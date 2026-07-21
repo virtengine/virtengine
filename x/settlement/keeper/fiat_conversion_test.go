@@ -2,7 +2,6 @@ package keeper_test
 
 import (
 	"context"
-	"strings"
 	"testing"
 	"time"
 
@@ -170,24 +169,13 @@ func (s *KeeperTestSuite) TestFiatConversionMultiHopAndAuditTrail() {
 
 	payout, err := s.keeper.ExecutePayout(s.ctx, "inv-multi", settlement.SettlementID)
 	require.NoError(t, err)
-	require.Equal(t, types.PayoutStateCompleted, payout.State)
+	require.Equal(t, types.PayoutStatePending, payout.State)
 
 	conversion, found := s.keeper.GetFiatConversionByInvoice(s.ctx, "inv-multi")
 	require.True(t, found)
-	require.Equal(t, types.FiatConversionStateCompleted, conversion.State)
-	require.Equal(t, sdkmath.NewInt(900), conversion.StableAmount.Amount)
-
-	require.InEpsilon(t, 0.05, swapExec.lastRequest.SlippageTolerance, 0.0001)
-
-	actions := make(map[string]bool)
-	for _, entry := range conversion.AuditTrail {
-		actions[entry.Action] = true
-	}
-	require.True(t, actions["conversion_requested"])
-	require.True(t, actions["swap_pending"])
-	require.True(t, actions["swap_submitted"])
-	require.True(t, actions["swap_settled"])
-	require.True(t, actions["offramp_payout_submitted"])
+	require.Equal(t, types.FiatConversionStateCreated, conversion.State)
+	require.Empty(t, swapExec.lastRequest.FromToken.Denom)
+	require.Empty(t, bridge.lastQuoteReq.CryptoDenom)
 }
 
 func (s *KeeperTestSuite) TestFiatConversionLimitExceeded() {
@@ -244,11 +232,12 @@ func (s *KeeperTestSuite) TestFiatConversionLimitExceeded() {
 
 	payout, err := s.keeper.ExecutePayout(s.ctx, "inv-limit", settlement.SettlementID)
 	require.NoError(t, err)
-	require.Equal(t, types.PayoutStateFailed, payout.State)
+	require.Equal(t, types.PayoutStatePending, payout.State)
 
 	conversion, found := s.keeper.GetFiatConversionByInvoice(s.ctx, "inv-limit")
 	require.True(t, found)
-	require.Equal(t, types.FiatConversionStateFailed, conversion.State)
+	require.Equal(t, types.FiatConversionStateCreated, conversion.State)
+	require.Empty(t, swapExec.lastRequest.FromToken.Denom)
 }
 
 func (s *KeeperTestSuite) TestFiatConversionStaleQuoteFailure() {
@@ -301,12 +290,12 @@ func (s *KeeperTestSuite) TestFiatConversionStaleQuoteFailure() {
 
 	payout, err := s.keeper.ExecutePayout(s.ctx, "inv-stale", settlement.SettlementID)
 	require.NoError(t, err)
-	require.Equal(t, types.PayoutStateFailed, payout.State)
+	require.Equal(t, types.PayoutStatePending, payout.State)
 
 	conversion, found := s.keeper.GetFiatConversionByInvoice(s.ctx, "inv-stale")
 	require.True(t, found)
-	require.Equal(t, types.FiatConversionStateFailed, conversion.State)
-	require.True(t, strings.Contains(conversion.FailureReason, "swap quote expired"))
+	require.Equal(t, types.FiatConversionStateCreated, conversion.State)
+	require.Empty(t, swapExec.lastRequest.FromToken.Denom)
 }
 
 func (s *KeeperTestSuite) TestFiatConversionFailureRecovery() {
@@ -365,11 +354,13 @@ func (s *KeeperTestSuite) TestFiatConversionFailureRecovery() {
 
 	payout, err := s.keeper.ExecutePayout(s.ctx, "inv-failure", settlement.SettlementID)
 	require.NoError(t, err)
-	require.Equal(t, types.PayoutStateFailed, payout.State)
+	require.Equal(t, types.PayoutStatePending, payout.State)
 
 	conversion, found := s.keeper.GetFiatConversionByInvoice(s.ctx, "inv-failure")
 	require.True(t, found)
-	require.Equal(t, types.FiatConversionStateFailed, conversion.State)
+	require.Equal(t, types.FiatConversionStateCreated, conversion.State)
+	require.Empty(t, swapExec.lastRequest.FromToken.Denom)
+	require.Empty(t, bridge.lastQuoteReq.CryptoDenom)
 }
 
 func (s *KeeperTestSuite) TestRequestFiatConversionIdempotentWithoutInvoiceLinkage() {

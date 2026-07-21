@@ -58,6 +58,7 @@ const providerSDK = createProviderSDK({
 
 ## Implementation Patterns
 - Add new API surfaces by updating generators under `sdk/ts/src/generated/` and re-export via `sdk/ts/src/index.ts:1`.
+- Never edit `sdk/ts/src/generated/` manually. Run `./scripts/proto-generate.sh ts`; dependencies are installed with `npm ci` from `sdk/ts/package-lock.json` inside the pinned Linux generator.
 - New SDK factories should live under `sdk/ts/src/sdk/` and be exported from `sdk/ts/src/sdk/index.ts:1`.
 - Keep retry and transport options wired through to avoid breaking existing integrations (`sdk/ts/src/sdk/provider/createProviderSDK.ts:12`).
 - Anti-patterns:
@@ -82,8 +83,9 @@ const providerSDK = createProviderSDK({
 ## Testing
 - Tests live in `sdk/ts/test/` (unit + functional).
 - Commands:
-  - `npm test` (runs Jest, `sdk/ts/package.json:41`).
-  - `npm run test:unit` and `npm run test:functional` for focused suites.
+  - `npm --prefix sdk/ts ci` installs the frozen dependency graph.
+  - `npm --prefix sdk/ts test` runs Jest.
+  - `npm --prefix sdk/ts run build` compiles and validates exports.
 
 ## Troubleshooting
 - SDK fails to connect in browser

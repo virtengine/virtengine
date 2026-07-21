@@ -72,14 +72,8 @@ func (s *settlementCLITestSuite) TestSettlementCLICommands() {
 	err = s.execTxCmd(cctx, settlementcli.CmdRecordUsage(),
 		append([]string{"order-cli-usage", "lease-1", "10", "compute", formatInt64(start), formatInt64(end), "1.25uve"}, recordArgs...),
 	)
-	s.Require().NoError(err)
-	s.Require().NoError(s.Network().WaitForNextBlock())
-
-	err = s.execTxCmd(cctx, settlementcli.CmdSettleOrder(),
-		append([]string{"order-cli-usage"}, txFlags...),
-	)
-	s.Require().NoError(err)
-	s.Require().NoError(s.Network().WaitForNextBlock())
+	s.Require().Error(err)
+	s.Require().Contains(err.Error(), "authenticated usage proof required")
 
 	err = s.execTxCmd(cctx, settlementcli.CmdRefundEscrow(),
 		append([]string{escrowRefund, "customer refund"}, txFlags...),

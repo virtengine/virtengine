@@ -2,7 +2,13 @@ package v1
 
 import (
 	sdk "github.com/cosmos/cosmos-sdk/types"
+
+	"github.com/virtengine/virtengine/sdk/go/sdkutil"
 )
+
+func init() {
+	sdkutil.RegisterNoSigner(&MsgSubmitConsensusVerification{})
+}
 
 var (
 	_ sdk.Msg = &MsgUploadScope{}
@@ -10,6 +16,7 @@ var (
 	_ sdk.Msg = &MsgRequestVerification{}
 	_ sdk.Msg = &MsgUpdateVerificationStatus{}
 	_ sdk.Msg = &MsgUpdateScore{}
+	_ sdk.Msg = &MsgSubmitConsensusVerification{}
 	_ sdk.Msg = &MsgSubmitSSOVerificationProof{}
 	_ sdk.Msg = &MsgSubmitEmailVerificationProof{}
 	_ sdk.Msg = &MsgSubmitSMSVerificationProof{}
@@ -196,6 +203,35 @@ func (msg *MsgUpdateScore) GetSigners() []sdk.AccAddress {
 	signer, _ := sdk.AccAddressFromBech32(msg.Sender)
 	return []sdk.AccAddress{signer}
 }
+
+// Route returns the route for the message.
+func (msg *MsgSubmitConsensusVerification) Route() string { return RouterKey }
+
+// Type returns the type for the message.
+func (msg *MsgSubmitConsensusVerification) Type() string { return "submit_consensus_verification" }
+
+// ValidateBasic validates static system-message fields. Full signed commit and
+// aggregate validation is performed by proposal processing and FinalizeBlock.
+func (msg *MsgSubmitConsensusVerification) ValidateBasic() error {
+	if msg.Version == 0 {
+		return ErrInvalidVerificationEvent.Wrap("version must be non-zero")
+	}
+	if msg.ChainId == "" {
+		return ErrInvalidVerificationEvent.Wrap("chain_id cannot be empty")
+	}
+	if msg.Height <= 0 {
+		return ErrInvalidVerificationEvent.Wrap("height must be positive")
+	}
+	if len(msg.ExtendedCommit) == 0 {
+		return ErrInvalidVerificationEvent.Wrap("extended_commit cannot be empty")
+	}
+	return nil
+}
+
+// GetSigners is intentionally empty. The application authenticates this
+// proposer-injected transaction from the signed ExtendedCommitInfo and rejects
+// it in CheckTx/ReCheckTx/Simulate through the system transaction ante boundary.
+func (msg *MsgSubmitConsensusVerification) GetSigners() []sdk.AccAddress { return nil }
 
 // Route returns the route for the message
 func (msg *MsgSubmitSSOVerificationProof) Route() string { return RouterKey }

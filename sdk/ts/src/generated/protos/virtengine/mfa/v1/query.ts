@@ -134,6 +134,20 @@ export interface QueryAuthorizationSessionResponse {
   isValid: boolean;
 }
 
+/** QueryAuthorizationSessionsRequest is the request for QueryAuthorizationSessions */
+export interface QueryAuthorizationSessionsRequest {
+  /** Address is the account address to query */
+  address: string;
+  /** IncludeExpired indicates whether to include expired/used sessions */
+  includeExpired: boolean;
+}
+
+/** QueryAuthorizationSessionsResponse is the response for QueryAuthorizationSessions */
+export interface QueryAuthorizationSessionsResponse {
+  /** Sessions is the list of authorization sessions */
+  sessions: AuthorizationSession[];
+}
+
 /** QueryTrustedDevicesRequest is the request for QueryTrustedDevices */
 export interface QueryTrustedDevicesRequest {
   /** Address is the account address to query */
@@ -148,6 +162,24 @@ export interface QueryTrustedDevicesResponse {
   devices: TrustedDevice[];
   /** Pagination is the pagination response */
   pagination: PageResponse | undefined;
+}
+
+/** QueryTrustedDeviceRequest is the request for QueryTrustedDevice */
+export interface QueryTrustedDeviceRequest {
+  /** Address is the account address to query */
+  address: string;
+  /** DeviceFingerprint is the device fingerprint to query */
+  deviceFingerprint: string;
+}
+
+/** QueryTrustedDeviceResponse is the response for QueryTrustedDevice */
+export interface QueryTrustedDeviceResponse {
+  /** Device is the trusted device */
+  device:
+    | TrustedDevice
+    | undefined;
+  /** Found indicates if the device was found */
+  found: boolean;
 }
 
 /** QuerySensitiveTxConfigRequest is the request for QuerySensitiveTxConfig */
@@ -1134,6 +1166,146 @@ export const QueryAuthorizationSessionResponse: MessageFns<
   },
 };
 
+function createBaseQueryAuthorizationSessionsRequest(): QueryAuthorizationSessionsRequest {
+  return { address: "", includeExpired: false };
+}
+
+export const QueryAuthorizationSessionsRequest: MessageFns<
+  QueryAuthorizationSessionsRequest,
+  "virtengine.mfa.v1.QueryAuthorizationSessionsRequest"
+> = {
+  $type: "virtengine.mfa.v1.QueryAuthorizationSessionsRequest" as const,
+
+  encode(message: QueryAuthorizationSessionsRequest, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.address !== "") {
+      writer.uint32(10).string(message.address);
+    }
+    if (message.includeExpired !== false) {
+      writer.uint32(16).bool(message.includeExpired);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): QueryAuthorizationSessionsRequest {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseQueryAuthorizationSessionsRequest();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.address = reader.string();
+          continue;
+        }
+        case 2: {
+          if (tag !== 16) {
+            break;
+          }
+
+          message.includeExpired = reader.bool();
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): QueryAuthorizationSessionsRequest {
+    return {
+      address: isSet(object.address) ? globalThis.String(object.address) : "",
+      includeExpired: isSet(object.include_expired) ? globalThis.Boolean(object.include_expired) : false,
+    };
+  },
+
+  toJSON(message: QueryAuthorizationSessionsRequest): unknown {
+    const obj: any = {};
+    if (message.address !== "") {
+      obj.address = message.address;
+    }
+    if (message.includeExpired !== false) {
+      obj.include_expired = message.includeExpired;
+    }
+    return obj;
+  },
+  fromPartial(object: DeepPartial<QueryAuthorizationSessionsRequest>): QueryAuthorizationSessionsRequest {
+    const message = createBaseQueryAuthorizationSessionsRequest();
+    message.address = object.address ?? "";
+    message.includeExpired = object.includeExpired ?? false;
+    return message;
+  },
+};
+
+function createBaseQueryAuthorizationSessionsResponse(): QueryAuthorizationSessionsResponse {
+  return { sessions: [] };
+}
+
+export const QueryAuthorizationSessionsResponse: MessageFns<
+  QueryAuthorizationSessionsResponse,
+  "virtengine.mfa.v1.QueryAuthorizationSessionsResponse"
+> = {
+  $type: "virtengine.mfa.v1.QueryAuthorizationSessionsResponse" as const,
+
+  encode(message: QueryAuthorizationSessionsResponse, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    for (const v of message.sessions) {
+      AuthorizationSession.encode(v!, writer.uint32(10).fork()).join();
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): QueryAuthorizationSessionsResponse {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseQueryAuthorizationSessionsResponse();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.sessions.push(AuthorizationSession.decode(reader, reader.uint32()));
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): QueryAuthorizationSessionsResponse {
+    return {
+      sessions: globalThis.Array.isArray(object?.sessions)
+        ? object.sessions.map((e: any) => AuthorizationSession.fromJSON(e))
+        : [],
+    };
+  },
+
+  toJSON(message: QueryAuthorizationSessionsResponse): unknown {
+    const obj: any = {};
+    if (message.sessions?.length) {
+      obj.sessions = message.sessions.map((e) => AuthorizationSession.toJSON(e));
+    }
+    return obj;
+  },
+  fromPartial(object: DeepPartial<QueryAuthorizationSessionsResponse>): QueryAuthorizationSessionsResponse {
+    const message = createBaseQueryAuthorizationSessionsResponse();
+    message.sessions = object.sessions?.map((e) => AuthorizationSession.fromPartial(e)) || [];
+    return message;
+  },
+};
+
 function createBaseQueryTrustedDevicesRequest(): QueryTrustedDevicesRequest {
   return { address: "", pagination: undefined };
 }
@@ -1290,6 +1462,162 @@ export const QueryTrustedDevicesResponse: MessageFns<
     message.pagination = (object.pagination !== undefined && object.pagination !== null)
       ? PageResponse.fromPartial(object.pagination)
       : undefined;
+    return message;
+  },
+};
+
+function createBaseQueryTrustedDeviceRequest(): QueryTrustedDeviceRequest {
+  return { address: "", deviceFingerprint: "" };
+}
+
+export const QueryTrustedDeviceRequest: MessageFns<
+  QueryTrustedDeviceRequest,
+  "virtengine.mfa.v1.QueryTrustedDeviceRequest"
+> = {
+  $type: "virtengine.mfa.v1.QueryTrustedDeviceRequest" as const,
+
+  encode(message: QueryTrustedDeviceRequest, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.address !== "") {
+      writer.uint32(10).string(message.address);
+    }
+    if (message.deviceFingerprint !== "") {
+      writer.uint32(18).string(message.deviceFingerprint);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): QueryTrustedDeviceRequest {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseQueryTrustedDeviceRequest();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.address = reader.string();
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.deviceFingerprint = reader.string();
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): QueryTrustedDeviceRequest {
+    return {
+      address: isSet(object.address) ? globalThis.String(object.address) : "",
+      deviceFingerprint: isSet(object.device_fingerprint) ? globalThis.String(object.device_fingerprint) : "",
+    };
+  },
+
+  toJSON(message: QueryTrustedDeviceRequest): unknown {
+    const obj: any = {};
+    if (message.address !== "") {
+      obj.address = message.address;
+    }
+    if (message.deviceFingerprint !== "") {
+      obj.device_fingerprint = message.deviceFingerprint;
+    }
+    return obj;
+  },
+  fromPartial(object: DeepPartial<QueryTrustedDeviceRequest>): QueryTrustedDeviceRequest {
+    const message = createBaseQueryTrustedDeviceRequest();
+    message.address = object.address ?? "";
+    message.deviceFingerprint = object.deviceFingerprint ?? "";
+    return message;
+  },
+};
+
+function createBaseQueryTrustedDeviceResponse(): QueryTrustedDeviceResponse {
+  return { device: undefined, found: false };
+}
+
+export const QueryTrustedDeviceResponse: MessageFns<
+  QueryTrustedDeviceResponse,
+  "virtengine.mfa.v1.QueryTrustedDeviceResponse"
+> = {
+  $type: "virtengine.mfa.v1.QueryTrustedDeviceResponse" as const,
+
+  encode(message: QueryTrustedDeviceResponse, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.device !== undefined) {
+      TrustedDevice.encode(message.device, writer.uint32(10).fork()).join();
+    }
+    if (message.found !== false) {
+      writer.uint32(16).bool(message.found);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): QueryTrustedDeviceResponse {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseQueryTrustedDeviceResponse();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.device = TrustedDevice.decode(reader, reader.uint32());
+          continue;
+        }
+        case 2: {
+          if (tag !== 16) {
+            break;
+          }
+
+          message.found = reader.bool();
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): QueryTrustedDeviceResponse {
+    return {
+      device: isSet(object.device) ? TrustedDevice.fromJSON(object.device) : undefined,
+      found: isSet(object.found) ? globalThis.Boolean(object.found) : false,
+    };
+  },
+
+  toJSON(message: QueryTrustedDeviceResponse): unknown {
+    const obj: any = {};
+    if (message.device !== undefined) {
+      obj.device = TrustedDevice.toJSON(message.device);
+    }
+    if (message.found !== false) {
+      obj.found = message.found;
+    }
+    return obj;
+  },
+  fromPartial(object: DeepPartial<QueryTrustedDeviceResponse>): QueryTrustedDeviceResponse {
+    const message = createBaseQueryTrustedDeviceResponse();
+    message.device = (object.device !== undefined && object.device !== null)
+      ? TrustedDevice.fromPartial(object.device)
+      : undefined;
+    message.found = object.found ?? false;
     return message;
   },
 };

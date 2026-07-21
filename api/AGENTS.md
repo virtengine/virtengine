@@ -9,6 +9,7 @@
 
 ## Architecture
 - `api/openapi/virtengine-api.yaml` — blockchain API specification, shared tags for modules, and server definitions (`api/openapi/virtengine-api.yaml:1`).
+- `api/openapi/virtengine-proto.swagger.json` — generated blockchain gRPC-gateway operations composed from protobuf descriptors; do not edit it manually.
 - `api/openapi/portal_api.yaml` — provider portal REST API specification, with ADR-036 auth headers (`api/openapi/portal_api.yaml:10`).
 - Both specs define `servers`, `security`, `tags`, `paths`, and `components` blocks for downstream generators.
 
@@ -58,6 +59,7 @@ X-VE-PubKey: <base64_pubkey>
 
 ## Testing
 - Validate specs with your OpenAPI linter or generator before release.
+- Regenerate protobuf OpenAPI with `./scripts/proto-generate.sh openapi`; drift is checked by `.github/workflows/proto-generation.yaml`.
 
 ## Configuration
 - No runtime configuration; specs are consumed by client generators and docs tooling.

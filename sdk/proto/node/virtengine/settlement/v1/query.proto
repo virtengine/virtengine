@@ -84,6 +84,16 @@ message SettlementRecord {
   bool is_final = 18;
 }
 
+// RawUsageMetrics contains exact integer deltas for one metering period.
+message RawUsageMetrics {
+  int64 cpu_milli_seconds = 1;
+  int64 memory_byte_seconds = 2;
+  int64 storage_byte_seconds = 3;
+  int64 network_bytes_in = 4;
+  int64 network_bytes_out = 5;
+  int64 gpu_seconds = 6;
+}
+
 // UsageRecord represents a signed usage record from a provider.
 message UsageRecord {
   string usage_id = 1;
@@ -108,6 +118,33 @@ message UsageRecord {
   int64 submitted_at = 17;
   int64 block_height = 18;
   map<string, string> metadata = 19;
+  string allocation_id = 20;
+  string chain_id = 21;
+  RawUsageMetrics raw_metrics = 22;
+  uint32 pricing_version = 23;
+  uint32 formula_version = 24;
+  uint32 model_version = 25;
+  uint64 stream_sequence = 26;
+  bytes nonce = 27;
+  bytes idempotency_key = 28;
+  uint64 provider_key_epoch = 29;
+  string provider_key_id = 30;
+  int64 issued_at_height = 31;
+  int64 expires_at_height = 32;
+  int64 issued_at_unix = 33;
+  int64 expires_at_unix = 34;
+  uint32 signature_version = 35;
+  bytes usage_digest = 36;
+  bool signature_verified = 37;
+  string authentication_status = 38;
+  bool legacy_unverified = 39;
+  bytes customer_ack_replay_key = 40;
+  int64 customer_ack_issued_at_height = 41;
+  int64 customer_ack_expires_at_height = 42;
+  int64 customer_ack_issued_at_unix = 43;
+  int64 customer_ack_expires_at_unix = 44;
+  uint32 customer_ack_signature_version = 45;
+  bool signature_material_redacted = 46;
 }
 
 // UsageTypeSummary aggregates usage by type.
@@ -458,6 +495,21 @@ message QueryUsageRecordsByOrderResponse {
   repeated UsageRecord usage_records = 1 [(gogoproto.nullable) = false];
 }
 
+// QueryUsageStreamStateRequest identifies one canonical metering stream.
+message QueryUsageStreamStateRequest {
+  string provider = 1 [(cosmos_proto.scalar) = "cosmos.AddressString"];
+  string allocation_id = 2;
+  string order_id = 3;
+  string lease_id = 4;
+}
+
+// QueryUsageStreamStateResponse returns the committed sequence cursor.
+message QueryUsageStreamStateResponse {
+  uint64 last_sequence = 1;
+  string last_usage_id = 2;
+  bytes last_usage_digest = 3;
+}
+
 // QueryUsageSummaryRequest is the request for querying usage summaries.
 message QueryUsageSummaryRequest {
   string order_id = 1;
@@ -600,6 +652,10 @@ service Query {
 
   rpc UsageRecordsByOrder(QueryUsageRecordsByOrderRequest) returns (QueryUsageRecordsByOrderResponse) {
     option (google.api.http).get = "/virtengine/settlement/v1/usage/by-order/{order_id}";
+  }
+
+  rpc UsageStreamState(QueryUsageStreamStateRequest) returns (QueryUsageStreamStateResponse) {
+    option (google.api.http).get = "/virtengine/settlement/v1/usage/streams/{provider}/{order_id}/{lease_id}";
   }
 
   rpc UsageSummary(QueryUsageSummaryRequest) returns (QueryUsageSummaryResponse) {

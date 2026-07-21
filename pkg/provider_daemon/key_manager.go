@@ -6,12 +6,14 @@ package provider_daemon
 import (
 	"crypto/ed25519"
 	"crypto/rand"
-	"crypto/sha256"
+	"crypto/subtle"
 	"encoding/hex"
 	"errors"
 	"fmt"
 	"sync"
 	"time"
+
+	providertypes "github.com/virtengine/virtengine/sdk/go/node/provider/v1beta4"
 )
 
 // ErrKeyNotFound is returned when a key is not found
@@ -28,6 +30,10 @@ var ErrKeyStorageLocked = errors.New("key storage is locked")
 
 // ErrInvalidPassphrase is returned when the passphrase is invalid
 var ErrInvalidPassphrase = errors.New("invalid passphrase")
+
+// ErrProviderKeyMismatch is returned when local custody does not match the
+// active governed x/provider signing-key epoch.
+var ErrProviderKeyMismatch = errors.New("local provider key does not match active on-chain epoch")
 
 const (
 	keyStatusActive  = "active"
@@ -255,8 +261,7 @@ func (km *KeyManager) generateEd25519Key(providerAddress string) (*ManagedKey, e
 
 // generateKeyID generates a unique key ID from the public key
 func generateKeyID(pubKey []byte) string {
-	hash := sha256.Sum256(pubKey)
-	return hex.EncodeToString(hash[:8])
+	return providertypes.ComputeProviderKeyID(providertypes.PublicKeyTypeEd25519, pubKey)
 }
 
 // GetActiveKey returns the currently active key
@@ -426,6 +431,43 @@ type Signature struct {
 
 	// SignedAt is when the signature was created
 	SignedAt time.Time `json:"signed_at"`
+}
+
+// ActiveProviderKeyBinding is the non-secret on-chain key state a caller has
+// resolved before signing a canonical usage proof.
+type ActiveProviderKeyBinding struct {
+	ProviderAddress string
+	KeyID           string
+	Epoch           uint64
+	PublicKey       []byte
+	Algorithm       string
+	BlockHeight     int64
+	BlockTime       time.Time
+}
+
+// SignForProviderKey signs only when local custody exactly matches the active
+// governed provider epoch returned by a chain resolver.
+func (km *KeyManager) SignForProviderKey(message []byte, binding ActiveProviderKeyBinding) (*Signature, error) {
+	km.mu.RLock()
+	defer km.mu.RUnlock()
+	if km.locked {
+		return nil, ErrKeyStorageLocked
+	}
+	key, err := km.getActiveKeyInternal()
+	if err != nil {
+		return nil, err
+	}
+	publicKey, err := hex.DecodeString(key.PublicKey)
+	if err != nil {
+		return nil, ErrProviderKeyMismatch
+	}
+	if binding.ProviderAddress == "" || binding.KeyID == "" || binding.Epoch == 0 ||
+		key.ProviderAddress != binding.ProviderAddress || key.KeyID != binding.KeyID ||
+		key.Algorithm != binding.Algorithm || len(publicKey) != len(binding.PublicKey) ||
+		subtle.ConstantTimeCompare(publicKey, binding.PublicKey) != 1 {
+		return nil, ErrProviderKeyMismatch
+	}
+	return km.signWithKey(key, message)
 }
 
 // Verify verifies the signature against the provided message

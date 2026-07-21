@@ -3,9 +3,10 @@ package keeper
 import (
 	"bytes"
 	"crypto/sha256"
+	"encoding/binary"
 	"encoding/hex"
 	"fmt"
-	"time"
+	"hash"
 
 	"cosmossdk.io/log"
 	sdk "github.com/cosmos/cosmos-sdk/types"
@@ -27,12 +28,6 @@ type ConsensusParams struct {
 
 	// RequireInputHashMatch enforces that validators must have the same input hash (proves same inputs)
 	RequireInputHashMatch bool
-
-	// MinValidatorAgreement is the minimum percentage of validators that must agree for consensus
-	MinValidatorAgreement float64
-
-	// MaxVerificationTimeMs is the maximum time allowed for verification in milliseconds
-	MaxVerificationTimeMs int64
 }
 
 // DefaultConsensusParams returns the default consensus parameters
@@ -42,8 +37,6 @@ func DefaultConsensusParams() ConsensusParams {
 		ScoreTolerance:        0,    // Exact match required by default
 		RequireModelMatch:     true, // Model version must match
 		RequireInputHashMatch: true, // Input hash must match
-		MinValidatorAgreement: 0.67, // 2/3 of validators must agree
-		MaxVerificationTimeMs: 1000, // 1 second max per verification
 	}
 }
 
@@ -117,8 +110,9 @@ func (cv *ConsensusVerifier) VerifyProposedResult(
 	ctx sdk.Context,
 	proposedResult types.VerificationResult,
 ) (valid bool, computedResult types.VerificationResult, err error) {
-	startTime := time.Now()
-
+	if cv == nil || cv.keeper == nil || cv.mlScorer == nil {
+		return false, types.VerificationResult{}, types.ErrInvalidVerificationResult.Wrap("consensus verifier is not configured")
+	}
 	cv.logger.Info("verifying proposed verification result",
 		"request_id", proposedResult.RequestID,
 		"proposed_score", proposedResult.Score,
@@ -150,8 +144,14 @@ func (cv *ConsensusVerifier) VerifyProposedResult(
 	}
 
 	// Step 3: Recompute the verification result
-	computedResult = *cv.keeper.ProcessVerificationRequest(ctx, request, cv.keyProvider)
-	computedResult.ProcessingDuration = time.Since(startTime).Milliseconds()
+	processed := cv.keeper.ProcessVerificationRequest(ctx, request, cv.keyProvider)
+	if processed == nil {
+		return false, types.VerificationResult{}, types.ErrInvalidVerificationResult.Wrapf(
+			"verification request %s produced no result", proposedResult.RequestID,
+		)
+	}
+	computedResult = *processed
+	computedResult.ProcessingDuration = 0
 
 	// Step 4: Compare results
 	comparison := cv.CompareResults(proposedResult, computedResult)
@@ -269,6 +269,9 @@ func (cv *ConsensusVerifier) ValidateModelVersion(
 	ctx sdk.Context,
 	requiredVersion string,
 ) error {
+	if cv == nil || cv.mlScorer == nil {
+		return types.ErrMLInferenceFailed.Wrap("ML scorer is not configured")
+	}
 	if cv.keeper != nil {
 		activePV, err := cv.keeper.GetActivePipelineVersion(ctx)
 		if err != nil {
@@ -332,48 +335,14 @@ func (k *Keeper) GetConsensusVerifier(
 // ProcessProposalVerifications validates all verification results in a proposed block
 // This is called during ProcessProposal to validate proposed verifications
 func (k *Keeper) ProcessProposalVerifications(
-	ctx sdk.Context,
+	_ sdk.Context,
 	results []types.VerificationResult,
-	keyProvider ValidatorKeyProvider,
+	_ ValidatorKeyProvider,
 ) error {
 	if len(results) == 0 {
 		return nil
 	}
-
-	cv := k.GetConsensusVerifier(keyProvider, DefaultConsensusParams(), k.Logger(ctx))
-
-	for i, result := range results {
-		valid, computedResult, err := cv.VerifyProposedResult(ctx, result)
-		if err != nil {
-			k.Logger(ctx).Error("verification error during ProcessProposal",
-				"index", i,
-				"request_id", result.RequestID,
-				"error", err,
-			)
-			return types.ErrInvalidVerificationResult.Wrapf(
-				"verification error for request %s: %v", result.RequestID, err,
-			)
-		}
-
-		if !valid {
-			k.Logger(ctx).Warn("verification mismatch during ProcessProposal",
-				"index", i,
-				"request_id", result.RequestID,
-				"proposed_score", result.Score,
-				"computed_score", computedResult.Score,
-			)
-			return types.ErrInvalidVerificationResult.Wrapf(
-				"verification mismatch for request %s: proposed=%d, computed=%d",
-				result.RequestID, result.Score, computedResult.Score,
-			)
-		}
-	}
-
-	k.Logger(ctx).Info("ProcessProposal verifications passed",
-		"count", len(results),
-	)
-
-	return nil
+	return types.ErrInvalidVerificationResult.Wrap("VEID proposal verification is disabled while vote-extension carrier v0 is active")
 }
 
 // ============================================================================
@@ -385,11 +354,11 @@ func (k *Keeper) ProcessProposalVerifications(
 func ComputeResultHash(result types.VerificationResult) []byte {
 	h := sha256.New()
 
-	// Include request ID
-	h.Write([]byte(result.RequestID))
-
-	// Include account address
-	h.Write([]byte(result.AccountAddress))
+	// Domain-separate and length-prefix variable-width fields to avoid
+	// concatenation ambiguity (for example, "ab"+"c" versus "a"+"bc").
+	h.Write([]byte("virtengine/veid/verification-result/v1"))
+	writeResultHashField(h, []byte(result.RequestID))
+	writeResultHashField(h, []byte(result.AccountAddress))
 
 	// Include score as 4 bytes (big-endian)
 	h.Write([]byte{
@@ -399,14 +368,9 @@ func ComputeResultHash(result types.VerificationResult) []byte {
 		byte(result.Score),
 	})
 
-	// Include status
-	h.Write([]byte(result.Status))
-
-	// Include model version
-	h.Write([]byte(result.ModelVersion))
-
-	// Include input hash
-	h.Write(result.InputHash)
+	writeResultHashField(h, []byte(result.Status))
+	writeResultHashField(h, []byte(result.ModelVersion))
+	writeResultHashField(h, result.InputHash)
 
 	// Include block height as 8 bytes (big-endian)
 	h.Write([]byte{
@@ -421,4 +385,11 @@ func ComputeResultHash(result types.VerificationResult) []byte {
 	})
 
 	return h.Sum(nil)
+}
+
+func writeResultHashField(h hash.Hash, value []byte) {
+	var length [8]byte
+	binary.BigEndian.PutUint64(length[:], uint64(len(value)))
+	_, _ = h.Write(length[:])
+	_, _ = h.Write(value)
 }

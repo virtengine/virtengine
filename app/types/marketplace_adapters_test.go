@@ -186,8 +186,9 @@ func TestResolveSensitiveTxType_ValidStringTypes(t *testing.T) {
 }
 
 func TestHasVerifiedActiveScope_Empty(t *testing.T) {
-	assert.False(t, hasVerifiedActiveScope(nil), "nil scopes should return false")
-	assert.False(t, hasVerifiedActiveScope([]veidtypes.IdentityScope{}),
+	now := time.Now()
+	assert.False(t, hasVerifiedActiveScope(nil, now), "nil scopes should return false")
+	assert.False(t, hasVerifiedActiveScope([]veidtypes.IdentityScope{}, now),
 		"empty scopes should return false")
 }
 
@@ -202,7 +203,7 @@ func TestHasVerifiedActiveScope_ActiveAndVerified(t *testing.T) {
 		},
 	}
 
-	assert.True(t, hasVerifiedActiveScope(scopes),
+	assert.True(t, hasVerifiedActiveScope(scopes, now),
 		"verified and active scope should return true")
 }
 
@@ -217,11 +218,12 @@ func TestHasVerifiedActiveScope_RevokedScope(t *testing.T) {
 		},
 	}
 
-	assert.False(t, hasVerifiedActiveScope(scopes),
+	assert.False(t, hasVerifiedActiveScope(scopes, now),
 		"revoked scope should not be considered active")
 }
 
 func TestHasVerifiedActiveScope_PendingScope(t *testing.T) {
+	now := time.Now()
 	scopes := []veidtypes.IdentityScope{
 		{
 			ScopeID: "scope-1",
@@ -230,7 +232,7 @@ func TestHasVerifiedActiveScope_PendingScope(t *testing.T) {
 		},
 	}
 
-	assert.False(t, hasVerifiedActiveScope(scopes),
+	assert.False(t, hasVerifiedActiveScope(scopes, now),
 		"pending scope should not be considered verified")
 }
 
@@ -247,7 +249,7 @@ func TestHasVerifiedActiveScope_ExpiredScope(t *testing.T) {
 		},
 	}
 
-	assert.False(t, hasVerifiedActiveScope(scopes),
+	assert.False(t, hasVerifiedActiveScope(scopes, now),
 		"expired scope should not be considered active")
 }
 
@@ -280,6 +282,6 @@ func TestHasVerifiedActiveScope_MixedScopes(t *testing.T) {
 		},
 	}
 
-	assert.True(t, hasVerifiedActiveScope(scopes),
+	assert.True(t, hasVerifiedActiveScope(scopes, now),
 		"should return true when at least one scope is verified and active")
 }

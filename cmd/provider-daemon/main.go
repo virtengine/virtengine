@@ -68,6 +68,12 @@ const (
 	// FlagMeteringInterval is the metering interval
 	FlagMeteringInterval = "metering-interval"
 
+	// FlagChainUsageSubmit enables authenticated durable usage submission.
+	FlagChainUsageSubmit = "chain-usage-submit"
+
+	// FlagChainUsageQueueFile stores proof allocation and transaction state.
+	FlagChainUsageQueueFile = "chain-usage-queue-file"
+
 	// FlagBidRateLimitMinute is the per-minute bid rate limit
 	FlagBidRateLimitMinute = "bid-rate-limit-minute"
 
@@ -347,6 +353,8 @@ func init() {
 	rootCmd.PersistentFlags().String(FlagNode, "tcp://localhost:26657", "Blockchain node RPC endpoint")
 	rootCmd.PersistentFlags().String(FlagProviderKey, "provider", "Provider key name")
 	rootCmd.PersistentFlags().String(FlagProviderKeyDir, "", "Directory containing provider keys")
+	rootCmd.PersistentFlags().Bool(FlagChainUsageSubmit, false, "Enable authenticated durable on-chain usage submission")
+	rootCmd.PersistentFlags().String(FlagChainUsageQueueFile, "data/chain_usage_queue.json", "Authenticated usage durable queue state file")
 	rootCmd.PersistentFlags().String(FlagKeyBackupFile, "", "Path to encrypted provider key backup")
 	rootCmd.PersistentFlags().Bool(FlagKeyBackupRestore, false, "Restore provider keys from --key-backup-file before startup")
 	rootCmd.PersistentFlags().Bool(FlagKeyBackupExport, false, "Write an encrypted provider key backup to --key-backup-file after key initialization")
@@ -460,6 +468,8 @@ func init() {
 	_ = viper.BindPFlag(FlagNode, rootCmd.PersistentFlags().Lookup(FlagNode))
 	_ = viper.BindPFlag(FlagProviderKey, rootCmd.PersistentFlags().Lookup(FlagProviderKey))
 	_ = viper.BindPFlag(FlagProviderKeyDir, rootCmd.PersistentFlags().Lookup(FlagProviderKeyDir))
+	_ = viper.BindPFlag(FlagChainUsageSubmit, rootCmd.PersistentFlags().Lookup(FlagChainUsageSubmit))
+	_ = viper.BindPFlag(FlagChainUsageQueueFile, rootCmd.PersistentFlags().Lookup(FlagChainUsageQueueFile))
 	_ = viper.BindPFlag(FlagKeyBackupFile, rootCmd.PersistentFlags().Lookup(FlagKeyBackupFile))
 	_ = viper.BindPFlag(FlagKeyBackupRestore, rootCmd.PersistentFlags().Lookup(FlagKeyBackupRestore))
 	_ = viper.BindPFlag(FlagKeyBackupExport, rootCmd.PersistentFlags().Lookup(FlagKeyBackupExport))
@@ -840,7 +850,7 @@ func runStart(cmd *cobra.Command, args []string) error {
 	}
 
 	// Create chain client for bid engine
-	chainClient, err := provider_daemon.NewRPCChainClient(provider_daemon.RPCChainClientConfig{
+	productionChainClient, err := provider_daemon.NewProviderRPCChainClient(provider_daemon.RPCChainClientConfig{
 		NodeURI:        viper.GetString(FlagNode),
 		GRPCEndpoint:   viper.GetString(FlagWaldurChainGRPC),
 		ChainID:        viper.GetString(FlagChainID),
@@ -849,6 +859,8 @@ func runStart(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("failed to create chain client: %w", err)
 	}
+	defer func() { _ = productionChainClient.Close() }()
+	var chainClient provider_daemon.ChainClient = productionChainClient
 
 	// Initialize HPC provider (VE-21C/VE-14B)
 	var hpcProvider *provider_daemon.HPCProvider
@@ -1036,18 +1048,51 @@ func runStart(cmd *cobra.Command, args []string) error {
 	recordChan := make(chan *provider_daemon.UsageRecord, 100)
 	usageStore := provider_daemon.NewUsageSnapshotStore()
 	usageReporter = usageStore
+	var usageMeter *provider_daemon.UsageMeter
+	if viper.GetBool(FlagChainUsageSubmit) {
+		if _, err := sdk.AccAddressFromBech32(providerAddress); err != nil {
+			return fmt.Errorf("provider key name must be the on-chain bech32 provider address for authenticated metering: %w", err)
+		}
+		usageSubmitterCfg := provider_daemon.DefaultChainSubmitterConfig()
+		usageSubmitterCfg.ProviderAddress = providerAddress
+		usageSubmitterCfg.ChainID = viper.GetString(FlagChainID)
+		usageSubmitterCfg.CometRPC = normalizeCometRPC(viper.GetString(FlagNode))
+		usageSubmitterCfg.RPCClient = productionChainClient.CometRPCClient()
+		usageSubmitterCfg.QueueStatePath = viper.GetString(FlagChainUsageQueueFile)
+		usageSubmitterCfg.ProviderSigningState = productionChainClient
+		usageSubmitterCfg.UsageStreamState = productionChainClient
+		usageSubmitter, err := provider_daemon.NewChainUsageSubmitter(usageSubmitterCfg, keyManager, provider_daemon.NewUsageMetricsCollector())
+		if err != nil {
+			return fmt.Errorf("failed to initialize authenticated usage submitter: %w", err)
+		}
+		if err := usageSubmitter.Start(ctx); err != nil {
+			return fmt.Errorf("failed to start authenticated usage submitter: %w", err)
+		}
+		defer usageSubmitter.Stop()
+		usageRecorder, err := provider_daemon.NewUsageChainRecorder(usageSubmitter)
+		if err != nil {
+			return fmt.Errorf("failed to initialize usage chain recorder: %w", err)
+		}
+		if workloadRuntime == nil {
+			return fmt.Errorf("authenticated usage metering requires an initialized workload metrics collector")
+		}
 
-	usageMeter := provider_daemon.NewUsageMeter(provider_daemon.UsageMeterConfig{
-		ProviderID: providerID,
-		Interval:   provider_daemon.MeteringInterval(viper.GetDuration(FlagMeteringInterval)),
-		KeyManager: keyManager,
-		RecordChan: recordChan,
-	})
+		usageMeter = provider_daemon.NewUsageMeter(provider_daemon.UsageMeterConfig{
+			ProviderID:       providerAddress,
+			Interval:         provider_daemon.MeteringInterval(viper.GetDuration(FlagMeteringInterval)),
+			MetricsCollector: workloadRuntime,
+			ChainRecorder:    usageRecorder,
+			KeyManager:       keyManager,
+			RecordChan:       recordChan,
+		})
 
-	if err := usageMeter.Start(ctx); err != nil {
-		return fmt.Errorf("failed to start usage meter: %w", err)
+		if err := usageMeter.Start(ctx); err != nil {
+			return fmt.Errorf("failed to start usage meter: %w", err)
+		}
+		fmt.Println("  Usage Meter: started (authenticated durable submission)")
+	} else {
+		fmt.Println("  Usage Meter: disabled (enable authenticated submission explicitly)")
 	}
-	fmt.Println("  Usage Meter: started")
 
 	portalAuditCfg := provider_daemon.DefaultAuditLogConfig()
 	portalAuditCfg.LogFile = viper.GetString(FlagPortalAuditLogFile)
@@ -1491,8 +1536,10 @@ func runStart(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	usageMeter.Stop()
-	fmt.Println("  Usage Meter: stopped")
+	if usageMeter != nil {
+		usageMeter.Stop()
+		fmt.Println("  Usage Meter: stopped")
+	}
 
 	if supportService != nil {
 		_ = supportService.Stop(ctx)

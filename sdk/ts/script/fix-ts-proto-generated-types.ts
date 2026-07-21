@@ -15,7 +15,13 @@ const helperTypeRegex = new RegExp(
 );
 
 const ROOT_DIR = resolvePath(import.meta.dirname, "..", "src");
+const paths: string[] = [];
 for await (const path of fs.glob(`${ROOT_DIR}/generated/protos/**/*.ts`)) {
+  paths.push(path);
+}
+paths.sort();
+
+for (const path of paths) {
   const source = await fs.readFile(path, "utf8");
   let newSource = source;
 
@@ -24,7 +30,9 @@ for await (const path of fs.glob(`${ROOT_DIR}/generated/protos/**/*.ts`)) {
   newSource = injectOwnHelpers(newSource, path);
 
   if (newSource !== source) {
-    await fs.writeFile(path, newSource);
+    const temporaryPath = `${path}.tmp`;
+    await fs.writeFile(temporaryPath, newSource);
+    await fs.rename(temporaryPath, path);
   }
 }
 

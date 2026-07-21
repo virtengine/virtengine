@@ -13,6 +13,35 @@ import (
 	"time"
 )
 
+type txSubmissionQueuePathLock struct {
+	file *os.File
+}
+
+func claimTxSubmissionQueuePath(path string) (*txSubmissionQueuePathLock, error) {
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+		return nil, fmt.Errorf("create queue state dir: %w", err)
+	}
+	lockPath := path + ".lock"
+	file, err := os.OpenFile(lockPath, os.O_CREATE|os.O_RDWR, 0o600) // #nosec G304 -- path validated by queue constructor
+	if err != nil {
+		return nil, fmt.Errorf("open queue state lock: %w", err)
+	}
+	if err := lockQueueStateFile(file); err != nil {
+		_ = file.Close()
+		return nil, fmt.Errorf("queue state path %s is already owned by another submitter: %w", path, err)
+	}
+	return &txSubmissionQueuePathLock{file: file}, nil
+}
+
+func (l *txSubmissionQueuePathLock) release() {
+	if l == nil || l.file == nil {
+		return
+	}
+	_ = unlockQueueStateFile(l.file)
+	_ = l.file.Close()
+	l.file = nil
+}
+
 type queueItemKind string
 
 const (
@@ -49,7 +78,22 @@ type txSubmissionQueueItem struct {
 }
 
 type txSubmissionQueueState struct {
-	Items map[string]*txSubmissionQueueItem `json:"items"`
+	Items          map[string]*txSubmissionQueueItem `json:"items"`
+	UsageSequences map[string]uint64                 `json:"usage_sequences,omitempty"`
+	UsageProofs    map[string]*usageProofAllocation  `json:"usage_proofs,omitempty"`
+}
+
+type usageProofAllocation struct {
+	StreamID        string `json:"stream_id"`
+	Sequence        uint64 `json:"sequence"`
+	Nonce           []byte `json:"nonce"`
+	IdempotencyKey  []byte `json:"idempotency_key"`
+	KeyID           string `json:"key_id"`
+	KeyEpoch        uint64 `json:"key_epoch"`
+	IssuedAtHeight  int64  `json:"issued_at_height"`
+	ExpiresAtHeight int64  `json:"expires_at_height"`
+	IssuedAtUnix    int64  `json:"issued_at_unix"`
+	ExpiresAtUnix   int64  `json:"expires_at_unix"`
 }
 
 type txSubmissionQueueStore struct {
@@ -67,7 +111,7 @@ func (s *txSubmissionQueueStore) Load() (*txSubmissionQueueState, error) {
 	data, err := os.ReadFile(s.path) // #nosec G304 -- path validated in constructor
 	if err != nil {
 		if os.IsNotExist(err) {
-			return &txSubmissionQueueState{Items: make(map[string]*txSubmissionQueueItem)}, nil
+			return newTxSubmissionQueueState(), nil
 		}
 		return nil, fmt.Errorf("read queue state: %w", err)
 	}
@@ -78,7 +122,21 @@ func (s *txSubmissionQueueStore) Load() (*txSubmissionQueueState, error) {
 	if state.Items == nil {
 		state.Items = make(map[string]*txSubmissionQueueItem)
 	}
+	if state.UsageSequences == nil {
+		state.UsageSequences = make(map[string]uint64)
+	}
+	if state.UsageProofs == nil {
+		state.UsageProofs = make(map[string]*usageProofAllocation)
+	}
 	return state, nil
+}
+
+func newTxSubmissionQueueState() *txSubmissionQueueState {
+	return &txSubmissionQueueState{
+		Items:          make(map[string]*txSubmissionQueueItem),
+		UsageSequences: make(map[string]uint64),
+		UsageProofs:    make(map[string]*usageProofAllocation),
+	}
 }
 
 func (s *txSubmissionQueueStore) Save(state *txSubmissionQueueState) error {
@@ -87,6 +145,12 @@ func (s *txSubmissionQueueStore) Save(state *txSubmissionQueueState) error {
 	}
 	if state.Items == nil {
 		state.Items = make(map[string]*txSubmissionQueueItem)
+	}
+	if state.UsageSequences == nil {
+		state.UsageSequences = make(map[string]uint64)
+	}
+	if state.UsageProofs == nil {
+		state.UsageProofs = make(map[string]*usageProofAllocation)
 	}
 	data, err := json.MarshalIndent(state, "", "  ")
 	if err != nil {
@@ -118,7 +182,7 @@ func (s *ChainUsageSubmitterImpl) enqueueMessage(kind queueItemKind, msg interfa
 	defer s.mu.Unlock()
 
 	if s.queueState == nil {
-		s.queueState = &txSubmissionQueueState{Items: make(map[string]*txSubmissionQueueItem)}
+		s.queueState = newTxSubmissionQueueState()
 	}
 	if existing, ok := s.queueState.Items[idempotencyKey]; ok {
 		return existing, true, nil
@@ -227,9 +291,6 @@ func (s *ChainUsageSubmitterImpl) processQueueItem(ctx context.Context, idempote
 		if broadcastErr == nil {
 			return nil
 		}
-		if txHash != "" {
-			return nil
-		}
 		if !inline {
 			return nil
 		}
@@ -304,10 +365,10 @@ func (s *ChainUsageSubmitterImpl) resolveQueueAttempt(idempotencyKey string, txH
 		return nil
 	}
 	item.AttemptCount++
-	if txHash != "" {
+	if broadcastErr == nil && txHash != "" {
 		item.BroadcastTxHash = txHash
 	}
-	if broadcastErr == nil || txHash != "" {
+	if broadcastErr == nil {
 		item.Status = queueItemStatusBroadcasted
 		item.LastError = ""
 		item.ClaimedBy = ""

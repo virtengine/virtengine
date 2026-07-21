@@ -11,12 +11,15 @@ import (
 	rpchttp "github.com/cometbft/cometbft/rpc/client/http"
 	sdktypes "github.com/cosmos/cosmos-sdk/types"
 	"github.com/cosmos/cosmos-sdk/types/query"
+	authtypes "github.com/cosmos/cosmos-sdk/x/auth/types"
 	"github.com/virtengine/virtengine/pkg/observability"
 	"github.com/virtengine/virtengine/pkg/security"
 	hpcv1 "github.com/virtengine/virtengine/sdk/go/node/hpc/v1"
 	marketv1 "github.com/virtengine/virtengine/sdk/go/node/market/v1"
 	marketv1beta5 "github.com/virtengine/virtengine/sdk/go/node/market/v1beta5"
+	providerv1beta4 "github.com/virtengine/virtengine/sdk/go/node/provider/v1beta4"
 	resourcesv1 "github.com/virtengine/virtengine/sdk/go/node/resources/v1"
+	settlementv1 "github.com/virtengine/virtengine/sdk/go/node/settlement/v1"
 	depositv1 "github.com/virtengine/virtengine/sdk/go/node/types/deposit/v1"
 	hpctypes "github.com/virtengine/virtengine/x/hpc/types"
 	"google.golang.org/grpc"
@@ -38,12 +41,15 @@ type RPCChainClientConfig struct {
 
 // rpcChainClient implements ChainClient using gRPC
 type rpcChainClient struct {
-	config         RPCChainClientConfig
-	grpcConn       *grpc.ClientConn
-	rpcClient      *rpchttp.HTTP
-	hpcQuery       providerHPCQueryClient
-	resourcesQuery providerResourcesQueryClient
-	storeQuery     providerStoreQueryClient
+	config          RPCChainClientConfig
+	grpcConn        *grpc.ClientConn
+	rpcClient       *rpchttp.HTTP
+	hpcQuery        providerHPCQueryClient
+	resourcesQuery  providerResourcesQueryClient
+	providerQuery   providerv1beta4.QueryClient
+	settlementQuery settlementv1.QueryClient
+	authQuery       authtypes.QueryClient
+	storeQuery      providerStoreQueryClient
 }
 
 // newRPCChainClient creates a new RPC-based chain client
@@ -69,6 +75,9 @@ func newRPCChainClient(config RPCChainClientConfig) (*rpcChainClient, error) {
 		client.grpcConn = conn
 		client.hpcQuery = hpcv1.NewQueryClient(conn)
 		client.resourcesQuery = resourcesv1.NewQueryClient(conn)
+		client.providerQuery = providerv1beta4.NewQueryClient(conn)
+		client.settlementQuery = settlementv1.NewQueryClient(conn)
+		client.authQuery = authtypes.NewQueryClient(conn)
 	}
 
 	if config.NodeURI != "" {
@@ -83,9 +92,102 @@ func newRPCChainClient(config RPCChainClientConfig) (*rpcChainClient, error) {
 	return client, nil
 }
 
+// ResolveUsageStreamState derives the committed last sequence by querying
+// stored authenticated usage and matching the collision-safe stream identity.
+func (c *rpcChainClient) ResolveUsageStreamState(ctx context.Context, provider, allocationID, orderID, leaseID string) (OnChainUsageStreamState, error) {
+	if c.settlementQuery == nil {
+		return OnChainUsageStreamState{}, fmt.Errorf("settlement query client not configured")
+	}
+	response, err := c.settlementQuery.UsageStreamState(ctx, &settlementv1.QueryUsageStreamStateRequest{
+		Provider:     provider,
+		AllocationId: allocationID,
+		OrderId:      orderID,
+		LeaseId:      leaseID,
+	})
+	if err != nil {
+		return OnChainUsageStreamState{}, fmt.Errorf("query usage stream state: %w", err)
+	}
+	return OnChainUsageStreamState{LastSequence: response.LastSequence}, nil
+}
+
+// ResolveAccountSequence returns the committed Cosmos transaction signer state.
+func (c *rpcChainClient) ResolveAccountSequence(ctx context.Context, address string) (uint64, uint64, error) {
+	if c.authQuery == nil {
+		return 0, 0, fmt.Errorf("auth query client not configured")
+	}
+	response, err := c.authQuery.AccountInfo(ctx, &authtypes.QueryAccountInfoRequest{Address: address})
+	if err != nil {
+		return 0, 0, fmt.Errorf("query account info: %w", err)
+	}
+	if response.Info == nil {
+		return 0, 0, fmt.Errorf("account info unavailable")
+	}
+	return response.Info.AccountNumber, response.Info.Sequence, nil
+}
+
+// ResolveProviderSigningState resolves the highest currently valid signing
+// epoch against the latest committed CometBFT height and time.
+func (c *rpcChainClient) ResolveProviderSigningState(ctx context.Context, providerAddress string) (ActiveProviderKeyBinding, error) {
+	if c.providerQuery == nil || c.rpcClient == nil {
+		return ActiveProviderKeyBinding{}, fmt.Errorf("provider signing-state query requires both gRPC and Comet RPC")
+	}
+	status, err := c.rpcClient.Status(ctx)
+	if err != nil {
+		return ActiveProviderKeyBinding{}, fmt.Errorf("query committed chain status: %w", err)
+	}
+	height := status.SyncInfo.LatestBlockHeight
+	blockTime := status.SyncInfo.LatestBlockTime.UTC()
+	response, err := c.providerQuery.ProviderSigningKeyEpochs(ctx, &providerv1beta4.QueryProviderSigningKeyEpochsRequest{Owner: providerAddress})
+	if err != nil {
+		return ActiveProviderKeyBinding{}, fmt.Errorf("query provider signing-key epochs: %w", err)
+	}
+	var selected *providerv1beta4.ProviderSigningKeyRecord
+	for i := range response.Keys {
+		record := &response.Keys[i]
+		if height < record.ActivatedAtHeight || (record.ActivatedAtUnix > 0 && blockTime.Unix() < record.ActivatedAtUnix) ||
+			(record.ExpiresAtHeight > 0 && height > record.ExpiresAtHeight) || (record.ExpiresAtUnix > 0 && blockTime.Unix() > record.ExpiresAtUnix) ||
+			(record.RetiredAtHeight > 0 && height > record.RetiredAtHeight) || (record.RetiredAtUnix > 0 && blockTime.Unix() > record.RetiredAtUnix) ||
+			(record.RevokedAtHeight > 0 && height >= record.RevokedAtHeight) || (record.RevokedAtUnix > 0 && blockTime.Unix() >= record.RevokedAtUnix) {
+			continue
+		}
+		if record.KeyType != providerv1beta4.PublicKeyTypeEd25519 && record.KeyType != providerv1beta4.PublicKeyTypeSecp256k1 {
+			continue
+		}
+		if selected == nil || record.Epoch > selected.Epoch {
+			copyRecord := *record
+			selected = &copyRecord
+		}
+	}
+	if selected == nil {
+		return ActiveProviderKeyBinding{}, fmt.Errorf("no active governed provider signing-key epoch")
+	}
+	return ActiveProviderKeyBinding{
+		ProviderAddress: providerAddress,
+		KeyID:           selected.KeyId,
+		Epoch:           selected.Epoch,
+		PublicKey:       append([]byte(nil), selected.PublicKey...),
+		Algorithm:       selected.KeyType,
+		BlockHeight:     height,
+		BlockTime:       blockTime,
+	}, nil
+}
+
 // NewRPCChainClient creates a new RPC-based chain client
 func NewRPCChainClient(config RPCChainClientConfig) (ChainClient, error) {
 	return newRPCChainClient(config)
+}
+
+// NewProviderRPCChainClient exposes the concrete production client for
+// components that require both provider operations and authenticated metering
+// state resolution.
+func NewProviderRPCChainClient(config RPCChainClientConfig) (*rpcChainClient, error) {
+	return newRPCChainClient(config)
+}
+
+// CometRPCClient returns the configured Comet client for signed transaction
+// broadcasting. Callers must not stop it independently of Close().
+func (c *rpcChainClient) CometRPCClient() *rpchttp.HTTP {
+	return c.rpcClient
 }
 
 // NewHPCChainClient creates a new chain client for HPC integrations.

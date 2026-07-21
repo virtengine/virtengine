@@ -3,11 +3,13 @@ package provider_daemon
 import (
 	"crypto/ed25519"
 	"crypto/rand"
+	"encoding/hex"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	providertypes "github.com/virtengine/virtengine/sdk/go/node/provider/v1beta4"
 )
 
 func TestNewKeyManager(t *testing.T) {
@@ -67,6 +69,16 @@ func TestKeyManagerGenerateKey(t *testing.T) {
 	assert.Equal(t, "active", key.Status)
 	assert.Equal(t, "provider1", key.ProviderAddress)
 	assert.False(t, key.CreatedAt.IsZero())
+}
+
+func TestKeyManagerKeyIDMatchesGovernedProviderRegistry(t *testing.T) {
+	km := createUnlockedKeyManager(t)
+	key, err := km.GenerateKey("provider1")
+	require.NoError(t, err)
+	publicKey, err := hex.DecodeString(key.PublicKey)
+	require.NoError(t, err)
+
+	require.Equal(t, providertypes.ComputeProviderKeyID(providertypes.PublicKeyTypeEd25519, publicKey), key.KeyID)
 }
 
 func TestKeyManagerGenerateKeyWhenLocked(t *testing.T) {

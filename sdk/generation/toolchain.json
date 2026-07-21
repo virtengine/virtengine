@@ -1,0 +1,49 @@
+{
+  "schemaVersion": 1,
+  "platform": "linux",
+  "container": {
+    "base": "golang:1.25.5-bookworm@sha256:d9132cce84391efab786495288756d60e1da215b1f94e87860aeefc3d4c45b6d",
+    "dockerfile": "sdk/generation/Dockerfile"
+  },
+  "tools": {
+    "go": "1.25.5",
+    "buf": "1.47.2",
+    "protoc": "29.1",
+    "protocGenGocosmos": {
+      "module": "github.com/cosmos/gogoproto",
+      "replacement": "github.com/virtengine/gogoproto",
+      "version": "v1.7.0-virtengine.1"
+    },
+    "protocGenGrpcGateway": "v1.16.0",
+    "protocGenSwagger": "v1.16.0",
+    "modvendor": "v0.5.0",
+    "node": "24.12.0",
+    "npm": "11.6.2",
+    "tsProto": "2.7.7"
+  },
+  "downloads": {
+    "protoc-29.1-linux-x86_64.zip": "sha256:00c83fe9722d85e96c81b941b29f17a744b33b4ce66e0f18009fd8937de22c60",
+    "protoc-29.1-linux-aarch_64.zip": "sha256:1f74a3f3355de7c0666bc125611c13532c2598f853521d0d3e621a5b09f24799",
+    "node-v24.12.0-linux-x64.tar.xz": "sha256:bdebee276e58d0ef5448f3d5ac12c67daa963dd5e0a9bb621a53d1cefbc852fd",
+    "node-v24.12.0-linux-arm64.tar.xz": "sha256:a06d42807fb500f7459e5f3fa6cb431447352826ee6f07e14adfeec58a1b3210"
+  },
+  "locks": [
+    "sdk/buf.lock",
+    "sdk/ts/package-lock.json",
+    "go.sum",
+    "sdk/go/go.sum"
+  ],
+  "supportedOutputs": [
+    "go-messages",
+    "go-grpc-services",
+    "go-grpc-gateway",
+    "descriptor-set",
+    "module-interface-inventory",
+    "openapi",
+    "typescript"
+  ],
+  "unsupportedOutputs": {
+    "python": "No published Python protobuf SDK is declared; generation fails closed.",
+    "rust": "Existing Rust templates are experimental; no Rust protobuf SDK is a release output."
+  }
+}

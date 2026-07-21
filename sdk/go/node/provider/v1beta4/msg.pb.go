@@ -872,6 +872,361 @@ func (m *MsgRevokeDomainVerificationResponse) XXX_DiscardUnknown() {
 
 var xxx_messageInfo_MsgRevokeDomainVerificationResponse proto.InternalMessageInfo
 
+// MsgSetProviderSigningKey registers a provider's first signing key.
+type MsgSetProviderSigningKey struct {
+	Owner     string `protobuf:"bytes,1,opt,name=owner,proto3" json:"owner,omitempty"`
+	PublicKey []byte `protobuf:"bytes,2,opt,name=public_key,json=publicKey,proto3" json:"public_key,omitempty"`
+	KeyType   string `protobuf:"bytes,3,opt,name=key_type,json=keyType,proto3" json:"key_type,omitempty"`
+}
+
+func (m *MsgSetProviderSigningKey) Reset()         { *m = MsgSetProviderSigningKey{} }
+func (m *MsgSetProviderSigningKey) String() string { return proto.CompactTextString(m) }
+func (*MsgSetProviderSigningKey) ProtoMessage()    {}
+func (*MsgSetProviderSigningKey) Descriptor() ([]byte, []int) {
+	return fileDescriptor_614bcf842c974387, []int{16}
+}
+func (m *MsgSetProviderSigningKey) XXX_Unmarshal(b []byte) error {
+	return m.Unmarshal(b)
+}
+func (m *MsgSetProviderSigningKey) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	if deterministic {
+		return xxx_messageInfo_MsgSetProviderSigningKey.Marshal(b, m, deterministic)
+	} else {
+		b = b[:cap(b)]
+		n, err := m.MarshalToSizedBuffer(b)
+		if err != nil {
+			return nil, err
+		}
+		return b[:n], nil
+	}
+}
+func (m *MsgSetProviderSigningKey) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_MsgSetProviderSigningKey.Merge(m, src)
+}
+func (m *MsgSetProviderSigningKey) XXX_Size() int {
+	return m.Size()
+}
+func (m *MsgSetProviderSigningKey) XXX_DiscardUnknown() {
+	xxx_messageInfo_MsgSetProviderSigningKey.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_MsgSetProviderSigningKey proto.InternalMessageInfo
+
+func (m *MsgSetProviderSigningKey) GetOwner() string {
+	if m != nil {
+		return m.Owner
+	}
+	return ""
+}
+
+func (m *MsgSetProviderSigningKey) GetPublicKey() []byte {
+	if m != nil {
+		return m.PublicKey
+	}
+	return nil
+}
+
+func (m *MsgSetProviderSigningKey) GetKeyType() string {
+	if m != nil {
+		return m.KeyType
+	}
+	return ""
+}
+
+type MsgSetProviderSigningKeyResponse struct {
+	KeyId             string `protobuf:"bytes,1,opt,name=key_id,json=keyId,proto3" json:"key_id,omitempty"`
+	Epoch             uint64 `protobuf:"varint,2,opt,name=epoch,proto3" json:"epoch,omitempty"`
+	ActivatedAtHeight int64  `protobuf:"varint,3,opt,name=activated_at_height,json=activatedAtHeight,proto3" json:"activated_at_height,omitempty"`
+}
+
+func (m *MsgSetProviderSigningKeyResponse) Reset()         { *m = MsgSetProviderSigningKeyResponse{} }
+func (m *MsgSetProviderSigningKeyResponse) String() string { return proto.CompactTextString(m) }
+func (*MsgSetProviderSigningKeyResponse) ProtoMessage()    {}
+func (*MsgSetProviderSigningKeyResponse) Descriptor() ([]byte, []int) {
+	return fileDescriptor_614bcf842c974387, []int{17}
+}
+func (m *MsgSetProviderSigningKeyResponse) XXX_Unmarshal(b []byte) error {
+	return m.Unmarshal(b)
+}
+func (m *MsgSetProviderSigningKeyResponse) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	if deterministic {
+		return xxx_messageInfo_MsgSetProviderSigningKeyResponse.Marshal(b, m, deterministic)
+	} else {
+		b = b[:cap(b)]
+		n, err := m.MarshalToSizedBuffer(b)
+		if err != nil {
+			return nil, err
+		}
+		return b[:n], nil
+	}
+}
+func (m *MsgSetProviderSigningKeyResponse) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_MsgSetProviderSigningKeyResponse.Merge(m, src)
+}
+func (m *MsgSetProviderSigningKeyResponse) XXX_Size() int {
+	return m.Size()
+}
+func (m *MsgSetProviderSigningKeyResponse) XXX_DiscardUnknown() {
+	xxx_messageInfo_MsgSetProviderSigningKeyResponse.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_MsgSetProviderSigningKeyResponse proto.InternalMessageInfo
+
+func (m *MsgSetProviderSigningKeyResponse) GetKeyId() string {
+	if m != nil {
+		return m.KeyId
+	}
+	return ""
+}
+
+func (m *MsgSetProviderSigningKeyResponse) GetEpoch() uint64 {
+	if m != nil {
+		return m.Epoch
+	}
+	return 0
+}
+
+func (m *MsgSetProviderSigningKeyResponse) GetActivatedAtHeight() int64 {
+	if m != nil {
+		return m.ActivatedAtHeight
+	}
+	return 0
+}
+
+// MsgRotateProviderSigningKey proves continuity with the retiring key.
+type MsgRotateProviderSigningKey struct {
+	Owner            string `protobuf:"bytes,1,opt,name=owner,proto3" json:"owner,omitempty"`
+	NewPublicKey     []byte `protobuf:"bytes,2,opt,name=new_public_key,json=newPublicKey,proto3" json:"new_public_key,omitempty"`
+	NewKeyType       string `protobuf:"bytes,3,opt,name=new_key_type,json=newKeyType,proto3" json:"new_key_type,omitempty"`
+	RotationProof    []byte `protobuf:"bytes,4,opt,name=rotation_proof,json=rotationProof,proto3" json:"rotation_proof,omitempty"`
+	SignatureVersion uint32 `protobuf:"varint,5,opt,name=signature_version,json=signatureVersion,proto3" json:"signature_version,omitempty"`
+}
+
+func (m *MsgRotateProviderSigningKey) Reset()         { *m = MsgRotateProviderSigningKey{} }
+func (m *MsgRotateProviderSigningKey) String() string { return proto.CompactTextString(m) }
+func (*MsgRotateProviderSigningKey) ProtoMessage()    {}
+func (*MsgRotateProviderSigningKey) Descriptor() ([]byte, []int) {
+	return fileDescriptor_614bcf842c974387, []int{18}
+}
+func (m *MsgRotateProviderSigningKey) XXX_Unmarshal(b []byte) error {
+	return m.Unmarshal(b)
+}
+func (m *MsgRotateProviderSigningKey) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	if deterministic {
+		return xxx_messageInfo_MsgRotateProviderSigningKey.Marshal(b, m, deterministic)
+	} else {
+		b = b[:cap(b)]
+		n, err := m.MarshalToSizedBuffer(b)
+		if err != nil {
+			return nil, err
+		}
+		return b[:n], nil
+	}
+}
+func (m *MsgRotateProviderSigningKey) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_MsgRotateProviderSigningKey.Merge(m, src)
+}
+func (m *MsgRotateProviderSigningKey) XXX_Size() int {
+	return m.Size()
+}
+func (m *MsgRotateProviderSigningKey) XXX_DiscardUnknown() {
+	xxx_messageInfo_MsgRotateProviderSigningKey.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_MsgRotateProviderSigningKey proto.InternalMessageInfo
+
+func (m *MsgRotateProviderSigningKey) GetOwner() string {
+	if m != nil {
+		return m.Owner
+	}
+	return ""
+}
+
+func (m *MsgRotateProviderSigningKey) GetNewPublicKey() []byte {
+	if m != nil {
+		return m.NewPublicKey
+	}
+	return nil
+}
+
+func (m *MsgRotateProviderSigningKey) GetNewKeyType() string {
+	if m != nil {
+		return m.NewKeyType
+	}
+	return ""
+}
+
+func (m *MsgRotateProviderSigningKey) GetRotationProof() []byte {
+	if m != nil {
+		return m.RotationProof
+	}
+	return nil
+}
+
+func (m *MsgRotateProviderSigningKey) GetSignatureVersion() uint32 {
+	if m != nil {
+		return m.SignatureVersion
+	}
+	return 0
+}
+
+type MsgRotateProviderSigningKeyResponse struct {
+	KeyId             string `protobuf:"bytes,1,opt,name=key_id,json=keyId,proto3" json:"key_id,omitempty"`
+	Epoch             uint64 `protobuf:"varint,2,opt,name=epoch,proto3" json:"epoch,omitempty"`
+	ActivatedAtHeight int64  `protobuf:"varint,3,opt,name=activated_at_height,json=activatedAtHeight,proto3" json:"activated_at_height,omitempty"`
+}
+
+func (m *MsgRotateProviderSigningKeyResponse) Reset()         { *m = MsgRotateProviderSigningKeyResponse{} }
+func (m *MsgRotateProviderSigningKeyResponse) String() string { return proto.CompactTextString(m) }
+func (*MsgRotateProviderSigningKeyResponse) ProtoMessage()    {}
+func (*MsgRotateProviderSigningKeyResponse) Descriptor() ([]byte, []int) {
+	return fileDescriptor_614bcf842c974387, []int{19}
+}
+func (m *MsgRotateProviderSigningKeyResponse) XXX_Unmarshal(b []byte) error {
+	return m.Unmarshal(b)
+}
+func (m *MsgRotateProviderSigningKeyResponse) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	if deterministic {
+		return xxx_messageInfo_MsgRotateProviderSigningKeyResponse.Marshal(b, m, deterministic)
+	} else {
+		b = b[:cap(b)]
+		n, err := m.MarshalToSizedBuffer(b)
+		if err != nil {
+			return nil, err
+		}
+		return b[:n], nil
+	}
+}
+func (m *MsgRotateProviderSigningKeyResponse) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_MsgRotateProviderSigningKeyResponse.Merge(m, src)
+}
+func (m *MsgRotateProviderSigningKeyResponse) XXX_Size() int {
+	return m.Size()
+}
+func (m *MsgRotateProviderSigningKeyResponse) XXX_DiscardUnknown() {
+	xxx_messageInfo_MsgRotateProviderSigningKeyResponse.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_MsgRotateProviderSigningKeyResponse proto.InternalMessageInfo
+
+func (m *MsgRotateProviderSigningKeyResponse) GetKeyId() string {
+	if m != nil {
+		return m.KeyId
+	}
+	return ""
+}
+
+func (m *MsgRotateProviderSigningKeyResponse) GetEpoch() uint64 {
+	if m != nil {
+		return m.Epoch
+	}
+	return 0
+}
+
+func (m *MsgRotateProviderSigningKeyResponse) GetActivatedAtHeight() int64 {
+	if m != nil {
+		return m.ActivatedAtHeight
+	}
+	return 0
+}
+
+// MsgRevokeProviderSigningKey revokes the exact active key ID.
+type MsgRevokeProviderSigningKey struct {
+	Owner string `protobuf:"bytes,1,opt,name=owner,proto3" json:"owner,omitempty"`
+	KeyId string `protobuf:"bytes,2,opt,name=key_id,json=keyId,proto3" json:"key_id,omitempty"`
+}
+
+func (m *MsgRevokeProviderSigningKey) Reset()         { *m = MsgRevokeProviderSigningKey{} }
+func (m *MsgRevokeProviderSigningKey) String() string { return proto.CompactTextString(m) }
+func (*MsgRevokeProviderSigningKey) ProtoMessage()    {}
+func (*MsgRevokeProviderSigningKey) Descriptor() ([]byte, []int) {
+	return fileDescriptor_614bcf842c974387, []int{20}
+}
+func (m *MsgRevokeProviderSigningKey) XXX_Unmarshal(b []byte) error {
+	return m.Unmarshal(b)
+}
+func (m *MsgRevokeProviderSigningKey) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	if deterministic {
+		return xxx_messageInfo_MsgRevokeProviderSigningKey.Marshal(b, m, deterministic)
+	} else {
+		b = b[:cap(b)]
+		n, err := m.MarshalToSizedBuffer(b)
+		if err != nil {
+			return nil, err
+		}
+		return b[:n], nil
+	}
+}
+func (m *MsgRevokeProviderSigningKey) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_MsgRevokeProviderSigningKey.Merge(m, src)
+}
+func (m *MsgRevokeProviderSigningKey) XXX_Size() int {
+	return m.Size()
+}
+func (m *MsgRevokeProviderSigningKey) XXX_DiscardUnknown() {
+	xxx_messageInfo_MsgRevokeProviderSigningKey.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_MsgRevokeProviderSigningKey proto.InternalMessageInfo
+
+func (m *MsgRevokeProviderSigningKey) GetOwner() string {
+	if m != nil {
+		return m.Owner
+	}
+	return ""
+}
+
+func (m *MsgRevokeProviderSigningKey) GetKeyId() string {
+	if m != nil {
+		return m.KeyId
+	}
+	return ""
+}
+
+type MsgRevokeProviderSigningKeyResponse struct {
+	RevokedAtHeight int64 `protobuf:"varint,1,opt,name=revoked_at_height,json=revokedAtHeight,proto3" json:"revoked_at_height,omitempty"`
+}
+
+func (m *MsgRevokeProviderSigningKeyResponse) Reset()         { *m = MsgRevokeProviderSigningKeyResponse{} }
+func (m *MsgRevokeProviderSigningKeyResponse) String() string { return proto.CompactTextString(m) }
+func (*MsgRevokeProviderSigningKeyResponse) ProtoMessage()    {}
+func (*MsgRevokeProviderSigningKeyResponse) Descriptor() ([]byte, []int) {
+	return fileDescriptor_614bcf842c974387, []int{21}
+}
+func (m *MsgRevokeProviderSigningKeyResponse) XXX_Unmarshal(b []byte) error {
+	return m.Unmarshal(b)
+}
+func (m *MsgRevokeProviderSigningKeyResponse) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	if deterministic {
+		return xxx_messageInfo_MsgRevokeProviderSigningKeyResponse.Marshal(b, m, deterministic)
+	} else {
+		b = b[:cap(b)]
+		n, err := m.MarshalToSizedBuffer(b)
+		if err != nil {
+			return nil, err
+		}
+		return b[:n], nil
+	}
+}
+func (m *MsgRevokeProviderSigningKeyResponse) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_MsgRevokeProviderSigningKeyResponse.Merge(m, src)
+}
+func (m *MsgRevokeProviderSigningKeyResponse) XXX_Size() int {
+	return m.Size()
+}
+func (m *MsgRevokeProviderSigningKeyResponse) XXX_DiscardUnknown() {
+	xxx_messageInfo_MsgRevokeProviderSigningKeyResponse.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_MsgRevokeProviderSigningKeyResponse proto.InternalMessageInfo
+
+func (m *MsgRevokeProviderSigningKeyResponse) GetRevokedAtHeight() int64 {
+	if m != nil {
+		return m.RevokedAtHeight
+	}
+	return 0
+}
+
 func init() {
 	proto.RegisterEnum("virtengine.provider.v1beta4.VerificationMethod", VerificationMethod_name, VerificationMethod_value)
 	proto.RegisterType((*MsgCreateProvider)(nil), "virtengine.provider.v1beta4.MsgCreateProvider")
@@ -890,6 +1245,12 @@ func init() {
 	proto.RegisterType((*MsgConfirmDomainVerificationResponse)(nil), "virtengine.provider.v1beta4.MsgConfirmDomainVerificationResponse")
 	proto.RegisterType((*MsgRevokeDomainVerification)(nil), "virtengine.provider.v1beta4.MsgRevokeDomainVerification")
 	proto.RegisterType((*MsgRevokeDomainVerificationResponse)(nil), "virtengine.provider.v1beta4.MsgRevokeDomainVerificationResponse")
+	proto.RegisterType((*MsgSetProviderSigningKey)(nil), "virtengine.provider.v1beta4.MsgSetProviderSigningKey")
+	proto.RegisterType((*MsgSetProviderSigningKeyResponse)(nil), "virtengine.provider.v1beta4.MsgSetProviderSigningKeyResponse")
+	proto.RegisterType((*MsgRotateProviderSigningKey)(nil), "virtengine.provider.v1beta4.MsgRotateProviderSigningKey")
+	proto.RegisterType((*MsgRotateProviderSigningKeyResponse)(nil), "virtengine.provider.v1beta4.MsgRotateProviderSigningKeyResponse")
+	proto.RegisterType((*MsgRevokeProviderSigningKey)(nil), "virtengine.provider.v1beta4.MsgRevokeProviderSigningKey")
+	proto.RegisterType((*MsgRevokeProviderSigningKeyResponse)(nil), "virtengine.provider.v1beta4.MsgRevokeProviderSigningKeyResponse")
 }
 
 func init() {
@@ -897,66 +1258,83 @@ func init() {
 }
 
 var fileDescriptor_614bcf842c974387 = []byte{
-	// 940 bytes of a gzipped FileDescriptorProto
-	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0xec, 0x56, 0x41, 0x6f, 0x1b, 0x45,
-	0x14, 0xf6, 0xc6, 0x4d, 0x9a, 0x4c, 0xa0, 0xa4, 0x4b, 0xa5, 0x3a, 0x31, 0x78, 0xd2, 0x09, 0x11,
-	0x96, 0xa5, 0xee, 0x2a, 0x29, 0x5c, 0x8a, 0x38, 0xd8, 0x89, 0xdb, 0x58, 0xad, 0x9d, 0x6a, 0xbb,
-	0x69, 0x10, 0x07, 0x56, 0xeb, 0xec, 0x78, 0xb3, 0x4a, 0xbc, 0x63, 0x66, 0x26, 0x0b, 0xb9, 0xc2,
-	0x1f, 0x40, 0xfc, 0x02, 0xe0, 0x84, 0xe0, 0x82, 0x10, 0x3f, 0x80, 0x63, 0xc5, 0xa9, 0xe2, 0xc4,
-	0x69, 0x41, 0xc9, 0x01, 0xe4, 0xa3, 0x7f, 0x01, 0xda, 0x99, 0x5d, 0xef, 0x1a, 0xd7, 0x46, 0x48,
-	0x8d, 0x22, 0xa1, 0xde, 0xe6, 0x7d, 0xef, 0xcd, 0x7b, 0xdf, 0x7e, 0xdf, 0x1b, 0x69, 0xc1, 0x7a,
-	0xe0, 0x51, 0x8e, 0x7d, 0xd7, 0xf3, 0xb1, 0xde, 0xa3, 0x24, 0xf0, 0x1c, 0x4c, 0xf5, 0x60, 0xa3,
-	0x8d, 0xb9, 0xfd, 0x8e, 0xde, 0x65, 0xae, 0xd6, 0xa3, 0x84, 0x13, 0xb5, 0x98, 0x96, 0x69, 0x49,
-	0x99, 0x16, 0x97, 0xad, 0xdc, 0x70, 0x89, 0x4b, 0x44, 0x9d, 0x1e, 0x9d, 0xe4, 0x95, 0x95, 0x9b,
-	0x07, 0x84, 0x75, 0x09, 0x8b, 0x9a, 0xe8, 0xc1, 0x46, 0xda, 0x6b, 0x65, 0x59, 0x26, 0x2c, 0x79,
-	0x43, 0x06, 0x71, 0xea, 0x76, 0x86, 0x4d, 0xdb, 0x66, 0x58, 0xb7, 0x39, 0xa7, 0x5e, 0xfb, 0x84,
-	0x63, 0x16, 0xf5, 0x18, 0x46, 0x71, 0x79, 0x65, 0x1a, 0xf9, 0x21, 0x4d, 0x51, 0x8b, 0x7e, 0xc9,
-	0x83, 0xeb, 0x4d, 0xe6, 0x6e, 0x51, 0x6c, 0x73, 0xfc, 0x28, 0xce, 0xa9, 0xf7, 0xc1, 0x2c, 0xf9,
-	0xc4, 0xc7, 0xb4, 0xa0, 0xac, 0x2a, 0xe5, 0x85, 0xda, 0x46, 0x3f, 0x84, 0x12, 0x18, 0x84, 0xf0,
-	0x95, 0x53, 0xbb, 0x7b, 0x7c, 0x17, 0x89, 0x10, 0xfd, 0xfa, 0xd3, 0xed, 0x1b, 0x31, 0xd5, 0xaa,
-	0xe3, 0x50, 0xcc, 0xd8, 0x63, 0x4e, 0x3d, 0xdf, 0x35, 0x64, 0xb9, 0x5a, 0x07, 0xf3, 0x87, 0x84,
-	0x71, 0xeb, 0x84, 0x7a, 0x85, 0x19, 0xd1, 0xab, 0x72, 0x16, 0xc2, 0xab, 0x3b, 0x84, 0xf1, 0x3d,
-	0xa3, 0xd1, 0x0f, 0xe1, 0x30, 0x3d, 0x08, 0xe1, 0x6b, 0xb2, 0x73, 0x82, 0x20, 0xe3, 0x6a, 0x74,
-	0xdc, 0xa3, 0x9e, 0xfa, 0xb3, 0x02, 0x40, 0xfa, 0xcd, 0x85, 0xfc, 0x6a, 0xbe, 0xbc, 0xb8, 0x59,
-	0xd6, 0x32, 0xea, 0x47, 0xb2, 0x68, 0x69, 0x89, 0x16, 0x6c, 0x68, 0xd5, 0x24, 0xaa, 0x05, 0x4f,
-	0x43, 0x98, 0xeb, 0x87, 0x30, 0xd3, 0x63, 0x10, 0xc2, 0xeb, 0x72, 0x5c, 0x8a, 0xa1, 0xef, 0x7e,
-	0x87, 0x0f, 0x5c, 0x8f, 0x1f, 0x9e, 0xb4, 0xb5, 0x03, 0xd2, 0xd5, 0x33, 0x32, 0x66, 0x8e, 0xcc,
-	0x39, 0xd2, 0x5d, 0xa2, 0xfb, 0xc4, 0xc1, 0x3a, 0x3f, 0xed, 0x61, 0x36, 0xea, 0x46, 0x3a, 0x96,
-	0x19, 0x99, 0x79, 0xaa, 0x01, 0xae, 0x78, 0x7e, 0x87, 0x14, 0xae, 0xac, 0x2a, 0xe5, 0xc5, 0xcd,
-	0x5b, 0xda, 0x94, 0xcd, 0xd1, 0x1a, 0x7e, 0x87, 0xd4, 0x8a, 0x31, 0x69, 0x71, 0x6d, 0x10, 0xc2,
-	0x45, 0x49, 0x37, 0x8a, 0x90, 0x21, 0xc0, 0xbb, 0xd7, 0xfe, 0xfa, 0x0a, 0xe6, 0x3e, 0xfb, 0xf3,
-	0x87, 0x8a, 0x54, 0x1b, 0x15, 0xc1, 0xf2, 0x98, 0x97, 0x06, 0x66, 0x3d, 0xe2, 0x33, 0x9c, 0x38,
-	0xbd, 0xd7, 0x73, 0x5e, 0x3a, 0xfd, 0x3f, 0x71, 0x7a, 0xd4, 0xcb, 0xa1, 0xd3, 0xc7, 0xc2, 0xe8,
-	0x6d, 0x7c, 0x8c, 0x2f, 0xc0, 0xe8, 0x09, 0x54, 0x46, 0xa7, 0x0d, 0xa9, 0xfc, 0xa8, 0x00, 0xd4,
-	0x64, 0xee, 0x7d, 0xec, 0x63, 0x6a, 0x73, 0xbc, 0x4d, 0xba, 0xb6, 0xe7, 0x3f, 0xc1, 0xd4, 0xeb,
-	0x78, 0x07, 0x36, 0xf7, 0x88, 0x6f, 0x92, 0x23, 0xec, 0xbf, 0xb8, 0x2d, 0xbc, 0x03, 0xe6, 0x1c,
-	0x31, 0x23, 0xde, 0xc1, 0x62, 0x3f, 0x84, 0x31, 0x32, 0x08, 0xe1, 0xab, 0xb2, 0x95, 0x8c, 0x91,
-	0x11, 0x27, 0xc6, 0xbe, 0xe8, 0x6b, 0x05, 0x54, 0xfe, 0x9d, 0x74, 0xf2, 0x8d, 0xaa, 0x0e, 0x66,
-	0x79, 0x04, 0xc4, 0xe4, 0x97, 0x23, 0xf2, 0x02, 0x48, 0xc9, 0x8b, 0x10, 0x19, 0x12, 0x56, 0x6b,
-	0x00, 0xe0, 0x4f, 0x7b, 0x1e, 0xc5, 0xcc, 0xb2, 0xb9, 0x20, 0x9a, 0xaf, 0xad, 0x45, 0x4b, 0x9b,
-	0xa2, 0xe9, 0xd2, 0xa6, 0x18, 0x32, 0x16, 0xe2, 0xa0, 0xca, 0x11, 0x05, 0x37, 0x9b, 0xcc, 0x15,
-	0xa4, 0x4e, 0x13, 0xd5, 0x25, 0xd1, 0x8b, 0x73, 0xfa, 0x23, 0x00, 0x27, 0xcc, 0x1c, 0x6a, 0xf1,
-	0x1e, 0x98, 0x0f, 0x84, 0x50, 0xd8, 0x11, 0xe3, 0xe7, 0x6b, 0x30, 0x7a, 0xfa, 0x09, 0x96, 0x3e,
-	0xfd, 0x04, 0x41, 0xc6, 0x30, 0x89, 0xbe, 0x9c, 0x01, 0x6f, 0x34, 0x99, 0x6b, 0xe0, 0x8f, 0x4f,
-	0x30, 0xe3, 0xe3, 0xb2, 0x5f, 0xee, 0x9a, 0xa8, 0x0e, 0x98, 0xeb, 0x62, 0x7e, 0x48, 0x9c, 0x42,
-	0x7e, 0x55, 0x29, 0x5f, 0xdb, 0xd4, 0xa7, 0xbe, 0xec, 0x2c, 0xf1, 0xa6, 0xb8, 0x26, 0xa7, 0xc8,
-	0x16, 0xe9, 0x14, 0x19, 0x23, 0x23, 0x4e, 0x8c, 0x89, 0xfe, 0xf9, 0x0c, 0x78, 0x6b, 0x9a, 0x28,
-	0x97, 0xba, 0x86, 0x6a, 0x07, 0xbc, 0x1e, 0x64, 0xc8, 0x58, 0xdc, 0xa6, 0x2e, 0xe6, 0x42, 0xa0,
-	0x85, 0xda, 0xbb, 0xfd, 0x10, 0x3e, 0x2f, 0x3d, 0x08, 0xe1, 0x4a, 0x76, 0x0b, 0x46, 0x92, 0xc8,
-	0x50, 0xb3, 0xa8, 0x29, 0xc1, 0x6f, 0x15, 0xb1, 0x1a, 0x5b, 0xc4, 0xef, 0x78, 0xb4, 0x7b, 0x91,
-	0xab, 0xa1, 0x83, 0xd9, 0x1e, 0x25, 0xa4, 0x13, 0x6f, 0x86, 0x90, 0x51, 0x00, 0x69, 0x23, 0x11,
-	0x22, 0x43, 0xc2, 0x63, 0x86, 0x7d, 0xaf, 0x08, 0xc3, 0x26, 0x52, 0x7d, 0x21, 0x6f, 0x45, 0xbd,
-	0x07, 0x16, 0x93, 0x73, 0xea, 0xde, 0x7a, 0x3f, 0x84, 0x59, 0x78, 0x10, 0x42, 0x75, 0xb4, 0x85,
-	0xf0, 0x0f, 0x24, 0x51, 0x95, 0xa3, 0x00, 0x14, 0xc5, 0x76, 0x05, 0xe4, 0x08, 0x5f, 0xa0, 0xac,
-	0x63, 0x2a, 0xad, 0x83, 0xb5, 0x29, 0x73, 0x13, 0x8d, 0x2a, 0xdf, 0x28, 0x40, 0x1d, 0x7f, 0x49,
-	0x2a, 0x04, 0xc5, 0x27, 0x75, 0xa3, 0x71, 0xaf, 0xb1, 0x55, 0x35, 0x1b, 0xbb, 0x2d, 0xab, 0x59,
-	0x37, 0x77, 0x76, 0xb7, 0xad, 0xbd, 0xd6, 0x83, 0xd6, 0xee, 0x7e, 0x6b, 0x29, 0x37, 0xa9, 0x60,
-	0xbb, 0xf5, 0xd8, 0x32, 0x3f, 0x30, 0x97, 0x14, 0xf5, 0x16, 0x78, 0x73, 0x52, 0xc1, 0x56, 0xab,
-	0xda, 0xac, 0x2f, 0xcd, 0xa8, 0x6f, 0x83, 0xb5, 0xe7, 0x95, 0xec, 0x98, 0xe6, 0x23, 0x6b, 0xbf,
-	0xfe, 0xf0, 0xa1, 0x25, 0x87, 0xe5, 0x6b, 0xfb, 0x4f, 0xcf, 0x4a, 0xca, 0xb3, 0xb3, 0x92, 0xf2,
-	0xc7, 0x59, 0x49, 0xf9, 0xe2, 0xbc, 0x94, 0x7b, 0x76, 0x5e, 0xca, 0xfd, 0x76, 0x5e, 0xca, 0x7d,
-	0xf8, 0xfe, 0x7f, 0xfa, 0xc7, 0xf8, 0xe7, 0xbf, 0x7a, 0x7b, 0x4e, 0xfc, 0xa3, 0xdf, 0xf9, 0x3b,
-	0x00, 0x00, 0xff, 0xff, 0x5b, 0xbb, 0x70, 0xc3, 0x8e, 0x0c, 0x00, 0x00,
+	// 1203 bytes of a gzipped FileDescriptorProto
+	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0xec, 0x57, 0x4f, 0x6f, 0x1b, 0xd5,
+	0x17, 0xf5, 0xc4, 0x71, 0x9a, 0xbc, 0xb4, 0x69, 0x32, 0xed, 0x4f, 0x75, 0xe2, 0x5f, 0x3d, 0xee,
+	0xa4, 0x11, 0x96, 0x51, 0x67, 0x94, 0x14, 0x36, 0x45, 0x2c, 0xec, 0x24, 0x6d, 0xac, 0xd4, 0x4e,
+	0x98, 0x38, 0x09, 0x62, 0xc1, 0x68, 0x6c, 0x3f, 0x8f, 0x47, 0x8e, 0xe7, 0x99, 0x79, 0xcf, 0x13,
+	0xbc, 0x42, 0x2a, 0x5f, 0x00, 0x21, 0x3e, 0x00, 0xb0, 0x42, 0xb0, 0x41, 0x88, 0x0f, 0xc0, 0xb2,
+	0x62, 0x55, 0xb1, 0x62, 0x35, 0xa0, 0x64, 0x01, 0xf2, 0xd2, 0x3b, 0x76, 0x68, 0xde, 0x9b, 0x7f,
+	0xae, 0x6b, 0x57, 0x88, 0x84, 0x4a, 0x88, 0xdd, 0xdc, 0x73, 0xef, 0xdc, 0x7b, 0xde, 0x39, 0xf7,
+	0x65, 0x62, 0xb0, 0x66, 0x1b, 0x16, 0x81, 0xa6, 0x6e, 0x98, 0x50, 0xee, 0x58, 0xc8, 0x36, 0xea,
+	0xd0, 0x92, 0xed, 0xf5, 0x2a, 0x24, 0xda, 0x1b, 0x72, 0x1b, 0xeb, 0x52, 0xc7, 0x42, 0x04, 0xf1,
+	0xa9, 0xb0, 0x4c, 0xf2, 0xcb, 0x24, 0xaf, 0x6c, 0xe5, 0xa6, 0x8e, 0x74, 0x44, 0xeb, 0x64, 0xf7,
+	0x89, 0xbd, 0xb2, 0x72, 0xab, 0x86, 0x70, 0x1b, 0x61, 0xb7, 0x89, 0x6c, 0xaf, 0x87, 0xbd, 0x56,
+	0x96, 0x59, 0x42, 0x65, 0x6f, 0xb0, 0xc0, 0x4b, 0xdd, 0x8b, 0xb0, 0xa9, 0x6a, 0x18, 0xca, 0x1a,
+	0x21, 0x96, 0x51, 0xed, 0x12, 0x88, 0xdd, 0x1e, 0x41, 0xe4, 0x95, 0xe7, 0x26, 0x91, 0x0f, 0x68,
+	0xd2, 0x5a, 0xf1, 0xc7, 0x38, 0x58, 0x2a, 0x61, 0x7d, 0xd3, 0x82, 0x1a, 0x81, 0xfb, 0x5e, 0x8e,
+	0x7f, 0x04, 0x12, 0xe8, 0xd4, 0x84, 0x56, 0x92, 0xcb, 0x70, 0xd9, 0xb9, 0xc2, 0x7a, 0xdf, 0x11,
+	0x18, 0x30, 0x70, 0x84, 0xab, 0x3d, 0xad, 0x7d, 0xf2, 0x40, 0xa4, 0xa1, 0xf8, 0xd3, 0xf7, 0xf7,
+	0x6e, 0x7a, 0x54, 0xf3, 0xf5, 0xba, 0x05, 0x31, 0x3e, 0x20, 0x96, 0x61, 0xea, 0x0a, 0x2b, 0xe7,
+	0xb7, 0xc1, 0x6c, 0x13, 0x61, 0xa2, 0x76, 0x2d, 0x23, 0x39, 0x45, 0x7b, 0xe5, 0xce, 0x1c, 0xe1,
+	0xca, 0x0e, 0xc2, 0xe4, 0x50, 0x29, 0xf6, 0x1d, 0x21, 0x48, 0x0f, 0x1c, 0xe1, 0x3a, 0xeb, 0xec,
+	0x23, 0xa2, 0x72, 0xc5, 0x7d, 0x3c, 0xb4, 0x0c, 0xfe, 0x07, 0x0e, 0x80, 0xf0, 0xcc, 0xc9, 0x78,
+	0x26, 0x9e, 0x9d, 0xdf, 0xc8, 0x4a, 0x11, 0xf5, 0x5d, 0x59, 0xa4, 0xb0, 0x44, 0xb2, 0xd7, 0xa5,
+	0xbc, 0x1f, 0x15, 0xec, 0xa7, 0x8e, 0x10, 0xeb, 0x3b, 0x42, 0xa4, 0xc7, 0xc0, 0x11, 0x96, 0xd8,
+	0xb8, 0x10, 0x13, 0xbf, 0xfe, 0x45, 0xd8, 0xd5, 0x0d, 0xd2, 0xec, 0x56, 0xa5, 0x1a, 0x6a, 0xcb,
+	0x11, 0x19, 0x23, 0x8f, 0xb8, 0xde, 0x92, 0x75, 0x24, 0x9b, 0xa8, 0x0e, 0x65, 0xd2, 0xeb, 0x40,
+	0x3c, 0xec, 0x46, 0x38, 0x16, 0x2b, 0x91, 0x79, 0xbc, 0x02, 0xa6, 0x0d, 0xb3, 0x81, 0x92, 0xd3,
+	0x19, 0x2e, 0x3b, 0xbf, 0x71, 0x47, 0x9a, 0xb0, 0x39, 0x52, 0xd1, 0x6c, 0xa0, 0x42, 0xca, 0x23,
+	0x4d, 0x5f, 0x1b, 0x38, 0xc2, 0x3c, 0xa3, 0xeb, 0x46, 0xa2, 0x42, 0xc1, 0x07, 0x0b, 0xbf, 0x7f,
+	0x2e, 0xc4, 0x9e, 0xfc, 0xf6, 0x6d, 0x8e, 0xa9, 0x2d, 0xa6, 0xc0, 0xf2, 0x88, 0x97, 0x0a, 0xc4,
+	0x1d, 0x64, 0x62, 0xe8, 0x3b, 0x7d, 0xd8, 0xa9, 0xff, 0xe7, 0xf4, 0xbf, 0xc4, 0xe9, 0x61, 0x2f,
+	0x03, 0xa7, 0x4f, 0xa8, 0xd1, 0x5b, 0xf0, 0x04, 0x5e, 0x82, 0xd1, 0x63, 0xa8, 0x0c, 0x4f, 0x0b,
+	0xa8, 0x7c, 0xc7, 0x01, 0xb1, 0x84, 0xf5, 0x47, 0xd0, 0x84, 0x96, 0x46, 0xe0, 0x16, 0x6a, 0x6b,
+	0x86, 0x79, 0x04, 0x2d, 0xa3, 0x61, 0xd4, 0x34, 0x62, 0x20, 0xb3, 0x82, 0x5a, 0xd0, 0xbc, 0xb8,
+	0x2d, 0xbc, 0x0f, 0x66, 0xea, 0x74, 0x86, 0xb7, 0x83, 0xa9, 0xbe, 0x23, 0x78, 0xc8, 0xc0, 0x11,
+	0xae, 0xb1, 0x56, 0x2c, 0x16, 0x15, 0x2f, 0x31, 0x72, 0xa2, 0x2f, 0x38, 0x90, 0x7b, 0x39, 0x69,
+	0xff, 0x8c, 0xbc, 0x0c, 0x12, 0xc4, 0x05, 0x3c, 0xf2, 0xcb, 0x2e, 0x79, 0x0a, 0x84, 0xe4, 0x69,
+	0x28, 0x2a, 0x0c, 0xe6, 0x0b, 0x00, 0xc0, 0x0f, 0x3b, 0x86, 0x05, 0xb1, 0xaa, 0x11, 0x4a, 0x34,
+	0x5e, 0x58, 0x75, 0x97, 0x36, 0x44, 0xc3, 0xa5, 0x0d, 0x31, 0x51, 0x99, 0xf3, 0x82, 0x3c, 0x11,
+	0x2d, 0x70, 0xab, 0x84, 0x75, 0x4a, 0xaa, 0xe7, 0xab, 0xce, 0x88, 0x5e, 0x9e, 0xd3, 0xef, 0x03,
+	0x61, 0xcc, 0xcc, 0x40, 0x8b, 0xb7, 0xc0, 0xac, 0x4d, 0x85, 0x82, 0x75, 0x3a, 0x7e, 0xb6, 0x20,
+	0xb8, 0x57, 0xdf, 0xc7, 0xc2, 0xab, 0xef, 0x23, 0xa2, 0x12, 0x24, 0xc5, 0x4f, 0xa7, 0xc0, 0xff,
+	0x4b, 0x58, 0x57, 0xe0, 0x07, 0x5d, 0x88, 0xc9, 0xa8, 0xec, 0xaf, 0x76, 0x4d, 0xf8, 0x3a, 0x98,
+	0x69, 0x43, 0xd2, 0x44, 0xf5, 0x64, 0x3c, 0xc3, 0x65, 0x17, 0x36, 0xe4, 0x89, 0x37, 0x3b, 0x4a,
+	0xbc, 0x44, 0x5f, 0x63, 0x53, 0x58, 0x8b, 0x70, 0x0a, 0x8b, 0x45, 0xc5, 0x4b, 0x8c, 0x88, 0xfe,
+	0xf1, 0x14, 0xb8, 0x3b, 0x49, 0x94, 0x57, 0xba, 0x86, 0x7c, 0x03, 0xdc, 0xb0, 0x23, 0x64, 0x54,
+	0xa2, 0x59, 0x3a, 0x24, 0x54, 0xa0, 0xb9, 0xc2, 0x9b, 0x7d, 0x47, 0x78, 0x51, 0x7a, 0xe0, 0x08,
+	0x2b, 0xd1, 0x2d, 0x18, 0x4a, 0x8a, 0x0a, 0x1f, 0x45, 0x2b, 0x0c, 0xfc, 0x8a, 0xa3, 0xab, 0xb1,
+	0x89, 0xcc, 0x86, 0x61, 0xb5, 0x2f, 0x73, 0x35, 0x64, 0x90, 0xe8, 0x58, 0x08, 0x35, 0xbc, 0xcd,
+	0xa0, 0x32, 0x52, 0x20, 0x6c, 0x44, 0x43, 0x51, 0x61, 0xf0, 0x88, 0x61, 0xdf, 0x70, 0xd4, 0xb0,
+	0xb1, 0x54, 0x2f, 0xe4, 0xae, 0xf0, 0x0f, 0xc1, 0xbc, 0xff, 0x1c, 0xba, 0xb7, 0xd6, 0x77, 0x84,
+	0x28, 0x3c, 0x70, 0x04, 0x7e, 0xb8, 0x05, 0xf5, 0x0f, 0xf8, 0x51, 0x9e, 0x88, 0x36, 0x48, 0xd1,
+	0xed, 0xb2, 0x51, 0x0b, 0x5e, 0xa2, 0xac, 0x23, 0x2a, 0xad, 0x81, 0xd5, 0x09, 0x73, 0x83, 0xef,
+	0xc7, 0x67, 0x1c, 0x48, 0x96, 0xb0, 0x7e, 0x00, 0x89, 0xff, 0x07, 0xe7, 0xc0, 0xd0, 0x4d, 0xc3,
+	0xd4, 0x77, 0x61, 0x8f, 0x97, 0x86, 0xc9, 0x25, 0x5f, 0x66, 0xed, 0x6d, 0x00, 0x3a, 0xdd, 0xea,
+	0x89, 0x51, 0x53, 0x5b, 0xb0, 0x47, 0x25, 0xbb, 0xaa, 0xcc, 0x31, 0xc4, 0x6d, 0xb7, 0x0c, 0x66,
+	0x5b, 0xb0, 0xa7, 0xba, 0x5f, 0x7a, 0xb6, 0xc0, 0xca, 0x95, 0x16, 0xec, 0x55, 0x7a, 0x1d, 0x38,
+	0xc2, 0xfe, 0x23, 0x90, 0x19, 0xc7, 0x2a, 0xb0, 0xf7, 0x7f, 0x60, 0xc6, 0x6d, 0x67, 0x30, 0x73,
+	0xe7, 0x94, 0x44, 0x0b, 0xf6, 0x8a, 0x75, 0xfe, 0x26, 0x48, 0xc0, 0x0e, 0xaa, 0x35, 0xe9, 0xfc,
+	0x69, 0x85, 0x05, 0xbc, 0x04, 0x6e, 0x68, 0x35, 0x62, 0xd8, 0x1a, 0xa1, 0x1e, 0xa9, 0x4d, 0x68,
+	0xe8, 0x4d, 0x76, 0x8f, 0xe2, 0xca, 0x52, 0x90, 0xca, 0x93, 0x1d, 0x9a, 0x10, 0xff, 0xe0, 0x98,
+	0x6f, 0x88, 0x44, 0xfe, 0x01, 0xf8, 0x1b, 0xd2, 0xdc, 0x05, 0x0b, 0x26, 0x3c, 0x55, 0x47, 0xe4,
+	0xb9, 0x6a, 0xc2, 0xd3, 0xfd, 0x40, 0xa1, 0x0c, 0x70, 0x63, 0xf5, 0x39, 0x95, 0x80, 0x09, 0x4f,
+	0x77, 0x99, 0x50, 0xfc, 0x1a, 0x58, 0xb0, 0x5c, 0x4e, 0xee, 0x7d, 0x66, 0xd7, 0x68, 0x9a, 0xf6,
+	0xb9, 0xe6, 0xa3, 0xfb, 0x2e, 0xc8, 0xbf, 0x0e, 0x96, 0xb0, 0xa1, 0x9b, 0x1a, 0xe9, 0x5a, 0x50,
+	0xb5, 0xa1, 0x85, 0x0d, 0x64, 0x26, 0x13, 0x19, 0x2e, 0x7b, 0x4d, 0x59, 0x0c, 0x12, 0x47, 0x0c,
+	0x1f, 0x11, 0xff, 0x09, 0xc7, 0x76, 0x67, 0xcc, 0xd9, 0xff, 0x19, 0x03, 0x48, 0xe4, 0xde, 0x5c,
+	0x80, 0xfe, 0x21, 0xd7, 0xa9, 0x08, 0xd7, 0x91, 0xa3, 0xbf, 0x13, 0xb9, 0x35, 0x13, 0x4e, 0x9e,
+	0x03, 0x4b, 0x16, 0xad, 0x89, 0x1e, 0x85, 0xa3, 0x47, 0xb9, 0xee, 0x25, 0xfc, 0x83, 0xe4, 0xbe,
+	0xe4, 0x00, 0x3f, 0xfa, 0xad, 0xe2, 0x05, 0x90, 0x3a, 0xda, 0x56, 0x8a, 0x0f, 0x8b, 0x9b, 0xf9,
+	0x4a, 0x71, 0xaf, 0xac, 0x96, 0xb6, 0x2b, 0x3b, 0x7b, 0x5b, 0xea, 0x61, 0x79, 0xb7, 0xbc, 0x77,
+	0x5c, 0x5e, 0x8c, 0x8d, 0x2b, 0xd8, 0x2a, 0x1f, 0xa8, 0x95, 0x77, 0x2b, 0x8b, 0x1c, 0x7f, 0x07,
+	0xdc, 0x1e, 0x57, 0xb0, 0x59, 0xce, 0x97, 0xb6, 0x17, 0xa7, 0xf8, 0xd7, 0xc0, 0xea, 0x8b, 0x4a,
+	0x76, 0x2a, 0x95, 0x7d, 0xf5, 0x78, 0xfb, 0xf1, 0x63, 0x95, 0x0d, 0x8b, 0x17, 0x8e, 0x9f, 0x9e,
+	0xa5, 0xb9, 0x67, 0x67, 0x69, 0xee, 0xd7, 0xb3, 0x34, 0xf7, 0xc9, 0x79, 0x3a, 0xf6, 0xec, 0x3c,
+	0x1d, 0xfb, 0xf9, 0x3c, 0x1d, 0x7b, 0xef, 0xed, 0xbf, 0xf4, 0x5f, 0xfc, 0xf3, 0xbf, 0x86, 0xab,
+	0x33, 0xf4, 0x57, 0xf0, 0xfd, 0x3f, 0x03, 0x00, 0x00, 0xff, 0xff, 0xee, 0x2f, 0xcc, 0xba, 0xf0,
+	0x0f, 0x00, 0x00,
 }
 
 func (m *MsgCreateProvider) Marshal() (dAtA []byte, err error) {
@@ -1527,6 +1905,251 @@ func (m *MsgRevokeDomainVerificationResponse) MarshalToSizedBuffer(dAtA []byte) 
 	return len(dAtA) - i, nil
 }
 
+func (m *MsgSetProviderSigningKey) Marshal() (dAtA []byte, err error) {
+	size := m.Size()
+	dAtA = make([]byte, size)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
+	if err != nil {
+		return nil, err
+	}
+	return dAtA[:n], nil
+}
+
+func (m *MsgSetProviderSigningKey) MarshalTo(dAtA []byte) (int, error) {
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *MsgSetProviderSigningKey) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
+	_ = i
+	var l int
+	_ = l
+	if len(m.KeyType) > 0 {
+		i -= len(m.KeyType)
+		copy(dAtA[i:], m.KeyType)
+		i = encodeVarintMsg(dAtA, i, uint64(len(m.KeyType)))
+		i--
+		dAtA[i] = 0x1a
+	}
+	if len(m.PublicKey) > 0 {
+		i -= len(m.PublicKey)
+		copy(dAtA[i:], m.PublicKey)
+		i = encodeVarintMsg(dAtA, i, uint64(len(m.PublicKey)))
+		i--
+		dAtA[i] = 0x12
+	}
+	if len(m.Owner) > 0 {
+		i -= len(m.Owner)
+		copy(dAtA[i:], m.Owner)
+		i = encodeVarintMsg(dAtA, i, uint64(len(m.Owner)))
+		i--
+		dAtA[i] = 0xa
+	}
+	return len(dAtA) - i, nil
+}
+
+func (m *MsgSetProviderSigningKeyResponse) Marshal() (dAtA []byte, err error) {
+	size := m.Size()
+	dAtA = make([]byte, size)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
+	if err != nil {
+		return nil, err
+	}
+	return dAtA[:n], nil
+}
+
+func (m *MsgSetProviderSigningKeyResponse) MarshalTo(dAtA []byte) (int, error) {
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *MsgSetProviderSigningKeyResponse) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
+	_ = i
+	var l int
+	_ = l
+	if m.ActivatedAtHeight != 0 {
+		i = encodeVarintMsg(dAtA, i, uint64(m.ActivatedAtHeight))
+		i--
+		dAtA[i] = 0x18
+	}
+	if m.Epoch != 0 {
+		i = encodeVarintMsg(dAtA, i, uint64(m.Epoch))
+		i--
+		dAtA[i] = 0x10
+	}
+	if len(m.KeyId) > 0 {
+		i -= len(m.KeyId)
+		copy(dAtA[i:], m.KeyId)
+		i = encodeVarintMsg(dAtA, i, uint64(len(m.KeyId)))
+		i--
+		dAtA[i] = 0xa
+	}
+	return len(dAtA) - i, nil
+}
+
+func (m *MsgRotateProviderSigningKey) Marshal() (dAtA []byte, err error) {
+	size := m.Size()
+	dAtA = make([]byte, size)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
+	if err != nil {
+		return nil, err
+	}
+	return dAtA[:n], nil
+}
+
+func (m *MsgRotateProviderSigningKey) MarshalTo(dAtA []byte) (int, error) {
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *MsgRotateProviderSigningKey) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
+	_ = i
+	var l int
+	_ = l
+	if m.SignatureVersion != 0 {
+		i = encodeVarintMsg(dAtA, i, uint64(m.SignatureVersion))
+		i--
+		dAtA[i] = 0x28
+	}
+	if len(m.RotationProof) > 0 {
+		i -= len(m.RotationProof)
+		copy(dAtA[i:], m.RotationProof)
+		i = encodeVarintMsg(dAtA, i, uint64(len(m.RotationProof)))
+		i--
+		dAtA[i] = 0x22
+	}
+	if len(m.NewKeyType) > 0 {
+		i -= len(m.NewKeyType)
+		copy(dAtA[i:], m.NewKeyType)
+		i = encodeVarintMsg(dAtA, i, uint64(len(m.NewKeyType)))
+		i--
+		dAtA[i] = 0x1a
+	}
+	if len(m.NewPublicKey) > 0 {
+		i -= len(m.NewPublicKey)
+		copy(dAtA[i:], m.NewPublicKey)
+		i = encodeVarintMsg(dAtA, i, uint64(len(m.NewPublicKey)))
+		i--
+		dAtA[i] = 0x12
+	}
+	if len(m.Owner) > 0 {
+		i -= len(m.Owner)
+		copy(dAtA[i:], m.Owner)
+		i = encodeVarintMsg(dAtA, i, uint64(len(m.Owner)))
+		i--
+		dAtA[i] = 0xa
+	}
+	return len(dAtA) - i, nil
+}
+
+func (m *MsgRotateProviderSigningKeyResponse) Marshal() (dAtA []byte, err error) {
+	size := m.Size()
+	dAtA = make([]byte, size)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
+	if err != nil {
+		return nil, err
+	}
+	return dAtA[:n], nil
+}
+
+func (m *MsgRotateProviderSigningKeyResponse) MarshalTo(dAtA []byte) (int, error) {
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *MsgRotateProviderSigningKeyResponse) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
+	_ = i
+	var l int
+	_ = l
+	if m.ActivatedAtHeight != 0 {
+		i = encodeVarintMsg(dAtA, i, uint64(m.ActivatedAtHeight))
+		i--
+		dAtA[i] = 0x18
+	}
+	if m.Epoch != 0 {
+		i = encodeVarintMsg(dAtA, i, uint64(m.Epoch))
+		i--
+		dAtA[i] = 0x10
+	}
+	if len(m.KeyId) > 0 {
+		i -= len(m.KeyId)
+		copy(dAtA[i:], m.KeyId)
+		i = encodeVarintMsg(dAtA, i, uint64(len(m.KeyId)))
+		i--
+		dAtA[i] = 0xa
+	}
+	return len(dAtA) - i, nil
+}
+
+func (m *MsgRevokeProviderSigningKey) Marshal() (dAtA []byte, err error) {
+	size := m.Size()
+	dAtA = make([]byte, size)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
+	if err != nil {
+		return nil, err
+	}
+	return dAtA[:n], nil
+}
+
+func (m *MsgRevokeProviderSigningKey) MarshalTo(dAtA []byte) (int, error) {
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *MsgRevokeProviderSigningKey) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
+	_ = i
+	var l int
+	_ = l
+	if len(m.KeyId) > 0 {
+		i -= len(m.KeyId)
+		copy(dAtA[i:], m.KeyId)
+		i = encodeVarintMsg(dAtA, i, uint64(len(m.KeyId)))
+		i--
+		dAtA[i] = 0x12
+	}
+	if len(m.Owner) > 0 {
+		i -= len(m.Owner)
+		copy(dAtA[i:], m.Owner)
+		i = encodeVarintMsg(dAtA, i, uint64(len(m.Owner)))
+		i--
+		dAtA[i] = 0xa
+	}
+	return len(dAtA) - i, nil
+}
+
+func (m *MsgRevokeProviderSigningKeyResponse) Marshal() (dAtA []byte, err error) {
+	size := m.Size()
+	dAtA = make([]byte, size)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
+	if err != nil {
+		return nil, err
+	}
+	return dAtA[:n], nil
+}
+
+func (m *MsgRevokeProviderSigningKeyResponse) MarshalTo(dAtA []byte) (int, error) {
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *MsgRevokeProviderSigningKeyResponse) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
+	_ = i
+	var l int
+	_ = l
+	if m.RevokedAtHeight != 0 {
+		i = encodeVarintMsg(dAtA, i, uint64(m.RevokedAtHeight))
+		i--
+		dAtA[i] = 0x8
+	}
+	return len(dAtA) - i, nil
+}
+
 func encodeVarintMsg(dAtA []byte, offset int, v uint64) int {
 	offset -= sovMsg(v)
 	base := offset
@@ -1777,6 +2400,122 @@ func (m *MsgRevokeDomainVerificationResponse) Size() (n int) {
 	}
 	var l int
 	_ = l
+	return n
+}
+
+func (m *MsgSetProviderSigningKey) Size() (n int) {
+	if m == nil {
+		return 0
+	}
+	var l int
+	_ = l
+	l = len(m.Owner)
+	if l > 0 {
+		n += 1 + l + sovMsg(uint64(l))
+	}
+	l = len(m.PublicKey)
+	if l > 0 {
+		n += 1 + l + sovMsg(uint64(l))
+	}
+	l = len(m.KeyType)
+	if l > 0 {
+		n += 1 + l + sovMsg(uint64(l))
+	}
+	return n
+}
+
+func (m *MsgSetProviderSigningKeyResponse) Size() (n int) {
+	if m == nil {
+		return 0
+	}
+	var l int
+	_ = l
+	l = len(m.KeyId)
+	if l > 0 {
+		n += 1 + l + sovMsg(uint64(l))
+	}
+	if m.Epoch != 0 {
+		n += 1 + sovMsg(uint64(m.Epoch))
+	}
+	if m.ActivatedAtHeight != 0 {
+		n += 1 + sovMsg(uint64(m.ActivatedAtHeight))
+	}
+	return n
+}
+
+func (m *MsgRotateProviderSigningKey) Size() (n int) {
+	if m == nil {
+		return 0
+	}
+	var l int
+	_ = l
+	l = len(m.Owner)
+	if l > 0 {
+		n += 1 + l + sovMsg(uint64(l))
+	}
+	l = len(m.NewPublicKey)
+	if l > 0 {
+		n += 1 + l + sovMsg(uint64(l))
+	}
+	l = len(m.NewKeyType)
+	if l > 0 {
+		n += 1 + l + sovMsg(uint64(l))
+	}
+	l = len(m.RotationProof)
+	if l > 0 {
+		n += 1 + l + sovMsg(uint64(l))
+	}
+	if m.SignatureVersion != 0 {
+		n += 1 + sovMsg(uint64(m.SignatureVersion))
+	}
+	return n
+}
+
+func (m *MsgRotateProviderSigningKeyResponse) Size() (n int) {
+	if m == nil {
+		return 0
+	}
+	var l int
+	_ = l
+	l = len(m.KeyId)
+	if l > 0 {
+		n += 1 + l + sovMsg(uint64(l))
+	}
+	if m.Epoch != 0 {
+		n += 1 + sovMsg(uint64(m.Epoch))
+	}
+	if m.ActivatedAtHeight != 0 {
+		n += 1 + sovMsg(uint64(m.ActivatedAtHeight))
+	}
+	return n
+}
+
+func (m *MsgRevokeProviderSigningKey) Size() (n int) {
+	if m == nil {
+		return 0
+	}
+	var l int
+	_ = l
+	l = len(m.Owner)
+	if l > 0 {
+		n += 1 + l + sovMsg(uint64(l))
+	}
+	l = len(m.KeyId)
+	if l > 0 {
+		n += 1 + l + sovMsg(uint64(l))
+	}
+	return n
+}
+
+func (m *MsgRevokeProviderSigningKeyResponse) Size() (n int) {
+	if m == nil {
+		return 0
+	}
+	var l int
+	_ = l
+	if m.RevokedAtHeight != 0 {
+		n += 1 + sovMsg(uint64(m.RevokedAtHeight))
+	}
 	return n
 }
 
@@ -3327,6 +4066,778 @@ func (m *MsgRevokeDomainVerificationResponse) Unmarshal(dAtA []byte) error {
 			return fmt.Errorf("proto: MsgRevokeDomainVerificationResponse: illegal tag %d (wire type %d)", fieldNum, wire)
 		}
 		switch fieldNum {
+		default:
+			iNdEx = preIndex
+			skippy, err := skipMsg(dAtA[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if (skippy < 0) || (iNdEx+skippy) < 0 {
+				return ErrInvalidLengthMsg
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			iNdEx += skippy
+		}
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
+func (m *MsgSetProviderSigningKey) Unmarshal(dAtA []byte) error {
+	l := len(dAtA)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return ErrIntOverflowMsg
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := dAtA[iNdEx]
+			iNdEx++
+			wire |= uint64(b&0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: MsgSetProviderSigningKey: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: MsgSetProviderSigningKey: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
+		case 1:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Owner", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowMsg
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLengthMsg
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthMsg
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.Owner = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
+		case 2:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field PublicKey", wireType)
+			}
+			var byteLen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowMsg
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				byteLen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if byteLen < 0 {
+				return ErrInvalidLengthMsg
+			}
+			postIndex := iNdEx + byteLen
+			if postIndex < 0 {
+				return ErrInvalidLengthMsg
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.PublicKey = append(m.PublicKey[:0], dAtA[iNdEx:postIndex]...)
+			if m.PublicKey == nil {
+				m.PublicKey = []byte{}
+			}
+			iNdEx = postIndex
+		case 3:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field KeyType", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowMsg
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLengthMsg
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthMsg
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.KeyType = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
+		default:
+			iNdEx = preIndex
+			skippy, err := skipMsg(dAtA[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if (skippy < 0) || (iNdEx+skippy) < 0 {
+				return ErrInvalidLengthMsg
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			iNdEx += skippy
+		}
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
+func (m *MsgSetProviderSigningKeyResponse) Unmarshal(dAtA []byte) error {
+	l := len(dAtA)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return ErrIntOverflowMsg
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := dAtA[iNdEx]
+			iNdEx++
+			wire |= uint64(b&0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: MsgSetProviderSigningKeyResponse: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: MsgSetProviderSigningKeyResponse: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
+		case 1:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field KeyId", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowMsg
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLengthMsg
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthMsg
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.KeyId = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
+		case 2:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Epoch", wireType)
+			}
+			m.Epoch = 0
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowMsg
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				m.Epoch |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+		case 3:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field ActivatedAtHeight", wireType)
+			}
+			m.ActivatedAtHeight = 0
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowMsg
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				m.ActivatedAtHeight |= int64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+		default:
+			iNdEx = preIndex
+			skippy, err := skipMsg(dAtA[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if (skippy < 0) || (iNdEx+skippy) < 0 {
+				return ErrInvalidLengthMsg
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			iNdEx += skippy
+		}
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
+func (m *MsgRotateProviderSigningKey) Unmarshal(dAtA []byte) error {
+	l := len(dAtA)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return ErrIntOverflowMsg
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := dAtA[iNdEx]
+			iNdEx++
+			wire |= uint64(b&0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: MsgRotateProviderSigningKey: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: MsgRotateProviderSigningKey: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
+		case 1:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Owner", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowMsg
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLengthMsg
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthMsg
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.Owner = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
+		case 2:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field NewPublicKey", wireType)
+			}
+			var byteLen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowMsg
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				byteLen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if byteLen < 0 {
+				return ErrInvalidLengthMsg
+			}
+			postIndex := iNdEx + byteLen
+			if postIndex < 0 {
+				return ErrInvalidLengthMsg
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.NewPublicKey = append(m.NewPublicKey[:0], dAtA[iNdEx:postIndex]...)
+			if m.NewPublicKey == nil {
+				m.NewPublicKey = []byte{}
+			}
+			iNdEx = postIndex
+		case 3:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field NewKeyType", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowMsg
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLengthMsg
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthMsg
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.NewKeyType = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
+		case 4:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field RotationProof", wireType)
+			}
+			var byteLen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowMsg
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				byteLen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if byteLen < 0 {
+				return ErrInvalidLengthMsg
+			}
+			postIndex := iNdEx + byteLen
+			if postIndex < 0 {
+				return ErrInvalidLengthMsg
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.RotationProof = append(m.RotationProof[:0], dAtA[iNdEx:postIndex]...)
+			if m.RotationProof == nil {
+				m.RotationProof = []byte{}
+			}
+			iNdEx = postIndex
+		case 5:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field SignatureVersion", wireType)
+			}
+			m.SignatureVersion = 0
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowMsg
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				m.SignatureVersion |= uint32(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+		default:
+			iNdEx = preIndex
+			skippy, err := skipMsg(dAtA[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if (skippy < 0) || (iNdEx+skippy) < 0 {
+				return ErrInvalidLengthMsg
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			iNdEx += skippy
+		}
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
+func (m *MsgRotateProviderSigningKeyResponse) Unmarshal(dAtA []byte) error {
+	l := len(dAtA)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return ErrIntOverflowMsg
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := dAtA[iNdEx]
+			iNdEx++
+			wire |= uint64(b&0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: MsgRotateProviderSigningKeyResponse: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: MsgRotateProviderSigningKeyResponse: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
+		case 1:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field KeyId", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowMsg
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLengthMsg
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthMsg
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.KeyId = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
+		case 2:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Epoch", wireType)
+			}
+			m.Epoch = 0
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowMsg
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				m.Epoch |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+		case 3:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field ActivatedAtHeight", wireType)
+			}
+			m.ActivatedAtHeight = 0
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowMsg
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				m.ActivatedAtHeight |= int64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+		default:
+			iNdEx = preIndex
+			skippy, err := skipMsg(dAtA[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if (skippy < 0) || (iNdEx+skippy) < 0 {
+				return ErrInvalidLengthMsg
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			iNdEx += skippy
+		}
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
+func (m *MsgRevokeProviderSigningKey) Unmarshal(dAtA []byte) error {
+	l := len(dAtA)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return ErrIntOverflowMsg
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := dAtA[iNdEx]
+			iNdEx++
+			wire |= uint64(b&0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: MsgRevokeProviderSigningKey: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: MsgRevokeProviderSigningKey: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
+		case 1:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Owner", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowMsg
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLengthMsg
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthMsg
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.Owner = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
+		case 2:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field KeyId", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowMsg
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLengthMsg
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthMsg
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.KeyId = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
+		default:
+			iNdEx = preIndex
+			skippy, err := skipMsg(dAtA[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if (skippy < 0) || (iNdEx+skippy) < 0 {
+				return ErrInvalidLengthMsg
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			iNdEx += skippy
+		}
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
+func (m *MsgRevokeProviderSigningKeyResponse) Unmarshal(dAtA []byte) error {
+	l := len(dAtA)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return ErrIntOverflowMsg
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := dAtA[iNdEx]
+			iNdEx++
+			wire |= uint64(b&0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: MsgRevokeProviderSigningKeyResponse: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: MsgRevokeProviderSigningKeyResponse: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
+		case 1:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field RevokedAtHeight", wireType)
+			}
+			m.RevokedAtHeight = 0
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowMsg
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				m.RevokedAtHeight |= int64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
 		default:
 			iNdEx = preIndex
 			skippy, err := skipMsg(dAtA[iNdEx:])

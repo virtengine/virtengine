@@ -192,6 +192,12 @@ func (k Keeper) GetVEIDScore(ctx sdk.Context, address sdk.AccAddress) (uint32, b
 // GetScore returns the score, status, and whether a score was found for an account
 // Implements IdentityScoreKeeper interface
 func (k Keeper) GetScore(ctx sdk.Context, addr string) (uint32, types.AccountStatus, bool) {
+	return k.GetScoreAt(ctx, addr, ctx.BlockTime())
+}
+
+// GetScoreAt returns score state at an explicit deterministic time. Consensus
+// callers should use GetScore, which supplies ctx.BlockTime().
+func (k Keeper) GetScoreAt(ctx sdk.Context, addr string, at time.Time) (uint32, types.AccountStatus, bool) {
 	address, err := sdk.AccAddressFromBech32(addr)
 	if err != nil {
 		return 0, types.AccountStatusUnknown, false
@@ -218,7 +224,7 @@ func (k Keeper) GetScore(ctx sdk.Context, addr string) (uint32, types.AccountSta
 	}
 
 	// Check if expired
-	if ss.ExpiresAt != nil && time.Now().Unix() > *ss.ExpiresAt {
+	if ss.ExpiresAt != nil && at.Unix() > *ss.ExpiresAt {
 		return ss.Score, types.AccountStatusExpired, true
 	}
 

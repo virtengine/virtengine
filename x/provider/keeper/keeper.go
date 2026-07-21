@@ -1,13 +1,16 @@
 package keeper
 
 import (
+	"bytes"
 	"crypto/ed25519"
 	"encoding/json"
 
 	"cosmossdk.io/store/prefix"
 	storetypes "cosmossdk.io/store/types"
 	"github.com/cosmos/cosmos-sdk/codec"
+	cosmossecp256k1 "github.com/cosmos/cosmos-sdk/crypto/keys/secp256k1"
 	sdk "github.com/cosmos/cosmos-sdk/types"
+	decredsecp256k1 "github.com/decred/dcrd/dcrec/secp256k1/v4"
 
 	types "github.com/virtengine/virtengine/sdk/go/node/provider/v1beta4"
 )
@@ -28,9 +31,15 @@ type IKeeper interface {
 	// Public key management methods
 	SetProviderPublicKey(ctx sdk.Context, owner sdk.AccAddress, pubKey []byte, keyType string) error
 	GetProviderPublicKeyRecord(ctx sdk.Context, owner sdk.AccAddress) (types.ProviderPublicKeyRecord, bool)
+	GetProviderSigningKey(ctx sdk.Context, owner sdk.AccAddress, keyID string, epoch uint64) (types.ProviderPublicKeyRecord, bool)
+	GetProviderSigningKeyEpochs(ctx sdk.Context, owner sdk.AccAddress) []types.ProviderPublicKeyRecord
+	WithProviderSigningKeys(ctx sdk.Context, fn func(sdk.AccAddress, types.ProviderPublicKeyRecord) bool)
 	RotateProviderPublicKey(ctx sdk.Context, owner sdk.AccAddress, newKey []byte, keyType string, signature []byte) error
+	RevokeProviderSigningKey(ctx sdk.Context, owner sdk.AccAddress, keyID string) error
 	DeleteProviderPublicKey(ctx sdk.Context, owner sdk.AccAddress)
 	WithProviderPublicKeys(ctx sdk.Context, fn func(sdk.AccAddress, types.ProviderPublicKeyRecord) bool)
+	MigrateSigningKeyEpochs(ctx sdk.Context) error
+	ImportProviderSigningKeyEpoch(ctx sdk.Context, owner sdk.AccAddress, record types.ProviderPublicKeyRecord, current bool) error
 	// Domain verification methods
 	GenerateDomainVerificationToken(ctx sdk.Context, providerAddr sdk.AccAddress, domain string) (*DomainVerificationRecord, error)
 	VerifyProviderDomain(ctx sdk.Context, providerAddr sdk.AccAddress) error
@@ -217,7 +226,7 @@ func (k Keeper) GetProviderPublicKeyRecord(ctx sdk.Context, owner sdk.AccAddress
 		// Log error but return not found to avoid breaking callers
 		return types.ProviderPublicKeyRecord{}, false
 	}
-	return record, true
+	return record.NormalizeLegacy(), true
 }
 
 // SetProviderPublicKey stores a public key for a provider.
@@ -229,15 +238,24 @@ func (k Keeper) SetProviderPublicKey(ctx sdk.Context, owner sdk.AccAddress, pubK
 	}
 
 	// Create and validate the record
-	record := types.NewProviderPublicKeyRecord(pubKey, keyType, ctx.BlockHeight())
+	activationHeight := ctx.BlockHeight()
+	if activationHeight <= 0 {
+		activationHeight = 1
+	}
+	record := types.NewProviderPublicKeyRecord(pubKey, keyType, activationHeight)
+	record.ActivatedAtUnix = ctx.BlockTime().Unix()
 	if err := record.Validate(); err != nil {
 		return err
 	}
 
-	// Check if we're updating an existing key (increment rotation count)
+	// Existing keys may only change through RotateProviderPublicKey, which
+	// requires a detached proof from the retiring key.
 	existingRecord, found := k.GetProviderPublicKeyRecord(ctx, owner)
 	if found {
-		record.RotationCount = existingRecord.RotationCount + 1
+		if existingRecord.KeyType == keyType && bytes.Equal(existingRecord.PublicKey, pubKey) {
+			return nil
+		}
+		return types.ErrInvalidRotationSignature.Wrap("existing provider key must be changed through proof-based rotation")
 	}
 
 	// Store the record
@@ -249,6 +267,7 @@ func (k Keeper) SetProviderPublicKey(ctx sdk.Context, owner sdk.AccAddress, pubK
 		return types.ErrInternal.Wrapf("failed to marshal public key record: %v", err)
 	}
 	store.Set(key, bz)
+	store.Set(ProviderSigningKeyEpochKey(owner, record.Epoch), bz)
 
 	// Emit event
 	_ = ctx.EventManager().EmitTypedEvent(
@@ -270,37 +289,166 @@ func (k Keeper) RotateProviderPublicKey(ctx sdk.Context, owner sdk.AccAddress, n
 
 	// Get existing key for signature verification
 	existingRecord, found := k.GetProviderPublicKeyRecord(ctx, owner)
-	if found && len(existingRecord.PublicKey) > 0 {
-		// Verify the rotation signature using the old key
-		if !k.verifyRotationSignature(existingRecord.PublicKey, existingRecord.KeyType, newKey, signature) {
-			return types.ErrInvalidRotationSignature.Wrap("signature verification failed")
-		}
+	if !found || len(existingRecord.PublicKey) == 0 {
+		return k.SetProviderPublicKey(ctx, owner, newKey, keyType)
+	}
+	if !existingRecord.IsSigningAlgorithm() || keyType == types.PublicKeyTypeX25519 {
+		return types.ErrInvalidPublicKeyType.Wrap("x25519 cannot authenticate provider signing-key rotation")
+	}
+	activationUnix := ctx.BlockTime().Unix()
+	rotationBytes, err := types.ProviderKeyRotationSignBytes(types.ProviderKeyRotationPayload{
+		ChainID:          ctx.ChainID(),
+		Provider:         owner.String(),
+		OldKeyID:         existingRecord.KeyID,
+		OldEpoch:         existingRecord.Epoch,
+		NewKeyType:       keyType,
+		NewPublicKey:     newKey,
+		NewEpoch:         existingRecord.Epoch + 1,
+		ActivationHeight: ctx.BlockHeight(),
+		ActivationUnix:   activationUnix,
+		OverlapEndHeight: ctx.BlockHeight() + types.ProviderSigningKeyOverlapBlocks,
+		OverlapEndUnix:   activationUnix + types.ProviderSigningKeyOverlapSeconds,
+		SignatureVersion: types.ProviderKeyRotationSignatureVersionV1,
+	})
+	if err != nil {
+		return err
+	}
+	if !verifyProviderDetachedSignature(existingRecord, rotationBytes, signature) {
+		return types.ErrInvalidRotationSignature.Wrap("signature verification failed")
 	}
 	// If no existing key, allow setting without signature (first-time setup)
 
-	return k.SetProviderPublicKey(ctx, owner, newKey, keyType)
+	newRecord := types.NewProviderPublicKeyRecord(newKey, keyType, ctx.BlockHeight())
+	newRecord.ActivatedAtUnix = activationUnix
+	newRecord.Epoch = existingRecord.Epoch + 1
+	newRecord.RotationCount = existingRecord.RotationCount + 1
+	newRecord.PreviousKeyID = existingRecord.KeyID
+	if err := newRecord.Validate(); err != nil {
+		return err
+	}
+
+	existingRecord.RetiredAtHeight = ctx.BlockHeight() + types.ProviderSigningKeyOverlapBlocks
+	existingRecord.RetiredAtUnix = activationUnix + types.ProviderSigningKeyOverlapSeconds
+	existingRecord.UpdatedAt = ctx.BlockHeight()
+
+	store := ctx.KVStore(k.skey)
+	oldBytes, err := json.Marshal(&existingRecord)
+	if err != nil {
+		return types.ErrInternal.Wrapf("failed to marshal retiring key: %v", err)
+	}
+	newBytes, err := json.Marshal(&newRecord)
+	if err != nil {
+		return types.ErrInternal.Wrapf("failed to marshal active key: %v", err)
+	}
+	store.Set(ProviderSigningKeyEpochKey(owner, existingRecord.Epoch), oldBytes)
+	store.Set(ProviderSigningKeyEpochKey(owner, newRecord.Epoch), newBytes)
+	store.Set(ProviderPublicKeyKey(owner), newBytes)
+	return nil
 }
 
-// verifyRotationSignature verifies that the signature was created by signing newKey with oldKey
-func (k Keeper) verifyRotationSignature(oldKey []byte, keyType string, newKey []byte, signature []byte) bool {
-	switch keyType {
+func verifyProviderDetachedSignature(record types.ProviderPublicKeyRecord, message, signature []byte) bool {
+	switch record.KeyType {
 	case types.PublicKeyTypeEd25519:
-		if len(oldKey) != ed25519.PublicKeySize {
+		if len(record.PublicKey) != ed25519.PublicKeySize || len(signature) != ed25519.SignatureSize {
 			return false
 		}
-		return ed25519.Verify(oldKey, newKey, signature)
-	case types.PublicKeyTypeX25519:
-		// X25519 is for encryption, not signing. For rotation verification,
-		// the caller should provide an Ed25519 signature alongside.
-		// For now, accept the rotation if signature is non-empty (caller responsibility)
-		return len(signature) > 0
+		return ed25519.Verify(record.PublicKey, message, signature)
 	case types.PublicKeyTypeSecp256k1:
-		// secp256k1 signature verification would require additional crypto imports
-		// For now, accept non-empty signatures (caller responsibility)
-		return len(signature) > 0
+		if len(signature) != 64 {
+			return false
+		}
+		var s decredsecp256k1.ModNScalar
+		if s.SetByteSlice(signature[32:]) || s.IsZero() || s.IsOverHalfOrder() {
+			return false
+		}
+		return (&cosmossecp256k1.PubKey{Key: record.PublicKey}).VerifySignature(message, signature)
 	default:
 		return false
 	}
+}
+
+// GetProviderSigningKey returns an exact immutable epoch record.
+func (k Keeper) GetProviderSigningKey(ctx sdk.Context, owner sdk.AccAddress, keyID string, epoch uint64) (types.ProviderPublicKeyRecord, bool) {
+	if epoch == 0 || keyID == "" {
+		return types.ProviderPublicKeyRecord{}, false
+	}
+	store := ctx.KVStore(k.skey)
+	bz := store.Get(ProviderSigningKeyEpochKey(owner, epoch))
+	if bz == nil {
+		current, found := k.GetProviderPublicKeyRecord(ctx, owner)
+		if !found || current.Epoch != epoch || current.KeyID != keyID {
+			return types.ProviderPublicKeyRecord{}, false
+		}
+		return current, true
+	}
+	var record types.ProviderPublicKeyRecord
+	if err := json.Unmarshal(bz, &record); err != nil {
+		return types.ProviderPublicKeyRecord{}, false
+	}
+	record = record.NormalizeLegacy()
+	if record.KeyID != keyID || record.Epoch != epoch {
+		return types.ProviderPublicKeyRecord{}, false
+	}
+	return record, true
+}
+
+// GetProviderSigningKeyEpochs lists a provider's epoch history in store order.
+func (k Keeper) GetProviderSigningKeyEpochs(ctx sdk.Context, owner sdk.AccAddress) []types.ProviderPublicKeyRecord {
+	store := ctx.KVStore(k.skey)
+	prefixKey := ProviderSigningKeyEpochOwnerPrefix(owner)
+	iter := storetypes.KVStorePrefixIterator(store, prefixKey)
+	defer iter.Close()
+	records := make([]types.ProviderPublicKeyRecord, 0)
+	for ; iter.Valid(); iter.Next() {
+		var record types.ProviderPublicKeyRecord
+		if err := json.Unmarshal(iter.Value(), &record); err == nil {
+			records = append(records, record.NormalizeLegacy())
+		}
+	}
+	return records
+}
+
+// WithProviderSigningKeys iterates all immutable provider key epochs.
+func (k Keeper) WithProviderSigningKeys(ctx sdk.Context, fn func(sdk.AccAddress, types.ProviderPublicKeyRecord) bool) {
+	store := prefix.NewStore(ctx.KVStore(k.skey), types.ProviderSigningKeyEpochPrefix())
+	iter := store.Iterator(nil, nil)
+	defer iter.Close()
+	for ; iter.Valid(); iter.Next() {
+		key := iter.Key()
+		if len(key) < 1+8 {
+			continue
+		}
+		addressLength := int(key[0])
+		if addressLength <= 0 || len(key) != 1+addressLength+8 {
+			continue
+		}
+		var record types.ProviderPublicKeyRecord
+		if err := json.Unmarshal(iter.Value(), &record); err != nil {
+			continue
+		}
+		if fn(sdk.AccAddress(key[1:1+addressLength]), record.NormalizeLegacy()) {
+			return
+		}
+	}
+}
+
+// RevokeProviderSigningKey permanently revokes an exact key epoch.
+func (k Keeper) RevokeProviderSigningKey(ctx sdk.Context, owner sdk.AccAddress, keyID string) error {
+	current, found := k.GetProviderPublicKeyRecord(ctx, owner)
+	if !found || current.KeyID != keyID {
+		return types.ErrInvalidPublicKey.Wrap("active signing key not found")
+	}
+	current.RevokedAtHeight = ctx.BlockHeight()
+	current.RevokedAtUnix = ctx.BlockTime().Unix()
+	current.UpdatedAt = ctx.BlockHeight()
+	bz, err := json.Marshal(&current)
+	if err != nil {
+		return types.ErrInternal.Wrapf("failed to marshal revoked key: %v", err)
+	}
+	store := ctx.KVStore(k.skey)
+	store.Set(ProviderSigningKeyEpochKey(owner, current.Epoch), bz)
+	store.Set(ProviderPublicKeyKey(owner), bz)
+	return nil
 }
 
 // DeleteProviderPublicKey removes a provider's public key from storage
@@ -312,6 +460,13 @@ func (k Keeper) DeleteProviderPublicKey(ctx sdk.Context, owner sdk.AccAddress) {
 		return
 	}
 
+	if current, found := k.GetProviderPublicKeyRecord(ctx, owner); found {
+		current.RevokedAtHeight = ctx.BlockHeight()
+		current.RevokedAtUnix = ctx.BlockTime().Unix()
+		if bz, err := json.Marshal(&current); err == nil {
+			store.Set(ProviderSigningKeyEpochKey(owner, current.Epoch), bz)
+		}
+	}
 	store.Delete(key)
 
 	_ = ctx.EventManager().EmitTypedEvent(
@@ -347,7 +502,7 @@ func (k Keeper) WithProviderPublicKeys(ctx sdk.Context, fn func(sdk.AccAddress, 
 		}
 		addr := sdk.AccAddress(keyBytes[1 : 1+addrLen])
 
-		if stop := fn(addr, record); stop {
+		if stop := fn(addr, record.NormalizeLegacy()); stop {
 			break
 		}
 	}
@@ -356,4 +511,43 @@ func (k Keeper) WithProviderPublicKeys(ctx sdk.Context, fn func(sdk.AccAddress, 
 // IsProvider checks if an address is a registered provider
 func (k Keeper) IsProvider(ctx sdk.Context, addr sdk.AccAddress) bool {
 	return k.ProviderExists(ctx, addr)
+}
+
+// MigrateSigningKeyEpochs backfills immutable history for pre-84B current keys.
+func (k Keeper) MigrateSigningKeyEpochs(ctx sdk.Context) error {
+	store := ctx.KVStore(k.skey)
+	var migrateErr error
+	k.WithProviderPublicKeys(ctx, func(owner sdk.AccAddress, record types.ProviderPublicKeyRecord) bool {
+		record = record.NormalizeLegacy()
+		if record.ActivatedAtUnix == 0 {
+			record.ActivatedAtUnix = ctx.BlockTime().Unix()
+		}
+		bz, err := json.Marshal(&record)
+		if err != nil {
+			migrateErr = err
+			return true
+		}
+		store.Set(ProviderPublicKeyKey(owner), bz)
+		store.Set(ProviderSigningKeyEpochKey(owner, record.Epoch), bz)
+		return false
+	})
+	return migrateErr
+}
+
+// ImportProviderSigningKeyEpoch imports validated genesis history.
+func (k Keeper) ImportProviderSigningKeyEpoch(ctx sdk.Context, owner sdk.AccAddress, record types.ProviderPublicKeyRecord, current bool) error {
+	record = record.NormalizeLegacy()
+	if err := record.Validate(); err != nil {
+		return err
+	}
+	bz, err := json.Marshal(&record)
+	if err != nil {
+		return err
+	}
+	store := ctx.KVStore(k.skey)
+	store.Set(ProviderSigningKeyEpochKey(owner, record.Epoch), bz)
+	if current {
+		store.Set(ProviderPublicKeyKey(owner), bz)
+	}
+	return nil
 }

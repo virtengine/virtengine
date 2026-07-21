@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"sort"
 	"time"
 
 	storetypes "cosmossdk.io/store/types"
@@ -639,6 +640,7 @@ func (k Keeper) getAccountKeyFingerprints(ctx sdk.Context, address sdk.AccAddres
 	for fp := range fingerprintSet {
 		fingerprints = append(fingerprints, fp)
 	}
+	sort.Strings(fingerprints)
 
 	return fingerprints
 }

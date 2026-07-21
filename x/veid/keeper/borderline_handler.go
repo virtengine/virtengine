@@ -273,12 +273,8 @@ func (k Keeper) DetectBorderlineCase(
 	// Determine recommended action based on margin and other factors
 	action := k.determineRecommendedAction(ctx, address, score, margin)
 
-	// Generate case ID
-	caseID, err := generateFallbackID()
-	if err != nil {
-		k.Logger(ctx).Error("failed to generate case ID", "error", err)
-		return nil, false
-	}
+	// Derive the case ID from committed, domain-separated inputs.
+	caseID := generateFallbackID(ctx, "case", fmt.Sprintf("%s:%s", address, scopeType))
 
 	now := ctx.BlockTime().Unix()
 	// Convert MFA timeout blocks to seconds
@@ -452,7 +448,7 @@ func (k Keeper) GrantProvisionalApproval(
 	duration time.Duration,
 ) error {
 	now := ctx.BlockTime().Unix()
-	expiresAt := now + int64(duration.Seconds())
+	expiresAt := now + int64(duration/time.Second)
 
 	// Update case status
 	borderlineCase.Status = CaseStatusProvisional

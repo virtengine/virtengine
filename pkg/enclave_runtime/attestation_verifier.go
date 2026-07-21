@@ -1080,13 +1080,17 @@ func CreateTestSEVSNPReport(measurement []byte, debugMode bool, nonce []byte) []
 func CreateTestNitroDocument(pcrs []byte, nonce []byte) []byte {
 	pcr0 := make([]byte, nitroatt.PCRDigestSize)
 	copy(pcr0, pcrs)
+	timestamp := time.Now().UnixMilli()
+	if timestamp < 0 {
+		timestamp = 0
+	}
 
 	doc := &nitroatt.AttestationDocument{
 		Protected: []byte{0xA1, 0x01, 0x38, 0x22}, // {1: -35} => ES384
 		Payload: &nitroatt.DocumentPayload{
 			ModuleID:    "sim-nitro-test",
 			Digest:      nitroatt.DigestAlgorithmSHA384,
-			Timestamp:   uint64(time.Now().UnixMilli()),
+			Timestamp:   uint64(timestamp), // #nosec G115 -- negative values are clamped above
 			PCRs:        map[int][]byte{nitroatt.PCRIndexEIF: pcr0},
 			Certificate: []byte("SIMULATED-NITRO-CERT"),
 			Nonce:       append([]byte(nil), nonce...),

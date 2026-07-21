@@ -34,4 +34,13 @@ service Msg {
 
   // RevokeDomainVerification revokes a provider's domain verification.
   rpc RevokeDomainVerification(MsgRevokeDomainVerification) returns (MsgRevokeDomainVerificationResponse);
+
+  // SetProviderSigningKey registers the first detached-signature key epoch.
+  rpc SetProviderSigningKey(MsgSetProviderSigningKey) returns (MsgSetProviderSigningKeyResponse);
+
+  // RotateProviderSigningKey rotates through a proof signed by the old key.
+  rpc RotateProviderSigningKey(MsgRotateProviderSigningKey) returns (MsgRotateProviderSigningKeyResponse);
+
+  // RevokeProviderSigningKey permanently revokes the active key epoch.
+  rpc RevokeProviderSigningKey(MsgRevokeProviderSigningKey) returns (MsgRevokeProviderSigningKeyResponse);
 }

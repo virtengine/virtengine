@@ -21,6 +21,31 @@ type customSigner struct {
 	msgType protoreflect.FullName
 	field   string
 	signer  string
+	fn      func(pproto.Message) ([][]byte, error)
+}
+
+// RegisterNoSigner registers a protobuf SDK message that is intentionally
+// authenticated outside the ordinary account-signature model.
+func RegisterNoSigner(msg proto.Message) {
+	defer signersLock.Unlock()
+	signersLock.Lock()
+
+	select {
+	case <-sealed:
+		panic("custom signers config has been sealed")
+	default:
+	}
+
+	msgType := pproto.MessageName(protoadapt.MessageV2Of(msg))
+	for _, registered := range customSigners {
+		if registered.msgType == msgType {
+			panic(fmt.Sprintf("custom signer for msg %q has already been registered", msgType.Name()))
+		}
+	}
+	customSigners = append(customSigners, customSigner{
+		msgType: msgType,
+		fn:      func(pproto.Message) ([][]byte, error) { return nil, nil },
+	})
 }
 
 var (
@@ -267,9 +292,13 @@ func buildCustomGetSigners(options *signing.Options) []signing.CustomGetSigner {
 
 	signers := make([]signing.CustomGetSigner, 0, len(customSigners))
 	for _, s := range customSigners {
+		fn := s.fn
+		if fn == nil {
+			fn = getSignerFromID(options, s.field, s.signer)
+		}
 		signers = append(signers, signing.CustomGetSigner{
 			MsgType: s.msgType,
-			Fn:      getSignerFromID(options, s.field, s.signer),
+			Fn:      fn,
 		})
 
 	}

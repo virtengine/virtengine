@@ -10,6 +10,7 @@ import type { DeepPartial, MessageFns } from "../../../../../encoding/typeEncodi
 import { BinaryReader, BinaryWriter } from "@bufbuild/protobuf/wire";
 import Long from "long";
 import { Coin, DecCoin } from "../../../cosmos/base/v1beta1/coin.ts";
+import { RawUsageMetrics } from "./query.ts";
 
 /** MsgCreateEscrow creates a new escrow account */
 export interface MsgCreateEscrow {
@@ -106,6 +107,22 @@ export interface MsgRecordUsage {
   periodEnd: Long;
   unitPrice: DecCoin | undefined;
   signature: Uint8Array;
+  allocationId: string;
+  chainId: string;
+  rawMetrics: RawUsageMetrics | undefined;
+  pricingVersion: number;
+  formulaVersion: number;
+  modelVersion: number;
+  streamSequence: Long;
+  nonce: Uint8Array;
+  idempotencyKey: Uint8Array;
+  providerKeyEpoch: Long;
+  providerKeyId: string;
+  issuedAtHeight: Long;
+  expiresAtHeight: Long;
+  issuedAtUnix: Long;
+  expiresAtUnix: Long;
+  signatureVersion: number;
 }
 
 /** MsgRecordUsageResponse is the response for MsgRecordUsage */
@@ -113,6 +130,9 @@ export interface MsgRecordUsageResponse {
   usageId: string;
   totalCost: string;
   recordedAt: Long;
+  usageDigest: Uint8Array;
+  authenticationStatus: string;
+  exactDuplicate: boolean;
 }
 
 /** MsgAcknowledgeUsage acknowledges a usage record */
@@ -120,11 +140,19 @@ export interface MsgAcknowledgeUsage {
   sender: string;
   usageId: string;
   signature: Uint8Array;
+  usageDigest: Uint8Array;
+  replayKey: Uint8Array;
+  issuedAtHeight: Long;
+  expiresAtHeight: Long;
+  issuedAtUnix: Long;
+  expiresAtUnix: Long;
+  signatureVersion: number;
 }
 
 /** MsgAcknowledgeUsageResponse is the response for MsgAcknowledgeUsage */
 export interface MsgAcknowledgeUsageResponse {
   acknowledgedAt: Long;
+  exactDuplicate: boolean;
 }
 
 /** MsgClaimRewards claims accumulated rewards */
@@ -1260,6 +1288,22 @@ function createBaseMsgRecordUsage(): MsgRecordUsage {
     periodEnd: Long.ZERO,
     unitPrice: undefined,
     signature: new Uint8Array(0),
+    allocationId: "",
+    chainId: "",
+    rawMetrics: undefined,
+    pricingVersion: 0,
+    formulaVersion: 0,
+    modelVersion: 0,
+    streamSequence: Long.UZERO,
+    nonce: new Uint8Array(0),
+    idempotencyKey: new Uint8Array(0),
+    providerKeyEpoch: Long.UZERO,
+    providerKeyId: "",
+    issuedAtHeight: Long.ZERO,
+    expiresAtHeight: Long.ZERO,
+    issuedAtUnix: Long.ZERO,
+    expiresAtUnix: Long.ZERO,
+    signatureVersion: 0,
   };
 }
 
@@ -1293,6 +1337,54 @@ export const MsgRecordUsage: MessageFns<MsgRecordUsage, "virtengine.settlement.v
     }
     if (message.signature.length !== 0) {
       writer.uint32(74).bytes(message.signature);
+    }
+    if (message.allocationId !== "") {
+      writer.uint32(82).string(message.allocationId);
+    }
+    if (message.chainId !== "") {
+      writer.uint32(90).string(message.chainId);
+    }
+    if (message.rawMetrics !== undefined) {
+      RawUsageMetrics.encode(message.rawMetrics, writer.uint32(98).fork()).join();
+    }
+    if (message.pricingVersion !== 0) {
+      writer.uint32(104).uint32(message.pricingVersion);
+    }
+    if (message.formulaVersion !== 0) {
+      writer.uint32(112).uint32(message.formulaVersion);
+    }
+    if (message.modelVersion !== 0) {
+      writer.uint32(120).uint32(message.modelVersion);
+    }
+    if (!message.streamSequence.equals(Long.UZERO)) {
+      writer.uint32(128).uint64(message.streamSequence.toString());
+    }
+    if (message.nonce.length !== 0) {
+      writer.uint32(138).bytes(message.nonce);
+    }
+    if (message.idempotencyKey.length !== 0) {
+      writer.uint32(146).bytes(message.idempotencyKey);
+    }
+    if (!message.providerKeyEpoch.equals(Long.UZERO)) {
+      writer.uint32(152).uint64(message.providerKeyEpoch.toString());
+    }
+    if (message.providerKeyId !== "") {
+      writer.uint32(162).string(message.providerKeyId);
+    }
+    if (!message.issuedAtHeight.equals(Long.ZERO)) {
+      writer.uint32(168).int64(message.issuedAtHeight.toString());
+    }
+    if (!message.expiresAtHeight.equals(Long.ZERO)) {
+      writer.uint32(176).int64(message.expiresAtHeight.toString());
+    }
+    if (!message.issuedAtUnix.equals(Long.ZERO)) {
+      writer.uint32(184).int64(message.issuedAtUnix.toString());
+    }
+    if (!message.expiresAtUnix.equals(Long.ZERO)) {
+      writer.uint32(192).int64(message.expiresAtUnix.toString());
+    }
+    if (message.signatureVersion !== 0) {
+      writer.uint32(200).uint32(message.signatureVersion);
     }
     return writer;
   },
@@ -1376,6 +1468,134 @@ export const MsgRecordUsage: MessageFns<MsgRecordUsage, "virtengine.settlement.v
           message.signature = reader.bytes();
           continue;
         }
+        case 10: {
+          if (tag !== 82) {
+            break;
+          }
+
+          message.allocationId = reader.string();
+          continue;
+        }
+        case 11: {
+          if (tag !== 90) {
+            break;
+          }
+
+          message.chainId = reader.string();
+          continue;
+        }
+        case 12: {
+          if (tag !== 98) {
+            break;
+          }
+
+          message.rawMetrics = RawUsageMetrics.decode(reader, reader.uint32());
+          continue;
+        }
+        case 13: {
+          if (tag !== 104) {
+            break;
+          }
+
+          message.pricingVersion = reader.uint32();
+          continue;
+        }
+        case 14: {
+          if (tag !== 112) {
+            break;
+          }
+
+          message.formulaVersion = reader.uint32();
+          continue;
+        }
+        case 15: {
+          if (tag !== 120) {
+            break;
+          }
+
+          message.modelVersion = reader.uint32();
+          continue;
+        }
+        case 16: {
+          if (tag !== 128) {
+            break;
+          }
+
+          message.streamSequence = Long.fromString(reader.uint64().toString(), true);
+          continue;
+        }
+        case 17: {
+          if (tag !== 138) {
+            break;
+          }
+
+          message.nonce = reader.bytes();
+          continue;
+        }
+        case 18: {
+          if (tag !== 146) {
+            break;
+          }
+
+          message.idempotencyKey = reader.bytes();
+          continue;
+        }
+        case 19: {
+          if (tag !== 152) {
+            break;
+          }
+
+          message.providerKeyEpoch = Long.fromString(reader.uint64().toString(), true);
+          continue;
+        }
+        case 20: {
+          if (tag !== 162) {
+            break;
+          }
+
+          message.providerKeyId = reader.string();
+          continue;
+        }
+        case 21: {
+          if (tag !== 168) {
+            break;
+          }
+
+          message.issuedAtHeight = Long.fromString(reader.int64().toString());
+          continue;
+        }
+        case 22: {
+          if (tag !== 176) {
+            break;
+          }
+
+          message.expiresAtHeight = Long.fromString(reader.int64().toString());
+          continue;
+        }
+        case 23: {
+          if (tag !== 184) {
+            break;
+          }
+
+          message.issuedAtUnix = Long.fromString(reader.int64().toString());
+          continue;
+        }
+        case 24: {
+          if (tag !== 192) {
+            break;
+          }
+
+          message.expiresAtUnix = Long.fromString(reader.int64().toString());
+          continue;
+        }
+        case 25: {
+          if (tag !== 200) {
+            break;
+          }
+
+          message.signatureVersion = reader.uint32();
+          continue;
+        }
       }
       if ((tag & 7) === 4 || tag === 0) {
         break;
@@ -1396,6 +1616,22 @@ export const MsgRecordUsage: MessageFns<MsgRecordUsage, "virtengine.settlement.v
       periodEnd: isSet(object.period_end) ? Long.fromValue(object.period_end) : Long.ZERO,
       unitPrice: isSet(object.unit_price) ? DecCoin.fromJSON(object.unit_price) : undefined,
       signature: isSet(object.signature) ? bytesFromBase64(object.signature) : new Uint8Array(0),
+      allocationId: isSet(object.allocation_id) ? globalThis.String(object.allocation_id) : "",
+      chainId: isSet(object.chain_id) ? globalThis.String(object.chain_id) : "",
+      rawMetrics: isSet(object.raw_metrics) ? RawUsageMetrics.fromJSON(object.raw_metrics) : undefined,
+      pricingVersion: isSet(object.pricing_version) ? globalThis.Number(object.pricing_version) : 0,
+      formulaVersion: isSet(object.formula_version) ? globalThis.Number(object.formula_version) : 0,
+      modelVersion: isSet(object.model_version) ? globalThis.Number(object.model_version) : 0,
+      streamSequence: isSet(object.stream_sequence) ? Long.fromValue(object.stream_sequence) : Long.UZERO,
+      nonce: isSet(object.nonce) ? bytesFromBase64(object.nonce) : new Uint8Array(0),
+      idempotencyKey: isSet(object.idempotency_key) ? bytesFromBase64(object.idempotency_key) : new Uint8Array(0),
+      providerKeyEpoch: isSet(object.provider_key_epoch) ? Long.fromValue(object.provider_key_epoch) : Long.UZERO,
+      providerKeyId: isSet(object.provider_key_id) ? globalThis.String(object.provider_key_id) : "",
+      issuedAtHeight: isSet(object.issued_at_height) ? Long.fromValue(object.issued_at_height) : Long.ZERO,
+      expiresAtHeight: isSet(object.expires_at_height) ? Long.fromValue(object.expires_at_height) : Long.ZERO,
+      issuedAtUnix: isSet(object.issued_at_unix) ? Long.fromValue(object.issued_at_unix) : Long.ZERO,
+      expiresAtUnix: isSet(object.expires_at_unix) ? Long.fromValue(object.expires_at_unix) : Long.ZERO,
+      signatureVersion: isSet(object.signature_version) ? globalThis.Number(object.signature_version) : 0,
     };
   },
 
@@ -1428,6 +1664,54 @@ export const MsgRecordUsage: MessageFns<MsgRecordUsage, "virtengine.settlement.v
     if (message.signature.length !== 0) {
       obj.signature = base64FromBytes(message.signature);
     }
+    if (message.allocationId !== "") {
+      obj.allocation_id = message.allocationId;
+    }
+    if (message.chainId !== "") {
+      obj.chain_id = message.chainId;
+    }
+    if (message.rawMetrics !== undefined) {
+      obj.raw_metrics = RawUsageMetrics.toJSON(message.rawMetrics);
+    }
+    if (message.pricingVersion !== 0) {
+      obj.pricing_version = Math.round(message.pricingVersion);
+    }
+    if (message.formulaVersion !== 0) {
+      obj.formula_version = Math.round(message.formulaVersion);
+    }
+    if (message.modelVersion !== 0) {
+      obj.model_version = Math.round(message.modelVersion);
+    }
+    if (!message.streamSequence.equals(Long.UZERO)) {
+      obj.stream_sequence = (message.streamSequence || Long.UZERO).toString();
+    }
+    if (message.nonce.length !== 0) {
+      obj.nonce = base64FromBytes(message.nonce);
+    }
+    if (message.idempotencyKey.length !== 0) {
+      obj.idempotency_key = base64FromBytes(message.idempotencyKey);
+    }
+    if (!message.providerKeyEpoch.equals(Long.UZERO)) {
+      obj.provider_key_epoch = (message.providerKeyEpoch || Long.UZERO).toString();
+    }
+    if (message.providerKeyId !== "") {
+      obj.provider_key_id = message.providerKeyId;
+    }
+    if (!message.issuedAtHeight.equals(Long.ZERO)) {
+      obj.issued_at_height = (message.issuedAtHeight || Long.ZERO).toString();
+    }
+    if (!message.expiresAtHeight.equals(Long.ZERO)) {
+      obj.expires_at_height = (message.expiresAtHeight || Long.ZERO).toString();
+    }
+    if (!message.issuedAtUnix.equals(Long.ZERO)) {
+      obj.issued_at_unix = (message.issuedAtUnix || Long.ZERO).toString();
+    }
+    if (!message.expiresAtUnix.equals(Long.ZERO)) {
+      obj.expires_at_unix = (message.expiresAtUnix || Long.ZERO).toString();
+    }
+    if (message.signatureVersion !== 0) {
+      obj.signature_version = Math.round(message.signatureVersion);
+    }
     return obj;
   },
   fromPartial(object: DeepPartial<MsgRecordUsage>): MsgRecordUsage {
@@ -1449,12 +1733,49 @@ export const MsgRecordUsage: MessageFns<MsgRecordUsage, "virtengine.settlement.v
       ? DecCoin.fromPartial(object.unitPrice)
       : undefined;
     message.signature = object.signature ?? new Uint8Array(0);
+    message.allocationId = object.allocationId ?? "";
+    message.chainId = object.chainId ?? "";
+    message.rawMetrics = (object.rawMetrics !== undefined && object.rawMetrics !== null)
+      ? RawUsageMetrics.fromPartial(object.rawMetrics)
+      : undefined;
+    message.pricingVersion = object.pricingVersion ?? 0;
+    message.formulaVersion = object.formulaVersion ?? 0;
+    message.modelVersion = object.modelVersion ?? 0;
+    message.streamSequence = (object.streamSequence !== undefined && object.streamSequence !== null)
+      ? Long.fromValue(object.streamSequence)
+      : Long.UZERO;
+    message.nonce = object.nonce ?? new Uint8Array(0);
+    message.idempotencyKey = object.idempotencyKey ?? new Uint8Array(0);
+    message.providerKeyEpoch = (object.providerKeyEpoch !== undefined && object.providerKeyEpoch !== null)
+      ? Long.fromValue(object.providerKeyEpoch)
+      : Long.UZERO;
+    message.providerKeyId = object.providerKeyId ?? "";
+    message.issuedAtHeight = (object.issuedAtHeight !== undefined && object.issuedAtHeight !== null)
+      ? Long.fromValue(object.issuedAtHeight)
+      : Long.ZERO;
+    message.expiresAtHeight = (object.expiresAtHeight !== undefined && object.expiresAtHeight !== null)
+      ? Long.fromValue(object.expiresAtHeight)
+      : Long.ZERO;
+    message.issuedAtUnix = (object.issuedAtUnix !== undefined && object.issuedAtUnix !== null)
+      ? Long.fromValue(object.issuedAtUnix)
+      : Long.ZERO;
+    message.expiresAtUnix = (object.expiresAtUnix !== undefined && object.expiresAtUnix !== null)
+      ? Long.fromValue(object.expiresAtUnix)
+      : Long.ZERO;
+    message.signatureVersion = object.signatureVersion ?? 0;
     return message;
   },
 };
 
 function createBaseMsgRecordUsageResponse(): MsgRecordUsageResponse {
-  return { usageId: "", totalCost: "", recordedAt: Long.ZERO };
+  return {
+    usageId: "",
+    totalCost: "",
+    recordedAt: Long.ZERO,
+    usageDigest: new Uint8Array(0),
+    authenticationStatus: "",
+    exactDuplicate: false,
+  };
 }
 
 export const MsgRecordUsageResponse: MessageFns<
@@ -1472,6 +1793,15 @@ export const MsgRecordUsageResponse: MessageFns<
     }
     if (!message.recordedAt.equals(Long.ZERO)) {
       writer.uint32(24).int64(message.recordedAt.toString());
+    }
+    if (message.usageDigest.length !== 0) {
+      writer.uint32(34).bytes(message.usageDigest);
+    }
+    if (message.authenticationStatus !== "") {
+      writer.uint32(42).string(message.authenticationStatus);
+    }
+    if (message.exactDuplicate !== false) {
+      writer.uint32(48).bool(message.exactDuplicate);
     }
     return writer;
   },
@@ -1507,6 +1837,30 @@ export const MsgRecordUsageResponse: MessageFns<
           message.recordedAt = Long.fromString(reader.int64().toString());
           continue;
         }
+        case 4: {
+          if (tag !== 34) {
+            break;
+          }
+
+          message.usageDigest = reader.bytes();
+          continue;
+        }
+        case 5: {
+          if (tag !== 42) {
+            break;
+          }
+
+          message.authenticationStatus = reader.string();
+          continue;
+        }
+        case 6: {
+          if (tag !== 48) {
+            break;
+          }
+
+          message.exactDuplicate = reader.bool();
+          continue;
+        }
       }
       if ((tag & 7) === 4 || tag === 0) {
         break;
@@ -1521,6 +1875,9 @@ export const MsgRecordUsageResponse: MessageFns<
       usageId: isSet(object.usage_id) ? globalThis.String(object.usage_id) : "",
       totalCost: isSet(object.total_cost) ? globalThis.String(object.total_cost) : "",
       recordedAt: isSet(object.recorded_at) ? Long.fromValue(object.recorded_at) : Long.ZERO,
+      usageDigest: isSet(object.usage_digest) ? bytesFromBase64(object.usage_digest) : new Uint8Array(0),
+      authenticationStatus: isSet(object.authentication_status) ? globalThis.String(object.authentication_status) : "",
+      exactDuplicate: isSet(object.exact_duplicate) ? globalThis.Boolean(object.exact_duplicate) : false,
     };
   },
 
@@ -1535,6 +1892,15 @@ export const MsgRecordUsageResponse: MessageFns<
     if (!message.recordedAt.equals(Long.ZERO)) {
       obj.recorded_at = (message.recordedAt || Long.ZERO).toString();
     }
+    if (message.usageDigest.length !== 0) {
+      obj.usage_digest = base64FromBytes(message.usageDigest);
+    }
+    if (message.authenticationStatus !== "") {
+      obj.authentication_status = message.authenticationStatus;
+    }
+    if (message.exactDuplicate !== false) {
+      obj.exact_duplicate = message.exactDuplicate;
+    }
     return obj;
   },
   fromPartial(object: DeepPartial<MsgRecordUsageResponse>): MsgRecordUsageResponse {
@@ -1544,12 +1910,26 @@ export const MsgRecordUsageResponse: MessageFns<
     message.recordedAt = (object.recordedAt !== undefined && object.recordedAt !== null)
       ? Long.fromValue(object.recordedAt)
       : Long.ZERO;
+    message.usageDigest = object.usageDigest ?? new Uint8Array(0);
+    message.authenticationStatus = object.authenticationStatus ?? "";
+    message.exactDuplicate = object.exactDuplicate ?? false;
     return message;
   },
 };
 
 function createBaseMsgAcknowledgeUsage(): MsgAcknowledgeUsage {
-  return { sender: "", usageId: "", signature: new Uint8Array(0) };
+  return {
+    sender: "",
+    usageId: "",
+    signature: new Uint8Array(0),
+    usageDigest: new Uint8Array(0),
+    replayKey: new Uint8Array(0),
+    issuedAtHeight: Long.ZERO,
+    expiresAtHeight: Long.ZERO,
+    issuedAtUnix: Long.ZERO,
+    expiresAtUnix: Long.ZERO,
+    signatureVersion: 0,
+  };
 }
 
 export const MsgAcknowledgeUsage: MessageFns<MsgAcknowledgeUsage, "virtengine.settlement.v1.MsgAcknowledgeUsage"> = {
@@ -1564,6 +1944,27 @@ export const MsgAcknowledgeUsage: MessageFns<MsgAcknowledgeUsage, "virtengine.se
     }
     if (message.signature.length !== 0) {
       writer.uint32(26).bytes(message.signature);
+    }
+    if (message.usageDigest.length !== 0) {
+      writer.uint32(34).bytes(message.usageDigest);
+    }
+    if (message.replayKey.length !== 0) {
+      writer.uint32(42).bytes(message.replayKey);
+    }
+    if (!message.issuedAtHeight.equals(Long.ZERO)) {
+      writer.uint32(48).int64(message.issuedAtHeight.toString());
+    }
+    if (!message.expiresAtHeight.equals(Long.ZERO)) {
+      writer.uint32(56).int64(message.expiresAtHeight.toString());
+    }
+    if (!message.issuedAtUnix.equals(Long.ZERO)) {
+      writer.uint32(64).int64(message.issuedAtUnix.toString());
+    }
+    if (!message.expiresAtUnix.equals(Long.ZERO)) {
+      writer.uint32(72).int64(message.expiresAtUnix.toString());
+    }
+    if (message.signatureVersion !== 0) {
+      writer.uint32(80).uint32(message.signatureVersion);
     }
     return writer;
   },
@@ -1599,6 +2000,62 @@ export const MsgAcknowledgeUsage: MessageFns<MsgAcknowledgeUsage, "virtengine.se
           message.signature = reader.bytes();
           continue;
         }
+        case 4: {
+          if (tag !== 34) {
+            break;
+          }
+
+          message.usageDigest = reader.bytes();
+          continue;
+        }
+        case 5: {
+          if (tag !== 42) {
+            break;
+          }
+
+          message.replayKey = reader.bytes();
+          continue;
+        }
+        case 6: {
+          if (tag !== 48) {
+            break;
+          }
+
+          message.issuedAtHeight = Long.fromString(reader.int64().toString());
+          continue;
+        }
+        case 7: {
+          if (tag !== 56) {
+            break;
+          }
+
+          message.expiresAtHeight = Long.fromString(reader.int64().toString());
+          continue;
+        }
+        case 8: {
+          if (tag !== 64) {
+            break;
+          }
+
+          message.issuedAtUnix = Long.fromString(reader.int64().toString());
+          continue;
+        }
+        case 9: {
+          if (tag !== 72) {
+            break;
+          }
+
+          message.expiresAtUnix = Long.fromString(reader.int64().toString());
+          continue;
+        }
+        case 10: {
+          if (tag !== 80) {
+            break;
+          }
+
+          message.signatureVersion = reader.uint32();
+          continue;
+        }
       }
       if ((tag & 7) === 4 || tag === 0) {
         break;
@@ -1613,6 +2070,13 @@ export const MsgAcknowledgeUsage: MessageFns<MsgAcknowledgeUsage, "virtengine.se
       sender: isSet(object.sender) ? globalThis.String(object.sender) : "",
       usageId: isSet(object.usage_id) ? globalThis.String(object.usage_id) : "",
       signature: isSet(object.signature) ? bytesFromBase64(object.signature) : new Uint8Array(0),
+      usageDigest: isSet(object.usage_digest) ? bytesFromBase64(object.usage_digest) : new Uint8Array(0),
+      replayKey: isSet(object.replay_key) ? bytesFromBase64(object.replay_key) : new Uint8Array(0),
+      issuedAtHeight: isSet(object.issued_at_height) ? Long.fromValue(object.issued_at_height) : Long.ZERO,
+      expiresAtHeight: isSet(object.expires_at_height) ? Long.fromValue(object.expires_at_height) : Long.ZERO,
+      issuedAtUnix: isSet(object.issued_at_unix) ? Long.fromValue(object.issued_at_unix) : Long.ZERO,
+      expiresAtUnix: isSet(object.expires_at_unix) ? Long.fromValue(object.expires_at_unix) : Long.ZERO,
+      signatureVersion: isSet(object.signature_version) ? globalThis.Number(object.signature_version) : 0,
     };
   },
 
@@ -1627,6 +2091,27 @@ export const MsgAcknowledgeUsage: MessageFns<MsgAcknowledgeUsage, "virtengine.se
     if (message.signature.length !== 0) {
       obj.signature = base64FromBytes(message.signature);
     }
+    if (message.usageDigest.length !== 0) {
+      obj.usage_digest = base64FromBytes(message.usageDigest);
+    }
+    if (message.replayKey.length !== 0) {
+      obj.replay_key = base64FromBytes(message.replayKey);
+    }
+    if (!message.issuedAtHeight.equals(Long.ZERO)) {
+      obj.issued_at_height = (message.issuedAtHeight || Long.ZERO).toString();
+    }
+    if (!message.expiresAtHeight.equals(Long.ZERO)) {
+      obj.expires_at_height = (message.expiresAtHeight || Long.ZERO).toString();
+    }
+    if (!message.issuedAtUnix.equals(Long.ZERO)) {
+      obj.issued_at_unix = (message.issuedAtUnix || Long.ZERO).toString();
+    }
+    if (!message.expiresAtUnix.equals(Long.ZERO)) {
+      obj.expires_at_unix = (message.expiresAtUnix || Long.ZERO).toString();
+    }
+    if (message.signatureVersion !== 0) {
+      obj.signature_version = Math.round(message.signatureVersion);
+    }
     return obj;
   },
   fromPartial(object: DeepPartial<MsgAcknowledgeUsage>): MsgAcknowledgeUsage {
@@ -1634,12 +2119,27 @@ export const MsgAcknowledgeUsage: MessageFns<MsgAcknowledgeUsage, "virtengine.se
     message.sender = object.sender ?? "";
     message.usageId = object.usageId ?? "";
     message.signature = object.signature ?? new Uint8Array(0);
+    message.usageDigest = object.usageDigest ?? new Uint8Array(0);
+    message.replayKey = object.replayKey ?? new Uint8Array(0);
+    message.issuedAtHeight = (object.issuedAtHeight !== undefined && object.issuedAtHeight !== null)
+      ? Long.fromValue(object.issuedAtHeight)
+      : Long.ZERO;
+    message.expiresAtHeight = (object.expiresAtHeight !== undefined && object.expiresAtHeight !== null)
+      ? Long.fromValue(object.expiresAtHeight)
+      : Long.ZERO;
+    message.issuedAtUnix = (object.issuedAtUnix !== undefined && object.issuedAtUnix !== null)
+      ? Long.fromValue(object.issuedAtUnix)
+      : Long.ZERO;
+    message.expiresAtUnix = (object.expiresAtUnix !== undefined && object.expiresAtUnix !== null)
+      ? Long.fromValue(object.expiresAtUnix)
+      : Long.ZERO;
+    message.signatureVersion = object.signatureVersion ?? 0;
     return message;
   },
 };
 
 function createBaseMsgAcknowledgeUsageResponse(): MsgAcknowledgeUsageResponse {
-  return { acknowledgedAt: Long.ZERO };
+  return { acknowledgedAt: Long.ZERO, exactDuplicate: false };
 }
 
 export const MsgAcknowledgeUsageResponse: MessageFns<
@@ -1651,6 +2151,9 @@ export const MsgAcknowledgeUsageResponse: MessageFns<
   encode(message: MsgAcknowledgeUsageResponse, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
     if (!message.acknowledgedAt.equals(Long.ZERO)) {
       writer.uint32(8).int64(message.acknowledgedAt.toString());
+    }
+    if (message.exactDuplicate !== false) {
+      writer.uint32(16).bool(message.exactDuplicate);
     }
     return writer;
   },
@@ -1670,6 +2173,14 @@ export const MsgAcknowledgeUsageResponse: MessageFns<
           message.acknowledgedAt = Long.fromString(reader.int64().toString());
           continue;
         }
+        case 2: {
+          if (tag !== 16) {
+            break;
+          }
+
+          message.exactDuplicate = reader.bool();
+          continue;
+        }
       }
       if ((tag & 7) === 4 || tag === 0) {
         break;
@@ -1680,13 +2191,19 @@ export const MsgAcknowledgeUsageResponse: MessageFns<
   },
 
   fromJSON(object: any): MsgAcknowledgeUsageResponse {
-    return { acknowledgedAt: isSet(object.acknowledged_at) ? Long.fromValue(object.acknowledged_at) : Long.ZERO };
+    return {
+      acknowledgedAt: isSet(object.acknowledged_at) ? Long.fromValue(object.acknowledged_at) : Long.ZERO,
+      exactDuplicate: isSet(object.exact_duplicate) ? globalThis.Boolean(object.exact_duplicate) : false,
+    };
   },
 
   toJSON(message: MsgAcknowledgeUsageResponse): unknown {
     const obj: any = {};
     if (!message.acknowledgedAt.equals(Long.ZERO)) {
       obj.acknowledged_at = (message.acknowledgedAt || Long.ZERO).toString();
+    }
+    if (message.exactDuplicate !== false) {
+      obj.exact_duplicate = message.exactDuplicate;
     }
     return obj;
   },
@@ -1695,6 +2212,7 @@ export const MsgAcknowledgeUsageResponse: MessageFns<
     message.acknowledgedAt = (object.acknowledgedAt !== undefined && object.acknowledgedAt !== null)
       ? Long.fromValue(object.acknowledgedAt)
       : Long.ZERO;
+    message.exactDuplicate = object.exactDuplicate ?? false;
     return message;
   },
 };

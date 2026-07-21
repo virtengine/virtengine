@@ -153,4 +153,35 @@ var (
 
 	// ErrRateUnavailable is returned when settlement rates cannot be locked
 	ErrRateUnavailable = errorsmod.Register(ModuleName, 1548, "settlement rate unavailable")
+
+	// ErrExternalIOForbidden is returned when keeper execution would cross the
+	// deterministic on-chain input boundary.
+	ErrExternalIOForbidden = errorsmod.Register(ModuleName, 1549, "external I/O forbidden in consensus execution")
+
+	// ErrUsageAuthenticationRequired rejects pre-84B or incomplete proofs.
+	ErrUsageAuthenticationRequired = errorsmod.Register(ModuleName, 1550, "authenticated usage proof required")
+
+	// ErrProviderSigningKeyNotFound rejects unknown or mismatched key epochs.
+	ErrProviderSigningKeyNotFound = errorsmod.Register(ModuleName, 1551, "provider signing key not found")
+
+	// ErrProviderSigningKeyInactive rejects preactivation, retired, or revoked keys.
+	ErrProviderSigningKeyInactive = errorsmod.Register(ModuleName, 1552, "provider signing key inactive")
+
+	// ErrUsageReplayConflict rejects one replay key bound to different bytes.
+	ErrUsageReplayConflict = errorsmod.Register(ModuleName, 1553, "conflicting usage replay key")
+
+	// ErrUsageSequenceGap rejects gaps and regressions in a metering stream.
+	ErrUsageSequenceGap = errorsmod.Register(ModuleName, 1554, "usage stream sequence gap or regression")
+
+	// ErrUsageProofExpired rejects stale or excessively future-dated proofs.
+	ErrUsageProofExpired = errorsmod.Register(ModuleName, 1555, "usage proof outside allowed height or time bounds")
+
+	// ErrUsagePeriodOverlap rejects overlapping metric periods in one stream.
+	ErrUsagePeriodOverlap = errorsmod.Register(ModuleName, 1556, "usage period overlaps prior period")
+
+	// ErrUsagePricingVersion rejects unavailable pricing/formula/model versions.
+	ErrUsagePricingVersion = errorsmod.Register(ModuleName, 1557, "usage pricing or formula version unavailable")
+
+	// ErrCustomerKeyUnsupported rejects absent, multisig, or unknown account keys.
+	ErrCustomerKeyUnsupported = errorsmod.Register(ModuleName, 1558, "customer account key algorithm unsupported")
 )

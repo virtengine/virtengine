@@ -1,4 +1,4 @@
-import { QueryClusterRequest, QueryClusterResponse, QueryClustersByProviderRequest, QueryClustersByProviderResponse, QueryClustersRequest, QueryClustersResponse, QueryDisputeRequest, QueryDisputeResponse, QueryDisputesRequest, QueryDisputesResponse, QueryJobAccountingRequest, QueryJobAccountingResponse, QueryJobRequest, QueryJobResponse, QueryJobsByCustomerRequest, QueryJobsByCustomerResponse, QueryJobsByProviderRequest, QueryJobsByProviderResponse, QueryJobsRequest, QueryJobsResponse, QueryNodeMetadataRequest, QueryNodeMetadataResponse, QueryNodesByClusterRequest, QueryNodesByClusterResponse, QueryOfferingRequest, QueryOfferingResponse, QueryOfferingsByClusterRequest, QueryOfferingsByClusterResponse, QueryOfferingsRequest, QueryOfferingsResponse, QueryParamsRequest, QueryParamsResponse, QueryRewardRequest, QueryRewardResponse, QueryRewardsByJobRequest, QueryRewardsByJobResponse, QuerySchedulingDecisionByJobRequest, QuerySchedulingDecisionByJobResponse, QuerySchedulingDecisionRequest, QuerySchedulingDecisionResponse } from "./query.ts";
+import { QueryClusterRequest, QueryClusterResponse, QueryClustersByProviderRequest, QueryClustersByProviderResponse, QueryClustersRequest, QueryClustersResponse, QueryDisputeRequest, QueryDisputeResponse, QueryDisputesRequest, QueryDisputesResponse, QueryJobAccountingRequest, QueryJobAccountingResponse, QueryJobRequest, QueryJobResponse, QueryJobsByCustomerRequest, QueryJobsByCustomerResponse, QueryJobsByProviderRequest, QueryJobsByProviderResponse, QueryJobsRequest, QueryJobsResponse, QueryNodeMetadataRequest, QueryNodeMetadataResponse, QueryNodesByClusterRequest, QueryNodesByClusterResponse, QueryOfferingRequest, QueryOfferingResponse, QueryOfferingsByClusterRequest, QueryOfferingsByClusterResponse, QueryOfferingsRequest, QueryOfferingsResponse, QueryParamsRequest, QueryParamsResponse, QueryRewardRequest, QueryRewardResponse, QueryRewardsByJobRequest, QueryRewardsByJobResponse, QuerySchedulingDecisionByJobRequest, QuerySchedulingDecisionByJobResponse, QuerySchedulingDecisionRequest, QuerySchedulingDecisionResponse, QuerySchedulingMetricsRequest, QuerySchedulingMetricsResponse } from "./query.ts";
 
 export const Query = {
   typeName: "virtengine.hpc.v1.Query",
@@ -106,6 +106,13 @@ export const Query = {
       httpPath: "/virtengine/hpc/v1/job/{job_id}/scheduling",
       input: QuerySchedulingDecisionByJobRequest,
       output: QuerySchedulingDecisionByJobResponse,
+      get parent() { return Query; },
+    },
+    schedulingMetrics: {
+      name: "SchedulingMetrics",
+      httpPath: "/virtengine/hpc/v1/scheduling/metrics/{cluster_id}/{queue_name}",
+      input: QuerySchedulingMetricsRequest,
+      output: QuerySchedulingMetricsResponse,
       get parent() { return Query; },
     },
     reward: {

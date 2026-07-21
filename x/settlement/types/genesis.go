@@ -53,6 +53,11 @@ type GenesisState struct {
 
 	// FiatConversionSequence is the next fiat conversion sequence number
 	FiatConversionSequence uint64 `json:"fiat_conversion_sequence"`
+
+	// UsageAuthenticationActive enables Task 84B on fresh chains. Old genesis
+	// documents omit this field and remain migration inputs rather than being
+	// retroactively authenticated.
+	UsageAuthenticationActive bool `json:"usage_authentication_active"`
 }
 
 // Params defines the parameters for the settlement module
@@ -190,21 +195,22 @@ type Params struct {
 // DefaultGenesisState returns the default genesis state
 func DefaultGenesisState() *GenesisState {
 	return &GenesisState{
-		Params:                 DefaultParams(),
-		EscrowAccounts:         []EscrowAccount{},
-		SettlementRecords:      []SettlementRecord{},
-		RewardDistributions:    []RewardDistribution{},
-		UsageRecords:           []UsageRecord{},
-		ClaimableRewards:       []ClaimableRewards{},
-		PayoutRecords:          []PayoutRecord{},
-		FiatConversionRecords:  []FiatConversionRecord{},
-		FiatPayoutPreferences:  []FiatPayoutPreference{},
-		EscrowSequence:         1,
-		SettlementSequence:     1,
-		DistributionSequence:   1,
-		UsageSequence:          1,
-		PayoutSequence:         1,
-		FiatConversionSequence: 1,
+		Params:                    DefaultParams(),
+		EscrowAccounts:            []EscrowAccount{},
+		SettlementRecords:         []SettlementRecord{},
+		RewardDistributions:       []RewardDistribution{},
+		UsageRecords:              []UsageRecord{},
+		ClaimableRewards:          []ClaimableRewards{},
+		PayoutRecords:             []PayoutRecord{},
+		FiatConversionRecords:     []FiatConversionRecord{},
+		FiatPayoutPreferences:     []FiatPayoutPreference{},
+		EscrowSequence:            1,
+		SettlementSequence:        1,
+		DistributionSequence:      1,
+		UsageSequence:             1,
+		PayoutSequence:            1,
+		FiatConversionSequence:    1,
+		UsageAuthenticationActive: true,
 	}
 }
 
@@ -313,6 +319,9 @@ func (gs GenesisState) Validate() error {
 			return ErrUsageRecordExists.Wrapf("duplicate usage_id: %s", usage.UsageID)
 		}
 		seenUsage[usage.UsageID] = true
+		if gs.UsageAuthenticationActive && !usage.IsAuthenticated() {
+			return ErrUsageAuthenticationRequired.Wrapf("genesis usage %s is not authenticated", usage.UsageID)
+		}
 	}
 
 	// Validate payout records

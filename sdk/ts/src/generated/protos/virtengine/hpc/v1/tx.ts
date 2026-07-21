@@ -19,6 +19,9 @@ import {
   DisputeStatus,
   disputeStatusFromJSON,
   disputeStatusToJSON,
+  HealthStatus,
+  healthStatusFromJSON,
+  healthStatusToJSON,
   HPCPricing,
   HPCUsageMetrics,
   JobResources,
@@ -27,7 +30,15 @@ import {
   jobStateToJSON,
   JobWorkloadSpec,
   LatencyMeasurement,
+  NodeCapacity,
+  NodeHardware,
+  NodeHealth,
+  NodeLocality,
   NodeResources,
+  NodeState,
+  nodeStateFromJSON,
+  nodeStateToJSON,
+  NodeTopology,
   Params,
   Partition,
   PreconfiguredWorkload,
@@ -175,6 +186,17 @@ export interface MsgUpdateNodeMetadata {
   networkBandwidthMbps: Long;
   resources: NodeResources | undefined;
   active: boolean;
+  state: NodeState;
+  healthStatus: HealthStatus;
+  agentPubkey: string;
+  hardwareFingerprint: string;
+  agentVersion: string;
+  lastSequenceNumber: Long;
+  capacity: NodeCapacity | undefined;
+  health: NodeHealth | undefined;
+  hardware: NodeHardware | undefined;
+  topology: NodeTopology | undefined;
+  locality: NodeLocality | undefined;
 }
 
 /** MsgUpdateNodeMetadataResponse is the response for MsgUpdateNodeMetadata */
@@ -2079,6 +2101,17 @@ function createBaseMsgUpdateNodeMetadata(): MsgUpdateNodeMetadata {
     networkBandwidthMbps: Long.ZERO,
     resources: undefined,
     active: false,
+    state: 0,
+    healthStatus: 0,
+    agentPubkey: "",
+    hardwareFingerprint: "",
+    agentVersion: "",
+    lastSequenceNumber: Long.UZERO,
+    capacity: undefined,
+    health: undefined,
+    hardware: undefined,
+    topology: undefined,
+    locality: undefined,
   };
 }
 
@@ -2112,6 +2145,39 @@ export const MsgUpdateNodeMetadata: MessageFns<MsgUpdateNodeMetadata, "virtengin
     }
     if (message.active !== false) {
       writer.uint32(72).bool(message.active);
+    }
+    if (message.state !== 0) {
+      writer.uint32(80).int32(message.state);
+    }
+    if (message.healthStatus !== 0) {
+      writer.uint32(88).int32(message.healthStatus);
+    }
+    if (message.agentPubkey !== "") {
+      writer.uint32(98).string(message.agentPubkey);
+    }
+    if (message.hardwareFingerprint !== "") {
+      writer.uint32(106).string(message.hardwareFingerprint);
+    }
+    if (message.agentVersion !== "") {
+      writer.uint32(114).string(message.agentVersion);
+    }
+    if (!message.lastSequenceNumber.equals(Long.UZERO)) {
+      writer.uint32(120).uint64(message.lastSequenceNumber.toString());
+    }
+    if (message.capacity !== undefined) {
+      NodeCapacity.encode(message.capacity, writer.uint32(130).fork()).join();
+    }
+    if (message.health !== undefined) {
+      NodeHealth.encode(message.health, writer.uint32(138).fork()).join();
+    }
+    if (message.hardware !== undefined) {
+      NodeHardware.encode(message.hardware, writer.uint32(146).fork()).join();
+    }
+    if (message.topology !== undefined) {
+      NodeTopology.encode(message.topology, writer.uint32(154).fork()).join();
+    }
+    if (message.locality !== undefined) {
+      NodeLocality.encode(message.locality, writer.uint32(162).fork()).join();
     }
     return writer;
   },
@@ -2195,6 +2261,94 @@ export const MsgUpdateNodeMetadata: MessageFns<MsgUpdateNodeMetadata, "virtengin
           message.active = reader.bool();
           continue;
         }
+        case 10: {
+          if (tag !== 80) {
+            break;
+          }
+
+          message.state = reader.int32() as any;
+          continue;
+        }
+        case 11: {
+          if (tag !== 88) {
+            break;
+          }
+
+          message.healthStatus = reader.int32() as any;
+          continue;
+        }
+        case 12: {
+          if (tag !== 98) {
+            break;
+          }
+
+          message.agentPubkey = reader.string();
+          continue;
+        }
+        case 13: {
+          if (tag !== 106) {
+            break;
+          }
+
+          message.hardwareFingerprint = reader.string();
+          continue;
+        }
+        case 14: {
+          if (tag !== 114) {
+            break;
+          }
+
+          message.agentVersion = reader.string();
+          continue;
+        }
+        case 15: {
+          if (tag !== 120) {
+            break;
+          }
+
+          message.lastSequenceNumber = Long.fromString(reader.uint64().toString(), true);
+          continue;
+        }
+        case 16: {
+          if (tag !== 130) {
+            break;
+          }
+
+          message.capacity = NodeCapacity.decode(reader, reader.uint32());
+          continue;
+        }
+        case 17: {
+          if (tag !== 138) {
+            break;
+          }
+
+          message.health = NodeHealth.decode(reader, reader.uint32());
+          continue;
+        }
+        case 18: {
+          if (tag !== 146) {
+            break;
+          }
+
+          message.hardware = NodeHardware.decode(reader, reader.uint32());
+          continue;
+        }
+        case 19: {
+          if (tag !== 154) {
+            break;
+          }
+
+          message.topology = NodeTopology.decode(reader, reader.uint32());
+          continue;
+        }
+        case 20: {
+          if (tag !== 162) {
+            break;
+          }
+
+          message.locality = NodeLocality.decode(reader, reader.uint32());
+          continue;
+        }
       }
       if ((tag & 7) === 4 || tag === 0) {
         break;
@@ -2219,6 +2373,17 @@ export const MsgUpdateNodeMetadata: MessageFns<MsgUpdateNodeMetadata, "virtengin
         : Long.ZERO,
       resources: isSet(object.resources) ? NodeResources.fromJSON(object.resources) : undefined,
       active: isSet(object.active) ? globalThis.Boolean(object.active) : false,
+      state: isSet(object.state) ? nodeStateFromJSON(object.state) : 0,
+      healthStatus: isSet(object.health_status) ? healthStatusFromJSON(object.health_status) : 0,
+      agentPubkey: isSet(object.agent_pubkey) ? globalThis.String(object.agent_pubkey) : "",
+      hardwareFingerprint: isSet(object.hardware_fingerprint) ? globalThis.String(object.hardware_fingerprint) : "",
+      agentVersion: isSet(object.agent_version) ? globalThis.String(object.agent_version) : "",
+      lastSequenceNumber: isSet(object.last_sequence_number) ? Long.fromValue(object.last_sequence_number) : Long.UZERO,
+      capacity: isSet(object.capacity) ? NodeCapacity.fromJSON(object.capacity) : undefined,
+      health: isSet(object.health) ? NodeHealth.fromJSON(object.health) : undefined,
+      hardware: isSet(object.hardware) ? NodeHardware.fromJSON(object.hardware) : undefined,
+      topology: isSet(object.topology) ? NodeTopology.fromJSON(object.topology) : undefined,
+      locality: isSet(object.locality) ? NodeLocality.fromJSON(object.locality) : undefined,
     };
   },
 
@@ -2251,6 +2416,39 @@ export const MsgUpdateNodeMetadata: MessageFns<MsgUpdateNodeMetadata, "virtengin
     if (message.active !== false) {
       obj.active = message.active;
     }
+    if (message.state !== 0) {
+      obj.state = nodeStateToJSON(message.state);
+    }
+    if (message.healthStatus !== 0) {
+      obj.health_status = healthStatusToJSON(message.healthStatus);
+    }
+    if (message.agentPubkey !== "") {
+      obj.agent_pubkey = message.agentPubkey;
+    }
+    if (message.hardwareFingerprint !== "") {
+      obj.hardware_fingerprint = message.hardwareFingerprint;
+    }
+    if (message.agentVersion !== "") {
+      obj.agent_version = message.agentVersion;
+    }
+    if (!message.lastSequenceNumber.equals(Long.UZERO)) {
+      obj.last_sequence_number = (message.lastSequenceNumber || Long.UZERO).toString();
+    }
+    if (message.capacity !== undefined) {
+      obj.capacity = NodeCapacity.toJSON(message.capacity);
+    }
+    if (message.health !== undefined) {
+      obj.health = NodeHealth.toJSON(message.health);
+    }
+    if (message.hardware !== undefined) {
+      obj.hardware = NodeHardware.toJSON(message.hardware);
+    }
+    if (message.topology !== undefined) {
+      obj.topology = NodeTopology.toJSON(message.topology);
+    }
+    if (message.locality !== undefined) {
+      obj.locality = NodeLocality.toJSON(message.locality);
+    }
     return obj;
   },
   fromPartial(object: DeepPartial<MsgUpdateNodeMetadata>): MsgUpdateNodeMetadata {
@@ -2268,6 +2466,29 @@ export const MsgUpdateNodeMetadata: MessageFns<MsgUpdateNodeMetadata, "virtengin
       ? NodeResources.fromPartial(object.resources)
       : undefined;
     message.active = object.active ?? false;
+    message.state = object.state ?? 0;
+    message.healthStatus = object.healthStatus ?? 0;
+    message.agentPubkey = object.agentPubkey ?? "";
+    message.hardwareFingerprint = object.hardwareFingerprint ?? "";
+    message.agentVersion = object.agentVersion ?? "";
+    message.lastSequenceNumber = (object.lastSequenceNumber !== undefined && object.lastSequenceNumber !== null)
+      ? Long.fromValue(object.lastSequenceNumber)
+      : Long.UZERO;
+    message.capacity = (object.capacity !== undefined && object.capacity !== null)
+      ? NodeCapacity.fromPartial(object.capacity)
+      : undefined;
+    message.health = (object.health !== undefined && object.health !== null)
+      ? NodeHealth.fromPartial(object.health)
+      : undefined;
+    message.hardware = (object.hardware !== undefined && object.hardware !== null)
+      ? NodeHardware.fromPartial(object.hardware)
+      : undefined;
+    message.topology = (object.topology !== undefined && object.topology !== null)
+      ? NodeTopology.fromPartial(object.topology)
+      : undefined;
+    message.locality = (object.locality !== undefined && object.locality !== null)
+      ? NodeLocality.fromPartial(object.locality)
+      : undefined;
     return message;
   },
 };

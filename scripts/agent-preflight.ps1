@@ -42,13 +42,11 @@ if ($hasGo -or $hasGoMod) {
     Write-Host "--- Go checks ---" -ForegroundColor Yellow
 
     if ($hasGoMod) {
-        Write-Host "  go mod tidy..."
-        go mod tidy 2>&1 | Out-Null
-        if ($LASTEXITCODE -ne 0) { Write-Host "FAIL: go mod tidy" -ForegroundColor Red; $errors++ }
-
-        Write-Host "  go mod vendor..."
-        go mod vendor 2>&1 | Out-Null
-        if ($LASTEXITCODE -ne 0) { Write-Host "FAIL: go mod vendor" -ForegroundColor Red; $errors++ }
+        Write-Host "  module/workspace/vendor policy..."
+        $gitBash = "C:\Program Files\Git\bin\bash.exe"
+        if (-not (Test-Path $gitBash)) { $gitBash = "bash" }
+        & $gitBash ./scripts/verify-modules.sh 2>&1 | Out-Null
+        if ($LASTEXITCODE -ne 0) { Write-Host "FAIL: module verification" -ForegroundColor Red; $errors++ }
     }
 
     $goPkgs = $hasGo | ForEach-Object { "./" + (Split-Path -Parent $_) } | Sort-Object -Unique | Where-Object { $_ -ne "./" }

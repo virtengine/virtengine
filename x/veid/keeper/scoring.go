@@ -274,8 +274,6 @@ func NewStubMLScorer(config MLScoringConfig) *StubMLScorer {
 // Score implements MLScorer.Score
 // Stub implementation returns deterministic scores based on scope types and counts
 func (s *StubMLScorer) Score(input *ScoringInput) (*ScoringOutput, error) {
-	startTime := time.Now()
-
 	output := &ScoringOutput{
 		Score:        0,
 		ModelVersion: s.config.ModelVersion,
@@ -288,7 +286,7 @@ func (s *StubMLScorer) Score(input *ScoringInput) (*ScoringOutput, error) {
 	// Check minimum scopes requirement
 	if len(input.DecryptedScopes) < s.config.MinScopesForScoring {
 		output.ReasonCodes = append(output.ReasonCodes, types.ReasonCodeInsufficientScopes)
-		output.ProcessingTime = time.Since(startTime).Milliseconds()
+		output.ProcessingTime = 0
 		return output, nil
 	}
 
@@ -341,7 +339,7 @@ func (s *StubMLScorer) Score(input *ScoringInput) (*ScoringOutput, error) {
 		output.ReasonCodes = append([]types.ReasonCode{types.ReasonCodeSuccess}, output.ReasonCodes...)
 	}
 
-	output.ProcessingTime = time.Since(startTime).Milliseconds()
+	output.ProcessingTime = 0
 	return output, nil
 }
 
@@ -611,8 +609,6 @@ type TensorFlowScorerAdapter struct {
 
 // Score implements MLScorer.Score using TensorFlow inference
 func (a *TensorFlowScorerAdapter) Score(input *ScoringInput) (*ScoringOutput, error) {
-	startTime := time.Now()
-
 	// Use the feature extraction pipeline to extract real features
 	features, err := a.featurePipeline.ExtractFeatures(
 		input.DecryptedScopes,
@@ -650,7 +646,7 @@ func (a *TensorFlowScorerAdapter) Score(input *ScoringInput) (*ScoringOutput, er
 		ReasonCodes:    a.convertReasonCodes(result.ReasonCodes),
 		ScopeScores:    make(map[string]uint32),
 		Confidence:     float64(result.Confidence),
-		ProcessingTime: time.Since(startTime).Milliseconds(),
+		ProcessingTime: 0,
 		InputHash:      []byte(result.InputHash),
 	}
 

@@ -720,7 +720,7 @@ func (c *NitroNSMClient) GetAttestationDocument(userData, nonce, publicKey []byt
 	}
 
 	if c.simulated {
-		return c.getSimulatedAttestationDocument(userData, nonce, publicKey)
+		return c.getSimulatedAttestationDocument(userData, nonce, publicKey), nil
 	}
 
 	return c.getHardwareAttestationDocument(userData, nonce, publicKey)
@@ -765,7 +765,7 @@ func (c *NitroNSMClient) getHardwareAttestationDocument(userData, nonce, publicK
 }
 
 // getSimulatedAttestationDocument generates a simulated document
-func (c *NitroNSMClient) getSimulatedAttestationDocument(userData, nonce, publicKey []byte) (*NSMAttestationDocument, error) {
+func (c *NitroNSMClient) getSimulatedAttestationDocument(userData, nonce, publicKey []byte) *NSMAttestationDocument {
 	doc := &NSMAttestationDocument{
 		ModuleID: "i-simulated-enclave-module",
 		//nolint:gosec // G115: Unix timestamp is positive and fits in uint64
@@ -792,7 +792,7 @@ func (c *NitroNSMClient) getSimulatedAttestationDocument(userData, nonce, public
 		generateSimulatedCert("AWS-NITRO-INTERMEDIATE"),
 	}
 
-	return doc, nil
+	return doc
 }
 
 // DescribePCRs returns the current PCR values
@@ -824,7 +824,7 @@ func (c *NitroNSMClient) DescribePCRs() (map[uint8][]byte, error) {
 		if err != nil {
 			return nil, unavailableHardwareOperation(AttestationTypeNitro, "describe PCRs", c.devicePath, err)
 		}
-		pcrs[uint8(i)] = append([]byte(nil), desc.Value...)
+		pcrs[uint8(i)] = append([]byte(nil), desc.Value...) // #nosec G115 -- loop bound is 16
 	}
 	return pcrs, nil
 }

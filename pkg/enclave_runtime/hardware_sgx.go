@@ -486,7 +486,7 @@ func (g *SGXReportGenerator) GenerateReport(reportData [64]byte, targetInfo []by
 }
 
 // generateHardwareReport generates a report using SGX hardware
-func (g *SGXReportGenerator) generateHardwareReport(reportData [64]byte, targetInfo []byte) (*SGXReportBody, error) {
+func (g *SGXReportGenerator) generateHardwareReport(_ [64]byte, targetInfo []byte) (*SGXReportBody, error) {
 	// TODO: Real SGX implementation:
 	// 1. Make ECALL into enclave
 	// 2. Inside enclave, call sgx_create_report() with:
@@ -494,7 +494,7 @@ func (g *SGXReportGenerator) generateHardwareReport(reportData [64]byte, targetI
 	//    - report_data (user-provided data to bind)
 	// 3. Return the generated report
 
-	_, _ = reportData, targetInfo
+	_ = targetInfo
 	return nil, unsupportedHardwareOperation(AttestationTypeSGX, "generate report",
 		"sgx_create_report is not wired for hardware-selected execution")
 }
@@ -816,14 +816,16 @@ func (e *SGXECallInterface) Call(functionID int, input []byte) (*ECallResult, er
 }
 
 // callHardware makes a real ECALL
-func (e *SGXECallInterface) callHardware(functionID int, input []byte) (*ECallResult, error) {
+//
+//nolint:unparam // The helper mirrors the hardware ECALL result contract for tests and future wiring.
+func (e *SGXECallInterface) callHardware(_ int, input []byte) (*ECallResult, error) {
 	// TODO: Real SGX implementation:
 	// 1. Prepare input buffers
 	// 2. Call the ECALL function via generated stubs
 	// 3. Handle OCALL callbacks if needed
 	// 4. Return output data
 
-	_, _ = functionID, input
+	_ = input
 	return nil, unsupportedHardwareOperation(AttestationTypeSGX, "ecall",
 		"SGX ECALL dispatch is not wired for hardware-selected execution")
 }

@@ -1,4 +1,4 @@
-import { QueryAllSensitiveTxConfigsRequest, QueryAllSensitiveTxConfigsResponse, QueryAuthorizationSessionRequest, QueryAuthorizationSessionResponse, QueryChallengeRequest, QueryChallengeResponse, QueryFactorEnrollmentRequest, QueryFactorEnrollmentResponse, QueryFactorEnrollmentsRequest, QueryFactorEnrollmentsResponse, QueryMFAPolicyRequest, QueryMFAPolicyResponse, QueryMFARequiredRequest, QueryMFARequiredResponse, QueryParamsRequest, QueryParamsResponse, QueryPendingChallengesRequest, QueryPendingChallengesResponse, QuerySensitiveTxConfigRequest, QuerySensitiveTxConfigResponse, QueryTrustedDevicesRequest, QueryTrustedDevicesResponse } from "./query.ts";
+import { QueryAllSensitiveTxConfigsRequest, QueryAllSensitiveTxConfigsResponse, QueryAuthorizationSessionRequest, QueryAuthorizationSessionResponse, QueryAuthorizationSessionsRequest, QueryAuthorizationSessionsResponse, QueryChallengeRequest, QueryChallengeResponse, QueryFactorEnrollmentRequest, QueryFactorEnrollmentResponse, QueryFactorEnrollmentsRequest, QueryFactorEnrollmentsResponse, QueryMFAPolicyRequest, QueryMFAPolicyResponse, QueryMFARequiredRequest, QueryMFARequiredResponse, QueryParamsRequest, QueryParamsResponse, QueryPendingChallengesRequest, QueryPendingChallengesResponse, QuerySensitiveTxConfigRequest, QuerySensitiveTxConfigResponse, QueryTrustedDeviceRequest, QueryTrustedDeviceResponse, QueryTrustedDevicesRequest, QueryTrustedDevicesResponse } from "./query.ts";
 
 export const Query = {
   typeName: "virtengine.mfa.v1.Query",
@@ -45,11 +45,25 @@ export const Query = {
       output: QueryAuthorizationSessionResponse,
       get parent() { return Query; },
     },
+    authorizationSessions: {
+      name: "AuthorizationSessions",
+      httpPath: "/virtengine/mfa/v1/sessions/{address}",
+      input: QueryAuthorizationSessionsRequest,
+      output: QueryAuthorizationSessionsResponse,
+      get parent() { return Query; },
+    },
     trustedDevices: {
       name: "TrustedDevices",
       httpPath: "/virtengine/mfa/v1/devices/{address}",
       input: QueryTrustedDevicesRequest,
       output: QueryTrustedDevicesResponse,
+      get parent() { return Query; },
+    },
+    trustedDevice: {
+      name: "TrustedDevice",
+      httpPath: "/virtengine/mfa/v1/device/{address}/{device_fingerprint}",
+      input: QueryTrustedDeviceRequest,
+      output: QueryTrustedDeviceResponse,
       get parent() { return Query; },
     },
     sensitiveTxConfig: {

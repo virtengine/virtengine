@@ -40,6 +40,7 @@ The assessment combined source inspection, protocol-document comparison, task-hi
 - `sdk/ts/node_modules` is absent, so no TypeScript SDK validation pass is claimed.
 - `node scripts/validate-agents-docs.mjs` passed.
 - The active Task 84A/application/upgrade/settlement/VEID and inference/security changes are an ownership boundary. Revalidation after merge must rerun the affected source inspection, targeted tests, dependency checks, and generated/release evidence before any corresponding snapshot finding is closed or narrowed.
+- **Task 84A carrier continuation delta, 2026-07-20:** the active checkout now implements carrier v1: canonical protobuf vote bundles, fork-supported `baseapp.ValidateVoteExtensions`, deterministic voting-power aggregation, a registered no-ordinary-signer SDK-native system transaction at index zero, ProcessProposal signature/commit/aggregate revalidation, FinalizeBlock-only exactly-once consumption, and `v1.4.0` H+1 vote-extension activation. This closes the empty-only carrier design gap locally. Task 84A remains open until its four-validator 500-block load/adversarial and supported Linux architecture parity acceptance gates pass. Task 85D remains responsible for producing authenticated sidecar inference receipts before non-empty verification-result lists are operational; Task 84A callbacks do not perform inference or network I/O.
 
 ### 2.2 Confidence model
 

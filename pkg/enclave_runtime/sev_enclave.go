@@ -1015,10 +1015,10 @@ func parseMinimumTCBVersion(value string) (*SNPTCBVersion, error) {
 
 func snpTCBMeetsMinimum(current uint64, minimum SNPTCBVersion) bool {
 	currentVersion := SNPTCBVersion{
-		BootLoader: uint8(current & 0xFF),
-		TEE:        uint8((current >> 8) & 0xFF),
-		SNP:        uint8((current >> 48) & 0xFF),
-		Microcode:  uint8((current >> 56) & 0xFF),
+		BootLoader: uint8(current & 0xFF),         // #nosec G115 -- masked to one byte
+		TEE:        uint8((current >> 8) & 0xFF),  // #nosec G115 -- masked to one byte
+		SNP:        uint8((current >> 48) & 0xFF), // #nosec G115 -- masked to one byte
+		Microcode:  uint8((current >> 56) & 0xFF), // #nosec G115 -- masked to one byte
 	}
 
 	return currentVersion.BootLoader >= minimum.BootLoader &&

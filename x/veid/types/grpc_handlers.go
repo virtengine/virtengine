@@ -31,6 +31,7 @@ var _Msg_serviceDesc = struct {
 		{MethodName: "RequestVerification", Handler: nil},
 		{MethodName: "UpdateVerificationStatus", Handler: nil},
 		{MethodName: "UpdateScore", Handler: nil},
+		{MethodName: "SubmitConsensusVerification", Handler: nil},
 		{MethodName: "CreateIdentityWallet", Handler: nil},
 		{MethodName: "AddScopeToWallet", Handler: nil},
 		{MethodName: "RevokeScopeFromWallet", Handler: nil},
@@ -57,6 +58,7 @@ type MsgServer interface {
 	RequestVerification(ctx context.Context, msg *MsgRequestVerification) (*MsgRequestVerificationResponse, error)
 	UpdateVerificationStatus(ctx context.Context, msg *MsgUpdateVerificationStatus) (*MsgUpdateVerificationStatusResponse, error)
 	UpdateScore(ctx context.Context, msg *MsgUpdateScore) (*MsgUpdateScoreResponse, error)
+	SubmitConsensusVerification(ctx context.Context, msg *MsgSubmitConsensusVerification) (*MsgSubmitConsensusVerificationResponse, error)
 	// Wallet operations
 	CreateIdentityWallet(ctx context.Context, msg *MsgCreateIdentityWallet) (*MsgCreateIdentityWalletResponse, error)
 	AddScopeToWallet(ctx context.Context, msg *MsgAddScopeToWallet) (*MsgAddScopeToWalletResponse, error)
@@ -92,6 +94,7 @@ var _Msg_serviceDesc_grpc = ggrpc.ServiceDesc{
 		{MethodName: "RequestVerification", Handler: _Msg_RequestVerification_Handler},
 		{MethodName: "UpdateVerificationStatus", Handler: _Msg_UpdateVerificationStatus_Handler},
 		{MethodName: "UpdateScore", Handler: _Msg_UpdateScore_Handler},
+		{MethodName: "SubmitConsensusVerification", Handler: _Msg_SubmitConsensusVerification_Handler},
 		{MethodName: "CreateIdentityWallet", Handler: _Msg_CreateIdentityWallet_Handler},
 		{MethodName: "AddScopeToWallet", Handler: _Msg_AddScopeToWallet_Handler},
 		{MethodName: "RevokeScopeFromWallet", Handler: _Msg_RevokeScopeFromWallet_Handler},
@@ -177,6 +180,20 @@ func _Msg_UpdateScore_Handler(srv interface{}, ctx context.Context, dec func(int
 	info := &ggrpc.UnaryServerInfo{Server: srv, FullMethod: "/virtengine.veid.v1.Msg/UpdateScore"}
 	return interceptor(ctx, in, info, func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(MsgServer).UpdateScore(ctx, req.(*MsgUpdateScore))
+	})
+}
+
+func _Msg_SubmitConsensusVerification_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor ggrpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(MsgSubmitConsensusVerification)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MsgServer).SubmitConsensusVerification(ctx, in)
+	}
+	info := &ggrpc.UnaryServerInfo{Server: srv, FullMethod: "/virtengine.veid.v1.Msg/SubmitConsensusVerification"}
+	return interceptor(ctx, in, info, func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MsgServer).SubmitConsensusVerification(ctx, req.(*MsgSubmitConsensusVerification))
 	})
 }
 

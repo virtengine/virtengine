@@ -181,18 +181,20 @@ func TestSettlementAfterJobCompletion(t *testing.T) {
 		FormulaVersion: types.CurrentBillingFormulaVersion,
 	}
 	require.NoError(t, k.CreateAccountingRecord(ctx, record))
+	transferCountBefore := len(bank.Transfers())
 
 	result, err := k.ProcessJobSettlement(ctx, job.JobID)
-	require.NoError(t, err)
-	require.True(t, result.Success)
-	require.NotEmpty(t, result.SettlementID)
+	require.Error(t, err)
+	require.False(t, result.Success)
+	require.Empty(t, result.SettlementID)
+	require.Contains(t, result.Error, "authenticated provider usage is pending")
 
 	records := k.GetAccountingRecordsByJob(ctx, job.JobID)
 	require.Len(t, records, 1)
-	require.Equal(t, types.AccountingStatusSettled, records[0].Status)
+	require.Equal(t, types.AccountingStatusPending, records[0].Status)
 
 	transfers := bank.Transfers()
-	require.NotEmpty(t, transfers)
+	require.Len(t, transfers, transferCountBefore)
 }
 
 func TestBillingInvoiceGeneration(t *testing.T) {
@@ -297,7 +299,8 @@ func TestRefundOnJobCancellation(t *testing.T) {
 	require.NoError(t, k.CreateAccountingRecord(ctx, record))
 
 	result, err := k.ProcessJobSettlement(ctx, job.JobID)
-	require.NoError(t, err)
-	require.True(t, result.Success)
-	require.False(t, result.RefundAmount.IsZero())
+	require.Error(t, err)
+	require.False(t, result.Success)
+	require.True(t, result.RefundAmount.IsZero())
+	require.Contains(t, result.Error, "authenticated provider usage is pending")
 }

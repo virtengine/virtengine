@@ -12,6 +12,7 @@ type SettlementKeeper interface {
 	SettleOrder(ctx sdk.Context, orderID string, usageRecordIDs []string, isFinal bool) (*settlementtypes.SettlementRecord, error)
 	GetEscrowByOrder(ctx sdk.Context, orderID string) (settlementtypes.EscrowAccount, bool)
 	GetEscrow(ctx sdk.Context, escrowID string) (settlementtypes.EscrowAccount, bool)
+	GetUsageRecord(ctx sdk.Context, usageID string) (settlementtypes.UsageRecord, bool)
 }
 
 // SetSettlementKeeper configures the settlement integration keeper.

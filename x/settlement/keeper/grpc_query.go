@@ -164,6 +164,30 @@ func (q GRPCQuerier) UsageRecordsByOrder(ctx context.Context, req *settlementv1.
 	return &settlementv1.QueryUsageRecordsByOrderResponse{UsageRecords: resp}, nil
 }
 
+// UsageStreamState returns the authoritative committed stream cursor.
+func (q GRPCQuerier) UsageStreamState(ctx context.Context, req *settlementv1.QueryUsageStreamStateRequest) (*settlementv1.QueryUsageStreamStateResponse, error) {
+	if req == nil {
+		return nil, status.Error(codes.InvalidArgument, "empty request")
+	}
+	if _, err := sdk.AccAddressFromBech32(req.Provider); err != nil {
+		return nil, status.Error(codes.InvalidArgument, "invalid provider address")
+	}
+	if req.OrderId == "" || req.LeaseId == "" {
+		return nil, status.Error(codes.InvalidArgument, "order_id and lease_id are required")
+	}
+
+	sdkCtx := sdk.UnwrapSDKContext(ctx)
+	sequence, usageID, digest, err := q.GetUsageStreamState(sdkCtx, req.Provider, req.AllocationId, req.OrderId, req.LeaseId)
+	if err != nil {
+		return nil, status.Error(codes.InvalidArgument, err.Error())
+	}
+	return &settlementv1.QueryUsageStreamStateResponse{
+		LastSequence:    sequence,
+		LastUsageId:     usageID,
+		LastUsageDigest: digest,
+	}, nil
+}
+
 // UsageSummary returns usage summary for an order/provider and period.
 func (q GRPCQuerier) UsageSummary(ctx context.Context, req *settlementv1.QueryUsageSummaryRequest) (*settlementv1.QueryUsageSummaryResponse, error) {
 	if req == nil {

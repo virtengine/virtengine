@@ -104,6 +104,7 @@ WORKFLOW_SPECS: dict[str, WorkflowSpec] = {
             "golang.org/x/vuln/cmd/govulncheck@${{ env.GOVULNCHECK_VERSION }}",
             "github.com/securego/gosec/v2/cmd/gosec@${{ env.GOSEC_VERSION }}",
             "gitleaks git .",
+            "validate_inference_deployment_policy.py",
         ),
         forbidden_snippets=("coverage-gate",),
     ),
@@ -212,8 +213,12 @@ def validate_workflow(path: Path) -> list[str]:
 
     if "validate_security_policies.py" not in raw:
         errors.append("policy-validation must run validate_security_policies.py")
-    if 'python -m unittest discover -s .github/tests -p "test_security_policy*.py"' not in raw:
-        errors.append("policy-validation must run security policy tests")
+    accepted_test_invocations = (
+        'python -m unittest discover -s .github/tests -p "test_security_policy*.py"',
+        'python -m unittest discover -s .github/tests -p "test_*policy*.py"',
+    )
+    if not any(invocation in raw for invocation in accepted_test_invocations):
+        errors.append("policy-validation must run policy validator tests")
     if "actionlint@v1.7.12" not in raw:
         errors.append("policy-validation must run actionlint at v1.7.12")
 

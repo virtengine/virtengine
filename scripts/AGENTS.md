@@ -166,6 +166,10 @@ When to add vs modify
 | Script | Purpose | Usage | Dependencies |
 | --- | --- | --- | --- |
 | scripts/generate-api-types.sh | Generate TS/Go API types + docs. | ./scripts/generate-api-types.sh | node+npx, go, oapi-codegen |
+| scripts/proto-generate.sh | Regenerate all protobuf contracts in the pinned Linux image. | ./scripts/proto-generate.sh all | Docker |
+| scripts/proto-generate-wsl.sh | Native Linux/WSL equivalent for a Docker-unavailable host. | ./scripts/proto-generate-wsl.sh all | Go 1.25.5, curl, tar |
+| scripts/verify-proto-generation.sh | Prove two-run generated artifact byte identity. | ./scripts/verify-proto-generation.sh | Docker, sha256sum |
+| scripts/verify-modules.sh | Verify workspace sums, empty-cache downloads, and vendor sync. | VE_VERIFY_EMPTY_CACHE=1 ./scripts/verify-modules.sh | Go 1.25.5 |
 | scripts/compute_model_hash.sh | Hash ML weights (bash). | ./scripts/compute_model_hash.sh ml/.. | sha256sum |
 | scripts/compute_model_hash.go | Hash ML weights (Go). | go run scripts/compute_model_hash.go -dir ... | go |
 | scripts/test_inference_conformance.sh | Go/Python inference parity tests. | ./scripts/test_inference_conformance.sh | go, python3 |

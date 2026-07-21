@@ -84,12 +84,20 @@ export interface RecipientKeyRecord {
   publicKey: Uint8Array;
   /** KeyFingerprint is a unique identifier derived from the public key */
   keyFingerprint: string;
+  /** KeyVersion is the rotation version for this key */
+  keyVersion: number;
   /** AlgorithmID specifies which algorithm this key is for */
   algorithmId: string;
   /** RegisteredAt is the block time when the key was registered */
   registeredAt: Long;
   /** RevokedAt is the block time when the key was revoked (0 if active) */
   revokedAt: Long;
+  /** DeprecatedAt is the block time when the key was deprecated (0 if not deprecated) */
+  deprecatedAt: Long;
+  /** ExpiresAt is the block time when the key expires (0 if no expiry) */
+  expiresAt: Long;
+  /** PurgeAt is the block time when the key material should be purged (0 if not scheduled) */
+  purgeAt: Long;
   /** Label is an optional human-readable label for the key */
   label: string;
 }
@@ -193,6 +201,14 @@ export interface Params {
   allowedAlgorithms: string[];
   /** RequireSignature determines if envelope signatures are mandatory */
   requireSignature: boolean;
+  /** RevocationGracePeriodSeconds is the grace period before purging revoked keys */
+  revocationGracePeriodSeconds: Long;
+  /** KeyExpiryWarningSeconds are warning windows before expiry for warning events */
+  keyExpiryWarningSeconds: Long[];
+  /** RotationBatchSize is the max number of envelopes to queue per rotation batch */
+  rotationBatchSize: number;
+  /** DefaultKeyTtlSeconds is the default TTL applied to newly registered keys (0 disables) */
+  defaultKeyTtlSeconds: Long;
 }
 
 /** EventKeyRegistered is emitted when a recipient key is registered */
@@ -219,6 +235,29 @@ export interface EventKeyUpdated {
   field: string;
   oldValue: string;
   newValue: string;
+}
+
+/** EventKeyRotated is emitted when a recipient key is rotated */
+export interface EventKeyRotated {
+  address: string;
+  oldFingerprint: string;
+  newFingerprint: string;
+  rotatedAt: Long;
+}
+
+/** EventKeyExpiryWarning is emitted when a key is nearing expiry */
+export interface EventKeyExpiryWarning {
+  address: string;
+  fingerprint: string;
+  expiresAt: Long;
+  warningWindowSeconds: Long;
+}
+
+/** EventKeyExpired is emitted when a key expires */
+export interface EventKeyExpired {
+  address: string;
+  fingerprint: string;
+  expiredAt: Long;
 }
 
 function createBaseAlgorithmInfo(): AlgorithmInfo {
@@ -364,9 +403,13 @@ function createBaseRecipientKeyRecord(): RecipientKeyRecord {
     address: "",
     publicKey: new Uint8Array(0),
     keyFingerprint: "",
+    keyVersion: 0,
     algorithmId: "",
     registeredAt: Long.ZERO,
     revokedAt: Long.ZERO,
+    deprecatedAt: Long.ZERO,
+    expiresAt: Long.ZERO,
+    purgeAt: Long.ZERO,
     label: "",
   };
 }
@@ -384,17 +427,29 @@ export const RecipientKeyRecord: MessageFns<RecipientKeyRecord, "virtengine.encr
     if (message.keyFingerprint !== "") {
       writer.uint32(26).string(message.keyFingerprint);
     }
+    if (message.keyVersion !== 0) {
+      writer.uint32(32).uint32(message.keyVersion);
+    }
     if (message.algorithmId !== "") {
-      writer.uint32(34).string(message.algorithmId);
+      writer.uint32(42).string(message.algorithmId);
     }
     if (!message.registeredAt.equals(Long.ZERO)) {
-      writer.uint32(40).int64(message.registeredAt.toString());
+      writer.uint32(48).int64(message.registeredAt.toString());
     }
     if (!message.revokedAt.equals(Long.ZERO)) {
-      writer.uint32(48).int64(message.revokedAt.toString());
+      writer.uint32(56).int64(message.revokedAt.toString());
+    }
+    if (!message.deprecatedAt.equals(Long.ZERO)) {
+      writer.uint32(64).int64(message.deprecatedAt.toString());
+    }
+    if (!message.expiresAt.equals(Long.ZERO)) {
+      writer.uint32(72).int64(message.expiresAt.toString());
+    }
+    if (!message.purgeAt.equals(Long.ZERO)) {
+      writer.uint32(80).int64(message.purgeAt.toString());
     }
     if (message.label !== "") {
-      writer.uint32(58).string(message.label);
+      writer.uint32(90).string(message.label);
     }
     return writer;
   },
@@ -431,19 +486,19 @@ export const RecipientKeyRecord: MessageFns<RecipientKeyRecord, "virtengine.encr
           continue;
         }
         case 4: {
-          if (tag !== 34) {
+          if (tag !== 32) {
+            break;
+          }
+
+          message.keyVersion = reader.uint32();
+          continue;
+        }
+        case 5: {
+          if (tag !== 42) {
             break;
           }
 
           message.algorithmId = reader.string();
-          continue;
-        }
-        case 5: {
-          if (tag !== 40) {
-            break;
-          }
-
-          message.registeredAt = Long.fromString(reader.int64().toString());
           continue;
         }
         case 6: {
@@ -451,11 +506,43 @@ export const RecipientKeyRecord: MessageFns<RecipientKeyRecord, "virtengine.encr
             break;
           }
 
-          message.revokedAt = Long.fromString(reader.int64().toString());
+          message.registeredAt = Long.fromString(reader.int64().toString());
           continue;
         }
         case 7: {
-          if (tag !== 58) {
+          if (tag !== 56) {
+            break;
+          }
+
+          message.revokedAt = Long.fromString(reader.int64().toString());
+          continue;
+        }
+        case 8: {
+          if (tag !== 64) {
+            break;
+          }
+
+          message.deprecatedAt = Long.fromString(reader.int64().toString());
+          continue;
+        }
+        case 9: {
+          if (tag !== 72) {
+            break;
+          }
+
+          message.expiresAt = Long.fromString(reader.int64().toString());
+          continue;
+        }
+        case 10: {
+          if (tag !== 80) {
+            break;
+          }
+
+          message.purgeAt = Long.fromString(reader.int64().toString());
+          continue;
+        }
+        case 11: {
+          if (tag !== 90) {
             break;
           }
 
@@ -476,9 +563,13 @@ export const RecipientKeyRecord: MessageFns<RecipientKeyRecord, "virtengine.encr
       address: isSet(object.address) ? globalThis.String(object.address) : "",
       publicKey: isSet(object.public_key) ? bytesFromBase64(object.public_key) : new Uint8Array(0),
       keyFingerprint: isSet(object.key_fingerprint) ? globalThis.String(object.key_fingerprint) : "",
+      keyVersion: isSet(object.key_version) ? globalThis.Number(object.key_version) : 0,
       algorithmId: isSet(object.algorithm_id) ? globalThis.String(object.algorithm_id) : "",
       registeredAt: isSet(object.registered_at) ? Long.fromValue(object.registered_at) : Long.ZERO,
       revokedAt: isSet(object.revoked_at) ? Long.fromValue(object.revoked_at) : Long.ZERO,
+      deprecatedAt: isSet(object.deprecated_at) ? Long.fromValue(object.deprecated_at) : Long.ZERO,
+      expiresAt: isSet(object.expires_at) ? Long.fromValue(object.expires_at) : Long.ZERO,
+      purgeAt: isSet(object.purge_at) ? Long.fromValue(object.purge_at) : Long.ZERO,
       label: isSet(object.label) ? globalThis.String(object.label) : "",
     };
   },
@@ -494,6 +585,9 @@ export const RecipientKeyRecord: MessageFns<RecipientKeyRecord, "virtengine.encr
     if (message.keyFingerprint !== "") {
       obj.key_fingerprint = message.keyFingerprint;
     }
+    if (message.keyVersion !== 0) {
+      obj.key_version = Math.round(message.keyVersion);
+    }
     if (message.algorithmId !== "") {
       obj.algorithm_id = message.algorithmId;
     }
@@ -502,6 +596,15 @@ export const RecipientKeyRecord: MessageFns<RecipientKeyRecord, "virtengine.encr
     }
     if (!message.revokedAt.equals(Long.ZERO)) {
       obj.revoked_at = (message.revokedAt || Long.ZERO).toString();
+    }
+    if (!message.deprecatedAt.equals(Long.ZERO)) {
+      obj.deprecated_at = (message.deprecatedAt || Long.ZERO).toString();
+    }
+    if (!message.expiresAt.equals(Long.ZERO)) {
+      obj.expires_at = (message.expiresAt || Long.ZERO).toString();
+    }
+    if (!message.purgeAt.equals(Long.ZERO)) {
+      obj.purge_at = (message.purgeAt || Long.ZERO).toString();
     }
     if (message.label !== "") {
       obj.label = message.label;
@@ -513,12 +616,22 @@ export const RecipientKeyRecord: MessageFns<RecipientKeyRecord, "virtengine.encr
     message.address = object.address ?? "";
     message.publicKey = object.publicKey ?? new Uint8Array(0);
     message.keyFingerprint = object.keyFingerprint ?? "";
+    message.keyVersion = object.keyVersion ?? 0;
     message.algorithmId = object.algorithmId ?? "";
     message.registeredAt = (object.registeredAt !== undefined && object.registeredAt !== null)
       ? Long.fromValue(object.registeredAt)
       : Long.ZERO;
     message.revokedAt = (object.revokedAt !== undefined && object.revokedAt !== null)
       ? Long.fromValue(object.revokedAt)
+      : Long.ZERO;
+    message.deprecatedAt = (object.deprecatedAt !== undefined && object.deprecatedAt !== null)
+      ? Long.fromValue(object.deprecatedAt)
+      : Long.ZERO;
+    message.expiresAt = (object.expiresAt !== undefined && object.expiresAt !== null)
+      ? Long.fromValue(object.expiresAt)
+      : Long.ZERO;
+    message.purgeAt = (object.purgeAt !== undefined && object.purgeAt !== null)
+      ? Long.fromValue(object.purgeAt)
       : Long.ZERO;
     message.label = object.label ?? "";
     return message;
@@ -1355,7 +1468,16 @@ export const MultiRecipientEnvelope_MetadataEntry: MessageFns<
 };
 
 function createBaseParams(): Params {
-  return { maxRecipientsPerEnvelope: 0, maxKeysPerAccount: 0, allowedAlgorithms: [], requireSignature: false };
+  return {
+    maxRecipientsPerEnvelope: 0,
+    maxKeysPerAccount: 0,
+    allowedAlgorithms: [],
+    requireSignature: false,
+    revocationGracePeriodSeconds: Long.UZERO,
+    keyExpiryWarningSeconds: [],
+    rotationBatchSize: 0,
+    defaultKeyTtlSeconds: Long.UZERO,
+  };
 }
 
 export const Params: MessageFns<Params, "virtengine.encryption.v1.Params"> = {
@@ -1373,6 +1495,18 @@ export const Params: MessageFns<Params, "virtengine.encryption.v1.Params"> = {
     }
     if (message.requireSignature !== false) {
       writer.uint32(32).bool(message.requireSignature);
+    }
+    if (!message.revocationGracePeriodSeconds.equals(Long.UZERO)) {
+      writer.uint32(40).uint64(message.revocationGracePeriodSeconds.toString());
+    }
+    for (const v of message.keyExpiryWarningSeconds) {
+      writer.uint32(48).uint64(v!.toString());
+    }
+    if (message.rotationBatchSize !== 0) {
+      writer.uint32(56).uint32(message.rotationBatchSize);
+    }
+    if (!message.defaultKeyTtlSeconds.equals(Long.UZERO)) {
+      writer.uint32(64).uint64(message.defaultKeyTtlSeconds.toString());
     }
     return writer;
   },
@@ -1416,6 +1550,48 @@ export const Params: MessageFns<Params, "virtengine.encryption.v1.Params"> = {
           message.requireSignature = reader.bool();
           continue;
         }
+        case 5: {
+          if (tag !== 40) {
+            break;
+          }
+
+          message.revocationGracePeriodSeconds = Long.fromString(reader.uint64().toString(), true);
+          continue;
+        }
+        case 6: {
+          if (tag === 48) {
+            message.keyExpiryWarningSeconds.push(Long.fromString(reader.uint64().toString(), true));
+
+            continue;
+          }
+
+          if (tag === 50) {
+            const end2 = reader.uint32() + reader.pos;
+            while (reader.pos < end2) {
+              message.keyExpiryWarningSeconds.push(Long.fromString(reader.uint64().toString(), true));
+            }
+
+            continue;
+          }
+
+          break;
+        }
+        case 7: {
+          if (tag !== 56) {
+            break;
+          }
+
+          message.rotationBatchSize = reader.uint32();
+          continue;
+        }
+        case 8: {
+          if (tag !== 64) {
+            break;
+          }
+
+          message.defaultKeyTtlSeconds = Long.fromString(reader.uint64().toString(), true);
+          continue;
+        }
       }
       if ((tag & 7) === 4 || tag === 0) {
         break;
@@ -1435,6 +1611,16 @@ export const Params: MessageFns<Params, "virtengine.encryption.v1.Params"> = {
         ? object.allowed_algorithms.map((e: any) => globalThis.String(e))
         : [],
       requireSignature: isSet(object.require_signature) ? globalThis.Boolean(object.require_signature) : false,
+      revocationGracePeriodSeconds: isSet(object.revocation_grace_period_seconds)
+        ? Long.fromValue(object.revocation_grace_period_seconds)
+        : Long.UZERO,
+      keyExpiryWarningSeconds: globalThis.Array.isArray(object?.key_expiry_warning_seconds)
+        ? object.key_expiry_warning_seconds.map((e: any) => Long.fromValue(e))
+        : [],
+      rotationBatchSize: isSet(object.rotation_batch_size) ? globalThis.Number(object.rotation_batch_size) : 0,
+      defaultKeyTtlSeconds: isSet(object.default_key_ttl_seconds)
+        ? Long.fromValue(object.default_key_ttl_seconds)
+        : Long.UZERO,
     };
   },
 
@@ -1452,6 +1638,18 @@ export const Params: MessageFns<Params, "virtengine.encryption.v1.Params"> = {
     if (message.requireSignature !== false) {
       obj.require_signature = message.requireSignature;
     }
+    if (!message.revocationGracePeriodSeconds.equals(Long.UZERO)) {
+      obj.revocation_grace_period_seconds = (message.revocationGracePeriodSeconds || Long.UZERO).toString();
+    }
+    if (message.keyExpiryWarningSeconds?.length) {
+      obj.key_expiry_warning_seconds = message.keyExpiryWarningSeconds.map((e) => (e || Long.UZERO).toString());
+    }
+    if (message.rotationBatchSize !== 0) {
+      obj.rotation_batch_size = Math.round(message.rotationBatchSize);
+    }
+    if (!message.defaultKeyTtlSeconds.equals(Long.UZERO)) {
+      obj.default_key_ttl_seconds = (message.defaultKeyTtlSeconds || Long.UZERO).toString();
+    }
     return obj;
   },
   fromPartial(object: DeepPartial<Params>): Params {
@@ -1460,6 +1658,15 @@ export const Params: MessageFns<Params, "virtengine.encryption.v1.Params"> = {
     message.maxKeysPerAccount = object.maxKeysPerAccount ?? 0;
     message.allowedAlgorithms = object.allowedAlgorithms?.map((e) => e) || [];
     message.requireSignature = object.requireSignature ?? false;
+    message.revocationGracePeriodSeconds =
+      (object.revocationGracePeriodSeconds !== undefined && object.revocationGracePeriodSeconds !== null)
+        ? Long.fromValue(object.revocationGracePeriodSeconds)
+        : Long.UZERO;
+    message.keyExpiryWarningSeconds = object.keyExpiryWarningSeconds?.map((e) => Long.fromValue(e)) || [];
+    message.rotationBatchSize = object.rotationBatchSize ?? 0;
+    message.defaultKeyTtlSeconds = (object.defaultKeyTtlSeconds !== undefined && object.defaultKeyTtlSeconds !== null)
+      ? Long.fromValue(object.defaultKeyTtlSeconds)
+      : Long.UZERO;
     return message;
   },
 };
@@ -1814,6 +2021,321 @@ export const EventKeyUpdated: MessageFns<EventKeyUpdated, "virtengine.encryption
     message.field = object.field ?? "";
     message.oldValue = object.oldValue ?? "";
     message.newValue = object.newValue ?? "";
+    return message;
+  },
+};
+
+function createBaseEventKeyRotated(): EventKeyRotated {
+  return { address: "", oldFingerprint: "", newFingerprint: "", rotatedAt: Long.ZERO };
+}
+
+export const EventKeyRotated: MessageFns<EventKeyRotated, "virtengine.encryption.v1.EventKeyRotated"> = {
+  $type: "virtengine.encryption.v1.EventKeyRotated" as const,
+
+  encode(message: EventKeyRotated, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.address !== "") {
+      writer.uint32(10).string(message.address);
+    }
+    if (message.oldFingerprint !== "") {
+      writer.uint32(18).string(message.oldFingerprint);
+    }
+    if (message.newFingerprint !== "") {
+      writer.uint32(26).string(message.newFingerprint);
+    }
+    if (!message.rotatedAt.equals(Long.ZERO)) {
+      writer.uint32(32).int64(message.rotatedAt.toString());
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): EventKeyRotated {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseEventKeyRotated();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.address = reader.string();
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.oldFingerprint = reader.string();
+          continue;
+        }
+        case 3: {
+          if (tag !== 26) {
+            break;
+          }
+
+          message.newFingerprint = reader.string();
+          continue;
+        }
+        case 4: {
+          if (tag !== 32) {
+            break;
+          }
+
+          message.rotatedAt = Long.fromString(reader.int64().toString());
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): EventKeyRotated {
+    return {
+      address: isSet(object.address) ? globalThis.String(object.address) : "",
+      oldFingerprint: isSet(object.old_fingerprint) ? globalThis.String(object.old_fingerprint) : "",
+      newFingerprint: isSet(object.new_fingerprint) ? globalThis.String(object.new_fingerprint) : "",
+      rotatedAt: isSet(object.rotated_at) ? Long.fromValue(object.rotated_at) : Long.ZERO,
+    };
+  },
+
+  toJSON(message: EventKeyRotated): unknown {
+    const obj: any = {};
+    if (message.address !== "") {
+      obj.address = message.address;
+    }
+    if (message.oldFingerprint !== "") {
+      obj.old_fingerprint = message.oldFingerprint;
+    }
+    if (message.newFingerprint !== "") {
+      obj.new_fingerprint = message.newFingerprint;
+    }
+    if (!message.rotatedAt.equals(Long.ZERO)) {
+      obj.rotated_at = (message.rotatedAt || Long.ZERO).toString();
+    }
+    return obj;
+  },
+  fromPartial(object: DeepPartial<EventKeyRotated>): EventKeyRotated {
+    const message = createBaseEventKeyRotated();
+    message.address = object.address ?? "";
+    message.oldFingerprint = object.oldFingerprint ?? "";
+    message.newFingerprint = object.newFingerprint ?? "";
+    message.rotatedAt = (object.rotatedAt !== undefined && object.rotatedAt !== null)
+      ? Long.fromValue(object.rotatedAt)
+      : Long.ZERO;
+    return message;
+  },
+};
+
+function createBaseEventKeyExpiryWarning(): EventKeyExpiryWarning {
+  return { address: "", fingerprint: "", expiresAt: Long.ZERO, warningWindowSeconds: Long.UZERO };
+}
+
+export const EventKeyExpiryWarning: MessageFns<
+  EventKeyExpiryWarning,
+  "virtengine.encryption.v1.EventKeyExpiryWarning"
+> = {
+  $type: "virtengine.encryption.v1.EventKeyExpiryWarning" as const,
+
+  encode(message: EventKeyExpiryWarning, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.address !== "") {
+      writer.uint32(10).string(message.address);
+    }
+    if (message.fingerprint !== "") {
+      writer.uint32(18).string(message.fingerprint);
+    }
+    if (!message.expiresAt.equals(Long.ZERO)) {
+      writer.uint32(24).int64(message.expiresAt.toString());
+    }
+    if (!message.warningWindowSeconds.equals(Long.UZERO)) {
+      writer.uint32(32).uint64(message.warningWindowSeconds.toString());
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): EventKeyExpiryWarning {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseEventKeyExpiryWarning();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.address = reader.string();
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.fingerprint = reader.string();
+          continue;
+        }
+        case 3: {
+          if (tag !== 24) {
+            break;
+          }
+
+          message.expiresAt = Long.fromString(reader.int64().toString());
+          continue;
+        }
+        case 4: {
+          if (tag !== 32) {
+            break;
+          }
+
+          message.warningWindowSeconds = Long.fromString(reader.uint64().toString(), true);
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): EventKeyExpiryWarning {
+    return {
+      address: isSet(object.address) ? globalThis.String(object.address) : "",
+      fingerprint: isSet(object.fingerprint) ? globalThis.String(object.fingerprint) : "",
+      expiresAt: isSet(object.expires_at) ? Long.fromValue(object.expires_at) : Long.ZERO,
+      warningWindowSeconds: isSet(object.warning_window_seconds)
+        ? Long.fromValue(object.warning_window_seconds)
+        : Long.UZERO,
+    };
+  },
+
+  toJSON(message: EventKeyExpiryWarning): unknown {
+    const obj: any = {};
+    if (message.address !== "") {
+      obj.address = message.address;
+    }
+    if (message.fingerprint !== "") {
+      obj.fingerprint = message.fingerprint;
+    }
+    if (!message.expiresAt.equals(Long.ZERO)) {
+      obj.expires_at = (message.expiresAt || Long.ZERO).toString();
+    }
+    if (!message.warningWindowSeconds.equals(Long.UZERO)) {
+      obj.warning_window_seconds = (message.warningWindowSeconds || Long.UZERO).toString();
+    }
+    return obj;
+  },
+  fromPartial(object: DeepPartial<EventKeyExpiryWarning>): EventKeyExpiryWarning {
+    const message = createBaseEventKeyExpiryWarning();
+    message.address = object.address ?? "";
+    message.fingerprint = object.fingerprint ?? "";
+    message.expiresAt = (object.expiresAt !== undefined && object.expiresAt !== null)
+      ? Long.fromValue(object.expiresAt)
+      : Long.ZERO;
+    message.warningWindowSeconds = (object.warningWindowSeconds !== undefined && object.warningWindowSeconds !== null)
+      ? Long.fromValue(object.warningWindowSeconds)
+      : Long.UZERO;
+    return message;
+  },
+};
+
+function createBaseEventKeyExpired(): EventKeyExpired {
+  return { address: "", fingerprint: "", expiredAt: Long.ZERO };
+}
+
+export const EventKeyExpired: MessageFns<EventKeyExpired, "virtengine.encryption.v1.EventKeyExpired"> = {
+  $type: "virtengine.encryption.v1.EventKeyExpired" as const,
+
+  encode(message: EventKeyExpired, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.address !== "") {
+      writer.uint32(10).string(message.address);
+    }
+    if (message.fingerprint !== "") {
+      writer.uint32(18).string(message.fingerprint);
+    }
+    if (!message.expiredAt.equals(Long.ZERO)) {
+      writer.uint32(24).int64(message.expiredAt.toString());
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): EventKeyExpired {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseEventKeyExpired();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.address = reader.string();
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.fingerprint = reader.string();
+          continue;
+        }
+        case 3: {
+          if (tag !== 24) {
+            break;
+          }
+
+          message.expiredAt = Long.fromString(reader.int64().toString());
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): EventKeyExpired {
+    return {
+      address: isSet(object.address) ? globalThis.String(object.address) : "",
+      fingerprint: isSet(object.fingerprint) ? globalThis.String(object.fingerprint) : "",
+      expiredAt: isSet(object.expired_at) ? Long.fromValue(object.expired_at) : Long.ZERO,
+    };
+  },
+
+  toJSON(message: EventKeyExpired): unknown {
+    const obj: any = {};
+    if (message.address !== "") {
+      obj.address = message.address;
+    }
+    if (message.fingerprint !== "") {
+      obj.fingerprint = message.fingerprint;
+    }
+    if (!message.expiredAt.equals(Long.ZERO)) {
+      obj.expired_at = (message.expiredAt || Long.ZERO).toString();
+    }
+    return obj;
+  },
+  fromPartial(object: DeepPartial<EventKeyExpired>): EventKeyExpired {
+    const message = createBaseEventKeyExpired();
+    message.address = object.address ?? "";
+    message.fingerprint = object.fingerprint ?? "";
+    message.expiredAt = (object.expiredAt !== undefined && object.expiredAt !== null)
+      ? Long.fromValue(object.expiredAt)
+      : Long.ZERO;
     return message;
   },
 };

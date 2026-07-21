@@ -41,7 +41,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - run: python .github/scripts/validate_security_policies.py
-      - run: python -m unittest discover -s .github/tests -p "test_security_policy*.py"
+      - run: python -m unittest discover -s .github/tests -p "test_*policy*.py"
+      - run: python .github/scripts/validate_inference_deployment_policy.py
       - run: go run github.com/rhysd/actionlint/cmd/actionlint@v1.7.12 .github/workflows/security.yaml
   codeql-analysis:
     runs-on: ubuntu-latest

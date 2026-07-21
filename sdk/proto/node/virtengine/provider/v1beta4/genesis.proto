@@ -3,6 +3,7 @@ package virtengine.provider.v1beta4;
 
 import "gogoproto/gogo.proto";
 import "virtengine/provider/v1beta4/provider.proto";
+import "virtengine/provider/v1beta4/query.proto";
 
 option go_package = "github.com/virtengine/virtengine/sdk/go/node/provider/v1beta4";
 
@@ -15,4 +16,11 @@ message GenesisState {
     (gogoproto.jsontag)      = "providers",
     (gogoproto.moretags)     = "yaml:\"providers\""
   ];
+  repeated ProviderSigningKeyGenesisRecord signing_keys = 2 [(gogoproto.nullable) = false];
+}
+
+message ProviderSigningKeyGenesisRecord {
+  string owner = 1;
+  ProviderSigningKeyRecord key = 2 [(gogoproto.nullable) = false];
+  bool current = 3;
 }

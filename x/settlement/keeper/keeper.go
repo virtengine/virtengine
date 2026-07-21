@@ -1,6 +1,7 @@
 package keeper
 
 import (
+	"bytes"
 	"context"
 	"encoding/binary"
 	"encoding/json"
@@ -15,6 +16,7 @@ import (
 
 	escrowid "github.com/virtengine/virtengine/sdk/go/node/escrow/id/v1"
 	etypes "github.com/virtengine/virtengine/sdk/go/node/escrow/types/v1"
+	providertypes "github.com/virtengine/virtengine/sdk/go/node/provider/v1beta4"
 	delegationtypes "github.com/virtengine/virtengine/x/delegation/types"
 	encryptiontypes "github.com/virtengine/virtengine/x/encryption/types"
 	"github.com/virtengine/virtengine/x/settlement/types"
@@ -40,6 +42,12 @@ type IKeeper interface {
 	// Usage records
 	RecordUsage(ctx sdk.Context, record *types.UsageRecord) error
 	AcknowledgeUsage(ctx sdk.Context, usageID string, customerSignature []byte) error
+	AcknowledgeUsageAuthenticated(ctx sdk.Context, usageID string, proof types.UsageAcknowledgmentProof) error
+	ActivateUsageAuthentication(ctx sdk.Context) error
+	IsUsageAuthenticationActive(ctx sdk.Context) bool
+	MigrateUsageAuthentication(ctx sdk.Context) error
+	ValidateUsageReplayIndexes(ctx sdk.Context) []string
+	GetUsageStreamState(ctx sdk.Context, provider, allocationID, orderID, leaseID string) (uint64, string, []byte, error)
 	GetUsageRecord(ctx sdk.Context, usageID string) (types.UsageRecord, bool)
 	GetUsageRecordsByOrder(ctx sdk.Context, orderID string) []types.UsageRecord
 	GetUnsettledUsageRecords(ctx sdk.Context, orderID string) []types.UsageRecord
@@ -149,6 +157,8 @@ type Keeper struct {
 	stakeRoutingKeeper StakeRoutingKeeper
 	priceFeeds         map[types.OracleSourceType]PriceFeed
 	encryptionKeeper   EncryptionKeeper
+	providerKeyKeeper  ProviderSigningKeyKeeper
+	accountKeeper      AccountKeeper
 
 	// The address capable of executing a MsgUpdateParams message.
 	// This should be the x/gov module account.
@@ -179,6 +189,16 @@ type EncryptionKeeper interface {
 	ValidateEnvelopeRecipients(ctx sdk.Context, envelope *encryptiontypes.EncryptedPayloadEnvelope) ([]string, error)
 }
 
+// ProviderSigningKeyKeeper resolves exact governed x/provider key epochs.
+type ProviderSigningKeyKeeper interface {
+	GetProviderSigningKey(ctx sdk.Context, owner sdk.AccAddress, keyID string, epoch uint64) (providertypes.ProviderPublicKeyRecord, bool)
+}
+
+// AccountKeeper resolves the x/auth account public key for acknowledgments.
+type AccountKeeper interface {
+	GetAccount(ctx context.Context, addr sdk.AccAddress) sdk.AccountI
+}
+
 // StakeRoutingKeeper provides validator and delegator stake snapshots for settlement rewards.
 type StakeRoutingKeeper interface {
 	GetAllValidators(ctx sdk.Context) []sdk.AccAddress
@@ -204,9 +224,18 @@ func NewKeeper(cdc codec.BinaryCodec, skey storetypes.StoreKey, bankKeeper BankK
 		stakeRoutingKeeper: nil,
 		priceFeeds:         make(map[types.OracleSourceType]PriceFeed),
 		encryptionKeeper:   encryptionKeeper,
+		providerKeyKeeper:  nil,
+		accountKeeper:      nil,
 		authority:          authority,
 	}
 	return keeper
+}
+
+// SetUsageAuthenticationKeepers installs the on-chain trust roots used by
+// provider usage and customer acknowledgment verification.
+func (k *Keeper) SetUsageAuthenticationKeepers(providerKeys ProviderSigningKeyKeeper, accounts AccountKeeper) {
+	k.providerKeyKeeper = providerKeys
+	k.accountKeeper = accounts
 }
 
 // SetBillingKeeper configures the billing integration keeper.
@@ -214,14 +243,16 @@ func (k *Keeper) SetBillingKeeper(billingKeeper BillingKeeper) {
 	k.billingKeeper = billingKeeper
 }
 
-// SetDexSwapExecutor configures the DEX swap executor.
-func (k *Keeper) SetDexSwapExecutor(executor DexSwapExecutor) {
-	k.dexSwap = executor
+// SetDexSwapExecutor is retained for source compatibility. Consensus keepers
+// never retain external executors; DEX work belongs in an off-chain worker.
+func (k *Keeper) SetDexSwapExecutor(_ DexSwapExecutor) {
+	k.dexSwap = nil
 }
 
-// SetOffRampBridge configures the off-ramp bridge.
-func (k *Keeper) SetOffRampBridge(bridge OffRampBridge) {
-	k.offRampBridge = bridge
+// SetOffRampBridge is retained for source compatibility. Consensus keepers
+// never retain external bridges; off-ramp work belongs in an off-chain worker.
+func (k *Keeper) SetOffRampBridge(_ OffRampBridge) {
+	k.offRampBridge = nil
 }
 
 // SetComplianceKeeper configures compliance checks.
@@ -242,8 +273,13 @@ func (k *Keeper) SetOracleKeeper(oracleKeeper OracleKeeper) {
 	}
 }
 
-// SetPriceFeed configures a custom price feed for a given source type.
+// SetPriceFeed configures only the committed x/oracle source. Externally backed
+// Band/Chainlink callbacks are discarded so endpoint availability cannot alter
+// keeper execution.
 func (k *Keeper) SetPriceFeed(sourceType types.OracleSourceType, feed PriceFeed) {
+	if sourceType != types.OracleSourceTypeCosmosOracle {
+		return
+	}
 	if k.priceFeeds == nil {
 		k.priceFeeds = make(map[types.OracleSourceType]PriceFeed)
 	}
@@ -605,17 +641,33 @@ func (k Keeper) SetUsageRecord(ctx sdk.Context, usage types.UsageRecord) error {
 	}
 
 	store := ctx.KVStore(k.skey)
+	key := types.UsageRecordKey(usage.UsageID)
+	if existingBz := store.Get(key); existingBz != nil {
+		var existing types.UsageRecord
+		if err := json.Unmarshal(existingBz, &existing); err != nil {
+			return err
+		}
+		if len(existing.UsageDigest) > 0 {
+			digest, err := types.CanonicalUsageDigest(usage.CanonicalUsagePayload(usage.ChainID))
+			if err != nil || !bytes.Equal(existing.UsageDigest, digest) {
+				return types.ErrInvalidUsageRecord.Wrap("authenticated usage record is immutable")
+			}
+		}
+	}
 
 	bz, err := json.Marshal(&usage)
 	if err != nil {
 		return err
 	}
 
-	// Store by usage ID
-	store.Set(types.UsageRecordKey(usage.UsageID), bz)
+	// Store by usage ID. Secondary order indexes are append-only only for the
+	// first insert; acknowledgments and settlement updates must not duplicate it.
+	isNew := !store.Has(key)
+	store.Set(key, bz)
 
-	// Append to order's usage list
-	k.appendUsageToOrder(ctx, usage.OrderID, usage.UsageID)
+	if isNew {
+		k.appendUsageToOrder(ctx, usage.OrderID, usage.UsageID)
+	}
 
 	return nil
 }
@@ -683,7 +735,7 @@ func (k Keeper) GetUnsettledUsageRecords(ctx sdk.Context, orderID string) []type
 	unsettled := make([]types.UsageRecord, 0)
 
 	for _, usage := range allUsage {
-		if !usage.Settled {
+		if !usage.Settled && (!k.IsUsageAuthenticationActive(ctx) || usage.IsAuthenticated()) {
 			unsettled = append(unsettled, usage)
 		}
 	}

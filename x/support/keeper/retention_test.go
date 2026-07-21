@@ -120,13 +120,13 @@ func TestProcessRetentionPoliciesRespectsBackpressure(t *testing.T) {
 	now := time.Date(2026, 4, 11, 3, 0, 0, 0, time.UTC)
 	ctx = ctx.WithBlockTime(now).WithBlockHeight(1)
 
-	totalRequests := retentionProcessLimitPerBlock + 3
-	for sequence := 1; sequence <= totalRequests; sequence++ {
+	totalRequests := uint64(retentionProcessLimitPerBlock + 3)
+	for sequence := uint64(1); sequence <= totalRequests; sequence++ {
 		request := newRetentionSupportRequest(
 			t,
 			sdk.AccAddress(fmt.Sprintf("submitter-%02d", sequence)),
-			uint64(sequence),
-			uint64(sequence),
+			sequence,
+			sequence,
 			now,
 			time.Minute,
 			0,
@@ -138,13 +138,13 @@ func TestProcessRetentionPoliciesRespectsBackpressure(t *testing.T) {
 	archived, purged := keeper.ProcessRetentionPolicies(processCtx)
 	require.Equal(t, retentionProcessLimitPerBlock, archived)
 	require.Zero(t, purged)
-	require.Len(t, keeper.listRetentionQueueEntries(processCtx, retentionActionArchive), totalRequests-retentionProcessLimitPerBlock)
+	require.Len(t, keeper.listRetentionQueueEntries(processCtx, retentionActionArchive), int(totalRequests)-retentionProcessLimitPerBlock)
 	requireEventAttribute(t, processCtx.EventManager().Events(), "support_retention_summary", "archive_backpressured", "true")
 	requireEventAttribute(t, processCtx.EventManager().Events(), "support_retention_summary", "archive_completed", fmt.Sprintf("%d", retentionProcessLimitPerBlock))
 
 	processCtx = processCtx.WithBlockTime(now.Add(3 * time.Minute)).WithBlockHeight(3).WithEventManager(sdk.NewEventManager())
 	archived, purged = keeper.ProcessRetentionPolicies(processCtx)
-	require.Equal(t, totalRequests-retentionProcessLimitPerBlock, archived)
+	require.Equal(t, int(totalRequests)-retentionProcessLimitPerBlock, archived)
 	require.Zero(t, purged)
 	require.Len(t, keeper.listRetentionQueueEntries(processCtx, retentionActionArchive), 0)
 	requireEventAttribute(t, processCtx.EventManager().Events(), "support_retention_summary", "archive_backpressured", "false")

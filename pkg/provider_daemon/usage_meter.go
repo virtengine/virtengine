@@ -8,6 +8,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"sync"
 	"time"
 
@@ -86,6 +87,12 @@ type UsageRecord struct {
 	// ProviderID is the provider ID
 	ProviderID string `json:"provider_id"`
 
+	// CustomerID is the escrow depositor bound into detached sign bytes.
+	CustomerID string `json:"customer_id,omitempty"`
+
+	// AllocationID is the canonical resource allocation lineage when available.
+	AllocationID string `json:"allocation_id,omitempty"`
+
 	// Type is the record type (periodic or final)
 	Type UsageRecordType `json:"type"`
 
@@ -126,13 +133,16 @@ type PricingInputs struct {
 	AgreedNetworkRate string `json:"agreed_network_rate"`
 }
 
-// Hash generates a hash of the usage record for signing
+// Hash generates a local deduplication identity. It MUST NOT be signed or used
+// as on-chain authentication; canonical detached proof bytes are built later.
 func (ur *UsageRecord) Hash() []byte {
 	data := struct {
 		WorkloadID   string          `json:"workload_id"`
 		DeploymentID string          `json:"deployment_id"`
 		LeaseID      string          `json:"lease_id"`
 		ProviderID   string          `json:"provider_id"`
+		CustomerID   string          `json:"customer_id"`
+		AllocationID string          `json:"allocation_id"`
 		Type         UsageRecordType `json:"type"`
 		StartTime    int64           `json:"start_time"`
 		EndTime      int64           `json:"end_time"`
@@ -142,6 +152,8 @@ func (ur *UsageRecord) Hash() []byte {
 		DeploymentID: ur.DeploymentID,
 		LeaseID:      ur.LeaseID,
 		ProviderID:   ur.ProviderID,
+		CustomerID:   ur.CustomerID,
+		AllocationID: ur.AllocationID,
 		Type:         ur.Type,
 		StartTime:    ur.StartTime.Unix(),
 		EndTime:      ur.EndTime.Unix(),
@@ -165,6 +177,9 @@ type WorkloadMetering struct {
 
 	// LeaseID is the lease ID
 	LeaseID string
+
+	CustomerID   string
+	AllocationID string
 
 	// StartTime is when metering started
 	StartTime time.Time
@@ -274,6 +289,9 @@ func NewUsageMeter(cfg UsageMeterConfig) *UsageMeter {
 
 // Start starts the usage metering loop
 func (um *UsageMeter) Start(ctx context.Context) error {
+	if um.collector == nil {
+		return fmt.Errorf("metrics collector is required")
+	}
 	um.mu.Lock()
 	if um.running {
 		um.mu.Unlock()
@@ -310,6 +328,21 @@ func (um *UsageMeter) Stop() {
 
 // StartMetering starts metering for a workload
 func (um *UsageMeter) StartMetering(workloadID, deploymentID, leaseID string, pricing PricingInputs) error {
+	return um.startMetering(workloadID, deploymentID, leaseID, "", "", pricing)
+}
+
+// StartMeteringAuthenticated starts billable metering with complete economic lineage.
+func (um *UsageMeter) StartMeteringAuthenticated(workloadID, deploymentID, leaseID, customerID, allocationID string, pricing PricingInputs) error {
+	if customerID == "" || allocationID == "" {
+		return fmt.Errorf("customer and allocation lineage are required for authenticated metering")
+	}
+	if um.recorder == nil {
+		return fmt.Errorf("chain recorder is required for authenticated metering")
+	}
+	return um.startMetering(workloadID, deploymentID, leaseID, customerID, allocationID, pricing)
+}
+
+func (um *UsageMeter) startMetering(workloadID, deploymentID, leaseID, customerID, allocationID string, pricing PricingInputs) error {
 	um.mu.Lock()
 	defer um.mu.Unlock()
 
@@ -318,6 +351,8 @@ func (um *UsageMeter) StartMetering(workloadID, deploymentID, leaseID string, pr
 		WorkloadID:        workloadID,
 		DeploymentID:      deploymentID,
 		LeaseID:           leaseID,
+		CustomerID:        customerID,
+		AllocationID:      allocationID,
 		StartTime:         now,
 		LastRecordTime:    now,
 		PricingInputs:     pricing,
@@ -340,6 +375,9 @@ func (um *UsageMeter) StopMetering(ctx context.Context, workloadID string) (*Usa
 	um.mu.Unlock()
 
 	// Collect final metrics
+	if um.collector == nil {
+		return nil, fmt.Errorf("metrics collector is required")
+	}
 	metrics, err := um.collector.CollectMetrics(ctx, workloadID)
 	if err != nil {
 		// Use cumulative metrics on error
@@ -352,8 +390,7 @@ func (um *UsageMeter) StopMetering(ctx context.Context, workloadID string) (*Usa
 	// Submit to chain
 	if um.recorder != nil {
 		if err := um.recorder.SubmitFinalSettlement(ctx, record); err != nil {
-			// Log error but return record anyway
-			_ = err
+			return record, err
 		}
 	}
 
@@ -491,21 +528,14 @@ func (um *UsageMeter) createUsageRecord(metering *WorkloadMetering, metrics *Res
 		DeploymentID:  metering.DeploymentID,
 		LeaseID:       metering.LeaseID,
 		ProviderID:    um.providerID,
+		CustomerID:    metering.CustomerID,
+		AllocationID:  metering.AllocationID,
 		Type:          recordType,
 		StartTime:     metering.LastRecordTime,
 		EndTime:       now,
 		Metrics:       *metrics,
 		PricingInputs: metering.PricingInputs,
 		CreatedAt:     now,
-	}
-
-	// Sign the record
-	if um.keyManager != nil {
-		hash := record.Hash()
-		sig, err := um.keyManager.Sign(hash)
-		if err == nil {
-			record.Signature = sig.Signature // Already hex-encoded string
-		}
 	}
 
 	return record
@@ -649,18 +679,10 @@ func (fc *FraudChecker) CheckRecord(record *UsageRecord, allocatedResources *Res
 
 // CheckRecordSignature verifies the signature on a usage record
 func (fc *FraudChecker) CheckRecordSignature(record *UsageRecord, publicKey []byte) bool {
-	if record.Signature == "" {
-		return false
-	}
-
-	signature, err := hex.DecodeString(record.Signature)
-	if err != nil {
-		return false
-	}
-
-	hash := record.Hash()
-
-	// In production, this would use proper ed25519 verification
-	// For now, we just check that the signature exists and is valid hex
-	return len(signature) > 0 && len(hash) > 0
+	// Legacy UsageRecord lacks chain/customer/key-epoch/replay inputs and cannot
+	// be cryptographically authenticated. Verification belongs to the canonical
+	// ChainUsageReport path after governed chain-state resolution.
+	_ = record
+	_ = publicKey
+	return false
 }

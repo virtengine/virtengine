@@ -44,7 +44,8 @@ func (s *OrderCreateScenario) Execute(ctx context.Context) (*framework.Execution
 	start := time.Now()
 	sequence := s.sequence.Add(1)
 	owner := s.accounts[(sequence-1)%uint64(len(s.accounts))]
-	quantity := int(sequence%4) + 1
+	quantities := [...]int{1, 2, 3, 4}
+	quantity := quantities[sequence%uint64(len(quantities))]
 	config := map[string]string{
 		"region": regionForSequence(sequence),
 		"tier":   tierForSequence(sequence),

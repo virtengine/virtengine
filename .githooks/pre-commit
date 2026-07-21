@@ -171,10 +171,9 @@ fi
 if [ "${VE_HOOK_SKIP_JS:-}" != "1" ]; then
     SDK_TS_STAGED_FILES="$(echo "$STAGED_FILES" | grep -E '^sdk/ts/.*\.(ts|tsx|js|jsx|json)$' || true)"
     if [ -n "$SDK_TS_STAGED_FILES" ]; then
-        SDK_LINT_STAGED_BIN="$REPO_ROOT/sdk/ts/node_modules/.bin/lint-staged"
-        if [ -x "$SDK_LINT_STAGED_BIN" ]; then
+        if [ -d "$REPO_ROOT/sdk/ts/node_modules/lint-staged" ]; then
             hook_header "[pre-commit] Formatting staged sdk/ts files with lint-staged..."
-            (cd "$REPO_ROOT/sdk/ts" && "$SDK_LINT_STAGED_BIN")
+            (cd "$REPO_ROOT/sdk/ts" && node ./node_modules/lint-staged/bin/lint-staged.js)
             hook_pass "[pre-commit] lint-staged applied for sdk/ts"
         else
             hook_warn "[pre-commit] lint-staged not available in sdk/ts/node_modules. Skipping sdk/ts formatting."

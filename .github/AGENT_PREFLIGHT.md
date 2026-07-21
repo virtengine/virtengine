@@ -26,6 +26,8 @@
 - [ ] Conventional commit format: `type(scope): description`
 - [ ] No sensitive data in commits (API keys, passwords, tokens)
 - [ ] Copyright headers on new files
+- [ ] `./scripts/verify-modules.sh` for module/checksum/vendor changes
+- [ ] `./scripts/verify-proto-generation.sh` for proto/generated/OpenAPI/SDK changes
 - [ ] `git push` succeeds (all pre-push hooks pass)
 
 ## If Push Fails

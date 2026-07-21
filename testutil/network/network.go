@@ -62,7 +62,8 @@ var (
 )
 
 type TestnetFixtureOptions struct {
-	EncCfg sdkutil.EncodingConfig
+	EncCfg          sdkutil.EncodingConfig
+	WrapApplication func(ValidatorI, servertypes.Application) servertypes.Application
 }
 
 type TestnetFixtureOption func(*TestnetFixtureOptions)
@@ -70,6 +71,14 @@ type TestnetFixtureOption func(*TestnetFixtureOptions)
 func WithEncodingConfig(val sdkutil.EncodingConfig) TestnetFixtureOption {
 	return func(opts *TestnetFixtureOptions) {
 		opts.EncCfg = val
+	}
+}
+
+// WithApplicationWrapper decorates each independently constructed validator
+// app. It is intended for observational or adversarial integration-test hooks.
+func WithApplicationWrapper(fn func(ValidatorI, servertypes.Application) servertypes.Application) TestnetFixtureOption {
+	return func(opts *TestnetFixtureOptions) {
+		opts.WrapApplication = fn
 	}
 }
 
@@ -89,28 +98,31 @@ type TestFixture struct {
 // Config defines the necessary configuration used to bootstrap and start an
 // in-process local testing network.
 type Config struct {
-	Codec             codec.Codec
-	LegacyAmino       *codec.LegacyAmino // TODO: Remove!
-	InterfaceRegistry codectypes.InterfaceRegistry
-	TxConfig          sdkclient.TxConfig
-	AccountRetriever  sdkclient.AccountRetriever
-	AppConstructor    AppConstructor             // the ABCI application constructor
-	GenesisState      map[string]json.RawMessage // custom genesis state to provide
-	TimeoutCommit     time.Duration              // the consensus commitment timeout
-	ChainID           string                     // the network chain-id
-	NumValidators     int                        // the total number of validators to create and bond
-	Mnemonics         []string                   // custom user-provided validator operator mnemonics
-	BondDenom         string                     // the staking bond denomination
-	Denoms            []string                   // list of additional denoms could be used on network
-	MinGasPrices      string                     // the minimum gas prices each validator will accept
-	AccountTokens     math.Int                   // the amount of unique validator tokens (e.g. 1000node0)
-	StakingTokens     math.Int                   // the amount of tokens each validator has available to stake
-	BondedTokens      math.Int                   // the amount of tokens each validator stakes
-	PruningStrategy   string                     // the pruning strategy each validator will have
-	EnableLogging     bool                       // enable Tendermint logging to STDOUT
-	CleanupDir        bool                       // remove base temporary directory during cleanup
-	SigningAlgo       string                     // signing algorithm for keys
-	KeyringOptions    []keyring.Option
+	Codec              codec.Codec
+	LegacyAmino        *codec.LegacyAmino // TODO: Remove!
+	InterfaceRegistry  codectypes.InterfaceRegistry
+	TxConfig           sdkclient.TxConfig
+	AccountRetriever   sdkclient.AccountRetriever
+	AppConstructor     AppConstructor             // the ABCI application constructor
+	GenesisState       map[string]json.RawMessage // custom genesis state to provide
+	TimeoutCommit      time.Duration              // the consensus commitment timeout
+	ChainID            string                     // the network chain-id
+	NumValidators      int                        // the total number of validators to create and bond
+	Mnemonics          []string                   // custom user-provided validator operator mnemonics
+	BondDenom          string                     // the staking bond denomination
+	Denoms             []string                   // list of additional denoms could be used on network
+	MinGasPrices       string                     // the minimum gas prices each validator will accept
+	AccountTokens      math.Int                   // the amount of unique validator tokens (e.g. 1000node0)
+	StakingTokens      math.Int                   // the amount of tokens each validator has available to stake
+	BondedTokens       math.Int                   // the amount of tokens each validator stakes
+	PruningStrategy    string                     // the pruning strategy each validator will have
+	EnableLogging      bool                       // enable Tendermint logging to STDOUT
+	CleanupDir         bool                       // remove base temporary directory during cleanup
+	SigningAlgo        string                     // signing algorithm for keys
+	KeyringOptions     []keyring.Option
+	ConfigureNode      func(index int, ctx *server.Context, appCfg *srvconfig.Config)
+	AppOptions         func(index int, home string) servertypes.AppOptions
+	AdditionalAccounts int
 }
 
 // Network defines a local in-process testing network using SimApp. It can be
@@ -124,11 +136,18 @@ type Config struct {
 // to create networks. In addition, only the first validator will have a valid
 // RPC and API server/client.
 type Network struct {
-	T          *testing.T
-	BaseDir    string
-	Validators []*Validator
+	T                  *testing.T
+	BaseDir            string
+	Validators         []*Validator
+	AdditionalAccounts []TestAccount
 
 	Config Config
+}
+
+// TestAccount identifies a funded key generated in validator zero's keyring.
+type TestAccount struct {
+	Name    string
+	Address sdk.AccAddress
 }
 
 // Validator defines an in-process Tendermint validator node. Through this object,
@@ -136,8 +155,10 @@ type Network struct {
 // or handler.
 type Validator struct {
 	AppConfig  *srvconfig.Config
+	AppOptions servertypes.AppOptions
 	ClientCtx  sdkclient.Context
 	Ctx        *server.Context
+	Index      int
 	Dir        string
 	NodeID     string
 	PubKey     cryptotypes.PubKey
@@ -162,6 +183,8 @@ type Validator struct {
 type ValidatorI interface {
 	GetCtx() *server.Context
 	GetAppConfig() *srvconfig.Config
+	GetAppOptions() servertypes.AppOptions
+	GetIndex() int
 }
 
 func (v Validator) GetCtx() *server.Context {
@@ -170,6 +193,15 @@ func (v Validator) GetCtx() *server.Context {
 
 func (v Validator) GetAppConfig() *srvconfig.Config {
 	return v.AppConfig
+}
+
+func (v Validator) GetAppOptions() servertypes.AppOptions {
+	return v.AppOptions
+}
+
+// GetIndex returns the validator's stable zero-based index in the network.
+func (v Validator) GetIndex() int {
+	return v.Index
 }
 
 // GetFreePorts asks the kernel for free open ports that are ready to use.
@@ -296,6 +328,9 @@ func New(t *testing.T, cfg Config) *Network {
 		tmCfg.P2P.ListenAddress = fmt.Sprintf("tcp://127.0.0.1:%d", ports.mustGetPort())
 		tmCfg.P2P.AddrBookStrict = false
 		tmCfg.P2P.AllowDuplicateIP = true
+		if cfg.ConfigureNode != nil {
+			cfg.ConfigureNode(i, ctx, appCfg)
+		}
 
 		if i == 0 {
 			apiListenAddr := fmt.Sprintf("tcp://127.0.0.1:%d", ports.mustGetPort())
@@ -368,6 +403,19 @@ func New(t *testing.T, cfg Config) *Network {
 		genFiles = append(genFiles, tmCfg.GenesisFile())
 		genBalances = append(genBalances, banktypes.Balance{Address: addr.String(), Coins: balances.Sort()})
 		genAccounts = append(genAccounts, authtypes.NewBaseAccount(addr, nil, 0, 0))
+		if i == 0 {
+			for accountIndex := 0; accountIndex < cfg.AdditionalAccounts; accountIndex++ {
+				name := fmt.Sprintf("test-account-%04d", accountIndex)
+				accountAddr, _, err := testutil.GenerateSaveCoinKey(kb, name, "", true, algo)
+				require.NoError(t, err)
+				network.AdditionalAccounts = append(network.AdditionalAccounts, TestAccount{Name: name, Address: accountAddr})
+				genBalances = append(genBalances, banktypes.Balance{
+					Address: accountAddr.String(),
+					Coins:   sdk.NewCoins(sdk.NewCoin(cfg.BondDenom, cfg.AccountTokens)),
+				})
+				genAccounts = append(genAccounts, authtypes.NewBaseAccount(accountAddr, nil, 0, 0))
+			}
+		}
 
 		commission, err := math.LegacyNewDecFromStr("0.5")
 		require.NoError(t, err)
@@ -426,9 +474,16 @@ func New(t *testing.T, cfg Config) *Network {
 			WithSkipConfirmation(true)
 
 		network.Validators[i] = &Validator{
-			AppConfig:  appCfg,
+			AppConfig: appCfg,
+			AppOptions: func() servertypes.AppOptions {
+				if cfg.AppOptions == nil {
+					return nil
+				}
+				return cfg.AppOptions(i, nodeDir)
+			}(),
 			ClientCtx:  cctx,
 			Ctx:        ctx,
+			Index:      i,
 			Dir:        filepath.Join(network.BaseDir, nodeDirName),
 			NodeID:     nodeID,
 			PubKey:     pubKey,
@@ -532,6 +587,33 @@ func (n *Network) WaitForHeightWithTimeout(h int64, t time.Duration) (int64, err
 			}
 		}
 	}
+}
+
+// LocalRPCClient returns the in-process CometBFT client for a validator. It is
+// available even when that validator does not expose an HTTP RPC endpoint.
+func (n *Network) LocalRPCClient(index int) (tmclient.Client, error) {
+	if index < 0 || index >= len(n.Validators) {
+		return nil, fmt.Errorf("validator index %d out of range", index)
+	}
+	client := n.Validators[index].RPCClient
+	if client == nil {
+		return nil, fmt.Errorf("validator %d local RPC client is unavailable", index)
+	}
+	return client, nil
+}
+
+// ValidatorApp returns the application created for a validator. Callers must
+// treat it as read-only after the network starts; mutation remains owned by
+// CometBFT's serialized ABCI connection.
+func (n *Network) ValidatorApp(index int) (servertypes.Application, error) {
+	if index < 0 || index >= len(n.Validators) {
+		return nil, fmt.Errorf("validator index %d out of range", index)
+	}
+	app := n.Validators[index].app
+	if app == nil {
+		return nil, fmt.Errorf("validator %d application is unavailable", index)
+	}
+	return app, nil
 }
 
 // WaitForNextBlock waits for the next block to be committed, returning an error

@@ -233,3 +233,47 @@ message MsgRevokeDomainVerification {
 
 // MsgRevokeDomainVerificationResponse defines the Msg/RevokeDomainVerification response type.
 message MsgRevokeDomainVerificationResponse {}
+
+// MsgSetProviderSigningKey registers a provider's first signing key.
+message MsgSetProviderSigningKey {
+  option (gogoproto.equal) = false;
+  option (cosmos.msg.v1.signer) = "owner";
+  string owner = 1 [(cosmos_proto.scalar) = "cosmos.AddressString"];
+  bytes public_key = 2;
+  string key_type = 3;
+}
+
+message MsgSetProviderSigningKeyResponse {
+  string key_id = 1;
+  uint64 epoch = 2;
+  int64 activated_at_height = 3;
+}
+
+// MsgRotateProviderSigningKey proves continuity with the retiring key.
+message MsgRotateProviderSigningKey {
+  option (gogoproto.equal) = false;
+  option (cosmos.msg.v1.signer) = "owner";
+  string owner = 1 [(cosmos_proto.scalar) = "cosmos.AddressString"];
+  bytes new_public_key = 2;
+  string new_key_type = 3;
+  bytes rotation_proof = 4;
+  uint32 signature_version = 5;
+}
+
+message MsgRotateProviderSigningKeyResponse {
+  string key_id = 1;
+  uint64 epoch = 2;
+  int64 activated_at_height = 3;
+}
+
+// MsgRevokeProviderSigningKey revokes the exact active key ID.
+message MsgRevokeProviderSigningKey {
+  option (gogoproto.equal) = false;
+  option (cosmos.msg.v1.signer) = "owner";
+  string owner = 1 [(cosmos_proto.scalar) = "cosmos.AddressString"];
+  string key_id = 2;
+}
+
+message MsgRevokeProviderSigningKeyResponse {
+  int64 revoked_at_height = 1;
+}

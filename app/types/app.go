@@ -58,7 +58,6 @@ import (
 	ibctm "github.com/cosmos/ibc-go/v10/modules/light-clients/07-tendermint"
 	emodule "github.com/virtengine/virtengine/sdk/go/node/escrow/module"
 
-	"github.com/virtengine/virtengine/pkg/pricefeed"
 	atypes "github.com/virtengine/virtengine/sdk/go/node/audit/v1"
 	ctypes "github.com/virtengine/virtengine/sdk/go/node/cert/v1"
 	dtypes "github.com/virtengine/virtengine/sdk/go/node/deployment/v1"
@@ -312,10 +311,12 @@ func (app *App) InitNormalKeepers(
 	maccPerms map[string][]string,
 	blockedAddresses map[string]bool,
 	invCheckPeriod uint,
+	enableUnorderedTxs ...bool,
 ) {
 
 	legacyAmino := encodingConfig.Amino
 
+	unorderedEnabled := len(enableUnorderedTxs) > 0 && enableUnorderedTxs[0]
 	app.Keepers.Cosmos.Acct = authkeeper.NewAccountKeeper(
 		cdc,
 		runtime.NewKVStoreService(app.keys[authtypes.StoreKey]),
@@ -324,6 +325,7 @@ func (app *App) InitNormalKeepers(
 		addresscodec.NewBech32Codec(sdk.GetConfig().GetBech32AccountAddrPrefix()),
 		AccountAddressPrefix,
 		authtypes.NewModuleAddress(govtypes.ModuleName).String(),
+		authkeeper.WithUnorderedTransactions(unorderedEnabled),
 	)
 
 	app.Keepers.Cosmos.Bank = bankkeeper.NewBaseKeeper(
@@ -615,6 +617,10 @@ func (app *App) InitNormalKeepers(
 		authtypes.NewModuleAddress(govtypes.ModuleName).String(),
 		app.Keepers.VirtEngine.Encryption,
 	)
+	app.Keepers.VirtEngine.Settlement.SetUsageAuthenticationKeepers(
+		app.Keepers.VirtEngine.Provider,
+		app.Keepers.Cosmos.Acct,
+	)
 
 	app.Keepers.VirtEngine.SettlementIBC = settlementibc.NewIBCKeeper(
 		cdc,
@@ -684,7 +690,6 @@ func (app *App) InitNormalKeepers(
 	)
 
 	app.Keepers.VirtEngine.Settlement.SetOracleKeeper(app.Keepers.VirtEngine.Oracle)
-	configureSettlementExternalPriceFeeds(&app.Keepers.VirtEngine.Settlement)
 
 	if billingKeeper, ok := app.Keepers.VirtEngine.Escrow.(settlementkeeper.BillingKeeper); ok {
 		app.Keepers.VirtEngine.Settlement.SetBillingKeeper(billingKeeper)
@@ -696,25 +701,6 @@ func (app *App) InitNormalKeepers(
 
 	app.Keepers.VirtEngine.HPC.SetSettlementKeeper(app.Keepers.VirtEngine.Settlement)
 	app.refreshGovLegacyRouter()
-}
-
-func configureSettlementExternalPriceFeeds(keeper *settlementkeeper.Keeper) {
-	cfg := pricefeed.DefaultConfig()
-	cfg.HealthCheckInterval = 0
-
-	aggregator, err := pricefeed.NewAggregator(cfg)
-	if err != nil {
-		return
-	}
-
-	keeper.SetPriceFeed(
-		settlementtypes.OracleSourceTypeBandIBC,
-		settlementkeeper.NewExternalOraclePriceFeed(aggregator, settlementtypes.OracleSourceTypeBandIBC),
-	)
-	keeper.SetPriceFeed(
-		settlementtypes.OracleSourceTypeChainlinkIBC,
-		settlementkeeper.NewExternalOraclePriceFeed(aggregator, settlementtypes.OracleSourceTypeChainlinkIBC),
-	)
 }
 
 func (app *App) SetupHooks() {

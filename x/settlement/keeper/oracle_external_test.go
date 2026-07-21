@@ -56,7 +56,7 @@ func TestExternalOraclePriceFeedGetPriceNormalizesBaseAndQuote(t *testing.T) {
 	require.Equal(t, "coingecko-primary", price.Source)
 }
 
-func TestExternalOraclePriceFeedFallsBackToSourceType(t *testing.T) {
+func TestExternalOraclePriceFeedDoesNotSubstituteHostTime(t *testing.T) {
 	provider := &mockExternalPriceProvider{
 		price: pricefeed.AggregatedPrice{
 			PriceData: pricefeed.PriceData{
@@ -70,7 +70,7 @@ func TestExternalOraclePriceFeedFallsBackToSourceType(t *testing.T) {
 	price, err := feed.GetPrice(context.Background(), "btc", "usd")
 	require.NoError(t, err)
 	require.Equal(t, string(types.OracleSourceTypeChainlinkIBC), price.Source)
-	require.False(t, price.Timestamp.IsZero())
+	require.True(t, price.Timestamp.IsZero())
 }
 
 func TestExternalOraclePriceFeedUsesSDKBlockTimeWhenTimestampMissing(t *testing.T) {
@@ -85,7 +85,7 @@ func TestExternalOraclePriceFeedUsesSDKBlockTimeWhenTimestampMissing(t *testing.
 	feed := NewExternalOraclePriceFeed(provider, types.OracleSourceTypeBandIBC)
 
 	sdkCtx := sdk.Context{}.WithBlockTime(blockTime)
-	price, err := feed.GetPrice(sdk.WrapSDKContext(sdkCtx), "VRT", "USD")
+	price, err := feed.GetPrice(sdkCtx, "VRT", "USD")
 	require.NoError(t, err)
 	require.Equal(t, blockTime, price.Timestamp)
 }

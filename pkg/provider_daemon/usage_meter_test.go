@@ -124,6 +124,26 @@ func TestUsageMeterStartStop(t *testing.T) {
 	meter.Stop()
 }
 
+func TestUsageMeterFailsClosedWithoutCollector(t *testing.T) {
+	meter := NewUsageMeter(UsageMeterConfig{ProviderID: "provider-123"})
+	require.Error(t, meter.Start(context.Background()))
+}
+
+func TestUsageMeterAuthenticatedLineageRequiresRecorder(t *testing.T) {
+	meter := NewUsageMeter(UsageMeterConfig{
+		ProviderID:       "provider-123",
+		MetricsCollector: NewMockMetricsCollector(),
+	})
+	require.Error(t, meter.StartMeteringAuthenticated(
+		"workload-1",
+		"order-1",
+		"lease-1",
+		"customer-1",
+		"allocation-1",
+		PricingInputs{AgreedCPURate: "1"},
+	))
+}
+
 func TestUsageMeterStartMetering(t *testing.T) {
 	collector := NewMockMetricsCollector()
 	meter := NewUsageMeter(UsageMeterConfig{
@@ -358,8 +378,9 @@ func TestUsageMeterWithKeyManager(t *testing.T) {
 	record, err := meter.ForceCollect(ctx, "workload-1")
 	require.NoError(t, err)
 
-	// Record should be signed
-	assert.NotEmpty(t, record.Signature)
+	// Raw meter output is deliberately unsigned. The durable chain submitter
+	// adds the canonical detached proof after resolving governed chain state.
+	assert.Empty(t, record.Signature)
 }
 
 func TestFraudCheckerValid(t *testing.T) {
@@ -514,8 +535,8 @@ func TestFraudCheckerSignatureVerification(t *testing.T) {
 		Signature: "abcd1234",
 	}
 
-	// Valid hex signature
-	assert.True(t, checker.CheckRecordSignature(record, []byte("public-key")))
+	// Legacy records are never treated as authenticated, even with valid hex.
+	assert.False(t, checker.CheckRecordSignature(record, []byte("public-key")))
 
 	// Empty signature
 	record.Signature = ""

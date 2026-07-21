@@ -1,4 +1,4 @@
-import { MsgAddScopeToWallet, MsgAddScopeToWalletResponse, MsgCompleteBorderlineFallback, MsgCompleteBorderlineFallbackResponse, MsgCreateIdentityWallet, MsgCreateIdentityWalletResponse, MsgRebindWallet, MsgRebindWalletResponse, MsgRequestVerification, MsgRequestVerificationResponse, MsgRevokeScope, MsgRevokeScopeFromWallet, MsgRevokeScopeFromWalletResponse, MsgRevokeScopeResponse, MsgUpdateBorderlineParams, MsgUpdateBorderlineParamsResponse, MsgUpdateConsentSettings, MsgUpdateConsentSettingsResponse, MsgUpdateDerivedFeatures, MsgUpdateDerivedFeaturesResponse, MsgUpdateParams, MsgUpdateParamsResponse, MsgUpdateScore, MsgUpdateScoreResponse, MsgUpdateVerificationStatus, MsgUpdateVerificationStatusResponse, MsgUploadScope, MsgUploadScopeResponse } from "./tx.ts";
+import { MsgAddScopeToWallet, MsgAddScopeToWalletResponse, MsgCompleteBorderlineFallback, MsgCompleteBorderlineFallbackResponse, MsgCreateIdentityWallet, MsgCreateIdentityWalletResponse, MsgRebindWallet, MsgRebindWalletResponse, MsgRequestVerification, MsgRequestVerificationResponse, MsgRevokeScope, MsgRevokeScopeFromWallet, MsgRevokeScopeFromWalletResponse, MsgRevokeScopeResponse, MsgSubmitConsensusVerification, MsgSubmitConsensusVerificationResponse, MsgSubmitEmailVerificationProof, MsgSubmitEmailVerificationProofResponse, MsgSubmitSMSVerificationProof, MsgSubmitSMSVerificationProofResponse, MsgSubmitSocialMediaScope, MsgSubmitSocialMediaScopeResponse, MsgSubmitSSOVerificationProof, MsgSubmitSSOVerificationProofResponse, MsgUpdateBorderlineParams, MsgUpdateBorderlineParamsResponse, MsgUpdateConsentSettings, MsgUpdateConsentSettingsResponse, MsgUpdateDerivedFeatures, MsgUpdateDerivedFeaturesResponse, MsgUpdateParams, MsgUpdateParamsResponse, MsgUpdateScore, MsgUpdateScoreResponse, MsgUpdateVerificationStatus, MsgUpdateVerificationStatusResponse, MsgUploadScope, MsgUploadScopeResponse } from "./tx.ts";
 import { MsgClaimAppeal, MsgClaimAppealResponse, MsgResolveAppeal, MsgResolveAppealResponse, MsgSubmitAppeal, MsgSubmitAppealResponse, MsgWithdrawAppeal, MsgWithdrawAppealResponse } from "./appeal.ts";
 import { MsgAttestCompliance, MsgAttestComplianceResponse, MsgDeactivateComplianceProvider, MsgDeactivateComplianceProviderResponse, MsgRegisterComplianceProvider, MsgRegisterComplianceProviderResponse, MsgSubmitComplianceCheck, MsgSubmitComplianceCheckResponse, MsgUpdateComplianceParams, MsgUpdateComplianceParamsResponse } from "./compliance.ts";
 import { MsgActivateModel, MsgActivateModelResponse, MsgDeprecateModel, MsgDeprecateModelResponse, MsgProposeModelUpdate, MsgProposeModelUpdateResponse, MsgRegisterModel, MsgRegisterModelResponse, MsgReportModelVersion, MsgReportModelVersionResponse, MsgRevokeModel, MsgRevokeModelResponse } from "./model.ts";
@@ -34,6 +34,12 @@ export const Msg = {
       name: "UpdateScore",
       input: MsgUpdateScore,
       output: MsgUpdateScoreResponse,
+      get parent() { return Msg; },
+    },
+    submitConsensusVerification: {
+      name: "SubmitConsensusVerification",
+      input: MsgSubmitConsensusVerification,
+      output: MsgSubmitConsensusVerificationResponse,
       get parent() { return Msg; },
     },
     createIdentityWallet: {
@@ -88,6 +94,30 @@ export const Msg = {
       name: "UpdateParams",
       input: MsgUpdateParams,
       output: MsgUpdateParamsResponse,
+      get parent() { return Msg; },
+    },
+    submitSSOVerificationProof: {
+      name: "SubmitSSOVerificationProof",
+      input: MsgSubmitSSOVerificationProof,
+      output: MsgSubmitSSOVerificationProofResponse,
+      get parent() { return Msg; },
+    },
+    submitEmailVerificationProof: {
+      name: "SubmitEmailVerificationProof",
+      input: MsgSubmitEmailVerificationProof,
+      output: MsgSubmitEmailVerificationProofResponse,
+      get parent() { return Msg; },
+    },
+    submitSMSVerificationProof: {
+      name: "SubmitSMSVerificationProof",
+      input: MsgSubmitSMSVerificationProof,
+      output: MsgSubmitSMSVerificationProofResponse,
+      get parent() { return Msg; },
+    },
+    submitSocialMediaScope: {
+      name: "SubmitSocialMediaScope",
+      input: MsgSubmitSocialMediaScope,
+      output: MsgSubmitSocialMediaScopeResponse,
       get parent() { return Msg; },
     },
     submitAppeal: {

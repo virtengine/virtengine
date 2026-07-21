@@ -13,6 +13,14 @@ usage-based rewards are calculated and distributed.
 
 ## Usage Reporting (Provider Daemon)
 
+Task 84B activates authenticated metering at software upgrade `v1.5.0`.
+Provider reports are detached-signature proofs over the versioned binary format
+in `_docs/adr/ADR-006-authenticated-metering.md`. The daemon resolves the
+active `x/provider` signing-key epoch, verifies that KeyManager custody matches
+that key, persists the stream sequence/proof allocation, and broadcasts the
+complete proof through the durable Cosmos transaction queue. The transaction
+sender signature does not replace this detached proof.
+
 The provider daemon emits **per-resource** usage reports for a metering window:
 
 | Usage Type | Units | Notes |
@@ -33,12 +41,35 @@ Each `MsgRecordUsage` creates a `UsageRecord` with:
 - `UsageUnits`, `UsageType`, `UnitPrice`, `TotalCost`
 - `PeriodStart`, `PeriodEnd`, `SubmittedAt`
 - `CustomerAcknowledged` (via `MsgAcknowledgeUsage`)
+- exact raw metric dimensions, pricing/formula/model versions, key epoch/ID,
+  proof bounds, stream sequence, replay keys, and the authenticated digest
+
+Sequences begin at one with no gaps. The stream identity binds provider plus
+allocation when present, with order/lease fallback and lineage binding. Exact
+retries return the original usage ID and emit no duplicate usage, billing,
+reward, escrow, or settlement effect. Reusing a sequence, nonce, or idempotency
+key for different bytes fails.
+
+Customer acknowledgment is a second detached signature over the exact stored
+usage digest. Ed25519 and canonical low-S Cosmos secp256k1 account keys are
+supported. Multisig and other key modes fail closed until a canonical detached
+policy is implemented.
 
 Usage records are settled by `SettleOrder`, which:
 
 - Creates a settlement record and invoice (when billing is enabled).
 - Executes payout records.
 - Triggers usage reward distribution for the settlement.
+
+Pre-`v1.5.0` records are migrated to `legacy_unverified`. They remain queryable
+but cannot newly trigger settlement, invoice, payout, reward, escrow release,
+or usage-condition effects. Query responses expose digest/epoch/status but
+redact detached signature, nonce, idempotency, and acknowledgment replay bytes.
+
+HPC consensus keepers do not synthesize signatures from calculation hashes or
+record IDs. An off-chain provider/node agent must first submit authenticated
+usage and attach its usage IDs; otherwise HPC accounting remains pending and
+unbillable.
 
 ## Deterministic Reward Calculation
 

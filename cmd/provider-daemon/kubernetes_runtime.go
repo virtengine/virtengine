@@ -55,6 +55,15 @@ type kubernetesWorkloadRuntime struct {
 	reconcileInterval time.Duration
 }
 
+// CollectMetrics implements the metering boundary. The core Kubernetes client
+// currently exposes lifecycle/status APIs but not metrics-server counters, so
+// production collection fails closed instead of inventing or billing requested
+// resources. A metrics-server adapter can replace this method without changing
+// the authenticated submission pipeline.
+func (r *kubernetesWorkloadRuntime) CollectMetrics(_ context.Context, workloadID string) (*provider_daemon.ResourceMetrics, error) {
+	return nil, fmt.Errorf("workload %s metrics are unavailable: kubernetes metrics-server collector is not configured", workloadID)
+}
+
 type workloadTarget struct {
 	Workload      *provider_daemon.DeployedWorkload
 	Namespace     string

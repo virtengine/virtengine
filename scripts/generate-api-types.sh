@@ -10,9 +10,9 @@ DOC_OUTPUT_FILE="docs/api/openapi/provider-portal.html"
 
 mkdir -p "$TS_OUTPUT_DIR" "$GO_OUTPUT_DIR"
 
-npx --yes @redocly/cli@latest lint "$SPEC_FILE"
+npx --yes @redocly/cli@2.39.0 lint "$SPEC_FILE"
 
-npx --yes openapi-typescript@latest "$SPEC_FILE" -o "$TS_OUTPUT_FILE"
+npx --yes openapi-typescript@7.13.0 "$SPEC_FILE" -o "$TS_OUTPUT_FILE"
 
 go run github.com/oapi-codegen/oapi-codegen/v2/cmd/oapi-codegen@v2.3.0 \
   -generate types \
@@ -21,6 +21,6 @@ go run github.com/oapi-codegen/oapi-codegen/v2/cmd/oapi-codegen@v2.3.0 \
 
 gofmt -w "$GO_OUTPUT_FILE"
 
-npx --yes @redocly/cli@latest build-docs "$SPEC_FILE" -o "$DOC_OUTPUT_FILE"
+npx --yes @redocly/cli@2.39.0 build-docs "$SPEC_FILE" -o "$DOC_OUTPUT_FILE"
 
 echo "Provider API types and docs generated."

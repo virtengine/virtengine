@@ -345,7 +345,7 @@ func TestVoteExtension_Timestamp(t *testing.T) {
 // ============================================================================
 
 func TestVoteExtensionVersion(t *testing.T) {
-	require.Equal(t, 1, VoteExtensionVersion, "current version should be 1")
+	require.Equal(t, uint32(1), VoteExtensionVersion, "current version should be 1")
 
 	extension := NewVoteExtension(1000, "virt1val123", "v1.0.0")
 	require.Equal(t, uint8(1), extension.Version)

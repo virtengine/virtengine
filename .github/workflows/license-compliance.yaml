@@ -21,6 +21,8 @@ on:
       - "sdk/ts/package-lock.json"
       - "ml/**/requirements*.txt"
       - ".github/workflows/license-compliance.yaml"
+      - "scripts/supply-chain/go-module-policy.json"
+      - "scripts/supply-chain/verify-go-module-policy.mjs"
       - ".github/scripts/validate_security_policies.py"
       - ".github/tests/test_security_policy*.py"
       - "SUPPLY_CHAIN_SECURITY.md"
@@ -44,6 +46,8 @@ on:
       - "sdk/ts/package-lock.json"
       - "ml/**/requirements*.txt"
       - ".github/workflows/license-compliance.yaml"
+      - "scripts/supply-chain/go-module-policy.json"
+      - "scripts/supply-chain/verify-go-module-policy.mjs"
       - ".github/scripts/validate_security_policies.py"
       - ".github/tests/test_security_policy*.py"
       - "SUPPLY_CHAIN_SECURITY.md"
@@ -144,9 +148,11 @@ jobs:
         run: |
           python - <<'PY'
           import csv
+          import json
           from pathlib import Path
 
-          disallowed = ("GPL", "AGPL", "LGPL", "SSPL", "BUSL")
+          policy = json.loads(Path("scripts/supply-chain/go-module-policy.json").read_text(encoding="utf-8"))
+          disallowed = tuple(policy["license"]["deniedTokens"])
           report = Path("license-reports/go/licenses.csv")
           violations = []
           with report.open(newline="", encoding="utf-8") as fh:
@@ -160,6 +166,9 @@ jobs:
           if violations:
               raise SystemExit("Disallowed Go licenses detected:\n" + "\n".join(violations))
           PY
+
+      - name: Enforce reviewed replace directives
+        run: node scripts/supply-chain/verify-go-module-policy.mjs
 
       - name: Upload Go license report
         uses: actions/upload-artifact@v4

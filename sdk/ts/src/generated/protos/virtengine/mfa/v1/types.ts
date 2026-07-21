@@ -524,6 +524,10 @@ export interface MFAProof {
   timestamp: Long;
   /** Signature is the signature over the proof data */
   signature: Uint8Array;
+  /** DeviceFingerprint identifies the device */
+  deviceFingerprint: string;
+  /** TrustToken is the trust token for a trusted device */
+  trustToken: string;
 }
 
 /** FactorCombination represents a set of factors that must ALL be satisfied (AND logic) */
@@ -566,6 +570,8 @@ export interface DeviceInfo {
   ipHash: string;
   /** TrustExpiresAt is when the device trust expires */
   trustExpiresAt: Long;
+  /** TrustTokenHash is the bcrypt hash of the trust token */
+  trustTokenHash: string;
 }
 
 /** FIDO2CredentialInfo contains FIDO2-specific credential information */
@@ -949,7 +955,14 @@ export interface EventMFAPolicyUpdated {
 }
 
 function createBaseMFAProof(): MFAProof {
-  return { sessionId: "", verifiedFactors: [], timestamp: Long.ZERO, signature: new Uint8Array(0) };
+  return {
+    sessionId: "",
+    verifiedFactors: [],
+    timestamp: Long.ZERO,
+    signature: new Uint8Array(0),
+    deviceFingerprint: "",
+    trustToken: "",
+  };
 }
 
 export const MFAProof: MessageFns<MFAProof, "virtengine.mfa.v1.MFAProof"> = {
@@ -967,6 +980,12 @@ export const MFAProof: MessageFns<MFAProof, "virtengine.mfa.v1.MFAProof"> = {
     }
     if (message.signature.length !== 0) {
       writer.uint32(34).bytes(message.signature);
+    }
+    if (message.deviceFingerprint !== "") {
+      writer.uint32(42).string(message.deviceFingerprint);
+    }
+    if (message.trustToken !== "") {
+      writer.uint32(50).string(message.trustToken);
     }
     return writer;
   },
@@ -1020,6 +1039,22 @@ export const MFAProof: MessageFns<MFAProof, "virtengine.mfa.v1.MFAProof"> = {
           message.signature = reader.bytes();
           continue;
         }
+        case 5: {
+          if (tag !== 42) {
+            break;
+          }
+
+          message.deviceFingerprint = reader.string();
+          continue;
+        }
+        case 6: {
+          if (tag !== 50) {
+            break;
+          }
+
+          message.trustToken = reader.string();
+          continue;
+        }
       }
       if ((tag & 7) === 4 || tag === 0) {
         break;
@@ -1037,6 +1072,8 @@ export const MFAProof: MessageFns<MFAProof, "virtengine.mfa.v1.MFAProof"> = {
         : [],
       timestamp: isSet(object.timestamp) ? Long.fromValue(object.timestamp) : Long.ZERO,
       signature: isSet(object.signature) ? bytesFromBase64(object.signature) : new Uint8Array(0),
+      deviceFingerprint: isSet(object.device_fingerprint) ? globalThis.String(object.device_fingerprint) : "",
+      trustToken: isSet(object.trust_token) ? globalThis.String(object.trust_token) : "",
     };
   },
 
@@ -1054,6 +1091,12 @@ export const MFAProof: MessageFns<MFAProof, "virtengine.mfa.v1.MFAProof"> = {
     if (message.signature.length !== 0) {
       obj.signature = base64FromBytes(message.signature);
     }
+    if (message.deviceFingerprint !== "") {
+      obj.device_fingerprint = message.deviceFingerprint;
+    }
+    if (message.trustToken !== "") {
+      obj.trust_token = message.trustToken;
+    }
     return obj;
   },
   fromPartial(object: DeepPartial<MFAProof>): MFAProof {
@@ -1064,6 +1107,8 @@ export const MFAProof: MessageFns<MFAProof, "virtengine.mfa.v1.MFAProof"> = {
       ? Long.fromValue(object.timestamp)
       : Long.ZERO;
     message.signature = object.signature ?? new Uint8Array(0);
+    message.deviceFingerprint = object.deviceFingerprint ?? "";
+    message.trustToken = object.trustToken ?? "";
     return message;
   },
 };
@@ -1290,6 +1335,7 @@ function createBaseDeviceInfo(): DeviceInfo {
     lastSeenAt: Long.ZERO,
     ipHash: "",
     trustExpiresAt: Long.ZERO,
+    trustTokenHash: "",
   };
 }
 
@@ -1314,6 +1360,9 @@ export const DeviceInfo: MessageFns<DeviceInfo, "virtengine.mfa.v1.DeviceInfo"> 
     }
     if (!message.trustExpiresAt.equals(Long.ZERO)) {
       writer.uint32(48).int64(message.trustExpiresAt.toString());
+    }
+    if (message.trustTokenHash !== "") {
+      writer.uint32(58).string(message.trustTokenHash);
     }
     return writer;
   },
@@ -1373,6 +1422,14 @@ export const DeviceInfo: MessageFns<DeviceInfo, "virtengine.mfa.v1.DeviceInfo"> 
           message.trustExpiresAt = Long.fromString(reader.int64().toString());
           continue;
         }
+        case 7: {
+          if (tag !== 58) {
+            break;
+          }
+
+          message.trustTokenHash = reader.string();
+          continue;
+        }
       }
       if ((tag & 7) === 4 || tag === 0) {
         break;
@@ -1390,6 +1447,7 @@ export const DeviceInfo: MessageFns<DeviceInfo, "virtengine.mfa.v1.DeviceInfo"> 
       lastSeenAt: isSet(object.last_seen_at) ? Long.fromValue(object.last_seen_at) : Long.ZERO,
       ipHash: isSet(object.ip_hash) ? globalThis.String(object.ip_hash) : "",
       trustExpiresAt: isSet(object.trust_expires_at) ? Long.fromValue(object.trust_expires_at) : Long.ZERO,
+      trustTokenHash: isSet(object.trust_token_hash) ? globalThis.String(object.trust_token_hash) : "",
     };
   },
 
@@ -1413,6 +1471,9 @@ export const DeviceInfo: MessageFns<DeviceInfo, "virtengine.mfa.v1.DeviceInfo"> 
     if (!message.trustExpiresAt.equals(Long.ZERO)) {
       obj.trust_expires_at = (message.trustExpiresAt || Long.ZERO).toString();
     }
+    if (message.trustTokenHash !== "") {
+      obj.trust_token_hash = message.trustTokenHash;
+    }
     return obj;
   },
   fromPartial(object: DeepPartial<DeviceInfo>): DeviceInfo {
@@ -1429,6 +1490,7 @@ export const DeviceInfo: MessageFns<DeviceInfo, "virtengine.mfa.v1.DeviceInfo"> 
     message.trustExpiresAt = (object.trustExpiresAt !== undefined && object.trustExpiresAt !== null)
       ? Long.fromValue(object.trustExpiresAt)
       : Long.ZERO;
+    message.trustTokenHash = object.trustTokenHash ?? "";
     return message;
   },
 };

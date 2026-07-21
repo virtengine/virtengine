@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
-	"time"
 
 	errorsmod "cosmossdk.io/errors"
 	storetypes "cosmossdk.io/store/types"
@@ -297,8 +296,6 @@ func (k Keeper) ProcessVerificationRequest(
 	request *types.VerificationRequest,
 	keyProvider ValidatorKeyProvider,
 ) *types.VerificationResult {
-	startTime := time.Now()
-
 	// Initialize result
 	result := types.NewVerificationResult(
 		request.RequestID,
@@ -380,7 +377,9 @@ func (k Keeper) ProcessVerificationRequest(
 	result.Score = score
 	result.ModelVersion = modelVersion
 	result.InputHash = inputHash
-	result.ProcessingDuration = time.Since(startTime).Milliseconds()
+	// Runtime duration is deliberately excluded from consensus state. Off-chain
+	// telemetry may measure this call without writing the measurement here.
+	result.ProcessingDuration = 0
 
 	// Add scope results
 	for _, sr := range scopeResults {
@@ -647,7 +646,6 @@ func (k Keeper) ProcessPendingVerifications(
 	keyProvider ValidatorKeyProvider,
 ) []types.VerificationResult {
 	config := DefaultVerificationPipelineConfig()
-	startTime := time.Now()
 	results := make([]types.VerificationResult, 0)
 
 	// Get pending requests
@@ -662,17 +660,6 @@ func (k Keeper) ProcessPendingVerifications(
 	)
 
 	for _, request := range requests {
-		// Check if we've exceeded block time budget
-		elapsed := time.Since(startTime).Milliseconds()
-		if elapsed >= config.MaxVerificationTimePerBlock {
-			k.Logger(ctx).Warn("verification time budget exceeded",
-				"elapsed_ms", elapsed,
-				"processed", len(results),
-				"remaining", len(requests)-len(results),
-			)
-			break
-		}
-
 		// Process the request
 		result := k.ProcessVerificationRequest(ctx, &request, keyProvider)
 		results = append(results, *result)

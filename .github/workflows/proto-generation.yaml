@@ -1,0 +1,77 @@
+name: Protobuf and Module Contract Gate
+
+on:
+  pull_request:
+    paths:
+      - 'go.mod'
+      - 'go.sum'
+      - 'go.work'
+      - 'sdk/**'
+      - 'api/openapi/**'
+      - 'scripts/proto-generate*.sh'
+      - 'scripts/verify-modules.sh'
+      - 'scripts/verify-proto-generation.sh'
+      - 'scripts/protoinventory/**'
+      - 'scripts/supply-chain/go-module-policy.json'
+      - 'scripts/supply-chain/verify-go-module-policy.mjs'
+      - 'tests/compatibility/**'
+      - 'tests/gateway/**'
+  push:
+    branches: [main, mainnet/main]
+    paths:
+      - 'go.mod'
+      - 'go.sum'
+      - 'go.work'
+      - 'sdk/**'
+      - 'api/openapi/**'
+      - 'scripts/proto-generate*.sh'
+      - 'scripts/verify-modules.sh'
+      - 'scripts/verify-proto-generation.sh'
+      - 'scripts/protoinventory/**'
+      - 'scripts/supply-chain/go-module-policy.json'
+      - 'scripts/supply-chain/verify-go-module-policy.mjs'
+      - 'tests/compatibility/**'
+      - 'tests/gateway/**'
+
+permissions:
+  contents: read
+
+env:
+  GO_VERSION: '1.25.5'
+
+jobs:
+  contracts:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+      - name: Verify modules and checksums
+        run: VE_VERIFY_EMPTY_CACHE=1 ./scripts/verify-modules.sh
+      - name: Build pinned generation image
+        run: docker build --file sdk/generation/Dockerfile --tag virtengine-proto-gen:1.0.0 .
+      - name: Lint protobuf sources
+        run: docker run --rm --volume "$PWD:/src" --workdir /src/sdk --entrypoint buf virtengine-proto-gen:1.0.0 lint
+      - name: Regenerate all contracts
+        run: ./scripts/proto-generate.sh all
+      - name: Verify generated drift
+        run: git diff --exit-code -- sdk/go/node sdk/ts/src/generated sdk/artifacts/proto api/openapi/virtengine-proto.swagger.json
+      - name: Verify deterministic second run
+        run: ./scripts/verify-proto-generation.sh
+      - name: Compatibility fixtures
+        run: go test -p 1 ./tests/compatibility -run '^TestTask86A' -count=1
+      - name: REST/gRPC gateway boundary
+        run: go test -p 1 -tags=e2e.integration ./tests/gateway -run '^TestTask86A' -count=1
+      - name: TypeScript SDK
+        run: |
+          docker run --rm --volume "$PWD:/src" --workdir /src --entrypoint bash \
+            virtengine-proto-gen:1.0.0 -lc '
+              export NODE_OPTIONS=--max-old-space-size=6144
+              npm --prefix sdk/ts ci --ignore-scripts --no-audit --no-fund
+              npm --prefix sdk/ts run lint
+              npm --prefix sdk/ts test -- --runInBand
+              npm --prefix sdk/ts run build
+            '

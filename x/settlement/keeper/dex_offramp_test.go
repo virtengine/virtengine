@@ -158,14 +158,16 @@ func (s *KeeperTestSuite) TestFiatConversionPayoutSuccess() {
 
 	payout, err := s.keeper.ExecutePayout(s.ctx, "inv-1", settlement.SettlementID)
 	require.NoError(t, err)
-	require.Equal(t, types.PayoutStateCompleted, payout.State)
+	require.Equal(t, types.PayoutStatePending, payout.State)
 	require.NotEmpty(t, payout.FiatConversionID)
 
 	conversion, found := s.keeper.GetFiatConversionByPayout(s.ctx, payout.PayoutID)
 	require.True(t, found)
-	require.Equal(t, types.FiatConversionStateCompleted, conversion.State)
-	require.NotEmpty(t, conversion.OffRampID)
-	require.NotEmpty(t, conversion.SwapTxHash)
+	require.Equal(t, types.FiatConversionStateCreated, conversion.State)
+	require.Empty(t, conversion.OffRampID)
+	require.Empty(t, conversion.SwapTxHash)
+	require.Zero(t, swapExec.quoteCalls)
+	require.Zero(t, swapExec.execCalls)
 }
 
 func (s *KeeperTestSuite) TestFiatConversionPayoutSwapFailure() {
@@ -212,9 +214,11 @@ func (s *KeeperTestSuite) TestFiatConversionPayoutSwapFailure() {
 
 	payout, err := s.keeper.ExecutePayout(s.ctx, "inv-2", settlement.SettlementID)
 	require.NoError(t, err)
-	require.Equal(t, types.PayoutStateFailed, payout.State)
+	require.Equal(t, types.PayoutStatePending, payout.State)
 
 	conversion, found := s.keeper.GetFiatConversionByInvoice(s.ctx, "inv-2")
 	require.True(t, found)
-	require.Equal(t, types.FiatConversionStateFailed, conversion.State)
+	require.Equal(t, types.FiatConversionStateCreated, conversion.State)
+	require.Zero(t, swapExec.quoteCalls)
+	require.Zero(t, swapExec.execCalls)
 }

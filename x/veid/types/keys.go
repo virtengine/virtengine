@@ -773,6 +773,13 @@ var (
 	// PrefixEvidenceRecordByAccountType stores evidence IDs by account and type
 	// Key: PrefixEvidenceRecordByAccountType | account_address | evidence_type -> []evidence_id
 	PrefixEvidenceRecordByAccountType = []byte{0x9C}
+
+	// PrefixConsensusVerificationHeight stores the consumed system transaction
+	// digest by proposal height to prevent replay or duplicate consumption.
+	PrefixConsensusVerificationHeight = []byte{0xD0}
+
+	// PrefixConsensusVerificationAggregate stores the canonical aggregate bytes.
+	PrefixConsensusVerificationAggregate = []byte{0xD1}
 )
 
 // IdentityRecordKey returns the store key for an identity record

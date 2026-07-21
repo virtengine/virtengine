@@ -883,7 +883,7 @@ type ScoringHistoryEntry struct {
 
 // DefaultScoringModel returns the default v1 scoring model
 func DefaultScoringModel() ScoringModelVersion {
-	now := time.Now()
+	now := time.Unix(0, 0).UTC()
 	return ScoringModelVersion{
 		Version:     DefaultScoringModelVersion,
 		CreatedAt:   now,

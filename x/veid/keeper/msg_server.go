@@ -6,6 +6,7 @@ import (
 
 	sdk "github.com/cosmos/cosmos-sdk/types"
 
+	veidv1 "github.com/virtengine/virtengine/sdk/go/node/veid/v1"
 	encryptiontypes "github.com/virtengine/virtengine/x/encryption/types"
 	"github.com/virtengine/virtengine/x/veid/types"
 )
@@ -17,15 +18,19 @@ const (
 )
 
 type msgServer struct {
+	veidv1.UnimplementedMsgServer
 	keeper Keeper
 }
 
 // NewMsgServerImpl returns an implementation of the veid MsgServer interface
-func NewMsgServerImpl(k Keeper) types.MsgServer {
+func NewMsgServerImpl(k Keeper) veidv1.MsgServer {
 	return &msgServer{keeper: k}
 }
 
-var _ types.MsgServer = msgServer{}
+var (
+	_ types.MsgServer  = msgServer{}
+	_ veidv1.MsgServer = (*msgServer)(nil)
+)
 
 // UploadScope handles uploading a new identity scope
 func (ms msgServer) UploadScope(goCtx context.Context, msg *types.MsgUploadScope) (*types.MsgUploadScopeResponse, error) {

@@ -54,6 +54,30 @@ export interface MsgUpdateKeyLabel {
 export interface MsgUpdateKeyLabelResponse {
 }
 
+/** MsgRotateKey is the message for rotating a recipient public key */
+export interface MsgRotateKey {
+  /** Sender is the account rotating the key (must own the key or be authority) */
+  sender: string;
+  /** OldKeyFingerprint is the fingerprint of the key to rotate */
+  oldKeyFingerprint: string;
+  /** NewPublicKey is the new public key bytes */
+  newPublicKey: Uint8Array;
+  /** NewAlgorithmId specifies which algorithm this new key is for (optional, defaults to old key algorithm) */
+  newAlgorithmId: string;
+  /** NewLabel is an optional label for the new key */
+  newLabel: string;
+  /** Reason is an optional reason for rotation */
+  reason: string;
+  /** NewKeyTtlSeconds is the TTL to apply to the new key (0 keeps default) */
+  newKeyTtlSeconds: Long;
+}
+
+/** MsgRotateKeyResponse is the response for MsgRotateKey */
+export interface MsgRotateKeyResponse {
+  /** NewKeyFingerprint is the fingerprint of the new key */
+  newKeyFingerprint: string;
+}
+
 function createBaseMsgRegisterRecipientKey(): MsgRegisterRecipientKey {
   return { sender: "", publicKey: new Uint8Array(0), algorithmId: "", label: "" };
 }
@@ -473,6 +497,228 @@ export const MsgUpdateKeyLabelResponse: MessageFns<
   },
   fromPartial(_: DeepPartial<MsgUpdateKeyLabelResponse>): MsgUpdateKeyLabelResponse {
     const message = createBaseMsgUpdateKeyLabelResponse();
+    return message;
+  },
+};
+
+function createBaseMsgRotateKey(): MsgRotateKey {
+  return {
+    sender: "",
+    oldKeyFingerprint: "",
+    newPublicKey: new Uint8Array(0),
+    newAlgorithmId: "",
+    newLabel: "",
+    reason: "",
+    newKeyTtlSeconds: Long.UZERO,
+  };
+}
+
+export const MsgRotateKey: MessageFns<MsgRotateKey, "virtengine.encryption.v1.MsgRotateKey"> = {
+  $type: "virtengine.encryption.v1.MsgRotateKey" as const,
+
+  encode(message: MsgRotateKey, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.sender !== "") {
+      writer.uint32(10).string(message.sender);
+    }
+    if (message.oldKeyFingerprint !== "") {
+      writer.uint32(18).string(message.oldKeyFingerprint);
+    }
+    if (message.newPublicKey.length !== 0) {
+      writer.uint32(26).bytes(message.newPublicKey);
+    }
+    if (message.newAlgorithmId !== "") {
+      writer.uint32(34).string(message.newAlgorithmId);
+    }
+    if (message.newLabel !== "") {
+      writer.uint32(42).string(message.newLabel);
+    }
+    if (message.reason !== "") {
+      writer.uint32(50).string(message.reason);
+    }
+    if (!message.newKeyTtlSeconds.equals(Long.UZERO)) {
+      writer.uint32(56).uint64(message.newKeyTtlSeconds.toString());
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): MsgRotateKey {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseMsgRotateKey();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.sender = reader.string();
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.oldKeyFingerprint = reader.string();
+          continue;
+        }
+        case 3: {
+          if (tag !== 26) {
+            break;
+          }
+
+          message.newPublicKey = reader.bytes();
+          continue;
+        }
+        case 4: {
+          if (tag !== 34) {
+            break;
+          }
+
+          message.newAlgorithmId = reader.string();
+          continue;
+        }
+        case 5: {
+          if (tag !== 42) {
+            break;
+          }
+
+          message.newLabel = reader.string();
+          continue;
+        }
+        case 6: {
+          if (tag !== 50) {
+            break;
+          }
+
+          message.reason = reader.string();
+          continue;
+        }
+        case 7: {
+          if (tag !== 56) {
+            break;
+          }
+
+          message.newKeyTtlSeconds = Long.fromString(reader.uint64().toString(), true);
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): MsgRotateKey {
+    return {
+      sender: isSet(object.sender) ? globalThis.String(object.sender) : "",
+      oldKeyFingerprint: isSet(object.old_key_fingerprint) ? globalThis.String(object.old_key_fingerprint) : "",
+      newPublicKey: isSet(object.new_public_key) ? bytesFromBase64(object.new_public_key) : new Uint8Array(0),
+      newAlgorithmId: isSet(object.new_algorithm_id) ? globalThis.String(object.new_algorithm_id) : "",
+      newLabel: isSet(object.new_label) ? globalThis.String(object.new_label) : "",
+      reason: isSet(object.reason) ? globalThis.String(object.reason) : "",
+      newKeyTtlSeconds: isSet(object.new_key_ttl_seconds) ? Long.fromValue(object.new_key_ttl_seconds) : Long.UZERO,
+    };
+  },
+
+  toJSON(message: MsgRotateKey): unknown {
+    const obj: any = {};
+    if (message.sender !== "") {
+      obj.sender = message.sender;
+    }
+    if (message.oldKeyFingerprint !== "") {
+      obj.old_key_fingerprint = message.oldKeyFingerprint;
+    }
+    if (message.newPublicKey.length !== 0) {
+      obj.new_public_key = base64FromBytes(message.newPublicKey);
+    }
+    if (message.newAlgorithmId !== "") {
+      obj.new_algorithm_id = message.newAlgorithmId;
+    }
+    if (message.newLabel !== "") {
+      obj.new_label = message.newLabel;
+    }
+    if (message.reason !== "") {
+      obj.reason = message.reason;
+    }
+    if (!message.newKeyTtlSeconds.equals(Long.UZERO)) {
+      obj.new_key_ttl_seconds = (message.newKeyTtlSeconds || Long.UZERO).toString();
+    }
+    return obj;
+  },
+  fromPartial(object: DeepPartial<MsgRotateKey>): MsgRotateKey {
+    const message = createBaseMsgRotateKey();
+    message.sender = object.sender ?? "";
+    message.oldKeyFingerprint = object.oldKeyFingerprint ?? "";
+    message.newPublicKey = object.newPublicKey ?? new Uint8Array(0);
+    message.newAlgorithmId = object.newAlgorithmId ?? "";
+    message.newLabel = object.newLabel ?? "";
+    message.reason = object.reason ?? "";
+    message.newKeyTtlSeconds = (object.newKeyTtlSeconds !== undefined && object.newKeyTtlSeconds !== null)
+      ? Long.fromValue(object.newKeyTtlSeconds)
+      : Long.UZERO;
+    return message;
+  },
+};
+
+function createBaseMsgRotateKeyResponse(): MsgRotateKeyResponse {
+  return { newKeyFingerprint: "" };
+}
+
+export const MsgRotateKeyResponse: MessageFns<MsgRotateKeyResponse, "virtengine.encryption.v1.MsgRotateKeyResponse"> = {
+  $type: "virtengine.encryption.v1.MsgRotateKeyResponse" as const,
+
+  encode(message: MsgRotateKeyResponse, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.newKeyFingerprint !== "") {
+      writer.uint32(10).string(message.newKeyFingerprint);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): MsgRotateKeyResponse {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseMsgRotateKeyResponse();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.newKeyFingerprint = reader.string();
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): MsgRotateKeyResponse {
+    return {
+      newKeyFingerprint: isSet(object.new_key_fingerprint) ? globalThis.String(object.new_key_fingerprint) : "",
+    };
+  },
+
+  toJSON(message: MsgRotateKeyResponse): unknown {
+    const obj: any = {};
+    if (message.newKeyFingerprint !== "") {
+      obj.new_key_fingerprint = message.newKeyFingerprint;
+    }
+    return obj;
+  },
+  fromPartial(object: DeepPartial<MsgRotateKeyResponse>): MsgRotateKeyResponse {
+    const message = createBaseMsgRotateKeyResponse();
+    message.newKeyFingerprint = object.newKeyFingerprint ?? "";
     return message;
   },
 };

@@ -22,6 +22,8 @@ This index lists internal-only documentation. Do not add internal docs outside `
 - `_docs/architecture/waldur-market-mapping-spec.md`
 - `_docs/adr/ADR-001-portal-architecture.md`
 - `_docs/adr/ADR-004-veid-governed-verifier.md`
+- `_docs/adr/ADR-005-consensus-determinism.md`
+- `_docs/adr/ADR-006-authenticated-metering.md`
 - `_docs/adr/adr-001-network-upgrades.md`
 - `_docs/adr/adr-002-manifest-v2beta2.md`
 - `_docs/adr/adr-003-technical-debt-refactoring.md`
@@ -81,17 +83,8 @@ This index lists internal-only documentation. Do not add internal docs outside `
 - `_docs/security/vendor-risk.md`
 
 ## Audit
-- `_docs/audit/crypto-audit-scope.md`
-- `_docs/audit/infra-audit-scope.md`
-- `_docs/audit/ml-audit-scope.md`
-- `_docs/audit/module-audit-scope.md`
-- `_docs/audit/pentest-scope.md`
-- `_docs/audit/remediation-process.md`
-- `_docs/audit/rfp-template.md`
-- `_docs/audit/pre-audit-checklist.yaml`
-- `_docs/audit/vendor-evaluation.yaml`
-- `_docs/audits/external-security-audit-engagement.md`
-- `_docs/audits/security-audit-report-2026-02-06.md`
+- `_docs/audits/task-86a-completion-report-2026-07-21.md`
+- `_docs/audits/task-84b-completion-report-2026-07-21.md`
 
 ## Protocols & Schemas
 - `_docs/protocols/hpc-cluster-template-spec.md`

@@ -36,12 +36,12 @@ func (a marketplaceVEIDAdapter) GetIdentityStatus(ctx sdk.Context, address sdk.A
 
 func (a marketplaceVEIDAdapter) IsEmailVerified(ctx sdk.Context, address sdk.AccAddress) bool {
 	scopes := a.keeper.GetScopesByType(ctx, address, veidtypes.ScopeTypeEmailProof)
-	return hasVerifiedActiveScope(scopes)
+	return hasVerifiedActiveScope(scopes, ctx.BlockTime())
 }
 
 func (a marketplaceVEIDAdapter) IsDomainVerified(ctx sdk.Context, address sdk.AccAddress) bool {
 	scopes := a.keeper.GetScopesByType(ctx, address, veidtypes.ScopeTypeDomainVerify)
-	return hasVerifiedActiveScope(scopes)
+	return hasVerifiedActiveScope(scopes, ctx.BlockTime())
 }
 
 func (a marketplaceVEIDAdapter) IsComplianceCleared(ctx sdk.Context, address sdk.AccAddress) (bool, bool) {
@@ -55,9 +55,9 @@ func (a marketplaceVEIDAdapter) IsComplianceCleared(ctx sdk.Context, address sdk
 	return record.Status.AllowsTransactions(), true
 }
 
-func hasVerifiedActiveScope(scopes []veidtypes.IdentityScope) bool {
+func hasVerifiedActiveScope(scopes []veidtypes.IdentityScope, at time.Time) bool {
 	for _, scope := range scopes {
-		if scope.IsVerified() && scope.IsActive() {
+		if scope.IsVerified() && scope.IsActiveAt(at) {
 			return true
 		}
 	}

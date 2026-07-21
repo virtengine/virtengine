@@ -6,6 +6,7 @@ package keeper
 import (
 	"encoding/json"
 	"fmt"
+	"time"
 
 	storetypes "cosmossdk.io/store/types"
 	sdk "github.com/cosmos/cosmos-sdk/types"
@@ -260,7 +261,7 @@ func (k Keeper) ValidateJobRouting(ctx sdk.Context, job *types.HPCJob, targetClu
 		ExpectedClusterID:    decision.SelectedClusterID,
 		ActualClusterID:      targetClusterID,
 		DecisionAgeBlocks:    ctx.BlockHeight() - decision.BlockHeight,
-		DecisionAgeSeconds:   int64(ctx.BlockTime().Sub(decision.CreatedAt).Seconds()),
+		DecisionAgeSeconds:   int64(ctx.BlockTime().Sub(decision.CreatedAt) / time.Second),
 		ProviderAddress:      job.ProviderAddress,
 	}
 

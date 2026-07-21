@@ -108,9 +108,7 @@ var (
 	findLedgerCosmosUserApp = func() (ledgerAppClient, error) {
 		return ledgercosmos.FindLedgerCosmosUserApp()
 	}
-	enumerateLedgerHIDDevices = func(vendorID, productID uint16) []hid.DeviceInfo {
-		return hid.Enumerate(vendorID, productID)
-	}
+	enumerateLedgerHIDDevices = hid.Enumerate
 )
 
 // LedgerDeviceType represents the type of Ledger device

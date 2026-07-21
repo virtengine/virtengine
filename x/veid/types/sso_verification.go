@@ -230,12 +230,18 @@ func (m *SSOLinkageMetadata) Validate() error {
 	return nil
 }
 
-// IsActive returns true if the linkage is currently valid
+// IsActive is a wall-clock convenience for off-chain callers. Consensus code
+// must call IsActiveAt with ctx.BlockTime().
 func (m *SSOLinkageMetadata) IsActive() bool {
+	return m.IsActiveAt(time.Now())
+}
+
+// IsActiveAt returns true if the linkage is valid at the provided time.
+func (m *SSOLinkageMetadata) IsActiveAt(now time.Time) bool {
 	if m.Status != SSOStatusVerified {
 		return false
 	}
-	if m.ExpiresAt != nil && time.Now().After(*m.ExpiresAt) {
+	if m.ExpiresAt != nil && now.After(*m.ExpiresAt) {
 		return false
 	}
 	return true

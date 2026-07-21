@@ -3,8 +3,13 @@ import type * as _protos_virtengine_bme_v1_types from "../protos/virtengine/bme/
 import type * as _protos_virtengine_bme_v1_events from "../protos/virtengine/bme/v1/events.ts";
 import type * as _protos_virtengine_bme_v1_genesis from "../protos/virtengine/bme/v1/genesis.ts";
 import type * as _protos_virtengine_bme_v1_query from "../protos/virtengine/bme/v1/query.ts";
-import type * as _protos_virtengine_deployment_v1beta4_resourceunit from "../protos/virtengine/deployment/v1beta4/resourceunit.ts";
+import type * as _protos_virtengine_deployment_v1beta3_resourceunit from "../protos/virtengine/deployment/v1beta3/resourceunit.ts";
 import type * as _protos_cosmos_base_v1beta1_coin from "../protos/cosmos/base/v1beta1/coin.ts";
+import type * as _protos_virtengine_deployment_v1beta3_groupspec from "../protos/virtengine/deployment/v1beta3/groupspec.ts";
+import type * as _protos_virtengine_deployment_v1beta3_deploymentmsg from "../protos/virtengine/deployment/v1beta3/deploymentmsg.ts";
+import type * as _protos_virtengine_deployment_v1beta3_group from "../protos/virtengine/deployment/v1beta3/group.ts";
+import type * as _protos_virtengine_deployment_v1beta3_genesis from "../protos/virtengine/deployment/v1beta3/genesis.ts";
+import type * as _protos_virtengine_deployment_v1beta4_resourceunit from "../protos/virtengine/deployment/v1beta4/resourceunit.ts";
 import type * as _protos_virtengine_deployment_v1beta4_groupspec from "../protos/virtengine/deployment/v1beta4/groupspec.ts";
 import type * as _protos_virtengine_deployment_v1beta4_deploymentmsg from "../protos/virtengine/deployment/v1beta4/deploymentmsg.ts";
 import type * as _protos_virtengine_deployment_v1beta4_group from "../protos/virtengine/deployment/v1beta4/group.ts";
@@ -13,21 +18,42 @@ import type * as _protos_virtengine_escrow_types_v1_balance from "../protos/virt
 import type * as _protos_virtengine_escrow_types_v1_deposit from "../protos/virtengine/escrow/types/v1/deposit.ts";
 import type * as _protos_virtengine_escrow_types_v1_account from "../protos/virtengine/escrow/types/v1/account.ts";
 import type * as _protos_virtengine_deployment_v1beta4_query from "../protos/virtengine/deployment/v1beta4/query.ts";
+import type * as _protos_virtengine_deployment_v1beta5_resourceunit from "../protos/virtengine/deployment/v1beta5/resourceunit.ts";
+import type * as _protos_virtengine_deployment_v1beta5_groupspec from "../protos/virtengine/deployment/v1beta5/groupspec.ts";
+import type * as _protos_virtengine_deployment_v1beta5_deploymentmsg from "../protos/virtengine/deployment/v1beta5/deploymentmsg.ts";
+import type * as _protos_virtengine_deployment_v1beta5_group from "../protos/virtengine/deployment/v1beta5/group.ts";
+import type * as _protos_virtengine_deployment_v1beta5_genesis from "../protos/virtengine/deployment/v1beta5/genesis.ts";
+import type * as _protos_virtengine_deployment_v1beta5_query from "../protos/virtengine/deployment/v1beta5/query.ts";
 import type * as _protos_virtengine_escrow_types_v1_payment from "../protos/virtengine/escrow/types/v1/payment.ts";
 import type * as _protos_virtengine_escrow_v1_genesis from "../protos/virtengine/escrow/v1/genesis.ts";
 import type * as _protos_virtengine_escrow_v1_query from "../protos/virtengine/escrow/v1/query.ts";
+import type * as _protos_virtengine_escrow_v1beta3_types from "../protos/virtengine/escrow/v1beta3/types.ts";
+import type * as _protos_virtengine_escrow_v1beta3_genesis from "../protos/virtengine/escrow/v1beta3/genesis.ts";
+import type * as _protos_virtengine_escrow_v1beta3_query from "../protos/virtengine/escrow/v1beta3/query.ts";
 import type * as _protos_virtengine_market_v1_lease from "../protos/virtengine/market/v1/lease.ts";
 import type * as _protos_virtengine_market_v1_event from "../protos/virtengine/market/v1/event.ts";
+import type * as _protos_virtengine_market_v1beta4_order from "../protos/virtengine/market/v1beta4/order.ts";
+import type * as _protos_virtengine_market_v1beta4_bid from "../protos/virtengine/market/v1beta4/bid.ts";
+import type * as _protos_virtengine_market_v1beta4_lease from "../protos/virtengine/market/v1beta4/lease.ts";
+import type * as _protos_virtengine_market_v1beta4_genesis from "../protos/virtengine/market/v1beta4/genesis.ts";
 import type * as _protos_virtengine_market_v1beta5_bid from "../protos/virtengine/market/v1beta5/bid.ts";
 import type * as _protos_virtengine_market_v1beta5_bidmsg from "../protos/virtengine/market/v1beta5/bidmsg.ts";
 import type * as _protos_virtengine_market_v1beta5_order from "../protos/virtengine/market/v1beta5/order.ts";
 import type * as _protos_virtengine_market_v1beta5_genesis from "../protos/virtengine/market/v1beta5/genesis.ts";
 import type * as _protos_virtengine_market_v1beta5_query from "../protos/virtengine/market/v1beta5/query.ts";
+import type * as _protos_virtengine_market_v2beta1_bid from "../protos/virtengine/market/v2beta1/bid.ts";
+import type * as _protos_virtengine_market_v2beta1_bidmsg from "../protos/virtengine/market/v2beta1/bidmsg.ts";
+import type * as _protos_virtengine_market_v2beta1_order from "../protos/virtengine/market/v2beta1/order.ts";
+import type * as _protos_virtengine_market_v2beta1_lease from "../protos/virtengine/market/v2beta1/lease.ts";
+import type * as _protos_virtengine_market_v2beta1_event from "../protos/virtengine/market/v2beta1/event.ts";
+import type * as _protos_virtengine_market_v2beta1_genesis from "../protos/virtengine/market/v2beta1/genesis.ts";
+import type * as _protos_virtengine_market_v2beta1_query from "../protos/virtengine/market/v2beta1/query.ts";
 import type * as _protos_virtengine_oracle_v1_prices from "../protos/virtengine/oracle/v1/prices.ts";
 import type * as _protos_virtengine_oracle_v1_events from "../protos/virtengine/oracle/v1/events.ts";
 import type * as _protos_virtengine_oracle_v1_genesis from "../protos/virtengine/oracle/v1/genesis.ts";
 import type * as _protos_virtengine_oracle_v1_msgs from "../protos/virtengine/oracle/v1/msgs.ts";
 import type * as _protos_virtengine_oracle_v1_query from "../protos/virtengine/oracle/v1/query.ts";
+import type * as _protos_virtengine_settlement_v1_query from "../protos/virtengine/settlement/v1/query.ts";
 import type * as _protos_virtengine_settlement_v1_tx from "../protos/virtengine/settlement/v1/tx.ts";
 
 const p = {
@@ -92,7 +118,7 @@ const p = {
     if (value.haltThreshold != null) newValue.haltThreshold = LegacyDec[transformType](value.haltThreshold);
     return newValue;
   },
-  "virtengine.deployment.v1beta4.ResourceUnit"(value: _protos_virtengine_deployment_v1beta4_resourceunit.ResourceUnit | undefined | null, transformType: 'encode' | 'decode') {
+  "virtengine.deployment.v1beta3.ResourceUnit"(value: _protos_virtengine_deployment_v1beta3_resourceunit.ResourceUnit | undefined | null, transformType: 'encode' | 'decode') {
     if (value == null) return;
     const newValue = { ...value };
     if (value.price != null) newValue.price = p["cosmos.base.v1beta1.DecCoin"](value.price, transformType);
@@ -102,6 +128,42 @@ const p = {
     if (value == null) return;
     const newValue = { ...value };
     if (value.amount != null) newValue.amount = LegacyDec[transformType](value.amount);
+    return newValue;
+  },
+  "virtengine.deployment.v1beta3.GroupSpec"(value: _protos_virtengine_deployment_v1beta3_groupspec.GroupSpec | undefined | null, transformType: 'encode' | 'decode') {
+    if (value == null) return;
+    const newValue = { ...value };
+    if (value.resources) newValue.resources = value.resources.map((item) => p["virtengine.deployment.v1beta3.ResourceUnit"](item, transformType)!);
+    return newValue;
+  },
+  "virtengine.deployment.v1beta3.MsgCreateDeployment"(value: _protos_virtengine_deployment_v1beta3_deploymentmsg.MsgCreateDeployment | undefined | null, transformType: 'encode' | 'decode') {
+    if (value == null) return;
+    const newValue = { ...value };
+    if (value.groups) newValue.groups = value.groups.map((item) => p["virtengine.deployment.v1beta3.GroupSpec"](item, transformType)!);
+    return newValue;
+  },
+  "virtengine.deployment.v1beta3.Group"(value: _protos_virtengine_deployment_v1beta3_group.Group | undefined | null, transformType: 'encode' | 'decode') {
+    if (value == null) return;
+    const newValue = { ...value };
+    if (value.groupSpec != null) newValue.groupSpec = p["virtengine.deployment.v1beta3.GroupSpec"](value.groupSpec, transformType);
+    return newValue;
+  },
+  "virtengine.deployment.v1beta3.GenesisDeployment"(value: _protos_virtengine_deployment_v1beta3_genesis.GenesisDeployment | undefined | null, transformType: 'encode' | 'decode') {
+    if (value == null) return;
+    const newValue = { ...value };
+    if (value.groups) newValue.groups = value.groups.map((item) => p["virtengine.deployment.v1beta3.Group"](item, transformType)!);
+    return newValue;
+  },
+  "virtengine.deployment.v1beta3.GenesisState"(value: _protos_virtengine_deployment_v1beta3_genesis.GenesisState | undefined | null, transformType: 'encode' | 'decode') {
+    if (value == null) return;
+    const newValue = { ...value };
+    if (value.deployments) newValue.deployments = value.deployments.map((item) => p["virtengine.deployment.v1beta3.GenesisDeployment"](item, transformType)!);
+    return newValue;
+  },
+  "virtengine.deployment.v1beta4.ResourceUnit"(value: _protos_virtengine_deployment_v1beta4_resourceunit.ResourceUnit | undefined | null, transformType: 'encode' | 'decode') {
+    if (value == null) return;
+    const newValue = { ...value };
+    if (value.price != null) newValue.price = p["cosmos.base.v1beta1.DecCoin"](value.price, transformType);
     return newValue;
   },
   "virtengine.deployment.v1beta4.GroupSpec"(value: _protos_virtengine_deployment_v1beta4_groupspec.GroupSpec | undefined | null, transformType: 'encode' | 'decode') {
@@ -179,6 +241,61 @@ const p = {
     if (value.group != null) newValue.group = p["virtengine.deployment.v1beta4.Group"](value.group, transformType);
     return newValue;
   },
+  "virtengine.deployment.v1beta5.ResourceUnit"(value: _protos_virtengine_deployment_v1beta5_resourceunit.ResourceUnit | undefined | null, transformType: 'encode' | 'decode') {
+    if (value == null) return;
+    const newValue = { ...value };
+    if (value.prices) newValue.prices = value.prices.map((item) => p["cosmos.base.v1beta1.DecCoin"](item, transformType)!);
+    return newValue;
+  },
+  "virtengine.deployment.v1beta5.GroupSpec"(value: _protos_virtengine_deployment_v1beta5_groupspec.GroupSpec | undefined | null, transformType: 'encode' | 'decode') {
+    if (value == null) return;
+    const newValue = { ...value };
+    if (value.resources) newValue.resources = value.resources.map((item) => p["virtengine.deployment.v1beta5.ResourceUnit"](item, transformType)!);
+    return newValue;
+  },
+  "virtengine.deployment.v1beta5.MsgCreateDeployment"(value: _protos_virtengine_deployment_v1beta5_deploymentmsg.MsgCreateDeployment | undefined | null, transformType: 'encode' | 'decode') {
+    if (value == null) return;
+    const newValue = { ...value };
+    if (value.groups) newValue.groups = value.groups.map((item) => p["virtengine.deployment.v1beta5.GroupSpec"](item, transformType)!);
+    return newValue;
+  },
+  "virtengine.deployment.v1beta5.Group"(value: _protos_virtengine_deployment_v1beta5_group.Group | undefined | null, transformType: 'encode' | 'decode') {
+    if (value == null) return;
+    const newValue = { ...value };
+    if (value.groupSpec != null) newValue.groupSpec = p["virtengine.deployment.v1beta5.GroupSpec"](value.groupSpec, transformType);
+    return newValue;
+  },
+  "virtengine.deployment.v1beta5.GenesisDeployment"(value: _protos_virtengine_deployment_v1beta5_genesis.GenesisDeployment | undefined | null, transformType: 'encode' | 'decode') {
+    if (value == null) return;
+    const newValue = { ...value };
+    if (value.groups) newValue.groups = value.groups.map((item) => p["virtengine.deployment.v1beta5.Group"](item, transformType)!);
+    return newValue;
+  },
+  "virtengine.deployment.v1beta5.GenesisState"(value: _protos_virtengine_deployment_v1beta5_genesis.GenesisState | undefined | null, transformType: 'encode' | 'decode') {
+    if (value == null) return;
+    const newValue = { ...value };
+    if (value.deployments) newValue.deployments = value.deployments.map((item) => p["virtengine.deployment.v1beta5.GenesisDeployment"](item, transformType)!);
+    return newValue;
+  },
+  "virtengine.deployment.v1beta5.QueryDeploymentsResponse"(value: _protos_virtengine_deployment_v1beta5_query.QueryDeploymentsResponse | undefined | null, transformType: 'encode' | 'decode') {
+    if (value == null) return;
+    const newValue = { ...value };
+    if (value.deployments) newValue.deployments = value.deployments.map((item) => p["virtengine.deployment.v1beta5.QueryDeploymentResponse"](item, transformType)!);
+    return newValue;
+  },
+  "virtengine.deployment.v1beta5.QueryDeploymentResponse"(value: _protos_virtengine_deployment_v1beta5_query.QueryDeploymentResponse | undefined | null, transformType: 'encode' | 'decode') {
+    if (value == null) return;
+    const newValue = { ...value };
+    if (value.groups) newValue.groups = value.groups.map((item) => p["virtengine.deployment.v1beta5.Group"](item, transformType)!);
+    if (value.escrowAccount != null) newValue.escrowAccount = p["virtengine.escrow.types.v1.Account"](value.escrowAccount, transformType);
+    return newValue;
+  },
+  "virtengine.deployment.v1beta5.QueryGroupResponse"(value: _protos_virtengine_deployment_v1beta5_query.QueryGroupResponse | undefined | null, transformType: 'encode' | 'decode') {
+    if (value == null) return;
+    const newValue = { ...value };
+    if (value.group != null) newValue.group = p["virtengine.deployment.v1beta5.Group"](value.group, transformType);
+    return newValue;
+  },
   "virtengine.escrow.types.v1.PaymentState"(value: _protos_virtengine_escrow_types_v1_payment.PaymentState | undefined | null, transformType: 'encode' | 'decode') {
     if (value == null) return;
     const newValue = { ...value };
@@ -212,6 +329,40 @@ const p = {
     if (value.payments) newValue.payments = value.payments.map((item) => p["virtengine.escrow.types.v1.Payment"](item, transformType)!);
     return newValue;
   },
+  "virtengine.escrow.v1beta3.Account"(value: _protos_virtengine_escrow_v1beta3_types.Account | undefined | null, transformType: 'encode' | 'decode') {
+    if (value == null) return;
+    const newValue = { ...value };
+    if (value.balance != null) newValue.balance = p["cosmos.base.v1beta1.DecCoin"](value.balance, transformType);
+    if (value.transferred != null) newValue.transferred = p["cosmos.base.v1beta1.DecCoin"](value.transferred, transformType);
+    if (value.funds != null) newValue.funds = p["cosmos.base.v1beta1.DecCoin"](value.funds, transformType);
+    return newValue;
+  },
+  "virtengine.escrow.v1beta3.FractionalPayment"(value: _protos_virtengine_escrow_v1beta3_types.FractionalPayment | undefined | null, transformType: 'encode' | 'decode') {
+    if (value == null) return;
+    const newValue = { ...value };
+    if (value.rate != null) newValue.rate = p["cosmos.base.v1beta1.DecCoin"](value.rate, transformType);
+    if (value.balance != null) newValue.balance = p["cosmos.base.v1beta1.DecCoin"](value.balance, transformType);
+    return newValue;
+  },
+  "virtengine.escrow.v1beta3.GenesisState"(value: _protos_virtengine_escrow_v1beta3_genesis.GenesisState | undefined | null, transformType: 'encode' | 'decode') {
+    if (value == null) return;
+    const newValue = { ...value };
+    if (value.accounts) newValue.accounts = value.accounts.map((item) => p["virtengine.escrow.v1beta3.Account"](item, transformType)!);
+    if (value.payments) newValue.payments = value.payments.map((item) => p["virtengine.escrow.v1beta3.FractionalPayment"](item, transformType)!);
+    return newValue;
+  },
+  "virtengine.escrow.v1beta3.QueryAccountsResponse"(value: _protos_virtengine_escrow_v1beta3_query.QueryAccountsResponse | undefined | null, transformType: 'encode' | 'decode') {
+    if (value == null) return;
+    const newValue = { ...value };
+    if (value.accounts) newValue.accounts = value.accounts.map((item) => p["virtengine.escrow.v1beta3.Account"](item, transformType)!);
+    return newValue;
+  },
+  "virtengine.escrow.v1beta3.QueryPaymentsResponse"(value: _protos_virtengine_escrow_v1beta3_query.QueryPaymentsResponse | undefined | null, transformType: 'encode' | 'decode') {
+    if (value == null) return;
+    const newValue = { ...value };
+    if (value.payments) newValue.payments = value.payments.map((item) => p["virtengine.escrow.v1beta3.FractionalPayment"](item, transformType)!);
+    return newValue;
+  },
   "virtengine.market.v1.Lease"(value: _protos_virtengine_market_v1_lease.Lease | undefined | null, transformType: 'encode' | 'decode') {
     if (value == null) return;
     const newValue = { ...value };
@@ -228,6 +379,38 @@ const p = {
     if (value == null) return;
     const newValue = { ...value };
     if (value.price != null) newValue.price = p["cosmos.base.v1beta1.DecCoin"](value.price, transformType);
+    return newValue;
+  },
+  "virtengine.market.v1beta4.Order"(value: _protos_virtengine_market_v1beta4_order.Order | undefined | null, transformType: 'encode' | 'decode') {
+    if (value == null) return;
+    const newValue = { ...value };
+    if (value.spec != null) newValue.spec = p["virtengine.deployment.v1beta3.GroupSpec"](value.spec, transformType);
+    return newValue;
+  },
+  "virtengine.market.v1beta4.MsgCreateBid"(value: _protos_virtengine_market_v1beta4_bid.MsgCreateBid | undefined | null, transformType: 'encode' | 'decode') {
+    if (value == null) return;
+    const newValue = { ...value };
+    if (value.price != null) newValue.price = p["cosmos.base.v1beta1.DecCoin"](value.price, transformType);
+    return newValue;
+  },
+  "virtengine.market.v1beta4.Bid"(value: _protos_virtengine_market_v1beta4_bid.Bid | undefined | null, transformType: 'encode' | 'decode') {
+    if (value == null) return;
+    const newValue = { ...value };
+    if (value.price != null) newValue.price = p["cosmos.base.v1beta1.DecCoin"](value.price, transformType);
+    return newValue;
+  },
+  "virtengine.market.v1beta4.Lease"(value: _protos_virtengine_market_v1beta4_lease.Lease | undefined | null, transformType: 'encode' | 'decode') {
+    if (value == null) return;
+    const newValue = { ...value };
+    if (value.price != null) newValue.price = p["cosmos.base.v1beta1.DecCoin"](value.price, transformType);
+    return newValue;
+  },
+  "virtengine.market.v1beta4.GenesisState"(value: _protos_virtengine_market_v1beta4_genesis.GenesisState | undefined | null, transformType: 'encode' | 'decode') {
+    if (value == null) return;
+    const newValue = { ...value };
+    if (value.orders) newValue.orders = value.orders.map((item) => p["virtengine.market.v1beta4.Order"](item, transformType)!);
+    if (value.leases) newValue.leases = value.leases.map((item) => p["virtengine.market.v1beta4.Lease"](item, transformType)!);
+    if (value.bids) newValue.bids = value.bids.map((item) => p["virtengine.market.v1beta4.Bid"](item, transformType)!);
     return newValue;
   },
   "virtengine.market.v1beta5.Bid"(value: _protos_virtengine_market_v1beta5_bid.Bid | undefined | null, transformType: 'encode' | 'decode') {
@@ -294,6 +477,88 @@ const p = {
     if (value.escrowPayment != null) newValue.escrowPayment = p["virtengine.escrow.types.v1.Payment"](value.escrowPayment, transformType);
     return newValue;
   },
+  "virtengine.market.v2beta1.Bid"(value: _protos_virtengine_market_v2beta1_bid.Bid | undefined | null, transformType: 'encode' | 'decode') {
+    if (value == null) return;
+    const newValue = { ...value };
+    if (value.prices) newValue.prices = value.prices.map((item) => p["cosmos.base.v1beta1.DecCoin"](item, transformType)!);
+    return newValue;
+  },
+  "virtengine.market.v2beta1.MsgCreateBid"(value: _protos_virtengine_market_v2beta1_bidmsg.MsgCreateBid | undefined | null, transformType: 'encode' | 'decode') {
+    if (value == null) return;
+    const newValue = { ...value };
+    if (value.prices) newValue.prices = value.prices.map((item) => p["cosmos.base.v1beta1.DecCoin"](item, transformType)!);
+    return newValue;
+  },
+  "virtengine.market.v2beta1.Order"(value: _protos_virtengine_market_v2beta1_order.Order | undefined | null, transformType: 'encode' | 'decode') {
+    if (value == null) return;
+    const newValue = { ...value };
+    if (value.spec != null) newValue.spec = p["virtengine.deployment.v1beta5.GroupSpec"](value.spec, transformType);
+    return newValue;
+  },
+  "virtengine.market.v2beta1.Lease"(value: _protos_virtengine_market_v2beta1_lease.Lease | undefined | null, transformType: 'encode' | 'decode') {
+    if (value == null) return;
+    const newValue = { ...value };
+    if (value.prices) newValue.prices = value.prices.map((item) => p["cosmos.base.v1beta1.DecCoin"](item, transformType)!);
+    return newValue;
+  },
+  "virtengine.market.v2beta1.EventBidCreated"(value: _protos_virtengine_market_v2beta1_event.EventBidCreated | undefined | null, transformType: 'encode' | 'decode') {
+    if (value == null) return;
+    const newValue = { ...value };
+    if (value.prices) newValue.prices = value.prices.map((item) => p["cosmos.base.v1beta1.DecCoin"](item, transformType)!);
+    return newValue;
+  },
+  "virtengine.market.v2beta1.EventLeaseCreated"(value: _protos_virtengine_market_v2beta1_event.EventLeaseCreated | undefined | null, transformType: 'encode' | 'decode') {
+    if (value == null) return;
+    const newValue = { ...value };
+    if (value.prices) newValue.prices = value.prices.map((item) => p["cosmos.base.v1beta1.DecCoin"](item, transformType)!);
+    return newValue;
+  },
+  "virtengine.market.v2beta1.GenesisState"(value: _protos_virtengine_market_v2beta1_genesis.GenesisState | undefined | null, transformType: 'encode' | 'decode') {
+    if (value == null) return;
+    const newValue = { ...value };
+    if (value.orders) newValue.orders = value.orders.map((item) => p["virtengine.market.v2beta1.Order"](item, transformType)!);
+    if (value.leases) newValue.leases = value.leases.map((item) => p["virtengine.market.v2beta1.Lease"](item, transformType)!);
+    if (value.bids) newValue.bids = value.bids.map((item) => p["virtengine.market.v2beta1.Bid"](item, transformType)!);
+    return newValue;
+  },
+  "virtengine.market.v2beta1.QueryOrdersResponse"(value: _protos_virtengine_market_v2beta1_query.QueryOrdersResponse | undefined | null, transformType: 'encode' | 'decode') {
+    if (value == null) return;
+    const newValue = { ...value };
+    if (value.orders) newValue.orders = value.orders.map((item) => p["virtengine.market.v2beta1.Order"](item, transformType)!);
+    return newValue;
+  },
+  "virtengine.market.v2beta1.QueryOrderResponse"(value: _protos_virtengine_market_v2beta1_query.QueryOrderResponse | undefined | null, transformType: 'encode' | 'decode') {
+    if (value == null) return;
+    const newValue = { ...value };
+    if (value.order != null) newValue.order = p["virtengine.market.v2beta1.Order"](value.order, transformType);
+    return newValue;
+  },
+  "virtengine.market.v2beta1.QueryBidsResponse"(value: _protos_virtengine_market_v2beta1_query.QueryBidsResponse | undefined | null, transformType: 'encode' | 'decode') {
+    if (value == null) return;
+    const newValue = { ...value };
+    if (value.bids) newValue.bids = value.bids.map((item) => p["virtengine.market.v2beta1.QueryBidResponse"](item, transformType)!);
+    return newValue;
+  },
+  "virtengine.market.v2beta1.QueryBidResponse"(value: _protos_virtengine_market_v2beta1_query.QueryBidResponse | undefined | null, transformType: 'encode' | 'decode') {
+    if (value == null) return;
+    const newValue = { ...value };
+    if (value.bid != null) newValue.bid = p["virtengine.market.v2beta1.Bid"](value.bid, transformType);
+    if (value.escrowAccount != null) newValue.escrowAccount = p["virtengine.escrow.types.v1.Account"](value.escrowAccount, transformType);
+    return newValue;
+  },
+  "virtengine.market.v2beta1.QueryLeasesResponse"(value: _protos_virtengine_market_v2beta1_query.QueryLeasesResponse | undefined | null, transformType: 'encode' | 'decode') {
+    if (value == null) return;
+    const newValue = { ...value };
+    if (value.leases) newValue.leases = value.leases.map((item) => p["virtengine.market.v2beta1.QueryLeaseResponse"](item, transformType)!);
+    return newValue;
+  },
+  "virtengine.market.v2beta1.QueryLeaseResponse"(value: _protos_virtengine_market_v2beta1_query.QueryLeaseResponse | undefined | null, transformType: 'encode' | 'decode') {
+    if (value == null) return;
+    const newValue = { ...value };
+    if (value.lease != null) newValue.lease = p["virtengine.market.v2beta1.Lease"](value.lease, transformType);
+    if (value.escrowPayment != null) newValue.escrowPayment = p["virtengine.escrow.types.v1.Payment"](value.escrowPayment, transformType);
+    return newValue;
+  },
   "virtengine.oracle.v1.PriceDataState"(value: _protos_virtengine_oracle_v1_prices.PriceDataState | undefined | null, transformType: 'encode' | 'decode') {
     if (value == null) return;
     const newValue = { ...value };
@@ -343,6 +608,24 @@ const p = {
     if (value == null) return;
     const newValue = { ...value };
     if (value.aggregatedPrice != null) newValue.aggregatedPrice = p["virtengine.oracle.v1.AggregatedPrice"](value.aggregatedPrice, transformType);
+    return newValue;
+  },
+  "virtengine.settlement.v1.UsageRecord"(value: _protos_virtengine_settlement_v1_query.UsageRecord | undefined | null, transformType: 'encode' | 'decode') {
+    if (value == null) return;
+    const newValue = { ...value };
+    if (value.unitPrice != null) newValue.unitPrice = p["cosmos.base.v1beta1.DecCoin"](value.unitPrice, transformType);
+    return newValue;
+  },
+  "virtengine.settlement.v1.QueryUsageRecordResponse"(value: _protos_virtengine_settlement_v1_query.QueryUsageRecordResponse | undefined | null, transformType: 'encode' | 'decode') {
+    if (value == null) return;
+    const newValue = { ...value };
+    if (value.usageRecord != null) newValue.usageRecord = p["virtengine.settlement.v1.UsageRecord"](value.usageRecord, transformType);
+    return newValue;
+  },
+  "virtengine.settlement.v1.QueryUsageRecordsByOrderResponse"(value: _protos_virtengine_settlement_v1_query.QueryUsageRecordsByOrderResponse | undefined | null, transformType: 'encode' | 'decode') {
+    if (value == null) return;
+    const newValue = { ...value };
+    if (value.usageRecords) newValue.usageRecords = value.usageRecords.map((item) => p["virtengine.settlement.v1.UsageRecord"](item, transformType)!);
     return newValue;
   },
   "virtengine.settlement.v1.MsgRecordUsage"(value: _protos_virtengine_settlement_v1_tx.MsgRecordUsage | undefined | null, transformType: 'encode' | 'decode') {

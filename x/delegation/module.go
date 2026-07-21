@@ -121,7 +121,7 @@ func (am AppModule) RegisterInvariants(_ sdk.InvariantRegistry) {
 
 // RegisterServices registers module services.
 func (am AppModule) RegisterServices(cfg module.Configurator) {
-	types.RegisterMsgServer(cfg.MsgServer(), keeper.NewMsgServerImpl(am.keeper))
+	types.RegisterMsgServerPB(cfg.MsgServer(), keeper.NewMsgServerImpl(am.keeper))
 	queryServer := keeper.NewQuerier(am.keeper)
 	delegationv1.RegisterQueryServer(cfg.QueryServer(), queryServer)
 }

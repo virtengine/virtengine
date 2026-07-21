@@ -1,4 +1,4 @@
-import { MsgRegisterRecipientKey, MsgRegisterRecipientKeyResponse, MsgRevokeRecipientKey, MsgRevokeRecipientKeyResponse, MsgUpdateKeyLabel, MsgUpdateKeyLabelResponse } from "./tx.ts";
+import { MsgRegisterRecipientKey, MsgRegisterRecipientKeyResponse, MsgRevokeRecipientKey, MsgRevokeRecipientKeyResponse, MsgRotateKey, MsgRotateKeyResponse, MsgUpdateKeyLabel, MsgUpdateKeyLabelResponse } from "./tx.ts";
 
 export const Msg = {
   typeName: "virtengine.encryption.v1.Msg",
@@ -19,6 +19,12 @@ export const Msg = {
       name: "UpdateKeyLabel",
       input: MsgUpdateKeyLabel,
       output: MsgUpdateKeyLabelResponse,
+      get parent() { return Msg; },
+    },
+    rotateKey: {
+      name: "RotateKey",
+      input: MsgRotateKey,
+      output: MsgRotateKeyResponse,
       get parent() { return Msg; },
     },
   },

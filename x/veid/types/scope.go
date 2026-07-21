@@ -249,13 +249,19 @@ func (s *IdentityScope) Validate() error {
 	return nil
 }
 
-// IsActive checks if the scope is active (not revoked and not expired)
+// IsActive is a wall-clock convenience for off-chain callers. Consensus code
+// must call IsActiveAt with ctx.BlockTime().
 func (s *IdentityScope) IsActive() bool {
+	return s.IsActiveAt(time.Now())
+}
+
+// IsActiveAt checks activity at an explicit deterministic time.
+func (s *IdentityScope) IsActiveAt(now time.Time) bool {
 	if s.Revoked {
 		return false
 	}
 
-	if s.ExpiresAt != nil && time.Now().After(*s.ExpiresAt) {
+	if s.ExpiresAt != nil && now.After(*s.ExpiresAt) {
 		return false
 	}
 

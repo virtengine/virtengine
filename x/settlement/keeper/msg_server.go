@@ -1,6 +1,7 @@
 package keeper
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"time"
@@ -248,15 +249,43 @@ func (ms msgServer) RecordUsage(goCtx context.Context, msg *types.MsgRecordUsage
 		ctx.BlockTime(),
 		ctx.BlockHeight(),
 	)
+	record.AllocationID = msg.AllocationId
+	record.ChainID = msg.ChainId
+	if msg.RawMetrics != nil {
+		record.Metrics = types.RawUsageMetrics{
+			CPUMilliSeconds:    msg.RawMetrics.CpuMilliSeconds,
+			MemoryByteSeconds:  msg.RawMetrics.MemoryByteSeconds,
+			StorageByteSeconds: msg.RawMetrics.StorageByteSeconds,
+			NetworkBytesIn:     msg.RawMetrics.NetworkBytesIn,
+			NetworkBytesOut:    msg.RawMetrics.NetworkBytesOut,
+			GPUSeconds:         msg.RawMetrics.GpuSeconds,
+		}
+	}
+	record.PricingVersion = msg.PricingVersion
+	record.FormulaVersion = msg.FormulaVersion
+	record.ModelVersion = msg.ModelVersion
+	record.Sequence = msg.StreamSequence
+	record.Nonce = append([]byte(nil), msg.Nonce...)
+	record.IdempotencyKey = append([]byte(nil), msg.IdempotencyKey...)
+	record.ProviderKeyEpoch = msg.ProviderKeyEpoch
+	record.ProviderKeyID = msg.ProviderKeyId
+	record.IssuedAtHeight = msg.IssuedAtHeight
+	record.ExpiresAtHeight = msg.ExpiresAtHeight
+	record.IssuedAtUnix = msg.IssuedAtUnix
+	record.ExpiresAtUnix = msg.ExpiresAtUnix
+	record.SignatureVersion = msg.SignatureVersion
 
 	if err := ms.keeper.RecordUsage(ctx, record); err != nil {
 		return nil, err
 	}
 
 	return &types.MsgRecordUsageResponse{
-		UsageId:    record.UsageID,
-		TotalCost:  record.TotalCost.String(),
-		RecordedAt: ctx.BlockTime().Unix(),
+		UsageId:              record.UsageID,
+		TotalCost:            record.TotalCost.String(),
+		RecordedAt:           ctx.BlockTime().Unix(),
+		UsageDigest:          append([]byte(nil), record.UsageDigest...),
+		AuthenticationStatus: record.AuthenticationStatus,
+		ExactDuplicate:       record.ExactDuplicate,
 	}, nil
 }
 
@@ -280,12 +309,31 @@ func (ms msgServer) AcknowledgeUsage(goCtx context.Context, msg *types.MsgAcknow
 		return nil, types.ErrUnauthorized.Wrap("only the customer can acknowledge usage")
 	}
 
-	if err := ms.keeper.AcknowledgeUsage(ctx, msg.UsageId, msg.Signature); err != nil {
+	if msg.SignatureVersion == 0 && !ms.keeper.IsUsageAuthenticationActive(ctx) {
+		if err := ms.keeper.AcknowledgeUsage(ctx, msg.UsageId, msg.Signature); err != nil {
+			return nil, err
+		}
+		return &types.MsgAcknowledgeUsageResponse{AcknowledgedAt: ctx.BlockTime().Unix()}, nil
+	}
+
+	exactDuplicate := usage.CustomerAcknowledged && bytes.Equal(usage.CustomerAckReplayKey, msg.ReplayKey)
+	proof := types.UsageAcknowledgmentProof{
+		Signature:        append([]byte(nil), msg.Signature...),
+		UsageDigest:      append([]byte(nil), msg.UsageDigest...),
+		ReplayKey:        append([]byte(nil), msg.ReplayKey...),
+		IssuedAtHeight:   msg.IssuedAtHeight,
+		ExpiresAtHeight:  msg.ExpiresAtHeight,
+		IssuedAtUnix:     msg.IssuedAtUnix,
+		ExpiresAtUnix:    msg.ExpiresAtUnix,
+		SignatureVersion: msg.SignatureVersion,
+	}
+	if err := ms.keeper.AcknowledgeUsageAuthenticated(ctx, msg.UsageId, proof); err != nil {
 		return nil, err
 	}
 
 	return &types.MsgAcknowledgeUsageResponse{
 		AcknowledgedAt: ctx.BlockTime().Unix(),
+		ExactDuplicate: exactDuplicate,
 	}, nil
 }
 

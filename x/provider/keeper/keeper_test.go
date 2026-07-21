@@ -368,7 +368,7 @@ func TestDeleteProviderPublicKeyNonExistent(t *testing.T) {
 	})
 }
 
-func TestPublicKeyRotationCount(t *testing.T) {
+func TestDirectPublicKeyOverwriteRejected(t *testing.T) {
 	ctx, keeper := setupKeeper(t)
 	prov := testutil.Provider(t)
 
@@ -396,12 +396,12 @@ func TestPublicKeyRotationCount(t *testing.T) {
 		key2[i] = byte(i + 100)
 	}
 	err = keeper.SetProviderPublicKey(ctx, owner, key2, types.PublicKeyTypeEd25519)
-	require.NoError(t, err)
+	require.Error(t, err)
 
 	record, found = keeper.GetProviderPublicKeyRecord(ctx, owner)
 	require.True(t, found)
-	require.Equal(t, uint32(1), record.RotationCount)
-	require.Equal(t, key2, record.PublicKey)
+	require.Equal(t, uint32(0), record.RotationCount)
+	require.Equal(t, key1, record.PublicKey)
 
 	// Third key set
 	key3 := make([]byte, 32)
@@ -409,11 +409,11 @@ func TestPublicKeyRotationCount(t *testing.T) {
 		key3[i] = byte(i + 200)
 	}
 	err = keeper.SetProviderPublicKey(ctx, owner, key3, types.PublicKeyTypeEd25519)
-	require.NoError(t, err)
+	require.Error(t, err)
 
 	record, found = keeper.GetProviderPublicKeyRecord(ctx, owner)
 	require.True(t, found)
-	require.Equal(t, uint32(2), record.RotationCount)
+	require.Equal(t, uint32(0), record.RotationCount)
 }
 
 func TestRotateProviderPublicKeyFirstTime(t *testing.T) {

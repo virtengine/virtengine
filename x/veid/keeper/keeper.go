@@ -7,8 +7,10 @@ import (
 	"fmt"
 	"time"
 
+	coreaddress "cosmossdk.io/core/address"
 	"cosmossdk.io/log"
 	storetypes "cosmossdk.io/store/types"
+	"github.com/cosmos/cosmos-sdk/baseapp"
 	"github.com/cosmos/cosmos-sdk/codec"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	stakingtypes "github.com/cosmos/cosmos-sdk/x/staking/types"
@@ -97,6 +99,9 @@ type IKeeper interface {
 type StakingKeeper interface {
 	// GetValidator returns the validator with the given operator address
 	GetValidator(ctx context.Context, addr sdk.ValAddress) (stakingtypes.Validator, error)
+	GetValidatorByConsAddr(ctx context.Context, addr sdk.ConsAddress) (stakingtypes.Validator, error)
+	GetLastValidatorPower(ctx context.Context, operator sdk.ValAddress) (int64, error)
+	ValidatorAddressCodec() coreaddress.Codec
 }
 
 // Keeper of the veid store
@@ -138,6 +143,11 @@ type Keeper struct {
 	// randSource provides deterministic randomness derived from tx context.
 	// It must never be nil during state transitions to preserve consensus safety.
 	randSource RandomSource
+
+	// consensusSystemTxAuthorizer confirms that the exact finalized transaction
+	// bytes were independently validated by the application pre-block boundary.
+	consensusSystemTxAuthorizer func(sdk.Context) bool
+	consensusValidatorStore     baseapp.ValidatorStore
 }
 
 // NewKeeper creates and returns an instance for veid keeper
@@ -183,6 +193,17 @@ func (k Keeper) Logger(ctx sdk.Context) log.Logger {
 // SetStakingKeeper sets the staking keeper reference for validator authorization
 func (k *Keeper) SetStakingKeeper(stakingKeeper StakingKeeper) {
 	k.stakingKeeper = stakingKeeper
+}
+
+// SetConsensusSystemTxAuthorizer installs the application finalization guard.
+func (k *Keeper) SetConsensusSystemTxAuthorizer(authorizer func(sdk.Context) bool) {
+	k.consensusSystemTxAuthorizer = authorizer
+}
+
+// SetConsensusValidatorStore installs the committed validator key source used
+// to revalidate carried extension signatures during final execution.
+func (k *Keeper) SetConsensusValidatorStore(store baseapp.ValidatorStore) {
+	k.consensusValidatorStore = store
 }
 
 // SetMarketKeeper sets the market keeper reference for GDPR portability exports.

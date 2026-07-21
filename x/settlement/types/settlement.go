@@ -183,6 +183,9 @@ func (s *SettlementRecord) Validate() error {
 
 // UsageRecord represents a signed usage record from a provider
 type UsageRecord struct {
+	// ExactDuplicate is a transient response marker and is never persisted.
+	ExactDuplicate bool `json:"-"`
+
 	// UsageID is the unique identifier for this usage record
 	UsageID string `json:"usage_id"`
 
@@ -191,6 +194,12 @@ type UsageRecord struct {
 
 	// LeaseID is the linked marketplace lease
 	LeaseID string `json:"lease_id"`
+
+	// AllocationID is the canonical allocation lineage when available.
+	AllocationID string `json:"allocation_id,omitempty"`
+
+	// ChainID is the chain domain authenticated by the provider.
+	ChainID string `json:"chain_id,omitempty"`
 
 	// Provider is the provider that submitted this record
 	Provider string `json:"provider"`
@@ -213,6 +222,24 @@ type UsageRecord struct {
 	// UnitPrice is the price per usage unit
 	UnitPrice sdk.DecCoin `json:"unit_price"`
 
+	// Metrics are exact raw integer deltas for the signed period.
+	Metrics RawUsageMetrics `json:"metrics"`
+
+	PricingVersion uint32 `json:"pricing_version,omitempty"`
+	FormulaVersion uint32 `json:"formula_version,omitempty"`
+	ModelVersion   uint32 `json:"model_version,omitempty"`
+	Sequence       uint64 `json:"stream_sequence,omitempty"`
+	Nonce          []byte `json:"nonce,omitempty"`
+	IdempotencyKey []byte `json:"idempotency_key,omitempty"`
+
+	ProviderKeyEpoch uint64 `json:"provider_key_epoch,omitempty"`
+	ProviderKeyID    string `json:"provider_key_id,omitempty"`
+	IssuedAtHeight   int64  `json:"issued_at_height,omitempty"`
+	ExpiresAtHeight  int64  `json:"expires_at_height,omitempty"`
+	IssuedAtUnix     int64  `json:"issued_at_unix,omitempty"`
+	ExpiresAtUnix    int64  `json:"expires_at_unix,omitempty"`
+	SignatureVersion uint32 `json:"signature_version,omitempty"`
+
 	// TotalCost is the total cost for this usage
 	TotalCost sdk.Coins `json:"total_cost"`
 
@@ -224,6 +251,21 @@ type UsageRecord struct {
 
 	// CustomerSignature is the customer's acknowledgment signature (optional)
 	CustomerSignature []byte `json:"customer_signature,omitempty"`
+
+	// UsageDigest is SHA-256 over the exact canonical provider sign bytes.
+	UsageDigest []byte `json:"usage_digest,omitempty"`
+
+	// SignatureVerified and AuthenticationStatus make verification explicit.
+	SignatureVerified    bool   `json:"signature_verified"`
+	AuthenticationStatus string `json:"authentication_status,omitempty"`
+	LegacyUnverified     bool   `json:"legacy_unverified"`
+
+	CustomerAckReplayKey        []byte `json:"customer_ack_replay_key,omitempty"`
+	CustomerAckIssuedAtHeight   int64  `json:"customer_ack_issued_at_height,omitempty"`
+	CustomerAckExpiresAtHeight  int64  `json:"customer_ack_expires_at_height,omitempty"`
+	CustomerAckIssuedAtUnix     int64  `json:"customer_ack_issued_at_unix,omitempty"`
+	CustomerAckExpiresAtUnix    int64  `json:"customer_ack_expires_at_unix,omitempty"`
+	CustomerAckSignatureVersion uint32 `json:"customer_ack_signature_version,omitempty"`
 
 	// Settled indicates if this usage has been settled
 	Settled bool `json:"settled"`
@@ -323,7 +365,97 @@ func (u *UsageRecord) Validate() error {
 		return ErrInvalidUsageRecord.Wrap("provider_signature cannot be empty")
 	}
 
+	if u.SignatureVersion != 0 {
+		if _, err := CanonicalUsageSignBytes(u.CanonicalUsagePayload(u.ChainID)); err != nil {
+			return ErrInvalidUsageRecord.Wrap(err.Error())
+		}
+		if u.SignatureVerified && len(u.UsageDigest) != DigestSize {
+			return ErrInvalidUsageRecord.Wrap("verified usage_digest must be 32 bytes")
+		}
+	}
+
 	return nil
+}
+
+const (
+	UsageAuthenticationStatusVerified = "verified_v1"
+	UsageAuthenticationStatusLegacy   = "legacy_unverified"
+)
+
+// CanonicalUsagePayload projects persisted state into the canonical envelope.
+func (u UsageRecord) CanonicalUsagePayload(chainID string) CanonicalUsagePayload {
+	if chainID == "" {
+		chainID = u.ChainID
+	}
+	return CanonicalUsagePayload{
+		SignatureVersion: u.SignatureVersion,
+		ChainID:          chainID,
+		Domain:           UsageProviderDomainV1,
+		SignerRole:       SignerRoleProvider,
+		Provider:         u.Provider,
+		Customer:         u.Customer,
+		OrderID:          u.OrderID,
+		LeaseID:          u.LeaseID,
+		AllocationID:     u.AllocationID,
+		PeriodStart:      u.PeriodStart.Unix(),
+		PeriodEnd:        u.PeriodEnd.Unix(),
+		Metrics:          u.Metrics,
+		PricingVersion:   u.PricingVersion,
+		UsageUnits:       u.UsageUnits,
+		UsageType:        u.UsageType,
+		UnitPriceDenom:   u.UnitPrice.Denom,
+		UnitPriceAmount:  u.UnitPrice.Amount.String(),
+		FormulaVersion:   u.FormulaVersion,
+		ModelVersion:     u.ModelVersion,
+		Sequence:         u.Sequence,
+		Nonce:            u.Nonce,
+		IdempotencyKey:   u.IdempotencyKey,
+		ProviderKeyEpoch: u.ProviderKeyEpoch,
+		ProviderKeyID:    u.ProviderKeyID,
+		IssuedAtHeight:   u.IssuedAtHeight,
+		ExpiresAtHeight:  u.ExpiresAtHeight,
+		IssuedAtUnix:     u.IssuedAtUnix,
+		ExpiresAtUnix:    u.ExpiresAtUnix,
+	}
+}
+
+// IsAuthenticated reports whether the record can trigger value-bearing effects.
+func (u UsageRecord) IsAuthenticated() bool {
+	return u.SignatureVersion == SignatureVersionV1 &&
+		u.SignatureVerified &&
+		!u.LegacyUnverified &&
+		u.AuthenticationStatus == UsageAuthenticationStatusVerified &&
+		len(u.UsageDigest) == DigestSize
+}
+
+// UsageAcknowledgmentProof contains all customer-supplied detached proof fields.
+type UsageAcknowledgmentProof struct {
+	Signature        []byte
+	UsageDigest      []byte
+	ReplayKey        []byte
+	IssuedAtHeight   int64
+	ExpiresAtHeight  int64
+	IssuedAtUnix     int64
+	ExpiresAtUnix    int64
+	SignatureVersion uint32
+}
+
+// CanonicalPayload projects an acknowledgment proof into its sign bytes.
+func (p UsageAcknowledgmentProof) CanonicalPayload(chainID, customer, usageID string) CanonicalAcknowledgmentPayload {
+	return CanonicalAcknowledgmentPayload{
+		SignatureVersion: p.SignatureVersion,
+		ChainID:          chainID,
+		Domain:           UsageCustomerDomainV1,
+		SignerRole:       SignerRoleCustomer,
+		Customer:         customer,
+		UsageID:          usageID,
+		UsageDigest:      p.UsageDigest,
+		ReplayKey:        p.ReplayKey,
+		IssuedAtHeight:   p.IssuedAtHeight,
+		ExpiresAtHeight:  p.ExpiresAtHeight,
+		IssuedAtUnix:     p.IssuedAtUnix,
+		ExpiresAtUnix:    p.ExpiresAtUnix,
+	}
 }
 
 // MarkSettled marks the usage record as settled

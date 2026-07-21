@@ -366,25 +366,9 @@ func (k Keeper) ExecutePayout(ctx sdk.Context, invoiceID string, settlementID st
 		if err := k.SetPayout(ctx, *payout); err != nil {
 			return nil, err
 		}
-
-		if err := k.executeFiatConversion(ctx, payout, &conversion); err != nil {
-			_ = conversion.MarkFailed(err.Error(), ctx.BlockTime())
-			_ = k.SetFiatConversion(ctx, conversion)
-			_ = payout.MarkFailed(err.Error(), ctx.BlockTime())
-			_ = k.SetPayout(ctx, *payout)
-			k.savePayoutLedgerEntry(ctx, payout.PayoutID, types.PayoutLedgerEntryFailed,
-				types.PayoutStateProcessing, types.PayoutStateFailed,
-				sdk.NewCoins(), fmt.Sprintf("fiat conversion failed: %s", err.Error()), "system")
-
-			_ = ctx.EventManager().EmitTypedEvent(&types.EventFiatConversionFailed{
-				ConversionID: conversion.ConversionID,
-				Provider:     conversion.Provider,
-				Reason:       err.Error(),
-				FailedAt:     ctx.BlockTime().Unix(),
-			})
-			return payout, nil
-		}
-
+		// External execution is deferred. An off-chain worker observes this
+		// committed request and must submit an authenticated result in a future
+		// schema version; consensus never calls the endpoint directly.
 		return payout, nil
 	}
 
@@ -638,12 +622,6 @@ func (k Keeper) cancelPayoutFiatConversion(ctx sdk.Context, payout types.PayoutR
 	conversion, found := k.GetFiatConversion(ctx, payout.FiatConversionID)
 	if !found || conversion.State.IsTerminal() {
 		return nil
-	}
-
-	if conversion.OffRampID != "" && k.offRampBridge != nil {
-		if err := k.offRampBridge.Cancel(ctx, conversion.OffRampID); err != nil {
-			return err
-		}
 	}
 
 	if err := conversion.MarkCancelled(reason, ctx.BlockTime()); err != nil {

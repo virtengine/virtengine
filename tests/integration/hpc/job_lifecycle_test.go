@@ -183,6 +183,14 @@ func (m *mockSettlementKeeper) GetEscrow(_ sdk.Context, escrowID string) (settle
 	return escrow, ok
 }
 
+func (m *mockSettlementKeeper) GetUsageRecord(_ sdk.Context, usageID string) (settlementtypes.UsageRecord, bool) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	record, ok := m.usageRecords[usageID]
+	return record, ok
+}
+
 func setupIntegrationKeeper(t testing.TB) (sdk.Context, keeper.Keeper, *integrationBankKeeper) {
 	t.Helper()
 

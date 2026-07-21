@@ -29,6 +29,9 @@ func init() {
 	sdkutil.RegisterCustomSignerField(&MsgRequestDomainVerification{}, "owner", "")
 	sdkutil.RegisterCustomSignerField(&MsgConfirmDomainVerification{}, "owner", "")
 	sdkutil.RegisterCustomSignerField(&MsgRevokeDomainVerification{}, "owner", "")
+	sdkutil.RegisterCustomSignerField(&MsgSetProviderSigningKey{}, "owner", "")
+	sdkutil.RegisterCustomSignerField(&MsgRotateProviderSigningKey{}, "owner", "")
+	sdkutil.RegisterCustomSignerField(&MsgRevokeProviderSigningKey{}, "owner", "")
 }
 
 // RegisterLegacyAminoCodec register concrete types on codec
@@ -54,6 +57,9 @@ func RegisterInterfaces(registry cdctypes.InterfaceRegistry) {
 		&MsgRequestDomainVerification{},
 		&MsgConfirmDomainVerification{},
 		&MsgRevokeDomainVerification{},
+		&MsgSetProviderSigningKey{},
+		&MsgRotateProviderSigningKey{},
+		&MsgRevokeProviderSigningKey{},
 	)
 
 	msgservice.RegisterMsgServiceDesc(registry, &_Msg_serviceDesc)

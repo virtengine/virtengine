@@ -144,6 +144,27 @@ var (
 	// PrefixFiatConversionIdempotency stores fiat conversion idempotency references
 	// Key: PrefixFiatConversionIdempotency | idempotency_key -> conversion_id
 	PrefixFiatConversionIdempotency = []byte{0x30}
+
+	// PrefixUsageReplaySequence maps stream+sequence to the original proof.
+	PrefixUsageReplaySequence = []byte{0x31}
+
+	// PrefixUsageReplayNonce globally consumes provider proof nonces.
+	PrefixUsageReplayNonce = []byte{0x32}
+
+	// PrefixUsageReplayIdempotency globally consumes idempotency keys.
+	PrefixUsageReplayIdempotency = []byte{0x33}
+
+	// PrefixUsageStreamState stores the last committed sequence per stream.
+	PrefixUsageStreamState = []byte{0x34}
+
+	// PrefixUsageAuthenticationActivation gates the v1.5.0 behavior switch.
+	PrefixUsageAuthenticationActivation = []byte{0x35}
+
+	// PrefixUsageAckReplay globally consumes customer acknowledgment keys.
+	PrefixUsageAckReplay = []byte{0x36}
+
+	// PrefixUsagePeriodState stores per-metric non-overlap state.
+	PrefixUsagePeriodState = []byte{0x37}
 )
 
 // ParamsKey returns the store key for module parameters
@@ -454,9 +475,56 @@ func UsageSequenceKey() []byte {
 	return PrefixUsageSequence
 }
 
+// UsageReplaySequenceKey returns stream+sequence replay index key.
+func UsageReplaySequenceKey(streamID []byte, sequence uint64) []byte {
+	key := make([]byte, 0, len(PrefixUsageReplaySequence)+len(streamID)+8)
+	key = append(key, PrefixUsageReplaySequence...)
+	key = append(key, streamID...)
+	return appendUint64(key, sequence)
+}
+
+// UsageReplayNonceKey returns the global nonce index key.
+func UsageReplayNonceKey(nonce []byte) []byte {
+	return append(append([]byte{}, PrefixUsageReplayNonce...), nonce...)
+}
+
+// UsageReplayIdempotencyKey returns the global idempotency index key.
+func UsageReplayIdempotencyKey(idempotencyKey []byte) []byte {
+	return append(append([]byte{}, PrefixUsageReplayIdempotency...), idempotencyKey...)
+}
+
+// UsageStreamStateKey returns the last-sequence state key.
+func UsageStreamStateKey(streamID []byte) []byte {
+	return append(append([]byte{}, PrefixUsageStreamState...), streamID...)
+}
+
+// UsagePeriodStateKey returns the per-metric period continuity key.
+func UsagePeriodStateKey(streamID []byte, usageType string) []byte {
+	key := append(append([]byte{}, PrefixUsagePeriodState...), streamID...)
+	key = appendUint32(key, uint32(len(usageType))) //nolint:gosec // usage types are protocol-bounded to 2 KiB
+	return append(key, []byte(usageType)...)
+}
+
+// UsageAckReplayKey returns the global customer acknowledgment replay key.
+func UsageAckReplayKey(replayKey []byte) []byte {
+	return append(append([]byte{}, PrefixUsageAckReplay...), replayKey...)
+}
+
+// UsageAuthenticationActivationKey returns the v1.5.0 activation marker key.
+func UsageAuthenticationActivationKey() []byte {
+	return PrefixUsageAuthenticationActivation
+}
+
 // appendUint64 appends a uint64 to a byte slice in big-endian order
 func appendUint64(bz []byte, n uint64) []byte {
 	for i := 7; i >= 0; i-- {
+		bz = append(bz, byte(n>>(i*8)))
+	}
+	return bz
+}
+
+func appendUint32(bz []byte, n uint32) []byte {
+	for i := 3; i >= 0; i-- {
 		bz = append(bz, byte(n>>(i*8)))
 	}
 	return bz

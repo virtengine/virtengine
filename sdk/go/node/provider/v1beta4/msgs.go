@@ -23,6 +23,9 @@ var (
 	msgTypeRequestDomainVerification       = ""
 	msgTypeConfirmDomainVerification       = ""
 	msgTypeRevokeDomainVerification        = ""
+	msgTypeSetProviderSigningKey           = ""
+	msgTypeRotateProviderSigningKey        = ""
+	msgTypeRevokeProviderSigningKey        = ""
 )
 
 var (
@@ -34,6 +37,9 @@ var (
 	_ sdk.Msg = &MsgRequestDomainVerification{}
 	_ sdk.Msg = &MsgConfirmDomainVerification{}
 	_ sdk.Msg = &MsgRevokeDomainVerification{}
+	_ sdk.Msg = &MsgSetProviderSigningKey{}
+	_ sdk.Msg = &MsgRotateProviderSigningKey{}
+	_ sdk.Msg = &MsgRevokeProviderSigningKey{}
 )
 
 var (
@@ -49,6 +55,68 @@ func init() {
 	msgTypeRequestDomainVerification = reflect.TypeOf(&MsgRequestDomainVerification{}).Elem().Name()
 	msgTypeConfirmDomainVerification = reflect.TypeOf(&MsgConfirmDomainVerification{}).Elem().Name()
 	msgTypeRevokeDomainVerification = reflect.TypeOf(&MsgRevokeDomainVerification{}).Elem().Name()
+	msgTypeSetProviderSigningKey = reflect.TypeOf(&MsgSetProviderSigningKey{}).Elem().Name()
+	msgTypeRotateProviderSigningKey = reflect.TypeOf(&MsgRotateProviderSigningKey{}).Elem().Name()
+	msgTypeRevokeProviderSigningKey = reflect.TypeOf(&MsgRevokeProviderSigningKey{}).Elem().Name()
+}
+
+func validateSigningKeyMessage(owner string, publicKey []byte, keyType string) error {
+	if _, err := sdk.AccAddressFromBech32(owner); err != nil {
+		return cerrors.Wrap(sdkerrors.ErrInvalidAddress, "invalid provider address")
+	}
+	if keyType == PublicKeyTypeX25519 {
+		return ErrInvalidPublicKeyType.Wrap("x25519 is not a signing algorithm")
+	}
+	record := NewProviderPublicKeyRecord(publicKey, keyType, 1)
+	return record.Validate()
+}
+
+func (msg *MsgSetProviderSigningKey) Type() string { return msgTypeSetProviderSigningKey }
+func (msg *MsgSetProviderSigningKey) ValidateBasic() error {
+	return validateSigningKeyMessage(msg.Owner, msg.PublicKey, msg.KeyType)
+}
+func (msg *MsgSetProviderSigningKey) GetSigners() []sdk.AccAddress {
+	owner, err := sdk.AccAddressFromBech32(msg.Owner)
+	if err != nil {
+		panic(err)
+	}
+	return []sdk.AccAddress{owner}
+}
+
+func (msg *MsgRotateProviderSigningKey) Type() string { return msgTypeRotateProviderSigningKey }
+func (msg *MsgRotateProviderSigningKey) ValidateBasic() error {
+	if err := validateSigningKeyMessage(msg.Owner, msg.NewPublicKey, msg.NewKeyType); err != nil {
+		return err
+	}
+	if msg.SignatureVersion != ProviderKeyRotationSignatureVersionV1 || len(msg.RotationProof) == 0 {
+		return ErrInvalidRotationSignature.Wrap("version-1 rotation proof required")
+	}
+	return nil
+}
+func (msg *MsgRotateProviderSigningKey) GetSigners() []sdk.AccAddress {
+	owner, err := sdk.AccAddressFromBech32(msg.Owner)
+	if err != nil {
+		panic(err)
+	}
+	return []sdk.AccAddress{owner}
+}
+
+func (msg *MsgRevokeProviderSigningKey) Type() string { return msgTypeRevokeProviderSigningKey }
+func (msg *MsgRevokeProviderSigningKey) ValidateBasic() error {
+	if _, err := sdk.AccAddressFromBech32(msg.Owner); err != nil {
+		return cerrors.Wrap(sdkerrors.ErrInvalidAddress, "invalid provider address")
+	}
+	if msg.KeyId == "" {
+		return ErrInvalidPublicKey.Wrap("key_id is required")
+	}
+	return nil
+}
+func (msg *MsgRevokeProviderSigningKey) GetSigners() []sdk.AccAddress {
+	owner, err := sdk.AccAddressFromBech32(msg.Owner)
+	if err != nil {
+		panic(err)
+	}
+	return []sdk.AccAddress{owner}
 }
 
 // NewMsgCreateProvider creates a new MsgCreateProvider instance

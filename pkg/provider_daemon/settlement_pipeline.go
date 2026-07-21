@@ -267,6 +267,9 @@ type ChainUsageReport struct {
 	// LeaseID is the lease ID.
 	LeaseID string `json:"lease_id"`
 
+	CustomerAddress string `json:"customer_address"`
+	AllocationID    string `json:"allocation_id,omitempty"`
+
 	// UsageUnits is the number of usage units.
 	UsageUnits uint64 `json:"usage_units"`
 
@@ -284,6 +287,22 @@ type ChainUsageReport struct {
 
 	// Signature is the provider's signature.
 	Signature []byte `json:"signature"`
+
+	RawMetrics       ResourceMetrics `json:"raw_metrics"`
+	ChainID          string          `json:"chain_id,omitempty"`
+	PricingVersion   uint32          `json:"pricing_version"`
+	FormulaVersion   uint32          `json:"formula_version"`
+	ModelVersion     uint32          `json:"model_version"`
+	StreamSequence   uint64          `json:"stream_sequence"`
+	Nonce            []byte          `json:"nonce,omitempty"`
+	IdempotencyKey   []byte          `json:"idempotency_key,omitempty"`
+	ProviderKeyEpoch uint64          `json:"provider_key_epoch"`
+	ProviderKeyID    string          `json:"provider_key_id,omitempty"`
+	IssuedAtHeight   int64           `json:"issued_at_height"`
+	ExpiresAtHeight  int64           `json:"expires_at_height"`
+	IssuedAtUnix     int64           `json:"issued_at_unix"`
+	ExpiresAtUnix    int64           `json:"expires_at_unix"`
+	SignatureVersion uint32          `json:"signature_version"`
 }
 
 // SettlementPipeline coordinates usage reporting to settlement.
@@ -803,18 +822,6 @@ func (p *SettlementPipeline) SubmitUsageToChain(ctx context.Context, record *Usa
 		return fmt.Errorf("no usage reports generated")
 	}
 
-	// Sign the report
-	if p.keyManager != nil {
-		hash := record.Hash()
-		sig, err := p.keyManager.Sign(hash)
-		if err == nil {
-			sigBytes, _ := hex.DecodeString(sig.Signature)
-			for _, report := range reports {
-				report.Signature = sigBytes
-			}
-		}
-	}
-
 	for _, report := range reports {
 		if err := p.withRetry(ctx, func() error {
 			return p.chainSubmit.SubmitUsageReport(ctx, report)
@@ -863,13 +870,19 @@ func (p *SettlementPipeline) buildUsageReports(record *UsageRecord) []*ChainUsag
 
 func (p *SettlementPipeline) buildReport(record *UsageRecord, usageType string, units uint64, rateStr string) *ChainUsageReport {
 	return &ChainUsageReport{
-		OrderID:     record.DeploymentID,
-		LeaseID:     record.LeaseID,
-		UsageUnits:  units,
-		UsageType:   usageType,
-		PeriodStart: record.StartTime,
-		PeriodEnd:   record.EndTime,
-		UnitPrice:   parseUnitPrice(rateStr),
+		OrderID:         record.DeploymentID,
+		LeaseID:         record.LeaseID,
+		CustomerAddress: record.CustomerID,
+		AllocationID:    record.AllocationID,
+		UsageUnits:      units,
+		UsageType:       usageType,
+		PeriodStart:     record.StartTime,
+		PeriodEnd:       record.EndTime,
+		UnitPrice:       parseUnitPrice(rateStr),
+		RawMetrics:      record.Metrics,
+		PricingVersion:  1,
+		FormulaVersion:  1,
+		ModelVersion:    1,
 	}
 }
 
@@ -878,7 +891,7 @@ func usageUnitsFromMilliSeconds(ms int64) uint64 {
 		return 0
 	}
 	//nolint:gosec // usage metrics should be non-negative
-	return uint64(ms / (1000 * 3600))
+	return uint64((ms-1)/(1000*3600) + 1)
 }
 
 func usageUnitsFromByteSeconds(byteSeconds int64) uint64 {
@@ -886,7 +899,7 @@ func usageUnitsFromByteSeconds(byteSeconds int64) uint64 {
 		return 0
 	}
 	//nolint:gosec // usage metrics should be non-negative
-	return uint64(byteSeconds / (1024 * 1024 * 1024 * 3600))
+	return uint64((byteSeconds-1)/(1024*1024*1024*3600) + 1)
 }
 
 func usageUnitsFromSeconds(seconds int64) uint64 {
@@ -894,7 +907,7 @@ func usageUnitsFromSeconds(seconds int64) uint64 {
 		return 0
 	}
 	//nolint:gosec // usage metrics should be non-negative
-	return uint64(seconds / 3600)
+	return uint64((seconds-1)/3600 + 1)
 }
 
 func usageUnitsFromBytes(bytes int64) uint64 {
@@ -902,7 +915,7 @@ func usageUnitsFromBytes(bytes int64) uint64 {
 		return 0
 	}
 	//nolint:gosec // usage metrics should be non-negative
-	return uint64(bytes / (1024 * 1024 * 1024))
+	return uint64((bytes-1)/(1024*1024*1024) + 1)
 }
 
 func parseUnitPrice(rateStr string) sdk.DecCoin {

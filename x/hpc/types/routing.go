@@ -271,8 +271,7 @@ func (d *SchedulingDecision) IsStale(currentBlockHeight int64, currentTime time.
 
 	// Check time age
 	if policy.MaxDecisionAgeSeconds > 0 {
-		timeAge := currentTime.Sub(d.CreatedAt)
-		if timeAge.Seconds() > float64(policy.MaxDecisionAgeSeconds) {
+		if currentTime.Sub(d.CreatedAt) > time.Duration(policy.MaxDecisionAgeSeconds)*time.Second {
 			return true
 		}
 	}

@@ -112,7 +112,7 @@ func (k Keeper) calculateCompositeScore(ctx sdk.Context, addr sdk.AccAddress) (u
 	// Iterate through all scopes for the account
 	k.WithScopes(ctx, addr, func(scope types.IdentityScope) bool {
 		// Only count verified, non-revoked scopes
-		if scope.Status == types.VerificationStatusVerified && scope.IsActive() {
+		if scope.Status == types.VerificationStatusVerified && scope.IsActiveAt(ctx.BlockTime()) {
 			weight := types.ScopeTypeWeight(scope.ScopeType)
 			totalWeight += weight
 			verifiedCount++

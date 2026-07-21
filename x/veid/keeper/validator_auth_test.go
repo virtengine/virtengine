@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	coreaddress "cosmossdk.io/core/address"
 	"cosmossdk.io/log"
 	"cosmossdk.io/store"
 	storemetrics "cosmossdk.io/store/metrics"
@@ -12,6 +13,7 @@ import (
 	cmtproto "github.com/cometbft/cometbft/proto/tendermint/types"
 	dbm "github.com/cosmos/cosmos-db"
 	"github.com/cosmos/cosmos-sdk/codec"
+	"github.com/cosmos/cosmos-sdk/codec/address"
 	codectypes "github.com/cosmos/cosmos-sdk/codec/types"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	stakingtypes "github.com/cosmos/cosmos-sdk/x/staking/types"
@@ -25,12 +27,16 @@ import (
 // MockStakingKeeper is a mock implementation of StakingKeeper for testing
 type MockStakingKeeper struct {
 	validators map[string]stakingtypes.Validator
+	consensus  map[string]string
+	powers     map[string]int64
 }
 
 // NewMockStakingKeeper creates a new mock staking keeper
 func NewMockStakingKeeper() *MockStakingKeeper {
 	return &MockStakingKeeper{
 		validators: make(map[string]stakingtypes.Validator),
+		consensus:  make(map[string]string),
+		powers:     make(map[string]int64),
 	}
 }
 
@@ -41,6 +47,26 @@ func (m *MockStakingKeeper) GetValidator(_ context.Context, addr sdk.ValAddress)
 		return stakingtypes.Validator{}, stakingtypes.ErrNoValidatorFound
 	}
 	return validator, nil
+}
+
+func (m *MockStakingKeeper) GetValidatorByConsAddr(_ context.Context, addr sdk.ConsAddress) (stakingtypes.Validator, error) {
+	operator, found := m.consensus[string(addr)]
+	if !found {
+		return stakingtypes.Validator{}, stakingtypes.ErrNoValidatorFound
+	}
+	validator, found := m.validators[operator]
+	if !found {
+		return stakingtypes.Validator{}, stakingtypes.ErrNoValidatorFound
+	}
+	return validator, nil
+}
+
+func (m *MockStakingKeeper) GetLastValidatorPower(_ context.Context, operator sdk.ValAddress) (int64, error) {
+	return m.powers[operator.String()], nil
+}
+
+func (m *MockStakingKeeper) ValidatorAddressCodec() coreaddress.Codec {
+	return address.NewBech32Codec("vevaloper")
 }
 
 // AddValidator adds a validator to the mock keeper

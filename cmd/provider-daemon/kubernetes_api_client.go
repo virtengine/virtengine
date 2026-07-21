@@ -518,19 +518,19 @@ func buildKubernetesProbe(spec *provider_daemon.K8sProbeSpec) *corev1.Probe {
 	}
 
 	if spec.HTTPGet != nil {
-		probe.ProbeHandler.HTTPGet = &corev1.HTTPGetAction{
+		probe.HTTPGet = &corev1.HTTPGetAction{
 			Path: spec.HTTPGet.Path,
 			Port: intstr.FromInt32(spec.HTTPGet.Port),
 		}
 		if spec.HTTPGet.Scheme != "" {
-			probe.ProbeHandler.HTTPGet.Scheme = corev1.URIScheme(spec.HTTPGet.Scheme)
+			probe.HTTPGet.Scheme = corev1.URIScheme(spec.HTTPGet.Scheme)
 		}
 	}
 	if spec.Exec != nil {
-		probe.ProbeHandler.Exec = &corev1.ExecAction{Command: append([]string(nil), spec.Exec.Command...)}
+		probe.Exec = &corev1.ExecAction{Command: append([]string(nil), spec.Exec.Command...)}
 	}
 	if spec.TCPSocket != nil {
-		probe.ProbeHandler.TCPSocket = &corev1.TCPSocketAction{
+		probe.TCPSocket = &corev1.TCPSocketAction{
 			Port: intstr.FromInt32(spec.TCPSocket.Port),
 		}
 	}
@@ -559,13 +559,13 @@ func buildKubernetesVolumes(specs []provider_daemon.K8sVolumeSpec) []corev1.Volu
 		volume := corev1.Volume{Name: spec.Name}
 		switch {
 		case spec.EmptyDir:
-			volume.VolumeSource.EmptyDir = &corev1.EmptyDirVolumeSource{}
+			volume.EmptyDir = &corev1.EmptyDirVolumeSource{}
 		case spec.SecretRef != "":
-			volume.VolumeSource.Secret = &corev1.SecretVolumeSource{
+			volume.Secret = &corev1.SecretVolumeSource{
 				SecretName: spec.SecretRef,
 			}
 		case spec.PVCName != "":
-			volume.VolumeSource.PersistentVolumeClaim = &corev1.PersistentVolumeClaimVolumeSource{
+			volume.PersistentVolumeClaim = &corev1.PersistentVolumeClaimVolumeSource{
 				ClaimName: spec.PVCName,
 			}
 		}

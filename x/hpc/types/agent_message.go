@@ -116,7 +116,12 @@ func (m *AgentMessage) Validate() error {
 
 // IsExpired checks if the message has expired
 func (m *AgentMessage) IsExpired() bool {
-	return time.Now().After(m.ExpiresAt)
+	return m.IsExpiredAt(time.Now())
+}
+
+// IsExpiredAt checks expiry at an explicit deterministic time.
+func (m *AgentMessage) IsExpiredAt(now time.Time) bool {
+	return now.After(m.ExpiresAt)
 }
 
 // HandoffRequest represents a request to hand off a task to another agent

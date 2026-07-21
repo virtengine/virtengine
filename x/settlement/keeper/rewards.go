@@ -141,8 +141,14 @@ func (k Keeper) DistributeProviderRewards(ctx sdk.Context, usageRecords []types.
 	}
 
 	recipients := make([]types.RewardRecipient, 0, len(providerRewards))
+	providers := make([]string, 0, len(providerRewards))
+	for provider := range providerRewards {
+		providers = append(providers, provider)
+	}
+	sort.Strings(providers)
 
-	for provider, rewards := range providerRewards {
+	for _, provider := range providers {
+		rewards := providerRewards[provider]
 		units := providerUsage[provider]
 		if rewards.IsZero() {
 			continue
@@ -294,7 +300,13 @@ func (k Keeper) distributeUsageRewardsWithMetadata(
 	)
 
 	if len(metadata) > 0 {
-		for key, value := range metadata {
+		keys := make([]string, 0, len(metadata))
+		for key := range metadata {
+			keys = append(keys, key)
+		}
+		sort.Strings(keys)
+		for _, key := range keys {
+			value := metadata[key]
 			dist.Metadata[key] = value
 		}
 	}

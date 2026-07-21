@@ -13,6 +13,11 @@ func InitGenesis(ctx sdk.Context, k keeper.IKeeper, data *types.GenesisState) {
 	if err := k.SetParams(ctx, data.Params); err != nil {
 		panic(err)
 	}
+	if data.UsageAuthenticationActive {
+		if err := k.ActivateUsageAuthentication(ctx); err != nil {
+			panic(err)
+		}
+	}
 
 	// Import escrow accounts
 	for _, escrow := range data.EscrowAccounts {
@@ -177,14 +182,15 @@ func ExportGenesis(ctx sdk.Context, k keeper.IKeeper) *types.GenesisState {
 	})
 
 	return &types.GenesisState{
-		Params:                params,
-		EscrowAccounts:        escrows,
-		SettlementRecords:     settlements,
-		UsageRecords:          usageRecords,
-		RewardDistributions:   rewardDistributions,
-		ClaimableRewards:      claimableRewards,
-		FiatConversionRecords: conversions,
-		FiatPayoutPreferences: preferences,
+		Params:                    params,
+		EscrowAccounts:            escrows,
+		SettlementRecords:         settlements,
+		UsageRecords:              usageRecords,
+		RewardDistributions:       rewardDistributions,
+		ClaimableRewards:          claimableRewards,
+		FiatConversionRecords:     conversions,
+		FiatPayoutPreferences:     preferences,
+		UsageAuthenticationActive: k.IsUsageAuthenticationActive(ctx),
 	}
 }
 

@@ -100,6 +100,9 @@ jobs:
       - name: Download dependencies
         run: go mod download
 
+      - name: Enforce consensus determinism policy
+        run: go run ./scripts/consensusdeterminism -root .
+
       - name: Run golangci-lint (PR diff)
         uses: golangci/golangci-lint-action@v8
         with:

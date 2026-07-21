@@ -9,6 +9,91 @@ import type { DeepPartial, MessageFns } from "../../../../../encoding/typeEncodi
 /* eslint-disable */
 import { BinaryReader, BinaryWriter } from "@bufbuild/protobuf/wire";
 import Long from "long";
+import { Offering } from "./types.ts";
+
+/** MsgCreateOffering creates a new marketplace offering */
+export interface MsgCreateOffering {
+  provider: string;
+  offering: Offering | undefined;
+}
+
+/** MsgCreateOfferingResponse is the response for MsgCreateOffering */
+export interface MsgCreateOfferingResponse {
+  offeringId: string;
+}
+
+/** MsgUpdateOffering updates an existing marketplace offering */
+export interface MsgUpdateOffering {
+  provider: string;
+  offeringId: string;
+  updates: Offering | undefined;
+}
+
+/** MsgUpdateOfferingResponse is the response for MsgUpdateOffering */
+export interface MsgUpdateOfferingResponse {
+}
+
+/** MsgDeactivateOffering deactivates an existing marketplace offering */
+export interface MsgDeactivateOffering {
+  provider: string;
+  offeringId: string;
+}
+
+/** MsgDeactivateOfferingResponse is the response for MsgDeactivateOffering */
+export interface MsgDeactivateOfferingResponse {
+}
+
+/** MsgAcceptBid accepts a bid for an order */
+export interface MsgAcceptBid {
+  customer: string;
+  orderId: string;
+  bidId: string;
+}
+
+/** MsgAcceptBidResponse is the response for MsgAcceptBid */
+export interface MsgAcceptBidResponse {
+  allocationId: string;
+}
+
+/** MsgTerminateAllocation terminates an allocation */
+export interface MsgTerminateAllocation {
+  customer: string;
+  allocationId: string;
+  reason: string;
+}
+
+/** MsgTerminateAllocationResponse is the response for MsgTerminateAllocation */
+export interface MsgTerminateAllocationResponse {
+}
+
+/** MsgResizeAllocation resizes an allocation */
+export interface MsgResizeAllocation {
+  customer: string;
+  allocationId: string;
+  resourceUnits: ResourceUnit[];
+  reason: string;
+}
+
+/** MsgResizeAllocationResponse is the response for MsgResizeAllocation */
+export interface MsgResizeAllocationResponse {
+}
+
+/** MsgPauseAllocation pauses an allocation */
+export interface MsgPauseAllocation {
+  customer: string;
+  allocationId: string;
+  reason: string;
+}
+
+/** MsgPauseAllocationResponse is the response for MsgPauseAllocation */
+export interface MsgPauseAllocationResponse {
+}
+
+/** ResourceUnit represents a resource type and its unit quantity for resizing */
+export interface ResourceUnit {
+  resourceType: string;
+  units: Long;
+}
 
 /** MsgWaldurCallback handles callbacks from Waldur integration */
 export interface MsgWaldurCallback {
@@ -23,6 +108,1042 @@ export interface MsgWaldurCallback {
 /** MsgWaldurCallbackResponse is the response for MsgWaldurCallback */
 export interface MsgWaldurCallbackResponse {
 }
+
+function createBaseMsgCreateOffering(): MsgCreateOffering {
+  return { provider: "", offering: undefined };
+}
+
+export const MsgCreateOffering: MessageFns<MsgCreateOffering, "virtengine.marketplace.v1.MsgCreateOffering"> = {
+  $type: "virtengine.marketplace.v1.MsgCreateOffering" as const,
+
+  encode(message: MsgCreateOffering, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.provider !== "") {
+      writer.uint32(10).string(message.provider);
+    }
+    if (message.offering !== undefined) {
+      Offering.encode(message.offering, writer.uint32(18).fork()).join();
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): MsgCreateOffering {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseMsgCreateOffering();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.provider = reader.string();
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.offering = Offering.decode(reader, reader.uint32());
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): MsgCreateOffering {
+    return {
+      provider: isSet(object.provider) ? globalThis.String(object.provider) : "",
+      offering: isSet(object.offering) ? Offering.fromJSON(object.offering) : undefined,
+    };
+  },
+
+  toJSON(message: MsgCreateOffering): unknown {
+    const obj: any = {};
+    if (message.provider !== "") {
+      obj.provider = message.provider;
+    }
+    if (message.offering !== undefined) {
+      obj.offering = Offering.toJSON(message.offering);
+    }
+    return obj;
+  },
+  fromPartial(object: DeepPartial<MsgCreateOffering>): MsgCreateOffering {
+    const message = createBaseMsgCreateOffering();
+    message.provider = object.provider ?? "";
+    message.offering = (object.offering !== undefined && object.offering !== null)
+      ? Offering.fromPartial(object.offering)
+      : undefined;
+    return message;
+  },
+};
+
+function createBaseMsgCreateOfferingResponse(): MsgCreateOfferingResponse {
+  return { offeringId: "" };
+}
+
+export const MsgCreateOfferingResponse: MessageFns<
+  MsgCreateOfferingResponse,
+  "virtengine.marketplace.v1.MsgCreateOfferingResponse"
+> = {
+  $type: "virtengine.marketplace.v1.MsgCreateOfferingResponse" as const,
+
+  encode(message: MsgCreateOfferingResponse, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.offeringId !== "") {
+      writer.uint32(10).string(message.offeringId);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): MsgCreateOfferingResponse {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseMsgCreateOfferingResponse();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.offeringId = reader.string();
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): MsgCreateOfferingResponse {
+    return { offeringId: isSet(object.offering_id) ? globalThis.String(object.offering_id) : "" };
+  },
+
+  toJSON(message: MsgCreateOfferingResponse): unknown {
+    const obj: any = {};
+    if (message.offeringId !== "") {
+      obj.offering_id = message.offeringId;
+    }
+    return obj;
+  },
+  fromPartial(object: DeepPartial<MsgCreateOfferingResponse>): MsgCreateOfferingResponse {
+    const message = createBaseMsgCreateOfferingResponse();
+    message.offeringId = object.offeringId ?? "";
+    return message;
+  },
+};
+
+function createBaseMsgUpdateOffering(): MsgUpdateOffering {
+  return { provider: "", offeringId: "", updates: undefined };
+}
+
+export const MsgUpdateOffering: MessageFns<MsgUpdateOffering, "virtengine.marketplace.v1.MsgUpdateOffering"> = {
+  $type: "virtengine.marketplace.v1.MsgUpdateOffering" as const,
+
+  encode(message: MsgUpdateOffering, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.provider !== "") {
+      writer.uint32(10).string(message.provider);
+    }
+    if (message.offeringId !== "") {
+      writer.uint32(18).string(message.offeringId);
+    }
+    if (message.updates !== undefined) {
+      Offering.encode(message.updates, writer.uint32(26).fork()).join();
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): MsgUpdateOffering {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseMsgUpdateOffering();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.provider = reader.string();
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.offeringId = reader.string();
+          continue;
+        }
+        case 3: {
+          if (tag !== 26) {
+            break;
+          }
+
+          message.updates = Offering.decode(reader, reader.uint32());
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): MsgUpdateOffering {
+    return {
+      provider: isSet(object.provider) ? globalThis.String(object.provider) : "",
+      offeringId: isSet(object.offering_id) ? globalThis.String(object.offering_id) : "",
+      updates: isSet(object.updates) ? Offering.fromJSON(object.updates) : undefined,
+    };
+  },
+
+  toJSON(message: MsgUpdateOffering): unknown {
+    const obj: any = {};
+    if (message.provider !== "") {
+      obj.provider = message.provider;
+    }
+    if (message.offeringId !== "") {
+      obj.offering_id = message.offeringId;
+    }
+    if (message.updates !== undefined) {
+      obj.updates = Offering.toJSON(message.updates);
+    }
+    return obj;
+  },
+  fromPartial(object: DeepPartial<MsgUpdateOffering>): MsgUpdateOffering {
+    const message = createBaseMsgUpdateOffering();
+    message.provider = object.provider ?? "";
+    message.offeringId = object.offeringId ?? "";
+    message.updates = (object.updates !== undefined && object.updates !== null)
+      ? Offering.fromPartial(object.updates)
+      : undefined;
+    return message;
+  },
+};
+
+function createBaseMsgUpdateOfferingResponse(): MsgUpdateOfferingResponse {
+  return {};
+}
+
+export const MsgUpdateOfferingResponse: MessageFns<
+  MsgUpdateOfferingResponse,
+  "virtengine.marketplace.v1.MsgUpdateOfferingResponse"
+> = {
+  $type: "virtengine.marketplace.v1.MsgUpdateOfferingResponse" as const,
+
+  encode(_: MsgUpdateOfferingResponse, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): MsgUpdateOfferingResponse {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseMsgUpdateOfferingResponse();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(_: any): MsgUpdateOfferingResponse {
+    return {};
+  },
+
+  toJSON(_: MsgUpdateOfferingResponse): unknown {
+    const obj: any = {};
+    return obj;
+  },
+  fromPartial(_: DeepPartial<MsgUpdateOfferingResponse>): MsgUpdateOfferingResponse {
+    const message = createBaseMsgUpdateOfferingResponse();
+    return message;
+  },
+};
+
+function createBaseMsgDeactivateOffering(): MsgDeactivateOffering {
+  return { provider: "", offeringId: "" };
+}
+
+export const MsgDeactivateOffering: MessageFns<
+  MsgDeactivateOffering,
+  "virtengine.marketplace.v1.MsgDeactivateOffering"
+> = {
+  $type: "virtengine.marketplace.v1.MsgDeactivateOffering" as const,
+
+  encode(message: MsgDeactivateOffering, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.provider !== "") {
+      writer.uint32(10).string(message.provider);
+    }
+    if (message.offeringId !== "") {
+      writer.uint32(18).string(message.offeringId);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): MsgDeactivateOffering {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseMsgDeactivateOffering();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.provider = reader.string();
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.offeringId = reader.string();
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): MsgDeactivateOffering {
+    return {
+      provider: isSet(object.provider) ? globalThis.String(object.provider) : "",
+      offeringId: isSet(object.offering_id) ? globalThis.String(object.offering_id) : "",
+    };
+  },
+
+  toJSON(message: MsgDeactivateOffering): unknown {
+    const obj: any = {};
+    if (message.provider !== "") {
+      obj.provider = message.provider;
+    }
+    if (message.offeringId !== "") {
+      obj.offering_id = message.offeringId;
+    }
+    return obj;
+  },
+  fromPartial(object: DeepPartial<MsgDeactivateOffering>): MsgDeactivateOffering {
+    const message = createBaseMsgDeactivateOffering();
+    message.provider = object.provider ?? "";
+    message.offeringId = object.offeringId ?? "";
+    return message;
+  },
+};
+
+function createBaseMsgDeactivateOfferingResponse(): MsgDeactivateOfferingResponse {
+  return {};
+}
+
+export const MsgDeactivateOfferingResponse: MessageFns<
+  MsgDeactivateOfferingResponse,
+  "virtengine.marketplace.v1.MsgDeactivateOfferingResponse"
+> = {
+  $type: "virtengine.marketplace.v1.MsgDeactivateOfferingResponse" as const,
+
+  encode(_: MsgDeactivateOfferingResponse, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): MsgDeactivateOfferingResponse {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseMsgDeactivateOfferingResponse();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(_: any): MsgDeactivateOfferingResponse {
+    return {};
+  },
+
+  toJSON(_: MsgDeactivateOfferingResponse): unknown {
+    const obj: any = {};
+    return obj;
+  },
+  fromPartial(_: DeepPartial<MsgDeactivateOfferingResponse>): MsgDeactivateOfferingResponse {
+    const message = createBaseMsgDeactivateOfferingResponse();
+    return message;
+  },
+};
+
+function createBaseMsgAcceptBid(): MsgAcceptBid {
+  return { customer: "", orderId: "", bidId: "" };
+}
+
+export const MsgAcceptBid: MessageFns<MsgAcceptBid, "virtengine.marketplace.v1.MsgAcceptBid"> = {
+  $type: "virtengine.marketplace.v1.MsgAcceptBid" as const,
+
+  encode(message: MsgAcceptBid, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.customer !== "") {
+      writer.uint32(10).string(message.customer);
+    }
+    if (message.orderId !== "") {
+      writer.uint32(18).string(message.orderId);
+    }
+    if (message.bidId !== "") {
+      writer.uint32(26).string(message.bidId);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): MsgAcceptBid {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseMsgAcceptBid();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.customer = reader.string();
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.orderId = reader.string();
+          continue;
+        }
+        case 3: {
+          if (tag !== 26) {
+            break;
+          }
+
+          message.bidId = reader.string();
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): MsgAcceptBid {
+    return {
+      customer: isSet(object.customer) ? globalThis.String(object.customer) : "",
+      orderId: isSet(object.order_id) ? globalThis.String(object.order_id) : "",
+      bidId: isSet(object.bid_id) ? globalThis.String(object.bid_id) : "",
+    };
+  },
+
+  toJSON(message: MsgAcceptBid): unknown {
+    const obj: any = {};
+    if (message.customer !== "") {
+      obj.customer = message.customer;
+    }
+    if (message.orderId !== "") {
+      obj.order_id = message.orderId;
+    }
+    if (message.bidId !== "") {
+      obj.bid_id = message.bidId;
+    }
+    return obj;
+  },
+  fromPartial(object: DeepPartial<MsgAcceptBid>): MsgAcceptBid {
+    const message = createBaseMsgAcceptBid();
+    message.customer = object.customer ?? "";
+    message.orderId = object.orderId ?? "";
+    message.bidId = object.bidId ?? "";
+    return message;
+  },
+};
+
+function createBaseMsgAcceptBidResponse(): MsgAcceptBidResponse {
+  return { allocationId: "" };
+}
+
+export const MsgAcceptBidResponse: MessageFns<MsgAcceptBidResponse, "virtengine.marketplace.v1.MsgAcceptBidResponse"> =
+  {
+    $type: "virtengine.marketplace.v1.MsgAcceptBidResponse" as const,
+
+    encode(message: MsgAcceptBidResponse, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+      if (message.allocationId !== "") {
+        writer.uint32(10).string(message.allocationId);
+      }
+      return writer;
+    },
+
+    decode(input: BinaryReader | Uint8Array, length?: number): MsgAcceptBidResponse {
+      const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+      const end = length === undefined ? reader.len : reader.pos + length;
+      const message = createBaseMsgAcceptBidResponse();
+      while (reader.pos < end) {
+        const tag = reader.uint32();
+        switch (tag >>> 3) {
+          case 1: {
+            if (tag !== 10) {
+              break;
+            }
+
+            message.allocationId = reader.string();
+            continue;
+          }
+        }
+        if ((tag & 7) === 4 || tag === 0) {
+          break;
+        }
+        reader.skip(tag & 7);
+      }
+      return message;
+    },
+
+    fromJSON(object: any): MsgAcceptBidResponse {
+      return { allocationId: isSet(object.allocation_id) ? globalThis.String(object.allocation_id) : "" };
+    },
+
+    toJSON(message: MsgAcceptBidResponse): unknown {
+      const obj: any = {};
+      if (message.allocationId !== "") {
+        obj.allocation_id = message.allocationId;
+      }
+      return obj;
+    },
+    fromPartial(object: DeepPartial<MsgAcceptBidResponse>): MsgAcceptBidResponse {
+      const message = createBaseMsgAcceptBidResponse();
+      message.allocationId = object.allocationId ?? "";
+      return message;
+    },
+  };
+
+function createBaseMsgTerminateAllocation(): MsgTerminateAllocation {
+  return { customer: "", allocationId: "", reason: "" };
+}
+
+export const MsgTerminateAllocation: MessageFns<
+  MsgTerminateAllocation,
+  "virtengine.marketplace.v1.MsgTerminateAllocation"
+> = {
+  $type: "virtengine.marketplace.v1.MsgTerminateAllocation" as const,
+
+  encode(message: MsgTerminateAllocation, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.customer !== "") {
+      writer.uint32(10).string(message.customer);
+    }
+    if (message.allocationId !== "") {
+      writer.uint32(18).string(message.allocationId);
+    }
+    if (message.reason !== "") {
+      writer.uint32(26).string(message.reason);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): MsgTerminateAllocation {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseMsgTerminateAllocation();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.customer = reader.string();
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.allocationId = reader.string();
+          continue;
+        }
+        case 3: {
+          if (tag !== 26) {
+            break;
+          }
+
+          message.reason = reader.string();
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): MsgTerminateAllocation {
+    return {
+      customer: isSet(object.customer) ? globalThis.String(object.customer) : "",
+      allocationId: isSet(object.allocation_id) ? globalThis.String(object.allocation_id) : "",
+      reason: isSet(object.reason) ? globalThis.String(object.reason) : "",
+    };
+  },
+
+  toJSON(message: MsgTerminateAllocation): unknown {
+    const obj: any = {};
+    if (message.customer !== "") {
+      obj.customer = message.customer;
+    }
+    if (message.allocationId !== "") {
+      obj.allocation_id = message.allocationId;
+    }
+    if (message.reason !== "") {
+      obj.reason = message.reason;
+    }
+    return obj;
+  },
+  fromPartial(object: DeepPartial<MsgTerminateAllocation>): MsgTerminateAllocation {
+    const message = createBaseMsgTerminateAllocation();
+    message.customer = object.customer ?? "";
+    message.allocationId = object.allocationId ?? "";
+    message.reason = object.reason ?? "";
+    return message;
+  },
+};
+
+function createBaseMsgTerminateAllocationResponse(): MsgTerminateAllocationResponse {
+  return {};
+}
+
+export const MsgTerminateAllocationResponse: MessageFns<
+  MsgTerminateAllocationResponse,
+  "virtengine.marketplace.v1.MsgTerminateAllocationResponse"
+> = {
+  $type: "virtengine.marketplace.v1.MsgTerminateAllocationResponse" as const,
+
+  encode(_: MsgTerminateAllocationResponse, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): MsgTerminateAllocationResponse {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseMsgTerminateAllocationResponse();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(_: any): MsgTerminateAllocationResponse {
+    return {};
+  },
+
+  toJSON(_: MsgTerminateAllocationResponse): unknown {
+    const obj: any = {};
+    return obj;
+  },
+  fromPartial(_: DeepPartial<MsgTerminateAllocationResponse>): MsgTerminateAllocationResponse {
+    const message = createBaseMsgTerminateAllocationResponse();
+    return message;
+  },
+};
+
+function createBaseMsgResizeAllocation(): MsgResizeAllocation {
+  return { customer: "", allocationId: "", resourceUnits: [], reason: "" };
+}
+
+export const MsgResizeAllocation: MessageFns<MsgResizeAllocation, "virtengine.marketplace.v1.MsgResizeAllocation"> = {
+  $type: "virtengine.marketplace.v1.MsgResizeAllocation" as const,
+
+  encode(message: MsgResizeAllocation, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.customer !== "") {
+      writer.uint32(10).string(message.customer);
+    }
+    if (message.allocationId !== "") {
+      writer.uint32(18).string(message.allocationId);
+    }
+    for (const v of message.resourceUnits) {
+      ResourceUnit.encode(v!, writer.uint32(26).fork()).join();
+    }
+    if (message.reason !== "") {
+      writer.uint32(34).string(message.reason);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): MsgResizeAllocation {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseMsgResizeAllocation();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.customer = reader.string();
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.allocationId = reader.string();
+          continue;
+        }
+        case 3: {
+          if (tag !== 26) {
+            break;
+          }
+
+          message.resourceUnits.push(ResourceUnit.decode(reader, reader.uint32()));
+          continue;
+        }
+        case 4: {
+          if (tag !== 34) {
+            break;
+          }
+
+          message.reason = reader.string();
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): MsgResizeAllocation {
+    return {
+      customer: isSet(object.customer) ? globalThis.String(object.customer) : "",
+      allocationId: isSet(object.allocation_id) ? globalThis.String(object.allocation_id) : "",
+      resourceUnits: globalThis.Array.isArray(object?.resource_units)
+        ? object.resource_units.map((e: any) => ResourceUnit.fromJSON(e))
+        : [],
+      reason: isSet(object.reason) ? globalThis.String(object.reason) : "",
+    };
+  },
+
+  toJSON(message: MsgResizeAllocation): unknown {
+    const obj: any = {};
+    if (message.customer !== "") {
+      obj.customer = message.customer;
+    }
+    if (message.allocationId !== "") {
+      obj.allocation_id = message.allocationId;
+    }
+    if (message.resourceUnits?.length) {
+      obj.resource_units = message.resourceUnits.map((e) => ResourceUnit.toJSON(e));
+    }
+    if (message.reason !== "") {
+      obj.reason = message.reason;
+    }
+    return obj;
+  },
+  fromPartial(object: DeepPartial<MsgResizeAllocation>): MsgResizeAllocation {
+    const message = createBaseMsgResizeAllocation();
+    message.customer = object.customer ?? "";
+    message.allocationId = object.allocationId ?? "";
+    message.resourceUnits = object.resourceUnits?.map((e) => ResourceUnit.fromPartial(e)) || [];
+    message.reason = object.reason ?? "";
+    return message;
+  },
+};
+
+function createBaseMsgResizeAllocationResponse(): MsgResizeAllocationResponse {
+  return {};
+}
+
+export const MsgResizeAllocationResponse: MessageFns<
+  MsgResizeAllocationResponse,
+  "virtengine.marketplace.v1.MsgResizeAllocationResponse"
+> = {
+  $type: "virtengine.marketplace.v1.MsgResizeAllocationResponse" as const,
+
+  encode(_: MsgResizeAllocationResponse, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): MsgResizeAllocationResponse {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseMsgResizeAllocationResponse();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(_: any): MsgResizeAllocationResponse {
+    return {};
+  },
+
+  toJSON(_: MsgResizeAllocationResponse): unknown {
+    const obj: any = {};
+    return obj;
+  },
+  fromPartial(_: DeepPartial<MsgResizeAllocationResponse>): MsgResizeAllocationResponse {
+    const message = createBaseMsgResizeAllocationResponse();
+    return message;
+  },
+};
+
+function createBaseMsgPauseAllocation(): MsgPauseAllocation {
+  return { customer: "", allocationId: "", reason: "" };
+}
+
+export const MsgPauseAllocation: MessageFns<MsgPauseAllocation, "virtengine.marketplace.v1.MsgPauseAllocation"> = {
+  $type: "virtengine.marketplace.v1.MsgPauseAllocation" as const,
+
+  encode(message: MsgPauseAllocation, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.customer !== "") {
+      writer.uint32(10).string(message.customer);
+    }
+    if (message.allocationId !== "") {
+      writer.uint32(18).string(message.allocationId);
+    }
+    if (message.reason !== "") {
+      writer.uint32(26).string(message.reason);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): MsgPauseAllocation {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseMsgPauseAllocation();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.customer = reader.string();
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.allocationId = reader.string();
+          continue;
+        }
+        case 3: {
+          if (tag !== 26) {
+            break;
+          }
+
+          message.reason = reader.string();
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): MsgPauseAllocation {
+    return {
+      customer: isSet(object.customer) ? globalThis.String(object.customer) : "",
+      allocationId: isSet(object.allocation_id) ? globalThis.String(object.allocation_id) : "",
+      reason: isSet(object.reason) ? globalThis.String(object.reason) : "",
+    };
+  },
+
+  toJSON(message: MsgPauseAllocation): unknown {
+    const obj: any = {};
+    if (message.customer !== "") {
+      obj.customer = message.customer;
+    }
+    if (message.allocationId !== "") {
+      obj.allocation_id = message.allocationId;
+    }
+    if (message.reason !== "") {
+      obj.reason = message.reason;
+    }
+    return obj;
+  },
+  fromPartial(object: DeepPartial<MsgPauseAllocation>): MsgPauseAllocation {
+    const message = createBaseMsgPauseAllocation();
+    message.customer = object.customer ?? "";
+    message.allocationId = object.allocationId ?? "";
+    message.reason = object.reason ?? "";
+    return message;
+  },
+};
+
+function createBaseMsgPauseAllocationResponse(): MsgPauseAllocationResponse {
+  return {};
+}
+
+export const MsgPauseAllocationResponse: MessageFns<
+  MsgPauseAllocationResponse,
+  "virtengine.marketplace.v1.MsgPauseAllocationResponse"
+> = {
+  $type: "virtengine.marketplace.v1.MsgPauseAllocationResponse" as const,
+
+  encode(_: MsgPauseAllocationResponse, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): MsgPauseAllocationResponse {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseMsgPauseAllocationResponse();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(_: any): MsgPauseAllocationResponse {
+    return {};
+  },
+
+  toJSON(_: MsgPauseAllocationResponse): unknown {
+    const obj: any = {};
+    return obj;
+  },
+  fromPartial(_: DeepPartial<MsgPauseAllocationResponse>): MsgPauseAllocationResponse {
+    const message = createBaseMsgPauseAllocationResponse();
+    return message;
+  },
+};
+
+function createBaseResourceUnit(): ResourceUnit {
+  return { resourceType: "", units: Long.UZERO };
+}
+
+export const ResourceUnit: MessageFns<ResourceUnit, "virtengine.marketplace.v1.ResourceUnit"> = {
+  $type: "virtengine.marketplace.v1.ResourceUnit" as const,
+
+  encode(message: ResourceUnit, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.resourceType !== "") {
+      writer.uint32(10).string(message.resourceType);
+    }
+    if (!message.units.equals(Long.UZERO)) {
+      writer.uint32(16).uint64(message.units.toString());
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): ResourceUnit {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseResourceUnit();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.resourceType = reader.string();
+          continue;
+        }
+        case 2: {
+          if (tag !== 16) {
+            break;
+          }
+
+          message.units = Long.fromString(reader.uint64().toString(), true);
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): ResourceUnit {
+    return {
+      resourceType: isSet(object.resource_type) ? globalThis.String(object.resource_type) : "",
+      units: isSet(object.units) ? Long.fromValue(object.units) : Long.UZERO,
+    };
+  },
+
+  toJSON(message: ResourceUnit): unknown {
+    const obj: any = {};
+    if (message.resourceType !== "") {
+      obj.resource_type = message.resourceType;
+    }
+    if (!message.units.equals(Long.UZERO)) {
+      obj.units = (message.units || Long.UZERO).toString();
+    }
+    return obj;
+  },
+  fromPartial(object: DeepPartial<ResourceUnit>): ResourceUnit {
+    const message = createBaseResourceUnit();
+    message.resourceType = object.resourceType ?? "";
+    message.units = (object.units !== undefined && object.units !== null) ? Long.fromValue(object.units) : Long.UZERO;
+    return message;
+  },
+};
 
 function createBaseMsgWaldurCallback(): MsgWaldurCallback {
   return { sender: "", callbackType: "", resourceId: "", status: "", payload: "", signature: new Uint8Array(0) };

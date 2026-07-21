@@ -1,7 +1,40 @@
 # VirtEngine Progress
 
-Last updated: 2026-02-22
-Status: **83A workspace isolation DONE; 83B/83C partially implemented; 83D not started.** Chain tasks (80A-82B) can now proceed — workspace isolation blocker resolved. Remaining sandbox gaps (83C) are mitigated by `skipGitRepoCheck` workaround.
+Last updated: 2026-07-21
+Status: **Protocol continuation Task 84B is implemented and validated to the achievable local standard; full live multi-validator provider/customer process evidence remains externally blocked.** Historical 80A-83D backlog status remains below for traceability.
+
+## Protocol Completion Continuation (2026-07-20)
+
+| ID | Title | Priority | Status |
+| --- | --- | --- | --- |
+| 84A | Eliminate consensus nondeterminism and enforce deterministic ABCI++ admission | P0 | **COMPLETED** |
+| 84B | Cryptographically authenticate metering and make settlement replay-safe | P0 | **IMPLEMENTED LOCALLY; PROCESS EVIDENCE BLOCKED** |
+
+### 84B: Cryptographically Authenticate Metering and Make Settlement Replay-Safe
+
+**Implemented:** 2026-07-21
+**Commit:** Not created per orchestration instruction
+
+- Added versioned, length-prefixed canonical provider/customer sign bytes with golden and legacy wire fixtures.
+- Bound usage verification to immutable `x/provider` signing-key epochs and customer acknowledgment to supported `x/auth` account keys.
+- Added exact-once sequence/nonce/idempotency/period indexes, cached-context atomicity, replay invariants, and durable daemon restart allocation.
+- Added `v1.5.0`, settlement consensus version `2`, provider consensus version `4`, legacy-unverified migration, and fail-closed HPC pending accounting.
+- Pinned generation completed twice with zero second-pass hash changes.
+- Completion evidence and limitations are recorded in `_docs/audits/task-84b-completion-report-2026-07-21.md`.
+
+### 84A: Eliminate Consensus Nondeterminism and Enforce Deterministic ABCI++ Admission
+
+**Completed:** 2026-07-20
+**Agent:** copilot_subagent with orchestrator verification
+**Commit:** Not created per orchestration instruction
+
+**Summary:**
+
+- Added upgrade-gated bounded proposal admission with canonical SDK transactions and stable rejection codes.
+- Added signed VEID vote-extension aggregation through one authenticated index-zero system transaction.
+- Removed consensus wall-clock/runtime/external-service inputs and added a static determinism gate.
+- Passed targeted tests, vet, lint, build, WSL race tests, and a four-validator 500-post-activation-block adversarial load test with a 5,000-transaction block and matching app hashes.
+- Completion evidence is recorded in `_docs/audits/task-84a-completion-report-2026-07-20.md`.
 
 ## Inputs reviewed
 

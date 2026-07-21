@@ -32,7 +32,11 @@ func (k Keeper) CreateEscrow(
 
 	// Validate expiration
 	params := k.GetParams(ctx)
-	expiresInSeconds := uint64(expiresIn.Seconds())
+	if expiresIn < 0 {
+		return "", types.ErrInvalidEscrow.Wrap("expires_in cannot be negative")
+	}
+	expiresInSecondsInt64 := int64(expiresIn / time.Second)
+	expiresInSeconds := uint64(expiresInSecondsInt64) //nolint:gosec // non-negative duration checked above
 	if expiresInSeconds < params.MinEscrowDuration {
 		return "", types.ErrInvalidEscrow.Wrapf("expires_in must be at least %d seconds", params.MinEscrowDuration)
 	}

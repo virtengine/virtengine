@@ -720,7 +720,7 @@ func calculateAgeScore(now time.Time, createdAt time.Time) int64 {
 	if createdAt.IsZero() {
 		return 0
 	}
-	ageSeconds := int64(now.Sub(createdAt).Seconds())
+	ageSeconds := int64(now.Sub(createdAt) / time.Second)
 	if ageSeconds <= 0 {
 		return 0
 	}

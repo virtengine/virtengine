@@ -44,9 +44,10 @@ func (s *BidSubmitScenario) Setup(ctx context.Context) error {
 
 	s.orderIDs = s.orderIDs[:0]
 	for idx, owner := range s.accounts {
+		sequence := s.sequence.Load() + 1
 		receipt, err := s.backend.CreateOrder(ctx, owner, idx%3+1, map[string]string{
-			"region": regionForSequence(uint64(idx + 1)),
-			"tier":   tierForSequence(uint64(idx + 1)),
+			"region": regionForSequence(sequence),
+			"tier":   tierForSequence(sequence),
 		})
 		if err != nil {
 			return fmt.Errorf("seed order %d: %w", idx, err)
@@ -62,7 +63,8 @@ func (s *BidSubmitScenario) Execute(ctx context.Context) (*framework.ExecutionRe
 	sequence := s.sequence.Add(1)
 	orderID := s.orderIDs[(sequence-1)%uint64(len(s.orderIDs))]
 	provider := s.accounts[sequence%uint64(len(s.accounts))]
-	price := 90 + int64(sequence%25)
+	prices := [...]int64{90, 91, 92, 93, 94, 95, 96, 97, 98, 99, 100, 101, 102, 103, 104, 105, 106, 107, 108, 109, 110, 111, 112, 113, 114}
+	price := prices[sequence%uint64(len(prices))]
 
 	receipt, err := s.backend.SubmitBid(ctx, orderID, provider, price)
 	if err != nil {

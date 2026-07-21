@@ -14,7 +14,7 @@ import { Params } from "./params.ts";
 /**
  * MsgUpdateParams is the Msg/UpdateParams request type.
  *
- * Since: virtengine v1.0.0
+ * Since: akash v1.0.0
  */
 export interface MsgUpdateParams {
   /** Authority is the address of the governance account. */
@@ -31,7 +31,7 @@ export interface MsgUpdateParams {
  * MsgUpdateParamsResponse defines the response structure for executing a
  * MsgUpdateParams message.
  *
- * Since: virtengine v1.0.0
+ * Since: akash v1.0.0
  */
 export interface MsgUpdateParamsResponse {
 }

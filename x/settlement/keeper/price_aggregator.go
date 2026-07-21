@@ -240,6 +240,10 @@ func (k Keeper) maybeAlertPriceDeviation(ctx sdk.Context, price types.Price) {
 	if changePct.LT(threshold) {
 		return
 	}
+	windowSeconds := uint64(0)
+	if window > 0 {
+		windowSeconds = uint64(window / time.Second) //nolint:gosec // positive duration checked above
+	}
 	alert := types.PriceAlert{
 		Base:         price.Base,
 		Quote:        price.Quote,
@@ -247,7 +251,7 @@ func (k Keeper) maybeAlertPriceDeviation(ctx sdk.Context, price types.Price) {
 		NewRate:      price.Rate,
 		ChangePct:    changePct,
 		OccurredAt:   price.Timestamp,
-		WindowSec:    uint64(window.Seconds()),
+		WindowSec:    windowSeconds,
 		ThresholdBps: k.oracleDeviationThresholdBps(ctx),
 		Source:       price.Source,
 	}

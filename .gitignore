@@ -7,6 +7,7 @@
 # dev artifacts
 /devdata
 pkg/provider_daemon/data/
+pkg/provider_daemon/.cache/
 
 # chain data
 *.tsd

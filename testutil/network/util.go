@@ -82,10 +82,9 @@ func startInProcess(cfg Config, val *Validator) error {
 		return err
 	}
 	val.tmNode = tmNode
-
-	if val.RPCAddress != "" {
-		val.RPCClient = local.New(tmNode)
-	}
+	// A local client does not bind a port and is safe to expose for every node.
+	// HTTP RPC/API servers remain restricted to validator zero below.
+	val.RPCClient = local.New(tmNode)
 
 	// We'll need a RPC client if the validator exposes a gRPC or REST endpoint.
 	if val.APIAddress != "" || val.AppConfig.GRPC.Enable {

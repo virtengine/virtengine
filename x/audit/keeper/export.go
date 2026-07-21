@@ -68,7 +68,7 @@ func (e *ExportProcessor) ProcessExportJob(ctx sdk.Context, jobID string) error 
 	var exportData []byte
 	switch job.Format {
 	case "json":
-		exportData, err = e.exportJSON(logs)
+		exportData, err = e.exportJSON(logs, ctx.BlockTime())
 	case "csv":
 		exportData = e.exportCSV(logs)
 	default:
@@ -111,10 +111,10 @@ func (e *ExportProcessor) ProcessExportJob(ctx sdk.Context, jobID string) error 
 }
 
 // exportJSON exports logs as JSON
-func (e *ExportProcessor) exportJSON(logs []types.AuditLogEntry) ([]byte, error) {
+func (e *ExportProcessor) exportJSON(logs []types.AuditLogEntry, exportedAt time.Time) ([]byte, error) {
 	export := map[string]interface{}{
 		"version":     "1.0",
-		"exported_at": time.Now().UTC().Format(time.RFC3339),
+		"exported_at": exportedAt.UTC().Format(time.RFC3339),
 		"entries":     logs,
 		"count":       len(logs),
 	}

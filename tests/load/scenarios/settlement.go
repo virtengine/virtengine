@@ -48,7 +48,8 @@ func (s *SettlementScenario) Execute(ctx context.Context) (*framework.ExecutionR
 	providerA := s.accounts[sequence%uint64(len(s.accounts))]
 	providerB := s.accounts[(sequence+1)%uint64(len(s.accounts))]
 
-	orderReceipt, err := s.backend.CreateOrder(ctx, owner, int(sequence%3)+1, map[string]string{
+	quantities := [...]int{1, 2, 3}
+	orderReceipt, err := s.backend.CreateOrder(ctx, owner, quantities[sequence%uint64(len(quantities))], map[string]string{
 		"region": regionForSequence(sequence),
 		"tier":   "settlement",
 	})
@@ -61,14 +62,16 @@ func (s *SettlementScenario) Execute(ctx context.Context) (*framework.ExecutionR
 	}
 
 	orderID := orderReceipt.ID
-	if _, err := s.backend.SubmitBid(ctx, orderID, providerA, 120+int64(sequence%15)); err != nil {
+	providerAPrices := [...]int64{120, 121, 122, 123, 124, 125, 126, 127, 128, 129, 130, 131, 132, 133, 134}
+	if _, err := s.backend.SubmitBid(ctx, orderID, providerA, providerAPrices[sequence%uint64(len(providerAPrices))]); err != nil {
 		return &framework.ExecutionResult{
 			Success:  false,
 			Duration: time.Since(start),
 			Error:    err,
 		}, nil
 	}
-	if _, err := s.backend.SubmitBid(ctx, orderID, providerB, 100+int64(sequence%10)); err != nil {
+	providerBPrices := [...]int64{100, 101, 102, 103, 104, 105, 106, 107, 108, 109}
+	if _, err := s.backend.SubmitBid(ctx, orderID, providerB, providerBPrices[sequence%uint64(len(providerBPrices))]); err != nil {
 		return &framework.ExecutionResult{
 			Success:  false,
 			Duration: time.Since(start),

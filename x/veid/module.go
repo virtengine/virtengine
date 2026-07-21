@@ -136,10 +136,13 @@ func (am AppModule) QuerierRoute() string {
 
 // RegisterServices registers the module's services
 func (am AppModule) RegisterServices(cfg module.Configurator) {
-	types.RegisterMsgServer(cfg.MsgServer(), keeper.NewMsgServerImpl(am.keeper))
+	veidv1.RegisterMsgServer(cfg.MsgServer(), keeper.NewMsgServerImpl(am.keeper))
 	// Use SDK's RegisterQueryServer with proper proto-generated service descriptor
 	// The SDK descriptor has proper proto registration for gRPC router validation
 	veidv1.RegisterQueryServer(cfg.QueryServer(), keeper.NewSDKQueryServer(am.keeper))
+	if err := cfg.RegisterMigration(types.ModuleName, 1, func(ctx sdk.Context) error { return nil }); err != nil {
+		panic(err)
+	}
 }
 
 // RegisterQueryService registers a GRPC query service to respond to the
@@ -182,7 +185,7 @@ func (am AppModule) ExportGenesis(ctx sdk.Context, cdc codec.JSONCodec) json.Raw
 
 // ConsensusVersion returns the consensus version for the veid module.
 func (AppModule) ConsensusVersion() uint64 {
-	return 1
+	return 2
 }
 
 // AppModuleSimulation functions

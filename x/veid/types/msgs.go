@@ -57,6 +57,12 @@ type MsgUpdateVerificationStatus = veidv1.MsgUpdateVerificationStatus
 // MsgUpdateVerificationStatusResponse is the response for MsgUpdateVerificationStatus
 type MsgUpdateVerificationStatusResponse = veidv1.MsgUpdateVerificationStatusResponse
 
+// MsgSubmitConsensusVerification is the SDK-native index-zero system message.
+type MsgSubmitConsensusVerification = veidv1.MsgSubmitConsensusVerification
+
+// MsgSubmitConsensusVerificationResponse reports the consumed result count.
+type MsgSubmitConsensusVerificationResponse = veidv1.MsgSubmitConsensusVerificationResponse
+
 // MsgUpdateScore is the message for validators to update identity score
 type MsgUpdateScore = veidv1.MsgUpdateScore
 

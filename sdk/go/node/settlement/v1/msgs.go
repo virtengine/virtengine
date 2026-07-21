@@ -182,6 +182,13 @@ func (msg *MsgRecordUsage) ValidateBasic() error {
 	if len(msg.Signature) == 0 {
 		return ErrInvalidSignature.Wrap("signature cannot be empty")
 	}
+	if msg.SignatureVersion != 0 {
+		if msg.SignatureVersion != 1 || msg.ChainId == "" || msg.PricingVersion == 0 || msg.FormulaVersion == 0 || msg.ModelVersion == 0 ||
+			msg.StreamSequence == 0 || len(msg.Nonce) != 32 || len(msg.IdempotencyKey) != 32 ||
+			msg.ProviderKeyEpoch == 0 || msg.ProviderKeyId == "" {
+			return ErrInvalidUsageRecord.Wrap("incomplete versioned usage proof")
+		}
+	}
 
 	return nil
 }
@@ -204,6 +211,11 @@ func (msg *MsgAcknowledgeUsage) ValidateBasic() error {
 
 	if len(msg.Signature) == 0 {
 		return ErrInvalidSignature.Wrap("signature cannot be empty")
+	}
+	if msg.SignatureVersion != 0 {
+		if msg.SignatureVersion != 1 || len(msg.UsageDigest) != 32 || len(msg.ReplayKey) != 32 {
+			return ErrInvalidSignature.Wrap("incomplete versioned acknowledgment proof")
+		}
 	}
 
 	return nil

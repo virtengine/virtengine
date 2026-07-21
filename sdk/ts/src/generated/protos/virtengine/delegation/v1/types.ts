@@ -174,10 +174,34 @@ export interface DelegatorReward {
   calculatedAt:
     | Date
     | undefined;
+  /** height is the block height when the reward was calculated */
+  height: Long;
   /** claimed indicates if the reward has been claimed */
   claimed: boolean;
   /** claimed_at is when the reward was claimed (optional) */
   claimedAt: Date | undefined;
+}
+
+/** DelegatorSlashingEvent represents a slashing event applied to a delegator */
+export interface DelegatorSlashingEvent {
+  /** id is the unique slashing event ID */
+  id: string;
+  /** delegator_address is the delegator's address */
+  delegatorAddress: string;
+  /** validator_address is the validator's address */
+  validatorAddress: string;
+  /** slash_fraction is the applied slash fraction */
+  slashFraction: string;
+  /** slash_amount is the total amount slashed */
+  slashAmount: string;
+  /** shares_slashed is the total shares slashed */
+  sharesSlashed: string;
+  /** infraction_height is the height at which the infraction occurred */
+  infractionHeight: Long;
+  /** block_height is the height at which the slash was applied */
+  blockHeight: Long;
+  /** block_time is the time at which the slash was applied */
+  blockTime: Date | undefined;
 }
 
 /** Params defines the parameters for the delegation module */
@@ -1020,6 +1044,7 @@ function createBaseDelegatorReward(): DelegatorReward {
     sharesAtEpoch: "",
     validatorTotalSharesAtEpoch: "",
     calculatedAt: undefined,
+    height: Long.ZERO,
     claimed: false,
     claimedAt: undefined,
   };
@@ -1049,6 +1074,9 @@ export const DelegatorReward: MessageFns<DelegatorReward, "virtengine.delegation
     }
     if (message.calculatedAt !== undefined) {
       Timestamp.encode(toTimestamp(message.calculatedAt), writer.uint32(58).fork()).join();
+    }
+    if (!message.height.equals(Long.ZERO)) {
+      writer.uint32(80).int64(message.height.toString());
     }
     if (message.claimed !== false) {
       writer.uint32(64).bool(message.claimed);
@@ -1122,6 +1150,14 @@ export const DelegatorReward: MessageFns<DelegatorReward, "virtengine.delegation
           message.calculatedAt = fromTimestamp(Timestamp.decode(reader, reader.uint32()));
           continue;
         }
+        case 10: {
+          if (tag !== 80) {
+            break;
+          }
+
+          message.height = Long.fromString(reader.int64().toString());
+          continue;
+        }
         case 8: {
           if (tag !== 64) {
             break;
@@ -1158,6 +1194,7 @@ export const DelegatorReward: MessageFns<DelegatorReward, "virtengine.delegation
         ? globalThis.String(object.validator_total_shares_at_epoch)
         : "",
       calculatedAt: isSet(object.calculated_at) ? fromJsonTimestamp(object.calculated_at) : undefined,
+      height: isSet(object.height) ? Long.fromValue(object.height) : Long.ZERO,
       claimed: isSet(object.claimed) ? globalThis.Boolean(object.claimed) : false,
       claimedAt: isSet(object.claimed_at) ? fromJsonTimestamp(object.claimed_at) : undefined,
     };
@@ -1186,6 +1223,9 @@ export const DelegatorReward: MessageFns<DelegatorReward, "virtengine.delegation
     if (message.calculatedAt !== undefined) {
       obj.calculated_at = message.calculatedAt.toISOString();
     }
+    if (!message.height.equals(Long.ZERO)) {
+      obj.height = (message.height || Long.ZERO).toString();
+    }
     if (message.claimed !== false) {
       obj.claimed = message.claimed;
     }
@@ -1205,8 +1245,214 @@ export const DelegatorReward: MessageFns<DelegatorReward, "virtengine.delegation
     message.sharesAtEpoch = object.sharesAtEpoch ?? "";
     message.validatorTotalSharesAtEpoch = object.validatorTotalSharesAtEpoch ?? "";
     message.calculatedAt = object.calculatedAt ?? undefined;
+    message.height = (object.height !== undefined && object.height !== null)
+      ? Long.fromValue(object.height)
+      : Long.ZERO;
     message.claimed = object.claimed ?? false;
     message.claimedAt = object.claimedAt ?? undefined;
+    return message;
+  },
+};
+
+function createBaseDelegatorSlashingEvent(): DelegatorSlashingEvent {
+  return {
+    id: "",
+    delegatorAddress: "",
+    validatorAddress: "",
+    slashFraction: "",
+    slashAmount: "",
+    sharesSlashed: "",
+    infractionHeight: Long.ZERO,
+    blockHeight: Long.ZERO,
+    blockTime: undefined,
+  };
+}
+
+export const DelegatorSlashingEvent: MessageFns<
+  DelegatorSlashingEvent,
+  "virtengine.delegation.v1.DelegatorSlashingEvent"
+> = {
+  $type: "virtengine.delegation.v1.DelegatorSlashingEvent" as const,
+
+  encode(message: DelegatorSlashingEvent, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.id !== "") {
+      writer.uint32(10).string(message.id);
+    }
+    if (message.delegatorAddress !== "") {
+      writer.uint32(18).string(message.delegatorAddress);
+    }
+    if (message.validatorAddress !== "") {
+      writer.uint32(26).string(message.validatorAddress);
+    }
+    if (message.slashFraction !== "") {
+      writer.uint32(34).string(message.slashFraction);
+    }
+    if (message.slashAmount !== "") {
+      writer.uint32(42).string(message.slashAmount);
+    }
+    if (message.sharesSlashed !== "") {
+      writer.uint32(50).string(message.sharesSlashed);
+    }
+    if (!message.infractionHeight.equals(Long.ZERO)) {
+      writer.uint32(56).int64(message.infractionHeight.toString());
+    }
+    if (!message.blockHeight.equals(Long.ZERO)) {
+      writer.uint32(64).int64(message.blockHeight.toString());
+    }
+    if (message.blockTime !== undefined) {
+      Timestamp.encode(toTimestamp(message.blockTime), writer.uint32(74).fork()).join();
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): DelegatorSlashingEvent {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseDelegatorSlashingEvent();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.id = reader.string();
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.delegatorAddress = reader.string();
+          continue;
+        }
+        case 3: {
+          if (tag !== 26) {
+            break;
+          }
+
+          message.validatorAddress = reader.string();
+          continue;
+        }
+        case 4: {
+          if (tag !== 34) {
+            break;
+          }
+
+          message.slashFraction = reader.string();
+          continue;
+        }
+        case 5: {
+          if (tag !== 42) {
+            break;
+          }
+
+          message.slashAmount = reader.string();
+          continue;
+        }
+        case 6: {
+          if (tag !== 50) {
+            break;
+          }
+
+          message.sharesSlashed = reader.string();
+          continue;
+        }
+        case 7: {
+          if (tag !== 56) {
+            break;
+          }
+
+          message.infractionHeight = Long.fromString(reader.int64().toString());
+          continue;
+        }
+        case 8: {
+          if (tag !== 64) {
+            break;
+          }
+
+          message.blockHeight = Long.fromString(reader.int64().toString());
+          continue;
+        }
+        case 9: {
+          if (tag !== 74) {
+            break;
+          }
+
+          message.blockTime = fromTimestamp(Timestamp.decode(reader, reader.uint32()));
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): DelegatorSlashingEvent {
+    return {
+      id: isSet(object.id) ? globalThis.String(object.id) : "",
+      delegatorAddress: isSet(object.delegator_address) ? globalThis.String(object.delegator_address) : "",
+      validatorAddress: isSet(object.validator_address) ? globalThis.String(object.validator_address) : "",
+      slashFraction: isSet(object.slash_fraction) ? globalThis.String(object.slash_fraction) : "",
+      slashAmount: isSet(object.slash_amount) ? globalThis.String(object.slash_amount) : "",
+      sharesSlashed: isSet(object.shares_slashed) ? globalThis.String(object.shares_slashed) : "",
+      infractionHeight: isSet(object.infraction_height) ? Long.fromValue(object.infraction_height) : Long.ZERO,
+      blockHeight: isSet(object.block_height) ? Long.fromValue(object.block_height) : Long.ZERO,
+      blockTime: isSet(object.block_time) ? fromJsonTimestamp(object.block_time) : undefined,
+    };
+  },
+
+  toJSON(message: DelegatorSlashingEvent): unknown {
+    const obj: any = {};
+    if (message.id !== "") {
+      obj.id = message.id;
+    }
+    if (message.delegatorAddress !== "") {
+      obj.delegator_address = message.delegatorAddress;
+    }
+    if (message.validatorAddress !== "") {
+      obj.validator_address = message.validatorAddress;
+    }
+    if (message.slashFraction !== "") {
+      obj.slash_fraction = message.slashFraction;
+    }
+    if (message.slashAmount !== "") {
+      obj.slash_amount = message.slashAmount;
+    }
+    if (message.sharesSlashed !== "") {
+      obj.shares_slashed = message.sharesSlashed;
+    }
+    if (!message.infractionHeight.equals(Long.ZERO)) {
+      obj.infraction_height = (message.infractionHeight || Long.ZERO).toString();
+    }
+    if (!message.blockHeight.equals(Long.ZERO)) {
+      obj.block_height = (message.blockHeight || Long.ZERO).toString();
+    }
+    if (message.blockTime !== undefined) {
+      obj.block_time = message.blockTime.toISOString();
+    }
+    return obj;
+  },
+  fromPartial(object: DeepPartial<DelegatorSlashingEvent>): DelegatorSlashingEvent {
+    const message = createBaseDelegatorSlashingEvent();
+    message.id = object.id ?? "";
+    message.delegatorAddress = object.delegatorAddress ?? "";
+    message.validatorAddress = object.validatorAddress ?? "";
+    message.slashFraction = object.slashFraction ?? "";
+    message.slashAmount = object.slashAmount ?? "";
+    message.sharesSlashed = object.sharesSlashed ?? "";
+    message.infractionHeight = (object.infractionHeight !== undefined && object.infractionHeight !== null)
+      ? Long.fromValue(object.infractionHeight)
+      : Long.ZERO;
+    message.blockHeight = (object.blockHeight !== undefined && object.blockHeight !== null)
+      ? Long.fromValue(object.blockHeight)
+      : Long.ZERO;
+    message.blockTime = object.blockTime ?? undefined;
     return message;
   },
 };

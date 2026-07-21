@@ -41,6 +41,7 @@ import (
 	"github.com/cosmos/cosmos-sdk/server/config"
 	servertypes "github.com/cosmos/cosmos-sdk/server/types"
 	sdk "github.com/cosmos/cosmos-sdk/types"
+	"github.com/cosmos/cosmos-sdk/types/mempool"
 	"github.com/cosmos/cosmos-sdk/types/module"
 	"github.com/cosmos/cosmos-sdk/version"
 	"github.com/cosmos/cosmos-sdk/x/auth/ante"
@@ -182,6 +183,7 @@ func NewApp(
 		ModuleAccountPerms(),
 		app.BlockedAddrs(),
 		invCheckPeriod,
+		cast.ToBool(appOpts.Get("test_enable_unordered_transactions")),
 	)
 
 	minGasPricesStr := cast.ToString(appOpts.Get(cflags.FlagMinGasPrices))
@@ -273,22 +275,51 @@ func NewApp(
 		RolesKeeper:      &app.Keepers.VirtEngine.Roles,
 		GasPricingKeeper: &app.Keepers.VirtEngine.GasPricing,
 	}
+	if rateLimitParams, ok := appOpts.Get("test_rate_limit_params").(apptypes.RateLimitParams); ok {
+		anteOpts.RateLimitParams = rateLimitParams
+	}
 
 	anteHandler, err := NewAnteHandler(anteOpts)
 	if err != nil {
 		panic(err)
 	}
 
-	app.SetPrepareProposal(baseapp.NoOpPrepareProposal())
-
-	// we use a no-op ProcessProposal, this way, we accept all proposals in avoidance
-	// of liveness failures due to Prepare / Process inconsistency. In other words,
-	// this ProcessProposal always returns ACCEPT.
-	app.SetProcessProposal(baseapp.NoOpProcessProposal())
+	// Require the SDK no-op mempool so default selection remains limited to the
+	// bounded FIFO CometBFT candidate window. A custom app mempool may enumerate
+	// entries not present in that window and would defeat the work bound.
+	if _, ok := app.Mempool().(mempool.NoOpMempool); !ok {
+		panic("Task 84A proposal admission requires the SDK no-op mempool")
+	}
+	sdkProposalHandler := baseapp.NewDefaultProposalHandler(app.Mempool(), app.BaseApp)
+	proposalHandler := NewProposalHandler(
+		app.BaseApp,
+		sdkProposalHandler.PrepareProposalHandler(),
+		NewUpgradeProposalActivation(app.Keepers.Cosmos.Upgrade),
+		DefaultProposalLimits(),
+		NewVEIDSystemTxCodec(app.txConfig, app.BaseApp, app.Keepers.Cosmos.Staking, &app.Keepers.VirtEngine.VEID),
+	)
+	if observer, ok := appOpts.Get("test_proposal_observer").(func(string, error)); ok {
+		WithProposalObserver(observer)(proposalHandler)
+	}
+	if cast.ToBool(appOpts.Get("test_checktx_prevalidated_proposals")) {
+		WithCheckTxPrevalidatedProposals()(proposalHandler)
+	}
+	configureConsensusSystemTxAuthorization(&app.Keepers.VirtEngine.VEID, app.Keepers.Cosmos.Staking)
+	app.SetPrepareProposal(FailClosedPrepareProposal(proposalHandler.PrepareProposal))
+	app.SetProcessProposal(proposalHandler.ProcessProposal)
+	app.SetPreBlocker(func(ctx sdk.Context, req *abci.RequestFinalizeBlock) (*sdk.ResponsePreBlock, error) {
+		ctx, err := proposalHandler.AuthorizeFinalizeBlock(ctx, req)
+		if err != nil {
+			return nil, err
+		}
+		return app.PreBlocker(ctx, req)
+	})
+	extendVote, verifyVoteExtension := newVEIDVoteExtensionHandlers(&app.Keepers.VirtEngine.VEID)
+	app.SetExtendVoteHandler(extendVote)
+	app.SetVerifyVoteExtensionHandler(verifyVoteExtension)
 
 	// initialize BaseApp
 	app.SetInitChainer(app.InitChainer)
-	app.SetPreBlocker(app.PreBlocker)
 	app.SetBeginBlocker(app.BeginBlocker)
 	app.SetAnteHandler(anteHandler)
 	app.SetEndBlocker(app.EndBlocker)

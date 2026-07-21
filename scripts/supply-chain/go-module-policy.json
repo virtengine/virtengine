@@ -1,0 +1,37 @@
+{
+  "schemaVersion": 1,
+  "license": {
+    "allowedFamilies": ["Apache-2.0", "BSD-2-Clause", "BSD-3-Clause", "ISC", "MIT", "MPL-2.0", "Unlicense", "CC0-1.0"],
+    "deniedTokens": ["AGPL", "BUSL", "GPL", "LGPL", "SSPL"]
+  },
+  "replaces": {
+    "go.mod": [
+      "github.com/99designs/keyring => github.com/cosmos/keyring v1.2.0",
+      "github.com/CosmWasm/wasmd => github.com/CosmWasm/wasmd v0.61.7-0.20260126125754-5cc330bcf3d3",
+      "github.com/bytedance/sonic => github.com/bytedance/sonic v1.14.1",
+      "github.com/cometbft/cometbft => github.com/virtengine/cometbft v0.38.21-virtengine.1",
+      "github.com/cosmos/cosmos-sdk => github.com/virtengine/cosmos-sdk v0.53.4-virtengine.1",
+      "github.com/cosmos/gogoproto => github.com/virtengine/gogoproto v1.7.0-virtengine.1",
+      "github.com/cosmos/ledger-cosmos-go => github.com/virtengine/ledger-go/cosmos v0.16.0-virtengine",
+      "github.com/gogo/protobuf => github.com/regen-network/protobuf v1.3.3-alpha.regen.1",
+      "github.com/syndtr/goleveldb => github.com/syndtr/goleveldb v1.0.1-0.20210819022825-2ae1ddf74ef7",
+      "github.com/virtengine/virtengine/sdk/go => ./sdk/go",
+      "github.com/virtengine/virtengine/sdk/specs => ./sdk/specs",
+      "github.com/zondax/hid => github.com/troian/hid v0.14.0",
+      "github.com/zondax/ledger-go => github.com/virtengine/ledger-go v0.16.0-virtengine",
+      "golang.org/x/exp => golang.org/x/exp v0.0.0-20230711153332-06a737ee72cb",
+      "pgregory.net/rapid => pgregory.net/rapid v0.5.5"
+    ],
+    "sdk/generation/go.mod": [
+      "github.com/cosmos/gogoproto => github.com/virtengine/gogoproto v1.7.0-virtengine.1"
+    ],
+    "sdk/go/go.mod": [
+      "github.com/CosmWasm/wasmd => github.com/CosmWasm/wasmd v0.53.4",
+      "github.com/cometbft/cometbft => github.com/virtengine/cometbft v0.38.21-virtengine.1",
+      "github.com/cosmos/cosmos-sdk => github.com/virtengine/cosmos-sdk v0.53.4-virtengine.1",
+      "github.com/cosmos/gogoproto => github.com/virtengine/gogoproto v1.7.0-virtengine.1",
+      "github.com/gogo/protobuf => github.com/regen-network/protobuf v1.3.3-alpha.regen.1",
+      "github.com/virtengine/virtengine/sdk/specs => ../specs"
+    ]
+  }
+}

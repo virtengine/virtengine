@@ -2,17 +2,6 @@
 version: v2
 modules:
   - path: proto/node
-    excludes:
-      - proto/node/virtengine/audit/v1beta3
-      - proto/node/virtengine/base/v1beta3
-      - proto/node/virtengine/cert/v1beta3
-      - proto/node/virtengine/deployment/v1beta3
-      - proto/node/virtengine/deployment/v1beta5
-      - proto/node/virtengine/escrow/v1beta3
-      - proto/node/virtengine/market/v1beta4
-      - proto/node/virtengine/market/v2beta1
-      - proto/node/virtengine/provider/v1beta3
-      - proto/node/virtengine/take/v1beta3
     breaking:
       use:
         - FILE
@@ -26,6 +15,125 @@ modules:
         - COMMENT_FIELD
         - SERVICE_SUFFIX
         - RPC_REQUEST_STANDARD_NAME
+      # These file/rule pairs are deployed legacy API debt. Keep all other
+      # STANDARD/COMMENTS rules enabled so new debt fails lint. Enum renames
+      # are wire/API breaking; retire entries only with an approved migration.
+      ignore_only:
+        COMMENT_ENUM_VALUE:
+          - proto/node/virtengine/provider/v1beta4/msg.proto
+          - proto/node/virtengine/resources/v1/types.proto
+        COMMENT_MESSAGE:
+          - proto/node/virtengine/resources/v1/query.proto
+          - proto/node/virtengine/resources/v1/tx.proto
+          - proto/node/virtengine/support/v1/query.proto
+          - proto/node/virtengine/support/v1/tx.proto
+          - proto/node/virtengine/support/v1/types.proto
+        COMMENT_RPC:
+          - proto/node/virtengine/settlement/v1/query.proto
+          - proto/node/virtengine/support/v1/query.proto
+          - proto/node/virtengine/support/v1/tx.proto
+        COMMENT_SERVICE:
+          - proto/node/virtengine/support/v1/query.proto
+          - proto/node/virtengine/support/v1/tx.proto
+        ENUM_VALUE_PREFIX:
+          - proto/node/virtengine/base/deposit/v1/deposit.proto
+          - proto/node/virtengine/base/resources/v1beta4/endpoint.proto
+          - proto/node/virtengine/base/v1beta3/endpoint.proto
+          - proto/node/virtengine/bme/v1/types.proto
+          - proto/node/virtengine/cert/v1/cert.proto
+          - proto/node/virtengine/cert/v1beta3/cert.proto
+          - proto/node/virtengine/deployment/v1/deployment.proto
+          - proto/node/virtengine/deployment/v1beta3/deployment.proto
+          - proto/node/virtengine/deployment/v1beta3/group.proto
+          - proto/node/virtengine/deployment/v1beta4/group.proto
+          - proto/node/virtengine/deployment/v1beta5/group.proto
+          - proto/node/virtengine/downtimedetector/v1beta1/downtime_duration.proto
+          - proto/node/virtengine/escrow/id/v1/id.proto
+          - proto/node/virtengine/escrow/types/v1/state.proto
+          - proto/node/virtengine/escrow/v1/authz.proto
+          - proto/node/virtengine/escrow/v1beta3/types.proto
+          - proto/node/virtengine/market/v1/lease.proto
+          - proto/node/virtengine/market/v1/types.proto
+          - proto/node/virtengine/market/v1beta4/bid.proto
+          - proto/node/virtengine/market/v1beta4/lease.proto
+          - proto/node/virtengine/market/v1beta4/order.proto
+          - proto/node/virtengine/market/v1beta5/bid.proto
+          - proto/node/virtengine/market/v1beta5/order.proto
+          - proto/node/virtengine/market/v2beta1/bid.proto
+          - proto/node/virtengine/market/v2beta1/lease.proto
+          - proto/node/virtengine/market/v2beta1/order.proto
+          - proto/node/virtengine/market/v2beta1/types.proto
+          - proto/node/virtengine/mfa/v1/types.proto
+          - proto/node/virtengine/veid/v1/compliance.proto
+        ENUM_VALUE_UPPER_SNAKE_CASE:
+          - proto/node/virtengine/base/deposit/v1/deposit.proto
+          - proto/node/virtengine/bme/v1/types.proto
+          - proto/node/virtengine/cert/v1/cert.proto
+          - proto/node/virtengine/cert/v1beta3/cert.proto
+          - proto/node/virtengine/deployment/v1/deployment.proto
+          - proto/node/virtengine/deployment/v1beta3/deployment.proto
+          - proto/node/virtengine/deployment/v1beta3/group.proto
+          - proto/node/virtengine/deployment/v1beta4/group.proto
+          - proto/node/virtengine/deployment/v1beta5/group.proto
+          - proto/node/virtengine/escrow/id/v1/id.proto
+          - proto/node/virtengine/escrow/types/v1/state.proto
+          - proto/node/virtengine/escrow/v1/authz.proto
+          - proto/node/virtengine/escrow/v1beta3/types.proto
+          - proto/node/virtengine/market/v1/lease.proto
+          - proto/node/virtengine/market/v1/types.proto
+          - proto/node/virtengine/market/v1beta4/bid.proto
+          - proto/node/virtengine/market/v1beta4/lease.proto
+          - proto/node/virtengine/market/v1beta4/order.proto
+          - proto/node/virtengine/market/v1beta5/bid.proto
+          - proto/node/virtengine/market/v1beta5/order.proto
+          - proto/node/virtengine/market/v2beta1/bid.proto
+          - proto/node/virtengine/market/v2beta1/lease.proto
+          - proto/node/virtengine/market/v2beta1/order.proto
+          - proto/node/virtengine/market/v2beta1/types.proto
+        ENUM_ZERO_VALUE_SUFFIX:
+          - proto/node/virtengine/base/deposit/v1/deposit.proto
+          - proto/node/virtengine/base/resources/v1beta4/endpoint.proto
+          - proto/node/virtengine/base/v1beta3/endpoint.proto
+          - proto/node/virtengine/bme/v1/types.proto
+          - proto/node/virtengine/cert/v1/cert.proto
+          - proto/node/virtengine/cert/v1beta3/cert.proto
+          - proto/node/virtengine/deployment/v1/deployment.proto
+          - proto/node/virtengine/deployment/v1beta3/deployment.proto
+          - proto/node/virtengine/deployment/v1beta3/group.proto
+          - proto/node/virtengine/deployment/v1beta4/group.proto
+          - proto/node/virtengine/deployment/v1beta5/group.proto
+          - proto/node/virtengine/downtimedetector/v1beta1/downtime_duration.proto
+          - proto/node/virtengine/escrow/id/v1/id.proto
+          - proto/node/virtengine/escrow/types/v1/state.proto
+          - proto/node/virtengine/escrow/v1/authz.proto
+          - proto/node/virtengine/escrow/v1beta3/types.proto
+          - proto/node/virtengine/market/v1/lease.proto
+          - proto/node/virtengine/market/v1/types.proto
+          - proto/node/virtengine/market/v1beta4/bid.proto
+          - proto/node/virtengine/market/v1beta4/lease.proto
+          - proto/node/virtengine/market/v1beta4/order.proto
+          - proto/node/virtengine/market/v1beta5/bid.proto
+          - proto/node/virtengine/market/v1beta5/order.proto
+          - proto/node/virtengine/market/v2beta1/bid.proto
+          - proto/node/virtengine/market/v2beta1/lease.proto
+          - proto/node/virtengine/market/v2beta1/order.proto
+          - proto/node/virtengine/market/v2beta1/types.proto
+          - proto/node/virtengine/mfa/v1/types.proto
+          - proto/node/virtengine/provider/v1beta4/msg.proto
+          - proto/node/virtengine/veid/v1/compliance.proto
+          - proto/node/virtengine/veid/v1/types.proto
+        IMPORT_NO_PUBLIC:
+          - proto/node/virtengine/delegation/v1/delegation.proto
+        IMPORT_USED:
+          - proto/node/virtengine/fraud/v1/types.proto
+          - proto/node/virtengine/sdk/v1/sdk_deps.proto
+          - proto/node/virtengine/staking/v1/params.proto
+          - proto/node/virtengine/staking/v1/types.proto
+        RPC_REQUEST_RESPONSE_UNIQUE:
+          - proto/node/virtengine/marketplace/v1/query.proto
+        RPC_RESPONSE_STANDARD_NAME:
+          - proto/node/virtengine/audit/v1/msg_audit_log.proto
+          - proto/node/virtengine/marketplace/v1/query.proto
 # Vendor path disabled - enable when proto/vendor directory has .proto files
 #  - path: proto/vendor
 #    lint:
