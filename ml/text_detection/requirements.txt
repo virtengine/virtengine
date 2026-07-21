@@ -10,7 +10,7 @@ craft-text-detector==0.4.3
 
 # Image Processing
 opencv-python==4.8.1.78
-Pillow==12.2.0
+Pillow==12.3.0
 
 # Numerical Computing
 numpy==1.24.3
