@@ -31,3 +31,15 @@ func (k Keeper) MigrateReservationLinks(ctx sdk.Context) (jobs, linked, executab
 	}
 	return
 }
+
+// SetLegacyReservationLink records migration quarantine lineage without
+// otherwise changing the legacy job lifecycle state.
+func (k Keeper) SetLegacyReservationLink(ctx sdk.Context, jobID, reservationID string) error {
+	job, found := k.GetJob(ctx, jobID)
+	if !found {
+		return types.ErrJobNotFound
+	}
+	job.ReservationID = reservationID
+	job.AllocationID = reservationID
+	return k.SetJob(ctx, job)
+}

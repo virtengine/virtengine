@@ -302,19 +302,25 @@ type GenesisState struct {
 
 	// EventSequence is the current event sequence number
 	EventSequence uint64 `json:"event_sequence"`
+
+	// CanonicalLifecycleActive explicitly activates the Task 84C write fence
+	// for a new chain. It defaults to false when absent so historical genesis
+	// documents remain importable for replay and upgrade fixtures.
+	CanonicalLifecycleActive bool `json:"canonical_lifecycle_active,omitempty"`
 }
 
 // DefaultGenesisState returns the default genesis state
 func DefaultGenesisState() *GenesisState {
 	return &GenesisState{
-		Params:           DefaultParams(),
-		Offerings:        make([]Offering, 0),
-		Orders:           make([]Order, 0),
-		Allocations:      make([]Allocation, 0),
-		Bids:             make([]MarketplaceBid, 0),
-		ProviderSettings: make(map[string]ProviderIdentitySettings),
-		MFAConfigs:       DefaultMFAActionConfigs(),
-		EventSequence:    0,
+		Params:                   DefaultParams(),
+		Offerings:                make([]Offering, 0),
+		Orders:                   make([]Order, 0),
+		Allocations:              make([]Allocation, 0),
+		Bids:                     make([]MarketplaceBid, 0),
+		ProviderSettings:         make(map[string]ProviderIdentitySettings),
+		MFAConfigs:               DefaultMFAActionConfigs(),
+		EventSequence:            0,
+		CanonicalLifecycleActive: true,
 	}
 }
 
@@ -340,7 +346,7 @@ func (gs *GenesisState) Validate() error {
 		if err := order.Validate(); err != nil {
 			return fmt.Errorf("invalid order %s: %w", order.ID.String(), err)
 		}
-		if !order.State.IsTerminal() {
+		if gs.CanonicalLifecycleActive && !order.State.IsTerminal() {
 			return fmt.Errorf("non-owner order %s must be terminal at canonical activation", order.ID.String())
 		}
 		if orderIDs[order.ID.String()] {
@@ -354,13 +360,30 @@ func (gs *GenesisState) Validate() error {
 		if err := allocation.Validate(); err != nil {
 			return fmt.Errorf("invalid allocation %s: %w", allocation.ID.String(), err)
 		}
-		if !allocation.State.IsTerminal() {
+		if gs.CanonicalLifecycleActive && !allocation.State.IsTerminal() {
 			return fmt.Errorf("non-owner allocation %s must be terminal at canonical activation", allocation.ID.String())
 		}
 		if allocationIDs[allocation.ID.String()] {
 			return fmt.Errorf("duplicate allocation ID: %s", allocation.ID.String())
 		}
 		allocationIDs[allocation.ID.String()] = true
+	}
+
+	bidIDs := make(map[string]bool)
+	for _, bid := range gs.Bids {
+		if err := bid.ID.Validate(); err != nil {
+			return fmt.Errorf("invalid bid %s: %w", bid.ID.String(), err)
+		}
+		if !bid.State.IsValid() {
+			return fmt.Errorf("invalid bid %s state: %s", bid.ID.String(), bid.State.String())
+		}
+		if gs.CanonicalLifecycleActive && !bid.State.IsTerminal() {
+			return fmt.Errorf("non-owner bid %s must be terminal at canonical activation", bid.ID.String())
+		}
+		if bidIDs[bid.ID.String()] {
+			return fmt.Errorf("duplicate bid ID: %s", bid.ID.String())
+		}
+		bidIDs[bid.ID.String()] = true
 	}
 
 	return nil

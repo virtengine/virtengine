@@ -21,4 +21,5 @@ var (
 	ErrProviderIneligible           = errorsmod.Register(ModuleName, 14, "provider is not eligible for reservation")
 	ErrLineageConflict              = errorsmod.Register(ModuleName, 15, "reservation lineage conflict")
 	ErrCapacityOverflow             = errorsmod.Register(ModuleName, 16, "resource capacity overflow")
+	ErrLegacyAllocationDeprecated   = errorsmod.Register(ModuleName, 17, "legacy resource allocation writes deprecated; use canonical reservations")
 )

@@ -1,9 +1,10 @@
 package keeper
 
 import (
-	"encoding/binary"
+	"crypto/sha256"
 	"encoding/json"
 	"fmt"
+	"strings"
 
 	sdkmath "cosmossdk.io/math"
 	storetypes "cosmossdk.io/store/types"
@@ -77,6 +78,9 @@ func (k Keeper) SetNextPayoutSequence(ctx sdk.Context, seq uint64) {
 	k.setNextSequence(ctx, types.PayoutSequenceKey(), seq)
 }
 
+// GetPayoutSequence returns the next persisted payout sequence for genesis export.
+func (k Keeper) GetPayoutSequence(ctx sdk.Context) uint64 { return k.getNextPayoutSequence(ctx) }
+
 // ============================================================================
 // Payout Storage
 // ============================================================================
@@ -88,6 +92,17 @@ func (k Keeper) SetPayout(ctx sdk.Context, payout types.PayoutRecord) error {
 	}
 
 	store := ctx.KVStore(k.skey)
+	for _, binding := range []struct {
+		name, value string
+		key         []byte
+	}{{"invoice", payout.InvoiceID, types.PayoutByInvoiceKey(payout.InvoiceID)}, {"settlement", payout.SettlementID, types.PayoutBySettlementKey(payout.SettlementID)}, {"idempotency", payout.IdempotencyKey, types.PayoutIdempotencyKey(payout.IdempotencyKey)}} {
+		if binding.value == "" {
+			continue
+		}
+		if owner := store.Get(binding.key); owner != nil && string(owner) != payout.PayoutID {
+			return types.ErrInvalidPayout.Wrapf("%s index already belongs to payout %s", binding.name, string(owner))
+		}
+	}
 	existing, found := k.GetPayout(ctx, payout.PayoutID)
 	if found {
 		if existing.State != payout.State {
@@ -271,6 +286,19 @@ func (k Keeper) updatePayoutState(ctx sdk.Context, payout types.PayoutRecord, ol
 
 // ExecutePayout executes a payout for a settlement/invoice
 func (k Keeper) ExecutePayout(ctx sdk.Context, invoiceID string, settlementID string) (*types.PayoutRecord, error) {
+	cacheCtx, write := ctx.CacheContext()
+	payout, err := k.executePayout(cacheCtx, invoiceID, settlementID)
+	if err != nil {
+		return nil, err
+	}
+	write()
+	return payout, nil
+}
+
+func (k Keeper) executePayout(ctx sdk.Context, invoiceID string, settlementID string) (*types.PayoutRecord, error) {
+	if caseID, held := k.HasActiveFinancialCase(ctx, "invoice", invoiceID); held {
+		return nil, types.ErrDisputeActive.Wrapf("invoice held by canonical case %s", caseID)
+	}
 	// Check idempotency
 	idempotencyKey := fmt.Sprintf("payout-%s-%s", invoiceID, settlementID)
 	if existingPayoutID := k.checkPayoutIdempotency(ctx, idempotencyKey); existingPayoutID != "" {
@@ -362,6 +390,9 @@ func (k Keeper) ExecutePayout(ctx sdk.Context, invoiceID string, settlementID st
 			return nil, err
 		}
 
+		if payout.FiatConversionID != "" && payout.FiatConversionID != conversion.ConversionID {
+			return nil, types.ErrInvalidPayout.Wrap("payout already claimed by another fiat conversion")
+		}
 		payout.FiatConversionID = conversion.ConversionID
 		if err := k.SetPayout(ctx, *payout); err != nil {
 			return nil, err
@@ -369,6 +400,13 @@ func (k Keeper) ExecutePayout(ctx sdk.Context, invoiceID string, settlementID st
 		// External execution is deferred. An off-chain worker observes this
 		// committed request and must submit an authenticated result in a future
 		// schema version; consensus never calls the endpoint directly.
+		return payout, nil
+	}
+
+	// An enabled fiat preference reserves this newly created payout as the
+	// authoritative value hold. Settlement then creates a conversion that must
+	// reference this exact payout before any external work can begin.
+	if pref, ok := k.GetFiatPayoutPreference(ctx, payout.Provider); ok && pref.Enabled {
 		return payout, nil
 	}
 
@@ -388,6 +426,20 @@ func (k Keeper) ExecutePayout(ctx sdk.Context, invoiceID string, settlementID st
 
 // executePayoutTransfer performs the actual fund transfer
 func (k Keeper) executePayoutTransfer(ctx sdk.Context, payout *types.PayoutRecord) error {
+	if payout == nil {
+		return types.ErrInvalidPayout.Wrap("payout required")
+	}
+	if payout.FiatConversionID != "" {
+		return types.ErrPayoutHeld.Wrap("fiat conversion owns payout value; legacy chain transfer forbidden")
+	}
+	if conversion, found := k.GetFiatConversionByPayout(ctx, payout.PayoutID); found {
+		if conversion.State != types.FiatConversionStateCancelled || conversion.TerminalPolicy != terminalPolicyCancelNoSwap || conversion.DailyQuotaReserved {
+			return types.ErrPayoutHeld.Wrapf("fiat conversion %s owns payout value", conversion.ConversionID)
+		}
+	}
+	if caseID, held := k.HasActiveFinancialCase(ctx, "invoice", payout.InvoiceID); held {
+		return types.ErrPayoutHeld.Wrapf("canonical case %s is active", caseID)
+	}
 	oldState := payout.State
 
 	// Mark as processing
@@ -428,6 +480,11 @@ func (k Keeper) executePayoutTransfer(ctx sdk.Context, payout *types.PayoutRecor
 	if err := payout.MarkCompleted(txHash, ctx.BlockTime()); err != nil {
 		return err
 	}
+	effectHash := sha256.Sum256([]byte(strings.Join([]string{
+		"virtengine/settlement/native-payout/v1", payout.PayoutID, payout.Provider, payout.NetAmount.String(), txHash,
+	}, "\x00")))
+	payout.ValueMovementApplied = true
+	payout.ValueMovementEffectHash = effectHash[:]
 
 	// Update state index
 	k.updatePayoutState(ctx, *payout, types.PayoutStateProcessing)
@@ -442,10 +499,8 @@ func (k Keeper) executePayoutTransfer(ctx sdk.Context, payout *types.PayoutRecor
 		payout.NetAmount, "payout completed", "system")
 
 	// Record treasury entries for fees
-	k.recordTreasuryEntry(ctx, payout, types.TreasuryRecordPlatformFee, payout.PlatformFee)
-	k.recordTreasuryEntry(ctx, payout, types.TreasuryRecordValidatorFee, payout.ValidatorFee)
-	if !payout.HoldbackAmount.IsZero() {
-		k.recordTreasuryEntry(ctx, payout, types.TreasuryRecordHoldback, payout.HoldbackAmount)
+	if err := k.recordPayoutRetainedTreasuryEntries(ctx, payout); err != nil {
+		return err
 	}
 
 	// Emit event
@@ -472,6 +527,15 @@ func (k Keeper) executePayoutTransfer(ctx sdk.Context, payout *types.PayoutRecor
 
 // ExecutePayoutByID executes a payout by its ID
 func (k Keeper) ExecutePayoutByID(ctx sdk.Context, payoutID string) error {
+	cacheCtx, write := ctx.CacheContext()
+	if err := k.executePayoutByID(cacheCtx, payoutID); err != nil {
+		return err
+	}
+	write()
+	return nil
+}
+
+func (k Keeper) executePayoutByID(ctx sdk.Context, payoutID string) error {
 	payout, found := k.GetPayout(ctx, payoutID)
 	if !found {
 		return types.ErrPayoutNotFound.Wrapf("payout %s not found", payoutID)
@@ -484,13 +548,29 @@ func (k Keeper) ExecutePayoutByID(ctx sdk.Context, payoutID string) error {
 	if payout.State == types.PayoutStateHeld {
 		return types.ErrPayoutHeld.Wrap("payout is on hold")
 	}
+	if caseID, held := k.HasActiveFinancialCase(ctx, "invoice", payout.InvoiceID); held {
+		return types.ErrPayoutHeld.Wrapf("canonical case %s is active", caseID)
+	}
 
 	if payout.FiatConversionID != "" {
 		conversion, found := k.GetFiatConversion(ctx, payout.FiatConversionID)
 		if !found {
 			return types.ErrFiatConversionNotFound.Wrapf("conversion %s not found for payout %s", payout.FiatConversionID, payout.PayoutID)
 		}
-		return k.executeFiatConversion(ctx, &payout, &conversion)
+		if conversion.State == types.FiatConversionStatePayoutCompleted {
+			return nil
+		}
+		if conversion.State == types.FiatConversionStateCancelled && conversion.TerminalPolicy == terminalPolicyCancelNoSwap && !conversion.DailyQuotaReserved {
+			payout.FiatConversionID = ""
+			if err := k.SetPayout(ctx, payout); err != nil {
+				return err
+			}
+			return k.executePayoutTransfer(ctx, &payout)
+		}
+		if conversion.State == types.FiatConversionStateFailed || conversion.State == types.FiatConversionStateCancelled {
+			return types.ErrFiatConversionFailed.Wrap(conversion.TerminalPolicy)
+		}
+		return types.ErrPayoutHeld.Wrap("fiat payout remains held pending authenticated terminal observation")
 	}
 
 	return k.executePayoutTransfer(ctx, &payout)
@@ -539,6 +619,12 @@ func (k Keeper) HoldPayout(ctx sdk.Context, payoutID string, disputeID string, r
 	}
 
 	oldState := payout.State
+	if payout.State == types.PayoutStateHeld {
+		if payout.DisputeID == disputeID {
+			return nil
+		}
+		return types.ErrFinancialCaseHold.Wrapf("payout already held by %s", payout.DisputeID)
+	}
 	if err := payout.Hold(disputeID, reason, ctx.BlockTime()); err != nil {
 		return err
 	}
@@ -581,6 +667,9 @@ func (k Keeper) ReleasePayoutHold(ctx sdk.Context, payoutID string) error {
 
 	if payout.State != types.PayoutStateHeld {
 		return types.ErrInvalidStateTransition.Wrap("payout is not on hold")
+	}
+	if k.IsFinancialCasesActive(ctx) && strings.HasPrefix(payout.DisputeID, "financial-case/") {
+		return types.ErrLegacyFinancialMutationFenced
 	}
 
 	oldState := payout.State
@@ -643,6 +732,9 @@ func (k Keeper) RefundPayout(ctx sdk.Context, payoutID string, reason string) er
 
 	if payout.State != types.PayoutStateHeld {
 		return types.ErrInvalidStateTransition.Wrap("can only refund held payouts")
+	}
+	if k.IsFinancialCasesActive(ctx) && strings.HasPrefix(payout.DisputeID, "financial-case/") {
+		return types.ErrLegacyFinancialMutationFenced
 	}
 
 	oldState := payout.State
@@ -712,6 +804,12 @@ func (k Keeper) ProcessPendingPayouts(ctx sdk.Context) error {
 	pendingPayouts := k.GetPayoutsByState(ctx, types.PayoutStatePending)
 
 	for _, payout := range pendingPayouts {
+		if payout.FiatConversionID != "" {
+			continue
+		}
+		if _, held := k.HasActiveFinancialCase(ctx, "invoice", payout.InvoiceID); held {
+			continue
+		}
 		if err := k.ExecutePayoutByID(ctx, payout.PayoutID); err != nil {
 			k.Logger(ctx).Error("failed to process pending payout",
 				"payout_id", payout.PayoutID,
@@ -734,6 +832,12 @@ func (k Keeper) RetryFailedPayouts(ctx sdk.Context) error {
 	failedPayouts := k.GetPayoutsByState(ctx, types.PayoutStateFailed)
 
 	for _, payout := range failedPayouts {
+		if payout.FiatConversionID != "" {
+			continue
+		}
+		if _, held := k.HasActiveFinancialCase(ctx, "invoice", payout.InvoiceID); held {
+			continue
+		}
 		if payout.ExecutionAttempts >= maxRetries {
 			continue // Max retries exceeded
 		}
@@ -832,12 +936,21 @@ func (k Keeper) recordTreasuryEntry(
 	payout *types.PayoutRecord,
 	recordType types.TreasuryRecordType,
 	amount sdk.Coins,
-) {
+) error {
 	if amount.IsZero() {
-		return
+		return nil
 	}
 
 	store := ctx.KVStore(k.skey)
+	recordID := treasuryPayoutRecordID(payout.PayoutID, recordType)
+	key := types.TreasuryRecordKey(recordID)
+	if existing := store.Get(key); existing != nil {
+		var record types.TreasuryRecord
+		if err := json.Unmarshal(existing, &record); err != nil || record.PayoutID != payout.PayoutID || record.SettlementID != payout.SettlementID || record.RecordType != recordType || !record.Amount.Equal(amount) {
+			return types.ErrInvalidSettlement.Wrapf("treasury effect conflict for payout %s type %s", payout.PayoutID, recordType.String())
+		}
+		return nil
+	}
 
 	// Get current treasury balance
 	balance := k.getTreasuryBalance(ctx)
@@ -853,10 +966,6 @@ func (k Keeper) recordTreasuryEntry(
 		balanceAfter = balance
 	}
 
-	// Create treasury record
-	seq := k.incrementTreasurySequence(ctx)
-	recordID := fmt.Sprintf("treasury-%d-%d", ctx.BlockTime().Unix(), seq)
-
 	record := types.TreasuryRecord{
 		RecordID:     recordID,
 		RecordType:   recordType,
@@ -871,12 +980,60 @@ func (k Keeper) recordTreasuryEntry(
 
 	bz, err := json.Marshal(&record)
 	if err != nil {
-		return // silently skip if marshal fails
+		return err
 	}
-	store.Set(types.TreasuryRecordKey(recordID), bz)
+	store.Set(key, bz)
 
 	// Update treasury balance
-	k.setTreasuryBalance(ctx, balanceAfter)
+	return k.setTreasuryBalance(ctx, balanceAfter)
+}
+
+func treasuryPayoutRecordID(payoutID string, recordType types.TreasuryRecordType) string {
+	return "payout/" + payoutID + "/" + recordType.String()
+}
+
+func (k Keeper) validateRetainedTreasuryEntries(ctx sdk.Context, payout *types.PayoutRecord) error {
+	if payout == nil {
+		return types.ErrInvalidPayout.Wrap("payout required for treasury accounting")
+	}
+	for _, entry := range []struct {
+		recordType types.TreasuryRecordType
+		amount     sdk.Coins
+	}{
+		{types.TreasuryRecordPlatformFee, payout.PlatformFee},
+		{types.TreasuryRecordValidatorFee, payout.ValidatorFee},
+		{types.TreasuryRecordHoldback, payout.HoldbackAmount},
+	} {
+		if entry.amount.IsZero() {
+			continue
+		}
+		if existing := ctx.KVStore(k.skey).Get(types.TreasuryRecordKey(treasuryPayoutRecordID(payout.PayoutID, entry.recordType))); existing != nil {
+			var record types.TreasuryRecord
+			if err := json.Unmarshal(existing, &record); err != nil || record.PayoutID != payout.PayoutID || record.RecordType != entry.recordType || !record.Amount.Equal(entry.amount) {
+				return types.ErrInvalidSettlement.Wrapf("treasury effect conflict for payout %s type %s", payout.PayoutID, entry.recordType.String())
+			}
+		}
+	}
+	return nil
+}
+
+func (k Keeper) recordPayoutRetainedTreasuryEntries(ctx sdk.Context, payout *types.PayoutRecord) error {
+	if err := k.validateRetainedTreasuryEntries(ctx, payout); err != nil {
+		return err
+	}
+	for _, entry := range []struct {
+		recordType types.TreasuryRecordType
+		amount     sdk.Coins
+	}{
+		{types.TreasuryRecordPlatformFee, payout.PlatformFee},
+		{types.TreasuryRecordValidatorFee, payout.ValidatorFee},
+		{types.TreasuryRecordHoldback, payout.HoldbackAmount},
+	} {
+		if err := k.recordTreasuryEntry(ctx, payout, entry.recordType, entry.amount); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (k Keeper) getTreasuryBalance(ctx sdk.Context) sdk.Coins {
@@ -893,30 +1050,14 @@ func (k Keeper) getTreasuryBalance(ctx sdk.Context) sdk.Coins {
 	return balance
 }
 
-func (k Keeper) setTreasuryBalance(ctx sdk.Context, balance sdk.Coins) {
+func (k Keeper) setTreasuryBalance(ctx sdk.Context, balance sdk.Coins) error {
 	store := ctx.KVStore(k.skey)
 	bz, err := json.Marshal(&balance)
 	if err != nil {
-		return // silently skip if marshal fails
+		return err
 	}
 	store.Set(types.PrefixTreasuryBalance, bz)
-}
-
-func (k Keeper) incrementTreasurySequence(ctx sdk.Context) uint64 {
-	store := ctx.KVStore(k.skey)
-	key := make([]byte, 0, len(types.PrefixTreasuryRecord)+5)
-	key = append(key, types.PrefixTreasuryRecord...)
-	key = append(key, []byte("_seq")...)
-	bz := store.Get(key)
-	var seq uint64
-	if bz != nil {
-		seq = binary.BigEndian.Uint64(bz)
-	}
-	seq++
-	newBz := make([]byte, 8)
-	binary.BigEndian.PutUint64(newBz, seq)
-	store.Set(key, newBz)
-	return seq
+	return nil
 }
 
 // GetTreasuryBalance returns the current treasury balance
@@ -949,7 +1090,7 @@ func (k Keeper) OnInvoicePaid(ctx sdk.Context, invoiceRecord *billing.InvoiceLed
 	}
 
 	// Execute payout
-	_, err := k.ExecutePayout(ctx, matchingSettlement.SettlementID, invoiceRecord.InvoiceID)
+	_, err := k.ExecutePayout(ctx, invoiceRecord.InvoiceID, matchingSettlement.SettlementID)
 	if err != nil {
 		return err
 	}
@@ -973,6 +1114,9 @@ func (k Keeper) OnDisputeOpened(ctx sdk.Context, invoiceID string, disputeID str
 
 // OnDisputeResolved is called when a dispute is resolved
 func (k Keeper) OnDisputeResolved(ctx sdk.Context, invoiceID string, resolution billing.DisputeResolutionType) error {
+	if k.IsFinancialCasesActive(ctx) {
+		return types.ErrLegacyFinancialMutationFenced
+	}
 	payout, found := k.GetPayoutByInvoice(ctx, invoiceID)
 	if !found {
 		return nil

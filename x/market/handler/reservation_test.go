@@ -3,6 +3,7 @@ package handler
 import (
 	"bytes"
 	"errors"
+	"math"
 	"testing"
 	"time"
 
@@ -22,9 +23,42 @@ import (
 	mv1 "github.com/virtengine/virtengine/sdk/go/node/market/v1"
 	markettypes "github.com/virtengine/virtengine/sdk/go/node/market/v1beta5"
 	resourcesv1 "github.com/virtengine/virtengine/sdk/go/node/resources/v1"
+	attributesv1 "github.com/virtengine/virtengine/sdk/go/node/types/attributes/v1"
 	rv1beta4 "github.com/virtengine/virtengine/sdk/go/node/types/resources/v1beta4"
 	resourcetypes "github.com/virtengine/virtengine/x/resources/types"
 )
+
+func TestMarketResourceCapacityUsesGeneratedUnitsAndRoundsUp(t *testing.T) {
+	offers := markettypes.ResourcesOffer{{
+		Count: 2,
+		Resources: rv1beta4.Resources{
+			CPU:     &rv1beta4.CPU{Units: rv1beta4.NewResourceValue(1500)},
+			Memory:  &rv1beta4.Memory{Quantity: rv1beta4.NewResourceValue(1536 * 1024 * 1024)},
+			Storage: rv1beta4.Volumes{{Quantity: rv1beta4.NewResourceValue(3*1024*1024*1024 + 1)}},
+		},
+	}}
+
+	capacity, err := marketResourceCapacity(offers)
+	require.NoError(t, err)
+	require.Equal(t, int64(3), capacity.CpuCores)
+	require.Equal(t, int64(3), capacity.MemoryGb)
+	require.Equal(t, int64(7), capacity.StorageGb)
+}
+
+func TestMarketResourceCapacityRejectsOverflowAndMissingGPUType(t *testing.T) {
+	_, err := marketResourceCapacity(markettypes.ResourcesOffer{{Count: 2, Resources: rv1beta4.Resources{CPU: &rv1beta4.CPU{Units: rv1beta4.NewResourceValue(math.MaxUint64)}}}})
+	require.ErrorContains(t, err, "overflow")
+
+	_, err = marketResourceCapacity(markettypes.ResourcesOffer{{Count: 1, Resources: rv1beta4.Resources{GPU: &rv1beta4.GPU{Units: rv1beta4.NewResourceValue(1)}}}})
+	require.ErrorContains(t, err, "GPU type")
+}
+
+func TestMarketResourceCapacityExtractsGPUType(t *testing.T) {
+	capacity, err := marketResourceCapacity(markettypes.ResourcesOffer{{Count: 2, Resources: rv1beta4.Resources{GPU: &rv1beta4.GPU{Units: rv1beta4.NewResourceValue(1), Attributes: attributesv1.Attributes{{Key: "gpu_type", Value: "nvidia-a100"}}}}}})
+	require.NoError(t, err)
+	require.Equal(t, int64(2), capacity.Gpus)
+	require.Equal(t, "nvidia-a100", capacity.GpuType)
+}
 
 func TestCreateLeaseReservationFailureIsAtomic(t *testing.T) {
 	ctx := reservationTestContext(t)

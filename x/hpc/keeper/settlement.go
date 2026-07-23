@@ -83,6 +83,9 @@ func (k Keeper) ProcessJobSettlement(ctx sdk.Context, jobID string) (*Settlement
 }
 
 func (k Keeper) processJobSettlement(ctx sdk.Context, jobID string) (*SettlementResult, error) {
+	if caseID := k.canonicalCaseForJob(ctx, jobID); caseID != "" {
+		return nil, types.ErrInvalidJobAccounting.Wrap("canonical financial case " + caseID + " holds settlement")
+	}
 	job, exists := k.GetJob(ctx, jobID)
 	if !exists {
 		return nil, types.ErrJobNotFound
@@ -162,8 +165,7 @@ func (k Keeper) processJobSettlement(ctx sdk.Context, jobID string) (*Settlement
 
 	// Distribute rewards
 	if _, err := k.DistributeJobRewardsFromSettlement(ctx, jobID, record); err != nil {
-		k.Logger(ctx).Error("failed to distribute rewards", "job_id", jobID, "error", err)
-		// Continue - settlement succeeded even if reward distribution failed
+		return nil, types.ErrInvalidReward.Wrapf("failed to distribute settlement rewards: %v", err)
 	}
 
 	k.Logger(ctx).Info("settled HPC job",
@@ -430,6 +432,9 @@ func clampUint64FromInt64(value int64) uint64 {
 
 // DistributeJobRewardsFromSettlement distributes rewards after settlement
 func (k Keeper) DistributeJobRewardsFromSettlement(ctx sdk.Context, jobID string, record *types.HPCAccountingRecord) (*types.HPCRewardRecord, error) {
+	if caseID := k.canonicalCaseForJob(ctx, jobID); caseID != "" {
+		return nil, types.ErrInvalidReward.Wrap("canonical financial case " + caseID + " holds rewards")
+	}
 	job, exists := k.GetJob(ctx, jobID)
 	if !exists {
 		return nil, types.ErrJobNotFound

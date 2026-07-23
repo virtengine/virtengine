@@ -1,6 +1,8 @@
 package keeper_test
 
 import (
+	"bytes"
+	"crypto/sha256"
 	"testing"
 	"time"
 
@@ -19,6 +21,8 @@ import (
 	"github.com/virtengine/virtengine/x/fraud/keeper"
 	"github.com/virtengine/virtengine/x/fraud/types"
 	rolestypes "github.com/virtengine/virtengine/x/roles/types"
+	settlementkeeper "github.com/virtengine/virtengine/x/settlement/keeper"
+	settlementtypes "github.com/virtengine/virtengine/x/settlement/types"
 )
 
 // MockRolesKeeper implements the RolesKeeper interface for testing
@@ -45,6 +49,26 @@ func (m *MockRolesKeeper) IsAdmin(ctx sdk.Context, addr sdk.AccAddress) bool {
 type MockProviderKeeper struct {
 	mock.Mock
 }
+
+type fraudFinancialCaseStub struct {
+	financialCase settlementtypes.FinancialCase
+	escalations   int
+}
+
+func (*fraudFinancialCaseStub) OpenFinancialCase(sdk.Context, settlementkeeper.FinancialCaseOpenRequest) (*settlementtypes.FinancialCase, *settlementtypes.FinancialClaim, bool, error) {
+	return nil, nil, false, nil
+}
+func (s *fraudFinancialCaseStub) EscalateFinancialCase(_ sdk.Context, caseID, _ string, reasonHash []byte) error {
+	if caseID == s.financialCase.CaseId && len(reasonHash) == sha256.Size {
+		s.escalations++
+		s.financialCase.Status = settlementtypes.FinancialCaseStatusEscalated
+	}
+	return nil
+}
+func (s *fraudFinancialCaseStub) GetFinancialCase(_ sdk.Context, caseID string) (settlementtypes.FinancialCase, bool) {
+	return s.financialCase, caseID == s.financialCase.CaseId
+}
+func (*fraudFinancialCaseStub) IsFinancialCasesActive(sdk.Context) bool { return true }
 
 func (m *MockProviderKeeper) IsProvider(ctx sdk.Context, addr sdk.AccAddress) bool {
 	args := m.Called(ctx, addr)
@@ -331,6 +355,41 @@ func (s *MsgServerTestSuite) TestResolveFraudReport_Success() {
 	report, found := s.keeper.GetFraudReport(s.ctx, submitResp.ReportId)
 	s.Require().True(found)
 	s.Require().Equal(types.FraudReportStatusResolved, report.Status)
+}
+
+func (s *MsgServerTestSuite) TestResolveFraudReport_ActiveCanonicalCasePersistsEscalationRequest() {
+	reporterAddr := sdk.AccAddress(bytes.Repeat([]byte{31}, 20))
+	moderatorAddr := sdk.AccAddress(bytes.Repeat([]byte{32}, 20))
+	reportedAddr := sdk.AccAddress(bytes.Repeat([]byte{33}, 20))
+	s.providerKeeper.On("IsProvider", mock.Anything, reporterAddr).Return(true)
+	s.rolesKeeper.On("HasRole", mock.Anything, reporterAddr, mock.Anything).Return(true)
+	s.rolesKeeper.On("IsModerator", mock.Anything, moderatorAddr).Return(true)
+
+	submitResp, err := s.msgServer.SubmitFraudReport(s.ctx, &types.MsgSubmitFraudReport{
+		Reporter: reporterAddr.String(), ReportedParty: reportedAddr.String(), Category: types.FraudCategoryPBPaymentFraud,
+		Description: "Payment fraud description for canonical escalation", Evidence: validEvidence(),
+	})
+	s.Require().NoError(err)
+	report, found := s.keeper.GetFraudReport(s.ctx, submitResp.ReportId)
+	s.Require().True(found)
+	stub := &fraudFinancialCaseStub{financialCase: settlementtypes.FinancialCase{CaseId: "financial-case/test", Status: settlementtypes.FinancialCaseStatusReview}}
+	report.FinancialCaseID = stub.financialCase.CaseId
+	report.FinancialCaseStatus = stub.financialCase.Status.String()
+	s.Require().NoError(s.keeper.SetFraudReport(s.ctx, report))
+	s.keeper.SetFinancialCaseKeeper(stub)
+	s.msgServer = keeper.NewMsgServerImpl(s.keeper)
+
+	response, err := s.msgServer.ResolveFraudReport(s.ctx, &types.MsgResolveFraudReport{
+		ReportId: submitResp.ReportId, Moderator: moderatorAddr.String(), Resolution: types.ResolutionTypePBWarning,
+		Notes: "canonical resolution requested",
+	})
+	s.Require().NoError(err)
+	s.Require().NotNil(response)
+	s.Require().Equal(1, stub.escalations)
+	report, found = s.keeper.GetFraudReport(s.ctx, submitResp.ReportId)
+	s.Require().True(found)
+	s.Require().Equal(types.FraudReportStatusSubmitted, report.Status)
+	s.Require().Equal(settlementtypes.FinancialCaseStatusEscalated.String(), report.FinancialCaseStatus)
 }
 
 // Test: RejectFraudReport - success

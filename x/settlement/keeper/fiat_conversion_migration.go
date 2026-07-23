@@ -564,6 +564,7 @@ func (k Keeper) ValidateFiatConversionInvariants(ctx sdk.Context) []string {
 		}
 	}
 	entryIter.Close()
+	broken = append(broken, k.validateCompletedFiatTreasuryAccounting(ctx, payouts)...)
 	actualCustody := k.GetFiatConversionCustodyBalance(ctx)
 	if !actualCustody.Equal(expectedCustody) {
 		broken = append(broken, fmt.Sprintf("fiat custody sink balance mismatch: expected=%s actual=%s", expectedCustody, actualCustody))
@@ -581,5 +582,98 @@ func (k Keeper) ValidateFiatConversionInvariants(ctx sdk.Context) []string {
 		}
 	}
 	custodyIter.Close()
+	return broken
+}
+
+// validateCompletedFiatTreasuryAccounting is intentionally payout-scoped, not
+// a fabricated global module liability equation. The settlement store has no
+// complete historical liability model for unrelated escrow/reward balances.
+// For every authenticated completed fiat conversion it can, however, prove per
+// denomination that the custody effect plus retained components equals gross
+// exposure and that each retained component has exactly one treasury entry.
+func (k Keeper) validateCompletedFiatTreasuryAccounting(ctx sdk.Context, payouts map[string]types.PayoutRecord) []string {
+	type retainedRecords map[types.TreasuryRecordType][]types.TreasuryRecord
+	recordsByPayout := make(map[string]retainedRecords)
+	completedByPayout := make(map[string]types.FiatConversionRecord)
+	var broken []string
+	k.WithFiatConversions(ctx, func(conversion types.FiatConversionRecord) bool {
+		if !conversion.LegacyQuarantined && conversion.State == types.FiatConversionStatePayoutCompleted && conversion.ValueMovementApplied {
+			completedByPayout[conversion.PayoutID] = conversion
+		}
+		return false
+	})
+	iterator := storetypes.KVStorePrefixIterator(ctx.KVStore(k.skey), types.PrefixTreasuryRecord)
+	defer iterator.Close()
+	for ; iterator.Valid(); iterator.Next() {
+		var record types.TreasuryRecord
+		if err := json.Unmarshal(iterator.Value(), &record); err != nil {
+			// Historical treasury data is outside this scoped liability proof.
+			// A malformed expected deterministic key is detected as missing below.
+			continue
+		}
+		if _, scoped := completedByPayout[record.PayoutID]; !scoped {
+			continue
+		}
+		if record.RecordID == "" || !bytes.Equal(iterator.Key(), types.TreasuryRecordKey(record.RecordID)) || !record.Amount.IsValid() || record.Amount.IsZero() {
+			broken = append(broken, fmt.Sprintf("malformed scoped treasury record %x", iterator.Key()))
+			continue
+		}
+		payout, found := payouts[record.PayoutID]
+		if !found || payout.SettlementID != record.SettlementID {
+			broken = append(broken, fmt.Sprintf("orphan scoped treasury record %x", iterator.Key()))
+			continue
+		}
+		switch record.RecordType {
+		case types.TreasuryRecordPlatformFee, types.TreasuryRecordValidatorFee, types.TreasuryRecordHoldback:
+			if record.RecordID != treasuryPayoutRecordID(record.PayoutID, record.RecordType) {
+				broken = append(broken, fmt.Sprintf("noncanonical scoped treasury record %x", iterator.Key()))
+				continue
+			}
+			if recordsByPayout[record.PayoutID] == nil {
+				recordsByPayout[record.PayoutID] = make(retainedRecords)
+			}
+			recordsByPayout[record.PayoutID][record.RecordType] = append(recordsByPayout[record.PayoutID][record.RecordType], record)
+		case types.TreasuryRecordRefund, types.TreasuryRecordWithdrawal:
+		default:
+			broken = append(broken, fmt.Sprintf("unknown treasury record type %x", iterator.Key()))
+		}
+	}
+
+	completedPayoutIDs := make([]string, 0, len(completedByPayout))
+	for payoutID := range completedByPayout {
+		completedPayoutIDs = append(completedPayoutIDs, payoutID)
+	}
+	sort.Strings(completedPayoutIDs)
+	for _, payoutID := range completedPayoutIDs {
+		conversion := completedByPayout[payoutID]
+		payout, found := payouts[conversion.PayoutID]
+		if !found {
+			continue // reported by the primary payout linkage invariant
+		}
+		retained := payout.PlatformFee.Add(payout.ValidatorFee...).Add(payout.HoldbackAmount...)
+		reconciled := sdk.NewCoins(conversion.CustodySinkAmount).Add(retained...)
+		if !reconciled.Equal(payout.GrossAmount) {
+			broken = append(broken, conversion.ConversionID+": custody plus retained components do not equal gross exposure")
+		}
+		for _, expected := range []struct {
+			recordType types.TreasuryRecordType
+			amount     sdk.Coins
+		}{
+			{types.TreasuryRecordPlatformFee, payout.PlatformFee},
+			{types.TreasuryRecordValidatorFee, payout.ValidatorFee},
+			{types.TreasuryRecordHoldback, payout.HoldbackAmount},
+		} {
+			records := recordsByPayout[payout.PayoutID][expected.recordType]
+			if expected.amount.IsZero() {
+				if len(records) != 0 {
+					broken = append(broken, conversion.ConversionID+": zero retained component has treasury entry")
+				}
+				continue
+			}
+			if len(records) != 1 || !records[0].Amount.Equal(expected.amount) {
+				broken = append(broken, conversion.ConversionID+": retained treasury component missing, duplicated, or mismatched")
+			}
+		}
+	}
 	return broken
 }

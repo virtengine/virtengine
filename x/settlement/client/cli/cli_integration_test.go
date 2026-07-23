@@ -1,6 +1,7 @@
 package cli_test
 
 import (
+	"bytes"
 	"strconv"
 	"strings"
 	"testing"
@@ -11,6 +12,7 @@ import (
 
 	sdkclient "github.com/cosmos/cosmos-sdk/client"
 	clitestutil "github.com/cosmos/cosmos-sdk/testutil/cli"
+	sdk "github.com/cosmos/cosmos-sdk/types"
 
 	"github.com/virtengine/virtengine/sdk/go/cli"
 	"github.com/virtengine/virtengine/testutil"
@@ -39,6 +41,7 @@ func (s *settlementCLITestSuite) TestSettlementCLICommands() {
 
 	fromName := s.WalletNameForTest()
 	fromAddr := s.WalletForTest().String()
+	providerAddr := sdk.AccAddress(bytes.Repeat([]byte{84}, 20)).String()
 
 	txFlags := cli.TestFlags().
 		WithFrom(fromName).
@@ -60,7 +63,7 @@ func (s *settlementCLITestSuite) TestSettlementCLICommands() {
 	s.Require().NoError(s.Network().WaitForNextBlock())
 
 	err = s.execTxCmd(cctx, settlementcli.CmdActivateEscrow(),
-		append([]string{escrowDispute, "lease-2", fromAddr}, txFlags...),
+		append([]string{escrowDispute, "lease-2", providerAddr}, txFlags...),
 	)
 	s.Require().NoError(err)
 	s.Require().NoError(s.Network().WaitForNextBlock())
@@ -91,8 +94,8 @@ func (s *settlementCLITestSuite) TestSettlementCLICommands() {
 	err = s.execTxCmd(cctx, settlementcli.CmdResolveDispute(),
 		append([]string{escrowDispute}, resolveArgs...),
 	)
-	s.Require().NoError(err)
-	s.Require().NoError(s.Network().WaitForNextBlock())
+	s.Require().Error(err)
+	s.Require().Contains(err.Error(), "canonical case")
 
 	issueRefundArgs := cli.TestFlags().Append(txFlags).WithFlag("reason", "support refund")
 	err = s.execTxCmd(cctx, settlementcli.CmdIssueRefund(),

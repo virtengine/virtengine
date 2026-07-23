@@ -33,6 +33,8 @@ var (
 	ErrSwapOutcomeAmbiguous    = errors.New("DEX swap outcome ambiguous")
 	ErrFiatGovernanceDisabled  = errors.New("fiat conversion disabled by governance")
 	ErrFiatFinancialHold       = errors.New("fiat conversion lineage has an active financial hold")
+	ErrFiatCurrentProfile      = errors.New("fiat conversion current profile changed")
+	ErrFiatCurrentCompliance   = errors.New("fiat conversion current compliance authorization changed")
 )
 
 const fiatObservationStatusSubmitted = "submitted" //nolint:goconst // Fiat settlement wire status, not an HPC lifecycle event.
@@ -76,15 +78,17 @@ type FiatDEX interface {
 }
 
 type DEXSwapReconciliation struct {
-	Found         bool
-	Final         bool
-	Reorged       bool
-	TxHash        string
-	Height        int64
-	BlockHash     []byte
-	Confirmations uint32
-	FinalityHash  []byte
-	OutputAmount  sdkmath.Int
+	Found           bool
+	Final           bool
+	Reorged         bool
+	TerminalFailure bool
+	FailureCode     string
+	TxHash          string
+	Height          int64
+	BlockHash       []byte
+	Confirmations   uint32
+	FinalityHash    []byte
+	OutputAmount    sdkmath.Int
 }
 
 // AdapterFiatDEX adapts an existing DEX adapter plus an explicit finality query.
@@ -457,13 +461,30 @@ func (o *FiatConversionOrchestrator) process(ctx context.Context, id string) err
 		}
 		return o.reconcilePendingObservation(ctx, item, chain)
 	}
+	if fiatWorkRequiresReadOnlyReconciliation(item, chain) {
+		if err := o.validateImmutableIntentAndProfiles(item, chain); err != nil {
+			return o.manualReview(ctx, item, "RECONCILIATION_COMMITMENT_MISMATCH", err)
+		}
+		if chain.ObservationSequence < item.ObservationSequence {
+			return o.deferWithoutAttempt(ctx, item, "CHAIN_OBSERVATION_LAG")
+		}
+		if chain.ObservationSequence != item.ObservationSequence || !bytes.Equal(chain.LastObservationDigest, mustHex32(item.ObservationDigest)) {
+			return o.manualReview(ctx, item, "OBSERVATION_HEAD_DIVERGED", ErrFiatIntentChanged)
+		}
+		switch item.State {
+		case FiatWorkSwapBroadcast, FiatWorkAmbiguous:
+			return o.reconcileSwap(ctx, item, chain)
+		case FiatWorkPayoutSubmitted, FiatWorkPayoutAmbiguous:
+			return o.reconcilePayout(ctx, item)
+		}
+	}
 	chain, err = o.validateIntentAndProfiles(ctx, item, chain)
 	if err != nil {
 		if errors.Is(err, ErrFiatConversionQueryUnavailable) {
 			return o.retry(ctx, item, "AUTHORIZATION_QUERY_UNAVAILABLE", err)
 		}
-		if errors.Is(err, ErrFiatGovernanceDisabled) || errors.Is(err, ErrFiatFinancialHold) {
-			return o.manualReviewWithoutObservation(ctx, item, executionBlockCode(err), err)
+		if currentFiatAuthorizationError(err) {
+			return o.deferExecutionBlocked(ctx, item, executionBlockCode(err), err)
 		}
 		return o.manualReview(ctx, item, "PROFILE_OR_INTENT_MISMATCH", err)
 	}
@@ -502,10 +523,10 @@ func (o *FiatConversionOrchestrator) quoteSwap(ctx context.Context, item *FiatCo
 	clearString(&resolvedDestination.Reference)
 	resolvedCompliance, err := o.cfg.Compliance.ResolveCompliance(ctx, chain)
 	if err != nil {
-		return o.manualReview(ctx, item, "COMPLIANCE_REVOKED", err)
+		return o.deferExecutionBlocked(ctx, item, "COMPLIANCE_REVOKED", err)
 	}
 	if err := validateResolvedCompliance(chain, resolvedCompliance, o.cfg.Now()); err != nil {
-		return o.manualReview(ctx, item, "COMPLIANCE_REVOKED", err)
+		return o.deferExecutionBlocked(ctx, item, "COMPLIANCE_REVOKED", err)
 	}
 	address, err := o.cfg.Custody.Address(ctx, o.cfg.Profiles.DEX.ChainID)
 	if err != nil {
@@ -598,14 +619,14 @@ func (o *FiatConversionOrchestrator) signAndExecuteSwap(ctx context.Context, ite
 	if err != nil {
 		return err
 	}
+	chain, err := o.refreshBeforeExternalBoundary(ctx, updated, fiatBoundarySwapBroadcast)
+	if err != nil {
+		return err
+	}
 	updated, err = o.updateOwned(ctx, item.Intent.ConversionID, func(work *FiatConversionWorkItem) error {
 		work.State = FiatWorkSwapBroadcast
 		return nil
 	})
-	if err != nil {
-		return err
-	}
-	chain, err := o.refreshBeforeExternalBoundary(ctx, updated, fiatBoundarySwapBroadcast)
 	if err != nil {
 		return err
 	}
@@ -655,6 +676,17 @@ func (o *FiatConversionOrchestrator) reconcileSwap(ctx context.Context, item *Fi
 	}
 	if status.Reorged {
 		return o.manualReview(ctx, item, "SWAP_REORG", ErrSwapOutcomeAmbiguous)
+	}
+	if status.TerminalFailure {
+		failureCode := boundedFiatFailureCode(status.FailureCode)
+		if failureCode == "MANUAL_REVIEW" {
+			return o.manualReview(ctx, item, "SWAP_FAILURE_EVIDENCE_INVALID", ErrSwapOutcomeAmbiguous)
+		}
+		message := o.baseObservation(item, settlementv1.FiatConversionObservationStage_FIAT_CONVERSION_OBSERVATION_STAGE_FAILED)
+		message.Status = string(FiatWorkFailed)
+		message.FailureCode = failureCode
+		message.EvidenceHash = hashEvidence("swap_terminal_failure", []byte(status.TxHash), []byte(failureCode))
+		return o.submitObservation(ctx, item, message, FiatWorkFailed, nil)
 	}
 	if status.Found && item.SwapTxHash == "" {
 		if status.TxHash == "" {
@@ -748,7 +780,7 @@ func (o *FiatConversionOrchestrator) quotePayout(ctx context.Context, item *Fiat
 	defer clearString(&destination)
 	resolvedCompliance, err := o.cfg.Compliance.ResolveCompliance(ctx, chain)
 	if err != nil || validateResolvedCompliance(chain, resolvedCompliance, o.cfg.Now()) != nil {
-		return o.manualReview(ctx, item, "COMPLIANCE_REVOKED", offramp.ErrComplianceRequired)
+		return o.deferExecutionBlocked(ctx, item, "COMPLIANCE_REVOKED", offramp.ErrComplianceRequired)
 	}
 	decision := resolvedCompliance.Decision
 	amount, ok := sdkmath.NewIntFromString(item.SwapConfirmation.StableAmount)
@@ -788,6 +820,9 @@ func (o *FiatConversionOrchestrator) initiatePayout(ctx context.Context, item *F
 	if item.PayoutQuote.ID == "" {
 		return o.manualReview(ctx, item, "PAYOUT_QUOTE_MISSING", ErrFiatIntentChanged)
 	}
+	if !o.cfg.Now().Before(item.PayoutQuote.ExpiresAt) {
+		return o.retryResetPayoutQuote(ctx, item, chain, "PAYOUT_QUOTE_EXPIRED")
+	}
 	resolvedDestination, err := o.cfg.Destination.ResolveDestination(ctx, chain)
 	if err != nil {
 		return o.retry(ctx, item, "DESTINATION_UNAVAILABLE", err)
@@ -799,7 +834,7 @@ func (o *FiatConversionOrchestrator) initiatePayout(ctx context.Context, item *F
 	defer clearString(&destination)
 	resolvedCompliance, err := o.cfg.Compliance.ResolveCompliance(ctx, chain)
 	if err != nil || validateResolvedCompliance(chain, resolvedCompliance, o.cfg.Now()) != nil {
-		return o.manualReview(ctx, item, "COMPLIANCE_REVOKED", offramp.ErrComplianceRequired)
+		return o.deferExecutionBlocked(ctx, item, "COMPLIANCE_REVOKED", offramp.ErrComplianceRequired)
 	}
 	decision := resolvedCompliance.Decision
 	metadata := payoutMetadata(item)
@@ -1085,17 +1120,15 @@ func (o *FiatConversionOrchestrator) validateIntentAndProfiles(ctx context.Conte
 	if authorization.ActiveHoldCount > 0 {
 		return nil, fmt.Errorf("%w: case %s", ErrFiatFinancialHold, authorization.ActiveCaseID)
 	}
+	if err := o.validateImmutableIntentAndProfiles(item, chain); err != nil {
+		return nil, err
+	}
 	certified := settlementv1.FiatConversionProfileState_FIAT_CONVERSION_PROFILE_STATE_CERTIFIED_ENABLED
 	if o.cfg.Production && (params.FiatConversionDexProfileState != certified || params.FiatConversionPayoutProfileState != certified) {
-		return nil, ErrFiatProfileMismatch
+		return nil, ErrFiatCurrentProfile
 	}
 	if params.FiatConversionDexProfileId != item.DEXProfileID || params.FiatConversionPayoutProfileId != item.PayoutProfileID || !bytes.Equal(params.FiatConversionDexProfileDigest, mustHex32(item.DEXProfileDigest)) || !bytes.Equal(params.FiatConversionPayoutProfileDigest, mustHex32(item.PayoutProfileDigest)) {
-		return nil, ErrFiatProfileMismatch
-	}
-	if chain.DexProfileId != item.DEXProfileID || chain.PayoutProfileId != item.PayoutProfileID ||
-		!bytes.Equal(chain.DexProfileDigest, mustHex32(item.DEXProfileDigest)) ||
-		!bytes.Equal(chain.PayoutProfileDigest, mustHex32(item.PayoutProfileDigest)) {
-		return nil, ErrFiatProfileMismatch
+		return nil, ErrFiatCurrentProfile
 	}
 	if chain.LegacyQuarantined || chainFiatConversionTerminal(chain.State) {
 		return nil, ErrFiatIntentChanged
@@ -1104,9 +1137,34 @@ func (o *FiatConversionOrchestrator) validateIntentAndProfiles(ctx context.Conte
 		return nil, err
 	}
 	if err := o.cfg.Compliance.ProductionReady(ctx); o.cfg.Production && err != nil {
-		return nil, err
+		return nil, fmt.Errorf("%w: %v", ErrFiatCurrentCompliance, err)
 	}
 	return chain, nil
+}
+
+func (o *FiatConversionOrchestrator) validateImmutableIntentAndProfiles(item *FiatConversionWorkItem, chain *settlementv1.FiatConversionRecord) error {
+	if chain == nil || !fiatIntentEqual(item.Intent, snapshotFiatIntent(chain)) ||
+		chain.DexProfileId != item.DEXProfileID || chain.PayoutProfileId != item.PayoutProfileID ||
+		!bytes.Equal(chain.DexProfileDigest, mustHex32(item.DEXProfileDigest)) ||
+		!bytes.Equal(chain.PayoutProfileDigest, mustHex32(item.PayoutProfileDigest)) {
+		return ErrFiatProfileMismatch
+	}
+	if chain.LegacyQuarantined || chainFiatConversionTerminal(chain.State) {
+		return ErrFiatIntentChanged
+	}
+	return nil
+}
+
+func fiatWorkRequiresReadOnlyReconciliation(item *FiatConversionWorkItem, chain *settlementv1.FiatConversionRecord) bool {
+	if item == nil || chain == nil {
+		return false
+	}
+	switch item.State {
+	case FiatWorkSwapBroadcast, FiatWorkAmbiguous, FiatWorkPayoutSubmitted, FiatWorkPayoutAmbiguous:
+		return true
+	default:
+		return false
+	}
 }
 
 type fiatExternalBoundary string
@@ -1128,8 +1186,8 @@ func (o *FiatConversionOrchestrator) refreshBeforeExternalBoundary(ctx context.C
 	if err == nil {
 		return chain, nil
 	}
-	if errors.Is(err, ErrFiatGovernanceDisabled) || errors.Is(err, ErrFiatFinancialHold) {
-		return nil, o.manualReviewWithoutObservation(ctx, item, executionBlockCode(err), err)
+	if currentFiatAuthorizationError(err) {
+		return nil, o.deferExecutionBlocked(ctx, item, executionBlockCode(err), err)
 	}
 	return nil, o.manualReview(ctx, item, "BOUNDARY_AUTHORIZATION_INVALID", err)
 }
@@ -1163,7 +1221,14 @@ func (o *FiatConversionOrchestrator) validateExecutionAuthorization(item *FiatCo
 			return nil, ErrFiatIntentChanged
 		}
 	case fiatBoundaryPayoutQuote:
-		if !chainStateIs(chain.State, fiatChainStateSwapSettled) || chain.SwapTxHash == "" {
+		if chainStateIs(chain.State, fiatChainStateSwapSettled) {
+			if chain.SwapTxHash == "" {
+				return nil, ErrFiatIntentChanged
+			}
+		} else if !chainStateIs(chain.State, fiatChainStatePayoutPending) || item.PayoutQuote.ID == "" ||
+			chain.OffRampId != "" || chain.OffRampReference != "" || chain.OffRampQuoteId != item.PayoutQuote.ID ||
+			!bytes.Equal(chain.QuoteDigest, mustHex32(item.PayoutQuoteDigest)) || chain.QuoteExpiry != item.PayoutQuote.ExpiresAt.Unix() ||
+			o.cfg.Now().Unix() < chain.QuoteExpiry {
 			return nil, ErrFiatIntentChanged
 		}
 	case fiatBoundaryPayoutInitiate:
@@ -1176,15 +1241,16 @@ func (o *FiatConversionOrchestrator) validateExecutionAuthorization(item *FiatCo
 }
 
 func (o *FiatConversionOrchestrator) validateIntentProfilesOnly(item *FiatConversionWorkItem, chain *settlementv1.FiatConversionRecord, params settlementv1.Params) (*settlementv1.FiatConversionRecord, error) {
+	if err := o.validateImmutableIntentAndProfiles(item, chain); err != nil {
+		return nil, err
+	}
 	certified := settlementv1.FiatConversionProfileState_FIAT_CONVERSION_PROFILE_STATE_CERTIFIED_ENABLED
 	if o.cfg.Production && (params.FiatConversionDexProfileState != certified || params.FiatConversionPayoutProfileState != certified) {
-		return nil, ErrFiatProfileMismatch
+		return nil, ErrFiatCurrentProfile
 	}
 	if params.FiatConversionDexProfileId != item.DEXProfileID || params.FiatConversionPayoutProfileId != item.PayoutProfileID ||
-		!bytes.Equal(params.FiatConversionDexProfileDigest, mustHex32(item.DEXProfileDigest)) || !bytes.Equal(params.FiatConversionPayoutProfileDigest, mustHex32(item.PayoutProfileDigest)) ||
-		chain.DexProfileId != item.DEXProfileID || chain.PayoutProfileId != item.PayoutProfileID ||
-		!bytes.Equal(chain.DexProfileDigest, mustHex32(item.DEXProfileDigest)) || !bytes.Equal(chain.PayoutProfileDigest, mustHex32(item.PayoutProfileDigest)) {
-		return nil, ErrFiatProfileMismatch
+		!bytes.Equal(params.FiatConversionDexProfileDigest, mustHex32(item.DEXProfileDigest)) || !bytes.Equal(params.FiatConversionPayoutProfileDigest, mustHex32(item.PayoutProfileDigest)) {
+		return nil, ErrFiatCurrentProfile
 	}
 	return chain, nil
 }
@@ -1203,7 +1269,30 @@ func executionBlockCode(err error) string {
 	if errors.Is(err, ErrFiatGovernanceDisabled) {
 		return "GOVERNANCE_DISABLED"
 	}
+	if errors.Is(err, ErrFiatCurrentProfile) {
+		return "CURRENT_PROFILE_CHANGED"
+	}
+	if errors.Is(err, ErrFiatCurrentCompliance) {
+		return "COMPLIANCE_REVOKED"
+	}
 	return "FINANCIAL_HOLD_ACTIVE"
+}
+
+func currentFiatAuthorizationError(err error) bool {
+	return errors.Is(err, ErrFiatGovernanceDisabled) || errors.Is(err, ErrFiatFinancialHold) || errors.Is(err, ErrFiatCurrentProfile) || errors.Is(err, ErrFiatCurrentCompliance)
+}
+
+func (o *FiatConversionOrchestrator) deferExecutionBlocked(ctx context.Context, item *FiatConversionWorkItem, code string, cause error) error {
+	_, err := o.updateOwned(ctx, item.Intent.ConversionID, func(work *FiatConversionWorkItem) error {
+		work.FailureCode = boundedFiatFailureCode(code)
+		work.NextRetryAt = o.cfg.Now().Add(o.cfg.RetryBackoff)
+		return nil
+	})
+	o.recordFailure()
+	if err != nil {
+		return err
+	}
+	return &fiatRetryError{cause: cause}
 }
 
 func (o *FiatConversionOrchestrator) manualReviewWithoutObservation(ctx context.Context, item *FiatConversionWorkItem, code string, cause error) error {
@@ -1235,7 +1324,7 @@ func (o *FiatConversionOrchestrator) recoverOnStart(ctx context.Context) error {
 			switch work.State {
 			case FiatWorkSigning, FiatWorkSwapBroadcast:
 				work.State = FiatWorkAmbiguous
-			case FiatWorkPayoutSubmitted, FiatWorkPayoutQuote:
+			case FiatWorkPayoutSubmitted:
 				work.State = FiatWorkPayoutAmbiguous
 			}
 			work.NextRetryAt = o.cfg.Now()
@@ -1300,6 +1389,30 @@ func (o *FiatConversionOrchestrator) retryResetQuote(ctx context.Context, item *
 		return err
 	}
 	return &fiatRetryError{cause: dex.ErrQuoteExpired}
+}
+
+func (o *FiatConversionOrchestrator) retryResetPayoutQuote(ctx context.Context, item *FiatConversionWorkItem, chain *settlementv1.FiatConversionRecord, code string) error {
+	if item.PayoutID != "" || item.PayoutReferenceHash != "" || chain == nil || !chainStateIs(chain.State, fiatChainStatePayoutPending) ||
+		chain.OffRampId != "" || chain.OffRampReference != "" || chain.OffRampQuoteId != item.PayoutQuote.ID ||
+		!bytes.Equal(chain.QuoteDigest, mustHex32(item.PayoutQuoteDigest)) || chain.QuoteExpiry != item.PayoutQuote.ExpiresAt.Unix() ||
+		o.cfg.Now().Unix() < chain.QuoteExpiry {
+		return o.manualReview(ctx, item, "PAYOUT_REQUOTE_UNSAFE", ErrFiatIntentChanged)
+	}
+	if item.AttemptCount+1 >= o.cfg.MaxAttempts {
+		return o.manualReview(ctx, item, "ATTEMPTS_EXHAUSTED", offramp.ErrQuoteExpired)
+	}
+	_, err := o.updateOwned(ctx, item.Intent.ConversionID, func(work *FiatConversionWorkItem) error {
+		work.AttemptCount++
+		work.State = FiatWorkSwapFinalized
+		work.NextRetryAt = o.cfg.Now().Add(o.retryDelay(work.AttemptCount))
+		work.FailureCode = code
+		work.Attempts = appendFiatAttempt(work.Attempts, FiatConversionAttempt{Number: work.AttemptCount, Stage: "payout_quote", StartedAt: o.cfg.Now(), FinishedAt: o.cfg.Now(), Classification: code, Outcome: "requote"})
+		return nil
+	})
+	if err != nil {
+		return err
+	}
+	return &fiatRetryError{cause: offramp.ErrQuoteExpired}
 }
 
 func (o *FiatConversionOrchestrator) manualReview(ctx context.Context, item *FiatConversionWorkItem, code string, cause error) error {

@@ -5,6 +5,7 @@ package keeper
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"math"
 	"sort"
@@ -100,11 +101,38 @@ func (k Keeper) ScheduleJob(ctx sdk.Context, job *types.HPCJob) (*types.Scheduli
 	if err := k.requireActiveJobReservation(ctx, *job); err != nil {
 		return nil, err
 	}
+	cacheCtx, write := ctx.CacheContext()
+	staged := *job
+	decision, err := k.scheduleJob(cacheCtx, &staged)
+	if err != nil {
+		if errors.Is(err, types.ErrTenantQuotaExceeded) {
+			offering, found := k.GetOffering(ctx, job.OfferingID)
+			if found {
+				k.recordQuotaDenied(ctx, resolveQueueName(job, &offering))
+			}
+		}
+		return nil, err
+	}
+	if err := k.SetJob(cacheCtx, staged); err != nil {
+		return nil, err
+	}
+	write()
+	*job = staged
+	return decision, nil
+}
+
+func (k Keeper) scheduleJob(ctx sdk.Context, job *types.HPCJob) (*types.SchedulingDecision, error) {
 	params := k.GetParams(ctx)
 
 	offering, exists := k.GetOffering(ctx, job.OfferingID)
 	if !exists {
 		return nil, types.ErrOfferingNotFound
+	}
+	if job.ProviderAddress == "" {
+		job.ProviderAddress = offering.ProviderAddress
+	}
+	if job.ProviderAddress != offering.ProviderAddress {
+		return nil, types.ErrUnauthorized.Wrap("job provider does not own offering")
 	}
 
 	queueName := resolveQueueName(job, &offering)
@@ -161,7 +189,6 @@ func (k Keeper) ScheduleJob(ctx sdk.Context, job *types.HPCJob) (*types.Scheduli
 
 	if selectedCluster == nil {
 		if schedulingBlockedByQuota(candidates) {
-			k.recordQuotaDenied(ctx, queueName)
 			return nil, types.ErrTenantQuotaExceeded
 		}
 		return nil, types.ErrNoAvailableCluster
@@ -260,6 +287,9 @@ func (k Keeper) findEligibleClusters(ctx sdk.Context, job *types.HPCJob, offerin
 	queueName := resolveQueueName(job, offering)
 
 	k.WithClusters(ctx, func(cluster types.HPCCluster) bool {
+		if cluster.ProviderAddress != offering.ProviderAddress || cluster.ProviderAddress != job.ProviderAddress {
+			return false
+		}
 		candidate := types.ClusterCandidate{
 			ClusterID:      cluster.ClusterID,
 			Region:         cluster.Region,

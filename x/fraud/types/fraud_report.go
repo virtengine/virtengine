@@ -340,6 +340,9 @@ type FraudReport struct {
 
 	// RelatedOrderIDs are order IDs related to this fraud report
 	RelatedOrderIDs []string `json:"related_order_ids,omitempty"`
+
+	FinancialCaseID     string `json:"financial_case_id,omitempty"`
+	FinancialCaseStatus string `json:"financial_case_status,omitempty"`
 }
 
 // NewFraudReport creates a new fraud report

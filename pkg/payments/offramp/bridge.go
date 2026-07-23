@@ -302,17 +302,29 @@ func (b *bridgeImpl) GetStatus(ctx context.Context, payoutID string) (PayoutResu
 	if err != nil {
 		normalized := normalizeAdapterError(adapter, operationGetStatus, err)
 		if IsNotFound(normalized) {
-			return PayoutResult{}, normalized
+			recovered, recoveryErr := b.restoreAdapterPayoutBinding(ctx, adapter, result)
+			if recoveryErr != nil {
+				return PayoutResult{}, recoveryErr
+			}
+			if err := b.cacheLookupResult(ctx, recovered); err != nil {
+				return PayoutResult{}, err
+			}
+			updated, err = adapter.GetStatus(ctx, payoutID)
+			if err != nil {
+				return PayoutResult{}, normalizeAdapterError(adapter, operationGetStatus, err)
+			}
+			updated.AuditFields = mergeStringMaps(updated.AuditFields, recovered.AuditFields)
+		} else {
+			result.AuditFields = mergeStringMaps(result.AuditFields, map[string]string{
+				"bridge_status_source":     "cache",
+				"bridge_status_refresh":    "stale",
+				"bridge_status_last_error": normalized.Error(),
+			})
+			if err := b.cacheLookupResult(ctx, result); err != nil {
+				return PayoutResult{}, err
+			}
+			return result, nil
 		}
-		result.AuditFields = mergeStringMaps(result.AuditFields, map[string]string{
-			"bridge_status_source":     "cache",
-			"bridge_status_refresh":    "stale",
-			"bridge_status_last_error": normalized.Error(),
-		})
-		if err := b.cacheLookupResult(ctx, result); err != nil {
-			return PayoutResult{}, err
-		}
-		return result, nil
 	}
 
 	normalized, normErr := b.normalizePayoutResult(resultingQuote(result), updated, result.Metadata, intValue(result.AuditFields["bridge_attempt"], 1), true)
@@ -326,6 +338,41 @@ func (b *bridgeImpl) GetStatus(ctx context.Context, payoutID string) (PayoutResu
 		return PayoutResult{}, err
 	}
 	return clonePayoutResult(normalized), nil
+}
+
+func (b *bridgeImpl) restoreAdapterPayoutBinding(ctx context.Context, adapter Adapter, expected PayoutResult) (PayoutResult, error) {
+	if expected.ID == "" || expected.Provider == "" || expected.Provider != adapter.Name() || expected.IsTerminal() || len(expected.Metadata) == 0 {
+		return PayoutResult{}, ErrPayoutNotFound
+	}
+	restorer, ok := adapter.(PayoutBindingRecoveryAdapter)
+	if !ok {
+		return PayoutResult{}, ErrPayoutNotFound
+	}
+	recovered, err := restorer.RestorePayoutBinding(ctx, clonePayoutResult(expected))
+	if err != nil {
+		return PayoutResult{}, normalizeAdapterError(adapter, operationMetadataLookup, err)
+	}
+	if err := validateRecoveredPayoutBinding(expected, recovered); err != nil {
+		return PayoutResult{}, err
+	}
+	recovered.AuditFields = mergeStringMaps(recovered.AuditFields, map[string]string{
+		"bridge_recovered_provider": adapter.Name(),
+		"bridge_recovery_reason":    "durable_binding_restore",
+	})
+	return recovered, nil
+}
+
+func validateRecoveredPayoutBinding(expected, recovered PayoutResult) error {
+	if expected.ID != recovered.ID || expected.Provider != recovered.Provider || expected.QuoteID != recovered.QuoteID ||
+		expected.Reference != recovered.Reference || !expected.FiatAmount.Equal(recovered.FiatAmount) ||
+		!expected.CryptoAmount.Equal(recovered.CryptoAmount) || !expected.Fee.Equal(recovered.Fee) ||
+		expected.DailyReservationKey != recovered.DailyReservationKey ||
+		expected.DailyReservationOperationID != recovered.DailyReservationOperationID ||
+		!maps.Equal(expected.Metadata, recovered.Metadata) || !expected.InitiatedAt.Equal(recovered.InitiatedAt) ||
+		reconcilePayoutStatus(expected, recovered) != nil {
+		return ErrProviderRejected
+	}
+	return nil
 }
 
 // Cancel attempts to cancel a payout.

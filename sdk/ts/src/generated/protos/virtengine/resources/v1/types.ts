@@ -119,6 +119,7 @@ export enum ReservationState {
   RESERVATION_STATE_EXPIRED = 5,
   RESERVATION_STATE_QUARANTINED = 6,
   RESERVATION_STATE_SLASHED = 7,
+  RESERVATION_STATE_DISPUTED = 8,
   UNRECOGNIZED = -1,
 }
 
@@ -148,6 +149,9 @@ export function reservationStateFromJSON(object: any): ReservationState {
     case 7:
     case "RESERVATION_STATE_SLASHED":
       return ReservationState.RESERVATION_STATE_SLASHED;
+    case 8:
+    case "RESERVATION_STATE_DISPUTED":
+      return ReservationState.RESERVATION_STATE_DISPUTED;
     case -1:
     case "UNRECOGNIZED":
     default:
@@ -173,6 +177,8 @@ export function reservationStateToJSON(object: ReservationState): string {
       return "RESERVATION_STATE_QUARANTINED";
     case ReservationState.RESERVATION_STATE_SLASHED:
       return "RESERVATION_STATE_SLASHED";
+    case ReservationState.RESERVATION_STATE_DISPUTED:
+      return "RESERVATION_STATE_DISPUTED";
     case ReservationState.UNRECOGNIZED:
     default:
       return "UNRECOGNIZED";
@@ -325,6 +331,10 @@ export interface Reservation {
   expiresHeight: Long;
   quarantinedHeight: Long;
   slashedHeight: Long;
+  financialCaseId: string;
+  preDisputeState: number;
+  disputedAt: Date | undefined;
+  disputedHeight: Long;
 }
 
 /** ReservationEvent records a stable transition without sensitive manifests. */
@@ -2052,6 +2062,10 @@ function createBaseReservation(): Reservation {
     expiresHeight: Long.ZERO,
     quarantinedHeight: Long.ZERO,
     slashedHeight: Long.ZERO,
+    financialCaseId: "",
+    preDisputeState: 0,
+    disputedAt: undefined,
+    disputedHeight: Long.ZERO,
   };
 }
 
@@ -2175,6 +2189,18 @@ export const Reservation: MessageFns<Reservation, "virtengine.resources.v1.Reser
     }
     if (!message.slashedHeight.equals(Long.ZERO)) {
       writer.uint32(312).int64(message.slashedHeight.toString());
+    }
+    if (message.financialCaseId !== "") {
+      writer.uint32(322).string(message.financialCaseId);
+    }
+    if (message.preDisputeState !== 0) {
+      writer.uint32(328).int32(message.preDisputeState);
+    }
+    if (message.disputedAt !== undefined) {
+      Timestamp.encode(toTimestamp(message.disputedAt), writer.uint32(338).fork()).join();
+    }
+    if (!message.disputedHeight.equals(Long.ZERO)) {
+      writer.uint32(344).int64(message.disputedHeight.toString());
     }
     return writer;
   },
@@ -2498,6 +2524,38 @@ export const Reservation: MessageFns<Reservation, "virtengine.resources.v1.Reser
           message.slashedHeight = Long.fromString(reader.int64().toString());
           continue;
         }
+        case 40: {
+          if (tag !== 322) {
+            break;
+          }
+
+          message.financialCaseId = reader.string();
+          continue;
+        }
+        case 41: {
+          if (tag !== 328) {
+            break;
+          }
+
+          message.preDisputeState = reader.int32();
+          continue;
+        }
+        case 42: {
+          if (tag !== 338) {
+            break;
+          }
+
+          message.disputedAt = fromTimestamp(Timestamp.decode(reader, reader.uint32()));
+          continue;
+        }
+        case 43: {
+          if (tag !== 344) {
+            break;
+          }
+
+          message.disputedHeight = Long.fromString(reader.int64().toString());
+          continue;
+        }
       }
       if ((tag & 7) === 4 || tag === 0) {
         break;
@@ -2548,6 +2606,10 @@ export const Reservation: MessageFns<Reservation, "virtengine.resources.v1.Reser
       expiresHeight: isSet(object.expires_height) ? Long.fromValue(object.expires_height) : Long.ZERO,
       quarantinedHeight: isSet(object.quarantined_height) ? Long.fromValue(object.quarantined_height) : Long.ZERO,
       slashedHeight: isSet(object.slashed_height) ? Long.fromValue(object.slashed_height) : Long.ZERO,
+      financialCaseId: isSet(object.financial_case_id) ? globalThis.String(object.financial_case_id) : "",
+      preDisputeState: isSet(object.pre_dispute_state) ? globalThis.Number(object.pre_dispute_state) : 0,
+      disputedAt: isSet(object.disputed_at) ? fromJsonTimestamp(object.disputed_at) : undefined,
+      disputedHeight: isSet(object.disputed_height) ? Long.fromValue(object.disputed_height) : Long.ZERO,
     };
   },
 
@@ -2670,6 +2732,18 @@ export const Reservation: MessageFns<Reservation, "virtengine.resources.v1.Reser
     if (!message.slashedHeight.equals(Long.ZERO)) {
       obj.slashed_height = (message.slashedHeight || Long.ZERO).toString();
     }
+    if (message.financialCaseId !== "") {
+      obj.financial_case_id = message.financialCaseId;
+    }
+    if (message.preDisputeState !== 0) {
+      obj.pre_dispute_state = Math.round(message.preDisputeState);
+    }
+    if (message.disputedAt !== undefined) {
+      obj.disputed_at = message.disputedAt.toISOString();
+    }
+    if (!message.disputedHeight.equals(Long.ZERO)) {
+      obj.disputed_height = (message.disputedHeight || Long.ZERO).toString();
+    }
     return obj;
   },
   fromPartial(object: DeepPartial<Reservation>): Reservation {
@@ -2730,6 +2804,12 @@ export const Reservation: MessageFns<Reservation, "virtengine.resources.v1.Reser
       : Long.ZERO;
     message.slashedHeight = (object.slashedHeight !== undefined && object.slashedHeight !== null)
       ? Long.fromValue(object.slashedHeight)
+      : Long.ZERO;
+    message.financialCaseId = object.financialCaseId ?? "";
+    message.preDisputeState = object.preDisputeState ?? 0;
+    message.disputedAt = object.disputedAt ?? undefined;
+    message.disputedHeight = (object.disputedHeight !== undefined && object.disputedHeight !== null)
+      ? Long.fromValue(object.disputedHeight)
       : Long.ZERO;
     return message;
   },

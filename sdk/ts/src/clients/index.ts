@@ -102,6 +102,52 @@ export type { Account as EscrowAccount } from "../generated/protos/virtengine/es
 export type { Payment } from "../generated/protos/virtengine/escrow/types/v1/payment.ts";
 export type { MsgAccountDeposit } from "../generated/protos/virtengine/escrow/v1/msg.ts";
 
+// Settlement canonical financial cases
+export type {
+  FinancialAppeal,
+  FinancialCase,
+  FinancialCaseEffect,
+  FinancialCaseTransition,
+  FinancialClaim,
+  FinancialExposure,
+  FinancialSubject,
+  QueryFinancialCaseBySubjectRequest,
+  QueryFinancialCaseBySubjectResponse,
+  QueryFinancialCaseLineageRequest,
+  QueryFinancialCaseLineageResponse,
+  QueryFinancialCaseRequest,
+  QueryFinancialCaseResponse,
+  QueryFinancialCasesRequest,
+  QueryFinancialCasesResponse,
+  TerminalAllocation,
+} from "../generated/protos/virtengine/settlement/v1/query.ts";
+export {
+  FinancialCaseStatus,
+  FinancialClaimType,
+  FinancialEffectStatus,
+  FinancialEffectType,
+  FinancialResolutionType,
+  FinancialSubjectType,
+} from "../generated/protos/virtengine/settlement/v1/query.ts";
+export type {
+  MsgAddFinancialClaim,
+  MsgAddFinancialClaimResponse,
+  MsgAppealFinancialCase,
+  MsgAppealFinancialCaseResponse,
+  MsgCancelFinancialCase,
+  MsgCancelFinancialCaseResponse,
+  MsgEscalateFinancialCase,
+  MsgEscalateFinancialCaseResponse,
+  MsgFinalizeFinancialCase,
+  MsgFinalizeFinancialCaseResponse,
+  MsgOpenFinancialCase,
+  MsgOpenFinancialCaseResponse,
+  MsgResolveFinancialCase,
+  MsgResolveFinancialCaseResponse,
+  MsgSubmitFinancialCaseForReview,
+  MsgSubmitFinancialCaseForReviewResponse,
+} from "../generated/protos/virtengine/settlement/v1/tx.ts";
+
 // Encryption module
 export { EncryptionClient } from "./EncryptionClient.ts";
 export type {

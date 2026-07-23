@@ -10,7 +10,22 @@ import type { DeepPartial, MessageFns } from "../../../../../encoding/typeEncodi
 import { BinaryReader, BinaryWriter } from "@bufbuild/protobuf/wire";
 import Long from "long";
 import { Coin, DecCoin } from "../../../cosmos/base/v1beta1/coin.ts";
-import { RawUsageMetrics } from "./query.ts";
+import {
+  FiatConversionObservationStage,
+  fiatConversionObservationStageFromJSON,
+  fiatConversionObservationStageToJSON,
+  FinancialCaseEffect,
+  FinancialCaseStatus,
+  financialCaseStatusFromJSON,
+  financialCaseStatusToJSON,
+  FinancialClaimType,
+  financialClaimTypeFromJSON,
+  financialClaimTypeToJSON,
+  FinancialSubject,
+  Params,
+  RawUsageMetrics,
+  TerminalAllocation,
+} from "./query.ts";
 
 /** MsgCreateEscrow creates a new escrow account */
 export interface MsgCreateEscrow {
@@ -165,6 +180,165 @@ export interface MsgClaimRewards {
 export interface MsgClaimRewardsResponse {
   claimedAmount: string;
   claimedAt: Long;
+}
+
+export interface MsgOpenFinancialCase {
+  sender: string;
+  subject: FinancialSubject | undefined;
+  claimType: FinancialClaimType;
+  respondent: string;
+  evidenceHash: Uint8Array;
+  encryptedReference: string;
+  idempotencyKey: Uint8Array;
+  sourceModule: string;
+  sourceReference: string;
+}
+
+export interface MsgOpenFinancialCaseResponse {
+  caseId: string;
+  claimId: string;
+  exactDuplicate: boolean;
+  status: FinancialCaseStatus;
+}
+
+export interface MsgAddFinancialClaim {
+  sender: string;
+  caseId: string;
+  claimType: FinancialClaimType;
+  evidenceHash: Uint8Array;
+  encryptedReference: string;
+  idempotencyKey: Uint8Array;
+  sourceModule: string;
+  sourceReference: string;
+  recommendation: string;
+}
+
+export interface MsgAddFinancialClaimResponse {
+  caseId: string;
+  claimId: string;
+  exactDuplicate: boolean;
+  status: FinancialCaseStatus;
+}
+
+export interface MsgSubmitFinancialCaseForReview {
+  sender: string;
+  caseId: string;
+}
+
+export interface MsgSubmitFinancialCaseForReviewResponse {
+  status: FinancialCaseStatus;
+}
+
+export interface MsgEscalateFinancialCase {
+  sender: string;
+  caseId: string;
+  reasonHash: Uint8Array;
+}
+
+export interface MsgEscalateFinancialCaseResponse {
+  status: FinancialCaseStatus;
+}
+
+export interface MsgResolveFinancialCase {
+  resolver: string;
+  caseId: string;
+  allocation: TerminalAllocation | undefined;
+}
+
+export interface MsgResolveFinancialCaseResponse {
+  status: FinancialCaseStatus;
+  appealDeadlineHeight: Long;
+  appealDeadlineTime: Long;
+}
+
+export interface MsgAppealFinancialCase {
+  appellant: string;
+  caseId: string;
+  evidenceHash: Uint8Array;
+  encryptedReference: string;
+  idempotencyKey: Uint8Array;
+}
+
+export interface MsgAppealFinancialCaseResponse {
+  appealId: string;
+  status: FinancialCaseStatus;
+}
+
+export interface MsgCancelFinancialCase {
+  sender: string;
+  caseId: string;
+  reasonHash: Uint8Array;
+}
+
+export interface MsgCancelFinancialCaseResponse {
+  status: FinancialCaseStatus;
+}
+
+export interface MsgFinalizeFinancialCase {
+  sender: string;
+  caseId: string;
+}
+
+export interface MsgFinalizeFinancialCaseResponse {
+  status: FinancialCaseStatus;
+  effects: FinancialCaseEffect[];
+}
+
+/**
+ * MsgRecordFiatConversionObservation reports privacy-safe external execution
+ * evidence. It deliberately excludes destinations, beneficiaries, credentials,
+ * contracts, secrets, and free-form evidence narratives.
+ */
+export interface MsgRecordFiatConversionObservation {
+  sender: string;
+  conversionId: string;
+  observationSequence: Long;
+  idempotencyKey: Uint8Array;
+  stage: FiatConversionObservationStage;
+  dexProfileId: string;
+  dexProfileDigest: Uint8Array;
+  payoutProfileId: string;
+  payoutProfileDigest: Uint8Array;
+  quoteDigest: Uint8Array;
+  quoteExpiry: Long;
+  minimumStableOutput: Coin | undefined;
+  swapTxHash: string;
+  swapHeight: Long;
+  swapBlockHash: Uint8Array;
+  swapFinalityConfirmations: number;
+  swapFinalityHash: Uint8Array;
+  stableAmount: Coin | undefined;
+  offRampQuoteId: string;
+  offRampPayoutId: string;
+  status: string;
+  /**
+   * privacy_safe_reference_hash is required at payout submission and must be
+   * reproduced byte-for-byte by the payout completion observation.
+   */
+  privacySafeReferenceHash: Uint8Array;
+  fiatAmount: string;
+  complianceDecisionHash: Uint8Array;
+  observedAt: Long;
+  evidenceHash: Uint8Array;
+  failureCode: string;
+  payoutFinalityHash: Uint8Array;
+}
+
+export interface MsgRecordFiatConversionObservationResponse {
+  conversionId: string;
+  observationSequence: Long;
+  stage: FiatConversionObservationStage;
+  state: string;
+  exactDuplicate: boolean;
+  observationDigest: Uint8Array;
+}
+
+export interface MsgUpdateParams {
+  authority: string;
+  params: Params | undefined;
+}
+
+export interface MsgUpdateParamsResponse {
 }
 
 function createBaseMsgCreateEscrow(): MsgCreateEscrow {
@@ -2366,6 +2540,2444 @@ export const MsgClaimRewardsResponse: MessageFns<
     message.claimedAt = (object.claimedAt !== undefined && object.claimedAt !== null)
       ? Long.fromValue(object.claimedAt)
       : Long.ZERO;
+    return message;
+  },
+};
+
+function createBaseMsgOpenFinancialCase(): MsgOpenFinancialCase {
+  return {
+    sender: "",
+    subject: undefined,
+    claimType: 0,
+    respondent: "",
+    evidenceHash: new Uint8Array(0),
+    encryptedReference: "",
+    idempotencyKey: new Uint8Array(0),
+    sourceModule: "",
+    sourceReference: "",
+  };
+}
+
+export const MsgOpenFinancialCase: MessageFns<MsgOpenFinancialCase, "virtengine.settlement.v1.MsgOpenFinancialCase"> = {
+  $type: "virtengine.settlement.v1.MsgOpenFinancialCase" as const,
+
+  encode(message: MsgOpenFinancialCase, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.sender !== "") {
+      writer.uint32(10).string(message.sender);
+    }
+    if (message.subject !== undefined) {
+      FinancialSubject.encode(message.subject, writer.uint32(18).fork()).join();
+    }
+    if (message.claimType !== 0) {
+      writer.uint32(24).int32(message.claimType);
+    }
+    if (message.respondent !== "") {
+      writer.uint32(34).string(message.respondent);
+    }
+    if (message.evidenceHash.length !== 0) {
+      writer.uint32(42).bytes(message.evidenceHash);
+    }
+    if (message.encryptedReference !== "") {
+      writer.uint32(50).string(message.encryptedReference);
+    }
+    if (message.idempotencyKey.length !== 0) {
+      writer.uint32(58).bytes(message.idempotencyKey);
+    }
+    if (message.sourceModule !== "") {
+      writer.uint32(66).string(message.sourceModule);
+    }
+    if (message.sourceReference !== "") {
+      writer.uint32(74).string(message.sourceReference);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): MsgOpenFinancialCase {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseMsgOpenFinancialCase();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.sender = reader.string();
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.subject = FinancialSubject.decode(reader, reader.uint32());
+          continue;
+        }
+        case 3: {
+          if (tag !== 24) {
+            break;
+          }
+
+          message.claimType = reader.int32() as any;
+          continue;
+        }
+        case 4: {
+          if (tag !== 34) {
+            break;
+          }
+
+          message.respondent = reader.string();
+          continue;
+        }
+        case 5: {
+          if (tag !== 42) {
+            break;
+          }
+
+          message.evidenceHash = reader.bytes();
+          continue;
+        }
+        case 6: {
+          if (tag !== 50) {
+            break;
+          }
+
+          message.encryptedReference = reader.string();
+          continue;
+        }
+        case 7: {
+          if (tag !== 58) {
+            break;
+          }
+
+          message.idempotencyKey = reader.bytes();
+          continue;
+        }
+        case 8: {
+          if (tag !== 66) {
+            break;
+          }
+
+          message.sourceModule = reader.string();
+          continue;
+        }
+        case 9: {
+          if (tag !== 74) {
+            break;
+          }
+
+          message.sourceReference = reader.string();
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): MsgOpenFinancialCase {
+    return {
+      sender: isSet(object.sender) ? globalThis.String(object.sender) : "",
+      subject: isSet(object.subject) ? FinancialSubject.fromJSON(object.subject) : undefined,
+      claimType: isSet(object.claim_type) ? financialClaimTypeFromJSON(object.claim_type) : 0,
+      respondent: isSet(object.respondent) ? globalThis.String(object.respondent) : "",
+      evidenceHash: isSet(object.evidence_hash) ? bytesFromBase64(object.evidence_hash) : new Uint8Array(0),
+      encryptedReference: isSet(object.encrypted_reference) ? globalThis.String(object.encrypted_reference) : "",
+      idempotencyKey: isSet(object.idempotency_key) ? bytesFromBase64(object.idempotency_key) : new Uint8Array(0),
+      sourceModule: isSet(object.source_module) ? globalThis.String(object.source_module) : "",
+      sourceReference: isSet(object.source_reference) ? globalThis.String(object.source_reference) : "",
+    };
+  },
+
+  toJSON(message: MsgOpenFinancialCase): unknown {
+    const obj: any = {};
+    if (message.sender !== "") {
+      obj.sender = message.sender;
+    }
+    if (message.subject !== undefined) {
+      obj.subject = FinancialSubject.toJSON(message.subject);
+    }
+    if (message.claimType !== 0) {
+      obj.claim_type = financialClaimTypeToJSON(message.claimType);
+    }
+    if (message.respondent !== "") {
+      obj.respondent = message.respondent;
+    }
+    if (message.evidenceHash.length !== 0) {
+      obj.evidence_hash = base64FromBytes(message.evidenceHash);
+    }
+    if (message.encryptedReference !== "") {
+      obj.encrypted_reference = message.encryptedReference;
+    }
+    if (message.idempotencyKey.length !== 0) {
+      obj.idempotency_key = base64FromBytes(message.idempotencyKey);
+    }
+    if (message.sourceModule !== "") {
+      obj.source_module = message.sourceModule;
+    }
+    if (message.sourceReference !== "") {
+      obj.source_reference = message.sourceReference;
+    }
+    return obj;
+  },
+  fromPartial(object: DeepPartial<MsgOpenFinancialCase>): MsgOpenFinancialCase {
+    const message = createBaseMsgOpenFinancialCase();
+    message.sender = object.sender ?? "";
+    message.subject = (object.subject !== undefined && object.subject !== null)
+      ? FinancialSubject.fromPartial(object.subject)
+      : undefined;
+    message.claimType = object.claimType ?? 0;
+    message.respondent = object.respondent ?? "";
+    message.evidenceHash = object.evidenceHash ?? new Uint8Array(0);
+    message.encryptedReference = object.encryptedReference ?? "";
+    message.idempotencyKey = object.idempotencyKey ?? new Uint8Array(0);
+    message.sourceModule = object.sourceModule ?? "";
+    message.sourceReference = object.sourceReference ?? "";
+    return message;
+  },
+};
+
+function createBaseMsgOpenFinancialCaseResponse(): MsgOpenFinancialCaseResponse {
+  return { caseId: "", claimId: "", exactDuplicate: false, status: 0 };
+}
+
+export const MsgOpenFinancialCaseResponse: MessageFns<
+  MsgOpenFinancialCaseResponse,
+  "virtengine.settlement.v1.MsgOpenFinancialCaseResponse"
+> = {
+  $type: "virtengine.settlement.v1.MsgOpenFinancialCaseResponse" as const,
+
+  encode(message: MsgOpenFinancialCaseResponse, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.caseId !== "") {
+      writer.uint32(10).string(message.caseId);
+    }
+    if (message.claimId !== "") {
+      writer.uint32(18).string(message.claimId);
+    }
+    if (message.exactDuplicate !== false) {
+      writer.uint32(24).bool(message.exactDuplicate);
+    }
+    if (message.status !== 0) {
+      writer.uint32(32).int32(message.status);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): MsgOpenFinancialCaseResponse {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseMsgOpenFinancialCaseResponse();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.caseId = reader.string();
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.claimId = reader.string();
+          continue;
+        }
+        case 3: {
+          if (tag !== 24) {
+            break;
+          }
+
+          message.exactDuplicate = reader.bool();
+          continue;
+        }
+        case 4: {
+          if (tag !== 32) {
+            break;
+          }
+
+          message.status = reader.int32() as any;
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): MsgOpenFinancialCaseResponse {
+    return {
+      caseId: isSet(object.case_id) ? globalThis.String(object.case_id) : "",
+      claimId: isSet(object.claim_id) ? globalThis.String(object.claim_id) : "",
+      exactDuplicate: isSet(object.exact_duplicate) ? globalThis.Boolean(object.exact_duplicate) : false,
+      status: isSet(object.status) ? financialCaseStatusFromJSON(object.status) : 0,
+    };
+  },
+
+  toJSON(message: MsgOpenFinancialCaseResponse): unknown {
+    const obj: any = {};
+    if (message.caseId !== "") {
+      obj.case_id = message.caseId;
+    }
+    if (message.claimId !== "") {
+      obj.claim_id = message.claimId;
+    }
+    if (message.exactDuplicate !== false) {
+      obj.exact_duplicate = message.exactDuplicate;
+    }
+    if (message.status !== 0) {
+      obj.status = financialCaseStatusToJSON(message.status);
+    }
+    return obj;
+  },
+  fromPartial(object: DeepPartial<MsgOpenFinancialCaseResponse>): MsgOpenFinancialCaseResponse {
+    const message = createBaseMsgOpenFinancialCaseResponse();
+    message.caseId = object.caseId ?? "";
+    message.claimId = object.claimId ?? "";
+    message.exactDuplicate = object.exactDuplicate ?? false;
+    message.status = object.status ?? 0;
+    return message;
+  },
+};
+
+function createBaseMsgAddFinancialClaim(): MsgAddFinancialClaim {
+  return {
+    sender: "",
+    caseId: "",
+    claimType: 0,
+    evidenceHash: new Uint8Array(0),
+    encryptedReference: "",
+    idempotencyKey: new Uint8Array(0),
+    sourceModule: "",
+    sourceReference: "",
+    recommendation: "",
+  };
+}
+
+export const MsgAddFinancialClaim: MessageFns<MsgAddFinancialClaim, "virtengine.settlement.v1.MsgAddFinancialClaim"> = {
+  $type: "virtengine.settlement.v1.MsgAddFinancialClaim" as const,
+
+  encode(message: MsgAddFinancialClaim, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.sender !== "") {
+      writer.uint32(10).string(message.sender);
+    }
+    if (message.caseId !== "") {
+      writer.uint32(18).string(message.caseId);
+    }
+    if (message.claimType !== 0) {
+      writer.uint32(24).int32(message.claimType);
+    }
+    if (message.evidenceHash.length !== 0) {
+      writer.uint32(34).bytes(message.evidenceHash);
+    }
+    if (message.encryptedReference !== "") {
+      writer.uint32(42).string(message.encryptedReference);
+    }
+    if (message.idempotencyKey.length !== 0) {
+      writer.uint32(50).bytes(message.idempotencyKey);
+    }
+    if (message.sourceModule !== "") {
+      writer.uint32(58).string(message.sourceModule);
+    }
+    if (message.sourceReference !== "") {
+      writer.uint32(66).string(message.sourceReference);
+    }
+    if (message.recommendation !== "") {
+      writer.uint32(74).string(message.recommendation);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): MsgAddFinancialClaim {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseMsgAddFinancialClaim();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.sender = reader.string();
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.caseId = reader.string();
+          continue;
+        }
+        case 3: {
+          if (tag !== 24) {
+            break;
+          }
+
+          message.claimType = reader.int32() as any;
+          continue;
+        }
+        case 4: {
+          if (tag !== 34) {
+            break;
+          }
+
+          message.evidenceHash = reader.bytes();
+          continue;
+        }
+        case 5: {
+          if (tag !== 42) {
+            break;
+          }
+
+          message.encryptedReference = reader.string();
+          continue;
+        }
+        case 6: {
+          if (tag !== 50) {
+            break;
+          }
+
+          message.idempotencyKey = reader.bytes();
+          continue;
+        }
+        case 7: {
+          if (tag !== 58) {
+            break;
+          }
+
+          message.sourceModule = reader.string();
+          continue;
+        }
+        case 8: {
+          if (tag !== 66) {
+            break;
+          }
+
+          message.sourceReference = reader.string();
+          continue;
+        }
+        case 9: {
+          if (tag !== 74) {
+            break;
+          }
+
+          message.recommendation = reader.string();
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): MsgAddFinancialClaim {
+    return {
+      sender: isSet(object.sender) ? globalThis.String(object.sender) : "",
+      caseId: isSet(object.case_id) ? globalThis.String(object.case_id) : "",
+      claimType: isSet(object.claim_type) ? financialClaimTypeFromJSON(object.claim_type) : 0,
+      evidenceHash: isSet(object.evidence_hash) ? bytesFromBase64(object.evidence_hash) : new Uint8Array(0),
+      encryptedReference: isSet(object.encrypted_reference) ? globalThis.String(object.encrypted_reference) : "",
+      idempotencyKey: isSet(object.idempotency_key) ? bytesFromBase64(object.idempotency_key) : new Uint8Array(0),
+      sourceModule: isSet(object.source_module) ? globalThis.String(object.source_module) : "",
+      sourceReference: isSet(object.source_reference) ? globalThis.String(object.source_reference) : "",
+      recommendation: isSet(object.recommendation) ? globalThis.String(object.recommendation) : "",
+    };
+  },
+
+  toJSON(message: MsgAddFinancialClaim): unknown {
+    const obj: any = {};
+    if (message.sender !== "") {
+      obj.sender = message.sender;
+    }
+    if (message.caseId !== "") {
+      obj.case_id = message.caseId;
+    }
+    if (message.claimType !== 0) {
+      obj.claim_type = financialClaimTypeToJSON(message.claimType);
+    }
+    if (message.evidenceHash.length !== 0) {
+      obj.evidence_hash = base64FromBytes(message.evidenceHash);
+    }
+    if (message.encryptedReference !== "") {
+      obj.encrypted_reference = message.encryptedReference;
+    }
+    if (message.idempotencyKey.length !== 0) {
+      obj.idempotency_key = base64FromBytes(message.idempotencyKey);
+    }
+    if (message.sourceModule !== "") {
+      obj.source_module = message.sourceModule;
+    }
+    if (message.sourceReference !== "") {
+      obj.source_reference = message.sourceReference;
+    }
+    if (message.recommendation !== "") {
+      obj.recommendation = message.recommendation;
+    }
+    return obj;
+  },
+  fromPartial(object: DeepPartial<MsgAddFinancialClaim>): MsgAddFinancialClaim {
+    const message = createBaseMsgAddFinancialClaim();
+    message.sender = object.sender ?? "";
+    message.caseId = object.caseId ?? "";
+    message.claimType = object.claimType ?? 0;
+    message.evidenceHash = object.evidenceHash ?? new Uint8Array(0);
+    message.encryptedReference = object.encryptedReference ?? "";
+    message.idempotencyKey = object.idempotencyKey ?? new Uint8Array(0);
+    message.sourceModule = object.sourceModule ?? "";
+    message.sourceReference = object.sourceReference ?? "";
+    message.recommendation = object.recommendation ?? "";
+    return message;
+  },
+};
+
+function createBaseMsgAddFinancialClaimResponse(): MsgAddFinancialClaimResponse {
+  return { caseId: "", claimId: "", exactDuplicate: false, status: 0 };
+}
+
+export const MsgAddFinancialClaimResponse: MessageFns<
+  MsgAddFinancialClaimResponse,
+  "virtengine.settlement.v1.MsgAddFinancialClaimResponse"
+> = {
+  $type: "virtengine.settlement.v1.MsgAddFinancialClaimResponse" as const,
+
+  encode(message: MsgAddFinancialClaimResponse, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.caseId !== "") {
+      writer.uint32(10).string(message.caseId);
+    }
+    if (message.claimId !== "") {
+      writer.uint32(18).string(message.claimId);
+    }
+    if (message.exactDuplicate !== false) {
+      writer.uint32(24).bool(message.exactDuplicate);
+    }
+    if (message.status !== 0) {
+      writer.uint32(32).int32(message.status);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): MsgAddFinancialClaimResponse {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseMsgAddFinancialClaimResponse();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.caseId = reader.string();
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.claimId = reader.string();
+          continue;
+        }
+        case 3: {
+          if (tag !== 24) {
+            break;
+          }
+
+          message.exactDuplicate = reader.bool();
+          continue;
+        }
+        case 4: {
+          if (tag !== 32) {
+            break;
+          }
+
+          message.status = reader.int32() as any;
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): MsgAddFinancialClaimResponse {
+    return {
+      caseId: isSet(object.case_id) ? globalThis.String(object.case_id) : "",
+      claimId: isSet(object.claim_id) ? globalThis.String(object.claim_id) : "",
+      exactDuplicate: isSet(object.exact_duplicate) ? globalThis.Boolean(object.exact_duplicate) : false,
+      status: isSet(object.status) ? financialCaseStatusFromJSON(object.status) : 0,
+    };
+  },
+
+  toJSON(message: MsgAddFinancialClaimResponse): unknown {
+    const obj: any = {};
+    if (message.caseId !== "") {
+      obj.case_id = message.caseId;
+    }
+    if (message.claimId !== "") {
+      obj.claim_id = message.claimId;
+    }
+    if (message.exactDuplicate !== false) {
+      obj.exact_duplicate = message.exactDuplicate;
+    }
+    if (message.status !== 0) {
+      obj.status = financialCaseStatusToJSON(message.status);
+    }
+    return obj;
+  },
+  fromPartial(object: DeepPartial<MsgAddFinancialClaimResponse>): MsgAddFinancialClaimResponse {
+    const message = createBaseMsgAddFinancialClaimResponse();
+    message.caseId = object.caseId ?? "";
+    message.claimId = object.claimId ?? "";
+    message.exactDuplicate = object.exactDuplicate ?? false;
+    message.status = object.status ?? 0;
+    return message;
+  },
+};
+
+function createBaseMsgSubmitFinancialCaseForReview(): MsgSubmitFinancialCaseForReview {
+  return { sender: "", caseId: "" };
+}
+
+export const MsgSubmitFinancialCaseForReview: MessageFns<
+  MsgSubmitFinancialCaseForReview,
+  "virtengine.settlement.v1.MsgSubmitFinancialCaseForReview"
+> = {
+  $type: "virtengine.settlement.v1.MsgSubmitFinancialCaseForReview" as const,
+
+  encode(message: MsgSubmitFinancialCaseForReview, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.sender !== "") {
+      writer.uint32(10).string(message.sender);
+    }
+    if (message.caseId !== "") {
+      writer.uint32(18).string(message.caseId);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): MsgSubmitFinancialCaseForReview {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseMsgSubmitFinancialCaseForReview();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.sender = reader.string();
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.caseId = reader.string();
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): MsgSubmitFinancialCaseForReview {
+    return {
+      sender: isSet(object.sender) ? globalThis.String(object.sender) : "",
+      caseId: isSet(object.case_id) ? globalThis.String(object.case_id) : "",
+    };
+  },
+
+  toJSON(message: MsgSubmitFinancialCaseForReview): unknown {
+    const obj: any = {};
+    if (message.sender !== "") {
+      obj.sender = message.sender;
+    }
+    if (message.caseId !== "") {
+      obj.case_id = message.caseId;
+    }
+    return obj;
+  },
+  fromPartial(object: DeepPartial<MsgSubmitFinancialCaseForReview>): MsgSubmitFinancialCaseForReview {
+    const message = createBaseMsgSubmitFinancialCaseForReview();
+    message.sender = object.sender ?? "";
+    message.caseId = object.caseId ?? "";
+    return message;
+  },
+};
+
+function createBaseMsgSubmitFinancialCaseForReviewResponse(): MsgSubmitFinancialCaseForReviewResponse {
+  return { status: 0 };
+}
+
+export const MsgSubmitFinancialCaseForReviewResponse: MessageFns<
+  MsgSubmitFinancialCaseForReviewResponse,
+  "virtengine.settlement.v1.MsgSubmitFinancialCaseForReviewResponse"
+> = {
+  $type: "virtengine.settlement.v1.MsgSubmitFinancialCaseForReviewResponse" as const,
+
+  encode(message: MsgSubmitFinancialCaseForReviewResponse, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.status !== 0) {
+      writer.uint32(8).int32(message.status);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): MsgSubmitFinancialCaseForReviewResponse {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseMsgSubmitFinancialCaseForReviewResponse();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 8) {
+            break;
+          }
+
+          message.status = reader.int32() as any;
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): MsgSubmitFinancialCaseForReviewResponse {
+    return { status: isSet(object.status) ? financialCaseStatusFromJSON(object.status) : 0 };
+  },
+
+  toJSON(message: MsgSubmitFinancialCaseForReviewResponse): unknown {
+    const obj: any = {};
+    if (message.status !== 0) {
+      obj.status = financialCaseStatusToJSON(message.status);
+    }
+    return obj;
+  },
+  fromPartial(object: DeepPartial<MsgSubmitFinancialCaseForReviewResponse>): MsgSubmitFinancialCaseForReviewResponse {
+    const message = createBaseMsgSubmitFinancialCaseForReviewResponse();
+    message.status = object.status ?? 0;
+    return message;
+  },
+};
+
+function createBaseMsgEscalateFinancialCase(): MsgEscalateFinancialCase {
+  return { sender: "", caseId: "", reasonHash: new Uint8Array(0) };
+}
+
+export const MsgEscalateFinancialCase: MessageFns<
+  MsgEscalateFinancialCase,
+  "virtengine.settlement.v1.MsgEscalateFinancialCase"
+> = {
+  $type: "virtengine.settlement.v1.MsgEscalateFinancialCase" as const,
+
+  encode(message: MsgEscalateFinancialCase, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.sender !== "") {
+      writer.uint32(10).string(message.sender);
+    }
+    if (message.caseId !== "") {
+      writer.uint32(18).string(message.caseId);
+    }
+    if (message.reasonHash.length !== 0) {
+      writer.uint32(26).bytes(message.reasonHash);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): MsgEscalateFinancialCase {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseMsgEscalateFinancialCase();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.sender = reader.string();
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.caseId = reader.string();
+          continue;
+        }
+        case 3: {
+          if (tag !== 26) {
+            break;
+          }
+
+          message.reasonHash = reader.bytes();
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): MsgEscalateFinancialCase {
+    return {
+      sender: isSet(object.sender) ? globalThis.String(object.sender) : "",
+      caseId: isSet(object.case_id) ? globalThis.String(object.case_id) : "",
+      reasonHash: isSet(object.reason_hash) ? bytesFromBase64(object.reason_hash) : new Uint8Array(0),
+    };
+  },
+
+  toJSON(message: MsgEscalateFinancialCase): unknown {
+    const obj: any = {};
+    if (message.sender !== "") {
+      obj.sender = message.sender;
+    }
+    if (message.caseId !== "") {
+      obj.case_id = message.caseId;
+    }
+    if (message.reasonHash.length !== 0) {
+      obj.reason_hash = base64FromBytes(message.reasonHash);
+    }
+    return obj;
+  },
+  fromPartial(object: DeepPartial<MsgEscalateFinancialCase>): MsgEscalateFinancialCase {
+    const message = createBaseMsgEscalateFinancialCase();
+    message.sender = object.sender ?? "";
+    message.caseId = object.caseId ?? "";
+    message.reasonHash = object.reasonHash ?? new Uint8Array(0);
+    return message;
+  },
+};
+
+function createBaseMsgEscalateFinancialCaseResponse(): MsgEscalateFinancialCaseResponse {
+  return { status: 0 };
+}
+
+export const MsgEscalateFinancialCaseResponse: MessageFns<
+  MsgEscalateFinancialCaseResponse,
+  "virtengine.settlement.v1.MsgEscalateFinancialCaseResponse"
+> = {
+  $type: "virtengine.settlement.v1.MsgEscalateFinancialCaseResponse" as const,
+
+  encode(message: MsgEscalateFinancialCaseResponse, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.status !== 0) {
+      writer.uint32(8).int32(message.status);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): MsgEscalateFinancialCaseResponse {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseMsgEscalateFinancialCaseResponse();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 8) {
+            break;
+          }
+
+          message.status = reader.int32() as any;
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): MsgEscalateFinancialCaseResponse {
+    return { status: isSet(object.status) ? financialCaseStatusFromJSON(object.status) : 0 };
+  },
+
+  toJSON(message: MsgEscalateFinancialCaseResponse): unknown {
+    const obj: any = {};
+    if (message.status !== 0) {
+      obj.status = financialCaseStatusToJSON(message.status);
+    }
+    return obj;
+  },
+  fromPartial(object: DeepPartial<MsgEscalateFinancialCaseResponse>): MsgEscalateFinancialCaseResponse {
+    const message = createBaseMsgEscalateFinancialCaseResponse();
+    message.status = object.status ?? 0;
+    return message;
+  },
+};
+
+function createBaseMsgResolveFinancialCase(): MsgResolveFinancialCase {
+  return { resolver: "", caseId: "", allocation: undefined };
+}
+
+export const MsgResolveFinancialCase: MessageFns<
+  MsgResolveFinancialCase,
+  "virtengine.settlement.v1.MsgResolveFinancialCase"
+> = {
+  $type: "virtengine.settlement.v1.MsgResolveFinancialCase" as const,
+
+  encode(message: MsgResolveFinancialCase, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.resolver !== "") {
+      writer.uint32(10).string(message.resolver);
+    }
+    if (message.caseId !== "") {
+      writer.uint32(18).string(message.caseId);
+    }
+    if (message.allocation !== undefined) {
+      TerminalAllocation.encode(message.allocation, writer.uint32(26).fork()).join();
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): MsgResolveFinancialCase {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseMsgResolveFinancialCase();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.resolver = reader.string();
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.caseId = reader.string();
+          continue;
+        }
+        case 3: {
+          if (tag !== 26) {
+            break;
+          }
+
+          message.allocation = TerminalAllocation.decode(reader, reader.uint32());
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): MsgResolveFinancialCase {
+    return {
+      resolver: isSet(object.resolver) ? globalThis.String(object.resolver) : "",
+      caseId: isSet(object.case_id) ? globalThis.String(object.case_id) : "",
+      allocation: isSet(object.allocation) ? TerminalAllocation.fromJSON(object.allocation) : undefined,
+    };
+  },
+
+  toJSON(message: MsgResolveFinancialCase): unknown {
+    const obj: any = {};
+    if (message.resolver !== "") {
+      obj.resolver = message.resolver;
+    }
+    if (message.caseId !== "") {
+      obj.case_id = message.caseId;
+    }
+    if (message.allocation !== undefined) {
+      obj.allocation = TerminalAllocation.toJSON(message.allocation);
+    }
+    return obj;
+  },
+  fromPartial(object: DeepPartial<MsgResolveFinancialCase>): MsgResolveFinancialCase {
+    const message = createBaseMsgResolveFinancialCase();
+    message.resolver = object.resolver ?? "";
+    message.caseId = object.caseId ?? "";
+    message.allocation = (object.allocation !== undefined && object.allocation !== null)
+      ? TerminalAllocation.fromPartial(object.allocation)
+      : undefined;
+    return message;
+  },
+};
+
+function createBaseMsgResolveFinancialCaseResponse(): MsgResolveFinancialCaseResponse {
+  return { status: 0, appealDeadlineHeight: Long.ZERO, appealDeadlineTime: Long.ZERO };
+}
+
+export const MsgResolveFinancialCaseResponse: MessageFns<
+  MsgResolveFinancialCaseResponse,
+  "virtengine.settlement.v1.MsgResolveFinancialCaseResponse"
+> = {
+  $type: "virtengine.settlement.v1.MsgResolveFinancialCaseResponse" as const,
+
+  encode(message: MsgResolveFinancialCaseResponse, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.status !== 0) {
+      writer.uint32(8).int32(message.status);
+    }
+    if (!message.appealDeadlineHeight.equals(Long.ZERO)) {
+      writer.uint32(16).int64(message.appealDeadlineHeight.toString());
+    }
+    if (!message.appealDeadlineTime.equals(Long.ZERO)) {
+      writer.uint32(24).int64(message.appealDeadlineTime.toString());
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): MsgResolveFinancialCaseResponse {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseMsgResolveFinancialCaseResponse();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 8) {
+            break;
+          }
+
+          message.status = reader.int32() as any;
+          continue;
+        }
+        case 2: {
+          if (tag !== 16) {
+            break;
+          }
+
+          message.appealDeadlineHeight = Long.fromString(reader.int64().toString());
+          continue;
+        }
+        case 3: {
+          if (tag !== 24) {
+            break;
+          }
+
+          message.appealDeadlineTime = Long.fromString(reader.int64().toString());
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): MsgResolveFinancialCaseResponse {
+    return {
+      status: isSet(object.status) ? financialCaseStatusFromJSON(object.status) : 0,
+      appealDeadlineHeight: isSet(object.appeal_deadline_height)
+        ? Long.fromValue(object.appeal_deadline_height)
+        : Long.ZERO,
+      appealDeadlineTime: isSet(object.appeal_deadline_time) ? Long.fromValue(object.appeal_deadline_time) : Long.ZERO,
+    };
+  },
+
+  toJSON(message: MsgResolveFinancialCaseResponse): unknown {
+    const obj: any = {};
+    if (message.status !== 0) {
+      obj.status = financialCaseStatusToJSON(message.status);
+    }
+    if (!message.appealDeadlineHeight.equals(Long.ZERO)) {
+      obj.appeal_deadline_height = (message.appealDeadlineHeight || Long.ZERO).toString();
+    }
+    if (!message.appealDeadlineTime.equals(Long.ZERO)) {
+      obj.appeal_deadline_time = (message.appealDeadlineTime || Long.ZERO).toString();
+    }
+    return obj;
+  },
+  fromPartial(object: DeepPartial<MsgResolveFinancialCaseResponse>): MsgResolveFinancialCaseResponse {
+    const message = createBaseMsgResolveFinancialCaseResponse();
+    message.status = object.status ?? 0;
+    message.appealDeadlineHeight = (object.appealDeadlineHeight !== undefined && object.appealDeadlineHeight !== null)
+      ? Long.fromValue(object.appealDeadlineHeight)
+      : Long.ZERO;
+    message.appealDeadlineTime = (object.appealDeadlineTime !== undefined && object.appealDeadlineTime !== null)
+      ? Long.fromValue(object.appealDeadlineTime)
+      : Long.ZERO;
+    return message;
+  },
+};
+
+function createBaseMsgAppealFinancialCase(): MsgAppealFinancialCase {
+  return {
+    appellant: "",
+    caseId: "",
+    evidenceHash: new Uint8Array(0),
+    encryptedReference: "",
+    idempotencyKey: new Uint8Array(0),
+  };
+}
+
+export const MsgAppealFinancialCase: MessageFns<
+  MsgAppealFinancialCase,
+  "virtengine.settlement.v1.MsgAppealFinancialCase"
+> = {
+  $type: "virtengine.settlement.v1.MsgAppealFinancialCase" as const,
+
+  encode(message: MsgAppealFinancialCase, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.appellant !== "") {
+      writer.uint32(10).string(message.appellant);
+    }
+    if (message.caseId !== "") {
+      writer.uint32(18).string(message.caseId);
+    }
+    if (message.evidenceHash.length !== 0) {
+      writer.uint32(26).bytes(message.evidenceHash);
+    }
+    if (message.encryptedReference !== "") {
+      writer.uint32(34).string(message.encryptedReference);
+    }
+    if (message.idempotencyKey.length !== 0) {
+      writer.uint32(42).bytes(message.idempotencyKey);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): MsgAppealFinancialCase {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseMsgAppealFinancialCase();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.appellant = reader.string();
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.caseId = reader.string();
+          continue;
+        }
+        case 3: {
+          if (tag !== 26) {
+            break;
+          }
+
+          message.evidenceHash = reader.bytes();
+          continue;
+        }
+        case 4: {
+          if (tag !== 34) {
+            break;
+          }
+
+          message.encryptedReference = reader.string();
+          continue;
+        }
+        case 5: {
+          if (tag !== 42) {
+            break;
+          }
+
+          message.idempotencyKey = reader.bytes();
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): MsgAppealFinancialCase {
+    return {
+      appellant: isSet(object.appellant) ? globalThis.String(object.appellant) : "",
+      caseId: isSet(object.case_id) ? globalThis.String(object.case_id) : "",
+      evidenceHash: isSet(object.evidence_hash) ? bytesFromBase64(object.evidence_hash) : new Uint8Array(0),
+      encryptedReference: isSet(object.encrypted_reference) ? globalThis.String(object.encrypted_reference) : "",
+      idempotencyKey: isSet(object.idempotency_key) ? bytesFromBase64(object.idempotency_key) : new Uint8Array(0),
+    };
+  },
+
+  toJSON(message: MsgAppealFinancialCase): unknown {
+    const obj: any = {};
+    if (message.appellant !== "") {
+      obj.appellant = message.appellant;
+    }
+    if (message.caseId !== "") {
+      obj.case_id = message.caseId;
+    }
+    if (message.evidenceHash.length !== 0) {
+      obj.evidence_hash = base64FromBytes(message.evidenceHash);
+    }
+    if (message.encryptedReference !== "") {
+      obj.encrypted_reference = message.encryptedReference;
+    }
+    if (message.idempotencyKey.length !== 0) {
+      obj.idempotency_key = base64FromBytes(message.idempotencyKey);
+    }
+    return obj;
+  },
+  fromPartial(object: DeepPartial<MsgAppealFinancialCase>): MsgAppealFinancialCase {
+    const message = createBaseMsgAppealFinancialCase();
+    message.appellant = object.appellant ?? "";
+    message.caseId = object.caseId ?? "";
+    message.evidenceHash = object.evidenceHash ?? new Uint8Array(0);
+    message.encryptedReference = object.encryptedReference ?? "";
+    message.idempotencyKey = object.idempotencyKey ?? new Uint8Array(0);
+    return message;
+  },
+};
+
+function createBaseMsgAppealFinancialCaseResponse(): MsgAppealFinancialCaseResponse {
+  return { appealId: "", status: 0 };
+}
+
+export const MsgAppealFinancialCaseResponse: MessageFns<
+  MsgAppealFinancialCaseResponse,
+  "virtengine.settlement.v1.MsgAppealFinancialCaseResponse"
+> = {
+  $type: "virtengine.settlement.v1.MsgAppealFinancialCaseResponse" as const,
+
+  encode(message: MsgAppealFinancialCaseResponse, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.appealId !== "") {
+      writer.uint32(10).string(message.appealId);
+    }
+    if (message.status !== 0) {
+      writer.uint32(16).int32(message.status);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): MsgAppealFinancialCaseResponse {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseMsgAppealFinancialCaseResponse();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.appealId = reader.string();
+          continue;
+        }
+        case 2: {
+          if (tag !== 16) {
+            break;
+          }
+
+          message.status = reader.int32() as any;
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): MsgAppealFinancialCaseResponse {
+    return {
+      appealId: isSet(object.appeal_id) ? globalThis.String(object.appeal_id) : "",
+      status: isSet(object.status) ? financialCaseStatusFromJSON(object.status) : 0,
+    };
+  },
+
+  toJSON(message: MsgAppealFinancialCaseResponse): unknown {
+    const obj: any = {};
+    if (message.appealId !== "") {
+      obj.appeal_id = message.appealId;
+    }
+    if (message.status !== 0) {
+      obj.status = financialCaseStatusToJSON(message.status);
+    }
+    return obj;
+  },
+  fromPartial(object: DeepPartial<MsgAppealFinancialCaseResponse>): MsgAppealFinancialCaseResponse {
+    const message = createBaseMsgAppealFinancialCaseResponse();
+    message.appealId = object.appealId ?? "";
+    message.status = object.status ?? 0;
+    return message;
+  },
+};
+
+function createBaseMsgCancelFinancialCase(): MsgCancelFinancialCase {
+  return { sender: "", caseId: "", reasonHash: new Uint8Array(0) };
+}
+
+export const MsgCancelFinancialCase: MessageFns<
+  MsgCancelFinancialCase,
+  "virtengine.settlement.v1.MsgCancelFinancialCase"
+> = {
+  $type: "virtengine.settlement.v1.MsgCancelFinancialCase" as const,
+
+  encode(message: MsgCancelFinancialCase, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.sender !== "") {
+      writer.uint32(10).string(message.sender);
+    }
+    if (message.caseId !== "") {
+      writer.uint32(18).string(message.caseId);
+    }
+    if (message.reasonHash.length !== 0) {
+      writer.uint32(26).bytes(message.reasonHash);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): MsgCancelFinancialCase {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseMsgCancelFinancialCase();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.sender = reader.string();
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.caseId = reader.string();
+          continue;
+        }
+        case 3: {
+          if (tag !== 26) {
+            break;
+          }
+
+          message.reasonHash = reader.bytes();
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): MsgCancelFinancialCase {
+    return {
+      sender: isSet(object.sender) ? globalThis.String(object.sender) : "",
+      caseId: isSet(object.case_id) ? globalThis.String(object.case_id) : "",
+      reasonHash: isSet(object.reason_hash) ? bytesFromBase64(object.reason_hash) : new Uint8Array(0),
+    };
+  },
+
+  toJSON(message: MsgCancelFinancialCase): unknown {
+    const obj: any = {};
+    if (message.sender !== "") {
+      obj.sender = message.sender;
+    }
+    if (message.caseId !== "") {
+      obj.case_id = message.caseId;
+    }
+    if (message.reasonHash.length !== 0) {
+      obj.reason_hash = base64FromBytes(message.reasonHash);
+    }
+    return obj;
+  },
+  fromPartial(object: DeepPartial<MsgCancelFinancialCase>): MsgCancelFinancialCase {
+    const message = createBaseMsgCancelFinancialCase();
+    message.sender = object.sender ?? "";
+    message.caseId = object.caseId ?? "";
+    message.reasonHash = object.reasonHash ?? new Uint8Array(0);
+    return message;
+  },
+};
+
+function createBaseMsgCancelFinancialCaseResponse(): MsgCancelFinancialCaseResponse {
+  return { status: 0 };
+}
+
+export const MsgCancelFinancialCaseResponse: MessageFns<
+  MsgCancelFinancialCaseResponse,
+  "virtengine.settlement.v1.MsgCancelFinancialCaseResponse"
+> = {
+  $type: "virtengine.settlement.v1.MsgCancelFinancialCaseResponse" as const,
+
+  encode(message: MsgCancelFinancialCaseResponse, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.status !== 0) {
+      writer.uint32(8).int32(message.status);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): MsgCancelFinancialCaseResponse {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseMsgCancelFinancialCaseResponse();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 8) {
+            break;
+          }
+
+          message.status = reader.int32() as any;
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): MsgCancelFinancialCaseResponse {
+    return { status: isSet(object.status) ? financialCaseStatusFromJSON(object.status) : 0 };
+  },
+
+  toJSON(message: MsgCancelFinancialCaseResponse): unknown {
+    const obj: any = {};
+    if (message.status !== 0) {
+      obj.status = financialCaseStatusToJSON(message.status);
+    }
+    return obj;
+  },
+  fromPartial(object: DeepPartial<MsgCancelFinancialCaseResponse>): MsgCancelFinancialCaseResponse {
+    const message = createBaseMsgCancelFinancialCaseResponse();
+    message.status = object.status ?? 0;
+    return message;
+  },
+};
+
+function createBaseMsgFinalizeFinancialCase(): MsgFinalizeFinancialCase {
+  return { sender: "", caseId: "" };
+}
+
+export const MsgFinalizeFinancialCase: MessageFns<
+  MsgFinalizeFinancialCase,
+  "virtengine.settlement.v1.MsgFinalizeFinancialCase"
+> = {
+  $type: "virtengine.settlement.v1.MsgFinalizeFinancialCase" as const,
+
+  encode(message: MsgFinalizeFinancialCase, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.sender !== "") {
+      writer.uint32(10).string(message.sender);
+    }
+    if (message.caseId !== "") {
+      writer.uint32(18).string(message.caseId);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): MsgFinalizeFinancialCase {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseMsgFinalizeFinancialCase();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.sender = reader.string();
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.caseId = reader.string();
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): MsgFinalizeFinancialCase {
+    return {
+      sender: isSet(object.sender) ? globalThis.String(object.sender) : "",
+      caseId: isSet(object.case_id) ? globalThis.String(object.case_id) : "",
+    };
+  },
+
+  toJSON(message: MsgFinalizeFinancialCase): unknown {
+    const obj: any = {};
+    if (message.sender !== "") {
+      obj.sender = message.sender;
+    }
+    if (message.caseId !== "") {
+      obj.case_id = message.caseId;
+    }
+    return obj;
+  },
+  fromPartial(object: DeepPartial<MsgFinalizeFinancialCase>): MsgFinalizeFinancialCase {
+    const message = createBaseMsgFinalizeFinancialCase();
+    message.sender = object.sender ?? "";
+    message.caseId = object.caseId ?? "";
+    return message;
+  },
+};
+
+function createBaseMsgFinalizeFinancialCaseResponse(): MsgFinalizeFinancialCaseResponse {
+  return { status: 0, effects: [] };
+}
+
+export const MsgFinalizeFinancialCaseResponse: MessageFns<
+  MsgFinalizeFinancialCaseResponse,
+  "virtengine.settlement.v1.MsgFinalizeFinancialCaseResponse"
+> = {
+  $type: "virtengine.settlement.v1.MsgFinalizeFinancialCaseResponse" as const,
+
+  encode(message: MsgFinalizeFinancialCaseResponse, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.status !== 0) {
+      writer.uint32(8).int32(message.status);
+    }
+    for (const v of message.effects) {
+      FinancialCaseEffect.encode(v!, writer.uint32(18).fork()).join();
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): MsgFinalizeFinancialCaseResponse {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseMsgFinalizeFinancialCaseResponse();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 8) {
+            break;
+          }
+
+          message.status = reader.int32() as any;
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.effects.push(FinancialCaseEffect.decode(reader, reader.uint32()));
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): MsgFinalizeFinancialCaseResponse {
+    return {
+      status: isSet(object.status) ? financialCaseStatusFromJSON(object.status) : 0,
+      effects: globalThis.Array.isArray(object?.effects)
+        ? object.effects.map((e: any) => FinancialCaseEffect.fromJSON(e))
+        : [],
+    };
+  },
+
+  toJSON(message: MsgFinalizeFinancialCaseResponse): unknown {
+    const obj: any = {};
+    if (message.status !== 0) {
+      obj.status = financialCaseStatusToJSON(message.status);
+    }
+    if (message.effects?.length) {
+      obj.effects = message.effects.map((e) => FinancialCaseEffect.toJSON(e));
+    }
+    return obj;
+  },
+  fromPartial(object: DeepPartial<MsgFinalizeFinancialCaseResponse>): MsgFinalizeFinancialCaseResponse {
+    const message = createBaseMsgFinalizeFinancialCaseResponse();
+    message.status = object.status ?? 0;
+    message.effects = object.effects?.map((e) => FinancialCaseEffect.fromPartial(e)) || [];
+    return message;
+  },
+};
+
+function createBaseMsgRecordFiatConversionObservation(): MsgRecordFiatConversionObservation {
+  return {
+    sender: "",
+    conversionId: "",
+    observationSequence: Long.UZERO,
+    idempotencyKey: new Uint8Array(0),
+    stage: 0,
+    dexProfileId: "",
+    dexProfileDigest: new Uint8Array(0),
+    payoutProfileId: "",
+    payoutProfileDigest: new Uint8Array(0),
+    quoteDigest: new Uint8Array(0),
+    quoteExpiry: Long.ZERO,
+    minimumStableOutput: undefined,
+    swapTxHash: "",
+    swapHeight: Long.ZERO,
+    swapBlockHash: new Uint8Array(0),
+    swapFinalityConfirmations: 0,
+    swapFinalityHash: new Uint8Array(0),
+    stableAmount: undefined,
+    offRampQuoteId: "",
+    offRampPayoutId: "",
+    status: "",
+    privacySafeReferenceHash: new Uint8Array(0),
+    fiatAmount: "",
+    complianceDecisionHash: new Uint8Array(0),
+    observedAt: Long.ZERO,
+    evidenceHash: new Uint8Array(0),
+    failureCode: "",
+    payoutFinalityHash: new Uint8Array(0),
+  };
+}
+
+export const MsgRecordFiatConversionObservation: MessageFns<
+  MsgRecordFiatConversionObservation,
+  "virtengine.settlement.v1.MsgRecordFiatConversionObservation"
+> = {
+  $type: "virtengine.settlement.v1.MsgRecordFiatConversionObservation" as const,
+
+  encode(message: MsgRecordFiatConversionObservation, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.sender !== "") {
+      writer.uint32(10).string(message.sender);
+    }
+    if (message.conversionId !== "") {
+      writer.uint32(18).string(message.conversionId);
+    }
+    if (!message.observationSequence.equals(Long.UZERO)) {
+      writer.uint32(24).uint64(message.observationSequence.toString());
+    }
+    if (message.idempotencyKey.length !== 0) {
+      writer.uint32(34).bytes(message.idempotencyKey);
+    }
+    if (message.stage !== 0) {
+      writer.uint32(40).int32(message.stage);
+    }
+    if (message.dexProfileId !== "") {
+      writer.uint32(50).string(message.dexProfileId);
+    }
+    if (message.dexProfileDigest.length !== 0) {
+      writer.uint32(58).bytes(message.dexProfileDigest);
+    }
+    if (message.payoutProfileId !== "") {
+      writer.uint32(66).string(message.payoutProfileId);
+    }
+    if (message.payoutProfileDigest.length !== 0) {
+      writer.uint32(74).bytes(message.payoutProfileDigest);
+    }
+    if (message.quoteDigest.length !== 0) {
+      writer.uint32(82).bytes(message.quoteDigest);
+    }
+    if (!message.quoteExpiry.equals(Long.ZERO)) {
+      writer.uint32(88).int64(message.quoteExpiry.toString());
+    }
+    if (message.minimumStableOutput !== undefined) {
+      Coin.encode(message.minimumStableOutput, writer.uint32(98).fork()).join();
+    }
+    if (message.swapTxHash !== "") {
+      writer.uint32(106).string(message.swapTxHash);
+    }
+    if (!message.swapHeight.equals(Long.ZERO)) {
+      writer.uint32(112).int64(message.swapHeight.toString());
+    }
+    if (message.swapBlockHash.length !== 0) {
+      writer.uint32(122).bytes(message.swapBlockHash);
+    }
+    if (message.swapFinalityConfirmations !== 0) {
+      writer.uint32(128).uint32(message.swapFinalityConfirmations);
+    }
+    if (message.swapFinalityHash.length !== 0) {
+      writer.uint32(138).bytes(message.swapFinalityHash);
+    }
+    if (message.stableAmount !== undefined) {
+      Coin.encode(message.stableAmount, writer.uint32(146).fork()).join();
+    }
+    if (message.offRampQuoteId !== "") {
+      writer.uint32(154).string(message.offRampQuoteId);
+    }
+    if (message.offRampPayoutId !== "") {
+      writer.uint32(162).string(message.offRampPayoutId);
+    }
+    if (message.status !== "") {
+      writer.uint32(170).string(message.status);
+    }
+    if (message.privacySafeReferenceHash.length !== 0) {
+      writer.uint32(178).bytes(message.privacySafeReferenceHash);
+    }
+    if (message.fiatAmount !== "") {
+      writer.uint32(186).string(message.fiatAmount);
+    }
+    if (message.complianceDecisionHash.length !== 0) {
+      writer.uint32(194).bytes(message.complianceDecisionHash);
+    }
+    if (!message.observedAt.equals(Long.ZERO)) {
+      writer.uint32(200).int64(message.observedAt.toString());
+    }
+    if (message.evidenceHash.length !== 0) {
+      writer.uint32(210).bytes(message.evidenceHash);
+    }
+    if (message.failureCode !== "") {
+      writer.uint32(218).string(message.failureCode);
+    }
+    if (message.payoutFinalityHash.length !== 0) {
+      writer.uint32(226).bytes(message.payoutFinalityHash);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): MsgRecordFiatConversionObservation {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseMsgRecordFiatConversionObservation();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.sender = reader.string();
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.conversionId = reader.string();
+          continue;
+        }
+        case 3: {
+          if (tag !== 24) {
+            break;
+          }
+
+          message.observationSequence = Long.fromString(reader.uint64().toString(), true);
+          continue;
+        }
+        case 4: {
+          if (tag !== 34) {
+            break;
+          }
+
+          message.idempotencyKey = reader.bytes();
+          continue;
+        }
+        case 5: {
+          if (tag !== 40) {
+            break;
+          }
+
+          message.stage = reader.int32() as any;
+          continue;
+        }
+        case 6: {
+          if (tag !== 50) {
+            break;
+          }
+
+          message.dexProfileId = reader.string();
+          continue;
+        }
+        case 7: {
+          if (tag !== 58) {
+            break;
+          }
+
+          message.dexProfileDigest = reader.bytes();
+          continue;
+        }
+        case 8: {
+          if (tag !== 66) {
+            break;
+          }
+
+          message.payoutProfileId = reader.string();
+          continue;
+        }
+        case 9: {
+          if (tag !== 74) {
+            break;
+          }
+
+          message.payoutProfileDigest = reader.bytes();
+          continue;
+        }
+        case 10: {
+          if (tag !== 82) {
+            break;
+          }
+
+          message.quoteDigest = reader.bytes();
+          continue;
+        }
+        case 11: {
+          if (tag !== 88) {
+            break;
+          }
+
+          message.quoteExpiry = Long.fromString(reader.int64().toString());
+          continue;
+        }
+        case 12: {
+          if (tag !== 98) {
+            break;
+          }
+
+          message.minimumStableOutput = Coin.decode(reader, reader.uint32());
+          continue;
+        }
+        case 13: {
+          if (tag !== 106) {
+            break;
+          }
+
+          message.swapTxHash = reader.string();
+          continue;
+        }
+        case 14: {
+          if (tag !== 112) {
+            break;
+          }
+
+          message.swapHeight = Long.fromString(reader.int64().toString());
+          continue;
+        }
+        case 15: {
+          if (tag !== 122) {
+            break;
+          }
+
+          message.swapBlockHash = reader.bytes();
+          continue;
+        }
+        case 16: {
+          if (tag !== 128) {
+            break;
+          }
+
+          message.swapFinalityConfirmations = reader.uint32();
+          continue;
+        }
+        case 17: {
+          if (tag !== 138) {
+            break;
+          }
+
+          message.swapFinalityHash = reader.bytes();
+          continue;
+        }
+        case 18: {
+          if (tag !== 146) {
+            break;
+          }
+
+          message.stableAmount = Coin.decode(reader, reader.uint32());
+          continue;
+        }
+        case 19: {
+          if (tag !== 154) {
+            break;
+          }
+
+          message.offRampQuoteId = reader.string();
+          continue;
+        }
+        case 20: {
+          if (tag !== 162) {
+            break;
+          }
+
+          message.offRampPayoutId = reader.string();
+          continue;
+        }
+        case 21: {
+          if (tag !== 170) {
+            break;
+          }
+
+          message.status = reader.string();
+          continue;
+        }
+        case 22: {
+          if (tag !== 178) {
+            break;
+          }
+
+          message.privacySafeReferenceHash = reader.bytes();
+          continue;
+        }
+        case 23: {
+          if (tag !== 186) {
+            break;
+          }
+
+          message.fiatAmount = reader.string();
+          continue;
+        }
+        case 24: {
+          if (tag !== 194) {
+            break;
+          }
+
+          message.complianceDecisionHash = reader.bytes();
+          continue;
+        }
+        case 25: {
+          if (tag !== 200) {
+            break;
+          }
+
+          message.observedAt = Long.fromString(reader.int64().toString());
+          continue;
+        }
+        case 26: {
+          if (tag !== 210) {
+            break;
+          }
+
+          message.evidenceHash = reader.bytes();
+          continue;
+        }
+        case 27: {
+          if (tag !== 218) {
+            break;
+          }
+
+          message.failureCode = reader.string();
+          continue;
+        }
+        case 28: {
+          if (tag !== 226) {
+            break;
+          }
+
+          message.payoutFinalityHash = reader.bytes();
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): MsgRecordFiatConversionObservation {
+    return {
+      sender: isSet(object.sender) ? globalThis.String(object.sender) : "",
+      conversionId: isSet(object.conversion_id) ? globalThis.String(object.conversion_id) : "",
+      observationSequence: isSet(object.observation_sequence)
+        ? Long.fromValue(object.observation_sequence)
+        : Long.UZERO,
+      idempotencyKey: isSet(object.idempotency_key) ? bytesFromBase64(object.idempotency_key) : new Uint8Array(0),
+      stage: isSet(object.stage) ? fiatConversionObservationStageFromJSON(object.stage) : 0,
+      dexProfileId: isSet(object.dex_profile_id) ? globalThis.String(object.dex_profile_id) : "",
+      dexProfileDigest: isSet(object.dex_profile_digest)
+        ? bytesFromBase64(object.dex_profile_digest)
+        : new Uint8Array(0),
+      payoutProfileId: isSet(object.payout_profile_id) ? globalThis.String(object.payout_profile_id) : "",
+      payoutProfileDigest: isSet(object.payout_profile_digest)
+        ? bytesFromBase64(object.payout_profile_digest)
+        : new Uint8Array(0),
+      quoteDigest: isSet(object.quote_digest) ? bytesFromBase64(object.quote_digest) : new Uint8Array(0),
+      quoteExpiry: isSet(object.quote_expiry) ? Long.fromValue(object.quote_expiry) : Long.ZERO,
+      minimumStableOutput: isSet(object.minimum_stable_output)
+        ? Coin.fromJSON(object.minimum_stable_output)
+        : undefined,
+      swapTxHash: isSet(object.swap_tx_hash) ? globalThis.String(object.swap_tx_hash) : "",
+      swapHeight: isSet(object.swap_height) ? Long.fromValue(object.swap_height) : Long.ZERO,
+      swapBlockHash: isSet(object.swap_block_hash) ? bytesFromBase64(object.swap_block_hash) : new Uint8Array(0),
+      swapFinalityConfirmations: isSet(object.swap_finality_confirmations)
+        ? globalThis.Number(object.swap_finality_confirmations)
+        : 0,
+      swapFinalityHash: isSet(object.swap_finality_hash)
+        ? bytesFromBase64(object.swap_finality_hash)
+        : new Uint8Array(0),
+      stableAmount: isSet(object.stable_amount) ? Coin.fromJSON(object.stable_amount) : undefined,
+      offRampQuoteId: isSet(object.off_ramp_quote_id) ? globalThis.String(object.off_ramp_quote_id) : "",
+      offRampPayoutId: isSet(object.off_ramp_payout_id) ? globalThis.String(object.off_ramp_payout_id) : "",
+      status: isSet(object.status) ? globalThis.String(object.status) : "",
+      privacySafeReferenceHash: isSet(object.privacy_safe_reference_hash)
+        ? bytesFromBase64(object.privacy_safe_reference_hash)
+        : new Uint8Array(0),
+      fiatAmount: isSet(object.fiat_amount) ? globalThis.String(object.fiat_amount) : "",
+      complianceDecisionHash: isSet(object.compliance_decision_hash)
+        ? bytesFromBase64(object.compliance_decision_hash)
+        : new Uint8Array(0),
+      observedAt: isSet(object.observed_at) ? Long.fromValue(object.observed_at) : Long.ZERO,
+      evidenceHash: isSet(object.evidence_hash) ? bytesFromBase64(object.evidence_hash) : new Uint8Array(0),
+      failureCode: isSet(object.failure_code) ? globalThis.String(object.failure_code) : "",
+      payoutFinalityHash: isSet(object.payout_finality_hash)
+        ? bytesFromBase64(object.payout_finality_hash)
+        : new Uint8Array(0),
+    };
+  },
+
+  toJSON(message: MsgRecordFiatConversionObservation): unknown {
+    const obj: any = {};
+    if (message.sender !== "") {
+      obj.sender = message.sender;
+    }
+    if (message.conversionId !== "") {
+      obj.conversion_id = message.conversionId;
+    }
+    if (!message.observationSequence.equals(Long.UZERO)) {
+      obj.observation_sequence = (message.observationSequence || Long.UZERO).toString();
+    }
+    if (message.idempotencyKey.length !== 0) {
+      obj.idempotency_key = base64FromBytes(message.idempotencyKey);
+    }
+    if (message.stage !== 0) {
+      obj.stage = fiatConversionObservationStageToJSON(message.stage);
+    }
+    if (message.dexProfileId !== "") {
+      obj.dex_profile_id = message.dexProfileId;
+    }
+    if (message.dexProfileDigest.length !== 0) {
+      obj.dex_profile_digest = base64FromBytes(message.dexProfileDigest);
+    }
+    if (message.payoutProfileId !== "") {
+      obj.payout_profile_id = message.payoutProfileId;
+    }
+    if (message.payoutProfileDigest.length !== 0) {
+      obj.payout_profile_digest = base64FromBytes(message.payoutProfileDigest);
+    }
+    if (message.quoteDigest.length !== 0) {
+      obj.quote_digest = base64FromBytes(message.quoteDigest);
+    }
+    if (!message.quoteExpiry.equals(Long.ZERO)) {
+      obj.quote_expiry = (message.quoteExpiry || Long.ZERO).toString();
+    }
+    if (message.minimumStableOutput !== undefined) {
+      obj.minimum_stable_output = Coin.toJSON(message.minimumStableOutput);
+    }
+    if (message.swapTxHash !== "") {
+      obj.swap_tx_hash = message.swapTxHash;
+    }
+    if (!message.swapHeight.equals(Long.ZERO)) {
+      obj.swap_height = (message.swapHeight || Long.ZERO).toString();
+    }
+    if (message.swapBlockHash.length !== 0) {
+      obj.swap_block_hash = base64FromBytes(message.swapBlockHash);
+    }
+    if (message.swapFinalityConfirmations !== 0) {
+      obj.swap_finality_confirmations = Math.round(message.swapFinalityConfirmations);
+    }
+    if (message.swapFinalityHash.length !== 0) {
+      obj.swap_finality_hash = base64FromBytes(message.swapFinalityHash);
+    }
+    if (message.stableAmount !== undefined) {
+      obj.stable_amount = Coin.toJSON(message.stableAmount);
+    }
+    if (message.offRampQuoteId !== "") {
+      obj.off_ramp_quote_id = message.offRampQuoteId;
+    }
+    if (message.offRampPayoutId !== "") {
+      obj.off_ramp_payout_id = message.offRampPayoutId;
+    }
+    if (message.status !== "") {
+      obj.status = message.status;
+    }
+    if (message.privacySafeReferenceHash.length !== 0) {
+      obj.privacy_safe_reference_hash = base64FromBytes(message.privacySafeReferenceHash);
+    }
+    if (message.fiatAmount !== "") {
+      obj.fiat_amount = message.fiatAmount;
+    }
+    if (message.complianceDecisionHash.length !== 0) {
+      obj.compliance_decision_hash = base64FromBytes(message.complianceDecisionHash);
+    }
+    if (!message.observedAt.equals(Long.ZERO)) {
+      obj.observed_at = (message.observedAt || Long.ZERO).toString();
+    }
+    if (message.evidenceHash.length !== 0) {
+      obj.evidence_hash = base64FromBytes(message.evidenceHash);
+    }
+    if (message.failureCode !== "") {
+      obj.failure_code = message.failureCode;
+    }
+    if (message.payoutFinalityHash.length !== 0) {
+      obj.payout_finality_hash = base64FromBytes(message.payoutFinalityHash);
+    }
+    return obj;
+  },
+  fromPartial(object: DeepPartial<MsgRecordFiatConversionObservation>): MsgRecordFiatConversionObservation {
+    const message = createBaseMsgRecordFiatConversionObservation();
+    message.sender = object.sender ?? "";
+    message.conversionId = object.conversionId ?? "";
+    message.observationSequence = (object.observationSequence !== undefined && object.observationSequence !== null)
+      ? Long.fromValue(object.observationSequence)
+      : Long.UZERO;
+    message.idempotencyKey = object.idempotencyKey ?? new Uint8Array(0);
+    message.stage = object.stage ?? 0;
+    message.dexProfileId = object.dexProfileId ?? "";
+    message.dexProfileDigest = object.dexProfileDigest ?? new Uint8Array(0);
+    message.payoutProfileId = object.payoutProfileId ?? "";
+    message.payoutProfileDigest = object.payoutProfileDigest ?? new Uint8Array(0);
+    message.quoteDigest = object.quoteDigest ?? new Uint8Array(0);
+    message.quoteExpiry = (object.quoteExpiry !== undefined && object.quoteExpiry !== null)
+      ? Long.fromValue(object.quoteExpiry)
+      : Long.ZERO;
+    message.minimumStableOutput = (object.minimumStableOutput !== undefined && object.minimumStableOutput !== null)
+      ? Coin.fromPartial(object.minimumStableOutput)
+      : undefined;
+    message.swapTxHash = object.swapTxHash ?? "";
+    message.swapHeight = (object.swapHeight !== undefined && object.swapHeight !== null)
+      ? Long.fromValue(object.swapHeight)
+      : Long.ZERO;
+    message.swapBlockHash = object.swapBlockHash ?? new Uint8Array(0);
+    message.swapFinalityConfirmations = object.swapFinalityConfirmations ?? 0;
+    message.swapFinalityHash = object.swapFinalityHash ?? new Uint8Array(0);
+    message.stableAmount = (object.stableAmount !== undefined && object.stableAmount !== null)
+      ? Coin.fromPartial(object.stableAmount)
+      : undefined;
+    message.offRampQuoteId = object.offRampQuoteId ?? "";
+    message.offRampPayoutId = object.offRampPayoutId ?? "";
+    message.status = object.status ?? "";
+    message.privacySafeReferenceHash = object.privacySafeReferenceHash ?? new Uint8Array(0);
+    message.fiatAmount = object.fiatAmount ?? "";
+    message.complianceDecisionHash = object.complianceDecisionHash ?? new Uint8Array(0);
+    message.observedAt = (object.observedAt !== undefined && object.observedAt !== null)
+      ? Long.fromValue(object.observedAt)
+      : Long.ZERO;
+    message.evidenceHash = object.evidenceHash ?? new Uint8Array(0);
+    message.failureCode = object.failureCode ?? "";
+    message.payoutFinalityHash = object.payoutFinalityHash ?? new Uint8Array(0);
+    return message;
+  },
+};
+
+function createBaseMsgRecordFiatConversionObservationResponse(): MsgRecordFiatConversionObservationResponse {
+  return {
+    conversionId: "",
+    observationSequence: Long.UZERO,
+    stage: 0,
+    state: "",
+    exactDuplicate: false,
+    observationDigest: new Uint8Array(0),
+  };
+}
+
+export const MsgRecordFiatConversionObservationResponse: MessageFns<
+  MsgRecordFiatConversionObservationResponse,
+  "virtengine.settlement.v1.MsgRecordFiatConversionObservationResponse"
+> = {
+  $type: "virtengine.settlement.v1.MsgRecordFiatConversionObservationResponse" as const,
+
+  encode(message: MsgRecordFiatConversionObservationResponse, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.conversionId !== "") {
+      writer.uint32(10).string(message.conversionId);
+    }
+    if (!message.observationSequence.equals(Long.UZERO)) {
+      writer.uint32(16).uint64(message.observationSequence.toString());
+    }
+    if (message.stage !== 0) {
+      writer.uint32(24).int32(message.stage);
+    }
+    if (message.state !== "") {
+      writer.uint32(34).string(message.state);
+    }
+    if (message.exactDuplicate !== false) {
+      writer.uint32(40).bool(message.exactDuplicate);
+    }
+    if (message.observationDigest.length !== 0) {
+      writer.uint32(50).bytes(message.observationDigest);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): MsgRecordFiatConversionObservationResponse {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseMsgRecordFiatConversionObservationResponse();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.conversionId = reader.string();
+          continue;
+        }
+        case 2: {
+          if (tag !== 16) {
+            break;
+          }
+
+          message.observationSequence = Long.fromString(reader.uint64().toString(), true);
+          continue;
+        }
+        case 3: {
+          if (tag !== 24) {
+            break;
+          }
+
+          message.stage = reader.int32() as any;
+          continue;
+        }
+        case 4: {
+          if (tag !== 34) {
+            break;
+          }
+
+          message.state = reader.string();
+          continue;
+        }
+        case 5: {
+          if (tag !== 40) {
+            break;
+          }
+
+          message.exactDuplicate = reader.bool();
+          continue;
+        }
+        case 6: {
+          if (tag !== 50) {
+            break;
+          }
+
+          message.observationDigest = reader.bytes();
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): MsgRecordFiatConversionObservationResponse {
+    return {
+      conversionId: isSet(object.conversion_id) ? globalThis.String(object.conversion_id) : "",
+      observationSequence: isSet(object.observation_sequence)
+        ? Long.fromValue(object.observation_sequence)
+        : Long.UZERO,
+      stage: isSet(object.stage) ? fiatConversionObservationStageFromJSON(object.stage) : 0,
+      state: isSet(object.state) ? globalThis.String(object.state) : "",
+      exactDuplicate: isSet(object.exact_duplicate) ? globalThis.Boolean(object.exact_duplicate) : false,
+      observationDigest: isSet(object.observation_digest)
+        ? bytesFromBase64(object.observation_digest)
+        : new Uint8Array(0),
+    };
+  },
+
+  toJSON(message: MsgRecordFiatConversionObservationResponse): unknown {
+    const obj: any = {};
+    if (message.conversionId !== "") {
+      obj.conversion_id = message.conversionId;
+    }
+    if (!message.observationSequence.equals(Long.UZERO)) {
+      obj.observation_sequence = (message.observationSequence || Long.UZERO).toString();
+    }
+    if (message.stage !== 0) {
+      obj.stage = fiatConversionObservationStageToJSON(message.stage);
+    }
+    if (message.state !== "") {
+      obj.state = message.state;
+    }
+    if (message.exactDuplicate !== false) {
+      obj.exact_duplicate = message.exactDuplicate;
+    }
+    if (message.observationDigest.length !== 0) {
+      obj.observation_digest = base64FromBytes(message.observationDigest);
+    }
+    return obj;
+  },
+  fromPartial(
+    object: DeepPartial<MsgRecordFiatConversionObservationResponse>,
+  ): MsgRecordFiatConversionObservationResponse {
+    const message = createBaseMsgRecordFiatConversionObservationResponse();
+    message.conversionId = object.conversionId ?? "";
+    message.observationSequence = (object.observationSequence !== undefined && object.observationSequence !== null)
+      ? Long.fromValue(object.observationSequence)
+      : Long.UZERO;
+    message.stage = object.stage ?? 0;
+    message.state = object.state ?? "";
+    message.exactDuplicate = object.exactDuplicate ?? false;
+    message.observationDigest = object.observationDigest ?? new Uint8Array(0);
+    return message;
+  },
+};
+
+function createBaseMsgUpdateParams(): MsgUpdateParams {
+  return { authority: "", params: undefined };
+}
+
+export const MsgUpdateParams: MessageFns<MsgUpdateParams, "virtengine.settlement.v1.MsgUpdateParams"> = {
+  $type: "virtengine.settlement.v1.MsgUpdateParams" as const,
+
+  encode(message: MsgUpdateParams, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.authority !== "") {
+      writer.uint32(10).string(message.authority);
+    }
+    if (message.params !== undefined) {
+      Params.encode(message.params, writer.uint32(18).fork()).join();
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): MsgUpdateParams {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseMsgUpdateParams();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.authority = reader.string();
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.params = Params.decode(reader, reader.uint32());
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): MsgUpdateParams {
+    return {
+      authority: isSet(object.authority) ? globalThis.String(object.authority) : "",
+      params: isSet(object.params) ? Params.fromJSON(object.params) : undefined,
+    };
+  },
+
+  toJSON(message: MsgUpdateParams): unknown {
+    const obj: any = {};
+    if (message.authority !== "") {
+      obj.authority = message.authority;
+    }
+    if (message.params !== undefined) {
+      obj.params = Params.toJSON(message.params);
+    }
+    return obj;
+  },
+  fromPartial(object: DeepPartial<MsgUpdateParams>): MsgUpdateParams {
+    const message = createBaseMsgUpdateParams();
+    message.authority = object.authority ?? "";
+    message.params = (object.params !== undefined && object.params !== null)
+      ? Params.fromPartial(object.params)
+      : undefined;
+    return message;
+  },
+};
+
+function createBaseMsgUpdateParamsResponse(): MsgUpdateParamsResponse {
+  return {};
+}
+
+export const MsgUpdateParamsResponse: MessageFns<
+  MsgUpdateParamsResponse,
+  "virtengine.settlement.v1.MsgUpdateParamsResponse"
+> = {
+  $type: "virtengine.settlement.v1.MsgUpdateParamsResponse" as const,
+
+  encode(_: MsgUpdateParamsResponse, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): MsgUpdateParamsResponse {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseMsgUpdateParamsResponse();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(_: any): MsgUpdateParamsResponse {
+    return {};
+  },
+
+  toJSON(_: MsgUpdateParamsResponse): unknown {
+    const obj: any = {};
+    return obj;
+  },
+  fromPartial(_: DeepPartial<MsgUpdateParamsResponse>): MsgUpdateParamsResponse {
+    const message = createBaseMsgUpdateParamsResponse();
     return message;
   },
 };

@@ -1,15 +1,18 @@
 package keeper_test
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"math/rand"
 	"testing"
 	"time"
 
+	storetypes "cosmossdk.io/store/types"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/stretchr/testify/require"
 
+	sdkquery "github.com/cosmos/cosmos-sdk/types/query"
 	resourcesv1 "github.com/virtengine/virtengine/sdk/go/node/resources/v1"
 	"github.com/virtengine/virtengine/x/resources/keeper"
 	"github.com/virtengine/virtengine/x/resources/types"
@@ -49,6 +52,8 @@ func TestReserveIsIdempotentAndRejectsConflictingPayload(t *testing.T) {
 	req := reservationRequest("idem-1", "job", "job-1", 2)
 	first, err := k.Reserve(ctx, req)
 	require.NoError(t, err)
+	require.NotEqual(t, req.IdempotencyKey, first.ReservationId)
+	require.Contains(t, first.ReservationId, "reservation/")
 
 	second, err := k.Reserve(ctx, req)
 	require.NoError(t, err)
@@ -62,6 +67,76 @@ func TestReserveIsIdempotentAndRejectsConflictingPayload(t *testing.T) {
 	inv, found := k.GetInventory(ctx, first.ProviderAddress, first.ResourceClass, first.InventoryId)
 	require.True(t, found)
 	require.Equal(t, int64(6), inv.Available.CpuCores)
+}
+
+func TestLegacyAllocationWritesRemainReplayableUntilActivation(t *testing.T) {
+	k, ctx := setupKeeper(t)
+	seedInventory(t, k, ctx, "inv-legacy-window", "virtengine1providerlegacywindow", 2)
+
+	allocation, err := k.AllocateResources(ctx, types.ResourceRequest{
+		RequestId: "legacy-window", RequesterAddress: "virtengine1requesterlegacywindow",
+		ResourceClass: types.ResourceClassCompute, Required: types.ResourceCapacity{CpuCores: 1},
+	})
+	require.NoError(t, err)
+	require.NotNil(t, allocation)
+
+	k.ActivateCanonicalReservations(ctx)
+	_, err = k.AllocateResources(ctx, types.ResourceRequest{
+		RequestId: "post-activation", RequesterAddress: "virtengine1requesterlegacywindow",
+		ResourceClass: types.ResourceClassCompute, Required: types.ResourceCapacity{CpuCores: 1},
+	})
+	require.ErrorIs(t, err, types.ErrLegacyAllocationDeprecated)
+}
+
+func TestReservationsByProviderPaginationCursor(t *testing.T) {
+	k, ctx := setupKeeper(t)
+	provider := seedInventory(t, k, ctx, "inv-pagination", "virtengine1providerpagination", 3)
+	for i := 0; i < 3; i++ {
+		request := reservationRequest(fmt.Sprintf("page-%d", i), "hpc_job", fmt.Sprintf("job-page-%d", i), 1)
+		request.ProviderAddress = provider
+		_, err := k.Reserve(ctx, request)
+		require.NoError(t, err)
+	}
+
+	querier := keeper.NewQuerier(k)
+	first, err := querier.ReservationsByProvider(ctx, &resourcesv1.QueryReservationsByProviderRequest{
+		ProviderAddress: provider, Pagination: &sdkquery.PageRequest{Limit: 2},
+	})
+	require.NoError(t, err)
+	require.Len(t, first.Reservations, 2)
+	require.NotEmpty(t, first.Pagination.NextKey)
+
+	second, err := querier.ReservationsByProvider(ctx, &resourcesv1.QueryReservationsByProviderRequest{
+		ProviderAddress: provider, Pagination: &sdkquery.PageRequest{Key: first.Pagination.NextKey, Limit: 2},
+	})
+	require.NoError(t, err)
+	require.Len(t, second.Reservations, 1)
+	require.Empty(t, second.Pagination.NextKey)
+}
+
+func TestReservationLineagePaginationCursor(t *testing.T) {
+	k, ctx := setupKeeper(t)
+	seedInventory(t, k, ctx, "inv-lineage-pagination", "ignored", 1)
+	reservation, err := k.Reserve(ctx, reservationRequest("lineage-pagination", "hpc_job", "job-lineage-pagination", 1))
+	require.NoError(t, err)
+	_, err = k.ActivateReservation(ctx, reservation.ReservationId, types.ReservationLink{ConsumerType: "hpc_job", ConsumerId: "job-lineage-pagination", HpcJobId: "job-lineage-pagination"})
+	require.NoError(t, err)
+	_, err = k.ReleaseReservation(ctx, reservation.ReservationId, "lineage_pagination_release")
+	require.NoError(t, err)
+
+	querier := keeper.NewQuerier(k)
+	first, err := querier.ReservationLineage(ctx, &resourcesv1.QueryReservationLineageRequest{
+		ReservationId: reservation.ReservationId, Pagination: &sdkquery.PageRequest{Limit: 2},
+	})
+	require.NoError(t, err)
+	require.Len(t, first.Events, 2)
+	require.NotEmpty(t, first.Pagination.NextKey)
+	second, err := querier.ReservationLineage(ctx, &resourcesv1.QueryReservationLineageRequest{
+		ReservationId: reservation.ReservationId, Pagination: &sdkquery.PageRequest{Key: first.Pagination.NextKey, Limit: 2},
+	})
+	require.NoError(t, err)
+	require.Len(t, second.Events, 1)
+	require.Empty(t, second.Pagination.NextKey)
 }
 
 func TestReservationLifecycleConservesCapacityAndTerminalIsFinal(t *testing.T) {
@@ -126,6 +201,91 @@ func TestReservationQuarantineRetainsCapacityUntilSlash(t *testing.T) {
 	require.Equal(t, int64(4), inv.Available.CpuCores)
 }
 
+func TestReservationFinancialCaseFinalizationClearsBinding(t *testing.T) {
+	k, ctx := setupKeeper(t)
+	seedInventory(t, k, ctx, "inv-financial-case", "ignored", 2)
+	reservation, err := k.Reserve(ctx, reservationRequest("financial-case", "hpc_job", "job-financial-case", 2))
+	require.NoError(t, err)
+	reservation, err = k.ActivateReservation(ctx, reservation.ReservationId, types.ReservationLink{ConsumerType: "hpc_job", ConsumerId: "job-financial-case", HpcJobId: "job-financial-case"})
+	require.NoError(t, err)
+	reservation, err = k.HoldReservationForFinancialCase(ctx, reservation.ReservationId, "financial-case/84d")
+	require.NoError(t, err)
+	require.Equal(t, types.ReservationStateDisputed, reservation.State)
+
+	reservation, err = k.FinalizeReservationFinancialCase(ctx, reservation.ReservationId, "financial-case/84d", false)
+	require.NoError(t, err)
+	require.Equal(t, types.ReservationStateReleased, reservation.State)
+	require.Empty(t, reservation.FinancialCaseId)
+	require.Zero(t, reservation.PreDisputeState)
+	require.Nil(t, reservation.DisputedAt)
+	require.Zero(t, reservation.DisputedHeight)
+	require.NoError(t, k.ValidateCapacityConservation(ctx))
+}
+
+func TestReservationExactRetryRejectsConflictingPayload(t *testing.T) {
+	k, ctx := setupKeeper(t)
+	seedInventory(t, k, ctx, "inv-exact-retry", "virtengine1providerexactretry", 2)
+
+	reservation, err := k.Reserve(ctx, reservationRequest("exact-retry", "hpc_job", "job-exact", 1))
+	require.NoError(t, err)
+	link := types.ReservationLink{ConsumerType: "hpc_job", ConsumerId: "job-exact", HpcJobId: "job-exact"}
+	_, err = k.ActivateReservation(ctx, reservation.ReservationId, link)
+	require.NoError(t, err)
+	_, err = k.ActivateReservation(ctx, reservation.ReservationId, types.ReservationLink{ConsumerType: "hpc_job", ConsumerId: "job-exact", HpcJobId: "different"})
+	require.ErrorIs(t, err, types.ErrLineageConflict)
+
+	_, err = k.ConsumeReservation(ctx, reservation.ReservationId, reservation.Capacity, "started")
+	require.NoError(t, err)
+	_, err = k.ConsumeReservation(ctx, reservation.ReservationId, reservation.Capacity, "different")
+	require.ErrorIs(t, err, types.ErrReservationConflict)
+	_, err = k.ReleaseReservation(ctx, reservation.ReservationId, "finished")
+	require.NoError(t, err)
+	_, err = k.ReleaseReservation(ctx, reservation.ReservationId, "different")
+	require.ErrorIs(t, err, types.ErrReservationConflict)
+}
+
+func TestReservationDuplicateConsumerAndLineageRollBackCapacity(t *testing.T) {
+	k, ctx := setupKeeper(t)
+	provider := seedInventory(t, k, ctx, "inv-index-owner", "virtengine1providerindexowner", 2)
+
+	firstRequest := reservationRequest("index-first", "hpc_job", "job-shared", 1)
+	firstRequest.HpcJobId = "job-shared"
+	_, err := k.Reserve(ctx, firstRequest)
+	require.NoError(t, err)
+
+	secondRequest := reservationRequest("index-second", "hpc_job", "job-shared", 1)
+	secondRequest.HpcJobId = "job-shared"
+	_, err = k.Reserve(ctx, secondRequest)
+	require.ErrorIs(t, err, types.ErrLineageConflict)
+	inventory, found := k.GetInventory(ctx, provider, types.ResourceClassCompute, "inv-index-owner")
+	require.True(t, found)
+	require.Equal(t, int64(1), inventory.Available.CpuCores)
+	require.NoError(t, k.ValidateCapacityConservation(ctx))
+}
+
+func TestSlashReservationExactRetryDoesNotDuplicateEvidence(t *testing.T) {
+	k, ctx := setupKeeper(t)
+	seedInventory(t, k, ctx, "inv-slash-retry", "virtengine1providerslashretry", 1)
+	reservation, err := k.Reserve(ctx, reservationRequest("slash-retry", "hpc_job", "job-slash", 1))
+	require.NoError(t, err)
+	_, err = k.ActivateReservation(ctx, reservation.ReservationId, types.ReservationLink{ConsumerType: "hpc_job", ConsumerId: "job-slash", HpcJobId: "job-slash"})
+	require.NoError(t, err)
+	_, err = k.QuarantineReservation(ctx, reservation.ReservationId, "disputed")
+	require.NoError(t, err)
+	_, err = k.SlashReservation(ctx, reservation.ReservationId, "failed")
+	require.NoError(t, err)
+	_, err = k.SlashReservation(ctx, reservation.ReservationId, "failed")
+	require.NoError(t, err)
+	prefix := append(append([]byte{}, types.SlashingEventKeyPrefix...), []byte(reservation.ReservationId+"\x00")...)
+	iterator := storetypes.KVStorePrefixIterator(ctx.KVStore(k.StoreKey()), prefix)
+	defer iterator.Close()
+	count := 0
+	for ; iterator.Valid(); iterator.Next() {
+		count++
+	}
+	require.Equal(t, 1, count)
+}
+
 func TestReservationExpirationUsesIndex(t *testing.T) {
 	k, ctx := setupKeeper(t)
 	seedInventory(t, k, ctx, "inv-expiry-index", "virtengine1providerexpiryindex", 2)
@@ -144,6 +304,23 @@ func TestReservationExpirationUsesIndex(t *testing.T) {
 	stored, found := k.GetReservation(ctx, reservation.ReservationId)
 	require.True(t, found)
 	require.Equal(t, types.ReservationStateExpired, stored.State)
+	require.Zero(t, stored.ReleasedHeight)
+}
+
+func TestReservationExpiryRequiresFutureTimeAndHeight(t *testing.T) {
+	k, ctx := setupKeeper(t)
+	seedInventory(t, k, ctx, "inv-expiry-bounds", "virtengine1providerexpirybounds", 2)
+
+	request := reservationRequest("expired-time", "hpc_job", "job-expired-time", 1)
+	expires := ctx.BlockTime()
+	request.ExpiresAt = &expires
+	_, err := k.Reserve(ctx, request)
+	require.ErrorIs(t, err, types.ErrInvalidRequest)
+
+	request = reservationRequest("expired-height", "hpc_job", "job-expired-height", 1)
+	request.ExpiresHeight = ctx.BlockHeight()
+	_, err = k.Reserve(ctx, request)
+	require.ErrorIs(t, err, types.ErrInvalidRequest)
 }
 
 func TestReservationLineageIndexes(t *testing.T) {
@@ -183,6 +360,17 @@ func TestReservationByBidQuery(t *testing.T) {
 	require.Error(t, err)
 }
 
+func TestReservationLineageRejectsMalformedEvent(t *testing.T) {
+	k, ctx := setupKeeper(t)
+	seedInventory(t, k, ctx, "inv-malformed-event", "ignored", 1)
+	reservation, err := k.Reserve(ctx, reservationRequest("malformed-event", "hpc_job", "job-malformed-event", 1))
+	require.NoError(t, err)
+	ctx.KVStore(k.StoreKey()).Set(types.ReservationEventKey(reservation.ReservationId, 2), []byte("not-json"))
+
+	_, err = keeper.NewQuerier(k).ReservationLineage(ctx, &resourcesv1.QueryReservationLineageRequest{ReservationId: reservation.ReservationId})
+	require.Error(t, err)
+}
+
 func TestCachedContextRollbackDoesNotConsumeLastUnit(t *testing.T) {
 	k, ctx := setupKeeper(t)
 	seedInventory(t, k, ctx, "inv-cache", "virtengine1providercache", 1)
@@ -215,7 +403,7 @@ func TestReservationGPUTypeRequirementFailsClosed(t *testing.T) {
 	k, ctx := setupKeeper(t)
 	require.NoError(t, k.SetInventory(ctx, types.ResourceInventory{
 		InventoryId: "inv-gpu", ProviderAddress: "virtengine1providergpu", ResourceClass: types.ResourceClassCompute,
-		Total: types.ResourceCapacity{Gpus: 1}, Available: types.ResourceCapacity{Gpus: 1},
+		Total: types.ResourceCapacity{Gpus: 1, GpuType: "nvidia-a100"}, Available: types.ResourceCapacity{Gpus: 1, GpuType: "nvidia-a100"},
 		Active: true, HeartbeatSequence: 1, LastHeartbeat: ctx.BlockTime(), UpdatedAt: ctx.BlockTime(),
 	}))
 
@@ -290,13 +478,15 @@ func reservationRequest(key, consumerType, consumerID string, cpu int64) types.R
 
 func seedInventory(t *testing.T, k interface {
 	SetInventory(ctx sdk.Context, inventory types.ResourceInventory) error
-}, ctx sdk.Context, inventoryID, provider string, cpu int64) {
+}, ctx sdk.Context, inventoryID, _ string, cpu int64) string {
 	t.Helper()
+	provider := sdk.AccAddress(bytes.Repeat([]byte{byte(len(inventoryID) + 1)}, 20)).String()
 	require.NoError(t, k.SetInventory(ctx, types.ResourceInventory{
 		InventoryId: inventoryID, ProviderAddress: provider, ResourceClass: types.ResourceClassCompute,
 		Total: types.ResourceCapacity{CpuCores: cpu}, Available: types.ResourceCapacity{CpuCores: cpu},
 		Active: true, HeartbeatSequence: 1, LastHeartbeat: ctx.BlockTime(), UpdatedAt: ctx.BlockTime(),
 	}))
+	return provider
 }
 
 var _ = resourcesv1.Reservation{}

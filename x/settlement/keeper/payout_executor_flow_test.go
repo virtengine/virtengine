@@ -110,7 +110,7 @@ func (s *KeeperTestSuite) TestExecuteFiatConversionRecoversAmbiguousOffRampSubmi
 	t := s.T()
 
 	params := s.keeper.GetParams(s.ctx)
-	params.FiatConversionEnabled = true
+	configureCertifiedFiatProfiles(&params)
 	params.FiatConversionMinAmount = "1"
 	params.FiatConversionMaxAmount = "1000000000"
 	params.FiatConversionDailyLimit = "10000000000"

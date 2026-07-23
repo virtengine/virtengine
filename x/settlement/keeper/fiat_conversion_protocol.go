@@ -95,8 +95,14 @@ func (k Keeper) recordFiatConversionObservation(ctx sdk.Context, msg *types.MsgR
 	}
 
 	params := k.GetParams(ctx)
-	if err := validateCurrentFiatProfileCommitments(params, conversion, msg); err != nil {
+	if err := validateImmutableFiatProfileCommitments(conversion, msg); err != nil {
 		return nil, err
+	}
+	newSideEffect := fiatObservationAuthorizesNewSideEffect(msg.Stage)
+	if newSideEffect {
+		if err := validateCurrentFiatProfileCommitments(params, conversion, msg); err != nil {
+			return nil, err
+		}
 	}
 	if len(conversion.Observations) >= int(params.FiatConversionMaxObservations) {
 		return nil, types.ErrFiatObservationEvidence.Wrap("observation history limit reached")
@@ -111,13 +117,17 @@ func (k Keeper) recordFiatConversionObservation(ctx sdk.Context, msg *types.MsgR
 		return nil, types.ErrFiatObservationEvidence.Wrap("observed_at outside block-time bounds")
 	}
 	if err := k.ensureFiatConversionNoActiveCase(ctx, conversion); err != nil {
-		if msg.Stage != settlementv1.FiatConversionObservationStage_FIAT_CONVERSION_OBSERVATION_STAGE_FAILED &&
-			msg.Stage != settlementv1.FiatConversionObservationStage_FIAT_CONVERSION_OBSERVATION_STAGE_CANCELLED {
+		if newSideEffect {
 			return nil, err
 		}
 	}
-	if err := k.validateCurrentFiatCompliance(ctx, conversion, msg.ComplianceDecisionHash); err != nil {
+	if err := validateCommittedFiatCompliance(conversion, msg.ComplianceDecisionHash); err != nil {
 		return nil, err
+	}
+	if newSideEffect {
+		if err := k.validateCurrentFiatCompliance(ctx, conversion, msg.ComplianceDecisionHash); err != nil {
+			return nil, err
+		}
 	}
 	if err := validateFiatObservationStage(params, &conversion, msg, now); err != nil {
 		return nil, err
@@ -160,6 +170,14 @@ func (k Keeper) recordFiatConversionObservation(ctx sdk.Context, msg *types.MsgR
 	return &FiatConversionObservationResult{Conversion: conversion, ObservationDigest: digest}, nil
 }
 
+func validateImmutableFiatProfileCommitments(conversion types.FiatConversionRecord, msg *types.MsgRecordFiatConversionObservation) error {
+	if msg.DexProfileId != conversion.DEXProfileID || msg.PayoutProfileId != conversion.PayoutProfileID ||
+		!bytes.Equal(msg.DexProfileDigest, conversion.DEXProfileDigest) || !bytes.Equal(msg.PayoutProfileDigest, conversion.PayoutProfileDigest) {
+		return types.ErrFiatProfileCommitment.Wrap("observation differs from accepted profile commitments")
+	}
+	return nil
+}
+
 func validateCurrentFiatProfileCommitments(params types.Params, conversion types.FiatConversionRecord, msg *types.MsgRecordFiatConversionObservation) error {
 	certified := settlementv1.FiatConversionProfileState_FIAT_CONVERSION_PROFILE_STATE_CERTIFIED_ENABLED
 	if !params.FiatConversionEnabled || params.FiatConversionDEXProfileState != certified || params.FiatConversionPayoutProfileState != certified {
@@ -174,9 +192,16 @@ func validateCurrentFiatProfileCommitments(params types.Params, conversion types
 	return nil
 }
 
-func (k Keeper) validateCurrentFiatCompliance(ctx sdk.Context, conversion types.FiatConversionRecord, reported []byte) error {
-	if len(reported) != 32 || !bytes.Equal(reported, conversion.ComplianceDecisionHash) {
+func validateCommittedFiatCompliance(conversion types.FiatConversionRecord, reported []byte) error {
+	if len(reported) != sha256.Size || !bytes.Equal(reported, conversion.ComplianceDecisionHash) {
 		return types.ErrComplianceRequired.Wrap("compliance decision digest mismatch")
+	}
+	return nil
+}
+
+func (k Keeper) validateCurrentFiatCompliance(ctx sdk.Context, conversion types.FiatConversionRecord, reported []byte) error {
+	if err := validateCommittedFiatCompliance(conversion, reported); err != nil {
+		return err
 	}
 	if k.complianceKeeper == nil {
 		return types.ErrComplianceRequired.Wrap("compliance keeper not configured")
@@ -190,6 +215,39 @@ func (k Keeper) validateCurrentFiatCompliance(ctx sdk.Context, conversion types.
 		return types.ErrComplianceRequired.Wrap("current compliance decision changed")
 	}
 	return nil
+}
+
+// fiatObservationAuthorizesNewSideEffect distinguishes current authorization
+// from immutable evidence. Quote observations can cause the worker to sign or
+// initiate a new external operation and therefore require current governance,
+// profile, compliance, and hold authorization. Submission/finality/failure
+// observations only reconcile an already-crossed external boundary against the
+// commitments accepted when the conversion was created.
+func fiatObservationAuthorizesNewSideEffect(stage settlementv1.FiatConversionObservationStage) bool {
+	switch stage {
+	case settlementv1.FiatConversionObservationStage_FIAT_CONVERSION_OBSERVATION_STAGE_QUOTE_ACCEPTED,
+		settlementv1.FiatConversionObservationStage_FIAT_CONVERSION_OBSERVATION_STAGE_PAYOUT_QUOTED:
+		return true
+	default:
+		return false
+	}
+}
+
+func fiatConversionCrossedIrreversibleBoundary(conversion types.FiatConversionRecord) bool {
+	if conversion.SwapTxHash != "" || conversion.OffRampID != "" || conversion.ValueMovementApplied {
+		return true
+	}
+	switch conversion.State {
+	case types.FiatConversionStateSwapSubmitted,
+		types.FiatConversionStateSwapSettled,
+		types.FiatConversionStateOffRampPending,
+		types.FiatConversionStatePayoutPending,
+		types.FiatConversionStatePayoutSubmitted,
+		types.FiatConversionStatePayoutCompleted:
+		return true
+	default:
+		return false
+	}
 }
 
 func validateFiatObservationStage(params types.Params, conversion *types.FiatConversionRecord, msg *types.MsgRecordFiatConversionObservation, blockTime int64) error {
@@ -225,7 +283,7 @@ func validateFiatObservationStage(params types.Params, conversion *types.FiatCon
 			return types.ErrFiatObservationEvidence.Wrap("quote status must be accepted")
 		}
 	case settlementv1.FiatConversionObservationStage_FIAT_CONVERSION_OBSERVATION_STAGE_SWAP_SUBMITTED:
-		if conversion.State != types.FiatConversionStateSwapPending || msg.SwapTxHash == "" || blockTime >= conversion.QuoteExpiry ||
+		if conversion.State != types.FiatConversionStateSwapPending || msg.SwapTxHash == "" || msg.ObservedAt >= conversion.QuoteExpiry ||
 			!bytes.Equal(msg.QuoteDigest, conversion.QuoteDigest) || !msg.MinimumStableOutput.IsEqual(conversion.MinimumStableOutput) {
 			return types.ErrInvalidStateTransition.Wrap("swap submission detached from accepted quote")
 		}
@@ -243,11 +301,17 @@ func validateFiatObservationStage(params types.Params, conversion *types.FiatCon
 			return types.ErrFiatObservationEvidence.Wrap("stable amount below minimum output")
 		}
 	case settlementv1.FiatConversionObservationStage_FIAT_CONVERSION_OBSERVATION_STAGE_PAYOUT_QUOTED:
-		if conversion.State != types.FiatConversionStateSwapSettled || msg.OffRampQuoteId == "" || msg.QuoteExpiry <= blockTime || requireHash(msg.QuoteDigest, "payout quote digest") != nil {
+		replacement := conversion.State == types.FiatConversionStatePayoutPending
+		if conversion.State != types.FiatConversionStateSwapSettled && !replacement || msg.OffRampQuoteId == "" || msg.QuoteExpiry <= blockTime || requireHash(msg.QuoteDigest, "payout quote digest") != nil {
 			return types.ErrInvalidStateTransition.Wrap("invalid payout quote")
 		}
+		if replacement && (conversion.OffRampID != "" || conversion.OffRampReference != "" || len(conversion.PrivacySafeReferenceHash) != 0 ||
+			conversion.OffRampQuoteID == "" || conversion.QuoteExpiry <= 0 || blockTime < conversion.QuoteExpiry ||
+			msg.OffRampQuoteId == conversion.OffRampQuoteID || bytes.Equal(msg.QuoteDigest, conversion.QuoteDigest)) {
+			return types.ErrInvalidStateTransition.Wrap("replacement payout quote requires an expired, unsubmitted, distinct prior quote")
+		}
 	case settlementv1.FiatConversionObservationStage_FIAT_CONVERSION_OBSERVATION_STAGE_PAYOUT_SUBMITTED:
-		if conversion.State != types.FiatConversionStatePayoutPending || msg.OffRampQuoteId != conversion.OffRampQuoteID || msg.OffRampPayoutId == "" || blockTime >= conversion.QuoteExpiry || !bytes.Equal(msg.QuoteDigest, conversion.QuoteDigest) || requireHash(msg.PrivacySafeReferenceHash, "privacy_safe_reference_hash") != nil {
+		if conversion.State != types.FiatConversionStatePayoutPending || msg.OffRampQuoteId != conversion.OffRampQuoteID || msg.OffRampPayoutId == "" || msg.ObservedAt >= conversion.QuoteExpiry || !bytes.Equal(msg.QuoteDigest, conversion.QuoteDigest) || requireHash(msg.PrivacySafeReferenceHash, "privacy_safe_reference_hash") != nil {
 			return types.ErrInvalidStateTransition.Wrap("payout submission detached from quote")
 		}
 	case settlementv1.FiatConversionObservationStage_FIAT_CONVERSION_OBSERVATION_STAGE_PAYOUT_COMPLETED:
@@ -283,6 +347,9 @@ func (k Keeper) applyFiatObservation(ctx sdk.Context, conversion *types.FiatConv
 		conversion.SwapStatus = "quote_accepted"
 		return conversion.MarkSwapPending(observed)
 	case settlementv1.FiatConversionObservationStage_FIAT_CONVERSION_OBSERVATION_STAGE_SWAP_SUBMITTED:
+		if err := k.releaseCanonicalPayoutHoldAtIrreversibleBoundary(ctx, *conversion); err != nil {
+			return err
+		}
 		conversion.SwapTxHash = msg.SwapTxHash
 		return conversion.MarkSwapSubmitted(hex.EncodeToString(conversion.QuoteDigest), observed)
 	case settlementv1.FiatConversionObservationStage_FIAT_CONVERSION_OBSERVATION_STAGE_SWAP_FINALIZED:
@@ -295,9 +362,17 @@ func (k Keeper) applyFiatObservation(ctx sdk.Context, conversion *types.FiatConv
 		if _, err := k.requireLinkedPendingFiatPayout(ctx, *conversion); err != nil {
 			return err
 		}
+		replacement := conversion.State == types.FiatConversionStatePayoutPending
 		conversion.OffRampQuoteID = msg.OffRampQuoteId
 		conversion.QuoteDigest = append([]byte(nil), msg.QuoteDigest...)
 		conversion.QuoteExpiry = msg.QuoteExpiry
+		if replacement {
+			conversion.OffRampStatus = "quote_replaced"
+			conversion.AddAuditEntry("expired_payout_quote_replaced", conversion.Provider, "", map[string]string{
+				"offramp_quote_id": msg.OffRampQuoteId,
+			}, observed)
+			return nil
+		}
 		if err := conversion.MarkOffRampPending(observed); err != nil {
 			return err
 		}
@@ -326,6 +401,9 @@ func (k Keeper) applyFiatObservation(ctx sdk.Context, conversion *types.FiatConv
 			}
 			return types.ErrFiatObservationReplayConflict.Wrap("fiat custody effect bound to different payload")
 		}
+		if err := k.validateRetainedTreasuryEntries(ctx, payout); err != nil {
+			return err
+		}
 		amount := sdk.NewCoins(conversion.CryptoAmount)
 		if err := k.bankKeeper.SendCoinsFromModuleToModule(ctx, types.ModuleAccountName, types.FiatConversionCustodyAccountName, amount); err != nil {
 			return types.ErrPayoutExecutionFailed.Wrapf("move fiat payout value to custody sink: %v", err)
@@ -334,6 +412,9 @@ func (k Keeper) applyFiatObservation(ctx sdk.Context, conversion *types.FiatConv
 		payout.ValueMovementApplied = true
 		payout.ValueMovementEffectHash = append([]byte(nil), effectHash...)
 		if err := k.SetPayout(ctx, *payout); err != nil {
+			return err
+		}
+		if err := k.recordPayoutRetainedTreasuryEntries(ctx, payout); err != nil {
 			return err
 		}
 		k.savePayoutLedgerEntry(ctx, payout.PayoutID, types.PayoutLedgerEntryCompleted,
@@ -360,6 +441,34 @@ func (k Keeper) applyFiatObservation(ctx sdk.Context, conversion *types.FiatConv
 	return types.ErrInvalidStateTransition
 }
 
+func (k Keeper) releaseCanonicalPayoutHoldAtIrreversibleBoundary(ctx sdk.Context, conversion types.FiatConversionRecord) error {
+	payout, err := k.requireLinkedFiatPayout(ctx, conversion)
+	if err != nil {
+		return err
+	}
+	if payout.State != types.PayoutStateHeld {
+		return nil
+	}
+	if !strings.HasPrefix(payout.DisputeID, "financial-case/") {
+		return types.ErrFinancialCaseHold.Wrap("fiat payout is held by a noncanonical owner")
+	}
+	financialCase, found := k.GetFinancialCase(ctx, payout.DisputeID)
+	if !found || !types.IsActiveFinancialCaseStatus(financialCase.Status) || financialCase.Exposure.PayoutId != payout.PayoutID {
+		return types.ErrFinancialCaseHold.Wrap("fiat payout canonical hold is malformed")
+	}
+	if financialCase.ActiveHoldCount <= 1 {
+		return types.ErrFinancialCaseHold.Wrap("irreversible boundary would leave canonical incident without a local hold")
+	}
+	payout.State = types.PayoutStatePending
+	payout.DisputeID = ""
+	payout.HoldReason = ""
+	if err := k.SetPayout(ctx, *payout); err != nil {
+		return err
+	}
+	financialCase.ActiveHoldCount--
+	return k.SetFinancialCase(ctx, financialCase)
+}
+
 func fiatCustodyEffectHash(conversion types.FiatConversionRecord, payout types.PayoutRecord, finalityHash []byte) []byte {
 	hash := sha256.New()
 	for _, value := range []string{
@@ -374,6 +483,17 @@ func fiatCustodyEffectHash(conversion types.FiatConversionRecord, payout types.P
 }
 
 func (k Keeper) requireLinkedPendingFiatPayout(ctx sdk.Context, conversion types.FiatConversionRecord) (*types.PayoutRecord, error) {
+	payout, err := k.requireLinkedFiatPayout(ctx, conversion)
+	if err != nil {
+		return nil, err
+	}
+	if payout.State != types.PayoutStatePending {
+		return nil, types.ErrInvalidStateTransition.Wrapf("linked payout state is %s", payout.State)
+	}
+	return payout, nil
+}
+
+func (k Keeper) requireLinkedFiatPayout(ctx sdk.Context, conversion types.FiatConversionRecord) (*types.PayoutRecord, error) {
 	if conversion.PayoutID == "" {
 		return nil, types.ErrPayoutNotFound.Wrap("fiat conversion is not linked to a payout")
 	}
@@ -381,9 +501,6 @@ func (k Keeper) requireLinkedPendingFiatPayout(ctx sdk.Context, conversion types
 	if !found || payout.FiatConversionID != conversion.ConversionID || payout.Provider != conversion.Provider || payout.Customer != conversion.Customer || payout.SettlementID != conversion.SettlementID ||
 		payout.InvoiceID != conversion.InvoiceID || len(payout.NetAmount) != 1 || !payout.NetAmount[0].IsEqual(conversion.CryptoAmount) {
 		return nil, types.ErrInvalidPayout.Wrap("fiat conversion payout lineage mismatch")
-	}
-	if payout.State != types.PayoutStatePending {
-		return nil, types.ErrInvalidStateTransition.Wrapf("linked payout state is %s", payout.State)
 	}
 	return &payout, nil
 }

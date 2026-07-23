@@ -136,6 +136,9 @@ func (am AppModule) RegisterServices(cfg module.Configurator) {
 	}); err != nil {
 		panic(err)
 	}
+	if err := cfg.RegisterMigration(types.ModuleName, 2, func(ctx sdk.Context) error { return nil }); err != nil {
+		panic(fmt.Sprintf("failed to register resources 2->3 migration: %v", err))
+	}
 }
 
 // InitGenesis initializes genesis state.
@@ -158,7 +161,7 @@ func (am AppModule) ExportGenesis(ctx sdk.Context, cdc codec.JSONCodec) json.Raw
 }
 
 // ConsensusVersion implements AppModule/ConsensusVersion.
-func (AppModule) ConsensusVersion() uint64 { return 2 }
+func (AppModule) ConsensusVersion() uint64 { return 3 }
 
 // IsAppModule implements the appmodule.AppModule interface.
 func (AppModule) IsAppModule() {}
@@ -174,7 +177,9 @@ func (am AppModule) BeginBlock(ctx context.Context) error {
 // EndBlock runs on end block.
 func (am AppModule) EndBlock(ctx context.Context) error {
 	sdkCtx := sdk.UnwrapSDKContext(ctx)
-	am.keeper.PruneStaleInventories(sdkCtx)
+	if err := am.keeper.PruneStaleInventories(sdkCtx); err != nil {
+		return err
+	}
 	am.keeper.ExpirePendingAllocations(sdkCtx)
 	_, err := am.keeper.ExpireReservations(sdkCtx, 1000)
 	return err

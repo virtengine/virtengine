@@ -98,6 +98,11 @@ type PayoutResult struct {
 	FailureCode     string            `json:"failure_code,omitempty"`
 	Retryable       bool              `json:"retryable,omitempty"`
 	AuditFields     map[string]string `json:"audit_fields,omitempty"`
+	// DailyReservationKey and DailyReservationOperationID identify the exact
+	// durable corridor reservation created before provider initiation. They
+	// contain no beneficiary data and permit restart-safe terminal release.
+	DailyReservationKey         string `json:"daily_reservation_key,omitempty"`
+	DailyReservationOperationID string `json:"daily_reservation_operation_id,omitempty"`
 }
 
 // IsTerminal returns true when the payout is in a final state.
@@ -108,6 +113,13 @@ func (r PayoutResult) IsTerminal() bool {
 // MetadataLookupAdapter optionally supports idempotent payout lookup by metadata.
 type MetadataLookupAdapter interface {
 	FindPayoutByMetadata(ctx context.Context, metadata map[string]string) (PayoutResult, error)
+}
+
+// PayoutBindingRecoveryAdapter restores volatile adapter state from one
+// durably known nonterminal payout. Implementations must recover by immutable
+// metadata/correlation and reject no-match, ambiguity, or binding mismatch.
+type PayoutBindingRecoveryAdapter interface {
+	RestorePayoutBinding(ctx context.Context, expected PayoutResult) (PayoutResult, error)
 }
 
 // PayoutRepository persists payout state and idempotency lookup keys.

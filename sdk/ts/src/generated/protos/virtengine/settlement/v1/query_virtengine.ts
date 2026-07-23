@@ -1,4 +1,4 @@
-import { QueryClaimableRewardsRequest, QueryClaimableRewardsResponse, QueryEscrowRequest, QueryEscrowResponse, QueryEscrowsByOrderRequest, QueryEscrowsByOrderResponse, QueryEscrowsByStateRequest, QueryEscrowsByStateResponse, QueryFiatConversionRequest, QueryFiatConversionResponse, QueryFiatConversionsByProviderRequest, QueryFiatConversionsByProviderResponse, QueryFiatPayoutPreferenceRequest, QueryFiatPayoutPreferenceResponse, QueryParamsRequest, QueryParamsResponse, QueryPayoutRequest, QueryPayoutResponse, QueryPayoutsByProviderRequest, QueryPayoutsByProviderResponse, QueryRewardDistributionRequest, QueryRewardDistributionResponse, QueryRewardHistoryRequest, QueryRewardHistoryResponse, QueryRewardsByEpochRequest, QueryRewardsByEpochResponse, QuerySettlementRequest, QuerySettlementResponse, QuerySettlementsByOrderRequest, QuerySettlementsByOrderResponse, QueryUsageRecordRequest, QueryUsageRecordResponse, QueryUsageRecordsByOrderRequest, QueryUsageRecordsByOrderResponse, QueryUsageStreamStateRequest, QueryUsageStreamStateResponse, QueryUsageSummaryRequest, QueryUsageSummaryResponse } from "./query.ts";
+import { QueryClaimableRewardsRequest, QueryClaimableRewardsResponse, QueryEscrowRequest, QueryEscrowResponse, QueryEscrowsByOrderRequest, QueryEscrowsByOrderResponse, QueryEscrowsByStateRequest, QueryEscrowsByStateResponse, QueryFiatConversionRequest, QueryFiatConversionResponse, QueryFiatConversionsByProviderRequest, QueryFiatConversionsByProviderResponse, QueryFiatPayoutPreferenceRequest, QueryFiatPayoutPreferenceResponse, QueryFinancialCaseBySubjectRequest, QueryFinancialCaseBySubjectResponse, QueryFinancialCaseLineageRequest, QueryFinancialCaseLineageResponse, QueryFinancialCaseRequest, QueryFinancialCaseResponse, QueryFinancialCasesRequest, QueryFinancialCasesResponse, QueryParamsRequest, QueryParamsResponse, QueryPayoutRequest, QueryPayoutResponse, QueryPayoutsByProviderRequest, QueryPayoutsByProviderResponse, QueryRewardDistributionRequest, QueryRewardDistributionResponse, QueryRewardHistoryRequest, QueryRewardHistoryResponse, QueryRewardsByEpochRequest, QueryRewardsByEpochResponse, QuerySettlementRequest, QuerySettlementResponse, QuerySettlementsByOrderRequest, QuerySettlementsByOrderResponse, QueryUsageRecordRequest, QueryUsageRecordResponse, QueryUsageRecordsByOrderRequest, QueryUsageRecordsByOrderResponse, QueryUsageStreamStateRequest, QueryUsageStreamStateResponse, QueryUsageSummaryRequest, QueryUsageSummaryResponse } from "./query.ts";
 
 export const Query = {
   typeName: "virtengine.settlement.v1.Query",
@@ -134,6 +134,76 @@ export const Query = {
       httpPath: "/virtengine/settlement/v1/fiat/preferences/{provider}",
       input: QueryFiatPayoutPreferenceRequest,
       output: QueryFiatPayoutPreferenceResponse,
+      get parent() { return Query; },
+    },
+    financialCase: {
+      name: "FinancialCase",
+      httpPath: "/virtengine/settlement/v1/financial-cases/{case_id}",
+      input: QueryFinancialCaseRequest,
+      output: QueryFinancialCaseResponse,
+      get parent() { return Query; },
+    },
+    financialCaseBySubject: {
+      name: "FinancialCaseBySubject",
+      httpPath: "/virtengine/settlement/v1/financial-cases/by-subject",
+      input: QueryFinancialCaseBySubjectRequest,
+      output: QueryFinancialCaseBySubjectResponse,
+      get parent() { return Query; },
+    },
+    financialCasesByOrder: {
+      name: "FinancialCasesByOrder",
+      httpPath: "/virtengine/settlement/v1/financial-cases/by-order/{key}",
+      input: QueryFinancialCasesRequest,
+      output: QueryFinancialCasesResponse,
+      get parent() { return Query; },
+    },
+    financialCasesByInvoice: {
+      name: "FinancialCasesByInvoice",
+      httpPath: "/virtengine/settlement/v1/financial-cases/by-invoice/{key}",
+      input: QueryFinancialCasesRequest,
+      output: QueryFinancialCasesResponse,
+      get parent() { return Query; },
+    },
+    financialCasesByUsage: {
+      name: "FinancialCasesByUsage",
+      httpPath: "/virtengine/settlement/v1/financial-cases/by-usage/{key}",
+      input: QueryFinancialCasesRequest,
+      output: QueryFinancialCasesResponse,
+      get parent() { return Query; },
+    },
+    financialCasesByJob: {
+      name: "FinancialCasesByJob",
+      httpPath: "/virtengine/settlement/v1/financial-cases/by-job/{key}",
+      input: QueryFinancialCasesRequest,
+      output: QueryFinancialCasesResponse,
+      get parent() { return Query; },
+    },
+    financialCasesByEscrow: {
+      name: "FinancialCasesByEscrow",
+      httpPath: "/virtengine/settlement/v1/financial-cases/by-escrow/{key}",
+      input: QueryFinancialCasesRequest,
+      output: QueryFinancialCasesResponse,
+      get parent() { return Query; },
+    },
+    financialCasesByStatus: {
+      name: "FinancialCasesByStatus",
+      httpPath: "/virtengine/settlement/v1/financial-cases/by-status/{key}",
+      input: QueryFinancialCasesRequest,
+      output: QueryFinancialCasesResponse,
+      get parent() { return Query; },
+    },
+    financialCasesByParty: {
+      name: "FinancialCasesByParty",
+      httpPath: "/virtengine/settlement/v1/financial-cases/by-party/{key}",
+      input: QueryFinancialCasesRequest,
+      output: QueryFinancialCasesResponse,
+      get parent() { return Query; },
+    },
+    financialCaseLineage: {
+      name: "FinancialCaseLineage",
+      httpPath: "/virtengine/settlement/v1/financial-cases/{case_id}/lineage",
+      input: QueryFinancialCaseLineageRequest,
+      output: QueryFinancialCaseLineageResponse,
       get parent() { return Query; },
     },
   },

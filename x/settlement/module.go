@@ -127,6 +127,17 @@ func (am AppModule) RegisterServices(cfg module.Configurator) {
 	}); err != nil {
 		panic(fmt.Sprintf("failed to register settlement 1->2 migration: %v", err))
 	}
+	if err := cfg.RegisterMigration(types.ModuleName, 2, func(ctx sdk.Context) error {
+		return am.keeper.RebuildFinancialCaseState(ctx)
+	}); err != nil {
+		panic(fmt.Sprintf("failed to register settlement 2->3 migration: %v", err))
+	}
+	if err := cfg.RegisterMigration(types.ModuleName, 3, func(ctx sdk.Context) error {
+		_, err := am.keeper.MigrateFiatConversions(ctx)
+		return err
+	}); err != nil {
+		panic(fmt.Sprintf("failed to register settlement 3->4 migration: %v", err))
+	}
 }
 
 // InitGenesis performs genesis initialization for the settlement module.
@@ -149,7 +160,7 @@ func (am AppModule) ExportGenesis(ctx sdk.Context, cdc codec.JSONCodec) json.Raw
 }
 
 // ConsensusVersion implements AppModule/ConsensusVersion.
-func (AppModule) ConsensusVersion() uint64 { return 2 }
+func (AppModule) ConsensusVersion() uint64 { return 4 }
 
 // IsOnePerModuleType implements the depinject.OnePerModuleType interface.
 func (am AppModule) IsOnePerModuleType() {
@@ -190,6 +201,11 @@ func BeginBlocker(ctx sdk.Context, k keeper.IKeeper) error {
 
 // EndBlocker performs end block operations for the settlement module
 func EndBlocker(ctx sdk.Context, k keeper.IKeeper) error {
+	if k.IsFinancialCasesActive(ctx) {
+		if _, err := k.ProcessFinancialCaseTimeouts(ctx); err != nil {
+			return err
+		}
+	}
 	// Auto-settle orders at the end of each block
 	if err := k.AutoSettle(ctx); err != nil {
 		return err

@@ -48,19 +48,22 @@ const (
 	ReservationStateExpired     = resourcesv1.ReservationState_RESERVATION_STATE_EXPIRED
 	ReservationStateQuarantined = resourcesv1.ReservationState_RESERVATION_STATE_QUARANTINED
 	ReservationStateSlashed     = resourcesv1.ReservationState_RESERVATION_STATE_SLASHED
+	ReservationStateDisputed    = resourcesv1.ReservationState_RESERVATION_STATE_DISPUTED
 )
 
 // CanTransitionReservation is the single explicit reservation transition table.
 func CanTransitionReservation(from, to ReservationState) bool {
 	switch from {
 	case ReservationStatePending:
-		return to == ReservationStateActive || to == ReservationStateReleased || to == ReservationStateExpired || to == ReservationStateQuarantined || to == ReservationStateSlashed
+		return to == ReservationStateActive || to == ReservationStateReleased || to == ReservationStateExpired || to == ReservationStateQuarantined || to == ReservationStateSlashed || to == ReservationStateDisputed
 	case ReservationStateActive:
-		return to == ReservationStateConsumed || to == ReservationStateReleased || to == ReservationStateQuarantined || to == ReservationStateSlashed
+		return to == ReservationStateConsumed || to == ReservationStateReleased || to == ReservationStateQuarantined || to == ReservationStateSlashed || to == ReservationStateDisputed
 	case ReservationStateConsumed:
-		return to == ReservationStateReleased || to == ReservationStateQuarantined || to == ReservationStateSlashed
+		return to == ReservationStateReleased || to == ReservationStateQuarantined || to == ReservationStateSlashed || to == ReservationStateDisputed
 	case ReservationStateQuarantined:
 		return to == ReservationStateSlashed
+	case ReservationStateDisputed:
+		return to == ReservationStateActive || to == ReservationStateConsumed || to == ReservationStateReleased || to == ReservationStateQuarantined || to == ReservationStateSlashed
 	default:
 		return false
 	}

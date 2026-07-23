@@ -66,7 +66,7 @@ func SetupTestSuite(t testing.TB) *TestSuite {
 
 func SetupTestSuiteWithoutModuleServices(t testing.TB) *TestSuite {
 	suite := SetupTestSuiteWithKeepersAndOptions(t, Keepers{}, app.WithSkipModuleServiceRegistration(true))
-	suite.ctx = suite.ctx.WithBlockHeight(1).WithBlockTime(time.Unix(1700000000, 0).UTC())
+	suite.ctx = suite.ctx.WithChainID("virtengine-integration-1").WithBlockHeight(1).WithBlockTime(time.Unix(1700000000, 0).UTC())
 	return suite
 }
 

@@ -16,6 +16,7 @@ import (
 	"github.com/cosmos/cosmos-sdk/codec"
 	codectypes "github.com/cosmos/cosmos-sdk/codec/types"
 	sdk "github.com/cosmos/cosmos-sdk/types"
+	authtypes "github.com/cosmos/cosmos-sdk/x/auth/types"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
 
@@ -58,7 +59,7 @@ func (m *MockBankKeeper) SendCoins(_ context.Context, fromAddr sdk.AccAddress, t
 }
 
 func (m *MockBankKeeper) SendCoinsFromModuleToModule(_ context.Context, senderModule string, recipientModule string, amt sdk.Coins) error {
-	if senderBalance, ok := m.balances[senderModule]; ok {
+	if senderBalance, configured := m.balances[senderModule]; configured {
 		if !senderBalance.IsAllGTE(amt) {
 			return types.ErrInsufficientFunds
 		}
@@ -69,7 +70,7 @@ func (m *MockBankKeeper) SendCoinsFromModuleToModule(_ context.Context, senderMo
 }
 
 func (m *MockBankKeeper) SendCoinsFromModuleToAccount(_ context.Context, senderModule string, recipientAddr sdk.AccAddress, amt sdk.Coins) error {
-	if senderBalance, ok := m.balances[senderModule]; ok {
+	if senderBalance, configured := m.balances[senderModule]; configured {
 		if !senderBalance.IsAllGTE(amt) {
 			return types.ErrInsufficientFunds
 		}
@@ -91,16 +92,30 @@ func (m *MockBankKeeper) SendCoinsFromAccountToModule(_ context.Context, senderA
 }
 
 func (m *MockBankKeeper) SpendableCoins(_ context.Context, addr sdk.AccAddress) sdk.Coins {
+	if addr.Equals(authtypes.NewModuleAddress(types.ModuleAccountName)) {
+		return m.balances[types.ModuleAccountName]
+	}
+	if addr.Equals(authtypes.NewModuleAddress(types.FiatConversionCustodyAccountName)) {
+		return m.balances[types.FiatConversionCustodyAccountName]
+	}
 	return m.balances[addr.String()]
 }
 
 func (m *MockBankKeeper) GetBalance(_ context.Context, addr sdk.AccAddress, denom string) sdk.Coin {
-	balance := m.balances[addr.String()]
+	balance := m.SpendableCoins(context.Background(), addr)
 	return sdk.NewCoin(denom, balance.AmountOf(denom))
 }
 
 func (m *MockBankKeeper) SetBalance(addr sdk.AccAddress, coins sdk.Coins) {
 	m.balances[addr.String()] = coins
+}
+
+func (m *MockBankKeeper) SetModuleBalance(module string, coins sdk.Coins) {
+	m.balances[module] = coins
+}
+
+func (m *MockBankKeeper) ModuleBalance(module string) sdk.Coins {
+	return m.balances[module]
 }
 
 // MockEscrowKeeper is a minimal escrow keeper implementation for tests.

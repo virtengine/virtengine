@@ -9,7 +9,541 @@ import type { DeepPartial, MessageFns } from "../../../../../encoding/typeEncodi
 /* eslint-disable */
 import { BinaryReader, BinaryWriter } from "@bufbuild/protobuf/wire";
 import Long from "long";
+import { PageRequest, PageResponse } from "../../../cosmos/base/query/v1beta1/pagination.ts";
 import { Coin, DecCoin } from "../../../cosmos/base/v1beta1/coin.ts";
+
+/** FinancialSubjectType identifies the canonical financial lineage root. */
+export enum FinancialSubjectType {
+  FINANCIAL_SUBJECT_TYPE_UNSPECIFIED = 0,
+  FINANCIAL_SUBJECT_TYPE_ORDER = 1,
+  FINANCIAL_SUBJECT_TYPE_INVOICE = 2,
+  FINANCIAL_SUBJECT_TYPE_USAGE = 3,
+  FINANCIAL_SUBJECT_TYPE_HPC_JOB = 4,
+  FINANCIAL_SUBJECT_TYPE_SETTLEMENT = 5,
+  UNRECOGNIZED = -1,
+}
+
+export function financialSubjectTypeFromJSON(object: any): FinancialSubjectType {
+  switch (object) {
+    case 0:
+    case "FINANCIAL_SUBJECT_TYPE_UNSPECIFIED":
+      return FinancialSubjectType.FINANCIAL_SUBJECT_TYPE_UNSPECIFIED;
+    case 1:
+    case "FINANCIAL_SUBJECT_TYPE_ORDER":
+      return FinancialSubjectType.FINANCIAL_SUBJECT_TYPE_ORDER;
+    case 2:
+    case "FINANCIAL_SUBJECT_TYPE_INVOICE":
+      return FinancialSubjectType.FINANCIAL_SUBJECT_TYPE_INVOICE;
+    case 3:
+    case "FINANCIAL_SUBJECT_TYPE_USAGE":
+      return FinancialSubjectType.FINANCIAL_SUBJECT_TYPE_USAGE;
+    case 4:
+    case "FINANCIAL_SUBJECT_TYPE_HPC_JOB":
+      return FinancialSubjectType.FINANCIAL_SUBJECT_TYPE_HPC_JOB;
+    case 5:
+    case "FINANCIAL_SUBJECT_TYPE_SETTLEMENT":
+      return FinancialSubjectType.FINANCIAL_SUBJECT_TYPE_SETTLEMENT;
+    case -1:
+    case "UNRECOGNIZED":
+    default:
+      return FinancialSubjectType.UNRECOGNIZED;
+  }
+}
+
+export function financialSubjectTypeToJSON(object: FinancialSubjectType): string {
+  switch (object) {
+    case FinancialSubjectType.FINANCIAL_SUBJECT_TYPE_UNSPECIFIED:
+      return "FINANCIAL_SUBJECT_TYPE_UNSPECIFIED";
+    case FinancialSubjectType.FINANCIAL_SUBJECT_TYPE_ORDER:
+      return "FINANCIAL_SUBJECT_TYPE_ORDER";
+    case FinancialSubjectType.FINANCIAL_SUBJECT_TYPE_INVOICE:
+      return "FINANCIAL_SUBJECT_TYPE_INVOICE";
+    case FinancialSubjectType.FINANCIAL_SUBJECT_TYPE_USAGE:
+      return "FINANCIAL_SUBJECT_TYPE_USAGE";
+    case FinancialSubjectType.FINANCIAL_SUBJECT_TYPE_HPC_JOB:
+      return "FINANCIAL_SUBJECT_TYPE_HPC_JOB";
+    case FinancialSubjectType.FINANCIAL_SUBJECT_TYPE_SETTLEMENT:
+      return "FINANCIAL_SUBJECT_TYPE_SETTLEMENT";
+    case FinancialSubjectType.UNRECOGNIZED:
+    default:
+      return "UNRECOGNIZED";
+  }
+}
+
+/** FinancialClaimType identifies a privacy-safe typed allegation or finding. */
+export enum FinancialClaimType {
+  FINANCIAL_CLAIM_TYPE_UNSPECIFIED = 0,
+  FINANCIAL_CLAIM_TYPE_BILLING = 1,
+  FINANCIAL_CLAIM_TYPE_USAGE = 2,
+  FINANCIAL_CLAIM_TYPE_SERVICE = 3,
+  FINANCIAL_CLAIM_TYPE_FRAUD = 4,
+  FINANCIAL_CLAIM_TYPE_HPC = 5,
+  FINANCIAL_CLAIM_TYPE_REVIEW = 6,
+  FINANCIAL_CLAIM_TYPE_MODERATION = 7,
+  FINANCIAL_CLAIM_TYPE_MIGRATION = 8,
+  UNRECOGNIZED = -1,
+}
+
+export function financialClaimTypeFromJSON(object: any): FinancialClaimType {
+  switch (object) {
+    case 0:
+    case "FINANCIAL_CLAIM_TYPE_UNSPECIFIED":
+      return FinancialClaimType.FINANCIAL_CLAIM_TYPE_UNSPECIFIED;
+    case 1:
+    case "FINANCIAL_CLAIM_TYPE_BILLING":
+      return FinancialClaimType.FINANCIAL_CLAIM_TYPE_BILLING;
+    case 2:
+    case "FINANCIAL_CLAIM_TYPE_USAGE":
+      return FinancialClaimType.FINANCIAL_CLAIM_TYPE_USAGE;
+    case 3:
+    case "FINANCIAL_CLAIM_TYPE_SERVICE":
+      return FinancialClaimType.FINANCIAL_CLAIM_TYPE_SERVICE;
+    case 4:
+    case "FINANCIAL_CLAIM_TYPE_FRAUD":
+      return FinancialClaimType.FINANCIAL_CLAIM_TYPE_FRAUD;
+    case 5:
+    case "FINANCIAL_CLAIM_TYPE_HPC":
+      return FinancialClaimType.FINANCIAL_CLAIM_TYPE_HPC;
+    case 6:
+    case "FINANCIAL_CLAIM_TYPE_REVIEW":
+      return FinancialClaimType.FINANCIAL_CLAIM_TYPE_REVIEW;
+    case 7:
+    case "FINANCIAL_CLAIM_TYPE_MODERATION":
+      return FinancialClaimType.FINANCIAL_CLAIM_TYPE_MODERATION;
+    case 8:
+    case "FINANCIAL_CLAIM_TYPE_MIGRATION":
+      return FinancialClaimType.FINANCIAL_CLAIM_TYPE_MIGRATION;
+    case -1:
+    case "UNRECOGNIZED":
+    default:
+      return FinancialClaimType.UNRECOGNIZED;
+  }
+}
+
+export function financialClaimTypeToJSON(object: FinancialClaimType): string {
+  switch (object) {
+    case FinancialClaimType.FINANCIAL_CLAIM_TYPE_UNSPECIFIED:
+      return "FINANCIAL_CLAIM_TYPE_UNSPECIFIED";
+    case FinancialClaimType.FINANCIAL_CLAIM_TYPE_BILLING:
+      return "FINANCIAL_CLAIM_TYPE_BILLING";
+    case FinancialClaimType.FINANCIAL_CLAIM_TYPE_USAGE:
+      return "FINANCIAL_CLAIM_TYPE_USAGE";
+    case FinancialClaimType.FINANCIAL_CLAIM_TYPE_SERVICE:
+      return "FINANCIAL_CLAIM_TYPE_SERVICE";
+    case FinancialClaimType.FINANCIAL_CLAIM_TYPE_FRAUD:
+      return "FINANCIAL_CLAIM_TYPE_FRAUD";
+    case FinancialClaimType.FINANCIAL_CLAIM_TYPE_HPC:
+      return "FINANCIAL_CLAIM_TYPE_HPC";
+    case FinancialClaimType.FINANCIAL_CLAIM_TYPE_REVIEW:
+      return "FINANCIAL_CLAIM_TYPE_REVIEW";
+    case FinancialClaimType.FINANCIAL_CLAIM_TYPE_MODERATION:
+      return "FINANCIAL_CLAIM_TYPE_MODERATION";
+    case FinancialClaimType.FINANCIAL_CLAIM_TYPE_MIGRATION:
+      return "FINANCIAL_CLAIM_TYPE_MIGRATION";
+    case FinancialClaimType.UNRECOGNIZED:
+    default:
+      return "UNRECOGNIZED";
+  }
+}
+
+/** FinancialCaseStatus is the canonical dispute lifecycle state. */
+export enum FinancialCaseStatus {
+  FINANCIAL_CASE_STATUS_UNSPECIFIED = 0,
+  FINANCIAL_CASE_STATUS_OPEN = 1,
+  FINANCIAL_CASE_STATUS_EVIDENCE = 2,
+  FINANCIAL_CASE_STATUS_REVIEW = 3,
+  FINANCIAL_CASE_STATUS_ESCALATED = 4,
+  FINANCIAL_CASE_STATUS_RESOLVED_PENDING_APPEAL = 5,
+  FINANCIAL_CASE_STATUS_FINAL = 6,
+  FINANCIAL_CASE_STATUS_REJECTED = 7,
+  FINANCIAL_CASE_STATUS_CANCELLED = 8,
+  FINANCIAL_CASE_STATUS_EXPIRED = 9,
+  FINANCIAL_CASE_STATUS_QUARANTINED = 10,
+  UNRECOGNIZED = -1,
+}
+
+export function financialCaseStatusFromJSON(object: any): FinancialCaseStatus {
+  switch (object) {
+    case 0:
+    case "FINANCIAL_CASE_STATUS_UNSPECIFIED":
+      return FinancialCaseStatus.FINANCIAL_CASE_STATUS_UNSPECIFIED;
+    case 1:
+    case "FINANCIAL_CASE_STATUS_OPEN":
+      return FinancialCaseStatus.FINANCIAL_CASE_STATUS_OPEN;
+    case 2:
+    case "FINANCIAL_CASE_STATUS_EVIDENCE":
+      return FinancialCaseStatus.FINANCIAL_CASE_STATUS_EVIDENCE;
+    case 3:
+    case "FINANCIAL_CASE_STATUS_REVIEW":
+      return FinancialCaseStatus.FINANCIAL_CASE_STATUS_REVIEW;
+    case 4:
+    case "FINANCIAL_CASE_STATUS_ESCALATED":
+      return FinancialCaseStatus.FINANCIAL_CASE_STATUS_ESCALATED;
+    case 5:
+    case "FINANCIAL_CASE_STATUS_RESOLVED_PENDING_APPEAL":
+      return FinancialCaseStatus.FINANCIAL_CASE_STATUS_RESOLVED_PENDING_APPEAL;
+    case 6:
+    case "FINANCIAL_CASE_STATUS_FINAL":
+      return FinancialCaseStatus.FINANCIAL_CASE_STATUS_FINAL;
+    case 7:
+    case "FINANCIAL_CASE_STATUS_REJECTED":
+      return FinancialCaseStatus.FINANCIAL_CASE_STATUS_REJECTED;
+    case 8:
+    case "FINANCIAL_CASE_STATUS_CANCELLED":
+      return FinancialCaseStatus.FINANCIAL_CASE_STATUS_CANCELLED;
+    case 9:
+    case "FINANCIAL_CASE_STATUS_EXPIRED":
+      return FinancialCaseStatus.FINANCIAL_CASE_STATUS_EXPIRED;
+    case 10:
+    case "FINANCIAL_CASE_STATUS_QUARANTINED":
+      return FinancialCaseStatus.FINANCIAL_CASE_STATUS_QUARANTINED;
+    case -1:
+    case "UNRECOGNIZED":
+    default:
+      return FinancialCaseStatus.UNRECOGNIZED;
+  }
+}
+
+export function financialCaseStatusToJSON(object: FinancialCaseStatus): string {
+  switch (object) {
+    case FinancialCaseStatus.FINANCIAL_CASE_STATUS_UNSPECIFIED:
+      return "FINANCIAL_CASE_STATUS_UNSPECIFIED";
+    case FinancialCaseStatus.FINANCIAL_CASE_STATUS_OPEN:
+      return "FINANCIAL_CASE_STATUS_OPEN";
+    case FinancialCaseStatus.FINANCIAL_CASE_STATUS_EVIDENCE:
+      return "FINANCIAL_CASE_STATUS_EVIDENCE";
+    case FinancialCaseStatus.FINANCIAL_CASE_STATUS_REVIEW:
+      return "FINANCIAL_CASE_STATUS_REVIEW";
+    case FinancialCaseStatus.FINANCIAL_CASE_STATUS_ESCALATED:
+      return "FINANCIAL_CASE_STATUS_ESCALATED";
+    case FinancialCaseStatus.FINANCIAL_CASE_STATUS_RESOLVED_PENDING_APPEAL:
+      return "FINANCIAL_CASE_STATUS_RESOLVED_PENDING_APPEAL";
+    case FinancialCaseStatus.FINANCIAL_CASE_STATUS_FINAL:
+      return "FINANCIAL_CASE_STATUS_FINAL";
+    case FinancialCaseStatus.FINANCIAL_CASE_STATUS_REJECTED:
+      return "FINANCIAL_CASE_STATUS_REJECTED";
+    case FinancialCaseStatus.FINANCIAL_CASE_STATUS_CANCELLED:
+      return "FINANCIAL_CASE_STATUS_CANCELLED";
+    case FinancialCaseStatus.FINANCIAL_CASE_STATUS_EXPIRED:
+      return "FINANCIAL_CASE_STATUS_EXPIRED";
+    case FinancialCaseStatus.FINANCIAL_CASE_STATUS_QUARANTINED:
+      return "FINANCIAL_CASE_STATUS_QUARANTINED";
+    case FinancialCaseStatus.UNRECOGNIZED:
+    default:
+      return "UNRECOGNIZED";
+  }
+}
+
+/** FinancialResolutionType selects the terminal policy applied after appeal. */
+export enum FinancialResolutionType {
+  FINANCIAL_RESOLUTION_TYPE_UNSPECIFIED = 0,
+  FINANCIAL_RESOLUTION_TYPE_PROVIDER_WIN = 1,
+  FINANCIAL_RESOLUTION_TYPE_CUSTOMER_WIN = 2,
+  FINANCIAL_RESOLUTION_TYPE_PARTIAL_SPLIT = 3,
+  FINANCIAL_RESOLUTION_TYPE_MUTUAL = 4,
+  FINANCIAL_RESOLUTION_TYPE_FRAUD_CONFIRMED = 5,
+  FINANCIAL_RESOLUTION_TYPE_INCONCLUSIVE_TIMEOUT = 6,
+  UNRECOGNIZED = -1,
+}
+
+export function financialResolutionTypeFromJSON(object: any): FinancialResolutionType {
+  switch (object) {
+    case 0:
+    case "FINANCIAL_RESOLUTION_TYPE_UNSPECIFIED":
+      return FinancialResolutionType.FINANCIAL_RESOLUTION_TYPE_UNSPECIFIED;
+    case 1:
+    case "FINANCIAL_RESOLUTION_TYPE_PROVIDER_WIN":
+      return FinancialResolutionType.FINANCIAL_RESOLUTION_TYPE_PROVIDER_WIN;
+    case 2:
+    case "FINANCIAL_RESOLUTION_TYPE_CUSTOMER_WIN":
+      return FinancialResolutionType.FINANCIAL_RESOLUTION_TYPE_CUSTOMER_WIN;
+    case 3:
+    case "FINANCIAL_RESOLUTION_TYPE_PARTIAL_SPLIT":
+      return FinancialResolutionType.FINANCIAL_RESOLUTION_TYPE_PARTIAL_SPLIT;
+    case 4:
+    case "FINANCIAL_RESOLUTION_TYPE_MUTUAL":
+      return FinancialResolutionType.FINANCIAL_RESOLUTION_TYPE_MUTUAL;
+    case 5:
+    case "FINANCIAL_RESOLUTION_TYPE_FRAUD_CONFIRMED":
+      return FinancialResolutionType.FINANCIAL_RESOLUTION_TYPE_FRAUD_CONFIRMED;
+    case 6:
+    case "FINANCIAL_RESOLUTION_TYPE_INCONCLUSIVE_TIMEOUT":
+      return FinancialResolutionType.FINANCIAL_RESOLUTION_TYPE_INCONCLUSIVE_TIMEOUT;
+    case -1:
+    case "UNRECOGNIZED":
+    default:
+      return FinancialResolutionType.UNRECOGNIZED;
+  }
+}
+
+export function financialResolutionTypeToJSON(object: FinancialResolutionType): string {
+  switch (object) {
+    case FinancialResolutionType.FINANCIAL_RESOLUTION_TYPE_UNSPECIFIED:
+      return "FINANCIAL_RESOLUTION_TYPE_UNSPECIFIED";
+    case FinancialResolutionType.FINANCIAL_RESOLUTION_TYPE_PROVIDER_WIN:
+      return "FINANCIAL_RESOLUTION_TYPE_PROVIDER_WIN";
+    case FinancialResolutionType.FINANCIAL_RESOLUTION_TYPE_CUSTOMER_WIN:
+      return "FINANCIAL_RESOLUTION_TYPE_CUSTOMER_WIN";
+    case FinancialResolutionType.FINANCIAL_RESOLUTION_TYPE_PARTIAL_SPLIT:
+      return "FINANCIAL_RESOLUTION_TYPE_PARTIAL_SPLIT";
+    case FinancialResolutionType.FINANCIAL_RESOLUTION_TYPE_MUTUAL:
+      return "FINANCIAL_RESOLUTION_TYPE_MUTUAL";
+    case FinancialResolutionType.FINANCIAL_RESOLUTION_TYPE_FRAUD_CONFIRMED:
+      return "FINANCIAL_RESOLUTION_TYPE_FRAUD_CONFIRMED";
+    case FinancialResolutionType.FINANCIAL_RESOLUTION_TYPE_INCONCLUSIVE_TIMEOUT:
+      return "FINANCIAL_RESOLUTION_TYPE_INCONCLUSIVE_TIMEOUT";
+    case FinancialResolutionType.UNRECOGNIZED:
+    default:
+      return "UNRECOGNIZED";
+  }
+}
+
+/** FinancialEffectType identifies an exactly-once terminal side effect. */
+export enum FinancialEffectType {
+  FINANCIAL_EFFECT_TYPE_UNSPECIFIED = 0,
+  FINANCIAL_EFFECT_TYPE_PAYOUT = 1,
+  FINANCIAL_EFFECT_TYPE_ESCROW = 2,
+  FINANCIAL_EFFECT_TYPE_REWARD = 3,
+  FINANCIAL_EFFECT_TYPE_RESERVATION = 4,
+  FINANCIAL_EFFECT_TYPE_REPUTATION = 5,
+  FINANCIAL_EFFECT_TYPE_PROJECTION = 6,
+  UNRECOGNIZED = -1,
+}
+
+export function financialEffectTypeFromJSON(object: any): FinancialEffectType {
+  switch (object) {
+    case 0:
+    case "FINANCIAL_EFFECT_TYPE_UNSPECIFIED":
+      return FinancialEffectType.FINANCIAL_EFFECT_TYPE_UNSPECIFIED;
+    case 1:
+    case "FINANCIAL_EFFECT_TYPE_PAYOUT":
+      return FinancialEffectType.FINANCIAL_EFFECT_TYPE_PAYOUT;
+    case 2:
+    case "FINANCIAL_EFFECT_TYPE_ESCROW":
+      return FinancialEffectType.FINANCIAL_EFFECT_TYPE_ESCROW;
+    case 3:
+    case "FINANCIAL_EFFECT_TYPE_REWARD":
+      return FinancialEffectType.FINANCIAL_EFFECT_TYPE_REWARD;
+    case 4:
+    case "FINANCIAL_EFFECT_TYPE_RESERVATION":
+      return FinancialEffectType.FINANCIAL_EFFECT_TYPE_RESERVATION;
+    case 5:
+    case "FINANCIAL_EFFECT_TYPE_REPUTATION":
+      return FinancialEffectType.FINANCIAL_EFFECT_TYPE_REPUTATION;
+    case 6:
+    case "FINANCIAL_EFFECT_TYPE_PROJECTION":
+      return FinancialEffectType.FINANCIAL_EFFECT_TYPE_PROJECTION;
+    case -1:
+    case "UNRECOGNIZED":
+    default:
+      return FinancialEffectType.UNRECOGNIZED;
+  }
+}
+
+export function financialEffectTypeToJSON(object: FinancialEffectType): string {
+  switch (object) {
+    case FinancialEffectType.FINANCIAL_EFFECT_TYPE_UNSPECIFIED:
+      return "FINANCIAL_EFFECT_TYPE_UNSPECIFIED";
+    case FinancialEffectType.FINANCIAL_EFFECT_TYPE_PAYOUT:
+      return "FINANCIAL_EFFECT_TYPE_PAYOUT";
+    case FinancialEffectType.FINANCIAL_EFFECT_TYPE_ESCROW:
+      return "FINANCIAL_EFFECT_TYPE_ESCROW";
+    case FinancialEffectType.FINANCIAL_EFFECT_TYPE_REWARD:
+      return "FINANCIAL_EFFECT_TYPE_REWARD";
+    case FinancialEffectType.FINANCIAL_EFFECT_TYPE_RESERVATION:
+      return "FINANCIAL_EFFECT_TYPE_RESERVATION";
+    case FinancialEffectType.FINANCIAL_EFFECT_TYPE_REPUTATION:
+      return "FINANCIAL_EFFECT_TYPE_REPUTATION";
+    case FinancialEffectType.FINANCIAL_EFFECT_TYPE_PROJECTION:
+      return "FINANCIAL_EFFECT_TYPE_PROJECTION";
+    case FinancialEffectType.UNRECOGNIZED:
+    default:
+      return "UNRECOGNIZED";
+  }
+}
+
+/** FinancialEffectStatus identifies durable effect progress. */
+export enum FinancialEffectStatus {
+  FINANCIAL_EFFECT_STATUS_UNSPECIFIED = 0,
+  FINANCIAL_EFFECT_STATUS_PENDING = 1,
+  FINANCIAL_EFFECT_STATUS_APPLIED = 2,
+  FINANCIAL_EFFECT_STATUS_FAILED = 3,
+  UNRECOGNIZED = -1,
+}
+
+export function financialEffectStatusFromJSON(object: any): FinancialEffectStatus {
+  switch (object) {
+    case 0:
+    case "FINANCIAL_EFFECT_STATUS_UNSPECIFIED":
+      return FinancialEffectStatus.FINANCIAL_EFFECT_STATUS_UNSPECIFIED;
+    case 1:
+    case "FINANCIAL_EFFECT_STATUS_PENDING":
+      return FinancialEffectStatus.FINANCIAL_EFFECT_STATUS_PENDING;
+    case 2:
+    case "FINANCIAL_EFFECT_STATUS_APPLIED":
+      return FinancialEffectStatus.FINANCIAL_EFFECT_STATUS_APPLIED;
+    case 3:
+    case "FINANCIAL_EFFECT_STATUS_FAILED":
+      return FinancialEffectStatus.FINANCIAL_EFFECT_STATUS_FAILED;
+    case -1:
+    case "UNRECOGNIZED":
+    default:
+      return FinancialEffectStatus.UNRECOGNIZED;
+  }
+}
+
+export function financialEffectStatusToJSON(object: FinancialEffectStatus): string {
+  switch (object) {
+    case FinancialEffectStatus.FINANCIAL_EFFECT_STATUS_UNSPECIFIED:
+      return "FINANCIAL_EFFECT_STATUS_UNSPECIFIED";
+    case FinancialEffectStatus.FINANCIAL_EFFECT_STATUS_PENDING:
+      return "FINANCIAL_EFFECT_STATUS_PENDING";
+    case FinancialEffectStatus.FINANCIAL_EFFECT_STATUS_APPLIED:
+      return "FINANCIAL_EFFECT_STATUS_APPLIED";
+    case FinancialEffectStatus.FINANCIAL_EFFECT_STATUS_FAILED:
+      return "FINANCIAL_EFFECT_STATUS_FAILED";
+    case FinancialEffectStatus.UNRECOGNIZED:
+    default:
+      return "UNRECOGNIZED";
+  }
+}
+
+/**
+ * FiatConversionProfileState distinguishes engineering readiness from real
+ * external production certification. Only CERTIFIED_ENABLED is executable.
+ */
+export enum FiatConversionProfileState {
+  FIAT_CONVERSION_PROFILE_STATE_UNSPECIFIED = 0,
+  FIAT_CONVERSION_PROFILE_STATE_UNSUPPORTED = 1,
+  FIAT_CONVERSION_PROFILE_STATE_ENGINEERING_INCOMPLETE = 2,
+  FIAT_CONVERSION_PROFILE_STATE_ENGINEERING_COMPLETE_EXTERNAL_BLOCKED = 3,
+  FIAT_CONVERSION_PROFILE_STATE_CERTIFIED_ENABLED = 4,
+  FIAT_CONVERSION_PROFILE_STATE_PAUSED = 5,
+  UNRECOGNIZED = -1,
+}
+
+export function fiatConversionProfileStateFromJSON(object: any): FiatConversionProfileState {
+  switch (object) {
+    case 0:
+    case "FIAT_CONVERSION_PROFILE_STATE_UNSPECIFIED":
+      return FiatConversionProfileState.FIAT_CONVERSION_PROFILE_STATE_UNSPECIFIED;
+    case 1:
+    case "FIAT_CONVERSION_PROFILE_STATE_UNSUPPORTED":
+      return FiatConversionProfileState.FIAT_CONVERSION_PROFILE_STATE_UNSUPPORTED;
+    case 2:
+    case "FIAT_CONVERSION_PROFILE_STATE_ENGINEERING_INCOMPLETE":
+      return FiatConversionProfileState.FIAT_CONVERSION_PROFILE_STATE_ENGINEERING_INCOMPLETE;
+    case 3:
+    case "FIAT_CONVERSION_PROFILE_STATE_ENGINEERING_COMPLETE_EXTERNAL_BLOCKED":
+      return FiatConversionProfileState.FIAT_CONVERSION_PROFILE_STATE_ENGINEERING_COMPLETE_EXTERNAL_BLOCKED;
+    case 4:
+    case "FIAT_CONVERSION_PROFILE_STATE_CERTIFIED_ENABLED":
+      return FiatConversionProfileState.FIAT_CONVERSION_PROFILE_STATE_CERTIFIED_ENABLED;
+    case 5:
+    case "FIAT_CONVERSION_PROFILE_STATE_PAUSED":
+      return FiatConversionProfileState.FIAT_CONVERSION_PROFILE_STATE_PAUSED;
+    case -1:
+    case "UNRECOGNIZED":
+    default:
+      return FiatConversionProfileState.UNRECOGNIZED;
+  }
+}
+
+export function fiatConversionProfileStateToJSON(object: FiatConversionProfileState): string {
+  switch (object) {
+    case FiatConversionProfileState.FIAT_CONVERSION_PROFILE_STATE_UNSPECIFIED:
+      return "FIAT_CONVERSION_PROFILE_STATE_UNSPECIFIED";
+    case FiatConversionProfileState.FIAT_CONVERSION_PROFILE_STATE_UNSUPPORTED:
+      return "FIAT_CONVERSION_PROFILE_STATE_UNSUPPORTED";
+    case FiatConversionProfileState.FIAT_CONVERSION_PROFILE_STATE_ENGINEERING_INCOMPLETE:
+      return "FIAT_CONVERSION_PROFILE_STATE_ENGINEERING_INCOMPLETE";
+    case FiatConversionProfileState.FIAT_CONVERSION_PROFILE_STATE_ENGINEERING_COMPLETE_EXTERNAL_BLOCKED:
+      return "FIAT_CONVERSION_PROFILE_STATE_ENGINEERING_COMPLETE_EXTERNAL_BLOCKED";
+    case FiatConversionProfileState.FIAT_CONVERSION_PROFILE_STATE_CERTIFIED_ENABLED:
+      return "FIAT_CONVERSION_PROFILE_STATE_CERTIFIED_ENABLED";
+    case FiatConversionProfileState.FIAT_CONVERSION_PROFILE_STATE_PAUSED:
+      return "FIAT_CONVERSION_PROFILE_STATE_PAUSED";
+    case FiatConversionProfileState.UNRECOGNIZED:
+    default:
+      return "UNRECOGNIZED";
+  }
+}
+
+/** FiatConversionObservationStage is the legal external execution vocabulary. */
+export enum FiatConversionObservationStage {
+  FIAT_CONVERSION_OBSERVATION_STAGE_UNSPECIFIED = 0,
+  FIAT_CONVERSION_OBSERVATION_STAGE_QUOTE_ACCEPTED = 1,
+  FIAT_CONVERSION_OBSERVATION_STAGE_SWAP_SUBMITTED = 2,
+  FIAT_CONVERSION_OBSERVATION_STAGE_SWAP_FINALIZED = 3,
+  FIAT_CONVERSION_OBSERVATION_STAGE_PAYOUT_QUOTED = 4,
+  FIAT_CONVERSION_OBSERVATION_STAGE_PAYOUT_SUBMITTED = 5,
+  FIAT_CONVERSION_OBSERVATION_STAGE_PAYOUT_COMPLETED = 6,
+  FIAT_CONVERSION_OBSERVATION_STAGE_FAILED = 7,
+  FIAT_CONVERSION_OBSERVATION_STAGE_CANCELLED = 8,
+  UNRECOGNIZED = -1,
+}
+
+export function fiatConversionObservationStageFromJSON(object: any): FiatConversionObservationStage {
+  switch (object) {
+    case 0:
+    case "FIAT_CONVERSION_OBSERVATION_STAGE_UNSPECIFIED":
+      return FiatConversionObservationStage.FIAT_CONVERSION_OBSERVATION_STAGE_UNSPECIFIED;
+    case 1:
+    case "FIAT_CONVERSION_OBSERVATION_STAGE_QUOTE_ACCEPTED":
+      return FiatConversionObservationStage.FIAT_CONVERSION_OBSERVATION_STAGE_QUOTE_ACCEPTED;
+    case 2:
+    case "FIAT_CONVERSION_OBSERVATION_STAGE_SWAP_SUBMITTED":
+      return FiatConversionObservationStage.FIAT_CONVERSION_OBSERVATION_STAGE_SWAP_SUBMITTED;
+    case 3:
+    case "FIAT_CONVERSION_OBSERVATION_STAGE_SWAP_FINALIZED":
+      return FiatConversionObservationStage.FIAT_CONVERSION_OBSERVATION_STAGE_SWAP_FINALIZED;
+    case 4:
+    case "FIAT_CONVERSION_OBSERVATION_STAGE_PAYOUT_QUOTED":
+      return FiatConversionObservationStage.FIAT_CONVERSION_OBSERVATION_STAGE_PAYOUT_QUOTED;
+    case 5:
+    case "FIAT_CONVERSION_OBSERVATION_STAGE_PAYOUT_SUBMITTED":
+      return FiatConversionObservationStage.FIAT_CONVERSION_OBSERVATION_STAGE_PAYOUT_SUBMITTED;
+    case 6:
+    case "FIAT_CONVERSION_OBSERVATION_STAGE_PAYOUT_COMPLETED":
+      return FiatConversionObservationStage.FIAT_CONVERSION_OBSERVATION_STAGE_PAYOUT_COMPLETED;
+    case 7:
+    case "FIAT_CONVERSION_OBSERVATION_STAGE_FAILED":
+      return FiatConversionObservationStage.FIAT_CONVERSION_OBSERVATION_STAGE_FAILED;
+    case 8:
+    case "FIAT_CONVERSION_OBSERVATION_STAGE_CANCELLED":
+      return FiatConversionObservationStage.FIAT_CONVERSION_OBSERVATION_STAGE_CANCELLED;
+    case -1:
+    case "UNRECOGNIZED":
+    default:
+      return FiatConversionObservationStage.UNRECOGNIZED;
+  }
+}
+
+export function fiatConversionObservationStageToJSON(object: FiatConversionObservationStage): string {
+  switch (object) {
+    case FiatConversionObservationStage.FIAT_CONVERSION_OBSERVATION_STAGE_UNSPECIFIED:
+      return "FIAT_CONVERSION_OBSERVATION_STAGE_UNSPECIFIED";
+    case FiatConversionObservationStage.FIAT_CONVERSION_OBSERVATION_STAGE_QUOTE_ACCEPTED:
+      return "FIAT_CONVERSION_OBSERVATION_STAGE_QUOTE_ACCEPTED";
+    case FiatConversionObservationStage.FIAT_CONVERSION_OBSERVATION_STAGE_SWAP_SUBMITTED:
+      return "FIAT_CONVERSION_OBSERVATION_STAGE_SWAP_SUBMITTED";
+    case FiatConversionObservationStage.FIAT_CONVERSION_OBSERVATION_STAGE_SWAP_FINALIZED:
+      return "FIAT_CONVERSION_OBSERVATION_STAGE_SWAP_FINALIZED";
+    case FiatConversionObservationStage.FIAT_CONVERSION_OBSERVATION_STAGE_PAYOUT_QUOTED:
+      return "FIAT_CONVERSION_OBSERVATION_STAGE_PAYOUT_QUOTED";
+    case FiatConversionObservationStage.FIAT_CONVERSION_OBSERVATION_STAGE_PAYOUT_SUBMITTED:
+      return "FIAT_CONVERSION_OBSERVATION_STAGE_PAYOUT_SUBMITTED";
+    case FiatConversionObservationStage.FIAT_CONVERSION_OBSERVATION_STAGE_PAYOUT_COMPLETED:
+      return "FIAT_CONVERSION_OBSERVATION_STAGE_PAYOUT_COMPLETED";
+    case FiatConversionObservationStage.FIAT_CONVERSION_OBSERVATION_STAGE_FAILED:
+      return "FIAT_CONVERSION_OBSERVATION_STAGE_FAILED";
+    case FiatConversionObservationStage.FIAT_CONVERSION_OBSERVATION_STAGE_CANCELLED:
+      return "FIAT_CONVERSION_OBSERVATION_STAGE_CANCELLED";
+    case FiatConversionObservationStage.UNRECOGNIZED:
+    default:
+      return "UNRECOGNIZED";
+  }
+}
 
 /** ReleaseCondition defines a condition that must be met for escrow release. */
 export interface ReleaseCondition {
@@ -240,6 +774,212 @@ export interface PayoutRecord {
   processedAt: Long;
   completedAt: Long;
   blockHeight: Long;
+  /**
+   * external_finality_hash is a SHA-256 digest for an authenticated external
+   * payout. It is never an on-chain transaction hash.
+   */
+  externalFinalityHash: Uint8Array;
+  /**
+   * value_movement_applied is true only after net_amount moved from the
+   * settlement account to the governed fiat custody sink.
+   */
+  valueMovementApplied: boolean;
+  /** value_movement_effect_hash binds the payout to that exact bank effect. */
+  valueMovementEffectHash: Uint8Array;
+}
+
+/** FinancialSubject contains all known privacy-safe lineage identifiers. */
+export interface FinancialSubject {
+  type: FinancialSubjectType;
+  primaryId: string;
+  orderId: string;
+  invoiceId: string;
+  usageId: string;
+  hpcJobId: string;
+  settlementId: string;
+  escrowId: string;
+  reservationId: string;
+  leaseId: string;
+}
+
+/** FinancialClaim is one typed claim merged into the canonical case. */
+export interface FinancialClaim {
+  claimId: string;
+  claimType: FinancialClaimType;
+  claimant: string;
+  sourceModule: string;
+  sourceReference: string;
+  evidenceHash: Uint8Array;
+  encryptedReference: string;
+  payloadHash: Uint8Array;
+  idempotencyKey: Uint8Array;
+  createdHeight: Long;
+  createdAt: Long;
+  recommendation: string;
+}
+
+/** FinancialExposure is the original multi-denom value/capacity held by a case. */
+export interface FinancialExposure {
+  escrowAmount: Coin[];
+  payoutAmount: Coin[];
+  unclaimedRewards: Coin[];
+  reservationId: string;
+  payoutId: string;
+  escrowId: string;
+  originalHeld: Coin[];
+  rewardAddress: string;
+}
+
+/** TerminalAllocation conserves the original held exposure independently per denom. */
+export interface TerminalAllocation {
+  originalExposure: Coin[];
+  provider: Coin[];
+  customer: Coin[];
+  platform: Coin[];
+  slashWitness: Coin[];
+  slashWitnessRecipient: string;
+  resolutionType: FinancialResolutionType;
+  allocationHash: Uint8Array;
+}
+
+/** FinancialAppeal is a bounded privacy-safe appeal filing. */
+export interface FinancialAppeal {
+  appealId: string;
+  appellant: string;
+  evidenceHash: Uint8Array;
+  encryptedReference: string;
+  createdHeight: Long;
+  createdAt: Long;
+  idempotencyKey: Uint8Array;
+}
+
+/** FinancialCaseTransition is one append-only audit transition. */
+export interface FinancialCaseTransition {
+  sequence: Long;
+  from: FinancialCaseStatus;
+  to: FinancialCaseStatus;
+  actor: string;
+  action: string;
+  reasonHash: Uint8Array;
+  blockHeight: Long;
+  blockTime: Long;
+}
+
+/** FinancialCaseEffect is an exactly-once persisted terminal effect marker. */
+export interface FinancialCaseEffect {
+  effectId: string;
+  type: FinancialEffectType;
+  status: FinancialEffectStatus;
+  referenceId: string;
+  attempts: number;
+  appliedHeight: Long;
+  appliedAt: Long;
+  errorCode: string;
+}
+
+/** FinancialCase is the sole authoritative financial dispute aggregate. */
+export interface FinancialCase {
+  version: number;
+  caseId: string;
+  subject: FinancialSubject | undefined;
+  claims: FinancialClaim[];
+  claimant: string;
+  respondent: string;
+  exposure: FinancialExposure | undefined;
+  status: FinancialCaseStatus;
+  filingDeadlineHeight: Long;
+  evidenceDeadlineHeight: Long;
+  reviewDeadlineHeight: Long;
+  appealDeadlineHeight: Long;
+  escalationDeadlineHeight: Long;
+  filingDeadlineTime: Long;
+  evidenceDeadlineTime: Long;
+  reviewDeadlineTime: Long;
+  appealDeadlineTime: Long;
+  escalationDeadlineTime: Long;
+  resolverAuthority: string;
+  terminalAllocation: TerminalAllocation | undefined;
+  appeals: FinancialAppeal[];
+  maxAppeals: number;
+  openIdempotencyKey: Uint8Array;
+  migrated: boolean;
+  quarantined: boolean;
+  quarantineReason: string;
+  transitions: FinancialCaseTransition[];
+  effects: FinancialCaseEffect[];
+  createdHeight: Long;
+  createdAt: Long;
+  updatedHeight: Long;
+  updatedAt: Long;
+  claimRoot: Uint8Array;
+  activeHoldCount: number;
+  legacySourceCount: number;
+  provider: string;
+  customer: string;
+}
+
+/** Generated financial-case events use bounded, privacy-safe fields only. */
+export interface EventFinancialCaseOpened {
+  caseId: string;
+  subjectKey: string;
+  status: FinancialCaseStatus;
+  holdCount: number;
+}
+
+export interface EventFinancialClaimAdded {
+  caseId: string;
+  claimId: string;
+  claimType: FinancialClaimType;
+  sourceModule: string;
+}
+
+export interface EventFinancialCaseHeld {
+  caseId: string;
+  referenceType: string;
+  referenceId: string;
+}
+
+export interface EventFinancialCaseReviewed {
+  caseId: string;
+  status: FinancialCaseStatus;
+}
+
+export interface EventFinancialCaseEscalated {
+  caseId: string;
+  status: FinancialCaseStatus;
+}
+
+export interface EventFinancialCaseResolved {
+  caseId: string;
+  resolutionType: FinancialResolutionType;
+  allocationHash: Uint8Array;
+}
+
+export interface EventFinancialCaseAppealed {
+  caseId: string;
+  appealId: string;
+  appealCount: number;
+}
+
+export interface EventFinancialCaseFinalized {
+  caseId: string;
+  resolutionType: FinancialResolutionType;
+}
+
+export interface EventFinancialCaseEffectApplied {
+  caseId: string;
+  effectId: string;
+  effectType: FinancialEffectType;
+}
+
+export interface EventFinancialCaseQuarantined {
+  caseId: string;
+  reasonHash: Uint8Array;
+}
+
+export interface EventFinancialCaseExpired {
+  caseId: string;
+  status: FinancialCaseStatus;
 }
 
 /** Params defines the parameters for the settlement module. */
@@ -279,6 +1019,30 @@ export interface Params {
   fiatConversionMaxSlippage: string;
   fiatConversionRiskScoreThreshold: number;
   fiatConversionMinComplianceStatus: string;
+  financialCaseFilingWindowSeconds: Long;
+  financialCaseEvidenceWindowSeconds: Long;
+  financialCaseReviewWindowSeconds: Long;
+  financialCaseAppealWindowSeconds: Long;
+  financialCaseEscalationWindowSeconds: Long;
+  financialCaseFilingWindowBlocks: Long;
+  financialCaseEvidenceWindowBlocks: Long;
+  financialCaseReviewWindowBlocks: Long;
+  financialCaseAppealWindowBlocks: Long;
+  financialCaseEscalationWindowBlocks: Long;
+  financialCaseMaxClaims: number;
+  financialCaseMaxAppeals: number;
+  financialCaseMaxEvidenceReferenceBytes: number;
+  financialCaseTimeoutBatchLimit: number;
+  fiatConversionDexProfileId: string;
+  fiatConversionDexProfileDigest: Uint8Array;
+  fiatConversionDexProfileState: FiatConversionProfileState;
+  fiatConversionPayoutProfileId: string;
+  fiatConversionPayoutProfileDigest: Uint8Array;
+  fiatConversionPayoutProfileState: FiatConversionProfileState;
+  fiatConversionMinSwapFinalityConfirmations: number;
+  fiatConversionObservationMaxPastSeconds: Long;
+  fiatConversionObservationMaxFutureSeconds: Long;
+  fiatConversionMaxObservations: number;
 }
 
 /** TokenSpec captures token metadata for swaps. */
@@ -305,6 +1069,11 @@ export interface FiatPayoutPreference {
   stableToken: TokenSpec | undefined;
   createdAt: Long;
   updatedAt: Long;
+  /**
+   * slippage_tolerance_exact is the canonical decimal used for decisions.
+   * The legacy double at field 10 remains read-only compatibility data.
+   */
+  slippageToleranceExact: string;
 }
 
 /** FiatConversionAuditEntry is an audit log entry for conversions. */
@@ -334,6 +1103,40 @@ export interface FiatConversionStateTransition {
 export interface FiatConversionStateTransition_MetadataEntry {
   key: string;
   value: string;
+}
+
+/** FiatConversionObservation is one authenticated, privacy-safe evidence node. */
+export interface FiatConversionObservation {
+  sequence: Long;
+  idempotencyKey: Uint8Array;
+  stage: FiatConversionObservationStage;
+  status: string;
+  observedAt: Long;
+  recordedAt: Long;
+  recordedHeight: Long;
+  evidenceHash: Uint8Array;
+  observationDigest: Uint8Array;
+  lineageDigest: Uint8Array;
+  failureCode: string;
+}
+
+/** Generated events contain no PII or free-form external evidence. */
+export interface EventFiatConversionObservationRecorded {
+  conversionId: string;
+  provider: string;
+  observationSequence: Long;
+  stage: FiatConversionObservationStage;
+  state: string;
+  observationDigest: Uint8Array;
+  recordedHeight: Long;
+}
+
+export interface EventFiatConversionTerminal {
+  conversionId: string;
+  payoutId: string;
+  stage: FiatConversionObservationStage;
+  terminalPolicy: string;
+  evidenceHash: Uint8Array;
 }
 
 /** FiatConversionRecord stores conversion details. */
@@ -383,6 +1186,43 @@ export interface FiatConversionRecord {
   lastErrorAt: Long;
   lastError: string;
   transitionHistory: FiatConversionStateTransition[];
+  protocolVersion: number;
+  observationSequence: Long;
+  lastObservationDigest: Uint8Array;
+  observations: FiatConversionObservation[];
+  dexProfileId: string;
+  dexProfileDigest: Uint8Array;
+  payoutProfileId: string;
+  payoutProfileDigest: Uint8Array;
+  quoteDigest: Uint8Array;
+  quoteExpiry: Long;
+  minimumStableOutput: Coin | undefined;
+  swapHeight: Long;
+  swapBlockHash: Uint8Array;
+  swapFinalityConfirmations: number;
+  swapFinalityHash: Uint8Array;
+  payoutFinalityHash: Uint8Array;
+  complianceDecisionHash: Uint8Array;
+  privacySafeReferenceHash: Uint8Array;
+  evidenceHash: Uint8Array;
+  requestDigest: Uint8Array;
+  dailyBucket: string;
+  legacyQuarantined: boolean;
+  quarantineReason: string;
+  terminalPolicy: string;
+  valueMovementApplied: boolean;
+  /**
+   * slippage_tolerance_exact is the canonical decimal used for decisions.
+   * The legacy double at field 24 remains read-only compatibility data.
+   */
+  slippageToleranceExact: string;
+  /**
+   * daily_quota_reserved is true exactly while this record contributes to the
+   * provider/day reservation total.
+   */
+  dailyQuotaReserved: boolean;
+  custodySinkAmount: Coin | undefined;
+  custodySinkEffectHash: Uint8Array;
 }
 
 /** QueryEscrowRequest is the request for querying an escrow by ID. */
@@ -583,6 +1423,44 @@ export interface QueryFiatPayoutPreferenceRequest {
 /** QueryFiatPayoutPreferenceResponse is the response for querying fiat payout preference. */
 export interface QueryFiatPayoutPreferenceResponse {
   preference: FiatPayoutPreference | undefined;
+}
+
+export interface QueryFinancialCaseRequest {
+  caseId: string;
+}
+
+export interface QueryFinancialCaseResponse {
+  financialCase: FinancialCase | undefined;
+}
+
+export interface QueryFinancialCaseBySubjectRequest {
+  subject: FinancialSubject | undefined;
+}
+
+export interface QueryFinancialCaseBySubjectResponse {
+  financialCase: FinancialCase | undefined;
+}
+
+export interface QueryFinancialCasesRequest {
+  key: string;
+  pagination: PageRequest | undefined;
+}
+
+export interface QueryFinancialCasesResponse {
+  financialCases: FinancialCase[];
+  pagination: PageResponse | undefined;
+}
+
+export interface QueryFinancialCaseLineageRequest {
+  caseId: string;
+  pagination: PageRequest | undefined;
+}
+
+export interface QueryFinancialCaseLineageResponse {
+  transitions: FinancialCaseTransition[];
+  claims: FinancialClaim[];
+  effects: FinancialCaseEffect[];
+  pagination: PageResponse | undefined;
 }
 
 function createBaseReleaseCondition(): ReleaseCondition {
@@ -3903,6 +4781,9 @@ function createBasePayoutRecord(): PayoutRecord {
     processedAt: Long.ZERO,
     completedAt: Long.ZERO,
     blockHeight: Long.ZERO,
+    externalFinalityHash: new Uint8Array(0),
+    valueMovementApplied: false,
+    valueMovementEffectHash: new Uint8Array(0),
   };
 }
 
@@ -3987,6 +4868,15 @@ export const PayoutRecord: MessageFns<PayoutRecord, "virtengine.settlement.v1.Pa
     }
     if (!message.blockHeight.equals(Long.ZERO)) {
       writer.uint32(208).int64(message.blockHeight.toString());
+    }
+    if (message.externalFinalityHash.length !== 0) {
+      writer.uint32(218).bytes(message.externalFinalityHash);
+    }
+    if (message.valueMovementApplied !== false) {
+      writer.uint32(224).bool(message.valueMovementApplied);
+    }
+    if (message.valueMovementEffectHash.length !== 0) {
+      writer.uint32(234).bytes(message.valueMovementEffectHash);
     }
     return writer;
   },
@@ -4206,6 +5096,30 @@ export const PayoutRecord: MessageFns<PayoutRecord, "virtengine.settlement.v1.Pa
           message.blockHeight = Long.fromString(reader.int64().toString());
           continue;
         }
+        case 27: {
+          if (tag !== 218) {
+            break;
+          }
+
+          message.externalFinalityHash = reader.bytes();
+          continue;
+        }
+        case 28: {
+          if (tag !== 224) {
+            break;
+          }
+
+          message.valueMovementApplied = reader.bool();
+          continue;
+        }
+        case 29: {
+          if (tag !== 234) {
+            break;
+          }
+
+          message.valueMovementEffectHash = reader.bytes();
+          continue;
+        }
       }
       if ((tag & 7) === 4 || tag === 0) {
         break;
@@ -4253,6 +5167,15 @@ export const PayoutRecord: MessageFns<PayoutRecord, "virtengine.settlement.v1.Pa
       processedAt: isSet(object.processed_at) ? Long.fromValue(object.processed_at) : Long.ZERO,
       completedAt: isSet(object.completed_at) ? Long.fromValue(object.completed_at) : Long.ZERO,
       blockHeight: isSet(object.block_height) ? Long.fromValue(object.block_height) : Long.ZERO,
+      externalFinalityHash: isSet(object.external_finality_hash)
+        ? bytesFromBase64(object.external_finality_hash)
+        : new Uint8Array(0),
+      valueMovementApplied: isSet(object.value_movement_applied)
+        ? globalThis.Boolean(object.value_movement_applied)
+        : false,
+      valueMovementEffectHash: isSet(object.value_movement_effect_hash)
+        ? bytesFromBase64(object.value_movement_effect_hash)
+        : new Uint8Array(0),
     };
   },
 
@@ -4336,6 +5259,15 @@ export const PayoutRecord: MessageFns<PayoutRecord, "virtengine.settlement.v1.Pa
     if (!message.blockHeight.equals(Long.ZERO)) {
       obj.block_height = (message.blockHeight || Long.ZERO).toString();
     }
+    if (message.externalFinalityHash.length !== 0) {
+      obj.external_finality_hash = base64FromBytes(message.externalFinalityHash);
+    }
+    if (message.valueMovementApplied !== false) {
+      obj.value_movement_applied = message.valueMovementApplied;
+    }
+    if (message.valueMovementEffectHash.length !== 0) {
+      obj.value_movement_effect_hash = base64FromBytes(message.valueMovementEffectHash);
+    }
     return obj;
   },
   fromPartial(object: DeepPartial<PayoutRecord>): PayoutRecord {
@@ -4376,6 +5308,3090 @@ export const PayoutRecord: MessageFns<PayoutRecord, "virtengine.settlement.v1.Pa
     message.blockHeight = (object.blockHeight !== undefined && object.blockHeight !== null)
       ? Long.fromValue(object.blockHeight)
       : Long.ZERO;
+    message.externalFinalityHash = object.externalFinalityHash ?? new Uint8Array(0);
+    message.valueMovementApplied = object.valueMovementApplied ?? false;
+    message.valueMovementEffectHash = object.valueMovementEffectHash ?? new Uint8Array(0);
+    return message;
+  },
+};
+
+function createBaseFinancialSubject(): FinancialSubject {
+  return {
+    type: 0,
+    primaryId: "",
+    orderId: "",
+    invoiceId: "",
+    usageId: "",
+    hpcJobId: "",
+    settlementId: "",
+    escrowId: "",
+    reservationId: "",
+    leaseId: "",
+  };
+}
+
+export const FinancialSubject: MessageFns<FinancialSubject, "virtengine.settlement.v1.FinancialSubject"> = {
+  $type: "virtengine.settlement.v1.FinancialSubject" as const,
+
+  encode(message: FinancialSubject, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.type !== 0) {
+      writer.uint32(8).int32(message.type);
+    }
+    if (message.primaryId !== "") {
+      writer.uint32(18).string(message.primaryId);
+    }
+    if (message.orderId !== "") {
+      writer.uint32(26).string(message.orderId);
+    }
+    if (message.invoiceId !== "") {
+      writer.uint32(34).string(message.invoiceId);
+    }
+    if (message.usageId !== "") {
+      writer.uint32(42).string(message.usageId);
+    }
+    if (message.hpcJobId !== "") {
+      writer.uint32(50).string(message.hpcJobId);
+    }
+    if (message.settlementId !== "") {
+      writer.uint32(58).string(message.settlementId);
+    }
+    if (message.escrowId !== "") {
+      writer.uint32(66).string(message.escrowId);
+    }
+    if (message.reservationId !== "") {
+      writer.uint32(74).string(message.reservationId);
+    }
+    if (message.leaseId !== "") {
+      writer.uint32(82).string(message.leaseId);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): FinancialSubject {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseFinancialSubject();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 8) {
+            break;
+          }
+
+          message.type = reader.int32() as any;
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.primaryId = reader.string();
+          continue;
+        }
+        case 3: {
+          if (tag !== 26) {
+            break;
+          }
+
+          message.orderId = reader.string();
+          continue;
+        }
+        case 4: {
+          if (tag !== 34) {
+            break;
+          }
+
+          message.invoiceId = reader.string();
+          continue;
+        }
+        case 5: {
+          if (tag !== 42) {
+            break;
+          }
+
+          message.usageId = reader.string();
+          continue;
+        }
+        case 6: {
+          if (tag !== 50) {
+            break;
+          }
+
+          message.hpcJobId = reader.string();
+          continue;
+        }
+        case 7: {
+          if (tag !== 58) {
+            break;
+          }
+
+          message.settlementId = reader.string();
+          continue;
+        }
+        case 8: {
+          if (tag !== 66) {
+            break;
+          }
+
+          message.escrowId = reader.string();
+          continue;
+        }
+        case 9: {
+          if (tag !== 74) {
+            break;
+          }
+
+          message.reservationId = reader.string();
+          continue;
+        }
+        case 10: {
+          if (tag !== 82) {
+            break;
+          }
+
+          message.leaseId = reader.string();
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): FinancialSubject {
+    return {
+      type: isSet(object.type) ? financialSubjectTypeFromJSON(object.type) : 0,
+      primaryId: isSet(object.primary_id) ? globalThis.String(object.primary_id) : "",
+      orderId: isSet(object.order_id) ? globalThis.String(object.order_id) : "",
+      invoiceId: isSet(object.invoice_id) ? globalThis.String(object.invoice_id) : "",
+      usageId: isSet(object.usage_id) ? globalThis.String(object.usage_id) : "",
+      hpcJobId: isSet(object.hpc_job_id) ? globalThis.String(object.hpc_job_id) : "",
+      settlementId: isSet(object.settlement_id) ? globalThis.String(object.settlement_id) : "",
+      escrowId: isSet(object.escrow_id) ? globalThis.String(object.escrow_id) : "",
+      reservationId: isSet(object.reservation_id) ? globalThis.String(object.reservation_id) : "",
+      leaseId: isSet(object.lease_id) ? globalThis.String(object.lease_id) : "",
+    };
+  },
+
+  toJSON(message: FinancialSubject): unknown {
+    const obj: any = {};
+    if (message.type !== 0) {
+      obj.type = financialSubjectTypeToJSON(message.type);
+    }
+    if (message.primaryId !== "") {
+      obj.primary_id = message.primaryId;
+    }
+    if (message.orderId !== "") {
+      obj.order_id = message.orderId;
+    }
+    if (message.invoiceId !== "") {
+      obj.invoice_id = message.invoiceId;
+    }
+    if (message.usageId !== "") {
+      obj.usage_id = message.usageId;
+    }
+    if (message.hpcJobId !== "") {
+      obj.hpc_job_id = message.hpcJobId;
+    }
+    if (message.settlementId !== "") {
+      obj.settlement_id = message.settlementId;
+    }
+    if (message.escrowId !== "") {
+      obj.escrow_id = message.escrowId;
+    }
+    if (message.reservationId !== "") {
+      obj.reservation_id = message.reservationId;
+    }
+    if (message.leaseId !== "") {
+      obj.lease_id = message.leaseId;
+    }
+    return obj;
+  },
+  fromPartial(object: DeepPartial<FinancialSubject>): FinancialSubject {
+    const message = createBaseFinancialSubject();
+    message.type = object.type ?? 0;
+    message.primaryId = object.primaryId ?? "";
+    message.orderId = object.orderId ?? "";
+    message.invoiceId = object.invoiceId ?? "";
+    message.usageId = object.usageId ?? "";
+    message.hpcJobId = object.hpcJobId ?? "";
+    message.settlementId = object.settlementId ?? "";
+    message.escrowId = object.escrowId ?? "";
+    message.reservationId = object.reservationId ?? "";
+    message.leaseId = object.leaseId ?? "";
+    return message;
+  },
+};
+
+function createBaseFinancialClaim(): FinancialClaim {
+  return {
+    claimId: "",
+    claimType: 0,
+    claimant: "",
+    sourceModule: "",
+    sourceReference: "",
+    evidenceHash: new Uint8Array(0),
+    encryptedReference: "",
+    payloadHash: new Uint8Array(0),
+    idempotencyKey: new Uint8Array(0),
+    createdHeight: Long.ZERO,
+    createdAt: Long.ZERO,
+    recommendation: "",
+  };
+}
+
+export const FinancialClaim: MessageFns<FinancialClaim, "virtengine.settlement.v1.FinancialClaim"> = {
+  $type: "virtengine.settlement.v1.FinancialClaim" as const,
+
+  encode(message: FinancialClaim, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.claimId !== "") {
+      writer.uint32(10).string(message.claimId);
+    }
+    if (message.claimType !== 0) {
+      writer.uint32(16).int32(message.claimType);
+    }
+    if (message.claimant !== "") {
+      writer.uint32(26).string(message.claimant);
+    }
+    if (message.sourceModule !== "") {
+      writer.uint32(34).string(message.sourceModule);
+    }
+    if (message.sourceReference !== "") {
+      writer.uint32(42).string(message.sourceReference);
+    }
+    if (message.evidenceHash.length !== 0) {
+      writer.uint32(50).bytes(message.evidenceHash);
+    }
+    if (message.encryptedReference !== "") {
+      writer.uint32(58).string(message.encryptedReference);
+    }
+    if (message.payloadHash.length !== 0) {
+      writer.uint32(66).bytes(message.payloadHash);
+    }
+    if (message.idempotencyKey.length !== 0) {
+      writer.uint32(74).bytes(message.idempotencyKey);
+    }
+    if (!message.createdHeight.equals(Long.ZERO)) {
+      writer.uint32(80).int64(message.createdHeight.toString());
+    }
+    if (!message.createdAt.equals(Long.ZERO)) {
+      writer.uint32(88).int64(message.createdAt.toString());
+    }
+    if (message.recommendation !== "") {
+      writer.uint32(98).string(message.recommendation);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): FinancialClaim {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseFinancialClaim();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.claimId = reader.string();
+          continue;
+        }
+        case 2: {
+          if (tag !== 16) {
+            break;
+          }
+
+          message.claimType = reader.int32() as any;
+          continue;
+        }
+        case 3: {
+          if (tag !== 26) {
+            break;
+          }
+
+          message.claimant = reader.string();
+          continue;
+        }
+        case 4: {
+          if (tag !== 34) {
+            break;
+          }
+
+          message.sourceModule = reader.string();
+          continue;
+        }
+        case 5: {
+          if (tag !== 42) {
+            break;
+          }
+
+          message.sourceReference = reader.string();
+          continue;
+        }
+        case 6: {
+          if (tag !== 50) {
+            break;
+          }
+
+          message.evidenceHash = reader.bytes();
+          continue;
+        }
+        case 7: {
+          if (tag !== 58) {
+            break;
+          }
+
+          message.encryptedReference = reader.string();
+          continue;
+        }
+        case 8: {
+          if (tag !== 66) {
+            break;
+          }
+
+          message.payloadHash = reader.bytes();
+          continue;
+        }
+        case 9: {
+          if (tag !== 74) {
+            break;
+          }
+
+          message.idempotencyKey = reader.bytes();
+          continue;
+        }
+        case 10: {
+          if (tag !== 80) {
+            break;
+          }
+
+          message.createdHeight = Long.fromString(reader.int64().toString());
+          continue;
+        }
+        case 11: {
+          if (tag !== 88) {
+            break;
+          }
+
+          message.createdAt = Long.fromString(reader.int64().toString());
+          continue;
+        }
+        case 12: {
+          if (tag !== 98) {
+            break;
+          }
+
+          message.recommendation = reader.string();
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): FinancialClaim {
+    return {
+      claimId: isSet(object.claim_id) ? globalThis.String(object.claim_id) : "",
+      claimType: isSet(object.claim_type) ? financialClaimTypeFromJSON(object.claim_type) : 0,
+      claimant: isSet(object.claimant) ? globalThis.String(object.claimant) : "",
+      sourceModule: isSet(object.source_module) ? globalThis.String(object.source_module) : "",
+      sourceReference: isSet(object.source_reference) ? globalThis.String(object.source_reference) : "",
+      evidenceHash: isSet(object.evidence_hash) ? bytesFromBase64(object.evidence_hash) : new Uint8Array(0),
+      encryptedReference: isSet(object.encrypted_reference) ? globalThis.String(object.encrypted_reference) : "",
+      payloadHash: isSet(object.payload_hash) ? bytesFromBase64(object.payload_hash) : new Uint8Array(0),
+      idempotencyKey: isSet(object.idempotency_key) ? bytesFromBase64(object.idempotency_key) : new Uint8Array(0),
+      createdHeight: isSet(object.created_height) ? Long.fromValue(object.created_height) : Long.ZERO,
+      createdAt: isSet(object.created_at) ? Long.fromValue(object.created_at) : Long.ZERO,
+      recommendation: isSet(object.recommendation) ? globalThis.String(object.recommendation) : "",
+    };
+  },
+
+  toJSON(message: FinancialClaim): unknown {
+    const obj: any = {};
+    if (message.claimId !== "") {
+      obj.claim_id = message.claimId;
+    }
+    if (message.claimType !== 0) {
+      obj.claim_type = financialClaimTypeToJSON(message.claimType);
+    }
+    if (message.claimant !== "") {
+      obj.claimant = message.claimant;
+    }
+    if (message.sourceModule !== "") {
+      obj.source_module = message.sourceModule;
+    }
+    if (message.sourceReference !== "") {
+      obj.source_reference = message.sourceReference;
+    }
+    if (message.evidenceHash.length !== 0) {
+      obj.evidence_hash = base64FromBytes(message.evidenceHash);
+    }
+    if (message.encryptedReference !== "") {
+      obj.encrypted_reference = message.encryptedReference;
+    }
+    if (message.payloadHash.length !== 0) {
+      obj.payload_hash = base64FromBytes(message.payloadHash);
+    }
+    if (message.idempotencyKey.length !== 0) {
+      obj.idempotency_key = base64FromBytes(message.idempotencyKey);
+    }
+    if (!message.createdHeight.equals(Long.ZERO)) {
+      obj.created_height = (message.createdHeight || Long.ZERO).toString();
+    }
+    if (!message.createdAt.equals(Long.ZERO)) {
+      obj.created_at = (message.createdAt || Long.ZERO).toString();
+    }
+    if (message.recommendation !== "") {
+      obj.recommendation = message.recommendation;
+    }
+    return obj;
+  },
+  fromPartial(object: DeepPartial<FinancialClaim>): FinancialClaim {
+    const message = createBaseFinancialClaim();
+    message.claimId = object.claimId ?? "";
+    message.claimType = object.claimType ?? 0;
+    message.claimant = object.claimant ?? "";
+    message.sourceModule = object.sourceModule ?? "";
+    message.sourceReference = object.sourceReference ?? "";
+    message.evidenceHash = object.evidenceHash ?? new Uint8Array(0);
+    message.encryptedReference = object.encryptedReference ?? "";
+    message.payloadHash = object.payloadHash ?? new Uint8Array(0);
+    message.idempotencyKey = object.idempotencyKey ?? new Uint8Array(0);
+    message.createdHeight = (object.createdHeight !== undefined && object.createdHeight !== null)
+      ? Long.fromValue(object.createdHeight)
+      : Long.ZERO;
+    message.createdAt = (object.createdAt !== undefined && object.createdAt !== null)
+      ? Long.fromValue(object.createdAt)
+      : Long.ZERO;
+    message.recommendation = object.recommendation ?? "";
+    return message;
+  },
+};
+
+function createBaseFinancialExposure(): FinancialExposure {
+  return {
+    escrowAmount: [],
+    payoutAmount: [],
+    unclaimedRewards: [],
+    reservationId: "",
+    payoutId: "",
+    escrowId: "",
+    originalHeld: [],
+    rewardAddress: "",
+  };
+}
+
+export const FinancialExposure: MessageFns<FinancialExposure, "virtengine.settlement.v1.FinancialExposure"> = {
+  $type: "virtengine.settlement.v1.FinancialExposure" as const,
+
+  encode(message: FinancialExposure, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    for (const v of message.escrowAmount) {
+      Coin.encode(v!, writer.uint32(10).fork()).join();
+    }
+    for (const v of message.payoutAmount) {
+      Coin.encode(v!, writer.uint32(18).fork()).join();
+    }
+    for (const v of message.unclaimedRewards) {
+      Coin.encode(v!, writer.uint32(26).fork()).join();
+    }
+    if (message.reservationId !== "") {
+      writer.uint32(34).string(message.reservationId);
+    }
+    if (message.payoutId !== "") {
+      writer.uint32(42).string(message.payoutId);
+    }
+    if (message.escrowId !== "") {
+      writer.uint32(50).string(message.escrowId);
+    }
+    for (const v of message.originalHeld) {
+      Coin.encode(v!, writer.uint32(58).fork()).join();
+    }
+    if (message.rewardAddress !== "") {
+      writer.uint32(66).string(message.rewardAddress);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): FinancialExposure {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseFinancialExposure();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.escrowAmount.push(Coin.decode(reader, reader.uint32()));
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.payoutAmount.push(Coin.decode(reader, reader.uint32()));
+          continue;
+        }
+        case 3: {
+          if (tag !== 26) {
+            break;
+          }
+
+          message.unclaimedRewards.push(Coin.decode(reader, reader.uint32()));
+          continue;
+        }
+        case 4: {
+          if (tag !== 34) {
+            break;
+          }
+
+          message.reservationId = reader.string();
+          continue;
+        }
+        case 5: {
+          if (tag !== 42) {
+            break;
+          }
+
+          message.payoutId = reader.string();
+          continue;
+        }
+        case 6: {
+          if (tag !== 50) {
+            break;
+          }
+
+          message.escrowId = reader.string();
+          continue;
+        }
+        case 7: {
+          if (tag !== 58) {
+            break;
+          }
+
+          message.originalHeld.push(Coin.decode(reader, reader.uint32()));
+          continue;
+        }
+        case 8: {
+          if (tag !== 66) {
+            break;
+          }
+
+          message.rewardAddress = reader.string();
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): FinancialExposure {
+    return {
+      escrowAmount: globalThis.Array.isArray(object?.escrow_amount)
+        ? object.escrow_amount.map((e: any) => Coin.fromJSON(e))
+        : [],
+      payoutAmount: globalThis.Array.isArray(object?.payout_amount)
+        ? object.payout_amount.map((e: any) => Coin.fromJSON(e))
+        : [],
+      unclaimedRewards: globalThis.Array.isArray(object?.unclaimed_rewards)
+        ? object.unclaimed_rewards.map((e: any) => Coin.fromJSON(e))
+        : [],
+      reservationId: isSet(object.reservation_id) ? globalThis.String(object.reservation_id) : "",
+      payoutId: isSet(object.payout_id) ? globalThis.String(object.payout_id) : "",
+      escrowId: isSet(object.escrow_id) ? globalThis.String(object.escrow_id) : "",
+      originalHeld: globalThis.Array.isArray(object?.original_held)
+        ? object.original_held.map((e: any) => Coin.fromJSON(e))
+        : [],
+      rewardAddress: isSet(object.reward_address) ? globalThis.String(object.reward_address) : "",
+    };
+  },
+
+  toJSON(message: FinancialExposure): unknown {
+    const obj: any = {};
+    if (message.escrowAmount?.length) {
+      obj.escrow_amount = message.escrowAmount.map((e) => Coin.toJSON(e));
+    }
+    if (message.payoutAmount?.length) {
+      obj.payout_amount = message.payoutAmount.map((e) => Coin.toJSON(e));
+    }
+    if (message.unclaimedRewards?.length) {
+      obj.unclaimed_rewards = message.unclaimedRewards.map((e) => Coin.toJSON(e));
+    }
+    if (message.reservationId !== "") {
+      obj.reservation_id = message.reservationId;
+    }
+    if (message.payoutId !== "") {
+      obj.payout_id = message.payoutId;
+    }
+    if (message.escrowId !== "") {
+      obj.escrow_id = message.escrowId;
+    }
+    if (message.originalHeld?.length) {
+      obj.original_held = message.originalHeld.map((e) => Coin.toJSON(e));
+    }
+    if (message.rewardAddress !== "") {
+      obj.reward_address = message.rewardAddress;
+    }
+    return obj;
+  },
+  fromPartial(object: DeepPartial<FinancialExposure>): FinancialExposure {
+    const message = createBaseFinancialExposure();
+    message.escrowAmount = object.escrowAmount?.map((e) => Coin.fromPartial(e)) || [];
+    message.payoutAmount = object.payoutAmount?.map((e) => Coin.fromPartial(e)) || [];
+    message.unclaimedRewards = object.unclaimedRewards?.map((e) => Coin.fromPartial(e)) || [];
+    message.reservationId = object.reservationId ?? "";
+    message.payoutId = object.payoutId ?? "";
+    message.escrowId = object.escrowId ?? "";
+    message.originalHeld = object.originalHeld?.map((e) => Coin.fromPartial(e)) || [];
+    message.rewardAddress = object.rewardAddress ?? "";
+    return message;
+  },
+};
+
+function createBaseTerminalAllocation(): TerminalAllocation {
+  return {
+    originalExposure: [],
+    provider: [],
+    customer: [],
+    platform: [],
+    slashWitness: [],
+    slashWitnessRecipient: "",
+    resolutionType: 0,
+    allocationHash: new Uint8Array(0),
+  };
+}
+
+export const TerminalAllocation: MessageFns<TerminalAllocation, "virtengine.settlement.v1.TerminalAllocation"> = {
+  $type: "virtengine.settlement.v1.TerminalAllocation" as const,
+
+  encode(message: TerminalAllocation, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    for (const v of message.originalExposure) {
+      Coin.encode(v!, writer.uint32(10).fork()).join();
+    }
+    for (const v of message.provider) {
+      Coin.encode(v!, writer.uint32(18).fork()).join();
+    }
+    for (const v of message.customer) {
+      Coin.encode(v!, writer.uint32(26).fork()).join();
+    }
+    for (const v of message.platform) {
+      Coin.encode(v!, writer.uint32(34).fork()).join();
+    }
+    for (const v of message.slashWitness) {
+      Coin.encode(v!, writer.uint32(42).fork()).join();
+    }
+    if (message.slashWitnessRecipient !== "") {
+      writer.uint32(50).string(message.slashWitnessRecipient);
+    }
+    if (message.resolutionType !== 0) {
+      writer.uint32(56).int32(message.resolutionType);
+    }
+    if (message.allocationHash.length !== 0) {
+      writer.uint32(66).bytes(message.allocationHash);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): TerminalAllocation {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseTerminalAllocation();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.originalExposure.push(Coin.decode(reader, reader.uint32()));
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.provider.push(Coin.decode(reader, reader.uint32()));
+          continue;
+        }
+        case 3: {
+          if (tag !== 26) {
+            break;
+          }
+
+          message.customer.push(Coin.decode(reader, reader.uint32()));
+          continue;
+        }
+        case 4: {
+          if (tag !== 34) {
+            break;
+          }
+
+          message.platform.push(Coin.decode(reader, reader.uint32()));
+          continue;
+        }
+        case 5: {
+          if (tag !== 42) {
+            break;
+          }
+
+          message.slashWitness.push(Coin.decode(reader, reader.uint32()));
+          continue;
+        }
+        case 6: {
+          if (tag !== 50) {
+            break;
+          }
+
+          message.slashWitnessRecipient = reader.string();
+          continue;
+        }
+        case 7: {
+          if (tag !== 56) {
+            break;
+          }
+
+          message.resolutionType = reader.int32() as any;
+          continue;
+        }
+        case 8: {
+          if (tag !== 66) {
+            break;
+          }
+
+          message.allocationHash = reader.bytes();
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): TerminalAllocation {
+    return {
+      originalExposure: globalThis.Array.isArray(object?.original_exposure)
+        ? object.original_exposure.map((e: any) => Coin.fromJSON(e))
+        : [],
+      provider: globalThis.Array.isArray(object?.provider) ? object.provider.map((e: any) => Coin.fromJSON(e)) : [],
+      customer: globalThis.Array.isArray(object?.customer) ? object.customer.map((e: any) => Coin.fromJSON(e)) : [],
+      platform: globalThis.Array.isArray(object?.platform) ? object.platform.map((e: any) => Coin.fromJSON(e)) : [],
+      slashWitness: globalThis.Array.isArray(object?.slash_witness)
+        ? object.slash_witness.map((e: any) => Coin.fromJSON(e))
+        : [],
+      slashWitnessRecipient: isSet(object.slash_witness_recipient)
+        ? globalThis.String(object.slash_witness_recipient)
+        : "",
+      resolutionType: isSet(object.resolution_type) ? financialResolutionTypeFromJSON(object.resolution_type) : 0,
+      allocationHash: isSet(object.allocation_hash) ? bytesFromBase64(object.allocation_hash) : new Uint8Array(0),
+    };
+  },
+
+  toJSON(message: TerminalAllocation): unknown {
+    const obj: any = {};
+    if (message.originalExposure?.length) {
+      obj.original_exposure = message.originalExposure.map((e) => Coin.toJSON(e));
+    }
+    if (message.provider?.length) {
+      obj.provider = message.provider.map((e) => Coin.toJSON(e));
+    }
+    if (message.customer?.length) {
+      obj.customer = message.customer.map((e) => Coin.toJSON(e));
+    }
+    if (message.platform?.length) {
+      obj.platform = message.platform.map((e) => Coin.toJSON(e));
+    }
+    if (message.slashWitness?.length) {
+      obj.slash_witness = message.slashWitness.map((e) => Coin.toJSON(e));
+    }
+    if (message.slashWitnessRecipient !== "") {
+      obj.slash_witness_recipient = message.slashWitnessRecipient;
+    }
+    if (message.resolutionType !== 0) {
+      obj.resolution_type = financialResolutionTypeToJSON(message.resolutionType);
+    }
+    if (message.allocationHash.length !== 0) {
+      obj.allocation_hash = base64FromBytes(message.allocationHash);
+    }
+    return obj;
+  },
+  fromPartial(object: DeepPartial<TerminalAllocation>): TerminalAllocation {
+    const message = createBaseTerminalAllocation();
+    message.originalExposure = object.originalExposure?.map((e) => Coin.fromPartial(e)) || [];
+    message.provider = object.provider?.map((e) => Coin.fromPartial(e)) || [];
+    message.customer = object.customer?.map((e) => Coin.fromPartial(e)) || [];
+    message.platform = object.platform?.map((e) => Coin.fromPartial(e)) || [];
+    message.slashWitness = object.slashWitness?.map((e) => Coin.fromPartial(e)) || [];
+    message.slashWitnessRecipient = object.slashWitnessRecipient ?? "";
+    message.resolutionType = object.resolutionType ?? 0;
+    message.allocationHash = object.allocationHash ?? new Uint8Array(0);
+    return message;
+  },
+};
+
+function createBaseFinancialAppeal(): FinancialAppeal {
+  return {
+    appealId: "",
+    appellant: "",
+    evidenceHash: new Uint8Array(0),
+    encryptedReference: "",
+    createdHeight: Long.ZERO,
+    createdAt: Long.ZERO,
+    idempotencyKey: new Uint8Array(0),
+  };
+}
+
+export const FinancialAppeal: MessageFns<FinancialAppeal, "virtengine.settlement.v1.FinancialAppeal"> = {
+  $type: "virtengine.settlement.v1.FinancialAppeal" as const,
+
+  encode(message: FinancialAppeal, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.appealId !== "") {
+      writer.uint32(10).string(message.appealId);
+    }
+    if (message.appellant !== "") {
+      writer.uint32(18).string(message.appellant);
+    }
+    if (message.evidenceHash.length !== 0) {
+      writer.uint32(26).bytes(message.evidenceHash);
+    }
+    if (message.encryptedReference !== "") {
+      writer.uint32(34).string(message.encryptedReference);
+    }
+    if (!message.createdHeight.equals(Long.ZERO)) {
+      writer.uint32(40).int64(message.createdHeight.toString());
+    }
+    if (!message.createdAt.equals(Long.ZERO)) {
+      writer.uint32(48).int64(message.createdAt.toString());
+    }
+    if (message.idempotencyKey.length !== 0) {
+      writer.uint32(58).bytes(message.idempotencyKey);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): FinancialAppeal {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseFinancialAppeal();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.appealId = reader.string();
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.appellant = reader.string();
+          continue;
+        }
+        case 3: {
+          if (tag !== 26) {
+            break;
+          }
+
+          message.evidenceHash = reader.bytes();
+          continue;
+        }
+        case 4: {
+          if (tag !== 34) {
+            break;
+          }
+
+          message.encryptedReference = reader.string();
+          continue;
+        }
+        case 5: {
+          if (tag !== 40) {
+            break;
+          }
+
+          message.createdHeight = Long.fromString(reader.int64().toString());
+          continue;
+        }
+        case 6: {
+          if (tag !== 48) {
+            break;
+          }
+
+          message.createdAt = Long.fromString(reader.int64().toString());
+          continue;
+        }
+        case 7: {
+          if (tag !== 58) {
+            break;
+          }
+
+          message.idempotencyKey = reader.bytes();
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): FinancialAppeal {
+    return {
+      appealId: isSet(object.appeal_id) ? globalThis.String(object.appeal_id) : "",
+      appellant: isSet(object.appellant) ? globalThis.String(object.appellant) : "",
+      evidenceHash: isSet(object.evidence_hash) ? bytesFromBase64(object.evidence_hash) : new Uint8Array(0),
+      encryptedReference: isSet(object.encrypted_reference) ? globalThis.String(object.encrypted_reference) : "",
+      createdHeight: isSet(object.created_height) ? Long.fromValue(object.created_height) : Long.ZERO,
+      createdAt: isSet(object.created_at) ? Long.fromValue(object.created_at) : Long.ZERO,
+      idempotencyKey: isSet(object.idempotency_key) ? bytesFromBase64(object.idempotency_key) : new Uint8Array(0),
+    };
+  },
+
+  toJSON(message: FinancialAppeal): unknown {
+    const obj: any = {};
+    if (message.appealId !== "") {
+      obj.appeal_id = message.appealId;
+    }
+    if (message.appellant !== "") {
+      obj.appellant = message.appellant;
+    }
+    if (message.evidenceHash.length !== 0) {
+      obj.evidence_hash = base64FromBytes(message.evidenceHash);
+    }
+    if (message.encryptedReference !== "") {
+      obj.encrypted_reference = message.encryptedReference;
+    }
+    if (!message.createdHeight.equals(Long.ZERO)) {
+      obj.created_height = (message.createdHeight || Long.ZERO).toString();
+    }
+    if (!message.createdAt.equals(Long.ZERO)) {
+      obj.created_at = (message.createdAt || Long.ZERO).toString();
+    }
+    if (message.idempotencyKey.length !== 0) {
+      obj.idempotency_key = base64FromBytes(message.idempotencyKey);
+    }
+    return obj;
+  },
+  fromPartial(object: DeepPartial<FinancialAppeal>): FinancialAppeal {
+    const message = createBaseFinancialAppeal();
+    message.appealId = object.appealId ?? "";
+    message.appellant = object.appellant ?? "";
+    message.evidenceHash = object.evidenceHash ?? new Uint8Array(0);
+    message.encryptedReference = object.encryptedReference ?? "";
+    message.createdHeight = (object.createdHeight !== undefined && object.createdHeight !== null)
+      ? Long.fromValue(object.createdHeight)
+      : Long.ZERO;
+    message.createdAt = (object.createdAt !== undefined && object.createdAt !== null)
+      ? Long.fromValue(object.createdAt)
+      : Long.ZERO;
+    message.idempotencyKey = object.idempotencyKey ?? new Uint8Array(0);
+    return message;
+  },
+};
+
+function createBaseFinancialCaseTransition(): FinancialCaseTransition {
+  return {
+    sequence: Long.UZERO,
+    from: 0,
+    to: 0,
+    actor: "",
+    action: "",
+    reasonHash: new Uint8Array(0),
+    blockHeight: Long.ZERO,
+    blockTime: Long.ZERO,
+  };
+}
+
+export const FinancialCaseTransition: MessageFns<
+  FinancialCaseTransition,
+  "virtengine.settlement.v1.FinancialCaseTransition"
+> = {
+  $type: "virtengine.settlement.v1.FinancialCaseTransition" as const,
+
+  encode(message: FinancialCaseTransition, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (!message.sequence.equals(Long.UZERO)) {
+      writer.uint32(8).uint64(message.sequence.toString());
+    }
+    if (message.from !== 0) {
+      writer.uint32(16).int32(message.from);
+    }
+    if (message.to !== 0) {
+      writer.uint32(24).int32(message.to);
+    }
+    if (message.actor !== "") {
+      writer.uint32(34).string(message.actor);
+    }
+    if (message.action !== "") {
+      writer.uint32(42).string(message.action);
+    }
+    if (message.reasonHash.length !== 0) {
+      writer.uint32(50).bytes(message.reasonHash);
+    }
+    if (!message.blockHeight.equals(Long.ZERO)) {
+      writer.uint32(56).int64(message.blockHeight.toString());
+    }
+    if (!message.blockTime.equals(Long.ZERO)) {
+      writer.uint32(64).int64(message.blockTime.toString());
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): FinancialCaseTransition {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseFinancialCaseTransition();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 8) {
+            break;
+          }
+
+          message.sequence = Long.fromString(reader.uint64().toString(), true);
+          continue;
+        }
+        case 2: {
+          if (tag !== 16) {
+            break;
+          }
+
+          message.from = reader.int32() as any;
+          continue;
+        }
+        case 3: {
+          if (tag !== 24) {
+            break;
+          }
+
+          message.to = reader.int32() as any;
+          continue;
+        }
+        case 4: {
+          if (tag !== 34) {
+            break;
+          }
+
+          message.actor = reader.string();
+          continue;
+        }
+        case 5: {
+          if (tag !== 42) {
+            break;
+          }
+
+          message.action = reader.string();
+          continue;
+        }
+        case 6: {
+          if (tag !== 50) {
+            break;
+          }
+
+          message.reasonHash = reader.bytes();
+          continue;
+        }
+        case 7: {
+          if (tag !== 56) {
+            break;
+          }
+
+          message.blockHeight = Long.fromString(reader.int64().toString());
+          continue;
+        }
+        case 8: {
+          if (tag !== 64) {
+            break;
+          }
+
+          message.blockTime = Long.fromString(reader.int64().toString());
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): FinancialCaseTransition {
+    return {
+      sequence: isSet(object.sequence) ? Long.fromValue(object.sequence) : Long.UZERO,
+      from: isSet(object.from) ? financialCaseStatusFromJSON(object.from) : 0,
+      to: isSet(object.to) ? financialCaseStatusFromJSON(object.to) : 0,
+      actor: isSet(object.actor) ? globalThis.String(object.actor) : "",
+      action: isSet(object.action) ? globalThis.String(object.action) : "",
+      reasonHash: isSet(object.reason_hash) ? bytesFromBase64(object.reason_hash) : new Uint8Array(0),
+      blockHeight: isSet(object.block_height) ? Long.fromValue(object.block_height) : Long.ZERO,
+      blockTime: isSet(object.block_time) ? Long.fromValue(object.block_time) : Long.ZERO,
+    };
+  },
+
+  toJSON(message: FinancialCaseTransition): unknown {
+    const obj: any = {};
+    if (!message.sequence.equals(Long.UZERO)) {
+      obj.sequence = (message.sequence || Long.UZERO).toString();
+    }
+    if (message.from !== 0) {
+      obj.from = financialCaseStatusToJSON(message.from);
+    }
+    if (message.to !== 0) {
+      obj.to = financialCaseStatusToJSON(message.to);
+    }
+    if (message.actor !== "") {
+      obj.actor = message.actor;
+    }
+    if (message.action !== "") {
+      obj.action = message.action;
+    }
+    if (message.reasonHash.length !== 0) {
+      obj.reason_hash = base64FromBytes(message.reasonHash);
+    }
+    if (!message.blockHeight.equals(Long.ZERO)) {
+      obj.block_height = (message.blockHeight || Long.ZERO).toString();
+    }
+    if (!message.blockTime.equals(Long.ZERO)) {
+      obj.block_time = (message.blockTime || Long.ZERO).toString();
+    }
+    return obj;
+  },
+  fromPartial(object: DeepPartial<FinancialCaseTransition>): FinancialCaseTransition {
+    const message = createBaseFinancialCaseTransition();
+    message.sequence = (object.sequence !== undefined && object.sequence !== null)
+      ? Long.fromValue(object.sequence)
+      : Long.UZERO;
+    message.from = object.from ?? 0;
+    message.to = object.to ?? 0;
+    message.actor = object.actor ?? "";
+    message.action = object.action ?? "";
+    message.reasonHash = object.reasonHash ?? new Uint8Array(0);
+    message.blockHeight = (object.blockHeight !== undefined && object.blockHeight !== null)
+      ? Long.fromValue(object.blockHeight)
+      : Long.ZERO;
+    message.blockTime = (object.blockTime !== undefined && object.blockTime !== null)
+      ? Long.fromValue(object.blockTime)
+      : Long.ZERO;
+    return message;
+  },
+};
+
+function createBaseFinancialCaseEffect(): FinancialCaseEffect {
+  return {
+    effectId: "",
+    type: 0,
+    status: 0,
+    referenceId: "",
+    attempts: 0,
+    appliedHeight: Long.ZERO,
+    appliedAt: Long.ZERO,
+    errorCode: "",
+  };
+}
+
+export const FinancialCaseEffect: MessageFns<FinancialCaseEffect, "virtengine.settlement.v1.FinancialCaseEffect"> = {
+  $type: "virtengine.settlement.v1.FinancialCaseEffect" as const,
+
+  encode(message: FinancialCaseEffect, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.effectId !== "") {
+      writer.uint32(10).string(message.effectId);
+    }
+    if (message.type !== 0) {
+      writer.uint32(16).int32(message.type);
+    }
+    if (message.status !== 0) {
+      writer.uint32(24).int32(message.status);
+    }
+    if (message.referenceId !== "") {
+      writer.uint32(34).string(message.referenceId);
+    }
+    if (message.attempts !== 0) {
+      writer.uint32(40).uint32(message.attempts);
+    }
+    if (!message.appliedHeight.equals(Long.ZERO)) {
+      writer.uint32(48).int64(message.appliedHeight.toString());
+    }
+    if (!message.appliedAt.equals(Long.ZERO)) {
+      writer.uint32(56).int64(message.appliedAt.toString());
+    }
+    if (message.errorCode !== "") {
+      writer.uint32(66).string(message.errorCode);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): FinancialCaseEffect {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseFinancialCaseEffect();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.effectId = reader.string();
+          continue;
+        }
+        case 2: {
+          if (tag !== 16) {
+            break;
+          }
+
+          message.type = reader.int32() as any;
+          continue;
+        }
+        case 3: {
+          if (tag !== 24) {
+            break;
+          }
+
+          message.status = reader.int32() as any;
+          continue;
+        }
+        case 4: {
+          if (tag !== 34) {
+            break;
+          }
+
+          message.referenceId = reader.string();
+          continue;
+        }
+        case 5: {
+          if (tag !== 40) {
+            break;
+          }
+
+          message.attempts = reader.uint32();
+          continue;
+        }
+        case 6: {
+          if (tag !== 48) {
+            break;
+          }
+
+          message.appliedHeight = Long.fromString(reader.int64().toString());
+          continue;
+        }
+        case 7: {
+          if (tag !== 56) {
+            break;
+          }
+
+          message.appliedAt = Long.fromString(reader.int64().toString());
+          continue;
+        }
+        case 8: {
+          if (tag !== 66) {
+            break;
+          }
+
+          message.errorCode = reader.string();
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): FinancialCaseEffect {
+    return {
+      effectId: isSet(object.effect_id) ? globalThis.String(object.effect_id) : "",
+      type: isSet(object.type) ? financialEffectTypeFromJSON(object.type) : 0,
+      status: isSet(object.status) ? financialEffectStatusFromJSON(object.status) : 0,
+      referenceId: isSet(object.reference_id) ? globalThis.String(object.reference_id) : "",
+      attempts: isSet(object.attempts) ? globalThis.Number(object.attempts) : 0,
+      appliedHeight: isSet(object.applied_height) ? Long.fromValue(object.applied_height) : Long.ZERO,
+      appliedAt: isSet(object.applied_at) ? Long.fromValue(object.applied_at) : Long.ZERO,
+      errorCode: isSet(object.error_code) ? globalThis.String(object.error_code) : "",
+    };
+  },
+
+  toJSON(message: FinancialCaseEffect): unknown {
+    const obj: any = {};
+    if (message.effectId !== "") {
+      obj.effect_id = message.effectId;
+    }
+    if (message.type !== 0) {
+      obj.type = financialEffectTypeToJSON(message.type);
+    }
+    if (message.status !== 0) {
+      obj.status = financialEffectStatusToJSON(message.status);
+    }
+    if (message.referenceId !== "") {
+      obj.reference_id = message.referenceId;
+    }
+    if (message.attempts !== 0) {
+      obj.attempts = Math.round(message.attempts);
+    }
+    if (!message.appliedHeight.equals(Long.ZERO)) {
+      obj.applied_height = (message.appliedHeight || Long.ZERO).toString();
+    }
+    if (!message.appliedAt.equals(Long.ZERO)) {
+      obj.applied_at = (message.appliedAt || Long.ZERO).toString();
+    }
+    if (message.errorCode !== "") {
+      obj.error_code = message.errorCode;
+    }
+    return obj;
+  },
+  fromPartial(object: DeepPartial<FinancialCaseEffect>): FinancialCaseEffect {
+    const message = createBaseFinancialCaseEffect();
+    message.effectId = object.effectId ?? "";
+    message.type = object.type ?? 0;
+    message.status = object.status ?? 0;
+    message.referenceId = object.referenceId ?? "";
+    message.attempts = object.attempts ?? 0;
+    message.appliedHeight = (object.appliedHeight !== undefined && object.appliedHeight !== null)
+      ? Long.fromValue(object.appliedHeight)
+      : Long.ZERO;
+    message.appliedAt = (object.appliedAt !== undefined && object.appliedAt !== null)
+      ? Long.fromValue(object.appliedAt)
+      : Long.ZERO;
+    message.errorCode = object.errorCode ?? "";
+    return message;
+  },
+};
+
+function createBaseFinancialCase(): FinancialCase {
+  return {
+    version: 0,
+    caseId: "",
+    subject: undefined,
+    claims: [],
+    claimant: "",
+    respondent: "",
+    exposure: undefined,
+    status: 0,
+    filingDeadlineHeight: Long.ZERO,
+    evidenceDeadlineHeight: Long.ZERO,
+    reviewDeadlineHeight: Long.ZERO,
+    appealDeadlineHeight: Long.ZERO,
+    escalationDeadlineHeight: Long.ZERO,
+    filingDeadlineTime: Long.ZERO,
+    evidenceDeadlineTime: Long.ZERO,
+    reviewDeadlineTime: Long.ZERO,
+    appealDeadlineTime: Long.ZERO,
+    escalationDeadlineTime: Long.ZERO,
+    resolverAuthority: "",
+    terminalAllocation: undefined,
+    appeals: [],
+    maxAppeals: 0,
+    openIdempotencyKey: new Uint8Array(0),
+    migrated: false,
+    quarantined: false,
+    quarantineReason: "",
+    transitions: [],
+    effects: [],
+    createdHeight: Long.ZERO,
+    createdAt: Long.ZERO,
+    updatedHeight: Long.ZERO,
+    updatedAt: Long.ZERO,
+    claimRoot: new Uint8Array(0),
+    activeHoldCount: 0,
+    legacySourceCount: 0,
+    provider: "",
+    customer: "",
+  };
+}
+
+export const FinancialCase: MessageFns<FinancialCase, "virtengine.settlement.v1.FinancialCase"> = {
+  $type: "virtengine.settlement.v1.FinancialCase" as const,
+
+  encode(message: FinancialCase, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.version !== 0) {
+      writer.uint32(8).uint32(message.version);
+    }
+    if (message.caseId !== "") {
+      writer.uint32(18).string(message.caseId);
+    }
+    if (message.subject !== undefined) {
+      FinancialSubject.encode(message.subject, writer.uint32(26).fork()).join();
+    }
+    for (const v of message.claims) {
+      FinancialClaim.encode(v!, writer.uint32(34).fork()).join();
+    }
+    if (message.claimant !== "") {
+      writer.uint32(42).string(message.claimant);
+    }
+    if (message.respondent !== "") {
+      writer.uint32(50).string(message.respondent);
+    }
+    if (message.exposure !== undefined) {
+      FinancialExposure.encode(message.exposure, writer.uint32(58).fork()).join();
+    }
+    if (message.status !== 0) {
+      writer.uint32(64).int32(message.status);
+    }
+    if (!message.filingDeadlineHeight.equals(Long.ZERO)) {
+      writer.uint32(72).int64(message.filingDeadlineHeight.toString());
+    }
+    if (!message.evidenceDeadlineHeight.equals(Long.ZERO)) {
+      writer.uint32(80).int64(message.evidenceDeadlineHeight.toString());
+    }
+    if (!message.reviewDeadlineHeight.equals(Long.ZERO)) {
+      writer.uint32(88).int64(message.reviewDeadlineHeight.toString());
+    }
+    if (!message.appealDeadlineHeight.equals(Long.ZERO)) {
+      writer.uint32(96).int64(message.appealDeadlineHeight.toString());
+    }
+    if (!message.escalationDeadlineHeight.equals(Long.ZERO)) {
+      writer.uint32(104).int64(message.escalationDeadlineHeight.toString());
+    }
+    if (!message.filingDeadlineTime.equals(Long.ZERO)) {
+      writer.uint32(112).int64(message.filingDeadlineTime.toString());
+    }
+    if (!message.evidenceDeadlineTime.equals(Long.ZERO)) {
+      writer.uint32(120).int64(message.evidenceDeadlineTime.toString());
+    }
+    if (!message.reviewDeadlineTime.equals(Long.ZERO)) {
+      writer.uint32(128).int64(message.reviewDeadlineTime.toString());
+    }
+    if (!message.appealDeadlineTime.equals(Long.ZERO)) {
+      writer.uint32(136).int64(message.appealDeadlineTime.toString());
+    }
+    if (!message.escalationDeadlineTime.equals(Long.ZERO)) {
+      writer.uint32(144).int64(message.escalationDeadlineTime.toString());
+    }
+    if (message.resolverAuthority !== "") {
+      writer.uint32(154).string(message.resolverAuthority);
+    }
+    if (message.terminalAllocation !== undefined) {
+      TerminalAllocation.encode(message.terminalAllocation, writer.uint32(162).fork()).join();
+    }
+    for (const v of message.appeals) {
+      FinancialAppeal.encode(v!, writer.uint32(170).fork()).join();
+    }
+    if (message.maxAppeals !== 0) {
+      writer.uint32(176).uint32(message.maxAppeals);
+    }
+    if (message.openIdempotencyKey.length !== 0) {
+      writer.uint32(186).bytes(message.openIdempotencyKey);
+    }
+    if (message.migrated !== false) {
+      writer.uint32(192).bool(message.migrated);
+    }
+    if (message.quarantined !== false) {
+      writer.uint32(200).bool(message.quarantined);
+    }
+    if (message.quarantineReason !== "") {
+      writer.uint32(210).string(message.quarantineReason);
+    }
+    for (const v of message.transitions) {
+      FinancialCaseTransition.encode(v!, writer.uint32(218).fork()).join();
+    }
+    for (const v of message.effects) {
+      FinancialCaseEffect.encode(v!, writer.uint32(226).fork()).join();
+    }
+    if (!message.createdHeight.equals(Long.ZERO)) {
+      writer.uint32(232).int64(message.createdHeight.toString());
+    }
+    if (!message.createdAt.equals(Long.ZERO)) {
+      writer.uint32(240).int64(message.createdAt.toString());
+    }
+    if (!message.updatedHeight.equals(Long.ZERO)) {
+      writer.uint32(248).int64(message.updatedHeight.toString());
+    }
+    if (!message.updatedAt.equals(Long.ZERO)) {
+      writer.uint32(256).int64(message.updatedAt.toString());
+    }
+    if (message.claimRoot.length !== 0) {
+      writer.uint32(266).bytes(message.claimRoot);
+    }
+    if (message.activeHoldCount !== 0) {
+      writer.uint32(272).uint32(message.activeHoldCount);
+    }
+    if (message.legacySourceCount !== 0) {
+      writer.uint32(280).uint32(message.legacySourceCount);
+    }
+    if (message.provider !== "") {
+      writer.uint32(290).string(message.provider);
+    }
+    if (message.customer !== "") {
+      writer.uint32(298).string(message.customer);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): FinancialCase {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseFinancialCase();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 8) {
+            break;
+          }
+
+          message.version = reader.uint32();
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.caseId = reader.string();
+          continue;
+        }
+        case 3: {
+          if (tag !== 26) {
+            break;
+          }
+
+          message.subject = FinancialSubject.decode(reader, reader.uint32());
+          continue;
+        }
+        case 4: {
+          if (tag !== 34) {
+            break;
+          }
+
+          message.claims.push(FinancialClaim.decode(reader, reader.uint32()));
+          continue;
+        }
+        case 5: {
+          if (tag !== 42) {
+            break;
+          }
+
+          message.claimant = reader.string();
+          continue;
+        }
+        case 6: {
+          if (tag !== 50) {
+            break;
+          }
+
+          message.respondent = reader.string();
+          continue;
+        }
+        case 7: {
+          if (tag !== 58) {
+            break;
+          }
+
+          message.exposure = FinancialExposure.decode(reader, reader.uint32());
+          continue;
+        }
+        case 8: {
+          if (tag !== 64) {
+            break;
+          }
+
+          message.status = reader.int32() as any;
+          continue;
+        }
+        case 9: {
+          if (tag !== 72) {
+            break;
+          }
+
+          message.filingDeadlineHeight = Long.fromString(reader.int64().toString());
+          continue;
+        }
+        case 10: {
+          if (tag !== 80) {
+            break;
+          }
+
+          message.evidenceDeadlineHeight = Long.fromString(reader.int64().toString());
+          continue;
+        }
+        case 11: {
+          if (tag !== 88) {
+            break;
+          }
+
+          message.reviewDeadlineHeight = Long.fromString(reader.int64().toString());
+          continue;
+        }
+        case 12: {
+          if (tag !== 96) {
+            break;
+          }
+
+          message.appealDeadlineHeight = Long.fromString(reader.int64().toString());
+          continue;
+        }
+        case 13: {
+          if (tag !== 104) {
+            break;
+          }
+
+          message.escalationDeadlineHeight = Long.fromString(reader.int64().toString());
+          continue;
+        }
+        case 14: {
+          if (tag !== 112) {
+            break;
+          }
+
+          message.filingDeadlineTime = Long.fromString(reader.int64().toString());
+          continue;
+        }
+        case 15: {
+          if (tag !== 120) {
+            break;
+          }
+
+          message.evidenceDeadlineTime = Long.fromString(reader.int64().toString());
+          continue;
+        }
+        case 16: {
+          if (tag !== 128) {
+            break;
+          }
+
+          message.reviewDeadlineTime = Long.fromString(reader.int64().toString());
+          continue;
+        }
+        case 17: {
+          if (tag !== 136) {
+            break;
+          }
+
+          message.appealDeadlineTime = Long.fromString(reader.int64().toString());
+          continue;
+        }
+        case 18: {
+          if (tag !== 144) {
+            break;
+          }
+
+          message.escalationDeadlineTime = Long.fromString(reader.int64().toString());
+          continue;
+        }
+        case 19: {
+          if (tag !== 154) {
+            break;
+          }
+
+          message.resolverAuthority = reader.string();
+          continue;
+        }
+        case 20: {
+          if (tag !== 162) {
+            break;
+          }
+
+          message.terminalAllocation = TerminalAllocation.decode(reader, reader.uint32());
+          continue;
+        }
+        case 21: {
+          if (tag !== 170) {
+            break;
+          }
+
+          message.appeals.push(FinancialAppeal.decode(reader, reader.uint32()));
+          continue;
+        }
+        case 22: {
+          if (tag !== 176) {
+            break;
+          }
+
+          message.maxAppeals = reader.uint32();
+          continue;
+        }
+        case 23: {
+          if (tag !== 186) {
+            break;
+          }
+
+          message.openIdempotencyKey = reader.bytes();
+          continue;
+        }
+        case 24: {
+          if (tag !== 192) {
+            break;
+          }
+
+          message.migrated = reader.bool();
+          continue;
+        }
+        case 25: {
+          if (tag !== 200) {
+            break;
+          }
+
+          message.quarantined = reader.bool();
+          continue;
+        }
+        case 26: {
+          if (tag !== 210) {
+            break;
+          }
+
+          message.quarantineReason = reader.string();
+          continue;
+        }
+        case 27: {
+          if (tag !== 218) {
+            break;
+          }
+
+          message.transitions.push(FinancialCaseTransition.decode(reader, reader.uint32()));
+          continue;
+        }
+        case 28: {
+          if (tag !== 226) {
+            break;
+          }
+
+          message.effects.push(FinancialCaseEffect.decode(reader, reader.uint32()));
+          continue;
+        }
+        case 29: {
+          if (tag !== 232) {
+            break;
+          }
+
+          message.createdHeight = Long.fromString(reader.int64().toString());
+          continue;
+        }
+        case 30: {
+          if (tag !== 240) {
+            break;
+          }
+
+          message.createdAt = Long.fromString(reader.int64().toString());
+          continue;
+        }
+        case 31: {
+          if (tag !== 248) {
+            break;
+          }
+
+          message.updatedHeight = Long.fromString(reader.int64().toString());
+          continue;
+        }
+        case 32: {
+          if (tag !== 256) {
+            break;
+          }
+
+          message.updatedAt = Long.fromString(reader.int64().toString());
+          continue;
+        }
+        case 33: {
+          if (tag !== 266) {
+            break;
+          }
+
+          message.claimRoot = reader.bytes();
+          continue;
+        }
+        case 34: {
+          if (tag !== 272) {
+            break;
+          }
+
+          message.activeHoldCount = reader.uint32();
+          continue;
+        }
+        case 35: {
+          if (tag !== 280) {
+            break;
+          }
+
+          message.legacySourceCount = reader.uint32();
+          continue;
+        }
+        case 36: {
+          if (tag !== 290) {
+            break;
+          }
+
+          message.provider = reader.string();
+          continue;
+        }
+        case 37: {
+          if (tag !== 298) {
+            break;
+          }
+
+          message.customer = reader.string();
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): FinancialCase {
+    return {
+      version: isSet(object.version) ? globalThis.Number(object.version) : 0,
+      caseId: isSet(object.case_id) ? globalThis.String(object.case_id) : "",
+      subject: isSet(object.subject) ? FinancialSubject.fromJSON(object.subject) : undefined,
+      claims: globalThis.Array.isArray(object?.claims) ? object.claims.map((e: any) => FinancialClaim.fromJSON(e)) : [],
+      claimant: isSet(object.claimant) ? globalThis.String(object.claimant) : "",
+      respondent: isSet(object.respondent) ? globalThis.String(object.respondent) : "",
+      exposure: isSet(object.exposure) ? FinancialExposure.fromJSON(object.exposure) : undefined,
+      status: isSet(object.status) ? financialCaseStatusFromJSON(object.status) : 0,
+      filingDeadlineHeight: isSet(object.filing_deadline_height)
+        ? Long.fromValue(object.filing_deadline_height)
+        : Long.ZERO,
+      evidenceDeadlineHeight: isSet(object.evidence_deadline_height)
+        ? Long.fromValue(object.evidence_deadline_height)
+        : Long.ZERO,
+      reviewDeadlineHeight: isSet(object.review_deadline_height)
+        ? Long.fromValue(object.review_deadline_height)
+        : Long.ZERO,
+      appealDeadlineHeight: isSet(object.appeal_deadline_height)
+        ? Long.fromValue(object.appeal_deadline_height)
+        : Long.ZERO,
+      escalationDeadlineHeight: isSet(object.escalation_deadline_height)
+        ? Long.fromValue(object.escalation_deadline_height)
+        : Long.ZERO,
+      filingDeadlineTime: isSet(object.filing_deadline_time) ? Long.fromValue(object.filing_deadline_time) : Long.ZERO,
+      evidenceDeadlineTime: isSet(object.evidence_deadline_time)
+        ? Long.fromValue(object.evidence_deadline_time)
+        : Long.ZERO,
+      reviewDeadlineTime: isSet(object.review_deadline_time) ? Long.fromValue(object.review_deadline_time) : Long.ZERO,
+      appealDeadlineTime: isSet(object.appeal_deadline_time) ? Long.fromValue(object.appeal_deadline_time) : Long.ZERO,
+      escalationDeadlineTime: isSet(object.escalation_deadline_time)
+        ? Long.fromValue(object.escalation_deadline_time)
+        : Long.ZERO,
+      resolverAuthority: isSet(object.resolver_authority) ? globalThis.String(object.resolver_authority) : "",
+      terminalAllocation: isSet(object.terminal_allocation)
+        ? TerminalAllocation.fromJSON(object.terminal_allocation)
+        : undefined,
+      appeals: globalThis.Array.isArray(object?.appeals)
+        ? object.appeals.map((e: any) => FinancialAppeal.fromJSON(e))
+        : [],
+      maxAppeals: isSet(object.max_appeals) ? globalThis.Number(object.max_appeals) : 0,
+      openIdempotencyKey: isSet(object.open_idempotency_key)
+        ? bytesFromBase64(object.open_idempotency_key)
+        : new Uint8Array(0),
+      migrated: isSet(object.migrated) ? globalThis.Boolean(object.migrated) : false,
+      quarantined: isSet(object.quarantined) ? globalThis.Boolean(object.quarantined) : false,
+      quarantineReason: isSet(object.quarantine_reason) ? globalThis.String(object.quarantine_reason) : "",
+      transitions: globalThis.Array.isArray(object?.transitions)
+        ? object.transitions.map((e: any) => FinancialCaseTransition.fromJSON(e))
+        : [],
+      effects: globalThis.Array.isArray(object?.effects)
+        ? object.effects.map((e: any) => FinancialCaseEffect.fromJSON(e))
+        : [],
+      createdHeight: isSet(object.created_height) ? Long.fromValue(object.created_height) : Long.ZERO,
+      createdAt: isSet(object.created_at) ? Long.fromValue(object.created_at) : Long.ZERO,
+      updatedHeight: isSet(object.updated_height) ? Long.fromValue(object.updated_height) : Long.ZERO,
+      updatedAt: isSet(object.updated_at) ? Long.fromValue(object.updated_at) : Long.ZERO,
+      claimRoot: isSet(object.claim_root) ? bytesFromBase64(object.claim_root) : new Uint8Array(0),
+      activeHoldCount: isSet(object.active_hold_count) ? globalThis.Number(object.active_hold_count) : 0,
+      legacySourceCount: isSet(object.legacy_source_count) ? globalThis.Number(object.legacy_source_count) : 0,
+      provider: isSet(object.provider) ? globalThis.String(object.provider) : "",
+      customer: isSet(object.customer) ? globalThis.String(object.customer) : "",
+    };
+  },
+
+  toJSON(message: FinancialCase): unknown {
+    const obj: any = {};
+    if (message.version !== 0) {
+      obj.version = Math.round(message.version);
+    }
+    if (message.caseId !== "") {
+      obj.case_id = message.caseId;
+    }
+    if (message.subject !== undefined) {
+      obj.subject = FinancialSubject.toJSON(message.subject);
+    }
+    if (message.claims?.length) {
+      obj.claims = message.claims.map((e) => FinancialClaim.toJSON(e));
+    }
+    if (message.claimant !== "") {
+      obj.claimant = message.claimant;
+    }
+    if (message.respondent !== "") {
+      obj.respondent = message.respondent;
+    }
+    if (message.exposure !== undefined) {
+      obj.exposure = FinancialExposure.toJSON(message.exposure);
+    }
+    if (message.status !== 0) {
+      obj.status = financialCaseStatusToJSON(message.status);
+    }
+    if (!message.filingDeadlineHeight.equals(Long.ZERO)) {
+      obj.filing_deadline_height = (message.filingDeadlineHeight || Long.ZERO).toString();
+    }
+    if (!message.evidenceDeadlineHeight.equals(Long.ZERO)) {
+      obj.evidence_deadline_height = (message.evidenceDeadlineHeight || Long.ZERO).toString();
+    }
+    if (!message.reviewDeadlineHeight.equals(Long.ZERO)) {
+      obj.review_deadline_height = (message.reviewDeadlineHeight || Long.ZERO).toString();
+    }
+    if (!message.appealDeadlineHeight.equals(Long.ZERO)) {
+      obj.appeal_deadline_height = (message.appealDeadlineHeight || Long.ZERO).toString();
+    }
+    if (!message.escalationDeadlineHeight.equals(Long.ZERO)) {
+      obj.escalation_deadline_height = (message.escalationDeadlineHeight || Long.ZERO).toString();
+    }
+    if (!message.filingDeadlineTime.equals(Long.ZERO)) {
+      obj.filing_deadline_time = (message.filingDeadlineTime || Long.ZERO).toString();
+    }
+    if (!message.evidenceDeadlineTime.equals(Long.ZERO)) {
+      obj.evidence_deadline_time = (message.evidenceDeadlineTime || Long.ZERO).toString();
+    }
+    if (!message.reviewDeadlineTime.equals(Long.ZERO)) {
+      obj.review_deadline_time = (message.reviewDeadlineTime || Long.ZERO).toString();
+    }
+    if (!message.appealDeadlineTime.equals(Long.ZERO)) {
+      obj.appeal_deadline_time = (message.appealDeadlineTime || Long.ZERO).toString();
+    }
+    if (!message.escalationDeadlineTime.equals(Long.ZERO)) {
+      obj.escalation_deadline_time = (message.escalationDeadlineTime || Long.ZERO).toString();
+    }
+    if (message.resolverAuthority !== "") {
+      obj.resolver_authority = message.resolverAuthority;
+    }
+    if (message.terminalAllocation !== undefined) {
+      obj.terminal_allocation = TerminalAllocation.toJSON(message.terminalAllocation);
+    }
+    if (message.appeals?.length) {
+      obj.appeals = message.appeals.map((e) => FinancialAppeal.toJSON(e));
+    }
+    if (message.maxAppeals !== 0) {
+      obj.max_appeals = Math.round(message.maxAppeals);
+    }
+    if (message.openIdempotencyKey.length !== 0) {
+      obj.open_idempotency_key = base64FromBytes(message.openIdempotencyKey);
+    }
+    if (message.migrated !== false) {
+      obj.migrated = message.migrated;
+    }
+    if (message.quarantined !== false) {
+      obj.quarantined = message.quarantined;
+    }
+    if (message.quarantineReason !== "") {
+      obj.quarantine_reason = message.quarantineReason;
+    }
+    if (message.transitions?.length) {
+      obj.transitions = message.transitions.map((e) => FinancialCaseTransition.toJSON(e));
+    }
+    if (message.effects?.length) {
+      obj.effects = message.effects.map((e) => FinancialCaseEffect.toJSON(e));
+    }
+    if (!message.createdHeight.equals(Long.ZERO)) {
+      obj.created_height = (message.createdHeight || Long.ZERO).toString();
+    }
+    if (!message.createdAt.equals(Long.ZERO)) {
+      obj.created_at = (message.createdAt || Long.ZERO).toString();
+    }
+    if (!message.updatedHeight.equals(Long.ZERO)) {
+      obj.updated_height = (message.updatedHeight || Long.ZERO).toString();
+    }
+    if (!message.updatedAt.equals(Long.ZERO)) {
+      obj.updated_at = (message.updatedAt || Long.ZERO).toString();
+    }
+    if (message.claimRoot.length !== 0) {
+      obj.claim_root = base64FromBytes(message.claimRoot);
+    }
+    if (message.activeHoldCount !== 0) {
+      obj.active_hold_count = Math.round(message.activeHoldCount);
+    }
+    if (message.legacySourceCount !== 0) {
+      obj.legacy_source_count = Math.round(message.legacySourceCount);
+    }
+    if (message.provider !== "") {
+      obj.provider = message.provider;
+    }
+    if (message.customer !== "") {
+      obj.customer = message.customer;
+    }
+    return obj;
+  },
+  fromPartial(object: DeepPartial<FinancialCase>): FinancialCase {
+    const message = createBaseFinancialCase();
+    message.version = object.version ?? 0;
+    message.caseId = object.caseId ?? "";
+    message.subject = (object.subject !== undefined && object.subject !== null)
+      ? FinancialSubject.fromPartial(object.subject)
+      : undefined;
+    message.claims = object.claims?.map((e) => FinancialClaim.fromPartial(e)) || [];
+    message.claimant = object.claimant ?? "";
+    message.respondent = object.respondent ?? "";
+    message.exposure = (object.exposure !== undefined && object.exposure !== null)
+      ? FinancialExposure.fromPartial(object.exposure)
+      : undefined;
+    message.status = object.status ?? 0;
+    message.filingDeadlineHeight = (object.filingDeadlineHeight !== undefined && object.filingDeadlineHeight !== null)
+      ? Long.fromValue(object.filingDeadlineHeight)
+      : Long.ZERO;
+    message.evidenceDeadlineHeight =
+      (object.evidenceDeadlineHeight !== undefined && object.evidenceDeadlineHeight !== null)
+        ? Long.fromValue(object.evidenceDeadlineHeight)
+        : Long.ZERO;
+    message.reviewDeadlineHeight = (object.reviewDeadlineHeight !== undefined && object.reviewDeadlineHeight !== null)
+      ? Long.fromValue(object.reviewDeadlineHeight)
+      : Long.ZERO;
+    message.appealDeadlineHeight = (object.appealDeadlineHeight !== undefined && object.appealDeadlineHeight !== null)
+      ? Long.fromValue(object.appealDeadlineHeight)
+      : Long.ZERO;
+    message.escalationDeadlineHeight =
+      (object.escalationDeadlineHeight !== undefined && object.escalationDeadlineHeight !== null)
+        ? Long.fromValue(object.escalationDeadlineHeight)
+        : Long.ZERO;
+    message.filingDeadlineTime = (object.filingDeadlineTime !== undefined && object.filingDeadlineTime !== null)
+      ? Long.fromValue(object.filingDeadlineTime)
+      : Long.ZERO;
+    message.evidenceDeadlineTime = (object.evidenceDeadlineTime !== undefined && object.evidenceDeadlineTime !== null)
+      ? Long.fromValue(object.evidenceDeadlineTime)
+      : Long.ZERO;
+    message.reviewDeadlineTime = (object.reviewDeadlineTime !== undefined && object.reviewDeadlineTime !== null)
+      ? Long.fromValue(object.reviewDeadlineTime)
+      : Long.ZERO;
+    message.appealDeadlineTime = (object.appealDeadlineTime !== undefined && object.appealDeadlineTime !== null)
+      ? Long.fromValue(object.appealDeadlineTime)
+      : Long.ZERO;
+    message.escalationDeadlineTime =
+      (object.escalationDeadlineTime !== undefined && object.escalationDeadlineTime !== null)
+        ? Long.fromValue(object.escalationDeadlineTime)
+        : Long.ZERO;
+    message.resolverAuthority = object.resolverAuthority ?? "";
+    message.terminalAllocation = (object.terminalAllocation !== undefined && object.terminalAllocation !== null)
+      ? TerminalAllocation.fromPartial(object.terminalAllocation)
+      : undefined;
+    message.appeals = object.appeals?.map((e) => FinancialAppeal.fromPartial(e)) || [];
+    message.maxAppeals = object.maxAppeals ?? 0;
+    message.openIdempotencyKey = object.openIdempotencyKey ?? new Uint8Array(0);
+    message.migrated = object.migrated ?? false;
+    message.quarantined = object.quarantined ?? false;
+    message.quarantineReason = object.quarantineReason ?? "";
+    message.transitions = object.transitions?.map((e) => FinancialCaseTransition.fromPartial(e)) || [];
+    message.effects = object.effects?.map((e) => FinancialCaseEffect.fromPartial(e)) || [];
+    message.createdHeight = (object.createdHeight !== undefined && object.createdHeight !== null)
+      ? Long.fromValue(object.createdHeight)
+      : Long.ZERO;
+    message.createdAt = (object.createdAt !== undefined && object.createdAt !== null)
+      ? Long.fromValue(object.createdAt)
+      : Long.ZERO;
+    message.updatedHeight = (object.updatedHeight !== undefined && object.updatedHeight !== null)
+      ? Long.fromValue(object.updatedHeight)
+      : Long.ZERO;
+    message.updatedAt = (object.updatedAt !== undefined && object.updatedAt !== null)
+      ? Long.fromValue(object.updatedAt)
+      : Long.ZERO;
+    message.claimRoot = object.claimRoot ?? new Uint8Array(0);
+    message.activeHoldCount = object.activeHoldCount ?? 0;
+    message.legacySourceCount = object.legacySourceCount ?? 0;
+    message.provider = object.provider ?? "";
+    message.customer = object.customer ?? "";
+    return message;
+  },
+};
+
+function createBaseEventFinancialCaseOpened(): EventFinancialCaseOpened {
+  return { caseId: "", subjectKey: "", status: 0, holdCount: 0 };
+}
+
+export const EventFinancialCaseOpened: MessageFns<
+  EventFinancialCaseOpened,
+  "virtengine.settlement.v1.EventFinancialCaseOpened"
+> = {
+  $type: "virtengine.settlement.v1.EventFinancialCaseOpened" as const,
+
+  encode(message: EventFinancialCaseOpened, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.caseId !== "") {
+      writer.uint32(10).string(message.caseId);
+    }
+    if (message.subjectKey !== "") {
+      writer.uint32(18).string(message.subjectKey);
+    }
+    if (message.status !== 0) {
+      writer.uint32(24).int32(message.status);
+    }
+    if (message.holdCount !== 0) {
+      writer.uint32(32).uint32(message.holdCount);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): EventFinancialCaseOpened {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseEventFinancialCaseOpened();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.caseId = reader.string();
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.subjectKey = reader.string();
+          continue;
+        }
+        case 3: {
+          if (tag !== 24) {
+            break;
+          }
+
+          message.status = reader.int32() as any;
+          continue;
+        }
+        case 4: {
+          if (tag !== 32) {
+            break;
+          }
+
+          message.holdCount = reader.uint32();
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): EventFinancialCaseOpened {
+    return {
+      caseId: isSet(object.case_id) ? globalThis.String(object.case_id) : "",
+      subjectKey: isSet(object.subject_key) ? globalThis.String(object.subject_key) : "",
+      status: isSet(object.status) ? financialCaseStatusFromJSON(object.status) : 0,
+      holdCount: isSet(object.hold_count) ? globalThis.Number(object.hold_count) : 0,
+    };
+  },
+
+  toJSON(message: EventFinancialCaseOpened): unknown {
+    const obj: any = {};
+    if (message.caseId !== "") {
+      obj.case_id = message.caseId;
+    }
+    if (message.subjectKey !== "") {
+      obj.subject_key = message.subjectKey;
+    }
+    if (message.status !== 0) {
+      obj.status = financialCaseStatusToJSON(message.status);
+    }
+    if (message.holdCount !== 0) {
+      obj.hold_count = Math.round(message.holdCount);
+    }
+    return obj;
+  },
+  fromPartial(object: DeepPartial<EventFinancialCaseOpened>): EventFinancialCaseOpened {
+    const message = createBaseEventFinancialCaseOpened();
+    message.caseId = object.caseId ?? "";
+    message.subjectKey = object.subjectKey ?? "";
+    message.status = object.status ?? 0;
+    message.holdCount = object.holdCount ?? 0;
+    return message;
+  },
+};
+
+function createBaseEventFinancialClaimAdded(): EventFinancialClaimAdded {
+  return { caseId: "", claimId: "", claimType: 0, sourceModule: "" };
+}
+
+export const EventFinancialClaimAdded: MessageFns<
+  EventFinancialClaimAdded,
+  "virtengine.settlement.v1.EventFinancialClaimAdded"
+> = {
+  $type: "virtengine.settlement.v1.EventFinancialClaimAdded" as const,
+
+  encode(message: EventFinancialClaimAdded, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.caseId !== "") {
+      writer.uint32(10).string(message.caseId);
+    }
+    if (message.claimId !== "") {
+      writer.uint32(18).string(message.claimId);
+    }
+    if (message.claimType !== 0) {
+      writer.uint32(24).int32(message.claimType);
+    }
+    if (message.sourceModule !== "") {
+      writer.uint32(34).string(message.sourceModule);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): EventFinancialClaimAdded {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseEventFinancialClaimAdded();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.caseId = reader.string();
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.claimId = reader.string();
+          continue;
+        }
+        case 3: {
+          if (tag !== 24) {
+            break;
+          }
+
+          message.claimType = reader.int32() as any;
+          continue;
+        }
+        case 4: {
+          if (tag !== 34) {
+            break;
+          }
+
+          message.sourceModule = reader.string();
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): EventFinancialClaimAdded {
+    return {
+      caseId: isSet(object.case_id) ? globalThis.String(object.case_id) : "",
+      claimId: isSet(object.claim_id) ? globalThis.String(object.claim_id) : "",
+      claimType: isSet(object.claim_type) ? financialClaimTypeFromJSON(object.claim_type) : 0,
+      sourceModule: isSet(object.source_module) ? globalThis.String(object.source_module) : "",
+    };
+  },
+
+  toJSON(message: EventFinancialClaimAdded): unknown {
+    const obj: any = {};
+    if (message.caseId !== "") {
+      obj.case_id = message.caseId;
+    }
+    if (message.claimId !== "") {
+      obj.claim_id = message.claimId;
+    }
+    if (message.claimType !== 0) {
+      obj.claim_type = financialClaimTypeToJSON(message.claimType);
+    }
+    if (message.sourceModule !== "") {
+      obj.source_module = message.sourceModule;
+    }
+    return obj;
+  },
+  fromPartial(object: DeepPartial<EventFinancialClaimAdded>): EventFinancialClaimAdded {
+    const message = createBaseEventFinancialClaimAdded();
+    message.caseId = object.caseId ?? "";
+    message.claimId = object.claimId ?? "";
+    message.claimType = object.claimType ?? 0;
+    message.sourceModule = object.sourceModule ?? "";
+    return message;
+  },
+};
+
+function createBaseEventFinancialCaseHeld(): EventFinancialCaseHeld {
+  return { caseId: "", referenceType: "", referenceId: "" };
+}
+
+export const EventFinancialCaseHeld: MessageFns<
+  EventFinancialCaseHeld,
+  "virtengine.settlement.v1.EventFinancialCaseHeld"
+> = {
+  $type: "virtengine.settlement.v1.EventFinancialCaseHeld" as const,
+
+  encode(message: EventFinancialCaseHeld, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.caseId !== "") {
+      writer.uint32(10).string(message.caseId);
+    }
+    if (message.referenceType !== "") {
+      writer.uint32(18).string(message.referenceType);
+    }
+    if (message.referenceId !== "") {
+      writer.uint32(26).string(message.referenceId);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): EventFinancialCaseHeld {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseEventFinancialCaseHeld();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.caseId = reader.string();
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.referenceType = reader.string();
+          continue;
+        }
+        case 3: {
+          if (tag !== 26) {
+            break;
+          }
+
+          message.referenceId = reader.string();
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): EventFinancialCaseHeld {
+    return {
+      caseId: isSet(object.case_id) ? globalThis.String(object.case_id) : "",
+      referenceType: isSet(object.reference_type) ? globalThis.String(object.reference_type) : "",
+      referenceId: isSet(object.reference_id) ? globalThis.String(object.reference_id) : "",
+    };
+  },
+
+  toJSON(message: EventFinancialCaseHeld): unknown {
+    const obj: any = {};
+    if (message.caseId !== "") {
+      obj.case_id = message.caseId;
+    }
+    if (message.referenceType !== "") {
+      obj.reference_type = message.referenceType;
+    }
+    if (message.referenceId !== "") {
+      obj.reference_id = message.referenceId;
+    }
+    return obj;
+  },
+  fromPartial(object: DeepPartial<EventFinancialCaseHeld>): EventFinancialCaseHeld {
+    const message = createBaseEventFinancialCaseHeld();
+    message.caseId = object.caseId ?? "";
+    message.referenceType = object.referenceType ?? "";
+    message.referenceId = object.referenceId ?? "";
+    return message;
+  },
+};
+
+function createBaseEventFinancialCaseReviewed(): EventFinancialCaseReviewed {
+  return { caseId: "", status: 0 };
+}
+
+export const EventFinancialCaseReviewed: MessageFns<
+  EventFinancialCaseReviewed,
+  "virtengine.settlement.v1.EventFinancialCaseReviewed"
+> = {
+  $type: "virtengine.settlement.v1.EventFinancialCaseReviewed" as const,
+
+  encode(message: EventFinancialCaseReviewed, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.caseId !== "") {
+      writer.uint32(10).string(message.caseId);
+    }
+    if (message.status !== 0) {
+      writer.uint32(16).int32(message.status);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): EventFinancialCaseReviewed {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseEventFinancialCaseReviewed();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.caseId = reader.string();
+          continue;
+        }
+        case 2: {
+          if (tag !== 16) {
+            break;
+          }
+
+          message.status = reader.int32() as any;
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): EventFinancialCaseReviewed {
+    return {
+      caseId: isSet(object.case_id) ? globalThis.String(object.case_id) : "",
+      status: isSet(object.status) ? financialCaseStatusFromJSON(object.status) : 0,
+    };
+  },
+
+  toJSON(message: EventFinancialCaseReviewed): unknown {
+    const obj: any = {};
+    if (message.caseId !== "") {
+      obj.case_id = message.caseId;
+    }
+    if (message.status !== 0) {
+      obj.status = financialCaseStatusToJSON(message.status);
+    }
+    return obj;
+  },
+  fromPartial(object: DeepPartial<EventFinancialCaseReviewed>): EventFinancialCaseReviewed {
+    const message = createBaseEventFinancialCaseReviewed();
+    message.caseId = object.caseId ?? "";
+    message.status = object.status ?? 0;
+    return message;
+  },
+};
+
+function createBaseEventFinancialCaseEscalated(): EventFinancialCaseEscalated {
+  return { caseId: "", status: 0 };
+}
+
+export const EventFinancialCaseEscalated: MessageFns<
+  EventFinancialCaseEscalated,
+  "virtengine.settlement.v1.EventFinancialCaseEscalated"
+> = {
+  $type: "virtengine.settlement.v1.EventFinancialCaseEscalated" as const,
+
+  encode(message: EventFinancialCaseEscalated, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.caseId !== "") {
+      writer.uint32(10).string(message.caseId);
+    }
+    if (message.status !== 0) {
+      writer.uint32(16).int32(message.status);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): EventFinancialCaseEscalated {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseEventFinancialCaseEscalated();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.caseId = reader.string();
+          continue;
+        }
+        case 2: {
+          if (tag !== 16) {
+            break;
+          }
+
+          message.status = reader.int32() as any;
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): EventFinancialCaseEscalated {
+    return {
+      caseId: isSet(object.case_id) ? globalThis.String(object.case_id) : "",
+      status: isSet(object.status) ? financialCaseStatusFromJSON(object.status) : 0,
+    };
+  },
+
+  toJSON(message: EventFinancialCaseEscalated): unknown {
+    const obj: any = {};
+    if (message.caseId !== "") {
+      obj.case_id = message.caseId;
+    }
+    if (message.status !== 0) {
+      obj.status = financialCaseStatusToJSON(message.status);
+    }
+    return obj;
+  },
+  fromPartial(object: DeepPartial<EventFinancialCaseEscalated>): EventFinancialCaseEscalated {
+    const message = createBaseEventFinancialCaseEscalated();
+    message.caseId = object.caseId ?? "";
+    message.status = object.status ?? 0;
+    return message;
+  },
+};
+
+function createBaseEventFinancialCaseResolved(): EventFinancialCaseResolved {
+  return { caseId: "", resolutionType: 0, allocationHash: new Uint8Array(0) };
+}
+
+export const EventFinancialCaseResolved: MessageFns<
+  EventFinancialCaseResolved,
+  "virtengine.settlement.v1.EventFinancialCaseResolved"
+> = {
+  $type: "virtengine.settlement.v1.EventFinancialCaseResolved" as const,
+
+  encode(message: EventFinancialCaseResolved, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.caseId !== "") {
+      writer.uint32(10).string(message.caseId);
+    }
+    if (message.resolutionType !== 0) {
+      writer.uint32(16).int32(message.resolutionType);
+    }
+    if (message.allocationHash.length !== 0) {
+      writer.uint32(26).bytes(message.allocationHash);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): EventFinancialCaseResolved {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseEventFinancialCaseResolved();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.caseId = reader.string();
+          continue;
+        }
+        case 2: {
+          if (tag !== 16) {
+            break;
+          }
+
+          message.resolutionType = reader.int32() as any;
+          continue;
+        }
+        case 3: {
+          if (tag !== 26) {
+            break;
+          }
+
+          message.allocationHash = reader.bytes();
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): EventFinancialCaseResolved {
+    return {
+      caseId: isSet(object.case_id) ? globalThis.String(object.case_id) : "",
+      resolutionType: isSet(object.resolution_type) ? financialResolutionTypeFromJSON(object.resolution_type) : 0,
+      allocationHash: isSet(object.allocation_hash) ? bytesFromBase64(object.allocation_hash) : new Uint8Array(0),
+    };
+  },
+
+  toJSON(message: EventFinancialCaseResolved): unknown {
+    const obj: any = {};
+    if (message.caseId !== "") {
+      obj.case_id = message.caseId;
+    }
+    if (message.resolutionType !== 0) {
+      obj.resolution_type = financialResolutionTypeToJSON(message.resolutionType);
+    }
+    if (message.allocationHash.length !== 0) {
+      obj.allocation_hash = base64FromBytes(message.allocationHash);
+    }
+    return obj;
+  },
+  fromPartial(object: DeepPartial<EventFinancialCaseResolved>): EventFinancialCaseResolved {
+    const message = createBaseEventFinancialCaseResolved();
+    message.caseId = object.caseId ?? "";
+    message.resolutionType = object.resolutionType ?? 0;
+    message.allocationHash = object.allocationHash ?? new Uint8Array(0);
+    return message;
+  },
+};
+
+function createBaseEventFinancialCaseAppealed(): EventFinancialCaseAppealed {
+  return { caseId: "", appealId: "", appealCount: 0 };
+}
+
+export const EventFinancialCaseAppealed: MessageFns<
+  EventFinancialCaseAppealed,
+  "virtengine.settlement.v1.EventFinancialCaseAppealed"
+> = {
+  $type: "virtengine.settlement.v1.EventFinancialCaseAppealed" as const,
+
+  encode(message: EventFinancialCaseAppealed, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.caseId !== "") {
+      writer.uint32(10).string(message.caseId);
+    }
+    if (message.appealId !== "") {
+      writer.uint32(18).string(message.appealId);
+    }
+    if (message.appealCount !== 0) {
+      writer.uint32(24).uint32(message.appealCount);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): EventFinancialCaseAppealed {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseEventFinancialCaseAppealed();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.caseId = reader.string();
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.appealId = reader.string();
+          continue;
+        }
+        case 3: {
+          if (tag !== 24) {
+            break;
+          }
+
+          message.appealCount = reader.uint32();
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): EventFinancialCaseAppealed {
+    return {
+      caseId: isSet(object.case_id) ? globalThis.String(object.case_id) : "",
+      appealId: isSet(object.appeal_id) ? globalThis.String(object.appeal_id) : "",
+      appealCount: isSet(object.appeal_count) ? globalThis.Number(object.appeal_count) : 0,
+    };
+  },
+
+  toJSON(message: EventFinancialCaseAppealed): unknown {
+    const obj: any = {};
+    if (message.caseId !== "") {
+      obj.case_id = message.caseId;
+    }
+    if (message.appealId !== "") {
+      obj.appeal_id = message.appealId;
+    }
+    if (message.appealCount !== 0) {
+      obj.appeal_count = Math.round(message.appealCount);
+    }
+    return obj;
+  },
+  fromPartial(object: DeepPartial<EventFinancialCaseAppealed>): EventFinancialCaseAppealed {
+    const message = createBaseEventFinancialCaseAppealed();
+    message.caseId = object.caseId ?? "";
+    message.appealId = object.appealId ?? "";
+    message.appealCount = object.appealCount ?? 0;
+    return message;
+  },
+};
+
+function createBaseEventFinancialCaseFinalized(): EventFinancialCaseFinalized {
+  return { caseId: "", resolutionType: 0 };
+}
+
+export const EventFinancialCaseFinalized: MessageFns<
+  EventFinancialCaseFinalized,
+  "virtengine.settlement.v1.EventFinancialCaseFinalized"
+> = {
+  $type: "virtengine.settlement.v1.EventFinancialCaseFinalized" as const,
+
+  encode(message: EventFinancialCaseFinalized, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.caseId !== "") {
+      writer.uint32(10).string(message.caseId);
+    }
+    if (message.resolutionType !== 0) {
+      writer.uint32(16).int32(message.resolutionType);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): EventFinancialCaseFinalized {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseEventFinancialCaseFinalized();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.caseId = reader.string();
+          continue;
+        }
+        case 2: {
+          if (tag !== 16) {
+            break;
+          }
+
+          message.resolutionType = reader.int32() as any;
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): EventFinancialCaseFinalized {
+    return {
+      caseId: isSet(object.case_id) ? globalThis.String(object.case_id) : "",
+      resolutionType: isSet(object.resolution_type) ? financialResolutionTypeFromJSON(object.resolution_type) : 0,
+    };
+  },
+
+  toJSON(message: EventFinancialCaseFinalized): unknown {
+    const obj: any = {};
+    if (message.caseId !== "") {
+      obj.case_id = message.caseId;
+    }
+    if (message.resolutionType !== 0) {
+      obj.resolution_type = financialResolutionTypeToJSON(message.resolutionType);
+    }
+    return obj;
+  },
+  fromPartial(object: DeepPartial<EventFinancialCaseFinalized>): EventFinancialCaseFinalized {
+    const message = createBaseEventFinancialCaseFinalized();
+    message.caseId = object.caseId ?? "";
+    message.resolutionType = object.resolutionType ?? 0;
+    return message;
+  },
+};
+
+function createBaseEventFinancialCaseEffectApplied(): EventFinancialCaseEffectApplied {
+  return { caseId: "", effectId: "", effectType: 0 };
+}
+
+export const EventFinancialCaseEffectApplied: MessageFns<
+  EventFinancialCaseEffectApplied,
+  "virtengine.settlement.v1.EventFinancialCaseEffectApplied"
+> = {
+  $type: "virtengine.settlement.v1.EventFinancialCaseEffectApplied" as const,
+
+  encode(message: EventFinancialCaseEffectApplied, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.caseId !== "") {
+      writer.uint32(10).string(message.caseId);
+    }
+    if (message.effectId !== "") {
+      writer.uint32(18).string(message.effectId);
+    }
+    if (message.effectType !== 0) {
+      writer.uint32(24).int32(message.effectType);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): EventFinancialCaseEffectApplied {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseEventFinancialCaseEffectApplied();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.caseId = reader.string();
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.effectId = reader.string();
+          continue;
+        }
+        case 3: {
+          if (tag !== 24) {
+            break;
+          }
+
+          message.effectType = reader.int32() as any;
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): EventFinancialCaseEffectApplied {
+    return {
+      caseId: isSet(object.case_id) ? globalThis.String(object.case_id) : "",
+      effectId: isSet(object.effect_id) ? globalThis.String(object.effect_id) : "",
+      effectType: isSet(object.effect_type) ? financialEffectTypeFromJSON(object.effect_type) : 0,
+    };
+  },
+
+  toJSON(message: EventFinancialCaseEffectApplied): unknown {
+    const obj: any = {};
+    if (message.caseId !== "") {
+      obj.case_id = message.caseId;
+    }
+    if (message.effectId !== "") {
+      obj.effect_id = message.effectId;
+    }
+    if (message.effectType !== 0) {
+      obj.effect_type = financialEffectTypeToJSON(message.effectType);
+    }
+    return obj;
+  },
+  fromPartial(object: DeepPartial<EventFinancialCaseEffectApplied>): EventFinancialCaseEffectApplied {
+    const message = createBaseEventFinancialCaseEffectApplied();
+    message.caseId = object.caseId ?? "";
+    message.effectId = object.effectId ?? "";
+    message.effectType = object.effectType ?? 0;
+    return message;
+  },
+};
+
+function createBaseEventFinancialCaseQuarantined(): EventFinancialCaseQuarantined {
+  return { caseId: "", reasonHash: new Uint8Array(0) };
+}
+
+export const EventFinancialCaseQuarantined: MessageFns<
+  EventFinancialCaseQuarantined,
+  "virtengine.settlement.v1.EventFinancialCaseQuarantined"
+> = {
+  $type: "virtengine.settlement.v1.EventFinancialCaseQuarantined" as const,
+
+  encode(message: EventFinancialCaseQuarantined, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.caseId !== "") {
+      writer.uint32(10).string(message.caseId);
+    }
+    if (message.reasonHash.length !== 0) {
+      writer.uint32(18).bytes(message.reasonHash);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): EventFinancialCaseQuarantined {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseEventFinancialCaseQuarantined();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.caseId = reader.string();
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.reasonHash = reader.bytes();
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): EventFinancialCaseQuarantined {
+    return {
+      caseId: isSet(object.case_id) ? globalThis.String(object.case_id) : "",
+      reasonHash: isSet(object.reason_hash) ? bytesFromBase64(object.reason_hash) : new Uint8Array(0),
+    };
+  },
+
+  toJSON(message: EventFinancialCaseQuarantined): unknown {
+    const obj: any = {};
+    if (message.caseId !== "") {
+      obj.case_id = message.caseId;
+    }
+    if (message.reasonHash.length !== 0) {
+      obj.reason_hash = base64FromBytes(message.reasonHash);
+    }
+    return obj;
+  },
+  fromPartial(object: DeepPartial<EventFinancialCaseQuarantined>): EventFinancialCaseQuarantined {
+    const message = createBaseEventFinancialCaseQuarantined();
+    message.caseId = object.caseId ?? "";
+    message.reasonHash = object.reasonHash ?? new Uint8Array(0);
+    return message;
+  },
+};
+
+function createBaseEventFinancialCaseExpired(): EventFinancialCaseExpired {
+  return { caseId: "", status: 0 };
+}
+
+export const EventFinancialCaseExpired: MessageFns<
+  EventFinancialCaseExpired,
+  "virtengine.settlement.v1.EventFinancialCaseExpired"
+> = {
+  $type: "virtengine.settlement.v1.EventFinancialCaseExpired" as const,
+
+  encode(message: EventFinancialCaseExpired, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.caseId !== "") {
+      writer.uint32(10).string(message.caseId);
+    }
+    if (message.status !== 0) {
+      writer.uint32(16).int32(message.status);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): EventFinancialCaseExpired {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseEventFinancialCaseExpired();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.caseId = reader.string();
+          continue;
+        }
+        case 2: {
+          if (tag !== 16) {
+            break;
+          }
+
+          message.status = reader.int32() as any;
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): EventFinancialCaseExpired {
+    return {
+      caseId: isSet(object.case_id) ? globalThis.String(object.case_id) : "",
+      status: isSet(object.status) ? financialCaseStatusFromJSON(object.status) : 0,
+    };
+  },
+
+  toJSON(message: EventFinancialCaseExpired): unknown {
+    const obj: any = {};
+    if (message.caseId !== "") {
+      obj.case_id = message.caseId;
+    }
+    if (message.status !== 0) {
+      obj.status = financialCaseStatusToJSON(message.status);
+    }
+    return obj;
+  },
+  fromPartial(object: DeepPartial<EventFinancialCaseExpired>): EventFinancialCaseExpired {
+    const message = createBaseEventFinancialCaseExpired();
+    message.caseId = object.caseId ?? "";
+    message.status = object.status ?? 0;
     return message;
   },
 };
@@ -4417,6 +8433,30 @@ function createBaseParams(): Params {
     fiatConversionMaxSlippage: "",
     fiatConversionRiskScoreThreshold: 0,
     fiatConversionMinComplianceStatus: "",
+    financialCaseFilingWindowSeconds: Long.UZERO,
+    financialCaseEvidenceWindowSeconds: Long.UZERO,
+    financialCaseReviewWindowSeconds: Long.UZERO,
+    financialCaseAppealWindowSeconds: Long.UZERO,
+    financialCaseEscalationWindowSeconds: Long.UZERO,
+    financialCaseFilingWindowBlocks: Long.ZERO,
+    financialCaseEvidenceWindowBlocks: Long.ZERO,
+    financialCaseReviewWindowBlocks: Long.ZERO,
+    financialCaseAppealWindowBlocks: Long.ZERO,
+    financialCaseEscalationWindowBlocks: Long.ZERO,
+    financialCaseMaxClaims: 0,
+    financialCaseMaxAppeals: 0,
+    financialCaseMaxEvidenceReferenceBytes: 0,
+    financialCaseTimeoutBatchLimit: 0,
+    fiatConversionDexProfileId: "",
+    fiatConversionDexProfileDigest: new Uint8Array(0),
+    fiatConversionDexProfileState: 0,
+    fiatConversionPayoutProfileId: "",
+    fiatConversionPayoutProfileDigest: new Uint8Array(0),
+    fiatConversionPayoutProfileState: 0,
+    fiatConversionMinSwapFinalityConfirmations: 0,
+    fiatConversionObservationMaxPastSeconds: Long.UZERO,
+    fiatConversionObservationMaxFutureSeconds: Long.UZERO,
+    fiatConversionMaxObservations: 0,
   };
 }
 
@@ -4528,6 +8568,78 @@ export const Params: MessageFns<Params, "virtengine.settlement.v1.Params"> = {
     }
     if (message.fiatConversionMinComplianceStatus !== "") {
       writer.uint32(282).string(message.fiatConversionMinComplianceStatus);
+    }
+    if (!message.financialCaseFilingWindowSeconds.equals(Long.UZERO)) {
+      writer.uint32(288).uint64(message.financialCaseFilingWindowSeconds.toString());
+    }
+    if (!message.financialCaseEvidenceWindowSeconds.equals(Long.UZERO)) {
+      writer.uint32(296).uint64(message.financialCaseEvidenceWindowSeconds.toString());
+    }
+    if (!message.financialCaseReviewWindowSeconds.equals(Long.UZERO)) {
+      writer.uint32(304).uint64(message.financialCaseReviewWindowSeconds.toString());
+    }
+    if (!message.financialCaseAppealWindowSeconds.equals(Long.UZERO)) {
+      writer.uint32(312).uint64(message.financialCaseAppealWindowSeconds.toString());
+    }
+    if (!message.financialCaseEscalationWindowSeconds.equals(Long.UZERO)) {
+      writer.uint32(320).uint64(message.financialCaseEscalationWindowSeconds.toString());
+    }
+    if (!message.financialCaseFilingWindowBlocks.equals(Long.ZERO)) {
+      writer.uint32(328).int64(message.financialCaseFilingWindowBlocks.toString());
+    }
+    if (!message.financialCaseEvidenceWindowBlocks.equals(Long.ZERO)) {
+      writer.uint32(336).int64(message.financialCaseEvidenceWindowBlocks.toString());
+    }
+    if (!message.financialCaseReviewWindowBlocks.equals(Long.ZERO)) {
+      writer.uint32(344).int64(message.financialCaseReviewWindowBlocks.toString());
+    }
+    if (!message.financialCaseAppealWindowBlocks.equals(Long.ZERO)) {
+      writer.uint32(352).int64(message.financialCaseAppealWindowBlocks.toString());
+    }
+    if (!message.financialCaseEscalationWindowBlocks.equals(Long.ZERO)) {
+      writer.uint32(360).int64(message.financialCaseEscalationWindowBlocks.toString());
+    }
+    if (message.financialCaseMaxClaims !== 0) {
+      writer.uint32(368).uint32(message.financialCaseMaxClaims);
+    }
+    if (message.financialCaseMaxAppeals !== 0) {
+      writer.uint32(376).uint32(message.financialCaseMaxAppeals);
+    }
+    if (message.financialCaseMaxEvidenceReferenceBytes !== 0) {
+      writer.uint32(384).uint32(message.financialCaseMaxEvidenceReferenceBytes);
+    }
+    if (message.financialCaseTimeoutBatchLimit !== 0) {
+      writer.uint32(392).uint32(message.financialCaseTimeoutBatchLimit);
+    }
+    if (message.fiatConversionDexProfileId !== "") {
+      writer.uint32(402).string(message.fiatConversionDexProfileId);
+    }
+    if (message.fiatConversionDexProfileDigest.length !== 0) {
+      writer.uint32(410).bytes(message.fiatConversionDexProfileDigest);
+    }
+    if (message.fiatConversionDexProfileState !== 0) {
+      writer.uint32(416).int32(message.fiatConversionDexProfileState);
+    }
+    if (message.fiatConversionPayoutProfileId !== "") {
+      writer.uint32(426).string(message.fiatConversionPayoutProfileId);
+    }
+    if (message.fiatConversionPayoutProfileDigest.length !== 0) {
+      writer.uint32(434).bytes(message.fiatConversionPayoutProfileDigest);
+    }
+    if (message.fiatConversionPayoutProfileState !== 0) {
+      writer.uint32(440).int32(message.fiatConversionPayoutProfileState);
+    }
+    if (message.fiatConversionMinSwapFinalityConfirmations !== 0) {
+      writer.uint32(448).uint32(message.fiatConversionMinSwapFinalityConfirmations);
+    }
+    if (!message.fiatConversionObservationMaxPastSeconds.equals(Long.UZERO)) {
+      writer.uint32(456).uint64(message.fiatConversionObservationMaxPastSeconds.toString());
+    }
+    if (!message.fiatConversionObservationMaxFutureSeconds.equals(Long.UZERO)) {
+      writer.uint32(464).uint64(message.fiatConversionObservationMaxFutureSeconds.toString());
+    }
+    if (message.fiatConversionMaxObservations !== 0) {
+      writer.uint32(472).uint32(message.fiatConversionMaxObservations);
     }
     return writer;
   },
@@ -4819,6 +8931,198 @@ export const Params: MessageFns<Params, "virtengine.settlement.v1.Params"> = {
           message.fiatConversionMinComplianceStatus = reader.string();
           continue;
         }
+        case 36: {
+          if (tag !== 288) {
+            break;
+          }
+
+          message.financialCaseFilingWindowSeconds = Long.fromString(reader.uint64().toString(), true);
+          continue;
+        }
+        case 37: {
+          if (tag !== 296) {
+            break;
+          }
+
+          message.financialCaseEvidenceWindowSeconds = Long.fromString(reader.uint64().toString(), true);
+          continue;
+        }
+        case 38: {
+          if (tag !== 304) {
+            break;
+          }
+
+          message.financialCaseReviewWindowSeconds = Long.fromString(reader.uint64().toString(), true);
+          continue;
+        }
+        case 39: {
+          if (tag !== 312) {
+            break;
+          }
+
+          message.financialCaseAppealWindowSeconds = Long.fromString(reader.uint64().toString(), true);
+          continue;
+        }
+        case 40: {
+          if (tag !== 320) {
+            break;
+          }
+
+          message.financialCaseEscalationWindowSeconds = Long.fromString(reader.uint64().toString(), true);
+          continue;
+        }
+        case 41: {
+          if (tag !== 328) {
+            break;
+          }
+
+          message.financialCaseFilingWindowBlocks = Long.fromString(reader.int64().toString());
+          continue;
+        }
+        case 42: {
+          if (tag !== 336) {
+            break;
+          }
+
+          message.financialCaseEvidenceWindowBlocks = Long.fromString(reader.int64().toString());
+          continue;
+        }
+        case 43: {
+          if (tag !== 344) {
+            break;
+          }
+
+          message.financialCaseReviewWindowBlocks = Long.fromString(reader.int64().toString());
+          continue;
+        }
+        case 44: {
+          if (tag !== 352) {
+            break;
+          }
+
+          message.financialCaseAppealWindowBlocks = Long.fromString(reader.int64().toString());
+          continue;
+        }
+        case 45: {
+          if (tag !== 360) {
+            break;
+          }
+
+          message.financialCaseEscalationWindowBlocks = Long.fromString(reader.int64().toString());
+          continue;
+        }
+        case 46: {
+          if (tag !== 368) {
+            break;
+          }
+
+          message.financialCaseMaxClaims = reader.uint32();
+          continue;
+        }
+        case 47: {
+          if (tag !== 376) {
+            break;
+          }
+
+          message.financialCaseMaxAppeals = reader.uint32();
+          continue;
+        }
+        case 48: {
+          if (tag !== 384) {
+            break;
+          }
+
+          message.financialCaseMaxEvidenceReferenceBytes = reader.uint32();
+          continue;
+        }
+        case 49: {
+          if (tag !== 392) {
+            break;
+          }
+
+          message.financialCaseTimeoutBatchLimit = reader.uint32();
+          continue;
+        }
+        case 50: {
+          if (tag !== 402) {
+            break;
+          }
+
+          message.fiatConversionDexProfileId = reader.string();
+          continue;
+        }
+        case 51: {
+          if (tag !== 410) {
+            break;
+          }
+
+          message.fiatConversionDexProfileDigest = reader.bytes();
+          continue;
+        }
+        case 52: {
+          if (tag !== 416) {
+            break;
+          }
+
+          message.fiatConversionDexProfileState = reader.int32() as any;
+          continue;
+        }
+        case 53: {
+          if (tag !== 426) {
+            break;
+          }
+
+          message.fiatConversionPayoutProfileId = reader.string();
+          continue;
+        }
+        case 54: {
+          if (tag !== 434) {
+            break;
+          }
+
+          message.fiatConversionPayoutProfileDigest = reader.bytes();
+          continue;
+        }
+        case 55: {
+          if (tag !== 440) {
+            break;
+          }
+
+          message.fiatConversionPayoutProfileState = reader.int32() as any;
+          continue;
+        }
+        case 56: {
+          if (tag !== 448) {
+            break;
+          }
+
+          message.fiatConversionMinSwapFinalityConfirmations = reader.uint32();
+          continue;
+        }
+        case 57: {
+          if (tag !== 456) {
+            break;
+          }
+
+          message.fiatConversionObservationMaxPastSeconds = Long.fromString(reader.uint64().toString(), true);
+          continue;
+        }
+        case 58: {
+          if (tag !== 464) {
+            break;
+          }
+
+          message.fiatConversionObservationMaxFutureSeconds = Long.fromString(reader.uint64().toString(), true);
+          continue;
+        }
+        case 59: {
+          if (tag !== 472) {
+            break;
+          }
+
+          message.fiatConversionMaxObservations = reader.uint32();
+          continue;
+        }
       }
       if ((tag & 7) === 4 || tag === 0) {
         break;
@@ -4913,6 +9217,78 @@ export const Params: MessageFns<Params, "virtengine.settlement.v1.Params"> = {
       fiatConversionMinComplianceStatus: isSet(object.fiat_conversion_min_compliance_status)
         ? globalThis.String(object.fiat_conversion_min_compliance_status)
         : "",
+      financialCaseFilingWindowSeconds: isSet(object.financial_case_filing_window_seconds)
+        ? Long.fromValue(object.financial_case_filing_window_seconds)
+        : Long.UZERO,
+      financialCaseEvidenceWindowSeconds: isSet(object.financial_case_evidence_window_seconds)
+        ? Long.fromValue(object.financial_case_evidence_window_seconds)
+        : Long.UZERO,
+      financialCaseReviewWindowSeconds: isSet(object.financial_case_review_window_seconds)
+        ? Long.fromValue(object.financial_case_review_window_seconds)
+        : Long.UZERO,
+      financialCaseAppealWindowSeconds: isSet(object.financial_case_appeal_window_seconds)
+        ? Long.fromValue(object.financial_case_appeal_window_seconds)
+        : Long.UZERO,
+      financialCaseEscalationWindowSeconds: isSet(object.financial_case_escalation_window_seconds)
+        ? Long.fromValue(object.financial_case_escalation_window_seconds)
+        : Long.UZERO,
+      financialCaseFilingWindowBlocks: isSet(object.financial_case_filing_window_blocks)
+        ? Long.fromValue(object.financial_case_filing_window_blocks)
+        : Long.ZERO,
+      financialCaseEvidenceWindowBlocks: isSet(object.financial_case_evidence_window_blocks)
+        ? Long.fromValue(object.financial_case_evidence_window_blocks)
+        : Long.ZERO,
+      financialCaseReviewWindowBlocks: isSet(object.financial_case_review_window_blocks)
+        ? Long.fromValue(object.financial_case_review_window_blocks)
+        : Long.ZERO,
+      financialCaseAppealWindowBlocks: isSet(object.financial_case_appeal_window_blocks)
+        ? Long.fromValue(object.financial_case_appeal_window_blocks)
+        : Long.ZERO,
+      financialCaseEscalationWindowBlocks: isSet(object.financial_case_escalation_window_blocks)
+        ? Long.fromValue(object.financial_case_escalation_window_blocks)
+        : Long.ZERO,
+      financialCaseMaxClaims: isSet(object.financial_case_max_claims)
+        ? globalThis.Number(object.financial_case_max_claims)
+        : 0,
+      financialCaseMaxAppeals: isSet(object.financial_case_max_appeals)
+        ? globalThis.Number(object.financial_case_max_appeals)
+        : 0,
+      financialCaseMaxEvidenceReferenceBytes: isSet(object.financial_case_max_evidence_reference_bytes)
+        ? globalThis.Number(object.financial_case_max_evidence_reference_bytes)
+        : 0,
+      financialCaseTimeoutBatchLimit: isSet(object.financial_case_timeout_batch_limit)
+        ? globalThis.Number(object.financial_case_timeout_batch_limit)
+        : 0,
+      fiatConversionDexProfileId: isSet(object.fiat_conversion_dex_profile_id)
+        ? globalThis.String(object.fiat_conversion_dex_profile_id)
+        : "",
+      fiatConversionDexProfileDigest: isSet(object.fiat_conversion_dex_profile_digest)
+        ? bytesFromBase64(object.fiat_conversion_dex_profile_digest)
+        : new Uint8Array(0),
+      fiatConversionDexProfileState: isSet(object.fiat_conversion_dex_profile_state)
+        ? fiatConversionProfileStateFromJSON(object.fiat_conversion_dex_profile_state)
+        : 0,
+      fiatConversionPayoutProfileId: isSet(object.fiat_conversion_payout_profile_id)
+        ? globalThis.String(object.fiat_conversion_payout_profile_id)
+        : "",
+      fiatConversionPayoutProfileDigest: isSet(object.fiat_conversion_payout_profile_digest)
+        ? bytesFromBase64(object.fiat_conversion_payout_profile_digest)
+        : new Uint8Array(0),
+      fiatConversionPayoutProfileState: isSet(object.fiat_conversion_payout_profile_state)
+        ? fiatConversionProfileStateFromJSON(object.fiat_conversion_payout_profile_state)
+        : 0,
+      fiatConversionMinSwapFinalityConfirmations: isSet(object.fiat_conversion_min_swap_finality_confirmations)
+        ? globalThis.Number(object.fiat_conversion_min_swap_finality_confirmations)
+        : 0,
+      fiatConversionObservationMaxPastSeconds: isSet(object.fiat_conversion_observation_max_past_seconds)
+        ? Long.fromValue(object.fiat_conversion_observation_max_past_seconds)
+        : Long.UZERO,
+      fiatConversionObservationMaxFutureSeconds: isSet(object.fiat_conversion_observation_max_future_seconds)
+        ? Long.fromValue(object.fiat_conversion_observation_max_future_seconds)
+        : Long.UZERO,
+      fiatConversionMaxObservations: isSet(object.fiat_conversion_max_observations)
+        ? globalThis.Number(object.fiat_conversion_max_observations)
+        : 0,
     };
   },
 
@@ -5023,6 +9399,87 @@ export const Params: MessageFns<Params, "virtengine.settlement.v1.Params"> = {
     if (message.fiatConversionMinComplianceStatus !== "") {
       obj.fiat_conversion_min_compliance_status = message.fiatConversionMinComplianceStatus;
     }
+    if (!message.financialCaseFilingWindowSeconds.equals(Long.UZERO)) {
+      obj.financial_case_filing_window_seconds = (message.financialCaseFilingWindowSeconds || Long.UZERO).toString();
+    }
+    if (!message.financialCaseEvidenceWindowSeconds.equals(Long.UZERO)) {
+      obj.financial_case_evidence_window_seconds = (message.financialCaseEvidenceWindowSeconds || Long.UZERO)
+        .toString();
+    }
+    if (!message.financialCaseReviewWindowSeconds.equals(Long.UZERO)) {
+      obj.financial_case_review_window_seconds = (message.financialCaseReviewWindowSeconds || Long.UZERO).toString();
+    }
+    if (!message.financialCaseAppealWindowSeconds.equals(Long.UZERO)) {
+      obj.financial_case_appeal_window_seconds = (message.financialCaseAppealWindowSeconds || Long.UZERO).toString();
+    }
+    if (!message.financialCaseEscalationWindowSeconds.equals(Long.UZERO)) {
+      obj.financial_case_escalation_window_seconds = (message.financialCaseEscalationWindowSeconds || Long.UZERO)
+        .toString();
+    }
+    if (!message.financialCaseFilingWindowBlocks.equals(Long.ZERO)) {
+      obj.financial_case_filing_window_blocks = (message.financialCaseFilingWindowBlocks || Long.ZERO).toString();
+    }
+    if (!message.financialCaseEvidenceWindowBlocks.equals(Long.ZERO)) {
+      obj.financial_case_evidence_window_blocks = (message.financialCaseEvidenceWindowBlocks || Long.ZERO).toString();
+    }
+    if (!message.financialCaseReviewWindowBlocks.equals(Long.ZERO)) {
+      obj.financial_case_review_window_blocks = (message.financialCaseReviewWindowBlocks || Long.ZERO).toString();
+    }
+    if (!message.financialCaseAppealWindowBlocks.equals(Long.ZERO)) {
+      obj.financial_case_appeal_window_blocks = (message.financialCaseAppealWindowBlocks || Long.ZERO).toString();
+    }
+    if (!message.financialCaseEscalationWindowBlocks.equals(Long.ZERO)) {
+      obj.financial_case_escalation_window_blocks = (message.financialCaseEscalationWindowBlocks || Long.ZERO)
+        .toString();
+    }
+    if (message.financialCaseMaxClaims !== 0) {
+      obj.financial_case_max_claims = Math.round(message.financialCaseMaxClaims);
+    }
+    if (message.financialCaseMaxAppeals !== 0) {
+      obj.financial_case_max_appeals = Math.round(message.financialCaseMaxAppeals);
+    }
+    if (message.financialCaseMaxEvidenceReferenceBytes !== 0) {
+      obj.financial_case_max_evidence_reference_bytes = Math.round(message.financialCaseMaxEvidenceReferenceBytes);
+    }
+    if (message.financialCaseTimeoutBatchLimit !== 0) {
+      obj.financial_case_timeout_batch_limit = Math.round(message.financialCaseTimeoutBatchLimit);
+    }
+    if (message.fiatConversionDexProfileId !== "") {
+      obj.fiat_conversion_dex_profile_id = message.fiatConversionDexProfileId;
+    }
+    if (message.fiatConversionDexProfileDigest.length !== 0) {
+      obj.fiat_conversion_dex_profile_digest = base64FromBytes(message.fiatConversionDexProfileDigest);
+    }
+    if (message.fiatConversionDexProfileState !== 0) {
+      obj.fiat_conversion_dex_profile_state = fiatConversionProfileStateToJSON(message.fiatConversionDexProfileState);
+    }
+    if (message.fiatConversionPayoutProfileId !== "") {
+      obj.fiat_conversion_payout_profile_id = message.fiatConversionPayoutProfileId;
+    }
+    if (message.fiatConversionPayoutProfileDigest.length !== 0) {
+      obj.fiat_conversion_payout_profile_digest = base64FromBytes(message.fiatConversionPayoutProfileDigest);
+    }
+    if (message.fiatConversionPayoutProfileState !== 0) {
+      obj.fiat_conversion_payout_profile_state = fiatConversionProfileStateToJSON(
+        message.fiatConversionPayoutProfileState,
+      );
+    }
+    if (message.fiatConversionMinSwapFinalityConfirmations !== 0) {
+      obj.fiat_conversion_min_swap_finality_confirmations = Math.round(
+        message.fiatConversionMinSwapFinalityConfirmations,
+      );
+    }
+    if (!message.fiatConversionObservationMaxPastSeconds.equals(Long.UZERO)) {
+      obj.fiat_conversion_observation_max_past_seconds = (message.fiatConversionObservationMaxPastSeconds || Long.UZERO)
+        .toString();
+    }
+    if (!message.fiatConversionObservationMaxFutureSeconds.equals(Long.UZERO)) {
+      obj.fiat_conversion_observation_max_future_seconds =
+        (message.fiatConversionObservationMaxFutureSeconds || Long.UZERO).toString();
+    }
+    if (message.fiatConversionMaxObservations !== 0) {
+      obj.fiat_conversion_max_observations = Math.round(message.fiatConversionMaxObservations);
+    }
     return obj;
   },
   fromPartial(object: DeepPartial<Params>): Params {
@@ -5078,6 +9535,69 @@ export const Params: MessageFns<Params, "virtengine.settlement.v1.Params"> = {
     message.fiatConversionMaxSlippage = object.fiatConversionMaxSlippage ?? "";
     message.fiatConversionRiskScoreThreshold = object.fiatConversionRiskScoreThreshold ?? 0;
     message.fiatConversionMinComplianceStatus = object.fiatConversionMinComplianceStatus ?? "";
+    message.financialCaseFilingWindowSeconds =
+      (object.financialCaseFilingWindowSeconds !== undefined && object.financialCaseFilingWindowSeconds !== null)
+        ? Long.fromValue(object.financialCaseFilingWindowSeconds)
+        : Long.UZERO;
+    message.financialCaseEvidenceWindowSeconds =
+      (object.financialCaseEvidenceWindowSeconds !== undefined && object.financialCaseEvidenceWindowSeconds !== null)
+        ? Long.fromValue(object.financialCaseEvidenceWindowSeconds)
+        : Long.UZERO;
+    message.financialCaseReviewWindowSeconds =
+      (object.financialCaseReviewWindowSeconds !== undefined && object.financialCaseReviewWindowSeconds !== null)
+        ? Long.fromValue(object.financialCaseReviewWindowSeconds)
+        : Long.UZERO;
+    message.financialCaseAppealWindowSeconds =
+      (object.financialCaseAppealWindowSeconds !== undefined && object.financialCaseAppealWindowSeconds !== null)
+        ? Long.fromValue(object.financialCaseAppealWindowSeconds)
+        : Long.UZERO;
+    message.financialCaseEscalationWindowSeconds =
+      (object.financialCaseEscalationWindowSeconds !== undefined &&
+          object.financialCaseEscalationWindowSeconds !== null)
+        ? Long.fromValue(object.financialCaseEscalationWindowSeconds)
+        : Long.UZERO;
+    message.financialCaseFilingWindowBlocks =
+      (object.financialCaseFilingWindowBlocks !== undefined && object.financialCaseFilingWindowBlocks !== null)
+        ? Long.fromValue(object.financialCaseFilingWindowBlocks)
+        : Long.ZERO;
+    message.financialCaseEvidenceWindowBlocks =
+      (object.financialCaseEvidenceWindowBlocks !== undefined && object.financialCaseEvidenceWindowBlocks !== null)
+        ? Long.fromValue(object.financialCaseEvidenceWindowBlocks)
+        : Long.ZERO;
+    message.financialCaseReviewWindowBlocks =
+      (object.financialCaseReviewWindowBlocks !== undefined && object.financialCaseReviewWindowBlocks !== null)
+        ? Long.fromValue(object.financialCaseReviewWindowBlocks)
+        : Long.ZERO;
+    message.financialCaseAppealWindowBlocks =
+      (object.financialCaseAppealWindowBlocks !== undefined && object.financialCaseAppealWindowBlocks !== null)
+        ? Long.fromValue(object.financialCaseAppealWindowBlocks)
+        : Long.ZERO;
+    message.financialCaseEscalationWindowBlocks =
+      (object.financialCaseEscalationWindowBlocks !== undefined && object.financialCaseEscalationWindowBlocks !== null)
+        ? Long.fromValue(object.financialCaseEscalationWindowBlocks)
+        : Long.ZERO;
+    message.financialCaseMaxClaims = object.financialCaseMaxClaims ?? 0;
+    message.financialCaseMaxAppeals = object.financialCaseMaxAppeals ?? 0;
+    message.financialCaseMaxEvidenceReferenceBytes = object.financialCaseMaxEvidenceReferenceBytes ?? 0;
+    message.financialCaseTimeoutBatchLimit = object.financialCaseTimeoutBatchLimit ?? 0;
+    message.fiatConversionDexProfileId = object.fiatConversionDexProfileId ?? "";
+    message.fiatConversionDexProfileDigest = object.fiatConversionDexProfileDigest ?? new Uint8Array(0);
+    message.fiatConversionDexProfileState = object.fiatConversionDexProfileState ?? 0;
+    message.fiatConversionPayoutProfileId = object.fiatConversionPayoutProfileId ?? "";
+    message.fiatConversionPayoutProfileDigest = object.fiatConversionPayoutProfileDigest ?? new Uint8Array(0);
+    message.fiatConversionPayoutProfileState = object.fiatConversionPayoutProfileState ?? 0;
+    message.fiatConversionMinSwapFinalityConfirmations = object.fiatConversionMinSwapFinalityConfirmations ?? 0;
+    message.fiatConversionObservationMaxPastSeconds =
+      (object.fiatConversionObservationMaxPastSeconds !== undefined &&
+          object.fiatConversionObservationMaxPastSeconds !== null)
+        ? Long.fromValue(object.fiatConversionObservationMaxPastSeconds)
+        : Long.UZERO;
+    message.fiatConversionObservationMaxFutureSeconds =
+      (object.fiatConversionObservationMaxFutureSeconds !== undefined &&
+          object.fiatConversionObservationMaxFutureSeconds !== null)
+        ? Long.fromValue(object.fiatConversionObservationMaxFutureSeconds)
+        : Long.UZERO;
+    message.fiatConversionMaxObservations = object.fiatConversionMaxObservations ?? 0;
     return message;
   },
 };
@@ -5204,6 +9724,7 @@ function createBaseFiatPayoutPreference(): FiatPayoutPreference {
     stableToken: undefined,
     createdAt: Long.ZERO,
     updatedAt: Long.ZERO,
+    slippageToleranceExact: "",
   };
 }
 
@@ -5252,6 +9773,9 @@ export const FiatPayoutPreference: MessageFns<FiatPayoutPreference, "virtengine.
     }
     if (!message.updatedAt.equals(Long.ZERO)) {
       writer.uint32(112).int64(message.updatedAt.toString());
+    }
+    if (message.slippageToleranceExact !== "") {
+      writer.uint32(122).string(message.slippageToleranceExact);
     }
     return writer;
   },
@@ -5375,6 +9899,14 @@ export const FiatPayoutPreference: MessageFns<FiatPayoutPreference, "virtengine.
           message.updatedAt = Long.fromString(reader.int64().toString());
           continue;
         }
+        case 15: {
+          if (tag !== 122) {
+            break;
+          }
+
+          message.slippageToleranceExact = reader.string();
+          continue;
+        }
       }
       if ((tag & 7) === 4 || tag === 0) {
         break;
@@ -5400,6 +9932,9 @@ export const FiatPayoutPreference: MessageFns<FiatPayoutPreference, "virtengine.
       stableToken: isSet(object.stable_token) ? TokenSpec.fromJSON(object.stable_token) : undefined,
       createdAt: isSet(object.created_at) ? Long.fromValue(object.created_at) : Long.ZERO,
       updatedAt: isSet(object.updated_at) ? Long.fromValue(object.updated_at) : Long.ZERO,
+      slippageToleranceExact: isSet(object.slippage_tolerance_exact)
+        ? globalThis.String(object.slippage_tolerance_exact)
+        : "",
     };
   },
 
@@ -5447,6 +9982,9 @@ export const FiatPayoutPreference: MessageFns<FiatPayoutPreference, "virtengine.
     if (!message.updatedAt.equals(Long.ZERO)) {
       obj.updated_at = (message.updatedAt || Long.ZERO).toString();
     }
+    if (message.slippageToleranceExact !== "") {
+      obj.slippage_tolerance_exact = message.slippageToleranceExact;
+    }
     return obj;
   },
   fromPartial(object: DeepPartial<FiatPayoutPreference>): FiatPayoutPreference {
@@ -5473,6 +10011,7 @@ export const FiatPayoutPreference: MessageFns<FiatPayoutPreference, "virtengine.
     message.updatedAt = (object.updatedAt !== undefined && object.updatedAt !== null)
       ? Long.fromValue(object.updatedAt)
       : Long.ZERO;
+    message.slippageToleranceExact = object.slippageToleranceExact ?? "";
     return message;
   },
 };
@@ -5944,6 +10483,547 @@ export const FiatConversionStateTransition_MetadataEntry: MessageFns<
   },
 };
 
+function createBaseFiatConversionObservation(): FiatConversionObservation {
+  return {
+    sequence: Long.UZERO,
+    idempotencyKey: new Uint8Array(0),
+    stage: 0,
+    status: "",
+    observedAt: Long.ZERO,
+    recordedAt: Long.ZERO,
+    recordedHeight: Long.ZERO,
+    evidenceHash: new Uint8Array(0),
+    observationDigest: new Uint8Array(0),
+    lineageDigest: new Uint8Array(0),
+    failureCode: "",
+  };
+}
+
+export const FiatConversionObservation: MessageFns<
+  FiatConversionObservation,
+  "virtengine.settlement.v1.FiatConversionObservation"
+> = {
+  $type: "virtengine.settlement.v1.FiatConversionObservation" as const,
+
+  encode(message: FiatConversionObservation, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (!message.sequence.equals(Long.UZERO)) {
+      writer.uint32(8).uint64(message.sequence.toString());
+    }
+    if (message.idempotencyKey.length !== 0) {
+      writer.uint32(18).bytes(message.idempotencyKey);
+    }
+    if (message.stage !== 0) {
+      writer.uint32(24).int32(message.stage);
+    }
+    if (message.status !== "") {
+      writer.uint32(34).string(message.status);
+    }
+    if (!message.observedAt.equals(Long.ZERO)) {
+      writer.uint32(40).int64(message.observedAt.toString());
+    }
+    if (!message.recordedAt.equals(Long.ZERO)) {
+      writer.uint32(48).int64(message.recordedAt.toString());
+    }
+    if (!message.recordedHeight.equals(Long.ZERO)) {
+      writer.uint32(56).int64(message.recordedHeight.toString());
+    }
+    if (message.evidenceHash.length !== 0) {
+      writer.uint32(66).bytes(message.evidenceHash);
+    }
+    if (message.observationDigest.length !== 0) {
+      writer.uint32(74).bytes(message.observationDigest);
+    }
+    if (message.lineageDigest.length !== 0) {
+      writer.uint32(82).bytes(message.lineageDigest);
+    }
+    if (message.failureCode !== "") {
+      writer.uint32(90).string(message.failureCode);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): FiatConversionObservation {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseFiatConversionObservation();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 8) {
+            break;
+          }
+
+          message.sequence = Long.fromString(reader.uint64().toString(), true);
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.idempotencyKey = reader.bytes();
+          continue;
+        }
+        case 3: {
+          if (tag !== 24) {
+            break;
+          }
+
+          message.stage = reader.int32() as any;
+          continue;
+        }
+        case 4: {
+          if (tag !== 34) {
+            break;
+          }
+
+          message.status = reader.string();
+          continue;
+        }
+        case 5: {
+          if (tag !== 40) {
+            break;
+          }
+
+          message.observedAt = Long.fromString(reader.int64().toString());
+          continue;
+        }
+        case 6: {
+          if (tag !== 48) {
+            break;
+          }
+
+          message.recordedAt = Long.fromString(reader.int64().toString());
+          continue;
+        }
+        case 7: {
+          if (tag !== 56) {
+            break;
+          }
+
+          message.recordedHeight = Long.fromString(reader.int64().toString());
+          continue;
+        }
+        case 8: {
+          if (tag !== 66) {
+            break;
+          }
+
+          message.evidenceHash = reader.bytes();
+          continue;
+        }
+        case 9: {
+          if (tag !== 74) {
+            break;
+          }
+
+          message.observationDigest = reader.bytes();
+          continue;
+        }
+        case 10: {
+          if (tag !== 82) {
+            break;
+          }
+
+          message.lineageDigest = reader.bytes();
+          continue;
+        }
+        case 11: {
+          if (tag !== 90) {
+            break;
+          }
+
+          message.failureCode = reader.string();
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): FiatConversionObservation {
+    return {
+      sequence: isSet(object.sequence) ? Long.fromValue(object.sequence) : Long.UZERO,
+      idempotencyKey: isSet(object.idempotency_key) ? bytesFromBase64(object.idempotency_key) : new Uint8Array(0),
+      stage: isSet(object.stage) ? fiatConversionObservationStageFromJSON(object.stage) : 0,
+      status: isSet(object.status) ? globalThis.String(object.status) : "",
+      observedAt: isSet(object.observed_at) ? Long.fromValue(object.observed_at) : Long.ZERO,
+      recordedAt: isSet(object.recorded_at) ? Long.fromValue(object.recorded_at) : Long.ZERO,
+      recordedHeight: isSet(object.recorded_height) ? Long.fromValue(object.recorded_height) : Long.ZERO,
+      evidenceHash: isSet(object.evidence_hash) ? bytesFromBase64(object.evidence_hash) : new Uint8Array(0),
+      observationDigest: isSet(object.observation_digest)
+        ? bytesFromBase64(object.observation_digest)
+        : new Uint8Array(0),
+      lineageDigest: isSet(object.lineage_digest) ? bytesFromBase64(object.lineage_digest) : new Uint8Array(0),
+      failureCode: isSet(object.failure_code) ? globalThis.String(object.failure_code) : "",
+    };
+  },
+
+  toJSON(message: FiatConversionObservation): unknown {
+    const obj: any = {};
+    if (!message.sequence.equals(Long.UZERO)) {
+      obj.sequence = (message.sequence || Long.UZERO).toString();
+    }
+    if (message.idempotencyKey.length !== 0) {
+      obj.idempotency_key = base64FromBytes(message.idempotencyKey);
+    }
+    if (message.stage !== 0) {
+      obj.stage = fiatConversionObservationStageToJSON(message.stage);
+    }
+    if (message.status !== "") {
+      obj.status = message.status;
+    }
+    if (!message.observedAt.equals(Long.ZERO)) {
+      obj.observed_at = (message.observedAt || Long.ZERO).toString();
+    }
+    if (!message.recordedAt.equals(Long.ZERO)) {
+      obj.recorded_at = (message.recordedAt || Long.ZERO).toString();
+    }
+    if (!message.recordedHeight.equals(Long.ZERO)) {
+      obj.recorded_height = (message.recordedHeight || Long.ZERO).toString();
+    }
+    if (message.evidenceHash.length !== 0) {
+      obj.evidence_hash = base64FromBytes(message.evidenceHash);
+    }
+    if (message.observationDigest.length !== 0) {
+      obj.observation_digest = base64FromBytes(message.observationDigest);
+    }
+    if (message.lineageDigest.length !== 0) {
+      obj.lineage_digest = base64FromBytes(message.lineageDigest);
+    }
+    if (message.failureCode !== "") {
+      obj.failure_code = message.failureCode;
+    }
+    return obj;
+  },
+  fromPartial(object: DeepPartial<FiatConversionObservation>): FiatConversionObservation {
+    const message = createBaseFiatConversionObservation();
+    message.sequence = (object.sequence !== undefined && object.sequence !== null)
+      ? Long.fromValue(object.sequence)
+      : Long.UZERO;
+    message.idempotencyKey = object.idempotencyKey ?? new Uint8Array(0);
+    message.stage = object.stage ?? 0;
+    message.status = object.status ?? "";
+    message.observedAt = (object.observedAt !== undefined && object.observedAt !== null)
+      ? Long.fromValue(object.observedAt)
+      : Long.ZERO;
+    message.recordedAt = (object.recordedAt !== undefined && object.recordedAt !== null)
+      ? Long.fromValue(object.recordedAt)
+      : Long.ZERO;
+    message.recordedHeight = (object.recordedHeight !== undefined && object.recordedHeight !== null)
+      ? Long.fromValue(object.recordedHeight)
+      : Long.ZERO;
+    message.evidenceHash = object.evidenceHash ?? new Uint8Array(0);
+    message.observationDigest = object.observationDigest ?? new Uint8Array(0);
+    message.lineageDigest = object.lineageDigest ?? new Uint8Array(0);
+    message.failureCode = object.failureCode ?? "";
+    return message;
+  },
+};
+
+function createBaseEventFiatConversionObservationRecorded(): EventFiatConversionObservationRecorded {
+  return {
+    conversionId: "",
+    provider: "",
+    observationSequence: Long.UZERO,
+    stage: 0,
+    state: "",
+    observationDigest: new Uint8Array(0),
+    recordedHeight: Long.ZERO,
+  };
+}
+
+export const EventFiatConversionObservationRecorded: MessageFns<
+  EventFiatConversionObservationRecorded,
+  "virtengine.settlement.v1.EventFiatConversionObservationRecorded"
+> = {
+  $type: "virtengine.settlement.v1.EventFiatConversionObservationRecorded" as const,
+
+  encode(message: EventFiatConversionObservationRecorded, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.conversionId !== "") {
+      writer.uint32(10).string(message.conversionId);
+    }
+    if (message.provider !== "") {
+      writer.uint32(18).string(message.provider);
+    }
+    if (!message.observationSequence.equals(Long.UZERO)) {
+      writer.uint32(24).uint64(message.observationSequence.toString());
+    }
+    if (message.stage !== 0) {
+      writer.uint32(32).int32(message.stage);
+    }
+    if (message.state !== "") {
+      writer.uint32(42).string(message.state);
+    }
+    if (message.observationDigest.length !== 0) {
+      writer.uint32(50).bytes(message.observationDigest);
+    }
+    if (!message.recordedHeight.equals(Long.ZERO)) {
+      writer.uint32(56).int64(message.recordedHeight.toString());
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): EventFiatConversionObservationRecorded {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseEventFiatConversionObservationRecorded();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.conversionId = reader.string();
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.provider = reader.string();
+          continue;
+        }
+        case 3: {
+          if (tag !== 24) {
+            break;
+          }
+
+          message.observationSequence = Long.fromString(reader.uint64().toString(), true);
+          continue;
+        }
+        case 4: {
+          if (tag !== 32) {
+            break;
+          }
+
+          message.stage = reader.int32() as any;
+          continue;
+        }
+        case 5: {
+          if (tag !== 42) {
+            break;
+          }
+
+          message.state = reader.string();
+          continue;
+        }
+        case 6: {
+          if (tag !== 50) {
+            break;
+          }
+
+          message.observationDigest = reader.bytes();
+          continue;
+        }
+        case 7: {
+          if (tag !== 56) {
+            break;
+          }
+
+          message.recordedHeight = Long.fromString(reader.int64().toString());
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): EventFiatConversionObservationRecorded {
+    return {
+      conversionId: isSet(object.conversion_id) ? globalThis.String(object.conversion_id) : "",
+      provider: isSet(object.provider) ? globalThis.String(object.provider) : "",
+      observationSequence: isSet(object.observation_sequence)
+        ? Long.fromValue(object.observation_sequence)
+        : Long.UZERO,
+      stage: isSet(object.stage) ? fiatConversionObservationStageFromJSON(object.stage) : 0,
+      state: isSet(object.state) ? globalThis.String(object.state) : "",
+      observationDigest: isSet(object.observation_digest)
+        ? bytesFromBase64(object.observation_digest)
+        : new Uint8Array(0),
+      recordedHeight: isSet(object.recorded_height) ? Long.fromValue(object.recorded_height) : Long.ZERO,
+    };
+  },
+
+  toJSON(message: EventFiatConversionObservationRecorded): unknown {
+    const obj: any = {};
+    if (message.conversionId !== "") {
+      obj.conversion_id = message.conversionId;
+    }
+    if (message.provider !== "") {
+      obj.provider = message.provider;
+    }
+    if (!message.observationSequence.equals(Long.UZERO)) {
+      obj.observation_sequence = (message.observationSequence || Long.UZERO).toString();
+    }
+    if (message.stage !== 0) {
+      obj.stage = fiatConversionObservationStageToJSON(message.stage);
+    }
+    if (message.state !== "") {
+      obj.state = message.state;
+    }
+    if (message.observationDigest.length !== 0) {
+      obj.observation_digest = base64FromBytes(message.observationDigest);
+    }
+    if (!message.recordedHeight.equals(Long.ZERO)) {
+      obj.recorded_height = (message.recordedHeight || Long.ZERO).toString();
+    }
+    return obj;
+  },
+  fromPartial(object: DeepPartial<EventFiatConversionObservationRecorded>): EventFiatConversionObservationRecorded {
+    const message = createBaseEventFiatConversionObservationRecorded();
+    message.conversionId = object.conversionId ?? "";
+    message.provider = object.provider ?? "";
+    message.observationSequence = (object.observationSequence !== undefined && object.observationSequence !== null)
+      ? Long.fromValue(object.observationSequence)
+      : Long.UZERO;
+    message.stage = object.stage ?? 0;
+    message.state = object.state ?? "";
+    message.observationDigest = object.observationDigest ?? new Uint8Array(0);
+    message.recordedHeight = (object.recordedHeight !== undefined && object.recordedHeight !== null)
+      ? Long.fromValue(object.recordedHeight)
+      : Long.ZERO;
+    return message;
+  },
+};
+
+function createBaseEventFiatConversionTerminal(): EventFiatConversionTerminal {
+  return { conversionId: "", payoutId: "", stage: 0, terminalPolicy: "", evidenceHash: new Uint8Array(0) };
+}
+
+export const EventFiatConversionTerminal: MessageFns<
+  EventFiatConversionTerminal,
+  "virtengine.settlement.v1.EventFiatConversionTerminal"
+> = {
+  $type: "virtengine.settlement.v1.EventFiatConversionTerminal" as const,
+
+  encode(message: EventFiatConversionTerminal, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.conversionId !== "") {
+      writer.uint32(10).string(message.conversionId);
+    }
+    if (message.payoutId !== "") {
+      writer.uint32(18).string(message.payoutId);
+    }
+    if (message.stage !== 0) {
+      writer.uint32(24).int32(message.stage);
+    }
+    if (message.terminalPolicy !== "") {
+      writer.uint32(34).string(message.terminalPolicy);
+    }
+    if (message.evidenceHash.length !== 0) {
+      writer.uint32(42).bytes(message.evidenceHash);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): EventFiatConversionTerminal {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseEventFiatConversionTerminal();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.conversionId = reader.string();
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.payoutId = reader.string();
+          continue;
+        }
+        case 3: {
+          if (tag !== 24) {
+            break;
+          }
+
+          message.stage = reader.int32() as any;
+          continue;
+        }
+        case 4: {
+          if (tag !== 34) {
+            break;
+          }
+
+          message.terminalPolicy = reader.string();
+          continue;
+        }
+        case 5: {
+          if (tag !== 42) {
+            break;
+          }
+
+          message.evidenceHash = reader.bytes();
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): EventFiatConversionTerminal {
+    return {
+      conversionId: isSet(object.conversion_id) ? globalThis.String(object.conversion_id) : "",
+      payoutId: isSet(object.payout_id) ? globalThis.String(object.payout_id) : "",
+      stage: isSet(object.stage) ? fiatConversionObservationStageFromJSON(object.stage) : 0,
+      terminalPolicy: isSet(object.terminal_policy) ? globalThis.String(object.terminal_policy) : "",
+      evidenceHash: isSet(object.evidence_hash) ? bytesFromBase64(object.evidence_hash) : new Uint8Array(0),
+    };
+  },
+
+  toJSON(message: EventFiatConversionTerminal): unknown {
+    const obj: any = {};
+    if (message.conversionId !== "") {
+      obj.conversion_id = message.conversionId;
+    }
+    if (message.payoutId !== "") {
+      obj.payout_id = message.payoutId;
+    }
+    if (message.stage !== 0) {
+      obj.stage = fiatConversionObservationStageToJSON(message.stage);
+    }
+    if (message.terminalPolicy !== "") {
+      obj.terminal_policy = message.terminalPolicy;
+    }
+    if (message.evidenceHash.length !== 0) {
+      obj.evidence_hash = base64FromBytes(message.evidenceHash);
+    }
+    return obj;
+  },
+  fromPartial(object: DeepPartial<EventFiatConversionTerminal>): EventFiatConversionTerminal {
+    const message = createBaseEventFiatConversionTerminal();
+    message.conversionId = object.conversionId ?? "";
+    message.payoutId = object.payoutId ?? "";
+    message.stage = object.stage ?? 0;
+    message.terminalPolicy = object.terminalPolicy ?? "";
+    message.evidenceHash = object.evidenceHash ?? new Uint8Array(0);
+    return message;
+  },
+};
+
 function createBaseFiatConversionRecord(): FiatConversionRecord {
   return {
     conversionId: "",
@@ -5991,6 +11071,35 @@ function createBaseFiatConversionRecord(): FiatConversionRecord {
     lastErrorAt: Long.ZERO,
     lastError: "",
     transitionHistory: [],
+    protocolVersion: 0,
+    observationSequence: Long.UZERO,
+    lastObservationDigest: new Uint8Array(0),
+    observations: [],
+    dexProfileId: "",
+    dexProfileDigest: new Uint8Array(0),
+    payoutProfileId: "",
+    payoutProfileDigest: new Uint8Array(0),
+    quoteDigest: new Uint8Array(0),
+    quoteExpiry: Long.ZERO,
+    minimumStableOutput: undefined,
+    swapHeight: Long.ZERO,
+    swapBlockHash: new Uint8Array(0),
+    swapFinalityConfirmations: 0,
+    swapFinalityHash: new Uint8Array(0),
+    payoutFinalityHash: new Uint8Array(0),
+    complianceDecisionHash: new Uint8Array(0),
+    privacySafeReferenceHash: new Uint8Array(0),
+    evidenceHash: new Uint8Array(0),
+    requestDigest: new Uint8Array(0),
+    dailyBucket: "",
+    legacyQuarantined: false,
+    quarantineReason: "",
+    terminalPolicy: "",
+    valueMovementApplied: false,
+    slippageToleranceExact: "",
+    dailyQuotaReserved: false,
+    custodySinkAmount: undefined,
+    custodySinkEffectHash: new Uint8Array(0),
   };
 }
 
@@ -6132,6 +11241,93 @@ export const FiatConversionRecord: MessageFns<FiatConversionRecord, "virtengine.
     }
     for (const v of message.transitionHistory) {
       FiatConversionStateTransition.encode(v!, writer.uint32(362).fork()).join();
+    }
+    if (message.protocolVersion !== 0) {
+      writer.uint32(368).uint32(message.protocolVersion);
+    }
+    if (!message.observationSequence.equals(Long.UZERO)) {
+      writer.uint32(376).uint64(message.observationSequence.toString());
+    }
+    if (message.lastObservationDigest.length !== 0) {
+      writer.uint32(386).bytes(message.lastObservationDigest);
+    }
+    for (const v of message.observations) {
+      FiatConversionObservation.encode(v!, writer.uint32(394).fork()).join();
+    }
+    if (message.dexProfileId !== "") {
+      writer.uint32(402).string(message.dexProfileId);
+    }
+    if (message.dexProfileDigest.length !== 0) {
+      writer.uint32(410).bytes(message.dexProfileDigest);
+    }
+    if (message.payoutProfileId !== "") {
+      writer.uint32(418).string(message.payoutProfileId);
+    }
+    if (message.payoutProfileDigest.length !== 0) {
+      writer.uint32(426).bytes(message.payoutProfileDigest);
+    }
+    if (message.quoteDigest.length !== 0) {
+      writer.uint32(434).bytes(message.quoteDigest);
+    }
+    if (!message.quoteExpiry.equals(Long.ZERO)) {
+      writer.uint32(440).int64(message.quoteExpiry.toString());
+    }
+    if (message.minimumStableOutput !== undefined) {
+      Coin.encode(message.minimumStableOutput, writer.uint32(450).fork()).join();
+    }
+    if (!message.swapHeight.equals(Long.ZERO)) {
+      writer.uint32(456).int64(message.swapHeight.toString());
+    }
+    if (message.swapBlockHash.length !== 0) {
+      writer.uint32(466).bytes(message.swapBlockHash);
+    }
+    if (message.swapFinalityConfirmations !== 0) {
+      writer.uint32(472).uint32(message.swapFinalityConfirmations);
+    }
+    if (message.swapFinalityHash.length !== 0) {
+      writer.uint32(482).bytes(message.swapFinalityHash);
+    }
+    if (message.payoutFinalityHash.length !== 0) {
+      writer.uint32(490).bytes(message.payoutFinalityHash);
+    }
+    if (message.complianceDecisionHash.length !== 0) {
+      writer.uint32(498).bytes(message.complianceDecisionHash);
+    }
+    if (message.privacySafeReferenceHash.length !== 0) {
+      writer.uint32(506).bytes(message.privacySafeReferenceHash);
+    }
+    if (message.evidenceHash.length !== 0) {
+      writer.uint32(514).bytes(message.evidenceHash);
+    }
+    if (message.requestDigest.length !== 0) {
+      writer.uint32(522).bytes(message.requestDigest);
+    }
+    if (message.dailyBucket !== "") {
+      writer.uint32(530).string(message.dailyBucket);
+    }
+    if (message.legacyQuarantined !== false) {
+      writer.uint32(536).bool(message.legacyQuarantined);
+    }
+    if (message.quarantineReason !== "") {
+      writer.uint32(546).string(message.quarantineReason);
+    }
+    if (message.terminalPolicy !== "") {
+      writer.uint32(554).string(message.terminalPolicy);
+    }
+    if (message.valueMovementApplied !== false) {
+      writer.uint32(560).bool(message.valueMovementApplied);
+    }
+    if (message.slippageToleranceExact !== "") {
+      writer.uint32(570).string(message.slippageToleranceExact);
+    }
+    if (message.dailyQuotaReserved !== false) {
+      writer.uint32(576).bool(message.dailyQuotaReserved);
+    }
+    if (message.custodySinkAmount !== undefined) {
+      Coin.encode(message.custodySinkAmount, writer.uint32(586).fork()).join();
+    }
+    if (message.custodySinkEffectHash.length !== 0) {
+      writer.uint32(594).bytes(message.custodySinkEffectHash);
     }
     return writer;
   },
@@ -6503,6 +11699,238 @@ export const FiatConversionRecord: MessageFns<FiatConversionRecord, "virtengine.
           message.transitionHistory.push(FiatConversionStateTransition.decode(reader, reader.uint32()));
           continue;
         }
+        case 46: {
+          if (tag !== 368) {
+            break;
+          }
+
+          message.protocolVersion = reader.uint32();
+          continue;
+        }
+        case 47: {
+          if (tag !== 376) {
+            break;
+          }
+
+          message.observationSequence = Long.fromString(reader.uint64().toString(), true);
+          continue;
+        }
+        case 48: {
+          if (tag !== 386) {
+            break;
+          }
+
+          message.lastObservationDigest = reader.bytes();
+          continue;
+        }
+        case 49: {
+          if (tag !== 394) {
+            break;
+          }
+
+          message.observations.push(FiatConversionObservation.decode(reader, reader.uint32()));
+          continue;
+        }
+        case 50: {
+          if (tag !== 402) {
+            break;
+          }
+
+          message.dexProfileId = reader.string();
+          continue;
+        }
+        case 51: {
+          if (tag !== 410) {
+            break;
+          }
+
+          message.dexProfileDigest = reader.bytes();
+          continue;
+        }
+        case 52: {
+          if (tag !== 418) {
+            break;
+          }
+
+          message.payoutProfileId = reader.string();
+          continue;
+        }
+        case 53: {
+          if (tag !== 426) {
+            break;
+          }
+
+          message.payoutProfileDigest = reader.bytes();
+          continue;
+        }
+        case 54: {
+          if (tag !== 434) {
+            break;
+          }
+
+          message.quoteDigest = reader.bytes();
+          continue;
+        }
+        case 55: {
+          if (tag !== 440) {
+            break;
+          }
+
+          message.quoteExpiry = Long.fromString(reader.int64().toString());
+          continue;
+        }
+        case 56: {
+          if (tag !== 450) {
+            break;
+          }
+
+          message.minimumStableOutput = Coin.decode(reader, reader.uint32());
+          continue;
+        }
+        case 57: {
+          if (tag !== 456) {
+            break;
+          }
+
+          message.swapHeight = Long.fromString(reader.int64().toString());
+          continue;
+        }
+        case 58: {
+          if (tag !== 466) {
+            break;
+          }
+
+          message.swapBlockHash = reader.bytes();
+          continue;
+        }
+        case 59: {
+          if (tag !== 472) {
+            break;
+          }
+
+          message.swapFinalityConfirmations = reader.uint32();
+          continue;
+        }
+        case 60: {
+          if (tag !== 482) {
+            break;
+          }
+
+          message.swapFinalityHash = reader.bytes();
+          continue;
+        }
+        case 61: {
+          if (tag !== 490) {
+            break;
+          }
+
+          message.payoutFinalityHash = reader.bytes();
+          continue;
+        }
+        case 62: {
+          if (tag !== 498) {
+            break;
+          }
+
+          message.complianceDecisionHash = reader.bytes();
+          continue;
+        }
+        case 63: {
+          if (tag !== 506) {
+            break;
+          }
+
+          message.privacySafeReferenceHash = reader.bytes();
+          continue;
+        }
+        case 64: {
+          if (tag !== 514) {
+            break;
+          }
+
+          message.evidenceHash = reader.bytes();
+          continue;
+        }
+        case 65: {
+          if (tag !== 522) {
+            break;
+          }
+
+          message.requestDigest = reader.bytes();
+          continue;
+        }
+        case 66: {
+          if (tag !== 530) {
+            break;
+          }
+
+          message.dailyBucket = reader.string();
+          continue;
+        }
+        case 67: {
+          if (tag !== 536) {
+            break;
+          }
+
+          message.legacyQuarantined = reader.bool();
+          continue;
+        }
+        case 68: {
+          if (tag !== 546) {
+            break;
+          }
+
+          message.quarantineReason = reader.string();
+          continue;
+        }
+        case 69: {
+          if (tag !== 554) {
+            break;
+          }
+
+          message.terminalPolicy = reader.string();
+          continue;
+        }
+        case 70: {
+          if (tag !== 560) {
+            break;
+          }
+
+          message.valueMovementApplied = reader.bool();
+          continue;
+        }
+        case 71: {
+          if (tag !== 570) {
+            break;
+          }
+
+          message.slippageToleranceExact = reader.string();
+          continue;
+        }
+        case 72: {
+          if (tag !== 576) {
+            break;
+          }
+
+          message.dailyQuotaReserved = reader.bool();
+          continue;
+        }
+        case 73: {
+          if (tag !== 586) {
+            break;
+          }
+
+          message.custodySinkAmount = Coin.decode(reader, reader.uint32());
+          continue;
+        }
+        case 74: {
+          if (tag !== 594) {
+            break;
+          }
+
+          message.custodySinkEffectHash = reader.bytes();
+          continue;
+        }
       }
       if ((tag & 7) === 4 || tag === 0) {
         break;
@@ -6565,6 +11993,63 @@ export const FiatConversionRecord: MessageFns<FiatConversionRecord, "virtengine.
       transitionHistory: globalThis.Array.isArray(object?.transition_history)
         ? object.transition_history.map((e: any) => FiatConversionStateTransition.fromJSON(e))
         : [],
+      protocolVersion: isSet(object.protocol_version) ? globalThis.Number(object.protocol_version) : 0,
+      observationSequence: isSet(object.observation_sequence)
+        ? Long.fromValue(object.observation_sequence)
+        : Long.UZERO,
+      lastObservationDigest: isSet(object.last_observation_digest)
+        ? bytesFromBase64(object.last_observation_digest)
+        : new Uint8Array(0),
+      observations: globalThis.Array.isArray(object?.observations)
+        ? object.observations.map((e: any) => FiatConversionObservation.fromJSON(e))
+        : [],
+      dexProfileId: isSet(object.dex_profile_id) ? globalThis.String(object.dex_profile_id) : "",
+      dexProfileDigest: isSet(object.dex_profile_digest)
+        ? bytesFromBase64(object.dex_profile_digest)
+        : new Uint8Array(0),
+      payoutProfileId: isSet(object.payout_profile_id) ? globalThis.String(object.payout_profile_id) : "",
+      payoutProfileDigest: isSet(object.payout_profile_digest)
+        ? bytesFromBase64(object.payout_profile_digest)
+        : new Uint8Array(0),
+      quoteDigest: isSet(object.quote_digest) ? bytesFromBase64(object.quote_digest) : new Uint8Array(0),
+      quoteExpiry: isSet(object.quote_expiry) ? Long.fromValue(object.quote_expiry) : Long.ZERO,
+      minimumStableOutput: isSet(object.minimum_stable_output)
+        ? Coin.fromJSON(object.minimum_stable_output)
+        : undefined,
+      swapHeight: isSet(object.swap_height) ? Long.fromValue(object.swap_height) : Long.ZERO,
+      swapBlockHash: isSet(object.swap_block_hash) ? bytesFromBase64(object.swap_block_hash) : new Uint8Array(0),
+      swapFinalityConfirmations: isSet(object.swap_finality_confirmations)
+        ? globalThis.Number(object.swap_finality_confirmations)
+        : 0,
+      swapFinalityHash: isSet(object.swap_finality_hash)
+        ? bytesFromBase64(object.swap_finality_hash)
+        : new Uint8Array(0),
+      payoutFinalityHash: isSet(object.payout_finality_hash)
+        ? bytesFromBase64(object.payout_finality_hash)
+        : new Uint8Array(0),
+      complianceDecisionHash: isSet(object.compliance_decision_hash)
+        ? bytesFromBase64(object.compliance_decision_hash)
+        : new Uint8Array(0),
+      privacySafeReferenceHash: isSet(object.privacy_safe_reference_hash)
+        ? bytesFromBase64(object.privacy_safe_reference_hash)
+        : new Uint8Array(0),
+      evidenceHash: isSet(object.evidence_hash) ? bytesFromBase64(object.evidence_hash) : new Uint8Array(0),
+      requestDigest: isSet(object.request_digest) ? bytesFromBase64(object.request_digest) : new Uint8Array(0),
+      dailyBucket: isSet(object.daily_bucket) ? globalThis.String(object.daily_bucket) : "",
+      legacyQuarantined: isSet(object.legacy_quarantined) ? globalThis.Boolean(object.legacy_quarantined) : false,
+      quarantineReason: isSet(object.quarantine_reason) ? globalThis.String(object.quarantine_reason) : "",
+      terminalPolicy: isSet(object.terminal_policy) ? globalThis.String(object.terminal_policy) : "",
+      valueMovementApplied: isSet(object.value_movement_applied)
+        ? globalThis.Boolean(object.value_movement_applied)
+        : false,
+      slippageToleranceExact: isSet(object.slippage_tolerance_exact)
+        ? globalThis.String(object.slippage_tolerance_exact)
+        : "",
+      dailyQuotaReserved: isSet(object.daily_quota_reserved) ? globalThis.Boolean(object.daily_quota_reserved) : false,
+      custodySinkAmount: isSet(object.custody_sink_amount) ? Coin.fromJSON(object.custody_sink_amount) : undefined,
+      custodySinkEffectHash: isSet(object.custody_sink_effect_hash)
+        ? bytesFromBase64(object.custody_sink_effect_hash)
+        : new Uint8Array(0),
     };
   },
 
@@ -6705,6 +12190,93 @@ export const FiatConversionRecord: MessageFns<FiatConversionRecord, "virtengine.
     if (message.transitionHistory?.length) {
       obj.transition_history = message.transitionHistory.map((e) => FiatConversionStateTransition.toJSON(e));
     }
+    if (message.protocolVersion !== 0) {
+      obj.protocol_version = Math.round(message.protocolVersion);
+    }
+    if (!message.observationSequence.equals(Long.UZERO)) {
+      obj.observation_sequence = (message.observationSequence || Long.UZERO).toString();
+    }
+    if (message.lastObservationDigest.length !== 0) {
+      obj.last_observation_digest = base64FromBytes(message.lastObservationDigest);
+    }
+    if (message.observations?.length) {
+      obj.observations = message.observations.map((e) => FiatConversionObservation.toJSON(e));
+    }
+    if (message.dexProfileId !== "") {
+      obj.dex_profile_id = message.dexProfileId;
+    }
+    if (message.dexProfileDigest.length !== 0) {
+      obj.dex_profile_digest = base64FromBytes(message.dexProfileDigest);
+    }
+    if (message.payoutProfileId !== "") {
+      obj.payout_profile_id = message.payoutProfileId;
+    }
+    if (message.payoutProfileDigest.length !== 0) {
+      obj.payout_profile_digest = base64FromBytes(message.payoutProfileDigest);
+    }
+    if (message.quoteDigest.length !== 0) {
+      obj.quote_digest = base64FromBytes(message.quoteDigest);
+    }
+    if (!message.quoteExpiry.equals(Long.ZERO)) {
+      obj.quote_expiry = (message.quoteExpiry || Long.ZERO).toString();
+    }
+    if (message.minimumStableOutput !== undefined) {
+      obj.minimum_stable_output = Coin.toJSON(message.minimumStableOutput);
+    }
+    if (!message.swapHeight.equals(Long.ZERO)) {
+      obj.swap_height = (message.swapHeight || Long.ZERO).toString();
+    }
+    if (message.swapBlockHash.length !== 0) {
+      obj.swap_block_hash = base64FromBytes(message.swapBlockHash);
+    }
+    if (message.swapFinalityConfirmations !== 0) {
+      obj.swap_finality_confirmations = Math.round(message.swapFinalityConfirmations);
+    }
+    if (message.swapFinalityHash.length !== 0) {
+      obj.swap_finality_hash = base64FromBytes(message.swapFinalityHash);
+    }
+    if (message.payoutFinalityHash.length !== 0) {
+      obj.payout_finality_hash = base64FromBytes(message.payoutFinalityHash);
+    }
+    if (message.complianceDecisionHash.length !== 0) {
+      obj.compliance_decision_hash = base64FromBytes(message.complianceDecisionHash);
+    }
+    if (message.privacySafeReferenceHash.length !== 0) {
+      obj.privacy_safe_reference_hash = base64FromBytes(message.privacySafeReferenceHash);
+    }
+    if (message.evidenceHash.length !== 0) {
+      obj.evidence_hash = base64FromBytes(message.evidenceHash);
+    }
+    if (message.requestDigest.length !== 0) {
+      obj.request_digest = base64FromBytes(message.requestDigest);
+    }
+    if (message.dailyBucket !== "") {
+      obj.daily_bucket = message.dailyBucket;
+    }
+    if (message.legacyQuarantined !== false) {
+      obj.legacy_quarantined = message.legacyQuarantined;
+    }
+    if (message.quarantineReason !== "") {
+      obj.quarantine_reason = message.quarantineReason;
+    }
+    if (message.terminalPolicy !== "") {
+      obj.terminal_policy = message.terminalPolicy;
+    }
+    if (message.valueMovementApplied !== false) {
+      obj.value_movement_applied = message.valueMovementApplied;
+    }
+    if (message.slippageToleranceExact !== "") {
+      obj.slippage_tolerance_exact = message.slippageToleranceExact;
+    }
+    if (message.dailyQuotaReserved !== false) {
+      obj.daily_quota_reserved = message.dailyQuotaReserved;
+    }
+    if (message.custodySinkAmount !== undefined) {
+      obj.custody_sink_amount = Coin.toJSON(message.custodySinkAmount);
+    }
+    if (message.custodySinkEffectHash.length !== 0) {
+      obj.custody_sink_effect_hash = base64FromBytes(message.custodySinkEffectHash);
+    }
     return obj;
   },
   fromPartial(object: DeepPartial<FiatConversionRecord>): FiatConversionRecord {
@@ -6771,6 +12343,45 @@ export const FiatConversionRecord: MessageFns<FiatConversionRecord, "virtengine.
     message.lastError = object.lastError ?? "";
     message.transitionHistory = object.transitionHistory?.map((e) => FiatConversionStateTransition.fromPartial(e)) ||
       [];
+    message.protocolVersion = object.protocolVersion ?? 0;
+    message.observationSequence = (object.observationSequence !== undefined && object.observationSequence !== null)
+      ? Long.fromValue(object.observationSequence)
+      : Long.UZERO;
+    message.lastObservationDigest = object.lastObservationDigest ?? new Uint8Array(0);
+    message.observations = object.observations?.map((e) => FiatConversionObservation.fromPartial(e)) || [];
+    message.dexProfileId = object.dexProfileId ?? "";
+    message.dexProfileDigest = object.dexProfileDigest ?? new Uint8Array(0);
+    message.payoutProfileId = object.payoutProfileId ?? "";
+    message.payoutProfileDigest = object.payoutProfileDigest ?? new Uint8Array(0);
+    message.quoteDigest = object.quoteDigest ?? new Uint8Array(0);
+    message.quoteExpiry = (object.quoteExpiry !== undefined && object.quoteExpiry !== null)
+      ? Long.fromValue(object.quoteExpiry)
+      : Long.ZERO;
+    message.minimumStableOutput = (object.minimumStableOutput !== undefined && object.minimumStableOutput !== null)
+      ? Coin.fromPartial(object.minimumStableOutput)
+      : undefined;
+    message.swapHeight = (object.swapHeight !== undefined && object.swapHeight !== null)
+      ? Long.fromValue(object.swapHeight)
+      : Long.ZERO;
+    message.swapBlockHash = object.swapBlockHash ?? new Uint8Array(0);
+    message.swapFinalityConfirmations = object.swapFinalityConfirmations ?? 0;
+    message.swapFinalityHash = object.swapFinalityHash ?? new Uint8Array(0);
+    message.payoutFinalityHash = object.payoutFinalityHash ?? new Uint8Array(0);
+    message.complianceDecisionHash = object.complianceDecisionHash ?? new Uint8Array(0);
+    message.privacySafeReferenceHash = object.privacySafeReferenceHash ?? new Uint8Array(0);
+    message.evidenceHash = object.evidenceHash ?? new Uint8Array(0);
+    message.requestDigest = object.requestDigest ?? new Uint8Array(0);
+    message.dailyBucket = object.dailyBucket ?? "";
+    message.legacyQuarantined = object.legacyQuarantined ?? false;
+    message.quarantineReason = object.quarantineReason ?? "";
+    message.terminalPolicy = object.terminalPolicy ?? "";
+    message.valueMovementApplied = object.valueMovementApplied ?? false;
+    message.slippageToleranceExact = object.slippageToleranceExact ?? "";
+    message.dailyQuotaReserved = object.dailyQuotaReserved ?? false;
+    message.custodySinkAmount = (object.custodySinkAmount !== undefined && object.custodySinkAmount !== null)
+      ? Coin.fromPartial(object.custodySinkAmount)
+      : undefined;
+    message.custodySinkEffectHash = object.custodySinkEffectHash ?? new Uint8Array(0);
     return message;
   },
 };
@@ -9223,6 +14834,602 @@ export const QueryFiatPayoutPreferenceResponse: MessageFns<
     const message = createBaseQueryFiatPayoutPreferenceResponse();
     message.preference = (object.preference !== undefined && object.preference !== null)
       ? FiatPayoutPreference.fromPartial(object.preference)
+      : undefined;
+    return message;
+  },
+};
+
+function createBaseQueryFinancialCaseRequest(): QueryFinancialCaseRequest {
+  return { caseId: "" };
+}
+
+export const QueryFinancialCaseRequest: MessageFns<
+  QueryFinancialCaseRequest,
+  "virtengine.settlement.v1.QueryFinancialCaseRequest"
+> = {
+  $type: "virtengine.settlement.v1.QueryFinancialCaseRequest" as const,
+
+  encode(message: QueryFinancialCaseRequest, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.caseId !== "") {
+      writer.uint32(10).string(message.caseId);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): QueryFinancialCaseRequest {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseQueryFinancialCaseRequest();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.caseId = reader.string();
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): QueryFinancialCaseRequest {
+    return { caseId: isSet(object.case_id) ? globalThis.String(object.case_id) : "" };
+  },
+
+  toJSON(message: QueryFinancialCaseRequest): unknown {
+    const obj: any = {};
+    if (message.caseId !== "") {
+      obj.case_id = message.caseId;
+    }
+    return obj;
+  },
+  fromPartial(object: DeepPartial<QueryFinancialCaseRequest>): QueryFinancialCaseRequest {
+    const message = createBaseQueryFinancialCaseRequest();
+    message.caseId = object.caseId ?? "";
+    return message;
+  },
+};
+
+function createBaseQueryFinancialCaseResponse(): QueryFinancialCaseResponse {
+  return { financialCase: undefined };
+}
+
+export const QueryFinancialCaseResponse: MessageFns<
+  QueryFinancialCaseResponse,
+  "virtengine.settlement.v1.QueryFinancialCaseResponse"
+> = {
+  $type: "virtengine.settlement.v1.QueryFinancialCaseResponse" as const,
+
+  encode(message: QueryFinancialCaseResponse, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.financialCase !== undefined) {
+      FinancialCase.encode(message.financialCase, writer.uint32(10).fork()).join();
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): QueryFinancialCaseResponse {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseQueryFinancialCaseResponse();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.financialCase = FinancialCase.decode(reader, reader.uint32());
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): QueryFinancialCaseResponse {
+    return { financialCase: isSet(object.financial_case) ? FinancialCase.fromJSON(object.financial_case) : undefined };
+  },
+
+  toJSON(message: QueryFinancialCaseResponse): unknown {
+    const obj: any = {};
+    if (message.financialCase !== undefined) {
+      obj.financial_case = FinancialCase.toJSON(message.financialCase);
+    }
+    return obj;
+  },
+  fromPartial(object: DeepPartial<QueryFinancialCaseResponse>): QueryFinancialCaseResponse {
+    const message = createBaseQueryFinancialCaseResponse();
+    message.financialCase = (object.financialCase !== undefined && object.financialCase !== null)
+      ? FinancialCase.fromPartial(object.financialCase)
+      : undefined;
+    return message;
+  },
+};
+
+function createBaseQueryFinancialCaseBySubjectRequest(): QueryFinancialCaseBySubjectRequest {
+  return { subject: undefined };
+}
+
+export const QueryFinancialCaseBySubjectRequest: MessageFns<
+  QueryFinancialCaseBySubjectRequest,
+  "virtengine.settlement.v1.QueryFinancialCaseBySubjectRequest"
+> = {
+  $type: "virtengine.settlement.v1.QueryFinancialCaseBySubjectRequest" as const,
+
+  encode(message: QueryFinancialCaseBySubjectRequest, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.subject !== undefined) {
+      FinancialSubject.encode(message.subject, writer.uint32(10).fork()).join();
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): QueryFinancialCaseBySubjectRequest {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseQueryFinancialCaseBySubjectRequest();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.subject = FinancialSubject.decode(reader, reader.uint32());
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): QueryFinancialCaseBySubjectRequest {
+    return { subject: isSet(object.subject) ? FinancialSubject.fromJSON(object.subject) : undefined };
+  },
+
+  toJSON(message: QueryFinancialCaseBySubjectRequest): unknown {
+    const obj: any = {};
+    if (message.subject !== undefined) {
+      obj.subject = FinancialSubject.toJSON(message.subject);
+    }
+    return obj;
+  },
+  fromPartial(object: DeepPartial<QueryFinancialCaseBySubjectRequest>): QueryFinancialCaseBySubjectRequest {
+    const message = createBaseQueryFinancialCaseBySubjectRequest();
+    message.subject = (object.subject !== undefined && object.subject !== null)
+      ? FinancialSubject.fromPartial(object.subject)
+      : undefined;
+    return message;
+  },
+};
+
+function createBaseQueryFinancialCaseBySubjectResponse(): QueryFinancialCaseBySubjectResponse {
+  return { financialCase: undefined };
+}
+
+export const QueryFinancialCaseBySubjectResponse: MessageFns<
+  QueryFinancialCaseBySubjectResponse,
+  "virtengine.settlement.v1.QueryFinancialCaseBySubjectResponse"
+> = {
+  $type: "virtengine.settlement.v1.QueryFinancialCaseBySubjectResponse" as const,
+
+  encode(message: QueryFinancialCaseBySubjectResponse, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.financialCase !== undefined) {
+      FinancialCase.encode(message.financialCase, writer.uint32(10).fork()).join();
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): QueryFinancialCaseBySubjectResponse {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseQueryFinancialCaseBySubjectResponse();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.financialCase = FinancialCase.decode(reader, reader.uint32());
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): QueryFinancialCaseBySubjectResponse {
+    return { financialCase: isSet(object.financial_case) ? FinancialCase.fromJSON(object.financial_case) : undefined };
+  },
+
+  toJSON(message: QueryFinancialCaseBySubjectResponse): unknown {
+    const obj: any = {};
+    if (message.financialCase !== undefined) {
+      obj.financial_case = FinancialCase.toJSON(message.financialCase);
+    }
+    return obj;
+  },
+  fromPartial(object: DeepPartial<QueryFinancialCaseBySubjectResponse>): QueryFinancialCaseBySubjectResponse {
+    const message = createBaseQueryFinancialCaseBySubjectResponse();
+    message.financialCase = (object.financialCase !== undefined && object.financialCase !== null)
+      ? FinancialCase.fromPartial(object.financialCase)
+      : undefined;
+    return message;
+  },
+};
+
+function createBaseQueryFinancialCasesRequest(): QueryFinancialCasesRequest {
+  return { key: "", pagination: undefined };
+}
+
+export const QueryFinancialCasesRequest: MessageFns<
+  QueryFinancialCasesRequest,
+  "virtengine.settlement.v1.QueryFinancialCasesRequest"
+> = {
+  $type: "virtengine.settlement.v1.QueryFinancialCasesRequest" as const,
+
+  encode(message: QueryFinancialCasesRequest, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.key !== "") {
+      writer.uint32(10).string(message.key);
+    }
+    if (message.pagination !== undefined) {
+      PageRequest.encode(message.pagination, writer.uint32(18).fork()).join();
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): QueryFinancialCasesRequest {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseQueryFinancialCasesRequest();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.key = reader.string();
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.pagination = PageRequest.decode(reader, reader.uint32());
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): QueryFinancialCasesRequest {
+    return {
+      key: isSet(object.key) ? globalThis.String(object.key) : "",
+      pagination: isSet(object.pagination) ? PageRequest.fromJSON(object.pagination) : undefined,
+    };
+  },
+
+  toJSON(message: QueryFinancialCasesRequest): unknown {
+    const obj: any = {};
+    if (message.key !== "") {
+      obj.key = message.key;
+    }
+    if (message.pagination !== undefined) {
+      obj.pagination = PageRequest.toJSON(message.pagination);
+    }
+    return obj;
+  },
+  fromPartial(object: DeepPartial<QueryFinancialCasesRequest>): QueryFinancialCasesRequest {
+    const message = createBaseQueryFinancialCasesRequest();
+    message.key = object.key ?? "";
+    message.pagination = (object.pagination !== undefined && object.pagination !== null)
+      ? PageRequest.fromPartial(object.pagination)
+      : undefined;
+    return message;
+  },
+};
+
+function createBaseQueryFinancialCasesResponse(): QueryFinancialCasesResponse {
+  return { financialCases: [], pagination: undefined };
+}
+
+export const QueryFinancialCasesResponse: MessageFns<
+  QueryFinancialCasesResponse,
+  "virtengine.settlement.v1.QueryFinancialCasesResponse"
+> = {
+  $type: "virtengine.settlement.v1.QueryFinancialCasesResponse" as const,
+
+  encode(message: QueryFinancialCasesResponse, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    for (const v of message.financialCases) {
+      FinancialCase.encode(v!, writer.uint32(10).fork()).join();
+    }
+    if (message.pagination !== undefined) {
+      PageResponse.encode(message.pagination, writer.uint32(18).fork()).join();
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): QueryFinancialCasesResponse {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseQueryFinancialCasesResponse();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.financialCases.push(FinancialCase.decode(reader, reader.uint32()));
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.pagination = PageResponse.decode(reader, reader.uint32());
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): QueryFinancialCasesResponse {
+    return {
+      financialCases: globalThis.Array.isArray(object?.financial_cases)
+        ? object.financial_cases.map((e: any) => FinancialCase.fromJSON(e))
+        : [],
+      pagination: isSet(object.pagination) ? PageResponse.fromJSON(object.pagination) : undefined,
+    };
+  },
+
+  toJSON(message: QueryFinancialCasesResponse): unknown {
+    const obj: any = {};
+    if (message.financialCases?.length) {
+      obj.financial_cases = message.financialCases.map((e) => FinancialCase.toJSON(e));
+    }
+    if (message.pagination !== undefined) {
+      obj.pagination = PageResponse.toJSON(message.pagination);
+    }
+    return obj;
+  },
+  fromPartial(object: DeepPartial<QueryFinancialCasesResponse>): QueryFinancialCasesResponse {
+    const message = createBaseQueryFinancialCasesResponse();
+    message.financialCases = object.financialCases?.map((e) => FinancialCase.fromPartial(e)) || [];
+    message.pagination = (object.pagination !== undefined && object.pagination !== null)
+      ? PageResponse.fromPartial(object.pagination)
+      : undefined;
+    return message;
+  },
+};
+
+function createBaseQueryFinancialCaseLineageRequest(): QueryFinancialCaseLineageRequest {
+  return { caseId: "", pagination: undefined };
+}
+
+export const QueryFinancialCaseLineageRequest: MessageFns<
+  QueryFinancialCaseLineageRequest,
+  "virtengine.settlement.v1.QueryFinancialCaseLineageRequest"
+> = {
+  $type: "virtengine.settlement.v1.QueryFinancialCaseLineageRequest" as const,
+
+  encode(message: QueryFinancialCaseLineageRequest, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.caseId !== "") {
+      writer.uint32(10).string(message.caseId);
+    }
+    if (message.pagination !== undefined) {
+      PageRequest.encode(message.pagination, writer.uint32(18).fork()).join();
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): QueryFinancialCaseLineageRequest {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseQueryFinancialCaseLineageRequest();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.caseId = reader.string();
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.pagination = PageRequest.decode(reader, reader.uint32());
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): QueryFinancialCaseLineageRequest {
+    return {
+      caseId: isSet(object.case_id) ? globalThis.String(object.case_id) : "",
+      pagination: isSet(object.pagination) ? PageRequest.fromJSON(object.pagination) : undefined,
+    };
+  },
+
+  toJSON(message: QueryFinancialCaseLineageRequest): unknown {
+    const obj: any = {};
+    if (message.caseId !== "") {
+      obj.case_id = message.caseId;
+    }
+    if (message.pagination !== undefined) {
+      obj.pagination = PageRequest.toJSON(message.pagination);
+    }
+    return obj;
+  },
+  fromPartial(object: DeepPartial<QueryFinancialCaseLineageRequest>): QueryFinancialCaseLineageRequest {
+    const message = createBaseQueryFinancialCaseLineageRequest();
+    message.caseId = object.caseId ?? "";
+    message.pagination = (object.pagination !== undefined && object.pagination !== null)
+      ? PageRequest.fromPartial(object.pagination)
+      : undefined;
+    return message;
+  },
+};
+
+function createBaseQueryFinancialCaseLineageResponse(): QueryFinancialCaseLineageResponse {
+  return { transitions: [], claims: [], effects: [], pagination: undefined };
+}
+
+export const QueryFinancialCaseLineageResponse: MessageFns<
+  QueryFinancialCaseLineageResponse,
+  "virtengine.settlement.v1.QueryFinancialCaseLineageResponse"
+> = {
+  $type: "virtengine.settlement.v1.QueryFinancialCaseLineageResponse" as const,
+
+  encode(message: QueryFinancialCaseLineageResponse, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    for (const v of message.transitions) {
+      FinancialCaseTransition.encode(v!, writer.uint32(10).fork()).join();
+    }
+    for (const v of message.claims) {
+      FinancialClaim.encode(v!, writer.uint32(18).fork()).join();
+    }
+    for (const v of message.effects) {
+      FinancialCaseEffect.encode(v!, writer.uint32(26).fork()).join();
+    }
+    if (message.pagination !== undefined) {
+      PageResponse.encode(message.pagination, writer.uint32(34).fork()).join();
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): QueryFinancialCaseLineageResponse {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseQueryFinancialCaseLineageResponse();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.transitions.push(FinancialCaseTransition.decode(reader, reader.uint32()));
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.claims.push(FinancialClaim.decode(reader, reader.uint32()));
+          continue;
+        }
+        case 3: {
+          if (tag !== 26) {
+            break;
+          }
+
+          message.effects.push(FinancialCaseEffect.decode(reader, reader.uint32()));
+          continue;
+        }
+        case 4: {
+          if (tag !== 34) {
+            break;
+          }
+
+          message.pagination = PageResponse.decode(reader, reader.uint32());
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): QueryFinancialCaseLineageResponse {
+    return {
+      transitions: globalThis.Array.isArray(object?.transitions)
+        ? object.transitions.map((e: any) => FinancialCaseTransition.fromJSON(e))
+        : [],
+      claims: globalThis.Array.isArray(object?.claims) ? object.claims.map((e: any) => FinancialClaim.fromJSON(e)) : [],
+      effects: globalThis.Array.isArray(object?.effects)
+        ? object.effects.map((e: any) => FinancialCaseEffect.fromJSON(e))
+        : [],
+      pagination: isSet(object.pagination) ? PageResponse.fromJSON(object.pagination) : undefined,
+    };
+  },
+
+  toJSON(message: QueryFinancialCaseLineageResponse): unknown {
+    const obj: any = {};
+    if (message.transitions?.length) {
+      obj.transitions = message.transitions.map((e) => FinancialCaseTransition.toJSON(e));
+    }
+    if (message.claims?.length) {
+      obj.claims = message.claims.map((e) => FinancialClaim.toJSON(e));
+    }
+    if (message.effects?.length) {
+      obj.effects = message.effects.map((e) => FinancialCaseEffect.toJSON(e));
+    }
+    if (message.pagination !== undefined) {
+      obj.pagination = PageResponse.toJSON(message.pagination);
+    }
+    return obj;
+  },
+  fromPartial(object: DeepPartial<QueryFinancialCaseLineageResponse>): QueryFinancialCaseLineageResponse {
+    const message = createBaseQueryFinancialCaseLineageResponse();
+    message.transitions = object.transitions?.map((e) => FinancialCaseTransition.fromPartial(e)) || [];
+    message.claims = object.claims?.map((e) => FinancialClaim.fromPartial(e)) || [];
+    message.effects = object.effects?.map((e) => FinancialCaseEffect.fromPartial(e)) || [];
+    message.pagination = (object.pagination !== undefined && object.pagination !== null)
+      ? PageResponse.fromPartial(object.pagination)
       : undefined;
     return message;
   },

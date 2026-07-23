@@ -328,7 +328,11 @@ func newOrchestratorFixture(t *testing.T) (*FiatConversionOrchestrator, *fiatQue
 	orchestrator, err := NewFiatConversionOrchestrator(FiatConversionOrchestratorConfig{Enabled: true, Production: true, ProviderAddress: "provider", Store: store, Lease: NewLocalFiatConversionLease(), LeaseTTL: time.Minute, PollInterval: time.Hour, RetryBackoff: time.Millisecond, MaxRetryBackoff: time.Second, MaxAttempts: 3, Now: func() time.Time { return now }, Profiles: profiles, Query: query, Submitter: submitter, DEX: fiatDEXFake{}, Custody: custodyFake{}, Offramp: bridgeFake{}, Destination: resolverFake{destination: "token-beneficiary", destinationDigest: destinationDigest[:]}, Compliance: resolverFake{decision: offramp.ComplianceDecision{Reference: "decision", KYCDecision: "approved", SanctionsDecision: "approved", ValidUntil: now.Add(time.Hour)}, complianceDigest: bytes.Repeat([]byte{2}, 32)}, WebhookEvents: repository, WebhookBindings: repository})
 	require.NoError(t, err)
 	require.NoError(t, orchestrator.Start(context.Background()))
-	t.Cleanup(func() { _ = orchestrator.Stop(context.Background()) })
+	t.Cleanup(func() {
+		if orchestrator != nil && orchestrator.cfg.Store != nil {
+			_ = orchestrator.Stop(context.Background())
+		}
+	})
 	return orchestrator, query, submitter, repository
 }
 
@@ -414,7 +418,8 @@ func TestFiatConversionProfileMismatchAndLeaseLossFailClosed(t *testing.T) {
 	require.Error(t, err)
 	stored, err := orchestrator.cfg.Store.Get(context.Background(), item.Intent.ConversionID)
 	require.NoError(t, err)
-	require.Equal(t, FiatWorkFailed, stored.State)
+	require.Equal(t, FiatWorkClaimed, stored.State)
+	require.Equal(t, "CURRENT_PROFILE_CHANGED", stored.FailureCode)
 	require.NoError(t, orchestrator.cfg.Lease.Release(context.Background(), orchestrator.leaseName, orchestrator.leaseToken))
 	require.ErrorIs(t, orchestrator.ProcessDue(context.Background(), 1), ErrFiatConversionLeaseLost)
 }
@@ -592,12 +597,13 @@ func TestFiatConversionComplianceRevocationEntersManualReview(t *testing.T) {
 	item, err := orchestrator.Claim(context.Background(), query.records["conversion-1"])
 	require.NoError(t, err)
 	err = orchestrator.process(context.Background(), item.Intent.ConversionID)
-	require.Error(t, err)
+	var retry *fiatRetryError
+	require.ErrorAs(t, err, &retry)
 	stored, err := orchestrator.cfg.Store.Get(context.Background(), item.Intent.ConversionID)
 	require.NoError(t, err)
-	require.Equal(t, FiatWorkFailed, stored.State)
-	require.Len(t, submitter.submitted, 1)
-	require.Equal(t, settlementv1.FiatConversionObservationStage_FIAT_CONVERSION_OBSERVATION_STAGE_FAILED, submitter.submitted[0].Stage)
+	require.Equal(t, FiatWorkClaimed, stored.State)
+	require.Equal(t, "COMPLIANCE_REVOKED", stored.FailureCode)
+	require.Empty(t, submitter.submitted)
 }
 
 func TestFiatConversionDestinationUnavailableEntersManualReviewWithoutObservation(t *testing.T) {
@@ -667,14 +673,14 @@ func TestFiatConversionGovernanceDisabledAfterQuoteStopsSigningAndBroadcast(t *t
 	require.Len(t, submitter.submitted, 1)
 	query.params.FiatConversionEnabled = false
 	err = orchestrator.process(context.Background(), item.Intent.ConversionID)
-	var terminal *fiatTerminalError
-	require.ErrorAs(t, err, &terminal)
+	var retry *fiatRetryError
+	require.ErrorAs(t, err, &retry)
 	require.Zero(t, custodyBoundary.signCalls)
 	require.Zero(t, dexBoundary.executeCalls)
 	require.Len(t, submitter.submitted, 1, "a governance stop must not race a chain observation")
 	stored, err := orchestrator.cfg.Store.Get(context.Background(), item.Intent.ConversionID)
 	require.NoError(t, err)
-	require.Equal(t, FiatWorkManualReview, stored.State)
+	require.Equal(t, FiatWorkQuoteReported, stored.State)
 	require.Equal(t, "GOVERNANCE_DISABLED", stored.FailureCode)
 }
 
@@ -690,14 +696,14 @@ func TestFiatConversionFinancialHoldAfterQuoteStopsSigningAndBroadcast(t *testin
 	require.NoError(t, orchestrator.process(context.Background(), item.Intent.ConversionID))
 	query.activeCaseID, query.activeHoldCount = "case-after-quote", 1
 	err = orchestrator.process(context.Background(), item.Intent.ConversionID)
-	var terminal *fiatTerminalError
-	require.ErrorAs(t, err, &terminal)
+	var retry *fiatRetryError
+	require.ErrorAs(t, err, &retry)
 	require.Zero(t, custodyBoundary.signCalls)
 	require.Zero(t, dexBoundary.executeCalls)
 	require.Len(t, submitter.submitted, 1)
 	stored, err := orchestrator.cfg.Store.Get(context.Background(), item.Intent.ConversionID)
 	require.NoError(t, err)
-	require.Equal(t, FiatWorkManualReview, stored.State)
+	require.Equal(t, FiatWorkQuoteReported, stored.State)
 	require.Equal(t, "FINANCIAL_HOLD_ACTIVE", stored.FailureCode)
 }
 
@@ -714,14 +720,14 @@ func TestFiatConversionFinancialHoldAfterSigningStopsBroadcast(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, orchestrator.process(context.Background(), item.Intent.ConversionID))
 	err = orchestrator.process(context.Background(), item.Intent.ConversionID)
-	var terminal *fiatTerminalError
-	require.ErrorAs(t, err, &terminal)
+	var retry *fiatRetryError
+	require.ErrorAs(t, err, &retry)
 	require.Equal(t, 1, custodyBoundary.signCalls)
 	require.Zero(t, dexBoundary.executeCalls, "fresh hold read must stop target-chain broadcast")
 	require.Len(t, submitter.submitted, 1)
 	stored, err := orchestrator.cfg.Store.Get(context.Background(), item.Intent.ConversionID)
 	require.NoError(t, err)
-	require.Equal(t, FiatWorkManualReview, stored.State)
+	require.Equal(t, FiatWorkSigning, stored.State)
 	require.NotEmpty(t, stored.SignedTxHash)
 	require.Equal(t, "FINANCIAL_HOLD_ACTIVE", stored.FailureCode)
 }
@@ -756,6 +762,11 @@ func TestFiatConversionFinancialHoldAfterSwapStopsPayoutInitiation(t *testing.T)
 	orchestrator.cfg.Offramp = bridge
 	item, err := orchestrator.Claim(context.Background(), query.records["conversion-1"])
 	require.NoError(t, err)
+	item, err = orchestrator.updateOwned(context.Background(), item.Intent.ConversionID, func(work *FiatConversionWorkItem) error {
+		work.State = FiatWorkSwapBroadcast
+		return nil
+	})
+	require.NoError(t, err)
 	query.records["conversion-1"].State = fiatChainStateSwapSettled
 	query.records["conversion-1"].SwapTxHash = testSwapTxHash
 	item, err = orchestrator.updateOwned(context.Background(), item.Intent.ConversionID, func(work *FiatConversionWorkItem) error {
@@ -771,13 +782,119 @@ func TestFiatConversionFinancialHoldAfterSwapStopsPayoutInitiation(t *testing.T)
 	require.Len(t, submitter.submitted, 1)
 	query.activeCaseID, query.activeHoldCount = "case-after-swap", 1
 	err = orchestrator.process(context.Background(), item.Intent.ConversionID)
-	var terminal *fiatTerminalError
-	require.ErrorAs(t, err, &terminal)
+	var retry *fiatRetryError
+	require.ErrorAs(t, err, &retry)
 	require.Zero(t, bridge.payoutCalls)
 	require.Len(t, submitter.submitted, 1)
 	stored, err := orchestrator.cfg.Store.Get(context.Background(), item.Intent.ConversionID)
 	require.NoError(t, err)
-	require.Equal(t, FiatWorkManualReview, stored.State)
+	require.Equal(t, FiatWorkPayoutQuote, stored.State)
+}
+
+func TestFiatConversionPostInitiationReconciliationIgnoresCurrentAuthorizationChanges(t *testing.T) {
+	blockers := []struct {
+		name  string
+		apply func(*FiatConversionOrchestrator, *fiatQueryFake)
+	}{
+		{"governance_pause", func(_ *FiatConversionOrchestrator, query *fiatQueryFake) { query.params.FiatConversionEnabled = false }},
+		{"profile_rotation", func(_ *FiatConversionOrchestrator, query *fiatQueryFake) {
+			query.params.FiatConversionDexProfileId = "rotated-dex"
+			query.params.FiatConversionDexProfileDigest = bytes.Repeat([]byte{0x91}, sha256.Size)
+			query.params.FiatConversionPayoutProfileId = "rotated-payout"
+			query.params.FiatConversionPayoutProfileDigest = bytes.Repeat([]byte{0x92}, sha256.Size)
+		}},
+		{"compliance_revocation", func(orchestrator *FiatConversionOrchestrator, _ *fiatQueryFake) {
+			orchestrator.cfg.Compliance = resolverFake{err: offramp.ErrComplianceRequired}
+		}},
+		{"financial_hold", func(_ *FiatConversionOrchestrator, query *fiatQueryFake) {
+			query.activeCaseID, query.activeHoldCount = "case-post-init", 1
+		}},
+	}
+	for _, blocker := range blockers {
+		t.Run("swap/"+blocker.name, func(t *testing.T) {
+			orchestrator, query, submitter, _ := newOrchestratorFixture(t)
+			quote := testDEXQuote(t, orchestrator.cfg.Profiles, orchestrator.cfg.Now())
+			blockHash := bytes.Repeat([]byte{3}, sha256.Size)
+			finalityHash, err := CanonicalDEXFinalityHash(quote.ChainID, testSwapTxHash, 100, blockHash, 3, sdkmath.NewInt(99))
+			require.NoError(t, err)
+			dexBoundary := &sideEffectDEXFake{quote: quote, reconciliation: DEXSwapReconciliation{Found: true, Final: true, TxHash: testSwapTxHash, Height: 100, BlockHash: blockHash, Confirmations: 3, FinalityHash: finalityHash, OutputAmount: sdkmath.NewInt(99)}}
+			orchestrator.cfg.DEX = dexBoundary
+			item, err := orchestrator.Claim(context.Background(), query.records["conversion-1"])
+			require.NoError(t, err)
+			item, err = orchestrator.updateOwned(context.Background(), item.Intent.ConversionID, func(work *FiatConversionWorkItem) error {
+				work.State, work.DEXQuote, work.QuoteDigest, work.SwapTxHash = FiatWorkSwapBroadcast, &quote, quote.QuoteDigest, testSwapTxHash
+				return nil
+			})
+			require.NoError(t, err)
+			query.records[item.Intent.ConversionID].State = "SWAP_SUBMITTED"
+			query.records[item.Intent.ConversionID].SwapTxHash = testSwapTxHash
+			blocker.apply(orchestrator, query)
+			require.NoError(t, orchestrator.process(context.Background(), item.Intent.ConversionID))
+			require.Equal(t, 1, dexBoundary.reconcileCalls)
+			require.Len(t, submitter.submitted, 1)
+			require.Equal(t, settlementv1.FiatConversionObservationStage_FIAT_CONVERSION_OBSERVATION_STAGE_SWAP_FINALIZED, submitter.submitted[0].Stage)
+			require.Zero(t, dexBoundary.executeCalls)
+		})
+
+		t.Run("payout/"+blocker.name, func(t *testing.T) {
+			orchestrator, query, submitter, repository := newOrchestratorFixture(t)
+			now := orchestrator.cfg.Now()
+			bridge := &scriptedBridge{now: now}
+			orchestrator.cfg.Offramp = bridge
+			item, err := orchestrator.Claim(context.Background(), query.records["conversion-1"])
+			require.NoError(t, err)
+			decision := orchestrator.cfg.Compliance.(resolverFake).decision
+			quote := offramp.Quote{ID: "payout-quote", Provider: "partner", FiatAmount: sdkmath.LegacyNewDec(99), ExchangeRate: sdkmath.LegacyOneDec(), Fee: sdkmath.NewInt(1), CreatedAt: now, ExpiresAt: now.Add(time.Minute), Request: offramp.QuoteRequest{CryptoSymbol: "USDC", CryptoDenom: "uusdc", CryptoDecimals: 6, CryptoAmount: sdkmath.NewInt(99), FiatCurrency: "USD", PaymentMethod: "ach", Sender: "provider", Destination: "token-beneficiary", BeneficiaryReference: "token-beneficiary", Jurisdiction: "US", CorrelationID: conversionCorrelation(item.Intent.ConversionID), Compliance: decision}}
+			quoteHash, requestHash, corridorID, providerBinding, err := canonicalPayoutQuoteCommitments(quote, orchestrator.cfg.Profiles, item.Intent.ComplianceDigest)
+			require.NoError(t, err)
+			result := testPayoutResult(now, quote, nil, offramp.StatusCompleted)
+			item, err = orchestrator.updateOwned(context.Background(), item.Intent.ConversionID, func(work *FiatConversionWorkItem) error {
+				work.State, work.ObservationSequence = FiatWorkPayoutSubmitted, 0
+				work.SwapTxHash, work.PayoutID, work.PayoutStatus, work.PayoutReferenceHash = testSwapTxHash, result.ID, string(offramp.StatusProcessing), hex.EncodeToString(hashEvidence("payout_reference", []byte(result.Reference)))
+				work.SwapConfirmation.StableAmount = "99"
+				work.PayoutQuote = payoutQuoteSnapshot(quote, requestHash, corridorID, providerBinding, work.Intent.ComplianceDigest, work.PayoutProfileDigest)
+				work.PayoutQuoteDigest = hex.EncodeToString(quoteHash)
+				return nil
+			})
+			require.NoError(t, err)
+			result.Metadata = payoutMetadata(item)
+			bridge.metadataResult = result
+			query.records[item.Intent.ConversionID].State = "PAYOUT_SUBMITTED"
+			query.records[item.Intent.ConversionID].OffRampId = result.ID
+			query.records[item.Intent.ConversionID].OffRampQuoteId = quote.ID
+			query.records[item.Intent.ConversionID].QuoteDigest = quoteHash
+			query.records[item.Intent.ConversionID].QuoteExpiry = quote.ExpiresAt.Unix()
+			event := offramp.WebhookEvent{EventID: "post-init-completed", EventType: "payout.status", Provider: result.Provider, APIVersion: orchestrator.cfg.Profiles.Payout.Webhook.Version, PayoutID: result.ID, QuoteID: result.QuoteID, CorrelationID: payoutMetadata(item)["correlation_id"], Status: offramp.StatusCompleted, OccurredAt: now}
+			require.NoError(t, repository.PutVerifiedWebhookEvent(context.Background(), event))
+			blocker.apply(orchestrator, query)
+			require.NoError(t, orchestrator.process(context.Background(), item.Intent.ConversionID))
+			require.Len(t, submitter.submitted, 1)
+			require.Equal(t, settlementv1.FiatConversionObservationStage_FIAT_CONVERSION_OBSERVATION_STAGE_PAYOUT_COMPLETED, submitter.submitted[0].Stage)
+			require.Zero(t, bridge.payoutCalls, "read-only reconcile must never initiate another payout")
+		})
+
+		t.Run("swap_failure/"+blocker.name, func(t *testing.T) {
+			orchestrator, query, submitter, _ := newOrchestratorFixture(t)
+			quote := testDEXQuote(t, orchestrator.cfg.Profiles, orchestrator.cfg.Now())
+			dexBoundary := &sideEffectDEXFake{quote: quote, reconciliation: DEXSwapReconciliation{Found: true, Final: true, TerminalFailure: true, FailureCode: "DEX_EXECUTION_FAILED", TxHash: testSwapTxHash}}
+			orchestrator.cfg.DEX = dexBoundary
+			item, err := orchestrator.Claim(context.Background(), query.records["conversion-1"])
+			require.NoError(t, err)
+			item, err = orchestrator.updateOwned(context.Background(), item.Intent.ConversionID, func(work *FiatConversionWorkItem) error {
+				work.State, work.DEXQuote, work.QuoteDigest, work.SwapTxHash = FiatWorkSwapBroadcast, &quote, quote.QuoteDigest, testSwapTxHash
+				return nil
+			})
+			require.NoError(t, err)
+			query.records[item.Intent.ConversionID].State = "SWAP_SUBMITTED"
+			query.records[item.Intent.ConversionID].SwapTxHash = testSwapTxHash
+			blocker.apply(orchestrator, query)
+			require.NoError(t, orchestrator.process(context.Background(), item.Intent.ConversionID))
+			require.Len(t, submitter.submitted, 1)
+			require.Equal(t, settlementv1.FiatConversionObservationStage_FIAT_CONVERSION_OBSERVATION_STAGE_FAILED, submitter.submitted[0].Stage)
+			require.Equal(t, "DEX_EXECUTION_FAILED", submitter.submitted[0].FailureCode)
+			require.Zero(t, dexBoundary.executeCalls)
+		})
+	}
 }
 
 func TestFiatConversionExpiredAcceptedQuoteAppendsReplacementBeforeSigning(t *testing.T) {
@@ -833,6 +950,67 @@ func TestFiatConversionExpiredAcceptedQuoteAppendsReplacementBeforeSigning(t *te
 	require.Zero(t, dexBoundary.executeCalls)
 }
 
+func TestFiatConversionExpiredPayoutQuoteRequotesBeforeInitiationAndSurvivesRestart(t *testing.T) {
+	orchestrator, query, submitter, _ := newOrchestratorFixture(t)
+	now := orchestrator.cfg.Now()
+	bridge := &scriptedBridge{now: now}
+	orchestrator.cfg.Offramp = bridge
+	item, err := orchestrator.Claim(context.Background(), query.records["conversion-1"])
+	require.NoError(t, err)
+	oldQuote := offramp.Quote{ID: "payout-quote-expired", Provider: "partner", FiatAmount: sdkmath.LegacyNewDec(99), ExchangeRate: sdkmath.LegacyOneDec(), Fee: sdkmath.NewInt(1), CreatedAt: now.Add(-2 * time.Minute), ExpiresAt: now.Add(-time.Minute), Request: offramp.QuoteRequest{CryptoSymbol: "USDC", CryptoDenom: "uusdc", CryptoDecimals: 6, CryptoAmount: sdkmath.NewInt(99), FiatCurrency: "USD", PaymentMethod: "ach", Sender: "provider", Destination: "token-beneficiary", BeneficiaryReference: "token-beneficiary", Jurisdiction: "US", CorrelationID: conversionCorrelation(item.Intent.ConversionID), Compliance: orchestrator.cfg.Compliance.(resolverFake).decision}}
+	quoteHash, requestHash, corridorID, providerBinding, err := canonicalPayoutQuoteCommitments(oldQuote, orchestrator.cfg.Profiles, item.Intent.ComplianceDigest)
+	require.NoError(t, err)
+	item, err = orchestrator.updateOwned(context.Background(), item.Intent.ConversionID, func(work *FiatConversionWorkItem) error {
+		work.State, work.SwapTxHash, work.ObservationSequence = FiatWorkPayoutQuote, testSwapTxHash, 4
+		work.SwapConfirmation.StableAmount = "99"
+		work.PayoutQuote = payoutQuoteSnapshot(oldQuote, requestHash, corridorID, providerBinding, work.Intent.ComplianceDigest, work.PayoutProfileDigest)
+		work.PayoutQuoteDigest = hex.EncodeToString(quoteHash)
+		return nil
+	})
+	require.NoError(t, err)
+	chain := query.records[item.Intent.ConversionID]
+	chain.State, chain.ObservationSequence, chain.SwapTxHash = fiatChainStatePayoutPending, 4, testSwapTxHash
+	chain.OffRampQuoteId, chain.QuoteDigest, chain.QuoteExpiry = oldQuote.ID, quoteHash, oldQuote.ExpiresAt.Unix()
+	chain.LastObservationDigest = mustHex32(item.ObservationDigest)
+	err = orchestrator.process(context.Background(), item.Intent.ConversionID)
+	var retry *fiatRetryError
+	require.ErrorAs(t, err, &retry)
+	require.Zero(t, bridge.payoutCalls)
+	stored, err := orchestrator.cfg.Store.Get(context.Background(), item.Intent.ConversionID)
+	require.NoError(t, err)
+	require.Equal(t, FiatWorkSwapFinalized, stored.State)
+	require.Equal(t, oldQuote.ID, stored.PayoutQuote.ID, "expired quote remains durable lineage until replacement observation commits")
+	_, err = orchestrator.updateOwned(context.Background(), item.Intent.ConversionID, func(work *FiatConversionWorkItem) error {
+		work.NextRetryAt = now
+		return nil
+	})
+	require.NoError(t, err)
+	require.NoError(t, orchestrator.process(context.Background(), item.Intent.ConversionID))
+	require.Len(t, submitter.submitted, 1)
+	replacement := submitter.submitted[0]
+	require.Equal(t, uint64(5), replacement.ObservationSequence)
+	require.Equal(t, settlementv1.FiatConversionObservationStage_FIAT_CONVERSION_OBSERVATION_STAGE_PAYOUT_QUOTED, replacement.Stage)
+	require.NotEqual(t, oldQuote.ID, replacement.OffRampQuoteId)
+	require.NotEqual(t, quoteHash, replacement.QuoteDigest)
+	require.Zero(t, bridge.payoutCalls)
+
+	path := orchestrator.cfg.Store.(*FileFiatConversionStore).path
+	require.NoError(t, orchestrator.Stop(context.Background()))
+	orchestrator.cfg.Store = nil
+	reopened, err := NewFileFiatConversionStore(path)
+	require.NoError(t, err)
+	restarted, err := NewFiatConversionOrchestrator(FiatConversionOrchestratorConfig{Enabled: true, Production: true, ProviderAddress: "provider", Store: reopened, Lease: NewLocalFiatConversionLease(), LeaseTTL: time.Minute, PollInterval: time.Hour, RetryBackoff: time.Millisecond, MaxRetryBackoff: time.Second, MaxAttempts: 3, Now: func() time.Time { return now }, Profiles: orchestrator.cfg.Profiles, Query: query, Submitter: submitter, DEX: fiatDEXFake{}, Custody: custodyFake{}, Offramp: bridge, Destination: orchestrator.cfg.Destination, Compliance: orchestrator.cfg.Compliance, WebhookEvents: orchestrator.cfg.WebhookEvents, WebhookBindings: orchestrator.cfg.WebhookBindings})
+	require.NoError(t, err)
+	require.NoError(t, restarted.Start(context.Background()))
+	t.Cleanup(func() { _ = restarted.Stop(context.Background()) })
+	restartedItem, err := reopened.Get(context.Background(), item.Intent.ConversionID)
+	require.NoError(t, err)
+	require.Equal(t, FiatWorkPayoutQuote, restartedItem.State, "known replacement quote is not made ambiguous by restart")
+	query.records[item.Intent.ConversionID].LastObservationDigest = mustHex32(restartedItem.ObservationDigest)
+	require.NoError(t, restarted.process(context.Background(), item.Intent.ConversionID))
+	require.Equal(t, 1, bridge.payoutCalls)
+}
+
 func TestFiatConversionRestartRecoveryAtEveryMajorStage(t *testing.T) {
 	tests := []struct {
 		state FiatConversionWorkState
@@ -842,7 +1020,7 @@ func TestFiatConversionRestartRecoveryAtEveryMajorStage(t *testing.T) {
 		{FiatWorkQuoteReported, FiatWorkQuoteReported}, {FiatWorkSigning, FiatWorkAmbiguous},
 		{FiatWorkSwapBroadcast, FiatWorkAmbiguous}, {FiatWorkAmbiguous, FiatWorkAmbiguous},
 		{FiatWorkSwapFinalized, FiatWorkSwapFinalized},
-		{FiatWorkPayoutQuote, FiatWorkPayoutAmbiguous}, {FiatWorkPayoutSubmitted, FiatWorkPayoutAmbiguous}, {FiatWorkPayoutAmbiguous, FiatWorkPayoutAmbiguous},
+		{FiatWorkPayoutQuote, FiatWorkPayoutQuote}, {FiatWorkPayoutSubmitted, FiatWorkPayoutAmbiguous}, {FiatWorkPayoutAmbiguous, FiatWorkPayoutAmbiguous},
 	}
 	for _, test := range tests {
 		t.Run(string(test.state), func(t *testing.T) {

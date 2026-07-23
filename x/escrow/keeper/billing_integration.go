@@ -16,6 +16,12 @@ func (k *keeper) GetUsageRecord(ctx sdk.Context, recordID string) (*billing.Usag
 	return k.NewReconciliationKeeper().GetUsageRecord(ctx, recordID)
 }
 
+// GetInvoice returns the immutable billing ledger record used for canonical
+// financial-case party authorization.
+func (k *keeper) GetInvoice(ctx sdk.Context, invoiceID string) (*billing.InvoiceLedgerRecord, error) {
+	return k.NewInvoiceKeeper().GetInvoice(ctx, invoiceID)
+}
+
 // CreateInvoice stores an invoice ledger record.
 func (k *keeper) CreateInvoice(ctx sdk.Context, invoice *billing.Invoice, artifactCID string) (*billing.InvoiceLedgerRecord, error) {
 	return k.NewInvoiceKeeper().CreateInvoice(ctx, invoice, artifactCID)

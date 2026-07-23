@@ -15,6 +15,11 @@ const (
 
 	// ModuleAccountName is the name for the module's account
 	ModuleAccountName = ModuleName
+
+	// FiatConversionCustodyAccountName is the governed, blocked module account
+	// that receives native payout value exactly once when authenticated external
+	// fiat finality is accepted. No normal execution path spends from this sink.
+	FiatConversionCustodyAccountName = ModuleName + "_fiat_custody"
 )
 
 // Store key prefixes
@@ -165,7 +170,131 @@ var (
 
 	// PrefixUsagePeriodState stores per-metric non-overlap state.
 	PrefixUsagePeriodState = []byte{0x37}
+
+	// PrefixFinancialCase stores canonical financial cases by stable ID.
+	PrefixFinancialCase = []byte{0x40}
+	// PrefixFinancialCaseBySubject maps one canonical active subject to a case.
+	PrefixFinancialCaseBySubject = []byte{0x41}
+	// PrefixFinancialCaseByOrder indexes cases by order.
+	PrefixFinancialCaseByOrder = []byte{0x42}
+	// PrefixFinancialCaseByInvoice indexes cases by invoice.
+	PrefixFinancialCaseByInvoice = []byte{0x43}
+	// PrefixFinancialCaseByUsage indexes cases by usage record.
+	PrefixFinancialCaseByUsage = []byte{0x44}
+	// PrefixFinancialCaseByJob indexes cases by HPC job.
+	PrefixFinancialCaseByJob = []byte{0x45}
+	// PrefixFinancialCaseByEscrow indexes cases by escrow.
+	PrefixFinancialCaseByEscrow = []byte{0x46}
+	// PrefixFinancialCaseByStatus indexes cases by lifecycle status.
+	PrefixFinancialCaseByStatus = []byte{0x47}
+	// PrefixFinancialCaseByParty indexes claimant/respondent cases.
+	PrefixFinancialCaseByParty = []byte{0x48}
+	// PrefixFinancialClaimIdempotency binds a retry key to payload+case+claim.
+	PrefixFinancialClaimIdempotency = []byte{0x49}
+	// PrefixFinancialCaseDeadline indexes the next deterministic timeout.
+	PrefixFinancialCaseDeadline = []byte{0x4A}
+	// PrefixFinancialCaseActivation gates v1.7.0 legacy mutation fencing.
+	PrefixFinancialCaseActivation = []byte{0x4B}
+	// PrefixFinancialCaseMigrationAudit stores reconciliation counters/digest.
+	PrefixFinancialCaseMigrationAudit = []byte{0x4C}
+	// PrefixFinancialCaseBySettlement indexes cases by settlement.
+	PrefixFinancialCaseBySettlement = []byte{0x4D}
+	// PrefixFinancialCaseByReservation indexes cases by Task 84C reservation.
+	PrefixFinancialCaseByReservation = []byte{0x4E}
+	// PrefixFinancialCaseByLease indexes cases by canonical market lease.
+	PrefixFinancialCaseByLease = []byte{0x4F}
+	// PrefixFinancialAppealIdempotency binds an appeal retry key to its payload.
+	PrefixFinancialAppealIdempotency = []byte{0x50}
+	// PrefixFiatObservationReplay binds conversion+idempotency to payload digest.
+	PrefixFiatObservationReplay = []byte{0x51}
+	// PrefixFiatObservationSequence binds conversion+sequence to payload digest.
+	PrefixFiatObservationSequence = []byte{0x52}
+	// PrefixFiatConversionRequestDigest binds request idempotency to canonical payload.
+	PrefixFiatConversionRequestDigest = []byte{0x53}
+	// PrefixFiatConversionMigrationAudit stores the v1.8.0 deterministic report.
+	PrefixFiatConversionMigrationAudit = []byte{0x54}
+	// PrefixFiatCustodyEffect stores one immutable accounting effect per conversion.
+	PrefixFiatCustodyEffect = []byte{0x55}
 )
+
+func financialIndexKey(prefix []byte, components ...string) []byte {
+	length := len(prefix)
+	for _, component := range components {
+		length += len(component) + 1
+	}
+	key := make([]byte, 0, length)
+	key = append(key, prefix...)
+	for _, component := range components {
+		key = append(key, []byte(component)...)
+		key = append(key, 0)
+	}
+	return key
+}
+
+func FinancialCaseKey(caseID string) []byte { return financialIndexKey(PrefixFinancialCase, caseID) }
+func FinancialSubjectKey(subjectKey string) []byte {
+	return financialIndexKey(PrefixFinancialCaseBySubject, subjectKey)
+}
+func FinancialCaseIndexKey(prefix []byte, value, caseID string) []byte {
+	return financialIndexKey(prefix, value, caseID)
+}
+func FinancialCaseIndexPrefix(prefix []byte, value string) []byte {
+	return financialIndexKey(prefix, value)
+}
+func FinancialClaimIdempotencyKey(key []byte) []byte {
+	result := append([]byte(nil), PrefixFinancialClaimIdempotency...)
+	return append(result, key...)
+}
+func FinancialAppealIdempotencyKey(key []byte) []byte {
+	result := append([]byte(nil), PrefixFinancialAppealIdempotency...)
+	return append(result, key...)
+}
+func FinancialCaseDeadlineKey(height int64, caseID string) []byte {
+	key := append([]byte(nil), PrefixFinancialCaseDeadline...)
+	if height < 0 {
+		height = 0
+	}
+	key = appendUint64(key, uint64(height)) //nolint:gosec // negative heights are normalized above
+	key = append(key, 0)
+	return append(key, []byte(caseID)...)
+}
+func FinancialCaseDeadlinePrefix() []byte { return append([]byte(nil), PrefixFinancialCaseDeadline...) }
+func FinancialCaseActivationKey() []byte {
+	return append([]byte(nil), PrefixFinancialCaseActivation...)
+}
+func FinancialCaseMigrationAuditKey() []byte {
+	return append([]byte(nil), PrefixFinancialCaseMigrationAudit...)
+}
+
+func FiatObservationReplayKey(conversionID string, idempotency []byte) []byte {
+	key := financialIndexKey(PrefixFiatObservationReplay, conversionID)
+	return append(key, idempotency...)
+}
+
+func FiatObservationReplayPrefix(conversionID string) []byte {
+	return financialIndexKey(PrefixFiatObservationReplay, conversionID)
+}
+
+func FiatObservationSequenceKey(conversionID string, sequence uint64) []byte {
+	key := financialIndexKey(PrefixFiatObservationSequence, conversionID)
+	return appendUint64(key, sequence)
+}
+
+func FiatObservationSequencePrefix(conversionID string) []byte {
+	return financialIndexKey(PrefixFiatObservationSequence, conversionID)
+}
+
+func FiatConversionRequestDigestKey(idempotency string) []byte {
+	return financialIndexKey(PrefixFiatConversionRequestDigest, idempotency)
+}
+
+func FiatConversionMigrationAuditKey() []byte {
+	return append([]byte(nil), PrefixFiatConversionMigrationAudit...)
+}
+
+func FiatCustodyEffectKey(conversionID string) []byte {
+	return financialIndexKey(PrefixFiatCustodyEffect, conversionID)
+}
 
 // ParamsKey returns the store key for module parameters
 func ParamsKey() []byte {

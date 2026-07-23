@@ -17,6 +17,7 @@ import (
 type BillingKeeper interface {
 	SaveUsageRecord(ctx sdk.Context, record *billing.UsageRecord) error
 	GetUsageRecord(ctx sdk.Context, recordID string) (*billing.UsageRecord, error)
+	GetInvoice(ctx sdk.Context, invoiceID string) (*billing.InvoiceLedgerRecord, error)
 	CreateInvoice(ctx sdk.Context, invoice *billing.Invoice, artifactCID string) (*billing.InvoiceLedgerRecord, error)
 	UpdateInvoiceStatus(ctx sdk.Context, invoiceID string, newStatus billing.InvoiceStatus, initiator string) (*billing.InvoiceLedgerEntry, error)
 	RecordPayment(ctx sdk.Context, invoiceID string, amount sdk.Coins, initiator string) (*billing.InvoiceLedgerEntry, error)

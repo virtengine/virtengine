@@ -27,14 +27,27 @@ func (m msgServer) ProviderHeartbeat(ctx context.Context, msg *types.MsgProvider
 	if msg == nil {
 		return nil, types.ErrInvalidRequest
 	}
-	if _, err := sdk.AccAddressFromBech32(msg.ProviderAddress); err != nil {
+	provider, err := sdk.AccAddressFromBech32(msg.ProviderAddress)
+	if err != nil {
 		return nil, types.ErrInvalidRequest.Wrap("invalid provider address")
+	}
+	if m.eligibilityKeeper == nil {
+		return nil, types.ErrEligibilityUnavailable
+	}
+	if !m.eligibilityKeeper.IsProviderEligible(sdkCtx, provider) {
+		return nil, types.ErrProviderIneligible
 	}
 	if msg.ResourceClass == types.ResourceClassUnspecified {
 		return nil, types.ErrInvalidRequest.Wrap("resource class required")
 	}
 	if msg.Sequence == 0 {
 		return nil, types.ErrInvalidRequest.Wrap("sequence must be positive")
+	}
+	if err := validateCapacity(msg.Total, false); err != nil {
+		return nil, err
+	}
+	if err := validateCapacity(msg.Available, true); err != nil {
+		return nil, err
 	}
 
 	inv, err := m.UpdateInventoryFromHeartbeat(sdkCtx, msg)
@@ -56,6 +69,9 @@ func (m msgServer) ProviderHeartbeat(ctx context.Context, msg *types.MsgProvider
 // AllocateResources handles allocation requests.
 func (m msgServer) AllocateResources(ctx context.Context, msg *types.MsgAllocateResources) (*types.MsgAllocateResourcesResponse, error) {
 	sdkCtx := sdk.UnwrapSDKContext(ctx)
+	if m.IsCanonicalReservationsActive(sdkCtx) {
+		return nil, types.ErrLegacyAllocationDeprecated
+	}
 	if msg == nil {
 		return nil, types.ErrInvalidRequest
 	}
@@ -85,6 +101,9 @@ func (m msgServer) AllocateResources(ctx context.Context, msg *types.MsgAllocate
 // ActivateAllocation acknowledges an allocation.
 func (m msgServer) ActivateAllocation(ctx context.Context, msg *types.MsgActivateAllocation) (*types.MsgActivateAllocationResponse, error) {
 	sdkCtx := sdk.UnwrapSDKContext(ctx)
+	if m.IsCanonicalReservationsActive(sdkCtx) {
+		return nil, types.ErrLegacyAllocationDeprecated
+	}
 	if msg == nil {
 		return nil, types.ErrInvalidRequest
 	}
@@ -114,6 +133,9 @@ func (m msgServer) ActivateAllocation(ctx context.Context, msg *types.MsgActivat
 // ReleaseAllocation releases an allocation.
 func (m msgServer) ReleaseAllocation(ctx context.Context, msg *types.MsgReleaseAllocation) (*types.MsgReleaseAllocationResponse, error) {
 	sdkCtx := sdk.UnwrapSDKContext(ctx)
+	if m.IsCanonicalReservationsActive(sdkCtx) {
+		return nil, types.ErrLegacyAllocationDeprecated
+	}
 	if msg == nil {
 		return nil, types.ErrInvalidRequest
 	}

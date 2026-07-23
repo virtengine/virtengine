@@ -1025,6 +1025,13 @@ func (k Keeper) SetWaldurSyncRecord(ctx sdk.Context, record *marketplace.WaldurS
 
 // ProcessWaldurCallback processes a Waldur callback
 func (k Keeper) ProcessWaldurCallback(ctx sdk.Context, callback *marketplace.WaldurCallback) error {
+	if callback == nil {
+		return marketplace.ErrWaldurCallbackInvalid.Wrap("callback is required")
+	}
+	if k.IsCanonicalLifecycleActive(ctx) &&
+		(callback.ChainEntityType == marketplace.SyncTypeOrder || callback.ChainEntityType == marketplace.SyncTypeBid || callback.ChainEntityType == marketplace.SyncTypeAllocation) {
+		return marketplace.ErrLifecycleDeprecated
+	}
 	// Validate callback
 	if err := callback.ValidateAt(ctx.BlockTime()); err != nil {
 		return marketplace.ErrWaldurCallbackInvalid.Wrap(err.Error())
@@ -1700,6 +1707,9 @@ func (k Keeper) SetEventCheckpoint(ctx sdk.Context, checkpoint *marketplace.Even
 
 // RequestUsageUpdate requests a usage update for an allocation and emits UsageUpdateRequested event
 func (k Keeper) RequestUsageUpdate(ctx sdk.Context, allocationID marketplace.AllocationID, requestType string) error {
+	if k.IsCanonicalLifecycleActive(ctx) {
+		return marketplace.ErrLifecycleDeprecated
+	}
 	allocation, found := k.GetAllocation(ctx, allocationID)
 	if !found {
 		return marketplace.ErrAllocationNotFound

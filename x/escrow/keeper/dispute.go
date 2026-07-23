@@ -2,6 +2,7 @@
 package keeper
 
 import (
+	"crypto/sha256"
 	"encoding/json"
 	"fmt"
 	"time"
@@ -11,7 +12,16 @@ import (
 	"github.com/cosmos/cosmos-sdk/types/query"
 
 	"github.com/virtengine/virtengine/x/escrow/types/billing"
+	settlementkeeper "github.com/virtengine/virtengine/x/settlement/keeper"
+	settlementtypes "github.com/virtengine/virtengine/x/settlement/types"
 )
+
+type CanonicalFinancialCaseKeeper interface {
+	OpenFinancialCase(ctx sdk.Context, request settlementkeeper.FinancialCaseOpenRequest) (*settlementtypes.FinancialCase, *settlementtypes.FinancialClaim, bool, error)
+	EscalateFinancialCase(ctx sdk.Context, caseID, actor string, reasonHash []byte) error
+	GetFinancialCaseBySubject(ctx sdk.Context, subject settlementtypes.FinancialSubject) (settlementtypes.FinancialCase, bool)
+	IsFinancialCasesActive(ctx sdk.Context) bool
+}
 
 // DisputeKeeper defines the interface for dispute workflow management
 type DisputeKeeper interface {
@@ -97,6 +107,10 @@ type DisputeKeeper interface {
 // disputeKeeper implements DisputeKeeper
 type disputeKeeper struct {
 	k *keeper
+}
+
+func (k *keeper) SetCanonicalFinancialCases(financialCases CanonicalFinancialCaseKeeper) {
+	k.canonicalFinancialCases = financialCases
 }
 
 // NewDisputeKeeper creates a new dispute keeper from the base keeper
@@ -237,6 +251,27 @@ func (dk *disputeKeeper) InitiateDispute(
 	disputedAmount sdk.Coins,
 	initiator string,
 ) (*billing.DisputeWorkflow, error) {
+	cacheCtx, write := ctx.CacheContext()
+	workflow, err := dk.initiateDispute(cacheCtx, invoiceID, category, subject, description, disputedAmount, initiator)
+	if err != nil {
+		return nil, err
+	}
+	write()
+	return workflow, nil
+}
+
+func (dk *disputeKeeper) initiateDispute(
+	ctx sdk.Context,
+	invoiceID string,
+	category billing.DisputeCategory,
+	subject string,
+	description string,
+	disputedAmount sdk.Coins,
+	initiator string,
+) (*billing.DisputeWorkflow, error) {
+	if dk.k.canonicalFinancialCases != nil && dk.k.canonicalFinancialCases.IsFinancialCasesActive(ctx) {
+		return dk.initiateCanonicalDispute(ctx, invoiceID, category, subject, description, disputedAmount, initiator)
+	}
 	// Get invoice keeper to validate invoice exists and can be disputed
 	invoiceKeeper := dk.k.NewInvoiceKeeper()
 
@@ -328,6 +363,40 @@ func (dk *disputeKeeper) InitiateDispute(
 	dk.SetDisputeSequence(ctx, seq+1)
 
 	return workflow, nil
+}
+
+func (dk *disputeKeeper) initiateCanonicalDispute(ctx sdk.Context, invoiceID string, category billing.DisputeCategory, subject, description string, disputedAmount sdk.Coins, initiator string) (*billing.DisputeWorkflow, error) {
+	invoice, err := dk.k.NewInvoiceKeeper().GetInvoice(ctx, invoiceID)
+	if err != nil {
+		return nil, err
+	}
+	respondent := invoice.Provider
+	if initiator == invoice.Provider {
+		respondent = invoice.Customer
+	}
+	hash := sha256.Sum256([]byte(subject + "\x00" + description))
+	idempotencyHash := sha256.Sum256([]byte("escrow/billing/financial-case/v1\x00" + invoiceID + "\x00" + initiator + "\x00" + category.String()))
+	idempotency := idempotencyHash[:]
+	_, claim, _, err := dk.k.canonicalFinancialCases.OpenFinancialCase(ctx, settlementkeeper.FinancialCaseOpenRequest{
+		Subject:  settlementtypes.FinancialSubject{Type: settlementtypes.FinancialSubjectTypeInvoice, PrimaryId: invoiceID, InvoiceId: invoiceID, OrderId: invoice.OrderID, EscrowId: invoice.EscrowID, LeaseId: invoice.LeaseID},
+		Claimant: initiator, Respondent: respondent, IdempotencyKey: idempotency, TrustedAdapter: true,
+		Claim: settlementtypes.FinancialClaim{ClaimType: settlementtypes.FinancialClaimTypeBilling, Claimant: initiator, SourceModule: "escrow", SourceReference: invoiceID, EvidenceHash: hash[:], EncryptedReference: fmt.Sprintf("billing://invoice/%s/evidence-hash/%x", invoiceID, hash[:]), IdempotencyKey: idempotency},
+	})
+	if err != nil {
+		return nil, err
+	}
+	projectionID := claim.ClaimId
+	now := ctx.BlockTime()
+	workflow := billing.NewDisputeWorkflow(projectionID, invoiceID, initiator, category, subject, "canonical financial case projection", disputedAmount, billing.NewDisputeWindow(projectionID+"-window", invoiceID, now, dk.k.canonicalDisputeWindowSeconds(ctx)), nil, ctx.BlockHeight(), now)
+	workflow.Status = billing.DisputeStatusUnderReview
+	if err := dk.CreateDisputeWorkflow(ctx, workflow); err != nil {
+		if existing, getErr := dk.GetDisputeWorkflow(ctx, projectionID); getErr == nil {
+			return existing, nil
+		}
+		return nil, err
+	}
+	_, err = dk.k.NewInvoiceKeeper().UpdateInvoiceStatus(ctx, invoiceID, billing.InvoiceStatusDisputed, initiator)
+	return workflow, err
 }
 
 // UploadEvidence uploads evidence for a dispute
@@ -455,6 +524,34 @@ func (dk *disputeKeeper) ResolveDispute(
 	resolver string,
 	refundAmount sdk.Coins,
 ) error {
+	cacheCtx, write := ctx.CacheContext()
+	if err := dk.resolveDispute(cacheCtx, disputeID, resolution, details, resolver, refundAmount); err != nil {
+		return err
+	}
+	write()
+	return nil
+}
+
+func (dk *disputeKeeper) resolveDispute(
+	ctx sdk.Context,
+	disputeID string,
+	resolution billing.DisputeResolutionType,
+	details string,
+	resolver string,
+	refundAmount sdk.Coins,
+) error {
+	if dk.k.canonicalFinancialCases != nil && dk.k.canonicalFinancialCases.IsFinancialCasesActive(ctx) {
+		workflow, err := dk.GetDisputeWorkflow(ctx, disputeID)
+		if err != nil {
+			return err
+		}
+		reasonHash := sha256.Sum256([]byte(resolution.String() + "\x00" + details + "\x00" + refundAmount.String()))
+		financialCase, found := dk.k.canonicalFinancialCases.GetFinancialCaseBySubject(ctx, settlementtypes.FinancialSubject{Type: settlementtypes.FinancialSubjectTypeInvoice, PrimaryId: workflow.InvoiceID, InvoiceId: workflow.InvoiceID})
+		if !found || !financialCaseHasBillingProjection(financialCase, disputeID) {
+			return settlementtypes.ErrLegacyFinancialMutationFenced
+		}
+		return dk.k.canonicalFinancialCases.EscalateFinancialCase(ctx, financialCase.CaseId, resolver, reasonHash[:])
+	}
 	workflow, err := dk.GetDisputeWorkflow(ctx, disputeID)
 	if err != nil {
 		return err
@@ -542,6 +639,15 @@ func (dk *disputeKeeper) ResolveDispute(
 
 // EscalateDispute escalates a dispute
 func (dk *disputeKeeper) EscalateDispute(ctx sdk.Context, disputeID string, escalateTo string, reason string) error {
+	cacheCtx, write := ctx.CacheContext()
+	if err := dk.escalateDispute(cacheCtx, disputeID, escalateTo, reason); err != nil {
+		return err
+	}
+	write()
+	return nil
+}
+
+func (dk *disputeKeeper) escalateDispute(ctx sdk.Context, disputeID string, escalateTo string, reason string) error {
 	workflow, err := dk.GetDisputeWorkflow(ctx, disputeID)
 	if err != nil {
 		return err
@@ -549,12 +655,31 @@ func (dk *disputeKeeper) EscalateDispute(ctx sdk.Context, disputeID string, esca
 
 	// Get initiator from workflow for audit
 	escalatedBy := workflow.InitiatedBy
+	if dk.k.canonicalFinancialCases != nil && dk.k.canonicalFinancialCases.IsFinancialCasesActive(ctx) {
+		financialCase, found := dk.k.canonicalFinancialCases.GetFinancialCaseBySubject(ctx, settlementtypes.FinancialSubject{Type: settlementtypes.FinancialSubjectTypeInvoice, PrimaryId: workflow.InvoiceID, InvoiceId: workflow.InvoiceID})
+		if !found || !financialCaseHasBillingProjection(financialCase, disputeID) {
+			return settlementtypes.ErrLegacyFinancialMutationFenced
+		}
+		reasonHash := sha256.Sum256([]byte(escalateTo + "\x00" + reason))
+		if err := dk.k.canonicalFinancialCases.EscalateFinancialCase(ctx, financialCase.CaseId, escalatedBy, reasonHash[:]); err != nil {
+			return err
+		}
+	}
 
 	if err := workflow.Escalate(escalateTo, reason, escalatedBy, ctx.BlockTime()); err != nil {
 		return err
 	}
 
 	return dk.UpdateDisputeWorkflow(ctx, workflow)
+}
+
+func financialCaseHasBillingProjection(financialCase settlementtypes.FinancialCase, disputeID string) bool {
+	for _, claim := range financialCase.Claims {
+		if claim.ClaimId == disputeID && claim.SourceModule == "escrow" {
+			return true
+		}
+	}
+	return false
 }
 
 // CheckDisputeWindowOpen checks if the dispute window is open for an invoice

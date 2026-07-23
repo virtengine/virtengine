@@ -104,11 +104,13 @@ export interface QueryReservationsResponse {
 
 export interface QueryReservationLineageRequest {
   reservationId: string;
+  pagination: PageRequest | undefined;
 }
 
 export interface QueryReservationLineageResponse {
   reservation: Reservation | undefined;
   events: ReservationEvent[];
+  pagination: PageResponse | undefined;
 }
 
 export interface QueryParamsRequest {
@@ -1390,7 +1392,7 @@ export const QueryReservationsResponse: MessageFns<
 };
 
 function createBaseQueryReservationLineageRequest(): QueryReservationLineageRequest {
-  return { reservationId: "" };
+  return { reservationId: "", pagination: undefined };
 }
 
 export const QueryReservationLineageRequest: MessageFns<
@@ -1402,6 +1404,9 @@ export const QueryReservationLineageRequest: MessageFns<
   encode(message: QueryReservationLineageRequest, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
     if (message.reservationId !== "") {
       writer.uint32(10).string(message.reservationId);
+    }
+    if (message.pagination !== undefined) {
+      PageRequest.encode(message.pagination, writer.uint32(18).fork()).join();
     }
     return writer;
   },
@@ -1421,6 +1426,14 @@ export const QueryReservationLineageRequest: MessageFns<
           message.reservationId = reader.string();
           continue;
         }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.pagination = PageRequest.decode(reader, reader.uint32());
+          continue;
+        }
       }
       if ((tag & 7) === 4 || tag === 0) {
         break;
@@ -1431,7 +1444,10 @@ export const QueryReservationLineageRequest: MessageFns<
   },
 
   fromJSON(object: any): QueryReservationLineageRequest {
-    return { reservationId: isSet(object.reservation_id) ? globalThis.String(object.reservation_id) : "" };
+    return {
+      reservationId: isSet(object.reservation_id) ? globalThis.String(object.reservation_id) : "",
+      pagination: isSet(object.pagination) ? PageRequest.fromJSON(object.pagination) : undefined,
+    };
   },
 
   toJSON(message: QueryReservationLineageRequest): unknown {
@@ -1439,17 +1455,23 @@ export const QueryReservationLineageRequest: MessageFns<
     if (message.reservationId !== "") {
       obj.reservation_id = message.reservationId;
     }
+    if (message.pagination !== undefined) {
+      obj.pagination = PageRequest.toJSON(message.pagination);
+    }
     return obj;
   },
   fromPartial(object: DeepPartial<QueryReservationLineageRequest>): QueryReservationLineageRequest {
     const message = createBaseQueryReservationLineageRequest();
     message.reservationId = object.reservationId ?? "";
+    message.pagination = (object.pagination !== undefined && object.pagination !== null)
+      ? PageRequest.fromPartial(object.pagination)
+      : undefined;
     return message;
   },
 };
 
 function createBaseQueryReservationLineageResponse(): QueryReservationLineageResponse {
-  return { reservation: undefined, events: [] };
+  return { reservation: undefined, events: [], pagination: undefined };
 }
 
 export const QueryReservationLineageResponse: MessageFns<
@@ -1464,6 +1486,9 @@ export const QueryReservationLineageResponse: MessageFns<
     }
     for (const v of message.events) {
       ReservationEvent.encode(v!, writer.uint32(18).fork()).join();
+    }
+    if (message.pagination !== undefined) {
+      PageResponse.encode(message.pagination, writer.uint32(26).fork()).join();
     }
     return writer;
   },
@@ -1491,6 +1516,14 @@ export const QueryReservationLineageResponse: MessageFns<
           message.events.push(ReservationEvent.decode(reader, reader.uint32()));
           continue;
         }
+        case 3: {
+          if (tag !== 26) {
+            break;
+          }
+
+          message.pagination = PageResponse.decode(reader, reader.uint32());
+          continue;
+        }
       }
       if ((tag & 7) === 4 || tag === 0) {
         break;
@@ -1506,6 +1539,7 @@ export const QueryReservationLineageResponse: MessageFns<
       events: globalThis.Array.isArray(object?.events)
         ? object.events.map((e: any) => ReservationEvent.fromJSON(e))
         : [],
+      pagination: isSet(object.pagination) ? PageResponse.fromJSON(object.pagination) : undefined,
     };
   },
 
@@ -1517,6 +1551,9 @@ export const QueryReservationLineageResponse: MessageFns<
     if (message.events?.length) {
       obj.events = message.events.map((e) => ReservationEvent.toJSON(e));
     }
+    if (message.pagination !== undefined) {
+      obj.pagination = PageResponse.toJSON(message.pagination);
+    }
     return obj;
   },
   fromPartial(object: DeepPartial<QueryReservationLineageResponse>): QueryReservationLineageResponse {
@@ -1525,6 +1562,9 @@ export const QueryReservationLineageResponse: MessageFns<
       ? Reservation.fromPartial(object.reservation)
       : undefined;
     message.events = object.events?.map((e) => ReservationEvent.fromPartial(e)) || [];
+    message.pagination = (object.pagination !== undefined && object.pagination !== null)
+      ? PageResponse.fromPartial(object.pagination)
+      : undefined;
     return message;
   },
 };

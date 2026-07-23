@@ -221,6 +221,8 @@ export interface MsgFlagDispute {
 /** MsgFlagDisputeResponse is the response for MsgFlagDispute */
 export interface MsgFlagDisputeResponse {
   disputeId: string;
+  financialCaseId: string;
+  financialCaseStatus: string;
 }
 
 /** MsgResolveDispute resolves a dispute (moderator only) */
@@ -2765,7 +2767,7 @@ export const MsgFlagDispute: MessageFns<MsgFlagDispute, "virtengine.hpc.v1.MsgFl
 };
 
 function createBaseMsgFlagDisputeResponse(): MsgFlagDisputeResponse {
-  return { disputeId: "" };
+  return { disputeId: "", financialCaseId: "", financialCaseStatus: "" };
 }
 
 export const MsgFlagDisputeResponse: MessageFns<MsgFlagDisputeResponse, "virtengine.hpc.v1.MsgFlagDisputeResponse"> = {
@@ -2774,6 +2776,12 @@ export const MsgFlagDisputeResponse: MessageFns<MsgFlagDisputeResponse, "virteng
   encode(message: MsgFlagDisputeResponse, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
     if (message.disputeId !== "") {
       writer.uint32(10).string(message.disputeId);
+    }
+    if (message.financialCaseId !== "") {
+      writer.uint32(18).string(message.financialCaseId);
+    }
+    if (message.financialCaseStatus !== "") {
+      writer.uint32(26).string(message.financialCaseStatus);
     }
     return writer;
   },
@@ -2793,6 +2801,22 @@ export const MsgFlagDisputeResponse: MessageFns<MsgFlagDisputeResponse, "virteng
           message.disputeId = reader.string();
           continue;
         }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.financialCaseId = reader.string();
+          continue;
+        }
+        case 3: {
+          if (tag !== 26) {
+            break;
+          }
+
+          message.financialCaseStatus = reader.string();
+          continue;
+        }
       }
       if ((tag & 7) === 4 || tag === 0) {
         break;
@@ -2803,7 +2827,11 @@ export const MsgFlagDisputeResponse: MessageFns<MsgFlagDisputeResponse, "virteng
   },
 
   fromJSON(object: any): MsgFlagDisputeResponse {
-    return { disputeId: isSet(object.dispute_id) ? globalThis.String(object.dispute_id) : "" };
+    return {
+      disputeId: isSet(object.dispute_id) ? globalThis.String(object.dispute_id) : "",
+      financialCaseId: isSet(object.financial_case_id) ? globalThis.String(object.financial_case_id) : "",
+      financialCaseStatus: isSet(object.financial_case_status) ? globalThis.String(object.financial_case_status) : "",
+    };
   },
 
   toJSON(message: MsgFlagDisputeResponse): unknown {
@@ -2811,11 +2839,19 @@ export const MsgFlagDisputeResponse: MessageFns<MsgFlagDisputeResponse, "virteng
     if (message.disputeId !== "") {
       obj.dispute_id = message.disputeId;
     }
+    if (message.financialCaseId !== "") {
+      obj.financial_case_id = message.financialCaseId;
+    }
+    if (message.financialCaseStatus !== "") {
+      obj.financial_case_status = message.financialCaseStatus;
+    }
     return obj;
   },
   fromPartial(object: DeepPartial<MsgFlagDisputeResponse>): MsgFlagDisputeResponse {
     const message = createBaseMsgFlagDisputeResponse();
     message.disputeId = object.disputeId ?? "";
+    message.financialCaseId = object.financialCaseId ?? "";
+    message.financialCaseStatus = object.financialCaseStatus ?? "";
     return message;
   },
 };

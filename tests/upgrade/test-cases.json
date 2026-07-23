@@ -1,4 +1,21 @@
 {
+    "v1.8.0": {
+        "modules": { "added": [], "removed": [] },
+        "migrations": {
+            "settlement": [{"from": "3", "to": "4"}]
+        }
+    },
+    "v1.7.0": {
+        "modules": { "added": [], "removed": [] },
+        "migrations": {
+            "settlement": [{"from": "2", "to": "3"}],
+            "fraud": [{"from": "1", "to": "2"}],
+            "hpc": [{"from": "2", "to": "3"}],
+            "review": [{"from": "1", "to": "2"}],
+            "escrow": [{"from": "3", "to": "4"}],
+            "resources": [{"from": "2", "to": "3"}]
+        }
+    },
     "v1.5.0": {
         "modules": {
             "added": [],

@@ -8,6 +8,7 @@ import (
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/stretchr/testify/require"
 
+	marketv1 "github.com/virtengine/virtengine/sdk/go/node/market/v1"
 	resourcesv1 "github.com/virtengine/virtengine/sdk/go/node/resources/v1"
 	"github.com/virtengine/virtengine/x/hpc/types"
 )
@@ -61,12 +62,9 @@ func TestHPCReservationActivationFailureIsAtomic(t *testing.T) {
 }
 
 func TestHPCReusesCanonicalMarketReservation(t *testing.T) {
-	const sharedLeaseID = "lease-shared"
 	ctx, k, _ := setupHPCKeeper(t)
 	resources := newHPCReservationStub()
 	resources.reservation.ConsumerType = "market_lease"
-	resources.reservation.ConsumerId = sharedLeaseID
-	resources.reservation.MarketLeaseId = sharedLeaseID
 	resources.reservation.ProviderAddress = sdk.AccAddress(bytes.Repeat([]byte{5}, 20)).String()
 	k.SetResourcesKeeper(resources)
 	seedHPCOffering(t, ctx, k)
@@ -74,8 +72,16 @@ func TestHPCReusesCanonicalMarketReservation(t *testing.T) {
 	job := validReservationJob(sdk.AccAddress(bytes.Repeat([]byte{7}, 20)).String())
 	resources.reservation.RequesterAddress = job.CustomerAddress
 	resources.reservation.Capacity = resourcesv1.ResourceCapacity{CpuCores: 2, MemoryGb: 4, StorageGb: 10}
+	leaseID := marketv1.LeaseID{Owner: job.CustomerAddress, DSeq: 1, GSeq: 1, OSeq: 1, Provider: resources.reservation.ProviderAddress}
+	resources.reservation.MarketOrderId = leaseID.OrderID().String()
+	resources.reservation.MarketBidId = leaseID.BidID().String()
+	resources.reservation.MarketLeaseId = leaseID.String()
+	resources.reservation.ConsumerId = leaseID.String()
+	k.SetMarketKeeper(&hpcMarketStub{lease: marketv1.Lease{ID: leaseID, State: marketv1.LeaseActive, ReservationId: resources.reservation.ReservationId}})
 	job.ReservationID = resources.reservation.ReservationId
-	job.MarketLeaseID = sharedLeaseID
+	job.MarketOrderID = resources.reservation.MarketOrderId
+	job.MarketBidID = resources.reservation.MarketBidId
+	job.MarketLeaseID = resources.reservation.MarketLeaseId
 	require.NoError(t, k.SubmitJob(ctx, &job))
 	require.Zero(t, resources.reserveCalls)
 	require.Zero(t, resources.activateCalls)
@@ -86,11 +92,63 @@ func TestHPCReusesCanonicalMarketReservation(t *testing.T) {
 	require.Zero(t, resources.releaseCalls, "canonical market lease owns final capacity release")
 }
 
+func TestHPCReusesConsumedCanonicalMarketReservation(t *testing.T) {
+	ctx, k, _ := setupHPCKeeper(t)
+	resources := newHPCReservationStub()
+	resources.reservation.State = resourcesv1.ReservationState_RESERVATION_STATE_CONSUMED
+	resources.reservation.ConsumerType = "market_lease"
+	resources.reservation.ConsumerId = "lease-consumed"
+	resources.reservation.MarketOrderId = "order-consumed"
+	resources.reservation.MarketBidId = "bid-consumed"
+	resources.reservation.MarketLeaseId = "lease-consumed"
+	resources.reservation.ProviderAddress = sdk.AccAddress(bytes.Repeat([]byte{5}, 20)).String()
+	resources.reservation.Capacity = resourcesv1.ResourceCapacity{CpuCores: 2, MemoryGb: 4, StorageGb: 10}
+	k.SetResourcesKeeper(resources)
+	seedHPCOffering(t, ctx, k)
+
+	job := validReservationJob(sdk.AccAddress(bytes.Repeat([]byte{8}, 20)).String())
+	leaseID := marketv1.LeaseID{Owner: job.CustomerAddress, DSeq: 2, GSeq: 1, OSeq: 1, Provider: resources.reservation.ProviderAddress}
+	resources.reservation.MarketOrderId = leaseID.OrderID().String()
+	resources.reservation.MarketBidId = leaseID.BidID().String()
+	resources.reservation.MarketLeaseId = leaseID.String()
+	k.SetMarketKeeper(&hpcMarketStub{lease: marketv1.Lease{ID: leaseID, State: marketv1.LeaseActive, ReservationId: resources.reservation.ReservationId}})
+	resources.reservation.RequesterAddress = job.CustomerAddress
+	job.ReservationID = resources.reservation.ReservationId
+	job.MarketOrderID = resources.reservation.MarketOrderId
+	job.MarketBidID = resources.reservation.MarketBidId
+	job.MarketLeaseID = resources.reservation.MarketLeaseId
+	require.NoError(t, k.SubmitJob(ctx, &job))
+	require.NoError(t, k.UpdateJobStatus(ctx, job.JobID, types.JobStateQueued, "queued", 0, nil))
+}
+
+type hpcMarketStub struct{ lease marketv1.Lease }
+
+func (s *hpcMarketStub) GetLease(sdk.Context, marketv1.LeaseID) (marketv1.Lease, bool) {
+	return s.lease, true
+}
+
+func (s *hpcMarketStub) OnDisputeOpened(sdk.Context, marketv1.LeaseID, string) error { return nil }
+
+func TestHPCRejectsMarketLineageWithoutCanonicalReservation(t *testing.T) {
+	ctx, k, _ := setupHPCKeeper(t)
+	resources := newHPCReservationStub()
+	k.SetResourcesKeeper(resources)
+	seedHPCOffering(t, ctx, k)
+
+	job := validReservationJob(sdk.AccAddress(bytes.Repeat([]byte{9}, 20)).String())
+	job.MarketLeaseID = "lease-orphan"
+	err := k.SubmitJob(ctx, &job)
+	require.ErrorContains(t, err, "market-backed jobs require")
+	require.Zero(t, resources.reserveCalls)
+}
+
 type hpcReservationStub struct {
 	reservation                               resourcesv1.Reservation
 	reserveCalls, activateCalls, releaseCalls int
 	activateErr                               error
 }
+
+func (*hpcReservationStub) IsCanonicalReservationsActive(sdk.Context) bool { return true }
 
 func newHPCReservationStub() *hpcReservationStub {
 	return &hpcReservationStub{reservation: resourcesv1.Reservation{ReservationId: "reservation-hpc", State: resourcesv1.ReservationState_RESERVATION_STATE_ACTIVE}}
@@ -98,8 +156,10 @@ func newHPCReservationStub() *hpcReservationStub {
 func (s *hpcReservationStub) Reserve(_ sdk.Context, request resourcesv1.ReservationRequest) (*resourcesv1.Reservation, error) {
 	s.reserveCalls++
 	s.reservation.ProviderAddress = request.ProviderAddress
+	s.reservation.RequesterAddress = request.RequesterAddress
 	s.reservation.ConsumerType = request.ConsumerType
 	s.reservation.ConsumerId = request.ConsumerId
+	s.reservation.Capacity = request.Capacity
 	copy := s.reservation
 	copy.State = resourcesv1.ReservationState_RESERVATION_STATE_PENDING
 	return &copy, nil

@@ -54,6 +54,7 @@ type partnerFixture struct {
 	unknownQuote  bool
 	oversized     bool
 	badPayoutBind bool
+	lookupStatus  int
 	timeoutPayout bool
 	mu            sync.Mutex
 }
@@ -103,6 +104,11 @@ func (f *partnerFixture) handler(w http.ResponseWriter, r *http.Request) {
 		}
 		f.writePayout(w, f.payoutStatus)
 	case r.Method == http.MethodPost && r.URL.Path == "/partner/v1/payouts/lookup":
+		if f.lookupStatus != 0 {
+			w.WriteHeader(f.lookupStatus)
+			_ = json.NewEncoder(w).Encode(partnerErrorResponse{Code: "ambiguous_lookup", Retryable: true})
+			return
+		}
 		f.writePayout(w, f.payoutStatus)
 	case r.Method == http.MethodGet && r.URL.Path == "/partner/v1/payouts/"+f.payoutID:
 		f.writePayout(w, f.payoutStatus)
@@ -137,6 +143,10 @@ func (f *partnerFixture) writePayout(w http.ResponseWriter, status Status) {
 	}
 	if status == StatusCompleted {
 		response.CompletedAt = &now
+	}
+	if status == StatusFailed {
+		response.FailureCode = "provider_failed"
+		response.FailureReason = "provider reported terminal failure"
 	}
 	require.NoError(f.t, json.NewEncoder(w).Encode(response))
 }
@@ -401,6 +411,109 @@ func TestHTTPPartnerAdapterAmbiguousInitiationRecoveredByMetadata(t *testing.T) 
 	recovered, err := adapter.FindPayoutByMetadata(context.Background(), metadata)
 	require.NoError(t, err)
 	require.Equal(t, fixture.payoutID, recovered.ID)
+}
+
+func TestHTTPPartnerAdapterRestartRestoresDurableBindingAndPolls(t *testing.T) {
+	clock := newTestClock(time.Date(2026, 7, 23, 10, 0, 0, 0, time.UTC))
+	profile := blockedSandboxProfile()
+	fixture := &partnerFixture{t: t, now: clock.Now, provider: profile.Provider, apiVersion: profile.APIVersion, quoteTTL: time.Minute, fiatAmount: "100.000000000000000000", quoteID: "quote-http-1", payoutID: "payout-http-1", payoutStatus: StatusProcessing}
+	server := httptest.NewServer(http.HandlerFunc(fixture.handler))
+	t.Cleanup(server.Close)
+	newAdapter := func() *HTTPPartnerAdapter {
+		adapter, err := NewHTTPPartnerAdapter(HTTPPartnerConfig{Profile: profile, BaseURL: server.URL, AllowedPathPrefixes: []string{"/partner/v1"}, Endpoints: testPartnerEndpoints(), Client: server.Client(), Clock: clock.Now, Secrets: &staticSecretResolver{api: []byte("secret")}, AllowExternalBlockedSandbox: true})
+		require.NoError(t, err)
+		return adapter
+	}
+	repository := newDurableTestPayoutRepository()
+	firstBridge := newBridgeWithDependencies(ExecutionModeSandbox, true, repository, nil, clock.Now)
+	require.NoError(t, firstBridge.RegisterAdapter(newAdapter()))
+	quote, err := firstBridge.GetQuote(context.Background(), httpQuoteRequest(clock.Now()))
+	require.NoError(t, err)
+	metadata := map[string]string{"idempotency_key": "idem-http-1", "correlation_id": "corr-http-1", "conversion_id": "conversion-http-1"}
+	started, err := firstBridge.InitiatePayout(context.Background(), quote, "tx", "beneficiary-token-1", metadata)
+	require.NoError(t, err)
+	require.NotEmpty(t, started.DailyReservationKey)
+	fixture.update(func(f *partnerFixture) { f.payoutStatus = StatusCompleted })
+	restartedBridge := newBridgeWithDependencies(ExecutionModeSandbox, true, repository, nil, clock.Now)
+	require.NoError(t, restartedBridge.RegisterAdapter(newAdapter()))
+	completed, err := restartedBridge.GetStatus(context.Background(), started.ID)
+	require.NoError(t, err)
+	require.Equal(t, StatusCompleted, completed.Status)
+	require.Equal(t, "durable_binding_restore", completed.AuditFields["bridge_recovery_reason"])
+	require.Equal(t, started.DailyReservationKey, completed.DailyReservationKey)
+}
+
+func TestHTTPPartnerAdapterRestartFailureReleasesExactDailyReservation(t *testing.T) {
+	clock := newTestClock(time.Date(2026, 7, 23, 10, 0, 0, 0, time.UTC))
+	profile := blockedSandboxProfile()
+	profile.Corridors[0].MaximumAmount = sdkmath.LegacyNewDec(100)
+	profile.Corridors[0].DailyLimit = sdkmath.LegacyNewDec(100)
+	limits := NewMemoryDailyLimitRepository()
+	fixture := &partnerFixture{t: t, now: clock.Now, provider: profile.Provider, apiVersion: profile.APIVersion, quoteTTL: time.Minute, fiatAmount: "100.000000000000000000", quoteID: "quote-http-1", payoutID: "payout-http-1", payoutStatus: StatusProcessing}
+	server := httptest.NewServer(http.HandlerFunc(fixture.handler))
+	t.Cleanup(server.Close)
+	newAdapter := func() *HTTPPartnerAdapter {
+		adapter, err := NewHTTPPartnerAdapter(HTTPPartnerConfig{Profile: profile, BaseURL: server.URL, AllowedPathPrefixes: []string{"/partner/v1"}, Endpoints: testPartnerEndpoints(), Client: server.Client(), Clock: clock.Now, Secrets: &staticSecretResolver{api: []byte("secret")}, DailyLimits: limits, AllowExternalBlockedSandbox: true})
+		require.NoError(t, err)
+		return adapter
+	}
+	repository := newDurableTestPayoutRepository()
+	first := newBridgeWithDependencies(ExecutionModeSandbox, true, repository, nil, clock.Now)
+	require.NoError(t, first.RegisterAdapter(newAdapter()))
+	quote, err := first.GetQuote(context.Background(), httpQuoteRequest(clock.Now()))
+	require.NoError(t, err)
+	started, err := first.InitiatePayout(context.Background(), quote, "tx", "beneficiary-token-1", map[string]string{"idempotency_key": "idem-http-1", "correlation_id": "corr-http-1", "conversion_id": "conversion-http-1"})
+	require.NoError(t, err)
+	fixture.update(func(f *partnerFixture) { f.payoutStatus = StatusFailed })
+	restarted := newBridgeWithDependencies(ExecutionModeSandbox, true, repository, nil, clock.Now)
+	require.NoError(t, restarted.RegisterAdapter(newAdapter()))
+	failed, err := restarted.GetStatus(context.Background(), started.ID)
+	require.NoError(t, err)
+	require.Equal(t, StatusFailed, failed.Status)
+	reserved, err := limits.ReserveDailyAmount(context.Background(), started.DailyReservationKey, "replacement-operation", sdkmath.LegacyNewDec(100), sdkmath.LegacyNewDec(100))
+	require.NoError(t, err)
+	require.True(t, reserved, "terminal restart reconciliation must release the original exact reservation")
+}
+
+func TestHTTPPartnerAdapterRestartRecoveryRejectsMismatchAndAmbiguousLookup(t *testing.T) {
+	for _, test := range []struct {
+		name   string
+		mutate func(*partnerFixture)
+	}{
+		{name: "mismatched payout", mutate: func(f *partnerFixture) { f.payoutID = "different-payout" }},
+		{name: "mismatched quote", mutate: func(f *partnerFixture) { f.badPayoutBind = true }},
+		{name: "ambiguous duplicate lookup", mutate: func(f *partnerFixture) { f.lookupStatus = http.StatusConflict }},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			clock := newTestClock(time.Date(2026, 7, 23, 10, 0, 0, 0, time.UTC))
+			profile := blockedSandboxProfile()
+			fixture := &partnerFixture{t: t, now: clock.Now, provider: profile.Provider, apiVersion: profile.APIVersion, quoteTTL: time.Minute, fiatAmount: "100.000000000000000000", quoteID: "quote-http-1", payoutID: "payout-http-1", payoutStatus: StatusProcessing}
+			server := httptest.NewServer(http.HandlerFunc(fixture.handler))
+			defer server.Close()
+			newAdapter := func() *HTTPPartnerAdapter {
+				adapter, err := NewHTTPPartnerAdapter(HTTPPartnerConfig{Profile: profile, BaseURL: server.URL, AllowedPathPrefixes: []string{"/partner/v1"}, Endpoints: testPartnerEndpoints(), Client: server.Client(), Clock: clock.Now, Secrets: &staticSecretResolver{api: []byte("secret")}, AllowExternalBlockedSandbox: true})
+				require.NoError(t, err)
+				return adapter
+			}
+			repository := newDurableTestPayoutRepository()
+			first := newBridgeWithDependencies(ExecutionModeSandbox, true, repository, nil, clock.Now)
+			require.NoError(t, first.RegisterAdapter(newAdapter()))
+			quote, err := first.GetQuote(context.Background(), httpQuoteRequest(clock.Now()))
+			require.NoError(t, err)
+			started, err := first.InitiatePayout(context.Background(), quote, "tx", "beneficiary-token-1", map[string]string{"idempotency_key": "idem-http-1", "correlation_id": "corr-http-1", "conversion_id": "conversion-http-1"})
+			require.NoError(t, err)
+			fixture.update(test.mutate)
+			restarted := newBridgeWithDependencies(ExecutionModeSandbox, true, repository, nil, clock.Now)
+			require.NoError(t, restarted.RegisterAdapter(newAdapter()))
+			_, err = restarted.GetStatus(context.Background(), started.ID)
+			require.Error(t, err)
+			if test.name == "ambiguous duplicate lookup" {
+				require.True(t, IsAmbiguous(err))
+			} else {
+				require.ErrorIs(t, err, ErrProviderRejected)
+			}
+		})
+	}
 }
 
 func TestHTTPPartnerAdapterRejectsProviderBindingMismatch(t *testing.T) {

@@ -9,7 +9,7 @@ import type { DeepPartial, MessageFns } from "../../../../../encoding/typeEncodi
 /* eslint-disable */
 import { BinaryReader, BinaryWriter } from "@bufbuild/protobuf/wire";
 import Long from "long";
-import { Params, Reservation, ResourceAllocation, ResourceInventory } from "./types.ts";
+import { Params, Reservation, ReservationEvent, ResourceAllocation, ResourceInventory } from "./types.ts";
 
 /** GenesisState defines the module genesis state. */
 export interface GenesisState {
@@ -17,10 +17,19 @@ export interface GenesisState {
   inventories: ResourceInventory[];
   allocations: ResourceAllocation[];
   reservations: Reservation[];
+  canonicalReservationsActive: boolean;
+  reservationEvents: ReservationEvent[];
 }
 
 function createBaseGenesisState(): GenesisState {
-  return { params: undefined, inventories: [], allocations: [], reservations: [] };
+  return {
+    params: undefined,
+    inventories: [],
+    allocations: [],
+    reservations: [],
+    canonicalReservationsActive: false,
+    reservationEvents: [],
+  };
 }
 
 export const GenesisState: MessageFns<GenesisState, "virtengine.resources.v1.GenesisState"> = {
@@ -38,6 +47,12 @@ export const GenesisState: MessageFns<GenesisState, "virtengine.resources.v1.Gen
     }
     for (const v of message.reservations) {
       Reservation.encode(v!, writer.uint32(34).fork()).join();
+    }
+    if (message.canonicalReservationsActive !== false) {
+      writer.uint32(40).bool(message.canonicalReservationsActive);
+    }
+    for (const v of message.reservationEvents) {
+      ReservationEvent.encode(v!, writer.uint32(50).fork()).join();
     }
     return writer;
   },
@@ -81,6 +96,22 @@ export const GenesisState: MessageFns<GenesisState, "virtengine.resources.v1.Gen
           message.reservations.push(Reservation.decode(reader, reader.uint32()));
           continue;
         }
+        case 5: {
+          if (tag !== 40) {
+            break;
+          }
+
+          message.canonicalReservationsActive = reader.bool();
+          continue;
+        }
+        case 6: {
+          if (tag !== 50) {
+            break;
+          }
+
+          message.reservationEvents.push(ReservationEvent.decode(reader, reader.uint32()));
+          continue;
+        }
       }
       if ((tag & 7) === 4 || tag === 0) {
         break;
@@ -102,6 +133,12 @@ export const GenesisState: MessageFns<GenesisState, "virtengine.resources.v1.Gen
       reservations: globalThis.Array.isArray(object?.reservations)
         ? object.reservations.map((e: any) => Reservation.fromJSON(e))
         : [],
+      canonicalReservationsActive: isSet(object.canonical_reservations_active)
+        ? globalThis.Boolean(object.canonical_reservations_active)
+        : false,
+      reservationEvents: globalThis.Array.isArray(object?.reservation_events)
+        ? object.reservation_events.map((e: any) => ReservationEvent.fromJSON(e))
+        : [],
     };
   },
 
@@ -119,6 +156,12 @@ export const GenesisState: MessageFns<GenesisState, "virtengine.resources.v1.Gen
     if (message.reservations?.length) {
       obj.reservations = message.reservations.map((e) => Reservation.toJSON(e));
     }
+    if (message.canonicalReservationsActive !== false) {
+      obj.canonical_reservations_active = message.canonicalReservationsActive;
+    }
+    if (message.reservationEvents?.length) {
+      obj.reservation_events = message.reservationEvents.map((e) => ReservationEvent.toJSON(e));
+    }
     return obj;
   },
   fromPartial(object: DeepPartial<GenesisState>): GenesisState {
@@ -129,6 +172,8 @@ export const GenesisState: MessageFns<GenesisState, "virtengine.resources.v1.Gen
     message.inventories = object.inventories?.map((e) => ResourceInventory.fromPartial(e)) || [];
     message.allocations = object.allocations?.map((e) => ResourceAllocation.fromPartial(e)) || [];
     message.reservations = object.reservations?.map((e) => Reservation.fromPartial(e)) || [];
+    message.canonicalReservationsActive = object.canonicalReservationsActive ?? false;
+    message.reservationEvents = object.reservationEvents?.map((e) => ReservationEvent.fromPartial(e)) || [];
     return message;
   },
 };

@@ -859,6 +859,8 @@ export interface HPCDispute {
   createdAt: Date | undefined;
   resolvedAt: Date | undefined;
   blockHeight: Long;
+  financialCaseId: string;
+  financialCaseStatus: string;
 }
 
 /** Params defines the parameters for the HPC module */
@@ -7728,6 +7730,8 @@ function createBaseHPCDispute(): HPCDispute {
     createdAt: undefined,
     resolvedAt: undefined,
     blockHeight: Long.ZERO,
+    financialCaseId: "",
+    financialCaseStatus: "",
   };
 }
 
@@ -7773,6 +7777,12 @@ export const HPCDispute: MessageFns<HPCDispute, "virtengine.hpc.v1.HPCDispute"> 
     }
     if (!message.blockHeight.equals(Long.ZERO)) {
       writer.uint32(104).int64(message.blockHeight.toString());
+    }
+    if (message.financialCaseId !== "") {
+      writer.uint32(114).string(message.financialCaseId);
+    }
+    if (message.financialCaseStatus !== "") {
+      writer.uint32(122).string(message.financialCaseStatus);
     }
     return writer;
   },
@@ -7888,6 +7898,22 @@ export const HPCDispute: MessageFns<HPCDispute, "virtengine.hpc.v1.HPCDispute"> 
           message.blockHeight = Long.fromString(reader.int64().toString());
           continue;
         }
+        case 14: {
+          if (tag !== 114) {
+            break;
+          }
+
+          message.financialCaseId = reader.string();
+          continue;
+        }
+        case 15: {
+          if (tag !== 122) {
+            break;
+          }
+
+          message.financialCaseStatus = reader.string();
+          continue;
+        }
       }
       if ((tag & 7) === 4 || tag === 0) {
         break;
@@ -7912,6 +7938,8 @@ export const HPCDispute: MessageFns<HPCDispute, "virtengine.hpc.v1.HPCDispute"> 
       createdAt: isSet(object.created_at) ? fromJsonTimestamp(object.created_at) : undefined,
       resolvedAt: isSet(object.resolved_at) ? fromJsonTimestamp(object.resolved_at) : undefined,
       blockHeight: isSet(object.block_height) ? Long.fromValue(object.block_height) : Long.ZERO,
+      financialCaseId: isSet(object.financial_case_id) ? globalThis.String(object.financial_case_id) : "",
+      financialCaseStatus: isSet(object.financial_case_status) ? globalThis.String(object.financial_case_status) : "",
     };
   },
 
@@ -7956,6 +7984,12 @@ export const HPCDispute: MessageFns<HPCDispute, "virtengine.hpc.v1.HPCDispute"> 
     if (!message.blockHeight.equals(Long.ZERO)) {
       obj.block_height = (message.blockHeight || Long.ZERO).toString();
     }
+    if (message.financialCaseId !== "") {
+      obj.financial_case_id = message.financialCaseId;
+    }
+    if (message.financialCaseStatus !== "") {
+      obj.financial_case_status = message.financialCaseStatus;
+    }
     return obj;
   },
   fromPartial(object: DeepPartial<HPCDispute>): HPCDispute {
@@ -7975,6 +8009,8 @@ export const HPCDispute: MessageFns<HPCDispute, "virtengine.hpc.v1.HPCDispute"> 
     message.blockHeight = (object.blockHeight !== undefined && object.blockHeight !== null)
       ? Long.fromValue(object.blockHeight)
       : Long.ZERO;
+    message.financialCaseId = object.financialCaseId ?? "";
+    message.financialCaseStatus = object.financialCaseStatus ?? "";
     return message;
   },
 };

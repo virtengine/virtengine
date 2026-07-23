@@ -23,6 +23,12 @@ const AuthenticatedMeteringUpgradeName = "v1.5.0"
 // CanonicalReservationsUpgradeName activates Task 84C ownership and reservation migrations.
 const CanonicalReservationsUpgradeName = "v1.6.0"
 
+// CanonicalFinancialCasesUpgradeName activates Task 84D ownership and adapters.
+const CanonicalFinancialCasesUpgradeName = "v1.7.0"
+
+// AuthenticatedFiatConversionsUpgradeName activates Task 85B observations.
+const AuthenticatedFiatConversionsUpgradeName = "v1.8.0"
+
 var (
 	upgrades      = map[string]UpgradeInitFn{}
 	heightPatches = map[int64]IHeightPatch{}

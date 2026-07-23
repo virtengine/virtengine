@@ -15,10 +15,12 @@ import (
 	storetypes "cosmossdk.io/store/types"
 	"github.com/cosmos/cosmos-sdk/codec"
 	sdk "github.com/cosmos/cosmos-sdk/types"
+	authtypes "github.com/cosmos/cosmos-sdk/x/auth/types"
 
 	escrowid "github.com/virtengine/virtengine/sdk/go/node/escrow/id/v1"
 	etypes "github.com/virtengine/virtengine/sdk/go/node/escrow/types/v1"
 	providertypes "github.com/virtengine/virtengine/sdk/go/node/provider/v1beta4"
+	resourcesv1 "github.com/virtengine/virtengine/sdk/go/node/resources/v1"
 	delegationtypes "github.com/virtengine/virtengine/x/delegation/types"
 	encryptiontypes "github.com/virtengine/virtengine/x/encryption/types"
 	"github.com/virtengine/virtengine/x/settlement/types"
@@ -40,6 +42,29 @@ type IKeeper interface {
 	SettleOrder(ctx sdk.Context, orderID string, usageRecordIDs []string, isFinal bool) (*types.SettlementRecord, error)
 	GetSettlement(ctx sdk.Context, settlementID string) (types.SettlementRecord, bool)
 	GetSettlementsByOrder(ctx sdk.Context, orderID string) []types.SettlementRecord
+
+	// Canonical financial cases
+	OpenFinancialCase(ctx sdk.Context, request FinancialCaseOpenRequest) (*types.FinancialCase, *types.FinancialClaim, bool, error)
+	AddFinancialClaim(ctx sdk.Context, caseID string, claim types.FinancialClaim) (*types.FinancialCase, *types.FinancialClaim, bool, error)
+	SubmitFinancialCaseForReview(ctx sdk.Context, caseID, actor string) error
+	EscalateFinancialCase(ctx sdk.Context, caseID, actor string, reasonHash []byte) error
+	ResolveFinancialCase(ctx sdk.Context, caseID, resolver string, allocation types.TerminalAllocation) error
+	AppealFinancialCase(ctx sdk.Context, caseID, appellant string, evidenceHash []byte, encryptedReference string, idempotency []byte) (*types.FinancialAppeal, bool, error)
+	CancelFinancialCase(ctx sdk.Context, caseID, actor string, reasonHash []byte) error
+	FinalizeFinancialCase(ctx sdk.Context, caseID, actor string) (*types.FinancialCase, error)
+	GetFinancialCase(ctx sdk.Context, caseID string) (types.FinancialCase, bool)
+	GetFinancialCaseBySubject(ctx sdk.Context, subject types.FinancialSubject) (types.FinancialCase, bool)
+	FinancialCasesByIndex(ctx sdk.Context, kind, value string) ([]types.FinancialCase, error)
+	HasActiveFinancialCase(ctx sdk.Context, kind, value string) (string, bool)
+	WithFinancialCases(ctx sdk.Context, fn func(types.FinancialCase) bool) error
+	SetFinancialCase(ctx sdk.Context, financialCase types.FinancialCase) error
+	ProcessFinancialCaseTimeouts(ctx sdk.Context) (uint64, error)
+	ActivateFinancialCases(ctx sdk.Context)
+	IsFinancialCasesActive(ctx sdk.Context) bool
+	QuarantineFinancialCase(ctx sdk.Context, caseID, reason string) error
+	MigrateFinancialCases(ctx sdk.Context) (FinancialCaseMigrationReport, error)
+	RebuildFinancialCaseState(ctx sdk.Context) error
+	ValidateFinancialCaseInvariants(ctx sdk.Context) []string
 
 	// Usage records
 	RecordUsage(ctx sdk.Context, record *types.UsageRecord) error
@@ -85,12 +110,14 @@ type IKeeper interface {
 
 	// Fiat conversion management
 	RequestFiatConversion(ctx sdk.Context, request types.FiatConversionRequest) (*types.FiatConversionRecord, error)
+	RecordFiatConversionObservation(ctx sdk.Context, msg *types.MsgRecordFiatConversionObservation) (*FiatConversionObservationResult, error)
 	ReconcileFiatConversion(ctx sdk.Context, conversionID string) (*types.FiatConversionRecord, error)
 	GetFiatConversion(ctx sdk.Context, conversionID string) (types.FiatConversionRecord, bool)
 	GetFiatConversionByInvoice(ctx sdk.Context, invoiceID string) (types.FiatConversionRecord, bool)
 	GetFiatConversionBySettlement(ctx sdk.Context, settlementID string) (types.FiatConversionRecord, bool)
 	GetFiatConversionByPayout(ctx sdk.Context, payoutID string) (types.FiatConversionRecord, bool)
 	SetFiatConversion(ctx sdk.Context, conversion types.FiatConversionRecord) error
+	ImportFiatConversion(ctx sdk.Context, conversion types.FiatConversionRecord) error
 	WithFiatConversions(ctx sdk.Context, fn func(types.FiatConversionRecord) bool)
 	WithFiatConversionsByState(ctx sdk.Context, state types.FiatConversionState, fn func(types.FiatConversionRecord) bool)
 	ProcessInFlightFiatConversions(ctx sdk.Context) error
@@ -98,6 +125,9 @@ type IKeeper interface {
 	SetFiatPayoutPreference(ctx sdk.Context, pref types.FiatPayoutPreference) error
 	GetFiatPayoutPreference(ctx sdk.Context, provider string) (types.FiatPayoutPreference, bool)
 	DeleteFiatPayoutPreference(ctx sdk.Context, provider string) error
+	MigrateFiatConversions(ctx sdk.Context) (FiatConversionMigrationReport, error)
+	RebuildFiatConversionState(ctx sdk.Context) error
+	ValidateFiatConversionInvariants(ctx sdk.Context) []string
 
 	// Parameters
 	GetParams(ctx sdk.Context) types.Params
@@ -119,6 +149,13 @@ type IKeeper interface {
 	SetNextDistributionSequence(ctx sdk.Context, seq uint64)
 	SetNextPayoutSequence(ctx sdk.Context, seq uint64)
 	SetNextFiatConversionSequence(ctx sdk.Context, seq uint64)
+	GetEscrowSequence(ctx sdk.Context) uint64
+	GetSettlementSequence(ctx sdk.Context) uint64
+	GetUsageSequence(ctx sdk.Context) uint64
+	GetDistributionSequence(ctx sdk.Context) uint64
+	GetPayoutSequence(ctx sdk.Context) uint64
+	GetFiatConversionSequence(ctx sdk.Context) uint64
+	GetFiatConversionCustodyBalance(ctx sdk.Context) sdk.Coins
 
 	// Block hooks
 	ProcessExpiredEscrows(ctx sdk.Context) error
@@ -161,10 +198,19 @@ type Keeper struct {
 	encryptionKeeper   EncryptionKeeper
 	providerKeyKeeper  ProviderSigningKeyKeeper
 	accountKeeper      AccountKeeper
+	reservationKeeper  FinancialReservationKeeper
 
 	// The address capable of executing a MsgUpdateParams message.
 	// This should be the x/gov module account.
 	authority string
+}
+
+// FinancialReservationKeeper is the narrow Task 84C→84D capacity hold boundary.
+type FinancialReservationKeeper interface {
+	HoldReservationForFinancialCase(ctx sdk.Context, reservationID, caseID string) (*resourcesv1.Reservation, error)
+	ReleaseReservationFinancialCaseHold(ctx sdk.Context, reservationID, caseID string) (*resourcesv1.Reservation, error)
+	FinalizeReservationFinancialCase(ctx sdk.Context, reservationID, caseID string, slash bool) (*resourcesv1.Reservation, error)
+	GetReservation(ctx sdk.Context, reservationID string) (resourcesv1.Reservation, bool)
 }
 
 // BankKeeper defines the expected bank keeper interface
@@ -228,9 +274,14 @@ func NewKeeper(cdc codec.BinaryCodec, skey storetypes.StoreKey, bankKeeper BankK
 		encryptionKeeper:   encryptionKeeper,
 		providerKeyKeeper:  nil,
 		accountKeeper:      nil,
+		reservationKeeper:  nil,
 		authority:          authority,
 	}
 	return keeper
+}
+
+func (k *Keeper) SetFinancialReservationKeeper(reservations FinancialReservationKeeper) {
+	k.reservationKeeper = reservations
 }
 
 // SetUsageAuthenticationKeepers installs the on-chain trust roots used by
@@ -303,6 +354,10 @@ func (k Keeper) GetAuthority() string {
 	return k.authority
 }
 
+func (k Keeper) GetFiatConversionCustodyBalance(ctx sdk.Context) sdk.Coins {
+	return k.bankKeeper.SpendableCoins(ctx, authtypes.NewModuleAddress(types.FiatConversionCustodyAccountName))
+}
+
 // Logger returns a module-specific logger
 func (k Keeper) Logger(ctx sdk.Context) log.Logger {
 	return ctx.Logger().With("module", "x/"+types.ModuleName)
@@ -338,6 +393,9 @@ func (k Keeper) incrementEscrowSequence(ctx sdk.Context) uint64 {
 	return seq
 }
 
+// GetEscrowSequence returns the next persisted escrow sequence for genesis export.
+func (k Keeper) GetEscrowSequence(ctx sdk.Context) uint64 { return k.getNextEscrowSequence(ctx) }
+
 func (k Keeper) getNextSettlementSequence(ctx sdk.Context) uint64 {
 	return k.getNextSequence(ctx, types.SettlementSequenceKey())
 }
@@ -346,6 +404,11 @@ func (k Keeper) incrementSettlementSequence(ctx sdk.Context) uint64 {
 	seq := k.getNextSettlementSequence(ctx)
 	k.setNextSequence(ctx, types.SettlementSequenceKey(), seq+1)
 	return seq
+}
+
+// GetSettlementSequence returns the next persisted settlement sequence for genesis export.
+func (k Keeper) GetSettlementSequence(ctx sdk.Context) uint64 {
+	return k.getNextSettlementSequence(ctx)
 }
 
 func (k Keeper) getNextDistributionSequence(ctx sdk.Context) uint64 {
@@ -358,6 +421,11 @@ func (k Keeper) incrementDistributionSequence(ctx sdk.Context) uint64 {
 	return seq
 }
 
+// GetDistributionSequence returns the next persisted distribution sequence for genesis export.
+func (k Keeper) GetDistributionSequence(ctx sdk.Context) uint64 {
+	return k.getNextDistributionSequence(ctx)
+}
+
 func (k Keeper) getNextUsageSequence(ctx sdk.Context) uint64 {
 	return k.getNextSequence(ctx, types.UsageSequenceKey())
 }
@@ -367,6 +435,9 @@ func (k Keeper) incrementUsageSequence(ctx sdk.Context) uint64 {
 	k.setNextSequence(ctx, types.UsageSequenceKey(), seq+1)
 	return seq
 }
+
+// GetUsageSequence returns the next persisted usage sequence for genesis export.
+func (k Keeper) GetUsageSequence(ctx sdk.Context) uint64 { return k.getNextUsageSequence(ctx) }
 
 // ============================================================================
 // Parameters
@@ -434,6 +505,16 @@ func (k Keeper) SetEscrow(ctx sdk.Context, escrow types.EscrowAccount) error {
 	}
 
 	store := ctx.KVStore(k.skey)
+	if existing, found := k.GetEscrow(ctx, escrow.EscrowID); found {
+		if existing.OrderID != "" && existing.OrderID != escrow.OrderID {
+			if indexed := store.Get(types.EscrowByOrderKey(existing.OrderID)); string(indexed) == escrow.EscrowID {
+				store.Delete(types.EscrowByOrderKey(existing.OrderID))
+			}
+		}
+		if existing.State != escrow.State {
+			store.Delete(types.EscrowByStateKey(existing.State, escrow.EscrowID))
+		}
+	}
 
 	bz, err := json.Marshal(&escrow)
 	if err != nil {
@@ -540,17 +621,26 @@ func (k Keeper) SetSettlement(ctx sdk.Context, settlement types.SettlementRecord
 	}
 
 	store := ctx.KVStore(k.skey)
+	_, existed := k.GetSettlement(ctx, settlement.SettlementID)
 
 	bz, err := json.Marshal(&settlement)
 	if err != nil {
 		return err
 	}
+	if existing := store.Get(types.SettlementKey(settlement.SettlementID)); existing != nil {
+		if bytes.Equal(existing, bz) {
+			return nil
+		}
+		return types.ErrInvalidSettlement.Wrap("settlement ID already exists with different payload")
+	}
 
 	// Store by settlement ID
 	store.Set(types.SettlementKey(settlement.SettlementID), bz)
 
-	// Store by order ID (append to list)
-	k.appendSettlementToOrder(ctx, settlement.OrderID, settlement.SettlementID)
+	// Store by order ID (append once; genesis import and migration replay are idempotent).
+	if !existed {
+		k.appendSettlementToOrder(ctx, settlement.OrderID, settlement.SettlementID)
+	}
 
 	// Store by escrow ID
 	store.Set(types.SettlementByEscrowKey(settlement.EscrowID), []byte(settlement.SettlementID))
@@ -847,6 +937,9 @@ func (k Keeper) SetRewardDistribution(ctx sdk.Context, dist types.RewardDistribu
 	}
 
 	store := ctx.KVStore(k.skey)
+	if _, exists := k.GetRewardDistribution(ctx, dist.DistributionID); exists {
+		return nil
+	}
 
 	bz, err := json.Marshal(&dist)
 	if err != nil {

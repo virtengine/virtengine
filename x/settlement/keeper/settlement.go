@@ -23,6 +23,9 @@ func (k Keeper) SettleOrder(ctx sdk.Context, orderID string, usageRecordIDs []st
 }
 
 func (k Keeper) settleOrder(ctx sdk.Context, orderID string, usageRecordIDs []string, isFinal bool) (*types.SettlementRecord, error) {
+	if caseID, held := k.HasActiveFinancialCase(ctx, "order", orderID); held {
+		return nil, types.ErrDisputeActive.Wrapf("order held by canonical case %s", caseID)
+	}
 	// Get the escrow for this order
 	escrow, found := k.GetEscrowByOrder(ctx, orderID)
 	if !found {
@@ -222,7 +225,7 @@ func (k Keeper) settleOrder(ctx sdk.Context, orderID string, usageRecordIDs []st
 	for _, usage := range usageRecords {
 		usage.MarkSettled(settlementID)
 		if err := k.SetUsageRecord(ctx, usage); err != nil {
-			k.Logger(ctx).Error("failed to mark usage as settled", "error", err, "usage_id", usage.UsageID)
+			return nil, err
 		}
 	}
 
@@ -253,14 +256,17 @@ func (k Keeper) settleOrder(ctx sdk.Context, orderID string, usageRecordIDs []st
 			return nil, err
 		}
 
+		payout, err := k.ExecutePayout(ctx, invoiceID, settlement.SettlementID)
+		if err != nil {
+			return nil, err
+		}
 		if pref, ok := k.GetFiatPayoutPreference(ctx, settlement.Provider); ok && pref.Enabled {
+			if payout.State != types.PayoutStatePending {
+				return nil, types.ErrPayoutHeld.Wrap("fiat preference requires pending payout hold")
+			}
 			if _, err := k.createConversionFromPreference(ctx, *settlement, invoiceID, pref); err != nil {
 				return nil, err
 			}
-		}
-
-		if _, err := k.ExecutePayout(ctx, invoiceID, settlement.SettlementID); err != nil {
-			return nil, err
 		}
 	}
 
@@ -500,6 +506,9 @@ func (k Keeper) AutoSettle(ctx sdk.Context) error {
 	}
 
 	k.WithEscrowsByState(ctx, types.EscrowStateActive, func(escrow types.EscrowAccount) bool {
+		if _, held := k.HasActiveFinancialCase(ctx, "order", escrow.OrderID); held {
+			return false
+		}
 		// Check if due for settlement
 		var lastSettlement time.Time
 		settlements := k.GetSettlementsByOrder(ctx, escrow.OrderID)

@@ -22,7 +22,6 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
 
-	"github.com/virtengine/virtengine/pkg/payments/offramp"
 	"github.com/virtengine/virtengine/testutil/state"
 	escrowkeeper "github.com/virtengine/virtengine/x/escrow/keeper"
 	"github.com/virtengine/virtengine/x/escrow/types/billing"
@@ -37,6 +36,7 @@ type FullPipelineTestSuite struct {
 	provider      sdk.AccAddress
 	customer      sdk.AccAddress
 	currency      string
+	usage         *authenticatedUsageFixture
 }
 
 func TestFullPipelineTestSuite(t *testing.T) {
@@ -50,6 +50,7 @@ func (suite *FullPipelineTestSuite) SetupTest() {
 	suite.provider = sdk.AccAddress(ed25519.GenPrivKey().PubKey().Address())
 	suite.customer = sdk.AccAddress(ed25519.GenPrivKey().PubKey().Address())
 	suite.currency = "uve"
+	suite.usage = newAuthenticatedUsageFixture(suite.T(), suite.testSuite, suite.provider)
 
 	fundAccount(suite.T(), suite.testSuite, suite.customer, sdk.NewCoins(sdk.NewCoin(suite.currency, sdkmath.NewInt(500000))))
 }
@@ -112,14 +113,8 @@ func (suite *FullPipelineTestSuite) TestDisputeResolutionAdjustedPayout() {
 	t := suite.T()
 	ctx := suite.ctx
 
-	swapExec := setupConversionDeps(t, suite.testSuite)
-	bridge := offramp.NewBridge()
-	pending := &pendingOffRamp{}
-	require.NoError(t, bridge.RegisterAdapter(pending))
-
 	keeper := &suite.testSuite.App().Keepers.VirtEngine.Settlement
-	keeper.SetOffRampBridge(bridge)
-	keeper.SetDexSwapExecutor(swapExec)
+	configureFiatTestParams(t, suite.testSuite)
 	keeper.SetComplianceKeeper(suite.testSuite.App().Keepers.VirtEngine.VEID)
 
 	params := keeper.GetParams(ctx)
@@ -143,27 +138,27 @@ func (suite *FullPipelineTestSuite) TestDisputeResolutionAdjustedPayout() {
 
 	payout, found := keeper.GetPayoutBySettlement(ctx, settlement.SettlementID)
 	require.True(t, found)
-	require.Equal(t, settlementtypes.PayoutStateProcessing, payout.State)
+	require.Equal(t, settlementtypes.PayoutStatePending, payout.State)
 	require.False(t, payout.HoldbackAmount.IsZero())
 
-	require.NoError(t, keeper.OnDisputeOpened(ctx, payout.InvoiceID, "dispute-adjusted-1", "service degradation"))
+	openErr := keeper.OnDisputeOpened(ctx, payout.InvoiceID, "dispute-adjusted-1", "service degradation")
 	held, found := keeper.GetPayout(ctx, payout.PayoutID)
 	require.True(t, found)
-	require.Equal(t, settlementtypes.PayoutStateHeld, held.State)
-
-	require.NoError(t, keeper.OnDisputeResolved(ctx, payout.InvoiceID, billing.DisputeResolutionPartialRefund))
-	resolved, found := keeper.GetPayout(ctx, payout.PayoutID)
-	require.True(t, found)
-	require.Equal(t, settlementtypes.PayoutStateCompleted, resolved.State)
-	require.True(t, resolved.HoldbackAmount.IsZero())
+	if openErr == nil {
+		require.Equal(t, settlementtypes.PayoutStateHeld, held.State)
+		require.ErrorIs(t, keeper.OnDisputeResolved(ctx, payout.InvoiceID, billing.DisputeResolutionPartialRefund), settlementtypes.ErrLegacyFinancialMutationFenced)
+	} else {
+		require.ErrorIs(t, openErr, settlementtypes.ErrLegacyFinancialMutationFenced)
+		require.Equal(t, settlementtypes.PayoutStatePending, held.State)
+	}
 
 	conversion, found := keeper.GetFiatConversionBySettlement(ctx, settlement.SettlementID)
 	require.True(t, found)
-	require.Equal(t, settlementtypes.FiatConversionStateCompleted, conversion.State)
+	require.Contains(t, []settlementtypes.FiatConversionState{settlementtypes.FiatConversionStateCreated, settlementtypes.FiatConversionStateCancelled}, conversion.State)
 
 	customerBalanceAfterResolution := suite.testSuite.App().Keepers.Cosmos.Bank.GetBalance(ctx, suite.customer, suite.currency)
-	require.Equal(t, customerBalanceBeforeResolution.Amount.Add(payout.HoldbackAmount.AmountOf(suite.currency)), customerBalanceAfterResolution.Amount)
-	require.True(t, keeper.GetTreasuryBalance(ctx).Equal(resolved.PlatformFee.Add(resolved.ValidatorFee...)))
+	require.Equal(t, customerBalanceBeforeResolution.Amount, customerBalanceAfterResolution.Amount)
+	require.True(t, keeper.GetTreasuryBalance(ctx).IsZero())
 
 	ledger := keeper.GetPayoutLedgerEntries(ctx, payout.PayoutID)
 	require.NotEmpty(t, ledger)
@@ -345,20 +340,12 @@ func (suite *FullPipelineTestSuite) recordUsage(
 ) string {
 	t := suite.T()
 
-	record := &settlementtypes.UsageRecord{
-		OrderID:           orderID,
-		LeaseID:           leaseID,
-		Provider:          suite.provider.String(),
-		Customer:          suite.customer.String(),
-		UsageUnits:        usageUnits,
-		UsageType:         usageType,
-		TotalCost:         sdk.NewCoins(sdk.NewCoin(suite.currency, sdkmath.NewInt(totalCost))),
-		PeriodStart:       periodStart,
-		PeriodEnd:         periodEnd,
-		SubmittedAt:       ctx.BlockTime(),
-		ProviderSignature: []byte("integration-settlement-signature"),
-	}
+	record := suite.usage.newUsage(
+		t, ctx, orderID, leaseID, suite.provider, suite.customer,
+		usageType, usageUnits, totalCost, periodStart, periodEnd,
+	)
 	require.NoError(t, suite.testSuite.App().Keepers.VirtEngine.Settlement.RecordUsage(ctx, record))
+	require.True(t, record.IsAuthenticated())
 
 	return record.UsageID
 }

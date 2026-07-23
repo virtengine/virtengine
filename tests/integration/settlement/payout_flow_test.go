@@ -11,7 +11,6 @@ import (
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/stretchr/testify/require"
 
-	"github.com/virtengine/virtengine/pkg/payments/offramp"
 	"github.com/virtengine/virtengine/testutil/state"
 	"github.com/virtengine/virtengine/x/escrow/types/billing"
 	"github.com/virtengine/virtengine/x/settlement/types"
@@ -23,13 +22,15 @@ func TestSettlementPayoutOffRampFlow(t *testing.T) {
 	app := suite.App()
 	keeper := &app.Keepers.VirtEngine.Settlement
 
-	setupConversionDeps(t, suite)
+	configureFiatTestParams(t, suite)
+	keeper.SetComplianceKeeper(app.Keepers.VirtEngine.VEID)
 
 	depositor := sdk.AccAddress(ed25519.GenPrivKey().PubKey().Address())
 	provider := sdk.AccAddress(ed25519.GenPrivKey().PubKey().Address())
 
 	seedComplianceRecord(t, suite, provider)
 	fundAccount(t, suite, depositor, sdk.NewCoins(sdk.NewCoin("uve", sdkmath.NewInt(100000))))
+	usageAuth := newAuthenticatedUsageFixture(t, suite, provider)
 
 	pref := makeFiatPayoutPreference(t, suite, ctx.BlockTime(), provider, "uve", "acct-token")
 	require.NoError(t, keeper.SetFiatPayoutPreference(ctx, pref))
@@ -38,19 +39,8 @@ func TestSettlementPayoutOffRampFlow(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, keeper.ActivateEscrow(ctx, escrowID, "lease-flow-1", provider))
 
-	usage := &types.UsageRecord{
-		OrderID:           "order-flow-1",
-		LeaseID:           "lease-flow-1",
-		Provider:          provider.String(),
-		Customer:          depositor.String(),
-		UsageUnits:        1,
-		UsageType:         "compute",
-		TotalCost:         sdk.NewCoins(sdk.NewCoin("uve", sdkmath.NewInt(1000))),
-		PeriodStart:       ctx.BlockTime().Add(-time.Hour),
-		PeriodEnd:         ctx.BlockTime(),
-		SubmittedAt:       ctx.BlockTime(),
-		ProviderSignature: []byte("sig"),
-	}
+	usage := usageAuth.newUsage(t, ctx, "order-flow-1", "lease-flow-1", provider, depositor,
+		"compute", 1, 1000, ctx.BlockTime().Add(-time.Hour), ctx.BlockTime())
 	require.NoError(t, keeper.RecordUsage(ctx, usage))
 
 	settlement, err := keeper.SettleOrder(ctx, "order-flow-1", []string{usage.UsageID}, false)
@@ -58,12 +48,13 @@ func TestSettlementPayoutOffRampFlow(t *testing.T) {
 
 	payout, found := keeper.GetPayoutBySettlement(ctx, settlement.SettlementID)
 	require.True(t, found)
-	require.Equal(t, types.PayoutStateCompleted, payout.State)
+	require.Equal(t, types.PayoutStatePending, payout.State)
 
 	conversion, found := keeper.GetFiatConversionBySettlement(ctx, settlement.SettlementID)
 	require.True(t, found)
-	require.Equal(t, types.FiatConversionStateCompleted, conversion.State)
-	require.NotEmpty(t, conversion.OffRampID)
+	require.Equal(t, types.FiatConversionStateCreated, conversion.State)
+	require.Equal(t, conversion.ConversionID, payout.FiatConversionID)
+	require.Empty(t, payout.TxHash)
 
 	ledger := keeper.GetPayoutLedgerEntries(ctx, payout.PayoutID)
 	require.NotEmpty(t, ledger)
@@ -76,12 +67,7 @@ func TestDisputeArbitrationRefundFlow(t *testing.T) {
 	keeper := &app.Keepers.VirtEngine.Settlement
 	bank := app.Keepers.Cosmos.Bank
 
-	swapExec := setupConversionDeps(t, suite)
-	bridge := offramp.NewBridge()
-	pending := &pendingOffRamp{}
-	require.NoError(t, bridge.RegisterAdapter(pending))
-	keeper.SetOffRampBridge(bridge)
-	keeper.SetDexSwapExecutor(swapExec)
+	configureFiatTestParams(t, suite)
 	keeper.SetComplianceKeeper(app.Keepers.VirtEngine.VEID)
 
 	depositor := sdk.AccAddress(ed25519.GenPrivKey().PubKey().Address())
@@ -89,6 +75,7 @@ func TestDisputeArbitrationRefundFlow(t *testing.T) {
 
 	seedComplianceRecord(t, suite, provider)
 	fundAccount(t, suite, depositor, sdk.NewCoins(sdk.NewCoin("uve", sdkmath.NewInt(100000))))
+	usageAuth := newAuthenticatedUsageFixture(t, suite, provider)
 	balanceBefore := bank.GetBalance(ctx, depositor, "uve")
 
 	pref := makeFiatPayoutPreference(t, suite, ctx.BlockTime(), provider, "uve", "acct-dispute-refund")
@@ -101,19 +88,8 @@ func TestDisputeArbitrationRefundFlow(t *testing.T) {
 	balanceAfterEscrow := bank.GetBalance(ctx, depositor, "uve")
 	require.True(t, balanceAfterEscrow.Amount.LT(balanceBefore.Amount))
 
-	usage := &types.UsageRecord{
-		OrderID:           "order-dispute-1",
-		LeaseID:           "lease-dispute-1",
-		Provider:          provider.String(),
-		Customer:          depositor.String(),
-		UsageUnits:        1,
-		UsageType:         "compute",
-		TotalCost:         sdk.NewCoins(sdk.NewCoin("uve", sdkmath.NewInt(1000))),
-		PeriodStart:       ctx.BlockTime().Add(-time.Hour),
-		PeriodEnd:         ctx.BlockTime(),
-		SubmittedAt:       ctx.BlockTime(),
-		ProviderSignature: []byte("sig"),
-	}
+	usage := usageAuth.newUsage(t, ctx, "order-dispute-1", "lease-dispute-1", provider, depositor,
+		"compute", 1, 1000, ctx.BlockTime().Add(-time.Hour), ctx.BlockTime())
 	require.NoError(t, keeper.RecordUsage(ctx, usage))
 
 	settlement, err := keeper.SettleOrder(ctx, "order-dispute-1", []string{usage.UsageID}, false)
@@ -121,25 +97,24 @@ func TestDisputeArbitrationRefundFlow(t *testing.T) {
 
 	payout, found := keeper.GetPayoutBySettlement(ctx, settlement.SettlementID)
 	require.True(t, found)
-	require.Equal(t, types.PayoutStateProcessing, payout.State)
+	require.Equal(t, types.PayoutStatePending, payout.State)
 
-	require.NoError(t, keeper.OnDisputeOpened(ctx, payout.InvoiceID, "dispute-1", "customer complaint"))
+	openErr := keeper.OnDisputeOpened(ctx, payout.InvoiceID, "dispute-1", "customer complaint")
 	held, found := keeper.GetPayout(ctx, payout.PayoutID)
 	require.True(t, found)
-	require.Equal(t, types.PayoutStateHeld, held.State)
-
-	require.NoError(t, keeper.OnDisputeResolved(ctx, payout.InvoiceID, billing.DisputeResolutionCustomerWin))
-	refunded, found := keeper.GetPayout(ctx, payout.PayoutID)
-	require.True(t, found)
-	require.Equal(t, types.PayoutStateRefunded, refunded.State)
-
-	balanceAfterRefund := bank.GetBalance(ctx, depositor, "uve")
-	require.Equal(t, balanceBefore.Amount, balanceAfterRefund.Amount)
+	if openErr == nil {
+		require.Equal(t, types.PayoutStateHeld, held.State)
+		require.ErrorIs(t, keeper.OnDisputeResolved(ctx, payout.InvoiceID, billing.DisputeResolutionCustomerWin), types.ErrLegacyFinancialMutationFenced)
+	} else {
+		require.ErrorIs(t, openErr, types.ErrLegacyFinancialMutationFenced)
+		require.Equal(t, types.PayoutStatePending, held.State)
+	}
+	require.Equal(t, balanceAfterEscrow.Amount, bank.GetBalance(ctx, depositor, "uve").Amount)
 	require.True(t, keeper.GetTreasuryBalance(ctx).IsZero())
 
 	conversion, found := keeper.GetFiatConversionBySettlement(ctx, settlement.SettlementID)
 	require.True(t, found)
-	require.Equal(t, types.FiatConversionStateCancelled, conversion.State)
+	require.Contains(t, []types.FiatConversionState{types.FiatConversionStateCreated, types.FiatConversionStateCancelled}, conversion.State)
 
 	ledger := keeper.GetPayoutLedgerEntries(ctx, payout.PayoutID)
 	require.NotEmpty(t, ledger)
@@ -159,24 +134,14 @@ func TestAutoSettleEdgeCases(t *testing.T) {
 	provider := sdk.AccAddress(ed25519.GenPrivKey().PubKey().Address())
 
 	fundAccount(t, suite, depositor, sdk.NewCoins(sdk.NewCoin("uve", sdkmath.NewInt(100000))))
+	usageAuth := newAuthenticatedUsageFixture(t, suite, provider)
 
 	escrowID, err := keeper.CreateEscrow(ctx, "order-auto-1", depositor, sdk.NewCoins(sdk.NewCoin("uve", sdkmath.NewInt(2000))), 24*time.Hour, nil)
 	require.NoError(t, err)
 	require.NoError(t, keeper.ActivateEscrow(ctx, escrowID, "lease-auto-1", provider))
 
-	usage := &types.UsageRecord{
-		OrderID:           "order-auto-1",
-		LeaseID:           "lease-auto-1",
-		Provider:          provider.String(),
-		Customer:          depositor.String(),
-		UsageUnits:        1,
-		UsageType:         "compute",
-		TotalCost:         sdk.NewCoins(sdk.NewCoin("uve", sdkmath.NewInt(1000))),
-		PeriodStart:       ctx.BlockTime().Add(-time.Hour),
-		PeriodEnd:         ctx.BlockTime(),
-		SubmittedAt:       ctx.BlockTime(),
-		ProviderSignature: []byte("sig"),
-	}
+	usage := usageAuth.newUsage(t, ctx, "order-auto-1", "lease-auto-1", provider, depositor,
+		"compute", 1, 1000, ctx.BlockTime().Add(-time.Hour), ctx.BlockTime())
 	require.NoError(t, keeper.RecordUsage(ctx, usage))
 
 	earlyCtx := ctx.WithBlockTime(ctx.BlockTime().Add(30 * time.Minute))
@@ -191,23 +156,13 @@ func TestAutoSettleEdgeCases(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, keeper.ActivateEscrow(ctx, expiringEscrowID, "lease-auto-expired", provider))
 
-	expiryUsage := &types.UsageRecord{
-		OrderID:           "order-auto-expired",
-		LeaseID:           "lease-auto-expired",
-		Provider:          provider.String(),
-		Customer:          depositor.String(),
-		UsageUnits:        1,
-		UsageType:         "compute",
-		TotalCost:         sdk.NewCoins(sdk.NewCoin("uve", sdkmath.NewInt(500))),
-		PeriodStart:       ctx.BlockTime().Add(-time.Hour),
-		PeriodEnd:         ctx.BlockTime(),
-		SubmittedAt:       ctx.BlockTime(),
-		ProviderSignature: []byte("sig"),
-	}
+	expiryUsage := usageAuth.newUsage(t, ctx, "order-auto-expired", "lease-auto-expired", provider, depositor,
+		"compute", 1, 500, ctx.BlockTime().Add(-time.Hour), ctx.BlockTime())
 	require.NoError(t, keeper.RecordUsage(ctx, expiryUsage))
 
 	expiredCtx := ctx.WithBlockTime(ctx.BlockTime().Add(3 * time.Hour))
 	require.NoError(t, keeper.AutoSettle(expiredCtx))
+	require.NoError(t, keeper.ProcessExpiredEscrows(expiredCtx))
 	escrow, found := keeper.GetEscrow(expiredCtx, expiringEscrowID)
 	require.True(t, found)
 	require.Equal(t, types.EscrowStateExpired, escrow.State)

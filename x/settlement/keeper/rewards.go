@@ -535,6 +535,9 @@ func (k Keeper) DistributeVerificationRewards(ctx sdk.Context, verificationResul
 
 // ClaimRewards claims accumulated rewards for an address
 func (k Keeper) ClaimRewards(ctx sdk.Context, claimer sdk.AccAddress, source string) (sdk.Coins, error) {
+	if caseID, held := k.HasActiveFinancialCase(ctx, "party", claimer.String()); held {
+		return nil, types.ErrDisputeActive.Wrapf("rewards held by canonical case %s", caseID)
+	}
 	rewards, found := k.GetClaimableRewards(ctx, claimer)
 	if !found || rewards.TotalClaimable.IsZero() {
 		return sdk.Coins{}, types.ErrNoClaimableRewards.Wrapf("no claimable rewards for %s", claimer.String())

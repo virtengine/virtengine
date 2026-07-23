@@ -2,6 +2,8 @@ package keeper
 
 import (
 	"context"
+	"encoding/binary"
+	"math"
 
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -102,6 +104,9 @@ func paginateAllocations(allocations []marketplacetypes.Allocation, pageReq *que
 	limit := uint64(len(allocations))
 	if pageReq != nil {
 		start = pageReq.Offset
+		if len(pageReq.Key) == 8 {
+			start = binary.BigEndian.Uint64(pageReq.Key)
+		}
 		if pageReq.Limit > 0 {
 			limit = pageReq.Limit
 		}
@@ -109,7 +114,10 @@ func paginateAllocations(allocations []marketplacetypes.Allocation, pageReq *que
 	if start > total {
 		start = total
 	}
-	end := start + limit
+	end := total
+	if limit <= math.MaxUint64-start {
+		end = start + limit
+	}
 	if end > total {
 		end = total
 	}
@@ -119,10 +127,16 @@ func paginateAllocations(allocations []marketplacetypes.Allocation, pageReq *que
 		result = append(result, allocationToProto(allocation))
 	}
 
+	var nextKey []byte
+	if end < total {
+		nextKey = make([]byte, 8)
+		binary.BigEndian.PutUint64(nextKey, end)
+	}
 	resp := &marketplacev1.QueryAllocationsResponse{
 		Allocations: result,
 		Pagination: &query.PageResponse{
-			Total: total,
+			Total:   total,
+			NextKey: nextKey,
 		},
 	}
 	return resp, nil

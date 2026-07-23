@@ -80,7 +80,7 @@ func (c *capturingOffRampBridge) Cancel(ctx context.Context, payoutID string) er
 
 func (s *KeeperTestSuite) configureFiatConversionDeps(t *testing.T, swapExec keeper.DexSwapExecutor, bridge keeper.OffRampBridge) {
 	params := s.keeper.GetParams(s.ctx)
-	params.FiatConversionEnabled = true
+	configureCertifiedFiatProfiles(&params)
 	params.FiatConversionMinAmount = "1"
 	params.FiatConversionMaxAmount = "1000000000"
 	params.FiatConversionDailyLimit = "10000000000"
@@ -228,15 +228,10 @@ func (s *KeeperTestSuite) TestFiatConversionLimitExceeded() {
 	}
 
 	_, err := s.keeper.RequestFiatConversion(s.ctx, request)
-	require.NoError(t, err)
+	require.ErrorIs(t, err, types.ErrFiatLimitExceeded)
 
-	payout, err := s.keeper.ExecutePayout(s.ctx, "inv-limit", settlement.SettlementID)
-	require.NoError(t, err)
-	require.Equal(t, types.PayoutStatePending, payout.State)
-
-	conversion, found := s.keeper.GetFiatConversionByInvoice(s.ctx, "inv-limit")
-	require.True(t, found)
-	require.Equal(t, types.FiatConversionStateCreated, conversion.State)
+	_, found := s.keeper.GetFiatConversionByInvoice(s.ctx, "inv-limit")
+	require.False(t, found)
 	require.Empty(t, swapExec.lastRequest.FromToken.Denom)
 }
 
@@ -384,22 +379,8 @@ func (s *KeeperTestSuite) TestRequestFiatConversionIdempotentWithoutInvoiceLinka
 		EncryptedPayload:  makeEncryptedSettlementPayload(t, []string{"provider-key", "customer-key"}),
 	}
 
-	first, err := s.keeper.RequestFiatConversion(s.ctx, request)
-	require.NoError(t, err)
-
-	second, err := s.keeper.RequestFiatConversion(s.ctx, request)
-	require.NoError(t, err)
-
-	require.Equal(t, first.ConversionID, second.ConversionID)
-	require.Equal(t, first.IdempotencyKey, second.IdempotencyKey)
-
-	stored, found := s.keeper.GetFiatConversion(s.ctx, first.ConversionID)
-	require.True(t, found)
-	require.Equal(t, first.ConversionID, stored.ConversionID)
-	require.Equal(t, first.IdempotencyKey, stored.IdempotencyKey)
-
-	idLookup := s.ctx.KVStore(s.storeKey).Get(types.FiatConversionIdempotencyKey(first.IdempotencyKey))
-	require.Equal(t, first.ConversionID, string(idLookup))
+	_, err := s.keeper.RequestFiatConversion(s.ctx, request)
+	require.ErrorIs(t, err, types.ErrInvalidSettlement)
 }
 
 func (s *KeeperTestSuite) TestSetFiatConversionReindexesUpdatedReferences() {

@@ -65,6 +65,9 @@ func validFiatWorkTransition(from, to FiatConversionWorkState) bool {
 	if to == FiatWorkClaimed {
 		return from == FiatWorkQuoting || from == FiatWorkQuoteReported
 	}
+	if to == FiatWorkSwapFinalized {
+		return from == FiatWorkSwapBroadcast || from == FiatWorkAmbiguous || from == FiatWorkPayoutQuote
+	}
 	rank := map[FiatConversionWorkState]int{
 		FiatWorkClaimed: 1, FiatWorkQuoting: 2, FiatWorkQuoteReported: 3, FiatWorkSigning: 4,
 		FiatWorkSwapBroadcast: 5, FiatWorkAmbiguous: 5, FiatWorkSwapFinalized: 6,

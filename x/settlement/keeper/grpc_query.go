@@ -2,6 +2,7 @@ package keeper
 
 import (
 	"context"
+	"encoding/binary"
 	"math"
 	"time"
 
@@ -497,7 +498,8 @@ func financialPageBounds(length int, request *query.PageRequest) (int, int, *que
 	}
 	page := &query.PageResponse{Total: total}
 	if end < total {
-		page.NextKey = []byte(time.Unix(financialPageUnix(end), 0).Format("150405"))
+		page.NextKey = make([]byte, 8)
+		binary.BigEndian.PutUint64(page.NextKey, end)
 	}
 	return financialPageIndex(offset), financialPageIndex(end), page
 }
@@ -515,11 +517,4 @@ func financialPageIndex(value uint64) int {
 		return int(^uint(0) >> 1)
 	}
 	return int(value)
-}
-
-func financialPageUnix(value uint64) int64 {
-	if value > uint64(math.MaxInt64) {
-		return math.MaxInt64
-	}
-	return int64(value)
 }

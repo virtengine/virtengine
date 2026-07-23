@@ -81,6 +81,9 @@ func (k Keeper) RecordAllocationEvent(ctx sdk.Context, allocation types.Resource
 
 // AllocateResources selects a provider and creates a pending allocation.
 func (k Keeper) AllocateResources(ctx sdk.Context, request types.ResourceRequest) (*types.ResourceAllocation, error) {
+	if k.IsCanonicalReservationsActive(ctx) {
+		return nil, types.ErrLegacyAllocationDeprecated
+	}
 	params := k.GetParams(ctx)
 	limit := uint64ToInt(params.MaxCandidates)
 	if request.MaxCandidates > 0 {
@@ -142,6 +145,9 @@ func (k Keeper) AllocateResources(ctx sdk.Context, request types.ResourceRequest
 
 // ActivateAllocation transitions allocation to active.
 func (k Keeper) ActivateAllocation(ctx sdk.Context, allocationID, provider string) (*types.ResourceAllocation, error) {
+	if k.IsCanonicalReservationsActive(ctx) {
+		return nil, types.ErrLegacyAllocationDeprecated
+	}
 	allocation, found := k.GetAllocation(ctx, allocationID)
 	if !found {
 		return nil, types.ErrAllocationNotFound
@@ -177,6 +183,9 @@ func (k Keeper) ActivateAllocation(ctx sdk.Context, allocationID, provider strin
 
 // ReleaseAllocation releases an allocation and returns capacity.
 func (k Keeper) ReleaseAllocation(ctx sdk.Context, allocationID, requester, reason string) (*types.ResourceAllocation, error) {
+	if k.IsCanonicalReservationsActive(ctx) {
+		return nil, types.ErrLegacyAllocationDeprecated
+	}
 	allocation, found := k.GetAllocation(ctx, allocationID)
 	if !found {
 		return nil, types.ErrAllocationNotFound
@@ -207,6 +216,9 @@ func (k Keeper) ReleaseAllocation(ctx sdk.Context, allocationID, requester, reas
 
 // ExpirePendingAllocations marks pending allocations expired and applies slashing.
 func (k Keeper) ExpirePendingAllocations(ctx sdk.Context) {
+	if k.IsCanonicalReservationsActive(ctx) {
+		return
+	}
 	params := k.GetParams(ctx)
 	cutoff := ctx.BlockTime().Add(-secondsToDuration(params.SlashingGraceSeconds))
 

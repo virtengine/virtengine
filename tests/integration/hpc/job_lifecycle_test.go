@@ -23,6 +23,7 @@ import (
 	"github.com/virtengine/virtengine/sdk/go/testutil"
 	"github.com/virtengine/virtengine/x/hpc/keeper"
 	"github.com/virtengine/virtengine/x/hpc/types"
+	settlementkeeper "github.com/virtengine/virtengine/x/settlement/keeper"
 	settlementtypes "github.com/virtengine/virtengine/x/settlement/types"
 )
 
@@ -55,6 +56,7 @@ type mockSettlementKeeper struct {
 	escrowByID       map[string]settlementtypes.EscrowAccount
 	usageRecords     map[string]settlementtypes.UsageRecord
 	usageByOrder     map[string][]string
+	financialCases   map[string]settlementtypes.FinancialCase
 	usageCounter     int
 	settlementNumber int
 	bank             *integrationBankKeeper
@@ -68,11 +70,35 @@ func newMockSettlementKeeper(escrow settlementtypes.EscrowAccount, bank *integra
 		escrowByID: map[string]settlementtypes.EscrowAccount{
 			escrow.EscrowID: escrow,
 		},
-		usageRecords: make(map[string]settlementtypes.UsageRecord),
-		usageByOrder: make(map[string][]string),
-		bank:         bank,
+		usageRecords:   make(map[string]settlementtypes.UsageRecord),
+		usageByOrder:   make(map[string][]string),
+		financialCases: make(map[string]settlementtypes.FinancialCase),
+		bank:           bank,
 	}
 }
+
+func (m *mockSettlementKeeper) OpenFinancialCase(_ sdk.Context, _ settlementkeeper.FinancialCaseOpenRequest) (*settlementtypes.FinancialCase, *settlementtypes.FinancialClaim, bool, error) {
+	return nil, nil, false, fmt.Errorf("financial cases are not enabled in this lifecycle fixture")
+}
+
+func (m *mockSettlementKeeper) AddFinancialClaim(_ sdk.Context, _ string, _ settlementtypes.FinancialClaim) (*settlementtypes.FinancialCase, *settlementtypes.FinancialClaim, bool, error) {
+	return nil, nil, false, fmt.Errorf("financial cases are not enabled in this lifecycle fixture")
+}
+
+func (m *mockSettlementKeeper) EscalateFinancialCase(_ sdk.Context, _ string, _ string, _ []byte) error {
+	return fmt.Errorf("financial cases are not enabled in this lifecycle fixture")
+}
+
+func (m *mockSettlementKeeper) GetFinancialCase(_ sdk.Context, caseID string) (settlementtypes.FinancialCase, bool) {
+	financialCase, found := m.financialCases[caseID]
+	return financialCase, found
+}
+
+func (m *mockSettlementKeeper) GetFinancialCaseBySubject(_ sdk.Context, _ settlementtypes.FinancialSubject) (settlementtypes.FinancialCase, bool) {
+	return settlementtypes.FinancialCase{}, false
+}
+
+func (m *mockSettlementKeeper) IsFinancialCasesActive(_ sdk.Context) bool { return false }
 
 func (m *mockSettlementKeeper) RecordUsage(_ sdk.Context, record *settlementtypes.UsageRecord) error {
 	m.mu.Lock()
@@ -274,7 +300,15 @@ func TestJobLifecycleSubmitScheduleRunCompleteSettle(t *testing.T) {
 		},
 		MaxRuntimeSeconds: 3600,
 	}
-	require.NoError(t, k.SubmitJob(ctx, &job))
+	// This historical lifecycle fixture isolates HPC accounting/settlement and
+	// intentionally predates the Task 84C reservation activation exercised by
+	// the marketplace integration suite.
+	job.ProviderAddress = providerAddr
+	job.ClusterID = cluster.ClusterID
+	job.State = types.JobStatePending
+	job.CreatedAt = ctx.BlockTime()
+	job.BlockHeight = ctx.BlockHeight()
+	require.NoError(t, k.SetJob(ctx, job))
 
 	escrow := settlementtypes.EscrowAccount{
 		EscrowID:     job.EscrowID,
@@ -308,6 +342,31 @@ func TestJobLifecycleSubmitScheduleRunCompleteSettle(t *testing.T) {
 	require.Greater(t, usageMetrics.NetworkBytesIn, int64(0))
 	require.Greater(t, usageMetrics.EnergyJoules, int64(0))
 	require.Equal(t, "mixed", usageMetrics.SchedulerSpecific["slurm_state"])
+	usage := settlementtypes.UsageRecord{
+		UsageID: "usage-lifecycle-1", OrderID: job.JobID, LeaseID: "lease-lifecycle",
+		Provider: providerAddr, Customer: customerAddr, UsageUnits: 1, UsageType: "hpc",
+		PeriodStart: time.Unix(1_700_000_200, 0), PeriodEnd: time.Unix(1_700_000_800, 0),
+		TotalCost: sdk.NewCoins(sdk.NewInt64Coin("uve", 1000)), ProviderSignature: []byte("provider-proof"),
+		SignatureVersion: settlementtypes.SignatureVersionV1, SignatureVerified: true,
+		UsageDigest:          bytes.Repeat([]byte{84}, settlementtypes.DigestSize),
+		CustomerAcknowledged: true, AuthenticationStatus: settlementtypes.UsageAuthenticationStatusVerified,
+	}
+	settlementKeeper := newMockSettlementKeeper(escrow, bank)
+	require.NoError(t, settlementKeeper.RecordUsage(ctx, &usage))
+	k.SetSettlementKeeper(settlementKeeper)
+	detailedMetrics := types.HPCDetailedMetrics{
+		WallClockSeconds: 600, CPUCoreSeconds: 4_800, MemoryGBSeconds: 19_200,
+		StorageGBHours: usageMetrics.StorageGBHours, NetworkBytesIn: usageMetrics.NetworkBytesIn,
+		NetworkBytesOut: usageMetrics.NetworkBytesOut, NodesUsed: 2, EnergyJoules: usageMetrics.EnergyJoules,
+		SubmitTime: time.Unix(1_700_000_100, 0),
+	}
+	require.NoError(t, k.CreateUsageSnapshot(ctx, &types.HPCUsageSnapshot{
+		SnapshotID: "usage-lifecycle-1", JobID: job.JobID, ClusterID: cluster.ClusterID,
+		SchedulerType: "SLURM", SnapshotType: types.SnapshotTypeFinal, SequenceNumber: 1,
+		ProviderAddress: providerAddr, CustomerAddress: customerAddr,
+		Metrics: detailedMetrics, CumulativeMetrics: detailedMetrics, JobState: types.JobStateCompleted,
+		SnapshotTime: ctx.BlockTime(), ProviderSignature: "authenticated-provider-proof",
+	}))
 
 	result, err := k.ProcessJobSettlement(ctx, job.JobID)
 	require.NoError(t, err)

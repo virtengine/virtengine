@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"math"
+	"strings"
 
 	"github.com/cosmos/cosmos-sdk/telemetry"
 	sdk "github.com/cosmos/cosmos-sdk/types"
@@ -15,6 +16,12 @@ import (
 	types "github.com/virtengine/virtengine/sdk/go/node/market/v1beta5"
 	ptypes "github.com/virtengine/virtengine/sdk/go/node/provider/v1beta4"
 	resourcesv1 "github.com/virtengine/virtengine/sdk/go/node/resources/v1"
+	attributesv1 "github.com/virtengine/virtengine/sdk/go/node/types/attributes/v1"
+)
+
+const (
+	marketCPUUnitsPerCore = uint64(1000)
+	marketBytesPerGiB     = uint64(1024 * 1024 * 1024)
 )
 
 type msgServer struct {
@@ -292,6 +299,9 @@ func (ms msgServer) createLease(ctx sdk.Context, msg *types.MsgCreateLease) (*ty
 		}
 		return false
 	})
+	if err != nil {
+		return nil, err
+	}
 
 	return &types.MsgCreateLeaseResponse{ReservationId: reservation.ReservationId}, nil
 }
@@ -372,7 +382,11 @@ func marketResourceCapacity(offers types.ResourcesOffer) (resourcesv1.ResourceCa
 			return capacity, fmt.Errorf("resource offer count must be positive")
 		}
 		if offer.Resources.CPU != nil {
-			value, err := checkedMarketProduct(offer.Resources.CPU.Units.Value(), uint64(offer.Count))
+			units, err := checkedMarketProductUint(offer.Resources.CPU.Units.Value(), uint64(offer.Count))
+			if err != nil {
+				return capacity, err
+			}
+			value, err := checkedMarketUintToInt64(ceilMarketUnits(units, marketCPUUnitsPerCore))
 			if err != nil {
 				return capacity, err
 			}
@@ -382,7 +396,11 @@ func marketResourceCapacity(offers types.ResourcesOffer) (resourcesv1.ResourceCa
 			}
 		}
 		if offer.Resources.Memory != nil {
-			value, err := checkedMarketProduct(offer.Resources.Memory.Quantity.Value(), uint64(offer.Count))
+			bytes, err := checkedMarketProductUint(offer.Resources.Memory.Quantity.Value(), uint64(offer.Count))
+			if err != nil {
+				return capacity, err
+			}
+			value, err := checkedMarketUintToInt64(ceilMarketUnits(bytes, marketBytesPerGiB))
 			if err != nil {
 				return capacity, err
 			}
@@ -392,7 +410,11 @@ func marketResourceCapacity(offers types.ResourcesOffer) (resourcesv1.ResourceCa
 			}
 		}
 		for _, storage := range offer.Resources.Storage {
-			value, err := checkedMarketProduct(storage.Quantity.Value(), uint64(offer.Count))
+			bytes, err := checkedMarketProductUint(storage.Quantity.Value(), uint64(offer.Count))
+			if err != nil {
+				return capacity, err
+			}
+			value, err := checkedMarketUintToInt64(ceilMarketUnits(bytes, marketBytesPerGiB))
 			if err != nil {
 				return capacity, err
 			}
@@ -410,6 +432,19 @@ func marketResourceCapacity(offers types.ResourcesOffer) (resourcesv1.ResourceCa
 			if err != nil {
 				return capacity, err
 			}
+			gpuType, err := marketGPUType(offer.Resources.GPU.Attributes)
+			if err != nil {
+				return capacity, err
+			}
+			if value > 0 && gpuType == "" {
+				return capacity, fmt.Errorf("GPU type is required when GPU capacity is nonzero")
+			}
+			if capacity.GpuType != "" && gpuType != "" && capacity.GpuType != gpuType {
+				return capacity, fmt.Errorf("resource offer contains multiple GPU types")
+			}
+			if capacity.GpuType == "" {
+				capacity.GpuType = gpuType
+			}
 		}
 	}
 	if capacity.CpuCores == 0 && capacity.MemoryGb == 0 && capacity.StorageGb == 0 && capacity.Gpus == 0 {
@@ -423,6 +458,50 @@ func checkedMarketProduct(value, count uint64) (int64, error) {
 		return 0, fmt.Errorf("resource capacity overflow")
 	}
 	return int64(value * count), nil //nolint:gosec // bounded above
+}
+
+func checkedMarketProductUint(value, count uint64) (uint64, error) {
+	if count > 0 && value > math.MaxUint64/count {
+		return 0, fmt.Errorf("resource capacity overflow")
+	}
+	return value * count, nil
+}
+
+func checkedMarketUintToInt64(value uint64) (int64, error) {
+	if value > math.MaxInt64 {
+		return 0, fmt.Errorf("resource capacity overflow")
+	}
+	return int64(value), nil //nolint:gosec // bounded above
+}
+
+func ceilMarketUnits(value, unit uint64) uint64 {
+	if value == 0 {
+		return 0
+	}
+	return 1 + (value-1)/unit
+}
+
+func marketGPUType(attributes attributesv1.Attributes) (string, error) {
+	var gpuType string
+	for _, attribute := range attributes {
+		key := strings.ToLower(strings.TrimSpace(attribute.Key))
+		value := strings.TrimSpace(attribute.Value)
+		candidate := ""
+		switch {
+		case key == "gpu_type" || strings.HasSuffix(key, "/gpu_type"):
+			candidate = value
+		case strings.HasPrefix(key, "vendor/nvidia/model/"):
+			candidate = strings.Split(strings.TrimPrefix(key, "vendor/nvidia/model/"), "/")[0]
+		}
+		if candidate == "" || candidate == "*" {
+			continue
+		}
+		if gpuType != "" && gpuType != candidate {
+			return "", fmt.Errorf("resource offer contains conflicting GPU attributes")
+		}
+		gpuType = candidate
+	}
+	return gpuType, nil
 }
 
 func checkedMarketAdd(current, value int64) (int64, error) {

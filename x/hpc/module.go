@@ -130,6 +130,9 @@ func (am AppModule) RegisterServices(cfg module.Configurator) {
 	}); err != nil {
 		panic(err)
 	}
+	if err := cfg.RegisterMigration(types.ModuleName, 2, func(ctx sdk.Context) error { return nil }); err != nil {
+		panic(fmt.Sprintf("failed to register hpc 2->3 migration: %v", err))
+	}
 }
 
 // InitGenesis performs genesis initialization for the HPC module.
@@ -152,7 +155,7 @@ func (am AppModule) ExportGenesis(ctx sdk.Context, cdc codec.JSONCodec) json.Raw
 }
 
 // ConsensusVersion implements AppModule/ConsensusVersion.
-func (AppModule) ConsensusVersion() uint64 { return 2 }
+func (AppModule) ConsensusVersion() uint64 { return 3 }
 
 // BeginBlock returns the begin blocker for the HPC module.
 func (am AppModule) BeginBlock(ctx context.Context) error {

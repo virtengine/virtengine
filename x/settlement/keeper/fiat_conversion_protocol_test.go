@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	storetypes "cosmossdk.io/store/types"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/stretchr/testify/require"
 
@@ -25,6 +26,10 @@ const (
 )
 
 func setupAuthenticatedFiatConversion(t *testing.T) (*KeeperTestSuite, types.FiatConversionRecord, types.PayoutRecord, *veidtypes.ComplianceRecord) {
+	return setupAuthenticatedFiatConversionWithRetained(t, false)
+}
+
+func setupAuthenticatedFiatConversionWithRetained(t *testing.T, retained bool) (*KeeperTestSuite, types.FiatConversionRecord, types.PayoutRecord, *veidtypes.ComplianceRecord) {
 	t.Helper()
 	s := new(KeeperTestSuite)
 	s.SetT(t)
@@ -48,11 +53,18 @@ func setupAuthenticatedFiatConversion(t *testing.T) (*KeeperTestSuite, types.Fia
 	s.keeper.SetComplianceKeeper(mockComplianceKeeper{record: compliance})
 
 	settlement := s.buildSettlement(t, "task85b-observation")
+	holdback := sdk.NewCoins()
+	if retained {
+		settlement.PlatformFee = sdk.NewCoins(sdk.NewInt64Coin("uve", 50))
+		settlement.ValidatorFee = sdk.NewCoins(sdk.NewInt64Coin("uve", 10))
+		settlement.ProviderShare = sdk.NewCoins(sdk.NewInt64Coin("uve", 940))
+		holdback = sdk.NewCoins(sdk.NewInt64Coin("uve", 100))
+	}
 	require.NoError(t, s.keeper.SetSettlement(s.ctx, settlement))
 	payout := types.NewPayoutRecord(
 		"payout-task85b", "invoice-task85b", settlement.SettlementID, settlement.EscrowID,
 		settlement.OrderID, settlement.LeaseID, settlement.Provider, settlement.Customer,
-		settlement.TotalAmount, settlement.PlatformFee, settlement.ValidatorFee, sdk.NewCoins(),
+		settlement.TotalAmount, settlement.PlatformFee, settlement.ValidatorFee, holdback,
 		s.ctx.BlockTime(), s.ctx.BlockHeight(),
 	)
 	require.NoError(t, s.keeper.SetPayout(s.ctx, *payout))
@@ -206,7 +218,7 @@ func TestFiatObservationAuthorizationSequenceProfileAndCompliance(t *testing.T) 
 }
 
 func TestFiatObservationEveryLegalStageAndTerminalExactlyOnce(t *testing.T) {
-	s, conversion, payout, compliance := setupAuthenticatedFiatConversion(t)
+	s, conversion, payout, compliance := setupAuthenticatedFiatConversionWithRetained(t, true)
 	providerBefore := s.bankKeeper.GetBalance(s.ctx, s.provider, "uve").Amount
 	final := runSuccessfulFiatObservationFlow(t, s, conversion, compliance)
 	require.Equal(t, types.FiatConversionStatePayoutCompleted, final.State)
@@ -223,8 +235,23 @@ func TestFiatObservationEveryLegalStageAndTerminalExactlyOnce(t *testing.T) {
 	require.Equal(t, providerBefore, s.bankKeeper.GetBalance(s.ctx, s.provider, "uve").Amount)
 	require.True(t, s.bankKeeper.ModuleBalance(types.ModuleAccountName).IsZero())
 	require.True(t, s.bankKeeper.ModuleBalance(types.FiatConversionCustodyAccountName).Equal(sdk.NewCoins(final.CryptoAmount)))
+	require.Equal(t, sdk.NewCoins(sdk.NewInt64Coin("uve", 160)), s.keeper.GetTreasuryBalance(s.ctx))
+	require.Equal(t, 3, countTreasuryRecordsForPayout(s, payout.PayoutID))
+	require.Equal(t, payout.GrossAmount, sdk.NewCoins(final.CustodySinkAmount).Add(payout.PlatformFee...).Add(payout.ValidatorFee...).Add(payout.HoldbackAmount...))
 	entries := s.keeper.GetPayoutLedgerEntries(s.ctx, payout.PayoutID)
 	require.Equal(t, payout.NetAmount, entries[len(entries)-1].Amount)
+	exactCompletion := observationFor(t, conversion, compliance, 6, settlementv1.FiatConversionObservationStage_FIAT_CONVERSION_OBSERVATION_STAGE_PAYOUT_COMPLETED)
+	exactCompletion.OffRampQuoteId = final.OffRampQuoteID
+	exactCompletion.OffRampPayoutId = final.OffRampID
+	exactCompletion.QuoteDigest = final.QuoteDigest
+	exactCompletion.Status = testPayoutCompletedStatus
+	exactCompletion.FiatAmount = testPayoutFiatAmount
+	exactCompletion.PrivacySafeReferenceHash = bytes.Repeat([]byte{61}, sha256.Size)
+	exactCompletion.PayoutFinalityHash = bytes.Repeat([]byte{62}, sha256.Size)
+	exact, err := s.keeper.RecordFiatConversionObservation(s.ctx, exactCompletion)
+	require.NoError(t, err)
+	require.True(t, exact.ExactDuplicate)
+	require.Equal(t, 3, countTreasuryRecordsForPayout(s, payout.PayoutID))
 
 	terminalReplay := observationFor(t, conversion, compliance, 7, settlementv1.FiatConversionObservationStage_FIAT_CONVERSION_OBSERVATION_STAGE_PAYOUT_COMPLETED)
 	terminalReplay.OffRampQuoteId = final.OffRampQuoteID
@@ -234,9 +261,11 @@ func TestFiatObservationEveryLegalStageAndTerminalExactlyOnce(t *testing.T) {
 	terminalReplay.FiatAmount = testPayoutFiatAmount
 	terminalReplay.PrivacySafeReferenceHash = bytes.Repeat([]byte{61}, 32)
 	terminalReplay.PayoutFinalityHash = bytes.Repeat([]byte{62}, 32)
-	_, err := s.keeper.RecordFiatConversionObservation(s.ctx, terminalReplay)
+	_, err = s.keeper.RecordFiatConversionObservation(s.ctx, terminalReplay)
 	require.ErrorIs(t, err, types.ErrInvalidStateTransition)
 	require.Equal(t, providerBefore, s.bankKeeper.GetBalance(s.ctx, s.provider, "uve").Amount)
+	require.Equal(t, sdk.NewCoins(sdk.NewInt64Coin("uve", 160)), s.keeper.GetTreasuryBalance(s.ctx))
+	require.Equal(t, 3, countTreasuryRecordsForPayout(s, payout.PayoutID))
 }
 
 func TestFiatObservationPayoutReferenceLineageImmutable(t *testing.T) {
@@ -310,7 +339,224 @@ func TestFiatObservationCompletionInsufficientBalanceIsAtomic(t *testing.T) {
 	require.Equal(t, types.PayoutStatePending, linked.State)
 	require.False(t, linked.ValueMovementApplied)
 	require.Empty(t, s.bankKeeper.ModuleBalance(types.FiatConversionCustodyAccountName))
+	require.True(t, s.keeper.GetTreasuryBalance(s.ctx).IsZero())
+	require.Zero(t, countTreasuryRecordsForPayout(s, payout.PayoutID))
 	require.Empty(t, s.keeper.ValidateFiatConversionInvariants(s.ctx))
+}
+
+func TestFiatObservationTreasuryConflictRollsBackCompletion(t *testing.T) {
+	s, conversion, payout, compliance := setupAuthenticatedFiatConversionWithRetained(t, true)
+	conflict := types.TreasuryRecord{
+		RecordID: "payout/" + payout.PayoutID + "/platform_fee", RecordType: types.TreasuryRecordPlatformFee,
+		PayoutID: payout.PayoutID, SettlementID: payout.SettlementID,
+		Amount: sdk.NewCoins(sdk.NewInt64Coin("uve", 1)), BalanceAfter: sdk.NewCoins(sdk.NewInt64Coin("uve", 1)),
+		Description: "conflicting fixture", BlockHeight: s.ctx.BlockHeight(), Timestamp: s.ctx.BlockTime(),
+	}
+	raw, err := json.Marshal(conflict)
+	require.NoError(t, err)
+	s.ctx.KVStore(s.storeKey).Set(types.TreasuryRecordKey(conflict.RecordID), raw)
+
+	completed := runSuccessfulFiatObservationFlowUntilCompletion(t, s, conversion, compliance)
+	_, err = s.keeper.RecordFiatConversionObservation(s.ctx, completed)
+	require.ErrorIs(t, err, types.ErrInvalidSettlement)
+	stored, found := s.keeper.GetFiatConversion(s.ctx, conversion.ConversionID)
+	require.True(t, found)
+	require.Equal(t, types.FiatConversionStatePayoutSubmitted, stored.State)
+	linked, found := s.keeper.GetPayout(s.ctx, payout.PayoutID)
+	require.True(t, found)
+	require.Equal(t, types.PayoutStatePending, linked.State)
+	require.False(t, linked.ValueMovementApplied)
+	require.True(t, s.bankKeeper.ModuleBalance(types.FiatConversionCustodyAccountName).IsZero())
+	require.True(t, s.keeper.GetTreasuryBalance(s.ctx).IsZero())
+}
+
+func TestFinancialCaseAfterIrreversibleFiatBoundaryCannotAllocateOrOverridePayout(t *testing.T) {
+	t.Run("after swap submission", func(t *testing.T) {
+		s, conversion, payout, compliance := setupAuthenticatedFiatConversion(t)
+		recordFiatSwapSubmitted(t, s, conversion, compliance)
+		financialCase := openFiatFinancialCase(t, s, conversion, 0x71)
+		linked, found := s.keeper.GetPayout(s.ctx, payout.PayoutID)
+		require.True(t, found)
+		require.Equal(t, types.PayoutStatePending, linked.State, "fiat conversion ownership remains authoritative")
+		providerBefore := s.bankKeeper.GetBalance(s.ctx, s.provider, "uve")
+		moduleBefore := s.bankKeeper.ModuleBalance(types.ModuleAccountName)
+		resolveFiatFinancialCase(t, s, financialCase)
+		_, err := s.keeper.FinalizeFinancialCase(s.ctx, financialCase.CaseId, s.keeper.GetAuthority())
+		require.ErrorIs(t, err, types.ErrFiatConversionQuarantined)
+		require.Equal(t, providerBefore, s.bankKeeper.GetBalance(s.ctx, s.provider, "uve"))
+		require.Equal(t, moduleBefore, s.bankKeeper.ModuleBalance(types.ModuleAccountName))
+		linked, found = s.keeper.GetPayout(s.ctx, payout.PayoutID)
+		require.True(t, found)
+		require.Equal(t, types.PayoutStatePending, linked.State)
+		require.False(t, linked.ValueMovementApplied)
+	})
+
+	t.Run("after payout submission", func(t *testing.T) {
+		s, conversion, payout, compliance := setupAuthenticatedFiatConversion(t)
+		completed := runSuccessfulFiatObservationFlowUntilCompletion(t, s, conversion, compliance)
+		financialCase := openFiatFinancialCase(t, s, conversion, 0x72)
+		resolveFiatFinancialCase(t, s, financialCase)
+		completed.ObservedAt = s.ctx.BlockTime().Unix()
+		_, err := s.keeper.RecordFiatConversionObservation(s.ctx, completed)
+		require.NoError(t, err, "authenticated external completion must remain admissible")
+		linked, found := s.keeper.GetPayout(s.ctx, payout.PayoutID)
+		require.True(t, found)
+		require.Equal(t, types.PayoutStateCompleted, linked.State)
+		custodyBefore := s.bankKeeper.ModuleBalance(types.FiatConversionCustodyAccountName)
+		_, err = s.keeper.FinalizeFinancialCase(s.ctx, financialCase.CaseId, s.keeper.GetAuthority())
+		require.ErrorIs(t, err, types.ErrFiatConversionQuarantined)
+		require.Equal(t, custodyBefore, s.bankKeeper.ModuleBalance(types.FiatConversionCustodyAccountName))
+		linked, found = s.keeper.GetPayout(s.ctx, payout.PayoutID)
+		require.True(t, found)
+		require.Equal(t, types.PayoutStateCompleted, linked.State, "financial case must not override external terminal evidence")
+		require.Empty(t, s.keeper.ValidateFiatConversionInvariants(s.ctx))
+		require.Empty(t, s.keeper.ValidateFinancialCaseInvariants(s.ctx))
+	})
+}
+
+func TestFiatPostInitiationReconciliationUsesImmutableAuthorization(t *testing.T) {
+	blockers := fiatCurrentAuthorizationBlockers()
+	for _, blocker := range blockers {
+		t.Run("swap_finalized/"+blocker.name, func(t *testing.T) {
+			s, conversion, _, compliance := setupAuthenticatedFiatConversion(t)
+			quote, submitted := recordFiatSwapSubmitted(t, s, conversion, compliance)
+			blocker.apply(t, s, conversion, compliance)
+			finalized := observationFor(t, conversion, compliance, 3, settlementv1.FiatConversionObservationStage_FIAT_CONVERSION_OBSERVATION_STAGE_SWAP_FINALIZED)
+			finalized.ComplianceDecisionHash = append([]byte(nil), conversion.ComplianceDecisionHash...)
+			finalized.QuoteDigest, finalized.MinimumStableOutput, finalized.SwapTxHash = quote.QuoteDigest, quote.MinimumStableOutput, submitted.SwapTxHash
+			finalized.SwapHeight = 100
+			finalized.SwapBlockHash = bytes.Repeat([]byte{41}, sha256.Size)
+			finalized.SwapFinalityConfirmations = 2
+			finalized.SwapFinalityHash = bytes.Repeat([]byte{42}, sha256.Size)
+			finalized.StableAmount = sdk.NewInt64Coin(testStableDenom, 950)
+			_, err := s.keeper.RecordFiatConversionObservation(s.ctx, finalized)
+			require.NoError(t, err)
+			payoutQuote := observationFor(t, conversion, compliance, 4, settlementv1.FiatConversionObservationStage_FIAT_CONVERSION_OBSERVATION_STAGE_PAYOUT_QUOTED)
+			payoutQuote.QuoteDigest = bytes.Repeat([]byte{51}, sha256.Size)
+			payoutQuote.QuoteExpiry = s.ctx.BlockTime().Add(time.Minute).Unix()
+			payoutQuote.OffRampQuoteId = "BLOCKED-NEW-PAYOUT-QUOTE"
+			_, err = s.keeper.RecordFiatConversionObservation(s.ctx, payoutQuote)
+			require.Error(t, err, "current authorization change must stop a new payout quote")
+		})
+
+		t.Run("swap_failed/"+blocker.name, func(t *testing.T) {
+			s, conversion, _, compliance := setupAuthenticatedFiatConversion(t)
+			recordFiatSwapSubmitted(t, s, conversion, compliance)
+			blocker.apply(t, s, conversion, compliance)
+			failed := observationFor(t, conversion, compliance, 3, settlementv1.FiatConversionObservationStage_FIAT_CONVERSION_OBSERVATION_STAGE_FAILED)
+			failed.ComplianceDecisionHash = append([]byte(nil), conversion.ComplianceDecisionHash...)
+			failed.Status, failed.FailureCode = "failed", "RECONCILED_SWAP_FAILURE"
+			result, err := s.keeper.RecordFiatConversionObservation(s.ctx, failed)
+			require.NoError(t, err)
+			require.Equal(t, types.FiatConversionStateFailed, result.Conversion.State)
+		})
+
+		for _, outcome := range []string{"completed", "failed"} {
+			t.Run("payout_"+outcome+"/"+blocker.name, func(t *testing.T) {
+				s, conversion, payout, compliance := setupAuthenticatedFiatConversion(t)
+				completed := runSuccessfulFiatObservationFlowUntilCompletion(t, s, conversion, compliance)
+				blocker.apply(t, s, conversion, compliance)
+				if outcome == "completed" {
+					_, err := s.keeper.RecordFiatConversionObservation(s.ctx, completed)
+					require.NoError(t, err)
+					linked, found := s.keeper.GetPayout(s.ctx, payout.PayoutID)
+					require.True(t, found)
+					require.Equal(t, types.PayoutStateCompleted, linked.State)
+				} else {
+					failed := observationFor(t, conversion, compliance, 6, settlementv1.FiatConversionObservationStage_FIAT_CONVERSION_OBSERVATION_STAGE_FAILED)
+					failed.ComplianceDecisionHash = append([]byte(nil), conversion.ComplianceDecisionHash...)
+					failed.Status, failed.FailureCode = "failed", "RECONCILED_PAYOUT_FAILURE"
+					result, err := s.keeper.RecordFiatConversionObservation(s.ctx, failed)
+					require.NoError(t, err)
+					require.Equal(t, types.FiatConversionStateFailed, result.Conversion.State)
+					linked, found := s.keeper.GetPayout(s.ctx, payout.PayoutID)
+					require.True(t, found)
+					require.Equal(t, types.PayoutStatePending, linked.State)
+				}
+			})
+		}
+	}
+}
+
+type fiatCurrentAuthorizationBlocker struct {
+	name  string
+	apply func(*testing.T, *KeeperTestSuite, types.FiatConversionRecord, *veidtypes.ComplianceRecord)
+}
+
+func fiatCurrentAuthorizationBlockers() []fiatCurrentAuthorizationBlocker {
+	return []fiatCurrentAuthorizationBlocker{
+		{name: "governance_pause", apply: func(t *testing.T, s *KeeperTestSuite, _ types.FiatConversionRecord, _ *veidtypes.ComplianceRecord) {
+			params := s.keeper.GetParams(s.ctx)
+			params.FiatConversionEnabled = false
+			require.NoError(t, s.keeper.SetParams(s.ctx, params))
+		}},
+		{name: "profile_rotation", apply: func(t *testing.T, s *KeeperTestSuite, _ types.FiatConversionRecord, _ *veidtypes.ComplianceRecord) {
+			params := s.keeper.GetParams(s.ctx)
+			params.FiatConversionDEXProfileID = "rotated-dex-profile"
+			params.FiatConversionDEXProfileDigest = bytes.Repeat([]byte{0x91}, sha256.Size)
+			params.FiatConversionPayoutProfileID = "rotated-payout-profile"
+			params.FiatConversionPayoutProfileDigest = bytes.Repeat([]byte{0x92}, sha256.Size)
+			require.NoError(t, s.keeper.SetParams(s.ctx, params))
+		}},
+		{name: "compliance_revocation", apply: func(_ *testing.T, _ *KeeperTestSuite, _ types.FiatConversionRecord, compliance *veidtypes.ComplianceRecord) {
+			compliance.Status = veidtypes.ComplianceStatusBlocked
+		}},
+		{name: "financial_hold", apply: func(t *testing.T, s *KeeperTestSuite, conversion types.FiatConversionRecord, _ *veidtypes.ComplianceRecord) {
+			openFiatFinancialCase(t, s, conversion, 0x73)
+		}},
+	}
+}
+
+func recordFiatSwapSubmitted(t *testing.T, s *KeeperTestSuite, conversion types.FiatConversionRecord, compliance *veidtypes.ComplianceRecord) (*types.MsgRecordFiatConversionObservation, *types.MsgRecordFiatConversionObservation) {
+	t.Helper()
+	quote := observationFor(t, conversion, compliance, 1, settlementv1.FiatConversionObservationStage_FIAT_CONVERSION_OBSERVATION_STAGE_QUOTE_ACCEPTED)
+	quote.QuoteDigest = bytes.Repeat([]byte{31}, sha256.Size)
+	quote.QuoteExpiry = s.ctx.BlockTime().Add(10 * time.Minute).Unix()
+	quote.MinimumStableOutput = sdk.NewInt64Coin(testStableDenom, 900)
+	_, err := s.keeper.RecordFiatConversionObservation(s.ctx, quote)
+	require.NoError(t, err)
+	submitted := observationFor(t, conversion, compliance, 2, settlementv1.FiatConversionObservationStage_FIAT_CONVERSION_OBSERVATION_STAGE_SWAP_SUBMITTED)
+	submitted.QuoteDigest, submitted.QuoteExpiry, submitted.MinimumStableOutput = quote.QuoteDigest, quote.QuoteExpiry, quote.MinimumStableOutput
+	submitted.SwapTxHash = "DEX-TX-IRREVERSIBLE"
+	_, err = s.keeper.RecordFiatConversionObservation(s.ctx, submitted)
+	require.NoError(t, err)
+	return quote, submitted
+}
+
+func openFiatFinancialCase(t *testing.T, s *KeeperTestSuite, conversion types.FiatConversionRecord, seed byte) *types.FinancialCase {
+	t.Helper()
+	s.keeper.ActivateFinancialCases(s.ctx)
+	idempotency := bytes.Repeat([]byte{seed}, sha256.Size)
+	financialCase, _, _, err := s.keeper.OpenFinancialCase(s.ctx, keeper.FinancialCaseOpenRequest{
+		Subject:  types.FinancialSubject{Type: types.FinancialSubjectTypeSettlement, PrimaryId: conversion.SettlementID, SettlementId: conversion.SettlementID, InvoiceId: conversion.InvoiceID, OrderId: conversion.OrderID, EscrowId: conversion.EscrowID, LeaseId: conversion.LeaseID},
+		Claimant: conversion.Customer, Respondent: conversion.Provider, IdempotencyKey: idempotency,
+		Claim: types.FinancialClaim{ClaimType: types.FinancialClaimTypeBilling, Claimant: conversion.Customer, SourceModule: "settlement", SourceReference: conversion.ConversionID, EvidenceHash: bytes.Repeat([]byte{seed + 1}, sha256.Size), EncryptedReference: "settlement://task85b/irreversible-incident", IdempotencyKey: idempotency},
+	})
+	require.NoError(t, err)
+	return financialCase
+}
+
+func resolveFiatFinancialCase(t *testing.T, s *KeeperTestSuite, financialCase *types.FinancialCase) {
+	t.Helper()
+	require.NoError(t, s.keeper.SubmitFinancialCaseForReview(s.ctx, financialCase.CaseId, financialCase.Customer))
+	allocation := types.TerminalAllocation{OriginalExposure: financialCase.Exposure.OriginalHeld, Provider: financialCase.Exposure.OriginalHeld, ResolutionType: types.FinancialResolutionProviderWin}
+	require.NoError(t, s.keeper.ResolveFinancialCase(s.ctx, financialCase.CaseId, s.keeper.GetAuthority(), allocation))
+	resolved, found := s.keeper.GetFinancialCase(s.ctx, financialCase.CaseId)
+	require.True(t, found)
+	s.ctx = s.ctx.WithBlockHeight(resolved.AppealDeadlineHeight + 1).WithBlockTime(time.Unix(resolved.AppealDeadlineTime+1, 0).UTC())
+}
+
+func countTreasuryRecordsForPayout(s *KeeperTestSuite, payoutID string) int {
+	count := 0
+	iterator := storetypes.KVStorePrefixIterator(s.ctx.KVStore(s.storeKey), types.PrefixTreasuryRecord)
+	defer iterator.Close()
+	for ; iterator.Valid(); iterator.Next() {
+		var record types.TreasuryRecord
+		if json.Unmarshal(iterator.Value(), &record) == nil && record.PayoutID == payoutID {
+			count++
+		}
+	}
+	return count
 }
 
 func TestFiatObservationRejectsExpiryWrongDenomMinOutputAndFinality(t *testing.T) {
@@ -465,6 +711,119 @@ func TestFiatObservationReplacementQuoteReplayIsExactOrConflict(t *testing.T) {
 	require.True(t, found)
 	require.Equal(t, replacement.QuoteDigest, stored.QuoteDigest)
 	require.Equal(t, uint64(2), stored.ObservationSequence)
+}
+
+func advanceFiatObservationToPayoutPending(t *testing.T, s *KeeperTestSuite, conversion types.FiatConversionRecord, compliance *veidtypes.ComplianceRecord) *types.MsgRecordFiatConversionObservation {
+	t.Helper()
+	quote := observationFor(t, conversion, compliance, 1, settlementv1.FiatConversionObservationStage_FIAT_CONVERSION_OBSERVATION_STAGE_QUOTE_ACCEPTED)
+	quote.QuoteDigest, quote.QuoteExpiry = bytes.Repeat([]byte{31}, sha256.Size), s.ctx.BlockTime().Add(time.Minute).Unix()
+	quote.MinimumStableOutput = sdk.NewInt64Coin(testStableDenom, 900)
+	_, err := s.keeper.RecordFiatConversionObservation(s.ctx, quote)
+	require.NoError(t, err)
+	submitted := observationFor(t, conversion, compliance, 2, settlementv1.FiatConversionObservationStage_FIAT_CONVERSION_OBSERVATION_STAGE_SWAP_SUBMITTED)
+	submitted.QuoteDigest, submitted.QuoteExpiry, submitted.MinimumStableOutput = quote.QuoteDigest, quote.QuoteExpiry, quote.MinimumStableOutput
+	submitted.SwapTxHash = "DEX-TX-PAYOUT-REQUOTE"
+	_, err = s.keeper.RecordFiatConversionObservation(s.ctx, submitted)
+	require.NoError(t, err)
+	finalized := observationFor(t, conversion, compliance, 3, settlementv1.FiatConversionObservationStage_FIAT_CONVERSION_OBSERVATION_STAGE_SWAP_FINALIZED)
+	finalized.QuoteDigest, finalized.MinimumStableOutput, finalized.SwapTxHash = quote.QuoteDigest, quote.MinimumStableOutput, submitted.SwapTxHash
+	finalized.SwapHeight, finalized.SwapFinalityConfirmations = 100, 2
+	finalized.SwapBlockHash, finalized.SwapFinalityHash = bytes.Repeat([]byte{41}, sha256.Size), bytes.Repeat([]byte{42}, sha256.Size)
+	finalized.StableAmount = sdk.NewInt64Coin(testStableDenom, 950)
+	_, err = s.keeper.RecordFiatConversionObservation(s.ctx, finalized)
+	require.NoError(t, err)
+	payoutQuote := observationFor(t, conversion, compliance, 4, settlementv1.FiatConversionObservationStage_FIAT_CONVERSION_OBSERVATION_STAGE_PAYOUT_QUOTED)
+	payoutQuote.QuoteDigest, payoutQuote.QuoteExpiry = bytes.Repeat([]byte{51}, sha256.Size), s.ctx.BlockTime().Add(time.Minute).Unix()
+	payoutQuote.OffRampQuoteId = "OFFRAMP-QUOTE-EXPIRES"
+	_, err = s.keeper.RecordFiatConversionObservation(s.ctx, payoutQuote)
+	require.NoError(t, err)
+	return payoutQuote
+}
+
+func TestFiatObservationExpiredPayoutQuoteReplacementPreservesCommitmentsAndContinues(t *testing.T) {
+	s, conversion, payout, compliance := setupAuthenticatedFiatConversion(t)
+	first := advanceFiatObservationToPayoutPending(t, s, conversion, compliance)
+	before, found := s.keeper.GetFiatConversion(s.ctx, conversion.ConversionID)
+	require.True(t, found)
+	s.ctx = s.ctx.WithBlockHeight(s.ctx.BlockHeight() + 1).WithBlockTime(time.Unix(first.QuoteExpiry+1, 0).UTC())
+	replacement := observationFor(t, conversion, compliance, 5, settlementv1.FiatConversionObservationStage_FIAT_CONVERSION_OBSERVATION_STAGE_PAYOUT_QUOTED)
+	replacement.ObservedAt = s.ctx.BlockTime().Unix()
+	replacement.OffRampQuoteId = "OFFRAMP-QUOTE-REPLACEMENT"
+	replacement.QuoteDigest = bytes.Repeat([]byte{52}, sha256.Size)
+	replacement.QuoteExpiry = s.ctx.BlockTime().Add(time.Minute).Unix()
+	result, err := s.keeper.RecordFiatConversionObservation(s.ctx, replacement)
+	require.NoError(t, err)
+	require.Equal(t, types.FiatConversionStatePayoutPending, result.Conversion.State)
+	require.Equal(t, replacement.OffRampQuoteId, result.Conversion.OffRampQuoteID)
+	require.Equal(t, replacement.QuoteDigest, result.Conversion.QuoteDigest)
+	require.Equal(t, before.RequestDigest, result.Conversion.RequestDigest)
+	require.Equal(t, before.ComplianceDecisionHash, result.Conversion.ComplianceDecisionHash)
+	require.Equal(t, before.DEXProfileDigest, result.Conversion.DEXProfileDigest)
+	require.Equal(t, before.PayoutProfileDigest, result.Conversion.PayoutProfileDigest)
+	require.Equal(t, before.SettlementID, result.Conversion.SettlementID)
+	require.Equal(t, before.CryptoAmount, result.Conversion.CryptoAmount)
+	require.True(t, result.Conversion.DailyQuotaReserved)
+	linked, found := s.keeper.GetPayout(s.ctx, payout.PayoutID)
+	require.True(t, found)
+	require.Equal(t, types.PayoutStatePending, linked.State)
+	require.Equal(t, conversion.ConversionID, linked.FiatConversionID)
+
+	submitted := observationFor(t, conversion, compliance, 6, settlementv1.FiatConversionObservationStage_FIAT_CONVERSION_OBSERVATION_STAGE_PAYOUT_SUBMITTED)
+	submitted.ObservedAt = s.ctx.BlockTime().Unix()
+	submitted.OffRampQuoteId, submitted.OffRampPayoutId = replacement.OffRampQuoteId, "OFFRAMP-PAYOUT-AFTER-REQUOTE"
+	submitted.QuoteDigest, submitted.QuoteExpiry = replacement.QuoteDigest, replacement.QuoteExpiry
+	submitted.Status = "processing"
+	submitted.PrivacySafeReferenceHash = bytes.Repeat([]byte{61}, sha256.Size)
+	continued, err := s.keeper.RecordFiatConversionObservation(s.ctx, submitted)
+	require.NoError(t, err)
+	require.Equal(t, types.FiatConversionStatePayoutSubmitted, continued.Conversion.State)
+	require.Empty(t, s.keeper.ValidateFiatConversionInvariants(s.ctx))
+}
+
+func TestFiatObservationPayoutQuoteReplacementRejectsUnsafeCases(t *testing.T) {
+	t.Run("before expiry", func(t *testing.T) {
+		s, conversion, _, compliance := setupAuthenticatedFiatConversion(t)
+		first := advanceFiatObservationToPayoutPending(t, s, conversion, compliance)
+		replacement := observationFor(t, conversion, compliance, 5, settlementv1.FiatConversionObservationStage_FIAT_CONVERSION_OBSERVATION_STAGE_PAYOUT_QUOTED)
+		replacement.OffRampQuoteId, replacement.QuoteDigest = "OFFRAMP-QUOTE-EARLY", bytes.Repeat([]byte{52}, sha256.Size)
+		replacement.QuoteExpiry = first.QuoteExpiry + 60
+		_, err := s.keeper.RecordFiatConversionObservation(s.ctx, replacement)
+		require.ErrorIs(t, err, types.ErrInvalidStateTransition)
+	})
+	t.Run("same digest or id", func(t *testing.T) {
+		for _, same := range []string{"digest", "id"} {
+			t.Run(same, func(t *testing.T) {
+				s, conversion, _, compliance := setupAuthenticatedFiatConversion(t)
+				first := advanceFiatObservationToPayoutPending(t, s, conversion, compliance)
+				s.ctx = s.ctx.WithBlockTime(time.Unix(first.QuoteExpiry+1, 0).UTC())
+				replacement := observationFor(t, conversion, compliance, 5, settlementv1.FiatConversionObservationStage_FIAT_CONVERSION_OBSERVATION_STAGE_PAYOUT_QUOTED)
+				replacement.ObservedAt, replacement.QuoteExpiry = s.ctx.BlockTime().Unix(), s.ctx.BlockTime().Add(time.Minute).Unix()
+				replacement.OffRampQuoteId, replacement.QuoteDigest = "OFFRAMP-QUOTE-NEW", bytes.Repeat([]byte{52}, sha256.Size)
+				if same == "digest" {
+					replacement.QuoteDigest = first.QuoteDigest
+				} else {
+					replacement.OffRampQuoteId = first.OffRampQuoteId
+				}
+				_, err := s.keeper.RecordFiatConversionObservation(s.ctx, replacement)
+				require.ErrorIs(t, err, types.ErrInvalidStateTransition)
+			})
+		}
+	})
+	t.Run("after submission", func(t *testing.T) {
+		s, conversion, _, compliance := setupAuthenticatedFiatConversion(t)
+		first := advanceFiatObservationToPayoutPending(t, s, conversion, compliance)
+		submitted := observationFor(t, conversion, compliance, 5, settlementv1.FiatConversionObservationStage_FIAT_CONVERSION_OBSERVATION_STAGE_PAYOUT_SUBMITTED)
+		submitted.OffRampQuoteId, submitted.OffRampPayoutId, submitted.QuoteDigest, submitted.QuoteExpiry = first.OffRampQuoteId, "OFFRAMP-PAYOUT-COMMITTED", first.QuoteDigest, first.QuoteExpiry
+		submitted.Status, submitted.PrivacySafeReferenceHash = "processing", bytes.Repeat([]byte{61}, sha256.Size)
+		_, err := s.keeper.RecordFiatConversionObservation(s.ctx, submitted)
+		require.NoError(t, err)
+		s.ctx = s.ctx.WithBlockTime(time.Unix(first.QuoteExpiry+1, 0).UTC())
+		replacement := observationFor(t, conversion, compliance, 6, settlementv1.FiatConversionObservationStage_FIAT_CONVERSION_OBSERVATION_STAGE_PAYOUT_QUOTED)
+		replacement.ObservedAt, replacement.QuoteExpiry = s.ctx.BlockTime().Unix(), s.ctx.BlockTime().Add(time.Minute).Unix()
+		replacement.OffRampQuoteId, replacement.QuoteDigest = "OFFRAMP-QUOTE-LATE", bytes.Repeat([]byte{52}, sha256.Size)
+		_, err = s.keeper.RecordFiatConversionObservation(s.ctx, replacement)
+		require.ErrorIs(t, err, types.ErrInvalidStateTransition)
+	})
 }
 
 func TestFiatObservationRejectsIllegalTransitionFinalityAndMinOutput(t *testing.T) {
@@ -750,7 +1109,10 @@ func TestFiatRequestExactSlippageReplayProperty(t *testing.T) {
 func TestFiatQuotaReleasedOnlyForPreSwapCancellation(t *testing.T) {
 	s, conversion, _, compliance := setupAuthenticatedFiatConversion(t)
 	params := s.keeper.GetParams(s.ctx)
-	params.FiatConversionDailyLimit = conversion.CryptoAmount.Amount.String()
+	// The second fixture payout is larger than the first conversion. Configure
+	// the limit to exactly that second amount so success proves the cancelled
+	// first reservation was removed rather than merely fitting cumulatively.
+	params.FiatConversionDailyLimit = "1000"
 	require.NoError(t, s.keeper.SetParams(s.ctx, params))
 
 	cancelled := observationFor(t, conversion, compliance, 1, settlementv1.FiatConversionObservationStage_FIAT_CONVERSION_OBSERVATION_STAGE_CANCELLED)

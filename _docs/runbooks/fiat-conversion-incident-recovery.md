@@ -29,6 +29,13 @@ Before target-chain signing, target-chain broadcast, or payout initiation, the w
 - Treat the outcome as ambiguous and follow the relevant reconciliation procedure below.
 - An expired provider quote after confirmed initiation does not prove payout failure.
 
+### After swap finality but before payout submission
+
+- If the committed payout quote expires while the conversion is `PAYOUT_PENDING`, confirm no provider payout ID, provider reference, or privacy-safe reference hash has been committed.
+- Obtain a new quote under the same conversion sequence, payout profile, compliance decision, settlement lineage and stable amount. The replacement quote ID and digest must both differ from the expired quote.
+- Submit the replacement as the next contiguous `PAYOUT_QUOTED` observation. The daily conversion reservation and linked pending payout remain unchanged; do not release or create a second reservation.
+- A pre-expiry replacement, same-ID/digest replacement, or replacement after provider submission is invalid and must enter reconciliation/manual review instead of retrying initiation.
+
 ## Stale or reorged DEX evidence
 
 1. Pause the route.
@@ -53,6 +60,8 @@ Before target-chain signing, target-chain broadcast, or payout initiation, the w
 4. Persist the immutable webhook binding as soon as a payout ID is recovered.
 5. A timeout, retryable HTTP error or conflict is not a failure. Do not release quota or initiate with a new key until the provider proves no payout exists.
 6. Completion still requires provider status and an authenticated matching webhook; otherwise remain pending/manual review.
+
+On process restart, a durable bridge record may exist while a fresh HTTP adapter has no volatile payout binding. If status polling returns not-found, the bridge performs one explicit binding restore by immutable metadata/correlation. The provider response must exactly reproduce provider, payout ID, quote ID, correlation/metadata, fiat and crypto amounts, fee, reference, initiation time, status monotonicity and the durable daily-reservation identity. No match, multiple/ambiguous match, or any mismatched field is rejected. Only after exact validation may the adapter restore its status/webhook binding and poll again.
 
 ## Webhook replay or conflict
 

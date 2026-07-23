@@ -54,6 +54,9 @@ type Keeper interface {
 	WithPayments(sdk.Context, func(etypes.Payment) bool)
 	SaveAccount(sdk.Context, etypes.Account) error
 	SavePayment(sdk.Context, etypes.Payment) error
+	NewDisputeKeeper() DisputeKeeper
+	NewInvoiceKeeper() InvoiceKeeper
+	SetCanonicalFinancialCases(CanonicalFinancialCaseKeeper)
 	NewQuerier() Querier
 }
 
@@ -76,17 +79,20 @@ func NewKeeper(
 }
 
 type keeper struct {
-	cdc         codec.BinaryCodec
-	skey        storetypes.StoreKey
-	bkeeper     BankKeeper
-	tkeeper     TakeKeeper
-	authzKeeper AuthzKeeper
-	feepool     collections.Item[distrtypes.FeePool]
-	hooks       struct {
+	cdc                     codec.BinaryCodec
+	skey                    storetypes.StoreKey
+	bkeeper                 BankKeeper
+	tkeeper                 TakeKeeper
+	authzKeeper             AuthzKeeper
+	feepool                 collections.Item[distrtypes.FeePool]
+	canonicalFinancialCases CanonicalFinancialCaseKeeper
+	hooks                   struct {
 		onAccountClosed []AccountHook
 		onPaymentClosed []PaymentHook
 	}
 }
+
+func (k *keeper) canonicalDisputeWindowSeconds(_ sdk.Context) int64 { return 604800 }
 
 type account struct {
 	etypes.Account

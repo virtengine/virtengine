@@ -117,6 +117,10 @@ describe("HPCClient", () => {
       encryptedOutputsPointer: "",
       maxRuntimeSeconds: Long.ZERO,
       maxPrice: [],
+      reservationId: "reservation-1",
+      marketOrderId: "",
+      marketBidId: "",
+      marketLeaseId: "",
     });
     expect(result.jobId).toBe("job-1");
     expect(result.transactionHash).toBe("ABC");

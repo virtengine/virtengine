@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"maps"
 	"net/http"
 	"net/url"
 	"path"
@@ -564,6 +565,8 @@ func (a *HTTPPartnerAdapter) InitiatePayout(ctx context.Context, req PayoutReque
 	if err != nil {
 		return PayoutResult{}, err
 	}
+	result.DailyReservationKey = reservationKey
+	result.DailyReservationOperationID = idempotencyKey
 	a.storePayout(result, WebhookBinding{
 		Provider: a.profile.Provider, PayoutID: result.ID, QuoteID: req.Quote.ID, CorrelationID: correlationID,
 		ReservationDay: now.Format("2006-01-02"),
@@ -601,18 +604,15 @@ func (a *HTTPPartnerAdapter) GetStatus(ctx context.Context, payoutID string) (Pa
 	a.mu.RLock()
 	current := a.payouts[payoutID]
 	a.mu.RUnlock()
+	result.DailyReservationKey = current.DailyReservationKey
+	result.DailyReservationOperationID = current.DailyReservationOperationID
 	if err := reconcilePayoutStatus(current, result); err != nil {
 		return PayoutResult{}, err
 	}
 	a.storePayout(result, binding)
 	if result.Status == StatusFailed || result.Status == StatusCancelled {
-		a.mu.RLock()
-		_, locallyQuoted := a.quotes[result.QuoteID]
-		a.mu.RUnlock()
-		if locallyQuoted {
-			if err := a.releasePayoutReservation(ctx, result); err != nil {
-				return PayoutResult{}, err
-			}
+		if err := a.releasePayoutReservation(ctx, result); err != nil {
+			return PayoutResult{}, err
 		}
 	}
 	return result, nil
@@ -688,6 +688,10 @@ func (a *HTTPPartnerAdapter) FindPayoutByMetadata(ctx context.Context, metadata 
 	if err != nil {
 		return PayoutResult{}, err
 	}
+	if !maps.Equal(response.Metadata, metadata) {
+		return PayoutResult{}, fmt.Errorf("%w: metadata lookup binding mismatch", ErrProviderRejected)
+	}
+	a.attachKnownDailyReservation(&result)
 	reservationDay := result.InitiatedAt.UTC().Format("2006-01-02")
 	a.mu.RLock()
 	if existing, ok := a.payoutBindings[result.ID]; ok && existing.ReservationDay != "" {
@@ -697,6 +701,46 @@ func (a *HTTPPartnerAdapter) FindPayoutByMetadata(ctx context.Context, metadata 
 	binding := WebhookBinding{Provider: a.profile.Provider, PayoutID: result.ID, QuoteID: result.QuoteID, CorrelationID: correlationID, ReservationDay: reservationDay}
 	a.storePayout(result, binding)
 	return result, nil
+}
+
+// RestorePayoutBinding safely reconstructs volatile status/webhook binding
+// state from a durable bridge record. Nothing is installed until a fresh
+// provider lookup matches every immutable and economic field exactly.
+func (a *HTTPPartnerAdapter) RestorePayoutBinding(ctx context.Context, expected PayoutResult) (PayoutResult, error) {
+	if err := a.authorizeRuntimeProfile(); err != nil {
+		return PayoutResult{}, err
+	}
+	if expected.ID == "" || expected.Provider != a.profile.Provider || expected.IsTerminal() || len(expected.Metadata) == 0 {
+		return PayoutResult{}, ErrInvalidRequest
+	}
+	if err := validateOperationalMetadata(expected.Metadata); err != nil {
+		return PayoutResult{}, err
+	}
+	correlationID := expected.Metadata["correlation_id"]
+	if correlationID == "" {
+		return PayoutResult{}, ErrInvalidRequest
+	}
+	var response partnerPayoutResponse
+	if err := a.doJSON(ctx, http.MethodPost, a.endpoints.MetadataLookup, partnerMetadataRequest{
+		APIVersion: a.profile.APIVersion, Metadata: cloneStringMap(expected.Metadata),
+	}, "lookup-"+expected.Metadata["idempotency_key"], correlationID, &response); err != nil {
+		return PayoutResult{}, err
+	}
+	if !maps.Equal(response.Metadata, expected.Metadata) {
+		return PayoutResult{}, fmt.Errorf("%w: recovery metadata mismatch", ErrProviderRejected)
+	}
+	recovered, err := a.convertPayoutResponse(response, nil, correlationID, expected.Metadata)
+	if err != nil {
+		return PayoutResult{}, err
+	}
+	recovered.DailyReservationKey = expected.DailyReservationKey
+	recovered.DailyReservationOperationID = expected.DailyReservationOperationID
+	if err := validateRecoveredPayoutBinding(expected, recovered); err != nil {
+		return PayoutResult{}, err
+	}
+	binding := WebhookBinding{Provider: recovered.Provider, PayoutID: recovered.ID, QuoteID: recovered.QuoteID, CorrelationID: correlationID, ReservationDay: recovered.InitiatedAt.UTC().Format("2006-01-02")}
+	a.storePayout(recovered, binding)
+	return clonePayoutResult(recovered), nil
 }
 
 // LookupWebhookBinding implements WebhookBindingRepository.
@@ -829,7 +873,7 @@ func (a *HTTPPartnerAdapter) normalizeHTTPError(statusCode int, raw []byte, oper
 	case http.StatusNotFound:
 		kind, base = ErrorKindNotFound, ErrPayoutNotFound
 	case http.StatusConflict:
-		kind, base, ambiguous = ErrorKindConflict, ErrProviderAmbiguous, operation == operationInitiatePayout
+		kind, base, ambiguous = ErrorKindConflict, ErrProviderAmbiguous, operation == operationInitiatePayout || operation == operationMetadataLookup
 	case http.StatusTooManyRequests:
 		kind, base, retryable = ErrorKindRateLimited, ErrProviderTemporary, true
 	default:
@@ -911,23 +955,42 @@ func (a *HTTPPartnerAdapter) releasePayoutReservation(ctx context.Context, resul
 	if idempotencyKey == "" {
 		return fmt.Errorf("%w: payout idempotency key missing", ErrProviderRejected)
 	}
-	a.mu.RLock()
-	quote, ok := a.quotes[result.QuoteID]
-	a.mu.RUnlock()
-	if !ok {
-		return fmt.Errorf("%w: payout quote binding missing", ErrProviderRejected)
+	if result.DailyReservationOperationID != "" && result.DailyReservationOperationID != idempotencyKey {
+		return fmt.Errorf("%w: payout reservation operation mismatch", ErrProviderRejected)
 	}
-	a.mu.RLock()
-	binding := a.payoutBindings[result.ID]
-	a.mu.RUnlock()
-	if binding.ReservationDay == "" {
-		return fmt.Errorf("%w: payout reservation day missing", ErrProviderRejected)
+	reservationKey := result.DailyReservationKey
+	if reservationKey == "" {
+		a.mu.RLock()
+		quote, quoteKnown := a.quotes[result.QuoteID]
+		binding := a.payoutBindings[result.ID]
+		a.mu.RUnlock()
+		if !quoteKnown || binding.ReservationDay == "" {
+			return fmt.Errorf("%w: payout daily reservation binding missing", ErrProviderRejected)
+		}
+		reservationKey = binding.ReservationDay + "|" + quote.corridor.ID
 	}
-	reservationKey := binding.ReservationDay + "|" + quote.corridor.ID
 	if err := a.dailyLimits.ReleaseDailyAmount(ctx, reservationKey, idempotencyKey); err != nil {
 		return fmt.Errorf("%w: release daily-limit reservation", ErrAdapterUnavailable)
 	}
 	return nil
+}
+
+func (a *HTTPPartnerAdapter) attachKnownDailyReservation(result *PayoutResult) {
+	if result == nil || result.QuoteID == "" {
+		return
+	}
+	a.mu.RLock()
+	quote, ok := a.quotes[result.QuoteID]
+	a.mu.RUnlock()
+	if !ok {
+		return
+	}
+	operationID := result.Metadata["idempotency_key"]
+	if operationID == "" {
+		return
+	}
+	result.DailyReservationKey = result.InitiatedAt.UTC().Format("2006-01-02") + "|" + quote.corridor.ID
+	result.DailyReservationOperationID = operationID
 }
 
 func (a *HTTPPartnerAdapter) endpointURL(endpoint string) (*url.URL, error) {
@@ -1162,5 +1225,6 @@ func matchesEndpointTemplate(endpoint string, template string) bool {
 
 var _ Adapter = (*HTTPPartnerAdapter)(nil)
 var _ MetadataLookupAdapter = (*HTTPPartnerAdapter)(nil)
+var _ PayoutBindingRecoveryAdapter = (*HTTPPartnerAdapter)(nil)
 var _ ProfiledAdapter = (*HTTPPartnerAdapter)(nil)
 var _ WebhookBindingRepository = (*HTTPPartnerAdapter)(nil)

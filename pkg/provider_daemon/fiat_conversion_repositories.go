@@ -458,6 +458,7 @@ func safeMetadataMatch(left, right map[string]string) bool {
 func validatePersistedPayoutUpdate(current, updated offramp.PayoutResult) error {
 	if current.Provider != updated.Provider || current.QuoteID != updated.QuoteID || current.Reference != updated.Reference ||
 		!current.FiatAmount.Equal(updated.FiatAmount) || !current.CryptoAmount.Equal(updated.CryptoAmount) || !current.Fee.Equal(updated.Fee) ||
+		current.DailyReservationKey != updated.DailyReservationKey || current.DailyReservationOperationID != updated.DailyReservationOperationID ||
 		updated.StatusUpdatedAt.Before(current.StatusUpdatedAt) || !fiatPayoutStatusCanAdvance(current.Status, updated.Status) {
 		return offramp.ErrProviderRejected
 	}
@@ -474,6 +475,11 @@ func privacySafePersistedPayout(value offramp.PayoutResult) (offramp.PayoutResul
 		}
 	}
 	if value.ID == "" || value.QuoteID == "" || value.Provider == "" || value.Reference == "" || len(value.Metadata) == 0 || len(value.Metadata) > 8 {
+		return offramp.PayoutResult{}, offramp.ErrInvalidRequest
+	}
+	if len(value.DailyReservationKey) > 512 || len(value.DailyReservationOperationID) > 256 ||
+		strings.ContainsAny(value.DailyReservationKey, "\x00\r\n") || strings.ContainsAny(value.DailyReservationOperationID, "\x00\r\n") ||
+		(value.DailyReservationKey == "") != (value.DailyReservationOperationID == "") {
 		return offramp.PayoutResult{}, offramp.ErrInvalidRequest
 	}
 	allowedMetadata := map[string]bool{"idempotency_key": true, "correlation_id": true, "conversion_id": true}

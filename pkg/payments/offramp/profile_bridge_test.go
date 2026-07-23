@@ -63,6 +63,24 @@ func (r *durableTestPayoutRepository) PutPayout(_ context.Context, result Payout
 
 func (*durableTestPayoutRepository) Durable() bool { return true }
 
+type restartRecoveryAdapter struct {
+	*contractProvider
+	recovered  PayoutResult
+	restoreErr error
+	restores   int
+}
+
+func (a *restartRecoveryAdapter) RestorePayoutBinding(_ context.Context, expected PayoutResult) (PayoutResult, error) {
+	a.restores++
+	if a.restoreErr != nil {
+		return PayoutResult{}, a.restoreErr
+	}
+	a.contractProvider.mu.Lock()
+	a.contractProvider.storeResultLocked(a.recovered)
+	a.contractProvider.mu.Unlock()
+	return clonePayoutResult(a.recovered), nil
+}
+
 func (a *profiledTestAdapter) Profile() PayoutProfile { return a.profile }
 
 func (a *profiledTestAdapter) IsTestOnly() bool { return a.profileTestOnly }
@@ -98,6 +116,67 @@ func TestProductionBridgeAcceptsCertifiedProfileButRejectsTestMarker(t *testing.
 	require.ErrorIs(t, bridge.RegisterAdapter(adapter), ErrTestAdapter)
 	adapter.profileTestOnly = false
 	require.ErrorIs(t, bridge.RegisterAdapter(adapter), ErrProfileNotExecutable, "only the package-sealed real HTTP adapter is production eligible")
+}
+
+func TestBridgeRestartRestoresAdapterBindingBeforeStatusPoll(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	clock := newTestClock(time.Date(2026, 7, 23, 10, 0, 0, 0, time.UTC))
+	repository := newDurableTestPayoutRepository()
+	metadata := map[string]string{"conversion_id": "conversion-restart", "idempotency_key": "idempotency-restart", "correlation_id": "correlation-restart"}
+	expected := PayoutResult{ID: "payout-restart", QuoteID: "quote-restart", Provider: "partner", Status: StatusProcessing,
+		FiatAmount: sdkmath.LegacyNewDec(100), CryptoAmount: sdkmath.NewInt(99), Fee: sdkmath.NewInt(1), Reference: "reference-restart",
+		Metadata: metadata, InitiatedAt: clock.Now(), StatusUpdatedAt: clock.Now(), DailyReservationKey: "2026-07-23|US-USD-ach", DailyReservationOperationID: metadata["idempotency_key"]}
+	require.NoError(t, repository.PutPayout(ctx, expected))
+	completedAt := clock.Now().Add(time.Minute)
+	recovered := clonePayoutResult(expected)
+	recovered.Status, recovered.StatusUpdatedAt, recovered.CompletedAt = StatusCompleted, completedAt, &completedAt
+	provider := &restartRecoveryAdapter{contractProvider: newContractProvider("partner", clock.Now, Quote{}), recovered: recovered}
+	bridge := newBridgeWithDependencies(ExecutionModeLegacy, false, repository, nil, clock.Now)
+	require.NoError(t, bridge.RegisterAdapter(provider))
+	result, err := bridge.GetStatus(ctx, expected.ID)
+	require.NoError(t, err)
+	require.Equal(t, StatusCompleted, result.Status)
+	require.Equal(t, 1, provider.restores)
+	require.Equal(t, "durable_binding_restore", result.AuditFields["bridge_recovery_reason"])
+}
+
+func TestBridgeRestartRejectsRecoveredMismatchAndAmbiguity(t *testing.T) {
+	t.Parallel()
+	for _, test := range []struct {
+		name       string
+		mutate     func(*PayoutResult)
+		restoreErr error
+	}{
+		{name: "payout id mismatch", mutate: func(result *PayoutResult) { result.ID = "different-payout" }},
+		{name: "quote mismatch", mutate: func(result *PayoutResult) { result.QuoteID = "different-quote" }},
+		{name: "economic mismatch", mutate: func(result *PayoutResult) { result.FiatAmount = sdkmath.LegacyNewDec(101) }},
+		{name: "ambiguous lookup", restoreErr: &ProviderError{Provider: "partner", Operation: operationMetadataLookup, Kind: ErrorKindAmbiguous, Retryable: true, Ambiguous: true, err: ErrProviderAmbiguous}},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			ctx := context.Background()
+			clock := newTestClock(time.Date(2026, 7, 23, 10, 0, 0, 0, time.UTC))
+			repository := newDurableTestPayoutRepository()
+			expected := PayoutResult{ID: "payout-restart", QuoteID: "quote-restart", Provider: "partner", Status: StatusProcessing,
+				FiatAmount: sdkmath.LegacyNewDec(100), CryptoAmount: sdkmath.NewInt(99), Fee: sdkmath.NewInt(1), Reference: "reference-restart",
+				Metadata: map[string]string{"conversion_id": "conversion-restart", "idempotency_key": "idempotency-restart", "correlation_id": "correlation-restart"}, InitiatedAt: clock.Now(), StatusUpdatedAt: clock.Now()}
+			require.NoError(t, repository.PutPayout(ctx, expected))
+			recovered := clonePayoutResult(expected)
+			if test.mutate != nil {
+				test.mutate(&recovered)
+			}
+			provider := &restartRecoveryAdapter{contractProvider: newContractProvider("partner", clock.Now, Quote{}), recovered: recovered, restoreErr: test.restoreErr}
+			bridge := newBridgeWithDependencies(ExecutionModeLegacy, false, repository, nil, clock.Now)
+			require.NoError(t, bridge.RegisterAdapter(provider))
+			_, err := bridge.GetStatus(ctx, expected.ID)
+			require.Error(t, err)
+			if test.restoreErr != nil {
+				require.True(t, IsAmbiguous(err))
+			} else {
+				require.ErrorIs(t, err, ErrProviderRejected)
+			}
+		})
+	}
 }
 
 func TestEngineeringSandboxRequiresExplicitExternalBlockedOptIn(t *testing.T) {
