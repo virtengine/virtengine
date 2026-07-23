@@ -9,14 +9,14 @@
 The machine-readable source of truth is `sdk/artifacts/proto/inventory.json` with a SHA-256 companion. It records:
 
 - 6 `go.work` modules plus 1 isolated generator tool module;
-- 23 replace directives;
+- 22 replace directives;
 - 245 protobuf files;
 - 65 services (32 query, 29 message, 4 other provider services);
-- 404 RPC methods and 213 HTTP bindings;
+- 418 RPC methods and 224 HTTP bindings;
 - 228 generated Go protobuf files;
 - 28 concrete Go gateway files and 0 production `gateway_stub.go` files;
 - 637 generated TypeScript files (including one retained dotted-path k8s compatibility artifact);
-- 213 protobuf-derived OpenAPI paths/operations with 213 unique operation IDs and source-fragment trace metadata.
+- 224 protobuf-derived OpenAPI paths/operations with 224 unique operation IDs and source-fragment trace metadata.
 
 The inventory also records generated output paths, query/message method input/output types, gRPC paths, HTTP methods/routes, Go package options, workspace/checksum/vendor policy, and unsupported-language fail-closed policy.
 

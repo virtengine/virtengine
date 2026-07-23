@@ -76,4 +76,5 @@ message Bid {
     (gogoproto.jsontag)      = "resources_offer",
     (gogoproto.moretags)     = "yaml:\"resources_offer\""
   ];
+  string reservation_id = 6 [(gogoproto.jsontag) = "reservation_id,omitempty", (gogoproto.moretags) = "yaml:\"reservation_id\""];
 }

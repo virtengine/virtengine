@@ -30,13 +30,28 @@ func (s Status) IsTerminal() bool {
 
 // QuoteRequest requests a fiat payout quote.
 type QuoteRequest struct {
-	CryptoSymbol  string      `json:"crypto_symbol"`
-	CryptoDenom   string      `json:"crypto_denom"`
-	CryptoAmount  sdkmath.Int `json:"crypto_amount"`
-	FiatCurrency  string      `json:"fiat_currency"`
-	PaymentMethod string      `json:"payment_method"`
-	Sender        string      `json:"sender"`
-	Destination   string      `json:"destination"`
+	CryptoSymbol         string             `json:"crypto_symbol"`
+	CryptoDenom          string             `json:"crypto_denom"`
+	CryptoDecimals       uint8              `json:"crypto_decimals"`
+	CryptoAmount         sdkmath.Int        `json:"crypto_amount"`
+	FiatCurrency         string             `json:"fiat_currency"`
+	PaymentMethod        string             `json:"payment_method"`
+	Sender               string             `json:"sender"`
+	Destination          string             `json:"destination"`
+	Jurisdiction         string             `json:"jurisdiction,omitempty"`
+	BeneficiaryReference string             `json:"beneficiary_reference,omitempty"`
+	CorrelationID        string             `json:"correlation_id,omitempty"`
+	Compliance           ComplianceDecision `json:"compliance,omitempty"`
+}
+
+// ComplianceDecision binds a payout to independently recorded KYC and
+// sanctions decisions. It contains references only, never identity evidence.
+type ComplianceDecision struct {
+	Reference         string    `json:"reference,omitempty"`
+	KYCDecision       string    `json:"kyc_decision,omitempty"`
+	SanctionsDecision string    `json:"sanctions_decision,omitempty"`
+	ValidUntil        time.Time `json:"valid_until,omitempty"`
+	Revoked           bool      `json:"revoked,omitempty"`
 }
 
 // Quote represents an off-ramp quote.
@@ -54,7 +69,7 @@ type Quote struct {
 
 // IsExpired returns true when the quote is no longer valid.
 func (q Quote) IsExpired(now time.Time) bool {
-	return !q.ExpiresAt.IsZero() && now.After(q.ExpiresAt)
+	return !q.ExpiresAt.IsZero() && !now.Before(q.ExpiresAt)
 }
 
 // PayoutRequest executes a fiat payout using an accepted quote.
@@ -93,6 +108,15 @@ func (r PayoutResult) IsTerminal() bool {
 // MetadataLookupAdapter optionally supports idempotent payout lookup by metadata.
 type MetadataLookupAdapter interface {
 	FindPayoutByMetadata(ctx context.Context, metadata map[string]string) (PayoutResult, error)
+}
+
+// PayoutRepository persists payout state and idempotency lookup keys.
+// Production bridges require a durable implementation.
+type PayoutRepository interface {
+	GetPayout(ctx context.Context, payoutID string) (PayoutResult, error)
+	FindPayout(ctx context.Context, provider string, metadata map[string]string) (PayoutResult, error)
+	PutPayout(ctx context.Context, result PayoutResult) error
+	Durable() bool
 }
 
 // Adapter defines the off-ramp provider interface.

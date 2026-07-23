@@ -4,18 +4,23 @@
 package dex
 
 import (
+	"bytes"
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
 
 	sdkmath "cosmossdk.io/math"
+	"github.com/cosmos/cosmos-sdk/types/tx"
 	"github.com/virtengine/virtengine/pkg/security"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
@@ -26,6 +31,11 @@ import (
 // ============================================================================
 
 const (
+	// OsmosisAdapterVersion is the only pool implementation whose math is
+	// currently implemented and covered by golden fixtures.
+	OsmosisAdapterVersion = "gamm-v1beta1-cp-equal-weight-v1"
+	osmosisGAMMPoolType   = "/osmosis.gamm.v1beta1.Pool"
+
 	// OsmosisMainnetGRPC is the mainnet gRPC endpoint
 	OsmosisMainnetGRPC = "grpc.osmosis.zone:443"
 
@@ -46,6 +56,8 @@ const (
 
 	// networkTestnet is the testnet network identifier
 	networkTestnet = "testnet"
+
+	maxOsmosisResponseBytes int64 = 2 << 20
 )
 
 // ============================================================================
@@ -104,6 +116,21 @@ type OsmosisConfig struct {
 
 	// EnableIBC enables IBC transfer integration
 	EnableIBC bool `json:"enable_ibc"`
+
+	// RouteProfile is the exact support-matrix row used for production safety.
+	RouteProfile *DEXRouteProfile `json:"-"`
+
+	// ValidationMode controls the explicit engineering-only opt-in.
+	ValidationMode RouteValidationMode `json:"-"`
+
+	// Process-boundary dependencies are injected for deterministic tests.
+	PoolState         OsmosisPoolStateProvider  `json:"-"`
+	ChainEvidence     ChainEvidenceProvider     `json:"-"`
+	Oracle            OraclePriceProvider       `json:"-"`
+	ExecutionVerifier ExecutionEnvelopeVerifier `json:"-"`
+	RouteAuthorizer   RouteProfileAuthorizer    `json:"-"`
+	HTTPClient        *http.Client              `json:"-"`
+	Now               func() time.Time          `json:"-"`
 }
 
 // DefaultOsmosisConfig returns default Osmosis configuration
@@ -202,7 +229,8 @@ type OsmosisSpotPriceResponse struct {
 	SpotPrice string `json:"spot_price"`
 }
 
-// OsmosisEstimateSwapResponse represents swap estimation response
+// OsmosisEstimateSwapResponse is retained for compatibility with external
+// response fixtures. Real quote math does not trust or consume this endpoint.
 type OsmosisEstimateSwapResponse struct {
 	TokenOutAmount string `json:"token_out_amount"`
 }
@@ -214,32 +242,118 @@ type OsmosisEstimateSwapResponse struct {
 // RealOsmosisAdapter implements real Osmosis DEX integration using gRPC/REST
 type RealOsmosisAdapter struct {
 	*BaseAdapter
-	config      OsmosisConfig
-	grpcConn    *grpc.ClientConn
-	httpClient  *http.Client
-	pools       map[string]LiquidityPool
-	poolsMu     sync.RWMutex
-	connected   bool
-	lastRefresh time.Time
+	config            OsmosisConfig
+	grpcConn          *grpc.ClientConn
+	httpClient        *http.Client
+	pools             map[string]LiquidityPool
+	poolsMu           sync.RWMutex
+	connected         bool
+	lastRefresh       time.Time
+	lifecycleMu       sync.Mutex
+	profile           DEXRouteProfile
+	mode              RouteValidationMode
+	poolState         OsmosisPoolStateProvider
+	evidence          ChainEvidenceProvider
+	oracle            OraclePriceProvider
+	executionVerifier ExecutionEnvelopeVerifier
+	now               func() time.Time
 }
 
 // NewRealOsmosisAdapter creates a new real Osmosis adapter
 func NewRealOsmosisAdapter(cfg AdapterConfig, osmosisConfig OsmosisConfig) (*RealOsmosisAdapter, error) {
+	mode := osmosisConfig.ValidationMode
+	if mode == "" {
+		mode = RouteValidationRuntime
+	}
+	if osmosisConfig.RouteProfile == nil {
+		return nil, fmt.Errorf("osmosis route profile is required")
+	}
+	if err := osmosisConfig.RouteProfile.Validate(mode); err != nil {
+		return nil, err
+	}
+	if mode == RouteValidationRuntime {
+		if osmosisConfig.RouteAuthorizer == nil {
+			return nil, fmt.Errorf("trusted DEX route authorizer is required")
+		}
+		if err := osmosisConfig.RouteAuthorizer.AuthorizeDEXRoute(*osmosisConfig.RouteProfile); err != nil {
+			return nil, fmt.Errorf("authorize DEX route: %w", err)
+		}
+		if err := validateOsmosisGRPCEndpoint(osmosisConfig.GetGRPCEndpoint()); err != nil {
+			return nil, err
+		}
+	}
+	if osmosisConfig.RouteProfile.ChainID != osmosisConfig.GetChainID() {
+		return nil, fmt.Errorf("%w: profile %s, adapter %s", ErrWrongChain, osmosisConfig.RouteProfile.ChainID, osmosisConfig.GetChainID())
+	}
+	if osmosisConfig.ChainEvidence == nil {
+		return nil, fmt.Errorf("chain evidence provider is required")
+	}
+	if strings.TrimSpace(osmosisConfig.ChainEvidence.SourceID()) == "" {
+		return nil, fmt.Errorf("chain evidence source identity is required")
+	}
+	if osmosisConfig.PoolState == nil {
+		return nil, fmt.Errorf("bound Osmosis pool state provider is required")
+	}
+	if osmosisConfig.Oracle == nil {
+		return nil, fmt.Errorf("oracle price provider is required")
+	}
+	if osmosisConfig.ExecutionVerifier == nil {
+		return nil, fmt.Errorf("execution envelope verifier is required")
+	}
+	restEndpoint, err := validateOsmosisRESTEndpoint(osmosisConfig.GetRESTEndpoint(), mode)
+	if err != nil {
+		return nil, err
+	}
+	osmosisConfig.RESTEndpoint = restEndpoint.String()
+	now := osmosisConfig.Now
+	if now == nil {
+		now = time.Now
+	}
+	httpClient := osmosisConfig.HTTPClient
+	if httpClient == nil {
+		httpClient = security.NewSecureHTTPClient(security.WithTimeout(osmosisConfig.Timeout))
+		if mode == RouteValidationRuntime {
+			if transport, ok := httpClient.Transport.(*http.Transport); ok {
+				clonedTransport := transport.Clone()
+				clonedTransport.Proxy = nil
+				httpClient.Transport = clonedTransport
+			}
+		}
+	} else {
+		cloned := *httpClient
+		httpClient = &cloned
+		if mode == RouteValidationRuntime {
+			transport, ok := httpClient.Transport.(*http.Transport)
+			if !ok || transport.Proxy != nil || transport.TLSClientConfig != nil && transport.TLSClientConfig.InsecureSkipVerify {
+				return nil, fmt.Errorf("unsafe production Osmosis HTTP transport")
+			}
+			httpClient.Transport = transport.Clone()
+		}
+	}
+	httpClient.CheckRedirect = func(_ *http.Request, _ []*http.Request) error { return http.ErrUseLastResponse }
 	adapter := &RealOsmosisAdapter{
-		BaseAdapter: NewBaseAdapter(cfg),
-		config:      osmosisConfig,
-		httpClient:  security.NewSecureHTTPClient(security.WithTimeout(osmosisConfig.Timeout)),
-		pools:       make(map[string]LiquidityPool),
+		BaseAdapter:       NewBaseAdapter(cfg),
+		config:            osmosisConfig,
+		httpClient:        httpClient,
+		pools:             make(map[string]LiquidityPool),
+		profile:           *osmosisConfig.RouteProfile,
+		mode:              mode,
+		poolState:         osmosisConfig.PoolState,
+		evidence:          osmosisConfig.ChainEvidence,
+		oracle:            osmosisConfig.Oracle,
+		executionVerifier: osmosisConfig.ExecutionVerifier,
+		now:               now,
 	}
 
-	// Override chain ID from config
-	adapter.chainID = osmosisConfig.GetChainID()
+	adapter.chainID = osmosisConfig.RouteProfile.ChainID
 
 	return adapter, nil
 }
 
 // Connect establishes connection to Osmosis
 func (a *RealOsmosisAdapter) Connect(ctx context.Context) error {
+	a.lifecycleMu.Lock()
+	defer a.lifecycleMu.Unlock()
 	endpoint := a.config.GetGRPCEndpoint()
 
 	// Create gRPC connection
@@ -250,9 +364,12 @@ func (a *RealOsmosisAdapter) Connect(ctx context.Context) error {
 		return fmt.Errorf("failed to connect to Osmosis gRPC: %w", err)
 	}
 
+	if a.grpcConn != nil {
+		_ = a.grpcConn.Close()
+	}
 	a.grpcConn = conn
 	a.connected = true
-	a.healthy = true
+	a.healthy.Store(true)
 
 	// Initial pool refresh
 	if err := a.refreshPools(ctx); err != nil {
@@ -265,10 +382,14 @@ func (a *RealOsmosisAdapter) Connect(ctx context.Context) error {
 
 // Disconnect closes the connection
 func (a *RealOsmosisAdapter) Disconnect() error {
+	a.lifecycleMu.Lock()
+	defer a.lifecycleMu.Unlock()
 	a.connected = false
-	a.healthy = false
+	a.healthy.Store(false)
 	if a.grpcConn != nil {
-		return a.grpcConn.Close()
+		err := a.grpcConn.Close()
+		a.grpcConn = nil
+		return err
 	}
 	return nil
 }
@@ -302,84 +423,107 @@ func (a *RealOsmosisAdapter) refreshPools(ctx context.Context) error {
 	for _, pool := range pools {
 		a.pools[pool.ID] = pool
 	}
-	a.lastRefresh = time.Now()
+	a.lastRefresh = a.now()
 
 	return nil
 }
 
-// queryPools queries pools from Osmosis REST API
+// queryPools acquires pools and their authenticated block observation through
+// one mandatory boundary. Unheighted REST pool responses are not executable.
 func (a *RealOsmosisAdapter) queryPools(ctx context.Context, limit int) ([]LiquidityPool, error) {
-	endpoint := a.config.GetRESTEndpoint()
-	url := fmt.Sprintf("%s/osmosis/poolmanager/v1beta1/all-pools?pagination.limit=%d", endpoint, limit)
-
-	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
+	bound, err := a.poolState.PoolStates(ctx, limit)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create request: %w", err)
+		return nil, fmt.Errorf("%w: bound pool discovery: %v", ErrOsmosisQueryFailed, err)
 	}
-
-	resp, err := a.httpClient.Do(req)
+	observation, err := a.validateBoundPoolResponse(bound)
 	if err != nil {
-		return nil, fmt.Errorf("%w: %v", ErrOsmosisQueryFailed, err)
+		return nil, err
 	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("%w: status %d: %s", ErrOsmosisQueryFailed, resp.StatusCode, string(body))
-	}
-
 	var poolsResp OsmosisPoolsResponse
-	if err := json.NewDecoder(resp.Body).Decode(&poolsResp); err != nil {
+	if err := decodeBoundedJSON(bytes.NewReader(bound.Payload), &poolsResp); err != nil {
 		return nil, fmt.Errorf("failed to decode pools response: %w", err)
 	}
-
-	return a.convertPools(poolsResp.Pools), nil
+	pools, err := a.convertPools(poolsResp.Pools, observation)
+	if err != nil {
+		return nil, err
+	}
+	return pools, nil
 }
 
 // convertPools converts Osmosis pool data to our LiquidityPool type
-func (a *RealOsmosisAdapter) convertPools(osmPools []OsmosisPoolData) []LiquidityPool {
-	var pools []LiquidityPool
+func (a *RealOsmosisAdapter) convertPools(osmPools []OsmosisPoolData, observation ChainObservation) ([]LiquidityPool, error) {
+	pools := make([]LiquidityPool, 0, len(osmPools))
 
 	for _, op := range osmPools {
-		pool := a.convertPool(op)
-		if pool.ID != "" {
-			pools = append(pools, pool)
+		if !a.profile.poolAllowed(op.ID) {
+			continue
 		}
+		pool, err := a.convertPool(op, observation)
+		if err != nil {
+			return nil, err
+		}
+		pools = append(pools, pool)
 	}
 
-	return pools
+	return pools, nil
 }
 
 // convertPool converts a single Osmosis pool to our LiquidityPool type
-func (a *RealOsmosisAdapter) convertPool(op OsmosisPoolData) LiquidityPool {
+func (a *RealOsmosisAdapter) convertPool(op OsmosisPoolData, observation ChainObservation) (LiquidityPool, error) {
+	if !a.profile.poolAllowed(op.ID) {
+		return LiquidityPool{}, ErrPoolNotAllowed
+	}
+	if !a.supportedConstantProductPool(op) {
+		return LiquidityPool{}, ErrOsmosisInvalidPool
+	}
 	pool := LiquidityPool{
 		ID:        op.ID,
 		DEX:       a.name,
 		Type:      PoolTypeConstantProduct, // Osmosis pools are x*y=k AMMs
 		Tokens:    make([]Token, 0, 2),
 		Reserves:  make(map[string]sdkmath.Int),
-		UpdatedAt: time.Now().UTC(),
+		UpdatedAt: observation.ObservedAt.UTC(),
+		ChainID:   observation.ChainID,
+		SourceID:  observation.SourceID,
+		Height:    observation.Height,
+		BlockHash: observation.BlockHash,
 	}
 
 	// Parse swap fee
-	if op.PoolParams.SwapFee != "" {
-		if fee, err := sdkmath.LegacyNewDecFromStr(op.PoolParams.SwapFee); err == nil {
-			pool.Fee = fee
-		}
+	fee, err := sdkmath.LegacyNewDecFromStr(op.PoolParams.SwapFee)
+	if err != nil || fee.IsNegative() || !fee.LT(sdkmath.LegacyOneDec()) {
+		return LiquidityPool{}, ErrOsmosisInvalidPool
 	}
+	pool.Fee = fee
 
 	// Parse pool assets
 	for _, asset := range op.PoolAssets {
 		token := a.parseToken(asset.Token)
 		pool.Tokens = append(pool.Tokens, token)
 
-		// Parse reserves by token symbol
-		if amount, ok := sdkmath.NewIntFromString(asset.Token.Amount); ok {
-			pool.Reserves[token.Symbol] = amount
+		// Parse reserves by exact denom. Symbols are display-only and are never
+		// used for production reserve direction.
+		amount, ok := sdkmath.NewIntFromString(asset.Token.Amount)
+		if !ok || !amount.IsPositive() {
+			return LiquidityPool{}, ErrOsmosisInvalidPool
 		}
+		pool.Reserves[token.Denom] = amount
 	}
 
-	return pool
+	return pool, nil
+}
+
+func (a *RealOsmosisAdapter) supportedConstantProductPool(pool OsmosisPoolData) bool {
+	typeSupported := pool.Type == osmosisGAMMPoolType || a.mode == RouteValidationEngineering && pool.Type == ""
+	if !typeSupported || len(pool.PoolAssets) != 2 {
+		return false
+	}
+	firstWeight, err := sdkmath.LegacyNewDecFromStr(pool.PoolAssets[0].Weight)
+	if err != nil || !firstWeight.IsPositive() {
+		return false
+	}
+	secondWeight, err := sdkmath.LegacyNewDecFromStr(pool.PoolAssets[1].Weight)
+	return err == nil && secondWeight.IsPositive() && firstWeight.Equal(secondWeight)
 }
 
 // parseToken parses an Osmosis token to our Token type
@@ -403,10 +547,14 @@ func (a *RealOsmosisAdapter) parseToken(coin OsmosisCoin) Token {
 		symbol = "USDC"
 	}
 
+	decimals := uint8(0)
+	if configured, ok := a.profile.token(coin.Denom); ok {
+		decimals = configured.Decimals
+	}
 	return Token{
 		Symbol:   symbol,
 		Denom:    coin.Denom,
-		Decimals: 6, // Most Cosmos tokens use 6 decimals
+		Decimals: decimals,
 		ChainID:  a.chainID,
 		IsNative: !strings.HasPrefix(coin.Denom, "ibc/"),
 	}
@@ -416,7 +564,7 @@ func (a *RealOsmosisAdapter) parseToken(coin OsmosisCoin) Token {
 func (a *RealOsmosisAdapter) GetSupportedPairs(ctx context.Context) ([]TradingPair, error) {
 	// Refresh pools if stale
 	a.poolsMu.RLock()
-	needsRefresh := time.Since(a.lastRefresh) > a.config.PoolRefreshInterval
+	needsRefresh := a.now().Sub(a.lastRefresh) > a.config.PoolRefreshInterval
 	a.poolsMu.RUnlock()
 
 	if needsRefresh {
@@ -466,7 +614,7 @@ func (a *RealOsmosisAdapter) GetPrice(ctx context.Context, baseSymbol, quoteSymb
 			QuoteToken: quoteToken,
 		},
 		Rate:       spotPrice,
-		Timestamp:  time.Now().UTC(),
+		Timestamp:  a.now().UTC(),
 		Source:     a.name,
 		Confidence: 1.0,
 	}, nil
@@ -490,7 +638,7 @@ func (a *RealOsmosisAdapter) getPoolTokenPair(pool LiquidityPool, baseSymbol, qu
 func (a *RealOsmosisAdapter) findPoolForPair(ctx context.Context, baseSymbol, quoteSymbol string) (LiquidityPool, error) {
 	// Ensure pools are loaded
 	a.poolsMu.RLock()
-	needsRefresh := len(a.pools) == 0 || time.Since(a.lastRefresh) > a.config.PoolRefreshInterval
+	needsRefresh := len(a.pools) == 0 || a.now().Sub(a.lastRefresh) > a.config.PoolRefreshInterval
 	a.poolsMu.RUnlock()
 
 	if needsRefresh {
@@ -513,6 +661,9 @@ func (a *RealOsmosisAdapter) findPoolForPair(ctx context.Context, baseSymbol, qu
 			}
 		}
 		if hasBase && hasQuote {
+			if !a.profile.poolAllowed(pool.ID) {
+				return LiquidityPool{}, ErrPoolNotAllowed
+			}
 			return pool, nil
 		}
 	}
@@ -522,6 +673,9 @@ func (a *RealOsmosisAdapter) findPoolForPair(ctx context.Context, baseSymbol, qu
 
 // querySpotPrice queries the spot price from Osmosis
 func (a *RealOsmosisAdapter) querySpotPrice(ctx context.Context, poolID, baseDenom, quoteDenom string) (sdkmath.LegacyDec, error) {
+	if !a.profile.poolAllowed(poolID) {
+		return sdkmath.LegacyDec{}, ErrPoolNotAllowed
+	}
 	endpoint := a.config.GetRESTEndpoint()
 	url := fmt.Sprintf("%s/osmosis/poolmanager/v1beta1/pools/%s/spot-price?base_asset_denom=%s&quote_asset_denom=%s",
 		endpoint, poolID, baseDenom, quoteDenom)
@@ -536,13 +690,16 @@ func (a *RealOsmosisAdapter) querySpotPrice(ctx context.Context, poolID, baseDen
 		return sdkmath.LegacyZeroDec(), fmt.Errorf("%w: %v", ErrOsmosisQueryFailed, err)
 	}
 	defer resp.Body.Close()
+	if err := requireJSONResponse(resp); err != nil {
+		return sdkmath.LegacyDec{}, err
+	}
 
 	if resp.StatusCode != http.StatusOK {
 		return sdkmath.LegacyZeroDec(), fmt.Errorf("%w: status %d", ErrOsmosisQueryFailed, resp.StatusCode)
 	}
 
 	var priceResp OsmosisSpotPriceResponse
-	if err := json.NewDecoder(resp.Body).Decode(&priceResp); err != nil {
+	if err := decodeBoundedJSON(resp.Body, &priceResp); err != nil {
 		return sdkmath.LegacyZeroDec(), fmt.Errorf("failed to decode price response: %w", err)
 	}
 
@@ -554,8 +711,11 @@ func (a *RealOsmosisAdapter) querySpotPrice(ctx context.Context, poolID, baseDen
 	return price, nil
 }
 
-// GetPool fetches pool information by ID
+// GetPool fetches pool information and authenticated state evidence by ID.
 func (a *RealOsmosisAdapter) GetPool(ctx context.Context, poolID string) (LiquidityPool, error) {
+	if !a.profile.poolAllowed(poolID) {
+		return LiquidityPool{}, ErrPoolNotAllowed
+	}
 	// Check cache first
 	a.poolsMu.RLock()
 	pool, ok := a.pools[poolID]
@@ -565,40 +725,31 @@ func (a *RealOsmosisAdapter) GetPool(ctx context.Context, poolID string) (Liquid
 		return pool, nil
 	}
 
-	// Query from Osmosis
-	endpoint := a.config.GetRESTEndpoint()
-	url := fmt.Sprintf("%s/osmosis/poolmanager/v1beta1/pools/%s", endpoint, poolID)
-
-	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
+	bound, err := a.poolState.PoolState(ctx, poolID)
 	if err != nil {
-		return LiquidityPool{}, fmt.Errorf("failed to create request: %w", err)
+		return LiquidityPool{}, fmt.Errorf("%w: bound pool %s: %v", ErrOsmosisQueryFailed, poolID, err)
 	}
-
-	resp, err := a.httpClient.Do(req)
+	observation, err := a.validateBoundPoolResponse(bound)
 	if err != nil {
-		return LiquidityPool{}, fmt.Errorf("%w: %v", ErrOsmosisQueryFailed, err)
+		return LiquidityPool{}, err
 	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode == http.StatusNotFound {
-		return LiquidityPool{}, ErrOsmosisPoolNotFound
-	}
-	if resp.StatusCode != http.StatusOK {
-		return LiquidityPool{}, fmt.Errorf("%w: status %d", ErrOsmosisQueryFailed, resp.StatusCode)
-	}
-
 	var poolResp OsmosisPoolResponse
-	if err := json.NewDecoder(resp.Body).Decode(&poolResp); err != nil {
+	if err := decodeBoundedJSON(bytes.NewReader(bound.Payload), &poolResp); err != nil {
 		return LiquidityPool{}, fmt.Errorf("failed to decode pool response: %w", err)
 	}
-
-	return a.convertPool(poolResp.Pool), nil
+	if poolResp.Pool.ID != poolID {
+		return LiquidityPool{}, fmt.Errorf("%w: requested pool %s, received %s", ErrPoolStateEvidence, poolID, poolResp.Pool.ID)
+	}
+	return a.convertPool(poolResp.Pool, observation)
 }
 
 // ListPools lists pools matching the query
 func (a *RealOsmosisAdapter) ListPools(ctx context.Context, query PoolQuery) ([]LiquidityPool, error) {
 	// Ensure pools are loaded
-	if len(a.pools) == 0 {
+	a.poolsMu.RLock()
+	empty := len(a.pools) == 0
+	a.poolsMu.RUnlock()
+	if empty {
 		if err := a.refreshPools(ctx); err != nil {
 			return nil, err
 		}
@@ -619,24 +770,109 @@ func (a *RealOsmosisAdapter) ListPools(ctx context.Context, query PoolQuery) ([]
 
 // GetSwapQuote generates a swap quote
 func (a *RealOsmosisAdapter) GetSwapQuote(ctx context.Context, request SwapRequest) (SwapQuote, error) {
+	if err := request.Validate(); err != nil {
+		return SwapQuote{}, err
+	}
+	if request.Type != "" && request.Type != SwapTypeExactIn {
+		return SwapQuote{}, fmt.Errorf("only exact-in Osmosis quotes are supported")
+	}
+	if request.FromToken.ChainID == "" || request.ToToken.ChainID == "" || request.FromToken.ChainID != a.chainID || request.ToToken.ChainID != a.chainID {
+		return SwapQuote{}, ErrWrongChain
+	}
+	fromProfile, ok := a.profile.token(request.FromToken.Denom)
+	if !ok {
+		return SwapQuote{}, ErrUnsupportedPair
+	}
+	toProfile, ok := a.profile.token(request.ToToken.Denom)
+	if !ok {
+		return SwapQuote{}, ErrUnsupportedPair
+	}
+	if request.FromToken.Decimals != fromProfile.Decimals || request.ToToken.Decimals != toProfile.Decimals {
+		return SwapQuote{}, ErrTokenDecimals
+	}
+	if request.FromToken.Symbol != fromProfile.Symbol || request.ToToken.Symbol != toProfile.Symbol {
+		return SwapQuote{}, ErrUnsupportedPair
+	}
+	if request.Amount.GT(a.profile.MaxAmount) {
+		return SwapQuote{}, ErrAmountTooLarge
+	}
+	if !request.Deadline.IsZero() && !request.Deadline.After(a.now()) {
+		return SwapQuote{}, ErrQuoteExpired
+	}
 	// Find pool for the swap
 	pool, err := a.findPoolForPair(ctx, request.FromToken.Symbol, request.ToToken.Symbol)
 	if err != nil {
 		return SwapQuote{}, err
 	}
-
-	// Query estimated swap output
-	outputAmount, err := a.estimateSwapOutput(ctx, pool.ID, request.FromToken.Denom, request.ToToken.Denom, request.Amount)
+	if !a.profile.poolAllowed(pool.ID) {
+		return SwapQuote{}, ErrPoolNotAllowed
+	}
+	if pool.ChainID != a.chainID || pool.SourceID == "" || pool.Height == 0 || pool.BlockHash == "" {
+		return SwapQuote{}, ErrPoolStateEvidence
+	}
+	reserveIn := pool.Reserves[request.FromToken.Denom]
+	reserveOut := pool.Reserves[request.ToToken.Denom]
+	if reserveIn.IsNil() || reserveOut.IsNil() || reserveIn.LT(a.profile.MinReserve) || reserveOut.LT(a.profile.MinReserve) {
+		return SwapQuote{}, ErrInsufficientLiquidity
+	}
+	if pool.TotalLiquidity.IsNil() || pool.TotalLiquidity.TruncateInt().LT(a.profile.MinLiquidity) {
+		// When the upstream response does not provide a trusted common-value TVL,
+		// require each exact reserve to satisfy the declared liquidity floor.
+		if reserveIn.LT(a.profile.MinLiquidity) || reserveOut.LT(a.profile.MinLiquidity) {
+			return SwapQuote{}, ErrInsufficientLiquidity
+		}
+	}
+	outputAmount, err := ConstantProductExactIn(reserveIn, reserveOut, request.Amount, pool.Fee)
 	if err != nil {
 		return SwapQuote{}, err
 	}
-
-	// Calculate slippage
-	minOutput := sdkmath.LegacyNewDecFromInt(outputAmount).Mul(sdkmath.LegacyOneDec().Sub(sdkmath.LegacyNewDecWithPrec(int64(a.config.SlippageTolerance*10000), 4)))
-	minOutputInt := minOutput.TruncateInt()
-
-	// Calculate price impact (simplified)
-	priceImpact := 0.001 // Would calculate from reserves in production
+	priceImpact, err := exactPriceImpact(reserveIn, reserveOut, request.Amount, outputAmount)
+	if err != nil {
+		return SwapQuote{}, err
+	}
+	if priceImpact.GT(a.profile.MaxPriceImpact) {
+		return SwapQuote{}, ErrPriceImpactExceeded
+	}
+	slippage := request.SlippageToleranceExact
+	if slippage.IsNil() || slippage.IsNegative() || slippage.GT(a.profile.MaxPriceImpact) {
+		return SwapQuote{}, ErrSlippageExceeded
+	}
+	minOutputInt := sdkmath.LegacyOneDec().Sub(slippage).MulInt(outputAmount).TruncateInt()
+	if !minOutputInt.IsPositive() || minOutputInt.GT(outputAmount) {
+		return SwapQuote{}, ErrMinimumOutput
+	}
+	if request.Amount.GTE(reserveIn) {
+		return SwapQuote{}, ErrInsufficientLiquidity
+	}
+	observation, err := a.validatePoolObservation(pool)
+	if err != nil {
+		return SwapQuote{}, err
+	}
+	rate, err := exactExchangeRate(request.Amount, outputAmount, request.FromToken.Decimals, request.ToToken.Decimals)
+	if err != nil {
+		return SwapQuote{}, err
+	}
+	oraclePrice, err := a.oracle.Price(request.FromToken.Denom, request.ToToken.Denom, observation.Height)
+	if err != nil {
+		return SwapQuote{}, fmt.Errorf("oracle price: %w", err)
+	}
+	oracleDeviation, err := exactDeviation(rate, oraclePrice)
+	if err != nil {
+		return SwapQuote{}, err
+	}
+	if oracleDeviation.GT(a.profile.MaxOracleDeviation) {
+		return SwapQuote{}, ErrOracleDeviation
+	}
+	evidence := PoolStateEvidence{
+		ChainID: a.chainID, SourceID: pool.SourceID, ProfileID: a.profile.ID, PoolID: pool.ID, Height: pool.Height,
+		BlockHash: pool.BlockHash, ObservedAt: pool.UpdatedAt, FromDenom: request.FromToken.Denom,
+		ToDenom: request.ToToken.Denom, FromDecimals: request.FromToken.Decimals, ToDecimals: request.ToToken.Decimals,
+		ReserveIn: reserveIn, ReserveOut: reserveOut, SwapFee: pool.Fee,
+	}
+	evidence.StateDigest, err = canonicalPoolStateDigest(evidence)
+	if err != nil {
+		return SwapQuote{}, err
+	}
 
 	route := SwapRoute{
 		Hops: []SwapHop{
@@ -650,123 +886,80 @@ func (a *RealOsmosisAdapter) GetSwapQuote(ctx context.Context, request SwapReque
 				Fee:       pool.Fee,
 			},
 		},
-		TotalGas:    300000,
-		PriceImpact: priceImpact,
+		PriceImpactExact: priceImpact,
 	}
-
-	// Calculate rate
-	rate := sdkmath.LegacyNewDecFromInt(outputAmount).Quo(sdkmath.LegacyNewDecFromInt(request.Amount))
-
+	now := a.now().UTC()
+	expires := now.Add(a.profile.QuoteTTL)
+	if !request.Deadline.IsZero() && request.Deadline.Before(expires) {
+		expires = request.Deadline.UTC()
+	}
 	quote := SwapQuote{
-		ID:              fmt.Sprintf("osmo-quote-%d", time.Now().UnixNano()),
-		Request:         request,
-		Route:           route,
-		InputAmount:     request.Amount,
-		OutputAmount:    outputAmount,
-		MinOutputAmount: minOutputInt,
-		Rate:            rate,
-		TotalFee:        pool.Fee.Mul(sdkmath.LegacyNewDecFromInt(request.Amount)).TruncateInt(),
-		GasEstimate:     300000,
-		ExpiresAt:       time.Now().Add(30 * time.Second),
-		CreatedAt:       time.Now().UTC(),
+		Request:              request,
+		Route:                route,
+		InputAmount:          request.Amount,
+		OutputAmount:         outputAmount,
+		MinOutputAmount:      minOutputInt,
+		Rate:                 rate,
+		TotalFee:             pool.Fee.Mul(sdkmath.LegacyNewDecFromInt(request.Amount)).TruncateInt(),
+		PriceImpactExact:     priceImpact,
+		ExpiresAt:            expires,
+		CreatedAt:            now,
+		ProfileID:            a.profile.ID,
+		ChainID:              a.chainID,
+		DEX:                  "osmosis",
+		DEXVersion:           a.profile.Version,
+		PoolStateEvidence:    []PoolStateEvidence{evidence},
+		OraclePrice:          oraclePrice,
+		OracleDeviation:      oracleDeviation,
+		ObservationHeight:    pool.Height,
+		ObservationBlockHash: pool.BlockHash,
 	}
-
+	quote.ID, err = QuoteDigest(quote)
+	if err != nil {
+		return SwapQuote{}, err
+	}
+	quote.QuoteDigest = quote.ID
 	return quote, nil
 }
 
-// estimateSwapOutput estimates the output amount for a swap
-func (a *RealOsmosisAdapter) estimateSwapOutput(ctx context.Context, poolID, tokenIn, tokenOut string, amountIn sdkmath.Int) (sdkmath.Int, error) {
-	endpoint := a.config.GetRESTEndpoint()
-	url := fmt.Sprintf("%s/osmosis/poolmanager/v1beta1/%s/estimate/single-pool-swap-exact-amount-in?pool_id=%s&token_in=%s%s&token_out_denom=%s",
-		endpoint, poolID, poolID, amountIn.String(), tokenIn, tokenOut)
-
-	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
-	if err != nil {
-		return sdkmath.Int{}, fmt.Errorf("failed to create request: %w", err)
-	}
-
-	resp, err := a.httpClient.Do(req)
-	if err != nil {
-		return sdkmath.Int{}, fmt.Errorf("%w: %v", ErrOsmosisQueryFailed, err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		// Fall back to manual calculation if estimation endpoint fails
-		return a.calculateSwapOutput(ctx, poolID, amountIn)
-	}
-
-	var swapResp OsmosisEstimateSwapResponse
-	if err := json.NewDecoder(resp.Body).Decode(&swapResp); err != nil {
-		return sdkmath.Int{}, fmt.Errorf("failed to decode swap response: %w", err)
-	}
-
-	output, ok := sdkmath.NewIntFromString(swapResp.TokenOutAmount)
-	if !ok {
-		return sdkmath.Int{}, fmt.Errorf("failed to parse output amount: %s", swapResp.TokenOutAmount)
-	}
-
-	return output, nil
-}
-
-// calculateSwapOutput calculates output using constant product formula
-func (a *RealOsmosisAdapter) calculateSwapOutput(ctx context.Context, poolID string, amountIn sdkmath.Int) (sdkmath.Int, error) {
-	pool, err := a.GetPool(ctx, poolID)
-	if err != nil {
-		return sdkmath.Int{}, err
-	}
-
-	// Constant product formula: x * y = k
-	// output = (reserve1 * amountIn) / (reserve0 + amountIn)
-	// Apply fee: output = output * (1 - fee)
-
-	// Get reserves from the new map structure - need at least 2 tokens
-	if len(pool.Tokens) < 2 {
-		return sdkmath.Int{}, ErrOsmosisInsufficientLiquidity
-	}
-
-	reserve0 := pool.Reserves[pool.Tokens[0].Symbol]
-	reserve1 := pool.Reserves[pool.Tokens[1].Symbol]
-
-	if reserve0.IsZero() || reserve1.IsZero() {
-		return sdkmath.Int{}, ErrOsmosisInsufficientLiquidity
-	}
-
-	// Calculate output before fee
-	numerator := reserve1.Mul(amountIn)
-	denominator := reserve0.Add(amountIn)
-	outputBeforeFee := numerator.Quo(denominator)
-
-	// Apply fee
-	feeMultiplier := sdkmath.LegacyOneDec().Sub(pool.Fee)
-	output := feeMultiplier.MulInt(outputBeforeFee).TruncateInt()
-
-	return output, nil
-}
-
-// ExecuteSwap executes a swap on Osmosis
+// ExecuteSwap executes a swap on Osmosis after verifying the signed envelope is
+// bound to the canonical quote and unsigned payload.
 func (a *RealOsmosisAdapter) ExecuteSwap(ctx context.Context, quote SwapQuote, signedTx []byte) (SwapResult, error) {
-	// In production, this would:
-	// 1. Verify the signed transaction
-	// 2. Broadcast to Osmosis network via gRPC or REST
-	// 3. Wait for confirmation
-	// 4. Return result with actual tx hash
+	if err := a.validateQuote(quote); err != nil {
+		return SwapResult{}, err
+	}
+	rawSignedTx, err := verifySignedExecutionEnvelope(quote, signedTx)
+	if err != nil {
+		return SwapResult{}, err
+	}
+	payload, err := BuildExecutionPayload(quote)
+	if err != nil {
+		return SwapResult{}, err
+	}
+	if err := a.executionVerifier.VerifySignedExecution(ctx, payload, rawSignedTx); err != nil {
+		return SwapResult{}, fmt.Errorf("%w: signed transaction is detached from quote payload: %v", ErrExecutionPayload, err)
+	}
 
 	endpoint := a.config.GetRESTEndpoint()
 	url := fmt.Sprintf("%s/cosmos/tx/v1beta1/txs", endpoint)
 
-	// Create broadcast request
-	broadcastReq := map[string]interface{}{
-		"tx_bytes": signedTx,
-		"mode":     "BROADCAST_MODE_SYNC",
+	var txRaw tx.TxRaw
+	if err := txRaw.Unmarshal(rawSignedTx); err != nil || len(txRaw.BodyBytes) == 0 || len(txRaw.AuthInfoBytes) == 0 || len(txRaw.Signatures) == 0 {
+		return SwapResult{}, fmt.Errorf("%w: signed transaction is not canonical TxRaw bytes", ErrExecutionPayload)
 	}
+
+	// Cosmos REST JSON requires protobuf bytes to be canonical base64 strings.
+	broadcastReq := struct {
+		TxBytes string `json:"tx_bytes"`
+		Mode    string `json:"mode"`
+	}{TxBytes: base64.StdEncoding.EncodeToString(rawSignedTx), Mode: "BROADCAST_MODE_SYNC"}
 
 	reqBody, err := json.Marshal(broadcastReq)
 	if err != nil {
 		return SwapResult{}, fmt.Errorf("failed to marshal broadcast request: %w", err)
 	}
 
-	req, err := http.NewRequestWithContext(ctx, "POST", url, strings.NewReader(string(reqBody)))
+	req, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewReader(reqBody))
 	if err != nil {
 		return SwapResult{}, fmt.Errorf("failed to create request: %w", err)
 	}
@@ -777,6 +970,16 @@ func (a *RealOsmosisAdapter) ExecuteSwap(ctx context.Context, quote SwapQuote, s
 		return SwapResult{}, fmt.Errorf("%w: %v", ErrOsmosisSwapFailed, err)
 	}
 	defer resp.Body.Close()
+	if err := requireJSONResponse(resp); err != nil {
+		return SwapResult{}, err
+	}
+	if resp.StatusCode != http.StatusOK {
+		body, readErr := readBoundedResponse(resp.Body)
+		if readErr != nil {
+			return SwapResult{}, readErr
+		}
+		return SwapResult{}, fmt.Errorf("%w: status %d: %s", ErrOsmosisSwapFailed, resp.StatusCode, string(body))
+	}
 
 	// Parse broadcast response
 	var broadcastResp struct {
@@ -787,7 +990,7 @@ func (a *RealOsmosisAdapter) ExecuteSwap(ctx context.Context, quote SwapQuote, s
 		} `json:"tx_response"`
 	}
 
-	if err := json.NewDecoder(resp.Body).Decode(&broadcastResp); err != nil {
+	if err := decodeBoundedJSON(resp.Body, &broadcastResp); err != nil {
 		return SwapResult{}, fmt.Errorf("failed to decode broadcast response: %w", err)
 	}
 
@@ -795,33 +998,383 @@ func (a *RealOsmosisAdapter) ExecuteSwap(ctx context.Context, quote SwapQuote, s
 		return SwapResult{}, fmt.Errorf("%w: code %d: %s",
 			ErrOsmosisSwapFailed, broadcastResp.TxResponse.Code, broadcastResp.TxResponse.Log)
 	}
+	if strings.TrimSpace(broadcastResp.TxResponse.TxHash) == "" {
+		return SwapResult{}, fmt.Errorf("%w: missing transaction hash", ErrOsmosisSwapFailed)
+	}
 
-	return SwapResult{
-		QuoteID:      quote.ID,
-		TxHash:       broadcastResp.TxResponse.TxHash,
-		InputAmount:  quote.InputAmount,
-		OutputAmount: quote.OutputAmount,
-		Fee:          quote.TotalFee,
-		GasUsed:      quote.GasEstimate,
-		ExecutedAt:   time.Now().UTC(),
-		Route:        quote.Route,
-	}, nil
+	confirmed, err := a.queryConfirmedSwap(ctx, broadcastResp.TxResponse.TxHash, quote)
+	if err != nil {
+		return SwapResult{}, err
+	}
+	return confirmed, nil
+}
+
+type osmosisTxResponse struct {
+	TxResponse struct {
+		TxHash  string `json:"txhash"`
+		Code    int    `json:"code"`
+		Log     string `json:"raw_log"`
+		Height  string `json:"height"`
+		GasUsed string `json:"gas_used"`
+		Events  []struct {
+			Type       string `json:"type"`
+			Attributes []struct {
+				Key   string `json:"key"`
+				Value string `json:"value"`
+			} `json:"attributes"`
+		} `json:"events"`
+	} `json:"tx_response"`
+}
+
+func (a *RealOsmosisAdapter) queryConfirmedSwap(ctx context.Context, txHash string, quote SwapQuote) (SwapResult, error) {
+	endpoint := a.config.GetRESTEndpoint()
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint+"/cosmos/tx/v1beta1/txs/"+url.PathEscape(txHash), nil)
+	if err != nil {
+		return SwapResult{}, err
+	}
+	resp, err := a.httpClient.Do(req)
+	if err != nil {
+		return SwapResult{}, fmt.Errorf("%w: confirmation query: %v", ErrOsmosisSwapFailed, err)
+	}
+	defer resp.Body.Close()
+	if err := requireJSONResponse(resp); err != nil {
+		return SwapResult{}, err
+	}
+	if resp.StatusCode != http.StatusOK {
+		return SwapResult{}, fmt.Errorf("%w: confirmation status %d", ErrOsmosisSwapFailed, resp.StatusCode)
+	}
+	var confirmed osmosisTxResponse
+	if err := decodeBoundedJSON(resp.Body, &confirmed); err != nil {
+		return SwapResult{}, err
+	}
+	if confirmed.TxResponse.Code != 0 || !strings.EqualFold(confirmed.TxResponse.TxHash, txHash) {
+		return SwapResult{}, fmt.Errorf("%w: transaction not confirmed successfully", ErrOsmosisSwapFailed)
+	}
+	confirmedHeight, err := strconv.ParseUint(confirmed.TxResponse.Height, 10, 64)
+	if err != nil || confirmedHeight == 0 {
+		return SwapResult{}, fmt.Errorf("%w: invalid confirmation height", ErrOsmosisSwapFailed)
+	}
+	latest, err := a.currentObservation()
+	if err != nil {
+		return SwapResult{}, err
+	}
+	if confirmedHeight > latest.Height || latest.Height-confirmedHeight < a.profile.FinalityBlocks {
+		return SwapResult{}, fmt.Errorf("%w: transaction lacks required finality", ErrOsmosisSwapFailed)
+	}
+	confirmedBlockHash, err := a.evidence.BlockHash(confirmedHeight)
+	if err != nil || strings.TrimSpace(confirmedBlockHash) == "" {
+		return SwapResult{}, fmt.Errorf("%w: confirmation block identity unavailable", ErrOsmosisSwapFailed)
+	}
+	output, ok := confirmedSwapOutput(confirmed, quote.Request.ToToken.Denom)
+	if !ok || output.LT(quote.MinOutputAmount) {
+		return SwapResult{}, ErrMinimumOutput
+	}
+	gasUsed, err := strconv.ParseUint(confirmed.TxResponse.GasUsed, 10, 64)
+	if err != nil {
+		return SwapResult{}, fmt.Errorf("%w: invalid confirmed gas", ErrOsmosisSwapFailed)
+	}
+	return SwapResult{QuoteID: quote.ID, TxHash: txHash, InputAmount: quote.InputAmount, OutputAmount: output,
+		Fee: quote.TotalFee, GasUsed: gasUsed, ExecutedAt: a.now().UTC(), Route: quote.Route}, nil
+}
+
+func confirmedSwapOutput(response osmosisTxResponse, denom string) (sdkmath.Int, bool) {
+	for _, event := range response.TxResponse.Events {
+		if event.Type != "token_swapped" {
+			continue
+		}
+		for _, attribute := range event.Attributes {
+			if attribute.Key != "tokens_out" || !strings.HasSuffix(attribute.Value, denom) {
+				continue
+			}
+			amount := strings.TrimSuffix(attribute.Value, denom)
+			parsed, ok := sdkmath.NewIntFromString(amount)
+			return parsed, ok && parsed.IsPositive()
+		}
+	}
+	return sdkmath.Int{}, false
+}
+
+func requireJSONResponse(response *http.Response) error {
+	contentType := strings.ToLower(strings.TrimSpace(strings.Split(response.Header.Get("Content-Type"), ";")[0]))
+	if contentType != "application/json" && !strings.HasSuffix(contentType, "+json") {
+		return fmt.Errorf("%w: remote response is not JSON", ErrOsmosisQueryFailed)
+	}
+	return nil
+}
+
+func validateOsmosisRESTEndpoint(raw string, mode RouteValidationMode) (*url.URL, error) {
+	parsed, err := url.Parse(raw)
+	if err != nil || !parsed.IsAbs() || parsed.Host == "" || parsed.User != nil || parsed.RawQuery != "" || parsed.Fragment != "" || parsed.Path != "" {
+		return nil, fmt.Errorf("invalid Osmosis REST endpoint")
+	}
+	if mode == RouteValidationRuntime && parsed.Scheme != "https" {
+		return nil, fmt.Errorf("production Osmosis REST endpoint must use HTTPS")
+	}
+	if parsed.Scheme != "https" && parsed.Scheme != "http" {
+		return nil, fmt.Errorf("unsupported Osmosis REST endpoint scheme")
+	}
+	return parsed, nil
+}
+
+func validateOsmosisGRPCEndpoint(raw string) error {
+	if strings.ContainsAny(raw, "/?#@\\") {
+		return fmt.Errorf("invalid Osmosis gRPC endpoint")
+	}
+	host, port, err := net.SplitHostPort(raw)
+	if err != nil || strings.TrimSpace(host) == "" || port != "443" {
+		return fmt.Errorf("production Osmosis gRPC endpoint must be host:443")
+	}
+	return nil
+}
+
+func decodeBoundedJSON(body io.Reader, target interface{}) error {
+	limited := &io.LimitedReader{R: body, N: maxOsmosisResponseBytes + 1}
+	decoder := json.NewDecoder(limited)
+	if err := decoder.Decode(target); err != nil {
+		return err
+	}
+	if limited.N == 0 {
+		return ErrRemoteResponseTooBig
+	}
+	var trailing interface{}
+	if err := decoder.Decode(&trailing); err != io.EOF {
+		if err == nil {
+			return fmt.Errorf("remote response contains trailing JSON")
+		}
+		return err
+	}
+	return nil
+}
+
+func readBoundedResponse(body io.Reader) ([]byte, error) {
+	limited := io.LimitReader(body, maxOsmosisResponseBytes+1)
+	raw, err := io.ReadAll(limited)
+	if err != nil {
+		return nil, err
+	}
+	if int64(len(raw)) > maxOsmosisResponseBytes {
+		return nil, ErrRemoteResponseTooBig
+	}
+	return raw, nil
+}
+
+func (a *RealOsmosisAdapter) currentObservation() (ChainObservation, error) {
+	observation, err := a.evidence.LatestObservation()
+	if err != nil {
+		return ChainObservation{}, fmt.Errorf("chain observation: %w", err)
+	}
+	if observation.ChainID != a.chainID {
+		return ChainObservation{}, ErrWrongChain
+	}
+	if observation.Height == 0 || strings.TrimSpace(observation.SourceID) == "" || strings.TrimSpace(observation.BlockHash) == "" || observation.ObservedAt.IsZero() {
+		return ChainObservation{}, ErrPoolStateEvidence
+	}
+	if age := a.now().Sub(observation.ObservedAt); age < 0 || age > a.profile.MaxObservationAge {
+		return ChainObservation{}, ErrPoolStateStale
+	}
+	return observation, nil
+}
+
+// validateBoundPoolResponse proves the response metadata and independently
+// resolved canonical block identity refer to the same state and source. It
+// deliberately does not infer a binding from request order or response time.
+func (a *RealOsmosisAdapter) validateBoundPoolResponse(bound BoundOsmosisPoolResponse) (ChainObservation, error) {
+	observation := bound.Observation
+	if observation.ChainID != a.chainID {
+		return ChainObservation{}, ErrWrongChain
+	}
+	if len(bound.Payload) == 0 || observation.Height == 0 || bound.ResponseHeight == 0 || bound.ResponseHeight != observation.Height ||
+		strings.TrimSpace(observation.SourceID) == "" || bound.ResponseSourceID != observation.SourceID ||
+		strings.TrimSpace(bound.ResponseBlockHash) == "" || !strings.EqualFold(bound.ResponseBlockHash, observation.BlockHash) ||
+		strings.TrimSpace(observation.BlockHash) == "" || observation.ObservedAt.IsZero() {
+		return ChainObservation{}, ErrPoolStateEvidence
+	}
+	if observation.SourceID != a.evidence.SourceID() {
+		return ChainObservation{}, ErrPoolStateEvidence
+	}
+	if age := a.now().Sub(observation.ObservedAt); age < 0 || age > a.profile.MaxObservationAge {
+		return ChainObservation{}, ErrPoolStateStale
+	}
+	canonicalHash, err := a.evidence.BlockHash(observation.Height)
+	if err != nil || strings.TrimSpace(canonicalHash) == "" || !strings.EqualFold(canonicalHash, observation.BlockHash) {
+		return ChainObservation{}, ErrPoolStateEvidence
+	}
+	latest, err := a.currentObservation()
+	if err != nil {
+		return ChainObservation{}, err
+	}
+	if latest.SourceID != observation.SourceID {
+		return ChainObservation{}, ErrPoolStateEvidence
+	}
+	if observation.Height > latest.Height || latest.Height-observation.Height > a.profile.MaxHeightLag {
+		return ChainObservation{}, ErrPoolStateStale
+	}
+	if observation.Height == latest.Height && !strings.EqualFold(observation.BlockHash, latest.BlockHash) {
+		return ChainObservation{}, ErrPoolStateEvidence
+	}
+	return observation, nil
+}
+
+func (a *RealOsmosisAdapter) validatePoolObservation(pool LiquidityPool) (ChainObservation, error) {
+	latest, err := a.currentObservation()
+	if err != nil {
+		return ChainObservation{}, err
+	}
+	if pool.ChainID != latest.ChainID || pool.SourceID != latest.SourceID {
+		return ChainObservation{}, ErrPoolStateEvidence
+	}
+	if pool.Height == 0 || pool.Height > latest.Height || latest.Height-pool.Height > a.profile.MaxHeightLag {
+		return ChainObservation{}, ErrPoolStateStale
+	}
+	if age := a.now().Sub(pool.UpdatedAt); age < 0 || age > a.profile.MaxObservationAge {
+		return ChainObservation{}, ErrPoolStateStale
+	}
+	canonicalHash, err := a.evidence.BlockHash(pool.Height)
+	if err != nil {
+		return ChainObservation{}, err
+	}
+	if strings.TrimSpace(canonicalHash) == "" || !strings.EqualFold(canonicalHash, pool.BlockHash) {
+		return ChainObservation{}, ErrPoolStateEvidence
+	}
+	return latest, nil
+}
+
+func (a *RealOsmosisAdapter) validateQuote(quote SwapQuote) error {
+	if quote.IsExpiredAt(a.now()) {
+		return ErrQuoteExpired
+	}
+	if quote.ProfileID != a.profile.ID || quote.ChainID != a.chainID || quote.DEX != "osmosis" || quote.DEXVersion != a.profile.Version {
+		return ErrRouteNotCertified
+	}
+	if len(quote.Route.Hops) == 0 {
+		return ErrRouteHopsExceeded
+	}
+	if quote.CreatedAt.IsZero() || quote.ExpiresAt.IsZero() || quote.CreatedAt.After(a.now()) || quote.ExpiresAt.After(quote.CreatedAt.Add(a.profile.QuoteTTL)) ||
+		!quote.ExpiresAt.After(quote.CreatedAt) || (!quote.Request.Deadline.IsZero() && quote.ExpiresAt.After(quote.Request.Deadline)) {
+		return ErrQuoteExpired
+	}
+	if quote.Request.Type != SwapTypeExactIn || !quote.Request.Amount.Equal(quote.InputAmount) ||
+		quote.Request.FromToken.Denom != quote.Route.Hops[0].FromToken.Denom ||
+		quote.Request.ToToken.Denom != quote.Route.Hops[len(quote.Route.Hops)-1].ToToken.Denom {
+		return ErrPoolStateEvidence
+	}
+	if quote.InputAmount.IsNil() || quote.OutputAmount.IsNil() || quote.MinOutputAmount.IsNil() || !quote.InputAmount.IsPositive() || quote.OutputAmount.LT(quote.MinOutputAmount) {
+		return ErrMinimumOutput
+	}
+	if quote.InputAmount.GT(a.profile.MaxAmount) || quote.Rate.IsNil() || !quote.Rate.IsPositive() || quote.OraclePrice.IsNil() || !quote.OraclePrice.IsPositive() ||
+		quote.PriceImpactExact.IsNil() || quote.PriceImpactExact.GT(a.profile.MaxPriceImpact) || quote.OracleDeviation.IsNil() || quote.OracleDeviation.GT(a.profile.MaxOracleDeviation) {
+		return ErrPriceImpactExceeded
+	}
+	if err := validateBoundedRoute(quote.Route, a.profile.MaxHops, a.profile); err != nil {
+		return err
+	}
+	digest, err := QuoteDigest(quote)
+	if err != nil || digest != quote.ID || digest != quote.QuoteDigest {
+		return ErrExecutionPayload
+	}
+	if len(quote.PoolStateEvidence) != len(quote.Route.Hops) {
+		return ErrPoolStateEvidence
+	}
+	latest, err := a.currentObservation()
+	if err != nil {
+		return err
+	}
+	totalFee := sdkmath.ZeroInt()
+	totalImpact := sdkmath.LegacyZeroDec()
+	newestHeight := uint64(0)
+	newestHash := ""
+	for i, evidence := range quote.PoolStateEvidence {
+		hop := quote.Route.Hops[i]
+		if evidence.ChainID != a.chainID || evidence.SourceID != latest.SourceID || evidence.Height == 0 || evidence.Height > latest.Height || latest.Height-evidence.Height > a.profile.MaxHeightLag ||
+			evidence.ProfileID != a.profile.ID || evidence.PoolID != hop.PoolID ||
+			evidence.FromDenom != hop.FromToken.Denom || evidence.ToDenom != hop.ToToken.Denom ||
+			evidence.FromDecimals != hop.FromToken.Decimals || evidence.ToDecimals != hop.ToToken.Decimals {
+			return ErrPoolStateEvidence
+		}
+		expectedDigest, digestErr := canonicalPoolStateDigest(evidence)
+		if digestErr != nil || expectedDigest != evidence.StateDigest {
+			return ErrPoolStateEvidence
+		}
+		canonicalHash, hashErr := a.evidence.BlockHash(evidence.Height)
+		if hashErr != nil || !strings.EqualFold(canonicalHash, evidence.BlockHash) {
+			return ErrPoolStateEvidence
+		}
+		if age := a.now().Sub(evidence.ObservedAt); age < 0 || age > a.profile.MaxObservationAge {
+			return ErrPoolStateStale
+		}
+		recomputedOutput, outputErr := ConstantProductExactIn(evidence.ReserveIn, evidence.ReserveOut, hop.AmountIn, evidence.SwapFee)
+		if outputErr != nil || !recomputedOutput.Equal(hop.AmountOut) || !hop.Fee.Equal(evidence.SwapFee) {
+			return ErrPoolStateEvidence
+		}
+		hopImpact, impactErr := exactPriceImpact(evidence.ReserveIn, evidence.ReserveOut, hop.AmountIn, hop.AmountOut)
+		if impactErr != nil {
+			return impactErr
+		}
+		totalImpact = totalImpact.Add(hopImpact)
+		totalFee = totalFee.Add(hop.Fee.MulInt(hop.AmountIn).TruncateInt())
+		if evidence.Height >= newestHeight {
+			newestHeight = evidence.Height
+			newestHash = evidence.BlockHash
+		}
+	}
+	expectedMinimum := sdkmath.LegacyOneDec().Sub(quote.Request.SlippageToleranceExact).MulInt(quote.OutputAmount).TruncateInt()
+	if !quote.OutputAmount.Equal(quote.Route.Hops[len(quote.Route.Hops)-1].AmountOut) || !quote.MinOutputAmount.Equal(expectedMinimum) ||
+		!quote.TotalFee.Equal(totalFee) || !quote.PriceImpactExact.Equal(totalImpact) || quote.ObservationHeight != newestHeight || !strings.EqualFold(quote.ObservationBlockHash, newestHash) {
+		return ErrPoolStateEvidence
+	}
+	expectedRate, err := exactExchangeRate(quote.InputAmount, quote.OutputAmount, quote.Request.FromToken.Decimals, quote.Request.ToToken.Decimals)
+	if err != nil {
+		return err
+	}
+	if !quote.Rate.Equal(expectedRate) {
+		return ErrPoolStateEvidence
+	}
+	oraclePrice, err := a.oracle.Price(quote.Request.FromToken.Denom, quote.Request.ToToken.Denom, quote.ObservationHeight)
+	if err != nil {
+		return err
+	}
+	if !quote.OraclePrice.Equal(oraclePrice) {
+		return ErrOracleDeviation
+	}
+	deviation, err := exactDeviation(quote.Rate, oraclePrice)
+	if err != nil || !quote.OracleDeviation.Equal(deviation) || deviation.GT(a.profile.MaxOracleDeviation) {
+		return ErrOracleDeviation
+	}
+	return nil
+}
+
+func validateBoundedRoute(route SwapRoute, maxHops uint32, profile DEXRouteProfile) error {
+	if len(route.Hops) == 0 || len(route.Hops) > int(maxHops) {
+		return ErrRouteHopsExceeded
+	}
+	visited := make(map[string]struct{}, len(route.Hops)+1)
+	for i, hop := range route.Hops {
+		if !profile.poolAllowed(hop.PoolID) {
+			return ErrPoolNotAllowed
+		}
+		if hop.FromToken.Denom == "" || hop.ToToken.Denom == "" || hop.FromToken.Denom == hop.ToToken.Denom {
+			return ErrRouteCycle
+		}
+		if _, seen := visited[hop.FromToken.Denom]; seen {
+			return ErrRouteCycle
+		}
+		visited[hop.FromToken.Denom] = struct{}{}
+		if i > 0 {
+			previous := route.Hops[i-1]
+			if previous.ToToken.Denom != hop.FromToken.Denom || !previous.AmountOut.Equal(hop.AmountIn) {
+				return ErrPoolStateEvidence
+			}
+		}
+	}
+	if _, seen := visited[route.Hops[len(route.Hops)-1].ToToken.Denom]; seen {
+		return ErrRouteCycle
+	}
+	return nil
 }
 
 // EstimateGas estimates gas for a swap
 func (a *RealOsmosisAdapter) EstimateGas(ctx context.Context, request SwapRequest) (uint64, error) {
-	// Osmosis swaps typically use 250k-400k gas depending on route complexity
-	// Multi-hop swaps use more gas
-
-	pool, err := a.findPoolForPair(ctx, request.FromToken.Symbol, request.ToToken.Symbol)
-	if err != nil {
-		// If no direct pool, estimate higher for multi-hop
-		return 500000, nil
-	}
-
-	// Direct swap
-	_ = pool
-	return 300000, nil
+	return 0, fmt.Errorf("real Osmosis gas simulation requires the finalized unsigned transaction payload")
 }
 
 // GetPoolReserves gets current pool reserves (for real-time data)
@@ -836,8 +1389,8 @@ func (a *RealOsmosisAdapter) GetPoolReserves(ctx context.Context, poolID string)
 		return sdkmath.Int{}, sdkmath.Int{}, ErrOsmosisInsufficientLiquidity
 	}
 
-	reserve0 := pool.Reserves[pool.Tokens[0].Symbol]
-	reserve1 := pool.Reserves[pool.Tokens[1].Symbol]
+	reserve0 := pool.Reserves[pool.Tokens[0].Denom]
+	reserve1 := pool.Reserves[pool.Tokens[1].Denom]
 
 	return reserve0, reserve1, nil
 }
@@ -859,7 +1412,7 @@ func (a *RealOsmosisAdapter) GetPoolTVL(ctx context.Context, poolID string, pric
 			return sdkmath.LegacyZeroDec(), err
 		}
 
-		reserve := pool.Reserves[token.Symbol]
+		reserve := pool.Reserves[token.Denom]
 		tokenTVL := price.Rate.MulInt(reserve).Quo(divisor)
 		tvl = tvl.Add(tokenTVL)
 	}
@@ -883,11 +1436,17 @@ func (a *RealOsmosisAdapter) GetTotalValueLocked(ctx context.Context) (sdkmath.L
 		return sdkmath.LegacyZeroDec(), err
 	}
 	defer resp.Body.Close()
+	if err := requireJSONResponse(resp); err != nil {
+		return sdkmath.LegacyDec{}, err
+	}
 
 	var liquidityResp struct {
 		Liquidity []OsmosisCoin `json:"liquidity"`
 	}
-	if err := json.NewDecoder(resp.Body).Decode(&liquidityResp); err != nil {
+	if resp.StatusCode != http.StatusOK {
+		return sdkmath.LegacyZeroDec(), fmt.Errorf("%w: status %d", ErrOsmosisQueryFailed, resp.StatusCode)
+	}
+	if err := decodeBoundedJSON(resp.Body, &liquidityResp); err != nil {
 		return sdkmath.LegacyZeroDec(), err
 	}
 
@@ -909,3 +1468,7 @@ func (a *RealOsmosisAdapter) GetTotalValueLocked(ctx context.Context) (sdkmath.L
 // ============================================================================
 
 var _ Adapter = (*RealOsmosisAdapter)(nil)
+
+func (a *RealOsmosisAdapter) productionDEXProfile() (string, bool) {
+	return a.profile.ID, a.mode == RouteValidationRuntime && a.profile.State == RouteCertifiedEnabled
+}

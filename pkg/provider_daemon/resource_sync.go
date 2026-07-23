@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math"
 	"sync"
 	"time"
 
@@ -13,7 +14,7 @@ import (
 // ResourceChainClient provides minimal chain operations for resource sync.
 type ResourceChainClient interface {
 	SubmitResourceHeartbeat(ctx context.Context, heartbeat *resourcesv1.MsgProviderHeartbeat) error
-	GetProviderAllocations(ctx context.Context, provider string) ([]resourcesv1.ResourceAllocation, error)
+	GetProviderReservations(ctx context.Context, provider string) ([]resourcesv1.Reservation, error)
 }
 
 // ResourceSyncConfig configures the resource availability sync.
@@ -77,9 +78,10 @@ type ResourceAvailabilitySync struct {
 	chainClient    ResourceChainClient
 	snapshotSource ResourceSnapshotProvider
 
-	mu      sync.Mutex
-	running bool
-	stopCh  chan struct{}
+	mu       sync.Mutex
+	running  bool
+	stopCh   chan struct{}
+	sequence uint64
 }
 
 // NewResourceAvailabilitySync constructs a new sync loop.
@@ -111,6 +113,7 @@ func (s *ResourceAvailabilitySync) Start(ctx context.Context) error {
 		s.mu.Unlock()
 		return nil
 	}
+	s.stopCh = make(chan struct{})
 	s.running = true
 	s.mu.Unlock()
 
@@ -148,22 +151,32 @@ func (s *ResourceAvailabilitySync) Stop() {
 }
 
 func (s *ResourceAvailabilitySync) syncOnce(ctx context.Context) error {
-	total, available, err := s.snapshotSource.Snapshot(ctx)
+	total, _, err := s.snapshotSource.Snapshot(ctx)
 	if err != nil {
 		return err
 	}
 
-	// Reconcile with active/pending allocations.
-	allocations, err := s.chainClient.GetProviderAllocations(ctx, s.cfg.ProviderAddress)
-	if err == nil {
-		used := resourcesv1.ResourceCapacity{}
-		for _, allocation := range allocations {
-			if allocation.State != resourcesv1.AllocationState_ALLOCATION_STATE_ACTIVE && allocation.State != resourcesv1.AllocationState_ALLOCATION_STATE_PENDING {
-				continue
-			}
-			used = sumCapacity(used, allocation.Assigned)
+	// Reconcile with the authoritative nonterminal reservation ledger.
+	reservations, err := s.chainClient.GetProviderReservations(ctx, s.cfg.ProviderAddress)
+	if err != nil {
+		return fmt.Errorf("query provider reservations: %w", err)
+	}
+	used := resourcesv1.ResourceCapacity{}
+	for _, reservation := range reservations {
+		if reservation.State != resourcesv1.ReservationState_RESERVATION_STATE_PENDING &&
+			reservation.State != resourcesv1.ReservationState_RESERVATION_STATE_ACTIVE &&
+			reservation.State != resourcesv1.ReservationState_RESERVATION_STATE_CONSUMED &&
+			reservation.State != resourcesv1.ReservationState_RESERVATION_STATE_QUARANTINED {
+			continue
 		}
-		available = subtractCapacity(*total, used)
+		used, err = sumCapacityChecked(used, reservation.Capacity)
+		if err != nil {
+			return fmt.Errorf("reconcile reservation %s: %w", reservation.ReservationId, err)
+		}
+	}
+	available, err := subtractCapacityChecked(*total, used)
+	if err != nil {
+		return err
 	}
 
 	heartbeat := &resourcesv1.MsgProviderHeartbeat{
@@ -177,33 +190,54 @@ func (s *ResourceAvailabilitySync) syncOnce(ctx context.Context) error {
 			Zone:       s.cfg.Zone,
 			Datacenter: s.cfg.Datacenter,
 		},
-		Sequence: unixNanoToUint64(time.Now().UnixNano()),
+		Sequence: s.nextSequence(),
 	}
 
 	return s.chainClient.SubmitResourceHeartbeat(ctx, heartbeat)
 }
 
-func sumCapacity(a resourcesv1.ResourceCapacity, b resourcesv1.ResourceCapacity) resourcesv1.ResourceCapacity {
-	return resourcesv1.ResourceCapacity{
-		CpuCores:    a.CpuCores + b.CpuCores,
-		MemoryGb:    a.MemoryGb + b.MemoryGb,
-		StorageGb:   a.StorageGb + b.StorageGb,
-		NetworkMbps: a.NetworkMbps + b.NetworkMbps,
-		Gpus:        a.Gpus + b.Gpus,
-		GpuType:     a.GpuType,
+func sumCapacityChecked(a resourcesv1.ResourceCapacity, b resourcesv1.ResourceCapacity) (resourcesv1.ResourceCapacity, error) {
+	left := []*int64{&a.CpuCores, &a.MemoryGb, &a.StorageGb, &a.NetworkMbps, &a.Gpus}
+	right := []int64{b.CpuCores, b.MemoryGb, b.StorageGb, b.NetworkMbps, b.Gpus}
+	for index, value := range right {
+		if value < 0 || *left[index] < 0 || *left[index] > math.MaxInt64-value {
+			return resourcesv1.ResourceCapacity{}, errors.New("reservation capacity is negative or overflows")
+		}
+		*left[index] += value
 	}
+	if a.GpuType == "" {
+		a.GpuType = b.GpuType
+	}
+	if a.GpuType != "" && b.GpuType != "" && a.GpuType != b.GpuType {
+		return resourcesv1.ResourceCapacity{}, errors.New("reservation GPU types conflict")
+	}
+	return a, nil
 }
 
-func subtractCapacity(total resourcesv1.ResourceCapacity, used resourcesv1.ResourceCapacity) *resourcesv1.ResourceCapacity {
+func subtractCapacityChecked(total resourcesv1.ResourceCapacity, used resourcesv1.ResourceCapacity) (*resourcesv1.ResourceCapacity, error) {
+	if total.CpuCores < used.CpuCores || total.MemoryGb < used.MemoryGb || total.StorageGb < used.StorageGb || total.NetworkMbps < used.NetworkMbps || total.Gpus < used.Gpus || used.Gpus > 0 && total.GpuType != used.GpuType {
+		return nil, errors.New("authoritative reservations exceed physical capacity")
+	}
 	result := resourcesv1.ResourceCapacity{
-		CpuCores:    nonNegativeInt64(total.CpuCores - used.CpuCores),
-		MemoryGb:    nonNegativeInt64(total.MemoryGb - used.MemoryGb),
-		StorageGb:   nonNegativeInt64(total.StorageGb - used.StorageGb),
-		NetworkMbps: nonNegativeInt64(total.NetworkMbps - used.NetworkMbps),
-		Gpus:        nonNegativeInt64(total.Gpus - used.Gpus),
+		CpuCores:    total.CpuCores - used.CpuCores,
+		MemoryGb:    total.MemoryGb - used.MemoryGb,
+		StorageGb:   total.StorageGb - used.StorageGb,
+		NetworkMbps: total.NetworkMbps - used.NetworkMbps,
+		Gpus:        total.Gpus - used.Gpus,
 		GpuType:     total.GpuType,
 	}
-	return &result
+	return &result, nil
+}
+
+func (s *ResourceAvailabilitySync) nextSequence() uint64 {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	now := unixNanoToUint64(time.Now().UnixNano())
+	if now <= s.sequence && s.sequence < math.MaxUint64 {
+		now = s.sequence + 1
+	}
+	s.sequence = now
+	return now
 }
 
 func nonNegativeInt64(value int64) int64 {

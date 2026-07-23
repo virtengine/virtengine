@@ -421,6 +421,11 @@ func (s *KeeperTestSuite) TestAuthenticatedUsageStateIsImmutableAfterVerificatio
 	err = s.keeper.SetUsageRecord(s.ctx, mutated)
 	s.Require().ErrorIs(err, types.ErrInvalidUsageRecord)
 
+	metadataMutated := *record
+	metadataMutated.Metadata = map[string]string{"tampered": "true"}
+	err = s.keeper.SetUsageRecord(s.ctx, metadataMutated)
+	s.Require().ErrorIs(err, types.ErrInvalidUsageRecord)
+
 	stored, found := s.keeper.GetUsageRecord(s.ctx, record.UsageID)
 	s.Require().True(found)
 	s.Require().Equal(record.UsageUnits, stored.UsageUnits)

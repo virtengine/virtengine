@@ -144,6 +144,10 @@ var (
 
 	// ErrProviderComplianceIncomplete indicates provider compliance is incomplete
 	ErrProviderComplianceIncomplete = errors.Register("marketplace", 2244, "provider compliance checklist incomplete")
+
+	// ErrLifecycleDeprecated is returned after Task 84C activation for all
+	// non-owner order, bid, allocation, and allocation-lifecycle writes.
+	ErrLifecycleDeprecated = errors.Register("marketplace", 2245, "marketplace lifecycle writes deprecated; use x/market and x/resources")
 )
 
 // WrapIdentityGatingError wraps an identity gating error with context

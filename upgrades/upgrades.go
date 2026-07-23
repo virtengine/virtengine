@@ -8,4 +8,5 @@ import (
 	_ "github.com/virtengine/virtengine/upgrades/software/v1.3.0"
 	_ "github.com/virtengine/virtengine/upgrades/software/v1.4.0"
 	_ "github.com/virtengine/virtengine/upgrades/software/v1.5.0"
+	_ "github.com/virtengine/virtengine/upgrades/software/v1.6.0"
 )

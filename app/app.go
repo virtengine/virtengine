@@ -214,6 +214,14 @@ func NewApp(
 	if app.Keepers.Cosmos.Crisis != nil {
 		//nolint:staticcheck // required for crisis invariant registration in this build
 		app.MM.RegisterInvariants(app.Keepers.Cosmos.Crisis)
+		app.Keepers.Cosmos.Crisis.RegisterRoute("reservation", "cross-module-lineage", func(ctx sdk.Context) (string, bool) {
+			if err := app.ValidateReservationLineage(ctx); err != nil {
+				//nolint:staticcheck // crisis invariant formatting remains required while x/crisis is wired.
+				return sdk.FormatInvariant("reservation", "cross-module-lineage", err.Error()), true
+			}
+			//nolint:staticcheck // crisis invariant formatting remains required while x/crisis is wired.
+			return sdk.FormatInvariant("reservation", "cross-module-lineage", "lineage valid"), false
+		})
 	}
 
 	// During begin block slashing happens after distr.BeginBlocker so that
@@ -232,6 +240,7 @@ func NewApp(
 	app.MM.SetOrderBeginBlockers(orderBeginBlockers(app.MM.ModuleNames())...)
 	app.MM.SetOrderEndBlockers(OrderEndBlockers(app.MM.ModuleNames())...)
 	app.MM.SetOrderInitGenesis(OrderInitGenesis(app.MM.ModuleNames())...)
+	app.MM.SetOrderMigrations(OrderMigrations(app.MM.ModuleNames())...)
 
 	app.Configurator = module.NewConfigurator(app.AppCodec(), app.MsgServiceRouter(), app.GRPCQueryRouter())
 	if !cast.ToBool(appOpts.Get("skip_module_service_registration")) {
@@ -597,7 +606,7 @@ func (app *VirtEngineApp) ModuleAccountAddrs() map[string]bool {
 // BlockedAddrs returns all the app's module account addresses that are not
 // allowed to receive external tokens.
 func (app *VirtEngineApp) BlockedAddrs() map[string]bool {
-	perms := ModuleAccountAddrs()
+	perms := ModuleAccountPerms()
 	blockedAddrs := make(map[string]bool)
 	for acc := range perms {
 		blockedAddrs[authtypes.NewModuleAddress(acc).String()] = !allowedReceivingModAcc[acc]

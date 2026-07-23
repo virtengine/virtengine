@@ -3824,6 +3824,13 @@
           "title": "Evidence contains the encrypted evidence attachments",
           "type": "array"
         },
+        "financial_case_id": {
+          "description": "FinancialCaseID links financially relevant reports to settlement authority.",
+          "type": "string"
+        },
+        "financial_case_status": {
+          "type": "string"
+        },
         "id": {
           "title": "ID is the unique identifier for this report",
           "type": "string"
@@ -4351,6 +4358,12 @@
         "evidence": {
           "type": "string"
         },
+        "financial_case_id": {
+          "type": "string"
+        },
+        "financial_case_status": {
+          "type": "string"
+        },
         "job_id": {
           "type": "string"
         },
@@ -4384,6 +4397,9 @@
             "$ref": "#/definitions/cosmos.base.v1beta1.Coin"
           },
           "type": "array"
+        },
+        "allocation_id": {
+          "type": "string"
         },
         "block_height": {
           "format": "int64",
@@ -4425,6 +4441,15 @@
         "job_id": {
           "type": "string"
         },
+        "market_bid_id": {
+          "type": "string"
+        },
+        "market_lease_id": {
+          "type": "string"
+        },
+        "market_order_id": {
+          "type": "string"
+        },
         "max_runtime_seconds": {
           "format": "int64",
           "type": "string"
@@ -4440,6 +4465,9 @@
         },
         "queued_at": {
           "format": "date-time",
+          "type": "string"
+        },
+        "reservation_id": {
           "type": "string"
         },
         "resources": {
@@ -4888,6 +4916,12 @@
       "properties": {
         "dispute_id": {
           "type": "string"
+        },
+        "financial_case_id": {
+          "type": "string"
+        },
+        "financial_case_status": {
+          "type": "string"
         }
       },
       "title": "MsgFlagDisputeResponse is the response for MsgFlagDispute",
@@ -4916,6 +4950,9 @@
           "type": "string"
         },
         "job_id": {
+          "type": "string"
+        },
+        "reservation_id": {
           "type": "string"
         }
       },
@@ -6353,6 +6390,10 @@
         "reason": {
           "$ref": "#/definitions/virtengine.market.v1.LeaseClosedReason"
         },
+        "reservation_id": {
+          "description": "ReservationId links the lease to authoritative x/resources capacity.",
+          "type": "string"
+        },
         "state": {
           "$ref": "#/definitions/virtengine.market.v1.Lease.State",
           "description": "State represents the state of the Lease."
@@ -6499,6 +6540,9 @@
           "$ref": "#/definitions/cosmos.base.v1beta1.DecCoin",
           "description": "Price holds the pricing stated on the Bid."
         },
+        "reservation_id": {
+          "type": "string"
+        },
         "resources_offer": {
           "description": "ResourceOffer is a list of offers.",
           "items": {
@@ -6577,6 +6621,11 @@
     },
     "virtengine.market.v1beta5.MsgCreateLeaseResponse": {
       "description": "MsgCreateLeaseResponse is the response from creating a lease.",
+      "properties": {
+        "reservation_id": {
+          "type": "string"
+        }
+      },
       "type": "object"
     },
     "virtengine.market.v1beta5.MsgUpdateParamsResponse": {
@@ -6597,6 +6646,9 @@
         "id": {
           "$ref": "#/definitions/virtengine.market.v1.OrderID",
           "description": "Id is the unique identifier of the order."
+        },
+        "reservation_id": {
+          "type": "string"
         },
         "spec": {
           "$ref": "#/definitions/virtengine.deployment.v1beta4.GroupSpec"
@@ -9937,6 +9989,253 @@
       },
       "type": "object"
     },
+    "virtengine.resources.v1.QueryReservationLineageResponse": {
+      "properties": {
+        "events": {
+          "items": {
+            "$ref": "#/definitions/virtengine.resources.v1.ReservationEvent"
+          },
+          "type": "array"
+        },
+        "pagination": {
+          "$ref": "#/definitions/cosmos.base.query.v1beta1.PageResponse"
+        },
+        "reservation": {
+          "$ref": "#/definitions/virtengine.resources.v1.Reservation"
+        }
+      },
+      "type": "object"
+    },
+    "virtengine.resources.v1.QueryReservationResponse": {
+      "properties": {
+        "reservation": {
+          "$ref": "#/definitions/virtengine.resources.v1.Reservation"
+        }
+      },
+      "type": "object"
+    },
+    "virtengine.resources.v1.QueryReservationsResponse": {
+      "properties": {
+        "pagination": {
+          "$ref": "#/definitions/cosmos.base.query.v1beta1.PageResponse"
+        },
+        "reservations": {
+          "items": {
+            "$ref": "#/definitions/virtengine.resources.v1.Reservation"
+          },
+          "type": "array"
+        }
+      },
+      "type": "object"
+    },
+    "virtengine.resources.v1.Reservation": {
+      "description": "Reservation is the authoritative capacity aggregate.",
+      "properties": {
+        "activated_at": {
+          "format": "date-time",
+          "type": "string"
+        },
+        "activated_height": {
+          "format": "int64",
+          "type": "string"
+        },
+        "capacity": {
+          "$ref": "#/definitions/virtengine.resources.v1.ResourceCapacity"
+        },
+        "collateral_id": {
+          "type": "string"
+        },
+        "consumed": {
+          "$ref": "#/definitions/virtengine.resources.v1.ResourceCapacity"
+        },
+        "consumed_at": {
+          "format": "date-time",
+          "type": "string"
+        },
+        "consumed_height": {
+          "format": "int64",
+          "type": "string"
+        },
+        "consumer_id": {
+          "type": "string"
+        },
+        "consumer_type": {
+          "type": "string"
+        },
+        "created_at": {
+          "format": "date-time",
+          "type": "string"
+        },
+        "created_height": {
+          "format": "int64",
+          "type": "string"
+        },
+        "disputed_at": {
+          "format": "date-time",
+          "type": "string"
+        },
+        "disputed_height": {
+          "format": "int64",
+          "type": "string"
+        },
+        "escrow_id": {
+          "type": "string"
+        },
+        "expired_at": {
+          "format": "date-time",
+          "type": "string"
+        },
+        "expires_at": {
+          "format": "date-time",
+          "type": "string"
+        },
+        "expires_height": {
+          "format": "int64",
+          "type": "string"
+        },
+        "financial_case_id": {
+          "type": "string"
+        },
+        "hpc_job_id": {
+          "type": "string"
+        },
+        "idempotency_key": {
+          "type": "string"
+        },
+        "inventory_id": {
+          "type": "string"
+        },
+        "legacy_reference": {
+          "type": "string"
+        },
+        "legacy_source": {
+          "type": "string"
+        },
+        "market_bid_id": {
+          "type": "string"
+        },
+        "market_lease_id": {
+          "type": "string"
+        },
+        "market_order_id": {
+          "type": "string"
+        },
+        "payload_hash": {
+          "format": "byte",
+          "type": "string"
+        },
+        "pre_dispute_state": {
+          "format": "int32",
+          "type": "integer"
+        },
+        "provider_address": {
+          "type": "string"
+        },
+        "quarantined_at": {
+          "format": "date-time",
+          "type": "string"
+        },
+        "quarantined_height": {
+          "format": "int64",
+          "type": "string"
+        },
+        "reason": {
+          "type": "string"
+        },
+        "released_at": {
+          "format": "date-time",
+          "type": "string"
+        },
+        "released_height": {
+          "format": "int64",
+          "type": "string"
+        },
+        "request_id": {
+          "type": "string"
+        },
+        "requester_address": {
+          "type": "string"
+        },
+        "reservation_id": {
+          "type": "string"
+        },
+        "resource_class": {
+          "$ref": "#/definitions/virtengine.resources.v1.ResourceClass"
+        },
+        "slashed_at": {
+          "format": "date-time",
+          "type": "string"
+        },
+        "slashed_height": {
+          "format": "int64",
+          "type": "string"
+        },
+        "state": {
+          "$ref": "#/definitions/virtengine.resources.v1.ReservationState"
+        },
+        "updated_at": {
+          "format": "date-time",
+          "type": "string"
+        },
+        "version": {
+          "format": "int64",
+          "type": "integer"
+        }
+      },
+      "type": "object"
+    },
+    "virtengine.resources.v1.ReservationEvent": {
+      "description": "ReservationEvent records a stable transition without sensitive manifests.",
+      "properties": {
+        "block_height": {
+          "format": "int64",
+          "type": "string"
+        },
+        "consumer_type": {
+          "type": "string"
+        },
+        "created_at": {
+          "format": "date-time",
+          "type": "string"
+        },
+        "from_state": {
+          "$ref": "#/definitions/virtengine.resources.v1.ReservationState"
+        },
+        "provider_address": {
+          "type": "string"
+        },
+        "reason": {
+          "type": "string"
+        },
+        "reservation_id": {
+          "type": "string"
+        },
+        "sequence": {
+          "format": "uint64",
+          "type": "string"
+        },
+        "to_state": {
+          "$ref": "#/definitions/virtengine.resources.v1.ReservationState"
+        }
+      },
+      "type": "object"
+    },
+    "virtengine.resources.v1.ReservationState": {
+      "default": "RESERVATION_STATE_UNSPECIFIED",
+      "description": "ReservationState defines the authoritative provider-capacity lifecycle.",
+      "enum": [
+        "RESERVATION_STATE_UNSPECIFIED",
+        "RESERVATION_STATE_PENDING",
+        "RESERVATION_STATE_ACTIVE",
+        "RESERVATION_STATE_CONSUMED",
+        "RESERVATION_STATE_RELEASED",
+        "RESERVATION_STATE_EXPIRED",
+        "RESERVATION_STATE_QUARANTINED",
+        "RESERVATION_STATE_SLASHED",
+        "RESERVATION_STATE_DISPUTED"
+      ],
+      "type": "string"
+    },
     "virtengine.resources.v1.ResourceAllocation": {
       "description": "ResourceAllocation stores the allocation decision.",
       "properties": {
@@ -9962,6 +10261,12 @@
           "format": "date-time",
           "type": "string"
         },
+        "legacy_reference": {
+          "type": "string"
+        },
+        "legacy_source": {
+          "type": "string"
+        },
         "locality": {
           "$ref": "#/definitions/virtengine.resources.v1.Locality"
         },
@@ -9976,6 +10281,9 @@
         },
         "required": {
           "$ref": "#/definitions/virtengine.resources.v1.ResourceCapacity"
+        },
+        "reservation_id": {
+          "type": "string"
         },
         "resource_class": {
           "$ref": "#/definitions/virtengine.resources.v1.ResourceClass"
@@ -10560,6 +10868,82 @@
       },
       "type": "object"
     },
+    "virtengine.settlement.v1.FiatConversionObservation": {
+      "description": "FiatConversionObservation is one authenticated, privacy-safe evidence node.",
+      "properties": {
+        "evidence_hash": {
+          "format": "byte",
+          "type": "string"
+        },
+        "failure_code": {
+          "type": "string"
+        },
+        "idempotency_key": {
+          "format": "byte",
+          "type": "string"
+        },
+        "lineage_digest": {
+          "format": "byte",
+          "type": "string"
+        },
+        "observation_digest": {
+          "format": "byte",
+          "type": "string"
+        },
+        "observed_at": {
+          "format": "int64",
+          "type": "string"
+        },
+        "recorded_at": {
+          "format": "int64",
+          "type": "string"
+        },
+        "recorded_height": {
+          "format": "int64",
+          "type": "string"
+        },
+        "sequence": {
+          "format": "uint64",
+          "type": "string"
+        },
+        "stage": {
+          "$ref": "#/definitions/virtengine.settlement.v1.FiatConversionObservationStage"
+        },
+        "status": {
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "virtengine.settlement.v1.FiatConversionObservationStage": {
+      "default": "FIAT_CONVERSION_OBSERVATION_STAGE_UNSPECIFIED",
+      "description": "FiatConversionObservationStage is the legal external execution vocabulary.",
+      "enum": [
+        "FIAT_CONVERSION_OBSERVATION_STAGE_UNSPECIFIED",
+        "FIAT_CONVERSION_OBSERVATION_STAGE_QUOTE_ACCEPTED",
+        "FIAT_CONVERSION_OBSERVATION_STAGE_SWAP_SUBMITTED",
+        "FIAT_CONVERSION_OBSERVATION_STAGE_SWAP_FINALIZED",
+        "FIAT_CONVERSION_OBSERVATION_STAGE_PAYOUT_QUOTED",
+        "FIAT_CONVERSION_OBSERVATION_STAGE_PAYOUT_SUBMITTED",
+        "FIAT_CONVERSION_OBSERVATION_STAGE_PAYOUT_COMPLETED",
+        "FIAT_CONVERSION_OBSERVATION_STAGE_FAILED",
+        "FIAT_CONVERSION_OBSERVATION_STAGE_CANCELLED"
+      ],
+      "type": "string"
+    },
+    "virtengine.settlement.v1.FiatConversionProfileState": {
+      "default": "FIAT_CONVERSION_PROFILE_STATE_UNSPECIFIED",
+      "description": "FiatConversionProfileState distinguishes engineering readiness from real\nexternal production certification. Only CERTIFIED_ENABLED is executable.",
+      "enum": [
+        "FIAT_CONVERSION_PROFILE_STATE_UNSPECIFIED",
+        "FIAT_CONVERSION_PROFILE_STATE_UNSUPPORTED",
+        "FIAT_CONVERSION_PROFILE_STATE_ENGINEERING_INCOMPLETE",
+        "FIAT_CONVERSION_PROFILE_STATE_ENGINEERING_COMPLETE_EXTERNAL_BLOCKED",
+        "FIAT_CONVERSION_PROFILE_STATE_CERTIFIED_ENABLED",
+        "FIAT_CONVERSION_PROFILE_STATE_PAUSED"
+      ],
+      "type": "string"
+    },
     "virtengine.settlement.v1.FiatConversionRecord": {
       "description": "FiatConversionRecord stores conversion details.",
       "properties": {
@@ -10571,6 +10955,10 @@
         },
         "compliance_checked_at": {
           "format": "int64",
+          "type": "string"
+        },
+        "compliance_decision_hash": {
+          "format": "byte",
           "type": "string"
         },
         "compliance_risk_score": {
@@ -10589,8 +10977,22 @@
         "crypto_token": {
           "$ref": "#/definitions/virtengine.settlement.v1.TokenSpec"
         },
+        "custody_sink_amount": {
+          "$ref": "#/definitions/cosmos.base.v1beta1.Coin"
+        },
+        "custody_sink_effect_hash": {
+          "format": "byte",
+          "type": "string"
+        },
         "customer": {
           "type": "string"
+        },
+        "daily_bucket": {
+          "type": "string"
+        },
+        "daily_quota_reserved": {
+          "description": "daily_quota_reserved is true exactly while this record contributes to the\nprovider/day reservation total.",
+          "type": "boolean"
         },
         "destination_hash": {
           "type": "string"
@@ -10604,7 +11006,18 @@
         "dex_adapter": {
           "type": "string"
         },
+        "dex_profile_digest": {
+          "format": "byte",
+          "type": "string"
+        },
+        "dex_profile_id": {
+          "type": "string"
+        },
         "escrow_id": {
+          "type": "string"
+        },
+        "evidence_hash": {
+          "format": "byte",
           "type": "string"
         },
         "failure_reason": {
@@ -10629,8 +11042,28 @@
           "format": "int64",
           "type": "string"
         },
+        "last_observation_digest": {
+          "format": "byte",
+          "type": "string"
+        },
         "lease_id": {
           "type": "string"
+        },
+        "legacy_quarantined": {
+          "type": "boolean"
+        },
+        "minimum_stable_output": {
+          "$ref": "#/definitions/cosmos.base.v1beta1.Coin"
+        },
+        "observation_sequence": {
+          "format": "uint64",
+          "type": "string"
+        },
+        "observations": {
+          "items": {
+            "$ref": "#/definitions/virtengine.settlement.v1.FiatConversionObservation"
+          },
+          "type": "array"
         },
         "off_ramp_attempts": {
           "format": "int64",
@@ -10661,10 +11094,44 @@
           "format": "int64",
           "type": "integer"
         },
+        "payout_finality_hash": {
+          "format": "byte",
+          "type": "string"
+        },
         "payout_id": {
           "type": "string"
         },
+        "payout_profile_digest": {
+          "format": "byte",
+          "type": "string"
+        },
+        "payout_profile_id": {
+          "type": "string"
+        },
+        "privacy_safe_reference_hash": {
+          "format": "byte",
+          "type": "string"
+        },
+        "protocol_version": {
+          "format": "int64",
+          "type": "integer"
+        },
         "provider": {
+          "type": "string"
+        },
+        "quarantine_reason": {
+          "type": "string"
+        },
+        "quote_digest": {
+          "format": "byte",
+          "type": "string"
+        },
+        "quote_expiry": {
+          "format": "int64",
+          "type": "string"
+        },
+        "request_digest": {
+          "format": "byte",
           "type": "string"
         },
         "requested_at": {
@@ -10681,6 +11148,10 @@
           "format": "double",
           "type": "number"
         },
+        "slippage_tolerance_exact": {
+          "description": "slippage_tolerance_exact is the canonical decimal used for decisions.\nThe legacy double at field 24 remains read-only compatibility data.",
+          "type": "string"
+        },
         "stable_amount": {
           "$ref": "#/definitions/cosmos.base.v1beta1.Coin"
         },
@@ -10694,6 +11165,22 @@
           "format": "int64",
           "type": "integer"
         },
+        "swap_block_hash": {
+          "format": "byte",
+          "type": "string"
+        },
+        "swap_finality_confirmations": {
+          "format": "int64",
+          "type": "integer"
+        },
+        "swap_finality_hash": {
+          "format": "byte",
+          "type": "string"
+        },
+        "swap_height": {
+          "format": "int64",
+          "type": "string"
+        },
         "swap_quote_id": {
           "type": "string"
         },
@@ -10701,6 +11188,9 @@
           "type": "string"
         },
         "swap_tx_hash": {
+          "type": "string"
+        },
+        "terminal_policy": {
           "type": "string"
         },
         "transition_history": {
@@ -10712,6 +11202,9 @@
         "updated_at": {
           "format": "int64",
           "type": "string"
+        },
+        "value_movement_applied": {
+          "type": "boolean"
         }
       },
       "type": "object"
@@ -10785,6 +11278,10 @@
           "format": "double",
           "type": "number"
         },
+        "slippage_tolerance_exact": {
+          "description": "slippage_tolerance_exact is the canonical decimal used for decisions.\nThe legacy double at field 10 remains read-only compatibility data.",
+          "type": "string"
+        },
         "stable_token": {
           "$ref": "#/definitions/virtengine.settlement.v1.TokenSpec"
         },
@@ -10794,6 +11291,464 @@
         }
       },
       "type": "object"
+    },
+    "virtengine.settlement.v1.FinancialAppeal": {
+      "description": "FinancialAppeal is a bounded privacy-safe appeal filing.",
+      "properties": {
+        "appeal_id": {
+          "type": "string"
+        },
+        "appellant": {
+          "type": "string"
+        },
+        "created_at": {
+          "format": "int64",
+          "type": "string"
+        },
+        "created_height": {
+          "format": "int64",
+          "type": "string"
+        },
+        "encrypted_reference": {
+          "type": "string"
+        },
+        "evidence_hash": {
+          "format": "byte",
+          "type": "string"
+        },
+        "idempotency_key": {
+          "format": "byte",
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "virtengine.settlement.v1.FinancialCase": {
+      "description": "FinancialCase is the sole authoritative financial dispute aggregate.",
+      "properties": {
+        "active_hold_count": {
+          "format": "int64",
+          "type": "integer"
+        },
+        "appeal_deadline_height": {
+          "format": "int64",
+          "type": "string"
+        },
+        "appeal_deadline_time": {
+          "format": "int64",
+          "type": "string"
+        },
+        "appeals": {
+          "items": {
+            "$ref": "#/definitions/virtengine.settlement.v1.FinancialAppeal"
+          },
+          "type": "array"
+        },
+        "case_id": {
+          "type": "string"
+        },
+        "claim_root": {
+          "format": "byte",
+          "type": "string"
+        },
+        "claimant": {
+          "type": "string"
+        },
+        "claims": {
+          "items": {
+            "$ref": "#/definitions/virtengine.settlement.v1.FinancialClaim"
+          },
+          "type": "array"
+        },
+        "created_at": {
+          "format": "int64",
+          "type": "string"
+        },
+        "created_height": {
+          "format": "int64",
+          "type": "string"
+        },
+        "customer": {
+          "type": "string"
+        },
+        "effects": {
+          "items": {
+            "$ref": "#/definitions/virtengine.settlement.v1.FinancialCaseEffect"
+          },
+          "type": "array"
+        },
+        "escalation_deadline_height": {
+          "format": "int64",
+          "type": "string"
+        },
+        "escalation_deadline_time": {
+          "format": "int64",
+          "type": "string"
+        },
+        "evidence_deadline_height": {
+          "format": "int64",
+          "type": "string"
+        },
+        "evidence_deadline_time": {
+          "format": "int64",
+          "type": "string"
+        },
+        "exposure": {
+          "$ref": "#/definitions/virtengine.settlement.v1.FinancialExposure"
+        },
+        "filing_deadline_height": {
+          "format": "int64",
+          "type": "string"
+        },
+        "filing_deadline_time": {
+          "format": "int64",
+          "type": "string"
+        },
+        "legacy_source_count": {
+          "format": "int64",
+          "type": "integer"
+        },
+        "max_appeals": {
+          "format": "int64",
+          "type": "integer"
+        },
+        "migrated": {
+          "type": "boolean"
+        },
+        "open_idempotency_key": {
+          "format": "byte",
+          "type": "string"
+        },
+        "provider": {
+          "type": "string"
+        },
+        "quarantine_reason": {
+          "type": "string"
+        },
+        "quarantined": {
+          "type": "boolean"
+        },
+        "resolver_authority": {
+          "type": "string"
+        },
+        "respondent": {
+          "type": "string"
+        },
+        "review_deadline_height": {
+          "format": "int64",
+          "type": "string"
+        },
+        "review_deadline_time": {
+          "format": "int64",
+          "type": "string"
+        },
+        "status": {
+          "$ref": "#/definitions/virtengine.settlement.v1.FinancialCaseStatus"
+        },
+        "subject": {
+          "$ref": "#/definitions/virtengine.settlement.v1.FinancialSubject"
+        },
+        "terminal_allocation": {
+          "$ref": "#/definitions/virtengine.settlement.v1.TerminalAllocation"
+        },
+        "transitions": {
+          "items": {
+            "$ref": "#/definitions/virtengine.settlement.v1.FinancialCaseTransition"
+          },
+          "type": "array"
+        },
+        "updated_at": {
+          "format": "int64",
+          "type": "string"
+        },
+        "updated_height": {
+          "format": "int64",
+          "type": "string"
+        },
+        "version": {
+          "format": "int64",
+          "type": "integer"
+        }
+      },
+      "type": "object"
+    },
+    "virtengine.settlement.v1.FinancialCaseEffect": {
+      "description": "FinancialCaseEffect is an exactly-once persisted terminal effect marker.",
+      "properties": {
+        "applied_at": {
+          "format": "int64",
+          "type": "string"
+        },
+        "applied_height": {
+          "format": "int64",
+          "type": "string"
+        },
+        "attempts": {
+          "format": "int64",
+          "type": "integer"
+        },
+        "effect_id": {
+          "type": "string"
+        },
+        "error_code": {
+          "type": "string"
+        },
+        "reference_id": {
+          "type": "string"
+        },
+        "status": {
+          "$ref": "#/definitions/virtengine.settlement.v1.FinancialEffectStatus"
+        },
+        "type": {
+          "$ref": "#/definitions/virtengine.settlement.v1.FinancialEffectType"
+        }
+      },
+      "type": "object"
+    },
+    "virtengine.settlement.v1.FinancialCaseStatus": {
+      "default": "FINANCIAL_CASE_STATUS_UNSPECIFIED",
+      "description": "FinancialCaseStatus is the canonical dispute lifecycle state.",
+      "enum": [
+        "FINANCIAL_CASE_STATUS_UNSPECIFIED",
+        "FINANCIAL_CASE_STATUS_OPEN",
+        "FINANCIAL_CASE_STATUS_EVIDENCE",
+        "FINANCIAL_CASE_STATUS_REVIEW",
+        "FINANCIAL_CASE_STATUS_ESCALATED",
+        "FINANCIAL_CASE_STATUS_RESOLVED_PENDING_APPEAL",
+        "FINANCIAL_CASE_STATUS_FINAL",
+        "FINANCIAL_CASE_STATUS_REJECTED",
+        "FINANCIAL_CASE_STATUS_CANCELLED",
+        "FINANCIAL_CASE_STATUS_EXPIRED",
+        "FINANCIAL_CASE_STATUS_QUARANTINED"
+      ],
+      "type": "string"
+    },
+    "virtengine.settlement.v1.FinancialCaseTransition": {
+      "description": "FinancialCaseTransition is one append-only audit transition.",
+      "properties": {
+        "action": {
+          "type": "string"
+        },
+        "actor": {
+          "type": "string"
+        },
+        "block_height": {
+          "format": "int64",
+          "type": "string"
+        },
+        "block_time": {
+          "format": "int64",
+          "type": "string"
+        },
+        "from": {
+          "$ref": "#/definitions/virtengine.settlement.v1.FinancialCaseStatus"
+        },
+        "reason_hash": {
+          "format": "byte",
+          "type": "string"
+        },
+        "sequence": {
+          "format": "uint64",
+          "type": "string"
+        },
+        "to": {
+          "$ref": "#/definitions/virtengine.settlement.v1.FinancialCaseStatus"
+        }
+      },
+      "type": "object"
+    },
+    "virtengine.settlement.v1.FinancialClaim": {
+      "description": "FinancialClaim is one typed claim merged into the canonical case.",
+      "properties": {
+        "claim_id": {
+          "type": "string"
+        },
+        "claim_type": {
+          "$ref": "#/definitions/virtengine.settlement.v1.FinancialClaimType"
+        },
+        "claimant": {
+          "type": "string"
+        },
+        "created_at": {
+          "format": "int64",
+          "type": "string"
+        },
+        "created_height": {
+          "format": "int64",
+          "type": "string"
+        },
+        "encrypted_reference": {
+          "type": "string"
+        },
+        "evidence_hash": {
+          "format": "byte",
+          "type": "string"
+        },
+        "idempotency_key": {
+          "format": "byte",
+          "type": "string"
+        },
+        "payload_hash": {
+          "format": "byte",
+          "type": "string"
+        },
+        "recommendation": {
+          "type": "string"
+        },
+        "source_module": {
+          "type": "string"
+        },
+        "source_reference": {
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "virtengine.settlement.v1.FinancialClaimType": {
+      "default": "FINANCIAL_CLAIM_TYPE_UNSPECIFIED",
+      "description": "FinancialClaimType identifies a privacy-safe typed allegation or finding.",
+      "enum": [
+        "FINANCIAL_CLAIM_TYPE_UNSPECIFIED",
+        "FINANCIAL_CLAIM_TYPE_BILLING",
+        "FINANCIAL_CLAIM_TYPE_USAGE",
+        "FINANCIAL_CLAIM_TYPE_SERVICE",
+        "FINANCIAL_CLAIM_TYPE_FRAUD",
+        "FINANCIAL_CLAIM_TYPE_HPC",
+        "FINANCIAL_CLAIM_TYPE_REVIEW",
+        "FINANCIAL_CLAIM_TYPE_MODERATION",
+        "FINANCIAL_CLAIM_TYPE_MIGRATION"
+      ],
+      "type": "string"
+    },
+    "virtengine.settlement.v1.FinancialEffectStatus": {
+      "default": "FINANCIAL_EFFECT_STATUS_UNSPECIFIED",
+      "description": "FinancialEffectStatus identifies durable effect progress.",
+      "enum": [
+        "FINANCIAL_EFFECT_STATUS_UNSPECIFIED",
+        "FINANCIAL_EFFECT_STATUS_PENDING",
+        "FINANCIAL_EFFECT_STATUS_APPLIED",
+        "FINANCIAL_EFFECT_STATUS_FAILED"
+      ],
+      "type": "string"
+    },
+    "virtengine.settlement.v1.FinancialEffectType": {
+      "default": "FINANCIAL_EFFECT_TYPE_UNSPECIFIED",
+      "description": "FinancialEffectType identifies an exactly-once terminal side effect.",
+      "enum": [
+        "FINANCIAL_EFFECT_TYPE_UNSPECIFIED",
+        "FINANCIAL_EFFECT_TYPE_PAYOUT",
+        "FINANCIAL_EFFECT_TYPE_ESCROW",
+        "FINANCIAL_EFFECT_TYPE_REWARD",
+        "FINANCIAL_EFFECT_TYPE_RESERVATION",
+        "FINANCIAL_EFFECT_TYPE_REPUTATION",
+        "FINANCIAL_EFFECT_TYPE_PROJECTION"
+      ],
+      "type": "string"
+    },
+    "virtengine.settlement.v1.FinancialExposure": {
+      "description": "FinancialExposure is the original multi-denom value/capacity held by a case.",
+      "properties": {
+        "escrow_amount": {
+          "items": {
+            "$ref": "#/definitions/cosmos.base.v1beta1.Coin"
+          },
+          "type": "array"
+        },
+        "escrow_id": {
+          "type": "string"
+        },
+        "original_held": {
+          "items": {
+            "$ref": "#/definitions/cosmos.base.v1beta1.Coin"
+          },
+          "type": "array"
+        },
+        "payout_amount": {
+          "items": {
+            "$ref": "#/definitions/cosmos.base.v1beta1.Coin"
+          },
+          "type": "array"
+        },
+        "payout_id": {
+          "type": "string"
+        },
+        "reservation_id": {
+          "type": "string"
+        },
+        "reward_address": {
+          "type": "string"
+        },
+        "unclaimed_rewards": {
+          "items": {
+            "$ref": "#/definitions/cosmos.base.v1beta1.Coin"
+          },
+          "type": "array"
+        }
+      },
+      "type": "object"
+    },
+    "virtengine.settlement.v1.FinancialResolutionType": {
+      "default": "FINANCIAL_RESOLUTION_TYPE_UNSPECIFIED",
+      "description": "FinancialResolutionType selects the terminal policy applied after appeal.",
+      "enum": [
+        "FINANCIAL_RESOLUTION_TYPE_UNSPECIFIED",
+        "FINANCIAL_RESOLUTION_TYPE_PROVIDER_WIN",
+        "FINANCIAL_RESOLUTION_TYPE_CUSTOMER_WIN",
+        "FINANCIAL_RESOLUTION_TYPE_PARTIAL_SPLIT",
+        "FINANCIAL_RESOLUTION_TYPE_MUTUAL",
+        "FINANCIAL_RESOLUTION_TYPE_FRAUD_CONFIRMED",
+        "FINANCIAL_RESOLUTION_TYPE_INCONCLUSIVE_TIMEOUT"
+      ],
+      "type": "string"
+    },
+    "virtengine.settlement.v1.FinancialSubject": {
+      "description": "FinancialSubject contains all known privacy-safe lineage identifiers.",
+      "properties": {
+        "escrow_id": {
+          "type": "string"
+        },
+        "hpc_job_id": {
+          "type": "string"
+        },
+        "invoice_id": {
+          "type": "string"
+        },
+        "lease_id": {
+          "type": "string"
+        },
+        "order_id": {
+          "type": "string"
+        },
+        "primary_id": {
+          "type": "string"
+        },
+        "reservation_id": {
+          "type": "string"
+        },
+        "settlement_id": {
+          "type": "string"
+        },
+        "type": {
+          "$ref": "#/definitions/virtengine.settlement.v1.FinancialSubjectType"
+        },
+        "usage_id": {
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "virtengine.settlement.v1.FinancialSubjectType": {
+      "default": "FINANCIAL_SUBJECT_TYPE_UNSPECIFIED",
+      "description": "FinancialSubjectType identifies the canonical financial lineage root.",
+      "enum": [
+        "FINANCIAL_SUBJECT_TYPE_UNSPECIFIED",
+        "FINANCIAL_SUBJECT_TYPE_ORDER",
+        "FINANCIAL_SUBJECT_TYPE_INVOICE",
+        "FINANCIAL_SUBJECT_TYPE_USAGE",
+        "FINANCIAL_SUBJECT_TYPE_HPC_JOB",
+        "FINANCIAL_SUBJECT_TYPE_SETTLEMENT"
+      ],
+      "type": "string"
     },
     "virtengine.settlement.v1.MsgAcknowledgeUsageResponse": {
       "properties": {
@@ -10816,6 +11771,42 @@
         }
       },
       "title": "MsgActivateEscrowResponse is the response for MsgActivateEscrow",
+      "type": "object"
+    },
+    "virtengine.settlement.v1.MsgAddFinancialClaimResponse": {
+      "properties": {
+        "case_id": {
+          "type": "string"
+        },
+        "claim_id": {
+          "type": "string"
+        },
+        "exact_duplicate": {
+          "type": "boolean"
+        },
+        "status": {
+          "$ref": "#/definitions/virtengine.settlement.v1.FinancialCaseStatus"
+        }
+      },
+      "type": "object"
+    },
+    "virtengine.settlement.v1.MsgAppealFinancialCaseResponse": {
+      "properties": {
+        "appeal_id": {
+          "type": "string"
+        },
+        "status": {
+          "$ref": "#/definitions/virtengine.settlement.v1.FinancialCaseStatus"
+        }
+      },
+      "type": "object"
+    },
+    "virtengine.settlement.v1.MsgCancelFinancialCaseResponse": {
+      "properties": {
+        "status": {
+          "$ref": "#/definitions/virtengine.settlement.v1.FinancialCaseStatus"
+        }
+      },
       "type": "object"
     },
     "virtengine.settlement.v1.MsgClaimRewardsResponse": {
@@ -10852,6 +11843,70 @@
         }
       },
       "title": "MsgDisputeEscrowResponse is the response for MsgDisputeEscrow",
+      "type": "object"
+    },
+    "virtengine.settlement.v1.MsgEscalateFinancialCaseResponse": {
+      "properties": {
+        "status": {
+          "$ref": "#/definitions/virtengine.settlement.v1.FinancialCaseStatus"
+        }
+      },
+      "type": "object"
+    },
+    "virtengine.settlement.v1.MsgFinalizeFinancialCaseResponse": {
+      "properties": {
+        "effects": {
+          "items": {
+            "$ref": "#/definitions/virtengine.settlement.v1.FinancialCaseEffect"
+          },
+          "type": "array"
+        },
+        "status": {
+          "$ref": "#/definitions/virtengine.settlement.v1.FinancialCaseStatus"
+        }
+      },
+      "type": "object"
+    },
+    "virtengine.settlement.v1.MsgOpenFinancialCaseResponse": {
+      "properties": {
+        "case_id": {
+          "type": "string"
+        },
+        "claim_id": {
+          "type": "string"
+        },
+        "exact_duplicate": {
+          "type": "boolean"
+        },
+        "status": {
+          "$ref": "#/definitions/virtengine.settlement.v1.FinancialCaseStatus"
+        }
+      },
+      "type": "object"
+    },
+    "virtengine.settlement.v1.MsgRecordFiatConversionObservationResponse": {
+      "properties": {
+        "conversion_id": {
+          "type": "string"
+        },
+        "exact_duplicate": {
+          "type": "boolean"
+        },
+        "observation_digest": {
+          "format": "byte",
+          "type": "string"
+        },
+        "observation_sequence": {
+          "format": "uint64",
+          "type": "string"
+        },
+        "stage": {
+          "$ref": "#/definitions/virtengine.settlement.v1.FiatConversionObservationStage"
+        },
+        "state": {
+          "type": "string"
+        }
+      },
       "type": "object"
     },
     "virtengine.settlement.v1.MsgRecordUsageResponse": {
@@ -10906,6 +11961,22 @@
       "title": "MsgReleaseEscrowResponse is the response for MsgReleaseEscrow",
       "type": "object"
     },
+    "virtengine.settlement.v1.MsgResolveFinancialCaseResponse": {
+      "properties": {
+        "appeal_deadline_height": {
+          "format": "int64",
+          "type": "string"
+        },
+        "appeal_deadline_time": {
+          "format": "int64",
+          "type": "string"
+        },
+        "status": {
+          "$ref": "#/definitions/virtengine.settlement.v1.FinancialCaseStatus"
+        }
+      },
+      "type": "object"
+    },
     "virtengine.settlement.v1.MsgSettleOrderResponse": {
       "properties": {
         "platform_fee": {
@@ -10928,6 +11999,17 @@
       "title": "MsgSettleOrderResponse is the response for MsgSettleOrder",
       "type": "object"
     },
+    "virtengine.settlement.v1.MsgSubmitFinancialCaseForReviewResponse": {
+      "properties": {
+        "status": {
+          "$ref": "#/definitions/virtengine.settlement.v1.FinancialCaseStatus"
+        }
+      },
+      "type": "object"
+    },
+    "virtengine.settlement.v1.MsgUpdateParamsResponse": {
+      "type": "object"
+    },
     "virtengine.settlement.v1.Params": {
       "description": "Params defines the parameters for the settlement module.",
       "properties": {
@@ -10944,11 +12026,25 @@
         "fiat_conversion_default_method": {
           "type": "string"
         },
+        "fiat_conversion_dex_profile_digest": {
+          "format": "byte",
+          "type": "string"
+        },
+        "fiat_conversion_dex_profile_id": {
+          "type": "string"
+        },
+        "fiat_conversion_dex_profile_state": {
+          "$ref": "#/definitions/virtengine.settlement.v1.FiatConversionProfileState"
+        },
         "fiat_conversion_enabled": {
           "type": "boolean"
         },
         "fiat_conversion_max_amount": {
           "type": "string"
+        },
+        "fiat_conversion_max_observations": {
+          "format": "int64",
+          "type": "integer"
         },
         "fiat_conversion_max_slippage": {
           "type": "string"
@@ -10958,6 +12054,28 @@
         },
         "fiat_conversion_min_compliance_status": {
           "type": "string"
+        },
+        "fiat_conversion_min_swap_finality_confirmations": {
+          "format": "int64",
+          "type": "integer"
+        },
+        "fiat_conversion_observation_max_future_seconds": {
+          "format": "uint64",
+          "type": "string"
+        },
+        "fiat_conversion_observation_max_past_seconds": {
+          "format": "uint64",
+          "type": "string"
+        },
+        "fiat_conversion_payout_profile_digest": {
+          "format": "byte",
+          "type": "string"
+        },
+        "fiat_conversion_payout_profile_id": {
+          "type": "string"
+        },
+        "fiat_conversion_payout_profile_state": {
+          "$ref": "#/definitions/virtengine.settlement.v1.FiatConversionProfileState"
         },
         "fiat_conversion_risk_score_threshold": {
           "format": "int32",
@@ -10972,6 +12090,62 @@
         },
         "fiat_conversion_stable_symbol": {
           "type": "string"
+        },
+        "financial_case_appeal_window_blocks": {
+          "format": "int64",
+          "type": "string"
+        },
+        "financial_case_appeal_window_seconds": {
+          "format": "uint64",
+          "type": "string"
+        },
+        "financial_case_escalation_window_blocks": {
+          "format": "int64",
+          "type": "string"
+        },
+        "financial_case_escalation_window_seconds": {
+          "format": "uint64",
+          "type": "string"
+        },
+        "financial_case_evidence_window_blocks": {
+          "format": "int64",
+          "type": "string"
+        },
+        "financial_case_evidence_window_seconds": {
+          "format": "uint64",
+          "type": "string"
+        },
+        "financial_case_filing_window_blocks": {
+          "format": "int64",
+          "type": "string"
+        },
+        "financial_case_filing_window_seconds": {
+          "format": "uint64",
+          "type": "string"
+        },
+        "financial_case_max_appeals": {
+          "format": "int64",
+          "type": "integer"
+        },
+        "financial_case_max_claims": {
+          "format": "int64",
+          "type": "integer"
+        },
+        "financial_case_max_evidence_reference_bytes": {
+          "format": "int64",
+          "type": "integer"
+        },
+        "financial_case_review_window_blocks": {
+          "format": "int64",
+          "type": "string"
+        },
+        "financial_case_review_window_seconds": {
+          "format": "uint64",
+          "type": "string"
+        },
+        "financial_case_timeout_batch_limit": {
+          "format": "int64",
+          "type": "integer"
         },
         "max_escrow_duration": {
           "format": "uint64",
@@ -11087,6 +12261,11 @@
           "format": "int64",
           "type": "integer"
         },
+        "external_finality_hash": {
+          "description": "external_finality_hash is a SHA-256 digest for an authenticated external\npayout. It is never an on-chain transaction hash.",
+          "format": "byte",
+          "type": "string"
+        },
         "fiat_conversion_id": {
           "type": "string"
         },
@@ -11160,6 +12339,15 @@
             "$ref": "#/definitions/cosmos.base.v1beta1.Coin"
           },
           "type": "array"
+        },
+        "value_movement_applied": {
+          "description": "value_movement_applied is true only after net_amount moved from the\nsettlement account to the governed fiat custody sink.",
+          "type": "boolean"
+        },
+        "value_movement_effect_hash": {
+          "description": "value_movement_effect_hash binds the payout to that exact bank effect.",
+          "format": "byte",
+          "type": "string"
         }
       },
       "type": "object"
@@ -11232,6 +12420,62 @@
       "properties": {
         "preference": {
           "$ref": "#/definitions/virtengine.settlement.v1.FiatPayoutPreference"
+        }
+      },
+      "type": "object"
+    },
+    "virtengine.settlement.v1.QueryFinancialCaseBySubjectResponse": {
+      "properties": {
+        "financial_case": {
+          "$ref": "#/definitions/virtengine.settlement.v1.FinancialCase"
+        }
+      },
+      "type": "object"
+    },
+    "virtengine.settlement.v1.QueryFinancialCaseLineageResponse": {
+      "properties": {
+        "claims": {
+          "items": {
+            "$ref": "#/definitions/virtengine.settlement.v1.FinancialClaim"
+          },
+          "type": "array"
+        },
+        "effects": {
+          "items": {
+            "$ref": "#/definitions/virtengine.settlement.v1.FinancialCaseEffect"
+          },
+          "type": "array"
+        },
+        "pagination": {
+          "$ref": "#/definitions/cosmos.base.query.v1beta1.PageResponse"
+        },
+        "transitions": {
+          "items": {
+            "$ref": "#/definitions/virtengine.settlement.v1.FinancialCaseTransition"
+          },
+          "type": "array"
+        }
+      },
+      "type": "object"
+    },
+    "virtengine.settlement.v1.QueryFinancialCaseResponse": {
+      "properties": {
+        "financial_case": {
+          "$ref": "#/definitions/virtengine.settlement.v1.FinancialCase"
+        }
+      },
+      "type": "object"
+    },
+    "virtengine.settlement.v1.QueryFinancialCasesResponse": {
+      "properties": {
+        "financial_cases": {
+          "items": {
+            "$ref": "#/definitions/virtengine.settlement.v1.FinancialCase"
+          },
+          "type": "array"
+        },
+        "pagination": {
+          "$ref": "#/definitions/cosmos.base.query.v1beta1.PageResponse"
         }
       },
       "type": "object"
@@ -11656,6 +12900,52 @@
             "$ref": "#/definitions/cosmos.base.v1beta1.Coin"
           },
           "type": "array"
+        }
+      },
+      "type": "object"
+    },
+    "virtengine.settlement.v1.TerminalAllocation": {
+      "description": "TerminalAllocation conserves the original held exposure independently per denom.",
+      "properties": {
+        "allocation_hash": {
+          "format": "byte",
+          "type": "string"
+        },
+        "customer": {
+          "items": {
+            "$ref": "#/definitions/cosmos.base.v1beta1.Coin"
+          },
+          "type": "array"
+        },
+        "original_exposure": {
+          "items": {
+            "$ref": "#/definitions/cosmos.base.v1beta1.Coin"
+          },
+          "type": "array"
+        },
+        "platform": {
+          "items": {
+            "$ref": "#/definitions/cosmos.base.v1beta1.Coin"
+          },
+          "type": "array"
+        },
+        "provider": {
+          "items": {
+            "$ref": "#/definitions/cosmos.base.v1beta1.Coin"
+          },
+          "type": "array"
+        },
+        "resolution_type": {
+          "$ref": "#/definitions/virtengine.settlement.v1.FinancialResolutionType"
+        },
+        "slash_witness": {
+          "items": {
+            "$ref": "#/definitions/cosmos.base.v1beta1.Coin"
+          },
+          "type": "array"
+        },
+        "slash_witness_recipient": {
+          "type": "string"
         }
       },
       "type": "object"
@@ -23287,6 +24577,344 @@
         "x-virtengine-proto-source": "virtengine/resources/v1/query.proto"
       }
     },
+    "/virtengine/resources/v1/reservation/{reservation_id}": {
+      "get": {
+        "operationId": "virtengine.resources.v1.Query_Reservation",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "reservation_id",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/virtengine.resources.v1.QueryReservationResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/grpc.gateway.runtime.Error"
+            }
+          }
+        },
+        "tags": [
+          "Query"
+        ],
+        "x-virtengine-proto-fragment": "virtengine/resources/v1/query.swagger.json",
+        "x-virtengine-proto-source": "virtengine/resources/v1/query.proto"
+      }
+    },
+    "/virtengine/resources/v1/reservation/{reservation_id}/lineage": {
+      "get": {
+        "operationId": "virtengine.resources.v1.Query_ReservationLineage",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "reservation_id",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "description": "key is a value returned in PageResponse.next_key to begin\nquerying the next page most efficiently. Only one of offset or key\nshould be set.",
+            "format": "byte",
+            "in": "query",
+            "name": "pagination.key",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "description": "offset is a numeric offset that can be used when key is unavailable.\nIt is less efficient than using key. Only one of offset or key should\nbe set.",
+            "format": "uint64",
+            "in": "query",
+            "name": "pagination.offset",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "description": "limit is the total number of results to be returned in the result page.\nIf left empty it will default to a value to be set by each app.",
+            "format": "uint64",
+            "in": "query",
+            "name": "pagination.limit",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "description": "count_total is set to true  to indicate that the result set should include\na count of the total number of items available for pagination in UIs.\ncount_total is only respected when offset is used. It is ignored when key\nis set.",
+            "in": "query",
+            "name": "pagination.count_total",
+            "required": false,
+            "type": "boolean"
+          },
+          {
+            "description": "reverse is set to true if results are to be returned in the descending order.",
+            "in": "query",
+            "name": "pagination.reverse",
+            "required": false,
+            "type": "boolean"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/virtengine.resources.v1.QueryReservationLineageResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/grpc.gateway.runtime.Error"
+            }
+          }
+        },
+        "tags": [
+          "Query"
+        ],
+        "x-virtengine-proto-fragment": "virtengine/resources/v1/query.swagger.json",
+        "x-virtengine-proto-source": "virtengine/resources/v1/query.proto"
+      }
+    },
+    "/virtengine/resources/v1/reservation/bid/{bid_id}": {
+      "get": {
+        "operationId": "virtengine.resources.v1.Query_ReservationByBid",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "bid_id",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/virtengine.resources.v1.QueryReservationResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/grpc.gateway.runtime.Error"
+            }
+          }
+        },
+        "tags": [
+          "Query"
+        ],
+        "x-virtengine-proto-fragment": "virtengine/resources/v1/query.swagger.json",
+        "x-virtengine-proto-source": "virtengine/resources/v1/query.proto"
+      }
+    },
+    "/virtengine/resources/v1/reservation/consumer/{consumer_type}/{consumer_id}": {
+      "get": {
+        "operationId": "virtengine.resources.v1.Query_ReservationByConsumer",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "consumer_type",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "in": "path",
+            "name": "consumer_id",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/virtengine.resources.v1.QueryReservationResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/grpc.gateway.runtime.Error"
+            }
+          }
+        },
+        "tags": [
+          "Query"
+        ],
+        "x-virtengine-proto-fragment": "virtengine/resources/v1/query.swagger.json",
+        "x-virtengine-proto-source": "virtengine/resources/v1/query.proto"
+      }
+    },
+    "/virtengine/resources/v1/reservation/job/{job_id}": {
+      "get": {
+        "operationId": "virtengine.resources.v1.Query_ReservationByJob",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "job_id",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/virtengine.resources.v1.QueryReservationResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/grpc.gateway.runtime.Error"
+            }
+          }
+        },
+        "tags": [
+          "Query"
+        ],
+        "x-virtengine-proto-fragment": "virtengine/resources/v1/query.swagger.json",
+        "x-virtengine-proto-source": "virtengine/resources/v1/query.proto"
+      }
+    },
+    "/virtengine/resources/v1/reservation/lease/{lease_id}": {
+      "get": {
+        "operationId": "virtengine.resources.v1.Query_ReservationByLease",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "lease_id",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/virtengine.resources.v1.QueryReservationResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/grpc.gateway.runtime.Error"
+            }
+          }
+        },
+        "tags": [
+          "Query"
+        ],
+        "x-virtengine-proto-fragment": "virtengine/resources/v1/query.swagger.json",
+        "x-virtengine-proto-source": "virtengine/resources/v1/query.proto"
+      }
+    },
+    "/virtengine/resources/v1/reservation/order/{order_id}": {
+      "get": {
+        "operationId": "virtengine.resources.v1.Query_ReservationByOrder",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "order_id",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/virtengine.resources.v1.QueryReservationResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/grpc.gateway.runtime.Error"
+            }
+          }
+        },
+        "tags": [
+          "Query"
+        ],
+        "x-virtengine-proto-fragment": "virtengine/resources/v1/query.swagger.json",
+        "x-virtengine-proto-source": "virtengine/resources/v1/query.proto"
+      }
+    },
+    "/virtengine/resources/v1/reservations/provider/{provider_address}": {
+      "get": {
+        "operationId": "virtengine.resources.v1.Query_ReservationsByProvider",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "provider_address",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "description": "key is a value returned in PageResponse.next_key to begin\nquerying the next page most efficiently. Only one of offset or key\nshould be set.",
+            "format": "byte",
+            "in": "query",
+            "name": "pagination.key",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "description": "offset is a numeric offset that can be used when key is unavailable.\nIt is less efficient than using key. Only one of offset or key should\nbe set.",
+            "format": "uint64",
+            "in": "query",
+            "name": "pagination.offset",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "description": "limit is the total number of results to be returned in the result page.\nIf left empty it will default to a value to be set by each app.",
+            "format": "uint64",
+            "in": "query",
+            "name": "pagination.limit",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "description": "count_total is set to true  to indicate that the result set should include\na count of the total number of items available for pagination in UIs.\ncount_total is only respected when offset is used. It is ignored when key\nis set.",
+            "in": "query",
+            "name": "pagination.count_total",
+            "required": false,
+            "type": "boolean"
+          },
+          {
+            "description": "reverse is set to true if results are to be returned in the descending order.",
+            "in": "query",
+            "name": "pagination.reverse",
+            "required": false,
+            "type": "boolean"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/virtengine.resources.v1.QueryReservationsResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/grpc.gateway.runtime.Error"
+            }
+          }
+        },
+        "tags": [
+          "Query"
+        ],
+        "x-virtengine-proto-fragment": "virtengine/resources/v1/query.swagger.json",
+        "x-virtengine-proto-source": "virtengine/resources/v1/query.proto"
+      }
+    },
     "/virtengine/review/v1/params": {
       "get": {
         "operationId": "virtengine.review.v1.Query_Params",
@@ -23825,6 +25453,693 @@
             "description": "A successful response.",
             "schema": {
               "$ref": "#/definitions/virtengine.settlement.v1.QueryFiatPayoutPreferenceResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/grpc.gateway.runtime.Error"
+            }
+          }
+        },
+        "tags": [
+          "Query"
+        ],
+        "x-virtengine-proto-fragment": "virtengine/settlement/v1/query.swagger.json",
+        "x-virtengine-proto-source": "virtengine/settlement/v1/query.proto"
+      }
+    },
+    "/virtengine/settlement/v1/financial-cases/{case_id}": {
+      "get": {
+        "operationId": "virtengine.settlement.v1.Query_FinancialCase",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "case_id",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/virtengine.settlement.v1.QueryFinancialCaseResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/grpc.gateway.runtime.Error"
+            }
+          }
+        },
+        "tags": [
+          "Query"
+        ],
+        "x-virtengine-proto-fragment": "virtengine/settlement/v1/query.swagger.json",
+        "x-virtengine-proto-source": "virtengine/settlement/v1/query.proto"
+      }
+    },
+    "/virtengine/settlement/v1/financial-cases/{case_id}/lineage": {
+      "get": {
+        "operationId": "virtengine.settlement.v1.Query_FinancialCaseLineage",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "case_id",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "description": "key is a value returned in PageResponse.next_key to begin\nquerying the next page most efficiently. Only one of offset or key\nshould be set.",
+            "format": "byte",
+            "in": "query",
+            "name": "pagination.key",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "description": "offset is a numeric offset that can be used when key is unavailable.\nIt is less efficient than using key. Only one of offset or key should\nbe set.",
+            "format": "uint64",
+            "in": "query",
+            "name": "pagination.offset",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "description": "limit is the total number of results to be returned in the result page.\nIf left empty it will default to a value to be set by each app.",
+            "format": "uint64",
+            "in": "query",
+            "name": "pagination.limit",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "description": "count_total is set to true  to indicate that the result set should include\na count of the total number of items available for pagination in UIs.\ncount_total is only respected when offset is used. It is ignored when key\nis set.",
+            "in": "query",
+            "name": "pagination.count_total",
+            "required": false,
+            "type": "boolean"
+          },
+          {
+            "description": "reverse is set to true if results are to be returned in the descending order.",
+            "in": "query",
+            "name": "pagination.reverse",
+            "required": false,
+            "type": "boolean"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/virtengine.settlement.v1.QueryFinancialCaseLineageResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/grpc.gateway.runtime.Error"
+            }
+          }
+        },
+        "tags": [
+          "Query"
+        ],
+        "x-virtengine-proto-fragment": "virtengine/settlement/v1/query.swagger.json",
+        "x-virtengine-proto-source": "virtengine/settlement/v1/query.proto"
+      }
+    },
+    "/virtengine/settlement/v1/financial-cases/by-escrow/{key}": {
+      "get": {
+        "operationId": "virtengine.settlement.v1.Query_FinancialCasesByEscrow",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "key",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "description": "key is a value returned in PageResponse.next_key to begin\nquerying the next page most efficiently. Only one of offset or key\nshould be set.",
+            "format": "byte",
+            "in": "query",
+            "name": "pagination.key",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "description": "offset is a numeric offset that can be used when key is unavailable.\nIt is less efficient than using key. Only one of offset or key should\nbe set.",
+            "format": "uint64",
+            "in": "query",
+            "name": "pagination.offset",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "description": "limit is the total number of results to be returned in the result page.\nIf left empty it will default to a value to be set by each app.",
+            "format": "uint64",
+            "in": "query",
+            "name": "pagination.limit",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "description": "count_total is set to true  to indicate that the result set should include\na count of the total number of items available for pagination in UIs.\ncount_total is only respected when offset is used. It is ignored when key\nis set.",
+            "in": "query",
+            "name": "pagination.count_total",
+            "required": false,
+            "type": "boolean"
+          },
+          {
+            "description": "reverse is set to true if results are to be returned in the descending order.",
+            "in": "query",
+            "name": "pagination.reverse",
+            "required": false,
+            "type": "boolean"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/virtengine.settlement.v1.QueryFinancialCasesResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/grpc.gateway.runtime.Error"
+            }
+          }
+        },
+        "tags": [
+          "Query"
+        ],
+        "x-virtengine-proto-fragment": "virtengine/settlement/v1/query.swagger.json",
+        "x-virtengine-proto-source": "virtengine/settlement/v1/query.proto"
+      }
+    },
+    "/virtengine/settlement/v1/financial-cases/by-invoice/{key}": {
+      "get": {
+        "operationId": "virtengine.settlement.v1.Query_FinancialCasesByInvoice",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "key",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "description": "key is a value returned in PageResponse.next_key to begin\nquerying the next page most efficiently. Only one of offset or key\nshould be set.",
+            "format": "byte",
+            "in": "query",
+            "name": "pagination.key",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "description": "offset is a numeric offset that can be used when key is unavailable.\nIt is less efficient than using key. Only one of offset or key should\nbe set.",
+            "format": "uint64",
+            "in": "query",
+            "name": "pagination.offset",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "description": "limit is the total number of results to be returned in the result page.\nIf left empty it will default to a value to be set by each app.",
+            "format": "uint64",
+            "in": "query",
+            "name": "pagination.limit",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "description": "count_total is set to true  to indicate that the result set should include\na count of the total number of items available for pagination in UIs.\ncount_total is only respected when offset is used. It is ignored when key\nis set.",
+            "in": "query",
+            "name": "pagination.count_total",
+            "required": false,
+            "type": "boolean"
+          },
+          {
+            "description": "reverse is set to true if results are to be returned in the descending order.",
+            "in": "query",
+            "name": "pagination.reverse",
+            "required": false,
+            "type": "boolean"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/virtengine.settlement.v1.QueryFinancialCasesResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/grpc.gateway.runtime.Error"
+            }
+          }
+        },
+        "tags": [
+          "Query"
+        ],
+        "x-virtengine-proto-fragment": "virtengine/settlement/v1/query.swagger.json",
+        "x-virtengine-proto-source": "virtengine/settlement/v1/query.proto"
+      }
+    },
+    "/virtengine/settlement/v1/financial-cases/by-job/{key}": {
+      "get": {
+        "operationId": "virtengine.settlement.v1.Query_FinancialCasesByJob",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "key",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "description": "key is a value returned in PageResponse.next_key to begin\nquerying the next page most efficiently. Only one of offset or key\nshould be set.",
+            "format": "byte",
+            "in": "query",
+            "name": "pagination.key",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "description": "offset is a numeric offset that can be used when key is unavailable.\nIt is less efficient than using key. Only one of offset or key should\nbe set.",
+            "format": "uint64",
+            "in": "query",
+            "name": "pagination.offset",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "description": "limit is the total number of results to be returned in the result page.\nIf left empty it will default to a value to be set by each app.",
+            "format": "uint64",
+            "in": "query",
+            "name": "pagination.limit",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "description": "count_total is set to true  to indicate that the result set should include\na count of the total number of items available for pagination in UIs.\ncount_total is only respected when offset is used. It is ignored when key\nis set.",
+            "in": "query",
+            "name": "pagination.count_total",
+            "required": false,
+            "type": "boolean"
+          },
+          {
+            "description": "reverse is set to true if results are to be returned in the descending order.",
+            "in": "query",
+            "name": "pagination.reverse",
+            "required": false,
+            "type": "boolean"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/virtengine.settlement.v1.QueryFinancialCasesResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/grpc.gateway.runtime.Error"
+            }
+          }
+        },
+        "tags": [
+          "Query"
+        ],
+        "x-virtengine-proto-fragment": "virtengine/settlement/v1/query.swagger.json",
+        "x-virtengine-proto-source": "virtengine/settlement/v1/query.proto"
+      }
+    },
+    "/virtengine/settlement/v1/financial-cases/by-order/{key}": {
+      "get": {
+        "operationId": "virtengine.settlement.v1.Query_FinancialCasesByOrder",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "key",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "description": "key is a value returned in PageResponse.next_key to begin\nquerying the next page most efficiently. Only one of offset or key\nshould be set.",
+            "format": "byte",
+            "in": "query",
+            "name": "pagination.key",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "description": "offset is a numeric offset that can be used when key is unavailable.\nIt is less efficient than using key. Only one of offset or key should\nbe set.",
+            "format": "uint64",
+            "in": "query",
+            "name": "pagination.offset",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "description": "limit is the total number of results to be returned in the result page.\nIf left empty it will default to a value to be set by each app.",
+            "format": "uint64",
+            "in": "query",
+            "name": "pagination.limit",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "description": "count_total is set to true  to indicate that the result set should include\na count of the total number of items available for pagination in UIs.\ncount_total is only respected when offset is used. It is ignored when key\nis set.",
+            "in": "query",
+            "name": "pagination.count_total",
+            "required": false,
+            "type": "boolean"
+          },
+          {
+            "description": "reverse is set to true if results are to be returned in the descending order.",
+            "in": "query",
+            "name": "pagination.reverse",
+            "required": false,
+            "type": "boolean"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/virtengine.settlement.v1.QueryFinancialCasesResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/grpc.gateway.runtime.Error"
+            }
+          }
+        },
+        "tags": [
+          "Query"
+        ],
+        "x-virtengine-proto-fragment": "virtengine/settlement/v1/query.swagger.json",
+        "x-virtengine-proto-source": "virtengine/settlement/v1/query.proto"
+      }
+    },
+    "/virtengine/settlement/v1/financial-cases/by-party/{key}": {
+      "get": {
+        "operationId": "virtengine.settlement.v1.Query_FinancialCasesByParty",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "key",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "description": "key is a value returned in PageResponse.next_key to begin\nquerying the next page most efficiently. Only one of offset or key\nshould be set.",
+            "format": "byte",
+            "in": "query",
+            "name": "pagination.key",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "description": "offset is a numeric offset that can be used when key is unavailable.\nIt is less efficient than using key. Only one of offset or key should\nbe set.",
+            "format": "uint64",
+            "in": "query",
+            "name": "pagination.offset",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "description": "limit is the total number of results to be returned in the result page.\nIf left empty it will default to a value to be set by each app.",
+            "format": "uint64",
+            "in": "query",
+            "name": "pagination.limit",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "description": "count_total is set to true  to indicate that the result set should include\na count of the total number of items available for pagination in UIs.\ncount_total is only respected when offset is used. It is ignored when key\nis set.",
+            "in": "query",
+            "name": "pagination.count_total",
+            "required": false,
+            "type": "boolean"
+          },
+          {
+            "description": "reverse is set to true if results are to be returned in the descending order.",
+            "in": "query",
+            "name": "pagination.reverse",
+            "required": false,
+            "type": "boolean"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/virtengine.settlement.v1.QueryFinancialCasesResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/grpc.gateway.runtime.Error"
+            }
+          }
+        },
+        "tags": [
+          "Query"
+        ],
+        "x-virtengine-proto-fragment": "virtengine/settlement/v1/query.swagger.json",
+        "x-virtengine-proto-source": "virtengine/settlement/v1/query.proto"
+      }
+    },
+    "/virtengine/settlement/v1/financial-cases/by-status/{key}": {
+      "get": {
+        "operationId": "virtengine.settlement.v1.Query_FinancialCasesByStatus",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "key",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "description": "key is a value returned in PageResponse.next_key to begin\nquerying the next page most efficiently. Only one of offset or key\nshould be set.",
+            "format": "byte",
+            "in": "query",
+            "name": "pagination.key",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "description": "offset is a numeric offset that can be used when key is unavailable.\nIt is less efficient than using key. Only one of offset or key should\nbe set.",
+            "format": "uint64",
+            "in": "query",
+            "name": "pagination.offset",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "description": "limit is the total number of results to be returned in the result page.\nIf left empty it will default to a value to be set by each app.",
+            "format": "uint64",
+            "in": "query",
+            "name": "pagination.limit",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "description": "count_total is set to true  to indicate that the result set should include\na count of the total number of items available for pagination in UIs.\ncount_total is only respected when offset is used. It is ignored when key\nis set.",
+            "in": "query",
+            "name": "pagination.count_total",
+            "required": false,
+            "type": "boolean"
+          },
+          {
+            "description": "reverse is set to true if results are to be returned in the descending order.",
+            "in": "query",
+            "name": "pagination.reverse",
+            "required": false,
+            "type": "boolean"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/virtengine.settlement.v1.QueryFinancialCasesResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/grpc.gateway.runtime.Error"
+            }
+          }
+        },
+        "tags": [
+          "Query"
+        ],
+        "x-virtengine-proto-fragment": "virtengine/settlement/v1/query.swagger.json",
+        "x-virtengine-proto-source": "virtengine/settlement/v1/query.proto"
+      }
+    },
+    "/virtengine/settlement/v1/financial-cases/by-subject": {
+      "get": {
+        "operationId": "virtengine.settlement.v1.Query_FinancialCaseBySubject",
+        "parameters": [
+          {
+            "default": "FINANCIAL_SUBJECT_TYPE_UNSPECIFIED",
+            "enum": [
+              "FINANCIAL_SUBJECT_TYPE_UNSPECIFIED",
+              "FINANCIAL_SUBJECT_TYPE_ORDER",
+              "FINANCIAL_SUBJECT_TYPE_INVOICE",
+              "FINANCIAL_SUBJECT_TYPE_USAGE",
+              "FINANCIAL_SUBJECT_TYPE_HPC_JOB",
+              "FINANCIAL_SUBJECT_TYPE_SETTLEMENT"
+            ],
+            "in": "query",
+            "name": "subject.type",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "in": "query",
+            "name": "subject.primary_id",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "in": "query",
+            "name": "subject.order_id",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "in": "query",
+            "name": "subject.invoice_id",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "in": "query",
+            "name": "subject.usage_id",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "in": "query",
+            "name": "subject.hpc_job_id",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "in": "query",
+            "name": "subject.settlement_id",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "in": "query",
+            "name": "subject.escrow_id",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "in": "query",
+            "name": "subject.reservation_id",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "in": "query",
+            "name": "subject.lease_id",
+            "required": false,
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/virtengine.settlement.v1.QueryFinancialCaseBySubjectResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/grpc.gateway.runtime.Error"
+            }
+          }
+        },
+        "tags": [
+          "Query"
+        ],
+        "x-virtengine-proto-fragment": "virtengine/settlement/v1/query.swagger.json",
+        "x-virtengine-proto-source": "virtengine/settlement/v1/query.proto"
+      }
+    },
+    "/virtengine/settlement/v1/financial-cases/by-usage/{key}": {
+      "get": {
+        "operationId": "virtengine.settlement.v1.Query_FinancialCasesByUsage",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "key",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "description": "key is a value returned in PageResponse.next_key to begin\nquerying the next page most efficiently. Only one of offset or key\nshould be set.",
+            "format": "byte",
+            "in": "query",
+            "name": "pagination.key",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "description": "offset is a numeric offset that can be used when key is unavailable.\nIt is less efficient than using key. Only one of offset or key should\nbe set.",
+            "format": "uint64",
+            "in": "query",
+            "name": "pagination.offset",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "description": "limit is the total number of results to be returned in the result page.\nIf left empty it will default to a value to be set by each app.",
+            "format": "uint64",
+            "in": "query",
+            "name": "pagination.limit",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "description": "count_total is set to true  to indicate that the result set should include\na count of the total number of items available for pagination in UIs.\ncount_total is only respected when offset is used. It is ignored when key\nis set.",
+            "in": "query",
+            "name": "pagination.count_total",
+            "required": false,
+            "type": "boolean"
+          },
+          {
+            "description": "reverse is set to true if results are to be returned in the descending order.",
+            "in": "query",
+            "name": "pagination.reverse",
+            "required": false,
+            "type": "boolean"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/virtengine.settlement.v1.QueryFinancialCasesResponse"
             }
           },
           "default": {

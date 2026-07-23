@@ -315,17 +315,15 @@ func (k Keeper) distributeUsageRewardsWithMetadata(
 		return nil, err
 	}
 
-	err := ctx.EventManager().EmitTypedEvent(&types.EventRewardsDistributed{
-		DistributionID: distributionID,
-		EpochNumber:    epoch,
-		Source:         string(types.RewardSourceUsage),
-		TotalRewards:   dist.TotalRewards.String(),
-		RecipientCount: safeUint32FromInt(len(recipients)),
-		DistributedAt:  ctx.BlockTime().Unix(),
-	})
-	if err != nil {
-		k.Logger(ctx).Error("failed to emit usage rewards distributed event", "error", err)
-	}
+	ctx.EventManager().EmitEvent(sdk.NewEvent(
+		types.EventTypeRewardsDistributed,
+		sdk.NewAttribute(types.AttributeKeyDistributionID, distributionID),
+		sdk.NewAttribute(types.AttributeKeyEpochNumber, fmt.Sprintf("%d", epoch)),
+		sdk.NewAttribute(types.AttributeKeyRewardSource, string(types.RewardSourceUsage)),
+		sdk.NewAttribute(types.AttributeKeyTotalRewards, dist.TotalRewards.String()),
+		sdk.NewAttribute(types.AttributeKeyRecipientCount, fmt.Sprintf("%d", safeUint32FromInt(len(recipients)))),
+		sdk.NewAttribute(types.AttributeKeyTimestamp, fmt.Sprintf("%d", ctx.BlockTime().Unix())),
+	))
 
 	k.Logger(ctx).Info("usage rewards distributed",
 		"distribution_id", distributionID,

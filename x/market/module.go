@@ -49,6 +49,7 @@ type AppModuleBasic struct {
 // AppModule implements an application module for the market module.
 type AppModule struct {
 	AppModuleBasic
+	keeper  keeper.IKeeper
 	keepers handler.Keepers
 }
 
@@ -117,9 +118,11 @@ func NewAppModule(
 	acckeeper govtypes.AccountKeeper,
 	authzkeeper authzkeeper.Keeper,
 	bkeeper bankkeeper.Keeper,
+	rkeeper handler.ResourcesKeeper,
 ) AppModule {
 	return AppModule{
 		AppModuleBasic: AppModuleBasic{cdc: cdc},
+		keeper:         keeper,
 		keepers: handler.Keepers{
 			Account:    acckeeper,
 			Escrow:     ekeeper,
@@ -129,6 +132,7 @@ func NewAppModule(
 			Provider:   pkeeper,
 			Authz:      authzkeeper,
 			Bank:       bkeeper,
+			Resources:  rkeeper,
 		},
 	}
 }
@@ -147,8 +151,16 @@ func (am AppModule) IsAppModule() {}
 // RegisterServices registers the module's services
 func (am AppModule) RegisterServices(cfg module.Configurator) {
 	types.RegisterMsgServer(cfg.MsgServer(), handler.NewServer(am.keepers))
-	querier := am.keepers.Market.NewQuerier()
+	querier := am.keeper.NewQuerier()
 	types.RegisterQueryServer(cfg.QueryServer(), querier)
+	if err := cfg.RegisterMigration(v1.ModuleName, 7, func(ctx sdk.Context) error {
+		if concrete, ok := am.keeper.(*keeper.Keeper); ok {
+			concrete.MigrateReservationLinks(ctx)
+		}
+		return nil
+	}); err != nil {
+		panic(err)
+	}
 }
 
 // BeginBlock performs no-op
@@ -167,19 +179,19 @@ func (am AppModule) EndBlock(_ context.Context) error {
 func (am AppModule) InitGenesis(ctx sdk.Context, cdc codec.JSONCodec, data json.RawMessage) {
 	var genesisState types.GenesisState
 	cdc.MustUnmarshalJSON(data, &genesisState)
-	InitGenesis(ctx, am.keepers.Market, &genesisState)
+	InitGenesis(ctx, am.keeper, &genesisState)
 }
 
 // ExportGenesis returns the exported genesis state as raw bytes for the market
 // module.
 func (am AppModule) ExportGenesis(ctx sdk.Context, cdc codec.JSONCodec) json.RawMessage {
-	gs := ExportGenesis(ctx, am.keepers.Market)
+	gs := ExportGenesis(ctx, am.keeper)
 	return cdc.MustMarshalJSON(gs)
 }
 
 // ConsensusVersion implements module.AppModule#ConsensusVersion
 func (am AppModule) ConsensusVersion() uint64 {
-	return 7
+	return 8
 }
 
 // AppModuleSimulation functions

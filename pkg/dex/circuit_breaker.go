@@ -4,10 +4,13 @@
 package dex
 
 import (
-	verrors "github.com/virtengine/virtengine/pkg/errors"
+	"strconv"
 	"sync"
 	"sync/atomic"
 	"time"
+
+	sdkmath "cosmossdk.io/math"
+	verrors "github.com/virtengine/virtengine/pkg/errors"
 )
 
 // circuitBreaker implements safety circuit breaker functionality
@@ -78,6 +81,9 @@ func (cb *circuitBreaker) RecordSuccess() {
 // trip trips the circuit breaker
 func (cb *circuitBreaker) trip() {
 	cb.tripped.Store(true)
+	if cb.cfg.CooldownPeriod <= 0 {
+		return
+	}
 
 	// Schedule automatic reset after cooldown
 	verrors.SafeGo("", func() {
@@ -107,16 +113,28 @@ func (cb *circuitBreaker) maybeReset() {
 
 // CheckPriceDeviation checks if price has deviated too much from TWAP
 func (cb *circuitBreaker) CheckPriceDeviation(currentPrice, twapPrice float64) bool {
-	if !cb.cfg.Enabled || twapPrice == 0 {
+	current, err := sdkmath.LegacyNewDecFromStr(strconv.FormatFloat(currentPrice, 'g', -1, 64))
+	if err != nil {
 		return false
 	}
-
-	deviation := (currentPrice - twapPrice) / twapPrice
-	if deviation < 0 {
-		deviation = -deviation
+	twap, err := sdkmath.LegacyNewDecFromStr(strconv.FormatFloat(twapPrice, 'g', -1, 64))
+	if err != nil {
+		return false
 	}
+	threshold, err := sdkmath.LegacyNewDecFromStr(strconv.FormatFloat(cb.cfg.PriceDeviationThreshold, 'g', -1, 64))
+	if err != nil {
+		return false
+	}
+	return cb.CheckPriceDeviationExact(current, twap, threshold)
+}
 
-	if deviation > cb.cfg.PriceDeviationThreshold {
+// CheckPriceDeviationExact checks monetary price ratios without float math.
+func (cb *circuitBreaker) CheckPriceDeviationExact(currentPrice, twapPrice, threshold sdkmath.LegacyDec) bool {
+	if !cb.cfg.Enabled || currentPrice.IsNil() || twapPrice.IsNil() || threshold.IsNil() || !twapPrice.IsPositive() || threshold.IsNegative() {
+		return false
+	}
+	deviation := currentPrice.Sub(twapPrice).Abs().Quo(twapPrice)
+	if deviation.GT(threshold) {
 		cb.mu.Lock()
 		cb.trip()
 		cb.mu.Unlock()

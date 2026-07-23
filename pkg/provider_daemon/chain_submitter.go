@@ -81,11 +81,16 @@ type ChainSubmitterConfig struct {
 	// ClaimTTL is the duration of a queue claim lease.
 	ClaimTTL time.Duration
 
-	// RPCClient is an optional preconfigured RPC client (for tests).
+	// ChainClient handles gas estimation and broadcast for legacy unit tests.
+	ChainClient ChainSubmitterClient
+
+	// RPCClient is a preconfigured Comet client for process-boundary integration
+	// tests only. Production code must use MutationSubmitter.
 	RPCClient *rpchttp.HTTP
 
-	// ChainClient handles gas estimation and broadcast (for tests).
-	ChainClient ChainSubmitterClient
+	// AllowTestLegacyChainClient permits ChainClient without MutationSubmitter.
+	// Production code must leave this false so all writes use ProviderMutationSubmitter.
+	AllowTestLegacyChainClient bool
 
 	// EnableIdempotency enables duplicate submission detection.
 	EnableIdempotency bool
@@ -106,6 +111,10 @@ type ChainSubmitterConfig struct {
 	// UsageStreamState resolves committed sequence state before allocating a
 	// new detached usage proof.
 	UsageStreamState UsageStreamStateResolver
+
+	// MutationSubmitter delegates final signed transaction delivery to the
+	// generalized durable pipeline while preserving Task 84B proof allocation.
+	MutationSubmitter *ProviderMutationSubmitter
 }
 
 // DefaultChainSubmitterConfig returns default chain submitter config.
@@ -162,7 +171,6 @@ type ChainUsageSubmitterImpl struct {
 
 	cfg         ChainSubmitterConfig
 	keyManager  *KeyManager
-	rpcClient   *rpchttp.HTTP
 	chainClient ChainSubmitterClient
 	metrics     *UsageMetricsCollector
 
@@ -175,7 +183,8 @@ type ChainUsageSubmitterImpl struct {
 	sequence      uint64
 	accountNumber uint64
 
-	reportValidator UsageReportValidator
+	reportValidator   UsageReportValidator
+	mutationSubmitter *ProviderMutationSubmitter
 
 	queueStore *txSubmissionQueueStore
 	queueState *txSubmissionQueueState
@@ -204,12 +213,22 @@ func NewChainUsageSubmitter(
 	if !cfg.Enabled {
 		return nil, nil
 	}
+	if cfg.RPCClient != nil && cfg.ChainClient == nil {
+		cfg.ChainClient = &rpcSubmitterClient{rpc: cfg.RPCClient, cfg: cfg}
+		cfg.AllowTestLegacyChainClient = true
+	}
+	if cfg.MutationSubmitter == nil && cfg.ChainClient == nil {
+		return nil, fmt.Errorf("%w: generalized mutation submitter is required", ErrProviderMutationUnavailable)
+	}
+	if cfg.MutationSubmitter == nil && cfg.ChainClient != nil && !cfg.AllowTestLegacyChainClient {
+		return nil, fmt.Errorf("%w: legacy chain client requires explicit test-only opt-in", ErrProviderMutationUnavailable)
+	}
 
 	if cfg.ProviderAddress == "" {
 		return nil, errors.New("provider address is required")
 	}
 
-	if cfg.CometRPC == "" && cfg.RPCClient == nil && cfg.ChainClient == nil {
+	if cfg.CometRPC == "" && cfg.MutationSubmitter == nil && cfg.ChainClient == nil {
 		return nil, errors.New("comet RPC endpoint is required")
 	}
 	if cfg.QueueStatePath == "" {
@@ -249,7 +268,6 @@ func NewChainUsageSubmitter(
 	submitter := &ChainUsageSubmitterImpl{
 		cfg:               cfg,
 		keyManager:        keyManager,
-		rpcClient:         cfg.RPCClient,
 		chainClient:       cfg.ChainClient,
 		metrics:           metrics,
 		pendingBatch:      make([]*ChainUsageReport, 0),
@@ -258,8 +276,9 @@ func NewChainUsageSubmitter(
 		sequence:          cfg.Sequence,
 		accountNumber:     cfg.AccountNumber,
 		reportValidator:   cfg.ReportValidator,
+		mutationSubmitter: cfg.MutationSubmitter,
 		workerID:          fmt.Sprintf("chain-submitter-%d", time.Now().UnixNano()),
-		useLegacyEnvelope: cfg.ChainClient != nil,
+		useLegacyEnvelope: cfg.MutationSubmitter == nil && cfg.ChainClient != nil,
 	}
 	if submitter.reportValidator == nil {
 		submitter.reportValidator = defaultUsageReportValidator
@@ -291,20 +310,11 @@ func (s *ChainUsageSubmitterImpl) Start(ctx context.Context) error {
 		return nil
 	}
 
-	if s.rpcClient == nil && s.chainClient == nil {
-		// Connect to RPC
-		rpc, err := rpchttp.New(s.cfg.CometRPC, "/websocket")
-		if err != nil {
-			return fmt.Errorf("create rpc client: %w", err)
-		}
-		if err := rpc.Start(); err != nil {
-			return fmt.Errorf("start rpc client: %w", err)
-		}
-		s.rpcClient = rpc
+	if s.mutationSubmitter == nil && s.chainClient == nil {
+		return fmt.Errorf("%w: generalized mutation submitter is required", ErrProviderMutationUnavailable)
 	}
-
-	if s.chainClient == nil && s.rpcClient != nil {
-		s.chainClient = &rpcSubmitterClient{rpc: s.rpcClient, cfg: s.cfg}
+	if s.mutationSubmitter == nil && s.chainClient != nil && !s.cfg.AllowTestLegacyChainClient {
+		return fmt.Errorf("%w: legacy chain client requires explicit test-only opt-in", ErrProviderMutationUnavailable)
 	}
 	if !s.useLegacyEnvelope {
 		if err := s.reconcileAccountSequence(ctx); err != nil {
@@ -350,9 +360,6 @@ func (s *ChainUsageSubmitterImpl) Stop() {
 	close(s.stopChan)
 	s.wg.Wait()
 
-	if s.rpcClient != nil {
-		_ = s.rpcClient.Stop()
-	}
 	s.queueLock.release()
 
 	s.stopChan = make(chan struct{})
@@ -556,6 +563,21 @@ func (s *ChainUsageSubmitterImpl) submitBatch(ctx context.Context, reports []*Ch
 //
 //nolint:unparam // ctx kept for future context deadline handling
 func (s *ChainUsageSubmitterImpl) signAndBroadcast(ctx context.Context, msg interface{}) (string, error) {
+	if s.mutationSubmitter != nil {
+		sdkMsgs, err := s.toSDKMsgs(msg)
+		if err != nil {
+			return "", err
+		}
+		if len(sdkMsgs) != 1 {
+			return "", fmt.Errorf("generalized mutation pipeline requires one durable message per queue item")
+		}
+		kind, err := providerMutationKindForSDKMsg(sdkMsgs[0])
+		if err != nil {
+			return "", err
+		}
+		result, err := s.mutationSubmitter.Submit(ctx, kind, sdkMsgs[0])
+		return result.TxHash, err
+	}
 	if s.keyManager == nil {
 		return "", errors.New("key manager not configured")
 	}
@@ -596,6 +618,19 @@ func (s *ChainUsageSubmitterImpl) signAndBroadcast(ctx context.Context, msg inte
 	}
 	s.incrementSequence()
 	return txHash, nil
+}
+
+func providerMutationKindForSDKMsg(msg sdk.Msg) (ProviderMutationKind, error) {
+	switch msg.(type) {
+	case *settlementv1.MsgRecordUsage:
+		return MutationSettlementRecordUsage, nil
+	case *settlementv1.MsgSettleOrder:
+		return MutationSettlementSettleOrder, nil
+	case *settlementv1.MsgRecordFiatConversionObservation:
+		return MutationSettlementFiatObservation, nil
+	default:
+		return "", fmt.Errorf("unsupported generalized usage mutation %T", msg)
+	}
 }
 
 func (s *ChainUsageSubmitterImpl) reconcileAccountSequence(ctx context.Context) error {
@@ -670,6 +705,40 @@ type classifiedBroadcastError struct {
 	Retryable bool
 }
 
+type rpcSubmitterClient struct {
+	rpc *rpchttp.HTTP
+	cfg ChainSubmitterConfig
+}
+
+func (c *rpcSubmitterClient) EstimateGas(_ context.Context, _ []byte) (uint64, error) {
+	if c.cfg.GasLimit == 0 {
+		return DefaultChainSubmitterConfig().GasLimit, nil
+	}
+	return c.cfg.GasLimit, nil
+}
+
+func (c *rpcSubmitterClient) BroadcastTx(ctx context.Context, tx []byte) (string, error) {
+	if c.rpc == nil {
+		return "", errors.New("rpc client not configured")
+	}
+	localHash := strings.ToUpper(hex.EncodeToString(tmtypes.Tx(tx).Hash()))
+	result, err := c.rpc.BroadcastTxCommit(ctx, tx)
+	if err != nil {
+		return localHash, &classifiedBroadcastError{Message: fmt.Sprintf("broadcast tx: %v", err), Retryable: true}
+	}
+	txHash := strings.ToUpper(hex.EncodeToString(result.Hash))
+	if txHash == "" {
+		txHash = localHash
+	}
+	if result.CheckTx.Code != 0 {
+		return txHash, classifyBroadcastError(result.CheckTx.Log)
+	}
+	if result.TxResult.Code != 0 {
+		return txHash, classifyBroadcastError(result.TxResult.Log)
+	}
+	return txHash, nil
+}
+
 func (e *classifiedBroadcastError) Error() string {
 	return e.Message
 }
@@ -681,76 +750,6 @@ type txEnvelope struct {
 	Sequence      uint64          `json:"sequence"`
 	GasLimit      uint64          `json:"gas_limit"`
 	AccountNumber uint64          `json:"account_number"`
-}
-
-type rpcSubmitterClient struct {
-	rpc *rpchttp.HTTP
-	cfg ChainSubmitterConfig
-}
-
-func (c *rpcSubmitterClient) EstimateGas(_ context.Context, _ []byte) (uint64, error) {
-	if c.cfg.GasLimit == 0 {
-		return 200000, nil
-	}
-	return c.cfg.GasLimit, nil
-}
-
-func (c *rpcSubmitterClient) BroadcastTx(ctx context.Context, tx []byte) (string, error) {
-	if c.rpc == nil {
-		return "", errors.New("rpc client not configured")
-	}
-	localHash := strings.ToUpper(hex.EncodeToString(tmtypes.Tx(tx).Hash()))
-	res, err := c.rpc.BroadcastTxCommit(ctx, tx)
-	if err != nil {
-		reconciledHash, reconcileErr := c.reconcileBroadcastError(ctx, localHash)
-		if reconcileErr == nil {
-			return reconciledHash, nil
-		}
-		return "", &classifiedBroadcastError{
-			Message:   fmt.Sprintf("broadcast tx: %v", err),
-			Retryable: true,
-		}
-	}
-	txHash := strings.ToUpper(hex.EncodeToString(res.Hash))
-	if txHash == "" {
-		txHash = localHash
-	}
-	if res.CheckTx.Code != 0 {
-		err := classifyBroadcastError(res.CheckTx.Log)
-		if err == nil {
-			err = fmt.Errorf("broadcast rejected by CheckTx with code=%d", res.CheckTx.Code)
-		}
-		return "", err
-	}
-	if res.TxResult.Code != 0 {
-		err := classifyBroadcastError(res.TxResult.Log)
-		if err == nil {
-			err = fmt.Errorf("broadcast failed in DeliverTx with code=%d", res.TxResult.Code)
-		}
-		return "", err
-	}
-	return txHash, nil
-}
-
-func (c *rpcSubmitterClient) reconcileBroadcastError(ctx context.Context, txHash string) (string, error) {
-	if c.rpc == nil || txHash == "" {
-		return "", fmt.Errorf("rpc reconciliation unavailable")
-	}
-	hashBytes, err := hex.DecodeString(strings.ToLower(txHash))
-	if err != nil {
-		return "", fmt.Errorf("decode tx hash: %w", err)
-	}
-
-	qctx, cancel := context.WithTimeout(ctx, 2*time.Second)
-	defer cancel()
-	txRes, err := c.rpc.Tx(qctx, hashBytes, false)
-	if err != nil || txRes == nil {
-		return "", fmt.Errorf("tx reconciliation failed: %w", err)
-	}
-	if txRes.TxResult.Code != 0 {
-		return txHash, classifyBroadcastError(txRes.TxResult.Log)
-	}
-	return txHash, nil
 }
 
 func defaultUsageReportValidator(report *ChainUsageReport) error {

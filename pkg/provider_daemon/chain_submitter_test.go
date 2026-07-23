@@ -189,6 +189,7 @@ func newSubmitterWithClient(t *testing.T, client ChainSubmitterClient, cfgOverri
 	cfg.ProviderAddress = testSubmitterProviderAddress
 	cfg.ChainID = testSubmitterChainID
 	cfg.ChainClient = client
+	cfg.AllowTestLegacyChainClient = true
 	cfg.CometRPC = ""
 	cfg.RetryBackoff = 0
 	cfg.QueueStatePath = filepath.Join(t.TempDir(), "queue-state.json")
@@ -217,6 +218,9 @@ func TestChainSubmitterInitialization(t *testing.T) {
 	cfg.ProviderAddress = testSubmitterProviderAddress
 	cfg.CometRPC = ""
 	cfg.ChainClient = mockClient
+	_, err = NewChainUsageSubmitter(cfg, newTestKeyManager(t), nil)
+	require.ErrorIs(t, err, ErrProviderMutationUnavailable)
+	cfg.AllowTestLegacyChainClient = true
 	submitter, err := NewChainUsageSubmitter(cfg, newTestKeyManager(t), nil)
 	require.NoError(t, err)
 	require.NotNil(t, submitter.chainClient)
@@ -402,6 +406,7 @@ func TestChainSubmitterQueuePersistenceAcrossRestart(t *testing.T) {
 	cfg.CometRPC = ""
 	cfg.QueueStatePath = queuePath
 	cfg.ChainClient = newMockSubmitterClient(100000)
+	cfg.AllowTestLegacyChainClient = true
 
 	submitter1, err := NewChainUsageSubmitter(cfg, newTestKeyManager(t), nil)
 	require.NoError(t, err)
@@ -412,6 +417,7 @@ func TestChainSubmitterQueuePersistenceAcrossRestart(t *testing.T) {
 
 	mockClient := newMockSubmitterClient(100000)
 	cfg.ChainClient = mockClient
+	cfg.AllowTestLegacyChainClient = true
 	submitter2, err := NewChainUsageSubmitter(cfg, newTestKeyManager(t), nil)
 	require.NoError(t, err)
 	t.Cleanup(submitter2.Stop)
@@ -437,6 +443,7 @@ func TestAuthenticatedUsageProofAllocationPersistsAcrossRestart(t *testing.T) {
 	cfg.ProviderAddress = testSubmitterProviderAddress
 	cfg.ChainID = testSubmitterChainID
 	cfg.ChainClient = newMockSubmitterClient(100000)
+	cfg.AllowTestLegacyChainClient = true
 	cfg.QueueStatePath = queuePath
 	cfg.ProviderSigningState = testSigningResolver(t, km1)
 	submitter1, err := NewChainUsageSubmitter(cfg, km1, nil)
@@ -495,6 +502,7 @@ func TestAuthenticatedUsageRefreshesExpiredUnbroadcastProof(t *testing.T) {
 	cfg.ProviderAddress = testSubmitterProviderAddress
 	cfg.ChainID = testSubmitterChainID
 	cfg.ChainClient = newMockSubmitterClient(100000)
+	cfg.AllowTestLegacyChainClient = true
 	cfg.QueueStatePath = queuePath
 	cfg.ProviderSigningState = resolver
 	submitter, err := NewChainUsageSubmitter(cfg, km, nil)
@@ -524,6 +532,7 @@ func TestChainSubmitterSharedQueueInstancesDoNotOverwrite(t *testing.T) {
 		cfg.ProviderAddress = testSubmitterProviderAddress
 		cfg.ChainID = testSubmitterChainID
 		cfg.ChainClient = newMockSubmitterClient(100000)
+		cfg.AllowTestLegacyChainClient = true
 		cfg.QueueStatePath = queuePath
 		km := newTestKeyManager(t)
 		cfg.ProviderSigningState = testSigningResolver(t, km)

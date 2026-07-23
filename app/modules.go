@@ -194,6 +194,7 @@ func appModules(
 			app.Keepers.Cosmos.Acct,
 			app.Keepers.Cosmos.Authz,
 			app.Keepers.Cosmos.Bank,
+			app.Keepers.VirtEngine.Resources,
 		),
 		marketplace.NewAppModule(
 			app.cdc,
@@ -410,6 +411,7 @@ func appSimModules(
 			app.Keepers.Cosmos.Acct,
 			app.Keepers.Cosmos.Authz,
 			app.Keepers.Cosmos.Bank,
+			app.Keepers.VirtEngine.Resources,
 		),
 		marketplace.NewAppModule(
 			app.cdc,

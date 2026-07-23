@@ -133,4 +133,7 @@ message Lease {
     (gogoproto.jsontag)  = "reason",
     (gogoproto.moretags) = "yaml:\"reason\""
   ];
+
+  // ReservationId links the lease to authoritative x/resources capacity.
+  string reservation_id = 7 [(gogoproto.jsontag) = "reservation_id,omitempty", (gogoproto.moretags) = "yaml:\"reservation_id\""];
 }

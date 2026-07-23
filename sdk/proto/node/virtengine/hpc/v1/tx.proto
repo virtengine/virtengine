@@ -166,12 +166,17 @@ message MsgSubmitJob {
   string encrypted_outputs_pointer = 8 [(gogoproto.jsontag) = "encrypted_outputs_pointer,omitempty", (gogoproto.moretags) = "yaml:\"encrypted_outputs_pointer\""];
   int64 max_runtime_seconds = 9 [(gogoproto.jsontag) = "max_runtime_seconds", (gogoproto.moretags) = "yaml:\"max_runtime_seconds\""];
   repeated cosmos.base.v1beta1.Coin max_price = 10 [(gogoproto.nullable) = false, (gogoproto.castrepeated) = "github.com/cosmos/cosmos-sdk/types.Coins", (gogoproto.jsontag) = "max_price", (gogoproto.moretags) = "yaml:\"max_price\""];
+  string reservation_id = 11 [(gogoproto.jsontag) = "reservation_id,omitempty", (gogoproto.moretags) = "yaml:\"reservation_id\""];
+  string market_order_id = 12 [(gogoproto.jsontag) = "market_order_id,omitempty", (gogoproto.moretags) = "yaml:\"market_order_id\""];
+  string market_bid_id = 13 [(gogoproto.jsontag) = "market_bid_id,omitempty", (gogoproto.moretags) = "yaml:\"market_bid_id\""];
+  string market_lease_id = 14 [(gogoproto.jsontag) = "market_lease_id,omitempty", (gogoproto.moretags) = "yaml:\"market_lease_id\""];
 }
 
 // MsgSubmitJobResponse is the response for MsgSubmitJob
 message MsgSubmitJobResponse {
   string job_id = 1 [(gogoproto.jsontag) = "job_id", (gogoproto.moretags) = "yaml:\"job_id\""];
   string escrow_id = 2 [(gogoproto.jsontag) = "escrow_id", (gogoproto.moretags) = "yaml:\"escrow_id\""];
+  string reservation_id = 3 [(gogoproto.jsontag) = "reservation_id", (gogoproto.moretags) = "yaml:\"reservation_id\""];
 }
 
 // MsgCancelJob cancels an HPC job
@@ -256,6 +261,8 @@ message MsgFlagDispute {
 // MsgFlagDisputeResponse is the response for MsgFlagDispute
 message MsgFlagDisputeResponse {
   string dispute_id = 1 [(gogoproto.jsontag) = "dispute_id", (gogoproto.moretags) = "yaml:\"dispute_id\""];
+  string financial_case_id = 2 [(gogoproto.jsontag) = "financial_case_id", (gogoproto.moretags) = "yaml:\"financial_case_id\""];
+  string financial_case_status = 3 [(gogoproto.jsontag) = "financial_case_status", (gogoproto.moretags) = "yaml:\"financial_case_status\""];
 }
 
 // MsgResolveDispute resolves a dispute (moderator only)

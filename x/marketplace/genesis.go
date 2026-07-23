@@ -67,6 +67,7 @@ func InitGenesis(ctx sdk.Context, k marketplacekeeper.IKeeper, gs *marketplacety
 		panic(err)
 	}
 	store.Set(marketplacetypes.EventSequenceKey(), bz)
+	k.ActivateCanonicalLifecycle(ctx)
 }
 
 // ExportGenesis exports module state to genesis.

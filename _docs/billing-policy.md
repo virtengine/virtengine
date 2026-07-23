@@ -334,10 +334,25 @@ Customers can set their tax profile:
 ### Dispute Lifecycle
 
 ```
-Open → Under Review → [Resolved | Escalated] → Closed
-                           ↓
-                       Arbitration
+Open → Evidence → Review → [Escalated] → Resolved Pending Appeal → Final
+  └──────────── quarantine/recovery ──────────────────────────────┘
 ```
+
+`x/settlement` is the sole financial-case authority after software upgrade
+`v1.7.0`. Escrow billing disputes, fraud reports, HPC disputes, reviews and
+moderation findings are compatibility projections or typed claims. They cannot
+release, refund, transfer, reward or slash value independently after activation.
+
+One active canonical subject group covers all supplied order, invoice, usage,
+HPC job, settlement, escrow, lease and reservation aliases. Simultaneous filings
+merge into that case. Payout, escrow, unclaimed rewards and capacity remain held
+through review and appeal.
+
+The case records provider/customer financial roles separately from
+claimant/respondent filing roles. Either party may file, but terminal provider
+and customer allocations always route to the committed financial parties.
+Public filings prove party lineage; only application-wired module adapters can
+submit trusted projection claims.
 
 ### Dispute Resolutions
 
@@ -348,6 +363,26 @@ Open → Under Review → [Resolved | Escalated] → Closed
 | `partial_refund` | Partial refund agreed |
 | `mutual_agreement` | Custom settlement |
 | `arbitration` | Third-party decision |
+
+Terminal allocations are multi-denomination `sdk.Coins`. For every denomination
+independently, provider + customer/refund + platform/fees + slash/witness must
+equal the original held exposure exactly. Cross-denomination netting, floating
+point allocation and release before the appeal deadline are prohibited.
+
+### Evidence privacy
+
+Canonical claims store a SHA-256 evidence hash and a bounded encrypted or
+content-addressed reference only. Raw descriptions, evidence files, manifests,
+PII, biometrics, ciphertext payloads and keys must not be copied into public
+case state, events or logs.
+
+### Legacy compatibility
+
+Historical completed billing dispute records remain queryable and immutable.
+Before `v1.7.0`, legacy replay semantics remain available. After activation,
+legacy open/resolve APIs create a projection or request canonical escalation;
+independent money-changing resolution is rejected. Ambiguous migration roots
+remain held and quarantined under the financial-case remediation runbook.
 
 ### Settlement Hooks
 

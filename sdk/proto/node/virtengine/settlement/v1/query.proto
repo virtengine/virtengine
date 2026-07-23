@@ -5,6 +5,7 @@ import "google/api/annotations.proto";
 import "gogoproto/gogo.proto";
 import "cosmos_proto/cosmos.proto";
 import "cosmos/base/v1beta1/coin.proto";
+import "cosmos/base/query/v1beta1/pagination.proto";
 
 option go_package = "github.com/virtengine/virtengine/sdk/go/node/settlement/v1";
 
@@ -290,6 +291,276 @@ message PayoutRecord {
   int64 processed_at = 24;
   int64 completed_at = 25;
   int64 block_height = 26;
+  // external_finality_hash is a SHA-256 digest for an authenticated external
+  // payout. It is never an on-chain transaction hash.
+  bytes external_finality_hash = 27;
+  // value_movement_applied is true only after net_amount moved from the
+  // settlement account to the governed fiat custody sink.
+  bool value_movement_applied = 28;
+  // value_movement_effect_hash binds the payout to that exact bank effect.
+  bytes value_movement_effect_hash = 29;
+}
+
+// FinancialSubjectType identifies the canonical financial lineage root.
+enum FinancialSubjectType {
+  FINANCIAL_SUBJECT_TYPE_UNSPECIFIED = 0;
+  FINANCIAL_SUBJECT_TYPE_ORDER = 1;
+  FINANCIAL_SUBJECT_TYPE_INVOICE = 2;
+  FINANCIAL_SUBJECT_TYPE_USAGE = 3;
+  FINANCIAL_SUBJECT_TYPE_HPC_JOB = 4;
+  FINANCIAL_SUBJECT_TYPE_SETTLEMENT = 5;
+}
+
+// FinancialClaimType identifies a privacy-safe typed allegation or finding.
+enum FinancialClaimType {
+  FINANCIAL_CLAIM_TYPE_UNSPECIFIED = 0;
+  FINANCIAL_CLAIM_TYPE_BILLING = 1;
+  FINANCIAL_CLAIM_TYPE_USAGE = 2;
+  FINANCIAL_CLAIM_TYPE_SERVICE = 3;
+  FINANCIAL_CLAIM_TYPE_FRAUD = 4;
+  FINANCIAL_CLAIM_TYPE_HPC = 5;
+  FINANCIAL_CLAIM_TYPE_REVIEW = 6;
+  FINANCIAL_CLAIM_TYPE_MODERATION = 7;
+  FINANCIAL_CLAIM_TYPE_MIGRATION = 8;
+}
+
+// FinancialCaseStatus is the canonical dispute lifecycle state.
+enum FinancialCaseStatus {
+  FINANCIAL_CASE_STATUS_UNSPECIFIED = 0;
+  FINANCIAL_CASE_STATUS_OPEN = 1;
+  FINANCIAL_CASE_STATUS_EVIDENCE = 2;
+  FINANCIAL_CASE_STATUS_REVIEW = 3;
+  FINANCIAL_CASE_STATUS_ESCALATED = 4;
+  FINANCIAL_CASE_STATUS_RESOLVED_PENDING_APPEAL = 5;
+  FINANCIAL_CASE_STATUS_FINAL = 6;
+  FINANCIAL_CASE_STATUS_REJECTED = 7;
+  FINANCIAL_CASE_STATUS_CANCELLED = 8;
+  FINANCIAL_CASE_STATUS_EXPIRED = 9;
+  FINANCIAL_CASE_STATUS_QUARANTINED = 10;
+}
+
+// FinancialResolutionType selects the terminal policy applied after appeal.
+enum FinancialResolutionType {
+  FINANCIAL_RESOLUTION_TYPE_UNSPECIFIED = 0;
+  FINANCIAL_RESOLUTION_TYPE_PROVIDER_WIN = 1;
+  FINANCIAL_RESOLUTION_TYPE_CUSTOMER_WIN = 2;
+  FINANCIAL_RESOLUTION_TYPE_PARTIAL_SPLIT = 3;
+  FINANCIAL_RESOLUTION_TYPE_MUTUAL = 4;
+  FINANCIAL_RESOLUTION_TYPE_FRAUD_CONFIRMED = 5;
+  FINANCIAL_RESOLUTION_TYPE_INCONCLUSIVE_TIMEOUT = 6;
+}
+
+// FinancialEffectType identifies an exactly-once terminal side effect.
+enum FinancialEffectType {
+  FINANCIAL_EFFECT_TYPE_UNSPECIFIED = 0;
+  FINANCIAL_EFFECT_TYPE_PAYOUT = 1;
+  FINANCIAL_EFFECT_TYPE_ESCROW = 2;
+  FINANCIAL_EFFECT_TYPE_REWARD = 3;
+  FINANCIAL_EFFECT_TYPE_RESERVATION = 4;
+  FINANCIAL_EFFECT_TYPE_REPUTATION = 5;
+  FINANCIAL_EFFECT_TYPE_PROJECTION = 6;
+}
+
+// FinancialEffectStatus identifies durable effect progress.
+enum FinancialEffectStatus {
+  FINANCIAL_EFFECT_STATUS_UNSPECIFIED = 0;
+  FINANCIAL_EFFECT_STATUS_PENDING = 1;
+  FINANCIAL_EFFECT_STATUS_APPLIED = 2;
+  FINANCIAL_EFFECT_STATUS_FAILED = 3;
+}
+
+// FinancialSubject contains all known privacy-safe lineage identifiers.
+message FinancialSubject {
+  FinancialSubjectType type = 1;
+  string primary_id = 2;
+  string order_id = 3;
+  string invoice_id = 4;
+  string usage_id = 5;
+  string hpc_job_id = 6;
+  string settlement_id = 7;
+  string escrow_id = 8;
+  string reservation_id = 9;
+  string lease_id = 10;
+}
+
+// FinancialClaim is one typed claim merged into the canonical case.
+message FinancialClaim {
+  string claim_id = 1;
+  FinancialClaimType claim_type = 2;
+  string claimant = 3 [(cosmos_proto.scalar) = "cosmos.AddressString"];
+  string source_module = 4;
+  string source_reference = 5;
+  bytes evidence_hash = 6;
+  string encrypted_reference = 7;
+  bytes payload_hash = 8;
+  bytes idempotency_key = 9;
+  int64 created_height = 10;
+  int64 created_at = 11;
+  string recommendation = 12;
+}
+
+// FinancialExposure is the original multi-denom value/capacity held by a case.
+message FinancialExposure {
+  repeated cosmos.base.v1beta1.Coin escrow_amount = 1 [
+    (gogoproto.nullable) = false,
+    (gogoproto.castrepeated) = "github.com/cosmos/cosmos-sdk/types.Coins"
+  ];
+  repeated cosmos.base.v1beta1.Coin payout_amount = 2 [
+    (gogoproto.nullable) = false,
+    (gogoproto.castrepeated) = "github.com/cosmos/cosmos-sdk/types.Coins"
+  ];
+  repeated cosmos.base.v1beta1.Coin unclaimed_rewards = 3 [
+    (gogoproto.nullable) = false,
+    (gogoproto.castrepeated) = "github.com/cosmos/cosmos-sdk/types.Coins"
+  ];
+  string reservation_id = 4;
+  string payout_id = 5;
+  string escrow_id = 6;
+  repeated cosmos.base.v1beta1.Coin original_held = 7 [
+    (gogoproto.nullable) = false,
+    (gogoproto.castrepeated) = "github.com/cosmos/cosmos-sdk/types.Coins"
+  ];
+  string reward_address = 8 [(cosmos_proto.scalar) = "cosmos.AddressString"];
+}
+
+// TerminalAllocation conserves the original held exposure independently per denom.
+message TerminalAllocation {
+  repeated cosmos.base.v1beta1.Coin original_exposure = 1 [
+    (gogoproto.nullable) = false,
+    (gogoproto.castrepeated) = "github.com/cosmos/cosmos-sdk/types.Coins"
+  ];
+  repeated cosmos.base.v1beta1.Coin provider = 2 [
+    (gogoproto.nullable) = false,
+    (gogoproto.castrepeated) = "github.com/cosmos/cosmos-sdk/types.Coins"
+  ];
+  repeated cosmos.base.v1beta1.Coin customer = 3 [
+    (gogoproto.nullable) = false,
+    (gogoproto.castrepeated) = "github.com/cosmos/cosmos-sdk/types.Coins"
+  ];
+  repeated cosmos.base.v1beta1.Coin platform = 4 [
+    (gogoproto.nullable) = false,
+    (gogoproto.castrepeated) = "github.com/cosmos/cosmos-sdk/types.Coins"
+  ];
+  repeated cosmos.base.v1beta1.Coin slash_witness = 5 [
+    (gogoproto.nullable) = false,
+    (gogoproto.castrepeated) = "github.com/cosmos/cosmos-sdk/types.Coins"
+  ];
+  string slash_witness_recipient = 6 [(cosmos_proto.scalar) = "cosmos.AddressString"];
+  FinancialResolutionType resolution_type = 7;
+  bytes allocation_hash = 8;
+}
+
+// FinancialAppeal is a bounded privacy-safe appeal filing.
+message FinancialAppeal {
+  string appeal_id = 1;
+  string appellant = 2 [(cosmos_proto.scalar) = "cosmos.AddressString"];
+  bytes evidence_hash = 3;
+  string encrypted_reference = 4;
+  int64 created_height = 5;
+  int64 created_at = 6;
+  bytes idempotency_key = 7;
+}
+
+// FinancialCaseTransition is one append-only audit transition.
+message FinancialCaseTransition {
+  uint64 sequence = 1;
+  FinancialCaseStatus from = 2;
+  FinancialCaseStatus to = 3;
+  string actor = 4;
+  string action = 5;
+  bytes reason_hash = 6;
+  int64 block_height = 7;
+  int64 block_time = 8;
+}
+
+// FinancialCaseEffect is an exactly-once persisted terminal effect marker.
+message FinancialCaseEffect {
+  string effect_id = 1;
+  FinancialEffectType type = 2;
+  FinancialEffectStatus status = 3;
+  string reference_id = 4;
+  uint32 attempts = 5;
+  int64 applied_height = 6;
+  int64 applied_at = 7;
+  string error_code = 8;
+}
+
+// FinancialCase is the sole authoritative financial dispute aggregate.
+message FinancialCase {
+  uint32 version = 1;
+  string case_id = 2;
+  FinancialSubject subject = 3 [(gogoproto.nullable) = false];
+  repeated FinancialClaim claims = 4 [(gogoproto.nullable) = false];
+  string claimant = 5 [(cosmos_proto.scalar) = "cosmos.AddressString"];
+  string respondent = 6 [(cosmos_proto.scalar) = "cosmos.AddressString"];
+  FinancialExposure exposure = 7 [(gogoproto.nullable) = false];
+  FinancialCaseStatus status = 8;
+  int64 filing_deadline_height = 9;
+  int64 evidence_deadline_height = 10;
+  int64 review_deadline_height = 11;
+  int64 appeal_deadline_height = 12;
+  int64 escalation_deadline_height = 13;
+  int64 filing_deadline_time = 14;
+  int64 evidence_deadline_time = 15;
+  int64 review_deadline_time = 16;
+  int64 appeal_deadline_time = 17;
+  int64 escalation_deadline_time = 18;
+  string resolver_authority = 19 [(cosmos_proto.scalar) = "cosmos.AddressString"];
+  TerminalAllocation terminal_allocation = 20;
+  repeated FinancialAppeal appeals = 21 [(gogoproto.nullable) = false];
+  uint32 max_appeals = 22;
+  bytes open_idempotency_key = 23;
+  bool migrated = 24;
+  bool quarantined = 25;
+  string quarantine_reason = 26;
+  repeated FinancialCaseTransition transitions = 27 [(gogoproto.nullable) = false];
+  repeated FinancialCaseEffect effects = 28 [(gogoproto.nullable) = false];
+  int64 created_height = 29;
+  int64 created_at = 30;
+  int64 updated_height = 31;
+  int64 updated_at = 32;
+  bytes claim_root = 33;
+  uint32 active_hold_count = 34;
+  uint32 legacy_source_count = 35;
+  string provider = 36 [(cosmos_proto.scalar) = "cosmos.AddressString"];
+  string customer = 37 [(cosmos_proto.scalar) = "cosmos.AddressString"];
+}
+
+// Generated financial-case events use bounded, privacy-safe fields only.
+message EventFinancialCaseOpened { string case_id = 1; string subject_key = 2; FinancialCaseStatus status = 3; uint32 hold_count = 4; }
+message EventFinancialClaimAdded { string case_id = 1; string claim_id = 2; FinancialClaimType claim_type = 3; string source_module = 4; }
+message EventFinancialCaseHeld { string case_id = 1; string reference_type = 2; string reference_id = 3; }
+message EventFinancialCaseReviewed { string case_id = 1; FinancialCaseStatus status = 2; }
+message EventFinancialCaseEscalated { string case_id = 1; FinancialCaseStatus status = 2; }
+message EventFinancialCaseResolved { string case_id = 1; FinancialResolutionType resolution_type = 2; bytes allocation_hash = 3; }
+message EventFinancialCaseAppealed { string case_id = 1; string appeal_id = 2; uint32 appeal_count = 3; }
+message EventFinancialCaseFinalized { string case_id = 1; FinancialResolutionType resolution_type = 2; }
+message EventFinancialCaseEffectApplied { string case_id = 1; string effect_id = 2; FinancialEffectType effect_type = 3; }
+message EventFinancialCaseQuarantined { string case_id = 1; bytes reason_hash = 2; }
+message EventFinancialCaseExpired { string case_id = 1; FinancialCaseStatus status = 2; }
+
+// FiatConversionProfileState distinguishes engineering readiness from real
+// external production certification. Only CERTIFIED_ENABLED is executable.
+enum FiatConversionProfileState {
+  FIAT_CONVERSION_PROFILE_STATE_UNSPECIFIED = 0;
+  FIAT_CONVERSION_PROFILE_STATE_UNSUPPORTED = 1;
+  FIAT_CONVERSION_PROFILE_STATE_ENGINEERING_INCOMPLETE = 2;
+  FIAT_CONVERSION_PROFILE_STATE_ENGINEERING_COMPLETE_EXTERNAL_BLOCKED = 3;
+  FIAT_CONVERSION_PROFILE_STATE_CERTIFIED_ENABLED = 4;
+  FIAT_CONVERSION_PROFILE_STATE_PAUSED = 5;
+}
+
+// FiatConversionObservationStage is the legal external execution vocabulary.
+enum FiatConversionObservationStage {
+  FIAT_CONVERSION_OBSERVATION_STAGE_UNSPECIFIED = 0;
+  FIAT_CONVERSION_OBSERVATION_STAGE_QUOTE_ACCEPTED = 1;
+  FIAT_CONVERSION_OBSERVATION_STAGE_SWAP_SUBMITTED = 2;
+  FIAT_CONVERSION_OBSERVATION_STAGE_SWAP_FINALIZED = 3;
+  FIAT_CONVERSION_OBSERVATION_STAGE_PAYOUT_QUOTED = 4;
+  FIAT_CONVERSION_OBSERVATION_STAGE_PAYOUT_SUBMITTED = 5;
+  FIAT_CONVERSION_OBSERVATION_STAGE_PAYOUT_COMPLETED = 6;
+  FIAT_CONVERSION_OBSERVATION_STAGE_FAILED = 7;
+  FIAT_CONVERSION_OBSERVATION_STAGE_CANCELLED = 8;
 }
 
 // Params defines the parameters for the settlement module.
@@ -329,6 +600,30 @@ message Params {
   string fiat_conversion_max_slippage = 33;
   int32 fiat_conversion_risk_score_threshold = 34;
   string fiat_conversion_min_compliance_status = 35;
+  uint64 financial_case_filing_window_seconds = 36;
+  uint64 financial_case_evidence_window_seconds = 37;
+  uint64 financial_case_review_window_seconds = 38;
+  uint64 financial_case_appeal_window_seconds = 39;
+  uint64 financial_case_escalation_window_seconds = 40;
+  int64 financial_case_filing_window_blocks = 41;
+  int64 financial_case_evidence_window_blocks = 42;
+  int64 financial_case_review_window_blocks = 43;
+  int64 financial_case_appeal_window_blocks = 44;
+  int64 financial_case_escalation_window_blocks = 45;
+  uint32 financial_case_max_claims = 46;
+  uint32 financial_case_max_appeals = 47;
+  uint32 financial_case_max_evidence_reference_bytes = 48;
+  uint32 financial_case_timeout_batch_limit = 49;
+  string fiat_conversion_dex_profile_id = 50;
+  bytes fiat_conversion_dex_profile_digest = 51;
+  FiatConversionProfileState fiat_conversion_dex_profile_state = 52;
+  string fiat_conversion_payout_profile_id = 53;
+  bytes fiat_conversion_payout_profile_digest = 54;
+  FiatConversionProfileState fiat_conversion_payout_profile_state = 55;
+  uint32 fiat_conversion_min_swap_finality_confirmations = 56;
+  uint64 fiat_conversion_observation_max_past_seconds = 57;
+  uint64 fiat_conversion_observation_max_future_seconds = 58;
+  uint32 fiat_conversion_max_observations = 59;
 }
 
 // TokenSpec captures token metadata for swaps.
@@ -355,6 +650,9 @@ message FiatPayoutPreference {
   TokenSpec stable_token = 12 [(gogoproto.nullable) = false];
   int64 created_at = 13;
   int64 updated_at = 14;
+  // slippage_tolerance_exact is the canonical decimal used for decisions.
+  // The legacy double at field 10 remains read-only compatibility data.
+  string slippage_tolerance_exact = 15;
 }
 
 // FiatConversionAuditEntry is an audit log entry for conversions.
@@ -374,6 +672,39 @@ message FiatConversionStateTransition {
   string reason = 4;
   int64 timestamp = 5;
   map<string, string> metadata = 6;
+}
+
+// FiatConversionObservation is one authenticated, privacy-safe evidence node.
+message FiatConversionObservation {
+  uint64 sequence = 1;
+  bytes idempotency_key = 2;
+  FiatConversionObservationStage stage = 3;
+  string status = 4;
+  int64 observed_at = 5;
+  int64 recorded_at = 6;
+  int64 recorded_height = 7;
+  bytes evidence_hash = 8;
+  bytes observation_digest = 9;
+  bytes lineage_digest = 10;
+  string failure_code = 11;
+}
+
+// Generated events contain no PII or free-form external evidence.
+message EventFiatConversionObservationRecorded {
+  string conversion_id = 1;
+  string provider = 2 [(cosmos_proto.scalar) = "cosmos.AddressString"];
+  uint64 observation_sequence = 3;
+  FiatConversionObservationStage stage = 4;
+  string state = 5;
+  bytes observation_digest = 6;
+  int64 recorded_height = 7;
+}
+message EventFiatConversionTerminal {
+  string conversion_id = 1;
+  string payout_id = 2;
+  FiatConversionObservationStage stage = 3;
+  string terminal_policy = 4;
+  bytes evidence_hash = 5;
 }
 
 // FiatConversionRecord stores conversion details.
@@ -423,6 +754,39 @@ message FiatConversionRecord {
   int64 last_error_at = 43;
   string last_error = 44;
   repeated FiatConversionStateTransition transition_history = 45 [(gogoproto.nullable) = false];
+  uint32 protocol_version = 46;
+  uint64 observation_sequence = 47;
+  bytes last_observation_digest = 48;
+  repeated FiatConversionObservation observations = 49 [(gogoproto.nullable) = false];
+  string dex_profile_id = 50;
+  bytes dex_profile_digest = 51;
+  string payout_profile_id = 52;
+  bytes payout_profile_digest = 53;
+  bytes quote_digest = 54;
+  int64 quote_expiry = 55;
+  cosmos.base.v1beta1.Coin minimum_stable_output = 56 [(gogoproto.nullable) = false];
+  int64 swap_height = 57;
+  bytes swap_block_hash = 58;
+  uint32 swap_finality_confirmations = 59;
+  bytes swap_finality_hash = 60;
+  bytes payout_finality_hash = 61;
+  bytes compliance_decision_hash = 62;
+  bytes privacy_safe_reference_hash = 63;
+  bytes evidence_hash = 64;
+  bytes request_digest = 65;
+  string daily_bucket = 66;
+  bool legacy_quarantined = 67;
+  string quarantine_reason = 68;
+  string terminal_policy = 69;
+  bool value_movement_applied = 70;
+  // slippage_tolerance_exact is the canonical decimal used for decisions.
+  // The legacy double at field 24 remains read-only compatibility data.
+  string slippage_tolerance_exact = 71;
+  // daily_quota_reserved is true exactly while this record contributes to the
+  // provider/day reservation total.
+  bool daily_quota_reserved = 72;
+  cosmos.base.v1beta1.Coin custody_sink_amount = 73 [(gogoproto.nullable) = false];
+  bytes custody_sink_effect_hash = 74;
 }
 
 // QueryEscrowRequest is the request for querying an escrow by ID.
@@ -624,6 +988,29 @@ message QueryFiatPayoutPreferenceResponse {
   FiatPayoutPreference preference = 1;
 }
 
+message QueryFinancialCaseRequest { string case_id = 1; }
+message QueryFinancialCaseResponse { FinancialCase financial_case = 1; }
+message QueryFinancialCaseBySubjectRequest { FinancialSubject subject = 1 [(gogoproto.nullable) = false]; }
+message QueryFinancialCaseBySubjectResponse { FinancialCase financial_case = 1; }
+message QueryFinancialCasesRequest {
+  string key = 1;
+  cosmos.base.query.v1beta1.PageRequest pagination = 2;
+}
+message QueryFinancialCasesResponse {
+  repeated FinancialCase financial_cases = 1 [(gogoproto.nullable) = false];
+  cosmos.base.query.v1beta1.PageResponse pagination = 2;
+}
+message QueryFinancialCaseLineageRequest {
+  string case_id = 1;
+  cosmos.base.query.v1beta1.PageRequest pagination = 2;
+}
+message QueryFinancialCaseLineageResponse {
+  repeated FinancialCaseTransition transitions = 1 [(gogoproto.nullable) = false];
+  repeated FinancialClaim claims = 2 [(gogoproto.nullable) = false];
+  repeated FinancialCaseEffect effects = 3 [(gogoproto.nullable) = false];
+  cosmos.base.query.v1beta1.PageResponse pagination = 4;
+}
+
 // Query defines the gRPC querier service for the settlement module.
 service Query {
   rpc Escrow(QueryEscrowRequest) returns (QueryEscrowResponse) {
@@ -700,5 +1087,36 @@ service Query {
 
   rpc FiatPayoutPreference(QueryFiatPayoutPreferenceRequest) returns (QueryFiatPayoutPreferenceResponse) {
     option (google.api.http).get = "/virtengine/settlement/v1/fiat/preferences/{provider}";
+  }
+
+  rpc FinancialCase(QueryFinancialCaseRequest) returns (QueryFinancialCaseResponse) {
+    option (google.api.http).get = "/virtengine/settlement/v1/financial-cases/{case_id}";
+  }
+  rpc FinancialCaseBySubject(QueryFinancialCaseBySubjectRequest) returns (QueryFinancialCaseBySubjectResponse) {
+    option (google.api.http).get = "/virtengine/settlement/v1/financial-cases/by-subject";
+  }
+  rpc FinancialCasesByOrder(QueryFinancialCasesRequest) returns (QueryFinancialCasesResponse) {
+    option (google.api.http).get = "/virtengine/settlement/v1/financial-cases/by-order/{key}";
+  }
+  rpc FinancialCasesByInvoice(QueryFinancialCasesRequest) returns (QueryFinancialCasesResponse) {
+    option (google.api.http).get = "/virtengine/settlement/v1/financial-cases/by-invoice/{key}";
+  }
+  rpc FinancialCasesByUsage(QueryFinancialCasesRequest) returns (QueryFinancialCasesResponse) {
+    option (google.api.http).get = "/virtengine/settlement/v1/financial-cases/by-usage/{key}";
+  }
+  rpc FinancialCasesByJob(QueryFinancialCasesRequest) returns (QueryFinancialCasesResponse) {
+    option (google.api.http).get = "/virtengine/settlement/v1/financial-cases/by-job/{key}";
+  }
+  rpc FinancialCasesByEscrow(QueryFinancialCasesRequest) returns (QueryFinancialCasesResponse) {
+    option (google.api.http).get = "/virtengine/settlement/v1/financial-cases/by-escrow/{key}";
+  }
+  rpc FinancialCasesByStatus(QueryFinancialCasesRequest) returns (QueryFinancialCasesResponse) {
+    option (google.api.http).get = "/virtengine/settlement/v1/financial-cases/by-status/{key}";
+  }
+  rpc FinancialCasesByParty(QueryFinancialCasesRequest) returns (QueryFinancialCasesResponse) {
+    option (google.api.http).get = "/virtengine/settlement/v1/financial-cases/by-party/{key}";
+  }
+  rpc FinancialCaseLineage(QueryFinancialCaseLineageRequest) returns (QueryFinancialCaseLineageResponse) {
+    option (google.api.http).get = "/virtengine/settlement/v1/financial-cases/{case_id}/lineage";
   }
 }

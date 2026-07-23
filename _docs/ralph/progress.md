@@ -1,18 +1,91 @@
 # VirtEngine Progress
 
-Last updated: 2026-07-21
-Status: **Protocol continuation Task 84B is implemented and validated to the achievable local standard; full live multi-validator provider/customer process evidence remains externally blocked.** Historical 80A-83D backlog status remains below for traceability.
+Last updated: 2026-07-23
+Status: **Protocol continuation Task 85B is locally complete as `engineering_complete_external_blocked`. Task 85C is NEXT.** The mandatory production DEX/payout floor remains externally blocked. Historical 80A-83D backlog status remains below for traceability.
 
 ## Protocol Completion Continuation (2026-07-20)
 
 | ID | Title | Priority | Status |
 | --- | --- | --- | --- |
 | 84A | Eliminate consensus nondeterminism and enforce deterministic ABCI++ admission | P0 | **COMPLETED** |
-| 84B | Cryptographically authenticate metering and make settlement replay-safe | P0 | **IMPLEMENTED LOCALLY; PROCESS EVIDENCE BLOCKED** |
+| 84B | Cryptographically authenticate metering and make settlement replay-safe | P0 | **COMPLETED** |
+| 84C | Decide canonical market lifecycle and unify reservations | P0 | **COMPLETED** |
+| 84D | Converge fraud, HPC, billing, escrow disputes, and review effects | P0 | **COMPLETED** |
+| 85A | Route every provider chain mutation through the durable signed broadcaster | P0 | **COMPLETED** |
+| 85B | Deliver verifiable DEX routing and a compliant fiat off-ramp | P0 | **`engineering_complete_external_blocked` (LOCALLY COMPLETE)** |
+| 85C | Converge production deployment rendering and prevent validator double-signing or provider HA state loss | P0 | **NEXT** |
+
+### 85B: Deliver Verifiable DEX Routing and a Compliant Fiat Off-Ramp
+
+**Locally completed:** 2026-07-23
+**Status:** `engineering_complete_external_blocked`
+**Commit:** Not created per orchestration instruction
+
+- Production factory selection now reaches the real, exact-version Osmosis `gamm-v1beta1-cp-equal-weight-v1` equal-weight constant-product adapter; Uniswap V2 and Curve remain rejected/test-only for production.
+- Added strict versioned DEX/payout profile states and trust, exact pool/denom/decimal/height/finality/oracle/quote/payload checks, a strict provider-neutral payout HTTP adapter, authenticated replay-safe webhooks and durable privacy-safe payout repositories.
+- Added the off-chain durable provider-daemon conversion orchestrator with local lease/fencing, restart and ambiguous-outcome recovery, target-chain custody boundary, and six ordered authenticated observation stages.
+- Added generated provider-signed `MsgRecordFiatConversionObservation`, consensus profile/compliance/idempotency/lineage/finality validation, Task 85A durable mutation registration, settlement/payout holds and invariants.
+- Added upgrade `v1.8.0`; activation disables execution, sets both profile states to `engineering_complete_external_blocked`, preserves/quarantines legacy records and verifies deterministic reconciliation.
+- Production startup remains fail-closed because reviewed external custody, payout partner, secret, destination, compliance and webhook backends are not injected. Backend identifiers do not enable execution.
+- Aggregate targeted tests passed across DEX, off-ramp, provider-daemon/command, settlement, `v1.8.0`, compatibility and upgrade scope. Relevant vet passed; lint reported 0 issues; provider-daemon and virtengine builds passed.
+- Focused WSL race tests passed for Task 85B DEX/off-ramp, provider fiat/orchestrator and settlement fiat/consensus paths. A broader provider-daemon race exposed an unrelated pre-existing `CompromiseDetector.recordAlertDispatch()` race.
+- Generated hashes were rechecked: descriptor `d2b18c893b4b853fb783d77aa30b95a4879bb46f7ced0bf4be524ad48192fab6`; inventory `654f503d6e84c881f62882f2a57cca3bf8077b2772bac3176c452dc6ebac50c4`; OpenAPI `e8b617f0722ba4cc26df5b66bb0a5d84328b5a08d226494dab1c75723ed88037`.
+- Completion evidence and external blockers are recorded in `_docs/audits/task-85b-completion-evidence-2026-07-23.md`; matrices, protocol, runbook and certification ledger are in `_docs/protocols/task-85b-dex-payout-support-matrices.md`, `_docs/protocols/fiat-conversion-orchestrator-protocol.md`, `_docs/runbooks/fiat-conversion-incident-recovery.md` and `_docs/task-85b-external-prerequisite-certification-ledger.md`.
+- No production custody, provider contract/credentials, certified pool/liquidity/oracle/governance evidence, approved corridor or independently reconciled production execution exists. The Claim 4 production floor and overall `planned_functionality_complete` status remain externally blocked.
+- **NEXT:** Task 85C.
+
+### 85A: Route Every Provider Chain Mutation Through the Durable Signed Broadcaster
+
+**Completed:** 2026-07-23
+**Commit:** Not created per orchestration instruction
+
+- Added the versioned provider mutation envelope/registry, durable queue store with `QueueStore` compatibility alias, local single-submitter lease/fencing seam, bounded metrics and readiness reporting.
+- Routed provider-originated bid, usage/settlement, HPC status/accounting/node metadata, resource heartbeat, provider domain/key/lifecycle, Waldur callback and support mutations through the durable signed submitter.
+- Production provider-daemon mutation paths no longer use generated `MsgClient` calls and no longer return success only because chain clients are absent; disconnected writes return typed unavailable/not-ready errors.
+- SDK transactions are direct-sign-mode signed by the configured provider `KeyManager`, gas-simulated, persisted with sequence/tx bytes/hash/attempts, broadcast, inclusion-confirmed, finalized or explicitly retried/dead-lettered.
+- Crash/restart, response-loss, timeout, sequence mismatch, out-of-gas, mempool, replacement/reorg, lease-loss, missing evidence, mutable idempotency and logical-state reconciliation paths are covered by focused tests.
+- Production fallbacks for legacy usage broadcast clients, file Waldur/provisioning callbacks, raw HPC node metadata submission and legacy domain confirmation are fail-closed.
+- Customer/owner-signed market `MsgCreateLease` and `MsgCloseLease` are intentionally not registered as provider-originated queue kinds; attempts fail closed as unknown.
+- Completion evidence and release-only limitations are recorded in `_docs/audits/task-85a-completion-report-2026-07-23.md`, with the mutation inventory in `_docs/audits/task-85a-mutation-inventory-2026-07-23.md`.
+
+### 84D: Converge Fraud, HPC, Billing, Escrow Disputes, and Review Effects
+
+**Completed:** 2026-07-22
+**Checkout:** `99973c3af6c084a915e2913016d5d08899dcdaa6`
+**Commit:** Not created per orchestration instruction
+
+- ADR-008 selects `x/settlement` as the sole canonical financial-case owner; escrow billing, fraud, HPC and review are evidence/projection adapters after `v1.7.0`.
+- Added generated multi-denom `FinancialCase`, complete lifecycle messages, 10 paginated query routes, generated privacy-safe events, deterministic domain-separated case/claim/appeal IDs, one active subject-group root and bounded append-only audit lineage.
+- Opening uses cached contexts and binds payout, escrow and Task 84C reservation holds. Settlement, payout/retry, reward claim, HPC accounting/reward and expiry paths reject active cases.
+- Explicit provider/customer roles remain stable when either party files; public filings prove committed lineage, trusted adapter calls cannot be spoofed through message fields, and active legacy billing workflows migrate as canonical claims.
+- Resolution validates exact per-denom conservation, remains held through appeal, and persists exactly-once payout/refund/platform/slash/reservation/projection effects; retries converge without duplicate transfers.
+- Fraud reports and HPC disputes open/merge canonical claims; review adds content-hash/reputation evidence; legacy billing/HPC/fraud money decisions are fenced or converted to canonical escalation requests after activation.
+- Added `v1.7.0` migrations/reconciliation, terminal-finance preservation, duplicate/orphan quarantine, genesis import/export, consensus-version increments, invariants, representative reconciliation artifact and operator remediation runbook.
+- Pinned generation completed repeatedly with zero drift: descriptor SHA-256 `38862f7cc92e1721d41585a243a65a664a1afaf363bc497cd8ab4f033fa733ea`; inventory SHA-256 `ff2c8d463de137b1400fdc5d07aecbace87fae82788f938821e46eda287f7193`; final before/after manifest SHA-256 `0e9c6f944e43d656786b3ec5f6ffb758afe421590220854c1fb8d1c43a7a0baa`; OpenAPI has 234 paths.
+- Affected tests, 1,000-case allocation property test, WSL race, vet, lint (`0 issues`), binaries, repository-wide Go compilation, TypeScript build and all 36 suites/1101 tests, determinism, module/vendor policy, docs, Task preflight and mandatory repository preflight pass.
+- Completion evidence and release-only process limitations are in `_docs/audits/task-84d-completion-report-2026-07-22.md`.
+
+### 84C: Decide the Canonical Market Lifecycle and Unify Reservations
+
+**Completed:** 2026-07-21
+**Checkout:** `99973c3af6c084a915e2913016d5d08899dcdaa6`
+**Commit:** Not created per orchestration instruction
+
+- ADR-007 selects `x/market` as the only mutable Order→Bid→Lease/financial owner and retains `mktplace` as an offering/catalog compatibility surface with lifecycle writes disabled after activation.
+- Added the generated authoritative `x/resources` reservation aggregate, explicit transitions, exact-retry idempotency, checked integer capacity, ordered expiration, bounded events, lineage queries, genesis, migrations, and invariants.
+- Canonical market lease creation is atomic with reserve/escrow/lease/activate; standalone HPC owns one reservation while market-backed HPC reuses the canonical lease reservation without double-reserving capacity.
+- Added `v1.6.0` with market `7→8`, mktplace `1→2`, resources `1→2`, and HPC `1→2` migrations; ambiguous active state is quarantined with zero synthetic capacity.
+- Senior compatibility re-audit added explicit `resources→market→hpc→mktplace` migration order, reconciliation before non-owner activation, real-app upgrade-handler/idempotence tests, historical replay/current-genesis activation flags, deterministic request-digest reservation IDs, callback/usage write fencing, non-owner bid quarantine, terminal-genesis lineage/idempotency indexes, event-preserving genesis, paginated lineage, and linked/dangling/inconsistent legacy resource handling.
+- Added fixed old-wire fixtures, randomized conservation, rollback, final-unit competition, fresh-genesis activation, migration, upgrade, and real-app keeper-wiring evidence.
+- Final pinned generation is byte-stable; 224 OpenAPI routes, 418 descriptor methods, and 224 HTTP bindings are recorded under inventory hash `58d5236fde8755aef2c7d4d2f67a77f3712b3356c8d319ccdfb036c21a3d83e3`.
+- Unit/integration/compatibility/upgrade tests, WSL race, vet, lint (`0 issues`), builds, determinism, generation verification, module verification, docs validation, preflight, and whitespace checks pass.
+- Completion evidence and release-only process limitations are recorded in `_docs/audits/task-84c-completion-report-2026-07-21.md`.
 
 ### 84B: Cryptographically Authenticate Metering and Make Settlement Replay-Safe
 
-**Implemented:** 2026-07-21
+**Completed:** 2026-07-21
+**Requested base commit:** `e2d78c01a0b653baabc9d27d0ca26d8305dd54c6`
+**Concurrent amended checkout:** `99973c3af6c084a915e2913016d5d08899dcdaa6`
 **Commit:** Not created per orchestration instruction
 
 - Added versioned, length-prefixed canonical provider/customer sign bytes with golden and legacy wire fixtures.
@@ -20,6 +93,8 @@ Status: **Protocol continuation Task 84B is implemented and validated to the ach
 - Added exact-once sequence/nonce/idempotency/period indexes, cached-context atomicity, replay invariants, and durable daemon restart allocation.
 - Added `v1.5.0`, settlement consensus version `2`, provider consensus version `4`, legacy-unverified migration, and fail-closed HPC pending accounting.
 - Pinned generation completed twice with zero second-pass hash changes.
+- Passed separate provider/customer helper-process execution, durable provider restart, local and chain exact-retry proofs, conflicting replay rejection, one usage/event/settlement/reward proof, and exact four-validator app-hash convergence at one committed height.
+- Final recorded app-hash evidence: height `20`, all four validators `4C39E284A499E4EDC5BC363F541D8E2085E228E9391C75D9CEDEB951EC972E82`.
 - Completion evidence and limitations are recorded in `_docs/audits/task-84b-completion-report-2026-07-21.md`.
 
 ### 84A: Eliminate Consensus Nondeterminism and Enforce Deterministic ABCI++ Admission

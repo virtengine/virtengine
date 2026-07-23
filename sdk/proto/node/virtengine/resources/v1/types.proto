@@ -24,6 +24,19 @@ enum AllocationState {
   ALLOCATION_STATE_RELEASED = 4;
 }
 
+// ReservationState defines the authoritative provider-capacity lifecycle.
+enum ReservationState {
+  RESERVATION_STATE_UNSPECIFIED = 0;
+  RESERVATION_STATE_PENDING = 1;
+  RESERVATION_STATE_ACTIVE = 2;
+  RESERVATION_STATE_CONSUMED = 3;
+  RESERVATION_STATE_RELEASED = 4;
+  RESERVATION_STATE_EXPIRED = 5;
+  RESERVATION_STATE_QUARANTINED = 6;
+  RESERVATION_STATE_SLASHED = 7;
+  RESERVATION_STATE_DISPUTED = 8;
+}
+
 // Locality captures location information.
 message Locality {
   string region = 1 [(gogoproto.jsontag) = "region,omitempty", (gogoproto.moretags) = "yaml:\"region\""];
@@ -84,6 +97,109 @@ message ResourceAllocation {
   google.protobuf.Timestamp activated_at = 13 [(gogoproto.stdtime) = true, (gogoproto.jsontag) = "activated_at,omitempty", (gogoproto.moretags) = "yaml:\"activated_at\""];
   google.protobuf.Timestamp updated_at = 14 [(gogoproto.nullable) = false, (gogoproto.stdtime) = true, (gogoproto.jsontag) = "updated_at", (gogoproto.moretags) = "yaml:\"updated_at\""];
   int64 block_height = 15 [(gogoproto.jsontag) = "block_height", (gogoproto.moretags) = "yaml:\"block_height\""];
+  string reservation_id = 16 [(gogoproto.jsontag) = "reservation_id,omitempty", (gogoproto.moretags) = "yaml:\"reservation_id\""];
+  string legacy_source = 17 [(gogoproto.jsontag) = "legacy_source,omitempty", (gogoproto.moretags) = "yaml:\"legacy_source\""];
+  string legacy_reference = 18 [(gogoproto.jsontag) = "legacy_reference,omitempty", (gogoproto.moretags) = "yaml:\"legacy_reference\""];
+}
+
+// ReservationRequest is the narrow deterministic input to Reserve.
+message ReservationRequest {
+  string idempotency_key = 1 [(gogoproto.jsontag) = "idempotency_key", (gogoproto.moretags) = "yaml:\"idempotency_key\""];
+  string request_id = 2 [(gogoproto.jsontag) = "request_id", (gogoproto.moretags) = "yaml:\"request_id\""];
+  string requester_address = 3 [(cosmos_proto.scalar) = "cosmos.AddressString", (gogoproto.jsontag) = "requester_address", (gogoproto.moretags) = "yaml:\"requester_address\""];
+  string provider_address = 4 [(cosmos_proto.scalar) = "cosmos.AddressString", (gogoproto.jsontag) = "provider_address,omitempty", (gogoproto.moretags) = "yaml:\"provider_address\""];
+  string inventory_id = 5 [(gogoproto.jsontag) = "inventory_id,omitempty", (gogoproto.moretags) = "yaml:\"inventory_id\""];
+  ResourceClass resource_class = 6 [(gogoproto.jsontag) = "resource_class", (gogoproto.moretags) = "yaml:\"resource_class\""];
+  ResourceCapacity capacity = 7 [(gogoproto.nullable) = false, (gogoproto.jsontag) = "capacity", (gogoproto.moretags) = "yaml:\"capacity\""];
+  Locality locality = 8 [(gogoproto.nullable) = false, (gogoproto.jsontag) = "locality", (gogoproto.moretags) = "yaml:\"locality\""];
+  string consumer_type = 9 [(gogoproto.jsontag) = "consumer_type", (gogoproto.moretags) = "yaml:\"consumer_type\""];
+  string consumer_id = 10 [(gogoproto.jsontag) = "consumer_id", (gogoproto.moretags) = "yaml:\"consumer_id\""];
+  string market_order_id = 11 [(gogoproto.jsontag) = "market_order_id,omitempty", (gogoproto.moretags) = "yaml:\"market_order_id\""];
+  string market_bid_id = 12 [(gogoproto.jsontag) = "market_bid_id,omitempty", (gogoproto.moretags) = "yaml:\"market_bid_id\""];
+  string market_lease_id = 13 [(gogoproto.jsontag) = "market_lease_id,omitempty", (gogoproto.moretags) = "yaml:\"market_lease_id\""];
+  string hpc_job_id = 14 [(gogoproto.jsontag) = "hpc_job_id,omitempty", (gogoproto.moretags) = "yaml:\"hpc_job_id\""];
+  string escrow_id = 15 [(gogoproto.jsontag) = "escrow_id,omitempty", (gogoproto.moretags) = "yaml:\"escrow_id\""];
+  string collateral_id = 16 [(gogoproto.jsontag) = "collateral_id,omitempty", (gogoproto.moretags) = "yaml:\"collateral_id\""];
+  google.protobuf.Timestamp expires_at = 17 [(gogoproto.stdtime) = true, (gogoproto.jsontag) = "expires_at,omitempty", (gogoproto.moretags) = "yaml:\"expires_at\""];
+  int64 expires_height = 18 [(gogoproto.jsontag) = "expires_height,omitempty", (gogoproto.moretags) = "yaml:\"expires_height\""];
+  uint32 version = 19 [(gogoproto.jsontag) = "version", (gogoproto.moretags) = "yaml:\"version\""];
+  string legacy_source = 20 [(gogoproto.jsontag) = "legacy_source,omitempty", (gogoproto.moretags) = "yaml:\"legacy_source\""];
+  string legacy_reference = 21 [(gogoproto.jsontag) = "legacy_reference,omitempty", (gogoproto.moretags) = "yaml:\"legacy_reference\""];
+  bool require_benchmark = 22 [(gogoproto.jsontag) = "require_benchmark,omitempty", (gogoproto.moretags) = "yaml:\"require_benchmark\""];
+  bool require_attestation = 23 [(gogoproto.jsontag) = "require_attestation,omitempty", (gogoproto.moretags) = "yaml:\"require_attestation\""];
+  bool require_collateral = 24 [(gogoproto.jsontag) = "require_collateral,omitempty", (gogoproto.moretags) = "yaml:\"require_collateral\""];
+}
+
+// ReservationLink adds or verifies executable lineage during activation.
+message ReservationLink {
+  string consumer_type = 1 [(gogoproto.jsontag) = "consumer_type", (gogoproto.moretags) = "yaml:\"consumer_type\""];
+  string consumer_id = 2 [(gogoproto.jsontag) = "consumer_id", (gogoproto.moretags) = "yaml:\"consumer_id\""];
+  string market_order_id = 3 [(gogoproto.jsontag) = "market_order_id,omitempty", (gogoproto.moretags) = "yaml:\"market_order_id\""];
+  string market_bid_id = 4 [(gogoproto.jsontag) = "market_bid_id,omitempty", (gogoproto.moretags) = "yaml:\"market_bid_id\""];
+  string market_lease_id = 5 [(gogoproto.jsontag) = "market_lease_id,omitempty", (gogoproto.moretags) = "yaml:\"market_lease_id\""];
+  string hpc_job_id = 6 [(gogoproto.jsontag) = "hpc_job_id,omitempty", (gogoproto.moretags) = "yaml:\"hpc_job_id\""];
+  string escrow_id = 7 [(gogoproto.jsontag) = "escrow_id,omitempty", (gogoproto.moretags) = "yaml:\"escrow_id\""];
+  string collateral_id = 8 [(gogoproto.jsontag) = "collateral_id,omitempty", (gogoproto.moretags) = "yaml:\"collateral_id\""];
+}
+
+// Reservation is the authoritative capacity aggregate.
+message Reservation {
+  string reservation_id = 1 [(gogoproto.jsontag) = "reservation_id", (gogoproto.moretags) = "yaml:\"reservation_id\""];
+  string idempotency_key = 2 [(gogoproto.jsontag) = "idempotency_key", (gogoproto.moretags) = "yaml:\"idempotency_key\""];
+  bytes payload_hash = 3 [(gogoproto.jsontag) = "payload_hash", (gogoproto.moretags) = "yaml:\"payload_hash\""];
+  string request_id = 4 [(gogoproto.jsontag) = "request_id", (gogoproto.moretags) = "yaml:\"request_id\""];
+  string requester_address = 5 [(cosmos_proto.scalar) = "cosmos.AddressString", (gogoproto.jsontag) = "requester_address", (gogoproto.moretags) = "yaml:\"requester_address\""];
+  string provider_address = 6 [(cosmos_proto.scalar) = "cosmos.AddressString", (gogoproto.jsontag) = "provider_address", (gogoproto.moretags) = "yaml:\"provider_address\""];
+  string inventory_id = 7 [(gogoproto.jsontag) = "inventory_id", (gogoproto.moretags) = "yaml:\"inventory_id\""];
+  ResourceClass resource_class = 8 [(gogoproto.jsontag) = "resource_class", (gogoproto.moretags) = "yaml:\"resource_class\""];
+  ResourceCapacity capacity = 9 [(gogoproto.nullable) = false, (gogoproto.jsontag) = "capacity", (gogoproto.moretags) = "yaml:\"capacity\""];
+  ResourceCapacity consumed = 10 [(gogoproto.nullable) = false, (gogoproto.jsontag) = "consumed", (gogoproto.moretags) = "yaml:\"consumed\""];
+  ReservationState state = 11 [(gogoproto.jsontag) = "state", (gogoproto.moretags) = "yaml:\"state\""];
+  string consumer_type = 12 [(gogoproto.jsontag) = "consumer_type", (gogoproto.moretags) = "yaml:\"consumer_type\""];
+  string consumer_id = 13 [(gogoproto.jsontag) = "consumer_id", (gogoproto.moretags) = "yaml:\"consumer_id\""];
+  string market_order_id = 14 [(gogoproto.jsontag) = "market_order_id,omitempty", (gogoproto.moretags) = "yaml:\"market_order_id\""];
+  string market_bid_id = 15 [(gogoproto.jsontag) = "market_bid_id,omitempty", (gogoproto.moretags) = "yaml:\"market_bid_id\""];
+  string market_lease_id = 16 [(gogoproto.jsontag) = "market_lease_id,omitempty", (gogoproto.moretags) = "yaml:\"market_lease_id\""];
+  string hpc_job_id = 17 [(gogoproto.jsontag) = "hpc_job_id,omitempty", (gogoproto.moretags) = "yaml:\"hpc_job_id\""];
+  string escrow_id = 18 [(gogoproto.jsontag) = "escrow_id,omitempty", (gogoproto.moretags) = "yaml:\"escrow_id\""];
+  string collateral_id = 19 [(gogoproto.jsontag) = "collateral_id,omitempty", (gogoproto.moretags) = "yaml:\"collateral_id\""];
+  uint32 version = 20 [(gogoproto.jsontag) = "version", (gogoproto.moretags) = "yaml:\"version\""];
+  string reason = 21 [(gogoproto.jsontag) = "reason,omitempty", (gogoproto.moretags) = "yaml:\"reason\""];
+  string legacy_source = 22 [(gogoproto.jsontag) = "legacy_source,omitempty", (gogoproto.moretags) = "yaml:\"legacy_source\""];
+  string legacy_reference = 23 [(gogoproto.jsontag) = "legacy_reference,omitempty", (gogoproto.moretags) = "yaml:\"legacy_reference\""];
+  google.protobuf.Timestamp created_at = 24 [(gogoproto.nullable) = false, (gogoproto.stdtime) = true, (gogoproto.jsontag) = "created_at", (gogoproto.moretags) = "yaml:\"created_at\""];
+  google.protobuf.Timestamp activated_at = 25 [(gogoproto.stdtime) = true, (gogoproto.jsontag) = "activated_at,omitempty", (gogoproto.moretags) = "yaml:\"activated_at\""];
+  google.protobuf.Timestamp consumed_at = 26 [(gogoproto.stdtime) = true, (gogoproto.jsontag) = "consumed_at,omitempty", (gogoproto.moretags) = "yaml:\"consumed_at\""];
+  google.protobuf.Timestamp released_at = 27 [(gogoproto.stdtime) = true, (gogoproto.jsontag) = "released_at,omitempty", (gogoproto.moretags) = "yaml:\"released_at\""];
+  google.protobuf.Timestamp expires_at = 28 [(gogoproto.stdtime) = true, (gogoproto.jsontag) = "expires_at,omitempty", (gogoproto.moretags) = "yaml:\"expires_at\""];
+  google.protobuf.Timestamp expired_at = 29 [(gogoproto.stdtime) = true, (gogoproto.jsontag) = "expired_at,omitempty", (gogoproto.moretags) = "yaml:\"expired_at\""];
+  google.protobuf.Timestamp quarantined_at = 30 [(gogoproto.stdtime) = true, (gogoproto.jsontag) = "quarantined_at,omitempty", (gogoproto.moretags) = "yaml:\"quarantined_at\""];
+  google.protobuf.Timestamp slashed_at = 31 [(gogoproto.stdtime) = true, (gogoproto.jsontag) = "slashed_at,omitempty", (gogoproto.moretags) = "yaml:\"slashed_at\""];
+  google.protobuf.Timestamp updated_at = 32 [(gogoproto.nullable) = false, (gogoproto.stdtime) = true, (gogoproto.jsontag) = "updated_at", (gogoproto.moretags) = "yaml:\"updated_at\""];
+  int64 created_height = 33 [(gogoproto.jsontag) = "created_height", (gogoproto.moretags) = "yaml:\"created_height\""];
+  int64 activated_height = 34 [(gogoproto.jsontag) = "activated_height,omitempty", (gogoproto.moretags) = "yaml:\"activated_height\""];
+  int64 consumed_height = 35 [(gogoproto.jsontag) = "consumed_height,omitempty", (gogoproto.moretags) = "yaml:\"consumed_height\""];
+  int64 released_height = 36 [(gogoproto.jsontag) = "released_height,omitempty", (gogoproto.moretags) = "yaml:\"released_height\""];
+  int64 expires_height = 37 [(gogoproto.jsontag) = "expires_height,omitempty", (gogoproto.moretags) = "yaml:\"expires_height\""];
+  int64 quarantined_height = 38 [(gogoproto.jsontag) = "quarantined_height,omitempty", (gogoproto.moretags) = "yaml:\"quarantined_height\""];
+  int64 slashed_height = 39 [(gogoproto.jsontag) = "slashed_height,omitempty", (gogoproto.moretags) = "yaml:\"slashed_height\""];
+  string financial_case_id = 40 [(gogoproto.jsontag) = "financial_case_id,omitempty", (gogoproto.moretags) = "yaml:\"financial_case_id\""];
+  int32 pre_dispute_state = 41 [(gogoproto.jsontag) = "pre_dispute_state,omitempty", (gogoproto.moretags) = "yaml:\"pre_dispute_state\""];
+  google.protobuf.Timestamp disputed_at = 42 [(gogoproto.stdtime) = true, (gogoproto.jsontag) = "disputed_at,omitempty", (gogoproto.moretags) = "yaml:\"disputed_at\""];
+  int64 disputed_height = 43 [(gogoproto.jsontag) = "disputed_height,omitempty", (gogoproto.moretags) = "yaml:\"disputed_height\""];
+}
+
+// ReservationEvent records a stable transition without sensitive manifests.
+message ReservationEvent {
+  string reservation_id = 1 [(gogoproto.jsontag) = "reservation_id", (gogoproto.moretags) = "yaml:\"reservation_id\""];
+  uint64 sequence = 2 [(gogoproto.jsontag) = "sequence", (gogoproto.moretags) = "yaml:\"sequence\""];
+  ReservationState from_state = 3 [(gogoproto.jsontag) = "from_state", (gogoproto.moretags) = "yaml:\"from_state\""];
+  ReservationState to_state = 4 [(gogoproto.jsontag) = "to_state", (gogoproto.moretags) = "yaml:\"to_state\""];
+  string reason = 5 [(gogoproto.jsontag) = "reason,omitempty", (gogoproto.moretags) = "yaml:\"reason\""];
+  string provider_address = 6 [(cosmos_proto.scalar) = "cosmos.AddressString", (gogoproto.jsontag) = "provider_address", (gogoproto.moretags) = "yaml:\"provider_address\""];
+  string consumer_type = 7 [(gogoproto.jsontag) = "consumer_type", (gogoproto.moretags) = "yaml:\"consumer_type\""];
+  google.protobuf.Timestamp created_at = 8 [(gogoproto.nullable) = false, (gogoproto.stdtime) = true, (gogoproto.jsontag) = "created_at", (gogoproto.moretags) = "yaml:\"created_at\""];
+  int64 block_height = 9 [(gogoproto.jsontag) = "block_height", (gogoproto.moretags) = "yaml:\"block_height\""];
 }
 
 // AllocationEvent records allocation lifecycle transitions.

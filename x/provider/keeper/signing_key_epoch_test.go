@@ -7,10 +7,13 @@ import (
 	"crypto/ed25519"
 	"crypto/rand"
 	"encoding/json"
+	"math/big"
 	"testing"
 	"time"
 
+	cosmossecp256k1 "github.com/cosmos/cosmos-sdk/crypto/keys/secp256k1"
 	sdk "github.com/cosmos/cosmos-sdk/types"
+	decredsecp256k1 "github.com/decred/dcrd/dcrec/secp256k1/v4"
 	"github.com/stretchr/testify/require"
 
 	types "github.com/virtengine/virtengine/sdk/go/node/provider/v1beta4"
@@ -136,4 +139,48 @@ func TestMigrateLegacyProviderSigningKeyEpoch(t *testing.T) {
 	historical, found := k.GetProviderSigningKey(ctx, owner, current.KeyID, current.Epoch)
 	require.True(t, found)
 	require.Equal(t, current, historical)
+}
+
+func TestProviderSigningKeySecp256k1RotationRejectsHighS(t *testing.T) {
+	ctx, k := setupKeeper(t)
+	ctx = ctx.WithChainID("virtengine-test-1").WithBlockHeight(100).WithBlockTime(time.Unix(1_700_000_000, 0).UTC())
+	provider := testutil.Provider(t)
+	require.NoError(t, k.Create(ctx, provider))
+	owner, err := sdk.AccAddressFromBech32(provider.Owner)
+	require.NoError(t, err)
+
+	oldPrivate := cosmossecp256k1.GenPrivKey()
+	require.NoError(t, k.SetProviderPublicKey(ctx, owner, oldPrivate.PubKey().Bytes(), types.PublicKeyTypeSecp256k1))
+	active, found := k.GetProviderPublicKeyRecord(ctx, owner)
+	require.True(t, found)
+	newPrivate := cosmossecp256k1.GenPrivKey()
+	rotationCtx := ctx.WithBlockHeight(101).WithBlockTime(ctx.BlockTime().Add(time.Second))
+	rotationBytes, err := types.ProviderKeyRotationSignBytes(types.ProviderKeyRotationPayload{
+		ChainID:          rotationCtx.ChainID(),
+		Provider:         owner.String(),
+		OldKeyID:         active.KeyID,
+		OldEpoch:         active.Epoch,
+		NewKeyType:       types.PublicKeyTypeSecp256k1,
+		NewPublicKey:     newPrivate.PubKey().Bytes(),
+		NewEpoch:         active.Epoch + 1,
+		ActivationHeight: rotationCtx.BlockHeight(),
+		ActivationUnix:   rotationCtx.BlockTime().Unix(),
+		OverlapEndHeight: rotationCtx.BlockHeight() + types.ProviderSigningKeyOverlapBlocks,
+		OverlapEndUnix:   rotationCtx.BlockTime().Unix() + types.ProviderSigningKeyOverlapSeconds,
+		SignatureVersion: types.ProviderKeyRotationSignatureVersionV1,
+	})
+	require.NoError(t, err)
+	proof, err := oldPrivate.Sign(rotationBytes)
+	require.NoError(t, err)
+
+	highS := append([]byte(nil), proof...)
+	sValue := new(big.Int).SetBytes(highS[32:])
+	sValue.Sub(decredsecp256k1.S256().N, sValue)
+	sBytes := sValue.Bytes()
+	for i := 32; i < 64; i++ {
+		highS[i] = 0
+	}
+	copy(highS[64-len(sBytes):], sBytes)
+	require.ErrorIs(t, k.RotateProviderPublicKey(rotationCtx, owner, newPrivate.PubKey().Bytes(), types.PublicKeyTypeSecp256k1, highS), types.ErrInvalidRotationSignature)
+	require.NoError(t, k.RotateProviderPublicKey(rotationCtx, owner, newPrivate.PubKey().Bytes(), types.PublicKeyTypeSecp256k1, proof))
 }

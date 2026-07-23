@@ -4,34 +4,18 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
-	"os"
-	"path/filepath"
 	"strings"
 	"time"
 
 	"cosmossdk.io/log"
 	tmbytes "github.com/cometbft/cometbft/libs/bytes"
 	rpcclient "github.com/cometbft/cometbft/rpc/client"
-	sdkclient "github.com/cosmos/cosmos-sdk/client"
-	"github.com/cosmos/cosmos-sdk/crypto/keyring"
 	sdk "github.com/cosmos/cosmos-sdk/types"
-	authtypes "github.com/cosmos/cosmos-sdk/x/auth/types"
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials"
 
-	"github.com/virtengine/virtengine/pkg/security"
-	"github.com/virtengine/virtengine/sdk/go/node/client/types"
-	clientv1beta3 "github.com/virtengine/virtengine/sdk/go/node/client/v1beta3"
 	supportv1 "github.com/virtengine/virtengine/sdk/go/node/support/v1"
-	"github.com/virtengine/virtengine/sdk/go/sdkutil"
-	"github.com/virtengine/virtengine/x/support"
 	supporttypes "github.com/virtengine/virtengine/x/support/types"
 )
-
-type supportTxClient interface {
-	BroadcastMsgs(context.Context, []sdk.Msg, ...clientv1beta3.BroadcastOption) (interface{}, error)
-}
 
 type supportExternalRefStore struct {
 	ResourceID       string `json:"resource_id"`
@@ -46,160 +30,31 @@ type supportExternalRefStore struct {
 
 type rpcSupportChainWriter struct {
 	sender     string
+	submitter  *ProviderMutationSubmitter
 	storeQuery providerStoreQueryClient
-	txClient   supportTxClient
-	txOpts     []clientv1beta3.BroadcastOption
 	timeout    time.Duration
 	logger     log.Logger
 	grpcConn   *grpc.ClientConn
 }
 
-func newSupportChainWriter(ctx context.Context, cfg SupportServiceConfig, logger log.Logger) (SupportChainWriter, error) {
+func newSupportChainWriter(_ context.Context, cfg SupportServiceConfig, logger log.Logger) (SupportChainWriter, error) {
 	if logger == nil {
 		logger = log.NewNopLogger()
 	}
-	if cfg.ChainID == "" {
-		return nil, fmt.Errorf("support chain ID is required")
-	}
-	if cfg.CometRPC == "" {
-		return nil, fmt.Errorf("support comet RPC endpoint is required")
-	}
-	if cfg.GRPCEndpoint == "" {
-		return nil, fmt.Errorf("support gRPC endpoint is required")
-	}
-	if strings.TrimSpace(cfg.SignerKeyName) == "" {
-		return nil, fmt.Errorf("support signer key name is required")
-	}
-
-	storeQuery, err := newProviderStoreQueryClient(cfg.CometRPC)
-	if err != nil {
-		return nil, err
-	}
-
-	txClient, sender, txOpts, grpcConn, err := newSupportTxClient(ctx, cfg)
-	if err != nil {
-		return nil, err
-	}
-
-	timeout := cfg.RequestTimeout
-	if timeout <= 0 {
-		timeout = 30 * time.Second
-	}
-
-	return &rpcSupportChainWriter{
-		sender:     sender,
-		storeQuery: storeQuery,
-		txClient:   txClient,
-		txOpts:     txOpts,
-		timeout:    timeout,
-		logger:     logger,
-		grpcConn:   grpcConn,
-	}, nil
-}
-
-func newSupportTxClient(
-	ctx context.Context,
-	cfg SupportServiceConfig,
-) (supportTxClient, string, []clientv1beta3.BroadcastOption, *grpc.ClientConn, error) {
-	encCfg := sdkutil.MakeEncodingConfig(support.AppModuleBasic{})
-
-	keyringDir := cfg.SignerKeyringDir
-	if keyringDir == "" {
-		home, err := os.UserHomeDir()
-		if err != nil {
-			return nil, "", nil, nil, fmt.Errorf("resolve home dir: %w", err)
+	if cfg.MutationSubmitter != nil {
+		timeout := cfg.RequestTimeout
+		if timeout <= 0 {
+			timeout = 30 * time.Second
 		}
-		keyringDir = filepath.Join(home, ".virtengine")
+		return &rpcSupportChainWriter{
+			sender:     cfg.ProviderAddress,
+			submitter:  cfg.MutationSubmitter,
+			storeQuery: cfg.StoreQuery,
+			timeout:    timeout,
+			logger:     logger,
+		}, nil
 	}
-
-	backend := cfg.SignerKeyringBackend
-	if backend == "" {
-		backend = testLiteral
-	}
-
-	in := strings.NewReader(cfg.SignerKeyringPassphrase + "\n" + cfg.SignerKeyringPassphrase + "\n")
-	kr, err := keyring.New(sdk.KeyringServiceName(), backend, keyringDir, in, encCfg.Codec)
-	if err != nil {
-		return nil, "", nil, nil, fmt.Errorf("init support keyring: %w", err)
-	}
-
-	record, err := kr.Key(cfg.SignerKeyName)
-	if err != nil {
-		return nil, "", nil, nil, fmt.Errorf("resolve support signer key %q: %w", cfg.SignerKeyName, err)
-	}
-
-	addr, err := record.GetAddress()
-	if err != nil {
-		return nil, "", nil, nil, fmt.Errorf("get support signer address: %w", err)
-	}
-
-	rpc, err := sdkclient.NewClientFromNode(cfg.CometRPC)
-	if err != nil {
-		return nil, "", nil, nil, fmt.Errorf("connect support comet rpc: %w", err)
-	}
-
-	dialCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
-	defer cancel()
-
-	//nolint:staticcheck // grpc.DialContext is retained for compatibility with sdk client wiring.
-	grpcConn, err := grpc.DialContext(
-		dialCtx,
-		cfg.GRPCEndpoint,
-		grpc.WithTransportCredentials(credentials.NewTLS(security.SecureTLSConfig())),
-	)
-	if err != nil {
-		return nil, "", nil, nil, fmt.Errorf("dial support grpc: %w", err)
-	}
-
-	cctx := sdkclient.Context{}.
-		WithChainID(cfg.ChainID).
-		WithNodeURI(cfg.CometRPC).
-		WithClient(rpc).
-		WithGRPCClient(grpcConn).
-		WithKeyring(kr).
-		WithFromName(cfg.SignerKeyName).
-		WithFromAddress(addr).
-		WithTxConfig(encCfg.TxConfig).
-		WithCodec(encCfg.Codec).
-		WithLegacyAmino(encCfg.Amino).
-		WithInterfaceRegistry(encCfg.InterfaceRegistry).
-		WithAccountRetriever(authtypes.AccountRetriever{}).
-		WithSignModeStr(types.SignModeDirect).
-		WithBroadcastMode(clientv1beta3.BroadcastSync).
-		WithOutput(io.Discard)
-
-	client, err := clientv1beta3.NewClient(ctx, cctx)
-	if err != nil {
-		_ = grpcConn.Close()
-		return nil, "", nil, nil, fmt.Errorf("init support tx client: %w", err)
-	}
-
-	opts := []clientv1beta3.BroadcastOption{
-		clientv1beta3.WithSkipConfirm(true),
-		clientv1beta3.WithBroadcastMode(clientv1beta3.BroadcastSync),
-		clientv1beta3.WithResultCodeAsError(),
-	}
-
-	gasSetting := cfg.GasSetting
-	if gasSetting.Gas == 0 && !gasSetting.Simulate {
-		gasSetting = GasSetting{Simulate: true}
-	}
-	opts = append(opts, clientv1beta3.WithGas(gasSetting))
-
-	if cfg.GasPrices != "" {
-		opts = append(opts, clientv1beta3.WithGasPrices(cfg.GasPrices))
-	}
-	if cfg.Fees != "" {
-		opts = append(opts, clientv1beta3.WithFees(cfg.Fees))
-	}
-	if cfg.GasAdjustment > 0 {
-		opts = append(opts, clientv1beta3.WithGasAdjustment(cfg.GasAdjustment))
-	}
-	if cfg.BroadcastTimeout > 0 {
-		opts = append(opts, clientv1beta3.WithBroadcastTimeout(cfg.BroadcastTimeout))
-	}
-
-	return client.Tx(), addr.String(), opts, grpcConn, nil
+	return nil, fmt.Errorf("%w: support writer requires generalized mutation submitter", ErrProviderMutationUnavailable)
 }
 
 func (w *rpcSupportChainWriter) SenderAddress() string {
@@ -310,6 +165,9 @@ func (w *rpcSupportChainWriter) queryExternalTicketRef(
 	resourceType supporttypes.ResourceType,
 	resourceID string,
 ) (*supporttypes.ExternalTicketRef, error) {
+	if w.storeQuery == nil {
+		return nil, ErrProviderMutationUnavailable
+	}
 	value, err := querySupportStoreValue(ctx, w.storeQuery, w.timeout, supporttypes.ExternalRefKey(resourceType, resourceID))
 	if err != nil {
 		return nil, err
@@ -337,19 +195,30 @@ func (w *rpcSupportChainWriter) queryExternalTicketRef(
 }
 
 func (w *rpcSupportChainWriter) broadcast(ctx context.Context, msg sdk.Msg) error {
-	resp, err := w.txClient.BroadcastMsgs(ctx, []sdk.Msg{msg}, w.txOpts...)
-	if err != nil {
+	if w.submitter != nil {
+		kind, err := supportMutationKind(msg)
+		if err != nil {
+			return err
+		}
+		_, err = w.submitter.Submit(ctx, kind, msg)
 		return err
 	}
+	return ErrProviderMutationUnavailable
+}
 
-	switch res := resp.(type) {
-	case *sdk.TxResponse:
-		if res.Code != 0 {
-			return fmt.Errorf("support broadcast failed code=%d log=%s", res.Code, res.RawLog)
-		}
+func supportMutationKind(msg sdk.Msg) (ProviderMutationKind, error) {
+	switch msg.(type) {
+	case *supportv1.MsgUpdateSupportRequest:
+		return MutationSupportUpdateRequest, nil
+	case *supportv1.MsgAddSupportResponse:
+		return MutationSupportAddResponse, nil
+	case *supportv1.MsgRegisterExternalTicket:
+		return MutationSupportRegisterExternal, nil
+	case *supportv1.MsgUpdateExternalTicket:
+		return MutationSupportUpdateExternal, nil
+	default:
+		return "", fmt.Errorf("unsupported support mutation %T", msg)
 	}
-
-	return nil
 }
 
 func querySupportStoreValue(

@@ -16,6 +16,7 @@ import (
 	mv1 "github.com/virtengine/virtengine/sdk/go/node/market/v1"
 	types "github.com/virtengine/virtengine/sdk/go/node/market/v1beta5"
 
+	resourcesv1 "github.com/virtengine/virtengine/sdk/go/node/resources/v1"
 	"github.com/virtengine/virtengine/x/market/keeper/keys"
 	"github.com/virtengine/virtengine/x/market/types/marketplace"
 )
@@ -59,6 +60,9 @@ type IKeeper interface {
 	// VEID Gating (VE-301: Marketplace gating)
 	CheckVEIDGating(ctx sdk.Context, customerAddr sdk.AccAddress, requirements VEIDGatingRequirements) (*VEIDGatingResult, error)
 	SetVEIDKeeper(veidKeeper VEIDKeeper)
+	SetResourcesKeeper(resources ResourcesKeeper)
+	OnDeploymentFailed(ctx sdk.Context, leaseID mv1.LeaseID, reason string) error
+	OnDisputeOpened(ctx sdk.Context, leaseID mv1.LeaseID, reason string) error
 }
 
 // Keeper of the market store
@@ -72,7 +76,13 @@ type Keeper struct {
 	// veidKeeper is the VEID module keeper for identity gating checks.
 	// This is optional and can be set after initialization via SetVEIDKeeper.
 	// VE-301: Marketplace gating
-	veidKeeper VEIDKeeper
+	veidKeeper      VEIDKeeper
+	resourcesKeeper ResourcesKeeper
+}
+
+type ResourcesKeeper interface {
+	ReleaseReservation(ctx sdk.Context, reservationID, reason string) (*resourcesv1.Reservation, error)
+	QuarantineReservation(ctx sdk.Context, reservationID, reason string) (*resourcesv1.Reservation, error)
 }
 
 // NewKeeper creates and returns an instance for Market keeper
@@ -90,6 +100,34 @@ func NewKeeper(cdc codec.BinaryCodec, skey storetypes.StoreKey, ekeeper EscrowKe
 // VE-301: Marketplace gating
 func (k *Keeper) SetVEIDKeeper(veidKeeper VEIDKeeper) {
 	k.veidKeeper = veidKeeper
+}
+
+func (k *Keeper) SetResourcesKeeper(resources ResourcesKeeper) { k.resourcesKeeper = resources }
+
+// OnDeploymentFailed releases capacity for a failed executable deployment.
+func (k Keeper) OnDeploymentFailed(ctx sdk.Context, leaseID mv1.LeaseID, reason string) error {
+	lease, found := k.GetLease(ctx, leaseID)
+	if !found {
+		return mv1.ErrLeaseNotFound
+	}
+	if k.resourcesKeeper == nil || lease.ReservationId == "" {
+		return fmt.Errorf("lease %s has no authoritative reservation", leaseID.String())
+	}
+	_, err := k.resourcesKeeper.ReleaseReservation(ctx, lease.ReservationId, "deployment_failed:"+reason)
+	return err
+}
+
+// OnDisputeOpened retains capacity in quarantine until Task 84D resolution.
+func (k Keeper) OnDisputeOpened(ctx sdk.Context, leaseID mv1.LeaseID, reason string) error {
+	lease, found := k.GetLease(ctx, leaseID)
+	if !found {
+		return mv1.ErrLeaseNotFound
+	}
+	if k.resourcesKeeper == nil || lease.ReservationId == "" {
+		return fmt.Errorf("lease %s has no authoritative reservation", leaseID.String())
+	}
+	_, err := k.resourcesKeeper.QuarantineReservation(ctx, lease.ReservationId, "dispute_opened:"+reason)
+	return err
 }
 
 func (k Keeper) NewQuerier() Querier {
@@ -293,10 +331,11 @@ func (k Keeper) CreateLease(ctx sdk.Context, bid types.Bid) error {
 	store := ctx.KVStore(k.skey)
 
 	lease := mv1.Lease{
-		ID:        mv1.LeaseID(bid.ID),
-		State:     mv1.LeaseActive,
-		Price:     bid.Price,
-		CreatedAt: ctx.BlockHeight(),
+		ID:            mv1.LeaseID(bid.ID),
+		State:         mv1.LeaseActive,
+		Price:         bid.Price,
+		CreatedAt:     ctx.BlockHeight(),
+		ReservationId: bid.ReservationId,
 	}
 
 	data := k.cdc.MustMarshal(&lease)
@@ -417,6 +456,11 @@ func (k Keeper) OnLeaseClosed(ctx sdk.Context, lease mv1.Lease, state mv1.Lease_
 
 	key = keys.MustLeaseKey(keys.LeaseStateToPrefix(lease.State), lease.ID)
 	store.Set(key, k.cdc.MustMarshal(&lease))
+	if k.resourcesKeeper != nil && lease.ReservationId != "" {
+		if _, err := k.resourcesKeeper.ReleaseReservation(ctx, lease.ReservationId, "market_lease_closed"); err != nil {
+			return err
+		}
+	}
 
 	err := ctx.EventManager().EmitTypedEvent(
 		&mv1.EventLeaseClosed{

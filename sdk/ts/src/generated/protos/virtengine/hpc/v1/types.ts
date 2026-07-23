@@ -580,6 +580,11 @@ export interface HPCJob {
   startedAt: Date | undefined;
   completedAt: Date | undefined;
   blockHeight: Long;
+  reservationId: string;
+  allocationId: string;
+  marketOrderId: string;
+  marketBidId: string;
+  marketLeaseId: string;
 }
 
 /** NodeReward represents a reward for a specific node */
@@ -3129,6 +3134,11 @@ function createBaseHPCJob(): HPCJob {
     startedAt: undefined,
     completedAt: undefined,
     blockHeight: Long.ZERO,
+    reservationId: "",
+    allocationId: "",
+    marketOrderId: "",
+    marketBidId: "",
+    marketLeaseId: "",
   };
 }
 
@@ -3207,6 +3217,21 @@ export const HPCJob: MessageFns<HPCJob, "virtengine.hpc.v1.HPCJob"> = {
     }
     if (!message.blockHeight.equals(Long.ZERO)) {
       writer.uint32(192).int64(message.blockHeight.toString());
+    }
+    if (message.reservationId !== "") {
+      writer.uint32(202).string(message.reservationId);
+    }
+    if (message.allocationId !== "") {
+      writer.uint32(210).string(message.allocationId);
+    }
+    if (message.marketOrderId !== "") {
+      writer.uint32(218).string(message.marketOrderId);
+    }
+    if (message.marketBidId !== "") {
+      writer.uint32(226).string(message.marketBidId);
+    }
+    if (message.marketLeaseId !== "") {
+      writer.uint32(234).string(message.marketLeaseId);
     }
     return writer;
   },
@@ -3410,6 +3435,46 @@ export const HPCJob: MessageFns<HPCJob, "virtengine.hpc.v1.HPCJob"> = {
           message.blockHeight = Long.fromString(reader.int64().toString());
           continue;
         }
+        case 25: {
+          if (tag !== 202) {
+            break;
+          }
+
+          message.reservationId = reader.string();
+          continue;
+        }
+        case 26: {
+          if (tag !== 210) {
+            break;
+          }
+
+          message.allocationId = reader.string();
+          continue;
+        }
+        case 27: {
+          if (tag !== 218) {
+            break;
+          }
+
+          message.marketOrderId = reader.string();
+          continue;
+        }
+        case 28: {
+          if (tag !== 226) {
+            break;
+          }
+
+          message.marketBidId = reader.string();
+          continue;
+        }
+        case 29: {
+          if (tag !== 234) {
+            break;
+          }
+
+          message.marketLeaseId = reader.string();
+          continue;
+        }
       }
       if ((tag & 7) === 4 || tag === 0) {
         break;
@@ -3455,6 +3520,11 @@ export const HPCJob: MessageFns<HPCJob, "virtengine.hpc.v1.HPCJob"> = {
       startedAt: isSet(object.started_at) ? fromJsonTimestamp(object.started_at) : undefined,
       completedAt: isSet(object.completed_at) ? fromJsonTimestamp(object.completed_at) : undefined,
       blockHeight: isSet(object.block_height) ? Long.fromValue(object.block_height) : Long.ZERO,
+      reservationId: isSet(object.reservation_id) ? globalThis.String(object.reservation_id) : "",
+      allocationId: isSet(object.allocation_id) ? globalThis.String(object.allocation_id) : "",
+      marketOrderId: isSet(object.market_order_id) ? globalThis.String(object.market_order_id) : "",
+      marketBidId: isSet(object.market_bid_id) ? globalThis.String(object.market_bid_id) : "",
+      marketLeaseId: isSet(object.market_lease_id) ? globalThis.String(object.market_lease_id) : "",
     };
   },
 
@@ -3532,6 +3602,21 @@ export const HPCJob: MessageFns<HPCJob, "virtengine.hpc.v1.HPCJob"> = {
     if (!message.blockHeight.equals(Long.ZERO)) {
       obj.block_height = (message.blockHeight || Long.ZERO).toString();
     }
+    if (message.reservationId !== "") {
+      obj.reservation_id = message.reservationId;
+    }
+    if (message.allocationId !== "") {
+      obj.allocation_id = message.allocationId;
+    }
+    if (message.marketOrderId !== "") {
+      obj.market_order_id = message.marketOrderId;
+    }
+    if (message.marketBidId !== "") {
+      obj.market_bid_id = message.marketBidId;
+    }
+    if (message.marketLeaseId !== "") {
+      obj.market_lease_id = message.marketLeaseId;
+    }
     return obj;
   },
   fromPartial(object: DeepPartial<HPCJob>): HPCJob {
@@ -3568,6 +3653,11 @@ export const HPCJob: MessageFns<HPCJob, "virtengine.hpc.v1.HPCJob"> = {
     message.blockHeight = (object.blockHeight !== undefined && object.blockHeight !== null)
       ? Long.fromValue(object.blockHeight)
       : Long.ZERO;
+    message.reservationId = object.reservationId ?? "";
+    message.allocationId = object.allocationId ?? "";
+    message.marketOrderId = object.marketOrderId ?? "";
+    message.marketBidId = object.marketBidId ?? "";
+    message.marketLeaseId = object.marketLeaseId ?? "";
     return message;
   },
 };

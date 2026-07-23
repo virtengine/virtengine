@@ -11,4 +11,7 @@ message GenesisState {
   Params params = 1 [(gogoproto.nullable) = false, (gogoproto.jsontag) = "params", (gogoproto.moretags) = "yaml:\"params\""];
   repeated ResourceInventory inventories = 2 [(gogoproto.nullable) = false, (gogoproto.jsontag) = "inventories", (gogoproto.moretags) = "yaml:\"inventories\""];
   repeated ResourceAllocation allocations = 3 [(gogoproto.nullable) = false, (gogoproto.jsontag) = "allocations", (gogoproto.moretags) = "yaml:\"allocations\""];
+  repeated Reservation reservations = 4 [(gogoproto.nullable) = false, (gogoproto.jsontag) = "reservations", (gogoproto.moretags) = "yaml:\"reservations\""];
+  bool canonical_reservations_active = 5 [(gogoproto.jsontag) = "canonical_reservations_active,omitempty", (gogoproto.moretags) = "yaml:\"canonical_reservations_active\""];
+  repeated ReservationEvent reservation_events = 6 [(gogoproto.nullable) = false, (gogoproto.jsontag) = "reservation_events", (gogoproto.moretags) = "yaml:\"reservation_events\""];
 }

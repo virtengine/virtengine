@@ -31,6 +31,38 @@ service Query {
     option (google.api.http).get = "/virtengine/resources/v1/allocations/provider/{provider_address}";
   }
 
+  rpc Reservation(QueryReservationRequest) returns (QueryReservationResponse) {
+    option (google.api.http).get = "/virtengine/resources/v1/reservation/{reservation_id}";
+  }
+
+  rpc ReservationByOrder(QueryReservationByOrderRequest) returns (QueryReservationResponse) {
+    option (google.api.http).get = "/virtengine/resources/v1/reservation/order/{order_id}";
+  }
+
+  rpc ReservationByBid(QueryReservationByBidRequest) returns (QueryReservationResponse) {
+    option (google.api.http).get = "/virtengine/resources/v1/reservation/bid/{bid_id}";
+  }
+
+  rpc ReservationByLease(QueryReservationByLeaseRequest) returns (QueryReservationResponse) {
+    option (google.api.http).get = "/virtengine/resources/v1/reservation/lease/{lease_id}";
+  }
+
+  rpc ReservationByJob(QueryReservationByJobRequest) returns (QueryReservationResponse) {
+    option (google.api.http).get = "/virtengine/resources/v1/reservation/job/{job_id}";
+  }
+
+  rpc ReservationByConsumer(QueryReservationByConsumerRequest) returns (QueryReservationResponse) {
+    option (google.api.http).get = "/virtengine/resources/v1/reservation/consumer/{consumer_type}/{consumer_id}";
+  }
+
+  rpc ReservationsByProvider(QueryReservationsByProviderRequest) returns (QueryReservationsResponse) {
+    option (google.api.http).get = "/virtengine/resources/v1/reservations/provider/{provider_address}";
+  }
+
+  rpc ReservationLineage(QueryReservationLineageRequest) returns (QueryReservationLineageResponse) {
+    option (google.api.http).get = "/virtengine/resources/v1/reservation/{reservation_id}/lineage";
+  }
+
   // Params returns module parameters.
   rpc Params(QueryParamsRequest) returns (QueryParamsResponse) {
     option (google.api.http).get = "/virtengine/resources/v1/params";
@@ -78,6 +110,36 @@ message QueryAllocationsByProviderRequest {
 message QueryAllocationsByProviderResponse {
   repeated ResourceAllocation allocations = 1 [(gogoproto.nullable) = false, (gogoproto.jsontag) = "allocations", (gogoproto.moretags) = "yaml:\"allocations\""];
   cosmos.base.query.v1beta1.PageResponse pagination = 2 [(gogoproto.jsontag) = "pagination,omitempty", (gogoproto.moretags) = "yaml:\"pagination\""];
+}
+
+message QueryReservationRequest { string reservation_id = 1; }
+message QueryReservationByOrderRequest { string order_id = 1; }
+message QueryReservationByBidRequest { string bid_id = 1; }
+message QueryReservationByLeaseRequest { string lease_id = 1; }
+message QueryReservationByJobRequest { string job_id = 1; }
+message QueryReservationByConsumerRequest {
+  string consumer_type = 1;
+  string consumer_id = 2;
+}
+message QueryReservationsByProviderRequest {
+  string provider_address = 1 [(cosmos_proto.scalar) = "cosmos.AddressString"];
+  cosmos.base.query.v1beta1.PageRequest pagination = 2;
+}
+message QueryReservationResponse {
+  Reservation reservation = 1 [(gogoproto.nullable) = false];
+}
+message QueryReservationsResponse {
+  repeated Reservation reservations = 1 [(gogoproto.nullable) = false];
+  cosmos.base.query.v1beta1.PageResponse pagination = 2;
+}
+message QueryReservationLineageRequest {
+  string reservation_id = 1;
+  cosmos.base.query.v1beta1.PageRequest pagination = 2;
+}
+message QueryReservationLineageResponse {
+  Reservation reservation = 1 [(gogoproto.nullable) = false];
+  repeated ReservationEvent events = 2 [(gogoproto.nullable) = false];
+  cosmos.base.query.v1beta1.PageResponse pagination = 3;
 }
 
 message QueryParamsRequest {}

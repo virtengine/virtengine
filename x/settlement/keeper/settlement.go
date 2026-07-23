@@ -1,6 +1,7 @@
 package keeper
 
 import (
+	"fmt"
 	"math"
 	"time"
 
@@ -269,23 +270,23 @@ func (k Keeper) settleOrder(ctx sdk.Context, orderID string, usageRecordIDs []st
 		}
 	}
 
-	// Emit event
-	err = ctx.EventManager().EmitTypedEvent(&types.EventOrderSettled{
-		SettlementID:   settlementID,
-		OrderID:        orderID,
-		EscrowID:       escrow.EscrowID,
-		Provider:       escrow.Recipient,
-		Customer:       escrow.Depositor,
-		TotalAmount:    settlementAmount.String(),
-		ProviderShare:  providerShare.String(),
-		PlatformFee:    platformFee.String(),
-		SettlementType: string(settlementType),
-		IsFinal:        isFinal,
-		SettledAt:      ctx.BlockTime().Unix(),
-	})
-	if err != nil {
-		k.Logger(ctx).Error("failed to emit order settled event", "error", err)
-	}
+	// These settlement events are handwritten compatibility types rather than
+	// generated protobuf messages. Emit their stable ABCI names directly so the
+	// event cannot be silently lost through an unregistered typed-event codec.
+	ctx.EventManager().EmitEvent(sdk.NewEvent(
+		types.EventTypeOrderSettled,
+		sdk.NewAttribute(types.AttributeKeySettlementID, settlementID),
+		sdk.NewAttribute(types.AttributeKeyOrderID, orderID),
+		sdk.NewAttribute(types.AttributeKeyEscrowID, escrow.EscrowID),
+		sdk.NewAttribute(types.AttributeKeyProvider, escrow.Recipient),
+		sdk.NewAttribute(types.AttributeKeyCustomer, escrow.Depositor),
+		sdk.NewAttribute(types.AttributeKeyAmount, settlementAmount.String()),
+		sdk.NewAttribute(types.AttributeKeyProviderShare, providerShare.String()),
+		sdk.NewAttribute(types.AttributeKeyPlatformFee, platformFee.String()),
+		sdk.NewAttribute(types.AttributeKeySettlementType, string(settlementType)),
+		sdk.NewAttribute(types.AttributeKeyIsFinal, fmt.Sprintf("%t", isFinal)),
+		sdk.NewAttribute(types.AttributeKeyTimestamp, fmt.Sprintf("%d", ctx.BlockTime().Unix())),
+	))
 
 	k.Logger(ctx).Info("order settled",
 		"settlement_id", settlementID,
@@ -388,8 +389,14 @@ func (k Keeper) recordUsage(ctx sdk.Context, record *types.UsageRecord) error {
 		return types.ErrUnauthorized.Wrap("provider does not match escrow recipient")
 	}
 
-	// Save usage record
-	if err := k.SetUsageRecord(ctx, *record); err != nil {
+	// Save the initial authenticated record directly after the complete proof,
+	// replay, escrow, and lineage checks above. Subsequent updates must pass the
+	// immutable-state guard in SetUsageRecord.
+	if record.IsAuthenticated() {
+		if err := k.insertAuthenticatedUsageRecord(ctx, *record); err != nil {
+			return err
+		}
+	} else if err := k.SetUsageRecord(ctx, *record); err != nil {
 		return err
 	}
 
@@ -409,20 +416,17 @@ func (k Keeper) recordUsage(ctx sdk.Context, record *types.UsageRecord) error {
 		k.Logger(ctx).Debug("failed to check usage condition", "error", err)
 	}
 
-	// Emit event
-	err := ctx.EventManager().EmitTypedEvent(&types.EventUsageRecorded{
-		UsageID:    record.UsageID,
-		OrderID:    record.OrderID,
-		LeaseID:    record.LeaseID,
-		Provider:   record.Provider,
-		UsageUnits: record.UsageUnits,
-		UsageType:  record.UsageType,
-		TotalCost:  record.TotalCost.String(),
-		RecordedAt: ctx.BlockTime().Unix(),
-	})
-	if err != nil {
-		k.Logger(ctx).Error("failed to emit usage recorded event", "error", err)
-	}
+	ctx.EventManager().EmitEvent(sdk.NewEvent(
+		types.EventTypeUsageRecorded,
+		sdk.NewAttribute(types.AttributeKeyUsageID, record.UsageID),
+		sdk.NewAttribute(types.AttributeKeyOrderID, record.OrderID),
+		sdk.NewAttribute(types.AttributeKeyLeaseID, record.LeaseID),
+		sdk.NewAttribute(types.AttributeKeyProvider, record.Provider),
+		sdk.NewAttribute(types.AttributeKeyUsageUnits, fmt.Sprintf("%d", record.UsageUnits)),
+		sdk.NewAttribute(types.AttributeKeyUsageType, record.UsageType),
+		sdk.NewAttribute(types.AttributeKeyAmount, record.TotalCost.String()),
+		sdk.NewAttribute(types.AttributeKeyTimestamp, fmt.Sprintf("%d", ctx.BlockTime().Unix())),
+	))
 
 	k.Logger(ctx).Info("usage recorded",
 		"usage_id", record.UsageID,

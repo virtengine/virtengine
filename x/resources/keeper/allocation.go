@@ -439,7 +439,7 @@ func capacitySatisfies(available, required types.ResourceCapacity) bool {
 	if required.Gpus > 0 && available.Gpus < required.Gpus {
 		return false
 	}
-	if required.GpuType != "" && available.GpuType != "" && required.GpuType != available.GpuType {
+	if required.GpuType != "" && required.GpuType != available.GpuType {
 		return false
 	}
 	return true

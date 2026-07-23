@@ -17,6 +17,7 @@ func InitGenesis(ctx sdk.Context, k keeper.Keeper, gs *types.GenesisState) {
 	if err := k.SetParams(ctx, gs.Params); err != nil {
 		panic(err)
 	}
+	k.ActivateCanonicalReservations(ctx)
 
 	for _, inventory := range gs.Inventories {
 		if err := k.SetInventory(ctx, inventory); err != nil {
@@ -27,6 +28,15 @@ func InitGenesis(ctx sdk.Context, k keeper.Keeper, gs *types.GenesisState) {
 		if err := k.SetAllocation(ctx, allocation); err != nil {
 			panic(err)
 		}
+	}
+	for _, reservation := range gs.Reservations {
+		if err := k.SetReservation(ctx, reservation); err != nil {
+			panic(err)
+		}
+		k.RebuildReservationIndexes(ctx, reservation)
+	}
+	if err := k.ValidateCapacityConservation(ctx); err != nil {
+		panic(err)
 	}
 }
 
@@ -41,6 +51,10 @@ func ExportGenesis(ctx sdk.Context, k keeper.Keeper) *types.GenesisState {
 	})
 	k.WithAllocations(ctx, func(allocation types.ResourceAllocation) bool {
 		gs.Allocations = append(gs.Allocations, allocation)
+		return false
+	})
+	k.WithReservations(ctx, func(reservation types.Reservation) bool {
+		gs.Reservations = append(gs.Reservations, reservation)
 		return false
 	})
 

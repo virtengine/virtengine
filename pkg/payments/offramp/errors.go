@@ -16,6 +16,14 @@ var (
 	ErrProviderRejected     = errors.New("offramp provider rejected request")
 	ErrProviderTemporary    = errors.New("offramp provider temporary failure")
 	ErrProviderAmbiguous    = errors.New("offramp provider result ambiguous")
+	ErrProfileNotExecutable = errors.New("offramp profile is not executable")
+	ErrUnsupportedCorridor  = errors.New("offramp corridor unsupported")
+	ErrLimitExceeded        = errors.New("offramp payout limit exceeded")
+	ErrComplianceRequired   = errors.New("offramp compliance decision required")
+	ErrTestAdapter          = errors.New("offramp test adapter is not production eligible")
+	ErrResponseTooLarge     = errors.New("offramp provider response too large")
+	ErrWebhookInvalid       = errors.New("offramp webhook invalid")
+	ErrWebhookReplay        = errors.New("offramp webhook replay conflict")
 )
 
 // ErrorKind classifies normalized provider failures.
@@ -127,7 +135,11 @@ func IsAmbiguous(err error) bool {
 
 // IsNotFound returns true when the normalized provider failure means the payout does not exist.
 func IsNotFound(err error) bool {
-	return errors.Is(err, ErrPayoutNotFound)
+	if errors.Is(err, ErrPayoutNotFound) {
+		return true
+	}
+	var providerErr *ProviderError
+	return errors.As(err, &providerErr) && providerErr.Kind == ErrorKindNotFound
 }
 
 // CanFailover returns true when the bridge may safely attempt a different provider.
@@ -151,6 +163,11 @@ func classifyError(operation string, err error) (ErrorKind, bool, bool) {
 	switch {
 	case errors.Is(err, ErrInvalidRequest):
 		return ErrorKindInvalidRequest, false, false
+	case errors.Is(err, ErrProfileNotExecutable),
+		errors.Is(err, ErrUnsupportedCorridor),
+		errors.Is(err, ErrLimitExceeded),
+		errors.Is(err, ErrComplianceRequired):
+		return ErrorKindRejected, false, false
 	case errors.Is(err, ErrPayoutNotFound):
 		return ErrorKindNotFound, false, false
 	case errors.Is(err, ErrAdapterUnavailable):

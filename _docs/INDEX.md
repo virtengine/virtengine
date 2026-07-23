@@ -24,6 +24,8 @@ This index lists internal-only documentation. Do not add internal docs outside `
 - `_docs/adr/ADR-004-veid-governed-verifier.md`
 - `_docs/adr/ADR-005-consensus-determinism.md`
 - `_docs/adr/ADR-006-authenticated-metering.md`
+- `_docs/adr/ADR-007-canonical-market-reservations.md`
+- `_docs/adr/ADR-008-canonical-financial-cases.md`
 - `_docs/adr/adr-001-network-upgrades.md`
 - `_docs/adr/adr-002-manifest-v2beta2.md`
 - `_docs/adr/adr-003-technical-debt-refactoring.md`
@@ -64,6 +66,10 @@ This index lists internal-only documentation. Do not add internal docs outside `
 
 ## Runbooks
 - `_docs/runbooks/operator-runbooks.md`
+- `_docs/runbooks/reservation-quarantine-remediation.md`
+- `_docs/runbooks/financial-case-duplicate-quarantine-remediation.md`
+- `_docs/runbooks/provider-mutation-queue-recovery-2026-07-23.md`
+- `_docs/runbooks/fiat-conversion-incident-recovery.md`
 - `_docs/runbooks/finance-reconciliation-runbook.md`
 - `_docs/runbooks/mainnet-genesis-ceremony.md`
 - `_docs/runbooks/mainnet-launch-runbook.md`
@@ -85,12 +91,22 @@ This index lists internal-only documentation. Do not add internal docs outside `
 ## Audit
 - `_docs/audits/task-86a-completion-report-2026-07-21.md`
 - `_docs/audits/task-84b-completion-report-2026-07-21.md`
+- `_docs/audits/task-84c-completion-report-2026-07-21.md`
+- `_docs/audits/task-84d-completion-report-2026-07-22.md`
+- `_docs/audits/task-85a-mutation-inventory-2026-07-23.md`
+- `_docs/audits/task-85a-completion-report-2026-07-23.md`
+- `_docs/audits/task-85b-completion-evidence-2026-07-23.md`
 
 ## Protocols & Schemas
 - `_docs/protocols/hpc-cluster-template-spec.md`
 - `_docs/protocols/hpc-node-agent-protocol.md`
 - `_docs/protocols/mobile-capture-protocol-v1.md`
 - `_docs/protocols/mobile-capture-sdk.md`
+- `_docs/protocols/resource-reservation-state-machine.md`
+- `_docs/protocols/financial-case-state-machine.md`
+- `_docs/protocols/provider-mutation-queue-spec-2026-07-23.md`
+- `_docs/protocols/task-85b-dex-payout-support-matrices.md`
+- `_docs/protocols/fiat-conversion-orchestrator-protocol.md`
 - `_docs/protocols/veid-registry-and-issuance-policy.md`
 - `_docs/protocols/veid-attestation-schema.md`
 - `_docs/veid-flow-spec.md`
@@ -115,6 +131,7 @@ This index lists internal-only documentation. Do not add internal docs outside `
 - `_docs/business-continuity.md`
 - `_docs/disaster-recovery.md`
 - `_docs/offramp-compliance.md`
+- `_docs/task-85b-external-prerequisite-certification-ledger.md`
 - `_docs/sso-oidc-operations.md`
 - `_docs/slos-and-playbooks.md`
 - `_docs/tokenomics-report.md`

@@ -1991,13 +1991,45 @@ export function createSDK(queryTransport: Transport, txTransport: Transport, opt
             const service = await serviceLoader.loadAt(42);
             return getClient(service).allocationsByProvider(input, options);
           }, { path: [42, 3] }),
+          getReservation: withMetadata(async function getReservation(input: DeepPartial<virtengine_resources_v1_query.QueryReservationRequest>, options?: CallOptions) {
+            const service = await serviceLoader.loadAt(42);
+            return getClient(service).reservation(input, options);
+          }, { path: [42, 4] }),
+          getReservationByOrder: withMetadata(async function getReservationByOrder(input: DeepPartial<virtengine_resources_v1_query.QueryReservationByOrderRequest>, options?: CallOptions) {
+            const service = await serviceLoader.loadAt(42);
+            return getClient(service).reservationByOrder(input, options);
+          }, { path: [42, 5] }),
+          getReservationByBid: withMetadata(async function getReservationByBid(input: DeepPartial<virtengine_resources_v1_query.QueryReservationByBidRequest>, options?: CallOptions) {
+            const service = await serviceLoader.loadAt(42);
+            return getClient(service).reservationByBid(input, options);
+          }, { path: [42, 6] }),
+          getReservationByLease: withMetadata(async function getReservationByLease(input: DeepPartial<virtengine_resources_v1_query.QueryReservationByLeaseRequest>, options?: CallOptions) {
+            const service = await serviceLoader.loadAt(42);
+            return getClient(service).reservationByLease(input, options);
+          }, { path: [42, 7] }),
+          getReservationByJob: withMetadata(async function getReservationByJob(input: DeepPartial<virtengine_resources_v1_query.QueryReservationByJobRequest>, options?: CallOptions) {
+            const service = await serviceLoader.loadAt(42);
+            return getClient(service).reservationByJob(input, options);
+          }, { path: [42, 8] }),
+          getReservationByConsumer: withMetadata(async function getReservationByConsumer(input: DeepPartial<virtengine_resources_v1_query.QueryReservationByConsumerRequest>, options?: CallOptions) {
+            const service = await serviceLoader.loadAt(42);
+            return getClient(service).reservationByConsumer(input, options);
+          }, { path: [42, 9] }),
+          getReservationsByProvider: withMetadata(async function getReservationsByProvider(input: DeepPartial<virtengine_resources_v1_query.QueryReservationsByProviderRequest>, options?: CallOptions) {
+            const service = await serviceLoader.loadAt(42);
+            return getClient(service).reservationsByProvider(input, options);
+          }, { path: [42, 10] }),
+          getReservationLineage: withMetadata(async function getReservationLineage(input: DeepPartial<virtengine_resources_v1_query.QueryReservationLineageRequest>, options?: CallOptions) {
+            const service = await serviceLoader.loadAt(42);
+            return getClient(service).reservationLineage(input, options);
+          }, { path: [42, 11] }),
           /**
            * getParams returns module parameters.
            */
           getParams: withMetadata(async function getParams(input: DeepPartial<virtengine_resources_v1_query.QueryParamsRequest> = {}, options?: CallOptions) {
             const service = await serviceLoader.loadAt(42);
             return getClient(service).params(input, options);
-          }, { path: [42, 4] }),
+          }, { path: [42, 12] }),
           /**
            * providerHeartbeat updates resource inventory from a provider heartbeat.
            */
@@ -2240,6 +2272,46 @@ export function createSDK(queryTransport: Transport, txTransport: Transport, opt
             const service = await serviceLoader.loadAt(48);
             return getClient(service).fiatPayoutPreference(input, options);
           }, { path: [48, 18] }),
+          getFinancialCase: withMetadata(async function getFinancialCase(input: DeepPartial<virtengine_settlement_v1_query.QueryFinancialCaseRequest>, options?: CallOptions) {
+            const service = await serviceLoader.loadAt(48);
+            return getClient(service).financialCase(input, options);
+          }, { path: [48, 19] }),
+          getFinancialCaseBySubject: withMetadata(async function getFinancialCaseBySubject(input: DeepPartial<virtengine_settlement_v1_query.QueryFinancialCaseBySubjectRequest>, options?: CallOptions) {
+            const service = await serviceLoader.loadAt(48);
+            return getClient(service).financialCaseBySubject(input, options);
+          }, { path: [48, 20] }),
+          getFinancialCasesByOrder: withMetadata(async function getFinancialCasesByOrder(input: DeepPartial<virtengine_settlement_v1_query.QueryFinancialCasesRequest>, options?: CallOptions) {
+            const service = await serviceLoader.loadAt(48);
+            return getClient(service).financialCasesByOrder(input, options);
+          }, { path: [48, 21] }),
+          getFinancialCasesByInvoice: withMetadata(async function getFinancialCasesByInvoice(input: DeepPartial<virtengine_settlement_v1_query.QueryFinancialCasesRequest>, options?: CallOptions) {
+            const service = await serviceLoader.loadAt(48);
+            return getClient(service).financialCasesByInvoice(input, options);
+          }, { path: [48, 22] }),
+          getFinancialCasesByUsage: withMetadata(async function getFinancialCasesByUsage(input: DeepPartial<virtengine_settlement_v1_query.QueryFinancialCasesRequest>, options?: CallOptions) {
+            const service = await serviceLoader.loadAt(48);
+            return getClient(service).financialCasesByUsage(input, options);
+          }, { path: [48, 23] }),
+          getFinancialCasesByJob: withMetadata(async function getFinancialCasesByJob(input: DeepPartial<virtengine_settlement_v1_query.QueryFinancialCasesRequest>, options?: CallOptions) {
+            const service = await serviceLoader.loadAt(48);
+            return getClient(service).financialCasesByJob(input, options);
+          }, { path: [48, 24] }),
+          getFinancialCasesByEscrow: withMetadata(async function getFinancialCasesByEscrow(input: DeepPartial<virtengine_settlement_v1_query.QueryFinancialCasesRequest>, options?: CallOptions) {
+            const service = await serviceLoader.loadAt(48);
+            return getClient(service).financialCasesByEscrow(input, options);
+          }, { path: [48, 25] }),
+          getFinancialCasesByStatus: withMetadata(async function getFinancialCasesByStatus(input: DeepPartial<virtengine_settlement_v1_query.QueryFinancialCasesRequest>, options?: CallOptions) {
+            const service = await serviceLoader.loadAt(48);
+            return getClient(service).financialCasesByStatus(input, options);
+          }, { path: [48, 26] }),
+          getFinancialCasesByParty: withMetadata(async function getFinancialCasesByParty(input: DeepPartial<virtengine_settlement_v1_query.QueryFinancialCasesRequest>, options?: CallOptions) {
+            const service = await serviceLoader.loadAt(48);
+            return getClient(service).financialCasesByParty(input, options);
+          }, { path: [48, 27] }),
+          getFinancialCaseLineage: withMetadata(async function getFinancialCaseLineage(input: DeepPartial<virtengine_settlement_v1_query.QueryFinancialCaseLineageRequest>, options?: CallOptions) {
+            const service = await serviceLoader.loadAt(48);
+            return getClient(service).financialCaseLineage(input, options);
+          }, { path: [48, 28] }),
           /**
            * createEscrow creates a new escrow account
            */
@@ -2302,7 +2374,78 @@ export function createSDK(queryTransport: Transport, txTransport: Transport, opt
           claimRewards: withMetadata(async function claimRewards(input: DeepSimplify<virtengine_settlement_v1_tx.MsgClaimRewards>, options?: TxCallOptions) {
             const service = await serviceLoader.loadAt(49);
             return getMsgClient(service).claimRewards(input, options);
-          }, { path: [49, 8] })
+          }, { path: [49, 8] }),
+          /**
+           * openFinancialCase atomically opens or merges a canonical financial case.
+           */
+          openFinancialCase: withMetadata(async function openFinancialCase(input: DeepSimplify<virtengine_settlement_v1_tx.MsgOpenFinancialCase>, options?: TxCallOptions) {
+            const service = await serviceLoader.loadAt(49);
+            return getMsgClient(service).openFinancialCase(input, options);
+          }, { path: [49, 9] }),
+          /**
+           * addFinancialClaim adds a privacy-safe typed claim to an active case.
+           */
+          addFinancialClaim: withMetadata(async function addFinancialClaim(input: DeepSimplify<virtengine_settlement_v1_tx.MsgAddFinancialClaim>, options?: TxCallOptions) {
+            const service = await serviceLoader.loadAt(49);
+            return getMsgClient(service).addFinancialClaim(input, options);
+          }, { path: [49, 10] }),
+          /**
+           * submitFinancialCaseForReview closes evidence collection.
+           */
+          submitFinancialCaseForReview: withMetadata(async function submitFinancialCaseForReview(input: DeepSimplify<virtengine_settlement_v1_tx.MsgSubmitFinancialCaseForReview>, options?: TxCallOptions) {
+            const service = await serviceLoader.loadAt(49);
+            return getMsgClient(service).submitFinancialCaseForReview(input, options);
+          }, { path: [49, 11] }),
+          /**
+           * escalateFinancialCase escalates a case to governance/arbitration.
+           */
+          escalateFinancialCase: withMetadata(async function escalateFinancialCase(input: DeepSimplify<virtengine_settlement_v1_tx.MsgEscalateFinancialCase>, options?: TxCallOptions) {
+            const service = await serviceLoader.loadAt(49);
+            return getMsgClient(service).escalateFinancialCase(input, options);
+          }, { path: [49, 12] }),
+          /**
+           * resolveFinancialCase records a conserved allocation pending appeal.
+           */
+          resolveFinancialCase: withMetadata(async function resolveFinancialCase(input: DeepSimplify<virtengine_settlement_v1_tx.MsgResolveFinancialCase>, options?: TxCallOptions) {
+            const service = await serviceLoader.loadAt(49);
+            return getMsgClient(service).resolveFinancialCase(input, options);
+          }, { path: [49, 13] }),
+          /**
+           * appealFinancialCase reopens review while all holds remain active.
+           */
+          appealFinancialCase: withMetadata(async function appealFinancialCase(input: DeepSimplify<virtengine_settlement_v1_tx.MsgAppealFinancialCase>, options?: TxCallOptions) {
+            const service = await serviceLoader.loadAt(49);
+            return getMsgClient(service).appealFinancialCase(input, options);
+          }, { path: [49, 14] }),
+          /**
+           * cancelFinancialCase cancels an unreviewed case and restores its holds.
+           */
+          cancelFinancialCase: withMetadata(async function cancelFinancialCase(input: DeepSimplify<virtengine_settlement_v1_tx.MsgCancelFinancialCase>, options?: TxCallOptions) {
+            const service = await serviceLoader.loadAt(49);
+            return getMsgClient(service).cancelFinancialCase(input, options);
+          }, { path: [49, 15] }),
+          /**
+           * finalizeFinancialCase applies the pending allocation exactly once.
+           */
+          finalizeFinancialCase: withMetadata(async function finalizeFinancialCase(input: DeepSimplify<virtengine_settlement_v1_tx.MsgFinalizeFinancialCase>, options?: TxCallOptions) {
+            const service = await serviceLoader.loadAt(49);
+            return getMsgClient(service).finalizeFinancialCase(input, options);
+          }, { path: [49, 16] }),
+          /**
+           * recordFiatConversionObservation records one authenticated, replay-safe
+           * observation produced by the provider's off-chain conversion orchestrator.
+           */
+          recordFiatConversionObservation: withMetadata(async function recordFiatConversionObservation(input: DeepSimplify<virtengine_settlement_v1_tx.MsgRecordFiatConversionObservation>, options?: TxCallOptions) {
+            const service = await serviceLoader.loadAt(49);
+            return getMsgClient(service).recordFiatConversionObservation(input, options);
+          }, { path: [49, 17] }),
+          /**
+           * updateParams updates settlement parameters through the configured x/gov authority.
+           */
+          updateParams: withMetadata(async function updateParams(input: DeepSimplify<virtengine_settlement_v1_tx.MsgUpdateParams>, options?: TxCallOptions) {
+            const service = await serviceLoader.loadAt(49);
+            return getMsgClient(service).updateParams(input, options);
+          }, { path: [49, 18] })
         }
       },
       staking: {

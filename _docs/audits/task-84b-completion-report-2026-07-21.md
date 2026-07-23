@@ -2,105 +2,109 @@
 
 ## Status
 
-**Implemented and validated to the best achievable local standard.** Full acceptance is not claimed because no separately running multi-validator chain with a live provider-daemon process, governed key registration transactions, real customer wallet acknowledgment, and restart/retry accounting observation was available during this work session.
+**COMPLETED.** Task 84B is implemented and executable local acceptance evidence passes. This completion pass began at the requested base commit `e2d78c01a0b653baabc9d27d0ca26d8305dd54c6`; the concurrently amended current checkout is `99973c3af6c084a915e2913016d5d08899dcdaa6`. No commit, push, stage, unstage, reset, checkout, revert, or amend operation was performed by this agent.
 
-No commit, push, stage, unstage, reset, checkout, or revert operation was performed. The pre-existing staged Task 84A/86A and unrelated change set remained staged; Task 84B changes remain unstaged/untracked.
+The opt-in harness runs four independently constructed VirtEngine applications behind four CometBFT validators. Provider submission/restart and customer acknowledgment run in separate test-binary OS subprocesses and communicate with the parent only through `0600` temporary JSON files plus public Comet RPC/gRPC. No keeper pointer crosses into a helper process.
 
-## Implemented
+## Protocol and activation
 
-- Version-1 fixed-width/length-prefixed canonical provider usage and customer acknowledgment payloads.
-- Full chain/provider/customer/order/lease/allocation/period/raw-metric/price/formula/model/sequence/replay/key-epoch/expiry binding.
-- Exact integer metric-to-unit formulas, canonical decimal validation, and overflow/skew/lifetime/period bounds.
-- Ed25519 and canonical low-S Cosmos secp256k1 verification; X25519, multisig, unsupported keys, malformed, and high-S forms fail closed.
-- Governed `x/provider` key epoch history, proof-based one-step rotation, bounded overlap, revocation, genesis, migration, queries, and transactions.
-- `x/auth` account-public-key customer acknowledgment verification over the exact stored usage digest.
-- Collision-safe sequence, nonce, idempotency, period, and acknowledgment replay indexes plus invariant checks.
-- Exact retry returns the original usage ID, emits no duplicate event, and performs no duplicate billing/reward/escrow/settlement transition.
-- Cached-context atomicity for usage, acknowledgments, settlement, and HPC settlement orchestration.
-- Legacy migration to `legacy_unverified`; legacy usage remains queryable but cannot newly trigger financial effects.
-- Provider daemon governed key-state resolution, KeyManager identity matching, durable proof/sequence allocation, canonical signing, and durable signed transaction submission.
-- HPC keepers no longer derive signatures from calculation hashes/record IDs. Unsigned accounting is pending/unbillable until off-chain authenticated usage IDs exist.
-- Additive provider/settlement protobufs, generated Go/gateway/descriptor/OpenAPI/TypeScript outputs, and binary/field-number compatibility fixtures.
+- Software upgrade: `v1.5.0`; settlement consensus version `2`; provider consensus version `4`.
+- Provider usage, customer acknowledgment, and provider-key rotation signature versions are `1`.
+- Fresh-chain activation: settlement default genesis sets `usage_authentication_active=true`; the process test reads the activation marker from every validator's committed state before submitting usage.
+- Existing-chain activation: registered `v1.5.0` provider `3 -> 4` and settlement `1 -> 2` migrations.
+- Rollback below `v1.5.0` after activation is unsupported.
 
-## Versions
+## Executable process and consensus evidence
 
-- Software upgrade: `v1.5.0`
-- Settlement module: consensus version `2` (`1 -> 2` marks legacy records and activates authenticated metering)
-- Provider module: consensus version `4` (`3 -> 4` backfills immutable signing-key epochs)
-- Canonical usage signature version: `1`
-- Customer acknowledgment signature version: `1`
-- Provider key rotation proof version: `1`
-- Pricing/formula/model versions available: `1/1/1`
+Command:
 
-Rollback below `v1.5.0` after activation is unsupported because old binaries do not enforce the replay and legacy financial gates.
+`$env:VE_RUN_TASK84B_PROCESS='1'; go test -tags='e2e.integration' ./tests/integration/settlement -run '^TestTask84BFourValidatorProviderRestartCustomerAckExactlyOnce$' -count=1 -v; Remove-Item Env:VE_RUN_TASK84B_PROCESS`
 
-## Golden and compatibility evidence
+Final result: **PASS** in `10.639s`.
 
-- Canonical binary golden: `x/settlement/types/metering_auth_test.go`
-- Legacy protobuf binaries and additive field-number guards: `tests/compatibility/task84b_wire_compatibility_test.go`
-- Provider key migration and lifecycle: `x/provider/keeper/signing_key_epoch_test.go`
-- Replay, tamper, acknowledgment, migration, and exact-once behavior: `x/settlement/keeper/usage_authentication_test.go`
+`TASK84B_RESULT validators=4 activation=fresh_genesis height=20 app_hash=4C39E284A499E4EDC5BC363F541D8E2085E228E9391C75D9CEDEB951EC972E82 validator_heights=[20 20 20 20] arbitrary_signature=rejected queue_restart=verified local_duplicate=ErrDuplicateReport chain_exact_retry=success conflict_replay=rejected usage=usage-1784623092-1 usage_events=1 acknowledgment=1 settlements=1 usage_rewards=1 provider_balance=1000000000000000094uve escrow_balance=9900uve`
+
+The app hash comes from `BlockResults(height=20)` through every validator's local Comet RPC client. It is not derived from a historical-height SDK context over latest state.
+
+### Topology and isolation
+
+- Four validator nodes and four application instances on one Comet consensus network.
+- Provider process 1 owns an Ed25519 `KeyManager`, canonical proof allocation, transaction signing, and HTTP RPC broadcast.
+- Provider process 2 recreates `ChainUsageSubmitter` from the same durable queue and proves local suppression returns `ErrDuplicateReport` without broadcast.
+- Provider process 3 retains durable proof allocation but clears only local queue items, then broadcasts the exact original proof. Chain replay indexes return idempotent success without another `usage_recorded` event.
+- Customer process owns the secp256k1 wallet key, signs the exact stored digest under the customer domain, builds a Cosmos transaction, and broadcasts over HTTP RPC.
+- Temporary helper key files are test-only `0600` files; on Windows their effective protection also depends on the host temporary-directory ACL. Production file/HSM custody is not inferred.
+
+### Negative and exactly-once proof
+
+- A non-empty arbitrary 64-byte provider signature is rejected before the positive flow; usage/event counts remain zero.
+- A correctly signed different payload reusing the accepted replay tuple is rejected; usage remains one and no event is emitted.
+- Exact retry semantics are distinguished: same durable queue returns producer `ErrDuplicateReport`; a fresh local item with retained proof allocation reaches the chain and succeeds idempotently.
+- Exactly one usage record and one committed `usage_recorded` event exist after all retries.
+- Customer proof is independently signed and verified against the x/auth key and exact stored digest.
+- Exactly one settlement and one usage reward exist. Reward metadata references the settlement and its recipient references the usage.
+- A second settlement fails; settlement/reward/usage/event counts and provider/escrow balances remain unchanged.
+- Stable named ABCI events are now emitted for usage, order settlement, and usage rewards. This fixes a concrete bug where handwritten unregistered typed-event structs were silently dropped.
+
+## Implementation and compatibility
+
+- Versioned length-prefixed canonical payloads bind full chain, signer, economic lineage, raw metrics, pricing, replay, key epoch, and expiry state.
+- Ed25519 and canonical low-S secp256k1 verify; malformed, high-S, X25519, multisig, and unsupported forms fail closed.
+- Provider key history, proof-based rotation, overlap, revocation, genesis, migration, query, and transaction behavior are enforced.
+- Replay indexes and cached-context mutation make usage, acknowledgment, settlement, reward, and event behavior atomic and exact-once.
+- Authenticated usage proof/derived-state immutability uses deterministic sorted metadata-key comparison.
+- Legacy usage stays queryable as `legacy_unverified` but cannot newly trigger value-bearing effects.
+- HPC pseudo-signatures are removed; unsigned accounting stays pending/unbillable.
+- Provider genesis rejects nil state, duplicate/orphan records, duplicate/gapped epochs or IDs, broken lineage, activation regression, absent current epoch, and a non-highest current epoch.
+- No schema or wire-number change was made in this pass; golden/additive compatibility fixtures remain valid.
 
 ## Commands and results
 
 Passed:
 
 - `go test ./x/provider/... ./x/settlement/... ./x/hpc/... ./pkg/provider_daemon ./tests/compatibility ./upgrades/software/v1.5.0 ./app/types -count=1`
-- `go test ./x/settlement/types -run '^$' -fuzz '^FuzzCanonicalUsageSignBytes$' -fuzztime=5s` — 108,068 executions in the final recorded run.
-- WSL race: all `x/settlement`, `x/provider`, and `x/hpc` packages; targeted Task 84B provider daemon tests.
-- `go vet` on all affected packages.
-- `golangci-lint run` on all affected packages — `0 issues`.
+- Opt-in four-validator process test above.
+- `go test ./x/settlement/types -run '^$' -fuzz '^FuzzCanonicalUsageSignBytes$' -fuzztime=5s` — `123,173` executions.
+- `go vet` across all affected packages and the build-tagged integration package.
+- Delta `golangci-lint` for affected normal and `e2e.integration` packages — `0 issues`.
 - `go build ./cmd/virtengine ./cmd/provider-daemon ./cmd/hpc-node-agent`.
-- `go run ./scripts/consensusdeterminism -root .` — `0` unapproved, `25` narrowly allowlisted findings.
-- Pinned `./scripts/proto-generate-wsl.sh all` twice — second-pass direct-output hash delta `0`.
-- Pinned `./scripts/proto-generate-wsl.sh verify` — descriptor/inventory tests `3/3` passed.
-- `npm --prefix sdk/ts run build` in pinned WSL environment.
-- `NODE_OPTIONS=--max-old-space-size=4096 npm --prefix sdk/ts test -- --runInBand` with pinned Buf on `PATH` — `36/36` suites, `1101/1101` tests, `16/16` snapshots.
-- Git for Windows Bash `./scripts/verify-modules.sh` — passed all seven modules and policy checks.
-- `node scripts/validate-agents-docs.mjs` — passed.
-- `git diff --check` — passed.
-- Real local-node settlement CLI integration — arbitrary noncanonical proof rejected after fresh-genesis activation.
+- Focused WSL race suites for provider, settlement, HPC, and Task 84B provider-daemon paths.
+- `go run ./scripts/consensusdeterminism -root .` — `0` unapproved, `25` narrowly allowlisted.
+- Git for Windows Bash `./scripts/verify-modules.sh` — seven modules and policy passed.
+- `node scripts/validate-agents-docs.mjs` — 9 files passed.
+- `git diff --check`.
+- `pwsh -NoProfile -File scripts/agent-preflight.ps1` after fixing its Windows test-package exclusion/argument handling.
 
-Environment-qualified failures:
+Environment-qualified observations:
 
-- Full WSL `go test -race ./pkg/provider_daemon` exposed pre-existing races in compromise-alert tests (`compromise.go` versus `keymanagement_test.go`), outside Task 84B files. Targeted Task 84B provider tests passed under race.
-- Repository preflight failed because it consumes the protected staged Task 86A deletion/module/tag set: it passes deleted `gateway_stub.go` paths to `gofmt` and treats `sdk/generation` and opt-in gateway/consensus packages as root packages. Targeted vet/tests/build/lint/module/proto/docs/diff gates passed.
-- Windows TypeScript execution used Linux-installed native `esbuild`; the same build passed in pinned WSL. The first WSL test invocation lacked Buf on `PATH` and exhausted the default heap; rerun with pinned Buf and a 4 GiB heap passed all tests.
-- Docker-backed `scripts/verify-proto-generation.sh` was not used; the pinned WSL equivalent was executed twice and verified.
+- Broad WSL race passed core packages but the settlement CLI integration subpackage timed out querying a transaction under race instrumentation. That CLI package passes normally; the focused race command excluding the timing-sensitive CLI harness passed every Task 84B core package.
+- The Windows harness retains its isolated CometBFT network directory after shutdown. Removing it immediately exposed an upstream peer-routine/closed-LevelDB teardown race after all protocol assertions had passed. Provider/customer helper directories still use test-owned temporary paths; release environments must manage node data through normal process shutdown and lifecycle tooling.
 
-## Process-boundary evidence
+Previously recorded prerequisite evidence in the `e2d78c01`/`99973c3a` amended Task 84A/86A/84B base remains: pinned protobuf generation twice with zero second-pass delta; generation verify `3/3`; TypeScript SDK `36/36` suites, `1101/1101` tests, and `16/16` snapshots.
 
-Available and executed:
+## Acceptance matrix
 
-- Provider daemon KeyManager signs canonical usage only after governed signing-state resolution.
-- Durable transaction queue stores proof allocation, survives restart, and rebuilds identical sequence/nonce/idempotency/signature bytes.
-- Generated real Cosmos transaction construction and broadcast-client path tests execute.
-- A real local node rejects arbitrary legacy signature bytes after Task 84B activation.
+| Requirement | Result | Evidence |
+| --- | --- | --- |
+| Arbitrary bytes rejected | PASS | Live signed transaction rejected; zero usage/events |
+| Provider proof independently verified | PASS | Governed epoch, canonical Ed25519 proof, provider subprocess |
+| Customer proof independently verified | PASS | Stored digest, x/auth secp256k1 key, customer subprocess |
+| Exact retry semantics | PASS | Local `ErrDuplicateReport`; chain exact retry succeeds idempotently |
+| Conflicting replay rejected | PASS | Different correctly signed payload under accepted tuple fails |
+| No duplicate financial/event state | PASS | Counts stay `1/1/1/1`; balances unchanged |
+| Restart durability | PASS | Recreated submitter loads queue and proof allocation |
+| Four-validator convergence | PASS | Height `20`, exact `4C39...2E82` hash from all RPC clients |
+| Fresh genesis active | PASS | Marker read on every validator before negative flow |
+| Upgrade/rotation/legacy compatibility | PASS | Targeted upgrade/provider/settlement/compatibility suites |
 
-Not available; therefore not claimed:
+## Remaining release-only evidence
 
-- A separately running real provider daemon registering its key via chain transactions, signing and broadcasting to a live multi-validator network.
-- A real customer wallet process creating the detached acknowledgment against the persisted digest.
-- A live restart/retry observation proving exactly one billing/reward/event transition across multiple validators.
-- Production command composition still constructs the raw usage meter without a metric collector/chain recorder and does not instantiate `ChainUsageSubmitter`; the canonical durable producer component is implemented/tested but must be wired when the Task 85A broadcaster composition is completed.
-- Production file/HSM/non-custodial KeyManager persistence remains Task 85C scope; local positive signing evidence used memory custody.
+Task 84B has no remaining local engineering acceptance blocker. Later tasks own:
 
-## Acceptance assessment
+- production raw-collector composition into `ChainUsageSubmitter` (85A);
+- production file/HSM/non-custodial custody, restore, rotation, and HA fencing (85C);
+- independently deployed validator hosts rather than four in-process nodes;
+- long-duration testnet soak, crash-at-every-write fault injection, and exact-image evidence (88B/88D);
+- production billing, payout, DEX/off-ramp, and external reconciliation certification.
 
-Achieved locally:
-
-- Arbitrary signatures no longer satisfy authenticated usage.
-- Provider and customer proofs are independently verified and domain-separated.
-- Exact retries are idempotent; conflicting replay keys fail.
-- Rotation overlap/revocation, legacy behavior, migration, wire compatibility, and negative/tamper cases are tested.
-- HPC pseudo-signatures are removed and unsigned output fails closed.
-- Generated contracts and SDK compile/test reproducibly.
-
-Not achieved due to external/environment limits:
-
-- Required live multi-validator, real-process provider/customer/restart/billing evidence.
-- Full provider-daemon package race cleanliness because of unrelated pre-existing compromise-alert races.
-- Clean aggregate repository preflight in the protected mixed staged worktree.
-- Positive production provider-daemon composition until the existing raw meter is connected to the durable canonical submitter with complete customer/allocation lineage.
-
-Task 84B should not be represented as process-boundary complete until those remaining gates are run on an isolated descendant revision with the staged prerequisite work committed.
+These release-only items do not reopen Task 84B's authenticated metering, replay safety, exact-once state/event/financial behavior, or local process/multi-validator completion.

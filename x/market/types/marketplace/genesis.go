@@ -66,6 +66,9 @@ var (
 
 	// MFAAuditKeyPrefix is the prefix for MFA audit records
 	MFAAuditKeyPrefix = []byte{0x0E}
+
+	// CanonicalLifecycleActivationKeyPrefix gates Task 84C owner enforcement.
+	CanonicalLifecycleActivationKeyPrefix = []byte{0x11}
 )
 
 // Key construction functions
@@ -114,6 +117,8 @@ func BidKey(id BidID) []byte {
 func ParamsKey() []byte {
 	return ParamsKeyPrefix
 }
+
+func CanonicalLifecycleActivationKey() []byte { return CanonicalLifecycleActivationKeyPrefix }
 
 // SyncRecordKey returns the key for a sync record
 func SyncRecordKey(entityType WaldurSyncType, entityID string) []byte {
@@ -335,6 +340,9 @@ func (gs *GenesisState) Validate() error {
 		if err := order.Validate(); err != nil {
 			return fmt.Errorf("invalid order %s: %w", order.ID.String(), err)
 		}
+		if !order.State.IsTerminal() {
+			return fmt.Errorf("non-owner order %s must be terminal at canonical activation", order.ID.String())
+		}
 		if orderIDs[order.ID.String()] {
 			return fmt.Errorf("duplicate order ID: %s", order.ID.String())
 		}
@@ -345,6 +353,9 @@ func (gs *GenesisState) Validate() error {
 	for _, allocation := range gs.Allocations {
 		if err := allocation.Validate(); err != nil {
 			return fmt.Errorf("invalid allocation %s: %w", allocation.ID.String(), err)
+		}
+		if !allocation.State.IsTerminal() {
+			return fmt.Errorf("non-owner allocation %s must be terminal at canonical activation", allocation.ID.String())
 		}
 		if allocationIDs[allocation.ID.String()] {
 			return fmt.Errorf("duplicate allocation ID: %s", allocation.ID.String())

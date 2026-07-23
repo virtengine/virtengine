@@ -139,12 +139,17 @@ export interface MsgSubmitJob {
   encryptedOutputsPointer: string;
   maxRuntimeSeconds: Long;
   maxPrice: Coin[];
+  reservationId: string;
+  marketOrderId: string;
+  marketBidId: string;
+  marketLeaseId: string;
 }
 
 /** MsgSubmitJobResponse is the response for MsgSubmitJob */
 export interface MsgSubmitJobResponse {
   jobId: string;
   escrowId: string;
+  reservationId: string;
 }
 
 /** MsgCancelJob cancels an HPC job */
@@ -1428,6 +1433,10 @@ function createBaseMsgSubmitJob(): MsgSubmitJob {
     encryptedOutputsPointer: "",
     maxRuntimeSeconds: Long.ZERO,
     maxPrice: [],
+    reservationId: "",
+    marketOrderId: "",
+    marketBidId: "",
+    marketLeaseId: "",
   };
 }
 
@@ -1464,6 +1473,18 @@ export const MsgSubmitJob: MessageFns<MsgSubmitJob, "virtengine.hpc.v1.MsgSubmit
     }
     for (const v of message.maxPrice) {
       Coin.encode(v!, writer.uint32(82).fork()).join();
+    }
+    if (message.reservationId !== "") {
+      writer.uint32(90).string(message.reservationId);
+    }
+    if (message.marketOrderId !== "") {
+      writer.uint32(98).string(message.marketOrderId);
+    }
+    if (message.marketBidId !== "") {
+      writer.uint32(106).string(message.marketBidId);
+    }
+    if (message.marketLeaseId !== "") {
+      writer.uint32(114).string(message.marketLeaseId);
     }
     return writer;
   },
@@ -1555,6 +1576,38 @@ export const MsgSubmitJob: MessageFns<MsgSubmitJob, "virtengine.hpc.v1.MsgSubmit
           message.maxPrice.push(Coin.decode(reader, reader.uint32()));
           continue;
         }
+        case 11: {
+          if (tag !== 90) {
+            break;
+          }
+
+          message.reservationId = reader.string();
+          continue;
+        }
+        case 12: {
+          if (tag !== 98) {
+            break;
+          }
+
+          message.marketOrderId = reader.string();
+          continue;
+        }
+        case 13: {
+          if (tag !== 106) {
+            break;
+          }
+
+          message.marketBidId = reader.string();
+          continue;
+        }
+        case 14: {
+          if (tag !== 114) {
+            break;
+          }
+
+          message.marketLeaseId = reader.string();
+          continue;
+        }
       }
       if ((tag & 7) === 4 || tag === 0) {
         break;
@@ -1582,6 +1635,10 @@ export const MsgSubmitJob: MessageFns<MsgSubmitJob, "virtengine.hpc.v1.MsgSubmit
         : "",
       maxRuntimeSeconds: isSet(object.max_runtime_seconds) ? Long.fromValue(object.max_runtime_seconds) : Long.ZERO,
       maxPrice: globalThis.Array.isArray(object?.max_price) ? object.max_price.map((e: any) => Coin.fromJSON(e)) : [],
+      reservationId: isSet(object.reservation_id) ? globalThis.String(object.reservation_id) : "",
+      marketOrderId: isSet(object.market_order_id) ? globalThis.String(object.market_order_id) : "",
+      marketBidId: isSet(object.market_bid_id) ? globalThis.String(object.market_bid_id) : "",
+      marketLeaseId: isSet(object.market_lease_id) ? globalThis.String(object.market_lease_id) : "",
     };
   },
 
@@ -1617,6 +1674,18 @@ export const MsgSubmitJob: MessageFns<MsgSubmitJob, "virtengine.hpc.v1.MsgSubmit
     if (message.maxPrice?.length) {
       obj.max_price = message.maxPrice.map((e) => Coin.toJSON(e));
     }
+    if (message.reservationId !== "") {
+      obj.reservation_id = message.reservationId;
+    }
+    if (message.marketOrderId !== "") {
+      obj.market_order_id = message.marketOrderId;
+    }
+    if (message.marketBidId !== "") {
+      obj.market_bid_id = message.marketBidId;
+    }
+    if (message.marketLeaseId !== "") {
+      obj.market_lease_id = message.marketLeaseId;
+    }
     return obj;
   },
   fromPartial(object: DeepPartial<MsgSubmitJob>): MsgSubmitJob {
@@ -1637,12 +1706,16 @@ export const MsgSubmitJob: MessageFns<MsgSubmitJob, "virtengine.hpc.v1.MsgSubmit
       ? Long.fromValue(object.maxRuntimeSeconds)
       : Long.ZERO;
     message.maxPrice = object.maxPrice?.map((e) => Coin.fromPartial(e)) || [];
+    message.reservationId = object.reservationId ?? "";
+    message.marketOrderId = object.marketOrderId ?? "";
+    message.marketBidId = object.marketBidId ?? "";
+    message.marketLeaseId = object.marketLeaseId ?? "";
     return message;
   },
 };
 
 function createBaseMsgSubmitJobResponse(): MsgSubmitJobResponse {
-  return { jobId: "", escrowId: "" };
+  return { jobId: "", escrowId: "", reservationId: "" };
 }
 
 export const MsgSubmitJobResponse: MessageFns<MsgSubmitJobResponse, "virtengine.hpc.v1.MsgSubmitJobResponse"> = {
@@ -1654,6 +1727,9 @@ export const MsgSubmitJobResponse: MessageFns<MsgSubmitJobResponse, "virtengine.
     }
     if (message.escrowId !== "") {
       writer.uint32(18).string(message.escrowId);
+    }
+    if (message.reservationId !== "") {
+      writer.uint32(26).string(message.reservationId);
     }
     return writer;
   },
@@ -1681,6 +1757,14 @@ export const MsgSubmitJobResponse: MessageFns<MsgSubmitJobResponse, "virtengine.
           message.escrowId = reader.string();
           continue;
         }
+        case 3: {
+          if (tag !== 26) {
+            break;
+          }
+
+          message.reservationId = reader.string();
+          continue;
+        }
       }
       if ((tag & 7) === 4 || tag === 0) {
         break;
@@ -1694,6 +1778,7 @@ export const MsgSubmitJobResponse: MessageFns<MsgSubmitJobResponse, "virtengine.
     return {
       jobId: isSet(object.job_id) ? globalThis.String(object.job_id) : "",
       escrowId: isSet(object.escrow_id) ? globalThis.String(object.escrow_id) : "",
+      reservationId: isSet(object.reservation_id) ? globalThis.String(object.reservation_id) : "",
     };
   },
 
@@ -1705,12 +1790,16 @@ export const MsgSubmitJobResponse: MessageFns<MsgSubmitJobResponse, "virtengine.
     if (message.escrowId !== "") {
       obj.escrow_id = message.escrowId;
     }
+    if (message.reservationId !== "") {
+      obj.reservation_id = message.reservationId;
+    }
     return obj;
   },
   fromPartial(object: DeepPartial<MsgSubmitJobResponse>): MsgSubmitJobResponse {
     const message = createBaseMsgSubmitJobResponse();
     message.jobId = object.jobId ?? "";
     message.escrowId = object.escrowId ?? "";
+    message.reservationId = object.reservationId ?? "";
     return message;
   },
 };

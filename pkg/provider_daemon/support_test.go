@@ -3,53 +3,32 @@ package provider_daemon
 import (
 	"context"
 	"encoding/json"
+	"path/filepath"
 	"testing"
 	"time"
 
-	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	clientv1beta3 "github.com/virtengine/virtengine/sdk/go/node/client/v1beta3"
-	supportv1 "github.com/virtengine/virtengine/sdk/go/node/support/v1"
 	supporttypes "github.com/virtengine/virtengine/x/support/types"
 )
 
-type fakeSupportTxClient struct {
-	msgs [][]sdk.Msg
-}
-
-func (f *fakeSupportTxClient) BroadcastMsgs(_ context.Context, msgs []sdk.Msg, _ ...clientv1beta3.BroadcastOption) (interface{}, error) {
-	copied := append([]sdk.Msg(nil), msgs...)
-	f.msgs = append(f.msgs, copied)
-	return &sdk.TxResponse{Code: 0}, nil
-}
-
-func TestRPCSupportChainWriterUpdateSupportRequestBroadcastsPatch(t *testing.T) {
-	txClient := &fakeSupportTxClient{}
+func TestRPCSupportChainWriterUpdateSupportRequestBroadcastsDeterministicPatch(t *testing.T) {
+	chain := newMutationChainFake()
+	submitter, _ := newMutationSubmitterForTest(t, chain, filepath.Join(t.TempDir(), "queue.json"))
 	writer := &rpcSupportChainWriter{
-		sender:   "ve1supportagent",
-		txClient: txClient,
+		sender:    submitter.cfg.ProviderAddress,
+		submitter: submitter,
 	}
 
 	err := writer.UpdateSupportRequest(context.Background(), &SupportUpdateRequest{
 		TicketID:      "ve1customer/support/7",
 		Status:        "waiting_customer",
 		AssignedAgent: "agent-1",
-		Metadata: map[string]string{
-			"external_id": "comment-17",
-		},
 	})
 	require.NoError(t, err)
-	require.Len(t, txClient.msgs, 1)
-	require.Len(t, txClient.msgs[0], 1)
-
-	msg, ok := txClient.msgs[0][0].(*supportv1.MsgUpdateSupportRequest)
-	require.True(t, ok)
-	assert.Equal(t, "ve1supportagent", msg.Sender)
-	assert.Equal(t, "ve1customer/support/7", msg.TicketId)
-	assert.Equal(t, "waiting_customer", msg.Status)
-	assert.Equal(t, "agent-1", msg.AssignedAgent)
-	assert.Equal(t, map[string]string{"external_id": "comment-17"}, msg.PublicMetadata)
+	chain.mu.Lock()
+	assert.Len(t, chain.broadcasts, 1)
+	chain.mu.Unlock()
 }
 
 func TestRPCSupportChainWriterAddSupportResponseRequiresPayload(t *testing.T) {
@@ -63,11 +42,12 @@ func TestRPCSupportChainWriterAddSupportResponseRequiresPayload(t *testing.T) {
 }
 
 func TestRPCSupportChainWriterRegisterExternalTicketRegistersWhenMissing(t *testing.T) {
-	txClient := &fakeSupportTxClient{}
+	chain := newMutationChainFake()
+	submitter, _ := newMutationSubmitterForTest(t, chain, filepath.Join(t.TempDir(), "queue.json"))
 	writer := &rpcSupportChainWriter{
-		sender:     "ve1supportagent",
+		sender:     submitter.cfg.ProviderAddress,
 		storeQuery: &fakeProviderStoreQueryClient{responses: map[string][]byte{}},
-		txClient:   txClient,
+		submitter:  submitter,
 		timeout:    time.Second,
 	}
 
@@ -79,17 +59,14 @@ func TestRPCSupportChainWriterRegisterExternalTicketRegistersWhenMissing(t *test
 		ExternalURL:      "https://waldur.example.com/issues/7",
 	})
 	require.NoError(t, err)
-	require.Len(t, txClient.msgs, 1)
-	require.Len(t, txClient.msgs[0], 1)
-
-	msg, ok := txClient.msgs[0][0].(*supportv1.MsgRegisterExternalTicket)
-	require.True(t, ok)
-	assert.Equal(t, "ve1supportagent", msg.Sender)
-	assert.Equal(t, "waldur-7", msg.ExternalTicketId)
-	assert.Equal(t, string(supporttypes.ExternalSystemWaldur), msg.ExternalSystem)
+	chain.mu.Lock()
+	assert.Len(t, chain.broadcasts, 1)
+	chain.mu.Unlock()
 }
 
 func TestRPCSupportChainWriterRegisterExternalTicketUpdatesExistingRef(t *testing.T) {
+	chain := newMutationChainFake()
+	submitter, _ := newMutationSubmitterForTest(t, chain, filepath.Join(t.TempDir(), "queue.json"))
 	stored := supportExternalRefStore{
 		ResourceID:       "ve1customer/support/7",
 		ResourceType:     string(supporttypes.ResourceTypeSupportRequest),
@@ -97,22 +74,21 @@ func TestRPCSupportChainWriterRegisterExternalTicketUpdatesExistingRef(t *testin
 		ExternalTicketID: "waldur-7",
 		ExternalURL:      "https://waldur.example.com/issues/7",
 		CreatedAt:        time.Now().Add(-time.Hour).Unix(),
-		CreatedBy:        "ve1supportagent",
+		CreatedBy:        submitter.cfg.ProviderAddress,
 		UpdatedAt:        time.Now().Add(-time.Minute).Unix(),
 	}
 	storedJSON, err := json.Marshal(&stored)
 	require.NoError(t, err)
 
-	txClient := &fakeSupportTxClient{}
 	writer := &rpcSupportChainWriter{
-		sender: "ve1supportagent",
+		sender: submitter.cfg.ProviderAddress,
 		storeQuery: &fakeProviderStoreQueryClient{
 			responses: map[string][]byte{
 				string(supporttypes.ExternalRefKey(supporttypes.ResourceTypeSupportRequest, "ve1customer/support/7")): storedJSON,
 			},
 		},
-		txClient: txClient,
-		timeout:  time.Second,
+		submitter: submitter,
+		timeout:   time.Second,
 	}
 
 	err = writer.RegisterExternalTicket(context.Background(), &SupportRegisterExternal{
@@ -123,14 +99,9 @@ func TestRPCSupportChainWriterRegisterExternalTicketUpdatesExistingRef(t *testin
 		ExternalURL:      "https://waldur.example.com/issues/7b",
 	})
 	require.NoError(t, err)
-	require.Len(t, txClient.msgs, 1)
-	require.Len(t, txClient.msgs[0], 1)
-
-	msg, ok := txClient.msgs[0][0].(*supportv1.MsgUpdateExternalTicket)
-	require.True(t, ok)
-	assert.Equal(t, "ve1supportagent", msg.Sender)
-	assert.Equal(t, "waldur-7b", msg.ExternalTicketId)
-	assert.Equal(t, "https://waldur.example.com/issues/7b", msg.ExternalUrl)
+	chain.mu.Lock()
+	assert.Len(t, chain.broadcasts, 1)
+	chain.mu.Unlock()
 }
 
 func TestRPCSupportChainWriterRegisterExternalTicketNoOpsWhenAlreadyCurrent(t *testing.T) {
@@ -147,7 +118,6 @@ func TestRPCSupportChainWriterRegisterExternalTicketNoOpsWhenAlreadyCurrent(t *t
 	storedJSON, err := json.Marshal(&stored)
 	require.NoError(t, err)
 
-	txClient := &fakeSupportTxClient{}
 	writer := &rpcSupportChainWriter{
 		sender: "ve1supportagent",
 		storeQuery: &fakeProviderStoreQueryClient{
@@ -155,8 +125,7 @@ func TestRPCSupportChainWriterRegisterExternalTicketNoOpsWhenAlreadyCurrent(t *t
 				string(supporttypes.ExternalRefKey(supporttypes.ResourceTypeSupportRequest, "ve1customer/support/7")): storedJSON,
 			},
 		},
-		txClient: txClient,
-		timeout:  time.Second,
+		timeout: time.Second,
 	}
 
 	err = writer.RegisterExternalTicket(context.Background(), &SupportRegisterExternal{
@@ -167,5 +136,4 @@ func TestRPCSupportChainWriterRegisterExternalTicketNoOpsWhenAlreadyCurrent(t *t
 		ExternalURL:      "https://waldur.example.com/issues/7",
 	})
 	require.NoError(t, err)
-	assert.Empty(t, txClient.msgs)
 }

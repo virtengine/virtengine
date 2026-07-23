@@ -15,8 +15,6 @@ import (
 	"github.com/stretchr/testify/require"
 
 	sdk "github.com/cosmos/cosmos-sdk/types"
-	clientv1beta3 "github.com/virtengine/virtengine/sdk/go/node/client/v1beta3"
-	providertypes "github.com/virtengine/virtengine/sdk/go/node/provider/v1beta4"
 	"github.com/virtengine/virtengine/x/provider/keeper"
 )
 
@@ -117,7 +115,7 @@ func TestNewDomainVerificationChecker(t *testing.T) {
 		errorMsg    string
 	}{
 		{
-			name: "missing signer key name without injected backend",
+			name: "missing injected mutation backend",
 			config: DomainVerificationCheckerConfig{
 				Enabled:         true,
 				ProviderAddress: testProviderAddr,
@@ -126,7 +124,7 @@ func TestNewDomainVerificationChecker(t *testing.T) {
 				GRPCEndpoint:    "localhost:9090",
 			},
 			expectError: true,
-			errorMsg:    "signer key name is required",
+			errorMsg:    "requires generalized mutation backend",
 		},
 		{
 			name: "disabled",
@@ -146,13 +144,13 @@ func TestNewDomainVerificationChecker(t *testing.T) {
 			errorMsg:    "provider address is required",
 		},
 		{
-			name: "missing rpc endpoint",
+			name: "missing chain client",
 			config: DomainVerificationCheckerConfig{
 				Enabled:         true,
 				ProviderAddress: testProviderAddr,
 			},
 			expectError: true,
-			errorMsg:    "comet RPC endpoint or chain client is required",
+			errorMsg:    "requires generalized mutation backend",
 		},
 		{
 			name: "with chain client",
@@ -707,23 +705,6 @@ func TestDomainVerificationRecordJSON(t *testing.T) {
 	assert.Equal(t, record.Status, decoded.Status)
 }
 
-type fakeDomainVerificationTxClient struct {
-	response interface{}
-	err      error
-	msgs     []sdk.Msg
-	calls    int
-}
-
-func (f *fakeDomainVerificationTxClient) BroadcastMsgs(
-	_ context.Context,
-	msgs []sdk.Msg,
-	_ ...clientv1beta3.BroadcastOption,
-) (interface{}, error) {
-	f.calls++
-	f.msgs = append([]sdk.Msg(nil), msgs...)
-	return f.response, f.err
-}
-
 func TestRPCDomainVerificationBackendQueryDomainVerificationRecord(t *testing.T) {
 	providerAddr := sdk.AccAddress(bytes.Repeat([]byte{0x02}, 20))
 	record := &keeper.DomainVerificationRecord{
@@ -754,25 +735,12 @@ func TestRPCDomainVerificationBackendQueryDomainVerificationRecord(t *testing.T)
 	assert.Equal(t, record.Token, got.Token)
 }
 
-func TestRPCDomainVerificationBackendConfirmDomainVerification(t *testing.T) {
+func TestRPCDomainVerificationBackendConfirmDomainVerificationRequiresGeneralizedSubmitter(t *testing.T) {
 	providerAddr := sdk.AccAddress(bytes.Repeat([]byte{0x03}, 20))
-	txClient := &fakeDomainVerificationTxClient{
-		response: &sdk.TxResponse{Code: 0},
-	}
-
-	backend := &rpcDomainVerificationBackend{
-		txClient: txClient,
-	}
+	backend := &rpcDomainVerificationBackend{}
 
 	err := backend.ConfirmDomainVerification(context.Background(), providerAddr, "dns_txt:proof")
-	require.NoError(t, err)
-	require.Equal(t, 1, txClient.calls)
-	require.Len(t, txClient.msgs, 1)
-
-	msg, ok := txClient.msgs[0].(*providertypes.MsgConfirmDomainVerification)
-	require.True(t, ok)
-	assert.Equal(t, providerAddr.String(), msg.Owner)
-	assert.Equal(t, "dns_txt:proof", msg.Proof)
+	require.ErrorIs(t, err, ErrProviderMutationUnavailable)
 }
 
 func TestQueryDomainVerificationRecordUsesInjectedBackend(t *testing.T) {

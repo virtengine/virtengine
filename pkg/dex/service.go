@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"sort"
+	"strings"
 	"sync"
 	"time"
 
@@ -32,10 +33,31 @@ type service struct {
 	stopCh  chan struct{}
 	wg      sync.WaitGroup
 	mu      sync.RWMutex
+	mode    RouteValidationMode
 }
 
-// NewService creates a new DEX service
+const routeValidationTestOnly RouteValidationMode = "test_only"
+
+// NewService creates a production DEX service. It accepts only trusted,
+// runtime-authorized real adapters.
 func NewService(cfg Config) (Service, error) {
+	return newService(cfg, RouteValidationRuntime)
+}
+
+// NewEngineeringService creates an explicit engineering-only service. It may
+// use real adapters backed by external-blocked fixture profiles, but never
+// placeholder one-to-one adapters.
+func NewEngineeringService(cfg Config) (Service, error) {
+	return newService(cfg, RouteValidationEngineering)
+}
+
+// NewTestService creates a service that permits deterministic placeholder
+// adapters. Runtime configuration must use NewService instead.
+func NewTestService(cfg Config) (Service, error) {
+	return newService(cfg, routeValidationTestOnly)
+}
+
+func newService(cfg Config, mode RouteValidationMode) (Service, error) {
 	if err := cfg.Validate(); err != nil {
 		return nil, fmt.Errorf("invalid config: %w", err)
 	}
@@ -44,6 +66,7 @@ func NewService(cfg Config) (Service, error) {
 		cfg:      cfg,
 		adapters: make(map[string]Adapter),
 		stopCh:   make(chan struct{}),
+		mode:     mode,
 	}
 
 	// Initialize price feed
@@ -58,6 +81,26 @@ func NewService(cfg Config) (Service, error) {
 	// Initialize circuit breaker
 	s.breaker = newCircuitBreaker(cfg.CircuitBreaker)
 
+	for _, adapterConfig := range cfg.Adapters {
+		if !adapterConfig.Enabled {
+			continue
+		}
+		if mode == RouteValidationRuntime && adapterConfig.EngineeringTestMode {
+			return nil, fmt.Errorf("production DEX service rejects engineering-test adapter %q", adapterConfig.Name)
+		}
+		if mode == RouteValidationEngineering {
+			adapterConfig.EngineeringTestMode = true
+		}
+		adapter, err := CreateAdapter(adapterConfig)
+		if err != nil {
+			return nil, fmt.Errorf("create configured DEX adapter %q: %w", adapterConfig.Name, err)
+		}
+		if err := s.RegisterAdapter(adapter); err != nil {
+			_ = adapter.Close()
+			return nil, fmt.Errorf("register configured DEX adapter %q: %w", adapterConfig.Name, err)
+		}
+	}
+
 	return s, nil
 }
 
@@ -70,11 +113,26 @@ func (s *service) RegisterAdapter(adapter Adapter) error {
 	if adapter == nil {
 		return errors.New("adapter cannot be nil")
 	}
+	if testAdapter, ok := adapter.(TestOnlyDEXAdapter); ok && testAdapter.IsTestOnlyDEXAdapter() && s.mode != routeValidationTestOnly {
+		return errors.New("test-only DEX adapter cannot be registered in a runtime service")
+	}
+	if s.mode == RouteValidationRuntime {
+		production, ok := adapter.(interface{ productionDEXProfile() (string, bool) })
+		if !ok {
+			return errors.New("DEX adapter is not production-authorized")
+		}
+		if _, authorized := production.productionDEXProfile(); !authorized {
+			return errors.New("DEX adapter profile is not authorized for production")
+		}
+	}
 
 	s.adaptersMu.Lock()
 	defer s.adaptersMu.Unlock()
 
 	name := adapter.Name()
+	if strings.TrimSpace(name) == "" {
+		return errors.New("adapter name cannot be empty")
+	}
 	if _, exists := s.adapters[name]; exists {
 		return fmt.Errorf("adapter %q already registered", name)
 	}
@@ -140,10 +198,14 @@ func (s *service) ListAdapters() []string {
 // getHealthyAdapters returns all healthy adapters sorted by priority
 func (s *service) getHealthyAdapters(ctx context.Context) []Adapter {
 	s.adaptersMu.RLock()
-	defer s.adaptersMu.RUnlock()
+	adapters := make([]Adapter, 0, len(s.adapters))
+	for _, adapter := range s.adapters {
+		adapters = append(adapters, adapter)
+	}
+	s.adaptersMu.RUnlock()
 
 	var healthy []Adapter
-	for _, adapter := range s.adapters {
+	for _, adapter := range adapters {
 		if adapter.IsHealthy(ctx) {
 			healthy = append(healthy, adapter)
 		}
@@ -374,6 +436,23 @@ func (s *service) Start(ctx context.Context) error {
 	if s.started {
 		return errors.New("service already started")
 	}
+	if s.mode != routeValidationTestOnly {
+		s.adaptersMu.RLock()
+		adapters := make([]Adapter, 0, len(s.adapters))
+		for _, adapter := range s.adapters {
+			adapters = append(adapters, adapter)
+		}
+		s.adaptersMu.RUnlock()
+		if len(adapters) == 0 {
+			return errors.New("DEX service requires at least one executable adapter")
+		}
+		for _, adapter := range adapters {
+			if !adapter.IsHealthy(ctx) {
+				return fmt.Errorf("DEX adapter %q failed startup health check", adapter.Name())
+			}
+		}
+	}
+	s.stopCh = make(chan struct{})
 
 	// Start price feed background updater
 	s.wg.Add(1)

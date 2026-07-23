@@ -9,17 +9,18 @@ import type { DeepPartial, MessageFns } from "../../../../../encoding/typeEncodi
 /* eslint-disable */
 import { BinaryReader, BinaryWriter } from "@bufbuild/protobuf/wire";
 import Long from "long";
-import { Params, ResourceAllocation, ResourceInventory } from "./types.ts";
+import { Params, Reservation, ResourceAllocation, ResourceInventory } from "./types.ts";
 
 /** GenesisState defines the module genesis state. */
 export interface GenesisState {
   params: Params | undefined;
   inventories: ResourceInventory[];
   allocations: ResourceAllocation[];
+  reservations: Reservation[];
 }
 
 function createBaseGenesisState(): GenesisState {
-  return { params: undefined, inventories: [], allocations: [] };
+  return { params: undefined, inventories: [], allocations: [], reservations: [] };
 }
 
 export const GenesisState: MessageFns<GenesisState, "virtengine.resources.v1.GenesisState"> = {
@@ -34,6 +35,9 @@ export const GenesisState: MessageFns<GenesisState, "virtengine.resources.v1.Gen
     }
     for (const v of message.allocations) {
       ResourceAllocation.encode(v!, writer.uint32(26).fork()).join();
+    }
+    for (const v of message.reservations) {
+      Reservation.encode(v!, writer.uint32(34).fork()).join();
     }
     return writer;
   },
@@ -69,6 +73,14 @@ export const GenesisState: MessageFns<GenesisState, "virtengine.resources.v1.Gen
           message.allocations.push(ResourceAllocation.decode(reader, reader.uint32()));
           continue;
         }
+        case 4: {
+          if (tag !== 34) {
+            break;
+          }
+
+          message.reservations.push(Reservation.decode(reader, reader.uint32()));
+          continue;
+        }
       }
       if ((tag & 7) === 4 || tag === 0) {
         break;
@@ -87,6 +99,9 @@ export const GenesisState: MessageFns<GenesisState, "virtengine.resources.v1.Gen
       allocations: globalThis.Array.isArray(object?.allocations)
         ? object.allocations.map((e: any) => ResourceAllocation.fromJSON(e))
         : [],
+      reservations: globalThis.Array.isArray(object?.reservations)
+        ? object.reservations.map((e: any) => Reservation.fromJSON(e))
+        : [],
     };
   },
 
@@ -101,6 +116,9 @@ export const GenesisState: MessageFns<GenesisState, "virtengine.resources.v1.Gen
     if (message.allocations?.length) {
       obj.allocations = message.allocations.map((e) => ResourceAllocation.toJSON(e));
     }
+    if (message.reservations?.length) {
+      obj.reservations = message.reservations.map((e) => Reservation.toJSON(e));
+    }
     return obj;
   },
   fromPartial(object: DeepPartial<GenesisState>): GenesisState {
@@ -110,6 +128,7 @@ export const GenesisState: MessageFns<GenesisState, "virtengine.resources.v1.Gen
       : undefined;
     message.inventories = object.inventories?.map((e) => ResourceInventory.fromPartial(e)) || [];
     message.allocations = object.allocations?.map((e) => ResourceAllocation.fromPartial(e)) || [];
+    message.reservations = object.reservations?.map((e) => Reservation.fromPartial(e)) || [];
     return message;
   },
 };

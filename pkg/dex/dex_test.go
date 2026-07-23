@@ -236,7 +236,7 @@ func TestNewService_InvalidConfig(t *testing.T) {
 
 func TestService_AdapterManagement(t *testing.T) {
 	cfg := DefaultConfig()
-	svc, err := NewService(cfg)
+	svc, err := NewTestService(cfg)
 	if err != nil {
 		t.Fatalf("NewService() error = %v", err)
 	}
@@ -302,7 +302,7 @@ func TestService_GetAdapter_NotFound(t *testing.T) {
 
 func TestService_Lifecycle(t *testing.T) {
 	cfg := DefaultConfig()
-	svc, _ := NewService(cfg)
+	svc, _ := NewTestService(cfg)
 
 	ctx := context.Background()
 
@@ -434,15 +434,12 @@ func TestCreateAdapter_UniswapV2(t *testing.T) {
 		},
 	}
 
-	adapter, err := CreateAdapter(cfg)
-	if err != nil {
-		t.Fatalf("CreateAdapter() error = %v", err)
+	if _, err := CreateAdapter(cfg); err == nil {
+		t.Fatal("CreateAdapter() must reject the placeholder Uniswap adapter")
 	}
-	if adapter.Name() != "test" {
-		t.Errorf("Adapter.Name() = %q, want %q", adapter.Name(), "test")
-	}
-	if adapter.Type() != "uniswap_v2" {
-		t.Errorf("Adapter.Type() = %q, want %q", adapter.Type(), "uniswap_v2")
+	adapter, err := NewUniswapV2Adapter(cfg)
+	if err != nil || adapter.Type() != "uniswap_v2" {
+		t.Fatalf("explicit test constructor failed: %v", err)
 	}
 }
 
@@ -454,12 +451,8 @@ func TestCreateAdapter_Osmosis(t *testing.T) {
 		RPCEndpoint: "grpc://localhost:9090",
 	}
 
-	adapter, err := CreateAdapter(cfg)
-	if err != nil {
-		t.Fatalf("CreateAdapter() error = %v", err)
-	}
-	if adapter.Type() != "osmosis" {
-		t.Errorf("Adapter.Type() = %q, want %q", adapter.Type(), "osmosis")
+	if _, err := CreateAdapter(cfg); err == nil {
+		t.Fatal("CreateAdapter() must require an explicit Osmosis profile")
 	}
 }
 
@@ -473,12 +466,12 @@ func TestCreateAdapter_Curve(t *testing.T) {
 		},
 	}
 
-	adapter, err := CreateAdapter(cfg)
-	if err != nil {
-		t.Fatalf("CreateAdapter() error = %v", err)
+	if _, err := CreateAdapter(cfg); err == nil {
+		t.Fatal("CreateAdapter() must reject the placeholder Curve adapter")
 	}
-	if adapter.Type() != "curve" {
-		t.Errorf("Adapter.Type() = %q, want %q", adapter.Type(), "curve")
+	adapter, err := NewCurveAdapter(cfg)
+	if err != nil || adapter.Type() != "curve" {
+		t.Fatalf("explicit test constructor failed: %v", err)
 	}
 }
 

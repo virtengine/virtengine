@@ -40,6 +40,8 @@ type SupportServiceConfig struct {
 	ServiceDeskConfig *servicedesk.Config
 	EventListener     *servicedesk.EventListenerConfig
 	Encryption        SupportEncryptionConfig
+	MutationSubmitter *ProviderMutationSubmitter
+	StoreQuery        providerStoreQueryClient
 }
 
 // SupportEncryptionConfig provides sender key for encrypting responses.

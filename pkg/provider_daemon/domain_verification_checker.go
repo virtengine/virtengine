@@ -183,10 +183,6 @@ func NewDomainVerificationChecker(
 		return nil, fmt.Errorf("provider address is required")
 	}
 
-	if cfg.CometRPC == "" && chainClient == nil {
-		return nil, fmt.Errorf("comet RPC endpoint or chain client is required")
-	}
-
 	checker := &DomainVerificationChecker{
 		cfg:        cfg,
 		retryState: make(map[string]*verificationRetryState),
@@ -214,11 +210,7 @@ func NewDomainVerificationChecker(
 	}
 
 	if checker.backend == nil {
-		backend, err := newRPCDomainVerificationBackend(context.Background(), cfg)
-		if err != nil {
-			return nil, fmt.Errorf("failed to initialize domain verification backend: %w", err)
-		}
-		checker.backend = backend
+		return nil, fmt.Errorf("%w: domain verification requires generalized mutation backend", ErrProviderMutationUnavailable)
 	}
 
 	return checker, nil

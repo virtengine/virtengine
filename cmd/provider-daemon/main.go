@@ -9,13 +9,16 @@
 package main
 
 import (
+	"bytes"
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
 	"os"
 	"os/signal"
+	"sort"
 	"strconv"
 	"strings"
 	"syscall"
@@ -30,7 +33,9 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 
+	"github.com/virtengine/virtengine/pkg/dex"
 	"github.com/virtengine/virtengine/pkg/observability"
+	"github.com/virtengine/virtengine/pkg/payments/offramp"
 	provider_daemon "github.com/virtengine/virtengine/pkg/provider_daemon"
 	"github.com/virtengine/virtengine/pkg/security"
 	"github.com/virtengine/virtengine/pkg/servicedesk"
@@ -318,6 +323,29 @@ const (
 
 	// FlagDomainVerificationEnabled enables automated provider domain verification checks.
 	FlagDomainVerificationEnabled = "domain-verification-enabled"
+
+	// Task 85B conversion flags. Runtime defaults disabled and composition never
+	// fabricates external custody or payout-provider dependencies.
+	FlagFiatConversionEnabled             = "fiat-conversion-enabled"
+	FlagFiatConversionMode                = "fiat-conversion-mode"
+	FlagFiatConversionProfileAuthorityKey = "fiat-conversion-profile-authority-public-key"
+	FlagFiatConversionProfileAuthorityID  = "fiat-conversion-profile-authority-id"
+	FlagFiatConversionDEXProfile          = "fiat-conversion-dex-profile"
+	FlagFiatConversionPayoutProfile       = "fiat-conversion-payout-profile"
+	FlagFiatConversionStateFile           = "fiat-conversion-state-file"
+	FlagFiatConversionRepositoryFile      = "fiat-conversion-repository-file"
+	FlagFiatConversionPollInterval        = "fiat-conversion-poll-interval"
+	FlagFiatConversionRetryBackoff        = "fiat-conversion-retry-backoff"
+	FlagFiatConversionMaxRetryBackoff     = "fiat-conversion-max-retry-backoff"
+	FlagFiatConversionMaxAttempts         = "fiat-conversion-max-attempts"
+	FlagFiatConversionWebhookListen       = "fiat-conversion-webhook-listen"
+	FlagFiatConversionWebhookPath         = "fiat-conversion-webhook-path"
+	FlagFiatConversionWebhookBodyLimit    = "fiat-conversion-webhook-body-limit"
+	FlagFiatConversionWebhookTimeout      = "fiat-conversion-webhook-timeout"
+	FlagFiatConversionCustodyBackend      = "fiat-conversion-custody-backend"
+	FlagFiatConversionSecretResolver      = "fiat-conversion-secret-resolver"
+	FlagFiatConversionDestinationResolver = "fiat-conversion-destination-resolver"
+	FlagFiatConversionComplianceResolver  = "fiat-conversion-compliance-resolver"
 )
 
 var (
@@ -462,6 +490,26 @@ func init() {
 	rootCmd.PersistentFlags().Bool(FlagSupportSyncOutbound, true, "Enable outbound support sync to service desk")
 	rootCmd.PersistentFlags().Duration(FlagSupportSyncInterval, 30*time.Second, "Support sync interval")
 	rootCmd.PersistentFlags().Bool(FlagDomainVerificationEnabled, false, "Enable automated provider domain verification checks")
+	rootCmd.PersistentFlags().Bool(FlagFiatConversionEnabled, false, "Enable the Task 85B off-chain fiat conversion orchestrator (default disabled)")
+	rootCmd.PersistentFlags().String(FlagFiatConversionMode, "production", "Fiat conversion mode (production or engineering_external_blocked)")
+	rootCmd.PersistentFlags().String(FlagFiatConversionProfileAuthorityKey, "", "Base64 Ed25519 public key for independently signed certified profile files")
+	rootCmd.PersistentFlags().String(FlagFiatConversionProfileAuthorityID, "", "Trusted fiat profile authority identifier")
+	rootCmd.PersistentFlags().String(FlagFiatConversionDEXProfile, "", "Versioned DEX route profile JSON path")
+	rootCmd.PersistentFlags().String(FlagFiatConversionPayoutProfile, "", "Versioned payout profile JSON path")
+	rootCmd.PersistentFlags().String(FlagFiatConversionStateFile, "data/fiat_conversion_state.json", "Durable conversion orchestrator state file")
+	rootCmd.PersistentFlags().String(FlagFiatConversionRepositoryFile, "data/fiat_conversion_repository.json", "Durable payout/limit/webhook repository file")
+	rootCmd.PersistentFlags().Duration(FlagFiatConversionPollInterval, 10*time.Second, "Fiat conversion intent polling interval")
+	rootCmd.PersistentFlags().Duration(FlagFiatConversionRetryBackoff, 2*time.Second, "Fiat conversion base retry backoff")
+	rootCmd.PersistentFlags().Duration(FlagFiatConversionMaxRetryBackoff, 5*time.Minute, "Fiat conversion maximum retry backoff")
+	rootCmd.PersistentFlags().Uint32(FlagFiatConversionMaxAttempts, 12, "Maximum external conversion attempts before safe failure/manual review")
+	rootCmd.PersistentFlags().String(FlagFiatConversionWebhookListen, "127.0.0.1:8485", "Private payout webhook listen address")
+	rootCmd.PersistentFlags().String(FlagFiatConversionWebhookPath, "/internal/v1/offramp/webhook", "Private authenticated payout webhook path")
+	rootCmd.PersistentFlags().Int64(FlagFiatConversionWebhookBodyLimit, 1<<20, "Maximum payout webhook body bytes")
+	rootCmd.PersistentFlags().Duration(FlagFiatConversionWebhookTimeout, 5*time.Second, "Payout webhook request timeout")
+	rootCmd.PersistentFlags().String(FlagFiatConversionCustodyBackend, "", "External target-chain custody signer backend identifier")
+	rootCmd.PersistentFlags().String(FlagFiatConversionSecretResolver, "", "Secret resolver backend identifier")
+	rootCmd.PersistentFlags().String(FlagFiatConversionDestinationResolver, "", "Encrypted destination resolver backend identifier")
+	rootCmd.PersistentFlags().String(FlagFiatConversionComplianceResolver, "", "Compliance decision resolver backend identifier")
 
 	// Bind to viper
 	_ = viper.BindPFlag(FlagChainID, rootCmd.PersistentFlags().Lookup(FlagChainID))
@@ -575,6 +623,17 @@ func init() {
 	_ = viper.BindPFlag(FlagSupportSyncOutbound, rootCmd.PersistentFlags().Lookup(FlagSupportSyncOutbound))
 	_ = viper.BindPFlag(FlagSupportSyncInterval, rootCmd.PersistentFlags().Lookup(FlagSupportSyncInterval))
 	_ = viper.BindPFlag(FlagDomainVerificationEnabled, rootCmd.PersistentFlags().Lookup(FlagDomainVerificationEnabled))
+	for _, name := range []string{
+		FlagFiatConversionEnabled, FlagFiatConversionMode, FlagFiatConversionDEXProfile,
+		FlagFiatConversionProfileAuthorityKey, FlagFiatConversionProfileAuthorityID,
+		FlagFiatConversionPayoutProfile, FlagFiatConversionStateFile, FlagFiatConversionRepositoryFile,
+		FlagFiatConversionPollInterval, FlagFiatConversionRetryBackoff, FlagFiatConversionMaxRetryBackoff,
+		FlagFiatConversionMaxAttempts, FlagFiatConversionWebhookListen, FlagFiatConversionWebhookPath,
+		FlagFiatConversionWebhookBodyLimit, FlagFiatConversionWebhookTimeout, FlagFiatConversionCustodyBackend,
+		FlagFiatConversionSecretResolver, FlagFiatConversionDestinationResolver, FlagFiatConversionComplianceResolver,
+	} {
+		_ = viper.BindPFlag(name, rootCmd.PersistentFlags().Lookup(name))
+	}
 
 	// Add commands
 	rootCmd.AddCommand(startCmd())
@@ -770,6 +829,14 @@ func runStart(cmd *cobra.Command, args []string) error {
 	if providerAddress == "" {
 		providerAddress = providerKeyName
 	}
+	if _, err := sdk.AccAddressFromBech32(providerAddress); err != nil {
+		derivedAddress, deriveErr := provider_daemon.ManagedKeyAccountAddress(key)
+		if deriveErr != nil {
+			return fmt.Errorf("provider key does not identify a Cosmos account: %w", deriveErr)
+		}
+		providerAddress = derivedAddress
+		key.ProviderAddress = derivedAddress
+	}
 	providerID := key.PublicKey
 	if generatedKey {
 		fmt.Printf("  Provider Key: generated (%s)\n", key.KeyID)
@@ -794,42 +861,9 @@ func runStart(cmd *cobra.Command, args []string) error {
 	var usageReporter provider_daemon.UsageReporter
 	var supportService *provider_daemon.SupportService
 	var domainVerificationChecker *provider_daemon.DomainVerificationChecker
+	var mutationSubmitter *provider_daemon.ProviderMutationSubmitter
 	var waldurMarketplaceClient *waldur.MarketplaceClient
 	var waldurReconciler *provider_daemon.WaldurReconciler
-
-	if viper.GetBool(FlagWaldurEnabled) && viper.GetBool(FlagWaldurChainSubmit) {
-		chainKeyName := viper.GetString(FlagWaldurChainKey)
-		if chainKeyName == "" {
-			chainKeyName = providerKeyName
-		}
-
-		gasSetting, err := parseGasSetting(viper.GetString(FlagWaldurChainGas))
-		if err != nil {
-			return fmt.Errorf("invalid waldur chain gas: %w", err)
-		}
-
-		chainCfg := provider_daemon.ChainCallbackSinkConfig{
-			ChainID:           viper.GetString(FlagChainID),
-			NodeURI:           viper.GetString(FlagNode),
-			GRPCEndpoint:      viper.GetString(FlagWaldurChainGRPC),
-			KeyName:           chainKeyName,
-			KeyringBackend:    viper.GetString(FlagWaldurChainKeyringBackend),
-			KeyringDir:        viper.GetString(FlagWaldurChainKeyringDir),
-			KeyringPassphrase: viper.GetString(FlagWaldurChainKeyringPassphrase),
-			GasSetting:        gasSetting,
-			GasPrices:         viper.GetString(FlagWaldurChainGasPrices),
-			Fees:              viper.GetString(FlagWaldurChainFees),
-			GasAdjustment:     viper.GetFloat64(FlagWaldurChainGasAdjustment),
-			BroadcastTimeout:  viper.GetDuration(FlagWaldurChainBroadcastTimeout),
-		}
-
-		sink, err := provider_daemon.NewChainCallbackSink(ctx, chainCfg)
-		if err != nil {
-			return fmt.Errorf("failed to create on-chain callback sink: %w", err)
-		}
-		callbackSink = sink
-		providerAddress = sink.SenderAddress()
-	}
 
 	if viper.GetBool(FlagWaldurEnabled) {
 		if _, err := sdk.AccAddressFromBech32(providerAddress); err != nil {
@@ -860,6 +894,48 @@ func runStart(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("failed to create chain client: %w", err)
 	}
 	defer func() { _ = productionChainClient.Close() }()
+	mutationChain, err := provider_daemon.NewRPCProviderMutationChain(productionChainClient)
+	if err != nil {
+		return fmt.Errorf("failed to initialize provider mutation transport: %w", err)
+	}
+	mutationCfg := provider_daemon.DefaultProviderMutationSubmitterConfig()
+	mutationCfg.ChainID = viper.GetString(FlagChainID)
+	mutationCfg.ProviderAddress = providerAddress
+	mutationCfg.QueueStatePath = viper.GetString(FlagChainUsageQueueFile) + ".mutations"
+	mutationCfg.Chain = mutationChain
+	mutationSubmitter, err = provider_daemon.NewProviderMutationSubmitter(mutationCfg, keyManager)
+	if err != nil {
+		return fmt.Errorf("failed to initialize provider mutation submitter: %w", err)
+	}
+	if err := mutationSubmitter.Start(ctx); err != nil {
+		return fmt.Errorf("failed to start provider mutation submitter: %w", err)
+	}
+	productionChainClient.SetMutationSubmitter(mutationSubmitter)
+	if readiness := mutationSubmitter.Readiness(ctx); !readiness.Ready {
+		return fmt.Errorf("provider mutation submitter not ready: %s", readiness.Reason)
+	}
+	fiatQuery, err := provider_daemon.NewRPCFiatConversionQuery(productionChainClient)
+	if err != nil && viper.GetBool(FlagFiatConversionEnabled) {
+		return fmt.Errorf("fiat conversion startup blocked: %w", err)
+	}
+	if err := validateFiatConversionStartup(ctx, fiatQuery, mutationSubmitter); err != nil {
+		return err
+	}
+	defer func(submitter *provider_daemon.ProviderMutationSubmitter) {
+		drainCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+		if err := submitter.Stop(drainCtx); err != nil {
+			fmt.Printf("  Provider Mutation Submitter: failed to drain cleanly: %v\n", err)
+		}
+	}(mutationSubmitter)
+	fmt.Println("  Provider Mutation Submitter: started (durable signed pipeline)")
+
+	if viper.GetBool(FlagWaldurEnabled) && viper.GetBool(FlagWaldurChainSubmit) {
+		callbackSink, err = provider_daemon.NewDurableChainCallbackSink(providerAddress, mutationSubmitter)
+		if err != nil {
+			return fmt.Errorf("failed to initialize durable Waldur callback sink: %w", err)
+		}
+	}
 	var chainClient provider_daemon.ChainClient = productionChainClient
 
 	// Initialize HPC provider (VE-21C/VE-14B)
@@ -890,19 +966,9 @@ func runStart(cmd *cobra.Command, args []string) error {
 	}
 
 	if hpcProviderConfig.HPC.Enabled {
-		hpcChainClient, err := provider_daemon.NewHPCChainClient(provider_daemon.RPCChainClientConfig{
-			NodeURI:        viper.GetString(FlagNode),
-			GRPCEndpoint:   viper.GetString(FlagWaldurChainGRPC),
-			ChainID:        viper.GetString(FlagChainID),
-			RequestTimeout: time.Second * 30,
-		})
-		if err != nil {
-			return fmt.Errorf("failed to create hpc chain client: %w", err)
-		}
-
 		hpcProvider, err = provider_daemon.NewHPCProviderWithDeps(
 			hpcProviderConfig,
-			hpcChainClient,
+			productionChainClient,
 			nil,
 			&provider_daemon.HPCProviderDeps{
 				Signer: newHPCKeyManagerSigner(keyManager, hpcProviderConfig.HPC.ProviderAddress),
@@ -1004,7 +1070,7 @@ func runStart(cmd *cobra.Command, args []string) error {
 			)
 		}
 
-		checker, err := provider_daemon.NewDomainVerificationChecker(domainVerificationCfg, keyManager, nil)
+		checker, err := provider_daemon.NewDomainVerificationChecker(domainVerificationCfg, keyManager, productionChainClient)
 		if err != nil {
 			return fmt.Errorf("failed to initialize domain verification checker: %w", err)
 		}
@@ -1057,10 +1123,10 @@ func runStart(cmd *cobra.Command, args []string) error {
 		usageSubmitterCfg.ProviderAddress = providerAddress
 		usageSubmitterCfg.ChainID = viper.GetString(FlagChainID)
 		usageSubmitterCfg.CometRPC = normalizeCometRPC(viper.GetString(FlagNode))
-		usageSubmitterCfg.RPCClient = productionChainClient.CometRPCClient()
 		usageSubmitterCfg.QueueStatePath = viper.GetString(FlagChainUsageQueueFile)
 		usageSubmitterCfg.ProviderSigningState = productionChainClient
 		usageSubmitterCfg.UsageStreamState = productionChainClient
+		usageSubmitterCfg.MutationSubmitter = mutationSubmitter
 		usageSubmitter, err := provider_daemon.NewChainUsageSubmitter(usageSubmitterCfg, keyManager, provider_daemon.NewUsageMetricsCollector())
 		if err != nil {
 			return fmt.Errorf("failed to initialize authenticated usage submitter: %w", err)
@@ -1384,7 +1450,7 @@ func runStart(cmd *cobra.Command, args []string) error {
 	// Initialize provisioning worker (VE-36F)
 	if viper.GetBool(FlagProvisioningEnabled) {
 		if callbackSink == nil {
-			callbackSink = provider_daemon.NewFileCallbackSink(viper.GetString(FlagWaldurCallbackSinkDir))
+			return fmt.Errorf("provisioning requires durable chain callback sink; enable %s with %s", FlagWaldurChainSubmit, FlagWaldurEnabled)
 		}
 
 		provCfg := provider_daemon.DefaultProvisioningConfig()
@@ -1468,6 +1534,8 @@ func runStart(cmd *cobra.Command, args []string) error {
 		supportCfg.GasAdjustment = viper.GetFloat64(FlagWaldurChainGasAdjustment)
 		supportCfg.BroadcastTimeout = viper.GetDuration(FlagWaldurChainBroadcastTimeout)
 		supportCfg.RequestTimeout = 30 * time.Second
+		supportCfg.MutationSubmitter = mutationSubmitter
+		supportCfg.StoreQuery = productionChainClient.ProviderStoreQueryClient()
 		supportCfg.Encryption.SenderPrivateKeyPath = viper.GetString(FlagSupportEncryptionKeyPath)
 		supportCfg.Encryption.SenderPrivateKeyBase64 = viper.GetString(FlagSupportEncryptionKeyBase64)
 
@@ -1559,10 +1627,122 @@ func runStart(cmd *cobra.Command, args []string) error {
 		}
 	}
 
+	if mutationSubmitter != nil {
+		drainDeadline := time.Now().Add(30 * time.Second)
+		for {
+			metrics := mutationSubmitter.Metrics(context.Background())
+			if metrics.QueueDepth == 0 || time.Now().After(drainDeadline) {
+				if metrics.QueueDepth > 0 {
+					fmt.Printf("  Provider Mutation Submitter: drain deadline reached with %d explicit queued item(s)\n", metrics.QueueDepth)
+				}
+				break
+			}
+			processCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			_ = mutationSubmitter.ProcessDue(processCtx, 32)
+			cancel()
+		}
+		stopCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		if err := mutationSubmitter.Stop(stopCtx); err != nil {
+			fmt.Printf("  Provider Mutation Submitter: failed to stop cleanly: %v\n", err)
+		} else {
+			fmt.Println("  Provider Mutation Submitter: drained and stopped")
+		}
+		cancel()
+		mutationSubmitter = nil
+	}
+
 	keyManager.Lock()
 	fmt.Println("  Key Manager: locked")
 
 	fmt.Println("Provider daemon stopped.")
+	return nil
+}
+
+// validateFiatConversionStartup enforces the production composition boundary.
+// External custody, vendor, secret, destination and compliance implementations
+// are intentionally not embedded in this binary, so identifiers alone never
+// promote local engineering code to an executable production corridor.
+func validateFiatConversionStartup(ctx context.Context, query *provider_daemon.RPCFiatConversionQuery, submitter *provider_daemon.ProviderMutationSubmitter) error {
+	if !viper.GetBool(FlagFiatConversionEnabled) {
+		fmt.Println("  Fiat Conversion Orchestrator: disabled (external route/corridor certification not claimed)")
+		return nil
+	}
+	mode := strings.TrimSpace(viper.GetString(FlagFiatConversionMode))
+	var authority provider_daemon.FiatProfileAuthority
+	encodedAuthorityKey := strings.TrimSpace(viper.GetString(FlagFiatConversionProfileAuthorityKey))
+	authorityID := strings.TrimSpace(viper.GetString(FlagFiatConversionProfileAuthorityID))
+	if encodedAuthorityKey != "" || authorityID != "" {
+		publicKey, decodeErr := base64.StdEncoding.Strict().DecodeString(encodedAuthorityKey)
+		if decodeErr != nil {
+			return fmt.Errorf("fiat conversion profile authority key: invalid base64")
+		}
+		configuredAuthority, authorityErr := provider_daemon.NewEd25519FiatProfileAuthority(authorityID, publicKey)
+		if authorityErr != nil {
+			return fmt.Errorf("fiat conversion profile authority: %w", authorityErr)
+		}
+		authority = configuredAuthority
+	}
+	profiles, err := provider_daemon.LoadTrustedFiatProfilesWithAuthority(
+		viper.GetString(FlagFiatConversionDEXProfile),
+		viper.GetString(FlagFiatConversionPayoutProfile),
+		authority,
+	)
+	if err != nil {
+		return fmt.Errorf("fiat conversion profiles: %w", err)
+	}
+	if err := validateFiatConversionProfileMode(mode, profiles); err != nil {
+		return err
+	}
+	if mode == "engineering_external_blocked" {
+		fmt.Println("  Fiat Conversion Orchestrator: engineering profile verified; external execution remains blocked until reviewed dependencies are injected")
+		return nil
+	}
+	if query == nil || submitter == nil || !submitter.Readiness(ctx).Ready {
+		return fmt.Errorf("fiat conversion startup blocked: query or mutation transport unavailable")
+	}
+	params, err := query.Params(ctx)
+	if err != nil {
+		return fmt.Errorf("fiat conversion startup blocked: %w", err)
+	}
+	if params.FiatConversionDexProfileId != profiles.DEX.ID || params.FiatConversionPayoutProfileId != profiles.Payout.ID ||
+		!bytes.Equal(params.FiatConversionDexProfileDigest, profiles.DEXDigest[:]) ||
+		!bytes.Equal(params.FiatConversionPayoutProfileDigest, profiles.PayoutDigest[:]) {
+		return fmt.Errorf("fiat conversion startup blocked: chain profile commitments do not match local files")
+	}
+	missing := make([]string, 0, 4)
+	for flag, value := range map[string]string{
+		FlagFiatConversionCustodyBackend:      viper.GetString(FlagFiatConversionCustodyBackend),
+		FlagFiatConversionSecretResolver:      viper.GetString(FlagFiatConversionSecretResolver),
+		FlagFiatConversionDestinationResolver: viper.GetString(FlagFiatConversionDestinationResolver),
+		FlagFiatConversionComplianceResolver:  viper.GetString(FlagFiatConversionComplianceResolver),
+	} {
+		if strings.TrimSpace(value) == "" {
+			missing = append(missing, flag)
+		}
+	}
+	sort.Strings(missing)
+	if len(missing) > 0 {
+		return fmt.Errorf("fiat conversion startup blocked: external dependency composition unavailable (%s)", strings.Join(missing, ", "))
+	}
+	return fmt.Errorf("fiat conversion startup blocked: configured external backend identifiers have no in-binary production factories; inject reviewed DEX custody, payout partner, secret, destination, compliance, and webhook implementations")
+}
+
+func validateFiatConversionProfileMode(mode string, profiles *provider_daemon.TrustedFiatProfiles) error {
+	if profiles == nil {
+		return fmt.Errorf("fiat conversion startup blocked: profiles unavailable")
+	}
+	if mode == "engineering_external_blocked" {
+		if profiles.DEX.State != dex.RouteEngineeringCompleteExternalBlocked || profiles.Payout.State != offramp.ProfileEngineeringCompleteExternalBlocked {
+			return fmt.Errorf("fiat conversion engineering mode requires explicit external-blocked profile rows")
+		}
+		return nil
+	}
+	if mode != "production" {
+		return fmt.Errorf("invalid fiat conversion mode %q", mode)
+	}
+	if !profiles.DEXTrusted || !profiles.PayoutTrusted {
+		return fmt.Errorf("fiat conversion startup blocked: certified profiles are not independently authorized")
+	}
 	return nil
 }
 

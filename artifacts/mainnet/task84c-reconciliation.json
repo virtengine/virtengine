@@ -1,0 +1,29 @@
+{
+  "schema_version": 1,
+  "source": "artifacts/mainnet/genesis.json",
+  "source_sha256": "a8d8a4a4f19882503265482c9433a6646d8dbbfe62f81c5945e81c32da9e6032",
+  "market": {
+    "orders": 0,
+    "bids": 0,
+    "leases": 0
+  },
+  "non_owner": {
+    "offerings": 0,
+    "orders": 0,
+    "bids": 0,
+    "allocations": 0
+  },
+  "resources": {
+    "inventories": 0,
+    "allocations": 0,
+    "reservations": 0
+  },
+  "hpc": {
+    "jobs": 0
+  },
+  "policy": {
+    "ambiguous_records": "quarantine",
+    "synthetic_capacity": "forbidden",
+    "non_owner_mutation_after_activation": "rejected"
+  }
+}

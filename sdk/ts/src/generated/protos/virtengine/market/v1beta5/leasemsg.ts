@@ -21,6 +21,7 @@ export interface MsgCreateLease {
 
 /** MsgCreateLeaseResponse is the response from creating a lease. */
 export interface MsgCreateLeaseResponse {
+  reservationId: string;
 }
 
 /** MsgWithdrawLease defines an SDK message for withdrawing lease funds. */
@@ -101,7 +102,7 @@ export const MsgCreateLease: MessageFns<MsgCreateLease, "virtengine.market.v1bet
 };
 
 function createBaseMsgCreateLeaseResponse(): MsgCreateLeaseResponse {
-  return {};
+  return { reservationId: "" };
 }
 
 export const MsgCreateLeaseResponse: MessageFns<
@@ -110,7 +111,10 @@ export const MsgCreateLeaseResponse: MessageFns<
 > = {
   $type: "virtengine.market.v1beta5.MsgCreateLeaseResponse" as const,
 
-  encode(_: MsgCreateLeaseResponse, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+  encode(message: MsgCreateLeaseResponse, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.reservationId !== "") {
+      writer.uint32(10).string(message.reservationId);
+    }
     return writer;
   },
 
@@ -121,6 +125,14 @@ export const MsgCreateLeaseResponse: MessageFns<
     while (reader.pos < end) {
       const tag = reader.uint32();
       switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.reservationId = reader.string();
+          continue;
+        }
       }
       if ((tag & 7) === 4 || tag === 0) {
         break;
@@ -130,16 +142,20 @@ export const MsgCreateLeaseResponse: MessageFns<
     return message;
   },
 
-  fromJSON(_: any): MsgCreateLeaseResponse {
-    return {};
+  fromJSON(object: any): MsgCreateLeaseResponse {
+    return { reservationId: isSet(object.reservation_id) ? globalThis.String(object.reservation_id) : "" };
   },
 
-  toJSON(_: MsgCreateLeaseResponse): unknown {
+  toJSON(message: MsgCreateLeaseResponse): unknown {
     const obj: any = {};
+    if (message.reservationId !== "") {
+      obj.reservation_id = message.reservationId;
+    }
     return obj;
   },
-  fromPartial(_: DeepPartial<MsgCreateLeaseResponse>): MsgCreateLeaseResponse {
+  fromPartial(object: DeepPartial<MsgCreateLeaseResponse>): MsgCreateLeaseResponse {
     const message = createBaseMsgCreateLeaseResponse();
+    message.reservationId = object.reservationId ?? "";
     return message;
   },
 };

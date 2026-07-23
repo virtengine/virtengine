@@ -1,0 +1,33 @@
+{
+  "schema_version": 1,
+  "task": "84D",
+  "upgrade": "v1.7.0",
+  "generated_at": "2026-07-22",
+  "input_profile": "representative-empty-current-genesis",
+  "settlement": {
+    "payouts_scanned": 0,
+    "escrows_scanned": 0,
+    "cases_created": 0,
+    "claims_merged": 0,
+    "quarantined": 0,
+    "terminal_preserved": 0,
+    "already_migrated": 0,
+    "malformed_orphans": 0,
+    "digest_sha256": "f5a5fd42d16a20302798ef6ed309979b43003d2320d9f0e8ea9831a92759fb4b"
+  },
+  "adapters": {
+    "fraud_claims": 0,
+    "hpc_claims": 0,
+    "billing_claims": 0,
+    "review_claims": 0,
+    "quarantined": 0
+  },
+  "remediation_states": [
+    "none",
+    "merged_active_claims",
+    "quarantined_ambiguous_subject",
+    "quarantined_orphan_hold",
+    "terminal_finance_preserved"
+  ],
+  "limitations": "This checked-in artifact is deterministic representative/empty-genesis evidence. A validator-approved mainnet genesis export was not supplied locally; release operators must rerun the v1.7.0 reconciliation preflight against that exact export and replace counts without changing the schema."
+}

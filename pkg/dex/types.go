@@ -199,6 +199,10 @@ type SwapRequest struct {
 	// SlippageTolerance is the maximum acceptable slippage (0.0-1.0)
 	SlippageTolerance float64 `json:"slippage_tolerance"`
 
+	// SlippageToleranceExact is the exact decimal tolerance required by real
+	// production adapters. The float field remains for API compatibility only.
+	SlippageToleranceExact sdkmath.LegacyDec `json:"slippage_tolerance_exact"`
+
 	// Deadline is the transaction deadline
 	Deadline time.Time `json:"deadline"`
 
@@ -226,6 +230,9 @@ func (r SwapRequest) Validate() error {
 	if r.SlippageTolerance < 0 || r.SlippageTolerance > 1.0 {
 		return errors.New("slippage_tolerance must be between 0 and 1")
 	}
+	if !r.SlippageToleranceExact.IsNil() && (r.SlippageToleranceExact.IsNegative() || r.SlippageToleranceExact.GT(sdkmath.LegacyOneDec())) {
+		return errors.New("slippage_tolerance_exact must be between 0 and 1")
+	}
 	if r.Sender == "" {
 		return errors.New("sender is required")
 	}
@@ -242,6 +249,9 @@ type SwapRoute struct {
 
 	// PriceImpact is the expected price impact
 	PriceImpact float64 `json:"price_impact"`
+
+	// PriceImpactExact is the exact decimal price impact used for safety checks.
+	PriceImpactExact sdkmath.LegacyDec `json:"price_impact_exact"`
 }
 
 // SwapHop represents a single hop in a multi-hop swap
@@ -294,6 +304,33 @@ type SwapQuote struct {
 	// PriceImpact is the total price impact
 	PriceImpact float64 `json:"price_impact"`
 
+	// PriceImpactExact is the exact price impact used by production validation.
+	PriceImpactExact sdkmath.LegacyDec `json:"price_impact_exact"`
+
+	// ProfileID identifies the exact support-matrix row.
+	ProfileID string `json:"profile_id"`
+
+	// ChainID is the verified chain on which all pool evidence was observed.
+	ChainID string `json:"chain_id"`
+
+	// DEX and DEXVersion bind the quote to an explicitly supported implementation.
+	DEX        string `json:"dex"`
+	DEXVersion string `json:"dex_version"`
+
+	// QuoteDigest is the SHA-256 digest of canonical quote content. ID equals it.
+	QuoteDigest string `json:"quote_digest"`
+
+	// PoolStateEvidence binds each route hop to exact finalized pool state.
+	PoolStateEvidence []PoolStateEvidence `json:"pool_state_evidence"`
+
+	// OraclePrice and OracleDeviation are exact values checked before execution.
+	OraclePrice     sdkmath.LegacyDec `json:"oracle_price"`
+	OracleDeviation sdkmath.LegacyDec `json:"oracle_deviation"`
+
+	// ObservationHeight and ObservationBlockHash summarize the newest bound state.
+	ObservationHeight    uint64 `json:"observation_height"`
+	ObservationBlockHash string `json:"observation_block_hash"`
+
 	// TotalFee is the total fee amount
 	TotalFee sdkmath.Int `json:"total_fee"`
 
@@ -309,7 +346,12 @@ type SwapQuote struct {
 
 // IsExpired checks if the quote has expired
 func (q SwapQuote) IsExpired() bool {
-	return time.Now().After(q.ExpiresAt)
+	return q.IsExpiredAt(time.Now())
+}
+
+// IsExpiredAt checks quote expiry against an explicit process-boundary time.
+func (q SwapQuote) IsExpiredAt(now time.Time) bool {
+	return !now.Before(q.ExpiresAt)
 }
 
 // SwapResult represents the result of a swap execution
@@ -388,6 +430,12 @@ type LiquidityPool struct {
 
 	// UpdatedAt is when pool data was last updated
 	UpdatedAt time.Time `json:"updated_at"`
+
+	// ChainID, SourceID, Height, and BlockHash identify the exact observed chain state.
+	ChainID   string `json:"chain_id"`
+	SourceID  string `json:"source_id"`
+	Height    uint64 `json:"height"`
+	BlockHash string `json:"block_hash"`
 }
 
 // PoolQuery specifies pool query parameters

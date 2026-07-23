@@ -97,6 +97,9 @@ type candidateMeta struct {
 
 // ScheduleJob selects the best cluster for a job using proximity-based heuristics
 func (k Keeper) ScheduleJob(ctx sdk.Context, job *types.HPCJob) (*types.SchedulingDecision, error) {
+	if err := k.requireActiveJobReservation(ctx, *job); err != nil {
+		return nil, err
+	}
 	params := k.GetParams(ctx)
 
 	offering, exists := k.GetOffering(ctx, job.OfferingID)

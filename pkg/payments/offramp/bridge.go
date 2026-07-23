@@ -2,8 +2,6 @@ package offramp
 
 import (
 	"context"
-	"crypto/rand"
-	"encoding/hex"
 	"fmt"
 	"maps"
 	"sort"
@@ -29,32 +27,79 @@ type quotePlan struct {
 
 // bridgeImpl aggregates multiple off-ramp adapters.
 type bridgeImpl struct {
-	adapters   map[string]Adapter
-	adapterMu  sync.RWMutex
-	operations map[string]PayoutResult
-	lookupKeys map[string]string
-	quotePlans map[string]quotePlan
-	opMu       sync.RWMutex
-	now        func() time.Time
+	adapters             map[string]Adapter
+	adapterMu            sync.RWMutex
+	operations           map[string]PayoutResult
+	lookupKeys           map[string]string
+	quotePlans           map[string]quotePlan
+	opMu                 sync.RWMutex
+	now                  func() time.Time
+	mode                 ExecutionMode
+	allowExternalBlocked bool
+	repository           PayoutRepository
+	profileAuthorizer    ProfileAuthorizer
 }
 
 // NewBridge creates a new off-ramp bridge.
 func NewBridge() *bridgeImpl {
-	return newBridgeWithClock(func() time.Time {
+	return newBridgeWithDependencies(ExecutionModeLegacy, false, nil, nil, func() time.Time {
+		return time.Now().UTC()
+	})
+}
+
+// ProductionBridgeConfig supplies the durable state and trusted support-matrix
+// authority required by a production bridge.
+type ProductionBridgeConfig struct {
+	Repository PayoutRepository
+	Authorizer ProfileAuthorizer
+}
+
+// NewProductionBridge creates a bridge that accepts only trusted certified
+// production profiles, rejects test adapters, and requires durable payout
+// state. Omitting config intentionally produces a fail-closed bridge while
+// preserving compatibility for callers that only validate rejection paths.
+func NewProductionBridge(config ...ProductionBridgeConfig) *bridgeImpl {
+	var repository PayoutRepository
+	var authorizer ProfileAuthorizer
+	if len(config) == 1 {
+		repository = config[0].Repository
+		authorizer = config[0].Authorizer
+	}
+	return newBridgeWithDependencies(ExecutionModeProduction, false, repository, authorizer, func() time.Time {
+		return time.Now().UTC()
+	})
+}
+
+// NewEngineeringSandboxBridge creates an engineering bridge. Externally
+// blocked profiles require explicit opt-in and remain visible in audit fields.
+func NewEngineeringSandboxBridge(allowExternalBlocked bool) *bridgeImpl {
+	return newBridgeWithDependencies(ExecutionModeSandbox, allowExternalBlocked, nil, nil, func() time.Time {
 		return time.Now().UTC()
 	})
 }
 
 func newBridgeWithClock(now func() time.Time) *bridgeImpl {
+	return newBridgeWithDependencies(ExecutionModeLegacy, false, nil, nil, now)
+}
+
+func newBridgeWithOptions(mode ExecutionMode, allowExternalBlocked bool, now func() time.Time) *bridgeImpl {
+	return newBridgeWithDependencies(mode, allowExternalBlocked, nil, nil, now)
+}
+
+func newBridgeWithDependencies(mode ExecutionMode, allowExternalBlocked bool, repository PayoutRepository, authorizer ProfileAuthorizer, now func() time.Time) *bridgeImpl {
 	if now == nil {
 		now = func() time.Time { return time.Now().UTC() }
 	}
 	return &bridgeImpl{
-		adapters:   make(map[string]Adapter),
-		operations: make(map[string]PayoutResult),
-		lookupKeys: make(map[string]string),
-		quotePlans: make(map[string]quotePlan),
-		now:        now,
+		adapters:             make(map[string]Adapter),
+		operations:           make(map[string]PayoutResult),
+		lookupKeys:           make(map[string]string),
+		quotePlans:           make(map[string]quotePlan),
+		now:                  now,
+		mode:                 mode,
+		allowExternalBlocked: allowExternalBlocked,
+		repository:           repository,
+		profileAuthorizer:    authorizer,
 	}
 }
 
@@ -67,8 +112,40 @@ func (b *bridgeImpl) RegisterAdapter(adapter Adapter) error {
 	if name == "" {
 		return ErrInvalidRequest
 	}
+	if b.mode == ExecutionModeProduction {
+		if testAdapter, ok := adapter.(TestOnlyAdapter); ok && testAdapter.IsTestOnly() {
+			return ErrTestAdapter
+		}
+		if b.repository == nil || !b.repository.Durable() || b.profileAuthorizer == nil {
+			return ErrProfileNotExecutable
+		}
+		if _, ok := adapter.(interface{ productionPayoutAdapter() }); !ok {
+			return ErrProfileNotExecutable
+		}
+	}
+	if b.mode != ExecutionModeLegacy {
+		profiled, ok := adapter.(ProfiledAdapter)
+		if !ok {
+			return ErrProfileNotExecutable
+		}
+		profile := profiled.Profile()
+		if profile.Provider != name {
+			return fmt.Errorf("%w: adapter name does not match profile provider", ErrInvalidRequest)
+		}
+		if err := profile.ValidateForExecution(b.mode, b.allowExternalBlocked); err != nil {
+			return err
+		}
+		if b.mode == ExecutionModeProduction {
+			if err := b.profileAuthorizer.AuthorizePayoutProfile(profile); err != nil {
+				return ErrProfileNotExecutable
+			}
+		}
+	}
 	b.adapterMu.Lock()
 	defer b.adapterMu.Unlock()
+	if _, exists := b.adapters[name]; exists {
+		return ErrInvalidRequest
+	}
 	b.adapters[name] = adapter
 	return nil
 }
@@ -108,6 +185,14 @@ func (b *bridgeImpl) InitiatePayout(ctx context.Context, quote Quote, cryptoTxRe
 	if err := validatePayoutInputs(quote, cryptoTxRef, destination, now); err != nil {
 		return PayoutResult{}, err
 	}
+	b.opMu.RLock()
+	plan, knownQuote := b.quotePlans[quote.ID]
+	b.opMu.RUnlock()
+	if b.mode != ExecutionModeLegacy {
+		if !knownQuote || len(plan.candidates) == 0 || !quotesEqual(plan.candidates[0], quote) {
+			return PayoutResult{}, ErrInvalidRequest
+		}
+	}
 
 	metadata = cloneStringMap(metadata)
 	if existing, ok := b.lookupExistingPayout(ctx, "", metadata); ok {
@@ -128,6 +213,10 @@ func (b *bridgeImpl) InitiatePayout(ctx context.Context, quote Quote, cryptoTxRe
 			lastErr = err
 			continue
 		}
+		if err := b.validateAdapterRequest(adapter, candidate.Request, now); err != nil {
+			lastErr = err
+			continue
+		}
 
 		result, err := adapter.InitiatePayout(ctx, PayoutRequest{
 			Quote:       candidate,
@@ -140,7 +229,9 @@ func (b *bridgeImpl) InitiatePayout(ctx context.Context, quote Quote, cryptoTxRe
 			if normErr != nil {
 				return PayoutResult{}, normErr
 			}
-			b.cacheLookupResult(normalized)
+			if err := b.cacheLookupResult(ctx, normalized); err != nil {
+				return PayoutResult{}, err
+			}
 			return clonePayoutResult(normalized), nil
 		}
 
@@ -151,7 +242,9 @@ func (b *bridgeImpl) InitiatePayout(ctx context.Context, quote Quote, cryptoTxRe
 				"bridge_recovery_reason":    "metadata_lookup",
 				"bridge_attempt":            strconv.Itoa(idx + 1),
 			})
-			b.cacheLookupResult(existing)
+			if err := b.cacheLookupResult(ctx, existing); err != nil {
+				return PayoutResult{}, err
+			}
 			return existing, nil
 		}
 
@@ -185,6 +278,12 @@ func (b *bridgeImpl) GetStatus(ctx context.Context, payoutID string) (PayoutResu
 	b.opMu.RLock()
 	result, ok := b.operations[payoutID]
 	b.opMu.RUnlock()
+	if !ok && b.repository != nil {
+		persisted, err := b.repository.GetPayout(ctx, payoutID)
+		if err == nil {
+			result, ok = clonePayoutResult(persisted), true
+		}
+	}
 	if !ok {
 		return PayoutResult{}, ErrPayoutNotFound
 	}
@@ -210,7 +309,9 @@ func (b *bridgeImpl) GetStatus(ctx context.Context, payoutID string) (PayoutResu
 			"bridge_status_refresh":    "stale",
 			"bridge_status_last_error": normalized.Error(),
 		})
-		b.cacheLookupResult(result)
+		if err := b.cacheLookupResult(ctx, result); err != nil {
+			return PayoutResult{}, err
+		}
 		return result, nil
 	}
 
@@ -221,7 +322,9 @@ func (b *bridgeImpl) GetStatus(ctx context.Context, payoutID string) (PayoutResu
 	normalized.AuditFields = mergeStringMaps(normalized.AuditFields, map[string]string{
 		"bridge_status_source": "provider",
 	})
-	b.cacheLookupResult(normalized)
+	if err := b.cacheLookupResult(ctx, normalized); err != nil {
+		return PayoutResult{}, err
+	}
 	return clonePayoutResult(normalized), nil
 }
 
@@ -230,6 +333,12 @@ func (b *bridgeImpl) Cancel(ctx context.Context, payoutID string) error {
 	b.opMu.RLock()
 	result, ok := b.operations[payoutID]
 	b.opMu.RUnlock()
+	if !ok && b.repository != nil {
+		persisted, err := b.repository.GetPayout(ctx, payoutID)
+		if err == nil {
+			result, ok = clonePayoutResult(persisted), true
+		}
+	}
 	if !ok {
 		return ErrPayoutNotFound
 	}
@@ -260,8 +369,7 @@ func (b *bridgeImpl) Cancel(ctx context.Context, payoutID string) error {
 		"bridge_status_source":       "bridge",
 	})
 
-	b.cacheLookupResult(cancelled)
-	return nil
+	return b.cacheLookupResult(ctx, cancelled)
 }
 
 // ListProviders lists registered adapters.
@@ -285,6 +393,10 @@ func (b *bridgeImpl) collectQuoteCandidates(ctx context.Context, req QuoteReques
 	for _, name := range providerNames {
 		adapter, err := b.adapterByName(name)
 		if err != nil {
+			lastErr = err
+			continue
+		}
+		if err := b.validateAdapterRequest(adapter, req, evaluatedAt); err != nil {
 			lastErr = err
 			continue
 		}
@@ -370,6 +482,15 @@ func (b *bridgeImpl) lookupExistingPayout(ctx context.Context, provider string, 
 		}
 	}
 	b.opMu.RUnlock()
+	if b.repository != nil {
+		persisted, err := b.repository.FindPayout(ctx, provider, metadata)
+		if err == nil {
+			if b.cacheLookupResult(ctx, persisted) != nil {
+				return PayoutResult{}, false
+			}
+			return clonePayoutResult(persisted), true
+		}
+	}
 
 	providers := b.providersForLookup(provider)
 	for _, adapter := range providers {
@@ -389,7 +510,9 @@ func (b *bridgeImpl) lookupExistingPayout(ctx context.Context, provider string, 
 			"bridge_recovered_provider": normalized.Provider,
 			"bridge_recovery_reason":    "metadata_lookup",
 		})
-		b.cacheLookupResult(normalized)
+		if b.cacheLookupResult(ctx, normalized) != nil {
+			continue
+		}
 		return clonePayoutResult(normalized), true
 	}
 
@@ -423,6 +546,18 @@ func (b *bridgeImpl) providersForLookup(provider string) []Adapter {
 
 func (b *bridgeImpl) normalizePayoutResult(quote Quote, result PayoutResult, metadata map[string]string, attempt int, fromLookup bool) (PayoutResult, error) {
 	now := b.now()
+	if result.Provider != "" && quote.Provider != "" && result.Provider != quote.Provider {
+		return PayoutResult{}, ErrInvalidRequest
+	}
+	if result.QuoteID != "" && quote.ID != "" && result.QuoteID != quote.ID {
+		return PayoutResult{}, ErrInvalidRequest
+	}
+	if !result.FiatAmount.IsNil() && !quote.FiatAmount.IsNil() && !result.FiatAmount.Equal(quote.FiatAmount) {
+		return PayoutResult{}, ErrInvalidRequest
+	}
+	if !result.CryptoAmount.IsNil() && !quote.Request.CryptoAmount.IsNil() && !result.CryptoAmount.Equal(quote.Request.CryptoAmount) {
+		return PayoutResult{}, ErrInvalidRequest
+	}
 	if result.Provider == "" {
 		result.Provider = quote.Provider
 	}
@@ -458,12 +593,19 @@ func (b *bridgeImpl) normalizePayoutResult(quote Quote, result PayoutResult, met
 		result.Metadata = cloneStringMap(metadata)
 	}
 	result.Metadata = mergeStringMaps(result.Metadata, metadata)
-	result.AuditFields = mergeStringMaps(result.AuditFields, map[string]string{
+	bridgeAudit := map[string]string{
 		"bridge_attempt":           strconv.Itoa(attempt),
 		"bridge_status_source":     ternaryString(fromLookup, "provider_lookup", "provider"),
 		"bridge_quote_provider":    quote.Provider,
 		"bridge_selected_provider": result.Provider,
-	})
+	}
+	if profiled, ok := b.profileForProvider(result.Provider); ok {
+		bridgeAudit["bridge_profile_id"] = profiled.ID
+		bridgeAudit["bridge_profile_state"] = string(profiled.State)
+		bridgeAudit["bridge_execution_environment"] = string(profiled.Environment)
+		bridgeAudit["bridge_production_floor_eligible"] = strconv.FormatBool(profiled.State == ProfileCertifiedEnabled && profiled.Environment == EnvironmentProduction)
+	}
+	result.AuditFields = mergeStringMaps(result.AuditFields, bridgeAudit)
 
 	if result.Status == StatusCompleted && result.CompletedAt == nil {
 		completedAt := now
@@ -508,13 +650,50 @@ func validateQuoteRequest(req QuoteRequest) error {
 	if req.CryptoAmount.IsNil() || !req.CryptoAmount.IsPositive() {
 		return ErrInvalidRequest
 	}
+	if req.CryptoDecimals > 18 {
+		return ErrInvalidRequest
+	}
 	if strings.TrimSpace(req.FiatCurrency) == "" || strings.TrimSpace(req.PaymentMethod) == "" {
 		return ErrInvalidRequest
 	}
 	if strings.TrimSpace(req.Sender) == "" || strings.TrimSpace(req.Destination) == "" {
 		return ErrInvalidRequest
 	}
+	if strings.TrimSpace(req.BeneficiaryReference) != "" && strings.TrimSpace(req.Destination) != strings.TrimSpace(req.BeneficiaryReference) {
+		return ErrInvalidRequest
+	}
 	return nil
+}
+
+func (b *bridgeImpl) validateAdapterRequest(adapter Adapter, req QuoteRequest, now time.Time) error {
+	profiled, ok := adapter.(ProfiledAdapter)
+	if !ok {
+		if b.mode == ExecutionModeLegacy {
+			return nil
+		}
+		return ErrProfileNotExecutable
+	}
+	profile := profiled.Profile()
+	if b.mode != ExecutionModeLegacy {
+		if err := profile.ValidateForExecution(b.mode, b.allowExternalBlocked); err != nil {
+			return err
+		}
+		if b.mode == ExecutionModeProduction {
+			if b.profileAuthorizer == nil || b.profileAuthorizer.AuthorizePayoutProfile(profile) != nil {
+				return ErrProfileNotExecutable
+			}
+		}
+	}
+	if req.Jurisdiction == "" {
+		return ErrUnsupportedCorridor
+	}
+	if _, err := profile.Corridor(req.Jurisdiction, req.FiatCurrency, req.PaymentMethod); err != nil {
+		return err
+	}
+	if strings.TrimSpace(req.BeneficiaryReference) == "" {
+		return ErrInvalidRequest
+	}
+	return validateCompliance(req.Compliance, profile.DecisionRequirements, now)
 }
 
 func validatePayoutInputs(quote Quote, cryptoTxRef string, destination string, now time.Time) error {
@@ -559,20 +738,18 @@ func quoteLess(left Quote, right Quote) bool {
 	}
 }
 
-func generateID(prefix string) (string, error) {
-	buf := make([]byte, 6)
-	if _, err := rand.Read(buf); err != nil {
-		return "", err
-	}
-	return fmt.Sprintf("%s-%s", prefix, hex.EncodeToString(buf)), nil
-}
-
-func (b *bridgeImpl) cacheLookupResult(result PayoutResult) {
+func (b *bridgeImpl) cacheLookupResult(ctx context.Context, result PayoutResult) error {
 	cloned := clonePayoutResult(result)
+	if b.repository != nil {
+		if err := b.repository.PutPayout(ctx, cloned); err != nil {
+			return fmt.Errorf("%w: durable payout repository unavailable", ErrAdapterUnavailable)
+		}
+	}
 	b.opMu.Lock()
-	defer b.opMu.Unlock()
 	b.operations[cloned.ID] = cloned
 	cacheMetadataKeys(b.lookupKeys, cloned)
+	b.opMu.Unlock()
+	return nil
 }
 
 func cacheMetadataKeys(index map[string]string, result PayoutResult) {
@@ -631,6 +808,18 @@ func (b *bridgeImpl) adapterByName(name string) (Adapter, error) {
 		return nil, ErrAdapterUnavailable
 	}
 	return adapter, nil
+}
+
+func (b *bridgeImpl) profileForProvider(name string) (PayoutProfile, bool) {
+	adapter, err := b.adapterByName(name)
+	if err != nil {
+		return PayoutProfile{}, false
+	}
+	profiled, ok := adapter.(ProfiledAdapter)
+	if !ok {
+		return PayoutProfile{}, false
+	}
+	return profiled.Profile(), true
 }
 
 func cloneQuote(quote Quote) Quote {

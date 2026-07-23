@@ -12,6 +12,15 @@ import (
 
 // SetInventory stores a resource inventory snapshot.
 func (k Keeper) SetInventory(ctx sdk.Context, inventory types.ResourceInventory) error {
+	if err := validateCapacity(inventory.Total, true); err != nil {
+		return err
+	}
+	if err := validateCapacity(inventory.Available, true); err != nil {
+		return err
+	}
+	if !capacitySatisfies(inventory.Total, inventory.Available) {
+		return types.ErrCapacityInvariant.Wrap("available exceeds declared total")
+	}
 	store := ctx.KVStore(k.skey)
 	key := types.InventoryKey(inventory.ProviderAddress, inventory.ResourceClass, inventory.InventoryId)
 	bz, err := json.Marshal(inventory)
@@ -76,7 +85,22 @@ func (k Keeper) UpdateInventoryFromHeartbeat(ctx sdk.Context, msg *types.MsgProv
 	}
 
 	inventory.Total = msg.Total
-	inventory.Available = msg.Available
+	if k.IsCanonicalReservationsActive(ctx) {
+		reserved, err := k.reservedCapacityForInventory(ctx, msg.ProviderAddress, msg.ResourceClass, inventoryID)
+		if err != nil {
+			return nil, err
+		}
+		available, err := subtractCapacityChecked(msg.Total, reserved)
+		if err != nil {
+			return nil, types.ErrCapacityInvariant.Wrap("heartbeat total below committed reservations")
+		}
+		if !capacityEqual(msg.Available, available) {
+			return nil, types.ErrCapacityInvariant.Wrap("heartbeat available conflicts with committed reservations")
+		}
+		inventory.Available = available
+	} else {
+		inventory.Available = msg.Available
+	}
 	inventory.Locality = msg.Locality
 	inventory.HeartbeatSequence = msg.Sequence
 	inventory.LastHeartbeat = now
@@ -101,6 +125,11 @@ func (k Keeper) PruneStaleInventories(ctx sdk.Context) {
 			inv.UpdatedAt = ctx.BlockTime()
 			if err := k.SetInventory(ctx, inv); err != nil {
 				k.Logger(ctx).Error("failed to mark stale inventory", "provider", inv.ProviderAddress, "error", err)
+			}
+			if k.IsCanonicalReservationsActive(ctx) {
+				if err := k.handleInventoryUnavailable(ctx, inv, "provider_heartbeat_expired"); err != nil {
+					k.Logger(ctx).Error("failed to quarantine stale inventory reservations", "inventory", inv.InventoryId, "error", err)
+				}
 			}
 		}
 		return false

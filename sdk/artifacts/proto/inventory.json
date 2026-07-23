@@ -213,8 +213,8 @@
       "services": 65,
       "queryServices": 32,
       "msgServices": 29,
-      "methods": 409,
-      "httpBindings": 215
+      "methods": 438,
+      "httpBindings": 234
     },
     "files": [
       {
@@ -4470,6 +4470,118 @@
                 ]
               },
               {
+                "name": "Reservation",
+                "fullName": "virtengine.resources.v1.Query.Reservation",
+                "grpcPath": "/virtengine.resources.v1.Query/Reservation",
+                "requestType": "virtengine.resources.v1.QueryReservationRequest",
+                "responseType": "virtengine.resources.v1.QueryReservationResponse",
+                "http": [
+                  {
+                    "body": "",
+                    "method": "GET",
+                    "path": "/virtengine/resources/v1/reservation/{reservation_id}"
+                  }
+                ]
+              },
+              {
+                "name": "ReservationByOrder",
+                "fullName": "virtengine.resources.v1.Query.ReservationByOrder",
+                "grpcPath": "/virtengine.resources.v1.Query/ReservationByOrder",
+                "requestType": "virtengine.resources.v1.QueryReservationByOrderRequest",
+                "responseType": "virtengine.resources.v1.QueryReservationResponse",
+                "http": [
+                  {
+                    "body": "",
+                    "method": "GET",
+                    "path": "/virtengine/resources/v1/reservation/order/{order_id}"
+                  }
+                ]
+              },
+              {
+                "name": "ReservationByBid",
+                "fullName": "virtengine.resources.v1.Query.ReservationByBid",
+                "grpcPath": "/virtengine.resources.v1.Query/ReservationByBid",
+                "requestType": "virtengine.resources.v1.QueryReservationByBidRequest",
+                "responseType": "virtengine.resources.v1.QueryReservationResponse",
+                "http": [
+                  {
+                    "body": "",
+                    "method": "GET",
+                    "path": "/virtengine/resources/v1/reservation/bid/{bid_id}"
+                  }
+                ]
+              },
+              {
+                "name": "ReservationByLease",
+                "fullName": "virtengine.resources.v1.Query.ReservationByLease",
+                "grpcPath": "/virtengine.resources.v1.Query/ReservationByLease",
+                "requestType": "virtengine.resources.v1.QueryReservationByLeaseRequest",
+                "responseType": "virtengine.resources.v1.QueryReservationResponse",
+                "http": [
+                  {
+                    "body": "",
+                    "method": "GET",
+                    "path": "/virtengine/resources/v1/reservation/lease/{lease_id}"
+                  }
+                ]
+              },
+              {
+                "name": "ReservationByJob",
+                "fullName": "virtengine.resources.v1.Query.ReservationByJob",
+                "grpcPath": "/virtengine.resources.v1.Query/ReservationByJob",
+                "requestType": "virtengine.resources.v1.QueryReservationByJobRequest",
+                "responseType": "virtengine.resources.v1.QueryReservationResponse",
+                "http": [
+                  {
+                    "body": "",
+                    "method": "GET",
+                    "path": "/virtengine/resources/v1/reservation/job/{job_id}"
+                  }
+                ]
+              },
+              {
+                "name": "ReservationByConsumer",
+                "fullName": "virtengine.resources.v1.Query.ReservationByConsumer",
+                "grpcPath": "/virtengine.resources.v1.Query/ReservationByConsumer",
+                "requestType": "virtengine.resources.v1.QueryReservationByConsumerRequest",
+                "responseType": "virtengine.resources.v1.QueryReservationResponse",
+                "http": [
+                  {
+                    "body": "",
+                    "method": "GET",
+                    "path": "/virtengine/resources/v1/reservation/consumer/{consumer_type}/{consumer_id}"
+                  }
+                ]
+              },
+              {
+                "name": "ReservationsByProvider",
+                "fullName": "virtengine.resources.v1.Query.ReservationsByProvider",
+                "grpcPath": "/virtengine.resources.v1.Query/ReservationsByProvider",
+                "requestType": "virtengine.resources.v1.QueryReservationsByProviderRequest",
+                "responseType": "virtengine.resources.v1.QueryReservationsResponse",
+                "http": [
+                  {
+                    "body": "",
+                    "method": "GET",
+                    "path": "/virtengine/resources/v1/reservations/provider/{provider_address}"
+                  }
+                ]
+              },
+              {
+                "name": "ReservationLineage",
+                "fullName": "virtengine.resources.v1.Query.ReservationLineage",
+                "grpcPath": "/virtengine.resources.v1.Query/ReservationLineage",
+                "requestType": "virtengine.resources.v1.QueryReservationLineageRequest",
+                "responseType": "virtengine.resources.v1.QueryReservationLineageResponse",
+                "http": [
+                  {
+                    "body": "",
+                    "method": "GET",
+                    "path": "/virtengine/resources/v1/reservation/{reservation_id}/lineage"
+                  }
+                ]
+              },
+              {
                 "name": "Params",
                 "fullName": "virtengine.resources.v1.Query.Params",
                 "grpcPath": "/virtengine.resources.v1.Query/Params",
@@ -4926,6 +5038,20 @@
                 ]
               },
               {
+                "name": "UsageStreamState",
+                "fullName": "virtengine.settlement.v1.Query.UsageStreamState",
+                "grpcPath": "/virtengine.settlement.v1.Query/UsageStreamState",
+                "requestType": "virtengine.settlement.v1.QueryUsageStreamStateRequest",
+                "responseType": "virtengine.settlement.v1.QueryUsageStreamStateResponse",
+                "http": [
+                  {
+                    "body": "",
+                    "method": "GET",
+                    "path": "/virtengine/settlement/v1/usage/streams/{provider}/{order_id}/{lease_id}"
+                  }
+                ]
+              },
+              {
                 "name": "UsageSummary",
                 "fullName": "virtengine.settlement.v1.Query.UsageSummary",
                 "grpcPath": "/virtengine.settlement.v1.Query/UsageSummary",
@@ -5078,6 +5204,146 @@
                     "path": "/virtengine/settlement/v1/fiat/preferences/{provider}"
                   }
                 ]
+              },
+              {
+                "name": "FinancialCase",
+                "fullName": "virtengine.settlement.v1.Query.FinancialCase",
+                "grpcPath": "/virtengine.settlement.v1.Query/FinancialCase",
+                "requestType": "virtengine.settlement.v1.QueryFinancialCaseRequest",
+                "responseType": "virtengine.settlement.v1.QueryFinancialCaseResponse",
+                "http": [
+                  {
+                    "body": "",
+                    "method": "GET",
+                    "path": "/virtengine/settlement/v1/financial-cases/{case_id}"
+                  }
+                ]
+              },
+              {
+                "name": "FinancialCaseBySubject",
+                "fullName": "virtengine.settlement.v1.Query.FinancialCaseBySubject",
+                "grpcPath": "/virtengine.settlement.v1.Query/FinancialCaseBySubject",
+                "requestType": "virtengine.settlement.v1.QueryFinancialCaseBySubjectRequest",
+                "responseType": "virtengine.settlement.v1.QueryFinancialCaseBySubjectResponse",
+                "http": [
+                  {
+                    "body": "",
+                    "method": "GET",
+                    "path": "/virtengine/settlement/v1/financial-cases/by-subject"
+                  }
+                ]
+              },
+              {
+                "name": "FinancialCasesByOrder",
+                "fullName": "virtengine.settlement.v1.Query.FinancialCasesByOrder",
+                "grpcPath": "/virtengine.settlement.v1.Query/FinancialCasesByOrder",
+                "requestType": "virtengine.settlement.v1.QueryFinancialCasesRequest",
+                "responseType": "virtengine.settlement.v1.QueryFinancialCasesResponse",
+                "http": [
+                  {
+                    "body": "",
+                    "method": "GET",
+                    "path": "/virtengine/settlement/v1/financial-cases/by-order/{key}"
+                  }
+                ]
+              },
+              {
+                "name": "FinancialCasesByInvoice",
+                "fullName": "virtengine.settlement.v1.Query.FinancialCasesByInvoice",
+                "grpcPath": "/virtengine.settlement.v1.Query/FinancialCasesByInvoice",
+                "requestType": "virtengine.settlement.v1.QueryFinancialCasesRequest",
+                "responseType": "virtengine.settlement.v1.QueryFinancialCasesResponse",
+                "http": [
+                  {
+                    "body": "",
+                    "method": "GET",
+                    "path": "/virtengine/settlement/v1/financial-cases/by-invoice/{key}"
+                  }
+                ]
+              },
+              {
+                "name": "FinancialCasesByUsage",
+                "fullName": "virtengine.settlement.v1.Query.FinancialCasesByUsage",
+                "grpcPath": "/virtengine.settlement.v1.Query/FinancialCasesByUsage",
+                "requestType": "virtengine.settlement.v1.QueryFinancialCasesRequest",
+                "responseType": "virtengine.settlement.v1.QueryFinancialCasesResponse",
+                "http": [
+                  {
+                    "body": "",
+                    "method": "GET",
+                    "path": "/virtengine/settlement/v1/financial-cases/by-usage/{key}"
+                  }
+                ]
+              },
+              {
+                "name": "FinancialCasesByJob",
+                "fullName": "virtengine.settlement.v1.Query.FinancialCasesByJob",
+                "grpcPath": "/virtengine.settlement.v1.Query/FinancialCasesByJob",
+                "requestType": "virtengine.settlement.v1.QueryFinancialCasesRequest",
+                "responseType": "virtengine.settlement.v1.QueryFinancialCasesResponse",
+                "http": [
+                  {
+                    "body": "",
+                    "method": "GET",
+                    "path": "/virtengine/settlement/v1/financial-cases/by-job/{key}"
+                  }
+                ]
+              },
+              {
+                "name": "FinancialCasesByEscrow",
+                "fullName": "virtengine.settlement.v1.Query.FinancialCasesByEscrow",
+                "grpcPath": "/virtengine.settlement.v1.Query/FinancialCasesByEscrow",
+                "requestType": "virtengine.settlement.v1.QueryFinancialCasesRequest",
+                "responseType": "virtengine.settlement.v1.QueryFinancialCasesResponse",
+                "http": [
+                  {
+                    "body": "",
+                    "method": "GET",
+                    "path": "/virtengine/settlement/v1/financial-cases/by-escrow/{key}"
+                  }
+                ]
+              },
+              {
+                "name": "FinancialCasesByStatus",
+                "fullName": "virtengine.settlement.v1.Query.FinancialCasesByStatus",
+                "grpcPath": "/virtengine.settlement.v1.Query/FinancialCasesByStatus",
+                "requestType": "virtengine.settlement.v1.QueryFinancialCasesRequest",
+                "responseType": "virtengine.settlement.v1.QueryFinancialCasesResponse",
+                "http": [
+                  {
+                    "body": "",
+                    "method": "GET",
+                    "path": "/virtengine/settlement/v1/financial-cases/by-status/{key}"
+                  }
+                ]
+              },
+              {
+                "name": "FinancialCasesByParty",
+                "fullName": "virtengine.settlement.v1.Query.FinancialCasesByParty",
+                "grpcPath": "/virtengine.settlement.v1.Query/FinancialCasesByParty",
+                "requestType": "virtengine.settlement.v1.QueryFinancialCasesRequest",
+                "responseType": "virtengine.settlement.v1.QueryFinancialCasesResponse",
+                "http": [
+                  {
+                    "body": "",
+                    "method": "GET",
+                    "path": "/virtengine/settlement/v1/financial-cases/by-party/{key}"
+                  }
+                ]
+              },
+              {
+                "name": "FinancialCaseLineage",
+                "fullName": "virtengine.settlement.v1.Query.FinancialCaseLineage",
+                "grpcPath": "/virtengine.settlement.v1.Query/FinancialCaseLineage",
+                "requestType": "virtengine.settlement.v1.QueryFinancialCaseLineageRequest",
+                "responseType": "virtengine.settlement.v1.QueryFinancialCaseLineageResponse",
+                "http": [
+                  {
+                    "body": "",
+                    "method": "GET",
+                    "path": "/virtengine/settlement/v1/financial-cases/{case_id}/lineage"
+                  }
+                ]
               }
             ]
           }
@@ -5163,6 +5429,86 @@
                 "grpcPath": "/virtengine.settlement.v1.Msg/ClaimRewards",
                 "requestType": "virtengine.settlement.v1.MsgClaimRewards",
                 "responseType": "virtengine.settlement.v1.MsgClaimRewardsResponse",
+                "http": []
+              },
+              {
+                "name": "OpenFinancialCase",
+                "fullName": "virtengine.settlement.v1.Msg.OpenFinancialCase",
+                "grpcPath": "/virtengine.settlement.v1.Msg/OpenFinancialCase",
+                "requestType": "virtengine.settlement.v1.MsgOpenFinancialCase",
+                "responseType": "virtengine.settlement.v1.MsgOpenFinancialCaseResponse",
+                "http": []
+              },
+              {
+                "name": "AddFinancialClaim",
+                "fullName": "virtengine.settlement.v1.Msg.AddFinancialClaim",
+                "grpcPath": "/virtengine.settlement.v1.Msg/AddFinancialClaim",
+                "requestType": "virtengine.settlement.v1.MsgAddFinancialClaim",
+                "responseType": "virtengine.settlement.v1.MsgAddFinancialClaimResponse",
+                "http": []
+              },
+              {
+                "name": "SubmitFinancialCaseForReview",
+                "fullName": "virtengine.settlement.v1.Msg.SubmitFinancialCaseForReview",
+                "grpcPath": "/virtengine.settlement.v1.Msg/SubmitFinancialCaseForReview",
+                "requestType": "virtengine.settlement.v1.MsgSubmitFinancialCaseForReview",
+                "responseType": "virtengine.settlement.v1.MsgSubmitFinancialCaseForReviewResponse",
+                "http": []
+              },
+              {
+                "name": "EscalateFinancialCase",
+                "fullName": "virtengine.settlement.v1.Msg.EscalateFinancialCase",
+                "grpcPath": "/virtengine.settlement.v1.Msg/EscalateFinancialCase",
+                "requestType": "virtengine.settlement.v1.MsgEscalateFinancialCase",
+                "responseType": "virtengine.settlement.v1.MsgEscalateFinancialCaseResponse",
+                "http": []
+              },
+              {
+                "name": "ResolveFinancialCase",
+                "fullName": "virtengine.settlement.v1.Msg.ResolveFinancialCase",
+                "grpcPath": "/virtengine.settlement.v1.Msg/ResolveFinancialCase",
+                "requestType": "virtengine.settlement.v1.MsgResolveFinancialCase",
+                "responseType": "virtengine.settlement.v1.MsgResolveFinancialCaseResponse",
+                "http": []
+              },
+              {
+                "name": "AppealFinancialCase",
+                "fullName": "virtengine.settlement.v1.Msg.AppealFinancialCase",
+                "grpcPath": "/virtengine.settlement.v1.Msg/AppealFinancialCase",
+                "requestType": "virtengine.settlement.v1.MsgAppealFinancialCase",
+                "responseType": "virtengine.settlement.v1.MsgAppealFinancialCaseResponse",
+                "http": []
+              },
+              {
+                "name": "CancelFinancialCase",
+                "fullName": "virtengine.settlement.v1.Msg.CancelFinancialCase",
+                "grpcPath": "/virtengine.settlement.v1.Msg/CancelFinancialCase",
+                "requestType": "virtengine.settlement.v1.MsgCancelFinancialCase",
+                "responseType": "virtengine.settlement.v1.MsgCancelFinancialCaseResponse",
+                "http": []
+              },
+              {
+                "name": "FinalizeFinancialCase",
+                "fullName": "virtengine.settlement.v1.Msg.FinalizeFinancialCase",
+                "grpcPath": "/virtengine.settlement.v1.Msg/FinalizeFinancialCase",
+                "requestType": "virtengine.settlement.v1.MsgFinalizeFinancialCase",
+                "responseType": "virtengine.settlement.v1.MsgFinalizeFinancialCaseResponse",
+                "http": []
+              },
+              {
+                "name": "RecordFiatConversionObservation",
+                "fullName": "virtengine.settlement.v1.Msg.RecordFiatConversionObservation",
+                "grpcPath": "/virtengine.settlement.v1.Msg/RecordFiatConversionObservation",
+                "requestType": "virtengine.settlement.v1.MsgRecordFiatConversionObservation",
+                "responseType": "virtengine.settlement.v1.MsgRecordFiatConversionObservationResponse",
+                "http": []
+              },
+              {
+                "name": "UpdateParams",
+                "fullName": "virtengine.settlement.v1.Msg.UpdateParams",
+                "grpcPath": "/virtengine.settlement.v1.Msg/UpdateParams",
+                "requestType": "virtengine.settlement.v1.MsgUpdateParams",
+                "responseType": "virtengine.settlement.v1.MsgUpdateParamsResponse",
                 "http": []
               }
             ]

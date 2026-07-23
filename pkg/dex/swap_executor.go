@@ -5,8 +5,6 @@ package dex
 
 import (
 	"context"
-	"crypto/rand"
-	"encoding/hex"
 	"errors"
 	"fmt"
 	"sort"
@@ -31,6 +29,9 @@ func newSwapExecutor(cfg SwapConfig, svc *service) *swapExecutorImpl {
 
 // GetQuote generates a swap quote with optimal routing
 func (e *swapExecutorImpl) GetQuote(ctx context.Context, request SwapRequest) (SwapQuote, error) {
+	if !request.SlippageToleranceExact.IsNil() {
+		return e.getExactAdapterQuote(ctx, request)
+	}
 	// Apply default slippage if not specified
 	if request.SlippageTolerance == 0 {
 		request.SlippageTolerance = e.cfg.DefaultSlippage
@@ -67,16 +68,9 @@ func (e *swapExecutorImpl) GetQuote(ctx context.Context, request SwapRequest) (S
 	// Calculate total fee
 	totalFee := e.calculateRouteFee(route, inputAmount)
 
-	// Generate quote ID
-	quoteID, err := generateQuoteID()
-	if err != nil {
-		return SwapQuote{}, fmt.Errorf("failed to generate quote ID: %w", err)
-	}
-
 	now := time.Now().UTC()
 
-	return SwapQuote{
-		ID:              quoteID,
+	quote := SwapQuote{
 		Request:         request,
 		Route:           route,
 		InputAmount:     inputAmount,
@@ -88,7 +82,42 @@ func (e *swapExecutorImpl) GetQuote(ctx context.Context, request SwapRequest) (S
 		GasEstimate:     route.TotalGas,
 		ExpiresAt:       now.Add(e.cfg.QuoteValidityPeriod),
 		CreatedAt:       now,
-	}, nil
+	}
+	quote.ID, err = genericQuoteDigest(quote)
+	if err != nil {
+		return SwapQuote{}, fmt.Errorf("failed to generate quote ID: %w", err)
+	}
+	return quote, nil
+}
+
+func (e *swapExecutorImpl) getExactAdapterQuote(ctx context.Context, request SwapRequest) (SwapQuote, error) {
+	if err := request.Validate(); err != nil {
+		return SwapQuote{}, err
+	}
+	if request.PreferredDEX != "" {
+		adapter, err := e.service.GetAdapter(request.PreferredDEX)
+		if err != nil {
+			return SwapQuote{}, err
+		}
+		if !adapter.IsHealthy(ctx) {
+			return SwapQuote{}, ErrProviderUnavailable
+		}
+		return adapter.GetSwapQuote(ctx, request)
+	}
+	var best SwapQuote
+	for _, adapter := range e.service.getHealthyAdapters(ctx) {
+		quote, err := adapter.GetSwapQuote(ctx, request)
+		if err != nil || quote.QuoteDigest == "" || quote.OutputAmount.IsNil() {
+			continue
+		}
+		if best.ID == "" || quote.OutputAmount.GT(best.OutputAmount) {
+			best = quote
+		}
+	}
+	if best.ID == "" {
+		return SwapQuote{}, ErrUnsupportedPair
+	}
+	return best, nil
 }
 
 // ExecuteSwap executes a previously quoted swap
@@ -134,6 +163,16 @@ func (e *swapExecutorImpl) FindBestRoute(ctx context.Context, request SwapReques
 	if len(routes) == 0 {
 		return SwapRoute{}, ErrUnsupportedPair
 	}
+	validRoutes := routes[:0]
+	for _, route := range routes {
+		if err := validateGenericRoute(route, e.cfg.MaxHops); err == nil {
+			validRoutes = append(validRoutes, route)
+		}
+	}
+	routes = validRoutes
+	if len(routes) == 0 {
+		return SwapRoute{}, ErrUnsupportedPair
+	}
 
 	// Sort by output amount (descending) for exact-in, input amount (ascending) for exact-out
 	if request.Type == SwapTypeExactIn {
@@ -158,6 +197,19 @@ func (e *swapExecutorImpl) ValidateQuote(ctx context.Context, quote SwapQuote) e
 	// Check expiration
 	if quote.IsExpired() {
 		return ErrQuoteExpired
+	}
+	if quote.OutputAmount.IsNil() || quote.MinOutputAmount.IsNil() || quote.OutputAmount.LT(quote.MinOutputAmount) {
+		return ErrMinimumOutput
+	}
+	if quote.QuoteDigest != "" {
+		digest, err := QuoteDigest(quote)
+		if err != nil || digest != quote.ID || digest != quote.QuoteDigest {
+			return ErrExecutionPayload
+		}
+		if quote.PriceImpactExact.IsNil() {
+			return ErrPriceImpactExceeded
+		}
+		return nil
 	}
 
 	// Validate current price hasn't deviated too much
@@ -432,9 +484,10 @@ func combineRoutes(left, right SwapRoute) SwapRoute {
 	hops = append(hops, right.Hops...)
 
 	return SwapRoute{
-		Hops:        hops,
-		TotalGas:    left.TotalGas + right.TotalGas,
-		PriceImpact: left.PriceImpact + right.PriceImpact,
+		Hops:             hops,
+		TotalGas:         left.TotalGas + right.TotalGas,
+		PriceImpact:      left.PriceImpact + right.PriceImpact,
+		PriceImpactExact: addOptionalDecimals(left.PriceImpactExact, right.PriceImpactExact),
 	}
 }
 
@@ -452,6 +505,48 @@ func dedupeRoutes(routes []SwapRoute) []SwapRoute {
 	}
 
 	return deduped
+}
+
+func validateGenericRoute(route SwapRoute, maxHops int) error {
+	if len(route.Hops) == 0 || maxHops <= 0 || len(route.Hops) > maxHops {
+		return ErrRouteHopsExceeded
+	}
+	visited := make(map[string]struct{}, len(route.Hops)+1)
+	for i, hop := range route.Hops {
+		from := hop.FromToken.Denom
+		if from == "" {
+			from = hop.FromToken.Symbol
+		}
+		to := hop.ToToken.Denom
+		if to == "" {
+			to = hop.ToToken.Symbol
+		}
+		if from == "" || to == "" || from == to {
+			return ErrRouteCycle
+		}
+		if _, duplicate := visited[from]; duplicate {
+			return ErrRouteCycle
+		}
+		visited[from] = struct{}{}
+		if i > 0 {
+			previous := route.Hops[i-1]
+			previousTo := previous.ToToken.Denom
+			if previousTo == "" {
+				previousTo = previous.ToToken.Symbol
+			}
+			if previousTo != from || !previous.AmountOut.Equal(hop.AmountIn) {
+				return ErrPoolStateEvidence
+			}
+		}
+	}
+	last := route.Hops[len(route.Hops)-1].ToToken.Denom
+	if last == "" {
+		last = route.Hops[len(route.Hops)-1].ToToken.Symbol
+	}
+	if _, duplicate := visited[last]; duplicate {
+		return ErrRouteCycle
+	}
+	return nil
 }
 
 func routeSignature(route SwapRoute) string {
@@ -498,11 +593,12 @@ func (e *swapExecutorImpl) calculateRouteFee(route SwapRoute, _ sdkmath.Int) sdk
 	return totalFee
 }
 
-// generateQuoteID generates a unique quote ID
-func generateQuoteID() (string, error) {
-	bytes := make([]byte, 16)
-	if _, err := rand.Read(bytes); err != nil {
-		return "", err
+func addOptionalDecimals(left, right sdkmath.LegacyDec) sdkmath.LegacyDec {
+	if left.IsNil() {
+		return right
 	}
-	return "quote_" + hex.EncodeToString(bytes), nil
+	if right.IsNil() {
+		return left
+	}
+	return left.Add(right)
 }

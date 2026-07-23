@@ -124,6 +124,12 @@ func (am AppModule) RegisterServices(cfg module.Configurator) {
 	types.RegisterMsgServer(cfg.MsgServer(), keeper.NewMsgServerImpl(am.keeper))
 	hpcv1.RegisterQueryServer(cfg.QueryServer(), keeper.NewQuerier(am.keeper))
 	types.RegisterQueryServer(cfg.QueryServer(), keeper.NewQueryServerImpl(am.keeper))
+	if err := cfg.RegisterMigration(types.ModuleName, 1, func(ctx sdk.Context) error {
+		am.keeper.MigrateReservationLinks(ctx)
+		return nil
+	}); err != nil {
+		panic(err)
+	}
 }
 
 // InitGenesis performs genesis initialization for the HPC module.
@@ -146,7 +152,7 @@ func (am AppModule) ExportGenesis(ctx sdk.Context, cdc codec.JSONCodec) json.Raw
 }
 
 // ConsensusVersion implements AppModule/ConsensusVersion.
-func (AppModule) ConsensusVersion() uint64 { return 1 }
+func (AppModule) ConsensusVersion() uint64 { return 2 }
 
 // BeginBlock returns the begin blocker for the HPC module.
 func (am AppModule) BeginBlock(ctx context.Context) error {

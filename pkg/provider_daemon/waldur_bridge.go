@@ -214,7 +214,7 @@ func (b *WaldurBridge) Start(ctx context.Context) error {
 		}
 	}
 	if b.callbackSink == nil {
-		b.callbackSink = NewFileCallbackSink(b.cfg.CallbackSinkDir)
+		return fmt.Errorf("%w: Waldur bridge requires durable chain callback sink", ErrProviderMutationUnavailable)
 	}
 
 	state, err := b.stateStore.Load()

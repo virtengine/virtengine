@@ -4,6 +4,7 @@
 package dex
 
 import (
+	"net/http"
 	"time"
 
 	sdkmath "cosmossdk.io/math"
@@ -184,6 +185,27 @@ type AdapterConfig struct {
 
 	// RetryDelay is the delay between retries
 	RetryDelay time.Duration `json:"retry_delay"`
+
+	// RouteProfile is the exact support-matrix row selected by this adapter.
+	RouteProfile *DEXRouteProfile `json:"route_profile,omitempty"`
+
+	// EngineeringTestMode permits only an explicitly external-blocked profile
+	// that also declares EngineeringTestOnly. It never enables production.
+	EngineeringTestMode bool `json:"engineering_test_mode,omitempty"`
+
+	// RESTEndpoint is the Osmosis LCD endpoint. RPCEndpoint remains retained for
+	// backward-compatible gRPC configuration.
+	RESTEndpoint string `json:"rest_endpoint,omitempty"`
+
+	// HTTPClient, PoolState, ChainEvidence, Oracle, and Now are process-boundary injection
+	// seams. They are excluded from serialized configuration.
+	HTTPClient        *http.Client              `json:"-"`
+	PoolState         OsmosisPoolStateProvider  `json:"-"`
+	ChainEvidence     ChainEvidenceProvider     `json:"-"`
+	Oracle            OraclePriceProvider       `json:"-"`
+	ExecutionVerifier ExecutionEnvelopeVerifier `json:"-"`
+	RouteAuthorizer   RouteProfileAuthorizer    `json:"-"`
+	Now               func() time.Time          `json:"-"`
 }
 
 // DefaultConfig returns sensible default configuration

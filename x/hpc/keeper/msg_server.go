@@ -301,6 +301,10 @@ func (ms msgServer) SubmitJob(goCtx context.Context, msg *types.MsgSubmitJob) (*
 		MaxRuntimeSeconds:       msg.MaxRuntimeSeconds,
 		AgreedPrice:             msg.MaxPrice,
 		State:                   types.JobStatePending,
+		ReservationID:           msg.ReservationId,
+		MarketOrderID:           msg.MarketOrderId,
+		MarketBidID:             msg.MarketBidId,
+		MarketLeaseID:           msg.MarketLeaseId,
 	}
 
 	// Submit the job
@@ -319,7 +323,7 @@ func (ms msgServer) SubmitJob(goCtx context.Context, msg *types.MsgSubmitJob) (*
 		"offering_id", msg.OfferingId,
 	)
 
-	return &types.MsgSubmitJobResponse{JobId: jobID}, nil
+	return &types.MsgSubmitJobResponse{JobId: jobID, EscrowId: job.EscrowID, ReservationId: job.ReservationID}, nil
 }
 
 // CancelJob handles cancelling an HPC job
@@ -487,6 +491,14 @@ func (ms msgServer) FlagDispute(goCtx context.Context, msg *types.MsgFlagDispute
 
 	if err := ms.keeper.FlagDispute(ctx, dispute); err != nil {
 		return nil, err
+	}
+	if job.ReservationID != "" && job.MarketLeaseID == "" {
+		if ms.keeper.resourcesKeeper == nil {
+			return nil, types.ErrInvalidDispute.Wrap("resources keeper is required")
+		}
+		if _, err := ms.keeper.resourcesKeeper.QuarantineReservation(ctx, job.ReservationID, "hpc_dispute_opened"); err != nil {
+			return nil, err
+		}
 	}
 
 	ms.keeper.Logger(ctx).Info("HPC dispute flagged",

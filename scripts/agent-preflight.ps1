@@ -24,7 +24,21 @@ $hasGo = $changedFiles | Where-Object { $_ -match '\.go$' }
 $hasPortal = $changedFiles | Where-Object { $_ -match '^portal/' }
 $hasGoMod = $changedFiles | Where-Object { $_ -match '^go\.(mod|sum)$' }
 $hasBosun = $changedFiles | Where-Object { $_ -match '^scripts/bosun/' }
+$hasTask84D = $changedFiles | Where-Object { $_ -match '(^x/(settlement|fraud|hpc|review|escrow|resources)/|^upgrades/software/v1\.7\.0/|financial-case|task84d)' }
+$hasTask85B = $changedFiles | Where-Object { $_ -match '(^pkg/dex/|^pkg/payments/offramp/|^pkg/provider_daemon/(fiat_conversion|provider_mutation|chain_submitter)|^cmd/provider-daemon/(main\.go|fiat_conversion)|^x/settlement/|^app/(app\.go|mac\.go|mac_task85b_test\.go)|^upgrades/software/v1\.8\.0/|^tests/(integration/settlement/|compatibility/task85b|upgrade/)|^sdk/(proto/node/virtengine/settlement/v1/|go/node/settlement/v1/|ts/src/generated/protos/virtengine/settlement/v1/|artifacts/proto/)|^api/openapi/virtengine-proto\.swagger\.json$|^_docs/.*(task[-_]?85b|fiat|off.?ramp|payout|dex)|task[-_]?85b|fiat-conversion|off.?ramp|payout-corridor)' }
 $errors = 0
+
+if ($hasTask84D) {
+    Write-Host "--- Task 84D canonical financial-case checks ---" -ForegroundColor Yellow
+    & (Join-Path $PSScriptRoot 'task84d-preflight.ps1')
+    if ($LASTEXITCODE -ne 0) { Write-Host "FAIL: Task 84D preflight" -ForegroundColor Red; $errors++ }
+}
+
+if ($hasTask85B) {
+    Write-Host "--- Task 85B DEX and fiat off-ramp checks ---" -ForegroundColor Yellow
+    & (Join-Path $PSScriptRoot 'task85b-preflight.ps1') -Quick -SkipRace
+    if ($LASTEXITCODE -ne 0) { Write-Host "FAIL: Task 85B preflight" -ForegroundColor Red; $errors++ }
+}
 
 # ── Windows Firewall check (non-blocking) ──────────────────────────────────
 if (($IsWindows -or ($env:OS -eq "Windows_NT")) -and ($hasGo -or $hasGoMod)) {
@@ -55,23 +69,25 @@ if ($hasGo -or $hasGoMod) {
     }
     $goPkgs = $goPkgs | ForEach-Object { $_ -replace '\\\\', '/' }
 
-    $nonTestGoPkgs = $goPkgs | Where-Object { $_ -notmatch '^\\.\\/tests\\b' }
+    $nonTestGoPkgs = $goPkgs | Where-Object { $_ -notmatch '^\./tests\b' }
 
     if ($goPkgs -and ($nonTestGoPkgs.Count -gt 0)) {
         Write-Host "  gofmt..."
         $hasGo | ForEach-Object { gofmt -w $_ 2>&1 | Out-Null }
 
         Write-Host "  go vet..."
-        go vet @($nonTestGoPkgs) 2>&1 | Out-Null
-        if ($LASTEXITCODE -ne 0) { Write-Host "FAIL: go vet" -ForegroundColor Red; $errors++ }
+        & go vet $nonTestGoPkgs *> $null
+        $goVetExitCode = $LASTEXITCODE
+        if ($goVetExitCode -ne 0) { Write-Host "FAIL: go vet" -ForegroundColor Red; $errors++ }
 
         Write-Host "  go build..."
         go build ./cmd/... 2>&1 | Out-Null
         if ($LASTEXITCODE -ne 0) { Write-Host "FAIL: go build" -ForegroundColor Red; $errors++ }
 
         Write-Host "  go test (changed packages)..."
-        go test -short -count=1 @($nonTestGoPkgs) 2>&1 | Out-Null
-        if ($LASTEXITCODE -ne 0) { Write-Host "FAIL: go test" -ForegroundColor Red; $errors++ }
+        & go test -short -count=1 $nonTestGoPkgs *> $null
+        $goTestExitCode = $LASTEXITCODE
+        if ($goTestExitCode -ne 0) { Write-Host "FAIL: go test" -ForegroundColor Red; $errors++ }
     }
     elseif ($goPkgs) {
         Write-Host "  Skipping Go build/vet/test for tests-only changes." -ForegroundColor DarkGray

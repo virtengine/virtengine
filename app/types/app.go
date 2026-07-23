@@ -557,6 +557,8 @@ func (app *App) InitNormalKeepers(
 		app.GetSubspace(resourcestypes.ModuleName),
 		authtypes.NewModuleAddress(govtypes.ModuleName).String(),
 	)
+	app.Keepers.VirtEngine.Resources.SetEligibilityKeeper(newReservationEligibilityAdapter(app.Keepers.VirtEngine.Provider))
+	app.Keepers.VirtEngine.Market.SetResourcesKeeper(app.Keepers.VirtEngine.Resources)
 
 	// Keepers with dependencies
 	app.Keepers.VirtEngine.MFA = mfakeeper.NewKeeper(
@@ -600,6 +602,8 @@ func (app *App) InitNormalKeepers(
 		app.Keepers.Cosmos.Bank,
 		authtypes.NewModuleAddress(govtypes.ModuleName).String(),
 	)
+	app.Keepers.VirtEngine.HPC.SetResourcesKeeper(app.Keepers.VirtEngine.Resources)
+	app.Keepers.VirtEngine.HPC.SetMarketKeeper(app.Keepers.VirtEngine.Market)
 
 	app.Keepers.VirtEngine.Benchmark = benchkeeper.NewKeeper(
 		cdc,
@@ -621,6 +625,8 @@ func (app *App) InitNormalKeepers(
 		app.Keepers.VirtEngine.Provider,
 		app.Keepers.Cosmos.Acct,
 	)
+	app.Keepers.VirtEngine.Settlement.SetFinancialReservationKeeper(app.Keepers.VirtEngine.Resources)
+	app.Keepers.VirtEngine.Escrow.SetCanonicalFinancialCases(app.Keepers.VirtEngine.Settlement)
 
 	app.Keepers.VirtEngine.SettlementIBC = settlementibc.NewIBCKeeper(
 		cdc,
@@ -647,6 +653,7 @@ func (app *App) InitNormalKeepers(
 		app.Keepers.VirtEngine.Provider,
 		authtypes.NewModuleAddress(govtypes.ModuleName).String(),
 	)
+	app.Keepers.VirtEngine.Fraud.SetFinancialCaseKeeper(app.Keepers.VirtEngine.Settlement)
 
 	app.Keepers.VirtEngine.Review = reviewkeeper.NewKeeper(
 		cdc,
@@ -655,6 +662,7 @@ func (app *App) InitNormalKeepers(
 		app.Keepers.VirtEngine.Roles,
 		authtypes.NewModuleAddress(govtypes.ModuleName).String(),
 	)
+	app.Keepers.VirtEngine.Review.SetFinancialCaseKeeper(app.Keepers.VirtEngine.Settlement)
 
 	app.Keepers.VirtEngine.Delegation = delegationkeeper.NewKeeper(
 		cdc,

@@ -67,6 +67,9 @@ func newMockProviderWithClock(name string, currencies []string, methods []string
 
 func (p *MockProvider) Name() string { return p.name }
 
+// IsTestOnly identifies this deterministic adapter as ineligible for production.
+func (p *MockProvider) IsTestOnly() bool { return true }
+
 func (p *MockProvider) GetQuote(ctx context.Context, req QuoteRequest) (Quote, error) {
 	if err := validateQuoteRequest(req); err != nil {
 		return Quote{}, err

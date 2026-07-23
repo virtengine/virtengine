@@ -114,6 +114,112 @@ func (q *Querier) AllocationsByProvider(ctx context.Context, req *resourcesv1.Qu
 	return &resourcesv1.QueryAllocationsByProviderResponse{Allocations: allocations, Pagination: pageRes}, nil
 }
 
+func (q *Querier) Reservation(ctx context.Context, req *resourcesv1.QueryReservationRequest) (*resourcesv1.QueryReservationResponse, error) {
+	if req == nil || req.ReservationId == "" {
+		return nil, status.Error(codes.InvalidArgument, "reservation_id required")
+	}
+	reservation, found := q.GetReservation(sdk.UnwrapSDKContext(ctx), req.ReservationId)
+	if !found {
+		return nil, status.Error(codes.NotFound, "reservation not found")
+	}
+	return &resourcesv1.QueryReservationResponse{Reservation: reservation}, nil
+}
+
+func (q *Querier) ReservationByOrder(ctx context.Context, req *resourcesv1.QueryReservationByOrderRequest) (*resourcesv1.QueryReservationResponse, error) {
+	if req == nil {
+		return nil, status.Error(codes.InvalidArgument, "order ID required")
+	}
+	return q.reservationByLineage(ctx, "order", req.GetOrderId())
+}
+
+func (q *Querier) ReservationByBid(ctx context.Context, req *resourcesv1.QueryReservationByBidRequest) (*resourcesv1.QueryReservationResponse, error) {
+	if req == nil {
+		return nil, status.Error(codes.InvalidArgument, "bid ID required")
+	}
+	return q.reservationByLineage(ctx, "bid", req.GetBidId())
+}
+
+func (q *Querier) ReservationByLease(ctx context.Context, req *resourcesv1.QueryReservationByLeaseRequest) (*resourcesv1.QueryReservationResponse, error) {
+	if req == nil {
+		return nil, status.Error(codes.InvalidArgument, "lease ID required")
+	}
+	return q.reservationByLineage(ctx, "lease", req.GetLeaseId())
+}
+
+func (q *Querier) ReservationByJob(ctx context.Context, req *resourcesv1.QueryReservationByJobRequest) (*resourcesv1.QueryReservationResponse, error) {
+	if req == nil {
+		return nil, status.Error(codes.InvalidArgument, "job ID required")
+	}
+	return q.reservationByLineage(ctx, "job", req.GetJobId())
+}
+
+func (q *Querier) ReservationByConsumer(ctx context.Context, req *resourcesv1.QueryReservationByConsumerRequest) (*resourcesv1.QueryReservationResponse, error) {
+	if req == nil || req.ConsumerType == "" || req.ConsumerId == "" {
+		return nil, status.Error(codes.InvalidArgument, "consumer type and ID required")
+	}
+	reservation, found := q.GetReservationByConsumer(sdk.UnwrapSDKContext(ctx), req.ConsumerType, req.ConsumerId)
+	if !found {
+		return nil, status.Error(codes.NotFound, "reservation not found")
+	}
+	return &resourcesv1.QueryReservationResponse{Reservation: reservation}, nil
+}
+
+func (q *Querier) ReservationsByProvider(ctx context.Context, req *resourcesv1.QueryReservationsByProviderRequest) (*resourcesv1.QueryReservationsResponse, error) {
+	if req == nil || req.ProviderAddress == "" {
+		return nil, status.Error(codes.InvalidArgument, "provider_address required")
+	}
+	sdkCtx := sdk.UnwrapSDKContext(ctx)
+	store := prefix.NewStore(sdkCtx.KVStore(q.skey), types.ReservationProviderPrefix(req.ProviderAddress))
+	reservations := make([]resourcesv1.Reservation, 0)
+	pageRes, err := sdkquery.Paginate(store, req.Pagination, func(key, _ []byte) error {
+		reservation, found := q.GetReservation(sdkCtx, string(key))
+		if found {
+			reservations = append(reservations, reservation)
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, status.Error(codes.Internal, err.Error())
+	}
+	return &resourcesv1.QueryReservationsResponse{Reservations: reservations, Pagination: pageRes}, nil
+}
+
+func (q *Querier) ReservationLineage(ctx context.Context, req *resourcesv1.QueryReservationLineageRequest) (*resourcesv1.QueryReservationLineageResponse, error) {
+	if req == nil || req.ReservationId == "" {
+		return nil, status.Error(codes.InvalidArgument, "reservation_id required")
+	}
+	sdkCtx := sdk.UnwrapSDKContext(ctx)
+	reservation, found := q.GetReservation(sdkCtx, req.ReservationId)
+	if !found {
+		return nil, status.Error(codes.NotFound, "reservation not found")
+	}
+	store := prefix.NewStore(sdkCtx.KVStore(q.skey), types.ReservationEventPrefix(req.ReservationId))
+	events := make([]resourcesv1.ReservationEvent, 0)
+	pageRes, err := sdkquery.Paginate(store, req.Pagination, func(_ []byte, value []byte) error {
+		var event resourcesv1.ReservationEvent
+		if err := json.Unmarshal(value, &event); err != nil {
+			return err
+		}
+		events = append(events, event)
+		return nil
+	})
+	if err != nil {
+		return nil, status.Error(codes.Internal, err.Error())
+	}
+	return &resourcesv1.QueryReservationLineageResponse{Reservation: reservation, Events: events, Pagination: pageRes}, nil
+}
+
+func (q *Querier) reservationByLineage(ctx context.Context, kind, id string) (*resourcesv1.QueryReservationResponse, error) {
+	if id == "" {
+		return nil, status.Error(codes.InvalidArgument, kind+" ID required")
+	}
+	reservation, found := q.GetReservationByLineage(sdk.UnwrapSDKContext(ctx), kind, id)
+	if !found {
+		return nil, status.Error(codes.NotFound, "reservation not found")
+	}
+	return &resourcesv1.QueryReservationResponse{Reservation: reservation}, nil
+}
+
 // Params returns module params.
 func (q *Querier) Params(ctx context.Context, _ *resourcesv1.QueryParamsRequest) (*resourcesv1.QueryParamsResponse, error) {
 	sdkCtx := sdk.UnwrapSDKContext(ctx)

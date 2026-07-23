@@ -1,4 +1,34 @@
 {
+    "v1.5.0": {
+        "modules": {
+            "added": [],
+            "removed": []
+        },
+        "migrations": {
+            "provider": [{"from": "3", "to": "4"}],
+            "settlement": [{"from": "1", "to": "2"}]
+        }
+    },
+    "v1.4.0": {
+        "modules": {
+            "added": [],
+            "removed": []
+        },
+        "migrations": {
+        }
+    },
+    "v1.6.0": {
+        "modules": {
+            "added": [],
+            "removed": []
+        },
+        "migrations": {
+            "market": [{"from": "7", "to": "8"}],
+            "mktplace": [{"from": "1", "to": "2"}],
+            "resources": [{"from": "1", "to": "2"}],
+            "hpc": [{"from": "1", "to": "2"}]
+        }
+    },
     "v1.3.0": {
         "modules": {
             "added": [],

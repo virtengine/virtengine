@@ -2,6 +2,7 @@ package provider_daemon
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"strconv"
 	"strings"
@@ -22,6 +23,7 @@ import (
 	settlementv1 "github.com/virtengine/virtengine/sdk/go/node/settlement/v1"
 	depositv1 "github.com/virtengine/virtengine/sdk/go/node/types/deposit/v1"
 	hpctypes "github.com/virtengine/virtengine/x/hpc/types"
+	providerkeeper "github.com/virtengine/virtengine/x/provider/keeper"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 )
@@ -41,15 +43,75 @@ type RPCChainClientConfig struct {
 
 // rpcChainClient implements ChainClient using gRPC
 type rpcChainClient struct {
-	config          RPCChainClientConfig
-	grpcConn        *grpc.ClientConn
-	rpcClient       *rpchttp.HTTP
-	hpcQuery        providerHPCQueryClient
-	resourcesQuery  providerResourcesQueryClient
-	providerQuery   providerv1beta4.QueryClient
-	settlementQuery settlementv1.QueryClient
-	authQuery       authtypes.QueryClient
-	storeQuery      providerStoreQueryClient
+	config            RPCChainClientConfig
+	grpcConn          *grpc.ClientConn
+	rpcClient         *rpchttp.HTTP
+	mutationSubmitter *ProviderMutationSubmitter
+	hpcQuery          providerHPCQueryClient
+	resourcesQuery    providerResourcesQueryClient
+	providerQuery     providerv1beta4.QueryClient
+	settlementQuery   settlementv1.QueryClient
+	authQuery         authtypes.QueryClient
+	storeQuery        providerStoreQueryClient
+}
+
+// SetMutationSubmitter installs the only production provider mutation path.
+// It must be started and ready before mutation-producing services are started.
+func (c *rpcChainClient) SetMutationSubmitter(submitter *ProviderMutationSubmitter) {
+	c.mutationSubmitter = submitter
+}
+
+// MutationReadiness exposes typed readiness for daemon health checks.
+func (c *rpcChainClient) MutationReadiness(ctx context.Context) ProviderMutationReadiness {
+	if c == nil || c.mutationSubmitter == nil {
+		return ProviderMutationReadiness{Reason: "provider mutation submitter unavailable"}
+	}
+	return c.mutationSubmitter.Readiness(ctx)
+}
+
+func (c *rpcChainClient) ProviderStoreQueryClient() providerStoreQueryClient {
+	if c == nil {
+		return nil
+	}
+	return c.storeQuery
+}
+
+func (c *rpcChainClient) submitMutation(ctx context.Context, kind ProviderMutationKind, msg sdktypes.Msg) error {
+	if msg == nil {
+		return fmt.Errorf("mutation message is required")
+	}
+	if c == nil || c.mutationSubmitter == nil {
+		return &ProviderMutationError{
+			Op:             "submit",
+			Classification: MutationClassUnavailable,
+			Retryable:      true,
+			Err:            ErrProviderMutationUnavailable,
+		}
+	}
+	_, err := c.mutationSubmitter.Submit(ctx, kind, msg)
+	return err
+}
+
+func (c *rpcChainClient) QueryDomainVerificationRecord(ctx context.Context, providerAddr sdktypes.AccAddress) (*providerkeeper.DomainVerificationRecord, error) {
+	if c == nil || c.storeQuery == nil {
+		return nil, ErrProviderMutationUnavailable
+	}
+	value, err := queryProviderStoreValue(ctx, c.storeQuery, c.config.RequestTimeout, providerkeeper.DomainVerificationKey(providerAddr))
+	if err != nil {
+		return nil, err
+	}
+	if len(value) == 0 {
+		return nil, nil
+	}
+	var record providerkeeper.DomainVerificationRecord
+	if err := json.Unmarshal(value, &record); err != nil {
+		return nil, fmt.Errorf("decode domain verification record: %w", err)
+	}
+	return &record, nil
+}
+
+func (c *rpcChainClient) ConfirmDomainVerification(ctx context.Context, providerAddr sdktypes.AccAddress, proof string) error {
+	return c.submitMutation(ctx, MutationProviderConfirmDomain, providerv1beta4.NewMsgConfirmDomainVerification(providerAddr, proof))
 }
 
 // newRPCChainClient creates a new RPC-based chain client
@@ -290,10 +352,6 @@ func (c *rpcChainClient) GetOpenOrders(ctx context.Context, offeringTypes []stri
 
 // PlaceBid places a bid on an order
 func (c *rpcChainClient) PlaceBid(ctx context.Context, bid *Bid, signature *Signature) error {
-	if c.grpcConn == nil {
-		return fmt.Errorf("grpc endpoint not configured")
-	}
-
 	if bid == nil {
 		return fmt.Errorf("bid cannot be nil")
 	}
@@ -328,20 +386,18 @@ func (c *rpcChainClient) PlaceBid(ctx context.Context, bid *Bid, signature *Sign
 			sdkmath.LegacyNewDecFromInt(priceAmount),
 		),
 		Deposit: depositv1.Deposit{
-			Amount: sdktypes.NewInt64Coin(bid.Currency, 0), // No deposit required for bids
+			Amount:  sdktypes.NewInt64Coin(bid.Currency, 0), // No deposit amount required for bids.
+			Sources: depositv1.Sources{depositv1.SourceBalance},
 		},
 		ResourcesOffer: bid.ResourcesOffer.Dup(),
 	}
 
-	// Send via Msg client
-	msgClient := marketv1beta5.NewMsgClient(c.grpcConn)
-
 	reqCtx, cancel := context.WithTimeout(ctx, c.config.RequestTimeout)
 	defer cancel()
 
-	_, err = msgClient.CreateBid(reqCtx, msg)
+	err = c.submitMutation(reqCtx, MutationMarketCreateBid, msg)
 	if err != nil {
-		return fmt.Errorf("failed to create bid: %w", err)
+		return fmt.Errorf("enqueue create bid: %w", err)
 	}
 
 	return nil
@@ -439,17 +495,13 @@ func (c *rpcChainClient) SubscribeToJobCancellations(ctx context.Context, cluste
 	}
 }
 
-// ReportJobStatus reports job status to chain (best-effort).
+// ReportJobStatus durably submits a job status mutation.
 func (c *rpcChainClient) ReportJobStatus(ctx context.Context, report *HPCStatusReport) error {
 	if report == nil {
-		return nil
-	}
-	if c.grpcConn == nil {
-		return nil
+		return fmt.Errorf("job status report is required")
 	}
 
-	msgClient := hpcv1.NewMsgClient(c.grpcConn)
-	_, err := msgClient.ReportJobStatus(ctx, &hpcv1.MsgReportJobStatus{
+	return c.submitMutation(ctx, MutationHPCReportJobStatus, &hpcv1.MsgReportJobStatus{
 		ProviderAddress: report.ProviderAddress,
 		JobId:           report.VirtEngineJobID,
 		SlurmJobId:      report.SchedulerJobID,
@@ -460,21 +512,14 @@ func (c *rpcChainClient) ReportJobStatus(ctx context.Context, report *HPCStatusR
 		Signature:       report.Signature,
 		SignedTimestamp: report.Timestamp.Unix(),
 	})
-	return err
 }
 
 // SubmitResourceHeartbeat submits a provider resource heartbeat.
 func (c *rpcChainClient) SubmitResourceHeartbeat(ctx context.Context, heartbeat *resourcesv1.MsgProviderHeartbeat) error {
 	if heartbeat == nil {
-		return nil
+		return fmt.Errorf("resource heartbeat is required")
 	}
-	if c.grpcConn == nil {
-		return nil
-	}
-
-	msgClient := resourcesv1.NewMsgClient(c.grpcConn)
-	_, err := msgClient.ProviderHeartbeat(ctx, heartbeat)
-	return err
+	return c.submitMutation(ctx, MutationResourcesHeartbeat, heartbeat)
 }
 
 // GetProviderAllocations queries allocations for a provider.
@@ -493,69 +538,65 @@ func (c *rpcChainClient) GetProviderAllocations(ctx context.Context, provider st
 	return allocations, nil
 }
 
-// SubmitNodeMetadata submits node metadata updates to chain (best-effort).
+// GetProviderReservations queries authoritative reservations for a provider.
+func (c *rpcChainClient) GetProviderReservations(ctx context.Context, provider string) ([]resourcesv1.Reservation, error) {
+	if provider == "" {
+		return nil, nil
+	}
+	client, err := c.providerResourcesQuery()
+	if err != nil {
+		return nil, err
+	}
+	reservations, err := c.queryProviderReservations(ctx, client, provider)
+	if err != nil {
+		return nil, fmt.Errorf("query provider reservations: %w", err)
+	}
+	return reservations, nil
+}
+
+// SubmitNodeMetadata durably submits node metadata updates.
 func (c *rpcChainClient) SubmitNodeMetadata(ctx context.Context, msg *hpcv1.MsgUpdateNodeMetadata) error {
 	if msg == nil {
-		return nil
+		return fmt.Errorf("node metadata is required")
 	}
-	if c.grpcConn == nil {
-		return nil
-	}
-
-	msgClient := hpcv1.NewMsgClient(c.grpcConn)
-	_, err := msgClient.UpdateNodeMetadata(ctx, msg)
-	return err
+	return c.submitMutation(ctx, MutationHPCUpdateNodeMetadata, msg)
 }
 
 // ReportJobAccounting reports job accounting to chain
 func (c *rpcChainClient) ReportJobAccounting(ctx context.Context, jobID string, metrics *HPCSchedulerMetrics) error {
-	if c.grpcConn == nil {
-		return nil // Silently skip if not connected
-	}
-
 	if metrics == nil {
-		return nil
+		return fmt.Errorf("job accounting metrics are required")
+	}
+	if strings.TrimSpace(jobID) == "" {
+		return fmt.Errorf("job ID is required")
 	}
 
-	// Convert metrics to proto format and submit via HPC module
 	protoMetrics := metricsToProto(metrics)
-	msgClient := hpcv1.NewMsgClient(c.grpcConn)
-
 	reqCtx, cancel := context.WithTimeout(ctx, c.config.RequestTimeout)
 	defer cancel()
 
-	// Submit as a job status update with accounting metrics
-	_, err := msgClient.ReportJobStatus(reqCtx, &hpcv1.MsgReportJobStatus{
-		ProviderAddress: "", // Will be set by KeyManager/TxBuilder
+	return c.submitMutation(reqCtx, MutationHPCReportJobStatus, &hpcv1.MsgReportJobStatus{
+		ProviderAddress: c.mutationProviderAddress(),
 		JobId:           jobID,
 		SlurmJobId:      "",
 		State:           hpcv1.JobStateRunning,
 		StatusMessage:   "Accounting update",
 		ExitCode:        0,
 		UsageMetrics:    protoMetrics,
+		SignedTimestamp: time.Now().UTC().Unix(),
 	})
-
-	return err
 }
 
 // SubmitAccountingRecord submits an accounting record
 func (c *rpcChainClient) SubmitAccountingRecord(ctx context.Context, record *hpctypes.HPCAccountingRecord) error {
-	if c.grpcConn == nil {
-		return nil // Silently skip if not connected
-	}
-
 	if record == nil {
-		return nil
+		return fmt.Errorf("accounting record is required")
 	}
-
-	// Convert record metrics to proto format
-	msgClient := hpcv1.NewMsgClient(c.grpcConn)
 
 	reqCtx, cancel := context.WithTimeout(ctx, c.config.RequestTimeout)
 	defer cancel()
 
-	// Submit via job status with usage metrics from record
-	_, err := msgClient.ReportJobStatus(reqCtx, &hpcv1.MsgReportJobStatus{
+	return c.submitMutation(reqCtx, MutationHPCReportJobStatus, &hpcv1.MsgReportJobStatus{
 		ProviderAddress: record.ProviderAddress,
 		JobId:           record.JobID,
 		SlurmJobId:      record.SchedulerJobID,
@@ -572,28 +613,20 @@ func (c *rpcChainClient) SubmitAccountingRecord(ctx context.Context, record *hpc
 			WallClockSeconds: record.UsageMetrics.WallClockSeconds,
 			NodesUsed:        record.UsageMetrics.NodesUsed,
 		},
+		SignedTimestamp: record.CreatedAt.UTC().Unix(),
 	})
-
-	return err
 }
 
 // SubmitUsageSnapshot submits a usage snapshot
 func (c *rpcChainClient) SubmitUsageSnapshot(ctx context.Context, snapshot *hpctypes.HPCUsageSnapshot) error {
-	if c.grpcConn == nil {
-		return nil // Silently skip if not connected
-	}
-
 	if snapshot == nil {
-		return nil
+		return fmt.Errorf("usage snapshot is required")
 	}
-
-	// Submit snapshot via HPC module
-	msgClient := hpcv1.NewMsgClient(c.grpcConn)
 
 	reqCtx, cancel := context.WithTimeout(ctx, c.config.RequestTimeout)
 	defer cancel()
 
-	_, err := msgClient.ReportJobStatus(reqCtx, &hpcv1.MsgReportJobStatus{
+	return c.submitMutation(reqCtx, MutationHPCReportJobStatus, &hpcv1.MsgReportJobStatus{
 		ProviderAddress: snapshot.ProviderAddress,
 		JobId:           snapshot.JobID,
 		SlurmJobId:      snapshot.SchedulerJobID,
@@ -610,9 +643,15 @@ func (c *rpcChainClient) SubmitUsageSnapshot(ctx context.Context, snapshot *hpct
 			WallClockSeconds: snapshot.Metrics.WallClockSeconds,
 			NodesUsed:        snapshot.Metrics.NodesUsed,
 		},
+		SignedTimestamp: snapshot.SnapshotTime.UTC().Unix(),
 	})
+}
 
-	return err
+func (c *rpcChainClient) mutationProviderAddress() string {
+	if c == nil || c.mutationSubmitter == nil {
+		return ""
+	}
+	return c.mutationSubmitter.cfg.ProviderAddress
 }
 
 // GetBillingRules returns billing rules from on-chain state.

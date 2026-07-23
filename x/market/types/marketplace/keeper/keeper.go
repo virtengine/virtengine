@@ -125,6 +125,8 @@ type IKeeper interface {
 	// Codec and store
 	Codec() codec.BinaryCodec
 	StoreKey() storetypes.StoreKey
+	ActivateCanonicalLifecycle(ctx sdk.Context)
+	IsCanonicalLifecycleActive(ctx sdk.Context) bool
 }
 
 // Keeper implements the marketplace keeper
@@ -173,6 +175,14 @@ func (k Keeper) StoreKey() storetypes.StoreKey {
 // GetAuthority returns the module's authority
 func (k Keeper) GetAuthority() string {
 	return k.authority
+}
+
+func (k Keeper) ActivateCanonicalLifecycle(ctx sdk.Context) {
+	ctx.KVStore(k.skey).Set(marketplace.CanonicalLifecycleActivationKey(), []byte{1})
+}
+
+func (k Keeper) IsCanonicalLifecycleActive(ctx sdk.Context) bool {
+	return ctx.KVStore(k.skey).Has(marketplace.CanonicalLifecycleActivationKey())
 }
 
 // IsProvider returns whether the account is a registered provider
@@ -342,6 +352,9 @@ func (k Keeper) GetOfferingsByProvider(ctx sdk.Context, providerAddress string) 
 
 // CreateOrder creates a new order with identity and MFA gating checks
 func (k Keeper) CreateOrder(ctx sdk.Context, order *marketplace.Order) error {
+	if k.IsCanonicalLifecycleActive(ctx) {
+		return marketplace.ErrLifecycleDeprecated
+	}
 	if err := order.Validate(); err != nil {
 		return err
 	}
@@ -440,6 +453,9 @@ func (k Keeper) GetOrder(ctx sdk.Context, id marketplace.OrderID) (*marketplace.
 
 // UpdateOrder updates an order
 func (k Keeper) UpdateOrder(ctx sdk.Context, order *marketplace.Order) error {
+	if k.IsCanonicalLifecycleActive(ctx) {
+		return marketplace.ErrLifecycleDeprecated
+	}
 	if err := order.Validate(); err != nil {
 		return err
 	}
@@ -507,6 +523,9 @@ func (k Keeper) GetOrdersByOffering(ctx sdk.Context, offeringID marketplace.Offe
 
 // CreateBid creates a new bid
 func (k Keeper) CreateBid(ctx sdk.Context, bid *marketplace.MarketplaceBid) error {
+	if k.IsCanonicalLifecycleActive(ctx) {
+		return marketplace.ErrLifecycleDeprecated
+	}
 	if err := bid.ID.Validate(); err != nil {
 		return err
 	}
@@ -575,6 +594,9 @@ func (k Keeper) GetBid(ctx sdk.Context, id marketplace.BidID) (*marketplace.Mark
 
 // AcceptBid accepts a bid and creates an allocation
 func (k Keeper) AcceptBid(ctx sdk.Context, id marketplace.BidID) (*marketplace.Allocation, error) {
+	if k.IsCanonicalLifecycleActive(ctx) {
+		return nil, marketplace.ErrLifecycleDeprecated
+	}
 	bid, found := k.GetBid(ctx, id)
 	if !found {
 		return nil, marketplace.ErrBidNotFound
@@ -670,6 +692,9 @@ func (k Keeper) WithBidsForOrder(ctx sdk.Context, orderID marketplace.OrderID, f
 
 // CreateAllocation creates a new allocation
 func (k Keeper) CreateAllocation(ctx sdk.Context, allocation *marketplace.Allocation) error {
+	if k.IsCanonicalLifecycleActive(ctx) {
+		return marketplace.ErrLifecycleDeprecated
+	}
 	if err := allocation.Validate(); err != nil {
 		return err
 	}
@@ -716,6 +741,9 @@ func (k Keeper) GetAllocation(ctx sdk.Context, id marketplace.AllocationID) (*ma
 
 // UpdateAllocation updates an allocation
 func (k Keeper) UpdateAllocation(ctx sdk.Context, allocation *marketplace.Allocation) error {
+	if k.IsCanonicalLifecycleActive(ctx) {
+		return marketplace.ErrLifecycleDeprecated
+	}
 	if err := allocation.Validate(); err != nil {
 		return err
 	}

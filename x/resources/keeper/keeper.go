@@ -14,10 +14,19 @@ import (
 
 // Keeper maintains the resources module state.
 type Keeper struct {
-	cdc        codec.BinaryCodec
-	skey       storetypes.StoreKey
-	paramSpace paramtypes.Subspace
-	authority  string
+	cdc               codec.BinaryCodec
+	skey              storetypes.StoreKey
+	paramSpace        paramtypes.Subspace
+	authority         string
+	eligibilityKeeper EligibilityKeeper
+}
+
+// EligibilityKeeper exposes only committed-state provider eligibility reads.
+type EligibilityKeeper interface {
+	IsProviderEligible(ctx sdk.Context, provider sdk.AccAddress) bool
+	HasCurrentBenchmark(ctx sdk.Context, provider string) bool
+	HasCurrentAttestation(ctx sdk.Context, provider string) bool
+	HasSufficientCollateral(ctx sdk.Context, provider, collateralID string) bool
 }
 
 // NewKeeper creates a new resources keeper.
@@ -32,6 +41,11 @@ func NewKeeper(cdc codec.BinaryCodec, skey storetypes.StoreKey, paramSpace param
 		paramSpace: paramSpace,
 		authority:  authority,
 	}
+}
+
+// SetEligibilityKeeper installs mandatory committed-state reservation checks.
+func (k *Keeper) SetEligibilityKeeper(eligibility EligibilityKeeper) {
+	k.eligibilityKeeper = eligibility
 }
 
 // Codec returns the codec.

@@ -15,6 +15,7 @@ func TestUpgradesName(t *testing.T) {
 	upgrades := utypes.GetUpgradesList()
 	require.NotNil(t, upgrades)
 	require.Contains(t, upgrades, utypes.ConsensusAdmissionUpgradeName)
+	require.Contains(t, upgrades, utypes.CanonicalReservationsUpgradeName)
 
 	for name := range upgrades {
 		// NOTE this is the only exception to the upgrade name

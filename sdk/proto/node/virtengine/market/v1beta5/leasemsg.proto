@@ -23,7 +23,9 @@ message MsgCreateLease {
 }
 
 // MsgCreateLeaseResponse is the response from creating a lease.
-message MsgCreateLeaseResponse {}
+message MsgCreateLeaseResponse {
+  string reservation_id = 1 [(gogoproto.jsontag) = "reservation_id", (gogoproto.moretags) = "yaml:\"reservation_id\""];
+}
 
 // MsgWithdrawLease defines an SDK message for withdrawing lease funds.
 message MsgWithdrawLease {

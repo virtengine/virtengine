@@ -33,6 +33,7 @@ type providerHPCQueryClient interface {
 
 type providerResourcesQueryClient interface {
 	AllocationsByProvider(context.Context, *resourcesv1.QueryAllocationsByProviderRequest, ...grpc.CallOption) (*resourcesv1.QueryAllocationsByProviderResponse, error)
+	ReservationsByProvider(context.Context, *resourcesv1.QueryReservationsByProviderRequest, ...grpc.CallOption) (*resourcesv1.QueryReservationsResponse, error)
 }
 
 type providerStoreQueryClient interface {
@@ -199,6 +200,35 @@ func (c *rpcChainClient) queryProviderAllocations(
 	}
 
 	return allocations, nil
+}
+
+func (c *rpcChainClient) queryProviderReservations(
+	ctx context.Context,
+	client providerResourcesQueryClient,
+	providerAddress string,
+) ([]resourcesv1.Reservation, error) {
+	nextKey := []byte(nil)
+	reservations := make([]resourcesv1.Reservation, 0)
+	for {
+		reqCtx, cancel := context.WithTimeout(ctx, c.config.RequestTimeout)
+		resp, err := client.ReservationsByProvider(reqCtx, &resourcesv1.QueryReservationsByProviderRequest{
+			ProviderAddress: providerAddress,
+			Pagination:      &query.PageRequest{Key: nextKey, Limit: defaultHPCPollPageLimit},
+		})
+		cancel()
+		if err != nil {
+			return nil, err
+		}
+		for _, reservation := range resp.GetReservations() {
+			if reservation.GetProviderAddress() == providerAddress {
+				reservations = append(reservations, reservation)
+			}
+		}
+		if resp.GetPagination() == nil || len(resp.GetPagination().GetNextKey()) == 0 {
+			return reservations, nil
+		}
+		nextKey = resp.GetPagination().GetNextKey()
+	}
 }
 
 func (c *rpcChainClient) queryHPCStoreValue(

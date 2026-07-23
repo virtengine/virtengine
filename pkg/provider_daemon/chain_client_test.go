@@ -3,7 +3,7 @@ package provider_daemon
 import (
 	"context"
 	"encoding/json"
-	"net"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -24,8 +24,6 @@ import (
 	resbasev1beta4 "github.com/virtengine/virtengine/sdk/go/node/types/resources/v1beta4"
 	hpctypes "github.com/virtengine/virtengine/x/hpc/types"
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials/insecure"
-	"google.golang.org/grpc/test/bufconn"
 )
 
 type fakeProviderHPCQueryClient struct {
@@ -61,8 +59,21 @@ func (f *fakeProviderHPCQueryClient) OfferingsByCluster(
 }
 
 type fakeProviderResourcesQueryClient struct {
-	allocationsByProvider map[string][]resourcesv1.ResourceAllocation
-	err                   error
+	allocationsByProvider  map[string][]resourcesv1.ResourceAllocation
+	reservationsByProvider map[string][]resourcesv1.Reservation
+	err                    error
+}
+
+func (f *fakeProviderResourcesQueryClient) ReservationsByProvider(
+	_ context.Context,
+	req *resourcesv1.QueryReservationsByProviderRequest,
+	_ ...grpc.CallOption,
+) (*resourcesv1.QueryReservationsResponse, error) {
+	if f.err != nil {
+		return nil, f.err
+	}
+	reservations := append([]resourcesv1.Reservation(nil), f.reservationsByProvider[req.GetProviderAddress()]...)
+	return &resourcesv1.QueryReservationsResponse{Reservations: reservations}, nil
 }
 
 func (f *fakeProviderResourcesQueryClient) AllocationsByProvider(
@@ -264,7 +275,7 @@ func TestPlaceBid_NoConnection(t *testing.T) {
 	err := client.PlaceBid(context.Background(), bid, nil)
 
 	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "grpc endpoint not configured")
+	assert.ErrorIs(t, err, ErrProviderMutationUnavailable)
 }
 
 func TestGetProviderBids_NoConnection(t *testing.T) {
@@ -650,36 +661,16 @@ func TestOrderFromProto_PreservesSchedulingAndBillingFields(t *testing.T) {
 }
 
 func TestPlaceBid_PreservesResourcesOffer(t *testing.T) {
-	listener := bufconn.Listen(1024 * 1024)
-	server := grpc.NewServer()
-	msgServer := &captureMarketMsgServer{}
-	marketv1beta5.RegisterMsgServer(server, msgServer)
-	go func() {
-		_ = server.Serve(listener)
-	}()
-	defer server.Stop()
-
-	conn, err := grpc.NewClient(
-		"passthrough:///bufnet",
-		grpc.WithContextDialer(func(ctx context.Context, _ string) (net.Conn, error) {
-			return listener.DialContext(ctx)
-		}),
-		grpc.WithTransportCredentials(insecure.NewCredentials()),
-	)
-	require.NoError(t, err)
-	conn.Connect()
-	defer conn.Close()
-
-	client := &rpcChainClient{
-		config: RPCChainClientConfig{
-			RequestTimeout: 5 * time.Second,
-		},
-		grpcConn: conn,
-	}
+	chain := newMutationChainFake()
+	submitter, _ := newMutationSubmitterForTest(t, chain, filepath.Join(t.TempDir(), "queue.json"))
+	client := &rpcChainClient{config: RPCChainClientConfig{RequestTimeout: 5 * time.Second}, mutationSubmitter: submitter}
+	ownerBytes := make([]byte, 20)
+	ownerBytes[19] = 1
+	owner := sdk.AccAddress(ownerBytes).String()
 
 	bid := &Bid{
-		OrderID:         "ve1customer/42/7/3",
-		ProviderAddress: "ve1provider",
+		OrderID:         owner + "/42/7/3",
+		ProviderAddress: submitter.cfg.ProviderAddress,
 		Price:           "25500000",
 		Currency:        "uvirt",
 		ResourcesOffer: marketv1beta5.ResourcesOffer{
@@ -701,14 +692,22 @@ func TestPlaceBid_PreservesResourcesOffer(t *testing.T) {
 		},
 	}
 
-	err = client.PlaceBid(context.Background(), bid, nil)
+	err := client.PlaceBid(context.Background(), bid, nil)
 	require.NoError(t, err)
-	require.NotNil(t, msgServer.lastCreateBid)
-	require.Len(t, msgServer.lastCreateBid.ResourcesOffer, 1)
-	assert.Equal(t, uint32(7), msgServer.lastCreateBid.ResourcesOffer[0].Resources.ID)
-	assert.Equal(t, uint32(3), msgServer.lastCreateBid.ResourcesOffer[0].Count)
-	assert.Equal(t, uint64(8), msgServer.lastCreateBid.ResourcesOffer[0].Resources.GetCPU().GetUnits().Value())
-	assert.Equal(t, uint64(2), msgServer.lastCreateBid.ResourcesOffer[0].Resources.GetGPU().GetUnits().Value())
+	chain.mu.Lock()
+	require.Len(t, chain.broadcasts, 1)
+	txBytes := append([]byte(nil), chain.broadcasts[0]...)
+	chain.mu.Unlock()
+	tx, err := submitter.encCfg.TxConfig.TxDecoder()(txBytes)
+	require.NoError(t, err)
+	require.Len(t, tx.GetMsgs(), 1)
+	msg, ok := tx.GetMsgs()[0].(*marketv1beta5.MsgCreateBid)
+	require.True(t, ok)
+	require.Len(t, msg.ResourcesOffer, 1)
+	assert.Equal(t, uint32(7), msg.ResourcesOffer[0].Resources.ID)
+	assert.Equal(t, uint32(3), msg.ResourcesOffer[0].Count)
+	assert.Equal(t, uint64(8), msg.ResourcesOffer[0].Resources.GetCPU().GetUnits().Value())
+	assert.Equal(t, uint64(2), msg.ResourcesOffer[0].Resources.GetGPU().GetUnits().Value())
 }
 
 func TestReportJobAccounting_NoConnection(t *testing.T) {
@@ -725,7 +724,7 @@ func TestReportJobAccounting_NoConnection(t *testing.T) {
 	}
 
 	err := client.ReportJobAccounting(context.Background(), "job-123", metrics)
-	assert.NoError(t, err)
+	assert.ErrorIs(t, err, ErrProviderMutationUnavailable)
 }
 
 func TestSubmitAccountingRecord_NilRecord(t *testing.T) {
@@ -736,7 +735,7 @@ func TestSubmitAccountingRecord_NilRecord(t *testing.T) {
 	}
 
 	err := client.SubmitAccountingRecord(context.Background(), nil)
-	assert.NoError(t, err)
+	assert.Error(t, err)
 }
 
 func TestSubmitUsageSnapshot_NilSnapshot(t *testing.T) {
@@ -747,7 +746,7 @@ func TestSubmitUsageSnapshot_NilSnapshot(t *testing.T) {
 	}
 
 	err := client.SubmitUsageSnapshot(context.Background(), nil)
-	assert.NoError(t, err)
+	assert.Error(t, err)
 }
 
 func TestClose(t *testing.T) {
@@ -820,14 +819,4 @@ func assertDecStringEqual(t *testing.T, expected, actual string) {
 	require.NoError(t, err)
 
 	assert.Truef(t, expectedDec.Equal(actualDec), "expected %s, got %s", expectedDec.String(), actualDec.String())
-}
-
-type captureMarketMsgServer struct {
-	marketv1beta5.UnimplementedMsgServer
-	lastCreateBid *marketv1beta5.MsgCreateBid
-}
-
-func (s *captureMarketMsgServer) CreateBid(_ context.Context, req *marketv1beta5.MsgCreateBid) (*marketv1beta5.MsgCreateBidResponse, error) {
-	s.lastCreateBid = req
-	return &marketv1beta5.MsgCreateBidResponse{}, nil
 }

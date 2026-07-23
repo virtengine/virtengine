@@ -13,6 +13,7 @@ import (
 	"sync"
 	"time"
 
+	cosmosed25519 "github.com/cosmos/cosmos-sdk/crypto/keys/ed25519"
 	providertypes "github.com/virtengine/virtengine/sdk/go/node/provider/v1beta4"
 )
 
@@ -150,6 +151,27 @@ type KeyManager struct {
 	activeID string
 	mu       sync.RWMutex
 	locked   bool
+}
+
+// ManagedKeyAccountAddress returns the Cosmos account address controlled by
+// the managed SDK signing key.
+func ManagedKeyAccountAddress(key *ManagedKey) (string, error) {
+	if key == nil {
+		return "", ErrKeyNotFound
+	}
+	publicKey, err := hex.DecodeString(key.PublicKey)
+	if err != nil {
+		return "", fmt.Errorf("decode managed public key: %w", err)
+	}
+	switch key.Algorithm {
+	case string(HSMKeyTypeEd25519):
+		if len(publicKey) != ed25519.PublicKeySize {
+			return "", fmt.Errorf("invalid ed25519 public key size %d", len(publicKey))
+		}
+		return (&cosmosed25519.PubKey{Key: publicKey}).Address().String(), nil
+	default:
+		return "", fmt.Errorf("unsupported SDK signer algorithm %s", key.Algorithm)
+	}
 }
 
 // NewKeyManager creates a new key manager with the given configuration

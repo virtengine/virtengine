@@ -56,4 +56,5 @@ message Order {
   ];
 
   int64 created_at = 4;
+  string reservation_id = 5 [(gogoproto.jsontag) = "reservation_id,omitempty", (gogoproto.moretags) = "yaml:\"reservation_id\""];
 }

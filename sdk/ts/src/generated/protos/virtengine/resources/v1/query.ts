@@ -10,7 +10,15 @@ import type { DeepPartial, MessageFns } from "../../../../../encoding/typeEncodi
 import { BinaryReader, BinaryWriter } from "@bufbuild/protobuf/wire";
 import Long from "long";
 import { PageRequest, PageResponse } from "../../../cosmos/base/query/v1beta1/pagination.ts";
-import { AllocationEvent, Params, ResourceAllocation, ResourceInventory, ResourceRequest } from "./types.ts";
+import {
+  AllocationEvent,
+  Params,
+  Reservation,
+  ReservationEvent,
+  ResourceAllocation,
+  ResourceInventory,
+  ResourceRequest,
+} from "./types.ts";
 
 export interface QueryAvailableResourcesRequest {
   request: ResourceRequest | undefined;
@@ -53,6 +61,54 @@ export interface QueryAllocationsByProviderRequest {
 export interface QueryAllocationsByProviderResponse {
   allocations: ResourceAllocation[];
   pagination: PageResponse | undefined;
+}
+
+export interface QueryReservationRequest {
+  reservationId: string;
+}
+
+export interface QueryReservationByOrderRequest {
+  orderId: string;
+}
+
+export interface QueryReservationByBidRequest {
+  bidId: string;
+}
+
+export interface QueryReservationByLeaseRequest {
+  leaseId: string;
+}
+
+export interface QueryReservationByJobRequest {
+  jobId: string;
+}
+
+export interface QueryReservationByConsumerRequest {
+  consumerType: string;
+  consumerId: string;
+}
+
+export interface QueryReservationsByProviderRequest {
+  providerAddress: string;
+  pagination: PageRequest | undefined;
+}
+
+export interface QueryReservationResponse {
+  reservation: Reservation | undefined;
+}
+
+export interface QueryReservationsResponse {
+  reservations: Reservation[];
+  pagination: PageResponse | undefined;
+}
+
+export interface QueryReservationLineageRequest {
+  reservationId: string;
+}
+
+export interface QueryReservationLineageResponse {
+  reservation: Reservation | undefined;
+  events: ReservationEvent[];
 }
 
 export interface QueryParamsRequest {
@@ -736,6 +792,739 @@ export const QueryAllocationsByProviderResponse: MessageFns<
     message.pagination = (object.pagination !== undefined && object.pagination !== null)
       ? PageResponse.fromPartial(object.pagination)
       : undefined;
+    return message;
+  },
+};
+
+function createBaseQueryReservationRequest(): QueryReservationRequest {
+  return { reservationId: "" };
+}
+
+export const QueryReservationRequest: MessageFns<
+  QueryReservationRequest,
+  "virtengine.resources.v1.QueryReservationRequest"
+> = {
+  $type: "virtengine.resources.v1.QueryReservationRequest" as const,
+
+  encode(message: QueryReservationRequest, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.reservationId !== "") {
+      writer.uint32(10).string(message.reservationId);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): QueryReservationRequest {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseQueryReservationRequest();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.reservationId = reader.string();
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): QueryReservationRequest {
+    return { reservationId: isSet(object.reservation_id) ? globalThis.String(object.reservation_id) : "" };
+  },
+
+  toJSON(message: QueryReservationRequest): unknown {
+    const obj: any = {};
+    if (message.reservationId !== "") {
+      obj.reservation_id = message.reservationId;
+    }
+    return obj;
+  },
+  fromPartial(object: DeepPartial<QueryReservationRequest>): QueryReservationRequest {
+    const message = createBaseQueryReservationRequest();
+    message.reservationId = object.reservationId ?? "";
+    return message;
+  },
+};
+
+function createBaseQueryReservationByOrderRequest(): QueryReservationByOrderRequest {
+  return { orderId: "" };
+}
+
+export const QueryReservationByOrderRequest: MessageFns<
+  QueryReservationByOrderRequest,
+  "virtengine.resources.v1.QueryReservationByOrderRequest"
+> = {
+  $type: "virtengine.resources.v1.QueryReservationByOrderRequest" as const,
+
+  encode(message: QueryReservationByOrderRequest, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.orderId !== "") {
+      writer.uint32(10).string(message.orderId);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): QueryReservationByOrderRequest {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseQueryReservationByOrderRequest();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.orderId = reader.string();
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): QueryReservationByOrderRequest {
+    return { orderId: isSet(object.order_id) ? globalThis.String(object.order_id) : "" };
+  },
+
+  toJSON(message: QueryReservationByOrderRequest): unknown {
+    const obj: any = {};
+    if (message.orderId !== "") {
+      obj.order_id = message.orderId;
+    }
+    return obj;
+  },
+  fromPartial(object: DeepPartial<QueryReservationByOrderRequest>): QueryReservationByOrderRequest {
+    const message = createBaseQueryReservationByOrderRequest();
+    message.orderId = object.orderId ?? "";
+    return message;
+  },
+};
+
+function createBaseQueryReservationByBidRequest(): QueryReservationByBidRequest {
+  return { bidId: "" };
+}
+
+export const QueryReservationByBidRequest: MessageFns<
+  QueryReservationByBidRequest,
+  "virtengine.resources.v1.QueryReservationByBidRequest"
+> = {
+  $type: "virtengine.resources.v1.QueryReservationByBidRequest" as const,
+
+  encode(message: QueryReservationByBidRequest, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.bidId !== "") {
+      writer.uint32(10).string(message.bidId);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): QueryReservationByBidRequest {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseQueryReservationByBidRequest();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.bidId = reader.string();
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): QueryReservationByBidRequest {
+    return { bidId: isSet(object.bid_id) ? globalThis.String(object.bid_id) : "" };
+  },
+
+  toJSON(message: QueryReservationByBidRequest): unknown {
+    const obj: any = {};
+    if (message.bidId !== "") {
+      obj.bid_id = message.bidId;
+    }
+    return obj;
+  },
+  fromPartial(object: DeepPartial<QueryReservationByBidRequest>): QueryReservationByBidRequest {
+    const message = createBaseQueryReservationByBidRequest();
+    message.bidId = object.bidId ?? "";
+    return message;
+  },
+};
+
+function createBaseQueryReservationByLeaseRequest(): QueryReservationByLeaseRequest {
+  return { leaseId: "" };
+}
+
+export const QueryReservationByLeaseRequest: MessageFns<
+  QueryReservationByLeaseRequest,
+  "virtengine.resources.v1.QueryReservationByLeaseRequest"
+> = {
+  $type: "virtengine.resources.v1.QueryReservationByLeaseRequest" as const,
+
+  encode(message: QueryReservationByLeaseRequest, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.leaseId !== "") {
+      writer.uint32(10).string(message.leaseId);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): QueryReservationByLeaseRequest {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseQueryReservationByLeaseRequest();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.leaseId = reader.string();
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): QueryReservationByLeaseRequest {
+    return { leaseId: isSet(object.lease_id) ? globalThis.String(object.lease_id) : "" };
+  },
+
+  toJSON(message: QueryReservationByLeaseRequest): unknown {
+    const obj: any = {};
+    if (message.leaseId !== "") {
+      obj.lease_id = message.leaseId;
+    }
+    return obj;
+  },
+  fromPartial(object: DeepPartial<QueryReservationByLeaseRequest>): QueryReservationByLeaseRequest {
+    const message = createBaseQueryReservationByLeaseRequest();
+    message.leaseId = object.leaseId ?? "";
+    return message;
+  },
+};
+
+function createBaseQueryReservationByJobRequest(): QueryReservationByJobRequest {
+  return { jobId: "" };
+}
+
+export const QueryReservationByJobRequest: MessageFns<
+  QueryReservationByJobRequest,
+  "virtengine.resources.v1.QueryReservationByJobRequest"
+> = {
+  $type: "virtengine.resources.v1.QueryReservationByJobRequest" as const,
+
+  encode(message: QueryReservationByJobRequest, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.jobId !== "") {
+      writer.uint32(10).string(message.jobId);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): QueryReservationByJobRequest {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseQueryReservationByJobRequest();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.jobId = reader.string();
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): QueryReservationByJobRequest {
+    return { jobId: isSet(object.job_id) ? globalThis.String(object.job_id) : "" };
+  },
+
+  toJSON(message: QueryReservationByJobRequest): unknown {
+    const obj: any = {};
+    if (message.jobId !== "") {
+      obj.job_id = message.jobId;
+    }
+    return obj;
+  },
+  fromPartial(object: DeepPartial<QueryReservationByJobRequest>): QueryReservationByJobRequest {
+    const message = createBaseQueryReservationByJobRequest();
+    message.jobId = object.jobId ?? "";
+    return message;
+  },
+};
+
+function createBaseQueryReservationByConsumerRequest(): QueryReservationByConsumerRequest {
+  return { consumerType: "", consumerId: "" };
+}
+
+export const QueryReservationByConsumerRequest: MessageFns<
+  QueryReservationByConsumerRequest,
+  "virtengine.resources.v1.QueryReservationByConsumerRequest"
+> = {
+  $type: "virtengine.resources.v1.QueryReservationByConsumerRequest" as const,
+
+  encode(message: QueryReservationByConsumerRequest, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.consumerType !== "") {
+      writer.uint32(10).string(message.consumerType);
+    }
+    if (message.consumerId !== "") {
+      writer.uint32(18).string(message.consumerId);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): QueryReservationByConsumerRequest {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseQueryReservationByConsumerRequest();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.consumerType = reader.string();
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.consumerId = reader.string();
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): QueryReservationByConsumerRequest {
+    return {
+      consumerType: isSet(object.consumer_type) ? globalThis.String(object.consumer_type) : "",
+      consumerId: isSet(object.consumer_id) ? globalThis.String(object.consumer_id) : "",
+    };
+  },
+
+  toJSON(message: QueryReservationByConsumerRequest): unknown {
+    const obj: any = {};
+    if (message.consumerType !== "") {
+      obj.consumer_type = message.consumerType;
+    }
+    if (message.consumerId !== "") {
+      obj.consumer_id = message.consumerId;
+    }
+    return obj;
+  },
+  fromPartial(object: DeepPartial<QueryReservationByConsumerRequest>): QueryReservationByConsumerRequest {
+    const message = createBaseQueryReservationByConsumerRequest();
+    message.consumerType = object.consumerType ?? "";
+    message.consumerId = object.consumerId ?? "";
+    return message;
+  },
+};
+
+function createBaseQueryReservationsByProviderRequest(): QueryReservationsByProviderRequest {
+  return { providerAddress: "", pagination: undefined };
+}
+
+export const QueryReservationsByProviderRequest: MessageFns<
+  QueryReservationsByProviderRequest,
+  "virtengine.resources.v1.QueryReservationsByProviderRequest"
+> = {
+  $type: "virtengine.resources.v1.QueryReservationsByProviderRequest" as const,
+
+  encode(message: QueryReservationsByProviderRequest, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.providerAddress !== "") {
+      writer.uint32(10).string(message.providerAddress);
+    }
+    if (message.pagination !== undefined) {
+      PageRequest.encode(message.pagination, writer.uint32(18).fork()).join();
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): QueryReservationsByProviderRequest {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseQueryReservationsByProviderRequest();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.providerAddress = reader.string();
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.pagination = PageRequest.decode(reader, reader.uint32());
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): QueryReservationsByProviderRequest {
+    return {
+      providerAddress: isSet(object.provider_address) ? globalThis.String(object.provider_address) : "",
+      pagination: isSet(object.pagination) ? PageRequest.fromJSON(object.pagination) : undefined,
+    };
+  },
+
+  toJSON(message: QueryReservationsByProviderRequest): unknown {
+    const obj: any = {};
+    if (message.providerAddress !== "") {
+      obj.provider_address = message.providerAddress;
+    }
+    if (message.pagination !== undefined) {
+      obj.pagination = PageRequest.toJSON(message.pagination);
+    }
+    return obj;
+  },
+  fromPartial(object: DeepPartial<QueryReservationsByProviderRequest>): QueryReservationsByProviderRequest {
+    const message = createBaseQueryReservationsByProviderRequest();
+    message.providerAddress = object.providerAddress ?? "";
+    message.pagination = (object.pagination !== undefined && object.pagination !== null)
+      ? PageRequest.fromPartial(object.pagination)
+      : undefined;
+    return message;
+  },
+};
+
+function createBaseQueryReservationResponse(): QueryReservationResponse {
+  return { reservation: undefined };
+}
+
+export const QueryReservationResponse: MessageFns<
+  QueryReservationResponse,
+  "virtengine.resources.v1.QueryReservationResponse"
+> = {
+  $type: "virtengine.resources.v1.QueryReservationResponse" as const,
+
+  encode(message: QueryReservationResponse, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.reservation !== undefined) {
+      Reservation.encode(message.reservation, writer.uint32(10).fork()).join();
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): QueryReservationResponse {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseQueryReservationResponse();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.reservation = Reservation.decode(reader, reader.uint32());
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): QueryReservationResponse {
+    return { reservation: isSet(object.reservation) ? Reservation.fromJSON(object.reservation) : undefined };
+  },
+
+  toJSON(message: QueryReservationResponse): unknown {
+    const obj: any = {};
+    if (message.reservation !== undefined) {
+      obj.reservation = Reservation.toJSON(message.reservation);
+    }
+    return obj;
+  },
+  fromPartial(object: DeepPartial<QueryReservationResponse>): QueryReservationResponse {
+    const message = createBaseQueryReservationResponse();
+    message.reservation = (object.reservation !== undefined && object.reservation !== null)
+      ? Reservation.fromPartial(object.reservation)
+      : undefined;
+    return message;
+  },
+};
+
+function createBaseQueryReservationsResponse(): QueryReservationsResponse {
+  return { reservations: [], pagination: undefined };
+}
+
+export const QueryReservationsResponse: MessageFns<
+  QueryReservationsResponse,
+  "virtengine.resources.v1.QueryReservationsResponse"
+> = {
+  $type: "virtengine.resources.v1.QueryReservationsResponse" as const,
+
+  encode(message: QueryReservationsResponse, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    for (const v of message.reservations) {
+      Reservation.encode(v!, writer.uint32(10).fork()).join();
+    }
+    if (message.pagination !== undefined) {
+      PageResponse.encode(message.pagination, writer.uint32(18).fork()).join();
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): QueryReservationsResponse {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseQueryReservationsResponse();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.reservations.push(Reservation.decode(reader, reader.uint32()));
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.pagination = PageResponse.decode(reader, reader.uint32());
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): QueryReservationsResponse {
+    return {
+      reservations: globalThis.Array.isArray(object?.reservations)
+        ? object.reservations.map((e: any) => Reservation.fromJSON(e))
+        : [],
+      pagination: isSet(object.pagination) ? PageResponse.fromJSON(object.pagination) : undefined,
+    };
+  },
+
+  toJSON(message: QueryReservationsResponse): unknown {
+    const obj: any = {};
+    if (message.reservations?.length) {
+      obj.reservations = message.reservations.map((e) => Reservation.toJSON(e));
+    }
+    if (message.pagination !== undefined) {
+      obj.pagination = PageResponse.toJSON(message.pagination);
+    }
+    return obj;
+  },
+  fromPartial(object: DeepPartial<QueryReservationsResponse>): QueryReservationsResponse {
+    const message = createBaseQueryReservationsResponse();
+    message.reservations = object.reservations?.map((e) => Reservation.fromPartial(e)) || [];
+    message.pagination = (object.pagination !== undefined && object.pagination !== null)
+      ? PageResponse.fromPartial(object.pagination)
+      : undefined;
+    return message;
+  },
+};
+
+function createBaseQueryReservationLineageRequest(): QueryReservationLineageRequest {
+  return { reservationId: "" };
+}
+
+export const QueryReservationLineageRequest: MessageFns<
+  QueryReservationLineageRequest,
+  "virtengine.resources.v1.QueryReservationLineageRequest"
+> = {
+  $type: "virtengine.resources.v1.QueryReservationLineageRequest" as const,
+
+  encode(message: QueryReservationLineageRequest, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.reservationId !== "") {
+      writer.uint32(10).string(message.reservationId);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): QueryReservationLineageRequest {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseQueryReservationLineageRequest();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.reservationId = reader.string();
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): QueryReservationLineageRequest {
+    return { reservationId: isSet(object.reservation_id) ? globalThis.String(object.reservation_id) : "" };
+  },
+
+  toJSON(message: QueryReservationLineageRequest): unknown {
+    const obj: any = {};
+    if (message.reservationId !== "") {
+      obj.reservation_id = message.reservationId;
+    }
+    return obj;
+  },
+  fromPartial(object: DeepPartial<QueryReservationLineageRequest>): QueryReservationLineageRequest {
+    const message = createBaseQueryReservationLineageRequest();
+    message.reservationId = object.reservationId ?? "";
+    return message;
+  },
+};
+
+function createBaseQueryReservationLineageResponse(): QueryReservationLineageResponse {
+  return { reservation: undefined, events: [] };
+}
+
+export const QueryReservationLineageResponse: MessageFns<
+  QueryReservationLineageResponse,
+  "virtengine.resources.v1.QueryReservationLineageResponse"
+> = {
+  $type: "virtengine.resources.v1.QueryReservationLineageResponse" as const,
+
+  encode(message: QueryReservationLineageResponse, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.reservation !== undefined) {
+      Reservation.encode(message.reservation, writer.uint32(10).fork()).join();
+    }
+    for (const v of message.events) {
+      ReservationEvent.encode(v!, writer.uint32(18).fork()).join();
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): QueryReservationLineageResponse {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseQueryReservationLineageResponse();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.reservation = Reservation.decode(reader, reader.uint32());
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.events.push(ReservationEvent.decode(reader, reader.uint32()));
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): QueryReservationLineageResponse {
+    return {
+      reservation: isSet(object.reservation) ? Reservation.fromJSON(object.reservation) : undefined,
+      events: globalThis.Array.isArray(object?.events)
+        ? object.events.map((e: any) => ReservationEvent.fromJSON(e))
+        : [],
+    };
+  },
+
+  toJSON(message: QueryReservationLineageResponse): unknown {
+    const obj: any = {};
+    if (message.reservation !== undefined) {
+      obj.reservation = Reservation.toJSON(message.reservation);
+    }
+    if (message.events?.length) {
+      obj.events = message.events.map((e) => ReservationEvent.toJSON(e));
+    }
+    return obj;
+  },
+  fromPartial(object: DeepPartial<QueryReservationLineageResponse>): QueryReservationLineageResponse {
+    const message = createBaseQueryReservationLineageResponse();
+    message.reservation = (object.reservation !== undefined && object.reservation !== null)
+      ? Reservation.fromPartial(object.reservation)
+      : undefined;
+    message.events = object.events?.map((e) => ReservationEvent.fromPartial(e)) || [];
     return message;
   },
 };

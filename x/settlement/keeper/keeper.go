@@ -3,9 +3,11 @@ package keeper
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
 	"encoding/binary"
 	"encoding/json"
 	"fmt"
+	"sort"
 	"time"
 
 	"cosmossdk.io/log"
@@ -641,16 +643,20 @@ func (k Keeper) SetUsageRecord(ctx sdk.Context, usage types.UsageRecord) error {
 	}
 
 	store := ctx.KVStore(k.skey)
-	key := types.UsageRecordKey(usage.UsageID)
-	if existingBz := store.Get(key); existingBz != nil {
-		var existing types.UsageRecord
-		if err := json.Unmarshal(existingBz, &existing); err != nil {
-			return err
-		}
-		if len(existing.UsageDigest) > 0 {
-			digest, err := types.CanonicalUsageDigest(usage.CanonicalUsagePayload(usage.ChainID))
-			if err != nil || !bytes.Equal(existing.UsageDigest, digest) {
-				return types.ErrInvalidUsageRecord.Wrap("authenticated usage record is immutable")
+	usageKey := types.UsageRecordKey(usage.UsageID)
+	existingBytes := store.Get(usageKey)
+	if usage.IsAuthenticated() {
+		if existingBytes == nil {
+			if k.IsUsageAuthenticationActive(ctx) {
+				return types.ErrInvalidUsageRecord.Wrap("authenticated usage must be inserted through RecordUsage")
+			}
+		} else {
+			var existing types.UsageRecord
+			if err := json.Unmarshal(existingBytes, &existing); err != nil {
+				return types.ErrInvalidUsageRecord.Wrap("corrupt stored usage record")
+			}
+			if err := validateAuthenticatedUsageUpdate(existing, usage); err != nil {
+				return err
 			}
 		}
 	}
@@ -662,14 +668,84 @@ func (k Keeper) SetUsageRecord(ctx sdk.Context, usage types.UsageRecord) error {
 
 	// Store by usage ID. Secondary order indexes are append-only only for the
 	// first insert; acknowledgments and settlement updates must not duplicate it.
-	isNew := !store.Has(key)
-	store.Set(key, bz)
+	isNew := existingBytes == nil
+	store.Set(usageKey, bz)
 
 	if isNew {
 		k.appendUsageToOrder(ctx, usage.OrderID, usage.UsageID)
 	}
 
 	return nil
+}
+
+func (k Keeper) insertAuthenticatedUsageRecord(ctx sdk.Context, usage types.UsageRecord) error {
+	if !usage.IsAuthenticated() {
+		return types.ErrInvalidUsageRecord.Wrap("verified authenticated usage required")
+	}
+	store := ctx.KVStore(k.skey)
+	key := types.UsageRecordKey(usage.UsageID)
+	if store.Has(key) {
+		return types.ErrUsageRecordExists.Wrapf("usage record %s already exists", usage.UsageID)
+	}
+	bz, err := json.Marshal(&usage)
+	if err != nil {
+		return err
+	}
+	store.Set(key, bz)
+	k.appendUsageToOrder(ctx, usage.OrderID, usage.UsageID)
+	return nil
+}
+
+func validateAuthenticatedUsageUpdate(existing, updated types.UsageRecord) error {
+	if !existing.IsAuthenticated() || !updated.IsAuthenticated() {
+		return types.ErrInvalidUsageRecord.Wrap("authenticated usage verification state is immutable")
+	}
+	if !bytes.Equal(existing.UsageDigest, updated.UsageDigest) {
+		return types.ErrInvalidUsageRecord.Wrap("authenticated usage digest is immutable")
+	}
+	signBytes, err := types.CanonicalUsageSignBytes(updated.CanonicalUsagePayload(updated.ChainID))
+	if err != nil {
+		return types.ErrInvalidUsageRecord.Wrap(err.Error())
+	}
+	digest := sha256.Sum256(signBytes)
+	if !bytes.Equal(digest[:], existing.UsageDigest) {
+		return types.ErrInvalidUsageRecord.Wrap("authenticated usage fields do not match the verified digest")
+	}
+	if !bytes.Equal(existing.ProviderSignature, updated.ProviderSignature) ||
+		existing.SubmittedAt.UnixNano() != updated.SubmittedAt.UnixNano() ||
+		existing.BlockHeight != updated.BlockHeight ||
+		!existing.TotalCost.Equal(updated.TotalCost) ||
+		!equalUsageMetadata(existing.Metadata, updated.Metadata) {
+		return types.ErrInvalidUsageRecord.Wrap("authenticated usage proof and derived state are immutable")
+	}
+	if existing.CustomerAcknowledged && !updated.CustomerAcknowledged {
+		return types.ErrInvalidUsageRecord.Wrap("customer acknowledgment cannot be cleared")
+	}
+	if existing.Settled && !updated.Settled {
+		return types.ErrInvalidUsageRecord.Wrap("settlement state cannot be cleared")
+	}
+	if existing.Settled && existing.SettlementID != updated.SettlementID {
+		return types.ErrInvalidUsageRecord.Wrap("settlement lineage is immutable")
+	}
+	return nil
+}
+
+func equalUsageMetadata(left, right map[string]string) bool {
+	if len(left) != len(right) {
+		return false
+	}
+	keys := make([]string, 0, len(left))
+	for key := range left {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	for _, key := range keys {
+		value := left[key]
+		if right[key] != value {
+			return false
+		}
+	}
+	return true
 }
 
 // appendUsageToOrder appends a usage ID to an order's usage list
