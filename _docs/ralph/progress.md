@@ -1,7 +1,7 @@
 # VirtEngine Progress
 
 Last updated: 2026-07-23
-Status: **Protocol continuation Task 85B is locally complete as `engineering_complete_external_blocked`. Task 85C is NEXT.** The mandatory production DEX/payout floor remains externally blocked. Historical 80A-83D backlog status remains below for traceability.
+Status: **Protocol continuation Task 85B is complete at the deterministic local engineering/fixture boundary as `engineering_complete_external_blocked`. Task 85C is NEXT.** Real testnet/sandbox and production execution evidence remain externally blocked; the mandatory production DEX/payout floor is not certified. Historical 80A-83D backlog status remains below for traceability.
 
 ## Protocol Completion Continuation (2026-07-20)
 
@@ -21,17 +21,19 @@ Status: **Protocol continuation Task 85B is locally complete as `engineering_com
 **Status:** `engineering_complete_external_blocked`
 **Commit:** Not created per orchestration instruction
 
-- Production factory selection now reaches the real, exact-version Osmosis `gamm-v1beta1-cp-equal-weight-v1` equal-weight constant-product adapter; Uniswap V2 and Curve remain rejected/test-only for production.
+- Production factory selection now reaches the real, exact-version Osmosis `gamm-v1beta1-cp-equal-weight-v1` equal-weight constant-product adapter through an authenticated pool provider bound to height, block hash and node identity; Uniswap V2 and Curve remain rejected/test-only for production.
 - Added strict versioned DEX/payout profile states and trust, exact pool/denom/decimal/height/finality/oracle/quote/payload checks, a strict provider-neutral payout HTTP adapter, authenticated replay-safe webhooks and durable privacy-safe payout repositories.
 - Added the off-chain durable provider-daemon conversion orchestrator with local lease/fencing, restart and ambiguous-outcome recovery, target-chain custody boundary, and six ordered authenticated observation stages.
-- Added generated provider-signed `MsgRecordFiatConversionObservation`, consensus profile/compliance/idempotency/lineage/finality validation, Task 85A durable mutation registration, settlement/payout holds and invariants.
+- Added generated provider-signed `MsgRecordFiatConversionObservation`, consensus profile/compliance/idempotency/lineage/finality validation, Task 85A durable mutation registration, settlement/payout holds and invariants. Current authorization gates new side effects, while immutable accepted commitments allow safe post-irreversible-boundary reconciliation after governance/profile/compliance/hold changes.
+- Authenticated completion deterministically moves native net value module-to-module into the internal-only fiat-custody sink, with exactly-once platform-fee, validator-fee and holdback treasury entries. It performs no synthetic provider-account or external bank/chain transfer.
+- Financial cases cannot double-allocate payout exposure after an irreversible fiat boundary. Restart-safe payout binding recovery requires an exact durable provider/quote/correlation/economic match, and expired DEX/payout quotes can be replaced only before the corresponding submission boundary without releasing holds or quota.
 - Added upgrade `v1.8.0`; activation disables execution, sets both profile states to `engineering_complete_external_blocked`, preserves/quarantines legacy records and verifies deterministic reconciliation.
 - Production startup remains fail-closed because reviewed external custody, payout partner, secret, destination, compliance and webhook backends are not injected. Backend identifiers do not enable execution.
-- Aggregate targeted tests passed across DEX, off-ramp, provider-daemon/command, settlement, `v1.8.0`, compatibility and upgrade scope. Relevant vet passed; lint reported 0 issues; provider-daemon and virtengine builds passed.
-- Focused WSL race tests passed for Task 85B DEX/off-ramp, provider fiat/orchestrator and settlement fiat/consensus paths. A broader provider-daemon race exposed an unrelated pre-existing `CompromiseDetector.recordAlertDispatch()` race.
-- Generated hashes were rechecked: descriptor `d2b18c893b4b853fb783d77aa30b95a4879bb46f7ced0bf4be524ad48192fab6`; inventory `654f503d6e84c881f62882f2a57cca3bf8077b2772bac3176c452dc6ebac50c4`; OpenAPI `e8b617f0722ba4cc26df5b66bb0a5d84328b5a08d226494dab1c75723ed88037`.
+- Aggregate targeted tests passed across DEX, off-ramp, provider-daemon/command, app custody, settlement, `v1.8.0`, compatibility and upgrade scope. Relevant vet passed; lint reported 0 issues; provider-daemon and virtengine builds passed; TypeScript SDK lint/build/tests passed; tagged settlement integration and `e2e.upgrade` compile/worker registration passed.
+- Focused WSL race tests passed for Task 85B DEX/off-ramp, provider fiat/orchestrator and settlement fiat/consensus paths.
+- Generated hashes were rechecked: descriptor `1ebde455e84065fa2f53cfc90536b9aece3423c55aed1abdb323ce42a7b9fb9e`; inventory `654f503d6e84c881f62882f2a57cca3bf8077b2772bac3176c452dc6ebac50c4`; OpenAPI `9e07efd4b158589d71907f350422fbba4ab9da36a3870a3065547ef8935d4d2d`. Full Task 85B preflight requires these live hashes in this progress record and the completion report.
 - Completion evidence and external blockers are recorded in `_docs/audits/task-85b-completion-evidence-2026-07-23.md`; matrices, protocol, runbook and certification ledger are in `_docs/protocols/task-85b-dex-payout-support-matrices.md`, `_docs/protocols/fiat-conversion-orchestrator-protocol.md`, `_docs/runbooks/fiat-conversion-incident-recovery.md` and `_docs/task-85b-external-prerequisite-certification-ledger.md`.
-- No production custody, provider contract/credentials, certified pool/liquidity/oracle/governance evidence, approved corridor or independently reconciled production execution exists. The Claim 4 production floor and overall `planned_functionality_complete` status remain externally blocked.
+- Deterministic local fixtures prove engineering conformance only. No real Osmosis testnet execution or provider sandbox payout is claimed; both remain required external conformance evidence before certification. No production custody, provider contract/credentials, certified pool/liquidity/oracle/governance evidence, approved corridor or independently reconciled production execution exists. The Claim 4 production floor and overall `planned_functionality_complete` status remain externally blocked.
 - **NEXT:** Task 85C.
 
 ### 85A: Route Every Provider Chain Mutation Through the Durable Signed Broadcaster

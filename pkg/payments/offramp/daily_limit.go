@@ -2,6 +2,7 @@ package offramp
 
 import (
 	"context"
+	"maps"
 	"sync"
 
 	sdkmath "cosmossdk.io/math"
@@ -79,3 +80,47 @@ func (r *MemoryDailyLimitRepository) ReleaseDailyAmount(_ context.Context, key s
 func (*MemoryDailyLimitRepository) Durable() bool { return false }
 
 var _ DailyLimitRepository = (*MemoryDailyLimitRepository)(nil)
+
+// MemoryPayoutInitiationRepository is an engineering-only implementation of
+// the write-ahead initiation repository. Production construction rejects it.
+type MemoryPayoutInitiationRepository struct {
+	mu      sync.Mutex
+	records map[string]PayoutInitiationRecord
+}
+
+// NewMemoryPayoutInitiationRepository creates an empty sandbox repository.
+func NewMemoryPayoutInitiationRepository() *MemoryPayoutInitiationRepository {
+	return &MemoryPayoutInitiationRepository{records: make(map[string]PayoutInitiationRecord)}
+}
+
+func (r *MemoryPayoutInitiationRepository) GetPayoutInitiation(_ context.Context, provider string, metadata map[string]string) (PayoutInitiationRecord, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	record, ok := r.records[metadataLookupKey(provider, metadata)]
+	if !ok {
+		return PayoutInitiationRecord{}, ErrPayoutNotFound
+	}
+	record.Metadata = maps.Clone(record.Metadata)
+	return record, nil
+}
+
+func (r *MemoryPayoutInitiationRepository) PutPayoutInitiation(_ context.Context, record PayoutInitiationRecord) error {
+	if err := validatePayoutInitiationRecord(record); err != nil {
+		return err
+	}
+	key := metadataLookupKey(record.Provider, record.Metadata)
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if current, ok := r.records[key]; ok {
+		if err := validatePayoutInitiationUpdate(current, record); err != nil {
+			return err
+		}
+	}
+	record.Metadata = maps.Clone(record.Metadata)
+	r.records[key] = record
+	return nil
+}
+
+func (*MemoryPayoutInitiationRepository) Durable() bool { return false }
+
+var _ PayoutInitiationRepository = (*MemoryPayoutInitiationRepository)(nil)

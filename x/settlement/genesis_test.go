@@ -91,9 +91,10 @@ func TestSettlementGenesisRoundTripPreservesNextSequencesAndPayouts(t *testing.T
 }
 
 func TestSettlementGenesisValidatesAndPreservesFiatCustodyBalance(t *testing.T) {
-	amount := sdk.NewInt64Coin("uve", 10)
+	gross := sdk.NewInt64Coin("uve", 16)
+	net := sdk.NewInt64Coin("uve", 10)
 	bank := &genesisBankKeeper{balances: map[string]sdk.Coins{
-		types.FiatConversionCustodyAccountName: sdk.NewCoins(amount),
+		types.FiatConversionCustodyAccountName: sdk.NewCoins(net),
 	}}
 	keeper, ctx := newGenesisTestKeeperWithBank(t, bank)
 	provider := sdk.AccAddress(bytes.Repeat([]byte{3}, 20)).String()
@@ -101,7 +102,8 @@ func TestSettlementGenesisValidatesAndPreservesFiatCustodyBalance(t *testing.T) 
 	payout := types.NewPayoutRecord(
 		"payout-custody-genesis", "invoice-custody-genesis", "settlement-custody-genesis", "escrow-custody-genesis",
 		"order-custody-genesis", "lease-custody-genesis", provider, customer,
-		sdk.NewCoins(amount), sdk.NewCoins(), sdk.NewCoins(), sdk.NewCoins(), ctx.BlockTime(), ctx.BlockHeight(),
+		sdk.NewCoins(gross), sdk.NewCoins(sdk.NewInt64Coin("uve", 3)), sdk.NewCoins(sdk.NewInt64Coin("uve", 2)),
+		sdk.NewCoins(sdk.NewInt64Coin("uve", 1)), ctx.BlockTime(), ctx.BlockHeight(),
 	)
 	payout.FiatConversionID = "conversion-custody-genesis"
 	payout.State = types.PayoutStateCompleted
@@ -112,18 +114,18 @@ func TestSettlementGenesisValidatesAndPreservesFiatCustodyBalance(t *testing.T) 
 	conversion := types.NewFiatConversionRecord("conversion-custody-genesis", types.FiatConversionRequest{
 		InvoiceID: payout.InvoiceID, SettlementID: payout.SettlementID, PayoutID: payout.PayoutID,
 		Provider: provider, Customer: customer, RequestedBy: provider,
-		CryptoAmount: amount, FiatCurrency: "USD", PaymentMethod: "bank_transfer",
+		CryptoAmount: net, FiatCurrency: "USD", PaymentMethod: "bank_transfer",
 		DestinationHash: types.HashDestination("opaque"), SlippageToleranceExact: "0.010000000000000000",
 		CryptoToken: types.TokenSpec{Symbol: "UVE", Denom: "uve", Decimals: 6},
 		StableToken: types.TokenSpec{Symbol: "USDC", Denom: "uusdc", Decimals: 6},
-	}, amount, ctx.BlockTime())
+	}, net, ctx.BlockTime())
 	conversion.ProtocolVersion = 1
 	conversion.RequestDigest = bytes.Repeat([]byte{7}, 32)
 	conversion.DailyBucket = "20231114"
 	conversion.DailyQuotaReserved = true
 	conversion.PayoutFinalityHash = append([]byte(nil), payout.ExternalFinalityHash...)
 	conversion.ValueMovementApplied = true
-	conversion.CustodySinkAmount = amount
+	conversion.CustodySinkAmount = net
 	effectHash := genesisFiatCustodyEffectHash(*conversion, *payout)
 	conversion.CustodySinkEffectHash = effectHash
 	payout.ValueMovementEffectHash = append([]byte(nil), effectHash...)
@@ -138,13 +140,25 @@ func TestSettlementGenesisValidatesAndPreservesFiatCustodyBalance(t *testing.T) 
 	genesis := types.DefaultGenesisState()
 	genesis.PayoutRecords = []types.PayoutRecord{*payout}
 	genesis.FiatConversionRecords = []types.FiatConversionRecord{*conversion}
-	genesis.FiatConversionCustodyBalance = sdk.NewCoins(amount)
+	genesis.FiatConversionCustodyBalance = sdk.NewCoins(net)
+	genesis.TreasuryRecords = genesisTreasuryRecords(*payout, ctx)
+	genesis.TreasuryBalance = sdk.NewCoins(sdk.NewInt64Coin("uve", 6))
 	require.NoError(t, genesis.Validate())
 	settlement.InitGenesis(ctx, keeper, genesis)
 
 	exported := settlement.ExportGenesis(ctx, keeper)
-	require.Equal(t, sdk.NewCoins(amount), exported.FiatConversionCustodyBalance)
+	require.Equal(t, sdk.NewCoins(net), exported.FiatConversionCustodyBalance)
+	require.ElementsMatch(t, genesis.TreasuryRecords, exported.TreasuryRecords)
+	require.Equal(t, genesis.TreasuryBalance, exported.TreasuryBalance)
 	require.NoError(t, exported.Validate())
+	restoredKeeper, restoredCtx := newGenesisTestKeeperWithBank(t, &genesisBankKeeper{balances: map[string]sdk.Coins{
+		types.FiatConversionCustodyAccountName: sdk.NewCoins(net),
+	}})
+	settlement.InitGenesis(restoredCtx, restoredKeeper, exported)
+	restored := settlement.ExportGenesis(restoredCtx, restoredKeeper)
+	require.Equal(t, exported.TreasuryRecords, restored.TreasuryRecords)
+	require.Equal(t, exported.TreasuryBalance, restored.TreasuryBalance)
+	require.Empty(t, restoredKeeper.ValidateFiatConversionInvariants(restoredCtx))
 
 	wrongDeclared := *genesis
 	wrongDeclared.FiatConversionCustodyBalance = sdk.NewCoins()
@@ -153,6 +167,56 @@ func TestSettlementGenesisValidatesAndPreservesFiatCustodyBalance(t *testing.T) 
 	wrongBank := &genesisBankKeeper{balances: map[string]sdk.Coins{}}
 	wrongKeeper, wrongCtx := newGenesisTestKeeperWithBank(t, wrongBank)
 	require.Panics(t, func() { settlement.InitGenesis(wrongCtx, wrongKeeper, genesis) })
+}
+
+func TestSettlementGenesisRejectsTreasuryMismatchWithoutPartialImport(t *testing.T) {
+	keeper, ctx := newGenesisTestKeeper(t)
+	provider := sdk.AccAddress(bytes.Repeat([]byte{6}, 20)).String()
+	customer := sdk.AccAddress(bytes.Repeat([]byte{7}, 20)).String()
+	payout := types.NewPayoutRecord(
+		"payout-treasury-rollback", "invoice-treasury-rollback", "settlement-treasury-rollback", "escrow-treasury-rollback",
+		"order-treasury-rollback", "lease-treasury-rollback", provider, customer,
+		sdk.NewCoins(sdk.NewInt64Coin("uve", 16)), sdk.NewCoins(sdk.NewInt64Coin("uve", 3)),
+		sdk.NewCoins(sdk.NewInt64Coin("uve", 2)), sdk.NewCoins(sdk.NewInt64Coin("uve", 1)), ctx.BlockTime(), ctx.BlockHeight(),
+	)
+	require.NoError(t, keeper.SetPayout(ctx, *payout))
+	records := genesisTreasuryRecords(*payout, ctx)
+	records[1].SettlementID = "wrong-settlement"
+
+	err := keeper.ImportTreasuryAccounting(ctx, records, sdk.NewCoins(sdk.NewInt64Coin("uve", 6)))
+	require.Error(t, err)
+	require.True(t, keeper.GetTreasuryBalance(ctx).IsZero())
+	exported, balance, exportErr := keeper.ExportTreasuryAccounting(ctx)
+	require.NoError(t, exportErr)
+	require.Empty(t, exported)
+	require.True(t, balance.IsZero())
+}
+
+func genesisTreasuryRecords(payout types.PayoutRecord, ctx sdk.Context) []types.TreasuryRecord {
+	balance := sdk.NewCoins()
+	records := make([]types.TreasuryRecord, 0, 3)
+	for _, entry := range []struct {
+		recordType types.TreasuryRecordType
+		amount     sdk.Coins
+	}{
+		{types.TreasuryRecordPlatformFee, payout.PlatformFee},
+		{types.TreasuryRecordValidatorFee, payout.ValidatorFee},
+		{types.TreasuryRecordHoldback, payout.HoldbackAmount},
+	} {
+		balance = balance.Add(entry.amount...)
+		records = append(records, types.TreasuryRecord{
+			RecordID:     "payout/" + payout.PayoutID + "/" + entry.recordType.String(),
+			RecordType:   entry.recordType,
+			PayoutID:     payout.PayoutID,
+			SettlementID: payout.SettlementID,
+			Amount:       entry.amount,
+			BalanceAfter: balance,
+			Description:  entry.recordType.String() + " for payout " + payout.PayoutID,
+			BlockHeight:  ctx.BlockHeight(),
+			Timestamp:    ctx.BlockTime(),
+		})
+	}
+	return records
 }
 
 func newGenesisTestKeeper(t *testing.T) (settlementkeeper.Keeper, sdk.Context) {

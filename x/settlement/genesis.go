@@ -85,6 +85,9 @@ func InitGenesis(ctx sdk.Context, k keeper.IKeeper, data *types.GenesisState) {
 			panic(err)
 		}
 	}
+	if err := k.ImportTreasuryAccounting(ctx, data.TreasuryRecords, data.TreasuryBalance); err != nil {
+		panic(err)
+	}
 
 	for _, financialCase := range data.FinancialCases {
 		if err := k.SetFinancialCase(ctx, financialCase); err != nil {
@@ -229,6 +232,10 @@ func ExportGenesis(ctx sdk.Context, k keeper.IKeeper) *types.GenesisState {
 	}); err != nil {
 		panic(err)
 	}
+	treasuryRecords, treasuryBalance, err := k.ExportTreasuryAccounting(ctx)
+	if err != nil {
+		panic(err)
+	}
 
 	return &types.GenesisState{
 		Params:                       params,
@@ -238,6 +245,8 @@ func ExportGenesis(ctx sdk.Context, k keeper.IKeeper) *types.GenesisState {
 		RewardDistributions:          rewardDistributions,
 		ClaimableRewards:             claimableRewards,
 		PayoutRecords:                payouts,
+		TreasuryRecords:              treasuryRecords,
+		TreasuryBalance:              treasuryBalance,
 		FiatConversionRecords:        conversions,
 		FiatPayoutPreferences:        preferences,
 		UsageAuthenticationActive:    k.IsUsageAuthenticationActive(ctx),

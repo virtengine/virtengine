@@ -22,6 +22,7 @@ import (
 	v150 "github.com/virtengine/virtengine/upgrades/software/v1.5.0"
 	v160 "github.com/virtengine/virtengine/upgrades/software/v1.6.0"
 	v170 "github.com/virtengine/virtengine/upgrades/software/v1.7.0"
+	v180 "github.com/virtengine/virtengine/upgrades/software/v1.8.0"
 )
 
 func init() {
@@ -77,6 +78,7 @@ func upgradeWorkerNames() []string {
 		v150.UpgradeName,
 		v160.UpgradeName,
 		v170.UpgradeName,
+		v180.UpgradeName,
 	}
 }
 

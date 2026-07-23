@@ -1,10 +1,10 @@
 import { describe, expect, it } from "@jest/globals";
 
 import {
+  type FinancialCase,
   FinancialCaseStatus,
   FinancialClaimType,
   FinancialSubjectType,
-  type FinancialCase,
   type MsgOpenFinancialCase,
   type QueryFinancialCaseRequest,
 } from "../index.ts";

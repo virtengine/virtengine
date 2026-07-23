@@ -28,7 +28,7 @@ for (const path of paths) {
   // Remove the `create` method from message objects
   newSource = newSource.replace(/^\s*create\(base\?:\s*DeepPartial<\w+>\):\s*\w+\s*\{\s*return\s*\w+\.fromPartial\(base \?\? \{\}\);\s*\},?\n?/gm, "");
   newSource = injectOwnHelpers(newSource, path);
-	newSource = restoreCosmosNumericWrappers(newSource, path);
+  newSource = restoreCosmosNumericWrappers(newSource, path);
 
   if (newSource !== source) {
     const temporaryPath = `${path}.tmp`;
@@ -38,16 +38,31 @@ for (const path of paths) {
 }
 
 function restoreCosmosNumericWrappers(source: string, path: string) {
-	const normalizedPath = path.replace(/\\/g, "/");
-	if (!normalizedPath.endsWith("/generated/protos/cosmos/base/v1beta1/coin.ts") || source.includes("export interface IntProto")) {
-		return source;
-	}
+  const normalizedPath = path.replace(/\\/g, "/");
+  if (!normalizedPath.endsWith("/generated/protos/cosmos/base/v1beta1/coin.ts")) {
+    return source;
+  }
 
-	const insertionPoint = "type Builtin = Date | Function | Uint8Array | string | number | boolean | undefined;";
-	if (!source.includes(insertionPoint)) {
-		throw new Error(`cannot restore Cosmos numeric wrappers in ${path}`);
-	}
-	const wrappers = `/** Numeric wrapper retained for Cosmos SDK wire compatibility. */
+  const insertionPoint = "type Builtin = Date | Function | Uint8Array | string | number | boolean | undefined;";
+  if (!source.includes(insertionPoint)) {
+    throw new Error(`cannot restore Cosmos numeric wrappers in ${path}`);
+  }
+  const legacyInterfaceStart = source.indexOf("/**\n * IntProto defines a Protobuf wrapper around an Int object.");
+  const coinStart = source.indexOf("function createBaseCoin(): Coin");
+  if (legacyInterfaceStart >= 0 && coinStart > legacyInterfaceStart) {
+    source = source.slice(0, legacyInterfaceStart) + source.slice(coinStart);
+  }
+  const wrapperStart = source.indexOf("/** Numeric wrapper retained for Cosmos SDK wire compatibility. */");
+  const generatedStart = source.indexOf("function createBaseIntProto(): IntProto");
+  const replacementStart = wrapperStart >= 0 ? wrapperStart : generatedStart;
+  if (replacementStart >= 0) {
+    const generatedEnd = source.indexOf(insertionPoint, replacementStart);
+    if (generatedEnd < 0) {
+      throw new Error(`cannot replace Cosmos numeric wrapper implementations in ${path}`);
+    }
+    source = source.slice(0, replacementStart) + source.slice(generatedEnd);
+  }
+  const wrappers = `/** Numeric wrapper retained for Cosmos SDK wire compatibility. */
 export interface IntProto {
   int: string;
 }
@@ -132,7 +147,7 @@ export const DecProto: MessageFns<DecProto, "cosmos.base.v1beta1.DecProto"> = {
 };
 
 `;
-	return source.replace(insertionPoint, wrappers + insertionPoint);
+  return source.replace(insertionPoint, wrappers + insertionPoint);
 }
 
 function injectOwnHelpers(source: string, path: string) {

@@ -22,18 +22,26 @@ const (
 	testFiatCancellationCode       = "USER_CANCELLED"
 	terminalPolicyCompletedForTest = "external_fiat_completed_custody_sink"
 	testPayoutCompletedStatus      = "completed"
+	testPayoutFailedStatus         = "failed"
 	testPayoutFiatAmount           = "123.45"
 )
 
 func setupAuthenticatedFiatConversion(t *testing.T) (*KeeperTestSuite, types.FiatConversionRecord, types.PayoutRecord, *veidtypes.ComplianceRecord) {
-	return setupAuthenticatedFiatConversionWithRetained(t, false)
+	return setupAuthenticatedFiatConversionForProvider(t, false, nil)
 }
 
 func setupAuthenticatedFiatConversionWithRetained(t *testing.T, retained bool) (*KeeperTestSuite, types.FiatConversionRecord, types.PayoutRecord, *veidtypes.ComplianceRecord) {
+	return setupAuthenticatedFiatConversionForProvider(t, retained, nil)
+}
+
+func setupAuthenticatedFiatConversionForProvider(t *testing.T, retained bool, provider sdk.AccAddress) (*KeeperTestSuite, types.FiatConversionRecord, types.PayoutRecord, *veidtypes.ComplianceRecord) {
 	t.Helper()
 	s := new(KeeperTestSuite)
 	s.SetT(t)
 	s.SetupTest()
+	if len(provider) != 0 {
+		s.provider = provider
+	}
 
 	params := s.keeper.GetParams(s.ctx)
 	configureCertifiedFiatProfiles(&params)
@@ -380,9 +388,14 @@ func TestFinancialCaseAfterIrreversibleFiatBoundaryCannotAllocateOrOverridePayou
 		require.Equal(t, types.PayoutStatePending, linked.State, "fiat conversion ownership remains authoritative")
 		providerBefore := s.bankKeeper.GetBalance(s.ctx, s.provider, "uve")
 		moduleBefore := s.bankKeeper.ModuleBalance(types.ModuleAccountName)
-		resolveFiatFinancialCase(t, s, financialCase)
-		_, err := s.keeper.FinalizeFinancialCase(s.ctx, financialCase.CaseId, s.keeper.GetAuthority())
+		require.NoError(t, s.keeper.SubmitFinancialCaseForReview(s.ctx, financialCase.CaseId, financialCase.Customer))
+		allocation := types.TerminalAllocation{OriginalExposure: financialCase.Exposure.OriginalHeld, Provider: financialCase.Exposure.OriginalHeld, ResolutionType: types.FinancialResolutionProviderWin}
+		err := s.keeper.ResolveFinancialCase(s.ctx, financialCase.CaseId, s.keeper.GetAuthority(), allocation)
 		require.ErrorIs(t, err, types.ErrFiatConversionQuarantined)
+		storedCase, found := s.keeper.GetFinancialCase(s.ctx, financialCase.CaseId)
+		require.True(t, found)
+		require.Equal(t, types.FinancialCaseStatusReview, storedCase.Status)
+		require.Nil(t, storedCase.TerminalAllocation)
 		require.Equal(t, providerBefore, s.bankKeeper.GetBalance(s.ctx, s.provider, "uve"))
 		require.Equal(t, moduleBefore, s.bankKeeper.ModuleBalance(types.ModuleAccountName))
 		linked, found = s.keeper.GetPayout(s.ctx, payout.PayoutID)
@@ -395,16 +408,19 @@ func TestFinancialCaseAfterIrreversibleFiatBoundaryCannotAllocateOrOverridePayou
 		s, conversion, payout, compliance := setupAuthenticatedFiatConversion(t)
 		completed := runSuccessfulFiatObservationFlowUntilCompletion(t, s, conversion, compliance)
 		financialCase := openFiatFinancialCase(t, s, conversion, 0x72)
-		resolveFiatFinancialCase(t, s, financialCase)
+		require.NoError(t, s.keeper.SubmitFinancialCaseForReview(s.ctx, financialCase.CaseId, financialCase.Customer))
+		allocation := types.TerminalAllocation{OriginalExposure: financialCase.Exposure.OriginalHeld, Customer: financialCase.Exposure.OriginalHeld, ResolutionType: types.FinancialResolutionCustomerWin}
+		err := s.keeper.ResolveFinancialCase(s.ctx, financialCase.CaseId, s.keeper.GetAuthority(), allocation)
+		require.ErrorIs(t, err, types.ErrFiatConversionQuarantined)
 		completed.ObservedAt = s.ctx.BlockTime().Unix()
-		_, err := s.keeper.RecordFiatConversionObservation(s.ctx, completed)
+		_, err = s.keeper.RecordFiatConversionObservation(s.ctx, completed)
 		require.NoError(t, err, "authenticated external completion must remain admissible")
 		linked, found := s.keeper.GetPayout(s.ctx, payout.PayoutID)
 		require.True(t, found)
 		require.Equal(t, types.PayoutStateCompleted, linked.State)
 		custodyBefore := s.bankKeeper.ModuleBalance(types.FiatConversionCustodyAccountName)
 		_, err = s.keeper.FinalizeFinancialCase(s.ctx, financialCase.CaseId, s.keeper.GetAuthority())
-		require.ErrorIs(t, err, types.ErrFiatConversionQuarantined)
+		require.ErrorIs(t, err, types.ErrFinancialCaseTransition)
 		require.Equal(t, custodyBefore, s.bankKeeper.ModuleBalance(types.FiatConversionCustodyAccountName))
 		linked, found = s.keeper.GetPayout(s.ctx, payout.PayoutID)
 		require.True(t, found)
@@ -445,13 +461,13 @@ func TestFiatPostInitiationReconciliationUsesImmutableAuthorization(t *testing.T
 			blocker.apply(t, s, conversion, compliance)
 			failed := observationFor(t, conversion, compliance, 3, settlementv1.FiatConversionObservationStage_FIAT_CONVERSION_OBSERVATION_STAGE_FAILED)
 			failed.ComplianceDecisionHash = append([]byte(nil), conversion.ComplianceDecisionHash...)
-			failed.Status, failed.FailureCode = "failed", "RECONCILED_SWAP_FAILURE"
+			failed.Status, failed.FailureCode = testPayoutFailedStatus, "RECONCILED_SWAP_FAILURE"
 			result, err := s.keeper.RecordFiatConversionObservation(s.ctx, failed)
 			require.NoError(t, err)
 			require.Equal(t, types.FiatConversionStateFailed, result.Conversion.State)
 		})
 
-		for _, outcome := range []string{"completed", "failed"} {
+		for _, outcome := range []string{"completed", testPayoutFailedStatus} {
 			t.Run("payout_"+outcome+"/"+blocker.name, func(t *testing.T) {
 				s, conversion, payout, compliance := setupAuthenticatedFiatConversion(t)
 				completed := runSuccessfulFiatObservationFlowUntilCompletion(t, s, conversion, compliance)
@@ -465,7 +481,7 @@ func TestFiatPostInitiationReconciliationUsesImmutableAuthorization(t *testing.T
 				} else {
 					failed := observationFor(t, conversion, compliance, 6, settlementv1.FiatConversionObservationStage_FIAT_CONVERSION_OBSERVATION_STAGE_FAILED)
 					failed.ComplianceDecisionHash = append([]byte(nil), conversion.ComplianceDecisionHash...)
-					failed.Status, failed.FailureCode = "failed", "RECONCILED_PAYOUT_FAILURE"
+					failed.Status, failed.FailureCode = testPayoutFailedStatus, "RECONCILED_PAYOUT_FAILURE"
 					result, err := s.keeper.RecordFiatConversionObservation(s.ctx, failed)
 					require.NoError(t, err)
 					require.Equal(t, types.FiatConversionStateFailed, result.Conversion.State)
@@ -488,6 +504,13 @@ func fiatCurrentAuthorizationBlockers() []fiatCurrentAuthorizationBlocker {
 		{name: "governance_pause", apply: func(t *testing.T, s *KeeperTestSuite, _ types.FiatConversionRecord, _ *veidtypes.ComplianceRecord) {
 			params := s.keeper.GetParams(s.ctx)
 			params.FiatConversionEnabled = false
+			require.NoError(t, s.keeper.SetParams(s.ctx, params))
+		}},
+		{name: "profile_paused", apply: func(t *testing.T, s *KeeperTestSuite, _ types.FiatConversionRecord, _ *veidtypes.ComplianceRecord) {
+			params := s.keeper.GetParams(s.ctx)
+			params.FiatConversionEnabled = false
+			params.FiatConversionDEXProfileState = settlementv1.FiatConversionProfileState_FIAT_CONVERSION_PROFILE_STATE_PAUSED
+			params.FiatConversionPayoutProfileState = settlementv1.FiatConversionProfileState_FIAT_CONVERSION_PROFILE_STATE_PAUSED
 			require.NoError(t, s.keeper.SetParams(s.ctx, params))
 		}},
 		{name: "profile_rotation", apply: func(t *testing.T, s *KeeperTestSuite, _ types.FiatConversionRecord, _ *veidtypes.ComplianceRecord) {
@@ -534,16 +557,6 @@ func openFiatFinancialCase(t *testing.T, s *KeeperTestSuite, conversion types.Fi
 	})
 	require.NoError(t, err)
 	return financialCase
-}
-
-func resolveFiatFinancialCase(t *testing.T, s *KeeperTestSuite, financialCase *types.FinancialCase) {
-	t.Helper()
-	require.NoError(t, s.keeper.SubmitFinancialCaseForReview(s.ctx, financialCase.CaseId, financialCase.Customer))
-	allocation := types.TerminalAllocation{OriginalExposure: financialCase.Exposure.OriginalHeld, Provider: financialCase.Exposure.OriginalHeld, ResolutionType: types.FinancialResolutionProviderWin}
-	require.NoError(t, s.keeper.ResolveFinancialCase(s.ctx, financialCase.CaseId, s.keeper.GetAuthority(), allocation))
-	resolved, found := s.keeper.GetFinancialCase(s.ctx, financialCase.CaseId)
-	require.True(t, found)
-	s.ctx = s.ctx.WithBlockHeight(resolved.AppealDeadlineHeight + 1).WithBlockTime(time.Unix(resolved.AppealDeadlineTime+1, 0).UTC())
 }
 
 func countTreasuryRecordsForPayout(s *KeeperTestSuite, payoutID string) int {
@@ -906,7 +919,7 @@ func TestFiatObservationFailureCancellationAndObservedTimeBounds(t *testing.T) {
 		require.NoError(t, err)
 		failed := observationFor(t, conversion, compliance, 3, settlementv1.FiatConversionObservationStage_FIAT_CONVERSION_OBSERVATION_STAGE_FAILED)
 		failed.FailureCode = "DEX_FINALITY_TIMEOUT"
-		failed.Status = "failed"
+		failed.Status = testPayoutFailedStatus
 		result, err := s.keeper.RecordFiatConversionObservation(s.ctx, failed)
 		require.NoError(t, err)
 		require.Equal(t, types.FiatConversionStateFailed, result.Conversion.State)

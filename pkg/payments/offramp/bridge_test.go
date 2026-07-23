@@ -143,7 +143,7 @@ func TestBridgeStoresFinanceReconciliationEvidence(t *testing.T) {
 	require.Equal(t, metadata, resolved.Metadata)
 }
 
-func TestBridgeInitiatePayoutFailsOverOnRetryableError(t *testing.T) {
+func TestBridgeCommittedQuoteNeverFailsOverOnRetryableError(t *testing.T) {
 	t.Parallel()
 
 	clock := newTestClock(time.Date(2026, 4, 11, 10, 10, 0, 0, time.UTC))
@@ -186,13 +186,20 @@ func TestBridgeInitiatePayoutFailsOverOnRetryableError(t *testing.T) {
 		"conversion_id":   "conv-2",
 		"idempotency_key": "idem-2",
 	}
-	result, err := bridge.InitiatePayout(context.Background(), quote, "swap-tx-2", "destination-ref", metadata)
-	require.NoError(t, err)
-
-	require.Equal(t, "secondary", result.Provider)
+	_, err = bridge.InitiatePayout(context.Background(), quote, "swap-tx-2", "destination-ref", metadata)
+	require.Error(t, err)
+	require.True(t, IsRetryable(err))
 	require.Equal(t, 1, primary.initCalls)
-	require.Equal(t, 1, secondary.initCalls)
-	require.Equal(t, "2", result.AuditFields["bridge_attempt"])
+	require.Zero(t, secondary.initCalls, "a committed quote must never initiate a secondary candidate")
+
+	replacement, err := bridge.GetReplacementQuote(context.Background(), quote)
+	require.NoError(t, err)
+	require.Equal(t, "secondary", replacement.Provider)
+	require.Equal(t, "secondary-quote", replacement.ID)
+	result, err := bridge.InitiatePayout(context.Background(), replacement, "swap-tx-2", "destination-ref", metadata)
+	require.NoError(t, err)
+	require.Equal(t, "secondary", result.Provider)
+	require.Equal(t, 1, secondary.initCalls, "only the explicitly selected replacement may initiate")
 }
 
 func TestBridgeInitiatePayoutRecoversAmbiguousProviderResult(t *testing.T) {

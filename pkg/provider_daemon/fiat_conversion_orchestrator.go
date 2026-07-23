@@ -589,7 +589,7 @@ func (o *FiatConversionOrchestrator) signAndExecuteSwap(ctx context.Context, ite
 		return o.manualReview(ctx, item, "PAYLOAD_INVALID", err)
 	}
 	payloadHash := digestHex(payload)
-	_, err = o.refreshBeforeExternalBoundary(ctx, item, fiatBoundarySwapSign)
+	_, err = o.refreshBeforeConversionSideEffect(ctx, item, fiatBoundarySwapSign)
 	if err != nil {
 		return err
 	}
@@ -619,7 +619,7 @@ func (o *FiatConversionOrchestrator) signAndExecuteSwap(ctx context.Context, ite
 	if err != nil {
 		return err
 	}
-	chain, err := o.refreshBeforeExternalBoundary(ctx, updated, fiatBoundarySwapBroadcast)
+	chain, err := o.refreshBeforeConversionSideEffect(ctx, updated, fiatBoundarySwapBroadcast)
 	if err != nil {
 		return err
 	}
@@ -705,7 +705,7 @@ func (o *FiatConversionOrchestrator) reconcileSwap(ctx context.Context, item *Fi
 		if payloadErr != nil || digestHex(payload) != item.PayloadHash {
 			return o.manualReview(ctx, item, "SWAP_RECOVERY_PAYLOAD_INVALID", dex.ErrExecutionPayload)
 		}
-		_, guardErr := o.refreshBeforeExternalBoundary(ctx, item, fiatBoundarySwapSign)
+		_, guardErr := o.refreshBeforeConversionSideEffect(ctx, item, fiatBoundarySwapSign)
 		if guardErr != nil {
 			return guardErr
 		}
@@ -717,7 +717,7 @@ func (o *FiatConversionOrchestrator) reconcileSwap(ctx context.Context, item *Fi
 		if envelopeErr != nil {
 			return o.manualReview(ctx, item, "SWAP_RECOVERY_ENVELOPE_INVALID", dex.ErrExecutionPayload)
 		}
-		chain, guardErr = o.refreshBeforeExternalBoundary(ctx, item, fiatBoundarySwapBroadcast)
+		chain, guardErr = o.refreshBeforeConversionSideEffect(ctx, item, fiatBoundarySwapBroadcast)
 		if guardErr != nil {
 			return guardErr
 		}
@@ -796,7 +796,20 @@ func (o *FiatConversionOrchestrator) quotePayout(ctx context.Context, item *Fiat
 	if err != nil {
 		return err
 	}
-	quote, err := o.cfg.Offramp.GetQuote(ctx, offramp.QuoteRequest{CryptoSymbol: chain.StableToken.Symbol, CryptoDenom: chain.StableToken.Denom, CryptoDecimals: stableDecimals, CryptoAmount: amount, FiatCurrency: chain.FiatCurrency, PaymentMethod: chain.PaymentMethod, Sender: chain.Provider, Destination: destination, BeneficiaryReference: destination, Jurisdiction: chain.DestinationRegion, CorrelationID: correlation, Compliance: decision})
+	var quote offramp.Quote
+	if item.PayoutQuote.ID != "" && !o.cfg.Now().Before(item.PayoutQuote.ExpiresAt) {
+		previous, reconstructErr := reconstructPayoutQuote(item.PayoutQuote, chain, item, destination, decision, o.cfg.Profiles)
+		if reconstructErr != nil {
+			return o.manualReview(ctx, item, "PAYOUT_QUOTE_INVALID", reconstructErr)
+		}
+		replacer, ok := o.cfg.Offramp.(offramp.ReplacementQuoteBridge)
+		if !ok {
+			return o.deferExecutionBlocked(ctx, item, "PAYOUT_REPLACEMENT_REQUIRED", offramp.ErrQuoteExpired)
+		}
+		quote, err = replacer.GetReplacementQuote(ctx, previous)
+	} else {
+		quote, err = o.cfg.Offramp.GetQuote(ctx, offramp.QuoteRequest{CryptoSymbol: chain.StableToken.Symbol, CryptoDenom: chain.StableToken.Denom, CryptoDecimals: stableDecimals, CryptoAmount: amount, FiatCurrency: chain.FiatCurrency, PaymentMethod: chain.PaymentMethod, Sender: chain.Provider, Destination: destination, BeneficiaryReference: destination, Jurisdiction: chain.DestinationRegion, CorrelationID: correlation, Compliance: decision})
+	}
 	if err != nil {
 		return o.retry(ctx, item, "PAYOUT_QUOTE_FAILED", err)
 	}
@@ -1192,6 +1205,34 @@ func (o *FiatConversionOrchestrator) refreshBeforeExternalBoundary(ctx context.C
 	return nil, o.manualReview(ctx, item, "BOUNDARY_AUTHORIZATION_INVALID", err)
 }
 
+// refreshBeforeConversionSideEffect performs the final authorization read for
+// custody signing and target-chain broadcast, then independently re-resolves
+// the current conversion compliance and destination commitment. It is never
+// used by post-broadcast reconciliation, which must remain read-only and
+// available after authorization changes.
+func (o *FiatConversionOrchestrator) refreshBeforeConversionSideEffect(ctx context.Context, item *FiatConversionWorkItem, boundary fiatExternalBoundary) (*settlementv1.FiatConversionRecord, error) {
+	chain, err := o.refreshBeforeExternalBoundary(ctx, item, boundary)
+	if err != nil {
+		return nil, err
+	}
+	resolvedCompliance, err := o.cfg.Compliance.ResolveCompliance(ctx, chain)
+	if err != nil {
+		return nil, o.deferExecutionBlocked(ctx, item, "COMPLIANCE_REVOKED", fmt.Errorf("%w: %v", ErrFiatCurrentCompliance, err))
+	}
+	if err := validateResolvedCompliance(chain, resolvedCompliance, o.cfg.Now()); err != nil {
+		return nil, o.deferExecutionBlocked(ctx, item, "COMPLIANCE_REVOKED", fmt.Errorf("%w: %v", ErrFiatCurrentCompliance, err))
+	}
+	resolvedDestination, err := o.cfg.Destination.ResolveDestination(ctx, chain)
+	if err != nil {
+		return nil, o.retry(ctx, item, "DESTINATION_UNAVAILABLE", err)
+	}
+	defer clearString(&resolvedDestination.Reference)
+	if err := validateResolvedDestination(chain, resolvedDestination); err != nil {
+		return nil, o.manualReview(ctx, item, "DESTINATION_BINDING_MISMATCH", err)
+	}
+	return chain, nil
+}
+
 func (o *FiatConversionOrchestrator) validateExecutionAuthorization(item *FiatConversionWorkItem, authorization FiatExecutionAuthorization, boundary fiatExternalBoundary) (*settlementv1.FiatConversionRecord, error) {
 	chain := authorization.Conversion
 	if chain == nil || !fiatIntentEqual(item.Intent, snapshotFiatIntent(chain)) {
@@ -1295,21 +1336,6 @@ func (o *FiatConversionOrchestrator) deferExecutionBlocked(ctx context.Context, 
 	return &fiatRetryError{cause: cause}
 }
 
-func (o *FiatConversionOrchestrator) manualReviewWithoutObservation(ctx context.Context, item *FiatConversionWorkItem, code string, cause error) error {
-	_, err := o.updateOwned(ctx, item.Intent.ConversionID, func(work *FiatConversionWorkItem) error {
-		work.State = FiatWorkManualReview
-		work.FailureCode = boundedFiatFailureCode(code)
-		work.TerminalResult = "manual_review"
-		work.NextRetryAt = time.Time{}
-		return nil
-	})
-	o.recordFailure()
-	if err != nil {
-		return err
-	}
-	return &fiatTerminalError{cause: cause}
-}
-
 func (o *FiatConversionOrchestrator) recoverOnStart(ctx context.Context) error {
 	items, err := o.cfg.Store.List(ctx)
 	if err != nil {
@@ -1396,7 +1422,7 @@ func (o *FiatConversionOrchestrator) retryResetPayoutQuote(ctx context.Context, 
 		chain.OffRampId != "" || chain.OffRampReference != "" || chain.OffRampQuoteId != item.PayoutQuote.ID ||
 		!bytes.Equal(chain.QuoteDigest, mustHex32(item.PayoutQuoteDigest)) || chain.QuoteExpiry != item.PayoutQuote.ExpiresAt.Unix() ||
 		o.cfg.Now().Unix() < chain.QuoteExpiry {
-		return o.manualReview(ctx, item, "PAYOUT_REQUOTE_UNSAFE", ErrFiatIntentChanged)
+		return ErrFiatIntentChanged
 	}
 	if item.AttemptCount+1 >= o.cfg.MaxAttempts {
 		return o.manualReview(ctx, item, "ATTEMPTS_EXHAUSTED", offramp.ErrQuoteExpired)

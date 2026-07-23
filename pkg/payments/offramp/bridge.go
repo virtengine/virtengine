@@ -199,65 +199,73 @@ func (b *bridgeImpl) InitiatePayout(ctx context.Context, quote Quote, cryptoTxRe
 		return existing, nil
 	}
 
-	candidates := b.payoutCandidatesForQuote(quote)
-	var lastErr error
+	adapter, err := b.adapterByName(quote.Provider)
+	if err != nil {
+		return PayoutResult{}, err
+	}
+	if err := b.validateAdapterRequest(adapter, quote.Request, now); err != nil {
+		return PayoutResult{}, err
+	}
 
-	for idx, candidate := range candidates {
-		if candidate.IsExpired(now) {
-			lastErr = ErrQuoteExpired
-			continue
+	result, err := adapter.InitiatePayout(ctx, PayoutRequest{
+		Quote:       quote,
+		CryptoTxRef: cryptoTxRef,
+		Destination: destination,
+		Metadata:    metadata,
+	})
+	if err == nil {
+		normalized, normErr := b.normalizePayoutResult(quote, result, metadata, 1, false)
+		if normErr != nil {
+			return PayoutResult{}, normErr
 		}
+		if err := b.cacheLookupResult(ctx, normalized); err != nil {
+			return PayoutResult{}, err
+		}
+		return clonePayoutResult(normalized), nil
+	}
 
-		adapter, err := b.adapterByName(candidate.Provider)
-		if err != nil {
-			lastErr = err
-			continue
-		}
-		if err := b.validateAdapterRequest(adapter, candidate.Request, now); err != nil {
-			lastErr = err
-			continue
-		}
-
-		result, err := adapter.InitiatePayout(ctx, PayoutRequest{
-			Quote:       candidate,
-			CryptoTxRef: cryptoTxRef,
-			Destination: destination,
-			Metadata:    metadata,
+	normalizedErr := normalizeAdapterError(adapter, operationInitiatePayout, err)
+	if existing, ok := b.lookupExistingPayout(ctx, quote.Provider, metadata); ok {
+		existing.AuditFields = mergeStringMaps(existing.AuditFields, map[string]string{
+			"bridge_recovered_provider": quote.Provider,
+			"bridge_recovery_reason":    "metadata_lookup",
+			"bridge_attempt":            "1",
 		})
-		if err == nil {
-			normalized, normErr := b.normalizePayoutResult(candidate, result, metadata, idx+1, false)
-			if normErr != nil {
-				return PayoutResult{}, normErr
-			}
-			if err := b.cacheLookupResult(ctx, normalized); err != nil {
-				return PayoutResult{}, err
-			}
-			return clonePayoutResult(normalized), nil
+		if err := b.cacheLookupResult(ctx, existing); err != nil {
+			return PayoutResult{}, err
 		}
-
-		normalizedErr := normalizeAdapterError(adapter, operationInitiatePayout, err)
-		if existing, ok := b.lookupExistingPayout(ctx, candidate.Provider, metadata); ok {
-			existing.AuditFields = mergeStringMaps(existing.AuditFields, map[string]string{
-				"bridge_recovered_provider": candidate.Provider,
-				"bridge_recovery_reason":    "metadata_lookup",
-				"bridge_attempt":            strconv.Itoa(idx + 1),
-			})
-			if err := b.cacheLookupResult(ctx, existing); err != nil {
-				return PayoutResult{}, err
-			}
-			return existing, nil
-		}
-
-		lastErr = normalizedErr
-		if !CanFailover(normalizedErr) {
-			break
-		}
+		return existing, nil
 	}
+	return PayoutResult{}, normalizedErr
+}
 
-	if lastErr != nil {
-		return PayoutResult{}, lastErr
+// GetReplacementQuote returns the next ranked quote from the original quote
+// plan. It never initiates a payout; the caller must first durably commit the
+// returned provider, quote identifier, and economics.
+func (b *bridgeImpl) GetReplacementQuote(_ context.Context, previous Quote) (Quote, error) {
+	b.opMu.RLock()
+	plan, ok := b.quotePlans[previous.ID]
+	b.opMu.RUnlock()
+	if !ok || len(plan.candidates) < 2 || !quotesEqual(plan.candidates[0], previous) {
+		return Quote{}, ErrAdapterUnavailable
 	}
-	return PayoutResult{}, ErrAdapterUnavailable
+	now := b.now()
+	for idx := 1; idx < len(plan.candidates); idx++ {
+		candidate := cloneQuote(plan.candidates[idx])
+		if candidate.IsExpired(now) {
+			continue
+		}
+		candidate.AuditFields = mergeStringMaps(candidate.AuditFields, map[string]string{
+			"bridge_replacement_for_quote": previous.ID,
+			"bridge_selected_provider":     candidate.Provider,
+			"bridge_selected_rank":         strconv.Itoa(idx + 1),
+		})
+		b.opMu.Lock()
+		b.quotePlans[candidate.ID] = quotePlan{request: plan.request, candidates: []Quote{cloneQuote(candidate)}}
+		b.opMu.Unlock()
+		return candidate, nil
+	}
+	return Quote{}, ErrAdapterUnavailable
 }
 
 // FindPayoutByMetadata resolves an off-ramp payout by idempotent metadata.
@@ -266,10 +274,35 @@ func (b *bridgeImpl) FindPayoutByMetadata(ctx context.Context, provider string, 
 		return PayoutResult{}, ErrInvalidRequest
 	}
 
-	if result, ok := b.lookupExistingPayout(ctx, provider, metadata); ok {
+	if result, ok := b.lookupKnownPayout(ctx, provider, metadata); ok {
 		return result, nil
 	}
-
+	adapters := b.providersForLookup(provider)
+	if len(adapters) == 0 {
+		return PayoutResult{}, NormalizeError(provider, operationMetadataLookup, ErrAdapterUnavailable)
+	}
+	for _, adapter := range adapters {
+		lookup, ok := adapter.(MetadataLookupAdapter)
+		if !ok {
+			continue
+		}
+		result, err := lookup.FindPayoutByMetadata(ctx, metadata)
+		if err != nil {
+			return PayoutResult{}, normalizeAdapterError(adapter, operationMetadataLookup, err)
+		}
+		normalized, normErr := b.normalizePayoutResult(resultingQuote(result), result, metadata, 1, true)
+		if normErr != nil {
+			return PayoutResult{}, normErr
+		}
+		normalized.AuditFields = mergeStringMaps(normalized.AuditFields, map[string]string{
+			"bridge_recovered_provider": normalized.Provider,
+			"bridge_recovery_reason":    "metadata_lookup",
+		})
+		if err := b.cacheLookupResult(ctx, normalized); err != nil {
+			return PayoutResult{}, err
+		}
+		return clonePayoutResult(normalized), nil
+	}
 	return PayoutResult{}, NormalizeError(provider, operationMetadataLookup, ErrPayoutNotFound)
 }
 
@@ -490,17 +523,39 @@ func (b *bridgeImpl) collectQuoteCandidates(ctx context.Context, req QuoteReques
 	return candidates, nil
 }
 
-func (b *bridgeImpl) payoutCandidatesForQuote(quote Quote) []Quote {
-	b.opMu.RLock()
-	plan, ok := b.quotePlans[quote.ID]
-	b.opMu.RUnlock()
-	if ok && len(plan.candidates) > 0 {
-		return cloneQuotes(plan.candidates)
+func (b *bridgeImpl) lookupExistingPayout(ctx context.Context, provider string, metadata map[string]string) (PayoutResult, bool) {
+	if result, ok := b.lookupKnownPayout(ctx, provider, metadata); ok {
+		return result, true
 	}
-	return []Quote{cloneQuote(quote)}
+
+	providers := b.providersForLookup(provider)
+	for _, adapter := range providers {
+		lookup, ok := adapter.(MetadataLookupAdapter)
+		if !ok {
+			continue
+		}
+		result, err := lookup.FindPayoutByMetadata(ctx, metadata)
+		if err != nil {
+			continue
+		}
+		normalized, normErr := b.normalizePayoutResult(resultingQuote(result), result, metadata, 1, true)
+		if normErr != nil {
+			continue
+		}
+		normalized.AuditFields = mergeStringMaps(normalized.AuditFields, map[string]string{
+			"bridge_recovered_provider": normalized.Provider,
+			"bridge_recovery_reason":    "metadata_lookup",
+		})
+		if b.cacheLookupResult(ctx, normalized) != nil {
+			continue
+		}
+		return clonePayoutResult(normalized), true
+	}
+
+	return PayoutResult{}, false
 }
 
-func (b *bridgeImpl) lookupExistingPayout(ctx context.Context, provider string, metadata map[string]string) (PayoutResult, bool) {
+func (b *bridgeImpl) lookupKnownPayout(ctx context.Context, provider string, metadata map[string]string) (PayoutResult, bool) {
 	if len(metadata) == 0 {
 		return PayoutResult{}, false
 	}
@@ -537,30 +592,6 @@ func (b *bridgeImpl) lookupExistingPayout(ctx context.Context, provider string, 
 			}
 			return clonePayoutResult(persisted), true
 		}
-	}
-
-	providers := b.providersForLookup(provider)
-	for _, adapter := range providers {
-		lookup, ok := adapter.(MetadataLookupAdapter)
-		if !ok {
-			continue
-		}
-		result, err := lookup.FindPayoutByMetadata(ctx, metadata)
-		if err != nil {
-			continue
-		}
-		normalized, normErr := b.normalizePayoutResult(resultingQuote(result), result, metadata, 1, true)
-		if normErr != nil {
-			continue
-		}
-		normalized.AuditFields = mergeStringMaps(normalized.AuditFields, map[string]string{
-			"bridge_recovered_provider": normalized.Provider,
-			"bridge_recovery_reason":    "metadata_lookup",
-		})
-		if b.cacheLookupResult(ctx, normalized) != nil {
-			continue
-		}
-		return clonePayoutResult(normalized), true
 	}
 
 	return PayoutResult{}, false

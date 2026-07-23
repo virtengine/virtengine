@@ -58,6 +58,7 @@ type HTTPPartnerConfig struct {
 	Clock                       func() time.Time
 	Secrets                     SecretResolver
 	DailyLimits                 DailyLimitRepository
+	Initiations                 PayoutInitiationRepository
 	ProfileAuthorizer           ProfileAuthorizer
 	ComplianceAuthorizer        ComplianceAuthorizer
 	AllowExternalBlockedSandbox bool
@@ -79,6 +80,7 @@ type HTTPPartnerAdapter struct {
 	now                 func() time.Time
 	secrets             SecretResolver
 	dailyLimits         DailyLimitRepository
+	initiations         PayoutInitiationRepository
 	profileAuthorizer   ProfileAuthorizer
 	compliance          ComplianceAuthorizer
 	authorizationHeader string
@@ -232,6 +234,13 @@ func NewHTTPPartnerAdapter(cfg HTTPPartnerConfig) (*HTTPPartnerAdapter, error) {
 	if cfg.Profile.Environment == EnvironmentProduction && !dailyLimits.Durable() {
 		return nil, fmt.Errorf("%w: durable daily-limit repository is required", ErrProfileNotExecutable)
 	}
+	initiations := cfg.Initiations
+	if initiations == nil {
+		initiations = NewMemoryPayoutInitiationRepository()
+	}
+	if cfg.Profile.Environment == EnvironmentProduction && !initiations.Durable() {
+		return nil, fmt.Errorf("%w: durable payout-initiation repository is required", ErrProfileNotExecutable)
+	}
 	if len(cfg.AllowedPathPrefixes) == 0 {
 		return nil, fmt.Errorf("%w: path allowlist is required", ErrInvalidRequest)
 	}
@@ -309,6 +318,7 @@ func NewHTTPPartnerAdapter(cfg HTTPPartnerConfig) (*HTTPPartnerAdapter, error) {
 		now:                 now,
 		secrets:             cfg.Secrets,
 		dailyLimits:         dailyLimits,
+		initiations:         initiations,
 		profileAuthorizer:   cfg.ProfileAuthorizer,
 		compliance:          cfg.ComplianceAuthorizer,
 		authorizationHeader: cfg.AuthorizationHeader,
@@ -490,6 +500,23 @@ func (a *HTTPPartnerAdapter) InitiatePayout(ctx context.Context, req PayoutReque
 	if err != nil {
 		return PayoutResult{}, err
 	}
+	operationRecord := PayoutInitiationRecord{
+		Provider: a.profile.Provider, QuoteID: req.Quote.ID, OperationBinding: operationBinding,
+		FiatAmount: req.Quote.FiatAmount.String(), CryptoAmount: req.Quote.Request.CryptoAmount.String(),
+		Fee: req.Quote.Fee.String(), Metadata: cloneStringMap(req.Metadata),
+		DailyReservationOperationID: idempotencyKey,
+	}
+	if existing, existingErr := a.initiations.GetPayoutInitiation(ctx, a.profile.Provider, req.Metadata); existingErr == nil {
+		operationRecord.RequestBinding = existing.RequestBinding
+		operationRecord.DailyReservationKey = existing.DailyReservationKey
+		operationRecord.PreparedAt = existing.PreparedAt
+		if err := validatePayoutInitiationBinding(existing, operationRecord); err != nil {
+			return PayoutResult{}, err
+		}
+		return a.reconcilePayoutInitiation(ctx, existing, correlationID)
+	} else if !IsNotFound(existingErr) {
+		return PayoutResult{}, fmt.Errorf("%w: payout-initiation repository unavailable", ErrAdapterUnavailable)
+	}
 	a.mu.RLock()
 	if existingBinding, exists := a.idempotency[idempotencyKey]; exists && existingBinding != operationBinding {
 		a.mu.RUnlock()
@@ -520,12 +547,23 @@ func (a *HTTPPartnerAdapter) InitiatePayout(ctx context.Context, req PayoutReque
 		return PayoutResult{}, err
 	}
 	reservationKey := now.Format("2006-01-02") + "|" + binding.corridor.ID
+	prepared := PayoutInitiationRecord{
+		Provider: a.profile.Provider, QuoteID: req.Quote.ID, OperationBinding: operationBinding,
+		RequestBinding: binding.requestHash, FiatAmount: req.Quote.FiatAmount.String(),
+		CryptoAmount: req.Quote.Request.CryptoAmount.String(), Fee: req.Quote.Fee.String(),
+		Metadata: cloneStringMap(req.Metadata), DailyReservationKey: reservationKey,
+		DailyReservationOperationID: idempotencyKey, State: PayoutInitiationPrepared, PreparedAt: now,
+	}
 	reserved, err := a.dailyLimits.ReserveDailyAmount(ctx, reservationKey, idempotencyKey, req.Quote.FiatAmount, binding.corridor.DailyLimit)
 	if err != nil {
 		return PayoutResult{}, fmt.Errorf("%w: daily-limit repository unavailable", ErrAdapterUnavailable)
 	}
 	if !reserved {
 		return PayoutResult{}, ErrLimitExceeded
+	}
+	if err := a.initiations.PutPayoutInitiation(ctx, prepared); err != nil {
+		_ = a.dailyLimits.ReleaseDailyAmount(context.Background(), reservationKey, idempotencyKey)
+		return PayoutResult{}, fmt.Errorf("%w: persist payout initiation", ErrAdapterUnavailable)
 	}
 	a.mu.Lock()
 	if existingBinding, exists := a.idempotency[idempotencyKey]; exists && existingBinding != operationBinding {
@@ -554,16 +592,28 @@ func (a *HTTPPartnerAdapter) InitiatePayout(ctx context.Context, req PayoutReque
 		ComplianceReference: req.Quote.Request.Compliance.Reference, Metadata: cloneStringMap(req.Metadata),
 	}
 	var response partnerPayoutResponse
-	err = a.doJSON(ctx, http.MethodPost, a.endpoints.Payout, wireRequest, idempotencyKey, correlationID, &response)
+	dispatched, err := a.doJSONDispatch(ctx, http.MethodPost, a.endpoints.Payout, wireRequest, idempotencyKey, correlationID, &response)
 	if err != nil {
-		if IsAmbiguous(err) {
+		if dispatched {
+			prepared.State = PayoutInitiationAmbiguous
+			if persistErr := a.initiations.PutPayoutInitiation(ctx, prepared); persistErr != nil {
+				return PayoutResult{}, fmt.Errorf("%w: payout response ambiguous and recovery state unavailable", ErrProviderAmbiguous)
+			}
 			releaseReservation = false
+			return PayoutResult{}, ambiguousInitiationError(a.Name(), err)
 		}
+		prepared.State = PayoutInitiationNoPayout
+		_ = a.initiations.PutPayoutInitiation(context.Background(), prepared)
 		return PayoutResult{}, err
 	}
 	result, err := a.convertPayoutResponse(response, &binding, correlationID, req.Metadata)
 	if err != nil {
-		return PayoutResult{}, err
+		prepared.State = PayoutInitiationAmbiguous
+		if persistErr := a.initiations.PutPayoutInitiation(ctx, prepared); persistErr != nil {
+			return PayoutResult{}, fmt.Errorf("%w: payout response ambiguous and recovery state unavailable", ErrProviderAmbiguous)
+		}
+		releaseReservation = false
+		return PayoutResult{}, ambiguousInitiationError(a.Name(), err)
 	}
 	result.DailyReservationKey = reservationKey
 	result.DailyReservationOperationID = idempotencyKey
@@ -571,12 +621,84 @@ func (a *HTTPPartnerAdapter) InitiatePayout(ctx context.Context, req PayoutReque
 		Provider: a.profile.Provider, PayoutID: result.ID, QuoteID: req.Quote.ID, CorrelationID: correlationID,
 		ReservationDay: now.Format("2006-01-02"),
 	})
+	prepared.State, prepared.PayoutID = PayoutInitiationAccepted, result.ID
+	switch result.Status {
+	case StatusFailed:
+		prepared.State = PayoutInitiationTerminalFailed
+	case StatusCancelled:
+		prepared.State = PayoutInitiationTerminalCancelled
+	}
+	if err := a.initiations.PutPayoutInitiation(ctx, prepared); err != nil {
+		releaseReservation = false
+		return PayoutResult{}, ambiguousInitiationError(a.Name(), err)
+	}
 	if result.Status == StatusFailed || result.Status == StatusCancelled {
 		if err := a.releasePayoutReservation(ctx, result); err != nil {
 			return PayoutResult{}, err
 		}
 	}
 	releaseReservation = false
+	return result, nil
+}
+
+func (a *HTTPPartnerAdapter) reconcilePayoutInitiation(ctx context.Context, record PayoutInitiationRecord, correlationID string) (PayoutResult, error) {
+	switch record.State {
+	case PayoutInitiationNoPayout:
+		return PayoutResult{}, NormalizeError(a.Name(), operationMetadataLookup, ErrPayoutNotFound)
+	case PayoutInitiationTerminalFailed, PayoutInitiationTerminalCancelled:
+		if record.PayoutID != "" {
+			a.mu.RLock()
+			result, ok := a.payouts[record.PayoutID]
+			a.mu.RUnlock()
+			if ok {
+				return clonePayoutResult(result), nil
+			}
+		}
+	}
+	var response partnerPayoutResponse
+	err := a.doJSON(ctx, http.MethodPost, a.endpoints.MetadataLookup, partnerMetadataRequest{
+		APIVersion: a.profile.APIVersion, Metadata: cloneStringMap(record.Metadata),
+	}, "lookup-"+record.DailyReservationOperationID, correlationID, &response)
+	if err != nil {
+		if IsNotFound(err) {
+			record.State = PayoutInitiationNoPayout
+			if persistErr := a.initiations.PutPayoutInitiation(ctx, record); persistErr != nil {
+				return PayoutResult{}, fmt.Errorf("%w: persist no-payout reconciliation", ErrAdapterUnavailable)
+			}
+			if releaseErr := a.dailyLimits.ReleaseDailyAmount(ctx, record.DailyReservationKey, record.DailyReservationOperationID); releaseErr != nil {
+				return PayoutResult{}, fmt.Errorf("%w: release reconciled payout reservation", ErrAdapterUnavailable)
+			}
+			return PayoutResult{}, err
+		}
+		return PayoutResult{}, ambiguousInitiationError(a.Name(), err)
+	}
+	if !maps.Equal(response.Metadata, record.Metadata) {
+		return PayoutResult{}, ambiguousInitiationError(a.Name(), ErrProviderRejected)
+	}
+	result, err := a.convertPayoutResponse(response, nil, correlationID, record.Metadata)
+	if err != nil || result.Provider != record.Provider || result.QuoteID != record.QuoteID ||
+		result.FiatAmount.String() != record.FiatAmount || result.CryptoAmount.String() != record.CryptoAmount || result.Fee.String() != record.Fee {
+		return PayoutResult{}, ambiguousInitiationError(a.Name(), ErrProviderRejected)
+	}
+	result.DailyReservationKey = record.DailyReservationKey
+	result.DailyReservationOperationID = record.DailyReservationOperationID
+	binding := WebhookBinding{Provider: result.Provider, PayoutID: result.ID, QuoteID: result.QuoteID, CorrelationID: correlationID, ReservationDay: strings.SplitN(record.DailyReservationKey, "|", 2)[0]}
+	a.storePayout(result, binding)
+	record.State, record.PayoutID = PayoutInitiationAccepted, result.ID
+	switch result.Status {
+	case StatusFailed:
+		record.State = PayoutInitiationTerminalFailed
+	case StatusCancelled:
+		record.State = PayoutInitiationTerminalCancelled
+	}
+	if err := a.initiations.PutPayoutInitiation(ctx, record); err != nil {
+		return PayoutResult{}, ambiguousInitiationError(a.Name(), err)
+	}
+	if result.Status == StatusFailed || result.Status == StatusCancelled {
+		if err := a.releasePayoutReservation(ctx, result); err != nil {
+			return PayoutResult{}, err
+		}
+	}
 	return result, nil
 }
 
@@ -779,15 +901,20 @@ func (a *HTTPPartnerAdapter) authorizeRuntimeProfile() error {
 }
 
 func (a *HTTPPartnerAdapter) doJSON(ctx context.Context, method string, endpoint string, requestBody any, idempotencyKey string, correlationID string, responseBody any) error {
+	_, err := a.doJSONDispatch(ctx, method, endpoint, requestBody, idempotencyKey, correlationID, responseBody)
+	return err
+}
+
+func (a *HTTPPartnerAdapter) doJSONDispatch(ctx context.Context, method string, endpoint string, requestBody any, idempotencyKey string, correlationID string, responseBody any) (bool, error) {
 	endpointURL, err := a.endpointURL(endpoint)
 	if err != nil {
-		return err
+		return false, err
 	}
 	var body io.Reader
 	if requestBody != nil {
 		encoded, encodeErr := json.Marshal(requestBody)
 		if encodeErr != nil {
-			return fmt.Errorf("%w: encode partner request", ErrInvalidRequest)
+			return false, fmt.Errorf("%w: encode partner request", ErrInvalidRequest)
 		}
 		body = bytes.NewReader(encoded)
 	}
@@ -795,7 +922,7 @@ func (a *HTTPPartnerAdapter) doJSON(ctx context.Context, method string, endpoint
 	defer cancel()
 	req, err := http.NewRequestWithContext(requestCtx, method, endpointURL.String(), body)
 	if err != nil {
-		return fmt.Errorf("%w: create partner request", ErrInvalidRequest)
+		return false, fmt.Errorf("%w: create partner request", ErrInvalidRequest)
 	}
 	req.Header.Set("Accept", "application/json")
 	req.Header.Set("X-API-Version", a.profile.APIVersion)
@@ -811,11 +938,11 @@ func (a *HTTPPartnerAdapter) doJSON(ctx context.Context, method string, endpoint
 	if a.secrets != nil {
 		credentialRef, refErr := findCredentialRef(a.profile, "api", a.profile.Environment)
 		if refErr != nil {
-			return fmt.Errorf("%w: API credential reference unavailable", ErrProfileNotExecutable)
+			return false, fmt.Errorf("%w: API credential reference unavailable", ErrProfileNotExecutable)
 		}
 		secret, resolveErr := a.secrets.ResolveSecret(requestCtx, credentialRef)
 		if resolveErr != nil || len(secret) == 0 {
-			return fmt.Errorf("%w: API credential unavailable", ErrAdapterUnavailable)
+			return false, fmt.Errorf("%w: API credential unavailable", ErrAdapterUnavailable)
 		}
 		req.Header.Set(a.authorizationHeader, "Bearer "+string(secret))
 		for i := range secret {
@@ -826,36 +953,36 @@ func (a *HTTPPartnerAdapter) doJSON(ctx context.Context, method string, endpoint
 	if err != nil {
 		operation := operationForEndpoint(endpoint, a.endpoints)
 		if method == http.MethodPost && (operation == operationInitiatePayout || operation == operationCancel) {
-			return &ProviderError{Provider: a.Name(), Operation: operation, Kind: ErrorKindAmbiguous, Retryable: true, Ambiguous: true, err: ErrProviderAmbiguous}
+			return true, &ProviderError{Provider: a.Name(), Operation: operation, Kind: ErrorKindAmbiguous, Retryable: true, Ambiguous: true, err: ErrProviderAmbiguous}
 		}
-		return NormalizeError(a.Name(), operation, err)
+		return true, NormalizeError(a.Name(), operation, err)
 	}
 	defer response.Body.Close()
 	limited := io.LimitReader(response.Body, a.maxResponseBytes+1)
 	raw, err := io.ReadAll(limited)
 	if err != nil {
-		return NormalizeError(a.Name(), operationForEndpoint(endpoint, a.endpoints), err)
+		return true, NormalizeError(a.Name(), operationForEndpoint(endpoint, a.endpoints), err)
 	}
 	if int64(len(raw)) > a.maxResponseBytes {
-		return ErrResponseTooLarge
+		return true, ErrResponseTooLarge
 	}
 	if response.StatusCode < http.StatusOK || response.StatusCode >= http.StatusMultipleChoices {
-		return a.normalizeHTTPError(response.StatusCode, raw, operationForEndpoint(endpoint, a.endpoints))
+		return true, a.normalizeHTTPError(response.StatusCode, raw, operationForEndpoint(endpoint, a.endpoints))
 	}
 	if responseBody == nil {
 		if len(bytes.TrimSpace(raw)) != 0 {
-			return fmt.Errorf("%w: unexpected response body", ErrProviderRejected)
+			return true, fmt.Errorf("%w: unexpected response body", ErrProviderRejected)
 		}
-		return nil
+		return true, nil
 	}
 	contentType := response.Header.Get("Content-Type")
 	if !strings.HasPrefix(strings.ToLower(contentType), "application/json") {
-		return fmt.Errorf("%w: partner response is not JSON", ErrProviderRejected)
+		return true, fmt.Errorf("%w: partner response is not JSON", ErrProviderRejected)
 	}
 	if err := decodeStrictJSON(raw, responseBody); err != nil {
-		return fmt.Errorf("%w: invalid partner response", ErrProviderRejected)
+		return true, fmt.Errorf("%w: invalid partner response", ErrProviderRejected)
 	}
-	return nil
+	return true, nil
 }
 
 func (a *HTTPPartnerAdapter) normalizeHTTPError(statusCode int, raw []byte, operation string) error {
@@ -1142,6 +1269,46 @@ func validateOperationalMetadata(metadata map[string]string) error {
 		}
 	}
 	return nil
+}
+
+func validatePayoutInitiationRecord(record PayoutInitiationRecord) error {
+	if record.Provider == "" || record.QuoteID == "" || record.OperationBinding == "" || record.RequestBinding == "" ||
+		record.FiatAmount == "" || record.CryptoAmount == "" || record.Fee == "" || record.DailyReservationKey == "" ||
+		record.DailyReservationOperationID == "" || record.PreparedAt.IsZero() || record.State == "" {
+		return ErrInvalidRequest
+	}
+	return validateOperationalMetadata(record.Metadata)
+}
+
+func validatePayoutInitiationBinding(current, expected PayoutInitiationRecord) error {
+	if current.Provider != expected.Provider || current.QuoteID != expected.QuoteID || current.OperationBinding != expected.OperationBinding ||
+		current.RequestBinding != expected.RequestBinding || current.FiatAmount != expected.FiatAmount || current.CryptoAmount != expected.CryptoAmount ||
+		current.Fee != expected.Fee || current.DailyReservationKey != expected.DailyReservationKey ||
+		current.DailyReservationOperationID != expected.DailyReservationOperationID || !maps.Equal(current.Metadata, expected.Metadata) {
+		return fmt.Errorf("%w: payout initiation binding mismatch", ErrInvalidRequest)
+	}
+	return nil
+}
+
+func validatePayoutInitiationUpdate(current, updated PayoutInitiationRecord) error {
+	if err := validatePayoutInitiationBinding(current, updated); err != nil || !current.PreparedAt.Equal(updated.PreparedAt) {
+		return ErrProviderRejected
+	}
+	if current.PayoutID != "" && current.PayoutID != updated.PayoutID {
+		return ErrProviderRejected
+	}
+	rank := map[PayoutInitiationState]int{
+		PayoutInitiationPrepared: 1, PayoutInitiationAmbiguous: 2, PayoutInitiationAccepted: 3,
+		PayoutInitiationNoPayout: 3, PayoutInitiationTerminalFailed: 3, PayoutInitiationTerminalCancelled: 3,
+	}
+	if current.State != updated.State && rank[updated.State] < rank[current.State] {
+		return ErrProviderRejected
+	}
+	return nil
+}
+
+func ambiguousInitiationError(provider string, cause error) error {
+	return &ProviderError{Provider: provider, Operation: operationInitiatePayout, Kind: ErrorKindAmbiguous, Retryable: true, Ambiguous: true, err: wrapBaseError(ErrProviderAmbiguous, cause)}
 }
 
 func reconcilePayoutStatus(current PayoutResult, updated PayoutResult) error {

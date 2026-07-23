@@ -105,6 +105,38 @@ type PayoutResult struct {
 	DailyReservationOperationID string `json:"daily_reservation_operation_id,omitempty"`
 }
 
+// PayoutInitiationState is the durable write-ahead state for one exact payout
+// POST. Prepared is intentionally treated as ambiguous after a restart because
+// the process may have stopped after the partner accepted the request.
+type PayoutInitiationState string
+
+const (
+	PayoutInitiationPrepared          PayoutInitiationState = "prepared"
+	PayoutInitiationAmbiguous         PayoutInitiationState = "ambiguous"
+	PayoutInitiationAccepted          PayoutInitiationState = "accepted"
+	PayoutInitiationNoPayout          PayoutInitiationState = "no_payout"
+	PayoutInitiationTerminalFailed    PayoutInitiationState = "terminal_failed"
+	PayoutInitiationTerminalCancelled PayoutInitiationState = "terminal_cancelled"
+)
+
+// PayoutInitiationRecord contains only privacy-safe immutable bindings needed
+// to reconcile an uncertain POST and retain its exact daily-limit reservation.
+type PayoutInitiationRecord struct {
+	Provider                    string                `json:"provider"`
+	QuoteID                     string                `json:"quote_id"`
+	OperationBinding            string                `json:"operation_binding"`
+	RequestBinding              string                `json:"request_binding"`
+	FiatAmount                  string                `json:"fiat_amount"`
+	CryptoAmount                string                `json:"crypto_amount"`
+	Fee                         string                `json:"fee"`
+	Metadata                    map[string]string     `json:"metadata"`
+	DailyReservationKey         string                `json:"daily_reservation_key"`
+	DailyReservationOperationID string                `json:"daily_reservation_operation_id"`
+	State                       PayoutInitiationState `json:"state"`
+	PayoutID                    string                `json:"payout_id,omitempty"`
+	PreparedAt                  time.Time             `json:"prepared_at"`
+}
+
 // IsTerminal returns true when the payout is in a final state.
 func (r PayoutResult) IsTerminal() bool {
 	return r.Status.IsTerminal()
@@ -129,6 +161,21 @@ type PayoutRepository interface {
 	FindPayout(ctx context.Context, provider string, metadata map[string]string) (PayoutResult, error)
 	PutPayout(ctx context.Context, result PayoutResult) error
 	Durable() bool
+}
+
+// PayoutInitiationRepository durably stores the write-ahead binding for an
+// exact provider POST. Production adapters require a durable implementation.
+type PayoutInitiationRepository interface {
+	GetPayoutInitiation(ctx context.Context, provider string, metadata map[string]string) (PayoutInitiationRecord, error)
+	PutPayoutInitiation(ctx context.Context, record PayoutInitiationRecord) error
+	Durable() bool
+}
+
+// ReplacementQuoteBridge optionally exposes an explicit alternate quote. A
+// caller must commit the returned quote before initiating it; InitiatePayout
+// itself never substitutes a different provider or quote.
+type ReplacementQuoteBridge interface {
+	GetReplacementQuote(ctx context.Context, previous Quote) (Quote, error)
 }
 
 // Adapter defines the off-ramp provider interface.

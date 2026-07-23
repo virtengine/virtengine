@@ -1,6 +1,7 @@
 package keeper
 
 import (
+	"bytes"
 	"crypto/sha256"
 	"encoding/json"
 	"fmt"
@@ -961,9 +962,12 @@ func (k Keeper) recordTreasuryEntry(
 	case types.TreasuryRecordPlatformFee, types.TreasuryRecordValidatorFee, types.TreasuryRecordHoldback:
 		balanceAfter = balance.Add(amount...)
 	case types.TreasuryRecordRefund, types.TreasuryRecordWithdrawal:
+		if !balance.IsAllGTE(amount) {
+			return types.ErrInvalidSettlement.Wrapf("treasury balance underflow for payout %s type %s", payout.PayoutID, recordType.String())
+		}
 		balanceAfter = balance.Sub(amount...)
 	default:
-		balanceAfter = balance
+		return types.ErrInvalidSettlement.Wrapf("unknown treasury record type %d", recordType)
 	}
 
 	record := types.TreasuryRecord{
@@ -1036,16 +1040,27 @@ func (k Keeper) recordPayoutRetainedTreasuryEntries(ctx sdk.Context, payout *typ
 	return nil
 }
 
-func (k Keeper) getTreasuryBalance(ctx sdk.Context) sdk.Coins {
+func (k Keeper) loadTreasuryBalance(ctx sdk.Context) (sdk.Coins, error) {
 	store := ctx.KVStore(k.skey)
 	bz := store.Get(types.PrefixTreasuryBalance)
 	if bz == nil {
-		return sdk.NewCoins()
+		return sdk.NewCoins(), nil
 	}
 
 	var balance sdk.Coins
 	if err := json.Unmarshal(bz, &balance); err != nil {
-		return sdk.NewCoins()
+		return nil, types.ErrInvalidSettlement.Wrap("malformed treasury balance")
+	}
+	if !balance.IsValid() {
+		return nil, types.ErrInvalidSettlement.Wrap("invalid treasury balance")
+	}
+	return balance, nil
+}
+
+func (k Keeper) getTreasuryBalance(ctx sdk.Context) sdk.Coins {
+	balance, err := k.loadTreasuryBalance(ctx)
+	if err != nil {
+		panic(err)
 	}
 	return balance
 }
@@ -1063,6 +1078,79 @@ func (k Keeper) setTreasuryBalance(ctx sdk.Context, balance sdk.Coins) error {
 // GetTreasuryBalance returns the current treasury balance
 func (k Keeper) GetTreasuryBalance(ctx sdk.Context) sdk.Coins {
 	return k.getTreasuryBalance(ctx)
+}
+
+func (k Keeper) ImportTreasuryAccounting(ctx sdk.Context, records []types.TreasuryRecord, balance sdk.Coins) error {
+	if !balance.IsValid() {
+		return types.ErrInvalidSettlement.Wrap("invalid treasury genesis balance")
+	}
+	cacheCtx, write := ctx.CacheContext()
+	credits := sdk.NewCoins()
+	debits := sdk.NewCoins()
+	seen := make(map[string]struct{}, len(records))
+	for _, record := range records {
+		if record.RecordID == "" || record.PayoutID == "" || record.SettlementID == "" || !record.Amount.IsValid() || record.Amount.IsZero() || !record.BalanceAfter.IsValid() {
+			return types.ErrInvalidSettlement.Wrap("invalid treasury genesis record")
+		}
+		if _, duplicate := seen[record.RecordID]; duplicate {
+			return types.ErrInvalidSettlement.Wrap("duplicate treasury genesis record")
+		}
+		seen[record.RecordID] = struct{}{}
+		switch record.RecordType {
+		case types.TreasuryRecordPlatformFee, types.TreasuryRecordValidatorFee, types.TreasuryRecordHoldback:
+			credits = credits.Add(record.Amount...)
+		case types.TreasuryRecordRefund, types.TreasuryRecordWithdrawal:
+			debits = debits.Add(record.Amount...)
+		default:
+			return types.ErrInvalidSettlement.Wrap("unknown treasury genesis record type")
+		}
+		payout, found := k.GetPayout(cacheCtx, record.PayoutID)
+		if !found || payout.SettlementID != record.SettlementID {
+			return types.ErrInvalidSettlement.Wrapf("treasury genesis record %s has invalid payout linkage", record.RecordID)
+		}
+		key := types.TreasuryRecordKey(record.RecordID)
+		if cacheCtx.KVStore(k.skey).Has(key) {
+			return types.ErrInvalidSettlement.Wrapf("treasury genesis record %s conflicts with stored accounting", record.RecordID)
+		}
+		raw, err := json.Marshal(record)
+		if err != nil {
+			return err
+		}
+		cacheCtx.KVStore(k.skey).Set(key, raw)
+	}
+	if !credits.IsAllGTE(debits) {
+		return types.ErrInvalidSettlement.Wrap("treasury genesis accounting underflow")
+	}
+	expected := credits.Sub(debits...)
+	if !expected.Equal(balance) {
+		return types.ErrInvalidSettlement.Wrapf("treasury genesis balance mismatch: expected %s got %s", expected, balance)
+	}
+	if err := k.setTreasuryBalance(cacheCtx, balance); err != nil {
+		return err
+	}
+	write()
+	return nil
+}
+
+func (k Keeper) ExportTreasuryAccounting(ctx sdk.Context) ([]types.TreasuryRecord, sdk.Coins, error) {
+	records := make([]types.TreasuryRecord, 0)
+	iterator := storetypes.KVStorePrefixIterator(ctx.KVStore(k.skey), types.PrefixTreasuryRecord)
+	defer iterator.Close()
+	for ; iterator.Valid(); iterator.Next() {
+		var record types.TreasuryRecord
+		if err := json.Unmarshal(iterator.Value(), &record); err != nil {
+			return nil, nil, types.ErrInvalidSettlement.Wrapf("malformed treasury record %x", iterator.Key())
+		}
+		if !bytes.Equal(iterator.Key(), types.TreasuryRecordKey(record.RecordID)) {
+			return nil, nil, types.ErrInvalidSettlement.Wrapf("mis-keyed treasury record %x", iterator.Key())
+		}
+		records = append(records, record)
+	}
+	balance, err := k.loadTreasuryBalance(ctx)
+	if err != nil {
+		return nil, nil, err
+	}
+	return records, balance, nil
 }
 
 // ============================================================================

@@ -11,9 +11,13 @@ git config --local merge.autoEdit false 2>$null
 $env:GIT_EDITOR = ":"
 $env:GIT_MERGE_AUTOEDIT = "no"
 
-$changedFiles = git diff --cached --name-only 2>$null
+$changedFiles = @(
+    git diff --cached --name-only 2>$null
+    git diff --name-only 2>$null
+    git ls-files --others --exclude-standard 2>$null
+) | Where-Object { $_ } | Sort-Object -Unique
 if (-not $changedFiles) {
-    $changedFiles = git diff --name-only HEAD~1 2>$null
+    $changedFiles = @(git diff --name-only HEAD~1 2>$null) | Where-Object { $_ } | Sort-Object -Unique
 }
 if (-not $changedFiles) {
     Write-Host "No changed files detected. Skipping pre-flight."
@@ -25,7 +29,7 @@ $hasPortal = $changedFiles | Where-Object { $_ -match '^portal/' }
 $hasGoMod = $changedFiles | Where-Object { $_ -match '^go\.(mod|sum)$' }
 $hasBosun = $changedFiles | Where-Object { $_ -match '^scripts/bosun/' }
 $hasTask84D = $changedFiles | Where-Object { $_ -match '(^x/(settlement|fraud|hpc|review|escrow|resources)/|^upgrades/software/v1\.7\.0/|financial-case|task84d)' }
-$hasTask85B = $changedFiles | Where-Object { $_ -match '(^pkg/dex/|^pkg/payments/offramp/|^pkg/provider_daemon/(fiat_conversion|provider_mutation|chain_submitter)|^cmd/provider-daemon/(main\.go|fiat_conversion)|^x/settlement/|^app/(app\.go|mac\.go|mac_task85b_test\.go)|^upgrades/software/v1\.8\.0/|^tests/(integration/settlement/|compatibility/task85b|upgrade/)|^sdk/(proto/node/virtengine/settlement/v1/|go/node/settlement/v1/|ts/src/generated/protos/virtengine/settlement/v1/|artifacts/proto/)|^api/openapi/virtengine-proto\.swagger\.json$|^_docs/.*(task[-_]?85b|fiat|off.?ramp|payout|dex)|task[-_]?85b|fiat-conversion|off.?ramp|payout-corridor)' }
+$hasTask85B = $changedFiles | Where-Object { $_ -match '(^pkg/dex/|^pkg/payments/offramp/|^pkg/provider_daemon/(fiat_conversion|provider_mutation|chain_submitter)|^cmd/provider-daemon/(main\.go|fiat_conversion)|^x/settlement/|^app/(app\.go|mac\.go|mac_task85b_test\.go)|^upgrades/software/v1\.8\.0/|^tests/(integration/settlement/|compatibility/task85b|upgrade/)|^sdk/(proto/node/virtengine/settlement/v1/|go/node/settlement/v1/|ts/src/generated/protos/virtengine/settlement/v1/|ts/script/fix-ts-proto-generated-types\.ts$|artifacts/proto/)|^api/openapi/virtengine-proto\.swagger\.json$|^_docs/.*(task[-_]?85b|fiat|off.?ramp|payout|dex)|task[-_]?85b|fiat-conversion|off.?ramp|payout-corridor)' }
 $errors = 0
 
 if ($hasTask84D) {
@@ -36,7 +40,16 @@ if ($hasTask84D) {
 
 if ($hasTask85B) {
     Write-Host "--- Task 85B DEX and fiat off-ramp checks ---" -ForegroundColor Yellow
-    & (Join-Path $PSScriptRoot 'task85b-preflight.ps1') -Quick -SkipRace
+    $task85BArgs = @()
+    if ($env:VE_HOOK_TASK85B_QUICK -eq '1') {
+        Write-Host 'WARNING: VE_HOOK_TASK85B_QUICK=1 requests diagnostic-only reduced checks; this is not release evidence.' -ForegroundColor Yellow
+        $task85BArgs += '-Quick'
+    }
+    if ($env:VE_HOOK_TASK85B_SKIP_RACE -eq '1') {
+        Write-Host 'WARNING: VE_HOOK_TASK85B_SKIP_RACE=1 explicitly skips the race gate; this is not release evidence.' -ForegroundColor Yellow
+        $task85BArgs += '-SkipRace'
+    }
+    & (Join-Path $PSScriptRoot 'task85b-preflight.ps1') @task85BArgs
     if ($LASTEXITCODE -ne 0) { Write-Host "FAIL: Task 85B preflight" -ForegroundColor Red; $errors++ }
 }
 

@@ -155,6 +155,8 @@ type IKeeper interface {
 	GetDistributionSequence(ctx sdk.Context) uint64
 	GetPayoutSequence(ctx sdk.Context) uint64
 	GetFiatConversionSequence(ctx sdk.Context) uint64
+	ImportTreasuryAccounting(ctx sdk.Context, records []types.TreasuryRecord, balance sdk.Coins) error
+	ExportTreasuryAccounting(ctx sdk.Context) ([]types.TreasuryRecord, sdk.Coins, error)
 	GetFiatConversionCustodyBalance(ctx sdk.Context) sdk.Coins
 
 	// Block hooks

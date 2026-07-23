@@ -19,6 +19,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -125,6 +126,25 @@ func (r resolverFake) ResolveCompliance(context.Context, *settlementv1.FiatConve
 }
 func (r resolverFake) ProductionReady(context.Context) error { return r.err }
 
+type mutableComplianceFake struct {
+	mu       sync.Mutex
+	decision offramp.ComplianceDecision
+	digest   []byte
+	err      error
+}
+
+func (r *mutableComplianceFake) ResolveCompliance(context.Context, *settlementv1.FiatConversionRecord) (ResolvedFiatCompliance, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return ResolvedFiatCompliance{Decision: r.decision, Digest: append([]byte(nil), r.digest...)}, r.err
+}
+func (*mutableComplianceFake) ProductionReady(context.Context) error { return nil }
+func (r *mutableComplianceFake) update(fn func(*offramp.ComplianceDecision, *[]byte)) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	fn(&r.decision, &r.digest)
+}
+
 type custodyFake struct {
 	testOnly bool
 	err      error
@@ -230,6 +250,7 @@ type scriptedBridge struct {
 	metadataCalls  int
 	initiateErr    error
 	metadataResult offramp.PayoutResult
+	replacement    offramp.Quote
 }
 
 func (*scriptedBridge) RegisterAdapter(offramp.Adapter) error { return nil }
@@ -243,6 +264,21 @@ func (b *scriptedBridge) InitiatePayout(_ context.Context, quote offramp.Quote, 
 		return offramp.PayoutResult{}, b.initiateErr
 	}
 	return testPayoutResult(b.now, quote, metadata, offramp.StatusProcessing), nil
+}
+func (b *scriptedBridge) GetReplacementQuote(_ context.Context, previous offramp.Quote) (offramp.Quote, error) {
+	if b.replacement.ID != "" {
+		quote := b.replacement
+		quote.Request = previous.Request
+		return quote, nil
+	}
+	quote, err := b.GetQuote(context.Background(), previous.Request)
+	if err != nil {
+		return offramp.Quote{}, err
+	}
+	if quote.ID == previous.ID {
+		quote.ID = previous.ID + "-replacement"
+	}
+	return quote, nil
 }
 func (b *scriptedBridge) GetStatus(_ context.Context, _ string) (offramp.PayoutResult, error) {
 	b.statusCalls++
@@ -283,7 +319,7 @@ func applyTestObservation(record *settlementv1.FiatConversionRecord, msg *settle
 	case settlementv1.FiatConversionObservationStage_FIAT_CONVERSION_OBSERVATION_STAGE_QUOTE_ACCEPTED:
 		record.State, record.QuoteDigest, record.QuoteExpiry, record.MinimumStableOutput = "SWAP_PENDING", msg.QuoteDigest, msg.QuoteExpiry, msg.MinimumStableOutput
 	case settlementv1.FiatConversionObservationStage_FIAT_CONVERSION_OBSERVATION_STAGE_SWAP_SUBMITTED:
-		record.State, record.SwapTxHash = "SWAP_SUBMITTED", msg.SwapTxHash
+		record.State, record.SwapTxHash = fiatChainStateSwapSubmitted, msg.SwapTxHash
 	case settlementv1.FiatConversionObservationStage_FIAT_CONVERSION_OBSERVATION_STAGE_SWAP_FINALIZED:
 		record.State, record.StableAmount = "SWAP_SETTLED", msg.StableAmount
 	case settlementv1.FiatConversionObservationStage_FIAT_CONVERSION_OBSERVATION_STAGE_PAYOUT_QUOTED:
@@ -732,6 +768,113 @@ func TestFiatConversionFinancialHoldAfterSigningStopsBroadcast(t *testing.T) {
 	require.Equal(t, "FINANCIAL_HOLD_ACTIVE", stored.FailureCode)
 }
 
+func TestFiatConversionComplianceChangeAfterQuoteStopsSigning(t *testing.T) {
+	for _, test := range []struct {
+		name   string
+		change func(*offramp.ComplianceDecision, *[]byte, time.Time)
+	}{
+		{name: "revoked", change: func(decision *offramp.ComplianceDecision, _ *[]byte, _ time.Time) { decision.Revoked = true }},
+		{name: "status_changed", change: func(decision *offramp.ComplianceDecision, _ *[]byte, _ time.Time) {
+			decision.SanctionsDecision = "denied"
+		}},
+		{name: "digest_changed", change: func(_ *offramp.ComplianceDecision, digest *[]byte, _ time.Time) {
+			*digest = bytes.Repeat([]byte{9}, sha256.Size)
+		}},
+		{name: "expired", change: func(decision *offramp.ComplianceDecision, _ *[]byte, now time.Time) { decision.ValidUntil = now }},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			orchestrator, query, submitter, _ := newOrchestratorFixture(t)
+			quote := testDEXQuote(t, orchestrator.cfg.Profiles, orchestrator.cfg.Now())
+			dexBoundary := &sideEffectDEXFake{quote: quote}
+			custodyBoundary := &sideEffectCustodyFake{}
+			current := orchestrator.cfg.Compliance.(resolverFake)
+			compliance := &mutableComplianceFake{decision: current.decision, digest: append([]byte(nil), current.complianceDigest...)}
+			orchestrator.cfg.DEX, orchestrator.cfg.Custody, orchestrator.cfg.Compliance = dexBoundary, custodyBoundary, compliance
+			item, err := orchestrator.Claim(context.Background(), query.records["conversion-1"])
+			require.NoError(t, err)
+			require.NoError(t, orchestrator.process(context.Background(), item.Intent.ConversionID))
+			compliance.update(func(decision *offramp.ComplianceDecision, digest *[]byte) {
+				test.change(decision, digest, orchestrator.cfg.Now())
+			})
+			err = orchestrator.process(context.Background(), item.Intent.ConversionID)
+			var retry *fiatRetryError
+			require.ErrorAs(t, err, &retry)
+			require.Zero(t, custodyBoundary.signCalls)
+			require.Zero(t, dexBoundary.executeCalls)
+			require.Len(t, submitter.submitted, 1)
+			stored, getErr := orchestrator.cfg.Store.Get(context.Background(), item.Intent.ConversionID)
+			require.NoError(t, getErr)
+			require.Equal(t, "COMPLIANCE_REVOKED", stored.FailureCode)
+		})
+	}
+}
+
+func TestFiatConversionComplianceChangeAfterSigningStopsBroadcast(t *testing.T) {
+	for _, test := range []struct {
+		name   string
+		change func(*offramp.ComplianceDecision, *[]byte, time.Time)
+	}{
+		{name: "revoked", change: func(decision *offramp.ComplianceDecision, _ *[]byte, _ time.Time) { decision.Revoked = true }},
+		{name: "status_changed", change: func(decision *offramp.ComplianceDecision, _ *[]byte, _ time.Time) { decision.KYCDecision = "revoked" }},
+		{name: "digest_changed", change: func(_ *offramp.ComplianceDecision, digest *[]byte, _ time.Time) {
+			*digest = bytes.Repeat([]byte{8}, sha256.Size)
+		}},
+		{name: "expired", change: func(decision *offramp.ComplianceDecision, _ *[]byte, now time.Time) { decision.ValidUntil = now }},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			orchestrator, query, submitter, _ := newOrchestratorFixture(t)
+			quote := testDEXQuote(t, orchestrator.cfg.Profiles, orchestrator.cfg.Now())
+			dexBoundary := &sideEffectDEXFake{quote: quote}
+			current := orchestrator.cfg.Compliance.(resolverFake)
+			compliance := &mutableComplianceFake{decision: current.decision, digest: append([]byte(nil), current.complianceDigest...)}
+			custodyBoundary := &sideEffectCustodyFake{afterSign: func() {
+				compliance.update(func(decision *offramp.ComplianceDecision, digest *[]byte) {
+					test.change(decision, digest, orchestrator.cfg.Now())
+				})
+			}}
+			orchestrator.cfg.DEX, orchestrator.cfg.Custody, orchestrator.cfg.Compliance = dexBoundary, custodyBoundary, compliance
+			item, err := orchestrator.Claim(context.Background(), query.records["conversion-1"])
+			require.NoError(t, err)
+			require.NoError(t, orchestrator.process(context.Background(), item.Intent.ConversionID))
+			err = orchestrator.process(context.Background(), item.Intent.ConversionID)
+			var retry *fiatRetryError
+			require.ErrorAs(t, err, &retry)
+			require.Equal(t, 1, custodyBoundary.signCalls)
+			require.Zero(t, dexBoundary.executeCalls)
+			require.Len(t, submitter.submitted, 1)
+			stored, getErr := orchestrator.cfg.Store.Get(context.Background(), item.Intent.ConversionID)
+			require.NoError(t, getErr)
+			require.NotEmpty(t, stored.SignedTxHash)
+			require.Equal(t, "COMPLIANCE_REVOKED", stored.FailureCode)
+		})
+	}
+}
+
+func TestFiatConversionComplianceRevokedAfterBroadcastStillReconciles(t *testing.T) {
+	orchestrator, query, submitter, _ := newOrchestratorFixture(t)
+	quote := testDEXQuote(t, orchestrator.cfg.Profiles, orchestrator.cfg.Now())
+	blockHash := bytes.Repeat([]byte{3}, sha256.Size)
+	finalityHash, err := CanonicalDEXFinalityHash(quote.ChainID, testSwapTxHash, 100, blockHash, 3, sdkmath.NewInt(99))
+	require.NoError(t, err)
+	dexBoundary := &sideEffectDEXFake{quote: quote, reconciliation: DEXSwapReconciliation{Found: true, Final: true, TxHash: testSwapTxHash, Height: 100, BlockHash: blockHash, Confirmations: 3, FinalityHash: finalityHash, OutputAmount: sdkmath.NewInt(99)}}
+	orchestrator.cfg.DEX = dexBoundary
+	item, err := orchestrator.Claim(context.Background(), query.records["conversion-1"])
+	require.NoError(t, err)
+	item, err = orchestrator.updateOwned(context.Background(), item.Intent.ConversionID, func(work *FiatConversionWorkItem) error {
+		work.State, work.DEXQuote, work.QuoteDigest, work.SwapTxHash = FiatWorkSwapBroadcast, &quote, quote.QuoteDigest, testSwapTxHash
+		return nil
+	})
+	require.NoError(t, err)
+	query.records[item.Intent.ConversionID].State = fiatChainStateSwapSubmitted
+	query.records[item.Intent.ConversionID].SwapTxHash = testSwapTxHash
+	orchestrator.cfg.Compliance = resolverFake{err: offramp.ErrComplianceRequired}
+	require.NoError(t, orchestrator.process(context.Background(), item.Intent.ConversionID))
+	require.Equal(t, 1, dexBoundary.reconcileCalls)
+	require.Zero(t, dexBoundary.executeCalls)
+	require.Len(t, submitter.submitted, 1)
+	require.Equal(t, settlementv1.FiatConversionObservationStage_FIAT_CONVERSION_OBSERVATION_STAGE_SWAP_FINALIZED, submitter.submitted[0].Stage)
+}
+
 func TestFiatConversionAuthorizationQueryFailureAfterQuoteHasNoSideEffectAndRetries(t *testing.T) {
 	orchestrator, query, submitter, _ := newOrchestratorFixture(t)
 	quote := testDEXQuote(t, orchestrator.cfg.Profiles, orchestrator.cfg.Now())
@@ -797,6 +940,10 @@ func TestFiatConversionPostInitiationReconciliationIgnoresCurrentAuthorizationCh
 		apply func(*FiatConversionOrchestrator, *fiatQueryFake)
 	}{
 		{"governance_pause", func(_ *FiatConversionOrchestrator, query *fiatQueryFake) { query.params.FiatConversionEnabled = false }},
+		{"profile_paused", func(_ *FiatConversionOrchestrator, query *fiatQueryFake) {
+			query.params.FiatConversionDexProfileState = settlementv1.FiatConversionProfileState_FIAT_CONVERSION_PROFILE_STATE_PAUSED
+			query.params.FiatConversionPayoutProfileState = settlementv1.FiatConversionProfileState_FIAT_CONVERSION_PROFILE_STATE_PAUSED
+		}},
 		{"profile_rotation", func(_ *FiatConversionOrchestrator, query *fiatQueryFake) {
 			query.params.FiatConversionDexProfileId = "rotated-dex"
 			query.params.FiatConversionDexProfileDigest = bytes.Repeat([]byte{0x91}, sha256.Size)
@@ -826,7 +973,7 @@ func TestFiatConversionPostInitiationReconciliationIgnoresCurrentAuthorizationCh
 				return nil
 			})
 			require.NoError(t, err)
-			query.records[item.Intent.ConversionID].State = "SWAP_SUBMITTED"
+			query.records[item.Intent.ConversionID].State = fiatChainStateSwapSubmitted
 			query.records[item.Intent.ConversionID].SwapTxHash = testSwapTxHash
 			blocker.apply(orchestrator, query)
 			require.NoError(t, orchestrator.process(context.Background(), item.Intent.ConversionID))
@@ -885,7 +1032,7 @@ func TestFiatConversionPostInitiationReconciliationIgnoresCurrentAuthorizationCh
 				return nil
 			})
 			require.NoError(t, err)
-			query.records[item.Intent.ConversionID].State = "SWAP_SUBMITTED"
+			query.records[item.Intent.ConversionID].State = fiatChainStateSwapSubmitted
 			query.records[item.Intent.ConversionID].SwapTxHash = testSwapTxHash
 			blocker.apply(orchestrator, query)
 			require.NoError(t, orchestrator.process(context.Background(), item.Intent.ConversionID))
@@ -1009,6 +1156,78 @@ func TestFiatConversionExpiredPayoutQuoteRequotesBeforeInitiationAndSurvivesRest
 	query.records[item.Intent.ConversionID].LastObservationDigest = mustHex32(restartedItem.ObservationDigest)
 	require.NoError(t, restarted.process(context.Background(), item.Intent.ConversionID))
 	require.Equal(t, 1, bridge.payoutCalls)
+}
+
+func TestFiatConversionPayoutQuoteReplacementRejectsUnsafeStatesAfterRestart(t *testing.T) {
+	for _, test := range []struct {
+		name       string
+		afterSetup func(*FiatConversionWorkItem, *fiatQueryFake)
+	}{
+		{name: "pre-expiry"},
+		{name: "post-initiation", afterSetup: func(item *FiatConversionWorkItem, query *fiatQueryFake) {
+			item.State = FiatWorkPayoutSubmitted
+			item.PayoutID = "external-payout-committed"
+			item.PayoutStatus = string(offramp.StatusProcessing)
+			item.PayoutReferenceHash = hex.EncodeToString(bytes.Repeat([]byte{0x77}, sha256.Size))
+			chain := query.records[item.Intent.ConversionID]
+			chain.State = fiatChainStatePayoutSubmitted
+			chain.OffRampId = item.PayoutID
+			chain.OffRampReference = "privacy-safe-reference"
+		}},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			orchestrator, query, _, _ := newOrchestratorFixture(t)
+			now := orchestrator.cfg.Now()
+			item, err := orchestrator.Claim(context.Background(), query.records["conversion-1"])
+			require.NoError(t, err)
+			quote := offramp.Quote{ID: "payout-quote-durable", Provider: "partner", FiatAmount: sdkmath.LegacyNewDec(99), ExchangeRate: sdkmath.LegacyOneDec(), Fee: sdkmath.NewInt(1), CreatedAt: now, ExpiresAt: now.Add(time.Minute), Request: offramp.QuoteRequest{CryptoSymbol: "USDC", CryptoDenom: "uusdc", CryptoDecimals: 6, CryptoAmount: sdkmath.NewInt(99), FiatCurrency: "USD", PaymentMethod: "ach", Sender: "provider", Destination: "token-beneficiary", BeneficiaryReference: "token-beneficiary", Jurisdiction: "US", CorrelationID: conversionCorrelation(item.Intent.ConversionID), Compliance: orchestrator.cfg.Compliance.(resolverFake).decision}}
+			quoteHash, requestHash, corridorID, providerBinding, err := canonicalPayoutQuoteCommitments(quote, orchestrator.cfg.Profiles, item.Intent.ComplianceDigest)
+			require.NoError(t, err)
+			item, err = orchestrator.updateOwned(context.Background(), item.Intent.ConversionID, func(work *FiatConversionWorkItem) error {
+				work.State, work.SwapTxHash, work.ObservationSequence = FiatWorkPayoutQuote, testSwapTxHash, 4
+				work.SwapConfirmation.StableAmount = "99"
+				work.PayoutQuote = payoutQuoteSnapshot(quote, requestHash, corridorID, providerBinding, work.Intent.ComplianceDigest, work.PayoutProfileDigest)
+				work.PayoutQuoteDigest = hex.EncodeToString(quoteHash)
+				return nil
+			})
+			require.NoError(t, err)
+			chain := query.records[item.Intent.ConversionID]
+			chain.State, chain.ObservationSequence, chain.SwapTxHash = fiatChainStatePayoutPending, 4, testSwapTxHash
+			chain.OffRampQuoteId, chain.QuoteDigest, chain.QuoteExpiry = quote.ID, quoteHash, quote.ExpiresAt.Unix()
+			if test.afterSetup != nil {
+				test.afterSetup(item, query)
+				_, err = orchestrator.updateOwned(context.Background(), item.Intent.ConversionID, func(work *FiatConversionWorkItem) error {
+					work.State, work.PayoutID, work.PayoutStatus, work.PayoutReferenceHash = item.State, item.PayoutID, item.PayoutStatus, item.PayoutReferenceHash
+					return nil
+				})
+				require.NoError(t, err)
+			}
+
+			path := orchestrator.cfg.Store.(*FileFiatConversionStore).path
+			require.NoError(t, orchestrator.Stop(context.Background()))
+			orchestrator.cfg.Store = nil
+			reopened, err := NewFileFiatConversionStore(path)
+			require.NoError(t, err)
+			orchestrator.cfg.Store = reopened
+			orchestrator.cfg.Lease = NewLocalFiatConversionLease()
+			require.NoError(t, orchestrator.Start(context.Background()))
+			restartedItem, err := reopened.Get(context.Background(), item.Intent.ConversionID)
+			require.NoError(t, err)
+			if test.name == "pre-expiry" {
+				err = orchestrator.retryResetPayoutQuote(context.Background(), restartedItem, query.records[item.Intent.ConversionID], "PAYOUT_QUOTE_REPLACEMENT")
+			} else {
+				clockAfterExpiry := now.Add(2 * time.Minute)
+				orchestrator.cfg.Now = func() time.Time { return clockAfterExpiry }
+				err = orchestrator.retryResetPayoutQuote(context.Background(), restartedItem, query.records[item.Intent.ConversionID], "PAYOUT_QUOTE_REPLACEMENT")
+			}
+			require.Error(t, err)
+			stored, getErr := reopened.Get(context.Background(), item.Intent.ConversionID)
+			require.NoError(t, getErr)
+			require.NotEqual(t, FiatWorkSwapFinalized, stored.State, "unsafe replacement must not return to the requote state")
+			require.Equal(t, quote.ID, stored.PayoutQuote.ID)
+			require.Equal(t, item.PayoutID, stored.PayoutID)
+		})
+	}
 }
 
 func TestFiatConversionRestartRecoveryAtEveryMajorStage(t *testing.T) {
@@ -1286,6 +1505,39 @@ func TestFileFiatRepositoryRejectsTrailingJSON(t *testing.T) {
 	reopened, err := NewFileFiatRepository(path)
 	require.NoError(t, err)
 	require.ErrorContains(t, reopened.Open(context.Background()), "multiple JSON values")
+}
+
+func TestFileFiatRepositoryPersistsAmbiguousPayoutInitiationAcrossRestart(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "repository.json")
+	repository, err := NewFileFiatRepository(path)
+	require.NoError(t, err)
+	require.NoError(t, repository.Open(context.Background()))
+	metadata := map[string]string{"idempotency_key": "idempotency-restart", "correlation_id": "correlation-restart", "conversion_id": "conversion-restart"}
+	record := offramp.PayoutInitiationRecord{
+		Provider: "partner", QuoteID: "quote-restart", OperationBinding: strings.Repeat("a", sha256.Size*2),
+		RequestBinding: strings.Repeat("b", sha256.Size*2), FiatAmount: "100.000000000000000000", CryptoAmount: "99", Fee: "1",
+		Metadata: metadata, DailyReservationKey: "2026-07-23|US-USD-ach", DailyReservationOperationID: metadata["idempotency_key"],
+		State: offramp.PayoutInitiationAmbiguous, PreparedAt: time.Date(2026, 7, 23, 10, 0, 0, 0, time.UTC),
+	}
+	reserved, err := repository.ReserveDailyAmount(context.Background(), record.DailyReservationKey, record.DailyReservationOperationID, sdkmath.LegacyNewDec(100), sdkmath.LegacyNewDec(100))
+	require.NoError(t, err)
+	require.True(t, reserved)
+	require.NoError(t, repository.PutPayoutInitiation(context.Background(), record))
+	require.NoError(t, repository.Close())
+
+	reopened, err := NewFileFiatRepository(path)
+	require.NoError(t, err)
+	require.NoError(t, reopened.Open(context.Background()))
+	t.Cleanup(func() { _ = reopened.Close() })
+	recovered, err := reopened.GetPayoutInitiation(context.Background(), record.Provider, metadata)
+	require.NoError(t, err)
+	require.Equal(t, record, recovered)
+	reserved, err = reopened.ReserveDailyAmount(context.Background(), record.DailyReservationKey, record.DailyReservationOperationID, sdkmath.LegacyNewDec(100), sdkmath.LegacyNewDec(100))
+	require.NoError(t, err)
+	require.True(t, reserved, "the exact operation may recover its existing reservation")
+	second, err := reopened.ReserveDailyAmount(context.Background(), record.DailyReservationKey, "second-payout", sdkmath.LegacyOneDec(), sdkmath.LegacyNewDec(100))
+	require.NoError(t, err)
+	require.False(t, second, "the preserved reservation must block a second payout")
 }
 
 func TestFiatWebhookHandlerRejectsSmugglingAndDuplicateHeaders(t *testing.T) {

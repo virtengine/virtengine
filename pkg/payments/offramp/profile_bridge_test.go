@@ -75,9 +75,9 @@ func (a *restartRecoveryAdapter) RestorePayoutBinding(_ context.Context, expecte
 	if a.restoreErr != nil {
 		return PayoutResult{}, a.restoreErr
 	}
-	a.contractProvider.mu.Lock()
-	a.contractProvider.storeResultLocked(a.recovered)
-	a.contractProvider.mu.Unlock()
+	a.mu.Lock()
+	a.storeResultLocked(a.recovered)
+	a.mu.Unlock()
 	return clonePayoutResult(a.recovered), nil
 }
 

@@ -14,6 +14,7 @@ import (
 	"time"
 
 	cosmosed25519 "github.com/cosmos/cosmos-sdk/crypto/keys/ed25519"
+	sdk "github.com/cosmos/cosmos-sdk/types"
 	providertypes "github.com/virtengine/virtengine/sdk/go/node/provider/v1beta4"
 )
 
@@ -168,7 +169,7 @@ func ManagedKeyAccountAddress(key *ManagedKey) (string, error) {
 		if len(publicKey) != ed25519.PublicKeySize {
 			return "", fmt.Errorf("invalid ed25519 public key size %d", len(publicKey))
 		}
-		return (&cosmosed25519.PubKey{Key: publicKey}).Address().String(), nil
+		return sdk.AccAddress((&cosmosed25519.PubKey{Key: publicKey}).Address()).String(), nil
 	default:
 		return "", fmt.Errorf("unsupported SDK signer algorithm %s", key.Algorithm)
 	}

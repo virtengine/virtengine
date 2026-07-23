@@ -3,6 +3,8 @@
 **Applies to:** Task 85B DEX/off-ramp engineering and any later certified deployment
 **Current production status:** `engineering_complete_external_blocked`
 
+Only deterministic local fixture conformance is complete. No real Osmosis testnet or payout-provider sandbox operation is represented by this runbook's current evidence; real testnet/sandbox and production exercises remain external gates.
+
 ## Immediate controls
 
 1. Stop new conversion intents by pausing the affected profile and/or disabling fiat conversion through governed change control.
@@ -21,7 +23,7 @@
 - Verify new pool height/block, oracle comparison, minimum output and expiry.
 - Do not reuse an expired quote or its signed payload.
 
-Before target-chain signing, target-chain broadcast, or payout initiation, the worker must freshly query governed settlement parameters and canonical financial-case holds. A disabled conversion flag, active hold, malformed response, or unavailable query means no external side effect; retain held value and retry or enter manual review.
+Before target-chain signing, target-chain broadcast, or payout initiation, the worker must freshly query governed settlement parameters and canonical financial-case holds. A disabled conversion flag, rotated/non-certified current profile, revoked/current compliance failure, active hold, malformed response, or unavailable query means no new external side effect; retain held value and retry or enter manual review.
 
 ### After swap or payout submission
 
@@ -61,7 +63,22 @@ Before target-chain signing, target-chain broadcast, or payout initiation, the w
 5. A timeout, retryable HTTP error or conflict is not a failure. Do not release quota or initiate with a new key until the provider proves no payout exists.
 6. Completion still requires provider status and an authenticated matching webhook; otherwise remain pending/manual review.
 
-On process restart, a durable bridge record may exist while a fresh HTTP adapter has no volatile payout binding. If status polling returns not-found, the bridge performs one explicit binding restore by immutable metadata/correlation. The provider response must exactly reproduce provider, payout ID, quote ID, correlation/metadata, fiat and crypto amounts, fee, reference, initiation time, status monotonicity and the durable daily-reservation identity. No match, multiple/ambiguous match, or any mismatched field is rejected. Only after exact validation may the adapter restore its status/webhook binding and poll again.
+On process restart, a durable bridge record may exist while a fresh HTTP adapter has no volatile payout binding. If status polling returns not-found, the bridge performs one explicit binding restore by immutable metadata/correlation. The provider response must exactly reproduce provider, payout ID, quote ID, correlation/metadata, fiat and crypto amounts, fee, reference, initiation time, status monotonicity and the durable daily-reservation identity. No match, multiple/ambiguous match, or any mismatched field is rejected. Only after exact validation may the adapter restore its status/webhook binding and poll again; restoration never authorizes a second initiation.
+
+## Governance, compliance or hold change after an irreversible boundary
+
+1. Determine whether target-chain signing/broadcast, swap submission, a provider payout ID or custody movement has crossed an irreversible boundary.
+2. Before the boundary, current governance/profile/compliance/financial-case authorization controls and may stop the next side effect.
+3. After the boundary, do not abandon reconciliation because the current enable flag, profile, compliance status or hold changed. Reconcile submission/finality using the immutable profile and compliance commitments accepted with the intent.
+4. Do not use this rule to initiate another swap or payout. It permits observation and reconciliation of an existing side effect only.
+5. A financial case opened after the boundary is an incident/evidence hold. It must not allocate the linked payout exposure, cancel the conversion, transfer provider/customer/platform amounts or release a second payout. Escalate to the governed external-reconciliation path.
+
+## Custody and treasury accounting verification
+
+1. On authenticated payout completion, expect one deterministic native transfer from the settlement module account to the internal-only fiat-custody module account for the conversion's net crypto amount. Do not expect a synthetic provider-account or external bank/chain transfer from consensus.
+2. Verify one treasury record per non-zero platform fee, validator fee and holdback, keyed by payout ID and type. An exact retry must not change treasury balance; any conflicting amount/lineage is an incident.
+3. Reconcile the custody module-account balance to all completed fiat conversion custody effects and verify each effect hash and linked payout finality hash.
+4. During genesis export/import or recovery, preserve treasury records, aggregate treasury balance and declared custody balance together. A mismatch must stop import rather than be repaired by manual store edits.
 
 ## Webhook replay or conflict
 
@@ -107,6 +124,6 @@ Build a privacy-safe evidence bundle containing:
 - settlement/payout lineage, held value, fees and daily-limit reservation; and
 - incident decisions, reviewers and timestamps.
 
-Two independent reviewers must reconcile DEX input/output/fees, custody balances, stable amount, provider debit/fee, fiat destination receipt and on-chain terminal record. Any unexplained delta, missing finality, changed compliance decision or duplicate external movement keeps the item in manual review.
+Two independent reviewers must reconcile DEX input/output/fees, the native settlement-to-custody module movement, exactly-once platform/validator/holdback treasury records, target-chain custody balances, stable amount, provider debit/fee, fiat destination receipt and on-chain terminal record. Any unexplained delta, missing finality, changed compliance decision or duplicate native/external movement keeps the item in manual review.
 
 Recovery must use normal authenticated observations or a separately governed remediation path. Never mutate terminal records, replay indexes, external finality hashes or accounting files by hand. Production may resume only after root cause, balance conservation, profile state and external approvals are all revalidated.

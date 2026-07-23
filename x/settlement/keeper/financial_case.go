@@ -516,6 +516,19 @@ func (k Keeper) ResolveFinancialCase(ctx sdk.Context, caseID, resolver string, a
 		if financialCase.Status != types.FinancialCaseStatusReview && financialCase.Status != types.FinancialCaseStatusEscalated && financialCase.Status != types.FinancialCaseStatusQuarantined {
 			return types.ErrFinancialCaseTransition.Wrap("case not resolvable")
 		}
+		if financialCase.Exposure.PayoutId != "" {
+			payout, found := k.GetPayout(ctx, financialCase.Exposure.PayoutId)
+			if !found {
+				return types.ErrFinancialCaseHold.Wrap("payout missing at resolution")
+			}
+			irreversibleFiat, err := k.payoutHasIrreversibleFiatBoundary(ctx, payout)
+			if err != nil {
+				return err
+			}
+			if irreversibleFiat {
+				return types.ErrFiatConversionQuarantined.Wrap("irreversible fiat incident cannot allocate native value")
+			}
+		}
 		if err := ValidateTerminalAllocation(financialCase.Exposure.OriginalHeld, allocation); err != nil {
 			return err
 		}

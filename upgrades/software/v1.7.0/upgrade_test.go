@@ -36,7 +36,7 @@ func TestUpgradeHandlerActivatesCanonicalFinancialCasesIdempotently(t *testing.T
 	handler := up.UpgradeHandler()
 	to, err := handler(ctx, upgradetypes.Plan{Name: v1_7_0.UpgradeName, Height: 17}, from)
 	require.NoError(t, err)
-	require.Equal(t, uint64(3), to[settlementtypes.ModuleName])
+	require.Equal(t, uint64(4), to[settlementtypes.ModuleName])
 	require.Equal(t, uint64(2), to[fraudtypes.ModuleName])
 	require.Equal(t, uint64(3), to[hpctypes.ModuleName])
 	require.Equal(t, uint64(2), to[reviewtypes.ModuleName])

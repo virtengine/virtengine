@@ -32,6 +32,9 @@ type GenesisState struct {
 
 	// PayoutRecords are the initial payout records
 	PayoutRecords []PayoutRecord `json:"payout_records"`
+	// TreasuryRecords and TreasuryBalance preserve retained payout accounting.
+	TreasuryRecords []TreasuryRecord `json:"treasury_records"`
+	TreasuryBalance sdk.Coins        `json:"treasury_balance"`
 
 	// FiatConversionRecords are the initial fiat conversion records
 	FiatConversionRecords []FiatConversionRecord `json:"fiat_conversion_records"`
@@ -246,6 +249,8 @@ func DefaultGenesisState() *GenesisState {
 		UsageRecords:                 []UsageRecord{},
 		ClaimableRewards:             []ClaimableRewards{},
 		PayoutRecords:                []PayoutRecord{},
+		TreasuryRecords:              []TreasuryRecord{},
+		TreasuryBalance:              sdk.NewCoins(),
 		FiatConversionRecords:        []FiatConversionRecord{},
 		FiatPayoutPreferences:        []FiatPayoutPreference{},
 		EscrowSequence:               1,
@@ -393,19 +398,30 @@ func (gs GenesisState) Validate() error {
 	}
 
 	// Validate payout records
-	seenPayouts := make(map[string]bool)
+	seenPayouts := make(map[string]PayoutRecord)
 	for _, payout := range gs.PayoutRecords {
 		if err := payout.Validate(); err != nil {
 			return err
 		}
-		if seenPayouts[payout.PayoutID] {
+		if _, exists := seenPayouts[payout.PayoutID]; exists {
 			return ErrPayoutExists.Wrapf("duplicate payout_id: %s", payout.PayoutID)
 		}
-		seenPayouts[payout.PayoutID] = true
+		seenPayouts[payout.PayoutID] = payout
+	}
+	if !gs.TreasuryBalance.IsValid() {
+		return ErrInvalidSettlement.Wrap("treasury balance is invalid")
+	}
+	treasuryByPayout, err := validateGenesisTreasuryAccounting(gs.TreasuryRecords, gs.TreasuryBalance, seenPayouts)
+	if err != nil {
+		return err
 	}
 
 	seenCases := make(map[string]bool)
 	seenActiveAliases := make(map[string]string)
+	conversionsByID := make(map[string]FiatConversionRecord, len(gs.FiatConversionRecords))
+	for _, conversion := range gs.FiatConversionRecords {
+		conversionsByID[conversion.ConversionID] = conversion
+	}
 	for i, financialCase := range gs.FinancialCases {
 		if financialCase.CaseId == "" || seenCases[financialCase.CaseId] {
 			return ErrInvalidFinancialCase.Wrapf("duplicate or empty financial case at %d", i)
@@ -431,7 +447,12 @@ func (gs GenesisState) Validate() error {
 			for _, payout := range gs.PayoutRecords {
 				if payout.PayoutID == financialCase.Exposure.PayoutId {
 					found = true
-					if IsActiveFinancialCaseStatus(financialCase.Status) && (payout.State != PayoutStateHeld || payout.DisputeID != financialCase.CaseId) {
+					incidentOnly := false
+					if payout.FiatConversionID != "" {
+						conversion, conversionFound := conversionsByID[payout.FiatConversionID]
+						incidentOnly = conversionFound && conversion.PayoutID == payout.PayoutID && fiatConversionGenesisIrreversible(conversion)
+					}
+					if IsActiveFinancialCaseStatus(financialCase.Status) && !incidentOnly && (payout.State != PayoutStateHeld || payout.DisputeID != financialCase.CaseId) {
 						return ErrFinancialCaseHold.Wrapf("financial case %s payout hold is inconsistent", financialCase.CaseId)
 					}
 					break
@@ -513,6 +534,41 @@ func (gs GenesisState) Validate() error {
 			if !linked {
 				return ErrInvalidPayout.Wrapf("conversion %s payout linkage mismatch", conversion.ConversionID)
 			}
+			if conversion.State == FiatConversionStatePayoutCompleted && !conversion.LegacyQuarantined {
+				var payout PayoutRecord
+				for _, candidate := range gs.PayoutRecords {
+					if candidate.PayoutID == conversion.PayoutID {
+						payout = candidate
+						break
+					}
+				}
+				retained := payout.PlatformFee.Add(payout.ValidatorFee...).Add(payout.HoldbackAmount...)
+				if !sdk.NewCoins(conversion.CustodySinkAmount).Add(retained...).Equal(payout.GrossAmount) {
+					return ErrInvalidSettlement.Wrapf("conversion %s custody plus retained components do not equal gross exposure", conversion.ConversionID)
+				}
+				for _, expected := range []struct {
+					recordType TreasuryRecordType
+					amount     sdk.Coins
+				}{
+					{TreasuryRecordPlatformFee, payout.PlatformFee},
+					{TreasuryRecordValidatorFee, payout.ValidatorFee},
+					{TreasuryRecordHoldback, payout.HoldbackAmount},
+				} {
+					records := treasuryByPayout[payout.PayoutID][expected.recordType]
+					if expected.amount.IsZero() {
+						if len(records) != 0 {
+							return ErrInvalidSettlement.Wrapf("conversion %s zero retained component has treasury entry", conversion.ConversionID)
+						}
+						continue
+					}
+					if len(records) != 1 || !records[0].Amount.Equal(expected.amount) {
+						return ErrInvalidSettlement.Wrapf("conversion %s retained treasury component missing, duplicated, or mismatched", conversion.ConversionID)
+					}
+					if records[0].RecordID != "payout/"+payout.PayoutID+"/"+expected.recordType.String() {
+						return ErrInvalidSettlement.Wrapf("conversion %s retained treasury component has noncanonical record id", conversion.ConversionID)
+					}
+				}
+			}
 		}
 	}
 	if !gs.FiatConversionCustodyBalance.Equal(expectedCustody) {
@@ -532,6 +588,59 @@ func (gs GenesisState) Validate() error {
 	}
 
 	return nil
+}
+
+func fiatConversionGenesisIrreversible(conversion FiatConversionRecord) bool {
+	switch conversion.State {
+	case FiatConversionStateSwapSubmitted, FiatConversionStateSwapSettled, FiatConversionStateOffRampPending,
+		FiatConversionStatePayoutPending, FiatConversionStatePayoutSubmitted, FiatConversionStatePayoutCompleted:
+		return true
+	default:
+		return conversion.SwapTxHash != "" || conversion.OffRampID != "" || conversion.ValueMovementApplied
+	}
+}
+
+func validateGenesisTreasuryAccounting(records []TreasuryRecord, balance sdk.Coins, payouts map[string]PayoutRecord) (map[string]map[TreasuryRecordType][]TreasuryRecord, error) {
+	credits := sdk.NewCoins()
+	debits := sdk.NewCoins()
+	seen := make(map[string]bool, len(records))
+	byPayout := make(map[string]map[TreasuryRecordType][]TreasuryRecord)
+	for _, record := range records {
+		if record.RecordID == "" || record.PayoutID == "" || record.SettlementID == "" || !record.Amount.IsValid() || record.Amount.IsZero() || !record.BalanceAfter.IsValid() {
+			return nil, ErrInvalidSettlement.Wrap("invalid treasury genesis record")
+		}
+		if seen[record.RecordID] {
+			return nil, ErrInvalidSettlement.Wrapf("duplicate treasury record_id: %s", record.RecordID)
+		}
+		seen[record.RecordID] = true
+		payout, found := payouts[record.PayoutID]
+		if !found {
+			return nil, ErrInvalidSettlement.Wrapf("treasury record %s references missing payout", record.RecordID)
+		}
+		if payout.SettlementID != record.SettlementID {
+			return nil, ErrInvalidSettlement.Wrapf("treasury record %s has invalid settlement linkage", record.RecordID)
+		}
+		switch record.RecordType {
+		case TreasuryRecordPlatformFee, TreasuryRecordValidatorFee, TreasuryRecordHoldback:
+			credits = credits.Add(record.Amount...)
+		case TreasuryRecordRefund, TreasuryRecordWithdrawal:
+			debits = debits.Add(record.Amount...)
+		default:
+			return nil, ErrInvalidSettlement.Wrapf("treasury record %s has unknown type", record.RecordID)
+		}
+		if byPayout[record.PayoutID] == nil {
+			byPayout[record.PayoutID] = make(map[TreasuryRecordType][]TreasuryRecord)
+		}
+		byPayout[record.PayoutID][record.RecordType] = append(byPayout[record.PayoutID][record.RecordType], record)
+	}
+	if !credits.IsAllGTE(debits) {
+		return nil, ErrInvalidSettlement.Wrap("treasury genesis accounting underflow")
+	}
+	expected := credits.Sub(debits...)
+	if !expected.Equal(balance) {
+		return nil, ErrInvalidSettlement.Wrapf("treasury balance mismatch: expected %s got %s", expected, balance)
+	}
+	return byPayout, nil
 }
 
 // Validate validates the parameters

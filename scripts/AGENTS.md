@@ -135,6 +135,7 @@ When to add vs modify
 | --- | --- | --- | --- |
 | scripts/agent-preflight.ps1 | Pre-flight checks before push (Go/Portal). | pwsh scripts/agent-preflight.ps1 | PowerShell 7+, go, pnpm (optional) |
 | scripts/agent-preflight.sh | Bash pre-flight checks before push. | ./scripts/agent-preflight.sh | bash, go, pnpm (optional) |
+| scripts/task85b-preflight.ps1 | Full Task 85B DEX/off-ramp release gate, including generation, docs hashes, SDK, upgrade, integration and race checks. | pwsh scripts/task85b-preflight.ps1 | PowerShell 7+, Go, Node/npm, WSL or Docker, golangci-lint |
 | scripts/archive-completed-tasks.ps1 | Archive done VK tasks into _docs/ralph. | pwsh scripts/archive-completed-tasks.ps1 -DryRun | PowerShell, VK CLI wrapper (ve-kanban) |
 | scripts/_check-parse.ps1 | Parse ve-orchestrator.ps1 and report errors. | pwsh scripts/_check-parse.ps1 | PowerShell 7+ |
 | scripts/_check-ps1-syntax.ps1 | Syntax check PS1 files (defaults to bosun). | pwsh scripts/_check-ps1-syntax.ps1 -Path scripts/bosun/ve-orchestrator.ps1 | PowerShell 7+ |
@@ -294,6 +295,14 @@ Note: run PowerShell scripts with pwsh (PowerShell 7+) unless stated.
 - Permissions: local git; executes go, pnpm if needed.
 - Errors: exits non-zero on failed checks; otherwise 0.
 - Example: pwsh scripts/agent-preflight.ps1
+
+For Task 85B paths, agent preflight runs `scripts/task85b-preflight.ps1` in full mode. `VE_HOOK_TASK85B_QUICK=1` and `VE_HOOK_TASK85B_SKIP_RACE=1` are explicit diagnostic-only reductions and are not release evidence.
+
+### scripts/task85b-preflight.ps1
+- Purpose: Run the mandatory full Task 85B Go, app custody, tagged integration, upgrade registry/worker, protobuf inventory/drift/hash, documentation consistency, TypeScript SDK, lint, build and WSL race gates.
+- Parameters: `-Quick` and `-SkipRace` are explicit diagnostic-only reductions; a run using either is not a release pass.
+- Errors: Fails closed when required tooling or an applicable full-mode gate is unavailable.
+- Example: pwsh scripts/task85b-preflight.ps1
 
 ### scripts/_check-parse.ps1
 - Purpose: Parse scripts/bosun/ve-orchestrator.ps1 and print errors.

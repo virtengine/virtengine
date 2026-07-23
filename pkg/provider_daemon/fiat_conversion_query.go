@@ -16,9 +16,11 @@ import (
 var ErrFiatConversionQueryUnavailable = errors.New("fiat conversion query unavailable")
 
 const (
-	fiatChainStateSwapPending   = "SWAP_PENDING"
-	fiatChainStateSwapSettled   = "SWAP_SETTLED"
-	fiatChainStatePayoutPending = "PAYOUT_PENDING" // Settlement chain state, not a local work state.
+	fiatChainStateSwapPending     = "SWAP_PENDING"
+	fiatChainStateSwapSubmitted   = "SWAP_SUBMITTED"
+	fiatChainStateSwapSettled     = "SWAP_SETTLED"
+	fiatChainStatePayoutPending   = "PAYOUT_PENDING" // Settlement chain state, not a local work state.
+	fiatChainStatePayoutSubmitted = "PAYOUT_SUBMITTED"
 )
 
 // FiatConversionQuery is the read-only chain boundary used by the worker.
@@ -207,7 +209,7 @@ func chainFiatConversionProcessable(record settlementv1.FiatConversionRecord) bo
 		return false
 	}
 	switch strings.ToUpper(strings.TrimSpace(record.State)) {
-	case "CREATED", fiatChainStateSwapPending, "SWAP_SUBMITTED", fiatChainStateSwapSettled, fiatChainStatePayoutPending, "OFFRAMP_PENDING", "PAYOUT_SUBMITTED":
+	case "CREATED", fiatChainStateSwapPending, fiatChainStateSwapSubmitted, fiatChainStateSwapSettled, fiatChainStatePayoutPending, "OFFRAMP_PENDING", fiatChainStatePayoutSubmitted:
 		return true
 	default:
 		return false

@@ -3,6 +3,8 @@
 # SPDX-License-Identifier: Apache-2.0
 # Task 85B focused preflight for authenticated DEX routing and fiat off-ramp work.
 # Usage: pwsh scripts/task85b-preflight.ps1 [-Quick] [-SkipRace]
+# Quick and SkipRace are explicit diagnostic-only reductions. Neither is a
+# Task 85B release gate, and agent-preflight intentionally invokes full mode.
 [CmdletBinding()]
 param(
     [switch]$Quick,
@@ -13,6 +15,7 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 $ProgressPreference = 'SilentlyContinue'
 $PSNativeCommandUseErrorActionPreference = $false
+$PSNativeCommandArgumentPassing = 'Standard'
 
 $repo = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot '..')).Path
 $taskPaths = @(
@@ -35,14 +38,18 @@ $taskPaths = @(
     'sdk/proto/node/virtengine/settlement/v1',
     'sdk/go/node/settlement/v1',
     'sdk/ts/src/generated/protos/virtengine/settlement/v1',
+    'sdk/ts/script/fix-ts-proto-generated-types.ts',
     'sdk/artifacts/proto',
     'api/openapi/virtengine-proto.swagger.json',
     '_docs/audits/task-85b-completion-evidence-2026-07-23.md',
+    '_docs/ralph/progress.md',
     '_docs/protocols/fiat-conversion-orchestrator-protocol.md',
     '_docs/protocols/task-85b-dex-payout-support-matrices.md',
     '_docs/runbooks/fiat-conversion-incident-recovery.md',
     '_docs/task-85b-external-prerequisite-certification-ledger.md',
-    'scripts/task85b-preflight.ps1'
+    'scripts/task85b-preflight.ps1',
+    'scripts/agent-preflight.ps1',
+    'tests/upgrade/workers_test.go'
 )
 $goPackages = @(
     './pkg/dex',
@@ -139,6 +146,30 @@ function Assert-SHA256Sidecar {
     }
 }
 
+function Get-SHA256Hex {
+    param([Parameter(Mandatory = $true)][string]$Artifact)
+
+    $artifactPath = Join-Path $repo $Artifact
+    if (-not (Test-Path -LiteralPath $artifactPath -PathType Leaf)) {
+        throw "required hash artifact is missing: $Artifact"
+    }
+    return (Get-FileHash -LiteralPath $artifactPath -Algorithm SHA256).Hash.ToLowerInvariant()
+}
+
+function Assert-DocumentHash {
+    param(
+        [Parameter(Mandatory = $true)][string]$Document,
+        [Parameter(Mandatory = $true)][string]$Artifact,
+        [Parameter(Mandatory = $true)][string]$Label
+    )
+
+    $hash = Get-SHA256Hex -Artifact $Artifact
+    $content = Get-RequiredContent -Path $Document
+    if ($content -notmatch [regex]::Escape($hash)) {
+        throw "$Document does not contain current $Label SHA-256 $hash"
+    }
+}
+
 function Get-Task85BDocuments {
     $documents = Get-ChildItem -LiteralPath (Join-Path $repo '_docs') -Recurse -File -Filter '*.md'
     return @($documents | Where-Object {
@@ -214,6 +245,29 @@ try {
         if ($LASTEXITCODE -ne 0) {
             throw 'git diff --check failed for Task 85B-owned paths'
         }
+    }
+
+    Invoke-Step 'parsing Task 85B PowerShell scripts' {
+        foreach ($path in @('scripts/task85b-preflight.ps1', 'scripts/agent-preflight.ps1')) {
+            $tokens = $null
+            $parseErrors = $null
+            [void][System.Management.Automation.Language.Parser]::ParseFile(
+                (Join-Path $repo $path),
+                [ref]$tokens,
+                [ref]$parseErrors
+            )
+            if ($parseErrors.Count -gt 0) {
+                throw "PowerShell parse errors in $path`n$($parseErrors -join "`n")"
+            }
+        }
+        $global:LASTEXITCODE = 0
+    }
+
+    Invoke-Step 'validating AGENTS documentation' {
+        if (-not (Get-Command node -ErrorAction SilentlyContinue)) {
+            throw 'node is required for documentation validation'
+        }
+        & node scripts/validate-agents-docs.mjs
     }
 
     Invoke-Step 'checking lifecycle, matrices, runbook, and prerequisite ledger' {
@@ -307,6 +361,29 @@ try {
         Assert-Contains -Path 'tests/integration/settlement/dex_offramp_test.go' -Pattern 'func TestAuthenticatedFiatConversionObservationPipeline' -Claim 'tagged authenticated fiat protocol integration test'
         Assert-Contains -Path 'tests/integration/settlement/dex_offramp_test.go' -Pattern 'RecordFiatConversionObservation' -Claim 'six-stage observation integration coverage'
         Assert-Contains -Path 'tests/integration/settlement/dex_offramp_test.go' -Pattern 'ErrExternalIOForbidden' -Claim 'tagged consensus external-I/O rejection coverage'
+        Assert-Contains -Path 'pkg/provider_daemon/fiat_conversion_dex_adapters.go' -Pattern 'func NewBoundOsmosisAdapter\(' -Claim 'authenticated bound Osmosis provider constructor'
+        Assert-Contains -Path 'pkg/provider_daemon/fiat_conversion_dex_adapters_test.go' -Pattern 'func TestNewBoundOsmosisAdapterRequiresBoundPoolProvider' -Claim 'bound Osmosis provider test'
+        Assert-Contains -Path 'x/settlement/keeper/fiat_conversion_protocol.go' -Pattern 'SendCoinsFromModuleToModule\(ctx, types\.ModuleAccountName, types\.FiatConversionCustodyAccountName' -Claim 'deterministic module-to-module fiat custody movement'
+        Assert-Contains -Path 'x/settlement/keeper/fiat_conversion_protocol.go' -Pattern 'func fiatObservationAuthorizesNewSideEffect\(' -Claim 'irreversible-boundary authorization policy'
+        Assert-Contains -Path 'x/settlement/keeper/fiat_conversion_protocol_test.go' -Pattern 'func TestFiatPostInitiationReconciliationUsesImmutableAuthorization' -Claim 'post-boundary reconciliation coverage'
+        Assert-Contains -Path 'x/settlement/keeper/fiat_conversion_protocol_test.go' -Pattern 'func TestFinancialCaseAfterIrreversibleFiatBoundaryCannotAllocateOrOverridePayout' -Claim 'financial-case no-double-allocation coverage'
+        Assert-Contains -Path 'x/settlement/keeper/fiat_conversion_protocol_test.go' -Pattern 'func TestFiatObservationExpiredPayoutQuoteReplacementPreservesCommitmentsAndContinues' -Claim 'payout expired-quote replacement coverage'
+        Assert-Contains -Path 'pkg/provider_daemon/fiat_conversion_orchestrator_test.go' -Pattern 'func TestFiatConversionExpiredAcceptedQuoteAppendsReplacementBeforeSigning' -Claim 'DEX expired-quote replacement coverage'
+        Assert-Contains -Path 'pkg/payments/offramp/bridge.go' -Pattern 'func \(b \*bridgeImpl\) restoreAdapterPayoutBinding\(' -Claim 'restart-safe payout binding recovery'
+        $global:LASTEXITCODE = 0
+    }
+
+    Invoke-Step 'checking local versus external evidence claims' {
+        foreach ($document in @(
+            '_docs/audits/task-85b-completion-evidence-2026-07-23.md',
+            '_docs/ralph/progress.md',
+            '_docs/protocols/task-85b-dex-payout-support-matrices.md',
+            '_docs/protocols/fiat-conversion-orchestrator-protocol.md',
+            '_docs/task-85b-external-prerequisite-certification-ledger.md'
+        )) {
+            Assert-Contains -Path $document -Pattern '(?i)(deterministic local|local engineering|local fixture)' -Claim 'local fixture evidence boundary'
+            Assert-Contains -Path $document -Pattern '(?i)(no real|not.*claim|not evidence|not.*substitute).*(testnet|sandbox)|(testnet|sandbox).*(external|not.*claim|not evidence|not.*substitute)' -Claim 'external testnet/sandbox boundary'
+        }
         $global:LASTEXITCODE = 0
     }
 
@@ -326,6 +403,8 @@ try {
         Assert-Contains -Path 'upgrades/software/v1.8.0/init.go' -Pattern 'RegisterUpgrade\(UpgradeName, initUpgrade\)' -Claim 'v1.8.0 upgrade registration'
         Assert-Contains -Path 'upgrades/upgrades.go' -Pattern 'upgrades/software/v1\.8\.0' -Claim 'v1.8.0 application registration import'
         Assert-Contains -Path 'tests/upgrade/registry_test.go' -Pattern 'v180\s+"github\.com/virtengine/virtengine/upgrades/software/v1\.8\.0"' -Claim 'v1.8.0 upgrade registry coverage'
+        Assert-Contains -Path 'tests/upgrade/workers_test.go' -Pattern 'v180\s+"github\.com/virtengine/virtengine/upgrades/software/v1\.8\.0"' -Claim 'v1.8.0 post-upgrade network worker import'
+        Assert-Contains -Path 'tests/upgrade/workers_test.go' -Pattern 'v180\.UpgradeName' -Claim 'v1.8.0 post-upgrade network worker registration'
         $global:LASTEXITCODE = 0
     }
 
@@ -349,6 +428,14 @@ try {
             }
             Assert-SHA256Sidecar -Artifact 'sdk/artifacts/proto/inventory.json' -Sidecar 'sdk/artifacts/proto/inventory.json.sha256'
             Assert-SHA256Sidecar -Artifact 'sdk/artifacts/proto/virtengine.binpb' -Sidecar 'sdk/artifacts/proto/virtengine.binpb.sha256'
+            foreach ($document in @(
+                '_docs/audits/task-85b-completion-evidence-2026-07-23.md',
+                '_docs/ralph/progress.md'
+            )) {
+                Assert-DocumentHash -Document $document -Artifact 'sdk/artifacts/proto/virtengine.binpb' -Label 'descriptor'
+                Assert-DocumentHash -Document $document -Artifact 'sdk/artifacts/proto/inventory.json' -Label 'inventory'
+                Assert-DocumentHash -Document $document -Artifact 'api/openapi/virtengine-proto.swagger.json' -Label 'OpenAPI'
+            }
         }
         finally {
             Remove-Item -LiteralPath $tempInventory, "$tempInventory.sha256" -Force -ErrorAction SilentlyContinue
@@ -357,19 +444,43 @@ try {
     }
 
     Invoke-Step 'running tagged settlement integration tests' {
-        & go test -tags='e2e.integration' ./tests/integration/settlement/... -count=1
+        $priorGoFlags = $env:GOFLAGS
+        try {
+            $env:GOFLAGS = '-tags=e2e.integration'
+            & go test -p 1 ./tests/integration/settlement -count=1
+        }
+        finally {
+            $env:GOFLAGS = $priorGoFlags
+        }
+    }
+
+    Invoke-Step 'running app fiat custody registration test' {
+        & go test -p 1 ./app -run '^TestFiatConversionCustodyModuleAccountIsRegisteredAsInternalOnlySink$' -count=1
     }
 
     Invoke-Step 'running targeted Go tests' {
-        & go test @goPackages -count=1
+        & go test -p 1 @goPackages -count=1
     }
 
     Invoke-Step 'running focused settlement package-tree tests' {
-        & go test ./x/settlement/... -run 'FiatConversion|ConsensusExternal' -count=1
+        & go test -p 1 ./x/settlement/... -run 'Fiat|Treasury|FinancialCaseAfterIrreversible|ConsensusExternal' -count=1
+    }
+
+    Invoke-Step 'checking v1.8.0 upgrade registry and e2e worker compilation' {
+        & go test -p 1 ./tests/upgrade -run 'UpgradeRegistry' -count=1
+        if ($LASTEXITCODE -ne 0) { return }
+        $priorGoFlags = $env:GOFLAGS
+        try {
+            $env:GOFLAGS = '-tags=e2e.upgrade'
+            & go test -p 1 ./tests/upgrade -run '^TestPostUpgradeWorkersRegistered$' -count=1
+        }
+        finally {
+            $env:GOFLAGS = $priorGoFlags
+        }
     }
 
     Invoke-Step 'running relevant go vet' {
-        & go vet @vetPackages
+        & go vet -p 1 @vetPackages
     }
 
     if (-not $Quick) {
@@ -398,6 +509,20 @@ try {
             }
         }
 
+        Invoke-Step 'rechecking post-generation artifact and documentation hashes' {
+            Assert-SHA256Sidecar -Artifact 'sdk/artifacts/proto/inventory.json' -Sidecar 'sdk/artifacts/proto/inventory.json.sha256'
+            Assert-SHA256Sidecar -Artifact 'sdk/artifacts/proto/virtengine.binpb' -Sidecar 'sdk/artifacts/proto/virtengine.binpb.sha256'
+            foreach ($document in @(
+                '_docs/audits/task-85b-completion-evidence-2026-07-23.md',
+                '_docs/ralph/progress.md'
+            )) {
+                Assert-DocumentHash -Document $document -Artifact 'sdk/artifacts/proto/virtengine.binpb' -Label 'descriptor'
+                Assert-DocumentHash -Document $document -Artifact 'sdk/artifacts/proto/inventory.json' -Label 'inventory'
+                Assert-DocumentHash -Document $document -Artifact 'api/openapi/virtengine-proto.swagger.json' -Label 'OpenAPI'
+            }
+            $global:LASTEXITCODE = 0
+        }
+
         Invoke-Step 'running focused golangci-lint' {
             $golangci = Get-Command golangci-lint -ErrorAction SilentlyContinue
             if (-not $golangci) {
@@ -409,6 +534,16 @@ try {
                 return
             }
             & $golangci.Source run @lintPackages
+        }
+
+        Invoke-Step 'running TypeScript SDK lint, build, and tests' {
+            if (-not (Get-Command wsl.exe -ErrorAction SilentlyContinue)) {
+                throw 'WSL is required for the pinned Task 85B TypeScript SDK gate'
+            }
+            $wslRepo = Convert-ToWSLPath -WindowsPath $repo
+            $quotedRepo = $wslRepo.Replace("'", "'`"'`"'")
+            $command = "set -e; repo='$quotedRepo'; nodebin=`"`$repo/.cache/proto-generation/node-24.12.0/bin`"; export PATH=`"`$nodebin:`$repo/.cache/proto-generation/bin:`$repo/sdk/ts/node_modules/.bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin`"; export NODE_OPTIONS=--max-old-space-size=6144; cd `"`$repo/sdk/ts`"; node node_modules/eslint/bin/eslint.js src; npm run build; node node_modules/jest/bin/jest.js --selectProjects unit functional --runInBand"
+            & wsl.exe --exec /bin/bash -lc $command
         }
 
         Invoke-Step 'building provider-daemon' {
@@ -432,7 +567,7 @@ try {
         }
     }
     else {
-        Write-Host '[85B] Quick mode: skipped golangci-lint and binary builds' -ForegroundColor DarkGray
+        Write-Host '[85B] Quick diagnostic mode: skipped generated drift, golangci-lint, TypeScript SDK gates, and binary builds; this is not a release pass' -ForegroundColor Yellow
     }
 
     if (-not $SkipRace) {
@@ -442,12 +577,12 @@ try {
             }
             $wslRepo = Convert-ToWSLPath -WindowsPath $repo
             $quotedRepo = $wslRepo.Replace("'", "'`"'`"'")
-            $command = "set -e; cd '$quotedRepo'; CGO_ENABLED=1 go test -p 1 -race ./pkg/dex ./pkg/payments/offramp -count=1; CGO_ENABLED=1 go test -p 1 -race ./pkg/provider_daemon ./cmd/provider-daemon -run 'FiatConversion|FiatWebhook|ProviderMutationFiat|SubmitFiatConversion' -count=1; CGO_ENABLED=1 go test -p 1 -race ./x/settlement/keeper -run 'FiatConversion|ConsensusExternal' -count=1"
+            $command = "set -e; cd '$quotedRepo'; CGO_ENABLED=1 go test -p 1 -race ./pkg/dex ./pkg/payments/offramp -count=1; CGO_ENABLED=1 go test -p 1 -race ./pkg/provider_daemon ./cmd/provider-daemon -run 'Fiat|BoundOsmosis|PayoutBinding' -count=1; CGO_ENABLED=1 go test -p 1 -race ./x/settlement/keeper -run 'Fiat|Treasury|FinancialCaseAfterIrreversible|ConsensusExternal' -count=1"
             & wsl.exe -e bash -lc $command
         }
     }
     else {
-        Write-Host '[85B] Race gate skipped by -SkipRace' -ForegroundColor DarkGray
+        Write-Host '[85B] Race gate explicitly skipped by -SkipRace; this is not a release pass' -ForegroundColor Yellow
     }
 
     Write-Host '[85B] preflight passed' -ForegroundColor Green

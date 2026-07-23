@@ -30,6 +30,14 @@
 - [ ] `./scripts/verify-proto-generation.sh` for proto/generated/OpenAPI/SDK changes
 - [ ] `git push` succeeds (all pre-push hooks pass)
 
+## Task 85B Changes
+
+- [ ] `pwsh scripts/task85b-preflight.ps1` completes in full mode for Task 85B DEX, off-ramp, provider-orchestrator, settlement, generated-contract, SDK, upgrade, app-custody, integration, lint, build and race changes.
+- [ ] Completion evidence and `_docs/ralph/progress.md` contain the live descriptor, inventory and OpenAPI SHA-256 values; the Task 85B preflight enforces this.
+- [ ] Real testnet/sandbox and production evidence is reported as externally blocked unless those external executions actually occurred and their retained evidence is available.
+
+`VE_HOOK_TASK85B_QUICK=1` and `VE_HOOK_TASK85B_SKIP_RACE=1` are explicit diagnostic-only reductions for constrained environments. Their output is not a Task 85B release pass and must not be recorded as full preflight evidence. Without these explicit variables, agent preflight fails closed and runs the full Task 85B gate.
+
 ## If Push Fails
 
 1. Read the error output carefully

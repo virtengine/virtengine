@@ -23,7 +23,7 @@ import (
 	"github.com/virtengine/virtengine/pkg/payments/offramp"
 )
 
-const fiatRepositorySchemaVersion uint32 = 2
+const fiatRepositorySchemaVersion uint32 = 3
 
 type persistedWebhookEvent struct {
 	Event      offramp.WebhookEvent `json:"event"`
@@ -32,13 +32,14 @@ type persistedWebhookEvent struct {
 }
 
 type fiatRepositoryState struct {
-	SchemaVersion  uint32                            `json:"schema_version"`
-	Payouts        map[string]offramp.PayoutResult   `json:"payouts"`
-	Limits         map[string]string                 `json:"limits"`
-	Reservations   map[string]string                 `json:"reservations"`
-	WebhookEvents  map[string]string                 `json:"webhook_events"`
-	Bindings       map[string]offramp.WebhookBinding `json:"bindings"`
-	VerifiedEvents map[string]persistedWebhookEvent  `json:"verified_events"`
+	SchemaVersion  uint32                                    `json:"schema_version"`
+	Payouts        map[string]offramp.PayoutResult           `json:"payouts"`
+	Limits         map[string]string                         `json:"limits"`
+	Reservations   map[string]string                         `json:"reservations"`
+	WebhookEvents  map[string]string                         `json:"webhook_events"`
+	Bindings       map[string]offramp.WebhookBinding         `json:"bindings"`
+	VerifiedEvents map[string]persistedWebhookEvent          `json:"verified_events"`
+	Initiations    map[string]offramp.PayoutInitiationRecord `json:"initiations"`
 }
 
 // FileFiatRepository implements all durable off-ramp repository contracts in
@@ -72,7 +73,7 @@ func (r *FileFiatRepository) Open(context.Context) error {
 	if err != nil {
 		return err
 	}
-	state := fiatRepositoryState{SchemaVersion: fiatRepositorySchemaVersion, Payouts: map[string]offramp.PayoutResult{}, Limits: map[string]string{}, Reservations: map[string]string{}, WebhookEvents: map[string]string{}, Bindings: map[string]offramp.WebhookBinding{}, VerifiedEvents: map[string]persistedWebhookEvent{}}
+	state := fiatRepositoryState{SchemaVersion: fiatRepositorySchemaVersion, Payouts: map[string]offramp.PayoutResult{}, Limits: map[string]string{}, Reservations: map[string]string{}, WebhookEvents: map[string]string{}, Bindings: map[string]offramp.WebhookBinding{}, VerifiedEvents: map[string]persistedWebhookEvent{}, Initiations: map[string]offramp.PayoutInitiationRecord{}}
 	if raw, readErr := os.ReadFile(r.path); readErr == nil { // #nosec G304 -- validated path.
 		var header struct {
 			SchemaVersion uint32 `json:"schema_version"`
@@ -81,7 +82,8 @@ func (r *FileFiatRepository) Open(context.Context) error {
 			lock.release()
 			return err
 		}
-		if header.SchemaVersion == 1 {
+		switch header.SchemaVersion {
+		case 1:
 			var legacy struct {
 				SchemaVersion  uint32                            `json:"schema_version"`
 				Payouts        map[string]offramp.PayoutResult   `json:"payouts"`
@@ -106,7 +108,16 @@ func (r *FileFiatRepository) Open(context.Context) error {
 				digest := sha256.Sum256(rawEvent)
 				state.VerifiedEvents[key] = persistedWebhookEvent{Event: event, Digest: hex.EncodeToString(digest[:])}
 			}
-		} else {
+		case 2:
+			var legacy fiatRepositoryState
+			if err := decodeStrictFiatRepositoryJSON(raw, &legacy, true); err != nil {
+				lock.release()
+				return err
+			}
+			state = legacy
+			state.SchemaVersion = fiatRepositorySchemaVersion
+			state.Initiations = map[string]offramp.PayoutInitiationRecord{}
+		default:
 			if err := decodeStrictFiatRepositoryJSON(raw, &state, true); err != nil {
 				lock.release()
 				return err
@@ -137,6 +148,9 @@ func (r *FileFiatRepository) Open(context.Context) error {
 	}
 	if state.VerifiedEvents == nil {
 		state.VerifiedEvents = map[string]persistedWebhookEvent{}
+	}
+	if state.Initiations == nil {
+		state.Initiations = map[string]offramp.PayoutInitiationRecord{}
 	}
 	r.state, r.lock, r.open = state, lock, true
 	return nil
@@ -208,6 +222,41 @@ func (r *FileFiatRepository) PutPayout(_ context.Context, value offramp.PayoutRe
 			delete(r.state.Payouts, safeValue.ID)
 		} else {
 			r.state.Payouts[safeValue.ID] = before
+		}
+		return err
+	}
+	return nil
+}
+
+func (r *FileFiatRepository) GetPayoutInitiation(_ context.Context, provider string, metadata map[string]string) (offramp.PayoutInitiationRecord, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	value, ok := r.state.Initiations[fiatRepositoryMetadataKey(provider, metadata)]
+	if !ok {
+		return offramp.PayoutInitiationRecord{}, offramp.ErrPayoutNotFound
+	}
+	return clonePayoutInitiation(value), nil
+}
+
+func (r *FileFiatRepository) PutPayoutInitiation(_ context.Context, value offramp.PayoutInitiationRecord) error {
+	if value.Provider == "" || value.QuoteID == "" || value.OperationBinding == "" || value.RequestBinding == "" ||
+		value.FiatAmount == "" || value.CryptoAmount == "" || value.Fee == "" || value.DailyReservationKey == "" ||
+		value.DailyReservationOperationID == "" || value.PreparedAt.IsZero() || !safeOperationalMetadata(value.Metadata) {
+		return offramp.ErrInvalidRequest
+	}
+	key := fiatRepositoryMetadataKey(value.Provider, value.Metadata)
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	before, existed := r.state.Initiations[key]
+	if existed && !validFiatInitiationUpdate(before, value) {
+		return offramp.ErrProviderRejected
+	}
+	r.state.Initiations[key] = clonePayoutInitiation(value)
+	if err := r.saveLocked(); err != nil {
+		if existed {
+			r.state.Initiations[key] = before
+		} else {
+			delete(r.state.Initiations, key)
 		}
 		return err
 	}
@@ -443,6 +492,61 @@ func cloneOfframpPayout(value offramp.PayoutResult) offramp.PayoutResult {
 	}
 	return copyValue
 }
+func clonePayoutInitiation(value offramp.PayoutInitiationRecord) offramp.PayoutInitiationRecord {
+	raw, err := json.Marshal(value)
+	if err != nil {
+		return offramp.PayoutInitiationRecord{}
+	}
+	var copyValue offramp.PayoutInitiationRecord
+	if err := json.Unmarshal(raw, &copyValue); err != nil {
+		return offramp.PayoutInitiationRecord{}
+	}
+	return copyValue
+}
+
+func fiatRepositoryMetadataKey(provider string, metadata map[string]string) string {
+	keys := make([]string, 0, len(metadata))
+	for key := range metadata {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	parts := []string{provider}
+	for _, key := range keys {
+		parts = append(parts, key+"="+metadata[key])
+	}
+	return strings.Join(parts, "|")
+}
+
+func safeOperationalMetadata(metadata map[string]string) bool {
+	if len(metadata) == 0 || len(metadata) > 8 {
+		return false
+	}
+	allowed := map[string]bool{"idempotency_key": true, "correlation_id": true, "conversion_id": true}
+	for key, value := range metadata {
+		if !allowed[key] || value == "" || len(value) > 256 || strings.ContainsAny(value, "\x00\r\n") {
+			return false
+		}
+	}
+	return metadata["idempotency_key"] != "" && metadata["correlation_id"] != ""
+}
+
+func validFiatInitiationUpdate(current, updated offramp.PayoutInitiationRecord) bool {
+	if current.Provider != updated.Provider || current.QuoteID != updated.QuoteID || current.OperationBinding != updated.OperationBinding ||
+		current.RequestBinding != updated.RequestBinding || current.FiatAmount != updated.FiatAmount || current.CryptoAmount != updated.CryptoAmount ||
+		current.Fee != updated.Fee || current.DailyReservationKey != updated.DailyReservationKey ||
+		current.DailyReservationOperationID != updated.DailyReservationOperationID || !current.PreparedAt.Equal(updated.PreparedAt) ||
+		!safeMetadataMatch(current.Metadata, updated.Metadata) || !safeMetadataMatch(updated.Metadata, current.Metadata) {
+		return false
+	}
+	if current.PayoutID != "" && current.PayoutID != updated.PayoutID {
+		return false
+	}
+	rank := map[offramp.PayoutInitiationState]int{
+		offramp.PayoutInitiationPrepared: 1, offramp.PayoutInitiationAmbiguous: 2, offramp.PayoutInitiationAccepted: 3,
+		offramp.PayoutInitiationNoPayout: 3, offramp.PayoutInitiationTerminalFailed: 3, offramp.PayoutInitiationTerminalCancelled: 3,
+	}
+	return current.State == updated.State || rank[updated.State] >= rank[current.State]
+}
 func safeMetadataMatch(left, right map[string]string) bool {
 	if len(right) == 0 {
 		return false
@@ -510,6 +614,7 @@ func fiatPayoutStatusCanAdvance(current, updated offramp.Status) bool {
 }
 
 var _ offramp.PayoutRepository = (*FileFiatRepository)(nil)
+var _ offramp.PayoutInitiationRepository = (*FileFiatRepository)(nil)
 var _ offramp.DailyLimitRepository = (*FileFiatRepository)(nil)
 var _ offramp.DurableWebhookReplayRepository = (*FileFiatRepository)(nil)
 var _ offramp.DurableWebhookBindingRepository = (*FileFiatRepository)(nil)
