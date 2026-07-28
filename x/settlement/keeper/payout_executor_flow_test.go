@@ -361,6 +361,7 @@ func (s *KeeperTestSuite) TestRetryFailedPayouts() {
 		s.ctx.BlockHeight(),
 	)
 	retryPayout.State = types.PayoutStateFailed
+	retryPayout.LastErrorRetryable = true
 	retryPayout.ExecutionAttempts = 1
 
 	maxedPayout := types.NewPayoutRecord(
@@ -380,10 +381,33 @@ func (s *KeeperTestSuite) TestRetryFailedPayouts() {
 		s.ctx.BlockHeight(),
 	)
 	maxedPayout.State = types.PayoutStateFailed
+	maxedPayout.LastErrorRetryable = true
 	maxedPayout.ExecutionAttempts = 2
+
+	terminalPayout := types.NewPayoutRecord(
+		"payout-retry-3",
+		"inv-retry-3",
+		"settle-retry-3",
+		"escrow-retry-3",
+		"order-retry-3",
+		"lease-retry-3",
+		s.provider.String(),
+		s.depositor.String(),
+		amount,
+		sdk.NewCoins(),
+		sdk.NewCoins(),
+		sdk.NewCoins(),
+		s.ctx.BlockTime(),
+		s.ctx.BlockHeight(),
+	)
+	terminalPayout.State = types.PayoutStateFailed
+	terminalPayout.LastError = "compliance rejected"
+	terminalPayout.LastErrorRetryable = false
+	terminalPayout.ExecutionAttempts = 1
 
 	require.NoError(t, s.keeper.SetPayout(s.ctx, *retryPayout))
 	require.NoError(t, s.keeper.SetPayout(s.ctx, *maxedPayout))
+	require.NoError(t, s.keeper.SetPayout(s.ctx, *terminalPayout))
 
 	require.NoError(t, s.keeper.RetryFailedPayouts(s.ctx))
 
@@ -394,6 +418,12 @@ func (s *KeeperTestSuite) TestRetryFailedPayouts() {
 	updatedMaxed, found := s.keeper.GetPayout(s.ctx, maxedPayout.PayoutID)
 	require.True(t, found)
 	require.Equal(t, types.PayoutStateFailed, updatedMaxed.State)
+
+	updatedTerminal, found := s.keeper.GetPayout(s.ctx, terminalPayout.PayoutID)
+	require.True(t, found)
+	require.Equal(t, types.PayoutStateFailed, updatedTerminal.State)
+	require.False(t, updatedTerminal.LastErrorRetryable)
+	require.Equal(t, uint32(1), updatedTerminal.ExecutionAttempts)
 }
 
 func (s *KeeperTestSuite) TestExecutePayoutIdempotentRequests() {
@@ -629,6 +659,111 @@ func (s *KeeperTestSuite) TestFiatConversionRetryDoesNotReexecuteSwap() {
 	require.True(t, found)
 	require.Equal(t, types.FiatConversionStateCreated, conv.State)
 	require.Empty(t, conv.SwapTxHash)
+}
+
+func (s *KeeperTestSuite) TestReconcileFiatConversionRejectsConsensusExternalIOAfterRestart() {
+	t := s.T()
+
+	swapQuote := dex.SwapQuote{
+		ID: "quote-terminal-failure",
+		Route: dex.SwapRoute{
+			Hops: []dex.SwapHop{{AmountOut: sdkmath.NewInt(900)}},
+		},
+		ExpiresAt: s.ctx.BlockTime().Add(5 * time.Minute),
+	}
+	swapExec := &mockSwapExecutor{
+		quote: swapQuote,
+		result: dex.SwapResult{
+			QuoteID:      swapQuote.ID,
+			TxHash:       "swap-terminal-failure",
+			InputAmount:  sdkmath.NewInt(1000),
+			OutputAmount: sdkmath.NewInt(900),
+			ExecutedAt:   s.ctx.BlockTime(),
+		},
+	}
+
+	s.configureFiatConversion(t, swapExec)
+
+	bridge := &pendingOffRampBridge{
+		quote: offramp.Quote{
+			ID:         "off-quote-terminal-failure",
+			FiatAmount: sdkmath.LegacyNewDec(100),
+			CreatedAt:  s.ctx.BlockTime(),
+			ExpiresAt:  s.ctx.BlockTime().Add(5 * time.Minute),
+		},
+		result: offramp.PayoutResult{
+			ID:           "off-payout-terminal-failure",
+			Status:       offramp.StatusProcessing,
+			Provider:     "mock",
+			FiatAmount:   sdkmath.LegacyNewDec(100),
+			CryptoAmount: sdkmath.NewInt(900),
+			Reference:    "ref-terminal-failure",
+			InitiatedAt:  s.ctx.BlockTime(),
+		},
+		status: offramp.PayoutResult{
+			ID:         "off-payout-terminal-failure",
+			Status:     offramp.StatusFailed,
+			Provider:   "mock",
+			FiatAmount: sdkmath.LegacyNewDec(100),
+			Reference:  "ref-terminal-failure",
+		},
+	}
+	s.keeper.SetOffRampBridge(bridge)
+
+	settlement := s.buildSettlement(t, "payout-terminal-failure")
+	require.NoError(t, s.keeper.SetSettlement(s.ctx, settlement))
+
+	request := types.FiatConversionRequest{
+		InvoiceID:         "inv-terminal-failure",
+		SettlementID:      settlement.SettlementID,
+		Provider:          settlement.Provider,
+		Customer:          settlement.Customer,
+		RequestedBy:       settlement.Provider,
+		CryptoAmount:      sdk.NewCoin("uve", sdkmath.NewInt(1000)),
+		FiatCurrency:      "USD",
+		PaymentMethod:     "bank_transfer",
+		DestinationHash:   types.HashDestination("acct-token"),
+		SlippageTolerance: 0.01,
+		CryptoToken:       types.TokenSpec{Symbol: "UVE", Denom: "uve", Decimals: 6},
+		StableToken:       types.TokenSpec{Symbol: "USDC", Denom: "uusdc", Decimals: 6},
+		EncryptedPayload:  makeEncryptedSettlementPayload(t, []string{"provider-key", "customer-key"}),
+	}
+
+	_, err := s.keeper.RequestFiatConversion(s.ctx, request)
+	require.NoError(t, err)
+
+	payout, err := s.keeper.ExecutePayout(s.ctx, "inv-terminal-failure", settlement.SettlementID)
+	require.NoError(t, err)
+	require.Equal(t, types.PayoutStatePending, payout.State)
+
+	conversion, found := s.keeper.GetFiatConversionByInvoice(s.ctx, "inv-terminal-failure")
+	require.True(t, found)
+	require.Equal(t, types.FiatConversionStateCreated, conversion.State)
+
+	restarted := keeper.NewKeeper(s.cdc, s.keeper.StoreKey(), s.bankKeeper, s.escrow, "authority", mockEncryptionKeeper{})
+	restarted.SetDexSwapExecutor(swapExec)
+	restarted.SetOffRampBridge(bridge)
+
+	reconciled, err := restarted.ReconcileFiatConversion(s.ctx, conversion.ConversionID)
+	require.ErrorIs(t, err, types.ErrExternalIOForbidden)
+	require.Equal(t, types.FiatConversionStateCreated, reconciled.State)
+	require.Zero(t, bridge.statusCalls)
+	require.Zero(t, bridge.initCalls)
+	require.Zero(t, swapExec.quoteCalls)
+	require.Zero(t, swapExec.execCalls)
+
+	updated, found := restarted.GetPayout(s.ctx, payout.PayoutID)
+	require.True(t, found)
+	require.Equal(t, types.PayoutStatePending, updated.State)
+	require.False(t, updated.LastErrorRetryable)
+	require.False(t, updated.CanRetry())
+
+	require.NoError(t, restarted.RetryFailedPayouts(s.ctx))
+	stillPending, found := restarted.GetPayout(s.ctx, payout.PayoutID)
+	require.True(t, found)
+	require.Equal(t, types.PayoutStatePending, stillPending.State)
+	require.False(t, stillPending.LastErrorRetryable)
+	require.Equal(t, updated.ExecutionAttempts, stillPending.ExecutionAttempts)
 }
 
 func (s *KeeperTestSuite) TestProcessInFlightFiatConversionsRecoveryLoop() {

@@ -774,6 +774,7 @@ export interface PayoutRecord {
   processedAt: Long;
   completedAt: Long;
   blockHeight: Long;
+  lastErrorRetryable: boolean;
   /**
    * external_finality_hash is a SHA-256 digest for an authenticated external
    * payout. It is never an on-chain transaction hash.
@@ -1186,6 +1187,7 @@ export interface FiatConversionRecord {
   lastErrorAt: Long;
   lastError: string;
   transitionHistory: FiatConversionStateTransition[];
+  lastErrorRetryable: boolean;
   protocolVersion: number;
   observationSequence: Long;
   lastObservationDigest: Uint8Array;
@@ -4781,6 +4783,7 @@ function createBasePayoutRecord(): PayoutRecord {
     processedAt: Long.ZERO,
     completedAt: Long.ZERO,
     blockHeight: Long.ZERO,
+    lastErrorRetryable: false,
     externalFinalityHash: new Uint8Array(0),
     valueMovementApplied: false,
     valueMovementEffectHash: new Uint8Array(0),
@@ -4869,14 +4872,17 @@ export const PayoutRecord: MessageFns<PayoutRecord, "virtengine.settlement.v1.Pa
     if (!message.blockHeight.equals(Long.ZERO)) {
       writer.uint32(208).int64(message.blockHeight.toString());
     }
+    if (message.lastErrorRetryable !== false) {
+      writer.uint32(216).bool(message.lastErrorRetryable);
+    }
     if (message.externalFinalityHash.length !== 0) {
-      writer.uint32(218).bytes(message.externalFinalityHash);
+      writer.uint32(226).bytes(message.externalFinalityHash);
     }
     if (message.valueMovementApplied !== false) {
-      writer.uint32(224).bool(message.valueMovementApplied);
+      writer.uint32(232).bool(message.valueMovementApplied);
     }
     if (message.valueMovementEffectHash.length !== 0) {
-      writer.uint32(234).bytes(message.valueMovementEffectHash);
+      writer.uint32(242).bytes(message.valueMovementEffectHash);
     }
     return writer;
   },
@@ -5097,23 +5103,31 @@ export const PayoutRecord: MessageFns<PayoutRecord, "virtengine.settlement.v1.Pa
           continue;
         }
         case 27: {
-          if (tag !== 218) {
+          if (tag !== 216) {
+            break;
+          }
+
+          message.lastErrorRetryable = reader.bool();
+          continue;
+        }
+        case 28: {
+          if (tag !== 226) {
             break;
           }
 
           message.externalFinalityHash = reader.bytes();
           continue;
         }
-        case 28: {
-          if (tag !== 224) {
+        case 29: {
+          if (tag !== 232) {
             break;
           }
 
           message.valueMovementApplied = reader.bool();
           continue;
         }
-        case 29: {
-          if (tag !== 234) {
+        case 30: {
+          if (tag !== 242) {
             break;
           }
 
@@ -5167,6 +5181,7 @@ export const PayoutRecord: MessageFns<PayoutRecord, "virtengine.settlement.v1.Pa
       processedAt: isSet(object.processed_at) ? Long.fromValue(object.processed_at) : Long.ZERO,
       completedAt: isSet(object.completed_at) ? Long.fromValue(object.completed_at) : Long.ZERO,
       blockHeight: isSet(object.block_height) ? Long.fromValue(object.block_height) : Long.ZERO,
+      lastErrorRetryable: isSet(object.last_error_retryable) ? globalThis.Boolean(object.last_error_retryable) : false,
       externalFinalityHash: isSet(object.external_finality_hash)
         ? bytesFromBase64(object.external_finality_hash)
         : new Uint8Array(0),
@@ -5259,6 +5274,9 @@ export const PayoutRecord: MessageFns<PayoutRecord, "virtengine.settlement.v1.Pa
     if (!message.blockHeight.equals(Long.ZERO)) {
       obj.block_height = (message.blockHeight || Long.ZERO).toString();
     }
+    if (message.lastErrorRetryable !== false) {
+      obj.last_error_retryable = message.lastErrorRetryable;
+    }
     if (message.externalFinalityHash.length !== 0) {
       obj.external_finality_hash = base64FromBytes(message.externalFinalityHash);
     }
@@ -5308,6 +5326,7 @@ export const PayoutRecord: MessageFns<PayoutRecord, "virtengine.settlement.v1.Pa
     message.blockHeight = (object.blockHeight !== undefined && object.blockHeight !== null)
       ? Long.fromValue(object.blockHeight)
       : Long.ZERO;
+    message.lastErrorRetryable = object.lastErrorRetryable ?? false;
     message.externalFinalityHash = object.externalFinalityHash ?? new Uint8Array(0);
     message.valueMovementApplied = object.valueMovementApplied ?? false;
     message.valueMovementEffectHash = object.valueMovementEffectHash ?? new Uint8Array(0);
@@ -11071,6 +11090,7 @@ function createBaseFiatConversionRecord(): FiatConversionRecord {
     lastErrorAt: Long.ZERO,
     lastError: "",
     transitionHistory: [],
+    lastErrorRetryable: false,
     protocolVersion: 0,
     observationSequence: Long.UZERO,
     lastObservationDigest: new Uint8Array(0),
@@ -11242,92 +11262,95 @@ export const FiatConversionRecord: MessageFns<FiatConversionRecord, "virtengine.
     for (const v of message.transitionHistory) {
       FiatConversionStateTransition.encode(v!, writer.uint32(362).fork()).join();
     }
+    if (message.lastErrorRetryable !== false) {
+      writer.uint32(368).bool(message.lastErrorRetryable);
+    }
     if (message.protocolVersion !== 0) {
-      writer.uint32(368).uint32(message.protocolVersion);
+      writer.uint32(376).uint32(message.protocolVersion);
     }
     if (!message.observationSequence.equals(Long.UZERO)) {
-      writer.uint32(376).uint64(message.observationSequence.toString());
+      writer.uint32(384).uint64(message.observationSequence.toString());
     }
     if (message.lastObservationDigest.length !== 0) {
-      writer.uint32(386).bytes(message.lastObservationDigest);
+      writer.uint32(394).bytes(message.lastObservationDigest);
     }
     for (const v of message.observations) {
-      FiatConversionObservation.encode(v!, writer.uint32(394).fork()).join();
+      FiatConversionObservation.encode(v!, writer.uint32(402).fork()).join();
     }
     if (message.dexProfileId !== "") {
-      writer.uint32(402).string(message.dexProfileId);
+      writer.uint32(410).string(message.dexProfileId);
     }
     if (message.dexProfileDigest.length !== 0) {
-      writer.uint32(410).bytes(message.dexProfileDigest);
+      writer.uint32(418).bytes(message.dexProfileDigest);
     }
     if (message.payoutProfileId !== "") {
-      writer.uint32(418).string(message.payoutProfileId);
+      writer.uint32(426).string(message.payoutProfileId);
     }
     if (message.payoutProfileDigest.length !== 0) {
-      writer.uint32(426).bytes(message.payoutProfileDigest);
+      writer.uint32(434).bytes(message.payoutProfileDigest);
     }
     if (message.quoteDigest.length !== 0) {
-      writer.uint32(434).bytes(message.quoteDigest);
+      writer.uint32(442).bytes(message.quoteDigest);
     }
     if (!message.quoteExpiry.equals(Long.ZERO)) {
-      writer.uint32(440).int64(message.quoteExpiry.toString());
+      writer.uint32(448).int64(message.quoteExpiry.toString());
     }
     if (message.minimumStableOutput !== undefined) {
-      Coin.encode(message.minimumStableOutput, writer.uint32(450).fork()).join();
+      Coin.encode(message.minimumStableOutput, writer.uint32(458).fork()).join();
     }
     if (!message.swapHeight.equals(Long.ZERO)) {
-      writer.uint32(456).int64(message.swapHeight.toString());
+      writer.uint32(464).int64(message.swapHeight.toString());
     }
     if (message.swapBlockHash.length !== 0) {
-      writer.uint32(466).bytes(message.swapBlockHash);
+      writer.uint32(474).bytes(message.swapBlockHash);
     }
     if (message.swapFinalityConfirmations !== 0) {
-      writer.uint32(472).uint32(message.swapFinalityConfirmations);
+      writer.uint32(480).uint32(message.swapFinalityConfirmations);
     }
     if (message.swapFinalityHash.length !== 0) {
-      writer.uint32(482).bytes(message.swapFinalityHash);
+      writer.uint32(490).bytes(message.swapFinalityHash);
     }
     if (message.payoutFinalityHash.length !== 0) {
-      writer.uint32(490).bytes(message.payoutFinalityHash);
+      writer.uint32(498).bytes(message.payoutFinalityHash);
     }
     if (message.complianceDecisionHash.length !== 0) {
-      writer.uint32(498).bytes(message.complianceDecisionHash);
+      writer.uint32(506).bytes(message.complianceDecisionHash);
     }
     if (message.privacySafeReferenceHash.length !== 0) {
-      writer.uint32(506).bytes(message.privacySafeReferenceHash);
+      writer.uint32(514).bytes(message.privacySafeReferenceHash);
     }
     if (message.evidenceHash.length !== 0) {
-      writer.uint32(514).bytes(message.evidenceHash);
+      writer.uint32(522).bytes(message.evidenceHash);
     }
     if (message.requestDigest.length !== 0) {
-      writer.uint32(522).bytes(message.requestDigest);
+      writer.uint32(530).bytes(message.requestDigest);
     }
     if (message.dailyBucket !== "") {
-      writer.uint32(530).string(message.dailyBucket);
+      writer.uint32(538).string(message.dailyBucket);
     }
     if (message.legacyQuarantined !== false) {
-      writer.uint32(536).bool(message.legacyQuarantined);
+      writer.uint32(544).bool(message.legacyQuarantined);
     }
     if (message.quarantineReason !== "") {
-      writer.uint32(546).string(message.quarantineReason);
+      writer.uint32(554).string(message.quarantineReason);
     }
     if (message.terminalPolicy !== "") {
-      writer.uint32(554).string(message.terminalPolicy);
+      writer.uint32(562).string(message.terminalPolicy);
     }
     if (message.valueMovementApplied !== false) {
-      writer.uint32(560).bool(message.valueMovementApplied);
+      writer.uint32(568).bool(message.valueMovementApplied);
     }
     if (message.slippageToleranceExact !== "") {
-      writer.uint32(570).string(message.slippageToleranceExact);
+      writer.uint32(578).string(message.slippageToleranceExact);
     }
     if (message.dailyQuotaReserved !== false) {
-      writer.uint32(576).bool(message.dailyQuotaReserved);
+      writer.uint32(584).bool(message.dailyQuotaReserved);
     }
     if (message.custodySinkAmount !== undefined) {
-      Coin.encode(message.custodySinkAmount, writer.uint32(586).fork()).join();
+      Coin.encode(message.custodySinkAmount, writer.uint32(594).fork()).join();
     }
     if (message.custodySinkEffectHash.length !== 0) {
-      writer.uint32(594).bytes(message.custodySinkEffectHash);
+      writer.uint32(602).bytes(message.custodySinkEffectHash);
     }
     return writer;
   },
@@ -11704,7 +11727,7 @@ export const FiatConversionRecord: MessageFns<FiatConversionRecord, "virtengine.
             break;
           }
 
-          message.protocolVersion = reader.uint32();
+          message.lastErrorRetryable = reader.bool();
           continue;
         }
         case 47: {
@@ -11712,15 +11735,15 @@ export const FiatConversionRecord: MessageFns<FiatConversionRecord, "virtengine.
             break;
           }
 
-          message.observationSequence = Long.fromString(reader.uint64().toString(), true);
+          message.protocolVersion = reader.uint32();
           continue;
         }
         case 48: {
-          if (tag !== 386) {
+          if (tag !== 384) {
             break;
           }
 
-          message.lastObservationDigest = reader.bytes();
+          message.observationSequence = Long.fromString(reader.uint64().toString(), true);
           continue;
         }
         case 49: {
@@ -11728,7 +11751,7 @@ export const FiatConversionRecord: MessageFns<FiatConversionRecord, "virtengine.
             break;
           }
 
-          message.observations.push(FiatConversionObservation.decode(reader, reader.uint32()));
+          message.lastObservationDigest = reader.bytes();
           continue;
         }
         case 50: {
@@ -11736,7 +11759,7 @@ export const FiatConversionRecord: MessageFns<FiatConversionRecord, "virtengine.
             break;
           }
 
-          message.dexProfileId = reader.string();
+          message.observations.push(FiatConversionObservation.decode(reader, reader.uint32()));
           continue;
         }
         case 51: {
@@ -11744,7 +11767,7 @@ export const FiatConversionRecord: MessageFns<FiatConversionRecord, "virtengine.
             break;
           }
 
-          message.dexProfileDigest = reader.bytes();
+          message.dexProfileId = reader.string();
           continue;
         }
         case 52: {
@@ -11752,7 +11775,7 @@ export const FiatConversionRecord: MessageFns<FiatConversionRecord, "virtengine.
             break;
           }
 
-          message.payoutProfileId = reader.string();
+          message.dexProfileDigest = reader.bytes();
           continue;
         }
         case 53: {
@@ -11760,7 +11783,7 @@ export const FiatConversionRecord: MessageFns<FiatConversionRecord, "virtengine.
             break;
           }
 
-          message.payoutProfileDigest = reader.bytes();
+          message.payoutProfileId = reader.string();
           continue;
         }
         case 54: {
@@ -11768,55 +11791,55 @@ export const FiatConversionRecord: MessageFns<FiatConversionRecord, "virtengine.
             break;
           }
 
-          message.quoteDigest = reader.bytes();
+          message.payoutProfileDigest = reader.bytes();
           continue;
         }
         case 55: {
-          if (tag !== 440) {
+          if (tag !== 442) {
+            break;
+          }
+
+          message.quoteDigest = reader.bytes();
+          continue;
+        }
+        case 56: {
+          if (tag !== 448) {
             break;
           }
 
           message.quoteExpiry = Long.fromString(reader.int64().toString());
           continue;
         }
-        case 56: {
-          if (tag !== 450) {
+        case 57: {
+          if (tag !== 458) {
             break;
           }
 
           message.minimumStableOutput = Coin.decode(reader, reader.uint32());
           continue;
         }
-        case 57: {
-          if (tag !== 456) {
+        case 58: {
+          if (tag !== 464) {
             break;
           }
 
           message.swapHeight = Long.fromString(reader.int64().toString());
           continue;
         }
-        case 58: {
-          if (tag !== 466) {
+        case 59: {
+          if (tag !== 474) {
             break;
           }
 
           message.swapBlockHash = reader.bytes();
           continue;
         }
-        case 59: {
-          if (tag !== 472) {
+        case 60: {
+          if (tag !== 480) {
             break;
           }
 
           message.swapFinalityConfirmations = reader.uint32();
-          continue;
-        }
-        case 60: {
-          if (tag !== 482) {
-            break;
-          }
-
-          message.swapFinalityHash = reader.bytes();
           continue;
         }
         case 61: {
@@ -11824,7 +11847,7 @@ export const FiatConversionRecord: MessageFns<FiatConversionRecord, "virtengine.
             break;
           }
 
-          message.payoutFinalityHash = reader.bytes();
+          message.swapFinalityHash = reader.bytes();
           continue;
         }
         case 62: {
@@ -11832,7 +11855,7 @@ export const FiatConversionRecord: MessageFns<FiatConversionRecord, "virtengine.
             break;
           }
 
-          message.complianceDecisionHash = reader.bytes();
+          message.payoutFinalityHash = reader.bytes();
           continue;
         }
         case 63: {
@@ -11840,7 +11863,7 @@ export const FiatConversionRecord: MessageFns<FiatConversionRecord, "virtengine.
             break;
           }
 
-          message.privacySafeReferenceHash = reader.bytes();
+          message.complianceDecisionHash = reader.bytes();
           continue;
         }
         case 64: {
@@ -11848,7 +11871,7 @@ export const FiatConversionRecord: MessageFns<FiatConversionRecord, "virtengine.
             break;
           }
 
-          message.evidenceHash = reader.bytes();
+          message.privacySafeReferenceHash = reader.bytes();
           continue;
         }
         case 65: {
@@ -11856,7 +11879,7 @@ export const FiatConversionRecord: MessageFns<FiatConversionRecord, "virtengine.
             break;
           }
 
-          message.requestDigest = reader.bytes();
+          message.evidenceHash = reader.bytes();
           continue;
         }
         case 66: {
@@ -11864,23 +11887,23 @@ export const FiatConversionRecord: MessageFns<FiatConversionRecord, "virtengine.
             break;
           }
 
-          message.dailyBucket = reader.string();
+          message.requestDigest = reader.bytes();
           continue;
         }
         case 67: {
-          if (tag !== 536) {
+          if (tag !== 538) {
+            break;
+          }
+
+          message.dailyBucket = reader.string();
+          continue;
+        }
+        case 68: {
+          if (tag !== 544) {
             break;
           }
 
           message.legacyQuarantined = reader.bool();
-          continue;
-        }
-        case 68: {
-          if (tag !== 546) {
-            break;
-          }
-
-          message.quarantineReason = reader.string();
           continue;
         }
         case 69: {
@@ -11888,43 +11911,51 @@ export const FiatConversionRecord: MessageFns<FiatConversionRecord, "virtengine.
             break;
           }
 
-          message.terminalPolicy = reader.string();
+          message.quarantineReason = reader.string();
           continue;
         }
         case 70: {
-          if (tag !== 560) {
+          if (tag !== 562) {
+            break;
+          }
+
+          message.terminalPolicy = reader.string();
+          continue;
+        }
+        case 71: {
+          if (tag !== 568) {
             break;
           }
 
           message.valueMovementApplied = reader.bool();
           continue;
         }
-        case 71: {
-          if (tag !== 570) {
+        case 72: {
+          if (tag !== 578) {
             break;
           }
 
           message.slippageToleranceExact = reader.string();
           continue;
         }
-        case 72: {
-          if (tag !== 576) {
+        case 73: {
+          if (tag !== 584) {
             break;
           }
 
           message.dailyQuotaReserved = reader.bool();
           continue;
         }
-        case 73: {
-          if (tag !== 586) {
+        case 74: {
+          if (tag !== 594) {
             break;
           }
 
           message.custodySinkAmount = Coin.decode(reader, reader.uint32());
           continue;
         }
-        case 74: {
-          if (tag !== 594) {
+        case 75: {
+          if (tag !== 602) {
             break;
           }
 
@@ -11993,6 +12024,7 @@ export const FiatConversionRecord: MessageFns<FiatConversionRecord, "virtengine.
       transitionHistory: globalThis.Array.isArray(object?.transition_history)
         ? object.transition_history.map((e: any) => FiatConversionStateTransition.fromJSON(e))
         : [],
+      lastErrorRetryable: isSet(object.last_error_retryable) ? globalThis.Boolean(object.last_error_retryable) : false,
       protocolVersion: isSet(object.protocol_version) ? globalThis.Number(object.protocol_version) : 0,
       observationSequence: isSet(object.observation_sequence)
         ? Long.fromValue(object.observation_sequence)
@@ -12190,6 +12222,9 @@ export const FiatConversionRecord: MessageFns<FiatConversionRecord, "virtengine.
     if (message.transitionHistory?.length) {
       obj.transition_history = message.transitionHistory.map((e) => FiatConversionStateTransition.toJSON(e));
     }
+    if (message.lastErrorRetryable !== false) {
+      obj.last_error_retryable = message.lastErrorRetryable;
+    }
     if (message.protocolVersion !== 0) {
       obj.protocol_version = Math.round(message.protocolVersion);
     }
@@ -12343,6 +12378,7 @@ export const FiatConversionRecord: MessageFns<FiatConversionRecord, "virtengine.
     message.lastError = object.lastError ?? "";
     message.transitionHistory = object.transitionHistory?.map((e) => FiatConversionStateTransition.fromPartial(e)) ||
       [];
+    message.lastErrorRetryable = object.lastErrorRetryable ?? false;
     message.protocolVersion = object.protocolVersion ?? 0;
     message.observationSequence = (object.observationSequence !== undefined && object.observationSequence !== null)
       ? Long.fromValue(object.observationSequence)

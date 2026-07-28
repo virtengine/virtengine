@@ -81,3 +81,28 @@ func TestFiatConversionStateMachineLegacyNormalization(t *testing.T) {
 	require.NoError(t, record.Validate())
 	require.Equal(t, FiatConversionStatePayoutCompleted, record.State)
 }
+
+func TestFiatConversionFailedRetryability(t *testing.T) {
+	now := time.Now().UTC()
+	record := &FiatConversionRecord{State: FiatConversionStatePayoutPending}
+
+	require.NoError(t, record.MarkFailedWithRetryability("provider timeout", true, now))
+	require.True(t, record.CanRetry())
+
+	retryAt := now.Add(time.Minute)
+	require.NoError(t, record.MarkPayoutPending(retryAt))
+	require.False(t, record.CanRetry())
+	require.False(t, record.LastErrorRetryable)
+}
+
+func TestFiatConversionFailedTerminalStateRejectsRetry(t *testing.T) {
+	now := time.Now().UTC()
+	record := &FiatConversionRecord{State: FiatConversionStatePayoutPending}
+
+	require.NoError(t, record.MarkFailedWithRetryability("compliance rejected", false, now))
+	require.False(t, record.CanRetry())
+
+	err := record.MarkPayoutPending(now.Add(time.Minute))
+	require.Error(t, err)
+	require.ErrorContains(t, err, "invalid fiat conversion transition")
+}

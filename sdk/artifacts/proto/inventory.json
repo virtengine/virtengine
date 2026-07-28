@@ -11,7 +11,7 @@
     {
       "path": "go.mod",
       "module": "github.com/virtengine/virtengine",
-      "go": "1.25.5",
+      "go": "1.25.8",
       "workspace": true,
       "hasGoSum": true,
       "vendorPolicy": "not-checked-in",

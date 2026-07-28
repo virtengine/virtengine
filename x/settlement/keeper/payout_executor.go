@@ -370,7 +370,7 @@ func (k Keeper) executePayout(ctx sdk.Context, invoiceID string, settlementID st
 	if hasConversion {
 		if len(payout.NetAmount) != 1 {
 			err := types.ErrInvalidAmount.Wrap("fiat conversion requires single denom payout")
-			_ = payout.MarkFailed(err.Error(), ctx.BlockTime())
+			_ = payout.MarkFailedWithRetryability(err.Error(), false, ctx.BlockTime())
 			_ = k.SetPayout(ctx, *payout)
 			k.savePayoutLedgerEntry(ctx, payout.PayoutID, types.PayoutLedgerEntryFailed,
 				types.PayoutStatePending, types.PayoutStateFailed,
@@ -403,7 +403,6 @@ func (k Keeper) executePayout(ctx sdk.Context, invoiceID string, settlementID st
 		// schema version; consensus never calls the endpoint directly.
 		return payout, nil
 	}
-
 	// An enabled fiat preference reserves this newly created payout as the
 	// authoritative value hold. Settlement then creates a conversion that must
 	// reference this exact payout before any external work can begin.
@@ -414,7 +413,7 @@ func (k Keeper) executePayout(ctx sdk.Context, invoiceID string, settlementID st
 	// Execute the payout immediately (crypto path)
 	if err := k.executePayoutTransfer(ctx, payout); err != nil {
 		// Mark as failed
-		_ = payout.MarkFailed(err.Error(), ctx.BlockTime())
+		_ = payout.MarkFailedWithRetryability(err.Error(), false, ctx.BlockTime())
 		_ = k.SetPayout(ctx, *payout)
 		k.savePayoutLedgerEntry(ctx, payout.PayoutID, types.PayoutLedgerEntryFailed,
 			types.PayoutStatePending, types.PayoutStateFailed,
@@ -841,6 +840,9 @@ func (k Keeper) RetryFailedPayouts(ctx sdk.Context) error {
 		}
 		if payout.ExecutionAttempts >= maxRetries {
 			continue // Max retries exceeded
+		}
+		if !payout.CanRetry() {
+			continue
 		}
 
 		// Reset to pending for retry and keep state index monotonic.

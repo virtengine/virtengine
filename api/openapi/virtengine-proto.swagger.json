@@ -11042,6 +11042,9 @@
           "format": "int64",
           "type": "string"
         },
+        "last_error_retryable": {
+          "type": "boolean"
+        },
         "last_observation_digest": {
           "format": "byte",
           "type": "string"
@@ -12296,6 +12299,9 @@
         },
         "last_error": {
           "type": "string"
+        },
+        "last_error_retryable": {
+          "type": "boolean"
         },
         "lease_id": {
           "type": "string"

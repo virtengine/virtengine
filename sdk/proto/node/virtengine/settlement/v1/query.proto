@@ -291,14 +291,15 @@ message PayoutRecord {
   int64 processed_at = 24;
   int64 completed_at = 25;
   int64 block_height = 26;
+  bool last_error_retryable = 27;
   // external_finality_hash is a SHA-256 digest for an authenticated external
   // payout. It is never an on-chain transaction hash.
-  bytes external_finality_hash = 27;
+  bytes external_finality_hash = 28;
   // value_movement_applied is true only after net_amount moved from the
   // settlement account to the governed fiat custody sink.
-  bool value_movement_applied = 28;
+  bool value_movement_applied = 29;
   // value_movement_effect_hash binds the payout to that exact bank effect.
-  bytes value_movement_effect_hash = 29;
+  bytes value_movement_effect_hash = 30;
 }
 
 // FinancialSubjectType identifies the canonical financial lineage root.
@@ -754,39 +755,40 @@ message FiatConversionRecord {
   int64 last_error_at = 43;
   string last_error = 44;
   repeated FiatConversionStateTransition transition_history = 45 [(gogoproto.nullable) = false];
-  uint32 protocol_version = 46;
-  uint64 observation_sequence = 47;
-  bytes last_observation_digest = 48;
-  repeated FiatConversionObservation observations = 49 [(gogoproto.nullable) = false];
-  string dex_profile_id = 50;
-  bytes dex_profile_digest = 51;
-  string payout_profile_id = 52;
-  bytes payout_profile_digest = 53;
-  bytes quote_digest = 54;
-  int64 quote_expiry = 55;
-  cosmos.base.v1beta1.Coin minimum_stable_output = 56 [(gogoproto.nullable) = false];
-  int64 swap_height = 57;
-  bytes swap_block_hash = 58;
-  uint32 swap_finality_confirmations = 59;
-  bytes swap_finality_hash = 60;
-  bytes payout_finality_hash = 61;
-  bytes compliance_decision_hash = 62;
-  bytes privacy_safe_reference_hash = 63;
-  bytes evidence_hash = 64;
-  bytes request_digest = 65;
-  string daily_bucket = 66;
-  bool legacy_quarantined = 67;
-  string quarantine_reason = 68;
-  string terminal_policy = 69;
-  bool value_movement_applied = 70;
+  bool last_error_retryable = 46;
+  uint32 protocol_version = 47;
+  uint64 observation_sequence = 48;
+  bytes last_observation_digest = 49;
+  repeated FiatConversionObservation observations = 50 [(gogoproto.nullable) = false];
+  string dex_profile_id = 51;
+  bytes dex_profile_digest = 52;
+  string payout_profile_id = 53;
+  bytes payout_profile_digest = 54;
+  bytes quote_digest = 55;
+  int64 quote_expiry = 56;
+  cosmos.base.v1beta1.Coin minimum_stable_output = 57 [(gogoproto.nullable) = false];
+  int64 swap_height = 58;
+  bytes swap_block_hash = 59;
+  uint32 swap_finality_confirmations = 60;
+  bytes swap_finality_hash = 61;
+  bytes payout_finality_hash = 62;
+  bytes compliance_decision_hash = 63;
+  bytes privacy_safe_reference_hash = 64;
+  bytes evidence_hash = 65;
+  bytes request_digest = 66;
+  string daily_bucket = 67;
+  bool legacy_quarantined = 68;
+  string quarantine_reason = 69;
+  string terminal_policy = 70;
+  bool value_movement_applied = 71;
   // slippage_tolerance_exact is the canonical decimal used for decisions.
   // The legacy double at field 24 remains read-only compatibility data.
-  string slippage_tolerance_exact = 71;
+  string slippage_tolerance_exact = 72;
   // daily_quota_reserved is true exactly while this record contributes to the
   // provider/day reservation total.
-  bool daily_quota_reserved = 72;
-  cosmos.base.v1beta1.Coin custody_sink_amount = 73 [(gogoproto.nullable) = false];
-  bytes custody_sink_effect_hash = 74;
+  bool daily_quota_reserved = 73;
+  cosmos.base.v1beta1.Coin custody_sink_amount = 74 [(gogoproto.nullable) = false];
+  bytes custody_sink_effect_hash = 75;
 }
 
 // QueryEscrowRequest is the request for querying an escrow by ID.
