@@ -5,7 +5,7 @@
       "type": "command",
       "command": [
         "node",
-        "/home/jon/.nvm/versions/node/v24.13.1/lib/node_modules/bosun/agent-hook-bridge.mjs",
+        "scripts/bosun/agent-hook-bridge.mjs",
         "--agent",
         "copilot",
         "--event",
@@ -19,7 +19,7 @@
       "type": "command",
       "command": [
         "node",
-        "/home/jon/.nvm/versions/node/v24.13.1/lib/node_modules/bosun/agent-hook-bridge.mjs",
+        "scripts/bosun/agent-hook-bridge.mjs",
         "--agent",
         "copilot",
         "--event",
@@ -34,7 +34,7 @@
         "type": "command",
         "command": [
           "node",
-          "/home/jon/.nvm/versions/node/v24.13.1/lib/node_modules/bosun/agent-hook-bridge.mjs",
+          "scripts/bosun/agent-hook-bridge.mjs",
           "--agent",
           "copilot",
           "--event",
@@ -50,7 +50,7 @@
         "type": "command",
         "command": [
           "node",
-          "/home/jon/.nvm/versions/node/v24.13.1/lib/node_modules/bosun/agent-hook-bridge.mjs",
+          "scripts/bosun/agent-hook-bridge.mjs",
           "--agent",
           "copilot",
           "--event",
