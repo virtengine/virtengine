@@ -1,9 +1,12 @@
 package keeper
 
 import (
+	"bytes"
 	"context"
+	"crypto/ed25519"
 	"encoding/hex"
 	"math"
+	"strconv"
 	"testing"
 	"time"
 
@@ -127,7 +130,7 @@ func TestVoteExtensionBundleCanonicalGolden(t *testing.T) {
 func TestVoteExtensionBundleRejectsWrongBoundaryAndTamper(t *testing.T) {
 	t.Parallel()
 
-	result := testVoteExtensionResult("request-1", 91)
+	result := testVoteExtensionResult(t, "request-1", 91)
 	bundle := testVoteExtensionBundle(result)
 	expectations := VoteExtensionExpectations{
 		ChainID:         "chain-A",
@@ -195,11 +198,11 @@ func TestExtendVoteCarriesNonEmptyBoundedResultAndVerifyAccepts(t *testing.T) {
 		BlockHeight:    ctx.BlockHeight(),
 		ReasonCodes:    []types.ReasonCode{types.ReasonCodeSuccess},
 		InputHash:      testHash(0x33),
-		Metadata: map[string]string{
-			types.VerificationResultMetadataReceiptDigest: hex.EncodeToString(testHash(0x66)),
-		},
+		Metadata:       map[string]string{},
 	}
-	require.NoError(t, keeper.storeVerifiedBlockVerificationResult(ctx.WithExecMode(sdk.ExecModeVoteExtension), ctx.BlockHeight(), result))
+	carrier := testVoteExtensionResultWithOptions(t, result.RequestID, result.AccountAddress, result.Score, string(result.Status), result.ModelVersion, result.InputHash, "stage")
+	result.Metadata[types.VerificationResultMetadataReceiptDigest] = hex.EncodeToString(carrier.ReceiptDigest)
+	require.NoError(t, keeper.storeVerifiedBlockVerificationResult(ctx.WithExecMode(sdk.ExecModeVoteExtension), ctx.BlockHeight(), result, carrier.ReceiptBytes))
 
 	req := &abci.RequestExtendVote{Height: ctx.BlockHeight(), Hash: []byte("block-hash")}
 	response, err := keeper.ExtendVote(ctx.WithExecMode(sdk.ExecModeVoteExtension), req, nil)
@@ -223,10 +226,8 @@ func TestExtendVoteCarriesNonEmptyBoundedResultAndVerifyAccepts(t *testing.T) {
 func TestAggregateVoteExtensionsVotingPowerQuorumAndMinority(t *testing.T) {
 	t.Parallel()
 
-	quorumResult := testVoteExtensionResult("request-quorum", 88)
-	minorityResult := testVoteExtensionResult("request-quorum", 88)
-	minorityResult.ReceiptDigest = testHash(0x77)
-	minorityResult.ResultHash = ComputeVoteExtensionResultHash(minorityResult)
+	quorumResult := testVoteExtensionResult(t, "request-quorum", 88)
+	minorityResult := testVoteExtensionResultWithNonce(t, "request-quorum", 88, "minority")
 	first := testVoteExtensionBundle(quorumResult)
 	second := testVoteExtensionBundle(quorumResult)
 	third := testVoteExtensionBundle(minorityResult)
@@ -256,6 +257,56 @@ func TestAggregateVoteExtensionsVotingPowerQuorumAndMinority(t *testing.T) {
 	require.Equal(t, int64(75), aggregate.Results[0].VotingPower)
 	require.Equal(t, int64(100), aggregate.TotalVotingPower)
 	require.Equal(t, int64(67), aggregate.QuorumVotingPower)
+}
+
+func TestVoteExtensionResultRequiresAndCommitsCanonicalReceiptBytes(t *testing.T) {
+	t.Parallel()
+
+	result := testVoteExtensionResult(t, "request-1", 88)
+	result.ReceiptBytes = nil
+	result.ResultHash = ComputeVoteExtensionResultHash(result)
+	require.ErrorContains(t, validateVoteExtensionResult(result, "1.0.0"), "receipt bytes")
+
+	result.ReceiptBytes = bytes.Repeat([]byte{0x42}, types.InferenceReceiptMaxSignedBytes+1)
+	result.ResultHash = ComputeVoteExtensionResultHash(result)
+	require.ErrorContains(t, validateVoteExtensionResult(result, "1.0.0"), "receipt bytes")
+
+	result = testVoteExtensionResult(t, "request-1", 88)
+	result.ResultHash = ComputeVoteExtensionResultHash(result)
+	require.NoError(t, validateVoteExtensionResult(result, "1.0.0"))
+
+	originalHash := append([]byte(nil), result.ResultHash...)
+	result.ReceiptBytes[0] ^= 0xff
+	require.NotEqual(t, originalHash, ComputeVoteExtensionResultHash(result))
+	require.Error(t, validateVoteExtensionResult(result, "1.0.0"))
+
+	result = testVoteExtensionResult(t, "request-1", 88)
+	result.ReceiptBytes = append(append([]byte(nil), result.ReceiptBytes...), 0)
+	result.ResultHash = ComputeVoteExtensionResultHash(result)
+	require.ErrorContains(t, validateVoteExtensionResult(result, "1.0.0"), "trailing")
+
+	result = testVoteExtensionResult(t, "request-1", 88)
+	result.ReceiptDigest[0] ^= 0xff
+	result.ResultHash = ComputeVoteExtensionResultHash(result)
+	require.ErrorContains(t, validateVoteExtensionResult(result, "1.0.0"), "receipt digest mismatch")
+}
+
+func TestVoteExtensionSizeLimitPermitsBoundedMaximumResults(t *testing.T) {
+	t.Parallel()
+
+	minimumPayloadBytes := MaxVoteExtensionResults * (types.InferenceReceiptMaxSignedBytes +
+		MaxVoteExtensionRequestID + MaxVoteExtensionAccountID + MaxVoteExtensionModelID +
+		(MaxVoteExtensionReasonCodes * 64))
+	require.GreaterOrEqual(t, MaxVoteExtensionBytes, minimumPayloadBytes)
+
+	oversized := &veidv1.VEIDVoteExtension{ChainId: string(bytes.Repeat([]byte{'a'}, MaxVoteExtensionBytes))}
+	_, err := MarshalVoteExtensionBundle(oversized)
+	require.ErrorContains(t, err, "exceeds")
+
+	result := testVoteExtensionResult(t, "request-1", 88)
+	result.AccountAddress = string(bytes.Repeat([]byte{'a'}, MaxVoteExtensionAccountID+1))
+	result.ResultHash = ComputeVoteExtensionResultHash(result)
+	require.ErrorContains(t, validateVoteExtensionResult(result, "1.0.0"), "account address")
 }
 
 func TestStrictQuorumVotingPowerDoesNotOverflow(t *testing.T) {
@@ -290,7 +341,7 @@ func TestAggregateInitialVoteExtensionCommitRequiresEmptyPriorExtensions(t *test
 func TestAggregateVoteExtensionsRejectsDuplicateValidatorAndResult(t *testing.T) {
 	t.Parallel()
 
-	result := testVoteExtensionResult("request-1", 88)
+	result := testVoteExtensionResult(t, "request-1", 88)
 	bundle := testVoteExtensionBundle(result)
 	duplicateResult := cloneVoteExtensionBundle(t, bundle)
 	duplicateResult.Results = append(duplicateResult.Results, duplicateResult.Results[0])
@@ -410,10 +461,15 @@ func TestConsensusSystemMessageConsumesExactlyOnceInFinalize(t *testing.T) {
 	require.Error(t, err)
 }
 
-func TestSubmitConsensusVerificationFinalizesOnlyQuorumReceiptDigest(t *testing.T) {
+func TestSubmitConsensusVerificationFinalizesOnlyQuorumReceiptBytes(t *testing.T) {
 	keeper, ctx, stateStore := setupInferenceReceiptKeeper(t)
 	t.Cleanup(func() { closeStoreIfNeeded(stateStore) })
+	params := types.DefaultParams()
+	params.RequireClientSignature = false
+	params.RequireUserSignature = false
+	require.NoError(t, keeper.SetParams(ctx, params))
 	registerActiveInferencePipeline(t, keeper, ctx)
+	ctx = ctx.WithBlockHeight(ctx.BlockHeight() + 1).WithBlockTime(ctx.BlockTime().Add(time.Second))
 
 	const authorizedTx = "authorized-system-tx"
 	ctx = ctx.
@@ -425,27 +481,24 @@ func TestSubmitConsensusVerificationFinalizesOnlyQuorumReceiptDigest(t *testing.
 		return string(callCtx.TxBytes()) == authorizedTx
 	})
 
-	account := sdk.AccAddress(testHash(0x44)[:20])
-	_, err := keeper.CreateIdentityRecord(ctx, account)
-	require.NoError(t, err)
-	request := types.NewVerificationRequest("request-quorum-finalize", account.String(), []string{"scope-a"}, ctx.BlockTime(), ctx.BlockHeight())
+	account, request, keyProvider, signerKey, signerPriv := setupReceiptBackedRequest(t, keeper, ctx, "quorum-finalize")
+	request.RequestedBlock = ctx.BlockHeight() - 1
 	require.NoError(t, keeper.setVerificationRequest(ctx, request))
 	keeper.addToPendingQueue(ctx, request)
-
-	quorumResult := testVoteExtensionResult(request.RequestID, 91)
-	quorumResult.AccountAddress = account.String()
-	quorumResult.ModelVersion = "v1.0.0"
-	quorumResult.ReceiptDigest = testHash(0x66)
-	quorumResult.ResultHash = ComputeVoteExtensionResultHash(quorumResult)
-
-	minorityResult := quorumResult
-	minorityResult.ReceiptDigest = testHash(0x77)
-	minorityResult.ResultHash = ComputeVoteExtensionResultHash(minorityResult)
 
 	expected, err := keeper.VoteExtensionCommitments(ctx)
 	require.NoError(t, err)
 	expected.Height = ctx.BlockHeight() - 1
 	expected.BlockHash = []byte("block-hash")
+	receiptCtx := ctx.WithBlockHeight(expected.Height)
+	expectations := buildReceiptExpectationsForRequest(t, keeper, receiptCtx, account, request, keyProvider)
+	quorumReceipt := testKeeperInferenceReceipt(t, receiptCtx, request, signerKey, expectations, signerPriv)
+	quorumResult := voteExtensionResultFromReceiptForTest(t, quorumReceipt)
+
+	minorityReceipt := testKeeperInferenceReceipt(t, receiptCtx, request, signerKey, expectations, signerPriv)
+	minorityReceipt.Nonce = "minority-nonce"
+	require.NoError(t, minorityReceipt.Sign(signerPriv))
+	minorityResult := voteExtensionResultFromReceiptForTest(t, minorityReceipt)
 
 	validatorSpecs := []consensusVoteSpec{
 		{key: cmtcrypto.GenPrivKey(), power: 40, bundle: signedVoteExtensionBundle(expected, quorumResult)},
@@ -475,7 +528,13 @@ func TestSubmitConsensusVerificationFinalizesOnlyQuorumReceiptDigest(t *testing.
 		Aggregate:      aggregate,
 	}
 
-	server := NewMsgServerImpl(keeper)
+	restarted := NewKeeper(keeper.cdc, keeper.skey, keeper.authority)
+	restarted.SetConsensusSystemTxAuthorizer(func(callCtx sdk.Context) bool {
+		return string(callCtx.TxBytes()) == authorizedTx
+	})
+	restarted.SetStakingKeeper(staking)
+	restarted.SetConsensusValidatorStore(staking)
+	server := NewMsgServerImpl(restarted)
 	response, err := server.SubmitConsensusVerification(ctx, msg)
 	require.NoError(t, err)
 	require.Equal(t, uint32(1), response.AppliedResults)
@@ -508,6 +567,737 @@ func TestSubmitConsensusVerificationFinalizesOnlyQuorumReceiptDigest(t *testing.
 	require.Len(t, keeper.GetScoreHistory(ctx, account.String()), 1)
 }
 
+func TestFinalizeCarriedConsensusReceiptValidationMatrix(t *testing.T) {
+	testCases := []struct {
+		name      string
+		mutate    func(*finalizeReceiptFixture)
+		wantError string
+	}{
+		{
+			name: "missing_receipt_bytes",
+			mutate: func(f *finalizeReceiptFixture) {
+				f.carrier.ReceiptBytes = nil
+				f.rehashCarrier()
+			},
+			wantError: "receipt bytes",
+		},
+		{
+			name: "oversized_receipt_bytes",
+			mutate: func(f *finalizeReceiptFixture) {
+				f.carrier.ReceiptBytes = bytes.Repeat([]byte{0x42}, types.InferenceReceiptMaxSignedBytes+1)
+				f.rehashCarrier()
+			},
+			wantError: "receipt bytes",
+		},
+		{
+			name: "malformed_receipt_bytes",
+			mutate: func(f *finalizeReceiptFixture) {
+				f.carrier.ReceiptBytes = []byte{0x01, 0x02, 0x03}
+				f.rehashCarrier()
+			},
+			wantError: "truncated",
+		},
+		{
+			name: "trailing_receipt_bytes",
+			mutate: func(f *finalizeReceiptFixture) {
+				f.carrier.ReceiptBytes = append(append([]byte(nil), f.carrier.ReceiptBytes...), 0)
+				f.rehashCarrier()
+			},
+			wantError: "trailing",
+		},
+		{
+			name: "noncanonical_uppercase_fingerprint",
+			mutate: func(f *finalizeReceiptFixture) {
+				offset := bytes.Index(f.carrier.ReceiptBytes, []byte(f.receipt.SignerFingerprint))
+				require.NotEqual(f.t, -1, offset)
+				mutated := false
+				for i, b := range f.carrier.ReceiptBytes[offset : offset+len(f.receipt.SignerFingerprint)] {
+					if b >= 'a' && b <= 'f' {
+						f.carrier.ReceiptBytes[offset+i] = b - ('a' - 'A')
+						mutated = true
+						break
+					}
+				}
+				require.True(f.t, mutated)
+				f.rehashCarrier()
+			},
+			wantError: "lowercase",
+		},
+		{
+			name: "receipt_digest_mismatch",
+			mutate: func(f *finalizeReceiptFixture) {
+				f.carrier.ReceiptDigest[0] ^= 0xff
+				f.rehashCarrier()
+			},
+			wantError: "receipt digest mismatch",
+		},
+		{
+			name: "result_hash_mismatch",
+			mutate: func(f *finalizeReceiptFixture) {
+				f.carrier.ResultHash[0] ^= 0xff
+			},
+			wantError: "result hash mismatch",
+		},
+		{
+			name: "bad_signature",
+			mutate: func(f *finalizeReceiptFixture) {
+				f.receipt.Signature[0] ^= 0xff
+				f.rebuildCarrier()
+			},
+			wantError: "signature",
+		},
+		{
+			name: "request_binding",
+			mutate: func(f *finalizeReceiptFixture) {
+				f.carrier.RequestId = "request-other"
+				f.rehashCarrier()
+			},
+			wantError: "binding mismatch",
+		},
+		{
+			name: "account_binding",
+			mutate: func(f *finalizeReceiptFixture) {
+				f.carrier.AccountAddress = sdk.AccAddress(testHash(0x99)[:20]).String()
+				f.rehashCarrier()
+			},
+			wantError: "binding mismatch",
+		},
+		{
+			name: "score_binding",
+			mutate: func(f *finalizeReceiptFixture) {
+				f.carrier.Score--
+				f.rehashCarrier()
+			},
+			wantError: "binding mismatch",
+		},
+		{
+			name: "status_binding",
+			mutate: func(f *finalizeReceiptFixture) {
+				f.carrier.Status = string(types.VerificationResultStatusFailed)
+				f.carrier.Score = 0
+				f.carrier.ReasonCodes = []string{string(types.ReasonCodeLowConfidence)}
+				f.rehashCarrier()
+			},
+			wantError: "binding mismatch",
+		},
+		{
+			name: "pipeline_binding",
+			mutate: func(f *finalizeReceiptFixture) {
+				f.carrier.ModelVersion = "v9.9.9"
+				f.rehashCarrier()
+			},
+			wantError: "model version mismatch",
+		},
+		{
+			name: "input_hash_binding",
+			mutate: func(f *finalizeReceiptFixture) {
+				f.carrier.InputHash[0] ^= 0xff
+				f.rehashCarrier()
+			},
+			wantError: "binding mismatch",
+		},
+		{
+			name: "reason_order_binding",
+			mutate: func(f *finalizeReceiptFixture) {
+				f.receipt.Status = types.VerificationResultStatusPartial
+				f.receipt.Score = 50
+				f.receipt.ReasonCodes = []types.ReasonCode{types.ReasonCodeLowConfidence, types.ReasonCodeTimeout}
+				f.resignAndRebuild()
+				f.carrier.ReasonCodes = []string{string(types.ReasonCodeTimeout), string(types.ReasonCodeLowConfidence)}
+				f.rehashCarrier()
+			},
+			wantError: "reason codes",
+		},
+		{
+			name: "request_scope_mismatch",
+			mutate: func(f *finalizeReceiptFixture) {
+				f.receipt.ScopeIDs = []string{"scope-a", "scope-b"}
+				f.resignAndRebuild()
+			},
+			wantError: "scope binding",
+		},
+		{
+			name: "request_duplicate_scope_ids",
+			mutate: func(f *finalizeReceiptFixture) {
+				f.request.ScopeIDs = []string{"scope-a", "scope-a"}
+				f.persistRequest()
+			},
+			wantError: "canonical scope ids",
+		},
+		{
+			name: "request_empty_scope_id",
+			mutate: func(f *finalizeReceiptFixture) {
+				f.request.ScopeIDs = []string{""}
+				f.persistRequest()
+			},
+			wantError: "canonical scope ids",
+		},
+		{
+			name: "receipt_schema_mismatch",
+			mutate: func(f *finalizeReceiptFixture) {
+				f.receipt.SchemaDigest[0] ^= 0xff
+				f.resignAndRebuild()
+			},
+			wantError: "commitment mismatch",
+		},
+		{
+			name: "receipt_model_manifest_mismatch",
+			mutate: func(f *finalizeReceiptFixture) {
+				f.receipt.ModelManifestDigest[0] ^= 0xff
+				f.resignAndRebuild()
+			},
+			wantError: "commitment mismatch",
+		},
+		{
+			name: "receipt_model_mismatch",
+			mutate: func(f *finalizeReceiptFixture) {
+				f.receipt.ModelDigest[0] ^= 0xff
+				f.resignAndRebuild()
+			},
+			wantError: "commitment mismatch",
+		},
+		{
+			name: "receipt_runtime_image_mismatch",
+			mutate: func(f *finalizeReceiptFixture) {
+				f.receipt.RuntimeImageDigest[0] ^= 0xff
+				f.resignAndRebuild()
+			},
+			wantError: "commitment mismatch",
+		},
+		{
+			name: "receipt_runtime_mismatch",
+			mutate: func(f *finalizeReceiptFixture) {
+				f.receipt.RuntimeDigest[0] ^= 0xff
+				f.resignAndRebuild()
+			},
+			wantError: "commitment mismatch",
+		},
+		{
+			name: "receipt_config_mismatch",
+			mutate: func(f *finalizeReceiptFixture) {
+				offset := bytes.Index(f.carrier.ReceiptBytes, f.receipt.ConfigDigest)
+				require.NotEqual(f.t, -1, offset)
+				f.carrier.ReceiptBytes[offset] ^= 0xff
+				f.rehashCarrier()
+			},
+			wantError: "config digest mismatch",
+		},
+		{
+			name: "receipt_profile_mismatch",
+			mutate: func(f *finalizeReceiptFixture) {
+				offset := bytes.Index(f.carrier.ReceiptBytes, f.receipt.ConfigDigest)
+				require.NotEqual(f.t, -1, offset)
+				profileOffset := offset + len(f.receipt.ConfigDigest)
+				require.Less(f.t, profileOffset, len(f.carrier.ReceiptBytes))
+				f.carrier.ReceiptBytes[profileOffset] = 0
+				f.rehashCarrier()
+			},
+			wantError: "not canonical",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			fixture := setupFinalizeReceiptFixture(t, tc.name)
+			tc.mutate(&fixture)
+			err := fixture.validate()
+			require.ErrorContains(t, err, tc.wantError)
+			_, found := fixture.keeper.GetVerificationResult(fixture.ctx, fixture.request.RequestID)
+			require.False(t, found)
+		})
+	}
+}
+
+func TestFinalizeCarriedConsensusReceiptRejectsSnapshotAndActiveProfileMismatch(t *testing.T) {
+	testCases := []struct {
+		name      string
+		mutate    func(*finalizeReceiptFixture)
+		wantError string
+	}{
+		{
+			name: "snapshot_schema",
+			mutate: func(f *finalizeReceiptFixture) {
+				f.request.InferenceProfileSnapshot.FeatureSchemaDigest[0] ^= 0xff
+				f.persistRequest()
+			},
+			wantError: "snapshot",
+		},
+		{
+			name: "snapshot_manifest",
+			mutate: func(f *finalizeReceiptFixture) {
+				f.request.InferenceProfileSnapshot.ModelManifestDigest[0] ^= 0xff
+				f.persistRequest()
+			},
+			wantError: "not found",
+		},
+		{
+			name: "snapshot_model",
+			mutate: func(f *finalizeReceiptFixture) {
+				f.request.InferenceProfileSnapshot.ModelDigest[0] ^= 0xff
+				f.persistRequest()
+			},
+			wantError: "snapshot",
+		},
+		{
+			name: "snapshot_runtime_image",
+			mutate: func(f *finalizeReceiptFixture) {
+				f.request.InferenceProfileSnapshot.RuntimeImageDigest[0] ^= 0xff
+				f.persistRequest()
+			},
+			wantError: "snapshot",
+		},
+		{
+			name: "snapshot_runtime",
+			mutate: func(f *finalizeReceiptFixture) {
+				f.request.InferenceProfileSnapshot.RuntimeDigest[0] ^= 0xff
+				f.persistRequest()
+			},
+			wantError: "snapshot",
+		},
+		{
+			name: "snapshot_config",
+			mutate: func(f *finalizeReceiptFixture) {
+				f.request.InferenceProfileSnapshot.DeterminismConfigDigest[0] ^= 0xff
+				f.persistRequest()
+			},
+			wantError: "snapshot",
+		},
+		{
+			name: "active_profile_changed",
+			mutate: func(f *finalizeReceiptFixture) {
+				registerActiveInferencePipelineVersion(f.t, f.keeper, f.ctx, "v2.0.0", 0x12, 0x23)
+			},
+			wantError: "active vote-extension bundle",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			fixture := setupFinalizeReceiptFixture(t, tc.name)
+			tc.mutate(&fixture)
+			err := fixture.validate()
+			require.ErrorContains(t, err, tc.wantError)
+			_, found := fixture.keeper.GetVerificationResult(fixture.ctx, fixture.request.RequestID)
+			require.False(t, found)
+		})
+	}
+}
+
+func TestFinalizeCarriedConsensusReceiptRejectsSignerLifecycleAndPolicy(t *testing.T) {
+	testCases := []struct {
+		name      string
+		mutate    func(*finalizeReceiptFixture)
+		wantError string
+	}{
+		{
+			name: "signer_key_missing",
+			mutate: func(f *finalizeReceiptFixture) {
+				store := f.ctx.KVStore(f.keeper.skey)
+				store.Delete(signerKeyStoreKey(f.signerKey.KeyID))
+				store.Delete(signerKeyFingerprintStoreKey(f.signerKey.Fingerprint))
+			},
+			wantError: "not found",
+		},
+		{
+			name: "wrong_key_id",
+			mutate: func(f *finalizeReceiptFixture) {
+				f.receipt.SignerKeyID = "did:virtengine:inference:missing"
+				f.resignAndRebuild()
+			},
+			wantError: "not found",
+		},
+		{
+			name: "wrong_fingerprint",
+			mutate: func(f *finalizeReceiptFixture) {
+				otherPub, _ := deterministicInferenceReceiptKey(f.t, "wrong-fingerprint")
+				f.receipt.SignerFingerprint = types.ComputeKeyFingerprint(otherPub)
+				f.resignAndRebuild()
+			},
+			wantError: "fingerprint not found",
+		},
+		{
+			name: "wrong_sequence",
+			mutate: func(f *finalizeReceiptFixture) {
+				f.receipt.SignerSequence++
+				f.resignAndRebuild()
+			},
+			wantError: "binding mismatch",
+		},
+		{
+			name: "unsupported_algorithm",
+			mutate: func(f *finalizeReceiptFixture) {
+				f.signerKey.Algorithm = types.ProofTypeSecp256k1
+				f.forceSigner()
+			},
+			wantError: "Ed25519",
+		},
+		{
+			name: "unsupported_public_key",
+			mutate: func(f *finalizeReceiptFixture) {
+				f.signerKey.PublicKey = f.signerKey.PublicKey[:ed25519.PublicKeySize-1]
+				f.forceSigner()
+			},
+			wantError: "public key",
+		},
+		{
+			name: "missing_inference_authorization",
+			mutate: func(f *finalizeReceiptFixture) {
+				f.signerKey.Metadata[types.SignerKeyMetadataEvidenceTypes] = string(types.AttestationTypeEmailVerification)
+				f.forceSigner()
+			},
+			wantError: "not authorized",
+		},
+		{
+			name: "pending_state",
+			mutate: func(f *finalizeReceiptFixture) {
+				f.signerKey.State = types.SignerKeyStatePending
+				f.forceSigner()
+			},
+			wantError: "active or rotating",
+		},
+		{
+			name: "preactivation_issue_time",
+			mutate: func(f *finalizeReceiptFixture) {
+				activatedAt := f.receipt.IssuedAt.Add(time.Second)
+				f.signerKey.ActivatedAt = &activatedAt
+				f.forceSigner()
+			},
+			wantError: "predates signer activation",
+		},
+		{
+			name: "preactivation_issue_height",
+			mutate: func(f *finalizeReceiptFixture) {
+				f.signerKey.Metadata[types.SignerKeyMetadataActivationHeight] = strconv.FormatInt(f.receipt.IssuedHeight+1, 10)
+				f.forceSigner()
+			},
+			wantError: "activation height",
+		},
+		{
+			name: "expiry_at_issue_time",
+			mutate: func(f *finalizeReceiptFixture) {
+				expiresAt := f.receipt.IssuedAt
+				f.signerKey.ExpiresAt = &expiresAt
+				f.forceSigner()
+			},
+			wantError: "expired",
+		},
+		{
+			name: "expiry_at_issue_height",
+			mutate: func(f *finalizeReceiptFixture) {
+				f.signerKey.Metadata[types.SignerKeyMetadataExpiryHeight] = strconv.FormatInt(f.receipt.IssuedHeight, 10)
+				f.forceSigner()
+			},
+			wantError: "expired by height",
+		},
+		{
+			name: "revocation_at_issue_time",
+			mutate: func(f *finalizeReceiptFixture) {
+				revokedAt := f.receipt.IssuedAt
+				f.signerKey.RevokedAt = &revokedAt
+				f.forceSigner()
+			},
+			wantError: "revoked",
+		},
+		{
+			name: "revocation_at_issue_height",
+			mutate: func(f *finalizeReceiptFixture) {
+				f.signerKey.Metadata[types.SignerKeyMetadataRevokedHeight] = strconv.FormatInt(f.receipt.IssuedHeight, 10)
+				f.forceSigner()
+			},
+			wantError: "revoked by height",
+		},
+		{
+			name: "expiry_after_issue_at_finalization_time",
+			mutate: func(f *finalizeReceiptFixture) {
+				expiresAt := f.ctx.BlockTime()
+				f.signerKey.ExpiresAt = &expiresAt
+				f.forceSigner()
+			},
+			wantError: "expired",
+		},
+		{
+			name: "expiry_after_issue_at_finalization_height",
+			mutate: func(f *finalizeReceiptFixture) {
+				f.signerKey.Metadata[types.SignerKeyMetadataExpiryHeight] = strconv.FormatInt(f.ctx.BlockHeight(), 10)
+				f.forceSigner()
+			},
+			wantError: "expired by height",
+		},
+		{
+			name: "revocation_after_issue_at_finalization_time",
+			mutate: func(f *finalizeReceiptFixture) {
+				revokedAt := f.ctx.BlockTime()
+				f.signerKey.RevokedAt = &revokedAt
+				f.forceSigner()
+			},
+			wantError: "revoked",
+		},
+		{
+			name: "revocation_after_issue_at_finalization_height",
+			mutate: func(f *finalizeReceiptFixture) {
+				f.signerKey.Metadata[types.SignerKeyMetadataRevokedHeight] = strconv.FormatInt(f.ctx.BlockHeight(), 10)
+				f.forceSigner()
+			},
+			wantError: "revoked by height",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			fixture := setupFinalizeReceiptFixture(t, tc.name)
+			tc.mutate(&fixture)
+			err := fixture.validate()
+			require.ErrorContains(t, err, tc.wantError)
+			_, found := fixture.keeper.GetVerificationResult(fixture.ctx, fixture.request.RequestID)
+			require.False(t, found)
+		})
+	}
+}
+
+func TestFinalizeCarriedConsensusReceiptFreshnessBoundaries(t *testing.T) {
+	testCases := []struct {
+		name      string
+		mutate    func(*finalizeReceiptFixture)
+		wantError string
+	}{
+		{
+			name: "issued_height_not_vote_height",
+			mutate: func(f *finalizeReceiptFixture) {
+				f.receipt.IssuedHeight--
+				f.resignAndRebuild()
+			},
+			wantError: "vote height",
+		},
+		{
+			name: "predates_request",
+			mutate: func(f *finalizeReceiptFixture) {
+				f.request.RequestedBlock = f.receipt.IssuedHeight + 1
+				f.persistRequest()
+			},
+			wantError: "predates request",
+		},
+		{
+			name: "issue_time_predates_request",
+			mutate: func(f *finalizeReceiptFixture) {
+				f.request.RequestedAt = f.receipt.IssuedAt.Add(time.Second)
+				f.persistRequest()
+			},
+			wantError: "predates request",
+		},
+		{
+			name: "future_issue_time",
+			mutate: func(f *finalizeReceiptFixture) {
+				f.receipt.IssuedAt = f.ctx.BlockTime().Add(time.Second)
+				f.resignAndRebuild()
+			},
+			wantError: "future",
+		},
+		{
+			name: "future_issue_height",
+			mutate: func(f *finalizeReceiptFixture) {
+				f.voteHeight = f.ctx.BlockHeight() + 1
+				f.receipt.IssuedHeight = f.voteHeight
+				f.receipt.ExpiresHeight = f.voteHeight + 2
+				f.resignAndRebuild()
+			},
+			wantError: "future",
+		},
+		{
+			name: "stale_issue_time_boundary_rejected",
+			mutate: func(f *finalizeReceiptFixture) {
+				f.receipt.IssuedAt = f.ctx.BlockTime().Add(-inferenceReceiptMaxAge - time.Second)
+				f.receipt.ExpiresAt = f.receipt.IssuedAt.Add(inferenceReceiptMaxLifetime)
+				f.request.RequestedAt = f.receipt.IssuedAt
+				f.persistRequest()
+				f.resignAndRebuild()
+			},
+			wantError: "stale",
+		},
+		{
+			name: "expired_time_boundary_rejected",
+			mutate: func(f *finalizeReceiptFixture) {
+				f.receipt.ExpiresAt = f.ctx.BlockTime()
+				f.resignAndRebuild()
+			},
+			wantError: "expired",
+		},
+		{
+			name: "expired_height_boundary_rejected",
+			mutate: func(f *finalizeReceiptFixture) {
+				f.receipt.ExpiresHeight = f.ctx.BlockHeight()
+				f.resignAndRebuild()
+			},
+			wantError: "expired",
+		},
+		{
+			name: "overlong_time_lifetime",
+			mutate: func(f *finalizeReceiptFixture) {
+				f.receipt.ExpiresAt = f.receipt.IssuedAt.Add(inferenceReceiptMaxLifetime + time.Second)
+				f.resignAndRebuild()
+			},
+			wantError: "lifetime",
+		},
+		{
+			name: "overlong_height_lifetime",
+			mutate: func(f *finalizeReceiptFixture) {
+				f.receipt.ExpiresHeight = f.receipt.IssuedHeight + inferenceReceiptMaxHeightLifetime + 1
+				f.resignAndRebuild()
+			},
+			wantError: "height lifetime",
+		},
+		{
+			name: "exact_time_and_height_boundaries_accepted",
+			mutate: func(f *finalizeReceiptFixture) {
+				f.receipt.IssuedAt = f.ctx.BlockTime().Add(-inferenceReceiptMaxAge)
+				f.receipt.ExpiresAt = f.receipt.IssuedAt.Add(inferenceReceiptMaxLifetime)
+				f.receipt.ExpiresHeight = f.receipt.IssuedHeight + inferenceReceiptMaxHeightLifetime
+				f.request.RequestedAt = f.receipt.IssuedAt
+				f.persistRequest()
+				activatedAt := f.receipt.IssuedAt.Add(-time.Second)
+				f.signerKey.ActivatedAt = &activatedAt
+				f.forceSigner()
+				f.resignAndRebuild()
+			},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			fixture := setupFinalizeReceiptFixture(t, tc.name)
+			tc.mutate(&fixture)
+			err := fixture.validate()
+			if tc.wantError == "" {
+				require.NoError(t, err)
+			} else {
+				require.ErrorContains(t, err, tc.wantError)
+			}
+			_, found := fixture.keeper.GetVerificationResult(fixture.ctx, fixture.request.RequestID)
+			require.False(t, found)
+		})
+	}
+}
+
+func TestSubmitConsensusVerificationPrevalidatesReceiptsAtomically(t *testing.T) {
+	testCases := []struct {
+		name         string
+		mutateSecond func(*types.InferenceReceipt, types.InferenceReceipt, ed25519.PrivateKey)
+		wantErr      string
+	}{
+		{
+			name: "signature_tamper",
+			mutateSecond: func(receipt *types.InferenceReceipt, _ types.InferenceReceipt, _ ed25519.PrivateKey) {
+				receipt.Signature[0] ^= 0xff
+			},
+			wantErr: "signature",
+		},
+		{
+			name: "duplicate_nonce",
+			mutateSecond: func(receipt *types.InferenceReceipt, first types.InferenceReceipt, priv ed25519.PrivateKey) {
+				receipt.Nonce = first.Nonce
+				require.NoError(t, receipt.Sign(priv))
+			},
+			wantErr: "nonce replay",
+		},
+		{
+			name: "request_scope_mismatch",
+			mutateSecond: func(receipt *types.InferenceReceipt, _ types.InferenceReceipt, priv ed25519.PrivateKey) {
+				receipt.ScopeIDs = []string{"scope-a", "scope-b"}
+				require.NoError(t, receipt.Sign(priv))
+			},
+			wantErr: "scope binding",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			keeper, ctx, stateStore := setupInferenceReceiptKeeper(t)
+			t.Cleanup(func() { closeStoreIfNeeded(stateStore) })
+			params := types.DefaultParams()
+			params.RequireClientSignature = false
+			params.RequireUserSignature = false
+			require.NoError(t, keeper.SetParams(ctx, params))
+			registerActiveInferencePipeline(t, keeper, ctx)
+			ctx = ctx.WithBlockHeight(ctx.BlockHeight() + 1).WithBlockTime(ctx.BlockTime().Add(time.Second))
+
+			const authorizedTx = "authorized-system-tx"
+			ctx = ctx.
+				WithExecMode(sdk.ExecModeFinalize).
+				WithTxBytes([]byte(authorizedTx)).
+				WithHeaderInfo(coreheader.Info{ChainID: ctx.ChainID(), Height: ctx.BlockHeight()}).
+				WithConsensusParams(cmtproto.ConsensusParams{Abci: &cmtproto.ABCIParams{VoteExtensionsEnableHeight: 1}})
+			keeper.SetConsensusSystemTxAuthorizer(func(callCtx sdk.Context) bool {
+				return string(callCtx.TxBytes()) == authorizedTx
+			})
+
+			account, firstRequest, keyProvider, signerKey, signerPriv := setupReceiptBackedRequest(t, keeper, ctx, "atomic-1")
+			firstRequest.RequestedBlock = ctx.BlockHeight() - 1
+			require.NoError(t, keeper.setVerificationRequest(ctx, firstRequest))
+			keeper.addToPendingQueue(ctx, firstRequest)
+
+			secondRequest := types.NewVerificationRequest("request-atomic-2", account.String(), []string{"scope-a"}, ctx.BlockTime(), ctx.BlockHeight()-1)
+			backfillRequestInferenceProfileForTest(t, keeper, ctx, secondRequest)
+			require.NoError(t, keeper.setVerificationRequest(ctx, secondRequest))
+			keeper.addToPendingQueue(ctx, secondRequest)
+
+			expected, err := keeper.VoteExtensionCommitments(ctx)
+			require.NoError(t, err)
+			expected.Height = ctx.BlockHeight() - 1
+			expected.BlockHash = []byte("block-hash")
+			receiptCtx := ctx.WithBlockHeight(expected.Height)
+
+			firstExpectations := buildReceiptExpectationsForRequest(t, keeper, receiptCtx, account, firstRequest, keyProvider)
+			firstReceipt := testKeeperInferenceReceipt(t, receiptCtx, firstRequest, signerKey, firstExpectations, signerPriv)
+			firstResult := voteExtensionResultFromReceiptForTest(t, firstReceipt)
+
+			secondExpectations := buildReceiptExpectationsForRequest(t, keeper, receiptCtx, account, secondRequest, keyProvider)
+			secondReceipt := testKeeperInferenceReceipt(t, receiptCtx, secondRequest, signerKey, secondExpectations, signerPriv)
+			secondReceipt.Nonce = "nonce-2"
+			require.NoError(t, secondReceipt.Sign(signerPriv))
+			tc.mutateSecond(&secondReceipt, firstReceipt, signerPriv)
+			secondResult := voteExtensionResultFromReceiptForTest(t, secondReceipt)
+
+			validatorSpecs := []consensusVoteSpec{
+				{key: cmtcrypto.GenPrivKey(), power: 40, bundle: signedVoteExtensionBundle(expected, firstResult, secondResult)},
+				{key: cmtcrypto.GenPrivKey(), power: 35, bundle: signedVoteExtensionBundle(expected, firstResult, secondResult)},
+				{key: cmtcrypto.GenPrivKey(), power: 25, bundle: signedVoteExtensionBundle(expected, firstResult, secondResult)},
+			}
+			staking := installConsensusValidators(t, validatorSpecs)
+			keeper.SetStakingKeeper(staking)
+			keeper.SetConsensusValidatorStore(staking)
+
+			commit := signedExtendedCommit(t, ctx, 2, validatorSpecs)
+			ctx = ctx.WithCometInfo(finalCometInfo{commit: commit})
+			aggregate, err := AggregateVoteExtensions(commit, expected)
+			require.NoError(t, err)
+			require.Len(t, aggregate.Results, 2)
+			commitBytes, err := proto.Marshal(&commit)
+			require.NoError(t, err)
+			msg := &veidv1.MsgSubmitConsensusVerification{
+				Version:        VoteExtensionVersion,
+				ChainId:        ctx.ChainID(),
+				Height:         ctx.BlockHeight(),
+				ExtendedCommit: commitBytes,
+				Aggregate:      aggregate,
+			}
+
+			server := NewMsgServerImpl(keeper)
+			_, err = server.SubmitConsensusVerification(ctx, msg)
+			require.ErrorContains(t, err, tc.wantErr)
+			_, found := keeper.GetVerificationResult(ctx, firstRequest.RequestID)
+			require.False(t, found)
+			_, found = keeper.GetVerificationResult(ctx, secondRequest.RequestID)
+			require.False(t, found)
+			storedFirst, found := keeper.GetVerificationRequest(ctx, firstRequest.RequestID)
+			require.True(t, found)
+			require.Equal(t, types.RequestStatusPending, storedFirst.Status)
+			storedSecond, found := keeper.GetVerificationRequest(ctx, secondRequest.RequestID)
+			require.True(t, found)
+			require.Equal(t, types.RequestStatusPending, storedSecond.Status)
+			require.Empty(t, keeper.GetScoreHistory(ctx, account.String()))
+		})
+	}
+}
+
 func TestConsensusSystemMessageRejectsUnmediatedFinalizeInvocation(t *testing.T) {
 	t.Parallel()
 
@@ -520,17 +1310,168 @@ func TestConsensusSystemMessageRejectsUnmediatedFinalizeInvocation(t *testing.T)
 	require.ErrorContains(t, err, "not authorized by FinalizeBlock pre-validation")
 }
 
-func testVoteExtensionResult(requestID string, score uint32) veidv1.VEIDVoteExtensionResult {
+type finalizeReceiptFixture struct {
+	t          *testing.T
+	keeper     Keeper
+	ctx        sdk.Context
+	request    *types.VerificationRequest
+	receipt    types.InferenceReceipt
+	carrier    veidv1.VEIDVoteExtensionResult
+	signerKey  *types.SignerKeyInfo
+	signerPriv ed25519.PrivateKey
+	voteHeight int64
+}
+
+func setupFinalizeReceiptFixture(t *testing.T, label string) finalizeReceiptFixture {
+	t.Helper()
+	keeper, voteCtx, stateStore := setupInferenceReceiptKeeper(t)
+	t.Cleanup(func() { closeStoreIfNeeded(stateStore) })
+	params := types.DefaultParams()
+	params.RequireClientSignature = false
+	params.RequireUserSignature = false
+	require.NoError(t, keeper.SetParams(voteCtx, params))
+	registerActiveInferencePipeline(t, keeper, voteCtx)
+
+	account, request, keyProvider, signerKey, signerPriv := setupReceiptBackedRequest(t, keeper, voteCtx, "finalize-"+label)
+	expectations := buildReceiptExpectationsForRequest(t, keeper, voteCtx, account, request, keyProvider)
+	receipt := testKeeperInferenceReceipt(t, voteCtx, request, signerKey, expectations, signerPriv)
+	finalCtx := voteCtx.WithBlockHeight(voteCtx.BlockHeight() + 1).WithBlockTime(voteCtx.BlockTime().Add(time.Second))
+	return finalizeReceiptFixture{
+		t:          t,
+		keeper:     keeper,
+		ctx:        finalCtx,
+		request:    request,
+		receipt:    receipt,
+		carrier:    voteExtensionResultFromReceiptForTest(t, receipt),
+		signerKey:  signerKey,
+		signerPriv: signerPriv,
+		voteHeight: voteCtx.BlockHeight(),
+	}
+}
+
+func (f *finalizeReceiptFixture) validate() error {
+	if err := validateVoteExtensionResult(f.carrier, f.request.InferenceProfileSnapshot.PipelineVersion); err != nil {
+		return err
+	}
+	_, err := f.keeper.validateCarriedConsensusReceipt(f.ctx, f.carrier, f.request, f.voteHeight)
+	return err
+}
+
+func (f *finalizeReceiptFixture) rebuildCarrier() {
+	f.carrier = voteExtensionResultFromReceiptForTest(f.t, f.receipt)
+}
+
+func (f *finalizeReceiptFixture) resignAndRebuild() {
+	require.NoError(f.t, f.receipt.Sign(f.signerPriv))
+	f.rebuildCarrier()
+}
+
+func (f *finalizeReceiptFixture) rehashCarrier() {
+	f.carrier.ResultHash = ComputeVoteExtensionResultHash(f.carrier)
+}
+
+func (f *finalizeReceiptFixture) persistRequest() {
+	require.NoError(f.t, f.keeper.setVerificationRequest(f.ctx, f.request))
+}
+
+func (f *finalizeReceiptFixture) forceSigner() {
+	forceInferenceSignerForTest(f.t, f.keeper, f.ctx, f.signerKey)
+}
+
+func testVoteExtensionResult(t *testing.T, requestID string, score uint32) veidv1.VEIDVoteExtensionResult {
+	t.Helper()
+	return testVoteExtensionResultWithNonce(t, requestID, score, "nonce-1")
+}
+
+func testVoteExtensionResultWithNonce(t *testing.T, requestID string, score uint32, nonce string) veidv1.VEIDVoteExtensionResult {
+	t.Helper()
 	accountBytes := testHash(0x44)
+	return testVoteExtensionResultWithOptions(t, requestID, sdk.AccAddress(accountBytes[:20]).String(), score, "success", "1.0.0", testHash(0x33), nonce)
+}
+
+func testVoteExtensionResultWithOptions(
+	t *testing.T,
+	requestID string,
+	accountAddress string,
+	score uint32,
+	status string,
+	modelVersion string,
+	inputHash []byte,
+	nonce string,
+) veidv1.VEIDVoteExtensionResult {
+	t.Helper()
+	pub, priv := deterministicInferenceReceiptKey(t, "vote-extension-"+requestID+"-"+nonce)
+	receipt := types.InferenceReceipt{
+		Domain:                types.InferenceReceiptDomain,
+		Version:               types.InferenceReceiptVersion,
+		ChainID:               "chain-A",
+		AccountAddress:        accountAddress,
+		RequestID:             requestID,
+		ScopeIDs:              []string{"scope-a"},
+		Nonce:                 nonce,
+		InputDigest:           append([]byte(nil), inputHash...),
+		FeatureDigest:         testHash(0x34),
+		SchemaDigest:          testHash(0x35),
+		EvidenceLineageDigest: testHash(0x36),
+		PipelineVersion:       modelVersion,
+		ModelManifestDigest:   testHash(0x22),
+		ModelDigest:           testHash(0x23),
+		RuntimeImageDigest:    testHash(0x11),
+		RuntimeDigest:         testHash(0x11),
+		ConfigDigest:          types.CanonicalInferenceDeterminismConfigDigest(),
+		DeterminismProfile:    types.CanonicalInferenceDeterminismProfile(),
+		Score:                 score,
+		Status:                types.VerificationResultStatus(status),
+		ConfidenceMillionths:  900_000,
+		ReasonCodes:           []types.ReasonCode{types.ReasonCodeSuccess},
+		IssuedHeight:          10,
+		IssuedAt:              time.Unix(100, 0).UTC(),
+		ExpiresHeight:         12,
+		ExpiresAt:             time.Unix(100, 0).UTC().Add(2 * time.Minute),
+		SignerKeyID:           "did:virtengine:inference:test",
+		SignerFingerprint:     types.ComputeKeyFingerprint(pub),
+		SignerSequence:        1,
+	}
+	require.NoError(t, receipt.Sign(priv))
+	receiptBytes, err := receipt.CanonicalSignedBytes()
+	require.NoError(t, err)
+	receiptDigest, err := receipt.Digest()
+	require.NoError(t, err)
 	result := veidv1.VEIDVoteExtensionResult{
 		RequestId:      requestID,
-		AccountAddress: sdk.AccAddress(accountBytes[:20]).String(),
+		AccountAddress: accountAddress,
 		Score:          score,
-		Status:         "success",
-		ModelVersion:   "1.0.0",
-		InputHash:      testHash(0x33),
+		Status:         status,
+		ModelVersion:   modelVersion,
+		InputHash:      append([]byte(nil), inputHash...),
 		ReasonCodes:    []string{"SUCCESS"},
-		ReceiptDigest:  testHash(0x66),
+		ReceiptDigest:  receiptDigest,
+		ReceiptBytes:   receiptBytes,
+	}
+	result.ResultHash = ComputeVoteExtensionResultHash(result)
+	return result
+}
+
+func voteExtensionResultFromReceiptForTest(t *testing.T, receipt types.InferenceReceipt) veidv1.VEIDVoteExtensionResult {
+	t.Helper()
+	receiptBytes, err := receipt.CanonicalSignedBytes()
+	require.NoError(t, err)
+	receiptDigest, err := receipt.Digest()
+	require.NoError(t, err)
+	reasonCodes := make([]string, len(receipt.ReasonCodes))
+	for i, reason := range receipt.ReasonCodes {
+		reasonCodes[i] = string(reason)
+	}
+	result := veidv1.VEIDVoteExtensionResult{
+		RequestId:      receipt.RequestID,
+		AccountAddress: receipt.AccountAddress,
+		Score:          receipt.Score,
+		Status:         string(receipt.Status),
+		ModelVersion:   receipt.PipelineVersion,
+		InputHash:      append([]byte(nil), receipt.InputDigest...),
+		ReasonCodes:    reasonCodes,
+		ReceiptDigest:  receiptDigest,
+		ReceiptBytes:   receiptBytes,
 	}
 	result.ResultHash = ComputeVoteExtensionResultHash(result)
 	return result

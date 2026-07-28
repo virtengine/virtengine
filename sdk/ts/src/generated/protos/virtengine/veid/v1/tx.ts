@@ -284,8 +284,8 @@ export interface MsgUpdateScoreResponse {
 
 /**
  * VEIDVoteExtension is the canonical versioned payload signed by CometBFT.
- * Carrier v1 is currently unreleased; receipt_digest is part of its initial
- * wire contract and therefore does not require a compatibility transition.
+ * Carrier v1 is currently unreleased; receipt_digest and receipt_bytes are
+ * part of its initial wire contract and do not require a v2 transition.
  */
 export interface VEIDVoteExtension {
   version: number;
@@ -309,6 +309,7 @@ export interface VEIDVoteExtensionResult {
   resultHash: Uint8Array;
   reasonCodes: string[];
   receiptDigest: Uint8Array;
+  receiptBytes: Uint8Array;
 }
 
 /** VEIDConsensusAggregate is deterministically reconstructed from signed votes. */
@@ -3935,6 +3936,7 @@ function createBaseVEIDVoteExtensionResult(): VEIDVoteExtensionResult {
     resultHash: new Uint8Array(0),
     reasonCodes: [],
     receiptDigest: new Uint8Array(0),
+    receiptBytes: new Uint8Array(0),
   };
 }
 
@@ -3971,6 +3973,9 @@ export const VEIDVoteExtensionResult: MessageFns<
     }
     if (message.receiptDigest.length !== 0) {
       writer.uint32(74).bytes(message.receiptDigest);
+    }
+    if (message.receiptBytes.length !== 0) {
+      writer.uint32(82).bytes(message.receiptBytes);
     }
     return writer;
   },
@@ -4054,6 +4059,14 @@ export const VEIDVoteExtensionResult: MessageFns<
           message.receiptDigest = reader.bytes();
           continue;
         }
+        case 10: {
+          if (tag !== 82) {
+            break;
+          }
+
+          message.receiptBytes = reader.bytes();
+          continue;
+        }
       }
       if ((tag & 7) === 4 || tag === 0) {
         break;
@@ -4076,6 +4089,7 @@ export const VEIDVoteExtensionResult: MessageFns<
         ? object.reason_codes.map((e: any) => globalThis.String(e))
         : [],
       receiptDigest: isSet(object.receipt_digest) ? bytesFromBase64(object.receipt_digest) : new Uint8Array(0),
+      receiptBytes: isSet(object.receipt_bytes) ? bytesFromBase64(object.receipt_bytes) : new Uint8Array(0),
     };
   },
 
@@ -4108,6 +4122,9 @@ export const VEIDVoteExtensionResult: MessageFns<
     if (message.receiptDigest.length !== 0) {
       obj.receipt_digest = base64FromBytes(message.receiptDigest);
     }
+    if (message.receiptBytes.length !== 0) {
+      obj.receipt_bytes = base64FromBytes(message.receiptBytes);
+    }
     return obj;
   },
   fromPartial(object: DeepPartial<VEIDVoteExtensionResult>): VEIDVoteExtensionResult {
@@ -4121,6 +4138,7 @@ export const VEIDVoteExtensionResult: MessageFns<
     message.resultHash = object.resultHash ?? new Uint8Array(0);
     message.reasonCodes = object.reasonCodes?.map((e) => e) || [];
     message.receiptDigest = object.receiptDigest ?? new Uint8Array(0);
+    message.receiptBytes = object.receiptBytes ?? new Uint8Array(0);
     return message;
   },
 };

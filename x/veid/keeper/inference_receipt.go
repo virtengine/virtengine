@@ -135,7 +135,11 @@ func (k Keeper) ProcessVerificationRequestWithReceipt(
 	}
 
 	result := k.verificationResultFromReceipt(ctx, stored, receipt, scopeResults, replay)
-	inserted, err := k.ensureReceiptBuffer().insert(ctx.BlockHeight(), *result, replay)
+	receiptBytes, err := receipt.CanonicalSignedBytes()
+	if err != nil {
+		return nil, err
+	}
+	inserted, err := k.ensureReceiptBuffer().insert(ctx.BlockHeight(), *result, receiptBytes, replay)
 	if err != nil {
 		return nil, err
 	}
@@ -339,19 +343,8 @@ func (k Keeper) verifyInferenceReceipt(
 	if err := validateInferenceReceiptFreshness(ctx, request, receipt); err != nil {
 		return inferenceReceiptReplayCheck{}, err
 	}
-	if !equalStringSlices(receipt.ScopeIDs, expectations.ScopeIDs) ||
-		!bytes.Equal(receipt.InputDigest, expectations.InputDigest) ||
-		!bytes.Equal(receipt.FeatureDigest, expectations.FeatureDigest) ||
-		!bytes.Equal(receipt.SchemaDigest, expectations.SchemaDigest) ||
-		!bytes.Equal(receipt.EvidenceLineageDigest, expectations.EvidenceLineageDigest) ||
-		receipt.PipelineVersion != expectations.PipelineVersion ||
-		!bytes.Equal(receipt.ModelManifestDigest, expectations.ModelManifestDigest) ||
-		!bytes.Equal(receipt.ModelDigest, expectations.ModelDigest) ||
-		!bytes.Equal(receipt.RuntimeImageDigest, expectations.RuntimeImageDigest) ||
-		!bytes.Equal(receipt.RuntimeDigest, expectations.RuntimeDigest) ||
-		!bytes.Equal(receipt.ConfigDigest, expectations.ConfigDigest) ||
-		receipt.DeterminismProfile != expectations.DeterminismProfile {
-		return inferenceReceiptReplayCheck{}, types.ErrInvalidVerificationResult.Wrap("inference receipt commitment mismatch")
+	if err := validateInferenceReceiptExpectations(receipt, expectations); err != nil {
+		return inferenceReceiptReplayCheck{}, err
 	}
 
 	key, err := k.resolveSignerKey(ctx, receipt.SignerKeyID, receipt.SignerFingerprint)
@@ -475,12 +468,25 @@ func parseInferenceSignerHeight(raw string, name string) (int64, bool, error) {
 }
 
 func validateInferenceReceiptFreshness(ctx sdk.Context, request *types.VerificationRequest, receipt types.InferenceReceipt) error {
+	return validateInferenceReceiptFreshnessAt(ctx, request, receipt, ctx.BlockHeight())
+}
+
+func validateInferenceReceiptFreshnessAt(ctx sdk.Context, request *types.VerificationRequest, receipt types.InferenceReceipt, voteHeight int64) error {
 	now := ctx.BlockTime().UTC()
-	if receipt.IssuedHeight != ctx.BlockHeight() {
-		return types.ErrInvalidTimestamp.Wrap("inference receipt issued height is not current")
+	if voteHeight <= 0 {
+		return types.ErrInvalidTimestamp.Wrap("inference receipt vote height is invalid")
+	}
+	if receipt.IssuedHeight != voteHeight {
+		return types.ErrInvalidTimestamp.Wrap("inference receipt issued height does not match vote height")
 	}
 	if receipt.IssuedHeight < request.RequestedBlock {
 		return types.ErrInvalidTimestamp.Wrap("inference receipt predates request")
+	}
+	if receipt.IssuedAt.UTC().Before(request.RequestedAt.UTC().Truncate(time.Second)) {
+		return types.ErrInvalidTimestamp.Wrap("inference receipt predates request")
+	}
+	if receipt.IssuedHeight > ctx.BlockHeight() {
+		return types.ErrInvalidTimestamp.Wrap("inference receipt issued height is from the future")
 	}
 	if receipt.IssuedAt.UTC().After(now) {
 		return types.ErrInvalidTimestamp.Wrap("inference receipt issued time is from the future")
@@ -499,6 +505,24 @@ func validateInferenceReceiptFreshness(ctx sdk.Context, request *types.Verificat
 	}
 	if receipt.ExpiresHeight-receipt.IssuedHeight > inferenceReceiptMaxHeightLifetime {
 		return types.ErrInvalidTimestamp.Wrap("inference receipt height lifetime exceeds maximum")
+	}
+	return nil
+}
+
+func validateInferenceReceiptExpectations(receipt types.InferenceReceipt, expectations inferenceReceiptExpectations) error {
+	if !equalStringSlices(receipt.ScopeIDs, expectations.ScopeIDs) ||
+		!bytes.Equal(receipt.InputDigest, expectations.InputDigest) ||
+		!bytes.Equal(receipt.FeatureDigest, expectations.FeatureDigest) ||
+		!bytes.Equal(receipt.SchemaDigest, expectations.SchemaDigest) ||
+		!bytes.Equal(receipt.EvidenceLineageDigest, expectations.EvidenceLineageDigest) ||
+		receipt.PipelineVersion != expectations.PipelineVersion ||
+		!bytes.Equal(receipt.ModelManifestDigest, expectations.ModelManifestDigest) ||
+		!bytes.Equal(receipt.ModelDigest, expectations.ModelDigest) ||
+		!bytes.Equal(receipt.RuntimeImageDigest, expectations.RuntimeImageDigest) ||
+		!bytes.Equal(receipt.RuntimeDigest, expectations.RuntimeDigest) ||
+		!bytes.Equal(receipt.ConfigDigest, expectations.ConfigDigest) ||
+		receipt.DeterminismProfile != expectations.DeterminismProfile {
+		return types.ErrInvalidVerificationResult.Wrap("inference receipt commitment mismatch")
 	}
 	return nil
 }

@@ -3,6 +3,7 @@ package keeper
 import (
 	"bytes"
 	"context"
+	"crypto/ed25519"
 	"crypto/sha256"
 	"encoding/binary"
 	"errors"
@@ -94,6 +95,9 @@ func (ms msgServer) SubmitConsensusVerification(goCtx context.Context, msg *type
 		return nil, types.ErrInvalidVerificationResult.Wrap("invalid aggregate quorum")
 	}
 
+	applyCtx, write := ctx.CacheContext()
+	seenReceiptContexts := make(map[string]string, len(msg.Aggregate.Results))
+	seenReceiptNonces := make(map[string]string, len(msg.Aggregate.Results))
 	for i := range msg.Aggregate.Results {
 		item := msg.Aggregate.Results[i]
 		if item.VotingPower < msg.Aggregate.QuorumVotingPower || item.VotingPower > msg.Aggregate.TotalVotingPower {
@@ -105,13 +109,27 @@ func (ms msgServer) SubmitConsensusVerification(goCtx context.Context, msg *type
 		if i > 0 && item.Result.RequestId <= msg.Aggregate.Results[i-1].Result.RequestId {
 			return nil, types.ErrInvalidVerificationResult.Wrap("aggregate results must be strictly ordered")
 		}
-		request, found := ms.keeper.GetVerificationRequest(ctx, item.Result.RequestId)
+		request, found := ms.keeper.GetVerificationRequest(applyCtx, item.Result.RequestId)
 		if !found || types.IsFinalRequestStatus(request.Status) || request.AccountAddress != item.Result.AccountAddress {
 			return nil, types.ErrInvalidVerificationResult.Wrapf("result %d request binding is invalid", i)
 		}
+		replay, err := ms.keeper.validateCarriedConsensusReceipt(applyCtx, item.Result, request, msg.Aggregate.Height)
+		if err != nil {
+			return nil, types.ErrInvalidVerificationResult.Wrapf("result %d receipt validation failed: %v", i, err)
+		}
+		if existingDigest := seenReceiptContexts[replay.ContextDigest]; existingDigest != "" {
+			if existingDigest != replay.ReceiptDigest {
+				return nil, types.ErrInvalidVerificationResult.Wrap("aggregate receipt context replay changed digest")
+			}
+			return nil, types.ErrInvalidVerificationResult.Wrap("aggregate duplicate receipt context")
+		}
+		if existingContext := seenReceiptNonces[replay.NonceDigest]; existingContext != "" && existingContext != replay.ContextDigest {
+			return nil, types.ErrInvalidVerificationResult.Wrap("aggregate receipt nonce replay changed context")
+		}
+		seenReceiptContexts[replay.ContextDigest] = replay.ReceiptDigest
+		seenReceiptNonces[replay.NonceDigest] = replay.ContextDigest
 	}
 
-	applyCtx, write := ctx.CacheContext()
 	for i := range msg.Aggregate.Results {
 		item := msg.Aggregate.Results[i]
 		if err := ms.keeper.applyConsensusVerificationResult(applyCtx, item.Result); err != nil {
@@ -155,6 +173,82 @@ func (k Keeper) validateConsensusCommitVotingPower(ctx sdk.Context, commit abci.
 		}
 	}
 	return nil
+}
+
+func (k Keeper) validateCarriedConsensusReceipt(
+	ctx sdk.Context,
+	carried veidv1.VEIDVoteExtensionResult,
+	request *types.VerificationRequest,
+	voteHeight int64,
+) (inferenceReceiptReplayCheck, error) {
+	if request == nil {
+		return inferenceReceiptReplayCheck{}, types.ErrInvalidVerificationRequest.Wrap("verification request is required")
+	}
+	receipt, err := types.DecodeCanonicalSignedInferenceReceipt(carried.ReceiptBytes)
+	if err != nil {
+		return inferenceReceiptReplayCheck{}, err
+	}
+	receiptDigest, err := receipt.Digest()
+	if err != nil {
+		return inferenceReceiptReplayCheck{}, err
+	}
+	if !bytes.Equal(receiptDigest, carried.ReceiptDigest) {
+		return inferenceReceiptReplayCheck{}, types.ErrInvalidVerificationResult.Wrap("carried receipt digest mismatch")
+	}
+	if err := validateVoteExtensionResultReceipt(carried, receipt); err != nil {
+		return inferenceReceiptReplayCheck{}, types.ErrInvalidVerificationResult.Wrap(err.Error())
+	}
+	if receipt.ChainID != ctx.ChainID() ||
+		receipt.AccountAddress != request.AccountAddress ||
+		receipt.RequestID != request.RequestID {
+		return inferenceReceiptReplayCheck{}, types.ErrInvalidVerificationResult.Wrap("inference receipt request binding mismatch")
+	}
+	canonicalRequestScopes := types.CanonicalInferenceReceiptScopeIDs(request.ScopeIDs)
+	if !equalStringSlices(request.ScopeIDs, canonicalRequestScopes) {
+		return inferenceReceiptReplayCheck{}, types.ErrInvalidVerificationRequest.Wrap("verification request must contain canonical scope ids")
+	}
+	if !equalStringSlices(receipt.ScopeIDs, canonicalRequestScopes) {
+		return inferenceReceiptReplayCheck{}, types.ErrInvalidVerificationResult.Wrap("inference receipt scope binding mismatch")
+	}
+
+	snapshot, err := k.validateInferenceProfileSnapshotReference(ctx, request)
+	if err != nil {
+		return inferenceReceiptReplayCheck{}, err
+	}
+	if err := k.requireRequestSnapshotMatchesCurrentBundle(ctx, request); err != nil {
+		return inferenceReceiptReplayCheck{}, err
+	}
+	expectations := inferenceReceiptExpectations{
+		InputDigest:           bytes.Clone(carried.InputHash),
+		FeatureDigest:         bytes.Clone(receipt.FeatureDigest),
+		SchemaDigest:          bytes.Clone(snapshot.FeatureSchemaDigest),
+		EvidenceLineageDigest: bytes.Clone(receipt.EvidenceLineageDigest),
+		ModelManifestDigest:   bytes.Clone(snapshot.ModelManifestDigest),
+		ModelDigest:           bytes.Clone(snapshot.ModelDigest),
+		RuntimeImageDigest:    bytes.Clone(snapshot.RuntimeImageDigest),
+		RuntimeDigest:         bytes.Clone(snapshot.RuntimeDigest),
+		ConfigDigest:          bytes.Clone(snapshot.DeterminismConfigDigest),
+		DeterminismProfile:    types.CanonicalInferenceDeterminismProfile(),
+		PipelineVersion:       snapshot.PipelineVersion,
+		ScopeIDs:              types.CanonicalInferenceReceiptScopeIDs(request.ScopeIDs),
+	}
+	if err := validateInferenceReceiptExpectations(receipt, expectations); err != nil {
+		return inferenceReceiptReplayCheck{}, err
+	}
+	if err := validateInferenceReceiptFreshnessAt(ctx, request, receipt, voteHeight); err != nil {
+		return inferenceReceiptReplayCheck{}, err
+	}
+	key, err := k.resolveSignerKey(ctx, receipt.SignerKeyID, receipt.SignerFingerprint)
+	if err != nil {
+		return inferenceReceiptReplayCheck{}, err
+	}
+	if err := validateInferenceReceiptSigner(ctx, key, receipt); err != nil {
+		return inferenceReceiptReplayCheck{}, err
+	}
+	if err := receipt.VerifySignature(ed25519.PublicKey(key.PublicKey)); err != nil {
+		return inferenceReceiptReplayCheck{}, err
+	}
+	return k.checkInferenceReceiptReplay(ctx, receipt)
 }
 
 func (k Keeper) applyConsensusVerificationResult(ctx sdk.Context, carried veidv1.VEIDVoteExtensionResult) error {

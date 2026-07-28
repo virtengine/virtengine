@@ -55,13 +55,13 @@ func (k *Keeper) ExtendVote(
 	expected.Height = req.Height
 	expected.BlockHash = bytes.Clone(req.Hash)
 
-	results := []types.VerificationResult{}
+	results := []stagedInferenceReceipt{}
 	if expected.PipelineVersion != noActivePipelineVersion {
 		results = k.ensureReceiptBuffer().snapshot(req.Height, ctx.BlockHeight())
 		if len(results) > MaxVoteExtensionResults {
 			return nil, types.ErrInvalidVerificationResult.Wrap("pre-consensus result limit exceeded")
 		}
-		sort.Slice(results, func(i, j int) bool { return results[i].RequestID < results[j].RequestID })
+		sort.Slice(results, func(i, j int) bool { return results[i].Result.RequestID < results[j].Result.RequestID })
 	}
 	bundle := &veidv1.VEIDVoteExtension{
 		Version:         VoteExtensionVersion,
@@ -118,17 +118,30 @@ func (k *Keeper) VerifyVoteExtension(
 	return response, nil
 }
 
-func verificationResultToVoteExtension(result types.VerificationResult, pipelineVersion string, height int64) (veidv1.VEIDVoteExtensionResult, error) {
+func verificationResultToVoteExtension(staged stagedInferenceReceipt, pipelineVersion string, height int64) (veidv1.VEIDVoteExtensionResult, error) {
+	result := staged.Result
 	if err := result.Validate(); err != nil {
 		return veidv1.VEIDVoteExtensionResult{}, err
 	}
 	if result.BlockHeight != height || !versionsMatch(result.ModelVersion, pipelineVersion) {
 		return veidv1.VEIDVoteExtensionResult{}, types.ErrInvalidVerificationResult.Wrap("result consensus binding mismatch")
 	}
+	receiptBytes := bytes.Clone(staged.ReceiptBytes)
+	receipt, err := types.DecodeCanonicalSignedInferenceReceipt(receiptBytes)
+	if err != nil {
+		return veidv1.VEIDVoteExtensionResult{}, err
+	}
+	receiptDigest, err := receipt.Digest()
+	if err != nil {
+		return veidv1.VEIDVoteExtensionResult{}, err
+	}
 	receiptDigestHex := result.Metadata[types.VerificationResultMetadataReceiptDigest]
-	receiptDigest, err := hex.DecodeString(receiptDigestHex)
-	if err != nil || len(receiptDigest) != 32 {
+	metadataDigest, err := hex.DecodeString(receiptDigestHex)
+	if err != nil || len(metadataDigest) != 32 {
 		return veidv1.VEIDVoteExtensionResult{}, types.ErrInvalidVerificationResult.Wrap("result receipt_digest is required")
+	}
+	if !bytes.Equal(metadataDigest, receiptDigest) {
+		return veidv1.VEIDVoteExtensionResult{}, types.ErrInvalidVerificationResult.Wrap("result receipt_digest does not match receipt bytes")
 	}
 	reasonCodes := make([]string, len(result.ReasonCodes))
 	for i, reason := range result.ReasonCodes {
@@ -145,6 +158,10 @@ func verificationResultToVoteExtension(result types.VerificationResult, pipeline
 		InputHash:      bytes.Clone(result.InputHash),
 		ReasonCodes:    reasonCodes,
 		ReceiptDigest:  receiptDigest,
+		ReceiptBytes:   receiptBytes,
+	}
+	if err := validateVoteExtensionResultReceipt(extResult, receipt); err != nil {
+		return veidv1.VEIDVoteExtensionResult{}, err
 	}
 	extResult.ResultHash = ComputeVoteExtensionResultHash(extResult)
 	return extResult, nil
@@ -179,7 +196,7 @@ func (k *Keeper) StoreBlockVerificationResult(ctx sdk.Context, height int64, res
 // storeVerifiedBlockVerificationResult stores a result after the caller has
 // verified its full signed inference receipt. It remains package-private so an
 // unauthenticated digest cannot be injected into the vote-extension carrier.
-func (k *Keeper) storeVerifiedBlockVerificationResult(ctx sdk.Context, height int64, result types.VerificationResult) error {
+func (k *Keeper) storeVerifiedBlockVerificationResult(ctx sdk.Context, height int64, result types.VerificationResult, receiptBytes []byte) error {
 	if ctx.ExecMode() != sdk.ExecModeVoteExtension {
 		return types.ErrUnauthorized.Wrap("pre-consensus results may only be staged during vote extension execution")
 	}
@@ -189,12 +206,12 @@ func (k *Keeper) storeVerifiedBlockVerificationResult(ctx sdk.Context, height in
 	if err := result.Validate(); err != nil {
 		return err
 	}
-	return k.ensureReceiptBuffer().stageResult(height, result)
+	return k.ensureReceiptBuffer().stageResult(height, result, receiptBytes)
 }
 
 // GetBlockVerificationResults gets all verification results for a specific block height
 func (k *Keeper) GetBlockVerificationResults(ctx sdk.Context, height int64) []types.VerificationResult {
-	return k.ensureReceiptBuffer().snapshot(height, ctx.BlockHeight())
+	return k.ensureReceiptBuffer().snapshotResults(height, ctx.BlockHeight())
 }
 
 // ClearBlockVerificationResults clears verification results for a block (called after finalization)

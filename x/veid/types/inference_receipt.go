@@ -4,11 +4,13 @@ import (
 	"bytes"
 	"crypto/ed25519"
 	"crypto/sha256"
+	"encoding/binary"
 	"encoding/hex"
-	"encoding/json"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
+	"unicode/utf8"
 )
 
 const (
@@ -19,12 +21,14 @@ const (
 	InferenceReceiptDigestDomain  = "VEID_INFERENCE_RECEIPT_DIGEST_V1"
 	InferenceReceiptContextDomain = "VEID_INFERENCE_RECEIPT_CONTEXT_V1"
 	InferenceReceiptConfigDomain  = "VEID_INFERENCE_DETERMINISM_CONFIG_V1"
+	InferenceReceiptProfileDomain = "VEID_INFERENCE_DETERMINISM_PROFILE_V1"
 
 	InferenceReceiptMaxString                = 128
 	InferenceReceiptMaxReasonCodes           = 16
 	InferenceReceiptMaxScopes                = 32
 	InferenceReceiptMaxConfidencePPM         = 1_000_000
 	InferenceReceiptRequiredRandomSeed int64 = 42
+	InferenceReceiptMaxSignedBytes           = 8 * 1024
 )
 
 // InferenceDeterminismProfile is the bounded deterministic runtime profile
@@ -91,57 +95,23 @@ func CanonicalInferenceDeterminismConfigDigest() []byte {
 // of the committed PipelineVersion determinism config, not a hard-coded local
 // runtime profile.
 func InferencePipelineDeterminismConfigDigest(config PipelineDeterminismConfig) []byte {
-	env := struct {
-		Domain                  string `json:"domain"`
-		RandomSeed              int64  `json:"random_seed"`
-		ForceCPU                bool   `json:"force_cpu"`
-		SingleThread            bool   `json:"single_thread"`
-		FloatPrecision          int32  `json:"float_precision"`
-		TensorFlowDeterministic bool   `json:"tensorflow_deterministic"`
-		DisableCUDNN            bool   `json:"disable_cudnn"`
-		ONNXDeterministic       bool   `json:"onnx_deterministic"`
-	}{
-		Domain:                  InferenceReceiptConfigDomain,
-		RandomSeed:              config.RandomSeed,
-		ForceCPU:                config.ForceCPU,
-		SingleThread:            config.SingleThread,
-		FloatPrecision:          config.FloatPrecision,
-		TensorFlowDeterministic: config.TensorFlowDeterministic,
-		DisableCUDNN:            config.DisableCUDNN,
-		ONNXDeterministic:       config.ONNXDeterministic,
-	}
-	bz, err := json.Marshal(env)
-	if err != nil {
-		panic(err)
-	}
-	sum := sha256.Sum256(bz)
+	enc := newInferenceReceiptBinaryEncoder(InferenceReceiptConfigDomain)
+	enc.writeInt64(config.RandomSeed)
+	enc.writeBool(config.ForceCPU)
+	enc.writeBool(config.SingleThread)
+	enc.writeInt32(config.FloatPrecision)
+	enc.writeBool(config.TensorFlowDeterministic)
+	enc.writeBool(config.DisableCUDNN)
+	enc.writeBool(config.ONNXDeterministic)
+	sum := sha256.Sum256(enc.bytes())
 	return sum[:]
 }
 
 // Digest returns the domain-separated digest of the deterministic profile.
 func (p InferenceDeterminismProfile) Digest() []byte {
-	env := struct {
-		Domain           string `json:"domain"`
-		ForceCPU         bool   `json:"force_cpu"`
-		RandomSeed       int64  `json:"random_seed"`
-		DeterministicOps bool   `json:"deterministic_ops"`
-		InterOpThreads   int32  `json:"inter_op_threads"`
-		IntraOpThreads   int32  `json:"intra_op_threads"`
-		DisableGPU       bool   `json:"disable_gpu"`
-	}{
-		Domain:           InferenceReceiptConfigDomain,
-		ForceCPU:         p.ForceCPU,
-		RandomSeed:       p.RandomSeed,
-		DeterministicOps: p.DeterministicOps,
-		InterOpThreads:   p.InterOpThreads,
-		IntraOpThreads:   p.IntraOpThreads,
-		DisableGPU:       p.DisableGPU,
-	}
-	bz, err := json.Marshal(env)
-	if err != nil {
-		panic(err)
-	}
-	sum := sha256.Sum256(bz)
+	enc := newInferenceReceiptBinaryEncoder(InferenceReceiptProfileDomain)
+	writeInferenceDeterminismProfile(enc, p)
+	sum := sha256.Sum256(enc.bytes())
 	return sum[:]
 }
 
@@ -189,66 +159,6 @@ type InferenceReceipt struct {
 	Signature            []byte                   `json:"signature"`
 }
 
-type inferenceReceiptSignEnvelope struct {
-	Domain                string                      `json:"domain"`
-	Version               uint32                      `json:"version"`
-	ChainID               string                      `json:"chain_id"`
-	AccountAddress        string                      `json:"account_address"`
-	RequestID             string                      `json:"request_id"`
-	ScopeIDs              []string                    `json:"scope_ids"`
-	Nonce                 string                      `json:"nonce"`
-	InputDigest           []byte                      `json:"input_digest"`
-	FeatureDigest         []byte                      `json:"feature_digest"`
-	SchemaDigest          []byte                      `json:"schema_digest"`
-	EvidenceLineageDigest []byte                      `json:"evidence_lineage_digest"`
-	PipelineVersion       string                      `json:"pipeline_version"`
-	ModelManifestDigest   []byte                      `json:"model_manifest_digest"`
-	ModelDigest           []byte                      `json:"model_digest"`
-	RuntimeImageDigest    []byte                      `json:"runtime_image_digest"`
-	RuntimeDigest         []byte                      `json:"runtime_digest"`
-	ConfigDigest          []byte                      `json:"config_digest"`
-	DeterminismProfile    InferenceDeterminismProfile `json:"determinism_profile"`
-	Score                 uint32                      `json:"score"`
-	Status                VerificationResultStatus    `json:"status"`
-	ConfidenceMillionths  uint32                      `json:"confidence_millionths"`
-	ReasonCodes           []ReasonCode                `json:"reason_codes"`
-	IssuedHeight          int64                       `json:"issued_height"`
-	IssuedAtUnix          int64                       `json:"issued_at_unix"`
-	ExpiresHeight         int64                       `json:"expires_height"`
-	ExpiresAtUnix         int64                       `json:"expires_at_unix"`
-	SignerKeyID           string                      `json:"signer_key_id"`
-	SignerFingerprint     string                      `json:"signer_fingerprint"`
-	SignerSequence        uint64                      `json:"signer_sequence"`
-}
-
-type inferenceReceiptContextEnvelope struct {
-	Domain                string                      `json:"domain"`
-	Version               uint32                      `json:"version"`
-	ChainID               string                      `json:"chain_id"`
-	AccountAddress        string                      `json:"account_address"`
-	RequestID             string                      `json:"request_id"`
-	ScopeIDs              []string                    `json:"scope_ids"`
-	Nonce                 string                      `json:"nonce"`
-	InputDigest           []byte                      `json:"input_digest"`
-	FeatureDigest         []byte                      `json:"feature_digest"`
-	SchemaDigest          []byte                      `json:"schema_digest"`
-	EvidenceLineageDigest []byte                      `json:"evidence_lineage_digest"`
-	PipelineVersion       string                      `json:"pipeline_version"`
-	ModelManifestDigest   []byte                      `json:"model_manifest_digest"`
-	ModelDigest           []byte                      `json:"model_digest"`
-	RuntimeImageDigest    []byte                      `json:"runtime_image_digest"`
-	RuntimeDigest         []byte                      `json:"runtime_digest"`
-	ConfigDigest          []byte                      `json:"config_digest"`
-	DeterminismProfile    InferenceDeterminismProfile `json:"determinism_profile"`
-	IssuedHeight          int64                       `json:"issued_height"`
-	IssuedAtUnix          int64                       `json:"issued_at_unix"`
-	ExpiresHeight         int64                       `json:"expires_height"`
-	ExpiresAtUnix         int64                       `json:"expires_at_unix"`
-	SignerKeyID           string                      `json:"signer_key_id"`
-	SignerFingerprint     string                      `json:"signer_fingerprint"`
-	SignerSequence        uint64                      `json:"signer_sequence"`
-}
-
 // CanonicalInferenceReceiptScopeIDs returns sorted unique scope IDs.
 func CanonicalInferenceReceiptScopeIDs(scopeIDs []string) []string {
 	out := append([]string(nil), scopeIDs...)
@@ -291,49 +201,78 @@ func (r InferenceReceipt) SignBytes() ([]byte, error) {
 	if err := r.validate(false); err != nil {
 		return nil, err
 	}
-	env := inferenceReceiptSignEnvelope{
-		Domain:                InferenceReceiptSignDomain,
-		Version:               r.Version,
-		ChainID:               r.ChainID,
-		AccountAddress:        r.AccountAddress,
-		RequestID:             r.RequestID,
-		ScopeIDs:              append([]string(nil), r.ScopeIDs...),
-		Nonce:                 r.Nonce,
-		InputDigest:           append([]byte(nil), r.InputDigest...),
-		FeatureDigest:         append([]byte(nil), r.FeatureDigest...),
-		SchemaDigest:          append([]byte(nil), r.SchemaDigest...),
-		EvidenceLineageDigest: append([]byte(nil), r.EvidenceLineageDigest...),
-		PipelineVersion:       r.PipelineVersion,
-		ModelManifestDigest:   append([]byte(nil), r.ModelManifestDigest...),
-		ModelDigest:           append([]byte(nil), r.ModelDigest...),
-		RuntimeImageDigest:    append([]byte(nil), r.RuntimeImageDigest...),
-		RuntimeDigest:         append([]byte(nil), r.RuntimeDigest...),
-		ConfigDigest:          append([]byte(nil), r.ConfigDigest...),
-		DeterminismProfile:    r.DeterminismProfile,
-		Score:                 r.Score,
-		Status:                r.Status,
-		ConfidenceMillionths:  r.ConfidenceMillionths,
-		ReasonCodes:           append([]ReasonCode(nil), r.ReasonCodes...),
-		IssuedHeight:          r.IssuedHeight,
-		IssuedAtUnix:          r.IssuedAt.UTC().Unix(),
-		ExpiresHeight:         r.ExpiresHeight,
-		ExpiresAtUnix:         r.ExpiresAt.UTC().Unix(),
-		SignerKeyID:           r.SignerKeyID,
-		SignerFingerprint:     strings.ToLower(r.SignerFingerprint),
-		SignerSequence:        r.SignerSequence,
-	}
-	return json.Marshal(env)
+	enc := newInferenceReceiptBinaryEncoder(InferenceReceiptSignDomain)
+	r.writeBinaryPayload(enc, true, false)
+	return enc.bytes(), nil
 }
 
-// Digest returns the SHA-256 digest of SignBytes.
+// CanonicalSignedBytes returns the bounded canonical receipt envelope carried
+// in vote extensions. It includes the signature and is byte-stable.
+func (r InferenceReceipt) CanonicalSignedBytes() ([]byte, error) {
+	if err := r.Validate(); err != nil {
+		return nil, err
+	}
+	enc := newInferenceReceiptBinaryEncoder(InferenceReceiptDomain)
+	r.writeBinaryPayload(enc, true, true)
+	bz := enc.bytes()
+	if len(bz) == 0 || len(bz) > InferenceReceiptMaxSignedBytes {
+		return nil, ErrInvalidVerificationResult.Wrapf("canonical inference receipt exceeds %d bytes", InferenceReceiptMaxSignedBytes)
+	}
+	return bz, nil
+}
+
+// CanonicalBytes is an alias for the signed receipt bytes carried by consensus.
+func (r InferenceReceipt) CanonicalBytes() ([]byte, error) {
+	return r.CanonicalSignedBytes()
+}
+
+// DecodeCanonicalSignedInferenceReceipt parses and validates a byte-exact
+// canonical signed receipt envelope.
+func DecodeCanonicalSignedInferenceReceipt(bz []byte) (InferenceReceipt, error) {
+	if len(bz) == 0 {
+		return InferenceReceipt{}, ErrInvalidVerificationResult.Wrap("canonical inference receipt is required")
+	}
+	if len(bz) > InferenceReceiptMaxSignedBytes {
+		return InferenceReceipt{}, ErrInvalidVerificationResult.Wrapf("canonical inference receipt exceeds %d bytes", InferenceReceiptMaxSignedBytes)
+	}
+	dec := newInferenceReceiptBinaryDecoder(bz)
+	domain, err := dec.readString(InferenceReceiptMaxString)
+	if err != nil {
+		return InferenceReceipt{}, err
+	}
+	if domain != InferenceReceiptDomain {
+		return InferenceReceipt{}, ErrInvalidVerificationResult.Wrap("invalid inference receipt domain")
+	}
+	receipt, err := dec.readReceipt(domain, true, true)
+	if err != nil {
+		return InferenceReceipt{}, err
+	}
+	if dec.remaining() != 0 {
+		return InferenceReceipt{}, ErrInvalidVerificationResult.Wrap("canonical inference receipt has trailing data")
+	}
+	if err := receipt.Validate(); err != nil {
+		return InferenceReceipt{}, err
+	}
+	canonical, err := receipt.CanonicalSignedBytes()
+	if err != nil {
+		return InferenceReceipt{}, err
+	}
+	if !bytes.Equal(canonical, bz) {
+		return InferenceReceipt{}, ErrInvalidVerificationResult.Wrap("inference receipt encoding is not canonical")
+	}
+	return receipt, nil
+}
+
+// Digest returns the domain-separated SHA-256 digest of the canonical signed
+// receipt bytes, including the signature carried by consensus.
 func (r InferenceReceipt) Digest() ([]byte, error) {
-	signBytes, err := r.SignBytes()
+	receiptBytes, err := r.CanonicalSignedBytes()
 	if err != nil {
 		return nil, err
 	}
 	h := sha256.New()
 	_, _ = h.Write([]byte(InferenceReceiptDigestDomain))
-	_, _ = h.Write(signBytes)
+	_, _ = h.Write(receiptBytes)
 	return h.Sum(nil), nil
 }
 
@@ -353,41 +292,427 @@ func (r InferenceReceipt) ContextDigest() ([]byte, error) {
 	if err := r.validate(false); err != nil {
 		return nil, err
 	}
-	env := inferenceReceiptContextEnvelope{
-		Domain:                InferenceReceiptContextDomain,
-		Version:               r.Version,
-		ChainID:               r.ChainID,
-		AccountAddress:        r.AccountAddress,
-		RequestID:             r.RequestID,
-		ScopeIDs:              append([]string(nil), r.ScopeIDs...),
-		Nonce:                 r.Nonce,
-		InputDigest:           append([]byte(nil), r.InputDigest...),
-		FeatureDigest:         append([]byte(nil), r.FeatureDigest...),
-		SchemaDigest:          append([]byte(nil), r.SchemaDigest...),
-		EvidenceLineageDigest: append([]byte(nil), r.EvidenceLineageDigest...),
-		PipelineVersion:       r.PipelineVersion,
-		ModelManifestDigest:   append([]byte(nil), r.ModelManifestDigest...),
-		ModelDigest:           append([]byte(nil), r.ModelDigest...),
-		RuntimeImageDigest:    append([]byte(nil), r.RuntimeImageDigest...),
-		RuntimeDigest:         append([]byte(nil), r.RuntimeDigest...),
-		ConfigDigest:          append([]byte(nil), r.ConfigDigest...),
-		DeterminismProfile:    r.DeterminismProfile,
-		IssuedHeight:          r.IssuedHeight,
-		IssuedAtUnix:          r.IssuedAt.UTC().Unix(),
-		ExpiresHeight:         r.ExpiresHeight,
-		ExpiresAtUnix:         r.ExpiresAt.UTC().Unix(),
-		SignerKeyID:           r.SignerKeyID,
-		SignerFingerprint:     strings.ToLower(r.SignerFingerprint),
-		SignerSequence:        r.SignerSequence,
+	enc := newInferenceReceiptBinaryEncoder(InferenceReceiptContextDomain)
+	r.writeBinaryPayload(enc, false, false)
+	h := sha256.New()
+	_, _ = h.Write([]byte(InferenceReceiptContextDomain))
+	_, _ = h.Write(enc.bytes())
+	return h.Sum(nil), nil
+}
+
+type inferenceReceiptBinaryEncoder struct {
+	buf bytes.Buffer
+}
+
+func newInferenceReceiptBinaryEncoder(domain string) *inferenceReceiptBinaryEncoder {
+	enc := &inferenceReceiptBinaryEncoder{}
+	enc.writeString(domain)
+	return enc
+}
+
+func (e *inferenceReceiptBinaryEncoder) bytes() []byte {
+	return append([]byte(nil), e.buf.Bytes()...)
+}
+
+func (e *inferenceReceiptBinaryEncoder) writeBool(value bool) {
+	if value {
+		e.buf.WriteByte(1)
+		return
 	}
-	bz, err := json.Marshal(env)
+	e.buf.WriteByte(0)
+}
+
+func (e *inferenceReceiptBinaryEncoder) writeUint32(value uint32) {
+	var out [4]byte
+	binary.BigEndian.PutUint32(out[:], value)
+	e.buf.Write(out[:])
+}
+
+func (e *inferenceReceiptBinaryEncoder) writeInt32(value int32) {
+	if err := binary.Write(&e.buf, binary.BigEndian, value); err != nil {
+		panic("failed to encode canonical inference receipt int32: " + err.Error())
+	}
+}
+
+func (e *inferenceReceiptBinaryEncoder) writeUint64(value uint64) {
+	var out [8]byte
+	binary.BigEndian.PutUint64(out[:], value)
+	e.buf.Write(out[:])
+}
+
+func (e *inferenceReceiptBinaryEncoder) writeInt64(value int64) {
+	if err := binary.Write(&e.buf, binary.BigEndian, value); err != nil {
+		panic("failed to encode canonical inference receipt int64: " + err.Error())
+	}
+}
+
+func (e *inferenceReceiptBinaryEncoder) writeBytes(value []byte) {
+	e.writeUint64(uint64(len(value)))
+	e.buf.Write(value)
+}
+
+func (e *inferenceReceiptBinaryEncoder) writeString(value string) {
+	e.writeBytes([]byte(value))
+}
+
+func (r InferenceReceipt) writeBinaryPayload(enc *inferenceReceiptBinaryEncoder, includeOutput bool, includeSignature bool) {
+	enc.writeUint32(r.Version)
+	enc.writeString(r.ChainID)
+	enc.writeString(r.AccountAddress)
+	enc.writeString(r.RequestID)
+	enc.writeUint64(uint64(len(r.ScopeIDs)))
+	for _, scopeID := range r.ScopeIDs {
+		enc.writeString(scopeID)
+	}
+	enc.writeString(r.Nonce)
+	enc.writeBytes(r.InputDigest)
+	enc.writeBytes(r.FeatureDigest)
+	enc.writeBytes(r.SchemaDigest)
+	enc.writeBytes(r.EvidenceLineageDigest)
+	enc.writeString(r.PipelineVersion)
+	enc.writeBytes(r.ModelManifestDigest)
+	enc.writeBytes(r.ModelDigest)
+	enc.writeBytes(r.RuntimeImageDigest)
+	enc.writeBytes(r.RuntimeDigest)
+	enc.writeBytes(r.ConfigDigest)
+	writeInferenceDeterminismProfile(enc, r.DeterminismProfile)
+	if includeOutput {
+		enc.writeUint32(r.Score)
+		enc.writeString(string(r.Status))
+		enc.writeUint32(r.ConfidenceMillionths)
+		enc.writeUint64(uint64(len(r.ReasonCodes)))
+		for _, reason := range r.ReasonCodes {
+			enc.writeString(string(reason))
+		}
+	}
+	enc.writeInt64(r.IssuedHeight)
+	enc.writeInt64(r.IssuedAt.UTC().Unix())
+	enc.writeInt64(r.ExpiresHeight)
+	enc.writeInt64(r.ExpiresAt.UTC().Unix())
+	enc.writeString(r.SignerKeyID)
+	enc.writeString(strings.ToLower(r.SignerFingerprint))
+	enc.writeUint64(r.SignerSequence)
+	if includeSignature {
+		enc.writeBytes(r.Signature)
+	}
+}
+
+func writeInferenceDeterminismProfile(enc *inferenceReceiptBinaryEncoder, profile InferenceDeterminismProfile) {
+	enc.writeBool(profile.ForceCPU)
+	enc.writeInt64(profile.RandomSeed)
+	enc.writeBool(profile.DeterministicOps)
+	enc.writeInt32(profile.InterOpThreads)
+	enc.writeInt32(profile.IntraOpThreads)
+	enc.writeBool(profile.DisableGPU)
+}
+
+type inferenceReceiptBinaryDecoder struct {
+	bz  []byte
+	pos int
+}
+
+func newInferenceReceiptBinaryDecoder(bz []byte) *inferenceReceiptBinaryDecoder {
+	return &inferenceReceiptBinaryDecoder{bz: bz}
+}
+
+func (d *inferenceReceiptBinaryDecoder) remaining() int {
+	return len(d.bz) - d.pos
+}
+
+func (d *inferenceReceiptBinaryDecoder) readBool() (bool, error) {
+	if d.remaining() < 1 {
+		return false, ErrInvalidVerificationResult.Wrap("truncated canonical inference receipt")
+	}
+	value := d.bz[d.pos]
+	d.pos++
+	switch value {
+	case 0:
+		return false, nil
+	case 1:
+		return true, nil
+	default:
+		return false, ErrInvalidVerificationResult.Wrap("invalid canonical inference receipt boolean")
+	}
+}
+
+func (d *inferenceReceiptBinaryDecoder) readUint32() (uint32, error) {
+	if d.remaining() < 4 {
+		return 0, ErrInvalidVerificationResult.Wrap("truncated canonical inference receipt")
+	}
+	value := binary.BigEndian.Uint32(d.bz[d.pos : d.pos+4])
+	d.pos += 4
+	return value, nil
+}
+
+func (d *inferenceReceiptBinaryDecoder) readInt32() (int32, error) {
+	if d.remaining() < 4 {
+		return 0, ErrInvalidVerificationResult.Wrap("truncated canonical inference receipt")
+	}
+	var value int32
+	if err := binary.Read(bytes.NewReader(d.bz[d.pos:d.pos+4]), binary.BigEndian, &value); err != nil {
+		return 0, ErrInvalidVerificationResult.Wrap("invalid canonical inference receipt int32")
+	}
+	d.pos += 4
+	return value, nil
+}
+
+func (d *inferenceReceiptBinaryDecoder) readUint64() (uint64, error) {
+	if d.remaining() < 8 {
+		return 0, ErrInvalidVerificationResult.Wrap("truncated canonical inference receipt")
+	}
+	value := binary.BigEndian.Uint64(d.bz[d.pos : d.pos+8])
+	d.pos += 8
+	return value, nil
+}
+
+func (d *inferenceReceiptBinaryDecoder) readInt64() (int64, error) {
+	if d.remaining() < 8 {
+		return 0, ErrInvalidVerificationResult.Wrap("truncated canonical inference receipt")
+	}
+	var value int64
+	if err := binary.Read(bytes.NewReader(d.bz[d.pos:d.pos+8]), binary.BigEndian, &value); err != nil {
+		return 0, ErrInvalidVerificationResult.Wrap("invalid canonical inference receipt int64")
+	}
+	d.pos += 8
+	return value, nil
+}
+
+func (d *inferenceReceiptBinaryDecoder) readBytes(max int) ([]byte, error) {
+	length, err := d.readUint64()
 	if err != nil {
 		return nil, err
 	}
-	h := sha256.New()
-	_, _ = h.Write([]byte(InferenceReceiptContextDomain))
-	_, _ = h.Write(bz)
-	return h.Sum(nil), nil
+	maxUint, err := canonicalIntToUint64(max)
+	if err != nil {
+		return nil, err
+	}
+	if length > maxUint {
+		return nil, ErrInvalidVerificationResult.Wrap("canonical inference receipt field exceeds limit")
+	}
+	lengthInt, err := canonicalUint64ToInt(length)
+	if err != nil {
+		return nil, err
+	}
+	if lengthInt > d.remaining() {
+		return nil, ErrInvalidVerificationResult.Wrap("truncated canonical inference receipt")
+	}
+	value := append([]byte(nil), d.bz[d.pos:d.pos+lengthInt]...)
+	d.pos += lengthInt
+	return value, nil
+}
+
+func (d *inferenceReceiptBinaryDecoder) readFixedBytes(size int) ([]byte, error) {
+	value, err := d.readBytes(size)
+	if err != nil {
+		return nil, err
+	}
+	if len(value) != size {
+		return nil, ErrInvalidVerificationResult.Wrap("canonical inference receipt fixed field has invalid length")
+	}
+	return value, nil
+}
+
+func (d *inferenceReceiptBinaryDecoder) readString(max int) (string, error) {
+	value, err := d.readBytes(max)
+	if err != nil {
+		return "", err
+	}
+	if !utf8.Valid(value) {
+		return "", ErrInvalidVerificationResult.Wrap("canonical inference receipt string is not valid UTF-8")
+	}
+	return string(value), nil
+}
+
+func (d *inferenceReceiptBinaryDecoder) readReceipt(domain string, includeOutput bool, includeSignature bool) (InferenceReceipt, error) {
+	version, err := d.readUint32()
+	if err != nil {
+		return InferenceReceipt{}, err
+	}
+	receipt := InferenceReceipt{Domain: domain, Version: version}
+	if receipt.ChainID, err = d.readString(InferenceReceiptMaxString); err != nil {
+		return InferenceReceipt{}, err
+	}
+	if receipt.AccountAddress, err = d.readString(InferenceReceiptMaxString); err != nil {
+		return InferenceReceipt{}, err
+	}
+	if receipt.RequestID, err = d.readString(InferenceReceiptMaxString); err != nil {
+		return InferenceReceipt{}, err
+	}
+	scopeCount, err := d.readBoundedCount(InferenceReceiptMaxScopes, "scope count")
+	if err != nil {
+		return InferenceReceipt{}, err
+	}
+	receipt.ScopeIDs = make([]string, scopeCount)
+	for i := range receipt.ScopeIDs {
+		if receipt.ScopeIDs[i], err = d.readString(InferenceReceiptMaxString); err != nil {
+			return InferenceReceipt{}, err
+		}
+	}
+	if receipt.Nonce, err = d.readString(InferenceReceiptMaxString); err != nil {
+		return InferenceReceipt{}, err
+	}
+	if receipt.InputDigest, err = d.readFixedBytes(sha256.Size); err != nil {
+		return InferenceReceipt{}, err
+	}
+	if receipt.FeatureDigest, err = d.readFixedBytes(sha256.Size); err != nil {
+		return InferenceReceipt{}, err
+	}
+	if receipt.SchemaDigest, err = d.readFixedBytes(sha256.Size); err != nil {
+		return InferenceReceipt{}, err
+	}
+	if receipt.EvidenceLineageDigest, err = d.readFixedBytes(sha256.Size); err != nil {
+		return InferenceReceipt{}, err
+	}
+	if receipt.PipelineVersion, err = d.readString(InferenceReceiptMaxString); err != nil {
+		return InferenceReceipt{}, err
+	}
+	if receipt.ModelManifestDigest, err = d.readFixedBytes(sha256.Size); err != nil {
+		return InferenceReceipt{}, err
+	}
+	if receipt.ModelDigest, err = d.readFixedBytes(sha256.Size); err != nil {
+		return InferenceReceipt{}, err
+	}
+	if receipt.RuntimeImageDigest, err = d.readFixedBytes(sha256.Size); err != nil {
+		return InferenceReceipt{}, err
+	}
+	if receipt.RuntimeDigest, err = d.readFixedBytes(sha256.Size); err != nil {
+		return InferenceReceipt{}, err
+	}
+	if receipt.ConfigDigest, err = d.readFixedBytes(sha256.Size); err != nil {
+		return InferenceReceipt{}, err
+	}
+	if receipt.DeterminismProfile, err = d.readInferenceDeterminismProfile(); err != nil {
+		return InferenceReceipt{}, err
+	}
+	if includeOutput {
+		if receipt.Score, err = d.readUint32(); err != nil {
+			return InferenceReceipt{}, err
+		}
+		status, err := d.readString(InferenceReceiptMaxString)
+		if err != nil {
+			return InferenceReceipt{}, err
+		}
+		receipt.Status = VerificationResultStatus(status)
+		if receipt.ConfidenceMillionths, err = d.readUint32(); err != nil {
+			return InferenceReceipt{}, err
+		}
+		reasonCount, err := d.readBoundedCount(InferenceReceiptMaxReasonCodes, "reason code count")
+		if err != nil {
+			return InferenceReceipt{}, err
+		}
+		receipt.ReasonCodes = make([]ReasonCode, reasonCount)
+		for i := range receipt.ReasonCodes {
+			reason, err := d.readString(64)
+			if err != nil {
+				return InferenceReceipt{}, err
+			}
+			receipt.ReasonCodes[i] = ReasonCode(reason)
+		}
+	}
+	if receipt.IssuedHeight, err = d.readInt64(); err != nil {
+		return InferenceReceipt{}, err
+	}
+	issuedAt, err := d.readInt64()
+	if err != nil {
+		return InferenceReceipt{}, err
+	}
+	receipt.IssuedAt = time.Unix(issuedAt, 0).UTC()
+	if receipt.ExpiresHeight, err = d.readInt64(); err != nil {
+		return InferenceReceipt{}, err
+	}
+	expiresAt, err := d.readInt64()
+	if err != nil {
+		return InferenceReceipt{}, err
+	}
+	receipt.ExpiresAt = time.Unix(expiresAt, 0).UTC()
+	if receipt.SignerKeyID, err = d.readString(InferenceReceiptMaxString); err != nil {
+		return InferenceReceipt{}, err
+	}
+	if receipt.SignerFingerprint, err = d.readString(InferenceReceiptMaxString); err != nil {
+		return InferenceReceipt{}, err
+	}
+	if receipt.SignerSequence, err = d.readUint64(); err != nil {
+		return InferenceReceipt{}, err
+	}
+	if includeSignature {
+		if receipt.Signature, err = d.readFixedBytes(ed25519.SignatureSize); err != nil {
+			return InferenceReceipt{}, err
+		}
+	}
+	return receipt, nil
+}
+
+func (d *inferenceReceiptBinaryDecoder) readBoundedCount(max int, name string) (int, error) {
+	count, err := d.readUint64()
+	if err != nil {
+		return 0, err
+	}
+	maxUint, err := canonicalIntToUint64(max)
+	if err != nil {
+		return 0, err
+	}
+	if count > maxUint {
+		return 0, ErrInvalidVerificationResult.Wrapf("canonical inference receipt %s exceeds limit", name)
+	}
+	countInt, err := canonicalUint64ToInt(count)
+	if err != nil {
+		return 0, err
+	}
+	return countInt, nil
+}
+
+func canonicalIntToUint64(value int) (uint64, error) {
+	if value < 0 {
+		return 0, ErrInvalidVerificationResult.Wrap("canonical inference receipt limit is negative")
+	}
+	converted, err := strconv.ParseUint(strconv.Itoa(value), 10, 64)
+	if err != nil {
+		return 0, ErrInvalidVerificationResult.Wrap("canonical inference receipt limit exceeds uint64")
+	}
+	return converted, nil
+}
+
+func canonicalUint64ToInt(value uint64) (int, error) {
+	converted, err := strconv.Atoi(strconv.FormatUint(value, 10))
+	if err != nil {
+		return 0, ErrInvalidVerificationResult.Wrap("canonical inference receipt length exceeds platform int")
+	}
+	return converted, nil
+}
+
+func (d *inferenceReceiptBinaryDecoder) readInferenceDeterminismProfile() (InferenceDeterminismProfile, error) {
+	forceCPU, err := d.readBool()
+	if err != nil {
+		return InferenceDeterminismProfile{}, err
+	}
+	randomSeed, err := d.readInt64()
+	if err != nil {
+		return InferenceDeterminismProfile{}, err
+	}
+	deterministicOps, err := d.readBool()
+	if err != nil {
+		return InferenceDeterminismProfile{}, err
+	}
+	interOpThreads, err := d.readInt32()
+	if err != nil {
+		return InferenceDeterminismProfile{}, err
+	}
+	intraOpThreads, err := d.readInt32()
+	if err != nil {
+		return InferenceDeterminismProfile{}, err
+	}
+	disableGPU, err := d.readBool()
+	if err != nil {
+		return InferenceDeterminismProfile{}, err
+	}
+	return InferenceDeterminismProfile{
+		ForceCPU:         forceCPU,
+		RandomSeed:       randomSeed,
+		DeterministicOps: deterministicOps,
+		InterOpThreads:   interOpThreads,
+		IntraOpThreads:   intraOpThreads,
+		DisableGPU:       disableGPU,
+	}, nil
 }
 
 // Sign signs the canonical receipt bytes with an Ed25519 private key.
@@ -448,9 +773,15 @@ func (r InferenceReceipt) validate(requireSignature bool) error {
 		if len(value) > InferenceReceiptMaxString {
 			return ErrInvalidVerificationResult.Wrapf("inference receipt %s exceeds %d bytes", name, InferenceReceiptMaxString)
 		}
+		if !utf8.ValidString(value) {
+			return ErrInvalidVerificationResult.Wrapf("inference receipt %s is not valid UTF-8", name)
+		}
 	}
 	if _, err := hex.DecodeString(r.SignerFingerprint); err != nil || len(r.SignerFingerprint) != sha256.Size*2 {
 		return ErrInvalidSignerKey.Wrap("signer fingerprint must be a SHA-256 hex digest")
+	}
+	if r.SignerFingerprint != strings.ToLower(r.SignerFingerprint) {
+		return ErrInvalidSignerKey.Wrap("signer fingerprint must be lowercase canonical hex")
 	}
 	if len(r.ScopeIDs) == 0 || len(r.ScopeIDs) > InferenceReceiptMaxScopes {
 		return ErrInvalidVerificationResult.Wrap("invalid inference receipt scope count")
@@ -458,6 +789,9 @@ func (r InferenceReceipt) validate(requireSignature bool) error {
 	for i, scopeID := range r.ScopeIDs {
 		if scopeID == "" || len(scopeID) > InferenceReceiptMaxString {
 			return ErrInvalidVerificationResult.Wrap("invalid inference receipt scope id")
+		}
+		if !utf8.ValidString(scopeID) {
+			return ErrInvalidVerificationResult.Wrap("inference receipt scope id is not valid UTF-8")
 		}
 		if i > 0 && scopeID <= r.ScopeIDs[i-1] {
 			return ErrInvalidVerificationResult.Wrap("inference receipt scope ids must be strictly sorted")
@@ -500,6 +834,9 @@ func (r InferenceReceipt) validate(requireSignature bool) error {
 		if code == "" || len(code) > 64 {
 			return ErrInvalidVerificationResult.Wrap("invalid inference receipt reason code")
 		}
+		if !utf8.ValidString(string(code)) {
+			return ErrInvalidVerificationResult.Wrap("inference receipt reason code is not valid UTF-8")
+		}
 		if !IsCanonicalInferenceReceiptReasonCode(code) {
 			return ErrInvalidVerificationResult.Wrap("non-canonical inference receipt reason code")
 		}
@@ -515,6 +852,9 @@ func (r InferenceReceipt) validate(requireSignature bool) error {
 	}
 	if r.IssuedAt.IsZero() || r.ExpiresAt.IsZero() || !r.ExpiresAt.After(r.IssuedAt) {
 		return ErrInvalidTimestamp.Wrap("invalid inference receipt time bounds")
+	}
+	if r.IssuedAt.Nanosecond() != 0 || r.ExpiresAt.Nanosecond() != 0 {
+		return ErrInvalidTimestamp.Wrap("inference receipt timestamps must use whole UTC seconds")
 	}
 	if r.SignerSequence == 0 {
 		return ErrInvalidSignerKey.Wrap("signer sequence is required")

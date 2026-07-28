@@ -16,9 +16,14 @@ const (
 
 type inferenceReceiptBuffer struct {
 	mu              sync.Mutex
-	resultsByHeight map[int64]map[string]types.VerificationResult
+	resultsByHeight map[int64]map[string]stagedInferenceReceipt
 	replayByContext map[string]inferenceReceiptReplayEntry
 	replayByNonce   map[string]string
+}
+
+type stagedInferenceReceipt struct {
+	Result       types.VerificationResult
+	ReceiptBytes []byte
 }
 
 type inferenceReceiptReplayEntry struct {
@@ -35,13 +40,13 @@ type inferenceReceiptBufferInsertResult struct {
 
 func newInferenceReceiptBuffer() *inferenceReceiptBuffer {
 	return &inferenceReceiptBuffer{
-		resultsByHeight: make(map[int64]map[string]types.VerificationResult),
+		resultsByHeight: make(map[int64]map[string]stagedInferenceReceipt),
 		replayByContext: make(map[string]inferenceReceiptReplayEntry),
 		replayByNonce:   make(map[string]string),
 	}
 }
 
-func (b *inferenceReceiptBuffer) insert(height int64, result types.VerificationResult, replay inferenceReceiptReplayCheck) (inferenceReceiptBufferInsertResult, error) {
+func (b *inferenceReceiptBuffer) insert(height int64, result types.VerificationResult, receiptBytes []byte, replay inferenceReceiptReplayCheck) (inferenceReceiptBufferInsertResult, error) {
 	if b == nil {
 		return inferenceReceiptBufferInsertResult{}, types.ErrInvalidVerificationResult.Wrap("inference receipt buffer is not configured")
 	}
@@ -50,6 +55,9 @@ func (b *inferenceReceiptBuffer) insert(height int64, result types.VerificationR
 	}
 	if err := result.Validate(); err != nil {
 		return inferenceReceiptBufferInsertResult{}, err
+	}
+	if len(receiptBytes) == 0 || len(receiptBytes) > types.InferenceReceiptMaxSignedBytes {
+		return inferenceReceiptBufferInsertResult{}, types.ErrInvalidVerificationResult.Wrap("canonical inference receipt bytes are required")
 	}
 
 	b.mu.Lock()
@@ -66,7 +74,7 @@ func (b *inferenceReceiptBuffer) insert(height int64, result types.VerificationR
 		if nonceContext := b.replayByNonce[replay.NonceDigest]; nonceContext != "" && nonceContext != replay.ContextDigest {
 			return inferenceReceiptBufferInsertResult{}, types.ErrInvalidVerificationResult.Wrap("inference receipt nonce replay changed context")
 		}
-		if err := b.insertResultLocked(height, result, true); err != nil {
+		if err := b.insertResultLocked(height, result, receiptBytes, true); err != nil {
 			return inferenceReceiptBufferInsertResult{}, err
 		}
 		return inferenceReceiptBufferInsertResult{ExactReplay: true}, nil
@@ -74,7 +82,7 @@ func (b *inferenceReceiptBuffer) insert(height int64, result types.VerificationR
 	if existingContext := b.replayByNonce[replay.NonceDigest]; existingContext != "" {
 		return inferenceReceiptBufferInsertResult{}, types.ErrInvalidVerificationResult.Wrap("inference receipt nonce replay changed context")
 	}
-	if err := b.insertResultLocked(height, result, false); err != nil {
+	if err := b.insertResultLocked(height, result, receiptBytes, false); err != nil {
 		return inferenceReceiptBufferInsertResult{}, err
 	}
 	b.replayByContext[replay.ContextDigest] = inferenceReceiptReplayEntry{
@@ -89,7 +97,7 @@ func (b *inferenceReceiptBuffer) insert(height int64, result types.VerificationR
 	return inferenceReceiptBufferInsertResult{}, nil
 }
 
-func (b *inferenceReceiptBuffer) stageResult(height int64, result types.VerificationResult) error {
+func (b *inferenceReceiptBuffer) stageResult(height int64, result types.VerificationResult, receiptBytes []byte) error {
 	if b == nil {
 		return types.ErrInvalidVerificationResult.Wrap("inference receipt buffer is not configured")
 	}
@@ -99,20 +107,23 @@ func (b *inferenceReceiptBuffer) stageResult(height int64, result types.Verifica
 	if err := result.Validate(); err != nil {
 		return err
 	}
+	if len(receiptBytes) == 0 || len(receiptBytes) > types.InferenceReceiptMaxSignedBytes {
+		return types.ErrInvalidVerificationResult.Wrap("canonical inference receipt bytes are required")
+	}
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	b.pruneLocked(height)
-	return b.insertResultLocked(height, result, false)
+	return b.insertResultLocked(height, result, receiptBytes, false)
 }
 
-func (b *inferenceReceiptBuffer) insertResultLocked(height int64, result types.VerificationResult, exactReplay bool) error {
+func (b *inferenceReceiptBuffer) insertResultLocked(height int64, result types.VerificationResult, receiptBytes []byte, exactReplay bool) error {
 	results := b.resultsByHeight[height]
 	if results == nil {
-		results = make(map[string]types.VerificationResult)
+		results = make(map[string]stagedInferenceReceipt)
 		b.resultsByHeight[height] = results
 	}
 	if existing, ok := results[result.RequestID]; ok {
-		if !inferenceReplayResultsMatch(existing, result) {
+		if !inferenceReplayResultsMatch(existing.Result, result) || !bytes.Equal(existing.ReceiptBytes, receiptBytes) {
 			return types.ErrInvalidVerificationResult.Wrap("inference receipt exact replay staged result mismatch")
 		}
 		return nil
@@ -123,13 +134,16 @@ func (b *inferenceReceiptBuffer) insertResultLocked(height int64, result types.V
 	if len(results) >= MaxVoteExtensionResults {
 		return types.ErrInvalidVerificationResult.Wrap("pre-consensus result limit exceeded")
 	}
-	results[result.RequestID] = cloneVerificationResult(result)
+	results[result.RequestID] = stagedInferenceReceipt{
+		Result:       cloneVerificationResult(result),
+		ReceiptBytes: bytes.Clone(receiptBytes),
+	}
 	return nil
 }
 
-func (b *inferenceReceiptBuffer) snapshot(height int64, currentHeight int64) []types.VerificationResult {
+func (b *inferenceReceiptBuffer) snapshot(height int64, currentHeight int64) []stagedInferenceReceipt {
 	if b == nil || height <= 0 {
-		return []types.VerificationResult{}
+		return []stagedInferenceReceipt{}
 	}
 	b.mu.Lock()
 	defer b.mu.Unlock()
@@ -137,15 +151,24 @@ func (b *inferenceReceiptBuffer) snapshot(height int64, currentHeight int64) []t
 
 	results := b.resultsByHeight[height]
 	if len(results) == 0 {
-		return []types.VerificationResult{}
+		return []stagedInferenceReceipt{}
 	}
-	out := make([]types.VerificationResult, 0, len(results))
-	for _, result := range results {
-		out = append(out, cloneVerificationResult(result))
+	out := make([]stagedInferenceReceipt, 0, len(results))
+	for _, staged := range results {
+		out = append(out, cloneStagedInferenceReceipt(staged))
 	}
 	sort.Slice(out, func(i, j int) bool {
-		return out[i].RequestID < out[j].RequestID
+		return out[i].Result.RequestID < out[j].Result.RequestID
 	})
+	return out
+}
+
+func (b *inferenceReceiptBuffer) snapshotResults(height int64, currentHeight int64) []types.VerificationResult {
+	staged := b.snapshot(height, currentHeight)
+	out := make([]types.VerificationResult, 0, len(staged))
+	for _, item := range staged {
+		out = append(out, cloneVerificationResult(item.Result))
+	}
 	return out
 }
 
@@ -224,6 +247,13 @@ func cloneVerificationResult(result types.VerificationResult) types.Verification
 		}
 	}
 	return clone
+}
+
+func cloneStagedInferenceReceipt(staged stagedInferenceReceipt) stagedInferenceReceipt {
+	return stagedInferenceReceipt{
+		Result:       cloneVerificationResult(staged.Result),
+		ReceiptBytes: bytes.Clone(staged.ReceiptBytes),
+	}
 }
 
 func cloneScopeVerificationResults(results []types.ScopeVerificationResult) []types.ScopeVerificationResult {

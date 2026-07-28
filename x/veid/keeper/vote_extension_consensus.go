@@ -21,18 +21,32 @@ import (
 
 const (
 	// VoteExtensionVersion is the active canonical protobuf carrier version.
-	// Version 1 has not shipped on a release boundary; receipt_digest is part of
-	// this unreleased v1 schema rather than a v2 transition.
+	// Version 1 has not shipped on a release boundary; the canonical receipt
+	// digest and bytes are part of this unreleased v1 schema rather than v2.
 	VoteExtensionVersion uint32 = 1
 	// ActiveVoteExtensionCarrierVersion is exported for app wiring and tests.
 	ActiveVoteExtensionCarrierVersion = VoteExtensionVersion
 
-	MaxVoteExtensionBytes       = 32 * 1024
 	MaxVoteExtensionResults     = 10
+	MaxVoteExtensionChainID     = 128
+	MaxVoteExtensionBlockHash   = 64
 	MaxVoteExtensionRequestID   = 128
+	MaxVoteExtensionAccountID   = 128
 	MaxVoteExtensionModelID     = 128
 	MaxVoteExtensionReasonCodes = 16
-	noActivePipelineVersion     = "none"
+
+	// maxVoteExtensionResultWireBytes is the exact protobuf v1 upper bound for
+	// one validated result: three 128-byte strings, bounded scalar/status/hash
+	// fields, sixteen 64-byte reason codes, and one maximum canonical receipt.
+	maxVoteExtensionResultWireBytes = 9_757
+	// maxVoteExtensionHeaderWireBytes bounds the version, chain, height, block,
+	// pipeline, runtime, and model fields before repeated result envelopes.
+	maxVoteExtensionHeaderWireBytes = 409
+	// MaxVoteExtensionBytes is the smallest documented deterministic bound that
+	// admits MaxVoteExtensionResults at every public field maximum. Each result
+	// needs a one-byte field tag and a two-byte embedded-message length prefix.
+	MaxVoteExtensionBytes   = maxVoteExtensionHeaderWireBytes + (MaxVoteExtensionResults * (maxVoteExtensionResultWireBytes + 3))
+	noActivePipelineVersion = "none"
 )
 
 // VoteExtensionExpectations binds a bundle to deterministic consensus state.
@@ -88,6 +102,9 @@ func MarshalVoteExtensionBundle(bundle *veidv1.VEIDVoteExtension) ([]byte, error
 	if bundle == nil {
 		return nil, errors.New("vote extension bundle is nil")
 	}
+	if bundle.Size() > MaxVoteExtensionBytes {
+		return nil, fmt.Errorf("vote extension exceeds %d bytes", MaxVoteExtensionBytes)
+	}
 	bz, err := proto.Marshal(bundle)
 	if err != nil {
 		return nil, err
@@ -138,13 +155,13 @@ func ValidateVoteExtensionBundle(bundle *veidv1.VEIDVoteExtension, expected Vote
 	if bundle.Version != VoteExtensionVersion {
 		return fmt.Errorf("unsupported vote extension version %d", bundle.Version)
 	}
-	if bundle.ChainId == "" || bundle.ChainId != expected.ChainID {
+	if bundle.ChainId == "" || len(bundle.ChainId) > MaxVoteExtensionChainID || bundle.ChainId != expected.ChainID {
 		return fmt.Errorf("vote extension chain ID mismatch")
 	}
 	if bundle.Height <= 0 || bundle.Height != expected.Height {
 		return fmt.Errorf("vote extension height mismatch: got %d expected %d", bundle.Height, expected.Height)
 	}
-	if len(bundle.BlockHash) == 0 || (len(expected.BlockHash) > 0 && !bytes.Equal(bundle.BlockHash, expected.BlockHash)) {
+	if len(bundle.BlockHash) == 0 || len(bundle.BlockHash) > MaxVoteExtensionBlockHash || (len(expected.BlockHash) > 0 && !bytes.Equal(bundle.BlockHash, expected.BlockHash)) {
 		return errors.New("vote extension block hash mismatch")
 	}
 	if len(bundle.PipelineVersion) == 0 || len(bundle.PipelineVersion) > MaxVoteExtensionModelID || bundle.PipelineVersion != expected.PipelineVersion {
@@ -161,6 +178,9 @@ func ValidateVoteExtensionBundle(bundle *veidv1.VEIDVoteExtension, expected Vote
 	}
 	if bundle.PipelineVersion == noActivePipelineVersion && len(bundle.Results) != 0 {
 		return errors.New("results require an active pipeline commitment")
+	}
+	if bundle.Size() > MaxVoteExtensionBytes {
+		return fmt.Errorf("vote extension exceeds %d bytes", MaxVoteExtensionBytes)
 	}
 
 	previousRequestID := ""
@@ -181,6 +201,9 @@ func validateVoteExtensionResult(result veidv1.VEIDVoteExtensionResult, pipeline
 	if result.RequestId == "" || len(result.RequestId) > MaxVoteExtensionRequestID {
 		return errors.New("invalid request ID")
 	}
+	if result.AccountAddress == "" || len(result.AccountAddress) > MaxVoteExtensionAccountID {
+		return errors.New("invalid account address")
+	}
 	if _, err := sdk.AccAddressFromBech32(result.AccountAddress); err != nil {
 		return errors.New("invalid account address")
 	}
@@ -199,9 +222,6 @@ func validateVoteExtensionResult(result veidv1.VEIDVoteExtensionResult, pipeline
 	}
 	if len(result.ReceiptDigest) != sha256.Size {
 		return errors.New("receipt digest must be SHA-256")
-	}
-	if len(result.ResultHash) != sha256.Size || !bytes.Equal(result.ResultHash, ComputeVoteExtensionResultHash(result)) {
-		return errors.New("result hash mismatch")
 	}
 	if len(result.ReasonCodes) > MaxVoteExtensionReasonCodes {
 		return errors.New("too many reason codes")
@@ -222,14 +242,53 @@ func validateVoteExtensionResult(result veidv1.VEIDVoteExtensionResult, pipeline
 	if err := types.ValidateInferenceReceiptResultSemantics(status, result.Score, reasonCodes); err != nil {
 		return err
 	}
+	if len(result.ReceiptBytes) == 0 || len(result.ReceiptBytes) > types.InferenceReceiptMaxSignedBytes {
+		return errors.New("canonical receipt bytes are required")
+	}
+	receipt, err := types.DecodeCanonicalSignedInferenceReceipt(result.ReceiptBytes)
+	if err != nil {
+		return err
+	}
+	receiptDigest, err := receipt.Digest()
+	if err != nil {
+		return err
+	}
+	if !bytes.Equal(receiptDigest, result.ReceiptDigest) {
+		return errors.New("receipt digest mismatch")
+	}
+	if err := validateVoteExtensionResultReceipt(result, receipt); err != nil {
+		return err
+	}
+	if len(result.ResultHash) != sha256.Size || !bytes.Equal(result.ResultHash, ComputeVoteExtensionResultHash(result)) {
+		return errors.New("result hash mismatch")
+	}
+	return nil
+}
+
+func validateVoteExtensionResultReceipt(result veidv1.VEIDVoteExtensionResult, receipt types.InferenceReceipt) error {
+	if result.RequestId != receipt.RequestID ||
+		result.AccountAddress != receipt.AccountAddress ||
+		result.Score != receipt.Score ||
+		result.Status != string(receipt.Status) ||
+		result.ModelVersion != receipt.PipelineVersion ||
+		!bytes.Equal(result.InputHash, receipt.InputDigest) {
+		return errors.New("receipt/result binding mismatch")
+	}
+	if len(result.ReasonCodes) != len(receipt.ReasonCodes) {
+		return errors.New("receipt/result reason code mismatch")
+	}
+	for i, reason := range result.ReasonCodes {
+		if reason != string(receipt.ReasonCodes[i]) {
+			return errors.New("receipt/result reason code mismatch")
+		}
+	}
 	return nil
 }
 
 // AggregateVoteExtensions deterministically selects only results backed by
 // strictly more than two thirds of total validator voting power. The carrier
-// includes only receipt_digest; validator extension signatures plus quorum over
-// an identical result hash authenticate the sidecar receipt without carrying
-// full receipt bytes in consensus.
+// includes the canonical receipt bytes, and the result hash commits those bytes
+// so quorum equality covers the independently verifiable signed evidence.
 func AggregateVoteExtensions(commit abci.ExtendedCommitInfo, expected VoteExtensionExpectations) (veidv1.VEIDConsensusAggregate, error) {
 	if len(commit.Votes) == 0 {
 		return veidv1.VEIDConsensusAggregate{}, errors.New("extended commit has no votes")
