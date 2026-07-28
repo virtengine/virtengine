@@ -377,7 +377,7 @@ const fetchOrderDetail = async (orderId: string, ownerAddress: string): Promise<
     ''
   );
 
-  let providerName = providerAddress;
+  let providerName: string;
   try {
     const providerPayload = await fetchChainJsonWithFallback<Record<string, unknown>>(
       PROVIDER_ENDPOINTS(providerAddress)
