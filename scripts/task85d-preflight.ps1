@@ -243,7 +243,7 @@ else {
         $drive = $Matches[1].ToLowerInvariant()
         $relativePath = $Matches[2].Replace('\', '/')
         $linuxPath = "/mnt/$drive$relativePath"
-        & wsl.exe --cd $linuxPath bash -lc 'mkdir -p .cache/go-build-wsl && GOCACHE="$(pwd)/.cache/go-build-wsl" go test -race ./tests/integration/veid ./x/veid/keeper -run "TestTask85D" -count=1'
+        & wsl.exe --cd $linuxPath bash -lc 'mkdir -p .cache/go-build-wsl && GOCACHE="$(pwd)/.cache/go-build-wsl" GOWORK=off GOFLAGS=-mod=mod CGO_ENABLED=1 go test -race ./tests/integration/veid ./x/veid/keeper -run "TestTask85D" -count=1'
     }
 }
 
