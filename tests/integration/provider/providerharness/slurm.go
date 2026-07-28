@@ -383,7 +383,7 @@ func (h *SLURMClusterHarness) ExecInPod(
 		return "Slurmctld(primary) at " + podName + " is UP", nil
 	case len(command) >= 5 && command[0] == "sinfo" && command[1] == "-N" && command[2] == "-h" && command[3] == "-o":
 		return h.renderSinfo(namespace, releaseName, command[4]), nil
-	case len(command) >= 5 && command[0] == "sinfo" && command[1] == "-n" && command[3] == "-h" && command[4] == "-o":
+	case len(command) >= 6 && command[0] == "sinfo" && command[1] == "-n" && command[3] == "-h" && command[4] == "-o":
 		nodeName := command[2]
 		return h.renderSingleNodeState(namespace, releaseName, nodeName, command[5]), nil
 	case len(command) >= 4 && command[0] == slurmControlCommand && command[1] == "update":
