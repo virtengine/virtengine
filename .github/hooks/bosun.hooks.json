@@ -4,9 +4,9 @@
     {
       "type": "command",
       "command": [
-        "node",
-        "-e",
-        "process.exit(0)"
+        "sh",
+        "-c",
+        "exit 0"
       ],
       "timeout": 60
     }
@@ -15,9 +15,9 @@
     {
       "type": "command",
       "command": [
-        "node",
-        "-e",
-        "process.exit(0)"
+        "sh",
+        "-c",
+        "exit 0"
       ],
       "timeout": 60
     }
@@ -27,9 +27,9 @@
       {
         "type": "command",
         "command": [
-          "node",
-          "-e",
-          "process.exit(0)"
+          "sh",
+          "-c",
+          "exit 0"
         ],
         "timeout": 300
       }
@@ -40,9 +40,9 @@
       {
         "type": "command",
         "command": [
-          "node",
-          "-e",
-          "process.exit(0)"
+          "sh",
+          "-c",
+          "exit 0"
         ],
         "timeout": 120
       }
