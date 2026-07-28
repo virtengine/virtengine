@@ -25,6 +25,23 @@ helm version  # >= 3.12
 argocd version
 ```
 
+### CI Enforcement
+
+The `Infrastructure` GitHub Actions workflow runs before infrastructure
+security, plan, apply, and drift jobs. Its `validate` job installs Node 20 and
+checksum-pinned kubectl 1.29.0, then runs:
+
+```bash
+node scripts/task85c-validate-kubernetes.mjs
+```
+
+The gate triggers on `infra/**` (including this deployment guide), `deploy/**`,
+`scripts/task85c-validate-kubernetes.mjs`,
+`docs/documentation/INFRA-001-IMPLEMENTATION-SUMMARY.md`, focused Task 85C
+ADR/completion/recovery docs, and the infrastructure workflow itself. The
+validation job uses only read access and does not require AWS, ArgoCD, or other
+deployment credentials.
+
 ### AWS Permissions
 
 The deploying IAM user/role needs:
@@ -104,15 +121,33 @@ kubectl apply -f infra/argocd/projects/virtengine-project.yaml
 kubectl apply -f infra/argocd/apps/app-of-apps.yaml
 ```
 
-### 5. Install Argo Rollouts
+### 5. Render and Apply Canonical Kubernetes
+
+`deploy/kubernetes/overlays/prod` is the canonical production application
+topology. The `infra/kubernetes/overlays/prod` entry point is retained only as a
+compatibility shim for older GitOps wiring and must render byte-equivalent
+output to the canonical deploy overlay.
+
+Do not apply `infra/rollouts/` as a directory. That directory is not an
+application topology source. `infra/rollouts/rollback-config.yaml` may be
+applied only by operators who intentionally run Argo Rollouts AnalysisTemplate
+policy for out-of-band health analysis; it does not replace the StatefulSet
+topology in the canonical production overlay. Never use a recursive or
+directory-wide apply for `infra/rollouts`.
 
 ```bash
-# Install Argo Rollouts
-kubectl create namespace argo-rollouts
-kubectl apply -n argo-rollouts -f https://github.com/argoproj/argo-rollouts/releases/latest/download/install.yaml
+# Render canonical production manifests
+kubectl kustomize --load-restrictor=LoadRestrictionsNone \
+  deploy/kubernetes/overlays/prod > /tmp/virtengine-prod.yaml
 
-# Apply rollout configurations
-kubectl apply -f infra/rollouts/
+# Optional compatibility check for legacy infra entry points
+kubectl kustomize --load-restrictor=LoadRestrictionsNone \
+  infra/kubernetes/overlays/prod > /tmp/virtengine-prod-infra-shim.yaml
+diff -u /tmp/virtengine-prod.yaml /tmp/virtengine-prod-infra-shim.yaml
+
+# Review and apply only the canonical Kustomize entry point
+kubectl diff -k deploy/kubernetes/overlays/prod
+kubectl apply -k deploy/kubernetes/overlays/prod
 ```
 
 ### 6. Configure External Secrets
@@ -125,9 +160,13 @@ helm install external-secrets external-secrets/external-secrets \
   --create-namespace \
   --set serviceAccount.annotations."eks\.amazonaws\.com/role-arn"=$(terraform output -raw external_secrets_role_arn)
 
-# Apply secret store configurations
-kubectl apply -f infra/kubernetes/base/external-secrets.yaml
+# Verify the canonical production render contains the expected ExternalSecret resources
+kubectl get externalsecrets -n virtengine
 ```
+
+External Secrets resources are owned by the canonical deploy overlay and
+environment-specific patches. Do not use the removed legacy external-secrets
+file from the infra compatibility tree.
 
 ## Environment Promotion
 
@@ -141,50 +180,70 @@ kubectl apply -f infra/kubernetes/base/external-secrets.yaml
 ### Staging → Production
 
 1. Create release tag (e.g., `v1.0.0`)
-2. Build production images
-3. Create PR to update production image tags
+2. Build production images and publish immutable SHA-256 digests
+3. Create PR to promote only digest-pinned image references in the canonical
+   deploy tree
 4. Manual approval required
-5. ArgoCD syncs with manual promotion
-6. Blue/green deployment activates
+5. Render `deploy/kubernetes/overlays/prod` and verify the infra compatibility
+   shim still renders identically
+6. ArgoCD or the release operator applies
+  `deploy/kubernetes/overlays/prod` as the canonical Kustomize entry point
+7. Observe StatefulSet rolling updates and roll back failed revisions
 
-## Blue/Green Deployment Process
+## Production Rolling Update Process
 
-### Automatic Promotion
+### Digest Promotion
 
-For services with `autoPromotionEnabled: true`:
+Production image promotion is a manifest change, not a mutable tag retarget:
 
-1. New ReplicaSet deployed as preview
-2. Pre-promotion analysis runs
-3. If healthy for 5 minutes, auto-promotes
-4. Old ReplicaSet scaled down after delay
+1. Build and sign the release image.
+2. Resolve the registry digest.
+3. Replace the matching `image:` value with `name@sha256:<digest>` in the
+   canonical deploy tree.
+4. Run `node scripts/task85c-validate-kubernetes.mjs`.
+   CI runs the same validator with checksum-pinned kubectl before downstream
+   infrastructure security, plan, apply, or drift jobs.
+5. After approval, run
+  `kubectl apply -k deploy/kubernetes/overlays/prod` (or configure ArgoCD with
+  that exact Kustomize path).
 
-### Manual Promotion
+### Observe StatefulSets
 
-For production validators:
+Production chain and provider workloads are StatefulSets:
 
 ```bash
-# Check rollout status
-kubectl argo rollouts get rollout virtengine-node -n virtengine
+# Validator: exactly one remote-signer validator replica
+kubectl rollout status statefulset/virtengine-validator -n virtengine --timeout=15m
+kubectl get pods -n virtengine -l app=virtengine-validator -o wide
 
-# Promote manually after verification
-kubectl argo rollouts promote virtengine-node -n virtengine
+# Sentry/full nodes
+kubectl rollout status statefulset/virtengine-node -n virtengine --timeout=30m
+kubectl get pods -n virtengine -l app=virtengine-node -o wide
 
-# Or abort if issues found
-kubectl argo rollouts abort virtengine-node -n virtengine
+# Provider daemon HA replicas
+kubectl rollout status statefulset/provider-daemon -n virtengine --timeout=30m
+kubectl get pods -n virtengine -l app=provider-daemon -o wide
 ```
 
 ### Rollback
 
 ```bash
-# Automatic rollback (analysis failure)
-# Rollouts automatically rolls back if analysis fails
+# Undo the previous StatefulSet controller revision
+kubectl rollout undo statefulset/virtengine-node -n virtengine
+kubectl rollout undo statefulset/provider-daemon -n virtengine
 
 # Manual rollback to previous version
-kubectl argo rollouts undo virtengine-node -n virtengine
+kubectl rollout status statefulset/virtengine-node -n virtengine --timeout=30m
+kubectl rollout status statefulset/provider-daemon -n virtengine --timeout=30m
 
 # Rollback to specific revision
-kubectl argo rollouts undo virtengine-node --to-revision=2 -n virtengine
+kubectl rollout undo statefulset/virtengine-node --to-revision=2 -n virtengine
 ```
+
+For `virtengine-validator`, roll back only after confirming the remote signer,
+signer epoch, fencing token, and validator key fingerprint are consistent with
+the target revision. The Kubernetes manifest rollback does not roll back the
+independent TMKMS/HSM custody boundary.
 
 ## Monitoring Deployments
 
@@ -196,20 +255,14 @@ kubectl port-forward svc/argocd-server -n argocd 8080:443
 # Open https://localhost:8080
 ```
 
-### Argo Rollouts Dashboard
-
-```bash
-kubectl argo rollouts dashboard
-# Open http://localhost:3100
-```
-
 ### Prometheus Metrics
 
 Key deployment metrics:
 - `argocd_app_sync_status`
-- `rollout_info`
-- `rollout_phase`
-- `analysis_run_metric_*`
+- `kube_statefulset_status_replicas_ready`
+- `kube_statefulset_status_observed_generation`
+- `kube_pod_container_status_restarts_total`
+- `kube_pod_status_ready`
 
 ## Troubleshooting
 
@@ -229,17 +282,20 @@ argocd app refresh virtengine-node-prod
 argocd app refresh virtengine-node-prod --hard
 ```
 
-### Rollout Stuck
+### StatefulSet Rolling Update Stuck
 
 ```bash
-# Get rollout details
-kubectl argo rollouts get rollout virtengine-node -n virtengine -w
+# Get StatefulSet details
+kubectl describe statefulset virtengine-node -n virtengine
+kubectl describe statefulset provider-daemon -n virtengine
 
-# Check analysis runs
-kubectl get analysisruns -n virtengine
+# Check pods and events
+kubectl get pods -n virtengine -o wide
+kubectl get events -n virtengine --sort-by=.lastTimestamp
 
-# View analysis logs
-kubectl logs -l app.kubernetes.io/name=argo-rollouts -n argo-rollouts
+# Inspect current and previous container logs
+kubectl logs -n virtengine statefulset/virtengine-node --tail=200
+kubectl logs -n virtengine statefulset/provider-daemon --tail=200
 ```
 
 ### Terraform State Lock

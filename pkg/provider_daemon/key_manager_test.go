@@ -3,7 +3,10 @@ package provider_daemon
 import (
 	"crypto/ed25519"
 	"crypto/rand"
+	"encoding/base64"
 	"encoding/hex"
+	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -42,6 +45,7 @@ func TestKeyManagerUnlockLock(t *testing.T) {
 func TestKeyManagerUnlockFileStorageRequiresPassphrase(t *testing.T) {
 	config := DefaultKeyManagerConfig()
 	config.StorageType = KeyStorageTypeFile
+	config.KeyDir = t.TempDir()
 	km, err := NewKeyManager(config)
 	require.NoError(t, err)
 
@@ -54,6 +58,112 @@ func TestKeyManagerUnlockFileStorageRequiresPassphrase(t *testing.T) {
 	err = km.Unlock("test-passphrase")
 	require.NoError(t, err)
 	assert.False(t, km.IsLocked())
+}
+
+func TestFileKeyManagerPersistsEncryptedIdentityAcrossRestartAndRotation(t *testing.T) {
+	keyDir := t.TempDir()
+	config := DefaultKeyManagerConfig()
+	config.StorageType = KeyStorageTypeFile
+	config.KeyDir = keyDir
+	config.KeyRotationDays = 0
+
+	first, err := NewKeyManager(config)
+	require.NoError(t, err)
+	require.NoError(t, first.Unlock("correct horse battery staple"))
+	initial, err := first.GenerateKey("provider1")
+	require.NoError(t, err)
+	initialFingerprint, err := first.ActiveKeyFingerprint()
+	require.NoError(t, err)
+	storePath := filepath.Join(keyDir, fileKeyStoreName)
+	stored, err := os.ReadFile(storePath)
+	require.NoError(t, err)
+	require.NotContains(t, string(stored), initial.PublicKey)
+	require.NotContains(t, string(stored), "provider1")
+	first.Lock()
+
+	wrong, err := NewKeyManager(config)
+	require.NoError(t, err)
+	require.ErrorIs(t, wrong.Unlock("wrong passphrase"), ErrInvalidPassphrase)
+
+	reopened, err := NewKeyManager(config)
+	require.NoError(t, err)
+	require.NoError(t, reopened.Unlock("correct horse battery staple"))
+	restored, err := reopened.GetActiveKey()
+	require.NoError(t, err)
+	require.Equal(t, initial.KeyID, restored.KeyID)
+	restoredFingerprint, err := reopened.ActiveKeyFingerprint()
+	require.NoError(t, err)
+	require.Equal(t, initialFingerprint, restoredFingerprint)
+	signature, err := reopened.Sign([]byte("restart continuity"))
+	require.NoError(t, err)
+	require.NoError(t, signature.Verify([]byte("restart continuity")))
+
+	rotated, rotation, err := reopened.RotateKey("provider1")
+	require.NoError(t, err)
+	require.Equal(t, initial.KeyID, rotation.OldKeyID)
+	reopened.Lock()
+
+	afterRotation, err := NewKeyManager(config)
+	require.NoError(t, err)
+	require.NoError(t, afterRotation.Unlock("correct horse battery staple"))
+	active, err := afterRotation.GetActiveKey()
+	require.NoError(t, err)
+	require.Equal(t, rotated.KeyID, active.KeyID)
+	old, err := afterRotation.GetKey(initial.KeyID)
+	require.NoError(t, err)
+	require.Equal(t, keyStatusRotated, old.Status)
+}
+
+func TestFileKeyManagerRejectsMetadataTamper(t *testing.T) {
+	keyDir := t.TempDir()
+	config := DefaultKeyManagerConfig()
+	config.StorageType = KeyStorageTypeFile
+	config.KeyDir = keyDir
+	km, err := NewKeyManager(config)
+	require.NoError(t, err)
+	require.NoError(t, km.Unlock("integrity passphrase"))
+	_, err = km.GenerateKey("provider1")
+	require.NoError(t, err)
+	km.Lock()
+
+	path := filepath.Join(keyDir, fileKeyStoreName)
+	data, err := os.ReadFile(path)
+	require.NoError(t, err)
+	for i := range data {
+		if data[i] == 'a' {
+			data[i] = 'b'
+			break
+		}
+	}
+	require.NoError(t, os.WriteFile(path, data, 0o600))
+	tampered, err := NewKeyManager(config)
+	require.NoError(t, err)
+	require.Error(t, tampered.Unlock("integrity passphrase"))
+}
+
+func TestManagedKeysFromPayloadRejectsDuplicateKeyID(t *testing.T) {
+	_, privateKey, err := ed25519.GenerateKey(rand.Reader)
+	require.NoError(t, err)
+	publicKey := privateKey[ed25519.PrivateKeySize-ed25519.PublicKeySize:]
+	keyID := generateKeyID(publicKey)
+	entry := persistedManagedKey{
+		KeyID: keyID, PublicKey: hex.EncodeToString(publicKey), Algorithm: string(HSMKeyTypeEd25519),
+		Status: keyStatusActive, ProviderAddress: "provider", PrivateKey: base64.StdEncoding.EncodeToString(privateKey),
+	}
+
+	_, err = managedKeysFromPayload(fileKeyStorePayload{Version: fileKeyStoreVersion, ActiveID: keyID, Keys: []persistedManagedKey{entry, entry}})
+	require.ErrorContains(t, err, "duplicate persisted key ID")
+}
+
+func TestKeyManagerFailsClosedForUnimplementedHardwareProfiles(t *testing.T) {
+	for _, storageType := range []KeyStorageType{KeyStorageTypeHardware, KeyStorageTypeLedger, KeyStorageTypeNonCustodial} {
+		t.Run(string(storageType), func(t *testing.T) {
+			config := DefaultKeyManagerConfig()
+			config.StorageType = storageType
+			_, err := NewKeyManager(config)
+			require.ErrorContains(t, err, "not implemented")
+		})
+	}
 }
 
 func TestKeyManagerGenerateKey(t *testing.T) {

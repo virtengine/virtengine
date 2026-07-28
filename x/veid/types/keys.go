@@ -780,6 +780,14 @@ var (
 
 	// PrefixConsensusVerificationAggregate stores the canonical aggregate bytes.
 	PrefixConsensusVerificationAggregate = []byte{0xD1}
+
+	// PrefixWebEvidenceReplay stores consumed authenticated web evidence contexts.
+	// Key: PrefixWebEvidenceReplay | full_context_digest -> attestation metadata digest
+	PrefixWebEvidenceReplay = []byte{0xD2}
+
+	// PrefixWebEvidenceReplayNonce globally locks an issuer key epoch and nonce to one context.
+	// Key: PrefixWebEvidenceReplayNonce | global_nonce_digest -> full_context_digest
+	PrefixWebEvidenceReplayNonce = []byte{0xD3}
 )
 
 // IdentityRecordKey returns the store key for an identity record

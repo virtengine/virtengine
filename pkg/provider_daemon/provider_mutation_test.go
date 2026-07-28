@@ -31,6 +31,8 @@ import (
 	depositv1 "github.com/virtengine/virtengine/sdk/go/node/types/deposit/v1"
 )
 
+const mutationTestChainID = "chain"
+
 type mutationChainFake struct {
 	mu             sync.Mutex
 	accountNumber  uint64
@@ -127,6 +129,7 @@ func newMutationSubmitterForTest(t *testing.T, chain *mutationChainFake, queuePa
 	cfg.FinalityBlocks = 2
 	cfg.RetryBackoff = time.Millisecond
 	cfg.MaxRetryBackoff = 2 * time.Millisecond
+	cfg.Production = false
 	submitter, err := NewProviderMutationSubmitter(cfg, keyManager)
 	require.NoError(t, err)
 	require.NoError(t, submitter.Start(context.Background()))
@@ -238,9 +241,9 @@ func TestProviderMutationSubmitterSignedTxContractEveryRegisteredKind(t *testing
 func TestProviderMutationRegistryRejectsUnknownAndMismatchedTypes(t *testing.T) {
 	registry := NewProviderMutationRegistry()
 	address := sdk.AccAddress(make([]byte, 20)).String()
-	_, err := registry.Encode("chain", "unknown.kind", &providerv1beta4.MsgDeleteProvider{Owner: address})
+	_, err := registry.Encode(mutationTestChainID, "unknown.kind", &providerv1beta4.MsgDeleteProvider{Owner: address})
 	require.ErrorIs(t, err, ErrUnknownProviderMutation)
-	_, err = registry.Encode("chain", MutationProviderDelete, &providerv1beta4.MsgConfirmDomainVerification{Owner: address, Proof: "proof"})
+	_, err = registry.Encode(mutationTestChainID, MutationProviderDelete, &providerv1beta4.MsgConfirmDomainVerification{Owner: address, Proof: "proof"})
 	require.ErrorIs(t, err, ErrUnknownProviderMutation)
 }
 
@@ -266,9 +269,9 @@ func TestProviderMutationRegistryDeterministicMapDigest(t *testing.T) {
 		},
 	}
 
-	firstEnvelope, err := registry.Encode("chain", MutationSupportUpdateRequest, first)
+	firstEnvelope, err := registry.Encode(mutationTestChainID, MutationSupportUpdateRequest, first)
 	require.NoError(t, err)
-	secondEnvelope, err := registry.Encode("chain", MutationSupportUpdateRequest, second)
+	secondEnvelope, err := registry.Encode(mutationTestChainID, MutationSupportUpdateRequest, second)
 	require.NoError(t, err)
 	require.Equal(t, firstEnvelope.MessageDigest, secondEnvelope.MessageDigest)
 	require.Equal(t, firstEnvelope.ID, secondEnvelope.ID)
@@ -281,11 +284,11 @@ func TestProviderMutationRegistryRejectsCustomerSignedLeaseMessages(t *testing.T
 	ownerBytes[19] = 1
 	owner := sdk.AccAddress(ownerBytes).String()
 
-	_, err := registry.Encode("chain", MutationMarketCreateLease, &marketv1beta5.MsgCreateLease{
+	_, err := registry.Encode(mutationTestChainID, MutationMarketCreateLease, &marketv1beta5.MsgCreateLease{
 		BidID: marketv1.BidID{Owner: owner, Provider: address, DSeq: 1, GSeq: 1, OSeq: 1},
 	})
 	require.ErrorIs(t, err, ErrUnknownProviderMutation)
-	_, err = registry.Encode("chain", MutationMarketCloseLease, &marketv1beta5.MsgCloseLease{
+	_, err = registry.Encode(mutationTestChainID, MutationMarketCloseLease, &marketv1beta5.MsgCloseLease{
 		ID: marketv1.LeaseID{Owner: owner, Provider: address, DSeq: 1, GSeq: 1, OSeq: 1},
 	})
 	require.ErrorIs(t, err, ErrUnknownProviderMutation)
@@ -316,7 +319,7 @@ func TestProviderMutationSubmitterBuildsDecodableSignedSDKTx(t *testing.T) {
 
 func TestProviderMutationSubmitterUnavailableAndReadiness(t *testing.T) {
 	cfg := DefaultProviderMutationSubmitterConfig()
-	cfg.ChainID = "chain"
+	cfg.ChainID = mutationTestChainID
 	cfg.ProviderAddress = sdk.AccAddress(make([]byte, 20)).String()
 	_, err := NewProviderMutationSubmitter(cfg, nil)
 	require.ErrorIs(t, err, ErrProviderMutationUnavailable)
@@ -436,6 +439,49 @@ func TestFileProviderMutationStorePersistsAndReopens(t *testing.T) {
 	stored, err := reopened.Get(context.Background(), envelope.ID)
 	require.NoError(t, err)
 	require.Equal(t, envelope.IdempotencyKey, stored.IdempotencyKey)
+}
+
+func TestFileProviderMutationStoreSharedReplicasPutIfAbsentAtomically(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "queue.json")
+	first, err := NewFileProviderMutationStore(path)
+	require.NoError(t, err)
+	second, err := NewFileProviderMutationStore(path)
+	require.NoError(t, err)
+	require.NoError(t, first.Open(context.Background()))
+	require.NoError(t, second.Open(context.Background()))
+	t.Cleanup(func() {
+		_ = first.Close()
+		_ = second.Close()
+	})
+	envelope := &ProviderMutationEnvelope{
+		SchemaVersion: providerMutationSchemaVersion, ID: "mutation-shared", Kind: MutationProviderDelete,
+		TypeURL: sdk.MsgTypeURL(&providerv1beta4.MsgDeleteProvider{}), MessageDigest: strings.Repeat("a", 64),
+		Signer: "provider", IdempotencyKey: "shared-idem", State: MutationStatePending,
+		CreatedAt: time.Now().UTC(), UpdatedAt: time.Now().UTC(), NextAttemptAt: time.Now().UTC(),
+	}
+	type result struct {
+		existed bool
+		err     error
+	}
+	results := make(chan result, 2)
+	for _, store := range []*FileProviderMutationStore{first, second} {
+		go func(candidate *FileProviderMutationStore) {
+			_, existed, putErr := candidate.PutIfAbsent(context.Background(), envelope)
+			results <- result{existed: existed, err: putErr}
+		}(store)
+	}
+	winners := 0
+	for range 2 {
+		result := <-results
+		require.NoError(t, result.err)
+		if !result.existed {
+			winners++
+		}
+	}
+	require.Equal(t, 1, winners)
+	items, err := first.List(context.Background())
+	require.NoError(t, err)
+	require.Len(t, items, 1)
 }
 
 func TestProviderMutationConfirmationEvidenceRequired(t *testing.T) {

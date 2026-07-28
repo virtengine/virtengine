@@ -88,7 +88,7 @@ spec:
       - apiGroups: [""]
         resources: ["pods"]
         verbs: ["get", "list", "delete"]
-    image: litmuschaos/go-runner:latest
+    image: litmuschaos/go-runner@sha256:07bf28291ceaf95a4d052b09c571b7e17e8cf57262a74b3f39f4aa073c815cc8
     imagePullPolicy: Always
     args:
       - -c
@@ -120,7 +120,7 @@ spec:
       - apiGroups: [""]
         resources: ["pods"]
         verbs: ["get", "list"]
-    image: litmuschaos/go-runner:latest
+    image: litmuschaos/go-runner@sha256:07bf28291ceaf95a4d052b09c571b7e17e8cf57262a74b3f39f4aa073c815cc8
     imagePullPolicy: Always
     args:
       - -c
@@ -150,7 +150,7 @@ spec:
       - apiGroups: [""]
         resources: ["pods"]
         verbs: ["get", "list"]
-    image: litmuschaos/go-runner:latest
+    image: litmuschaos/go-runner@sha256:07bf28291ceaf95a4d052b09c571b7e17e8cf57262a74b3f39f4aa073c815cc8
     imagePullPolicy: Always
     args:
       - -c

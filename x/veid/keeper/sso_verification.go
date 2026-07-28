@@ -9,7 +9,6 @@
 package keeper
 
 import (
-	"crypto/ed25519"
 	"fmt"
 	"time"
 
@@ -18,15 +17,34 @@ import (
 	"github.com/virtengine/virtengine/x/veid/types"
 )
 
-// ValidateSSOAttestationSubmission validates an SSO attestation submission.
-// - Verifies attestation signature using signer key info (if available)
-// - Enforces replay protection (OIDC nonce)
-// - Emits events and audit logs consistent with keeper patterns
+// ValidateSSOAttestationSubmission validates an SSO attestation submission
+// without mutating nonce or audit state. Mutation is internal to the web
+// evidence handler after the shared issuer/account proof gate has passed.
 func (k Keeper) ValidateSSOAttestationSubmission(
 	ctx sdk.Context,
 	att *types.SSOAttestation,
-	signerKeyInfo *types.SignerKeyInfo, // may be nil if not available
+	signerKeyInfo *types.SignerKeyInfo,
 ) error {
+	if att == nil {
+		return types.ErrInvalidAttestation.Wrap("SSO attestation cannot be nil")
+	}
+	if signerKeyInfo == nil {
+		return types.ErrSignerKeyNotFound.Wrap("signer key is required for SSO attestation")
+	}
+	if !signerKeyInfo.State.CanVerify() {
+		return types.ErrInvalidSignerKey.Wrapf("signer key not valid for verification: %s", signerKeyInfo.State)
+	}
+	if signerKeyInfo.KeyID != att.Issuer.KeyID || signerKeyInfo.Fingerprint != att.Issuer.KeyFingerprint {
+		return types.ErrInvalidSignerKey.Wrap("signer key does not match attestation issuer")
+	}
+	if att.Subject.AccountAddress != att.LinkedAccountAddress {
+		return types.ErrInvalidAttestation.Wrap("SSO subject account does not match linked account")
+	}
+	expectedSubjectID := fmt.Sprintf("did:virtengine:%s", att.Subject.AccountAddress)
+	if att.Subject.ID != expectedSubjectID {
+		return types.ErrInvalidAttestation.Wrap("SSO subject ID does not match account address")
+	}
+
 	// 1. Replay protection: check OIDC nonce has not been used
 	if att.OIDCNonce == "" {
 		return types.ErrInvalidAttestation.Wrap("missing OIDC nonce for replay protection")
@@ -35,33 +53,20 @@ func (k Keeper) ValidateSSOAttestationSubmission(
 	if k.IsSSONonceUsed(ctx, nonceHash) {
 		return types.ErrNonceAlreadyUsed.Wrap("OIDC nonce already used")
 	}
+	return nil
+}
 
-	// 2. Signature validation (if signerKeyInfo provided)
-	if signerKeyInfo != nil {
-		if !signerKeyInfo.State.CanVerify() {
-			return types.ErrInvalidSignerKey.Wrapf("signer key not valid for verification: %s", signerKeyInfo.State)
-		}
-		if signerKeyInfo.Fingerprint != att.Issuer.KeyFingerprint {
-			return types.ErrInvalidSignerKey.Wrap("signer key fingerprint does not match attestation issuer")
-		}
-		if signerKeyInfo.Algorithm != types.ProofTypeEd25519 {
-			return types.ErrInvalidSignerKey.Wrapf("unsupported signer key algorithm: %s", signerKeyInfo.Algorithm)
-		}
-
-		canonicalBytes, err := att.CanonicalBytes()
-		if err != nil {
-			return types.ErrInvalidAttestation.Wrapf("failed to build canonical bytes: %v", err)
-		}
-		signatureBytes, err := att.GetProofBytes()
-		if err != nil {
-			return types.ErrInvalidAttestation.Wrapf("failed to decode signature: %v", err)
-		}
-		if !ed25519.Verify(signerKeyInfo.PublicKey, canonicalBytes, signatureBytes) {
-			return types.ErrAttestationSignatureInvalid.Wrap("attestation signature invalid")
-		}
+func (k Keeper) recordSSOAttestationSubmission(
+	ctx sdk.Context,
+	att *types.SSOAttestation,
+	signerKeyInfo *types.SignerKeyInfo,
+) error {
+	if err := k.ValidateSSOAttestationSubmission(ctx, att, signerKeyInfo); err != nil {
+		return err
 	}
+	nonceHash := hashNonce(att.OIDCNonce)
 
-	// 3. Mark nonce as used (prevent replay)
+	// Mark nonce as used (prevent replay)
 	nonceRecord := types.NewSSONonceRecord(
 		nonceHash,
 		att.LinkedAccountAddress,
@@ -74,7 +79,7 @@ func (k Keeper) ValidateSSOAttestationSubmission(
 	)
 	k.SetSSONonceRecord(ctx, nonceRecord)
 
-	// 4. Emit event (pattern: EventVerificationSubmitted)
+	// Emit event (pattern: EventVerificationSubmitted)
 	if err := k.EmitVerificationSubmittedEvent(
 		ctx,
 		att.LinkedAccountAddress,
@@ -85,7 +90,7 @@ func (k Keeper) ValidateSSOAttestationSubmission(
 		return err
 	}
 
-	// 5. Write audit log (pattern: SetAuditEntry)
+	// Write audit log (pattern: SetAuditEntry)
 	details := map[string]interface{}{
 		"oidc_issuer":   att.OIDCIssuer,
 		"subject_hash":  att.SubjectHash,

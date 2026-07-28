@@ -65,8 +65,10 @@ type TensorFlowScoringConfig struct {
 	ForceCPU bool
 }
 
-// DefaultMLScoringConfig returns default ML scoring configuration
-func DefaultMLScoringConfig() MLScoringConfig {
+// DefaultDevelopmentMLScoringConfig returns an off-chain development/test ML
+// scoring configuration. It may inspect local environment variables to make
+// developer fixtures convenient, but production keeper paths never call it.
+func DefaultDevelopmentMLScoringConfig() MLScoringConfig {
 	return MLScoringConfig{
 		ModelVersion:        "v1.0.0",
 		MinScopesForScoring: 1,
@@ -77,12 +79,20 @@ func DefaultMLScoringConfig() MLScoringConfig {
 		MaxInferenceTime: 2000, // 2 seconds
 		FallbackScore:    0,
 		UseTensorFlow:    isTensorFlowEnabled(),
-		TensorFlowConfig: DefaultTensorFlowScoringConfig(),
+		TensorFlowConfig: DefaultDevelopmentTensorFlowScoringConfig(),
 	}
 }
 
-// DefaultTensorFlowScoringConfig returns default TensorFlow configuration
-func DefaultTensorFlowScoringConfig() *TensorFlowScoringConfig {
+// DefaultMLScoringConfig is retained for compatibility with legacy tests and
+// tools. Deprecated: use DefaultDevelopmentMLScoringConfig and inject the scorer
+// explicitly; consensus-critical keeper behavior consumes signed receipts only.
+func DefaultMLScoringConfig() MLScoringConfig {
+	return DefaultDevelopmentMLScoringConfig()
+}
+
+// DefaultDevelopmentTensorFlowScoringConfig returns an off-chain development
+// TensorFlow configuration. It is not a production keeper default.
+func DefaultDevelopmentTensorFlowScoringConfig() *TensorFlowScoringConfig {
 	return &TensorFlowScoringConfig{
 		ModelPath:      getEnvOrDefault("VEID_INFERENCE_MODEL_PATH", "models/trust_score"),
 		ExpectedHash:   os.Getenv("VEID_INFERENCE_MODEL_HASH"),
@@ -91,6 +101,12 @@ func DefaultTensorFlowScoringConfig() *TensorFlowScoringConfig {
 		Deterministic:  true,
 		ForceCPU:       true,
 	}
+}
+
+// DefaultTensorFlowScoringConfig is retained for compatibility with legacy
+// tests and tools. Deprecated: use DefaultDevelopmentTensorFlowScoringConfig.
+func DefaultTensorFlowScoringConfig() *TensorFlowScoringConfig {
+	return DefaultDevelopmentTensorFlowScoringConfig()
 }
 
 // isTensorFlowEnabled checks if TensorFlow scoring is enabled
@@ -486,11 +502,6 @@ func (k Keeper) ComputeIdentityScore(
 
 	// Get or create ML scorer
 	scorer := k.getMLScorer()
-	defer func() {
-		if scorer != nil {
-			_ = scorer.Close()
-		}
-	}()
 
 	// Check if scorer is healthy
 	if !scorer.IsHealthy() {
@@ -516,40 +527,17 @@ func (k Keeper) ComputeIdentityScore(
 	return output.Score, output.ModelVersion, output.ReasonCodes, output.InputHash, nil
 }
 
-// getMLScorer returns the ML scorer instance
-// Returns TensorFlow scorer when VEID_USE_TENSORFLOW=true, otherwise stub
-// Prefers sidecar mode when VEID_INFERENCE_USE_SIDECAR=true for consensus safety
-//
-// VE-205: This function implements a graceful fallback strategy:
-// 1. If TensorFlow is enabled and model is available -> use real inference
-// 2. If sidecar mode is configured -> use gRPC sidecar client
-// 3. If TensorFlow initialization fails -> fall back to stub
-// 4. Default -> use stub scorer for development/testing
+// getMLScorer returns only explicitly injected development/test scorers.
+// Production inference is consumed through signed receipts staged before
+// consensus; keeper defaults must never select consensus behavior from env.
 func (k Keeper) getMLScorer() MLScorer {
-	config := DefaultMLScoringConfig()
-
-	// Use TensorFlow scorer if enabled (VE-205)
-	// Sidecar mode is preferred for production as it provides better isolation
-	// and determinism guarantees across validators
-	if config.UseTensorFlow && config.TensorFlowConfig != nil {
-		if err := isRealInferenceReady(config.TensorFlowConfig); err != nil {
-			return &failClosedMLScorer{
-				version: config.ModelVersion,
-				err:     types.ErrMLInferenceFailed.Wrapf("production inference bundle is not ready: %v", err),
-			}
-		}
-
-		scorer, err := k.createTensorFlowScorer(config)
-		if err != nil {
-			return &failClosedMLScorer{
-				version: config.ModelVersion,
-				err:     types.ErrMLInferenceFailed.Wrapf("failed to initialize production inference scorer: %v", err),
-			}
-		}
-		return scorer
+	if k.developmentMLScorer != nil {
+		return k.developmentMLScorer.scorerOrFailClosed()
 	}
-
-	return NewStubMLScorer(config)
+	return &failClosedMLScorer{
+		version: "",
+		err:     types.ErrMLInferenceFailed.Wrap("no production inference scorer is configured; use signed receipts"),
+	}
 }
 
 // createTensorFlowScorer creates a TensorFlow-based scorer

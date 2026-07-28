@@ -23,7 +23,7 @@ spec:
         - name: chaos-namespace
           value: virtengine
         - name: app-label
-          value: app.kubernetes.io/component=validator
+          value: app.kubernetes.io/name=virtengine-validator
         - name: chaos-duration
           value: "300"
     templates:
@@ -59,24 +59,21 @@ spec:
 
       - name: steady-state-check
         container:
-          image: curlimages/curl:latest
+          image: curlimages/curl@sha256:9b7242c3b31d66e5b1b9768386f89d72289013ac70505d2a0f8f19efdf5f3d8c
           command: ["/bin/sh", "-c"]
           args:
             - |
               echo "Checking validator health..."
-              # Check validator status endpoint
-              for i in $(seq 1 3); do
-                response=$(curl -s -o /dev/null -w "%{http_code}" http://virtengine-validator-$i.virtengine:26657/status || echo "000")
-                if [ "$response" != "200" ]; then
-                  echo "Validator $i unhealthy: HTTP $response"
-                  exit 1
-                fi
-              done
-              echo "All validators healthy"
+              response=$(curl -s -o /dev/null -w "%{http_code}" http://virtengine-validator.virtengine:26657/status || echo "000")
+              if [ "$response" != "200" ]; then
+                echo "Validator unhealthy: HTTP $response"
+                exit 1
+              fi
+              echo "Validator healthy"
 
       - name: pod-delete
         container:
-          image: litmuschaos/litmus-checker:latest
+          image: litmuschaos/litmus-checker@sha256:35f5389a0aa55c5438bcb47942d158305758a5584319f2ab99e1af375256f8a7
           command: ["/bin/sh", "-c"]
           args:
             - |
@@ -117,7 +114,7 @@ spec:
 
       - name: network-partition
         container:
-          image: litmuschaos/litmus-checker:latest
+          image: litmuschaos/litmus-checker@sha256:35f5389a0aa55c5438bcb47942d158305758a5584319f2ab99e1af375256f8a7
           command: ["/bin/sh", "-c"]
           args:
             - |
@@ -151,7 +148,7 @@ spec:
 
       - name: cpu-stress
         container:
-          image: litmuschaos/litmus-checker:latest
+          image: litmuschaos/litmus-checker@sha256:35f5389a0aa55c5438bcb47942d158305758a5584319f2ab99e1af375256f8a7
           command: ["/bin/sh", "-c"]
           args:
             - |

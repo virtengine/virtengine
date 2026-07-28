@@ -21,6 +21,8 @@ import (
 
 const (
 	// VoteExtensionVersion is the active canonical protobuf carrier version.
+	// Version 1 has not shipped on a release boundary; receipt_digest is part of
+	// this unreleased v1 schema rather than a v2 transition.
 	VoteExtensionVersion uint32 = 1
 	// ActiveVoteExtensionCarrierVersion is exported for app wiring and tests.
 	ActiveVoteExtensionCarrierVersion = VoteExtensionVersion
@@ -195,25 +197,39 @@ func validateVoteExtensionResult(result veidv1.VEIDVoteExtensionResult, pipeline
 	if len(result.InputHash) != sha256.Size {
 		return errors.New("input hash must be SHA-256")
 	}
+	if len(result.ReceiptDigest) != sha256.Size {
+		return errors.New("receipt digest must be SHA-256")
+	}
 	if len(result.ResultHash) != sha256.Size || !bytes.Equal(result.ResultHash, ComputeVoteExtensionResultHash(result)) {
 		return errors.New("result hash mismatch")
 	}
 	if len(result.ReasonCodes) > MaxVoteExtensionReasonCodes {
 		return errors.New("too many reason codes")
 	}
+	reasonCodes := make([]types.ReasonCode, len(result.ReasonCodes))
 	for i, reason := range result.ReasonCodes {
 		if reason == "" || len(reason) > 64 {
 			return errors.New("invalid reason code")
+		}
+		reasonCodes[i] = types.ReasonCode(reason)
+		if !types.IsCanonicalInferenceReceiptReasonCode(reasonCodes[i]) {
+			return errors.New("non-canonical reason code")
 		}
 		if i > 0 && reason <= result.ReasonCodes[i-1] {
 			return errors.New("reason codes must be strictly ordered")
 		}
 	}
+	if err := types.ValidateInferenceReceiptResultSemantics(status, result.Score, reasonCodes); err != nil {
+		return err
+	}
 	return nil
 }
 
 // AggregateVoteExtensions deterministically selects only results backed by
-// strictly more than two thirds of total validator voting power.
+// strictly more than two thirds of total validator voting power. The carrier
+// includes only receipt_digest; validator extension signatures plus quorum over
+// an identical result hash authenticate the sidecar receipt without carrying
+// full receipt bytes in consensus.
 func AggregateVoteExtensions(commit abci.ExtendedCommitInfo, expected VoteExtensionExpectations) (veidv1.VEIDConsensusAggregate, error) {
 	if len(commit.Votes) == 0 {
 		return veidv1.VEIDConsensusAggregate{}, errors.New("extended commit has no votes")

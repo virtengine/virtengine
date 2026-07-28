@@ -101,6 +101,16 @@ func setupGovernedVerificationKeeper(t *testing.T) (Keeper, sdk.Context) {
 	return k, ctx
 }
 
+func authorizeGovernedVerificationApply(k *Keeper, ctx sdk.Context) sdk.Context {
+	const authorizedTx = "test-authorized-consensus-system-tx"
+	authorizedCtx := ctx.WithExecMode(sdk.ExecModeFinalize).WithTxBytes([]byte(authorizedTx))
+	k.SetConsensusSystemTxAuthorizer(func(callCtx sdk.Context) bool {
+		return callCtx.ExecMode() == sdk.ExecModeFinalize &&
+			bytes.Equal(callCtx.TxBytes(), []byte(authorizedTx))
+	})
+	return authorizedCtx
+}
+
 func closeTestStoreIfNeeded(stateStore store.CommitMultiStore) {
 	if stateStore == nil {
 		return
@@ -112,6 +122,7 @@ func closeTestStoreIfNeeded(stateStore store.CommitMultiStore) {
 
 func TestApplyVerificationResultRecordsIssuanceForActiveVerifier(t *testing.T) {
 	k, ctx := setupGovernedVerificationKeeper(t)
+	ctx = authorizeGovernedVerificationApply(&k, ctx)
 	manifest := createIntegrationTestManifest(t)
 	_, err := k.RegisterPipelineVersion(
 		ctx,
@@ -162,6 +173,7 @@ func TestApplyVerificationResultRecordsIssuanceForActiveVerifier(t *testing.T) {
 
 func TestApplyVerificationResultRejectsMismatchedVerifierVersion(t *testing.T) {
 	k, ctx := setupGovernedVerificationKeeper(t)
+	ctx = authorizeGovernedVerificationApply(&k, ctx)
 	manifest := createIntegrationTestManifest(t)
 	_, err := k.RegisterPipelineVersion(
 		ctx,
@@ -206,6 +218,7 @@ func TestApplyVerificationResultRejectsMismatchedVerifierVersion(t *testing.T) {
 
 func TestApplyVerificationResultRejectsUnauthorizedArtifactState(t *testing.T) {
 	k, ctx := setupGovernedVerificationKeeper(t)
+	ctx = authorizeGovernedVerificationApply(&k, ctx)
 	manifest := createIntegrationTestManifest(t)
 	_, err := k.RegisterPipelineVersion(
 		ctx,

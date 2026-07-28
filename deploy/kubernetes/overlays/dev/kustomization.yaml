@@ -7,12 +7,23 @@ namespace: virtengine
 resources:
   - ../../base
 
-commonLabels:
-  environment: dev
+labels:
+  - pairs:
+      environment: dev
+    includeSelectors: true
 
-# Patches for dev environment
 patches:
-  # Reduce replicas for dev
+  - target:
+      kind: StatefulSet
+      name: virtengine-validator
+    patch: |
+      - op: replace
+        path: /spec/replicas
+        value: 1
+      - op: remove
+        path: /spec/template/spec/nodeSelector
+      - op: remove
+        path: /spec/template/spec/tolerations
   - target:
       kind: StatefulSet
       name: virtengine-node
@@ -20,18 +31,8 @@ patches:
       - op: replace
         path: /spec/replicas
         value: 1
-  - target:
-      kind: Deployment
-      name: provider-daemon
-    patch: |
-      - op: replace
-        path: /spec/replicas
-        value: 1
-  # Reduce resources for dev
-  - target:
-      kind: StatefulSet
-      name: virtengine-node
-    patch: |
+      - op: remove
+        path: /spec/template/spec/nodeSelector
       - op: replace
         path: /spec/template/spec/containers/0/resources/requests/cpu
         value: "500m"
@@ -44,22 +45,22 @@ patches:
       - op: replace
         path: /spec/template/spec/containers/0/resources/limits/memory
         value: "4Gi"
-  # Remove node selectors for dev
   - target:
       kind: StatefulSet
-      name: virtengine-node
-    patch: |
-      - op: remove
-        path: /spec/template/spec/nodeSelector
-      - op: remove
-        path: /spec/template/spec/tolerations
-  - target:
-      kind: Deployment
       name: provider-daemon
     patch: |
+      - op: replace
+        path: /spec/replicas
+        value: 1
       - op: remove
         path: /spec/template/spec/nodeSelector
-  # Update PDB for single instance
+  - target:
+      kind: PodDisruptionBudget
+      name: virtengine-validator-pdb
+    patch: |
+      - op: replace
+        path: /spec/minAvailable
+        value: 0
   - target:
       kind: PodDisruptionBudget
       name: virtengine-node-pdb
@@ -68,32 +69,12 @@ patches:
         path: /spec/minAvailable
         value: 0
   - target:
-      kind: ExternalSecret
-      name: virtengine-node-secrets
+      kind: PodDisruptionBudget
+      name: provider-daemon-pdb
     patch: |
       - op: replace
-        path: /spec/data/0/remoteRef/key
-        value: secret/virtengine/dev/virtengine-node
-      - op: replace
-        path: /spec/data/1/remoteRef/key
-        value: secret/virtengine/dev/virtengine-node
-  - target:
-      kind: ExternalSecret
-      name: provider-daemon-secrets
-    patch: |
-      - op: replace
-        path: /spec/data/0/remoteRef/key
-        value: secret/virtengine/dev/provider-daemon
-      - op: replace
-        path: /spec/data/1/remoteRef/key
-        value: secret/virtengine/dev/provider-daemon
-  - target:
-      kind: ExternalSecret
-      name: database-credentials
-    patch: |
-      - op: replace
-        path: /spec/dataFrom/0/extract/key
-        value: secret/virtengine/dev/database
+        path: /spec/minAvailable
+        value: 0
   - target:
       kind: ConfigMap
       name: virtengine-config
@@ -107,9 +88,20 @@ patches:
       - op: replace
         path: /data/API_SWAGGER
         value: "true"
-
-images:
-  - name: virtengine/virtengine-node
-    newTag: dev
-  - name: virtengine/provider-daemon
-    newTag: dev
+  - target:
+      kind: ConfigMap
+      name: provider-daemon-config
+    patch: |
+      - op: replace
+        path: /data/CHAIN_ID
+        value: virtengine-dev-1
+  - target:
+      kind: HorizontalPodAutoscaler
+      name: provider-daemon-hpa
+    patch: |
+      - op: replace
+        path: /spec/minReplicas
+        value: 1
+      - op: replace
+        path: /spec/maxReplicas
+        value: 3

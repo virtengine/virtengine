@@ -144,6 +144,16 @@ type Keeper struct {
 	// It must never be nil during state transitions to preserve consensus safety.
 	randSource RandomSource
 
+	// developmentMLScorer is an explicit test/development-only injection point.
+	// Production keeper construction intentionally leaves this nil and fails
+	// closed instead of selecting a scorer from environment variables.
+	developmentMLScorer *developmentMLScorerSlot
+
+	// receiptBuffer is validator-local pre-consensus memory. Vote extensions
+	// may carry snapshots from it, but finalized state must trust only signed
+	// extensions plus committed chain state.
+	receiptBuffer *inferenceReceiptBuffer
+
 	// consensusSystemTxAuthorizer confirms that the exact finalized transaction
 	// bytes were independently validated by the application pre-block boundary.
 	consensusSystemTxAuthorizer func(sdk.Context) bool
@@ -162,11 +172,13 @@ func NewKeeper(cdc codec.BinaryCodec, skey storetypes.StoreKey, authority string
 	}
 
 	return Keeper{
-		cdc:        cdc,
-		skey:       skey,
-		authority:  authority,
-		zkSystem:   zkSystem,
-		randSource: DeterministicRandomSource{},
+		cdc:                 cdc,
+		skey:                skey,
+		authority:           authority,
+		zkSystem:            zkSystem,
+		randSource:          DeterministicRandomSource{},
+		developmentMLScorer: newDevelopmentMLScorerSlot(),
+		receiptBuffer:       newInferenceReceiptBuffer(),
 	}
 }
 
@@ -229,6 +241,37 @@ func (k *Keeper) SetRandomSource(src RandomSource) {
 		return
 	}
 	k.randSource = src
+}
+
+// SetDevelopmentMLScorer explicitly installs a development/test scorer.
+// Passing nil restores production fail-closed scoring behavior.
+func (k *Keeper) SetDevelopmentMLScorer(scorer MLScorer) {
+	k.ensureDevelopmentMLScorerSlot().set(scorer)
+}
+
+// ReplaceDevelopmentMLScorer installs a development/test scorer and optionally
+// closes the scorer it replaces while holding the scorer mutex.
+func (k *Keeper) ReplaceDevelopmentMLScorer(scorer MLScorer, closePrevious bool) error {
+	return k.ensureDevelopmentMLScorerSlot().replace(scorer, closePrevious)
+}
+
+// CloseDevelopmentMLScorer explicitly closes and removes the injected scorer.
+func (k *Keeper) CloseDevelopmentMLScorer() error {
+	return k.ensureDevelopmentMLScorerSlot().closeActive()
+}
+
+func (k *Keeper) ensureDevelopmentMLScorerSlot() *developmentMLScorerSlot {
+	if k.developmentMLScorer == nil {
+		k.developmentMLScorer = newDevelopmentMLScorerSlot()
+	}
+	return k.developmentMLScorer
+}
+
+func (k *Keeper) ensureReceiptBuffer() *inferenceReceiptBuffer {
+	if k.receiptBuffer == nil {
+		k.receiptBuffer = newInferenceReceiptBuffer()
+	}
+	return k.receiptBuffer
 }
 
 // IsValidator checks if the given account address is a bonded validator

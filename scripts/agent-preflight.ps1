@@ -28,17 +28,19 @@ $hasGo = $changedFiles | Where-Object { $_ -match '\.go$' }
 $hasPortal = $changedFiles | Where-Object { $_ -match '^portal/' }
 $hasGoMod = $changedFiles | Where-Object { $_ -match '^go\.(mod|sum)$' }
 $hasBosun = $changedFiles | Where-Object { $_ -match '^scripts/bosun/' }
+$errors = 0
 $hasTask84D = $changedFiles | Where-Object { $_ -match '(^x/(settlement|fraud|hpc|review|escrow|resources)/|^upgrades/software/v1\.7\.0/|financial-case|task84d)' }
 $hasTask85B = $changedFiles | Where-Object { $_ -match '(^pkg/dex/|^pkg/payments/offramp/|^pkg/provider_daemon/(fiat_conversion|provider_mutation|chain_submitter)|^cmd/provider-daemon/(main\.go|fiat_conversion)|^x/settlement/|^app/(app\.go|mac\.go|mac_task85b_test\.go)|^upgrades/software/v1\.8\.0/|^tests/(integration/settlement/|compatibility/task85b|upgrade/)|^sdk/(proto/node/virtengine/settlement/v1/|go/node/settlement/v1/|ts/src/generated/protos/virtengine/settlement/v1/|ts/script/fix-ts-proto-generated-types\.ts$|artifacts/proto/)|^api/openapi/virtengine-proto\.swagger\.json$|^_docs/.*(task[-_]?85b|fiat|off.?ramp|payout|dex)|task[-_]?85b|fiat-conversion|off.?ramp|payout-corridor)' }
-$errors = 0
+$hasTask85C = $changedFiles | Where-Object { $_ -match '(^deploy/kubernetes/|^infra/kubernetes/|^pkg/provider_daemon/(key_manager|provider_mutation|submitter_lease|portal_api|portal_readiness|chain_submitter_queue)|^cmd/provider-daemon/(main\.go|key_backup)|^scripts/task85c|^_docs/(adr/ADR-009|runbooks/kubernetes-identity|audits/task-85c)|task[-_]?85c)' }
+$task85CExclusive = $hasTask85C -and -not ($changedFiles | Where-Object { $_ -match '(^pkg/dex/|^pkg/payments/offramp/|^upgrades/software/v1\.8\.0/|^sdk/proto/node/virtengine/settlement/v1/|^artifacts/mainnet/task84d|^upgrades/software/v1\.7\.0/)' })
 
-if ($hasTask84D) {
+if ($hasTask84D -and -not $task85CExclusive) {
     Write-Host "--- Task 84D canonical financial-case checks ---" -ForegroundColor Yellow
     & (Join-Path $PSScriptRoot 'task84d-preflight.ps1')
     if ($LASTEXITCODE -ne 0) { Write-Host "FAIL: Task 84D preflight" -ForegroundColor Red; $errors++ }
 }
 
-if ($hasTask85B) {
+if ($hasTask85B -and -not $task85CExclusive) {
     Write-Host "--- Task 85B DEX and fiat off-ramp checks ---" -ForegroundColor Yellow
     $task85BArgs = @()
     if ($env:VE_HOOK_TASK85B_QUICK -eq '1') {
@@ -51,6 +53,22 @@ if ($hasTask85B) {
     }
     & (Join-Path $PSScriptRoot 'task85b-preflight.ps1') @task85BArgs
     if ($LASTEXITCODE -ne 0) { Write-Host "FAIL: Task 85B preflight" -ForegroundColor Red; $errors++ }
+}
+
+if ($hasTask85C) {
+    Write-Host "--- Task 85C safe validator/provider HA checks ---" -ForegroundColor Yellow
+    $skipTask85CRace = $env:VE_HOOK_TASK85C_SKIP_RACE -eq '1'
+    if ($skipTask85CRace) {
+        Write-Host 'WARNING: VE_HOOK_TASK85C_SKIP_RACE=1 explicitly skips the race gate; this is not release evidence.' -ForegroundColor Yellow
+    }
+    try {
+        & (Join-Path $PSScriptRoot 'task85c-preflight.ps1') -SkipRace:$skipTask85CRace
+        if ($LASTEXITCODE -ne 0) { Write-Host "FAIL: Task 85C preflight" -ForegroundColor Red; $errors++ }
+    }
+    catch {
+        Write-Host "FAIL: Task 85C preflight: $($_.Exception.Message)" -ForegroundColor Red
+        $errors++
+    }
 }
 
 # ── Windows Firewall check (non-blocking) ──────────────────────────────────

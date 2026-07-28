@@ -18,9 +18,11 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 
@@ -32,6 +34,8 @@ import (
 	veidv1 "github.com/virtengine/virtengine/sdk/go/node/veid/v1"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
+	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/rest"
 
 	"github.com/virtengine/virtengine/pkg/dex"
 	"github.com/virtengine/virtengine/pkg/observability"
@@ -54,6 +58,28 @@ const (
 
 	// FlagProviderKeyDir is the directory containing provider keys
 	FlagProviderKeyDir = "key-dir"
+
+	// FlagProviderKeyPassphraseFile is a secret-mounted file containing the
+	// encrypted file-keystore passphrase.
+	FlagProviderKeyPassphraseFile = "key-passphrase-file" //nolint:gosec // flag name, not a credential
+
+	// FlagProviderKeyFingerprint is the expected SHA-256 public-key fingerprint.
+	FlagProviderKeyFingerprint = "key-fingerprint"
+
+	// FlagSubmitterLeaseFile stores cross-process ownership and fencing tokens.
+	FlagSubmitterLeaseFile = "submitter-lease-file"
+
+	// FlagSubmitterLeaseOwner is a unique replica identity, normally the pod UID.
+	FlagSubmitterLeaseOwner = "submitter-lease-owner"
+
+	// FlagSubmitterLeaseBackend selects kubernetes or shared_file fencing.
+	FlagSubmitterLeaseBackend = "submitter-lease-backend"
+
+	// FlagSubmitterLeaseNamespace is the Kubernetes Lease namespace.
+	FlagSubmitterLeaseNamespace = "submitter-lease-namespace"
+
+	// FlagProviderProduction enforces persistent key and distributed lease profiles.
+	FlagProviderProduction = "production"
 
 	// FlagKeyBackupFile is the path to the encrypted provider key backup file
 	FlagKeyBackupFile = "key-backup-file"
@@ -381,6 +407,13 @@ func init() {
 	rootCmd.PersistentFlags().String(FlagNode, "tcp://localhost:26657", "Blockchain node RPC endpoint")
 	rootCmd.PersistentFlags().String(FlagProviderKey, "provider", "Provider key name")
 	rootCmd.PersistentFlags().String(FlagProviderKeyDir, "", "Directory containing provider keys")
+	rootCmd.PersistentFlags().String(FlagProviderKeyPassphraseFile, "", "Secret file containing the provider file-keystore passphrase")
+	rootCmd.PersistentFlags().String(FlagProviderKeyFingerprint, "", "Expected SHA-256 provider public-key fingerprint")
+	rootCmd.PersistentFlags().String(FlagSubmitterLeaseFile, "", "Durable cross-process submitter lease state file")
+	rootCmd.PersistentFlags().String(FlagSubmitterLeaseOwner, "", "Unique submitter lease owner identity")
+	rootCmd.PersistentFlags().String(FlagSubmitterLeaseBackend, "kubernetes", "Submitter fencing backend (kubernetes or shared_file)")
+	rootCmd.PersistentFlags().String(FlagSubmitterLeaseNamespace, "virtengine", "Kubernetes namespace for submitter Lease objects")
+	rootCmd.PersistentFlags().Bool(FlagProviderProduction, false, "Enforce production key, store, and fencing requirements")
 	rootCmd.PersistentFlags().Bool(FlagChainUsageSubmit, false, "Enable authenticated durable on-chain usage submission")
 	rootCmd.PersistentFlags().String(FlagChainUsageQueueFile, "data/chain_usage_queue.json", "Authenticated usage durable queue state file")
 	rootCmd.PersistentFlags().String(FlagKeyBackupFile, "", "Path to encrypted provider key backup")
@@ -516,6 +549,13 @@ func init() {
 	_ = viper.BindPFlag(FlagNode, rootCmd.PersistentFlags().Lookup(FlagNode))
 	_ = viper.BindPFlag(FlagProviderKey, rootCmd.PersistentFlags().Lookup(FlagProviderKey))
 	_ = viper.BindPFlag(FlagProviderKeyDir, rootCmd.PersistentFlags().Lookup(FlagProviderKeyDir))
+	_ = viper.BindPFlag(FlagProviderKeyPassphraseFile, rootCmd.PersistentFlags().Lookup(FlagProviderKeyPassphraseFile))
+	_ = viper.BindPFlag(FlagProviderKeyFingerprint, rootCmd.PersistentFlags().Lookup(FlagProviderKeyFingerprint))
+	_ = viper.BindPFlag(FlagSubmitterLeaseFile, rootCmd.PersistentFlags().Lookup(FlagSubmitterLeaseFile))
+	_ = viper.BindPFlag(FlagSubmitterLeaseOwner, rootCmd.PersistentFlags().Lookup(FlagSubmitterLeaseOwner))
+	_ = viper.BindPFlag(FlagSubmitterLeaseBackend, rootCmd.PersistentFlags().Lookup(FlagSubmitterLeaseBackend))
+	_ = viper.BindPFlag(FlagSubmitterLeaseNamespace, rootCmd.PersistentFlags().Lookup(FlagSubmitterLeaseNamespace))
+	_ = viper.BindPFlag(FlagProviderProduction, rootCmd.PersistentFlags().Lookup(FlagProviderProduction))
 	_ = viper.BindPFlag(FlagChainUsageSubmit, rootCmd.PersistentFlags().Lookup(FlagChainUsageSubmit))
 	_ = viper.BindPFlag(FlagChainUsageQueueFile, rootCmd.PersistentFlags().Lookup(FlagChainUsageQueueFile))
 	_ = viper.BindPFlag(FlagKeyBackupFile, rootCmd.PersistentFlags().Lookup(FlagKeyBackupFile))
@@ -661,6 +701,7 @@ func initConfig() {
 
 	viper.AutomaticEnv()
 	viper.SetEnvPrefix("VIRTENGINE")
+	viper.SetEnvKeyReplacer(strings.NewReplacer("-", "_", ".", "_"))
 
 	if err := viper.ReadInConfig(); err == nil {
 		fmt.Fprintln(os.Stderr, "Using config file:", viper.ConfigFileUsed())
@@ -791,6 +832,11 @@ func runStart(cmd *cobra.Command, args []string) error {
 
 	// Initialize key manager (VE-400)
 	keyDir := viper.GetString(FlagProviderKeyDir)
+	if viper.GetBool(FlagProviderProduction) {
+		if err := validateProductionDurablePaths(keyDir); err != nil {
+			return err
+		}
+	}
 	keyConfig := provider_daemon.DefaultKeyManagerConfig()
 	keyConfig.KeyDir = keyDir
 	if keyDir == "" {
@@ -803,8 +849,12 @@ func runStart(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("failed to create key manager: %w", err)
 	}
 
-	// Unlock key manager (use empty passphrase for memory storage)
-	if err := keyManager.Unlock(""); err != nil {
+	keyPassphrase, err := providerKeyPassphrase(keyConfig.StorageType, viper.GetString(FlagProviderKeyPassphraseFile))
+	if err != nil {
+		return err
+	}
+	defer scrubStringBytes(keyPassphrase)
+	if err := keyManager.Unlock(string(keyPassphrase)); err != nil {
 		return fmt.Errorf("failed to unlock key manager: %w", err)
 	}
 	fmt.Println("  Key Manager: initialized")
@@ -821,7 +871,16 @@ func runStart(cmd *cobra.Command, args []string) error {
 
 	// Initialize provider key material
 	providerKeyName := viper.GetString(FlagProviderKey)
-	key, generatedKey, err := ensureProviderKey(keyManager, providerKeyName)
+	var key *provider_daemon.ManagedKey
+	generatedKey := false
+	if viper.GetBool(FlagProviderProduction) {
+		key, err = keyManager.GetActiveKey()
+		if err != nil {
+			return fmt.Errorf("production provider key must be provisioned or restored before startup: %w", err)
+		}
+	} else {
+		key, generatedKey, err = ensureProviderKey(keyManager, providerKeyName)
+	}
 	if err != nil {
 		return fmt.Errorf("failed to initialize provider key: %w", err)
 	}
@@ -838,6 +897,21 @@ func runStart(cmd *cobra.Command, args []string) error {
 		key.ProviderAddress = derivedAddress
 	}
 	providerID := key.PublicKey
+	fingerprint, err := keyManager.ActiveKeyFingerprint()
+	if err != nil {
+		return fmt.Errorf("failed to fingerprint provider key: %w", err)
+	}
+	if expected := strings.ToLower(strings.TrimSpace(viper.GetString(FlagProviderKeyFingerprint))); expected != "" && expected != fingerprint {
+		return fmt.Errorf("provider key fingerprint mismatch")
+	}
+	if expected := strings.TrimSpace(viper.GetString(FlagProviderKeyFingerprint)); expected != "" {
+		if err := keyManager.SetExpectedActiveKeyFingerprint(expected); err != nil {
+			return fmt.Errorf("bind provider key fingerprint: %w", err)
+		}
+	}
+	if viper.GetBool(FlagProviderProduction) && strings.TrimSpace(viper.GetString(FlagProviderKeyFingerprint)) == "" {
+		return fmt.Errorf("production provider key fingerprint is required")
+	}
 	if generatedKey {
 		fmt.Printf("  Provider Key: generated (%s)\n", key.KeyID)
 	} else {
@@ -903,6 +977,35 @@ func runStart(cmd *cobra.Command, args []string) error {
 	mutationCfg.ProviderAddress = providerAddress
 	mutationCfg.QueueStatePath = viper.GetString(FlagChainUsageQueueFile) + ".mutations"
 	mutationCfg.Chain = mutationChain
+	mutationCfg.Production = viper.GetBool(FlagProviderProduction)
+	leaseOwner := strings.TrimSpace(viper.GetString(FlagSubmitterLeaseOwner))
+	leaseBackend := strings.ToLower(strings.TrimSpace(viper.GetString(FlagSubmitterLeaseBackend)))
+	switch leaseBackend {
+	case "kubernetes":
+		if leaseOwner != "" {
+			clusterConfig, configErr := rest.InClusterConfig()
+			if configErr != nil {
+				return fmt.Errorf("failed to load Kubernetes submitter lease credentials: %w", configErr)
+			}
+			clientset, clientErr := kubernetes.NewForConfig(clusterConfig)
+			if clientErr != nil {
+				return fmt.Errorf("failed to initialize Kubernetes submitter lease client: %w", clientErr)
+			}
+			lease, leaseErr := provider_daemon.NewKubernetesSubmitterLease(clientset.CoordinationV1(), viper.GetString(FlagSubmitterLeaseNamespace), leaseOwner)
+			if leaseErr != nil {
+				return fmt.Errorf("failed to initialize Kubernetes submitter lease: %w", leaseErr)
+			}
+			mutationCfg.Lease = lease
+		}
+	case "shared_file":
+		lease, leaseErr := provider_daemon.NewFileSubmitterLease(viper.GetString(FlagSubmitterLeaseFile), leaseOwner)
+		if leaseErr != nil {
+			return fmt.Errorf("failed to initialize durable submitter lease: %w", leaseErr)
+		}
+		mutationCfg.Lease = lease
+	default:
+		return fmt.Errorf("unsupported submitter lease backend %q", leaseBackend)
+	}
 	mutationSubmitter, err = provider_daemon.NewProviderMutationSubmitter(mutationCfg, keyManager)
 	if err != nil {
 		return fmt.Errorf("failed to initialize provider mutation submitter: %w", err)
@@ -911,8 +1014,18 @@ func runStart(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("failed to start provider mutation submitter: %w", err)
 	}
 	productionChainClient.SetMutationSubmitter(mutationSubmitter)
+	productionChainClient.SetMutationGuard(func(guardCtx context.Context) error {
+		readiness := mutationSubmitter.Readiness(guardCtx)
+		if readiness.Ready {
+			return nil
+		}
+		return fmt.Errorf("%w: %s", provider_daemon.ErrProviderMutationNotReady, readiness.Reason)
+	})
 	if readiness := mutationSubmitter.Readiness(ctx); !readiness.Ready {
-		return fmt.Errorf("provider mutation submitter not ready: %s", readiness.Reason)
+		if !mutationCfg.Production || readiness.Reason != "submitter lease not held" {
+			return fmt.Errorf("provider mutation submitter not ready: %s", readiness.Reason)
+		}
+		fmt.Println("  Provider Mutation Submitter: standby (waiting for durable fenced ownership)")
 	}
 	fiatQuery, err := provider_daemon.NewRPCFiatConversionQuery(productionChainClient)
 	if err != nil && viper.GetBool(FlagFiatConversionEnabled) {
@@ -1115,47 +1228,90 @@ func runStart(cmd *cobra.Command, args []string) error {
 	usageStore := provider_daemon.NewUsageSnapshotStore()
 	usageReporter = usageStore
 	var usageMeter *provider_daemon.UsageMeter
+	var usageSubmitter *provider_daemon.ChainUsageSubmitterImpl
+	var usagePipelineMu sync.Mutex
+	stopUsagePipeline := func() {
+		usagePipelineMu.Lock()
+		defer usagePipelineMu.Unlock()
+		if usageMeter != nil {
+			usageMeter.Stop()
+			usageMeter = nil
+		}
+		if usageSubmitter != nil {
+			usageSubmitter.Stop()
+			usageSubmitter = nil
+		}
+	}
 	if viper.GetBool(FlagChainUsageSubmit) {
 		if _, err := sdk.AccAddressFromBech32(providerAddress); err != nil {
 			return fmt.Errorf("provider key name must be the on-chain bech32 provider address for authenticated metering: %w", err)
 		}
-		usageSubmitterCfg := provider_daemon.DefaultChainSubmitterConfig()
-		usageSubmitterCfg.ProviderAddress = providerAddress
-		usageSubmitterCfg.ChainID = viper.GetString(FlagChainID)
-		usageSubmitterCfg.CometRPC = normalizeCometRPC(viper.GetString(FlagNode))
-		usageSubmitterCfg.QueueStatePath = viper.GetString(FlagChainUsageQueueFile)
-		usageSubmitterCfg.ProviderSigningState = productionChainClient
-		usageSubmitterCfg.UsageStreamState = productionChainClient
-		usageSubmitterCfg.MutationSubmitter = mutationSubmitter
-		usageSubmitter, err := provider_daemon.NewChainUsageSubmitter(usageSubmitterCfg, keyManager, provider_daemon.NewUsageMetricsCollector())
-		if err != nil {
-			return fmt.Errorf("failed to initialize authenticated usage submitter: %w", err)
-		}
-		if err := usageSubmitter.Start(ctx); err != nil {
-			return fmt.Errorf("failed to start authenticated usage submitter: %w", err)
-		}
-		defer usageSubmitter.Stop()
-		usageRecorder, err := provider_daemon.NewUsageChainRecorder(usageSubmitter)
-		if err != nil {
-			return fmt.Errorf("failed to initialize usage chain recorder: %w", err)
-		}
 		if workloadRuntime == nil {
 			return fmt.Errorf("authenticated usage metering requires an initialized workload metrics collector")
 		}
-
-		usageMeter = provider_daemon.NewUsageMeter(provider_daemon.UsageMeterConfig{
-			ProviderID:       providerAddress,
-			Interval:         provider_daemon.MeteringInterval(viper.GetDuration(FlagMeteringInterval)),
-			MetricsCollector: workloadRuntime,
-			ChainRecorder:    usageRecorder,
-			KeyManager:       keyManager,
-			RecordChan:       recordChan,
-		})
-
-		if err := usageMeter.Start(ctx); err != nil {
-			return fmt.Errorf("failed to start usage meter: %w", err)
+		startUsagePipeline := func() error {
+			usagePipelineMu.Lock()
+			defer usagePipelineMu.Unlock()
+			if usageMeter != nil || !mutationSubmitter.Readiness(ctx).Ready {
+				return nil
+			}
+			usageSubmitterCfg := provider_daemon.DefaultChainSubmitterConfig()
+			usageSubmitterCfg.ProviderAddress = providerAddress
+			usageSubmitterCfg.ChainID = viper.GetString(FlagChainID)
+			usageSubmitterCfg.CometRPC = normalizeCometRPC(viper.GetString(FlagNode))
+			usageSubmitterCfg.QueueStatePath = viper.GetString(FlagChainUsageQueueFile)
+			usageSubmitterCfg.ProviderSigningState = productionChainClient
+			usageSubmitterCfg.UsageStreamState = productionChainClient
+			usageSubmitterCfg.MutationSubmitter = mutationSubmitter
+			candidateSubmitter, createErr := provider_daemon.NewChainUsageSubmitter(usageSubmitterCfg, keyManager, provider_daemon.NewUsageMetricsCollector())
+			if createErr != nil {
+				return fmt.Errorf("initialize authenticated usage submitter: %w", createErr)
+			}
+			if startErr := candidateSubmitter.Start(ctx); startErr != nil {
+				candidateSubmitter.Stop()
+				return fmt.Errorf("start authenticated usage submitter: %w", startErr)
+			}
+			usageRecorder, recorderErr := provider_daemon.NewUsageChainRecorder(candidateSubmitter)
+			if recorderErr != nil {
+				candidateSubmitter.Stop()
+				return fmt.Errorf("initialize usage chain recorder: %w", recorderErr)
+			}
+			candidateMeter := provider_daemon.NewUsageMeter(provider_daemon.UsageMeterConfig{
+				ProviderID: providerAddress, Interval: provider_daemon.MeteringInterval(viper.GetDuration(FlagMeteringInterval)),
+				MetricsCollector: workloadRuntime, ChainRecorder: usageRecorder, KeyManager: keyManager, RecordChan: recordChan,
+			})
+			if startErr := candidateMeter.Start(ctx); startErr != nil {
+				candidateSubmitter.Stop()
+				return fmt.Errorf("start usage meter: %w", startErr)
+			}
+			usageSubmitter = candidateSubmitter
+			usageMeter = candidateMeter
+			fmt.Println("  Usage Meter: started by fenced submitter owner")
+			return nil
 		}
-		fmt.Println("  Usage Meter: started (authenticated durable submission)")
+		if err := startUsagePipeline(); err != nil {
+			return err
+		}
+		if viper.GetBool(FlagProviderProduction) {
+			go func() {
+				ticker := time.NewTicker(2 * time.Second)
+				defer ticker.Stop()
+				for {
+					select {
+					case <-ctx.Done():
+						return
+					case <-ticker.C:
+						if mutationSubmitter.Readiness(ctx).Ready {
+							if startErr := startUsagePipeline(); startErr != nil {
+								fmt.Printf("  Usage Meter: fenced startup deferred: %v\n", startErr)
+							}
+						} else {
+							stopUsagePipeline()
+						}
+					}
+				}
+			}()
+		}
 	} else {
 		fmt.Println("  Usage Meter: disabled (enable authenticated submission explicitly)")
 	}
@@ -1293,6 +1449,19 @@ func runStart(cmd *cobra.Command, args []string) error {
 	portalCfg.ShellSessionTTL = viper.GetDuration(FlagPortalShellSessionTTL)
 	portalCfg.TokenTTL = viper.GetDuration(FlagPortalTokenTTL)
 	portalCfg.AuditLogger = portalAuditLogger
+	portalCfg.Readiness = func(readinessCtx context.Context) provider_daemon.ProviderMutationReadiness {
+		status := mutationSubmitter.Readiness(readinessCtx)
+		if status.Ready && viper.GetBool(FlagChainUsageSubmit) {
+			usagePipelineMu.Lock()
+			usageReady := usageMeter != nil && usageSubmitter != nil
+			usagePipelineMu.Unlock()
+			if !usageReady {
+				status.Ready = false
+				status.Reason = "usage sequence and queue store unavailable"
+			}
+		}
+		return status
+	}
 	portalCfg.LogStore = portalLogStore
 	portalCfg.WalletAuthChainID = viper.GetString(FlagChainID)
 	portalCfg.ChainQuery = chainQuery
@@ -1604,10 +1773,8 @@ func runStart(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	if usageMeter != nil {
-		usageMeter.Stop()
-		fmt.Println("  Usage Meter: stopped")
-	}
+	stopUsagePipeline()
+	fmt.Println("  Usage Meter: stopped")
 
 	if supportService != nil {
 		_ = supportService.Stop(ctx)
@@ -1831,7 +1998,12 @@ func initKeyCmd() *cobra.Command {
 				return fmt.Errorf("failed to create key manager: %w", err)
 			}
 
-			if err := keyManager.Unlock(""); err != nil {
+			passphrase, err := providerKeyPassphrase(provider_daemon.KeyStorageTypeFile, viper.GetString(FlagProviderKeyPassphraseFile))
+			if err != nil {
+				return err
+			}
+			defer scrubStringBytes(passphrase)
+			if err := keyManager.Unlock(string(passphrase)); err != nil {
 				return fmt.Errorf("failed to unlock key manager: %w", err)
 			}
 
@@ -1849,6 +2021,65 @@ func initKeyCmd() *cobra.Command {
 	}
 
 	return cmd
+}
+
+func providerKeyPassphrase(storageType provider_daemon.KeyStorageType, path string) ([]byte, error) {
+	if storageType == provider_daemon.KeyStorageTypeMemory {
+		return nil, nil
+	}
+	if strings.TrimSpace(path) == "" {
+		return nil, fmt.Errorf("file key storage requires --%s from a mounted secret", FlagProviderKeyPassphraseFile)
+	}
+	value, err := os.ReadFile(path)
+	if err != nil {
+		return nil, fmt.Errorf("read provider key passphrase file: %w", err)
+	}
+	value = bytes.TrimSpace(value)
+	if len(value) == 0 {
+		return nil, fmt.Errorf("provider key passphrase must not be empty")
+	}
+	return value, nil
+}
+
+func scrubStringBytes(value []byte) {
+	for i := range value {
+		value[i] = 0
+	}
+}
+
+func validateProductionDurablePaths(keyDir string) error {
+	if strings.TrimSpace(keyDir) == "" || !filepath.IsAbs(keyDir) {
+		return fmt.Errorf("production provider key directory must be an absolute durable path")
+	}
+	paths := map[string]string{
+		FlagChainUsageQueueFile:          viper.GetString(FlagChainUsageQueueFile),
+		FlagWaldurStateFile:              viper.GetString(FlagWaldurStateFile),
+		FlagWaldurCheckpointFile:         viper.GetString(FlagWaldurCheckpointFile),
+		FlagWaldurOrderStateFile:         viper.GetString(FlagWaldurOrderStateFile),
+		FlagWaldurOrderCheckpointFile:    viper.GetString(FlagWaldurOrderCheckpointFile),
+		FlagProvisioningStateFile:        viper.GetString(FlagProvisioningStateFile),
+		FlagProvisioningCheckpointFile:   viper.GetString(FlagProvisioningCheckpointFile),
+		FlagFiatConversionStateFile:      viper.GetString(FlagFiatConversionStateFile),
+		FlagFiatConversionRepositoryFile: viper.GetString(FlagFiatConversionRepositoryFile),
+		FlagWaldurOfferingSyncStateFile:  viper.GetString(FlagWaldurOfferingSyncStateFile),
+		FlagWaldurLifecycleQueuePath:     viper.GetString(FlagWaldurLifecycleQueuePath),
+		FlagWaldurCallbackSinkDir:        viper.GetString(FlagWaldurCallbackSinkDir),
+		FlagPortalAuditLogFile:           viper.GetString(FlagPortalAuditLogFile),
+	}
+	if strings.EqualFold(strings.TrimSpace(viper.GetString(FlagSubmitterLeaseBackend)), "shared_file") {
+		paths[FlagSubmitterLeaseFile] = viper.GetString(FlagSubmitterLeaseFile)
+	}
+	root := filepath.Clean(filepath.Dir(keyDir))
+	for name, path := range paths {
+		if strings.TrimSpace(path) == "" || !filepath.IsAbs(path) {
+			return fmt.Errorf("production --%s must be an absolute durable path", name)
+		}
+		relative, err := filepath.Rel(root, filepath.Clean(path))
+		if err != nil || relative == ".." || strings.HasPrefix(relative, ".."+string(filepath.Separator)) {
+			return fmt.Errorf("production --%s must be rooted under durable provider volume %s", name, root)
+		}
+	}
+	return nil
 }
 
 func rotateKeyCmd() *cobra.Command {

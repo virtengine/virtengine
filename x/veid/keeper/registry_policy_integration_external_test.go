@@ -74,6 +74,16 @@ func setupRegistryPolicyIntegrationKeepers(t *testing.T) (veidkeeper.Keeper, reg
 	return veidK, registryK, issuanceK, ctx
 }
 
+func authorizeRegistryPolicyApply(k *veidkeeper.Keeper, ctx sdk.Context) sdk.Context {
+	const authorizedTx = "test-authorized-consensus-system-tx"
+	authorizedCtx := ctx.WithExecMode(sdk.ExecModeFinalize).WithTxBytes([]byte(authorizedTx))
+	k.SetConsensusSystemTxAuthorizer(func(callCtx sdk.Context) bool {
+		return callCtx.ExecMode() == sdk.ExecModeFinalize &&
+			bytes.Equal(callCtx.TxBytes(), []byte(authorizedTx))
+	})
+	return authorizedCtx
+}
+
 func createIntegrationManifest() veidtypes.ModelManifest {
 	models := []veidtypes.ModelInfo{
 		{
@@ -124,6 +134,7 @@ func activateRegistryVerifier(t *testing.T, registryK registrykeeper.Keeper, ctx
 
 func TestApplyVerificationResultUsesRealRegistryAndPolicyKeepers(t *testing.T) {
 	k, registryK, issuanceK, ctx := setupRegistryPolicyIntegrationKeepers(t)
+	ctx = authorizeRegistryPolicyApply(&k, ctx)
 	manifest := createIntegrationManifest()
 
 	_, err := k.RegisterPipelineVersion(
@@ -174,6 +185,7 @@ func TestApplyVerificationResultUsesRealRegistryAndPolicyKeepers(t *testing.T) {
 
 func TestApplyVerificationResultRejectsRealRegistryArtifactMismatch(t *testing.T) {
 	k, registryK, issuanceK, ctx := setupRegistryPolicyIntegrationKeepers(t)
+	ctx = authorizeRegistryPolicyApply(&k, ctx)
 	manifest := createIntegrationManifest()
 
 	_, err := k.RegisterPipelineVersion(
@@ -220,6 +232,7 @@ func TestApplyVerificationResultRejectsRealRegistryArtifactMismatch(t *testing.T
 
 func TestApplyVerificationResultRespectsRealPolicyScope(t *testing.T) {
 	k, registryK, issuanceK, ctx := setupRegistryPolicyIntegrationKeepers(t)
+	ctx = authorizeRegistryPolicyApply(&k, ctx)
 	manifest := createIntegrationManifest()
 
 	_, err := k.RegisterPipelineVersion(

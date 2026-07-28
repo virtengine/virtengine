@@ -78,6 +78,11 @@ func (k Keeper) CreateVerificationRequest(
 	// Generate request ID
 	requestID := k.generateRequestID(ctx, accountAddress, scopeIDs)
 
+	profileSnapshot, err := k.activeInferenceProfileSnapshot(ctx)
+	if err != nil {
+		return nil, err
+	}
+
 	// Create the request
 	request := types.NewVerificationRequest(
 		requestID,
@@ -86,6 +91,9 @@ func (k Keeper) CreateVerificationRequest(
 		ctx.BlockTime(),
 		ctx.BlockHeight(),
 	)
+	if err := request.SetInferenceProfileSnapshot(profileSnapshot); err != nil {
+		return nil, err
+	}
 
 	// Store the request
 	if err := k.setVerificationRequest(ctx, request); err != nil {
@@ -296,120 +304,18 @@ func (k Keeper) ProcessVerificationRequest(
 	request *types.VerificationRequest,
 	keyProvider ValidatorKeyProvider,
 ) *types.VerificationResult {
-	// Initialize result
+	if request == nil {
+		result := types.NewVerificationResult("", "", ctx.BlockTime(), ctx.BlockHeight())
+		result.SetError(types.ReasonCodeMLInferenceError, "verification request is required")
+		return result
+	}
 	result := types.NewVerificationResult(
 		request.RequestID,
 		request.AccountAddress,
 		ctx.BlockTime(),
 		ctx.BlockHeight(),
 	)
-
-	// Parse account address
-	addr, err := sdk.AccAddressFromBech32(request.AccountAddress)
-	if err != nil {
-		result.SetError(types.ReasonCodeInvalidPayload, err.Error())
-		return result
-	}
-
-	// Update request status to in progress
-	request.SetInProgress(ctx.BlockTime())
-	if err := k.setVerificationRequest(ctx, request); err != nil {
-		k.Logger(ctx).Error("failed to update request status", "error", err)
-	}
-
-	// Step 1: Decrypt scopes
-	decryptedScopes, scopeResults, err := k.DecryptScopesForVerification(
-		ctx, addr, request.ScopeIDs, keyProvider)
-	if err != nil {
-		result.SetError(types.ReasonCodeDecryptError, err.Error())
-		k.finalizeRequest(ctx, request, result)
-		return result
-	}
-
-	// Step 2: Validate decrypted payloads
-	validDecrypted := make([]DecryptedScope, 0, len(decryptedScopes))
-	for i, ds := range decryptedScopes {
-		valid, reason := k.ValidateDecryptedPayload(ctx, ds)
-		if valid {
-			validDecrypted = append(validDecrypted, ds)
-		} else {
-			scopeResults[i].SetFailure(types.ReasonCodeInvalidPayload)
-			scopeResults[i].Details = reason
-		}
-	}
-
-	// Step 3: Check if we have enough valid scopes
-	if len(validDecrypted) == 0 {
-		result.SetFailed(types.ReasonCodeInsufficientScopes)
-		for _, sr := range scopeResults {
-			result.AddScopeResult(sr)
-		}
-		k.finalizeRequest(ctx, request, result)
-		return result
-	}
-
-	// Step 4: Compute identity score using ML
-	score, modelVersion, reasonCodes, inputHash, err := k.ComputeIdentityScore(
-		ctx, request.AccountAddress, validDecrypted, scopeResults)
-	if err != nil {
-		result.SetError(types.ReasonCodeMLInferenceError, err.Error())
-		k.finalizeRequest(ctx, request, result)
-		return result
-	}
-
-	// Step 4b: Process evidence pipeline (document + biometric)
-	assessment, evidenceErr := k.ProcessEvidencePipeline(ctx, addr, request.RequestID, validDecrypted, keyProvider)
-	if evidenceErr != nil {
-		k.Logger(ctx).Error("evidence pipeline failed", "error", evidenceErr)
-		result.Metadata["evidence_error"] = evidenceErr.Error()
-	} else if assessment != nil {
-		result.Metadata["evidence_confidence"] = fmt.Sprintf("%d", assessment.OverallConfidence)
-		result.Metadata["evidence_provenance_hash"] = hex.EncodeToString(assessment.ProvenanceHash)
-		if adjusted, applied := applyEvidenceConfidence(score, assessment.OverallConfidence); applied {
-			score = adjusted
-		}
-		if shouldFlagLowEvidenceConfidence(assessment.OverallConfidence) {
-			reasonCodes = append(reasonCodes, types.ReasonCodeLowConfidence)
-		}
-	}
-
-	// Step 5: Build final result
-	result.Score = score
-	result.ModelVersion = modelVersion
-	result.InputHash = inputHash
-	// Runtime duration is deliberately excluded from consensus state. Off-chain
-	// telemetry may measure this call without writing the measurement here.
-	result.ProcessingDuration = 0
-
-	// Add scope results
-	for _, sr := range scopeResults {
-		result.AddScopeResult(sr)
-	}
-
-	// Determine overall status
-	result.DetermineStatus()
-
-	// Override reason codes with ML reason codes if available
-	if len(reasonCodes) > 0 {
-		result.ReasonCodes = reasonCodes
-	}
-
-	// Step 6: Update on-chain state
-	if err := k.applyVerificationResult(ctx, addr, request, result); err != nil {
-		k.rejectVerificationResult(result, err)
-	}
-
-	// Finalize request
-	k.finalizeRequest(ctx, request, result)
-
-	k.Logger(ctx).Info("verification request processed",
-		"request_id", request.RequestID,
-		"account", request.AccountAddress,
-		"score", result.Score,
-		"status", result.Status,
-		"duration_ms", result.ProcessingDuration,
-	)
-
+	result.SetError(types.ReasonCodeMLInferenceError, "direct verification processing is disabled; signed inference receipt staging is required")
 	return result
 }
 
@@ -420,6 +326,12 @@ func (k Keeper) applyVerificationResult(
 	request *types.VerificationRequest,
 	result *types.VerificationResult,
 ) error {
+	if ctx.ExecMode() != sdk.ExecModeFinalize {
+		return types.ErrUnauthorized.Wrap("verification results may only be applied during FinalizeBlock")
+	}
+	if k.consensusSystemTxAuthorizer == nil || !k.consensusSystemTxAuthorizer(ctx) {
+		return types.ErrUnauthorized.Wrap("verification result application requires authorized consensus system transaction")
+	}
 	// Update identity score
 	if result.Status == types.VerificationResultStatusSuccess ||
 		result.Status == types.VerificationResultStatusPartial {
@@ -443,7 +355,7 @@ func (k Keeper) applyVerificationResult(
 		}
 
 		if err := k.SetScoreWithDetails(ctx, addr.String(), result.Score, details); err != nil {
-			k.Logger(ctx).Error("failed to set score", "error", err)
+			return err
 		}
 
 		// Update scope verification statuses
@@ -589,6 +501,12 @@ func (k Keeper) finalizeRequest(
 	request *types.VerificationRequest,
 	result *types.VerificationResult,
 ) {
+	if ctx.ExecMode() != sdk.ExecModeFinalize ||
+		k.consensusSystemTxAuthorizer == nil ||
+		!k.consensusSystemTxAuthorizer(ctx) {
+		k.Logger(ctx).Error("refusing to finalize verification outside authorized consensus system transaction")
+		return
+	}
 	// Update request status based on result
 	switch result.Status {
 	case types.VerificationResultStatusSuccess, types.VerificationResultStatusPartial:
@@ -645,9 +563,12 @@ func (k Keeper) ProcessPendingVerifications(
 	ctx sdk.Context,
 	keyProvider ValidatorKeyProvider,
 ) []types.VerificationResult {
-	config := DefaultVerificationPipelineConfig()
 	results := make([]types.VerificationResult, 0)
+	if ctx.ExecMode() != sdk.ExecModeVoteExtension {
+		return results
+	}
 
+	config := DefaultVerificationPipelineConfig()
 	// Get pending requests
 	requests := k.GetPendingRequests(ctx, config.MaxRequestsPerBlock)
 	if len(requests) == 0 {
@@ -659,12 +580,10 @@ func (k Keeper) ProcessPendingVerifications(
 		"block_height", ctx.BlockHeight(),
 	)
 
-	for _, request := range requests {
-		// Process the request
-		result := k.ProcessVerificationRequest(ctx, &request, keyProvider)
-		results = append(results, *result)
-	}
-
+	k.Logger(ctx).Debug("pending verification requests require signed inference receipts for staging",
+		"count", len(requests),
+		"block_height", ctx.BlockHeight(),
+	)
 	return results
 }
 
@@ -673,27 +592,23 @@ func (k Keeper) HandleVerificationTimeout(
 	ctx sdk.Context,
 	request *types.VerificationRequest,
 ) *types.VerificationResult {
-	config := DefaultVerificationPipelineConfig()
-
+	if request != nil {
+		k.Logger(ctx).Warn("verification request timeout left pending for consensus handling",
+			"request_id", request.RequestID,
+			"block_height", ctx.BlockHeight(),
+		)
+	}
+	if request == nil {
+		result := types.NewVerificationResult("invalid-timeout-request", "invalid-timeout-account", ctx.BlockTime(), ctx.BlockHeight())
+		result.SetError(types.ReasonCodeTimeout, "verification timeout processing requires a request")
+		return result
+	}
 	result := types.NewVerificationResult(
 		request.RequestID,
 		request.AccountAddress,
 		ctx.BlockTime(),
 		ctx.BlockHeight(),
 	)
-	result.SetError(types.ReasonCodeTimeout, "verification timed out")
-
-	// Check if we should retry
-	if request.IsRetryable(config.MaxRetries) {
-		request.IncrementRetry(ctx.BlockTime())
-		request.SetTimeout()
-		k.addToPendingQueue(ctx, request)
-	} else {
-		request.SetFailed("timeout after max retries")
-	}
-
-	_ = k.setVerificationRequest(ctx, request)
-	_ = k.StoreVerificationResult(ctx, result)
-
+	result.SetError(types.ReasonCodeTimeout, "verification timeout requires consensus-system-transaction agreement")
 	return result
 }

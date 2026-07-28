@@ -615,7 +615,7 @@ func (r *ProviderMutationRegistry) Decode(envelope *ProviderMutationEnvelope) (s
 	return msg, nil
 }
 
-// ProviderMutationSubmitterConfig controls the one-process durable pipeline.
+// ProviderMutationSubmitterConfig controls the durable fenced pipeline.
 type ProviderMutationSubmitterConfig struct {
 	ChainID             string
 	ProviderAddress     string
@@ -739,7 +739,15 @@ func NewProviderMutationSubmitter(cfg ProviderMutationSubmitterConfig, keyManage
 	}
 	lease := cfg.Lease
 	if lease == nil {
+		if cfg.Production {
+			return nil, fmt.Errorf("%w: production requires an explicit durable submitter lease", ErrProviderMutationUnavailable)
+		}
 		lease = NewLocalSubmitterLease()
+	}
+	if cfg.Production {
+		if _, unsafe := lease.(*LocalSubmitterLease); unsafe {
+			return nil, fmt.Errorf("%w: process-local submitter lease is forbidden in production", ErrProviderMutationUnavailable)
+		}
 	}
 	encCfg := sdkutil.MakeEncodingConfig(
 		marketmodule.AppModuleBasic{}, hpcmodule.AppModuleBasic{}, resourcesmodule.AppModuleBasic{},
@@ -765,24 +773,48 @@ func (s *ProviderMutationSubmitter) Start(ctx context.Context) error {
 	s.storeReady = true
 	token, err := s.lease.Acquire(ctx, s.leaseName, s.cfg.LeaseTTL)
 	if err != nil {
-		_ = s.store.Close()
-		s.storeReady = false
-		s.mu.Unlock()
-		return err
+		if !s.cfg.Production {
+			_ = s.store.Close()
+			s.storeReady = false
+			s.mu.Unlock()
+			return err
+		}
+		token = 0
 	}
 	s.leaseToken = token
-	if err := s.recoverInProgress(ctx); err != nil {
-		_ = s.lease.Release(ctx, s.leaseName, token)
-		_ = s.store.Close()
-		s.storeReady = false
-		s.mu.Unlock()
-		return err
+	if token != 0 {
+		if err := s.recoverInProgress(ctx, token); err != nil {
+			_ = s.lease.Release(ctx, s.leaseName, token)
+			_ = s.store.Close()
+			s.storeReady = false
+			s.mu.Unlock()
+			return err
+		}
 	}
 	s.running = true
 	s.stopCh = make(chan struct{})
 	s.wg.Add(1)
 	s.mu.Unlock()
 	go s.worker(ctx)
+	return nil
+}
+
+func (s *ProviderMutationSubmitter) activateLease(ctx context.Context, token uint64) error {
+	if token == 0 {
+		return fmt.Errorf("%w: zero fencing token", ErrProviderMutationNotReady)
+	}
+	if err := s.recoverInProgress(ctx, token); err != nil {
+		_ = s.lease.Release(ctx, s.leaseName, token)
+		return err
+	}
+	s.mu.Lock()
+	if !s.running {
+		s.mu.Unlock()
+		_ = s.lease.Release(ctx, s.leaseName, token)
+		return ErrProviderMutationNotReady
+	}
+	s.leaseToken = token
+	s.mu.Unlock()
 	return nil
 }
 
@@ -811,7 +843,7 @@ func (s *ProviderMutationSubmitter) Stop(ctx context.Context) error {
 	return err
 }
 
-func (s *ProviderMutationSubmitter) recoverInProgress(ctx context.Context) error {
+func (s *ProviderMutationSubmitter) recoverInProgress(ctx context.Context, token uint64) error {
 	items, err := s.store.List(ctx)
 	if err != nil {
 		return err
@@ -820,7 +852,7 @@ func (s *ProviderMutationSubmitter) recoverInProgress(ctx context.Context) error
 		if item.State == MutationStateBuilding || item.State == MutationStateBuilt || item.State == MutationStateBroadcasting || item.State == MutationStateIncluded {
 			_, err = s.store.Update(ctx, item.ID, func(stored *ProviderMutationEnvelope) error {
 				stored.State = MutationStateAmbiguous
-				stored.LeaseToken = s.leaseToken
+				stored.LeaseToken = token
 				stored.ReconciliationState = "restart_reconciliation_required"
 				stored.NextAttemptAt = time.Now().UTC()
 				return nil
@@ -850,14 +882,31 @@ func (s *ProviderMutationSubmitter) worker(ctx context.Context) {
 		case <-s.stopCh:
 			return
 		case <-leaseTicker.C:
-			if err := s.lease.Renew(ctx, s.leaseName, s.leaseToken, s.cfg.LeaseTTL); err != nil {
+			s.mu.RLock()
+			token := s.leaseToken
+			s.mu.RUnlock()
+			if token == 0 {
+				acquired, err := s.lease.Acquire(ctx, s.leaseName, s.cfg.LeaseTTL)
+				if err != nil {
+					continue
+				}
+				if err := s.activateLease(ctx, acquired); err != nil {
+					s.mu.Lock()
+					s.lastFailure = time.Now().UTC()
+					s.mu.Unlock()
+				}
+				continue
+			}
+			if err := s.lease.Renew(ctx, s.leaseName, token, s.cfg.LeaseTTL); err != nil {
 				s.mu.Lock()
+				s.leaseToken = 0
 				s.lastFailure = time.Now().UTC()
 				s.mu.Unlock()
-				return
 			}
 		case <-ticker.C:
-			_ = s.ProcessDue(ctx, 32)
+			if s.Readiness(ctx).Ready {
+				_ = s.ProcessDue(ctx, 32)
+			}
 		}
 	}
 }
@@ -877,7 +926,10 @@ func (s *ProviderMutationSubmitter) Submit(ctx context.Context, kind ProviderMut
 	if envelope.Signer != s.cfg.ProviderAddress {
 		return ProviderMutationResult{}, fmt.Errorf("mutation signer %s does not match configured provider", envelope.Signer)
 	}
-	envelope.LeaseToken = s.leaseToken
+	s.mu.RLock()
+	leaseToken := s.leaseToken
+	s.mu.RUnlock()
+	envelope.LeaseToken = leaseToken
 	stored, existed, err := s.store.PutIfAbsent(ctx, envelope)
 	if err != nil {
 		return ProviderMutationResult{}, err
@@ -962,7 +1014,13 @@ func providerMutationTerminalState(state ProviderMutationState) bool {
 }
 
 func (s *ProviderMutationSubmitter) ensureLeaseHeld(ctx context.Context) error {
-	if s == nil || s.lease == nil || !s.lease.Held(ctx, s.leaseName, s.leaseToken) {
+	if s == nil || s.lease == nil {
+		return fmt.Errorf("%w: submitter lease lost", ErrProviderMutationNotReady)
+	}
+	s.mu.RLock()
+	token := s.leaseToken
+	s.mu.RUnlock()
+	if !s.lease.Held(ctx, s.leaseName, token) {
 		return fmt.Errorf("%w: submitter lease lost", ErrProviderMutationNotReady)
 	}
 	return nil
@@ -972,11 +1030,14 @@ func (s *ProviderMutationSubmitter) updateOwned(ctx context.Context, id string, 
 	if err := s.ensureLeaseHeld(ctx); err != nil {
 		return nil, err
 	}
+	s.mu.RLock()
+	token := s.leaseToken
+	s.mu.RUnlock()
 	return s.store.Update(ctx, id, func(item *ProviderMutationEnvelope) error {
-		if item.LeaseToken != 0 && item.LeaseToken != s.leaseToken {
+		if item.LeaseToken != 0 && item.LeaseToken != token {
 			return fmt.Errorf("%w: lease token changed", ErrProviderMutationNotReady)
 		}
-		item.LeaseToken = s.leaseToken
+		item.LeaseToken = token
 		if providerMutationTerminalState(item.State) {
 			return ErrProviderMutationStaleState
 		}
@@ -1015,7 +1076,10 @@ func (s *ProviderMutationSubmitter) ProcessDue(ctx context.Context, limit int) e
 func (s *ProviderMutationSubmitter) process(ctx context.Context, id string) error {
 	s.processMu.Lock()
 	defer s.processMu.Unlock()
-	if !s.lease.Held(ctx, s.leaseName, s.leaseToken) {
+	s.mu.RLock()
+	token := s.leaseToken
+	s.mu.RUnlock()
+	if !s.lease.Held(ctx, s.leaseName, token) {
 		return fmt.Errorf("%w: submitter lease lost", ErrProviderMutationNotReady)
 	}
 	envelope, err := s.store.Get(ctx, id)
@@ -1499,7 +1563,7 @@ func (s *ProviderMutationSubmitter) Readiness(ctx context.Context) ProviderMutat
 	token := s.leaseToken
 	storeOpen := s.storeReady
 	s.mu.RUnlock()
-	result := ProviderMutationReadiness{Started: started, KeyReady: s.keyManager != nil && !s.keyManager.IsLocked(), ChainReady: s.cfg.DevelopmentNoop || s.chain != nil, ConfirmationReady: s.cfg.DevelopmentNoop || s.chain != nil}
+	result := ProviderMutationReadiness{Started: started, KeyReady: s.keyManager != nil && s.keyManager.Ready(), ChainReady: s.cfg.DevelopmentNoop || s.chain != nil, ConfirmationReady: s.cfg.DevelopmentNoop || s.chain != nil}
 	result.LeaseHeld = started && s.lease.Held(ctx, s.leaseName, token)
 	result.StoreReady = storeOpen
 	if storeOpen {

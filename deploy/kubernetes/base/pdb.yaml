@@ -1,5 +1,19 @@
 # Pod Disruption Budgets
-# Ensures high availability during voluntary disruptions
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: virtengine-validator-pdb
+  namespace: virtengine
+  labels:
+    app.kubernetes.io/name: virtengine-validator
+    app.kubernetes.io/component: validator
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: virtengine-validator
+      app.kubernetes.io/component: validator
+---
 apiVersion: policy/v1
 kind: PodDisruptionBudget
 metadata:
@@ -7,11 +21,13 @@ metadata:
   namespace: virtengine
   labels:
     app.kubernetes.io/name: virtengine-node
+    app.kubernetes.io/component: sentry
 spec:
-  minAvailable: 2  # Ensure quorum for consensus
+  minAvailable: 1
   selector:
     matchLabels:
       app.kubernetes.io/name: virtengine-node
+      app.kubernetes.io/component: sentry
 ---
 apiVersion: policy/v1
 kind: PodDisruptionBudget
@@ -20,8 +36,10 @@ metadata:
   namespace: virtengine
   labels:
     app.kubernetes.io/name: provider-daemon
+    app.kubernetes.io/component: provider
 spec:
   minAvailable: 1
   selector:
     matchLabels:
       app.kubernetes.io/name: provider-daemon
+      app.kubernetes.io/component: provider

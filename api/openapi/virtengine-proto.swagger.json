@@ -16879,6 +16879,10 @@
           },
           "type": "array"
         },
+        "receipt_digest": {
+          "format": "byte",
+          "type": "string"
+        },
         "request_id": {
           "type": "string"
         },

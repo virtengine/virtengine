@@ -861,6 +861,8 @@ message MsgUpdateScoreResponse {
 }
 
 // VEIDVoteExtension is the canonical versioned payload signed by CometBFT.
+// Carrier v1 is currently unreleased; receipt_digest is part of its initial
+// wire contract and therefore does not require a compatibility transition.
 message VEIDVoteExtension {
   uint32 version = 1;
   string chain_id = 2;
@@ -882,6 +884,7 @@ message VEIDVoteExtensionResult {
   bytes input_hash = 6;
   bytes result_hash = 7;
   repeated string reason_codes = 8;
+  bytes receipt_digest = 9;
 }
 
 // VEIDConsensusAggregate is deterministically reconstructed from signed votes.

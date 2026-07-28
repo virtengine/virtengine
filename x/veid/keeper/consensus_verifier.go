@@ -110,7 +110,7 @@ func (cv *ConsensusVerifier) VerifyProposedResult(
 	ctx sdk.Context,
 	proposedResult types.VerificationResult,
 ) (valid bool, computedResult types.VerificationResult, err error) {
-	if cv == nil || cv.keeper == nil || cv.mlScorer == nil {
+	if cv == nil || cv.keeper == nil {
 		return false, types.VerificationResult{}, types.ErrInvalidVerificationResult.Wrap("consensus verifier is not configured")
 	}
 	cv.logger.Info("verifying proposed verification result",
@@ -119,74 +119,7 @@ func (cv *ConsensusVerifier) VerifyProposedResult(
 		"proposed_model", proposedResult.ModelVersion,
 		"block_height", ctx.BlockHeight(),
 	)
-
-	// Step 1: Validate model version - must match before proceeding
-	if cv.params.RequireModelMatch {
-		if err := cv.ValidateModelVersion(ctx, proposedResult.ModelVersion); err != nil {
-			cv.logger.Error("model version mismatch",
-				"required", proposedResult.ModelVersion,
-				"local", cv.mlScorer.GetModelVersion(),
-				"error", err,
-			)
-			return false, types.VerificationResult{}, err
-		}
-	}
-
-	// Step 2: Get the verification request
-	request, found := cv.keeper.GetVerificationRequest(ctx, proposedResult.RequestID)
-	if !found {
-		cv.logger.Error("verification request not found",
-			"request_id", proposedResult.RequestID,
-		)
-		return false, types.VerificationResult{}, types.ErrVerificationRequestNotFound.Wrapf(
-			"request %s not found", proposedResult.RequestID,
-		)
-	}
-
-	// Step 3: Recompute the verification result
-	processed := cv.keeper.ProcessVerificationRequest(ctx, request, cv.keyProvider)
-	if processed == nil {
-		return false, types.VerificationResult{}, types.ErrInvalidVerificationResult.Wrapf(
-			"verification request %s produced no result", proposedResult.RequestID,
-		)
-	}
-	computedResult = *processed
-	computedResult.ProcessingDuration = 0
-
-	// Step 4: Compare results
-	comparison := cv.CompareResults(proposedResult, computedResult)
-
-	// Log verification metrics
-	metrics := VerificationMetrics{
-		RequestID:        proposedResult.RequestID,
-		ProposerScore:    proposedResult.Score,
-		ComputedScore:    computedResult.Score,
-		ScoreDifference:  comparison.ScoreDifference,
-		Match:            comparison.Match,
-		ModelVersion:     computedResult.ModelVersion,
-		ComputeTimeMs:    computedResult.ProcessingDuration,
-		BlockHeight:      ctx.BlockHeight(),
-		ValidatorAddress: cv.getValidatorAddress(),
-	}
-	cv.keeper.LogVerificationMetrics(ctx, metrics)
-
-	if !comparison.Match {
-		cv.logger.Warn("verification result mismatch",
-			"request_id", proposedResult.RequestID,
-			"proposed_score", proposedResult.Score,
-			"computed_score", computedResult.Score,
-			"differences", comparison.Differences,
-		)
-		return false, computedResult, nil
-	}
-
-	cv.logger.Info("verification result verified successfully",
-		"request_id", proposedResult.RequestID,
-		"score", computedResult.Score,
-		"compute_time_ms", computedResult.ProcessingDuration,
-	)
-
-	return true, computedResult, nil
+	return false, types.VerificationResult{}, types.ErrInvalidVerificationResult.Wrap("consensus recomputation is disabled; use signed vote-extension receipt carrier")
 }
 
 // CompareResults compares proposed and computed verification results

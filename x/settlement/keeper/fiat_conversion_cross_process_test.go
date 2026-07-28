@@ -131,6 +131,7 @@ func TestFiatObservationDurableMutationToAuthenticatedMsgServerProgression(t *te
 	queuePath := filepath.Join(t.TempDir(), "task85b-mutations.json")
 
 	config := provider_daemon.DefaultProviderMutationSubmitterConfig()
+	config.Production = false
 	config.ChainID = "virtengine-task85b-process"
 	config.ProviderAddress = providerAddress
 	config.QueueStatePath = queuePath

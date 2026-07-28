@@ -100,7 +100,7 @@ spec:
       initContainers:
         # Hardware detection init container
         - name: tee-hardware-detect
-          image: virtengine/tee-enclave:0.1.0
+          image: ghcr.io/virtengine/tee-enclave@sha256:f00c2e5a2d945f6325e44ec8aa10d71250f196ceea6c33d7db0373395cb2df3a
           imagePullPolicy: IfNotPresent
           command:
             - /bin/sh
@@ -185,7 +185,7 @@ spec:
 
       containers:
         - name: enclave
-          image: virtengine/tee-enclave:0.1.0
+          image: ghcr.io/virtengine/tee-enclave@sha256:f00c2e5a2d945f6325e44ec8aa10d71250f196ceea6c33d7db0373395cb2df3a
           imagePullPolicy: IfNotPresent
           args:
             - serve

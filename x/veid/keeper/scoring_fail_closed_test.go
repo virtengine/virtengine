@@ -15,7 +15,7 @@ func TestIsRealInferenceReadyRejectsPlaceholderHash(t *testing.T) {
 	require.Contains(t, err.Error(), "placeholder")
 }
 
-func TestGetMLScorerFailsClosedWhenTensorFlowBundleMissing(t *testing.T) {
+func TestGetMLScorerFailsClosedWithoutExplicitDevelopmentInjection(t *testing.T) {
 	t.Setenv("VEID_USE_TENSORFLOW", "true")
 	t.Setenv("VEID_DISABLE_TENSORFLOW", "")
 	t.Setenv("VEID_INFERENCE_ENABLED", "")
@@ -32,5 +32,5 @@ func TestGetMLScorerFailsClosedWhenTensorFlowBundleMissing(t *testing.T) {
 
 	_, err := scorer.Score(&ScoringInput{})
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "not ready")
+	require.Contains(t, err.Error(), "signed receipts")
 }

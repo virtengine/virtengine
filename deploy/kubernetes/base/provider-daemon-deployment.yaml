@@ -1,6 +1,6 @@
-# Provider Daemon Deployment
+# Provider Daemon StatefulSet
 apiVersion: apps/v1
-kind: Deployment
+kind: StatefulSet
 metadata:
   name: provider-daemon
   namespace: virtengine
@@ -10,16 +10,17 @@ metadata:
     app.kubernetes.io/part-of: virtengine-platform
   annotations:
     reloader.stakater.com/auto: "true"
+    virtengine.com/provider-ha-state: "persistent"
 spec:
+  serviceName: provider-daemon-headless
   replicas: 2
-  strategy:
+  podManagementPolicy: Parallel
+  updateStrategy:
     type: RollingUpdate
-    rollingUpdate:
-      maxUnavailable: 1
-      maxSurge: 1
   selector:
     matchLabels:
       app.kubernetes.io/name: provider-daemon
+      app.kubernetes.io/component: provider
   template:
     metadata:
       labels:
@@ -28,7 +29,7 @@ spec:
         app.kubernetes.io/part-of: virtengine-platform
       annotations:
         prometheus.io/scrape: "true"
-        prometheus.io/port: "9100"
+        prometheus.io/port: "9090"
         prometheus.io/path: "/metrics"
     spec:
       serviceAccountName: provider-daemon
@@ -37,50 +38,156 @@ spec:
         runAsUser: 1000
         runAsGroup: 1000
         fsGroup: 1000
-      
+        seccompProfile:
+          type: RuntimeDefault
       nodeSelector:
         role: workload
-      
       affinity:
         podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            - labelSelector:
+                matchLabels:
+                  app.kubernetes.io/name: provider-daemon
+                  app.kubernetes.io/component: provider
+              topologyKey: kubernetes.io/hostname
           preferredDuringSchedulingIgnoredDuringExecution:
             - weight: 100
               podAffinityTerm:
                 labelSelector:
                   matchLabels:
                     app.kubernetes.io/name: provider-daemon
-                topologyKey: kubernetes.io/hostname
-      
-      containers:
-        - name: provider-daemon
-          image: virtengine/provider-daemon:latest
+                    app.kubernetes.io/component: provider
+                topologyKey: topology.kubernetes.io/zone
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: topology.kubernetes.io/zone
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              app.kubernetes.io/name: provider-daemon
+              app.kubernetes.io/component: provider
+      initContainers:
+        - name: validate-provider-ha
+          image: ghcr.io/virtengine/provider-daemon@sha256:2e5d5bc24a2d21a2b9df45d349f9b6f2c1c0e1ef6dfe0ef7a59335a7d7df45bb
           imagePullPolicy: IfNotPresent
-          
-          command: ["provider-daemon"]
+          command: ["/bin/sh", "-ec"]
           args:
-            - run
-            - --host=$(PROVIDER_HOST)
-            - --port=$(PROVIDER_PORT)
-            - --grpc-port=$(PROVIDER_GRPC_PORT)
-            - --node=$(VIRTENGINE_NODE_URL)
-            - --log-level=$(LOG_LEVEL)
-          
+            - |
+              required="PROVIDER_ADDRESS PROVIDER_KEY_FINGERPRINT VIRTENGINE_KEY_PASSPHRASE_FILE"
+              for name in $required; do
+                eval value="\${$name:-}"
+                if [ -z "$value" ]; then
+                  echo "missing required provider HA metadata: $name" >&2
+                  exit 1
+                fi
+              done
+              mkdir -p /var/lib/virtengine/provider/keys /var/lib/virtengine/provider-ha/lifecycle_queue /var/lib/virtengine/provider-backups /var/log/virtengine/provider
           envFrom:
             - configMapRef:
                 name: provider-daemon-config
-          
           env:
-            - name: PROVIDER_KEY
+            - name: PROVIDER_ADDRESS
               valueFrom:
                 secretKeyRef:
                   name: provider-daemon-secrets
-                  key: provider-key
-            - name: WALLET_MNEMONIC
+                  key: provider-address
+            - name: PROVIDER_KEY_FINGERPRINT
               valueFrom:
                 secretKeyRef:
                   name: provider-daemon-secrets
-                  key: wallet-mnemonic
-          
+                  key: provider-key-fingerprint
+            - name: VIRTENGINE_KEY_PASSPHRASE_FILE
+              value: /var/run/secrets/virtengine/provider/key-passphrase
+          volumeMounts:
+            - name: provider-data
+              mountPath: /var/lib/virtengine/provider
+            - name: provider-ha-state
+              mountPath: /var/lib/virtengine/provider-ha
+            - name: provider-backups
+              mountPath: /var/lib/virtengine/provider-backups
+            - name: provider-logs
+              mountPath: /var/log/virtengine/provider
+            - name: tmp
+              mountPath: /tmp
+            - name: provider-key-passphrase
+              mountPath: /var/run/secrets/virtengine/provider
+              readOnly: true
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            runAsNonRoot: true
+            runAsUser: 1000
+            capabilities:
+              drop:
+                - ALL
+      containers:
+        - name: provider-daemon
+          image: ghcr.io/virtengine/provider-daemon@sha256:2e5d5bc24a2d21a2b9df45d349f9b6f2c1c0e1ef6dfe0ef7a59335a7d7df45bb
+          imagePullPolicy: IfNotPresent
+          command: ["provider-daemon"]
+          args:
+            - start
+            - --node=$(VIRTENGINE_NODE_URL)
+            - --chain-id=$(CHAIN_ID)
+            - --provider-key=$(PROVIDER_ADDRESS)
+            - --production=true
+            - --key-dir=/var/lib/virtengine/provider/keys
+            - --key-passphrase-file=/var/run/secrets/virtengine/provider/key-passphrase
+            - --key-fingerprint=$(PROVIDER_KEY_FINGERPRINT)
+            - --key-backup-file=/var/lib/virtengine/provider-backups/provider-keys.enc.json
+            - --submitter-lease-backend=kubernetes
+            - --submitter-lease-owner=$(POD_UID)
+            - --submitter-lease-namespace=$(POD_NAMESPACE)
+            - --submitter-lease-file=/var/lib/virtengine/provider-ha/submitter_lease.json
+            - --listen=0.0.0.0:$(PROVIDER_PORT)
+            - --metrics=0.0.0.0:$(METRICS_PORT)
+            - --chain-usage-submit=true
+            - --chain-usage-queue-file=/var/lib/virtengine/provider-ha/chain_usage_queue.json
+            - --waldur-state-file=/var/lib/virtengine/provider-ha/waldur_bridge_state.json
+            - --waldur-checkpoint-file=/var/lib/virtengine/provider-ha/marketplace_checkpoint.json
+            - --waldur-order-state-file=/var/lib/virtengine/provider-ha/waldur_order_state.json
+            - --waldur-order-checkpoint-file=/var/lib/virtengine/provider-ha/waldur_order_checkpoint.json
+            - --waldur-offering-sync-state-file=/var/lib/virtengine/provider-ha/offering_sync_state.json
+            - --waldur-callback-sink-dir=/var/lib/virtengine/provider-ha/callbacks
+            - --waldur-lifecycle-queue-enabled=true
+            - --waldur-lifecycle-queue-path=/var/lib/virtengine/provider-ha/lifecycle_queue
+            - --provisioning-state-file=/var/lib/virtengine/provider-ha/provisioning_state.json
+            - --provisioning-checkpoint-file=/var/lib/virtengine/provider-ha/provisioning_checkpoint.json
+            - --portal-audit-log-file=/var/log/virtengine/provider/portal_audit.log
+            - --fiat-conversion-state-file=/var/lib/virtengine/provider-ha/fiat_conversion_state.json
+            - --fiat-conversion-repository-file=/var/lib/virtengine/provider-ha/fiat_conversion_repository.json
+          envFrom:
+            - configMapRef:
+                name: provider-daemon-config
+          env:
+            - name: PROVIDER_ADDRESS
+              valueFrom:
+                secretKeyRef:
+                  name: provider-daemon-secrets
+                  key: provider-address
+            - name: PROVIDER_KEY_FINGERPRINT
+              valueFrom:
+                secretKeyRef:
+                  name: provider-daemon-secrets
+                  key: provider-key-fingerprint
+            - name: POD_UID
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.uid
+            - name: POD_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+            - name: VIRTENGINE_WALDUR_CHAIN_KEYRING_PASSPHRASE
+              valueFrom:
+                secretKeyRef:
+                  name: provider-daemon-secrets
+                  key: waldur-chain-keyring-passphrase
+            - name: VIRTENGINE_PORTAL_AUTH_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: provider-daemon-secrets
+                  key: portal-auth-secret
           ports:
             - name: https
               containerPort: 8443
@@ -89,9 +196,8 @@ spec:
               containerPort: 8444
               protocol: TCP
             - name: metrics
-              containerPort: 9100
+              containerPort: 9090
               protocol: TCP
-          
           resources:
             requests:
               cpu: "500m"
@@ -99,59 +205,128 @@ spec:
             limits:
               cpu: "2000m"
               memory: "4Gi"
-          
           livenessProbe:
             httpGet:
               path: /health
               port: https
-              scheme: HTTPS
+              scheme: HTTP
             initialDelaySeconds: 30
             periodSeconds: 30
             timeoutSeconds: 10
             failureThreshold: 3
-          
           readinessProbe:
             httpGet:
               path: /ready
               port: https
-              scheme: HTTPS
+              scheme: HTTP
             initialDelaySeconds: 10
             periodSeconds: 10
             timeoutSeconds: 5
             failureThreshold: 3
-
           startupProbe:
             httpGet:
               path: /ready
               port: https
-              scheme: HTTPS
+              scheme: HTTP
             initialDelaySeconds: 10
             periodSeconds: 10
             timeoutSeconds: 5
             failureThreshold: 18
-          
           volumeMounts:
             - name: provider-data
-              mountPath: /root/.provider
+              mountPath: /var/lib/virtengine/provider
+            - name: provider-ha-state
+              mountPath: /var/lib/virtengine/provider-ha
+            - name: provider-backups
+              mountPath: /var/lib/virtengine/provider-backups
+            - name: provider-logs
+              mountPath: /var/log/virtengine/provider
             - name: tmp
               mountPath: /tmp
-          
+            - name: provider-key-passphrase
+              mountPath: /var/run/secrets/virtengine/provider
+              readOnly: true
           securityContext:
             allowPrivilegeEscalation: false
             readOnlyRootFilesystem: true
+            runAsNonRoot: true
+            runAsUser: 1000
             capabilities:
               drop:
                 - ALL
-      
       volumes:
         - name: provider-data
-          emptyDir: {}
+          persistentVolumeClaim:
+            claimName: provider-data
+        - name: provider-ha-state
+          persistentVolumeClaim:
+            claimName: provider-ha-state
+        - name: provider-backups
+          persistentVolumeClaim:
+            claimName: provider-backups
+        - name: provider-logs
+          emptyDir:
+            sizeLimit: 1Gi
         - name: tmp
-          emptyDir: {}
-      
-      terminationGracePeriodSeconds: 30
+          emptyDir:
+            sizeLimit: 256Mi
+        - name: provider-key-passphrase
+          secret:
+            secretName: provider-daemon-secrets
+            defaultMode: 0400
+            items:
+              - key: provider-key-passphrase
+                path: key-passphrase
+      terminationGracePeriodSeconds: 60
 ---
-# ServiceAccount
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: provider-data
+  namespace: virtengine
+  labels:
+    app.kubernetes.io/name: provider-daemon
+    app.kubernetes.io/component: provider
+    virtengine.com/provider-identity: encrypted-shared
+spec:
+  accessModes: ["ReadWriteMany"]
+  storageClassName: rwx-retain-encrypted
+  resources:
+    requests:
+      storage: 100Gi
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: provider-ha-state
+  namespace: virtengine
+  labels:
+    app.kubernetes.io/name: provider-daemon
+    app.kubernetes.io/component: provider
+    virtengine.com/provider-ha-state: shared
+spec:
+  accessModes: ["ReadWriteMany"]
+  storageClassName: rwx-retain-encrypted
+  resources:
+    requests:
+      storage: 100Gi
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: provider-backups
+  namespace: virtengine
+  labels:
+    app.kubernetes.io/name: provider-daemon
+    app.kubernetes.io/component: provider
+    virtengine.com/provider-backups: encrypted
+spec:
+  accessModes: ["ReadWriteMany"]
+  storageClassName: rwx-retain-encrypted
+  resources:
+    requests:
+      storage: 100Gi
+---
 apiVersion: v1
 kind: ServiceAccount
 metadata:
@@ -160,7 +335,6 @@ metadata:
   labels:
     app.kubernetes.io/name: provider-daemon
 ---
-# RBAC for provider daemon to manage lease namespaces
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
@@ -183,6 +357,9 @@ rules:
   - apiGroups: ["autoscaling"]
     resources: ["horizontalpodautoscalers"]
     verbs: ["*"]
+  - apiGroups: ["coordination.k8s.io"]
+    resources: ["leases"]
+    verbs: ["get", "create", "update"]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding

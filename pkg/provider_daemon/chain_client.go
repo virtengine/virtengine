@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	sdkmath "cosmossdk.io/math"
@@ -43,10 +44,12 @@ type RPCChainClientConfig struct {
 
 // rpcChainClient implements ChainClient using gRPC
 type rpcChainClient struct {
+	mu                sync.RWMutex
 	config            RPCChainClientConfig
 	grpcConn          *grpc.ClientConn
 	rpcClient         *rpchttp.HTTP
 	mutationSubmitter *ProviderMutationSubmitter
+	mutationGuard     func(context.Context) error
 	hpcQuery          providerHPCQueryClient
 	resourcesQuery    providerResourcesQueryClient
 	providerQuery     providerv1beta4.QueryClient
@@ -55,18 +58,45 @@ type rpcChainClient struct {
 	storeQuery        providerStoreQueryClient
 }
 
+// SetMutationGuard installs the HA fencing check applied before provider
+// producers read or mutate chain state. Standby replicas therefore cannot bid,
+// report resources, update domains, or initiate any other write workflow.
+func (c *rpcChainClient) SetMutationGuard(guard func(context.Context) error) {
+	c.mu.Lock()
+	c.mutationGuard = guard
+	c.mu.Unlock()
+}
+
+func (c *rpcChainClient) ensureMutationAllowed(ctx context.Context) error {
+	c.mu.RLock()
+	guard := c.mutationGuard
+	c.mu.RUnlock()
+	if guard == nil {
+		return nil
+	}
+	return guard(ctx)
+}
+
 // SetMutationSubmitter installs the only production provider mutation path.
 // It must be started and ready before mutation-producing services are started.
 func (c *rpcChainClient) SetMutationSubmitter(submitter *ProviderMutationSubmitter) {
+	c.mu.Lock()
 	c.mutationSubmitter = submitter
+	c.mu.Unlock()
 }
 
 // MutationReadiness exposes typed readiness for daemon health checks.
 func (c *rpcChainClient) MutationReadiness(ctx context.Context) ProviderMutationReadiness {
-	if c == nil || c.mutationSubmitter == nil {
+	if c == nil {
 		return ProviderMutationReadiness{Reason: "provider mutation submitter unavailable"}
 	}
-	return c.mutationSubmitter.Readiness(ctx)
+	c.mu.RLock()
+	submitter := c.mutationSubmitter
+	c.mu.RUnlock()
+	if submitter == nil {
+		return ProviderMutationReadiness{Reason: "provider mutation submitter unavailable"}
+	}
+	return submitter.Readiness(ctx)
 }
 
 func (c *rpcChainClient) ProviderStoreQueryClient() providerStoreQueryClient {
@@ -80,7 +110,16 @@ func (c *rpcChainClient) submitMutation(ctx context.Context, kind ProviderMutati
 	if msg == nil {
 		return fmt.Errorf("mutation message is required")
 	}
-	if c == nil || c.mutationSubmitter == nil {
+	if c == nil {
+		return ErrProviderMutationUnavailable
+	}
+	if err := c.ensureMutationAllowed(ctx); err != nil {
+		return err
+	}
+	c.mu.RLock()
+	submitter := c.mutationSubmitter
+	c.mu.RUnlock()
+	if submitter == nil {
 		return &ProviderMutationError{
 			Op:             "submit",
 			Classification: MutationClassUnavailable,
@@ -88,7 +127,7 @@ func (c *rpcChainClient) submitMutation(ctx context.Context, kind ProviderMutati
 			Err:            ErrProviderMutationUnavailable,
 		}
 	}
-	_, err := c.mutationSubmitter.Submit(ctx, kind, msg)
+	_, err := submitter.Submit(ctx, kind, msg)
 	return err
 }
 

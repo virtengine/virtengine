@@ -66,6 +66,7 @@ type PortalAPIServerConfig struct {
 	VaultMaxPayloadBytes    int64
 	WorkloadLogSource       WorkloadLogSource
 	WorkloadShellExecutor   WorkloadShellExecutor
+	Readiness               func(context.Context) ProviderMutationReadiness
 }
 
 type WorkloadLogSource interface {
@@ -120,6 +121,7 @@ type PortalAPIServer struct {
 	lifecycleExec LifecycleExecutor
 	workloadLogs  WorkloadLogSource
 	shellExec     WorkloadShellExecutor
+	readiness     func(context.Context) ProviderMutationReadiness
 }
 
 func NewPortalAPIServer(cfg PortalAPIServerConfig) (*PortalAPIServer, error) {
@@ -184,6 +186,7 @@ func NewPortalAPIServer(cfg PortalAPIServerConfig) (*PortalAPIServer, error) {
 	srv.lifecycleExec = cfg.LifecycleExecutor
 	srv.workloadLogs = cfg.WorkloadLogSource
 	srv.shellExec = cfg.WorkloadShellExecutor
+	srv.readiness = cfg.Readiness
 
 	return srv, nil
 }
@@ -208,6 +211,7 @@ func (s *PortalAPIServer) Start(ctx context.Context) error {
 
 func (s *PortalAPIServer) setupRoutes(router *mux.Router) {
 	router.HandleFunc("/health", s.handleHealth).Methods(http.MethodGet)
+	router.HandleFunc("/ready", s.handleReady).Methods(http.MethodGet)
 	router.HandleFunc("/deployments/{id}/logs", s.handleLogs).Methods(http.MethodGet)
 	router.HandleFunc("/deployments/{id}/shell/session", s.handleShellSession).Methods(http.MethodPost)
 	router.HandleFunc("/deployments/{id}/shell", s.handleShell).Methods(http.MethodGet)
@@ -216,6 +220,7 @@ func (s *PortalAPIServer) setupRoutes(router *mux.Router) {
 	api.Use(s.rateLimitMiddleware())
 
 	api.HandleFunc("/health", s.handleHealth).Methods(http.MethodGet)
+	api.HandleFunc("/ready", s.handleReady).Methods(http.MethodGet)
 	api.HandleFunc("/deployments/{deploymentId}/logs", s.handleLogs).Methods(http.MethodGet)
 	api.HandleFunc("/deployments/{deploymentId}/shell/session", s.handleShellSession).Methods(http.MethodPost)
 	api.HandleFunc("/deployments/{deploymentId}/shell", s.handleShell).Methods(http.MethodGet)
@@ -269,6 +274,20 @@ func (s *PortalAPIServer) Shutdown(ctx context.Context) error {
 func (s *PortalAPIServer) handleHealth(w http.ResponseWriter, _ *http.Request) {
 	w.WriteHeader(http.StatusOK)
 	_, _ = w.Write([]byte("ok"))
+}
+
+func (s *PortalAPIServer) handleReady(w http.ResponseWriter, r *http.Request) {
+	if s.readiness == nil {
+		http.Error(w, "readiness dependencies unavailable", http.StatusServiceUnavailable)
+		return
+	}
+	status := s.readiness(r.Context())
+	if !status.Ready {
+		http.Error(w, status.Reason, http.StatusServiceUnavailable)
+		return
+	}
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write([]byte("ready"))
 }
 
 func (s *PortalAPIServer) handleLogs(w http.ResponseWriter, r *http.Request) {

@@ -1,6 +1,8 @@
 package main
 
 import (
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -42,4 +44,21 @@ func TestWriteAndRestoreProviderKeyBackupRoundTrip(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, originalKey.PublicKey, signature.PublicKey)
 	require.NoError(t, signature.Verify(message))
+}
+
+func TestProviderKeyPassphraseRequiresNonEmptySecretFile(t *testing.T) {
+	_, err := providerKeyPassphrase(provider_daemon.KeyStorageTypeFile, "")
+	require.ErrorContains(t, err, "mounted secret")
+
+	path := filepath.Join(t.TempDir(), "passphrase")
+	require.NoError(t, os.WriteFile(path, []byte("\n\t"), 0o600))
+	_, err = providerKeyPassphrase(provider_daemon.KeyStorageTypeFile, path)
+	require.ErrorContains(t, err, "must not be empty")
+
+	require.NoError(t, os.WriteFile(path, []byte("  strong passphrase\n"), 0o600))
+	value, err := providerKeyPassphrase(provider_daemon.KeyStorageTypeFile, path)
+	require.NoError(t, err)
+	require.Equal(t, []byte("strong passphrase"), value)
+	scrubStringBytes(value)
+	require.Equal(t, make([]byte, len(value)), value)
 }

@@ -3,6 +3,7 @@ package provider_daemon
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"path/filepath"
 	"testing"
 	"time"
@@ -19,6 +20,7 @@ import (
 	hpcv1 "github.com/virtengine/virtengine/sdk/go/node/hpc/v1"
 	marketv1 "github.com/virtengine/virtengine/sdk/go/node/market/v1"
 	marketv1beta5 "github.com/virtengine/virtengine/sdk/go/node/market/v1beta5"
+	providerv1beta4 "github.com/virtengine/virtengine/sdk/go/node/provider/v1beta4"
 	resourcesv1 "github.com/virtengine/virtengine/sdk/go/node/resources/v1"
 	attrv1 "github.com/virtengine/virtengine/sdk/go/node/types/attributes/v1"
 	resbasev1beta4 "github.com/virtengine/virtengine/sdk/go/node/types/resources/v1beta4"
@@ -158,6 +160,17 @@ func TestNewRPCChainClient(t *testing.T) {
 			defer client.Close()
 		})
 	}
+}
+
+func TestRPCChainClientMutationGuardFencesStandby(t *testing.T) {
+	client := &rpcChainClient{}
+	client.SetMutationGuard(func(context.Context) error {
+		return ErrProviderMutationNotReady
+	})
+
+	err := client.submitMutation(context.Background(), MutationProviderDelete, &providerv1beta4.MsgDeleteProvider{Owner: "provider"})
+	require.ErrorIs(t, err, ErrProviderMutationNotReady)
+	require.False(t, errors.Is(err, ErrProviderMutationUnavailable), "guard must run before submitter lookup")
 }
 
 func TestParseOrderID(t *testing.T) {

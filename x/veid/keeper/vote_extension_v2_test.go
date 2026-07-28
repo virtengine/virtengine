@@ -195,8 +195,11 @@ func TestExtendVoteCarriesNonEmptyBoundedResultAndVerifyAccepts(t *testing.T) {
 		BlockHeight:    ctx.BlockHeight(),
 		ReasonCodes:    []types.ReasonCode{types.ReasonCodeSuccess},
 		InputHash:      testHash(0x33),
+		Metadata: map[string]string{
+			types.VerificationResultMetadataReceiptDigest: hex.EncodeToString(testHash(0x66)),
+		},
 	}
-	require.NoError(t, keeper.StoreBlockVerificationResult(ctx, ctx.BlockHeight(), result))
+	require.NoError(t, keeper.storeVerifiedBlockVerificationResult(ctx.WithExecMode(sdk.ExecModeVoteExtension), ctx.BlockHeight(), result))
 
 	req := &abci.RequestExtendVote{Height: ctx.BlockHeight(), Hash: []byte("block-hash")}
 	response, err := keeper.ExtendVote(ctx.WithExecMode(sdk.ExecModeVoteExtension), req, nil)
@@ -221,7 +224,9 @@ func TestAggregateVoteExtensionsVotingPowerQuorumAndMinority(t *testing.T) {
 	t.Parallel()
 
 	quorumResult := testVoteExtensionResult("request-quorum", 88)
-	minorityResult := testVoteExtensionResult("request-minority", 33)
+	minorityResult := testVoteExtensionResult("request-quorum", 88)
+	minorityResult.ReceiptDigest = testHash(0x77)
+	minorityResult.ResultHash = ComputeVoteExtensionResultHash(minorityResult)
 	first := testVoteExtensionBundle(quorumResult)
 	second := testVoteExtensionBundle(quorumResult)
 	third := testVoteExtensionBundle(minorityResult)
@@ -246,6 +251,8 @@ func TestAggregateVoteExtensionsVotingPowerQuorumAndMinority(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, aggregate.Results, 1)
 	require.Equal(t, "request-quorum", aggregate.Results[0].Result.RequestId)
+	require.Equal(t, quorumResult.ReceiptDigest, aggregate.Results[0].Result.ReceiptDigest)
+	require.NotEqual(t, minorityResult.ReceiptDigest, aggregate.Results[0].Result.ReceiptDigest)
 	require.Equal(t, int64(75), aggregate.Results[0].VotingPower)
 	require.Equal(t, int64(100), aggregate.TotalVotingPower)
 	require.Equal(t, int64(67), aggregate.QuorumVotingPower)
@@ -403,6 +410,104 @@ func TestConsensusSystemMessageConsumesExactlyOnceInFinalize(t *testing.T) {
 	require.Error(t, err)
 }
 
+func TestSubmitConsensusVerificationFinalizesOnlyQuorumReceiptDigest(t *testing.T) {
+	keeper, ctx, stateStore := setupInferenceReceiptKeeper(t)
+	t.Cleanup(func() { closeStoreIfNeeded(stateStore) })
+	registerActiveInferencePipeline(t, keeper, ctx)
+
+	const authorizedTx = "authorized-system-tx"
+	ctx = ctx.
+		WithExecMode(sdk.ExecModeFinalize).
+		WithTxBytes([]byte(authorizedTx)).
+		WithHeaderInfo(coreheader.Info{ChainID: ctx.ChainID(), Height: ctx.BlockHeight()}).
+		WithConsensusParams(cmtproto.ConsensusParams{Abci: &cmtproto.ABCIParams{VoteExtensionsEnableHeight: 1}})
+	keeper.SetConsensusSystemTxAuthorizer(func(callCtx sdk.Context) bool {
+		return string(callCtx.TxBytes()) == authorizedTx
+	})
+
+	account := sdk.AccAddress(testHash(0x44)[:20])
+	_, err := keeper.CreateIdentityRecord(ctx, account)
+	require.NoError(t, err)
+	request := types.NewVerificationRequest("request-quorum-finalize", account.String(), []string{"scope-a"}, ctx.BlockTime(), ctx.BlockHeight())
+	require.NoError(t, keeper.setVerificationRequest(ctx, request))
+	keeper.addToPendingQueue(ctx, request)
+
+	quorumResult := testVoteExtensionResult(request.RequestID, 91)
+	quorumResult.AccountAddress = account.String()
+	quorumResult.ModelVersion = "v1.0.0"
+	quorumResult.ReceiptDigest = testHash(0x66)
+	quorumResult.ResultHash = ComputeVoteExtensionResultHash(quorumResult)
+
+	minorityResult := quorumResult
+	minorityResult.ReceiptDigest = testHash(0x77)
+	minorityResult.ResultHash = ComputeVoteExtensionResultHash(minorityResult)
+
+	expected, err := keeper.VoteExtensionCommitments(ctx)
+	require.NoError(t, err)
+	expected.Height = ctx.BlockHeight() - 1
+	expected.BlockHash = []byte("block-hash")
+
+	validatorSpecs := []consensusVoteSpec{
+		{key: cmtcrypto.GenPrivKey(), power: 40, bundle: signedVoteExtensionBundle(expected, quorumResult)},
+		{key: cmtcrypto.GenPrivKey(), power: 35, bundle: signedVoteExtensionBundle(expected, quorumResult)},
+		{key: cmtcrypto.GenPrivKey(), power: 25, bundle: signedVoteExtensionBundle(expected, minorityResult)},
+	}
+	staking := installConsensusValidators(t, validatorSpecs)
+	keeper.SetStakingKeeper(staking)
+	keeper.SetConsensusValidatorStore(staking)
+
+	commit := signedExtendedCommit(t, ctx, 2, validatorSpecs)
+	ctx = ctx.WithCometInfo(finalCometInfo{commit: commit})
+	aggregate, err := AggregateVoteExtensions(commit, expected)
+	require.NoError(t, err)
+	require.Len(t, aggregate.Results, 1)
+	require.Equal(t, int64(75), aggregate.Results[0].VotingPower)
+	require.Equal(t, quorumResult.ReceiptDigest, aggregate.Results[0].Result.ReceiptDigest)
+	require.NotEqual(t, minorityResult.ReceiptDigest, aggregate.Results[0].Result.ReceiptDigest)
+
+	commitBytes, err := proto.Marshal(&commit)
+	require.NoError(t, err)
+	msg := &veidv1.MsgSubmitConsensusVerification{
+		Version:        VoteExtensionVersion,
+		ChainId:        ctx.ChainID(),
+		Height:         ctx.BlockHeight(),
+		ExtendedCommit: commitBytes,
+		Aggregate:      aggregate,
+	}
+
+	server := NewMsgServerImpl(keeper)
+	response, err := server.SubmitConsensusVerification(ctx, msg)
+	require.NoError(t, err)
+	require.Equal(t, uint32(1), response.AppliedResults)
+
+	storedResult, found := keeper.GetVerificationResult(ctx, request.RequestID)
+	require.True(t, found)
+	require.Equal(t, types.VerificationResultStatusSuccess, storedResult.Status)
+	require.Equal(t, hex.EncodeToString(quorumResult.ReceiptDigest), storedResult.Metadata[types.VerificationResultMetadataReceiptDigest])
+	require.NotEqual(t, hex.EncodeToString(minorityResult.ReceiptDigest), storedResult.Metadata[types.VerificationResultMetadataReceiptDigest])
+
+	storedRequest, found := keeper.GetVerificationRequest(ctx, request.RequestID)
+	require.True(t, found)
+	require.Equal(t, types.RequestStatusCompleted, storedRequest.Status)
+	require.Zero(t, storedRequest.RetryCount)
+	require.Empty(t, keeper.GetPendingRequests(ctx, 10))
+
+	score, status, found := keeper.GetScore(ctx, account.String())
+	require.True(t, found)
+	require.Equal(t, uint32(91), score)
+	require.Equal(t, types.AccountStatusVerified, status)
+	history := keeper.GetScoreHistory(ctx, account.String())
+	require.Len(t, history, 1)
+	require.Equal(t, uint32(91), history[0].Score)
+
+	_, err = server.SubmitConsensusVerification(ctx, msg)
+	require.Error(t, err)
+	storedRequest, found = keeper.GetVerificationRequest(ctx, request.RequestID)
+	require.True(t, found)
+	require.Equal(t, types.RequestStatusCompleted, storedRequest.Status)
+	require.Len(t, keeper.GetScoreHistory(ctx, account.String()), 1)
+}
+
 func TestConsensusSystemMessageRejectsUnmediatedFinalizeInvocation(t *testing.T) {
 	t.Parallel()
 
@@ -425,6 +530,7 @@ func testVoteExtensionResult(requestID string, score uint32) veidv1.VEIDVoteExte
 		ModelVersion:   "1.0.0",
 		InputHash:      testHash(0x33),
 		ReasonCodes:    []string{"SUCCESS"},
+		ReceiptDigest:  testHash(0x66),
 	}
 	result.ResultHash = ComputeVoteExtensionResultHash(result)
 	return result
@@ -464,6 +570,72 @@ func testExtendedVote(t *testing.T, addressByte byte, power int64, bundle *veidv
 		VoteExtension: encoded,
 		BlockIdFlag:   cmtproto.BlockIDFlagCommit,
 	}
+}
+
+type consensusVoteSpec struct {
+	key    cmtcrypto.PrivKey
+	power  int64
+	bundle *veidv1.VEIDVoteExtension
+}
+
+func signedVoteExtensionBundle(expected VoteExtensionExpectations, results ...veidv1.VEIDVoteExtensionResult) *veidv1.VEIDVoteExtension {
+	return &veidv1.VEIDVoteExtension{
+		Version:         VoteExtensionVersion,
+		ChainId:         expected.ChainID,
+		Height:          expected.Height,
+		BlockHash:       append([]byte(nil), expected.BlockHash...),
+		PipelineVersion: expected.PipelineVersion,
+		RuntimeHash:     append([]byte(nil), expected.RuntimeHash...),
+		ModelHash:       append([]byte(nil), expected.ModelHash...),
+		Results:         results,
+	}
+}
+
+func installConsensusValidators(t *testing.T, specs []consensusVoteSpec) *consensusStakingTestStore {
+	t.Helper()
+	staking := &consensusStakingTestStore{
+		validators: make(map[string]stakingtypes.Validator, len(specs)),
+		consensus:  make(map[string]string, len(specs)),
+		powers:     make(map[string]int64, len(specs)),
+	}
+	for i, spec := range specs {
+		pubKey, err := cryptocodec.FromCmtPubKeyInterface(spec.key.PubKey())
+		require.NoError(t, err)
+		operatorSeed := testHash(byte(0xa0 + i))
+		operator := sdk.ValAddress(operatorSeed[:20])
+		validator, err := stakingtypes.NewValidator(operator.String(), pubKey, stakingtypes.Description{})
+		require.NoError(t, err)
+		staking.validators[operator.String()] = validator
+		staking.consensus[string(spec.key.PubKey().Address())] = operator.String()
+		staking.powers[operator.String()] = spec.power
+	}
+	return staking
+}
+
+func signedExtendedCommit(t *testing.T, ctx sdk.Context, round int32, specs []consensusVoteSpec) abci.ExtendedCommitInfo {
+	t.Helper()
+	commit := abci.ExtendedCommitInfo{
+		Round: round,
+		Votes: make([]abci.ExtendedVoteInfo, 0, len(specs)),
+	}
+	for _, spec := range specs {
+		encoded, err := MarshalVoteExtensionBundle(spec.bundle)
+		require.NoError(t, err)
+		signBytes := cmttypes.VoteExtensionSignBytes(ctx.ChainID(), &cmtproto.Vote{
+			Height:    ctx.BlockHeight() - 1,
+			Round:     round,
+			Extension: encoded,
+		})
+		signature, err := spec.key.Sign(signBytes)
+		require.NoError(t, err)
+		commit.Votes = append(commit.Votes, abci.ExtendedVoteInfo{
+			Validator:          abci.Validator{Address: spec.key.PubKey().Address(), Power: spec.power},
+			VoteExtension:      encoded,
+			ExtensionSignature: signature,
+			BlockIdFlag:        cmtproto.BlockIDFlagCommit,
+		})
+	}
+	return commit
 }
 
 func cloneVoteExtensionBundle(t *testing.T, bundle *veidv1.VEIDVoteExtension) *veidv1.VEIDVoteExtension {

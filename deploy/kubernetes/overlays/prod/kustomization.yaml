@@ -10,34 +10,22 @@ resources:
   - hpa-enhanced.yaml
   - keda-scaledobject.yaml
 
-commonLabels:
-  environment: prod
+labels:
+  - pairs:
+      environment: prod
+    includeSelectors: true
 
 commonAnnotations:
-  # Production-specific annotations
   sidecar.istio.io/inject: "true"
 
 patches:
-  # Production replicas
   - target:
       kind: StatefulSet
-      name: virtengine-node
+      name: virtengine-validator
     patch: |
       - op: replace
         path: /spec/replicas
-        value: 4
-  - target:
-      kind: Deployment
-      name: provider-daemon
-    patch: |
-      - op: replace
-        path: /spec/replicas
-        value: 3
-  # Production resources
-  - target:
-      kind: StatefulSet
-      name: virtengine-node
-    patch: |
+        value: 1
       - op: replace
         path: /spec/template/spec/containers/0/resources/requests/cpu
         value: "2000m"
@@ -50,10 +38,38 @@ patches:
       - op: replace
         path: /spec/template/spec/containers/0/resources/limits/memory
         value: "16Gi"
+      - op: replace
+        path: /spec/volumeClaimTemplates/0/spec/resources/requests/storage
+        value: 1Ti
   - target:
-      kind: Deployment
+      kind: StatefulSet
+      name: virtengine-node
+    patch: |
+      - op: replace
+        path: /spec/replicas
+        value: 4
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/requests/cpu
+        value: "2000m"
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/requests/memory
+        value: "8Gi"
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/limits/cpu
+        value: "4000m"
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/limits/memory
+        value: "16Gi"
+      - op: replace
+        path: /spec/volumeClaimTemplates/0/spec/resources/requests/storage
+        value: 1Ti
+  - target:
+      kind: StatefulSet
       name: provider-daemon
     patch: |
+      - op: replace
+        path: /spec/replicas
+        value: 3
       - op: replace
         path: /spec/template/spec/containers/0/resources/requests/cpu
         value: "1000m"
@@ -66,34 +82,99 @@ patches:
       - op: replace
         path: /spec/template/spec/containers/0/resources/limits/memory
         value: "8Gi"
-  # Storage for production
   - target:
-      kind: StatefulSet
-      name: virtengine-node
+      kind: PersistentVolumeClaim
+      name: provider-data
     patch: |
       - op: replace
-        path: /spec/volumeClaimTemplates/0/spec/resources/requests/storage
-        value: 1Ti
+        path: /spec/resources/requests/storage
+        value: 200Gi
+  - target:
+      kind: PersistentVolumeClaim
+      name: provider-ha-state
+    patch: |
+      - op: replace
+        path: /spec/resources/requests/storage
+        value: 200Gi
+  - target:
+      kind: PersistentVolumeClaim
+      name: provider-backups
+    patch: |
+      - op: replace
+        path: /spec/resources/requests/storage
+        value: 200Gi
   - target:
       kind: ExternalSecret
-      name: virtengine-node-secrets
+      name: validator-signer-identity
     patch: |
-      - op: replace
-        path: /spec/data/0/remoteRef/key
-        value: secret/virtengine/prod/virtengine-node
-      - op: replace
-        path: /spec/data/1/remoteRef/key
-        value: secret/virtengine/prod/virtengine-node
+      apiVersion: external-secrets.io/v1beta1
+      kind: ExternalSecret
+      metadata:
+        name: validator-signer-identity
+      spec:
+        data:
+          - secretKey: validator-address
+            remoteRef:
+              key: secret/virtengine/prod/validator-signer
+              property: validator-address
+          - secretKey: validator-key-fingerprint
+            remoteRef:
+              key: secret/virtengine/prod/validator-signer
+              property: validator-key-fingerprint
+          - secretKey: signer-endpoint
+            remoteRef:
+              key: secret/virtengine/prod/validator-signer
+              property: signer-endpoint
+          - secretKey: signer-epoch
+            remoteRef:
+              key: secret/virtengine/prod/validator-signer
+              property: signer-epoch
+          - secretKey: signer-fencing-token
+            remoteRef:
+              key: secret/virtengine/prod/validator-signer
+              property: signer-fencing-token
+          - secretKey: tmkms-config-sha256
+            remoteRef:
+              key: secret/virtengine/prod/validator-signer
+              property: tmkms-config-sha256
+          - secretKey: signer-cert-sha256
+            remoteRef:
+              key: secret/virtengine/prod/validator-signer
+              property: signer-cert-sha256
   - target:
       kind: ExternalSecret
       name: provider-daemon-secrets
     patch: |
-      - op: replace
-        path: /spec/data/0/remoteRef/key
-        value: secret/virtengine/prod/provider-daemon
-      - op: replace
-        path: /spec/data/1/remoteRef/key
-        value: secret/virtengine/prod/provider-daemon
+      apiVersion: external-secrets.io/v1beta1
+      kind: ExternalSecret
+      metadata:
+        name: provider-daemon-secrets
+      spec:
+        data:
+          - secretKey: provider-address
+            remoteRef:
+              key: secret/virtengine/prod/provider-daemon
+              property: provider-address
+          - secretKey: provider-key-fingerprint
+            remoteRef:
+              key: secret/virtengine/prod/provider-daemon
+              property: provider-key-fingerprint
+          - secretKey: provider-key-passphrase
+            remoteRef:
+              key: secret/virtengine/prod/provider-daemon
+              property: provider-key-passphrase
+          - secretKey: provider-key-backup-passphrase
+            remoteRef:
+              key: secret/virtengine/prod/provider-daemon
+              property: provider-key-backup-passphrase
+          - secretKey: waldur-chain-keyring-passphrase
+            remoteRef:
+              key: secret/virtengine/prod/provider-daemon
+              property: waldur-chain-keyring-passphrase
+          - secretKey: portal-auth-secret
+            remoteRef:
+              key: secret/virtengine/prod/provider-daemon
+              property: portal-auth-secret
   - target:
       kind: ExternalSecret
       name: database-credentials
@@ -101,7 +182,13 @@ patches:
       - op: replace
         path: /spec/dataFrom/0/extract/key
         value: secret/virtengine/prod/database
-  # PDB for production
+  - target:
+      kind: PodDisruptionBudget
+      name: virtengine-validator-pdb
+    patch: |
+      - op: replace
+        path: /spec/minAvailable
+        value: 1
   - target:
       kind: PodDisruptionBudget
       name: virtengine-node-pdb
@@ -116,7 +203,6 @@ patches:
       - op: replace
         path: /spec/minAvailable
         value: 2
-  # HPA for production
   - target:
       kind: HorizontalPodAutoscaler
       name: provider-daemon-hpa
@@ -150,6 +236,16 @@ patches:
         path: /data/PRUNING_INTERVAL
         value: "100"
   - target:
+      kind: ConfigMap
+      name: provider-daemon-config
+    patch: |
+      - op: replace
+        path: /data/CHAIN_ID
+        value: virtengine-1
+      - op: replace
+        path: /data/LOG_LEVEL
+        value: info
+  - target:
       kind: Deployment
       name: tee-enclave
     patch: |
@@ -168,11 +264,3 @@ patches:
       - op: replace
         path: /spec/template/spec/containers/0/resources/limits/memory
         value: "8Gi"
-
-images:
-  - name: virtengine/virtengine-node
-    newTag: v1.0.0  # Pin to specific version in prod
-  - name: virtengine/provider-daemon
-    newTag: v1.0.0
-  - name: virtengine/tee-enclave
-    newTag: v1.0.0  # TEE-HW-001: Production TEE enclave

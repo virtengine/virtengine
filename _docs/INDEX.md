@@ -23,6 +23,10 @@ This index lists internal-only documentation. Do not add internal docs outside `
 - `_docs/adr/ADR-001-portal-architecture.md`
 - `_docs/adr/ADR-004-veid-governed-verifier.md`
 - `_docs/adr/ADR-005-consensus-determinism.md`
+- `_docs/adr/ADR-006-authenticated-metering.md`
+- `_docs/adr/ADR-007-canonical-market-reservations.md`
+- `_docs/adr/ADR-008-canonical-financial-cases.md`
+- `_docs/adr/ADR-009-canonical-kubernetes-rendering-and-identity.md`
 - `_docs/adr/adr-001-network-upgrades.md`
 - `_docs/adr/adr-002-manifest-v2beta2.md`
 - `_docs/adr/adr-003-technical-debt-refactoring.md`
@@ -66,6 +70,7 @@ This index lists internal-only documentation. Do not add internal docs outside `
 - `_docs/runbooks/finance-reconciliation-runbook.md`
 - `_docs/runbooks/mainnet-genesis-ceremony.md`
 - `_docs/runbooks/mainnet-launch-runbook.md`
+- `_docs/runbooks/kubernetes-identity-backup-restore-runbook.md`
 - `_docs/runbooks/tee-incident-response.md`
 - `_docs/runbooks/treasury-ops-runbook.md`
 - `_docs/runbooks/validator-onboarding.md`
@@ -82,6 +87,7 @@ This index lists internal-only documentation. Do not add internal docs outside `
 - `_docs/security/vendor-risk.md`
 
 ## Audit
+- `_docs/audits/task-85c-completion-report-2026-07-23.md`
 - `_docs/audits/task-86a-completion-report-2026-07-21.md`
 
 ## Protocols & Schemas

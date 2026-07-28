@@ -1,11 +1,7 @@
 # VirtEngine DR Backup CronJobs
-# Automated backup scheduling for disaster recovery
-#
-# These CronJobs run automated backups across all regions:
-# - Chain state backups every 4 hours
-# - Key backups daily at 2 AM UTC
-# - DR validation tests daily at 6 AM UTC
-
+# These jobs consume the canonical deploy/kubernetes resources. They do not
+# define application workloads or access the independent remote-signer custody
+# boundary.
 ---
 apiVersion: v1
 kind: Namespace
@@ -14,16 +10,14 @@ metadata:
   labels:
     name: dr-system
     virtengine.com/managed-by: terraform
-
 ---
 apiVersion: v1
 kind: ServiceAccount
 metadata:
   name: dr-backup-sa
-  namespace: dr-system
+  namespace: virtengine
   annotations:
     eks.amazonaws.com/role-arn: "${DR_BACKUP_IAM_ROLE_ARN}"
-
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
@@ -34,12 +28,11 @@ rules:
     resources: ["pods", "pods/exec", "pods/log"]
     verbs: ["get", "list", "create"]
   - apiGroups: [""]
-    resources: ["persistentvolumeclaims"]
+    resources: ["persistentvolumeclaims", "secrets"]
     verbs: ["get", "list"]
   - apiGroups: ["apps"]
-    resources: ["statefulsets", "deployments"]
+    resources: ["statefulsets"]
     verbs: ["get", "list"]
-
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
@@ -52,15 +45,13 @@ roleRef:
 subjects:
   - kind: ServiceAccount
     name: dr-backup-sa
-    namespace: dr-system
-
+    namespace: virtengine
 ---
-# Chain State Backup - Every 4 hours
 apiVersion: batch/v1
 kind: CronJob
 metadata:
   name: dr-backup-chain-state
-  namespace: dr-system
+  namespace: virtengine
   labels:
     app: dr-backup
     component: chain-state
@@ -72,7 +63,7 @@ spec:
   jobTemplate:
     spec:
       backoffLimit: 2
-      ttlSecondsAfterFinished: 86400  # 24 hours
+      ttlSecondsAfterFinished: 86400
       template:
         metadata:
           labels:
@@ -81,10 +72,17 @@ spec:
         spec:
           serviceAccountName: dr-backup-sa
           restartPolicy: OnFailure
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 1000
+            runAsGroup: 1000
+            fsGroup: 1000
+            seccompProfile:
+              type: RuntimeDefault
           containers:
             - name: backup
-              image: virtengine/dr-tools:latest
-              imagePullPolicy: Always
+              image: ghcr.io/virtengine/dr-tools@sha256:85c0d1f6e31b4f77a9c2db9af5082e8c43c29f7a8be77a2a1e764ec67e05985c
+              imagePullPolicy: IfNotPresent
               command: ["/scripts/dr/backup-chain-state.sh"]
               env:
                 - name: DR_BUCKET
@@ -95,16 +93,22 @@ spec:
                   value: "/data/snapshots"
                 - name: RETENTION_COUNT
                   value: "10"
+                - name: CANONICAL_VALIDATOR_STATEFULSET
+                  value: "virtengine-validator"
+                - name: CANONICAL_VALIDATOR_PVC
+                  value: "data-virtengine-validator-0"
                 - name: AWS_REGION
                   valueFrom:
                     fieldRef:
                       fieldPath: metadata.annotations['eks.amazonaws.com/region']
               volumeMounts:
-                - name: node-data
+                - name: validator-data
                   mountPath: /opt/virtengine
                   readOnly: true
                 - name: snapshots
                   mountPath: /data/snapshots
+                - name: tmp
+                  mountPath: /tmp
               resources:
                 requests:
                   cpu: 500m
@@ -112,26 +116,33 @@ spec:
                 limits:
                   cpu: 2000m
                   memory: 4Gi
+              securityContext:
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: true
+                capabilities:
+                  drop:
+                    - ALL
           volumes:
-            - name: node-data
+            - name: validator-data
               persistentVolumeClaim:
-                claimName: validator-data
+                claimName: data-virtengine-validator-0
             - name: snapshots
               persistentVolumeClaim:
                 claimName: snapshot-storage
-
+            - name: tmp
+              emptyDir:
+                sizeLimit: 256Mi
 ---
-# Key Backup - Daily at 2 AM UTC
 apiVersion: batch/v1
 kind: CronJob
 metadata:
-  name: dr-backup-keys
-  namespace: dr-system
+  name: dr-backup-provider-state
+  namespace: virtengine
   labels:
     app: dr-backup
-    component: keys
+    component: provider-state
 spec:
-  schedule: "0 2 * * *"
+  schedule: "30 */4 * * *"
   successfulJobsHistoryLimit: 3
   failedJobsHistoryLimit: 3
   concurrencyPolicy: Forbid
@@ -143,57 +154,104 @@ spec:
         metadata:
           labels:
             app: dr-backup
-            component: keys
+            component: provider-state
         spec:
           serviceAccountName: dr-backup-sa
           restartPolicy: OnFailure
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 1000
+            runAsGroup: 1000
+            fsGroup: 1000
+            seccompProfile:
+              type: RuntimeDefault
           containers:
             - name: backup
-              image: virtengine/dr-tools:latest
-              imagePullPolicy: Always
-              command: ["/scripts/dr/backup-keys.sh", "--type", "all"]
+              image: ghcr.io/virtengine/dr-tools@sha256:85c0d1f6e31b4f77a9c2db9af5082e8c43c29f7a8be77a2a1e764ec67e05985c
+              imagePullPolicy: IfNotPresent
+              command: ["/scripts/dr/backup-provider-state.sh"]
               env:
                 - name: DR_BUCKET
                   value: "s3://virtengine-dr-backups"
-                - name: KEY_DIR
-                  value: "/opt/virtengine/config"
-                - name: BACKUP_DIR
+                - name: PROVIDER_HOME
+                  value: "/var/lib/virtengine/provider"
+                - name: PROVIDER_KEY_DIR
+                  value: "/var/lib/virtengine/provider/keys"
+                - name: PROVIDER_HA_STATE_DIR
+                  value: "/var/lib/virtengine/provider-ha"
+                - name: PROVIDER_SNAPSHOT_DIR
                   value: "/secure/backups"
-                - name: HSM_ENABLED
-                  value: "0"
+                - name: SNAPSHOT_SIGNING_REQUIRED
+                  value: "1"
+                - name: SNAPSHOT_SIGNING_KEY
+                  value: "/var/run/secrets/virtengine/dr/snapshot-signing-key"
+                - name: CANONICAL_PROVIDER_STATEFULSET
+                  value: "provider-daemon"
+                - name: CANONICAL_PROVIDER_SHARED_PVC
+                  value: "provider-ha-state"
                 - name: AWS_REGION
                   valueFrom:
                     fieldRef:
                       fieldPath: metadata.annotations['eks.amazonaws.com/region']
               volumeMounts:
-                - name: keys
-                  mountPath: /opt/virtengine/config
+                - name: provider-ha-state
+                  mountPath: /var/lib/virtengine/provider-ha
+                  readOnly: true
+                - name: provider-backups
+                  mountPath: /var/lib/virtengine/provider-backups
+                  readOnly: true
+                - name: provider-identity
+                  mountPath: /var/lib/virtengine/provider
                   readOnly: true
                 - name: backup-storage
                   mountPath: /secure/backups
+                - name: tmp
+                  mountPath: /tmp
+                - name: snapshot-signing-key
+                  mountPath: /var/run/secrets/virtengine/dr
+                  readOnly: true
               resources:
                 requests:
-                  cpu: 200m
-                  memory: 512Mi
-                limits:
                   cpu: 500m
                   memory: 1Gi
+                limits:
+                  cpu: 1000m
+                  memory: 2Gi
+              securityContext:
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: true
+                capabilities:
+                  drop:
+                    - ALL
           volumes:
-            - name: keys
-              secret:
-                secretName: validator-keys
-                optional: true
+            - name: provider-ha-state
+              persistentVolumeClaim:
+                claimName: provider-ha-state
+            - name: provider-backups
+              persistentVolumeClaim:
+                claimName: provider-backups
+            - name: provider-identity
+              persistentVolumeClaim:
+                claimName: provider-data
             - name: backup-storage
               persistentVolumeClaim:
                 claimName: backup-storage
-
+            - name: tmp
+              emptyDir:
+                sizeLimit: 256Mi
+            - name: snapshot-signing-key
+              secret:
+                secretName: dr-backup-signing-key
+                defaultMode: 0400
+                items:
+                  - key: private-key.pem
+                    path: snapshot-signing-key
 ---
-# DR Tests - Daily at 6 AM UTC
 apiVersion: batch/v1
 kind: CronJob
 metadata:
   name: dr-tests
-  namespace: dr-system
+  namespace: virtengine
   labels:
     app: dr-test
     component: validation
@@ -205,7 +263,7 @@ spec:
   jobTemplate:
     spec:
       backoffLimit: 1
-      ttlSecondsAfterFinished: 172800  # 48 hours
+      ttlSecondsAfterFinished: 172800
       template:
         metadata:
           labels:
@@ -214,10 +272,17 @@ spec:
         spec:
           serviceAccountName: dr-backup-sa
           restartPolicy: OnFailure
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 1000
+            runAsGroup: 1000
+            fsGroup: 1000
+            seccompProfile:
+              type: RuntimeDefault
           containers:
             - name: test
-              image: virtengine/dr-tools:latest
-              imagePullPolicy: Always
+              image: ghcr.io/virtengine/dr-tools@sha256:85c0d1f6e31b4f77a9c2db9af5082e8c43c29f7a8be77a2a1e764ec67e05985c
+              imagePullPolicy: IfNotPresent
               command: ["/scripts/dr/dr-test.sh", "--report", "--notify"]
               env:
                 - name: DR_BUCKET
@@ -239,6 +304,8 @@ spec:
               volumeMounts:
                 - name: test-results
                   mountPath: /var/log/dr-tests
+                - name: tmp
+                  mountPath: /tmp
               resources:
                 requests:
                   cpu: 200m
@@ -246,17 +313,24 @@ spec:
                 limits:
                   cpu: 1000m
                   memory: 1Gi
+              securityContext:
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: true
+                capabilities:
+                  drop:
+                    - ALL
           volumes:
             - name: test-results
               emptyDir: {}
-
+            - name: tmp
+              emptyDir:
+                sizeLimit: 256Mi
 ---
-# PersistentVolumeClaim for snapshots
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
   name: snapshot-storage
-  namespace: dr-system
+  namespace: virtengine
   labels:
     app: dr-backup
     component: storage
@@ -267,14 +341,12 @@ spec:
   resources:
     requests:
       storage: 500Gi
-
 ---
-# PersistentVolumeClaim for key backups
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
   name: backup-storage
-  namespace: dr-system
+  namespace: virtengine
   labels:
     app: dr-backup
     component: storage
@@ -284,4 +356,4 @@ spec:
   storageClassName: gp3-encrypted
   resources:
     requests:
-      storage: 50Gi
+      storage: 100Gi

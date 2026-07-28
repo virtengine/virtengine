@@ -1,6 +1,7 @@
 package keeper_test
 
 import (
+	"bytes"
 	"crypto/ed25519"
 	"crypto/rand"
 	"crypto/sha256"
@@ -8,6 +9,7 @@ import (
 	"time"
 
 	sdk "github.com/cosmos/cosmos-sdk/types"
+	stakingtypes "github.com/cosmos/cosmos-sdk/x/staking/types"
 	"github.com/stretchr/testify/suite"
 
 	veidv1 "github.com/virtengine/virtengine/sdk/go/node/veid/v1"
@@ -297,8 +299,67 @@ func (s *MsgServerTestSuite) TestMsgUpdateScore_RecordNotFound() {
 
 	_, err := s.msgServer.UpdateScore(s.ctx, msg)
 	s.Require().Error(err)
-	// Should fail due to not being a validator
-	s.Require().Contains(err.Error(), "validator")
+	s.Require().Contains(err.Error(), "disabled")
+}
+
+func (s *MsgServerTestSuite) TestMsgUpdateVerificationStatus_DisabledEvenForBondedValidator() {
+	stakingKeeper := NewMockStakingKeeper()
+	validatorAddr := sdk.AccAddress(bytes.Repeat([]byte{0x01}, 20))
+	stakingKeeper.AddValidator(sdk.ValAddress(validatorAddr), stakingtypes.Bonded)
+	s.keeper.SetStakingKeeper(stakingKeeper)
+
+	params := types.DefaultParams()
+	params.RequireClientSignature = false
+	params.RequireUserSignature = false
+	s.Require().NoError(s.keeper.SetParams(s.ctx, params))
+
+	accountAddr := sdk.AccAddress(bytes.Repeat([]byte{0x02}, 20))
+	metadata := s.createTestUploadMetadata()
+	scope := types.NewIdentityScope(
+		"scope-disabled-status",
+		types.ScopeTypeIDDocument,
+		s.createTestPayload(),
+		metadata,
+		time.Now(),
+	)
+	s.Require().NoError(s.keeper.UploadScope(s.ctx, accountAddr, scope))
+
+	_, err := s.msgServer.UpdateVerificationStatus(s.ctx, &types.MsgUpdateVerificationStatus{
+		Sender:         validatorAddr.String(),
+		AccountAddress: accountAddr.String(),
+		ScopeId:        "scope-disabled-status",
+		NewStatus:      veidv1.VerificationStatusVerified,
+		Reason:         "bonded validator attempt",
+	})
+	s.Require().Error(err)
+	s.Require().Contains(err.Error(), "disabled")
+	stored, found := s.keeper.GetScope(s.ctx, accountAddr, "scope-disabled-status")
+	s.Require().True(found)
+	s.Require().Equal(types.VerificationStatusPending, stored.Status)
+}
+
+func (s *MsgServerTestSuite) TestMsgUpdateScore_DisabledEvenForBondedValidator() {
+	stakingKeeper := NewMockStakingKeeper()
+	validatorAddr := sdk.AccAddress(bytes.Repeat([]byte{0x03}, 20))
+	stakingKeeper.AddValidator(sdk.ValAddress(validatorAddr), stakingtypes.Bonded)
+	s.keeper.SetStakingKeeper(stakingKeeper)
+
+	accountAddr := sdk.AccAddress(bytes.Repeat([]byte{0x04}, 20))
+	_, err := s.keeper.CreateIdentityRecord(s.ctx, accountAddr)
+	s.Require().NoError(err)
+
+	_, err = s.msgServer.UpdateScore(s.ctx, &types.MsgUpdateScore{
+		Sender:         validatorAddr.String(),
+		AccountAddress: accountAddr.String(),
+		NewScore:       99,
+		ScoreVersion:   "v-disabled",
+	})
+	s.Require().Error(err)
+	s.Require().Contains(err.Error(), "disabled")
+	record, found := s.keeper.GetIdentityRecord(s.ctx, accountAddr)
+	s.Require().True(found)
+	s.Require().Zero(record.CurrentScore)
+	s.Require().Empty(record.ScoreVersion)
 }
 
 // Test: MsgCreateIdentityWallet - success

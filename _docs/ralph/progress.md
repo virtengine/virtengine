@@ -1,7 +1,7 @@
 # VirtEngine Progress
 
 Last updated: 2026-07-23
-Status: **Protocol continuation Task 85B is complete at the deterministic local engineering/fixture boundary as `engineering_complete_external_blocked`. Task 85C is NEXT.** Real testnet/sandbox and production execution evidence remain externally blocked; the mandatory production DEX/payout floor is not certified. Historical 80A-83D backlog status remains below for traceability.
+Status: **Protocol continuation Task 85C is complete at the deterministic local engineering boundary as `engineering_complete_external_blocked`. Task 85D is NEXT.** Live TMKMS/HSM, multi-zone Kubernetes storage and regional DR certification remain externally blocked. Historical 80A-83D backlog status remains below for traceability.
 
 ## Protocol Completion Continuation (2026-07-20)
 
@@ -13,7 +13,29 @@ Status: **Protocol continuation Task 85B is complete at the deterministic local 
 | 84D | Converge fraud, HPC, billing, escrow disputes, and review effects | P0 | **COMPLETED** |
 | 85A | Route every provider chain mutation through the durable signed broadcaster | P0 | **COMPLETED** |
 | 85B | Deliver verifiable DEX routing and a compliant fiat off-ramp | P0 | **`engineering_complete_external_blocked` (LOCALLY COMPLETE)** |
-| 85C | Converge production deployment rendering and prevent validator double-signing or provider HA state loss | P0 | **NEXT** |
+| 85C | Converge production deployment rendering and prevent validator double-signing or provider HA state loss | P0 | **`engineering_complete_external_blocked` (LOCALLY COMPLETE)** |
+
+### 85C: Converge Production Deployment Rendering and Prevent Validator Double-Signing or Provider HA State Loss
+
+**Locally completed:** 2026-07-23
+**Status:** `engineering_complete_external_blocked`
+**Commit:** Not created per orchestration instruction
+
+- ADR-009 makes `deploy/kubernetes` the only application source. Infra base/dev/staging/prod entry points are import-only compatibility shims with byte-equivalent renders; chaos and DR assets consume canonical labels/PVCs.
+- `infra/rollouts` is not application topology: stale blue/green Rollout manifests were removed and the retained rollback config is optional AnalysisTemplate policy only.
+- Production renders one explicit remote-signer validator plus four horizontally scalable sentry/full nodes. Validator readiness binds chain ID, address, key fingerprint, signer endpoint, epoch, fencing token, TMKMS config digest and signer certificate digest; sentries receive no signer identity.
+- Provider production renders three StatefulSet replicas with durable shared encrypted identity/HA/backup PVCs, immutable images, PDB, anti-affinity, topology spread, restricted pod security, canonical metrics port 9090, and fencing/key-aware readiness.
+- Added Kubernetes Lease ownership using resource-version atomic updates and monotonic `leaseTransitions` fencing tokens. Standbys stay unready until takeover; stale owners/tokens cannot renew or submit. Shared-file leases remain an explicit compatible profile; process-local leases are rejected in production.
+- A chain-client mutation guard fences bid, resource, domain, HPC and other provider mutation producers on standby replicas; authenticated metering stops on ownership loss and starts only after fenced takeover.
+- The mutation file store now reloads and updates under cross-process locking, preserving atomic idempotency/sequence/reconciliation writes between replicas.
+- The provider file keystore now persists Argon2id/AES-256-GCM authenticated envelopes with atomic writes, metadata/private-key integrity, restart/rotation continuity, secret-file passphrases, fingerprint binding, and fail-closed missing production identity. Hardware/Ledger/non-custodial profiles fail closed; SoftHSM is not represented as real hardware certification.
+- Provider DR backup/restore now carries encrypted identity, queues/idempotency, usage sequence/proofs, mutation sequence/reconciliation, fiat reconciliation, and fencing state. The executable local restore drill passed.
+- Full `scripts/task85c-preflight.ps1` passed: provider/command tests, settlement continuity, vet, lint (`0 issues`), provider build, canonical/compatibility/chaos renders and policy, AGENTS docs, provider recovery drill, whitespace and WSL race tests. Repository-wide `go test ./... -run '^$' -count=1` compilation also passed.
+- Final CI enforcement gap closed: `.github/workflows/infrastructure.yaml` now triggers on canonical infra/deploy changes, the Task 85C validator, focused Task 85C docs, and the INFRA-001 summary; its validate job installs Node 20 plus checksum-pinned kubectl 1.29.0 and runs `node scripts/task85c-validate-kubernetes.mjs` with read-only permissions and no deployment credentials before downstream security, plan, apply, or drift jobs.
+- Focused local validation for the CI enforcement gap passed: the kubectl 1.29.0 Linux amd64 checksum matched `dl.k8s.io`; workflow YAML parsed with PyYAML and passed `actionlint` 1.7.7; the Task 85C validator and AGENTS validator passed; and `git diff --check` passed.
+- Completion evidence and release-only limitations are in `_docs/audits/task-85c-completion-report-2026-07-23.md`; architecture and recovery guidance are in `_docs/adr/ADR-009-canonical-kubernetes-rendering-and-identity.md` and `_docs/runbooks/kubernetes-identity-backup-restore-runbook.md`.
+- No live TMKMS/vendor HSM/mTLS signer, real double-sign/partition drill, named Kubernetes distribution, encrypted RWO/RWX storage backend, snapshot controller, immutable-image provenance, multi-zone eviction, detached-volume or regional failover evidence exists locally. These remain mandatory release-only blockers; no production hardware or DR certification is claimed.
+- **NEXT:** Task 85D.
 
 ### 85B: Deliver Verifiable DEX Routing and a Compliant Fiat Off-Ramp
 

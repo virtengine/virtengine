@@ -2,7 +2,7 @@ package keeper
 
 import (
 	"bytes"
-	"encoding/json"
+	"encoding/hex"
 	"sort"
 
 	abci "github.com/cometbft/cometbft/abci/types"
@@ -57,10 +57,7 @@ func (k *Keeper) ExtendVote(
 
 	results := []types.VerificationResult{}
 	if expected.PipelineVersion != noActivePipelineVersion {
-		results, err = k.getBlockVerificationResultsStrict(ctx, req.Height)
-		if err != nil {
-			return nil, err
-		}
+		results = k.ensureReceiptBuffer().snapshot(req.Height, ctx.BlockHeight())
 		if len(results) > MaxVoteExtensionResults {
 			return nil, types.ErrInvalidVerificationResult.Wrap("pre-consensus result limit exceeded")
 		}
@@ -128,6 +125,11 @@ func verificationResultToVoteExtension(result types.VerificationResult, pipeline
 	if result.BlockHeight != height || !versionsMatch(result.ModelVersion, pipelineVersion) {
 		return veidv1.VEIDVoteExtensionResult{}, types.ErrInvalidVerificationResult.Wrap("result consensus binding mismatch")
 	}
+	receiptDigestHex := result.Metadata[types.VerificationResultMetadataReceiptDigest]
+	receiptDigest, err := hex.DecodeString(receiptDigestHex)
+	if err != nil || len(receiptDigest) != 32 {
+		return veidv1.VEIDVoteExtensionResult{}, types.ErrInvalidVerificationResult.Wrap("result receipt_digest is required")
+	}
 	reasonCodes := make([]string, len(result.ReasonCodes))
 	for i, reason := range result.ReasonCodes {
 		reasonCodes[i] = string(reason)
@@ -142,6 +144,7 @@ func verificationResultToVoteExtension(result types.VerificationResult, pipeline
 		ModelVersion:   result.ModelVersion,
 		InputHash:      bytes.Clone(result.InputHash),
 		ReasonCodes:    reasonCodes,
+		ReceiptDigest:  receiptDigest,
 	}
 	extResult.ResultHash = ComputeVoteExtensionResultHash(extResult)
 	return extResult, nil
@@ -166,29 +169,19 @@ func compactSortedStrings(values []string) []string {
 // Block Verification Results Storage
 // ============================================================================
 
-// blockVerificationResultsKey returns the store key for block verification results
-func blockVerificationResultsKey(height int64) []byte {
-	key := make([]byte, 0, len(types.PrefixVerificationHistory)+8)
-	key = append(key, types.PrefixVerificationHistory...)
-	key = append(key, []byte("/block/")...)
-	key = append(key, []byte{
-		byte(height >> 56),
-		byte(height >> 48),
-		byte(height >> 40),
-		byte(height >> 32),
-		byte(height >> 24),
-		byte(height >> 16),
-		byte(height >> 8),
-		byte(height),
-	}...)
-	return key
+// StoreBlockVerificationResult rejects direct result staging. Production
+// callers must use ProcessVerificationRequestWithReceipt so the full signed
+// receipt, committed runtime profile, and replay context are verified first.
+func (k *Keeper) StoreBlockVerificationResult(ctx sdk.Context, height int64, result types.VerificationResult) error {
+	return types.ErrUnauthorized.Wrap("direct pre-consensus result staging is disabled; use a verified inference receipt")
 }
 
-// StoreBlockVerificationResult stores a verification result for a specific block
-// This is used for vote extension creation
-func (k *Keeper) StoreBlockVerificationResult(ctx sdk.Context, height int64, result types.VerificationResult) error {
-	if ctx.ExecMode() != sdk.ExecModeFinalize && ctx.ExecMode() != sdk.ExecModeVoteExtension {
-		return types.ErrUnauthorized.Wrap("pre-consensus results may only be staged by validator-local finalization workers")
+// storeVerifiedBlockVerificationResult stores a result after the caller has
+// verified its full signed inference receipt. It remains package-private so an
+// unauthenticated digest cannot be injected into the vote-extension carrier.
+func (k *Keeper) storeVerifiedBlockVerificationResult(ctx sdk.Context, height int64, result types.VerificationResult) error {
+	if ctx.ExecMode() != sdk.ExecModeVoteExtension {
+		return types.ErrUnauthorized.Wrap("pre-consensus results may only be staged during vote extension execution")
 	}
 	if height <= 0 || result.BlockHeight != height {
 		return types.ErrInvalidVerificationResult.Wrap("result height does not match carrier height")
@@ -196,60 +189,17 @@ func (k *Keeper) StoreBlockVerificationResult(ctx sdk.Context, height int64, res
 	if err := result.Validate(); err != nil {
 		return err
 	}
-	store := ctx.KVStore(k.skey)
-
-	// Get existing results for this block
-	results, err := k.getBlockVerificationResultsStrict(ctx, height)
-	if err != nil {
-		return err
-	}
-	if len(results) >= MaxVoteExtensionResults {
-		return types.ErrInvalidVerificationResult.Wrap("pre-consensus result limit exceeded")
-	}
-	for _, existing := range results {
-		if existing.RequestID == result.RequestID {
-			return types.ErrInvalidVerificationResult.Wrapf("duplicate request %s", result.RequestID)
-		}
-	}
-	results = append(results, result)
-
-	bz, err := json.Marshal(results)
-	if err != nil {
-		return err
-	}
-
-	store.Set(blockVerificationResultsKey(height), bz)
-	return nil
+	return k.ensureReceiptBuffer().stageResult(height, result)
 }
 
 // GetBlockVerificationResults gets all verification results for a specific block height
 func (k *Keeper) GetBlockVerificationResults(ctx sdk.Context, height int64) []types.VerificationResult {
-	results, err := k.getBlockVerificationResultsStrict(ctx, height)
-	if err != nil {
-		k.Logger(ctx).Error("failed to unmarshal block verification results", "height", height, "error", err)
-		return []types.VerificationResult{}
-	}
-	return results
-}
-
-func (k *Keeper) getBlockVerificationResultsStrict(ctx sdk.Context, height int64) ([]types.VerificationResult, error) {
-	store := ctx.KVStore(k.skey)
-	bz := store.Get(blockVerificationResultsKey(height))
-	if bz == nil {
-		return []types.VerificationResult{}, nil
-	}
-
-	var results []types.VerificationResult
-	if err := json.Unmarshal(bz, &results); err != nil {
-		return nil, types.ErrInvalidVerificationResult.Wrap("corrupted pre-consensus result queue")
-	}
-	return results, nil
+	return k.ensureReceiptBuffer().snapshot(height, ctx.BlockHeight())
 }
 
 // ClearBlockVerificationResults clears verification results for a block (called after finalization)
 func (k *Keeper) ClearBlockVerificationResults(ctx sdk.Context, height int64) {
-	store := ctx.KVStore(k.skey)
-	store.Delete(blockVerificationResultsKey(height))
+	k.ensureReceiptBuffer().clearHeight(height)
 }
 
 // ============================================================================

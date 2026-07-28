@@ -179,6 +179,7 @@ func (k Keeper) applyConsensusVerificationResult(ctx sdk.Context, carried veidv1
 		result.ReasonCodes[i] = types.ReasonCode(code)
 	}
 	result.Metadata["consensus_result_hash"] = fmt.Sprintf("%x", carried.ResultHash)
+	result.Metadata[types.VerificationResultMetadataReceiptDigest] = fmt.Sprintf("%x", carried.ReceiptDigest)
 
 	account, err := sdk.AccAddressFromBech32(result.AccountAddress)
 	if err != nil {

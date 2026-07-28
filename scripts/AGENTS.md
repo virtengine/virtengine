@@ -136,6 +136,7 @@ When to add vs modify
 | scripts/agent-preflight.ps1 | Pre-flight checks before push (Go/Portal). | pwsh scripts/agent-preflight.ps1 | PowerShell 7+, go, pnpm (optional) |
 | scripts/agent-preflight.sh | Bash pre-flight checks before push. | ./scripts/agent-preflight.sh | bash, go, pnpm (optional) |
 | scripts/task85b-preflight.ps1 | Full Task 85B DEX/off-ramp release gate, including generation, docs hashes, SDK, upgrade, integration and race checks. | pwsh scripts/task85b-preflight.ps1 | PowerShell 7+, Go, Node/npm, WSL or Docker, golangci-lint |
+| scripts/task85c-preflight.ps1 | Task 85C encrypted-key, distributed-fencing, canonical-render, policy, docs, lint, build and race gate. | pwsh scripts/task85c-preflight.ps1 | PowerShell 7+, Go, Node, kubectl, WSL, golangci-lint |
 | scripts/archive-completed-tasks.ps1 | Archive done VK tasks into _docs/ralph. | pwsh scripts/archive-completed-tasks.ps1 -DryRun | PowerShell, VK CLI wrapper (ve-kanban) |
 | scripts/_check-parse.ps1 | Parse ve-orchestrator.ps1 and report errors. | pwsh scripts/_check-parse.ps1 | PowerShell 7+ |
 | scripts/_check-ps1-syntax.ps1 | Syntax check PS1 files (defaults to bosun). | pwsh scripts/_check-ps1-syntax.ps1 -Path scripts/bosun/ve-orchestrator.ps1 | PowerShell 7+ |
@@ -184,7 +185,7 @@ When to add vs modify
 | scripts/compliance/collect-soc2-evidence.sh | Collect SOC2 evidence bundle. | ./scripts/compliance/collect-soc2-evidence.sh | bash, git, go (opt) |
 | scripts/compliance/soc2-evidence-manifest.yaml | Manifest for SOC2 collection. | Read by collector. | N/A |
 | scripts/dr/backup-chain-state.sh | Backup chain state to disk/S3. | ./scripts/dr/backup-chain-state.sh --snapshot-only | virtengine, jq, aws |
-| scripts/dr/backup-provider-state.sh | Backup provider daemon state. | ./scripts/dr/backup-provider-state.sh | tar, jq, aws |
+| scripts/dr/backup-provider-state.sh | Backup/restore provider config, encrypted identity, queue, sequence, reconciliation and fencing state. | ./scripts/dr/backup-provider-state.sh | tar, jq, openssl, aws (optional) |
 | scripts/dr/backup-keys.sh | Backup validator/provider keys; optional Shamir. | ./scripts/dr/backup-keys.sh --type validator | openssl, aws, jq |
 | scripts/dr/dr-test.sh | DR validation suite + optional Slack. | ./scripts/dr/dr-test.sh --report --notify | jq, aws, curl |
 | scripts/dr/README.md | DR playbook and scheduling examples. | Readme only. | N/A |
@@ -214,7 +215,7 @@ When to add vs modify
 | Script | Purpose | Usage | Dependencies |
 | --- | --- | --- | --- |
 | scripts/smoke-test.sh | Regional smoke test (k8s + RPC). | ./scripts/smoke-test.sh us-east-1 | kubectl, curl |
-| scripts/ci/backup-restore-smoke-test.sh | CI smoke test for DR backup/restore. | ./scripts/ci/backup-restore-smoke-test.sh | bash, openssl, jq |
+| scripts/ci/backup-restore-smoke-test.sh | CI chain and provider identity/queue/sequence/fencing/reconciliation restore drill. | ./scripts/ci/backup-restore-smoke-test.sh | bash, openssl, jq |
 | scripts/verify-cross-region.sh | Cross-region connectivity checks. | ./scripts/verify-cross-region.sh | kubectl, aws, curl |
 | scripts/verify-db-replication.sh | CockroachDB multi-region checks. | ./scripts/verify-db-replication.sh | kubectl, aws |
 | scripts/update-global-lb.sh | Route53 weighted record mgmt. | ./scripts/update-global-lb.sh status | aws |
@@ -303,6 +304,12 @@ For Task 85B paths, agent preflight runs `scripts/task85b-preflight.ps1` in full
 - Parameters: `-Quick` and `-SkipRace` are explicit diagnostic-only reductions; a run using either is not a release pass.
 - Errors: Fails closed when required tooling or an applicable full-mode gate is unavailable.
 - Example: pwsh scripts/task85b-preflight.ps1
+
+### scripts/task85c-preflight.ps1
+- Purpose: Run the Task 85C local engineering acceptance gate for provider key persistence, Kubernetes/file lease fencing and failover, provider restart continuity, manifest convergence/policy, docs, lint, build and race tests.
+- Parameters: `-SkipRace` is an explicit diagnostic-only reduction and is not full local acceptance evidence.
+- Errors: Fails closed when required tooling or any full-mode gate is unavailable.
+- Example: pwsh scripts/task85c-preflight.ps1
 
 ### scripts/_check-parse.ps1
 - Purpose: Parse scripts/bosun/ve-orchestrator.ps1 and print errors.

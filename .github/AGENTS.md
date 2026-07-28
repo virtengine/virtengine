@@ -14,20 +14,21 @@
 | Tags v\*             | `changelog.yaml`, `supply-chain.yaml`, `ci.yaml`                                           | tags: v\*                              | v1.0.0 tag               |
 | Workflow dispatch    | `release.yaml`, `multi-region-deploy.yaml`, others                                         | workflow_dispatch                      | Manual trigger           |
 | Schedule             | `security.yaml`, `veid-conformance.yaml`, `ml-determinism.yaml`, `chaos-test.yaml`, others | cron                                   | Daily 02:00 UTC          |
-| Path filters         | `api-spec.yaml`, `portal-ci.yaml`, `infrastructure.yaml`                                   | paths: api/**, portal/**, infra/\*\*   | Changes in specific dirs |
+| Path filters         | `api-spec.yaml`, `portal-ci.yaml`, `infrastructure.yaml`                                   | paths: api/**, portal/**, infra/\*\*, Task 85C k8s docs/script | Changes in specific dirs |
 
 ### Environment & Toolchain Matrix
 
 | Component                     | Version | Workflows                                                          | Notes                           |
 | ----------------------------- | ------- | ------------------------------------------------------------------ | ------------------------------- |
 | Go                            | 1.25.5  | `ci.yaml`, `quality-gate.yaml`, `security.yaml`, most Go workflows | Set in `GO_VERSION` env var     |
-| Node                          | 20      | `portal-ci.yaml`, `portal-deploy-pages.yaml`                       | Set in `NODE_VERSION` env var   |
+| Node                          | 20      | `portal-ci.yaml`, `portal-deploy-pages.yaml`, `infrastructure.yaml` | Set in `NODE_VERSION` env var   |
 | Node (npm OIDC)               | 24      | `bosun-publish.yaml`                                       | Requires Node 24 for provenance |
 | pnpm                          | 10.28.2 | `portal-ci.yaml`, `portal-deploy-pages.yaml`, `smoke-test.yaml`     | Set in `PNPM_VERSION` env var   |
 | Python                        | 3.11    | `ci.yaml`, `security.yaml`, `ml-model-verify.yaml`                 | Set in `PYTHON_VERSION` env var |
 | Docker Buildx                 | latest  | `release.yaml`, `ci.yaml`                                          | Multi-arch builds               |
 | Terraform (infra)             | 1.6.6   | `infrastructure.yaml`                                              | IaC deployments                 |
 | Terraform (multi-region)      | 1.6.0   | `multi-region-deploy.yaml`                                         | Multi-region IaC deployments    |
+| kubectl (Task 85C)             | 1.29.0  | `infrastructure.yaml`                                              | Checksum-pinned for `kubectl kustomize` validation |
 | GoReleaser (via make release) | latest  | `release.yaml`                                                     | Release automation              |
 
 ## Module Overview
@@ -77,7 +78,7 @@ Inventory and docs live in `.github/workflows/` with release details in `RELEASE
 | `dispatch.yaml`              | Homebrew dispatch                                          | tags vX.Y.Z                                                          | `dispatch-homebrew`                                                                                                                                                                      | Dispatch event                                | GORELEASER_ACCESS_TOKEN                                     |
 | `dr-failover-test.yaml`       | DR failover drill                                          | schedule Sun 06:00 UTC, dispatch                                     | `dr-failover`                                                                                                                                                                            | DR report artifact                            | Go 1.25.5 + Slack/Discord webhooks                          |
 | `fuzz.yaml`                  | Fuzz testing                                               | push/pr main, nightly 02:00 UTC, dispatch                            | `fuzz-tests`, `oss-fuzz-build`, `fuzz-security-audit`                                                                                                                                    | Fuzz corpus                                   | Go toolchain                                                |
-| `infrastructure.yaml`        | Infra plan/apply                                           | push/pr paths infra/\*\*, dispatch                                   | validate, security, plan, apply-\*, argocd-sync, test                                                                                                                                    | Terraform plan artifacts                      | Terraform + AWS + ArgoCD                                    |
+| `infrastructure.yaml`        | Infra validation, security, plan/apply                     | push/pr paths infra/\*\*, deploy/\*\*, Task 85C validator/docs, dispatch | validate, security, plan, apply, drift                                                                                                                                                    | Terraform plan artifacts                      | Terraform + Node 20 + checksum-pinned kubectl + AWS OIDC    |
 | `labeler.yaml`               | PR labeling                                                | pull_request_target                                                  | `labeler`                                                                                                                                                                                | Labels applied                                | GITHUB_TOKEN                                                |
 | `license-compliance.yaml`    | License + SBOM                                             | push/pr deps, weekly Sun 03:00 UTC, dispatch                         | go-licenses, npm-licenses, python-licenses, spdx-sbom                                                                                                                                    | License reports, SBOM                         | Go/Node/Python                                              |
 | `load-test.yaml`             | Load testing                                               | nightly 02:00 UTC, dispatch                                          | `load-test`                                                                                                                                                                              | Load-test artifacts                           | Go 1.25.5                                                   |
@@ -141,7 +142,7 @@ Inventory and docs live in `.github/workflows/` with release details in `RELEASE
 
 ### Execution Ordering
 
-1. **Lint & Static Analysis** (parallel): `lint`, `vet`, `lint-shell`, `agents-docs`
+1. **Lint & Static Analysis** (parallel): `lint`, `vet`, `lint-shell`, `agents-docs`; infrastructure `validate` also runs the Task 85C Kubernetes semantic gate before infra security, plan, apply, or drift jobs
 2. **Unit Tests** (parallel): `test-go`, `test-python`, `test-portal`
 3. **Build** (parallel with lint/test-go): `build`, `build-macos`
 4. **Integration & E2E** (depends on build): `integration`, `veid-e2e`, `staging-e2e`
@@ -206,18 +207,20 @@ Inventory and docs live in `.github/workflows/` with release details in `RELEASE
 
 ### Infrastructure Deployment (`infrastructure.yaml`)
 
-**Trigger:** push/PR to main (infra/** paths), `workflow_dispatch`
+**Trigger:** push/PR to main for `infra/**`, `deploy/**`, the Task 85C Kubernetes validator, `docs/documentation/INFRA-001-IMPLEMENTATION-SUMMARY.md`, focused Task 85C ADR/completion/recovery docs, and the workflow file; `schedule`; `workflow_dispatch`
 **Jobs:\*\*
 
-1. `validate`: Terraform fmt check, validate
-2. `security`: checkov + trivy scans
-3. `plan`: Terraform plan for each environment (dev, staging, prod)
-4. `apply-dev`, `apply-staging`, `apply-prod`: Sequential applies with manual approval gates
-5. `argocd-sync`: Sync ArgoCD apps post-apply
+1. `validate`: installs Node 20 and checksum-pinned kubectl 1.29.0, runs `node scripts/task85c-validate-kubernetes.mjs`, then runs Terraform fmt/validate and kubeval checks without deployment credentials
+2. `security`: checkov + trivy scans with `security-events: write`
+3. `plan`: Terraform plan for the selected workflow-dispatch environment using job-scoped OIDC
+4. `apply`: Terraform apply for the selected environment on `main` with manual approval gates and job-scoped OIDC
+5. `drift`: Manual or scheduled drift detection with job-scoped OIDC
 
 **Artifacts:** Terraform plans saved to GitHub artifacts
 
 **Post-deploy testing:** `smoke-test.yaml` and `staging-e2e.yaml` run via workflow_run or workflow_dispatch after infrastructure deployment completes.
+
+**Permissions:** `infrastructure.yaml` defaults to `contents: read`; only SARIF upload receives `security-events: write`, and only Terraform plan/apply/drift jobs receive `id-token: write`. The validate gate uses no secrets or deployment credentials.
 
 ### Multi-Region Deployment (`multi-region-deploy.yaml`)
 

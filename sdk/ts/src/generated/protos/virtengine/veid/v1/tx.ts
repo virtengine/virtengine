@@ -282,7 +282,11 @@ export interface MsgUpdateScoreResponse {
   updatedAt: Long;
 }
 
-/** VEIDVoteExtension is the canonical versioned payload signed by CometBFT. */
+/**
+ * VEIDVoteExtension is the canonical versioned payload signed by CometBFT.
+ * Carrier v1 is currently unreleased; receipt_digest is part of its initial
+ * wire contract and therefore does not require a compatibility transition.
+ */
 export interface VEIDVoteExtension {
   version: number;
   chainId: string;
@@ -304,6 +308,7 @@ export interface VEIDVoteExtensionResult {
   inputHash: Uint8Array;
   resultHash: Uint8Array;
   reasonCodes: string[];
+  receiptDigest: Uint8Array;
 }
 
 /** VEIDConsensusAggregate is deterministically reconstructed from signed votes. */
@@ -3929,6 +3934,7 @@ function createBaseVEIDVoteExtensionResult(): VEIDVoteExtensionResult {
     inputHash: new Uint8Array(0),
     resultHash: new Uint8Array(0),
     reasonCodes: [],
+    receiptDigest: new Uint8Array(0),
   };
 }
 
@@ -3962,6 +3968,9 @@ export const VEIDVoteExtensionResult: MessageFns<
     }
     for (const v of message.reasonCodes) {
       writer.uint32(66).string(v!);
+    }
+    if (message.receiptDigest.length !== 0) {
+      writer.uint32(74).bytes(message.receiptDigest);
     }
     return writer;
   },
@@ -4037,6 +4046,14 @@ export const VEIDVoteExtensionResult: MessageFns<
           message.reasonCodes.push(reader.string());
           continue;
         }
+        case 9: {
+          if (tag !== 74) {
+            break;
+          }
+
+          message.receiptDigest = reader.bytes();
+          continue;
+        }
       }
       if ((tag & 7) === 4 || tag === 0) {
         break;
@@ -4058,6 +4075,7 @@ export const VEIDVoteExtensionResult: MessageFns<
       reasonCodes: globalThis.Array.isArray(object?.reason_codes)
         ? object.reason_codes.map((e: any) => globalThis.String(e))
         : [],
+      receiptDigest: isSet(object.receipt_digest) ? bytesFromBase64(object.receipt_digest) : new Uint8Array(0),
     };
   },
 
@@ -4087,6 +4105,9 @@ export const VEIDVoteExtensionResult: MessageFns<
     if (message.reasonCodes?.length) {
       obj.reason_codes = message.reasonCodes;
     }
+    if (message.receiptDigest.length !== 0) {
+      obj.receipt_digest = base64FromBytes(message.receiptDigest);
+    }
     return obj;
   },
   fromPartial(object: DeepPartial<VEIDVoteExtensionResult>): VEIDVoteExtensionResult {
@@ -4099,6 +4120,7 @@ export const VEIDVoteExtensionResult: MessageFns<
     message.inputHash = object.inputHash ?? new Uint8Array(0);
     message.resultHash = object.resultHash ?? new Uint8Array(0);
     message.reasonCodes = object.reasonCodes?.map((e) => e) || [];
+    message.receiptDigest = object.receiptDigest ?? new Uint8Array(0);
     return message;
   },
 };

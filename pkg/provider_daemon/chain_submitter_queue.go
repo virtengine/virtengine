@@ -33,6 +33,30 @@ func claimTxSubmissionQueuePath(path string) (*txSubmissionQueuePathLock, error)
 	return &txSubmissionQueuePathLock{file: file}, nil
 }
 
+func claimTxSubmissionQueuePathWithRetry(ctx context.Context, path string) (*txSubmissionQueuePathLock, error) {
+	deadline := time.Now().Add(5 * time.Second)
+	var lastErr error
+	for {
+		lock, err := claimTxSubmissionQueuePath(path)
+		if err == nil {
+			return lock, nil
+		}
+		lastErr = err
+		if !time.Now().Before(deadline) {
+			return nil, lastErr
+		}
+		timer := time.NewTimer(5 * time.Millisecond)
+		select {
+		case <-ctx.Done():
+			if !timer.Stop() {
+				<-timer.C
+			}
+			return nil, ctx.Err()
+		case <-timer.C:
+		}
+	}
+}
+
 func (l *txSubmissionQueuePathLock) release() {
 	if l == nil || l.file == nil {
 		return

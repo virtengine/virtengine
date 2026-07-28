@@ -6,6 +6,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"strconv"
 	"time"
 
 	sdk "github.com/cosmos/cosmos-sdk/types"
@@ -39,21 +40,22 @@ func (ms msgServer) SubmitSSOVerificationProof(goCtx context.Context, msg *types
 	if err := att.Validate(); err != nil {
 		return nil, err
 	}
-	if att.LinkedAccountAddress != msg.AccountAddress {
-		return nil, types.ErrInvalidAttestation.Wrap("attestation account address mismatch")
-	}
-
-	if err := ms.keeper.ValidateSSOAttestationSubmission(ctx, &att, nil); err != nil {
+	if err := validateSSOWebEvidenceSubjectBinding(msg.AccountAddress, &att); err != nil {
 		return nil, err
-	}
-
-	if existing := ms.keeper.GetSSOLinkageByAccountAndProvider(ctx, msg.AccountAddress, att.ProviderType); existing != "" {
-		return nil, types.ErrDuplicateLinkage.Wrapf("SSO linkage already exists: %s", existing)
 	}
 
 	evidenceHash := hashEvidence(msg.AttestationData)
 	if msg.EvidenceHash != "" && msg.EvidenceHash != evidenceHash {
 		return nil, types.ErrInvalidSSO.Wrap("evidence_hash does not match attestation_data")
+	}
+
+	evidence, err := buildSSOWebEvidenceContext(ctx, msg, &att)
+	if err != nil {
+		return nil, err
+	}
+	validation, err := ms.keeper.validateWebEvidenceSubmission(ctx, &att.VerificationAttestation, evidence, att.LinkageSignature)
+	if err != nil {
+		return nil, err
 	}
 
 	linkage := att.ToLinkageMetadata(msg.LinkageId)
@@ -63,6 +65,45 @@ func (ms msgServer) SubmitSSOVerificationProof(goCtx context.Context, msg *types
 	linkage.EvidenceMetadata = msg.EvidenceMetadata
 
 	if err := linkage.Validate(); err != nil {
+		return nil, err
+	}
+
+	if existing := ms.keeper.GetSSOLinkageByAccountAndProvider(ctx, msg.AccountAddress, att.ProviderType); existing != "" {
+		existingLinkage, found := ms.keeper.GetSSOLinkage(ctx, existing)
+		if validation.ExactReplay &&
+			found &&
+			existing == msg.LinkageId &&
+			existingLinkage.EvidenceHash == evidenceHash &&
+			webEvidenceStorageMatches(
+				existingLinkage.EvidenceStorageBackend,
+				existingLinkage.EvidenceStorageRef,
+				existingLinkage.EvidenceMetadata,
+				msg.EvidenceStorageBackend,
+				msg.EvidenceStorageRef,
+				msg.EvidenceMetadata,
+			) {
+			return &types.MsgSubmitSSOVerificationProofResponse{
+				LinkageId:         msg.LinkageId,
+				Status:            string(existingLinkage.Status),
+				ScoreContribution: types.GetSSOScoringWeight(att.ProviderType),
+				VerifiedAt:        existingLinkage.VerifiedAt.Unix(),
+			}, nil
+		}
+		return nil, types.ErrDuplicateLinkage.Wrapf("SSO linkage already exists: %s", existing)
+	}
+	if validation.ExactReplay {
+		return nil, types.ErrNonceAlreadyUsed.Wrap("web evidence replay target missing")
+	}
+	if _, found := ms.keeper.GetSSOLinkage(ctx, msg.LinkageId); found {
+		return nil, types.ErrDuplicateLinkage.Wrapf("SSO linkage already exists: %s", msg.LinkageId)
+	}
+	if ms.keeper.IsSSONonceUsed(ctx, hashNonce(att.OIDCNonce)) {
+		return nil, types.ErrNonceAlreadyUsed.Wrap("OIDC nonce already used")
+	}
+	if err := ms.keeper.recordWebEvidenceReplay(ctx, validation); err != nil {
+		return nil, err
+	}
+	if err := ms.keeper.recordSSOAttestationSubmission(ctx, &att, validation.SignerKey); err != nil {
 		return nil, err
 	}
 
@@ -115,15 +156,6 @@ func (ms msgServer) SubmitEmailVerificationProof(goCtx context.Context, msg *typ
 		return nil, types.ErrInvalidAttestation.Wrap("attestation_data cannot be empty")
 	}
 
-	if _, found := ms.keeper.GetEmailVerificationRecord(ctx, msg.VerificationId); found {
-		return nil, types.ErrInvalidEmail.Wrap("verification_id already exists")
-	}
-
-	nonceHash := hashEvidence([]byte(msg.Nonce))
-	if ms.keeper.IsEmailNonceUsed(ctx, nonceHash) {
-		return nil, types.ErrNonceAlreadyUsed.Wrap("email nonce already used")
-	}
-
 	attestation, err := types.AttestationFromJSON(msg.AttestationData)
 	if err != nil {
 		return nil, types.ErrInvalidAttestation.Wrapf("invalid attestation_data: %v", err)
@@ -143,16 +175,18 @@ func (ms msgServer) SubmitEmailVerificationProof(goCtx context.Context, msg *typ
 		return nil, types.ErrInvalidEmail.Wrap("evidence_hash does not match attestation_data")
 	}
 
+	evidence, err := buildEmailWebEvidenceContext(ctx, msg, attestation)
+	if err != nil {
+		return nil, err
+	}
+	validation, err := ms.keeper.validateWebEvidenceSubmission(ctx, attestation, evidence, msg.AccountSignature)
+	if err != nil {
+		return nil, err
+	}
+
 	now := ctx.BlockTime()
-	verifiedAt := now
-	if msg.VerifiedAt > 0 {
-		verifiedAt = time.Unix(msg.VerifiedAt, 0)
-	}
-	var expiresAt *time.Time
-	if msg.ExpiresAt > 0 {
-		ts := time.Unix(msg.ExpiresAt, 0)
-		expiresAt = &ts
-	}
+	verifiedAt := attestation.IssuedAt
+	expiresAt := &attestation.ExpiresAt
 
 	record := &types.EmailVerificationRecord{
 		Version:                types.EmailVerificationVersion,
@@ -175,6 +209,43 @@ func (ms msgServer) SubmitEmailVerificationProof(goCtx context.Context, msg *typ
 		EvidenceMetadata:       msg.EvidenceMetadata,
 	}
 
+	if err := record.Validate(); err != nil {
+		return nil, err
+	}
+	if existing, found := ms.keeper.GetEmailVerificationRecord(ctx, msg.VerificationId); found {
+		if validation.ExactReplay &&
+			existing.AccountAddress == msg.AccountAddress &&
+			existing.EmailHash == msg.EmailHash &&
+			existing.EvidenceHash == evidenceHash &&
+			bytes.Equal(existing.AccountSignature, msg.AccountSignature) &&
+			webEvidenceStorageMatches(
+				existing.EvidenceStorageBackend,
+				existing.EvidenceStorageRef,
+				existing.EvidenceMetadata,
+				msg.EvidenceStorageBackend,
+				msg.EvidenceStorageRef,
+				msg.EvidenceMetadata,
+			) {
+			scoreContribution := types.CalculateEmailScore(existing, types.DefaultEmailScoringWeight(), ctx.BlockTime())
+			return &types.MsgSubmitEmailVerificationProofResponse{
+				VerificationId:    msg.VerificationId,
+				Status:            string(existing.Status),
+				ScoreContribution: scoreContribution,
+				VerifiedAt:        existing.VerifiedAt.Unix(),
+			}, nil
+		}
+		return nil, types.ErrInvalidEmail.Wrap("verification_id already exists")
+	}
+	if validation.ExactReplay {
+		return nil, types.ErrNonceAlreadyUsed.Wrap("web evidence replay target missing")
+	}
+	nonceHash := hashEvidence([]byte(msg.Nonce))
+	if ms.keeper.IsEmailNonceUsed(ctx, nonceHash) {
+		return nil, types.ErrNonceAlreadyUsed.Wrap("email nonce already used")
+	}
+	if err := ms.keeper.recordWebEvidenceReplay(ctx, validation); err != nil {
+		return nil, err
+	}
 	if err := ms.keeper.SetEmailVerificationRecord(ctx, record); err != nil {
 		return nil, err
 	}
@@ -229,10 +300,6 @@ func (ms msgServer) SubmitSMSVerificationProof(goCtx context.Context, msg *types
 		return nil, types.ErrInvalidAttestation.Wrap("attestation_data cannot be empty")
 	}
 
-	if _, found := ms.keeper.GetSMSVerificationRecord(ctx, msg.VerificationId); found {
-		return nil, types.ErrInvalidPhone.Wrap("verification_id already exists")
-	}
-
 	attestation, err := types.AttestationFromJSON(msg.AttestationData)
 	if err != nil {
 		return nil, types.ErrInvalidAttestation.Wrapf("invalid attestation_data: %v", err)
@@ -252,16 +319,18 @@ func (ms msgServer) SubmitSMSVerificationProof(goCtx context.Context, msg *types
 		return nil, types.ErrInvalidPhone.Wrap("evidence_hash does not match attestation_data")
 	}
 
+	evidence, err := buildSMSWebEvidenceContext(ctx, msg, attestation)
+	if err != nil {
+		return nil, err
+	}
+	validation, err := ms.keeper.validateWebEvidenceSubmission(ctx, attestation, evidence, msg.AccountSignature)
+	if err != nil {
+		return nil, err
+	}
+
 	now := ctx.BlockTime()
-	verifiedAt := now
-	if msg.VerifiedAt > 0 {
-		verifiedAt = time.Unix(msg.VerifiedAt, 0)
-	}
-	var expiresAt *time.Time
-	if msg.ExpiresAt > 0 {
-		ts := time.Unix(msg.ExpiresAt, 0)
-		expiresAt = &ts
-	}
+	verifiedAt := attestation.IssuedAt
+	expiresAt := &attestation.ExpiresAt
 
 	record := &types.SMSVerificationRecord{
 		Version:        types.SMSVerificationVersion,
@@ -288,6 +357,39 @@ func (ms msgServer) SubmitSMSVerificationProof(goCtx context.Context, msg *types
 		EvidenceMetadata:       msg.EvidenceMetadata,
 	}
 
+	if err := record.Validate(); err != nil {
+		return nil, err
+	}
+	if existing, found := ms.keeper.GetSMSVerificationRecord(ctx, msg.VerificationId); found {
+		if validation.ExactReplay &&
+			existing.AccountAddress == msg.AccountAddress &&
+			existing.PhoneHash.Hash == msg.PhoneHash &&
+			existing.EvidenceHash == evidenceHash &&
+			bytes.Equal(existing.AccountSignature, msg.AccountSignature) &&
+			webEvidenceStorageMatches(
+				existing.EvidenceStorageBackend,
+				existing.EvidenceStorageRef,
+				existing.EvidenceMetadata,
+				msg.EvidenceStorageBackend,
+				msg.EvidenceStorageRef,
+				msg.EvidenceMetadata,
+			) {
+			scoreContribution := types.CalculateSMSScore(existing, types.DefaultSMSScoringWeight(), ctx.BlockTime())
+			return &types.MsgSubmitSMSVerificationProofResponse{
+				VerificationId:    msg.VerificationId,
+				Status:            string(existing.Status),
+				ScoreContribution: scoreContribution,
+				VerifiedAt:        existing.VerifiedAt.Unix(),
+			}, nil
+		}
+		return nil, types.ErrInvalidPhone.Wrap("verification_id already exists")
+	}
+	if validation.ExactReplay {
+		return nil, types.ErrNonceAlreadyUsed.Wrap("web evidence replay target missing")
+	}
+	if err := ms.keeper.recordWebEvidenceReplay(ctx, validation); err != nil {
+		return nil, err
+	}
 	if err := ms.keeper.SetSMSVerificationRecord(ctx, record); err != nil {
 		return nil, err
 	}
@@ -336,10 +438,6 @@ func (ms msgServer) SubmitSocialMediaScope(goCtx context.Context, msg *types.Msg
 		return nil, types.ErrInvalidAttestation.Wrap("attestation_data cannot be empty")
 	}
 
-	if _, found := ms.keeper.GetSocialMediaScope(ctx, msg.ScopeId); found {
-		return nil, types.ErrInvalidScope.Wrap("scope_id already exists")
-	}
-
 	attestation, err := types.AttestationFromJSON(msg.AttestationData)
 	if err != nil {
 		return nil, types.ErrInvalidAttestation.Wrapf("invalid attestation_data: %v", err)
@@ -374,6 +472,15 @@ func (ms msgServer) SubmitSocialMediaScope(goCtx context.Context, msg *types.Msg
 		ageDays = uint32(now.Sub(*accountCreatedAt).Hours() / 24)
 	}
 
+	evidence, err := buildSocialWebEvidenceContext(ctx, msg, attestation, provider, ageDays)
+	if err != nil {
+		return nil, err
+	}
+	validation, err := ms.keeper.validateWebEvidenceSubmission(ctx, attestation, evidence, msg.AccountSignature)
+	if err != nil {
+		return nil, err
+	}
+
 	scope := &types.SocialMediaScope{
 		Version:                types.SocialMediaScopeVersion,
 		ScopeID:                msg.ScopeId,
@@ -401,20 +508,40 @@ func (ms msgServer) SubmitSocialMediaScope(goCtx context.Context, msg *types.Msg
 		return nil, err
 	}
 
+	if existing, found := ms.keeper.GetSocialMediaScope(ctx, msg.ScopeId); found {
+		if validation.ExactReplay &&
+			existing.AccountAddress == msg.AccountAddress &&
+			existing.Provider == provider &&
+			existing.EvidenceHash == evidenceHash &&
+			webEvidenceStorageMatches(
+				existing.EvidenceStorageBackend,
+				existing.EvidenceStorageRef,
+				existing.EvidenceMetadata,
+				msg.EvidenceStorageBackend,
+				msg.EvidenceStorageRef,
+				msg.EvidenceMetadata,
+			) {
+			scoreContribution := types.CalculateSocialMediaScore(existing, webScopeSocialNameMatch(ctx, ms.keeper, msg.AccountAddress, existing.ProfileNameHash), now)
+			return &types.MsgSubmitSocialMediaScopeResponse{
+				ScopeId:           msg.ScopeId,
+				Status:            string(existing.Status),
+				ScoreContribution: scoreContribution,
+				VerifiedAt:        existing.UpdatedAt.Unix(),
+			}, nil
+		}
+		return nil, types.ErrInvalidScope.Wrap("scope_id already exists")
+	}
+	if validation.ExactReplay {
+		return nil, types.ErrNonceAlreadyUsed.Wrap("web evidence replay target missing")
+	}
+	if err := ms.keeper.recordWebEvidenceReplay(ctx, validation); err != nil {
+		return nil, err
+	}
 	if err := ms.keeper.SetSocialMediaScope(ctx, scope); err != nil {
 		return nil, err
 	}
 
-	nameMatch := false
-	address := sdk.MustAccAddressFromBech32(msg.AccountAddress)
-	if wallet, found := ms.keeper.GetWallet(ctx, address); found {
-		if docHash, ok := wallet.DerivedFeatures.DocFieldHashes[types.DocFieldNameHash]; ok {
-			if nameHashBytes, err := hex.DecodeString(msg.ProfileNameHash); err == nil {
-				nameMatch = bytes.Equal(docHash, nameHashBytes)
-			}
-		}
-	}
-
+	nameMatch := webScopeSocialNameMatch(ctx, ms.keeper, msg.AccountAddress, msg.ProfileNameHash)
 	scoreContribution := types.CalculateSocialMediaScore(scope, nameMatch, now)
 	if err := ms.keeper.applyWebScopeScore(ctx, msg.AccountAddress, []webScopeContribution{
 		{
@@ -434,10 +561,261 @@ func (ms msgServer) SubmitSocialMediaScope(goCtx context.Context, msg *types.Msg
 	}, nil
 }
 
+func webScopeSocialNameMatch(ctx sdk.Context, k Keeper, accountAddress string, profileNameHash string) bool {
+	address := sdk.MustAccAddressFromBech32(accountAddress)
+	wallet, found := k.GetWallet(ctx, address)
+	if !found {
+		return false
+	}
+	docHash, ok := wallet.DerivedFeatures.DocFieldHashes[types.DocFieldNameHash]
+	if !ok {
+		return false
+	}
+	nameHashBytes, err := hex.DecodeString(profileNameHash)
+	return err == nil && bytes.Equal(docHash, nameHashBytes)
+}
+
 func hashEvidence(data []byte) string {
 	if len(data) == 0 {
 		return ""
 	}
 	hash := sha256.Sum256(data)
 	return hex.EncodeToString(hash[:])
+}
+
+func validateSSOWebEvidenceSubjectBinding(accountAddress string, att *types.SSOAttestation) error {
+	if att == nil {
+		return types.ErrInvalidAttestation.Wrap("SSO attestation cannot be nil")
+	}
+	if att.LinkedAccountAddress != accountAddress {
+		return types.ErrInvalidAttestation.Wrap("SSO linked account address mismatch")
+	}
+	if att.Subject.AccountAddress != accountAddress {
+		return types.ErrInvalidAttestation.Wrap("SSO subject account address mismatch")
+	}
+	expectedSubjectID := "did:virtengine:" + accountAddress
+	if att.Subject.ID != expectedSubjectID {
+		return types.ErrInvalidAttestation.Wrap("SSO subject ID does not match account address")
+	}
+	return nil
+}
+
+func buildSSOWebEvidenceContext(ctx sdk.Context, msg *types.MsgSubmitSSOVerificationProof, att *types.SSOAttestation) (types.WebEvidenceContext, error) {
+	canonical, err := att.CanonicalBytes()
+	if err != nil {
+		return types.WebEvidenceContext{}, types.ErrInvalidAttestation.Wrapf("failed to build SSO canonical bytes: %v", err)
+	}
+	serviceHash, err := webEvidenceServiceMetadataHash(msg.EvidenceMetadata)
+	if err != nil {
+		return types.WebEvidenceContext{}, err
+	}
+	return types.NewWebEvidenceContext(types.WebEvidenceContextConfig{
+		ChainID:             ctx.ChainID(),
+		AccountAddress:      msg.AccountAddress,
+		EvidenceType:        types.AttestationTypeSSOVerification,
+		Action:              types.WebEvidenceActionSubmitSSO,
+		ScopeID:             msg.LinkageId,
+		AttestationDigest:   types.WebEvidenceDigestHex(canonical),
+		Issuer:              att.Issuer,
+		IssuerAlgorithm:     att.Proof.Type,
+		Nonce:               att.Nonce,
+		Challenge:           att.OIDCNonce,
+		IssuedAt:            att.IssuedAt,
+		ExpiresAt:           att.ExpiresAt,
+		ServiceMetadataHash: serviceHash,
+		CallerFields: map[string]string{
+			"linkage_id":             msg.LinkageId,
+			"provider":               string(att.ProviderType),
+			"oidc_issuer":            att.OIDCIssuer,
+			"subject_hash":           att.SubjectHash,
+			"email_hash":             att.EmailHash,
+			"email_domain_hash":      att.EmailDomainHash,
+			"tenant_id_hash":         att.TenantIDHash,
+			"oidc_nonce":             att.OIDCNonce,
+			"email_verified":         strconv.FormatBool(att.EmailVerified),
+			"linked_account_address": att.LinkedAccountAddress,
+		},
+	}), nil
+}
+
+func buildEmailWebEvidenceContext(ctx sdk.Context, msg *types.MsgSubmitEmailVerificationProof, att *types.VerificationAttestation) (types.WebEvidenceContext, error) {
+	if msg.Nonce != att.Nonce {
+		return types.WebEvidenceContext{}, types.ErrInvalidAttestation.Wrap("email nonce does not match attestation nonce")
+	}
+	if err := requireUnixMatch("verified_at", msg.VerifiedAt, att.IssuedAt); err != nil {
+		return types.WebEvidenceContext{}, err
+	}
+	if err := requireUnixMatch("expires_at", msg.ExpiresAt, att.ExpiresAt); err != nil {
+		return types.WebEvidenceContext{}, err
+	}
+	digest, err := types.WebEvidenceAttestationDigestHex(att)
+	if err != nil {
+		return types.WebEvidenceContext{}, err
+	}
+	serviceHash, err := webEvidenceServiceMetadataHash(msg.EvidenceMetadata)
+	if err != nil {
+		return types.WebEvidenceContext{}, err
+	}
+	return types.NewWebEvidenceContext(types.WebEvidenceContextConfig{
+		ChainID:             ctx.ChainID(),
+		AccountAddress:      msg.AccountAddress,
+		EvidenceType:        types.AttestationTypeEmailVerification,
+		Action:              types.WebEvidenceActionSubmitEmail,
+		ScopeID:             msg.VerificationId,
+		AttestationDigest:   digest,
+		Issuer:              att.Issuer,
+		IssuerAlgorithm:     att.Proof.Type,
+		Nonce:               att.Nonce,
+		Challenge:           msg.VerificationId,
+		IssuedAt:            att.IssuedAt,
+		ExpiresAt:           att.ExpiresAt,
+		ServiceMetadataHash: serviceHash,
+		CallerFields: map[string]string{
+			"verification_id":   msg.VerificationId,
+			"email_hash":        msg.EmailHash,
+			"domain_hash":       msg.DomainHash,
+			"nonce":             msg.Nonce,
+			"is_organizational": strconv.FormatBool(msg.IsOrganizational),
+			"verified_at_unix":  strconv.FormatInt(att.IssuedAt.Unix(), 10),
+			"expires_at_unix":   strconv.FormatInt(att.ExpiresAt.Unix(), 10),
+		},
+	}), nil
+}
+
+func buildSMSWebEvidenceContext(ctx sdk.Context, msg *types.MsgSubmitSMSVerificationProof, att *types.VerificationAttestation) (types.WebEvidenceContext, error) {
+	if err := requireUnixMatch("verified_at", msg.VerifiedAt, att.IssuedAt); err != nil {
+		return types.WebEvidenceContext{}, err
+	}
+	if err := requireUnixMatch("expires_at", msg.ExpiresAt, att.ExpiresAt); err != nil {
+		return types.WebEvidenceContext{}, err
+	}
+	digest, err := types.WebEvidenceAttestationDigestHex(att)
+	if err != nil {
+		return types.WebEvidenceContext{}, err
+	}
+	serviceHash, err := webEvidenceServiceMetadataHash(msg.EvidenceMetadata)
+	if err != nil {
+		return types.WebEvidenceContext{}, err
+	}
+	return types.NewWebEvidenceContext(types.WebEvidenceContextConfig{
+		ChainID:             ctx.ChainID(),
+		AccountAddress:      msg.AccountAddress,
+		EvidenceType:        types.AttestationTypeSMSVerification,
+		Action:              types.WebEvidenceActionSubmitSMS,
+		ScopeID:             msg.VerificationId,
+		AttestationDigest:   digest,
+		Issuer:              att.Issuer,
+		IssuerAlgorithm:     att.Proof.Type,
+		Nonce:               att.Nonce,
+		Challenge:           msg.VerificationId,
+		IssuedAt:            att.IssuedAt,
+		ExpiresAt:           att.ExpiresAt,
+		ServiceMetadataHash: serviceHash,
+		CallerFields: map[string]string{
+			"verification_id":   msg.VerificationId,
+			"phone_hash":        msg.PhoneHash,
+			"phone_hash_salt":   msg.PhoneHashSalt,
+			"country_code_hash": msg.CountryCodeHash,
+			"is_voip":           strconv.FormatBool(msg.IsVoip),
+			"carrier_type":      msg.CarrierType,
+			"validator_address": msg.ValidatorAddress,
+			"verified_at_unix":  strconv.FormatInt(att.IssuedAt.Unix(), 10),
+			"expires_at_unix":   strconv.FormatInt(att.ExpiresAt.Unix(), 10),
+		},
+	}), nil
+}
+
+func buildSocialWebEvidenceContext(
+	ctx sdk.Context,
+	msg *types.MsgSubmitSocialMediaScope,
+	att *types.VerificationAttestation,
+	provider types.SocialMediaProviderType,
+	ageDays uint32,
+) (types.WebEvidenceContext, error) {
+	if msg.AccountCreatedAt > 0 && msg.AccountCreatedAt > ctx.BlockTime().Unix() {
+		return types.WebEvidenceContext{}, types.ErrInvalidScope.Wrap("account_created_at cannot be in the future")
+	}
+	digest, err := types.WebEvidenceAttestationDigestHex(att)
+	if err != nil {
+		return types.WebEvidenceContext{}, err
+	}
+	serviceHash, err := webEvidenceServiceMetadataHash(msg.EvidenceMetadata)
+	if err != nil {
+		return types.WebEvidenceContext{}, err
+	}
+	payloadDigest, err := webEvidenceEncryptedPayloadDigest(&msg.EncryptedPayload)
+	if err != nil {
+		return types.WebEvidenceContext{}, err
+	}
+	return types.NewWebEvidenceContext(types.WebEvidenceContextConfig{
+		ChainID:             ctx.ChainID(),
+		AccountAddress:      msg.AccountAddress,
+		EvidenceType:        types.AttestationTypeSocialMediaVerification,
+		Action:              types.WebEvidenceActionSubmitSocial,
+		ScopeID:             msg.ScopeId,
+		AttestationDigest:   digest,
+		Issuer:              att.Issuer,
+		IssuerAlgorithm:     att.Proof.Type,
+		Nonce:               att.Nonce,
+		Challenge:           msg.ScopeId,
+		IssuedAt:            att.IssuedAt,
+		ExpiresAt:           att.ExpiresAt,
+		ServiceMetadataHash: serviceHash,
+		CallerFields: map[string]string{
+			"scope_id":                 msg.ScopeId,
+			"provider":                 string(provider),
+			"profile_name_hash":        msg.ProfileNameHash,
+			"email_hash":               msg.EmailHash,
+			"username_hash":            msg.UsernameHash,
+			"org_hash":                 msg.OrgHash,
+			"account_created_at_unix":  strconv.FormatInt(msg.AccountCreatedAt, 10),
+			"account_age_days":         strconv.FormatUint(uint64(ageDays), 10),
+			"is_verified":              strconv.FormatBool(msg.IsVerified),
+			"friend_count_range":       msg.FriendCountRange,
+			"encrypted_payload_digest": payloadDigest,
+		},
+	}), nil
+}
+
+func requireUnixMatch(field string, msgValue int64, expected time.Time) error {
+	if msgValue > 0 && msgValue != expected.Unix() {
+		return types.ErrInvalidAttestation.Wrapf("%s does not match attestation timestamp", field)
+	}
+	return nil
+}
+
+func webEvidenceServiceMetadataHash(metadata map[string]string) (string, error) {
+	return types.WebEvidenceServiceMetadataHash(metadata)
+}
+
+func webEvidenceStorageMatches(
+	storedBackend string,
+	storedRef string,
+	storedMetadata map[string]string,
+	msgBackend string,
+	msgRef string,
+	msgMetadata map[string]string,
+) bool {
+	if storedBackend != msgBackend || storedRef != msgRef {
+		return false
+	}
+	if len(storedMetadata) != len(msgMetadata) {
+		return false
+	}
+	for key, storedValue := range storedMetadata {
+		if msgValue, ok := msgMetadata[key]; !ok || msgValue != storedValue {
+			return false
+		}
+	}
+	return true
+}
+
+func webEvidenceEncryptedPayloadDigest(payload *types.EncryptedPayloadEnvelopePB) (string, error) {
+	converted := encryptedPayloadFromProto(payload)
+	bz, err := json.Marshal(converted)
+	if err != nil {
+		return "", err
+	}
+	hash := sha256.Sum256(bz)
+	return hex.EncodeToString(hash[:]), nil
 }

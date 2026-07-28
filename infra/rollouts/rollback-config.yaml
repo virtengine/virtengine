@@ -1,5 +1,11 @@
-# Automated Rollback Configuration
-# These resources configure automatic rollback behavior
+# Optional rollback AnalysisTemplate policy.
+#
+# This file is not an application topology source and must not be applied as
+# part of an infra/rollouts directory deployment. Canonical production
+# application topology lives under deploy/kubernetes/overlays/prod and uses
+# StatefulSet rolling updates. Operators may apply this file separately only
+# when Argo Rollouts AnalysisTemplates are intentionally used for supplemental
+# health policy.
 apiVersion: argoproj.io/v1alpha1
 kind: AnalysisTemplate
 metadata:

@@ -14,7 +14,7 @@ metadata:
 spec:
   scaleTargetRef:
     name: provider-daemon
-    kind: Deployment
+    kind: StatefulSet
   pollingInterval: 15
   cooldownPeriod: 300
   minReplicaCount: 3

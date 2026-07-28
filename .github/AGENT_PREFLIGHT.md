@@ -38,6 +38,14 @@
 
 `VE_HOOK_TASK85B_QUICK=1` and `VE_HOOK_TASK85B_SKIP_RACE=1` are explicit diagnostic-only reductions for constrained environments. Their output is not a Task 85B release pass and must not be recorded as full preflight evidence. Without these explicit variables, agent preflight fails closed and runs the full Task 85B gate.
 
+## Task 85C Changes
+
+- [ ] `pwsh scripts/task85c-preflight.ps1` completes for encrypted keystore persistence, distributed fencing/failover, provider restart continuity, canonical Kubernetes rendering/policy, docs, lint, vet, build, and race checks.
+- [ ] `deploy/kubernetes` remains the sole application source; `infra/kubernetes` application entry points render byte-equivalent compatibility imports.
+- [ ] A local preflight pass is not live TMKMS/HSM, multi-zone storage, cloud snapshot, or regional failover certification. Report those as release-only blocked evidence unless retained external drill evidence exists.
+
+`VE_HOOK_TASK85C_SKIP_RACE=1` is diagnostic only and must not be recorded as full Task 85C local acceptance evidence.
+
 ## If Push Fails
 
 1. Read the error output carefully

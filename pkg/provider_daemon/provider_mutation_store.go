@@ -29,7 +29,6 @@ type FileProviderMutationStore struct {
 	path  string
 	mu    sync.RWMutex
 	state providerMutationFileState
-	lock  *txSubmissionQueuePathLock
 	open  bool
 }
 
@@ -47,36 +46,22 @@ func NewFileProviderMutationStore(path string) (*FileProviderMutationStore, erro
 	return &FileProviderMutationStore{path: filepath.Clean(absolute)}, nil
 }
 
-func (s *FileProviderMutationStore) Open(_ context.Context) error {
+func (s *FileProviderMutationStore) Open(ctx context.Context) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.open {
 		return nil
 	}
-	lock, err := claimTxSubmissionQueuePath(s.path)
+	lock, err := claimTxSubmissionQueuePathWithRetry(ctx, s.path)
 	if err != nil {
 		return err
 	}
-	state := providerMutationFileState{SchemaVersion: providerMutationSchemaVersion, Items: make(map[string]*ProviderMutationEnvelope)}
-	data, readErr := os.ReadFile(s.path) // #nosec G304 -- constructor validates the state path.
-	if readErr == nil {
-		if err := json.Unmarshal(data, &state); err != nil {
-			lock.release()
-			return fmt.Errorf("decode mutation queue: %w", err)
-		}
-		if state.SchemaVersion != providerMutationSchemaVersion {
-			lock.release()
-			return fmt.Errorf("unsupported mutation queue schema %d", state.SchemaVersion)
-		}
-		if state.Items == nil {
-			state.Items = make(map[string]*ProviderMutationEnvelope)
-		}
-	} else if !os.IsNotExist(readErr) {
-		lock.release()
-		return fmt.Errorf("read mutation queue: %w", readErr)
+	defer lock.release()
+	state, err := s.loadStateLocked()
+	if err != nil {
+		return err
 	}
 	s.state = state
-	s.lock = lock
 	s.open = true
 	return nil
 }
@@ -87,8 +72,6 @@ func (s *FileProviderMutationStore) Close() error {
 	if !s.open {
 		return nil
 	}
-	s.lock.release()
-	s.lock = nil
 	s.open = false
 	return nil
 }
@@ -108,7 +91,7 @@ func cloneMutationEnvelope(item *ProviderMutationEnvelope) *ProviderMutationEnve
 	return &clone
 }
 
-func (s *FileProviderMutationStore) PutIfAbsent(_ context.Context, item *ProviderMutationEnvelope) (*ProviderMutationEnvelope, bool, error) {
+func (s *FileProviderMutationStore) PutIfAbsent(ctx context.Context, item *ProviderMutationEnvelope) (*ProviderMutationEnvelope, bool, error) {
 	if item == nil || item.ID == "" || item.IdempotencyKey == "" {
 		return nil, false, fmt.Errorf("mutation identity is required")
 	}
@@ -117,6 +100,16 @@ func (s *FileProviderMutationStore) PutIfAbsent(_ context.Context, item *Provide
 	if !s.open {
 		return nil, false, ErrProviderMutationUnavailable
 	}
+	lock, err := claimTxSubmissionQueuePathWithRetry(ctx, s.path)
+	if err != nil {
+		return nil, false, err
+	}
+	defer lock.release()
+	state, err := s.loadStateLocked()
+	if err != nil {
+		return nil, false, err
+	}
+	s.state = state
 	for _, existing := range s.state.Items {
 		if existing.ID == item.ID {
 			return cloneMutationEnvelope(existing), true, nil
@@ -139,25 +132,44 @@ func (s *FileProviderMutationStore) PutIfAbsent(_ context.Context, item *Provide
 	return cloneMutationEnvelope(item), false, nil
 }
 
-func (s *FileProviderMutationStore) Get(_ context.Context, id string) (*ProviderMutationEnvelope, error) {
+func (s *FileProviderMutationStore) Get(ctx context.Context, id string) (*ProviderMutationEnvelope, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	if !s.open {
 		return nil, ErrProviderMutationUnavailable
 	}
-	item, ok := s.state.Items[id]
+	lock, err := claimTxSubmissionQueuePathWithRetry(ctx, s.path)
+	if err != nil {
+		return nil, err
+	}
+	defer lock.release()
+	state, err := s.loadStateLocked()
+	if err != nil {
+		return nil, err
+	}
+	item, ok := state.Items[id]
 	if !ok {
 		return nil, ErrProviderMutationNotFound
 	}
 	return cloneMutationEnvelope(item), nil
 }
 
-func (s *FileProviderMutationStore) Update(_ context.Context, id string, fn func(*ProviderMutationEnvelope) error) (*ProviderMutationEnvelope, error) {
+func (s *FileProviderMutationStore) Update(ctx context.Context, id string, fn func(*ProviderMutationEnvelope) error) (*ProviderMutationEnvelope, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if !s.open {
 		return nil, ErrProviderMutationUnavailable
 	}
+	lock, err := claimTxSubmissionQueuePathWithRetry(ctx, s.path)
+	if err != nil {
+		return nil, err
+	}
+	defer lock.release()
+	state, err := s.loadStateLocked()
+	if err != nil {
+		return nil, err
+	}
+	s.state = state
 	item, ok := s.state.Items[id]
 	if !ok {
 		return nil, ErrProviderMutationNotFound
@@ -177,18 +189,48 @@ func (s *FileProviderMutationStore) Update(_ context.Context, id string, fn func
 	return cloneMutationEnvelope(candidate), nil
 }
 
-func (s *FileProviderMutationStore) List(_ context.Context) ([]*ProviderMutationEnvelope, error) {
+func (s *FileProviderMutationStore) List(ctx context.Context) ([]*ProviderMutationEnvelope, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	if !s.open {
 		return nil, ErrProviderMutationUnavailable
 	}
-	items := make([]*ProviderMutationEnvelope, 0, len(s.state.Items))
-	for _, item := range s.state.Items {
+	lock, err := claimTxSubmissionQueuePathWithRetry(ctx, s.path)
+	if err != nil {
+		return nil, err
+	}
+	defer lock.release()
+	state, err := s.loadStateLocked()
+	if err != nil {
+		return nil, err
+	}
+	items := make([]*ProviderMutationEnvelope, 0, len(state.Items))
+	for _, item := range state.Items {
 		items = append(items, cloneMutationEnvelope(item))
 	}
 	sort.Slice(items, func(i, j int) bool { return items[i].ID < items[j].ID })
 	return items, nil
+}
+
+func (s *FileProviderMutationStore) loadStateLocked() (providerMutationFileState, error) {
+	state := providerMutationFileState{SchemaVersion: providerMutationSchemaVersion, Items: make(map[string]*ProviderMutationEnvelope)}
+	data, readErr := os.ReadFile(s.path) // #nosec G304 -- constructor validates the state path.
+	if errors.Is(readErr, os.ErrNotExist) {
+		return state, nil
+	}
+	if readErr != nil {
+		return state, fmt.Errorf("read mutation queue: %w", readErr)
+	}
+	if err := json.Unmarshal(data, &state); err != nil {
+		return state, fmt.Errorf("decode mutation queue: %w", err)
+	}
+	if state.SchemaVersion != providerMutationSchemaVersion {
+		return state, fmt.Errorf("unsupported mutation queue schema %d", state.SchemaVersion)
+	}
+	if state.Items == nil {
+		state.Items = make(map[string]*ProviderMutationEnvelope)
+	}
+	return state, nil
 }
 
 func (s *FileProviderMutationStore) saveLocked() error {

@@ -11,6 +11,8 @@
 #
 # Environment variables:
 #   PROVIDER_HOME            Provider daemon home (default: /opt/provider-daemon)
+#   PROVIDER_KEY_DIR         Encrypted file-keystore directory (optional)
+#   PROVIDER_HA_STATE_DIR    Shared queue/sequence/reconciliation/fencing directory (optional)
 #   PROVIDER_SNAPSHOT_DIR    Local backup directory (default: /data/provider-snapshots)
 #   DR_BUCKET                S3 bucket for backups (optional)
 #   RETENTION_COUNT          Number of local backups to keep (default: 10)
@@ -27,6 +29,8 @@
 set -euo pipefail
 
 PROVIDER_HOME="${PROVIDER_HOME:-/opt/provider-daemon}"
+PROVIDER_KEY_DIR="${PROVIDER_KEY_DIR:-${PROVIDER_HOME}/keys}"
+PROVIDER_HA_STATE_DIR="${PROVIDER_HA_STATE_DIR:-${PROVIDER_HOME}/ha}"
 PROVIDER_SNAPSHOT_DIR="${PROVIDER_SNAPSHOT_DIR:-/data/provider-snapshots}"
 DR_BUCKET="${DR_BUCKET:-}"
 RETENTION_COUNT="${RETENTION_COUNT:-10}"
@@ -39,6 +43,7 @@ ALERT_WEBHOOK_TIMEOUT="${ALERT_WEBHOOK_TIMEOUT:-5}"
 RESTORE_AUTO_APPROVE="${RESTORE_AUTO_APPROVE:-0}"
 RESTORE_SKIP_SERVICE="${RESTORE_SKIP_SERVICE:-0}"
 SYSTEMCTL_CMD="${SYSTEMCTL_CMD:-systemctl}"
+CREATED_BACKUP_NAME=""
 
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -225,13 +230,9 @@ create_backup() {
 
     local state_dir="${PROVIDER_HOME}/data"
     local config_dir="${PROVIDER_HOME}/config"
+	local key_store="${PROVIDER_KEY_DIR}/provider-keys.enc.json"
 
     log_info "Creating provider state backup..."
-
-    if [ ! -d "$state_dir" ] && [ ! -d "$config_dir" ]; then
-        log_error "Provider data/config directories not found in ${PROVIDER_HOME}"
-        return 1
-    fi
 
     local tmp_dir
     tmp_dir=$(mktemp -d)
@@ -247,6 +248,40 @@ create_backup() {
         cp -R "$config_dir"/* "$tmp_dir/config/" 2>/dev/null || true
     fi
 
+    if [ ! -d "$state_dir" ] && [ ! -d "$config_dir" ]; then
+        log_warn "Optional legacy provider data/config directories are absent; backing up encrypted identity and HA state only"
+    fi
+
+    if [ -f "$key_store" ]; then
+        mkdir -p "$tmp_dir/keys"
+        cp "$key_store" "$tmp_dir/keys/provider-keys.enc.json"
+    fi
+
+    if [ -d "$PROVIDER_HA_STATE_DIR" ]; then
+        mkdir -p "$tmp_dir/ha"
+        cp -R "$PROVIDER_HA_STATE_DIR"/. "$tmp_dir/ha/"
+    fi
+
+    if [ ! -f "$tmp_dir/keys/provider-keys.enc.json" ]; then
+        log_error "Encrypted provider keystore not found: ${key_store}"
+        return 1
+    fi
+    if ! grep -q '"cipher"' "$tmp_dir/keys/provider-keys.enc.json" || grep -q '"private_key"' "$tmp_dir/keys/provider-keys.enc.json"; then
+        log_error "Provider keystore is not an authenticated encrypted envelope"
+        return 1
+    fi
+
+    local continuity_files=""
+    for file in chain_usage_queue.json chain_usage_queue.json.mutations fiat_conversion_state.json fiat_conversion_repository.json submitter_lease.json; do
+        if [ -f "$tmp_dir/ha/$file" ]; then
+            continuity_files="${continuity_files}${file},"
+        fi
+    done
+    if [ -z "$continuity_files" ]; then
+        log_error "No provider queue, sequence, reconciliation, or fencing state found in ${PROVIDER_HA_STATE_DIR}"
+        return 1
+    fi
+
     tar -czf "${PROVIDER_SNAPSHOT_DIR}/${backup_name}.tar.gz" -C "$tmp_dir" .
 
     cat > "${PROVIDER_SNAPSHOT_DIR}/${backup_name}_metadata.json" << EOF
@@ -256,6 +291,9 @@ create_backup() {
   "provider_home": "${PROVIDER_HOME}",
   "state_dir": "${state_dir}",
   "config_dir": "${config_dir}",
+    "key_store": "${key_store}",
+    "ha_state_dir": "${PROVIDER_HA_STATE_DIR}",
+    "continuity_files": "${continuity_files%,}",
   "hostname": "$(hostname)",
   "region": "$(get_region)"
 }
@@ -269,7 +307,7 @@ EOF
 
     log_info "Provider state backup created: ${backup_name}"
     notify_webhook "provider.backup" "success" "Provider state backup created" "$backup_name"
-    echo "$backup_name"
+    CREATED_BACKUP_NAME="$backup_name"
 }
 
 upload_backup() {
@@ -416,6 +454,23 @@ restore_backup() {
         mv "$restore_dir/config" "${PROVIDER_HOME}/config"
     fi
 
+    if [ -f "$restore_dir/keys/provider-keys.enc.json" ]; then
+        mkdir -p "$PROVIDER_KEY_DIR"
+        mv "$restore_dir/keys/provider-keys.enc.json" "$PROVIDER_KEY_DIR/provider-keys.enc.json"
+        chmod 600 "$PROVIDER_KEY_DIR/provider-keys.enc.json"
+    else
+        log_error "Restored backup is missing encrypted provider identity"
+        return 1
+    fi
+
+    if [ -d "$restore_dir/ha" ]; then
+        mkdir -p "$PROVIDER_HA_STATE_DIR"
+        cp -R "$restore_dir/ha"/. "$PROVIDER_HA_STATE_DIR/"
+    else
+        log_error "Restored backup is missing provider HA state"
+        return 1
+    fi
+
     rm -rf "$restore_dir"
 
     if [ "$RESTORE_SKIP_SERVICE" = "0" ]; then
@@ -513,10 +568,12 @@ main() {
     case $action in
         backup)
             local backup_name
-            backup_name=$(create_backup)
+            create_backup
+            backup_name="$CREATED_BACKUP_NAME"
             upload_backup "$backup_name"
             cleanup_old_backups
             verify_backup "$backup_name"
+            echo "$backup_name"
             ;;
         verify)
             verify_backup ""
