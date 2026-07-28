@@ -38,14 +38,15 @@ func TestTask85BObservationTypeURLs(t *testing.T) {
 
 func TestTask85BAdditiveFieldNumbers(t *testing.T) {
 	assertFieldNumbers(t, reflect.TypeOf(settlementv1.PayoutRecord{}), map[string]int{
-		"payout_id": 1, "block_height": 26, "external_finality_hash": 27,
+		"payout_id": 1, "block_height": 26, "last_error_retryable": 27,
+		"external_finality_hash": 28,
 	})
 	assertFieldNumbers(t, reflect.TypeOf(settlementv1.FiatConversionRecord{}), map[string]int{
-		"conversion_id": 1, "transition_history": 45, "protocol_version": 46,
-		"observation_sequence": 47, "last_observation_digest": 48, "observations": 49,
-		"dex_profile_id": 50, "payout_profile_id": 52, "request_digest": 65,
-		"daily_bucket": 66, "value_movement_applied": 70,
-		"slippage_tolerance_exact": 71, "daily_quota_reserved": 72,
+		"conversion_id": 1, "transition_history": 45, "last_error_retryable": 46,
+		"protocol_version": 47, "observation_sequence": 48, "last_observation_digest": 49,
+		"observations": 50, "dex_profile_id": 51, "payout_profile_id": 53,
+		"request_digest": 66, "daily_bucket": 67, "value_movement_applied": 71,
+		"slippage_tolerance_exact": 72, "daily_quota_reserved": 73,
 	})
 	assertFieldNumbers(t, reflect.TypeOf(settlementv1.Params{}), map[string]int{
 		"financial_case_timeout_batch_limit": 49, "fiat_conversion_dex_profile_id": 50,
