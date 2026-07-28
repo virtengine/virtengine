@@ -20,14 +20,14 @@ opencv-python-headless==4.8.1.78
 numpy==1.26.3
 
 # Pillow for image handling
-Pillow==12.1.1
+Pillow==12.2.0
 
 # ONNX Runtime for CRAFT model (CPU-only)
 onnxruntime==1.16.3
 
 # PyTorch (CPU-only) for CRAFT text detection
 --extra-index-url https://download.pytorch.org/whl/cpu
-torch==2.8.0+cpu
+torch==2.12.1+cpu
 
 # Tesseract OCR Python bindings
 pytesseract==0.3.10
