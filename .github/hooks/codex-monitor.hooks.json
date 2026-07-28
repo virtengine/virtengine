@@ -4,7 +4,7 @@
     {
       "type": "command",
       "command": [
-        "sh",
+        "/bin/sh",
         "-c",
         "exit 0"
       ],
@@ -15,37 +15,11 @@
     {
       "type": "command",
       "command": [
-        "sh",
+        "/bin/sh",
         "-c",
         "exit 0"
       ],
       "timeout": 60
     }
-  ],
-  "preToolUse": {
-    "*": [
-      {
-        "type": "command",
-        "command": [
-          "sh",
-          "-c",
-          "exit 0"
-        ],
-        "timeout": 300
-      }
-    ]
-  },
-  "postToolUse": {
-    "*": [
-      {
-        "type": "command",
-        "command": [
-          "sh",
-          "-c",
-          "exit 0"
-        ],
-        "timeout": 120
-      }
-    ]
-  }
+  ]
 }
