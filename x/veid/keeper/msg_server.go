@@ -385,34 +385,8 @@ func (ms msgServer) RebindWallet(goCtx context.Context, msg *types.MsgRebindWall
 
 // UpdateDerivedFeatures handles updating derived features
 func (ms msgServer) UpdateDerivedFeatures(goCtx context.Context, msg *types.MsgUpdateDerivedFeatures) (*types.MsgUpdateDerivedFeaturesResponse, error) {
-	ctx := sdk.UnwrapSDKContext(goCtx)
-
-	sender, err := sdk.AccAddressFromBech32(msg.Sender)
-	if err != nil {
-		return nil, types.ErrInvalidAddress.Wrap(errMsgInvalidSenderAddr)
-	}
-
-	accountAddr, err := sdk.AccAddressFromBech32(msg.AccountAddress)
-	if err != nil {
-		return nil, types.ErrInvalidAddress.Wrap("invalid account address")
-	}
-
-	update := &types.DerivedFeaturesUpdate{
-		AccountAddress:    msg.AccountAddress,
-		FaceEmbeddingHash: msg.FaceEmbeddingHash,
-		DocFieldHashes:    msg.DocFieldHashes,
-		BiometricHash:     msg.BiometricHash,
-		LivenessProofHash: msg.LivenessProofHash,
-		ModelVersion:      msg.ModelVersion,
-		ValidatorAddress:  sender.String(),
-	}
-	if err := ms.keeper.UpdateDerivedFeatures(ctx, accountAddr, update); err != nil {
-		return nil, err
-	}
-
-	return &types.MsgUpdateDerivedFeaturesResponse{
-		UpdatedAt: ctx.BlockTime().Unix(),
-	}, nil
+	_ = sdk.UnwrapSDKContext(goCtx)
+	return nil, types.ErrUnauthorized.Wrap("ordinary derived feature transactions are disabled; use signed inference receipts and consensus finalization")
 }
 
 // CompleteBorderlineFallback handles completing a borderline fallback verification
@@ -447,22 +421,13 @@ func (ms msgServer) CompleteBorderlineFallback(goCtx context.Context, msg *types
 	}
 
 	// Retrieve the updated fallback record for response
-	updatedFallback, _ := ms.keeper.GetBorderlineFallbackRecord(ctx, fallbackRecord.FallbackID)
+	updatedFallback, found := ms.keeper.GetBorderlineFallbackRecord(ctx, fallbackRecord.FallbackID)
+	if !found {
+		return nil, types.ErrBorderlineFallbackNotFound.Wrapf("fallback %s not found after completion", fallbackRecord.FallbackID)
+	}
 
 	// Determine factor class from satisfied factors
-	factorClass := ms.keeper.DetermineFactorClass(msg.FactorsSatisfied)
-
-	// Emit completion event (using SDK event since typed events not available)
-	ctx.EventManager().EmitEvent(
-		sdk.NewEvent(
-			types.EventTypeBorderlineFallbackCompleted,
-			sdk.NewAttribute(types.AttributeKeyAccountAddress, msg.Sender),
-			sdk.NewAttribute(types.AttributeKeyFallbackID, fallbackRecord.FallbackID),
-			sdk.NewAttribute(types.AttributeKeyChallengeID, msg.ChallengeId),
-			sdk.NewAttribute(types.AttributeKeyFactorClass, factorClass),
-			sdk.NewAttribute(types.AttributeKeyFinalStatus, string(types.VerificationStatusVerified)),
-		),
-	)
+	factorClass := ms.keeper.DetermineFactorClass(updatedFallback.SatisfiedFactors)
 
 	return &types.MsgCompleteBorderlineFallbackResponse{
 		FallbackId:  updatedFallback.FallbackID,

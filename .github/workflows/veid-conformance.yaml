@@ -4,6 +4,45 @@ name: VEID Conformance
 
 on:
   workflow_call:
+  push:
+    branches:
+      - main
+      - mainnet/main
+      - "release/**"
+    paths:
+      - "cmd/inference-sidecar/**"
+      - "pkg/inference/**"
+      - "x/veid/**"
+      - "tests/integration/veid/task85d_process_boundary_test.go"
+      - "deploy/kubernetes/**"
+      - "infra/kubernetes/**"
+      - ".github/scripts/validate_inference_deployment_policy.py"
+      - ".github/tests/test_inference_deployment_policy.py"
+      - ".github/workflows/veid-conformance.yaml"
+      - ".github/AGENTS.md"
+      - "docs/inference-sidecar-deployment.md"
+      - "_docs/inference-fallback-behavior.md"
+      - "_docs/runbooks/**"
+      - "_docs/INDEX.md"
+  pull_request:
+    branches:
+      - main
+      - mainnet/main
+    paths:
+      - "cmd/inference-sidecar/**"
+      - "pkg/inference/**"
+      - "x/veid/**"
+      - "tests/integration/veid/task85d_process_boundary_test.go"
+      - "deploy/kubernetes/**"
+      - "infra/kubernetes/**"
+      - ".github/scripts/validate_inference_deployment_policy.py"
+      - ".github/tests/test_inference_deployment_policy.py"
+      - ".github/workflows/veid-conformance.yaml"
+      - ".github/AGENTS.md"
+      - "docs/inference-sidecar-deployment.md"
+      - "_docs/inference-fallback-behavior.md"
+      - "_docs/runbooks/**"
+      - "_docs/INDEX.md"
   schedule:
     - cron: "0 2 * * *"
   workflow_dispatch:
@@ -16,9 +55,96 @@ on:
 
 env:
   GO_VERSION: "1.25.5"
+  PYTHON_VERSION: "3.11"
+  KUBECTL_VERSION: "1.29.0"
+  KUBECTL_SHA256: "0e03ab096163f61ab610b33f37f55709d3af8e16e4dcc1eb682882ef80f96fd5"
   VEID_CONFORMANCE_EVIDENCE_DIR: ${{ github.workspace }}/conformance-evidence
 
 jobs:
+  deployment-policy:
+    name: Deployment Policy
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+          cache-dependency-path: go.sum
+
+      - name: Install pinned kubectl
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fsSLo kubectl "https://dl.k8s.io/release/v${KUBECTL_VERSION}/bin/linux/amd64/kubectl"
+          echo "${KUBECTL_SHA256}  kubectl" | sha256sum --check --strict
+          chmod +x kubectl
+          sudo install -m 0755 kubectl /usr/local/bin/kubectl
+          kubectl version --client=true --output=yaml
+
+      - name: Run inference deployment policy tests
+        shell: bash
+        run: python .github/tests/test_inference_deployment_policy.py
+
+      - name: Run inference sidecar mTLS tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          go test ./cmd/inference-sidecar ./pkg/inference \
+            -run "Test.*MTLS|TestSidecarClient.*MTLS|TestStartupOptionsFailClosedDefaultsAndFallbackPolicy" \
+            -count=1
+
+      - name: Build and test inference sidecar
+        shell: bash
+        run: |
+          set -euo pipefail
+          go test ./cmd/inference-sidecar ./pkg/inference -count=1
+          go build -trimpath -o "${RUNNER_TEMP}/inference-sidecar" ./cmd/inference-sidecar
+
+      - name: Validate rendered inference deployment policy
+        shell: bash
+        run: python .github/scripts/validate_inference_deployment_policy.py
+
+  process-boundary:
+    name: Process Boundary
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+          cache-dependency-path: go.sum
+
+      - name: Run VEID receipt and keeper tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          go test ./x/veid/types ./x/veid/keeper -count=1 -timeout 15m
+
+      - name: Run Task 85D separate-process integration tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          go test ./tests/integration/veid -run '^TestTask85D' -count=1 -timeout 15m
+
   conformance-tests:
     name: Conformance (${{ matrix.os }}-${{ matrix.arch }})
     runs-on: ${{ matrix.runner }}
@@ -56,6 +182,7 @@ jobs:
       - name: Run deterministic conformance tests
         shell: bash
         run: |
+          set -euo pipefail
           export VE_DIRENV_SET=1
           export TF_DETERMINISTIC_OPS=1
           export TF_CUDNN_DETERMINISTIC=1
@@ -71,6 +198,7 @@ jobs:
       - name: Run golden vector tests
         shell: bash
         run: |
+          set -euo pipefail
           export VE_DIRENV_SET=1
           go test -v -timeout 5m \
             -run "TestGoldenVector" \
@@ -80,6 +208,7 @@ jobs:
       - name: Run multi-environment simulation
         shell: bash
         run: |
+          set -euo pipefail
           export VE_DIRENV_SET=1
           go test -v -timeout 5m \
             -run "TestMultiEnvironmentSimulation" \
@@ -184,6 +313,7 @@ jobs:
       - name: Run benchmarks
         shell: bash
         run: |
+          set -euo pipefail
           go test -v -bench=. -benchmem -timeout 10m \
             ./pkg/inference/... \
             -run=^$ \
@@ -199,19 +329,23 @@ jobs:
   conformance-summary:
     name: Conformance Summary
     runs-on: ubuntu-latest
-    needs: [conformance-tests, verify-cross-platform-hashes]
+    needs: [deployment-policy, process-boundary, conformance-tests, verify-cross-platform-hashes]
     if: always()
     steps:
       - name: Check overall status
         shell: bash
         run: |
-          if [[ "${{ needs.conformance-tests.result }}" == "success" ]] && \
+          if [[ "${{ needs.deployment-policy.result }}" == "success" ]] && \
+             [[ "${{ needs.process-boundary.result }}" == "success" ]] && \
+             [[ "${{ needs.conformance-tests.result }}" == "success" ]] && \
              [[ "${{ needs.verify-cross-platform-hashes.result }}" == "success" ]]; then
             echo "VEID conformance checks passed"
             exit 0
           fi
 
           echo "::error::VEID conformance checks failed"
+          echo "  - Deployment Policy: ${{ needs.deployment-policy.result }}"
+          echo "  - Process Boundary: ${{ needs.process-boundary.result }}"
           echo "  - Conformance Tests: ${{ needs.conformance-tests.result }}"
           echo "  - Hash Verification: ${{ needs.verify-cross-platform-hashes.result }}"
           exit 1
@@ -225,6 +359,8 @@ jobs:
 
           | Required Gate | Status |
           |---------------|--------|
+          | Deployment policy render and mTLS gate | ${{ needs.deployment-policy.result }} |
+          | VEID receipt and separate-process boundary tests | ${{ needs.process-boundary.result }} |
           | Cross-platform conformance matrix | ${{ needs.conformance-tests.result }} |
           | Hash verification | ${{ needs.verify-cross-platform-hashes.result }} |
 

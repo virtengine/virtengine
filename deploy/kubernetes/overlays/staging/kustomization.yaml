@@ -59,6 +59,13 @@ patches:
         path: /spec/replicas
         value: 2
   - target:
+      kind: StatefulSet
+      name: inference-sidecar
+    patch: |
+      - op: replace
+        path: /spec/replicas
+        value: 1
+  - target:
       kind: ExternalSecret
       name: validator-signer-identity
     patch: |
@@ -130,6 +137,86 @@ patches:
             remoteRef:
               key: secret/virtengine/staging/provider-daemon
               property: portal-auth-secret
+  - target:
+      kind: ExternalSecret
+      name: inference-sidecar-server-mtls
+    patch: |
+      apiVersion: external-secrets.io/v1beta1
+      kind: ExternalSecret
+      metadata:
+        name: inference-sidecar-server-mtls
+      spec:
+        data:
+          - secretKey: tls.crt
+            remoteRef:
+              key: secret/virtengine/staging/inference-sidecar/server-mtls
+              property: server-cert
+          - secretKey: tls.key
+            remoteRef:
+              key: secret/virtengine/staging/inference-sidecar/server-mtls
+              property: server-key
+  - target:
+      kind: ExternalSecret
+      name: inference-sidecar-client-ca
+    patch: |
+      apiVersion: external-secrets.io/v1beta1
+      kind: ExternalSecret
+      metadata:
+        name: inference-sidecar-client-ca
+      spec:
+        data:
+          - secretKey: ca.crt
+            remoteRef:
+              key: secret/virtengine/staging/inference-sidecar/client-ca
+              property: client-ca
+  - target:
+      kind: ExternalSecret
+      name: inference-sidecar-client-mtls
+    patch: |
+      apiVersion: external-secrets.io/v1beta1
+      kind: ExternalSecret
+      metadata:
+        name: inference-sidecar-client-mtls
+      spec:
+        data:
+          - secretKey: tls.crt
+            remoteRef:
+              key: secret/virtengine/staging/inference-sidecar/validator-client-mtls
+              property: client-cert
+          - secretKey: tls.key
+            remoteRef:
+              key: secret/virtengine/staging/inference-sidecar/validator-client-mtls
+              property: client-key
+          - secretKey: ca.crt
+            remoteRef:
+              key: secret/virtengine/staging/inference-sidecar/server-ca
+              property: server-ca
+  - target:
+      kind: ExternalSecret
+      name: inference-sidecar-model-metadata
+    patch: |
+      apiVersion: external-secrets.io/v1beta1
+      kind: ExternalSecret
+      metadata:
+        name: inference-sidecar-model-metadata
+      spec:
+        data:
+          - secretKey: model-version
+            remoteRef:
+              key: secret/virtengine/staging/inference-sidecar/model-metadata
+              property: model-version
+          - secretKey: model-digest
+            remoteRef:
+              key: secret/virtengine/staging/inference-sidecar/model-metadata
+              property: model-digest
+          - secretKey: runtime-digest
+            remoteRef:
+              key: secret/virtengine/staging/inference-sidecar/model-metadata
+              property: runtime-digest
+          - secretKey: manifest-digest
+            remoteRef:
+              key: secret/virtengine/staging/inference-sidecar/model-metadata
+              property: manifest-digest
   - target:
       kind: ExternalSecret
       name: database-credentials

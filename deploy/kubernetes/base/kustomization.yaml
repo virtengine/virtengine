@@ -8,6 +8,7 @@ resources:
   - namespace.yaml
   - configmap.yaml
   - secrets.yaml
+  - inference-sidecar.yaml
   - virtengine-node-deployment.yaml
   - virtengine-node-service.yaml
   - provider-daemon-deployment.yaml

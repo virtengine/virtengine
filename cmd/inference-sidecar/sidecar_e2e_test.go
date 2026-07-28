@@ -14,29 +14,12 @@ import (
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
-	"google.golang.org/grpc/encoding"
 	"google.golang.org/grpc/health"
 	"google.golang.org/grpc/health/grpc_health_v1"
 
 	"github.com/virtengine/virtengine/pkg/inference"
 	inferencepb "github.com/virtengine/virtengine/pkg/inference/proto"
 )
-
-var _ encoding.Codec = jsonTestCodec{}
-
-type jsonTestCodec struct{}
-
-func (jsonTestCodec) Marshal(v interface{}) ([]byte, error) {
-	return json.Marshal(v)
-}
-
-func (jsonTestCodec) Unmarshal(data []byte, v interface{}) error {
-	return json.Unmarshal(data, v)
-}
-
-func (jsonTestCodec) Name() string {
-	return "json"
-}
 
 func TestSidecarE2EVerifiedBundleServesTraffic(t *testing.T) {
 	tfServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -88,6 +71,7 @@ func TestSidecarE2EVerifiedBundleServesTraffic(t *testing.T) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
+	inferenceCallCodec := grpc.CallContentSubtype(inference.SidecarJSONCodecName)
 
 	grpcHealth, err := healthClient.Check(ctx, &grpc_health_v1.HealthCheckRequest{Service: inferencepb.ServiceName})
 	if err != nil {
@@ -97,7 +81,7 @@ func TestSidecarE2EVerifiedBundleServesTraffic(t *testing.T) {
 		t.Fatalf("expected grpc health SERVING, got %s", grpcHealth.Status.String())
 	}
 
-	healthResp, err := client.HealthCheck(ctx, &inferencepb.HealthCheckRequest{})
+	healthResp, err := client.HealthCheck(ctx, &inferencepb.HealthCheckRequest{}, inferenceCallCodec)
 	if err != nil {
 		t.Fatalf("sidecar health RPC failed: %v", err)
 	}
@@ -130,7 +114,7 @@ func TestSidecarE2EVerifiedBundleServesTraffic(t *testing.T) {
 			BlockHeight:    1,
 			RequestID:      "req-1",
 		},
-	})
+	}, inferenceCallCodec)
 	if err != nil {
 		t.Fatalf("ComputeScore failed: %v", err)
 	}
@@ -174,6 +158,7 @@ func TestSidecarE2EBadManifestStaysNotReady(t *testing.T) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
+	inferenceCallCodec := grpc.CallContentSubtype(inference.SidecarJSONCodecName)
 
 	grpcHealth, err := healthClient.Check(ctx, &grpc_health_v1.HealthCheckRequest{Service: inferencepb.ServiceName})
 	if err != nil {
@@ -183,7 +168,7 @@ func TestSidecarE2EBadManifestStaysNotReady(t *testing.T) {
 		t.Fatalf("expected grpc health NOT_SERVING, got %s", grpcHealth.Status.String())
 	}
 
-	healthResp, err := client.HealthCheck(ctx, &inferencepb.HealthCheckRequest{})
+	healthResp, err := client.HealthCheck(ctx, &inferencepb.HealthCheckRequest{}, inferenceCallCodec)
 	if err != nil {
 		t.Fatalf("sidecar health RPC failed: %v", err)
 	}
@@ -212,7 +197,7 @@ func TestSidecarE2EBadManifestStaysNotReady(t *testing.T) {
 
 	_, err = client.ComputeScore(ctx, &inferencepb.ComputeScoreRequest{
 		Features: make([]float32, inference.TotalFeatureDim),
-	})
+	}, inferenceCallCodec)
 	if err == nil || !strings.Contains(err.Error(), string(verificationStateBadManifest)) {
 		t.Fatalf("expected ComputeScore to fail with bad_manifest, got %v", err)
 	}
@@ -226,7 +211,7 @@ func startSidecarE2EServer(t *testing.T, server *InferenceSidecarServer) (*grpc.
 		t.Fatalf("listen: %v", err)
 	}
 
-	grpcServer := grpc.NewServer(grpc.ForceServerCodec(jsonTestCodec{}))
+	grpcServer := grpc.NewServer()
 	inferencepb.RegisterInferenceServiceServer(grpcServer, server)
 	healthServer := health.NewServer()
 	grpc_health_v1.RegisterHealthServer(grpcServer, healthServer)
@@ -246,7 +231,7 @@ func startSidecarE2EServer(t *testing.T, server *InferenceSidecarServer) (*grpc.
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
-		statusCode, payload := readinessHTTPResponse(server.Readiness())
+		statusCode, payload := runtimeReadinessHTTPResponse(r.Context(), server)
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(statusCode)
 		_, _ = w.Write(payload)
@@ -260,7 +245,6 @@ func startSidecarE2EServer(t *testing.T, server *InferenceSidecarServer) (*grpc.
 		ctx,
 		listener.Addr().String(),
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
-		grpc.WithDefaultCallOptions(grpc.ForceCodec(jsonTestCodec{})),
 		grpc.WithBlock(),
 	)
 	if err != nil {

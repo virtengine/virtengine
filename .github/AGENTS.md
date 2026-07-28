@@ -14,7 +14,7 @@
 | Tags v\*             | `changelog.yaml`, `supply-chain.yaml`, `ci.yaml`                                           | tags: v\*                              | v1.0.0 tag               |
 | Workflow dispatch    | `release.yaml`, `multi-region-deploy.yaml`, others                                         | workflow_dispatch                      | Manual trigger           |
 | Schedule             | `security.yaml`, `veid-conformance.yaml`, `ml-determinism.yaml`, `chaos-test.yaml`, others | cron                                   | Daily 02:00 UTC          |
-| Path filters         | `api-spec.yaml`, `portal-ci.yaml`, `infrastructure.yaml`                                   | paths: api/**, portal/**, infra/\*\*, Task 85C k8s docs/script | Changes in specific dirs |
+| Path filters         | `api-spec.yaml`, `portal-ci.yaml`, `infrastructure.yaml`, `veid-conformance.yaml`           | paths: api/**, portal/**, infra/\*\*, deploy/kubernetes/**, cmd/inference-sidecar/**, x/veid/**, focused VEID docs/scripts | Changes in specific dirs |
 
 ### Environment & Toolchain Matrix
 
@@ -24,11 +24,11 @@
 | Node                          | 20      | `portal-ci.yaml`, `portal-deploy-pages.yaml`, `infrastructure.yaml` | Set in `NODE_VERSION` env var   |
 | Node (npm OIDC)               | 24      | `bosun-publish.yaml`                                       | Requires Node 24 for provenance |
 | pnpm                          | 10.28.2 | `portal-ci.yaml`, `portal-deploy-pages.yaml`, `smoke-test.yaml`     | Set in `PNPM_VERSION` env var   |
-| Python                        | 3.11    | `ci.yaml`, `security.yaml`, `ml-model-verify.yaml`                 | Set in `PYTHON_VERSION` env var |
+| Python                        | 3.11    | `ci.yaml`, `security.yaml`, `ml-model-verify.yaml`, `veid-conformance.yaml` | Set in `PYTHON_VERSION` env var |
 | Docker Buildx                 | latest  | `release.yaml`, `ci.yaml`                                          | Multi-arch builds               |
 | Terraform (infra)             | 1.6.6   | `infrastructure.yaml`                                              | IaC deployments                 |
 | Terraform (multi-region)      | 1.6.0   | `multi-region-deploy.yaml`                                         | Multi-region IaC deployments    |
-| kubectl (Task 85C)             | 1.29.0  | `infrastructure.yaml`                                              | Checksum-pinned for `kubectl kustomize` validation |
+| kubectl (Task 85C/85D)         | 1.29.0  | `infrastructure.yaml`, `veid-conformance.yaml`                     | Checksum-pinned for `kubectl kustomize` validation |
 | GoReleaser (via make release) | latest  | `release.yaml`                                                     | Release automation              |
 
 ## Module Overview
@@ -98,7 +98,7 @@ Inventory and docs live in `.github/workflows/` with release details in `RELEASE
 | `stale.yaml`                 | Stale PR cleanup                                           | daily 00:00 UTC                                                      | `stale-pr`                                                                                                                                                                               | PR comments/labels                            | GITHUB_TOKEN                                                |
 | `standardize-yaml.yaml`      | Enforce .yaml                                              | push/pr main paths \*_/_.yml                                         | `check-yml-files`                                                                                                                                                                        | Fail on tracked .yml list                     | git + bash                                                  |
 | `supply-chain.yaml`          | SLSA + SBOM                                                | push main/mainnet, tags v\*, PR deps, weekly Mon 04:00 UTC, dispatch | provenance + SBOM suite                                                                                                                                                                  | SBOM/provenance bundles                       | Go 1.25.5, cosign/slsa tooling                              |
-| `veid-conformance.yaml`      | VEID conformance                                           | push/pr main/mainnet/\*\* paths, schedule daily 02:00 UTC, dispatch  | conformance tests                                                                                                                                                                        | Evidence bundles                              | Go toolchain                                                |
+| `veid-conformance.yaml`      | VEID conformance and inference deployment policy           | push/pr main/mainnet paths for VEID inference code, Task 85D process-boundary integration tests, canonical/infra Kubernetes, policy scripts/tests, workflow, and focused docs; schedule daily 02:00 UTC; dispatch | deployment-policy, process-boundary, conformance tests, hash verification, summary                                                                                                         | Evidence bundles and required policy summary  | Go toolchain, Python 3.11, checksum-pinned kubectl 1.29.0   |
 | `veid-e2e.yaml`              | VEID E2E                                                   | push/pr main paths, dispatch                                         | veid-e2e, veid-unit, veid-determinism                                                                                                                                                    | Evidence logs                                 | Go toolchain                                                |
 
 ### Secrets & Env Vars (masked examples)
@@ -142,7 +142,7 @@ Inventory and docs live in `.github/workflows/` with release details in `RELEASE
 
 ### Execution Ordering
 
-1. **Lint & Static Analysis** (parallel): `lint`, `vet`, `lint-shell`, `agents-docs`; infrastructure `validate` also runs the Task 85C Kubernetes semantic gate before infra security, plan, apply, or drift jobs
+1. **Lint & Static Analysis** (parallel): `lint`, `vet`, `lint-shell`, `agents-docs`; infrastructure `validate` also runs the Task 85C Kubernetes semantic gate before infra security, plan, apply, or drift jobs; VEID conformance starts with the deployment-policy render/mTLS gate
 2. **Unit Tests** (parallel): `test-go`, `test-python`, `test-portal`
 3. **Build** (parallel with lint/test-go): `build`, `build-macos`
 4. **Integration & E2E** (depends on build): `integration`, `veid-e2e`, `staging-e2e`
@@ -221,6 +221,19 @@ Inventory and docs live in `.github/workflows/` with release details in `RELEASE
 **Post-deploy testing:** `smoke-test.yaml` and `staging-e2e.yaml` run via workflow_run or workflow_dispatch after infrastructure deployment completes.
 
 **Permissions:** `infrastructure.yaml` defaults to `contents: read`; only SARIF upload receives `security-events: write`, and only Terraform plan/apply/drift jobs receive `id-token: write`. The validate gate uses no secrets or deployment credentials.
+
+### VEID Conformance (`veid-conformance.yaml`)
+
+**Trigger:** push/PR to main or mainnet/main for VEID inference code, `deploy/kubernetes/**`, `infra/kubernetes/**`, the deployment policy script/tests, this guide, the workflow file, and focused inference docs/runbooks; schedule; `workflow_dispatch`
+**Jobs:**
+
+1. `deployment-policy`: installs Python 3.11, Go 1.25.5, and checksum-pinned kubectl 1.29.0, runs `.github/tests/test_inference_deployment_policy.py`, runs focused mTLS tests plus the complete inference sidecar packages and binary build, then runs `.github/scripts/validate_inference_deployment_policy.py`
+2. `process-boundary`: runs VEID receipt/type/keeper tests and the Task 85D separate-process issuer/runtime integration tests
+3. `conformance-tests`: runs cross-platform deterministic inference tests
+4. `verify-cross-platform-hashes`: checks deterministic hash evidence across platforms
+5. `conformance-summary`: fails unless the deployment-policy, process-boundary, conformance matrix, and hash verification gates pass
+
+The deployment-policy job renders canonical base/staging/prod and matching infra compatibility surfaces, rejects production-like plaintext or fallback sidecar configuration, rejects mutable sidecar images, duplicate named resources, and cross-environment inference secret references, verifies one sidecar replica, checks mTLS/secret/security/NetworkPolicy/PDB/model-bundle controls, and checks canonical-vs-infra render equivalence.
 
 ### Multi-Region Deployment (`multi-region-deploy.yaml`)
 

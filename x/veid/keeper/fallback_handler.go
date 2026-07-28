@@ -41,42 +41,25 @@ func (k Keeper) HandleBorderlineFallbackCompleted(
 	// Check if fallback has expired
 	now := ctx.BlockTime().Unix()
 	if fallbackRecord.IsExpired(now) {
-		// Mark as expired and emit event
-		fallbackRecord.MarkExpired(now)
-		if err := k.setBorderlineFallbackRecord(ctx, fallbackRecord); err != nil {
-			return err
-		}
-		k.removeFromPendingFallbackQueue(ctx, fallbackRecord)
-		k.emitBorderlineFallbackExpiredEvent(ctx, fallbackRecord)
-
-		// Emit spec-defined authorization expired event (per veid-flow-spec.md)
-		_ = k.EmitAuthorizationExpiredEvent(
-			ctx,
-			fallbackRecord.AccountAddress,
-			fallbackRecord.FallbackID,
-			"verification_fallback",
-			fallbackRecord.CreatedAt,
-		)
 		return types.ErrBorderlineFallbackExpired
 	}
 
-	// Verify MFA challenge was actually satisfied
-	if err := k.verifyMFAChallengeCompleted(ctx, challengeID); err != nil {
+	derivedFactors, err := k.deriveSatisfiedFactorsFromCompletedMFAChallenge(ctx, challengeID, accountAddr, now)
+	if err != nil {
 		k.Logger(ctx).Warn("MFA challenge not satisfied",
 			"account", accountAddr,
 			"challenge_id", challengeID,
 			"error", err,
 		)
+		return err
+	}
 
-		// Mark fallback as failed
-		fallbackRecord.MarkFailed(now)
-		if err := k.setBorderlineFallbackRecord(ctx, fallbackRecord); err != nil {
-			return err
-		}
-		k.removeFromPendingFallbackQueue(ctx, fallbackRecord)
-		k.emitBorderlineFallbackFailedEvent(ctx, fallbackRecord, "MFA challenge not satisfied")
-
-		return types.ErrMFAChallengeNotSatisfied
+	callerFactors, err := canonicalizeFallbackSatisfiedFactors(factorsSatisfied)
+	if err != nil {
+		return err
+	}
+	if !sameCanonicalFactors(callerFactors, derivedFactors) {
+		return types.ErrMFAChallengeNotSatisfied.Wrap("satisfied factors do not match completed MFA challenge")
 	}
 
 	// Check minimum factors satisfied requirement
@@ -87,16 +70,16 @@ func (k Keeper) HandleBorderlineFallbackCompleted(
 		minFactorsRequired = 1 // Default to at least 1 factor
 	}
 	//nolint:gosec // slice length is non-negative
-	if uint32(len(factorsSatisfied)) < minFactorsRequired {
+	if uint32(len(derivedFactors)) < minFactorsRequired {
 		return types.ErrMFAChallengeNotSatisfied.Wrapf(
 			"need at least %d factors, got %d",
 			minFactorsRequired,
-			len(factorsSatisfied),
+			len(derivedFactors),
 		)
 	}
 
 	// Update fallback record to completed
-	fallbackRecord.MarkCompleted(factorsSatisfied, types.VerificationStatusVerified, now)
+	fallbackRecord.MarkCompleted(derivedFactors, types.VerificationStatusVerified, now)
 	if err := k.setBorderlineFallbackRecord(ctx, fallbackRecord); err != nil {
 		return err
 	}
@@ -114,34 +97,36 @@ func (k Keeper) HandleBorderlineFallbackCompleted(
 	err = k.SetScoreWithDetails(ctx, accountAddr, fallbackRecord.BorderlineScore, ScoreDetails{
 		Status:       types.AccountStatusVerified,
 		ModelVersion: "borderline-fallback",
-		Reason:       fmt.Sprintf("borderline fallback completed via %s", strings.Join(factorsSatisfied, ",")),
+		Reason:       fmt.Sprintf("borderline fallback completed via %s", strings.Join(derivedFactors, ",")),
 	})
 	if err != nil {
 		return err
 	}
 
 	// Determine factor class for audit
-	factorClass := k.determineFactorClass(factorsSatisfied)
+	factorClass := k.determineFactorClass(derivedFactors)
 
 	// Emit completion event
-	k.emitBorderlineFallbackCompletedEvent(ctx, fallbackRecord, factorsSatisfied, factorClass)
+	k.emitBorderlineFallbackCompletedEvent(ctx, fallbackRecord, derivedFactors, factorClass)
 
 	// Emit spec-defined authorization granted event (per veid-flow-spec.md)
 	// This is emitted when MFA successfully grants authorization for verification
-	_ = k.EmitAuthorizationGrantedEvent(
+	if err := k.EmitAuthorizationGrantedEvent(
 		ctx,
 		accountAddr,
 		fallbackRecord.FallbackID,
 		"verification_fallback",
-		factorsSatisfied,
+		derivedFactors,
 		0, // No expiry for completed fallback
-	)
+	); err != nil {
+		return err
+	}
 
 	k.Logger(ctx).Info("borderline fallback completed successfully",
 		"account", accountAddr,
 		"fallback_id", fallbackRecord.FallbackID,
 		"challenge_id", challengeID,
-		"factors_satisfied", strings.Join(factorsSatisfied, ","),
+		"factors_satisfied", strings.Join(derivedFactors, ","),
 		"factor_class", factorClass,
 		"borderline_score", fallbackRecord.BorderlineScore,
 	)
@@ -150,29 +135,76 @@ func (k Keeper) HandleBorderlineFallbackCompleted(
 	if record, found := k.GetIdentityRecord(ctx, address); found {
 		record.Tier = types.IdentityTierStandard
 		if err := k.SetIdentityRecord(ctx, record); err != nil {
-			k.Logger(ctx).Error("failed to update identity record tier", "error", err)
+			return err
 		}
 	}
 
 	return nil
 }
 
-// verifyMFAChallengeCompleted checks if the MFA challenge was successfully completed
-func (k Keeper) verifyMFAChallengeCompleted(ctx sdk.Context, challengeID string) error {
+func (k Keeper) deriveSatisfiedFactorsFromCompletedMFAChallenge(
+	ctx sdk.Context,
+	challengeID string,
+	accountAddr string,
+	now int64,
+) ([]string, error) {
 	if k.mfaKeeper == nil {
-		return types.ErrMFAChallengeNotSatisfied.Wrap("MFA keeper not configured")
+		return nil, types.ErrMFAChallengeNotSatisfied.Wrap("MFA keeper not configured")
 	}
 
 	challenge, found := k.mfaKeeper.GetChallenge(ctx, challengeID)
 	if !found {
-		return types.ErrMFAChallengeNotSatisfied.Wrap("challenge not found")
+		return nil, types.ErrMFAChallengeNotSatisfied.Wrap("challenge not found")
 	}
 
 	if challenge.Status != mfatypes.ChallengeStatusVerified {
-		return types.ErrMFAChallengeNotSatisfied.Wrapf("challenge status is %s, expected verified", challenge.Status.String())
+		return nil, types.ErrMFAChallengeNotSatisfied.Wrapf("challenge status is %s, expected verified", challenge.Status.String())
+	}
+	if challenge.AccountAddress != accountAddr {
+		return nil, types.ErrMFAChallengeNotSatisfied.Wrap("challenge account mismatch")
+	}
+	if now >= challenge.ExpiresAt {
+		return nil, types.ErrMFAChallengeNotSatisfied.Wrap("challenge expired")
+	}
+	if !challenge.FactorType.IsValid() {
+		return nil, types.ErrMFAChallengeNotSatisfied.Wrapf("invalid challenge factor type: %d", challenge.FactorType)
 	}
 
-	return nil
+	return []string{challenge.FactorType.String()}, nil
+}
+
+func canonicalizeFallbackSatisfiedFactors(factors []string) ([]string, error) {
+	if len(factors) == 0 {
+		return nil, types.ErrMFAChallengeNotSatisfied.Wrap("satisfied factors cannot be empty")
+	}
+
+	canonical := make([]string, 0, len(factors))
+	seen := make(map[string]struct{}, len(factors))
+	for _, factorName := range factors {
+		factorType, err := mfatypes.FactorTypeFromString(factorName)
+		if err != nil || !factorType.IsValid() || factorName != factorType.String() {
+			return nil, types.ErrMFAChallengeNotSatisfied.Wrapf("invalid satisfied factor: %s", factorName)
+		}
+		canonicalFactor := factorType.String()
+		if _, found := seen[canonicalFactor]; found {
+			return nil, types.ErrMFAChallengeNotSatisfied.Wrapf("duplicate satisfied factor: %s", canonicalFactor)
+		}
+		seen[canonicalFactor] = struct{}{}
+		canonical = append(canonical, canonicalFactor)
+	}
+	return canonical, nil
+}
+
+func sameCanonicalFactors(a, b []string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
 }
 
 // DetermineFactorClass determines the security class of the satisfied factors

@@ -1,0 +1,395 @@
+# Copyright 2024-2026 VirtEngine Authors
+# SPDX-License-Identifier: Apache-2.0
+
+# VEID inference sidecar
+#
+# This workload is pinned to one replica because it represents one validator's
+# authenticated runtime identity. It is reachable only inside the cluster over
+# mTLS and exposes readiness/metrics on 9092 to avoid the chain gRPC port 9090.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: inference-sidecar
+  namespace: virtengine
+  labels:
+    app.kubernetes.io/name: inference-sidecar
+    app.kubernetes.io/component: inference
+    app.kubernetes.io/part-of: virtengine-platform
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: inference-sidecar-model-bundle
+  namespace: virtengine
+  labels:
+    app.kubernetes.io/name: inference-sidecar
+    app.kubernetes.io/component: inference
+  annotations:
+    virtengine.com/model-version: "v1.0.0"
+    virtengine.com/model-digest: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    virtengine.com/runtime-digest: "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+    virtengine.com/manifest-digest: "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+    virtengine.com/bundle-mode: "immutable-pvc"
+spec:
+  accessModes: ["ReadOnlyMany"]
+  storageClassName: model-bundle-immutable
+  resources:
+    requests:
+      storage: 20Gi
+---
+apiVersion: external-secrets.io/v1beta1
+kind: ExternalSecret
+metadata:
+  name: inference-sidecar-server-mtls
+  namespace: virtengine
+spec:
+  refreshInterval: 15m
+  secretStoreRef:
+    kind: ClusterSecretStore
+    name: vault-backend
+  target:
+    name: inference-sidecar-server-mtls
+    creationPolicy: Owner
+  data:
+    - secretKey: tls.crt
+      remoteRef:
+        key: secret/virtengine/dev/inference-sidecar/server-mtls
+        property: server-cert
+    - secretKey: tls.key
+      remoteRef:
+        key: secret/virtengine/dev/inference-sidecar/server-mtls
+        property: server-key
+---
+apiVersion: external-secrets.io/v1beta1
+kind: ExternalSecret
+metadata:
+  name: inference-sidecar-client-ca
+  namespace: virtengine
+spec:
+  refreshInterval: 15m
+  secretStoreRef:
+    kind: ClusterSecretStore
+    name: vault-backend
+  target:
+    name: inference-sidecar-client-ca
+    creationPolicy: Owner
+  data:
+    - secretKey: ca.crt
+      remoteRef:
+        key: secret/virtengine/dev/inference-sidecar/client-ca
+        property: client-ca
+---
+apiVersion: external-secrets.io/v1beta1
+kind: ExternalSecret
+metadata:
+  name: inference-sidecar-client-mtls
+  namespace: virtengine
+spec:
+  refreshInterval: 15m
+  secretStoreRef:
+    kind: ClusterSecretStore
+    name: vault-backend
+  target:
+    name: inference-sidecar-client-mtls
+    creationPolicy: Owner
+  data:
+    - secretKey: tls.crt
+      remoteRef:
+        key: secret/virtengine/dev/inference-sidecar/validator-client-mtls
+        property: client-cert
+    - secretKey: tls.key
+      remoteRef:
+        key: secret/virtengine/dev/inference-sidecar/validator-client-mtls
+        property: client-key
+    - secretKey: ca.crt
+      remoteRef:
+        key: secret/virtengine/dev/inference-sidecar/server-ca
+        property: server-ca
+---
+apiVersion: external-secrets.io/v1beta1
+kind: ExternalSecret
+metadata:
+  name: inference-sidecar-model-metadata
+  namespace: virtengine
+spec:
+  refreshInterval: 15m
+  secretStoreRef:
+    kind: ClusterSecretStore
+    name: vault-backend
+  target:
+    name: inference-sidecar-model-metadata
+    creationPolicy: Owner
+  data:
+    - secretKey: model-version
+      remoteRef:
+        key: secret/virtengine/dev/inference-sidecar/model-metadata
+        property: model-version
+    - secretKey: model-digest
+      remoteRef:
+        key: secret/virtengine/dev/inference-sidecar/model-metadata
+        property: model-digest
+    - secretKey: runtime-digest
+      remoteRef:
+        key: secret/virtengine/dev/inference-sidecar/model-metadata
+        property: runtime-digest
+    - secretKey: manifest-digest
+      remoteRef:
+        key: secret/virtengine/dev/inference-sidecar/model-metadata
+        property: manifest-digest
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: inference-sidecar
+  namespace: virtengine
+  labels:
+    app.kubernetes.io/name: inference-sidecar
+    app.kubernetes.io/component: inference
+    app.kubernetes.io/part-of: virtengine-platform
+  annotations:
+    virtengine.com/model-version: "v1.0.0"
+    virtengine.com/model-digest: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    virtengine.com/runtime-digest: "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+    virtengine.com/manifest-digest: "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+    reloader.stakater.com/auto: "true"
+spec:
+  serviceName: inference-sidecar
+  replicas: 1
+  podManagementPolicy: OrderedReady
+  updateStrategy:
+    type: RollingUpdate
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: inference-sidecar
+      app.kubernetes.io/component: inference
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: inference-sidecar
+        app.kubernetes.io/component: inference
+        app.kubernetes.io/part-of: virtengine-platform
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "9092"
+        prometheus.io/path: "/metrics"
+        virtengine.com/model-version: "v1.0.0"
+        virtengine.com/model-digest: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        virtengine.com/runtime-digest: "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+        virtengine.com/manifest-digest: "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+    spec:
+      serviceAccountName: inference-sidecar
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+        seccompProfile:
+          type: RuntimeDefault
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                labelSelector:
+                  matchLabels:
+                    app.kubernetes.io/name: inference-sidecar
+                    app.kubernetes.io/component: inference
+                topologyKey: kubernetes.io/hostname
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: topology.kubernetes.io/zone
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              app.kubernetes.io/name: inference-sidecar
+              app.kubernetes.io/component: inference
+      containers:
+        - name: inference-sidecar
+          image: ghcr.io/virtengine/inference-sidecar@sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd
+          imagePullPolicy: IfNotPresent
+          args:
+            - --grpc-addr=:50051
+            - --metrics-addr=:9092
+            - --require-mtls=true
+            - --tls-cert-file=/var/run/secrets/virtengine/inference-sidecar/server/tls.crt
+            - --tls-key-file=/var/run/secrets/virtengine/inference-sidecar/server/tls.key
+            - --tls-client-ca-file=/var/run/secrets/virtengine/inference-sidecar/client-ca/ca.crt
+            - --model-path=/models/trust-score/v1/model
+            - --model-version=v1.0.0
+            - --expected-hash=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+            - --manifest-path=/models/trust-score/v1/release_manifest.json
+            - --force-cpu=true
+            - --random-seed=42
+            - --max-memory-mb=512
+            - --timeout=2s
+            - --serving-url=http://tf-serving.virtengine-runtime.svc.cluster.local:8501
+            - --serving-model=trust_score
+            - --serving-signature=serving_default
+            - --serving-timeout=5s
+          ports:
+            - name: grpc
+              containerPort: 50051
+              protocol: TCP
+            - name: metrics
+              containerPort: 9092
+              protocol: TCP
+          resources:
+            requests:
+              cpu: "1000m"
+              memory: "2Gi"
+            limits:
+              cpu: "2000m"
+              memory: "4Gi"
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: metrics
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: metrics
+            initialDelaySeconds: 30
+            periodSeconds: 30
+            timeoutSeconds: 5
+            failureThreshold: 3
+          startupProbe:
+            httpGet:
+              path: /health
+              port: metrics
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 30
+          volumeMounts:
+            - name: server-mtls
+              mountPath: /var/run/secrets/virtengine/inference-sidecar/server
+              readOnly: true
+            - name: client-ca
+              mountPath: /var/run/secrets/virtengine/inference-sidecar/client-ca
+              readOnly: true
+            - name: model-bundle
+              mountPath: /models/trust-score/v1
+              readOnly: true
+            - name: model-metadata
+              mountPath: /var/run/secrets/virtengine/inference-sidecar/model-metadata
+              readOnly: true
+            - name: tmp
+              mountPath: /tmp
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            runAsNonRoot: true
+            runAsUser: 1000
+            capabilities:
+              drop:
+                - ALL
+      volumes:
+        - name: server-mtls
+          secret:
+            secretName: inference-sidecar-server-mtls
+        - name: client-ca
+          secret:
+            secretName: inference-sidecar-client-ca
+        - name: model-bundle
+          persistentVolumeClaim:
+            claimName: inference-sidecar-model-bundle
+            readOnly: true
+        - name: model-metadata
+          secret:
+            secretName: inference-sidecar-model-metadata
+        - name: tmp
+          emptyDir:
+            sizeLimit: 256Mi
+      terminationGracePeriodSeconds: 30
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: inference-sidecar
+  namespace: virtengine
+  labels:
+    app.kubernetes.io/name: inference-sidecar
+    app.kubernetes.io/component: inference
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: inference-sidecar
+    app.kubernetes.io/component: inference
+  ports:
+    - name: grpc
+      port: 50051
+      targetPort: grpc
+      protocol: TCP
+    - name: metrics
+      port: 9092
+      targetPort: metrics
+      protocol: TCP
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: inference-sidecar-pdb
+  namespace: virtengine
+  labels:
+    app.kubernetes.io/name: inference-sidecar
+    app.kubernetes.io/component: inference
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: inference-sidecar
+      app.kubernetes.io/component: inference
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: inference-sidecar
+  namespace: virtengine
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: inference-sidecar
+      app.kubernetes.io/component: inference
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: virtengine-validator
+              app.kubernetes.io/component: validator
+      ports:
+        - protocol: TCP
+          port: 50051
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: monitoring
+      ports:
+        - protocol: TCP
+          port: 9092
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: virtengine-runtime
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: tf-serving
+      ports:
+        - protocol: TCP
+          port: 8501

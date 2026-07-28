@@ -48,6 +48,22 @@ type InferenceConfig struct {
 	// SidecarTLS enables TLS for sidecar connections
 	SidecarTLS bool
 
+	// SidecarTLSCertFile is the absolute path to the sidecar client certificate
+	// used for explicit mTLS transport identity.
+	SidecarTLSCertFile string
+
+	// SidecarTLSKeyFile is the absolute path to the sidecar client private key
+	// used for explicit mTLS transport identity.
+	SidecarTLSKeyFile string
+
+	// SidecarTLSServerCAFile is the absolute path to the CA bundle used to
+	// verify the inference sidecar server certificate.
+	SidecarTLSServerCAFile string
+
+	// SidecarTLSServerName overrides the TLS server name when the dial address
+	// is not the certificate DNS name. Hostname verification remains enabled.
+	SidecarTLSServerName string
+
 	// Determinism Configuration
 	// Deterministic forces deterministic inference mode
 	Deterministic bool
@@ -165,11 +181,23 @@ func (c *InferenceConfig) Validate() error {
 	}
 
 	if c.UseSidecar {
-		if c.SidecarAddress == "" {
+		if strings.TrimSpace(c.SidecarAddress) == "" {
 			return fmt.Errorf("sidecar_address is required when use_sidecar is true")
+		}
+		if strings.TrimSpace(c.ModelVersion) == "" {
+			return fmt.Errorf("model_version is required when use_sidecar is true")
 		}
 		if c.SidecarTimeout <= 0 {
 			return fmt.Errorf("sidecar_timeout must be positive")
+		}
+		if c.SidecarTLS {
+			if strings.TrimSpace(c.SidecarTLSCertFile) == "" ||
+				strings.TrimSpace(c.SidecarTLSKeyFile) == "" ||
+				strings.TrimSpace(c.SidecarTLSServerCAFile) == "" {
+				return fmt.Errorf("sidecar client certificate, private key, and server CA files are required when sidecar TLS is enabled")
+			}
+		} else if sidecarMTLSFilesConfigured(*c) || strings.TrimSpace(c.SidecarTLSServerName) != "" {
+			return fmt.Errorf("sidecar TLS must be enabled when mTLS files or a TLS server name are configured")
 		}
 	} else if c.ModelPath == "" {
 		return fmt.Errorf("model_path is required when not using sidecar")

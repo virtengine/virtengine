@@ -2,359 +2,145 @@
 
 ## Overview
 
-The VEID inference sidecar provides deterministic ML inference for identity scoring
-in a blockchain consensus environment. This document describes the deployment topology
-and resource requirements.
+The VEID inference sidecar serves deterministic ML inference to one validator identity. Production deployments are fail-closed: gRPC requires mutual TLS, the model/runtime bundle is pinned by digest metadata, and local stub fallback is not part of deployable runtime configuration.
 
-## Architecture
+Canonical Kubernetes assets live under `deploy/kubernetes`. `infra/kubernetes` is an import-only compatibility shim and must render identically to the canonical tree.
+
+## Production Topology
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│                     Validator Node                          │
-│  ┌─────────────────┐     gRPC      ┌──────────────────────┐ │
-│  │   VirtEngine    │◄─────────────►│  Inference Sidecar   │ │
-│  │   (Chain Node)  │  localhost:   │  (TensorFlow Model)  │ │
-│  │                 │    50051      │                      │ │
-│  └─────────────────┘               └──────────────────────┘ │
-│         │                                   │               │
-│         ▼                                   ▼               │
-│  ┌─────────────────┐               ┌──────────────────────┐ │
-│  │   Prometheus    │◄──────────────│  /metrics (9090)     │ │
-│  │   Metrics       │               │                      │ │
-│  └─────────────────┘               └──────────────────────┘ │
-└─────────────────────────────────────────────────────────────┘
+Validator pod
+  pre-consensus inference worker transport identity
+    mTLS client cert/key/server CA at /var/run/secrets/virtengine/inference-sidecar-client
+    VEID_INFERENCE_SIDECAR_ADDR=inference-sidecar.virtengine.svc.cluster.local:50051
+
+Inference sidecar StatefulSet
+  gRPC: 50051, mTLS required
+  HTTP readiness/liveness/metrics: /health and /metrics on 9092
+  server cert/key at /var/run/secrets/virtengine/inference-sidecar/server
+  client CA at /var/run/secrets/virtengine/inference-sidecar/client-ca
+  model metadata at /var/run/secrets/virtengine/inference-sidecar/model-metadata
+  read-only model/runtime bundle at /models/trust-score/v1
 ```
 
-## Deployment Modes
+The sidecar Service is `ClusterIP` only. There is no public ingress, no HPA, and the production overlay keeps exactly one sidecar replica aligned to one validator identity.
 
-### 1. Sidecar Mode (Recommended for Production)
+## Canonical Kubernetes
 
-The inference sidecar runs as a separate process alongside the validator node.
-This provides:
-- Memory isolation between chain and inference
-- Independent scaling and resource management
-- Easier model updates without chain restarts
-
-Production and staging deployments must keep local stub fallback disabled. Do not
-add the sidecar's local fallback flag to deployment commands, manifests, Docker
-arguments, or CI automation. Pull requests are validated against this policy.
-
-**Configuration:**
-```bash
-# On the validator node
-export VEID_INFERENCE_ENABLED=true
-export VEID_INFERENCE_USE_SIDECAR=true
-export VEID_INFERENCE_SIDECAR_ADDR=localhost:50051
-export VEID_INFERENCE_MODEL_HASH=<expected-model-hash>
-```
-
-**Starting the sidecar:**
-```bash
-./inference-sidecar \
-    --grpc-addr=:50051 \
-    --metrics-addr=:9090 \
-    --model-path=/models/trust_score \
-    --model-version=v1.0.0 \
-    --expected-hash=<model-hash> \
-    --force-cpu=true \
-    --random-seed=42
-```
-
-### 2. Embedded Mode (Development/Testing)
-
-TensorFlow is embedded directly in the chain node process.
-Only recommended for development and testing.
-
-**Configuration:**
-```bash
-export VEID_USE_TENSORFLOW=true
-export VEID_INFERENCE_MODEL_PATH=/models/trust_score
-export VEID_INFERENCE_MODEL_HASH=<expected-model-hash>
-```
-
-## Resource Requirements
-
-### Minimum Requirements (per validator)
-
-| Resource    | Minimum   | Recommended |
-|-------------|-----------|-------------|
-| CPU         | 2 cores   | 4 cores     |
-| RAM         | 2 GB      | 4 GB        |
-| Disk        | 1 GB      | 5 GB        |
-| Network     | 1 Gbps    | 10 Gbps     |
-
-### Sidecar-Specific Requirements
-
-| Resource    | Minimum   | Recommended |
-|-------------|-----------|-------------|
-| CPU         | 1 core    | 2 cores     |
-| RAM         | 512 MB    | 1 GB        |
-| Model Size  | ~50 MB    | ~50 MB      |
-
-### Latency Requirements
-
-| Metric              | Requirement |
-|---------------------|-------------|
-| P99 Latency         | < 500 ms    |
-| P95 Latency         | < 200 ms    |
-| Timeout             | 2 seconds   |
-
-## Determinism Configuration
-
-**CRITICAL:** All validators MUST use identical determinism settings for consensus.
-
-### Required Environment Variables
+Render the canonical base or overlays with Kustomize:
 
 ```bash
-# TensorFlow Determinism
-export CUDA_VISIBLE_DEVICES=-1      # Disable GPU
-export TF_DETERMINISTIC_OPS=1       # Use deterministic ops
-export TF_CUDNN_DETERMINISTIC=1     # cuDNN determinism
-export TF_USE_CUDNN_AUTOTUNE=0      # Disable auto-tuning
-export TF_ENABLE_ONEDNN_OPTS=0      # Disable oneDNN
-export OMP_NUM_THREADS=1            # Single thread
-export PYTHONHASHSEED=42            # Fixed Python hash seed
-
-# VirtEngine Inference
-export VEID_INFERENCE_DETERMINISTIC=true
-export VEID_INFERENCE_FORCE_CPU=true
+kubectl kustomize --load-restrictor=LoadRestrictionsNone deploy/kubernetes/base
+kubectl kustomize --load-restrictor=LoadRestrictionsNone deploy/kubernetes/overlays/staging
+kubectl kustomize --load-restrictor=LoadRestrictionsNone deploy/kubernetes/overlays/prod
 ```
 
-### Fixed Configuration Values
+The canonical set includes:
 
-| Setting               | Required Value |
-|-----------------------|----------------|
-| Random Seed           | 42             |
-| Inter-Op Parallelism  | 1              |
-| Intra-Op Parallelism  | 1              |
-| CPU Only              | true           |
-| Deterministic Ops     | true           |
+- `StatefulSet/inference-sidecar` with one replica, immutable digest image, non-root security context, read-only root filesystem, dropped capabilities, bounded writable tmp, anti-affinity, topology spread, and `/health` probes on port 9092.
+- `Service/inference-sidecar` as an internal `ClusterIP` with gRPC 50051 and metrics/readiness 9092.
+- `ServiceAccount/inference-sidecar`, `PodDisruptionBudget/inference-sidecar-pdb`, `NetworkPolicy/inference-sidecar`, and a read-only model bundle claim.
+- ExternalSecret definitions for the server transport cert/key, client CA, validator client transport cert/key/server CA, and model/bundle metadata. These secrets are transport and model metadata only; they do not contain consensus keys or inference receipt signing keys.
+- `StatefulSet/inference-sidecar` uses `reloader.stakater.com/auto: "true"` so transport certificate and metadata Secret rotation restarts the pod through the existing reloader convention.
 
-## Model Management
+Production images must use immutable digests:
 
-### Model Version Requirements
+```yaml
+image: ghcr.io/virtengine/inference-sidecar@sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd
+```
 
-All validators in the active set MUST use:
-1. The same model version
-2. The same model weights (verified by hash)
-3. The same TensorFlow version
+Replace placeholder digest values with governed, environment-approved image and model/runtime digests before live deployment.
 
-### Model Hash Verification
+## Sidecar Arguments
+
+Production sidecar args must include mTLS and deterministic runtime settings:
+
+```yaml
+args:
+  - --grpc-addr=:50051
+  - --metrics-addr=:9092
+  - --require-mtls=true
+  - --tls-cert-file=/var/run/secrets/virtengine/inference-sidecar/server/tls.crt
+  - --tls-key-file=/var/run/secrets/virtengine/inference-sidecar/server/tls.key
+  - --tls-client-ca-file=/var/run/secrets/virtengine/inference-sidecar/client-ca/ca.crt
+  - --model-path=/models/trust-score/v1/model
+  - --model-version=v1.0.0
+  - --expected-hash=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+  - --manifest-path=/models/trust-score/v1/release_manifest.json
+  - --serving-url=http://tf-serving.virtengine-runtime.svc.cluster.local:8501
+  - --force-cpu=true
+  - --random-seed=42
+```
+
+The sidecar refuses to start with required mTLS unless all cert paths are non-empty absolute paths to readable regular files and the server certificate, key, and client CA parse successfully. The server leaf must be within its validity window, allow digital signatures, and carry a server-authentication EKU. The client CA bundle must contain at least one CA certificate authorized for certificate signing; leaf-only or malformed trailing PEM is rejected. TLS is configured with TLS 1.3 minimum and client certificate verification. Production mTLS mode also requires the remote `--serving-url`, rejects a secondary serving endpoint and local stub fallback, and requires CPU-only execution with random seed 42.
+
+The validator-side client is also fail-closed: enabling sidecar TLS requires an explicit client certificate, matching private key, and server CA bundle. One-way TLS and partial mTLS file configuration are rejected before dialing, and every score response must retain the model version and digest established by the authenticated model-info exchange.
+
+Development plaintext is available only by explicitly passing `--require-mtls=false` for local testing. That opt-out is non-production and does not enable fallback scoring.
+
+## Validator Configuration
+
+The validator deployment projects the mTLS client identity into:
+
+```text
+/var/run/secrets/virtengine/inference-sidecar-client/tls.crt
+/var/run/secrets/virtengine/inference-sidecar-client/tls.key
+/var/run/secrets/virtengine/inference-sidecar-client/ca.crt
+```
+
+The validator environment records the sidecar endpoint and transport paths:
 
 ```bash
-# Compute model hash
-sha256sum /models/trust_score/saved_model.pb
-
-# Verify in sidecar
-./inference-sidecar --expected-hash=<hash> ...
+VEID_INFERENCE_ENABLED=true
+VEID_INFERENCE_USE_SIDECAR=true
+VEID_INFERENCE_SIDECAR_ADDR=inference-sidecar.virtengine.svc.cluster.local:50051
+VEID_INFERENCE_SIDECAR_TLS=true
+VEID_INFERENCE_SIDECAR_TLS_CERT_FILE=/var/run/secrets/virtengine/inference-sidecar-client/tls.crt
+VEID_INFERENCE_SIDECAR_TLS_KEY_FILE=/var/run/secrets/virtengine/inference-sidecar-client/tls.key
+VEID_INFERENCE_SIDECAR_TLS_CA_FILE=/var/run/secrets/virtengine/inference-sidecar-client/ca.crt
 ```
 
-### Model Updates
+These values are transport identity metadata projected for the pre-consensus inference worker. The current production keeper consensus path uses signed receipts and must not select consensus scoring behavior from these environment variables. Consensus identity and signing material must remain outside the inference sidecar transport secrets.
 
-1. Propose model update via governance
-2. All validators download new model
-3. Verify hash matches governance proposal
-4. Coordinate upgrade at specific block height
+## Network Policy
+
+The canonical policy allows:
+
+- validator workloads to call sidecar TCP 50051;
+- monitoring workloads to scrape sidecar TCP 9092;
+- sidecar DNS egress;
+- sidecar egress to TensorFlow Serving only when that runtime dependency is used.
+
+The validator NetworkPolicy also allows egress to the sidecar service on TCP 50051. Do not expose sidecar gRPC or metrics through a public Service or ingress.
 
 ## Monitoring
 
-### Prometheus Metrics
+The sidecar exposes:
 
-The sidecar exposes metrics at `/metrics`:
+| Endpoint | Port | Purpose |
+| --- | --- | --- |
+| `/health` | 9092 | bundle verification plus live serving-backend startup, readiness, and liveness checks |
+| `/metrics` | 9092 | Prometheus metrics |
+| gRPC health | 50051 | internal service health |
 
-| Metric                          | Type      | Description                    |
-|---------------------------------|-----------|--------------------------------|
-| veid_inference_total            | Counter   | Total inference requests       |
-| veid_inference_latency_seconds  | Histogram | Inference latency              |
-| veid_inference_model_info       | Gauge     | Model version and hash         |
-| veid_inference_sidecar_healthy  | Gauge     | Sidecar health status          |
-| veid_inference_score_distribution | Histogram | Score distribution           |
+Expected metrics include inference request counts, latency histograms, model info, and health status. Scraping must come from the monitoring namespace or pods selected by the canonical NetworkPolicy.
 
-### Health Check Endpoints
+## Validation
 
-| Endpoint    | Port  | Description          |
-|-------------|-------|----------------------|
-| /health     | 9090  | HTTP health check    |
-| gRPC Health | 50051 | gRPC health service  |
-
-### Alerting Rules
-
-```yaml
-groups:
-  - name: inference-sidecar
-    rules:
-      - alert: InferenceSidecarDown
-        expr: up{job="inference-sidecar"} == 0
-        for: 1m
-        labels:
-          severity: critical
-
-      - alert: HighInferenceLatency
-        expr: histogram_quantile(0.99, veid_inference_latency_seconds) > 1
-        for: 5m
-        labels:
-          severity: warning
-
-      - alert: InferenceErrors
-        expr: rate(veid_inference_total{status="error"}[5m]) > 0.1
-        for: 5m
-        labels:
-          severity: warning
-```
-
-## Docker Deployment
-
-### Dockerfile
-
-```dockerfile
-FROM golang:1.21-alpine AS builder
-WORKDIR /app
-COPY . .
-RUN go build -o inference-sidecar ./cmd/inference-sidecar
-
-FROM alpine:3.18
-RUN apk add --no-cache libc6-compat
-COPY --from=builder /app/inference-sidecar /usr/local/bin/
-COPY models/trust_score /models/trust_score
-
-ENV CUDA_VISIBLE_DEVICES=-1
-ENV TF_DETERMINISTIC_OPS=1
-ENV OMP_NUM_THREADS=1
-
-EXPOSE 50051 9090
-
-ENTRYPOINT ["inference-sidecar"]
-CMD ["--grpc-addr=:50051", "--metrics-addr=:9090", "--model-path=/models/trust_score"]
-```
-
-### Docker Compose
-
-```yaml
-version: '3.8'
-
-services:
-  inference-sidecar:
-    image: virtengine/inference-sidecar:v1.0.0
-    ports:
-      - "50051:50051"
-      - "9090:9090"
-    environment:
-      - CUDA_VISIBLE_DEVICES=-1
-      - TF_DETERMINISTIC_OPS=1
-      - OMP_NUM_THREADS=1
-    volumes:
-      - ./models:/models:ro
-    deploy:
-      resources:
-        limits:
-          cpus: '2'
-          memory: 1G
-        reservations:
-          cpus: '1'
-          memory: 512M
-    healthcheck:
-      test: ["CMD", "wget", "-q", "--spider", "http://localhost:9090/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-```
-
-Keep compose or container runtime overrides fail-closed in production. If you
-need local fallback behavior for troubleshooting, use a separate dev/test-only
-override file rather than modifying the production service definition.
-
-## Kubernetes Deployment
-
-### Sidecar Container
-
-```yaml
-apiVersion: v1
-kind: Pod
-metadata:
-  name: validator
-spec:
-  containers:
-    - name: virtengine
-      image: virtengine/virtengine:latest
-      env:
-        - name: VEID_INFERENCE_ENABLED
-          value: "true"
-        - name: VEID_INFERENCE_USE_SIDECAR
-          value: "true"
-        - name: VEID_INFERENCE_SIDECAR_ADDR
-          value: "localhost:50051"
-
-    - name: inference-sidecar
-      image: virtengine/inference-sidecar:v1.0.0
-      ports:
-        - containerPort: 50051
-        - containerPort: 9090
-      env:
-        - name: CUDA_VISIBLE_DEVICES
-          value: "-1"
-        - name: TF_DETERMINISTIC_OPS
-          value: "1"
-      resources:
-        limits:
-          cpu: "2"
-          memory: "1Gi"
-        requests:
-          cpu: "1"
-          memory: "512Mi"
-      livenessProbe:
-        httpGet:
-          path: /health
-          port: 9090
-        initialDelaySeconds: 10
-        periodSeconds: 30
-      readinessProbe:
-        grpc:
-          port: 50051
-        initialDelaySeconds: 5
-        periodSeconds: 10
-```
-
-Production overlays should pin the explicit sidecar args they require and should
-not introduce local stub fallback as a runtime override. Treat any production
-deployment that falls back to a local stub as a policy violation.
-
-## Troubleshooting
-
-### Common Issues
-
-1. **Hash Mismatch**
-   - Verify model file integrity
-   - Check TensorFlow version matches
-   - Ensure deterministic export
-
-2. **High Latency**
-   - Check CPU resources
-   - Verify single-threaded mode
-   - Monitor memory usage
-
-3. **Connection Refused**
-   - Verify sidecar is running
-   - Check port configuration
-   - Verify network policies
-
-4. **Unexpected fallback behavior**
-   - Production or staging should not be configured to fall back to a local stub
-   - If the sidecar reports fallback mode in production, treat it as a deployment incident
-
-### Debug Mode
+Run the deployment policy gate locally before proposing changes:
 
 ```bash
-./inference-sidecar \
-    --log-level=debug \
-    --enable-reflection=true \
-    ...
+python .github/tests/test_inference_deployment_policy.py
+python .github/scripts/validate_inference_deployment_policy.py
+node scripts/task85c-validate-kubernetes.mjs
 ```
 
-### Testing Determinism
+The gate rejects mutable images, missing mTLS args, plaintext production-like configuration, fallback/stub runtime tokens, public services, missing NetworkPolicy/PDB/security controls, replica drift, duplicate named resources, cross-environment inference secret references, raw signing or consensus key references, and canonical-vs-infra render drift across base, staging, and production.
 
-```bash
-# Run determinism verification
-grpcurl -plaintext localhost:50051 \
-    inference.v1.InferenceService/VerifyDeterminism \
-    -d '{"test_vector_id": "high_quality_verification"}'
-```
+The validator readiness probe in the current immutable validator image proves required environment values and mounted transport files are present and readable. It does not prove a successful mTLS handshake to the sidecar. Until a known TLS-capable probe binary is included in that image, production readiness must include separately collected live mTLS probe evidence from the validator workload or an approved diagnostic workload.
+
+## Operational Notes
+
+- Rotate transport certificates through the environment External Secrets backend and the private CA process approved for the target cluster.
+- Coordinate model/runtime bundle digest changes through governance and update the model metadata ExternalSecret references in the target overlay.
+- Treat any production render that disables mTLS, exposes a public sidecar Service, changes sidecar replicas away from one, or configures fallback scoring as a deployment incident.

@@ -218,6 +218,20 @@ spec:
                 secretKeyRef:
                   name: validator-signer-identity
                   key: signer-cert-sha256
+            - name: VEID_INFERENCE_ENABLED
+              value: "true"
+            - name: VEID_INFERENCE_USE_SIDECAR
+              value: "true"
+            - name: VEID_INFERENCE_SIDECAR_ADDR
+              value: inference-sidecar.virtengine.svc.cluster.local:50051
+            - name: VEID_INFERENCE_SIDECAR_TLS
+              value: "true"
+            - name: VEID_INFERENCE_SIDECAR_TLS_CERT_FILE
+              value: /var/run/secrets/virtengine/inference-sidecar-client/tls.crt
+            - name: VEID_INFERENCE_SIDECAR_TLS_KEY_FILE
+              value: /var/run/secrets/virtengine/inference-sidecar-client/tls.key
+            - name: VEID_INFERENCE_SIDECAR_TLS_CA_FILE
+              value: /var/run/secrets/virtengine/inference-sidecar-client/ca.crt
           ports:
             - name: p2p
               containerPort: 26656
@@ -261,6 +275,9 @@ spec:
                   test -n "$CHAIN_ID" && test -n "$VALIDATOR_ADDRESS" && test -n "$VALIDATOR_KEY_FINGERPRINT"
                   test -n "$VALIDATOR_SIGNER_EPOCH" && test -n "$VALIDATOR_SIGNER_FENCING_TOKEN"
                   test -n "$TMKMS_CONFIG_SHA256" && test -n "$TMKMS_SIGNER_CERT_SHA256"
+                  test "$VEID_INFERENCE_ENABLED" = "true" && test "$VEID_INFERENCE_USE_SIDECAR" = "true" && test "$VEID_INFERENCE_SIDECAR_TLS" = "true"
+                  test -n "$VEID_INFERENCE_SIDECAR_ADDR"
+                  test -r "$VEID_INFERENCE_SIDECAR_TLS_CERT_FILE" && test -r "$VEID_INFERENCE_SIDECAR_TLS_KEY_FILE" && test -r "$VEID_INFERENCE_SIDECAR_TLS_CA_FILE"
                   endpoint="${VALIDATOR_SIGNER_ENDPOINT#*://}"; host="${endpoint%:*}"; port="${endpoint##*:}"
                   test -n "$host" && test -n "$port"
                   (echo >/dev/tcp/$host/$port) >/dev/null 2>&1
@@ -285,6 +302,9 @@ spec:
               mountPath: /data
             - name: tmp
               mountPath: /tmp
+            - name: inference-sidecar-client-mtls
+              mountPath: /var/run/secrets/virtengine/inference-sidecar-client
+              readOnly: true
           securityContext:
             allowPrivilegeEscalation: false
             readOnlyRootFilesystem: true
@@ -297,6 +317,9 @@ spec:
         - name: tmp
           emptyDir:
             sizeLimit: 256Mi
+        - name: inference-sidecar-client-mtls
+          secret:
+            secretName: inference-sidecar-client-mtls
       terminationGracePeriodSeconds: 120
   volumeClaimTemplates:
     - metadata:

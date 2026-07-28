@@ -72,6 +72,14 @@ spec:
           port: 26656
         - protocol: TCP
           port: 26657
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: inference-sidecar
+              app.kubernetes.io/component: inference
+      ports:
+        - protocol: TCP
+          port: 50051
     # Remote signer / TMKMS endpoint. Restrict this with cluster-specific CIDRs
     # in private overlays when signer networking is known.
     - to: []

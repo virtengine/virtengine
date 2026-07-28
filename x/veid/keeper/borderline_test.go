@@ -285,10 +285,15 @@ func (s *BorderlineFallbackTestSuite) TestBorderlineFallbackFlow_MFANotSatisfied
 	s.Require().Error(err)
 	s.Require().ErrorIs(err, types.ErrMFAChallengeNotSatisfied)
 
-	// Fallback should be marked as failed
+	// Fallback should remain pending; proof failures must not mutate fallback state.
 	updatedFallback, found := s.keeper.GetBorderlineFallbackRecord(s.ctx, fallback.FallbackID)
 	s.Require().True(found)
-	s.Require().Equal(types.BorderlineFallbackStatusFailed, updatedFallback.Status)
+	s.Require().Equal(types.BorderlineFallbackStatusPending, updatedFallback.Status)
+	s.Require().Empty(updatedFallback.SatisfiedFactors)
+	s.Require().Zero(updatedFallback.CompletedAt)
+	pending := s.keeper.GetPendingFallbacksForAccount(s.ctx, testBorderlineAddress)
+	s.Require().Len(pending, 1)
+	s.Require().Equal(fallback.FallbackID, pending[0].FallbackID)
 }
 
 func (s *BorderlineFallbackTestSuite) TestBorderlineFallbackFlow_HighSecurityFactor() {
@@ -317,6 +322,130 @@ func (s *BorderlineFallbackTestSuite) TestBorderlineFallbackFlow_HighSecurityFac
 	// Verify completion
 	updatedFallback, _ := s.keeper.GetBorderlineFallbackRecord(s.ctx, fallback.FallbackID)
 	s.Require().Equal(types.BorderlineFallbackStatusCompleted, updatedFallback.Status)
+}
+
+func (s *BorderlineFallbackTestSuite) TestBorderlineFallbackCompletionRejectsNonAuthoritativeFactorsWithoutMutation() {
+	testCases := []struct {
+		name            string
+		callerFactors   []string
+		requiredFactors uint32
+		mutateChallenge func(*mfatypes.Challenge)
+	}{
+		{
+			name:          "spoofed high",
+			callerFactors: []string{"fido2"},
+		},
+		{
+			name:          "extra",
+			callerFactors: []string{"totp", "fido2"},
+		},
+		{
+			name:          "duplicate",
+			callerFactors: []string{"totp", "totp"},
+		},
+		{
+			name:          "invalid",
+			callerFactors: []string{"bogus"},
+		},
+		{
+			name:          "noncanonical",
+			callerFactors: []string{"TOTP"},
+		},
+		{
+			name:          "empty",
+			callerFactors: []string{},
+		},
+		{
+			name:          "account mismatch",
+			callerFactors: []string{"totp"},
+			mutateChallenge: func(challenge *mfatypes.Challenge) {
+				challenge.AccountAddress = sdk.AccAddress([]byte("borderline_other____")).String()
+			},
+		},
+		{
+			name:          "expiry exact",
+			callerFactors: []string{"totp"},
+			mutateChallenge: func(challenge *mfatypes.Challenge) {
+				challenge.ExpiresAt = s.ctx.BlockTime().Unix()
+			},
+		},
+		{
+			name:          "expiry past",
+			callerFactors: []string{"totp"},
+			mutateChallenge: func(challenge *mfatypes.Challenge) {
+				challenge.ExpiresAt = s.ctx.BlockTime().Add(-time.Second).Unix()
+			},
+		},
+		{
+			name:          "invalid challenge factor",
+			callerFactors: []string{"totp"},
+			mutateChallenge: func(challenge *mfatypes.Challenge) {
+				challenge.FactorType = mfatypes.FactorTypeUnspecified
+			},
+		},
+		{
+			name:            "required factors 2",
+			callerFactors:   []string{"totp"},
+			requiredFactors: 2,
+		},
+	}
+
+	for _, tc := range testCases {
+		s.Run(tc.name, func() {
+			fallback := s.preparePremiumTOTPBorderlineFallback(tc.requiredFactors)
+			s.mfaKeeper.SetChallengeVerified(fallback.ChallengeID)
+			if tc.mutateChallenge != nil {
+				challenge, found := s.mfaKeeper.GetChallenge(s.ctx, fallback.ChallengeID)
+				s.Require().True(found)
+				tc.mutateChallenge(challenge)
+			}
+
+			err := s.keeper.HandleBorderlineFallbackCompleted(
+				s.ctx,
+				testBorderlineAddress,
+				fallback.ChallengeID,
+				tc.callerFactors,
+			)
+			s.Require().Error(err)
+			s.assertFallbackProofFailureMutationFree(fallback)
+		})
+	}
+}
+
+func (s *BorderlineFallbackTestSuite) TestCompleteBorderlineFallbackMsgServerUsesDerivedTOTPFactors() {
+	fallback := s.preparePremiumTOTPBorderlineFallback(1)
+	s.mfaKeeper.SetChallengeVerified(fallback.ChallengeID)
+	s.ctx = s.ctx.WithEventManager(sdk.NewEventManager())
+
+	msgServer := keeper.NewMsgServerImpl(s.keeper)
+	resp, err := msgServer.CompleteBorderlineFallback(s.ctx, &types.MsgCompleteBorderlineFallback{
+		Sender:           testBorderlineAddress,
+		ChallengeId:      fallback.ChallengeID,
+		FactorsSatisfied: []string{"totp"},
+	})
+	s.Require().NoError(err)
+	s.Require().NotNil(resp)
+	s.Require().Equal(fallback.FallbackID, resp.FallbackId)
+	s.Require().Equal(types.VerificationStatusToProto(types.VerificationStatusVerified), resp.FinalStatus)
+	s.Require().Equal("medium", resp.FactorClass)
+
+	updated, found := s.keeper.GetBorderlineFallbackRecord(s.ctx, fallback.FallbackID)
+	s.Require().True(found)
+	s.Require().Equal(types.BorderlineFallbackStatusCompleted, updated.Status)
+	s.Require().Equal([]string{"totp"}, updated.SatisfiedFactors)
+
+	var completionEvent sdk.Event
+	completionEventCount := 0
+	for _, event := range s.ctx.EventManager().Events() {
+		if event.Type == types.EventTypeBorderlineFallbackCompleted {
+			completionEvent = event
+			completionEventCount++
+		}
+	}
+	s.Require().Equal(1, completionEventCount)
+	s.Require().Equal(types.EventTypeBorderlineFallbackCompleted, completionEvent.Type)
+	s.Require().Equal("medium", eventAttributeValue(completionEvent, types.AttributeKeyFactorClass))
+	s.Require().Equal("totp", eventAttributeValue(completionEvent, types.AttributeKeySatisfiedFactors))
 }
 
 // ============================================================================
@@ -414,6 +543,64 @@ func (s *BorderlineFallbackTestSuite) TestCancelBorderlineFallback_WrongAccount(
 // ============================================================================
 // Helper Functions
 // ============================================================================
+
+func (s *BorderlineFallbackTestSuite) preparePremiumTOTPBorderlineFallback(requiredFactors uint32) types.BorderlineFallbackRecord {
+	if requiredFactors > 0 {
+		params := types.DefaultBorderlineParams()
+		params.RequiredFactors = requiredFactors
+		s.Require().NoError(s.keeper.SetBorderlineParams(s.ctx, params))
+	}
+
+	s.addTOTPEnrollment(testBorderlineAddress)
+	record := types.NewIdentityRecord(testBorderlineAddress, s.ctx.BlockTime())
+	record.Tier = types.IdentityTierPremium
+	s.Require().NoError(s.keeper.SetIdentityRecord(s.ctx, *record))
+
+	status, err := s.keeper.CheckBorderlineAndTriggerFallback(s.ctx, testBorderlineAddress, 87)
+	s.Require().NoError(err)
+	s.Require().Equal(types.VerificationStatusNeedsAdditionalFactor, status)
+
+	fallbacks := s.keeper.GetPendingFallbacksForAccount(s.ctx, testBorderlineAddress)
+	s.Require().NotEmpty(fallbacks)
+	return fallbacks[len(fallbacks)-1]
+}
+
+func (s *BorderlineFallbackTestSuite) assertFallbackProofFailureMutationFree(fallback types.BorderlineFallbackRecord) {
+	updated, found := s.keeper.GetBorderlineFallbackRecord(s.ctx, fallback.FallbackID)
+	s.Require().True(found)
+	s.Require().Equal(types.BorderlineFallbackStatusPending, updated.Status)
+	s.Require().Empty(updated.SatisfiedFactors)
+	s.Require().Zero(updated.CompletedAt)
+	s.Require().Equal(types.VerificationStatus(""), updated.FinalVerificationStatus)
+
+	pending := s.keeper.GetPendingFallbacksForAccount(s.ctx, testBorderlineAddress)
+	queueHasFallback := false
+	for _, queued := range pending {
+		if queued.FallbackID == fallback.FallbackID {
+			queueHasFallback = true
+			break
+		}
+	}
+	s.Require().True(queueHasFallback, "fallback should remain in pending queue")
+
+	_, _, scoreFound := s.keeper.GetScore(s.ctx, testBorderlineAddress)
+	s.Require().False(scoreFound)
+
+	address, err := sdk.AccAddressFromBech32(testBorderlineAddress)
+	s.Require().NoError(err)
+	record, found := s.keeper.GetIdentityRecord(s.ctx, address)
+	s.Require().True(found)
+	s.Require().Equal(types.IdentityTierPremium, record.Tier)
+}
+
+func eventAttributeValue(event sdk.Event, key string) string {
+	for _, attr := range event.Attributes {
+		if string(attr.Key) == key {
+			return string(attr.Value)
+		}
+	}
+	return ""
+}
 
 func (s *BorderlineFallbackTestSuite) addTOTPEnrollment(address string) {
 	enrollment := mfatypes.FactorEnrollment{

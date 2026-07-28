@@ -81,8 +81,7 @@ node scripts/telegram-bot.mjs
   managers; never commit them to the repo.
 
 ## Testing
-- Validate AGENTS docs: 
-ode scripts/validate-agents-docs.mjs.
+- Validate AGENTS docs: `node scripts/validate-agents-docs.mjs`.
 - Run pre-flight checks before push:
   - pwsh scripts/agent-preflight.ps1
   - ./scripts/agent-preflight.sh
@@ -137,6 +136,7 @@ When to add vs modify
 | scripts/agent-preflight.sh | Bash pre-flight checks before push. | ./scripts/agent-preflight.sh | bash, go, pnpm (optional) |
 | scripts/task85b-preflight.ps1 | Full Task 85B DEX/off-ramp release gate, including generation, docs hashes, SDK, upgrade, integration and race checks. | pwsh scripts/task85b-preflight.ps1 | PowerShell 7+, Go, Node/npm, WSL or Docker, golangci-lint |
 | scripts/task85c-preflight.ps1 | Task 85C encrypted-key, distributed-fencing, canonical-render, policy, docs, lint, build and race gate. | pwsh scripts/task85c-preflight.ps1 | PowerShell 7+, Go, Node, kubectl, WSL, golangci-lint |
+| scripts/task85d-preflight.ps1 | Task 85D process-boundary conformance gate for web issuer helper processes, deterministic inference receipts, consensus receipt bytes, full VEID integration/package checks, inference-sidecar mTLS/fallback policy, docs, PowerShell parse, vet, task-scoped lint, task-scoped diff, generated-contract applicability, and WSL race checks. | pwsh scripts/task85d-preflight.ps1 | PowerShell 7+, Go, Python, Node, WSL, golangci-lint |
 | scripts/archive-completed-tasks.ps1 | Archive done VK tasks into _docs/ralph. | pwsh scripts/archive-completed-tasks.ps1 -DryRun | PowerShell, VK CLI wrapper (ve-kanban) |
 | scripts/_check-parse.ps1 | Parse ve-orchestrator.ps1 and report errors. | pwsh scripts/_check-parse.ps1 | PowerShell 7+ |
 | scripts/_check-ps1-syntax.ps1 | Syntax check PS1 files (defaults to bosun). | pwsh scripts/_check-ps1-syntax.ps1 -Path scripts/bosun/ve-orchestrator.ps1 | PowerShell 7+ |
@@ -298,6 +298,8 @@ Note: run PowerShell scripts with pwsh (PowerShell 7+) unless stated.
 - Example: pwsh scripts/agent-preflight.ps1
 
 For Task 85B paths, agent preflight runs `scripts/task85b-preflight.ps1` in full mode. `VE_HOOK_TASK85B_QUICK=1` and `VE_HOOK_TASK85B_SKIP_RACE=1` are explicit diagnostic-only reductions and are not release evidence.
+
+For Task 85D paths, agent preflight runs `scripts/task85d-preflight.ps1` in full mode. `VE_HOOK_TASK85D_SKIP_RACE=1`, `VE_HOOK_TASK85D_SKIP_LINT=1`, `VE_HOOK_TASK85D_SKIP_GENERATION=1`, and `VE_HOOK_TASK85D_SKIP_EXPENSIVE=1` are explicit diagnostic-only reductions and are not release evidence. Generated VEID proto/generated/OpenAPI/descriptor changes fail closed in this dirty-checkout preflight; verify generation in a clean isolated worktree or container. On Windows, bash-based checks must use `C:\Program Files\Git\bin\bash.exe` rather than resolving an arbitrary WSL `bash`.
 
 ### scripts/task85b-preflight.ps1
 - Purpose: Run the mandatory full Task 85B Go, app custody, tagged integration, upgrade registry/worker, protobuf inventory/drift/hash, documentation consistency, TypeScript SDK, lint, build and WSL race gates.

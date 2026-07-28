@@ -31,6 +31,74 @@ func (s *MsgServerTestSuite) SetupTest() {
 	s.msgServer = keeper.NewMsgServerImpl(s.keeper)
 }
 
+func (s *MsgServerTestSuite) registerActiveMsgServerInferenceProfile() {
+	const version = "v1.0.0"
+	manifest := types.NewModelManifest(version, []types.ModelInfo{
+		{
+			Name:        "deepface_facenet512",
+			Version:     version,
+			WeightsHash: "sha256:a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2",
+			Framework:   "tensorflow",
+			Purpose:     string(types.ModelPurposeFaceRecognition),
+			InputShape:  []int32{1, 160, 160, 3},
+			OutputShape: []int32{1, 512},
+		},
+		{
+			Name:        "craft_text_detection",
+			Version:     version,
+			WeightsHash: "sha256:b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3",
+			Framework:   "pytorch",
+			Purpose:     string(types.ModelPurposeTextDetection),
+		},
+		{
+			Name:        "unet_face_extraction",
+			Version:     version,
+			WeightsHash: "sha256:c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4",
+			Framework:   "tensorflow",
+			Purpose:     string(types.ModelPurposeFaceExtraction),
+		},
+	}, s.ctx.BlockTime())
+
+	_, err := s.keeper.RegisterPipelineVersion(
+		s.ctx,
+		version,
+		"sha256:a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2",
+		"ghcr.io/virtengine/veid-pipeline:"+version,
+		*manifest,
+	)
+	s.Require().NoError(err)
+	s.Require().NoError(s.keeper.ActivatePipelineVersion(s.ctx, version))
+}
+
+func (s *MsgServerTestSuite) addBondedMsgServerValidator(address sdk.AccAddress) {
+	stakingKeeper := NewMockStakingKeeper()
+	stakingKeeper.AddValidator(sdk.ValAddress(address), stakingtypes.Bonded)
+	s.keeper.SetStakingKeeper(stakingKeeper)
+	s.msgServer = keeper.NewMsgServerImpl(s.keeper)
+}
+
+func msgServerDerivedFeaturesMsg(sender, account, modelVersion string) *types.MsgUpdateDerivedFeatures {
+	faceHash := sha256.Sum256([]byte("face-derived-feature"))
+	nameHash := sha256.Sum256([]byte("name-derived-feature"))
+	return &types.MsgUpdateDerivedFeatures{
+		Sender:            sender,
+		AccountAddress:    account,
+		FaceEmbeddingHash: faceHash[:],
+		DocFieldHashes: map[string][]byte{
+			types.DocFieldNameHash: nameHash[:],
+		},
+		ModelVersion: modelVersion,
+	}
+}
+
+func (s *MsgServerTestSuite) requireDerivedFeaturesEmpty(address sdk.AccAddress) {
+	wallet, found := s.keeper.GetWallet(s.ctx, address)
+	s.Require().True(found)
+	s.Require().Empty(wallet.DerivedFeatures.FaceEmbeddingHash)
+	s.Require().Empty(wallet.DerivedFeatures.DocFieldHashes)
+	s.Require().Empty(wallet.DerivedFeatures.ModelVersion)
+}
+
 // createTestPayloadPB creates a veidv1.EncryptedPayloadEnvelope for protobuf struct literals
 func (s *MsgServerTestSuite) createTestPayloadPB() veidv1.EncryptedPayloadEnvelope {
 	nonce := make([]byte, 24)
@@ -360,6 +428,161 @@ func (s *MsgServerTestSuite) TestMsgUpdateScore_DisabledEvenForBondedValidator()
 	s.Require().True(found)
 	s.Require().Zero(record.CurrentScore)
 	s.Require().Empty(record.ScoreVersion)
+}
+
+func (s *MsgServerTestSuite) TestMsgUpdateDerivedFeatures_DisabledBeforeParsingAccount() {
+	validatorAddr := sdk.AccAddress(bytes.Repeat([]byte{0x11}, 20))
+
+	_, err := s.msgServer.UpdateDerivedFeatures(
+		s.ctx,
+		msgServerDerivedFeaturesMsg(validatorAddr.String(), "not-a-bech32-account", "v1.0.0"),
+	)
+	s.Require().Error(err)
+	s.Require().Contains(err.Error(), "disabled")
+}
+
+func (s *MsgServerTestSuite) TestMsgUpdateDerivedFeatures_DisabledWithoutStakingKeeperDoesNotMutateWallet() {
+	validatorAddr := sdk.AccAddress(bytes.Repeat([]byte{0x12}, 20))
+	accountAddr := sdk.AccAddress(bytes.Repeat([]byte{0x13}, 20))
+	s.createWalletWithKey(accountAddr, generateTestKeyPair())
+	wallet, found := s.keeper.GetWallet(s.ctx, accountAddr)
+	s.Require().True(found)
+	existingFaceHash := sha256.Sum256([]byte("existing-face-derived-feature"))
+	existingNameHash := sha256.Sum256([]byte("existing-name-derived-feature"))
+	wallet.DerivedFeatures = types.DerivedFeatures{
+		FaceEmbeddingHash: existingFaceHash[:],
+		DocFieldHashes: map[string][]byte{
+			types.DocFieldNameHash: existingNameHash[:],
+		},
+		LastComputedAt: time.Unix(1_720_000_000, 0).UTC(),
+		ModelVersion:   "existing-model",
+		ComputedBy:     "existing-validator",
+		BlockHeight:    99,
+		FeatureVersion: types.CurrentDerivedFeaturesVersion,
+	}
+	expected := wallet.DerivedFeatures
+	s.Require().NoError(s.keeper.SetWallet(s.ctx, wallet))
+
+	_, err := s.msgServer.UpdateDerivedFeatures(
+		s.ctx,
+		msgServerDerivedFeaturesMsg(validatorAddr.String(), accountAddr.String(), "v1.0.0"),
+	)
+	s.Require().Error(err)
+	s.Require().Contains(err.Error(), "disabled")
+	wallet, found = s.keeper.GetWallet(s.ctx, accountAddr)
+	s.Require().True(found)
+	s.Require().Equal(expected.FaceEmbeddingHash, wallet.DerivedFeatures.FaceEmbeddingHash)
+	s.Require().Equal(expected.DocFieldHashes, wallet.DerivedFeatures.DocFieldHashes)
+	s.Require().Equal(expected.BiometricHash, wallet.DerivedFeatures.BiometricHash)
+	s.Require().Equal(expected.LivenessProofHash, wallet.DerivedFeatures.LivenessProofHash)
+	s.Require().True(expected.LastComputedAt.Equal(wallet.DerivedFeatures.LastComputedAt))
+	s.Require().Equal(expected.ModelVersion, wallet.DerivedFeatures.ModelVersion)
+	s.Require().Equal(expected.ComputedBy, wallet.DerivedFeatures.ComputedBy)
+	s.Require().Equal(expected.BlockHeight, wallet.DerivedFeatures.BlockHeight)
+	s.Require().Equal(expected.FeatureVersion, wallet.DerivedFeatures.FeatureVersion)
+}
+
+func (s *MsgServerTestSuite) TestMsgUpdateDerivedFeatures_DisabledForNonValidatorBeforeMutation() {
+	validatorAddr := sdk.AccAddress(bytes.Repeat([]byte{0x14}, 20))
+	accountAddr := sdk.AccAddress(bytes.Repeat([]byte{0x15}, 20))
+	s.keeper.SetStakingKeeper(NewMockStakingKeeper())
+	s.createWalletWithKey(accountAddr, generateTestKeyPair())
+
+	_, err := s.msgServer.UpdateDerivedFeatures(
+		s.ctx,
+		msgServerDerivedFeaturesMsg(validatorAddr.String(), accountAddr.String(), "v1.0.0"),
+	)
+	s.Require().Error(err)
+	s.Require().Contains(err.Error(), "disabled")
+	s.requireDerivedFeaturesEmpty(accountAddr)
+}
+
+func (s *MsgServerTestSuite) TestMsgUpdateDerivedFeatures_DisabledWithoutActiveProfileBeforeMutation() {
+	validatorAddr := sdk.AccAddress(bytes.Repeat([]byte{0x16}, 20))
+	accountAddr := sdk.AccAddress(bytes.Repeat([]byte{0x17}, 20))
+	s.addBondedMsgServerValidator(validatorAddr)
+	s.createWalletWithKey(accountAddr, generateTestKeyPair())
+
+	_, err := s.msgServer.UpdateDerivedFeatures(
+		s.ctx,
+		msgServerDerivedFeaturesMsg(validatorAddr.String(), accountAddr.String(), "v1.0.0"),
+	)
+	s.Require().Error(err)
+	s.Require().Contains(err.Error(), "disabled")
+	s.requireDerivedFeaturesEmpty(accountAddr)
+}
+
+func (s *MsgServerTestSuite) TestMsgUpdateDerivedFeatures_DisabledWithRetiredProfileBeforeMutation() {
+	validatorAddr := sdk.AccAddress(bytes.Repeat([]byte{0x18}, 20))
+	accountAddr := sdk.AccAddress(bytes.Repeat([]byte{0x19}, 20))
+	s.addBondedMsgServerValidator(validatorAddr)
+	s.registerActiveMsgServerInferenceProfile()
+	active, found := s.keeper.GetPipelineVersion(s.ctx, "v1.0.0")
+	s.Require().True(found)
+	active.Status = string(types.PipelineVersionStatusDeprecated)
+	s.Require().NoError(s.keeper.SetPipelineVersion(s.ctx, active))
+	s.createWalletWithKey(accountAddr, generateTestKeyPair())
+
+	_, err := s.msgServer.UpdateDerivedFeatures(
+		s.ctx,
+		msgServerDerivedFeaturesMsg(validatorAddr.String(), accountAddr.String(), "v1.0.0"),
+	)
+	s.Require().Error(err)
+	s.Require().Contains(err.Error(), "disabled")
+	s.requireDerivedFeaturesEmpty(accountAddr)
+}
+
+func (s *MsgServerTestSuite) TestMsgUpdateDerivedFeatures_DisabledWithNonStrictProfileBeforeMutation() {
+	validatorAddr := sdk.AccAddress(bytes.Repeat([]byte{0x1a}, 20))
+	accountAddr := sdk.AccAddress(bytes.Repeat([]byte{0x1b}, 20))
+	s.addBondedMsgServerValidator(validatorAddr)
+	s.registerActiveMsgServerInferenceProfile()
+	active, found := s.keeper.GetPipelineVersion(s.ctx, "v1.0.0")
+	s.Require().True(found)
+	active.DeterminismConfig.ForceCPU = false
+	s.Require().NoError(s.keeper.SetPipelineVersion(s.ctx, active))
+	s.createWalletWithKey(accountAddr, generateTestKeyPair())
+
+	_, err := s.msgServer.UpdateDerivedFeatures(
+		s.ctx,
+		msgServerDerivedFeaturesMsg(validatorAddr.String(), accountAddr.String(), "v1.0.0"),
+	)
+	s.Require().Error(err)
+	s.Require().Contains(err.Error(), "disabled")
+	s.requireDerivedFeaturesEmpty(accountAddr)
+}
+
+func (s *MsgServerTestSuite) TestMsgUpdateDerivedFeatures_DisabledWithModelVersionMismatchMutationFree() {
+	validatorAddr := sdk.AccAddress(bytes.Repeat([]byte{0x1c}, 20))
+	accountAddr := sdk.AccAddress(bytes.Repeat([]byte{0x1d}, 20))
+	s.addBondedMsgServerValidator(validatorAddr)
+	s.registerActiveMsgServerInferenceProfile()
+	s.createWalletWithKey(accountAddr, generateTestKeyPair())
+
+	_, err := s.msgServer.UpdateDerivedFeatures(
+		s.ctx,
+		msgServerDerivedFeaturesMsg(validatorAddr.String(), accountAddr.String(), "v2.0.0"),
+	)
+	s.Require().Error(err)
+	s.Require().Contains(err.Error(), "disabled")
+	s.requireDerivedFeaturesEmpty(accountAddr)
+}
+
+func (s *MsgServerTestSuite) TestMsgUpdateDerivedFeatures_DisabledEvenForBondedValidator() {
+	validatorAddr := sdk.AccAddress(bytes.Repeat([]byte{0x1e}, 20))
+	accountAddr := sdk.AccAddress(bytes.Repeat([]byte{0x1f}, 20))
+	s.addBondedMsgServerValidator(validatorAddr)
+	s.registerActiveMsgServerInferenceProfile()
+	s.createWalletWithKey(accountAddr, generateTestKeyPair())
+
+	resp, err := s.msgServer.UpdateDerivedFeatures(
+		s.ctx,
+		msgServerDerivedFeaturesMsg(validatorAddr.String(), accountAddr.String(), "v1.0.0"),
+	)
+	s.Require().Error(err)
+	s.Require().Contains(err.Error(), "disabled")
+	s.Require().Nil(resp)
+	s.requireDerivedFeaturesEmpty(accountAddr)
 }
 
 // Test: MsgCreateIdentityWallet - success

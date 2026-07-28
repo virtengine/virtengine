@@ -1,7 +1,7 @@
 # VirtEngine Progress
 
-Last updated: 2026-07-23
-Status: **Protocol continuation Task 85C is complete at the deterministic local engineering boundary as `engineering_complete_external_blocked`. Task 85D is NEXT.** Live TMKMS/HSM, multi-zone Kubernetes storage and regional DR certification remain externally blocked. Historical 80A-83D backlog status remains below for traceability.
+Last updated: 2026-07-28
+Status: **Protocol continuation Task 85D is complete at the deterministic local engineering boundary as `engineering_complete_external_blocked`. Task 86B is NEXT.** Real identity providers/connectors, production issuer custody, production mTLS CA/workload identity, approved model/runtime/dataset, live four-validator network evidence, retained signed chain tx/app-hash evidence, live TMKMS/HSM, multi-zone Kubernetes storage and regional DR certification remain externally blocked. Historical 80A-83D backlog status remains below for traceability.
 
 ## Protocol Completion Continuation (2026-07-20)
 
@@ -14,6 +14,26 @@ Status: **Protocol continuation Task 85C is complete at the deterministic local 
 | 85A | Route every provider chain mutation through the durable signed broadcaster | P0 | **COMPLETED** |
 | 85B | Deliver verifiable DEX routing and a compliant fiat off-ramp | P0 | **`engineering_complete_external_blocked` (LOCALLY COMPLETE)** |
 | 85C | Converge production deployment rendering and prevent validator double-signing or provider HA state loss | P0 | **`engineering_complete_external_blocked` (LOCALLY COMPLETE)** |
+| 85D | Authenticate every VEID evidence path and require attested pinned runtime receipts | P0 | **`engineering_complete_external_blocked` (LOCALLY COMPLETE)** |
+
+### 85D: Authenticate Every VEID Evidence Path and Require Attested, Pinned, Real Production Inference
+
+**Locally completed:** 2026-07-28
+**Status:** `engineering_complete_external_blocked`
+**Commit:** Not created per orchestration instruction
+
+- Added deterministic separate-OS-process helper fixtures for SSO, email, SMS and social web evidence. Child issuer processes own Ed25519 issuer private keys and return only public registration data plus canonical signed attestations; parent-owned account wallet binding keys/signatures are separate and messages submit through the real VEID msg server keeper path.
+- Added exact idempotent retry checks and negative no-mutation coverage for wrong account, wrong chain, wrong scope, wrong type, changed payload, nonce replay, stale/expired evidence, revoked key and rotated unregistered key.
+- Added an engineering-only deterministic inference sandbox process fixture. Two fresh children with strict CPU/seed/deterministic config produce identical canonical signed `types.InferenceReceipt` bytes, score and model/runtime/schema/config digests. This is local engineering evidence only, not production model certification.
+- Added a four-validator keeper-level consensus conformance test using independent committed stores, child-issued canonical receipt bytes, real `Keeper.ExtendVote` / representative `VerifyVoteExtension`, real `AggregateVoteExtensions` / `SubmitConsensusVerification`, 90-power quorum, and a separate valid 10-power dissenting receipt that is excluded and cannot finalize.
+- Fixed the Task 85D defect exposed by RED tests: web-scope score updates now promote existing `pending`/`unknown` status to `verified` when accumulated score crosses `ThresholdBasic`.
+- Added `scripts/task85d-preflight.ps1`, Task 85D trigger integration in `scripts/agent-preflight.ps1`, and preflight documentation. The dedicated preflight scopes lint and generation drift to Task 85D files so unrelated dirty generated/Task 85B/85C files are preserved.
+- Full local VEID integration package validation now passes after the old flow tests explicitly assert disabled ordinary `UpdateVerificationStatus` / `UpdateScore` messages and continue with direct deterministic fixture seeding without re-enabling ordinary mutations.
+- Focused validation passed for Task 85D web evidence, deterministic inference, helper protocols, keeper consensus, `x/veid/types`, `x/veid/keeper`, `cmd/inference-sidecar`, `pkg/inference`, full `tests/integration/veid`, focused vet, policy tests/validator, AGENTS docs validation, PowerShell parse, gofmt check, task-scoped lint, task-scoped diff check and generated drift applicability.
+- Full Task 85D preflight reaches the WSL race gate and then blocks because WSL has no installed Linux distribution on this host. The `-SkipRace` preflight is diagnostic only and explicitly not release evidence for race coverage.
+- Completion evidence is in `_docs/audits/task-85d-process-boundary-conformance-report-2026-07-28.md`; external prerequisites are in `_docs/task-85d-external-prerequisite-certification-ledger.md`.
+- No real OIDC/SAML provider, email/SMS/social connector sandbox, production HSM/KMS issuer custody, production mTLS CA/workload identity, approved production model/runtime/dataset, live four-validator network, or retained signed chain tx/app-hash evidence exists locally. Status remains `engineering_complete_external_blocked`, not certified.
+- **NEXT:** Task 86B.
 
 ### 85C: Converge Production Deployment Rendering and Prevent Validator Double-Signing or Provider HA State Loss
 
@@ -35,7 +55,7 @@ Status: **Protocol continuation Task 85C is complete at the deterministic local 
 - Focused local validation for the CI enforcement gap passed: the kubectl 1.29.0 Linux amd64 checksum matched `dl.k8s.io`; workflow YAML parsed with PyYAML and passed `actionlint` 1.7.7; the Task 85C validator and AGENTS validator passed; and `git diff --check` passed.
 - Completion evidence and release-only limitations are in `_docs/audits/task-85c-completion-report-2026-07-23.md`; architecture and recovery guidance are in `_docs/adr/ADR-009-canonical-kubernetes-rendering-and-identity.md` and `_docs/runbooks/kubernetes-identity-backup-restore-runbook.md`.
 - No live TMKMS/vendor HSM/mTLS signer, real double-sign/partition drill, named Kubernetes distribution, encrypted RWO/RWX storage backend, snapshot controller, immutable-image provenance, multi-zone eviction, detached-volume or regional failover evidence exists locally. These remain mandatory release-only blockers; no production hardware or DR certification is claimed.
-- **NEXT:** Task 85D.
+- **NEXT:** Task 85D is complete locally; Task 86B is next.
 
 ### 85B: Deliver Verifiable DEX Routing and a Compliant Fiat Off-Ramp
 

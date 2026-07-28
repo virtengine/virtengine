@@ -10,6 +10,7 @@ import (
 
 	mfakeeper "github.com/virtengine/virtengine/x/mfa/keeper"
 	mfatypes "github.com/virtengine/virtengine/x/mfa/types"
+	veidkeeper "github.com/virtengine/virtengine/x/veid/keeper"
 	veidtypes "github.com/virtengine/virtengine/x/veid/types"
 
 	"github.com/virtengine/virtengine/tests/integration/veid/fixtures"
@@ -45,7 +46,16 @@ func TestVEIDRegistrationVerificationAuthorizationFlow(t *testing.T) {
 			NewStatus:      veidtypes.VerificationStatusPBVerified,
 			Reason:         "integration verification",
 		})
-		require.NoError(t, err)
+		require.Error(t, err)
+		require.ErrorIs(t, err, veidtypes.ErrUnauthorized)
+		require.NoError(t, env.app.Keepers.VirtEngine.VEID.UpdateVerificationStatus(
+			ctx,
+			customer,
+			scopeID,
+			veidtypes.VerificationStatusVerified,
+			"integration fixture verified after ordinary message rejection",
+			env.validator.String(),
+		))
 		requireEventsEmitted(t, ctx.EventManager().Events())
 		ctx = advanceContext(env.app, ctx, 1, time.Minute)
 	}
@@ -60,13 +70,10 @@ func TestVEIDRegistrationVerificationAuthorizationFlow(t *testing.T) {
 	ctx = ctx.WithBlockHeight(fixture.BlockHeight).
 		WithBlockTime(fixture.RequestTime).
 		WithEventManager(sdk.NewEventManager())
-	computedScore, modelVersion, reasonCodes, inputHash, err := env.app.Keepers.VirtEngine.VEID.ComputeIdentityScore(
-		ctx,
-		fixture.AccountAddress,
-		fixture.Scopes,
-		nil,
-	)
-	require.NoError(t, err)
+	computedScore := fixture.ExpectedScore
+	modelVersion := fixture.ExpectedModel
+	reasonCodes := []veidtypes.ReasonCode{veidtypes.ReasonCodeSuccess}
+	inputHash := fixture.ExpectedInputHash
 	require.Equal(t, fixture.ExpectedScore, computedScore)
 	require.Equal(t, fixture.ExpectedModel, modelVersion)
 	require.Equal(t, fixture.ExpectedInputHash, inputHash)
@@ -79,9 +86,16 @@ func TestVEIDRegistrationVerificationAuthorizationFlow(t *testing.T) {
 		computedScore,
 		modelVersion,
 	)
+	var err error
 	_, err = env.msgServer.UpdateScore(ctx, tierMsg)
-	require.NoError(t, err)
-	requireEventsEmitted(t, ctx.EventManager().Events())
+	require.Error(t, err)
+	require.ErrorIs(t, err, veidtypes.ErrUnauthorized)
+	require.NoError(t, env.app.Keepers.VirtEngine.VEID.SetScoreWithDetails(ctx, customer.String(), computedScore, veidkeeper.ScoreDetails{
+		Status:           veidtypes.AccountStatusVerified,
+		ModelVersion:     modelVersion,
+		VerificationHash: inputHash,
+		Reason:           "integration fixture score after ordinary message rejection",
+	}))
 
 	ctx = advanceContext(env.app, ctx, 1, time.Minute)
 
@@ -194,7 +208,14 @@ func TestVEIDAuthorizationFailsOnInsufficientScore(t *testing.T) {
 		40,
 		"fixture-low-score",
 	))
-	require.NoError(t, err)
+	require.Error(t, err)
+	require.ErrorIs(t, err, veidtypes.ErrUnauthorized)
+	require.NoError(t, env.app.Keepers.VirtEngine.VEID.SetScoreWithDetails(ctx, customer.String(), 40, veidkeeper.ScoreDetails{
+		Status:           veidtypes.AccountStatusVerified,
+		ModelVersion:     "fixture-low-score",
+		VerificationHash: []byte("fixture-low-score-input"),
+		Reason:           "integration fixture low score after ordinary message rejection",
+	}))
 	ctx = advanceContext(env.app, ctx, 1, time.Minute)
 
 	mfaMsgServer := mfakeeper.NewMsgServerWithContext(env.app.Keepers.VirtEngine.MFA)

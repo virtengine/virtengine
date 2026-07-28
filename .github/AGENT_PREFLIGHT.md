@@ -46,6 +46,15 @@
 
 `VE_HOOK_TASK85C_SKIP_RACE=1` is diagnostic only and must not be recorded as full Task 85C local acceptance evidence.
 
+## Task 85D Changes
+
+- [ ] `pwsh scripts/task85d-preflight.ps1` completes for process-boundary web evidence, deterministic inference sandbox receipts, consensus receipt bytes/finalization, full `go test ./tests/integration/veid -count=1`, the focused VEID/inference package suite, inference-sidecar mTLS and fallback policy, docs validation, PowerShell parse checks, gofmt, vet, task-scoped lint, task-scoped diff check, generated-contract applicability, and WSL race checks.
+- [ ] Local helper-process issuer and inference fixtures are engineering conformance evidence only. They are not real OIDC/SAML, email/SMS/social connector, production signer custody, production mTLS CA, approved production model/runtime/dataset, live validator network, or retained signed chain transaction/app-hash evidence.
+- [ ] Generated VEID proto/generated/OpenAPI/descriptor changes must be verified in a clean isolated worktree or container; the Task 85D preflight fails closed instead of running broad generation in a dirty layered checkout.
+- [ ] `_docs/audits/task-85d-*`, `_docs/task-85d-*`, `_docs/INDEX.md`, and `_docs/ralph/progress.md` distinguish local engineering completion from external certification blockers.
+
+`VE_HOOK_TASK85D_SKIP_RACE=1`, `VE_HOOK_TASK85D_SKIP_LINT=1`, `VE_HOOK_TASK85D_SKIP_GENERATION=1`, and `VE_HOOK_TASK85D_SKIP_EXPENSIVE=1` are diagnostic only. `VE_HOOK_TASK85D_SKIP_EXPENSIVE=1` skips the named expensive gates: full VEID integration package, full VEID/inference package suite, and WSL race. Any skipped output is not Task 85D release evidence.
+
 ## If Push Fails
 
 1. Read the error output carefully

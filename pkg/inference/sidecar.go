@@ -3,16 +3,31 @@ package inference
 import (
 	"context"
 	"crypto/tls"
+	"crypto/x509"
+	"encoding/json"
+	"encoding/pem"
 	"fmt"
+	"os"
+	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/encoding"
 
 	inferencepb "github.com/virtengine/virtengine/pkg/inference/proto"
 )
+
+// SidecarJSONCodecName is the stable gRPC content subtype used for the
+// hand-written inference service request/response structs.
+const SidecarJSONCodecName = "json"
+
+func init() {
+	encoding.RegisterCodec(sidecarJSONCodec{})
+}
 
 // ============================================================================
 // Sidecar Client
@@ -103,13 +118,19 @@ func (sc *SidecarClient) connect() error {
 	sc.mu.Lock()
 	defer sc.mu.Unlock()
 
+	if !sc.useTLS && sidecarMTLSFilesConfigured(sc.config) {
+		return fmt.Errorf("sidecar TLS must be enabled when explicit mTLS files are configured")
+	}
+
 	// Build gRPC dial options
-	var opts []grpc.DialOption
+	opts := []grpc.DialOption{
+		grpc.WithDefaultCallOptions(grpc.ForceCodec(sidecarJSONCodec{})),
+	}
 
 	if sc.useTLS {
-		// Use TLS with system root CAs
-		tlsConfig := &tls.Config{
-			MinVersion: tls.VersionTLS12,
+		tlsConfig, err := buildSidecarClientTLSConfig(sc.config)
+		if err != nil {
+			return err
 		}
 		opts = append(opts, grpc.WithTransportCredentials(credentials.NewTLS(tlsConfig)))
 	} else {
@@ -128,10 +149,134 @@ func (sc *SidecarClient) connect() error {
 
 	// Get model info from sidecar
 	if err := sc.refreshModelInfo(); err != nil {
+		_ = conn.Close()
+		sc.conn = nil
+		sc.grpcClient = nil
+		sc.isConnected = false
 		return fmt.Errorf("failed to get model info: %w", err)
 	}
 
 	return nil
+}
+
+func buildSidecarClientTLSConfig(config InferenceConfig) (*tls.Config, error) {
+	tlsConfig := &tls.Config{
+		MinVersion: tls.VersionTLS13,
+	}
+	if strings.TrimSpace(config.SidecarTLSServerName) != "" {
+		tlsConfig.ServerName = strings.TrimSpace(config.SidecarTLSServerName)
+	}
+
+	certFile, err := validateSidecarTLSFile("sidecar client certificate", config.SidecarTLSCertFile)
+	if err != nil {
+		return nil, err
+	}
+	keyFile, err := validateSidecarTLSFile("sidecar client private key", config.SidecarTLSKeyFile)
+	if err != nil {
+		return nil, err
+	}
+	caFile, err := validateSidecarTLSFile("sidecar server CA", config.SidecarTLSServerCAFile)
+	if err != nil {
+		return nil, err
+	}
+
+	cert, err := tls.LoadX509KeyPair(certFile, keyFile)
+	if err != nil {
+		return nil, fmt.Errorf("load sidecar mTLS client certificate/key: %w", err)
+	}
+	caPEM, err := os.ReadFile(caFile)
+	if err != nil {
+		return nil, fmt.Errorf("read sidecar server CA: %w", err)
+	}
+	roots, err := parseSidecarServerCAPool(caPEM)
+	if err != nil {
+		return nil, err
+	}
+
+	tlsConfig.Certificates = []tls.Certificate{cert}
+	tlsConfig.RootCAs = roots
+	return tlsConfig, nil
+}
+
+func sidecarMTLSFilesConfigured(config InferenceConfig) bool {
+	return strings.TrimSpace(config.SidecarTLSCertFile) != "" ||
+		strings.TrimSpace(config.SidecarTLSKeyFile) != "" ||
+		strings.TrimSpace(config.SidecarTLSServerCAFile) != ""
+}
+
+func validateSidecarTLSFile(label, path string) (string, error) {
+	cleaned := strings.TrimSpace(path)
+	if cleaned == "" {
+		return "", fmt.Errorf("%s file is required when any explicit sidecar mTLS file is configured", label)
+	}
+	if !filepath.IsAbs(cleaned) {
+		return "", fmt.Errorf("%s file must be an absolute path", label)
+	}
+	info, err := os.Stat(cleaned)
+	if err != nil {
+		return "", fmt.Errorf("read %s file: %w", label, err)
+	}
+	if !info.Mode().IsRegular() {
+		return "", fmt.Errorf("%s file must reference a readable regular file", label)
+	}
+	file, err := os.Open(cleaned)
+	if err != nil {
+		return "", fmt.Errorf("read %s file: %w", label, err)
+	}
+	_ = file.Close()
+	return cleaned, nil
+}
+
+func parseSidecarServerCAPool(caPEM []byte) (*x509.CertPool, error) {
+	remaining := strings.TrimSpace(string(caPEM))
+	if remaining == "" {
+		return nil, fmt.Errorf("sidecar server CA must contain at least one PEM certificate")
+	}
+
+	roots := x509.NewCertPool()
+	certCount := 0
+	for {
+		block, rest := pem.Decode([]byte(remaining))
+		if block == nil {
+			if strings.TrimSpace(remaining) != "" {
+				return nil, fmt.Errorf("sidecar server CA contains malformed trailing PEM data")
+			}
+			break
+		}
+		if block.Type != "CERTIFICATE" {
+			return nil, fmt.Errorf("sidecar server CA contains unsupported PEM block %q", block.Type)
+		}
+		cert, err := x509.ParseCertificate(block.Bytes)
+		if err != nil {
+			return nil, fmt.Errorf("parse sidecar server CA certificate: %w", err)
+		}
+		if cert.IsCA && cert.BasicConstraintsValid && cert.KeyUsage&x509.KeyUsageCertSign != 0 {
+			roots.AddCert(cert)
+			certCount++
+		}
+		remaining = strings.TrimSpace(string(rest))
+		if remaining == "" {
+			break
+		}
+	}
+	if certCount == 0 {
+		return nil, fmt.Errorf("sidecar server CA must contain at least one CA certificate authorized for certificate signing")
+	}
+	return roots, nil
+}
+
+type sidecarJSONCodec struct{}
+
+func (sidecarJSONCodec) Marshal(v interface{}) ([]byte, error) {
+	return json.Marshal(v)
+}
+
+func (sidecarJSONCodec) Unmarshal(data []byte, v interface{}) error {
+	return json.Unmarshal(data, v)
+}
+
+func (sidecarJSONCodec) Name() string {
+	return SidecarJSONCodecName
 }
 
 // refreshModelInfo fetches model version and hash from sidecar
@@ -163,6 +308,10 @@ func (sc *SidecarClient) refreshModelInfo() error {
 	if sc.config.ExpectedHash != "" && sc.modelHash != sc.config.ExpectedHash {
 		return fmt.Errorf("model hash mismatch: expected %s, got %s",
 			sc.config.ExpectedHash, sc.modelHash)
+	}
+	if sc.config.ModelVersion != "" && sc.modelVersion != sc.config.ModelVersion {
+		return fmt.Errorf("model version mismatch: expected %s, got %s",
+			sc.config.ModelVersion, sc.modelVersion)
 	}
 
 	return nil
@@ -296,6 +445,17 @@ func (sc *SidecarClient) callSidecar(ctx context.Context, features []float32, in
 	resp, err := sc.grpcClient.ComputeScore(ctx, req)
 	if err != nil {
 		return nil, fmt.Errorf("sidecar ComputeScore RPC failed: %w", err)
+	}
+
+	expectedModelVersion := sc.GetModelVersion()
+	if resp.ModelVersion != expectedModelVersion {
+		return nil, fmt.Errorf("sidecar response model version mismatch: expected %s, got %s",
+			expectedModelVersion, resp.ModelVersion)
+	}
+	expectedModelHash := sc.GetModelHash()
+	if resp.ModelHash != expectedModelHash {
+		return nil, fmt.Errorf("sidecar response model hash mismatch: expected %s, got %s",
+			expectedModelHash, resp.ModelHash)
 	}
 
 	// Verify output hash if we computed one locally

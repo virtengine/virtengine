@@ -32,6 +32,7 @@ $errors = 0
 $hasTask84D = $changedFiles | Where-Object { $_ -match '(^x/(settlement|fraud|hpc|review|escrow|resources)/|^upgrades/software/v1\.7\.0/|financial-case|task84d)' }
 $hasTask85B = $changedFiles | Where-Object { $_ -match '(^pkg/dex/|^pkg/payments/offramp/|^pkg/provider_daemon/(fiat_conversion|provider_mutation|chain_submitter)|^cmd/provider-daemon/(main\.go|fiat_conversion)|^x/settlement/|^app/(app\.go|mac\.go|mac_task85b_test\.go)|^upgrades/software/v1\.8\.0/|^tests/(integration/settlement/|compatibility/task85b|upgrade/)|^sdk/(proto/node/virtengine/settlement/v1/|go/node/settlement/v1/|ts/src/generated/protos/virtengine/settlement/v1/|ts/script/fix-ts-proto-generated-types\.ts$|artifacts/proto/)|^api/openapi/virtengine-proto\.swagger\.json$|^_docs/.*(task[-_]?85b|fiat|off.?ramp|payout|dex)|task[-_]?85b|fiat-conversion|off.?ramp|payout-corridor)' }
 $hasTask85C = $changedFiles | Where-Object { $_ -match '(^deploy/kubernetes/|^infra/kubernetes/|^pkg/provider_daemon/(key_manager|provider_mutation|submitter_lease|portal_api|portal_readiness|chain_submitter_queue)|^cmd/provider-daemon/(main\.go|key_backup)|^scripts/task85c|^_docs/(adr/ADR-009|runbooks/kubernetes-identity|audits/task-85c)|task[-_]?85c)' }
+$hasTask85D = $changedFiles | Where-Object { $_ -match '(^tests/integration/veid/task85d|^x/veid/keeper/(task85d|web_scope_scoring\.go|inference_receipt|vote_extension|consensus_system_tx)|^x/veid/types/inference_receipt|^cmd/inference-sidecar/|^pkg/inference/|^scripts/task85d-preflight\.ps1$|^\.github/(scripts/validate_inference_deployment_policy\.py|tests/test_inference_deployment_policy\.py|AGENT_PREFLIGHT\.md)|^_docs/(audits/task-85d|task-85d|ralph/progress\.md|INDEX\.md)|task[-_]?85d|process-boundary|inference receipt)' }
 $task85CExclusive = $hasTask85C -and -not ($changedFiles | Where-Object { $_ -match '(^pkg/dex/|^pkg/payments/offramp/|^upgrades/software/v1\.8\.0/|^sdk/proto/node/virtengine/settlement/v1/|^artifacts/mainnet/task84d|^upgrades/software/v1\.7\.0/)' })
 
 if ($hasTask84D -and -not $task85CExclusive) {
@@ -71,6 +72,35 @@ if ($hasTask85C) {
     }
 }
 
+if ($hasTask85D) {
+    Write-Host "--- Task 85D process-boundary conformance checks ---" -ForegroundColor Yellow
+    $task85DArgs = @()
+    if ($env:VE_HOOK_TASK85D_SKIP_RACE -eq '1') {
+        Write-Host 'WARNING: VE_HOOK_TASK85D_SKIP_RACE=1 explicitly skips the WSL race gate; this is not release evidence.' -ForegroundColor Yellow
+        $task85DArgs += '-SkipRace'
+    }
+    if ($env:VE_HOOK_TASK85D_SKIP_LINT -eq '1') {
+        Write-Host 'WARNING: VE_HOOK_TASK85D_SKIP_LINT=1 explicitly skips golangci-lint; this is not release evidence.' -ForegroundColor Yellow
+        $task85DArgs += '-SkipLint'
+    }
+    if ($env:VE_HOOK_TASK85D_SKIP_GENERATION -eq '1') {
+        Write-Host 'WARNING: VE_HOOK_TASK85D_SKIP_GENERATION=1 explicitly skips generated contract drift; this is not release evidence.' -ForegroundColor Yellow
+        $task85DArgs += '-SkipGeneration'
+    }
+    if ($env:VE_HOOK_TASK85D_SKIP_EXPENSIVE -eq '1') {
+        Write-Host 'WARNING: VE_HOOK_TASK85D_SKIP_EXPENSIVE=1 explicitly skips expensive Task 85D gates; this is not release evidence.' -ForegroundColor Yellow
+        $task85DArgs += '-SkipExpensive'
+    }
+    try {
+        & (Join-Path $PSScriptRoot 'task85d-preflight.ps1') @task85DArgs
+        if ($LASTEXITCODE -ne 0) { Write-Host "FAIL: Task 85D preflight" -ForegroundColor Red; $errors++ }
+    }
+    catch {
+        Write-Host "FAIL: Task 85D preflight: $($_.Exception.Message)" -ForegroundColor Red
+        $errors++
+    }
+}
+
 # ── Windows Firewall check (non-blocking) ──────────────────────────────────
 if (($IsWindows -or ($env:OS -eq "Windows_NT")) -and ($hasGo -or $hasGoMod)) {
     $fwScript = Join-Path $PSScriptRoot "setup-firewall.ps1"
@@ -89,9 +119,14 @@ if ($hasGo -or $hasGoMod) {
     if ($hasGoMod) {
         Write-Host "  module/workspace/vendor policy..."
         $gitBash = "C:\Program Files\Git\bin\bash.exe"
-        if (-not (Test-Path $gitBash)) { $gitBash = "bash" }
+        if (-not (Test-Path $gitBash)) {
+            Write-Host "FAIL: Git for Windows bash not found at $gitBash; do not fall back to WSL bash for Windows preflight" -ForegroundColor Red
+            $errors++
+        }
+        else {
         & $gitBash ./scripts/verify-modules.sh 2>&1 | Out-Null
         if ($LASTEXITCODE -ne 0) { Write-Host "FAIL: module verification" -ForegroundColor Red; $errors++ }
+        }
     }
 
     $goPkgs = $hasGo | ForEach-Object { "./" + (Split-Path -Parent $_) } | Sort-Object -Unique | Where-Object { $_ -ne "./" }

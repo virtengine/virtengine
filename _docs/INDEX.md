@@ -15,6 +15,7 @@ This index lists internal-only documentation. Do not add internal docs outside `
 - `_docs/PROTO_GENERATION_NOTE.md`
 - `_docs/CI_FIXES_SUMMARY.md`
 - `_docs/failure-analysis.md`
+- `_docs/inference-fallback-behavior.md`
 
 ## Architecture & ADRs
 - `_docs/architecture/ADR-002-hybrid-decentralized-portal-architecture.md`
@@ -70,6 +71,7 @@ This index lists internal-only documentation. Do not add internal docs outside `
 - `_docs/runbooks/finance-reconciliation-runbook.md`
 - `_docs/runbooks/mainnet-genesis-ceremony.md`
 - `_docs/runbooks/mainnet-launch-runbook.md`
+- `_docs/runbooks/production-inference-sidecar.md`
 - `_docs/runbooks/kubernetes-identity-backup-restore-runbook.md`
 - `_docs/runbooks/tee-incident-response.md`
 - `_docs/runbooks/treasury-ops-runbook.md`
@@ -87,6 +89,7 @@ This index lists internal-only documentation. Do not add internal docs outside `
 - `_docs/security/vendor-risk.md`
 
 ## Audit
+- `_docs/audits/task-85d-process-boundary-conformance-report-2026-07-28.md`
 - `_docs/audits/task-85c-completion-report-2026-07-23.md`
 - `_docs/audits/task-86a-completion-report-2026-07-21.md`
 
@@ -137,6 +140,7 @@ This index lists internal-only documentation. Do not add internal docs outside `
 - `_docs/IMPLEMENTATION_SUMMARY.md`
 - `_docs/IMPROVEMENTS-2026-02-08.md`
 - `_docs/KANBAN_SPLIT_TRACKER.md`
+- `_docs/task-85d-external-prerequisite-certification-ledger.md`
 
 ## Records & PDFs
 - `_docs/AU2024203136A1-LIVE.pdf`
