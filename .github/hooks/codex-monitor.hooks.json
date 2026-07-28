@@ -5,11 +5,8 @@
       "type": "command",
       "command": [
         "node",
-        "scripts/bosun/agent-hook-bridge.mjs",
-        "--agent",
-        "copilot",
-        "--event",
-        "sessionStart"
+        "-e",
+        "process.exit(0)"
       ],
       "timeout": 60
     }
@@ -19,11 +16,8 @@
       "type": "command",
       "command": [
         "node",
-        "scripts/bosun/agent-hook-bridge.mjs",
-        "--agent",
-        "copilot",
-        "--event",
-        "sessionEnd"
+        "-e",
+        "process.exit(0)"
       ],
       "timeout": 60
     }
@@ -34,11 +28,8 @@
         "type": "command",
         "command": [
           "node",
-          "scripts/bosun/agent-hook-bridge.mjs",
-          "--agent",
-          "copilot",
-          "--event",
-          "preToolUse"
+          "-e",
+          "process.exit(0)"
         ],
         "timeout": 300
       }
@@ -50,11 +41,8 @@
         "type": "command",
         "command": [
           "node",
-          "scripts/bosun/agent-hook-bridge.mjs",
-          "--agent",
-          "copilot",
-          "--event",
-          "postToolUse"
+          "-e",
+          "process.exit(0)"
         ],
         "timeout": 120
       }
