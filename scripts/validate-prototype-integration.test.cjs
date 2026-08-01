@@ -33,7 +33,10 @@ function validFixture() {
       thread: "T4",
       branch: "ve/prototype-integration",
       start_head: sha,
+      end_head: sha,
       origin_main: sha,
+      tree_clean: true,
+      expected_head: sha,
       accepted_checkpoints: [],
       rejected_checkpoints: [],
     },
@@ -54,6 +57,11 @@ const tests = [
     const fixture = validFixture();
     fixture.control.generated_file_lease.holder = "T1";
     assert.throws(() => validateIntegrationControl(fixture.control, fixture.schema, fixture.handoff));
+  }],
+  ["rejects a non-commit checkpoint boundary", () => {
+    const fixture = validFixture();
+    fixture.handoff.start_head = "HEAD";
+    assert.throws(() => validateIntegrationControl(fixture.control, fixture.schema, fixture.handoff), /start_head/);
   }],
 ];
 

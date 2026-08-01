@@ -1,34 +1,47 @@
 {
   "campaign": "three-day-prototype",
   "thread": "T4",
-  "checkpoint": "T4-01",
+  "checkpoint": "T4-02A",
   "branch": "ve/prototype-integration",
-  "start_head": "79391a3df86d85522b92e0400c6904971ecbe65d",
-  "end_head": "60c54838f506dd942778520412f33853a17a29ee",
+  "start_head": "add7562c1fc1842b1c4c167dea9f00a36ba14235",
+  "end_head": "6a8154ba6d21f7e5eab6f28087adb7f107bf6f61",
   "origin_main": "79391a3df86d85522b92e0400c6904971ecbe65d",
   "tree_clean": true,
   "commits": [
-    "60c54838f506dd942778520412f33853a17a29ee"
+    "6a8154ba6d21f7e5eab6f28087adb7f107bf6f61"
   ],
   "owned_paths": [
     "_docs/ralph/prototype-integration/**",
     "_docs/ralph/handoffs/prototype-integration/**",
-    "scripts/validate-prototype-integration.cjs"
+    "scripts/validate-prototype-integration.cjs",
+    "scripts/validate-migration-inventory.cjs",
+    "_docs/ralph/prototype-integration/migration-inventory.json",
+    "_docs/ralph/prototype-integration/migration-inventory.schema.json"
   ],
   "files_changed": [
     "_docs/INDEX.md",
     "_docs/ralph/handoffs/prototype-integration/HANDOFF.yaml",
-    "_docs/ralph/prototype-integration/control.json",
-    "_docs/ralph/prototype-integration/producer-handoff.schema.json",
-    "scripts/validate-prototype-integration.cjs",
-    "scripts/validate-prototype-integration.test.cjs"
+    "_docs/ralph/prototype-integration/migration-inventory.json",
+    "_docs/ralph/prototype-integration/migration-inventory.schema.json",
+    "scripts/validate-migration-inventory.cjs",
+    "scripts/validate-migration-inventory.test.cjs",
+    "scripts/validate-prototype-integration.cjs"
   ],
   "tests": [
+    {
+      "command": "node scripts/validate-migration-inventory.test.cjs && node scripts/validate-migration-inventory.cjs",
+      "exit_code": 0,
+      "result": "passed",
+      "test_count": 8,
+      "tool_versions": {
+        "node": "20.19.1"
+      }
+    },
     {
       "command": "node scripts/validate-prototype-integration.test.cjs && node scripts/validate-prototype-integration.cjs",
       "exit_code": 0,
       "result": "passed",
-      "test_count": 4,
+      "test_count": 5,
       "tool_versions": {
         "node": "20.19.1"
       }
@@ -41,20 +54,30 @@
       "tool_versions": {
         "node": "20.19.1"
       }
+    },
+    {
+      "command": "go1.25.8 test -count=1 ./tests/upgrade && go1.25.8 vet ./tests/upgrade",
+      "exit_code": 0,
+      "result": "passed",
+      "tool_versions": {
+        "go": "1.25.8 windows/amd64"
+      }
     }
   ],
   "generated_hashes": {
-    "control.json": "7fade5003634c3310ae16807adfc44674e7ae85bd791392aa9c7adff1b5b8405",
-    "producer-handoff.schema.json": "fde642dfaf135598d69d70922ceb9544fde913d1812731dcaa33150def1ce735"
+    "migration-inventory.json": "a78e32dad73854308ca736a7fc390c035902ee8db8e91117693fb416ad9e145f",
+    "migration-inventory.schema.json": "7bb7166a49d89cafa3329879902d41538a247eaf19c6c0b113d4b30d6b946c57"
   },
   "accepted_checkpoints": [],
   "rejected_checkpoints": [],
   "external_evidence": [],
-  "known_failures": [],
-  "blockers": [
-    "No producer checkpoint handoff exists at the frozen baseline.",
-    "Tasks 88A-88D remain dependency-blocked; this checkpoint establishes integration controls only."
+  "known_failures": [
+    "Go 1.26.5 cannot compile github.com/bytedance/sonic v1.14.1; checkpoint gates were rerun successfully with the repository-pinned Go 1.25.8 toolchain."
   ],
-  "next_checkpoint": "T4-02",
-  "expected_head": "60c54838f506dd942778520412f33853a17a29ee"
+  "blockers": [
+    "T1, T2, T3, and T5 have not published committed persisted-schema declarations for the migration inventory.",
+    "T4-02 and Tasks 88A-88D remain dependency-blocked; this checkpoint validates the existing baseline transition inventory only."
+  ],
+  "next_checkpoint": "T4-02B",
+  "expected_head": "6a8154ba6d21f7e5eab6f28087adb7f107bf6f61"
 }

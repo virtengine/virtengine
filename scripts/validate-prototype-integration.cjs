@@ -5,11 +5,15 @@
 const assert = require("assert").strict;
 const { readFileSync } = require("fs");
 const { resolve } = require("path");
+const { validateMigrationInventory } = require("./validate-migration-inventory.cjs");
 
 const root = resolve(__dirname, "..");
 const controlPath = resolve(root, "_docs/ralph/prototype-integration/control.json");
 const schemaPath = resolve(root, "_docs/ralph/prototype-integration/producer-handoff.schema.json");
 const handoffPath = resolve(root, "_docs/ralph/handoffs/prototype-integration/HANDOFF.yaml");
+const migrationInventoryPath = resolve(root, "_docs/ralph/prototype-integration/migration-inventory.json");
+const migrationSchemaPath = resolve(root, "_docs/ralph/prototype-integration/migration-inventory.schema.json");
+const testCasesPath = resolve(root, "tests/upgrade/test-cases.json");
 
 function loadJson(path) {
   return JSON.parse(readFileSync(path, "utf8"));
@@ -56,8 +60,11 @@ function validateIntegrationControl(control, schema, handoff) {
   assert.equal(handoff.campaign, control.campaign);
   assert.equal(handoff.thread, "T4");
   assert.equal(handoff.branch, control.integration.branch);
-  assert.equal(handoff.start_head, control.baseline.sha);
+  assert.ok(shaPattern.test(handoff.start_head), "handoff start_head must be a full lowercase commit SHA");
+  assert.ok(shaPattern.test(handoff.end_head), "handoff end_head must be a full lowercase commit SHA");
+  assert.ok(shaPattern.test(handoff.expected_head), "handoff expected_head must be a full lowercase commit SHA");
   assert.equal(handoff.origin_main, control.baseline.sha);
+  assert.equal(handoff.tree_clean, true);
   assert.ok(Array.isArray(handoff.accepted_checkpoints));
   assert.ok(Array.isArray(handoff.rejected_checkpoints));
 }
@@ -66,5 +73,9 @@ module.exports = { validateIntegrationControl };
 
 if (require.main === module) {
   validateIntegrationControl(loadJson(controlPath), loadJson(schemaPath), loadJson(handoffPath));
+  validateMigrationInventory(loadJson(migrationInventoryPath), loadJson(testCasesPath), {
+    rootDir: root,
+    schema: loadJson(migrationSchemaPath),
+  });
   console.log("prototype integration controls: valid");
 }
