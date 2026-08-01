@@ -1,39 +1,43 @@
 campaign: three-day-prototype
 thread: T3
-checkpoint: T3-04
+checkpoint: T3-05
 branch: ve/prototype-t3-reliability
-start_head: a66aaaeea4b7c7f4104df38bd0832e0a33877323
-end_head: 51028d2482d7ed7810feda77ba3b035eec80c723
+start_head: 6e9207e1eb268a468dc5956282ead0d097de0f62
+end_head: 627ad7767b1bec1415d0c3105504322930e10a63
 origin_main: 79391a3df86d85522b92e0400c6904971ecbe65d
 integration_parent: fa21b1e540a5efcbe1822da4199be7acec7709d3
 tree_clean: true
 commits:
-  - 51028d2482d7ed7810feda77ba3b035eec80c723
+  - 627ad7767b1bec1415d0c3105504322930e10a63
 owned_paths:
   - pkg/provider_daemon/
+  - x/settlement/ibc/
   - _docs/ralph/handoffs/prototype-t3/HANDOFF.yaml
 files_changed:
+  - pkg/provider_daemon/reconciliation_metrics.go
+  - pkg/provider_daemon/reconciliation_metrics_test.go
   - pkg/provider_daemon/waldur_reconciler.go
-  - pkg/provider_daemon/waldur_reconciler_test.go
   - pkg/provider_daemon/waldur_reconciliation_store.go
-  - pkg/provider_daemon/waldur_reconciliation_store_test.go
+  - x/settlement/ibc/keeper.go
+  - x/settlement/ibc/metrics.go
+  - x/settlement/ibc/metrics_test.go
 tests:
-  - command: C:\Users\pavil\AppData\Local\VirtEngine\toolchains\go1.25.8\go\bin\go.exe -C C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t3 test -count=1 ./pkg/provider_daemon -run FileReconciliationJobStore
+  - command: C:\Users\pavil\AppData\Local\VirtEngine\toolchains\go1.25.8\go\bin\go.exe -C C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t3 test -count=1 ./x/settlement/ibc
     exit_code: 0
     result: passed
     tool_versions:
       go: go version go1.25.8 windows/amd64
-  - command: C:\Users\pavil\AppData\Local\VirtEngine\toolchains\go1.25.8\go\bin\go.exe -C C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t3 test -count=1 ./pkg/provider_daemon -run Waldur
+  - command: C:\Users\pavil\AppData\Local\VirtEngine\toolchains\go1.25.8\go\bin\go.exe -C C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t3 test -count=1 ./pkg/provider_daemon -run 'ReconciliationMetrics|ReconciliationIntentRejects|Waldur|FileReconciliationJobStore'
     exit_code: 0
     result: passed
     tool_versions:
       go: go version go1.25.8 windows/amd64
-  - command: C:\Users\pavil\AppData\Local\VirtEngine\toolchains\go1.25.8\go\bin\go.exe -C C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t3 vet ./pkg/provider_daemon
+  - command: C:\Users\pavil\AppData\Local\VirtEngine\toolchains\go1.25.8\go\bin\go.exe -C C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t3 vet ./x/settlement/ibc ./pkg/provider_daemon
     exit_code: 0
     result: passed
     tool_versions:
       go: go version go1.25.8 windows/amd64
-  - command: set CGO_ENABLED=1 && set CC=C:\Users\pavil\AppData\Local\Microsoft\WinGet\Packages\BrechtSanders.WinLibs.POSIX.UCRT_Microsoft.Winget.Source_8wekyb3d8bbwe\mingw64\bin\gcc.exe && C:\Users\pavil\AppData\Local\VirtEngine\toolchains\go1.25.8\go\bin\go.exe -C C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t3 test -race -count=1 ./pkg/provider_daemon -run 'Waldur|FileReconciliationJobStore'
+  - command: set CGO_ENABLED=1 && set CC=C:\Users\pavil\AppData\Local\Microsoft\WinGet\Packages\BrechtSanders.WinLibs.POSIX.UCRT_Microsoft.Winget.Source_8wekyb3d8bbwe\mingw64\bin\gcc.exe && C:\Users\pavil\AppData\Local\VirtEngine\toolchains\go1.25.8\go\bin\go.exe -C C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t3 test -race -count=1 ./x/settlement/ibc ./pkg/provider_daemon -run 'Metrics|Waldur|FileReconciliationJobStore|AtomicTransitionRollbackAndRetry'
     exit_code: 0
     result: passed
     tool_versions:
@@ -43,9 +47,12 @@ generated_hashes: {}
 migrations: []
 external_evidence:
   - No production reconciliation authority, independent operator certification, or external Waldur evidence availability is claimed.
-known_failures: []
+known_failures:
+  - TestProviderMutationSubmitterStandbyTakesOverWithHigherFence fails reproducibly in untouched provider-mutation lease code with submitter lease lost; focused T3 telemetry gates pass.
 blockers:
   - T4 must install a deterministic TransferLifecycleHooks adapter during its app-wiring ownership window; outgoing settlement IBC remains fail closed until then.
   - T4 producer-handoff.schema.json at integration parent fa21b1e540a5efcbe1822da4199be7acec7709d3 does not yet declare the campaign-required integration_parent field.
-next_checkpoint: T3-05
-expected_head: 51028d2482d7ed7810feda77ba3b035eec80c723
+  - T4 must register T3 collectors with the shared registry, install the durable reconciliation store, serve provider metrics on port 9090, and correct the observability Prometheus mount from prometheus.yml to prometheus.yaml.
+  - CI status and T3-04 tag publication are blocked because GitHub CLI has no authentication in this environment.
+next_checkpoint: T3-06
+expected_head: 627ad7767b1bec1415d0c3105504322930e10a63
