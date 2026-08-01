@@ -65,3 +65,4 @@ export type {
   TransactionOptions,
   TransactionValidationResult,
 } from './transaction';
+export * from './claims';
