@@ -8,6 +8,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"testing"
@@ -210,6 +211,100 @@ func TestFileReconciliationJobStoreCompletionRetryMustMatchMetadata(t *testing.T
 	require.Len(t, projection.Results, 1)
 	require.Len(t, projection.Intents, 1)
 	require.Len(t, projection.Cursors, 1)
+}
+
+func TestFileReconciliationJobStoreCapacityFailureIsAtomic(t *testing.T) {
+	ctx := context.Background()
+	path := filepath.Join(t.TempDir(), "reconciliation.json")
+	store := openReconciliationStore(t, path)
+	store.maxEvents = 2
+	job := testReconciliationJob()
+	_, _, err := store.PutJobIfAbsent(ctx, job)
+	require.NoError(t, err)
+	attempt, err := store.BeginAttempt(ctx, job.ID)
+	require.NoError(t, err)
+	before, err := os.ReadFile(path)
+	require.NoError(t, err)
+	result := testDurableReconciliationResult(job, attempt.Number)
+	intent := testReconciliationIntent(result)
+	cursor := ReconciliationCursor{StreamID: "waldur/default", JobID: job.ID, ResultDigest: result.ResultDigest}
+	require.ErrorIs(t, store.CompleteAttempt(ctx, result, []ReconciliationActionIntent{intent}, cursor), ErrReconciliationCapacityExceeded)
+	after, err := os.ReadFile(path)
+	require.NoError(t, err)
+	require.Equal(t, before, after)
+	projection, err := store.LoadProjection(ctx)
+	require.NoError(t, err)
+	require.Empty(t, projection.Results)
+	require.Empty(t, projection.Intents)
+	require.Empty(t, projection.Cursors)
+	require.True(t, projection.Attempts[job.ID][0].FinishedAt.IsZero())
+	require.NoError(t, store.Close())
+
+	reopened := openReconciliationStore(t, path)
+	projection, err = reopened.LoadProjection(ctx)
+	require.NoError(t, err)
+	require.Empty(t, projection.Results)
+	require.True(t, projection.Attempts[job.ID][0].FinishedAt.IsZero())
+}
+
+func TestFileReconciliationJobStoreExactCapacityAllowsIdempotentRetry(t *testing.T) {
+	ctx := context.Background()
+	path := filepath.Join(t.TempDir(), "reconciliation.json")
+	store := openReconciliationStore(t, path)
+	store.maxEvents = 4
+	job := testReconciliationJob()
+	_, _, err := store.PutJobIfAbsent(ctx, job)
+	require.NoError(t, err)
+	attempt, err := store.BeginAttempt(ctx, job.ID)
+	require.NoError(t, err)
+	result := testDurableReconciliationResult(job, attempt.Number)
+	cursor := ReconciliationCursor{StreamID: "waldur/default", JobID: job.ID, ResultDigest: result.ResultDigest}
+	require.NoError(t, store.CompleteAttempt(ctx, result, nil, cursor))
+	before, err := os.ReadFile(path)
+	require.NoError(t, err)
+	require.NoError(t, store.CompleteAttempt(ctx, result, nil, cursor))
+	after, err := os.ReadFile(path)
+	require.NoError(t, err)
+	require.Equal(t, before, after)
+}
+
+func TestFileReconciliationJobStoreSharedReplicasRespectCapacity(t *testing.T) {
+	ctx := context.Background()
+	path := filepath.Join(t.TempDir(), "reconciliation.json")
+	first := openReconciliationStore(t, path)
+	second := openReconciliationStore(t, path)
+	first.maxEvents, second.maxEvents = 1, 1
+	firstJob := testReconciliationJob()
+	secondJob := firstJob
+	secondJob.ID, secondJob.AllocationID, secondJob.ResourceUUID = "job-2", "allocation-2", "resource-2"
+	type result struct{ err error }
+	results := make(chan result, 2)
+	for _, candidate := range []struct {
+		store *FileReconciliationJobStore
+		job   ReconciliationJob
+	}{{first, firstJob}, {second, secondJob}} {
+		go func(store *FileReconciliationJobStore, job ReconciliationJob) {
+			_, _, err := store.PutJobIfAbsent(ctx, job)
+			results <- result{err: err}
+		}(candidate.store, candidate.job)
+	}
+	succeeded, capacityFailures := 0, 0
+	for range 2 {
+		outcome := <-results
+		switch {
+		case outcome.err == nil:
+			succeeded++
+		case errors.Is(outcome.err, ErrReconciliationCapacityExceeded):
+			capacityFailures++
+		default:
+			t.Fatalf("unexpected replica result: %v", outcome.err)
+		}
+	}
+	require.Equal(t, 1, succeeded)
+	require.Equal(t, 1, capacityFailures)
+	projection, err := first.LoadProjection(ctx)
+	require.NoError(t, err)
+	require.Len(t, projection.Jobs, 1)
 }
 
 func openReconciliationStore(t *testing.T, path string) *FileReconciliationJobStore {

@@ -19,12 +19,16 @@ import (
 	"time"
 )
 
-const reconciliationStoreSchemaVersion uint32 = 1
+const (
+	reconciliationStoreSchemaVersion uint32 = 1
+	reconciliationStoreMaxEvents            = 100_000
+)
 
 var (
-	ErrReconciliationJobNotFound = errors.New("reconciliation job not found")
-	ErrReconciliationConflict    = errors.New("reconciliation store conflict")
-	ErrReconciliationUnavailable = errors.New("reconciliation store unavailable")
+	ErrReconciliationJobNotFound      = errors.New("reconciliation job not found")
+	ErrReconciliationConflict         = errors.New("reconciliation store conflict")
+	ErrReconciliationUnavailable      = errors.New("reconciliation store unavailable")
+	ErrReconciliationCapacityExceeded = errors.New("reconciliation store event capacity exceeded")
 )
 
 type ReconciliationEventType string
@@ -131,11 +135,12 @@ type ReconciliationJobStore interface {
 }
 
 type FileReconciliationJobStore struct {
-	path  string
-	mu    sync.RWMutex
-	state reconciliationStoreState
-	open  bool
-	now   func() time.Time
+	path      string
+	mu        sync.RWMutex
+	state     reconciliationStoreState
+	open      bool
+	now       func() time.Time
+	maxEvents int
 }
 
 func NewFileReconciliationJobStore(path string) (*FileReconciliationJobStore, error) {
@@ -149,7 +154,10 @@ func NewFileReconciliationJobStore(path string) (*FileReconciliationJobStore, er
 	if err := validateStatePath(absolute); err != nil {
 		return nil, err
 	}
-	return &FileReconciliationJobStore{path: filepath.Clean(absolute), now: func() time.Time { return time.Now().UTC() }}, nil
+	return &FileReconciliationJobStore{
+		path: filepath.Clean(absolute), now: func() time.Time { return time.Now().UTC() },
+		maxEvents: reconciliationStoreMaxEvents,
+	}, nil
 }
 
 func (s *FileReconciliationJobStore) Open(ctx context.Context) error {
@@ -350,6 +358,9 @@ func (s *FileReconciliationJobStore) update(ctx context.Context, mutate func(*re
 	if state.TailSequence == before.TailSequence {
 		s.state = state
 		return nil
+	}
+	if len(state.Events) > s.maxEvents {
+		return ErrReconciliationCapacityExceeded
 	}
 	if err := validateReconciliationState(state); err != nil {
 		return err
