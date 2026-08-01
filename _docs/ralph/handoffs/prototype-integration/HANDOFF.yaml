@@ -1,79 +1,56 @@
 {
   "campaign": "three-day-prototype",
   "thread": "T4",
-  "checkpoint": "T4-11B",
+  "checkpoint": "T4-05A",
   "branch": "ve/prototype-integration",
-  "start_head": "24e4767d773648588acee859283bddecba9affe9",
-  "end_head": "3ea333ec89f1765218d977a8343bb204a2e0a4d3",
+  "start_head": "99ee447ec28842506b2ad59e4646c0aa6496ba67",
+  "end_head": "fad7870d2073bf327dd476aa353cc1ae6325a3ed",
   "origin_main": "79391a3df86d85522b92e0400c6904971ecbe65d",
   "tree_clean": true,
   "commits": [
-    "3ea333ec89f1765218d977a8343bb204a2e0a4d3"
+    "fad7870d2073bf327dd476aa353cc1ae6325a3ed"
   ],
   "owned_paths": [
     "_docs/ralph/prototype-integration/**",
     "_docs/ralph/handoffs/prototype-integration/**",
     "scripts/validate-prototype-integration.cjs",
-    ".github/workflows/ml-model-verify.yaml",
-    "ml/training/tests/**",
-    "ml/training/tools/**",
-    "pkg/inference/**"
+    "_docs/ralph/prototype-integration/required-gate-matrix.json",
+    "_docs/ralph/prototype-integration/required-gate-matrix.schema.json",
+    "scripts/validate-required-gate-matrix.cjs",
+    "scripts/validate-required-gate-matrix.test.cjs"
   ],
   "files_changed": [
     "_docs/ralph/handoffs/prototype-integration/HANDOFF.yaml",
-    ".github/workflows/ml-model-verify.yaml",
+    "_docs/INDEX.md",
     "_docs/ralph/handoffs/prototype-integration/HANDOFF.yaml",
-    "ml/training/tests/test_receipt_parity.py",
-    "ml/training/tools/receipt_parity_fixture.py",
-    "pkg/inference/conformance/testdata/receipt_parity_v1.json",
-    "pkg/inference/receipt_parity_test.go"
+    "_docs/ralph/prototype-integration/required-gate-matrix.json",
+    "_docs/ralph/prototype-integration/required-gate-matrix.schema.json",
+    "scripts/validate-prototype-integration.cjs",
+    "scripts/validate-required-gate-matrix.cjs",
+    "scripts/validate-required-gate-matrix.test.cjs"
   ],
   "tests": [
     {
-      "command": "python -m ml.training.tools.receipt_parity_fixture --check && python -m pytest -q ml/training/tests/test_receipt_parity.py ml/training/tests/test_feature_parity.py",
+      "command": "node scripts/validate-required-gate-matrix.test.cjs && node scripts/validate-required-gate-matrix.cjs",
       "exit_code": 0,
       "result": "passed",
-      "test_count": 12,
+      "test_count": 13,
       "tool_versions": {
-        "python": "3.14.6 windows"
+        "node": "20.19.1"
       }
     },
     {
-      "command": "go1.25.8 test -count=1 ./pkg/inference -run '^TestInferenceReceiptParityFixture$' && go1.25.8 test -count=1 ./x/veid/types -run '^TestInferenceReceipt'",
+      "command": "node scripts/validate-prototype-integration.test.cjs && node scripts/validate-prototype-integration.cjs && node scripts/validate-agents-docs.mjs",
       "exit_code": 0,
       "result": "passed",
       "tool_versions": {
-        "go": "go version go1.25.8 windows/amd64"
-      }
-    },
-    {
-      "command": "go1.25.8 test -count=1 ./pkg/inference/... && go1.25.8 vet ./pkg/inference/...",
-      "exit_code": 0,
-      "result": "passed",
-      "tool_versions": {
-        "go": "go version go1.25.8 windows/amd64"
-      }
-    },
-    {
-      "command": "CGO_ENABLED=1 CC=<WinLibs-GCC-16.1.0> go1.25.8 test -race -count=1 ./pkg/inference/...",
-      "exit_code": 0,
-      "result": "passed",
-      "tool_versions": {
-        "go": "go version go1.25.8 windows/amd64",
-        "gcc": "WinLibs GCC 16.1.0 POSIX UCRT"
-      }
-    },
-    {
-      "command": "python.exe C:\\Users\\pavil\\AppData\\Local\\Temp\\t4_parse_workflow.py; git diff --check",
-      "exit_code": 0,
-      "result": "passed",
-      "tool_versions": {
-        "python": "3.14.6 windows"
+        "node": "20.19.1"
       }
     }
   ],
   "generated_hashes": {
-    "pkg/inference/conformance/testdata/receipt_parity_v1.json": "13ee68a81737a58c7ba7b1a4644e707ca98dc080d17a85068861b8db484165b9"
+    "_docs/ralph/prototype-integration/required-gate-matrix.json": "92def5c909e8fd7cb38bd800a200602775099af9d9890a016f02f9126d0552ae",
+    "_docs/ralph/prototype-integration/required-gate-matrix.schema.json": "3a750b55c0003c83386a4b72c4d7ddbd0a1c1a1a6f965437c7f4f9f43d17147f"
   },
   "accepted_checkpoints": [],
   "rejected_checkpoints": [
@@ -96,9 +73,10 @@
   ],
   "blockers": [
     "Epoch 1 remains open with no announced intake-v2 producer tags; no producer checkpoint is accepted by this checkpoint.",
-    "Receipt parity covers supplied score fields, canonical SignBytes/digests, deterministic signatures, and production score clamping only; no model output parity is claimed.",
-    "No production runtime creates authenticated receipts yet, and no production model, weights, dataset, license, runtime image, or lifecycle state is approved or activated."
+    "Every required-gate category remains dependency_blocked; this checkpoint defines controls but records no gate execution evidence.",
+    "Tasks 85D, 86A-86D, 87D, and 88A remain unavailable to the complete Task 88B gate.",
+    "Task 88B is not complete and no process-boundary lifecycle evidence is claimed."
   ],
-  "next_checkpoint": "T4-12A",
-  "expected_head": "3ea333ec89f1765218d977a8343bb204a2e0a4d3"
+  "next_checkpoint": "T4-05B",
+  "expected_head": "fad7870d2073bf327dd476aa353cc1ae6325a3ed"
 }
