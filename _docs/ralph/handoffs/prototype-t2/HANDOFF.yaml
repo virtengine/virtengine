@@ -1,62 +1,49 @@
 campaign: three-day-prototype
 thread: T2
-checkpoint: T2-15
+checkpoint: T2-16
 branch: ve/prototype-t2-product
-start_head: 833929584bbea586ef255b6e9827de031d767388
-end_head: e4da83c0b586b06dbae33d30602a7925d090d1e9
+start_head: 2504c1266c84d3a326e197dbefb7e314bc6a5c5e
+end_head: 8276564f51db0eb244f68bc095ab074a036146fe
 origin_main: 79391a3df86d85522b92e0400c6904971ecbe65d
 tree_clean: true
 commits:
-  - e4da83c0b586b06dbae33d30602a7925d090d1e9
+  - 8276564f51db0eb244f68bc095ab074a036146fe
 owned_paths:
-  - lib/portal/src/identity/uniqueness-enrollment.ts
-  - lib/portal/components/identity/UniquenessEnrollmentStatus.tsx
-  - lib/portal/__tests__/identity/uniqueness-enrollment.test.tsx
+  - lib/portal/src/support-ai/unsupported-document-triage.ts
+  - lib/portal/__tests__/support-ai/unsupported-document-triage.test.ts
   - lib/portal/index.ts
   - lib/portal/index.d.ts
+  - lib/portal/tsconfig.chain.json
 files_changed:
-  - lib/portal/src/identity/uniqueness-enrollment.ts
-  - lib/portal/components/identity/UniquenessEnrollmentStatus.tsx
-  - lib/portal/__tests__/identity/uniqueness-enrollment.test.tsx
+  - lib/portal/src/support-ai/unsupported-document-triage.ts
+  - lib/portal/__tests__/support-ai/unsupported-document-triage.test.ts
   - lib/portal/index.ts
   - lib/portal/index.d.ts
+  - lib/portal/tsconfig.chain.json
 tests:
   - command: C:\Users\pavil\AppData\Local\Temp\virtengine-node-v24.12.0\npm.cmd --prefix C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t2\lib\portal test
     exit_code: 0
     result: passed
-    test_count: 615
+    test_count: 649
     tool_versions:
       node: v24.12.0
-    artifact: _docs/ralph/handoffs/prototype-t2/T2-15-evidence.txt
+    artifact: _docs/ralph/handoffs/prototype-t2/T2-16-evidence.txt
   - command: C:\Users\pavil\AppData\Local\Temp\virtengine-node-v24.12.0\npm.cmd --prefix C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t2\lib\portal run type-check
     exit_code: 0
     result: passed
     tool_versions:
       node: v24.12.0
-    artifact: _docs/ralph/handoffs/prototype-t2/T2-15-evidence.txt
-  - command: C:\Users\pavil\AppData\Local\Temp\virtengine-node-v24.12.0\npm.cmd --prefix C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t2\portal run lint
-    exit_code: 0
-    result: passed
-    tool_versions:
-      node: v24.12.0
-    artifact: _docs/ralph/handoffs/prototype-t2/T2-15-evidence.txt
-  - command: C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t2\portal\node_modules\.bin\vitest.CMD run --reporter=dot
-    exit_code: 0
-    result: passed
-    test_count: 525
-    tool_versions:
-      node: v24.12.0
-    artifact: _docs/ralph/handoffs/prototype-t2/T2-15-evidence.txt
+    artifact: _docs/ralph/handoffs/prototype-t2/T2-16-evidence.txt
 generated_hashes: {}
 migrations: []
 external_evidence:
-  - _docs/ralph/handoffs/prototype-t2/T2-15-evidence.txt
+  - _docs/ralph/handoffs/prototype-t2/T2-16-evidence.txt
 known_failures:
   - TestProviderMutationSubmitterStandbyTakesOverWithHigherFence fails repeatedly in the full provider package gate with submitter lease timing errors.
 blockers:
   - T4 producer-handoff.schema.json forbids the integration_parent field required by the updated campaign plan; integration ancestor fa21b1e540a5efcbe1822da4199be7acec7709d3 is retained in T2-05-evidence.txt.
   - Full provider package certification is blocked by the unrelated submitter lease timing failure retained in T2-03B-evidence.txt.
-  - Canonical T1 uniqueness receipt projection is not wired; defaults remain unavailable.
-  - No production route wiring or uniqueness-service certification is claimed.
-next_checkpoint: T2-16
-expected_head: e4da83c0b586b06dbae33d30602a7925d090d1e9
+  - Production model, output validator, and digest authority are not wired; defaults remain unavailable.
+  - No ChatAgent, tool, route, side effect, decision authority, or production model integration exists.
+next_checkpoint: T2-X01
+expected_head: 8276564f51db0eb244f68bc095ab074a036146fe

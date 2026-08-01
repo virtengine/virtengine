@@ -1,0 +1,22 @@
+T2-16 retained validation evidence
+Implementation SHA: 8276564f51db0eb244f68bc095ab074a036146fe
+Node: v24.12.0
+
+COMMAND: C:\Users\pavil\AppData\Local\Temp\virtengine-node-v24.12.0\npm.cmd --prefix C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t2\lib\portal test
+EXIT: 0
+RESULT: passed
+DETAIL: 25 files, 649 tests passed; unsupported-document triage 34 tests passed
+
+COMMAND: C:\Users\pavil\AppData\Local\Temp\virtengine-node-v24.12.0\npm.cmd --prefix C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t2\lib\portal run type-check
+EXIT: 0
+RESULT: passed
+
+COMMAND: git -C C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t2 diff --check
+EXIT: 0
+RESULT: passed
+
+NON-CLAIMS:
+- The model, output validator and digest authority are injected; production defaults remain unavailable.
+- Inputs are allowlisted redacted reason tokens only; raw documents, OCR free text, biometrics, identifiers, secrets, envelopes and transaction data are rejected.
+- Model output remains a draft until exact human confirmation and cannot set identity, uniqueness, score, mint, claim, eligibility, policy, payment, payout or fund decisions.
+- No ChatAgent, tool, route, side effect or production model integration exists.
