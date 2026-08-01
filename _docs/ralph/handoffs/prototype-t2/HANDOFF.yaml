@@ -1,48 +1,43 @@
 campaign: three-day-prototype
 thread: T2
-checkpoint: T2-01
+checkpoint: T2-02
 branch: ve/prototype-t2-product
-start_head: 79391a3df86d85522b92e0400c6904971ecbe65d
-end_head: 68afe205fde8e1f290e22a05dec8a8c3d39003c6
+start_head: 62d8c4b99804b354b36031ea2fd8b609dcac8a87
+end_head: 7c0de3549caa37c12425373f1d82a50eee13df68
 origin_main: 79391a3df86d85522b92e0400c6904971ecbe65d
 tree_clean: true
 commits:
-  - 68afe205fde8e1f290e22a05dec8a8c3d39003c6
+  - 7c0de3549caa37c12425373f1d82a50eee13df68
 owned_paths:
-  - sdk/ts/AGENTS.md
-  - sdk/ts/src/clients/
-  - sdk/ts/src/sdk/chain/
-  - sdk/ts/src/sdk/index.shared.ts
-  - sdk/ts/src/sdk/transport/createNoopTransport.ts
+  - lib/portal/__tests__/wallet/
+  - lib/portal/src/wallet/
+  - lib/portal/index.ts
+  - lib/portal/package.json
+  - pnpm-lock.yaml
 files_changed:
-  - sdk/ts/AGENTS.md
-  - sdk/ts/src/clients/BaseClient.spec.ts
-  - sdk/ts/src/clients/BaseClient.ts
-  - sdk/ts/src/sdk/chain/ChainCapability.spec.ts
-  - sdk/ts/src/sdk/chain/ChainCapability.ts
-  - sdk/ts/src/sdk/chain/createCapabilityTransports.ts
-  - sdk/ts/src/sdk/chain/createChainNodeSDK.spec.ts
-  - sdk/ts/src/sdk/chain/createChainNodeSDK.ts
-  - sdk/ts/src/sdk/chain/createChainNodeWebSDK.spec.ts
-  - sdk/ts/src/sdk/chain/createChainNodeWebSDK.ts
-  - sdk/ts/src/sdk/index.shared.ts
-  - sdk/ts/src/sdk/transport/createNoopTransport.ts
+  - lib/portal/__tests__/wallet/context.test.tsx
+  - lib/portal/__tests__/wallet/session.test.ts
+  - lib/portal/index.ts
+  - lib/portal/package.json
+  - lib/portal/src/wallet/context.tsx
+  - lib/portal/src/wallet/index.ts
+  - lib/portal/src/wallet/session.ts
+  - pnpm-lock.yaml
 tests:
-  - command: npm.cmd --prefix sdk/ts test -- --runInBand --forceExit src/clients/BaseClient.spec.ts src/sdk/chain/ChainCapability.spec.ts src/sdk/chain/createChainNodeSDK.spec.ts src/sdk/chain/createChainNodeWebSDK.spec.ts
+  - command: npm.cmd --prefix lib/portal test -- --runInBand __tests__/wallet/session.test.ts __tests__/wallet/context.test.tsx
     exit_code: 0
-    result: 4 suites and 18 tests passed
+    result: package runner executed 17 files and 430 tests; all passed
     runtime: node v24.12.0
-  - command: npm.cmd --prefix sdk/ts run lint
+  - command: npm.cmd --prefix lib/portal run type-check
     exit_code: 0
-    result: eslint src completed with zero findings
+    result: tsc -p tsconfig.chain.json --noEmit completed
     runtime: node v24.12.0
-  - command: npm.cmd --prefix sdk/ts run build
+  - command: npm.cmd --prefix lib/portal run lint
     exit_code: 0
-    result: TypeScript build and package export validation completed
+    result: accessibility changed-file lint completed with no matching component files
     runtime: node v24.12.0
 generated_hashes: {}
 external_evidence: []
-known_failures:
-  - Focused Jest execution passes but requires --forceExit because the package test runner retains an open handle.
-next_checkpoint: T2-02
-expected_head: 68afe205fde8e1f290e22a05dec8a8c3d39003c6
+known_failures: []
+next_checkpoint: T2-03
+expected_head: 7c0de3549caa37c12425373f1d82a50eee13df68
