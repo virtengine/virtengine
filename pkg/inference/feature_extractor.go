@@ -66,6 +66,13 @@ func NewFeatureExtractor(config FeatureExtractorConfig) *FeatureExtractor {
 
 // ExtractFeatures transforms ScoreInputs into a feature vector for model inference
 func (fe *FeatureExtractor) ExtractFeatures(inputs *ScoreInputs) ([]float32, error) {
+	if inputs == nil {
+		return nil, fmt.Errorf("score inputs must not be nil")
+	}
+	if err := validateFiniteFeatureInputs(inputs); err != nil {
+		return nil, err
+	}
+
 	features := make([]float32, TotalFeatureDim)
 	offset := 0
 
@@ -93,6 +100,43 @@ func (fe *FeatureExtractor) ExtractFeatures(inputs *ScoreInputs) ([]float32, err
 	}
 
 	return features, nil
+}
+
+func validateFiniteFeatureInputs(inputs *ScoreInputs) error {
+	check := func(name string, value float32) error {
+		if math.IsNaN(float64(value)) || math.IsInf(float64(value), 0) {
+			return fmt.Errorf("%s must be finite", name)
+		}
+		return nil
+	}
+
+	for i, value := range inputs.FaceEmbedding {
+		if err := check(fmt.Sprintf("face embedding[%d]", i), value); err != nil {
+			return err
+		}
+	}
+	values := []struct {
+		name  string
+		value float32
+	}{
+		{"face confidence", inputs.FaceConfidence},
+		{"document quality score", inputs.DocQualityScore},
+		{"document sharpness", inputs.DocQualityFeatures.Sharpness},
+		{"document brightness", inputs.DocQualityFeatures.Brightness},
+		{"document contrast", inputs.DocQualityFeatures.Contrast},
+		{"document noise level", inputs.DocQualityFeatures.NoiseLevel},
+	}
+	for _, item := range values {
+		if err := check(item.name, item.value); err != nil {
+			return err
+		}
+	}
+	for field, value := range inputs.OCRConfidences {
+		if err := check(fmt.Sprintf("OCR confidence[%s]", field), value); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // extractFaceFeatures extracts face embedding and confidence

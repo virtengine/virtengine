@@ -20,6 +20,11 @@ from ml.training.features.face_features import FaceFeatureExtractor, FaceFeature
 from ml.training.features.doc_features import DocumentFeatureExtractor, DocumentFeatures
 from ml.training.features.ocr_features import OCRFeatureExtractor, OCRFeatures
 from ml.training.features.metadata_features import MetadataFeatureExtractor, MetadataFeatures
+from ml.training.features.canonical_vector import (
+    CanonicalInferenceInputs,
+    TOTAL_FEATURE_DIM,
+    assemble_canonical_inference_vector,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -168,8 +173,17 @@ class FeatureExtractor:
     
     def _compute_feature_dim(self) -> None:
         """Compute the total feature dimension."""
-        # Use configured dimension or compute from components
-        self._feature_dim = self.config.combined_feature_dim
+        if self.config.combined_feature_dim != TOTAL_FEATURE_DIM:
+            raise ValueError(
+                "production inference vectors require combined_feature_dim "
+                f"{TOTAL_FEATURE_DIM}, got {self.config.combined_feature_dim}"
+            )
+        if self.config.face_embedding_dim != 512:
+            raise ValueError(
+                "production inference vectors require face_embedding_dim 512, "
+                f"got {self.config.face_embedding_dim}"
+            )
+        self._feature_dim = TOTAL_FEATURE_DIM
     
     def extract_all(
         self,
@@ -207,7 +221,11 @@ class FeatureExtractor:
         
         # Combine into unified vector
         combined_vector = self._combine_features(
-            face_features, doc_features, ocr_features, meta_features
+            face_features,
+            doc_features,
+            ocr_features,
+            meta_features,
+            sample.annotations,
         )
         
         # Build OCR field scores dict
@@ -239,8 +257,45 @@ class FeatureExtractor:
         doc_features: DocumentFeatures,
         ocr_features: OCRFeatures,
         meta_features: MetadataFeatures,
+        annotations: Optional[Dict[str, Any]] = None,
     ) -> np.ndarray:
-        """Combine all features into a single vector."""
+        """Combine extracted values using the canonical Go inference layout."""
+        del meta_features
+        annotations = annotations or {}
+        embedding = (
+            face_features.combined_embedding
+            if face_features.combined_embedding is not None
+            else ()
+        )
+        return assemble_canonical_inference_vector(CanonicalInferenceInputs(
+            face_embedding=embedding,
+            face_confidence=face_features.selfie_face_confidence,
+            doc_quality_score=doc_features.overall_quality_score,
+            sharpness=doc_features.sharpness_score,
+            brightness=doc_features.brightness_score,
+            contrast=doc_features.contrast_score,
+            noise_level=doc_features.noise_level,
+            ocr_confidences={
+                name: score.confidence
+                for name, score in ocr_features.field_scores.items()
+            },
+            ocr_field_validation={
+                name: score.validated
+                for name, score in ocr_features.field_scores.items()
+            },
+            scope_types=annotations.get("scope_types", ()),
+            scope_count=annotations.get("scope_count", 0),
+            block_height=annotations.get("block_height", 0),
+        ))
+
+    def combine_training_features(
+        self,
+        face_features: FaceFeatures,
+        doc_features: DocumentFeatures,
+        ocr_features: OCRFeatures,
+        meta_features: MetadataFeatures,
+    ) -> np.ndarray:
+        """Build the legacy rich training-only component vector."""
         components = []
         
         # Face embedding (primary feature)
@@ -320,6 +375,9 @@ class FeatureExtractor:
         train_features = self._extract_split(dataset.train)
         val_features = self._extract_split(dataset.validation)
         test_features = self._extract_split(dataset.test)
+
+        if not train_features and not val_features and not test_features:
+            raise RuntimeError("feature extraction produced zero selected vectors")
         
         total_time = (time.perf_counter() - start_time) * 1000
         
@@ -352,9 +410,14 @@ class FeatureExtractor:
         for sample in split.samples:
             try:
                 feature_vector = self.extract_all(sample)
-                features.append(feature_vector)
-            except Exception as e:
-                logger.error(f"Feature extraction failed for {sample.sample_id}: {e}")
+            except Exception as error:
+                raise RuntimeError(
+                    f"feature extraction failed for selected sample {sample.sample_id}"
+                ) from error
+            features.append(feature_vector)
+
+        if split.samples and not features:
+            raise RuntimeError("feature extraction produced zero selected vectors")
         
         return features
     
@@ -367,7 +430,9 @@ class FeatureExtractor:
         
         for sample in samples:
             if not sample.success or sample.original_sample is None:
-                continue
+                raise RuntimeError(
+                    f"selected preprocessed sample {sample.sample_id} is invalid"
+                )
             
             try:
                 feature_vector = self.extract_all(
@@ -375,9 +440,14 @@ class FeatureExtractor:
                     document_image=sample.document_image,
                     selfie_image=sample.selfie_image,
                 )
-                features.append(feature_vector)
-            except Exception as e:
-                logger.error(f"Feature extraction failed for {sample.sample_id}: {e}")
+            except Exception as error:
+                raise RuntimeError(
+                    f"feature extraction failed for selected sample {sample.sample_id}"
+                ) from error
+            features.append(feature_vector)
+
+        if not features:
+            raise RuntimeError("feature extraction produced zero selected vectors")
         
         return features
     
@@ -390,11 +460,15 @@ class FeatureExtractor:
         
         for sample in samples:
             if sample.original_sample is None:
-                continue
+                raise RuntimeError(
+                    f"selected augmentation {sample.augmentation_id} has no source sample"
+                )
             
             original = sample.original_sample.original_sample
             if original is None:
-                continue
+                raise RuntimeError(
+                    f"selected augmentation {sample.augmentation_id} has no original sample"
+                )
             
             try:
                 feature_vector = self.extract_all(
@@ -402,14 +476,17 @@ class FeatureExtractor:
                     document_image=sample.document_image,
                     selfie_image=sample.selfie_image,
                 )
-                # Use augmentation ID
-                feature_vector.sample_id = sample.augmentation_id
-                feature_vector.trust_score = sample.trust_score
-                features.append(feature_vector)
-            except Exception as e:
-                logger.error(
-                    f"Feature extraction failed for {sample.augmentation_id}: {e}"
-                )
+            except Exception as error:
+                raise RuntimeError(
+                    "feature extraction failed for selected augmentation "
+                    f"{sample.augmentation_id}"
+                ) from error
+            feature_vector.sample_id = sample.augmentation_id
+            feature_vector.trust_score = sample.trust_score
+            features.append(feature_vector)
+
+        if not features:
+            raise RuntimeError("feature extraction produced zero selected vectors")
         
         return features
     

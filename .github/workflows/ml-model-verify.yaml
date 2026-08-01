@@ -36,7 +36,7 @@ on:
         default: ''
 
 env:
-  GO_VERSION: "1.25.5"
+  GO_VERSION: "1.25.8"
   PYTHON_VERSION: "3.11"
   GOWORK: "off"  # Disable workspace mode for vendor operations
   TF_VERSION: "2.15.0"
@@ -74,6 +74,16 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r ml/requirements-deterministic.txt
           pip install pytest pytest-cov
+
+      - name: Verify canonical feature parity fixture
+        run: |
+          set -euo pipefail
+          command -v python
+          python --version
+          python -m ml.training.tools.feature_parity_fixture --check
+          pytest ml/training/tests/test_feature_parity.py ml/training/tests/test_features.py -v --tb=short
+        env:
+          PYTHONPATH: ${{ github.workspace }}
 
       - name: Run training module tests
         run: |
@@ -131,6 +141,14 @@ jobs:
         run: |
           go mod tidy
           go mod vendor
+
+      - name: Run canonical feature parity tests
+        run: |
+          set -euo pipefail
+          command -v go
+          go version | grep -F "go${{ env.GO_VERSION }}"
+          go test -json -count=1 -run '^TestCanonicalFeatureParityFixture$' ./pkg/inference | tee feature-parity-go.json
+          grep -q '"Action":"pass","Test":"TestCanonicalFeatureParityFixture"' feature-parity-go.json
 
       - name: Run inference package tests
         run: |
