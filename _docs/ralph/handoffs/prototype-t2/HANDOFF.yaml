@@ -1,91 +1,66 @@
 campaign: three-day-prototype
 thread: T2
-checkpoint: T2-05
+checkpoint: T2-06
 branch: ve/prototype-t2-product
-start_head: d896e77793b6be572a0f00e2ccd5fbe2aa4bbafb
-end_head: fedded8e9b1f94ccbf3a3bb33560d991bd4692f3
+start_head: 43f2735ab1025641ac0d0fd93e2c7887389a1e40
+end_head: d50d150ed0d296f44135445afbe4d0846e9c603d
 origin_main: 79391a3df86d85522b92e0400c6904971ecbe65d
 tree_clean: true
 commits:
-  - fedded8e9b1f94ccbf3a3bb33560d991bd4692f3
+  - d50d150ed0d296f44135445afbe4d0846e9c603d
 owned_paths:
-  - lib/capture/
   - mobile/veid-capture-app/
-  - portal/src/app/(customer)/verify/page.tsx
-  - portal/src/components/veid/
-  - portal/src/lib/capture-adapter.ts
-files_changed:
-  - lib/capture/__tests__/liveness.test.ts
-  - lib/capture/components/SelfieCapture.tsx
-  - lib/capture/index.ts
-  - lib/capture/types/capture.ts
-  - lib/capture/utils/liveness.ts
-  - mobile/veid-capture-app/README.md
-  - mobile/veid-capture-app/src/components/CameraFrame.tsx
-  - mobile/veid-capture-app/src/core/biometric/index.ts
-  - mobile/veid-capture-app/src/core/captureModels.ts
-  - mobile/veid-capture-app/src/core/captureSession.ts
-  - mobile/veid-capture-app/src/core/deviceAttestation.ts
-  - mobile/veid-capture-app/src/screens/BiometricCaptureScreen.tsx
-  - mobile/veid-capture-app/src/screens/DocumentCaptureScreen.tsx
-  - mobile/veid-capture-app/src/screens/SelfieCaptureScreen.tsx
-  - mobile/veid-capture-app/src/screens/UploadScreen.tsx
-  - mobile/veid-capture-app/src/services/camera/cameraAdapter.ts
-  - mobile/veid-capture-app/src/services/camera/visionCameraAdapter.ts
-  - mobile/veid-capture-app/src/test/biometricCapture.test.ts
-  - mobile/veid-capture-app/src/test/deviceAttestation.test.ts
-  - mobile/veid-capture-app/src/test/visionCameraAdapter.test.ts
-  - mobile/veid-capture-app/tsconfig.json
-  - portal/src/app/(customer)/verify/page.tsx
-  - portal/src/components/veid/DocumentCapture.tsx
-  - portal/src/components/veid/LivenessChallenge.test.tsx
-  - portal/src/components/veid/LivenessChallenge.tsx
-  - portal/src/components/veid/SelfieCapture.tsx
-  - portal/src/components/veid/VeidCaptureProviders.test.ts
-  - portal/src/components/veid/VeidCaptureProviders.ts
-  - portal/src/components/veid/VerificationStatus.tsx
-  - portal/src/components/veid/VerificationWizard.test.tsx
   - portal/src/components/veid/VerificationWizard.tsx
-  - portal/src/components/veid/__tests__/captureProviderTestUtils.ts
-  - portal/src/components/veid/index.ts
-  - portal/src/lib/capture-adapter.ts
+  - portal/src/features/veid/
+  - portal/tests/unit/veid/useVeidWizard.test.tsx
+files_changed:
+  - mobile/veid-capture-app/App.tsx
+  - mobile/veid-capture-app/src/screens/UploadScreen.tsx
+  - mobile/veid-capture-app/src/services/upload/captureUploadAttempt.ts
+  - mobile/veid-capture-app/src/services/upload/captureUploader.ts
+  - mobile/veid-capture-app/src/test/captureUploader.test.ts
+  - portal/src/components/veid/VerificationWizard.tsx
+  - portal/src/features/veid/hooks/useVeidWizard.ts
+  - portal/src/features/veid/index.ts
+  - portal/tests/unit/veid/useVeidWizard.test.tsx
 tests:
   - command: C:\Users\pavil\AppData\Local\Temp\virtengine-node-v24.12.0\npm.cmd --prefix C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t2\mobile\veid-capture-app test
     exit_code: 0
     result: passed
-    test_count: 15
+    test_count: 31
     tool_versions:
       node: v24.12.0
-    artifact: _docs/ralph/handoffs/prototype-t2/T2-05-evidence.txt
+    artifact: _docs/ralph/handoffs/prototype-t2/T2-06-evidence.txt
   - command: C:\Users\pavil\AppData\Local\Temp\virtengine-node-v24.12.0\npm.cmd --prefix C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t2\mobile\veid-capture-app run typecheck
     exit_code: 0
     result: passed
     tool_versions:
       node: v24.12.0
-    artifact: _docs/ralph/handoffs/prototype-t2/T2-05-evidence.txt
-  - command: C:\Users\pavil\AppData\Local\Temp\virtengine-node-v24.12.0\npm.cmd --prefix C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t2\lib\capture test
+    artifact: _docs/ralph/handoffs/prototype-t2/T2-06-evidence.txt
+  - command: C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t2\portal\node_modules\.bin\vitest.CMD run tests\unit\veid\useVeidWizard.test.tsx src\components\veid\VerificationWizard.test.tsx --reporter=dot
     exit_code: 0
     result: passed
-    test_count: 117
+    test_count: 38
     tool_versions:
       node: v24.12.0
-    artifact: _docs/ralph/handoffs/prototype-t2/T2-05-evidence.txt
+    artifact: _docs/ralph/handoffs/prototype-t2/T2-06-evidence.txt
   - command: C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t2\portal\node_modules\.bin\vitest.CMD run --reporter=dot
     exit_code: 0
     result: passed
-    test_count: 506
+    test_count: 525
     tool_versions:
       node: v24.12.0
-    artifact: _docs/ralph/handoffs/prototype-t2/T2-05-evidence.txt
+    artifact: _docs/ralph/handoffs/prototype-t2/T2-06-evidence.txt
 generated_hashes: {}
 migrations: []
 external_evidence:
-  - _docs/ralph/handoffs/prototype-t2/T2-05-evidence.txt
+  - _docs/ralph/handoffs/prototype-t2/T2-06-evidence.txt
 known_failures:
   - TestProviderMutationSubmitterStandbyTakesOverWithHigherFence fails repeatedly in the full provider package gate with submitter lease timing errors.
 blockers:
   - T4 producer-handoff.schema.json forbids the integration_parent field required by the updated campaign plan; integration ancestor fa21b1e540a5efcbe1822da4199be7acec7709d3 is retained in T2-05-evidence.txt.
   - Full provider package certification is blocked by the unrelated submitter lease timing failure retained in T2-03B-evidence.txt.
-  - T4 owns approved production capture-provider wiring; browser verification remains typed unavailable until those providers are injected.
-next_checkpoint: T2-06
-expected_head: fedded8e9b1f94ccbf3a3bb33560d991bd4692f3
+  - T1 canonical Evidence Envelope construction is unavailable in this branch; T2 consumes opaque envelope data and caller-supplied canonical digests without redefining sign bytes.
+  - T4 owns approved production envelope and upload/transaction transport wiring; browser and mobile submission remain typed unavailable until injected.
+next_checkpoint: T2-07
+expected_head: d50d150ed0d296f44135445afbe4d0846e9c603d
