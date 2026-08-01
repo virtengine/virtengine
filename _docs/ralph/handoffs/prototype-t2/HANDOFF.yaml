@@ -1,54 +1,64 @@
 campaign: three-day-prototype
 thread: T2
-checkpoint: T2-03
+checkpoint: T2-04
 branch: ve/prototype-t2-product
-start_head: 15ced161e9495d6493094792197fdcc5328e072c
-end_head: f5a5b7a7d350254f2b0abf2e034f06e26ccdc9a2
+start_head: b856bbd6733bd62e65d78c16f81026c43093cf23
+end_head: 8dc40f83e182ef8bec270f9d0a79c65182c02398
 origin_main: 79391a3df86d85522b92e0400c6904971ecbe65d
 tree_clean: true
 commits:
-  - d692c78d30410d53e85be4da5bad9e5b629738c4
-  - f5a5b7a7d350254f2b0abf2e034f06e26ccdc9a2
+  - 8dc40f83e182ef8bec270f9d0a79c65182c02398
 owned_paths:
-  - pkg/provider_daemon/portal_chain_query.go
-  - pkg/provider_daemon/portal_readiness_test.go
+  - portal/src/features/hpc/
+  - portal/tests/unit/hpc/hpcClient.test.ts
 files_changed:
-  - pkg/provider_daemon/portal_chain_query.go
-  - pkg/provider_daemon/portal_readiness_test.go
+  - portal/src/features/hpc/components/JobWizard.test.tsx
+  - portal/src/features/hpc/components/JobWizard.tsx
+  - portal/src/features/hpc/context/HPCClientProvider.tsx
+  - portal/src/features/hpc/hooks/index.test.tsx
+  - portal/src/features/hpc/hooks/index.ts
+  - portal/src/features/hpc/index.ts
+  - portal/src/features/hpc/lib/hpc-client.test.ts
+  - portal/src/features/hpc/lib/hpc-client.ts
+  - portal/tests/unit/hpc/hpcClient.test.ts
 tests:
-  - command: C:\Users\pavil\AppData\Local\VirtEngine\toolchains\go1.25.8\go\bin\go.exe -C C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t2 test -count=1 ./pkg/provider_daemon -run 'Portal|ChainQuery|Capability|Legacy'
+  - command: C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t2\portal\node_modules\.bin\vitest.CMD run src/features/hpc/lib/hpc-client.test.ts src/features/hpc/hooks/index.test.tsx src/features/hpc/components/JobWizard.test.tsx tests/unit/hpc/hpcClient.test.ts
     exit_code: 0
     result: passed
-    tool_versions:
-      go: go version go1.25.8 windows/amd64
-    artifact: _docs/ralph/handoffs/prototype-t2/T2-03B-evidence.txt
-  - command: C:\Users\pavil\AppData\Local\VirtEngine\toolchains\go1.25.8\go\bin\go.exe -C C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t2 vet ./pkg/provider_daemon
-    exit_code: 0
-    result: passed
-    tool_versions:
-      go: go version go1.25.8 windows/amd64
-    artifact: _docs/ralph/handoffs/prototype-t2/T2-03B-evidence.txt
-  - command: C:\Users\pavil\AppData\Local\Temp\virtengine-node-v24.12.0\npm.cmd --prefix lib\portal test -- --runInBand __tests__/provider-api/client.test.ts
-    exit_code: 0
-    result: passed
-    test_count: 431
+    test_count: 35
     tool_versions:
       node: v24.12.0
-    artifact: _docs/ralph/handoffs/prototype-t2/T2-03B-evidence.txt
-  - command: C:\Users\pavil\AppData\Local\Temp\virtengine-node-v24.12.0\npm.cmd --prefix lib\portal run type-check
+    artifact: _docs/ralph/handoffs/prototype-t2/T2-04-evidence.txt
+  - command: C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t2\portal\node_modules\.bin\eslint.CMD src --ext .ts,.tsx --max-warnings 0
     exit_code: 0
     result: passed
     tool_versions:
       node: v24.12.0
-    artifact: _docs/ralph/handoffs/prototype-t2/T2-03B-evidence.txt
+      typescript: 5.9.3
+    artifact: _docs/ralph/handoffs/prototype-t2/T2-04-evidence.txt
+  - command: C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t2\portal\node_modules\.bin\tsc.CMD --noEmit
+    exit_code: 0
+    result: passed
+    tool_versions:
+      node: v24.12.0
+      typescript: 5.9.3
+    artifact: _docs/ralph/handoffs/prototype-t2/T2-04-evidence.txt
+  - command: C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t2\portal\node_modules\.bin\vitest.CMD run --reporter=dot
+    exit_code: 0
+    result: passed
+    test_count: 499
+    tool_versions:
+      node: v24.12.0
+    artifact: _docs/ralph/handoffs/prototype-t2/T2-04-evidence.txt
 generated_hashes: {}
 migrations: []
 external_evidence:
-  - _docs/ralph/handoffs/prototype-t2/T2-03B-evidence.txt
+  - _docs/ralph/handoffs/prototype-t2/T2-04-evidence.txt
 known_failures:
   - TestProviderMutationSubmitterStandbyTakesOverWithHigherFence fails repeatedly in the full provider package gate with submitter lease timing errors.
 blockers:
-  - T4 producer-handoff.schema.json forbids the integration_parent field required by the updated campaign plan; integration parent fa21b1e540a5efcbe1822da4199be7acec7709d3 is retained in T2-03B-evidence.txt.
+  - T4 producer-handoff.schema.json forbids the integration_parent field required by the updated campaign plan; integration ancestor fa21b1e540a5efcbe1822da4199be7acec7709d3 is retained in T2-04-evidence.txt.
   - Full provider package certification is blocked by the unrelated submitter lease timing failure retained in T2-03B-evidence.txt.
-next_checkpoint: T2-04
-expected_head: f5a5b7a7d350254f2b0abf2e034f06e26ccdc9a2
+  - T4 owns application-provider wiring and generated SDK integration; T2-04 remains typed unavailable until an authoritative client is injected.
+next_checkpoint: T2-05
+expected_head: 8dc40f83e182ef8bec270f9d0a79c65182c02398
