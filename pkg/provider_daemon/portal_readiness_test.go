@@ -22,6 +22,10 @@ func (authoritativePortalChainQuery) PortalCapability(PortalRouteCapability) err
 	return nil
 }
 
+type legacyPortalChainQuery struct {
+	ChainQuery
+}
+
 func TestPortalReadinessFailsClosedWithoutDependencies(t *testing.T) {
 	server, err := NewPortalAPIServer(DefaultPortalAPIServerConfig())
 	require.NoError(t, err)
@@ -59,4 +63,30 @@ func TestPortalStartupRejectsUnavailableEnabledRoutes(t *testing.T) {
 	require.Error(t, err)
 	require.True(t, errors.Is(err, ErrPortalFeatureUnavailable))
 	require.Contains(t, err.Error(), "tickets")
+}
+
+func TestLegacyPortalChainQueryFailsClosed(t *testing.T) {
+	config := DefaultPortalAPIServerConfig()
+	config.ChainQuery = legacyPortalChainQuery{ChainQuery: authoritativePortalChainQuery{}}
+	config.Readiness = func(context.Context) ProviderMutationReadiness {
+		return ProviderMutationReadiness{Ready: true, Started: true, StoreReady: true, LeaseHeld: true, KeyReady: true}
+	}
+	server, err := NewPortalAPIServer(config)
+	require.NoError(t, err)
+
+	capabilityErr := server.RouteCapability(PortalCapabilityTickets)
+	require.ErrorIs(t, capabilityErr, ErrPortalFeatureUnavailable)
+	var unavailable *PortalFeatureUnavailableError
+	require.ErrorAs(t, capabilityErr, &unavailable)
+	require.Equal(t, PortalCapabilityTickets, unavailable.Capability)
+
+	router := mux.NewRouter()
+	server.setupRoutes(router)
+	response := httptest.NewRecorder()
+	router.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/ready", nil))
+	require.Equal(t, http.StatusServiceUnavailable, response.Code)
+
+	startupErr := server.Start(context.Background())
+	require.ErrorIs(t, startupErr, ErrPortalFeatureUnavailable)
+	require.ErrorAs(t, startupErr, &unavailable)
 }

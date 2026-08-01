@@ -64,7 +64,7 @@ func portalQueryCapability(query ChainQuery, capability PortalRouteCapability) e
 	}
 	capabilities, ok := query.(PortalChainQueryCapabilities)
 	if !ok {
-		return nil
+		return featureUnavailable(capability, "86C")
 	}
 	return capabilities.PortalCapability(capability)
 }
