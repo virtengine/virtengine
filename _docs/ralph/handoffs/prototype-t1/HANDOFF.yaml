@@ -1,0 +1,53 @@
+campaign: three-day-prototype
+thread: T1
+checkpoint: T1-01
+branch: ve/prototype-t1-identity
+start_head: 79391a3df86d85522b92e0400c6904971ecbe65d
+end_head: e0cd1254c17c426826e683fa6ebec428d78aebab
+origin_main: 79391a3df86d85522b92e0400c6904971ecbe65d
+tree_clean: true
+commits:
+  - e0cd1254c17c426826e683fa6ebec428d78aebab
+owned_paths:
+  - x/veid/types/evidence_trust_inventory.go
+  - x/veid/types/evidence_trust_inventory_test.go
+  - scripts/task85d-preflight.ps1
+  - _docs/ralph/handoffs/prototype-t1/HANDOFF.yaml
+files_changed:
+  - x/veid/types/evidence_trust_inventory.go
+  - x/veid/types/evidence_trust_inventory_test.go
+  - scripts/task85d-preflight.ps1
+  - _docs/ralph/handoffs/prototype-t1/HANDOFF.yaml
+tests:
+  - command: go test -count=1 ./x/veid/types -run EvidenceTrust
+    exit_code: 0
+    runtime: go1.25.8 windows/amd64
+  - command: go test -count=1 ./x/veid/types
+    exit_code: 0
+    runtime: go1.25.8 windows/amd64
+  - command: go vet ./x/veid/types
+    exit_code: 0
+    runtime: go1.25.8 windows/amd64
+  - command: git diff --check
+    exit_code: 0
+generated_hashes: {}
+external_evidence: []
+known_failures:
+  - command: pwsh scripts/task85d-preflight.ps1
+    status: failed
+    exit_code: 1
+    reason: The full preflight reaches a baseline ZK metadata checksum failure on this CRLF checkout. T4 owns and has committed the canonical LF policy; T1 does not duplicate that integration-owned fix.
+  - command: go test -count=1 ./x/veid/types ./x/veid/keeper ./x/veidregistry/... ./pkg/inference ./cmd/inference-sidecar
+    status: terminated
+    exit_code: null
+    reason: The 925-test keeper package exceeded the default ten-minute aggregate timeout; the stale runner discarded its timeout stack and was terminated without being used as evidence.
+  - command: go test -timeout=30m -count=1 ./x/veid/types ./x/veid/keeper ./x/veidregistry/... ./pkg/inference ./cmd/inference-sidecar
+    status: not_completed
+    exit_code: null
+    reason: The optional task-level aggregate gate was stopped after the touched types package passed because the baseline keeper suite occupied the runner without package output. T1-01 uses its green per-commit focused gates; the complete Task 85D gate remains mandatory before task completion.
+notes:
+  - T1-01 is inventory only and makes no Task 85D completion or certification claim.
+  - No descriptor is production eligible; the inventory is audit/readiness metadata until later checkpoints wire enforcement.
+  - T1-02 design research is complete and its pure Go Evidence Envelope v1 contract is ready for implementation without generated-file ownership.
+next_checkpoint: T1-02
+expected_head: e0cd1254c17c426826e683fa6ebec428d78aebab
