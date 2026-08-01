@@ -1,66 +1,43 @@
 campaign: three-day-prototype
 thread: T2
-checkpoint: T2-06
+checkpoint: T2-07
 branch: ve/prototype-t2-product
-start_head: 43f2735ab1025641ac0d0fd93e2c7887389a1e40
-end_head: d50d150ed0d296f44135445afbe4d0846e9c603d
+start_head: ca38018a0868cd9e26462b7df61a9114ee0a06c4
+end_head: 5b54095ab4a360c659ec62c4d470573d50e1b108
 origin_main: 79391a3df86d85522b92e0400c6904971ecbe65d
 tree_clean: true
 commits:
-  - d50d150ed0d296f44135445afbe4d0846e9c603d
+  - 5b54095ab4a360c659ec62c4d470573d50e1b108
 owned_paths:
-  - mobile/veid-capture-app/
-  - portal/src/components/veid/VerificationWizard.tsx
-  - portal/src/features/veid/
-  - portal/tests/unit/veid/useVeidWizard.test.tsx
+  - lib/portal/src/chat/action-gate.ts
+  - lib/portal/__tests__/chat/action-gate.test.ts
 files_changed:
-  - mobile/veid-capture-app/App.tsx
-  - mobile/veid-capture-app/src/screens/UploadScreen.tsx
-  - mobile/veid-capture-app/src/services/upload/captureUploadAttempt.ts
-  - mobile/veid-capture-app/src/services/upload/captureUploader.ts
-  - mobile/veid-capture-app/src/test/captureUploader.test.ts
-  - portal/src/components/veid/VerificationWizard.tsx
-  - portal/src/features/veid/hooks/useVeidWizard.ts
-  - portal/src/features/veid/index.ts
-  - portal/tests/unit/veid/useVeidWizard.test.tsx
+  - lib/portal/src/chat/action-gate.ts
+  - lib/portal/__tests__/chat/action-gate.test.ts
 tests:
-  - command: C:\Users\pavil\AppData\Local\Temp\virtengine-node-v24.12.0\npm.cmd --prefix C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t2\mobile\veid-capture-app test
+  - command: C:\Users\pavil\AppData\Local\Temp\virtengine-node-v24.12.0\npm.cmd --prefix C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t2\lib\portal test
     exit_code: 0
     result: passed
-    test_count: 31
+    test_count: 466
     tool_versions:
       node: v24.12.0
-    artifact: _docs/ralph/handoffs/prototype-t2/T2-06-evidence.txt
-  - command: C:\Users\pavil\AppData\Local\Temp\virtengine-node-v24.12.0\npm.cmd --prefix C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t2\mobile\veid-capture-app run typecheck
+    artifact: _docs/ralph/handoffs/prototype-t2/T2-07-evidence.txt
+  - command: C:\Users\pavil\AppData\Local\Temp\virtengine-node-v24.12.0\npm.cmd --prefix C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t2\lib\portal run type-check
     exit_code: 0
     result: passed
     tool_versions:
       node: v24.12.0
-    artifact: _docs/ralph/handoffs/prototype-t2/T2-06-evidence.txt
-  - command: C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t2\portal\node_modules\.bin\vitest.CMD run tests\unit\veid\useVeidWizard.test.tsx src\components\veid\VerificationWizard.test.tsx --reporter=dot
-    exit_code: 0
-    result: passed
-    test_count: 38
-    tool_versions:
-      node: v24.12.0
-    artifact: _docs/ralph/handoffs/prototype-t2/T2-06-evidence.txt
-  - command: C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t2\portal\node_modules\.bin\vitest.CMD run --reporter=dot
-    exit_code: 0
-    result: passed
-    test_count: 525
-    tool_versions:
-      node: v24.12.0
-    artifact: _docs/ralph/handoffs/prototype-t2/T2-06-evidence.txt
+    artifact: _docs/ralph/handoffs/prototype-t2/T2-07-evidence.txt
 generated_hashes: {}
 migrations: []
 external_evidence:
-  - _docs/ralph/handoffs/prototype-t2/T2-06-evidence.txt
+  - _docs/ralph/handoffs/prototype-t2/T2-07-evidence.txt
 known_failures:
   - TestProviderMutationSubmitterStandbyTakesOverWithHigherFence fails repeatedly in the full provider package gate with submitter lease timing errors.
 blockers:
   - T4 producer-handoff.schema.json forbids the integration_parent field required by the updated campaign plan; integration ancestor fa21b1e540a5efcbe1822da4199be7acec7709d3 is retained in T2-05-evidence.txt.
   - Full provider package certification is blocked by the unrelated submitter lease timing failure retained in T2-03B-evidence.txt.
-  - T1 canonical Evidence Envelope construction is unavailable in this branch; T2 consumes opaque envelope data and caller-supplied canonical digests without redefining sign bytes.
-  - T4 owns approved production envelope and upload/transaction transport wiring; browser and mobile submission remain typed unavailable until injected.
-next_checkpoint: T2-07
-expected_head: d50d150ed0d296f44135445afbe4d0846e9c603d
+  - T2-07 is intentionally unregistered and does not complete Task 91B; production NLI mutation tools remain outside this isolated prototype.
+  - Task 91A policy registry, durable nonce storage, governed preview signing, model/tool certification, red-team evidence, and human handoff remain unavailable.
+next_checkpoint: T2-08
+expected_head: 5b54095ab4a360c659ec62c4d470573d50e1b108
