@@ -143,8 +143,10 @@ This index lists internal-only documentation. Do not add internal docs outside `
 - `_docs/VirtEngine Identification System Technical Report.pdf`
 
 ## Ralph
+- `_docs/prototype-thread-intake-runbook.md`
 - `_docs/ralph/progress.md`
 - `_docs/ralph/prototype-integration/control.json`
+- `_docs/ralph/prototype-integration/epochs/epoch-1.json`
 - `_docs/ralph/prototype-integration/migration-inventory.json`
 - `_docs/ralph/prototype-integration/migration-inventory.schema.json`
 - `_docs/ralph/prototype-integration/model-provenance.json`

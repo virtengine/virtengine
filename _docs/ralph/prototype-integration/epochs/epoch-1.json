@@ -1,0 +1,17 @@
+{
+  "schema_version": "virtengine.prototype.intake-epoch/v2",
+  "campaign": "three-day-prototype",
+  "intake_epoch": 1,
+  "base_tag": "checkpoint/prototype-integration/epoch-1-base",
+  "base_sha": "5587c384f634552c3a2dd7181ca49cafa4da1984",
+  "planning_sha": "1436723bd78980aa0388dbe9fcfa24dda939c54a",
+  "status": "open",
+  "opens_at": "2026-08-02T00:00:00Z",
+  "announcement_cutoff": "2026-08-02T23:59:59Z",
+  "producers": [
+    { "thread": "T1", "status": "unannounced", "tag": null, "decision": null },
+    { "thread": "T2", "status": "unannounced", "tag": null, "decision": null },
+    { "thread": "T3", "status": "unannounced", "tag": null, "decision": null },
+    { "thread": "T5", "status": "unannounced", "tag": null, "decision": null }
+  ]
+}

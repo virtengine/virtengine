@@ -24,9 +24,10 @@ function validFixture() {
     },
     schema: {
       $schema: "https://json-schema.org/draft/2020-12/schema",
-      required: ["end_head", "tree_clean", "tests", "migrations", "blockers", "expected_head"],
-      properties: { tree_clean: { const: true } },
-      $defs: { testResult: { properties: { exit_code: { const: 0 }, result: { const: "passed" } } } },
+      additionalProperties: false,
+      required: ["campaign", "thread", "checkpoint", "branch", "frozen_baseline", "planning_sha", "intake_epoch", "intake_base_sha", "payload_head", "prior_accepted_payload", "tree_clean", "commits_since_prior_acceptance", "owned_paths", "files_changed", "tests", "generated_hashes", "migrations", "external_evidence", "known_failures", "blockers", "next_checkpoint"],
+      properties: { frozen_baseline: { const: sha }, tree_clean: { const: true }, commits_since_prior_acceptance: { minItems: 1 } },
+      $defs: { testResult: { additionalProperties: false, required: ["command", "exit_code", "result", "tool_versions", "artifact"], properties: { exit_code: { const: 0 }, result: { const: "passed" }, tool_versions: { minProperties: 1 } } } },
     },
     handoff: {
       campaign: "three-day-prototype",
@@ -40,28 +41,45 @@ function validFixture() {
       accepted_checkpoints: [],
       rejected_checkpoints: [],
     },
+    epoch: {
+      schema_version: "virtengine.prototype.intake-epoch/v2",
+      campaign: "three-day-prototype",
+      intake_epoch: 1,
+      base_tag: "checkpoint/prototype-integration/epoch-1-base",
+      base_sha: "5587c384f634552c3a2dd7181ca49cafa4da1984",
+      planning_sha: "1436723bd78980aa0388dbe9fcfa24dda939c54a",
+      status: "open",
+      opens_at: "2026-08-02T00:00:00Z",
+      announcement_cutoff: "2026-08-02T23:59:59Z",
+      producers: ["T1", "T2", "T3", "T5"].map((thread) => ({ thread, status: "unannounced", tag: null, decision: null })),
+    },
   };
 }
 
 const tests = [
   ["accepts the frozen T4 campaign controls", () => {
     const fixture = validFixture();
-    assert.doesNotThrow(() => validateIntegrationControl(fixture.control, fixture.schema, fixture.handoff));
+    assert.doesNotThrow(() => validateIntegrationControl(fixture.control, fixture.schema, fixture.handoff, fixture.epoch));
   }],
   ["rejects a producer branch that does not match its thread", () => {
     const fixture = validFixture();
     fixture.control.producers[0].branch = "ve/prototype-t2-product";
-    assert.throws(() => validateIntegrationControl(fixture.control, fixture.schema, fixture.handoff), /unexpected producer registration/);
+    assert.throws(() => validateIntegrationControl(fixture.control, fixture.schema, fixture.handoff, fixture.epoch), /unexpected producer registration/);
   }],
   ["rejects a held lease represented as available", () => {
     const fixture = validFixture();
     fixture.control.generated_file_lease.holder = "T1";
-    assert.throws(() => validateIntegrationControl(fixture.control, fixture.schema, fixture.handoff));
+    assert.throws(() => validateIntegrationControl(fixture.control, fixture.schema, fixture.handoff, fixture.epoch));
   }],
   ["rejects a non-commit checkpoint boundary", () => {
     const fixture = validFixture();
     fixture.handoff.start_head = "HEAD";
-    assert.throws(() => validateIntegrationControl(fixture.control, fixture.schema, fixture.handoff), /start_head/);
+    assert.throws(() => validateIntegrationControl(fixture.control, fixture.schema, fixture.handoff, fixture.epoch), /start_head/);
+  }],
+  ["rejects an epoch with an unknown field", () => {
+    const fixture = validFixture();
+    fixture.epoch.accepted = [];
+    assert.throws(() => validateIntegrationControl(fixture.control, fixture.schema, fixture.handoff, fixture.epoch));
   }],
 ];
 
