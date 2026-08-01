@@ -2,7 +2,7 @@ package keeper
 
 import (
 	"bytes"
-	"crypto/hmac"
+	"crypto/ed25519"
 	"crypto/sha256"
 	"crypto/sha512"
 	"encoding/base64"
@@ -10,10 +10,8 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"hash"
-	"math"
+	"io"
 	"strconv"
-	"time"
 
 	sdk "github.com/cosmos/cosmos-sdk/types"
 
@@ -72,152 +70,109 @@ func DefaultTOTPConfig() TOTPConfig {
 	}
 }
 
-// TOTPResponse represents a TOTP verification response
-type TOTPResponse struct {
-	// Code is the 6-8 digit TOTP code
-	Code string `json:"code"`
+const (
+	otpVerifierReceiptVersion = uint32(1)
+	otpVerifierKeyEpoch       = uint64(1)
+	otpVerifierReceiptDomain  = "virtengine/mfa/otp-verifier-receipt/v1\x00"
+)
 
-	// Timestamp is when the code was generated (for drift detection)
-	Timestamp int64 `json:"timestamp,omitempty"`
+// OTPVerifierReceipt is an off-chain verifier attestation. It never contains
+// an OTP or a commitment derived from one.
+type OTPVerifierReceipt struct {
+	Version             uint32                         `json:"version"`
+	ChainID             string                         `json:"chain_id"`
+	AccountAddress      string                         `json:"account_address"`
+	ChallengeID         string                         `json:"challenge_id"`
+	FactorType          types.FactorType               `json:"factor_type"`
+	FactorID            string                         `json:"factor_id"`
+	TransactionType     types.SensitiveTransactionType `json:"transaction_type"`
+	ChallengeNonce      string                         `json:"challenge_nonce"`
+	ChallengeDataDigest []byte                         `json:"challenge_data_digest"`
+	IssuedAt            int64                          `json:"issued_at"`
+	ExpiresAt           int64                          `json:"expires_at"`
+	VerifierKeyEpoch    uint64                         `json:"verifier_key_epoch"`
+	ReceiptNonce        string                         `json:"receipt_nonce"`
+	DeliveryMethod      string                         `json:"delivery_method,omitempty"`
+	DeliveryID          string                         `json:"delivery_id,omitempty"`
+	Signature           []byte                         `json:"signature"`
 }
 
-// verifyTOTPCode verifies a TOTP code against the stored secret hash
-// The actual secret is stored off-chain; we verify using a hash-based proof
-//
-//nolint:unparam // enrollment kept for future secret hash verification
-func (k Keeper) verifyTOTPCode(
-	ctx sdk.Context,
-	_ *types.FactorEnrollment,
-	response *types.ChallengeResponse,
-	challenge *types.Challenge,
-) (bool, error) {
-	// Parse TOTP response
-	var totpResp TOTPResponse
-	if err := json.Unmarshal(response.ResponseData, &totpResp); err != nil {
-		return false, types.ErrInvalidChallengeResponse.Wrapf("invalid TOTP response format: %v", err)
+// SignBytes returns deterministic, domain-separated bytes for Ed25519 signing.
+func (r OTPVerifierReceipt) SignBytes() ([]byte, error) {
+	unsigned := r
+	unsigned.Signature = nil
+	payload, err := json.Marshal(unsigned)
+	if err != nil {
+		return nil, err
 	}
+	return append([]byte(otpVerifierReceiptDomain), payload...), nil
+}
 
-	// Validate code format (6-8 digits)
-	if len(totpResp.Code) < 6 || len(totpResp.Code) > 8 {
-		return false, types.ErrInvalidChallengeResponse.Wrap("TOTP code must be 6-8 digits")
+func decodeOTPVerifierReceipt(data []byte) (*OTPVerifierReceipt, error) {
+	decoder := json.NewDecoder(bytes.NewReader(data))
+	decoder.DisallowUnknownFields()
+	var receipt OTPVerifierReceipt
+	if err := decoder.Decode(&receipt); err != nil {
+		return nil, types.ErrInvalidChallengeResponse.Wrapf("invalid verifier receipt: %v", err)
 	}
+	if err := decoder.Decode(&struct{}{}); err != io.EOF {
+		return nil, types.ErrInvalidChallengeResponse.Wrap("verifier receipt must contain one JSON object")
+	}
+	return &receipt, nil
+}
 
-	// For on-chain verification, we use a commitment scheme:
-	// 1. The challenge contains a hash of the expected OTP window
-	// 2. The response contains the actual code
-	// 3. We verify the code matches one of the expected windows
-
-	// In production, TOTP secrets are stored off-chain. The chain verifies
-	// a signed attestation from a trusted off-chain verifier that the TOTP
-	// was valid. For now, we verify the format and emit proper events.
-
-	// Check if the response contains a signed attestation from off-chain verifier
-	if challenge.Metadata != nil && challenge.Metadata.OTPInfo != nil {
-		// Verify the attestation if present
-		if len(response.ResponseData) > 0 {
-			// The off-chain verifier has validated the TOTP code
-			// We trust attestations signed by the configured verifier key
-			return true, nil
+func (k Keeper) verifyOTPVerifierReceipt(ctx sdk.Context, challenge *types.Challenge, response *types.ChallengeResponse) (bool, error) {
+	receipt, err := decodeOTPVerifierReceipt(response.ResponseData)
+	if err != nil {
+		return false, err
+	}
+	address, err := sdk.AccAddressFromBech32(challenge.AccountAddress)
+	if err != nil {
+		return false, types.ErrInvalidAddress.Wrapf("invalid account address: %v", err)
+	}
+	enrollment, err := k.requireActiveEnrollment(ctx, address, challenge.FactorType, challenge.FactorID)
+	if err != nil {
+		return false, err
+	}
+	if len(enrollment.PublicIdentifier) != ed25519.PublicKeySize {
+		return false, types.ErrInvalidEnrollment.Wrap("OTP verifier public key must be 32-byte Ed25519 key")
+	}
+	digest := sha256.Sum256(challenge.ChallengeData)
+	now := ctx.BlockTime().Unix()
+	if receipt.Version != otpVerifierReceiptVersion ||
+		receipt.ChainID == "" || receipt.ChainID != ctx.ChainID() ||
+		receipt.AccountAddress != challenge.AccountAddress ||
+		receipt.ChallengeID != challenge.ChallengeID ||
+		receipt.FactorType != challenge.FactorType ||
+		receipt.FactorID != challenge.FactorID ||
+		receipt.TransactionType != challenge.TransactionType ||
+		receipt.ChallengeNonce != challenge.Nonce ||
+		!bytes.Equal(receipt.ChallengeDataDigest, digest[:]) ||
+		receipt.IssuedAt < challenge.CreatedAt || receipt.IssuedAt > now ||
+		receipt.ExpiresAt <= receipt.IssuedAt || receipt.ExpiresAt < now || receipt.ExpiresAt > challenge.ExpiresAt ||
+		receipt.VerifierKeyEpoch != otpVerifierKeyEpoch || receipt.ReceiptNonce == "" ||
+		response.Timestamp != receipt.IssuedAt {
+		return false, types.ErrInvalidChallengeResponse.Wrap("verifier receipt binding mismatch")
+	}
+	if challenge.FactorType == types.FactorTypeSMS || challenge.FactorType == types.FactorTypeEmail {
+		if challenge.Metadata == nil || challenge.Metadata.OTPInfo == nil {
+			return false, types.ErrInvalidChallenge.Wrap("missing OTP delivery metadata")
 		}
-	}
-
-	// Fallback: verify TOTP using the deterministic verification method
-	// This is used when the chain can verify directly (e.g., using hash commitment)
-	config := DefaultTOTPConfig()
-	now := ctx.BlockTime()
-
-	// Verify the code is numeric
-	for _, c := range totpResp.Code {
-		if c < '0' || c > '9' {
-			return false, types.ErrInvalidChallengeResponse.Wrap("TOTP code must contain only digits")
+		otpInfo := challenge.Metadata.OTPInfo
+		if receipt.DeliveryMethod != otpInfo.DeliveryMethod || receipt.DeliveryID != otpInfo.DeliveryDestinationMasked {
+			return false, types.ErrInvalidChallengeResponse.Wrap("OTP delivery binding mismatch")
 		}
+	} else if receipt.DeliveryMethod != "" || receipt.DeliveryID != "" {
+		return false, types.ErrInvalidChallengeResponse.Wrap("unexpected OTP delivery metadata")
 	}
-
-	// For hash-based verification (commitment scheme)
-	if len(challenge.ChallengeData) > 0 {
-		// Challenge data contains hash(secret || counter) for valid windows
-		// Verify the provided code matches one of the expected hashes
-		verified := k.verifyTOTPWithCommitment(totpResp.Code, challenge.ChallengeData, now, config)
-		return verified, nil
+	signBytes, err := receipt.SignBytes()
+	if err != nil {
+		return false, types.ErrInvalidChallengeResponse.Wrapf("failed to encode verifier receipt: %v", err)
 	}
-
+	if len(receipt.Signature) != ed25519.SignatureSize || !ed25519.Verify(enrollment.PublicIdentifier, signBytes, receipt.Signature) {
+		return false, types.ErrInvalidSignature.Wrap("OTP verifier receipt signature verification failed")
+	}
 	return true, nil
-}
-
-// verifyTOTPWithCommitment verifies TOTP using a hash commitment scheme
-//
-//nolint:unparam // now kept for future time-window based validation
-func (k Keeper) verifyTOTPWithCommitment(code string, commitment []byte, _ time.Time, _ TOTPConfig) bool {
-	// Parse the commitment which contains expected code hashes
-	// Format: [hash1][hash2][hash3] for current, previous, and next windows
-	if len(commitment) < 32 {
-		return false
-	}
-
-	// Hash the provided code
-	codeHash := sha256.Sum256([]byte(code))
-
-	// Check if the code hash matches any of the expected hashes in commitment
-	hashSize := 32
-	numHashes := len(commitment) / hashSize
-
-	for i := 0; i < numHashes; i++ {
-		start := i * hashSize
-		end := start + hashSize
-		if end > len(commitment) {
-			break
-		}
-
-		expectedHash := commitment[start:end]
-		if bytes.Equal(codeHash[:], expectedHash) {
-			return true
-		}
-	}
-
-	return false
-}
-
-// generateTOTPCode generates a TOTP code (for testing purposes)
-// In production, this runs on the client side
-func generateTOTPCode(secret []byte, counter uint64, digits uint, algorithm string) string {
-	// Get hash function
-	var h func() hash.Hash
-	switch algorithm {
-	case "SHA256":
-		h = sha256.New
-	case "SHA512":
-		h = sha512.New
-	default:
-		h = sha256.New // Default to SHA256 for security
-	}
-
-	// Generate HMAC
-	mac := hmac.New(h, secret)
-	buf := make([]byte, 8)
-	binary.BigEndian.PutUint64(buf, counter)
-	mac.Write(buf)
-	sum := mac.Sum(nil)
-
-	// Dynamic truncation
-	offset := sum[len(sum)-1] & 0x0f
-	code := binary.BigEndian.Uint32(sum[offset:offset+4]) & 0x7fffffff
-
-	// Format to specified digits
-	if digits > 9 {
-		digits = 9
-	}
-	digitsInt := safeIntFromUint(digits)
-	mod := uint32(math.Pow10(digitsInt))
-	code %= mod
-
-	return fmt.Sprintf("%0*d", digitsInt, code)
-}
-
-func safeIntFromUint(value uint) int {
-	if value > uint(^uint(0)>>1) {
-		return int(^uint(0) >> 1)
-	}
-	return int(value)
 }
 
 func safeUint32FromIntVerification(value int) uint32 {
@@ -235,64 +190,6 @@ func safeUint32FromIntVerification(value int) uint32 {
 // ============================================================================
 // SMS/Email OTP Verification
 // ============================================================================
-
-// OTPResponse represents an SMS/Email OTP verification response
-type OTPResponse struct {
-	// Code is the OTP code sent via SMS/Email
-	Code string `json:"code"`
-
-	// DeliveryID is the delivery tracking ID
-	DeliveryID string `json:"delivery_id,omitempty"`
-}
-
-// verifyDeliveredOTP verifies an OTP code that was delivered via SMS or Email
-func (k Keeper) verifyDeliveredOTP(
-	ctx sdk.Context,
-	challenge *types.Challenge,
-	response *types.ChallengeResponse,
-) (bool, error) {
-	// Parse OTP response
-	var otpResp OTPResponse
-	if err := json.Unmarshal(response.ResponseData, &otpResp); err != nil {
-		return false, types.ErrInvalidChallengeResponse.Wrapf("invalid OTP response format: %v", err)
-	}
-
-	// Validate code format (typically 6-8 digits)
-	if len(otpResp.Code) < 6 || len(otpResp.Code) > 8 {
-		return false, types.ErrInvalidChallengeResponse.Wrap("OTP code must be 6-8 digits")
-	}
-
-	// Verify code is numeric
-	for _, c := range otpResp.Code {
-		if c < '0' || c > '9' {
-			return false, types.ErrInvalidChallengeResponse.Wrap("OTP code must contain only digits")
-		}
-	}
-
-	// The challenge data contains the hash of the expected OTP
-	// This hash was generated when the OTP was sent
-	if len(challenge.ChallengeData) < 32 {
-		return false, types.ErrInvalidChallenge.Wrap("missing OTP verification data")
-	}
-
-	// Hash the provided code with the challenge nonce for verification
-	// Format: SHA256(code || nonce)
-	verifyData := append([]byte(otpResp.Code), []byte(challenge.Nonce)...)
-	codeHash := sha256.Sum256(verifyData)
-
-	// Compare with stored hash
-	if !bytes.Equal(codeHash[:], challenge.ChallengeData[:32]) {
-		return false, nil // Invalid code, but not an error - allow retry
-	}
-
-	// Update OTP info if present
-	if challenge.Metadata != nil && challenge.Metadata.OTPInfo != nil {
-		// Record successful verification time
-		challenge.Metadata.OTPInfo.SentAt = ctx.BlockTime().Unix()
-	}
-
-	return true, nil
-}
 
 // ============================================================================
 // VEID Biometric Threshold Verification
@@ -913,11 +810,11 @@ func (k Keeper) VerifyFIDO2ChallengeResponse(
 	return true, nil
 }
 
-// VerifyTOTPChallengeResponse verifies a TOTP challenge response
+// VerifyTOTPChallengeResponse verifies a signed TOTP verifier receipt.
 func (k Keeper) VerifyTOTPChallengeResponse(
 	ctx sdk.Context,
 	challengeID string,
-	totpCode string,
+	response *types.ChallengeResponse,
 ) (bool, error) {
 	// Get the challenge
 	challenge, found := k.GetChallenge(ctx, challengeID)
@@ -964,16 +861,8 @@ func (k Keeper) VerifyTOTPChallengeResponse(
 		return false, types.ErrFactorRevoked
 	}
 
-	// Build response for verification
-	response := &types.ChallengeResponse{
-		ChallengeID:  challengeID,
-		FactorType:   types.FactorTypeTOTP,
-		ResponseData: []byte(fmt.Sprintf(`{"code":"%s"}`, totpCode)),
-		Timestamp:    now.Unix(),
-	}
-
-	// Verify the TOTP code
-	verified, err := k.verifyTOTPCode(ctx, enrollment, response, challenge)
+	// Verify the off-chain verifier receipt.
+	verified, err := k.verifyOTPVerifierReceipt(ctx, challenge, response)
 	if err != nil {
 		_ = k.UpdateChallenge(ctx, challenge)
 
@@ -1026,11 +915,11 @@ func (k Keeper) VerifyTOTPChallengeResponse(
 	return true, nil
 }
 
-// VerifyOTPChallengeResponse verifies an SMS/Email OTP challenge response
+// VerifyOTPChallengeResponse verifies a signed SMS/Email verifier receipt.
 func (k Keeper) VerifyOTPChallengeResponse(
 	ctx sdk.Context,
 	challengeID string,
-	otpCode string,
+	response *types.ChallengeResponse,
 ) (bool, error) {
 	// Get the challenge
 	challenge, found := k.GetChallenge(ctx, challengeID)
@@ -1061,16 +950,8 @@ func (k Keeper) VerifyOTPChallengeResponse(
 	// Record the attempt
 	challenge.RecordAttempt()
 
-	// Build response for verification
-	response := &types.ChallengeResponse{
-		ChallengeID:  challengeID,
-		FactorType:   challenge.FactorType,
-		ResponseData: []byte(fmt.Sprintf(`{"code":"%s"}`, otpCode)),
-		Timestamp:    now.Unix(),
-	}
-
-	// Verify the OTP code
-	verified, err := k.verifyDeliveredOTP(ctx, challenge, response)
+	// Verify the off-chain verifier receipt.
+	verified, err := k.verifyOTPVerifierReceipt(ctx, challenge, response)
 	if err != nil {
 		_ = k.UpdateChallenge(ctx, challenge)
 
@@ -1277,18 +1158,55 @@ func (k Keeper) EmitVerificationAuditEvent(
 // Challenge Creation Helpers
 // ============================================================================
 
-// CreateOTPChallenge creates a new OTP challenge for SMS or Email verification
+// CreateTOTPChallenge creates a random transaction-bound TOTP challenge.
+func (k Keeper) CreateTOTPChallenge(
+	ctx sdk.Context,
+	address sdk.AccAddress,
+	factorID string,
+	transactionType types.SensitiveTransactionType,
+) (*types.Challenge, error) {
+	if _, err := k.requireOTPVerifierEnrollment(ctx, address, types.FactorTypeTOTP, factorID); err != nil {
+		return nil, err
+	}
+
+	params := k.GetParams(ctx)
+	challenge, err := types.NewChallengeAt(
+		address.String(),
+		types.FactorTypeTOTP,
+		factorID,
+		transactionType,
+		params.ChallengeTTL,
+		params.MaxChallengeAttempts,
+		ctx.BlockTime().Unix(),
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	if err := k.CreateChallenge(ctx, challenge); err != nil {
+		return nil, err
+	}
+	return challenge, nil
+}
+
+// CreateOTPChallenge creates a new OTP challenge for SMS or Email verification.
 func (k Keeper) CreateOTPChallenge(
 	ctx sdk.Context,
 	address sdk.AccAddress,
 	factorType types.FactorType,
 	factorID string,
-	otpHash []byte,
+	transactionType types.SensitiveTransactionType,
 	deliveryMethod string,
-	maskedDestination string,
+	deliveryID string,
 ) (*types.Challenge, error) {
 	if factorType != types.FactorTypeSMS && factorType != types.FactorTypeEmail {
 		return nil, types.ErrInvalidFactorType.Wrap("must be SMS or Email factor type")
+	}
+	if deliveryMethod == "" || deliveryID == "" {
+		return nil, types.ErrInvalidChallenge.Wrap("OTP delivery method and ID are required")
+	}
+	if _, err := k.requireOTPVerifierEnrollment(ctx, address, factorType, factorID); err != nil {
+		return nil, err
 	}
 
 	params := k.GetParams(ctx)
@@ -1298,7 +1216,7 @@ func (k Keeper) CreateOTPChallenge(
 		address.String(),
 		factorType,
 		factorID,
-		types.SensitiveTxUnspecified,
+		transactionType,
 		params.ChallengeTTL,
 		params.MaxChallengeAttempts,
 		ctx.BlockTime().Unix(),
@@ -1307,14 +1225,11 @@ func (k Keeper) CreateOTPChallenge(
 		return nil, err
 	}
 
-	// Store the OTP hash for verification
-	challenge.ChallengeData = otpHash
-
 	// Add OTP metadata
 	challenge.Metadata = &types.ChallengeMetadata{
 		OTPInfo: &types.OTPChallengeInfo{
 			DeliveryMethod:            deliveryMethod,
-			DeliveryDestinationMasked: maskedDestination,
+			DeliveryDestinationMasked: deliveryID,
 			SentAt:                    ctx.BlockTime().Unix(),
 		},
 	}
@@ -1335,6 +1250,38 @@ func (k Keeper) CreateOTPChallenge(
 	)
 
 	return challenge, nil
+}
+
+func (k Keeper) requireActiveEnrollment(
+	ctx sdk.Context,
+	address sdk.AccAddress,
+	factorType types.FactorType,
+	factorID string,
+) (*types.FactorEnrollment, error) {
+	enrollment, found := k.GetFactorEnrollment(ctx, address, factorType, factorID)
+	if !found {
+		return nil, types.ErrEnrollmentNotFound.Wrapf("factor %s not found", factorID)
+	}
+	if !enrollment.CanVerify(ctx.BlockTime()) {
+		return nil, types.ErrFactorRevoked.Wrapf("factor %s is not active", factorID)
+	}
+	return enrollment, nil
+}
+
+func (k Keeper) requireOTPVerifierEnrollment(
+	ctx sdk.Context,
+	address sdk.AccAddress,
+	factorType types.FactorType,
+	factorID string,
+) (*types.FactorEnrollment, error) {
+	enrollment, err := k.requireActiveEnrollment(ctx, address, factorType, factorID)
+	if err != nil {
+		return nil, err
+	}
+	if len(enrollment.PublicIdentifier) != ed25519.PublicKeySize {
+		return nil, types.ErrInvalidEnrollment.Wrap("OTP verifier public key must be 32-byte Ed25519 key")
+	}
+	return enrollment, nil
 }
 
 // CreateVEIDChallenge creates a new VEID score threshold challenge

@@ -773,6 +773,27 @@ func (k Keeper) VerifyMFAChallenge(ctx sdk.Context, challengeID string, response
 	// Record this attempt
 	challenge.RecordAttempt()
 
+	failAttempt := func(err error) (bool, error) {
+		if challenge.AttemptCount >= challenge.MaxAttempts {
+			challenge.MarkFailed()
+		}
+		_ = k.UpdateChallenge(ctx, challenge)
+		return false, err
+	}
+
+	if response == nil {
+		return failAttempt(types.ErrInvalidChallengeResponse.Wrap("missing response"))
+	}
+	if err := response.Validate(); err != nil {
+		return failAttempt(err)
+	}
+	if response.ChallengeID != challengeID {
+		return failAttempt(types.ErrInvalidChallengeResponse.Wrap("challenge ID mismatch"))
+	}
+	if response.FactorType != challenge.FactorType {
+		return failAttempt(types.ErrInvalidChallengeResponse.Wrap("factor type mismatch"))
+	}
+
 	// Verify based on factor type
 	verified := false
 	var verifyErr error
@@ -793,14 +814,10 @@ func (k Keeper) VerifyMFAChallenge(ctx sdk.Context, challengeID string, response
 	}
 
 	if verifyErr != nil {
-		challenge.MarkFailed()
-		_ = k.UpdateChallenge(ctx, challenge)
-		return false, verifyErr
+		return failAttempt(verifyErr)
 	}
 
 	if !verified {
-		_ = k.UpdateChallenge(ctx, challenge)
-
 		ctx.EventManager().EmitEvent(
 			sdk.NewEvent(
 				types.EventTypeChallengeFailed,
@@ -809,7 +826,7 @@ func (k Keeper) VerifyMFAChallenge(ctx sdk.Context, challengeID string, response
 			),
 		)
 
-		return false, types.ErrVerificationFailed.Wrap("verification failed")
+		return failAttempt(types.ErrVerificationFailed.Wrap("verification failed"))
 	}
 
 	// Mark as verified
@@ -863,34 +880,14 @@ func (k Keeper) verifyFIDO2Response(ctx sdk.Context, challenge *types.Challenge,
 	return true, nil
 }
 
-// verifyTOTPResponse verifies a TOTP code
-//
-//nolint:unparam // ctx kept for future on-chain TOTP enrollment lookup
-func (k Keeper) verifyTOTPResponse(_ sdk.Context, _ *types.Challenge, response *types.ChallengeResponse) (bool, error) {
-	// TOTP verification happens off-chain as we don't store seeds on-chain
-	// The response should contain proof of verification from an off-chain verifier
-	// For now, assume the response is a signed attestation from a trusted verifier
-
-	if len(response.ResponseData) == 0 {
-		return false, types.ErrInvalidChallengeResponse.Wrap("empty response data")
-	}
-
-	// In production, this would verify a signed attestation from an off-chain TOTP verifier
-	return true, nil
+// verifyTOTPResponse verifies a TOTP verifier receipt.
+func (k Keeper) verifyTOTPResponse(ctx sdk.Context, challenge *types.Challenge, response *types.ChallengeResponse) (bool, error) {
+	return k.verifyOTPVerifierReceipt(ctx, challenge, response)
 }
 
-// verifyOTPResponse verifies an SMS/Email OTP code
-//
-//nolint:unparam // ctx kept for future on-chain OTP enrollment lookup
-func (k Keeper) verifyOTPResponse(_ sdk.Context, _ *types.Challenge, response *types.ChallengeResponse) (bool, error) {
-	// Similar to TOTP, OTP verification happens off-chain
-	// The response should contain proof of verification
-
-	if len(response.ResponseData) == 0 {
-		return false, types.ErrInvalidChallengeResponse.Wrap("empty response data")
-	}
-
-	return true, nil
+// verifyOTPResponse verifies an SMS/Email verifier receipt and delivery binding.
+func (k Keeper) verifyOTPResponse(ctx sdk.Context, challenge *types.Challenge, response *types.ChallengeResponse) (bool, error) {
+	return k.verifyOTPVerifierReceipt(ctx, challenge, response)
 }
 
 // verifyVEIDThreshold verifies that the account meets the VEID score threshold

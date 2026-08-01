@@ -1,39 +1,40 @@
 campaign: three-day-prototype
 thread: T5
-checkpoint: T5-08
+checkpoint: T5-09
 branch: ve/prototype-t5-platform
-start_head: a9e148436c73e398e8902d03303abafdc1117bb5
-end_head: d24cd792fe31912d075dcae6208d5dcc6df9f95e
+start_head: a1f8bb35e4a17b4912bde3ff83e9262ed5b149b0
+end_head: PENDING_COMMIT
 origin_main: c31f910e318a39d86372ed2d65050d08777dbfc5
-tree_clean: true
-commits:
-  - d24cd792fe31912d075dcae6208d5dcc6df9f95e
+tree_clean: false
+commits: []
 owned_paths:
-  - x/encryption/crypto/envelope.go
-  - x/encryption/crypto/envelope_fuzz_test.go
-  - x/encryption/crypto/envelope_test.go
-  - x/encryption/types/envelope.go
-  - x/encryption/types/envelope_test.go
+  - x/mfa/keeper/keeper.go
+  - x/mfa/keeper/keeper_test.go
+  - x/mfa/keeper/msg_server.go
+  - x/mfa/keeper/msg_server_test.go
+  - x/mfa/keeper/verification.go
+  - x/mfa/keeper/verification_test.go
   - _docs/ralph/handoffs/prototype-t5/HANDOFF.yaml
 files_changed:
-  - x/encryption/crypto/envelope.go
-  - x/encryption/crypto/envelope_fuzz_test.go
-  - x/encryption/crypto/envelope_test.go
-  - x/encryption/types/envelope.go
-  - x/encryption/types/envelope_test.go
+  - x/mfa/keeper/keeper.go
+  - x/mfa/keeper/keeper_test.go
+  - x/mfa/keeper/msg_server.go
+  - x/mfa/keeper/msg_server_test.go
+  - x/mfa/keeper/verification.go
+  - x/mfa/keeper/verification_test.go
   - _docs/ralph/handoffs/prototype-t5/HANDOFF.yaml
 tests:
-  - command: go test -count=1 ./x/encryption/types ./x/encryption/crypto
+  - command: go test -count=1 ./x/mfa/keeper
     exit_code: 0
     result: passed
     tool_versions:
       go: go1.25.8 windows/amd64
-  - command: go vet ./x/encryption/types ./x/encryption/crypto
+  - command: go vet ./x/mfa/keeper
     exit_code: 0
     result: passed
     tool_versions:
       go: go1.25.8 windows/amd64
-  - command: go test -race -count=1 ./x/encryption/crypto
+  - command: go test -race -count=1 ./x/mfa/keeper
     exit_code: 0
     result: passed
     tool_versions:
@@ -47,8 +48,8 @@ migrations: []
 external_evidence: []
 known_failures: []
 blockers:
-  - T4 must add sender_signing_pub_key and wrapped-key fields to protobuf wire schemas, regenerate clients, and add round-trip gates before v2 envelopes are integrated across chain and VEID paths.
-  - Sender identity remains fail-closed at trust boundaries: callers must pin or resolve the expected Ed25519 signing key and use ValidateEnvelopeSignatureWithExpectedKey.
-  - Legacy v1 envelopes are unauthenticated and may only be read by the explicitly named migration API before immediate v2 re-encryption.
-next_checkpoint: T5-09
-expected_head: d24cd792fe31912d075dcae6208d5dcc6df9f95e
+  - Production verifier key epochs remain fixed at prototype epoch 1 until a governed verifier-key registry and generated API are integrated by T4.
+  - TOTP, SMS, and email challenge creation must be invoked by trusted off-chain verifier/delivery services; the generic public challenge route rejects these factors.
+  - OTP values and OTP-derived commitments are never accepted on-chain; only signed challenge-bound verifier receipts are valid.
+next_checkpoint: T5-10
+expected_head: PENDING_COMMIT
