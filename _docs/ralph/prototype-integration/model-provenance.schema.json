@@ -1,0 +1,138 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://virtengine.com/schemas/prototype-integration/model-provenance.schema.json",
+  "title": "VirtEngine model provenance manifest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "manifest_id", "status", "source", "stages", "artifacts", "datasets", "licenses", "redistribution", "bindings", "sbom", "model_card", "evaluation_report", "blockers"],
+  "properties": {
+    "schema_version": { "const": "virtengine.model-provenance/v1" },
+    "manifest_id": { "type": "string", "pattern": "^[a-z0-9.-]+$" },
+    "status": { "enum": ["dependency_blocked", "fixture_only", "release_candidate", "production_approved"] },
+    "source": { "$ref": "#/$defs/sourceControl" },
+    "stages": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/stage" }
+    },
+    "artifacts": { "$ref": "#/$defs/evidenceArray" },
+    "datasets": { "$ref": "#/$defs/evidenceArray" },
+    "licenses": { "$ref": "#/$defs/evidenceArray" },
+    "redistribution": { "$ref": "#/$defs/redistribution" },
+    "bindings": { "$ref": "#/$defs/bindings" },
+    "sbom": { "$ref": "#/$defs/evidence" },
+    "model_card": { "$ref": "#/$defs/evidence" },
+    "evaluation_report": { "$ref": "#/$defs/evidence" },
+    "blockers": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/blocker" }
+    }
+  },
+  "$defs": {
+    "sha1": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{40}$"
+    },
+    "sha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "sourceControl": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["commit", "tree"],
+      "properties": {
+        "commit": { "$ref": "#/$defs/sha1" },
+        "tree": { "$ref": "#/$defs/sha1" }
+      }
+    },
+    "immutableSource": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "uri", "revision", "digest"],
+      "properties": {
+        "type": { "enum": ["repository_file", "oci"] },
+        "uri": { "type": "string", "minLength": 1 },
+        "revision": {
+          "oneOf": [
+            { "$ref": "#/$defs/sha1" },
+            { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" }
+          ]
+        },
+        "digest": { "$ref": "#/$defs/sha256" }
+      }
+    },
+    "localEvidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "state", "path", "sha256", "size", "source"],
+      "properties": {
+        "id": { "type": "string", "pattern": "^[a-z0-9.-]+$" },
+        "state": { "enum": ["present", "fixture_only"] },
+        "path": { "type": "string", "minLength": 1 },
+        "sha256": { "$ref": "#/$defs/sha256" },
+        "size": { "type": "integer", "minimum": 1 },
+        "source": { "$ref": "#/$defs/immutableSource" }
+      }
+    },
+    "blockedEvidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "state", "blocker_id"],
+      "properties": {
+        "id": { "type": "string", "pattern": "^[a-z0-9.-]+$" },
+        "state": { "const": "dependency_blocked" },
+        "blocker_id": { "type": "string", "pattern": "^[a-z0-9.-]+$" }
+      }
+    },
+    "evidence": {
+      "oneOf": [
+        { "$ref": "#/$defs/localEvidence" },
+        { "$ref": "#/$defs/blockedEvidence" }
+      ]
+    },
+    "evidenceArray": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/evidence" }
+    },
+    "stage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "state", "evidence"],
+      "properties": {
+        "id": { "enum": ["preprocessing", "training", "evaluation", "packaging"] },
+        "state": { "enum": ["present", "fixture_only", "dependency_blocked"] },
+        "evidence": { "$ref": "#/$defs/evidence" }
+      }
+    },
+    "redistribution": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["approved", "evidence"],
+      "properties": {
+        "approved": { "type": "boolean" },
+        "evidence": { "$ref": "#/$defs/evidence" }
+      }
+    },
+    "bindings": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["preprocessing", "schema", "runtime"],
+      "properties": {
+        "preprocessing": { "$ref": "#/$defs/evidence" },
+        "schema": { "$ref": "#/$defs/evidence" },
+        "runtime": { "$ref": "#/$defs/evidence" }
+      }
+    },
+    "blocker": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "description"],
+      "properties": {
+        "id": { "type": "string", "pattern": "^[a-z0-9.-]+$" },
+        "description": { "type": "string", "minLength": 1 }
+      }
+    }
+  }
+}

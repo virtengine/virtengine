@@ -44,11 +44,16 @@ func TestUpgradeHandlerRunsRegisteredMigrationsAndIsIdempotent(t *testing.T) {
 	retried, err := upgrade.UpgradeHandler()(ctx, upgradetypes.Plan{Name: v1_6_0.UpgradeName}, toVM)
 	require.NoError(t, err)
 	require.Equal(t, module.VersionMap(toVM), retried)
+
+	retriedFromOriginal, err := upgrade.UpgradeHandler()(ctx, upgradetypes.Plan{Name: v1_6_0.UpgradeName}, fromVM)
+	require.NoError(t, err)
+	require.Equal(t, module.VersionMap(toVM), retriedFromOriginal)
 }
 
 func TestUpgradeHandlerRejectsPrematureNonOwnerActivation(t *testing.T) {
 	application := app.Setup(app.WithChainID("task84c-upgrade-precondition"))
 	ctx := application.NewContext(false)
+	ctx.KVStore(application.GetKey(resourcetypes.StoreKey)).Delete(resourcetypes.CanonicalReservationsActivationKey())
 	application.Keepers.VirtEngine.Marketplace.ActivateCanonicalLifecycle(ctx)
 	fromVM := application.MM.GetVersionMap()
 	fromVM[marketv1.ModuleName] = 7
@@ -60,5 +65,5 @@ func TestUpgradeHandlerRejectsPrematureNonOwnerActivation(t *testing.T) {
 	upgrade, err := constructor(application.Logger(), application.App)
 	require.NoError(t, err)
 	_, err = upgrade.UpgradeHandler()(ctx, upgradetypes.Plan{Name: v1_6_0.UpgradeName}, fromVM)
-	require.ErrorContains(t, err, "canonical write fence already active")
+	require.ErrorContains(t, err, "canonical activation is partial")
 }
