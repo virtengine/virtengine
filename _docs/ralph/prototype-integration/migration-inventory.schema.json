@@ -1,0 +1,74 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://virtengine.com/schemas/prototype-integration/migration-inventory.schema.json",
+  "title": "Task 88A migration inventory",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "task", "status", "baseline_commit", "migrations", "producers", "blockers"],
+  "properties": {
+    "schema_version": { "const": "virtengine.task-88a.migration-inventory/v1" },
+    "task": { "const": "88A" },
+    "status": { "enum": ["dependency_blocked", "complete"] },
+    "baseline_commit": { "$ref": "#/$defs/sha" },
+    "migrations": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/migration" }
+    },
+    "producers": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/producer" }
+    },
+    "blockers": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 }
+    }
+  },
+  "$defs": {
+    "sha": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{40}$"
+    },
+    "stringArray": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 }
+    },
+    "migration": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "task", "upgrade", "module", "from_version", "to_version", "execution_kind", "store_impacts", "prefix_impacts", "protobuf_changes", "params_changes", "index_changes", "genesis_changes", "evidence"],
+      "properties": {
+        "id": { "type": "string", "pattern": "^[a-z0-9.-]+$" },
+        "task": { "type": "string", "minLength": 1 },
+        "upgrade": { "type": "string", "pattern": "^v1\\.[5-8]\\.0$" },
+        "module": { "type": "string", "minLength": 1 },
+        "from_version": { "type": "integer", "minimum": 0 },
+        "to_version": { "type": "integer", "minimum": 1 },
+        "execution_kind": { "enum": ["registered_module_migration"] },
+        "store_impacts": { "$ref": "#/$defs/stringArray" },
+        "prefix_impacts": { "$ref": "#/$defs/stringArray" },
+        "protobuf_changes": { "$ref": "#/$defs/stringArray" },
+        "params_changes": { "$ref": "#/$defs/stringArray" },
+        "index_changes": { "$ref": "#/$defs/stringArray" },
+        "genesis_changes": { "$ref": "#/$defs/stringArray" },
+        "evidence": { "$ref": "#/$defs/stringArray" }
+      }
+    },
+    "producer": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["thread", "branch", "handoff_path", "status", "sha", "migrations", "blockers"],
+      "properties": {
+        "thread": { "enum": ["T1", "T2", "T3", "T5"] },
+        "branch": { "type": "string", "minLength": 1 },
+        "handoff_path": { "type": "string", "minLength": 1 },
+        "status": { "enum": ["awaiting_committed_handoff", "accepted"] },
+        "sha": { "oneOf": [{ "$ref": "#/$defs/sha" }, { "type": "null" }] },
+        "migrations": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/migration" }
+        },
+        "blockers": { "$ref": "#/$defs/stringArray" }
+      }
+    }
+  }
+}
