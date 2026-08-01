@@ -1,8 +1,8 @@
 campaign: three-day-prototype
 thread: T5
-checkpoint: T5-06
+checkpoint: T5-07
 branch: ve/prototype-t5-platform
-start_head: d7ab800c361535c715e2d3bfaa0583ba1073f1ef
+start_head: 81e8bbe5d121e1c04ec0454253f9b3119551d01a
 end_head: PENDING_COMMIT
 origin_main: c31f910e318a39d86372ed2d65050d08777dbfc5
 tree_clean: false
@@ -14,49 +14,37 @@ commits:
   - e54ba766
   - 6e2d084269ac2b5ffe45804616eb6702a494914b
   - d7ab800c361535c715e2d3bfaa0583ba1073f1ef
+  - 81e8bbe5d121e1c04ec0454253f9b3119551d01a
 owned_paths:
-  - x/roles/types/privileged/approval_mfa.go
-  - x/roles/types/privileged/audit.go
-  - x/roles/types/privileged/canonical.go
-  - x/roles/types/privileged/contracts_test.go
-  - x/roles/types/privileged/emergency_hold.go
-  - x/roles/types/privileged/feature.go
-  - x/roles/types/privileged/fixture.go
-  - x/roles/types/privileged/lifecycle.go
-  - x/roles/types/privileged/policy.go
+  - pkg/platformsecurity/contracts/manifest.go
+  - pkg/platformsecurity/contracts/manifest_test.go
+  - pkg/platformsecurity/contracts/testdata/dependency-manifest.json
   - _docs/ralph/handoffs/prototype-t5/HANDOFF.yaml
 files_changed:
-  - x/roles/types/privileged/approval_mfa.go
-  - x/roles/types/privileged/audit.go
-  - x/roles/types/privileged/canonical.go
-  - x/roles/types/privileged/contracts_test.go
-  - x/roles/types/privileged/emergency_hold.go
-  - x/roles/types/privileged/feature.go
-  - x/roles/types/privileged/fixture.go
-  - x/roles/types/privileged/lifecycle.go
-  - x/roles/types/privileged/policy.go
+  - pkg/platformsecurity/contracts/manifest.go
+  - pkg/platformsecurity/contracts/manifest_test.go
+  - pkg/platformsecurity/contracts/testdata/dependency-manifest.json
   - _docs/ralph/handoffs/prototype-t5/HANDOFF.yaml
 tests:
-  - command: go test -count=1 ./x/roles/types/privileged
+  - command: go test -count=1 <T5 MFA slice and all six isolated contract packages>
     environment: GO111MODULE=off
     go_version: go1.26.5 windows/amd64
     exit_code: 0
-  - command: go test -count=1 ./x/roles/types/privileged -run 'Policy|Role|Account|Audit|Emergency|Migration'
+  - command: go vet ./pkg/platformsecurity/contracts
     environment: GO111MODULE=off
     go_version: go1.26.5 windows/amd64
     exit_code: 0
-  - command: go vet ./x/roles/types/privileged
-    environment: GO111MODULE=off
-    go_version: go1.26.5 windows/amd64
+  - command: node scripts/validate-prototype-integration.cjs --root .
     exit_code: 0
   - command: git diff --check
     exit_code: 0
-generated_hashes: {}
+generated_hashes:
+  dependency_manifest: ace90f4423f4bdeaac92508a5b00e6d2b27c769e00f43b787ad4e8ae5565c527
 external_evidence: []
 known_failures: []
 notes:
-  - Privileged governance remains fixture_only with registration, advertisement, readiness, and mutation disabled.
-  - No threshold operator group, break-glass custody, privileged route, emergency activation, or production governance certification is claimed.
-  - Stale policy, self-approval, quorum loss, missing actions, scope expansion, weak MFA, hold migration drift, and audit-chain tampering fail closed.
-next_checkpoint: T5-07
+  - All 89A, 89B, 89C, 89D, 90A, and 91A capability rows remain fixture_only with registration, advertisement, readiness, and mutation disabled.
+  - T1 and T3 contract digests remain unavailable; T4 SHA and control artifacts are baseline fixtures, not claims about current T4 HEAD.
+  - Missing/changed dependencies, unknown versions/statuses, capability omissions, and every positive-enablement selector fail closed.
+next_checkpoint: queue_complete
 expected_head: PENDING_COMMIT
