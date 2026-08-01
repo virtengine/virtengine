@@ -161,6 +161,7 @@ When to add vs modify
 | scripts/init-chain.sh | Init local chain and start node. | ./scripts/init-chain.sh [chain-id] [genesis-account] | virtengine, jq |
 | scripts/seed-test-identities.sh | Patch genesis with test VEID identities. | ./scripts/seed-test-identities.sh | virtengine, jq |
 | scripts/localnet.sh | Docker-based localnet orchestration. | ./scripts/localnet.sh start | docker, docker compose, curl |
+| scripts/localnet.ps1 | Native Windows Docker localnet orchestration. | pwsh scripts/localnet.ps1 start | PowerShell 7+, Docker Desktop, Docker Compose V2 |
 | scripts/state-sync-bootstrap.sh | Configure state sync on node. | ./scripts/state-sync-bootstrap.sh --rpc-servers ... | jq, curl/wget |
 
 ### API + ML utilities

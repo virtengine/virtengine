@@ -1,14 +1,16 @@
-# VirtEngine Development Environment Setup for Windows (Git Bash)
+# VirtEngine Development Environment Setup for Windows
 
 ## Quick Start
 
-Run the setup script in Git Bash:
+VirtEngine supports native Windows builds and unit tests from PowerShell. Install Go `1.25.8`, then run:
 
-```bash
-./scripts/setup-env-gitbash.sh
+```powershell
+$env:CGO_ENABLED = "0"
+go build -mod=readonly -o .\bin\virtengine.exe .\cmd\virtengine
+go test -mod=readonly -short -count=1 ./...
 ```
 
-This script will check all dependencies and guide you through the setup process.
+Use `scripts/localnet.ps1` with Docker Desktop to run the complete local environment; WSL is not required by the launcher.
 
 ## Prerequisites
 
@@ -20,7 +22,7 @@ This script will check all dependencies and guide you through the setup process.
 
 2. **Go Programming Language**
    - Download: https://go.dev/dl/
-   - Minimum version: **1.21.0** (1.22+ recommended for localnet)
+   - Required version: **1.25.8**
    - Ensure Go is in your PATH
 
 3. **Node.js and npm**
@@ -28,191 +30,106 @@ This script will check all dependencies and guide you through the setup process.
    - LTS version recommended
    - npm comes bundled with Node.js
 
-4. **Make** (GNU Make)
-   - Install via Git Bash pacman: `pacman -S make`
-   - Or use the version bundled with Git for Windows
+4. **Docker Desktop** (complete localnet only)
+   - Use Docker Desktop configured for Linux containers.
+   - Docker Desktop itself still requires a virtualization backend (WSL2 or Hyper-V); this is a Docker requirement, not a VirtEngine shell requirement.
 
-5. **direnv** (version 2.32.0+)
-   - Download from: https://github.com/direnv/direnv/releases
-   - Extract `direnv.exe` to a directory in your PATH (e.g., `C:\Program Files\Git\usr\bin`)
-   - Add to your `~/.bashrc`:
-     ```bash
-     eval "$(direnv hook bash)"
-     ```
-
-### Recommended Tools (for Git Bash)
-
-Install these via Git Bash's pacman:
-
-```bash
-# Update package database
-pacman -Sy
-
-# Install recommended tools
-pacman -S curl wget jq unzip coreutils pv lz4
-```
+5. **C compiler** (optional, race tests and CGO features)
+   - Install a supported MinGW-w64 toolchain and set `CC` to its `gcc.exe`.
+   - Standard builds and short unit tests use `CGO_ENABLED=0` and do not require it.
 
 ### Optional Tools
 
-- **Docker Desktop** (for running localnet)
-  - Download: https://www.docker.com/products/docker-desktop
-  - Required for integration testing and local blockchain network
-  - Ensure WSL 2 backend is enabled in Docker Desktop settings
+These are needed only for specific workflows:
+
+- Node.js 20+ and pnpm `10.28.2` for portal and TypeScript SDK work.
+- GNU Make and Git Bash for legacy Make and Bash-only development helpers.
+- `direnv` for the Git Bash workflow. It is not required by native PowerShell commands.
 
 ## Manual Setup Steps
 
 If you prefer to set up manually instead of using the script:
 
-### 1. Configure Git Bash Environment
+### 1. Configure PowerShell Environment
 
-Add to your `~/.bashrc` or `~/.bash_profile`:
+Open a new PowerShell window after installing Go, then verify the toolchain:
 
-```bash
-# direnv integration
-eval "$(direnv hook bash)"
-
-# Ensure GOPATH is set
-export GOPATH=$(go env GOPATH)
-export PATH="$GOPATH/bin:$PATH"
+```powershell
+go version
+git --version
 ```
 
 ### 2. Clone and Setup VirtEngine
 
-```bash
+```powershell
 # Clone the repository (if not already done)
 git clone https://github.com/virtengine/virtengine.git
-cd virtengine
-
-# Allow direnv to load the environment
-direnv allow .
+Set-Location virtengine
 ```
 
-The `.envrc` file will automatically:
-
-- Check for required dependencies
-- Set up environment variables
-- Create `.cache` directories for build tools
-- Configure git hooks for code quality
-
-### 3. Configure direnv Auto-Allow (Optional)
-
-To avoid manually running `direnv allow` each time:
-
-Create/edit `~/.config/direnv/direnv.toml`:
-
-```toml
-[whitelist]
-prefix = [
-    "/c/Users/YOUR_USERNAME/path/to/virtengine"
-]
-```
-
-Replace `YOUR_USERNAME` and the path with your actual setup.
-
-### 4. Setup Git Hooks
-
-Git hooks are automatically configured when direnv loads, but you can manually set them:
-
-```bash
-git config core.hooksPath .githooks
-chmod +x .githooks/*
-```
+The PowerShell build and test commands do not depend on `.envrc`. Configure Git hooks with `git config core.hooksPath .githooks`; use `pwsh scripts/agent-preflight.ps1` before pushing.
 
 ## Building VirtEngine
 
 ### Build the main binary
 
-```bash
-make virtengine
+```powershell
+New-Item -ItemType Directory -Force .\bin | Out-Null
+$env:CGO_ENABLED = "0"
+go build -mod=readonly -o .\bin\virtengine.exe .\cmd\virtengine
 ```
 
-The binary will be created in `.cache/bin/virtengine`.
+The binary is created at `.\bin\virtengine.exe`.
 
 ### Run tests
 
-```bash
+```powershell
 # Unit tests
-make test
+$env:CGO_ENABLED = "0"
+go test -mod=readonly -short -count=1 ./...
 
-# Integration tests (requires more setup)
-make test-integration
-
-# Linting
-make lint-go
+# Race tests require MinGW-w64 and CGO_ENABLED=1.
+go test -mod=readonly -race -count=1 ./pkg/provider_daemon
 ```
 
 ## Running Localnet (Local Development Network)
 
-**Note:** Localnet is best run in WSL2 on Windows for full compatibility.
+The localnet launcher is native PowerShell. Docker Desktop runs the Linux service containers; it must be configured with a functional Linux-container backend.
 
 ### Using Docker Desktop
 
-If you have Docker Desktop installed:
+If Docker Desktop is running:
 
-```bash
-# Make scripts executable
-chmod +x scripts/localnet.sh scripts/init-chain.sh
+```powershell
+# Start and inspect the localnet
+pwsh .\scripts\localnet.ps1 start
+pwsh .\scripts\localnet.ps1 status
+pwsh .\scripts\localnet.ps1 logs virtengine-node
 
-# Start localnet
-./scripts/localnet.sh start
-
-# Check status
-./scripts/localnet.sh status
-
-# View logs
-./scripts/localnet.sh logs
-
-# Stop localnet
-./scripts/localnet.sh stop
+# Integration tests and lifecycle
+pwsh .\scripts\localnet.ps1 test
+pwsh .\scripts\localnet.ps1 stop
 ```
 
-### Using WSL2 (Recommended for Localnet)
-
-For the best experience with localnet and integration tests:
-
-1. Install WSL2: `wsl --install`
-2. Install Ubuntu or your preferred distro
-3. Clone the repo in WSL2
-4. Follow the Linux setup instructions in `_docs/development-environment.md`
+`start`, `stop`, `restart`, `update`, `reset`, `status`, `logs`, `test`, `shell`, and `create-admin` mirror the Bash launcher. Use `-Foreground` to retain Compose output and `reset -Force` to skip the destructive-action prompt.
 
 ## Common Issues and Solutions
 
-### Issue: `direnv: command not found`
+### Issue: `go: command not found`
 
-**Solution:** Ensure direnv is installed and in your PATH. Add this to `~/.bashrc`:
-
-```bash
-eval "$(direnv hook bash)"
-```
-
-### Issue: `make: command not found`
-
-**Solution:** Install make via pacman in Git Bash:
-
-```bash
-pacman -S make
-```
+**Solution:** Install Go `1.25.8`, then open a new PowerShell window so its installation directory is added to `PATH`.
 
 ### Issue: `.envrc` errors about missing tools
 
 **Solution:** Install the missing tools listed in the Prerequisites section.
-
-### Issue: Permission denied when running scripts
-
-**Solution:** Make scripts executable:
-
-```bash
-chmod +x setup-env-gitbash.sh
-chmod +x scripts/*.sh
-```
 
 ### Issue: Docker not available
 
 **Solution:**
 
 - Install Docker Desktop for Windows
-- Enable WSL 2 backend in Docker settings
-- Or use WSL2 for localnet development
+- Configure a Linux-container backend (WSL2 or Hyper-V)
+- Ensure hardware virtualization is enabled before running the complete localnet
 
 ### Issue: `No git tags found`
 
@@ -224,14 +141,12 @@ git tag v0.1.0
 
 ## Environment Variables
 
-Key environment variables set by `.envrc`:
+Key environment variables:
 
-- `VIRTENGINE_ROOT` - Project root directory
-- `GOPATH` - Go workspace path
-- `GOWORK` - Go workspace file path
-- `VE_DEVCACHE` - Build tools cache directory
-- `VE_DEVCACHE_BIN` - Build tools binary directory
-- `PATH` - Extended with `.cache/bin` and other tool paths
+- `CHAIN_ID` - Overrides the Docker localnet chain ID.
+- `LOG_LEVEL` - Overrides localnet logging (default `info`).
+- `CGO_ENABLED` - Set to `1` only when a Windows C compiler is configured.
+- `CC` - Path to MinGW-w64 `gcc.exe` for CGO and race tests.
 
 ## Next Steps
 
@@ -239,14 +154,16 @@ After setup:
 
 1. **Test the build:**
 
-   ```bash
-   make virtengine
+   ```powershell
+   $env:CGO_ENABLED = "0"
+   go build -mod=readonly -o .\bin\virtengine.exe .\cmd\virtengine
    ```
 
 2. **Run unit tests:**
 
-   ```bash
-   make test
+   ```powershell
+   $env:CGO_ENABLED = "0"
+   go test -mod=readonly -short -count=1 ./...
    ```
 
 3. **Explore the documentation:**
@@ -286,12 +203,12 @@ After setup:
 
 3. **Symbolic Links:** Some operations may require "Developer Mode" on Windows 10/11.
 
-4. **Performance:** File I/O is slower than Linux. Consider WSL2 for intensive development.
+4. **Performance:** Native Go builds and unit tests run directly on Windows. Docker localnet performance depends on Docker Desktop's selected virtualization backend.
 
-5. **Localnet:** For full localnet functionality, use WSL2 or Docker Desktop with WSL2 backend.
+5. **Localnet:** Use `pwsh .\scripts\localnet.ps1 start`. The launcher does not require Git Bash or WSL.
 
 6. **CGO Dependencies:** The project uses CGO (libusb/libhid). Ensure you have:
    - MinGW-w64 (usually bundled with Git for Windows)
    - Build tools available
 
-7. **Terminal:** Use Git Bash, not PowerShell or CMD, for running shell scripts.
+7. **Terminal:** Use PowerShell for the native workflow. Use Git Bash only for legacy `.sh` helpers that do not yet have a PowerShell equivalent.

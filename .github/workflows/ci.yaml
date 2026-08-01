@@ -147,6 +147,41 @@ jobs:
         run: go vet ./...
 
   # ===========================================================================
+  # Native Windows Build and Unit Tests
+  # ===========================================================================
+  windows-native:
+    name: Windows Native Build and Unit Tests
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.25.8"
+          cache: true
+
+      - name: Download dependencies
+        shell: pwsh
+        run: go mod download
+
+      - name: Build VirtEngine
+        shell: pwsh
+        env:
+          CGO_ENABLED: "0"
+          GOFLAGS: "-mod=readonly"
+        run: go build -o .\bin\virtengine.exe .\cmd\virtengine
+
+      - name: Run short unit tests
+        shell: pwsh
+        env:
+          CGO_ENABLED: "0"
+          GOFLAGS: "-mod=readonly"
+        run: go test -short -count=1 ./...
+
+  # ===========================================================================
   # Shell Lint Job
   # ===========================================================================
   lint-shell:

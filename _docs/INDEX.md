@@ -5,6 +5,12 @@ This index lists internal-only documentation. Do not add internal docs outside `
 ## Core References
 - `_docs/architecture.md`
 - `_docs/protocol-completion-continuation-plan.md`
+- `_docs/five-agent-protocol-completion-plan.md`
+- `_docs/thread-queues/thread-1-identity-trust.md`
+- `_docs/thread-queues/thread-2-product-clients.md`
+- `_docs/thread-queues/thread-3-protocol-reliability.md`
+- `_docs/thread-queues/thread-4-integration-release.md`
+- `_docs/thread-queues/thread-5-platform-security.md`
 - `_docs/api-gateway.md`
 - `_docs/developer-guide.md`
 - `_docs/development-environment.md`
