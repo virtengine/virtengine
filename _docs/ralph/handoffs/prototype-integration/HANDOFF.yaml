@@ -1,63 +1,62 @@
 {
   "campaign": "three-day-prototype",
   "thread": "T4",
-  "checkpoint": "T4-10A",
+  "checkpoint": "T4-10B",
   "branch": "ve/prototype-integration",
-  "start_head": "823c61a1a9fc2c3a8f8b59dd060bb6db4a1bc3db",
-  "end_head": "0ee9defcf2daca0d949dca4cace0d6f0a3cc264d",
+  "start_head": "5593292ec188efd3b69e4a48cefe2e79d90412ef",
+  "end_head": "fb95e757e09f83b5262a424720a19eca34a86bbb",
   "origin_main": "79391a3df86d85522b92e0400c6904971ecbe65d",
   "tree_clean": true,
   "commits": [
-    "0ee9defcf2daca0d949dca4cace0d6f0a3cc264d"
+    "fb95e757e09f83b5262a424720a19eca34a86bbb"
   ],
   "owned_paths": [
     "_docs/ralph/prototype-integration/**",
     "_docs/ralph/handoffs/prototype-integration/**",
     "scripts/validate-prototype-integration.cjs",
-    "scripts/validate-model-provenance.cjs"
+    "cmd/inference-sidecar/manifest.go",
+    "cmd/inference-sidecar/manifest_test.go"
   ],
   "files_changed": [
-    "_docs/INDEX.md",
     "_docs/ralph/handoffs/prototype-integration/HANDOFF.yaml",
-    "_docs/ralph/prototype-integration/model-provenance.json",
-    "_docs/ralph/prototype-integration/model-provenance.schema.json",
-    "scripts/validate-model-provenance.cjs",
-    "scripts/validate-model-provenance.test.cjs",
-    "scripts/validate-prototype-integration.cjs"
+    "cmd/inference-sidecar/manifest.go",
+    "cmd/inference-sidecar/manifest_test.go"
   ],
   "tests": [
     {
-      "command": "node scripts/validate-model-provenance.test.cjs && node scripts/validate-model-provenance.cjs",
+      "command": "go1.25.8 test -count=1 ./cmd/inference-sidecar -run 'Provenance|VerifyModelBundle'",
       "exit_code": 0,
       "result": "passed",
-      "test_count": 10,
       "tool_versions": {
-        "node": "20.19.1"
+        "go": "1.25.8 windows/amd64"
       }
     },
     {
-      "command": "node scripts/validate-prototype-integration.test.cjs && node scripts/validate-prototype-integration.cjs",
+      "command": "go1.25.8 test -count=1 ./cmd/inference-sidecar",
       "exit_code": 0,
       "result": "passed",
-      "test_count": 5,
       "tool_versions": {
-        "node": "20.19.1"
+        "go": "1.25.8 windows/amd64"
       }
     },
     {
-      "command": "node scripts/validate-agents-docs.mjs",
+      "command": "go1.25.8 vet ./cmd/inference-sidecar",
       "exit_code": 0,
       "result": "passed",
-      "test_count": 9,
+      "tool_versions": {
+        "go": "1.25.8 windows/amd64"
+      }
+    },
+    {
+      "command": "node scripts/validate-model-provenance.test.cjs && node scripts/validate-prototype-integration.cjs",
+      "exit_code": 0,
+      "result": "passed",
       "tool_versions": {
         "node": "20.19.1"
       }
     }
   ],
-  "generated_hashes": {
-    "model-provenance.json": "d28295672b114e6ba910b12d2fa060b6b32f0ab63ec795e07b2564ac494b1acc",
-    "model-provenance.schema.json": "d84720c9d1479b8521377b6f1029d10169a56878c4088b74ca65d4f041830a57"
-  },
+  "generated_hashes": {},
   "accepted_checkpoints": [],
   "rejected_checkpoints": [
     {
@@ -80,8 +79,9 @@
   "blockers": [
     "T1 and T5 have incomplete dirty handoffs with PENDING_COMMIT; T2 and T3 are stale relative to current T4.",
     "Model weights, production data, approved licenses and redistribution, runtime image/SBOM, approved model card, and production evaluation remain dependency-blocked.",
+    "No current model bundle carries production_approved provenance; production sidecar readiness now rejects all lower evidence states.",
     "T4-10 is not complete and no model, dataset, runtime, license, or production profile is certified by this checkpoint."
   ],
-  "next_checkpoint": "T4-10B",
-  "expected_head": "0ee9defcf2daca0d949dca4cace0d6f0a3cc264d"
+  "next_checkpoint": "T4-10C",
+  "expected_head": "fb95e757e09f83b5262a424720a19eca34a86bbb"
 }
