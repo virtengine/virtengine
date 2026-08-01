@@ -1,46 +1,62 @@
 campaign: three-day-prototype
 thread: T2
-checkpoint: T2-14
+checkpoint: T2-15
 branch: ve/prototype-t2-product
-start_head: 6e1bd4c23b276393792b0a3df4cd348a6c5c96e5
-end_head: 158c60041bbe86f02d86bdbd22eba71aaf9f3870
+start_head: 833929584bbea586ef255b6e9827de031d767388
+end_head: e4da83c0b586b06dbae33d30602a7925d090d1e9
 origin_main: 79391a3df86d85522b92e0400c6904971ecbe65d
 tree_clean: true
 commits:
-  - 158c60041bbe86f02d86bdbd22eba71aaf9f3870
+  - e4da83c0b586b06dbae33d30602a7925d090d1e9
 owned_paths:
-  - lib/portal/src/wallet/remote-face/
-  - lib/portal/__tests__/wallet/remote-face/
-  - lib/portal/src/wallet/index.ts
+  - lib/portal/src/identity/uniqueness-enrollment.ts
+  - lib/portal/components/identity/UniquenessEnrollmentStatus.tsx
+  - lib/portal/__tests__/identity/uniqueness-enrollment.test.tsx
+  - lib/portal/index.ts
+  - lib/portal/index.d.ts
 files_changed:
-  - lib/portal/src/wallet/remote-face/remote-face-auth.ts
-  - lib/portal/src/wallet/remote-face/index.ts
-  - lib/portal/__tests__/wallet/remote-face/remote-face-auth.test.ts
-  - lib/portal/src/wallet/index.ts
+  - lib/portal/src/identity/uniqueness-enrollment.ts
+  - lib/portal/components/identity/UniquenessEnrollmentStatus.tsx
+  - lib/portal/__tests__/identity/uniqueness-enrollment.test.tsx
+  - lib/portal/index.ts
+  - lib/portal/index.d.ts
 tests:
   - command: C:\Users\pavil\AppData\Local\Temp\virtengine-node-v24.12.0\npm.cmd --prefix C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t2\lib\portal test
     exit_code: 0
     result: passed
-    test_count: 576
+    test_count: 615
     tool_versions:
       node: v24.12.0
-    artifact: _docs/ralph/handoffs/prototype-t2/T2-14-evidence.txt
+    artifact: _docs/ralph/handoffs/prototype-t2/T2-15-evidence.txt
   - command: C:\Users\pavil\AppData\Local\Temp\virtengine-node-v24.12.0\npm.cmd --prefix C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t2\lib\portal run type-check
     exit_code: 0
     result: passed
     tool_versions:
       node: v24.12.0
-    artifact: _docs/ralph/handoffs/prototype-t2/T2-14-evidence.txt
+    artifact: _docs/ralph/handoffs/prototype-t2/T2-15-evidence.txt
+  - command: C:\Users\pavil\AppData\Local\Temp\virtengine-node-v24.12.0\npm.cmd --prefix C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t2\portal run lint
+    exit_code: 0
+    result: passed
+    tool_versions:
+      node: v24.12.0
+    artifact: _docs/ralph/handoffs/prototype-t2/T2-15-evidence.txt
+  - command: C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t2\portal\node_modules\.bin\vitest.CMD run --reporter=dot
+    exit_code: 0
+    result: passed
+    test_count: 525
+    tool_versions:
+      node: v24.12.0
+    artifact: _docs/ralph/handoffs/prototype-t2/T2-15-evidence.txt
 generated_hashes: {}
 migrations: []
 external_evidence:
-  - _docs/ralph/handoffs/prototype-t2/T2-14-evidence.txt
+  - _docs/ralph/handoffs/prototype-t2/T2-15-evidence.txt
 known_failures:
   - TestProviderMutationSubmitterStandbyTakesOverWithHigherFence fails repeatedly in the full provider package gate with submitter lease timing errors.
 blockers:
   - T4 producer-handoff.schema.json forbids the integration_parent field required by the updated campaign plan; integration ancestor fa21b1e540a5efcbe1822da4199be7acec7709d3 is retained in T2-05-evidence.txt.
   - Full provider package certification is blocked by the unrelated submitter lease timing failure retained in T2-03B-evidence.txt.
-  - Remote face authentication is disabled by default; T1/T5 profiles and all evidence/final authorization authorities are not wired.
-  - Face alone cannot authorize and no production UI wiring or certification is claimed.
-next_checkpoint: T2-15
-expected_head: 158c60041bbe86f02d86bdbd22eba71aaf9f3870
+  - Canonical T1 uniqueness receipt projection is not wired; defaults remain unavailable.
+  - No production route wiring or uniqueness-service certification is claimed.
+next_checkpoint: T2-16
+expected_head: e4da83c0b586b06dbae33d30602a7925d090d1e9
