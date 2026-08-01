@@ -1,47 +1,49 @@
 campaign: three-day-prototype
 thread: T2
-checkpoint: T2-09
+checkpoint: T2-10
 branch: ve/prototype-t2-product
-start_head: abffecf162d8b502c6a88cb18182dd157f55bf63
-end_head: f9efd60804075e08b83777273b25632fc3f02f1b
+start_head: c6985000b1401b559e7d8c65864e2ddc5b1b4043
+end_head: fe96075c22c002256853bb52170f36bb5a9045d6
 origin_main: 79391a3df86d85522b92e0400c6904971ecbe65d
 tree_clean: true
 commits:
-  - f9efd60804075e08b83777273b25632fc3f02f1b
+  - fe96075c22c002256853bb52170f36bb5a9045d6
 owned_paths:
-  - lib/portal/src/chain/evidence-boundary.ts
-  - lib/portal/__tests__/chain/evidence-boundary.test.ts
-  - lib/portal/src/chain/index.ts
-  - lib/portal/src/chain/tx/veid.ts
+  - mobile/veid-capture-app/
 files_changed:
-  - lib/portal/src/chain/evidence-boundary.ts
-  - lib/portal/__tests__/chain/evidence-boundary.test.ts
-  - lib/portal/src/chain/index.ts
-  - lib/portal/src/chain/tx/veid.ts
+  - mobile/veid-capture-app/App.tsx
+  - mobile/veid-capture-app/src/screens/UploadScreen.tsx
+  - mobile/veid-capture-app/src/services/cleanup/captureCleanup.ts
+  - mobile/veid-capture-app/src/services/cleanup/sensitiveData.ts
+  - mobile/veid-capture-app/src/services/upload/captureUploadAttempt.ts
+  - mobile/veid-capture-app/src/state/captureStore.tsx
+  - mobile/veid-capture-app/src/test/captureCleanup.test.ts
+  - mobile/veid-capture-app/src/test/captureStore.test.ts
+  - mobile/veid-capture-app/src/test/captureUploader.test.ts
 tests:
-  - command: C:\Users\pavil\AppData\Local\Temp\virtengine-node-v24.12.0\npm.cmd --prefix C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t2\lib\portal test
+  - command: C:\Users\pavil\AppData\Local\Temp\virtengine-node-v24.12.0\npm.cmd --prefix C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t2\mobile\veid-capture-app test
     exit_code: 0
     result: passed
-    test_count: 487
+    test_count: 44
     tool_versions:
       node: v24.12.0
-    artifact: _docs/ralph/handoffs/prototype-t2/T2-09-evidence.txt
-  - command: C:\Users\pavil\AppData\Local\Temp\virtengine-node-v24.12.0\npm.cmd --prefix C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t2\lib\portal run type-check
+    artifact: _docs/ralph/handoffs/prototype-t2/T2-10-evidence.txt
+  - command: C:\Users\pavil\AppData\Local\Temp\virtengine-node-v24.12.0\npm.cmd --prefix C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t2\mobile\veid-capture-app run typecheck
     exit_code: 0
     result: passed
     tool_versions:
       node: v24.12.0
-    artifact: _docs/ralph/handoffs/prototype-t2/T2-09-evidence.txt
+    artifact: _docs/ralph/handoffs/prototype-t2/T2-10-evidence.txt
 generated_hashes: {}
 migrations: []
 external_evidence:
-  - _docs/ralph/handoffs/prototype-t2/T2-09-evidence.txt
+  - _docs/ralph/handoffs/prototype-t2/T2-10-evidence.txt
 known_failures:
   - TestProviderMutationSubmitterStandbyTakesOverWithHigherFence fails repeatedly in the full provider package gate with submitter lease timing errors.
 blockers:
   - T4 producer-handoff.schema.json forbids the integration_parent field required by the updated campaign plan; integration ancestor fa21b1e540a5efcbe1822da4199be7acec7709d3 is retained in T2-05-evidence.txt.
   - Full provider package certification is blocked by the unrelated submitter lease timing failure retained in T2-03B-evidence.txt.
-  - T5 canonical EvidenceObjectRef is unavailable; the new boundary remains unavailable until injected and defines no competing schema.
-  - Production off-chain ingestion, T5 reference validation/projection, chain submitter, and durable persistence are not wired.
-next_checkpoint: T2-10
-expected_head: f9efd60804075e08b83777273b25632fc3f02f1b
+  - Production durable acknowledgement validation, artifact removal, and cleanup journal persistence are not wired; defaults remain unavailable.
+  - T2 defines no T5 deletion receipt or durable storage schema.
+next_checkpoint: T2-11
+expected_head: fe96075c22c002256853bb52170f36bb5a9045d6
