@@ -1,56 +1,76 @@
 {
   "campaign": "three-day-prototype",
   "thread": "T4",
-  "checkpoint": "T4-01B",
+  "checkpoint": "T4-11A",
   "branch": "ve/prototype-integration",
-  "start_head": "5587c384f634552c3a2dd7181ca49cafa4da1984",
-  "end_head": "64dc9eebf3395227cca18bfb333774cf22d5d1c2",
+  "start_head": "657e593482a2e54bc4b2c805ed6fea08afaa1493",
+  "end_head": "760794e9ee709ad3537f76831264be34aa6f6186",
   "origin_main": "79391a3df86d85522b92e0400c6904971ecbe65d",
   "tree_clean": true,
   "commits": [
-    "64dc9eebf3395227cca18bfb333774cf22d5d1c2"
+    "760794e9ee709ad3537f76831264be34aa6f6186"
   ],
   "owned_paths": [
     "_docs/ralph/prototype-integration/**",
     "_docs/ralph/handoffs/prototype-integration/**",
     "scripts/validate-prototype-integration.cjs",
-    "_docs/prototype-thread-intake-runbook.md",
-    "scripts/validate-prototype-intake.cjs",
-    "scripts/validate-prototype-intake.test.cjs"
+    ".github/workflows/ml-model-verify.yaml",
+    "ml/training/features/**",
+    "ml/training/tests/**",
+    "ml/training/tools/**",
+    "pkg/inference/**"
   ],
   "files_changed": [
     "_docs/ralph/handoffs/prototype-integration/HANDOFF.yaml",
-    "_docs/INDEX.md",
-    "_docs/prototype-thread-intake-runbook.md",
-    "_docs/ralph/prototype-integration/epochs/epoch-1.json",
-    "_docs/ralph/prototype-integration/producer-handoff.schema.json",
-    "scripts/validate-prototype-intake.cjs",
-    "scripts/validate-prototype-intake.test.cjs",
-    "scripts/validate-prototype-integration.cjs",
-    "scripts/validate-prototype-integration.test.cjs"
+    ".github/workflows/ml-model-verify.yaml",
+    "_docs/ralph/handoffs/prototype-integration/HANDOFF.yaml",
+    "ml/training/features/canonical_vector.py",
+    "ml/training/features/feature_combiner.py",
+    "ml/training/tests/test_feature_parity.py",
+    "ml/training/tests/test_features.py",
+    "ml/training/tools/feature_parity_fixture.py",
+    "pkg/inference/conformance/testdata/feature_parity_v1.json",
+    "pkg/inference/feature_extractor.go",
+    "pkg/inference/feature_parity_test.go"
   ],
   "tests": [
     {
-      "command": "node --test scripts/validate-prototype-intake.test.cjs",
+      "command": "python -m ml.training.tools.feature_parity_fixture --check && python -m pytest -q ml/training/tests/test_feature_parity.py ml/training/tests/test_features.py",
       "exit_code": 0,
       "result": "passed",
-      "test_count": 28,
+      "test_count": 30,
       "tool_versions": {
-        "node": "20.19.1"
+        "python": "3.14.6 windows"
       }
     },
     {
-      "command": "node scripts/validate-prototype-integration.test.cjs && node scripts/validate-prototype-integration.cjs && node scripts/validate-agents-docs.mjs",
+      "command": "go1.25.8 test -count=1 ./pkg/inference/... && go1.25.8 vet ./pkg/inference/...",
       "exit_code": 0,
       "result": "passed",
       "tool_versions": {
-        "node": "20.19.1"
+        "go": "go version go1.25.8 windows/amd64"
+      }
+    },
+    {
+      "command": "CGO_ENABLED=1 CC=<WinLibs-GCC-16.1.0> go1.25.8 test -race -count=1 ./pkg/inference/...",
+      "exit_code": 0,
+      "result": "passed",
+      "tool_versions": {
+        "go": "go version go1.25.8 windows/amd64",
+        "gcc": "WinLibs GCC 16.1.0 POSIX UCRT"
+      }
+    },
+    {
+      "command": "python.exe C:\\Users\\pavil\\AppData\\Local\\Temp\\t4_parse_workflow.py; git diff --check",
+      "exit_code": 0,
+      "result": "passed",
+      "tool_versions": {
+        "python": "3.14.6 windows"
       }
     }
   ],
   "generated_hashes": {
-    "scripts/validate-prototype-intake.cjs": "2b9cb0a6a3baaab573846e94057bfac478dd922fba6db5128c1110a9d15f31f8",
-    "_docs/ralph/prototype-integration/producer-handoff.schema.json": "912d031a6782a832622fcd50fd98a4facb4ca2ef36b8b9d01d60327f02135e0a"
+    "pkg/inference/conformance/testdata/feature_parity_v1.json": "61f5f4239f515a57d73e1ef0261415bfba2fb8e55560d7cbedabd8e09479930c"
   },
   "accepted_checkpoints": [],
   "rejected_checkpoints": [
@@ -72,10 +92,10 @@
     "Go 1.26.5 cannot compile github.com/bytedance/sonic v1.14.1; checkpoint gates were rerun successfully with the repository-pinned Go 1.25.8 toolchain."
   ],
   "blockers": [
-    "Epoch 1 is open with no announced producer tags; intake is forbidden until T4 commits a frozen post-cutoff roster.",
-    "Existing producer handoffs use the obsolete pre-epoch schema and are not intake-eligible.",
-    "No producer checkpoint has been accepted or integrated by this checkpoint."
+    "Epoch 1 remains open with no announced intake-v2 producer tags; no producer checkpoint is accepted by this checkpoint.",
+    "Feature-vector assembly and deterministic hash parity are proven for shared fixtures only; receipt-byte parity remains T4-11B.",
+    "No production model, weights, dataset, license, runtime image, or model lifecycle state is approved or activated."
   ],
-  "next_checkpoint": "T4-11A",
-  "expected_head": "64dc9eebf3395227cca18bfb333774cf22d5d1c2"
+  "next_checkpoint": "T4-11B",
+  "expected_head": "760794e9ee709ad3537f76831264be34aa6f6186"
 }
