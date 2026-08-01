@@ -1,0 +1,26 @@
+T2-X01 retained validation evidence
+Implementation SHA: 957221d2705d124d962e293ef18158716e07fc8b
+Node: v24.12.0
+
+COMMAND: C:\Users\pavil\AppData\Local\Temp\virtengine-node-v24.12.0\npm.cmd --prefix C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t2\lib\portal test
+EXIT: 0
+RESULT: passed
+DETAIL: 25 files, 656 tests passed; wallet context 14 tests passed
+
+COMMAND: C:\Users\pavil\AppData\Local\Temp\virtengine-node-v24.12.0\npm.cmd --prefix C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t2\lib\portal run type-check
+EXIT: 0
+RESULT: passed
+
+COMMAND: git -C C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t2 diff --check
+EXIT: 0
+RESULT: passed
+
+BEHAVIOR:
+- Amino, Direct and arbitrary signing require a fresh injected live authorization before adapter invocation.
+- Authorization is bound to chain, account, public key, wallet, device/session, expiry and operation-specific MFA scope.
+- Transaction and arbitrary-signing scopes are isolated; reconnect metadata alone never authorizes.
+- Delayed authorization is rejected after account, chain, wallet or public-key context changes.
+
+NON-CLAIMS:
+- Production signing authorization authority is not wired; signing defaults fail closed with typed SESSION_EXPIRED.
+- Live authorization remains memory-only and is never persisted.

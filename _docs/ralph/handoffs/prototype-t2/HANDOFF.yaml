@@ -1,52 +1,51 @@
 campaign: three-day-prototype
 thread: T2
-checkpoint: T2-16
+checkpoint: T2-X01
 branch: ve/prototype-t2-product
-start_head: 2504c1266c84d3a326e197dbefb7e314bc6a5c5e
-end_head: 126be5cac8095b0a6fe04588c047afa2d707546f
+start_head: 4d08acc2cef5365fec59c93791d12bbf3acd7f93
+end_head: 957221d2705d124d962e293ef18158716e07fc8b
 origin_main: 79391a3df86d85522b92e0400c6904971ecbe65d
 tree_clean: true
 commits:
-  - 8276564f51db0eb244f68bc095ab074a036146fe
-  - 126be5cac8095b0a6fe04588c047afa2d707546f
+  - 957221d2705d124d962e293ef18158716e07fc8b
 owned_paths:
-  - lib/portal/src/support-ai/unsupported-document-triage.ts
-  - lib/portal/src/support-ai/index.ts
-  - lib/portal/__tests__/support-ai/unsupported-document-triage.test.ts
+  - lib/portal/src/wallet/context.tsx
+  - lib/portal/src/wallet/session.ts
+  - lib/portal/src/wallet/types.ts
+  - lib/portal/__tests__/wallet/context.test.tsx
+  - lib/portal/src/wallet/index.ts
   - lib/portal/index.ts
-  - lib/portal/index.d.ts
-  - lib/portal/tsconfig.chain.json
 files_changed:
-  - lib/portal/src/support-ai/unsupported-document-triage.ts
-  - lib/portal/src/support-ai/index.ts
-  - lib/portal/__tests__/support-ai/unsupported-document-triage.test.ts
+  - lib/portal/src/wallet/context.tsx
+  - lib/portal/src/wallet/session.ts
+  - lib/portal/src/wallet/types.ts
+  - lib/portal/__tests__/wallet/context.test.tsx
+  - lib/portal/src/wallet/index.ts
   - lib/portal/index.ts
-  - lib/portal/index.d.ts
-  - lib/portal/tsconfig.chain.json
 tests:
   - command: C:\Users\pavil\AppData\Local\Temp\virtengine-node-v24.12.0\npm.cmd --prefix C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t2\lib\portal test
     exit_code: 0
     result: passed
-    test_count: 649
+    test_count: 656
     tool_versions:
       node: v24.12.0
-    artifact: _docs/ralph/handoffs/prototype-t2/T2-16-evidence.txt
+    artifact: _docs/ralph/handoffs/prototype-t2/T2-X01-evidence.txt
   - command: C:\Users\pavil\AppData\Local\Temp\virtengine-node-v24.12.0\npm.cmd --prefix C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t2\lib\portal run type-check
     exit_code: 0
     result: passed
     tool_versions:
       node: v24.12.0
-    artifact: _docs/ralph/handoffs/prototype-t2/T2-16-evidence.txt
+    artifact: _docs/ralph/handoffs/prototype-t2/T2-X01-evidence.txt
 generated_hashes: {}
 migrations: []
 external_evidence:
-  - _docs/ralph/handoffs/prototype-t2/T2-16-evidence.txt
+  - _docs/ralph/handoffs/prototype-t2/T2-X01-evidence.txt
 known_failures:
   - TestProviderMutationSubmitterStandbyTakesOverWithHigherFence fails repeatedly in the full provider package gate with submitter lease timing errors.
 blockers:
   - T4 producer-handoff.schema.json forbids the integration_parent field required by the updated campaign plan; integration ancestor fa21b1e540a5efcbe1822da4199be7acec7709d3 is retained in T2-05-evidence.txt.
   - Full provider package certification is blocked by the unrelated submitter lease timing failure retained in T2-03B-evidence.txt.
-  - Production model, output validator, and digest authority are not wired; defaults remain unavailable.
-  - No ChatAgent, tool, route, side effect, decision authority, or production model integration exists.
-next_checkpoint: T2-X01
-expected_head: 126be5cac8095b0a6fe04588c047afa2d707546f
+  - Production live signing authorization authority is not wired; all signing methods fail closed until injected.
+  - Live authorization remains memory-only and reconnect metadata cannot authorize signing.
+next_checkpoint: T2-X02
+expected_head: 957221d2705d124d962e293ef18158716e07fc8b
