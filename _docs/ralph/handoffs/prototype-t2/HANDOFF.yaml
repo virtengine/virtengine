@@ -1,43 +1,41 @@
 campaign: three-day-prototype
 thread: T2
-checkpoint: T2-07
+checkpoint: T2-08
 branch: ve/prototype-t2-product
-start_head: ca38018a0868cd9e26462b7df61a9114ee0a06c4
-end_head: 5b54095ab4a360c659ec62c4d470573d50e1b108
+start_head: c668cb59bccc28a70de50d7eb59b8b3c1a3587d7
+end_head: c668cb59bccc28a70de50d7eb59b8b3c1a3587d7
 origin_main: 79391a3df86d85522b92e0400c6904971ecbe65d
 tree_clean: true
-commits:
-  - 5b54095ab4a360c659ec62c4d470573d50e1b108
+commits: []
 owned_paths:
-  - lib/portal/src/chat/action-gate.ts
-  - lib/portal/__tests__/chat/action-gate.test.ts
+  - _docs/ralph/handoffs/prototype-t2/T2-08-blocked-evidence.txt
 files_changed:
-  - lib/portal/src/chat/action-gate.ts
-  - lib/portal/__tests__/chat/action-gate.test.ts
+  - _docs/ralph/handoffs/prototype-t2/T2-08-blocked-evidence.txt
 tests:
-  - command: C:\Users\pavil\AppData\Local\Temp\virtengine-node-v24.12.0\npm.cmd --prefix C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t2\lib\portal test
+  - command: C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t2\portal\node_modules\.bin\vitest.CMD run tests\unit\veid\useVeidWizard.test.tsx -t "fails closed" --reporter=dot
     exit_code: 0
     result: passed
-    test_count: 466
+    test_count: 5
     tool_versions:
       node: v24.12.0
-    artifact: _docs/ralph/handoffs/prototype-t2/T2-07-evidence.txt
-  - command: C:\Users\pavil\AppData\Local\Temp\virtengine-node-v24.12.0\npm.cmd --prefix C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t2\lib\portal run type-check
+    artifact: _docs/ralph/handoffs/prototype-t2/T2-08-blocked-evidence.txt
+  - command: C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t2\mobile\veid-capture-app\node_modules\.bin\vitest.CMD run src\test\captureUploader.test.ts -t "fails typed unavailable" --reporter=dot
     exit_code: 0
     result: passed
+    test_count: 1
     tool_versions:
       node: v24.12.0
-    artifact: _docs/ralph/handoffs/prototype-t2/T2-07-evidence.txt
+    artifact: _docs/ralph/handoffs/prototype-t2/T2-08-blocked-evidence.txt
 generated_hashes: {}
 migrations: []
 external_evidence:
-  - _docs/ralph/handoffs/prototype-t2/T2-07-evidence.txt
+  - _docs/ralph/handoffs/prototype-t2/T2-08-blocked-evidence.txt
 known_failures:
   - TestProviderMutationSubmitterStandbyTakesOverWithHigherFence fails repeatedly in the full provider package gate with submitter lease timing errors.
 blockers:
   - T4 producer-handoff.schema.json forbids the integration_parent field required by the updated campaign plan; integration ancestor fa21b1e540a5efcbe1822da4199be7acec7709d3 is retained in T2-05-evidence.txt.
   - Full provider package certification is blocked by the unrelated submitter lease timing failure retained in T2-03B-evidence.txt.
-  - T2-07 is intentionally unregistered and does not complete Task 91B; production NLI mutation tools remain outside this isolated prototype.
-  - Task 91A policy registry, durable nonce storage, governed preview signing, model/tool certification, red-team evidence, and human handoff remain unavailable.
-next_checkpoint: T2-08
-expected_head: 5b54095ab4a360c659ec62c4d470573d50e1b108
+  - T2-08 is blocked_external_dependency: no real local process supplies approved capture providers, a T1 canonical Evidence Envelope, authenticated upload receipts, and committed transaction evidence.
+  - Screenshots and integrated-journey success are intentionally absent; mocks and fixture transports are not completion evidence.
+next_checkpoint: T2-09
+expected_head: c668cb59bccc28a70de50d7eb59b8b3c1a3587d7
