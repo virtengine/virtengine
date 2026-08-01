@@ -10,21 +10,25 @@
 package crypto
 
 import (
+	"bytes"
+	"crypto/ed25519"
 	"crypto/rand"
-	"crypto/sha256"
 	"fmt"
 	"io"
 
 	"golang.org/x/crypto/curve25519"
 	"golang.org/x/crypto/nacl/box"
+	"golang.org/x/crypto/nacl/secretbox"
 
 	"github.com/virtengine/virtengine/x/encryption/types"
 )
 
-// KeyPair represents an X25519 key pair for encryption
+// KeyPair contains independent X25519 encryption and Ed25519 signing keys.
 type KeyPair struct {
-	PublicKey  [32]byte
-	PrivateKey [32]byte
+	PublicKey         [32]byte
+	PrivateKey        [32]byte
+	SigningPublicKey  [ed25519.PublicKeySize]byte
+	SigningPrivateKey [ed25519.PrivateKeySize]byte
 }
 
 // RecipientInfo describes a recipient for multi-recipient envelopes.
@@ -32,6 +36,41 @@ type RecipientInfo struct {
 	PublicKey  []byte
 	KeyID      string
 	KeyVersion uint32
+}
+
+func (kp *KeyPair) validate() error {
+	if kp == nil {
+		return fmt.Errorf("sender key pair required")
+	}
+	var derivedPublicKey [32]byte
+	curve25519.ScalarBaseMult(&derivedPublicKey, &kp.PrivateKey)
+	if derivedPublicKey != kp.PublicKey {
+		return fmt.Errorf("sender X25519 public key does not match private key")
+	}
+	derivedSigningPublicKey := ed25519.PrivateKey(kp.SigningPrivateKey[:]).Public().(ed25519.PublicKey)
+	if !bytes.Equal(derivedSigningPublicKey, kp.SigningPublicKey[:]) {
+		return fmt.Errorf("sender Ed25519 public key does not match private key")
+	}
+	return nil
+}
+
+func validateRecipient(recipient RecipientInfo) (string, error) {
+	if len(recipient.PublicKey) != 32 {
+		return "", fmt.Errorf("invalid recipient public key size: expected 32, got %d", len(recipient.PublicKey))
+	}
+	testScalar := [32]byte{1}
+	if _, err := curve25519.X25519(testScalar[:], recipient.PublicKey); err != nil {
+		return "", fmt.Errorf("invalid low-order recipient public key: %w", err)
+	}
+	fingerprint := types.ComputeKeyFingerprint(recipient.PublicKey)
+	keyID := recipient.KeyID
+	if keyID == "" {
+		keyID = types.FormatRecipientKeyID(fingerprint, recipient.KeyVersion)
+	}
+	if types.NormalizeRecipientKeyID(keyID) != fingerprint {
+		return "", fmt.Errorf("recipient key ID does not match public key fingerprint")
+	}
+	return keyID, nil
 }
 
 // GenerateKeyPair generates a new X25519 key pair using crypto/rand
@@ -44,9 +83,20 @@ func GenerateKeyPair() (*KeyPair, error) {
 	var publicKey [32]byte
 	curve25519.ScalarBaseMult(&publicKey, &privateKey)
 
+	signingPublicKey, signingPrivateKey, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		return nil, fmt.Errorf("failed to generate signing key: %w", err)
+	}
+	var signingPublicKeyArray [ed25519.PublicKeySize]byte
+	var signingPrivateKeyArray [ed25519.PrivateKeySize]byte
+	copy(signingPublicKeyArray[:], signingPublicKey)
+	copy(signingPrivateKeyArray[:], signingPrivateKey)
+
 	return &KeyPair{
-		PublicKey:  publicKey,
-		PrivateKey: privateKey,
+		PublicKey:         publicKey,
+		PrivateKey:        privateKey,
+		SigningPublicKey:  signingPublicKeyArray,
+		SigningPrivateKey: signingPrivateKeyArray,
 	}, nil
 }
 
@@ -80,11 +130,12 @@ func CreateEnvelope(plaintext []byte, recipientPublicKey []byte, senderKeyPair *
 // CreateEnvelopeWithRecipient creates an encrypted payload envelope for a single recipient
 // with an optional versioned key ID.
 func CreateEnvelopeWithRecipient(plaintext []byte, recipient RecipientInfo, senderKeyPair *KeyPair) (*types.EncryptedPayloadEnvelope, error) {
-	if len(recipient.PublicKey) == 0 {
-		return nil, fmt.Errorf("recipient public key required")
+	if err := senderKeyPair.validate(); err != nil {
+		return nil, err
 	}
-	if len(recipient.PublicKey) != 32 {
-		return nil, fmt.Errorf("invalid recipient public key size: expected 32, got %d", len(recipient.PublicKey))
+	recipientKeyID, err := validateRecipient(recipient)
+	if err != nil {
+		return nil, err
 	}
 
 	// Generate nonce
@@ -100,16 +151,9 @@ func CreateEnvelopeWithRecipient(plaintext []byte, recipient RecipientInfo, send
 	// Encrypt using NaCl box
 	ciphertext := box.Seal(nil, plaintext, &nonce, &recipientPubKeyArr, &senderKeyPair.PrivateKey)
 
-	// Compute recipient key fingerprint
-	recipientFingerprint := types.ComputeKeyFingerprint(recipient.PublicKey)
-	recipientKeyID := recipient.KeyID
-	if recipientKeyID == "" {
-		recipientKeyID = types.FormatRecipientKeyID(recipientFingerprint, recipient.KeyVersion)
-	}
-
 	// Create envelope
 	envelope := &types.EncryptedPayloadEnvelope{
-		Version:             types.EnvelopeVersion,
+		Version:             types.EnvelopeVersionV2,
 		AlgorithmID:         types.AlgorithmX25519XSalsa20Poly1305,
 		AlgorithmVersion:    types.AlgorithmVersionV1,
 		RecipientKeyIDs:     []string{recipientKeyID},
@@ -117,11 +161,12 @@ func CreateEnvelopeWithRecipient(plaintext []byte, recipient RecipientInfo, send
 		Nonce:               nonce[:],
 		Ciphertext:          ciphertext,
 		SenderPubKey:        senderKeyPair.PublicKey[:],
+		SenderSigningPubKey: senderKeyPair.SigningPublicKey[:],
 		Metadata:            make(map[string]string),
 	}
 
 	// Generate signature over the signing payload
-	signature, err := signEnvelope(envelope, &senderKeyPair.PrivateKey)
+	signature, err := signEnvelope(envelope, senderKeyPair.SigningPrivateKey[:])
 	if err != nil {
 		return nil, fmt.Errorf("failed to sign envelope: %w", err)
 	}
@@ -160,6 +205,9 @@ func CreateMultiRecipientEnvelope(plaintext []byte, recipientPublicKeys [][]byte
 // CreateMultiRecipientEnvelopeWithRecipients creates an encrypted payload envelope for multiple recipients
 // using optional versioned key IDs.
 func CreateMultiRecipientEnvelopeWithRecipients(plaintext []byte, recipients []RecipientInfo, senderKeyPair *KeyPair) (*types.EncryptedPayloadEnvelope, error) {
+	if err := senderKeyPair.validate(); err != nil {
+		return nil, err
+	}
 	if len(recipients) == 0 {
 		return nil, fmt.Errorf("at least one recipient required")
 	}
@@ -173,6 +221,7 @@ func CreateMultiRecipientEnvelopeWithRecipients(plaintext []byte, recipients []R
 	if _, err := io.ReadFull(rand.Reader, dek[:]); err != nil {
 		return nil, fmt.Errorf("failed to generate DEK: %w", err)
 	}
+	defer ZeroKey(&dek)
 
 	// Generate nonce for data encryption
 	dataNonce, err := GenerateNonce()
@@ -180,60 +229,65 @@ func CreateMultiRecipientEnvelopeWithRecipients(plaintext []byte, recipients []R
 		return nil, fmt.Errorf("failed to generate data nonce: %w", err)
 	}
 
-	// Encrypt data with DEK using XSalsa20-Poly1305
-	// For multi-recipient, we use secretbox-style encryption with the DEK
-	ciphertext := xsalsa20Poly1305Encrypt(plaintext, &dek, &dataNonce)
+	// Encrypt the payload using the audited XSalsa20-Poly1305 secretbox construction.
+	ciphertext := secretbox.Seal(nil, plaintext, &dataNonce, &dek)
 
 	// Encrypt DEK for each recipient
 	recipientKeyIDs := make([]string, len(recipients))
-	encryptedKeys := make([][]byte, len(recipients))
 	recipientPubKeys := make([][]byte, len(recipients))
 	wrappedKeys := make([]types.WrappedKeyEntry, len(recipients))
+	seenRecipients := make(map[string]struct{}, len(recipients))
 
 	for i, recipient := range recipients {
 		recipientPubKey := recipient.PublicKey
-		if len(recipientPubKey) != 32 {
-			return nil, fmt.Errorf("invalid recipient public key size at index %d: expected 32, got %d", i, len(recipientPubKey))
+		keyID, err := validateRecipient(recipient)
+		if err != nil {
+			return nil, fmt.Errorf("invalid recipient at index %d: %w", i, err)
 		}
+		normalizedID := types.NormalizeRecipientKeyID(keyID)
+		if _, exists := seenRecipients[normalizedID]; exists {
+			return nil, fmt.Errorf("duplicate recipient public key at index %d", i)
+		}
+		seenRecipients[normalizedID] = struct{}{}
 
 		var recipientPubKeyArr [32]byte
 		copy(recipientPubKeyArr[:], recipientPubKey)
 
-		// Generate unique nonce for key encryption
+		ephemeralPublicKey, ephemeralPrivateKey, err := box.GenerateKey(rand.Reader)
+		if err != nil {
+			return nil, fmt.Errorf("failed to generate ephemeral key for recipient %d: %w", i, err)
+		}
+
 		keyNonce, err := GenerateNonce()
 		if err != nil {
 			return nil, fmt.Errorf("failed to generate key nonce for recipient %d: %w", i, err)
 		}
 
-		// Encrypt DEK to this recipient
-		encryptedDEK := box.Seal(keyNonce[:], dek[:], &keyNonce, &recipientPubKeyArr, &senderKeyPair.PrivateKey)
-		encryptedKeys[i] = encryptedDEK
+		// Prefix the random nonce to the authenticated ephemeral box ciphertext.
+		encryptedDEK := box.Seal(keyNonce[:], dek[:], &keyNonce, &recipientPubKeyArr, ephemeralPrivateKey)
 
-		fingerprint := types.ComputeKeyFingerprint(recipientPubKey)
-		keyID := recipient.KeyID
-		if keyID == "" {
-			keyID = types.FormatRecipientKeyID(fingerprint, recipient.KeyVersion)
-		}
 		recipientKeyIDs[i] = keyID
 		recipientPubKeys[i] = append([]byte(nil), recipientPubKey...)
 		wrappedKeys[i] = types.WrappedKeyEntry{
-			RecipientID: keyID,
-			WrappedKey:  encryptedDEK,
+			RecipientID:     keyID,
+			WrappedKey:      encryptedDEK,
+			Algorithm:       types.WrappedKeyAlgorithmX25519NaClBox,
+			EphemeralPubKey: append([]byte(nil), ephemeralPublicKey[:]...),
 		}
 	}
 
 	// Create envelope
 	envelope := &types.EncryptedPayloadEnvelope{
-		Version:             types.EnvelopeVersion,
+		Version:             types.EnvelopeVersionV2,
 		AlgorithmID:         types.AlgorithmX25519XSalsa20Poly1305,
 		AlgorithmVersion:    types.AlgorithmVersionV1,
 		RecipientKeyIDs:     recipientKeyIDs,
 		RecipientPublicKeys: recipientPubKeys,
-		EncryptedKeys:       encryptedKeys,
 		WrappedKeys:         wrappedKeys,
 		Nonce:               dataNonce[:],
 		Ciphertext:          ciphertext,
 		SenderPubKey:        senderKeyPair.PublicKey[:],
+		SenderSigningPubKey: senderKeyPair.SigningPublicKey[:],
 		Metadata:            make(map[string]string),
 	}
 
@@ -241,16 +295,11 @@ func CreateMultiRecipientEnvelopeWithRecipients(plaintext []byte, recipients []R
 	envelope.Metadata["_mode"] = "multi-recipient"
 
 	// Generate signature
-	signature, err := signEnvelope(envelope, &senderKeyPair.PrivateKey)
+	signature, err := signEnvelope(envelope, senderKeyPair.SigningPrivateKey[:])
 	if err != nil {
 		return nil, fmt.Errorf("failed to sign envelope: %w", err)
 	}
 	envelope.SenderSignature = signature
-
-	// Clear DEK from memory
-	for i := range dek {
-		dek[i] = 0
-	}
 
 	return envelope, nil
 }
@@ -267,8 +316,20 @@ func OpenEnvelope(envelope *types.EncryptedPayloadEnvelope, recipientPrivateKey 
 		return nil, types.ErrInvalidEnvelope.Wrap("envelope cannot be nil")
 	}
 
+	if envelope.Version != types.EnvelopeVersionV2 {
+		return nil, types.ErrUnsupportedVersion.Wrap("unauthenticated v1 envelopes require OpenUnauthenticatedLegacyEnvelopeV1")
+	}
+
 	if err := envelope.Validate(); err != nil {
 		return nil, err
+	}
+
+	valid, err := ValidateEnvelopeSignature(envelope)
+	if err != nil {
+		return nil, err
+	}
+	if !valid {
+		return nil, types.ErrInvalidSignature.Wrap("sender signature verification failed")
 	}
 
 	if len(recipientPrivateKey) != 32 {
@@ -305,76 +366,59 @@ func OpenEnvelope(envelope *types.EncryptedPayloadEnvelope, recipientPrivateKey 
 }
 
 // openMultiRecipientEnvelope decrypts a multi-recipient envelope
-func openMultiRecipientEnvelope(envelope *types.EncryptedPayloadEnvelope, recipientPrivateKey, senderPubKey *[32]byte) ([]byte, error) {
+func openMultiRecipientEnvelope(envelope *types.EncryptedPayloadEnvelope, recipientPrivateKey, _ *[32]byte) ([]byte, error) {
 	// Derive our public key to find our encrypted key
 	var ourPublicKey [32]byte
 	curve25519.ScalarBaseMult(&ourPublicKey, recipientPrivateKey)
 	ourFingerprint := types.ComputeKeyFingerprint(ourPublicKey[:])
 
 	// Find our encrypted DEK
-	var encryptedDEK []byte
+	var wrappedKey *types.WrappedKeyEntry
 	for _, entry := range envelope.WrappedKeys {
 		if types.NormalizeRecipientKeyID(entry.RecipientID) == ourFingerprint {
-			encryptedDEK = entry.WrappedKey
+			entryCopy := entry
+			wrappedKey = &entryCopy
 			break
 		}
 	}
-	if encryptedDEK == nil {
-		for i, keyID := range envelope.RecipientKeyIDs {
-			if types.NormalizeRecipientKeyID(keyID) == ourFingerprint {
-				if i < len(envelope.EncryptedKeys) {
-					encryptedDEK = envelope.EncryptedKeys[i]
-				}
-				break
-			}
-		}
-	}
-
-	if encryptedDEK == nil {
+	if wrappedKey == nil {
 		return nil, types.ErrNotRecipient.Wrap("no encrypted key found for this recipient")
 	}
 
-	// Extract nonce from encrypted DEK (first 24 bytes)
-	if len(encryptedDEK) < 24 {
-		return nil, types.ErrDecryptionFailed.Wrap("encrypted key too short")
-	}
-
 	var keyNonce [24]byte
-	copy(keyNonce[:], encryptedDEK[:24])
+	copy(keyNonce[:], wrappedKey.WrappedKey[:24])
+	var ephemeralPublicKey [32]byte
+	copy(ephemeralPublicKey[:], wrappedKey.EphemeralPubKey)
 
 	// Decrypt DEK
-	dek, ok := box.Open(nil, encryptedDEK[24:], &keyNonce, senderPubKey, recipientPrivateKey)
+	dek, ok := box.Open(nil, wrappedKey.WrappedKey[24:], &keyNonce, &ephemeralPublicKey, recipientPrivateKey)
 	if !ok {
 		return nil, types.ErrDecryptionFailed.Wrap("failed to decrypt data encryption key")
 	}
 
 	if len(dek) != 32 {
+		ZeroBytes(dek)
 		return nil, types.ErrDecryptionFailed.Wrap("invalid DEK size")
 	}
+	defer ZeroBytes(dek)
 
 	// Decrypt data with DEK
 	var dekArr [32]byte
 	copy(dekArr[:], dek)
+	defer ZeroKey(&dekArr)
 
 	var dataNonce [24]byte
 	copy(dataNonce[:], envelope.Nonce)
 
-	plaintext, err := xsalsa20Poly1305Decrypt(envelope.Ciphertext, &dekArr, &dataNonce)
-	if err != nil {
-		return nil, types.ErrDecryptionFailed.Wrap(err.Error())
-	}
-
-	// Clear DEK from memory
-	for i := range dekArr {
-		dekArr[i] = 0
+	plaintext, ok := secretbox.Open(nil, envelope.Ciphertext, &dataNonce, &dekArr)
+	if !ok {
+		return nil, types.ErrDecryptionFailed.Wrap("payload authentication failed")
 	}
 
 	return plaintext, nil
 }
 
 // ValidateEnvelopeSignature verifies the sender's signature on an envelope.
-// Note: This is a simplified signature scheme using the signing payload hash.
-// In production, consider using Ed25519 for signatures.
 func ValidateEnvelopeSignature(envelope *types.EncryptedPayloadEnvelope) (bool, error) {
 	if envelope == nil {
 		return false, types.ErrInvalidEnvelope.Wrap("envelope cannot be nil")
@@ -384,91 +428,99 @@ func ValidateEnvelopeSignature(envelope *types.EncryptedPayloadEnvelope) (bool, 
 		return false, types.ErrInvalidSignature.Wrap("no signature present")
 	}
 
-	if len(envelope.SenderPubKey) != 32 {
-		return false, types.ErrInvalidPublicKey.Wrap("invalid sender public key")
+	if envelope.Version != types.EnvelopeVersionV2 {
+		return false, types.ErrInvalidSignature.Wrap("legacy v1 envelopes are unauthenticated")
 	}
 
-	// Compute expected signature
-	payload := envelope.SigningPayload()
-	expectedSig := computeSignature(payload, envelope.SenderPubKey)
-
-	// Compare signatures
-	if len(envelope.SenderSignature) != len(expectedSig) {
+	if len(envelope.SenderSigningPubKey) != ed25519.PublicKeySize {
+		return false, types.ErrInvalidPublicKey.Wrap("invalid sender signing public key")
+	}
+	if len(envelope.SenderSignature) != ed25519.SignatureSize {
 		return false, nil
 	}
 
-	// Constant-time comparison
-	var diff byte
-	for i := range expectedSig {
-		diff |= envelope.SenderSignature[i] ^ expectedSig[i]
+	return ed25519.Verify(ed25519.PublicKey(envelope.SenderSigningPubKey), envelope.SigningPayload(), envelope.SenderSignature), nil
+}
+
+// ValidateEnvelopeSignatureWithExpectedKey authenticates the envelope against a trusted sender key.
+func ValidateEnvelopeSignatureWithExpectedKey(envelope *types.EncryptedPayloadEnvelope, expectedSigningPublicKey []byte) (bool, error) {
+	if len(expectedSigningPublicKey) != ed25519.PublicKeySize {
+		return false, types.ErrInvalidPublicKey.Wrap("invalid expected sender signing public key")
 	}
-
-	return diff == 0, nil
+	if envelope == nil || !bytes.Equal(envelope.SenderSigningPubKey, expectedSigningPublicKey) {
+		return false, types.ErrInvalidSignature.Wrap("sender signing public key does not match trusted key")
+	}
+	return ValidateEnvelopeSignature(envelope)
 }
 
-// signEnvelope creates a signature binding for the envelope.
-//
-// SECURITY WARNING (SECURITY-001):
-// This implementation uses a SHA256 binding (H(payload || publicKey)) which provides
-// integrity binding but NOT authentication. Anyone with knowledge of the public key
-// can compute the same binding value.
-//
-// REMEDIATION REQUIRED: Replace with Ed25519 signature using sender's private key:
-//  1. Change signature to: Ed25519.Sign(privateKey, payload)
-//  2. Update CreateEnvelope to accept signing key
-//  3. Update ValidateEnvelopeSignature to use Ed25519.Verify
-//
-// Current limitations:
-//   - No proof of sender identity (anyone can forge "signatures")
-//   - Suitable only when sender authentication is not required
-//   - Must NOT be used for transaction authorization
-//
-//nolint:unparam // result 1 (error) reserved for future signing failures
-func signEnvelope(envelope *types.EncryptedPayloadEnvelope, _ *[32]byte) ([]byte, error) {
-	payload := envelope.SigningPayload()
-
-	// Create binding: H(payload || publicKey)
-	// WARNING: This is NOT a true signature - see security note above
-	h := sha256.New()
-	h.Write(payload)
-	h.Write(envelope.SenderPubKey)
-
-	return h.Sum(nil), nil
+func signEnvelope(envelope *types.EncryptedPayloadEnvelope, privateKey ed25519.PrivateKey) ([]byte, error) {
+	if len(privateKey) != ed25519.PrivateKeySize {
+		return nil, fmt.Errorf("invalid Ed25519 private key size: %d", len(privateKey))
+	}
+	return ed25519.Sign(privateKey, envelope.SigningPayload()), nil
 }
 
-// computeSignature computes the expected signature for verification.
-//
-// SECURITY WARNING: See signEnvelope security notes. This function only verifies
-// integrity binding, not sender authentication.
-func computeSignature(payload, senderPubKey []byte) []byte {
-	// WARNING: This is a simplified scheme - does not verify sender identity
-	h := sha256.New()
-	h.Write(payload)
-	h.Write(senderPubKey)
-	return h.Sum(nil)
-}
-
-// xsalsa20Poly1305Encrypt encrypts data using XSalsa20-Poly1305 with a symmetric key
-func xsalsa20Poly1305Encrypt(plaintext []byte, key *[32]byte, nonce *[24]byte) []byte {
-	// Use box.SealAfterPrecomputation with a zero peer key for symmetric encryption
-	// This is a simplified approach; for production, use secretbox
-	var zeroKey [32]byte
-	var sharedKey [32]byte
-	box.Precompute(&sharedKey, &zeroKey, key)
-
-	return box.SealAfterPrecomputation(nil, plaintext, nonce, &sharedKey)
-}
-
-// xsalsa20Poly1305Decrypt decrypts data using XSalsa20-Poly1305 with a symmetric key
-func xsalsa20Poly1305Decrypt(ciphertext []byte, key *[32]byte, nonce *[24]byte) ([]byte, error) {
-	var zeroKey [32]byte
-	var sharedKey [32]byte
-	box.Precompute(&sharedKey, &zeroKey, key)
-
-	plaintext, ok := box.OpenAfterPrecomputation(nil, ciphertext, nonce, &sharedKey)
+// OpenUnauthenticatedLegacyEnvelopeV1 decrypts a v1 envelope for migration only.
+// V1 sender signatures are publicly forgeable and are intentionally not verified.
+func OpenUnauthenticatedLegacyEnvelopeV1(envelope *types.EncryptedPayloadEnvelope, recipientPrivateKey []byte) ([]byte, error) {
+	if envelope == nil || envelope.Version != types.EnvelopeVersionV1 {
+		return nil, types.ErrUnsupportedVersion.Wrap("legacy v1 envelope required")
+	}
+	if err := envelope.Validate(); err != nil {
+		return nil, err
+	}
+	if len(recipientPrivateKey) != 32 {
+		return nil, fmt.Errorf("invalid private key size: expected 32, got %d", len(recipientPrivateKey))
+	}
+	var privateKey, senderPublicKey [32]byte
+	copy(privateKey[:], recipientPrivateKey)
+	copy(senderPublicKey[:], envelope.SenderPubKey)
+	if envelope.Metadata["_mode"] == "multi-recipient" {
+		return openUnauthenticatedLegacyMultiRecipientEnvelopeV1(envelope, &privateKey, &senderPublicKey)
+	}
+	var nonce [24]byte
+	copy(nonce[:], envelope.Nonce)
+	plaintext, ok := box.Open(nil, envelope.Ciphertext, &nonce, &senderPublicKey, &privateKey)
 	if !ok {
-		return nil, fmt.Errorf("decryption failed")
+		return nil, types.ErrDecryptionFailed.Wrap("failed to decrypt legacy envelope")
 	}
+	return plaintext, nil
+}
 
+func openUnauthenticatedLegacyMultiRecipientEnvelopeV1(envelope *types.EncryptedPayloadEnvelope, recipientPrivateKey, senderPublicKey *[32]byte) ([]byte, error) {
+	var recipientPublicKey [32]byte
+	curve25519.ScalarBaseMult(&recipientPublicKey, recipientPrivateKey)
+	fingerprint := types.ComputeKeyFingerprint(recipientPublicKey[:])
+	var encryptedDEK []byte
+	for i, recipientID := range envelope.RecipientKeyIDs {
+		if types.NormalizeRecipientKeyID(recipientID) == fingerprint && i < len(envelope.EncryptedKeys) {
+			encryptedDEK = envelope.EncryptedKeys[i]
+			break
+		}
+	}
+	if len(encryptedDEK) < 24 {
+		return nil, types.ErrNotRecipient.Wrap("no encrypted key found for this recipient")
+	}
+	var keyNonce [24]byte
+	copy(keyNonce[:], encryptedDEK[:24])
+	dek, ok := box.Open(nil, encryptedDEK[24:], &keyNonce, senderPublicKey, recipientPrivateKey)
+	if !ok || len(dek) != 32 {
+		ZeroBytes(dek)
+		return nil, types.ErrDecryptionFailed.Wrap("failed to decrypt legacy data encryption key")
+	}
+	defer ZeroBytes(dek)
+	var dekArray [32]byte
+	copy(dekArray[:], dek)
+	defer ZeroKey(&dekArray)
+	var dataNonce [24]byte
+	copy(dataNonce[:], envelope.Nonce)
+	var zeroKey [32]byte
+	var sharedKey [32]byte
+	box.Precompute(&sharedKey, &zeroKey, &dekArray)
+	defer ZeroKey(&sharedKey)
+	plaintext, ok := box.OpenAfterPrecomputation(nil, envelope.Ciphertext, &dataNonce, &sharedKey)
+	if !ok {
+		return nil, types.ErrDecryptionFailed.Wrap("failed to decrypt legacy payload")
+	}
 	return plaintext, nil
 }

@@ -1,48 +1,53 @@
 campaign: three-day-prototype
 thread: T5
-checkpoint: T5-07
+checkpoint: T5-08
 branch: ve/prototype-t5-platform
-start_head: 81e8bbe5d121e1c04ec0454253f9b3119551d01a
-end_head: 7675014fcb1585fbbe652319b592d58c94f99750
+start_head: a9e148436c73e398e8902d03303abafdc1117bb5
+end_head: PENDING_COMMIT
 origin_main: c31f910e318a39d86372ed2d65050d08777dbfc5
-tree_clean: true
-commits:
-  - 7675014fcb1585fbbe652319b592d58c94f99750
+tree_clean: false
+commits: []
 owned_paths:
-  - pkg/platformsecurity/contracts/manifest.go
-  - pkg/platformsecurity/contracts/manifest_test.go
-  - pkg/platformsecurity/contracts/testdata/dependency-manifest.json
+  - x/encryption/crypto/envelope.go
+  - x/encryption/crypto/envelope_fuzz_test.go
+  - x/encryption/crypto/envelope_test.go
+  - x/encryption/types/envelope.go
+  - x/encryption/types/envelope_test.go
   - _docs/ralph/handoffs/prototype-t5/HANDOFF.yaml
 files_changed:
-  - pkg/platformsecurity/contracts/manifest.go
-  - pkg/platformsecurity/contracts/manifest_test.go
-  - pkg/platformsecurity/contracts/testdata/dependency-manifest.json
+  - x/encryption/crypto/envelope.go
+  - x/encryption/crypto/envelope_fuzz_test.go
+  - x/encryption/crypto/envelope_test.go
+  - x/encryption/types/envelope.go
+  - x/encryption/types/envelope_test.go
   - _docs/ralph/handoffs/prototype-t5/HANDOFF.yaml
 tests:
-  - command: go test -count=1 <T5 MFA slice and all six isolated contract packages>
+  - command: go test -count=1 ./x/encryption/types ./x/encryption/crypto
     exit_code: 0
     result: passed
     tool_versions:
-      go: go1.26.5 windows/amd64
-  - command: go vet ./pkg/platformsecurity/contracts
+      go: go1.25.8 windows/amd64
+  - command: go vet ./x/encryption/types ./x/encryption/crypto
     exit_code: 0
     result: passed
     tool_versions:
-      go: go1.26.5 windows/amd64
-  - command: node scripts/validate-prototype-integration.cjs --root .
+      go: go1.25.8 windows/amd64
+  - command: go test -race -count=1 ./x/encryption/crypto
     exit_code: 0
     result: passed
+    tool_versions:
+      go: go1.25.8 windows/amd64
+      gcc: WinLibs POSIX UCRT
   - command: git diff --check
     exit_code: 0
     result: passed
-generated_hashes:
-  dependency_manifest: ace90f4423f4bdeaac92508a5b00e6d2b27c769e00f43b787ad4e8ae5565c527
+generated_hashes: {}
 migrations: []
 external_evidence: []
 known_failures: []
 blockers:
-  - All 89A, 89B, 89C, 89D, 90A, and 91A capability rows remain fixture_only with registration, advertisement, readiness, and mutation disabled.
-  - T1 and T3 contract digests remain unavailable; T4 SHA and control artifacts are baseline fixtures, not claims about current T4 HEAD.
-  - Missing/changed dependencies, unknown versions/statuses, capability omissions, and every positive-enablement selector fail closed.
-next_checkpoint: null
-expected_head: 7675014fcb1585fbbe652319b592d58c94f99750
+  - T4 must add sender_signing_pub_key and wrapped-key fields to protobuf wire schemas, regenerate clients, and add round-trip gates before v2 envelopes are integrated across chain and VEID paths.
+  - Sender identity remains fail-closed at trust boundaries: callers must pin or resolve the expected Ed25519 signing key and use ValidateEnvelopeSignatureWithExpectedKey.
+  - Legacy v1 envelopes are unauthenticated and may only be read by the explicitly named migration API before immediate v2 re-encryption.
+next_checkpoint: T5-09
+expected_head: PENDING_COMMIT
