@@ -1,0 +1,57 @@
+Thread: T2
+Checkpoint: T2-05
+Implementation SHA: fedded8e9b1f94ccbf3a3bb33560d991bd4692f3
+Integration ancestor: fa21b1e540a5efcbe1822da4199be7acec7709d3
+Platform: Windows
+Tool: Node v24.12.0
+
+PASS
+Command: C:\Users\pavil\AppData\Local\Temp\virtengine-node-v24.12.0\npm.cmd --prefix C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t2\mobile\veid-capture-app test
+Exit code: 0
+Output: Test Files 5 passed (5); Tests 15 passed (15).
+
+PASS
+Command: C:\Users\pavil\AppData\Local\Temp\virtengine-node-v24.12.0\npm.cmd --prefix C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t2\mobile\veid-capture-app run typecheck
+Exit code: 0
+Output: tsc --noEmit completed with no diagnostics.
+
+PASS
+Command: C:\Users\pavil\AppData\Local\Temp\virtengine-node-v24.12.0\npm.cmd --prefix C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t2\lib\capture test
+Exit code: 0
+Output: Test Files 10 passed (10); Tests 117 passed (117).
+
+PASS
+Command: C:\Users\pavil\AppData\Local\Temp\virtengine-node-v24.12.0\npm.cmd --prefix C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t2\lib\capture run type-check
+Exit code: 0
+Output: tsc --noEmit completed with no diagnostics.
+
+PASS
+Command: C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t2\portal\node_modules\.bin\vitest.CMD run src/components/veid/VeidCaptureProviders.test.ts src/components/veid/VerificationWizard.test.tsx src/components/veid/LivenessChallenge.test.tsx
+Exit code: 0
+Output: Test Files 3 passed (3); Tests 7 passed (7).
+
+PASS
+Command: C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t2\portal\node_modules\.bin\eslint.CMD src --ext .ts,.tsx --max-warnings 0
+Exit code: 0
+Output: no lint findings. Existing compatibility notice: installed TypeScript 5.9.3 is newer than the parser's declared supported range.
+
+PASS
+Command: C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t2\portal\node_modules\.bin\tsc.CMD --noEmit
+Exit code: 0
+Output: no diagnostics.
+
+PASS
+Command: C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t2\portal\node_modules\.bin\vitest.CMD run --reporter=dot
+Exit code: 0
+Output: Test Files 72 passed (72); Tests 506 passed (506).
+
+PASS
+Command: git diff --check
+Exit code: 0
+Output: no whitespace errors; Windows LF-to-CRLF notices only.
+
+NON-CLAIMS
+Production/default constructors now reject or report unavailable for mock camera, biometric, device-attestation, signing and timer-authoritative liveness providers. Explicit mocks remain test/development-only. The reachable browser verification route remains unavailable until T4 wires approved production providers. Upload receipt transport and committed chain submission remain T2-06 scope.
+
+BLOCKER
+The campaign plan requires integration_parent in producer handoffs, while the integrated T4 producer-handoff.schema.json sets additionalProperties=false and does not define integration_parent. The integration ancestor is retained above pending T4 schema reconciliation.

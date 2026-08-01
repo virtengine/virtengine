@@ -1,64 +1,91 @@
 campaign: three-day-prototype
 thread: T2
-checkpoint: T2-04
+checkpoint: T2-05
 branch: ve/prototype-t2-product
-start_head: b856bbd6733bd62e65d78c16f81026c43093cf23
-end_head: 8dc40f83e182ef8bec270f9d0a79c65182c02398
+start_head: d896e77793b6be572a0f00e2ccd5fbe2aa4bbafb
+end_head: fedded8e9b1f94ccbf3a3bb33560d991bd4692f3
 origin_main: 79391a3df86d85522b92e0400c6904971ecbe65d
 tree_clean: true
 commits:
-  - 8dc40f83e182ef8bec270f9d0a79c65182c02398
+  - fedded8e9b1f94ccbf3a3bb33560d991bd4692f3
 owned_paths:
-  - portal/src/features/hpc/
-  - portal/tests/unit/hpc/hpcClient.test.ts
+  - lib/capture/
+  - mobile/veid-capture-app/
+  - portal/src/app/(customer)/verify/page.tsx
+  - portal/src/components/veid/
+  - portal/src/lib/capture-adapter.ts
 files_changed:
-  - portal/src/features/hpc/components/JobWizard.test.tsx
-  - portal/src/features/hpc/components/JobWizard.tsx
-  - portal/src/features/hpc/context/HPCClientProvider.tsx
-  - portal/src/features/hpc/hooks/index.test.tsx
-  - portal/src/features/hpc/hooks/index.ts
-  - portal/src/features/hpc/index.ts
-  - portal/src/features/hpc/lib/hpc-client.test.ts
-  - portal/src/features/hpc/lib/hpc-client.ts
-  - portal/tests/unit/hpc/hpcClient.test.ts
+  - lib/capture/__tests__/liveness.test.ts
+  - lib/capture/components/SelfieCapture.tsx
+  - lib/capture/index.ts
+  - lib/capture/types/capture.ts
+  - lib/capture/utils/liveness.ts
+  - mobile/veid-capture-app/README.md
+  - mobile/veid-capture-app/src/components/CameraFrame.tsx
+  - mobile/veid-capture-app/src/core/biometric/index.ts
+  - mobile/veid-capture-app/src/core/captureModels.ts
+  - mobile/veid-capture-app/src/core/captureSession.ts
+  - mobile/veid-capture-app/src/core/deviceAttestation.ts
+  - mobile/veid-capture-app/src/screens/BiometricCaptureScreen.tsx
+  - mobile/veid-capture-app/src/screens/DocumentCaptureScreen.tsx
+  - mobile/veid-capture-app/src/screens/SelfieCaptureScreen.tsx
+  - mobile/veid-capture-app/src/screens/UploadScreen.tsx
+  - mobile/veid-capture-app/src/services/camera/cameraAdapter.ts
+  - mobile/veid-capture-app/src/services/camera/visionCameraAdapter.ts
+  - mobile/veid-capture-app/src/test/biometricCapture.test.ts
+  - mobile/veid-capture-app/src/test/deviceAttestation.test.ts
+  - mobile/veid-capture-app/src/test/visionCameraAdapter.test.ts
+  - mobile/veid-capture-app/tsconfig.json
+  - portal/src/app/(customer)/verify/page.tsx
+  - portal/src/components/veid/DocumentCapture.tsx
+  - portal/src/components/veid/LivenessChallenge.test.tsx
+  - portal/src/components/veid/LivenessChallenge.tsx
+  - portal/src/components/veid/SelfieCapture.tsx
+  - portal/src/components/veid/VeidCaptureProviders.test.ts
+  - portal/src/components/veid/VeidCaptureProviders.ts
+  - portal/src/components/veid/VerificationStatus.tsx
+  - portal/src/components/veid/VerificationWizard.test.tsx
+  - portal/src/components/veid/VerificationWizard.tsx
+  - portal/src/components/veid/__tests__/captureProviderTestUtils.ts
+  - portal/src/components/veid/index.ts
+  - portal/src/lib/capture-adapter.ts
 tests:
-  - command: C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t2\portal\node_modules\.bin\vitest.CMD run src/features/hpc/lib/hpc-client.test.ts src/features/hpc/hooks/index.test.tsx src/features/hpc/components/JobWizard.test.tsx tests/unit/hpc/hpcClient.test.ts
+  - command: C:\Users\pavil\AppData\Local\Temp\virtengine-node-v24.12.0\npm.cmd --prefix C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t2\mobile\veid-capture-app test
     exit_code: 0
     result: passed
-    test_count: 35
+    test_count: 15
     tool_versions:
       node: v24.12.0
-    artifact: _docs/ralph/handoffs/prototype-t2/T2-04-evidence.txt
-  - command: C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t2\portal\node_modules\.bin\eslint.CMD src --ext .ts,.tsx --max-warnings 0
-    exit_code: 0
-    result: passed
-    tool_versions:
-      node: v24.12.0
-      typescript: 5.9.3
-    artifact: _docs/ralph/handoffs/prototype-t2/T2-04-evidence.txt
-  - command: C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t2\portal\node_modules\.bin\tsc.CMD --noEmit
+    artifact: _docs/ralph/handoffs/prototype-t2/T2-05-evidence.txt
+  - command: C:\Users\pavil\AppData\Local\Temp\virtengine-node-v24.12.0\npm.cmd --prefix C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t2\mobile\veid-capture-app run typecheck
     exit_code: 0
     result: passed
     tool_versions:
       node: v24.12.0
-      typescript: 5.9.3
-    artifact: _docs/ralph/handoffs/prototype-t2/T2-04-evidence.txt
+    artifact: _docs/ralph/handoffs/prototype-t2/T2-05-evidence.txt
+  - command: C:\Users\pavil\AppData\Local\Temp\virtengine-node-v24.12.0\npm.cmd --prefix C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t2\lib\capture test
+    exit_code: 0
+    result: passed
+    test_count: 117
+    tool_versions:
+      node: v24.12.0
+    artifact: _docs/ralph/handoffs/prototype-t2/T2-05-evidence.txt
   - command: C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t2\portal\node_modules\.bin\vitest.CMD run --reporter=dot
     exit_code: 0
     result: passed
-    test_count: 499
+    test_count: 506
     tool_versions:
       node: v24.12.0
-    artifact: _docs/ralph/handoffs/prototype-t2/T2-04-evidence.txt
+    artifact: _docs/ralph/handoffs/prototype-t2/T2-05-evidence.txt
 generated_hashes: {}
 migrations: []
 external_evidence:
-  - _docs/ralph/handoffs/prototype-t2/T2-04-evidence.txt
+  - _docs/ralph/handoffs/prototype-t2/T2-05-evidence.txt
 known_failures:
   - TestProviderMutationSubmitterStandbyTakesOverWithHigherFence fails repeatedly in the full provider package gate with submitter lease timing errors.
 blockers:
-  - T4 producer-handoff.schema.json forbids the integration_parent field required by the updated campaign plan; integration ancestor fa21b1e540a5efcbe1822da4199be7acec7709d3 is retained in T2-04-evidence.txt.
+  - T4 producer-handoff.schema.json forbids the integration_parent field required by the updated campaign plan; integration ancestor fa21b1e540a5efcbe1822da4199be7acec7709d3 is retained in T2-05-evidence.txt.
   - Full provider package certification is blocked by the unrelated submitter lease timing failure retained in T2-03B-evidence.txt.
-  - T4 owns application-provider wiring and generated SDK integration; T2-04 remains typed unavailable until an authoritative client is injected.
-next_checkpoint: T2-05
-expected_head: 8dc40f83e182ef8bec270f9d0a79c65182c02398
+  - T4 owns approved production capture-provider wiring; browser verification remains typed unavailable until those providers are injected.
+next_checkpoint: T2-06
+expected_head: fedded8e9b1f94ccbf3a3bb33560d991bd4692f3
