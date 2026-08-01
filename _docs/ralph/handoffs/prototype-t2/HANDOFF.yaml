@@ -1,43 +1,51 @@
 campaign: three-day-prototype
 thread: T2
-checkpoint: T2-02
+checkpoint: T2-03
 branch: ve/prototype-t2-product
-start_head: 62d8c4b99804b354b36031ea2fd8b609dcac8a87
-end_head: 7c0de3549caa37c12425373f1d82a50eee13df68
+start_head: 886db129f174dda6b1d2a1201658ec436a9e699a
+end_head: 8c06476465f09b3378595722caabc26cba16256e
 origin_main: 79391a3df86d85522b92e0400c6904971ecbe65d
 tree_clean: true
 commits:
-  - 7c0de3549caa37c12425373f1d82a50eee13df68
+  - 8c06476465f09b3378595722caabc26cba16256e
 owned_paths:
-  - lib/portal/__tests__/wallet/
-  - lib/portal/src/wallet/
-  - lib/portal/index.ts
-  - lib/portal/package.json
-  - pnpm-lock.yaml
+  - pkg/provider_daemon/portal_*.go
+  - lib/portal/src/provider-api/client.ts
+  - lib/portal/__tests__/provider-api/client.test.ts
 files_changed:
-  - lib/portal/__tests__/wallet/context.test.tsx
-  - lib/portal/__tests__/wallet/session.test.ts
-  - lib/portal/index.ts
-  - lib/portal/package.json
-  - lib/portal/src/wallet/context.tsx
-  - lib/portal/src/wallet/index.ts
-  - lib/portal/src/wallet/session.ts
-  - pnpm-lock.yaml
+  - lib/portal/__tests__/provider-api/client.test.ts
+  - lib/portal/src/provider-api/client.ts
+  - pkg/provider_daemon/portal_api.go
+  - pkg/provider_daemon/portal_billing.go
+  - pkg/provider_daemon/portal_capability_routes_test.go
+  - pkg/provider_daemon/portal_chain_query.go
+  - pkg/provider_daemon/portal_chain_query_grpc.go
+  - pkg/provider_daemon/portal_chain_query_test.go
+  - pkg/provider_daemon/portal_events.go
+  - pkg/provider_daemon/portal_metrics.go
+  - pkg/provider_daemon/portal_middleware.go
+  - pkg/provider_daemon/portal_organizations.go
+  - pkg/provider_daemon/portal_readiness_test.go
+  - pkg/provider_daemon/portal_tickets.go
 tests:
-  - command: npm.cmd --prefix lib/portal test -- --runInBand __tests__/wallet/session.test.ts __tests__/wallet/context.test.tsx
+  - command: go1.25.8 test -count=1 ./pkg/provider_daemon -run 'Portal|ChainQuery|Capability'
     exit_code: 0
-    result: package runner executed 17 files and 430 tests; all passed
+    result: focused provider portal and capability tests passed
+    runtime: go1.25.8 windows/amd64
+  - command: go1.25.8 vet ./pkg/provider_daemon
+    exit_code: 0
+    result: provider daemon package vet passed
+    runtime: go1.25.8 windows/amd64
+  - command: npm.cmd --prefix lib/portal test -- --runInBand __tests__/provider-api/client.test.ts
+    exit_code: 0
+    result: package runner executed 17 files and 431 tests; all passed
     runtime: node v24.12.0
   - command: npm.cmd --prefix lib/portal run type-check
     exit_code: 0
     result: tsc -p tsconfig.chain.json --noEmit completed
     runtime: node v24.12.0
-  - command: npm.cmd --prefix lib/portal run lint
-    exit_code: 0
-    result: accessibility changed-file lint completed with no matching component files
-    runtime: node v24.12.0
 generated_hashes: {}
 external_evidence: []
 known_failures: []
-next_checkpoint: T2-03
-expected_head: 7c0de3549caa37c12425373f1d82a50eee13df68
+next_checkpoint: T2-04
+expected_head: 8c06476465f09b3378595722caabc26cba16256e
