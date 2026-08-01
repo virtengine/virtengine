@@ -1,33 +1,47 @@
 campaign: three-day-prototype
 thread: T3
-checkpoint: T3-06
+checkpoint: T3-07
 branch: ve/prototype-t3-reliability
-start_head: 6a8f81a4b626eb88629ab6fb37af4bc8d25825b8
-end_head: 4c98c403f012ff22fbac4d5a20c97319b0664fb8
+start_head: cbb2810da8dbfb1caa45ff38e850fef2f2e47528
+end_head: b77e8b545906ffe635eeb217c78d38471c1688e3
 origin_main: 79391a3df86d85522b92e0400c6904971ecbe65d
 integration_parent: fa21b1e540a5efcbe1822da4199be7acec7709d3
 tree_clean: true
 commits:
-  - 4c98c403f012ff22fbac4d5a20c97319b0664fb8
+  - b77e8b545906ffe635eeb217c78d38471c1688e3
 owned_paths:
-  - x/benchmark/types/
+  - pkg/provider_daemon/
   - _docs/ralph/handoffs/prototype-t3/HANDOFF.yaml
 files_changed:
-  - x/benchmark/types/evidence_envelope.go
-  - x/benchmark/types/evidence_envelope_test.go
-  - x/benchmark/types/genesis.go
+  - pkg/provider_daemon/waldur_reconciler.go
+  - pkg/provider_daemon/waldur_reconciler_test.go
 tests:
-  - command: C:\Users\pavil\AppData\Local\VirtEngine\toolchains\go1.25.8\go\bin\go.exe -C C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t3 test -count=1 ./pkg/benchmark_daemon ./x/benchmark/types
+  - command: C:\Users\pavil\AppData\Local\VirtEngine\toolchains\go1.25.8\go\bin\go.exe -C C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t3 test -count=1 ./x/settlement/ibc
     exit_code: 0
     result: passed
     tool_versions:
       go: go version go1.25.8 windows/amd64
-  - command: C:\Users\pavil\AppData\Local\VirtEngine\toolchains\go1.25.8\go\bin\go.exe -C C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t3 vet ./pkg/benchmark_daemon ./x/benchmark/types
+  - command: C:\Users\pavil\AppData\Local\VirtEngine\toolchains\go1.25.8\go\bin\go.exe -C C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t3 test -count=1 ./pkg/provider_daemon -run Reconciliation
     exit_code: 0
     result: passed
     tool_versions:
       go: go version go1.25.8 windows/amd64
-  - command: set CGO_ENABLED=1 && set CC=C:\Users\pavil\AppData\Local\Microsoft\WinGet\Packages\BrechtSanders.WinLibs.POSIX.UCRT_Microsoft.Winget.Source_8wekyb3d8bbwe\mingw64\bin\gcc.exe && C:\Users\pavil\AppData\Local\VirtEngine\toolchains\go1.25.8\go\bin\go.exe -C C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t3 test -race -count=1 ./pkg/benchmark_daemon ./x/benchmark/types
+  - command: C:\Users\pavil\AppData\Local\VirtEngine\toolchains\go1.25.8\go\bin\go.exe -C C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t3 test -count=1 ./pkg/provider_daemon -run Waldur
+    exit_code: 0
+    result: passed
+    tool_versions:
+      go: go version go1.25.8 windows/amd64
+  - command: C:\Users\pavil\AppData\Local\VirtEngine\toolchains\go1.25.8\go\bin\go.exe -C C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t3 test -count=1 ./pkg/observability/... ./pkg/benchmark_daemon ./x/benchmark/types
+    exit_code: 0
+    result: passed
+    tool_versions:
+      go: go version go1.25.8 windows/amd64
+  - command: C:\Users\pavil\AppData\Local\VirtEngine\toolchains\go1.25.8\go\bin\go.exe -C C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t3 vet ./x/settlement/ibc ./pkg/provider_daemon ./pkg/observability/... ./pkg/benchmark_daemon ./x/benchmark/types
+    exit_code: 0
+    result: passed
+    tool_versions:
+      go: go version go1.25.8 windows/amd64
+  - command: set CGO_ENABLED=1 && set CC=C:\Users\pavil\AppData\Local\Microsoft\WinGet\Packages\BrechtSanders.WinLibs.POSIX.UCRT_Microsoft.Winget.Source_8wekyb3d8bbwe\mingw64\bin\gcc.exe && C:\Users\pavil\AppData\Local\VirtEngine\toolchains\go1.25.8\go\bin\go.exe -C C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t3 test -race -count=1 ./x/settlement/ibc ./pkg/provider_daemon -run 'Waldur|Reconciliation|Metrics|TerminalCallbacks|AtomicTransitionRollbackAndRetry|FileReconciliationJobStore'
     exit_code: 0
     result: passed
     tool_versions:
@@ -36,8 +50,8 @@ tests:
 generated_hashes: {}
 migrations: []
 external_evidence:
-  - Canonical envelope and verified reliability defaults remain disabled; no production activation is claimed.
-  - No representative hardware run, independent verifier, certified suite/image, real SLA window, or runner-key custody evidence is available or claimed.
+  - No two-chain relayer certification, production reconciliation authority, representative hardware run, independent verifier, certified suite/image, or real SLA observation window is claimed.
+  - T5/90A prerequisites remain unavailable: certified backend profile digest, representative hardware identity, runner/verifier key custody and epoch, source retention policy, and independent benchmark operator evidence.
 known_failures:
   - TestProviderMutationSubmitterStandbyTakesOverWithHigherFence fails reproducibly in untouched provider-mutation lease code with submitter lease lost; focused T3 telemetry gates pass.
 blockers:
@@ -46,5 +60,6 @@ blockers:
   - T4 must register T3 collectors with the shared registry, install the durable reconciliation store, serve provider metrics on port 9090, and correct the observability Prometheus mount from prometheus.yml to prometheus.yaml.
   - CI status and T3-04 tag publication are blocked because GitHub CLI has no authentication in this environment.
   - Legacy benchmark submissions and fabricated reliability defaults remain unverified and must not be connected to placement, rewards, suspension, or enforcement.
-next_checkpoint: T3-07
-expected_head: 4c98c403f012ff22fbac4d5a20c97319b0664fb8
+  - Docker is not installed in this environment, so docker compose -f docker-compose.observability.yaml config could not be retained as evidence.
+next_checkpoint: null
+expected_head: b77e8b545906ffe635eeb217c78d38471c1688e3
