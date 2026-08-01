@@ -1,82 +1,62 @@
 campaign: three-day-prototype
 thread: T2
-checkpoint: T2-X02
+checkpoint: T2-X03
 branch: ve/prototype-t2-product
-start_head: f725b90e294fbbe64a8732100c2aac570f0dfb60
-end_head: 7261750ec31160f6413bdc46e320187a9fa1eac6
+start_head: bd51902b3164fde2403438644852b90f42ef1138
+end_head: cc7103aacbd4ac287c4ceb8872fcd06a1d408602
 origin_main: 79391a3df86d85522b92e0400c6904971ecbe65d
 tree_clean: true
 commits:
-  - 7261750ec31160f6413bdc46e320187a9fa1eac6
+  - cc7103aacbd4ac287c4ceb8872fcd06a1d408602
 owned_paths:
-  - lib/portal/src/chat/
-  - lib/portal/__tests__/chat/
-  - portal/src/components/chat/
-  - portal/src/config/env.ts
-  - portal/src/config/env.test.ts
-  - portal/src/stores/chatStore.ts
-  - portal/.env.example
+  - portal/src/components/orders/
+  - portal/src/features/orders/
+  - portal/tests/unit/orders/useOrderWizardSubmission.test.ts
 files_changed:
-  - lib/portal/src/chat/types.ts
-  - lib/portal/src/chat/tools.ts
-  - lib/portal/src/chat/agent.ts
-  - lib/portal/src/chat/chain-tools/deployments.ts
-  - lib/portal/src/chat/chain-tools/marketplace.ts
-  - lib/portal/src/chat/chain-tools/identity.ts
-  - lib/portal/src/chat/chain-tools/governance.ts
-  - lib/portal/src/chat/chain-tools/wallet.ts
-  - lib/portal/__tests__/chat/agent.test.ts
-  - lib/portal/__tests__/chat/tools.test.ts
-  - portal/src/components/chat/ChatPanel.tsx
-  - portal/src/components/chat/executeChatAction.ts
-  - portal/src/components/chat/executeChatAction.test.ts
-  - portal/src/config/env.ts
-  - portal/src/config/env.test.ts
-  - portal/src/stores/chatStore.ts
-  - portal/.env.example
+  - portal/src/components/orders/EscrowDeposit.tsx
+  - portal/src/components/orders/OrderConfirmation.tsx
+  - portal/src/components/orders/OrderWizard.tsx
+  - portal/src/features/orders/index.ts
+  - portal/src/features/orders/types.ts
+  - portal/src/features/orders/useOrderWizard.ts
+  - portal/tests/unit/orders/useOrderWizardSubmission.test.ts
 tests:
-  - command: C:\Users\pavil\AppData\Local\Temp\virtengine-node-v24.12.0\npm.cmd --prefix C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t2\lib\portal test
+  - command: C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t2\portal\node_modules\.bin\vitest.CMD run tests\unit\orders\useOrderWizardSubmission.test.ts --reporter=dot
     exit_code: 0
     result: passed
-    test_count: 661
+    test_count: 13
     tool_versions:
       node: v24.12.0
-    artifact: _docs/ralph/handoffs/prototype-t2/T2-X02-evidence.txt
-  - command: C:\Users\pavil\AppData\Local\Temp\virtengine-node-v24.12.0\npm.cmd --prefix C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t2\lib\portal run type-check
-    exit_code: 0
-    result: passed
-    tool_versions:
-      node: v24.12.0
-    artifact: _docs/ralph/handoffs/prototype-t2/T2-X02-evidence.txt
-  - command: C:\Users\pavil\AppData\Local\Temp\virtengine-node-v24.12.0\npm.cmd --prefix C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t2\portal run lint
+    artifact: _docs/ralph/handoffs/prototype-t2/T2-X03-evidence.txt
+  - command: C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t2\portal\node_modules\.bin\eslint.CMD C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t2\portal\src --ext .ts,.tsx --max-warnings 0
     exit_code: 0
     result: passed
     tool_versions:
       node: v24.12.0
-    artifact: _docs/ralph/handoffs/prototype-t2/T2-X02-evidence.txt
-  - command: C:\Users\pavil\AppData\Local\Temp\virtengine-node-v24.12.0\npm.cmd --prefix C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t2\portal run type-check
+    artifact: _docs/ralph/handoffs/prototype-t2/T2-X03-evidence.txt
+  - command: C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t2\portal\node_modules\.bin\tsc.CMD --noEmit -p C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t2\portal\tsconfig.json
     exit_code: 0
     result: passed
     tool_versions:
       node: v24.12.0
-    artifact: _docs/ralph/handoffs/prototype-t2/T2-X02-evidence.txt
+    artifact: _docs/ralph/handoffs/prototype-t2/T2-X03-evidence.txt
   - command: C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t2\portal\node_modules\.bin\vitest.CMD run --reporter=dot
     exit_code: 0
     result: passed
-    test_count: 528
+    test_count: 541
     tool_versions:
       node: v24.12.0
-    artifact: _docs/ralph/handoffs/prototype-t2/T2-X02-evidence.txt
+    artifact: _docs/ralph/handoffs/prototype-t2/T2-X03-evidence.txt
 generated_hashes: {}
 migrations: []
 external_evidence:
-  - _docs/ralph/handoffs/prototype-t2/T2-X02-evidence.txt
+  - _docs/ralph/handoffs/prototype-t2/T2-X03-evidence.txt
 known_failures:
   - TestProviderMutationSubmitterStandbyTakesOverWithHigherFence fails repeatedly in the full provider package gate with submitter lease timing errors.
 blockers:
   - T4 producer-handoff.schema.json forbids the integration_parent field required by the updated campaign plan; integration ancestor fa21b1e540a5efcbe1822da4199be7acec7709d3 is retained in T2-05-evidence.txt.
   - Full provider package certification is blocked by the unrelated submitter lease timing failure retained in T2-03B-evidence.txt.
-  - Production chat mutations remain disabled; T2-07 is intentionally not registered and Task 91B prerequisites remain unavailable.
-  - Query-only chat requires explicit enablement and no production model certification is claimed.
-next_checkpoint: T2-X03
-expected_head: 7261750ec31160f6413bdc46e320187a9fa1eac6
+  - Production generated SDK/order mutation adapter wiring remains unavailable and T4-owned.
+  - No live chain order was submitted or certified.
+next_checkpoint: T2-X04
+expected_head: cc7103aacbd4ac287c4ceb8872fcd06a1d408602
