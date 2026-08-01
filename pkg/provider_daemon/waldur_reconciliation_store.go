@@ -233,6 +233,12 @@ func (s *FileReconciliationJobStore) FailAttempt(ctx context.Context, jobID stri
 		if err != nil {
 			return err
 		}
+		if !attempt.FinishedAt.IsZero() {
+			if attempt.Outcome == "failed" && attempt.Classification == classification {
+				return nil
+			}
+			return ErrReconciliationConflict
+		}
 		attempt.FinishedAt, attempt.Outcome, attempt.Classification = s.now(), "failed", classification
 		return appendReconciliationEvent(state, ReconciliationEvent{Type: ReconciliationEventAttemptFailed, RecordedAt: s.now(), Attempt: &attempt})
 	})
@@ -247,14 +253,18 @@ func (s *FileReconciliationJobStore) CompleteAttempt(ctx context.Context, result
 		if err != nil {
 			return err
 		}
-		if _, err := findReconciliationAttempt(projection, result.JobID, result.AttemptNumber); err != nil {
+		attempt, err := findReconciliationAttempt(projection, result.JobID, result.AttemptNumber)
+		if err != nil {
 			return err
 		}
-		if existing, ok := projection.Results[result.JobID]; ok {
-			if existing.ResultDigest == result.ResultDigest {
-				return nil
-			}
+		if !attempt.FinishedAt.IsZero() && attempt.Outcome != "completed" {
 			return ErrReconciliationConflict
+		}
+		if existing, ok := projection.Results[result.JobID]; ok {
+			if existing.ResultDigest != result.ResultDigest {
+				return ErrReconciliationConflict
+			}
+			return validateReconciliationCompletionRetry(projection, result, intents, cursor)
 		}
 		if cursor.JobID != result.JobID || cursor.ResultDigest != result.ResultDigest || cursor.StreamID == "" {
 			return errors.New("cursor must reference the completed result")
@@ -341,10 +351,54 @@ func (s *FileReconciliationJobStore) update(ctx context.Context, mutate func(*re
 		s.state = state
 		return nil
 	}
+	if err := validateReconciliationState(state); err != nil {
+		return err
+	}
 	s.state = state
 	if err := s.saveLocked(); err != nil {
 		s.state = before
 		return err
+	}
+	return nil
+}
+
+func validateReconciliationCompletionRetry(
+	projection ReconciliationProjection,
+	result DurableReconciliationResult,
+	intents []ReconciliationActionIntent,
+	cursor ReconciliationCursor,
+) error {
+	storedCursor, ok := projection.Cursors[cursor.StreamID]
+	if !ok || cursor.StreamID == "" || cursor.JobID != result.JobID || cursor.ResultDigest != result.ResultDigest ||
+		storedCursor.JobID != cursor.JobID || storedCursor.ResultDigest != cursor.ResultDigest ||
+		(cursor.LastCompletedJobSequence != 0 && cursor.LastCompletedJobSequence != storedCursor.LastCompletedJobSequence) {
+		return ErrReconciliationConflict
+	}
+	if len(intents) == 0 {
+		for _, stored := range projection.Intents {
+			if stored.JobID == result.JobID {
+				return ErrReconciliationConflict
+			}
+		}
+		return nil
+	}
+	seen := make(map[string]struct{}, len(intents))
+	for _, intent := range intents {
+		stored, exists := projection.Intents[intent.ID]
+		if !exists || stored != intent || intent.JobID != result.JobID {
+			return ErrReconciliationConflict
+		}
+		if _, duplicate := seen[intent.ID]; duplicate {
+			return ErrReconciliationConflict
+		}
+		seen[intent.ID] = struct{}{}
+	}
+	for _, stored := range projection.Intents {
+		if stored.JobID == result.JobID {
+			if _, exists := seen[stored.ID]; !exists {
+				return ErrReconciliationConflict
+			}
+		}
 	}
 	return nil
 }

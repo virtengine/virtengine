@@ -168,6 +168,11 @@ func TestFileReconciliationJobStoreFailAttemptPersists(t *testing.T) {
 	attempt, err := store.BeginAttempt(ctx, job.ID)
 	require.NoError(t, err)
 	require.NoError(t, store.FailAttempt(ctx, job.ID, attempt.Number, "independent_evidence_unavailable"))
+	require.NoError(t, store.FailAttempt(ctx, job.ID, attempt.Number, "independent_evidence_unavailable"))
+	require.ErrorIs(t, store.FailAttempt(ctx, job.ID, attempt.Number, "different_classification"), ErrReconciliationConflict)
+	result := testDurableReconciliationResult(job, attempt.Number)
+	cursor := ReconciliationCursor{StreamID: "waldur/default", JobID: job.ID, ResultDigest: result.ResultDigest}
+	require.ErrorIs(t, store.CompleteAttempt(ctx, result, nil, cursor), ErrReconciliationConflict)
 	require.NoError(t, store.Close())
 
 	reopened := openReconciliationStore(t, path)
@@ -175,6 +180,36 @@ func TestFileReconciliationJobStoreFailAttemptPersists(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, "failed", projection.Attempts[job.ID][0].Outcome)
 	require.Equal(t, "independent_evidence_unavailable", projection.Attempts[job.ID][0].Classification)
+	require.Len(t, projection.Attempts[job.ID], 1)
+}
+
+func TestFileReconciliationJobStoreCompletionRetryMustMatchMetadata(t *testing.T) {
+	ctx := context.Background()
+	store := openReconciliationStore(t, filepath.Join(t.TempDir(), "reconciliation.json"))
+	job := testReconciliationJob()
+	_, _, err := store.PutJobIfAbsent(ctx, job)
+	require.NoError(t, err)
+	attempt, err := store.BeginAttempt(ctx, job.ID)
+	require.NoError(t, err)
+	result := testDurableReconciliationResult(job, attempt.Number)
+	intent := testReconciliationIntent(result)
+	cursor := ReconciliationCursor{StreamID: "waldur/default", JobID: job.ID, ResultDigest: result.ResultDigest}
+	require.NoError(t, store.CompleteAttempt(ctx, result, []ReconciliationActionIntent{intent}, cursor))
+	require.NoError(t, store.CompleteAttempt(ctx, result, []ReconciliationActionIntent{intent}, cursor))
+
+	require.ErrorIs(t, store.CompleteAttempt(ctx, result, nil, cursor), ErrReconciliationConflict)
+	wrongCursor := cursor
+	wrongCursor.StreamID = "waldur/other"
+	require.ErrorIs(t, store.CompleteAttempt(ctx, result, []ReconciliationActionIntent{intent}, wrongCursor), ErrReconciliationConflict)
+	wrongIntent := intent
+	wrongIntent.Severity = "critical"
+	require.ErrorIs(t, store.CompleteAttempt(ctx, result, []ReconciliationActionIntent{wrongIntent}, cursor), ErrReconciliationConflict)
+
+	projection, err := store.LoadProjection(ctx)
+	require.NoError(t, err)
+	require.Len(t, projection.Results, 1)
+	require.Len(t, projection.Intents, 1)
+	require.Len(t, projection.Cursors, 1)
 }
 
 func openReconciliationStore(t *testing.T, path string) *FileReconciliationJobStore {
