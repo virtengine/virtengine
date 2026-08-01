@@ -7,6 +7,7 @@ const { readFileSync } = require("fs");
 const { resolve } = require("path");
 const { validateMigrationInventory } = require("./validate-migration-inventory.cjs");
 const { validateModelProvenance } = require("./validate-model-provenance.cjs");
+const { validateRequiredGateMatrix } = require("./validate-required-gate-matrix.cjs");
 
 const root = resolve(__dirname, "..");
 const controlPath = resolve(root, "_docs/ralph/prototype-integration/control.json");
@@ -17,6 +18,8 @@ const migrationInventoryPath = resolve(root, "_docs/ralph/prototype-integration/
 const migrationSchemaPath = resolve(root, "_docs/ralph/prototype-integration/migration-inventory.schema.json");
 const modelProvenancePath = resolve(root, "_docs/ralph/prototype-integration/model-provenance.json");
 const modelProvenanceSchemaPath = resolve(root, "_docs/ralph/prototype-integration/model-provenance.schema.json");
+const requiredGateMatrixPath = resolve(root, "_docs/ralph/prototype-integration/required-gate-matrix.json");
+const requiredGateSchemaPath = resolve(root, "_docs/ralph/prototype-integration/required-gate-matrix.schema.json");
 const testCasesPath = resolve(root, "tests/upgrade/test-cases.json");
 
 function loadJson(path) {
@@ -120,6 +123,9 @@ if (require.main === module) {
   validateModelProvenance(loadJson(modelProvenancePath), {
     rootDir: root,
     schema: loadJson(modelProvenanceSchemaPath),
+  });
+  validateRequiredGateMatrix(loadJson(requiredGateMatrixPath), {
+    schema: loadJson(requiredGateSchemaPath),
   });
   console.log("prototype integration controls: valid");
 }
