@@ -3,25 +3,44 @@ import { ActivityIndicator, StyleSheet, Text, View } from "react-native";
 import { CaptureFooter } from "../components/CaptureFooter";
 import { CaptureHeader } from "../components/CaptureHeader";
 import { buildCapturePayload, finalizeCaptureSession } from "../core/captureSession";
+import type { DeviceAttestationProviderAdapter } from "../core/deviceAttestation";
 import { uploadCapture } from "../services/upload/captureUploader";
 import { useCaptureStore } from "../state/captureStore";
 
-export function UploadScreen() {
+interface UploadScreenProps {
+  attestationProvider?: DeviceAttestationProviderAdapter;
+}
+
+export function UploadScreen({ attestationProvider }: UploadScreenProps) {
   const { state, dispatch } = useCaptureStore();
   const [status, setStatus] = useState<"idle" | "uploading" | "success" | "error">("idle");
   const [error, setError] = useState<string | null>(null);
 
   const handleUpload = async () => {
     setStatus("uploading");
-    const session = finalizeCaptureSession(state.session, "0.1.0");
-    const payload = buildCapturePayload(session, "https://api.virtengine.local/veid/capture", true);
-    const result = await uploadCapture(payload);
-    if (result.success) {
-      setStatus("success");
-      dispatch({ type: "next" });
-    } else {
+    setError(null);
+
+    try {
+      const session = finalizeCaptureSession(state.session, "0.1.0", attestationProvider);
+      if (!session.deviceAttestation?.supported) {
+        setStatus("error");
+        setError(session.deviceAttestation?.failureReason ?? "attestation_unavailable");
+        return;
+      }
+
+      const payload = buildCapturePayload(session, "https://api.virtengine.local/veid/capture");
+      const result = await uploadCapture(payload);
+      if (result.success) {
+        setStatus("success");
+        dispatch({ type: "next" });
+        return;
+      }
+
       setStatus("error");
       setError(result.error ?? "unknown_error");
+    } catch (uploadError) {
+      setStatus("error");
+      setError(uploadError instanceof Error ? uploadError.message : "upload_unavailable");
     }
   };
 

@@ -1,36 +1,50 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useState } from "react";
 import { Image, Pressable, StyleSheet, Text, View } from "react-native";
 import type { ImageAsset } from "../core/captureModels";
-import { mockCameraAdapter } from "../services/camera/mockCameraAdapter";
+import type { CameraAdapter } from "../services/camera/cameraAdapter";
+import { CameraUnavailableError } from "../services/camera/cameraAdapter";
 import { visionCameraAdapter } from "../services/camera/visionCameraAdapter";
 
 interface CameraFrameProps {
   label: string;
   onCapture: (asset: ImageAsset) => void;
+  cameraAdapter?: CameraAdapter;
 }
 
-export function CameraFrame({ label, onCapture }: CameraFrameProps) {
-  const isDev = typeof __DEV__ === "undefined" ? true : __DEV__;
-  const adapter = useMemo(() => (isDev ? mockCameraAdapter : visionCameraAdapter), [isDev]);
+export function CameraFrame({ label, onCapture, cameraAdapter = visionCameraAdapter }: CameraFrameProps) {
   const [permissionGranted, setPermissionGranted] = useState(false);
   const [captured, setCaptured] = useState<ImageAsset | null>(null);
+  const [unavailableReason, setUnavailableReason] = useState<string | null>(null);
 
   useEffect(() => {
     let isMounted = true;
-    adapter.requestPermission().then((granted) => {
-      if (isMounted) {
-        setPermissionGranted(granted);
-      }
-    });
+    cameraAdapter.requestPermission()
+      .then((granted) => {
+        if (isMounted) {
+          setPermissionGranted(granted);
+          setUnavailableReason(granted ? null : "camera_permission_denied");
+        }
+      })
+      .catch((error: unknown) => {
+        if (isMounted) {
+          setPermissionGranted(false);
+          setUnavailableReason(getCameraFailureReason(error));
+        }
+      });
     return () => {
       isMounted = false;
     };
-  }, [adapter]);
+  }, [cameraAdapter]);
 
   const handleCapture = async () => {
-    const asset = await adapter.capturePhoto(label);
-    setCaptured(asset);
-    onCapture(asset);
+    try {
+      const asset = await cameraAdapter.capturePhoto(label);
+      setCaptured(asset);
+      setUnavailableReason(null);
+      onCapture(asset);
+    } catch (error) {
+      setUnavailableReason(getCameraFailureReason(error));
+    }
   };
 
   return (
@@ -41,16 +55,24 @@ export function CameraFrame({ label, onCapture }: CameraFrameProps) {
         ) : (
           <View style={styles.placeholder}>
             <Text style={styles.placeholderText}>
-              {permissionGranted ? "Camera ready" : "Camera permission required"}
+              {unavailableReason ?? (permissionGranted ? "Camera ready" : "Camera permission required")}
             </Text>
           </View>
         )}
       </View>
-      <Pressable style={styles.captureButton} onPress={handleCapture}>
+      <Pressable
+        style={[styles.captureButton, !permissionGranted ? styles.captureButtonDisabled : null]}
+        onPress={handleCapture}
+        disabled={!permissionGranted}
+      >
         <Text style={styles.captureText}>Capture</Text>
       </Pressable>
     </View>
   );
+}
+
+function getCameraFailureReason(error: unknown): string {
+  return error instanceof CameraUnavailableError ? error.code : "camera_unavailable";
 }
 
 const styles = StyleSheet.create({
@@ -83,6 +105,9 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     borderRadius: 12,
     alignItems: "center"
+  },
+  captureButtonDisabled: {
+    opacity: 0.45
   },
   captureText: {
     color: "#ffffff",

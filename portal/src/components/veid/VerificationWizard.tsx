@@ -16,12 +16,13 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/Alert';
 import { Progress } from '@/components/ui/Progress';
 import { Badge } from '@/components/ui/Badge';
 import { useVeidWizard, WIZARD_STEPS, MAX_RETRY_COUNT } from '@/features/veid';
-import type { CaptureError } from '@/lib/capture-adapter';
+import type { CaptureError, SelfieResult } from '@/lib/capture-adapter';
 import { VeidDocumentCapture } from './DocumentCapture';
 import { VeidSelfieCapture } from './SelfieCapture';
-import { LivenessChallenge } from './LivenessChallenge';
+import { unavailableVeidCaptureProviders, type VeidCaptureProviders } from './VeidCaptureProviders';
 
 interface VerificationWizardProps {
+  providers?: VeidCaptureProviders;
   /** Callback when wizard completes */
   onComplete?: () => void;
   /** Callback when user cancels */
@@ -29,7 +30,12 @@ interface VerificationWizardProps {
   className?: string;
 }
 
-export function VerificationWizard({ onComplete, onCancel, className }: VerificationWizardProps) {
+export function VerificationWizard({
+  providers = unavailableVeidCaptureProviders,
+  onComplete,
+  onCancel,
+  className,
+}: VerificationWizardProps) {
   const {
     state,
     navigation,
@@ -61,6 +67,36 @@ export function VerificationWizard({ onComplete, onCancel, className }: Verifica
     await submit();
     onComplete?.();
   }, [submit, onComplete]);
+
+  const handleSelfieCapture = useCallback(
+    (result: SelfieResult) => {
+      const evidence = result.livenessCheck;
+      if (
+        !evidence?.passed ||
+        !evidence.providerId.trim() ||
+        !evidence.providerVersion.trim() ||
+        !evidence.challengeId.trim() ||
+        !evidence.evidenceDigest.trim() ||
+        evidence.sessionId !== result.metadata.sessionId ||
+        !Number.isFinite(evidence.challengeDurationMs) ||
+        evidence.challengeDurationMs <= 0 ||
+        !Number.isFinite(evidence.score) ||
+        evidence.score < 0 ||
+        evidence.score > 1
+      ) {
+        setError({
+          step: 'selfie',
+          code: 'liveness_evidence_invalid',
+          message: 'Verified liveness evidence is required to continue.',
+          retryable: true,
+        });
+        return;
+      }
+      setSelfie(result);
+      completeLiveness();
+    },
+    [completeLiveness, setError, setSelfie]
+  );
 
   return (
     <div className={cn('space-y-6', className)}>
@@ -149,7 +185,11 @@ export function VerificationWizard({ onComplete, onCancel, className }: Verifica
             </div>
 
             <div className="flex gap-2">
-              <Button size="lg" onClick={navigation.goForward}>
+              <Button
+                size="lg"
+                onClick={navigation.goForward}
+                disabled={providers.status === 'unavailable'}
+              >
                 Begin Verification
               </Button>
               {onCancel && (
@@ -158,6 +198,12 @@ export function VerificationWizard({ onComplete, onCancel, className }: Verifica
                 </Button>
               )}
             </div>
+            {providers.status === 'unavailable' && (
+              <Alert variant="destructive">
+                <AlertTitle>Verification unavailable</AlertTitle>
+                <AlertDescription>{providers.reason}</AlertDescription>
+              </Alert>
+            )}
           </CardContent>
         </Card>
       )}
@@ -165,6 +211,7 @@ export function VerificationWizard({ onComplete, onCancel, className }: Verifica
       {/* Document select step */}
       {state.currentStep === 'document-select' && (
         <VeidDocumentCapture
+          providers={providers}
           side="front"
           onCapture={() => {
             /* handled by selectDocumentType */
@@ -177,6 +224,7 @@ export function VerificationWizard({ onComplete, onCancel, className }: Verifica
       {/* Document front step */}
       {state.currentStep === 'document-front' && (
         <VeidDocumentCapture
+          providers={providers}
           documentType={state.captureData.documentType ?? undefined}
           side="front"
           onCapture={setDocumentFront}
@@ -188,6 +236,7 @@ export function VerificationWizard({ onComplete, onCancel, className }: Verifica
       {/* Document back step */}
       {state.currentStep === 'document-back' && (
         <VeidDocumentCapture
+          providers={providers}
           documentType={state.captureData.documentType ?? undefined}
           side="back"
           onCapture={setDocumentBack}
@@ -199,19 +248,10 @@ export function VerificationWizard({ onComplete, onCancel, className }: Verifica
       {/* Selfie step */}
       {state.currentStep === 'selfie' && (
         <VeidSelfieCapture
-          livenessCheck={false}
-          onCapture={setSelfie}
+          providers={providers}
+          livenessCheck
+          onCapture={handleSelfieCapture}
           onError={handleCaptureError}
-          onCancel={() => navigation.goBack()}
-        />
-      )}
-
-      {/* Liveness step */}
-      {state.currentStep === 'liveness' && (
-        <LivenessChallenge
-          challengeCount={3}
-          timeLimitSeconds={10}
-          onComplete={completeLiveness}
           onCancel={() => navigation.goBack()}
         />
       )}
