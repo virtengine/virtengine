@@ -56,8 +56,11 @@ function validateIntegrationControl(control, schema, handoff) {
   assert.equal(handoff.campaign, control.campaign);
   assert.equal(handoff.thread, "T4");
   assert.equal(handoff.branch, control.integration.branch);
-  assert.equal(handoff.start_head, control.baseline.sha);
+  assert.ok(shaPattern.test(handoff.start_head), "handoff start_head must be a full lowercase commit SHA");
+  assert.ok(shaPattern.test(handoff.end_head), "handoff end_head must be a full lowercase commit SHA");
+  assert.ok(shaPattern.test(handoff.expected_head), "handoff expected_head must be a full lowercase commit SHA");
   assert.equal(handoff.origin_main, control.baseline.sha);
+  assert.equal(handoff.tree_clean, true);
   assert.ok(Array.isArray(handoff.accepted_checkpoints));
   assert.ok(Array.isArray(handoff.rejected_checkpoints));
 }

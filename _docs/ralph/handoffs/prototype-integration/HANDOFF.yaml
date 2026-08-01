@@ -1,60 +1,63 @@
 {
   "campaign": "three-day-prototype",
   "thread": "T4",
-  "checkpoint": "T4-01",
+  "checkpoint": "T4-F01",
   "branch": "ve/prototype-integration",
-  "start_head": "79391a3df86d85522b92e0400c6904971ecbe65d",
-  "end_head": "60c54838f506dd942778520412f33853a17a29ee",
+  "start_head": "9635513da5e3813e4d30839e0ee22b15f16e3911",
+  "end_head": "427daa2fa037aadf048d02f0b8375dad8994d62f",
   "origin_main": "79391a3df86d85522b92e0400c6904971ecbe65d",
   "tree_clean": true,
   "commits": [
-    "60c54838f506dd942778520412f33853a17a29ee"
+    "427daa2fa037aadf048d02f0b8375dad8994d62f"
   ],
   "owned_paths": [
     "_docs/ralph/prototype-integration/**",
     "_docs/ralph/handoffs/prototype-integration/**",
-    "scripts/validate-prototype-integration.cjs"
+    "scripts/validate-prototype-integration.cjs",
+    "tests/upgrade/test_cases_test.go"
   ],
   "files_changed": [
-    "_docs/INDEX.md",
     "_docs/ralph/handoffs/prototype-integration/HANDOFF.yaml",
-    "_docs/ralph/prototype-integration/control.json",
-    "_docs/ralph/prototype-integration/producer-handoff.schema.json",
-    "scripts/validate-prototype-integration.cjs",
-    "scripts/validate-prototype-integration.test.cjs"
+    "tests/upgrade/test_cases_test.go"
   ],
   "tests": [
     {
-      "command": "node scripts/validate-prototype-integration.test.cjs && node scripts/validate-prototype-integration.cjs",
+      "command": "go1.25.8 test -count=1 ./tests/upgrade -run '^TestUpgradeTestCasesMigrationMatrix'",
       "exit_code": 0,
       "result": "passed",
-      "test_count": 4,
+      "test_count": 5,
       "tool_versions": {
-        "node": "20.19.1"
+        "go": "1.25.8 windows/amd64"
       }
     },
     {
-      "command": "node scripts/validate-agents-docs.mjs",
+      "command": "go1.25.8 test -count=1 ./tests/upgrade",
       "exit_code": 0,
       "result": "passed",
-      "test_count": 9,
       "tool_versions": {
-        "node": "20.19.1"
+        "go": "1.25.8 windows/amd64"
+      }
+    },
+    {
+      "command": "go1.25.8 vet ./tests/upgrade",
+      "exit_code": 0,
+      "result": "passed",
+      "tool_versions": {
+        "go": "1.25.8 windows/amd64"
       }
     }
   ],
-  "generated_hashes": {
-    "control.json": "7fade5003634c3310ae16807adfc44674e7ae85bd791392aa9c7adff1b5b8405",
-    "producer-handoff.schema.json": "fde642dfaf135598d69d70922ceb9544fde913d1812731dcaa33150def1ce735"
-  },
+  "generated_hashes": {},
   "accepted_checkpoints": [],
   "rejected_checkpoints": [],
   "external_evidence": [],
-  "known_failures": [],
+  "known_failures": [
+    "Go 1.26.5 cannot compile github.com/bytedance/sonic v1.14.1; checkpoint gates were rerun successfully with the repository-pinned Go 1.25.8 toolchain."
+  ],
   "blockers": [
     "No producer checkpoint handoff exists at the frozen baseline.",
     "Tasks 88A-88D remain dependency-blocked; this checkpoint establishes integration controls only."
   ],
   "next_checkpoint": "T4-02",
-  "expected_head": "60c54838f506dd942778520412f33853a17a29ee"
+  "expected_head": "427daa2fa037aadf048d02f0b8375dad8994d62f"
 }
