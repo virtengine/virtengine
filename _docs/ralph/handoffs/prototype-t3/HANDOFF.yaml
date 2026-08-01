@@ -1,13 +1,13 @@
 {
   "campaign": "three-day-prototype",
   "thread": "T3",
-  "checkpoint": "T3-X01",
+  "checkpoint": "T3-X02",
   "branch": "ve/prototype-t3-reliability",
   "frozen_baseline": "79391a3df86d85522b92e0400c6904971ecbe65d",
   "planning_sha": "1436723bd78980aa0388dbe9fcfa24dda939c54a",
   "intake_epoch": 1,
   "intake_base_sha": "5587c384f634552c3a2dd7181ca49cafa4da1984",
-  "payload_head": "4a6848c6342ca2645b6bf059254e3e791b9bec34",
+  "payload_head": "5bbccdb8f1e3181fc2d60246a61fda54f0746db9",
   "prior_accepted_payload": null,
   "tree_clean": true,
   "commits_since_prior_acceptance": [
@@ -43,7 +43,9 @@
     "1903debe559315a305b17bda6b5e5bd7ca56d94f",
     "ca831142df42c4d7c3c5132bfdb785bd2eca78fb",
     "8dbbaf14d5fdfd4e8405f085842a595bc7f299ff",
-    "4a6848c6342ca2645b6bf059254e3e791b9bec34"
+    "4a6848c6342ca2645b6bf059254e3e791b9bec34",
+    "165bfde01d111f1d9d08b5e357f96116ac94d21c",
+    "5bbccdb8f1e3181fc2d60246a61fda54f0746db9"
   ],
   "owned_paths": [
     "_docs/ralph/handoffs/prototype-t3/**",
@@ -70,6 +72,9 @@
     "_docs/ralph/evidence/prototype-t3/t3-x01/go-race.txt",
     "_docs/ralph/evidence/prototype-t3/t3-x01/go-test.txt",
     "_docs/ralph/evidence/prototype-t3/t3-x01/go-vet.txt",
+    "_docs/ralph/evidence/prototype-t3/t3-x02/go-race.txt",
+    "_docs/ralph/evidence/prototype-t3/t3-x02/go-test.txt",
+    "_docs/ralph/evidence/prototype-t3/t3-x02/go-vet.txt",
     "_docs/ralph/prototype-integration/control.json",
     "_docs/ralph/prototype-integration/migration-inventory.json",
     "_docs/ralph/prototype-integration/migration-inventory.schema.json",
@@ -128,14 +133,14 @@
       "exit_code": 0,
       "result": "passed",
       "tool_versions": { "go": "go version go1.25.8 windows/amd64" },
-      "artifact": "_docs/ralph/evidence/prototype-t3/t3-x01/go-test.txt"
+      "artifact": "_docs/ralph/evidence/prototype-t3/t3-x02/go-test.txt"
     },
     {
       "command": "C:\\Users\\pavil\\AppData\\Local\\VirtEngine\\toolchains\\go1.25.8\\go\\bin\\go.exe -C C:\\Users\\pavil\\Desktop\\virtengine-gh\\repos\\virtengine-t3 vet ./x/settlement/ibc",
       "exit_code": 0,
       "result": "passed",
       "tool_versions": { "go": "go version go1.25.8 windows/amd64" },
-      "artifact": "_docs/ralph/evidence/prototype-t3/t3-x01/go-vet.txt"
+      "artifact": "_docs/ralph/evidence/prototype-t3/t3-x02/go-vet.txt"
     },
     {
       "command": "set CGO_ENABLED=1 && set CC=C:\\Users\\pavil\\AppData\\Local\\Microsoft\\WinGet\\Packages\\BrechtSanders.WinLibs.POSIX.UCRT_Microsoft.Winget.Source_8wekyb3d8bbwe\\mingw64\\bin\\gcc.exe && C:\\Users\\pavil\\AppData\\Local\\VirtEngine\\toolchains\\go1.25.8\\go\\bin\\go.exe -C C:\\Users\\pavil\\Desktop\\virtengine-gh\\repos\\virtengine-t3 test -race -count=1 ./x/settlement/ibc",
@@ -145,7 +150,7 @@
         "go": "go version go1.25.8 windows/amd64",
         "gcc": "gcc.exe (MinGW-W64 x86_64-ucrt-posix-seh, Brecht Sanders r3) 16.1.0"
       },
-      "artifact": "_docs/ralph/evidence/prototype-t3/t3-x01/go-race.txt"
+      "artifact": "_docs/ralph/evidence/prototype-t3/t3-x02/go-race.txt"
     }
   ],
   "generated_hashes": {},
