@@ -60,6 +60,58 @@ export const HPCProvider: any;
 export const IdentityProvider: any;
 export const IdentityScoreDisplay: any;
 export const IdentityStatusCard: any;
+export type UniquenessEnrollmentStatusValue =
+  | "processing"
+  | "possible-match-review"
+  | "unique"
+  | "duplicate-confirmed"
+  | "unavailable"
+  | "appeal";
+export interface UniquenessStatusProjection {
+  status: UniquenessEnrollmentStatusValue;
+  receiptId: string;
+  revision: number;
+  supersedesReceiptId?: string;
+  governedFinalAdjudication?: boolean;
+}
+export type UniquenessReceiptProjector = (
+  receipt: unknown,
+) => UniquenessStatusProjection;
+export interface UniquenessEnrollmentState {
+  status: UniquenessEnrollmentStatusValue;
+  receiptId: string | null;
+  revision: number | null;
+}
+export type UniquenessTransitionErrorCode =
+  | "invalid-projection"
+  | "invalid-transition"
+  | "stale-receipt"
+  | "superseded-receipt"
+  | "final-adjudication-required";
+export class UniquenessTransitionError extends Error {
+  readonly code: UniquenessTransitionErrorCode;
+}
+export interface UniquenessEnrollmentAdapter {
+  getState(): Readonly<UniquenessEnrollmentState>;
+  beginProcessing(): Readonly<UniquenessEnrollmentState>;
+  applyReceipt(receipt: unknown): Readonly<UniquenessEnrollmentState>;
+  requestAppeal(): Readonly<UniquenessEnrollmentState>;
+}
+export interface UniquenessEnrollmentAdapterOptions {
+  projectReceipt?: UniquenessReceiptProjector;
+}
+export function createUniquenessEnrollmentAdapter(
+  options?: UniquenessEnrollmentAdapterOptions,
+): UniquenessEnrollmentAdapter;
+export interface UniquenessEnrollmentStatusProps {
+  state: Pick<UniquenessEnrollmentState, "status">;
+  onManualVerification: () => void;
+  onAppeal: () => void;
+  className?: string;
+}
+export const UniquenessEnrollmentStatus: (
+  props: UniquenessEnrollmentStatusProps,
+) => any;
 export const initLiveRegions: any;
 export const InviteMemberDialog: any;
 export const isRetryableError: any;

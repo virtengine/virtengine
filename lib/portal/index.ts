@@ -185,6 +185,21 @@ export { IdentityScoreDisplay } from "./components/identity/IdentityScoreDisplay
 export { ScopeRequirements } from "./components/identity/ScopeRequirements";
 export { UploadHistory } from "./components/identity/UploadHistory";
 export { RemediationGuide } from "./components/identity/RemediationGuide";
+export { UniquenessEnrollmentStatus } from "./components/identity/UniquenessEnrollmentStatus";
+export type { UniquenessEnrollmentStatusProps } from "./components/identity/UniquenessEnrollmentStatus";
+export {
+  createUniquenessEnrollmentAdapter,
+  UniquenessTransitionError,
+} from "./src/identity/uniqueness-enrollment";
+export type {
+  UniquenessEnrollmentAdapter,
+  UniquenessEnrollmentAdapterOptions,
+  UniquenessEnrollmentState,
+  UniquenessEnrollmentStatus as UniquenessEnrollmentStatusValue,
+  UniquenessReceiptProjector,
+  UniquenessStatusProjection,
+  UniquenessTransitionErrorCode,
+} from "./src/identity/uniqueness-enrollment";
 
 // ============================================================================
 // MFA (VE-702)
