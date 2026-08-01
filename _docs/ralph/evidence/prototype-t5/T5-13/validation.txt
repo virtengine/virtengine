@@ -1,0 +1,35 @@
+T5-13 confidential issuer-link validation
+Payload: 4e3e646e6e4056ca6480807415d4b94101ea57c3
+Platform: windows/amd64
+Toolchains: go version go1.25.8 windows/amd64; WinLibs POSIX UCRT GCC 16.1.0
+
+Command: C:\Users\pavil\AppData\Local\VirtEngine\toolchains\go1.25.8\go\bin\go.exe -C C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t5 test -count=1 ./pkg/platformsecurity/issuerlink
+Output: ok github.com/virtengine/virtengine/pkg/platformsecurity/issuerlink 1.359s
+Exit code: 0
+
+Command: C:\Users\pavil\AppData\Local\VirtEngine\toolchains\go1.25.8\go\bin\go.exe -C C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t5 vet ./pkg/platformsecurity/issuerlink
+Output: no diagnostics
+Exit code: 0
+
+Environment: CGO_ENABLED=1; CC=gcc; PATH includes WinLibs UCRT bin
+Command: C:\Users\pavil\AppData\Local\VirtEngine\toolchains\go1.25.8\go\bin\go.exe test -race -count=1 ./pkg/platformsecurity/issuerlink
+Output: ok github.com/virtengine/virtengine/pkg/platformsecurity/issuerlink 2.279s
+Exit code: 0
+
+Command: git diff --cached --check
+Output: no errors
+Exit code: 0
+
+Security evidence:
+- Nullifiers are derived internally through a capability-bound scoped PRF; callers cannot choose them.
+- Issuer attestation nonce, request, domain, issuer, policy, profile, key epoch and freshness are exact-bound and atomically consumed.
+- Initial and rotation links require wallet possession signatures; rotation persists exact predecessor lineage and atomically supersedes the old wallet.
+- Lookup, appeal and retention actions require signed expiring capabilities; store coordinates are authoritative.
+- Authentication reads canonical current state under lock, so cached active records cannot bypass supersession/revocation.
+- Deletion removes wallet indices and full records, leaving only minimal commitment tombstones; legal holds fail closed.
+- Public serialization contains no issuer subject, wallet address, account ID, raw evidence, backend URI, stable PRF input or global index.
+
+Non-claims/blockers:
+- Deterministic PRF and in-memory stores are fixture-only and production unavailable.
+- Production requires governed threshold PRF custody, durable transactional storage, issuer/lookup/appeal/retention authorities, independent audit and external review.
+- No T4 intake epoch manifest/base tag/validator is published; payload remains untagged and not intake-eligible.

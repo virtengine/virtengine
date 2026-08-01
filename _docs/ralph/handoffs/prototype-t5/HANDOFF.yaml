@@ -1,60 +1,59 @@
 campaign: three-day-prototype
 thread: T5
-checkpoint: T5-12
+checkpoint: T5-13
 branch: ve/prototype-t5-platform
-start_head: f1447884e847797297c799198cf2b1ceabb0b9d5
-end_head: 7d95b18afe4196e56eb10bd7f2b51aee31da355a
+start_head: 024a2535b3761c7f12000d4feb6c93726e815651
+end_head: 4e3e646e6e4056ca6480807415d4b94101ea57c3
 origin_main: 79391a3df86d85522b92e0400c6904971ecbe65d
 tree_clean: true
 commits:
-  - 7d95b18afe4196e56eb10bd7f2b51aee31da355a
+  - 4e3e646e6e4056ca6480807415d4b94101ea57c3
 owned_paths:
-  - pkg/platformsecurity/uniqueness/contracts.go
-  - pkg/platformsecurity/uniqueness/contracts_test.go
-  - pkg/platformsecurity/uniqueness/fixture.go
-  - pkg/platformsecurity/uniqueness/fixture_test.go
+  - pkg/platformsecurity/issuerlink/contracts.go
+  - pkg/platformsecurity/issuerlink/contracts_test.go
+  - pkg/platformsecurity/issuerlink/fixture.go
+  - pkg/platformsecurity/issuerlink/fixture_test.go
   - _docs/ralph/handoffs/prototype-t5/HANDOFF.yaml
-  - _docs/ralph/evidence/prototype-t5/T5-12/validation.txt
+  - _docs/ralph/evidence/prototype-t5/T5-13/validation.txt
 files_changed:
-  - pkg/platformsecurity/uniqueness/contracts.go
-  - pkg/platformsecurity/uniqueness/contracts_test.go
-  - pkg/platformsecurity/uniqueness/fixture.go
-  - pkg/platformsecurity/uniqueness/fixture_test.go
+  - pkg/platformsecurity/issuerlink/contracts.go
+  - pkg/platformsecurity/issuerlink/contracts_test.go
+  - pkg/platformsecurity/issuerlink/fixture.go
+  - pkg/platformsecurity/issuerlink/fixture_test.go
   - _docs/ralph/handoffs/prototype-t5/HANDOFF.yaml
-  - _docs/ralph/evidence/prototype-t5/T5-12/validation.txt
+  - _docs/ralph/evidence/prototype-t5/T5-13/validation.txt
 tests:
-  - command: C:\Users\pavil\AppData\Local\VirtEngine\toolchains\go1.25.8\go\bin\go.exe -C C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t5 test -count=1 ./pkg/platformsecurity/uniqueness
+  - command: C:\Users\pavil\AppData\Local\VirtEngine\toolchains\go1.25.8\go\bin\go.exe -C C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t5 test -count=1 ./pkg/platformsecurity/issuerlink
     exit_code: 0
     result: passed
     tool_versions:
       go: go1.25.8 windows/amd64
-    artifact: _docs/ralph/evidence/prototype-t5/T5-12/validation.txt
-  - command: C:\Users\pavil\AppData\Local\VirtEngine\toolchains\go1.25.8\go\bin\go.exe -C C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t5 vet ./pkg/platformsecurity/uniqueness
+    artifact: _docs/ralph/evidence/prototype-t5/T5-13/validation.txt
+  - command: C:\Users\pavil\AppData\Local\VirtEngine\toolchains\go1.25.8\go\bin\go.exe -C C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t5 vet ./pkg/platformsecurity/issuerlink
     exit_code: 0
     result: passed
     tool_versions:
       go: go1.25.8 windows/amd64
-    artifact: _docs/ralph/evidence/prototype-t5/T5-12/validation.txt
-  - command: $env:CGO_ENABLED='1'; $env:CC='gcc'; C:\Users\pavil\AppData\Local\VirtEngine\toolchains\go1.25.8\go\bin\go.exe test -race -count=1 ./pkg/platformsecurity/uniqueness
+    artifact: _docs/ralph/evidence/prototype-t5/T5-13/validation.txt
+  - command: $env:CGO_ENABLED='1'; $env:CC='gcc'; C:\Users\pavil\AppData\Local\VirtEngine\toolchains\go1.25.8\go\bin\go.exe test -race -count=1 ./pkg/platformsecurity/issuerlink
     exit_code: 0
     result: passed
     tool_versions:
       go: go1.25.8 windows/amd64
       gcc: WinLibs POSIX UCRT 16.1.0
-    artifact: _docs/ralph/evidence/prototype-t5/T5-12/validation.txt
+    artifact: _docs/ralph/evidence/prototype-t5/T5-13/validation.txt
   - command: git diff --check
     exit_code: 0
     result: passed
-    artifact: _docs/ralph/evidence/prototype-t5/T5-12/validation.txt
+    artifact: _docs/ralph/evidence/prototype-t5/T5-13/validation.txt
 generated_hashes: {}
 migrations: []
 external_evidence:
-  - _docs/ralph/evidence/prototype-t5/T5-12/validation.txt
+  - _docs/ralph/evidence/prototype-t5/T5-13/validation.txt
 known_failures: []
 blockers:
-  - T1 canonical uniqueness decision and receipt source schemas are not yet available; T5-12 exposes only custody-side adapter interfaces and fixtures.
-  - Deterministic HMAC and Ed25519 fixtures are not reviewed OPRF, threshold-PRF, MPC or TEE implementations and remain production unavailable.
-  - Production requires independent operators, key ceremony, durable transactional enrollment, reviewed transform and PRF profiles, external cryptographic review and T4 wiring.
-  - T4 has not published the intake epoch manifest, epoch base tag, or intake validator required by the authoritative runbook; T5-12 must remain untagged and is not intake-eligible.
-next_checkpoint: T5-13
-expected_head: 7d95b18afe4196e56eb10bd7f2b51aee31da355a
+  - Deterministic PRF and in-memory registry implementations are fixture-only and production unavailable.
+  - Production requires governed threshold PRF custody, durable transactional storage, signed issuer and policy authorities, independent audit and external review.
+  - T4 has not published the intake epoch manifest, epoch base tag, or intake validator required by the authoritative runbook; T5-13 remains untagged and not intake-eligible.
+next_checkpoint: T5-14
+expected_head: 4e3e646e6e4056ca6480807415d4b94101ea57c3
