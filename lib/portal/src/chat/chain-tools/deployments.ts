@@ -12,6 +12,7 @@ const listDeploymentsDefinition = {
   name: "list-deployments",
   description:
     "List active deployments across all providers for the current wallet.",
+  kind: "query" as const,
   parameters: {
     type: "object",
     properties: {
@@ -27,6 +28,7 @@ const deleteDeploymentsDefinition = {
   name: "delete-deployments",
   description:
     "Stop or terminate deployments by id. Requires confirmation before execution.",
+  kind: "mutation" as const,
   parameters: {
     type: "object",
     properties: {

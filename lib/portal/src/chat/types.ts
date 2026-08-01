@@ -23,6 +23,7 @@ export interface ChatToolDefinition {
   name: string;
   description: string;
   parameters: Record<string, unknown>;
+  kind: "query" | "mutation";
   destructive?: boolean;
 }
 
@@ -121,6 +122,7 @@ export interface ChatAction {
 export interface ChatActionExecution {
   ok: boolean;
   summary: string;
+  code?: "feature_unavailable" | "unsupported_action";
   details?: unknown;
 }
 
