@@ -5,6 +5,7 @@ branch: ve/prototype-t3-reliability
 start_head: 46b213a3c230790a46c9db8bd19bfb9ace2ef9cf
 end_head: 38bb57c61949b63a6c1d60065ff5390d6bcfb171
 origin_main: 79391a3df86d85522b92e0400c6904971ecbe65d
+integration_parent: fa21b1e540a5efcbe1822da4199be7acec7709d3
 tree_clean: true
 commits:
   - 38bb57c61949b63a6c1d60065ff5390d6bcfb171
@@ -39,5 +40,6 @@ external_evidence: []
 known_failures: []
 blockers:
   - T4 must install a deterministic TransferLifecycleHooks adapter during its app-wiring ownership window; outgoing settlement IBC remains fail closed until then.
+  - T4 producer-handoff.schema.json at integration parent fa21b1e540a5efcbe1822da4199be7acec7709d3 does not yet declare the campaign-required integration_parent field.
 next_checkpoint: T3-04
 expected_head: 38bb57c61949b63a6c1d60065ff5390d6bcfb171
