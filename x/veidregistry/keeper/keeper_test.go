@@ -1,6 +1,8 @@
 package keeper
 
 import (
+	"bytes"
+	"encoding/json"
 	"testing"
 	"time"
 
@@ -52,11 +54,14 @@ func TestActivateReadyVerifiers(t *testing.T) {
 	k, ctx := setupRegistryKeeper(t)
 
 	require.NoError(t, k.SetVerifierVersion(ctx, types.VerifierVersion{
-		VerifierID:       "verifier-1",
-		SpecVersion:      "veid-1.2",
-		WeightsSHA256:    "sha256:abc",
-		ActivationHeight: ctx.BlockHeight(),
-		Status:           string(types.VerifierStatusApproved),
+		VerifierID:        "verifier-1",
+		SpecVersion:       "veid-1.2",
+		WeightsSHA256:     registryHashA,
+		TestVectorsSHA256: registryHashB,
+		ImageHash:         registryHashC,
+		ModelManifestHash: registryHashA,
+		ActivationHeight:  ctx.BlockHeight(),
+		Status:            string(types.VerifierStatusApproved),
 	}))
 
 	require.NoError(t, k.SetValidatorReadiness(ctx, types.ValidatorReadiness{
@@ -85,7 +90,192 @@ func TestActivateReadyVerifiers(t *testing.T) {
 
 	info, found := k.GetActiveVerifierInfo(ctx)
 	require.True(t, found)
-	require.Equal(t, "sha256:abc", info.WeightsSHA256)
+	require.Equal(t, registryHashA, info.WeightsSHA256)
+}
+
+func TestGetActiveVerifierInfoStrictProjection(t *testing.T) {
+	t.Run("no pointer", func(t *testing.T) {
+		k, ctx := setupRegistryKeeper(t)
+		info, found, err := k.GetActiveVerifierInfoStrict(ctx)
+		require.NoError(t, err)
+		require.False(t, found)
+		require.Empty(t, info)
+	})
+
+	t.Run("exact active projection supports prefixed and raw commitments", func(t *testing.T) {
+		k, ctx := setupRegistryKeeper(t)
+		verifier := activeProjectionVerifier(ctx)
+		verifier.ImageHash = registryHashC[len("sha256:"):]
+		require.NoError(t, k.SetVerifierVersion(ctx, verifier))
+		require.NoError(t, k.SetActiveVerifier(ctx, types.ActiveVerifierPointer{
+			VerifierID: verifier.VerifierID, SpecVersion: verifier.SpecVersion, ActivatedAtHeight: ctx.BlockHeight(),
+		}))
+		beforePointer := bytes.Clone(ctx.KVStore(k.skey).Get(types.ActiveVerifierKey()))
+		beforeRecord := bytes.Clone(ctx.KVStore(k.skey).Get(types.VerifierVersionKey(verifier.VerifierID)))
+
+		info, found, err := k.GetActiveVerifierInfoStrict(ctx)
+
+		require.NoError(t, err)
+		require.True(t, found)
+		require.Equal(t, string(types.VerifierStatusActive), info.Status)
+		require.Equal(t, verifier.ImageHash, info.ImageHash)
+		require.Equal(t, verifier.ModelManifestHash, info.ModelManifestHash)
+		require.Equal(t, beforePointer, ctx.KVStore(k.skey).Get(types.ActiveVerifierKey()))
+		require.Equal(t, beforeRecord, ctx.KVStore(k.skey).Get(types.VerifierVersionKey(verifier.VerifierID)))
+	})
+
+	tests := []struct {
+		name   string
+		mutate func(Keeper, sdk.Context, types.VerifierVersion)
+	}{
+		{
+			name: "missing record",
+			mutate: func(k Keeper, ctx sdk.Context, verifier types.VerifierVersion) {
+				ctx.KVStore(k.skey).Delete(types.VerifierVersionKey(verifier.VerifierID))
+			},
+		},
+		{
+			name: "inactive record",
+			mutate: func(k Keeper, ctx sdk.Context, verifier types.VerifierVersion) {
+				verifier.Status = string(types.VerifierStatusDeprecated)
+				require.NoError(t, k.SetVerifierVersion(ctx, verifier))
+			},
+		},
+		{
+			name: "pointer spec mismatch",
+			mutate: func(k Keeper, ctx sdk.Context, verifier types.VerifierVersion) {
+				pointer := types.ActiveVerifierPointer{VerifierID: verifier.VerifierID, SpecVersion: "veid-9.9", ActivatedAtHeight: verifier.ActivationHeight}
+				bz, err := json.Marshal(pointer)
+				require.NoError(t, err)
+				ctx.KVStore(k.skey).Set(types.ActiveVerifierKey(), bz)
+			},
+		},
+		{
+			name: "future activation",
+			mutate: func(k Keeper, ctx sdk.Context, verifier types.VerifierVersion) {
+				verifier.ActivationHeight = ctx.BlockHeight() + 1
+				require.NoError(t, k.SetVerifierVersion(ctx, verifier))
+				pointer := types.ActiveVerifierPointer{VerifierID: verifier.VerifierID, SpecVersion: verifier.SpecVersion, ActivatedAtHeight: verifier.ActivationHeight}
+				bz, err := json.Marshal(pointer)
+				require.NoError(t, err)
+				ctx.KVStore(k.skey).Set(types.ActiveVerifierKey(), bz)
+			},
+		},
+		{
+			name: "malformed commitment",
+			mutate: func(k Keeper, ctx sdk.Context, verifier types.VerifierVersion) {
+				verifier.ImageHash = "sha256:not-a-digest"
+				require.NoError(t, k.SetVerifierVersion(ctx, verifier))
+			},
+		},
+		{
+			name: "uppercase prefix",
+			mutate: func(k Keeper, ctx sdk.Context, verifier types.VerifierVersion) {
+				verifier.ImageHash = "SHA256:" + registryHashC[len("sha256:"):]
+				require.NoError(t, k.SetVerifierVersion(ctx, verifier))
+			},
+		},
+		{
+			name: "uppercase hex",
+			mutate: func(k Keeper, ctx sdk.Context, verifier types.VerifierVersion) {
+				verifier.ImageHash = "sha256:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+				require.NoError(t, k.SetVerifierVersion(ctx, verifier))
+			},
+		},
+		{
+			name: "surrounding whitespace",
+			mutate: func(k Keeper, ctx sdk.Context, verifier types.VerifierVersion) {
+				verifier.ImageHash = " " + registryHashC
+				require.NoError(t, k.SetVerifierVersion(ctx, verifier))
+			},
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			k, ctx := setupRegistryKeeper(t)
+			verifier := activeProjectionVerifier(ctx)
+			require.NoError(t, k.SetVerifierVersion(ctx, verifier))
+			require.NoError(t, k.SetActiveVerifier(ctx, types.ActiveVerifierPointer{
+				VerifierID: verifier.VerifierID, SpecVersion: verifier.SpecVersion, ActivatedAtHeight: ctx.BlockHeight(),
+			}))
+			storedVerifier, found := k.GetVerifierVersion(ctx, verifier.VerifierID)
+			require.True(t, found)
+			test.mutate(k, ctx, *storedVerifier)
+			beforePointer := bytes.Clone(ctx.KVStore(k.skey).Get(types.ActiveVerifierKey()))
+			beforeRecord := bytes.Clone(ctx.KVStore(k.skey).Get(types.VerifierVersionKey(storedVerifier.VerifierID)))
+
+			_, found, err := k.GetActiveVerifierInfoStrict(ctx)
+
+			require.Error(t, err)
+			require.True(t, found)
+			require.Equal(t, beforePointer, ctx.KVStore(k.skey).Get(types.ActiveVerifierKey()))
+			require.Equal(t, beforeRecord, ctx.KVStore(k.skey).Get(types.VerifierVersionKey(storedVerifier.VerifierID)))
+		})
+	}
+}
+
+func TestSetActiveVerifierRejectsInvalidPointerWithoutMutation(t *testing.T) {
+	tests := []struct {
+		name    string
+		pointer func(types.VerifierVersion, sdk.Context) types.ActiveVerifierPointer
+	}{
+		{
+			name: "spec mismatch",
+			pointer: func(verifier types.VerifierVersion, ctx sdk.Context) types.ActiveVerifierPointer {
+				return types.ActiveVerifierPointer{VerifierID: verifier.VerifierID, SpecVersion: "veid-9.9.9", ActivatedAtHeight: ctx.BlockHeight()}
+			},
+		},
+		{
+			name: "zero height",
+			pointer: func(verifier types.VerifierVersion, ctx sdk.Context) types.ActiveVerifierPointer {
+				return types.ActiveVerifierPointer{VerifierID: verifier.VerifierID, SpecVersion: verifier.SpecVersion}
+			},
+		},
+		{
+			name: "future height",
+			pointer: func(verifier types.VerifierVersion, ctx sdk.Context) types.ActiveVerifierPointer {
+				return types.ActiveVerifierPointer{VerifierID: verifier.VerifierID, SpecVersion: verifier.SpecVersion, ActivatedAtHeight: ctx.BlockHeight() + 1}
+			},
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			k, ctx := setupRegistryKeeper(t)
+			previous := activeProjectionVerifier(ctx)
+			previous.VerifierID = "previous-verifier"
+			require.NoError(t, k.SetVerifierVersion(ctx, previous))
+			require.NoError(t, k.SetActiveVerifier(ctx, types.ActiveVerifierPointer{
+				VerifierID: previous.VerifierID, SpecVersion: previous.SpecVersion, ActivatedAtHeight: ctx.BlockHeight(),
+			}))
+			candidate := activeProjectionVerifier(ctx)
+			candidate.VerifierID = "candidate-verifier"
+			require.NoError(t, k.SetVerifierVersion(ctx, candidate))
+			beforePointer := bytes.Clone(ctx.KVStore(k.skey).Get(types.ActiveVerifierKey()))
+			beforePrevious := bytes.Clone(ctx.KVStore(k.skey).Get(types.VerifierVersionKey(previous.VerifierID)))
+			beforeCandidate := bytes.Clone(ctx.KVStore(k.skey).Get(types.VerifierVersionKey(candidate.VerifierID)))
+
+			err := k.SetActiveVerifier(ctx, test.pointer(candidate, ctx))
+
+			require.Error(t, err)
+			require.Equal(t, beforePointer, ctx.KVStore(k.skey).Get(types.ActiveVerifierKey()))
+			require.Equal(t, beforePrevious, ctx.KVStore(k.skey).Get(types.VerifierVersionKey(previous.VerifierID)))
+			require.Equal(t, beforeCandidate, ctx.KVStore(k.skey).Get(types.VerifierVersionKey(candidate.VerifierID)))
+		})
+	}
+}
+
+func activeProjectionVerifier(ctx sdk.Context) types.VerifierVersion {
+	return types.VerifierVersion{
+		VerifierID:        "verifier-runtime",
+		SpecVersion:       "veid-1.2.0",
+		WeightsSHA256:     registryHashA,
+		TestVectorsSHA256: registryHashB,
+		ImageHash:         registryHashC,
+		ModelManifestHash: registryHashA,
+		ActivationHeight:  ctx.BlockHeight(),
+		Status:            string(types.VerifierStatusApproved),
+	}
 }
 
 func TestProposalHandlerAndQuery(t *testing.T) {

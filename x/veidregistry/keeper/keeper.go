@@ -111,6 +111,12 @@ func (k Keeper) SetActiveVerifier(ctx sdk.Context, pointer types.ActiveVerifierP
 	if verifier.Status != string(types.VerifierStatusApproved) && verifier.Status != string(types.VerifierStatusActive) {
 		return fmt.Errorf("verifier %s must be approved before activation", pointer.VerifierID)
 	}
+	if pointer.SpecVersion != verifier.SpecVersion {
+		return fmt.Errorf("active verifier pointer spec version %s does not match verifier spec version %s", pointer.SpecVersion, verifier.SpecVersion)
+	}
+	if pointer.ActivatedAtHeight <= 0 || pointer.ActivatedAtHeight > ctx.BlockHeight() {
+		return fmt.Errorf("active verifier activation height %d must be positive and no greater than block height %d", pointer.ActivatedAtHeight, ctx.BlockHeight())
+	}
 
 	if active, found := k.GetActiveVerifier(ctx); found && active.VerifierID != pointer.VerifierID {
 		if previous, ok := k.GetVerifierVersion(ctx, active.VerifierID); ok {
@@ -312,21 +318,75 @@ func (k Keeper) MirrorLegacyPipelineActivation(ctx sdk.Context, version string, 
 type ActiveVerifierInfo = veidkeeper.ActiveVerifierInfo
 
 func (k Keeper) GetActiveVerifierInfo(ctx sdk.Context) (veidkeeper.ActiveVerifierInfo, bool) {
-	active, found := k.GetActiveVerifier(ctx)
-	if !found {
-		return veidkeeper.ActiveVerifierInfo{}, false
+	info, found, err := k.GetActiveVerifierInfoStrict(ctx)
+	return info, found && err == nil
+}
+
+func (k Keeper) GetActiveVerifierInfoStrict(ctx sdk.Context) (veidkeeper.ActiveVerifierInfo, bool, error) {
+	activeBz := ctx.KVStore(k.skey).Get(types.ActiveVerifierKey())
+	if activeBz == nil {
+		return veidkeeper.ActiveVerifierInfo{}, false, nil
 	}
-	verifier, found := k.GetVerifierVersion(ctx, active.VerifierID)
-	if !found {
-		return veidkeeper.ActiveVerifierInfo{}, false
+	var active types.ActiveVerifierPointer
+	if err := json.Unmarshal(activeBz, &active); err != nil {
+		return veidkeeper.ActiveVerifierInfo{}, true, fmt.Errorf("decode active verifier pointer: %w", err)
 	}
+	if err := active.Validate(); err != nil {
+		return veidkeeper.ActiveVerifierInfo{}, true, fmt.Errorf("validate active verifier pointer: %w", err)
+	}
+
+	verifierBz := ctx.KVStore(k.skey).Get(types.VerifierVersionKey(active.VerifierID))
+	if verifierBz == nil {
+		return veidkeeper.ActiveVerifierInfo{}, true, fmt.Errorf("active verifier record %s is missing", active.VerifierID)
+	}
+	var verifier types.VerifierVersion
+	if err := json.Unmarshal(verifierBz, &verifier); err != nil {
+		return veidkeeper.ActiveVerifierInfo{}, true, fmt.Errorf("decode active verifier record %s: %w", active.VerifierID, err)
+	}
+	if verifier.Status != string(types.VerifierStatusActive) {
+		return veidkeeper.ActiveVerifierInfo{}, true, fmt.Errorf("active verifier record %s has status %s", active.VerifierID, verifier.Status)
+	}
+	if verifier.VerifierID != active.VerifierID || verifier.SpecVersion != active.SpecVersion || verifier.ActivationHeight != active.ActivatedAtHeight {
+		return veidkeeper.ActiveVerifierInfo{}, true, fmt.Errorf("active verifier pointer does not match committed verifier record")
+	}
+	if active.ActivatedAtHeight <= 0 || active.ActivatedAtHeight > ctx.BlockHeight() {
+		return veidkeeper.ActiveVerifierInfo{}, true, fmt.Errorf("active verifier activation height %d is not effective at height %d", active.ActivatedAtHeight, ctx.BlockHeight())
+	}
+	for name, commitment := range map[string]string{
+		"weights": verifier.WeightsSHA256, "test vectors": verifier.TestVectorsSHA256,
+		"image": verifier.ImageHash, "model manifest": verifier.ModelManifestHash,
+	} {
+		if commitment != "" && !isCanonicalSHA256Commitment(commitment) {
+			return veidkeeper.ActiveVerifierInfo{}, true, fmt.Errorf("active verifier %s commitment is not a SHA-256 digest", name)
+		}
+	}
+
 	return veidkeeper.ActiveVerifierInfo{
-		VerifierID:        active.VerifierID,
-		SpecVersion:       active.SpecVersion,
+		VerifierID:        verifier.VerifierID,
+		SpecVersion:       verifier.SpecVersion,
+		Status:            verifier.Status,
 		WeightsSHA256:     verifier.WeightsSHA256,
 		TestVectorsSHA256: verifier.TestVectorsSHA256,
-		ActivationHeight:  active.ActivatedAtHeight,
-	}, true
+		ImageHash:         verifier.ImageHash,
+		ModelManifestHash: verifier.ModelManifestHash,
+		ActivationHeight:  verifier.ActivationHeight,
+	}, true, nil
+}
+
+func isCanonicalSHA256Commitment(value string) bool {
+	normalized := value
+	if strings.HasPrefix(normalized, "sha256:") {
+		normalized = normalized[len("sha256:"):]
+	}
+	if len(normalized) != 64 {
+		return false
+	}
+	for _, char := range normalized {
+		if (char < '0' || char > '9') && (char < 'a' || char > 'f') {
+			return false
+		}
+	}
+	return true
 }
 
 func firstNonEmpty(values ...string) string {
