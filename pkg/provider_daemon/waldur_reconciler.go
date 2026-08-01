@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"log"
 	"math"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -126,6 +127,7 @@ type WaldurReconciler struct {
 	usageStore         *UsageSnapshotStore
 	settlementPipeline *SettlementPipeline
 	stateStore         *WaldurBridgeStateStore
+	jobStore           ReconciliationJobStore
 
 	// results stores reconciliation results by allocation ID.
 	results map[string]*ReconciliationResult
@@ -141,6 +143,13 @@ type WaldurReconciler struct {
 
 	// wg waits for goroutines to finish.
 	wg sync.WaitGroup
+}
+
+// SetJobStore installs the required durable reconciliation store.
+func (r *WaldurReconciler) SetJobStore(store ReconciliationJobStore) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.jobStore = store
 }
 
 const (
@@ -181,11 +190,34 @@ func (r *WaldurReconciler) Start(ctx context.Context) error {
 	if !r.cfg.Enabled {
 		return nil
 	}
-
+	r.mu.RLock()
+	alreadyRunning := r.running
+	r.mu.RUnlock()
+	if alreadyRunning {
+		return nil
+	}
+	if r.jobStore == nil {
+		return ErrReconciliationUnavailable
+	}
+	if err := r.jobStore.Open(ctx); err != nil {
+		return fmt.Errorf("open reconciliation store: %w", err)
+	}
+	projection, err := r.jobStore.LoadProjection(ctx)
+	if err != nil {
+		_ = r.jobStore.Close()
+		return fmt.Errorf("load reconciliation projection: %w", err)
+	}
 	r.mu.Lock()
 	if r.running {
 		r.mu.Unlock()
 		return nil
+	}
+	r.results = make(map[string]*ReconciliationResult, len(projection.Results))
+	r.discrepancies = r.discrepancies[:0]
+	for _, durable := range projection.Results {
+		result := durable.Result
+		r.results[result.AllocationID] = &result
+		r.discrepancies = append(r.discrepancies, result.Discrepancies...)
 	}
 	r.running = true
 	r.mu.Unlock()
@@ -212,6 +244,9 @@ func (r *WaldurReconciler) Stop() {
 
 	close(r.stopChan)
 	r.wg.Wait()
+	if r.jobStore != nil {
+		_ = r.jobStore.Close()
+	}
 
 	r.stopChan = make(chan struct{})
 	log.Printf("[waldur-reconciler] stopped")
@@ -220,27 +255,36 @@ func (r *WaldurReconciler) Stop() {
 // ReconcileAllocation reconciles usage for a specific allocation.
 func (r *WaldurReconciler) ReconcileAllocation(ctx context.Context, allocationID string, resourceUUID string) (*ReconciliationResult, error) {
 	now := time.Now()
+	periodEnd := now
+	periodStart := now.Add(-r.cfg.ReconciliationInterval)
+	return r.reconcileAllocation(ctx, allocationID, resourceUUID, now, periodStart, periodEnd, true)
+}
+
+func (r *WaldurReconciler) reconcileAllocation(ctx context.Context, allocationID, resourceUUID string, now, periodStart, periodEnd time.Time, publish bool) (*ReconciliationResult, error) {
 	if r.usageStore == nil {
 		return nil, fmt.Errorf("usage store not configured")
 	}
+	publishResult := func(result *ReconciliationResult) {
+		if publish {
+			r.storeResult(result)
+		}
+	}
 
 	// Get provider-reported usage
-	periodEnd := now
-	periodStart := now.Add(-r.cfg.ReconciliationInterval)
 	providerRecord, found := r.usageStore.FindLatest(allocationID, &periodStart, &periodEnd)
 	if !found {
 		result := r.newClassifiedResult(allocationID, now, ResourceMetrics{}, ReconciliationStateUnavailable, ReconciliationReasonProviderEvidenceUnavailable)
-		r.storeResult(result)
+		publishResult(result)
 		return result, nil
 	}
 	if providerRecord.EndTime.IsZero() || providerRecord.EndTime.Before(providerRecord.StartTime) {
 		result := r.newClassifiedResult(allocationID, now, providerRecord.Metrics, ReconciliationStateUnresolved, ReconciliationReasonMalformedEvidence)
-		r.storeResult(result)
+		publishResult(result)
 		return result, nil
 	}
 	if r.evidenceStale(now, providerRecord.EndTime) {
 		result := r.newClassifiedResult(allocationID, now, providerRecord.Metrics, ReconciliationStateStale, ReconciliationReasonProviderEvidenceStale)
-		r.storeResult(result)
+		publishResult(result)
 		return result, nil
 	}
 
@@ -252,17 +296,17 @@ func (r *WaldurReconciler) ReconcileAllocation(ctx context.Context, allocationID
 			state, reason = ReconciliationStateUnresolved, validationErr.reason
 		}
 		result := r.newClassifiedResult(allocationID, now, providerRecord.Metrics, state, reason)
-		r.storeResult(result)
+		publishResult(result)
 		return result, nil
 	}
 	if r.evidenceStale(now, waldurStats.EvidenceTime) {
 		result := r.newClassifiedResult(allocationID, now, providerRecord.Metrics, ReconciliationStateStale, ReconciliationReasonIndependentEvidenceStale)
-		r.storeResult(result)
+		publishResult(result)
 		return result, nil
 	}
 	if !hasCompleteIndependentEvidence(providerRecord.Metrics, waldurStats.Components) {
 		result := r.newClassifiedResult(allocationID, now, providerRecord.Metrics, ReconciliationStateUnresolved, ReconciliationReasonPartialEvidence)
-		r.storeResult(result)
+		publishResult(result)
 		return result, nil
 	}
 
@@ -292,7 +336,7 @@ func (r *WaldurReconciler) ReconcileAllocation(ctx context.Context, allocationID
 		result.ReasonCode = ReconciliationReasonWithinTolerance
 	}
 
-	r.storeResult(result)
+	publishResult(result)
 
 	// Handle discrepancies
 	if len(discrepancies) > 0 {
@@ -714,24 +758,61 @@ func (r *WaldurReconciler) runReconciliation(ctx context.Context) {
 		return
 	}
 
-	processed := 0
-	skipped := 0
-	for allocationID, mapping := range state.Mappings {
-		if mapping == nil {
-			skipped++
+	if r.jobStore == nil {
+		log.Printf("[waldur-reconciler] skipped: durable reconciliation store unavailable")
+		return
+	}
+
+	periodEnd := time.Now().UTC()
+	periodStart := periodEnd.Add(-r.cfg.ReconciliationInterval)
+	allocationIDs := make([]string, 0, len(state.Mappings))
+	for allocationID := range state.Mappings {
+		allocationIDs = append(allocationIDs, allocationID)
+	}
+	sort.Strings(allocationIDs)
+	for _, allocationID := range allocationIDs {
+		mapping := state.Mappings[allocationID]
+		if mapping == nil || mapping.ResourceUUID == "" {
 			continue
 		}
 		if mapping.AllocationID != "" {
 			allocationID = mapping.AllocationID
 		}
-		if allocationID == "" || mapping.ResourceUUID == "" {
-			skipped++
+		job := newReconciliationJob(allocationID, mapping.ResourceUUID, periodStart, periodEnd)
+		if _, _, err := r.jobStore.PutJobIfAbsent(ctx, job); err != nil {
+			log.Printf("[waldur-reconciler] failed to persist job %s: %v", job.ID, err)
+		}
+	}
+
+	pending, err := r.jobStore.PendingJobs(ctx)
+	if err != nil {
+		log.Printf("[waldur-reconciler] failed to load pending jobs: %v", err)
+		return
+	}
+	processed := 0
+	skipped := 0
+	for _, job := range pending {
+		attempt, err := r.jobStore.BeginAttempt(ctx, job.ID)
+		if err != nil {
+			log.Printf("[waldur-reconciler] failed to begin job %s: %v", job.ID, err)
 			continue
 		}
-		if _, err := r.ReconcileAllocation(ctx, allocationID, mapping.ResourceUUID); err != nil {
-			log.Printf("[waldur-reconciler] failed to reconcile %s: %v", allocationID, err)
+		result, err := r.reconcileAllocation(ctx, job.AllocationID, job.ResourceUUID, job.PeriodEnd, job.PeriodStart, job.PeriodEnd, false)
+		if err != nil {
+			_ = r.jobStore.FailAttempt(ctx, job.ID, attempt.Number, "reconciliation_error")
+			log.Printf("[waldur-reconciler] failed to reconcile %s: %v", job.AllocationID, err)
 			continue
 		}
+		durable, intents, cursor, err := buildDurableReconciliationCompletion(job, attempt, *result)
+		if err != nil {
+			_ = r.jobStore.FailAttempt(ctx, job.ID, attempt.Number, "evidence_digest_error")
+			continue
+		}
+		if err := r.jobStore.CompleteAttempt(ctx, durable, intents, cursor); err != nil {
+			log.Printf("[waldur-reconciler] failed to commit job %s: %v", job.ID, err)
+			continue
+		}
+		r.storeResult(result)
 		processed++
 	}
 

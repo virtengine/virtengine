@@ -75,6 +75,8 @@ func TestWaldurReconcilerFetchWaldurUsageUsesUsageAPI(t *testing.T) {
 	cfg.DiscrepancyThreshold = 1
 
 	reconciler := NewWaldurReconciler(cfg, waldur.NewMarketplaceClient(client), usageStore, nil, stateStore)
+	jobStore := openReconciliationStore(t, filepath.Join(t.TempDir(), "reconciliation.json"))
+	reconciler.SetJobStore(jobStore)
 
 	stats, err := reconciler.fetchWaldurUsage(context.Background(), "resource-1", now.Add(-time.Hour), now)
 	require.NoError(t, err)
@@ -92,6 +94,77 @@ func TestWaldurReconcilerFetchWaldurUsageUsesUsageAPI(t *testing.T) {
 	require.Equal(t, ReconciliationReasonExactMatch, result.ReasonCode)
 	require.Equal(t, 100, result.Score)
 	require.Empty(t, result.Discrepancies)
+	projection, err := jobStore.LoadProjection(context.Background())
+	require.NoError(t, err)
+	require.Len(t, projection.Results, 1)
+	require.Len(t, projection.Cursors, 1)
+	require.Empty(t, projection.Intents)
+}
+
+func TestWaldurReconcilerStartRequiresDurableStore(t *testing.T) {
+	reconciler := NewWaldurReconciler(DefaultWaldurReconcilerConfig(), nil, NewUsageSnapshotStore(), nil, nil)
+	require.ErrorIs(t, reconciler.Start(context.Background()), ErrReconciliationUnavailable)
+}
+
+func TestWaldurReconcilerStartHydratesDurableResults(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "reconciliation.json")
+	store := openReconciliationStore(t, path)
+	job := testReconciliationJob()
+	_, _, err := store.PutJobIfAbsent(context.Background(), job)
+	require.NoError(t, err)
+	attempt, err := store.BeginAttempt(context.Background(), job.ID)
+	require.NoError(t, err)
+	durable := testDurableReconciliationResult(job, attempt.Number)
+	cursor := ReconciliationCursor{StreamID: "waldur/default", LastCompletedJobSequence: 1, JobID: job.ID, ResultDigest: durable.ResultDigest}
+	require.NoError(t, store.CompleteAttempt(context.Background(), durable, nil, cursor))
+	require.NoError(t, store.Close())
+
+	reopened, err := NewFileReconciliationJobStore(path)
+	require.NoError(t, err)
+	reconciler := NewWaldurReconciler(DefaultWaldurReconcilerConfig(), nil, NewUsageSnapshotStore(), nil, nil)
+	reconciler.SetJobStore(reopened)
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	require.NoError(t, reconciler.Start(ctx))
+	reconciler.Stop()
+	result, found := reconciler.GetResult(job.AllocationID)
+	require.True(t, found)
+	require.Equal(t, durable.Result.State, result.State)
+	require.Equal(t, durable.Result.ReasonCode, result.ReasonCode)
+}
+
+func TestWaldurReconcilerPersistsUnavailableIntentBeforePublishing(t *testing.T) {
+	now := time.Now().UTC()
+	usageStore := NewUsageSnapshotStore()
+	usageStore.Track(&UsageRecord{
+		ID: "record-1", DeploymentID: "alloc-1", StartTime: now.Add(-time.Hour), EndTime: now,
+		Metrics: ResourceMetrics{CPUMilliSeconds: 100},
+	})
+	stateStore := NewWaldurBridgeStateStore(filepath.Join(t.TempDir(), "waldur-state.json"))
+	require.NoError(t, stateStore.Save(&WaldurBridgeState{Mappings: map[string]*WaldurAllocationMapping{
+		"alloc-1": {AllocationID: "alloc-1", ResourceUUID: "resource-1", UpdatedAt: now},
+	}}))
+	jobStore := openReconciliationStore(t, filepath.Join(t.TempDir(), "reconciliation.json"))
+	cfg := DefaultWaldurReconcilerConfig()
+	cfg.ReconciliationInterval = time.Hour
+	reconciler := NewWaldurReconciler(cfg, nil, usageStore, nil, stateStore)
+	reconciler.SetJobStore(jobStore)
+
+	reconciler.runReconciliation(context.Background())
+	result, found := reconciler.GetResult("alloc-1")
+	require.True(t, found)
+	require.Equal(t, ReconciliationStateUnavailable, result.State)
+	require.Equal(t, ReconciliationReasonIndependentEvidenceUnavailable, result.ReasonCode)
+
+	projection, err := jobStore.LoadProjection(context.Background())
+	require.NoError(t, err)
+	require.Len(t, projection.Results, 1)
+	require.Len(t, projection.Intents, 1)
+	require.Len(t, projection.Cursors, 1)
+	for _, intent := range projection.Intents {
+		require.Equal(t, "alert_discrepancy", intent.Kind)
+		require.Equal(t, "pending", intent.Status)
+	}
 }
 
 func TestWaldurReconciliationStateClassification(t *testing.T) {
