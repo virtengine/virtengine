@@ -1,8 +1,8 @@
 # VEID AI, Privacy-Preserving Biometric Uniqueness, and Private Claims Architecture
 
-**Status:** Prototype architecture and implementation backlog  
-**Prepared:** 2026-08-01  
-**Owners:** Threads T1-T5  
+**Status:** Prototype architecture and implementation backlog
+**Prepared:** 2026-08-01
+**Owners:** Threads T1-T5
 **Production status:** Disabled until every mandatory security and certification gate passes
 
 ## 1. Purpose
