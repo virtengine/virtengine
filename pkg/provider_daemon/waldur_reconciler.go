@@ -128,6 +128,7 @@ type WaldurReconciler struct {
 	settlementPipeline *SettlementPipeline
 	stateStore         *WaldurBridgeStateStore
 	jobStore           ReconciliationJobStore
+	metrics            *ReconciliationMetrics
 
 	// results stores reconciliation results by allocation ID.
 	results map[string]*ReconciliationResult
@@ -150,6 +151,13 @@ func (r *WaldurReconciler) SetJobStore(store ReconciliationJobStore) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.jobStore = store
+}
+
+// SetMetrics installs optional bounded reconciliation metrics.
+func (r *WaldurReconciler) SetMetrics(metrics *ReconciliationMetrics) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.metrics = metrics
 }
 
 const (
@@ -207,6 +215,7 @@ func (r *WaldurReconciler) Start(ctx context.Context) error {
 		_ = r.jobStore.Close()
 		return fmt.Errorf("load reconciliation projection: %w", err)
 	}
+	r.metrics.ObserveProjection(projection)
 	r.mu.Lock()
 	if r.running {
 		r.mu.Unlock()
@@ -783,6 +792,7 @@ func (r *WaldurReconciler) runReconciliation(ctx context.Context) {
 			log.Printf("[waldur-reconciler] failed to persist job %s: %v", job.ID, err)
 		}
 	}
+	r.refreshMetrics(ctx)
 
 	pending, err := r.jobStore.PendingJobs(ctx)
 	if err != nil {
@@ -800,18 +810,21 @@ func (r *WaldurReconciler) runReconciliation(ctx context.Context) {
 		result, err := r.reconcileAllocation(ctx, job.AllocationID, job.ResourceUUID, job.PeriodEnd, job.PeriodStart, job.PeriodEnd, false)
 		if err != nil {
 			_ = r.jobStore.FailAttempt(ctx, job.ID, attempt.Number, "reconciliation_error")
+			r.refreshMetrics(ctx)
 			log.Printf("[waldur-reconciler] failed to reconcile %s: %v", job.AllocationID, err)
 			continue
 		}
 		durable, intents, cursor, err := buildDurableReconciliationCompletion(job, attempt, *result)
 		if err != nil {
 			_ = r.jobStore.FailAttempt(ctx, job.ID, attempt.Number, "evidence_digest_error")
+			r.refreshMetrics(ctx)
 			continue
 		}
 		if err := r.jobStore.CompleteAttempt(ctx, durable, intents, cursor); err != nil {
 			log.Printf("[waldur-reconciler] failed to commit job %s: %v", job.ID, err)
 			continue
 		}
+		r.refreshMetrics(ctx)
 		r.storeResult(result)
 		processed++
 	}
@@ -819,6 +832,17 @@ func (r *WaldurReconciler) runReconciliation(ctx context.Context) {
 	status := r.GetSyncStatus()
 	log.Printf("[waldur-reconciler] reconciliation complete: %d processed, %d skipped, %d allocations, %d matched, %d mismatched, %d unavailable, %d stale, %d unresolved, avg score %d",
 		processed, skipped, status.TotalAllocations, status.MatchedCount, status.MismatchedCount, status.UnavailableCount, status.StaleCount, status.UnresolvedCount, status.AverageScore)
+}
+
+func (r *WaldurReconciler) refreshMetrics(ctx context.Context) {
+	if r.metrics == nil || r.jobStore == nil {
+		return
+	}
+	projection, err := r.jobStore.LoadProjection(ctx)
+	if err != nil {
+		return
+	}
+	r.metrics.ObserveProjection(projection)
 }
 
 // ScheduledUsageCollector collects usage on a schedule and integrates with settlement.

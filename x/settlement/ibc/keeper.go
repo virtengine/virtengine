@@ -68,6 +68,7 @@ type IBCKeeper struct {
 	portKeeper       PortKeeper
 	relayerHooks     RelayerHooks
 	lifecycleHooks   TransferLifecycleHooks
+	metrics          TransferMetrics
 }
 
 // NewIBCKeeper creates a new settlement IBC keeper.
@@ -86,7 +87,17 @@ func NewIBCKeeper(
 		portKeeper:       portKeeper,
 		relayerHooks:     NoOpRelayerHooks{},
 		lifecycleHooks:   unavailableTransferLifecycleHooks{},
+		metrics:          noOpTransferMetrics{},
 	}
+}
+
+// SetMetrics installs optional bounded transfer metrics.
+func (k *IBCKeeper) SetMetrics(metrics TransferMetrics) {
+	if metrics == nil {
+		k.metrics = noOpTransferMetrics{}
+		return
+	}
+	k.metrics = metrics
 }
 
 // SetTransferLifecycleHooks installs mandatory deterministic transfer hooks.
@@ -304,6 +315,7 @@ func (k IBCKeeper) sendPacket(
 	)
 	write()
 	ctx.EventManager().EmitEvents(cacheCtx.EventManager().Events())
+	k.RefreshMetrics(ctx)
 
 	return sequence, nil
 }
@@ -651,12 +663,21 @@ func (k IBCKeeper) applyTerminalTransition(
 		err = k.lifecycleHooks.CompensateTransfer(cacheCtx, pending, transition)
 	}
 	if err != nil {
+		if transition.TerminalState == TransferStateCompensated {
+			k.metrics.CompensationFailed(transition.PacketType, "compensate", transition.CompensationReason)
+		}
 		return err
 	}
 	if err := k.lifecycleHooks.RecordAccounting(cacheCtx, pending, transition); err != nil {
+		if transition.TerminalState == TransferStateCompensated {
+			k.metrics.CompensationFailed(transition.PacketType, "accounting", transition.CompensationReason)
+		}
 		return err
 	}
 	if err := k.lifecycleHooks.RecordAudit(cacheCtx, pending, transition); err != nil {
+		if transition.TerminalState == TransferStateCompensated {
+			k.metrics.CompensationFailed(transition.PacketType, "audit", transition.CompensationReason)
+		}
 		return err
 	}
 
@@ -671,7 +692,24 @@ func (k IBCKeeper) applyTerminalTransition(
 	k.deletePendingPacket(cacheCtx, pending.Identity.SourceChannel, pending.Identity.Sequence)
 	write()
 	ctx.EventManager().EmitEvents(cacheCtx.EventManager().Events())
+	k.metrics.TerminalCommitted(transition.PacketType, transition.TerminalState, transition.CompensationReason)
+	k.RefreshMetrics(ctx)
 	return nil
+}
+
+// RefreshMetrics reconstructs pending exposure gauges from committed KV state.
+func (k IBCKeeper) RefreshMetrics(ctx sdk.Context) {
+	counts := make(map[PacketType]float64)
+	iterator := storetypes.KVStorePrefixIterator(ctx.KVStore(k.storeKey), PrefixPendingPacket)
+	defer iterator.Close()
+	for ; iterator.Valid(); iterator.Next() {
+		var pending PendingPacket
+		if err := json.Unmarshal(iterator.Value(), &pending); err != nil {
+			continue
+		}
+		counts[pending.PacketData.Type]++
+	}
+	k.metrics.SetPending(counts)
 }
 
 func (k IBCKeeper) setTerminalMarker(ctx sdk.Context, marker TerminalMarker) {

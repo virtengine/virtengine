@@ -584,6 +584,9 @@ func validateReconciliationIntent(intent ReconciliationActionIntent, result Dura
 	if intent.Kind != "alert_discrepancy" && intent.Kind != "auto_correct" {
 		return errors.New("unsupported reconciliation action intent")
 	}
+	if intent.Severity != "critical" && intent.Severity != "warning" && intent.Severity != "high" && intent.Severity != "info" {
+		return errors.New("unsupported reconciliation action intent severity")
+	}
 	return nil
 }
 
@@ -639,7 +642,7 @@ func buildDurableReconciliationCompletion(job ReconciliationJob, attempt Reconci
 	}
 	cursor := ReconciliationCursor{
 		StreamID: "waldur/default",
-		JobID: job.ID, ResultDigest: resultDigest,
+		JobID:    job.ID, ResultDigest: resultDigest,
 	}
 	return durable, intents, cursor, nil
 }
