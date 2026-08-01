@@ -171,6 +171,10 @@ func resolveBundlePath(bundleRoot, relativePath, manifestPath, fieldName string)
 }
 
 func verifyModelBundle(modelPath, manifestPath, expectedVersion, expectedHash string) (*verificationResult, error) {
+	return verifyModelBundleForProfile(modelPath, manifestPath, expectedVersion, expectedHash, "production")
+}
+
+func verifyModelBundleForProfile(modelPath, manifestPath, expectedVersion, expectedHash, expectedProfile string) (*verificationResult, error) {
 	manifestPath = deriveManifestPath(modelPath, manifestPath)
 	data, err := os.ReadFile(manifestPath)
 	if err != nil {
@@ -456,11 +460,37 @@ func verifyModelBundle(modelPath, manifestPath, expectedVersion, expectedHash st
 			Err:   fmt.Errorf("unsupported provenance schema_version %q", provenance.SchemaVersion),
 		}
 	}
-	if manifest.Profile == "production" && provenance.Status != "production_approved" {
+	switch manifest.Profile {
+	case "production":
+		if provenance.Status == "production_approved" {
+			break
+		}
 		return nil, &verificationError{
 			State: verificationStateBadManifest,
 			Path:  absProvenancePath,
 			Err:   fmt.Errorf("production manifest requires production_approved provenance status, got %q", provenance.Status),
+		}
+	case "fixture_only":
+		if provenance.Status == "fixture_only" || provenance.Status == "production_approved" {
+			break
+		}
+		return nil, &verificationError{
+			State: verificationStateBadManifest,
+			Path:  absProvenancePath,
+			Err:   fmt.Errorf("fixture_only manifest requires fixture_only or production_approved provenance status, got %q", provenance.Status),
+		}
+	default:
+		return nil, &verificationError{
+			State: verificationStateBadManifest,
+			Path:  manifestPath,
+			Err:   fmt.Errorf("manifest profile must be production or fixture_only, got %q", manifest.Profile),
+		}
+	}
+	if manifest.Profile != expectedProfile {
+		return nil, &verificationError{
+			State: verificationStateBadManifest,
+			Path:  manifestPath,
+			Err:   fmt.Errorf("manifest profile mismatch: expected %s, got %s", expectedProfile, manifest.Profile),
 		}
 	}
 
@@ -477,7 +507,11 @@ func verifyModelBundle(modelPath, manifestPath, expectedVersion, expectedHash st
 
 func computeModelDirHash(modelPath string) (string, error) {
 	hasher := sha256.New()
-	var files []string
+	type modelFile struct {
+		absolutePath string
+		relativePath string
+	}
+	var files []modelFile
 
 	err := filepath.Walk(modelPath, func(path string, info os.FileInfo, walkErr error) error {
 		if walkErr != nil {
@@ -489,16 +523,25 @@ func computeModelDirHash(modelPath string) (string, error) {
 		if filepath.Base(path) == "export_metadata.json" {
 			return nil
 		}
-		files = append(files, path)
+		relativePath, err := filepath.Rel(modelPath, path)
+		if err != nil {
+			return err
+		}
+		files = append(files, modelFile{
+			absolutePath: path,
+			relativePath: filepath.ToSlash(relativePath),
+		})
 		return nil
 	})
 	if err != nil {
 		return "", err
 	}
 
-	sort.Strings(files)
-	for _, path := range files {
-		file, err := os.Open(path)
+	sort.Slice(files, func(i, j int) bool {
+		return files[i].relativePath < files[j].relativePath
+	})
+	for _, modelFile := range files {
+		file, err := os.Open(modelFile.absolutePath)
 		if err != nil {
 			return "", err
 		}
