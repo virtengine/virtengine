@@ -30,6 +30,7 @@ var requiredManifestArtifacts = []string{
 	"MODEL_HASH.txt",
 	"export_metadata.json",
 	"manifest.json",
+	"model_provenance.json",
 	"model_frozen.pb",
 	filepath.ToSlash(filepath.Join("model", "saved_model.pb")),
 }
@@ -54,7 +55,11 @@ func (e *verificationError) Unwrap() error {
 type releaseManifest struct {
 	SchemaVersion string `json:"schema_version"`
 	Profile       string `json:"profile"`
-	Model         struct {
+	Provenance    struct {
+		Path   string `json:"path"`
+		SHA256 string `json:"sha256"`
+	} `json:"provenance"`
+	Model struct {
 		Name            string                 `json:"name"`
 		Version         string                 `json:"version"`
 		ModelDir        string                 `json:"model_dir"`
@@ -71,6 +76,11 @@ type releaseArtifact struct {
 	Path      string `json:"path"`
 	SHA256    string `json:"sha256"`
 	SizeBytes int64  `json:"size_bytes"`
+}
+
+type modelProvenance struct {
+	SchemaVersion string `json:"schema_version"`
+	Status        string `json:"status"`
 }
 
 type verificationResult struct {
@@ -289,7 +299,7 @@ func verifyModelBundle(modelPath, manifestPath, expectedVersion, expectedHash st
 		}
 	}
 
-	verifiedArtifacts := make(map[string]struct{}, len(manifest.Artifacts))
+	verifiedArtifacts := make(map[string]string, len(manifest.Artifacts))
 	for _, artifact := range manifest.Artifacts {
 		if strings.TrimSpace(artifact.Path) == "" {
 			return nil, &verificationError{
@@ -326,7 +336,7 @@ func verifyModelBundle(modelPath, manifestPath, expectedVersion, expectedHash st
 				Err:   fmt.Errorf("duplicate artifact entry %s", normalizedArtifactPath),
 			}
 		}
-		verifiedArtifacts[normalizedArtifactPath] = struct{}{}
+		verifiedArtifacts[normalizedArtifactPath] = artifactHash
 
 		info, err := os.Stat(artifactPath)
 		if err != nil {
@@ -372,6 +382,85 @@ func verifyModelBundle(modelPath, manifestPath, expectedVersion, expectedHash st
 				Path:  manifestPath,
 				Err:   fmt.Errorf("manifest artifacts missing required entry %s", requiredArtifact),
 			}
+		}
+	}
+
+	provenancePath := strings.TrimSpace(manifest.Provenance.Path)
+	if provenancePath == "" {
+		return nil, &verificationError{
+			State: verificationStateBadManifest,
+			Path:  manifestPath,
+			Err:   fmt.Errorf("manifest provenance path is required"),
+		}
+	}
+	if filepath.IsAbs(provenancePath) || filepath.VolumeName(provenancePath) != "" {
+		return nil, &verificationError{
+			State: verificationStateBadManifest,
+			Path:  manifestPath,
+			Err:   fmt.Errorf("manifest provenance path must be repository-relative: %s", provenancePath),
+		}
+	}
+	provenanceHash := normalizeHash(manifest.Provenance.SHA256)
+	if !isValidHash(provenanceHash) {
+		return nil, &verificationError{
+			State: verificationStateBadManifest,
+			Path:  manifestPath,
+			Err:   fmt.Errorf("manifest provenance hash must be a valid SHA-256 digest"),
+		}
+	}
+
+	absProvenancePath, normalizedProvenancePath, err := resolveBundlePath(
+		manifestDir,
+		provenancePath,
+		manifestPath,
+		"manifest provenance path",
+	)
+	if err != nil {
+		return nil, err
+	}
+	if normalizedProvenancePath != "model_provenance.json" {
+		return nil, &verificationError{
+			State: verificationStateBadManifest,
+			Path:  manifestPath,
+			Err:   fmt.Errorf("manifest provenance path must reference model_provenance.json"),
+		}
+	}
+	artifactHash, exists := verifiedArtifacts[normalizedProvenancePath]
+	if !exists {
+		return nil, &verificationError{
+			State: verificationStateBadManifest,
+			Path:  manifestPath,
+			Err:   fmt.Errorf("manifest provenance path is not a verified artifact: %s", normalizedProvenancePath),
+		}
+	}
+	if provenanceHash != artifactHash {
+		return nil, &verificationError{
+			State: verificationStateStaleManifest,
+			Path:  absProvenancePath,
+			Err:   fmt.Errorf("provenance digest mismatch: expected %s, got %s", artifactHash, provenanceHash),
+		}
+	}
+
+	provenanceData, err := os.ReadFile(absProvenancePath)
+	if err != nil {
+		return nil, &verificationError{State: verificationStateBadManifest, Path: absProvenancePath, Err: err}
+	}
+	var provenance modelProvenance
+	if err := json.Unmarshal(provenanceData, &provenance); err != nil {
+		return nil, &verificationError{State: verificationStateBadManifest, Path: absProvenancePath, Err: err}
+	}
+	if provenance.SchemaVersion != "virtengine.model-provenance/v1" {
+		return nil, &verificationError{
+			State: verificationStateBadManifest,
+			Path:  absProvenancePath,
+			Err:   fmt.Errorf("unsupported provenance schema_version %q", provenance.SchemaVersion),
+		}
+	}
+	if manifest.Profile == "production" && provenance.Status != "production_approved" {
+		return nil, &verificationError{
+			State: verificationStateBadManifest,
+			Path:  absProvenancePath,
+			Err:   fmt.Errorf("production manifest requires production_approved provenance status, got %q", provenance.Status),
 		}
 	}
 

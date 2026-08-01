@@ -1,0 +1,181 @@
+{
+  "schema_version": "virtengine.model-provenance/v1",
+  "manifest_id": "trust-score",
+  "status": "dependency_blocked",
+  "source": {
+    "commit": "79391a3df86d85522b92e0400c6904971ecbe65d",
+    "tree": "349820fab7aeeefc20079ac29b98f6ec6736f4fb"
+  },
+  "stages": [
+    {
+      "id": "preprocessing",
+      "state": "fixture_only",
+      "evidence": {
+        "id": "stage-preprocessing-implementation",
+        "state": "fixture_only",
+        "path": "ml/training/dataset/preprocessing.py",
+        "sha256": "af117f2fb426a05e7284971f1bbc4006d13461464db7aff1bf0d2e1f96789ab5",
+        "size": 10059,
+        "source": {
+          "type": "repository_file",
+          "uri": "git+https://github.com/virtengine/virtengine.git",
+          "revision": "79391a3df86d85522b92e0400c6904971ecbe65d",
+          "digest": "af117f2fb426a05e7284971f1bbc4006d13461464db7aff1bf0d2e1f96789ab5"
+        }
+      }
+    },
+    {
+      "id": "training",
+      "state": "fixture_only",
+      "evidence": {
+        "id": "stage-training-implementation",
+        "state": "fixture_only",
+        "path": "ml/training/run_training.py",
+        "sha256": "bfedb40c53cbaab768e45d6f0236c9517e30a5aa66f5fcadd6039d3e11746b94",
+        "size": 25742,
+        "source": {
+          "type": "repository_file",
+          "uri": "git+https://github.com/virtengine/virtengine.git",
+          "revision": "79391a3df86d85522b92e0400c6904971ecbe65d",
+          "digest": "bfedb40c53cbaab768e45d6f0236c9517e30a5aa66f5fcadd6039d3e11746b94"
+        }
+      }
+    },
+    {
+      "id": "evaluation",
+      "state": "dependency_blocked",
+      "evidence": {
+        "id": "stage-production-evaluation",
+        "state": "dependency_blocked",
+        "blocker_id": "production-evaluation-absent"
+      }
+    },
+    {
+      "id": "packaging",
+      "state": "dependency_blocked",
+      "evidence": {
+        "id": "stage-production-package",
+        "state": "dependency_blocked",
+        "blocker_id": "model-weights-absent"
+      }
+    }
+  ],
+  "artifacts": [
+    {
+      "id": "trust-score-architecture",
+      "state": "fixture_only",
+      "path": "ml/training/model/architecture.py",
+      "sha256": "38f8a14dffa7444ed5da7d7823f1b855eba9ba285a6408cb73d9a9e9aba60eb2",
+      "size": 11379,
+      "source": {
+        "type": "repository_file",
+        "uri": "git+https://github.com/virtengine/virtengine.git",
+        "revision": "79391a3df86d85522b92e0400c6904971ecbe65d",
+        "digest": "38f8a14dffa7444ed5da7d7823f1b855eba9ba285a6408cb73d9a9e9aba60eb2"
+      }
+    },
+    {
+      "id": "trust-score-model-weights",
+      "state": "dependency_blocked",
+      "blocker_id": "model-weights-absent"
+    }
+  ],
+  "datasets": [
+    {
+      "id": "synthetic-ci-dataset",
+      "state": "fixture_only",
+      "path": "ml/training/ci_data/synthetic_dataset.json",
+      "sha256": "99318ebecd144029d7c02425f970e1e36f20c28d9f42fe81337dc2f491c44ea2",
+      "size": 20871,
+      "source": {
+        "type": "repository_file",
+        "uri": "git+https://github.com/virtengine/virtengine.git",
+        "revision": "79391a3df86d85522b92e0400c6904971ecbe65d",
+        "digest": "99318ebecd144029d7c02425f970e1e36f20c28d9f42fe81337dc2f491c44ea2"
+      }
+    },
+    {
+      "id": "production-training-dataset",
+      "state": "dependency_blocked",
+      "blocker_id": "production-dataset-absent"
+    }
+  ],
+  "licenses": [
+    {
+      "id": "production-dataset-license",
+      "state": "dependency_blocked",
+      "blocker_id": "approved-licenses-absent"
+    },
+    {
+      "id": "model-license",
+      "state": "dependency_blocked",
+      "blocker_id": "approved-licenses-absent"
+    }
+  ],
+  "redistribution": {
+    "approved": false,
+    "evidence": {
+      "id": "redistribution-approval",
+      "state": "dependency_blocked",
+      "blocker_id": "redistribution-approval-absent"
+    }
+  },
+  "bindings": {
+    "preprocessing": {
+      "id": "preprocessing-config-binding",
+      "state": "fixture_only",
+      "path": "ml/training/configs/trust_score_v1.yaml",
+      "sha256": "eb1d31e472295bdf14a999548b6364b90f19cb2a9f9ed5aade9878467c76a11b",
+      "size": 7731,
+      "source": {
+        "type": "repository_file",
+        "uri": "git+https://github.com/virtengine/virtengine.git",
+        "revision": "79391a3df86d85522b92e0400c6904971ecbe65d",
+        "digest": "eb1d31e472295bdf14a999548b6364b90f19cb2a9f9ed5aade9878467c76a11b"
+      }
+    },
+    "schema": {
+      "id": "feature-schema-binding",
+      "state": "present",
+      "path": "_docs/veid-ml-feature-schema.md",
+      "sha256": "ccb183b971af38523deb6b29e0d1ce0dcd773146527e940dd9b870e721f6f76c",
+      "size": 24198,
+      "source": {
+        "type": "repository_file",
+        "uri": "git+https://github.com/virtengine/virtengine.git",
+        "revision": "79391a3df86d85522b92e0400c6904971ecbe65d",
+        "digest": "ccb183b971af38523deb6b29e0d1ce0dcd773146527e940dd9b870e721f6f76c"
+      }
+    },
+    "runtime": {
+      "id": "runtime-image-binding",
+      "state": "dependency_blocked",
+      "blocker_id": "runtime-image-absent"
+    }
+  },
+  "sbom": {
+    "id": "runtime-sbom",
+    "state": "dependency_blocked",
+    "blocker_id": "runtime-sbom-absent"
+  },
+  "model_card": {
+    "id": "approved-model-card",
+    "state": "dependency_blocked",
+    "blocker_id": "approved-model-card-absent"
+  },
+  "evaluation_report": {
+    "id": "production-evaluation-report",
+    "state": "dependency_blocked",
+    "blocker_id": "production-evaluation-absent"
+  },
+  "blockers": [
+    { "id": "model-weights-absent", "description": "No immutable trust-score model weights are present at the campaign baseline." },
+    { "id": "production-dataset-absent", "description": "No consented production training dataset is present at the campaign baseline." },
+    { "id": "approved-licenses-absent", "description": "No approved production dataset or model license evidence is present." },
+    { "id": "redistribution-approval-absent", "description": "No approved redistribution grant is present." },
+    { "id": "runtime-image-absent", "description": "No digest-pinned production runtime image is present." },
+    { "id": "runtime-sbom-absent", "description": "No SBOM bound to a production runtime image is present." },
+    { "id": "approved-model-card-absent", "description": "The repository model-card template is not approved production evidence." },
+    { "id": "production-evaluation-absent", "description": "No production evaluation report bound to model weights and a production dataset is present." }
+  ]
+}

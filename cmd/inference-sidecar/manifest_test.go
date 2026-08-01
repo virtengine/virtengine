@@ -185,6 +185,127 @@ func TestVerifyModelBundleRejectsArtifactPathTraversal(t *testing.T) {
 	}
 }
 
+func TestVerifyModelBundleRejectsMissingProvenanceDeclaration(t *testing.T) {
+	modelDir, manifestPath := createReleaseBundle(t)
+	payload := mustReadJSON(t, manifestPath)
+	delete(payload, "provenance")
+	writeJSON(t, manifestPath, payload)
+
+	_, err := verifyModelBundle(modelDir, manifestPath, releaseBundleVersion, "")
+	assertVerificationError(t, err, verificationStateBadManifest, "provenance path is required")
+}
+
+func TestVerifyModelBundleRejectsInvalidProvenanceDeclaration(t *testing.T) {
+	tests := []struct {
+		name       string
+		update     func(map[string]any)
+		wantReason string
+	}{
+		{
+			name: "missing path",
+			update: func(provenance map[string]any) {
+				delete(provenance, "path")
+			},
+			wantReason: "provenance path is required",
+		},
+		{
+			name: "missing hash",
+			update: func(provenance map[string]any) {
+				delete(provenance, "sha256")
+			},
+			wantReason: "provenance hash must be a valid SHA-256 digest",
+		},
+		{
+			name: "path traversal",
+			update: func(provenance map[string]any) {
+				provenance["path"] = "../model_provenance.json"
+			},
+			wantReason: "outside bundle root",
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			modelDir, manifestPath := createReleaseBundle(t)
+			payload := mustReadJSON(t, manifestPath)
+			test.update(payload["provenance"].(map[string]any))
+			writeJSON(t, manifestPath, payload)
+
+			_, err := verifyModelBundle(modelDir, manifestPath, releaseBundleVersion, "")
+			assertVerificationError(t, err, verificationStateBadManifest, test.wantReason)
+		})
+	}
+}
+
+func TestVerifyModelBundleRejectsMissingProvenanceArtifact(t *testing.T) {
+	modelDir, manifestPath := createReleaseBundle(t)
+	payload := mustReadJSON(t, manifestPath)
+	artifacts := payload["artifacts"].([]any)
+	filtered := make([]any, 0, len(artifacts)-1)
+	for _, artifact := range artifacts {
+		record := artifact.(map[string]any)
+		if record["path"] != "model_provenance.json" {
+			filtered = append(filtered, record)
+		}
+	}
+	payload["artifacts"] = filtered
+	writeJSON(t, manifestPath, payload)
+
+	_, err := verifyModelBundle(modelDir, manifestPath, releaseBundleVersion, "")
+	assertVerificationError(t, err, verificationStateBadManifest, "model_provenance.json")
+}
+
+func TestVerifyModelBundleRejectsProvenanceDigestMismatch(t *testing.T) {
+	modelDir, manifestPath := createReleaseBundle(t)
+	payload := mustReadJSON(t, manifestPath)
+	payload["provenance"].(map[string]any)["sha256"] = stringsOfLength(64, "a")
+	writeJSON(t, manifestPath, payload)
+
+	_, err := verifyModelBundle(modelDir, manifestPath, releaseBundleVersion, "")
+	assertVerificationError(t, err, verificationStateStaleManifest, "provenance digest mismatch")
+}
+
+func TestVerifyModelBundleRejectsDependencyBlockedProductionProvenance(t *testing.T) {
+	modelDir, manifestPath := createReleaseBundle(t)
+	rewriteProvenance(t, manifestPath, map[string]any{
+		"schema_version": "virtengine.model-provenance/v1",
+		"status":         "dependency_blocked",
+	})
+
+	_, err := verifyModelBundle(modelDir, manifestPath, releaseBundleVersion, "")
+	assertVerificationError(t, err, verificationStateBadManifest, "production_approved")
+}
+
+func TestVerifyModelBundleRejectsWrongProvenanceSchema(t *testing.T) {
+	modelDir, manifestPath := createReleaseBundle(t)
+	rewriteProvenance(t, manifestPath, map[string]any{
+		"schema_version": "virtengine.model-provenance/v2",
+		"status":         "production_approved",
+	})
+
+	_, err := verifyModelBundle(modelDir, manifestPath, releaseBundleVersion, "")
+	assertVerificationError(t, err, verificationStateBadManifest, "unsupported provenance schema_version")
+}
+
+func TestVerifyModelBundleRejectsMalformedProvenance(t *testing.T) {
+	modelDir, manifestPath := createReleaseBundle(t)
+	provenancePath := filepath.Join(filepath.Dir(manifestPath), "model_provenance.json")
+	mustWriteFile(t, provenancePath, []byte("{not-json\n"))
+	rebindProvenanceArtifact(t, manifestPath)
+
+	_, err := verifyModelBundle(modelDir, manifestPath, releaseBundleVersion, "")
+	assertVerificationError(t, err, verificationStateBadManifest, "invalid character")
+}
+
+func TestVerifyModelBundleRejectsTamperedProvenanceArtifact(t *testing.T) {
+	modelDir, manifestPath := createReleaseBundle(t)
+	provenancePath := filepath.Join(filepath.Dir(manifestPath), "model_provenance.json")
+	mustWriteFile(t, provenancePath, []byte(`{"schema_version":"virtengine.model-provenance/v1","status":"dependency_blocked"}`))
+
+	_, err := verifyModelBundle(modelDir, manifestPath, releaseBundleVersion, "")
+	assertVerificationError(t, err, verificationStateStaleManifest, "artifact hash mismatch")
+}
+
 func TestNewInferenceSidecarServerReportsMissingManifestState(t *testing.T) {
 	modelDir := filepath.Join(t.TempDir(), "model")
 	if err := os.MkdirAll(modelDir, 0o750); err != nil {
@@ -385,11 +506,16 @@ func createReleaseBundle(t *testing.T) (string, string) {
 	mustWriteFile(t, filepath.Join(versionDir, "MODEL_HASH.txt"), []byte(
 		"SHA256="+modelHash+"\nVERSION="+releaseBundleVersion+"\n",
 	))
+	writeJSON(t, filepath.Join(versionDir, "model_provenance.json"), map[string]any{
+		"schema_version": "virtengine.model-provenance/v1",
+		"status":         "production_approved",
+	})
 
 	artifacts := []string{
 		"MODEL_HASH.txt",
 		"export_metadata.json",
 		"manifest.json",
+		"model_provenance.json",
 		"model_frozen.pb",
 		filepath.ToSlash(filepath.Join("model", "saved_model.pb")),
 		filepath.ToSlash(filepath.Join("model", "variables", "variables.data-00000-of-00001")),
@@ -415,9 +541,14 @@ func createReleaseBundle(t *testing.T) (string, string) {
 	}
 
 	releaseManifestPath := filepath.Join(versionDir, "release_manifest.json")
+	provenanceHash := mustComputeHash(t, filepath.Join(versionDir, "model_provenance.json"))
 	writeJSON(t, releaseManifestPath, map[string]any{
 		"schema_version": "veid.release.manifest/v1",
 		"profile":        "production",
+		"provenance": map[string]any{
+			"path":   "model_provenance.json",
+			"sha256": provenanceHash,
+		},
 		"model": map[string]any{
 			"name":              "trust_score",
 			"version":           releaseBundleVersion,
@@ -432,6 +563,53 @@ func createReleaseBundle(t *testing.T) (string, string) {
 	})
 
 	return modelDir, releaseManifestPath
+}
+
+func rewriteProvenance(t *testing.T, manifestPath string, provenance map[string]any) {
+	t.Helper()
+	provenancePath := filepath.Join(filepath.Dir(manifestPath), "model_provenance.json")
+	writeJSON(t, provenancePath, provenance)
+	rebindProvenanceArtifact(t, manifestPath)
+}
+
+func rebindProvenanceArtifact(t *testing.T, manifestPath string) {
+	t.Helper()
+	provenancePath := filepath.Join(filepath.Dir(manifestPath), "model_provenance.json")
+	provenanceHash := mustComputeHash(t, provenancePath)
+	provenanceInfo, err := os.Stat(provenancePath)
+	if err != nil {
+		t.Fatalf("stat provenance: %v", err)
+	}
+
+	payload := mustReadJSON(t, manifestPath)
+	payload["provenance"].(map[string]any)["sha256"] = provenanceHash
+	for _, artifact := range payload["artifacts"].([]any) {
+		record := artifact.(map[string]any)
+		if record["path"] == "model_provenance.json" {
+			record["sha256"] = provenanceHash
+			record["size_bytes"] = provenanceInfo.Size()
+			writeJSON(t, manifestPath, payload)
+			return
+		}
+	}
+	t.Fatal("model_provenance.json artifact record not found")
+}
+
+func assertVerificationError(t *testing.T, err error, state verificationState, message string) {
+	t.Helper()
+	if err == nil {
+		t.Fatal("expected verification error")
+	}
+	var verifyErr *verificationError
+	if !errors.As(err, &verifyErr) {
+		t.Fatalf("expected verificationError, got %T", err)
+	}
+	if verifyErr.State != state {
+		t.Fatalf("expected %s, got %s", state, verifyErr.State)
+	}
+	if !strings.Contains(verifyErr.Error(), message) {
+		t.Fatalf("expected error containing %q, got %v", message, verifyErr)
+	}
 }
 
 func mustReadJSON(t *testing.T, path string) map[string]any {
