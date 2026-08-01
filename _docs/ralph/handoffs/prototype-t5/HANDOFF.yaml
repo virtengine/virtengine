@@ -3,10 +3,11 @@ thread: T5
 checkpoint: T5-09
 branch: ve/prototype-t5-platform
 start_head: a1f8bb35e4a17b4912bde3ff83e9262ed5b149b0
-end_head: PENDING_COMMIT
+end_head: 33e7457f3041135c222f89d2f938479b8e701a7b
 origin_main: c31f910e318a39d86372ed2d65050d08777dbfc5
-tree_clean: false
-commits: []
+tree_clean: true
+commits:
+  - 33e7457f3041135c222f89d2f938479b8e701a7b
 owned_paths:
   - x/mfa/keeper/keeper.go
   - x/mfa/keeper/keeper_test.go
@@ -52,4 +53,4 @@ blockers:
   - TOTP, SMS, and email challenge creation must be invoked by trusted off-chain verifier/delivery services; the generic public challenge route rejects these factors.
   - OTP values and OTP-derived commitments are never accepted on-chain; only signed challenge-bound verifier receipts are valid.
 next_checkpoint: T5-10
-expected_head: PENDING_COMMIT
+expected_head: 33e7457f3041135c222f89d2f938479b8e701a7b
