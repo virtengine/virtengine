@@ -1,8 +1,8 @@
 {
-  "schema_version": "virtengine.prototype.slurm-chart-inventory/v1",
-  "checkpoint": "T4-06A",
+  "schema_version": "virtengine.prototype.slurm-chart-inventory/v2",
+  "checkpoint": "T4-06B",
   "status": "blocked",
-  "validation_mode": "contract-only",
+  "validation_mode": "executable-semantic",
   "research_scope": {
     "roots": ["deploy", "infra", "config", "charts", "scripts", "_build/helm"],
     "selection_evidence": [
@@ -41,6 +41,21 @@
       ]
     }
   ],
+  "semantic_validator": {
+    "contract": "virtengine.slurm-semantic-validation/v1",
+    "implementation": "scripts/validate_slurm_chart_semantics.py",
+    "test": "scripts/validate_slurm_chart_semantics_test.py",
+    "testdata": "scripts/testdata/slurm-chart-semantics",
+    "passing_command": "python scripts/validate_slurm_chart_semantics_test.py -v",
+    "diagnostic_command": "python scripts/validate_slurm_chart_semantics.py --chart deploy/slurm/slurm-cluster --diagnostic --json",
+    "production_result": "blocked"
+  },
+  "semantic_report": {
+    "path": "_docs/ralph/prototype-integration/slurm-chart-semantic-report.json",
+    "sha256": "34c6bb43206190025209c9d436c872b318100b4720df187196fc1d0f1407f38c",
+    "source": "deploy/slurm/slurm-cluster",
+    "generated_by": "python scripts/validate_slurm_chart_semantics.py --chart deploy/slurm/slurm-cluster --diagnostic --json"
+  },
   "semantic_invariants": [
     {
       "id": "stable-secrets",
@@ -101,7 +116,7 @@
     "dependency:85C",
     "dependency:87A",
     "dependency:87D",
-    "tooling:semantic-render-unavailable"
+    "evidence:production-render-not-provided"
   ],
   "completion": {
     "allowed": false,

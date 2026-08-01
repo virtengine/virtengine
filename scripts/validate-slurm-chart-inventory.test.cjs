@@ -1,6 +1,7 @@
 "use strict";
 
 const assert = require("assert").strict;
+const { createHash } = require("crypto");
 const { readFileSync } = require("fs");
 const { resolve } = require("path");
 const { validateSlurmChartInventory } = require("./validate-slurm-chart-inventory.cjs");
@@ -15,11 +16,28 @@ function fixture() {
 }
 
 function validate(candidate, options = {}) {
+  const semanticReport = options.semanticReport || reportFor(candidate);
+  const semanticReportContent = Buffer.from(`${JSON.stringify(semanticReport, null, 2)}\n`);
+  candidate.semantic_report.sha256 = createHash("sha256").update(semanticReportContent).digest("hex");
   return validateSlurmChartInventory(candidate, {
     schema,
     discoveredSources: options.discoveredSources || knownSources,
-    semanticContract: options.semanticContract || Object.fromEntries(candidate.semantic_invariants.map((item) => [item.id, item.status === "satisfied"])),
+    semanticReport,
+    semanticReportContent,
   });
+}
+
+function reportFor(candidate) {
+  const statusMap = { violated: "failed", unverified: "unverified", satisfied: "passed" };
+  return {
+    findings: candidate.semantic_invariants
+      .filter((item) => item.status === "violated")
+      .map((item) => ({ invariant: item.id, location: "fixture", message: "fixture failure" })),
+    invariants: Object.fromEntries(candidate.semantic_invariants.map((item) => [item.id, statusMap[item.status]])),
+    mode: "diagnostic",
+    passed: false,
+    schema_version: "virtengine.slurm-semantic-validation/v1",
+  };
 }
 
 function complete(candidate) {
@@ -36,12 +54,15 @@ function complete(candidate) {
   return candidate;
 }
 
-function contractWithFailure(failedInvariant) {
-  return Object.fromEntries(inventory.semantic_invariants.map((item) => [item.id, item.id !== failedInvariant]));
+function reportWithFailure(candidate, failedInvariant) {
+  const report = reportFor(candidate);
+  report.invariants[failedInvariant] = "failed";
+  report.findings.push({ invariant: failedInvariant, location: "fixture", message: "fixture failure" });
+  return report;
 }
 
 const tests = [
-  ["accepts the blocked contract-only inventory", () => assert.doesNotThrow(() => validate(fixture()))],
+  ["accepts the blocked executable-semantic inventory", () => assert.doesNotThrow(() => validate(fixture()))],
   ["rejects an unknown competing source", () => {
     assert.throws(() => validate(fixture(), { discoveredSources: [...knownSources, "infra/charts/slurm"] }), /unknown competing SLURM chart source/);
   }],
@@ -51,23 +72,35 @@ const tests = [
   }],
   ["rejects mutable images", () => {
     const candidate = complete(fixture());
-    assert.throws(() => validate(candidate, { discoveredSources: ["deploy/slurm/slurm-cluster"], semanticContract: contractWithFailure("immutable-images") }), /semantic declaration disagrees with contract: immutable-images/);
+    assert.throws(() => validate(candidate, { discoveredSources: ["deploy/slurm/slurm-cluster"], semanticReport: reportWithFailure(candidate, "immutable-images") }), /semantic declaration disagrees with report: immutable-images/);
   }],
   ["rejects production-generated random secrets", () => {
     const candidate = complete(fixture());
-    assert.throws(() => validate(candidate, { discoveredSources: ["deploy/slurm/slurm-cluster"], semanticContract: contractWithFailure("stable-secrets") }), /semantic declaration disagrees with contract: stable-secrets/);
+    assert.throws(() => validate(candidate, { discoveredSources: ["deploy/slurm/slurm-cluster"], semanticReport: reportWithFailure(candidate, "stable-secrets") }), /semantic declaration disagrees with report: stable-secrets/);
   }],
   ["rejects capacity and replica mismatch", () => {
     const candidate = complete(fixture());
-    assert.throws(() => validate(candidate, { discoveredSources: ["deploy/slurm/slurm-cluster"], semanticContract: contractWithFailure("replica-capacity-equality") }), /semantic declaration disagrees with contract: replica-capacity-equality/);
+    assert.throws(() => validate(candidate, { discoveredSources: ["deploy/slurm/slurm-cluster"], semanticReport: reportWithFailure(candidate, "replica-capacity-equality") }), /semantic declaration disagrees with report: replica-capacity-equality/);
   }],
   ["rejects blanket privilege", () => {
     const candidate = complete(fixture());
-    assert.throws(() => validate(candidate, { discoveredSources: ["deploy/slurm/slurm-cluster"], semanticContract: contractWithFailure("least-privilege") }), /semantic declaration disagrees with contract: least-privilege/);
+    assert.throws(() => validate(candidate, { discoveredSources: ["deploy/slurm/slurm-cluster"], semanticReport: reportWithFailure(candidate, "least-privilege") }), /semantic declaration disagrees with report: least-privilege/);
   }],
   ["rejects nondurable state", () => {
     const candidate = complete(fixture());
-    assert.throws(() => validate(candidate, { discoveredSources: ["deploy/slurm/slurm-cluster"], semanticContract: contractWithFailure("durable-state") }), /semantic declaration disagrees with contract: durable-state/);
+    assert.throws(() => validate(candidate, { discoveredSources: ["deploy/slurm/slurm-cluster"], semanticReport: reportWithFailure(candidate, "durable-state") }), /semantic declaration disagrees with report: durable-state/);
+  }],
+  ["rejects a report with a missing invariant status", () => {
+    const candidate = fixture();
+    const report = reportFor(candidate);
+    delete report.invariants["durable-state"];
+    assert.throws(() => validate(candidate, { semanticReport: report }), /exactly five invariant statuses/);
+  }],
+  ["rejects a report with an unknown field", () => {
+    const candidate = fixture();
+    const report = reportFor(candidate);
+    report.source = "inventory";
+    assert.throws(() => validate(candidate, { semanticReport: report }));
   }],
   ["rejects premature complete", () => {
     const candidate = fixture();

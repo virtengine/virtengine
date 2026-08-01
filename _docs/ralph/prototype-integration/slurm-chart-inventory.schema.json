@@ -13,16 +13,18 @@
     "canonical_source",
     "compatibility_import_only_shims",
     "retired_sources",
+    "semantic_validator",
+    "semantic_report",
     "semantic_invariants",
     "dependencies",
     "blockers",
     "completion"
   ],
   "properties": {
-    "schema_version": { "const": "virtengine.prototype.slurm-chart-inventory/v1" },
-    "checkpoint": { "const": "T4-06A" },
+    "schema_version": { "const": "virtengine.prototype.slurm-chart-inventory/v2" },
+    "checkpoint": { "const": "T4-06B" },
     "status": { "enum": ["blocked", "complete"] },
-    "validation_mode": { "enum": ["contract-only", "semantic-render"] },
+    "validation_mode": { "enum": ["contract-only", "executable-semantic", "semantic-render"] },
     "research_scope": {
       "type": "object",
       "additionalProperties": false,
@@ -56,6 +58,31 @@
             }
           }
         ]
+      }
+    },
+    "semantic_validator": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["contract", "implementation", "test", "testdata", "passing_command", "diagnostic_command", "production_result"],
+      "properties": {
+        "contract": { "const": "virtengine.slurm-semantic-validation/v1" },
+        "implementation": { "const": "scripts/validate_slurm_chart_semantics.py" },
+        "test": { "const": "scripts/validate_slurm_chart_semantics_test.py" },
+        "testdata": { "const": "scripts/testdata/slurm-chart-semantics" },
+        "passing_command": { "const": "python scripts/validate_slurm_chart_semantics_test.py -v" },
+        "diagnostic_command": { "const": "python scripts/validate_slurm_chart_semantics.py --chart deploy/slurm/slurm-cluster --diagnostic --json" },
+        "production_result": { "const": "blocked" }
+      }
+    },
+    "semantic_report": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "sha256", "source", "generated_by"],
+      "properties": {
+        "path": { "const": "_docs/ralph/prototype-integration/slurm-chart-semantic-report.json" },
+        "sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+        "source": { "const": "deploy/slurm/slurm-cluster" },
+        "generated_by": { "const": "python scripts/validate_slurm_chart_semantics.py --chart deploy/slurm/slurm-cluster --diagnostic --json" }
       }
     },
     "semantic_invariants": {

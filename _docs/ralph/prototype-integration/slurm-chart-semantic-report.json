@@ -1,0 +1,89 @@
+{
+  "findings": [
+    {
+      "invariant": "least-privilege",
+      "location": "templates/compute-nodepools-statefulset.yaml",
+      "message": "template contains privileged or root container defaults"
+    },
+    {
+      "invariant": "least-privilege",
+      "location": "templates/compute-statefulset.yaml",
+      "message": "template contains privileged or root container defaults"
+    },
+    {
+      "invariant": "least-privilege",
+      "location": "templates/controller-statefulset.yaml",
+      "message": "template contains privileged or root container defaults"
+    },
+    {
+      "invariant": "least-privilege",
+      "location": "templates/database-statefulset.yaml",
+      "message": "template contains privileged or root container defaults"
+    },
+    {
+      "invariant": "stable-secrets",
+      "location": "templates/secrets.yaml",
+      "message": "render-time random secret generation is forbidden"
+    },
+    {
+      "invariant": "stable-secrets",
+      "location": "values.yaml",
+      "message": "munge has no pre-provisioned secret configured"
+    },
+    {
+      "invariant": "stable-secrets",
+      "location": "values.yaml",
+      "message": "database has no pre-provisioned secret configured"
+    },
+    {
+      "invariant": "stable-secrets",
+      "location": "values.yaml",
+      "message": "mariadb has no pre-provisioned secret configured"
+    },
+    {
+      "invariant": "replica-capacity-equality",
+      "location": "values.yaml",
+      "message": "partition normal advertises 32 nodes but values declare 2 compute replicas"
+    },
+    {
+      "invariant": "immutable-images",
+      "location": "values.yaml",
+      "message": "munge image is tag-based rather than digest-pinned"
+    },
+    {
+      "invariant": "immutable-images",
+      "location": "values.yaml",
+      "message": "controller image is tag-based rather than digest-pinned"
+    },
+    {
+      "invariant": "immutable-images",
+      "location": "values.yaml",
+      "message": "database image is tag-based rather than digest-pinned"
+    },
+    {
+      "invariant": "immutable-images",
+      "location": "values.yaml",
+      "message": "mariadb image is tag-based rather than digest-pinned"
+    },
+    {
+      "invariant": "immutable-images",
+      "location": "values.yaml",
+      "message": "compute image is tag-based rather than digest-pinned"
+    },
+    {
+      "invariant": "immutable-images",
+      "location": "values.yaml",
+      "message": "nodeAgent image is tag-based rather than digest-pinned"
+    }
+  ],
+  "invariants": {
+    "durable-state": "unverified",
+    "immutable-images": "failed",
+    "least-privilege": "failed",
+    "replica-capacity-equality": "failed",
+    "stable-secrets": "failed"
+  },
+  "mode": "diagnostic",
+  "passed": false,
+  "schema_version": "virtengine.slurm-semantic-validation/v1"
+}

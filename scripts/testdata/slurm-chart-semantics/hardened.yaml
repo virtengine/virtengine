@@ -1,0 +1,135 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: slurm-config
+data:
+  slurm.conf: |
+    NodeName=slurm-compute-0 CPUs=4 RealMemory=4096 State=UNKNOWN
+    NodeName=slurm-compute-1 CPUs=4 RealMemory=4096 State=UNKNOWN
+    PartitionName=normal Nodes=slurm-compute-[0-1] MaxNodes=2 State=UP
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: slurm-compute
+  labels:
+    app.kubernetes.io/component: compute
+spec:
+  replicas: 2
+  template:
+    spec:
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: slurmd
+          image: ghcr.io/virtengine/slurm-compute@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+          securityContext:
+            privileged: false
+            runAsNonRoot: true
+            runAsUser: 1000
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: [ALL]
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: slurm-controller
+  labels:
+    app.kubernetes.io/component: controller
+spec:
+  template:
+    spec:
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: slurmctld
+          image: ghcr.io/virtengine/slurm-controller@sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
+          securityContext:
+            privileged: false
+            runAsNonRoot: true
+            runAsUser: 1000
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: [ALL]
+          volumeMounts:
+            - name: state
+              mountPath: /var/spool/slurm
+  volumeClaimTemplates:
+    - metadata:
+        name: state
+      spec:
+        accessModes: [ReadWriteOnce]
+        resources:
+          requests:
+            storage: 1Gi
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: slurm-database
+  labels:
+    app.kubernetes.io/component: database
+spec:
+  template:
+    spec:
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: slurmdbd
+          image: ghcr.io/virtengine/slurm-dbd@sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+          securityContext:
+            privileged: false
+            runAsNonRoot: true
+            runAsUser: 1000
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: [ALL]
+          volumeMounts:
+            - name: state
+              mountPath: /var/spool/slurm
+  volumeClaimTemplates:
+    - metadata:
+        name: state
+      spec:
+        accessModes: [ReadWriteOnce]
+        resources:
+          requests:
+            storage: 1Gi
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: slurm-mariadb
+  labels:
+    app.kubernetes.io/component: mariadb
+spec:
+  template:
+    spec:
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: mariadb
+          image: mariadb@sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd
+          securityContext:
+            privileged: false
+            runAsNonRoot: true
+            runAsUser: 1000
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: [ALL]
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/mysql
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: [ReadWriteOnce]
+        resources:
+          requests:
+            storage: 1Gi

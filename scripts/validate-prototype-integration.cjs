@@ -86,7 +86,7 @@ function validateIntegrationControl(control, schema, handoff, epoch) {
 
   assert.ok(control.path_ownership.integration_only.length > 0, "integration-only paths must not be empty");
   assert.equal(new Set(control.path_ownership.integration_only).size, control.path_ownership.integration_only.length, "integration-only paths must be unique");
-  assert.deepEqual(control.dependency_ledger.ready, ["T4-01"]);
+  assert.deepEqual(control.dependency_ledger.ready, ["T4-01", "T4-06B"]);
   assert.equal(control.generated_file_lease.state, "available");
   assert.equal(control.generated_file_lease.holder, null);
   assert.deepEqual(control.generated_file_lease.paths, []);

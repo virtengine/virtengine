@@ -19,7 +19,7 @@ function validFixture() {
         { thread: "T5", branch: "ve/prototype-t5-platform" },
       ],
       path_ownership: { integration_only: ["app/**"] },
-      dependency_ledger: { ready: ["T4-01"] },
+      dependency_ledger: { ready: ["T4-01", "T4-06B"] },
       generated_file_lease: { state: "available", holder: null, paths: [] },
     },
     schema: {

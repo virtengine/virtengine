@@ -52,13 +52,13 @@
     "coordination_rule": "Producer changes to integration-only paths require an active generated-file lease recorded here before modification."
   },
   "dependency_ledger": {
-    "ready": ["T4-01"],
+    "ready": ["T4-01", "T4-06B"],
     "blocked": {
       "T4-02": ["T1 persisted schema inventory", "T2 persisted schema inventory", "T3 persisted schema inventory", "T5 persisted schema inventory"],
       "T4-03": ["T4-02"],
       "T4-04": ["eligible producer checkpoint synchronized with current integration SHA"],
       "T4-05": ["85D", "86A", "86B", "86C", "86D", "87D", "88A"],
-      "T4-06": ["T4-06A", "eligible 88C dependency contracts"],
+      "T4-06": ["T4-06B", "eligible 88C dependency contracts", "hardened production render passes semantic validator"],
       "T4-06A": ["84B", "84C", "85C", "87A", "87D"],
       "T4-07": ["T4-06"],
       "T4-08": ["accepted prototype checkpoints", "T4-02", "T4-03", "T4-05", "T4-07"],
