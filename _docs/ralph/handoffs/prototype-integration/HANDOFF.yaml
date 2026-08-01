@@ -1,0 +1,29 @@
+{
+  "campaign": "three-day-prototype",
+  "thread": "T4",
+  "checkpoint": "T4-01",
+  "branch": "ve/prototype-integration",
+  "start_head": "79391a3df86d85522b92e0400c6904971ecbe65d",
+  "end_head": "PENDING_COMMIT",
+  "origin_main": "79391a3df86d85522b92e0400c6904971ecbe65d",
+  "tree_clean": false,
+  "commits": [],
+  "owned_paths": [
+    "_docs/ralph/prototype-integration/**",
+    "_docs/ralph/handoffs/prototype-integration/**",
+    "scripts/validate-prototype-integration.cjs"
+  ],
+  "files_changed": [],
+  "tests": [],
+  "generated_hashes": {},
+  "accepted_checkpoints": [],
+  "rejected_checkpoints": [],
+  "external_evidence": [],
+  "known_failures": [],
+  "blockers": [
+    "No producer checkpoint handoff exists at the frozen baseline.",
+    "Tasks 88A-88D remain dependency-blocked; this checkpoint establishes integration controls only."
+  ],
+  "next_checkpoint": "T4-02",
+  "expected_head": "PENDING_COMMIT"
+}
