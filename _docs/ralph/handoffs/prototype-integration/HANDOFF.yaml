@@ -1,46 +1,41 @@
 {
   "campaign": "three-day-prototype",
   "thread": "T4",
-  "checkpoint": "T4-05B",
+  "checkpoint": "T4-06A",
   "branch": "ve/prototype-integration",
-  "start_head": "328c5e2ad93c1873e5c9bbaa89c28970e702651e",
-  "end_head": "9ff3f397d703ac431a1b9f6bc865fe0b6d85f801",
+  "start_head": "6cb453faf143813aad61945e74c3a90389cd1dd6",
+  "end_head": "5a4685a78b6365e407996b5625717eec6f990944",
   "origin_main": "79391a3df86d85522b92e0400c6904971ecbe65d",
   "tree_clean": true,
   "commits": [
-    "9ff3f397d703ac431a1b9f6bc865fe0b6d85f801"
+    "5a4685a78b6365e407996b5625717eec6f990944"
   ],
   "owned_paths": [
     "_docs/ralph/prototype-integration/**",
     "_docs/ralph/handoffs/prototype-integration/**",
     "scripts/validate-prototype-integration.cjs",
-    "_docs/ralph/prototype-integration/required-gate-matrix.json",
-    "_docs/ralph/prototype-integration/required-gate-matrix.schema.json",
-    "scripts/validate-required-gate-matrix.cjs",
-    "scripts/validate-required-gate-matrix.test.cjs",
-    "scripts/run-required-gates.cjs",
-    "scripts/run-required-gates.test.cjs"
+    "_docs/ralph/prototype-integration/slurm-chart-inventory.json",
+    "_docs/ralph/prototype-integration/slurm-chart-inventory.schema.json",
+    "scripts/validate-slurm-chart-inventory.cjs",
+    "scripts/validate-slurm-chart-inventory.test.cjs"
   ],
   "files_changed": [
     "_docs/ralph/handoffs/prototype-integration/HANDOFF.yaml",
     "_docs/INDEX.md",
     "_docs/ralph/handoffs/prototype-integration/HANDOFF.yaml",
-    "_docs/ralph/prototype-integration/required-gate-matrix.json",
-    "_docs/ralph/prototype-integration/required-gate-matrix.schema.json",
-    "_docs/ralph/prototype-integration/required-gate-plan.schema.json",
-    "_docs/ralph/prototype-integration/required-gate-results.schema.json",
-    "scripts/run-required-gates.cjs",
-    "scripts/run-required-gates.test.cjs",
+    "_docs/ralph/prototype-integration/control.json",
+    "_docs/ralph/prototype-integration/slurm-chart-inventory.json",
+    "_docs/ralph/prototype-integration/slurm-chart-inventory.schema.json",
     "scripts/validate-prototype-integration.cjs",
-    "scripts/validate-required-gate-matrix.cjs",
-    "scripts/validate-required-gate-matrix.test.cjs"
+    "scripts/validate-slurm-chart-inventory.cjs",
+    "scripts/validate-slurm-chart-inventory.test.cjs"
   ],
   "tests": [
     {
-      "command": "node scripts/run-required-gates.test.cjs && node scripts/validate-required-gate-matrix.test.cjs && node scripts/validate-required-gate-matrix.cjs",
+      "command": "node scripts/validate-slurm-chart-inventory.test.cjs && node scripts/validate-slurm-chart-inventory.cjs",
       "exit_code": 0,
       "result": "passed",
-      "test_count": 29,
+      "test_count": 10,
       "tool_versions": {
         "node": "20.19.1"
       }
@@ -55,9 +50,8 @@
     }
   ],
   "generated_hashes": {
-    "scripts/run-required-gates.cjs": "2a8ffd18c74fae10960e0b2fa80fcb0c5135a58ca7fcc5ac550d41fa0f603a44",
-    "_docs/ralph/prototype-integration/required-gate-plan.schema.json": "556507cf39d1550a56b192936dc1ed4c7fe8595ccce449bf4adc758f197a4f6d",
-    "_docs/ralph/prototype-integration/required-gate-results.schema.json": "346c8cfcdd0648a894ef44a216948995c737e8bc4faccecac3e63bf14de0349b"
+    "_docs/ralph/prototype-integration/slurm-chart-inventory.json": "798880465b738aa785bd6adedfb813105981a2d1bdb25dabebd67ada6f0b1280",
+    "_docs/ralph/prototype-integration/slurm-chart-inventory.schema.json": "8d2ed59e1697923a1dabd65a800fd015b99ce1ca30cf546d90692bb3f07bf738"
   },
   "accepted_checkpoints": [],
   "rejected_checkpoints": [
@@ -80,10 +74,11 @@
   ],
   "blockers": [
     "Epoch 1 remains open with no announced intake-v2 producer tags; no producer checkpoint is accepted by this checkpoint.",
-    "Every required-gate category remains dependency_blocked; plans and result envelopes can be validated, but execution is refused.",
-    "Tasks 85D, 86A-86D, 87D, and 88A remain unavailable to the complete Task 88B gate.",
-    "Task 88B is not complete and no process-boundary lifecycle evidence is claimed."
+    "The canonical deploy/slurm/slurm-cluster chart remains blocked by random render-time secrets, replica/capacity mismatch, mutable images, and blanket privilege.",
+    "The competing _build/helm/slurm-cluster chart remains present and must be retired.",
+    "Validation is contract-only; no semantic render, stable-secret, capacity, privilege, durable-state, failover, or restore proof is claimed.",
+    "Task 88C is not complete."
   ],
-  "next_checkpoint": "T4-06A",
-  "expected_head": "9ff3f397d703ac431a1b9f6bc865fe0b6d85f801"
+  "next_checkpoint": "T4-06B",
+  "expected_head": "5a4685a78b6365e407996b5625717eec6f990944"
 }
