@@ -1,0 +1,115 @@
+{
+  "schema_version": "virtengine.prototype.slurm-chart-inventory/v1",
+  "checkpoint": "T4-06A",
+  "status": "blocked",
+  "validation_mode": "contract-only",
+  "research_scope": {
+    "roots": ["deploy", "infra", "config", "charts", "scripts", "_build/helm"],
+    "selection_evidence": [
+      "_docs/protocol-completion-continuation-plan.md#task-19--88c-converge-and-harden-the-canonical-slurm-chart-for-tenancy-capacity-secrets-ha-and-signed-accounting",
+      "_docs/runbooks/hpc-slurm/deployment-runbook.md",
+      "deploy/slurm/slurm-cluster/Chart.yaml"
+    ],
+    "non_chart_hpc_sources": [
+      "deploy/monitoring/alerts/hpc-scheduling.yaml",
+      "deploy/monitoring/grafana/dashboards/hpc-scheduling.json",
+      "config/mainnet/genesis-params.json",
+      "config/mainnet/genesis-checks.json",
+      "scripts/hpc/"
+    ]
+  },
+  "canonical_source": {
+    "path": "deploy/slurm/slurm-cluster",
+    "kind": "helm-chart",
+    "state": "canonical-blocked",
+    "allowed_use": "authoring-and-runtime-after-hardening",
+    "evidence": [
+      "_docs/runbooks/hpc-slurm/deployment-runbook.md",
+      "deploy/slurm/slurm-cluster/Chart.yaml"
+    ]
+  },
+  "compatibility_import_only_shims": [],
+  "retired_sources": [
+    {
+      "path": "_build/helm/slurm-cluster",
+      "kind": "helm-chart",
+      "state": "present-blocker",
+      "allowed_use": "none",
+      "evidence": [
+        "_docs/protocol-completion-continuation-plan.md",
+        "_build/helm/slurm-cluster/Chart.yaml"
+      ]
+    }
+  ],
+  "semantic_invariants": [
+    {
+      "id": "stable-secrets",
+      "status": "violated",
+      "requirement": "Production uses pre-provisioned or external secrets and never generates random credentials during render.",
+      "evidence": ["deploy/slurm/slurm-cluster/templates/secrets.yaml"],
+      "blocker": "Canonical templates call randAlphaNum for munge and database credentials."
+    },
+    {
+      "id": "replica-capacity-equality",
+      "status": "violated",
+      "requirement": "Rendered partition membership and advertised capacity exactly equal rendered compute replicas and node pools.",
+      "evidence": ["deploy/slurm/slurm-cluster/values.yaml"],
+      "blocker": "Default compute replicas are 2 while the normal partition names compute-[0-31]."
+    },
+    {
+      "id": "immutable-images",
+      "status": "violated",
+      "requirement": "Every production workload image is pinned by digest.",
+      "evidence": ["deploy/slurm/slurm-cluster/values.yaml"],
+      "blocker": "Canonical defaults select image tags without sha256 digests."
+    },
+    {
+      "id": "least-privilege",
+      "status": "violated",
+      "requirement": "Blanket privilege is forbidden; any narrow exception is isolated, disabled by default, and non-tenant-controlled.",
+      "evidence": ["deploy/slurm/slurm-cluster/templates/compute-statefulset.yaml"],
+      "blocker": "The default slurmd container runs as root with privileged true."
+    },
+    {
+      "id": "durable-state",
+      "status": "unverified",
+      "requirement": "Controller, accounting database, and required scheduler state survive upgrade, failover, rollback, and restore.",
+      "evidence": [
+        "deploy/slurm/slurm-cluster/templates/controller-statefulset.yaml",
+        "deploy/slurm/slurm-cluster/templates/database-statefulset.yaml",
+        "deploy/slurm/slurm-cluster/templates/mariadb-statefulset.yaml"
+      ],
+      "blocker": "PVC declarations exist, but no semantic render or failover/restore evidence is available in this checkpoint."
+    }
+  ],
+  "dependencies": [
+    { "id": "84B", "status": "unverified", "reason": "Canonical signed accounting contract is not intake-verified for this checkpoint." },
+    { "id": "84C", "status": "unverified", "reason": "Authoritative reservation and capacity contract is not intake-verified for this checkpoint." },
+    { "id": "85C", "status": "unverified", "reason": "Governed workload identity and durable secret contract is not intake-verified for this checkpoint." },
+    { "id": "87A", "status": "unverified", "reason": "Required integration contract is not intake-verified for this checkpoint." },
+    { "id": "87D", "status": "unverified", "reason": "Required integration contract is not intake-verified for this checkpoint." }
+  ],
+  "blockers": [
+    "retire-source:_build/helm/slurm-cluster",
+    "invariant:stable-secrets",
+    "invariant:replica-capacity-equality",
+    "invariant:immutable-images",
+    "invariant:least-privilege",
+    "invariant:durable-state",
+    "dependency:84B",
+    "dependency:84C",
+    "dependency:85C",
+    "dependency:87A",
+    "dependency:87D",
+    "tooling:semantic-render-unavailable"
+  ],
+  "completion": {
+    "allowed": false,
+    "required_evidence": [
+      "semantic Helm render parsed as structured YAML",
+      "retired source absent and forbidden by discovery",
+      "all semantic invariants satisfied",
+      "all dependency contracts ready"
+    ]
+  }
+}

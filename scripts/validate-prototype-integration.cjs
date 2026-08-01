@@ -8,6 +8,7 @@ const { resolve } = require("path");
 const { validateMigrationInventory } = require("./validate-migration-inventory.cjs");
 const { validateModelProvenance } = require("./validate-model-provenance.cjs");
 const { validateRequiredGateMatrix } = require("./validate-required-gate-matrix.cjs");
+const { validateSlurmChartInventory } = require("./validate-slurm-chart-inventory.cjs");
 
 const root = resolve(__dirname, "..");
 const controlPath = resolve(root, "_docs/ralph/prototype-integration/control.json");
@@ -22,6 +23,8 @@ const requiredGateMatrixPath = resolve(root, "_docs/ralph/prototype-integration/
 const requiredGateSchemaPath = resolve(root, "_docs/ralph/prototype-integration/required-gate-matrix.schema.json");
 const requiredGatePlanSchemaPath = resolve(root, "_docs/ralph/prototype-integration/required-gate-plan.schema.json");
 const requiredGateResultSchemaPath = resolve(root, "_docs/ralph/prototype-integration/required-gate-results.schema.json");
+const slurmChartInventoryPath = resolve(root, "_docs/ralph/prototype-integration/slurm-chart-inventory.json");
+const slurmChartSchemaPath = resolve(root, "_docs/ralph/prototype-integration/slurm-chart-inventory.schema.json");
 const testCasesPath = resolve(root, "tests/upgrade/test-cases.json");
 
 function loadJson(path) {
@@ -130,6 +133,10 @@ if (require.main === module) {
     schema: loadJson(requiredGateSchemaPath),
     planSchema: loadJson(requiredGatePlanSchemaPath),
     resultSchema: loadJson(requiredGateResultSchemaPath),
+  });
+  validateSlurmChartInventory(loadJson(slurmChartInventoryPath), {
+    rootDir: root,
+    schema: loadJson(slurmChartSchemaPath),
   });
   console.log("prototype integration controls: valid");
 }

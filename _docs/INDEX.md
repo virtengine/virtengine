@@ -91,6 +91,8 @@ This index lists internal-only documentation. Do not add internal docs outside `
 - `_docs/audits/task-86a-completion-report-2026-07-21.md`
 
 ## Protocols & Schemas
+- `_docs/ralph/prototype-integration/slurm-chart-inventory.json`
+- `_docs/ralph/prototype-integration/slurm-chart-inventory.schema.json`
 - `_docs/protocols/hpc-cluster-template-spec.md`
 - `_docs/protocols/hpc-node-agent-protocol.md`
 - `_docs/protocols/mobile-capture-protocol-v1.md`
