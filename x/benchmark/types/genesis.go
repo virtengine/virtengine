@@ -32,6 +32,20 @@ type Params struct {
 
 	// AnomalyThresholdRepeatCount is the count threshold for repeated outputs
 	AnomalyThresholdRepeatCount int64 `json:"anomaly_threshold_repeat_count"`
+
+	CanonicalEnvelopeEnabled bool `json:"canonical_envelope_enabled"`
+
+	VerifiedReliabilityEnabled bool `json:"verified_reliability_enabled"`
+
+	MaxEnvelopeAgeSeconds int64 `json:"max_envelope_age_seconds"`
+
+	MaxSourceAgeSeconds int64 `json:"max_source_age_seconds"`
+
+	MaxFutureSkewSeconds int64 `json:"max_future_skew_seconds"`
+
+	MaxEnvelopeLifetimeBlocks int64 `json:"max_envelope_lifetime_blocks"`
+
+	MaxEnvelopeLifetimeSeconds int64 `json:"max_envelope_lifetime_seconds"`
 }
 
 // DefaultParams returns default parameters
@@ -43,6 +57,13 @@ func DefaultParams() Params {
 		MaxReportsPerSubmission:         10,
 		AnomalyThresholdJumpPercent:     50, // 50%
 		AnomalyThresholdRepeatCount:     3,  // 3 identical outputs
+		CanonicalEnvelopeEnabled:        false,
+		VerifiedReliabilityEnabled:      false,
+		MaxEnvelopeAgeSeconds:           3600,
+		MaxSourceAgeSeconds:             86400,
+		MaxFutureSkewSeconds:            120,
+		MaxEnvelopeLifetimeBlocks:       200,
+		MaxEnvelopeLifetimeSeconds:      3600,
 	}
 }
 
@@ -62,6 +83,10 @@ func (p *Params) Validate() error {
 
 	if p.MaxReportsPerSubmission <= 0 || p.MaxReportsPerSubmission > 100 {
 		return fmt.Errorf("max_reports_per_submission must be between 1 and 100")
+	}
+	if p.MaxEnvelopeAgeSeconds <= 0 || p.MaxSourceAgeSeconds <= 0 || p.MaxFutureSkewSeconds < 0 ||
+		p.MaxEnvelopeLifetimeBlocks <= 0 || p.MaxEnvelopeLifetimeSeconds <= 0 {
+		return fmt.Errorf("canonical reliability freshness bounds must be positive")
 	}
 
 	return nil
