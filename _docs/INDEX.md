@@ -154,6 +154,8 @@ This index lists internal-only documentation. Do not add internal docs outside `
 - `_docs/ralph/prototype-integration/producer-handoff.schema.json`
 - `_docs/ralph/prototype-integration/required-gate-matrix.json`
 - `_docs/ralph/prototype-integration/required-gate-matrix.schema.json`
+- `_docs/ralph/prototype-integration/required-gate-plan.schema.json`
+- `_docs/ralph/prototype-integration/required-gate-results.schema.json`
 - `_docs/ralph/ralph_patent_text.txt`
 
 ## Visual Assets

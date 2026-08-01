@@ -9,6 +9,8 @@ const { resolve } = require("path");
 const root = resolve(__dirname, "..");
 const matrixPath = resolve(root, "_docs/ralph/prototype-integration/required-gate-matrix.json");
 const schemaPath = resolve(root, "_docs/ralph/prototype-integration/required-gate-matrix.schema.json");
+const planSchemaPath = resolve(root, "_docs/ralph/prototype-integration/required-gate-plan.schema.json");
+const resultSchemaPath = resolve(root, "_docs/ralph/prototype-integration/required-gate-results.schema.json");
 const categoryCommands = new Map([
   ["go", ["go vet ./...", "go test -count=1 ./..."]],
   ["proto_api", ["docker build --file sdk/generation/Dockerfile --tag virtengine-proto-gen:1.0.0 .", "docker run --rm --volume $PWD:/src --workdir /src/sdk --entrypoint buf virtengine-proto-gen:1.0.0 lint", "bash scripts/verify-proto-generation.sh", "go test -count=1 ./api/... ./client/..."]],
@@ -22,7 +24,15 @@ const categoryCommands = new Map([
   ["security", ["python .github/scripts/validate_security_policies.py", "go test -count=1 -tags=e2e.integration ./tests/integration/security/..."]],
   ["docs_process_boundary_e2e", ["node scripts/validate-prototype-integration.cjs", "go test -count=1 -tags=e2e.integration ./tests/e2e/... ./tests/integration/..."]],
 ]);
-const rootKeys = ["schema_version", "task", "control_scope", "status", "completion_claim", "categories", "blockers"];
+const rootKeys = ["schema_version", "task", "control_scope", "status", "completion_claim", "unmatched_path_allowlist", "categories", "blockers"];
+const expectedUnmatchedAllowlist = [
+  ["*.md", "Root-level policy, legal, and repository narrative metadata has no executable gate."],
+  ["*.txt", "Root-level repository text metadata has no executable gate."],
+  [".editorconfig", "Repository editor metadata has no executable gate."],
+  [".gitattributes", "Repository Git attribute metadata has no executable gate."],
+  [".gitignore", "Repository Git ignore metadata has no executable gate."],
+  ["codecov.yml", "Repository coverage-reporting metadata has no local executable gate."],
+];
 const categoryKeys = ["id", "path_selectors", "required_commands", "pinned_tools", "zero_test_policy", "failure_semantics", "dependencies", "status", "blockers"];
 
 function loadJson(path) {
@@ -47,6 +57,27 @@ function validateSchemaControl(schema) {
   for (const field of ["nonzero_exit", "skipped", "missing_tool", "cancelled"]) {
     assert.equal(schema.$defs.failureSemantics.properties[field].const, "fail");
   }
+}
+
+function validateExecutionSchemas(planSchema, resultSchema) {
+  assert.equal(planSchema.$schema, "https://json-schema.org/draft/2020-12/schema");
+  assert.equal(planSchema.additionalProperties, false, "plan schema root must reject additional properties");
+  assert.deepEqual(planSchema.required.slice().sort(), ["schema_version", "base_sha", "head_sha", "matrix_digest", "matrix_status", "changed_paths", "allowlisted_paths", "categories"].sort());
+  assert.equal(planSchema.properties.schema_version.const, "virtengine.task-88b.required-gate-plan/v1");
+  assert.deepEqual(planSchema.properties.matrix_status.enum, ["dependency_blocked", "ready", "complete"]);
+  assert.equal(planSchema.$defs.category.additionalProperties, false);
+  assert.equal(planSchema.$defs.command.additionalProperties, false);
+  assert.equal(planSchema.$defs.tool.additionalProperties, false);
+
+  assert.equal(resultSchema.$schema, "https://json-schema.org/draft/2020-12/schema");
+  assert.equal(resultSchema.additionalProperties, false, "result schema root must reject additional properties");
+  assert.deepEqual(resultSchema.required.slice().sort(), ["schema_version", "base_sha", "head_sha", "matrix_digest", "results"].sort());
+  assert.equal(resultSchema.properties.schema_version.const, "virtengine.task-88b.required-gate-results/v1");
+  assert.equal(resultSchema.$defs.result.additionalProperties, false);
+  assert.equal(resultSchema.$defs.result.properties.outcome.const, "passed");
+  assert.equal(resultSchema.$defs.result.properties.exit_code.const, 0);
+  assert.equal(resultSchema.$defs.result.properties.skipped_tests.const, 0);
+  assert.equal(resultSchema.$defs.tool.properties.available.const, true);
 }
 
 function assertImmutableCommand(command, label) {
@@ -77,14 +108,32 @@ function validateGateResult(category, result) {
 
 function validateRequiredGateMatrix(matrix, options = {}) {
   if (options.schema) validateSchemaControl(options.schema);
+  if (options.planSchema || options.resultSchema) {
+    assert.ok(options.planSchema && options.resultSchema, "plan and result schemas must be validated together");
+    validateExecutionSchemas(options.planSchema, options.resultSchema);
+  }
   assertExactKeys(matrix, rootKeys, "matrix");
   assert.equal(matrix.schema_version, "virtengine.task-88b.required-gate-matrix/v1");
   assert.equal(matrix.task, "88B");
   assert.equal(matrix.control_scope, "required_gate_matrix_only");
   assert.ok(["dependency_blocked", "ready", "complete"].includes(matrix.status), "invalid matrix status");
   assert.equal(typeof matrix.completion_claim, "boolean");
+  assert.ok(Array.isArray(matrix.unmatched_path_allowlist) && matrix.unmatched_path_allowlist.length > 0, "unmatched path allowlist must not be empty");
+  const allowanceSelectors = new Set();
+  for (const allowance of matrix.unmatched_path_allowlist) {
+    assertExactKeys(allowance, ["selector", "reason"], "unmatched path allowance");
+    assert.ok(typeof allowance.selector === "string" && allowance.selector.length > 0 && !allowance.selector.includes("\\"), "invalid unmatched path selector");
+    assert.ok(!allowanceSelectors.has(allowance.selector), `duplicate unmatched path selector: ${allowance.selector}`);
+    allowanceSelectors.add(allowance.selector);
+    assert.ok(typeof allowance.reason === "string" && allowance.reason.length > 0, `allowance ${allowance.selector} must have a reason`);
+  }
   assert.ok(Array.isArray(matrix.categories), "categories must be an array");
   assert.ok(Array.isArray(matrix.blockers), "blockers must be an array");
+  assert.deepEqual(
+    matrix.unmatched_path_allowlist.map((entry) => [entry.selector, entry.reason]),
+    expectedUnmatchedAllowlist,
+    "unmatched path allowlist must use the reviewed root metadata policy",
+  );
 
   const blockerIds = new Set();
   for (const blocker of matrix.blockers) {
@@ -147,9 +196,13 @@ function validateRequiredGateMatrix(matrix, options = {}) {
   }
 }
 
-module.exports = { validateGateResult, validateRequiredGateMatrix };
+module.exports = { validateExecutionSchemas, validateGateResult, validateRequiredGateMatrix };
 
 if (require.main === module) {
-  validateRequiredGateMatrix(loadJson(matrixPath), { schema: loadJson(schemaPath) });
+  validateRequiredGateMatrix(loadJson(matrixPath), {
+    schema: loadJson(schemaPath),
+    planSchema: loadJson(planSchemaPath),
+    resultSchema: loadJson(resultSchemaPath),
+  });
   console.log("Task 88B required-gate matrix control: valid (dependency_blocked)");
 }

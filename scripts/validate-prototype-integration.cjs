@@ -20,6 +20,8 @@ const modelProvenancePath = resolve(root, "_docs/ralph/prototype-integration/mod
 const modelProvenanceSchemaPath = resolve(root, "_docs/ralph/prototype-integration/model-provenance.schema.json");
 const requiredGateMatrixPath = resolve(root, "_docs/ralph/prototype-integration/required-gate-matrix.json");
 const requiredGateSchemaPath = resolve(root, "_docs/ralph/prototype-integration/required-gate-matrix.schema.json");
+const requiredGatePlanSchemaPath = resolve(root, "_docs/ralph/prototype-integration/required-gate-plan.schema.json");
+const requiredGateResultSchemaPath = resolve(root, "_docs/ralph/prototype-integration/required-gate-results.schema.json");
 const testCasesPath = resolve(root, "tests/upgrade/test-cases.json");
 
 function loadJson(path) {
@@ -126,6 +128,8 @@ if (require.main === module) {
   });
   validateRequiredGateMatrix(loadJson(requiredGateMatrixPath), {
     schema: loadJson(requiredGateSchemaPath),
+    planSchema: loadJson(requiredGatePlanSchemaPath),
+    resultSchema: loadJson(requiredGateResultSchemaPath),
   });
   console.log("prototype integration controls: valid");
 }

@@ -4,6 +4,14 @@
   "control_scope": "required_gate_matrix_only",
   "status": "dependency_blocked",
   "completion_claim": false,
+  "unmatched_path_allowlist": [
+    { "selector": "*.md", "reason": "Root-level policy, legal, and repository narrative metadata has no executable gate." },
+    { "selector": "*.txt", "reason": "Root-level repository text metadata has no executable gate." },
+    { "selector": ".editorconfig", "reason": "Repository editor metadata has no executable gate." },
+    { "selector": ".gitattributes", "reason": "Repository Git attribute metadata has no executable gate." },
+    { "selector": ".gitignore", "reason": "Repository Git ignore metadata has no executable gate." },
+    { "selector": "codecov.yml", "reason": "Repository coverage-reporting metadata has no local executable gate." }
+  ],
   "categories": [
     {
       "id": "go",
@@ -150,7 +158,7 @@
     },
     {
       "id": "docs_process_boundary_e2e",
-      "path_selectors": ["docs/**", "_docs/**", "tests/e2e/**", "tests/integration/**", "scripts/localnet.sh"],
+      "path_selectors": ["docs/**", "_docs/**", "tests/e2e/**", "tests/integration/**", "scripts/*.cjs", "scripts/localnet.sh"],
       "required_commands": [
         { "id": "docs-control", "kind": "policy", "command": "node scripts/validate-prototype-integration.cjs" },
         { "id": "process-boundary-e2e", "kind": "test", "command": "go test -count=1 -tags=e2e.integration ./tests/e2e/... ./tests/integration/..." }

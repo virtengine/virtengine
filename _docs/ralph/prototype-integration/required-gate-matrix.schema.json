@@ -1,16 +1,21 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://virtengine.com/schemas/prototype-integration/required-gate-matrix.schema.json",
-  "title": "T4-05A Task 88B required-gate matrix control",
+  "title": "T4-05B Task 88B required-gate matrix control",
   "type": "object",
   "additionalProperties": false,
-  "required": ["schema_version", "task", "control_scope", "status", "completion_claim", "categories", "blockers"],
+  "required": ["schema_version", "task", "control_scope", "status", "completion_claim", "unmatched_path_allowlist", "categories", "blockers"],
   "properties": {
     "schema_version": { "const": "virtengine.task-88b.required-gate-matrix/v1" },
     "task": { "const": "88B" },
     "control_scope": { "const": "required_gate_matrix_only" },
     "status": { "enum": ["dependency_blocked", "ready", "complete"] },
     "completion_claim": { "type": "boolean" },
+    "unmatched_path_allowlist": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/pathAllowance" }
+    },
     "categories": {
       "type": "array",
       "minItems": 11,
@@ -36,6 +41,15 @@
       "properties": {
         "id": { "type": "string", "pattern": "^[a-z0-9.-]+$" },
         "description": { "type": "string", "minLength": 1 }
+      }
+    },
+    "pathAllowance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["selector", "reason"],
+      "properties": {
+        "selector": { "type": "string", "minLength": 1 },
+        "reason": { "type": "string", "minLength": 1 }
       }
     },
     "tool": {

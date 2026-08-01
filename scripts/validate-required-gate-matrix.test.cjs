@@ -86,6 +86,11 @@ const tests = [
     candidate.categories[0].required_commands[0].command = "docker run example:latest";
     assert.throws(() => validateRequiredGateMatrix(candidate, { schema }), /mutable command reference/);
   }],
+  ["rejects a catch-all unmatched path allowance", () => {
+    const candidate = cloneMatrix();
+    candidate.unmatched_path_allowlist[0].selector = "**";
+    assert.throws(() => validateRequiredGateMatrix(candidate, { schema }), /reviewed root metadata policy/);
+  }],
   ["rejects premature complete", () => {
     const candidate = cloneMatrix();
     candidate.status = "complete";
