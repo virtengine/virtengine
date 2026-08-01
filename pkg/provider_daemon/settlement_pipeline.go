@@ -175,6 +175,32 @@ type UsageCorrection struct {
 	Signature string `json:"signature"`
 }
 
+// ReconciliationState is the bounded outcome of comparing two evidence sources.
+type ReconciliationState string
+
+const (
+	ReconciliationStateMatched     ReconciliationState = "matched"
+	ReconciliationStateMismatched  ReconciliationState = "mismatched"
+	ReconciliationStateUnavailable ReconciliationState = "unavailable"
+	ReconciliationStateStale       ReconciliationState = "stale"
+	ReconciliationStateUnresolved  ReconciliationState = "unresolved"
+)
+
+// ReconciliationReasonCode is a stable machine-readable reconciliation reason.
+type ReconciliationReasonCode string
+
+const (
+	ReconciliationReasonExactMatch                     ReconciliationReasonCode = "exact_match"
+	ReconciliationReasonWithinTolerance                ReconciliationReasonCode = "within_tolerance"
+	ReconciliationReasonMetricThresholdExceeded        ReconciliationReasonCode = "metric_threshold_exceeded"
+	ReconciliationReasonProviderEvidenceUnavailable    ReconciliationReasonCode = "provider_evidence_unavailable"
+	ReconciliationReasonIndependentEvidenceUnavailable ReconciliationReasonCode = "independent_evidence_unavailable"
+	ReconciliationReasonProviderEvidenceStale          ReconciliationReasonCode = "provider_evidence_stale"
+	ReconciliationReasonIndependentEvidenceStale       ReconciliationReasonCode = "independent_evidence_stale"
+	ReconciliationReasonPartialEvidence                ReconciliationReasonCode = "partial_evidence"
+	ReconciliationReasonMalformedEvidence              ReconciliationReasonCode = "malformed_evidence"
+)
+
 // ReconciliationResult contains the result of a reconciliation check.
 type ReconciliationResult struct {
 	// AllocationID is the allocation being reconciled.
@@ -192,8 +218,11 @@ type ReconciliationResult struct {
 	// Discrepancies contains any discrepancies found.
 	Discrepancies []MetricDiscrepancy `json:"discrepancies,omitempty"`
 
-	// InSync indicates if provider and Waldur data are in sync.
-	InSync bool `json:"in_sync"`
+	// State is the explicit reconciliation outcome.
+	State ReconciliationState `json:"state"`
+
+	// ReasonCode is the stable explanation for State.
+	ReasonCode ReconciliationReasonCode `json:"reason_code"`
 
 	// Score is the reconciliation confidence score (0-100).
 	Score int `json:"score"`

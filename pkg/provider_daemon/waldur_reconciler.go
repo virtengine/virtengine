@@ -10,6 +10,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"math"
 	"strings"
 	"sync"
 	"time"
@@ -92,6 +93,9 @@ type WaldurUsageStats struct {
 
 	// Components contains component-level usage.
 	Components []WaldurUsageComponent `json:"components,omitempty"`
+
+	// EvidenceTime is the newest timestamp among the independent records.
+	EvidenceTime time.Time `json:"evidence_time"`
 }
 
 // WaldurUsageComponent represents a usage component from Waldur.
@@ -225,21 +229,39 @@ func (r *WaldurReconciler) ReconcileAllocation(ctx context.Context, allocationID
 	periodStart := now.Add(-r.cfg.ReconciliationInterval)
 	providerRecord, found := r.usageStore.FindLatest(allocationID, &periodStart, &periodEnd)
 	if !found {
-		return nil, fmt.Errorf("no provider usage record found for allocation %s", allocationID)
+		result := r.newClassifiedResult(allocationID, now, ResourceMetrics{}, ReconciliationStateUnavailable, ReconciliationReasonProviderEvidenceUnavailable)
+		r.storeResult(result)
+		return result, nil
+	}
+	if providerRecord.EndTime.IsZero() || providerRecord.EndTime.Before(providerRecord.StartTime) {
+		result := r.newClassifiedResult(allocationID, now, providerRecord.Metrics, ReconciliationStateUnresolved, ReconciliationReasonMalformedEvidence)
+		r.storeResult(result)
+		return result, nil
+	}
+	if r.evidenceStale(now, providerRecord.EndTime) {
+		result := r.newClassifiedResult(allocationID, now, providerRecord.Metrics, ReconciliationStateStale, ReconciliationReasonProviderEvidenceStale)
+		r.storeResult(result)
+		return result, nil
 	}
 
 	// Get Waldur usage stats
 	waldurStats, err := r.fetchWaldurUsage(ctx, resourceUUID, periodStart, periodEnd)
 	if err != nil {
-		// If Waldur stats not available, still return result with provider data only
-		result := &ReconciliationResult{
-			AllocationID:       allocationID,
-			ReconciliationTime: now,
-			ProviderMetrics:    providerRecord.Metrics,
-			WaldurMetrics:      nil,
-			InSync:             true, // Can't verify, assume in sync
-			Score:              50,   // Neutral score
+		state, reason := ReconciliationStateUnavailable, ReconciliationReasonIndependentEvidenceUnavailable
+		if validationErr, ok := err.(*reconciliationEvidenceError); ok {
+			state, reason = ReconciliationStateUnresolved, validationErr.reason
 		}
+		result := r.newClassifiedResult(allocationID, now, providerRecord.Metrics, state, reason)
+		r.storeResult(result)
+		return result, nil
+	}
+	if r.evidenceStale(now, waldurStats.EvidenceTime) {
+		result := r.newClassifiedResult(allocationID, now, providerRecord.Metrics, ReconciliationStateStale, ReconciliationReasonIndependentEvidenceStale)
+		r.storeResult(result)
+		return result, nil
+	}
+	if !hasCompleteIndependentEvidence(providerRecord.Metrics, waldurStats.Components) {
+		result := r.newClassifiedResult(allocationID, now, providerRecord.Metrics, ReconciliationStateUnresolved, ReconciliationReasonPartialEvidence)
 		r.storeResult(result)
 		return result, nil
 	}
@@ -259,8 +281,15 @@ func (r *WaldurReconciler) ReconcileAllocation(ctx context.Context, allocationID
 		ProviderMetrics:    providerRecord.Metrics,
 		WaldurMetrics:      waldurMetrics,
 		Discrepancies:      discrepancies,
-		InSync:             len(discrepancies) == 0,
+		State:              ReconciliationStateMatched,
+		ReasonCode:         ReconciliationReasonExactMatch,
 		Score:              score,
+	}
+	if len(discrepancies) > 0 {
+		result.State = ReconciliationStateMismatched
+		result.ReasonCode = ReconciliationReasonMetricThresholdExceeded
+	} else if providerRecord.Metrics != *waldurMetrics {
+		result.ReasonCode = ReconciliationReasonWithinTolerance
 	}
 
 	r.storeResult(result)
@@ -273,6 +302,21 @@ func (r *WaldurReconciler) ReconcileAllocation(ctx context.Context, allocationID
 	return result, nil
 }
 
+type reconciliationEvidenceError struct {
+	reason ReconciliationReasonCode
+	msg    string
+}
+
+func (e *reconciliationEvidenceError) Error() string { return e.msg }
+
+func (r *WaldurReconciler) newClassifiedResult(allocationID string, now time.Time, provider ResourceMetrics, state ReconciliationState, reason ReconciliationReasonCode) *ReconciliationResult {
+	return &ReconciliationResult{AllocationID: allocationID, ReconciliationTime: now, ProviderMetrics: provider, State: state, ReasonCode: reason}
+}
+
+func (r *WaldurReconciler) evidenceStale(now, evidenceTime time.Time) bool {
+	return evidenceTime.IsZero() || r.cfg.MaxAgeForReconciliation <= 0 || now.Sub(evidenceTime) > r.cfg.MaxAgeForReconciliation
+}
+
 // fetchWaldurUsage fetches usage statistics from Waldur.
 func (r *WaldurReconciler) fetchWaldurUsage(ctx context.Context, resourceUUID string, periodStart, periodEnd time.Time) (*WaldurUsageStats, error) {
 	if r.usageClient == nil {
@@ -283,6 +327,9 @@ func (r *WaldurReconciler) fetchWaldurUsage(ctx context.Context, resourceUUID st
 	if err != nil {
 		return nil, fmt.Errorf("fetch usage: %w", err)
 	}
+	if len(records) == 0 {
+		return nil, fmt.Errorf("independent usage evidence unavailable")
+	}
 
 	stats := &WaldurUsageStats{
 		ResourceUUID: resourceUUID,
@@ -291,10 +338,53 @@ func (r *WaldurReconciler) fetchWaldurUsage(ctx context.Context, resourceUUID st
 		Components:   make([]WaldurUsageComponent, 0, len(records)),
 	}
 	for _, record := range records {
+		if err := validateWaldurUsageRecord(record, resourceUUID); err != nil {
+			return nil, err
+		}
+		evidenceTime := record.Date
+		if record.Created.After(evidenceTime) {
+			evidenceTime = record.Created
+		}
+		if evidenceTime.After(stats.EvidenceTime) {
+			stats.EvidenceTime = evidenceTime
+		}
 		r.applyWaldurUsageRecord(stats, record)
 	}
 
 	return stats, nil
+}
+
+func validateWaldurUsageRecord(record waldur.UsageRecord, resourceUUID string) error {
+	componentType := strings.ToLower(strings.TrimSpace(record.ComponentType))
+	if record.ResourceUUID != resourceUUID || componentType == "" || usageUnitForComponentType(componentType) == "unit" ||
+		math.IsNaN(record.Usage) || math.IsInf(record.Usage, 0) || record.Usage < 0 || (record.Date.IsZero() && record.Created.IsZero()) {
+		return &reconciliationEvidenceError{reason: ReconciliationReasonMalformedEvidence, msg: "malformed independent usage evidence"}
+	}
+	return nil
+}
+
+func hasCompleteIndependentEvidence(provider ResourceMetrics, components []WaldurUsageComponent) bool {
+	present := make(map[string]bool)
+	for _, component := range components {
+		componentType := strings.ToLower(strings.TrimSpace(component.Type))
+		switch {
+		case strings.Contains(componentType, "cpu"):
+			present["cpu"] = true
+		case strings.Contains(componentType, "mem"), strings.Contains(componentType, "ram"):
+			present["memory"] = true
+		case strings.Contains(componentType, "storage"):
+			present["storage"] = true
+		case strings.Contains(componentType, "gpu"):
+			present["gpu"] = true
+		case strings.Contains(componentType, "network"), strings.Contains(componentType, "bandwidth"):
+			present["network"] = true
+		}
+	}
+	return (provider.CPUMilliSeconds == 0 || present["cpu"]) &&
+		(provider.MemoryByteSeconds == 0 || present["memory"]) &&
+		(provider.StorageByteSeconds == 0 || present["storage"]) &&
+		(provider.GPUSeconds == 0 || present["gpu"]) &&
+		(provider.NetworkBytesIn+provider.NetworkBytesOut == 0 || present["network"])
 }
 
 func (r *WaldurReconciler) applyWaldurUsageRecord(stats *WaldurUsageStats, record waldur.UsageRecord) {
@@ -540,10 +630,17 @@ func (r *WaldurReconciler) GetSyncStatus() ReconciliationSyncStatus {
 		if result.ReconciliationTime.After(status.LastReconcileTime) {
 			status.LastReconcileTime = result.ReconciliationTime
 		}
-		if result.InSync {
-			status.InSyncCount++
-		} else {
-			status.OutOfSyncCount++
+		switch result.State {
+		case ReconciliationStateMatched:
+			status.MatchedCount++
+		case ReconciliationStateMismatched:
+			status.MismatchedCount++
+		case ReconciliationStateUnavailable:
+			status.UnavailableCount++
+		case ReconciliationStateStale:
+			status.StaleCount++
+		case ReconciliationStateUnresolved:
+			status.UnresolvedCount++
 		}
 		status.TotalScore += result.Score
 	}
@@ -560,11 +657,11 @@ type ReconciliationSyncStatus struct {
 	// TotalAllocations is the total number of reconciled allocations.
 	TotalAllocations int `json:"total_allocations"`
 
-	// InSyncCount is the count of in-sync allocations.
-	InSyncCount int `json:"in_sync_count"`
-
-	// OutOfSyncCount is the count of out-of-sync allocations.
-	OutOfSyncCount int `json:"out_of_sync_count"`
+	MatchedCount     int `json:"matched_count"`
+	MismatchedCount  int `json:"mismatched_count"`
+	UnavailableCount int `json:"unavailable_count"`
+	StaleCount       int `json:"stale_count"`
+	UnresolvedCount  int `json:"unresolved_count"`
 
 	// AverageScore is the average reconciliation score.
 	AverageScore int `json:"average_score"`
@@ -639,8 +736,8 @@ func (r *WaldurReconciler) runReconciliation(ctx context.Context) {
 	}
 
 	status := r.GetSyncStatus()
-	log.Printf("[waldur-reconciler] reconciliation complete: %d processed, %d skipped, %d allocations, %d in-sync, %d out-of-sync, avg score %d",
-		processed, skipped, status.TotalAllocations, status.InSyncCount, status.OutOfSyncCount, status.AverageScore)
+	log.Printf("[waldur-reconciler] reconciliation complete: %d processed, %d skipped, %d allocations, %d matched, %d mismatched, %d unavailable, %d stale, %d unresolved, avg score %d",
+		processed, skipped, status.TotalAllocations, status.MatchedCount, status.MismatchedCount, status.UnavailableCount, status.StaleCount, status.UnresolvedCount, status.AverageScore)
 }
 
 // ScheduledUsageCollector collects usage on a schedule and integrates with settlement.
