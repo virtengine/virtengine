@@ -20,7 +20,7 @@
   - `sdk/ts/test/` — unit and functional tests.
 
 ## Core Concepts
-- Query vs tx: `createChainNodeSDK` builds gRPC query transport and optional tx transport, falling back to a noop transport when a signer is missing (`sdk/ts/src/sdk/chain/createChainNodeSDK.ts:17`).
+- Query vs tx: chain factories expose a capability controller with `disconnected`, `query-only`, `signing-ready`, and `MFA-authorized` states. Unsupported query or transaction calls reject with `ChainCapabilityError` instead of using an ambiguous noop transaction result (`sdk/ts/src/sdk/chain/ChainCapability.ts:4`).
 - Web vs node: `createChainNodeWebSDK` targets gRPC-gateway endpoints for browser usage (`sdk/ts/src/sdk/chain/createChainNodeWebSDK.ts:15`).
 - Provider SDK: `createProviderSDK` constructs provider-service clients with optional mTLS and retry interceptors (`sdk/ts/src/sdk/provider/createProviderSDK.ts:12`).
 
@@ -35,6 +35,7 @@ const sdk = createChainNodeSDK({
 });
 
 const identity = await sdk.virtengine.veid.v1.identity({ accountAddress: "..."} );
+console.log(sdk.capability.state); // "query-only"
 ```
 
 ### Web SDK (gRPC-gateway)
