@@ -1,60 +1,46 @@
 {
   "campaign": "three-day-prototype",
   "thread": "T4",
-  "checkpoint": "T4-10C",
+  "checkpoint": "T4-01B",
   "branch": "ve/prototype-integration",
-  "start_head": "fa21b1e540a5efcbe1822da4199be7acec7709d3",
-  "end_head": "c23ec6e2909ea144263aa7344a80f14ed98fd433",
+  "start_head": "5587c384f634552c3a2dd7181ca49cafa4da1984",
+  "end_head": "64dc9eebf3395227cca18bfb333774cf22d5d1c2",
   "origin_main": "79391a3df86d85522b92e0400c6904971ecbe65d",
   "tree_clean": true,
   "commits": [
-    "c23ec6e2909ea144263aa7344a80f14ed98fd433"
+    "64dc9eebf3395227cca18bfb333774cf22d5d1c2"
   ],
   "owned_paths": [
     "_docs/ralph/prototype-integration/**",
     "_docs/ralph/handoffs/prototype-integration/**",
     "scripts/validate-prototype-integration.cjs",
-    "_build/build-veid-pipeline.sh",
-    "cmd/inference-sidecar/manifest.go",
-    "ml/training/model/release_manifest.py",
-    "ml/training/tests/test_release_manifest.py"
+    "_docs/prototype-thread-intake-runbook.md",
+    "scripts/validate-prototype-intake.cjs",
+    "scripts/validate-prototype-intake.test.cjs"
   ],
   "files_changed": [
     "_docs/ralph/handoffs/prototype-integration/HANDOFF.yaml",
-    "_build/build-veid-pipeline.sh",
-    "cmd/inference-sidecar/manifest.go",
-    "ml/training/model/release_manifest.py",
-    "ml/training/tests/test_release_manifest.py"
+    "_docs/INDEX.md",
+    "_docs/prototype-thread-intake-runbook.md",
+    "_docs/ralph/prototype-integration/epochs/epoch-1.json",
+    "_docs/ralph/prototype-integration/producer-handoff.schema.json",
+    "scripts/validate-prototype-intake.cjs",
+    "scripts/validate-prototype-intake.test.cjs",
+    "scripts/validate-prototype-integration.cjs",
+    "scripts/validate-prototype-integration.test.cjs"
   ],
   "tests": [
     {
-      "command": "python -m pytest -q ml/training/tests/test_release_manifest.py",
+      "command": "node --test scripts/validate-prototype-intake.test.cjs",
       "exit_code": 0,
       "result": "passed",
-      "test_count": 50,
+      "test_count": 28,
       "tool_versions": {
-        "python": "3.14.6 windows"
+        "node": "20.19.1"
       }
     },
     {
-      "command": "go1.25.8 test -count=1 ./cmd/inference-sidecar && go1.25.8 vet ./cmd/inference-sidecar",
-      "exit_code": 0,
-      "result": "passed",
-      "tool_versions": {
-        "go": "1.25.8 windows/amd64"
-      }
-    },
-    {
-      "command": "python -m py_compile ml/training/model/release_manifest.py ml/training/tests/test_release_manifest.py && bash -n _build/build-veid-pipeline.sh",
-      "exit_code": 0,
-      "result": "passed",
-      "tool_versions": {
-        "python": "3.14.6 windows",
-        "bash": "Git for Windows"
-      }
-    },
-    {
-      "command": "node scripts/validate-model-provenance.test.cjs && node scripts/validate-model-provenance.cjs && node scripts/validate-prototype-integration.test.cjs && node scripts/validate-prototype-integration.cjs && node scripts/validate-agents-docs.mjs",
+      "command": "node scripts/validate-prototype-integration.test.cjs && node scripts/validate-prototype-integration.cjs && node scripts/validate-agents-docs.mjs",
       "exit_code": 0,
       "result": "passed",
       "tool_versions": {
@@ -63,8 +49,8 @@
     }
   ],
   "generated_hashes": {
-    "ml/training/model/release_manifest.py": "e2374745f0f88404bfed58cf1a694b9d3f1ddd0557ef4be2e7408425daf0e671",
-    "_build/build-veid-pipeline.sh": "4b3f31a58e3096b143ac8891397c1f71067c4e9af87785360d6ab859f8f31206"
+    "scripts/validate-prototype-intake.cjs": "2b9cb0a6a3baaab573846e94057bfac478dd922fba6db5128c1110a9d15f31f8",
+    "_docs/ralph/prototype-integration/producer-handoff.schema.json": "912d031a6782a832622fcd50fd98a4facb4ca2ef36b8b9d01d60327f02135e0a"
   },
   "accepted_checkpoints": [],
   "rejected_checkpoints": [
@@ -86,11 +72,10 @@
     "Go 1.26.5 cannot compile github.com/bytedance/sonic v1.14.1; checkpoint gates were rerun successfully with the repository-pinned Go 1.25.8 toolchain."
   ],
   "blockers": [
-    "T1 and T5 have incomplete dirty handoffs with PENDING_COMMIT; T2 and T3 are stale relative to current T4.",
-    "Model weights, production data, approved licenses and redistribution, runtime image/SBOM, approved model card, and production evaluation remain dependency-blocked.",
-    "No current model bundle carries production_approved provenance; generation and production sidecar readiness reject lower evidence states and fixture profiles.",
-    "T4-10 is not complete and no model, dataset, runtime, license, redistribution approval, or production profile is certified by this checkpoint."
+    "Epoch 1 is open with no announced producer tags; intake is forbidden until T4 commits a frozen post-cutoff roster.",
+    "Existing producer handoffs use the obsolete pre-epoch schema and are not intake-eligible.",
+    "No producer checkpoint has been accepted or integrated by this checkpoint."
   ],
   "next_checkpoint": "T4-11A",
-  "expected_head": "c23ec6e2909ea144263aa7344a80f14ed98fd433"
+  "expected_head": "64dc9eebf3395227cca18bfb333774cf22d5d1c2"
 }
