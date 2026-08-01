@@ -1,45 +1,62 @@
 {
   "campaign": "three-day-prototype",
   "thread": "T4",
-  "checkpoint": "T4-F01",
+  "checkpoint": "T4-02A",
   "branch": "ve/prototype-integration",
-  "start_head": "9635513da5e3813e4d30839e0ee22b15f16e3911",
-  "end_head": "427daa2fa037aadf048d02f0b8375dad8994d62f",
+  "start_head": "add7562c1fc1842b1c4c167dea9f00a36ba14235",
+  "end_head": "6a8154ba6d21f7e5eab6f28087adb7f107bf6f61",
   "origin_main": "79391a3df86d85522b92e0400c6904971ecbe65d",
   "tree_clean": true,
   "commits": [
-    "427daa2fa037aadf048d02f0b8375dad8994d62f"
+    "6a8154ba6d21f7e5eab6f28087adb7f107bf6f61"
   ],
   "owned_paths": [
     "_docs/ralph/prototype-integration/**",
     "_docs/ralph/handoffs/prototype-integration/**",
     "scripts/validate-prototype-integration.cjs",
-    "tests/upgrade/test_cases_test.go"
+    "scripts/validate-migration-inventory.cjs",
+    "_docs/ralph/prototype-integration/migration-inventory.json",
+    "_docs/ralph/prototype-integration/migration-inventory.schema.json"
   ],
   "files_changed": [
+    "_docs/INDEX.md",
     "_docs/ralph/handoffs/prototype-integration/HANDOFF.yaml",
-    "tests/upgrade/test_cases_test.go"
+    "_docs/ralph/prototype-integration/migration-inventory.json",
+    "_docs/ralph/prototype-integration/migration-inventory.schema.json",
+    "scripts/validate-migration-inventory.cjs",
+    "scripts/validate-migration-inventory.test.cjs",
+    "scripts/validate-prototype-integration.cjs"
   ],
   "tests": [
     {
-      "command": "go1.25.8 test -count=1 ./tests/upgrade -run '^TestUpgradeTestCasesMigrationMatrix'",
+      "command": "node scripts/validate-migration-inventory.test.cjs && node scripts/validate-migration-inventory.cjs",
+      "exit_code": 0,
+      "result": "passed",
+      "test_count": 8,
+      "tool_versions": {
+        "node": "20.19.1"
+      }
+    },
+    {
+      "command": "node scripts/validate-prototype-integration.test.cjs && node scripts/validate-prototype-integration.cjs",
       "exit_code": 0,
       "result": "passed",
       "test_count": 5,
       "tool_versions": {
-        "go": "1.25.8 windows/amd64"
+        "node": "20.19.1"
       }
     },
     {
-      "command": "go1.25.8 test -count=1 ./tests/upgrade",
+      "command": "node scripts/validate-agents-docs.mjs",
       "exit_code": 0,
       "result": "passed",
+      "test_count": 9,
       "tool_versions": {
-        "go": "1.25.8 windows/amd64"
+        "node": "20.19.1"
       }
     },
     {
-      "command": "go1.25.8 vet ./tests/upgrade",
+      "command": "go1.25.8 test -count=1 ./tests/upgrade && go1.25.8 vet ./tests/upgrade",
       "exit_code": 0,
       "result": "passed",
       "tool_versions": {
@@ -47,7 +64,10 @@
       }
     }
   ],
-  "generated_hashes": {},
+  "generated_hashes": {
+    "migration-inventory.json": "a78e32dad73854308ca736a7fc390c035902ee8db8e91117693fb416ad9e145f",
+    "migration-inventory.schema.json": "7bb7166a49d89cafa3329879902d41538a247eaf19c6c0b113d4b30d6b946c57"
+  },
   "accepted_checkpoints": [],
   "rejected_checkpoints": [],
   "external_evidence": [],
@@ -55,9 +75,9 @@
     "Go 1.26.5 cannot compile github.com/bytedance/sonic v1.14.1; checkpoint gates were rerun successfully with the repository-pinned Go 1.25.8 toolchain."
   ],
   "blockers": [
-    "No producer checkpoint handoff exists at the frozen baseline.",
-    "Tasks 88A-88D remain dependency-blocked; this checkpoint establishes integration controls only."
+    "T1, T2, T3, and T5 have not published committed persisted-schema declarations for the migration inventory.",
+    "T4-02 and Tasks 88A-88D remain dependency-blocked; this checkpoint validates the existing baseline transition inventory only."
   ],
-  "next_checkpoint": "T4-02",
-  "expected_head": "427daa2fa037aadf048d02f0b8375dad8994d62f"
+  "next_checkpoint": "T4-02B",
+  "expected_head": "6a8154ba6d21f7e5eab6f28087adb7f107bf6f61"
 }
