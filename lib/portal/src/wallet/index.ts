@@ -66,3 +66,4 @@ export type {
   TransactionValidationResult,
 } from './transaction';
 export * from './claims';
+export * from './passkeys';
