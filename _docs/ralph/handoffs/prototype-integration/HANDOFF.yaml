@@ -1,53 +1,38 @@
 {
   "campaign": "three-day-prototype",
   "thread": "T4",
-  "checkpoint": "T4-03A",
+  "checkpoint": "T4-10A",
   "branch": "ve/prototype-integration",
-  "start_head": "78c57fbaf9517caba7b0d9a0dc0ca427665eb12e",
-  "end_head": "16a84a0e76dceeea07061a8ea0e1a6db7c5dd09e",
+  "start_head": "823c61a1a9fc2c3a8f8b59dd060bb6db4a1bc3db",
+  "end_head": "0ee9defcf2daca0d949dca4cace0d6f0a3cc264d",
   "origin_main": "79391a3df86d85522b92e0400c6904971ecbe65d",
   "tree_clean": true,
   "commits": [
-    "cfee07eeb3ad746be6327a66ada2c19ef3282def",
-    "16a84a0e76dceeea07061a8ea0e1a6db7c5dd09e"
+    "0ee9defcf2daca0d949dca4cace0d6f0a3cc264d"
   ],
   "owned_paths": [
     "_docs/ralph/prototype-integration/**",
     "_docs/ralph/handoffs/prototype-integration/**",
     "scripts/validate-prototype-integration.cjs",
-    ".gitattributes",
-    "upgrades/software/v1.6.0/**"
+    "scripts/validate-model-provenance.cjs"
   ],
   "files_changed": [
-    ".gitattributes",
+    "_docs/INDEX.md",
     "_docs/ralph/handoffs/prototype-integration/HANDOFF.yaml",
-    "upgrades/software/v1.6.0/upgrade.go",
-    "upgrades/software/v1.6.0/upgrade_handler_test.go",
-    "upgrades/software/v1.6.0/upgrade_retry_test.go"
+    "_docs/ralph/prototype-integration/model-provenance.json",
+    "_docs/ralph/prototype-integration/model-provenance.schema.json",
+    "scripts/validate-model-provenance.cjs",
+    "scripts/validate-model-provenance.test.cjs",
+    "scripts/validate-prototype-integration.cjs"
   ],
   "tests": [
     {
-      "command": "go1.25.8 test -count=1 ./upgrades/software/v1.6.0",
+      "command": "node scripts/validate-model-provenance.test.cjs && node scripts/validate-model-provenance.cjs",
       "exit_code": 0,
       "result": "passed",
+      "test_count": 10,
       "tool_versions": {
-        "go": "1.25.8 windows/amd64"
-      }
-    },
-    {
-      "command": "go1.25.8 vet ./upgrades/software/v1.6.0",
-      "exit_code": 0,
-      "result": "passed",
-      "tool_versions": {
-        "go": "1.25.8 windows/amd64"
-      }
-    },
-    {
-      "command": "go1.25.8 test -count=1 ./x/veid/zk/params -run '^TestLoadArtifactSetAcceptsEmbeddedParams$'",
-      "exit_code": 0,
-      "result": "passed",
-      "tool_versions": {
-        "go": "1.25.8 windows/amd64"
+        "node": "20.19.1"
       }
     },
     {
@@ -58,10 +43,20 @@
       "tool_versions": {
         "node": "20.19.1"
       }
+    },
+    {
+      "command": "node scripts/validate-agents-docs.mjs",
+      "exit_code": 0,
+      "result": "passed",
+      "test_count": 9,
+      "tool_versions": {
+        "node": "20.19.1"
+      }
     }
   ],
   "generated_hashes": {
-    "x/veid/zk/params/params_metadata.json": "a4e05914f7a3b5cc5914a535ee6c6ea61ebcffbbafcce9a824394c0397766462"
+    "model-provenance.json": "d28295672b114e6ba910b12d2fa060b6b32f0ab63ec795e07b2564ac494b1acc",
+    "model-provenance.schema.json": "d84720c9d1479b8521377b6f1029d10169a56878c4088b74ca65d4f041830a57"
   },
   "accepted_checkpoints": [],
   "rejected_checkpoints": [
@@ -70,6 +65,12 @@
       "checkpoint": "T2-01",
       "tip": "62d8c4b99804b354b36031ea2fd8b609dcac8a87",
       "reason": "Producer tip does not contain integration SHA 78c57fbaf9517caba7b0d9a0dc0ca427665eb12e; synchronize with current T4 and rerun exact-SHA gates."
+    },
+    {
+      "thread": "T3",
+      "checkpoint": "T3-01",
+      "tip": "9cc738fbb241890d069d6fb6c2ddb664a4e53447",
+      "reason": "Producer tip does not contain integration SHA 823c61a1a9fc2c3a8f8b59dd060bb6db4a1bc3db; synchronize with current T4 and rerun exact-SHA gates."
     }
   ],
   "external_evidence": [],
@@ -77,9 +78,10 @@
     "Go 1.26.5 cannot compile github.com/bytedance/sonic v1.14.1; checkpoint gates were rerun successfully with the repository-pinned Go 1.25.8 toolchain."
   ],
   "blockers": [
-    "T1 and T3 have no committed producer handoff; T2 is stale; T5 has an incomplete dirty handoff with PENDING_COMMIT.",
-    "T4-02B and Tasks 88A-88D remain dependency-blocked; this checkpoint proves one historical real-app upgrade retry only."
+    "T1 and T5 have incomplete dirty handoffs with PENDING_COMMIT; T2 and T3 are stale relative to current T4.",
+    "Model weights, production data, approved licenses and redistribution, runtime image/SBOM, approved model card, and production evaluation remain dependency-blocked.",
+    "T4-10 is not complete and no model, dataset, runtime, license, or production profile is certified by this checkpoint."
   ],
-  "next_checkpoint": "T4-03B",
-  "expected_head": "16a84a0e76dceeea07061a8ea0e1a6db7c5dd09e"
+  "next_checkpoint": "T4-10B",
+  "expected_head": "0ee9defcf2daca0d949dca4cace0d6f0a3cc264d"
 }
