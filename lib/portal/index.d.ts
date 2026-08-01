@@ -1,5 +1,96 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
+export type UnsupportedDocumentReasonCode =
+  | "CATEGORY_NOT_SUPPORTED"
+  | "COUNTRY_NOT_SUPPORTED"
+  | "DOCUMENT_EXPIRED"
+  | "DOCUMENT_FORMAT_NOT_SUPPORTED"
+  | "DOCUMENT_QUALITY_INSUFFICIENT"
+  | "LANGUAGE_NOT_SUPPORTED"
+  | "REQUIRED_SIDE_MISSING";
+export type UnsupportedDocumentCategory =
+  | "DRIVER_LICENSE"
+  | "NATIONAL_ID"
+  | "OTHER_GOVERNMENT_DOCUMENT"
+  | "PASSPORT"
+  | "RESIDENCE_PERMIT";
+export type SupportLanguageCode =
+  | "ar"
+  | "de"
+  | "en"
+  | "es"
+  | "fr"
+  | "hi"
+  | "id"
+  | "ja"
+  | "ko"
+  | "pt"
+  | "zh";
+export type RedactedReasonToken =
+  | "category-mismatch"
+  | "country-restricted"
+  | "expired-document"
+  | "format-unsupported"
+  | "language-assistance"
+  | "quality-insufficient"
+  | "review-required"
+  | "side-missing";
+export type SafeNextStepOption =
+  | "CONTACT_SUPPORT"
+  | "REQUEST_ACCESSIBLE_ASSISTANCE"
+  | "RETRY_WITH_SUPPORTED_DOCUMENT"
+  | "REVIEW_SUPPORTED_DOCUMENTS";
+export interface UnsupportedDocumentTriageRequest {
+  schemaVersion: "unsupported-document-triage.v1";
+  reasonCodes: UnsupportedDocumentReasonCode[];
+  supportLanguageCode: SupportLanguageCode;
+  redactedNotes: RedactedReasonToken[];
+  documentCategory?: UnsupportedDocumentCategory;
+  countryCode?: string;
+}
+export interface UnsupportedDocumentTriageOutput {
+  schemaVersion: "unsupported-document-triage.v1";
+  unsupportedDocumentCategory: UnsupportedDocumentCategory;
+  safeNextStepOptions: SafeNextStepOption[];
+  redactedCaseSummary: string;
+}
+export interface UnsupportedDocumentTriageDraft extends UnsupportedDocumentTriageOutput {
+  status: "draft";
+  draftReference: string;
+}
+export interface HumanTriageConfirmation {
+  confirmed: true;
+  draftReference: string;
+}
+export interface AcceptedUnsupportedDocumentSupportNote extends UnsupportedDocumentTriageOutput {
+  status: "accepted-support-note";
+  draftReference: string;
+  humanConfirmed: true;
+}
+export interface UnsupportedDocumentModelAuthority {
+  proposeUnsupportedDocumentTriage(
+    request: Readonly<UnsupportedDocumentTriageRequest>,
+  ): Promise<unknown>;
+}
+export interface UnsupportedDocumentOutputValidator {
+  validate(
+    output: Readonly<UnsupportedDocumentTriageOutput>,
+  ): void | Promise<void>;
+}
+export interface TriageDigestAuthority {
+  sha256(canonicalValue: string): string | Promise<string>;
+}
+export interface UnsupportedDocumentTriagePolicy {
+  allowDocumentCategory?: boolean;
+  allowCountryCode?: boolean;
+}
+export interface UnsupportedDocumentTriageDependencies {
+  modelAuthority?: UnsupportedDocumentModelAuthority;
+  outputValidator?: UnsupportedDocumentOutputValidator;
+  digestAuthority?: TriageDigestAuthority;
+  policy?: UnsupportedDocumentTriagePolicy;
+}
+
 export const AccessibleAlert: any;
 export const AccessibleButton: any;
 export const AccessibleCheckbox: any;
@@ -17,6 +108,35 @@ export const calculateFee: any;
 export const CapacityMonitor: any;
 export const ChainProvider: any;
 export const ChatAgent: any;
+export class UnsupportedDocumentTriageAssistant {
+  constructor(dependencies?: UnsupportedDocumentTriageDependencies);
+  isAvailable(): boolean;
+  propose(value: unknown): Promise<UnsupportedDocumentTriageDraft>;
+  confirm(
+    originalRequest: unknown,
+    draftValue: unknown,
+    confirmationValue: unknown,
+  ): Promise<AcceptedUnsupportedDocumentSupportNote>;
+}
+export class UnsupportedDocumentTriageConfirmationError extends Error {}
+export class UnsupportedDocumentTriageUnavailableError extends Error {}
+export class UnsupportedDocumentTriageValidationError extends Error {
+  readonly path: string;
+}
+export const UNSUPPORTED_DOCUMENT_TRIAGE_SCHEMA_VERSION: "unsupported-document-triage.v1";
+export const UNSUPPORTED_DOCUMENT_REASON_CODES: readonly UnsupportedDocumentReasonCode[];
+export const UNSUPPORTED_DOCUMENT_CATEGORIES: readonly UnsupportedDocumentCategory[];
+export const SUPPORT_LANGUAGE_CODES: readonly SupportLanguageCode[];
+export const REDACTED_REASON_TOKENS: readonly RedactedReasonToken[];
+export const REDACTED_SUMMARY_TOKENS: readonly string[];
+export const SAFE_NEXT_STEP_OPTIONS: readonly SafeNextStepOption[];
+export function validateUnsupportedDocumentTriageOutput(
+  value: unknown,
+): UnsupportedDocumentTriageOutput;
+export function validateUnsupportedDocumentTriageRequest(
+  value: unknown,
+  policy?: UnsupportedDocumentTriagePolicy,
+): UnsupportedDocumentTriageRequest;
 export const CheckoutFlow: any;
 export const clearAnnouncements: any;
 export const createChainConfig: any;
