@@ -6,6 +6,7 @@ const assert = require("assert").strict;
 const { readFileSync } = require("fs");
 const { resolve } = require("path");
 const { validateMigrationInventory } = require("./validate-migration-inventory.cjs");
+const { validateModelProvenance } = require("./validate-model-provenance.cjs");
 
 const root = resolve(__dirname, "..");
 const controlPath = resolve(root, "_docs/ralph/prototype-integration/control.json");
@@ -13,6 +14,8 @@ const schemaPath = resolve(root, "_docs/ralph/prototype-integration/producer-han
 const handoffPath = resolve(root, "_docs/ralph/handoffs/prototype-integration/HANDOFF.yaml");
 const migrationInventoryPath = resolve(root, "_docs/ralph/prototype-integration/migration-inventory.json");
 const migrationSchemaPath = resolve(root, "_docs/ralph/prototype-integration/migration-inventory.schema.json");
+const modelProvenancePath = resolve(root, "_docs/ralph/prototype-integration/model-provenance.json");
+const modelProvenanceSchemaPath = resolve(root, "_docs/ralph/prototype-integration/model-provenance.schema.json");
 const testCasesPath = resolve(root, "tests/upgrade/test-cases.json");
 
 function loadJson(path) {
@@ -76,6 +79,10 @@ if (require.main === module) {
   validateMigrationInventory(loadJson(migrationInventoryPath), loadJson(testCasesPath), {
     rootDir: root,
     schema: loadJson(migrationSchemaPath),
+  });
+  validateModelProvenance(loadJson(modelProvenancePath), {
+    rootDir: root,
+    schema: loadJson(modelProvenanceSchemaPath),
   });
   console.log("prototype integration controls: valid");
 }
