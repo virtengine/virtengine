@@ -230,6 +230,84 @@ func TestIBCKeeperSendEscrowDepositDefaults(t *testing.T) {
 	expectedTimestamp := uint64(env.ctx.BlockTime().UnixNano()) + DefaultTimeoutTimestampDelta //nolint:gosec // test helper
 	require.Equal(t, expectedHeight, sent.timeoutHeight.RevisionHeight)
 	require.Equal(t, expectedTimestamp, sent.timeoutTimestamp)
+
+	pending, found := env.keeper.getPendingPacket(env.ctx, "channel-0", sequence)
+	require.True(t, found)
+	require.NoError(t, pending.Identity.Validate())
+	require.Equal(t, "deposit-1", pending.Identity.LogicalPayoutID)
+	require.Equal(t, payloadDigest(sent.data), pending.Identity.PayloadDigest)
+	require.Equal(t, TransferStatePending, pending.State)
+}
+
+func TestIBCKeeperTerminalCallbacks(t *testing.T) {
+	tests := []struct {
+		name       string
+		first      string
+		second     string
+		secondAck  Acknowledgement
+		wantErr    error
+		wantState  TransferState
+		wantReason CompensationReason
+	}{
+		{name: "exact acknowledgement retry", first: "success", second: "success", wantState: TransferStateFinalized},
+		{name: "conflicting acknowledgement", first: "success", second: "ack", secondAck: NewErrorAcknowledgement(fmt.Errorf("rejected")), wantErr: ErrTerminalConflict, wantState: TransferStateFinalized},
+		{name: "late acknowledgement after timeout", first: "timeout", second: "success", wantErr: ErrTerminalConflict, wantState: TransferStateCompensated, wantReason: CompensationReasonTimeout},
+		{name: "reordered timeout after acknowledgement", first: "success", second: "timeout", wantErr: ErrTerminalConflict, wantState: TransferStateFinalized},
+		{name: "duplicate timeout", first: "timeout", second: "timeout", wantState: TransferStateCompensated, wantReason: CompensationReasonTimeout},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			env := setupIBCTestEnv(t)
+			deposit := validDepositPacket(env.ctx.BlockTime())
+			sequence, err := env.keeper.SendEscrowDepositPacket(env.ctx, "channel-0", clienttypes.Height{}, 0, deposit)
+			require.NoError(t, err)
+			packet := channeltypes.NewPacket(env.channel.sent[0].data, sequence, PortID, "channel-0", PortID, "channel-1", clienttypes.NewHeight(0, 20), 0)
+			relayer := sdk.AccAddress([]byte("relayer_addr________"))
+			successAck := NewResultAcknowledgement(EscrowDepositAck{EscrowID: "escrow-1", Status: "created"})
+
+			runCallback := func(kind string, ack Acknowledgement) error {
+				switch kind {
+				case "success":
+					return env.keeper.OnAcknowledgementPacket(env.ctx, packet, successAck.GetBytes(), relayer)
+				case "ack":
+					return env.keeper.OnAcknowledgementPacket(env.ctx, packet, ack.GetBytes(), relayer)
+				case "timeout":
+					return env.keeper.OnTimeoutPacket(env.ctx, packet, relayer)
+				default:
+					t.Fatalf("unknown callback kind %q", kind)
+					return nil
+				}
+			}
+
+			require.NoError(t, runCallback(test.first, test.secondAck))
+			err = runCallback(test.second, test.secondAck)
+			if test.wantErr != nil {
+				require.ErrorIs(t, err, test.wantErr)
+			} else {
+				require.NoError(t, err)
+			}
+
+			marker, found := env.keeper.getTerminalMarker(env.ctx, "channel-0", sequence)
+			require.True(t, found)
+			require.Equal(t, test.wantState, marker.State)
+			require.Equal(t, test.wantReason, marker.CompensationReason)
+		})
+	}
+}
+
+func validDepositPacket(now time.Time) EscrowDepositPacket {
+	depositor := sdk.AccAddress([]byte("depositor_addr______"))
+	return EscrowDepositPacket{
+		DepositID:        "deposit-1",
+		OrderID:          "order-1",
+		Depositor:        depositor.String(),
+		Amount:           sdk.NewCoins(sdk.NewInt64Coin("uve", 1000)),
+		ExpiresInSeconds: 3600,
+		SourceChainID:    "chain-a",
+		SourceChannel:    "channel-0",
+		RequestedAt:      now,
+	}
 }
 
 func TestIBCKeeperOnRecvEscrowDeposit(t *testing.T) {

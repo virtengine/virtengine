@@ -16,4 +16,5 @@ var (
 	ErrChannelNotFound    = errorsmod.Register(ModuleName, 3104, "IBC channel not found")
 	ErrHandshakeTimedOut  = errorsmod.Register(ModuleName, 3105, "IBC channel handshake timed out")
 	ErrSettlementConflict = errorsmod.Register(ModuleName, 3106, "settlement record conflict")
+	ErrTerminalConflict   = errorsmod.Register(ModuleName, 3107, "conflicting terminal packet callback")
 )
