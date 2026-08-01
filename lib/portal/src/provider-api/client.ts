@@ -526,6 +526,9 @@ export class ProviderAPIClient {
 
   private shouldRetry(error: unknown): boolean {
     if (error instanceof ProviderAPIError) {
+      if (error.code === "feature_unavailable") {
+        return false;
+      }
       return error.status >= 500;
     }
     return true;

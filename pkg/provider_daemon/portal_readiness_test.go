@@ -5,6 +5,7 @@ package provider_daemon
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -13,9 +14,18 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+type authoritativePortalChainQuery struct {
+	NoopChainQuery
+}
+
+func (authoritativePortalChainQuery) PortalCapability(PortalRouteCapability) error {
+	return nil
+}
+
 func TestPortalReadinessFailsClosedWithoutDependencies(t *testing.T) {
 	server, err := NewPortalAPIServer(DefaultPortalAPIServerConfig())
 	require.NoError(t, err)
+	require.ErrorIs(t, server.RouteCapability(PortalCapabilityTickets), ErrPortalFeatureUnavailable)
 	router := mux.NewRouter()
 	server.setupRoutes(router)
 
@@ -26,6 +36,7 @@ func TestPortalReadinessFailsClosedWithoutDependencies(t *testing.T) {
 
 func TestPortalReadinessReflectsFencedMutationSubmitter(t *testing.T) {
 	config := DefaultPortalAPIServerConfig()
+	config.ChainQuery = authoritativePortalChainQuery{}
 	config.Readiness = func(context.Context) ProviderMutationReadiness {
 		return ProviderMutationReadiness{Ready: true, Started: true, StoreReady: true, LeaseHeld: true, KeyReady: true}
 	}
@@ -38,4 +49,14 @@ func TestPortalReadinessReflectsFencedMutationSubmitter(t *testing.T) {
 	router.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/ready", nil))
 	require.Equal(t, http.StatusOK, response.Code)
 	require.Equal(t, "ready", response.Body.String())
+}
+
+func TestPortalStartupRejectsUnavailableEnabledRoutes(t *testing.T) {
+	server, err := NewPortalAPIServer(DefaultPortalAPIServerConfig())
+	require.NoError(t, err)
+
+	err = server.Start(context.Background())
+	require.Error(t, err)
+	require.True(t, errors.Is(err, ErrPortalFeatureUnavailable))
+	require.Contains(t, err.Error(), "tickets")
 }

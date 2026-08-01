@@ -286,6 +286,22 @@ describe("ProviderAPIClient", () => {
       expect(fetcher).toHaveBeenCalledTimes(1);
     });
 
+    it("does not retry typed feature_unavailable errors", async () => {
+      const { client, fetcher } = createClient({ retries: 2 });
+      fetcher.mockResolvedValue(
+        errorResponse(503, {
+          message: "feature unavailable",
+          code: "feature_unavailable",
+        }),
+      );
+
+      await expect(client.health()).rejects.toMatchObject({
+        status: 503,
+        code: "feature_unavailable",
+      });
+      expect(fetcher).toHaveBeenCalledTimes(1);
+    });
+
     it("retries on 5xx errors", async () => {
       const { client, fetcher } = createClient({ retries: 1, retryDelayMs: 0 });
       fetcher
