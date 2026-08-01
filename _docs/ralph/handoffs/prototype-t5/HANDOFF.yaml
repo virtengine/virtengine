@@ -1,27 +1,29 @@
 campaign: three-day-prototype
 thread: T5
-checkpoint: T5-02
+checkpoint: T5-03
 branch: ve/prototype-t5-platform
-start_head: deb09725
+start_head: 79f82c97fbe330359816c32e606a9bc98048a899
 end_head: PENDING_COMMIT
 origin_main: c31f910e318a39d86372ed2d65050d08777dbfc5
 tree_clean: false
 commits:
   - deb09725
+  - 31603443
+  - 79f82c97fbe330359816c32e606a9bc98048a899
 owned_paths:
-  - pkg/data_vault/contracts/contracts.go
-  - pkg/data_vault/contracts/contracts_test.go
+  - pkg/organization/contracts/contracts.go
+  - pkg/organization/contracts/contracts_test.go
   - _docs/ralph/handoffs/prototype-t5/HANDOFF.yaml
 files_changed:
-  - pkg/data_vault/contracts/contracts.go
-  - pkg/data_vault/contracts/contracts_test.go
+  - pkg/organization/contracts/contracts.go
+  - pkg/organization/contracts/contracts_test.go
   - _docs/ralph/handoffs/prototype-t5/HANDOFF.yaml
 tests:
-  - command: go test -v -count=1 ./pkg/data_vault/contracts
+  - command: go test -v -count=1 ./pkg/organization/contracts
     environment: GO111MODULE=off
     go_version: go1.26.5 windows/amd64
     exit_code: 0
-  - command: go vet ./pkg/data_vault/contracts
+  - command: go vet ./pkg/organization/contracts
     environment: GO111MODULE=off
     go_version: go1.26.5 windows/amd64
     exit_code: 0
@@ -31,8 +33,8 @@ generated_hashes: {}
 external_evidence: []
 known_failures: []
 notes:
-  - Contracts remain disabled or fixture_only and do not select a runtime vault backend.
-  - No 88D certification, durable production backend, KMS/HSM custody, restore environment, or legal approval is claimed.
-  - Memory/test backends, regenerated keys, incomplete restore inventories, unilateral holds, active-hold erasure, missing receipts, and decryptable remnants fail closed.
-next_checkpoint: T5-03
+  - Contracts remain disabled or fixture_only and do not wire an organization keeper or portal mutation.
+  - No authoritative group account, private roster, durable projection, threshold participant, settlement integration, or organization certification is claimed.
+  - Last-admin removal, threshold loss, replay, stale policy, budget mismatch, projection leakage/rollback, unknown recovery hooks, and billing mismatch fail closed.
+next_checkpoint: T5-04
 expected_head: PENDING_COMMIT
