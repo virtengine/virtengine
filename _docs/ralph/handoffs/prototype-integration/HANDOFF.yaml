@@ -1,21 +1,20 @@
 {
   "campaign": "three-day-prototype",
   "thread": "T4",
-  "checkpoint": "T4-11A",
+  "checkpoint": "T4-11B",
   "branch": "ve/prototype-integration",
-  "start_head": "657e593482a2e54bc4b2c805ed6fea08afaa1493",
-  "end_head": "760794e9ee709ad3537f76831264be34aa6f6186",
+  "start_head": "24e4767d773648588acee859283bddecba9affe9",
+  "end_head": "3ea333ec89f1765218d977a8343bb204a2e0a4d3",
   "origin_main": "79391a3df86d85522b92e0400c6904971ecbe65d",
   "tree_clean": true,
   "commits": [
-    "760794e9ee709ad3537f76831264be34aa6f6186"
+    "3ea333ec89f1765218d977a8343bb204a2e0a4d3"
   ],
   "owned_paths": [
     "_docs/ralph/prototype-integration/**",
     "_docs/ralph/handoffs/prototype-integration/**",
     "scripts/validate-prototype-integration.cjs",
     ".github/workflows/ml-model-verify.yaml",
-    "ml/training/features/**",
     "ml/training/tests/**",
     "ml/training/tools/**",
     "pkg/inference/**"
@@ -24,23 +23,27 @@
     "_docs/ralph/handoffs/prototype-integration/HANDOFF.yaml",
     ".github/workflows/ml-model-verify.yaml",
     "_docs/ralph/handoffs/prototype-integration/HANDOFF.yaml",
-    "ml/training/features/canonical_vector.py",
-    "ml/training/features/feature_combiner.py",
-    "ml/training/tests/test_feature_parity.py",
-    "ml/training/tests/test_features.py",
-    "ml/training/tools/feature_parity_fixture.py",
-    "pkg/inference/conformance/testdata/feature_parity_v1.json",
-    "pkg/inference/feature_extractor.go",
-    "pkg/inference/feature_parity_test.go"
+    "ml/training/tests/test_receipt_parity.py",
+    "ml/training/tools/receipt_parity_fixture.py",
+    "pkg/inference/conformance/testdata/receipt_parity_v1.json",
+    "pkg/inference/receipt_parity_test.go"
   ],
   "tests": [
     {
-      "command": "python -m ml.training.tools.feature_parity_fixture --check && python -m pytest -q ml/training/tests/test_feature_parity.py ml/training/tests/test_features.py",
+      "command": "python -m ml.training.tools.receipt_parity_fixture --check && python -m pytest -q ml/training/tests/test_receipt_parity.py ml/training/tests/test_feature_parity.py",
       "exit_code": 0,
       "result": "passed",
-      "test_count": 30,
+      "test_count": 12,
       "tool_versions": {
         "python": "3.14.6 windows"
+      }
+    },
+    {
+      "command": "go1.25.8 test -count=1 ./pkg/inference -run '^TestInferenceReceiptParityFixture$' && go1.25.8 test -count=1 ./x/veid/types -run '^TestInferenceReceipt'",
+      "exit_code": 0,
+      "result": "passed",
+      "tool_versions": {
+        "go": "go version go1.25.8 windows/amd64"
       }
     },
     {
@@ -70,7 +73,7 @@
     }
   ],
   "generated_hashes": {
-    "pkg/inference/conformance/testdata/feature_parity_v1.json": "61f5f4239f515a57d73e1ef0261415bfba2fb8e55560d7cbedabd8e09479930c"
+    "pkg/inference/conformance/testdata/receipt_parity_v1.json": "13ee68a81737a58c7ba7b1a4644e707ca98dc080d17a85068861b8db484165b9"
   },
   "accepted_checkpoints": [],
   "rejected_checkpoints": [
@@ -93,9 +96,9 @@
   ],
   "blockers": [
     "Epoch 1 remains open with no announced intake-v2 producer tags; no producer checkpoint is accepted by this checkpoint.",
-    "Feature-vector assembly and deterministic hash parity are proven for shared fixtures only; receipt-byte parity remains T4-11B.",
-    "No production model, weights, dataset, license, runtime image, or model lifecycle state is approved or activated."
+    "Receipt parity covers supplied score fields, canonical SignBytes/digests, deterministic signatures, and production score clamping only; no model output parity is claimed.",
+    "No production runtime creates authenticated receipts yet, and no production model, weights, dataset, license, runtime image, or lifecycle state is approved or activated."
   ],
-  "next_checkpoint": "T4-11B",
-  "expected_head": "760794e9ee709ad3537f76831264be34aa6f6186"
+  "next_checkpoint": "T4-12A",
+  "expected_head": "3ea333ec89f1765218d977a8343bb204a2e0a4d3"
 }
