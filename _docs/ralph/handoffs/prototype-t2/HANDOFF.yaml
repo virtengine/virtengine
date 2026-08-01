@@ -1,46 +1,46 @@
 campaign: three-day-prototype
 thread: T2
-checkpoint: T2-13
+checkpoint: T2-14
 branch: ve/prototype-t2-product
-start_head: 66da8d6c0ec57c9c966cd9bf2328b9ec82299058
-end_head: 6f1f48a229bae442f08aba0aab055ebd3c5492cb
+start_head: 6e1bd4c23b276393792b0a3df4cd348a6c5c96e5
+end_head: 158c60041bbe86f02d86bdbd22eba71aaf9f3870
 origin_main: 79391a3df86d85522b92e0400c6904971ecbe65d
 tree_clean: true
 commits:
-  - 6f1f48a229bae442f08aba0aab055ebd3c5492cb
+  - 158c60041bbe86f02d86bdbd22eba71aaf9f3870
 owned_paths:
-  - lib/portal/src/wallet/passkeys/
-  - lib/portal/__tests__/wallet/passkeys/
+  - lib/portal/src/wallet/remote-face/
+  - lib/portal/__tests__/wallet/remote-face/
   - lib/portal/src/wallet/index.ts
 files_changed:
-  - lib/portal/src/wallet/passkeys/client.ts
-  - lib/portal/src/wallet/passkeys/index.ts
-  - lib/portal/__tests__/wallet/passkeys/client.test.ts
+  - lib/portal/src/wallet/remote-face/remote-face-auth.ts
+  - lib/portal/src/wallet/remote-face/index.ts
+  - lib/portal/__tests__/wallet/remote-face/remote-face-auth.test.ts
   - lib/portal/src/wallet/index.ts
 tests:
   - command: C:\Users\pavil\AppData\Local\Temp\virtengine-node-v24.12.0\npm.cmd --prefix C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t2\lib\portal test
     exit_code: 0
     result: passed
-    test_count: 555
+    test_count: 576
     tool_versions:
       node: v24.12.0
-    artifact: _docs/ralph/handoffs/prototype-t2/T2-13-evidence.txt
+    artifact: _docs/ralph/handoffs/prototype-t2/T2-14-evidence.txt
   - command: C:\Users\pavil\AppData\Local\Temp\virtengine-node-v24.12.0\npm.cmd --prefix C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t2\lib\portal run type-check
     exit_code: 0
     result: passed
     tool_versions:
       node: v24.12.0
-    artifact: _docs/ralph/handoffs/prototype-t2/T2-13-evidence.txt
+    artifact: _docs/ralph/handoffs/prototype-t2/T2-14-evidence.txt
 generated_hashes: {}
 migrations: []
 external_evidence:
-  - _docs/ralph/handoffs/prototype-t2/T2-13-evidence.txt
+  - _docs/ralph/handoffs/prototype-t2/T2-14-evidence.txt
 known_failures:
   - TestProviderMutationSubmitterStandbyTakesOverWithHigherFence fails repeatedly in the full provider package gate with submitter lease timing errors.
 blockers:
   - T4 producer-handoff.schema.json forbids the integration_parent field required by the updated campaign plan; integration ancestor fa21b1e540a5efcbe1822da4199be7acec7709d3 is retained in T2-05-evidence.txt.
   - Full provider package certification is blocked by the unrelated submitter lease timing failure retained in T2-03B-evidence.txt.
-  - Production WebAuthn authority, server verifier, challenge projector, and counter store are not wired; defaults remain unavailable.
-  - No authenticator certification or production UI wiring is claimed.
-next_checkpoint: T2-14
-expected_head: 6f1f48a229bae442f08aba0aab055ebd3c5492cb
+  - Remote face authentication is disabled by default; T1/T5 profiles and all evidence/final authorization authorities are not wired.
+  - Face alone cannot authorize and no production UI wiring or certification is claimed.
+next_checkpoint: T2-15
+expected_head: 158c60041bbe86f02d86bdbd22eba71aaf9f3870

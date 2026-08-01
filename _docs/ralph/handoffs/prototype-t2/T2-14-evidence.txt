@@ -1,0 +1,17 @@
+T2-14 retained validation evidence
+Implementation SHA: 158c60041bbe86f02d86bdbd22eba71aaf9f3870
+Node: v24.12.0
+
+COMMAND: C:\Users\pavil\AppData\Local\Temp\virtengine-node-v24.12.0\npm.cmd --prefix C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t2\lib\portal test
+EXIT: 0
+RESULT: passed
+DETAIL: 23 files, 576 tests passed; remote-face gate 21 tests passed
+
+COMMAND: C:\Users\pavil\AppData\Local\Temp\virtengine-node-v24.12.0\npm.cmd --prefix C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t2\lib\portal run type-check
+EXIT: 0
+RESULT: passed
+
+NON-CLAIMS:
+- Remote face authentication is disabled by default and has no production UI wiring.
+- T1/T5 profiles, liveness, device attestation, possession, recovery and final authorization authorities are injected and unavailable by default.
+- Face alone never authorizes; no biometric images, templates, embeddings, metrics or reusable identifiers are accepted or returned.
