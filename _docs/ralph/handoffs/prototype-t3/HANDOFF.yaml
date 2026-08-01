@@ -1,35 +1,33 @@
 campaign: three-day-prototype
 thread: T3
-checkpoint: T3-02
+checkpoint: T3-03
 branch: ve/prototype-t3-reliability
-start_head: 2716650879188a700987e46174bb2da618cc6a55
-end_head: 9cc738fbb241890d069d6fb6c2ddb664a4e53447
+start_head: 46b213a3c230790a46c9db8bd19bfb9ace2ef9cf
+end_head: 38bb57c61949b63a6c1d60065ff5390d6bcfb171
 origin_main: 79391a3df86d85522b92e0400c6904971ecbe65d
 tree_clean: true
 commits:
-  - 9cc738fbb241890d069d6fb6c2ddb664a4e53447
+  - 38bb57c61949b63a6c1d60065ff5390d6bcfb171
 owned_paths:
-  - x/settlement/ibc/
+  - pkg/provider_daemon/
   - _docs/ralph/handoffs/prototype-t3/HANDOFF.yaml
 files_changed:
-  - x/settlement/ibc/errors.go
-  - x/settlement/ibc/hooks.go
-  - x/settlement/ibc/keeper.go
-  - x/settlement/ibc/keeper_test.go
-  - x/settlement/ibc/keys.go
-  - x/settlement/ibc/types.go
+  - pkg/provider_daemon/settlement_pipeline.go
+  - pkg/provider_daemon/usage_alerts.go
+  - pkg/provider_daemon/waldur_reconciler.go
+  - pkg/provider_daemon/waldur_reconciler_test.go
 tests:
-  - command: go test -count=1 ./x/settlement/ibc
+  - command: go test -count=1 ./pkg/provider_daemon -run 'Waldur|Reconcile|UsageReporter'
     exit_code: 0
     result: passed
     tool_versions:
       go: go1.25.8 windows/amd64
-  - command: go vet ./x/settlement/ibc
+  - command: go vet ./pkg/provider_daemon
     exit_code: 0
     result: passed
     tool_versions:
       go: go1.25.8 windows/amd64
-  - command: go test -race -count=1 ./x/settlement/ibc
+  - command: go test -race -count=1 ./pkg/provider_daemon -run 'Waldur|Reconcile|UsageReporter'
     exit_code: 0
     result: passed
     tool_versions:
@@ -41,5 +39,5 @@ external_evidence: []
 known_failures: []
 blockers:
   - T4 must install a deterministic TransferLifecycleHooks adapter during its app-wiring ownership window; outgoing settlement IBC remains fail closed until then.
-next_checkpoint: T3-03
-expected_head: 9cc738fbb241890d069d6fb6c2ddb664a4e53447
+next_checkpoint: T3-04
+expected_head: 38bb57c61949b63a6c1d60065ff5390d6bcfb171
