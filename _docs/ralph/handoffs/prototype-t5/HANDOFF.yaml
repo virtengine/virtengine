@@ -3,10 +3,11 @@ thread: T5
 checkpoint: T5-08
 branch: ve/prototype-t5-platform
 start_head: a9e148436c73e398e8902d03303abafdc1117bb5
-end_head: PENDING_COMMIT
+end_head: d24cd792fe31912d075dcae6208d5dcc6df9f95e
 origin_main: c31f910e318a39d86372ed2d65050d08777dbfc5
-tree_clean: false
-commits: []
+tree_clean: true
+commits:
+  - d24cd792fe31912d075dcae6208d5dcc6df9f95e
 owned_paths:
   - x/encryption/crypto/envelope.go
   - x/encryption/crypto/envelope_fuzz_test.go
@@ -50,4 +51,4 @@ blockers:
   - Sender identity remains fail-closed at trust boundaries: callers must pin or resolve the expected Ed25519 signing key and use ValidateEnvelopeSignatureWithExpectedKey.
   - Legacy v1 envelopes are unauthenticated and may only be read by the explicitly named migration API before immediate v2 re-encryption.
 next_checkpoint: T5-09
-expected_head: PENDING_COMMIT
+expected_head: d24cd792fe31912d075dcae6208d5dcc6df9f95e
