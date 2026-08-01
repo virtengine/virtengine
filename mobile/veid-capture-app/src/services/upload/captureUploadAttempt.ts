@@ -5,6 +5,7 @@ import {
   type EvidenceEnvelopePayload,
   type UploadResult
 } from "./captureUploader";
+import { wipeCapturePayload } from "../cleanup/sensitiveData";
 
 export interface CaptureUploadDependencies {
   evidence?: EvidenceEnvelopePayload;
@@ -17,6 +18,7 @@ export interface CaptureUploadAttempt {
   readonly capture: CapturePayload;
   readonly idempotencyKey: string;
   upload(capture?: CapturePayload): Promise<UploadResult>;
+  wipe(): void;
 }
 
 export function createCaptureUploadAttempt(
@@ -41,6 +43,9 @@ export function createCaptureUploadAttempt(
         return Promise.resolve({ success: false, error: "invalid_upload_request" });
       }
       return uploadCapture(options);
+    },
+    wipe() {
+      wipeCapturePayload(capture);
     }
   };
 }

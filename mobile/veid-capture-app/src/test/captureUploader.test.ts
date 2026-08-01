@@ -139,6 +139,34 @@ describe("uploadCapture", () => {
     expect(uploaded.upload).not.toHaveBeenCalled();
   });
 
+  it("destructively wipes payload and old session references", () => {
+    const sensitiveCapture = {
+      ...capture,
+      transport: { uploadUrl: "https://upload.example", retryCount: 0 },
+      session: {
+        sessionId: "session-1",
+        documentFront: { image: { uri: "file:///document.jpg" } },
+        ocr: { rawText: "secret", fields: [{ value: "private" }] },
+        biometric: {
+          template: "embedding",
+          liveness: { detectedSignals: [] },
+          antiSpoofing: { signals: [] }
+        }
+      }
+    } as unknown as CapturePayload;
+    const oldSession = sensitiveCapture.session;
+    const attempt = createCaptureUploadAttempt(sensitiveCapture, {
+      createIdempotencyKey: () => "upload-1"
+    });
+
+    attempt.wipe();
+
+    expect(sensitiveCapture.encryptedPayload).toBe("");
+    expect(oldSession.documentFront).toBeUndefined();
+    expect(oldSession.ocr).toBeUndefined();
+    expect(oldSession.biometric).toBeUndefined();
+  });
+
   it.each([
     { authenticated: false },
     { receiptId: "" },

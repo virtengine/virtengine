@@ -9,24 +9,75 @@ import {
   type CaptureUploadAttempt,
   type CaptureUploadDependencies
 } from "../services/upload/captureUploadAttempt";
+import {
+  createCaptureCleanupCoordinator,
+  type CaptureCleanupDependencies
+} from "../services/cleanup/captureCleanup";
 import { useCaptureStore } from "../state/captureStore";
 
 export interface UploadScreenProps {
   attestationProvider?: DeviceAttestationProviderAdapter;
   uploadDependencies: CaptureUploadDependencies;
+  cleanupDependencies?: CaptureCleanupDependencies;
 }
 
-export function UploadScreen({ attestationProvider, uploadDependencies }: UploadScreenProps) {
+export function UploadScreen({
+  attestationProvider,
+  uploadDependencies,
+  cleanupDependencies = {}
+}: UploadScreenProps) {
   const { state, dispatch } = useCaptureStore();
   const [status, setStatus] = useState<"idle" | "uploading" | "success" | "error">("idle");
   const [error, setError] = useState<string | null>(null);
   const uploadAttempt = useRef<CaptureUploadAttempt>();
+  const pendingAcknowledgement = useRef<{ acknowledgement: unknown; cleanupId: string }>();
+  const cleanupCoordinator = useRef(createCaptureCleanupCoordinator(cleanupDependencies));
+
+  const artifactUris = () =>
+    [
+      state.session.documentFront?.image.uri,
+      state.session.documentBack?.image.uri,
+      state.session.selfie?.image.uri
+    ].filter((uri): uri is string => Boolean(uri));
+
+  const wipeSensitiveData = () => {
+    uploadAttempt.current?.wipe();
+    uploadAttempt.current = undefined;
+    dispatch({ type: "wipe" });
+  };
+
+  const finishCleanup = async (acknowledgement: unknown, cleanupId: string, uris: string[]) => {
+    const cleanup = await cleanupCoordinator.current.afterDurableAcknowledgement(acknowledgement, {
+      cleanupId,
+      artifactUris: uris,
+      wipeSensitiveData
+    });
+    if (!cleanup.success) {
+      pendingAcknowledgement.current = { acknowledgement, cleanupId };
+      setStatus("error");
+      setError(cleanup.error);
+      return;
+    }
+
+    pendingAcknowledgement.current = undefined;
+    setStatus("success");
+    dispatch({ type: "complete" });
+  };
 
   const handleUpload = async () => {
     setStatus("uploading");
     setError(null);
 
     try {
+      if (pendingAcknowledgement.current) {
+        await finishCleanup(
+          pendingAcknowledgement.current.acknowledgement,
+          pendingAcknowledgement.current.cleanupId,
+          []
+        );
+        return;
+      }
+
       const session = finalizeCaptureSession(state.session, "0.1.0", attestationProvider);
       if (!session.deviceAttestation?.supported) {
         setStatus("error");
@@ -41,8 +92,7 @@ export function UploadScreen({ attestationProvider, uploadDependencies }: Upload
 
       const result = await uploadAttempt.current.upload();
       if (result.success) {
-        setStatus("success");
-        dispatch({ type: "next" });
+        await finishCleanup(result.receipt, uploadAttempt.current.idempotencyKey, artifactUris());
         return;
       }
 
@@ -51,6 +101,21 @@ export function UploadScreen({ attestationProvider, uploadDependencies }: Upload
     } catch (uploadError) {
       setStatus("error");
       setError(uploadError instanceof Error ? uploadError.message : "upload_unavailable");
+    }
+  };
+
+  const handleCancel = async () => {
+    setStatus("uploading");
+    setError(null);
+    const cleanupId = uploadAttempt.current?.idempotencyKey ?? uploadDependencies.createIdempotencyKey();
+    const result = await cleanupCoordinator.current.cancel({
+      cleanupId,
+      artifactUris: artifactUris(),
+      wipeSensitiveData
+    });
+    if (!result.success) {
+      setStatus("error");
+      setError(result.error);
     }
   };
 
@@ -69,8 +134,8 @@ export function UploadScreen({ attestationProvider, uploadDependencies }: Upload
       <CaptureFooter
         primaryLabel={status === "success" ? "Finish" : "Upload"}
         onPrimary={handleUpload}
-        secondaryLabel="Back"
-        onSecondary={() => dispatch({ type: "prev" })}
+        secondaryLabel="Cancel"
+        onSecondary={handleCancel}
         disabled={status === "uploading"}
       />
     </View>

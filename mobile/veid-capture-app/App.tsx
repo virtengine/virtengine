@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect, useRef } from "react";
 import { SafeAreaView, StyleSheet } from "react-native";
 import { CaptureProvider, useCaptureStore } from "./src/state/captureStore";
 import { ConsentScreen } from "./src/screens/ConsentScreen";
@@ -12,12 +12,32 @@ import { UploadScreen } from "./src/screens/UploadScreen";
 import { CompleteScreen } from "./src/screens/CompleteScreen";
 import type { CaptureUploadDependencies } from "./src/services/upload/captureUploadAttempt";
 import { createId } from "./src/utils/id";
+import {
+  createCaptureCleanupCoordinator,
+  type CaptureCleanupDependencies
+} from "./src/services/cleanup/captureCleanup";
 
 const productionUploadDependencies: CaptureUploadDependencies = {
   createIdempotencyKey: () => createId("upload")
 };
 
-function CaptureRouter({ uploadDependencies }: { uploadDependencies: CaptureUploadDependencies }) {
+function CleanupRecovery({ dependencies }: { dependencies: CaptureCleanupDependencies }) {
+  const { dispatch } = useCaptureStore();
+  const coordinator = useRef(createCaptureCleanupCoordinator(dependencies));
+
+  useEffect(() => {
+    void coordinator.current.resumePending(() => dispatch({ type: "wipe" }));
+  }, [dispatch]);
+  return null;
+}
+
+function CaptureRouter({
+  uploadDependencies,
+  cleanupDependencies
+}: {
+  uploadDependencies: CaptureUploadDependencies;
+  cleanupDependencies: CaptureCleanupDependencies;
+}) {
   const { state } = useCaptureStore();
 
   switch (state.currentStep) {
@@ -38,7 +58,7 @@ function CaptureRouter({ uploadDependencies }: { uploadDependencies: CaptureUplo
     case "review":
       return <ReviewScreen />;
     case "upload":
-      return <UploadScreen uploadDependencies={uploadDependencies} />;
+      return <UploadScreen uploadDependencies={uploadDependencies} cleanupDependencies={cleanupDependencies} />;
     case "complete":
       return <CompleteScreen />;
     default:
@@ -46,11 +66,19 @@ function CaptureRouter({ uploadDependencies }: { uploadDependencies: CaptureUplo
   }
 }
 
-export default function App() {
+export interface AppProps {
+  cleanupDependencies?: CaptureCleanupDependencies;
+}
+
+export default function App({ cleanupDependencies = {} }: AppProps) {
   return (
     <CaptureProvider>
+      <CleanupRecovery dependencies={cleanupDependencies} />
       <SafeAreaView style={styles.container}>
-        <CaptureRouter uploadDependencies={productionUploadDependencies} />
+        <CaptureRouter
+          uploadDependencies={productionUploadDependencies}
+          cleanupDependencies={cleanupDependencies}
+        />
       </SafeAreaView>
     </CaptureProvider>
   );
