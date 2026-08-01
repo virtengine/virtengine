@@ -1,8 +1,8 @@
 campaign: three-day-prototype
 thread: T5
-checkpoint: T5-03
+checkpoint: T5-04
 branch: ve/prototype-t5-platform
-start_head: 79f82c97fbe330359816c32e606a9bc98048a899
+start_head: c66ae54a9603570278b0de01aa71cb1906105135
 end_head: PENDING_COMMIT
 origin_main: c31f910e318a39d86372ed2d65050d08777dbfc5
 tree_clean: false
@@ -10,31 +10,40 @@ commits:
   - deb09725
   - 31603443
   - 79f82c97fbe330359816c32e606a9bc98048a899
+  - c66ae54a9603570278b0de01aa71cb1906105135
 owned_paths:
-  - pkg/organization/contracts/contracts.go
-  - pkg/organization/contracts/contracts_test.go
+  - pkg/provider_daemon/federation/federation.go
+  - pkg/provider_daemon/federation/federation_test.go
+  - pkg/provider_daemon/federation/request_v1_vector.ts
+  - pkg/provider_daemon/federation/testdata/request-v1.json
   - _docs/ralph/handoffs/prototype-t5/HANDOFF.yaml
 files_changed:
-  - pkg/organization/contracts/contracts.go
-  - pkg/organization/contracts/contracts_test.go
+  - pkg/provider_daemon/federation/federation.go
+  - pkg/provider_daemon/federation/federation_test.go
+  - pkg/provider_daemon/federation/request_v1_vector.ts
+  - pkg/provider_daemon/federation/testdata/request-v1.json
   - _docs/ralph/handoffs/prototype-t5/HANDOFF.yaml
 tests:
-  - command: go test -v -count=1 ./pkg/organization/contracts
+  - command: go test -v -count=1 ./pkg/provider_daemon/federation/...
     environment: GO111MODULE=off
     go_version: go1.26.5 windows/amd64
     exit_code: 0
-  - command: go vet ./pkg/organization/contracts
+  - command: go vet ./pkg/provider_daemon/federation
     environment: GO111MODULE=off
     go_version: go1.26.5 windows/amd64
     exit_code: 0
   - command: git diff --check
     exit_code: 0
-generated_hashes: {}
+generated_hashes:
+  request_v1_digest: c578be4fa829c04d0222cc4375e24c437d959f86049507796353d99cf16c7dc0
 external_evidence: []
-known_failures: []
+known_failures:
+  - command: go test -race -count=1 ./pkg/provider_daemon/federation/...
+    status: blocked
+    reason: Windows race build requires gcc, which is unavailable on PATH.
 notes:
-  - Contracts remain disabled or fixture_only and do not wire an organization keeper or portal mutation.
-  - No authoritative group account, private roster, durable projection, threshold participant, settlement integration, or organization certification is claimed.
-  - Last-admin removal, threshold loss, replay, stale policy, budget mismatch, projection leakage/rollback, unknown recovery hooks, and billing mismatch fail closed.
-next_checkpoint: T5-04
+  - Contracts remain disabled or fixture_only and do not register live provider routes.
+  - No independent provider operator, DNS/PKI control, durable HA nonce store, endpoint certification, or production federation is claimed.
+  - Discovery rollback, cross-provider replay, unsupported browser trust, origin mismatch, stale keys, wrong request bindings, proof failure, and nonce replay fail closed.
+next_checkpoint: T5-05
 expected_head: PENDING_COMMIT
