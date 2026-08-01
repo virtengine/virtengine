@@ -1,8 +1,8 @@
 campaign: three-day-prototype
 thread: T5
-checkpoint: T5-05
+checkpoint: T5-06
 branch: ve/prototype-t5-platform
-start_head: 6e2d084269ac2b5ffe45804616eb6702a494914b
+start_head: d7ab800c361535c715e2d3bfaa0583ba1073f1ef
 end_head: PENDING_COMMIT
 origin_main: c31f910e318a39d86372ed2d65050d08777dbfc5
 tree_clean: false
@@ -13,22 +13,39 @@ commits:
   - c66ae54a9603570278b0de01aa71cb1906105135
   - e54ba766
   - 6e2d084269ac2b5ffe45804616eb6702a494914b
+  - d7ab800c361535c715e2d3bfaa0583ba1073f1ef
 owned_paths:
-  - pkg/provider_daemon/backendprofile/contracts.go
-  - pkg/provider_daemon/backendprofile/fixtures.go
-  - pkg/provider_daemon/backendprofile/contracts_test.go
+  - x/roles/types/privileged/approval_mfa.go
+  - x/roles/types/privileged/audit.go
+  - x/roles/types/privileged/canonical.go
+  - x/roles/types/privileged/contracts_test.go
+  - x/roles/types/privileged/emergency_hold.go
+  - x/roles/types/privileged/feature.go
+  - x/roles/types/privileged/fixture.go
+  - x/roles/types/privileged/lifecycle.go
+  - x/roles/types/privileged/policy.go
   - _docs/ralph/handoffs/prototype-t5/HANDOFF.yaml
 files_changed:
-  - pkg/provider_daemon/backendprofile/contracts.go
-  - pkg/provider_daemon/backendprofile/fixtures.go
-  - pkg/provider_daemon/backendprofile/contracts_test.go
+  - x/roles/types/privileged/approval_mfa.go
+  - x/roles/types/privileged/audit.go
+  - x/roles/types/privileged/canonical.go
+  - x/roles/types/privileged/contracts_test.go
+  - x/roles/types/privileged/emergency_hold.go
+  - x/roles/types/privileged/feature.go
+  - x/roles/types/privileged/fixture.go
+  - x/roles/types/privileged/lifecycle.go
+  - x/roles/types/privileged/policy.go
   - _docs/ralph/handoffs/prototype-t5/HANDOFF.yaml
 tests:
-  - command: go test -v -count=1 ./pkg/provider_daemon/backendprofile/...
+  - command: go test -count=1 ./x/roles/types/privileged
     environment: GO111MODULE=off
     go_version: go1.26.5 windows/amd64
     exit_code: 0
-  - command: go vet ./pkg/provider_daemon/backendprofile/...
+  - command: go test -count=1 ./x/roles/types/privileged -run 'Policy|Role|Account|Audit|Emergency|Migration'
+    environment: GO111MODULE=off
+    go_version: go1.26.5 windows/amd64
+    exit_code: 0
+  - command: go vet ./x/roles/types/privileged
     environment: GO111MODULE=off
     go_version: go1.26.5 windows/amd64
     exit_code: 0
@@ -38,8 +55,8 @@ generated_hashes: {}
 external_evidence: []
 known_failures: []
 notes:
-  - Kubernetes v1.30 and OpenStack 2024.1 rows remain fixture_only, uncertified, and activation-disabled.
-  - No real cluster/account, quotas, credentials, cost controls, destructive cleanup authority, or backend certification is claimed.
-  - Unsupported versions/capabilities, mutable lineage, cycles, quota/cost overflow, unowned cleanup, dependency-order violations, and nonzero residue fail closed.
-next_checkpoint: T5-06
+  - Privileged governance remains fixture_only with registration, advertisement, readiness, and mutation disabled.
+  - No threshold operator group, break-glass custody, privileged route, emergency activation, or production governance certification is claimed.
+  - Stale policy, self-approval, quorum loss, missing actions, scope expansion, weak MFA, hold migration drift, and audit-chain tampering fail closed.
+next_checkpoint: T5-07
 expected_head: PENDING_COMMIT
