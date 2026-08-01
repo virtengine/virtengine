@@ -74,11 +74,14 @@ func TestLegacyPortalChainQueryFailsClosed(t *testing.T) {
 	server, err := NewPortalAPIServer(config)
 	require.NoError(t, err)
 
-	capabilityErr := server.RouteCapability(PortalCapabilityTickets)
-	require.ErrorIs(t, capabilityErr, ErrPortalFeatureUnavailable)
-	var unavailable *PortalFeatureUnavailableError
-	require.ErrorAs(t, capabilityErr, &unavailable)
-	require.Equal(t, PortalCapabilityTickets, unavailable.Capability)
+	for _, capability := range requiredPortalRouteCapabilities {
+		capabilityErr := server.RouteCapability(capability)
+		require.ErrorIs(t, capabilityErr, ErrPortalFeatureUnavailable)
+		var unavailable *PortalFeatureUnavailableError
+		require.ErrorAs(t, capabilityErr, &unavailable)
+		require.Equal(t, capability, unavailable.Capability)
+		require.Equal(t, "86C", unavailable.Owner)
+	}
 
 	router := mux.NewRouter()
 	server.setupRoutes(router)
@@ -88,5 +91,6 @@ func TestLegacyPortalChainQueryFailsClosed(t *testing.T) {
 
 	startupErr := server.Start(context.Background())
 	require.ErrorIs(t, startupErr, ErrPortalFeatureUnavailable)
+	var unavailable *PortalFeatureUnavailableError
 	require.ErrorAs(t, startupErr, &unavailable)
 }
