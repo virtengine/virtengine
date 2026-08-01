@@ -2,50 +2,53 @@ campaign: three-day-prototype
 thread: T2
 checkpoint: T2-03
 branch: ve/prototype-t2-product
-start_head: 886db129f174dda6b1d2a1201658ec436a9e699a
-end_head: 8c06476465f09b3378595722caabc26cba16256e
+start_head: 15ced161e9495d6493094792197fdcc5328e072c
+end_head: f5a5b7a7d350254f2b0abf2e034f06e26ccdc9a2
 origin_main: 79391a3df86d85522b92e0400c6904971ecbe65d
 tree_clean: true
 commits:
-  - 8c06476465f09b3378595722caabc26cba16256e
+  - d692c78d30410d53e85be4da5bad9e5b629738c4
+  - f5a5b7a7d350254f2b0abf2e034f06e26ccdc9a2
 owned_paths:
-  - pkg/provider_daemon/portal_*.go
-  - lib/portal/src/provider-api/client.ts
-  - lib/portal/__tests__/provider-api/client.test.ts
-files_changed:
-  - lib/portal/__tests__/provider-api/client.test.ts
-  - lib/portal/src/provider-api/client.ts
-  - pkg/provider_daemon/portal_api.go
-  - pkg/provider_daemon/portal_billing.go
-  - pkg/provider_daemon/portal_capability_routes_test.go
   - pkg/provider_daemon/portal_chain_query.go
-  - pkg/provider_daemon/portal_chain_query_grpc.go
-  - pkg/provider_daemon/portal_chain_query_test.go
-  - pkg/provider_daemon/portal_events.go
-  - pkg/provider_daemon/portal_metrics.go
-  - pkg/provider_daemon/portal_middleware.go
-  - pkg/provider_daemon/portal_organizations.go
   - pkg/provider_daemon/portal_readiness_test.go
-  - pkg/provider_daemon/portal_tickets.go
+files_changed:
+  - pkg/provider_daemon/portal_chain_query.go
+  - pkg/provider_daemon/portal_readiness_test.go
 tests:
-  - command: go1.25.8 test -count=1 ./pkg/provider_daemon -run 'Portal|ChainQuery|Capability'
+  - command: C:\Users\pavil\AppData\Local\VirtEngine\toolchains\go1.25.8\go\bin\go.exe -C C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t2 test -count=1 ./pkg/provider_daemon -run 'Portal|ChainQuery|Capability|Legacy'
     exit_code: 0
-    result: focused provider portal and capability tests passed
-    runtime: go1.25.8 windows/amd64
-  - command: go1.25.8 vet ./pkg/provider_daemon
+    result: passed
+    tool_versions:
+      go: go version go1.25.8 windows/amd64
+    artifact: _docs/ralph/handoffs/prototype-t2/T2-03B-evidence.txt
+  - command: C:\Users\pavil\AppData\Local\VirtEngine\toolchains\go1.25.8\go\bin\go.exe -C C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t2 vet ./pkg/provider_daemon
     exit_code: 0
-    result: provider daemon package vet passed
-    runtime: go1.25.8 windows/amd64
-  - command: npm.cmd --prefix lib/portal test -- --runInBand __tests__/provider-api/client.test.ts
+    result: passed
+    tool_versions:
+      go: go version go1.25.8 windows/amd64
+    artifact: _docs/ralph/handoffs/prototype-t2/T2-03B-evidence.txt
+  - command: C:\Users\pavil\AppData\Local\Temp\virtengine-node-v24.12.0\npm.cmd --prefix lib\portal test -- --runInBand __tests__/provider-api/client.test.ts
     exit_code: 0
-    result: package runner executed 17 files and 431 tests; all passed
-    runtime: node v24.12.0
-  - command: npm.cmd --prefix lib/portal run type-check
+    result: passed
+    test_count: 431
+    tool_versions:
+      node: v24.12.0
+    artifact: _docs/ralph/handoffs/prototype-t2/T2-03B-evidence.txt
+  - command: C:\Users\pavil\AppData\Local\Temp\virtengine-node-v24.12.0\npm.cmd --prefix lib\portal run type-check
     exit_code: 0
-    result: tsc -p tsconfig.chain.json --noEmit completed
-    runtime: node v24.12.0
+    result: passed
+    tool_versions:
+      node: v24.12.0
+    artifact: _docs/ralph/handoffs/prototype-t2/T2-03B-evidence.txt
 generated_hashes: {}
-external_evidence: []
-known_failures: []
+migrations: []
+external_evidence:
+  - _docs/ralph/handoffs/prototype-t2/T2-03B-evidence.txt
+known_failures:
+  - TestProviderMutationSubmitterStandbyTakesOverWithHigherFence fails repeatedly in the full provider package gate with submitter lease timing errors.
+blockers:
+  - T4 producer-handoff.schema.json forbids the integration_parent field required by the updated campaign plan; integration parent fa21b1e540a5efcbe1822da4199be7acec7709d3 is retained in T2-03B-evidence.txt.
+  - Full provider package certification is blocked by the unrelated submitter lease timing failure retained in T2-03B-evidence.txt.
 next_checkpoint: T2-04
-expected_head: 8c06476465f09b3378595722caabc26cba16256e
+expected_head: f5a5b7a7d350254f2b0abf2e034f06e26ccdc9a2
