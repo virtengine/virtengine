@@ -22,6 +22,11 @@ NLI.
 
 Mandatory rules:
 - Read all applicable AGENTS.md files and both completion plans first.
+- Follow `_docs/prototype-thread-intake-runbook.md`. Before publication, merge
+  the open frozen epoch base, rerun gates, commit `payload_head`, retain literal
+  outputs, commit the handoff/evidence descendant, push with upstream, and push
+  an annotated `checkpoint/prototype-t2/<id>` tag targeting the handoff commit.
+  Record planning SHA, epoch/base, payload and prior accepted payload exactly.
 - Never edit another worktree or push to stable/integration branches.
 - Consume T1 Evidence Envelope v1; do not invent competing sign bytes.
 - Consume canonical market reservations, financial cases, and Task 85A signed
@@ -42,6 +47,9 @@ T2-02 (4h): Harden wallet sessions. Persist reconnect metadata only; bind live
 authorization to chain, account, public key, wallet, device/session, expiry, and
 MFA scope. Invalidate on switching, expiry, malformed legacy state, cross-tab
 disconnect, and storage tampering. Remove misleading base64 encryption behavior.
+Every signing entry point, including Amino, Direct and arbitrary signing, must
+call live authorization for sensitive actions; an unused assertion helper is
+only partial groundwork.
 T2-03 (4h): Make provider portal APIs fail closed. Enabled ticket, individual
 billing, usage, and metrics routes may not inherit empty-success NoopChainQuery
 behavior. Organization routes return typed feature_unavailable owned by 89C.

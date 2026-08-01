@@ -96,10 +96,32 @@ T4 is the only integration owner. T1, T2, T3, and T5 never push directly to
 `stable-virtengine-beta` or T4's branch. They publish immutable green checkpoint
 SHAs. T4 accepts one producer checkpoint at a time.
 
-Before integration, the producer merges the latest
-`origin/ve/prototype-integration` into its own branch, resolves conflicts there,
-and reruns its gate. T4 accepts only a clean merge with declared paths and green
-tests. T4 does not repair producer conflicts.
+Integration follows `_docs/prototype-thread-intake-runbook.md`. T4 publishes a
+frozen intake epoch base. Producers synchronize once to that base, resolve
+conflicts on their own branch, and rerun their gates. Later T4 commits do not
+invalidate checkpoints in the open epoch. T4 does not repair producer conflicts.
+
+### 3.1 Producer Intake Gate
+
+A producer checkpoint is intake-eligible only when all of the following can be
+verified from a fresh clone after its push:
+
+1. The remote producer payload descends from the frozen intake epoch base.
+2. The handoff names `payload_head`, frozen baseline, planning SHA, intake epoch,
+   intake base and prior accepted payload.
+3. The immutable checkpoint tag targets the committed handoff descendant. Only
+   declared handoff/evidence paths may differ after `payload_head`.
+4. The frozen baseline remains `79391a3df86d85522b92e0400c6904971ecbe65d`;
+   planning and intake SHAs are separate fields.
+5. `tree_clean` is true, every test entry has a literal executable command,
+  exit code `0`, result `passed`, and the required pinned tool versions.
+6. The producer has pushed its annotated `checkpoint/prototype-tN/<id>` tag and
+  retained the exact command output in the handoff evidence location.
+
+The T4 intake validator must check remote-ref ancestry, tag target, handoff
+range ownership, baseline identity, and literal test commands. Schema-only YAML
+validation is not sufficient. A stale, dirty, placeholder, or locally-only
+handoff is rejected and remains the producer's responsibility to repair.
 
 Generated protobuf/OpenAPI/SDK output, module metadata, application wiring,
 upgrade registration, and release manifests use explicit single-owner windows
@@ -126,6 +148,11 @@ Thread: T1
 Checkpoint: T1-03
 Handoff-From: <full-parent-sha>
 ```
+
+All Go checkpoint commands use the repository-pinned Go `1.25.8` toolchain.
+Every handoff records its absolute executable path or an unambiguous versioned
+tool name and the exact `go version` output. A checkpoint validated with a
+different Go version is diagnostic only and cannot be tagged or integrated.
 
 Before commit, verify `git diff --cached --name-status` and
 `git diff --cached --check`. Push only the owning thread branch:
@@ -156,31 +183,38 @@ slot records the current HEAD as the campaign baseline.
 ## 5. Handoff Contract
 
 Each thread maintains `_docs/ralph/handoffs/prototype-tN/HANDOFF.yaml`. Every
-green checkpoint commits an update
-containing:
+green checkpoint commits an update following the intake runbook. The core fields
+are:
 
 ```yaml
 campaign: three-day-prototype
 thread: T1
 checkpoint: T1-03
 branch: ve/prototype-t1-identity
-start_head: <sha>
-end_head: <sha>
-origin_main: <sha>
+frozen_baseline: 79391a3df86d85522b92e0400c6904971ecbe65d
+planning_sha: <stable-planning-sha>
+intake_epoch: 1
+intake_base_sha: <frozen-t4-epoch-base>
+payload_head: <implementation-sha>
+prior_accepted_payload: null
 tree_clean: true
-commits: []
+commits_since_prior_acceptance: []
 owned_paths: []
 files_changed: []
 tests: []
 generated_hashes: {}
+migrations: []
 external_evidence: []
 known_failures: []
+blockers: []
 next_checkpoint: T1-04
-expected_head: <sha>
 ```
 
 Commands, exit codes, platform/tool versions, generated hashes, and external
 non-claims are evidence. Summaries without retained results are not evidence.
+The checkpoint tag identifies the handoff commit. `payload_head` identifies the
+green implementation commit. The intervening range is limited to declared
+handoff and retained evidence files.
 
 If a slot cannot reach green, preserve `git diff --binary`, untracked-file names
 and hashes, test output, and expected parent in the external lease record. A
@@ -203,6 +237,16 @@ can commit and integrate continuously instead of holding three days of changes.
 T1, T2, T3, and T5 should target checkpoints of two to six hours. T4 polls for
 new producer checkpoints between its own queue items and integrates only green,
 dependency-compatible SHAs.
+
+T2-03 cannot be green until a legacy `ChainQuery` implementation that does not
+affirmatively declare authoritative capabilities fails startup or readiness with
+a typed unavailable state. Capability enforcement is opt-out only for explicit,
+test-scoped mocks; production-facing defaults must fail closed.
+
+T3-03 cannot be green until table-driven tests cover matched, mismatched,
+unavailable, stale, and unresolved reconciliation states, including tolerance
+boundaries, partial responses, and malformed evidence. Each non-matched state
+must preserve the durable intent and block settlement mutation.
 
 Tasks whose roadmap predecessors are incomplete may produce only isolated
 contracts, validators, fixtures, and fail-closed feature gates. They must not be
@@ -264,6 +308,10 @@ dirty worktree.
   typed `feature_unavailable` or disabled readiness.
 - T4 publishes the current integration SHA and grants single-owner windows for
   generated files, app wiring, upgrades, charts, and manifests.
+
+The `localnet.sh test` and `localnet.ps1 test` commands must use the same
+explicit integration build tags as the canonical `make test-integration` gate;
+a launcher that executes only untagged packages is not integration evidence.
 
 Task 85D does not implement Task 90C lifecycle transitions. The T1 prototype
 reader may carry compatibility fixtures for future states, but it accepts only

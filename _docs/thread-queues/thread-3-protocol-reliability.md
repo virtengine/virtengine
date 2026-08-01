@@ -19,6 +19,11 @@ benchmark envelope. No external relayer or benchmark certification is claimed.
 
 Mandatory rules:
 - Read applicable AGENTS.md files and both plans before edits.
+- Follow `_docs/prototype-thread-intake-runbook.md`. Before publication, merge
+  the open frozen epoch base, rerun gates, commit `payload_head`, retain literal
+  outputs, commit the handoff/evidence descendant, push with upstream, and push
+  an annotated `checkpoint/prototype-t3/<id>` tag targeting the handoff commit.
+  Record planning SHA, epoch/base, payload and prior accepted payload exactly.
 - Never push to stable or integration branches.
 - Use integer/fixed-point canonical units; preserve conservation.
 - Unavailable independent evidence is unavailable, never synchronized.
@@ -40,11 +45,14 @@ handling. Retain recoverable state until custody/refund action succeeds. Require
 accounting/audit hooks. Add race and conservation tests.
 T3-03 (3h): Replace reconciliation InSync booleans with matched, mismatched,
 unavailable, stale, and unresolved states plus stable reason codes. Cover exact,
-tolerance boundary, partial, malformed, stale, and unavailable inputs.
+tolerance boundary, partial, malformed, stale, and unavailable inputs. This is
+T3-03A classifier groundwork until T3-04 durability and mutation gating pass.
 T3-04 (5h): Add durable append-only reconciliation jobs/results, cursors,
 evidence digests, attempts, and action intents using repository atomic storage
 patterns. Prove restart at each phase, duplicate replay convergence, corrupt
-store rejection, and race safety.
+store rejection, and race safety. Every non-matched state must durably preserve
+the action intent and block usage/settlement mutation until authoritative
+resolution; add a table-driven state/action matrix.
 T3-05 (4h): Connect bounded production metrics for T3 paths: pending exposure,
 terminal outcomes, compensation failures, reconciliation state/freshness,
 backlog, and action intent. Add duplicate-registration and bounded-label tests.

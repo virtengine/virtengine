@@ -23,15 +23,18 @@ completion, Milestone M, GA, or production release.
 
 Mandatory rules:
 - Read all repository instructions and both plans first.
+- Follow `_docs/prototype-thread-intake-runbook.md`; it overrides generic Git
+  guidance for producer intake.
 - T4 alone edits integration-only surfaces: generated artifacts, go.work/module
   convergence, app/upgrade registration, shared workflows, release manifests,
   and canonical chart outputs during declared windows.
 - Accept only producer checkpoints with baseline/tip SHA, declared paths,
   commits, tests/exit codes, generated hashes, migrations, blockers, and clean
   status. The exact producer SHA must be pushed and green.
-- Before acceptance, require the producer to merge the latest T4 integration SHA
-  into its branch and resolve conflicts there. T4 rejects conflicted or stale
-  intake; it does not repair producer code.
+- Open a frozen intake epoch and require the producer to descend from that epoch
+  base. Do not invalidate waiting producers with later T4 commits.
+- Resolve committed handoffs from remote annotated tags and validate actual
+  schema, refs, ancestry, changed ranges, evidence and duplicate acceptance.
 - Integrate one producer at a time with a normal merge commit. Never rebase,
   force-push, or rewrite shared history.
 - After each merge run focused tests, compile affected packages, check generated
@@ -40,7 +43,10 @@ Mandatory rules:
 
 Queue:
 T4-01 (2h): Freeze the campaign baseline, register producer branches, create the
-intake schema, path ownership map, dependency ledger, and generated-file lease.
+intake schema, epoch manifest, path ownership map, dependency ledger and
+generated-file lease. Implement `scripts/validate-prototype-intake.cjs` plus
+negative tests exactly as required by the intake runbook. No intake is allowed
+until both validator commands pass.
 T4-02 (4h): Build the 88A machine-readable migration inventory covering module
 versions, stores/prefixes, protobuf/genesis changes, app registration, and every
 producer's persisted changes.
@@ -104,15 +110,18 @@ prototype profile may enable this only after all covered handlers pass; unknown
 value-moving routes fail the required-gate matrix.
 
 Intake loop:
-1. Fetch producer and integration refs.
-2. Read the producer HANDOFF and verify the tagged SHA.
-3. Confirm declared paths, green exact-SHA CI, dependency contracts, and clean
-   generated ownership.
-4. Reject stale/conflicted checkpoints back to the producer.
-5. Merge one accepted checkpoint with --no-ff and an explicit message.
-6. Run focused tests, compile, generation drift, and git diff --check.
-7. Push integration, create checkpoint/prototype-integration/<sequence>, update
-   the ledger, then resume T4 queue work.
+1. Finish or preserve T4's own dirty checkpoint; intake requires a clean tree.
+2. Fetch producer and integration refs and select the open frozen intake epoch.
+3. Load the producer HANDOFF from its remote annotated tag.
+4. Confirm schema, payload ancestry, declared paths, retained exact-SHA evidence,
+  dependency contracts and clean generated ownership.
+5. Reject stale/conflicted checkpoints back to the producer.
+6. Merge one accepted checkpoint with --no-ff and an explicit message.
+7. Run focused tests, compile, generation drift and git diff --check.
+8. Commit the accepted/rejected ledger and epoch state after validation.
+9. Push integration, then create and push
+  checkpoint/prototype-integration/<sequence> targeting that final ledger
+  commit; resume T4 queue work.
 
 Fallback queue:
 - Repair integration-owned preflight false greens and zero-test selectors.

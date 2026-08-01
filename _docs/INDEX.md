@@ -6,6 +6,7 @@ This index lists internal-only documentation. Do not add internal docs outside `
 - `_docs/architecture.md`
 - `_docs/protocol-completion-continuation-plan.md`
 - `_docs/five-agent-protocol-completion-plan.md`
+- `_docs/prototype-thread-intake-runbook.md`
 - `_docs/thread-queues/thread-1-identity-trust.md`
 - `_docs/thread-queues/thread-2-product-clients.md`
 - `_docs/thread-queues/thread-3-protocol-reliability.md`
@@ -93,6 +94,7 @@ This index lists internal-only documentation. Do not add internal docs outside `
 - `_docs/security/vendor-risk.md`
 
 ## Audit
+- `_docs/audits/prototype-thread-progress-audit-2026-08-01.md`
 - `_docs/audits/task-85c-completion-report-2026-07-23.md`
 - `_docs/audits/task-86a-completion-report-2026-07-21.md`
 

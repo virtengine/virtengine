@@ -25,6 +25,11 @@ fail closed until their dependencies exist.
 Mandatory rules:
 - Read AGENTS.md, applicable nested AGENTS.md files, the continuation plan, and
   the five-thread plan before editing.
+- Follow `_docs/prototype-thread-intake-runbook.md`. Before publication, merge
+  the open frozen epoch base, rerun gates, commit `payload_head`, retain literal
+  outputs, commit the handoff/evidence descendant, push with upstream, and push
+  an annotated `checkpoint/prototype-t1/<id>` tag targeting the handoff commit.
+  Record planning SHA, epoch/base, payload and prior accepted payload exactly.
 - Never edit another thread's worktree or branch. Never push to
   stable-virtengine-beta or ve/prototype-integration.
 - Keep Task 84A consensus callbacks free of inference and network I/O.
@@ -42,11 +47,15 @@ Queue, in order when dependencies permit:
 T1-01 (2h): Inventory every VEID attestation/evidence class, handler, signer,
 replay key, mutation point, score contribution, and credential consumer. Add a
 machine-readable or table-driven trust inventory. Unknown production evidence
-must be classified fail closed.
+must be classified fail closed. This is a partial contract checkpoint until
+handler-level assertions prove every evidence-bearing production mutation is
+represented; metadata with no production consumer is not runtime enforcement.
 T1-02 (4h): Freeze Evidence Envelope v1 using the existing canonical web evidence
 contract. Cover domain/version, chain/account/scope, issuer epoch, account
 signature, payload digest, nonce/challenge, block bounds, privacy-safe storage,
-and exact retry. Add golden and tamper vectors.
+and exact retry. Add golden and tamper vectors. Types-only work is labelled
+partial until keeper signature verification, replay consumption and persistence
+use the envelope or a later checkpoint explicitly owns that activation.
 T1-03 (3h): Freeze Runtime Policy Reader v1 over VEID pipeline/profile and
 veidregistry state. Add bootstrap-active, disabled, unknown, mismatched, and
 superseded compatibility fixtures.

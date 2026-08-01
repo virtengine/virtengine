@@ -21,6 +21,11 @@ must not be wired, advertised, or marked engineering-complete.
 
 Mandatory rules:
 - Read applicable AGENTS.md files, the DAG, and the five-thread plan first.
+- Follow `_docs/prototype-thread-intake-runbook.md`. Before publication, merge
+  the open frozen epoch base, rerun gates, commit `payload_head`, retain literal
+  outputs, commit the handoff/evidence descendant, push with upstream, and push
+  an annotated `checkpoint/prototype-t5/<id>` tag targeting the handoff commit.
+  Record planning SHA, epoch/base, payload and prior accepted payload exactly.
 - Never push to stable or integration branches.
 - Use typed state disabled -> fixture_only -> sandbox -> production. Roadmap
   features whose predecessors are missing may not transition beyond fixture_only.
@@ -74,7 +79,11 @@ T5-08 (5h): Replace the broken multi-recipient envelope construction with an
 audited HPKE/age-style recipient wrap plus AEAD data encryption and real Ed25519
 sender authentication. Add known-answer, wrong-recipient, forged-sender,
 tamper, recipient-removal and key-rotation tests. Migrate/version old envelopes
-without treating them as authenticated.
+without treating them as authenticated. Normal open requires a trusted sender
+key or resolver; self-declared sender-key verification is structural only. Add a
+genuine serialized v1 fixture, explicit migration service, stale/revoked-key and
+rollback tests. Do not activate v2 globally until T4 coordinates every existing
+v1 consumer.
 T5-09 (3h): Replace arbitrary non-empty OTP acceptance with actual registered
 factor verification, challenge binding, attempt limits, expiry and replay
 consumption. Add negative tests for TOTP, SMS and email dispatch paths.
