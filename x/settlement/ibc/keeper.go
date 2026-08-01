@@ -700,16 +700,46 @@ func (k IBCKeeper) applyTerminalTransition(
 // RefreshMetrics reconstructs pending exposure gauges from committed KV state.
 func (k IBCKeeper) RefreshMetrics(ctx sdk.Context) {
 	counts := make(map[PacketType]float64)
+	available := true
 	iterator := storetypes.KVStorePrefixIterator(ctx.KVStore(k.storeKey), PrefixPendingPacket)
 	defer iterator.Close()
 	for ; iterator.Valid(); iterator.Next() {
 		var pending PendingPacket
 		if err := json.Unmarshal(iterator.Value(), &pending); err != nil {
-			continue
+			available = false
+			break
+		}
+		if !validPendingMetricRecord(iterator.Key(), pending) {
+			available = false
+			break
 		}
 		counts[pending.PacketData.Type]++
 	}
-	k.metrics.SetPending(counts)
+	k.metrics.SetPending(counts, available)
+}
+
+func validPendingMetricRecord(key []byte, pending PendingPacket) bool {
+	if pending.PacketData.Validate() != nil || pending.Identity.Validate() != nil ||
+		pending.State != TransferStatePending || pending.Identity.SourcePort != PortID ||
+		validateCustodyReference(pending.CustodyReference) != nil ||
+		!bytes.Equal(key, PendingPacketKey(pending.Identity.SourceChannel, pending.Identity.Sequence)) ||
+		!bytes.Equal(pending.Identity.PayloadDigest, payloadDigest(pending.PacketData.GetBytes())) ||
+		pending.Identity.LogicalPayoutID != logicalPayoutID(pending.PacketData) {
+		return false
+	}
+	switch pending.PacketData.Type {
+	case PacketTypeEscrowDeposit:
+		var packet EscrowDepositPacket
+		return json.Unmarshal(pending.PacketData.Data, &packet) == nil && packet.Validate() == nil
+	case PacketTypeEscrowRelease:
+		var packet EscrowReleasePacket
+		return json.Unmarshal(pending.PacketData.Data, &packet) == nil && packet.Validate() == nil
+	case PacketTypeSettlementRecord:
+		var packet SettlementRecordPacket
+		return json.Unmarshal(pending.PacketData.Data, &packet) == nil && packet.Validate() == nil
+	default:
+		return false
+	}
 }
 
 func (k IBCKeeper) setTerminalMarker(ctx sdk.Context, marker TerminalMarker) {
