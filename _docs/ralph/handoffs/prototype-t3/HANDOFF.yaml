@@ -1,13 +1,13 @@
 {
   "campaign": "three-day-prototype",
   "thread": "T3",
-  "checkpoint": "T3-10",
+  "checkpoint": "T3-13",
   "branch": "ve/prototype-t3-reliability",
   "frozen_baseline": "79391a3df86d85522b92e0400c6904971ecbe65d",
   "planning_sha": "1436723bd78980aa0388dbe9fcfa24dda939c54a",
   "intake_epoch": 1,
   "intake_base_sha": "5587c384f634552c3a2dd7181ca49cafa4da1984",
-  "payload_head": "7ec578d14763e6f4e7354fed717d70485cd68e99",
+  "payload_head": "11971ec857e466c627ef227488d8211109054d6a",
   "prior_accepted_payload": null,
   "tree_clean": true,
   "commits_since_prior_acceptance": [
@@ -33,13 +33,20 @@
     "6c55ab7701ccb57fe7386f3237eda4ab72b7304a",
     "edf987d444faeec21baa98989606a4ade6ce8628",
     "93b3375127161d27e30fdf33bef970a447fb5344",
-    "7ec578d14763e6f4e7354fed717d70485cd68e99"
+    "7ec578d14763e6f4e7354fed717d70485cd68e99",
+    "82705f9a4d1ad1348f836628ff76539bad40304f",
+    "0c0f62fbc0e9b3dd19fc7a0632171534c2d07051",
+    "df034a9faed852f45204f61d9ef8646bf8521540",
+    "e3ac34e0eb4920e7998903edda3f4068522e3a31",
+    "399fa0838fa3e04726144859418d22871fa90043",
+    "11971ec857e466c627ef227488d8211109054d6a"
   ],
   "owned_paths": [
     "_docs/ralph/handoffs/prototype-t3/**",
     "_docs/ralph/evidence/prototype-t3/**",
     "pkg/inference/**",
     "pkg/provider_daemon/**",
+    "pkg/reviewops/**",
     "pkg/uniquenessops/**",
     "x/benchmark/**",
     "x/settlement/ibc/**"
@@ -50,6 +57,9 @@
     "_docs/INDEX.md",
     "_docs/ralph/handoffs/prototype-integration/HANDOFF.yaml",
     "_docs/ralph/handoffs/prototype-t3/HANDOFF.yaml",
+    "_docs/ralph/evidence/prototype-t3/t3-13/go-race.txt",
+    "_docs/ralph/evidence/prototype-t3/t3-13/go-test.txt",
+    "_docs/ralph/evidence/prototype-t3/t3-13/go-vet.txt",
     "_docs/ralph/prototype-integration/control.json",
     "_docs/ralph/prototype-integration/migration-inventory.json",
     "_docs/ralph/prototype-integration/migration-inventory.schema.json",
@@ -72,6 +82,8 @@
     "pkg/provider_daemon/waldur_reconciler_test.go",
     "pkg/provider_daemon/waldur_reconciliation_store.go",
     "pkg/provider_daemon/waldur_reconciliation_store_test.go",
+    "pkg/reviewops/metrics.go",
+    "pkg/reviewops/metrics_test.go",
     "pkg/uniquenessops/evidence.go",
     "pkg/uniquenessops/evidence_test.go",
     "scripts/validate-migration-inventory.cjs",
@@ -102,28 +114,28 @@
   ],
   "tests": [
     {
-      "command": "C:\\Users\\pavil\\AppData\\Local\\VirtEngine\\toolchains\\go1.25.8\\go\\bin\\go.exe -C C:\\Users\\pavil\\Desktop\\virtengine-gh\\repos\\virtengine-t3 test -count=1 ./pkg/inference ./pkg/uniquenessops ./x/settlement/ibc ./x/benchmark/keeper ./x/benchmark/types",
+      "command": "C:\\Users\\pavil\\AppData\\Local\\VirtEngine\\toolchains\\go1.25.8\\go\\bin\\go.exe -C C:\\Users\\pavil\\Desktop\\virtengine-gh\\repos\\virtengine-t3 test -v -count=1 ./pkg/reviewops",
       "exit_code": 0,
       "result": "passed",
       "tool_versions": { "go": "go version go1.25.8 windows/amd64" },
-      "artifact": "_docs/ralph/evidence/prototype-t3/t3-10/go-test.txt"
+      "artifact": "_docs/ralph/evidence/prototype-t3/t3-13/go-test.txt"
     },
     {
-      "command": "C:\\Users\\pavil\\AppData\\Local\\VirtEngine\\toolchains\\go1.25.8\\go\\bin\\go.exe -C C:\\Users\\pavil\\Desktop\\virtengine-gh\\repos\\virtengine-t3 vet ./pkg/inference ./pkg/uniquenessops ./x/settlement/ibc ./x/benchmark/keeper ./x/benchmark/types",
+      "command": "C:\\Users\\pavil\\AppData\\Local\\VirtEngine\\toolchains\\go1.25.8\\go\\bin\\go.exe -C C:\\Users\\pavil\\Desktop\\virtengine-gh\\repos\\virtengine-t3 vet ./pkg/reviewops",
       "exit_code": 0,
       "result": "passed",
       "tool_versions": { "go": "go version go1.25.8 windows/amd64" },
-      "artifact": "_docs/ralph/evidence/prototype-t3/t3-10/go-vet.txt"
+      "artifact": "_docs/ralph/evidence/prototype-t3/t3-13/go-vet.txt"
     },
     {
-      "command": "set CGO_ENABLED=1 && set CC=C:\\Users\\pavil\\AppData\\Local\\Microsoft\\WinGet\\Packages\\BrechtSanders.WinLibs.POSIX.UCRT_Microsoft.Winget.Source_8wekyb3d8bbwe\\mingw64\\bin\\gcc.exe && C:\\Users\\pavil\\AppData\\Local\\VirtEngine\\toolchains\\go1.25.8\\go\\bin\\go.exe -C C:\\Users\\pavil\\Desktop\\virtengine-gh\\repos\\virtengine-t3 test -race -count=1 ./pkg/inference ./pkg/uniquenessops ./x/settlement/ibc ./x/benchmark/types",
+      "command": "set CGO_ENABLED=1 && set CC=C:\\Users\\pavil\\AppData\\Local\\Microsoft\\WinGet\\Packages\\BrechtSanders.WinLibs.POSIX.UCRT_Microsoft.Winget.Source_8wekyb3d8bbwe\\mingw64\\bin\\gcc.exe && C:\\Users\\pavil\\AppData\\Local\\VirtEngine\\toolchains\\go1.25.8\\go\\bin\\go.exe -C C:\\Users\\pavil\\Desktop\\virtengine-gh\\repos\\virtengine-t3 test -race -count=1 ./pkg/reviewops",
       "exit_code": 0,
       "result": "passed",
       "tool_versions": {
         "go": "go version go1.25.8 windows/amd64",
         "gcc": "gcc.exe (MinGW-W64 x86_64-ucrt-posix-seh, Brecht Sanders r3) 16.1.0"
       },
-      "artifact": "_docs/ralph/evidence/prototype-t3/t3-10/go-race.txt"
+      "artifact": "_docs/ralph/evidence/prototype-t3/t3-13/go-race.txt"
     }
   ],
   "generated_hashes": {},
@@ -138,6 +150,7 @@
     "T4 intake validator currently includes synchronized pre-epoch T4 merge commits in a producer with no prior accepted payload, causing integration-owned upgrades/software/v1.6.0 paths to fail the generated-file lease check.",
     "The T5 deletion-receipt contract is remotely committed but absent from frozen epoch base 5587c384f634552c3a2dd7181ca49cafa4da1984, so T3-11 cannot consume it in epoch 1.",
     "The required T1-owned canonical stage and decision mapping contract is unavailable at frozen epoch base 5587c384f634552c3a2dd7181ca49cafa4da1984.",
+    "T3-13 exposes only aggregate fail-closed metrics. Authoritative reviewer independence, recusal, reason-delivery acknowledgement, restoration receipts, and governed subgroup bindings remain unavailable and are never inferred from existing appeal records.",
     "No production model, dataset, runtime, representative-hardware result, independent verifier evidence, or production certification is claimed."
   ],
   "next_checkpoint": "T3-11"
