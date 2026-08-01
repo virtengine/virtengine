@@ -31,9 +31,10 @@ func TestVaultService_AccessAndAudit(t *testing.T) {
 	auditLogger := NewAuditLogger(DefaultAuditLogConfig(), NewMemoryAuditStore())
 
 	vault, err := NewVaultService(VaultConfig{
-		Store:         store,
-		AccessControl: access,
-		AuditLogger:   auditLogger,
+		Store:           store,
+		AccessControl:   access,
+		ConsentResolver: AllowAllConsentResolver{},
+		AuditLogger:     auditLogger,
 	})
 	if err != nil {
 		t.Fatalf("new vault: %v", err)
@@ -132,6 +133,26 @@ func TestVaultService_ConsentRequired(t *testing.T) {
 	}
 }
 
+func TestVaultService_MissingConsentResolverDenies(t *testing.T) {
+	ctx := context.Background()
+	keyMgr := keys.NewKeyManager()
+	require.NoError(t, keyMgr.Initialize())
+	store := NewEncryptedBlobStore(newMemoryArtifactStore(), keyMgr)
+	vault, err := NewVaultService(VaultConfig{
+		Store:       store,
+		AuditLogger: NewAuditLogger(DefaultAuditLogConfig(), NewMemoryAuditStore()),
+	})
+	require.NoError(t, err)
+
+	blob, err := vault.Upload(ctx, &UploadRequest{
+		Scope: ScopeSupport, Plaintext: []byte("secret"), Owner: "owner",
+	})
+	require.NoError(t, err)
+
+	_, _, err = vault.Retrieve(ctx, &RetrieveRequest{ID: blob.Metadata.ID, Requester: "owner"})
+	require.ErrorIs(t, err, ErrConsentRequired)
+}
+
 func TestVaultService_RotateKeysReencrypts(t *testing.T) {
 	ctx := context.Background()
 
@@ -145,9 +166,10 @@ func TestVaultService_RotateKeysReencrypts(t *testing.T) {
 	auditLogger := NewAuditLogger(DefaultAuditLogConfig(), NewMemoryAuditStore())
 
 	vault, err := NewVaultService(VaultConfig{
-		Store:         store,
-		AccessControl: access,
-		AuditLogger:   auditLogger,
+		Store:           store,
+		AccessControl:   access,
+		ConsentResolver: AllowAllConsentResolver{},
+		AuditLogger:     auditLogger,
 	})
 	require.NoError(t, err)
 
@@ -169,4 +191,101 @@ func TestVaultService_RotateKeysReencrypts(t *testing.T) {
 	})
 	require.NoError(t, err)
 	require.Greater(t, meta.KeyVersion, originalVersion)
+}
+
+func TestVaultServicePropagatesAuditFailures(t *testing.T) {
+	ctx := context.Background()
+	newVault := func(auditStore *failOnceAuditStore) *Vault {
+		keyManager := keys.NewKeyManager()
+		require.NoError(t, keyManager.Initialize())
+		vault, err := NewVaultService(VaultConfig{
+			Store:           NewEncryptedBlobStore(newMemoryArtifactStore(), keyManager),
+			ConsentResolver: AllowAllConsentResolver{},
+			AuditLogger:     NewAuditLogger(DefaultAuditLogConfig(), auditStore),
+		})
+		require.NoError(t, err)
+		return vault
+	}
+
+	uploadAudit := &failOnceAuditStore{fail: true}
+	uploadVault := newVault(uploadAudit)
+	_, err := uploadVault.Upload(ctx, &UploadRequest{Scope: ScopeSupport, Plaintext: []byte("secret"), Owner: "owner"})
+	require.ErrorContains(t, err, "audit intent append failed")
+
+	retrieveAudit := &failOnceAuditStore{}
+	retrieveVault := newVault(retrieveAudit)
+	retrieveBlob, err := retrieveVault.Upload(ctx, &UploadRequest{Scope: ScopeSupport, Plaintext: []byte("secret"), Owner: "owner"})
+	require.NoError(t, err)
+	retrieveAudit.fail = true
+	_, _, err = retrieveVault.Retrieve(ctx, &RetrieveRequest{ID: retrieveBlob.Metadata.ID, Requester: "owner"})
+	require.ErrorContains(t, err, "audit append failed")
+
+	deleteAudit := &failOnceAuditStore{}
+	deleteVault := newVault(deleteAudit)
+	deleteBlob, err := deleteVault.Upload(ctx, &UploadRequest{Scope: ScopeSupport, Plaintext: []byte("secret"), Owner: "owner"})
+	require.NoError(t, err)
+	deleteAudit.fail = true
+	err = deleteVault.Delete(ctx, deleteBlob.Metadata.ID, "owner")
+	require.ErrorContains(t, err, "audit intent append failed")
+}
+
+func TestVaultUploadAuditIntentAndTerminalFailureSemantics(t *testing.T) {
+	ctx := context.Background()
+	newVault := func(auditStore *failOnceAuditStore) *Vault {
+		keyManager := keys.NewKeyManager()
+		require.NoError(t, keyManager.Initialize())
+		vault, err := NewVaultService(VaultConfig{
+			Store: NewEncryptedBlobStore(newMemoryArtifactStore(), keyManager), ConsentResolver: AllowAllConsentResolver{},
+			AuditLogger: NewAuditLogger(DefaultAuditLogConfig(), auditStore),
+		})
+		require.NoError(t, err)
+		return vault
+	}
+
+	intentFailureStore := &failOnceAuditStore{failAt: 1}
+	intentFailureVault := newVault(intentFailureStore)
+	blob, err := intentFailureVault.Upload(ctx, &UploadRequest{Scope: ScopeSupport, Plaintext: []byte("intent"), Owner: "owner"})
+	require.Nil(t, blob)
+	require.ErrorContains(t, err, "audit intent append failed")
+	metadata, listErr := intentFailureVault.store.ListByScope(ScopeSupport)
+	require.NoError(t, listErr)
+	require.Empty(t, metadata)
+
+	terminalFailureStore := &failOnceAuditStore{failAt: 2}
+	terminalFailureVault := newVault(terminalFailureStore)
+	blob, err = terminalFailureVault.Upload(ctx, &UploadRequest{Scope: ScopeSupport, Plaintext: []byte("terminal"), Owner: "owner"})
+	require.NotNil(t, blob)
+	require.ErrorIs(t, err, ErrReconciliationRequired)
+	_, metadataErr := terminalFailureVault.store.GetMetadata(blob.Metadata.ID)
+	require.NoError(t, metadataErr)
+	require.Len(t, terminalFailureStore.events, 1)
+	require.Equal(t, "intent", terminalFailureStore.events[0].Metadata["phase"])
+	require.NoError(t, terminalFailureVault.ReconcilePending(ctx))
+	require.Len(t, terminalFailureStore.events, 2)
+	require.Equal(t, "terminal", terminalFailureStore.events[1].Metadata["phase"])
+	require.True(t, terminalFailureStore.events[1].Success)
+}
+
+func TestVaultDeleteTerminalAuditFailureLeavesCommittedMutationPending(t *testing.T) {
+	ctx := context.Background()
+	auditStore := &failOnceAuditStore{}
+	keyManager := keys.NewKeyManager()
+	require.NoError(t, keyManager.Initialize())
+	vault, err := NewVaultService(VaultConfig{
+		Store: NewEncryptedBlobStore(newMemoryArtifactStore(), keyManager), ConsentResolver: AllowAllConsentResolver{},
+		AuditLogger: NewAuditLogger(DefaultAuditLogConfig(), auditStore),
+	})
+	require.NoError(t, err)
+	blob, err := vault.Upload(ctx, &UploadRequest{Scope: ScopeSupport, Plaintext: []byte("delete"), Owner: "owner"})
+	require.NoError(t, err)
+	auditStore.failAt = auditStore.appendCalls + 2
+	err = vault.Delete(ctx, blob.Metadata.ID, "owner")
+	require.ErrorIs(t, err, ErrReconciliationRequired)
+	_, metadataErr := vault.store.GetMetadata(blob.Metadata.ID)
+	require.ErrorIs(t, metadataErr, ErrBlobNotFound)
+	require.NoError(t, vault.ReconcilePending(ctx))
+	events, queryErr := auditStore.Query(ctx, AuditFilter{})
+	require.NoError(t, queryErr)
+	require.Equal(t, "terminal", events[len(events)-1].Metadata["phase"])
+	require.True(t, events[len(events)-1].Success)
 }

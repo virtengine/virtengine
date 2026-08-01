@@ -3,6 +3,9 @@ package data_vault
 import (
 	"bytes"
 	"context"
+	"crypto/rand"
+	"encoding/hex"
+	"errors"
 	"fmt"
 	"io"
 	"time"
@@ -44,7 +47,7 @@ func NewVaultService(cfg VaultConfig) (*Vault, error) {
 		cfg.AccessControl = OwnerOnlyAccessControl{}
 	}
 	if cfg.ConsentResolver == nil {
-		cfg.ConsentResolver = AllowAllConsentResolver{}
+		cfg.ConsentResolver = DenyAllConsentResolver{}
 	}
 	if cfg.AuditOwner == "" {
 		cfg.AuditOwner = "audit-system"
@@ -60,7 +63,7 @@ func NewVaultService(cfg VaultConfig) (*Vault, error) {
 		cfg.KeyRotationOverlap = 24 * time.Hour
 	}
 
-	return &Vault{
+	vault := &Vault{
 		store:           cfg.Store,
 		accessControl:   cfg.AccessControl,
 		consentResolver: cfg.ConsentResolver,
@@ -68,7 +71,11 @@ func NewVaultService(cfg VaultConfig) (*Vault, error) {
 		metrics:         cfg.Metrics,
 		anomalyDetector: cfg.AnomalyDetector,
 		rotationOverlap: cfg.KeyRotationOverlap,
-	}, nil
+	}
+	if err := vault.ReconcilePending(ctxWithoutCancellation()); err != nil {
+		return nil, fmt.Errorf("reconcile pending vault audits: %w", err)
+	}
+	return vault, nil
 }
 
 // NewVault creates a new vault service (alias for NewVaultService).
@@ -97,17 +104,34 @@ func (v *Vault) Upload(ctx context.Context, req *UploadRequest) (*EncryptedBlob,
 		return nil, err
 	}
 
-	blob, err := v.store.Store(ctx, req)
+	operationID, err := v.beginMutationAudit(ctx, req.Scope, "", req.Owner, req.OrgID, AccessActionUpload)
 	if err != nil {
+		return nil, NewVaultError("Upload", err, "audit intent append failed")
+	}
+	mutationRequest := *req
+	mutationRequest.AuditOperationID = operationID
+	blob, err := v.store.Store(ctx, &mutationRequest)
+	if err != nil {
+		if errors.Is(err, ErrReconciliationRequired) && blob != nil {
+			v.recordAccess(AccessActionUpload, req.Scope, req.Owner, true, nil)
+			if auditErr := v.finishMutationAudit(ctx, operationID, req.Scope, blob.Metadata.ID, req.Owner, req.OrgID, AccessActionUpload, true, nil, map[string]string{"storage_reconciliation": "pending"}); auditErr != nil {
+				return blob, &ReconciliationRequiredError{OperationID: operationID, Operation: string(AccessActionUpload), Cause: errors.Join(err, auditErr)}
+			}
+			return blob, err
+		}
 		v.recordAccess(AccessActionUpload, req.Scope, req.Owner, false, err)
-		v.logAudit(ctx, req.Scope, "", req.Owner, req.OrgID, AccessActionUpload, false, err, nil)
+		if auditErr := v.finishMutationAudit(ctx, operationID, req.Scope, "", req.Owner, req.OrgID, AccessActionUpload, false, err, nil); auditErr != nil {
+			return nil, &ReconciliationRequiredError{OperationID: operationID, Operation: string(AccessActionUpload), Cause: auditErr}
+		}
 		return nil, err
 	}
 
 	v.recordAccess(AccessActionUpload, req.Scope, req.Owner, true, nil)
-	v.logAudit(ctx, req.Scope, blob.Metadata.ID, req.Owner, req.OrgID, AccessActionUpload, true, nil, map[string]string{
+	if err := v.finishMutationAudit(ctx, operationID, req.Scope, blob.Metadata.ID, req.Owner, req.OrgID, AccessActionUpload, true, nil, map[string]string{
 		"size": fmt.Sprintf("%d", blob.Metadata.Size),
-	})
+	}); err != nil {
+		return blob, &ReconciliationRequiredError{OperationID: operationID, Operation: string(AccessActionUpload), Cause: err}
+	}
 
 	return blob, nil
 }
@@ -175,7 +199,9 @@ func (v *Vault) Retrieve(ctx context.Context, req *RetrieveRequest) ([]byte, *Bl
 	}
 
 	v.recordAccess(AccessActionRead, metadata.Scope, req.Requester, true, nil)
-	v.logAudit(ctx, metadata.Scope, req.ID, req.Requester, req.OrgID, AccessActionRead, true, nil, requestMetadata(req))
+	if err := v.logAudit(ctx, metadata.Scope, req.ID, req.Requester, req.OrgID, AccessActionRead, true, nil, requestMetadata(req)); err != nil {
+		return nil, nil, NewVaultError("Retrieve", err, "audit append failed")
+	}
 
 	return data, meta, nil
 }
@@ -245,14 +271,29 @@ func (v *Vault) Delete(ctx context.Context, id BlobID, requester string) error {
 		return err
 	}
 
+	operationID, err := v.beginMutationAudit(ctx, metadata.Scope, id, requester, metadata.OrgID, AccessActionDelete)
+	if err != nil {
+		return NewVaultError("Delete", err, "audit intent append failed")
+	}
 	if err := v.store.Delete(ctx, id); err != nil {
+		if errors.Is(err, ErrReconciliationRequired) {
+			v.recordAccess(AccessActionDelete, metadata.Scope, requester, true, nil)
+			if auditErr := v.finishMutationAudit(ctx, operationID, metadata.Scope, id, requester, metadata.OrgID, AccessActionDelete, true, nil, map[string]string{"storage_reconciliation": "pending"}); auditErr != nil {
+				return &ReconciliationRequiredError{OperationID: operationID, Operation: string(AccessActionDelete), Cause: errors.Join(err, auditErr)}
+			}
+			return err
+		}
 		v.recordAccess(AccessActionDelete, metadata.Scope, requester, false, err)
-		v.logAudit(ctx, metadata.Scope, id, requester, metadata.OrgID, AccessActionDelete, false, err, nil)
+		if auditErr := v.finishMutationAudit(ctx, operationID, metadata.Scope, id, requester, metadata.OrgID, AccessActionDelete, false, err, nil); auditErr != nil {
+			return &ReconciliationRequiredError{OperationID: operationID, Operation: string(AccessActionDelete), Cause: auditErr}
+		}
 		return err
 	}
 
 	v.recordAccess(AccessActionDelete, metadata.Scope, requester, true, nil)
-	v.logAudit(ctx, metadata.Scope, id, requester, metadata.OrgID, AccessActionDelete, true, nil, nil)
+	if err := v.finishMutationAudit(ctx, operationID, metadata.Scope, id, requester, metadata.OrgID, AccessActionDelete, true, nil, nil); err != nil {
+		return &ReconciliationRequiredError{OperationID: operationID, Operation: string(AccessActionDelete), Cause: err}
+	}
 
 	return nil
 }
@@ -396,12 +437,67 @@ func (v *Vault) GetAuditEvents(ctx context.Context, filter AuditFilter) ([]*Audi
 	return v.auditLogger.QueryEvents(ctx, filter)
 }
 
-// Close closes the vault service and releases resources.
-func (v *Vault) Close() error {
-	if v.store != nil {
-		return v.store.Close()
+// ReconcilePending appends terminal records for durable mutation intents whose
+// process stopped after the intent or committed mutation.
+func (v *Vault) ReconcilePending(ctx context.Context) error {
+	if v.auditLogger == nil {
+		return nil
+	}
+	if v.auditLogger.initErr != nil {
+		return v.auditLogger.initErr
+	}
+	events, err := v.auditLogger.QueryEvents(ctx, AuditFilter{})
+	if err != nil {
+		return err
+	}
+	pending := make(map[string]*AuditEvent)
+	for _, event := range events {
+		operationID := event.Metadata["operation_id"]
+		switch event.Metadata["phase"] {
+		case "intent":
+			pending[operationID] = event
+		case "terminal":
+			delete(pending, operationID)
+		}
+	}
+	for operationID, intent := range pending {
+		success := false
+		blobID := intent.BlobID
+		switch AccessAction(intent.EventType) {
+		case AccessActionUpload:
+			metadata, listErr := v.store.ListByScope(intent.Scope)
+			if listErr != nil {
+				return listErr
+			}
+			for _, candidate := range metadata {
+				if candidate != nil && candidate.AuditOperationID == operationID {
+					success, blobID = true, candidate.ID
+					break
+				}
+			}
+		case AccessActionDelete:
+			_, getErr := v.store.GetMetadata(intent.BlobID)
+			success = errors.Is(getErr, ErrBlobNotFound)
+		default:
+			return fmt.Errorf("unsupported pending audit operation %q", intent.EventType)
+		}
+		if err := v.finishMutationAudit(ctx, operationID, intent.Scope, blobID, intent.Requester, intent.OrgID, AccessAction(intent.EventType), success, nil, map[string]string{"reconciled": "true"}); err != nil {
+			return err
+		}
 	}
 	return nil
+}
+
+// Close closes the vault service and releases resources.
+func (v *Vault) Close() error {
+	var closeErrors []error
+	if v.store != nil {
+		closeErrors = append(closeErrors, v.store.Close())
+	}
+	if v.auditLogger != nil {
+		closeErrors = append(closeErrors, v.auditLogger.Close())
+	}
+	return errors.Join(closeErrors...)
 }
 
 func (v *Vault) recordAccess(action AccessAction, scope Scope, requester string, success bool, err error) {
@@ -424,9 +520,9 @@ func (v *Vault) recordAccess(action AccessAction, scope Scope, requester string,
 	}
 }
 
-func (v *Vault) logAudit(ctx context.Context, scope Scope, blobID BlobID, requester, orgID string, action AccessAction, success bool, err error, metadata map[string]string) {
+func (v *Vault) logAudit(ctx context.Context, scope Scope, blobID BlobID, requester, orgID string, action AccessAction, success bool, err error, metadata map[string]string) error {
 	if v.auditLogger == nil {
-		return
+		return nil
 	}
 	event := &AuditEvent{
 		EventType: string(action),
@@ -440,10 +536,48 @@ func (v *Vault) logAudit(ctx context.Context, scope Scope, blobID BlobID, reques
 	if err != nil {
 		event.Error = err.Error()
 	}
-	if logErr := v.auditLogger.LogEvent(ctx, event); logErr != nil && v.metrics != nil {
-		v.metrics.AuditFailures.Inc()
+	if logErr := v.auditLogger.LogEvent(ctx, event); logErr != nil {
+		if v.metrics != nil {
+			v.metrics.AuditFailures.Inc()
+		}
+		return logErr
 	}
+	return nil
 }
+
+func (v *Vault) beginMutationAudit(ctx context.Context, scope Scope, blobID BlobID, requester, orgID string, action AccessAction) (string, error) {
+	operationID, err := newAuditOperationID()
+	if err != nil {
+		return "", err
+	}
+	if err := v.logAudit(ctx, scope, blobID, requester, orgID, action, false, nil, map[string]string{
+		"operation_id": operationID,
+		"phase":        "intent",
+	}); err != nil {
+		return "", err
+	}
+	return operationID, nil
+}
+
+func (v *Vault) finishMutationAudit(ctx context.Context, operationID string, scope Scope, blobID BlobID, requester, orgID string, action AccessAction, success bool, operationErr error, metadata map[string]string) error {
+	terminal := cloneStringMap(metadata)
+	if terminal == nil {
+		terminal = make(map[string]string)
+	}
+	terminal["operation_id"] = operationID
+	terminal["phase"] = "terminal"
+	return v.logAudit(ctx, scope, blobID, requester, orgID, action, success, operationErr, terminal)
+}
+
+func newAuditOperationID() (string, error) {
+	var value [16]byte
+	if _, err := rand.Read(value[:]); err != nil {
+		return "", err
+	}
+	return hex.EncodeToString(value[:]), nil
+}
+
+func ctxWithoutCancellation() context.Context { return context.Background() }
 
 func requestMetadata(req *RetrieveRequest) map[string]string {
 	if req == nil {

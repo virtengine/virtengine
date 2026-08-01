@@ -139,6 +139,18 @@ type KeyRotation struct {
 	Status RotationStatus
 }
 
+// VaultKeyManager is the prototype key lifecycle contract required by the data vault.
+// Production is blocked until encryption/decryption use non-exportable KMS operations;
+// GetKey currently exposes fixture private key material and must never back production.
+type VaultKeyManager interface {
+	GetActiveKey(scope Scope) (*KeyInfo, error)
+	GetKey(scope Scope, keyID string) (*KeyInfo, error)
+	RotateKey(scope Scope, overlapDuration time.Duration) error
+	CompleteRotation(scope Scope) error
+	GetRotationStatus(scope Scope) (*KeyRotation, error)
+	ListKeys(scope Scope) ([]*KeyInfo, error)
+}
+
 // RotationStatus represents the state of a key rotation
 type RotationStatus string
 
