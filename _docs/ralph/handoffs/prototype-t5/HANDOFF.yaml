@@ -1,8 +1,8 @@
 campaign: three-day-prototype
 thread: T5
-checkpoint: T5-04
+checkpoint: T5-05
 branch: ve/prototype-t5-platform
-start_head: c66ae54a9603570278b0de01aa71cb1906105135
+start_head: 6e2d084269ac2b5ffe45804616eb6702a494914b
 end_head: PENDING_COMMIT
 origin_main: c31f910e318a39d86372ed2d65050d08777dbfc5
 tree_clean: false
@@ -11,39 +11,35 @@ commits:
   - 31603443
   - 79f82c97fbe330359816c32e606a9bc98048a899
   - c66ae54a9603570278b0de01aa71cb1906105135
+  - e54ba766
+  - 6e2d084269ac2b5ffe45804616eb6702a494914b
 owned_paths:
-  - pkg/provider_daemon/federation/federation.go
-  - pkg/provider_daemon/federation/federation_test.go
-  - pkg/provider_daemon/federation/request_v1_vector.ts
-  - pkg/provider_daemon/federation/testdata/request-v1.json
+  - pkg/provider_daemon/backendprofile/contracts.go
+  - pkg/provider_daemon/backendprofile/fixtures.go
+  - pkg/provider_daemon/backendprofile/contracts_test.go
   - _docs/ralph/handoffs/prototype-t5/HANDOFF.yaml
 files_changed:
-  - pkg/provider_daemon/federation/federation.go
-  - pkg/provider_daemon/federation/federation_test.go
-  - pkg/provider_daemon/federation/request_v1_vector.ts
-  - pkg/provider_daemon/federation/testdata/request-v1.json
+  - pkg/provider_daemon/backendprofile/contracts.go
+  - pkg/provider_daemon/backendprofile/fixtures.go
+  - pkg/provider_daemon/backendprofile/contracts_test.go
   - _docs/ralph/handoffs/prototype-t5/HANDOFF.yaml
 tests:
-  - command: go test -v -count=1 ./pkg/provider_daemon/federation/...
+  - command: go test -v -count=1 ./pkg/provider_daemon/backendprofile/...
     environment: GO111MODULE=off
     go_version: go1.26.5 windows/amd64
     exit_code: 0
-  - command: go vet ./pkg/provider_daemon/federation
+  - command: go vet ./pkg/provider_daemon/backendprofile/...
     environment: GO111MODULE=off
     go_version: go1.26.5 windows/amd64
     exit_code: 0
   - command: git diff --check
     exit_code: 0
-generated_hashes:
-  request_v1_digest: c578be4fa829c04d0222cc4375e24c437d959f86049507796353d99cf16c7dc0
+generated_hashes: {}
 external_evidence: []
-known_failures:
-  - command: go test -race -count=1 ./pkg/provider_daemon/federation/...
-    status: blocked
-    reason: Windows race build requires gcc, which is unavailable on PATH.
+known_failures: []
 notes:
-  - Contracts remain disabled or fixture_only and do not register live provider routes.
-  - No independent provider operator, DNS/PKI control, durable HA nonce store, endpoint certification, or production federation is claimed.
-  - Discovery rollback, cross-provider replay, unsupported browser trust, origin mismatch, stale keys, wrong request bindings, proof failure, and nonce replay fail closed.
-next_checkpoint: T5-05
+  - Kubernetes v1.30 and OpenStack 2024.1 rows remain fixture_only, uncertified, and activation-disabled.
+  - No real cluster/account, quotas, credentials, cost controls, destructive cleanup authority, or backend certification is claimed.
+  - Unsupported versions/capabilities, mutable lineage, cycles, quota/cost overflow, unowned cleanup, dependency-order violations, and nonzero residue fail closed.
+next_checkpoint: T5-06
 expected_head: PENDING_COMMIT
