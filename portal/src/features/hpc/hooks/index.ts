@@ -2,24 +2,25 @@
  * HPC Hooks
  *
  * React hooks for HPC feature interactions.
- * Uses mock client for now, will be replaced with real SDK integration.
+ * The default client reports typed unavailability until application wiring
+ * injects authoritative adapters.
  */
 
 import { useEffect, useState } from 'react';
-import { createHPCClient } from '../lib/hpc-client';
+import { useHPCClient } from '../context/HPCClientProvider';
+import type { SubmitJobParams } from '../lib/hpc-client';
 import type { Job, JobOutput, WorkloadTemplate, JobStatus } from '../types';
 
 /**
  * Hook to fetch and manage workload templates
  */
 export function useWorkloadTemplates() {
+  const client = useHPCClient();
   const [templates, setTemplates] = useState<WorkloadTemplate[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
 
   useEffect(() => {
-    const client = createHPCClient();
-
     client
       .listWorkloadTemplates()
       .then((data) => {
@@ -30,7 +31,7 @@ export function useWorkloadTemplates() {
         setError(err as Error);
         setIsLoading(false);
       });
-  }, []);
+  }, [client]);
 
   return { templates, isLoading, error };
 }
@@ -39,6 +40,7 @@ export function useWorkloadTemplates() {
  * Hook to fetch a single template
  */
 export function useWorkloadTemplate(templateId: string | null) {
+  const client = useHPCClient();
   const [template, setTemplate] = useState<WorkloadTemplate | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
@@ -50,8 +52,6 @@ export function useWorkloadTemplate(templateId: string | null) {
       return;
     }
 
-    const client = createHPCClient();
-
     client
       .getWorkloadTemplate(templateId)
       .then((data) => {
@@ -62,7 +62,7 @@ export function useWorkloadTemplate(templateId: string | null) {
         setError(err as Error);
         setIsLoading(false);
       });
-  }, [templateId]);
+  }, [client, templateId]);
 
   return { template, isLoading, error };
 }
@@ -71,14 +71,13 @@ export function useWorkloadTemplate(templateId: string | null) {
  * Hook to fetch and manage jobs
  */
 export function useJobs(filters?: { status?: JobStatus[] }) {
+  const client = useHPCClient();
   const [jobs, setJobs] = useState<Job[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
 
   const refetch = () => {
     setIsLoading(true);
-    const client = createHPCClient();
-
     client
       .listJobs(filters)
       .then((data) => {
@@ -94,7 +93,7 @@ export function useJobs(filters?: { status?: JobStatus[] }) {
   useEffect(() => {
     refetch();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filters?.status?.join(',')]);
+  }, [client, filters?.status?.join(',')]);
 
   return { jobs, isLoading, error, refetch };
 }
@@ -103,6 +102,7 @@ export function useJobs(filters?: { status?: JobStatus[] }) {
  * Hook to fetch a single job with auto-refresh
  */
 export function useJob(jobId: string | null, autoRefresh = true) {
+  const client = useHPCClient();
   const [job, setJob] = useState<Job | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
@@ -113,8 +113,6 @@ export function useJob(jobId: string | null, autoRefresh = true) {
       setIsLoading(false);
       return;
     }
-
-    const client = createHPCClient();
 
     const fetchJob = () => {
       client
@@ -136,7 +134,7 @@ export function useJob(jobId: string | null, autoRefresh = true) {
       const interval = setInterval(fetchJob, 10000);
       return () => clearInterval(interval);
     }
-  }, [jobId, autoRefresh]);
+  }, [client, jobId, autoRefresh]);
 
   return { job, isLoading, error };
 }
@@ -145,17 +143,15 @@ export function useJob(jobId: string | null, autoRefresh = true) {
  * Hook for job submission
  */
 export function useJobSubmission() {
+  const client = useHPCClient();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<Error | null>(null);
 
-  const submitJob = async (
-    params: Parameters<ReturnType<typeof createHPCClient>['submitJob']>[0]
-  ) => {
+  const submitJob = async (params: SubmitJobParams) => {
     setIsSubmitting(true);
     setError(null);
 
     try {
-      const client = createHPCClient();
       const result = await client.submitJob(params);
       setIsSubmitting(false);
       return result;
@@ -173,6 +169,7 @@ export function useJobSubmission() {
  * Hook for job cancellation
  */
 export function useJobCancellation() {
+  const client = useHPCClient();
   const [isCancelling, setIsCancelling] = useState(false);
   const [error, setError] = useState<Error | null>(null);
 
@@ -181,7 +178,6 @@ export function useJobCancellation() {
     setError(null);
 
     try {
-      const client = createHPCClient();
       const result = await client.cancelJob(jobId);
       setIsCancelling(false);
       return result;
@@ -199,18 +195,15 @@ export function useJobCancellation() {
  * Hook for cost estimation
  */
 export function useCostEstimation() {
+  const client = useHPCClient();
   const [isEstimating, setIsEstimating] = useState(false);
   const [error, setError] = useState<Error | null>(null);
 
-  const estimateCost = async (
-    offeringId: string,
-    resources: Parameters<ReturnType<typeof createHPCClient>['estimateJobCost']>[1]
-  ) => {
+  const estimateCost = async (offeringId: string, resources: SubmitJobParams['resources']) => {
     setIsEstimating(true);
     setError(null);
 
     try {
-      const client = createHPCClient();
       const result = await client.estimateJobCost(offeringId, resources);
       setIsEstimating(false);
       return result;
@@ -248,6 +241,7 @@ export function useJobStatistics() {
  * Hook for streaming job logs with auto-refresh
  */
 export function useJobLogs(jobId: string | null, autoRefresh = true) {
+  const client = useHPCClient();
   const [lines, setLines] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
@@ -258,8 +252,6 @@ export function useJobLogs(jobId: string | null, autoRefresh = true) {
       setIsLoading(false);
       return;
     }
-
-    const client = createHPCClient();
 
     const fetchLogs = () => {
       client
@@ -280,7 +272,7 @@ export function useJobLogs(jobId: string | null, autoRefresh = true) {
       const interval = setInterval(fetchLogs, 5000);
       return () => clearInterval(interval);
     }
-  }, [jobId, autoRefresh]);
+  }, [client, jobId, autoRefresh]);
 
   return { lines, isLoading, error };
 }
@@ -289,6 +281,7 @@ export function useJobLogs(jobId: string | null, autoRefresh = true) {
  * Hook for job outputs
  */
 export function useJobOutputs(jobId: string | null) {
+  const client = useHPCClient();
   const [outputs, setOutputs] = useState<JobOutput[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
@@ -300,8 +293,6 @@ export function useJobOutputs(jobId: string | null) {
       return;
     }
 
-    const client = createHPCClient();
-
     client
       .getJobOutputs(jobId)
       .then((data) => {
@@ -312,7 +303,7 @@ export function useJobOutputs(jobId: string | null) {
         setError(err as Error);
         setIsLoading(false);
       });
-  }, [jobId]);
+  }, [client, jobId]);
 
   return { outputs, isLoading, error };
 }
@@ -321,6 +312,7 @@ export function useJobOutputs(jobId: string | null) {
  * Hook for job resource usage with auto-refresh
  */
 export function useJobUsage(jobId: string | null, autoRefresh = true) {
+  const client = useHPCClient();
   const [usage, setUsage] = useState<{
     cpuPercent: number;
     memoryPercent: number;
@@ -337,8 +329,6 @@ export function useJobUsage(jobId: string | null, autoRefresh = true) {
       setIsLoading(false);
       return;
     }
-
-    const client = createHPCClient();
 
     const fetchUsage = () => {
       client
@@ -359,7 +349,7 @@ export function useJobUsage(jobId: string | null, autoRefresh = true) {
       const interval = setInterval(fetchUsage, 10000);
       return () => clearInterval(interval);
     }
-  }, [jobId, autoRefresh]);
+  }, [client, jobId, autoRefresh]);
 
   return { usage, isLoading, error };
 }
