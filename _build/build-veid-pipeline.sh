@@ -19,7 +19,9 @@ MODEL_BUNDLE_DIR="${VEID_MODEL_BUNDLE_DIR:-${REPO_ROOT}/models/trust_score/${REL
 MODEL_NAME="${VEID_MODEL_NAME:-trust_score}"
 MODEL_CONFIG="${VEID_MODEL_CONFIG:-${REPO_ROOT}/ml/training/configs/trust_score_v1.yaml}"
 MODEL_CARD="${VEID_MODEL_CARD:-${REPO_ROOT}/models/trust_score/MODEL_CARD.md}"
+MODEL_PROVENANCE="${VEID_MODEL_PROVENANCE:-${MODEL_BUNDLE_DIR}/model_provenance.json}"
 SKIP_DOCKER_BUILD="${VEID_SKIP_DOCKER_BUILD:-false}"
+PYTHON_BIN="${VEID_PYTHON:-}"
 SOURCE_REVISION=""
 SOURCE_DESCRIBE=""
 BUNDLE_DISPLAY_PATH=""
@@ -55,8 +57,15 @@ log_error() {
 check_dependencies() {
     log_info "Checking dependencies..."
 
-    if ! command -v python3 >/dev/null 2>&1; then
-        log_error "python3 is required"
+    if [ -z "${PYTHON_BIN}" ]; then
+        if [ -n "${MSYSTEM:-}" ] && command -v python >/dev/null 2>&1; then
+            PYTHON_BIN="python"
+        else
+            PYTHON_BIN="python3"
+        fi
+    fi
+    if ! command -v "${PYTHON_BIN}" >/dev/null 2>&1; then
+        log_error "Python is required: ${PYTHON_BIN}"
         exit 1
     fi
 
@@ -104,7 +113,7 @@ write_sha_file() {
 
 portable_path() {
     local raw_path="$1"
-    python3 - "${REPO_ROOT}" "${raw_path}" <<'PY'
+    "${PYTHON_BIN}" - "${REPO_ROOT}" "${raw_path}" <<'PY'
 from pathlib import Path
 import sys
 
@@ -144,6 +153,43 @@ normalize_input_paths() {
     OUTPUT_DIR="$(shell_path "${OUTPUT_DIR}")"
     MODEL_CONFIG="$(shell_path "${MODEL_CONFIG}")"
     MODEL_CARD="$(shell_path "${MODEL_CARD}")"
+    MODEL_PROVENANCE="$(shell_path "${MODEL_PROVENANCE}")"
+}
+
+validate_build_inputs() {
+    case "${BUILD_PROFILE}" in
+        production|fixture_only) ;;
+        *)
+            log_error "Build profile must be production or fixture_only: ${BUILD_PROFILE}"
+            exit 1
+            ;;
+    esac
+
+    "${PYTHON_BIN}" - "${REPO_ROOT}" "${OUTPUT_DIR}" "${MODEL_BUNDLE_DIR}" "${MODEL_CONFIG}" "${MODEL_CARD}" "${MODEL_PROVENANCE}" <<'PY'
+from pathlib import Path
+import sys
+
+repo_root = Path(sys.argv[1]).resolve()
+
+def resolve(raw: str) -> Path:
+    path = Path(raw)
+    return (path if path.is_absolute() else repo_root / path).resolve()
+
+output_dir = resolve(sys.argv[2])
+bundle_dir = resolve(sys.argv[3])
+protected = {
+    "training config": resolve(sys.argv[4]),
+    "model card": resolve(sys.argv[5]),
+    "model provenance": resolve(sys.argv[6]),
+}
+
+if output_dir == bundle_dir or output_dir in bundle_dir.parents or bundle_dir in output_dir.parents:
+    raise SystemExit("output directory and model bundle directory must be disjoint")
+
+for label, path in protected.items():
+    if path == output_dir or output_dir in path.parents:
+        raise SystemExit(f"{label} must not be beneath output directory")
+PY
 }
 
 require_bundle() {
@@ -173,44 +219,73 @@ require_bundle() {
         exit 1
     fi
 
+    if [ ! -f "${MODEL_PROVENANCE}" ]; then
+        log_error "Model provenance not found: ${MODEL_PROVENANCE}"
+        exit 1
+    fi
+
     if [ "${BUILD_PROFILE}" = "production" ] && [ "$(basename "${MODEL_BUNDLE_DIR}")" != "${RELEASE_VERSION}" ]; then
         log_error "Production bundle directory must end with ${RELEASE_VERSION}: ${MODEL_BUNDLE_DIR}"
         exit 1
     fi
 
     if grep -R -n -i -E 'placeholder|pending|tbd|not published yet|<path>|sha256:placeholder' \
-        "${MODEL_BUNDLE_DIR}" "${MODEL_CARD}" "${MODEL_CONFIG}" >/dev/null 2>&1; then
-        log_error "Placeholder content detected in model bundle, config, or model card"
+        "${MODEL_BUNDLE_DIR}" "${MODEL_CARD}" "${MODEL_CONFIG}" "${MODEL_PROVENANCE}" >/dev/null 2>&1; then
+        log_error "Placeholder content detected in model bundle, config, model card, or provenance"
         exit 1
     fi
 }
 
-generate_release_manifest() {
-    log_info "Generating deterministic release manifest..."
-
+prepare_release_context() {
     SOURCE_REVISION="$(git -C "${REPO_ROOT}" rev-parse HEAD)"
     SOURCE_DESCRIBE="$(git -C "${REPO_ROOT}" describe --tags --always --dirty --match 'v*' 2>/dev/null || git -C "${REPO_ROOT}" rev-parse --short=12 HEAD)"
     BUNDLE_DISPLAY_PATH="$(portable_path "${MODEL_BUNDLE_DIR}")"
     CONFIG_DISPLAY_PATH="$(portable_path "${MODEL_CONFIG}")"
     MODEL_CARD_DISPLAY_PATH="$(portable_path "${MODEL_CARD}")"
-    BUNDLE_MANIFEST_PATH="${MODEL_BUNDLE_DIR}/release_manifest.json"
-    OUTPUT_MANIFEST_PATH="${OUTPUT_DIR}/release_manifest.json"
+}
 
-    python3 "${REPO_ROOT}/ml/training/model/release_manifest.py" \
+preflight_release_manifest() {
+    log_info "Validating release manifest inputs..."
+
+    "${PYTHON_BIN}" "${REPO_ROOT}/ml/training/model/release_manifest.py" \
         --bundle-dir "${MODEL_BUNDLE_DIR}" \
-        --output "${BUNDLE_MANIFEST_PATH}" \
+        --output "${OUTPUT_DIR}/release_manifest.json" \
         --model-name "${MODEL_NAME}" \
         --version "${RELEASE_VERSION}" \
         --profile "${BUILD_PROFILE}" \
         --config-path "${MODEL_CONFIG}" \
         --model-card-path "${MODEL_CARD}" \
+        --provenance-path "${MODEL_PROVENANCE}" \
+        --source-revision "${SOURCE_REVISION}" \
+        --source-describe "${SOURCE_DESCRIBE}" \
+        --bundle-display-path "${BUNDLE_DISPLAY_PATH}" \
+        --config-display-path "${CONFIG_DISPLAY_PATH}" \
+        --model-card-display-path "${MODEL_CARD_DISPLAY_PATH}" \
+        --validate-only
+
+    log_success "Release manifest inputs validated"
+}
+
+generate_release_manifest() {
+    log_info "Generating deterministic release manifest..."
+
+    OUTPUT_MANIFEST_PATH="${OUTPUT_DIR}/release_manifest.json"
+
+    "${PYTHON_BIN}" "${REPO_ROOT}/ml/training/model/release_manifest.py" \
+        --bundle-dir "${MODEL_BUNDLE_DIR}" \
+        --output "${OUTPUT_MANIFEST_PATH}" \
+        --model-name "${MODEL_NAME}" \
+        --version "${RELEASE_VERSION}" \
+        --profile "${BUILD_PROFILE}" \
+        --config-path "${MODEL_CONFIG}" \
+        --model-card-path "${MODEL_CARD}" \
+        --provenance-path "${MODEL_PROVENANCE}" \
         --source-revision "${SOURCE_REVISION}" \
         --source-describe "${SOURCE_DESCRIBE}" \
         --bundle-display-path "${BUNDLE_DISPLAY_PATH}" \
         --config-display-path "${CONFIG_DISPLAY_PATH}" \
         --model-card-display-path "${MODEL_CARD_DISPLAY_PATH}"
 
-    cp "${BUNDLE_MANIFEST_PATH}" "${OUTPUT_MANIFEST_PATH}"
     write_sha_file "${OUTPUT_MANIFEST_PATH}" "release_manifest.json" "${OUTPUT_DIR}/release_manifest.json.sha256"
 
     log_success "Release manifest written: ${OUTPUT_MANIFEST_PATH}"
@@ -219,7 +294,7 @@ generate_release_manifest() {
 generate_source_provenance() {
     log_info "Publishing source provenance..."
 
-    python3 - "${OUTPUT_DIR}" "${BUILD_PROFILE}" "${RELEASE_VERSION}" "${MODEL_NAME}" "${SOURCE_REVISION}" "${SOURCE_DESCRIBE}" "${BUNDLE_DISPLAY_PATH}" "${CONFIG_DISPLAY_PATH}" "${MODEL_CARD_DISPLAY_PATH}" <<'PY'
+    "${PYTHON_BIN}" - "${OUTPUT_DIR}" "${BUILD_PROFILE}" "${RELEASE_VERSION}" "${MODEL_NAME}" "${SOURCE_REVISION}" "${SOURCE_DESCRIBE}" "${BUNDLE_DISPLAY_PATH}" "${CONFIG_DISPLAY_PATH}" "${MODEL_CARD_DISPLAY_PATH}" <<'PY'
 import json
 import sys
 from pathlib import Path
@@ -266,7 +341,7 @@ PY
 generate_model_signature() {
     log_info "Publishing model signature contract..."
 
-    python3 - "${OUTPUT_DIR}" "${BUILD_PROFILE}" <<'PY'
+    "${PYTHON_BIN}" - "${OUTPUT_DIR}" "${BUILD_PROFILE}" <<'PY'
 import json
 import sys
 from pathlib import Path
@@ -337,7 +412,7 @@ build_image() {
 generate_pipeline_version() {
     log_info "Generating pipeline metadata..."
 
-    python3 - "${OUTPUT_DIR}" "${FULL_IMAGE}" "${RELEASE_VERSION}" "${BUILD_PROFILE}" "${BUNDLE_DISPLAY_PATH}" "${SOURCE_REVISION}" "${SOURCE_DESCRIBE}" <<'PY'
+    "${PYTHON_BIN}" - "${OUTPUT_DIR}" "${FULL_IMAGE}" "${RELEASE_VERSION}" "${BUILD_PROFILE}" "${BUNDLE_DISPLAY_PATH}" "${SOURCE_REVISION}" "${SOURCE_DESCRIBE}" <<'PY'
 import json
 import sys
 from pathlib import Path
@@ -392,7 +467,7 @@ publish_checksums() {
         local rel
         rel="${path#${MODEL_BUNDLE_DIR}/}"
         printf '%s  %s\n' "$(compute_file_hash "${path}")" "${rel}" >> "${checksum_file}"
-    done < <(find "${MODEL_BUNDLE_DIR}" -type f | sort)
+    done < <(LC_ALL=C find "${MODEL_BUNDLE_DIR}" -type f | LC_ALL=C sort)
 
     for published_artifact in \
         release_manifest.json \
@@ -418,7 +493,7 @@ publish_checksums() {
 verify_release_bundle() {
     log_info "Verifying release bundle consistency..."
 
-    python3 - "${MODEL_BUNDLE_DIR}" "${OUTPUT_DIR}" <<'PY'
+    "${PYTHON_BIN}" - "${MODEL_BUNDLE_DIR}" "${OUTPUT_DIR}" <<'PY'
 import hashlib
 import json
 import sys
@@ -438,6 +513,7 @@ required = {
     "MODEL_HASH.txt",
     "export_metadata.json",
     "manifest.json",
+    "model_provenance.json",
     "model_frozen.pb",
     "model/saved_model.pb",
 }
@@ -447,6 +523,10 @@ if missing:
 
 if model["version"] == "" or model["runtime_hash"] == "" or model["frozen_graph_hash"] == "":
     raise SystemExit("release manifest contains empty model identity fields")
+
+provenance = release_manifest.get("provenance", {})
+if provenance.get("path") != "model_provenance.json":
+    raise SystemExit("release manifest provenance path must be model_provenance.json")
 
 if release_manifest["source"]["bundle_path"] != pipeline_version["model_bundle_dir"]:
     raise SystemExit("release manifest bundle path does not match pipeline metadata")
@@ -568,6 +648,8 @@ for artifact in release_manifest["artifacts"]:
     actual = sha256_file(bundle_dir / label)
     if checksum_entries.get(label) != actual:
         raise SystemExit(f"bundle_checksums.txt entry mismatch for bundle artifact {label}")
+    if label == "model_provenance.json" and provenance.get("sha256") != actual:
+        raise SystemExit("release manifest provenance digest does not match its artifact")
 PY
 
     log_success "Release bundle verification passed"
@@ -621,8 +703,11 @@ main() {
 
     check_dependencies
     normalize_input_paths
-    setup_output_dir
+    validate_build_inputs
     require_bundle
+    prepare_release_context
+    preflight_release_manifest
+    setup_output_dir
     generate_release_manifest
     generate_source_provenance
     generate_model_signature
