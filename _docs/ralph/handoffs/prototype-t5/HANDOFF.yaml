@@ -1,56 +1,109 @@
 campaign: three-day-prototype
 thread: T5
-checkpoint: T5-09
+checkpoint: T5-10
 branch: ve/prototype-t5-platform
-start_head: a1f8bb35e4a17b4912bde3ff83e9262ed5b149b0
-end_head: 33e7457f3041135c222f89d2f938479b8e701a7b
-origin_main: c31f910e318a39d86372ed2d65050d08777dbfc5
+start_head: 4a5ca4968e75ad0221037c19b2998ea5e49c27e0
+end_head: 25cf508a904a0b8de1ac7eb163a67bf1703007f2
+origin_main: 79391a3df86d85522b92e0400c6904971ecbe65d
 tree_clean: true
 commits:
-  - 33e7457f3041135c222f89d2f938479b8e701a7b
+  - 25cf508a904a0b8de1ac7eb163a67bf1703007f2
 owned_paths:
-  - x/mfa/keeper/keeper.go
-  - x/mfa/keeper/keeper_test.go
-  - x/mfa/keeper/msg_server.go
-  - x/mfa/keeper/msg_server_test.go
-  - x/mfa/keeper/verification.go
-  - x/mfa/keeper/verification_test.go
+  - pkg/data_vault/audit_logger.go
+  - pkg/data_vault/audit_logger_test.go
+  - pkg/data_vault/consent.go
+  - pkg/data_vault/contracts/revision_anchor.go
+  - pkg/data_vault/errors.go
+  - pkg/data_vault/file_lock_unix.go
+  - pkg/data_vault/file_lock_windows.go
+  - pkg/data_vault/fixture_artifact_store.go
+  - pkg/data_vault/fixture_artifact_store_test.go
+  - pkg/data_vault/fixture_audit_store.go
+  - pkg/data_vault/fixture_erasure.go
+  - pkg/data_vault/fixture_file_security.go
+  - pkg/data_vault/keys/file_lock_unix.go
+  - pkg/data_vault/keys/file_lock_windows.go
+  - pkg/data_vault/keys/key_manager.go
+  - pkg/data_vault/keys/persistence.go
+  - pkg/data_vault/keys/persistence_test.go
+  - pkg/data_vault/revision_anchor.go
+  - pkg/data_vault/store.go
+  - pkg/data_vault/store_persistence_test.go
+  - pkg/data_vault/types.go
+  - pkg/data_vault/vault_service.go
+  - pkg/data_vault/vault_service_test.go
+  - pkg/provider_daemon/portal_vault_test.go
+  - pkg/provider_daemon/vault_service.go
+  - pkg/provider_daemon/vault_service_test.go
   - _docs/ralph/handoffs/prototype-t5/HANDOFF.yaml
+  - _docs/ralph/evidence/prototype-t5/T5-10/validation.txt
 files_changed:
-  - x/mfa/keeper/keeper.go
-  - x/mfa/keeper/keeper_test.go
-  - x/mfa/keeper/msg_server.go
-  - x/mfa/keeper/msg_server_test.go
-  - x/mfa/keeper/verification.go
-  - x/mfa/keeper/verification_test.go
+  - pkg/data_vault/audit_logger.go
+  - pkg/data_vault/audit_logger_test.go
+  - pkg/data_vault/consent.go
+  - pkg/data_vault/contracts/revision_anchor.go
+  - pkg/data_vault/errors.go
+  - pkg/data_vault/file_lock_unix.go
+  - pkg/data_vault/file_lock_windows.go
+  - pkg/data_vault/fixture_artifact_store.go
+  - pkg/data_vault/fixture_artifact_store_test.go
+  - pkg/data_vault/fixture_audit_store.go
+  - pkg/data_vault/fixture_erasure.go
+  - pkg/data_vault/fixture_file_security.go
+  - pkg/data_vault/keys/file_lock_unix.go
+  - pkg/data_vault/keys/file_lock_windows.go
+  - pkg/data_vault/keys/key_manager.go
+  - pkg/data_vault/keys/persistence.go
+  - pkg/data_vault/keys/persistence_test.go
+  - pkg/data_vault/revision_anchor.go
+  - pkg/data_vault/store.go
+  - pkg/data_vault/store_persistence_test.go
+  - pkg/data_vault/types.go
+  - pkg/data_vault/vault_service.go
+  - pkg/data_vault/vault_service_test.go
+  - pkg/provider_daemon/portal_vault_test.go
+  - pkg/provider_daemon/vault_service.go
+  - pkg/provider_daemon/vault_service_test.go
   - _docs/ralph/handoffs/prototype-t5/HANDOFF.yaml
+  - _docs/ralph/evidence/prototype-t5/T5-10/validation.txt
 tests:
-  - command: go test -count=1 ./x/mfa/keeper
+  - command: C:\Users\pavil\AppData\Local\VirtEngine\toolchains\go1.25.8\go\bin\go.exe test -count=1 ./pkg/data_vault/...
     exit_code: 0
     result: passed
     tool_versions:
       go: go1.25.8 windows/amd64
-  - command: go vet ./x/mfa/keeper
+    artifact: _docs/ralph/evidence/prototype-t5/T5-10/validation.txt
+  - command: C:\Users\pavil\AppData\Local\VirtEngine\toolchains\go1.25.8\go\bin\go.exe test -count=1 ./pkg/provider_daemon -run 'Vault|PortalVault'
     exit_code: 0
     result: passed
     tool_versions:
       go: go1.25.8 windows/amd64
-  - command: go test -race -count=1 ./x/mfa/keeper
+    artifact: _docs/ralph/evidence/prototype-t5/T5-10/validation.txt
+  - command: C:\Users\pavil\AppData\Local\VirtEngine\toolchains\go1.25.8\go\bin\go.exe vet ./pkg/data_vault/... ./pkg/provider_daemon
     exit_code: 0
     result: passed
     tool_versions:
       go: go1.25.8 windows/amd64
-      gcc: WinLibs POSIX UCRT
+    artifact: _docs/ralph/evidence/prototype-t5/T5-10/validation.txt
+  - command: $env:CGO_ENABLED='1'; $env:CC='gcc'; C:\Users\pavil\AppData\Local\VirtEngine\toolchains\go1.25.8\go\bin\go.exe test -race -count=1 ./pkg/data_vault/...
+    exit_code: 0
+    result: passed
+    tool_versions:
+      go: go1.25.8 windows/amd64
+      gcc: WinLibs POSIX UCRT 16.1.0
+    artifact: _docs/ralph/evidence/prototype-t5/T5-10/validation.txt
   - command: git diff --check
     exit_code: 0
     result: passed
+    artifact: _docs/ralph/evidence/prototype-t5/T5-10/validation.txt
 generated_hashes: {}
 migrations: []
-external_evidence: []
+external_evidence:
+  - _docs/ralph/evidence/prototype-t5/T5-10/validation.txt
 known_failures: []
 blockers:
-  - Production verifier key epochs remain fixed at prototype epoch 1 until a governed verifier-key registry and generated API are integrated by T4.
-  - TOTP, SMS, and email challenge creation must be invoked by trusted off-chain verifier/delivery services; the generic public challenge route rejects these factors.
-  - OTP values and OTP-derived commitments are never accepted on-chain; only signed challenge-bound verifier receipts are valid.
-next_checkpoint: T5-10
-expected_head: 33e7457f3041135c222f89d2f938479b8e701a7b
+  - Production remains unavailable without a non-local non-replayable revision anchor, production artifact backend, non-exportable KMS operations, authoritative role and organization resolvers, consent authority, and durable audit service.
+  - Filesystem artifact, key, and audit stores plus the process revision anchor are fixture or development only; Windows use requires the explicit UnsafeWindowsDevelopment override.
+  - T4 has not published an intake epoch manifest, epoch base tag, producer intake validator, or updated producer schema required by the authoritative intake runbook; T5-10 must not be tagged or represented as intake-eligible.
+next_checkpoint: T5-11
+expected_head: 25cf508a904a0b8de1ac7eb163a67bf1703007f2

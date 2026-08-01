@@ -1,0 +1,53 @@
+T5-10 durable vault fixture validation
+Payload: 25cf508a904a0b8de1ac7eb163a67bf1703007f2
+Platform: windows/amd64
+
+Tool versions:
+C:\Users\pavil\AppData\Local\VirtEngine\toolchains\go1.25.8\go\bin\go.exe version
+go version go1.25.8 windows/amd64
+
+C:\Users\pavil\AppData\Local\Microsoft\WinGet\Packages\BrechtSanders.WinLibs.POSIX.UCRT_Microsoft.Winget.Source_8wekyb3d8bbwe\mingw64\bin\gcc.exe --version
+gcc.exe (MinGW-W64 x86_64-ucrt-posix-seh, built by Brecht Sanders, r3) 16.1.0
+
+Command:
+C:\Users\pavil\AppData\Local\VirtEngine\toolchains\go1.25.8\go\bin\go.exe test -count=1 ./pkg/data_vault/...
+Output:
+ok github.com/virtengine/virtengine/pkg/data_vault 4.784s
+ok github.com/virtengine/virtengine/pkg/data_vault/contracts 0.500s
+ok github.com/virtengine/virtengine/pkg/data_vault/keys 0.737s
+Exit code: 0
+
+Command:
+C:\Users\pavil\AppData\Local\VirtEngine\toolchains\go1.25.8\go\bin\go.exe test -count=1 ./pkg/provider_daemon -run 'Vault|PortalVault'
+Output:
+ok github.com/virtengine/virtengine/pkg/provider_daemon 1.031s
+Exit code: 0
+
+Command:
+C:\Users\pavil\AppData\Local\VirtEngine\toolchains\go1.25.8\go\bin\go.exe vet ./pkg/data_vault/... ./pkg/provider_daemon
+Output: no diagnostics
+Exit code: 0
+
+Environment:
+CGO_ENABLED=1
+CC=gcc
+PATH prepended with C:\Users\pavil\AppData\Local\Microsoft\WinGet\Packages\BrechtSanders.WinLibs.POSIX.UCRT_Microsoft.Winget.Source_8wekyb3d8bbwe\mingw64\bin
+
+Command:
+C:\Users\pavil\AppData\Local\VirtEngine\toolchains\go1.25.8\go\bin\go.exe test -race -count=1 ./pkg/data_vault/...
+Output:
+ok github.com/virtengine/virtengine/pkg/data_vault 5.351s
+ok github.com/virtengine/virtengine/pkg/data_vault/contracts 1.525s
+ok github.com/virtengine/virtengine/pkg/data_vault/keys 2.539s
+Exit code: 0
+
+Command:
+git diff --cached --check
+Output: no errors
+Exit code: 0
+
+Non-claims:
+- Filesystem artifact, audit, key persistence, and process revision anchors are fixture/development-only.
+- Production remains unavailable without a non-local non-replayable revision anchor, production artifact backend, non-exportable KMS operations, authoritative role/organization resolvers, consent authority, and durable audit store.
+- Windows fixture use requires the explicit UnsafeWindowsDevelopment override because restrictive DACL enforcement is not certified.
+- No T4 intake epoch/tag/validator is currently published; this payload is not tagged or intake-eligible.
