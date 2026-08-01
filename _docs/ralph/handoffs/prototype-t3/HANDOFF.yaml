@@ -1,45 +1,51 @@
 campaign: three-day-prototype
 thread: T3
-checkpoint: T3-03
+checkpoint: T3-04
 branch: ve/prototype-t3-reliability
-start_head: 46b213a3c230790a46c9db8bd19bfb9ace2ef9cf
-end_head: 38bb57c61949b63a6c1d60065ff5390d6bcfb171
+start_head: a66aaaeea4b7c7f4104df38bd0832e0a33877323
+end_head: 51028d2482d7ed7810feda77ba3b035eec80c723
 origin_main: 79391a3df86d85522b92e0400c6904971ecbe65d
 integration_parent: fa21b1e540a5efcbe1822da4199be7acec7709d3
 tree_clean: true
 commits:
-  - 38bb57c61949b63a6c1d60065ff5390d6bcfb171
+  - 51028d2482d7ed7810feda77ba3b035eec80c723
 owned_paths:
   - pkg/provider_daemon/
   - _docs/ralph/handoffs/prototype-t3/HANDOFF.yaml
 files_changed:
-  - pkg/provider_daemon/settlement_pipeline.go
-  - pkg/provider_daemon/usage_alerts.go
   - pkg/provider_daemon/waldur_reconciler.go
   - pkg/provider_daemon/waldur_reconciler_test.go
+  - pkg/provider_daemon/waldur_reconciliation_store.go
+  - pkg/provider_daemon/waldur_reconciliation_store_test.go
 tests:
-  - command: go test -count=1 ./pkg/provider_daemon -run 'Waldur|Reconcile|UsageReporter'
+  - command: C:\Users\pavil\AppData\Local\VirtEngine\toolchains\go1.25.8\go\bin\go.exe -C C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t3 test -count=1 ./pkg/provider_daemon -run FileReconciliationJobStore
     exit_code: 0
     result: passed
     tool_versions:
-      go: go1.25.8 windows/amd64
-  - command: go vet ./pkg/provider_daemon
+      go: go version go1.25.8 windows/amd64
+  - command: C:\Users\pavil\AppData\Local\VirtEngine\toolchains\go1.25.8\go\bin\go.exe -C C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t3 test -count=1 ./pkg/provider_daemon -run Waldur
     exit_code: 0
     result: passed
     tool_versions:
-      go: go1.25.8 windows/amd64
-  - command: go test -race -count=1 ./pkg/provider_daemon -run 'Waldur|Reconcile|UsageReporter'
+      go: go version go1.25.8 windows/amd64
+  - command: C:\Users\pavil\AppData\Local\VirtEngine\toolchains\go1.25.8\go\bin\go.exe -C C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t3 vet ./pkg/provider_daemon
     exit_code: 0
     result: passed
     tool_versions:
-      go: go1.25.8 windows/amd64
+      go: go version go1.25.8 windows/amd64
+  - command: set CGO_ENABLED=1 && set CC=C:\Users\pavil\AppData\Local\Microsoft\WinGet\Packages\BrechtSanders.WinLibs.POSIX.UCRT_Microsoft.Winget.Source_8wekyb3d8bbwe\mingw64\bin\gcc.exe && C:\Users\pavil\AppData\Local\VirtEngine\toolchains\go1.25.8\go\bin\go.exe -C C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t3 test -race -count=1 ./pkg/provider_daemon -run 'Waldur|FileReconciliationJobStore'
+    exit_code: 0
+    result: passed
+    tool_versions:
+      go: go version go1.25.8 windows/amd64
       gcc: WinLibs GCC 16.1.0 POSIX UCRT
 generated_hashes: {}
 migrations: []
-external_evidence: []
+external_evidence:
+  - No production reconciliation authority, independent operator certification, or external Waldur evidence availability is claimed.
 known_failures: []
 blockers:
   - T4 must install a deterministic TransferLifecycleHooks adapter during its app-wiring ownership window; outgoing settlement IBC remains fail closed until then.
   - T4 producer-handoff.schema.json at integration parent fa21b1e540a5efcbe1822da4199be7acec7709d3 does not yet declare the campaign-required integration_parent field.
-next_checkpoint: T3-04
-expected_head: 38bb57c61949b63a6c1d60065ff5390d6bcfb171
+next_checkpoint: T3-05
+expected_head: 51028d2482d7ed7810feda77ba3b035eec80c723
