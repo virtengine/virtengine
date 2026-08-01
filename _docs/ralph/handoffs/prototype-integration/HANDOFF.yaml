@@ -1,14 +1,14 @@
 {
   "campaign": "three-day-prototype",
   "thread": "T4",
-  "checkpoint": "T4-06A",
+  "checkpoint": "T4-06B",
   "branch": "ve/prototype-integration",
-  "start_head": "6cb453faf143813aad61945e74c3a90389cd1dd6",
-  "end_head": "5a4685a78b6365e407996b5625717eec6f990944",
+  "start_head": "e2e6885f5ea8feaa24a3e60624bb7195b62078f9",
+  "end_head": "342855608b50ba8ac3e1880fa6b2522b27c7bf85",
   "origin_main": "79391a3df86d85522b92e0400c6904971ecbe65d",
   "tree_clean": true,
   "commits": [
-    "5a4685a78b6365e407996b5625717eec6f990944"
+    "342855608b50ba8ac3e1880fa6b2522b27c7bf85"
   ],
   "owned_paths": [
     "_docs/ralph/prototype-integration/**",
@@ -17,26 +17,38 @@
     "_docs/ralph/prototype-integration/slurm-chart-inventory.json",
     "_docs/ralph/prototype-integration/slurm-chart-inventory.schema.json",
     "scripts/validate-slurm-chart-inventory.cjs",
-    "scripts/validate-slurm-chart-inventory.test.cjs"
+    "scripts/validate-slurm-chart-inventory.test.cjs",
+    "scripts/validate_slurm_chart_semantics.py",
+    "scripts/validate_slurm_chart_semantics_test.py",
+    "scripts/testdata/slurm-chart-semantics/**"
   ],
   "files_changed": [
-    "_docs/ralph/handoffs/prototype-integration/HANDOFF.yaml",
-    "_docs/INDEX.md",
     "_docs/ralph/handoffs/prototype-integration/HANDOFF.yaml",
     "_docs/ralph/prototype-integration/control.json",
     "_docs/ralph/prototype-integration/slurm-chart-inventory.json",
     "_docs/ralph/prototype-integration/slurm-chart-inventory.schema.json",
+    "_docs/ralph/prototype-integration/slurm-chart-semantic-report.json",
+    "scripts/testdata/slurm-chart-semantics/hardened.yaml",
+    "scripts/testdata/slurm-chart-semantics/negative-durable-state.yaml",
+    "scripts/testdata/slurm-chart-semantics/negative-immutable-images.yaml",
+    "scripts/testdata/slurm-chart-semantics/negative-least-privilege.yaml",
+    "scripts/testdata/slurm-chart-semantics/negative-replica-capacity-equality.yaml",
+    "scripts/testdata/slurm-chart-semantics/negative-stable-secrets.yaml",
     "scripts/validate-prototype-integration.cjs",
+    "scripts/validate-prototype-integration.test.cjs",
     "scripts/validate-slurm-chart-inventory.cjs",
-    "scripts/validate-slurm-chart-inventory.test.cjs"
+    "scripts/validate-slurm-chart-inventory.test.cjs",
+    "scripts/validate_slurm_chart_semantics.py",
+    "scripts/validate_slurm_chart_semantics_test.py"
   ],
   "tests": [
     {
-      "command": "node scripts/validate-slurm-chart-inventory.test.cjs && node scripts/validate-slurm-chart-inventory.cjs",
+      "command": "python scripts/validate_slurm_chart_semantics_test.py && node scripts/validate-slurm-chart-inventory.test.cjs && node scripts/validate-slurm-chart-inventory.cjs",
       "exit_code": 0,
       "result": "passed",
-      "test_count": 10,
+      "test_count": 31,
       "tool_versions": {
+        "python": "3.14.6 windows",
         "node": "20.19.1"
       }
     },
@@ -50,8 +62,8 @@
     }
   ],
   "generated_hashes": {
-    "_docs/ralph/prototype-integration/slurm-chart-inventory.json": "798880465b738aa785bd6adedfb813105981a2d1bdb25dabebd67ada6f0b1280",
-    "_docs/ralph/prototype-integration/slurm-chart-inventory.schema.json": "8d2ed59e1697923a1dabd65a800fd015b99ce1ca30cf546d90692bb3f07bf738"
+    "scripts/validate_slurm_chart_semantics.py": "bd23d5a1a62817fdc849ac723d780e59deebddbe8f4de00567095e11edc64604",
+    "_docs/ralph/prototype-integration/slurm-chart-semantic-report.json": "34c6bb43206190025209c9d436c872b318100b4720df187196fc1d0f1407f38c"
   },
   "accepted_checkpoints": [],
   "rejected_checkpoints": [
@@ -76,9 +88,10 @@
     "Epoch 1 remains open with no announced intake-v2 producer tags; no producer checkpoint is accepted by this checkpoint.",
     "The canonical deploy/slurm/slurm-cluster chart remains blocked by random render-time secrets, replica/capacity mismatch, mutable images, and blanket privilege.",
     "The competing _build/helm/slurm-cluster chart remains present and must be retired.",
-    "Validation is contract-only; no semantic render, stable-secret, capacity, privilege, durable-state, failover, or restore proof is claimed.",
+    "Executable structured-YAML checks pass on hardened fixtures, but the canonical source diagnostic remains blocked on stable secrets, capacity equality, immutable images, and least privilege; durability remains unverified.",
+    "No canonical chart remediation, failover, restore, or production render approval is claimed.",
     "Task 88C is not complete."
   ],
-  "next_checkpoint": "T4-06B",
-  "expected_head": "5a4685a78b6365e407996b5625717eec6f990944"
+  "next_checkpoint": "T4-07A",
+  "expected_head": "342855608b50ba8ac3e1880fa6b2522b27c7bf85"
 }
