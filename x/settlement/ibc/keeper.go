@@ -169,7 +169,7 @@ func (k IBCKeeper) CheckHandshakeTimeout(ctx sdk.Context, channelID string) erro
 
 	var record HandshakeRecord
 	if err := json.Unmarshal(bz, &record); err != nil {
-		return nil
+		return ErrInvalidPacket.Wrap("invalid handshake record")
 	}
 
 	if record.StartHeight > 0 && ctx.BlockHeight() > record.StartHeight+100 {

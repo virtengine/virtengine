@@ -685,6 +685,18 @@ func TestIBCKeeperHandshakeTimeout(t *testing.T) {
 	require.ErrorIs(t, env.keeper.CheckHandshakeTimeout(lateCtx, "channel-1"), ErrHandshakeTimedOut)
 }
 
+func TestIBCModuleRejectsAndRetainsMalformedHandshakeRecord(t *testing.T) {
+	env := setupIBCTestEnv(t)
+	key := HandshakeKey("channel-0")
+	store := env.ctx.KVStore(env.storeKey)
+	store.Set(key, []byte("not-json"))
+	module := NewIBCModule(env.keeper)
+
+	err := module.OnChanOpenConfirm(env.ctx, PortID, "channel-0")
+	require.ErrorIs(t, err, ErrInvalidPacket)
+	require.Equal(t, []byte("not-json"), store.Get(key))
+}
+
 func TestIBCKeeperBindPort(t *testing.T) {
 	env := setupIBCTestEnv(t)
 
