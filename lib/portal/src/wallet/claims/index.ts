@@ -17,3 +17,23 @@ export type {
   ClaimKeyAuthority,
   DerivedClaimStoreDependencies,
 } from "./store";
+export {
+  SelectivePresentationAdapter,
+  SelectivePresentationError,
+} from "./selective-presentation";
+export type {
+  RequestedClaimProjection,
+  ConsentProjection,
+  CanonicalChallengeProjection,
+  PresentationContext,
+  ChallengeValidator,
+  RequestedDecryptedClaim,
+  RequestedClaimReader,
+  ClaimStatusAuthority,
+  PresentationBindingProjection,
+  OpaquePresentationAuthority,
+  NonceReplayGuard,
+  SelectivePresentationDependencies,
+  SelectivePresentationReview,
+  SelectivePresentationErrorCode,
+} from "./selective-presentation";
