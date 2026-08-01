@@ -1,51 +1,82 @@
 campaign: three-day-prototype
 thread: T2
-checkpoint: T2-X01
+checkpoint: T2-X02
 branch: ve/prototype-t2-product
-start_head: 4d08acc2cef5365fec59c93791d12bbf3acd7f93
-end_head: 957221d2705d124d962e293ef18158716e07fc8b
+start_head: f725b90e294fbbe64a8732100c2aac570f0dfb60
+end_head: 7261750ec31160f6413bdc46e320187a9fa1eac6
 origin_main: 79391a3df86d85522b92e0400c6904971ecbe65d
 tree_clean: true
 commits:
-  - 957221d2705d124d962e293ef18158716e07fc8b
+  - 7261750ec31160f6413bdc46e320187a9fa1eac6
 owned_paths:
-  - lib/portal/src/wallet/context.tsx
-  - lib/portal/src/wallet/session.ts
-  - lib/portal/src/wallet/types.ts
-  - lib/portal/__tests__/wallet/context.test.tsx
-  - lib/portal/src/wallet/index.ts
-  - lib/portal/index.ts
+  - lib/portal/src/chat/
+  - lib/portal/__tests__/chat/
+  - portal/src/components/chat/
+  - portal/src/config/env.ts
+  - portal/src/config/env.test.ts
+  - portal/src/stores/chatStore.ts
+  - portal/.env.example
 files_changed:
-  - lib/portal/src/wallet/context.tsx
-  - lib/portal/src/wallet/session.ts
-  - lib/portal/src/wallet/types.ts
-  - lib/portal/__tests__/wallet/context.test.tsx
-  - lib/portal/src/wallet/index.ts
-  - lib/portal/index.ts
+  - lib/portal/src/chat/types.ts
+  - lib/portal/src/chat/tools.ts
+  - lib/portal/src/chat/agent.ts
+  - lib/portal/src/chat/chain-tools/deployments.ts
+  - lib/portal/src/chat/chain-tools/marketplace.ts
+  - lib/portal/src/chat/chain-tools/identity.ts
+  - lib/portal/src/chat/chain-tools/governance.ts
+  - lib/portal/src/chat/chain-tools/wallet.ts
+  - lib/portal/__tests__/chat/agent.test.ts
+  - lib/portal/__tests__/chat/tools.test.ts
+  - portal/src/components/chat/ChatPanel.tsx
+  - portal/src/components/chat/executeChatAction.ts
+  - portal/src/components/chat/executeChatAction.test.ts
+  - portal/src/config/env.ts
+  - portal/src/config/env.test.ts
+  - portal/src/stores/chatStore.ts
+  - portal/.env.example
 tests:
   - command: C:\Users\pavil\AppData\Local\Temp\virtengine-node-v24.12.0\npm.cmd --prefix C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t2\lib\portal test
     exit_code: 0
     result: passed
-    test_count: 656
+    test_count: 661
     tool_versions:
       node: v24.12.0
-    artifact: _docs/ralph/handoffs/prototype-t2/T2-X01-evidence.txt
+    artifact: _docs/ralph/handoffs/prototype-t2/T2-X02-evidence.txt
   - command: C:\Users\pavil\AppData\Local\Temp\virtengine-node-v24.12.0\npm.cmd --prefix C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t2\lib\portal run type-check
     exit_code: 0
     result: passed
     tool_versions:
       node: v24.12.0
-    artifact: _docs/ralph/handoffs/prototype-t2/T2-X01-evidence.txt
+    artifact: _docs/ralph/handoffs/prototype-t2/T2-X02-evidence.txt
+  - command: C:\Users\pavil\AppData\Local\Temp\virtengine-node-v24.12.0\npm.cmd --prefix C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t2\portal run lint
+    exit_code: 0
+    result: passed
+    tool_versions:
+      node: v24.12.0
+    artifact: _docs/ralph/handoffs/prototype-t2/T2-X02-evidence.txt
+  - command: C:\Users\pavil\AppData\Local\Temp\virtengine-node-v24.12.0\npm.cmd --prefix C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t2\portal run type-check
+    exit_code: 0
+    result: passed
+    tool_versions:
+      node: v24.12.0
+    artifact: _docs/ralph/handoffs/prototype-t2/T2-X02-evidence.txt
+  - command: C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t2\portal\node_modules\.bin\vitest.CMD run --reporter=dot
+    exit_code: 0
+    result: passed
+    test_count: 528
+    tool_versions:
+      node: v24.12.0
+    artifact: _docs/ralph/handoffs/prototype-t2/T2-X02-evidence.txt
 generated_hashes: {}
 migrations: []
 external_evidence:
-  - _docs/ralph/handoffs/prototype-t2/T2-X01-evidence.txt
+  - _docs/ralph/handoffs/prototype-t2/T2-X02-evidence.txt
 known_failures:
   - TestProviderMutationSubmitterStandbyTakesOverWithHigherFence fails repeatedly in the full provider package gate with submitter lease timing errors.
 blockers:
   - T4 producer-handoff.schema.json forbids the integration_parent field required by the updated campaign plan; integration ancestor fa21b1e540a5efcbe1822da4199be7acec7709d3 is retained in T2-05-evidence.txt.
   - Full provider package certification is blocked by the unrelated submitter lease timing failure retained in T2-03B-evidence.txt.
-  - Production live signing authorization authority is not wired; all signing methods fail closed until injected.
-  - Live authorization remains memory-only and reconnect metadata cannot authorize signing.
-next_checkpoint: T2-X02
-expected_head: 957221d2705d124d962e293ef18158716e07fc8b
+  - Production chat mutations remain disabled; T2-07 is intentionally not registered and Task 91B prerequisites remain unavailable.
+  - Query-only chat requires explicit enablement and no production model certification is claimed.
+next_checkpoint: T2-X03
+expected_head: 7261750ec31160f6413bdc46e320187a9fa1eac6
