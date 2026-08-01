@@ -160,13 +160,123 @@ func (m *mockPortKeeper) Route(module string) (porttypes.IBCModule, bool) {
 }
 
 type ibcTestEnv struct {
-	ctx      sdk.Context
-	keeper   IBCKeeper
-	settle   *mockSettlementKeeper
-	channel  *mockChannelKeeper
-	port     *mockPortKeeper
+	ctx       sdk.Context
+	keeper    IBCKeeper
+	lifecycle *testLifecycleHooks
+	settle    *mockSettlementKeeper
+	channel   *mockChannelKeeper
+	port      *mockPortKeeper
+	storeKey  storetypes.StoreKey
+	codec     codec.BinaryCodec
+}
+
+type testConservationLedger struct {
+	Available int64    `json:"available"`
+	Held      int64    `json:"held"`
+	Committed int64    `json:"committed"`
+	Refunded  int64    `json:"refunded"`
+	Calls     []string `json:"calls"`
+}
+
+type testLifecycleHooks struct {
 	storeKey storetypes.StoreKey
-	codec    codec.BinaryCodec
+	failAt   string
+}
+
+var testLifecycleLedgerKey = []byte{0xf0}
+
+func (h *testLifecycleHooks) PrepareTransfer(ctx sdk.Context, packet SettlementPacketData) (string, error) {
+	if h.failAt == "prepare" {
+		return "", fmt.Errorf("injected prepare failure")
+	}
+	ledger := h.getLedger(ctx)
+	if ledger.Available == 0 && ledger.Held == 0 && ledger.Committed == 0 && ledger.Refunded == 0 {
+		ledger.Available = 1000
+	}
+	amount := packetAmount(packet)
+	if amount <= 0 || ledger.Available < amount {
+		return "", fmt.Errorf("insufficient test custody")
+	}
+	ledger.Available -= amount
+	ledger.Held += amount
+	ledger.Calls = append(ledger.Calls, "prepare")
+	h.setLedger(ctx, ledger)
+	return "custody/deposit-1", nil
+}
+
+func (h *testLifecycleHooks) FinalizeTransfer(ctx sdk.Context, _ PendingPacket, _ TransferTransition) error {
+	if h.failAt == "finalize" {
+		return fmt.Errorf("injected finalize failure")
+	}
+	ledger := h.getLedger(ctx)
+	ledger.Committed += ledger.Held
+	ledger.Held = 0
+	ledger.Calls = append(ledger.Calls, "finalize")
+	h.setLedger(ctx, ledger)
+	return nil
+}
+
+func (h *testLifecycleHooks) CompensateTransfer(ctx sdk.Context, _ PendingPacket, _ TransferTransition) error {
+	if h.failAt == "compensate" {
+		return fmt.Errorf("injected compensate failure")
+	}
+	ledger := h.getLedger(ctx)
+	ledger.Refunded += ledger.Held
+	ledger.Held = 0
+	ledger.Calls = append(ledger.Calls, "compensate")
+	h.setLedger(ctx, ledger)
+	return nil
+}
+
+func (h *testLifecycleHooks) RecordAccounting(ctx sdk.Context, _ PendingPacket, _ TransferTransition) error {
+	if h.failAt == "accounting" {
+		return fmt.Errorf("injected accounting failure")
+	}
+	ledger := h.getLedger(ctx)
+	ledger.Calls = append(ledger.Calls, "accounting")
+	h.setLedger(ctx, ledger)
+	return nil
+}
+
+func (h *testLifecycleHooks) RecordAudit(ctx sdk.Context, _ PendingPacket, _ TransferTransition) error {
+	if h.failAt == "audit" {
+		return fmt.Errorf("injected audit failure")
+	}
+	ledger := h.getLedger(ctx)
+	ledger.Calls = append(ledger.Calls, "audit")
+	h.setLedger(ctx, ledger)
+	return nil
+}
+
+func (h *testLifecycleHooks) getLedger(ctx sdk.Context) testConservationLedger {
+	bz := ctx.KVStore(h.storeKey).Get(testLifecycleLedgerKey)
+	if bz == nil {
+		return testConservationLedger{}
+	}
+	var ledger testConservationLedger
+	if err := json.Unmarshal(bz, &ledger); err != nil {
+		panic(err)
+	}
+	return ledger
+}
+
+func (h *testLifecycleHooks) setLedger(ctx sdk.Context, ledger testConservationLedger) {
+	bz, err := json.Marshal(ledger)
+	if err != nil {
+		panic(err)
+	}
+	ctx.KVStore(h.storeKey).Set(testLifecycleLedgerKey, bz)
+}
+
+func packetAmount(packet SettlementPacketData) int64 {
+	if packet.Type != PacketTypeEscrowDeposit {
+		return 1
+	}
+	var deposit EscrowDepositPacket
+	if err := json.Unmarshal(packet.Data, &deposit); err != nil || len(deposit.Amount) != 1 {
+		return 0
+	}
+	return deposit.Amount[0].Amount.Int64()
 }
 
 func setupIBCTestEnv(t *testing.T) ibcTestEnv {
@@ -193,15 +303,18 @@ func setupIBCTestEnv(t *testing.T) ibcTestEnv {
 	port := newMockPortKeeper()
 
 	keeper := NewIBCKeeper(cdc, storeKey, settle, channel, port)
+	lifecycle := &testLifecycleHooks{storeKey: storeKey}
+	keeper.SetTransferLifecycleHooks(lifecycle)
 
 	return ibcTestEnv{
-		ctx:      ctx,
-		keeper:   keeper,
-		settle:   settle,
-		channel:  channel,
-		port:     port,
-		storeKey: storeKey,
-		codec:    cdc,
+		ctx:       ctx,
+		keeper:    keeper,
+		lifecycle: lifecycle,
+		settle:    settle,
+		channel:   channel,
+		port:      port,
+		storeKey:  storeKey,
+		codec:     cdc,
 	}
 }
 
@@ -294,6 +407,103 @@ func TestIBCKeeperTerminalCallbacks(t *testing.T) {
 			require.Equal(t, test.wantReason, marker.CompensationReason)
 		})
 	}
+}
+
+func TestIBCKeeperLifecycleHooksFailClosed(t *testing.T) {
+	env := setupIBCTestEnv(t)
+	env.keeper.SetTransferLifecycleHooks(nil)
+
+	_, err := env.keeper.SendEscrowDepositPacket(env.ctx, "channel-0", clienttypes.Height{}, 0, validDepositPacket(env.ctx.BlockTime()))
+	require.ErrorIs(t, err, ErrLifecycleHooksUnavailable)
+	require.Empty(t, env.channel.sent)
+}
+
+func TestIBCKeeperAtomicTransitionRollbackAndRetry(t *testing.T) {
+	tests := []struct {
+		name          string
+		callback      string
+		failAt        string
+		wantCommitted int64
+		wantRefunded  int64
+	}{
+		{name: "finalize custody failure", callback: "success", failAt: "finalize", wantCommitted: 1000},
+		{name: "compensation custody failure", callback: "timeout", failAt: "compensate", wantRefunded: 1000},
+		{name: "accounting failure", callback: "success", failAt: "accounting", wantCommitted: 1000},
+		{name: "audit failure", callback: "timeout", failAt: "audit", wantRefunded: 1000},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			env := setupIBCTestEnv(t)
+			sequence, err := env.keeper.SendEscrowDepositPacket(env.ctx, "channel-0", clienttypes.Height{}, 0, validDepositPacket(env.ctx.BlockTime()))
+			require.NoError(t, err)
+			packet := channeltypes.NewPacket(env.channel.sent[0].data, sequence, PortID, "channel-0", PortID, "channel-1", clienttypes.NewHeight(0, 20), 0)
+			relayer := sdk.AccAddress([]byte("relayer_addr________"))
+			ack := NewResultAcknowledgement(EscrowDepositAck{EscrowID: "escrow-1", Status: "created"})
+			runCallback := func() error {
+				if test.callback == "timeout" {
+					return env.keeper.OnTimeoutPacket(env.ctx, packet, relayer)
+				}
+				return env.keeper.OnAcknowledgementPacket(env.ctx, packet, ack.GetBytes(), relayer)
+			}
+
+			env.lifecycle.failAt = test.failAt
+			require.Error(t, runCallback())
+			pending, found := env.keeper.getPendingPacket(env.ctx, "channel-0", sequence)
+			require.True(t, found)
+			require.Equal(t, TransferStatePending, pending.State)
+			_, found = env.keeper.getTerminalMarker(env.ctx, "channel-0", sequence)
+			require.False(t, found)
+			store := env.ctx.KVStore(env.storeKey)
+			require.Nil(t, store.Get(AckPacketKey("channel-0", sequence)))
+			require.Nil(t, store.Get(TimeoutPacketKey("channel-0", sequence)))
+			ledger := env.lifecycle.getLedger(env.ctx)
+			require.Equal(t, testConservationLedger{Available: 0, Held: 1000, Calls: []string{"prepare"}}, ledger)
+
+			env.lifecycle.failAt = ""
+			require.NoError(t, runCallback())
+			require.NoError(t, runCallback())
+			_, found = env.keeper.getPendingPacket(env.ctx, "channel-0", sequence)
+			require.False(t, found)
+			_, found = env.keeper.getTerminalMarker(env.ctx, "channel-0", sequence)
+			require.True(t, found)
+			if test.callback == "timeout" {
+				require.NotNil(t, store.Get(TimeoutPacketKey("channel-0", sequence)))
+				require.Nil(t, store.Get(AckPacketKey("channel-0", sequence)))
+			} else {
+				require.NotNil(t, store.Get(AckPacketKey("channel-0", sequence)))
+				require.Nil(t, store.Get(TimeoutPacketKey("channel-0", sequence)))
+			}
+			ledger = env.lifecycle.getLedger(env.ctx)
+			require.Equal(t, int64(1000), ledger.Available+ledger.Held+ledger.Committed+ledger.Refunded)
+			require.Equal(t, test.wantCommitted, ledger.Committed)
+			require.Equal(t, test.wantRefunded, ledger.Refunded)
+			custodyCall := "finalize"
+			if test.callback == "timeout" {
+				custodyCall = "compensate"
+			}
+			require.Equal(t, []string{"prepare", custodyCall, "accounting", "audit"}, ledger.Calls)
+		})
+	}
+}
+
+func TestIBCKeeperCallbacksFailClosed(t *testing.T) {
+	env := setupIBCTestEnv(t)
+	relayer := sdk.AccAddress([]byte("relayer_addr________"))
+	ack := NewResultAcknowledgement(EscrowDepositAck{EscrowID: "escrow-1", Status: "created"})
+	unknown := channeltypes.NewPacket([]byte(`{"unknown":true}`), 99, PortID, "channel-0", PortID, "channel-1", clienttypes.NewHeight(0, 20), 0)
+	require.ErrorIs(t, env.keeper.OnAcknowledgementPacket(env.ctx, unknown, ack.GetBytes(), relayer), ErrPendingPacketNotFound)
+
+	sequence, err := env.keeper.SendEscrowDepositPacket(env.ctx, "channel-0", clienttypes.Height{}, 0, validDepositPacket(env.ctx.BlockTime()))
+	require.NoError(t, err)
+	packet := channeltypes.NewPacket(env.channel.sent[0].data, sequence, PortID, "channel-0", PortID, "channel-1", clienttypes.NewHeight(0, 20), 0)
+	require.ErrorIs(t, env.keeper.OnAcknowledgementPacket(env.ctx, packet, Acknowledgement{}.GetBytes(), relayer), ErrInvalidPacket)
+
+	mismatched := channeltypes.NewPacket(packet.GetData(), sequence, "other-port", "channel-0", PortID, "channel-1", clienttypes.NewHeight(0, 20), 0)
+	require.ErrorIs(t, env.keeper.OnTimeoutPacket(env.ctx, mismatched, relayer), ErrPacketIdentityMismatch)
+	pending, found := env.keeper.getPendingPacket(env.ctx, "channel-0", sequence)
+	require.True(t, found)
+	require.Equal(t, TransferStatePending, pending.State)
 }
 
 func validDepositPacket(now time.Time) EscrowDepositPacket {

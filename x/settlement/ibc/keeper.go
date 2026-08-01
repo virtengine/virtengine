@@ -23,11 +23,12 @@ import (
 
 // PendingPacket tracks packets awaiting acknowledgement.
 type PendingPacket struct {
-	PacketData SettlementPacketData `json:"packet_data"`
-	Identity   TransferIdentity     `json:"identity"`
-	State      TransferState        `json:"state"`
-	Sender     string               `json:"sender,omitempty"`
-	CreatedAt  time.Time            `json:"created_at"`
+	PacketData       SettlementPacketData `json:"packet_data"`
+	Identity         TransferIdentity     `json:"identity"`
+	State            TransferState        `json:"state"`
+	CustodyReference string               `json:"custody_reference"`
+	Sender           string               `json:"sender,omitempty"`
+	CreatedAt        time.Time            `json:"created_at"`
 }
 
 // HandshakeRecord tracks handshake start time for timeouts.
@@ -66,6 +67,7 @@ type IBCKeeper struct {
 	channelKeeper    ChannelKeeper
 	portKeeper       PortKeeper
 	relayerHooks     RelayerHooks
+	lifecycleHooks   TransferLifecycleHooks
 }
 
 // NewIBCKeeper creates a new settlement IBC keeper.
@@ -83,7 +85,17 @@ func NewIBCKeeper(
 		channelKeeper:    channelKeeper,
 		portKeeper:       portKeeper,
 		relayerHooks:     NoOpRelayerHooks{},
+		lifecycleHooks:   unavailableTransferLifecycleHooks{},
 	}
+}
+
+// SetTransferLifecycleHooks installs mandatory deterministic transfer hooks.
+func (k *IBCKeeper) SetTransferLifecycleHooks(hooks TransferLifecycleHooks) {
+	if hooks == nil {
+		k.lifecycleHooks = unavailableTransferLifecycleHooks{}
+		return
+	}
+	k.lifecycleHooks = hooks
 }
 
 // SetRelayerHooks installs relayer hooks.
@@ -246,8 +258,17 @@ func (k IBCKeeper) sendPacket(
 		timeoutTimestamp = uint64(blockTime) + DefaultTimeoutTimestampDelta //nolint:gosec // block time is non-negative
 	}
 
+	cacheCtx, write := ctx.CacheContext()
+	custodyReference, err := k.lifecycleHooks.PrepareTransfer(cacheCtx, packetData)
+	if err != nil {
+		return 0, err
+	}
+	if err := validateCustodyReference(custodyReference); err != nil {
+		return 0, err
+	}
+
 	sequence, err := k.channelKeeper.SendPacket(
-		ctx,
+		cacheCtx,
 		PortID,
 		sourceChannel,
 		height,
@@ -258,7 +279,7 @@ func (k IBCKeeper) sendPacket(
 		return 0, err
 	}
 
-	k.setPendingPacket(ctx, sourceChannel, sequence, PendingPacket{
+	k.setPendingPacket(cacheCtx, sourceChannel, sequence, PendingPacket{
 		PacketData: packetData,
 		Identity: TransferIdentity{
 			Version:         TransferContractVersion,
@@ -268,11 +289,12 @@ func (k IBCKeeper) sendPacket(
 			Sequence:        sequence,
 			PayloadDigest:   payloadDigest(packetData.GetBytes()),
 		},
-		State:     TransferStatePending,
-		CreatedAt: ctx.BlockTime(),
+		State:            TransferStatePending,
+		CustodyReference: custodyReference,
+		CreatedAt:        cacheCtx.BlockTime(),
 	})
 
-	ctx.EventManager().EmitEvent(
+	cacheCtx.EventManager().EmitEvent(
 		sdk.NewEvent(
 			EventTypePacketSent,
 			sdk.NewAttribute(AttributeKeyPacketType, string(packetData.Type)),
@@ -280,6 +302,8 @@ func (k IBCKeeper) sendPacket(
 			sdk.NewAttribute(AttributeKeySequence, fmt.Sprintf("%d", sequence)),
 		),
 	)
+	write()
+	ctx.EventManager().EmitEvents(cacheCtx.EventManager().Events())
 
 	return sequence, nil
 }
@@ -365,9 +389,12 @@ func (k IBCKeeper) OnAcknowledgementPacket(
 	if err := json.Unmarshal(acknowledgement, &ack); err != nil {
 		return ErrInvalidPacket.Wrap(err.Error())
 	}
+	if err := ack.Validate(); err != nil {
+		return ErrInvalidPacket.Wrap(err.Error())
+	}
 	digest := acknowledgementDigest(acknowledgement)
 	if terminal, found := k.getTerminalMarker(ctx, packet.GetSourceChannel(), packet.GetSequence()); found {
-		if bytes.Equal(terminal.Identity.PayloadDigest, payloadDigest(packet.GetData())) && bytes.Equal(terminal.CallbackDigest, digest) {
+		if terminalMatchesPacket(terminal, packet) && bytes.Equal(terminal.CallbackDigest, digest) {
 			return nil
 		}
 		return ErrTerminalConflict
@@ -375,25 +402,30 @@ func (k IBCKeeper) OnAcknowledgementPacket(
 
 	pending, found := k.getPendingPacket(ctx, packet.GetSourceChannel(), packet.GetSequence())
 	if !found {
-		return nil
+		return ErrPendingPacketNotFound
+	}
+	if err := validatePendingIdentity(pending, packet); err != nil {
+		return err
 	}
 
-	terminalState := TransferStateFinalized
-	reason := CompensationReasonNone
-	if !ack.Success() {
-		terminalState = TransferStateCompensated
-		reason = CompensationReasonErrorAck
+	transition := TransferTransition{
+		Identity:          pending.Identity,
+		PacketType:        pending.PacketData.Type,
+		FromState:         TransferStatePending,
+		IntermediateState: TransferStateFinalizing,
+		TerminalState:     TransferStateFinalized,
+		CallbackDigest:    digest,
 	}
-	pending.State = terminalState
-	k.setPendingPacket(ctx, packet.GetSourceChannel(), packet.GetSequence(), pending)
-	k.setTerminalMarker(ctx, TerminalMarker{
-		Identity:           pending.Identity,
-		State:              terminalState,
-		CompensationReason: reason,
-		CallbackDigest:     digest,
-		TransitionedAt:     ctx.BlockTime(),
-	})
-	k.storeAck(ctx, packet.GetSourceChannel(), packet.GetSequence(), ack)
+	if !ack.Success() {
+		transition.IntermediateState = TransferStateCompensating
+		transition.TerminalState = TransferStateCompensated
+		transition.CompensationReason = CompensationReasonErrorAck
+	}
+	if err := k.applyTerminalTransition(ctx, pending, transition, func(cacheCtx sdk.Context) {
+		k.storeAck(cacheCtx, packet.GetSourceChannel(), packet.GetSequence(), ack)
+	}); err != nil {
+		return err
+	}
 
 	k.relayerHooks.OnPacketAcknowledged(ctx, relayer, packet, pending.PacketData.Type, ack.Success())
 
@@ -419,7 +451,7 @@ func (k IBCKeeper) OnTimeoutPacket(
 ) error {
 	digest := timeoutDigest()
 	if terminal, found := k.getTerminalMarker(ctx, packet.GetSourceChannel(), packet.GetSequence()); found {
-		if bytes.Equal(terminal.Identity.PayloadDigest, payloadDigest(packet.GetData())) && bytes.Equal(terminal.CallbackDigest, digest) {
+		if terminalMatchesPacket(terminal, packet) && bytes.Equal(terminal.CallbackDigest, digest) {
 			return nil
 		}
 		return ErrTerminalConflict
@@ -427,19 +459,25 @@ func (k IBCKeeper) OnTimeoutPacket(
 
 	pending, found := k.getPendingPacket(ctx, packet.GetSourceChannel(), packet.GetSequence())
 	if !found {
-		return nil
+		return ErrPendingPacketNotFound
 	}
-
-	pending.State = TransferStateCompensated
-	k.setPendingPacket(ctx, packet.GetSourceChannel(), packet.GetSequence(), pending)
-	k.setTerminalMarker(ctx, TerminalMarker{
+	if err := validatePendingIdentity(pending, packet); err != nil {
+		return err
+	}
+	transition := TransferTransition{
 		Identity:           pending.Identity,
-		State:              TransferStateCompensated,
+		PacketType:         pending.PacketData.Type,
+		FromState:          TransferStatePending,
+		IntermediateState:  TransferStateCompensating,
+		TerminalState:      TransferStateCompensated,
 		CompensationReason: CompensationReasonTimeout,
 		CallbackDigest:     digest,
-		TransitionedAt:     ctx.BlockTime(),
-	})
-	k.storeTimeout(ctx, packet.GetSourceChannel(), packet.GetSequence())
+	}
+	if err := k.applyTerminalTransition(ctx, pending, transition, func(cacheCtx sdk.Context) {
+		k.storeTimeout(cacheCtx, packet.GetSourceChannel(), packet.GetSequence())
+	}); err != nil {
+		return err
+	}
 
 	k.relayerHooks.OnPacketTimeout(ctx, relayer, packet, pending.PacketData.Type)
 
@@ -572,6 +610,68 @@ func (k IBCKeeper) getPendingPacket(ctx sdk.Context, channelID string, sequence 
 func (k IBCKeeper) deletePendingPacket(ctx sdk.Context, channelID string, sequence uint64) {
 	store := ctx.KVStore(k.storeKey)
 	store.Delete(PendingPacketKey(channelID, sequence))
+}
+
+func validatePendingIdentity(pending PendingPacket, packet channeltypes.Packet) error {
+	if pending.State != TransferStatePending || pending.Identity.SourcePort != packet.GetSourcePort() ||
+		pending.Identity.SourceChannel != packet.GetSourceChannel() || pending.Identity.Sequence != packet.GetSequence() ||
+		!bytes.Equal(pending.Identity.PayloadDigest, payloadDigest(packet.GetData())) {
+		return ErrPacketIdentityMismatch
+	}
+	if err := pending.Identity.Validate(); err != nil {
+		return ErrPacketIdentityMismatch.Wrap(err.Error())
+	}
+	if err := validateCustodyReference(pending.CustodyReference); err != nil {
+		return ErrPacketIdentityMismatch.Wrap(err.Error())
+	}
+	return nil
+}
+
+func terminalMatchesPacket(marker TerminalMarker, packet channeltypes.Packet) bool {
+	return marker.Identity.SourcePort == packet.GetSourcePort() &&
+		marker.Identity.SourceChannel == packet.GetSourceChannel() &&
+		marker.Identity.Sequence == packet.GetSequence() &&
+		bytes.Equal(marker.Identity.PayloadDigest, payloadDigest(packet.GetData()))
+}
+
+func (k IBCKeeper) applyTerminalTransition(
+	ctx sdk.Context,
+	pending PendingPacket,
+	transition TransferTransition,
+	storeEvidence func(sdk.Context),
+) error {
+	cacheCtx, write := ctx.CacheContext()
+	pending.State = transition.IntermediateState
+	k.setPendingPacket(cacheCtx, pending.Identity.SourceChannel, pending.Identity.Sequence, pending)
+
+	var err error
+	if transition.TerminalState == TransferStateFinalized {
+		err = k.lifecycleHooks.FinalizeTransfer(cacheCtx, pending, transition)
+	} else {
+		err = k.lifecycleHooks.CompensateTransfer(cacheCtx, pending, transition)
+	}
+	if err != nil {
+		return err
+	}
+	if err := k.lifecycleHooks.RecordAccounting(cacheCtx, pending, transition); err != nil {
+		return err
+	}
+	if err := k.lifecycleHooks.RecordAudit(cacheCtx, pending, transition); err != nil {
+		return err
+	}
+
+	storeEvidence(cacheCtx)
+	k.setTerminalMarker(cacheCtx, TerminalMarker{
+		Identity:           pending.Identity,
+		State:              transition.TerminalState,
+		CompensationReason: transition.CompensationReason,
+		CallbackDigest:     transition.CallbackDigest,
+		TransitionedAt:     cacheCtx.BlockTime(),
+	})
+	k.deletePendingPacket(cacheCtx, pending.Identity.SourceChannel, pending.Identity.Sequence)
+	write()
+	ctx.EventManager().EmitEvents(cacheCtx.EventManager().Events())
+	return nil
 }
 
 func (k IBCKeeper) setTerminalMarker(ctx sdk.Context, marker TerminalMarker) {

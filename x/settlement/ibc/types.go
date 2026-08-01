@@ -147,6 +147,17 @@ type TerminalMarker struct {
 	TransitionedAt     time.Time          `json:"transitioned_at"`
 }
 
+// TransferTransition describes one compare-and-transition operation.
+type TransferTransition struct {
+	Identity           TransferIdentity   `json:"identity"`
+	PacketType         PacketType         `json:"packet_type"`
+	FromState          TransferState      `json:"from_state"`
+	IntermediateState  TransferState      `json:"intermediate_state"`
+	TerminalState      TransferState      `json:"terminal_state"`
+	CompensationReason CompensationReason `json:"compensation_reason,omitempty"`
+	CallbackDigest     []byte             `json:"callback_digest"`
+}
+
 func acknowledgementDigest(acknowledgement []byte) []byte {
 	digest := sha256.Sum256(append([]byte("ack/v1:"), acknowledgement...))
 	return digest[:]
@@ -300,6 +311,14 @@ type SettlementRecordAck struct {
 type Acknowledgement struct {
 	Result []byte `json:"result,omitempty"`
 	Error  string `json:"error,omitempty"`
+}
+
+// Validate rejects ambiguous acknowledgements.
+func (a Acknowledgement) Validate() error {
+	if (len(a.Result) == 0) == (a.Error == "") {
+		return fmt.Errorf("acknowledgement must contain exactly one of result or error")
+	}
+	return nil
 }
 
 // NewResultAcknowledgement creates a successful acknowledgement.
