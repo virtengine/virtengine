@@ -56,6 +56,29 @@ perfect reliability. Add golden, tamper, replay, and fixed-point tests.
 T3-07 (2h): Run restart/replay/conservation/telemetry integration, document exact
 handoffs to T4 and prerequisites from T5/90A, then publish the green checkpoint.
 
+Supplemental AI operations queue:
+T3-08 (4h): Define bounded operational metrics for every model stage and decision:
+volume, unavailable/error, latency, freshness, reason-code counts and profile
+digest. Prohibit account, document, biometric, nullifier and evidence IDs in
+labels or logs.
+T3-09 (4h): Add model-quality evidence schemas for OCR CER/WER, document
+confusion, face FMR/FNMR/EER, PAD APCER/BPCER, fraud calibration and subgroup
+limits. Synthetic fixtures validate computation but never certify production.
+T3-10 (4h): Add uniqueness operations evidence: candidate rate, reviewed and
+confirmed matches, false-match/false-non-match outcomes, atomic enrollment
+conflicts, threshold-node availability, appeal backlog and subgroup monitoring.
+All outputs are aggregate and anti-enumeration bounded.
+T3-11 (4h): Add durable raw-evidence deletion and key-destruction job states,
+retry/reconciliation metrics, legal-hold conflicts and backend/KMS receipt
+validation. Consume T5's authoritative retention/deletion receipt; T3 owns only
+operational jobs and projections. A claim without storage/KMS evidence is unresolved.
+T3-12 (4h): Add model/profile drift, canary, pause and rollback telemetry contract
+fixtures for T1/90C. Unknown profile or missing baseline is unavailable, never
+healthy. Do not activate lifecycle mutations.
+T3-13 (3h): Add appeal and manual-review queue SLIs: age, independent reviewer,
+recusal, reason delivery, restoration and subgroup overturn rates. Keep identity
+details out of metrics.
+
 Focused gates:
 - go test -race -count=1 ./x/settlement/ibc
 - go test -race -count=1 ./pkg/provider_daemon -run 'Waldur|Reconcile|UsageReporter'
@@ -73,6 +96,8 @@ Fallback queue:
   expected series without high-cardinality labels.
 - Inventory and replace T3-owned hard-coded benchmark reliability inputs with
   fail-closed source interfaces, without activating consumers.
+- Add privacy-safe model incident, uniqueness-service outage, mass false-match,
+  deletion backlog and key-compromise alert fixtures for T4 integration.
 
 When exhausted, audit only T3-owned state machines and producer call sites for
 remaining prototype-critical fail-open or non-durable behavior, number new T3-X

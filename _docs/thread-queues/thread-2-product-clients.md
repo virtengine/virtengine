@@ -66,6 +66,36 @@ T2-08 (2h): Run the integrated client journey and publish exact screenshots/test
 artifacts only if the real local process path exists. Otherwise publish typed
 blocked evidence, not a mock-backed pass.
 
+Supplemental private evidence and authentication queue:
+T2-09 (5h): Move capture submission to an off-chain encrypted-ingestion contract.
+The client submits only an opaque object commitment/status transaction to chain.
+Add tests proving raw images, OCR text, embeddings and complete recipient
+envelopes cannot enter chain requests or persisted client state. Consume T5's
+canonical EvidenceObjectRef; T2 does not define a competing source schema.
+T2-10 (4h): Implement client cleanup after durable acknowledgement: wipe camera
+files, blobs, OCR intermediates, temporary embeddings and offline queue plaintext.
+Cover cancel, crash, retry, app restart and failed-acknowledgement behavior.
+T2-11 (5h): Add a user-controlled encrypted derived-claim store abstraction.
+Store wrapped DEKs and minimal credential/status metadata, not raw KEKs or raw
+documents. Add lock, unlock, rotation, recovery-reference and stale-key tests.
+T2-12 (5h): Implement provider/order ClaimPolicy challenge and wallet selective
+presentation adapters. Bind audience, order, purpose, nonce, expiry, holder,
+issuer, status and policy. Display only requested claims and exact consent.
+T2-13 (4h): Prefer platform WebAuthn/passkeys for face-backed authentication so
+device biometrics unlock a non-exportable key locally. Bind signatures to the
+session or exact transaction. Do not send facial metrics to VirtEngine.
+T2-14 (4h): Add an optional remote-face authentication interface that is disabled
+by default and requires T1/T5 profiles, liveness, device attestation, possession
+factor, exact action binding and non-biometric recovery. Prove face alone fails.
+T2-15 (4h): Implement uniqueness enrollment UX states: processing,
+possible-match-review, unique, duplicate-confirmed, unavailable and appeal.
+Never reveal candidates or treat a fuzzy match as final. Add accessible manual
+and non-biometric verification routes without punitive false success.
+T2-16 (3h): Add schema-constrained LLM-assisted unsupported-document triage and
+case summarization interfaces over redacted normalized fields only. Model output
+cannot set identity, uniqueness, score, mint, claim or fund decisions and always
+requires human confirmation.
+
 Focused gates:
 - pnpm -C sdk/ts lint && pnpm -C sdk/ts build && pnpm -C sdk/ts test
 - go test -count=1 ./pkg/provider_daemon -run 'Portal|ChainQuery|Capability'
@@ -84,6 +114,8 @@ Fallback queue:
 - Add accessibility and state-transition tests for the selected real client path.
 - Add SDK/client compatibility fixtures for T1 canonical vectors without editing
   generated output until T4 grants the generation window.
+- Add consent withdrawal, presentation expiry/revocation, privacy-safe logging,
+  secure screen/cache behavior and biometric accessibility/manual-review tests.
 
 When the queue is exhausted, audit T2-owned production constructors and user
 journeys for additional false success, create numbered T2-X checkpoints, and

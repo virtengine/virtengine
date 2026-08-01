@@ -209,6 +209,46 @@ contracts, validators, fixtures, and fail-closed feature gates. They must not be
 wired into production, advertised, or marked complete. This lets all five
 threads make useful progress without falsifying dependency completion.
 
+### 6.1 Supplemental AI and Biometric Workstream
+
+The model, private-evidence, biometric-uniqueness and fund-authorization audit is
+specified in `_docs/protocols/veid-ai-biometric-architecture.md`. It adds 39
+checkpoint-sized tasks without changing roadmap ownership:
+
+| Thread | Supplemental IDs | Count | Primary outcome |
+| --- | --- | ---: | --- |
+| T1 | T1-10 through T1-18 | 9 | Canonical model schema, stage decisions, uniqueness receipts, eligibility and authenticated inference |
+| T2 | T2-09 through T2-16 | 8 | Off-chain capture, client cleanup, encrypted claims, selective presentation and passkeys |
+| T3 | T3-08 through T3-13 | 6 | Model, uniqueness, deletion, drift and appeal evidence |
+| T4 | T4-10 through T4-16 | 7 | Model supply chain, parity CI, prohibited-path gates, generated integration and live fund-handler enforcement |
+| T5 | T5-08 through T5-18 | 11 | Cryptography, OTP, durable custody, private uniqueness boundary and fund authorization |
+| **Total** |  | **41** |  |
+
+P0 prototype blockers take precedence over the earlier queue when encountered:
+
+1. repair envelope encryption/authentication and reject arbitrary OTP;
+2. freeze Python/Go feature parity and disable placeholder production models;
+3. keep raw evidence and biometric templates off-chain;
+4. implement signed stage/uniqueness/eligibility contracts with hard gates;
+5. require transaction-bound authorization for every value-moving route;
+6. add model/license/privacy/deletion evidence to T4's exact-SHA manifest.
+
+Biometric uniqueness and face authentication remain separate. Public fuzzy
+embedding hashes are prohibited. Prototype uniqueness uses contracts and a
+clearly labelled non-cryptographic simulator; production requires an externally
+reviewed threshold-MPC/confidential-compute design. Preferred face-backed
+authentication is a device-local biometric unlocking a WebAuthn/passkey.
+
+### 6.2 Active Thread Synchronization
+
+If a thread already has uncommitted work when this supplemental queue lands, it
+must not merge, copy, or regenerate over that dirty checkpoint. It first makes
+its current item green, commits and pushes it, and records the handoff. It then
+merges the updated `stable-virtengine-beta` or latest T4 integration checkpoint
+into its own branch, resolves conflicts there, reruns focused gates, and begins
+the first ready supplemental ID. T4 never overwrites or repairs a producer's
+dirty worktree.
+
 ## 7. Cross-Thread Contract Gates
 
 - T1 publishes Evidence Envelope v1, Runtime Policy Reader v1, Workload Binding

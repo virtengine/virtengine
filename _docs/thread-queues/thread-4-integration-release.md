@@ -71,6 +71,38 @@ the manifest digest, publish `milestone/prototype/three-day-integrated`, and
 record accepted and rejected checkpoints. Do not publish if the tree is dirty or
 required prototype gates fail.
 
+Supplemental AI supply-chain and integration queue:
+T4-10 (4h): Add a machine-readable model artifact and data provenance manifest.
+Require stage, artifact SHA-256, source, code/weight/data licenses,
+redistribution approval, preprocessing/schema/runtime digests, SBOM, model card
+and evaluation report. Empty hashes, mutable downloads and trust-on-first-use
+fail.
+T4-11 (4h): Add cross-language canonical feature and receipt parity CI for Python
+and Go. Zero selected vectors, shifted fields, silent extractor exceptions,
+float-schema drift and generated changes fail the gate.
+T4-12 (4h): Add production policy scanning that rejects runtime model downloads,
+untrained/random placeholder models, synthetic age, fake biometric LSH, insecure
+XOR/base64 encryption, allow-all consent, memory vaults and stub success.
+T4-13 (4h): Integrate generated contracts for stage decisions, uniqueness
+receipts, eligibility, claim presentations and fund authorization during one
+declared generation window. Require second-run zero drift and compatibility
+fixtures.
+T4-14 (4h): Extend the prototype manifest with every model/runtime/schema/license
+digest, feature-vector hash, evaluation status, uniqueness implementation class,
+vault/KMS state, consent/retention state and explicit non-certification.
+T4-15 (4h): Add AI/biometric security release gates for template inversion,
+linkability, replay, concurrent enrollment, arbitrary OTP, forged envelopes,
+transferred proofs, fund-route coverage, deletion receipts and client cleanup.
+Missing external privacy/PAD/model evaluations remain blockers.
+T4-16 (6h): Integrate T5's canonical FundAuthorization keeper into every
+registered value-moving handler: issuance/mint, bank send, reward, escrow
+release/refund/final settlement, payout, withdrawal, recovery and privileged
+treasury. Consume authorization atomically with the protected mutation. Add real
+app E2E negatives for missing, wrong-chain, wrong-account, wrong-signer,
+wrong-message, stale, replayed and concurrently consumed authorizations. The
+prototype profile may enable this only after all covered handlers pass; unknown
+value-moving routes fail the required-gate matrix.
+
 Intake loop:
 1. Fetch producer and integration refs.
 2. Read the producer HANDOFF and verify the tagged SHA.
@@ -88,6 +120,8 @@ Fallback queue:
 - Audit mutable CI actions/images and record prototype blockers without broad
   unrelated upgrades.
 - Expand compile and generated-drift coverage for already integrated paths.
+- Reconcile unsupported model-card/compliance claims with exact retained evidence
+  and fail the prototype manifest when claims exceed evidence state.
 
 Continue until the queue is exhausted and no producer has an eligible checkpoint.
 If external tools prevent a gate, record the blocker and run CI on the exact SHA;

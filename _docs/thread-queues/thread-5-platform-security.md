@@ -22,8 +22,10 @@ must not be wired, advertised, or marked engineering-complete.
 Mandatory rules:
 - Read applicable AGENTS.md files, the DAG, and the five-thread plan first.
 - Never push to stable or integration branches.
-- Use typed state disabled -> fixture_only -> sandbox -> production. This queue
-  may not transition beyond fixture_only.
+- Use typed state disabled -> fixture_only -> sandbox -> production. Roadmap
+  features whose predecessors are missing may not transition beyond fixture_only.
+  P0 repairs and authorization implementations may be completed, but activation
+  and cross-module wiring belong to T4's exact-SHA integration gate.
 - Missing 88D/dependency digests, profiles, replay state, custody, or policy
   always deny mutation and readiness.
 - Never fall back to memory vaults, process-local keys/nonces, local organization
@@ -67,6 +69,57 @@ T5-07 (2h): Run cross-contract compatibility and negative-enablement tests,
 document dependency digests required from T1/T3/T4, and publish the green
 fixture-only checkpoint.
 
+Supplemental biometric security and value-control queue:
+T5-08 (5h): Replace the broken multi-recipient envelope construction with an
+audited HPKE/age-style recipient wrap plus AEAD data encryption and real Ed25519
+sender authentication. Add known-answer, wrong-recipient, forged-sender,
+tamper, recipient-removal and key-rotation tests. Migrate/version old envelopes
+without treating them as authenticated.
+T5-09 (3h): Replace arbitrary non-empty OTP acceptance with actual registered
+factor verification, challenge binding, attempt limits, expiry and replay
+consumption. Add negative tests for TOTP, SMS and email dispatch paths.
+T5-10 (5h): Implement durable vault/KMS interfaces and fail-closed production
+construction. Remove allow-all consent and memory/process-local key fallback.
+Add restart, restore, stale-writer, rotation, legal-hold and undecryptability
+after erasure tests with fixture backends.
+T5-11 (4h): Define off-chain EvidenceObjectRef, randomized chain commitment,
+retention state and storage/KMS deletion receipt. Add migration tests proving raw
+ciphertext is no longer required in consensus state and false deletion claims
+remain unresolved.
+T5-12 (5h): Define the uniqueness service custody boundary: independent node
+identities, threshold key epochs, cancellable-template profile, atomic enrollment
+store, OPRF/threshold-PRF nullifier domain, quorum receipt and compromise
+rotation. Implement interfaces/fixtures only until cryptographic review.
+T5-13 (4h): Add a confidential governed issuer-link continuity registry. Derive
+program- and relying-party-scoped nullifiers through domain-separated
+OPRF/threshold-PRF interfaces; never publish a global issuer-subject index.
+Specify visibility, access, retention and deletion. Reject duplicate wallet
+linkage, cross-domain replay and concurrent registration. Support old/new wallet
+signatures, cooldown, notification, supersession and appeal.
+T5-14 (5h): Define canonical, versioned, transaction-bound FundAuthorization
+sign bytes and an exhaustive registry of value-moving messages: issuance/mint,
+bank send, rewards, escrow release/refund/final settlement, payout, withdrawal,
+recovery and privileged treasury. Bind domain/version, chain ID, account and
+signer key epoch, exact message digest, amount, denomination, parties,
+case/order, MFA/eligibility/policy digests, nonce, block bounds and expiry.
+Require signature verification and atomic nonce consumption.
+T5-15 (5h): Enforce fund authorization coverage with tests that fail when a new
+value-moving route is unregistered. Biometrics may supplement a possession
+factor but never authorize alone. Suspended, held, stale, duplicate or recovery
+pending accounts fail closed.
+T5-16 (4h): Replace declarative erasure with idempotent storage/KMS adapters and
+signed deletion receipts. Add crash-boundary, backup-expiry, legal-hold,
+consent-withdrawal and restore-after-erasure negative tests.
+T5-17 (4h): Add biometric incident and recovery contracts for template/index
+compromise, transform/key rotation, mass false matches, unlawful processing,
+model poisoning and dedup enumeration. Require threshold approval, audit and
+user/regulator notification state.
+T5-18 (6h): Implement the FundAuthorization keeper and atomic consume API. Cover
+canonical sign bytes, key-epoch resolution, signature, block bounds, exact
+message binding, wrong chain/account/action, tampering, replay, concurrent
+consumption and rollback when the protected cached-context mutation fails. Hand
+the green keeper checkpoint to T4-16 for cross-module wiring.
+
 Focused gates:
 - go test -count=1 ./x/mfa/types -run 'Recovery|FactorProfile|Challenge'
 - go test -count=1 ./pkg/data_vault/...
@@ -87,6 +140,8 @@ Fallback queue:
   without editing shared generated artifacts.
 - Audit T5-owned current defaults for memory/process-local fallbacks and add
   fail-closed interfaces or tests in isolated packages.
+- Add signed DPIA/jurisdiction/retention/appeal/key-ceremony evidence states and
+  keep production readiness disabled while any mandatory approval is absent.
 
 When exhausted, audit only T5-owned contract/default surfaces, add numbered T5-X
 checkpoints, and continue while dependency-independent work remains. Never claim

@@ -72,6 +72,42 @@ T1-09 (2h): Run the integrated T1 contract gate, freeze canonical vectors, reser
 store/protobuf identifiers, document handoffs to T2/T4/T5, and publish the green
 checkpoint SHA.
 
+Supplemental AI and biometric queue:
+T1-10 (4h): Freeze one canonical feature schema shared byte-for-byte by Python
+training and Go serving. Repair shifted/missing face/document fields and add
+cross-language golden vectors. Silent zero-padding or extraction failure is an
+error in production profiles.
+T1-11 (3h): Add a governed model-portfolio manifest for document routing, OCR,
+authenticity, face detection/comparison, liveness, fraud fusion and policy
+evaluation. Every stage binds artifact, preprocessing, schema, license,
+evaluation and runtime digests; unknown or placeholder stages fail closed.
+T1-12 (4h): Mark the untrained GAN, anomaly, U-Net fallback, synthetic age and
+hash-derived face/liveness implementations non-production. Add constructor and
+policy tests proving no production profile can select them.
+T1-13 (5h): Define separate fixed-point Document, FaceMatch, Liveness, Risk,
+Identity, Uniqueness and Eligibility decisions. Replace aggregate-score pass
+semantics with hard gates and stable reason codes. A high average cannot override
+failed liveness, duplicate biometrics, expired evidence or active holds.
+T1-14 (5h): Define versioned UniquenessRequest and threshold-signed
+UniquenessReceipt contracts with final program-scoped nullifier,
+possible-match-review, confirmed duplicate, unavailable, appeal and supersession
+states. Pending/non-unique outcomes receive request-scoped opaque references and
+never a stable nullifier. Retire truncated SHA-256 LSH from production policy.
+T1-15 (4h): Build a deterministic uniqueness-service simulator for contract,
+concurrency and policy tests. Prove atomic search-plus-insert, exact retry,
+simultaneous duplicate enrollment, threshold/profile mismatch and no biometric
+template in chain-facing receipts. Label it non-cryptographic fixture_only.
+T1-16 (4h): Define PolicyBundle v1 and an action-specific eligibility evaluator.
+Initial mint eligibility requires current identity, liveness and uniqueness,
+good account standing and no risk hold. Add complete dependency/reason lineage.
+T1-17 (4h): Bind credential and privacy proofs to governed issuer credential,
+subject key, policy, verifier challenge, expiry, status and non-reusable
+nullifier. Add transferred-proof and self-constructed biometric-proof negatives.
+T1-18 (5h): Implement the authenticated worker boundary that builds signed stage
+and aggregate receipts from the pinned model graph. Keep mTLS/workload identity,
+model/runtime/schema pinning, deterministic result normalization and fail-closed
+outage behavior explicit.
+
 Focused gates:
 - go test -count=1 ./x/veid/types ./x/veid/keeper ./x/veidregistry/...
 - go test -race -count=1 ./x/veid/keeper ./pkg/inference ./cmd/inference-sidecar
@@ -89,6 +125,9 @@ Fallback queue:
   privacy/log-redaction, and deterministic-byte vectors.
 - Audit stale inference fallback documentation and prepare an update confined to
   T1 ownership.
+- Add model-stage calibration, subgroup, receipt-lineage, model migration,
+  uniqueness race, false-match adjudication and template-linkability test
+  fixtures without claiming real accuracy or anonymity.
 
 When this queue is exhausted, audit only T1-owned surfaces for additional
 prototype-critical fail-open behavior, create numbered T1-X checkpoints, and
