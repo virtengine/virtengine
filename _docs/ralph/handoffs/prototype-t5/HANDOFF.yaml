@@ -1,109 +1,78 @@
 campaign: three-day-prototype
 thread: T5
-checkpoint: T5-10
+checkpoint: T5-11
 branch: ve/prototype-t5-platform
-start_head: 4a5ca4968e75ad0221037c19b2998ea5e49c27e0
-end_head: 25cf508a904a0b8de1ac7eb163a67bf1703007f2
+start_head: 91edf353e307bfc75884320d4833266aee4f8de6
+end_head: a1666807054d6b5843353213bc2318ef3ec47ffc
 origin_main: 79391a3df86d85522b92e0400c6904971ecbe65d
 tree_clean: true
 commits:
-  - 25cf508a904a0b8de1ac7eb163a67bf1703007f2
+  - a1666807054d6b5843353213bc2318ef3ec47ffc
 owned_paths:
-  - pkg/data_vault/audit_logger.go
-  - pkg/data_vault/audit_logger_test.go
-  - pkg/data_vault/consent.go
-  - pkg/data_vault/contracts/revision_anchor.go
-  - pkg/data_vault/errors.go
-  - pkg/data_vault/file_lock_unix.go
-  - pkg/data_vault/file_lock_windows.go
-  - pkg/data_vault/fixture_artifact_store.go
-  - pkg/data_vault/fixture_artifact_store_test.go
-  - pkg/data_vault/fixture_audit_store.go
-  - pkg/data_vault/fixture_erasure.go
-  - pkg/data_vault/fixture_file_security.go
-  - pkg/data_vault/keys/file_lock_unix.go
-  - pkg/data_vault/keys/file_lock_windows.go
-  - pkg/data_vault/keys/key_manager.go
-  - pkg/data_vault/keys/persistence.go
-  - pkg/data_vault/keys/persistence_test.go
-  - pkg/data_vault/revision_anchor.go
-  - pkg/data_vault/store.go
-  - pkg/data_vault/store_persistence_test.go
-  - pkg/data_vault/types.go
-  - pkg/data_vault/vault_service.go
-  - pkg/data_vault/vault_service_test.go
-  - pkg/provider_daemon/portal_vault_test.go
-  - pkg/provider_daemon/vault_service.go
-  - pkg/provider_daemon/vault_service_test.go
+  - pkg/data_vault/contracts/evidence_lifecycle.go
+  - pkg/data_vault/contracts/evidence_lifecycle_test.go
+  - x/veid/types/keys.go
+  - x/veid/keeper/evidence_object_store.go
+  - x/veid/keeper/evidence_object_migration.go
+  - x/veid/keeper/evidence_object_migration_test.go
   - _docs/ralph/handoffs/prototype-t5/HANDOFF.yaml
-  - _docs/ralph/evidence/prototype-t5/T5-10/validation.txt
+  - _docs/ralph/evidence/prototype-t5/T5-11/validation.txt
 files_changed:
-  - pkg/data_vault/audit_logger.go
-  - pkg/data_vault/audit_logger_test.go
-  - pkg/data_vault/consent.go
-  - pkg/data_vault/contracts/revision_anchor.go
-  - pkg/data_vault/errors.go
-  - pkg/data_vault/file_lock_unix.go
-  - pkg/data_vault/file_lock_windows.go
-  - pkg/data_vault/fixture_artifact_store.go
-  - pkg/data_vault/fixture_artifact_store_test.go
-  - pkg/data_vault/fixture_audit_store.go
-  - pkg/data_vault/fixture_erasure.go
-  - pkg/data_vault/fixture_file_security.go
-  - pkg/data_vault/keys/file_lock_unix.go
-  - pkg/data_vault/keys/file_lock_windows.go
-  - pkg/data_vault/keys/key_manager.go
-  - pkg/data_vault/keys/persistence.go
-  - pkg/data_vault/keys/persistence_test.go
-  - pkg/data_vault/revision_anchor.go
-  - pkg/data_vault/store.go
-  - pkg/data_vault/store_persistence_test.go
-  - pkg/data_vault/types.go
-  - pkg/data_vault/vault_service.go
-  - pkg/data_vault/vault_service_test.go
-  - pkg/provider_daemon/portal_vault_test.go
-  - pkg/provider_daemon/vault_service.go
-  - pkg/provider_daemon/vault_service_test.go
+  - pkg/data_vault/contracts/evidence_lifecycle.go
+  - pkg/data_vault/contracts/evidence_lifecycle_test.go
+  - x/veid/types/keys.go
+  - x/veid/keeper/evidence_object_store.go
+  - x/veid/keeper/evidence_object_migration.go
+  - x/veid/keeper/evidence_object_migration_test.go
   - _docs/ralph/handoffs/prototype-t5/HANDOFF.yaml
-  - _docs/ralph/evidence/prototype-t5/T5-10/validation.txt
+  - _docs/ralph/evidence/prototype-t5/T5-11/validation.txt
 tests:
-  - command: C:\Users\pavil\AppData\Local\VirtEngine\toolchains\go1.25.8\go\bin\go.exe test -count=1 ./pkg/data_vault/...
+  - command: C:\Users\pavil\AppData\Local\VirtEngine\toolchains\go1.25.8\go\bin\go.exe -C C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t5 test -count=1 ./pkg/data_vault/contracts -run 'Evidence|Deletion|Retention'
     exit_code: 0
     result: passed
     tool_versions:
       go: go1.25.8 windows/amd64
-    artifact: _docs/ralph/evidence/prototype-t5/T5-10/validation.txt
-  - command: C:\Users\pavil\AppData\Local\VirtEngine\toolchains\go1.25.8\go\bin\go.exe test -count=1 ./pkg/provider_daemon -run 'Vault|PortalVault'
+    artifact: _docs/ralph/evidence/prototype-t5/T5-11/validation.txt
+  - command: C:\Users\pavil\AppData\Local\VirtEngine\toolchains\go1.25.8\go\bin\go.exe -C C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t5 test -count=1 ./x/veid/keeper -run 'EvidenceObject|MigrateEvidence'
     exit_code: 0
     result: passed
     tool_versions:
       go: go1.25.8 windows/amd64
-    artifact: _docs/ralph/evidence/prototype-t5/T5-10/validation.txt
-  - command: C:\Users\pavil\AppData\Local\VirtEngine\toolchains\go1.25.8\go\bin\go.exe vet ./pkg/data_vault/... ./pkg/provider_daemon
+    artifact: _docs/ralph/evidence/prototype-t5/T5-11/validation.txt
+  - command: C:\Users\pavil\AppData\Local\VirtEngine\toolchains\go1.25.8\go\bin\go.exe -C C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t5 vet ./pkg/data_vault/contracts ./x/veid/keeper
     exit_code: 0
     result: passed
     tool_versions:
       go: go1.25.8 windows/amd64
-    artifact: _docs/ralph/evidence/prototype-t5/T5-10/validation.txt
-  - command: $env:CGO_ENABLED='1'; $env:CC='gcc'; C:\Users\pavil\AppData\Local\VirtEngine\toolchains\go1.25.8\go\bin\go.exe test -race -count=1 ./pkg/data_vault/...
+    artifact: _docs/ralph/evidence/prototype-t5/T5-11/validation.txt
+  - command: $env:CGO_ENABLED='1'; $env:CC='gcc'; C:\Users\pavil\AppData\Local\VirtEngine\toolchains\go1.25.8\go\bin\go.exe test -race -count=1 ./pkg/data_vault/contracts -run 'Evidence|Deletion|Retention'
     exit_code: 0
     result: passed
     tool_versions:
       go: go1.25.8 windows/amd64
       gcc: WinLibs POSIX UCRT 16.1.0
-    artifact: _docs/ralph/evidence/prototype-t5/T5-10/validation.txt
+    artifact: _docs/ralph/evidence/prototype-t5/T5-11/validation.txt
+  - command: $env:CGO_ENABLED='1'; $env:CC='gcc'; C:\Users\pavil\AppData\Local\VirtEngine\toolchains\go1.25.8\go\bin\go.exe test -race -count=1 ./x/veid/keeper -run 'EvidenceObject|MigrateEvidence'
+    exit_code: 0
+    result: passed
+    tool_versions:
+      go: go1.25.8 windows/amd64
+      gcc: WinLibs POSIX UCRT 16.1.0
+    artifact: _docs/ralph/evidence/prototype-t5/T5-11/validation.txt
   - command: git diff --check
     exit_code: 0
     result: passed
-    artifact: _docs/ralph/evidence/prototype-t5/T5-10/validation.txt
+    artifact: _docs/ralph/evidence/prototype-t5/T5-11/validation.txt
 generated_hashes: {}
-migrations: []
+migrations:
+  - T4 must register the VEID payload-free evidence migration and increment ConsensusVersion.
 external_evidence:
-  - _docs/ralph/evidence/prototype-t5/T5-10/validation.txt
+  - _docs/ralph/evidence/prototype-t5/T5-11/validation.txt
 known_failures: []
 blockers:
-  - Production remains unavailable without a non-local non-replayable revision anchor, production artifact backend, non-exportable KMS operations, authoritative role and organization resolvers, consent authority, and durable audit service.
-  - Filesystem artifact, key, and audit stores plus the process revision anchor are fixture or development only; Windows use requires the explicit UnsafeWindowsDevelopment override.
-  - T4 has not published an intake epoch manifest, epoch base tag, producer intake validator, or updated producer schema required by the authoritative intake runbook; T5-10 must not be tagged or represented as intake-eligible.
-next_checkpoint: T5-11
-expected_head: 25cf508a904a0b8de1ac7eb163a67bf1703007f2
+  - Generated transaction inputs still carry ciphertext; T4 owns generated contract replacement and client cutover.
+  - Existing scope and social-scope readers require coordinated cutover before legacy ciphertext rows can be sanitized; migration reports pending cutover truthfully.
+  - Existing persisted 0x9A social/evidence collision is not renumbered; ambiguous legacy rows are quarantined and new references use unique 0xD4 subkeys.
+  - T4 has not published the intake epoch manifest, epoch base tag, or intake validator required by the authoritative runbook; T5-11 must remain untagged and is not intake-eligible.
+next_checkpoint: T5-12
+expected_head: a1666807054d6b5843353213bc2318ef3ec47ffc
