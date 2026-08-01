@@ -21,7 +21,14 @@ import { CosmostationAdapter } from "./adapters/cosmostation";
 import { WalletConnectAdapter } from "./adapters/walletconnect";
 import type { WalletAdapter } from "./types";
 import { WalletError as TypedWalletError, WalletErrorCode, parseWalletError } from "./errors";
-import { WalletSessionManager, type WalletSession } from "./session";
+import {
+  WALLET_ARBITRARY_SIGNING_SCOPE,
+  WALLET_TRANSACTION_SIGNING_SCOPE,
+  WalletSessionManager,
+  type WalletSession,
+  type WalletSigningOperation,
+} from "./session";
+import { toBase64 } from "./utils";
 
 const DEFAULT_PERSIST_KEY = "virtengine_wallet_session";
 
@@ -58,6 +65,7 @@ export function WalletProvider({
     () => new WalletSessionManager({ persistKey, autoReconnect: config.autoConnect ?? true }),
     [config.autoConnect, persistKey],
   );
+  const authorizationContextVersionRef = React.useRef(0);
 
   const adaptersRef = React.useRef<Map<WalletType, WalletAdapter> | null>(null);
 
@@ -89,6 +97,7 @@ export function WalletProvider({
 
   React.useEffect(() => {
     if (previousChainIdRef.current !== chainInfo.chainId) {
+      authorizationContextVersionRef.current += 1;
       sessionManager.clearLiveAuthorization();
       sessionManager.clearSession();
       setState((prev) => ({
@@ -102,6 +111,7 @@ export function WalletProvider({
 
   React.useEffect(() => {
     const clearProviderState = () => {
+      authorizationContextVersionRef.current += 1;
       setState((prev) => ({
         ...initialState,
         autoConnect: prev.autoConnect,
@@ -138,9 +148,11 @@ export function WalletProvider({
 
   const persistReconnectMetadata = React.useCallback(
     (walletType: WalletType, account: WalletAccount) => {
+      authorizationContextVersionRef.current += 1;
       sessionManager.setExpectedContext({
         walletType,
         account: account.address,
+        publicKey: toBase64(account.pubKey),
         chainId: chainInfo.chainId,
       });
       sessionManager.clearLiveAuthorization();
@@ -244,6 +256,7 @@ export function WalletProvider({
         await adapter.disconnect();
       }
     } finally {
+      authorizationContextVersionRef.current += 1;
       sessionManager.clearSession();
       setState((prev) => ({
         ...initialState,
@@ -305,6 +318,68 @@ export function WalletProvider({
     [],
   );
 
+  const requireSigningAuthorization = React.useCallback(
+    async (account: WalletAccount, operation: WalletSigningOperation): Promise<void> => {
+      const walletType = state.walletType;
+      const authority = config.signingAuthorization;
+      if (!walletType || !authority) {
+        throw new TypedWalletError(
+          WalletErrorCode.SESSION_EXPIRED,
+          "Live wallet signing authorization is required",
+        );
+      }
+
+      const requiredScope = operation === "arbitrary"
+        ? WALLET_ARBITRARY_SIGNING_SCOPE
+        : WALLET_TRANSACTION_SIGNING_SCOPE;
+      const request = {
+        operation,
+        requiredScope,
+        chainId: chainInfo.chainId,
+        account: account.address,
+        publicKey: toBase64(account.pubKey),
+        walletType,
+      } as const;
+      const authorizationContextVersion = authorizationContextVersionRef.current;
+
+      sessionManager.clearLiveAuthorization();
+      let binding;
+      try {
+        binding = await authority.authorize(request);
+      } catch (error) {
+        throw error instanceof TypedWalletError
+          ? error
+          : new TypedWalletError(
+              WalletErrorCode.SESSION_EXPIRED,
+              "Live wallet signing authorization failed",
+              { cause: error },
+            );
+      }
+      if (
+        authorizationContextVersion !== authorizationContextVersionRef.current ||
+        !binding ||
+        !sessionManager.setLiveAuthorization(binding) ||
+        !sessionManager.getLiveAuthorization(
+          {
+            chainId: request.chainId,
+            account: request.account,
+            publicKey: request.publicKey,
+            walletType: request.walletType,
+            deviceId: binding.deviceId,
+            sessionId: binding.sessionId,
+          },
+          [requiredScope],
+        )
+      ) {
+        throw new TypedWalletError(
+          WalletErrorCode.SESSION_EXPIRED,
+          "Live wallet signing authorization is invalid or expired",
+        );
+      }
+    },
+    [chainInfo.chainId, config.signingAuthorization, sessionManager, state.walletType],
+  );
+
   const signAmino = React.useCallback(
     async (
       signDoc: AminoSignDoc,
@@ -319,6 +394,7 @@ export function WalletProvider({
         state.accounts,
         state.activeAccountIndex,
       );
+      await requireSigningAuthorization(account, "amino");
       return adapter.signAmino(
         chainInfo.chainId,
         account.address,
@@ -330,6 +406,7 @@ export function WalletProvider({
       chainInfo.chainId,
       getActiveAccount,
       getAdapter,
+      requireSigningAuthorization,
       state.accounts,
       state.activeAccountIndex,
       state.walletType,
@@ -347,12 +424,14 @@ export function WalletProvider({
         state.accounts,
         state.activeAccountIndex,
       );
+      await requireSigningAuthorization(account, "direct");
       return adapter.signDirect(chainInfo.chainId, account.address, signDoc);
     },
     [
       chainInfo.chainId,
       getActiveAccount,
       getAdapter,
+      requireSigningAuthorization,
       state.accounts,
       state.activeAccountIndex,
       state.walletType,
@@ -372,12 +451,14 @@ export function WalletProvider({
         state.accounts,
         state.activeAccountIndex,
       );
+      await requireSigningAuthorization(account, "arbitrary");
       return adapter.signArbitrary(chainInfo.chainId, account.address, data);
     },
     [
       chainInfo.chainId,
       getActiveAccount,
       getAdapter,
+      requireSigningAuthorization,
       state.accounts,
       state.activeAccountIndex,
       state.walletType,

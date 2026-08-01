@@ -121,6 +121,8 @@ export {
   WalletSessionManager,
   walletSessionManager,
   createSessionManager,
+  WALLET_TRANSACTION_SIGNING_SCOPE,
+  WALLET_ARBITRARY_SIGNING_SCOPE,
   // Wallet detection
   WalletDetector,
   walletDetector,
@@ -144,6 +146,9 @@ export type {
   MfaAuthorization,
   WalletAuthorizationBinding,
   WalletAuthorizationContext,
+  WalletSigningOperation,
+  WalletSigningAuthorizationRequest,
+  WalletSigningAuthorizationAuthority,
   WalletDetectionResult,
   GasTier,
   GasSettings,

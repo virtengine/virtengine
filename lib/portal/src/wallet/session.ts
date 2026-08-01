@@ -38,6 +38,28 @@ export interface WalletAuthorizationBinding {
   mfa: MfaAuthorization;
 }
 
+export const WALLET_TRANSACTION_SIGNING_SCOPE = 'wallet:sign:transaction';
+export const WALLET_ARBITRARY_SIGNING_SCOPE = 'wallet:sign:arbitrary';
+
+export type WalletSigningOperation = 'amino' | 'direct' | 'arbitrary';
+
+export interface WalletSigningAuthorizationRequest {
+  operation: WalletSigningOperation;
+  requiredScope:
+    | typeof WALLET_TRANSACTION_SIGNING_SCOPE
+    | typeof WALLET_ARBITRARY_SIGNING_SCOPE;
+  chainId: string;
+  account: string;
+  publicKey: string;
+  walletType: WalletType;
+}
+
+export interface WalletSigningAuthorizationAuthority {
+  authorize(
+    request: WalletSigningAuthorizationRequest
+  ): Promise<WalletAuthorizationBinding | null>;
+}
+
 export type WalletSessionInvalidationReason = 'removed' | 'tampered' | 'disconnect';
 
 export type WalletAuthorizationContext = Pick<

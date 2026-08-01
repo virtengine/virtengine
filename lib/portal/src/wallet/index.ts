@@ -3,6 +3,8 @@ export {
   WalletSessionManager,
   walletSessionManager,
   createSessionManager,
+  WALLET_TRANSACTION_SIGNING_SCOPE,
+  WALLET_ARBITRARY_SIGNING_SCOPE,
 } from "./session";
 export { WalletDetector, walletDetector, WalletPriority } from "./detector";
 export {
@@ -39,6 +41,9 @@ export type {
   MfaAuthorization,
   WalletAuthorizationBinding,
   WalletAuthorizationContext,
+  WalletSigningOperation,
+  WalletSigningAuthorizationRequest,
+  WalletSigningAuthorizationAuthority,
 } from "./session";
 export type { WalletDetectionResult } from "./detector";
 export {

@@ -4,6 +4,12 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { WalletAccount, WalletContextValue, WalletProviderConfig } from "../../src/wallet/types";
 import { WalletError, WalletErrorCode } from "../../src/wallet/errors";
+import {
+  WALLET_ARBITRARY_SIGNING_SCOPE,
+  WALLET_TRANSACTION_SIGNING_SCOPE,
+  type WalletAuthorizationBinding,
+  type WalletSigningAuthorizationRequest,
+} from "../../src/wallet/session";
 
 const adapters = vi.hoisted(() => {
   const createAdapter = (type: string, name: string) => ({
@@ -56,6 +62,41 @@ const account = (address: string): WalletAccount => ({
   pubKey: new Uint8Array([1, 2, 3]),
   algo: "secp256k1",
 });
+
+const aminoSignDoc = {
+  chain_id: "virtengine-1",
+  account_number: "0",
+  sequence: "0",
+  fee: { gas: "1", amount: [] },
+  msgs: [],
+  memo: "",
+};
+
+const directSignDoc = {
+  bodyBytes: new Uint8Array(),
+  authInfoBytes: new Uint8Array(),
+  chainId: "virtengine-1",
+  accountNumber: 0,
+};
+
+const authorizationFor = (
+  request: WalletSigningAuthorizationRequest,
+  overrides: Partial<WalletAuthorizationBinding> = {},
+): WalletAuthorizationBinding => {
+  const now = Date.now();
+  return {
+    chainId: request.chainId,
+    account: request.account,
+    publicKey: request.publicKey,
+    walletType: request.walletType,
+    deviceId: "device-1",
+    sessionId: "session-1",
+    issuedAt: now - 1_000,
+    expiresAt: now + 60_000,
+    mfa: { scopes: [request.requiredScope], expiresAt: now + 30_000 },
+    ...overrides,
+  };
+};
 
 const chainInfo: WalletProviderConfig["chainInfo"] = {
   chainId: "virtengine-1",
@@ -123,6 +164,9 @@ describe("WalletProvider session integration", () => {
     adapters.keplr.connect.mockReset();
     adapters.keplr.disconnect.mockReset().mockResolvedValue(undefined);
     adapters.keplr.getAccounts.mockReset();
+    adapters.keplr.signAmino.mockReset();
+    adapters.keplr.signDirect.mockReset();
+    adapters.keplr.signArbitrary.mockReset();
   });
 
   afterEach(async () => {
@@ -290,6 +334,143 @@ describe("WalletProvider session integration", () => {
     expect(JSON.parse(localStorage.getItem("provider-session") ?? "null").address).toBe(
       "virtengine1second",
     );
+  });
+
+  it("fails all signing methods closed when no live authorization authority is configured", async () => {
+    await renderProvider();
+    adapters.keplr.connect.mockResolvedValueOnce([account("virtengine1first")]);
+    await act(async () => wallet.connect("keplr"));
+
+    const attempts = [
+      () => wallet.signAmino(aminoSignDoc),
+      () => wallet.signDirect(directSignDoc),
+      () => wallet.signArbitrary("proof"),
+    ];
+    for (const attempt of attempts) {
+      await expect(attempt()).rejects.toMatchObject({ code: WalletErrorCode.SESSION_EXPIRED });
+    }
+
+    expect(adapters.keplr.signAmino).not.toHaveBeenCalled();
+    expect(adapters.keplr.signDirect).not.toHaveBeenCalled();
+    expect(adapters.keplr.signArbitrary).not.toHaveBeenCalled();
+  });
+
+  it.each(["mismatched", "expired"] as const)(
+    "does not invoke any signing adapter with %s authorization",
+    async (kind) => {
+      const authorize = vi.fn(async (request: WalletSigningAuthorizationRequest) =>
+        authorizationFor(request, kind === "mismatched"
+          ? { account: "virtengine1other" }
+          : {
+              issuedAt: Date.now() - 2_000,
+              expiresAt: Date.now() - 1_000,
+              mfa: { scopes: [request.requiredScope], expiresAt: Date.now() - 1_000 },
+            }),
+      );
+      await renderProvider({ signingAuthorization: { authorize } });
+      adapters.keplr.connect.mockResolvedValueOnce([account("virtengine1first")]);
+      await act(async () => wallet.connect("keplr"));
+
+      await expect(wallet.signAmino(aminoSignDoc)).rejects.toMatchObject({
+        code: WalletErrorCode.SESSION_EXPIRED,
+      });
+      await expect(wallet.signDirect(directSignDoc)).rejects.toMatchObject({
+        code: WalletErrorCode.SESSION_EXPIRED,
+      });
+      await expect(wallet.signArbitrary("proof")).rejects.toMatchObject({
+        code: WalletErrorCode.SESSION_EXPIRED,
+      });
+
+      expect(adapters.keplr.signAmino).not.toHaveBeenCalled();
+      expect(adapters.keplr.signDirect).not.toHaveBeenCalled();
+      expect(adapters.keplr.signArbitrary).not.toHaveBeenCalled();
+    },
+  );
+
+  it("invokes each adapter once with an exact live operation-scoped binding", async () => {
+    const authorize = vi.fn(async (request: WalletSigningAuthorizationRequest) =>
+      authorizationFor(request),
+    );
+    adapters.keplr.signAmino.mockResolvedValueOnce({ signed: aminoSignDoc, signature: {} });
+    adapters.keplr.signDirect.mockResolvedValueOnce({ signed: directSignDoc, signature: {} });
+    adapters.keplr.signArbitrary.mockResolvedValueOnce({
+      signature: "signature",
+      pubKey: new Uint8Array([1, 2, 3]),
+    });
+    await renderProvider({ persistKey: "provider-session", signingAuthorization: { authorize } });
+    adapters.keplr.connect.mockResolvedValueOnce([account("virtengine1first")]);
+    await act(async () => wallet.connect("keplr"));
+
+    await wallet.signAmino(aminoSignDoc);
+    await wallet.signDirect(directSignDoc);
+    await wallet.signArbitrary("proof");
+
+    expect(adapters.keplr.signAmino).toHaveBeenCalledTimes(1);
+    expect(adapters.keplr.signDirect).toHaveBeenCalledTimes(1);
+    expect(adapters.keplr.signArbitrary).toHaveBeenCalledTimes(1);
+    expect(authorize.mock.calls.map(([request]) => [request.operation, request.requiredScope])).toEqual([
+      ["amino", WALLET_TRANSACTION_SIGNING_SCOPE],
+      ["direct", WALLET_TRANSACTION_SIGNING_SCOPE],
+      ["arbitrary", WALLET_ARBITRARY_SIGNING_SCOPE],
+    ]);
+    expect(localStorage.getItem("provider-session")).not.toContain("device-1");
+    expect(localStorage.getItem("provider-session")).not.toContain("session-1");
+  });
+
+  it.each(["account", "public key"] as const)(
+    "invalidates authorization when the active %s changes",
+    async (changedIdentity) => {
+      let originalBinding: WalletAuthorizationBinding | null = null;
+      const authorize = vi.fn(async (request: WalletSigningAuthorizationRequest) => {
+        originalBinding ??= authorizationFor(request);
+        return originalBinding;
+      });
+      await renderProvider({ signingAuthorization: { authorize } });
+      adapters.keplr.connect.mockResolvedValueOnce([account("virtengine1first")]);
+      await act(async () => wallet.connect("keplr"));
+
+      await wallet.signDirect(directSignDoc);
+      adapters.keplr.signDirect.mockClear();
+      if (changedIdentity === "account") {
+        adapters.keplr.getAccounts.mockResolvedValueOnce([
+          account("virtengine1first"),
+          account("virtengine1second"),
+        ]);
+        await act(async () => wallet.refreshAccounts());
+        act(() => wallet.selectAccount(1));
+      } else {
+        adapters.keplr.getAccounts.mockResolvedValueOnce([{
+          ...account("virtengine1first"),
+          pubKey: new Uint8Array([4, 5, 6]),
+        }]);
+        await act(async () => wallet.refreshAccounts());
+      }
+
+      await expect(wallet.signDirect(directSignDoc)).rejects.toMatchObject({
+        code: WalletErrorCode.SESSION_EXPIRED,
+      });
+      expect(adapters.keplr.signDirect).not.toHaveBeenCalled();
+    },
+  );
+
+  it("does not let arbitrary signing reuse transaction MFA authorization", async () => {
+    const authorize = vi.fn(async (request: WalletSigningAuthorizationRequest) =>
+      authorizationFor(request, {
+        mfa: { scopes: [WALLET_TRANSACTION_SIGNING_SCOPE], expiresAt: Date.now() + 30_000 },
+      }),
+    );
+    await renderProvider({ signingAuthorization: { authorize } });
+    adapters.keplr.connect.mockResolvedValueOnce([account("virtengine1first")]);
+    await act(async () => wallet.connect("keplr"));
+
+    await expect(wallet.signArbitrary("proof")).rejects.toMatchObject({
+      code: WalletErrorCode.SESSION_EXPIRED,
+    });
+    expect(authorize).toHaveBeenCalledWith(expect.objectContaining({
+      operation: "arbitrary",
+      requiredScope: WALLET_ARBITRARY_SIGNING_SCOPE,
+    }));
+    expect(adapters.keplr.signArbitrary).not.toHaveBeenCalled();
   });
 
   it("immediately clears provider state and signing ability on cross-tab removal", async () => {
