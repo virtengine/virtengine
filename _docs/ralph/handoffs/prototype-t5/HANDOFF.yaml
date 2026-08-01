@@ -1,42 +1,38 @@
 campaign: three-day-prototype
 thread: T5
-checkpoint: T5-01
+checkpoint: T5-02
 branch: ve/prototype-t5-platform
-start_head: 79391a3df86d85522b92e0400c6904971ecbe65d
+start_head: deb09725
 end_head: PENDING_COMMIT
 origin_main: c31f910e318a39d86372ed2d65050d08777dbfc5
 tree_clean: false
-commits: []
+commits:
+  - deb09725
 owned_paths:
-  - x/mfa/types/prototype_contract.go
-  - x/mfa/types/prototype_recovery_contract.go
-  - x/mfa/types/prototype_contract_test.go
+  - pkg/data_vault/contracts/contracts.go
+  - pkg/data_vault/contracts/contracts_test.go
   - _docs/ralph/handoffs/prototype-t5/HANDOFF.yaml
 files_changed:
-  - x/mfa/types/prototype_contract.go
-  - x/mfa/types/prototype_recovery_contract.go
-  - x/mfa/types/prototype_contract_test.go
+  - pkg/data_vault/contracts/contracts.go
+  - pkg/data_vault/contracts/contracts_test.go
   - _docs/ralph/handoffs/prototype-t5/HANDOFF.yaml
 tests:
-  - command: go test -v -count=1 prototype_contract.go prototype_recovery_contract.go factors.go prototype_contract_test.go
-    working_directory: x/mfa/types
+  - command: go test -v -count=1 ./pkg/data_vault/contracts
+    environment: GO111MODULE=off
     go_version: go1.26.5 windows/amd64
     exit_code: 0
-  - command: go vet prototype_contract.go prototype_recovery_contract.go factors.go
-    working_directory: x/mfa/types
+  - command: go vet ./pkg/data_vault/contracts
+    environment: GO111MODULE=off
     go_version: go1.26.5 windows/amd64
     exit_code: 0
   - command: git diff --check
     exit_code: 0
 generated_hashes: {}
 external_evidence: []
-known_failures:
-  - command: go test -count=1 ./x/mfa/types -run 'Recovery|FactorProfile|Challenge'
-    status: not_completed
-    reason: Concurrent first-run repository dependency compilation did not reach test execution; the changed standard-library contract slice was validated separately.
+known_failures: []
 notes:
-  - Contracts remain disabled or fixture_only and do not wire account recovery.
-  - No 88D digest, real authenticator, verifier root, or threshold participant certification is claimed.
-  - Missing prior policy, unknown participant versions, replay, expiry, and wrong chain/account/action fail closed.
-next_checkpoint: T5-02
+  - Contracts remain disabled or fixture_only and do not select a runtime vault backend.
+  - No 88D certification, durable production backend, KMS/HSM custody, restore environment, or legal approval is claimed.
+  - Memory/test backends, regenerated keys, incomplete restore inventories, unilateral holds, active-hold erasure, missing receipts, and decryptable remnants fail closed.
+next_checkpoint: T5-03
 expected_head: PENDING_COMMIT
