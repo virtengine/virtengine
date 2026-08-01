@@ -1,0 +1,41 @@
+T5-15 fund authorization coverage validation
+Payload: 34629857a91b2ea4a4cfb043eedcd7011edcc518
+Platform: windows/amd64
+Toolchains: go version go1.25.8 windows/amd64; WinLibs POSIX UCRT GCC 16.1.0
+
+Command: C:\Users\pavil\AppData\Local\VirtEngine\toolchains\go1.25.8\go\bin\go.exe -C C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t5 test -count=1 ./pkg/fundauth
+Output: ok github.com/virtengine/virtengine/pkg/fundauth 3.801s
+Exit code: 0
+
+Command: C:\Users\pavil\AppData\Local\VirtEngine\toolchains\go1.25.8\go\bin\go.exe -C C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t5 vet ./pkg/fundauth
+Output: no diagnostics
+Exit code: 0
+
+Environment: CGO_ENABLED=1; CC=gcc; PATH includes WinLibs UCRT bin
+Command: C:\Users\pavil\AppData\Local\VirtEngine\toolchains\go1.25.8\go\bin\go.exe test -race -count=1 ./pkg/fundauth
+Output: ok github.com/virtengine/virtengine/pkg/fundauth 3.206s
+Exit code: 0
+
+Command: git diff --cached --check
+Output: no errors
+Exit code: 0
+
+Pinned inventory:
+- total sources: 40
+- active sources: 30
+- exclusions: 7
+- registry digest: 0bec64f7208bda97b411c4f109eddfc6ff4dd8b392791f980426c87189069702
+- active digest: 380bbdb419f245cf5d34fd010d7111690dfaf4f932fffc2dda05911b4f7e9bec
+- inventory digest: 3fea71122bb16bfffcb88309610c92e08e74aabced5743ac27458c572df64f74
+
+Security evidence:
+- Manifest and source detectors fail on omitted, duplicate, unknown, reclassified or excluded active value sources.
+- Account policy permits only active accounts; suspended, held, recovery-pending, terminated and closed fail.
+- Account/policy revisions, signer epoch, MFA and eligibility evidence/freshness are exact-bound.
+- Possession signature verification precedes policy and atomic consumer; biometrics/eligibility cannot authorize alone.
+- Policy failure calls the consumer zero times; replay, concurrency, callback rollback and cancellation fail closed.
+
+Blockers/non-claims:
+- Runtime enforcement remains not_wired_t4_16_required; T4 must install decoded-message adapters at every live handler.
+- T5-18 must implement the durable keeper nonce consumer and cached-context transaction.
+- No T4 intake epoch manifest/base tag/validator is published; payload remains untagged and not intake-eligible.

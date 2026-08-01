@@ -1,70 +1,64 @@
 campaign: three-day-prototype
 thread: T5
-checkpoint: T5-14
+checkpoint: T5-15
 branch: ve/prototype-t5-platform
-start_head: 83486e5cd2aaeea176fdd99d30ee92b04ee8665f
-end_head: 26212410a6e190375ddb3f5bb393c9966ac5d839
+start_head: a5c5f4761b33e0f4b26b8333c707fb24e72526aa
+end_head: 34629857a91b2ea4a4cfb043eedcd7011edcc518
 origin_main: 79391a3df86d85522b92e0400c6904971ecbe65d
 tree_clean: true
 commits:
-  - 26212410a6e190375ddb3f5bb393c9966ac5d839
+  - 34629857a91b2ea4a4cfb043eedcd7011edcc518
 owned_paths:
-  - pkg/fundauth/authorization.go
-  - pkg/fundauth/canonical.go
-  - pkg/fundauth/registry.go
-  - pkg/fundauth/canonical_test.go
-  - pkg/fundauth/consumer_test.go
-  - pkg/fundauth/helpers_test.go
-  - pkg/fundauth/registry_test.go
-  - pkg/fundauth/strict_test.go
-  - pkg/fundauth/verify_test.go
+  - pkg/fundauth/inventory.go
+  - pkg/fundauth/inventory_test.go
+  - pkg/fundauth/policy.go
+  - pkg/fundauth/policy_test.go
+  - pkg/fundauth/testdata/value_source_inventory_v1.json
   - _docs/ralph/handoffs/prototype-t5/HANDOFF.yaml
-  - _docs/ralph/evidence/prototype-t5/T5-14/validation.txt
+  - _docs/ralph/evidence/prototype-t5/T5-15/validation.txt
 files_changed:
-  - pkg/fundauth/authorization.go
-  - pkg/fundauth/canonical.go
-  - pkg/fundauth/registry.go
-  - pkg/fundauth/canonical_test.go
-  - pkg/fundauth/consumer_test.go
-  - pkg/fundauth/helpers_test.go
-  - pkg/fundauth/registry_test.go
-  - pkg/fundauth/strict_test.go
-  - pkg/fundauth/verify_test.go
+  - pkg/fundauth/inventory.go
+  - pkg/fundauth/inventory_test.go
+  - pkg/fundauth/policy.go
+  - pkg/fundauth/policy_test.go
+  - pkg/fundauth/testdata/value_source_inventory_v1.json
   - _docs/ralph/handoffs/prototype-t5/HANDOFF.yaml
-  - _docs/ralph/evidence/prototype-t5/T5-14/validation.txt
+  - _docs/ralph/evidence/prototype-t5/T5-15/validation.txt
 tests:
   - command: C:\Users\pavil\AppData\Local\VirtEngine\toolchains\go1.25.8\go\bin\go.exe -C C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t5 test -count=1 ./pkg/fundauth
     exit_code: 0
     result: passed
     tool_versions:
       go: go1.25.8 windows/amd64
-    artifact: _docs/ralph/evidence/prototype-t5/T5-14/validation.txt
+    artifact: _docs/ralph/evidence/prototype-t5/T5-15/validation.txt
   - command: C:\Users\pavil\AppData\Local\VirtEngine\toolchains\go1.25.8\go\bin\go.exe -C C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t5 vet ./pkg/fundauth
     exit_code: 0
     result: passed
     tool_versions:
       go: go1.25.8 windows/amd64
-    artifact: _docs/ralph/evidence/prototype-t5/T5-14/validation.txt
+    artifact: _docs/ralph/evidence/prototype-t5/T5-15/validation.txt
   - command: $env:CGO_ENABLED='1'; $env:CC='gcc'; C:\Users\pavil\AppData\Local\VirtEngine\toolchains\go1.25.8\go\bin\go.exe test -race -count=1 ./pkg/fundauth
     exit_code: 0
     result: passed
     tool_versions:
       go: go1.25.8 windows/amd64
       gcc: WinLibs POSIX UCRT 16.1.0
-    artifact: _docs/ralph/evidence/prototype-t5/T5-14/validation.txt
+    artifact: _docs/ralph/evidence/prototype-t5/T5-15/validation.txt
   - command: git diff --check
     exit_code: 0
     result: passed
-    artifact: _docs/ralph/evidence/prototype-t5/T5-14/validation.txt
-generated_hashes: {}
+    artifact: _docs/ralph/evidence/prototype-t5/T5-15/validation.txt
+generated_hashes:
+  registry: 0bec64f7208bda97b411c4f109eddfc6ff4dd8b392791f980426c87189069702
+  active_sources: 380bbdb419f245cf5d34fd010d7111690dfaf4f932fffc2dda05911b4f7e9bec
+  inventory: 3fea71122bb16bfffcb88309610c92e08e74aabced5743ac27458c572df64f74
 migrations: []
 external_evidence:
-  - _docs/ralph/evidence/prototype-t5/T5-14/validation.txt
+  - _docs/ralph/evidence/prototype-t5/T5-15/validation.txt
 known_failures: []
 blockers:
-  - T5-15 must audit every live value-moving route and account-state gate against the registry.
-  - T5-18 must implement durable keeper nonce consumption and cached-context rollback.
-  - T4-16 owns decoded-message adapters and cross-module runtime wiring.
-  - T4 has not published the intake epoch manifest, epoch base tag, or intake validator; T5-14 remains untagged and not intake-eligible.
-next_checkpoint: T5-15
-expected_head: 26212410a6e190375ddb3f5bb393c9966ac5d839
+  - Runtime enforcement remains not_wired_t4_16_required; T4 must install decoded-message adapters at every live handler.
+  - T5-18 must implement the durable keeper nonce consumer and cached-context transaction.
+  - T4 has not published the intake epoch manifest, epoch base tag, or intake validator; T5-15 remains untagged and not intake-eligible.
+next_checkpoint: T5-16
+expected_head: 34629857a91b2ea4a4cfb043eedcd7011edcc518
