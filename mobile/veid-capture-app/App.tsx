@@ -10,8 +10,14 @@ import { BiometricCaptureScreen } from "./src/screens/BiometricCaptureScreen";
 import { ReviewScreen } from "./src/screens/ReviewScreen";
 import { UploadScreen } from "./src/screens/UploadScreen";
 import { CompleteScreen } from "./src/screens/CompleteScreen";
+import type { CaptureUploadDependencies } from "./src/services/upload/captureUploadAttempt";
+import { createId } from "./src/utils/id";
 
-function CaptureRouter() {
+const productionUploadDependencies: CaptureUploadDependencies = {
+  createIdempotencyKey: () => createId("upload")
+};
+
+function CaptureRouter({ uploadDependencies }: { uploadDependencies: CaptureUploadDependencies }) {
   const { state } = useCaptureStore();
 
   switch (state.currentStep) {
@@ -32,7 +38,7 @@ function CaptureRouter() {
     case "review":
       return <ReviewScreen />;
     case "upload":
-      return <UploadScreen />;
+      return <UploadScreen uploadDependencies={uploadDependencies} />;
     case "complete":
       return <CompleteScreen />;
     default:
@@ -44,7 +50,7 @@ export default function App() {
   return (
     <CaptureProvider>
       <SafeAreaView style={styles.container}>
-        <CaptureRouter />
+        <CaptureRouter uploadDependencies={productionUploadDependencies} />
       </SafeAreaView>
     </CaptureProvider>
   );

@@ -1,20 +1,26 @@
-import React, { useState } from "react";
+import React, { useRef, useState } from "react";
 import { ActivityIndicator, StyleSheet, Text, View } from "react-native";
 import { CaptureFooter } from "../components/CaptureFooter";
 import { CaptureHeader } from "../components/CaptureHeader";
 import { buildCapturePayload, finalizeCaptureSession } from "../core/captureSession";
 import type { DeviceAttestationProviderAdapter } from "../core/deviceAttestation";
-import { uploadCapture } from "../services/upload/captureUploader";
+import {
+  createCaptureUploadAttempt,
+  type CaptureUploadAttempt,
+  type CaptureUploadDependencies
+} from "../services/upload/captureUploadAttempt";
 import { useCaptureStore } from "../state/captureStore";
 
-interface UploadScreenProps {
+export interface UploadScreenProps {
   attestationProvider?: DeviceAttestationProviderAdapter;
+  uploadDependencies: CaptureUploadDependencies;
 }
 
-export function UploadScreen({ attestationProvider }: UploadScreenProps) {
+export function UploadScreen({ attestationProvider, uploadDependencies }: UploadScreenProps) {
   const { state, dispatch } = useCaptureStore();
   const [status, setStatus] = useState<"idle" | "uploading" | "success" | "error">("idle");
   const [error, setError] = useState<string | null>(null);
+  const uploadAttempt = useRef<CaptureUploadAttempt>();
 
   const handleUpload = async () => {
     setStatus("uploading");
@@ -28,8 +34,12 @@ export function UploadScreen({ attestationProvider }: UploadScreenProps) {
         return;
       }
 
-      const payload = buildCapturePayload(session, "https://api.virtengine.local/veid/capture");
-      const result = await uploadCapture(payload);
+      if (!uploadAttempt.current) {
+        const payload = buildCapturePayload(session, "https://api.virtengine.local/veid/capture");
+        uploadAttempt.current = createCaptureUploadAttempt(payload, uploadDependencies);
+      }
+
+      const result = await uploadAttempt.current.upload();
       if (result.success) {
         setStatus("success");
         dispatch({ type: "next" });
@@ -37,7 +47,7 @@ export function UploadScreen({ attestationProvider }: UploadScreenProps) {
       }
 
       setStatus("error");
-      setError(result.error ?? "unknown_error");
+      setError(result.error);
     } catch (uploadError) {
       setStatus("error");
       setError(uploadError instanceof Error ? uploadError.message : "upload_unavailable");

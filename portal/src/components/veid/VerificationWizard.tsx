@@ -16,6 +16,7 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/Alert';
 import { Progress } from '@/components/ui/Progress';
 import { Badge } from '@/components/ui/Badge';
 import { useVeidWizard, WIZARD_STEPS, MAX_RETRY_COUNT } from '@/features/veid';
+import type { VeidSubmissionInput, VeidSubmissionTransport } from '@/features/veid';
 import type { CaptureError, SelfieResult } from '@/lib/capture-adapter';
 import { VeidDocumentCapture } from './DocumentCapture';
 import { VeidSelfieCapture } from './SelfieCapture';
@@ -23,6 +24,8 @@ import { unavailableVeidCaptureProviders, type VeidCaptureProviders } from './Ve
 
 interface VerificationWizardProps {
   providers?: VeidCaptureProviders;
+  submission?: VeidSubmissionInput;
+  submissionTransport?: VeidSubmissionTransport;
   /** Callback when wizard completes */
   onComplete?: () => void;
   /** Callback when user cancels */
@@ -32,6 +35,8 @@ interface VerificationWizardProps {
 
 export function VerificationWizard({
   providers = unavailableVeidCaptureProviders,
+  submission,
+  submissionTransport,
   onComplete,
   onCancel,
   className,
@@ -49,7 +54,7 @@ export function VerificationWizard({
     submit,
     setError,
     retry,
-  } = useVeidWizard();
+  } = useVeidWizard({ submission, transport: submissionTransport });
 
   const handleCaptureError = useCallback(
     (error: CaptureError) => {
@@ -64,8 +69,7 @@ export function VerificationWizard({
   );
 
   const handleSubmit = useCallback(async () => {
-    await submit();
-    onComplete?.();
+    if (await submit()) onComplete?.();
   }, [submit, onComplete]);
 
   const handleSelfieCapture = useCallback(
