@@ -258,6 +258,25 @@ func TestReconciliationSyncStatusUsesExplicitStates(t *testing.T) {
 	require.Equal(t, 1, status.UnresolvedCount)
 }
 
+func TestWaldurReconcilerSettlementEligibilityRequiresMatched(t *testing.T) {
+	var absent *WaldurReconciler
+	require.ErrorIs(t, absent.SettlementEligibility("alloc-1"), ErrSettlementReconciliationHold)
+
+	reconciler := NewWaldurReconciler(DefaultWaldurReconcilerConfig(), nil, nil, nil, nil)
+	require.ErrorIs(t, reconciler.SettlementEligibility("alloc-1"), ErrSettlementReconciliationHold)
+	for _, state := range []ReconciliationState{
+		ReconciliationStateMismatched,
+		ReconciliationStateUnavailable,
+		ReconciliationStateStale,
+		ReconciliationStateUnresolved,
+	} {
+		reconciler.storeResult(&ReconciliationResult{AllocationID: "alloc-1", State: state})
+		require.ErrorIs(t, reconciler.SettlementEligibility("alloc-1"), ErrSettlementReconciliationHold)
+	}
+	reconciler.storeResult(&ReconciliationResult{AllocationID: "alloc-1", State: ReconciliationStateMatched})
+	require.NoError(t, reconciler.SettlementEligibility("alloc-1"))
+}
+
 func TestReconciliationResultJSONUsesExplicitContract(t *testing.T) {
 	bz, err := json.Marshal(&ReconciliationResult{State: ReconciliationStateUnavailable, ReasonCode: ReconciliationReasonIndependentEvidenceUnavailable})
 	require.NoError(t, err)

@@ -8,6 +8,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"math"
@@ -19,6 +20,8 @@ import (
 	verrors "github.com/virtengine/virtengine/pkg/errors"
 	"github.com/virtengine/virtengine/pkg/waldur"
 )
+
+var ErrSettlementReconciliationHold = errors.New("settlement held pending matched reconciliation")
 
 // WaldurReconcilerConfig configures the Waldur reconciler.
 type WaldurReconcilerConfig struct {
@@ -654,6 +657,18 @@ func (r *WaldurReconciler) GetResult(allocationID string) (*ReconciliationResult
 	return result, ok
 }
 
+// SettlementEligibility fails closed unless a durably published result is matched.
+func (r *WaldurReconciler) SettlementEligibility(allocationID string) error {
+	if r == nil || strings.TrimSpace(allocationID) == "" {
+		return ErrSettlementReconciliationHold
+	}
+	result, found := r.GetResult(allocationID)
+	if !found || result.State != ReconciliationStateMatched {
+		return ErrSettlementReconciliationHold
+	}
+	return nil
+}
+
 // GetRecentDiscrepancies returns recent discrepancies.
 func (r *WaldurReconciler) GetRecentDiscrepancies(limit int) []MetricDiscrepancy {
 	r.mu.RLock()
@@ -968,6 +983,14 @@ func (c *ScheduledUsageCollector) CollectNow(ctx context.Context) error {
 			}
 
 			// Submit to chain
+			allocationID := record.AllocationID
+			if allocationID == "" {
+				allocationID = record.DeploymentID
+			}
+			if err := c.reconciler.SettlementEligibility(allocationID); err != nil {
+				log.Printf("[scheduled-collector] settlement held for %s: %v", workloadID, err)
+				continue
+			}
 			if err := c.settlementPipeline.SubmitUsageToChain(ctx, record); err != nil {
 				log.Printf("[scheduled-collector] failed to submit to chain for %s: %v", workloadID, err)
 			}
