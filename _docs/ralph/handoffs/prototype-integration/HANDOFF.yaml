@@ -1,14 +1,14 @@
 {
   "campaign": "three-day-prototype",
   "thread": "T4",
-  "checkpoint": "T4-05A",
+  "checkpoint": "T4-05B",
   "branch": "ve/prototype-integration",
-  "start_head": "99ee447ec28842506b2ad59e4646c0aa6496ba67",
-  "end_head": "fad7870d2073bf327dd476aa353cc1ae6325a3ed",
+  "start_head": "328c5e2ad93c1873e5c9bbaa89c28970e702651e",
+  "end_head": "9ff3f397d703ac431a1b9f6bc865fe0b6d85f801",
   "origin_main": "79391a3df86d85522b92e0400c6904971ecbe65d",
   "tree_clean": true,
   "commits": [
-    "fad7870d2073bf327dd476aa353cc1ae6325a3ed"
+    "9ff3f397d703ac431a1b9f6bc865fe0b6d85f801"
   ],
   "owned_paths": [
     "_docs/ralph/prototype-integration/**",
@@ -17,7 +17,9 @@
     "_docs/ralph/prototype-integration/required-gate-matrix.json",
     "_docs/ralph/prototype-integration/required-gate-matrix.schema.json",
     "scripts/validate-required-gate-matrix.cjs",
-    "scripts/validate-required-gate-matrix.test.cjs"
+    "scripts/validate-required-gate-matrix.test.cjs",
+    "scripts/run-required-gates.cjs",
+    "scripts/run-required-gates.test.cjs"
   ],
   "files_changed": [
     "_docs/ralph/handoffs/prototype-integration/HANDOFF.yaml",
@@ -25,16 +27,20 @@
     "_docs/ralph/handoffs/prototype-integration/HANDOFF.yaml",
     "_docs/ralph/prototype-integration/required-gate-matrix.json",
     "_docs/ralph/prototype-integration/required-gate-matrix.schema.json",
+    "_docs/ralph/prototype-integration/required-gate-plan.schema.json",
+    "_docs/ralph/prototype-integration/required-gate-results.schema.json",
+    "scripts/run-required-gates.cjs",
+    "scripts/run-required-gates.test.cjs",
     "scripts/validate-prototype-integration.cjs",
     "scripts/validate-required-gate-matrix.cjs",
     "scripts/validate-required-gate-matrix.test.cjs"
   ],
   "tests": [
     {
-      "command": "node scripts/validate-required-gate-matrix.test.cjs && node scripts/validate-required-gate-matrix.cjs",
+      "command": "node scripts/run-required-gates.test.cjs && node scripts/validate-required-gate-matrix.test.cjs && node scripts/validate-required-gate-matrix.cjs",
       "exit_code": 0,
       "result": "passed",
-      "test_count": 13,
+      "test_count": 29,
       "tool_versions": {
         "node": "20.19.1"
       }
@@ -49,8 +55,9 @@
     }
   ],
   "generated_hashes": {
-    "_docs/ralph/prototype-integration/required-gate-matrix.json": "92def5c909e8fd7cb38bd800a200602775099af9d9890a016f02f9126d0552ae",
-    "_docs/ralph/prototype-integration/required-gate-matrix.schema.json": "3a750b55c0003c83386a4b72c4d7ddbd0a1c1a1a6f965437c7f4f9f43d17147f"
+    "scripts/run-required-gates.cjs": "2a8ffd18c74fae10960e0b2fa80fcb0c5135a58ca7fcc5ac550d41fa0f603a44",
+    "_docs/ralph/prototype-integration/required-gate-plan.schema.json": "556507cf39d1550a56b192936dc1ed4c7fe8595ccce449bf4adc758f197a4f6d",
+    "_docs/ralph/prototype-integration/required-gate-results.schema.json": "346c8cfcdd0648a894ef44a216948995c737e8bc4faccecac3e63bf14de0349b"
   },
   "accepted_checkpoints": [],
   "rejected_checkpoints": [
@@ -73,10 +80,10 @@
   ],
   "blockers": [
     "Epoch 1 remains open with no announced intake-v2 producer tags; no producer checkpoint is accepted by this checkpoint.",
-    "Every required-gate category remains dependency_blocked; this checkpoint defines controls but records no gate execution evidence.",
+    "Every required-gate category remains dependency_blocked; plans and result envelopes can be validated, but execution is refused.",
     "Tasks 85D, 86A-86D, 87D, and 88A remain unavailable to the complete Task 88B gate.",
     "Task 88B is not complete and no process-boundary lifecycle evidence is claimed."
   ],
-  "next_checkpoint": "T4-05B",
-  "expected_head": "fad7870d2073bf327dd476aa353cc1ae6325a3ed"
+  "next_checkpoint": "T4-06A",
+  "expected_head": "9ff3f397d703ac431a1b9f6bc865fe0b6d85f801"
 }
