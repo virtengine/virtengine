@@ -9,7 +9,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/Button';
 import { Alert } from '@/components/ui/Alert';
 import { Separator } from '@/components/ui/Separator';
-import type { EscrowInfo, PriceBreakdown } from '@/features/orders';
+import type { EscrowInfo, OrderSubmissionErrorCode, PriceBreakdown } from '@/features/orders';
 import { formatTokenAmount } from '@/features/orders';
 import { usePriceConversion } from '@/hooks/usePriceConversion';
 import { useTranslation } from 'react-i18next';
@@ -19,7 +19,7 @@ interface EscrowDepositProps {
   escrowInfo: EscrowInfo;
   priceBreakdown: PriceBreakdown;
   isSubmitting: boolean;
-  error: string | null;
+  error: OrderSubmissionErrorCode | null;
   onSubmit: () => void;
 }
 

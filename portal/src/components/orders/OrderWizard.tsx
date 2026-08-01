@@ -5,15 +5,15 @@
 
 'use client';
 
-import { useCallback } from 'react';
 import { Button } from '@/components/ui/Button';
 import type { Offering } from '@/types/offerings';
 import {
   useOrderWizard,
   WIZARD_STEPS,
   STEP_LABELS,
-  type OrderWizardState,
   type OrderCreateResult,
+  type OrderResultProjector,
+  type OrderSubmissionAdapter,
 } from '@/features/orders';
 import { ResourceConfigStep } from './ResourceConfig';
 import { PriceCalculator } from './PriceCalculator';
@@ -25,6 +25,8 @@ interface OrderWizardProps {
   offering: Offering;
   walletBalance?: string;
   walletDenom?: string;
+  submissionAdapter?: OrderSubmissionAdapter;
+  resultProjector?: OrderResultProjector;
   onComplete?: (result: OrderCreateResult) => void;
   onCancel?: () => void;
 }
@@ -37,33 +39,20 @@ export function OrderWizard({
   offering,
   walletBalance = '10000000000',
   walletDenom = 'uve',
+  submissionAdapter,
+  resultProjector,
   onComplete,
   onCancel,
 }: OrderWizardProps) {
   const { t } = useTranslation();
-  const handleSubmit = useCallback(
-    async (_state: OrderWizardState): Promise<OrderCreateResult> => {
-      // In production, this would send MsgCreateOrder to the chain via wallet
-      await new Promise((resolve) => setTimeout(resolve, 2000));
-
-      const result: OrderCreateResult = {
-        orderId: `order-${Date.now().toString(36)}`,
-        txHash: `${Date.now().toString(16)}${Math.random().toString(16).slice(2, 10)}`,
-        status: 'pending',
-        createdAt: new Date().toISOString(),
-      };
-
-      onComplete?.(result);
-      return result;
-    },
-    [onComplete]
-  );
 
   const wizard = useOrderWizard({
     offering,
     walletBalance,
     walletDenom,
-    onSubmit: handleSubmit,
+    submissionAdapter,
+    resultProjector,
+    onComplete,
   });
 
   const { state, stepIndex, totalSteps, isFirstStep, canProceed } = wizard;

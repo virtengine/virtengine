@@ -5,24 +5,34 @@
 
 'use client';
 
-import { useState, useCallback, useMemo } from 'react';
+import { useState, useCallback, useMemo, useRef } from 'react';
 import type { Offering } from '@/types/offerings';
 import {
   type WizardStep,
   type ResourceConfig,
   type OrderCreateResult,
+  type OrderResultProjector,
+  type OrderSubmissionAdapter,
   type OrderWizardState,
+  OrderSubmissionError,
   WIZARD_STEPS,
   DEFAULT_RESOURCE_CONFIG,
+  buildOrderCreateRequest,
   calculatePriceBreakdown,
+  digestOrderCreateRequest,
+  validateCommittedOrderResult,
   validateResources,
 } from './types';
+
+const SUBMISSION_TIMEOUT_MS = 30_000;
 
 export interface UseOrderWizardOptions {
   offering: Offering | null;
   walletBalance?: string;
   walletDenom?: string;
-  onSubmit?: (state: OrderWizardState) => Promise<OrderCreateResult>;
+  submissionAdapter?: OrderSubmissionAdapter;
+  resultProjector?: OrderResultProjector;
+  onComplete?: (result: OrderCreateResult) => void;
 }
 
 export interface UseOrderWizardReturn {
@@ -74,9 +84,14 @@ export function useOrderWizard({
   offering,
   walletBalance = '0',
   walletDenom = 'uve',
-  onSubmit,
+  submissionAdapter,
+  resultProjector,
+  onComplete,
 }: UseOrderWizardOptions): UseOrderWizardReturn {
   const [state, setState] = useState<OrderWizardState>(() => createInitialState(offering));
+  const stateRef = useRef(state);
+  const submissionInFlightRef = useRef(false);
+  stateRef.current = state;
 
   const stepIndex = WIZARD_STEPS.indexOf(state.currentStep);
   const totalSteps = WIZARD_STEPS.length;
@@ -177,26 +192,62 @@ export function useOrderWizard({
   }, []);
 
   const submitOrder = useCallback(async () => {
-    if (!onSubmit || !state.offering) return;
+    if (submissionInFlightRef.current) return;
 
+    if (!submissionAdapter || !resultProjector) {
+      setState((prev) => ({ ...prev, error: 'feature_unavailable' }));
+      return;
+    }
+
+    const request = buildOrderCreateRequest(stateRef.current);
+    if (!request) {
+      setState((prev) => ({ ...prev, error: 'submission_rejected' }));
+      return;
+    }
+
+    submissionInFlightRef.current = true;
     setState((prev) => ({ ...prev, isSubmitting: true, error: null }));
+    const abortController = new AbortController();
+    let timeout: ReturnType<typeof setTimeout> | undefined;
 
     try {
-      const result = await onSubmit(state);
+      const requestDigest = await digestOrderCreateRequest(request);
+      const rawResult = await Promise.race([
+        submissionAdapter.submitOrder(request, {
+          requestDigest,
+          idempotencyKey: requestDigest,
+          signal: abortController.signal,
+        }),
+        new Promise<never>((_, reject) => {
+          timeout = setTimeout(() => {
+            abortController.abort();
+            reject(new OrderSubmissionError('submission_timeout'));
+          }, SUBMISSION_TIMEOUT_MS);
+        }),
+      ]);
+      const currentRequest = buildOrderCreateRequest(stateRef.current);
+      if (!currentRequest || (await digestOrderCreateRequest(currentRequest)) !== requestDigest) {
+        throw new OrderSubmissionError('order_state_changed');
+      }
+      const result = validateCommittedOrderResult(resultProjector(rawResult), request, requestDigest);
       setState((prev) => ({
         ...prev,
         orderResult: result,
         currentStep: 'confirmation',
         isSubmitting: false,
       }));
+      onComplete?.(result);
     } catch (err) {
       setState((prev) => ({
         ...prev,
         isSubmitting: false,
-        error: err instanceof Error ? err.message : 'Failed to create order',
+        error: err instanceof OrderSubmissionError ? err.code : 'submission_rejected',
       }));
+    } finally {
+      if (timeout !== undefined) clearTimeout(timeout);
+      submissionInFlightRef.current = false;
     }
-  }, [onSubmit, state]);
+  }, [onComplete, resultProjector, submissionAdapter]);
 
   const reset = useCallback(() => {
     setState(createInitialState(offering));
