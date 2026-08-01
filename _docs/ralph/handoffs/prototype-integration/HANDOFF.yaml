@@ -1,83 +1,87 @@
 {
   "campaign": "three-day-prototype",
   "thread": "T4",
-  "checkpoint": "T4-02A",
+  "checkpoint": "T4-10B",
   "branch": "ve/prototype-integration",
-  "start_head": "add7562c1fc1842b1c4c167dea9f00a36ba14235",
-  "end_head": "6a8154ba6d21f7e5eab6f28087adb7f107bf6f61",
+  "start_head": "5593292ec188efd3b69e4a48cefe2e79d90412ef",
+  "end_head": "fb95e757e09f83b5262a424720a19eca34a86bbb",
   "origin_main": "79391a3df86d85522b92e0400c6904971ecbe65d",
   "tree_clean": true,
   "commits": [
-    "6a8154ba6d21f7e5eab6f28087adb7f107bf6f61"
+    "fb95e757e09f83b5262a424720a19eca34a86bbb"
   ],
   "owned_paths": [
     "_docs/ralph/prototype-integration/**",
     "_docs/ralph/handoffs/prototype-integration/**",
     "scripts/validate-prototype-integration.cjs",
-    "scripts/validate-migration-inventory.cjs",
-    "_docs/ralph/prototype-integration/migration-inventory.json",
-    "_docs/ralph/prototype-integration/migration-inventory.schema.json"
+    "cmd/inference-sidecar/manifest.go",
+    "cmd/inference-sidecar/manifest_test.go"
   ],
   "files_changed": [
-    "_docs/INDEX.md",
     "_docs/ralph/handoffs/prototype-integration/HANDOFF.yaml",
-    "_docs/ralph/prototype-integration/migration-inventory.json",
-    "_docs/ralph/prototype-integration/migration-inventory.schema.json",
-    "scripts/validate-migration-inventory.cjs",
-    "scripts/validate-migration-inventory.test.cjs",
-    "scripts/validate-prototype-integration.cjs"
+    "cmd/inference-sidecar/manifest.go",
+    "cmd/inference-sidecar/manifest_test.go"
   ],
   "tests": [
     {
-      "command": "node scripts/validate-migration-inventory.test.cjs && node scripts/validate-migration-inventory.cjs",
-      "exit_code": 0,
-      "result": "passed",
-      "test_count": 8,
-      "tool_versions": {
-        "node": "20.19.1"
-      }
-    },
-    {
-      "command": "node scripts/validate-prototype-integration.test.cjs && node scripts/validate-prototype-integration.cjs",
-      "exit_code": 0,
-      "result": "passed",
-      "test_count": 5,
-      "tool_versions": {
-        "node": "20.19.1"
-      }
-    },
-    {
-      "command": "node scripts/validate-agents-docs.mjs",
-      "exit_code": 0,
-      "result": "passed",
-      "test_count": 9,
-      "tool_versions": {
-        "node": "20.19.1"
-      }
-    },
-    {
-      "command": "go1.25.8 test -count=1 ./tests/upgrade && go1.25.8 vet ./tests/upgrade",
+      "command": "go1.25.8 test -count=1 ./cmd/inference-sidecar -run 'Provenance|VerifyModelBundle'",
       "exit_code": 0,
       "result": "passed",
       "tool_versions": {
         "go": "1.25.8 windows/amd64"
       }
+    },
+    {
+      "command": "go1.25.8 test -count=1 ./cmd/inference-sidecar",
+      "exit_code": 0,
+      "result": "passed",
+      "tool_versions": {
+        "go": "1.25.8 windows/amd64"
+      }
+    },
+    {
+      "command": "go1.25.8 vet ./cmd/inference-sidecar",
+      "exit_code": 0,
+      "result": "passed",
+      "tool_versions": {
+        "go": "1.25.8 windows/amd64"
+      }
+    },
+    {
+      "command": "node scripts/validate-model-provenance.test.cjs && node scripts/validate-prototype-integration.cjs",
+      "exit_code": 0,
+      "result": "passed",
+      "tool_versions": {
+        "node": "20.19.1"
+      }
     }
   ],
-  "generated_hashes": {
-    "migration-inventory.json": "a78e32dad73854308ca736a7fc390c035902ee8db8e91117693fb416ad9e145f",
-    "migration-inventory.schema.json": "7bb7166a49d89cafa3329879902d41538a247eaf19c6c0b113d4b30d6b946c57"
-  },
+  "generated_hashes": {},
   "accepted_checkpoints": [],
-  "rejected_checkpoints": [],
+  "rejected_checkpoints": [
+    {
+      "thread": "T2",
+      "checkpoint": "T2-01",
+      "tip": "62d8c4b99804b354b36031ea2fd8b609dcac8a87",
+      "reason": "Producer tip does not contain integration SHA 78c57fbaf9517caba7b0d9a0dc0ca427665eb12e; synchronize with current T4 and rerun exact-SHA gates."
+    },
+    {
+      "thread": "T3",
+      "checkpoint": "T3-01",
+      "tip": "9cc738fbb241890d069d6fb6c2ddb664a4e53447",
+      "reason": "Producer tip does not contain integration SHA 823c61a1a9fc2c3a8f8b59dd060bb6db4a1bc3db; synchronize with current T4 and rerun exact-SHA gates."
+    }
+  ],
   "external_evidence": [],
   "known_failures": [
     "Go 1.26.5 cannot compile github.com/bytedance/sonic v1.14.1; checkpoint gates were rerun successfully with the repository-pinned Go 1.25.8 toolchain."
   ],
   "blockers": [
-    "T1, T2, T3, and T5 have not published committed persisted-schema declarations for the migration inventory.",
-    "T4-02 and Tasks 88A-88D remain dependency-blocked; this checkpoint validates the existing baseline transition inventory only."
+    "T1 and T5 have incomplete dirty handoffs with PENDING_COMMIT; T2 and T3 are stale relative to current T4.",
+    "Model weights, production data, approved licenses and redistribution, runtime image/SBOM, approved model card, and production evaluation remain dependency-blocked.",
+    "No current model bundle carries production_approved provenance; production sidecar readiness now rejects all lower evidence states.",
+    "T4-10 is not complete and no model, dataset, runtime, license, or production profile is certified by this checkpoint."
   ],
-  "next_checkpoint": "T4-02B",
-  "expected_head": "6a8154ba6d21f7e5eab6f28087adb7f107bf6f61"
+  "next_checkpoint": "T4-10C",
+  "expected_head": "fb95e757e09f83b5262a424720a19eca34a86bbb"
 }

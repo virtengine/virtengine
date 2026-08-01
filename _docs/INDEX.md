@@ -147,6 +147,8 @@ This index lists internal-only documentation. Do not add internal docs outside `
 - `_docs/ralph/prototype-integration/control.json`
 - `_docs/ralph/prototype-integration/migration-inventory.json`
 - `_docs/ralph/prototype-integration/migration-inventory.schema.json`
+- `_docs/ralph/prototype-integration/model-provenance.json`
+- `_docs/ralph/prototype-integration/model-provenance.schema.json`
 - `_docs/ralph/prototype-integration/producer-handoff.schema.json`
 - `_docs/ralph/ralph_patent_text.txt`
 
