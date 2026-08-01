@@ -1,78 +1,60 @@
 campaign: three-day-prototype
 thread: T5
-checkpoint: T5-11
+checkpoint: T5-12
 branch: ve/prototype-t5-platform
-start_head: 91edf353e307bfc75884320d4833266aee4f8de6
-end_head: a1666807054d6b5843353213bc2318ef3ec47ffc
+start_head: f1447884e847797297c799198cf2b1ceabb0b9d5
+end_head: 7d95b18afe4196e56eb10bd7f2b51aee31da355a
 origin_main: 79391a3df86d85522b92e0400c6904971ecbe65d
 tree_clean: true
 commits:
-  - a1666807054d6b5843353213bc2318ef3ec47ffc
+  - 7d95b18afe4196e56eb10bd7f2b51aee31da355a
 owned_paths:
-  - pkg/data_vault/contracts/evidence_lifecycle.go
-  - pkg/data_vault/contracts/evidence_lifecycle_test.go
-  - x/veid/types/keys.go
-  - x/veid/keeper/evidence_object_store.go
-  - x/veid/keeper/evidence_object_migration.go
-  - x/veid/keeper/evidence_object_migration_test.go
+  - pkg/platformsecurity/uniqueness/contracts.go
+  - pkg/platformsecurity/uniqueness/contracts_test.go
+  - pkg/platformsecurity/uniqueness/fixture.go
+  - pkg/platformsecurity/uniqueness/fixture_test.go
   - _docs/ralph/handoffs/prototype-t5/HANDOFF.yaml
-  - _docs/ralph/evidence/prototype-t5/T5-11/validation.txt
+  - _docs/ralph/evidence/prototype-t5/T5-12/validation.txt
 files_changed:
-  - pkg/data_vault/contracts/evidence_lifecycle.go
-  - pkg/data_vault/contracts/evidence_lifecycle_test.go
-  - x/veid/types/keys.go
-  - x/veid/keeper/evidence_object_store.go
-  - x/veid/keeper/evidence_object_migration.go
-  - x/veid/keeper/evidence_object_migration_test.go
+  - pkg/platformsecurity/uniqueness/contracts.go
+  - pkg/platformsecurity/uniqueness/contracts_test.go
+  - pkg/platformsecurity/uniqueness/fixture.go
+  - pkg/platformsecurity/uniqueness/fixture_test.go
   - _docs/ralph/handoffs/prototype-t5/HANDOFF.yaml
-  - _docs/ralph/evidence/prototype-t5/T5-11/validation.txt
+  - _docs/ralph/evidence/prototype-t5/T5-12/validation.txt
 tests:
-  - command: C:\Users\pavil\AppData\Local\VirtEngine\toolchains\go1.25.8\go\bin\go.exe -C C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t5 test -count=1 ./pkg/data_vault/contracts -run 'Evidence|Deletion|Retention'
+  - command: C:\Users\pavil\AppData\Local\VirtEngine\toolchains\go1.25.8\go\bin\go.exe -C C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t5 test -count=1 ./pkg/platformsecurity/uniqueness
     exit_code: 0
     result: passed
     tool_versions:
       go: go1.25.8 windows/amd64
-    artifact: _docs/ralph/evidence/prototype-t5/T5-11/validation.txt
-  - command: C:\Users\pavil\AppData\Local\VirtEngine\toolchains\go1.25.8\go\bin\go.exe -C C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t5 test -count=1 ./x/veid/keeper -run 'EvidenceObject|MigrateEvidence'
+    artifact: _docs/ralph/evidence/prototype-t5/T5-12/validation.txt
+  - command: C:\Users\pavil\AppData\Local\VirtEngine\toolchains\go1.25.8\go\bin\go.exe -C C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t5 vet ./pkg/platformsecurity/uniqueness
     exit_code: 0
     result: passed
     tool_versions:
       go: go1.25.8 windows/amd64
-    artifact: _docs/ralph/evidence/prototype-t5/T5-11/validation.txt
-  - command: C:\Users\pavil\AppData\Local\VirtEngine\toolchains\go1.25.8\go\bin\go.exe -C C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t5 vet ./pkg/data_vault/contracts ./x/veid/keeper
-    exit_code: 0
-    result: passed
-    tool_versions:
-      go: go1.25.8 windows/amd64
-    artifact: _docs/ralph/evidence/prototype-t5/T5-11/validation.txt
-  - command: $env:CGO_ENABLED='1'; $env:CC='gcc'; C:\Users\pavil\AppData\Local\VirtEngine\toolchains\go1.25.8\go\bin\go.exe test -race -count=1 ./pkg/data_vault/contracts -run 'Evidence|Deletion|Retention'
+    artifact: _docs/ralph/evidence/prototype-t5/T5-12/validation.txt
+  - command: $env:CGO_ENABLED='1'; $env:CC='gcc'; C:\Users\pavil\AppData\Local\VirtEngine\toolchains\go1.25.8\go\bin\go.exe test -race -count=1 ./pkg/platformsecurity/uniqueness
     exit_code: 0
     result: passed
     tool_versions:
       go: go1.25.8 windows/amd64
       gcc: WinLibs POSIX UCRT 16.1.0
-    artifact: _docs/ralph/evidence/prototype-t5/T5-11/validation.txt
-  - command: $env:CGO_ENABLED='1'; $env:CC='gcc'; C:\Users\pavil\AppData\Local\VirtEngine\toolchains\go1.25.8\go\bin\go.exe test -race -count=1 ./x/veid/keeper -run 'EvidenceObject|MigrateEvidence'
-    exit_code: 0
-    result: passed
-    tool_versions:
-      go: go1.25.8 windows/amd64
-      gcc: WinLibs POSIX UCRT 16.1.0
-    artifact: _docs/ralph/evidence/prototype-t5/T5-11/validation.txt
+    artifact: _docs/ralph/evidence/prototype-t5/T5-12/validation.txt
   - command: git diff --check
     exit_code: 0
     result: passed
-    artifact: _docs/ralph/evidence/prototype-t5/T5-11/validation.txt
+    artifact: _docs/ralph/evidence/prototype-t5/T5-12/validation.txt
 generated_hashes: {}
-migrations:
-  - T4 must register the VEID payload-free evidence migration and increment ConsensusVersion.
+migrations: []
 external_evidence:
-  - _docs/ralph/evidence/prototype-t5/T5-11/validation.txt
+  - _docs/ralph/evidence/prototype-t5/T5-12/validation.txt
 known_failures: []
 blockers:
-  - Generated transaction inputs still carry ciphertext; T4 owns generated contract replacement and client cutover.
-  - Existing scope and social-scope readers require coordinated cutover before legacy ciphertext rows can be sanitized; migration reports pending cutover truthfully.
-  - Existing persisted 0x9A social/evidence collision is not renumbered; ambiguous legacy rows are quarantined and new references use unique 0xD4 subkeys.
-  - T4 has not published the intake epoch manifest, epoch base tag, or intake validator required by the authoritative runbook; T5-11 must remain untagged and is not intake-eligible.
-next_checkpoint: T5-12
-expected_head: a1666807054d6b5843353213bc2318ef3ec47ffc
+  - T1 canonical uniqueness decision and receipt source schemas are not yet available; T5-12 exposes only custody-side adapter interfaces and fixtures.
+  - Deterministic HMAC and Ed25519 fixtures are not reviewed OPRF, threshold-PRF, MPC or TEE implementations and remain production unavailable.
+  - Production requires independent operators, key ceremony, durable transactional enrollment, reviewed transform and PRF profiles, external cryptographic review and T4 wiring.
+  - T4 has not published the intake epoch manifest, epoch base tag, or intake validator required by the authoritative runbook; T5-12 must remain untagged and is not intake-eligible.
+next_checkpoint: T5-13
+expected_head: 7d95b18afe4196e56eb10bd7f2b51aee31da355a

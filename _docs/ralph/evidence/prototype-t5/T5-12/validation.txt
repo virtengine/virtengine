@@ -1,0 +1,51 @@
+T5-12 uniqueness custody fixture validation
+Payload: 7d95b18afe4196e56eb10bd7f2b51aee31da355a
+Platform: windows/amd64
+
+Tool versions:
+C:\Users\pavil\AppData\Local\VirtEngine\toolchains\go1.25.8\go\bin\go.exe version
+go version go1.25.8 windows/amd64
+C:\Users\pavil\AppData\Local\Microsoft\WinGet\Packages\BrechtSanders.WinLibs.POSIX.UCRT_Microsoft.Winget.Source_8wekyb3d8bbwe\mingw64\bin\gcc.exe --version
+gcc.exe (MinGW-W64 x86_64-ucrt-posix-seh, built by Brecht Sanders, r3) 16.1.0
+
+Command:
+C:\Users\pavil\AppData\Local\VirtEngine\toolchains\go1.25.8\go\bin\go.exe -C C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t5 test -count=1 ./pkg/platformsecurity/uniqueness
+Output:
+ok github.com/virtengine/virtengine/pkg/platformsecurity/uniqueness 0.933s
+Exit code: 0
+
+Command:
+C:\Users\pavil\AppData\Local\VirtEngine\toolchains\go1.25.8\go\bin\go.exe -C C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t5 vet ./pkg/platformsecurity/uniqueness
+Output: no diagnostics
+Exit code: 0
+
+Environment:
+CGO_ENABLED=1
+CC=gcc
+PATH prepended with C:\Users\pavil\AppData\Local\Microsoft\WinGet\Packages\BrechtSanders.WinLibs.POSIX.UCRT_Microsoft.Winget.Source_8wekyb3d8bbwe\mingw64\bin
+
+Command:
+C:\Users\pavil\AppData\Local\VirtEngine\toolchains\go1.25.8\go\bin\go.exe test -race -count=1 ./pkg/platformsecurity/uniqueness
+Output:
+ok github.com/virtengine/virtengine/pkg/platformsecurity/uniqueness 1.853s
+Exit code: 0
+
+Command:
+git diff --cached --check
+Output: no errors
+Exit code: 0
+
+Security evidence:
+- Custody threshold binds canonical independent operator/failure-domain commitments and participant-set digest.
+- Quorum attestations bind threshold, participant set, payload, freshness and active epoch; key aliases, duplicate/stale signers and signer-set substitution fail.
+- Stable nullifier derivation requires a verified final-unique authorization and exact program/RP/policy/profile/epoch binding.
+- Candidate identities and exact distances remain internal; callers receive only opaque adjudication references and commitments.
+- Atomic enrollment uses copy-on-write rollback, poisoned transactions, context/freshness rechecks, idempotent exact retry and concurrent duplicate exclusion.
+- Compromise rotation requires threshold-signed old-epoch approval and a verified capability before new-epoch issuance.
+- Public records use strict canonical digests/opaque identifiers and serialize no templates, embeddings, candidate identities, key shares or global subject index.
+
+Non-claims/blockers:
+- Deterministic HMAC/Ed25519 fixtures are not OPRF, threshold-PRF, MPC or TEE implementations and are production unavailable.
+- T1 canonical UniquenessReceipt/decision schema is not yet available; T5 publishes only custody-side fixture contracts.
+- Production requires external cryptographic review, independent operators, key ceremony, durable transactional enrollment, reviewed transform/PRF profiles and T4 wiring.
+- No T4 intake epoch manifest/base tag/validator is published, so this payload is untagged and not intake-eligible.
