@@ -1,0 +1,48 @@
+campaign: three-day-prototype
+thread: T2
+checkpoint: T2-01
+branch: ve/prototype-t2-product
+start_head: 79391a3df86d85522b92e0400c6904971ecbe65d
+end_head: 68afe205fde8e1f290e22a05dec8a8c3d39003c6
+origin_main: 79391a3df86d85522b92e0400c6904971ecbe65d
+tree_clean: true
+commits:
+  - 68afe205fde8e1f290e22a05dec8a8c3d39003c6
+owned_paths:
+  - sdk/ts/AGENTS.md
+  - sdk/ts/src/clients/
+  - sdk/ts/src/sdk/chain/
+  - sdk/ts/src/sdk/index.shared.ts
+  - sdk/ts/src/sdk/transport/createNoopTransport.ts
+files_changed:
+  - sdk/ts/AGENTS.md
+  - sdk/ts/src/clients/BaseClient.spec.ts
+  - sdk/ts/src/clients/BaseClient.ts
+  - sdk/ts/src/sdk/chain/ChainCapability.spec.ts
+  - sdk/ts/src/sdk/chain/ChainCapability.ts
+  - sdk/ts/src/sdk/chain/createCapabilityTransports.ts
+  - sdk/ts/src/sdk/chain/createChainNodeSDK.spec.ts
+  - sdk/ts/src/sdk/chain/createChainNodeSDK.ts
+  - sdk/ts/src/sdk/chain/createChainNodeWebSDK.spec.ts
+  - sdk/ts/src/sdk/chain/createChainNodeWebSDK.ts
+  - sdk/ts/src/sdk/index.shared.ts
+  - sdk/ts/src/sdk/transport/createNoopTransport.ts
+tests:
+  - command: npm.cmd --prefix sdk/ts test -- --runInBand --forceExit src/clients/BaseClient.spec.ts src/sdk/chain/ChainCapability.spec.ts src/sdk/chain/createChainNodeSDK.spec.ts src/sdk/chain/createChainNodeWebSDK.spec.ts
+    exit_code: 0
+    result: 4 suites and 18 tests passed
+    runtime: node v24.12.0
+  - command: npm.cmd --prefix sdk/ts run lint
+    exit_code: 0
+    result: eslint src completed with zero findings
+    runtime: node v24.12.0
+  - command: npm.cmd --prefix sdk/ts run build
+    exit_code: 0
+    result: TypeScript build and package export validation completed
+    runtime: node v24.12.0
+generated_hashes: {}
+external_evidence: []
+known_failures:
+  - Focused Jest execution passes but requires --forceExit because the package test runner retains an open handle.
+next_checkpoint: T2-02
+expected_head: 68afe205fde8e1f290e22a05dec8a8c3d39003c6
