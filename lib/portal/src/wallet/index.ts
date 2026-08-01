@@ -37,7 +37,13 @@ export type {
   WalletContextValue,
   WalletProviderConfig,
 } from './types';
-export type { WalletSession, SessionConfig } from './session';
+export type {
+  WalletSession,
+  SessionConfig,
+  MfaAuthorization,
+  WalletAuthorizationBinding,
+  WalletAuthorizationContext,
+} from './session';
 export type { WalletDetectionResult } from './detector';
 export {
   GAS_TIERS,

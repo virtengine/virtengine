@@ -141,6 +141,9 @@ export {
 export type {
   WalletSession,
   SessionConfig as WalletSessionConfig,
+  MfaAuthorization,
+  WalletAuthorizationBinding,
+  WalletAuthorizationContext,
   WalletDetectionResult,
   GasTier,
   GasSettings,

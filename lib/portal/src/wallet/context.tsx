@@ -20,8 +20,10 @@ import { LeapAdapter } from "./adapters/leap";
 import { CosmostationAdapter } from "./adapters/cosmostation";
 import { WalletConnectAdapter } from "./adapters/walletconnect";
 import type { WalletAdapter } from "./types";
+import { WalletError as TypedWalletError, WalletErrorCode, parseWalletError } from "./errors";
+import { WalletSessionManager, type WalletSession } from "./session";
 
-const DEFAULT_PERSIST_KEY = "ve_wallet_session";
+const DEFAULT_PERSIST_KEY = "virtengine_wallet_session";
 
 const initialState: WalletState = {
   status: "idle",
@@ -51,6 +53,12 @@ export function WalletProvider({
     autoConnect: config.autoConnect ?? true,
   }));
 
+  const persistKey = config.persistKey ?? DEFAULT_PERSIST_KEY;
+  const sessionManager = React.useMemo(
+    () => new WalletSessionManager({ persistKey, autoReconnect: config.autoConnect ?? true }),
+    [config.autoConnect, persistKey],
+  );
+
   const adaptersRef = React.useRef<Map<WalletType, WalletAdapter> | null>(null);
 
   if (!adaptersRef.current) {
@@ -77,7 +85,34 @@ export function WalletProvider({
   }
 
   const chainInfo = config.chainInfo;
-  const persistKey = config.persistKey ?? DEFAULT_PERSIST_KEY;
+  const previousChainIdRef = React.useRef(chainInfo.chainId);
+
+  React.useEffect(() => {
+    if (previousChainIdRef.current !== chainInfo.chainId) {
+      sessionManager.clearLiveAuthorization();
+      sessionManager.clearSession();
+      setState((prev) => ({
+        ...initialState,
+        autoConnect: prev.autoConnect,
+      }));
+    }
+    previousChainIdRef.current = chainInfo.chainId;
+    sessionManager.setExpectedChainId(chainInfo.chainId);
+  }, [chainInfo.chainId, sessionManager]);
+
+  React.useEffect(() => {
+    const clearProviderState = () => {
+      setState((prev) => ({
+        ...initialState,
+        autoConnect: prev.autoConnect,
+      }));
+    };
+    const unsubscribe = sessionManager.onInvalidated(clearProviderState);
+    return () => {
+      unsubscribe();
+      sessionManager.dispose();
+    };
+  }, [sessionManager]);
 
   const setError = React.useCallback(
     (error: WalletError | null) => {
@@ -101,43 +136,45 @@ export function WalletProvider({
     [],
   );
 
-  const persistSession = React.useCallback(
-    (nextState: WalletState) => {
-      if (typeof window === "undefined") return;
-      const payload = {
-        walletType: nextState.walletType,
-        activeAccountIndex: nextState.activeAccountIndex,
-        chainId: nextState.chainId,
-        autoConnect: nextState.autoConnect,
-        lastConnectedAt: nextState.lastConnectedAt,
-      };
-      window.localStorage.setItem(persistKey, JSON.stringify(payload));
+  const persistReconnectMetadata = React.useCallback(
+    (walletType: WalletType, account: WalletAccount) => {
+      sessionManager.setExpectedContext({
+        walletType,
+        account: account.address,
+        chainId: chainInfo.chainId,
+      });
+      sessionManager.clearLiveAuthorization();
+      sessionManager.saveSession(
+        sessionManager.createSession({
+          walletType,
+          address: account.address,
+          chainId: chainInfo.chainId,
+          autoReconnect: config.autoConnect ?? true,
+        }),
+      );
     },
-    [persistKey],
+    [chainInfo.chainId, config.autoConnect, sessionManager],
   );
 
-  const clearSession = React.useCallback(() => {
-    if (typeof window === "undefined") return;
-    window.localStorage.removeItem(persistKey);
-  }, [persistKey]);
-
-  const connect = React.useCallback(
-    async (walletType: WalletType) => {
+  const connectWallet = React.useCallback(
+    async (walletType: WalletType, reconnect: WalletSession | null) => {
       const adapter = getAdapter(walletType);
       if (!adapter) {
-        setError({
-          code: "wallet_unavailable",
-          message: "Unsupported wallet type",
-        });
-        return;
+        const error = new TypedWalletError(
+          WalletErrorCode.UNKNOWN,
+          "Unsupported wallet type",
+        );
+        setError(error);
+        throw error;
       }
 
       if (!adapter.isAvailable()) {
-        setError({
-          code: "wallet_not_installed",
-          message: `${adapter.name} wallet is not available`,
-        });
-        return;
+        const error = new TypedWalletError(
+          WalletErrorCode.WALLET_NOT_INSTALLED,
+          `${adapter.name} wallet is not available`,
+        );
+        setError(error);
+        throw error;
       }
 
       setState((prev) => ({
@@ -148,7 +185,22 @@ export function WalletProvider({
       }));
 
       try {
+        if (reconnect?.chainId !== undefined && reconnect.chainId !== chainInfo.chainId) {
+          throw new TypedWalletError(WalletErrorCode.INVALID_CHAIN_ID);
+        }
+        if (reconnect && (reconnect.walletType !== walletType || adapter.type !== walletType)) {
+          throw new TypedWalletError(WalletErrorCode.SESSION_EXPIRED);
+        }
         const accounts = await adapter.connect(chainInfo);
+        const account = accounts[0];
+        if (!account) {
+          throw new TypedWalletError(WalletErrorCode.ACCOUNT_NOT_FOUND);
+        }
+        if (reconnect && account.address !== reconnect.address) {
+          throw new TypedWalletError(WalletErrorCode.SESSION_EXPIRED);
+        }
+        const connectedAt = Date.now();
+        if (!reconnect) persistReconnectMetadata(walletType, account);
         setState((prev) => {
           const nextState: WalletState = {
             ...prev,
@@ -158,39 +210,47 @@ export function WalletProvider({
             accounts,
             activeAccountIndex: 0,
             error: null,
-            lastConnectedAt: Date.now(),
+            lastConnectedAt: connectedAt,
           };
-          persistSession(nextState);
           return nextState;
         });
       } catch (error) {
-        setError({
-          code: "connect_failed",
-          message:
-            error instanceof Error ? error.message : "Failed to connect wallet",
-          cause: error,
-        });
-        setState((prev) => ({
-          ...prev,
-          status: "error",
-        }));
+        sessionManager.clearSession();
+        const walletError = parseWalletError(error);
+        if (reconnect) {
+          setState((prev) => ({
+            ...initialState,
+            status: "error",
+            error: walletError,
+            autoConnect: prev.autoConnect,
+          }));
+        }
+        setError(walletError);
+        throw walletError;
       }
     },
-    [chainInfo, getAdapter, persistSession, setError],
+    [chainInfo, getAdapter, persistReconnectMetadata, sessionManager, setError],
+  );
+
+  const connect = React.useCallback(
+    async (walletType: WalletType) => connectWallet(walletType, null),
+    [connectWallet],
   );
 
   const disconnect = React.useCallback(async () => {
     const adapter = getAdapter(state.walletType);
-    if (adapter) {
-      await adapter.disconnect();
+    try {
+      if (adapter) {
+        await adapter.disconnect();
+      }
+    } finally {
+      sessionManager.clearSession();
+      setState((prev) => ({
+        ...initialState,
+        autoConnect: prev.autoConnect,
+      }));
     }
-
-    setState((prev) => ({
-      ...initialState,
-      autoConnect: prev.autoConnect,
-    }));
-    clearSession();
-  }, [clearSession, getAdapter, state.walletType]);
+  }, [getAdapter, sessionManager, state.walletType]);
 
   const refreshAccounts = React.useCallback(async () => {
     const adapter = getAdapter(state.walletType);
@@ -198,18 +258,15 @@ export function WalletProvider({
 
     try {
       const accounts = await adapter.getAccounts(chainInfo);
-      setState((prev) => {
-        const nextState = {
-          ...prev,
-          accounts,
-          activeAccountIndex: Math.min(
-            prev.activeAccountIndex,
-            Math.max(accounts.length - 1, 0),
-          ),
-        };
-        persistSession(nextState);
-        return nextState;
-      });
+      const activeAccountIndex = Math.min(
+        state.activeAccountIndex,
+        Math.max(accounts.length - 1, 0),
+      );
+      sessionManager.clearLiveAuthorization();
+      const account = accounts[activeAccountIndex];
+      if (state.walletType && account) persistReconnectMetadata(state.walletType, account);
+      else sessionManager.clearSession();
+      setState((prev) => ({ ...prev, accounts, activeAccountIndex }));
     } catch (error) {
       setError({
         code: "account_refresh_failed",
@@ -218,17 +275,24 @@ export function WalletProvider({
         cause: error,
       });
     }
-  }, [chainInfo, getAdapter, persistSession, setError, state.walletType]);
+  }, [
+    chainInfo,
+    getAdapter,
+    persistReconnectMetadata,
+    sessionManager,
+    setError,
+    state.activeAccountIndex,
+    state.walletType,
+  ]);
 
   const selectAccount = React.useCallback(
     (index: number) => {
-      setState((prev) => {
-        const nextState = { ...prev, activeAccountIndex: index };
-        persistSession(nextState);
-        return nextState;
-      });
+      sessionManager.clearLiveAuthorization();
+      const account = state.accounts[index];
+      if (state.walletType && account) persistReconnectMetadata(state.walletType, account);
+      setState((prev) => ({ ...prev, activeAccountIndex: index }));
     },
-    [persistSession],
+    [persistReconnectMetadata, sessionManager, state.accounts, state.walletType],
   );
 
   const getActiveAccount = React.useCallback(
@@ -392,22 +456,17 @@ export function WalletProvider({
     state.activeAccountIndex,
   ]);
 
+  const autoConnectAttemptRef = React.useRef<string | null>(null);
+
   React.useEffect(() => {
-    if (typeof window === "undefined") return;
     if (!state.autoConnect) return;
-
-    const stored = window.localStorage.getItem(persistKey);
-    if (!stored) return;
-
-    try {
-      const parsed = JSON.parse(stored) as Partial<WalletState>;
-      if (parsed.walletType) {
-        connect(parsed.walletType as WalletType);
-      }
-    } catch (error) {
-      clearSession();
-    }
-  }, [clearSession, connect, persistKey, state.autoConnect]);
+    const reconnect = sessionManager.loadSession();
+    if (!reconnect || !sessionManager.shouldAutoReconnect()) return;
+    const reconnectBinding = `${reconnect.walletType}:${reconnect.chainId}:${reconnect.address}`;
+    if (autoConnectAttemptRef.current === reconnectBinding) return;
+    autoConnectAttemptRef.current = reconnectBinding;
+    void connectWallet(reconnect.walletType, reconnect).catch(() => undefined);
+  }, [connectWallet, sessionManager, state.autoConnect]);
 
   React.useEffect(() => {
     if (state.status !== "connected") return;
