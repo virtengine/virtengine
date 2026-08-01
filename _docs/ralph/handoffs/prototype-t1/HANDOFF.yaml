@@ -1,29 +1,46 @@
 campaign: three-day-prototype
 thread: T1
-checkpoint: T1-02
+checkpoint: T1-03
 branch: ve/prototype-t1-identity
-start_head: 06ac2b77ac67066c0b943f5be093db3c28e3805a
-end_head: e89a0ef2878e7006ad9480982844f5b8a2bc5c5e
+start_head: 5e4201b309881e89f78d487fc10d64f1460bdd87
+end_head: 43421b0bc9198c138083d0a9cbefaf9a428ebae3
 origin_main: 79391a3df86d85522b92e0400c6904971ecbe65d
 tree_clean: true
 commits:
-  - e89a0ef2878e7006ad9480982844f5b8a2bc5c5e
+  - 43421b0bc9198c138083d0a9cbefaf9a428ebae3
 owned_paths:
-  - x/veid/types/evidence_envelope.go
-  - x/veid/types/evidence_envelope_test.go
+  - x/veid/keeper/runtime_policy.go
+  - x/veid/keeper/runtime_policy_test.go
+  - x/veid/keeper/governance_hooks.go
+  - x/veid/keeper/verification_pipeline.go
+  - x/veid/keeper/verification_pipeline_governance_test.go
+  - x/veidregistry/keeper/keeper.go
+  - x/veidregistry/keeper/keeper_test.go
   - _docs/ralph/handoffs/prototype-t1/HANDOFF.yaml
 files_changed:
-  - x/veid/types/evidence_envelope.go
-  - x/veid/types/evidence_envelope_test.go
+  - x/veid/keeper/runtime_policy.go
+  - x/veid/keeper/runtime_policy_test.go
+  - x/veid/keeper/governance_hooks.go
+  - x/veid/keeper/verification_pipeline.go
+  - x/veid/keeper/verification_pipeline_governance_test.go
+  - x/veidregistry/keeper/keeper.go
+  - x/veidregistry/keeper/keeper_test.go
   - _docs/ralph/handoffs/prototype-t1/HANDOFF.yaml
 tests:
-  - command: go test -count=1 ./x/veid/types -run EvidenceEnvelope
+  - command: go test -count=1 ./x/veid/keeper -run 'RuntimePolicy|VerificationArtifactState'
     exit_code: 0
     runtime: go1.25.8 windows/amd64
-  - command: go test -count=1 ./x/veid/types
+    environment: VEID_ZK_PARAMS_DIR pointed to a temporary LF-normalized copy of committed ZK artifacts
+  - command: go test -count=1 ./x/veidregistry/keeper -run 'ActiveVerifierInfoStrict|SetActiveVerifier'
     exit_code: 0
     runtime: go1.25.8 windows/amd64
-  - command: go vet ./x/veid/types
+  - command: go test -count=1 ./x/veidregistry/...
+    exit_code: 0
+    runtime: go1.25.8 windows/amd64
+  - command: go test -run '^$' -count=1 ./x/veid/keeper
+    exit_code: 0
+    runtime: go1.25.8 windows/amd64
+  - command: go vet ./x/veid/keeper ./x/veidregistry/...
     exit_code: 0
     runtime: go1.25.8 windows/amd64
   - command: git diff --check
@@ -36,7 +53,7 @@ known_failures:
     exit_code: 1
     reason: The full preflight reaches a baseline ZK metadata checksum failure on this CRLF checkout. T4 owns and has committed the canonical LF policy; T1 does not duplicate that integration-owned fix.
 notes:
-  - T1-02 freezes a pure Go contract and vectors only; production handler activation, stores, generated transports, and migration remain later T1/T4 work.
-  - Envelope v1 binds the full existing web source context without changing WebEvidenceVersion or current web sign bytes.
-next_checkpoint: T1-03
-expected_head: e89a0ef2878e7006ad9480982844f5b8a2bc5c5e
+  - T1-03 is read-only runtime policy enforcement; it adds no model lifecycle mutation, app wiring, generated transport, or store prefix.
+  - Registry-configured verification now fails closed on absent or malformed active state; legacy pipeline fallback remains only when no registry keeper is configured.
+next_checkpoint: T1-04
+expected_head: 43421b0bc9198c138083d0a9cbefaf9a428ebae3
