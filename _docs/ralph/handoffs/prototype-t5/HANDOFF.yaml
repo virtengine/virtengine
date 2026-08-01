@@ -1,59 +1,70 @@
 campaign: three-day-prototype
 thread: T5
-checkpoint: T5-13
+checkpoint: T5-14
 branch: ve/prototype-t5-platform
-start_head: 024a2535b3761c7f12000d4feb6c93726e815651
-end_head: 4e3e646e6e4056ca6480807415d4b94101ea57c3
+start_head: 83486e5cd2aaeea176fdd99d30ee92b04ee8665f
+end_head: 26212410a6e190375ddb3f5bb393c9966ac5d839
 origin_main: 79391a3df86d85522b92e0400c6904971ecbe65d
 tree_clean: true
 commits:
-  - 4e3e646e6e4056ca6480807415d4b94101ea57c3
+  - 26212410a6e190375ddb3f5bb393c9966ac5d839
 owned_paths:
-  - pkg/platformsecurity/issuerlink/contracts.go
-  - pkg/platformsecurity/issuerlink/contracts_test.go
-  - pkg/platformsecurity/issuerlink/fixture.go
-  - pkg/platformsecurity/issuerlink/fixture_test.go
+  - pkg/fundauth/authorization.go
+  - pkg/fundauth/canonical.go
+  - pkg/fundauth/registry.go
+  - pkg/fundauth/canonical_test.go
+  - pkg/fundauth/consumer_test.go
+  - pkg/fundauth/helpers_test.go
+  - pkg/fundauth/registry_test.go
+  - pkg/fundauth/strict_test.go
+  - pkg/fundauth/verify_test.go
   - _docs/ralph/handoffs/prototype-t5/HANDOFF.yaml
-  - _docs/ralph/evidence/prototype-t5/T5-13/validation.txt
+  - _docs/ralph/evidence/prototype-t5/T5-14/validation.txt
 files_changed:
-  - pkg/platformsecurity/issuerlink/contracts.go
-  - pkg/platformsecurity/issuerlink/contracts_test.go
-  - pkg/platformsecurity/issuerlink/fixture.go
-  - pkg/platformsecurity/issuerlink/fixture_test.go
+  - pkg/fundauth/authorization.go
+  - pkg/fundauth/canonical.go
+  - pkg/fundauth/registry.go
+  - pkg/fundauth/canonical_test.go
+  - pkg/fundauth/consumer_test.go
+  - pkg/fundauth/helpers_test.go
+  - pkg/fundauth/registry_test.go
+  - pkg/fundauth/strict_test.go
+  - pkg/fundauth/verify_test.go
   - _docs/ralph/handoffs/prototype-t5/HANDOFF.yaml
-  - _docs/ralph/evidence/prototype-t5/T5-13/validation.txt
+  - _docs/ralph/evidence/prototype-t5/T5-14/validation.txt
 tests:
-  - command: C:\Users\pavil\AppData\Local\VirtEngine\toolchains\go1.25.8\go\bin\go.exe -C C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t5 test -count=1 ./pkg/platformsecurity/issuerlink
+  - command: C:\Users\pavil\AppData\Local\VirtEngine\toolchains\go1.25.8\go\bin\go.exe -C C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t5 test -count=1 ./pkg/fundauth
     exit_code: 0
     result: passed
     tool_versions:
       go: go1.25.8 windows/amd64
-    artifact: _docs/ralph/evidence/prototype-t5/T5-13/validation.txt
-  - command: C:\Users\pavil\AppData\Local\VirtEngine\toolchains\go1.25.8\go\bin\go.exe -C C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t5 vet ./pkg/platformsecurity/issuerlink
+    artifact: _docs/ralph/evidence/prototype-t5/T5-14/validation.txt
+  - command: C:\Users\pavil\AppData\Local\VirtEngine\toolchains\go1.25.8\go\bin\go.exe -C C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t5 vet ./pkg/fundauth
     exit_code: 0
     result: passed
     tool_versions:
       go: go1.25.8 windows/amd64
-    artifact: _docs/ralph/evidence/prototype-t5/T5-13/validation.txt
-  - command: $env:CGO_ENABLED='1'; $env:CC='gcc'; C:\Users\pavil\AppData\Local\VirtEngine\toolchains\go1.25.8\go\bin\go.exe test -race -count=1 ./pkg/platformsecurity/issuerlink
+    artifact: _docs/ralph/evidence/prototype-t5/T5-14/validation.txt
+  - command: $env:CGO_ENABLED='1'; $env:CC='gcc'; C:\Users\pavil\AppData\Local\VirtEngine\toolchains\go1.25.8\go\bin\go.exe test -race -count=1 ./pkg/fundauth
     exit_code: 0
     result: passed
     tool_versions:
       go: go1.25.8 windows/amd64
       gcc: WinLibs POSIX UCRT 16.1.0
-    artifact: _docs/ralph/evidence/prototype-t5/T5-13/validation.txt
+    artifact: _docs/ralph/evidence/prototype-t5/T5-14/validation.txt
   - command: git diff --check
     exit_code: 0
     result: passed
-    artifact: _docs/ralph/evidence/prototype-t5/T5-13/validation.txt
+    artifact: _docs/ralph/evidence/prototype-t5/T5-14/validation.txt
 generated_hashes: {}
 migrations: []
 external_evidence:
-  - _docs/ralph/evidence/prototype-t5/T5-13/validation.txt
+  - _docs/ralph/evidence/prototype-t5/T5-14/validation.txt
 known_failures: []
 blockers:
-  - Deterministic PRF and in-memory registry implementations are fixture-only and production unavailable.
-  - Production requires governed threshold PRF custody, durable transactional storage, signed issuer and policy authorities, independent audit and external review.
-  - T4 has not published the intake epoch manifest, epoch base tag, or intake validator required by the authoritative runbook; T5-13 remains untagged and not intake-eligible.
-next_checkpoint: T5-14
-expected_head: 4e3e646e6e4056ca6480807415d4b94101ea57c3
+  - T5-15 must audit every live value-moving route and account-state gate against the registry.
+  - T5-18 must implement durable keeper nonce consumption and cached-context rollback.
+  - T4-16 owns decoded-message adapters and cross-module runtime wiring.
+  - T4 has not published the intake epoch manifest, epoch base tag, or intake validator; T5-14 remains untagged and not intake-eligible.
+next_checkpoint: T5-15
+expected_head: 26212410a6e190375ddb3f5bb393c9966ac5d839

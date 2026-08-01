@@ -1,0 +1,35 @@
+T5-14 fund authorization contract validation
+Payload: 26212410a6e190375ddb3f5bb393c9966ac5d839
+Platform: windows/amd64
+Toolchains: go version go1.25.8 windows/amd64; WinLibs POSIX UCRT GCC 16.1.0
+
+Command: C:\Users\pavil\AppData\Local\VirtEngine\toolchains\go1.25.8\go\bin\go.exe -C C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t5 test -count=1 ./pkg/fundauth
+Output: ok github.com/virtengine/virtengine/pkg/fundauth 1.680s
+Exit code: 0
+
+Command: C:\Users\pavil\AppData\Local\VirtEngine\toolchains\go1.25.8\go\bin\go.exe -C C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t5 vet ./pkg/fundauth
+Output: no diagnostics
+Exit code: 0
+
+Environment: CGO_ENABLED=1; CC=gcc; PATH includes WinLibs UCRT bin
+Command: C:\Users\pavil\AppData\Local\VirtEngine\toolchains\go1.25.8\go\bin\go.exe test -race -count=1 ./pkg/fundauth
+Output: ok github.com/virtengine/virtengine/pkg/fundauth 2.191s
+Exit code: 0
+
+Command: git diff --cached --check
+Output: no errors
+Exit code: 0
+
+Security evidence:
+- Mandatory trusted TransactionBinding exactly matches chain/account/source/type/message/amounts/parties/references/policy/MFA/eligibility/bounds/expiry.
+- Possession signature is always required and resolved key identity/account/epoch/active state must match exactly.
+- MFA and eligibility modes are explicit; missing, unexpected, or substituted evidence fails closed.
+- Canonical length-prefixed bytes bind every security field; zero amounts, unsorted/duplicate denoms/parties and ambiguous IDs fail.
+- Registry pins active, deferred, planned and internal sources, including active market bid/lease escrow routes; BME no-op routes are explicitly planned.
+- Atomic consumption remains a keeper-required contract; fixture tests prove proof-before-store, replay, concurrency and callback rollback.
+
+Blockers/non-claims:
+- T5-15 must audit every live value-moving route and account-state gate against this registry.
+- T5-18 must implement durable keeper nonce consumption and cached-context rollback.
+- T4-16 owns decoded-message adapters and cross-module runtime wiring.
+- No T4 intake epoch manifest/base tag/validator is published; payload remains untagged and not intake-eligible.
