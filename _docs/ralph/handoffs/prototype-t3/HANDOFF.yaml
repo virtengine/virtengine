@@ -1,0 +1,43 @@
+campaign: three-day-prototype
+thread: T3
+checkpoint: T3-01
+branch: ve/prototype-t3-reliability
+start_head: 79391a3df86d85522b92e0400c6904971ecbe65d
+end_head: 2519cc59ecca0a9bb35881935aff76043a6d5105
+origin_main: 79391a3df86d85522b92e0400c6904971ecbe65d
+tree_clean: true
+commits:
+  - 7d333977f55fdb23e691615329bcd72837be0e54
+owned_paths:
+  - x/settlement/ibc/
+  - _docs/ralph/handoffs/prototype-t3/HANDOFF.yaml
+files_changed:
+  - x/settlement/ibc/errors.go
+  - x/settlement/ibc/keeper.go
+  - x/settlement/ibc/keeper_test.go
+  - x/settlement/ibc/keys.go
+  - x/settlement/ibc/types.go
+tests:
+  - command: go test -count=1 ./x/settlement/ibc
+    exit_code: 0
+    result: passed
+    tool_versions:
+      go: go1.25.8 windows/amd64
+  - command: go vet ./x/settlement/ibc
+    exit_code: 0
+    result: passed
+    tool_versions:
+      go: go1.25.8 windows/amd64
+  - command: go test -race -count=1 ./x/settlement/ibc
+    exit_code: 0
+    result: passed
+    tool_versions:
+      go: go1.25.8 windows/amd64
+      gcc: WinLibs GCC 16.1.0 POSIX UCRT
+generated_hashes: {}
+migrations: []
+external_evidence: []
+known_failures: []
+blockers: []
+next_checkpoint: T3-02
+expected_head: 2519cc59ecca0a9bb35881935aff76043a6d5105
