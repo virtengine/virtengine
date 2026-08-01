@@ -287,7 +287,11 @@ func (c *collector) Collect(ch chan<- prometheus.Metric) {
 		ch <- prometheus.MustNewConstMetric(c.queueAvailable, prometheus.GaugeValue, available, string(queueKind))
 		if queueAvailable {
 			ch <- prometheus.MustNewConstMetric(c.queuePending, prometheus.GaugeValue, float64(queue.Pending), string(queueKind))
-			ch <- prometheus.MustNewConstMetric(c.queueOldestAge, prometheus.GaugeValue, (queue.OldestAge + elapsed).Seconds(), string(queueKind))
+			oldestAge := time.Duration(0)
+			if queue.Pending > 0 {
+				oldestAge = queue.OldestAge + elapsed
+			}
+			ch <- prometheus.MustNewConstMetric(c.queueOldestAge, prometheus.GaugeValue, oldestAge.Seconds(), string(queueKind))
 		}
 		for _, controlKind := range controlKinds {
 			aggregate := controls[controlKey(queueKind, controlKind)]

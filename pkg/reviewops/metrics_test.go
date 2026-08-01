@@ -185,6 +185,20 @@ func TestOperationalMetricsFailsClosedWhenSnapshotBecomesStale(t *testing.T) {
 	require.Equal(t, float64(0), metricValue(t, families, "virtengine_review_operations_subgroup_source_available", nil))
 }
 
+func TestOperationalMetricsEmptyQueueAgeRemainsZero(t *testing.T) {
+	registry := prometheus.NewRegistry()
+	metrics := newTestMetrics(t, registry)
+	snapshot := validSnapshot()
+	snapshot.Queues[0].Pending = 0
+	snapshot.Queues[0].OldestAge = 0
+	require.NoError(t, metrics.SetSnapshot(snapshot))
+
+	metrics.collector.now = func() time.Time { return fixtureTime.Add(2 * time.Minute) }
+	families, err := registry.Gather()
+	require.NoError(t, err)
+	require.Equal(t, float64(0), metricValue(t, families, "virtengine_review_operations_queue_oldest_age_seconds", map[string]string{"queue": "appeal"}))
+}
+
 func TestOperationalMetricsTaxonomyDigestIsImmutable(t *testing.T) {
 	metrics := newTestMetrics(t, prometheus.NewRegistry())
 	require.NoError(t, metrics.SetSnapshot(validSnapshot()))
