@@ -56,6 +56,31 @@ function producerHandoffDeclaresContract(contract, producerHandoff) {
     && contract.proto_sources.every((path) => producerHandoff.files_changed.includes(path));
 }
 
+function validateContainedProducerCommits(containedCommits, acceptedCheckpoints, isAncestor) {
+  for (const contained of containedCommits) {
+    const covering = acceptedCheckpoints.filter((entry) => entry.thread === contained.thread
+      && isAncestor(contained.commit, entry.payload_head)
+      && isAncestor(entry.payload_head, "HEAD"));
+    assert.ok(covering.length > 0, `T4 contains unaccepted ${contained.thread} producer commit ${contained.commit}`);
+  }
+  return true;
+}
+
+function discoverContainedProducerCommits(control, epoch) {
+  const contained = [];
+  for (const producer of control.producers) {
+    const ref = `refs/remotes/origin/${producer.branch}`;
+    const exists = spawnSync("git", ["cat-file", "-e", `${ref}^{commit}`], { cwd: root });
+    assert.equal(exists.status, 0, `registered producer ref is unavailable: ${producer.branch}`);
+    const commits = spawnSync("git", ["rev-list", "--reverse", `${epoch.base_sha}..${ref}`], { cwd: root, encoding: "utf8" });
+    assert.equal(commits.status, 0, `cannot inspect ${producer.thread} producer ancestry`);
+    for (const commit of commits.stdout.trim().split(/\r?\n/).filter(Boolean)) {
+      if (spawnSync("git", ["merge-base", "--is-ancestor", commit, "HEAD"], { cwd: root }).status === 0) contained.push({ thread: producer.thread, commit });
+    }
+  }
+  return contained;
+}
+
 function validateEpoch(epoch, handoff = null) {
   const expectedKeys = ["announcement_cutoff", "base_sha", "base_tag", "campaign", "intake_epoch", "opens_at", "planning_sha", "producers", "schema_version", "status"];
   assert.deepEqual(Object.keys(epoch).sort(), expectedKeys);
@@ -154,12 +179,15 @@ function validateIntegrationControl(control, schema, handoff, epoch) {
   validateEpoch(epoch, handoff);
 }
 
-module.exports = { producerHandoffDeclaresContract, validateEpoch, validateIntegrationControl };
+module.exports = { producerHandoffDeclaresContract, validateContainedProducerCommits, validateEpoch, validateIntegrationControl };
 
 if (require.main === module) {
   const handoff = loadJson(handoffPath);
-  validateIntegrationControl(loadJson(controlPath), loadJson(schemaPath), handoff, loadJson(epochPath));
-  validateTagObservation(loadJson(epochTagObservationPath), loadJson(epochPath));
+  const control = loadJson(controlPath);
+  const epoch = loadJson(epochPath);
+  validateIntegrationControl(control, loadJson(schemaPath), handoff, epoch);
+  validateContainedProducerCommits(discoverContainedProducerCommits(control, epoch), handoff.accepted_checkpoints, (ancestor, descendant) => spawnSync("git", ["merge-base", "--is-ancestor", ancestor, descendant], { cwd: root }).status === 0);
+  validateTagObservation(loadJson(epochTagObservationPath), epoch);
   validateSecurityGates(loadJson(aiBiometricSecurityGatesPath), { rootDir: root });
   validateProductionPolicy(loadJson(aiProductionPolicyPath), { rootDir: root });
   validateCoreRcSchema(loadJson(coreRcSchemaPath));

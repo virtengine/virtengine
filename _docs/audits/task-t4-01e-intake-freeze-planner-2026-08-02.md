@@ -17,6 +17,11 @@ manifest to bind that exact path/digest, verifies identical bytes at the
 manifest source commit, and requires that source to be an ancestor of current
 T4. Local post-manifest observation edits therefore cannot affect the roster.
 
+Aggregate integration validation also inspects every registered remote producer
+branch from the epoch base. Any producer commit reachable from T4 must be
+covered by an accepted same-thread payload that is itself reachable from T4;
+missing producer refs or unaccepted out-of-band merges fail closed.
+
 The negative suite rejects planning before cutoff, late tags, wrong-thread tags,
 invalid targets, unknown producers, duplicate selections, unobserved tags, and
 post-cutoff observations. The real epoch

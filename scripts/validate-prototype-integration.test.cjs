@@ -1,7 +1,7 @@
 "use strict";
 
 const assert = require("assert").strict;
-const { producerHandoffDeclaresContract, validateIntegrationControl } = require("./validate-prototype-integration.cjs");
+const { producerHandoffDeclaresContract, validateContainedProducerCommits, validateIntegrationControl } = require("./validate-prototype-integration.cjs");
 
 const sha = "79391a3df86d85522b92e0400c6904971ecbe65d";
 
@@ -57,6 +57,13 @@ function validFixture() {
 }
 
 const tests = [
+  ["rejects producer commits not covered by accepted payloads", () => {
+    const ancestry = new Set([`producer:${sha}`, `${sha}:HEAD`]);
+    const isAncestor = (ancestor, descendant) => ancestry.has(`${ancestor}:${descendant}`);
+    assert.throws(() => validateContainedProducerCommits([{ thread: "T1", commit: "producer" }], [], isAncestor), /unaccepted T1 producer commit/);
+    assert.doesNotThrow(() => validateContainedProducerCommits([{ thread: "T1", commit: "producer" }], [{ thread: "T1", payload_head: sha }], isAncestor));
+    assert.throws(() => validateContainedProducerCommits([{ thread: "T1", commit: "producer" }], [{ thread: "T5", payload_head: sha }], isAncestor), /unaccepted T1 producer commit/);
+  }],
   ["requires producer handoff ownership of generated proto sources", () => {
     const contract = { owner_thread: "T1", producer: { payload_sha: sha }, proto_sources: ["sdk/proto/node/decision.proto"] };
     assert.equal(producerHandoffDeclaresContract(contract, { thread: "T1", payload_head: sha, files_changed: ["sdk/proto/node/decision.proto"] }), true);
