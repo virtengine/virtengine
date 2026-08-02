@@ -180,7 +180,7 @@ func (h CompromiseHold) Validate(policy *RecoveryPolicy, now int64) error {
 	if h.ProofDigest == ([32]byte{}) || h.Nonce == ([32]byte{}) || h.BlockedActionSet == ([32]byte{}) || h.SafeActionSet == ([32]byte{}) {
 		return fmt.Errorf("hold proof, nonce, and action commitments are required")
 	}
-	if h.ActivatedAt <= 0 || h.ExpiresAt <= h.ActivatedAt || h.ExpiresAt-h.ActivatedAt > policy.MaximumHoldSeconds || now >= h.ExpiresAt {
+	if h.ActivatedAt <= 0 || h.ExpiresAt <= h.ActivatedAt || h.ExpiresAt-h.ActivatedAt > policy.MaximumHoldSeconds || now < h.ActivatedAt || now >= h.ExpiresAt {
 		return fmt.Errorf("hold validity window is invalid")
 	}
 	authorities := make(map[string]RecoveryAuthority, len(policy.Authorities))

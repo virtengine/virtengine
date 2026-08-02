@@ -189,6 +189,12 @@ func TestRecoveryHoldRequiresThresholdAndRejectsExpiry(t *testing.T) {
 		t.Fatal("minority compromise hold accepted")
 	}
 	hold.Approvals = append(hold.Approvals, RecoveryApproval{ParticipantID: "guardian-b", ParticipantVersion: RecoveryParticipantContractVersion, Weight: 1, ApprovalDigest: [32]byte{6}})
+	if err := hold.Validate(&policy, hold.ActivatedAt-1); err == nil {
+		t.Fatal("future-dated compromise hold activated early")
+	}
+	if err := hold.Validate(&policy, hold.ActivatedAt); err != nil {
+		t.Fatalf("compromise hold rejected at activation boundary: %v", err)
+	}
 	if err := hold.Validate(&policy, 150); err != nil {
 		t.Fatalf("threshold compromise hold rejected: %v", err)
 	}
