@@ -868,12 +868,14 @@ func (s *ProviderMutationSubmitter) recoverInProgress(ctx context.Context, token
 func (s *ProviderMutationSubmitter) worker(ctx context.Context) {
 	defer s.wg.Done()
 	ticker := time.NewTicker(s.cfg.PollInterval)
+	acquireTicker := time.NewTicker(s.cfg.PollInterval)
 	leaseInterval := s.cfg.LeaseTTL / 3
 	if leaseInterval <= 0 {
 		leaseInterval = time.Nanosecond
 	}
 	leaseTicker := time.NewTicker(leaseInterval)
 	defer ticker.Stop()
+	defer acquireTicker.Stop()
 	defer leaseTicker.Stop()
 	for {
 		select {
@@ -881,20 +883,27 @@ func (s *ProviderMutationSubmitter) worker(ctx context.Context) {
 			return
 		case <-s.stopCh:
 			return
+		case <-acquireTicker.C:
+			s.mu.RLock()
+			token := s.leaseToken
+			s.mu.RUnlock()
+			if token != 0 {
+				continue
+			}
+			acquired, err := s.lease.Acquire(ctx, s.leaseName, s.cfg.LeaseTTL)
+			if err != nil {
+				continue
+			}
+			if err := s.activateLease(ctx, acquired); err != nil {
+				s.mu.Lock()
+				s.lastFailure = time.Now().UTC()
+				s.mu.Unlock()
+			}
 		case <-leaseTicker.C:
 			s.mu.RLock()
 			token := s.leaseToken
 			s.mu.RUnlock()
 			if token == 0 {
-				acquired, err := s.lease.Acquire(ctx, s.leaseName, s.cfg.LeaseTTL)
-				if err != nil {
-					continue
-				}
-				if err := s.activateLease(ctx, acquired); err != nil {
-					s.mu.Lock()
-					s.lastFailure = time.Now().UTC()
-					s.mu.Unlock()
-				}
 				continue
 			}
 			if err := s.lease.Renew(ctx, s.leaseName, token, s.cfg.LeaseTTL); err != nil {
