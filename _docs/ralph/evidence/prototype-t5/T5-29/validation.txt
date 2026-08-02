@@ -1,0 +1,63 @@
+T5-29 MFA authorization session revalidation
+Payload: bf4b0190c5271d52b260d124f8981760980bc595
+Branch: ve/prototype-t5-platform
+Platform: windows/amd64
+Toolchains: go version go1.25.8 windows/amd64; gcc.exe (MinGW-W64 x86_64-ucrt-posix-seh, built by Brecht Sanders, r3) 16.1.0; git version 2.51.2.windows.1
+
+Epoch ancestry:
+- Frozen baseline: 79391a3df86d85522b92e0400c6904971ecbe65d
+- Planning SHA: 1436723bd78980aa0388dbe9fcfa24dda939c54a
+- Intake epoch: 1
+- Intake base: 5587c384f634552c3a2dd7181ca49cafa4da1984
+- Prior accepted payload: null
+- Payload head: bf4b0190c5271d52b260d124f8981760980bc595
+- Next checkpoint: null
+- Payload descends from the intake base.
+- git rev-list --count reports exactly 56 commits from the intake base to the payload.
+- Complete all-parent changed-path accounting reports exactly 152 paths, including integration-history parent diffs.
+- Honest T5 ownership covers 128 of 152 complete changed paths and leaves exactly 24 inherited integration/T4 paths uncovered.
+
+MFA authorization session revalidation:
+- HasValidAuthSession, ConsumeAuthSession, and ValidateSessionForTransaction re-evaluate current factor combinations before authorization.
+- Device-bound sessions require an explicit matching fingerprint; an omitted fingerprint fails closed.
+- Session APIs without trust-token evidence enforce full factor requirements and do not grant trusted-device reduction.
+- Trusted-device bypass and reduction require a valid device trust token, not only a public fingerprint.
+- Factor combinations enforce MinSecurityLevel using the declared factor types.
+- VEID-bearing sessions and proofs enforce the strictest current global, account, and action VEID threshold and fail closed when the VEID keeper is unavailable.
+- Consumption continues past mismatched or under-factored candidate sessions and can select a later valid session without mutating rejected sessions.
+- Single-use under-factored sessions remain unconsumed.
+
+Command: go.exe -C C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t5 test -count=1 ./x/mfa/keeper
+Output: ok github.com/virtengine/virtengine/x/mfa/keeper 0.922s
+Exit code: 0
+
+Command: go.exe -C C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t5 vet ./x/mfa/keeper
+Output: no diagnostics
+Exit code: 0
+
+Process environment:
+- CGO_ENABLED=1
+- CC=C:\Users\pavil\AppData\Local\Microsoft\WinGet\Packages\BrechtSanders.WinLibs.POSIX.UCRT_Microsoft.Winget.Source_8wekyb3d8bbwe\mingw64\bin\gcc.exe
+Command: go.exe -C C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t5 test -race -count=1 ./x/mfa/keeper -run '^(TestGatingTestSuite|TestHasValidAuthSession|TestConsumeAuthSession|TestAuthSessionPolicy|TestValidateSessionForTransaction)'
+Output: ok github.com/virtengine/virtengine/x/mfa/keeper 12.182s; no race detector diagnostics
+Exit code: 0
+
+Adversarial review:
+- Reviews found and drove closure of under-factored consumption, omitted device proof, fingerprint-only trusted reduction, MinSecurityLevel omission, stale VEID score, duplicate ValidateSessionForTransaction bypasses, and first-mismatch session ordering.
+- A review accidentally inspected repos/virtengine instead of repos/virtengine-t5 and was discarded; an absolute-path re-review of the T5 worktree reported no blocker or high-severity findings.
+
+Ownership and blockers:
+- Honest T5 owned_paths claim only T5 evidence/handoff paths and T5-owned data-vault, fundauth, organization-contract, platform-security, provider-daemon contract, encryption, MFA, privileged-role, and VEID surfaces.
+- The 24 inherited integration/T4 paths have no active T5 generated-file lease, so this checkpoint remains untagged and not intake eligible.
+- T4 must register the prerequisite VEID evidence reference migration and then separately register the signed evidence payload cutover using D4 children 05 through 08.
+- T4 must mount and wire the persistent FundAuthorization store and keeper.
+- Production erasure remains external: it requires durable transactional erasure storage, production storage-deletion and KMS-destruction adapters, independent receipt signers and key resolver, consent, hold, backup, and finalization authorities, and authenticated restore-manifest authority.
+- generated_hashes is {} because T5-29 changes no generated artifact.
+- migrations is [] because T4 registration is absent.
+
+Validation:
+- Strict schema-v2 JSON parse and integration-control validation: passed.
+- Epoch range validation: 56 exact commits and 152 exact complete changed paths from 5587c384f634552c3a2dd7181ca49cafa4da1984 through bf4b0190c5271d52b260d124f8981760980bc595.
+- Ownership validation: 128 covered paths and 24 uncovered inherited integration/T4 paths.
+- Git all-parent inventory and handoff files_changed both contain 152 paths with zero differences.
+- git diff --check for T5-29 evidence and handoff: passed with no errors.
