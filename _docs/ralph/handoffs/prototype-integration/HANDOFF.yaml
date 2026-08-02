@@ -1,40 +1,23 @@
 {
   "campaign": "three-day-prototype",
   "thread": "T4",
-  "checkpoint": "T4-01G",
+  "checkpoint": "T4-01H",
   "branch": "ve/prototype-integration",
-  "start_head": "4db91c866eeec2fe84b1e47f3e0eccbf687c36c3",
-  "end_head": "2c4dd4a912f89c3fcccf6078af453399e4413fa2",
+  "start_head": "2891644488b63aa3340b3959a118e4f28ce75b14",
+  "end_head": "c379739fd89f59508f1ffa4343e2cd1c25239264",
   "origin_main": "79391a3df86d85522b92e0400c6904971ecbe65d",
   "tree_clean": true,
   "commits": [
-    "2c4dd4a912f89c3fcccf6078af453399e4413fa2"
+    "c379739fd89f59508f1ffa4343e2cd1c25239264"
   ],
   "owned_paths": [
     "_docs/ralph/prototype-integration/**",
     "_docs/ralph/handoffs/prototype-integration/**",
-    "_docs/audits/task-t4-01e-intake-freeze-planner-2026-08-02.md",
-    "_docs/prototype-thread-intake-runbook.md",
-    "_docs/ralph/prototype-integration/epochs/epoch-1-tag-observation.json",
-    "scripts/observe-prototype-intake-tags.cjs",
-    "scripts/observe-prototype-intake-tags.test.cjs",
-    "scripts/plan-prototype-intake-freeze.cjs",
-    "scripts/plan-prototype-intake-freeze.test.cjs"
+    "_docs/ralph/prototype-integration/core-rc-manifest.json"
   ],
   "files_changed": [
     "_docs/ralph/handoffs/prototype-integration/HANDOFF.yaml",
-    "_docs/audits/task-t4-01e-intake-freeze-planner-2026-08-02.md",
-    "_docs/prototype-thread-intake-runbook.md",
-    "_docs/ralph/prototype-integration/epochs/epoch-1-tag-observation.json",
-    "_docs/ralph/prototype-integration/required-gate-matrix.json",
-    "scripts/generate-core-rc-manifest.cjs",
-    "scripts/generate-core-rc-manifest.test.cjs",
-    "scripts/observe-prototype-intake-tags.cjs",
-    "scripts/observe-prototype-intake-tags.test.cjs",
-    "scripts/plan-prototype-intake-freeze.cjs",
-    "scripts/plan-prototype-intake-freeze.test.cjs",
-    "scripts/validate-prototype-integration.cjs",
-    "scripts/validate-required-gate-matrix.cjs"
+    "_docs/ralph/prototype-integration/core-rc-manifest.json"
   ],
   "tests": [
     {
@@ -56,10 +39,7 @@
     }
   ],
   "generated_hashes": {
-    "scripts/observe-prototype-intake-tags.cjs": "9976eaabf9c0176b1d8289addaa37c3f2bb06278c20e2439cc6eb32e1f2d7b38",
-    "scripts/observe-prototype-intake-tags.test.cjs": "51204ced5ddf9960a9e88affca5b38cc6eb3fcb042c934bfe98df4808e0c2dca",
-    "scripts/plan-prototype-intake-freeze.cjs": "42d1a7eaa3ced0325c42cc7911e37c9e7e1b52c2934ff598bf64b5aed4782527",
-    "_docs/ralph/prototype-integration/epochs/epoch-1-tag-observation.json": "fdcd4bbec27f84b159ba067d895ba2fe0038fca148e73bc397b6729f2b00af6a"
+    "_docs/ralph/prototype-integration/core-rc-manifest.json": "323fe204c5d29e5865088467ff149574ea98c5943adab7d1647b0da2854c18b7"
   },
   "accepted_checkpoints": [],
   "rejected_checkpoints": [
@@ -98,5 +78,5 @@
     "Task 88C is not complete."
   ],
   "next_checkpoint": null,
-  "expected_head": "2c4dd4a912f89c3fcccf6078af453399e4413fa2"
+  "expected_head": "c379739fd89f59508f1ffa4343e2cd1c25239264"
 }
