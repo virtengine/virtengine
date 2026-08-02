@@ -1,54 +1,36 @@
 {
   "campaign": "three-day-prototype",
   "thread": "T4",
-  "checkpoint": "T4-15B",
+  "checkpoint": "T4-01C",
   "branch": "ve/prototype-integration",
-  "start_head": "567e9fe695f4c2ca2807c358ad7a3ce1a7a2ead5",
-  "end_head": "a5fd4e1951046b90574e297db7abb53345e3b21f",
+  "start_head": "c784db17fc449e6e45fbfb1151915435d82528f7",
+  "end_head": "04338e44e11e9e3cd2fb232585afc63426820c91",
   "origin_main": "79391a3df86d85522b92e0400c6904971ecbe65d",
   "tree_clean": true,
   "commits": [
-    "a5fd4e1951046b90574e297db7abb53345e3b21f"
+    "04338e44e11e9e3cd2fb232585afc63426820c91"
   ],
   "owned_paths": [
     "_docs/ralph/prototype-integration/**",
     "_docs/ralph/handoffs/prototype-integration/**",
-    "_docs/ralph/prototype-integration/core-rc-manifest.json"
+    "_docs/prototype-thread-intake-runbook.md"
   ],
   "files_changed": [
     "_docs/ralph/handoffs/prototype-integration/HANDOFF.yaml",
-    "_docs/ralph/prototype-integration/core-rc-manifest.json"
+    "_docs/prototype-thread-intake-runbook.md"
   ],
   "tests": [
     {
-      "command": "node scripts/validate-ai-biometric-security-gates.test.cjs && node scripts/validate-ai-biometric-security-gates.cjs",
+      "command": "node --test scripts/validate-prototype-intake.test.cjs",
       "exit_code": 0,
       "result": "passed",
-      "test_count": 12,
+      "test_count": 31,
       "tool_versions": {
         "node": "20.19.1"
       }
     },
     {
-      "command": "node scripts/validate-required-gate-matrix.test.cjs && node scripts/validate-required-gate-matrix.cjs",
-      "exit_code": 0,
-      "result": "passed",
-      "test_count": 13,
-      "tool_versions": {
-        "node": "20.19.1"
-      }
-    },
-    {
-      "command": "node scripts/generate-core-rc-manifest.test.cjs",
-      "exit_code": 0,
-      "result": "passed",
-      "test_count": 14,
-      "tool_versions": {
-        "node": "20.19.1"
-      }
-    },
-    {
-      "command": "node scripts/validate-core-rc-manifest.cjs && node scripts/validate-prototype-integration.cjs && node scripts/validate-agents-docs.mjs",
+      "command": "node scripts/validate-agents-docs.mjs",
       "exit_code": 0,
       "result": "passed",
       "tool_versions": {
@@ -57,7 +39,7 @@
     }
   ],
   "generated_hashes": {
-    "_docs/ralph/prototype-integration/core-rc-manifest.json": "b29d25459df373d57955c68b75db1e1f3d31d74d5631eddc3ff061f302cf3890"
+    "_docs/prototype-thread-intake-runbook.md": "7c5954ccfcf67bc381a825890287e65f6052d2ad70ff016c1b30da9224257307"
   },
   "accepted_checkpoints": [],
   "rejected_checkpoints": [
@@ -81,7 +63,7 @@
     "The clean T4-09A real diagnostic exited 1 as required and reported 19 deterministic publication blockers."
   ],
   "blockers": [
-    "Epoch 1 remains open with no announced intake-v2 producer tags; no producer checkpoint is accepted by this checkpoint.",
+    "Epoch 1 remains open before its announcement cutoff. Remote T1 and T3 tags are observable, but the roster is not frozen and no producer checkpoint is accepted by this checkpoint.",
     "Stable secrets are remediated through explicit pre-provisioned Secret names/keys and legacy upgrade instructions; no render-time credential generation remains.",
     "The diagnostic-only publication guard refuses --publish and created no local or remote checkpoint/prototype-integration/t4-09a tag.",
     "Clean real diagnostics pass candidate HEAD/remote equality, manifest strict validity/hash/ancestry/boundary, accepted-ledger correspondence, and tag absence.",
@@ -94,5 +76,5 @@
     "Task 88C is not complete."
   ],
   "next_checkpoint": null,
-  "expected_head": "a5fd4e1951046b90574e297db7abb53345e3b21f"
+  "expected_head": "04338e44e11e9e3cd2fb232585afc63426820c91"
 }
