@@ -114,6 +114,36 @@ func TestFileReconciliationJobStoreRejectsSupersededAttemptCompletion(t *testing
 	require.Equal(t, second.Number, projection.Results[job.ID].AttemptNumber)
 }
 
+func TestFileReconciliationJobStoreRejectsResultAllocationMismatch(t *testing.T) {
+	ctx := context.Background()
+	store := openReconciliationStore(t, filepath.Join(t.TempDir(), "reconciliation.json"))
+	job := testReconciliationJob()
+	_, _, err := store.PutJobIfAbsent(ctx, job)
+	require.NoError(t, err)
+	attempt, err := store.BeginAttempt(ctx, job.ID)
+	require.NoError(t, err)
+	result := testDurableReconciliationResult(job, attempt.Number)
+	result.Result.AllocationID = "other-allocation"
+	result.ResultDigest, err = canonicalReconciliationResultDigest(result.Result)
+	require.NoError(t, err)
+	cursor := ReconciliationCursor{StreamID: "waldur/default", JobID: job.ID, ResultDigest: result.ResultDigest}
+	require.ErrorIs(t, store.CompleteAttempt(ctx, result, nil, cursor), ErrReconciliationConflict)
+}
+
+func TestFileReconciliationJobStoreRejectsResultPeriodMismatch(t *testing.T) {
+	ctx := context.Background()
+	store := openReconciliationStore(t, filepath.Join(t.TempDir(), "reconciliation.json"))
+	job := testReconciliationJob()
+	_, _, err := store.PutJobIfAbsent(ctx, job)
+	require.NoError(t, err)
+	attempt, err := store.BeginAttempt(ctx, job.ID)
+	require.NoError(t, err)
+	result := testDurableReconciliationResult(job, attempt.Number)
+	result.CompletedAt = result.CompletedAt.Add(time.Second)
+	cursor := ReconciliationCursor{StreamID: "waldur/default", JobID: job.ID, ResultDigest: result.ResultDigest}
+	require.ErrorIs(t, store.CompleteAttempt(ctx, result, nil, cursor), ErrReconciliationConflict)
+}
+
 func TestFileReconciliationJobStoreRejectsCorruption(t *testing.T) {
 	ctx := context.Background()
 	path := filepath.Join(t.TempDir(), "reconciliation.json")

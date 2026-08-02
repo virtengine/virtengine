@@ -207,23 +207,26 @@ func (r *WaldurReconciler) Start(ctx context.Context) error {
 	if alreadyRunning {
 		return nil
 	}
-	if r.jobStore == nil {
+	r.mu.RLock()
+	jobStore, metrics := r.jobStore, r.metrics
+	r.mu.RUnlock()
+	if jobStore == nil {
 		return ErrReconciliationUnavailable
 	}
-	if err := r.jobStore.Open(ctx); err != nil {
+	if err := jobStore.Open(ctx); err != nil {
 		return fmt.Errorf("open reconciliation store: %w", err)
 	}
-	projection, err := r.jobStore.LoadProjection(ctx)
+	projection, err := jobStore.LoadProjection(ctx)
 	if err != nil {
-		if r.metrics != nil {
-			r.metrics.ObserveProjectionFailure()
+		if metrics != nil {
+			metrics.ObserveProjectionFailure()
 		}
-		_ = r.jobStore.Close()
+		_ = jobStore.Close()
 		return fmt.Errorf("load reconciliation projection: %w", err)
 	}
-	if r.metrics != nil {
-		if err := r.metrics.ObserveProjection(projection); err != nil {
-			_ = r.jobStore.Close()
+	if metrics != nil {
+		if err := metrics.ObserveProjection(projection); err != nil {
+			_ = jobStore.Close()
 			return fmt.Errorf("observe reconciliation projection: %w", err)
 		}
 	}
@@ -260,12 +263,13 @@ func (r *WaldurReconciler) Stop() {
 		return
 	}
 	r.running = false
+	jobStore := r.jobStore
 	r.mu.Unlock()
 
 	close(r.stopChan)
 	r.wg.Wait()
-	if r.jobStore != nil {
-		_ = r.jobStore.Close()
+	if jobStore != nil {
+		_ = jobStore.Close()
 	}
 
 	r.stopChan = make(chan struct{})
@@ -677,6 +681,52 @@ func (r *WaldurReconciler) SettlementEligibility(allocationID string) error {
 	return nil
 }
 
+// DurableSettlementEligibility requires a matched durable result covering the usage window.
+func (r *WaldurReconciler) DurableSettlementEligibility(record *UsageRecord) error {
+	if r == nil || record == nil || record.StartTime.IsZero() ||
+		record.EndTime.IsZero() || !record.EndTime.After(record.StartTime) {
+		return ErrSettlementReconciliationHold
+	}
+	r.mu.RLock()
+	jobStore := r.jobStore
+	r.mu.RUnlock()
+	if jobStore == nil {
+		return ErrSettlementReconciliationHold
+	}
+	allocationID := record.AllocationID
+	if allocationID == "" {
+		allocationID = record.DeploymentID
+	}
+	if allocationID == "" {
+		return ErrSettlementReconciliationHold
+	}
+	projection, err := jobStore.LoadProjection(context.Background())
+	if err != nil {
+		return ErrSettlementReconciliationHold
+	}
+	var latestJob ReconciliationJob
+	var latestResult DurableReconciliationResult
+	found := false
+	ambiguous := false
+	for jobID, result := range projection.Results {
+		job, ok := projection.Jobs[jobID]
+		if !ok || job.AllocationID != allocationID || job.PeriodStart.After(record.StartTime) || job.PeriodEnd.Before(record.EndTime) {
+			continue
+		}
+		if !found || job.PeriodEnd.After(latestJob.PeriodEnd) ||
+			(job.PeriodEnd.Equal(latestJob.PeriodEnd) && result.CompletedAt.After(latestResult.CompletedAt)) {
+			latestJob, latestResult, found, ambiguous = job, result, true, false
+		} else if job.PeriodEnd.Equal(latestJob.PeriodEnd) && result.CompletedAt.Equal(latestResult.CompletedAt) &&
+			result.Result.State != latestResult.Result.State {
+			ambiguous = true
+		}
+	}
+	if found && !ambiguous && latestResult.Result.State == ReconciliationStateMatched {
+		return nil
+	}
+	return ErrSettlementReconciliationHold
+}
+
 // GetRecentDiscrepancies returns recent discrepancies.
 func (r *WaldurReconciler) GetRecentDiscrepancies(limit int) []MetricDiscrepancy {
 	r.mu.RLock()
@@ -790,7 +840,10 @@ func (r *WaldurReconciler) runReconciliation(ctx context.Context) {
 		return
 	}
 
-	if r.jobStore == nil {
+	r.mu.RLock()
+	jobStore, metrics := r.jobStore, r.metrics
+	r.mu.RUnlock()
+	if jobStore == nil {
 		log.Printf("[waldur-reconciler] skipped: durable reconciliation store unavailable")
 		return
 	}
@@ -811,16 +864,16 @@ func (r *WaldurReconciler) runReconciliation(ctx context.Context) {
 			allocationID = mapping.AllocationID
 		}
 		job := newReconciliationJob(allocationID, mapping.ResourceUUID, periodStart, periodEnd)
-		if _, _, err := r.jobStore.PutJobIfAbsent(ctx, job); err != nil {
+		if _, _, err := jobStore.PutJobIfAbsent(ctx, job); err != nil {
 			log.Printf("[waldur-reconciler] failed to persist job %s: %v", job.ID, err)
 		}
 	}
 	r.refreshMetrics(ctx)
 
-	pending, err := r.jobStore.PendingJobs(ctx)
+	pending, err := jobStore.PendingJobs(ctx)
 	if err != nil {
-		if r.metrics != nil {
-			r.metrics.ObserveProjectionFailure()
+		if metrics != nil {
+			metrics.ObserveProjectionFailure()
 		}
 		log.Printf("[waldur-reconciler] failed to load pending jobs: %v", err)
 		return
@@ -828,25 +881,25 @@ func (r *WaldurReconciler) runReconciliation(ctx context.Context) {
 	processed := 0
 	skipped := 0
 	for _, job := range pending {
-		attempt, err := r.jobStore.BeginAttempt(ctx, job.ID)
+		attempt, err := jobStore.BeginAttempt(ctx, job.ID)
 		if err != nil {
 			log.Printf("[waldur-reconciler] failed to begin job %s: %v", job.ID, err)
 			continue
 		}
 		result, err := r.reconcileAllocation(ctx, job.AllocationID, job.ResourceUUID, job.PeriodEnd, job.PeriodStart, job.PeriodEnd, false)
 		if err != nil {
-			_ = r.jobStore.FailAttempt(ctx, job.ID, attempt.Number, "reconciliation_error")
+			_ = jobStore.FailAttempt(ctx, job.ID, attempt.Number, "reconciliation_error")
 			r.refreshMetrics(ctx)
 			log.Printf("[waldur-reconciler] failed to reconcile %s: %v", job.AllocationID, err)
 			continue
 		}
 		durable, intents, cursor, err := buildDurableReconciliationCompletion(job, attempt, *result)
 		if err != nil {
-			_ = r.jobStore.FailAttempt(ctx, job.ID, attempt.Number, "evidence_digest_error")
+			_ = jobStore.FailAttempt(ctx, job.ID, attempt.Number, "evidence_digest_error")
 			r.refreshMetrics(ctx)
 			continue
 		}
-		if err := r.jobStore.CompleteAttempt(ctx, durable, intents, cursor); err != nil {
+		if err := jobStore.CompleteAttempt(ctx, durable, intents, cursor); err != nil {
 			log.Printf("[waldur-reconciler] failed to commit job %s: %v", job.ID, err)
 			continue
 		}
@@ -861,15 +914,18 @@ func (r *WaldurReconciler) runReconciliation(ctx context.Context) {
 }
 
 func (r *WaldurReconciler) refreshMetrics(ctx context.Context) {
-	if r.metrics == nil || r.jobStore == nil {
+	r.mu.RLock()
+	metrics, jobStore := r.metrics, r.jobStore
+	r.mu.RUnlock()
+	if metrics == nil || jobStore == nil {
 		return
 	}
-	projection, err := r.jobStore.LoadProjection(ctx)
+	projection, err := jobStore.LoadProjection(ctx)
 	if err != nil {
-		r.metrics.ObserveProjectionFailure()
+		metrics.ObserveProjectionFailure()
 		return
 	}
-	_ = r.metrics.ObserveProjection(projection)
+	_ = metrics.ObserveProjection(projection)
 }
 
 // ScheduledUsageCollector collects usage on a schedule and integrates with settlement.
@@ -919,6 +975,9 @@ func NewScheduledUsageCollector(
 	pipeline *SettlementPipeline,
 	reconciler *WaldurReconciler,
 ) *ScheduledUsageCollector {
+	if pipeline != nil && reconciler != nil {
+		pipeline.SetSettlementEligibility(reconciler.DurableSettlementEligibility)
+	}
 	return &ScheduledUsageCollector{
 		cfg:                cfg,
 		usageMeter:         usageMeter,
@@ -995,11 +1054,11 @@ func (c *ScheduledUsageCollector) CollectNow(ctx context.Context) error {
 			}
 
 			// Submit to chain
-			allocationID := record.AllocationID
-			if allocationID == "" {
-				allocationID = record.DeploymentID
+			if c.reconciler == nil {
+				log.Printf("[scheduled-collector] settlement held for %s: reconciliation unavailable", workloadID)
+				continue
 			}
-			if err := c.reconciler.SettlementEligibility(allocationID); err != nil {
+			if err := c.reconciler.DurableSettlementEligibility(record); err != nil {
 				log.Printf("[scheduled-collector] settlement held for %s: %v", workloadID, err)
 				continue
 			}

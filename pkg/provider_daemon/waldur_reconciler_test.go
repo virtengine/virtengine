@@ -23,12 +23,16 @@ type reconciliationCompletionTestStore struct {
 	completeErr    error
 	loadErr        error
 	pendingErr     error
+	projection     *ReconciliationProjection
 	duplicate      bool
 }
 
 func (s *reconciliationCompletionTestStore) LoadProjection(ctx context.Context) (*ReconciliationProjection, error) {
 	if s.loadErr != nil {
 		return nil, s.loadErr
+	}
+	if s.projection != nil {
+		return s.projection, nil
 	}
 	return s.ReconciliationJobStore.LoadProjection(ctx)
 }
@@ -484,6 +488,68 @@ func TestWaldurReconcilerSettlementEligibilityRequiresMatched(t *testing.T) {
 	}
 	reconciler.storeResult(&ReconciliationResult{AllocationID: "alloc-1", State: ReconciliationStateMatched})
 	require.NoError(t, reconciler.SettlementEligibility("alloc-1"))
+}
+
+func TestWaldurReconcilerDurableSettlementEligibilityRequiresCoveringMatchedResult(t *testing.T) {
+	ctx := context.Background()
+	job := testReconciliationJob()
+	record := &UsageRecord{
+		ID: "usage-1", AllocationID: job.AllocationID,
+		StartTime: job.PeriodStart.Add(time.Minute), EndTime: job.PeriodEnd.Add(-time.Minute),
+	}
+	reconciler := NewWaldurReconciler(DefaultWaldurReconcilerConfig(), nil, NewUsageSnapshotStore(), nil, nil)
+	require.ErrorIs(t, reconciler.DurableSettlementEligibility(record), ErrSettlementReconciliationHold)
+
+	store := openReconciliationStore(t, filepath.Join(t.TempDir(), "reconciliation.json"))
+	reconciler.SetJobStore(store)
+	_, _, err := store.PutJobIfAbsent(ctx, job)
+	require.NoError(t, err)
+	attempt, err := store.BeginAttempt(ctx, job.ID)
+	require.NoError(t, err)
+	result := testDurableReconciliationResult(job, attempt.Number)
+	result.Result.State = ReconciliationStateMatched
+	result.Result.ReasonCode = ReconciliationReasonExactMatch
+	result.Result.Score = 100
+	result.ResultDigest, err = canonicalReconciliationResultDigest(result.Result)
+	require.NoError(t, err)
+	cursor := ReconciliationCursor{StreamID: "waldur/default", JobID: job.ID, ResultDigest: result.ResultDigest}
+	require.NoError(t, store.CompleteAttempt(ctx, result, nil, cursor))
+	require.NoError(t, reconciler.DurableSettlementEligibility(record))
+
+	newerJob := newReconciliationJob(job.AllocationID, job.ResourceUUID, job.PeriodStart, job.PeriodEnd.Add(time.Minute))
+	_, _, err = store.PutJobIfAbsent(ctx, newerJob)
+	require.NoError(t, err)
+	newerAttempt, err := store.BeginAttempt(ctx, newerJob.ID)
+	require.NoError(t, err)
+	newerResult := testDurableReconciliationResult(newerJob, newerAttempt.Number)
+	newerCursor := ReconciliationCursor{StreamID: "waldur/default", JobID: newerJob.ID, ResultDigest: newerResult.ResultDigest}
+	require.NoError(t, store.CompleteAttempt(ctx, newerResult, nil, newerCursor))
+	require.ErrorIs(t, reconciler.DurableSettlementEligibility(record), ErrSettlementReconciliationHold)
+
+	record.EndTime = job.PeriodEnd.Add(time.Second)
+	require.ErrorIs(t, reconciler.DurableSettlementEligibility(record), ErrSettlementReconciliationHold)
+}
+
+func TestWaldurReconcilerDurableSettlementEligibilityRejectsAuthorityTie(t *testing.T) {
+	job := testReconciliationJob()
+	otherJob := job
+	otherJob.ID = "job-2"
+	matched := testDurableReconciliationResult(job, 1)
+	matched.Result.State = ReconciliationStateMatched
+	matched.Result.ReasonCode = ReconciliationReasonExactMatch
+	matched.Result.Score = 100
+	mismatched := testDurableReconciliationResult(otherJob, 1)
+	projection := &ReconciliationProjection{
+		Jobs:    map[string]ReconciliationJob{job.ID: job, otherJob.ID: otherJob},
+		Results: map[string]DurableReconciliationResult{job.ID: matched, otherJob.ID: mismatched},
+	}
+	reconciler := NewWaldurReconciler(DefaultWaldurReconcilerConfig(), nil, NewUsageSnapshotStore(), nil, nil)
+	reconciler.SetJobStore(&reconciliationCompletionTestStore{projection: projection})
+	record := &UsageRecord{AllocationID: job.AllocationID, StartTime: job.PeriodStart, EndTime: job.PeriodEnd}
+	require.ErrorIs(t, reconciler.DurableSettlementEligibility(record), ErrSettlementReconciliationHold)
+
+	record.EndTime = record.StartTime
+	require.ErrorIs(t, reconciler.DurableSettlementEligibility(record), ErrSettlementReconciliationHold)
 }
 
 func TestReconciliationResultJSONUsesExplicitContract(t *testing.T) {

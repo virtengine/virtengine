@@ -265,6 +265,10 @@ func (s *FileReconciliationJobStore) CompleteAttempt(ctx context.Context, result
 		if err != nil {
 			return err
 		}
+		job, exists := projection.Jobs[result.JobID]
+		if !exists || validateReconciliationResultJobBinding(result, job) != nil {
+			return ErrReconciliationConflict
+		}
 		if result.AttemptNumber != uint32(len(projection.Attempts[result.JobID])) { //nolint:gosec // bounded by event capacity.
 			return ErrReconciliationConflict
 		}
@@ -593,8 +597,8 @@ func projectReconciliationState(state reconciliationStoreState) (ReconciliationP
 			if _, exists := projection.Jobs[event.Result.JobID]; !exists {
 				return projection, errors.New("reconciliation result references missing job")
 			}
-			if event.Result.Result.AllocationID != projection.Jobs[event.Result.JobID].AllocationID {
-				return projection, errors.New("reconciliation result allocation mismatch")
+			if err := validateReconciliationResultJobBinding(*event.Result, projection.Jobs[event.Result.JobID]); err != nil {
+				return projection, err
 			}
 			attempt, err := findReconciliationAttempt(projection, event.Result.JobID, event.Result.AttemptNumber)
 			if err != nil || !attempt.FinishedAt.IsZero() || event.Result.AttemptNumber != uint32(len(projection.Attempts[event.Result.JobID])) { //nolint:gosec // bounded by event count.
@@ -643,6 +647,15 @@ func findReconciliationAttempt(projection ReconciliationProjection, jobID string
 func validateReconciliationJob(job ReconciliationJob) error {
 	if job.ID == "" || job.AllocationID == "" || job.ResourceUUID == "" || job.CreatedAt.IsZero() || job.PeriodStart.IsZero() || !job.PeriodEnd.After(job.PeriodStart) {
 		return errors.New("invalid reconciliation job")
+	}
+	return nil
+}
+
+func validateReconciliationResultJobBinding(result DurableReconciliationResult, job ReconciliationJob) error {
+	if result.JobID != job.ID || result.Result.AllocationID != job.AllocationID ||
+		!result.CompletedAt.Equal(job.PeriodEnd) ||
+		!result.Result.ReconciliationTime.Equal(job.PeriodEnd.UTC().Truncate(time.Second)) {
+		return errors.New("reconciliation result does not match job period")
 	}
 	return nil
 }

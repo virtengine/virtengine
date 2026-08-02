@@ -338,11 +338,12 @@ type ChainUsageReport struct {
 type SettlementPipeline struct {
 	mu sync.RWMutex
 
-	cfg         SettlementConfig
-	keyManager  *KeyManager
-	usageMeter  *UsageMeter
-	usageStore  *UsageSnapshotStore
-	chainSubmit ChainUsageSubmitter
+	cfg                   SettlementConfig
+	keyManager            *KeyManager
+	usageMeter            *UsageMeter
+	usageStore            *UsageSnapshotStore
+	chainSubmit           ChainUsageSubmitter
+	settlementEligibility func(*UsageRecord) error
 
 	// pending contains usage records pending settlement.
 	pending map[string]*UsageRecord
@@ -370,6 +371,13 @@ type SettlementPipeline struct {
 
 	// wg waits for goroutines to finish.
 	wg sync.WaitGroup
+}
+
+// SetSettlementEligibility installs the final fail-closed settlement gate.
+func (p *SettlementPipeline) SetSettlementEligibility(check func(*UsageRecord) error) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.settlementEligibility = check
 }
 
 // NewSettlementPipeline creates a new settlement pipeline.
@@ -845,6 +853,15 @@ func (p *SettlementPipeline) SubmitUsageToChain(ctx context.Context, record *Usa
 	if p.chainSubmit == nil {
 		return fmt.Errorf("chain submitter not configured")
 	}
+	p.mu.RLock()
+	check := p.settlementEligibility
+	p.mu.RUnlock()
+	if check == nil {
+		return ErrSettlementReconciliationHold
+	}
+	if err := check(record); err != nil {
+		return err
+	}
 
 	reports := p.buildUsageReports(record)
 	if len(reports) == 0 {
@@ -1107,6 +1124,22 @@ func (p *SettlementPipeline) processSettlements(ctx context.Context) {
 
 		if hasDispute {
 			log.Printf("[settlement-pipeline] skipping order %s with pending dispute", orderID)
+			continue
+		}
+
+		eligible := p.settlementEligibility != nil
+		if !eligible {
+			log.Printf("[settlement-pipeline] holding order %s: reconciliation eligibility is not configured", orderID)
+		} else {
+			for _, record := range records {
+				if err := p.settlementEligibility(record); err != nil {
+					log.Printf("[settlement-pipeline] holding order %s for reconciliation: %v", orderID, err)
+					eligible = false
+					break
+				}
+			}
+		}
+		if !eligible {
 			continue
 		}
 
