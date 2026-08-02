@@ -6,14 +6,14 @@
   "planned_functionality_complete": false,
   "milestone_m_eligible": false,
   "source": {
-    "payload_sha": "567e9fe695f4c2ca2807c358ad7a3ce1a7a2ead5",
-    "tree": "2ee47979cf7ba8ff6b56084860b54513bb37c5e8",
+    "payload_sha": "0f307fa73831c86a37494b73909bc7dc5f60ab07",
+    "tree": "77bbae275da819e42d5c3dde32726bf0bdd04c18",
     "branch": "ve/prototype-integration",
     "binding": "declared_clean_parent_payload"
   },
   "tooling": {
-    "tooling_sha": "567e9fe695f4c2ca2807c358ad7a3ce1a7a2ead5",
-    "tree": "2ee47979cf7ba8ff6b56084860b54513bb37c5e8",
+    "tooling_sha": "0f307fa73831c86a37494b73909bc7dc5f60ab07",
+    "tree": "77bbae275da819e42d5c3dde32726bf0bdd04c18",
     "artifacts": [
       {
         "id": "generator",
@@ -395,37 +395,28 @@
     }
   },
   "test_evidence": {
-    "status": "complete",
+    "status": "partial",
     "ledger_path": "_docs/ralph/handoffs/prototype-integration/HANDOFF.yaml",
-    "implementation_sha": "81bbd7b35de74242d1d383b1ac7a3bfb93a2b57c",
-    "ledger_sha": "567e9fe695f4c2ca2807c358ad7a3ce1a7a2ead5",
-    "record_count": 3,
-    "declared_test_count": 39,
-    "uncounted_record_count": 0,
+    "implementation_sha": "04338e44e11e9e3cd2fb232585afc63426820c91",
+    "ledger_sha": "0f307fa73831c86a37494b73909bc7dc5f60ab07",
+    "record_count": 2,
+    "declared_test_count": 31,
+    "uncounted_record_count": 1,
     "records": [
       {
-        "command": "node scripts/validate-ai-biometric-security-gates.test.cjs && node scripts/validate-ai-biometric-security-gates.cjs",
+        "command": "node --test scripts/validate-prototype-intake.test.cjs",
         "exit_code": 0,
         "result": "passed",
-        "test_count": 12,
+        "test_count": 31,
         "tool_versions": {
           "node": "20.19.1"
         }
       },
       {
-        "command": "node scripts/validate-required-gate-matrix.test.cjs && node scripts/validate-required-gate-matrix.cjs",
+        "command": "node scripts/validate-agents-docs.mjs",
         "exit_code": 0,
         "result": "passed",
-        "test_count": 13,
-        "tool_versions": {
-          "node": "20.19.1"
-        }
-      },
-      {
-        "command": "node scripts/generate-core-rc-manifest.test.cjs",
-        "exit_code": 0,
-        "result": "passed",
-        "test_count": 14,
+        "test_count": null,
         "tool_versions": {
           "node": "20.19.1"
         }
@@ -435,7 +426,7 @@
   },
   "producer_checkpoints": {
     "ledger_path": "_docs/ralph/handoffs/prototype-integration/HANDOFF.yaml",
-    "ledger_sha256": "038f6e424620791eb7c9804bc3d50e1980fc13490ade103534f6079cd3dde19c",
+    "ledger_sha256": "c7a664d70c567d60fdee15f8745cb92e70577a4225983c917b83d6a0c68bc3c6",
     "accepted": [],
     "rejected": [
       {
