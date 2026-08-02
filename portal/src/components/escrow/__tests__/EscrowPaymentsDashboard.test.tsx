@@ -3,6 +3,15 @@ import { fireEvent, render, screen } from '@testing-library/react';
 import { EscrowPaymentsDashboard } from '@/components/escrow/EscrowPaymentsDashboard';
 
 const scrollIntoViewMock = vi.fn();
+const mutationProps = {
+  mutationAdapter: { mutate: vi.fn(() => new Promise(() => undefined)) },
+  mutationContext: {
+    chainId: 'virtengine-1',
+    accountAddress: 'virtengine1customer',
+    escrowAccountId: 'escrow-1',
+  },
+  resultProjector: (value: unknown) => value,
+};
 
 const mockState = {
   fetchDashboard: vi.fn(),
@@ -60,6 +69,7 @@ const mockState = {
 vi.mock('@/lib/portal-adapter', () => ({
   useWallet: () => ({
     activeAccountIndex: 0,
+    chainId: 'virtengine-1',
     accounts: [{ address: 'virtengine1customer' }],
   }),
 }));
@@ -105,15 +115,48 @@ describe('EscrowPaymentsDashboard', () => {
     expect(mockState.fetchDashboard).toHaveBeenCalledWith('virtengine1customer');
   });
 
-  it('opens the deposit modal from the dashboard', () => {
+  it('disables mutation controls without an authoritative adapter', () => {
     render(<EscrowPaymentsDashboard />);
+    expect(screen.getAllByText(/no authoritative signing and broadcast adapter/i)).not.toHaveLength(
+      0
+    );
+    expect(screen.getByRole('button', { name: /^deposit$/i })).toBeDisabled();
+    expect(screen.getByRole('button', { name: /^withdraw$/i })).toBeDisabled();
+  });
+
+  it('rejects mutation context for a different wallet', () => {
+    render(
+      <EscrowPaymentsDashboard
+        {...mutationProps}
+        mutationContext={{ ...mutationProps.mutationContext, accountAddress: 'virtengine1other' }}
+      />
+    );
+
+    expect(screen.getByRole('button', { name: /^deposit$/i })).toBeDisabled();
+    expect(screen.getByRole('button', { name: /^withdraw$/i })).toBeDisabled();
+  });
+
+  it('rejects mutation context for a different chain', () => {
+    render(
+      <EscrowPaymentsDashboard
+        {...mutationProps}
+        mutationContext={{ ...mutationProps.mutationContext, chainId: 'virtengine-testnet-1' }}
+      />
+    );
+
+    expect(screen.getByRole('button', { name: /^deposit$/i })).toBeDisabled();
+    expect(screen.getByRole('button', { name: /^withdraw$/i })).toBeDisabled();
+  });
+
+  it('opens the deposit modal from the dashboard', () => {
+    render(<EscrowPaymentsDashboard {...mutationProps} />);
 
     fireEvent.click(screen.getByRole('button', { name: /deposit/i }));
     expect(screen.getByText('Deposit to Escrow')).toBeInTheDocument();
   });
 
   it('scrolls to the withdraw form when clicking withdraw', () => {
-    render(<EscrowPaymentsDashboard />);
+    render(<EscrowPaymentsDashboard {...mutationProps} />);
 
     fireEvent.click(screen.getByRole('button', { name: /^withdraw$/i }));
     expect(scrollIntoViewMock).toHaveBeenCalled();
