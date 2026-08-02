@@ -1,39 +1,52 @@
 {
   "campaign": "three-day-prototype",
   "thread": "T4",
-  "checkpoint": "T4-07G",
+  "checkpoint": "T4-12A",
   "branch": "ve/prototype-integration",
-  "start_head": "e38f50f3e59f0ae8e277abadb2ed383770ea9af7",
-  "end_head": "2f4f20f731ad55fd10ef8aa8154b4208347fcef1",
+  "start_head": "1845068281db06ae1ada1a515b711731f1071011",
+  "end_head": "46c62da6a5222e907a6e82c385b16338ef73877d",
   "origin_main": "79391a3df86d85522b92e0400c6904971ecbe65d",
   "tree_clean": true,
   "commits": [
-    "2f4f20f731ad55fd10ef8aa8154b4208347fcef1"
+    "46c62da6a5222e907a6e82c385b16338ef73877d"
   ],
   "owned_paths": [
     "_docs/ralph/prototype-integration/**",
     "_docs/ralph/handoffs/prototype-integration/**",
-    "_docs/audits/task-t4-07g-slurm-retired-reference-guard-2026-08-02.md",
-    "_docs/ralph/prototype-integration/slurm-chart-inventory.json",
-    "_docs/ralph/prototype-integration/slurm-chart-inventory.schema.json",
-    "scripts/validate-slurm-chart-inventory.cjs",
-    "scripts/validate-slurm-chart-inventory.test.cjs"
+    "_docs/audits/task-t4-12a-ai-production-policy-2026-08-02.md",
+    "_docs/ralph/prototype-integration/ai-production-policy.json",
+    "_docs/ralph/prototype-integration/required-gate-matrix.json",
+    "scripts/validate-ai-production-policy.cjs",
+    "scripts/validate-ai-production-policy.test.cjs",
+    "scripts/validate-prototype-integration.cjs",
+    "scripts/validate-required-gate-matrix.cjs"
   ],
   "files_changed": [
     "_docs/ralph/handoffs/prototype-integration/HANDOFF.yaml",
     "_docs/INDEX.md",
-    "_docs/audits/task-t4-07g-slurm-retired-reference-guard-2026-08-02.md",
-    "_docs/ralph/prototype-integration/slurm-chart-inventory.json",
-    "_docs/ralph/prototype-integration/slurm-chart-inventory.schema.json",
-    "scripts/validate-slurm-chart-inventory.cjs",
-    "scripts/validate-slurm-chart-inventory.test.cjs"
+    "_docs/audits/task-t4-12a-ai-production-policy-2026-08-02.md",
+    "_docs/ralph/prototype-integration/ai-production-policy.json",
+    "_docs/ralph/prototype-integration/required-gate-matrix.json",
+    "scripts/validate-ai-production-policy.cjs",
+    "scripts/validate-ai-production-policy.test.cjs",
+    "scripts/validate-prototype-integration.cjs",
+    "scripts/validate-required-gate-matrix.cjs"
   ],
   "tests": [
     {
-      "command": "node scripts/validate-slurm-chart-inventory.test.cjs && node scripts/validate-slurm-chart-inventory.cjs",
+      "command": "node scripts/validate-ai-production-policy.test.cjs && node scripts/validate-ai-production-policy.cjs",
       "exit_code": 0,
       "result": "passed",
       "test_count": 12,
+      "tool_versions": {
+        "node": "20.19.1"
+      }
+    },
+    {
+      "command": "node scripts/validate-required-gate-matrix.test.cjs && node scripts/validate-required-gate-matrix.cjs",
+      "exit_code": 0,
+      "result": "passed",
+      "test_count": 13,
       "tool_versions": {
         "node": "20.19.1"
       }
@@ -49,11 +62,11 @@
     }
   ],
   "generated_hashes": {
-    "scripts/validate-slurm-chart-inventory.cjs": "73f827fbae20d7a2a302cc3fe700c33ae7d127ffcd23d72741235c228f10ac7b",
-    "scripts/validate-slurm-chart-inventory.test.cjs": "344c513dae55f48128cfc82388e88f457f3b9c2f39ac5961fc32400f256ae44e",
-    "_docs/ralph/prototype-integration/slurm-chart-inventory.json": "55c55aa646e26e339fb2d278548700e7e1f4e684252ac7c65047936f826af1df",
-    "_docs/ralph/prototype-integration/slurm-chart-inventory.schema.json": "f2c8a1bdf109d30d0d290d22a2bf89c4cddf495877d85c0d06dd2f77ae2ffdc5",
-    "_docs/audits/task-t4-07g-slurm-retired-reference-guard-2026-08-02.md": "4256ef3a554945cf0663a28a199340d1976f8355fd742ea87a8f2ba78ac6f7d0"
+    "scripts/validate-ai-production-policy.cjs": "22cc44d54553d869c139a318cf3b5b143c2a9cb29a4f705eae72e94e27f7351b",
+    "scripts/validate-ai-production-policy.test.cjs": "599bc1e072dec3bb5081b12554b369622c480cf335e19ce17ec8ca9a193bf401",
+    "_docs/ralph/prototype-integration/ai-production-policy.json": "7df63a18a24e8b35ad69c21aed6fa583ff5589c2ddc1ea0830ca69f4b18e12b4",
+    "_docs/ralph/prototype-integration/required-gate-matrix.json": "a7d49b7d89bde8953ac03de1b3e5c3a269ca36b6a62d537752bda8c62b1311d6",
+    "_docs/audits/task-t4-12a-ai-production-policy-2026-08-02.md": "4eca14d898700ae6b9e4dc4bd704d2e41839c12e661837a6a4f063294c36b0c0"
   },
   "accepted_checkpoints": [],
   "rejected_checkpoints": [
@@ -84,8 +97,10 @@
     "Publication remains blocked by 19 checks: CI availability and two exact workflows; epoch cutoff/state; model, producer, release-provenance, rollback, rollout, SBOM, and SLURM evidence; complete gate matrix/result envelope; future manifest status/prototype success; accepted tag revalidation; producer terminal/frozen-out decisions.",
     "The canonical diagnostic reports stable secrets and immutable images passed; capacity equality, durability, and least privilege remain unverified without Helm/live evidence.",
     "No canonical chart remediation, failover, restore, or production render approval is claimed.",
+    "The T4-12A diagnostic records 11 prohibited production AI, biometric, consent, custody, or stub-success finding paths; enforce mode rejects the current repository state.",
+    "External production model privacy and security evaluation is unavailable.",
     "Task 88C is not complete."
   ],
   "next_checkpoint": null,
-  "expected_head": "2f4f20f731ad55fd10ef8aa8154b4208347fcef1"
+  "expected_head": "46c62da6a5222e907a6e82c385b16338ef73877d"
 }
