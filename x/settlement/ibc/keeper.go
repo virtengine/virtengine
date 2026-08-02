@@ -5,6 +5,7 @@ package ibc
 
 import (
 	"bytes"
+	"crypto/sha256"
 	"encoding/json"
 	"fmt"
 	"time"
@@ -406,7 +407,11 @@ func (k IBCKeeper) OnAcknowledgementPacket(
 	}
 	digest := acknowledgementDigest(acknowledgement)
 	if terminal, found := k.getTerminalMarker(ctx, packet.GetSourceChannel(), packet.GetSequence()); found {
-		if terminalMatchesPacket(terminal, packet) && bytes.Equal(terminal.CallbackDigest, digest) {
+		expectedState, expectedReason := TransferStateFinalized, CompensationReasonNone
+		if !ack.Success() {
+			expectedState, expectedReason = TransferStateCompensated, CompensationReasonErrorAck
+		}
+		if terminalMatchesCallback(terminal, packet, expectedState, expectedReason, digest) {
 			return nil
 		}
 		return ErrTerminalConflict
@@ -463,7 +468,7 @@ func (k IBCKeeper) OnTimeoutPacket(
 ) error {
 	digest := timeoutDigest()
 	if terminal, found := k.getTerminalMarker(ctx, packet.GetSourceChannel(), packet.GetSequence()); found {
-		if terminalMatchesPacket(terminal, packet) && bytes.Equal(terminal.CallbackDigest, digest) {
+		if terminalMatchesCallback(terminal, packet, TransferStateCompensated, CompensationReasonTimeout, digest) {
 			return nil
 		}
 		return ErrTerminalConflict
@@ -644,6 +649,18 @@ func terminalMatchesPacket(marker TerminalMarker, packet channeltypes.Packet) bo
 		marker.Identity.SourceChannel == packet.GetSourceChannel() &&
 		marker.Identity.Sequence == packet.GetSequence() &&
 		bytes.Equal(marker.Identity.PayloadDigest, payloadDigest(packet.GetData()))
+}
+
+func terminalMatchesCallback(
+	marker TerminalMarker,
+	packet channeltypes.Packet,
+	state TransferState,
+	reason CompensationReason,
+	digest []byte,
+) bool {
+	return marker.Identity.Validate() == nil && terminalMatchesPacket(marker, packet) &&
+		marker.State == state && marker.CompensationReason == reason && !marker.TransitionedAt.IsZero() &&
+		len(marker.CallbackDigest) == sha256.Size && len(digest) == sha256.Size && bytes.Equal(marker.CallbackDigest, digest)
 }
 
 func (k IBCKeeper) applyTerminalTransition(

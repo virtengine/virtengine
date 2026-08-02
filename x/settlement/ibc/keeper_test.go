@@ -685,6 +685,31 @@ func TestIBCKeeperHandshakeTimeout(t *testing.T) {
 	require.ErrorIs(t, env.keeper.CheckHandshakeTimeout(lateCtx, "channel-1"), ErrHandshakeTimedOut)
 }
 
+func TestIBCKeeperRejectsSemanticallyCorruptTerminalMarker(t *testing.T) {
+	env := setupIBCTestEnv(t)
+	sequence, err := env.keeper.SendEscrowDepositPacket(env.ctx, "channel-0", clienttypes.Height{}, 0, validDepositPacket(env.ctx.BlockTime()))
+	require.NoError(t, err)
+	packet := channeltypes.NewPacket(
+		env.channel.sent[0].data, sequence, PortID, "channel-0", PortID, "channel-1",
+		clienttypes.NewHeight(0, 20), 0,
+	)
+	pending, found := env.keeper.getPendingPacket(env.ctx, "channel-0", sequence)
+	require.True(t, found)
+	ack := NewResultAcknowledgement(EscrowDepositAck{EscrowID: "escrow-1", OrderID: "order-1", Status: "success"})
+	marker := TerminalMarker{
+		Identity: pending.Identity, State: TransferStateRecoveryRequired,
+		CallbackDigest: acknowledgementDigest(ack.GetBytes()), TransitionedAt: env.ctx.BlockTime(),
+	}
+	env.keeper.setTerminalMarker(env.ctx, marker)
+	relayer := sdk.AccAddress([]byte("relayer_addr________"))
+
+	require.ErrorIs(t, env.keeper.OnAcknowledgementPacket(env.ctx, packet, ack.GetBytes(), relayer), ErrTerminalConflict)
+	_, found = env.keeper.getPendingPacket(env.ctx, "channel-0", sequence)
+	require.True(t, found)
+	require.Nil(t, env.ctx.KVStore(env.storeKey).Get(AckPacketKey("channel-0", sequence)))
+	require.NotContains(t, env.lifecycle.getLedger(env.ctx).Calls, "finalize")
+}
+
 func TestIBCModuleRejectsAndRetainsMalformedHandshakeRecord(t *testing.T) {
 	env := setupIBCTestEnv(t)
 	key := HandshakeKey("channel-0")
