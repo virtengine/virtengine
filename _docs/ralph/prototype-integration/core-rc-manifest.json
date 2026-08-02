@@ -1,0 +1,429 @@
+{
+  "schema_version": "virtengine.core-rc.prototype/v0",
+  "manifest_id": "T4-08A",
+  "status": "dependency_blocked",
+  "authoritative": false,
+  "planned_functionality_complete": false,
+  "milestone_m_eligible": false,
+  "source": {
+    "payload_sha": "38afcdae29a66a9952cffe08b616039c371068d6",
+    "tree": "4a426f58aa3fe3e5ed8a4bfd24a67f6ee2632dda",
+    "branch": "ve/prototype-integration",
+    "binding": "declared_clean_parent_payload"
+  },
+  "tooling": {
+    "tooling_sha": "b0d8be8b7c7158928ebd80b2aaa2467947cbea0f",
+    "tree": "07fb290ffbcc0820433b91de7ad76e2fc656d52a",
+    "artifacts": [
+      {
+        "id": "generator",
+        "path": "scripts/generate-core-rc-manifest.cjs",
+        "git_blob": "291cdff39bc00436fe4f6be1135b61b9acdc6e35",
+        "sha256": "c09380bedbef8e96e9fab18ca4847aae860466bf6c4b838828fc1d4e21b77704"
+      },
+      {
+        "id": "schema",
+        "path": "_docs/ralph/prototype-integration/core-rc-manifest.schema.json",
+        "git_blob": "ab4cad357796e38b7b35b9ba1edb3f278ae63e85",
+        "sha256": "b2b2412a5e716e08459b6f4a2a57144bb90f5928c564e67836ef89c26b3f0d07"
+      },
+      {
+        "id": "validator",
+        "path": "scripts/validate-core-rc-manifest.cjs",
+        "git_blob": "a6c8f1196c0b0630f38b642ec8650b066b4ed720",
+        "sha256": "c34b080fac99a9700e48b812d052e62821a200c1bdd88214e159ece3fef315ce"
+      }
+    ]
+  },
+  "toolchains": [
+    {
+      "name": "buf",
+      "version": "1.47.2",
+      "source": "sdk/generation/go.mod",
+      "status": "declared"
+    },
+    {
+      "name": "docker-compose",
+      "version": "2.39.1",
+      "source": "required gate runner image",
+      "status": "declared"
+    },
+    {
+      "name": "go",
+      "version": "1.25.8",
+      "source": "go.mod",
+      "status": "declared"
+    },
+    {
+      "name": "node",
+      "version": "20.19.4",
+      "source": ".github workflow control",
+      "status": "declared"
+    },
+    {
+      "name": "node",
+      "version": "24.12.0",
+      "source": "required gate runner image",
+      "status": "declared"
+    },
+    {
+      "name": "node",
+      "version": "24.12.0",
+      "source": "sdk/ts/package.json volta",
+      "status": "declared"
+    },
+    {
+      "name": "pnpm",
+      "version": "10.28.2",
+      "source": ".github workflow control",
+      "status": "declared"
+    },
+    {
+      "name": "python",
+      "version": "3.11.9",
+      "source": ".github workflow control",
+      "status": "declared"
+    }
+  ],
+  "artifact_groups": [
+    {
+      "id": "lockfiles",
+      "status": "available",
+      "selection": {
+        "included_path_prefixes": [],
+        "included_file_patterns": [
+          "**/go.sum",
+          "**/pnpm-lock.yaml",
+          "**/package-lock.json"
+        ],
+        "excluded_path_patterns": [],
+        "minimum_file_count": 11,
+        "expected_file_count": 11
+      },
+      "file_count": 11,
+      "sha256": "c5b80770179ed70536e6503543faa9d41cb4ce36c4def375e87cdef55480e5c8",
+      "blocker_id": null
+    },
+    {
+      "id": "modules",
+      "status": "available",
+      "selection": {
+        "included_path_prefixes": [],
+        "included_file_patterns": [
+          "**/go.mod",
+          "**/package.json"
+        ],
+        "excluded_path_patterns": [],
+        "minimum_file_count": 17,
+        "expected_file_count": 17
+      },
+      "file_count": 17,
+      "sha256": "a86a9b6fa1c5ed1709fc908aa2185d874e9a0596106ca6fe18de96c5ffcf2c61",
+      "blocker_id": null
+    },
+    {
+      "id": "proto",
+      "status": "available",
+      "selection": {
+        "included_path_prefixes": [],
+        "included_file_patterns": [
+          "**/*.proto"
+        ],
+        "excluded_path_patterns": [],
+        "minimum_file_count": 249,
+        "expected_file_count": 249
+      },
+      "file_count": 249,
+      "sha256": "2b80290cf11ebfca7f2fbaeb5e54306a41b81beb5359ef81a9fc9d6b84b20141",
+      "blocker_id": null
+    },
+    {
+      "id": "openapi",
+      "status": "available",
+      "selection": {
+        "included_path_prefixes": [
+          "openapi/"
+        ],
+        "included_file_patterns": [
+          "**/*openapi*.json",
+          "**/*openapi*.yaml",
+          "**/*openapi*.yml",
+          "**/*swagger*.json",
+          "**/*swagger*.yaml",
+          "**/*swagger*.yml"
+        ],
+        "excluded_path_patterns": [],
+        "minimum_file_count": 10,
+        "expected_file_count": 10
+      },
+      "file_count": 10,
+      "sha256": "c37a740f9c34a98ab7866204e7eb8c2187340b4e5f57f9cfec9583dc055231c5",
+      "blocker_id": null
+    },
+    {
+      "id": "sdk",
+      "status": "available",
+      "selection": {
+        "included_path_prefixes": [
+          "sdk/go/",
+          "sdk/ts/src/generated/"
+        ],
+        "included_file_patterns": [],
+        "excluded_path_patterns": [],
+        "minimum_file_count": 1508,
+        "expected_file_count": 1508
+      },
+      "file_count": 1508,
+      "sha256": "fa5089692121d1f61c28df693d404afbc8c6008ad7b48f67d367979917ff5249",
+      "blocker_id": null
+    },
+    {
+      "id": "model",
+      "status": "partial",
+      "selection": {
+        "included_path_prefixes": [
+          "models/",
+          "ml/training/model/"
+        ],
+        "included_file_patterns": [],
+        "excluded_path_patterns": [],
+        "minimum_file_count": 13,
+        "expected_file_count": 13
+      },
+      "file_count": 13,
+      "sha256": "b13cfa38d4c9f52ef7fdb47249b20db8aafcf83617e85bd5dd866081c1c25543",
+      "blocker_id": "production-model-artifacts-unavailable"
+    },
+    {
+      "id": "chart",
+      "status": "available",
+      "selection": {
+        "included_path_prefixes": [
+          "deploy/slurm/slurm-cluster/"
+        ],
+        "included_file_patterns": [],
+        "excluded_path_patterns": [
+          "**/__pycache__/**",
+          "**/.pytest_cache/**",
+          "**/*.pyc"
+        ],
+        "minimum_file_count": 15,
+        "expected_file_count": 15
+      },
+      "file_count": 15,
+      "sha256": "0deffbe066f6662caa5e28157c1446a5ec34b524630cf803c6d0f4a459b43ae8",
+      "blocker_id": null
+    }
+  ],
+  "control_artifacts": [
+    {
+      "id": "migration_inventory",
+      "path": "_docs/ralph/prototype-integration/migration-inventory.json",
+      "sha256": "d625558ab2f018c1b603cce40bbd351110c8441b24397c13819c00cebae007b1",
+      "status": "dependency_blocked"
+    },
+    {
+      "id": "required_gate_matrix",
+      "path": "_docs/ralph/prototype-integration/required-gate-matrix.json",
+      "sha256": "c0b1f2cd945364a3269049d810dc340c67dabc544548685367317f3628392497",
+      "status": "dependency_blocked"
+    },
+    {
+      "id": "slurm_inventory",
+      "path": "_docs/ralph/prototype-integration/slurm-chart-inventory.json",
+      "sha256": "4fba4652a97c3f4a2f9a2ae1d815caba2cea0dbaab0e2d16371e3445cc8efab6",
+      "status": "blocked"
+    },
+    {
+      "id": "slurm_report",
+      "path": "_docs/ralph/prototype-integration/slurm-chart-semantic-report.json",
+      "sha256": "cf619b8ec32834f2cb1b4ba3850842d8253fb8d6d7714324ba5787c678ac87a8",
+      "status": "blocked"
+    },
+    {
+      "id": "model_provenance",
+      "path": "_docs/ralph/prototype-integration/model-provenance.json",
+      "sha256": "90e506192e849a4a555cf29d3bf8d37970981beaf31d966aea1832f437752508",
+      "status": "dependency_blocked"
+    }
+  ],
+  "migrations": {
+    "status": "dependency_blocked",
+    "inventory_path": "_docs/ralph/prototype-integration/migration-inventory.json",
+    "migration_count": 13,
+    "unavailable_producer_count": 4,
+    "blocker_id": "producer-migration-handoffs-unavailable"
+  },
+  "required_gates": {
+    "status": "dependency_blocked",
+    "matrix_path": "_docs/ralph/prototype-integration/required-gate-matrix.json",
+    "category_count": 11,
+    "blocked_category_count": 11,
+    "blocker_id": "required-gates-dependency-blocked"
+  },
+  "slurm": {
+    "status": "blocked",
+    "inventory_path": "_docs/ralph/prototype-integration/slurm-chart-inventory.json",
+    "report_path": "_docs/ralph/prototype-integration/slurm-chart-semantic-report.json",
+    "report_status": "blocked",
+    "blocker_id": "slurm-production-evidence-unavailable"
+  },
+  "model_provenance": {
+    "status": "dependency_blocked",
+    "path": "_docs/ralph/prototype-integration/model-provenance.json",
+    "sbom_status": "dependency_blocked",
+    "production_weights_status": "dependency_blocked",
+    "blocker_id": "production-model-provenance-unavailable"
+  },
+  "test_evidence": {
+    "status": "partial",
+    "ledger_path": "_docs/ralph/handoffs/prototype-integration/HANDOFF.yaml",
+    "implementation_sha": "735a5d57566e44e456432faaa73431defb3c3c1e",
+    "ledger_sha": "38afcdae29a66a9952cffe08b616039c371068d6",
+    "record_count": 5,
+    "declared_test_count": 75,
+    "uncounted_record_count": 2,
+    "records": [
+      {
+        "command": "python scripts/validate_slurm_chart_semantics_test.py && node scripts/validate-slurm-chart-inventory.test.cjs && node scripts/validate-slurm-chart-inventory.cjs",
+        "exit_code": 0,
+        "result": "passed",
+        "test_count": 64,
+        "tool_versions": {
+          "python": "3.14.6 windows",
+          "node": "20.19.1"
+        }
+      },
+      {
+        "command": "go1.25.8 test '-tags=e2e.integration' -count=1 ./tests/integration/hpc -run '^TestDurableStateOfflineContracts$'",
+        "exit_code": 0,
+        "result": "passed",
+        "test_count": null,
+        "tool_versions": {
+          "go": "go version go1.25.8 windows/amd64"
+        }
+      },
+      {
+        "command": "python scripts/hpc/slurm-durable-state-drill-test.py",
+        "exit_code": 0,
+        "result": "passed",
+        "test_count": 10,
+        "tool_versions": {
+          "python": "3.14.6 windows"
+        }
+      },
+      {
+        "command": "python scripts/hpc/slurm-durable-state-drill.py",
+        "exit_code": 0,
+        "result": "passed",
+        "test_count": 1,
+        "tool_versions": {
+          "python": "3.14.6 windows"
+        }
+      },
+      {
+        "command": "node scripts/validate-prototype-integration.test.cjs && node scripts/validate-prototype-integration.cjs && node scripts/validate-agents-docs.mjs",
+        "exit_code": 0,
+        "result": "passed",
+        "test_count": null,
+        "tool_versions": {
+          "node": "20.19.1"
+        }
+      }
+    ],
+    "blocker_id": "test-evidence-partial"
+  },
+  "producer_checkpoints": {
+    "ledger_path": "_docs/ralph/handoffs/prototype-integration/HANDOFF.yaml",
+    "ledger_sha256": "d559ff55bd38e8b43d746339dc8be836b6a54a7feb60211ff6040fa2a342b5e9",
+    "accepted": [],
+    "rejected": [
+      {
+        "thread": "T2",
+        "checkpoint": "T2-01",
+        "tip": "62d8c4b99804b354b36031ea2fd8b609dcac8a87",
+        "reason": "Producer tip does not contain integration SHA 78c57fbaf9517caba7b0d9a0dc0ca427665eb12e; synchronize with current T4 and rerun exact-SHA gates."
+      },
+      {
+        "thread": "T3",
+        "checkpoint": "T3-01",
+        "tip": "9cc738fbb241890d069d6fb6c2ddb664a4e53447",
+        "reason": "Producer tip does not contain integration SHA 823c61a1a9fc2c3a8f8b59dd060bb6db4a1bc3db; synchronize with current T4 and rerun exact-SHA gates."
+      }
+    ],
+    "blocker_id": "accepted-producer-checkpoints-unavailable"
+  },
+  "rollout": {
+    "status": "not_authorized",
+    "evidence": null,
+    "blocker_id": "rollout-not-authorized"
+  },
+  "rollback": {
+    "status": "unverified",
+    "evidence": null,
+    "blocker_id": "rollback-evidence-unavailable"
+  },
+  "external_dependencies": [
+    {
+      "id": "producer-checkpoints",
+      "status": "unavailable",
+      "blocker_id": "accepted-producer-checkpoints-unavailable"
+    },
+    {
+      "id": "sbom-and-release-provenance",
+      "status": "unavailable",
+      "blocker_id": "release-sbom-provenance-unavailable"
+    },
+    {
+      "id": "production-rollout",
+      "status": "unavailable",
+      "blocker_id": "rollout-not-authorized"
+    }
+  ],
+  "blockers": [
+    {
+      "id": "accepted-producer-checkpoints-unavailable",
+      "description": "No producer checkpoint is accepted by the payload ledger."
+    },
+    {
+      "id": "artifact-selection-incomplete",
+      "description": "One or more artifact selections do not meet their declared coverage contract."
+    },
+    {
+      "id": "producer-migration-handoffs-unavailable",
+      "description": "Committed producer migration handoffs are unavailable."
+    },
+    {
+      "id": "required-gates-dependency-blocked",
+      "description": "The required gate matrix remains dependency-blocked."
+    },
+    {
+      "id": "slurm-production-evidence-unavailable",
+      "description": "SLURM production render, isolation, and live durability evidence remain unavailable."
+    },
+    {
+      "id": "production-model-artifacts-unavailable",
+      "description": "Production model weights and release artifacts are unavailable."
+    },
+    {
+      "id": "production-model-provenance-unavailable",
+      "description": "Production model provenance, approvals, evaluation, and runtime SBOM are unavailable."
+    },
+    {
+      "id": "test-evidence-partial",
+      "description": "Some passing handoff test records do not declare test counts."
+    },
+    {
+      "id": "release-sbom-provenance-unavailable",
+      "description": "No release SBOM or signed release provenance is available."
+    },
+    {
+      "id": "rollout-not-authorized",
+      "description": "This non-authoritative prototype manifest does not authorize rollout."
+    },
+    {
+      "id": "rollback-evidence-unavailable",
+      "description": "No production rollback execution evidence is available."
+    }
+  ]
+}
