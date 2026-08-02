@@ -12,6 +12,11 @@ date alone. The planner requires a committed pre-cutoff observation containing
 each annotated tag object and peeled target; unobserved tags cannot enter the
 frozen roster.
 
+The planner hashes the selected observation, requires the checked core-RC
+manifest to bind that exact path/digest, verifies identical bytes at the
+manifest source commit, and requires that source to be an ancestor of current
+T4. Local post-manifest observation edits therefore cannot affect the roster.
+
 The negative suite rejects planning before cutoff, late tags, wrong-thread tags,
 invalid targets, unknown producers, duplicate selections, unobserved tags, and
 post-cutoff observations. The real epoch

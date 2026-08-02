@@ -1,7 +1,8 @@
 "use strict";
 
 const assert = require("assert").strict;
-const { parseArgs, planFrozenEpoch } = require("./plan-prototype-intake-freeze.cjs");
+const { createHash } = require("crypto");
+const { parseArgs, planFrozenEpoch, validateObservationBinding } = require("./plan-prototype-intake-freeze.cjs");
 
 function epoch() {
   return {
@@ -25,6 +26,9 @@ const tests = [
   ["rejects a post-cutoff observation", () => { const value = observation(); value.observed_at = "2000-01-02T00:00:01Z"; assert.throws(() => planFrozenEpoch(epoch(), new Map(), { now: Date.parse("2000-01-03T00:00:00Z"), observation: value, resolveTag: resolver }), /not captured before cutoff/); }],
   ["parses explicit tag selections", () => { const parsed = parseArgs(["--epoch", "1", "--observation", "observation.json", "--tag", "T1=checkpoint/prototype-t1/t1-09"]); assert.equal(parsed.selections.get("T1"), "checkpoint/prototype-t1/t1-09"); }],
   ["rejects duplicate selections", () => assert.throws(() => parseArgs(["--epoch", "1", "--observation", "observation.json", "--tag", "T1=a", "--tag", "T1=b"]), /duplicate producer/)],
+  ["accepts manifest-bound observation bytes", () => { const content = JSON.stringify(observation()); const digest = createHash("sha256").update(content).digest("hex"); const manifest = { source: { payload_sha: "a".repeat(40) }, control_artifacts: [{ id: "intake_tag_observation", path: "observation.json", sha256: digest }] }; assert.doesNotThrow(() => validateObservationBinding(content, "observation.json", manifest, { sourceContent: content, sourceIsAncestor: true })); }],
+  ["rejects observation bytes not bound by manifest", () => { const content = JSON.stringify(observation()); const manifest = { source: { payload_sha: "a".repeat(40) }, control_artifacts: [{ id: "intake_tag_observation", path: "observation.json", sha256: "b".repeat(64) }] }; assert.throws(() => validateObservationBinding(content, "observation.json", manifest, { sourceContent: content, sourceIsAncestor: true }), /digest does not match/); }],
+  ["rejects observation bytes changed after manifest source", () => { const content = JSON.stringify(observation()); const digest = createHash("sha256").update(content).digest("hex"); const manifest = { source: { payload_sha: "a".repeat(40) }, control_artifacts: [{ id: "intake_tag_observation", path: "observation.json", sha256: digest }] }; assert.throws(() => validateObservationBinding(content, "observation.json", manifest, { sourceContent: "changed", sourceIsAncestor: true }), /source commit/); }],
 ];
 
 for (const [name, run] of tests) { run(); console.log(`ok - ${name}`); }

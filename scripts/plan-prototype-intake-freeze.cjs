@@ -3,8 +3,9 @@
 "use strict";
 
 const assert = require("assert").strict;
+const { createHash } = require("crypto");
 const { readFileSync } = require("fs");
-const { resolve } = require("path");
+const { isAbsolute, resolve } = require("path");
 const { spawnSync } = require("child_process");
 
 const threads = ["T1", "T2", "T3", "T5"];
@@ -24,6 +25,24 @@ function resolveAnnotatedTag(repo, remote, tag) {
     tagger_at: git(repo, ["for-each-ref", "--format=%(taggerdate:iso-strict)", ref]),
     target: git(repo, ["rev-parse", `${ref}^{}`]),
   };
+}
+
+function validateObservationBinding(content, observationPath, manifest, options = {}) {
+  assert.ok(!observationPath.startsWith("/") && !observationPath.split(/[\\/]/).includes(".."), "observation path must be repository-relative");
+  const digest = createHash("sha256").update(content).digest("hex");
+  const artifacts = manifest.control_artifacts.filter((artifact) => artifact.id === "intake_tag_observation" && artifact.path === observationPath);
+  assert.equal(artifacts.length, 1, "manifest does not bind the intake tag observation");
+  assert.equal(artifacts[0].sha256, digest, "observation digest does not match manifest");
+  assert.match(manifest.source.payload_sha, /^[a-f0-9]{40}$/);
+  const sourceResult = options.sourceContent === undefined
+    ? spawnSync("git", ["show", `${manifest.source.payload_sha}:${observationPath}`], { cwd: options.repo, encoding: "buffer" })
+    : null;
+  if (sourceResult) assert.equal(sourceResult.status, 0, "observation is missing from manifest source commit");
+  const sourceContent = options.sourceContent ?? sourceResult.stdout;
+  assert.equal(createHash("sha256").update(sourceContent).digest("hex"), digest, "observation bytes do not match manifest source commit");
+  const ancestor = options.sourceIsAncestor ?? spawnSync("git", ["merge-base", "--is-ancestor", manifest.source.payload_sha, "HEAD"], { cwd: options.repo }).status === 0;
+  assert.equal(ancestor, true, "manifest source is not an ancestor of current T4");
+  return true;
 }
 
 function planFrozenEpoch(epoch, selections, options = {}) {
@@ -60,10 +79,10 @@ function planFrozenEpoch(epoch, selections, options = {}) {
 }
 
 function parseArgs(argv) {
-  const options = { epoch: null, observation: null, remote: "origin", repo: resolve(__dirname, ".."), selections: new Map() };
+  const options = { epoch: null, manifest: "_docs/ralph/prototype-integration/core-rc-manifest.json", observation: null, remote: "origin", repo: resolve(__dirname, ".."), selections: new Map() };
   for (let index = 0; index < argv.length; index += 1) {
     const argument = argv[index];
-    if (["--epoch", "--observation", "--remote", "--repo", "--tag"].includes(argument)) {
+    if (["--epoch", "--manifest", "--observation", "--remote", "--repo", "--tag"].includes(argument)) {
       const value = argv[++index];
       assert.ok(value, `${argument} requires a value`);
       if (argument === "--tag") {
@@ -76,6 +95,7 @@ function parseArgs(argv) {
   }
   assert.match(options.epoch || "", /^[1-9][0-9]*$/, "--epoch is required");
   assert.ok(options.observation, "--observation is required");
+  assert.ok(!isAbsolute(options.observation) && !options.observation.split(/[\\/]/).includes(".."), "--observation must be repository-relative");
   options.repo = resolve(options.repo);
   return options;
 }
@@ -84,12 +104,15 @@ function main(argv) {
   const options = parseArgs(argv);
   const path = resolve(options.repo, `_docs/ralph/prototype-integration/epochs/epoch-${options.epoch}.json`);
   const epoch = JSON.parse(readFileSync(path, "utf8"));
-  const observation = JSON.parse(readFileSync(resolve(options.repo, options.observation), "utf8"));
+  const observationContent = readFileSync(resolve(options.repo, options.observation), "utf8");
+  const observation = JSON.parse(observationContent);
+  const manifest = JSON.parse(readFileSync(resolve(options.repo, options.manifest), "utf8"));
+  validateObservationBinding(observationContent, options.observation, manifest, { repo: options.repo });
   const plan = planFrozenEpoch(epoch, options.selections, { observation, resolveTag: (tag) => resolveAnnotatedTag(options.repo, options.remote, tag) });
   process.stdout.write(`${JSON.stringify(plan, null, 2)}\n`);
 }
 
-module.exports = { parseArgs, planFrozenEpoch };
+module.exports = { parseArgs, planFrozenEpoch, validateObservationBinding };
 
 if (require.main === module) {
   try { main(process.argv.slice(2)); }
