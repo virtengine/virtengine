@@ -175,23 +175,40 @@ const (
 )
 
 type DeletionReceipt struct {
-	Version             uint32              `json:"version"`
-	Kind                DeletionReceiptKind `json:"kind"`
-	TargetCommitment    string              `json:"target_commitment"`
-	AuthorizationDigest string              `json:"authorization_digest"`
-	PolicyDigest        string              `json:"policy_digest"`
-	ProfileDigest       string              `json:"profile_digest"`
-	OperationID         string              `json:"operation_id"`
-	KeyEpoch            uint64              `json:"key_epoch"`
-	CompletedHeight     int64               `json:"completed_height"`
-	CompletedUnix       int64               `json:"completed_unix"`
-	SignerKeyID         string              `json:"signer_key_id"`
-	SignerKeyEpoch      uint64              `json:"signer_key_epoch"`
-	Signature           []byte              `json:"signature"`
+	Version                uint32              `json:"version"`
+	Kind                   DeletionReceiptKind `json:"kind"`
+	TargetCommitment       string              `json:"target_commitment"`
+	RequestDigest          string              `json:"request_digest,omitempty"`
+	AuthorizationDigest    string              `json:"authorization_digest"`
+	PolicyDigest           string              `json:"policy_digest"`
+	ProfileDigest          string              `json:"profile_digest"`
+	ConsentDecisionDigest  string              `json:"consent_decision_digest,omitempty"`
+	ConsentPolicyDigest    string              `json:"consent_policy_digest,omitempty"`
+	OperationID            string              `json:"operation_id"`
+	KeyEpoch               uint64              `json:"key_epoch"`
+	ObjectCommitment       string              `json:"object_commitment,omitempty"`
+	StorageCommitment      string              `json:"storage_commitment,omitempty"`
+	KeyCommitment          string              `json:"key_commitment,omitempty"`
+	BackupGenerationDigest string              `json:"backup_generation_digest,omitempty"`
+	BackupExpiryHeight     int64               `json:"backup_expiry_height,omitempty"`
+	BackupExpiryUnix       int64               `json:"backup_expiry_unix,omitempty"`
+	ErasureEpoch           uint64              `json:"erasure_epoch,omitempty"`
+	CompletedHeight        int64               `json:"completed_height"`
+	CompletedUnix          int64               `json:"completed_unix"`
+	SignerKeyID            string              `json:"signer_key_id"`
+	SignerKeyEpoch         uint64              `json:"signer_key_epoch"`
+	Signature              []byte              `json:"signature"`
 }
 
 type DeletionReceiptKeyResolver interface {
 	ResolveDeletionReceiptKey(kind DeletionReceiptKind, keyID string, keyEpoch uint64) (ed25519.PublicKey, error)
+}
+
+// DeletionReceiptAuthorityResolver binds signer keys to independently
+// administered authority domains for the v2 erasure lifecycle.
+type DeletionReceiptAuthorityResolver interface {
+	DeletionReceiptKeyResolver
+	ResolveDeletionReceiptAuthority(kind DeletionReceiptKind, keyID string, keyEpoch uint64) (string, error)
 }
 
 type DeletionReceiptReplay struct {
@@ -204,23 +221,42 @@ type DeletionReceiptReplayConsumer interface {
 }
 
 type DeletionResolutionContext struct {
-	AuthorizationDigest string
-	PolicyDigest        string
-	ProfileDigest       string
-	CurrentHeight       int64
-	CurrentUnix         int64
-	LegalHold           bool
-	ReplayConsumer      DeletionReceiptReplayConsumer
-	ApplyResolved       func(EvidenceObjectRef) error
+	AuthorizationDigest    string
+	PolicyDigest           string
+	ProfileDigest          string
+	RequestDigest          string
+	ConsentDecisionDigest  string
+	ConsentPolicyDigest    string
+	ObjectCommitment       string
+	StorageCommitment      string
+	KeyCommitment          string
+	BackupGenerationDigest string
+	BackupExpiryHeight     int64
+	BackupExpiryUnix       int64
+	ErasureEpoch           uint64
+	CurrentHeight          int64
+	CurrentUnix            int64
+	LegalHold              bool
+	ReplayConsumer         DeletionReceiptReplayConsumer
+	ApplyResolved          func(EvidenceObjectRef) error
 }
 
 func (r DeletionReceipt) CanonicalSignBytes() ([]byte, error) {
 	if err := r.validate(false); err != nil {
 		return nil, err
 	}
-	return canonicalValues("virtengine/evidence-deletion-receipt/v1", fmt.Sprint(r.Version), string(r.Kind),
-		r.TargetCommitment, r.AuthorizationDigest, r.PolicyDigest, r.ProfileDigest, r.OperationID,
-		fmt.Sprint(r.KeyEpoch), fmt.Sprint(r.CompletedHeight), fmt.Sprint(r.CompletedUnix),
+	if r.ErasureEpoch == 0 {
+		return canonicalValues("virtengine/evidence-deletion-receipt/v1", fmt.Sprint(r.Version), string(r.Kind),
+			r.TargetCommitment, r.AuthorizationDigest, r.PolicyDigest, r.ProfileDigest, r.OperationID,
+			fmt.Sprint(r.KeyEpoch), fmt.Sprint(r.CompletedHeight), fmt.Sprint(r.CompletedUnix),
+			r.SignerKeyID, fmt.Sprint(r.SignerKeyEpoch)), nil
+	}
+	return canonicalValues("virtengine/evidence-deletion-receipt/v2", fmt.Sprint(r.Version), string(r.Kind),
+		r.TargetCommitment, r.RequestDigest, r.AuthorizationDigest, r.PolicyDigest, r.ProfileDigest,
+		r.ConsentDecisionDigest, r.ConsentPolicyDigest, r.OperationID, fmt.Sprint(r.KeyEpoch),
+		r.ObjectCommitment, r.StorageCommitment, r.KeyCommitment, r.BackupGenerationDigest,
+		fmt.Sprint(r.BackupExpiryHeight), fmt.Sprint(r.BackupExpiryUnix), fmt.Sprint(r.ErasureEpoch),
+		fmt.Sprint(r.CompletedHeight), fmt.Sprint(r.CompletedUnix),
 		r.SignerKeyID, fmt.Sprint(r.SignerKeyEpoch)), nil
 }
 
@@ -286,12 +322,32 @@ func ResolveDeletion(ref EvidenceObjectRef, resolution DeletionResolutionContext
 			return fail(err)
 		}
 	}
+	if resolution.ErasureEpoch != 0 {
+		if resolution.ObjectCommitment != ref.ObjectCommitment || resolution.PolicyDigest != ref.PolicyDigest ||
+			resolution.ProfileDigest != ref.ProfileDigest {
+			return fail(errors.New("erasure resolution claims do not match the evidence object"))
+		}
+		for name, digest := range map[string]string{
+			"request digest": resolution.RequestDigest, "consent decision digest": resolution.ConsentDecisionDigest,
+			"consent policy digest": resolution.ConsentPolicyDigest, "object commitment": resolution.ObjectCommitment,
+			"storage commitment": resolution.StorageCommitment, "key commitment": resolution.KeyCommitment,
+			"backup generation digest": resolution.BackupGenerationDigest,
+		} {
+			if err := validateDigest(digest, name); err != nil {
+				return fail(err)
+			}
+		}
+		if resolution.BackupExpiryHeight <= 0 || resolution.BackupExpiryUnix <= 0 {
+			return fail(errors.New("backup expiry coordinates are required"))
+		}
+	}
 	if resolution.CurrentHeight <= 0 || resolution.CurrentUnix <= 0 {
 		return fail(errors.New("current deletion resolution coordinates are required"))
 	}
 	seen := make(map[DeletionReceiptKind]bool, 2)
 	operations := make(map[string]bool, 2)
 	keys := make(map[DeletionReceiptKind]ed25519.PublicKey, 2)
+	authorities := make(map[DeletionReceiptKind]string, 2)
 	replays := make(map[DeletionReceiptKind]DeletionReceiptReplay, 2)
 	var completedHeight, completedUnix int64
 	for _, receipt := range receipts {
@@ -306,6 +362,14 @@ func ResolveDeletion(ref EvidenceObjectRef, resolution DeletionResolutionContext
 			receipt.PolicyDigest != resolution.PolicyDigest || receipt.ProfileDigest != resolution.ProfileDigest || receipt.KeyEpoch != ref.KeyEpoch {
 			return fail(errors.New("deletion receipt claims do not match the evidence object"))
 		}
+		if resolution.ErasureEpoch != 0 && (receipt.RequestDigest != resolution.RequestDigest ||
+			receipt.ConsentDecisionDigest != resolution.ConsentDecisionDigest || receipt.ConsentPolicyDigest != resolution.ConsentPolicyDigest ||
+			receipt.ObjectCommitment != resolution.ObjectCommitment || receipt.StorageCommitment != resolution.StorageCommitment ||
+			receipt.KeyCommitment != resolution.KeyCommitment || receipt.BackupGenerationDigest != resolution.BackupGenerationDigest ||
+			receipt.BackupExpiryHeight != resolution.BackupExpiryHeight || receipt.BackupExpiryUnix != resolution.BackupExpiryUnix ||
+			receipt.ErasureEpoch != resolution.ErasureEpoch) {
+			return fail(errors.New("deletion receipt erasure fence claims do not match the resolution"))
+		}
 		if receipt.CompletedHeight < ref.UpdatedHeight || receipt.CompletedUnix < ref.UpdatedUnix {
 			return fail(errors.New("deletion receipt predates the pending deletion state"))
 		}
@@ -315,6 +379,17 @@ func ResolveDeletion(ref EvidenceObjectRef, resolution DeletionResolutionContext
 		seen[receipt.Kind] = true
 		operations[receipt.OperationID] = true
 		keys[receipt.Kind] = publicKey
+		if resolution.ErasureEpoch != 0 {
+			authorityResolver, ok := resolver.(DeletionReceiptAuthorityResolver)
+			if !ok {
+				return fail(errors.New("v2 deletion receipts require authority-domain resolution"))
+			}
+			authority, err := authorityResolver.ResolveDeletionReceiptAuthority(receipt.Kind, receipt.SignerKeyID, receipt.SignerKeyEpoch)
+			if err != nil || authority == "" {
+				return fail(errors.New("deletion receipt authority domain is unavailable"))
+			}
+			authorities[receipt.Kind] = authority
+		}
 		signBytes, _ := receipt.CanonicalSignBytes()
 		receiptHash := sha256.New()
 		receiptHash.Write(signBytes)
@@ -332,6 +407,9 @@ func ResolveDeletion(ref EvidenceObjectRef, resolution DeletionResolutionContext
 	}
 	if subtle.ConstantTimeCompare(keys[ReceiptStorageDeletion], keys[ReceiptKMSDestruction]) == 1 {
 		return fail(errors.New("storage and KMS deletion authorities must use distinct public keys"))
+	}
+	if resolution.ErasureEpoch != 0 && authorities[ReceiptStorageDeletion] == authorities[ReceiptKMSDestruction] {
+		return fail(errors.New("storage and KMS deletion authorities must use distinct authority domains"))
 	}
 	resolved := ref
 	err := resolution.ReplayConsumer.ConsumeDeletionReceipts(replays[ReceiptStorageDeletion], replays[ReceiptKMSDestruction], func() error {
@@ -351,6 +429,21 @@ func (r DeletionReceipt) validate(signature bool) error {
 	for name, digest := range map[string]string{"target commitment": r.TargetCommitment, "authorization digest": r.AuthorizationDigest, "policy digest": r.PolicyDigest, "profile digest": r.ProfileDigest} {
 		if err := validateDigest(digest, name); err != nil {
 			return err
+		}
+	}
+	if r.ErasureEpoch != 0 {
+		for name, digest := range map[string]string{
+			"request digest": r.RequestDigest, "consent decision digest": r.ConsentDecisionDigest,
+			"consent policy digest": r.ConsentPolicyDigest, "object commitment": r.ObjectCommitment,
+			"storage commitment": r.StorageCommitment, "key commitment": r.KeyCommitment,
+			"backup generation digest": r.BackupGenerationDigest,
+		} {
+			if err := validateDigest(digest, name); err != nil {
+				return err
+			}
+		}
+		if r.BackupExpiryHeight <= 0 || r.BackupExpiryUnix <= 0 {
+			return errors.New("backup expiry coordinates are required")
 		}
 	}
 	if r.OperationID == "" || r.SignerKeyID == "" || r.KeyEpoch == 0 || r.SignerKeyEpoch == 0 || r.CompletedHeight <= 0 || r.CompletedUnix <= 0 {

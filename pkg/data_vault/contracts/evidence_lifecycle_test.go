@@ -8,6 +8,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"strings"
 	"testing"
 )
@@ -129,6 +130,13 @@ func TestDeletionReceiptsRequireIndependentMatchingClaims(t *testing.T) {
 	signReceipt(t, &kms, kmsPrivate)
 
 	firstSignBytes, _ := storage.CanonicalSignBytes()
+	expectedLegacyBytes := canonicalValues("virtengine/evidence-deletion-receipt/v1", fmt.Sprint(storage.Version), string(storage.Kind),
+		storage.TargetCommitment, storage.AuthorizationDigest, storage.PolicyDigest, storage.ProfileDigest, storage.OperationID,
+		fmt.Sprint(storage.KeyEpoch), fmt.Sprint(storage.CompletedHeight), fmt.Sprint(storage.CompletedUnix),
+		storage.SignerKeyID, fmt.Sprint(storage.SignerKeyEpoch))
+	if !bytes.Equal(firstSignBytes, expectedLegacyBytes) {
+		t.Fatal("legacy deletion receipt canonical bytes changed")
+	}
 	storage.Signature = append([]byte(nil), storage.Signature...)
 	secondSignBytes, _ := storage.CanonicalSignBytes()
 	if !bytes.Equal(firstSignBytes, secondSignBytes) {
