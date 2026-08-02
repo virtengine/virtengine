@@ -1,0 +1,45 @@
+T2-X09 retained validation evidence
+Implementation SHA: b1641c5bbb68a7e9a3eb8df8082f72ad2ba64f44
+Node: v24.12.0
+
+COMMAND: portal\node_modules\.bin\vitest.CMD run src/components/escrow/__tests__/DepositModal.test.tsx src/components/escrow/__tests__/WithdrawForm.test.tsx src/components/escrow/__tests__/EscrowPaymentsDashboard.test.tsx src/components/escrow/__tests__/mutations.test.ts --reporter=dot
+EXIT: 0
+RESULT: passed
+DETAIL: 4 files, 49 tests passed
+
+COMMAND: portal\node_modules\.bin\vitest.CMD run src/components/escrow --reporter=dot
+EXIT: 0
+RESULT: passed
+DETAIL: 5 files, 45 tests passed before the final lifecycle/cancellation cases were added; the final affected 4-file gate above passed 49 tests.
+
+COMMAND: portal\node_modules\.bin\prettier.CMD --check <nine T2-X09 escrow source/test files>
+EXIT: 0
+RESULT: passed
+DETAIL: All matched files use Prettier code style; final write pass completed without errors.
+
+COMMAND: pnpm -C portal lint
+EXIT: 0
+RESULT: passed
+DETAIL: Full portal ESLint completed with no diagnostics.
+
+COMMAND: pnpm -C portal type-check
+EXIT: 0
+RESULT: passed
+DETAIL: Full portal TypeScript check completed with no diagnostics.
+
+COMMAND: portal\node_modules\.bin\vitest.CMD run --reporter=dot --maxWorkers=1
+EXIT: unavailable
+RESULT: infrastructure-blocked
+DETAIL: The Windows terminal bridge terminated the all-in-one process before a Vitest summary or exit marker. Passing progress contained no failure output. Equivalent focused and escrow gates above completed successfully; no full-suite pass is claimed.
+
+BEHAVIOR:
+- Deposit and withdrawal controls default unavailable unless an authoritative mutation adapter, projector, and complete chain/account/escrow context are injected.
+- Dashboard mutation context is bound exactly to the connected wallet address and active chain.
+- Requests use canonical positive decimal amounts, an immutable request snapshot, SHA-256 digest idempotency, exact request/result binding, committed code 0, positive block height, transaction hash, and operation ID.
+- Caller close, external close, authority change, request change, and unmount invalidate the session; active adapters receive an aborted signal and stale results are not displayed.
+- Unsupported funding sources and withdrawal destinations are hidden; fiat off-ramp remains navigation only.
+
+NON-CLAIMS:
+- No production signing/broadcast adapter is wired by this checkpoint; controls default unavailable.
+- No live escrow transaction or chain endpoint was certified.
+- The complete portal unit suite was not certified because the terminal bridge repeatedly terminated the all-in-one process before completion.
