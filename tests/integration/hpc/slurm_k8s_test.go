@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"runtime"
 	"strings"
 	"testing"
@@ -175,6 +176,54 @@ func verifyOfflineSLURMContracts(t *testing.T) {
 
 func TestReplicaCapacityOfflineContracts(t *testing.T) {
 	verifyOfflineSLURMContracts(t)
+}
+
+func TestImmutableImagesOfflineContracts(t *testing.T) {
+	chartRoot := filepath.Join(repoRoot(t), "deploy", "slurm", "slurm-cluster")
+	helpers := readRepoFile(t, "deploy", "slurm", "slurm-cluster", "templates", "_helpers.tpl")
+	values := readRepoFile(t, "deploy", "slurm", "slurm-cluster", "values.yaml")
+	schema := readRepoFile(t, "deploy", "slurm", "slurm-cluster", "values.schema.json")
+	fixture := readRepoFile(t, "deploy", "slurm", "slurm-cluster", "tests", "stable-secrets-values.yaml")
+
+	for _, required := range []string{
+		`define "slurm-cluster.immutableImage"`,
+		`required (printf`,
+		`@sha256:[a-f0-9]{64}$`,
+		`slurm-cluster.munge.image`,
+		`slurm-cluster.controller.image`,
+		`slurm-cluster.database.image`,
+		`slurm-cluster.mariadb.image`,
+		`slurm-cluster.compute.image`,
+		`slurm-cluster.nodeAgent.image`,
+		`slurm-cluster.utility.image`,
+	} {
+		require.Contains(t, helpers, required)
+	}
+	helperPattern := `^[a-z0-9]+([._-][a-z0-9]+)*(:[0-9]+)?(/[a-z0-9]+([._-][a-z0-9]+)*)*@sha256:[a-f0-9]{64}$`
+	_, err := regexp.Compile(helperPattern)
+	require.NoError(t, err)
+	require.Contains(t, helpers, `regexMatch "`+helperPattern+`"`)
+	require.NotContains(t, values, "repository:")
+	require.NotContains(t, values, "tag:")
+	require.Equal(t, 7, strings.Count(values, `reference: ""`))
+	require.Contains(t, schema, `"required": ["reference", "pullPolicy"]`)
+	require.Contains(t, schema, `@sha256:[a-f0-9]{64}$`)
+
+	exactReference := regexp.MustCompile(`(?m)^\s+reference:\s+\S+@sha256:[a-f0-9]{64}\s*$`)
+	require.Len(t, exactReference.FindAllString(fixture, -1), 7)
+
+	templates, err := filepath.Glob(filepath.Join(chartRoot, "templates", "*.yaml"))
+	require.NoError(t, err)
+	imageHelper := regexp.MustCompile(`include "slurm-cluster\.(munge|controller|database|mariadb|compute|nodeAgent|utility)\.image"`)
+	for _, template := range templates {
+		content, err := os.ReadFile(template)
+		require.NoError(t, err)
+		for _, line := range strings.Split(string(content), "\n") {
+			if strings.HasPrefix(strings.TrimSpace(line), "image:") {
+				require.Regexp(t, imageHelper, line, "container image bypasses immutable helper in %s", template)
+			}
+		}
+	}
 }
 
 func checkPrerequisites(t *testing.T) bool {

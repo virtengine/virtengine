@@ -2,10 +2,22 @@
   "$schema": "https://json-schema.org/draft-07/schema#",
   "type": "object",
   "properties": {
+    "utilityImage": { "$ref": "#/definitions/pinnedImage" },
     "munge": { "$ref": "#/definitions/secretComponent" },
+    "controller": {
+      "type": "object",
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "image": { "$ref": "#/definitions/pinnedImage" }
+      }
+    },
     "database": {
       "type": "object",
-      "properties": { "config": { "$ref": "#/definitions/databaseSecret" } },
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "config": { "$ref": "#/definitions/databaseSecret" },
+        "image": { "$ref": "#/definitions/pinnedImage" }
+      },
       "required": ["config"]
     },
     "mariadb": { "$ref": "#/definitions/mariadbSecret" },
@@ -13,7 +25,8 @@
       "type": "object",
       "properties": {
         "enabled": { "type": "boolean" },
-        "replicas": { "type": "integer", "minimum": 0 }
+        "replicas": { "type": "integer", "minimum": 0 },
+        "image": { "$ref": "#/definitions/pinnedImage" }
       },
       "required": ["enabled", "replicas"],
       "allOf": [
@@ -71,6 +84,10 @@
     },
     "nodeAgent": {
       "type": "object",
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "image": { "$ref": "#/definitions/pinnedImage" }
+      },
       "allOf": [
         {
           "if": {
@@ -88,11 +105,83 @@
       ]
     }
   },
+  "allOf": [
+    {
+      "if": { "properties": { "controller": { "properties": { "enabled": { "const": true } }, "required": ["enabled"] } }, "required": ["controller"] },
+      "then": { "properties": { "controller": { "required": ["image"] } } }
+    },
+    {
+      "if": { "properties": { "database": { "properties": { "enabled": { "const": true } }, "required": ["enabled"] } }, "required": ["database"] },
+      "then": { "properties": { "database": { "required": ["image"] } } }
+    },
+    {
+      "if": { "properties": { "mariadb": { "properties": { "enabled": { "const": true } }, "required": ["enabled"] } }, "required": ["mariadb"] },
+      "then": { "properties": { "mariadb": { "required": ["image"] } } }
+    },
+    {
+      "if": {
+        "anyOf": [
+          { "properties": { "controller": { "properties": { "enabled": { "const": true } }, "required": ["enabled"] } }, "required": ["controller"] },
+          { "properties": { "database": { "properties": { "enabled": { "const": true } }, "required": ["enabled"] } }, "required": ["database"] },
+          { "properties": { "compute": { "properties": { "enabled": { "const": true } }, "required": ["enabled"] } }, "required": ["compute"] },
+          { "properties": { "nodePools": { "contains": { "not": { "properties": { "enabled": { "const": false } }, "required": ["enabled"] } } } }, "required": ["nodePools"] }
+        ]
+      },
+      "then": { "properties": { "munge": { "required": ["image"] } }, "required": ["munge"] }
+    },
+    {
+      "if": {
+        "anyOf": [
+          { "properties": { "database": { "properties": { "enabled": { "const": true } }, "required": ["enabled"] } }, "required": ["database"] },
+          { "properties": { "compute": { "properties": { "enabled": { "const": true } }, "required": ["enabled"] } }, "required": ["compute"] },
+          { "properties": { "nodePools": { "contains": { "not": { "properties": { "enabled": { "const": false } }, "required": ["enabled"] } } } }, "required": ["nodePools"] }
+        ]
+      },
+      "then": { "required": ["utilityImage"] }
+    },
+    {
+      "if": {
+        "allOf": [
+          {
+            "anyOf": [
+              { "properties": { "compute": { "properties": { "enabled": { "const": true } }, "required": ["enabled"] } }, "required": ["compute"] },
+              { "properties": { "nodePools": { "contains": { "not": { "properties": { "enabled": { "const": false } }, "required": ["enabled"] } } } }, "required": ["nodePools"] }
+            ]
+          },
+          { "properties": { "nodeAgent": { "properties": { "enabled": { "const": true } }, "required": ["enabled"] } }, "required": ["nodeAgent"] }
+        ]
+      },
+      "then": { "properties": { "nodeAgent": { "required": ["image"] } } }
+    },
+    {
+      "if": {
+        "anyOf": [
+          { "properties": { "compute": { "properties": { "enabled": { "const": true } }, "required": ["enabled"] } }, "required": ["compute"] },
+          { "properties": { "nodePools": { "contains": { "not": { "properties": { "enabled": { "const": false } }, "required": ["enabled"] } } } }, "required": ["nodePools"] }
+        ]
+      },
+      "then": { "properties": { "compute": { "required": ["image"] } }, "required": ["compute"] }
+    }
+  ],
   "definitions": {
     "nonEmptyString": { "type": "string", "minLength": 1 },
+    "pinnedImage": {
+      "type": "object",
+      "properties": {
+        "reference": {
+          "type": "string",
+          "pattern": "^[a-z0-9]+(?:[._-][a-z0-9]+)*(?::[0-9]+)?(?:/[a-z0-9]+(?:[._-][a-z0-9]+)*)*@sha256:[a-f0-9]{64}$"
+        },
+        "pullPolicy": { "enum": ["Always", "IfNotPresent", "Never"] }
+      },
+      "required": ["reference", "pullPolicy"],
+      "additionalProperties": false
+    },
     "secretComponent": {
       "type": "object",
       "properties": {
+        "enabled": { "type": "boolean" },
+        "image": { "$ref": "#/definitions/pinnedImage" },
         "existingSecret": { "$ref": "#/definitions/nonEmptyString" },
         "secretKeyName": { "$ref": "#/definitions/nonEmptyString" }
       },
@@ -109,6 +198,8 @@
     "mariadbSecret": {
       "type": "object",
       "properties": {
+        "enabled": { "type": "boolean" },
+        "image": { "$ref": "#/definitions/pinnedImage" },
         "existingSecret": { "$ref": "#/definitions/nonEmptyString" },
         "secretRootPasswordKey": { "$ref": "#/definitions/nonEmptyString" }
       },

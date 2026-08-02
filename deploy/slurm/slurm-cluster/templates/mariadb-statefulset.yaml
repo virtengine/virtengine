@@ -34,7 +34,7 @@ spec:
       {{- end }}
       containers:
         - name: mariadb
-          image: {{ .Values.mariadb.image.repository }}:{{ .Values.mariadb.image.tag }}
+          image: {{ include "slurm-cluster.mariadb.image" . }}
           imagePullPolicy: {{ .Values.mariadb.image.pullPolicy }}
           ports:
             - name: mysql

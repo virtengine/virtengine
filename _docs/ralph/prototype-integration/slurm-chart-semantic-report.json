@@ -19,41 +19,11 @@
       "invariant": "least-privilege",
       "location": "templates/database-statefulset.yaml",
       "message": "template contains privileged or root container defaults"
-    },
-    {
-      "invariant": "immutable-images",
-      "location": "values.yaml",
-      "message": "munge image is tag-based rather than digest-pinned"
-    },
-    {
-      "invariant": "immutable-images",
-      "location": "values.yaml",
-      "message": "controller image is tag-based rather than digest-pinned"
-    },
-    {
-      "invariant": "immutable-images",
-      "location": "values.yaml",
-      "message": "database image is tag-based rather than digest-pinned"
-    },
-    {
-      "invariant": "immutable-images",
-      "location": "values.yaml",
-      "message": "mariadb image is tag-based rather than digest-pinned"
-    },
-    {
-      "invariant": "immutable-images",
-      "location": "values.yaml",
-      "message": "compute image is tag-based rather than digest-pinned"
-    },
-    {
-      "invariant": "immutable-images",
-      "location": "values.yaml",
-      "message": "nodeAgent image is tag-based rather than digest-pinned"
     }
   ],
   "invariants": {
     "durable-state": "unverified",
-    "immutable-images": "failed",
+    "immutable-images": "passed",
     "least-privilege": "failed",
     "replica-capacity-equality": "unverified",
     "stable-secrets": "passed"

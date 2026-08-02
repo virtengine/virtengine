@@ -104,61 +104,43 @@ Create the name of the service account to use
 {{- end }}
 
 {{/*
-SLURM version tag
+Require one complete, lowercase, digest-pinned image reference.
 */}}
-{{- define "slurm-cluster.slurmVersion" -}}
-{{- default .Chart.AppVersion .Values.global.slurmVersion }}
+{{- define "slurm-cluster.immutableImage" -}}
+{{- $name := index . 0 -}}
+{{- $reference := required (printf "%s.image.reference must be an explicit repository@sha256:<lowercase64> reference" $name) (index . 1) -}}
+{{- if not (regexMatch "^[a-z0-9]+([._-][a-z0-9]+)*(:[0-9]+)?(/[a-z0-9]+([._-][a-z0-9]+)*)*@sha256:[a-f0-9]{64}$" $reference) -}}
+{{- fail (printf "%s.image.reference must be an explicit repository@sha256:<lowercase64> reference" $name) -}}
+{{- end -}}
+{{- $reference -}}
 {{- end }}
 
-{{/*
-Image registry prefix
-*/}}
-{{- define "slurm-cluster.imageRegistry" -}}
-{{- .Values.global.imageRegistry | default "ghcr.io/virtengine" }}
-{{- end }}
-
-{{/*
-Controller image
-*/}}
 {{- define "slurm-cluster.controller.image" -}}
-{{- $registry := include "slurm-cluster.imageRegistry" . }}
-{{- $tag := default (include "slurm-cluster.slurmVersion" .) .Values.controller.image.tag }}
-{{- printf "%s/%s:%s" $registry .Values.controller.image.repository $tag }}
+{{- include "slurm-cluster.immutableImage" (list "controller" .Values.controller.image.reference) -}}
 {{- end }}
 
-{{/*
-Database image
-*/}}
 {{- define "slurm-cluster.database.image" -}}
-{{- $registry := include "slurm-cluster.imageRegistry" . }}
-{{- $tag := default (include "slurm-cluster.slurmVersion" .) .Values.database.image.tag }}
-{{- printf "%s/%s:%s" $registry .Values.database.image.repository $tag }}
+{{- include "slurm-cluster.immutableImage" (list "database" .Values.database.image.reference) -}}
 {{- end }}
 
-{{/*
-Compute image
-*/}}
 {{- define "slurm-cluster.compute.image" -}}
-{{- $registry := include "slurm-cluster.imageRegistry" . }}
-{{- $tag := default (include "slurm-cluster.slurmVersion" .) .Values.compute.image.tag }}
-{{- printf "%s/%s:%s" $registry .Values.compute.image.repository $tag }}
+{{- include "slurm-cluster.immutableImage" (list "compute" .Values.compute.image.reference) -}}
 {{- end }}
 
-{{/*
-Munge image
-*/}}
 {{- define "slurm-cluster.munge.image" -}}
-{{- $registry := include "slurm-cluster.imageRegistry" . }}
-{{- $tag := default (include "slurm-cluster.slurmVersion" .) .Values.munge.image.tag }}
-{{- printf "%s/%s:%s" $registry .Values.munge.image.repository $tag }}
+{{- include "slurm-cluster.immutableImage" (list "munge" .Values.munge.image.reference) -}}
 {{- end }}
 
-{{/*
-Node agent image
-*/}}
+{{- define "slurm-cluster.mariadb.image" -}}
+{{- include "slurm-cluster.immutableImage" (list "mariadb" .Values.mariadb.image.reference) -}}
+{{- end }}
+
 {{- define "slurm-cluster.nodeAgent.image" -}}
-{{- $registry := include "slurm-cluster.imageRegistry" . }}
-{{- printf "%s/%s:%s" $registry .Values.nodeAgent.image.repository .Values.nodeAgent.image.tag }}
+{{- include "slurm-cluster.immutableImage" (list "nodeAgent" .Values.nodeAgent.image.reference) -}}
+{{- end }}
+
+{{- define "slurm-cluster.utility.image" -}}
+{{- include "slurm-cluster.immutableImage" (list "utility" .Values.utilityImage.reference) -}}
 {{- end }}
 
 {{/*

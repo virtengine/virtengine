@@ -63,7 +63,8 @@ spec:
             runAsUser: 0
             runAsNonRoot: false
         - name: wait-for-controller
-          image: busybox:1.36
+          image: {{ include "slurm-cluster.utility.image" $root }}
+          imagePullPolicy: {{ $root.Values.utilityImage.pullPolicy }}
           command:
             - /bin/sh
             - -c

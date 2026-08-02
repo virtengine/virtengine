@@ -12,22 +12,22 @@ cluster:
 
 # -- Global settings
 global:
-  # -- Image registry
-  imageRegistry: "ghcr.io/virtengine"
   # -- Image pull secrets
   imagePullSecrets: []
   # -- Storage class for persistent volumes
   storageClass: ""
-  # -- SLURM version tag
-  slurmVersion: "23.02.7"
+
+# -- Utility image used by readiness init containers. Production must provide an exact digest reference.
+utilityImage:
+  reference: ""
+  pullPolicy: IfNotPresent
 
 # -- Munge authentication daemon
 munge:
   # -- Enable munge deployment
   enabled: true
   image:
-    repository: slurm-munge
-    tag: ""  # Defaults to global.slurmVersion
+    reference: ""
     pullPolicy: IfNotPresent
   # -- Name of a pre-provisioned Secret containing the munge key (required when enabled)
   existingSecret: ""
@@ -52,8 +52,7 @@ controller:
   # -- Number of controller replicas (1 for single, 2 for HA)
   replicas: 1
   image:
-    repository: slurm-controller
-    tag: ""
+    reference: ""
     pullPolicy: IfNotPresent
   # -- Controller configuration
   config:
@@ -119,8 +118,7 @@ database:
   # -- Number of replicas
   replicas: 1
   image:
-    repository: slurm-dbd
-    tag: ""
+    reference: ""
     pullPolicy: IfNotPresent
   # -- Database configuration
   config:
@@ -165,8 +163,7 @@ mariadb:
   # -- Enable internal MariaDB
   enabled: true
   image:
-    repository: mariadb
-    tag: "10.11"
+    reference: ""
     pullPolicy: IfNotPresent
   # -- Name of a pre-provisioned Secret containing the root password (required when enabled)
   existingSecret: ""
@@ -196,8 +193,7 @@ compute:
   # -- Number of compute node replicas (for statefulset)
   replicas: 2
   image:
-    repository: slurm-compute
-    tag: ""
+    reference: ""
     pullPolicy: IfNotPresent
   # -- Node configuration
   config:
@@ -300,8 +296,7 @@ nodeAgent:
   # -- Enable node agent sidecar on compute nodes
   enabled: true
   image:
-    repository: virtengine-node-agent
-    tag: "0.9.1"
+    reference: ""
     pullPolicy: IfNotPresent
   # -- Agent configuration
   config:

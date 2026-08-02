@@ -176,8 +176,37 @@ class SlurmChartSemanticsTest(unittest.TestCase):
         failed = {finding.invariant for finding in findings}
         self.assertNotIn("stable-secrets", failed)
         self.assertNotIn("replica-capacity-equality", failed)
-        self.assertTrue({"immutable-images", "least-privilege"}.issubset(failed))
+        self.assertNotIn("immutable-images", failed)
+        self.assertIn("least-privilege", failed)
         self.assertNotIn("durable-state", failed)
+
+    def test_source_rejects_mutable_or_bypassed_image_contracts(self) -> None:
+        source = ROOT / "deploy" / "slurm" / "slurm-cluster"
+        mutations = {
+            "tagged default": ("values.yaml", 'reference: ""', 'reference: "busybox:latest"'),
+            "uppercase digest": ("values.schema.json", "[a-f0-9]{64}", "[A-F0-9]{64}"),
+            "template helper bypass": ("templates/mariadb-statefulset.yaml", 'include "slurm-cluster.mariadb.image" .', ".Values.mariadb.image.reference"),
+            "helper source bypass": ("templates/_helpers.tpl", '.Values.mariadb.image.reference', '.Values.compute.image.reference'),
+            "bad pull policy enum": ("values.schema.json", '"Never"]', '"Sometimes"]'),
+            "bad pull policy source": ("templates/mariadb-statefulset.yaml", '.Values.mariadb.image.pullPolicy', '.Values.compute.image.pullPolicy'),
+        }
+        for label, (relative, old, new) in mutations.items():
+            with self.subTest(label=label), tempfile.TemporaryDirectory() as directory:
+                chart = Path(directory)
+                (chart / "templates").mkdir()
+                for path in source.iterdir():
+                    if path.is_file():
+                        content = path.read_text(encoding="utf-8")
+                        if path.name == relative:
+                            content = content.replace(old, new, 1)
+                        (chart / path.name).write_text(content, encoding="utf-8")
+                for template in (source / "templates").glob("*"):
+                    if template.is_file():
+                        content = template.read_text(encoding="utf-8")
+                        if f"templates/{template.name}" == relative:
+                            content = content.replace(old, new, 1)
+                        (chart / "templates" / template.name).write_text(content, encoding="utf-8")
+                self.assertIn("immutable-images", {finding.invariant for finding in validate_source(chart)})
 
     def test_source_rejects_partition_capacity_override(self) -> None:
         source = ROOT / "deploy" / "slurm" / "slurm-cluster"
@@ -230,12 +259,21 @@ class SlurmChartSemanticsTest(unittest.TestCase):
             findings = validate_source(chart)
         self.assertTrue(any(finding.invariant == "stable-secrets" and "projection mismatch" in finding.message for finding in findings))
 
-    def test_shared_secret_schema_requirements_are_unconditional(self) -> None:
+    def test_image_schema_requirements_are_workload_conditional(self) -> None:
         schema = json.loads((ROOT / "deploy" / "slurm" / "slurm-cluster" / "values.schema.json").read_text(encoding="utf-8"))
         self.assertEqual(schema["definitions"]["secretComponent"]["required"], ["existingSecret", "secretKeyName"])
         self.assertEqual(schema["properties"]["database"]["required"], ["config"])
         self.assertEqual(schema["definitions"]["databaseSecret"]["required"], ["existingSecret", "secretPasswordKey"])
         self.assertEqual(schema["definitions"]["mariadbSecret"]["required"], ["existingSecret", "secretRootPasswordKey"])
+        conditional_requirements = json.dumps(schema["allOf"], sort_keys=True)
+        for image_owner in ("controller", "database", "mariadb", "munge", "compute", "nodeAgent", "utilityImage"):
+            self.assertIn(image_owner, conditional_requirements)
+
+    def test_pull_policy_schema_is_required_and_enumerated(self) -> None:
+        schema = json.loads((ROOT / "deploy" / "slurm" / "slurm-cluster" / "values.schema.json").read_text(encoding="utf-8"))
+        pinned_image = schema["definitions"]["pinnedImage"]
+        self.assertEqual(pinned_image["properties"]["pullPolicy"], {"enum": ["Always", "IfNotPresent", "Never"]})
+        self.assertEqual(pinned_image["required"], ["reference", "pullPolicy"])
 
     def test_capacity_schema_forbids_partition_overrides(self) -> None:
         schema = json.loads((ROOT / "deploy" / "slurm" / "slurm-cluster" / "values.schema.json").read_text(encoding="utf-8"))
@@ -288,12 +326,13 @@ class SlurmChartSemanticsTest(unittest.TestCase):
         self.assertLessEqual(len(f"{second}-9999"), 63)
         self.assertRegex(first, r"-[a-f0-9]{8}$")
 
-    def test_source_diagnostic_only_promotes_stable_secrets(self) -> None:
+    def test_source_diagnostic_promotes_source_verifiable_invariants(self) -> None:
         statuses = result([], diagnostic=True)["invariants"]
         self.assertEqual(statuses["stable-secrets"], "passed")
+        self.assertEqual(statuses["immutable-images"], "passed")
         self.assertEqual(statuses["replica-capacity-equality"], "unverified")
         self.assertEqual(
-            {status for invariant, status in statuses.items() if invariant != "stable-secrets"},
+            {status for invariant, status in statuses.items() if invariant not in {"stable-secrets", "immutable-images"}},
             {"unverified"},
         )
 

@@ -22,7 +22,7 @@ INVARIANTS = (
     "least-privilege",
     "durable-state",
 )
-SOURCE_VERIFIABLE_INVARIANTS = {"stable-secrets"}
+SOURCE_VERIFIABLE_INVARIANTS = {"stable-secrets", "immutable-images"}
 WORKLOAD_KINDS = {"CronJob", "DaemonSet", "Deployment", "Job", "Pod", "ReplicaSet", "ReplicationController", "StatefulSet"}
 DURABLE_COMPONENTS = {"controller", "database", "mariadb"}
 DURABLE_PATHS = {
@@ -34,6 +34,10 @@ DIGEST_IMAGE = re.compile(
     r"^[a-z0-9]+(?:[._-][a-z0-9]+)*(?::[0-9]+)?"
     r"(?:/[a-z0-9]+(?:[._-][a-z0-9]+)*)*@sha256:[a-f0-9]{64}$"
 )
+HELM_DIGEST_PATTERN = (
+    r"^[a-z0-9]+([._-][a-z0-9]+)*(:[0-9]+)?"
+    r"(/[a-z0-9]+([._-][a-z0-9]+)*)*@sha256:[a-f0-9]{64}$"
+)
 HELM_RANDOM = re.compile(
     r"{{[^}]*\b(?:randAlpha|randAlphaNum|randAscii|randBytes|randNumeric|genCA|genPrivateKey|"
     r"genSelfSignedCert|genSignedCert|derivePassword|htpasswd|uuidv4)\b",
@@ -42,6 +46,16 @@ HELM_RANDOM = re.compile(
 PRIVILEGED_SOURCE = re.compile(r"^\s*(?:privileged:\s*true|runAsUser:\s*0|runAsNonRoot:\s*false|allowPrivilegeEscalation:\s*true)\b", re.MULTILINE)
 NODE_LINE = re.compile(r"^\s*NodeName=(\S+)", re.MULTILINE)
 PARTITION_LINE = re.compile(r"^\s*PartitionName=(\S+)(.*)$", re.MULTILINE)
+HELPER_DEFINITION = re.compile(r'{{-?\s*define\s+"([^"]+)"\s*-?}}(.*?){{-?\s*end\s*}}', re.DOTALL)
+IMAGE_HELPERS = {
+    "munge": ("slurm-cluster.munge.image", "munge", "munge.image"),
+    "controller": ("slurm-cluster.controller.image", "controller", "controller.image"),
+    "database": ("slurm-cluster.database.image", "database", "database.image"),
+    "mariadb": ("slurm-cluster.mariadb.image", "mariadb", "mariadb.image"),
+    "compute": ("slurm-cluster.compute.image", "compute", "compute.image"),
+    "nodeAgent": ("slurm-cluster.nodeAgent.image", "nodeAgent", "nodeAgent.image"),
+    "utility": ("slurm-cluster.utility.image", "utility", "utilityImage"),
+}
 
 
 @dataclass(frozen=True)
@@ -283,15 +297,62 @@ def _static_findings(chart_dir: Path) -> list[Finding]:
             if forbidden in partition:
                 findings.append(Finding("replica-capacity-equality", "values.yaml", f"partition {partition.get('name', '<unnamed>')} overrides derived {forbidden}"))
 
-    for component in ("munge", "controller", "database", "mariadb", "compute", "nodeAgent"):
-        settings = values.get(component, {})
-        image = settings.get("image", {}) if isinstance(settings, dict) else {}
-        if not isinstance(image, dict) or not image:
-            continue
-        repository = str(image.get("repository", ""))
-        tag = str(image.get("tag", ""))
-        if not DIGEST_IMAGE.search(repository) and not DIGEST_IMAGE.search(tag):
-            findings.append(Finding("immutable-images", "values.yaml", f"{component} image is tag-based rather than digest-pinned"))
+    helpers_path = chart_dir / "templates" / "_helpers.tpl"
+    helpers = helpers_path.read_text(encoding="utf-8") if helpers_path.is_file() else ""
+    pinned_image = schema.get("definitions", {}).get("pinnedImage", {})
+    image_pattern = pinned_image.get("properties", {}).get("reference", {}).get("pattern")
+    if image_pattern != DIGEST_IMAGE.pattern:
+        findings.append(Finding("immutable-images", "values.schema.json", "pinned image schema does not require the exact lowercase sha256 reference grammar"))
+    pull_policy = pinned_image.get("properties", {}).get("pullPolicy", {})
+    if pull_policy != {"enum": ["Always", "IfNotPresent", "Never"]} or pinned_image.get("required") != ["reference", "pullPolicy"]:
+        findings.append(Finding("immutable-images", "values.schema.json", "pinned image schema must require pullPolicy with the Kubernetes policy enum"))
+    helper_contract = (
+        'define "slurm-cluster.immutableImage"',
+        "required (printf",
+        f'regexMatch "{HELM_DIGEST_PATTERN}"',
+    )
+    for fragment in helper_contract:
+        if fragment not in helpers:
+            findings.append(Finding("immutable-images", "templates/_helpers.tpl", f"fail-closed image helper is missing {fragment}"))
+    helper_bodies = {name: body for name, body in HELPER_DEFINITION.findall(helpers)}
+    approved_helpers = {helper: values_path for helper, _, values_path in IMAGE_HELPERS.values()}
+    for component, (helper, label, values_path) in IMAGE_HELPERS.items():
+        image = values.get("utilityImage", {}) if component == "utility" else values.get(component, {}).get("image", {})
+        if not isinstance(image, dict) or set(image) != {"reference", "pullPolicy"}:
+            findings.append(Finding("immutable-images", "values.yaml", f"{component} image must expose only reference and pullPolicy"))
+        elif image["reference"] and not DIGEST_IMAGE.fullmatch(str(image["reference"])):
+            findings.append(Finding("immutable-images", "values.yaml", f"{component} default image reference is not an exact lowercase sha256 reference"))
+        body = helper_bodies.get(helper, "")
+        expected_body = re.compile(
+            rf'^\s*{{{{-?\s*include\s+"slurm-cluster\.immutableImage"\s+\(list\s+"{re.escape(label)}"\s+\.Values\.{re.escape(values_path)}\.reference\)\s*-?}}}}\s*$'
+        )
+        if not expected_body.fullmatch(body):
+            findings.append(Finding("immutable-images", "templates/_helpers.tpl", f"{component} image helper must call immutableImage with .Values.{values_path}.reference"))
+        if f'include "{helper}"' not in template_source:
+            findings.append(Finding("immutable-images", "templates", f"{component} image helper is not used by a workload"))
+    for path in (chart_dir / "templates").glob("*.yaml"):
+        lines = path.read_text(encoding="utf-8").splitlines()
+        paired_pull_policy_lines: set[int] = set()
+        for line_number, line in enumerate(lines, 1):
+            if not re.match(r"^\s*image:\s*", line):
+                continue
+            match = re.fullmatch(r'\s*image:\s*{{\s*include\s+"([^"]+)"\s+(\$root|\.)\s*}}\s*', line)
+            if not match or match.group(1) not in approved_helpers:
+                findings.append(Finding("immutable-images", f"templates/{path.name}:{line_number}", "container image bypasses an approved immutable image helper"))
+                continue
+            helper, context = match.groups()
+            values_path = approved_helpers[helper]
+            values_root = ".Values" if context == "." else f"{context}.Values"
+            expected_source = f"{values_root}.{values_path}.pullPolicy"
+            policy_line = lines[line_number] if line_number < len(lines) else ""
+            expected_policy = re.compile(rf"\s*imagePullPolicy:\s*{{{{\s*{re.escape(expected_source)}\s*}}}}\s*")
+            if not expected_policy.fullmatch(policy_line):
+                findings.append(Finding("immutable-images", f"templates/{path.name}:{line_number + 1}", f"{helper} must use imagePullPolicy from {expected_source}"))
+            else:
+                paired_pull_policy_lines.add(line_number + 1)
+        for line_number, line in enumerate(lines, 1):
+            if re.match(r"^\s*imagePullPolicy:\s*", line) and line_number not in paired_pull_policy_lines:
+                findings.append(Finding("immutable-images", f"templates/{path.name}:{line_number}", "imagePullPolicy is not paired with its approved image values path"))
 
     for component in DURABLE_COMPONENTS:
         settings = values.get(component, {})

@@ -57,7 +57,8 @@ spec:
             runAsUser: 0
             runAsNonRoot: false
         - name: wait-for-mariadb
-          image: busybox:1.36
+          image: {{ include "slurm-cluster.utility.image" . }}
+          imagePullPolicy: {{ .Values.utilityImage.pullPolicy }}
           command:
             - /bin/sh
             - -c

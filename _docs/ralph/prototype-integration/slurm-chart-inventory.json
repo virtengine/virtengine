@@ -1,6 +1,6 @@
 {
   "schema_version": "virtengine.prototype.slurm-chart-inventory/v2",
-  "checkpoint": "T4-07B",
+  "checkpoint": "T4-07C",
   "status": "blocked",
   "validation_mode": "executable-semantic",
   "research_scope": {
@@ -52,7 +52,7 @@
   },
   "semantic_report": {
     "path": "_docs/ralph/prototype-integration/slurm-chart-semantic-report.json",
-    "sha256": "45f6c327d1440897d920ab511be77a5b833290ded7c086e520587df9c6e8e314",
+    "sha256": "268d7b66c9cc9da80f71df66e4ce0e1f8f09ab41d55cced8d9bb13d994b58e15",
     "source": "deploy/slurm/slurm-cluster",
     "generated_by": "python scripts/validate_slurm_chart_semantics.py --chart deploy/slurm/slurm-cluster --diagnostic --json"
   },
@@ -85,10 +85,17 @@
     },
     {
       "id": "immutable-images",
-      "status": "violated",
-      "requirement": "Every production workload image is pinned by digest.",
-      "evidence": ["deploy/slurm/slurm-cluster/values.yaml"],
-      "blocker": "Canonical defaults select image tags without sha256 digests."
+      "status": "satisfied",
+      "requirement": "Every enabled production workload, init container, and sidecar image is an explicit complete repository@sha256:<lowercase64> reference.",
+      "evidence": [
+        "deploy/slurm/slurm-cluster/templates/_helpers.tpl",
+        "deploy/slurm/slurm-cluster/values.schema.json",
+        "deploy/slurm/slurm-cluster/values.yaml",
+        "deploy/slurm/slurm-cluster/tests/stable-secrets-values.yaml",
+        "scripts/validate_slurm_chart_semantics_test.py",
+        "tests/integration/hpc/slurm_k8s_test.go"
+      ],
+      "blocker": null
     },
     {
       "id": "least-privilege",
@@ -119,7 +126,6 @@
   "blockers": [
     "retire-source:_build/helm/slurm-cluster",
     "invariant:replica-capacity-equality",
-    "invariant:immutable-images",
     "invariant:least-privilege",
     "invariant:durable-state",
     "dependency:84B",
