@@ -85,7 +85,7 @@ func (k Keeper) recordSSOAttestationSubmission(
 		att.LinkedAccountAddress,
 		att.OIDCIssuer+":"+att.SubjectHash,
 		string(att.ProviderType),
-		att.OIDCNonce,
+		nonceHash,
 	); err != nil {
 		return err
 	}
