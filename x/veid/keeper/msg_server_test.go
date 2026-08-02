@@ -5,6 +5,7 @@ import (
 	"crypto/ed25519"
 	"crypto/rand"
 	"crypto/sha256"
+	"fmt"
 	"testing"
 	"time"
 
@@ -653,6 +654,68 @@ func (s *MsgServerTestSuite) TestMsgRebindWallet_Success() {
 	wallet, found := s.keeper.GetWallet(s.ctx, address)
 	s.Require().True(found)
 	s.Require().Equal([]byte(newKP.pub), wallet.BindingPubKey)
+}
+
+func (s *MsgServerTestSuite) TestMsgUpdateDerivedFeatures_RequiresBondedValidator() {
+	testCases := []struct {
+		name             string
+		setStakingKeeper bool
+		addValidator     bool
+		status           stakingtypes.BondStatus
+	}{
+		{name: "nil staking keeper"},
+		{name: "non-validator", setStakingKeeper: true},
+		{name: "unbonding validator", setStakingKeeper: true, addValidator: true, status: stakingtypes.Unbonding},
+		{name: "unbonded validator", setStakingKeeper: true, addValidator: true, status: stakingtypes.Unbonded},
+	}
+
+	for index, testCase := range testCases {
+		s.Run(testCase.name, func() {
+			target := sdk.AccAddress([]byte(fmt.Sprintf("derived-target-%02d", index)))
+			s.createWalletWithKey(target, generateTestKeyPair())
+			sender := sdk.AccAddress([]byte(fmt.Sprintf("derived-sender-%02d", index)))
+			if !testCase.setStakingKeeper {
+				s.keeper.SetStakingKeeper(nil)
+			} else {
+				stakingKeeper := NewMockStakingKeeper()
+				if testCase.addValidator {
+					stakingKeeper.AddValidator(sdk.ValAddress(sender), testCase.status)
+				}
+				s.keeper.SetStakingKeeper(stakingKeeper)
+			}
+			s.msgServer = keeper.NewMsgServerImpl(s.keeper)
+
+			msg := &types.MsgUpdateDerivedFeatures{
+				Sender: sender.String(), AccountAddress: target.String(), ModelVersion: "model-v1",
+				FaceEmbeddingHash: bytes.Repeat([]byte{1}, 32),
+			}
+			_, err := s.msgServer.UpdateDerivedFeatures(s.ctx, msg)
+			s.Require().ErrorIs(err, types.ErrValidatorOnly)
+			wallet, found := s.keeper.GetWallet(s.ctx, target)
+			s.Require().True(found)
+			s.Require().Empty(wallet.DerivedFeatures.FaceEmbeddingHash)
+			s.Require().Empty(wallet.DerivedFeatures.ComputedBy)
+		})
+	}
+
+	target := sdk.AccAddress([]byte("derived-feature-target"))
+	s.createWalletWithKey(target, generateTestKeyPair())
+	stakingKeeper := NewMockStakingKeeper()
+	validator := sdk.AccAddress([]byte("derived-validator-01"))
+	stakingKeeper.AddValidator(sdk.ValAddress(validator), stakingtypes.Bonded)
+	s.keeper.SetStakingKeeper(stakingKeeper)
+	s.msgServer = keeper.NewMsgServerImpl(s.keeper)
+	msg := &types.MsgUpdateDerivedFeatures{
+		Sender: validator.String(), AccountAddress: target.String(), ModelVersion: "model-v1",
+		FaceEmbeddingHash: bytes.Repeat([]byte{1}, 32),
+	}
+	response, err := s.msgServer.UpdateDerivedFeatures(s.ctx, msg)
+	s.Require().NoError(err)
+	s.Require().NotNil(response)
+	wallet, found := s.keeper.GetWallet(s.ctx, target)
+	s.Require().True(found)
+	s.Require().Equal(msg.FaceEmbeddingHash, wallet.DerivedFeatures.FaceEmbeddingHash)
+	s.Require().Equal(validator.String(), wallet.DerivedFeatures.ComputedBy)
 }
 
 // Test: MsgUpdateBorderlineParams - unauthorized
