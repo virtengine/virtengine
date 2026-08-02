@@ -53,24 +53,33 @@ func TestInferenceReceiptRejectsTamperedFields(t *testing.T) {
 	require.NoError(t, base.Sign(priv))
 
 	tamperCases := map[string]func(*InferenceReceipt){
-		"domain":         func(r *InferenceReceipt) { r.Domain = "wrong" },
-		"chain":          func(r *InferenceReceipt) { r.ChainID = "other-chain" },
-		"account":        func(r *InferenceReceipt) { r.AccountAddress = "other-account" },
-		"request":        func(r *InferenceReceipt) { r.RequestID = "other-request" },
-		"scope_order":    func(r *InferenceReceipt) { r.ScopeIDs = []string{"scope-b", "scope-a"} },
-		"input":          func(r *InferenceReceipt) { r.InputDigest[0] ^= 0x01 },
-		"feature":        func(r *InferenceReceipt) { r.FeatureDigest[0] ^= 0x01 },
-		"schema":         func(r *InferenceReceipt) { r.SchemaDigest[0] ^= 0x01 },
-		"manifest":       func(r *InferenceReceipt) { r.ModelManifestDigest[0] ^= 0x01 },
-		"model":          func(r *InferenceReceipt) { r.ModelDigest[0] ^= 0x01 },
-		"runtime":        func(r *InferenceReceipt) { r.RuntimeDigest[0] ^= 0x01 },
-		"config":         func(r *InferenceReceipt) { r.ConfigDigest[0] ^= 0x01 },
-		"profile":        func(r *InferenceReceipt) { r.DeterminismProfile.ForceCPU = false },
-		"score":          func(r *InferenceReceipt) { r.Score = MaxScore + 1 },
-		"status":         func(r *InferenceReceipt) { r.Status = VerificationResultStatus("unknown") },
-		"confidence":     func(r *InferenceReceipt) { r.ConfidenceMillionths = InferenceReceiptMaxConfidencePPM + 1 },
-		"reasons":        func(r *InferenceReceipt) { r.ReasonCodes = []ReasonCode{ReasonCodeSuccess, ReasonCodeSuccess} },
-		"unknown_reason": func(r *InferenceReceipt) { r.ReasonCodes = []ReasonCode{"NOT_CANONICAL"} },
+		"domain":                    func(r *InferenceReceipt) { r.Domain = "wrong" },
+		"version":                   func(r *InferenceReceipt) { r.Version++ },
+		"chain":                     func(r *InferenceReceipt) { r.ChainID = "other-chain" },
+		"account":                   func(r *InferenceReceipt) { r.AccountAddress = "other-account" },
+		"request":                   func(r *InferenceReceipt) { r.RequestID = "other-request" },
+		"scope_order":               func(r *InferenceReceipt) { r.ScopeIDs = []string{"scope-b", "scope-a"} },
+		"nonce":                     func(r *InferenceReceipt) { r.Nonce = "other-nonce" },
+		"input":                     func(r *InferenceReceipt) { r.InputDigest[0] ^= 0x01 },
+		"feature":                   func(r *InferenceReceipt) { r.FeatureDigest[0] ^= 0x01 },
+		"schema":                    func(r *InferenceReceipt) { r.SchemaDigest[0] ^= 0x01 },
+		"lineage":                   func(r *InferenceReceipt) { r.EvidenceLineageDigest[0] ^= 0x01 },
+		"manifest":                  func(r *InferenceReceipt) { r.ModelManifestDigest[0] ^= 0x01 },
+		"model":                     func(r *InferenceReceipt) { r.ModelDigest[0] ^= 0x01 },
+		"runtime_image":             func(r *InferenceReceipt) { r.RuntimeImageDigest[0] ^= 0x01 },
+		"runtime":                   func(r *InferenceReceipt) { r.RuntimeDigest[0] ^= 0x01 },
+		"config":                    func(r *InferenceReceipt) { r.ConfigDigest[0] ^= 0x01 },
+		"profile_force_cpu":         func(r *InferenceReceipt) { r.DeterminismProfile.ForceCPU = false },
+		"profile_random_seed":       func(r *InferenceReceipt) { r.DeterminismProfile.RandomSeed++ },
+		"profile_deterministic_ops": func(r *InferenceReceipt) { r.DeterminismProfile.DeterministicOps = false },
+		"profile_inter_op_threads":  func(r *InferenceReceipt) { r.DeterminismProfile.InterOpThreads++ },
+		"profile_intra_op_threads":  func(r *InferenceReceipt) { r.DeterminismProfile.IntraOpThreads++ },
+		"profile_disable_gpu":       func(r *InferenceReceipt) { r.DeterminismProfile.DisableGPU = false },
+		"score":                     func(r *InferenceReceipt) { r.Score = MaxScore + 1 },
+		"status":                    func(r *InferenceReceipt) { r.Status = VerificationResultStatus("unknown") },
+		"confidence":                func(r *InferenceReceipt) { r.ConfidenceMillionths = InferenceReceiptMaxConfidencePPM + 1 },
+		"reasons":                   func(r *InferenceReceipt) { r.ReasonCodes = []ReasonCode{ReasonCodeSuccess, ReasonCodeSuccess} },
+		"unknown_reason":            func(r *InferenceReceipt) { r.ReasonCodes = []ReasonCode{"NOT_CANONICAL"} },
 		"failed_success": func(r *InferenceReceipt) {
 			r.Status = VerificationResultStatusFailed
 			r.Score = 0
@@ -79,6 +88,13 @@ func TestInferenceReceiptRejectsTamperedFields(t *testing.T) {
 		"issued_height":   func(r *InferenceReceipt) { r.IssuedHeight = 0 },
 		"expiry_height":   func(r *InferenceReceipt) { r.ExpiresHeight = r.IssuedHeight },
 		"issued_time":     func(r *InferenceReceipt) { r.IssuedAt = time.Time{} },
+		"expires_at":      func(r *InferenceReceipt) { r.ExpiresAt = r.IssuedAt },
+		"issued_precision": func(r *InferenceReceipt) {
+			r.IssuedAt = r.IssuedAt.Add(time.Nanosecond)
+		},
+		"expires_precision": func(r *InferenceReceipt) {
+			r.ExpiresAt = r.ExpiresAt.Add(time.Nanosecond)
+		},
 		"signer_key":      func(r *InferenceReceipt) { r.SignerKeyID = "other-key" },
 		"fingerprint":     func(r *InferenceReceipt) { r.SignerFingerprint = "not-hex" },
 		"signer_sequence": func(r *InferenceReceipt) { r.SignerSequence = 0 },
@@ -90,6 +106,33 @@ func TestInferenceReceiptRejectsTamperedFields(t *testing.T) {
 			require.Error(t, receipt.VerifySignature(pub))
 		})
 	}
+}
+
+func TestInferenceReceiptRejectsSubsecondTamperBeforeSignatureVerification(t *testing.T) {
+	pub, priv := deterministicReceiptKey(t)
+	receipt := testInferenceReceipt(t, pub)
+	require.NoError(t, receipt.Sign(priv))
+	receipt.ExpiresAt = receipt.ExpiresAt.Add(time.Nanosecond)
+	receipt.Signature[0] ^= 0xff
+
+	require.ErrorContains(t, receipt.VerifySignature(pub), "second-aligned")
+}
+
+func TestInferenceReceiptLifetimeBoundaries(t *testing.T) {
+	pub, priv := deterministicReceiptKey(t)
+	base := testInferenceReceipt(t, pub)
+	base.ExpiresAt = base.IssuedAt.Add(InferenceReceiptMaxLifetime)
+	base.ExpiresHeight = base.IssuedHeight + InferenceReceiptMaxHeightLifetime
+	require.NoError(t, base.Sign(priv))
+	require.NoError(t, base.Validate())
+
+	overTime := cloneInferenceReceipt(base)
+	overTime.ExpiresAt = overTime.ExpiresAt.Add(time.Second)
+	require.ErrorContains(t, overTime.Validate(), "lifetime exceeds")
+
+	overHeight := cloneInferenceReceipt(base)
+	overHeight.ExpiresHeight++
+	require.ErrorContains(t, overHeight.Validate(), "height lifetime exceeds")
 }
 
 func TestCanonicalInferenceDeterminismProfile(t *testing.T) {

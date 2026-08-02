@@ -24,9 +24,7 @@ const (
 	inferenceReceiptModelDomain   = "VEID_INFERENCE_MODEL_ENTRIES_V1"
 	inferenceReceiptReplayDomain  = "VEID_INFERENCE_RECEIPT_REPLAY_NONCE_V1"
 
-	inferenceReceiptMaxAge            = 5 * time.Minute
-	inferenceReceiptMaxLifetime       = 10 * time.Minute
-	inferenceReceiptMaxHeightLifetime = int64(2)
+	inferenceReceiptMaxAge = 5 * time.Minute
 )
 
 type inferenceReceiptExpectations struct {
@@ -491,13 +489,13 @@ func validateInferenceReceiptFreshness(ctx sdk.Context, request *types.Verificat
 	if !receipt.ExpiresAt.UTC().After(now) {
 		return types.ErrInvalidTimestamp.Wrap("inference receipt is expired")
 	}
-	if receipt.ExpiresAt.UTC().Sub(receipt.IssuedAt.UTC()) > inferenceReceiptMaxLifetime {
+	if receipt.ExpiresAt.UTC().Sub(receipt.IssuedAt.UTC()) > types.InferenceReceiptMaxLifetime {
 		return types.ErrInvalidTimestamp.Wrap("inference receipt lifetime exceeds maximum")
 	}
 	if receipt.ExpiresHeight <= ctx.BlockHeight() {
 		return types.ErrInvalidTimestamp.Wrap("inference receipt expiry height is expired")
 	}
-	if receipt.ExpiresHeight-receipt.IssuedHeight > inferenceReceiptMaxHeightLifetime {
+	if receipt.ExpiresHeight-receipt.IssuedHeight > types.InferenceReceiptMaxHeightLifetime {
 		return types.ErrInvalidTimestamp.Wrap("inference receipt height lifetime exceeds maximum")
 	}
 	return nil

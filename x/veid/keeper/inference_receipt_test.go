@@ -142,7 +142,7 @@ func TestVerifyInferenceReceiptRejectsBoundaryAndFreshnessWithoutMutation(t *tes
 		}, "not current"},
 		{"past_height", func(ctx sdk.Context, _ *types.VerificationRequest, r *types.InferenceReceipt) {
 			r.IssuedHeight = ctx.BlockHeight() - 1
-		}, "not current"},
+		}, "height lifetime"},
 		{"expired_time", func(ctx sdk.Context, _ *types.VerificationRequest, r *types.InferenceReceipt) {
 			r.IssuedAt = ctx.BlockTime().Add(-2 * time.Minute)
 			r.ExpiresAt = ctx.BlockTime().Add(-time.Minute)
@@ -151,10 +151,10 @@ func TestVerifyInferenceReceiptRejectsBoundaryAndFreshnessWithoutMutation(t *tes
 			r.ExpiresHeight = ctx.BlockHeight()
 		}, "height bounds"},
 		{"overlong_time", func(_ sdk.Context, _ *types.VerificationRequest, r *types.InferenceReceipt) {
-			r.ExpiresAt = r.IssuedAt.Add(inferenceReceiptMaxLifetime + time.Second)
+			r.ExpiresAt = r.IssuedAt.Add(types.InferenceReceiptMaxLifetime + time.Second)
 		}, "lifetime"},
 		{"overlong_height", func(_ sdk.Context, _ *types.VerificationRequest, r *types.InferenceReceipt) {
-			r.ExpiresHeight = r.IssuedHeight + inferenceReceiptMaxHeightLifetime + 1
+			r.ExpiresHeight = r.IssuedHeight + types.InferenceReceiptMaxHeightLifetime + 1
 		}, "height lifetime"},
 		{"bad_signature", func(_ sdk.Context, _ *types.VerificationRequest, r *types.InferenceReceipt) { r.Signature[0] ^= 0xff }, "signature"},
 	}
