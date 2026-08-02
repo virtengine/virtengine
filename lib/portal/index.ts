@@ -404,6 +404,9 @@ export {
   providerDeploymentActions,
   ProviderDeploymentActionError,
   validateProviderDeploymentActionReceipt,
+  ProviderShellSessionError,
+  buildProviderShellWebSocketUrl,
+  validateProviderShellSessionReceipt,
 } from "./src/provider-api";
 export type {
   ProviderAPIClientOptions,
@@ -418,7 +421,6 @@ export type {
   ServiceStatus,
   DeploymentListResponse,
   DeploymentAction,
-  ShellSessionResponse,
   ProviderAPIErrorDetails,
   ProviderDeploymentAction,
   ProviderDeploymentActionStatus,
@@ -429,6 +431,11 @@ export type {
   ProviderDeploymentTxEvidenceValidator,
   ProviderDeploymentActionValidationContext,
   ProviderDeploymentActionReceiptValidator,
+  ProviderShellSessionErrorCode,
+  ProviderShellSessionCapability,
+  ProviderShellSessionReceipt,
+  ShellEligibilityProjection,
+  ShellSessionValidationContext,
 } from "./src/provider-api";
 
 export { signRequest } from "./src/auth/wallet-sign";

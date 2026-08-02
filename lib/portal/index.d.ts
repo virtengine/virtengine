@@ -278,6 +278,13 @@ export const prefersReducedMotion: any;
 export const PricingEditor: any;
 export const ProviderAPIClient: any;
 export const ProviderAPIError: any;
+export class ProviderShellSessionError extends Error {
+  readonly code: ProviderShellSessionErrorCode;
+  readonly cause?: unknown;
+  constructor(code: ProviderShellSessionErrorCode, message: string, cause?: unknown);
+}
+export const buildProviderShellWebSocketUrl: any;
+export const validateProviderShellSessionReceipt: any;
 export const providerDeploymentActions: readonly [
   "start",
   "stop",
@@ -568,7 +575,11 @@ export type SessionConfig = any;
 export type SessionInfo = any;
 export type SessionToken = any;
 export type SettlementSummary = any;
-export type ShellSessionResponse = any;
+export type ProviderShellSessionErrorCode = any;
+export type ProviderShellSessionCapability = any;
+export type ProviderShellSessionReceipt = any;
+export type ShellEligibilityProjection = any;
+export type ShellSessionValidationContext = any;
 export type SignedRequestHeaders = any;
 export type SigningResult = any;
 export type SignRequestOptions = any;
@@ -585,6 +596,9 @@ export type UsageMonitorProps = any;
 export type UsageRecord = any;
 export type UseAggregatedDeploymentsOptions = any;
 export type UseAggregatedMetricsOptions = any;
+export const useDeploymentShell: any;
+export type UseDeploymentShellOptions = any;
+export type UseDeploymentShellResult = any;
 export type VerificationRecord = any;
 export type VerificationScope = any;
 export type VerificationScopeType = any;

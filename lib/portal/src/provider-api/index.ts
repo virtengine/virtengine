@@ -10,7 +10,6 @@ export type {
   ServiceStatus,
   DeploymentListResponse,
   DeploymentAction,
-  ShellSessionResponse,
   ProviderAPIErrorDetails,
 } from "./types";
 
@@ -22,6 +21,19 @@ export {
 } from "./client";
 
 export type { ProviderAPIClientOptions } from "./client";
+
+export {
+  ProviderShellSessionError,
+  buildProviderShellWebSocketUrl,
+  validateProviderShellSessionReceipt,
+} from "./shell-session";
+export type {
+  ProviderShellSessionErrorCode,
+  ProviderShellSessionCapability,
+  ProviderShellSessionReceipt,
+  ShellEligibilityProjection,
+  ShellSessionValidationContext,
+} from "./shell-session";
 
 export {
   providerDeploymentActions,

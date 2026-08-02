@@ -79,14 +79,6 @@ export type DeploymentAction =
   | "update"
   | "terminate";
 
-export interface ShellSessionResponse {
-  token: string;
-  expiresAt: string;
-  deployment: string;
-  container?: string;
-  sessionTtl?: number;
-}
-
 export interface ProviderAPIErrorDetails {
   code?: string;
   message?: string;

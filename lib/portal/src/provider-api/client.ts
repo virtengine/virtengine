@@ -9,8 +9,17 @@ import type {
   ProviderAPIErrorDetails,
   ProviderHealth,
   ResourceMetrics,
-  ShellSessionResponse,
 } from "./types";
+import {
+  buildProviderShellWebSocketUrl,
+  ProviderShellSessionError,
+  validateProviderShellSessionReceipt,
+} from "./shell-session";
+import type {
+  ProviderShellSessionCapability,
+  ProviderShellSessionReceipt,
+  ShellEligibilityProjection,
+} from "./shell-session";
 import {
   ProviderDeploymentActionError,
   validateProviderDeploymentActionReceipt,
@@ -41,6 +50,7 @@ export interface ProviderAPIClientOptions {
   deploymentActionCapability?: ProviderDeploymentActionCapability;
   deploymentActionReceiptValidator?: ProviderDeploymentActionReceiptValidator;
   deploymentTxEvidenceValidator?: ProviderDeploymentTxEvidenceValidator;
+  shellSessionCapability?: ProviderShellSessionCapability;
 }
 
 export interface ProviderAPIRequestOptions {
@@ -222,8 +232,7 @@ export class ShellConnection {
 
   constructor(url: string) {
     this.socket = new ReconnectingWebSocket(url, {
-      retryDelayMs: 1500,
-      maxRetries: 10,
+      maxRetries: 0,
     });
   }
 
@@ -276,6 +285,8 @@ export class ProviderAPIClient {
   private deploymentActionCapability?: ProviderDeploymentActionCapability;
   private deploymentActionReceiptValidator: ProviderDeploymentActionReceiptValidator;
   private deploymentTxEvidenceValidator?: ProviderDeploymentTxEvidenceValidator;
+  private shellSessionCapability?: ProviderShellSessionCapability;
+  private issuedShellReceipts = new WeakSet<ProviderShellSessionReceipt>();
 
   constructor(options: ProviderAPIClientOptions) {
     this.endpoint = options.endpoint.replace(/\/$/, "");
@@ -291,6 +302,7 @@ export class ProviderAPIClient {
       options.deploymentActionReceiptValidator ??
       validateProviderDeploymentActionReceipt;
     this.deploymentTxEvidenceValidator = options.deploymentTxEvidenceValidator;
+    this.shellSessionCapability = options.shellSessionCapability;
   }
 
   async health(): Promise<ProviderHealth> {
@@ -428,22 +440,54 @@ export class ProviderAPIClient {
   }
 
   async createShellSession(
-    leaseId: string,
-    container?: string,
-  ): Promise<ShellSessionResponse> {
-    const response = await this.request<ShellSessionResponse>(
+    eligibility?: ShellEligibilityProjection,
+  ): Promise<ProviderShellSessionReceipt> {
+    if (!eligibility) {
+      return validateProviderShellSessionReceipt(undefined, {
+        eligibility,
+        capability: this.shellSessionCapability,
+        providerEndpoint: this.endpoint,
+      });
+    }
+    if (!this.shellSessionCapability) {
+      return validateProviderShellSessionReceipt(undefined, {
+        eligibility,
+        capability: this.shellSessionCapability,
+        providerEndpoint: this.endpoint,
+      });
+    }
+    if (!this.providerId || this.providerId !== eligibility.providerId) {
+      throw new ProviderShellSessionError(
+        "receipt_mismatch",
+        "Shell eligibility does not match this provider",
+      );
+    }
+    const response = await this.request<unknown>(
       "POST",
-      `/api/v1/deployments/${leaseId}/shell/session`,
+      `/api/v1/deployments/${eligibility.deploymentId}/shell/session`,
       {
-        body: container ? { container } : {},
+        retry: false,
+        body: {
+          container: eligibility.container,
+          account: eligibility.account,
+          provider_id: eligibility.providerId,
+          chain_id: eligibility.chainId,
+          eligibility_session_id: eligibility.sessionId,
+          policy_epoch: eligibility.policyEpoch,
+          status_epoch: eligibility.statusEpoch,
+          capability_digest: eligibility.capabilityDigest,
+          policy_digest: eligibility.policyDigest,
+        },
       },
     );
-
-    return {
-      ...response,
-      expiresAt: response.expiresAt ?? (response as any).expires_at,
-      sessionTtl: response.sessionTtl ?? (response as any).session_ttl,
-    };
+    const receipt = validateProviderShellSessionReceipt(response, {
+      eligibility,
+      capability: this.shellSessionCapability,
+      providerEndpoint: this.endpoint,
+    });
+    Object.freeze(receipt);
+    this.issuedShellReceipts.add(receipt);
+    return receipt;
   }
 
   async connectLogStream(
@@ -464,19 +508,20 @@ export class ProviderAPIClient {
     return new LogStream(url);
   }
 
-  async connectShell(
-    leaseId: string,
-    sessionToken?: string,
-    container?: string,
-  ): Promise<ShellConnection> {
-    const query = buildQuery({
-      token: sessionToken,
-      container,
-    });
-    const url = await this.buildWebSocketUrl(
-      `/api/v1/deployments/${leaseId}/shell${query}`,
+  connectShell(receipt: ProviderShellSessionReceipt): ShellConnection {
+    if (!this.issuedShellReceipts.delete(receipt)) {
+      throw new ProviderShellSessionError(
+        "receipt_invalid",
+        "Shell session receipt was not issued by this client or was already consumed",
+      );
+    }
+    return new ShellConnection(
+      buildProviderShellWebSocketUrl(
+        this.endpoint,
+        receipt.deploymentId,
+        receipt,
+      ),
     );
-    return new ShellConnection(url);
   }
 
   private normalizeDeployment = (

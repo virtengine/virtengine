@@ -18,6 +18,12 @@ import type { WalletContextValue } from '../../../lib/portal';
 
 export { PortalProvider, usePortal } from '../../../lib/portal';
 export type { PortalProviderProps, PortalConfig, WalletContextValue } from '../../../lib/portal';
+export { useDeploymentShell, ProviderShellSessionError } from '../../../lib/portal';
+export type {
+  ProviderShellSessionCapability,
+  ShellEligibilityProjection,
+  UseDeploymentShellResult,
+} from '../../../lib/portal';
 
 // ============================================================================
 // Chat Agent (VE-70D)
@@ -349,7 +355,6 @@ export type {
   ServiceStatus,
   DeploymentListResponse,
   DeploymentAction,
-  ShellSessionResponse,
   ProviderAPIErrorDetails,
   ProviderDeploymentAction,
   ProviderDeploymentActionStatus,

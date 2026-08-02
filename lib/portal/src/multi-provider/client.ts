@@ -7,6 +7,11 @@ import type {
   ProviderDeploymentActionReceipt,
 } from "../provider-api/deployment-actions";
 import type {
+  ProviderShellSessionCapability,
+  ShellEligibilityProjection,
+} from "../provider-api/shell-session";
+import { ProviderShellSessionError } from "../provider-api/shell-session";
+import type {
   AggregatedMetrics,
   DeploymentWithProvider,
   MultiProviderClientOptions,
@@ -105,6 +110,7 @@ export class MultiProviderClient {
   private readonly deploymentActionCapability?: MultiProviderClientOptions["deploymentActionCapability"];
   private readonly deploymentActionReceiptValidator?: MultiProviderClientOptions["deploymentActionReceiptValidator"];
   private readonly deploymentTxEvidenceValidator?: MultiProviderClientOptions["deploymentTxEvidenceValidator"];
+  private readonly shellSessionCapability?: MultiProviderClientOptions["shellSessionCapability"];
   private readonly deploymentActionReceiptProjector: NonNullable<
     MultiProviderClientOptions["deploymentActionReceiptProjector"]
   >;
@@ -128,6 +134,7 @@ export class MultiProviderClient {
     this.deploymentActionReceiptValidator =
       options.deploymentActionReceiptValidator;
     this.deploymentTxEvidenceValidator = options.deploymentTxEvidenceValidator;
+    this.shellSessionCapability = options.shellSessionCapability;
     this.deploymentActionReceiptProjector =
       options.deploymentActionReceiptProjector ??
       ((receipt, context) => {
@@ -193,6 +200,7 @@ export class MultiProviderClient {
         this.resolveDeploymentActionCapability(provider),
       deploymentActionReceiptValidator: this.deploymentActionReceiptValidator,
       deploymentTxEvidenceValidator: this.deploymentTxEvidenceValidator,
+      shellSessionCapability: this.resolveShellSessionCapability(provider),
     });
     this.clients.set(address, client);
     return client;
@@ -393,11 +401,14 @@ export class MultiProviderClient {
     return client.connectLogStream(deploymentId);
   }
 
-  async connectShell(
-    deploymentId: string,
-    sessionToken?: string,
-    container?: string,
-  ) {
+  async connectShell(eligibility?: ShellEligibilityProjection) {
+    if (!eligibility) {
+      throw new ProviderShellSessionError(
+        "eligibility_unavailable",
+        "Authoritative shell eligibility is unavailable",
+      );
+    }
+    const deploymentId = eligibility.deploymentId;
     const providerId = await this.resolveDeploymentProvider(deploymentId);
     if (!providerId) {
       throw new Error(`Unknown deployment: ${deploymentId}`);
@@ -407,8 +418,17 @@ export class MultiProviderClient {
     if (!client) {
       throw new Error(`No client for provider ${providerId}`);
     }
-
-    return client.connectShell(deploymentId, sessionToken, container);
+    if (providerId !== eligibility.providerId) {
+      throw new ProviderShellSessionError(
+        "receipt_mismatch",
+        "Shell eligibility does not match the resolved deployment provider",
+      );
+    }
+    const receipt = await client.createShellSession(eligibility);
+    return {
+      connection: client.connectShell(receipt),
+      expiresAt: receipt.expiresAt,
+    };
   }
 
   async performAction(
@@ -448,6 +468,14 @@ export class MultiProviderClient {
       ? this.deploymentActionCapability(provider)
       : (this.deploymentActionCapability ??
           provider.deploymentActionCapability);
+  }
+
+  private resolveShellSessionCapability(
+    provider: ProviderRecord,
+  ): ProviderShellSessionCapability | undefined {
+    return typeof this.shellSessionCapability === "function"
+      ? this.shellSessionCapability(provider)
+      : (this.shellSessionCapability ?? provider.shellSessionCapability);
   }
 
   private async resolveDeploymentProvider(
@@ -527,6 +555,20 @@ export class MultiProviderClient {
           "deployment_action_requires_chain_signing",
           "deployment-action-requires-chain-signing",
         ]);
+        const shellReceiptVersion = pickAttribute(attrs, [
+          "shell_session_receipt_version",
+          "shell-session-receipt-version",
+        ]);
+        const shellTransport = pickAttribute(attrs, [
+          "shell_session_transport",
+          "shell-session-transport",
+        ]);
+        const shellMaxTtl = Number(
+          pickAttribute(attrs, [
+            "shell_session_max_ttl_seconds",
+            "shell-session-max-ttl-seconds",
+          ]),
+        );
 
         return {
           address: provider.owner,
@@ -542,6 +584,18 @@ export class MultiProviderClient {
               ? {
                   receiptVersion: "v1" as const,
                   requiresChainSigning: requiresChainSigning === "true",
+                }
+              : undefined,
+          shellSessionCapability:
+            shellReceiptVersion === "v1" &&
+            (shellTransport === "one_time_reference" ||
+              shellTransport === "server_url") &&
+            Number.isFinite(shellMaxTtl) &&
+            shellMaxTtl > 0
+              ? {
+                  receiptVersion: "v1" as const,
+                  transport: shellTransport,
+                  maxTtlSeconds: shellMaxTtl,
                 }
               : undefined,
         };

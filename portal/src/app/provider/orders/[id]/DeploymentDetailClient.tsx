@@ -78,10 +78,6 @@ export default function DeploymentDetailClient() {
     () => deployment?.containers.map((container) => container.name) ?? [],
     [deployment]
   );
-  const minShellScore = 70;
-  const veidScore = 42;
-  const hasShellAccess = veidScore >= minShellScore;
-
   useEffect(() => {
     void fetchDeployment(id);
   }, [fetchDeployment, id]);
@@ -393,22 +389,8 @@ export default function DeploymentDetailClient() {
             <div className="mt-6 h-[420px]">
               {activePanel === 'logs' ? (
                 <LogViewer deploymentId={id} containerName={activeContainer} />
-              ) : hasShellAccess ? (
-                <ShellTerminal deploymentId={id} containerName={activeContainer} />
               ) : (
-                <div className="flex h-full flex-col items-center justify-center rounded-lg border border-dashed border-border text-center">
-                  <h3 className="text-sm font-semibold">VEID verification required</h3>
-                  <p className="mt-2 text-sm text-muted-foreground">
-                    Shell access is available once your VEID score reaches {minShellScore}.
-                  </p>
-                  <p className="mt-1 text-xs text-muted-foreground">Current score: {veidScore}</p>
-                  <Link
-                    href="/identity"
-                    className="mt-4 rounded-full border border-border px-4 py-2 text-sm text-muted-foreground hover:border-primary hover:text-primary"
-                  >
-                    Continue verification
-                  </Link>
-                </div>
+                <ShellTerminal deploymentId={id} containerName={activeContainer} />
               )}
             </div>
           </div>

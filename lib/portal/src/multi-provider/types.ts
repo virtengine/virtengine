@@ -7,6 +7,7 @@ import type {
   ProviderDeploymentActionReceiptValidator,
   ProviderDeploymentTxEvidenceValidator,
 } from "../provider-api/deployment-actions";
+import type { ProviderShellSessionCapability } from "../provider-api/shell-session";
 
 export type ProviderStatus = "online" | "offline" | "unknown";
 
@@ -21,6 +22,7 @@ export interface ProviderRecord {
   metadata?: Record<string, unknown>;
   error?: string;
   deploymentActionCapability?: ProviderDeploymentActionCapability;
+  shellSessionCapability?: ProviderShellSessionCapability;
 }
 
 export interface DeploymentWithProvider extends Deployment {
@@ -59,6 +61,11 @@ export interface MultiProviderClientOptions {
       ) => ProviderDeploymentActionCapability | undefined);
   deploymentActionReceiptValidator?: ProviderDeploymentActionReceiptValidator;
   deploymentTxEvidenceValidator?: ProviderDeploymentTxEvidenceValidator;
+  shellSessionCapability?:
+    | ProviderShellSessionCapability
+    | ((
+        provider: ProviderRecord,
+      ) => ProviderShellSessionCapability | undefined);
   deploymentActionReceiptProjector?: (
     receipt: ProviderDeploymentActionReceipt,
     context: {
