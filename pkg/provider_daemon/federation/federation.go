@@ -263,6 +263,9 @@ func (signed SignedDiscoveryDocument) Verify(record ServiceRecord, previous *Dis
 	if err := record.Validate(); err != nil {
 		return err
 	}
+	if record.State != StateFixtureOnly {
+		return errors.New("disabled federation service cannot authenticate discovery")
+	}
 	canonical, err := signed.Document.CanonicalBytes()
 	if err != nil {
 		return err
@@ -523,9 +526,15 @@ func (policy RoutePolicy) Validate() error {
 	return nil
 }
 
-func (policy RoutePolicy) Authorize(binding RequestBinding, document DiscoveryDocument, bodyBytes uint64, now time.Time) error {
+func (policy RoutePolicy) Authorize(record ServiceRecord, binding RequestBinding, document DiscoveryDocument, bodyBytes uint64, now time.Time) error {
 	if err := policy.Validate(); err != nil {
 		return err
+	}
+	if err := record.Validate(); err != nil {
+		return err
+	}
+	if record.State != StateFixtureOnly {
+		return errors.New("disabled federation service cannot authorize requests")
 	}
 	if err := binding.Validate(); err != nil {
 		return err
@@ -549,7 +558,9 @@ func (policy RoutePolicy) Authorize(binding RequestBinding, document DiscoveryDo
 		return errors.New("request timestamp outside policy window")
 	}
 	discoveryDigest, err := document.Digest()
-	if err != nil || binding.DiscoveryDigest != discoveryDigest {
+	if err != nil || binding.DiscoveryDigest != discoveryDigest || record.DiscoveryDigest != discoveryDigest ||
+		record.ProviderID != document.ProviderID || record.ServiceID != document.ServiceID || record.Revision != document.Revision ||
+		record.ActiveKeyEpoch != document.SigningKeyEpoch || binding.SigningKeyEpoch != record.ActiveKeyEpoch {
 		return errors.New("request discovery digest mismatch")
 	}
 	epoch, ok := findKeyEpoch(document.KeyEpochs, binding.SigningKeyEpoch)
@@ -563,14 +574,14 @@ type AtomicNonceStore interface {
 	WithNonce(ctx context.Context, scope, nonce string, protected func() error) error
 }
 
-func VerifyAndConsume(ctx context.Context, store AtomicNonceStore, policy RoutePolicy, binding RequestBinding, document DiscoveryDocument, body []byte, now time.Time, signature []byte, protected func() error) error {
+func VerifyAndConsume(ctx context.Context, store AtomicNonceStore, policy RoutePolicy, record ServiceRecord, binding RequestBinding, document DiscoveryDocument, body []byte, now time.Time, signature []byte, protected func() error) error {
 	if store == nil || protected == nil {
 		return errors.New("atomic nonce store and protected operation are required")
 	}
 	if uint64(len(body)) > policy.MaxBodyBytes || sha256.Sum256(body) != binding.BodySHA256 {
 		return errors.New("request body mismatch")
 	}
-	if err := policy.Authorize(binding, document, uint64(len(body)), now); err != nil {
+	if err := policy.Authorize(record, binding, document, uint64(len(body)), now); err != nil {
 		return err
 	}
 	canonical, err := binding.CanonicalBytes()

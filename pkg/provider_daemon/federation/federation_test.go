@@ -53,6 +53,14 @@ func TestSignedDiscoveryValidationAndRollback(t *testing.T) {
 	if err := signed.Verify(record, nil, now); err != nil {
 		t.Fatalf("valid discovery rejected: %v", err)
 	}
+	disabled := record
+	disabled.State = StateDisabled
+	if err := disabled.Validate(); err != nil {
+		t.Fatalf("disabled service record is not structurally valid: %v", err)
+	}
+	if err := signed.Verify(disabled, nil, now); err == nil {
+		t.Fatal("disabled service record authenticated discovery")
+	}
 	if err := signed.Verify(record, nil, document.ExpiresAt); err == nil {
 		t.Fatal("stale discovery accepted")
 	}
@@ -127,9 +135,10 @@ func TestTrustProfilesAndOriginPolicy(t *testing.T) {
 func TestRequestPolicyBindings(t *testing.T) {
 	now := time.Unix(1_800_000_000, 0).UTC()
 	document, privateKey := fixtureDiscovery(now)
+	record := fixtureServiceRecord(t, document)
 	binding := fixtureBinding(t, document, now, []byte(`{"id":"order-1"}`), "nonce-bindings")
 	policy := fixtureRoutePolicy()
-	if err := policy.Authorize(binding, document, uint64(len(`{"id":"order-1"}`)), now); err != nil {
+	if err := policy.Authorize(record, binding, document, uint64(len(`{"id":"order-1"}`)), now); err != nil {
 		t.Fatalf("valid request rejected: %v", err)
 	}
 	tests := []struct {
@@ -150,23 +159,47 @@ func TestRequestPolicyBindings(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			candidate := binding
 			test.mutate(&candidate)
-			if err := policy.Authorize(candidate, document, uint64(len(`{"id":"order-1"}`)), now); err == nil {
+			if err := policy.Authorize(record, candidate, document, uint64(len(`{"id":"order-1"}`)), now); err == nil {
 				t.Fatal("mismatched request accepted")
 			}
 		})
 	}
 	canonical, _ := binding.CanonicalBytes()
 	signature := ed25519.Sign(privateKey, canonical)
-	if err := VerifyAndConsume(context.Background(), &nonceStore{}, policy, binding, document, []byte(`{"id":"tampered"}`), now, signature, func() error { return nil }); err == nil {
+	if err := VerifyAndConsume(context.Background(), &nonceStore{}, policy, record, binding, document, []byte(`{"id":"tampered"}`), now, signature, func() error { return nil }); err == nil {
 		t.Fatal("wrong body accepted")
 	}
-	if err := policy.Authorize(binding, document, policy.MaxBodyBytes+1, now); err == nil {
+	if err := policy.Authorize(record, binding, document, policy.MaxBodyBytes+1, now); err == nil {
 		t.Fatal("oversized body accepted")
 	}
 	missingCapability := document
 	missingCapability.Capabilities = []string{"orders.read"}
-	if err := policy.Authorize(binding, missingCapability, uint64(len(`{"id":"order-1"}`)), now); err == nil {
+	if err := policy.Authorize(record, binding, missingCapability, uint64(len(`{"id":"order-1"}`)), now); err == nil {
 		t.Fatal("request without required capability accepted")
+	}
+	disabled := record
+	disabled.State = StateDisabled
+	if err := policy.Authorize(disabled, binding, document, uint64(len(`{"id":"order-1"}`)), now); err == nil {
+		t.Fatal("disabled service record authorized request")
+	}
+	oldSeed := sha256.Sum256([]byte("virtengine-federation-retired-fixture-key-v1"))
+	oldPrivateKey := ed25519.NewKeyFromSeed(oldSeed[:])
+	overlap := document
+	overlap.KeyEpochs = append(overlap.KeyEpochs, KeyEpoch{
+		Epoch: 6, PublicKey: oldPrivateKey.Public().(ed25519.PublicKey),
+		NotBefore: now.Add(-2 * time.Hour), NotAfter: now.Add(30 * time.Minute),
+	})
+	overlapDigest, err := overlap.Digest()
+	if err != nil {
+		t.Fatalf("overlapping discovery digest: %v", err)
+	}
+	retired := binding
+	retired.SigningKeyEpoch = 6
+	retired.DiscoveryDigest = overlapDigest
+	overlapRecord := record
+	overlapRecord.DiscoveryDigest = overlapDigest
+	if err := policy.Authorize(overlapRecord, retired, overlap, uint64(len(`{"id":"order-1"}`)), now); err == nil {
+		t.Fatal("retired overlapping key epoch authorized request")
 	}
 	unauthenticated := policy
 	unauthenticated.Auth = AuthNone
@@ -178,29 +211,42 @@ func TestRequestPolicyBindings(t *testing.T) {
 func TestAtomicNonceConsumeOnSuccess(t *testing.T) {
 	now := time.Unix(1_800_000_000, 0).UTC()
 	document, privateKey := fixtureDiscovery(now)
+	record := fixtureServiceRecord(t, document)
 	body := []byte(`{"id":"order-1"}`)
 	binding := fixtureBinding(t, document, now, body, "nonce-atomic")
 	canonical, _ := binding.CanonicalBytes()
 	signature := ed25519.Sign(privateKey, canonical)
 	store := &nonceStore{}
+	disabled := record
+	disabled.State = StateDisabled
+	protectedCalled := false
+	if err := VerifyAndConsume(context.Background(), store, fixtureRoutePolicy(), disabled, binding, document, body, now, signature, func() error {
+		protectedCalled = true
+		return nil
+	}); err == nil {
+		t.Fatal("disabled service record consumed request")
+	}
+	if store.calls != 0 || protectedCalled {
+		t.Fatal("disabled request reached nonce store or protected mutation")
+	}
 	protectedErr := errors.New("protected mutation failed")
-	if err := VerifyAndConsume(context.Background(), store, fixtureRoutePolicy(), binding, document, body, now, signature, func() error { return protectedErr }); !errors.Is(err, protectedErr) {
+	if err := VerifyAndConsume(context.Background(), store, fixtureRoutePolicy(), record, binding, document, body, now, signature, func() error { return protectedErr }); !errors.Is(err, protectedErr) {
 		t.Fatalf("protected failure not returned: %v", err)
 	}
 	if len(store.used) != 0 {
 		t.Fatal("nonce burned when protected mutation failed")
 	}
-	if err := VerifyAndConsume(context.Background(), store, fixtureRoutePolicy(), binding, document, body, now, signature, func() error { return nil }); err != nil {
+	if err := VerifyAndConsume(context.Background(), store, fixtureRoutePolicy(), record, binding, document, body, now, signature, func() error { return nil }); err != nil {
 		t.Fatalf("valid retry rejected: %v", err)
 	}
-	if err := VerifyAndConsume(context.Background(), store, fixtureRoutePolicy(), binding, document, body, now, signature, func() error { return nil }); err == nil {
+	if err := VerifyAndConsume(context.Background(), store, fixtureRoutePolicy(), record, binding, document, body, now, signature, func() error { return nil }); err == nil {
 		t.Fatal("request replay accepted")
 	}
 	badSignature := append([]byte(nil), signature...)
 	badSignature[0] ^= 0xff
 	fresh := binding
 	fresh.Nonce = "nonce-invalid-proof"
-	if err := VerifyAndConsume(context.Background(), store, fixtureRoutePolicy(), fresh, document, body, now, badSignature, func() error { return nil }); err == nil {
+	if err := VerifyAndConsume(context.Background(), store, fixtureRoutePolicy(), record, fresh, document, body, now, badSignature, func() error { return nil }); err == nil {
 		t.Fatal("invalid signature accepted")
 	}
 	if store.calls != 3 {
@@ -337,6 +383,18 @@ func fixtureDiscovery(now time.Time) (DiscoveryDocument, ed25519.PrivateKey) {
 		IssuedAt: now.Add(-time.Minute), ExpiresAt: now.Add(30 * time.Minute), SigningKeyEpoch: 7,
 	}
 	return document, privateKey
+}
+
+func fixtureServiceRecord(t *testing.T, document DiscoveryDocument) ServiceRecord {
+	t.Helper()
+	digest, err := document.Digest()
+	if err != nil {
+		t.Fatalf("discovery digest: %v", err)
+	}
+	return ServiceRecord{
+		Version: Version1, ProviderID: document.ProviderID, ServiceID: document.ServiceID, Revision: document.Revision,
+		DiscoveryDigest: digest, ActiveKeyEpoch: document.SigningKeyEpoch, State: StateFixtureOnly,
+	}
 }
 
 func fixtureBinding(t *testing.T, document DiscoveryDocument, now time.Time, body []byte, nonce string) RequestBinding {
