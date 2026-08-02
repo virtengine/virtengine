@@ -237,6 +237,58 @@ func TestRuntimePolicyRejectsSupersededRegistrySnapshot(t *testing.T) {
 	require.Equal(t, before, snapshotRuntimePolicyStore(t, keeper, ctx))
 }
 
+func TestRuntimePolicyRegistryLifecycleCompatibility(t *testing.T) {
+	statuses := []struct {
+		status   string
+		eligible bool
+	}{
+		{status: "active", eligible: true},
+		{status: "candidate"},
+		{status: "trained"},
+		{status: "eligibility-failed"},
+		{status: "review-pending"},
+		{status: "eligible"},
+		{status: "approved"},
+		{status: "canary"},
+		{status: "paused"},
+		{status: "deprecated"},
+		{status: "revoked"},
+		{status: "rolled-back"},
+		{status: ""},
+		{status: "unknown-future-state"},
+	}
+
+	for _, test := range statuses {
+		name := test.status
+		if name == "" {
+			name = "empty"
+		}
+		t.Run(name, func(t *testing.T) {
+			keeper, ctx, pipeline, manifest := setupRuntimePolicy(t)
+			projection := projectionForRuntimePolicy(pipeline, manifest)
+			projection.Status = test.status
+			keeper.SetVerifierRegistryKeeper(runtimePolicyRegistryStub{info: projection, found: true})
+			before := snapshotRuntimePolicyStore(t, keeper, ctx)
+
+			policy, err := keeper.ReadRuntimePolicyV1(ctx, RuntimePolicyRequestV1{Source: RuntimePolicySourceRegistry})
+
+			if test.eligible {
+				require.NoError(t, err)
+				require.True(t, policy.Eligible)
+				require.Equal(t, RuntimePolicyStateEligible, policy.State)
+			} else {
+				require.Error(t, err)
+				require.False(t, policy.Eligible)
+				require.Equal(t, RuntimePolicyStateMismatch, policy.State)
+				var policyErr *RuntimePolicyError
+				require.ErrorAs(t, err, &policyErr)
+				require.Equal(t, RuntimePolicyStateMismatch, policyErr.State)
+			}
+			require.Equal(t, before, snapshotRuntimePolicyStore(t, keeper, ctx))
+		})
+	}
+}
+
 func withRuntimeProjection(info ActiveVerifierInfo, mutate func(*ActiveVerifierInfo)) ActiveVerifierInfo {
 	mutate(&info)
 	return info
