@@ -1,63 +1,57 @@
 campaign: three-day-prototype
 thread: T2
-checkpoint: T2-X10
+checkpoint: T2-X11
 branch: ve/prototype-t2-product
-start_head: 951b19ba7666fd0f95fddef017487b47a1eee933
-end_head: 513ea3f8f78d4b2fb92a5819a420356b82e929c3
+start_head: 8e8660dfffff1bd991f57545e00c7cbcc5680751
+end_head: c704213ea3169ff1792a19f3daf2ee484b1862e1
 origin_main: 79391a3df86d85522b92e0400c6904971ecbe65d
 tree_clean: true
 commits:
-  - 513ea3f8f78d4b2fb92a5819a420356b82e929c3
+  - c704213ea3169ff1792a19f3daf2ee484b1862e1
 owned_paths:
   - lib/portal/components/marketplace/
   - lib/portal/__tests__/marketplace/
-  - lib/portal/index.ts
+  - lib/portal/hooks/useMarketplace.tsx
+  - lib/portal/types/marketplace.ts
+  - lib/portal/components/PortalProvider.tsx
   - lib/portal/index.d.ts
-  - portal/src/components/marketplace/CheckoutDialog.tsx
-  - portal/src/lib/portal-adapter.ts
-  - portal/src/components/escrow/__tests__/
 files_changed:
+  - lib/portal/components/PortalProvider.tsx
   - lib/portal/components/marketplace/CheckoutFlow.tsx
   - lib/portal/components/marketplace/checkout-mutation.ts
   - lib/portal/__tests__/marketplace/checkout-flow.test.tsx
-  - lib/portal/index.ts
+  - lib/portal/__tests__/marketplace/use-marketplace-commit.test.tsx
+  - lib/portal/hooks/useMarketplace.tsx
+  - lib/portal/types/marketplace.ts
   - lib/portal/index.d.ts
-  - portal/src/components/marketplace/CheckoutDialog.tsx
-  - portal/src/lib/portal-adapter.ts
-  - portal/src/components/escrow/__tests__/DepositModal.test.tsx
-  - portal/src/components/escrow/__tests__/WithdrawForm.test.tsx
 tests:
-  - command: lib\portal\node_modules\.bin\vitest.CMD run __tests__/marketplace/checkout-flow.test.tsx --reporter=dot
+  - command: lib\portal\node_modules\.bin\vitest.CMD run __tests__/marketplace/checkout-flow.test.tsx __tests__/marketplace/use-marketplace-commit.test.tsx --reporter=dot
     exit_code: 0
     result: passed
-    test_count: 6
+    test_count: 12
     tool_versions:
       node: v24.12.0
-    artifact: _docs/ralph/handoffs/prototype-t2/T2-X10-evidence.txt
+    artifact: _docs/ralph/handoffs/prototype-t2/T2-X11-evidence.txt
   - command: lib\portal\node_modules\.bin\vitest.CMD run --reporter=dot
     exit_code: 0
     result: passed
-    test_count: 702
+    test_count: 708
     tool_versions:
       node: v24.12.0
-    artifact: _docs/ralph/handoffs/prototype-t2/T2-X10-evidence.txt
-  - command: portal\node_modules\.bin\tsc.CMD --noEmit -p portal\tsconfig.json
-    exit_code: 0
-    result: passed
-    tool_versions:
-      node: v24.12.0
-    artifact: _docs/ralph/handoffs/prototype-t2/T2-X10-evidence.txt
+    artifact: _docs/ralph/handoffs/prototype-t2/T2-X11-evidence.txt
 generated_hashes: {}
 migrations: []
 external_evidence:
-  - _docs/ralph/handoffs/prototype-t2/T2-X10-evidence.txt
+  - _docs/ralph/handoffs/prototype-t2/T2-X11-evidence.txt
 known_failures:
-  - Full lib/portal TypeScript compilation has pre-existing duplicate SupportTicketDetail and missing wallet adapter factory/WalletChainConfig export errors outside the T2-X10 slice; changed checkout files compile cleanly.
+  - Focused TypeScript compilation has zero T2-X11 diagnostics but reaches the pre-existing lib/portal/src/wallet/utils.ts missing WalletChainConfig export.
+  - Full accessibility lint has pre-existing focus-visible errors in MFAEnrollmentWizard, JobSubmissionForm, and components/accessible/index.ts; CheckoutFlow has no finding.
 blockers:
   - T4 producer-handoff.schema.json does not permit the established supplemental T2-X checkpoint names; T2-X01 through T2-X10 retain the campaign queue naming.
   - T4 producer-handoff.schema.json forbids the integration_parent field required by the updated campaign plan; integration ancestor fa21b1e540a5efcbe1822da4199be7acec7709d3 is retained in T2-05-evidence.txt.
   - Full provider package certification is blocked by the unrelated submitter lease timing failure retained in T2-03B-evidence.txt.
-  - No production checkout signing/broadcast adapter is wired; checkout defaults unavailable.
+  - PortalProvider retains pre-existing ts-nocheck because unrelated Auth, Identity, MFA, Provider, and HPC provider dependencies are not wired.
+  - No production marketplace signing/broadcast adapter is wired; checkout defaults unavailable.
   - No live order or chain endpoint was certified.
-next_checkpoint: T2-X11
-expected_head: 513ea3f8f78d4b2fb92a5819a420356b82e929c3
+next_checkpoint: T2-X12
+expected_head: c704213ea3169ff1792a19f3daf2ee484b1862e1
