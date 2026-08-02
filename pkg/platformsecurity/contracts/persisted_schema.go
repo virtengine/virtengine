@@ -18,7 +18,7 @@ const (
 	PersistedSchemaEpochBase        = "5587c384f634552c3a2dd7181ca49cafa4da1984"
 	// PersistedSchemaPayloadHead is the inventoried code boundary. The inventory
 	// artifact is metadata committed later as a descendant of this revision.
-	PersistedSchemaPayloadHead = "b6980d266eb23d56e23108858cbbf1b2da9dfe8c"
+	PersistedSchemaPayloadHead = "55cc117cbb8a8ce82d8941e41e10cc5739a792eb"
 )
 
 type StorageClass string
@@ -115,6 +115,10 @@ var requiredPersistedSchemas = map[string]persistedSchemaSpec{
 		"x/veid/keeper/evidence_object_migration.go", StorageConsensus, "v1", "VEID evidence object migration", "D4 01 || UTF-8 upgradeID -> replay digest; D4 02 || upgradeID -> JSON report; singleton D4 03 -> manifest digest; D4 04 || UTF-8 signerKeyID -> BE64 epoch floor", MigrationRequiredUnwired, "veid-evidence-object-v1",
 		[]string{"x/veid/keeper/evidence_object_migration.go", "x/veid/types/keys.go"}, "T4 upgrade owner must register the VEID evidence migration",
 	},
+	"veid-payload-cutover-bookkeeping": {
+		"x/veid/keeper/evidence_payload_cutover.go", StorageConsensus, "v1", "VEID legacy payload cutover", "D4 05 || UTF-8 cutoverID -> signed replay digest; D4 06 || cutoverID -> JSON EvidencePayloadCutoverReport; singleton D4 07 -> latest cutover manifest digest; D4 08 || UTF-8 signerKeyID -> BE64 epoch floor", MigrationRequiredUnwired, "veid-legacy-payload-cutover-v1",
+		[]string{"x/veid/keeper/evidence_payload_cutover.go", "x/veid/keeper/evidence_payload_cutover_test.go"}, "T4 must register signed cutover after evidence reference migration",
+	},
 	"veid-legacy-payload-cutover": {
 		"x/veid/keeper/evidence_object_migration.go", StorageConsensus, "v1", "legacy VEID evidence payload cutover", "legacy PrefixScope 0x02 rows and classified shared-prefix 0x9A rows retain encrypted_payload until sanitize/delete cutover", MigrationRequiredUnwired, "veid-legacy-payload-cutover-v1",
 		[]string{"x/veid/keeper/evidence_object_migration.go", "x/veid/keeper/evidence_object_migration_test.go"}, "separate T4 migration must sanitize/delete legacy PrefixScope 0x02 rows and classified shared-prefix 0x9A rows",
@@ -143,6 +147,7 @@ var requiredNonPersistentSurfaces = []string{
 
 var requiredPersistedSchemaBlockers = []string{
 	"T4 upgrade owner must register the VEID evidence migration",
+	"T4 must register signed cutover after evidence reference migration",
 	"separate T4 migration must sanitize/delete legacy PrefixScope 0x02 rows and classified shared-prefix 0x9A rows",
 	"T4 must mount and wire the fundauth keeper",
 	"production erasure requires durable transactional ErasureOperationStore; production storage deletion and KMS destruction adapters; independent receipt signers/key resolver; consent, hold, backup and finalization authorities; authenticated restore-manifest authority",

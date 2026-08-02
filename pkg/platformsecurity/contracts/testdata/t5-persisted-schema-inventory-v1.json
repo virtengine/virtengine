@@ -3,7 +3,7 @@
   "thread": "T5",
   "frozen_baseline": "79391a3df86d85522b92e0400c6904971ecbe65d",
   "intake_base_sha": "5587c384f634552c3a2dd7181ca49cafa4da1984",
-  "payload_head": "b6980d266eb23d56e23108858cbbf1b2da9dfe8c",
+  "payload_head": "55cc117cbb8a8ce82d8941e41e10cc5739a792eb",
   "entries": [
     {
       "id": "data-vault-key-state",
@@ -104,6 +104,18 @@
       "blocker": "T4 upgrade owner must register the VEID evidence migration"
     },
     {
+      "id": "veid-payload-cutover-bookkeeping",
+      "owner_path": "x/veid/keeper/evidence_payload_cutover.go",
+      "storage_class": "consensus",
+      "schema_version": "v1",
+      "domain": "VEID legacy payload cutover",
+      "key_or_format": "D4 05 || UTF-8 cutoverID -> signed replay digest; D4 06 || cutoverID -> JSON EvidencePayloadCutoverReport; singleton D4 07 -> latest cutover manifest digest; D4 08 || UTF-8 signerKeyID -> BE64 epoch floor",
+      "migration_disposition": "required_unwired",
+      "migration_id": "veid-legacy-payload-cutover-v1",
+      "evidence_paths": ["x/veid/keeper/evidence_payload_cutover.go", "x/veid/keeper/evidence_payload_cutover_test.go"],
+      "blocker": "T4 must register signed cutover after evidence reference migration"
+    },
+    {
       "id": "veid-legacy-payload-cutover",
       "owner_path": "x/veid/keeper/evidence_object_migration.go",
       "storage_class": "consensus",
@@ -149,6 +161,7 @@
   ],
   "blockers": [
     "T4 upgrade owner must register the VEID evidence migration",
+    "T4 must register signed cutover after evidence reference migration",
     "separate T4 migration must sanitize/delete legacy PrefixScope 0x02 rows and classified shared-prefix 0x9A rows",
     "T4 must mount and wire the fundauth keeper",
     "production erasure requires durable transactional ErasureOperationStore; production storage deletion and KMS destruction adapters; independent receipt signers/key resolver; consent, hold, backup and finalization authorities; authenticated restore-manifest authority"

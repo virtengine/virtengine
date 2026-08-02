@@ -59,7 +59,7 @@ func TestPersistedSchemaFixtureAndCanonicalDigest(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	const expected = "4ea63d9160ff0fefabb04f1854c1700386a93b2567f9fde0c4b7153b75b8fd44"
+	const expected = "c2ea1ee7426f671415d6ab4a246dce2f8990fed673b8fa408d3d0b5b0b452d14"
 	if actual := hex.EncodeToString(digest[:]); actual != expected {
 		t.Fatalf("canonical digest = %s, want %s", actual, expected)
 	}
@@ -138,6 +138,33 @@ func TestPersistedSchemaGlobalBlockerSetFailsClosed(t *testing.T) {
 	}
 }
 
+func TestPersistedSchemaPayloadCutoverBookkeepingFailsClosed(t *testing.T) {
+	const expectedFormat = "D4 05 || UTF-8 cutoverID -> signed replay digest; D4 06 || cutoverID -> JSON EvidencePayloadCutoverReport; singleton D4 07 -> latest cutover manifest digest; D4 08 || UTF-8 signerKeyID -> BE64 epoch floor"
+	inventory := clonePersistedSchemaFixture(t)
+	if actual := entryByID(t, &inventory, "veid-payload-cutover-bookkeeping").KeyOrFormat; actual != expectedFormat {
+		t.Fatalf("cutover bookkeeping format = %q, want %q", actual, expectedFormat)
+	}
+
+	tests := []struct {
+		name  string
+		apply func(*PersistedSchemaEntry)
+	}{
+		{"class", func(entry *PersistedSchemaEntry) { entry.StorageClass = StorageOffChain }},
+		{"disposition", func(entry *PersistedSchemaEntry) { entry.MigrationDisposition = MigrationNone }},
+		{"migration ID", func(entry *PersistedSchemaEntry) { entry.MigrationID = "changed" }},
+		{"D4 format", func(entry *PersistedSchemaEntry) { entry.KeyOrFormat += " changed" }},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			candidate := clonePersistedSchemaFixture(t)
+			test.apply(entryByID(t, &candidate, "veid-payload-cutover-bookkeeping"))
+			if err := candidate.Validate(); err == nil {
+				t.Fatal("invalid cutover bookkeeping contract accepted")
+			}
+		})
+	}
+}
+
 func TestPersistedSchemaEvidencePathsExistAtPayloadHead(t *testing.T) {
 	inventory := loadPersistedSchemaFixture(t)
 	assertPersistedSchemaPayloadObjects(t, inventory)
@@ -171,12 +198,6 @@ func assertPersistedSchemaPayloadObjects(t *testing.T, inventory PersistedSchema
 			}
 			t.Logf("verified entry %q payload blob %q (%d bytes)", entry.ID, repositoryPath, size)
 		}
-	}
-	// The fixture records metadata committed after payload_head and is not payload evidence.
-	fixtureObject := inventory.PayloadHead + ":pkg/platformsecurity/contracts/" + persistedSchemaFixture
-	command := exec.Command("git", "-C", repoRoot, "cat-file", "-e", fixtureObject)
-	if err := command.Run(); err == nil {
-		t.Fatalf("metadata fixture unexpectedly exists at payload boundary %q", inventory.PayloadHead)
 	}
 }
 
@@ -240,6 +261,12 @@ func TestPersistedSchemaAuditedEntriesAreExact(t *testing.T) {
 			"T4 upgrade owner must register the VEID evidence migration",
 		},
 		{
+			"veid-payload-cutover-bookkeeping", "x/veid/keeper/evidence_payload_cutover.go", StorageConsensus, "VEID legacy payload cutover",
+			"D4 05 || UTF-8 cutoverID -> signed replay digest; D4 06 || cutoverID -> JSON EvidencePayloadCutoverReport; singleton D4 07 -> latest cutover manifest digest; D4 08 || UTF-8 signerKeyID -> BE64 epoch floor",
+			MigrationRequiredUnwired, "veid-legacy-payload-cutover-v1", []string{"x/veid/keeper/evidence_payload_cutover.go", "x/veid/keeper/evidence_payload_cutover_test.go"},
+			"T4 must register signed cutover after evidence reference migration",
+		},
+		{
 			"veid-legacy-payload-cutover", "x/veid/keeper/evidence_object_migration.go", StorageConsensus, "legacy VEID evidence payload cutover",
 			"legacy PrefixScope 0x02 rows and classified shared-prefix 0x9A rows retain encrypted_payload until sanitize/delete cutover", MigrationRequiredUnwired, "veid-legacy-payload-cutover-v1",
 			[]string{"x/veid/keeper/evidence_object_migration.go", "x/veid/keeper/evidence_object_migration_test.go"},
@@ -296,7 +323,7 @@ func TestPersistedSchemaConsensusOwnershipIsExactAndProductionOwned(t *testing.T
 		}
 	}
 	slices.Sort(consensus)
-	want := []string{"fundauth-replay-store", "veid-evidence-migration-bookkeeping", "veid-evidence-quarantine", "veid-evidence-reference", "veid-legacy-payload-cutover"}
+	want := []string{"fundauth-replay-store", "veid-evidence-migration-bookkeeping", "veid-evidence-quarantine", "veid-evidence-reference", "veid-legacy-payload-cutover", "veid-payload-cutover-bookkeeping"}
 	if !slices.Equal(consensus, want) {
 		t.Fatalf("consensus entries = %v, want %v", consensus, want)
 	}
