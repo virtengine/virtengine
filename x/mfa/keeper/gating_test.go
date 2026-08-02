@@ -400,6 +400,30 @@ func (s *GatingTestSuite) TestCanBypassMFA_TrustedDevice() {
 	s.Require().False(canBypass)
 }
 
+func (s *GatingTestSuite) TestValidateTrustToken_CorruptDeviceFailsClosed() {
+	address := sdk.AccAddress([]byte("corrupt-trusted-device"))
+	otherAddress := sdk.AccAddress([]byte("other-trusted-device__"))
+	fingerprint := "trusted-fingerprint"
+	store := s.ctx.KVStore(s.storeKey)
+	tests := []struct {
+		name  string
+		value string
+	}{
+		{name: "malformed", value: `{"device_info":`},
+		{name: "wrong account", value: fmt.Sprintf(`{"account_address":%q,"device_info":{"fingerprint":%q,"trust_expires_at":2,"trust_token_hash":"hash"},"added_at":1}`, otherAddress.String(), fingerprint)},
+		{name: "wrong fingerprint", value: fmt.Sprintf(`{"account_address":%q,"device_info":{"fingerprint":"other","trust_expires_at":2,"trust_token_hash":"hash"},"added_at":1}`, address.String())},
+		{name: "zero expiry with token hash", value: fmt.Sprintf(`{"account_address":%q,"device_info":{"fingerprint":%q,"trust_token_hash":"hash"},"added_at":1}`, address.String(), fingerprint)},
+	}
+	for _, test := range tests {
+		s.Run(test.name, func() {
+			store.Set(types.TrustedDeviceKey(address, fingerprint), []byte(test.value))
+			s.Require().Panics(func() {
+				s.keeper.ValidateTrustToken(s.ctx, address, fingerprint, "token")
+			})
+		})
+	}
+}
+
 // Test: CanBypassMFA - expired trusted device
 func (s *GatingTestSuite) TestCanBypassMFA_ExpiredDevice() {
 	address := sdk.AccAddress([]byte("test-bypass-expired"))

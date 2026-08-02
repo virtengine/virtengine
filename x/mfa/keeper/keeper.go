@@ -1268,14 +1268,24 @@ func (k Keeper) GetTrustedDevice(ctx sdk.Context, address sdk.AccAddress, finger
 	}
 
 	var ds trustedDeviceStore
-	_ = json.Unmarshal(bz, &ds)
+	if err := json.Unmarshal(bz, &ds); err != nil {
+		panic(fmt.Errorf("decode trusted device %s for %s: %w", fingerprint, address.String(), err))
+	}
 
-	return &types.TrustedDevice{
+	device := &types.TrustedDevice{
 		AccountAddress: ds.AccountAddress,
 		DeviceInfo:     ds.DeviceInfo,
 		AddedAt:        ds.AddedAt,
 		LastUsedAt:     ds.LastUsedAt,
-	}, true
+	}
+	if device.AccountAddress != address.String() || device.DeviceInfo.Fingerprint != fingerprint {
+		panic(fmt.Errorf("trusted device key mismatch for %s and fingerprint %s", address.String(), fingerprint))
+	}
+	if err := device.Validate(); err != nil {
+		panic(fmt.Errorf("invalid persisted trusted device %s for %s: %w", fingerprint, address.String(), err))
+	}
+
+	return device, true
 }
 
 // GetTrustedDevices returns all trusted devices for an account
