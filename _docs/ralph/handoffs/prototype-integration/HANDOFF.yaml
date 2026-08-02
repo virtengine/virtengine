@@ -1,14 +1,14 @@
 {
   "campaign": "three-day-prototype",
   "thread": "T4",
-  "checkpoint": "T4-07C",
+  "checkpoint": "T4-07D",
   "branch": "ve/prototype-integration",
-  "start_head": "8460b45c2239b1c049167c4409c3d0d7587b6c86",
-  "end_head": "b092c75d0b5a0728cce75cc3dec5c83bcabe4232",
+  "start_head": "aed31f4033f02c52f87d98063154c3d6d7bf772a",
+  "end_head": "02d134bd238c5633638cb8fede13db9d7561e10e",
   "origin_main": "79391a3df86d85522b92e0400c6904971ecbe65d",
   "tree_clean": true,
   "commits": [
-    "b092c75d0b5a0728cce75cc3dec5c83bcabe4232"
+    "02d134bd238c5633638cb8fede13db9d7561e10e"
   ],
   "owned_paths": [
     "_docs/ralph/prototype-integration/**",
@@ -28,14 +28,18 @@
     "_docs/ralph/prototype-integration/slurm-chart-inventory.json",
     "_docs/ralph/prototype-integration/slurm-chart-inventory.schema.json",
     "_docs/ralph/prototype-integration/slurm-chart-semantic-report.json",
+    "_docs/runbooks/hpc-slurm/deployment-runbook.md",
     "deploy/slurm/slurm-cluster/templates/_helpers.tpl",
     "deploy/slurm/slurm-cluster/templates/compute-nodepools-statefulset.yaml",
     "deploy/slurm/slurm-cluster/templates/compute-statefulset.yaml",
+    "deploy/slurm/slurm-cluster/templates/configmap.yaml",
+    "deploy/slurm/slurm-cluster/templates/controller-statefulset.yaml",
     "deploy/slurm/slurm-cluster/templates/database-statefulset.yaml",
     "deploy/slurm/slurm-cluster/templates/mariadb-statefulset.yaml",
     "deploy/slurm/slurm-cluster/tests/stable-secrets-values.yaml",
     "deploy/slurm/slurm-cluster/values.schema.json",
     "deploy/slurm/slurm-cluster/values.yaml",
+    "scripts/testdata/slurm-chart-semantics/hardened.yaml",
     "scripts/validate-slurm-chart-inventory.cjs",
     "scripts/validate_slurm_chart_semantics.py",
     "scripts/validate_slurm_chart_semantics_test.py",
@@ -46,14 +50,14 @@
       "command": "python scripts/validate_slurm_chart_semantics_test.py && node scripts/validate-slurm-chart-inventory.test.cjs && node scripts/validate-slurm-chart-inventory.cjs",
       "exit_code": 0,
       "result": "passed",
-      "test_count": 46,
+      "test_count": 59,
       "tool_versions": {
         "python": "3.14.6 windows",
         "node": "20.19.1"
       }
     },
     {
-      "command": "go1.25.8 test -count=1 ./x/hpc/... && go1.25.8 test '-tags=e2e.integration' -count=1 ./tests/integration/hpc -run '^TestImmutableImagesOfflineContracts$'",
+      "command": "go1.25.8 test -count=1 ./x/hpc/... && go1.25.8 test '-tags=e2e.integration' -count=1 ./tests/integration/hpc -run '^TestLeastPrivilegeOfflineContracts$'",
       "exit_code": 0,
       "result": "passed",
       "tool_versions": {
@@ -70,8 +74,8 @@
     }
   ],
   "generated_hashes": {
-    "scripts/validate_slurm_chart_semantics.py": "cb0fd6ed23df3925e63b61f03decf4a9ce432bf601a7cb1d11f5991f0e1e0178",
-    "_docs/ralph/prototype-integration/slurm-chart-semantic-report.json": "268d7b66c9cc9da80f71df66e4ce0e1f8f09ab41d55cced8d9bb13d994b58e15"
+    "scripts/validate_slurm_chart_semantics.py": "1a986a5e4d5486ae559ad53d505323856c0a29996ccd1b39627e29fc879affeb",
+    "_docs/ralph/prototype-integration/slurm-chart-semantic-report.json": "d0573f44a9bb46362260ccadfe3fa1da4df93cc4ff4bd016259263449e788993"
   },
   "accepted_checkpoints": [],
   "rejected_checkpoints": [
@@ -91,18 +95,19 @@
   "external_evidence": [],
   "known_failures": [
     "Go 1.26.5 cannot compile github.com/bytedance/sonic v1.14.1; checkpoint gates were rerun successfully with the repository-pinned Go 1.25.8 toolchain.",
-    "The full tagged HPC integration package times out in existing pkg/provider_daemon TestHeartbeatMonitor because RecordHeartbeat holds nodesMu while raiseAlert reacquires it; the focused T4-07B capacity contract passes."
+    "The full tagged HPC integration package times out in existing pkg/provider_daemon TestHeartbeatMonitor because RecordHeartbeat holds nodesMu while raiseAlert reacquires it; the focused T4-07D least-privilege contract passes."
   ],
   "blockers": [
     "Epoch 1 remains open with no announced intake-v2 producer tags; no producer checkpoint is accepted by this checkpoint.",
     "Stable secrets are remediated through explicit pre-provisioned Secret names/keys and legacy upgrade instructions; no render-time credential generation remains.",
-    "All enabled chart workloads now require explicit lowercase repository@sha256 image references; synthetic digests exist only in test values.",
-    "Capacity equality and durability remain unverified until a real Helm render is parsed; least privilege remains failed.",
+    "Default workloads now use fixed non-root identities, seccomp, no privilege escalation, read-only roots, and no added capabilities or host cgroup mounts.",
+    "The rootless profile disables cgroup tenant enforcement and is prototype-only; no production multi-tenant isolation claim is made.",
+    "Capacity equality, durability, and least privilege remain unverified until a real Helm render and workload startup are proven.",
     "The competing _build/helm/slurm-cluster chart remains present and must be retired.",
     "The canonical diagnostic reports stable-secrets passed; capacity equality and durability unverified; immutable images and least privilege failed.",
     "No canonical chart remediation, failover, restore, or production render approval is claimed.",
     "Task 88C is not complete."
   ],
-  "next_checkpoint": "T4-07D",
-  "expected_head": "b092c75d0b5a0728cce75cc3dec5c83bcabe4232"
+  "next_checkpoint": "T4-07E",
+  "expected_head": "02d134bd238c5633638cb8fede13db9d7561e10e"
 }
