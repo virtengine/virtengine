@@ -8,6 +8,7 @@ const { resolve } = require("path");
 const { spawnSync } = require("child_process");
 
 const threads = ["T1", "T2", "T3", "T5"];
+const producerKeys = ["decision", "status", "tag", "thread"];
 
 function validateFreezeTransition(current, proposed, now = Date.now()) {
   assert.deepEqual(Object.keys(proposed).sort(), Object.keys(current).sort(), "freeze plan changes epoch fields");
@@ -19,14 +20,18 @@ function validateFreezeTransition(current, proposed, now = Date.now()) {
   }
   assert.deepEqual(current.producers.map((producer) => producer.thread), threads, "current producer roster is invalid");
   assert.deepEqual(proposed.producers.map((producer) => producer.thread), threads, "freeze plan producer roster is invalid");
+  const announcedTags = [];
   for (let index = 0; index < threads.length; index += 1) {
     const before = current.producers[index];
     const after = proposed.producers[index];
+    assert.deepEqual(Object.keys(after).sort(), producerKeys, `${after.thread} freeze decision fields are invalid`);
     assert.deepEqual(before, { thread: threads[index], status: "unannounced", tag: null, decision: null }, `${before.thread} current state is not open`);
-    const announced = after.status === "announced" && typeof after.tag === "string" && after.decision === null;
+    const announced = after.status === "announced" && typeof after.tag === "string" && new RegExp(`^checkpoint/prototype-${after.thread.toLowerCase()}/${after.thread.toLowerCase()}-[0-9]{2,}[a-z]?$`).test(after.tag) && after.decision === null;
     const frozenOut = after.status === "unannounced" && after.tag === null && after.decision === "frozen-out";
     assert.ok(announced || frozenOut, `${after.thread} freeze decision is invalid`);
+    if (announced) announcedTags.push(after.tag);
   }
+  assert.equal(new Set(announcedTags).size, announcedTags.length, "announced tags must be unique");
   return true;
 }
 

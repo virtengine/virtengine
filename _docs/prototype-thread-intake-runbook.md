@@ -157,8 +157,9 @@ git diff -- _docs/ralph/prototype-integration/epochs/epoch-1.json
 ```
 
 The application command rejects dirty worktrees, pre-cutoff execution, changed
-epoch metadata or roster order, and producer decisions other than announced or
-frozen out. Acceptance remains a later, separately validated transition.
+epoch metadata or roster order, unknown producer fields, wrong-thread tags, and
+producer decisions other than announced or frozen out. Acceptance remains a
+later, separately validated transition.
 
 ## Core RC Publication Preflight
 

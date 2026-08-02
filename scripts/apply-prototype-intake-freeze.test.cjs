@@ -27,6 +27,8 @@ const tests = [
   ["rejects changed epoch metadata", () => { const value = frozen(); value.base_sha = "c".repeat(40); assert.throws(() => validateFreezeTransition(epoch(), value, afterCutoff), /changes base_sha/); }],
   ["rejects an accepted decision during freeze", () => { const value = frozen(); value.producers[0].decision = "accepted"; assert.throws(() => validateFreezeTransition(epoch(), value, afterCutoff), /decision is invalid/); }],
   ["rejects a changed producer roster", () => { const value = frozen(); value.producers[0].thread = "T2"; assert.throws(() => validateFreezeTransition(epoch(), value, afterCutoff), /roster is invalid/); }],
+  ["rejects a wrong-thread announced tag", () => { const value = frozen(); value.producers[0].tag = "checkpoint/prototype-t3/t3-13a"; assert.throws(() => validateFreezeTransition(epoch(), value, afterCutoff), /decision is invalid/); }],
+  ["rejects unknown producer fields", () => { const value = frozen(); value.producers[0].accepted = true; assert.throws(() => validateFreezeTransition(epoch(), value, afterCutoff), /fields are invalid/); }],
   ["parses an explicit epoch and plan", () => { const value = parseArgs(["--epoch", "1", "--plan", "plan.json"]); assert.equal(value.epoch, "1"); assert.equal(value.plan, "plan.json"); }],
 ];
 
