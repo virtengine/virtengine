@@ -1,38 +1,54 @@
 {
   "campaign": "three-day-prototype",
   "thread": "T4",
-  "checkpoint": "T4-01L",
+  "checkpoint": "T4-01M",
   "branch": "ve/prototype-integration",
-  "start_head": "48e0df95a01c730082165fa3f4b4a3b4d15e69f9",
-  "end_head": "db0ad7437f4f42eeb161b5e0064f2358b8bc2eb6",
+  "start_head": "b5bcfcf60ea0846cfdb68c390302e3df3ea56bd6",
+  "end_head": "e6ca914a1ce704afc6f0bb2cd78813e2b6ef2433",
   "origin_main": "79391a3df86d85522b92e0400c6904971ecbe65d",
   "tree_clean": true,
   "commits": [
-    "db0ad7437f4f42eeb161b5e0064f2358b8bc2eb6"
+    "e6ca914a1ce704afc6f0bb2cd78813e2b6ef2433"
   ],
   "owned_paths": [
     "_docs/ralph/prototype-integration/**",
     "_docs/ralph/handoffs/prototype-integration/**",
-    "_docs/ralph/prototype-integration/core-rc-manifest.json"
+    "_docs/ralph/prototype-integration/core-rc-manifest.json",
+    "scripts/preflight-integration-candidate.cjs",
+    "scripts/preflight-integration-candidate.test.cjs",
+    "scripts/validate-required-gate-matrix.cjs"
   ],
   "files_changed": [
-    "_docs/ralph/handoffs/prototype-integration/HANDOFF.yaml",
-    "_docs/ralph/prototype-integration/core-rc-manifest.json"
+    "_docs/audits/task-t4-01e-intake-freeze-planner-2026-08-02.md",
+    "_docs/ralph/prototype-integration/required-gate-matrix.json",
+    "scripts/preflight-integration-candidate.cjs",
+    "scripts/preflight-integration-candidate.test.cjs",
+    "scripts/validate-required-gate-matrix.cjs"
   ],
   "tests": [
     {
-      "command": "node scripts/validate-prototype-integration.test.cjs && node scripts/validate-prototype-integration.cjs",
+      "command": "node scripts/preflight-integration-candidate.test.cjs",
       "exit_code": 0,
       "result": "passed",
-      "test_count": 12,
+      "test_count": 8,
       "tool_versions": {
         "node": "20.19.1"
       }
     },
     {
-      "command": "node scripts/validate-prototype-integration.cjs && node scripts/validate-agents-docs.mjs",
+      "command": "node scripts/validate-required-gate-matrix.test.cjs",
       "exit_code": 0,
       "result": "passed",
+      "test_count": 13,
+      "tool_versions": {
+        "node": "20.19.1"
+      }
+    },
+    {
+      "command": "node scripts/validate-agents-docs.mjs",
+      "exit_code": 0,
+      "result": "passed",
+      "test_count": 9,
       "tool_versions": {
         "node": "20.19.1"
       }
@@ -74,9 +90,10 @@
     "The T4-15A release gate records all ten AI/biometric security categories as partial or missing; enforce mode rejects release and external privacy, PAD, and production-model evaluations remain unavailable.",
     "The T4-16A inventory binds 18 discovered production mover files to 20 value-moving routes; no accepted T5 FundAuthorization checkpoint exists and --require-ready rejects release.",
     "The T4-13A inventory records five required generated contract families as absent or precursor-only; no canonical proto source is accepted and --require-ready rejects generation readiness.",
+    "The divergent ve/prototype-integration-live candidate is not promotable: its acceptance artifact is uncommitted, its ancestry predates canonical T4, and no strict exact-SHA acceptance evidence is available.",
     "External production model privacy and security evaluation is unavailable.",
     "Task 88C is not complete."
   ],
   "next_checkpoint": null,
-  "expected_head": "db0ad7437f4f42eeb161b5e0064f2358b8bc2eb6"
+  "expected_head": "e6ca914a1ce704afc6f0bb2cd78813e2b6ef2433"
 }
