@@ -1,13 +1,13 @@
 {
   "campaign": "three-day-prototype",
   "thread": "T5",
-  "checkpoint": "T5-24",
+  "checkpoint": "T5-25",
   "branch": "ve/prototype-t5-platform",
   "frozen_baseline": "79391a3df86d85522b92e0400c6904971ecbe65d",
   "planning_sha": "1436723bd78980aa0388dbe9fcfa24dda939c54a",
   "intake_epoch": 1,
   "intake_base_sha": "5587c384f634552c3a2dd7181ca49cafa4da1984",
-  "payload_head": "51fe504f0c8177b78d8b26918210184c156c44bc",
+  "payload_head": "b6a56ff1bb737d45296d3147aaa88b8a8bec634f",
   "prior_accepted_payload": null,
   "tree_clean": true,
   "commits_since_prior_acceptance": [
@@ -56,7 +56,9 @@
     "5d12f965684a0fef9098f32409993238a233097a",
     "658af424032aae72c79d6b6672749463dd9ffc6e",
     "aeea6624bdf2f1ada6408f73fab7d3b11e459791",
-    "51fe504f0c8177b78d8b26918210184c156c44bc"
+    "51fe504f0c8177b78d8b26918210184c156c44bc",
+    "db71a62ef312da6e79ddef907b30f56878440a55",
+    "b6a56ff1bb737d45296d3147aaa88b8a8bec634f"
   ],
   "owned_paths": [
     "_docs/ralph/evidence/prototype-t5/**",
@@ -94,6 +96,7 @@
     "_docs/ralph/evidence/prototype-t5/T5-21/validation.txt",
     "_docs/ralph/evidence/prototype-t5/T5-22/validation.txt",
     "_docs/ralph/evidence/prototype-t5/T5-23/validation.txt",
+    "_docs/ralph/evidence/prototype-t5/T5-24/validation.txt",
     "_docs/ralph/handoffs/prototype-integration/HANDOFF.yaml",
     "_docs/ralph/handoffs/prototype-t5/HANDOFF.yaml",
     "_docs/ralph/prototype-integration/control.json",
@@ -223,44 +226,42 @@
   ],
   "tests": [
     {
-      "command": "C:\\Users\\pavil\\AppData\\Local\\VirtEngine\\toolchains\\go1.25.8\\go\\bin\\go.exe -C C:\\Users\\pavil\\Desktop\\virtengine-gh\\repos\\virtengine-t5 test -count=1 -run EvidenceObjectMigration ./x/veid/keeper",
+      "command": "C:\\Users\\pavil\\AppData\\Local\\VirtEngine\\toolchains\\go1.25.8\\go\\bin\\go.exe -C C:\\Users\\pavil\\Desktop\\virtengine-gh\\repos\\virtengine-t5 test -count=1 ./pkg/organization/contracts",
       "exit_code": 0,
       "result": "passed",
       "tool_versions": {
         "go": "go version go1.25.8 windows/amd64"
       },
-      "artifact": "_docs/ralph/evidence/prototype-t5/T5-24/validation.txt"
+      "artifact": "_docs/ralph/evidence/prototype-t5/T5-25/validation.txt"
     },
     {
-      "command": "C:\\Users\\pavil\\AppData\\Local\\VirtEngine\\toolchains\\go1.25.8\\go\\bin\\go.exe -C C:\\Users\\pavil\\Desktop\\virtengine-gh\\repos\\virtengine-t5 vet ./x/veid/keeper",
+      "command": "C:\\Users\\pavil\\AppData\\Local\\VirtEngine\\toolchains\\go1.25.8\\go\\bin\\go.exe -C C:\\Users\\pavil\\Desktop\\virtengine-gh\\repos\\virtengine-t5 vet ./pkg/organization/contracts",
       "exit_code": 0,
       "result": "passed",
       "tool_versions": {
         "go": "go version go1.25.8 windows/amd64"
       },
-      "artifact": "_docs/ralph/evidence/prototype-t5/T5-24/validation.txt"
+      "artifact": "_docs/ralph/evidence/prototype-t5/T5-25/validation.txt"
     },
     {
-      "command": "[Environment]::SetEnvironmentVariable('CGO_ENABLED', '1', [EnvironmentVariableTarget]::Process); [Environment]::SetEnvironmentVariable('CC', 'C:\\Users\\pavil\\AppData\\Local\\Microsoft\\WinGet\\Packages\\BrechtSanders.WinLibs.POSIX.UCRT_Microsoft.Winget.Source_8wekyb3d8bbwe\\mingw64\\bin\\gcc.exe', [EnvironmentVariableTarget]::Process); C:\\Users\\pavil\\AppData\\Local\\VirtEngine\\toolchains\\go1.25.8\\go\\bin\\go.exe -C C:\\Users\\pavil\\Desktop\\virtengine-gh\\repos\\virtengine-t5 test -race -count=1 -run EvidenceObjectMigration ./x/veid/keeper",
+      "command": "[Environment]::SetEnvironmentVariable('CGO_ENABLED', '1', [EnvironmentVariableTarget]::Process); [Environment]::SetEnvironmentVariable('CC', 'C:\\Users\\pavil\\AppData\\Local\\Microsoft\\WinGet\\Packages\\BrechtSanders.WinLibs.POSIX.UCRT_Microsoft.Winget.Source_8wekyb3d8bbwe\\mingw64\\bin\\gcc.exe', [EnvironmentVariableTarget]::Process); C:\\Users\\pavil\\AppData\\Local\\VirtEngine\\toolchains\\go1.25.8\\go\\bin\\go.exe -C C:\\Users\\pavil\\Desktop\\virtengine-gh\\repos\\virtengine-t5 test -race -count=1 ./pkg/organization/contracts",
       "exit_code": 0,
       "result": "passed",
       "tool_versions": {
         "go": "go version go1.25.8 windows/amd64",
         "gcc": "gcc.exe (MinGW-W64 x86_64-ucrt-posix-seh, built by Brecht Sanders, r3) 16.1.0"
       },
-      "artifact": "_docs/ralph/evidence/prototype-t5/T5-24/validation.txt"
+      "artifact": "_docs/ralph/evidence/prototype-t5/T5-25/validation.txt"
     }
   ],
   "generated_hashes": {},
   "migrations": [],
   "external_evidence": [
-    "_docs/ralph/evidence/prototype-t5/T5-24/validation.txt"
+    "_docs/ralph/evidence/prototype-t5/T5-25/validation.txt"
   ],
-  "known_failures": [
-    "Earlier fresh-runner environment-assignment attempts failed before compilation and are non-authoritative diagnostics; the authoritative focused race command used .NET process-environment setters with an absolute GCC path and exited successfully without race detector output."
-  ],
+  "known_failures": [],
   "blockers": [
-    "Epoch 1 completeChangedPaths contains 143 paths; honest T5 ownership covers 119 and leaves 24 inherited integration/T4 paths outside ownership, including upgrades/software/v1.6.0/upgrade.go, upgrades/software/v1.6.0/upgrade_handler_test.go, and upgrades/software/v1.6.0/upgrade_retry_test.go from merge a9e148436c73e398e8902d03303abafdc1117bb5; no active T5 generated-file lease covers them, so this checkpoint is untagged and not intake eligible.",
+    "Epoch 1 completeChangedPaths contains 144 paths; honest T5 ownership covers 120 and leaves 24 inherited integration/T4 paths outside ownership, including upgrades/software/v1.6.0/upgrade.go, upgrades/software/v1.6.0/upgrade_handler_test.go, and upgrades/software/v1.6.0/upgrade_retry_test.go from merge a9e148436c73e398e8902d03303abafdc1117bb5; no active T5 generated-file lease covers them, so this checkpoint is untagged and not intake eligible.",
     "T4 must register the prerequisite VEID evidence reference migration, then separately register the signed evidence payload cutover using D4 children 05 through 08.",
     "T4 must mount and wire the persistent FundAuthorization store and keeper.",
     "Production erasure requires a durable transactional ErasureOperationStore, production storage-deletion and KMS-destruction adapters, independent receipt signers and key resolver, consent, hold, backup, and finalization authorities, and authenticated restore-manifest authority."
