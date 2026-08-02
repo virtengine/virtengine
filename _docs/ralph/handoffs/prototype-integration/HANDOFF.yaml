@@ -1,41 +1,45 @@
 {
   "campaign": "three-day-prototype",
   "thread": "T4",
-  "checkpoint": "T4-01P",
+  "checkpoint": "T4-01Q",
   "branch": "ve/prototype-integration",
-  "start_head": "2eb1b5bc019e7ca9c2f2a7d04b73d5ae1da68547",
-  "end_head": "45e5d856f69b687f0a75aa04bc54a0060b867646",
+  "start_head": "5347b3be342a15fd7965350061cfc5fcb7529c05",
+  "end_head": "6b668bd9d73e7db09ed0d08d04399afe422ba8d7",
   "origin_main": "79391a3df86d85522b92e0400c6904971ecbe65d",
   "tree_clean": true,
   "commits": [
-    "45e5d856f69b687f0a75aa04bc54a0060b867646"
+    "6b668bd9d73e7db09ed0d08d04399afe422ba8d7"
   ],
   "owned_paths": [
+    "_docs/prototype-thread-intake-runbook.md",
     "_docs/ralph/prototype-integration/**",
     "_docs/ralph/handoffs/prototype-integration/**",
-    "_docs/ralph/prototype-integration/core-rc-manifest.json",
-    "_docs/ralph/prototype-integration/core-rc-manifest.json",
-    "_docs/ralph/prototype-integration/core-rc-manifest.json"
+    "scripts/apply-prototype-intake-freeze.cjs",
+    "scripts/apply-prototype-intake-freeze.test.cjs",
+    "scripts/validate-required-gate-matrix.cjs"
   ],
   "files_changed": [
-    "_docs/ralph/handoffs/prototype-integration/HANDOFF.yaml",
-    "_docs/ralph/prototype-integration/core-rc-manifest.json"
+    "_docs/prototype-thread-intake-runbook.md",
+    "_docs/ralph/prototype-integration/required-gate-matrix.json",
+    "scripts/apply-prototype-intake-freeze.cjs",
+    "scripts/apply-prototype-intake-freeze.test.cjs",
+    "scripts/validate-required-gate-matrix.cjs"
   ],
   "tests": [
     {
-      "command": "node scripts/validate-prototype-integration.test.cjs && node scripts/validate-prototype-integration.cjs",
+      "command": "node scripts/apply-prototype-intake-freeze.test.cjs",
       "exit_code": 0,
       "result": "passed",
-      "test_count": 12,
+      "test_count": 6,
       "tool_versions": {
         "node": "20.19.1"
       }
     },
     {
-      "command": "node scripts/validate-agents-docs.mjs",
+      "command": "node scripts/validate-required-gate-matrix.test.cjs",
       "exit_code": 0,
       "result": "passed",
-      "test_count": 9,
+      "test_count": 13,
       "tool_versions": {
         "node": "20.19.1"
       }
@@ -82,5 +86,5 @@
     "Task 88C is not complete."
   ],
   "next_checkpoint": null,
-  "expected_head": "45e5d856f69b687f0a75aa04bc54a0060b867646"
+  "expected_head": "6b668bd9d73e7db09ed0d08d04399afe422ba8d7"
 }
