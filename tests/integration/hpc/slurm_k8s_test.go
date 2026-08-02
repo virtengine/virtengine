@@ -137,11 +137,17 @@ func verifyOfflineSLURMContracts(t *testing.T) {
 	t.Helper()
 	chart := readRepoFile(t, "deploy", "slurm", "slurm-cluster", "templates", "compute-nodepools-statefulset.yaml")
 	helpers := readRepoFile(t, "deploy", "slurm", "slurm-cluster", "templates", "_helpers.tpl")
+	config := readRepoFile(t, "deploy", "slurm", "slurm-cluster", "templates", "configmap.yaml")
+	schema := readRepoFile(t, "deploy", "slurm", "slurm-cluster", "values.schema.json")
+	values := readRepoFile(t, "deploy", "slurm", "slurm-cluster", "values.yaml")
 	adapter := readRepoFile(t, "pkg", "provider_daemon", "slurm_k8s", "adapter.go")
 
 	for label, required := range map[string][]string{
-		"chart":   {"StatefulSet", ".Values.nodePools", "virtengine.com/node-pool"},
-		"helpers": {"slurm-cluster.nodePool.serviceName", "printf"},
+		"chart":   {"StatefulSet", ".Values.nodePools", "slurm-cluster.nodePool.enabled", "virtengine.com/node-pool"},
+		"helpers": {"slurm-cluster.dnsName", "sha256sum $raw", "ordinalBudget", "is reserved by an existing chart resource", "slurm-cluster.compute.capacity", "slurm-cluster.partition.capacity", "selects unknown node pool", "selects disabled node pool", "at least one compute replica must be enabled"},
+		"config":  {`include "slurm-cluster.compute.capacity" . | fromJson`, `include "slurm-cluster.partition.capacity"`, "Nodes={{ $partitionCapacity.nodes }}", "MaxNodes={{ $partitionCapacity.replicas }}"},
+		"schema":  {`"nodePools"`, `"uniqueItems": true`, `"controller"`, `"node-agent"`},
+		"values":  {"compute:", "replicas: 2", "nodePools: []"},
 		"adapter": {"func (a *SLURMKubernetesAdapter) Scale", "poolName", "waitForScaledStatefulSet"},
 	} {
 		var contents string
@@ -150,6 +156,12 @@ func verifyOfflineSLURMContracts(t *testing.T) {
 			contents = chart
 		case "helpers":
 			contents = helpers
+		case "config":
+			contents = config
+		case "schema":
+			contents = schema
+		case "values":
+			contents = values
 		case "adapter":
 			contents = adapter
 		}
@@ -159,6 +171,10 @@ func verifyOfflineSLURMContracts(t *testing.T) {
 			}
 		}
 	}
+}
+
+func TestReplicaCapacityOfflineContracts(t *testing.T) {
+	verifyOfflineSLURMContracts(t)
 }
 
 func checkPrerequisites(t *testing.T) bool {
@@ -172,7 +188,7 @@ func checkPrerequisites(t *testing.T) bool {
 		}
 	}
 	if len(missing) > 0 {
-		t.Logf("real Kubernetes deployment harness unavailable; validating offline SLURM contracts instead: missing %v", missing)
+		t.Logf("real Kubernetes deployment harness unavailable; validating source contract guards only (rendered replica-capacity equality remains unverified): missing %v", missing)
 		verifyOfflineSLURMContracts(t)
 		return false
 	}

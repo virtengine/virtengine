@@ -1,6 +1,6 @@
 {
   "schema_version": "virtengine.prototype.slurm-chart-inventory/v2",
-  "checkpoint": "T4-07A",
+  "checkpoint": "T4-07B",
   "status": "blocked",
   "validation_mode": "executable-semantic",
   "research_scope": {
@@ -52,7 +52,7 @@
   },
   "semantic_report": {
     "path": "_docs/ralph/prototype-integration/slurm-chart-semantic-report.json",
-    "sha256": "07eca3ddc378a8d4b45c6253b12e3b65b2d548397595b0817effe739428d5e8a",
+    "sha256": "45f6c327d1440897d920ab511be77a5b833290ded7c086e520587df9c6e8e314",
     "source": "deploy/slurm/slurm-cluster",
     "generated_by": "python scripts/validate_slurm_chart_semantics.py --chart deploy/slurm/slurm-cluster --diagnostic --json"
   },
@@ -71,10 +71,17 @@
     },
     {
       "id": "replica-capacity-equality",
-      "status": "violated",
+      "status": "unverified",
       "requirement": "Rendered partition membership and advertised capacity exactly equal rendered compute replicas and node pools.",
-      "evidence": ["deploy/slurm/slurm-cluster/values.yaml"],
-      "blocker": "Default compute replicas are 2 while the normal partition names compute-[0-31]."
+      "evidence": [
+        "deploy/slurm/slurm-cluster/templates/_helpers.tpl",
+        "deploy/slurm/slurm-cluster/templates/configmap.yaml",
+        "deploy/slurm/slurm-cluster/values.schema.json",
+        "scripts/testdata/slurm-chart-semantics/hardened-multiple-pools.yaml",
+        "scripts/validate_slurm_chart_semantics_test.py",
+        "tests/integration/hpc/slurm_k8s_test.go"
+      ],
+      "blocker": "Source contract guards pass, but Helm is unavailable and no rendered YAML report validates exact workloads, StatefulSet pod names, partition membership, and slurm.conf capacity."
     },
     {
       "id": "immutable-images",

@@ -253,6 +253,7 @@ compute:
 # -- Node pools (additional compute node configurations)
 nodePools: []
   # - name: gpu-nodes
+  #   enabled: true
   #   replicas: 4
   #   cpus: 64
   #   memory: 256000
@@ -272,14 +273,13 @@ partitions:
     default: true
     maxTime: "24:00:00"
     defaultTime: "1:00:00"
-    maxNodes: 32
     state: UP
-    nodes: "compute-[0-31]"  # Auto-generated based on compute.replicas
   - name: debug
     default: false
+    # -- Explicit compute pools: "default" is the built-in compute pool
+    nodePools: ["default"]
     maxTime: "00:30:00"
     defaultTime: "00:15:00"
-    maxNodes: 2
     state: UP
     priority: 10
 

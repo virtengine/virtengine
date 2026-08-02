@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 
+import hashlib
+import json
 import tempfile
 import unittest
-import json
 from pathlib import Path
 
 import yaml
@@ -119,9 +120,35 @@ class SlurmChartSemanticsTest(unittest.TestCase):
         candidate["data"]["slurm.conf"] = "NodeName=slurm-compute-[0,1-1] CPUs=4\nPartitionName=normal Nodes=slurm-compute-[0,1-1] MaxNodes=2\n"
         self.assertNotIn("replica-capacity-equality", {finding.invariant for finding in validate([candidate, *self.hardened[1:]])})
 
+    def test_accepts_multiple_enabled_node_pools(self) -> None:
+        documents = load_documents(TESTDATA / "hardened-multiple-pools.yaml")
+        self.assertNotIn("replica-capacity-equality", {finding.invariant for finding in validate(documents)})
+
+    def test_accepts_partition_specific_membership(self) -> None:
+        documents = load_documents(TESTDATA / "hardened-multiple-pools.yaml")
+        config = documents[0]
+        config["data"]["slurm.conf"] = "\n".join([
+            "NodeName=slurm-compute-[0-1] CPUs=4",
+            "NodeName=slurm-gpu-0 CPUs=8",
+            "NodeName=slurm-memory-[0-1] CPUs=4",
+            "PartitionName=normal Nodes=slurm-compute-[0-1],slurm-memory-[0-1] MaxNodes=4",
+            "PartitionName=gpu Nodes=slurm-gpu-0 MaxNodes=1",
+        ])
+        self.assertNotIn("replica-capacity-equality", {finding.invariant for finding in validate(documents)})
+
+    def test_rejects_partition_unknown_nodes_and_wrong_max(self) -> None:
+        candidate = yaml.safe_load(yaml.safe_dump(self.hardened[0]))
+        candidate["data"]["slurm.conf"] = "NodeName=slurm-compute-[0-1]\nPartitionName=normal Nodes=slurm-compute-0,missing-0 MaxNodes=1\n"
+        self.assertIn("replica-capacity-equality", {finding.invariant for finding in validate([candidate, *self.hardened[1:]])})
+
+    def test_rejects_unpartitioned_rendered_nodes(self) -> None:
+        candidate = yaml.safe_load(yaml.safe_dump(self.hardened[0]))
+        candidate["data"]["slurm.conf"] = "NodeName=slurm-compute-[0-1]\nPartitionName=normal Nodes=slurm-compute-0 MaxNodes=1\n"
+        self.assertIn("replica-capacity-equality", {finding.invariant for finding in validate([candidate, *self.hardened[1:]])})
+
     def test_counts_deployment_and_replication_controller_compute_replicas(self) -> None:
         config = yaml.safe_load(yaml.safe_dump(self.hardened[0]))
-        config["data"]["slurm.conf"] = "NodeName=compute-[0-2]\nPartitionName=normal MaxNodes=3\n"
+        config["data"]["slurm.conf"] = "NodeName=compute-[0-2]\nPartitionName=normal Nodes=compute-[0-2] MaxNodes=3\n"
         deployment = yaml.safe_load(yaml.safe_dump(self.hardened[1]))
         deployment["kind"] = "Deployment"
         deployment["metadata"]["name"] = "compute-deployment"
@@ -148,8 +175,36 @@ class SlurmChartSemanticsTest(unittest.TestCase):
         findings = validate_source(ROOT / "deploy" / "slurm" / "slurm-cluster")
         failed = {finding.invariant for finding in findings}
         self.assertNotIn("stable-secrets", failed)
-        self.assertTrue({"replica-capacity-equality", "immutable-images", "least-privilege"}.issubset(failed))
+        self.assertNotIn("replica-capacity-equality", failed)
+        self.assertTrue({"immutable-images", "least-privilege"}.issubset(failed))
         self.assertNotIn("durable-state", failed)
+
+    def test_source_rejects_partition_capacity_override(self) -> None:
+        source = ROOT / "deploy" / "slurm" / "slurm-cluster"
+        with tempfile.TemporaryDirectory() as directory:
+            chart = Path(directory)
+            (chart / "templates").mkdir()
+            for template in (source / "templates").glob("*"):
+                if template.is_file():
+                    (chart / "templates" / template.name).write_text(template.read_text(encoding="utf-8"), encoding="utf-8")
+            values = yaml.safe_load((source / "values.yaml").read_text(encoding="utf-8"))
+            values["partitions"][0]["maxNodes"] = 32
+            (chart / "values.yaml").write_text(yaml.safe_dump(values), encoding="utf-8")
+            findings = validate_source(chart)
+        self.assertTrue(any(finding.invariant == "replica-capacity-equality" and "overrides derived maxNodes" in finding.message for finding in findings))
+
+    def test_source_rejects_missing_zero_capacity_guard(self) -> None:
+        source = ROOT / "deploy" / "slurm" / "slurm-cluster"
+        with tempfile.TemporaryDirectory() as directory:
+            chart = Path(directory)
+            (chart / "templates").mkdir()
+            (chart / "values.yaml").write_text((source / "values.yaml").read_text(encoding="utf-8"), encoding="utf-8")
+            for template in (source / "templates").glob("*"):
+                if template.is_file():
+                    content = template.read_text(encoding="utf-8").replace('fail "at least one compute replica must be enabled"', 'printf "no capacity"')
+                    (chart / "templates" / template.name).write_text(content, encoding="utf-8")
+            findings = validate_source(chart)
+        self.assertTrue(any(finding.invariant == "replica-capacity-equality" and "at least one compute replica" in finding.message for finding in findings))
 
     def test_source_rejects_missing_fail_closed_secret_guard(self) -> None:
         source = ROOT / "deploy" / "slurm" / "slurm-cluster"
@@ -182,9 +237,61 @@ class SlurmChartSemanticsTest(unittest.TestCase):
         self.assertEqual(schema["definitions"]["databaseSecret"]["required"], ["existingSecret", "secretPasswordKey"])
         self.assertEqual(schema["definitions"]["mariadbSecret"]["required"], ["existingSecret", "secretRootPasswordKey"])
 
+    def test_capacity_schema_forbids_partition_overrides(self) -> None:
+        schema = json.loads((ROOT / "deploy" / "slurm" / "slurm-cluster" / "values.schema.json").read_text(encoding="utf-8"))
+        self.assertEqual(schema["properties"]["nodePools"]["items"]["required"], ["name", "replicas"])
+        pool_condition = schema["properties"]["nodePools"]["items"]["allOf"][0]
+        self.assertEqual(pool_condition["if"]["properties"]["enabled"]["const"], False)
+        self.assertEqual(pool_condition["else"]["properties"]["replicas"]["minimum"], 1)
+        compute_condition = schema["properties"]["compute"]["allOf"][0]
+        self.assertEqual(compute_condition["then"]["properties"]["replicas"]["minimum"], 1)
+        forbidden = schema["properties"]["partitions"]["items"]["not"]["anyOf"]
+        self.assertEqual(forbidden, [{"required": ["nodes"]}, {"required": ["maxNodes"]}])
+
+    def test_capacity_schema_reserves_resource_names_and_partition_selectors(self) -> None:
+        schema = json.loads((ROOT / "deploy" / "slurm" / "slurm-cluster" / "values.schema.json").read_text(encoding="utf-8"))
+        pool_name = schema["properties"]["nodePools"]["items"]["properties"]["name"]
+        self.assertTrue({"controller", "slurmdbd", "database", "mariadb", "compute", "munge", "node-agent"}.issubset(pool_name["not"]["enum"]))
+        partition = schema["properties"]["partitions"]["items"]
+        self.assertEqual(partition["properties"]["nodePools"]["minItems"], 1)
+        self.assertTrue(partition["properties"]["nodePools"]["uniqueItems"])
+        self.assertEqual(partition["allOf"][0]["else"]["required"], ["nodePools"])
+
+    def test_source_requires_hash_stable_dns_and_selector_guards(self) -> None:
+        source = ROOT / "deploy" / "slurm" / "slurm-cluster"
+        with tempfile.TemporaryDirectory() as directory:
+            chart = Path(directory)
+            (chart / "templates").mkdir()
+            (chart / "values.yaml").write_text((source / "values.yaml").read_text(encoding="utf-8"), encoding="utf-8")
+            (chart / "values.schema.json").write_text((source / "values.schema.json").read_text(encoding="utf-8"), encoding="utf-8")
+            for template in (source / "templates").glob("*"):
+                if template.is_file():
+                    content = template.read_text(encoding="utf-8").replace("sha256sum $raw | trunc 8", "trunc 8 $raw")
+                    (chart / "templates" / template.name).write_text(content, encoding="utf-8")
+            findings = validate_source(chart)
+        self.assertTrue(any(finding.invariant == "replica-capacity-equality" and "sha256sum" in finding.message for finding in findings))
+
+    def test_long_dns_names_are_bounded_for_ordinals_and_collision_resistant(self) -> None:
+        def bounded(raw: str, replicas: int) -> str:
+            ordinal_budget = 1 + len(str(max(replicas - 1, 0))) if replicas > 0 else 0
+            limit = 63 - ordinal_budget
+            if len(raw) <= limit:
+                return raw.rstrip("-")
+            digest = hashlib.sha256(raw.encode()).hexdigest()[:8]
+            return f"{raw[:limit - 9].rstrip('-')}-{digest}"
+
+        common = "release-with-a-deliberately-long-name-slurm-cluster-pool-prefix-"
+        first = bounded(common + "alpha", 10_000)
+        second = bounded(common + "bravo", 10_000)
+        self.assertNotEqual(first, second)
+        self.assertLessEqual(len(f"{first}-9999"), 63)
+        self.assertLessEqual(len(f"{second}-9999"), 63)
+        self.assertRegex(first, r"-[a-f0-9]{8}$")
+
     def test_source_diagnostic_only_promotes_stable_secrets(self) -> None:
         statuses = result([], diagnostic=True)["invariants"]
         self.assertEqual(statuses["stable-secrets"], "passed")
+        self.assertEqual(statuses["replica-capacity-equality"], "unverified")
         self.assertEqual(
             {status for invariant, status in statuses.items() if invariant != "stable-secrets"},
             {"unverified"},

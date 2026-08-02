@@ -218,18 +218,70 @@ def _static_findings(chart_dir: Path) -> list[Finding]:
         if projected_path not in template_source or configured_path not in template_source:
             findings.append(Finding("stable-secrets", "templates", f"nodeAgent TLS projection mismatch for {projected_path.removeprefix('path: ')}"))
 
-    compute = values.get("compute", {}) if isinstance(values.get("compute"), dict) else {}
-    replica_count = int(compute.get("replicas", 0)) if compute.get("enabled", True) else 0
-    for pool in values.get("nodePools", []) or []:
-        if isinstance(pool, dict):
-            replica_count += int(pool.get("replicas", 0))
+    capacity_contract = {
+        "templates/_helpers.tpl": (
+            'define "slurm-cluster.dnsName"',
+            'define "slurm-cluster.resourceName"',
+            "sha256sum $raw | trunc 8",
+            "ordinalBudget",
+            'define "slurm-cluster.compute.capacity"',
+            'define "slurm-cluster.partition.capacity"',
+            "compute.replicas must be at least 1 when compute.enabled is true",
+            "replicas must be at least 1 when enabled",
+            "is reserved by an existing chart resource or component",
+            "is duplicated or conflicts with the default compute pool",
+            "collides at rendered StatefulSet name",
+            "has duplicate node pool selector",
+            "selects unknown node pool",
+            "selects disabled node pool",
+            "selects zero compute nodes",
+            'fail "at least one compute replica must be enabled"',
+            'dict "replicas" $total "nodes" (join "," $nodes) "pools" $pools',
+        ),
+        "templates/configmap.yaml": (
+            'include "slurm-cluster.compute.capacity" . | fromJson',
+            'include "slurm-cluster.partition.capacity"',
+            'NodeName={{ include "slurm-cluster.compute.serviceName"',
+            'NodeName={{ include "slurm-cluster.nodePool.serviceName"',
+            "Nodes={{ $partitionCapacity.nodes }}",
+            "MaxNodes={{ $partitionCapacity.replicas }}",
+        ),
+        "templates/compute-nodepools-statefulset.yaml": (
+            'include "slurm-cluster.compute.capacity" .',
+            'include "slurm-cluster.nodePool.enabled"',
+        ),
+    }
+    for relative, required_fragments in capacity_contract.items():
+        path = chart_dir / relative
+        content = path.read_text(encoding="utf-8") if path.is_file() else ""
+        for fragment in required_fragments:
+            if fragment not in content:
+                findings.append(Finding("replica-capacity-equality", relative, f"derived capacity contract is missing {fragment}"))
+
+    schema_path = chart_dir / "values.schema.json"
+    schema = json.loads(schema_path.read_text(encoding="utf-8")) if schema_path.is_file() else {}
+    properties = schema.get("properties", {}) if isinstance(schema, dict) else {}
+    pool_schema = properties.get("nodePools", {}).get("items", {}) if isinstance(properties.get("nodePools"), dict) else {}
+    partition_schema = properties.get("partitions", {}).get("items", {}) if isinstance(properties.get("partitions"), dict) else {}
+    if pool_schema.get("required") != ["name", "replicas"] or not pool_schema.get("allOf"):
+        findings.append(Finding("replica-capacity-equality", "values.schema.json", "enabled node pools do not require names, replicas, and conditional capacity validation"))
+    forbidden_capacity = partition_schema.get("not", {}).get("anyOf", []) if isinstance(partition_schema, dict) else []
+    if forbidden_capacity != [{"required": ["nodes"]}, {"required": ["maxNodes"]}]:
+        findings.append(Finding("replica-capacity-equality", "values.schema.json", "partition nodes and maxNodes overrides are not forbidden"))
+    reserved_names = pool_schema.get("properties", {}).get("name", {}).get("not", {}).get("enum", [])
+    required_reserved = {"controller", "slurmdbd", "database", "mariadb", "compute", "munge", "node-agent"}
+    if not required_reserved.issubset(set(reserved_names)):
+        findings.append(Finding("replica-capacity-equality", "values.schema.json", "node pool names do not reserve existing chart resources and components"))
+    selector_schema = partition_schema.get("properties", {}).get("nodePools", {})
+    if selector_schema.get("minItems") != 1 or selector_schema.get("uniqueItems") is not True or not partition_schema.get("allOf"):
+        findings.append(Finding("replica-capacity-equality", "values.schema.json", "partition nodePools selectors are not nonempty, unique, and required outside the default partition"))
+
     for partition in values.get("partitions", []) or []:
         if not isinstance(partition, dict):
             continue
-        advertised = partition.get("nodes")
-        advertised_count = len(_expand_hostlist(str(advertised))) if advertised else int(partition.get("maxNodes", 0))
-        if advertised_count != replica_count:
-            findings.append(Finding("replica-capacity-equality", "values.yaml", f"partition {partition.get('name', '<unnamed>')} advertises {advertised_count} nodes but values declare {replica_count} compute replicas"))
+        for forbidden in ("nodes", "maxNodes"):
+            if forbidden in partition:
+                findings.append(Finding("replica-capacity-equality", "values.yaml", f"partition {partition.get('name', '<unnamed>')} overrides derived {forbidden}"))
 
     for component in ("munge", "controller", "database", "mariadb", "compute", "nodeAgent"):
         settings = values.get(component, {})
@@ -257,6 +309,7 @@ def validate(documents: list[dict[str, Any]], chart_dir: Path | None = None) -> 
     documents = [document for value in documents for document in _documents(value)]
     findings = _static_findings(chart_dir) if chart_dir else []
     compute_replicas = 0
+    stateful_compute_nodes: set[str] = set()
     durable_seen: set[str] = set()
 
     for document in documents:
@@ -305,7 +358,10 @@ def validate(documents: list[dict[str, Any]], chart_dir: Path | None = None) -> 
                     findings.append(Finding("least-privilege", container_location, "; ".join(violations)))
 
         if kind in {"Deployment", "ReplicaSet", "ReplicationController", "StatefulSet"} and component == "compute":
-            compute_replicas += int(document.get("spec", {}).get("replicas", 1))
+            replicas = int(document.get("spec", {}).get("replicas", 1))
+            compute_replicas += replicas
+            if kind == "StatefulSet":
+                stateful_compute_nodes.update(f"{name}-{ordinal}" for ordinal in range(replicas))
         if pod_spec is not None and component in DURABLE_COMPONENTS:
             durable_seen.add(component)
             spec = document.get("spec", {})
@@ -331,9 +387,15 @@ def validate(documents: list[dict[str, Any]], chart_dir: Path | None = None) -> 
         findings.append(Finding("replica-capacity-equality", "render", "no ConfigMap contains data.slurm.conf"))
     elif len(declared_nodes) != compute_replicas:
         findings.append(Finding("replica-capacity-equality", "ConfigMap/slurm.conf", f"render has {compute_replicas} compute replicas and {len(declared_nodes)} declared nodes"))
+    elif stateful_compute_nodes and stateful_compute_nodes != declared_nodes:
+        findings.append(Finding("replica-capacity-equality", "ConfigMap/slurm.conf", "declared NodeName values do not exactly match rendered StatefulSet pod names"))
+    covered_nodes: set[str] = set()
     for partition_name, partition_nodes, max_nodes in partitions:
-        if (partition_nodes and partition_nodes != declared_nodes) or (max_nodes is not None and max_nodes != compute_replicas) or (not partition_nodes and max_nodes is None):
-            findings.append(Finding("replica-capacity-equality", "ConfigMap/slurm.conf", f"partition {partition_name} does not exactly advertise the {compute_replicas} rendered compute replicas"))
+        covered_nodes.update(partition_nodes)
+        if not partition_nodes or not partition_nodes.issubset(declared_nodes) or max_nodes != len(partition_nodes):
+            findings.append(Finding("replica-capacity-equality", "ConfigMap/slurm.conf", f"partition {partition_name} does not exactly advertise its selected rendered compute replicas"))
+    if config and (not partitions or covered_nodes != declared_nodes):
+        findings.append(Finding("replica-capacity-equality", "ConfigMap/slurm.conf", "partition membership does not cover every rendered compute replica"))
 
     for missing in sorted(DURABLE_COMPONENTS - durable_seen):
         findings.append(Finding("durable-state", "render", f"required durable component {missing} has no StatefulSet"))

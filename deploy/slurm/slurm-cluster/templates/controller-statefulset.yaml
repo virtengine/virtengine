@@ -135,7 +135,7 @@ spec:
       volumes:
         - name: slurm-config
           configMap:
-            name: {{ include "slurm-cluster.fullname" . }}-config
+            name: {{ include "slurm-cluster.resourceName" (list . "config" 0) }}
         - name: munge-key
           secret:
             secretName: {{ include "slurm-cluster.munge.secretName" . }}

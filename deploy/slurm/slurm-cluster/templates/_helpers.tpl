@@ -6,19 +6,58 @@ Expand the name of the chart.
 {{- end }}
 
 {{/*
-Create a default fully qualified app name.
+Create the unbounded fully qualified app name used as input to stable DNS names.
 */}}
-{{- define "slurm-cluster.fullname" -}}
+{{- define "slurm-cluster.rawFullname" -}}
 {{- if .Values.fullnameOverride }}
-{{- .Values.fullnameOverride | trunc 63 | trimSuffix "-" }}
+{{- .Values.fullnameOverride }}
 {{- else }}
 {{- $name := default .Chart.Name .Values.nameOverride }}
 {{- if contains $name .Release.Name }}
-{{- .Release.Name | trunc 63 | trimSuffix "-" }}
+{{- .Release.Name }}
 {{- else }}
-{{- printf "%s-%s" .Release.Name $name | trunc 63 | trimSuffix "-" }}
+{{- printf "%s-%s" .Release.Name $name }}
 {{- end }}
 {{- end }}
+{{- end }}
+
+{{/*
+Bound a DNS label, preserving collision resistance when truncation is required.
+*/}}
+{{- define "slurm-cluster.dnsName" -}}
+{{- $raw := index . 0 -}}
+{{- $limit := int (index . 1) -}}
+{{- if lt $limit 10 -}}{{ fail (printf "DNS name budget %d is too small for stable truncation" $limit) }}{{- end -}}
+{{- if le (len $raw) $limit -}}
+{{- $raw | trimSuffix "-" -}}
+{{- else -}}
+{{- $hash := sha256sum $raw | trunc 8 -}}
+{{- $prefix := $raw | trunc (sub $limit 9) | trimSuffix "-" -}}
+{{- printf "%s-%s" $prefix $hash -}}
+{{- end -}}
+{{- end }}
+
+{{/*
+Create a DNS label for a resource and reserve room for a StatefulSet pod ordinal.
+*/}}
+{{- define "slurm-cluster.resourceName" -}}
+{{- $root := index . 0 -}}
+{{- $suffix := index . 1 -}}
+{{- $replicas := int (index . 2) -}}
+{{- $ordinal := 0 -}}
+{{- if gt $replicas 1 -}}{{- $ordinal = sub $replicas 1 -}}{{- end -}}
+{{- $ordinalBudget := 0 -}}
+{{- if gt $replicas 0 -}}{{- $ordinalBudget = add 1 (len (printf "%d" $ordinal)) -}}{{- end -}}
+{{- $raw := include "slurm-cluster.rawFullname" $root -}}
+{{- if $suffix -}}{{- $raw = printf "%s-%s" $raw $suffix -}}{{- end -}}
+{{- include "slurm-cluster.dnsName" (list $raw (sub 63 $ordinalBudget)) -}}
+{{- end }}
+
+{{/*
+Create a default fully qualified app name.
+*/}}
+{{- define "slurm-cluster.fullname" -}}
+{{- include "slurm-cluster.resourceName" (list . "" 0) -}}
 {{- end }}
 
 {{/*
@@ -147,28 +186,28 @@ MariaDB secret name
 Controller service name
 */}}
 {{- define "slurm-cluster.controller.serviceName" -}}
-{{- include "slurm-cluster.fullname" . }}-controller
+{{- include "slurm-cluster.resourceName" (list . "controller" .Values.controller.replicas) -}}
 {{- end }}
 
 {{/*
 Database service name
 */}}
 {{- define "slurm-cluster.database.serviceName" -}}
-{{- include "slurm-cluster.fullname" . }}-slurmdbd
+{{- include "slurm-cluster.resourceName" (list . "slurmdbd" .Values.database.replicas) -}}
 {{- end }}
 
 {{/*
 MariaDB service name
 */}}
 {{- define "slurm-cluster.mariadb.serviceName" -}}
-{{- include "slurm-cluster.fullname" . }}-mariadb
+{{- include "slurm-cluster.resourceName" (list . "mariadb" 1) -}}
 {{- end }}
 
 {{/*
 Compute headless service name
 */}}
 {{- define "slurm-cluster.compute.serviceName" -}}
-{{- include "slurm-cluster.fullname" . }}-compute
+{{- include "slurm-cluster.resourceName" (list . "compute" .Values.compute.replicas) -}}
 {{- end }}
 
 {{/*
@@ -177,20 +216,92 @@ Node pool headless service name
 {{- define "slurm-cluster.nodePool.serviceName" -}}
 {{- $root := index . 0 -}}
 {{- $pool := index . 1 -}}
-{{- printf "%s-%s" (include "slurm-cluster.fullname" $root) $pool.name | trunc 63 | trimSuffix "-" -}}
+{{- include "slurm-cluster.resourceName" (list $root $pool.name $pool.replicas) -}}
 {{- end }}
 
 {{/*
-Generate node list for SLURM configuration
+Whether a node pool is enabled. Pools are enabled by default for compatibility.
 */}}
-{{- define "slurm-cluster.nodeList" -}}
-{{- $fullname := include "slurm-cluster.fullname" . }}
-{{- $replicas := int .Values.compute.replicas }}
-{{- if eq $replicas 1 }}
-{{- printf "%s-compute-0" $fullname }}
-{{- else }}
-{{- printf "%s-compute-[0-%d]" $fullname (sub $replicas 1) }}
+{{- define "slurm-cluster.nodePool.enabled" -}}
+{{- $pool := index . 1 -}}
+{{- if or (not (hasKey $pool "enabled")) $pool.enabled -}}true{{- else -}}false{{- end -}}
 {{- end }}
+
+{{/*
+Build the authoritative enabled compute capacity and SLURM hostlist.
+*/}}
+{{- define "slurm-cluster.compute.capacity" -}}
+{{- $root := . -}}
+{{- $total := 0 -}}
+{{- $nodes := list -}}
+{{- $names := dict -}}
+{{- $serviceNames := dict -}}
+{{- $pools := dict -}}
+{{- $reserved := list "controller" "slurmdbd" "database" "mariadb" "mariadb-init" "compute" "munge" "node-agent" "config" "default" -}}
+{{- if .Values.compute.enabled -}}
+{{- $replicas := int .Values.compute.replicas -}}
+{{- if lt $replicas 1 -}}{{ fail "compute.replicas must be at least 1 when compute.enabled is true" }}{{- end -}}
+{{- $_ := set $names "compute" true -}}
+{{- $_ := set $serviceNames (include "slurm-cluster.compute.serviceName" .) true -}}
+{{- $total = add $total $replicas -}}
+{{- $defaultNodes := printf "%s-[0-%d]" (include "slurm-cluster.compute.serviceName" .) (sub $replicas 1) -}}
+{{- $nodes = append $nodes $defaultNodes -}}
+{{- $_ := set $pools "default" (dict "enabled" true "replicas" $replicas "nodes" $defaultNodes) -}}
+{{- else -}}
+{{- $_ := set $pools "default" (dict "enabled" false "replicas" 0 "nodes" "") -}}
+{{- end -}}
+{{- range $pool := .Values.nodePools -}}
+{{- $name := required "nodePools[].name is required" $pool.name -}}
+{{- if not (regexMatch "^[a-z0-9]([-a-z0-9]*[a-z0-9])?$" $name) -}}{{ fail (printf "node pool name %q must be a DNS label" $name) }}{{- end -}}
+{{- if has $name $reserved -}}{{ fail (printf "node pool name %q is reserved by an existing chart resource or component" $name) }}{{- end -}}
+{{- if hasKey $names $name -}}{{ fail (printf "node pool name %q is duplicated or conflicts with the default compute pool" $name) }}{{- end -}}
+{{- $_ := set $names $name true -}}
+{{- $serviceName := include "slurm-cluster.nodePool.serviceName" (list $root $pool) -}}
+{{- if hasKey $serviceNames $serviceName -}}{{ fail (printf "node pool name %q collides at rendered StatefulSet name %q" $name $serviceName) }}{{- end -}}
+{{- $_ := set $serviceNames $serviceName true -}}
+{{- $enabled := eq (include "slurm-cluster.nodePool.enabled" (list $root $pool)) "true" -}}
+{{- if $enabled -}}
+{{- $replicas := int $pool.replicas -}}
+{{- if lt $replicas 1 -}}{{ fail (printf "node pool %q replicas must be at least 1 when enabled" $name) }}{{- end -}}
+{{- $total = add $total $replicas -}}
+{{- $poolNodes := printf "%s-[0-%d]" $serviceName (sub $replicas 1) -}}
+{{- $nodes = append $nodes $poolNodes -}}
+{{- $_ := set $pools $name (dict "enabled" true "replicas" $replicas "nodes" $poolNodes) -}}
+{{- else -}}
+{{- $_ := set $pools $name (dict "enabled" false "replicas" 0 "nodes" "") -}}
+{{- end -}}
+{{- end -}}
+{{- if lt $total 1 -}}{{ fail "at least one compute replica must be enabled" }}{{- end -}}
+{{- dict "replicas" $total "nodes" (join "," $nodes) "pools" $pools | toJson -}}
+{{- end }}
+
+{{/*
+Resolve and validate the exact enabled node pools selected by one partition.
+The default partition selects all capacity when nodePools is omitted.
+*/}}
+{{- define "slurm-cluster.partition.capacity" -}}
+{{- $partition := index . 1 -}}
+{{- $capacity := index . 2 -}}
+{{- $selectors := $partition.nodePools | default (list) -}}
+{{- if and (eq (len $selectors) 0) $partition.default -}}
+{{- dict "replicas" $capacity.replicas "nodes" $capacity.nodes | toJson -}}
+{{- else -}}
+{{- if eq (len $selectors) 0 -}}{{ fail (printf "partition %q must select at least one node pool" $partition.name) }}{{- end -}}
+{{- $seen := dict -}}
+{{- $nodes := list -}}
+{{- $replicas := 0 -}}
+{{- range $selector := $selectors -}}
+{{- if hasKey $seen $selector -}}{{ fail (printf "partition %q has duplicate node pool selector %q" $partition.name $selector) }}{{- end -}}
+{{- $_ := set $seen $selector true -}}
+{{- if not (hasKey $capacity.pools $selector) -}}{{ fail (printf "partition %q selects unknown node pool %q" $partition.name $selector) }}{{- end -}}
+{{- $pool := index $capacity.pools $selector -}}
+{{- if not $pool.enabled -}}{{ fail (printf "partition %q selects disabled node pool %q" $partition.name $selector) }}{{- end -}}
+{{- $nodes = append $nodes $pool.nodes -}}
+{{- $replicas = add $replicas (int $pool.replicas) -}}
+{{- end -}}
+{{- if lt $replicas 1 -}}{{ fail (printf "partition %q selects zero compute nodes" $partition.name) }}{{- end -}}
+{{- dict "replicas" $replicas "nodes" (join "," $nodes) | toJson -}}
+{{- end -}}
 {{- end }}
 
 {{/*

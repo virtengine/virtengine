@@ -1,6 +1,7 @@
-{{- if .Values.compute.enabled }}
 {{- $root := . }}
+{{- $_ := include "slurm-cluster.compute.capacity" . }}
 {{- range $pool := .Values.nodePools }}
+{{- if eq (include "slurm-cluster.nodePool.enabled" (list $root $pool)) "true" }}
 {{- $serviceName := include "slurm-cluster.nodePool.serviceName" (list $root $pool) }}
 apiVersion: apps/v1
 kind: StatefulSet
@@ -13,7 +14,7 @@ metadata:
     virtengine.com/node-pool: {{ $pool.name | quote }}
 spec:
   serviceName: {{ $serviceName }}
-  replicas: {{ $pool.replicas | default 0 }}
+  replicas: {{ $pool.replicas }}
   podManagementPolicy: Parallel
   selector:
     matchLabels:
@@ -217,7 +218,7 @@ spec:
       volumes:
         - name: slurm-config
           configMap:
-            name: {{ include "slurm-cluster.fullname" $root }}-config
+            name: {{ include "slurm-cluster.resourceName" (list $root "config" 0) }}
             defaultMode: 0644
         - name: munge-key
           secret:
@@ -235,7 +236,7 @@ spec:
         {{- if $root.Values.nodeAgent.enabled }}
         - name: node-agent-config
           configMap:
-            name: {{ include "slurm-cluster.fullname" $root }}-node-agent
+            name: {{ include "slurm-cluster.resourceName" (list $root "node-agent" 0) }}
         {{- if $root.Values.nodeAgent.tls.enabled }}
         - name: node-agent-tls
           secret:

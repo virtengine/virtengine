@@ -1,7 +1,7 @@
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: {{ include "slurm-cluster.fullname" . }}-config
+  name: {{ include "slurm-cluster.resourceName" (list . "config" 0) }}
   namespace: {{ .Release.Namespace }}
   labels:
     {{- include "slurm-cluster.labels" . | nindent 4 }}
@@ -88,20 +88,25 @@ data:
     HealthCheckProgram=/usr/local/bin/slurm-health-check.sh
     
     # Nodes
-    {{- $fullname := include "slurm-cluster.fullname" . }}
+    {{- $capacity := include "slurm-cluster.compute.capacity" . | fromJson }}
+    {{- if .Values.compute.enabled }}
     {{- range $i := until (int .Values.compute.replicas) }}
-    NodeName={{ $fullname }}-compute-{{ $i }} CPUs={{ $.Values.compute.config.cpus | default 4 }} RealMemory={{ $.Values.compute.config.memory | default 4096 }} State=UNKNOWN
+    NodeName={{ include "slurm-cluster.compute.serviceName" $ }}-{{ $i }} CPUs={{ $.Values.compute.config.cpus | default 4 }} RealMemory={{ $.Values.compute.config.memory | default 4096 }} State=UNKNOWN
+    {{- end }}
     {{- end }}
     
-    {{- range .Values.nodePools }}
+    {{- range $pool := .Values.nodePools }}
+    {{- if eq (include "slurm-cluster.nodePool.enabled" (list $ $pool)) "true" }}
     {{- range $i := until (int .replicas) }}
-    NodeName={{ $fullname }}-{{ .name }}-{{ $i }} CPUs={{ .cpus | default 4 }} RealMemory={{ .memory | default 4096 }} Gres={{ if .gpus }}gpu:{{ .gpuType | default "nvidia" }}:{{ .gpus }}{{ end }} Features={{ .features | join "," }} State=UNKNOWN
+    NodeName={{ include "slurm-cluster.nodePool.serviceName" (list $ $pool) }}-{{ $i }} CPUs={{ $pool.cpus | default 4 }} RealMemory={{ $pool.memory | default 4096 }} Gres={{ if $pool.gpus }}gpu:{{ $pool.gpuType | default "nvidia" }}:{{ $pool.gpus }}{{ end }} Features={{ $pool.features | default (list) | join "," }} State=UNKNOWN
+    {{- end }}
     {{- end }}
     {{- end }}
     
     # Partitions
-    {{- range .Values.partitions }}
-    PartitionName={{ .name }} Nodes={{ .nodes | default (include "slurm-cluster.nodeList" $) }} MaxTime={{ .maxTime | default "24:00:00" }} DefaultTime={{ .defaultTime | default "1:00:00" }} MaxNodes={{ .maxNodes | default 32 }} State={{ .state | default "UP" }}{{ if .default }} Default=YES{{ end }}{{ if .priority }} PriorityTier={{ .priority }}{{ end }}
+    {{- range $partition := .Values.partitions }}
+    {{- $partitionCapacity := include "slurm-cluster.partition.capacity" (list $ $partition $capacity) | fromJson }}
+    PartitionName={{ $partition.name }} Nodes={{ $partitionCapacity.nodes }} MaxTime={{ $partition.maxTime | default "24:00:00" }} DefaultTime={{ $partition.defaultTime | default "1:00:00" }} MaxNodes={{ $partitionCapacity.replicas }} State={{ $partition.state | default "UP" }}{{ if $partition.default }} Default=YES{{ end }}{{ if $partition.priority }} PriorityTier={{ $partition.priority }}{{ end }}
     {{- end }}
 
   slurmdbd.conf: |

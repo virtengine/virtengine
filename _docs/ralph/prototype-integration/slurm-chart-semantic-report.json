@@ -21,11 +21,6 @@
       "message": "template contains privileged or root container defaults"
     },
     {
-      "invariant": "replica-capacity-equality",
-      "location": "values.yaml",
-      "message": "partition normal advertises 32 nodes but values declare 2 compute replicas"
-    },
-    {
       "invariant": "immutable-images",
       "location": "values.yaml",
       "message": "munge image is tag-based rather than digest-pinned"
@@ -60,7 +55,7 @@
     "durable-state": "unverified",
     "immutable-images": "failed",
     "least-privilege": "failed",
-    "replica-capacity-equality": "failed",
+    "replica-capacity-equality": "unverified",
     "stable-secrets": "passed"
   },
   "mode": "diagnostic",

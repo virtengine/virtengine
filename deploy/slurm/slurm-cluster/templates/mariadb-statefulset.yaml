@@ -87,7 +87,7 @@ spec:
       volumes:
         - name: init-scripts
           configMap:
-            name: {{ include "slurm-cluster.fullname" . }}-mariadb-init
+            name: {{ include "slurm-cluster.resourceName" (list . "mariadb-init" 0) }}
       {{- with .Values.mariadb.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}
@@ -133,7 +133,7 @@ spec:
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: {{ include "slurm-cluster.fullname" . }}-mariadb-init
+  name: {{ include "slurm-cluster.resourceName" (list . "mariadb-init" 0) }}
   namespace: {{ .Release.Namespace }}
   labels:
     {{- include "slurm-cluster.labels" . | nindent 4 }}
