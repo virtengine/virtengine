@@ -450,19 +450,15 @@ func (s *MsgServerTestSuite) grantScopeConsent(address sdk.AccAddress, scopeID, 
 		GrantConsent: true,
 		Purpose:      purpose,
 	}
-	consentMsg := []byte("VEID_CONSENT_UPDATE:" + address.String() + ":" + scopeID + ":grant")
-	consentSig := kp.signMessage(consentMsg)
+	wallet, found := s.keeper.GetWallet(s.ctx, address)
+	s.Require().True(found)
+	consentSig := kp.signConsentUpdate(address.String(), wallet.ConsentSettings.ConsentVersion, update)
 	err := s.keeper.UpdateConsent(s.ctx, address, update, consentSig)
 	s.Require().NoError(err)
 }
 
-// signConsentUpdate signs the consent update message: "VEID_CONSENT_UPDATE:" + sender + ":" + scopeID + ":" + grant/revoke
-func (kp testKeyPair) signConsentUpdate(sender, scopeID string, grant bool) []byte {
-	grantStr := "revoke"
-	if grant {
-		grantStr = "grant"
-	}
-	msg := []byte("VEID_CONSENT_UPDATE:" + sender + ":" + scopeID + ":" + grantStr)
+func (kp testKeyPair) signConsentUpdate(sender string, version uint32, update types.ConsentUpdateRequest) []byte {
+	msg := types.GetConsentUpdateSigningMessage(sender, version, update)
 	return kp.signMessage(msg)
 }
 
@@ -602,7 +598,7 @@ func (s *MsgServerTestSuite) TestMsgUpdateConsentSettings_Success() {
 	s.createWalletWithKey(address, kp)
 
 	scopeID := "scope-consent-update"
-	consentSig := kp.signConsentUpdate(address.String(), scopeID, true)
+	consentSig := kp.signConsentUpdate(address.String(), 1, types.ConsentUpdateRequest{ScopeID: scopeID, GrantConsent: true, Purpose: "identity verification"})
 
 	msg := &types.MsgUpdateConsentSettings{
 		Sender:        address.String(),

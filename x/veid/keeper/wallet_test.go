@@ -4,6 +4,7 @@ import (
 	"crypto/ed25519"
 	"crypto/rand"
 	"crypto/sha256"
+	"math"
 	"testing"
 	"time"
 
@@ -99,6 +100,13 @@ func (ts *testWalletSetup) signWalletBinding(walletID string) []byte {
 	return ed25519.Sign(ts.privKey, msg)
 }
 
+func (ts *testWalletSetup) signConsentUpdate(t *testing.T, update types.ConsentUpdateRequest) []byte {
+	t.Helper()
+	wallet, found := ts.keeper.GetWallet(ts.ctx, ts.address)
+	require.True(t, found)
+	return ts.signMessage(types.GetConsentUpdateSigningMessage(ts.address.String(), wallet.ConsentSettings.ConsentVersion, update))
+}
+
 func grantScopeConsent(t *testing.T, ts *testWalletSetup, scopeID string) {
 	t.Helper()
 
@@ -107,8 +115,7 @@ func grantScopeConsent(t *testing.T, ts *testWalletSetup, scopeID string) {
 		GrantConsent: true,
 		Purpose:      "KYC verification",
 	}
-	consentMsg := []byte("VEID_CONSENT_UPDATE:" + ts.address.String() + ":" + scopeID + ":grant")
-	consentSig := ts.signMessage(consentMsg)
+	consentSig := ts.signConsentUpdate(t, update)
 	err := ts.keeper.UpdateConsent(ts.ctx, ts.address, update, consentSig)
 	require.NoError(t, err)
 }
@@ -403,8 +410,7 @@ func TestUpdateConsent(t *testing.T) {
 	}
 
 	// Sign consent update
-	consentMsg := []byte("VEID_CONSENT_UPDATE:" + ts.address.String() + ":" + scopeID + ":grant")
-	consentSig := ts.signMessage(consentMsg)
+	consentSig := ts.signConsentUpdate(t, update)
 
 	err = ts.keeper.UpdateConsent(ts.ctx, ts.address, update, consentSig)
 	require.NoError(t, err)
@@ -416,6 +422,184 @@ func TestUpdateConsent(t *testing.T) {
 	require.True(t, found)
 	require.True(t, consent.Granted)
 	require.Equal(t, "identity verification", consent.Purpose)
+	tampered := update
+	tampered.Purpose = "unapproved purpose"
+	version := wallet.ConsentSettings.ConsentVersion
+	err = ts.keeper.UpdateConsent(ts.ctx, ts.address, tampered, consentSig)
+	require.ErrorIs(t, err, types.ErrInvalidUserSignature)
+	err = ts.keeper.UpdateConsent(ts.ctx, ts.address, update, consentSig)
+	require.ErrorIs(t, err, types.ErrInvalidUserSignature)
+	wallet, found = ts.keeper.GetWallet(ts.ctx, ts.address)
+	require.True(t, found)
+	require.Equal(t, version, wallet.ConsentSettings.ConsentVersion)
+	consent, found = wallet.ConsentSettings.GetScopeConsent(scopeID)
+	require.True(t, found)
+	require.Equal(t, "identity verification", consent.Purpose)
+}
+
+func TestUpdateConsentRejectsTamperRolloverAndPartialPersistence(t *testing.T) {
+	ts := setupWalletTest(t)
+	walletID := GenerateWalletID(ts.address.String())
+	_, err := ts.keeper.CreateWallet(ts.ctx, ts.address, ts.signWalletBinding(walletID), ts.pubKey)
+	require.NoError(t, err)
+
+	expiresAt := ts.ctx.BlockTime().Add(time.Hour).UTC()
+	share := true
+	update := types.ConsentUpdateRequest{
+		ScopeID: "complete-intent", GrantConsent: true, Purpose: "approved purpose", ExpiresAt: &expiresAt,
+		GlobalSettings: &types.GlobalConsentUpdate{ShareWithProviders: &share},
+	}
+	signature := ts.signConsentUpdate(t, update)
+	changedExpiry := expiresAt.Add(time.Second)
+	tampered := update
+	tampered.ExpiresAt = &changedExpiry
+	require.ErrorIs(t, ts.keeper.UpdateConsent(ts.ctx, ts.address, tampered, signature), types.ErrInvalidUserSignature)
+	share = false
+	require.ErrorIs(t, ts.keeper.UpdateConsent(ts.ctx, ts.address, update, signature), types.ErrInvalidUserSignature)
+	wallet, found := ts.keeper.GetWallet(ts.ctx, ts.address)
+	require.True(t, found)
+	require.Equal(t, uint32(1), wallet.ConsentSettings.ConsentVersion)
+
+	require.ErrorIs(t, ts.keeper.UpdateConsent(ts.ctx, ts.address, types.ConsentUpdateRequest{}, nil), types.ErrInvalidConsent)
+
+	wallet.ConsentSettings.ConsentVersion = math.MaxUint32
+	require.NoError(t, ts.keeper.SetWallet(ts.ctx, wallet))
+	rollover := types.ConsentUpdateRequest{ScopeID: "rollover", GrantConsent: true, Purpose: "purpose"}
+	rolloverSignature := ts.signMessage(types.GetConsentUpdateSigningMessage(ts.address.String(), math.MaxUint32, rollover))
+	require.ErrorIs(t, ts.keeper.UpdateConsent(ts.ctx, ts.address, rollover, rolloverSignature), types.ErrInvalidConsent)
+	wallet, found = ts.keeper.GetWallet(ts.ctx, ts.address)
+	require.True(t, found)
+	require.Equal(t, uint32(math.MaxUint32), wallet.ConsentSettings.ConsentVersion)
+
+	wallet.ConsentSettings.ConsentVersion = math.MaxUint32 - 1
+	require.NoError(t, ts.keeper.SetWallet(ts.ctx, wallet))
+	combined := rollover
+	combined.GlobalSettings = &types.GlobalConsentUpdate{ShareWithProviders: boolPointer(true)}
+	combinedSignature := ts.signMessage(types.GetConsentUpdateSigningMessage(ts.address.String(), math.MaxUint32-1, combined))
+	require.ErrorIs(t, ts.keeper.UpdateConsent(ts.ctx, ts.address, combined, combinedSignature), types.ErrInvalidConsent)
+
+	wallet.ConsentSettings.ConsentVersion = 1
+	require.NoError(t, ts.keeper.SetWallet(ts.ctx, wallet))
+	invalidRecordExpiry := time.Date(10000, time.January, 1, 0, 0, 0, 0, time.UTC)
+	invalidRecord := types.ConsentUpdateRequest{
+		ScopeID: "record-failure", GrantConsent: true, Purpose: "purpose", ExpiresAt: &invalidRecordExpiry,
+	}
+	invalidRecordSignature := ts.signConsentUpdate(t, invalidRecord)
+	require.Error(t, ts.keeper.UpdateConsent(ts.ctx, ts.address, invalidRecord, invalidRecordSignature))
+	wallet, found = ts.keeper.GetWallet(ts.ctx, ts.address)
+	require.True(t, found)
+	require.Equal(t, uint32(1), wallet.ConsentSettings.ConsentVersion)
+	_, found = wallet.ConsentSettings.GetScopeConsent(invalidRecord.ScopeID)
+	require.False(t, found)
+}
+
+func boolPointer(value bool) *bool {
+	return &value
+}
+
+func TestUpdateConsent_SignedIntentBinding(t *testing.T) {
+	ts := setupWalletTest(t)
+
+	walletID := GenerateWalletID(ts.address.String())
+	bindingSignature := ts.signWalletBinding(walletID)
+	_, err := ts.keeper.CreateWallet(ts.ctx, ts.address, bindingSignature, ts.pubKey)
+	require.NoError(t, err)
+
+	expiresAt := time.Date(2032, time.March, 4, 5, 6, 7, 890123456, time.FixedZone("test", -5*60*60))
+	newUpdate := func() types.ConsentUpdateRequest {
+		shareWithProviders := true
+		shareForVerification := false
+		allowReVerification := true
+		allowDerivedFeatureSharing := false
+		expiry := expiresAt
+		return types.ConsentUpdateRequest{
+			ScopeID:      "scope:identity|proof",
+			GrantConsent: true,
+			Purpose:      "identity:verification|account recovery",
+			ExpiresAt:    &expiry,
+			GlobalSettings: &types.GlobalConsentUpdate{
+				ShareWithProviders:         &shareWithProviders,
+				ShareForVerification:       &shareForVerification,
+				AllowReVerification:        &allowReVerification,
+				AllowDerivedFeatureSharing: &allowDerivedFeatureSharing,
+			},
+		}
+	}
+
+	walletBefore, found := ts.keeper.GetWallet(ts.ctx, ts.address)
+	require.True(t, found)
+	version := walletBefore.ConsentSettings.ConsentVersion
+	update := newUpdate()
+	signingMessage := types.GetConsentUpdateSigningMessage(ts.address.String(), version, update)
+	require.Equal(t, signingMessage, types.GetConsentUpdateSigningMessage(ts.address.String(), version, newUpdate()))
+	require.NotEqual(t,
+		types.GetConsentUpdateSigningMessage(ts.address.String(), version, types.ConsentUpdateRequest{ScopeID: "a:b", Purpose: "c"}),
+		types.GetConsentUpdateSigningMessage(ts.address.String(), version, types.ConsentUpdateRequest{ScopeID: "a", Purpose: "b:c"}),
+	)
+	signature := ts.signMessage(signingMessage)
+
+	mutations := []struct {
+		name   string
+		mutate func(*types.ConsentUpdateRequest)
+	}{
+		{name: "scope", mutate: func(value *types.ConsentUpdateRequest) { value.ScopeID += ":tampered" }},
+		{name: "grant", mutate: func(value *types.ConsentUpdateRequest) { value.GrantConsent = false }},
+		{name: "purpose", mutate: func(value *types.ConsentUpdateRequest) { value.Purpose += ":tampered" }},
+		{name: "expiry absent", mutate: func(value *types.ConsentUpdateRequest) { value.ExpiresAt = nil }},
+		{name: "expiry value", mutate: func(value *types.ConsentUpdateRequest) {
+			changed := value.ExpiresAt.Add(time.Nanosecond)
+			value.ExpiresAt = &changed
+		}},
+		{name: "global absent", mutate: func(value *types.ConsentUpdateRequest) { value.GlobalSettings = nil }},
+		{name: "share with providers absent", mutate: func(value *types.ConsentUpdateRequest) { value.GlobalSettings.ShareWithProviders = nil }},
+		{name: "share with providers value", mutate: func(value *types.ConsentUpdateRequest) {
+			changed := !*value.GlobalSettings.ShareWithProviders
+			value.GlobalSettings.ShareWithProviders = &changed
+		}},
+		{name: "share for verification absent", mutate: func(value *types.ConsentUpdateRequest) { value.GlobalSettings.ShareForVerification = nil }},
+		{name: "share for verification value", mutate: func(value *types.ConsentUpdateRequest) {
+			changed := !*value.GlobalSettings.ShareForVerification
+			value.GlobalSettings.ShareForVerification = &changed
+		}},
+		{name: "allow reverification absent", mutate: func(value *types.ConsentUpdateRequest) { value.GlobalSettings.AllowReVerification = nil }},
+		{name: "allow reverification value", mutate: func(value *types.ConsentUpdateRequest) {
+			changed := !*value.GlobalSettings.AllowReVerification
+			value.GlobalSettings.AllowReVerification = &changed
+		}},
+		{name: "derived sharing absent", mutate: func(value *types.ConsentUpdateRequest) { value.GlobalSettings.AllowDerivedFeatureSharing = nil }},
+		{name: "derived sharing value", mutate: func(value *types.ConsentUpdateRequest) {
+			changed := !*value.GlobalSettings.AllowDerivedFeatureSharing
+			value.GlobalSettings.AllowDerivedFeatureSharing = &changed
+		}},
+	}
+	for _, test := range mutations {
+		t.Run(test.name, func(t *testing.T) {
+			tampered := newUpdate()
+			test.mutate(&tampered)
+			err := ts.keeper.UpdateConsent(ts.ctx, ts.address, tampered, signature)
+			require.ErrorIs(t, err, types.ErrInvalidUserSignature)
+			walletAfter, found := ts.keeper.GetWallet(ts.ctx, ts.address)
+			require.True(t, found)
+			require.Equal(t, walletBefore, walletAfter)
+		})
+	}
+
+	require.ErrorIs(t, ts.keeper.VerifyConsentUpdateSignature("other-sender", version, update, ts.pubKey, signature), types.ErrInvalidUserSignature)
+	require.ErrorIs(t, ts.keeper.VerifyConsentUpdateSignature(ts.address.String(), version+1, update, ts.pubKey, signature), types.ErrInvalidUserSignature)
+	legacySignature := ts.signMessage([]byte("VEID_CONSENT_UPDATE:" + ts.address.String() + ":" + update.ScopeID + ":grant"))
+	require.ErrorIs(t, ts.keeper.UpdateConsent(ts.ctx, ts.address, update, legacySignature), types.ErrInvalidUserSignature)
+	walletAfterLegacy, found := ts.keeper.GetWallet(ts.ctx, ts.address)
+	require.True(t, found)
+	require.Equal(t, walletBefore, walletAfterLegacy)
+
+	require.NoError(t, ts.keeper.UpdateConsent(ts.ctx, ts.address, update, signature))
+	walletAfterUpdate, found := ts.keeper.GetWallet(ts.ctx, ts.address)
+	require.True(t, found)
+	require.Greater(t, walletAfterUpdate.ConsentSettings.ConsentVersion, version)
+	require.ErrorIs(t, ts.keeper.UpdateConsent(ts.ctx, ts.address, update, signature), types.ErrInvalidUserSignature)
+	walletAfterReplay, found := ts.keeper.GetWallet(ts.ctx, ts.address)
+	require.True(t, found)
+	require.Equal(t, walletAfterUpdate, walletAfterReplay)
 }
 
 func TestUpdateConsent_GlobalSettings(t *testing.T) {
@@ -439,8 +623,7 @@ func TestUpdateConsent_GlobalSettings(t *testing.T) {
 	}
 
 	// Sign consent update
-	consentMsg := []byte("VEID_CONSENT_UPDATE:" + ts.address.String() + "::grant")
-	consentSig := ts.signMessage(consentMsg)
+	consentSig := ts.signConsentUpdate(t, update)
 
 	err = ts.keeper.UpdateConsent(ts.ctx, ts.address, update, consentSig)
 	require.NoError(t, err)
@@ -660,8 +843,7 @@ func TestWalletConsentFlow(t *testing.T) {
 		GrantConsent: true,
 		Purpose:      "KYC verification",
 	}
-	grantMsg := []byte("VEID_CONSENT_UPDATE:" + ts.address.String() + ":" + scopeID + ":grant")
-	grantSig := ts.signMessage(grantMsg)
+	grantSig := ts.signConsentUpdate(t, grantUpdate)
 	err = ts.keeper.UpdateConsent(ts.ctx, ts.address, grantUpdate, grantSig)
 	require.NoError(t, err)
 
@@ -674,8 +856,7 @@ func TestWalletConsentFlow(t *testing.T) {
 		ScopeID:      scopeID,
 		GrantConsent: false,
 	}
-	revokeMsg := []byte("VEID_CONSENT_UPDATE:" + ts.address.String() + ":" + scopeID + ":revoke")
-	revokeSig := ts.signMessage(revokeMsg)
+	revokeSig := ts.signConsentUpdate(t, revokeUpdate)
 	err = ts.keeper.UpdateConsent(ts.ctx, ts.address, revokeUpdate, revokeSig)
 	require.NoError(t, err)
 
