@@ -7,6 +7,7 @@ const { resolve } = require("path");
 const {
   artifactSelections,
   assertUniqueIds,
+  buildAiAssurance,
   buildArtifactGroup,
   buildTestEvidence,
   buildTooling,
@@ -36,8 +37,20 @@ function runGenerator(args) {
 
 const handoff = sourceJson(handoffPath);
 const schema = JSON.parse(readFileSync(resolve(root, "_docs/ralph/prototype-integration/core-rc-manifest.schema.json"), "utf8"));
+const modelProvenance = JSON.parse(readFileSync(resolve(root, "_docs/ralph/prototype-integration/model-provenance.json"), "utf8"));
+const productionPolicy = JSON.parse(readFileSync(resolve(root, "_docs/ralph/prototype-integration/ai-production-policy.json"), "utf8"));
+const featureParity = JSON.parse(readFileSync(resolve(root, "pkg/inference/conformance/testdata/feature_parity_v1.json"), "utf8"));
 
 const tests = [
+  ["projects blocked AI assurance without certification", () => {
+    const assurance = buildAiAssurance(modelProvenance, productionPolicy, featureParity);
+    assert.equal(assurance.feature_vector.dimension, 768);
+    assert.equal(assurance.feature_vector.test_vector_hashes.length, 4);
+    assert.equal(assurance.uniqueness.implementation_class, "truncated_salted_sha256_bucket_equality_not_lsh");
+    assert.equal(assurance.vault_kms.kms_hsm, "not_configured_or_certified");
+    assert.equal(assurance.consent_retention.production_retention_certified, false);
+    assert.equal(assurance.non_certification.production_certified, false);
+  }],
   ["binds the AI production policy as a control artifact", () => {
     assert.ok(sourceArtifacts.some(([id, path]) => id === "ai_production_policy" && path === "_docs/ralph/prototype-integration/ai-production-policy.json"));
   }],

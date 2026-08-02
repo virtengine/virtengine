@@ -8,7 +8,7 @@
     "schema_version", "manifest_id", "status", "authoritative",
     "planned_functionality_complete", "milestone_m_eligible", "source", "tooling",
     "toolchains", "artifact_groups", "control_artifacts", "migrations",
-    "required_gates", "slurm", "model_provenance", "test_evidence",
+    "required_gates", "slurm", "model_provenance", "ai_assurance", "test_evidence",
     "producer_checkpoints", "rollout", "rollback", "external_dependencies", "blockers"
   ],
   "properties": {
@@ -36,6 +36,7 @@
     "required_gates": { "$ref": "#/$defs/requiredGates" },
     "slurm": { "$ref": "#/$defs/slurm" },
     "model_provenance": { "$ref": "#/$defs/modelProvenance" },
+    "ai_assurance": { "$ref": "#/$defs/aiAssurance" },
     "test_evidence": { "$ref": "#/$defs/testEvidence" },
     "producer_checkpoints": { "$ref": "#/$defs/producerCheckpoints" },
     "rollout": { "$ref": "#/$defs/releaseState" },
@@ -100,6 +101,74 @@
         "id": { "type": "string", "minLength": 1 }, "path": { "type": "string", "minLength": 1 },
         "sha256": { "$ref": "#/$defs/digest" }, "status": { "type": "string", "minLength": 1 }
       }
+    },
+    "aiAssurance": {
+      "type": "object", "additionalProperties": false,
+      "required": ["status", "provenance_digests", "feature_vector", "evaluation", "uniqueness", "vault_kms", "consent_retention", "non_certification"],
+      "properties": {
+        "status": { "const": "dependency_blocked" },
+        "provenance_digests": {
+          "type": "object", "additionalProperties": false,
+          "required": ["models", "runtime", "schema", "licenses"],
+          "properties": {
+            "models": { "type": "array", "minItems": 2, "items": { "$ref": "#/$defs/assuranceDigest" } },
+            "licenses": { "type": "array", "minItems": 2, "items": { "$ref": "#/$defs/assuranceDigest" } },
+            "runtime": {
+              "type": "object", "additionalProperties": false,
+              "required": ["state", "sha256", "source_blocker_id", "sbom_sha256", "sbom_blocker_id"],
+              "properties": {
+                "state": { "type": "string", "minLength": 1 }, "sha256": { "$ref": "#/$defs/nullableDigest" },
+                "source_blocker_id": { "$ref": "#/$defs/nullableString" }, "sbom_sha256": { "$ref": "#/$defs/nullableDigest" },
+                "sbom_blocker_id": { "$ref": "#/$defs/nullableString" }
+              }
+            },
+            "schema": {
+              "type": "object", "additionalProperties": false,
+              "required": ["state", "sha256", "source_blocker_id"],
+              "properties": { "state": { "type": "string", "minLength": 1 }, "sha256": { "$ref": "#/$defs/nullableDigest" }, "source_blocker_id": { "$ref": "#/$defs/nullableString" } }
+            }
+          }
+        },
+        "feature_vector": {
+          "type": "object", "additionalProperties": false,
+          "required": ["state", "dimension", "value_type", "byte_order", "pre_hash_decimal_places", "hash_algorithm", "fixture_path", "test_vector_hashes"],
+          "properties": {
+            "state": { "const": "fixture_only" }, "dimension": { "const": 768 }, "value_type": { "const": "ieee754-float32" },
+            "byte_order": { "const": "big-endian" }, "pre_hash_decimal_places": { "const": 6 }, "hash_algorithm": { "const": "sha256" },
+            "fixture_path": { "const": "pkg/inference/conformance/testdata/feature_parity_v1.json" },
+            "test_vector_hashes": { "type": "array", "minItems": 4, "maxItems": 4, "items": { "$ref": "#/$defs/namedDigest" } }
+          }
+        },
+        "evaluation": { "$ref": "#/$defs/assuranceStatus" },
+        "uniqueness": {
+          "type": "object", "additionalProperties": false, "required": ["status", "implementation_class", "evidence_path"],
+          "properties": { "status": { "const": "blocked" }, "implementation_class": { "const": "truncated_salted_sha256_bucket_equality_not_lsh" }, "evidence_path": { "const": "x/veid/keeper/biometric_hash.go" } }
+        },
+        "vault_kms": {
+          "type": "object", "additionalProperties": false, "required": ["status", "blob_backend", "key_custody", "kms_hsm"],
+          "properties": { "status": { "const": "blocked" }, "blob_backend": { "const": "process_memory" }, "key_custody": { "const": "process_memory" }, "kms_hsm": { "const": "not_configured_or_certified" } }
+        },
+        "consent_retention": {
+          "type": "object", "additionalProperties": false, "required": ["status", "consent", "retention", "production_retention_certified"],
+          "properties": { "status": { "const": "blocked" }, "consent": { "const": "allow_all_default" }, "retention": { "const": "implementation_present_production_uncertified" }, "production_retention_certified": { "const": false } }
+        },
+        "non_certification": {
+          "type": "object", "additionalProperties": false, "required": ["production_certified", "not_certified", "blocker_id"],
+          "properties": { "production_certified": { "const": false }, "not_certified": { "type": "array", "minItems": 7, "maxItems": 7, "items": { "type": "string", "minLength": 1 } }, "blocker_id": { "const": "ai-production-assurance-unavailable" } }
+        }
+      }
+    },
+    "assuranceDigest": {
+      "type": "object", "additionalProperties": false, "required": ["id", "state", "sha256", "source_blocker_id"],
+      "properties": { "id": { "type": "string", "minLength": 1 }, "state": { "type": "string", "minLength": 1 }, "sha256": { "$ref": "#/$defs/nullableDigest" }, "source_blocker_id": { "$ref": "#/$defs/nullableString" } }
+    },
+    "namedDigest": {
+      "type": "object", "additionalProperties": false, "required": ["id", "sha256"],
+      "properties": { "id": { "type": "string", "minLength": 1 }, "sha256": { "$ref": "#/$defs/digest" } }
+    },
+    "assuranceStatus": {
+      "type": "object", "additionalProperties": false, "required": ["status", "report_sha256", "source_blocker_id"],
+      "properties": { "status": { "type": "string", "minLength": 1 }, "report_sha256": { "$ref": "#/$defs/nullableDigest" }, "source_blocker_id": { "$ref": "#/$defs/nullableString" } }
     },
     "migrations": {
       "type": "object", "additionalProperties": false,

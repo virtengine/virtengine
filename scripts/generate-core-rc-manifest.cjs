@@ -221,6 +221,74 @@ function buildToolchains(gateMatrix) {
     compareBytewise(`${left.name}\0${left.version}\0${left.source}`, `${right.name}\0${right.version}\0${right.source}`));
 }
 
+function provenanceDigest(entry) {
+  return {
+    id: entry.id,
+    state: entry.state,
+    sha256: entry.sha256 || null,
+    source_blocker_id: entry.blocker_id || null,
+  };
+}
+
+function buildAiAssurance(modelProvenance, productionPolicy, featureParity) {
+  const policyRules = new Set(productionPolicy.known_findings.map((finding) => finding.rule));
+  const runtime = modelProvenance.bindings.runtime;
+  const schema = modelProvenance.bindings.schema;
+  return {
+    status: "dependency_blocked",
+    provenance_digests: {
+      models: modelProvenance.artifacts.map(provenanceDigest),
+      runtime: {
+        state: runtime.state,
+        sha256: runtime.sha256 || null,
+        source_blocker_id: runtime.blocker_id || null,
+        sbom_sha256: modelProvenance.sbom.sha256 || null,
+        sbom_blocker_id: modelProvenance.sbom.blocker_id || null,
+      },
+      schema: {
+        state: schema.state,
+        sha256: schema.sha256 || null,
+        source_blocker_id: schema.blocker_id || null,
+      },
+      licenses: modelProvenance.licenses.map(provenanceDigest),
+    },
+    feature_vector: {
+      state: "fixture_only",
+      dimension: featureParity.layout.total_dimension,
+      ...featureParity.layout.encoding,
+      fixture_path: "pkg/inference/conformance/testdata/feature_parity_v1.json",
+      test_vector_hashes: featureParity.cases.map((testCase) => ({ id: testCase.name, sha256: testCase.expected_vector_hash })),
+    },
+    evaluation: {
+      status: modelProvenance.evaluation_report.state,
+      report_sha256: modelProvenance.evaluation_report.sha256 || null,
+      source_blocker_id: modelProvenance.evaluation_report.blocker_id || null,
+    },
+    uniqueness: {
+      status: "blocked",
+      implementation_class: policyRules.has("fake-biometric-lsh") ? "truncated_salted_sha256_bucket_equality_not_lsh" : "unverified",
+      evidence_path: "x/veid/keeper/biometric_hash.go",
+    },
+    vault_kms: {
+      status: "blocked",
+      blob_backend: policyRules.has("memory-vault") ? "process_memory" : "unverified",
+      key_custody: policyRules.has("memory-vault") ? "process_memory" : "unverified",
+      kms_hsm: "not_configured_or_certified",
+    },
+    consent_retention: {
+      status: "blocked",
+      consent: policyRules.has("allow-all-consent") ? "allow_all_default" : "unverified",
+      retention: "implementation_present_production_uncertified",
+      production_retention_certified: false,
+    },
+    non_certification: {
+      production_certified: false,
+      not_certified: ["production_model", "production_runtime", "production_evaluation", "biometric_uniqueness", "durable_vault_or_kms", "production_consent_enforcement", "production_retention_legal_hold_or_erasure"],
+      blocker_id: "ai-production-assurance-unavailable",
+    },
+  };
+}
+
 function generateManifest(sourceSha, options = {}) {
   const cwd = options.rootDir || root;
   assertCommit(sourceSha, "--source", cwd);
@@ -236,6 +304,8 @@ function generateManifest(sourceSha, options = {}) {
   const slurmInventory = sourceJson(sourceSha, sourceArtifacts[2][1], cwd);
   const slurmReport = sourceJson(sourceSha, sourceArtifacts[3][1], cwd);
   const modelProvenance = sourceJson(sourceSha, sourceArtifacts[4][1], cwd);
+  const productionPolicy = sourceJson(sourceSha, sourceArtifacts[5][1], cwd);
+  const featureParity = sourceJson(sourceSha, "pkg/inference/conformance/testdata/feature_parity_v1.json", cwd);
   const entries = listSourceEntries(sourceSha, cwd);
   const tooling = buildTooling(options.toolingSha, sourceSha, cwd);
   const testEvidence = buildTestEvidence(sourceSha, handoff, handoffPath, cwd);
@@ -288,6 +358,7 @@ function generateManifest(sourceSha, options = {}) {
       production_weights_status: modelProvenance.artifacts.find((artifact) => artifact.id === "trust-score-model-weights").state,
       blocker_id: "production-model-provenance-unavailable",
     },
+    ai_assurance: buildAiAssurance(modelProvenance, productionPolicy, featureParity),
     test_evidence: testEvidence,
     producer_checkpoints: {
       ledger_path: handoffPath,
@@ -311,6 +382,7 @@ function generateManifest(sourceSha, options = {}) {
       { id: "slurm-production-evidence-unavailable", description: "SLURM production render, isolation, and live durability evidence remain unavailable." },
       { id: "production-model-artifacts-unavailable", description: "Production model weights and release artifacts are unavailable." },
       { id: "production-model-provenance-unavailable", description: "Production model provenance, approvals, evaluation, and runtime SBOM are unavailable." },
+      { id: "ai-production-assurance-unavailable", description: "AI, biometric uniqueness, vault/KMS, consent, retention, and production evaluation assurance remain unavailable." },
       { id: "test-evidence-partial", description: "Some passing handoff test records do not declare test counts." },
       { id: "release-sbom-provenance-unavailable", description: "No release SBOM or signed release provenance is available." },
       { id: "rollout-not-authorized", description: "This non-authoritative prototype manifest does not authorize rollout." },
@@ -323,7 +395,7 @@ function generateManifest(sourceSha, options = {}) {
 
 function validateManifest(manifest, options = {}) {
   const cwd = options.rootDir || root;
-  exactKeys(manifest, ["schema_version", "manifest_id", "status", "authoritative", "planned_functionality_complete", "milestone_m_eligible", "source", "tooling", "toolchains", "artifact_groups", "control_artifacts", "migrations", "required_gates", "slurm", "model_provenance", "test_evidence", "producer_checkpoints", "rollout", "rollback", "external_dependencies", "blockers"], "manifest");
+  exactKeys(manifest, ["schema_version", "manifest_id", "status", "authoritative", "planned_functionality_complete", "milestone_m_eligible", "source", "tooling", "toolchains", "artifact_groups", "control_artifacts", "migrations", "required_gates", "slurm", "model_provenance", "ai_assurance", "test_evidence", "producer_checkpoints", "rollout", "rollback", "external_dependencies", "blockers"], "manifest");
   assert.equal(manifest.schema_version, "virtengine.core-rc.prototype/v0");
   assert.equal(manifest.manifest_id, "T4-08A");
   assert.equal(manifest.status, "dependency_blocked");
@@ -397,6 +469,7 @@ function validateManifest(manifest, options = {}) {
   exactKeys(manifest.required_gates, ["status", "matrix_path", "category_count", "blocked_category_count", "blocker_id"], "required_gates");
   exactKeys(manifest.slurm, ["status", "inventory_path", "report_path", "report_status", "blocker_id"], "slurm");
   exactKeys(manifest.model_provenance, ["status", "path", "sbom_status", "production_weights_status", "blocker_id"], "model_provenance");
+  assertBlocker(manifest, manifest.ai_assurance.non_certification.blocker_id, "AI assurance");
   exactKeys(manifest.test_evidence, ["status", "ledger_path", "implementation_sha", "ledger_sha", "record_count", "declared_test_count", "uncounted_record_count", "records", "blocker_id"], "test_evidence");
   exactKeys(manifest.producer_checkpoints, ["ledger_path", "ledger_sha256", "accepted", "rejected", "blocker_id"], "producer_checkpoints");
   exactKeys(manifest.rollout, ["status", "evidence", "blocker_id"], "rollout");
@@ -426,6 +499,9 @@ function validateManifest(manifest, options = {}) {
   assert.equal(manifest.model_provenance.status, modelProvenance.status, "model provenance status mismatch");
   assert.equal(manifest.model_provenance.sbom_status, modelProvenance.sbom.state, "model SBOM status mismatch");
   assert.equal(manifest.model_provenance.production_weights_status, modelProvenance.artifacts.find((artifact) => artifact.id === "trust-score-model-weights").state, "model weights status mismatch");
+  const productionPolicy = sourceJson(manifest.source.payload_sha, sourceArtifacts[5][1], cwd);
+  const featureParity = sourceJson(manifest.source.payload_sha, "pkg/inference/conformance/testdata/feature_parity_v1.json", cwd);
+  assert.deepEqual(manifest.ai_assurance, buildAiAssurance(modelProvenance, productionPolicy, featureParity), "AI assurance projection mismatch");
   const expectedEvidence = buildTestEvidence(manifest.source.payload_sha, handoff, manifest.test_evidence.ledger_path, cwd);
   assert.deepEqual(manifest.test_evidence, expectedEvidence, "test evidence binding mismatch");
   const expectedTestRecords = expectedEvidence.records;
@@ -487,6 +563,6 @@ function main(argv = process.argv.slice(2)) {
   }
 }
 
-module.exports = { artifactSelections, assertUniqueIds, buildArtifactGroup, buildTestEvidence, buildTooling, generateManifest, listSourceEntries, main, manifestRelativePath, serialize, sourceArtifacts, validateManifest };
+module.exports = { artifactSelections, assertUniqueIds, buildAiAssurance, buildArtifactGroup, buildTestEvidence, buildTooling, generateManifest, listSourceEntries, main, manifestRelativePath, serialize, sourceArtifacts, validateManifest };
 
 if (require.main === module) main();

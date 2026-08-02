@@ -97,6 +97,7 @@ This index lists internal-only documentation. Do not add internal docs outside `
 - `_docs/audits/task-t4-07f-slurm-chart-retirement-2026-08-02.md`
 - `_docs/audits/task-t4-07g-slurm-retired-reference-guard-2026-08-02.md`
 - `_docs/audits/task-t4-12a-ai-production-policy-2026-08-02.md`
+- `_docs/audits/task-t4-14a-ai-assurance-manifest-2026-08-02.md`
 - `_docs/protocols/hpc-cluster-template-spec.md`
 - `_docs/protocols/hpc-node-agent-protocol.md`
 - `_docs/protocols/mobile-capture-protocol-v1.md`
