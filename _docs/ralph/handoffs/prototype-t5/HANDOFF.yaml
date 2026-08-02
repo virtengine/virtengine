@@ -1,54 +1,259 @@
-campaign: three-day-prototype
-thread: T5
-checkpoint: T5-18
-branch: ve/prototype-t5-platform
-start_head: 4deeb0b94b2070100f8492f72d71d80a001807b7
-end_head: 489c0ef74f14562b200ffcb14fbf2258e9cb3754
-origin_main: 79391a3df86d85522b92e0400c6904971ecbe65d
-tree_clean: true
-commits:
-  - 489c0ef74f14562b200ffcb14fbf2258e9cb3754
-owned_paths:
-  - pkg/fundauth/keeper/keeper.go
-  - pkg/fundauth/keeper/keeper_test.go
-  - _docs/ralph/handoffs/prototype-t5/HANDOFF.yaml
-  - _docs/ralph/evidence/prototype-t5/T5-18/validation.txt
-files_changed:
-  - pkg/fundauth/keeper/keeper.go
-  - pkg/fundauth/keeper/keeper_test.go
-  - _docs/ralph/handoffs/prototype-t5/HANDOFF.yaml
-  - _docs/ralph/evidence/prototype-t5/T5-18/validation.txt
-tests:
-  - command: C:\Users\pavil\AppData\Local\VirtEngine\toolchains\go1.25.8\go\bin\go.exe test -count=1 ./pkg/fundauth/...
-    exit_code: 0
-    result: passed
-    tool_versions:
-      go: go1.25.8 windows/amd64
-    artifact: _docs/ralph/evidence/prototype-t5/T5-18/validation.txt
-  - command: C:\Users\pavil\AppData\Local\VirtEngine\toolchains\go1.25.8\go\bin\go.exe vet ./pkg/fundauth/...
-    exit_code: 0
-    result: passed
-    tool_versions:
-      go: go1.25.8 windows/amd64
-    artifact: _docs/ralph/evidence/prototype-t5/T5-18/validation.txt
-  - command: $env:CGO_ENABLED='1'; $env:CC='gcc'; C:\Users\pavil\AppData\Local\VirtEngine\toolchains\go1.25.8\go\bin\go.exe test -race -count=1 ./pkg/fundauth/...
-    exit_code: 0
-    result: passed
-    tool_versions:
-      go: go1.25.8 windows/amd64
-      gcc: WinLibs POSIX UCRT 16.1.0
-    artifact: _docs/ralph/evidence/prototype-t5/T5-18/validation.txt
-  - command: git diff --cached --check
-    exit_code: 0
-    result: passed
-    artifact: _docs/ralph/evidence/prototype-t5/T5-18/validation.txt
-generated_hashes: {}
-migrations: []
-external_evidence:
-  - _docs/ralph/evidence/prototype-t5/T5-18/validation.txt
-known_failures: []
-blockers:
-  - T4-16 must mount, store, and wire all value routes and verify BaseApp rollback.
-  - T4 intake epoch infrastructure is absent, so T5-18 is untagged and not intake-eligible.
-next_checkpoint: T4-16-integration
-expected_head: 489c0ef74f14562b200ffcb14fbf2258e9cb3754
+{
+  "campaign": "three-day-prototype",
+  "thread": "T5",
+  "checkpoint": "T5-19",
+  "branch": "ve/prototype-t5-platform",
+  "frozen_baseline": "79391a3df86d85522b92e0400c6904971ecbe65d",
+  "planning_sha": "1436723bd78980aa0388dbe9fcfa24dda939c54a",
+  "intake_epoch": 1,
+  "intake_base_sha": "5587c384f634552c3a2dd7181ca49cafa4da1984",
+  "payload_head": "fe66ce8364319418c2b9fcd4f839e75fc209befa",
+  "prior_accepted_payload": null,
+  "tree_clean": true,
+  "commits_since_prior_acceptance": [
+    "deb097253fbaac31321fc818506fb80787fee57e",
+    "31603443eaf89bdb686412e04eedddfd1baf912e",
+    "79f82c97fbe330359816c32e606a9bc98048a899",
+    "c66ae54a9603570278b0de01aa71cb1906105135",
+    "e54ba766af7e9def6246acc46368d9fc82fc1ee5",
+    "6e2d084269ac2b5ffe45804616eb6702a494914b",
+    "d7ab800c361535c715e2d3bfaa0583ba1073f1ef",
+    "81e8bbe5d121e1c04ec0454253f9b3119551d01a",
+    "7675014fcb1585fbbe652319b592d58c94f99750",
+    "c2cc55dc3bcb2b18a47b7b5a8e25aefe3561f779",
+    "a9e148436c73e398e8902d03303abafdc1117bb5",
+    "d24cd792fe31912d075dcae6208d5dcc6df9f95e",
+    "1a8334b6ca91a8295b185b4928a407e8fcfd7f8e",
+    "a1f8bb35e4a17b4912bde3ff83e9262ed5b149b0",
+    "33e7457f3041135c222f89d2f938479b8e701a7b",
+    "4a5ca4968e75ad0221037c19b2998ea5e49c27e0",
+    "25cf508a904a0b8de1ac7eb163a67bf1703007f2",
+    "c17551f87744fefc1c8088eb3bcdc84231490370",
+    "91edf353e307bfc75884320d4833266aee4f8de6",
+    "a1666807054d6b5843353213bc2318ef3ec47ffc",
+    "f1447884e847797297c799198cf2b1ceabb0b9d5",
+    "7d95b18afe4196e56eb10bd7f2b51aee31da355a",
+    "024a2535b3761c7f12000d4feb6c93726e815651",
+    "4e3e646e6e4056ca6480807415d4b94101ea57c3",
+    "83486e5cd2aaeea176fdd99d30ee92b04ee8665f",
+    "26212410a6e190375ddb3f5bb393c9966ac5d839",
+    "a5c5f4761b33e0f4b26b8333c707fb24e72526aa",
+    "34629857a91b2ea4a4cfb043eedcd7011edcc518",
+    "2884d7d0b9522a642c3b337eb7941089da847d1c",
+    "65508cd516f5e46fb055d47c0bb81f1bcf810eae",
+    "35945dd943d6f8dd647cae74cf11478b0acbc53a",
+    "c3355b55f3f58aefebaad5b0b1be483e5be2dc1a",
+    "4deeb0b94b2070100f8492f72d71d80a001807b7",
+    "489c0ef74f14562b200ffcb14fbf2258e9cb3754",
+    "03bdcd0543396999569f7b2f5c68e855ee720100",
+    "fe66ce8364319418c2b9fcd4f839e75fc209befa"
+  ],
+  "owned_paths": [
+    "_docs/ralph/evidence/prototype-t5/**",
+    "_docs/ralph/handoffs/prototype-t5/**",
+    "pkg/data_vault/**",
+    "pkg/fundauth/**",
+    "pkg/organization/contracts/**",
+    "pkg/platformsecurity/**",
+    "pkg/provider_daemon/backendprofile/**",
+    "pkg/provider_daemon/federation/**",
+    "pkg/provider_daemon/portal_vault_test.go",
+    "pkg/provider_daemon/vault_service.go",
+    "pkg/provider_daemon/vault_service_test.go",
+    "x/encryption/**",
+    "x/mfa/**",
+    "x/roles/types/privileged/**",
+    "x/veid/keeper/evidence_object_migration.go",
+    "x/veid/keeper/evidence_object_migration_test.go",
+    "x/veid/keeper/evidence_object_store.go",
+    "x/veid/types/keys.go"
+  ],
+  "files_changed": [
+    ".gitattributes",
+    "_build/build-veid-pipeline.sh",
+    "_docs/INDEX.md",
+    "_docs/ralph/evidence/prototype-t5/T5-10/validation.txt",
+    "_docs/ralph/evidence/prototype-t5/T5-11/validation.txt",
+    "_docs/ralph/evidence/prototype-t5/T5-12/validation.txt",
+    "_docs/ralph/evidence/prototype-t5/T5-13/validation.txt",
+    "_docs/ralph/evidence/prototype-t5/T5-14/validation.txt",
+    "_docs/ralph/evidence/prototype-t5/T5-15/validation.txt",
+    "_docs/ralph/evidence/prototype-t5/T5-16/validation.txt",
+    "_docs/ralph/evidence/prototype-t5/T5-17/validation.txt",
+    "_docs/ralph/evidence/prototype-t5/T5-18/validation.txt",
+    "_docs/ralph/handoffs/prototype-integration/HANDOFF.yaml",
+    "_docs/ralph/handoffs/prototype-t5/HANDOFF.yaml",
+    "_docs/ralph/prototype-integration/control.json",
+    "_docs/ralph/prototype-integration/migration-inventory.json",
+    "_docs/ralph/prototype-integration/migration-inventory.schema.json",
+    "_docs/ralph/prototype-integration/model-provenance.json",
+    "_docs/ralph/prototype-integration/model-provenance.schema.json",
+    "_docs/ralph/prototype-integration/producer-handoff.schema.json",
+    "cmd/inference-sidecar/manifest.go",
+    "cmd/inference-sidecar/manifest_test.go",
+    "ml/training/model/release_manifest.py",
+    "ml/training/tests/test_release_manifest.py",
+    "pkg/data_vault/audit_logger.go",
+    "pkg/data_vault/audit_logger_test.go",
+    "pkg/data_vault/consent.go",
+    "pkg/data_vault/contracts/contracts.go",
+    "pkg/data_vault/contracts/contracts_test.go",
+    "pkg/data_vault/contracts/evidence_lifecycle.go",
+    "pkg/data_vault/contracts/evidence_lifecycle_test.go",
+    "pkg/data_vault/contracts/revision_anchor.go",
+    "pkg/data_vault/erasure_coordinator.go",
+    "pkg/data_vault/erasure_coordinator_test.go",
+    "pkg/data_vault/errors.go",
+    "pkg/data_vault/file_lock_unix.go",
+    "pkg/data_vault/file_lock_windows.go",
+    "pkg/data_vault/fixture_artifact_store.go",
+    "pkg/data_vault/fixture_artifact_store_test.go",
+    "pkg/data_vault/fixture_audit_store.go",
+    "pkg/data_vault/fixture_erasure.go",
+    "pkg/data_vault/fixture_file_security.go",
+    "pkg/data_vault/keys/file_lock_unix.go",
+    "pkg/data_vault/keys/file_lock_windows.go",
+    "pkg/data_vault/keys/key_manager.go",
+    "pkg/data_vault/keys/persistence.go",
+    "pkg/data_vault/keys/persistence_test.go",
+    "pkg/data_vault/restore_fence.go",
+    "pkg/data_vault/revision_anchor.go",
+    "pkg/data_vault/store.go",
+    "pkg/data_vault/store_persistence_test.go",
+    "pkg/data_vault/types.go",
+    "pkg/data_vault/vault_service.go",
+    "pkg/data_vault/vault_service_test.go",
+    "pkg/fundauth/authorization.go",
+    "pkg/fundauth/canonical.go",
+    "pkg/fundauth/canonical_test.go",
+    "pkg/fundauth/consumer_test.go",
+    "pkg/fundauth/helpers_test.go",
+    "pkg/fundauth/inventory.go",
+    "pkg/fundauth/inventory_test.go",
+    "pkg/fundauth/keeper/integration_test.go",
+    "pkg/fundauth/keeper/keeper.go",
+    "pkg/fundauth/keeper/keeper_test.go",
+    "pkg/fundauth/policy.go",
+    "pkg/fundauth/policy_test.go",
+    "pkg/fundauth/registry.go",
+    "pkg/fundauth/registry_test.go",
+    "pkg/fundauth/strict_test.go",
+    "pkg/fundauth/testdata/value_source_inventory_v1.json",
+    "pkg/fundauth/verify_test.go",
+    "pkg/organization/contracts/contracts.go",
+    "pkg/organization/contracts/contracts_test.go",
+    "pkg/platformsecurity/contracts/manifest.go",
+    "pkg/platformsecurity/contracts/manifest_test.go",
+    "pkg/platformsecurity/contracts/testdata/dependency-manifest.json",
+    "pkg/platformsecurity/issuerlink/contracts.go",
+    "pkg/platformsecurity/issuerlink/contracts_test.go",
+    "pkg/platformsecurity/issuerlink/fixture.go",
+    "pkg/platformsecurity/issuerlink/fixture_test.go",
+    "pkg/platformsecurity/uniqueness/contracts.go",
+    "pkg/platformsecurity/uniqueness/contracts_test.go",
+    "pkg/platformsecurity/uniqueness/fixture.go",
+    "pkg/platformsecurity/uniqueness/fixture_test.go",
+    "pkg/platformsecurity/uniqueness/incident.go",
+    "pkg/platformsecurity/uniqueness/incident_test.go",
+    "pkg/provider_daemon/backendprofile/contracts.go",
+    "pkg/provider_daemon/backendprofile/contracts_test.go",
+    "pkg/provider_daemon/backendprofile/fixtures.go",
+    "pkg/provider_daemon/federation/federation.go",
+    "pkg/provider_daemon/federation/federation_test.go",
+    "pkg/provider_daemon/federation/request_v1_vector.ts",
+    "pkg/provider_daemon/federation/testdata/request-v1.json",
+    "pkg/provider_daemon/portal_vault_test.go",
+    "pkg/provider_daemon/vault_service.go",
+    "pkg/provider_daemon/vault_service_test.go",
+    "scripts/validate-migration-inventory.cjs",
+    "scripts/validate-migration-inventory.test.cjs",
+    "scripts/validate-model-provenance.cjs",
+    "scripts/validate-model-provenance.test.cjs",
+    "scripts/validate-prototype-integration.cjs",
+    "scripts/validate-prototype-integration.test.cjs",
+    "tests/upgrade/test_cases_test.go",
+    "upgrades/software/v1.6.0/upgrade.go",
+    "upgrades/software/v1.6.0/upgrade_handler_test.go",
+    "upgrades/software/v1.6.0/upgrade_retry_test.go",
+    "x/encryption/crypto/envelope.go",
+    "x/encryption/crypto/envelope_fuzz_test.go",
+    "x/encryption/crypto/envelope_test.go",
+    "x/encryption/types/envelope.go",
+    "x/encryption/types/envelope_test.go",
+    "x/mfa/keeper/keeper.go",
+    "x/mfa/keeper/keeper_test.go",
+    "x/mfa/keeper/msg_server.go",
+    "x/mfa/keeper/msg_server_test.go",
+    "x/mfa/keeper/verification.go",
+    "x/mfa/keeper/verification_test.go",
+    "x/mfa/types/prototype_contract.go",
+    "x/mfa/types/prototype_contract_test.go",
+    "x/mfa/types/prototype_recovery_contract.go",
+    "x/roles/types/privileged/approval_mfa.go",
+    "x/roles/types/privileged/audit.go",
+    "x/roles/types/privileged/canonical.go",
+    "x/roles/types/privileged/contracts_test.go",
+    "x/roles/types/privileged/emergency_hold.go",
+    "x/roles/types/privileged/feature.go",
+    "x/roles/types/privileged/fixture.go",
+    "x/roles/types/privileged/lifecycle.go",
+    "x/roles/types/privileged/policy.go",
+    "x/veid/keeper/evidence_object_migration.go",
+    "x/veid/keeper/evidence_object_migration_test.go",
+    "x/veid/keeper/evidence_object_store.go",
+    "x/veid/types/keys.go"
+  ],
+  "tests": [
+    {
+      "command": "C:\\Users\\pavil\\AppData\\Local\\VirtEngine\\toolchains\\go1.25.8\\go\\bin\\go.exe test -count=1 ./pkg/fundauth/keeper",
+      "exit_code": 0,
+      "result": "passed",
+      "tool_versions": {
+        "go": "go version go1.25.8 windows/amd64"
+      },
+      "artifact": "_docs/ralph/evidence/prototype-t5/T5-19/validation.txt"
+    },
+    {
+      "command": "C:\\Users\\pavil\\AppData\\Local\\VirtEngine\\toolchains\\go1.25.8\\go\\bin\\go.exe test -count=1 ./pkg/fundauth/...",
+      "exit_code": 0,
+      "result": "passed",
+      "tool_versions": {
+        "go": "go version go1.25.8 windows/amd64"
+      },
+      "artifact": "_docs/ralph/evidence/prototype-t5/T5-19/validation.txt"
+    },
+    {
+      "command": "C:\\Users\\pavil\\AppData\\Local\\VirtEngine\\toolchains\\go1.25.8\\go\\bin\\go.exe vet ./pkg/fundauth/...",
+      "exit_code": 0,
+      "result": "passed",
+      "tool_versions": {
+        "go": "go version go1.25.8 windows/amd64"
+      },
+      "artifact": "_docs/ralph/evidence/prototype-t5/T5-19/validation.txt"
+    },
+    {
+      "command": "$env:CGO_ENABLED='1'; $env:CC='gcc'; C:\\Users\\pavil\\AppData\\Local\\VirtEngine\\toolchains\\go1.25.8\\go\\bin\\go.exe test -race -count=1 ./pkg/fundauth/...",
+      "exit_code": 0,
+      "result": "passed",
+      "tool_versions": {
+        "go": "go version go1.25.8 windows/amd64",
+        "gcc": "WinLibs POSIX UCRT GCC 16.1.0"
+      },
+      "artifact": "_docs/ralph/evidence/prototype-t5/T5-19/validation.txt"
+    }
+  ],
+  "generated_hashes": {},
+  "migrations": [],
+  "external_evidence": [
+    "_docs/ralph/evidence/prototype-t5/T5-19/validation.txt"
+  ],
+  "known_failures": [
+    "A diagnostic fresh-runner GCC PATH command was parsed incorrectly and failed before compilation; the corrected command passed in the persistent shell."
+  ],
+  "blockers": [
+    "Epoch 1 range includes T4 integration merge a9e148436c73e398e8902d03303abafdc1117bb5, whose parent diff adds upgrades/software/v1.6.0/upgrade.go, upgrades/software/v1.6.0/upgrade_handler_test.go, and upgrades/software/v1.6.0/upgrade_retry_test.go; there is no active T5 generated-file lease; validator completeChangedPaths sees 133 paths; T5 cannot truthfully claim integration ownership or fix accumulated history with a descendant commit or revert; intake requires a later T4 epoch base/prior accepted payload or an exact active lease.",
+    "T4-16 must mount the persistent FundAuthorization store, construct the keeper, wire all value-moving routes through the atomic authorization consumer, and verify BaseApp commit and rollback behavior end to end.",
+    "This checkpoint is untagged and not intake eligible, and it makes no production-readiness, production-approval, or production-deployment claim."
+  ],
+  "next_checkpoint": null
+}

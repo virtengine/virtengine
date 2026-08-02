@@ -1,0 +1,62 @@
+T5-19 intake epoch diagnostic validation
+Payload: fe66ce8364319418c2b9fcd4f839e75fc209befa
+Branch: ve/prototype-t5-platform
+Platform: windows/amd64
+Toolchains: go version go1.25.8 windows/amd64; WinLibs POSIX UCRT GCC 16.1.0
+
+Epoch ancestry:
+- Frozen baseline: 79391a3df86d85522b92e0400c6904971ecbe65d
+- Planning SHA: 1436723bd78980aa0388dbe9fcfa24dda939c54a
+- Intake epoch: 1
+- Intake base: 5587c384f634552c3a2dd7181ca49cafa4da1984
+- Prior accepted payload: null
+- Payload head: fe66ce8364319418c2b9fcd4f839e75fc209befa
+- Payload descends from the intake base.
+- git rev-list --reverse --topo-order reports exactly 36 commits from the intake base to the payload.
+- T4 completeChangedPaths reports exactly 133 paths, including integration-history parent diffs.
+
+Command: C:\Users\pavil\AppData\Local\VirtEngine\toolchains\go1.25.8\go\bin\go.exe test -count=1 ./pkg/fundauth/keeper
+Output:
+- ok github.com/virtengine/virtengine/pkg/fundauth/keeper 0.214s
+Exit code: 0
+
+Command: C:\Users\pavil\AppData\Local\VirtEngine\toolchains\go1.25.8\go\bin\go.exe test -count=1 ./pkg/fundauth/...
+Output:
+- ok github.com/virtengine/virtengine/pkg/fundauth 1.727s
+- ok github.com/virtengine/virtengine/pkg/fundauth/keeper 1.711s
+Exit code: 0
+
+Command: C:\Users\pavil\AppData\Local\VirtEngine\toolchains\go1.25.8\go\bin\go.exe vet ./pkg/fundauth/...
+Output: no diagnostics
+Exit code: 0
+
+Persistent-shell environment: CGO_ENABLED=1; CC=gcc; PATH includes the WinLibs UCRT bin directory.
+Command: C:\Users\pavil\AppData\Local\VirtEngine\toolchains\go1.25.8\go\bin\go.exe test -race -count=1 ./pkg/fundauth/...
+Output:
+- ok github.com/virtengine/virtengine/pkg/fundauth 1.842s
+- ok github.com/virtengine/virtengine/pkg/fundauth/keeper 1.304s
+Exit code: 0
+
+Diagnostic known failure:
+- A fresh-runner GCC PATH command was parsed incorrectly and failed before compilation. The corrected command was rerun in the persistent shell and produced the passing race output above.
+
+Integration-history ownership diagnostic:
+- Merge: a9e148436c73e398e8902d03303abafdc1117bb5
+- The merge parent diff adds exactly these three integration-owned paths:
+  - upgrades/software/v1.6.0/upgrade.go
+  - upgrades/software/v1.6.0/upgrade_handler_test.go
+  - upgrades/software/v1.6.0/upgrade_retry_test.go
+- No active T5 generated-file lease covers those paths.
+- T5 does not declare upgrades/** or any other T4-only path in owned_paths.
+- The handoff may therefore fail validator ownership coverage intentionally and truthfully.
+- A descendant commit or revert cannot remove paths already accumulated by completeChangedPaths for this epoch range.
+- Intake requires a later T4 epoch base/prior accepted payload or an exact active lease for the integration-owned paths.
+
+Integration obligation and non-claims:
+- T4-16 must mount the persistent FundAuthorization store, construct the keeper, wire all value-moving routes through the atomic authorization consumer, and verify BaseApp commit and rollback behavior end to end.
+- This checkpoint makes no production-readiness, production-approval, or production-deployment claim.
+- The handoff is untagged and not intake eligible.
+
+Command: git diff --check -- _docs/ralph/evidence/prototype-t5/T5-19/validation.txt _docs/ralph/handoffs/prototype-t5/HANDOFF.yaml
+Output: no errors
+Exit code: 0
