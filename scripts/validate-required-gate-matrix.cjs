@@ -17,7 +17,7 @@ const categoryCommands = new Map([
   ["sdk", ["pnpm --dir sdk/ts install --frozen-lockfile", "pnpm --dir sdk/ts build", "pnpm --dir sdk/ts test"]],
   ["portal", ["pnpm --dir portal install --frozen-lockfile", "pnpm --dir portal lint", "pnpm --dir portal test"]],
   ["mobile", ["pnpm --dir mobile/veid-capture-app install --frozen-lockfile", "pnpm --dir mobile/veid-capture-app typecheck", "pnpm --dir mobile/veid-capture-app test"]],
-  ["ml", ["python -m pip install --require-hashes -r ml/requirements-deterministic.txt", "python -m pytest --collect-only -q ml/training/tests", "python -m pytest -q ml/training/tests"]],
+  ["ml", ["python -m pip install --require-hashes -r ml/requirements-deterministic.txt", "python -m pytest --collect-only -q ml/training/tests", "python -m pytest -q ml/training/tests", "node scripts/validate-ai-production-policy.cjs --enforce"]],
   ["deployment", ["docker compose -f docker-compose.yaml config --quiet", "bash scripts/ci/post-deploy-smoke-test.sh"]],
   ["observability", ["docker compose -f docker-compose.observability.yaml config --quiet", "go test -count=1 ./pkg/observability/..."]],
   ["upgrades", ["go test -count=1 ./tests/upgrade/..."]],
