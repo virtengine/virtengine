@@ -7,6 +7,11 @@ import (
 	"sort"
 )
 
+const (
+	MFAFactorProfileContractVersion = "virtengine.mfa.factor-profile/v1"
+	MFAChallengeContractVersion     = "virtengine.mfa.challenge/v1"
+)
+
 type ApprovalMember struct {
 	AccountID string `json:"account_id"`
 	RoleID    string `json:"role_id"`
@@ -171,9 +176,12 @@ type MFARequirement struct {
 }
 
 func (r MFARequirement) Validate() error {
-	if invalidExactValue(r.RequirementID) || invalidExactValue(r.ContractVersion) || invalidExactValue(r.ProfileID) || invalidExactValue(r.ChallengeVersion) ||
+	if invalidExactValue(r.RequirementID) || invalidExactValue(r.ProfileID) ||
 		r.VerifierKeyEpoch == 0 || r.RootEpoch == 0 || r.ProofEpoch == 0 || r.MinimumProofs == 0 || r.ActionDigest == ([32]byte{}) {
 		return fmt.Errorf("MFA requirement must bind contract, profile, challenge, proofs, and exact action")
+	}
+	if r.ContractVersion != MFAFactorProfileContractVersion || r.ChallengeVersion != MFAChallengeContractVersion {
+		return fmt.Errorf("MFA requirement uses an unsupported contract or challenge version")
 	}
 	if !r.RequireStrongFactor {
 		return fmt.Errorf("privileged action requires a strong MFA factor")
@@ -210,10 +218,15 @@ func (e MFAEvidence) Validate(requirement MFARequirement, now int64) error {
 	if uint32(len(e.ProofDigests)) < requirement.MinimumProofs {
 		return fmt.Errorf("MFA evidence has insufficient proofs")
 	}
+	seenProofs := make(map[[32]byte]struct{}, len(e.ProofDigests))
 	for _, proof := range e.ProofDigests {
 		if proof == ([32]byte{}) {
 			return fmt.Errorf("MFA proof digest is missing")
 		}
+		if _, duplicate := seenProofs[proof]; duplicate {
+			return fmt.Errorf("MFA proof digest is duplicated")
+		}
+		seenProofs[proof] = struct{}{}
 	}
 	if e.VerifiedAt <= 0 || e.ExpiresAt <= e.VerifiedAt || now < e.VerifiedAt || now >= e.ExpiresAt {
 		return fmt.Errorf("MFA evidence validity window is invalid")

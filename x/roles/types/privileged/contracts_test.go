@@ -203,6 +203,39 @@ func TestPolicyRejectsWeakOrMissingMFA(t *testing.T) {
 	}
 }
 
+func TestPolicyRejectsUnsupportedMFAVersionsAndDuplicateProofs(t *testing.T) {
+	requirement := DeterministicFixture().MFARequirements[0]
+	for name, mutate := range map[string]func(*MFARequirement){
+		"unknown contract":    func(value *MFARequirement) { value.ContractVersion = "virtengine.mfa.factor-profile/v2" },
+		"downgraded contract": func(value *MFARequirement) { value.ContractVersion = "virtengine.mfa.factor-profile/v0" },
+		"unknown challenge":   func(value *MFARequirement) { value.ChallengeVersion = "virtengine.mfa.challenge/v2" },
+	} {
+		t.Run(name, func(t *testing.T) {
+			candidate := requirement
+			mutate(&candidate)
+			if err := candidate.Validate(); err == nil {
+				t.Fatal("unsupported MFA contract version accepted")
+			}
+		})
+	}
+
+	requirement.MinimumProofs = 2
+	evidence := MFAEvidence{
+		RequirementID: requirement.RequirementID, ContractVersion: requirement.ContractVersion,
+		ProfileID: requirement.ProfileID, ChallengeVersion: requirement.ChallengeVersion,
+		VerifierKeyEpoch: requirement.VerifierKeyEpoch, RootEpoch: requirement.RootEpoch, ProofEpoch: requirement.ProofEpoch,
+		ChallengeDigest: testDigest(4), ProofDigests: [][32]byte{testDigest(5), testDigest(5)},
+		ActionDigest: requirement.ActionDigest, VerifiedAt: 100, ExpiresAt: 200,
+	}
+	if err := evidence.Validate(requirement, 150); err == nil {
+		t.Fatal("duplicate MFA proof digest inflated proof quorum")
+	}
+	evidence.ProofDigests[1] = testDigest(6)
+	if err := evidence.Validate(requirement, 150); err != nil {
+		t.Fatalf("distinct MFA proof quorum rejected: %v", err)
+	}
+}
+
 func TestPolicyVaultHoldMigrationPreservation(t *testing.T) {
 	source := VaultHoldSnapshot{
 		HoldID: "hold-1", AuthorityID: "court-1", ApprovalDigest: testDigest(1), PolicyRegistryID: "registry-1",
