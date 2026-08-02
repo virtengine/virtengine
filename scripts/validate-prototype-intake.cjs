@@ -243,13 +243,13 @@ function validateToolchains(test, nodeMajors) {
   }
 }
 
-function validateEpoch(epoch, requestedEpoch, tagInfo) {
+function validateEpoch(epoch, requestedEpoch, tagInfo, revalidateAccepted = false) {
   assertExactKeys(epoch, ["announcement_cutoff", "base_sha", "base_tag", "campaign", "intake_epoch", "opens_at", "planning_sha", "producers", "schema_version", "status"], "epoch manifest");
   assert.equal(epoch.schema_version, "virtengine.prototype.intake-epoch/v2");
   assert.equal(epoch.campaign, CAMPAIGN);
   assert.equal(epoch.intake_epoch, requestedEpoch);
   assert.equal(epoch.planning_sha, PLANNING_SHA, "epoch has wrong planning SHA");
-  assert.equal(epoch.status, "frozen", "epoch announcement roster is not frozen");
+  assert.ok(epoch.status === "frozen" || (revalidateAccepted && epoch.status === "closed"), "epoch announcement roster is not frozen");
   assert.equal(epoch.base_tag, `checkpoint/prototype-integration/epoch-${requestedEpoch}-base`);
   assertSha(epoch.base_sha, "epoch base_sha");
   assert.match(epoch.opens_at, /Z$/, "epoch opens_at must be UTC");
@@ -267,12 +267,16 @@ function validateEpoch(epoch, requestedEpoch, tagInfo) {
       assert.equal(entry.tag, null);
       assert.equal(entry.decision, null);
     }
+    if (["announced", "accepted", "rejected"].includes(entry.status)) assert.equal(typeof entry.tag, "string", `${entry.status} producer ${entry.thread} must record a tag`);
+    if (entry.status === "accepted") assert.equal(entry.decision, "accepted", `accepted producer ${entry.thread} must record decision=accepted`);
+    if (entry.status === "rejected") assert.equal(entry.decision, "rejected", `rejected producer ${entry.thread} must record decision=rejected`);
   }
   const producer = epoch.producers.find((entry) => entry.thread === tagInfo.thread);
   assert.ok(producer, "producer is unknown to epoch");
-  assert.equal(producer.status, "announced", "producer tag was not announced for this epoch");
+  assert.equal(producer.status, revalidateAccepted ? "accepted" : "announced", revalidateAccepted ? "producer tag was not accepted for this epoch" : "producer tag was not announced for this epoch");
   assert.equal(producer.tag, tagInfo.tag, "epoch announced a different tag");
-  assert.equal(producer.decision, null, "epoch tag already has a decision");
+  if (revalidateAccepted) assert.equal(producer.decision, "accepted", "accepted epoch tag must record decision=accepted");
+  else assert.equal(producer.decision, null, "epoch tag already has a decision");
   return producer;
 }
 
@@ -289,7 +293,7 @@ function validateIntake(options) {
   const epochPath = `_docs/ralph/prototype-integration/epochs/epoch-${requestedEpoch}.json`;
   assert.ok(objectExistsAt(repo, "HEAD", epochPath), `unknown intake epoch ${requestedEpoch}`);
   const epoch = parseJsonDocument(gitShow(repo, "HEAD", epochPath), "epoch manifest");
-  validateEpoch(epoch, requestedEpoch, tagInfo);
+  validateEpoch(epoch, requestedEpoch, tagInfo, options.revalidateAccepted === true);
   const schema = parseJsonDocument(gitShow(repo, "HEAD", "_docs/ralph/prototype-integration/producer-handoff.schema.json"), "producer schema");
   validateSchemaContract(schema);
   const control = parseJsonDocument(gitShow(repo, "HEAD", "_docs/ralph/prototype-integration/control.json"), "integration control");
@@ -330,8 +334,10 @@ function validateIntake(options) {
 
   const ledger = parseJsonDocument(gitShow(repo, "HEAD", "_docs/ralph/handoffs/prototype-integration/HANDOFF.yaml"), "integration handoff ledger");
   const accepted = Array.isArray(ledger.accepted_checkpoints) ? ledger.accepted_checkpoints : [];
-  assert.ok(!accepted.some((entry) => entry.thread === handoff.thread && (entry.checkpoint === handoff.checkpoint || entry.tip === tagTarget || entry.payload_head === handoff.payload_head)), "checkpoint or payload was already accepted");
-  const acceptedForThread = accepted.filter((entry) => entry.thread === handoff.thread);
+  if (!options.revalidateAccepted) {
+    assert.ok(!accepted.some((entry) => entry.thread === handoff.thread && (entry.checkpoint === handoff.checkpoint || entry.tip === tagTarget || entry.payload_head === handoff.payload_head)), "checkpoint or payload was already accepted");
+  }
+  const acceptedForThread = accepted.filter((entry) => entry.thread === handoff.thread && (!options.revalidateAccepted || (entry.checkpoint !== handoff.checkpoint && entry.tip !== tagTarget && entry.payload_head !== handoff.payload_head)));
   const latestAccepted = acceptedForThread.length === 0 ? null : acceptedForThread[acceptedForThread.length - 1];
   const expectedPrior = latestAccepted === null ? null : latestAccepted.payload_head;
   assert.equal(handoff.prior_accepted_payload, expectedPrior, "prior_accepted_payload is not the latest accepted payload");

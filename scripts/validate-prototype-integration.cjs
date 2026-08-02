@@ -9,6 +9,7 @@ const { validateManifest: validateCoreRcManifest } = require("./generate-core-rc
 const { validateSchema: validateCoreRcSchema } = require("./validate-core-rc-manifest.cjs");
 const { validateMigrationInventory } = require("./validate-migration-inventory.cjs");
 const { validateModelProvenance } = require("./validate-model-provenance.cjs");
+const { validateReportSchema: validatePublicationPreflightSchema } = require("./preflight-core-rc-publication.cjs");
 const { validateRequiredGateMatrix } = require("./validate-required-gate-matrix.cjs");
 const { validateSlurmChartInventory } = require("./validate-slurm-chart-inventory.cjs");
 
@@ -23,6 +24,7 @@ const migrationInventoryPath = resolve(root, "_docs/ralph/prototype-integration/
 const migrationSchemaPath = resolve(root, "_docs/ralph/prototype-integration/migration-inventory.schema.json");
 const modelProvenancePath = resolve(root, "_docs/ralph/prototype-integration/model-provenance.json");
 const modelProvenanceSchemaPath = resolve(root, "_docs/ralph/prototype-integration/model-provenance.schema.json");
+const publicationPreflightSchemaPath = resolve(root, "_docs/ralph/prototype-integration/core-rc-publication-preflight.schema.json");
 const requiredGateMatrixPath = resolve(root, "_docs/ralph/prototype-integration/required-gate-matrix.json");
 const requiredGateSchemaPath = resolve(root, "_docs/ralph/prototype-integration/required-gate-matrix.schema.json");
 const requiredGatePlanSchemaPath = resolve(root, "_docs/ralph/prototype-integration/required-gate-plan.schema.json");
@@ -35,7 +37,7 @@ function loadJson(path) {
   return JSON.parse(readFileSync(path, "utf8"));
 }
 
-function validateEpoch(epoch) {
+function validateEpoch(epoch, handoff = null) {
   const expectedKeys = ["announcement_cutoff", "base_sha", "base_tag", "campaign", "intake_epoch", "opens_at", "planning_sha", "producers", "schema_version", "status"];
   assert.deepEqual(Object.keys(epoch).sort(), expectedKeys);
   assert.equal(epoch.schema_version, "virtengine.prototype.intake-epoch/v2");
@@ -44,7 +46,7 @@ function validateEpoch(epoch) {
   assert.equal(epoch.base_tag, "checkpoint/prototype-integration/epoch-1-base");
   assert.equal(epoch.base_sha, "5587c384f634552c3a2dd7181ca49cafa4da1984");
   assert.equal(epoch.planning_sha, "1436723bd78980aa0388dbe9fcfa24dda939c54a");
-  assert.equal(epoch.status, "open");
+  assert.ok(["open", "frozen", "closed"].includes(epoch.status), "epoch status must be open, frozen, or closed");
   assert.ok(Number.isFinite(Date.parse(epoch.opens_at)), "epoch opens_at must be UTC date-time");
   assert.ok(Number.isFinite(Date.parse(epoch.announcement_cutoff)), "epoch announcement_cutoff must be UTC date-time");
   assert.match(epoch.opens_at, /Z$/);
@@ -56,11 +58,23 @@ function validateEpoch(epoch) {
     assert.ok(["unannounced", "announced", "accepted", "rejected"].includes(producer.status));
     if (producer.status === "unannounced") {
       assert.equal(producer.tag, null);
-      assert.equal(producer.decision, null);
+      assert.ok(producer.decision === null || producer.decision === "frozen-out", "unannounced producer decision must be null or frozen-out");
+      if (producer.decision === "frozen-out") assert.ok(["frozen", "closed"].includes(epoch.status), "open epoch cannot freeze out a producer");
     } else {
       assert.match(producer.tag, /^checkpoint\/prototype-t[1235]\/t[1235]-[0-9]{2,}[a-z]?$/);
       if (producer.status === "announced") assert.equal(producer.decision, null);
-      else assert.ok(producer.decision !== null, "accepted/rejected producer must record a decision");
+      if (producer.status === "accepted") assert.equal(producer.decision, "accepted", "accepted producer must record decision=accepted");
+      if (producer.status === "rejected") assert.equal(producer.decision, "rejected", "rejected producer must record decision=rejected");
+    }
+  }
+  if (handoff) {
+    const accepted = Array.isArray(handoff.accepted_checkpoints) ? handoff.accepted_checkpoints : [];
+    for (const producer of epoch.producers.filter((entry) => entry.status === "accepted")) {
+      const matches = accepted.filter((entry) => entry.thread === producer.thread && entry.tag === producer.tag);
+      assert.equal(matches.length, 1, `accepted epoch producer ${producer.thread} must match exactly one accepted ledger checkpoint/tag`);
+      assert.match(matches[0].checkpoint, new RegExp(`^${producer.thread}-[0-9]{2,}[A-Z]?$`));
+      assert.match(matches[0].tip, /^[a-f0-9]{40}$/);
+      assert.match(matches[0].payload_head, /^[a-f0-9]{40}$/);
     }
   }
 }
@@ -118,7 +132,7 @@ function validateIntegrationControl(control, schema, handoff, epoch) {
   assert.equal(handoff.tree_clean, true);
   assert.ok(Array.isArray(handoff.accepted_checkpoints));
   assert.ok(Array.isArray(handoff.rejected_checkpoints));
-  validateEpoch(epoch);
+  validateEpoch(epoch, handoff);
 }
 
 module.exports = { validateEpoch, validateIntegrationControl };
@@ -135,6 +149,7 @@ if (require.main === module) {
     rootDir: root,
     schema: loadJson(modelProvenanceSchemaPath),
   });
+  validatePublicationPreflightSchema(loadJson(publicationPreflightSchemaPath));
   validateRequiredGateMatrix(loadJson(requiredGateMatrixPath), {
     schema: loadJson(requiredGateSchemaPath),
     planSchema: loadJson(requiredGatePlanSchemaPath),

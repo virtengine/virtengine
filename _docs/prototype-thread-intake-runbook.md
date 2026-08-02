@@ -22,8 +22,9 @@ T4 also commits an epoch manifest with epoch number, base tag/SHA, planning SHA,
 `opens_at`, `announcement_cutoff`, and producer states. A checkpoint is announced
 only when its remote annotated tag exists before the cutoff. At cutoff, T4 freezes
 the announced tag list. Unannounced work automatically moves to the next epoch;
-it does not block closure. T4 accepts or rejects every frozen tag, records the
-decision, closes the epoch, then opens the next. A rejected payload is immutable;
+T4 records it as `status: unannounced`, `tag: null`, and `decision: frozen-out`
+before treating it as terminal for closure. T4 accepts or rejects every frozen
+tag, records the decision, closes the epoch, then opens the next. A rejected payload is immutable;
 a correction receives a new checkpoint ID in a later epoch.
 
 A producer merges the epoch base into its branch before validation. It must not
@@ -122,6 +123,32 @@ node scripts/validate-prototype-intake.cjs --epoch 1 --tag checkpoint/prototype-
 
 Both commands are mandatory. T4 performs no producer merge until the validator
 and its negative tests pass on the exact T4 SHA.
+
+## Core RC Publication Preflight
+
+T4-09A is diagnostic-only. It never creates or pushes a tag. Run it with the
+exact candidate, intake epoch, and reserved checkpoint tag:
+
+```powershell
+node scripts/preflight-core-rc-publication.cjs --candidate <full-sha> --epoch 1 --tag checkpoint/prototype-integration/t4-09a --json
+```
+
+The command exits nonzero while any blocker remains and emits a deterministic
+report conforming to `core-rc-publication-preflight.schema.json`. `--publish` is
+intentionally unavailable. Publication requires a clean local/remote exact-SHA
+boundary, terminal producer decisions, accepted ledger/tag/payload
+correspondence, and revalidated accepted tags. The current strict v0 manifest
+must retain its schema-required false authority flags; publication readiness is
+evaluated separately from that contract and remains blocked until a future
+valid manifest reports a ready status with no prototype-success blockers.
+
+Gate results must validate against the exact execution plan computed from the
+declared base to the candidate. Their committed bytes must be SHA-256 bound in
+both the manifest and integration ledger. Required CI evidence is accepted only
+from the immutable workflow paths and job names, exact VirtEngine repository,
+`ve/prototype-integration` branch, allowed event, successful run attempt and
+job, exact candidate SHA, and matching required-gate artifact digest. The local
+and remote publication tag must remain absent.
 
 ## Toolchains
 

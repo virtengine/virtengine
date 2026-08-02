@@ -152,6 +152,36 @@ test("accepts an annotated, announced intake-v2 checkpoint", () => {
   }
 });
 
+test("revalidates an accepted checkpoint without treating its decision as a new intake", () => {
+  const fixture = buildFixture({ static: ({ epoch }) => {
+    epoch.producers[1].status = "accepted";
+    epoch.producers[1].decision = "accepted";
+  } });
+  try {
+    assert.doesNotThrow(() => run(fixture, { revalidateAccepted: true }));
+  } finally {
+    rmSync(fixture.directory, { recursive: true, force: true });
+  }
+});
+
+test("revalidates an accepted checkpoint from a closed epoch", () => {
+  const fixture = buildFixture({ static: ({ epoch }) => {
+    epoch.status = "closed";
+    epoch.producers[1].status = "accepted";
+    epoch.producers[1].decision = "accepted";
+  } });
+  try {
+    assert.doesNotThrow(() => run(fixture, { revalidateAccepted: true }));
+    assert.throws(() => run(fixture), /roster is not frozen|not announced/);
+  } finally {
+    rmSync(fixture.directory, { recursive: true, force: true });
+  }
+});
+
+fixtureTest("rejects an accepted producer with a rejected decision", {
+  static: ({ epoch }) => { epoch.producers[1].status = "accepted"; epoch.producers[1].decision = "rejected"; },
+}, /decision=accepted/, { revalidateAccepted: true });
+
 fixtureTest("rejects a missing remote tag", {
   static: ({ epoch }) => { epoch.producers[1].tag = "checkpoint/prototype-t2/t2-99"; },
 }, /missing|failed/, { tag: "checkpoint/prototype-t2/t2-99" });

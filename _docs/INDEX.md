@@ -151,6 +151,7 @@ This index lists internal-only documentation. Do not add internal docs outside `
 - `_docs/ralph/prototype-integration/control.json`
 - `_docs/ralph/prototype-integration/core-rc-manifest.json`
 - `_docs/ralph/prototype-integration/core-rc-manifest.schema.json`
+- `_docs/ralph/prototype-integration/core-rc-publication-preflight.schema.json`
 - `_docs/ralph/prototype-integration/epochs/epoch-1.json`
 - `_docs/ralph/prototype-integration/migration-inventory.json`
 - `_docs/ralph/prototype-integration/migration-inventory.schema.json`

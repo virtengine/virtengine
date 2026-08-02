@@ -81,6 +81,40 @@ const tests = [
     fixture.epoch.accepted = [];
     assert.throws(() => validateIntegrationControl(fixture.control, fixture.schema, fixture.handoff, fixture.epoch));
   }],
+  ["accepts frozen and closed aggregate epoch states", () => {
+    for (const status of ["frozen", "closed"]) {
+      const fixture = validFixture();
+      fixture.epoch.status = status;
+      assert.doesNotThrow(() => validateIntegrationControl(fixture.control, fixture.schema, fixture.handoff, fixture.epoch));
+    }
+  }],
+  ["rejects an unknown aggregate epoch state", () => {
+    const fixture = validFixture();
+    fixture.epoch.status = "published";
+    assert.throws(() => validateIntegrationControl(fixture.control, fixture.schema, fixture.handoff, fixture.epoch), /epoch status/);
+  }],
+  ["accepts an explicitly frozen-out producer only after the epoch freezes", () => {
+    const fixture = validFixture();
+    fixture.epoch.status = "closed";
+    fixture.epoch.producers[0].decision = "frozen-out";
+    assert.doesNotThrow(() => validateIntegrationControl(fixture.control, fixture.schema, fixture.handoff, fixture.epoch));
+    fixture.epoch.status = "open";
+    assert.throws(() => validateIntegrationControl(fixture.control, fixture.schema, fixture.handoff, fixture.epoch), /cannot freeze out/);
+  }],
+  ["requires accepted epoch producers to match an accepted ledger tag and payload", () => {
+    const fixture = validFixture();
+    fixture.epoch.status = "closed";
+    fixture.epoch.producers[0] = { thread: "T1", status: "accepted", tag: "checkpoint/prototype-t1/t1-10", decision: "accepted" };
+    assert.throws(() => validateIntegrationControl(fixture.control, fixture.schema, fixture.handoff, fixture.epoch), /accepted ledger/);
+    fixture.handoff.accepted_checkpoints.push({ thread: "T1", checkpoint: "T1-10", tag: "checkpoint/prototype-t1/t1-10", tip: sha, payload_head: sha });
+    assert.doesNotThrow(() => validateIntegrationControl(fixture.control, fixture.schema, fixture.handoff, fixture.epoch));
+  }],
+  ["rejects status and decision disagreement", () => {
+    const fixture = validFixture();
+    fixture.epoch.status = "closed";
+    fixture.epoch.producers[0] = { thread: "T1", status: "rejected", tag: "checkpoint/prototype-t1/t1-10", decision: "accepted" };
+    assert.throws(() => validateIntegrationControl(fixture.control, fixture.schema, fixture.handoff, fixture.epoch), /decision=rejected/);
+  }],
 ];
 
 for (const [name, run] of tests) {
