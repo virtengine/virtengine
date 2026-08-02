@@ -1,13 +1,13 @@
 {
   "campaign": "three-day-prototype",
   "thread": "T1",
-  "checkpoint": "T1-05",
+  "checkpoint": "T1-06",
   "branch": "ve/prototype-t1-identity",
   "frozen_baseline": "79391a3df86d85522b92e0400c6904971ecbe65d",
   "planning_sha": "1436723bd78980aa0388dbe9fcfa24dda939c54a",
   "intake_epoch": 1,
   "intake_base_sha": "5587c384f634552c3a2dd7181ca49cafa4da1984",
-  "payload_head": "2c08d17206575f865f427510ff5c79598737e6ed",
+  "payload_head": "566ae4194921b8da03ecb49fd4a38ef30254f2cf",
   "prior_accepted_payload": null,
   "tree_clean": true,
   "commits_since_prior_acceptance": [
@@ -20,12 +20,15 @@
     "29bab5c50234eb546619fde8e99c4f9de3596e0e",
     "74b2e331e3785279c261d4d4decaede5809752fa",
     "9a1618115680c19abd952ac3b381ed68cac1ea29",
-    "2c08d17206575f865f427510ff5c79598737e6ed"
+    "2c08d17206575f865f427510ff5c79598737e6ed",
+    "40b2ff52ee01021482374851a3a9d4befddbffa1",
+    "566ae4194921b8da03ecb49fd4a38ef30254f2cf"
   ],
   "owned_paths": [
     "_docs/ralph/handoffs/prototype-t1/**",
     "_docs/ralph/evidence/prototype-t1/**",
     "pkg/enclave_runtime/workload_binding*.go",
+    "pkg/inference/receipt_producer*.go",
     "scripts/task85d-preflight.ps1",
     "x/veid/**",
     "x/veidregistry/**"
@@ -43,6 +46,16 @@
     "_docs/ralph/evidence/prototype-t1/t1-04/go-vet.txt",
     "_docs/ralph/evidence/prototype-t1/t1-04/keeper-tests.txt",
     "_docs/ralph/evidence/prototype-t1/t1-04/payload-head.txt",
+    "_docs/ralph/evidence/prototype-t1/t1-05/commits.txt",
+    "_docs/ralph/evidence/prototype-t1/t1-05/files.txt",
+    "_docs/ralph/evidence/prototype-t1/t1-05/focused-tests.txt",
+    "_docs/ralph/evidence/prototype-t1/t1-05/git-diff-check.txt",
+    "_docs/ralph/evidence/prototype-t1/t1-05/git-version.txt",
+    "_docs/ralph/evidence/prototype-t1/t1-05/go-version.txt",
+    "_docs/ralph/evidence/prototype-t1/t1-05/go-vet.txt",
+    "_docs/ralph/evidence/prototype-t1/t1-05/package-tests.txt",
+    "_docs/ralph/evidence/prototype-t1/t1-05/payload-head.txt",
+    "_docs/ralph/evidence/prototype-t1/t1-05/race-tests.txt",
     "_docs/ralph/handoffs/prototype-integration/HANDOFF.yaml",
     "_docs/ralph/handoffs/prototype-t1/HANDOFF.yaml",
     "_docs/ralph/prototype-integration/control.json",
@@ -59,6 +72,8 @@
     "pkg/enclave_runtime/workload_binding_test.go",
     "pkg/enclave_runtime/workload_binding_verifier.go",
     "pkg/enclave_runtime/workload_binding_verifier_test.go",
+    "pkg/inference/receipt_producer.go",
+    "pkg/inference/receipt_producer_test.go",
     "scripts/task85d-preflight.ps1",
     "scripts/validate-migration-inventory.cjs",
     "scripts/validate-migration-inventory.test.cjs",
@@ -71,6 +86,8 @@
     "upgrades/software/v1.6.0/upgrade_handler_test.go",
     "upgrades/software/v1.6.0/upgrade_retry_test.go",
     "x/veid/keeper/evidence_vertical_test.go",
+    "x/veid/keeper/inference_receipt.go",
+    "x/veid/keeper/inference_receipt_test.go",
     "x/veid/keeper/governance_hooks.go",
     "x/veid/keeper/runtime_policy.go",
     "x/veid/keeper/runtime_policy_test.go",
@@ -85,63 +102,72 @@
     "x/veid/types/evidence_envelope_test.go",
     "x/veid/types/evidence_trust_inventory.go",
     "x/veid/types/evidence_trust_inventory_test.go",
+    "x/veid/types/inference_receipt.go",
+    "x/veid/types/inference_receipt_test.go",
     "x/veidregistry/keeper/keeper.go",
     "x/veidregistry/keeper/keeper_test.go"
   ],
   "tests": [
     {
-      "command": "C:\\Users\\pavil\\AppData\\Local\\VirtEngine\\toolchains\\go1.25.8\\go\\bin\\go.exe -C C:\\Users\\pavil\\Desktop\\virtengine-gh\\repos\\virtengine-t1 test -count=1 ./pkg/enclave_runtime -run WorkloadBinding",
+      "command": "C:\\Users\\pavil\\AppData\\Local\\VirtEngine\\toolchains\\go1.25.8\\go\\bin\\go.exe -C C:\\Users\\pavil\\Desktop\\virtengine-gh\\repos\\virtengine-t1 test -count=1 ./pkg/inference -run ReceiptProducer",
       "exit_code": 0,
       "result": "passed",
       "tool_versions": { "go": "go version go1.25.8 windows/amd64" },
-      "artifact": "_docs/ralph/evidence/prototype-t1/t1-05/focused-tests.txt"
+      "artifact": "_docs/ralph/evidence/prototype-t1/t1-06/producer-tests.txt"
     },
     {
-      "command": "C:\\Users\\pavil\\AppData\\Local\\VirtEngine\\toolchains\\go1.25.8\\go\\bin\\go.exe -C C:\\Users\\pavil\\Desktop\\virtengine-gh\\repos\\virtengine-t1 test -count=1 ./pkg/enclave_runtime",
+      "command": "C:\\Users\\pavil\\AppData\\Local\\VirtEngine\\toolchains\\go1.25.8\\go\\bin\\go.exe -C C:\\Users\\pavil\\Desktop\\virtengine-gh\\repos\\virtengine-t1 test -count=1 ./x/veid/types -run InferenceReceipt",
       "exit_code": 0,
       "result": "passed",
       "tool_versions": { "go": "go version go1.25.8 windows/amd64" },
-      "artifact": "_docs/ralph/evidence/prototype-t1/t1-05/package-tests.txt"
+      "artifact": "_docs/ralph/evidence/prototype-t1/t1-06/types-tests.txt"
     },
     {
-      "command": "$env:CGO_ENABLED='1'; $env:CC='C:\\Users\\pavil\\AppData\\Local\\Microsoft\\WinGet\\Packages\\BrechtSanders.WinLibs.POSIX.UCRT_Microsoft.Winget.Source_8wekyb3d8bbwe\\mingw64\\bin\\gcc.exe'; C:\\Users\\pavil\\AppData\\Local\\VirtEngine\\toolchains\\go1.25.8\\go\\bin\\go.exe -C C:\\Users\\pavil\\Desktop\\virtengine-gh\\repos\\virtengine-t1 test -race -count=1 ./pkg/enclave_runtime -run WorkloadBinding",
+      "command": "C:\\Users\\pavil\\AppData\\Local\\VirtEngine\\toolchains\\go1.25.8\\go\\bin\\go.exe -C C:\\Users\\pavil\\Desktop\\virtengine-gh\\repos\\virtengine-t1 test -count=1 ./x/veid/keeper -run InferenceReceipt",
       "exit_code": 0,
       "result": "passed",
       "tool_versions": { "go": "go version go1.25.8 windows/amd64" },
-      "artifact": "_docs/ralph/evidence/prototype-t1/t1-05/race-tests.txt"
+      "artifact": "_docs/ralph/evidence/prototype-t1/t1-06/keeper-tests.txt"
     },
     {
-      "command": "C:\\Users\\pavil\\AppData\\Local\\VirtEngine\\toolchains\\go1.25.8\\go\\bin\\go.exe -C C:\\Users\\pavil\\Desktop\\virtengine-gh\\repos\\virtengine-t1 vet ./pkg/enclave_runtime",
+      "command": "$env:CGO_ENABLED='1'; $env:CC='C:\\Users\\pavil\\AppData\\Local\\Microsoft\\WinGet\\Packages\\BrechtSanders.WinLibs.POSIX.UCRT_Microsoft.Winget.Source_8wekyb3d8bbwe\\mingw64\\bin\\gcc.exe'; C:\\Users\\pavil\\AppData\\Local\\VirtEngine\\toolchains\\go1.25.8\\go\\bin\\go.exe -C C:\\Users\\pavil\\Desktop\\virtengine-gh\\repos\\virtengine-t1 test -race -count=1 ./pkg/inference -run ReceiptProducer",
       "exit_code": 0,
       "result": "passed",
       "tool_versions": { "go": "go version go1.25.8 windows/amd64" },
-      "artifact": "_docs/ralph/evidence/prototype-t1/t1-05/go-vet.txt"
+      "artifact": "_docs/ralph/evidence/prototype-t1/t1-06/race-tests.txt"
+    },
+    {
+      "command": "C:\\Users\\pavil\\AppData\\Local\\VirtEngine\\toolchains\\go1.25.8\\go\\bin\\go.exe -C C:\\Users\\pavil\\Desktop\\virtengine-gh\\repos\\virtengine-t1 vet ./pkg/inference ./x/veid/types ./x/veid/keeper",
+      "exit_code": 0,
+      "result": "passed",
+      "tool_versions": { "go": "go version go1.25.8 windows/amd64" },
+      "artifact": "_docs/ralph/evidence/prototype-t1/t1-06/go-vet.txt"
     },
     {
       "command": "git -C C:\\Users\\pavil\\Desktop\\virtengine-gh\\repos\\virtengine-t1 diff --check",
       "exit_code": 0,
       "result": "passed",
       "tool_versions": { "git": "git version 2.52.0.windows.1" },
-      "artifact": "_docs/ralph/evidence/prototype-t1/t1-05/git-diff-check.txt"
+      "artifact": "_docs/ralph/evidence/prototype-t1/t1-06/git-diff-check.txt"
     }
   ],
   "generated_hashes": {},
   "migrations": [],
   "external_evidence": [
-    "_docs/ralph/evidence/prototype-t1/t1-05/commits.txt",
-    "_docs/ralph/evidence/prototype-t1/t1-05/files.txt",
-    "_docs/ralph/evidence/prototype-t1/t1-05/git-version.txt",
-    "_docs/ralph/evidence/prototype-t1/t1-05/go-version.txt",
-    "_docs/ralph/evidence/prototype-t1/t1-05/payload-head.txt"
+    "_docs/ralph/evidence/prototype-t1/t1-06/commits.txt",
+    "_docs/ralph/evidence/prototype-t1/t1-06/files.txt",
+    "_docs/ralph/evidence/prototype-t1/t1-06/git-version.txt",
+    "_docs/ralph/evidence/prototype-t1/t1-06/go-version.txt",
+    "_docs/ralph/evidence/prototype-t1/t1-06/payload-head.txt"
   ],
   "known_failures": [
-    "T1-05 defines a verifier contract and fixture boundary only; it does not certify real hardware, current vendor collateral, signer-key ownership, replay consumption, or production readiness.",
-    "Workload identity persistence, sidecar/runtime integration, production certificate rotation, and external operator certification remain open."
+    "T1-06 proves an in-process deterministic receipt producer interface and vectors only; production sidecar process, mTLS identity, workload-binding integration, and external signer custody remain open.",
+    "The trusted caller must derive receipt commitments from the committed Runtime Policy/Profile; scorer metadata equality does not replace keeper verification of model/runtime/schema commitments."
   ],
   "blockers": [
     "T4 intake validation for the published T1-04 tag is currently blocked by an unrelated dirty T4 worktree path cmd/inference-sidecar/manifest_test2.go.",
     "T4 intake validator includes synchronized epoch-base merge paths in a first producer payload, causing integration-owned files to fail producer ownership and generated-file lease checks.",
     "Real-hardware attestation, current collateral, signer ownership resolution, durable replay consumption, and sidecar integration remain outside this checkpoint."
   ],
-  "next_checkpoint": "T1-06"
+  "next_checkpoint": "T1-07"
 }
