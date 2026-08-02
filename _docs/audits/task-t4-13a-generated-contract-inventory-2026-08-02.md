@@ -11,7 +11,9 @@ family and stage decisions are absent as a standalone payload.
 The validator reserves one canonical `all` generation window, restricts source
 and target roots, requires an accepted producer tag/payload for every generated
 family, verifies producer source blobs through the accepted T4 ledger, and
-requires compatibility fixtures. `--require-ready` rejects the current state.
+requires compatibility fixtures. A completed window must retain first/second
+run exit codes, zero-drift status, and an evidence path/hash verified at the
+exact generation source commit. `--require-ready` rejects the current state.
 
 This checkpoint does not open the generation window or claim generated output.
 Generation remains blocked until immutable producer checkpoints publish all

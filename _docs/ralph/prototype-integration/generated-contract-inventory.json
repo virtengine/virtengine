@@ -15,7 +15,8 @@
     "command": "./scripts/proto-generate.sh all",
     "second_run_command": "./scripts/verify-proto-generation.sh",
     "tracked_target_roots": ["api/openapi", "sdk/artifacts/proto", "sdk/go/node", "sdk/ts/src/generated"],
-    "state": "closed"
+    "state": "closed",
+    "result": null
   },
   "blockers": ["canonical-producer-contract-unavailable", "fixture-only-uniqueness-precursor", "handwritten-eligibility-precursor", "opaque-presentation-precursor", "handwritten-fund-authorization-precursor"],
   "completion": { "allowed": false }

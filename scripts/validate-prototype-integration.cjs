@@ -4,6 +4,7 @@
 
 const assert = require("assert").strict;
 const { spawnSync } = require("child_process");
+const { createHash } = require("crypto");
 const { readFileSync } = require("fs");
 const { resolve } = require("path");
 const { validateSecurityGates } = require("./validate-ai-biometric-security-gates.cjs");
@@ -162,6 +163,10 @@ if (require.main === module) {
     rootDir: root,
     verifyAcceptedProducer: (contract) => handoff.accepted_checkpoints.some((entry) => entry.thread === contract.owner_thread && entry.tag === contract.producer.tag && entry.payload_head === contract.producer.payload_sha)
       && contract.proto_sources.every((path) => spawnSync("git", ["cat-file", "-e", `${contract.producer.payload_sha}:${path}`], { cwd: root }).status === 0),
+    verifyGenerationResult: (result) => {
+      const evidence = spawnSync("git", ["show", `${result.source_sha}:${result.evidence_path}`], { cwd: root, encoding: "buffer" });
+      return evidence.status === 0 && createHash("sha256").update(evidence.stdout).digest("hex") === result.evidence_sha256;
+    },
   });
   validateMigrationInventory(loadJson(migrationInventoryPath), loadJson(testCasesPath), {
     rootDir: root,

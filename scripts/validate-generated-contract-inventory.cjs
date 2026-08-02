@@ -33,7 +33,7 @@ function validateGeneratedContractInventory(inventory, options = {}) {
   assert.deepEqual(inventory.contracts.map((contract) => contract.id), contractIds);
   assert.equal(new Set(inventory.blockers).size, inventory.blockers.length, "blockers must be unique");
 
-  exactKeys(inventory.generation_window, ["command", "mode", "second_run_command", "source_roots", "state", "tracked_target_roots"], "generation window");
+  exactKeys(inventory.generation_window, ["command", "mode", "result", "second_run_command", "source_roots", "state", "tracked_target_roots"], "generation window");
   assert.deepEqual(inventory.generation_window, {
     mode: "all",
     source_roots: ["sdk/proto/node", "sdk/proto/provider"],
@@ -41,8 +41,22 @@ function validateGeneratedContractInventory(inventory, options = {}) {
     second_run_command: "./scripts/verify-proto-generation.sh",
     tracked_target_roots: targetRoots,
     state: inventory.generation_window.state,
+    result: inventory.generation_window.result,
   });
   assert.ok(["closed", "completed"].includes(inventory.generation_window.state));
+  if (inventory.generation_window.state === "closed") {
+    assert.equal(inventory.generation_window.result, null, "closed generation window must not claim results");
+  } else {
+    assert.ok(inventory.generation_window.result && typeof inventory.generation_window.result === "object", "completed generation window requires results");
+    exactKeys(inventory.generation_window.result, ["drift_clean", "evidence_path", "evidence_sha256", "first_run_exit_code", "second_run_exit_code", "source_sha"], "generation result");
+    assert.match(inventory.generation_window.result.source_sha, /^[a-f0-9]{40}$/);
+    assert.ok(!isAbsolute(inventory.generation_window.result.evidence_path) && !inventory.generation_window.result.evidence_path.split(/[\\/]/).includes(".."), "generation evidence path escapes repository");
+    assert.match(inventory.generation_window.result.evidence_sha256, /^[a-f0-9]{64}$/);
+    assert.equal(inventory.generation_window.result.first_run_exit_code, 0);
+    assert.equal(inventory.generation_window.result.second_run_exit_code, 0);
+    assert.equal(inventory.generation_window.result.drift_clean, true);
+    assert.equal(options.verifyGenerationResult?.(inventory.generation_window.result), true, "generation result verification failed");
+  }
 
   for (const contract of inventory.contracts) {
     exactKeys(contract, ["blockers", "compatibility_fixtures", "generated_targets", "id", "owner_thread", "producer", "proto_sources", "state"], `contract ${contract.id || "unknown"}`);
