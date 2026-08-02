@@ -171,6 +171,9 @@ remote tags, then atomically replaces the epoch through a same-directory
 exclusive temporary file that is flushed before replacement. Acceptance remains a
 later, separately validated transition. The clean reviewed HEAD boundary is
 checked both before evidence replay and immediately before replacement.
+An exclusive worktree-specific Git-path lease serializes the full application;
+an existing or crash-retained lease fails closed and requires explicit operator
+inspection before removal.
 
 ## Core RC Publication Preflight
 
