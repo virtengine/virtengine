@@ -19,15 +19,15 @@ function recoverLease(lockPath, expectedLeaseSha256, expected, options = {}) {
 
   const quarantinePath = options.quarantinePath ?? `${lockPath}.recovery-${randomUUID()}`;
   operations.renameSync(lockPath, quarantinePath);
-  const claimedContent = operations.readFileSync(quarantinePath, "utf8");
   try {
+    const claimedContent = operations.readFileSync(quarantinePath, "utf8");
     const claimed = inspectLeaseContent(claimedContent, expected, inspectionOptions);
     assert.equal(claimed.lease_sha256, expectedLeaseSha256, "claimed freeze lease bytes changed after review");
     assert.equal(claimed.pid_present, false, "recorded PID became present during recovery");
+    operations.unlinkSync(quarantinePath);
   } catch (error) {
     throw new Error(`claimed lease retained at ${quarantinePath}: ${error.message}`);
   }
-  operations.unlinkSync(quarantinePath);
   return { recovery_status: "stale_lease_removed", lease_sha256: expectedLeaseSha256 };
 }
 

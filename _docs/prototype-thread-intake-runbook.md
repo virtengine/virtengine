@@ -193,7 +193,8 @@ any separately reviewed recovery operation.
 After confirming the recorded PID is absent and separately reviewing the exact
 lease digest, use compare-and-claim recovery. The command atomically renames the
 lease to a unique quarantine, revalidates its bytes and PID state, and removes
-only that claimed quarantine. Changed bytes remain quarantined for inspection:
+only that claimed quarantine. Any post-claim read, validation, or removal
+failure reports the retained quarantine path for inspection:
 
 ```powershell
 node scripts/recover-prototype-intake-freeze-lease.test.cjs
