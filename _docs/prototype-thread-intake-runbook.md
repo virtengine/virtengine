@@ -156,6 +156,7 @@ $reviewedPlanSha256 = '<SHA-256 recorded during separate plan review>'
 node scripts/apply-prototype-intake-freeze.cjs --epoch 1 `
   --expected-head $reviewedT4 `
   --expected-plan-sha256 $reviewedPlanSha256 `
+  --observation _docs/ralph/prototype-integration/epochs/epoch-1-tag-observation.json `
   --plan $env:TEMP\epoch-1-frozen-plan.json
 git diff -- _docs/ralph/prototype-integration/epochs/epoch-1.json
 ```
@@ -164,7 +165,9 @@ Do not derive `$reviewedT4` or `$reviewedPlanSha256` during application; that
 would let a stale checkout or substituted plan approve itself. The application command rejects dirty
 worktrees, a HEAD other than the separately reviewed exact SHA, pre-cutoff execution, changed
 epoch metadata or roster order, unknown producer fields, wrong-thread tags, and
-producer decisions other than announced or frozen out. Acceptance remains a
+producer decisions other than announced or frozen out. It also recomputes the
+plan against the manifest-bound pre-cutoff observation and current annotated
+remote tags. Acceptance remains a
 later, separately validated transition.
 
 ## Core RC Publication Preflight

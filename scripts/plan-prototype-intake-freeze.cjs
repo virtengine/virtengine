@@ -112,7 +112,7 @@ function main(argv) {
   process.stdout.write(`${JSON.stringify(plan, null, 2)}\n`);
 }
 
-module.exports = { parseArgs, planFrozenEpoch, validateObservationBinding };
+module.exports = { parseArgs, planFrozenEpoch, resolveAnnotatedTag, validateObservationBinding };
 
 if (require.main === module) {
   try { main(process.argv.slice(2)); }

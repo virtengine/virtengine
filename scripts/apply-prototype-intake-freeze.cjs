@@ -7,6 +7,7 @@ const { createHash } = require("crypto");
 const { readFileSync, writeFileSync } = require("fs");
 const { resolve } = require("path");
 const { spawnSync } = require("child_process");
+const { planFrozenEpoch, resolveAnnotatedTag, validateObservationBinding } = require("./plan-prototype-intake-freeze.cjs");
 
 const threads = ["T1", "T2", "T3", "T5"];
 const producerKeys = ["decision", "status", "tag", "thread"];
@@ -37,20 +38,30 @@ function validateFreezeTransition(current, proposed, now = Date.now()) {
 }
 
 function parseArgs(argv) {
-  const options = { epoch: null, expectedHead: null, expectedPlanSha256: null, plan: null, repo: resolve(__dirname, "..") };
+  const options = { epoch: null, expectedHead: null, expectedPlanSha256: null, manifest: "_docs/ralph/prototype-integration/core-rc-manifest.json", observation: null, plan: null, remote: "origin", repo: resolve(__dirname, "..") };
   for (let index = 0; index < argv.length; index += 2) {
     const argument = argv[index];
     const value = argv[index + 1];
-    assert.ok(["--epoch", "--expected-head", "--expected-plan-sha256", "--plan", "--repo"].includes(argument) && value, `invalid argument: ${argument || "missing"}`);
+    assert.ok(["--epoch", "--expected-head", "--expected-plan-sha256", "--manifest", "--observation", "--plan", "--remote", "--repo"].includes(argument) && value, `invalid argument: ${argument || "missing"}`);
     const key = argument === "--expected-head" ? "expectedHead" : argument === "--expected-plan-sha256" ? "expectedPlanSha256" : argument.slice(2);
     options[key] = value;
   }
   assert.match(options.epoch || "", /^[1-9][0-9]*$/, "--epoch is required");
   assert.match(options.expectedHead || "", /^[a-f0-9]{40}$/, "--expected-head requires an exact commit SHA");
   assert.match(options.expectedPlanSha256 || "", /^[a-f0-9]{64}$/, "--expected-plan-sha256 requires an exact SHA-256 digest");
+  assert.ok(options.observation && !options.observation.startsWith("/") && !options.observation.split(/[\\/]/).includes(".."), "--observation requires a repository-relative path");
   assert.ok(options.plan, "--plan is required");
   options.repo = resolve(options.repo);
   return options;
+}
+
+function validateFreezeEvidence(current, proposed, observationContent, observationPath, manifest, options = {}) {
+  validateObservationBinding(observationContent, observationPath, manifest, options);
+  const observation = JSON.parse(observationContent);
+  const selections = new Map(proposed.producers.filter((producer) => producer.status === "announced").map((producer) => [producer.thread, producer.tag]));
+  const recomputed = planFrozenEpoch(current, selections, { now: options.now, observation, resolveTag: options.resolveTag });
+  assert.deepEqual(proposed, recomputed, "freeze plan does not match revalidated observation evidence");
+  return true;
 }
 
 function validatePlanDigest(content, expectedDigest) {
@@ -78,11 +89,14 @@ function main(argv) {
   const proposed = JSON.parse(planContent);
   assert.equal(current.intake_epoch, Number(options.epoch), "epoch number mismatch");
   validateFreezeTransition(current, proposed);
+  const observationContent = readFileSync(resolve(options.repo, options.observation), "utf8");
+  const manifest = JSON.parse(readFileSync(resolve(options.repo, options.manifest), "utf8"));
+  validateFreezeEvidence(current, proposed, observationContent, options.observation, manifest, { repo: options.repo, resolveTag: (tag) => resolveAnnotatedTag(options.repo, options.remote, tag) });
   writeFileSync(epochPath, `${JSON.stringify(proposed, null, 2)}\n`, "utf8");
   process.stdout.write(`prototype intake epoch ${options.epoch} frozen\n`);
 }
 
-module.exports = { parseArgs, validateFreezeTransition, validatePlanDigest, validateWorktreeBoundary };
+module.exports = { parseArgs, validateFreezeEvidence, validateFreezeTransition, validatePlanDigest, validateWorktreeBoundary };
 
 if (require.main === module) {
   try { main(process.argv.slice(2)); }
