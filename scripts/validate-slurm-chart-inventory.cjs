@@ -3,6 +3,7 @@
 "use strict";
 
 const assert = require("assert").strict;
+const { execFileSync } = require("child_process");
 const { createHash } = require("crypto");
 const { existsSync, readdirSync, readFileSync, statSync } = require("fs");
 const { join, relative, resolve } = require("path");
@@ -12,6 +13,15 @@ const inventoryPath = resolve(root, "_docs/ralph/prototype-integration/slurm-cha
 const schemaPath = resolve(root, "_docs/ralph/prototype-integration/slurm-chart-inventory.schema.json");
 const invariantIds = ["stable-secrets", "replica-capacity-equality", "immutable-images", "least-privilege", "durable-state"];
 const dependencyIds = ["84B", "84C", "85C", "87A", "87D"];
+const operationalPathspecs = [
+  ".github", "_build", "api", "app", "client", "cmd", "config", "deploy",
+  "docgen", "docker-compose*.yaml", "fuzz", "gentx", "infra", "lib", "make",
+  "Makefile", "ml", "mobile", "models", "package.json", "pkg", "pnpm-lock.yaml",
+  "pnpm-workspace.yaml", "portal", "pubsub", "script", "scripts", "sdk", "sim",
+  "testutil", "tools", "upgrades", "util", "x",
+  ":(exclude)scripts/validate-slurm-chart-inventory.cjs",
+  ":(exclude)scripts/validate-slurm-chart-inventory.test.cjs",
+];
 
 function loadJson(path) {
   return JSON.parse(readFileSync(path, "utf8"));
@@ -69,11 +79,27 @@ function discoverSlurmCharts(rootDir, roots) {
   return [...new Set(sources)].sort();
 }
 
+function discoverRetiredSourceReferences(rootDir, retiredPaths) {
+  return Object.fromEntries(retiredPaths.map((retiredPath) => {
+    try {
+      const output = execFileSync(
+        "git",
+        ["grep", "-n", "--fixed-strings", retiredPath, "--", ...operationalPathspecs],
+        { cwd: rootDir, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] },
+      );
+      return [retiredPath, output.trim().split(/\r?\n/).filter(Boolean)];
+    } catch (error) {
+      if (error.status === 1) return [retiredPath, []];
+      throw error;
+    }
+  }));
+}
+
 function validateSchemaContract(schema) {
   assert.equal(schema.$schema, "https://json-schema.org/draft/2020-12/schema");
   assert.equal(schema.additionalProperties, false);
   assert.equal(schema.properties.schema_version.const, "virtengine.prototype.slurm-chart-inventory/v2");
-  assert.equal(schema.properties.checkpoint.const, "T4-07F");
+  assert.equal(schema.properties.checkpoint.const, "T4-07G");
   assert.deepEqual(schema.properties.research_scope.properties.roots.const, ["deploy", "infra", "config", "charts", "scripts", "_build/helm"]);
   assert.equal(schema.$defs.source.additionalProperties, false);
   assert.equal(schema.$defs.invariant.additionalProperties, false);
@@ -83,13 +109,15 @@ function validateSlurmChartInventory(inventory, options = {}) {
   const rootDir = options.rootDir || root;
   const schema = options.schema || loadJson(schemaPath);
   const discoveredSources = options.discoveredSources || discoverSlurmCharts(rootDir, inventory.research_scope.roots);
+  const retiredPaths = inventory.retired_sources.map((source) => source.path);
+  const retiredSourceReferences = options.retiredSourceReferences || discoverRetiredSourceReferences(rootDir, retiredPaths);
   const reportPath = resolve(rootDir, inventory.semantic_report.path);
   const reportContent = options.semanticReportContent || readFileSync(reportPath);
   const semanticReport = options.semanticReport || JSON.parse(reportContent.toString("utf8"));
 
   validateSchemaContract(schema);
   assert.equal(inventory.schema_version, "virtengine.prototype.slurm-chart-inventory/v2");
-  assert.equal(inventory.checkpoint, "T4-07F");
+  assert.equal(inventory.checkpoint, "T4-07G");
   assert.ok(["blocked", "complete"].includes(inventory.status), "status must be blocked or complete");
   assert.ok(["contract-only", "executable-semantic", "semantic-render"].includes(inventory.validation_mode), "unknown validation mode");
   assert.deepEqual(inventory.research_scope.roots, ["deploy", "infra", "config", "charts", "scripts", "_build/helm"]);
@@ -130,6 +158,7 @@ function validateSlurmChartInventory(inventory, options = {}) {
   }
   for (const retired of inventory.retired_sources) {
     assert.equal(retired.allowed_use, "none", `retired source ${retired.path} must forbid all use`);
+    assert.deepEqual(retiredSourceReferences[retired.path], [], `operational reference to retired source ${retired.path}`);
     const present = discoveredSources.includes(retired.path);
     if (inventory.status === "complete") assert.equal(present, false, `retired source reintroduced: ${retired.path}`);
     assert.equal(retired.state, present ? "present-blocker" : "absent-forbidden", `retired source state mismatch for ${retired.path}`);
@@ -158,7 +187,7 @@ function validateSlurmChartInventory(inventory, options = {}) {
   assert.equal(inventory.status === "complete", mayComplete, "status disagrees with completion readiness");
 }
 
-module.exports = { discoverSlurmCharts, validateSemanticReport, validateSlurmChartInventory };
+module.exports = { discoverRetiredSourceReferences, discoverSlurmCharts, validateSemanticReport, validateSlurmChartInventory };
 
 if (require.main === module) {
   validateSlurmChartInventory(loadJson(inventoryPath));

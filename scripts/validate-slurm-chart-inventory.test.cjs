@@ -22,6 +22,7 @@ function validate(candidate, options = {}) {
   return validateSlurmChartInventory(candidate, {
     schema,
     discoveredSources: options.discoveredSources || knownSources,
+    retiredSourceReferences: options.retiredSourceReferences || { "_build/helm/slurm-cluster": [] },
     semanticReport,
     semanticReportContent,
   });
@@ -71,6 +72,12 @@ const tests = [
     assert.throws(
       () => validate(candidate, { discoveredSources: ["_build/helm/slurm-cluster", ...knownSources] }),
       /retired source reintroduced/,
+    );
+  }],
+  ["rejects operational references to the retired source", () => {
+    assert.throws(
+      () => validate(fixture(), { retiredSourceReferences: { "_build/helm/slurm-cluster": ["Makefile:12:_build/helm/slurm-cluster"] } }),
+      /operational reference to retired source/,
     );
   }],
   ["rejects mutable images", () => {

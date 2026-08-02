@@ -1,6 +1,6 @@
 {
   "schema_version": "virtengine.prototype.slurm-chart-inventory/v2",
-  "checkpoint": "T4-07F",
+  "checkpoint": "T4-07G",
   "status": "blocked",
   "validation_mode": "executable-semantic",
   "research_scope": {
