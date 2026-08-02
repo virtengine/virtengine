@@ -160,6 +160,11 @@ function validateRequiredGateMatrix(matrix, options = {}) {
         assert.ok(category.path_selectors.includes(selector), `docs/process selectors must include ${selector}`);
       }
     }
+    if (category.id === "deployment") {
+      for (const selector of ["scripts/validate_slurm_chart_semantics.py", "scripts/validate_slurm_chart_semantics_test.py"]) {
+        assert.ok(category.path_selectors.includes(selector), `deployment selectors must include ${selector}`);
+      }
+    }
     assert.ok(Array.isArray(category.required_commands) && category.required_commands.length > 0, `${category.id} required commands must not be empty`);
     const commandIds = new Set();
     for (const command of category.required_commands) {

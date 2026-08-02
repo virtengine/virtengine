@@ -53,6 +53,12 @@ const tests = [
     category.pinned_tools = category.pinned_tools.filter((tool) => tool.name !== "helm");
     assert.throws(() => validateRequiredGateMatrix(candidate, { schema }), /deployment must pin helm 3\.18\.6/);
   }],
+  ["rejects a missing SLURM validator deployment selector", () => {
+    const candidate = cloneMatrix();
+    const category = candidate.categories.find((entry) => entry.id === "deployment");
+    category.path_selectors = category.path_selectors.filter((selector) => selector !== "scripts/validate_slurm_chart_semantics.py");
+    assert.throws(() => validateRequiredGateMatrix(candidate, { schema }), /deployment selectors must include scripts\/validate_slurm_chart_semantics\.py/);
+  }],
   ["rejects a missing Windows localnet selector", () => {
     const candidate = cloneMatrix();
     const category = candidate.categories.find((entry) => entry.id === "docs_process_boundary_e2e");

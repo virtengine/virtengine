@@ -135,9 +135,10 @@ try {
       const plan = planFor(["scripts/verify-modules.sh"]);
       assert.deepEqual(plan.categories.map((category) => category.id), ["docs_process_boundary_e2e"]);
     }],
-    ["selects docs/process gates for root Python and MJS scripts", () => {
+    ["selects deployment and docs gates for the SLURM validator", () => {
       const plan = planFor(["scripts/validate_slurm_chart_semantics.py", "scripts/validate-agents-docs.mjs"]);
-      assert.deepEqual(plan.categories.map((category) => category.id), ["docs_process_boundary_e2e"]);
+      assert.deepEqual(plan.categories.map((category) => category.id), ["deployment", "docs_process_boundary_e2e"]);
+      assert.deepEqual(plan.categories[0].commands.filter((command) => command.id.startsWith("slurm-chart-")).map((command) => command.id), ["slurm-chart-lint", "slurm-chart-render"]);
     }],
     ["selects docs/process gates for root script Markdown and SQL", () => {
       const plan = planFor(["scripts/AGENTS.md", "scripts/archive-vk-data.sql"]);

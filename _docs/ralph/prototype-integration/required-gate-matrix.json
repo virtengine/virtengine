@@ -108,7 +108,7 @@
     },
     {
       "id": "deployment",
-      "path_selectors": ["deploy/**", "infra/**", "docker-compose*.yaml", "scripts/ci/**"],
+      "path_selectors": ["deploy/**", "infra/**", "docker-compose*.yaml", "scripts/ci/**", "scripts/validate_slurm_chart_semantics.py", "scripts/validate_slurm_chart_semantics_test.py"],
       "required_commands": [
         { "id": "deployment-compose", "kind": "policy", "command": "docker compose -f docker-compose.yaml config --quiet" },
         { "id": "slurm-chart-lint", "kind": "lint", "command": "helm lint deploy/slurm/slurm-cluster --values deploy/slurm/slurm-cluster/tests/stable-secrets-values.yaml --strict" },
