@@ -6,52 +6,32 @@
  */
 
 import type { Job, JobOutput, JobStatus, SDKOffering, WorkloadTemplate } from '../types';
+import {
+  HPCClientUnavailableError,
+  HPCMutationNotCommittedError,
+  assertCommittedJobMutation,
+  requireHPCSigner,
+  type CommittedJobMutation,
+  type HPCClientCapability,
+  type HPCSignerAdapter,
+  type SubmitJobParams,
+} from '@/lib/portal-adapter';
+
+export {
+  HPCClientUnavailableError,
+  HPCMutationNotCommittedError,
+  assertCommittedJobMutation,
+} from '@/lib/portal-adapter';
+export type {
+  CommittedJobMutation,
+  HPCClientCapability,
+  HPCSignerAdapter,
+  SubmitJobParams,
+} from '@/lib/portal-adapter';
 
 /**
  * HPC Client Configuration
  */
-export type HPCClientCapability = 'query' | 'signer' | 'provider';
-
-export class HPCClientUnavailableError extends Error {
-  readonly code = 'hpc_client_unavailable';
-
-  constructor(readonly capability: HPCClientCapability) {
-    super(`HPC ${capability} capability is unavailable`);
-    this.name = 'HPCClientUnavailableError';
-  }
-}
-
-export class HPCMutationNotCommittedError extends Error {
-  readonly code = 'hpc_mutation_not_committed';
-
-  constructor() {
-    super('HPC mutation did not return authoritative committed transaction and job state');
-    this.name = 'HPCMutationNotCommittedError';
-  }
-}
-
-/**
- * Job submission parameters
- */
-export interface SubmitJobParams {
-  offeringId: string;
-  name: string;
-  description?: string;
-  templateId?: string;
-  resources: {
-    nodes: number;
-    cpusPerNode: number;
-    memoryGBPerNode: number;
-    gpusPerNode?: number;
-    gpuType?: string;
-    maxRuntimeSeconds: number;
-    storageGB: number;
-  };
-  command?: string;
-  containerImage?: string;
-  environment?: Record<string, string>;
-}
-
 export interface JobUsage {
   cpuPercent: number;
   memoryPercent: number;
@@ -72,41 +52,6 @@ export interface JobCostEstimate {
   denom: string;
 }
 
-export interface CommittedJobMutation {
-  committed: true;
-  jobId: string;
-  txHash: string;
-  code: 0;
-  blockHeight: number;
-}
-
-export function assertCommittedJobMutation(
-  result: unknown,
-  expectedJobId?: string
-): asserts result is CommittedJobMutation {
-  if (
-    typeof result !== 'object' ||
-    result === null ||
-    !('committed' in result) ||
-    result.committed !== true ||
-    !('jobId' in result) ||
-    typeof result.jobId !== 'string' ||
-    result.jobId.trim().length === 0 ||
-    (expectedJobId !== undefined && result.jobId !== expectedJobId) ||
-    !('txHash' in result) ||
-    typeof result.txHash !== 'string' ||
-    result.txHash.trim().length === 0 ||
-    !('code' in result) ||
-    result.code !== 0 ||
-    !('blockHeight' in result) ||
-    typeof result.blockHeight !== 'number' ||
-    !Number.isInteger(result.blockHeight) ||
-    result.blockHeight <= 0
-  ) {
-    throw new HPCMutationNotCommittedError();
-  }
-}
-
 export interface HPCQueryAdapter {
   listWorkloadTemplates(): Promise<WorkloadTemplate[]>;
   getWorkloadTemplate(templateId: string): Promise<WorkloadTemplate | null>;
@@ -118,12 +63,6 @@ export interface HPCQueryAdapter {
     offeringId: string,
     resources: SubmitJobParams['resources']
   ): Promise<JobCostEstimate>;
-}
-
-export interface HPCSignerAdapter {
-  readonly state: 'query-only' | 'signing-ready';
-  submitJob(params: SubmitJobParams): Promise<unknown>;
-  cancelJob(jobId: string): Promise<unknown>;
 }
 
 export interface HPCProviderAdapter {
@@ -250,10 +189,7 @@ export class HPCClient {
   }
 
   private requireSigner(): HPCSignerAdapter {
-    if (!this.dependencies.signer || this.dependencies.signer.state !== 'signing-ready') {
-      throw new HPCClientUnavailableError('signer');
-    }
-    return this.dependencies.signer;
+    return requireHPCSigner(this.dependencies.signer);
   }
 
   private requireProvider(): HPCProviderAdapter {
@@ -563,6 +499,8 @@ export function createMockHPCClient(): HPCClient {
   };
   const signer: HPCSignerAdapter = {
     state: 'signing-ready',
+    chainId: 'virtengine-1',
+    accountAddress: 'virtengine1fixture',
     submitJob: () =>
       Promise.resolve({
         committed: true,

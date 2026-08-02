@@ -89,6 +89,8 @@ describe('useWorkloadTemplates', () => {
     const cancelJob = vi.fn().mockResolvedValue(committed);
     const signer: HPCSignerAdapter = {
       state: 'signing-ready',
+      chainId: 'virtengine-1',
+      accountAddress: 'virtengine1customer',
       submitJob,
       cancelJob,
     };

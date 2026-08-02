@@ -3,52 +3,26 @@
  * Portal Provider
  * VE-700: Main portal context provider that combines all sub-providers
  */
-import * as React from 'react';
-import { AuthProvider } from '../hooks/useAuth';
-import { IdentityProvider } from '../hooks/useIdentity';
-import { MFAProvider } from '../hooks/useMFA';
-import { MarketplaceProvider } from '../hooks/useMarketplace';
-import { useChain } from '../hooks/useChain';
-import { ProviderProvider } from '../hooks/useProvider';
-import { HPCProvider } from '../hooks/useHPC';
-import { ChainProvider } from '../hooks/useChain';
-import { WalletProvider, useWallet } from '../src/wallet/context';
+import * as React from "react";
+import { AuthProvider } from "../hooks/useAuth";
+import { IdentityProvider } from "../hooks/useIdentity";
+import { MFAProvider } from "../hooks/useMFA";
+import { MarketplaceProvider } from "../hooks/useMarketplace";
+import { useChain } from "../hooks/useChain";
+import { ProviderProvider } from "../hooks/useProvider";
+import { HPCProvider } from "../hooks/useHPC";
+import { ChainProvider } from "../hooks/useChain";
+import { WalletProvider, useWallet } from "../src/wallet/context";
 import type {
   CheckoutMutationAdapter,
   CheckoutMutationProjector,
-} from './marketplace/checkout-mutation';
-import type { WalletProviderConfig, WalletChainInfo } from '../src/wallet/types';
-import type { PortalConfig } from '../types/config';
-import type { ChainConfig } from '../types/chain';
-
-/**
- * Portal provider props
- */
-export interface PortalProviderProps {
-  /**
-   * Portal configuration
-   */
-  config: PortalConfig;
-
-  /**
-   * Chain configuration
-   */
-  chainConfig: ChainConfig;
-
-  /**
-   * Wallet configuration
-   */
-  walletConfig?: WalletProviderConfig;
-
-  marketplaceMutationAdapter?: CheckoutMutationAdapter;
-  marketplaceResultProjector?: CheckoutMutationProjector;
-  marketplaceMutationTimeoutMs?: number;
-
-  /**
-   * Children
-   */
-  children: React.ReactNode;
-}
+} from "./marketplace/checkout-mutation";
+import type { HPCSignerAdapter } from "./hpc/hpc-mutation";
+import type {
+  WalletProviderConfig,
+  WalletChainInfo,
+} from "../src/wallet/types";
+import type { PortalConfig, PortalProviderProps } from "../types/config";
 
 function ProductProviders({
   children,
@@ -56,23 +30,26 @@ function ProductProviders({
   resultProjector,
   mutationTimeoutMs,
   queryChainId,
+  hpcMutationAdapter,
 }: {
   children: React.ReactNode;
   mutationAdapter?: CheckoutMutationAdapter;
   resultProjector?: CheckoutMutationProjector;
   mutationTimeoutMs?: number;
   queryChainId: string;
+  hpcMutationAdapter?: HPCSignerAdapter;
 }) {
   const chain = useChain();
   const wallet = useWallet();
-  const walletAddress = wallet.accounts[wallet.activeAccountIndex]?.address ?? null;
+  const walletAddress =
+    wallet.accounts[wallet.activeAccountIndex]?.address ?? null;
   const accountAddress = wallet.chainId === queryChainId ? walletAddress : null;
   const mutationContext = React.useMemo(
     () =>
       accountAddress && wallet.chainId === queryChainId
         ? { chainId: wallet.chainId, customerAddress: accountAddress }
         : undefined,
-    [accountAddress, queryChainId, wallet.chainId]
+    [accountAddress, queryChainId, wallet.chainId],
   );
 
   return (
@@ -85,7 +62,20 @@ function ProductProviders({
       mutationTimeoutMs={mutationTimeoutMs}
     >
       <ProviderProvider>
-        <HPCProvider>{children}</HPCProvider>
+        <HPCProvider
+          queryClient={chain.queryClient}
+          chainId={queryChainId}
+          accountAddress={accountAddress}
+          mutationAdapter={
+            accountAddress &&
+            hpcMutationAdapter?.chainId === queryChainId &&
+            hpcMutationAdapter.accountAddress === accountAddress
+              ? hpcMutationAdapter
+              : undefined
+          }
+        >
+          {children}
+        </HPCProvider>
       </ProviderProvider>
     </MarketplaceProvider>
   );
@@ -119,6 +109,7 @@ export function PortalProvider({
   marketplaceMutationAdapter,
   marketplaceResultProjector,
   marketplaceMutationTimeoutMs,
+  hpcMutationAdapter,
   children,
 }: PortalProviderProps): JSX.Element {
   const [isReady, setIsReady] = React.useState(false);
@@ -139,40 +130,40 @@ export function PortalProvider({
   };
 
   const defaultChainInfo: WalletChainInfo = {
-    chainId: chainConfig.chainId ?? config.chainId ?? 'virtengine-1',
-    chainName: config.networkName ?? 'VirtEngine',
+    chainId: chainConfig.chainId ?? config.chainId ?? "virtengine-1",
+    chainName: config.networkName ?? "VirtEngine",
     rpcEndpoint: config.chainEndpoint,
     restEndpoint: config.chainRestEndpoint ?? chainConfig.restEndpoint,
     bech32Config: {
-      bech32PrefixAccAddr: 'virtengine',
-      bech32PrefixAccPub: 'virtenginepub',
-      bech32PrefixValAddr: 'virtenginevaloper',
-      bech32PrefixValPub: 'virtenginevaloperpub',
-      bech32PrefixConsAddr: 'virtenginevalcons',
-      bech32PrefixConsPub: 'virtenginevalconspub',
+      bech32PrefixAccAddr: "virtengine",
+      bech32PrefixAccPub: "virtenginepub",
+      bech32PrefixValAddr: "virtenginevaloper",
+      bech32PrefixValPub: "virtenginevaloperpub",
+      bech32PrefixConsAddr: "virtenginevalcons",
+      bech32PrefixConsPub: "virtenginevalconspub",
     },
     bip44: { coinType: 118 },
     stakeCurrency: {
-      coinDenom: 'VE',
-      coinMinimalDenom: 'uve',
+      coinDenom: "VE",
+      coinMinimalDenom: "uve",
       coinDecimals: 6,
     },
     currencies: [
       {
-        coinDenom: 'VE',
-        coinMinimalDenom: 'uve',
+        coinDenom: "VE",
+        coinMinimalDenom: "uve",
         coinDecimals: 6,
       },
     ],
     feeCurrencies: [
       {
-        coinDenom: 'VE',
-        coinMinimalDenom: 'uve',
+        coinDenom: "VE",
+        coinMinimalDenom: "uve",
         coinDecimals: 6,
         gasPriceStep: { low: 0.01, average: 0.025, high: 0.04 },
       },
     ],
-    features: ['cosmwasm', 'ibc-transfer', 'ibc-go'],
+    features: ["cosmwasm", "ibc-transfer", "ibc-go"],
   };
 
   const resolvedWalletConfig: WalletProviderConfig = walletConfig ?? {
@@ -194,6 +185,7 @@ export function PortalProvider({
                   resultProjector={marketplaceResultProjector}
                   mutationTimeoutMs={marketplaceMutationTimeoutMs}
                   queryChainId={chainConfig.chainId}
+                  hpcMutationAdapter={hpcMutationAdapter}
                 >
                   {children}
                 </ProductProviders>
@@ -212,7 +204,7 @@ export function PortalProvider({
 export function usePortal(): PortalContextValue {
   const context = React.useContext(PortalContext);
   if (!context) {
-    throw new Error('usePortal must be used within a PortalProvider');
+    throw new Error("usePortal must be used within a PortalProvider");
   }
   return context;
 }

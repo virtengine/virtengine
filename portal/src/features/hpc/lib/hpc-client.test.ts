@@ -36,6 +36,11 @@ function createQueryAdapter(): HPCQueryAdapter {
   };
 }
 
+const signerBinding = {
+  chainId: 'virtengine-1',
+  accountAddress: 'virtengine1customer',
+} as const;
+
 describe('HPCClient', () => {
   it('is query-unavailable by default instead of selecting mock data', async () => {
     await expect(createHPCClient().listJobs()).rejects.toEqual(
@@ -58,6 +63,7 @@ describe('HPCClient', () => {
     const submitJob = vi.fn();
     const signer: HPCSignerAdapter = {
       state: 'query-only',
+      ...signerBinding,
       submitJob,
       cancelJob: vi.fn(),
     };
@@ -71,6 +77,7 @@ describe('HPCClient', () => {
   it('rejects a signer preview or broadcast response as mutation success', async () => {
     const signer: HPCSignerAdapter = {
       state: 'signing-ready',
+      ...signerBinding,
       submitJob: vi.fn().mockResolvedValue({ txHash: 'preview-hash' }),
       cancelJob: vi.fn(),
     };
@@ -89,6 +96,7 @@ describe('HPCClient', () => {
   ])('rejects malformed or unsuccessful committed receipt %#', async (receipt) => {
     const signer: HPCSignerAdapter = {
       state: 'signing-ready',
+      ...signerBinding,
       submitJob: vi.fn().mockResolvedValue(receipt),
       cancelJob: vi.fn(),
     };
@@ -108,6 +116,7 @@ describe('HPCClient', () => {
     };
     const signer: HPCSignerAdapter = {
       state: 'signing-ready',
+      ...signerBinding,
       submitJob: vi.fn().mockResolvedValue(committed),
       cancelJob: vi.fn().mockResolvedValue(committed),
     };
@@ -120,6 +129,7 @@ describe('HPCClient', () => {
   it('rejects committed cancellation state for a different job identity', async () => {
     const signer: HPCSignerAdapter = {
       state: 'signing-ready',
+      ...signerBinding,
       submitJob: vi.fn(),
       cancelJob: vi.fn().mockResolvedValue({
         committed: true,

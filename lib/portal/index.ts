@@ -517,6 +517,18 @@ export type { DeploymentWithProviderState } from "./src/hooks/useDeploymentWithP
 // ============================================================================
 
 export { useHPC, HPCProvider } from "./hooks/useHPC";
+export {
+  HPCClientUnavailableError,
+  HPCMutationNotCommittedError,
+  assertCommittedJobMutation,
+  requireHPCSigner,
+} from "./components/hpc/hpc-mutation";
+export type {
+  CommittedJobMutation,
+  HPCClientCapability,
+  HPCSignerAdapter,
+  SubmitJobParams,
+} from "./components/hpc/hpc-mutation";
 export type {
   HPCState,
   WorkloadTemplate,
