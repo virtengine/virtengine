@@ -6,14 +6,14 @@
   "planned_functionality_complete": false,
   "milestone_m_eligible": false,
   "source": {
-    "payload_sha": "38afcdae29a66a9952cffe08b616039c371068d6",
-    "tree": "4a426f58aa3fe3e5ed8a4bfd24a67f6ee2632dda",
+    "payload_sha": "5626d5b73d40012dedbf44ac3f4c7909baa4246c",
+    "tree": "bc1e8d5d346a92d2ad2ba999d57600d101414f33",
     "branch": "ve/prototype-integration",
     "binding": "declared_clean_parent_payload"
   },
   "tooling": {
-    "tooling_sha": "b0d8be8b7c7158928ebd80b2aaa2467947cbea0f",
-    "tree": "07fb290ffbcc0820433b91de7ad76e2fc656d52a",
+    "tooling_sha": "5626d5b73d40012dedbf44ac3f4c7909baa4246c",
+    "tree": "bc1e8d5d346a92d2ad2ba999d57600d101414f33",
     "artifacts": [
       {
         "id": "generator",
@@ -278,47 +278,28 @@
   "test_evidence": {
     "status": "partial",
     "ledger_path": "_docs/ralph/handoffs/prototype-integration/HANDOFF.yaml",
-    "implementation_sha": "735a5d57566e44e456432faaa73431defb3c3c1e",
-    "ledger_sha": "38afcdae29a66a9952cffe08b616039c371068d6",
-    "record_count": 5,
-    "declared_test_count": 75,
+    "implementation_sha": "3cfdd31a84883de0b80aff6b05b8dc3403e12b81",
+    "ledger_sha": "5626d5b73d40012dedbf44ac3f4c7909baa4246c",
+    "record_count": 3,
+    "declared_test_count": 11,
     "uncounted_record_count": 2,
     "records": [
       {
-        "command": "python scripts/validate_slurm_chart_semantics_test.py && node scripts/validate-slurm-chart-inventory.test.cjs && node scripts/validate-slurm-chart-inventory.cjs",
+        "command": "node scripts/generate-core-rc-manifest.test.cjs",
         "exit_code": 0,
         "result": "passed",
-        "test_count": 64,
+        "test_count": 11,
         "tool_versions": {
-          "python": "3.14.6 windows",
           "node": "20.19.1"
         }
       },
       {
-        "command": "go1.25.8 test '-tags=e2e.integration' -count=1 ./tests/integration/hpc -run '^TestDurableStateOfflineContracts$'",
+        "command": "node scripts/generate-core-rc-manifest.cjs --check --source 38afcdae29a66a9952cffe08b616039c371068d6 --tooling-source b0d8be8b7c7158928ebd80b2aaa2467947cbea0f && node scripts/validate-core-rc-manifest.cjs",
         "exit_code": 0,
         "result": "passed",
         "test_count": null,
         "tool_versions": {
-          "go": "go version go1.25.8 windows/amd64"
-        }
-      },
-      {
-        "command": "python scripts/hpc/slurm-durable-state-drill-test.py",
-        "exit_code": 0,
-        "result": "passed",
-        "test_count": 10,
-        "tool_versions": {
-          "python": "3.14.6 windows"
-        }
-      },
-      {
-        "command": "python scripts/hpc/slurm-durable-state-drill.py",
-        "exit_code": 0,
-        "result": "passed",
-        "test_count": 1,
-        "tool_versions": {
-          "python": "3.14.6 windows"
+          "node": "20.19.1"
         }
       },
       {
@@ -335,7 +316,7 @@
   },
   "producer_checkpoints": {
     "ledger_path": "_docs/ralph/handoffs/prototype-integration/HANDOFF.yaml",
-    "ledger_sha256": "d559ff55bd38e8b43d746339dc8be836b6a54a7feb60211ff6040fa2a342b5e9",
+    "ledger_sha256": "86b21e4658a69a14e156aef6383fc1b44e9b07c4d293355fc0373ce115e5f5e8",
     "accepted": [],
     "rejected": [
       {
