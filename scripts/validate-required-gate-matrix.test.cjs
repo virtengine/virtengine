@@ -41,6 +41,18 @@ const tests = [
     candidate.categories[0].required_commands.shift();
     assert.throws(() => validateRequiredGateMatrix(candidate, { schema }), /required literal commands changed/);
   }],
+  ["rejects a missing SLURM render command", () => {
+    const candidate = cloneMatrix();
+    const category = candidate.categories.find((entry) => entry.id === "deployment");
+    category.required_commands = category.required_commands.filter((command) => command.id !== "slurm-chart-render");
+    assert.throws(() => validateRequiredGateMatrix(candidate, { schema }), /required literal commands changed/);
+  }],
+  ["rejects an unpinned Helm deployment tool", () => {
+    const candidate = cloneMatrix();
+    const category = candidate.categories.find((entry) => entry.id === "deployment");
+    category.pinned_tools = category.pinned_tools.filter((tool) => tool.name !== "helm");
+    assert.throws(() => validateRequiredGateMatrix(candidate, { schema }), /deployment must pin helm 3\.18\.6/);
+  }],
   ["rejects a missing Windows localnet selector", () => {
     const candidate = cloneMatrix();
     const category = candidate.categories.find((entry) => entry.id === "docs_process_boundary_e2e");

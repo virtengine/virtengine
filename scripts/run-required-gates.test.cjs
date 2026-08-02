@@ -111,6 +111,12 @@ try {
       const plan = planFor(["pnpm-lock.yaml"]);
       assert.deepEqual(plan.categories.map((category) => category.id), ["sdk", "portal", "mobile"]);
     }],
+    ["selects pinned Helm gates for a SLURM chart change", () => {
+      const plan = planFor(["deploy/slurm/slurm-cluster/templates/configmap.yaml"]);
+      assert.deepEqual(plan.categories.map((category) => category.id), ["deployment"]);
+      assert.deepEqual(plan.categories[0].commands.filter((command) => command.id.startsWith("slurm-chart-")).map((command) => command.id), ["slurm-chart-lint", "slurm-chart-render"]);
+      assert.ok(plan.categories[0].pinned_tools.some((tool) => tool.name === "helm" && tool.version === "3.18.6"));
+    }],
     ["selects launcher parity for a Windows-only localnet change", () => {
       const plan = planFor(["scripts/localnet.ps1"]);
       assert.deepEqual(plan.categories.map((category) => category.id), ["docs_process_boundary_e2e"]);

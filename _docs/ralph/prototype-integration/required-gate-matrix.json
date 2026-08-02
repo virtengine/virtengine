@@ -111,9 +111,11 @@
       "path_selectors": ["deploy/**", "infra/**", "docker-compose*.yaml", "scripts/ci/**"],
       "required_commands": [
         { "id": "deployment-compose", "kind": "policy", "command": "docker compose -f docker-compose.yaml config --quiet" },
+        { "id": "slurm-chart-lint", "kind": "lint", "command": "helm lint deploy/slurm/slurm-cluster --values deploy/slurm/slurm-cluster/tests/stable-secrets-values.yaml --strict" },
+        { "id": "slurm-chart-render", "kind": "policy", "command": "helm template slurm-capacity deploy/slurm/slurm-cluster --namespace slurm-capacity --values deploy/slurm/slurm-cluster/tests/stable-secrets-values.yaml | python scripts/validate_slurm_chart_semantics.py --chart deploy/slurm/slurm-cluster --rendered -" },
         { "id": "deployment-smoke", "kind": "test", "command": "bash scripts/ci/post-deploy-smoke-test.sh" }
       ],
-      "pinned_tools": [{ "name": "docker-compose", "version": "2.39.1", "source": "required gate runner image" }],
+      "pinned_tools": [{ "name": "docker-compose", "version": "2.39.1", "source": "required gate runner image" }, { "name": "helm", "version": "3.18.6", "source": "required gate runner image" }, { "name": "python", "version": "3.11.9", "source": ".github workflow control" }],
       "zero_test_policy": { "applies_to": "test_commands", "minimum_discovered": 1, "minimum_executed": 1, "empty_selection": "fail" },
       "failure_semantics": { "nonzero_exit": "fail", "skipped": "fail", "missing_tool": "fail", "cancelled": "fail" },
       "dependencies": [{ "id": "86C", "status": "unavailable" }],

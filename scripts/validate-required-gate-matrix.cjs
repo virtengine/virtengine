@@ -18,11 +18,14 @@ const categoryCommands = new Map([
   ["portal", ["pnpm --dir portal install --frozen-lockfile", "pnpm --dir portal lint", "pnpm --dir portal test"]],
   ["mobile", ["pnpm --dir mobile/veid-capture-app install --frozen-lockfile", "pnpm --dir mobile/veid-capture-app typecheck", "pnpm --dir mobile/veid-capture-app test"]],
   ["ml", ["python -m pip install --require-hashes -r ml/requirements-deterministic.txt", "python -m pytest --collect-only -q ml/training/tests", "python -m pytest -q ml/training/tests", "node scripts/validate-ai-production-policy.cjs --enforce", "node scripts/validate-ai-biometric-security-gates.cjs --enforce"]],
-  ["deployment", ["docker compose -f docker-compose.yaml config --quiet", "bash scripts/ci/post-deploy-smoke-test.sh"]],
+  ["deployment", ["docker compose -f docker-compose.yaml config --quiet", "helm lint deploy/slurm/slurm-cluster --values deploy/slurm/slurm-cluster/tests/stable-secrets-values.yaml --strict", "helm template slurm-capacity deploy/slurm/slurm-cluster --namespace slurm-capacity --values deploy/slurm/slurm-cluster/tests/stable-secrets-values.yaml | python scripts/validate_slurm_chart_semantics.py --chart deploy/slurm/slurm-cluster --rendered -", "bash scripts/ci/post-deploy-smoke-test.sh"]],
   ["observability", ["docker compose -f docker-compose.observability.yaml config --quiet", "go test -count=1 ./pkg/observability/..."]],
   ["upgrades", ["go test -count=1 ./tests/upgrade/..."]],
   ["security", ["python .github/scripts/validate_security_policies.py", "go test -count=1 -tags=e2e.integration ./tests/integration/security/...", "node scripts/validate-fund-route-inventory.cjs --require-ready"]],
   ["docs_process_boundary_e2e", ["node scripts/validate-prototype-integration.cjs", "node scripts/observe-prototype-intake-tags.test.cjs", "node scripts/plan-prototype-intake-freeze.test.cjs", "node scripts/apply-prototype-intake-freeze.test.cjs", "node scripts/inspect-prototype-intake-freeze-lease.test.cjs", "node scripts/recover-prototype-intake-freeze-lease.test.cjs", "node scripts/preflight-integration-candidate.test.cjs", "node scripts/validate-localnet-integration-launchers.test.cjs", "go test -count=1 -tags=e2e.integration ./tests/e2e/... ./tests/integration/..."]],
+]);
+const requiredToolVersions = new Map([
+  ["deployment", new Map([["helm", "3.18.6"]])],
 ]);
 const rootKeys = ["schema_version", "task", "control_scope", "status", "completion_claim", "unmatched_path_allowlist", "categories", "blockers"];
 const expectedUnmatchedAllowlist = [
@@ -171,6 +174,9 @@ function validateRequiredGateMatrix(matrix, options = {}) {
     for (const tool of category.pinned_tools) {
       assertExactKeys(tool, ["name", "version", "source"], `${category.id} pinned tool`);
       assert.match(tool.version, /^[0-9]+\.[0-9]+(?:\.[0-9]+)?$/, `${category.id} tool ${tool.name} must use an exact version`);
+    }
+    for (const [name, version] of requiredToolVersions.get(category.id) || []) {
+      assert.ok(category.pinned_tools.some((tool) => tool.name === name && tool.version === version), `${category.id} must pin ${name} ${version}`);
     }
     assert.deepEqual(category.zero_test_policy, { applies_to: "test_commands", minimum_discovered: 1, minimum_executed: 1, empty_selection: "fail" });
     assert.deepEqual(category.failure_semantics, { nonzero_exit: "fail", skipped: "fail", missing_tool: "fail", cancelled: "fail" });

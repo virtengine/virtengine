@@ -162,7 +162,7 @@ fsGroup: {{ $root.Values.securityIdentities.munge.gid }}
 fsGroupChangePolicy: OnRootMismatch
 runAsNonRoot: true
 seccompProfile:
-	type: RuntimeDefault
+  type: RuntimeDefault
 {{- end }}
 
 {{- define "slurm-cluster.containerSecurityContext" -}}
@@ -175,15 +175,15 @@ seccompProfile:
 {{- $identity := required (printf "securityIdentities.%s is required" $identityKey) (index $root.Values.securityIdentities $identityKey) -}}
 allowPrivilegeEscalation: false
 capabilities:
-	drop:
-		- ALL
+  drop:
+    - ALL
 privileged: false
 readOnlyRootFilesystem: true
 runAsGroup: {{ required (printf "securityIdentities.%s.gid is required" $component) $identity.gid }}
 runAsNonRoot: true
 runAsUser: {{ required (printf "securityIdentities.%s.uid is required" $component) $identity.uid }}
 seccompProfile:
-	type: RuntimeDefault
+  type: RuntimeDefault
 {{- end }}
 
 {{/* Shared daemon username for slurmctld, slurmdbd, and slurmd. */}}
