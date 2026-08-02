@@ -1,86 +1,74 @@
 campaign: three-day-prototype
 thread: T2
-checkpoint: T2-X04
+checkpoint: T2-X05
 branch: ve/prototype-t2-product
-start_head: 3496c1441e2031231b05eca56d37d6ea1c23c7d8
-end_head: 5d6ce82e96491b0536c713a7ea0ae31b5977a2d4
+start_head: 180356cc2b33f39669fb36651985ae0024435c8d
+end_head: 74f7236822bc18deedab2db1f0f3ba2ab0d08c10
 origin_main: 79391a3df86d85522b92e0400c6904971ecbe65d
 tree_clean: true
 commits:
-  - 5d6ce82e96491b0536c713a7ea0ae31b5977a2d4
+  - 74f7236822bc18deedab2db1f0f3ba2ab0d08c10
 owned_paths:
-  - lib/portal/src/provider-api/
-  - lib/portal/src/multi-provider/
-  - lib/portal/src/chat/
-  - lib/portal/__tests__/provider-api/
-  - lib/portal/index.ts
-  - lib/portal/index.d.ts
-  - portal/src/stores/deploymentStore.ts
-  - portal/src/stores/__tests__/deploymentStore.test.ts
-  - portal/src/app/provider/orders/[id]/
-  - portal/src/lib/portal-adapter.ts
+  - portal/src/lib/api/chain.ts
+  - portal/src/lib/api/__tests__/chain.test.ts
+  - portal/src/lib/order-creation.ts
+  - portal/src/lib/__tests__/order-creation.test.ts
+  - portal/src/stores/orderStore.ts
+  - portal/src/stores/__tests__/orderStore.test.ts
+  - portal/src/app/(customer)/marketplace/[provider]/[sequence]/order/OrderCreateClient.tsx
+  - portal/src/hooks/useWalletTransaction.ts
+  - portal/tests/unit/wallet/useWalletTransaction.test.ts
+  - portal/src/lib/veid-submission.ts
+  - portal/src/stores/__tests__/identityStore.test.ts
 files_changed:
-  - lib/portal/src/provider-api/deployment-actions.ts
-  - lib/portal/src/provider-api/client.ts
-  - lib/portal/src/provider-api/index.ts
-  - lib/portal/src/provider-api/types.ts
-  - lib/portal/src/multi-provider/client.ts
-  - lib/portal/src/multi-provider/types.ts
-  - lib/portal/src/chat/chain-tools/deployments.ts
-  - lib/portal/src/chat/types.ts
-  - lib/portal/__tests__/provider-api/client.test.ts
-  - lib/portal/__tests__/provider-api/multi-provider-actions.test.ts
-  - lib/portal/index.ts
-  - lib/portal/index.d.ts
-  - portal/src/stores/deploymentStore.ts
-  - portal/src/stores/__tests__/deploymentStore.test.ts
-  - portal/src/app/provider/orders/[id]/DeploymentDetailClient.tsx
-  - portal/src/app/provider/orders/[id]/deploymentActionUI.ts
-  - portal/src/app/provider/orders/[id]/deploymentActionUI.test.ts
-  - portal/src/lib/portal-adapter.ts
+  - portal/src/lib/api/chain.ts
+  - portal/src/lib/api/__tests__/chain.test.ts
+  - portal/src/lib/order-creation.ts
+  - portal/src/lib/__tests__/order-creation.test.ts
+  - portal/src/stores/orderStore.ts
+  - portal/src/stores/__tests__/orderStore.test.ts
+  - portal/src/app/(customer)/marketplace/[provider]/[sequence]/order/OrderCreateClient.tsx
+  - portal/src/hooks/useWalletTransaction.ts
+  - portal/tests/unit/wallet/useWalletTransaction.test.ts
+  - portal/src/lib/veid-submission.ts
+  - portal/src/stores/__tests__/identityStore.test.ts
 tests:
-  - command: C:\Users\pavil\AppData\Local\Temp\virtengine-node-v24.12.0\npm.cmd --prefix C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t2\lib\portal test
+  - command: C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t2\portal\node_modules\.bin\vitest.CMD run src\lib\api\__tests__\chain.test.ts src\lib\__tests__\order-creation.test.ts src\stores\__tests__\orderStore.test.ts tests\unit\wallet\useWalletTransaction.test.ts --reporter=dot
     exit_code: 0
     result: passed
-    test_count: 677
+    test_count: 18
     tool_versions:
       node: v24.12.0
-    artifact: _docs/ralph/handoffs/prototype-t2/T2-X04-evidence.txt
-  - command: C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t2\node_modules\.bin\tsc.CMD -p C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t2\lib\portal\tsconfig.chain.json --noEmit
-    exit_code: 0
-    result: passed
-    tool_versions:
-      node: v24.12.0
-    artifact: _docs/ralph/handoffs/prototype-t2/T2-X04-evidence.txt
+    artifact: _docs/ralph/handoffs/prototype-t2/T2-X05-evidence.txt
   - command: C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t2\portal\node_modules\.bin\eslint.CMD C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t2\portal\src --ext .ts,.tsx --max-warnings 0
     exit_code: 0
     result: passed
     tool_versions:
       node: v24.12.0
-    artifact: _docs/ralph/handoffs/prototype-t2/T2-X04-evidence.txt
+    artifact: _docs/ralph/handoffs/prototype-t2/T2-X05-evidence.txt
   - command: C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t2\portal\node_modules\.bin\tsc.CMD --noEmit -p C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t2\portal\tsconfig.json
     exit_code: 0
     result: passed
     tool_versions:
       node: v24.12.0
-    artifact: _docs/ralph/handoffs/prototype-t2/T2-X04-evidence.txt
+    artifact: _docs/ralph/handoffs/prototype-t2/T2-X05-evidence.txt
   - command: C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t2\portal\node_modules\.bin\vitest.CMD run --reporter=dot
     exit_code: 0
     result: passed
-    test_count: 560
+    test_count: 574
     tool_versions:
       node: v24.12.0
-    artifact: _docs/ralph/handoffs/prototype-t2/T2-X04-evidence.txt
+    artifact: _docs/ralph/handoffs/prototype-t2/T2-X05-evidence.txt
 generated_hashes: {}
 migrations: []
 external_evidence:
-  - _docs/ralph/handoffs/prototype-t2/T2-X04-evidence.txt
+  - _docs/ralph/handoffs/prototype-t2/T2-X05-evidence.txt
 known_failures:
   - TestProviderMutationSubmitterStandbyTakesOverWithHigherFence fails repeatedly in the full provider package gate with submitter lease timing errors.
 blockers:
   - T4 producer-handoff.schema.json forbids the integration_parent field required by the updated campaign plan; integration ancestor fa21b1e540a5efcbe1822da4199be7acec7709d3 is retained in T2-05-evidence.txt.
   - Full provider package certification is blocked by the unrelated submitter lease timing failure retained in T2-03B-evidence.txt.
-  - Existing providers must add authoritative deployment action receipt capability v1 before actions become available.
-  - No live provider operation or chain transaction was certified.
-next_checkpoint: T2-X05
-expected_head: 5d6ce82e96491b0536c713a7ea0ae31b5977a2d4
+  - No live chain transaction or external node route was certified.
+  - Marketplace confirmation remains unavailable when the committed transaction lacks an authoritative order-created event.
+next_checkpoint: T2-X06
+expected_head: 74f7236822bc18deedab2db1f0f3ba2ab0d08c10
