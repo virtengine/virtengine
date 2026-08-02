@@ -1,54 +1,44 @@
 {
   "campaign": "three-day-prototype",
   "thread": "T4",
-  "checkpoint": "T4-16B",
+  "checkpoint": "T4-16C",
   "branch": "ve/prototype-integration",
-  "start_head": "9a8629844381988fbee1f362a5ef75df60c6ced8",
-  "end_head": "7889a44321b4729a9eb7a4415fc0881f6b7da25d",
+  "start_head": "9e31f0d23b90a3e8ab6df34f964cca542d27c0cf",
+  "end_head": "b3944e8137e06af7fc7d6b1d34dee95ddcb5f970",
   "origin_main": "79391a3df86d85522b92e0400c6904971ecbe65d",
   "tree_clean": true,
   "commits": [
-    "7889a44321b4729a9eb7a4415fc0881f6b7da25d"
+    "b3944e8137e06af7fc7d6b1d34dee95ddcb5f970"
   ],
   "owned_paths": [
     "_docs/ralph/prototype-integration/**",
     "_docs/ralph/handoffs/prototype-integration/**",
-    "_docs/ralph/prototype-integration/core-rc-manifest.json"
+    "_docs/audits/task-t4-16a-fund-route-inventory-2026-08-02.md",
+    "_docs/ralph/prototype-integration/fund-route-inventory.json",
+    "scripts/validate-fund-route-inventory.cjs",
+    "scripts/validate-fund-route-inventory.test.cjs",
+    "scripts/validate-prototype-integration.cjs"
   ],
   "files_changed": [
     "_docs/ralph/handoffs/prototype-integration/HANDOFF.yaml",
-    "_docs/ralph/prototype-integration/core-rc-manifest.json"
+    "_docs/audits/task-t4-16a-fund-route-inventory-2026-08-02.md",
+    "_docs/ralph/prototype-integration/fund-route-inventory.json",
+    "scripts/validate-fund-route-inventory.cjs",
+    "scripts/validate-fund-route-inventory.test.cjs",
+    "scripts/validate-prototype-integration.cjs"
   ],
   "tests": [
     {
       "command": "node scripts/validate-fund-route-inventory.test.cjs && node scripts/validate-fund-route-inventory.cjs",
       "exit_code": 0,
       "result": "passed",
-      "test_count": 11,
+      "test_count": 12,
       "tool_versions": {
         "node": "20.19.1"
       }
     },
     {
-      "command": "node scripts/validate-required-gate-matrix.test.cjs && node scripts/validate-required-gate-matrix.cjs",
-      "exit_code": 0,
-      "result": "passed",
-      "test_count": 13,
-      "tool_versions": {
-        "node": "20.19.1"
-      }
-    },
-    {
-      "command": "node scripts/generate-core-rc-manifest.test.cjs",
-      "exit_code": 0,
-      "result": "passed",
-      "test_count": 15,
-      "tool_versions": {
-        "node": "20.19.1"
-      }
-    },
-    {
-      "command": "node scripts/validate-core-rc-manifest.cjs && node scripts/validate-prototype-integration.cjs && node scripts/validate-agents-docs.mjs",
+      "command": "node scripts/validate-prototype-integration.cjs && node scripts/validate-agents-docs.mjs",
       "exit_code": 0,
       "result": "passed",
       "tool_versions": {
@@ -57,7 +47,9 @@
     }
   ],
   "generated_hashes": {
-    "_docs/ralph/prototype-integration/core-rc-manifest.json": "72af4112be71c6963d2d862aca3d3764e02f0fa7b4b97898892c870dac90c966"
+    "scripts/validate-fund-route-inventory.cjs": "2a517ed75cfa5ecf98585a554cca022ee1e8dfdc897390030272ba2d7fb997fd",
+    "scripts/validate-fund-route-inventory.test.cjs": "fb62055fc5c7f2d7c0b8aa6d2cdc2915e4eb397a5c4db3858aa4e9bb14e6e9ef",
+    "_docs/ralph/prototype-integration/fund-route-inventory.json": "3aa716d5eba8f975369c0ae9325908a6b80b60c31173097dfd8c79c01ec3d911"
   },
   "accepted_checkpoints": [],
   "rejected_checkpoints": [
@@ -95,5 +87,5 @@
     "Task 88C is not complete."
   ],
   "next_checkpoint": null,
-  "expected_head": "7889a44321b4729a9eb7a4415fc0881f6b7da25d"
+  "expected_head": "b3944e8137e06af7fc7d6b1d34dee95ddcb5f970"
 }
