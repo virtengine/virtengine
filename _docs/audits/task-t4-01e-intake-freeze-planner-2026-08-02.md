@@ -22,6 +22,13 @@ branch from the epoch base. Any producer commit reachable from T4 must be
 covered by an accepted same-thread payload that is itself reachable from T4;
 missing producer refs or unaccepted out-of-band merges fail closed.
 
+Candidate-branch promotion additionally requires descent from current canonical
+T4 and a committed strict acceptance artifact whose base/candidate SHAs match,
+whose tags peel to the declared payloads, and whose accepted payloads cover all
+contained producer history. The current `ve/prototype-integration-live` branch
+fails because its acceptance summary is uncommitted and its base predates
+canonical T4; no promotion or merge is claimed.
+
 The negative suite rejects planning before cutoff, late tags, wrong-thread tags,
 invalid targets, unknown producers, duplicate selections, unobserved tags, and
 post-cutoff observations. The real epoch
