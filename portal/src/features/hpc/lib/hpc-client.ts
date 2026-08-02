@@ -8,11 +8,9 @@
 import type { Job, JobOutput, JobStatus, SDKOffering, WorkloadTemplate } from '../types';
 import {
   HPCClientUnavailableError,
-  HPCMutationNotCommittedError,
   assertCommittedJobMutation,
   requireHPCSigner,
   type CommittedJobMutation,
-  type HPCClientCapability,
   type HPCSignerAdapter,
   type SubmitJobParams,
 } from '@/lib/portal-adapter';

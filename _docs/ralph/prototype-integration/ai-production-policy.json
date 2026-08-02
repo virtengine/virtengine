@@ -67,7 +67,6 @@
   ],
   "known_findings": [
     { "rule": "allow-all-consent", "path": "pkg/data_vault/consent.go", "count": 3 },
-    { "rule": "allow-all-consent", "path": "pkg/data_vault/vault_service.go", "count": 1 },
     { "rule": "fake-biometric-lsh", "path": "x/veid/keeper/biometric_hash.go", "count": 5 },
     { "rule": "memory-vault", "path": "x/veid/keeper/decryption.go", "count": 2 },
     { "rule": "placeholder-model", "path": "cmd/inference-sidecar/main.go", "count": 1 },
