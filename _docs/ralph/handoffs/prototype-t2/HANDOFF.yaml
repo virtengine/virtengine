@@ -1,55 +1,63 @@
 campaign: three-day-prototype
 thread: T2
-checkpoint: T2-X09
+checkpoint: T2-X10
 branch: ve/prototype-t2-product
-start_head: c81c1339f5ee8cbad5e2f6b12388fcae55094c19
-end_head: b1641c5bbb68a7e9a3eb8df8082f72ad2ba64f44
+start_head: 951b19ba7666fd0f95fddef017487b47a1eee933
+end_head: 513ea3f8f78d4b2fb92a5819a420356b82e929c3
 origin_main: 79391a3df86d85522b92e0400c6904971ecbe65d
 tree_clean: true
 commits:
-  - b1641c5bbb68a7e9a3eb8df8082f72ad2ba64f44
+  - 513ea3f8f78d4b2fb92a5819a420356b82e929c3
 owned_paths:
-  - portal/src/components/escrow/
+  - lib/portal/components/marketplace/
+  - lib/portal/__tests__/marketplace/
+  - lib/portal/index.ts
+  - lib/portal/index.d.ts
+  - portal/src/components/marketplace/CheckoutDialog.tsx
+  - portal/src/lib/portal-adapter.ts
+  - portal/src/components/escrow/__tests__/
 files_changed:
-  - portal/src/components/escrow/DepositModal.tsx
-  - portal/src/components/escrow/EscrowBalance.tsx
-  - portal/src/components/escrow/EscrowPaymentsDashboard.tsx
-  - portal/src/components/escrow/WithdrawForm.tsx
-  - portal/src/components/escrow/mutations.ts
+  - lib/portal/components/marketplace/CheckoutFlow.tsx
+  - lib/portal/components/marketplace/checkout-mutation.ts
+  - lib/portal/__tests__/marketplace/checkout-flow.test.tsx
+  - lib/portal/index.ts
+  - lib/portal/index.d.ts
+  - portal/src/components/marketplace/CheckoutDialog.tsx
+  - portal/src/lib/portal-adapter.ts
   - portal/src/components/escrow/__tests__/DepositModal.test.tsx
-  - portal/src/components/escrow/__tests__/EscrowPaymentsDashboard.test.tsx
   - portal/src/components/escrow/__tests__/WithdrawForm.test.tsx
-  - portal/src/components/escrow/__tests__/mutations.test.ts
 tests:
-  - command: portal\node_modules\.bin\vitest.CMD run src/components/escrow/__tests__/DepositModal.test.tsx src/components/escrow/__tests__/WithdrawForm.test.tsx src/components/escrow/__tests__/EscrowPaymentsDashboard.test.tsx src/components/escrow/__tests__/mutations.test.ts --reporter=dot
+  - command: lib\portal\node_modules\.bin\vitest.CMD run __tests__/marketplace/checkout-flow.test.tsx --reporter=dot
     exit_code: 0
     result: passed
-    test_count: 49
+    test_count: 6
     tool_versions:
       node: v24.12.0
-    artifact: _docs/ralph/handoffs/prototype-t2/T2-X09-evidence.txt
-  - command: pnpm -C portal lint
+    artifact: _docs/ralph/handoffs/prototype-t2/T2-X10-evidence.txt
+  - command: lib\portal\node_modules\.bin\vitest.CMD run --reporter=dot
+    exit_code: 0
+    result: passed
+    test_count: 702
+    tool_versions:
+      node: v24.12.0
+    artifact: _docs/ralph/handoffs/prototype-t2/T2-X10-evidence.txt
+  - command: portal\node_modules\.bin\tsc.CMD --noEmit -p portal\tsconfig.json
     exit_code: 0
     result: passed
     tool_versions:
       node: v24.12.0
-    artifact: _docs/ralph/handoffs/prototype-t2/T2-X09-evidence.txt
-  - command: pnpm -C portal type-check
-    exit_code: 0
-    result: passed
-    tool_versions:
-      node: v24.12.0
-    artifact: _docs/ralph/handoffs/prototype-t2/T2-X09-evidence.txt
+    artifact: _docs/ralph/handoffs/prototype-t2/T2-X10-evidence.txt
 generated_hashes: {}
 migrations: []
 external_evidence:
-  - _docs/ralph/handoffs/prototype-t2/T2-X09-evidence.txt
+  - _docs/ralph/handoffs/prototype-t2/T2-X10-evidence.txt
 known_failures:
-  - The Windows terminal bridge repeatedly terminated the all-in-one portal Vitest process before a summary or exit marker; no full-suite pass is claimed and no Vitest failure was reported.
+  - Full lib/portal TypeScript compilation has pre-existing duplicate SupportTicketDetail and missing wallet adapter factory/WalletChainConfig export errors outside the T2-X10 slice; changed checkout files compile cleanly.
 blockers:
+  - T4 producer-handoff.schema.json does not permit the established supplemental T2-X checkpoint names; T2-X01 through T2-X10 retain the campaign queue naming.
   - T4 producer-handoff.schema.json forbids the integration_parent field required by the updated campaign plan; integration ancestor fa21b1e540a5efcbe1822da4199be7acec7709d3 is retained in T2-05-evidence.txt.
   - Full provider package certification is blocked by the unrelated submitter lease timing failure retained in T2-03B-evidence.txt.
-  - No production escrow signing/broadcast adapter is wired; mutation controls default unavailable.
-  - No live escrow transaction or chain endpoint was certified.
-next_checkpoint: T2-X10
-expected_head: b1641c5bbb68a7e9a3eb8df8082f72ad2ba64f44
+  - No production checkout signing/broadcast adapter is wired; checkout defaults unavailable.
+  - No live order or chain endpoint was certified.
+next_checkpoint: T2-X11
+expected_head: 513ea3f8f78d4b2fb92a5819a420356b82e929c3
