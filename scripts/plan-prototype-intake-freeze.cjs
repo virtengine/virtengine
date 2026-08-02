@@ -1,0 +1,86 @@
+#!/usr/bin/env node
+
+"use strict";
+
+const assert = require("assert").strict;
+const { readFileSync } = require("fs");
+const { resolve } = require("path");
+const { spawnSync } = require("child_process");
+
+const threads = ["T1", "T2", "T3", "T5"];
+const tagPattern = /^checkpoint\/prototype-t([1235])\/(t[1235]-[0-9]{2,}[a-z]?)$/;
+
+function git(repo, args) {
+  const result = spawnSync("git", args, { cwd: repo, encoding: "utf8" });
+  if (result.status !== 0) throw new Error((result.stderr || result.stdout || `git ${args.join(" ")} failed`).trim());
+  return result.stdout.trim();
+}
+
+function resolveAnnotatedTag(repo, remote, tag) {
+  const ref = `refs/tags/${tag}`;
+  git(repo, ["fetch", remote, `${ref}:${ref}`]);
+  assert.equal(git(repo, ["cat-file", "-t", ref]), "tag", `${tag} is not an annotated tag`);
+  return {
+    tagger_at: git(repo, ["for-each-ref", "--format=%(taggerdate:iso-strict)", ref]),
+    target: git(repo, ["rev-parse", `${ref}^{}`]),
+  };
+}
+
+function planFrozenEpoch(epoch, selections, options = {}) {
+  const now = options.now ?? Date.now();
+  const cutoff = Date.parse(epoch.announcement_cutoff);
+  assert.ok(Number.isFinite(cutoff), "epoch cutoff is invalid");
+  assert.ok(now > cutoff, "epoch announcement cutoff has not elapsed");
+  assert.equal(epoch.status, "open", "only an open epoch can be frozen");
+  assert.deepEqual(epoch.producers.map((producer) => producer.thread), threads, "epoch producer roster is invalid");
+  for (const thread of selections.keys()) assert.ok(threads.includes(thread), `unknown producer selection: ${thread}`);
+
+  const producers = epoch.producers.map((producer) => {
+    const tag = selections.get(producer.thread);
+    if (!tag) return { thread: producer.thread, status: "unannounced", tag: null, decision: "frozen-out" };
+    const match = tag.match(tagPattern);
+    assert.ok(match && `T${match[1]}` === producer.thread, `${producer.thread} selected an invalid tag`);
+    const resolved = options.resolveTag(tag);
+    assert.match(resolved.target, /^[a-f0-9]{40}$/, `${tag} target is not a commit SHA`);
+    const taggerTime = Date.parse(resolved.tagger_at);
+    assert.ok(Number.isFinite(taggerTime), `${tag} tagger timestamp is invalid`);
+    assert.ok(taggerTime <= cutoff, `${tag} was published after the announcement cutoff`);
+    return { thread: producer.thread, status: "announced", tag, decision: null };
+  });
+  return { ...epoch, status: "frozen", producers };
+}
+
+function parseArgs(argv) {
+  const options = { epoch: null, remote: "origin", repo: resolve(__dirname, ".."), selections: new Map() };
+  for (let index = 0; index < argv.length; index += 1) {
+    const argument = argv[index];
+    if (["--epoch", "--remote", "--repo", "--tag"].includes(argument)) {
+      const value = argv[++index];
+      assert.ok(value, `${argument} requires a value`);
+      if (argument === "--tag") {
+        const match = value.match(/^(T[1235])=(.+)$/);
+        assert.ok(match, "--tag requires THREAD=TAG");
+        assert.ok(!options.selections.has(match[1]), `duplicate producer selection: ${match[1]}`);
+        options.selections.set(match[1], match[2]);
+      } else options[argument.slice(2)] = value;
+    } else throw new Error(`unknown argument: ${argument}`);
+  }
+  assert.match(options.epoch || "", /^[1-9][0-9]*$/, "--epoch is required");
+  options.repo = resolve(options.repo);
+  return options;
+}
+
+function main(argv) {
+  const options = parseArgs(argv);
+  const path = resolve(options.repo, `_docs/ralph/prototype-integration/epochs/epoch-${options.epoch}.json`);
+  const epoch = JSON.parse(readFileSync(path, "utf8"));
+  const plan = planFrozenEpoch(epoch, options.selections, { resolveTag: (tag) => resolveAnnotatedTag(options.repo, options.remote, tag) });
+  process.stdout.write(`${JSON.stringify(plan, null, 2)}\n`);
+}
+
+module.exports = { parseArgs, planFrozenEpoch };
+
+if (require.main === module) {
+  try { main(process.argv.slice(2)); }
+  catch (error) { console.error(`prototype intake freeze plan: invalid: ${error.message}`); process.exitCode = 1; }
+}

@@ -1,0 +1,27 @@
+"use strict";
+
+const assert = require("assert").strict;
+const { parseArgs, planFrozenEpoch } = require("./plan-prototype-intake-freeze.cjs");
+
+function epoch() {
+  return {
+    schema_version: "virtengine.prototype.intake-epoch/v2", campaign: "three-day-prototype", intake_epoch: 1,
+    base_tag: "checkpoint/prototype-integration/epoch-1-base", base_sha: "a".repeat(40), planning_sha: "b".repeat(40),
+    status: "open", opens_at: "2000-01-01T00:00:00Z", announcement_cutoff: "2000-01-02T00:00:00Z",
+    producers: ["T1", "T2", "T3", "T5"].map((thread) => ({ thread, status: "unannounced", tag: null, decision: null })),
+  };
+}
+
+const resolver = () => ({ target: "c".repeat(40), tagger_at: "2000-01-01T12:00:00Z" });
+const tests = [
+  ["plans an announced tag and freezes out unselected producers", () => { const plan = planFrozenEpoch(epoch(), new Map([["T1", "checkpoint/prototype-t1/t1-09"]]), { now: Date.parse("2000-01-03T00:00:00Z"), resolveTag: resolver }); assert.equal(plan.status, "frozen"); assert.deepEqual(plan.producers[0], { thread: "T1", status: "announced", tag: "checkpoint/prototype-t1/t1-09", decision: null }); assert.ok(plan.producers.slice(1).every((producer) => producer.decision === "frozen-out")); }],
+  ["rejects planning before cutoff", () => assert.throws(() => planFrozenEpoch(epoch(), new Map(), { now: Date.parse("2000-01-01T12:00:00Z"), resolveTag: resolver }), /cutoff has not elapsed/)],
+  ["rejects a late tag", () => assert.throws(() => planFrozenEpoch(epoch(), new Map([["T1", "checkpoint/prototype-t1/t1-09"]]), { now: Date.parse("2000-01-03T00:00:00Z"), resolveTag: () => ({ target: "c".repeat(40), tagger_at: "2000-01-02T00:00:01Z" }) }), /after the announcement cutoff/)],
+  ["rejects a tag from another thread", () => assert.throws(() => planFrozenEpoch(epoch(), new Map([["T1", "checkpoint/prototype-t3/t3-09"]]), { now: Date.parse("2000-01-03T00:00:00Z"), resolveTag: resolver }), /invalid tag/)],
+  ["rejects an invalid target", () => assert.throws(() => planFrozenEpoch(epoch(), new Map([["T1", "checkpoint/prototype-t1/t1-09"]]), { now: Date.parse("2000-01-03T00:00:00Z"), resolveTag: () => ({ target: "HEAD", tagger_at: "2000-01-01T12:00:00Z" }) }), /not a commit SHA/)],
+  ["rejects an unknown producer", () => assert.throws(() => planFrozenEpoch(epoch(), new Map([["T4", "checkpoint/prototype-t1/t1-09"]]), { now: Date.parse("2000-01-03T00:00:00Z"), resolveTag: resolver }), /unknown producer/)],
+  ["parses explicit tag selections", () => { const parsed = parseArgs(["--epoch", "1", "--tag", "T1=checkpoint/prototype-t1/t1-09"]); assert.equal(parsed.selections.get("T1"), "checkpoint/prototype-t1/t1-09"); }],
+  ["rejects duplicate selections", () => assert.throws(() => parseArgs(["--epoch", "1", "--tag", "T1=a", "--tag", "T1=b"]), /duplicate producer/)],
+];
+
+for (const [name, run] of tests) { run(); console.log(`ok - ${name}`); }

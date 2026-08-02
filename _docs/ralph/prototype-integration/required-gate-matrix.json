@@ -165,6 +165,7 @@
       "path_selectors": ["docs/**", "_docs/**", "tests/e2e/**", "tests/integration/**", "scripts/*.cjs", "scripts/localnet.sh"],
       "required_commands": [
         { "id": "docs-control", "kind": "policy", "command": "node scripts/validate-prototype-integration.cjs" },
+        { "id": "intake-freeze-planner", "kind": "test", "command": "node scripts/plan-prototype-intake-freeze.test.cjs" },
         { "id": "process-boundary-e2e", "kind": "test", "command": "go test -count=1 -tags=e2e.integration ./tests/e2e/... ./tests/integration/..." }
       ],
       "pinned_tools": [{ "name": "go", "version": "1.25.8", "source": "go.mod" }, { "name": "node", "version": "24.12.0", "source": "required gate runner image" }],

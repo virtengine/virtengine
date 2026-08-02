@@ -130,6 +130,22 @@ and its negative tests pass on the exact T4 SHA. The validation clone must be
 new or independently verified clean; do not relax the validator's worktree
 cleanliness check to accommodate unrelated local files.
 
+After `announcement_cutoff`, plan the frozen roster without mutating the epoch.
+Select at most one intake-format annotated tag per producer explicitly; the
+planner rejects early, late, lightweight, wrong-thread, duplicate, or unknown
+selections and marks unselected producers frozen out:
+
+```powershell
+node scripts/plan-prototype-intake-freeze.test.cjs
+node scripts/plan-prototype-intake-freeze.cjs --epoch 1 `
+  --tag T1=checkpoint/prototype-t1/t1-09 `
+  --tag T3=checkpoint/prototype-t3/t3-13a `
+  > $env:TEMP\epoch-1-frozen-plan.json
+```
+
+Review and commit the proposed epoch separately. The planner never writes the
+epoch file and does not accept or merge any producer checkpoint.
+
 ## Core RC Publication Preflight
 
 T4-09A is diagnostic-only. It never creates or pushes a tag. Run it with the
