@@ -11,6 +11,7 @@ const {
   buildTestEvidence,
   buildTooling,
   listSourceEntries,
+  sourceArtifacts,
 } = require("./generate-core-rc-manifest.cjs");
 const { validateSchema } = require("./validate-core-rc-manifest.cjs");
 
@@ -37,6 +38,9 @@ const handoff = sourceJson(handoffPath);
 const schema = JSON.parse(readFileSync(resolve(root, "_docs/ralph/prototype-integration/core-rc-manifest.schema.json"), "utf8"));
 
 const tests = [
+  ["binds the AI production policy as a control artifact", () => {
+    assert.ok(sourceArtifacts.some(([id, path]) => id === "ai_production_policy" && path === "_docs/ralph/prototype-integration/ai-production-policy.json"));
+  }],
   ["hashes every tracked canonical chart file", () => {
     const chartContract = artifactSelections.find((contract) => contract.id === "chart");
     const entries = listSourceEntries(sourceSha, root);

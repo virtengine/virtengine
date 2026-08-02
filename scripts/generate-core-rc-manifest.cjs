@@ -25,6 +25,7 @@ const sourceArtifacts = [
   ["slurm_inventory", "_docs/ralph/prototype-integration/slurm-chart-inventory.json"],
   ["slurm_report", "_docs/ralph/prototype-integration/slurm-chart-semantic-report.json"],
   ["model_provenance", "_docs/ralph/prototype-integration/model-provenance.json"],
+  ["ai_production_policy", "_docs/ralph/prototype-integration/ai-production-policy.json"],
 ];
 
 const artifactSelections = [
@@ -486,6 +487,6 @@ function main(argv = process.argv.slice(2)) {
   }
 }
 
-module.exports = { artifactSelections, assertUniqueIds, buildArtifactGroup, buildTestEvidence, buildTooling, generateManifest, listSourceEntries, main, manifestRelativePath, serialize, validateManifest };
+module.exports = { artifactSelections, assertUniqueIds, buildArtifactGroup, buildTestEvidence, buildTooling, generateManifest, listSourceEntries, main, manifestRelativePath, serialize, sourceArtifacts, validateManifest };
 
 if (require.main === module) main();

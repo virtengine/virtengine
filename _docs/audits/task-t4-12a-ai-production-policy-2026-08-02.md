@@ -11,7 +11,8 @@ Test and fixture paths are excluded from production findings.
 The diagnostic records 11 exact finding paths and rejects undeclared finding
 drift. Its `--enforce` mode rejects the current repository state, and the Task
 88B ML gate requires that enforcement command before the gate can become green.
-The aggregate integration validator checks the diagnostic contract.
+The aggregate integration validator checks the diagnostic contract. The
+exact-SHA core-RC manifest generator binds the policy as a control artifact.
 
 This checkpoint establishes fail-closed detection only. It does not remediate
 the findings, approve placeholder models, certify biometric uniqueness, or
