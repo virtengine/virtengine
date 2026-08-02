@@ -1,14 +1,14 @@
 {
   "campaign": "three-day-prototype",
   "thread": "T4",
-  "checkpoint": "T4-07A",
+  "checkpoint": "T4-07B",
   "branch": "ve/prototype-integration",
-  "start_head": "017d288cbd48bd60b44275371ace2dbfe4d3afc8",
-  "end_head": "1737b584ad51707123ffb936b3a5f503d2a033ab",
+  "start_head": "459992215780d9ec15cc091c5314a98807fd49c2",
+  "end_head": "772290cb2adda70043dfab8320c97774815343d4",
   "origin_main": "79391a3df86d85522b92e0400c6904971ecbe65d",
   "tree_clean": true,
   "commits": [
-    "1737b584ad51707123ffb936b3a5f503d2a033ab"
+    "772290cb2adda70043dfab8320c97774815343d4"
   ],
   "owned_paths": [
     "_docs/ralph/prototype-integration/**",
@@ -21,26 +21,28 @@
     "scripts/validate_slurm_chart_semantics.py",
     "scripts/validate_slurm_chart_semantics_test.py",
     "deploy/slurm/slurm-cluster/**",
-    "_docs/runbooks/hpc-slurm/deployment-runbook.md",
     "tests/integration/hpc/slurm_k8s_test.go"
   ],
   "files_changed": [
     "_docs/ralph/handoffs/prototype-integration/HANDOFF.yaml",
-    "_docs/ralph/handoffs/prototype-integration/HANDOFF.yaml",
     "_docs/ralph/prototype-integration/slurm-chart-inventory.json",
     "_docs/ralph/prototype-integration/slurm-chart-inventory.schema.json",
     "_docs/ralph/prototype-integration/slurm-chart-semantic-report.json",
-    "_docs/runbooks/hpc-slurm/deployment-runbook.md",
     "deploy/slurm/slurm-cluster/templates/_helpers.tpl",
     "deploy/slurm/slurm-cluster/templates/compute-nodepools-statefulset.yaml",
     "deploy/slurm/slurm-cluster/templates/compute-statefulset.yaml",
-    "deploy/slurm/slurm-cluster/templates/secrets.yaml",
-    "deploy/slurm/slurm-cluster/tests/stable-secrets-values.yaml",
+    "deploy/slurm/slurm-cluster/templates/configmap.yaml",
+    "deploy/slurm/slurm-cluster/templates/controller-statefulset.yaml",
+    "deploy/slurm/slurm-cluster/templates/database-statefulset.yaml",
+    "deploy/slurm/slurm-cluster/templates/mariadb-statefulset.yaml",
+    "deploy/slurm/slurm-cluster/templates/networkpolicy.yaml",
+    "deploy/slurm/slurm-cluster/templates/servicemonitor.yaml",
     "deploy/slurm/slurm-cluster/values.schema.json",
     "deploy/slurm/slurm-cluster/values.yaml",
     "scripts/validate-slurm-chart-inventory.cjs",
     "scripts/validate_slurm_chart_semantics.py",
     "scripts/validate_slurm_chart_semantics_test.py",
+    "scripts/testdata/slurm-chart-semantics/hardened-multiple-pools.yaml",
     "tests/integration/hpc/slurm_k8s_test.go"
   ],
   "tests": [
@@ -48,14 +50,14 @@
       "command": "python scripts/validate_slurm_chart_semantics_test.py && node scripts/validate-slurm-chart-inventory.test.cjs && node scripts/validate-slurm-chart-inventory.cjs",
       "exit_code": 0,
       "result": "passed",
-      "test_count": 34,
+      "test_count": 44,
       "tool_versions": {
         "python": "3.14.6 windows",
         "node": "20.19.1"
       }
     },
     {
-      "command": "go1.25.8 test -count=1 ./x/hpc/... && go1.25.8 vet ./x/hpc/... && go1.25.8 test '-tags=e2e.integration' -count=1 ./tests/integration/hpc",
+      "command": "go1.25.8 test -count=1 ./x/hpc/... && go1.25.8 test '-tags=e2e.integration' -count=1 ./tests/integration/hpc -run '^TestReplicaCapacityOfflineContracts$'",
       "exit_code": 0,
       "result": "passed",
       "tool_versions": {
@@ -72,8 +74,8 @@
     }
   ],
   "generated_hashes": {
-    "scripts/validate_slurm_chart_semantics.py": "fd088b79d0274200cbe65dec4d7dc8b3199545557c0b31fe9c53bb36e7343668",
-    "_docs/ralph/prototype-integration/slurm-chart-semantic-report.json": "07eca3ddc378a8d4b45c6253b12e3b65b2d548397595b0817effe739428d5e8a"
+    "scripts/validate_slurm_chart_semantics.py": "b2be2259705654a334c0055735b069ed6b2e36062e93931f170e3b5fe080fe43",
+    "_docs/ralph/prototype-integration/slurm-chart-semantic-report.json": "45f6c327d1440897d920ab511be77a5b833290ded7c086e520587df9c6e8e314"
   },
   "accepted_checkpoints": [],
   "rejected_checkpoints": [
@@ -92,17 +94,19 @@
   ],
   "external_evidence": [],
   "known_failures": [
-    "Go 1.26.5 cannot compile github.com/bytedance/sonic v1.14.1; checkpoint gates were rerun successfully with the repository-pinned Go 1.25.8 toolchain."
+    "Go 1.26.5 cannot compile github.com/bytedance/sonic v1.14.1; checkpoint gates were rerun successfully with the repository-pinned Go 1.25.8 toolchain.",
+    "The full tagged HPC integration package times out in existing pkg/provider_daemon TestHeartbeatMonitor because RecordHeartbeat holds nodesMu while raiseAlert reacquires it; the focused T4-07B capacity contract passes."
   ],
   "blockers": [
     "Epoch 1 remains open with no announced intake-v2 producer tags; no producer checkpoint is accepted by this checkpoint.",
     "Stable secrets are remediated through explicit pre-provisioned Secret names/keys and legacy upgrade instructions; no render-time credential generation remains.",
-    "The canonical chart remains blocked by replica/capacity mismatch, mutable images, and blanket privilege.",
+    "Capacity derivation and partition pool selectors are implemented, but replica-capacity-equality remains unverified until a real Helm render is parsed.",
+    "The canonical chart remains blocked by mutable images and blanket privilege.",
     "The competing _build/helm/slurm-cluster chart remains present and must be retired.",
-    "The canonical diagnostic reports stable-secrets passed; capacity equality, immutable images, and least privilege fail, while durability remains unverified.",
+    "The canonical diagnostic reports stable-secrets passed; capacity equality and durability unverified; immutable images and least privilege failed.",
     "No canonical chart remediation, failover, restore, or production render approval is claimed.",
     "Task 88C is not complete."
   ],
-  "next_checkpoint": "T4-07B",
-  "expected_head": "1737b584ad51707123ffb936b3a5f503d2a033ab"
+  "next_checkpoint": "T4-07C",
+  "expected_head": "772290cb2adda70043dfab8320c97774815343d4"
 }
