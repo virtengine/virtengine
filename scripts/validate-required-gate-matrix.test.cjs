@@ -39,6 +39,12 @@ const tests = [
     candidate.categories[0].required_commands.shift();
     assert.throws(() => validateRequiredGateMatrix(candidate, { schema }), /required literal commands changed/);
   }],
+  ["rejects a missing Windows localnet selector", () => {
+    const candidate = cloneMatrix();
+    const category = candidate.categories.find((entry) => entry.id === "docs_process_boundary_e2e");
+    category.path_selectors = category.path_selectors.filter((selector) => selector !== "scripts/localnet.ps1");
+    assert.throws(() => validateRequiredGateMatrix(candidate, { schema }), /must include scripts\/localnet\.ps1/);
+  }],
   ["rejects a nonzero exit", () => {
     const category = cloneMatrix().categories[0];
     const result = validResult(category);

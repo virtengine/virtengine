@@ -152,6 +152,11 @@ function validateRequiredGateMatrix(matrix, options = {}) {
     for (const selector of category.path_selectors) {
       assert.ok(typeof selector === "string" && selector.length > 0 && !selector.includes("\\"), `${category.id} has an invalid path selector`);
     }
+    if (category.id === "docs_process_boundary_e2e") {
+      for (const launcher of ["scripts/localnet.sh", "scripts/localnet.ps1"]) {
+        assert.ok(category.path_selectors.includes(launcher), `docs/process selectors must include ${launcher}`);
+      }
+    }
     assert.ok(Array.isArray(category.required_commands) && category.required_commands.length > 0, `${category.id} required commands must not be empty`);
     const commandIds = new Set();
     for (const command of category.required_commands) {

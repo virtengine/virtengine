@@ -111,6 +111,11 @@ try {
       const plan = planFor(["pnpm-lock.yaml"]);
       assert.deepEqual(plan.categories.map((category) => category.id), ["sdk", "portal", "mobile"]);
     }],
+    ["selects launcher parity for a Windows-only localnet change", () => {
+      const plan = planFor(["scripts/localnet.ps1"]);
+      assert.deepEqual(plan.categories.map((category) => category.id), ["docs_process_boundary_e2e"]);
+      assert.ok(plan.categories[0].commands.some((command) => command.id === "localnet-integration-launchers"));
+    }],
     ["records an explicit root metadata allowance", () => {
       const plan = planFor(["README.md"]);
       assert.equal(plan.categories.length, 0);
