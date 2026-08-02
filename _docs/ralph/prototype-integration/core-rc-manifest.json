@@ -6,14 +6,14 @@
   "planned_functionality_complete": false,
   "milestone_m_eligible": false,
   "source": {
-    "payload_sha": "820c06eaee5a9b0899840768a02784c32cc94826",
-    "tree": "fd22946e8432586fba2de249d91f21bc36d16206",
+    "payload_sha": "b831ea6f035c9342b2c83924df7cdc3cb96da95e",
+    "tree": "0ee8fa3f0fc190f803b8eecdd75f8f8d0ee2187b",
     "branch": "ve/prototype-integration",
     "binding": "declared_clean_parent_payload"
   },
   "tooling": {
-    "tooling_sha": "820c06eaee5a9b0899840768a02784c32cc94826",
-    "tree": "fd22946e8432586fba2de249d91f21bc36d16206",
+    "tooling_sha": "b831ea6f035c9342b2c83924df7cdc3cb96da95e",
+    "tree": "0ee8fa3f0fc190f803b8eecdd75f8f8d0ee2187b",
     "artifacts": [
       {
         "id": "generator",
@@ -237,7 +237,7 @@
     {
       "id": "slurm_inventory",
       "path": "_docs/ralph/prototype-integration/slurm-chart-inventory.json",
-      "sha256": "0a34b6189f24baf2cab4a2560deb7f6c4f52e9215abd81c1e37c482b7e3f733e",
+      "sha256": "f3dcb8c332cedee06e950c774822d2b482f5a2a13e84f6132eb488a4e0473519",
       "status": "blocked"
     },
     {
@@ -421,27 +421,17 @@
   "test_evidence": {
     "status": "complete",
     "ledger_path": "_docs/ralph/handoffs/prototype-integration/HANDOFF.yaml",
-    "implementation_sha": "e8499b88ca250073a56da963bc2680882851da76",
-    "ledger_sha": "820c06eaee5a9b0899840768a02784c32cc94826",
-    "record_count": 2,
-    "declared_test_count": 50,
+    "implementation_sha": "b75de77c53ff73d868d83c994c363200c0b3a5c1",
+    "ledger_sha": "b831ea6f035c9342b2c83924df7cdc3cb96da95e",
+    "record_count": 1,
+    "declared_test_count": 14,
     "uncounted_record_count": 0,
     "records": [
       {
-        "command": "helm lint deploy/slurm/slurm-cluster --values deploy/slurm/slurm-cluster/tests/stable-secrets-values.yaml --strict && helm template slurm-capacity deploy/slurm/slurm-cluster --namespace slurm-capacity --values deploy/slurm/slurm-cluster/tests/stable-secrets-values.yaml | python scripts/validate_slurm_chart_semantics.py --chart deploy/slurm/slurm-cluster --rendered -",
+        "command": "node scripts/validate-slurm-chart-inventory.test.cjs && node scripts/validate-slurm-chart-inventory.cjs",
         "exit_code": 0,
         "result": "passed",
-        "test_count": 5,
-        "tool_versions": {
-          "helm": "3.18.6",
-          "python": "3.14.6"
-        }
-      },
-      {
-        "command": "node scripts/validate-required-gate-matrix.test.cjs && node scripts/run-required-gates.test.cjs",
-        "exit_code": 0,
-        "result": "passed",
-        "test_count": 45,
+        "test_count": 14,
         "tool_versions": {
           "node": "20.19.1"
         }
@@ -451,7 +441,7 @@
   },
   "producer_checkpoints": {
     "ledger_path": "_docs/ralph/handoffs/prototype-integration/HANDOFF.yaml",
-    "ledger_sha256": "b7eb3a604ad84bd205a01e3ed3e1e73e57d50931aa90dea6fe644f2a16d0efba",
+    "ledger_sha256": "00624608eb0288948e913072c48a290bc5438dda83ab509c6639ba560ba52803",
     "accepted": [],
     "rejected": [
       {
