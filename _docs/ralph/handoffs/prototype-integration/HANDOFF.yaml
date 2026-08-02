@@ -1,90 +1,54 @@
 {
   "campaign": "three-day-prototype",
   "thread": "T4",
-  "checkpoint": "T4-07E",
+  "checkpoint": "T4-08A",
   "branch": "ve/prototype-integration",
-  "start_head": "55600687e47c92ce23d6bbfb650f74819b5ec6a3",
-  "end_head": "735a5d57566e44e456432faaa73431defb3c3c1e",
+  "start_head": "38afcdae29a66a9952cffe08b616039c371068d6",
+  "end_head": "3cfdd31a84883de0b80aff6b05b8dc3403e12b81",
   "origin_main": "79391a3df86d85522b92e0400c6904971ecbe65d",
   "tree_clean": true,
   "commits": [
-    "735a5d57566e44e456432faaa73431defb3c3c1e"
+    "b0d8be8b7c7158928ebd80b2aaa2467947cbea0f",
+    "3cfdd31a84883de0b80aff6b05b8dc3403e12b81"
   ],
   "owned_paths": [
     "_docs/ralph/prototype-integration/**",
     "_docs/ralph/handoffs/prototype-integration/**",
     "scripts/validate-prototype-integration.cjs",
-    "_docs/ralph/prototype-integration/slurm-chart-inventory.json",
-    "_docs/ralph/prototype-integration/slurm-chart-inventory.schema.json",
-    "scripts/validate-slurm-chart-inventory.cjs",
-    "scripts/validate-slurm-chart-inventory.test.cjs",
-    "scripts/validate_slurm_chart_semantics.py",
-    "scripts/validate_slurm_chart_semantics_test.py",
-    "scripts/hpc/slurm-durable-state-drill.py",
-    "scripts/hpc/slurm-durable-state-drill-test.py",
-    "deploy/slurm/slurm-cluster/**",
-    "_docs/audits/task-t4-07e-durable-state-evidence-2026-08-02.md",
-    "_docs/runbooks/hpc-slurm/deployment-runbook.md",
-    "tests/integration/hpc/slurm_k8s_test.go"
+    "_docs/ralph/prototype-integration/core-rc-manifest.json",
+    "_docs/ralph/prototype-integration/core-rc-manifest.schema.json",
+    "scripts/generate-core-rc-manifest.cjs",
+    "scripts/generate-core-rc-manifest.test.cjs",
+    "scripts/validate-core-rc-manifest.cjs"
   ],
   "files_changed": [
     "_docs/ralph/handoffs/prototype-integration/HANDOFF.yaml",
     "_docs/INDEX.md",
-    "_docs/ralph/prototype-integration/slurm-chart-inventory.json",
-    "_docs/ralph/prototype-integration/slurm-chart-inventory.schema.json",
-    "_docs/ralph/prototype-integration/slurm-chart-semantic-report.json",
-    "_docs/runbooks/hpc-slurm/deployment-runbook.md",
-    "_docs/audits/task-t4-07e-durable-state-evidence-2026-08-02.md",
-    "deploy/slurm/slurm-cluster/templates/_helpers.tpl",
-    "deploy/slurm/slurm-cluster/templates/controller-statefulset.yaml",
-    "deploy/slurm/slurm-cluster/templates/database-statefulset.yaml",
-    "deploy/slurm/slurm-cluster/templates/mariadb-statefulset.yaml",
-    "deploy/slurm/slurm-cluster/tests/stable-secrets-values.yaml",
-    "deploy/slurm/slurm-cluster/values.schema.json",
-    "deploy/slurm/slurm-cluster/values.yaml",
-    "scripts/hpc/slurm-durable-state-drill.py",
-    "scripts/hpc/slurm-durable-state-drill-test.py",
-    "scripts/testdata/slurm-chart-semantics/hardened.yaml",
-    "scripts/validate-slurm-chart-inventory.cjs",
-    "scripts/validate_slurm_chart_semantics.py",
-    "scripts/validate_slurm_chart_semantics_test.py",
-    "tests/integration/hpc/slurm_k8s_test.go"
+    "_docs/INDEX.md",
+    "_docs/ralph/prototype-integration/core-rc-manifest.json",
+    "_docs/ralph/prototype-integration/core-rc-manifest.schema.json",
+    "_docs/ralph/handoffs/prototype-integration/HANDOFF.yaml",
+    "scripts/generate-core-rc-manifest.cjs",
+    "scripts/generate-core-rc-manifest.test.cjs",
+    "scripts/validate-core-rc-manifest.cjs",
+    "scripts/validate-prototype-integration.cjs"
   ],
   "tests": [
     {
-      "command": "python scripts/validate_slurm_chart_semantics_test.py && node scripts/validate-slurm-chart-inventory.test.cjs && node scripts/validate-slurm-chart-inventory.cjs",
+      "command": "node scripts/generate-core-rc-manifest.test.cjs",
       "exit_code": 0,
       "result": "passed",
-      "test_count": 64,
+      "test_count": 11,
       "tool_versions": {
-        "python": "3.14.6 windows",
         "node": "20.19.1"
       }
     },
     {
-      "command": "go1.25.8 test '-tags=e2e.integration' -count=1 ./tests/integration/hpc -run '^TestDurableStateOfflineContracts$'",
+      "command": "node scripts/generate-core-rc-manifest.cjs --check --source 38afcdae29a66a9952cffe08b616039c371068d6 --tooling-source b0d8be8b7c7158928ebd80b2aaa2467947cbea0f && node scripts/validate-core-rc-manifest.cjs",
       "exit_code": 0,
       "result": "passed",
       "tool_versions": {
-        "go": "go version go1.25.8 windows/amd64"
-      }
-    },
-    {
-      "command": "python scripts/hpc/slurm-durable-state-drill-test.py",
-      "exit_code": 0,
-      "result": "passed",
-      "test_count": 10,
-      "tool_versions": {
-        "python": "3.14.6 windows"
-      }
-    },
-    {
-      "command": "python scripts/hpc/slurm-durable-state-drill.py",
-      "exit_code": 0,
-      "result": "passed",
-      "test_count": 1,
-      "tool_versions": {
-        "python": "3.14.6 windows"
+        "node": "20.19.1"
       }
     },
     {
@@ -97,8 +61,9 @@
     }
   ],
   "generated_hashes": {
-    "scripts/hpc/slurm-durable-state-drill.py": "eab78c36099e3ba366ca5a273154f9cc3ec1a014c1b077452b0f88e43ea83ee2",
-    "_docs/ralph/prototype-integration/slurm-chart-inventory.json": "79eaba8dc4fb6109524682198e6c2dcc274219dac6673e6d2f5d798f769774e7"
+    "_docs/ralph/prototype-integration/core-rc-manifest.json": "116e5ed25a6d87c8c36a1439df00643a2c24a69c0d4a58721f6dae96d5f7c5c3",
+    "scripts/generate-core-rc-manifest.cjs": "e194fe01edebce12f00f3ddec535f135fbac6e81a5bbadd796e7a1720b39dc7e",
+    "_docs/ralph/prototype-integration/core-rc-manifest.schema.json": "17405ad2d0e46d12d25ef154f4ffd0dd3de793a229be5e6c28de33ca17c5abbf"
   },
   "accepted_checkpoints": [],
   "rejected_checkpoints": [
@@ -123,14 +88,14 @@
   "blockers": [
     "Epoch 1 remains open with no announced intake-v2 producer tags; no producer checkpoint is accepted by this checkpoint.",
     "Stable secrets are remediated through explicit pre-provisioned Secret names/keys and legacy upgrade instructions; no render-time credential generation remains.",
-    "Authoritative controller, slurmdbd, and MariaDB state paths are PVC-backed with retained generated claims or explicit existing claims.",
-    "Checksum-gated backup/restore ordering passes offline, but Helm, Kubernetes, CSI/StorageClass, retained-PV failover, and live restore evidence are unavailable.",
-    "Durability, capacity equality, and least privilege remain unverified; no live-storage or production isolation claim is made.",
+    "The core-RC manifest is non-authoritative, planned_functionality_complete=false, and milestone_m_eligible=false.",
+    "The manifest is bound to source payload 38afcdae29a66a9952cffe08b616039c371068d6 and tooling commit b0d8be8b7c7158928ebd80b2aaa2467947cbea0f; it contains zero accepted producer checkpoints.",
+    "Required gates, producer migrations, SLURM production evidence, model provenance, SBOM/release provenance, rollout, and rollback remain blocked or unavailable.",
     "The competing _build/helm/slurm-cluster chart remains present and must be retired.",
     "The canonical diagnostic reports stable-secrets passed; capacity equality and durability unverified; immutable images and least privilege failed.",
     "No canonical chart remediation, failover, restore, or production render approval is claimed.",
     "Task 88C is not complete."
   ],
-  "next_checkpoint": "T4-08A",
-  "expected_head": "735a5d57566e44e456432faaa73431defb3c3c1e"
+  "next_checkpoint": "T4-08B",
+  "expected_head": "3cfdd31a84883de0b80aff6b05b8dc3403e12b81"
 }
