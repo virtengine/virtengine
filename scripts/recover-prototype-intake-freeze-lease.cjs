@@ -7,6 +7,7 @@ const { randomUUID } = require("crypto");
 const { readFileSync, renameSync, unlinkSync } = require("fs");
 const { resolve } = require("path");
 const { spawnSync } = require("child_process");
+const { validateWorktreeBoundary } = require("./apply-prototype-intake-freeze.cjs");
 const { inspectLeaseContent } = require("./inspect-prototype-intake-freeze-lease.cjs");
 
 function recoverLease(lockPath, expectedLeaseSha256, expected, options = {}) {
@@ -16,6 +17,7 @@ function recoverLease(lockPath, expectedLeaseSha256, expected, options = {}) {
   const inspected = inspectLeaseContent(content, expected, inspectionOptions);
   assert.equal(inspected.lease_sha256, expectedLeaseSha256, "freeze lease bytes do not match reviewed SHA-256");
   assert.equal(inspected.pid_present, false, "refusing recovery while the recorded PID is present");
+  if (options.validateBoundary) options.validateBoundary();
 
   const quarantinePath = options.quarantinePath ?? `${lockPath}.recovery-${randomUUID()}`;
   operations.renameSync(lockPath, quarantinePath);
@@ -53,7 +55,7 @@ function main(argv) {
   const options = parseArgs(argv);
   const lock = spawnSync("git", ["rev-parse", "--git-path", `prototype-intake-freeze-epoch-${options.epoch}.lock`], { cwd: options.repo, encoding: "utf8" });
   assert.equal(lock.status, 0, "unable to resolve intake freeze lock path");
-  const result = recoverLease(resolve(options.repo, lock.stdout.trim()), options.expectedLeaseSha256, options);
+  const result = recoverLease(resolve(options.repo, lock.stdout.trim()), options.expectedLeaseSha256, options, { ...options, validateBoundary: () => validateWorktreeBoundary(options.repo, options.expectedHead) });
   process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
 }
 

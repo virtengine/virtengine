@@ -195,6 +195,8 @@ lease digest, use compare-and-claim recovery. The command atomically renames the
 lease to a unique quarantine, revalidates its bytes and PID state, and removes
 only that claimed quarantine. Any post-claim read, validation, or removal
 failure reports the retained quarantine path for inspection:
+Recovery also requires a clean checkout at the separately reviewed exact T4
+SHA immediately before claiming the lease.
 
 ```powershell
 node scripts/recover-prototype-intake-freeze-lease.test.cjs
