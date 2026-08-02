@@ -1,6 +1,6 @@
 {
   "schema_version": "virtengine.prototype.slurm-chart-inventory/v2",
-  "checkpoint": "T4-07E",
+  "checkpoint": "T4-07F",
   "status": "blocked",
   "validation_mode": "executable-semantic",
   "research_scope": {
@@ -33,11 +33,11 @@
     {
       "path": "_build/helm/slurm-cluster",
       "kind": "helm-chart",
-      "state": "present-blocker",
+      "state": "absent-forbidden",
       "allowed_use": "none",
       "evidence": [
         "_docs/protocol-completion-continuation-plan.md",
-        "_build/helm/slurm-cluster/Chart.yaml"
+        "_docs/audits/task-t4-07f-slurm-chart-retirement-2026-08-02.md"
       ]
     }
   ],
@@ -138,7 +138,6 @@
     { "id": "87D", "status": "unverified", "reason": "Required integration contract is not intake-verified for this checkpoint." }
   ],
   "blockers": [
-    "retire-source:_build/helm/slurm-cluster",
     "invariant:replica-capacity-equality",
     "invariant:least-privilege",
     "isolation:slurm-cgroup-tenant-enforcement-absent",

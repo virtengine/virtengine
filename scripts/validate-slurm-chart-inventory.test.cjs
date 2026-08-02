@@ -9,7 +9,7 @@ const { validateSlurmChartInventory } = require("./validate-slurm-chart-inventor
 const root = resolve(__dirname, "..");
 const inventory = JSON.parse(readFileSync(resolve(root, "_docs/ralph/prototype-integration/slurm-chart-inventory.json"), "utf8"));
 const schema = JSON.parse(readFileSync(resolve(root, "_docs/ralph/prototype-integration/slurm-chart-inventory.schema.json"), "utf8"));
-const knownSources = ["_build/helm/slurm-cluster", "deploy/slurm/slurm-cluster"];
+const knownSources = ["deploy/slurm/slurm-cluster"];
 
 function fixture() {
   return structuredClone(inventory);
@@ -68,7 +68,10 @@ const tests = [
   }],
   ["rejects retired source reintroduction", () => {
     const candidate = complete(fixture());
-    assert.throws(() => validate(candidate), /retired source reintroduced/);
+    assert.throws(
+      () => validate(candidate, { discoveredSources: ["_build/helm/slurm-cluster", ...knownSources] }),
+      /retired source reintroduced/,
+    );
   }],
   ["rejects mutable images", () => {
     const candidate = complete(fixture());

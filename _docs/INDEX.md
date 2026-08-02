@@ -94,6 +94,7 @@ This index lists internal-only documentation. Do not add internal docs outside `
 - `_docs/ralph/prototype-integration/slurm-chart-inventory.json`
 - `_docs/ralph/prototype-integration/slurm-chart-inventory.schema.json`
 - `_docs/audits/task-t4-07e-durable-state-evidence-2026-08-02.md`
+- `_docs/audits/task-t4-07f-slurm-chart-retirement-2026-08-02.md`
 - `_docs/protocols/hpc-cluster-template-spec.md`
 - `_docs/protocols/hpc-node-agent-protocol.md`
 - `_docs/protocols/mobile-capture-protocol-v1.md`
