@@ -148,6 +148,13 @@ function withStablePublishedBoundary(repo, expectedHead, remote, operation, run 
   return result;
 }
 
+function validateAppliedFreeze(path, expectedContent, repo, expectedHead, remote = "origin", options = {}) {
+  const read = options.readFileSync ?? readFileSync;
+  assert.equal(read(path, "utf8"), expectedContent, "applied epoch bytes do not match reviewed freeze plan");
+  validateRemoteBoundary(repo, expectedHead, remote, options.run ?? spawnSync);
+  return true;
+}
+
 function main(argv) {
   const options = parseArgs(argv);
   const lock = spawnSync("git", ["rev-parse", "--git-path", `prototype-intake-freeze-epoch-${options.epoch}.lock`], { cwd: options.repo, encoding: "utf8" });
@@ -169,11 +176,12 @@ function main(argv) {
       return { epochPath, serialized: `${JSON.stringify(proposed, null, 2)}\n` };
     });
     atomicWriteFile(prepared.epochPath, prepared.serialized);
+    validateAppliedFreeze(prepared.epochPath, prepared.serialized, options.repo, options.expectedHead, options.remote);
   });
   process.stdout.write(`prototype intake epoch ${options.epoch} frozen\n`);
 }
 
-module.exports = { atomicWriteFile, createLeaseRecord, parseArgs, validateFreezeEvidence, validateFreezeTransition, validatePlanDigest, validateRemoteBoundary, validateWorktreeBoundary, withExclusiveLease, withStablePublishedBoundary };
+module.exports = { atomicWriteFile, createLeaseRecord, parseArgs, validateAppliedFreeze, validateFreezeEvidence, validateFreezeTransition, validatePlanDigest, validateRemoteBoundary, validateWorktreeBoundary, withExclusiveLease, withStablePublishedBoundary };
 
 if (require.main === module) {
   try { main(process.argv.slice(2)); }

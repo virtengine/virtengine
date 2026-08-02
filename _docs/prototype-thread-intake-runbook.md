@@ -172,7 +172,8 @@ exclusive temporary file that is flushed before replacement. Acceptance remains 
 later, separately validated transition. The clean reviewed HEAD boundary is
 checked both before evidence replay and immediately before replacement, and the
 reviewed SHA must equal the remote `ve/prototype-integration` branch at both
-boundaries.
+boundaries. After replacement, the command rereads the exact epoch bytes and
+checks the remote branch once more before reporting success.
 An exclusive worktree-specific Git-path lease serializes the full application;
 an existing or crash-retained lease fails closed and requires explicit operator
 inspection before removal. Inspect its schema, PID, UTC start time, epoch,
