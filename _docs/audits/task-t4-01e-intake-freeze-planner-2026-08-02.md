@@ -24,7 +24,7 @@ missing producer refs or unaccepted out-of-band merges fail closed.
 
 Candidate-branch promotion additionally requires descent from current canonical
 T4 and a committed strict acceptance artifact whose base/candidate SHAs match,
-whose tags peel to the declared payloads, and whose accepted payloads cover all
+whose annotated tag objects peel to the declared payloads, and whose accepted payloads cover all
 contained producer history. The current `ve/prototype-integration-live` branch
 fails because its acceptance summary is uncommitted and its base predates
 canonical T4; no promotion or merge is claimed.

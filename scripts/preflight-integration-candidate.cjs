@@ -28,6 +28,12 @@ function parseAcceptance(content) {
   return acceptance;
 }
 
+function verifyAcceptedPayload(repo, entry, runGit = git) {
+  const objectType = runGit(repo, ["cat-file", "-t", entry.tag], true);
+  const peeled = runGit(repo, ["rev-parse", `${entry.tag}^{}`], true);
+  return objectType.status === 0 && objectType.stdout.trim() === "tag" && peeled.status === 0 && peeled.stdout.trim() === entry.payload_sha;
+}
+
 function validateCandidatePlan(plan, options) {
   assert.match(plan.canonical_head, /^[a-f0-9]{40}$/);
   assert.match(plan.candidate_head, /^[a-f0-9]{40}$/);
@@ -82,15 +88,12 @@ function main(argv) {
   validateCandidatePlan(plan, {
     acceptanceCommitted: true,
     isAncestor: (ancestor, descendant) => git(repo, ["merge-base", "--is-ancestor", ancestor, descendant], true).status === 0,
-    verifyAcceptedPayload: (entry) => {
-      const tag = git(repo, ["rev-parse", `${entry.tag}^{}`], true);
-      return tag.status === 0 && tag.stdout.trim() === entry.payload_sha;
-    },
+    verifyAcceptedPayload: (entry) => verifyAcceptedPayload(repo, entry),
   });
   process.stdout.write(`${JSON.stringify(plan, null, 2)}\n`);
 }
 
-module.exports = { buildCandidatePlan, parseAcceptance, validateCandidatePlan };
+module.exports = { buildCandidatePlan, parseAcceptance, validateCandidatePlan, verifyAcceptedPayload };
 
 if (require.main === module) {
   try { main(process.argv.slice(2)); }
