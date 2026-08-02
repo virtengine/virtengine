@@ -265,6 +265,9 @@ func (s *FileReconciliationJobStore) CompleteAttempt(ctx context.Context, result
 		if err != nil {
 			return err
 		}
+		if result.AttemptNumber != uint32(len(projection.Attempts[result.JobID])) { //nolint:gosec // bounded by event capacity.
+			return ErrReconciliationConflict
+		}
 		if !attempt.FinishedAt.IsZero() && attempt.Outcome != "completed" {
 			return ErrReconciliationConflict
 		}
@@ -567,6 +570,9 @@ func projectReconciliationState(state reconciliationStoreState) (ReconciliationP
 			}
 			projection.Jobs[event.Job.ID] = *event.Job
 		case ReconciliationEventAttemptStarted:
+			if _, completed := projection.Results[event.Attempt.JobID]; completed {
+				return projection, errors.New("reconciliation attempt started after completion")
+			}
 			if _, exists := projection.Jobs[event.Attempt.JobID]; !exists || event.Attempt.Number != uint32(len(projection.Attempts[event.Attempt.JobID])+1) { //nolint:gosec // bounded by event count
 				return projection, errors.New("invalid reconciliation attempt sequence")
 			}
@@ -591,7 +597,7 @@ func projectReconciliationState(state reconciliationStoreState) (ReconciliationP
 				return projection, errors.New("reconciliation result allocation mismatch")
 			}
 			attempt, err := findReconciliationAttempt(projection, event.Result.JobID, event.Result.AttemptNumber)
-			if err != nil || !attempt.FinishedAt.IsZero() {
+			if err != nil || !attempt.FinishedAt.IsZero() || event.Result.AttemptNumber != uint32(len(projection.Attempts[event.Result.JobID])) { //nolint:gosec // bounded by event count.
 				return projection, errors.New("reconciliation result references invalid attempt")
 			}
 			attempt.FinishedAt, attempt.Outcome = event.Result.CompletedAt, "completed"
