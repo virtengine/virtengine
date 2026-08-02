@@ -188,6 +188,7 @@ func TestQuorumAttestationAuthorityFreshnessAndTamper(t *testing.T) {
 		"expired":   {IssuedAt: 800, ExpiresAt: 900, Nonce: "nonce"},
 		"future":    {IssuedAt: 1010, ExpiresAt: 1050, Nonce: "nonce"},
 		"oversized": {IssuedAt: 900, ExpiresAt: 1100, Nonce: "nonce"},
+		"overflow":  {IssuedAt: 0, ExpiresAt: 9_223_372_037, Nonce: "nonce"},
 	} {
 		t.Run(name, func(t *testing.T) {
 			p := payload

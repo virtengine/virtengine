@@ -315,7 +315,7 @@ func (f Freshness) ValidateAt(now time.Time, lifetime, skew time.Duration) error
 	if err := f.ValidateStructure(); err != nil {
 		return err
 	}
-	if lifetime <= 0 || skew < 0 || time.Duration(f.ExpiresAt-f.IssuedAt)*time.Second > lifetime {
+	if lifetime <= 0 || skew < 0 || f.ExpiresAt-f.IssuedAt > int64(lifetime/time.Second) {
 		return errors.New("freshness lifetime exceeds policy")
 	}
 	if f.IssuedAt > now.Add(skew).Unix() || f.ExpiresAt <= now.Add(-skew).Unix() {
