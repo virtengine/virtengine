@@ -186,7 +186,9 @@ node scripts/inspect-prototype-intake-freeze-lease.cjs --epoch 1 `
 The inspector is read-only. It rejects malformed or mismatched lease metadata
 and reports whether the recorded local PID is present; it never treats PID
 presence as proof of lease ownership because operating systems reuse PIDs, and
-it never removes a lease. Both PID states require explicit operator review.
+it never removes a lease. Both PID states require explicit operator review. Its
+`lease_sha256` binds the exact retained file bytes and must be recorded before
+any separately reviewed recovery operation.
 
 ## Core RC Publication Preflight
 

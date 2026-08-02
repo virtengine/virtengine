@@ -3,6 +3,7 @@
 "use strict";
 
 const assert = require("assert").strict;
+const { createHash } = require("crypto");
 const { readFileSync } = require("fs");
 const { resolve } = require("path");
 const { spawnSync } = require("child_process");
@@ -32,6 +33,11 @@ function inspectLease(lease, expected, options = {}) {
   };
 }
 
+function inspectLeaseContent(content, expected, options = {}) {
+  const inspected = inspectLease(JSON.parse(content), expected, options);
+  return { ...inspected, lease_sha256: createHash("sha256").update(content).digest("hex") };
+}
+
 function parseArgs(argv) {
   const options = { epoch: null, expectedHead: null, expectedPlanSha256: null, repo: resolve(__dirname, "..") };
   for (let index = 0; index < argv.length; index += 2) {
@@ -53,11 +59,11 @@ function main(argv) {
   const options = parseArgs(argv);
   const lock = spawnSync("git", ["rev-parse", "--git-path", `prototype-intake-freeze-epoch-${options.epoch}.lock`], { cwd: options.repo, encoding: "utf8" });
   assert.equal(lock.status, 0, "unable to resolve intake freeze lock path");
-  const lease = JSON.parse(readFileSync(resolve(options.repo, lock.stdout.trim()), "utf8"));
-  process.stdout.write(`${JSON.stringify(inspectLease(lease, options), null, 2)}\n`);
+  const content = readFileSync(resolve(options.repo, lock.stdout.trim()), "utf8");
+  process.stdout.write(`${JSON.stringify(inspectLeaseContent(content, options), null, 2)}\n`);
 }
 
-module.exports = { inspectLease, parseArgs, processIsAlive };
+module.exports = { inspectLease, inspectLeaseContent, parseArgs, processIsAlive };
 
 if (require.main === module) {
   try { main(process.argv.slice(2)); }
