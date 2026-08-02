@@ -21,7 +21,7 @@ const categoryCommands = new Map([
   ["deployment", ["docker compose -f docker-compose.yaml config --quiet", "bash scripts/ci/post-deploy-smoke-test.sh"]],
   ["observability", ["docker compose -f docker-compose.observability.yaml config --quiet", "go test -count=1 ./pkg/observability/..."]],
   ["upgrades", ["go test -count=1 ./tests/upgrade/..."]],
-  ["security", ["python .github/scripts/validate_security_policies.py", "go test -count=1 -tags=e2e.integration ./tests/integration/security/..."]],
+  ["security", ["python .github/scripts/validate_security_policies.py", "go test -count=1 -tags=e2e.integration ./tests/integration/security/...", "node scripts/validate-fund-route-inventory.cjs --require-ready"]],
   ["docs_process_boundary_e2e", ["node scripts/validate-prototype-integration.cjs", "go test -count=1 -tags=e2e.integration ./tests/e2e/... ./tests/integration/..."]],
 ]);
 const rootKeys = ["schema_version", "task", "control_scope", "status", "completion_claim", "unmatched_path_allowlist", "categories", "blockers"];

@@ -57,6 +57,9 @@ const tests = [
   ["binds the AI biometric security gates as a control artifact", () => {
     assert.ok(sourceArtifacts.some(([id, path]) => id === "ai_biometric_security_gates" && path === "_docs/ralph/prototype-integration/ai-biometric-security-gates.json"));
   }],
+  ["binds the fund route inventory as a control artifact", () => {
+    assert.ok(sourceArtifacts.some(([id, path]) => id === "fund_route_inventory" && path === "_docs/ralph/prototype-integration/fund-route-inventory.json"));
+  }],
   ["hashes every tracked canonical chart file", () => {
     const chartContract = artifactSelections.find((contract) => contract.id === "chart");
     const entries = listSourceEntries(sourceSha, root);

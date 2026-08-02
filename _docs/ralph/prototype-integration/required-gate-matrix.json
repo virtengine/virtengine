@@ -146,17 +146,18 @@
     },
     {
       "id": "security",
-      "path_selectors": [".github/**", "SECURITY.md", "SUPPLY_CHAIN_SECURITY.md", "scripts/security/**", "tests/integration/security/**"],
+      "path_selectors": [".github/**", "SECURITY.md", "SUPPLY_CHAIN_SECURITY.md", "app/**", "x/**", "scripts/security/**", "scripts/validate-fund-route-inventory*.cjs", "tests/integration/security/**", "_docs/ralph/prototype-integration/fund-route-inventory.json"],
       "required_commands": [
         { "id": "security-policy", "kind": "policy", "command": "python .github/scripts/validate_security_policies.py" },
-        { "id": "security-test", "kind": "test", "command": "go test -count=1 -tags=e2e.integration ./tests/integration/security/..." }
+        { "id": "security-test", "kind": "test", "command": "go test -count=1 -tags=e2e.integration ./tests/integration/security/..." },
+        { "id": "fund-route-authorization", "kind": "policy", "command": "node scripts/validate-fund-route-inventory.cjs --require-ready" }
       ],
-      "pinned_tools": [{ "name": "go", "version": "1.25.8", "source": "go.mod" }, { "name": "python", "version": "3.11.9", "source": ".github workflow control" }],
+      "pinned_tools": [{ "name": "go", "version": "1.25.8", "source": "go.mod" }, { "name": "python", "version": "3.11.9", "source": ".github workflow control" }, { "name": "node", "version": "24.12.0", "source": "required gate runner image" }],
       "zero_test_policy": { "applies_to": "test_commands", "minimum_discovered": 1, "minimum_executed": 1, "empty_selection": "fail" },
       "failure_semantics": { "nonzero_exit": "fail", "skipped": "fail", "missing_tool": "fail", "cancelled": "fail" },
       "dependencies": [{ "id": "86D", "status": "unavailable" }],
       "status": "dependency_blocked",
-      "blockers": ["dependency-86d"]
+      "blockers": ["dependency-86d", "fund-route-authorization-blocked"]
     },
     {
       "id": "docs_process_boundary_e2e",
@@ -183,6 +184,7 @@
     { "id": "dependency-88a", "description": "Task 88A is dependency-blocked and cannot provide accepted rehearsal evidence." },
     { "id": "ai-production-policy-blocked", "description": "T4-12 diagnostic records prohibited production AI, biometric, consent, custody, or stub-success paths; enforce mode rejects them." },
     { "id": "ai-biometric-security-gates-blocked", "description": "T4-15 records incomplete AI and biometric security evidence; enforce mode rejects partial, missing, or externally blocked categories." },
+    { "id": "fund-route-authorization-blocked", "description": "T4-16 records incomplete value-moving route authorization; release remains blocked until an accepted T5 checkpoint is wired atomically across every route." },
     { "id": "real-process-evidence-absent", "description": "No accepted process-boundary lifecycle evidence is recorded by this matrix-only control." }
   ]
 }

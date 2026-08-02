@@ -9,6 +9,7 @@ const { validateSecurityGates } = require("./validate-ai-biometric-security-gate
 const { validateProductionPolicy } = require("./validate-ai-production-policy.cjs");
 const { validateManifest: validateCoreRcManifest } = require("./generate-core-rc-manifest.cjs");
 const { validateSchema: validateCoreRcSchema } = require("./validate-core-rc-manifest.cjs");
+const { validateFundRouteInventory } = require("./validate-fund-route-inventory.cjs");
 const { validateMigrationInventory } = require("./validate-migration-inventory.cjs");
 const { validateModelProvenance } = require("./validate-model-provenance.cjs");
 const { validateReportSchema: validatePublicationPreflightSchema } = require("./preflight-core-rc-publication.cjs");
@@ -23,6 +24,7 @@ const coreRcManifestPath = resolve(root, "_docs/ralph/prototype-integration/core
 const coreRcSchemaPath = resolve(root, "_docs/ralph/prototype-integration/core-rc-manifest.schema.json");
 const schemaPath = resolve(root, "_docs/ralph/prototype-integration/producer-handoff.schema.json");
 const epochPath = resolve(root, "_docs/ralph/prototype-integration/epochs/epoch-1.json");
+const fundRouteInventoryPath = resolve(root, "_docs/ralph/prototype-integration/fund-route-inventory.json");
 const handoffPath = resolve(root, "_docs/ralph/handoffs/prototype-integration/HANDOFF.yaml");
 const migrationInventoryPath = resolve(root, "_docs/ralph/prototype-integration/migration-inventory.json");
 const migrationSchemaPath = resolve(root, "_docs/ralph/prototype-integration/migration-inventory.schema.json");
@@ -147,6 +149,7 @@ if (require.main === module) {
   validateProductionPolicy(loadJson(aiProductionPolicyPath), { rootDir: root });
   validateCoreRcSchema(loadJson(coreRcSchemaPath));
   validateCoreRcManifest(loadJson(coreRcManifestPath), { rootDir: root });
+  validateFundRouteInventory(loadJson(fundRouteInventoryPath), { rootDir: root });
   validateMigrationInventory(loadJson(migrationInventoryPath), loadJson(testCasesPath), {
     rootDir: root,
     schema: loadJson(migrationSchemaPath),
