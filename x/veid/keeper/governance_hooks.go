@@ -5,14 +5,23 @@ import (
 	"strings"
 
 	sdk "github.com/cosmos/cosmos-sdk/types"
+
+	"github.com/virtengine/virtengine/x/veid/types"
 )
 
 type ActiveVerifierInfo struct {
 	VerifierID        string
 	SpecVersion       string
+	Status            string
 	WeightsSHA256     string
 	TestVectorsSHA256 string
+	ImageHash         string
+	ModelManifestHash string
 	ActivationHeight  int64
+}
+
+type StrictVerifierRegistryReader interface {
+	GetActiveVerifierInfoStrict(ctx sdk.Context) (ActiveVerifierInfo, bool, error)
 }
 
 type VerifierRegistryKeeper interface {
@@ -49,11 +58,22 @@ func versionsMatch(expected, actual string) bool {
 	return normalizeVersionString(expected) == normalizeVersionString(actual)
 }
 
-func (k Keeper) getActiveVerifierInfo(ctx sdk.Context) (ActiveVerifierInfo, bool) {
+func (k Keeper) getActiveVerifierInfo(ctx sdk.Context) (ActiveVerifierInfo, bool, error) {
 	if k.verifierRegistryKeeper != nil {
-		if info, found := k.verifierRegistryKeeper.GetActiveVerifierInfo(ctx); found {
-			return info, true
+		if strictReader, ok := k.verifierRegistryKeeper.(StrictVerifierRegistryReader); ok {
+			info, found, err := strictReader.GetActiveVerifierInfoStrict(ctx)
+			if err != nil {
+				return ActiveVerifierInfo{}, false, err
+			}
+			if !found {
+				return ActiveVerifierInfo{}, false, types.ErrUnauthorized.Wrap("active verifier registry projection is missing")
+			}
+			return info, true, nil
 		}
+		if info, found := k.verifierRegistryKeeper.GetActiveVerifierInfo(ctx); found {
+			return info, true, nil
+		}
+		return ActiveVerifierInfo{}, false, types.ErrUnauthorized.Wrap("active verifier registry projection is missing")
 	}
 	if active, err := k.GetActivePipelineVersion(ctx); err == nil && active != nil {
 		return ActiveVerifierInfo{
@@ -61,9 +81,9 @@ func (k Keeper) getActiveVerifierInfo(ctx sdk.Context) (ActiveVerifierInfo, bool
 			SpecVersion:      active.Version,
 			WeightsSHA256:    firstNonEmptyString(active.ModelManifest.ManifestHash, active.ImageHash),
 			ActivationHeight: active.ActivatedAtHeight,
-		}, true
+		}, true, nil
 	}
-	return ActiveVerifierInfo{}, false
+	return ActiveVerifierInfo{}, false, nil
 }
 
 func firstNonEmptyString(values ...string) string {

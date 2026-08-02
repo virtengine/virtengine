@@ -1,0 +1,1 @@
+PASS: C:\Users\pavil\AppData\Local\VirtEngine\toolchains\go1.25.8\go\bin\go.exe -C C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t1 vet ./pkg/enclave_runtime

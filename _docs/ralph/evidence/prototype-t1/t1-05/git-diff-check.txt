@@ -1,0 +1,1 @@
+PASS: git -C C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t1 diff --check
