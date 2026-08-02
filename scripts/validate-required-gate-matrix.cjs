@@ -22,7 +22,7 @@ const categoryCommands = new Map([
   ["observability", ["docker compose -f docker-compose.observability.yaml config --quiet", "go test -count=1 ./pkg/observability/..."]],
   ["upgrades", ["go test -count=1 ./tests/upgrade/..."]],
   ["security", ["python .github/scripts/validate_security_policies.py", "go test -count=1 -tags=e2e.integration ./tests/integration/security/...", "node scripts/validate-fund-route-inventory.cjs --require-ready"]],
-  ["docs_process_boundary_e2e", ["node scripts/validate-prototype-integration.cjs", "node scripts/observe-prototype-intake-tags.test.cjs", "node scripts/plan-prototype-intake-freeze.test.cjs", "node scripts/apply-prototype-intake-freeze.test.cjs", "node scripts/inspect-prototype-intake-freeze-lease.test.cjs", "node scripts/recover-prototype-intake-freeze-lease.test.cjs", "node scripts/preflight-integration-candidate.test.cjs", "go test -count=1 -tags=e2e.integration ./tests/e2e/... ./tests/integration/..."]],
+  ["docs_process_boundary_e2e", ["node scripts/validate-prototype-integration.cjs", "node scripts/observe-prototype-intake-tags.test.cjs", "node scripts/plan-prototype-intake-freeze.test.cjs", "node scripts/apply-prototype-intake-freeze.test.cjs", "node scripts/inspect-prototype-intake-freeze-lease.test.cjs", "node scripts/recover-prototype-intake-freeze-lease.test.cjs", "node scripts/preflight-integration-candidate.test.cjs", "node scripts/validate-localnet-integration-launchers.test.cjs", "go test -count=1 -tags=e2e.integration ./tests/e2e/... ./tests/integration/..."]],
 ]);
 const rootKeys = ["schema_version", "task", "control_scope", "status", "completion_claim", "unmatched_path_allowlist", "categories", "blockers"];
 const expectedUnmatchedAllowlist = [

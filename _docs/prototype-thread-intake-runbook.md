@@ -130,6 +130,19 @@ and its negative tests pass on the exact T4 SHA. The validation clone must be
 new or independently verified clean; do not relax the validator's worktree
 cleanliness check to accommodate unrelated local files.
 
+Localnet integration entry points must preserve the canonical explicit build
+tag and disable cached results on both platforms:
+
+```powershell
+node scripts/validate-localnet-integration-launchers.test.cjs
+./scripts/localnet.sh test
+./scripts/localnet.ps1 test
+```
+
+Both launchers execute `go test -count=1 -tags=e2e.integration -v
+./tests/integration/...` in the `test-runner` container. Untagged launcher output
+is not integration evidence.
+
 After `announcement_cutoff`, plan the frozen roster without mutating the epoch.
 Select at most one intake-format annotated tag per producer explicitly; the
 planner rejects early, late, lightweight, wrong-thread, duplicate, or unknown

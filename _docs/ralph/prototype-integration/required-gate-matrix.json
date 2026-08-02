@@ -171,6 +171,7 @@
         { "id": "intake-freeze-lease-inspection", "kind": "test", "command": "node scripts/inspect-prototype-intake-freeze-lease.test.cjs" },
         { "id": "intake-freeze-lease-recovery", "kind": "test", "command": "node scripts/recover-prototype-intake-freeze-lease.test.cjs" },
         { "id": "integration-candidate-preflight", "kind": "test", "command": "node scripts/preflight-integration-candidate.test.cjs" },
+        { "id": "localnet-integration-launchers", "kind": "test", "command": "node scripts/validate-localnet-integration-launchers.test.cjs" },
         { "id": "process-boundary-e2e", "kind": "test", "command": "go test -count=1 -tags=e2e.integration ./tests/e2e/... ./tests/integration/..." }
       ],
       "pinned_tools": [{ "name": "go", "version": "1.25.8", "source": "go.mod" }, { "name": "node", "version": "24.12.0", "source": "required gate runner image" }],
