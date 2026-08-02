@@ -1,53 +1,75 @@
 {
   "campaign": "three-day-prototype",
   "thread": "T4",
-  "checkpoint": "T4-01D",
+  "checkpoint": "T4-16A",
   "branch": "ve/prototype-integration",
-  "start_head": "0f307fa73831c86a37494b73909bc7dc5f60ab07",
-  "end_head": "b943c46388fd18674a3239940ae15d5f88b0b0ee",
+  "start_head": "6567b422e38effe327d3684df29bb0e505f6c1fc",
+  "end_head": "ad7c3fa6a7e04cea8afdd5a6949c45554f10ef8a",
   "origin_main": "79391a3df86d85522b92e0400c6904971ecbe65d",
   "tree_clean": true,
   "commits": [
-    "b943c46388fd18674a3239940ae15d5f88b0b0ee"
+    "ad7c3fa6a7e04cea8afdd5a6949c45554f10ef8a"
   ],
   "owned_paths": [
     "_docs/ralph/prototype-integration/**",
     "_docs/ralph/handoffs/prototype-integration/**",
-    "_docs/ralph/prototype-integration/core-rc-manifest.json"
+    "_docs/audits/task-t4-16a-fund-route-inventory-2026-08-02.md",
+    "_docs/ralph/prototype-integration/fund-route-inventory.json",
+    "_docs/ralph/prototype-integration/required-gate-matrix.json",
+    "scripts/generate-core-rc-manifest.cjs",
+    "scripts/generate-core-rc-manifest.test.cjs",
+    "scripts/validate-fund-route-inventory.cjs",
+    "scripts/validate-fund-route-inventory.test.cjs",
+    "scripts/validate-prototype-integration.cjs",
+    "scripts/validate-required-gate-matrix.cjs"
   ],
   "files_changed": [
     "_docs/ralph/handoffs/prototype-integration/HANDOFF.yaml",
-    "_docs/ralph/prototype-integration/core-rc-manifest.json"
+    "_docs/INDEX.md",
+    "_docs/audits/task-t4-16a-fund-route-inventory-2026-08-02.md",
+    "_docs/ralph/prototype-integration/fund-route-inventory.json",
+    "_docs/ralph/prototype-integration/required-gate-matrix.json",
+    "scripts/generate-core-rc-manifest.cjs",
+    "scripts/generate-core-rc-manifest.test.cjs",
+    "scripts/validate-fund-route-inventory.cjs",
+    "scripts/validate-fund-route-inventory.test.cjs",
+    "scripts/validate-prototype-integration.cjs",
+    "scripts/validate-required-gate-matrix.cjs"
   ],
   "tests": [
     {
-      "command": "node --test scripts/validate-prototype-intake.test.cjs",
+      "command": "node scripts/validate-fund-route-inventory.test.cjs && node scripts/validate-fund-route-inventory.cjs",
       "exit_code": 0,
       "result": "passed",
-      "test_count": 31,
+      "test_count": 11,
       "tool_versions": {
         "node": "20.19.1"
       }
     },
     {
-      "command": "node scripts/validate-agents-docs.mjs",
+      "command": "node scripts/validate-required-gate-matrix.test.cjs && node scripts/validate-required-gate-matrix.cjs",
       "exit_code": 0,
       "result": "passed",
+      "test_count": 13,
       "tool_versions": {
         "node": "20.19.1"
       }
     },
     {
-      "command": "node scripts/validate-core-rc-manifest.cjs && node scripts/validate-prototype-integration.cjs",
+      "command": "node scripts/generate-core-rc-manifest.test.cjs",
       "exit_code": 0,
       "result": "passed",
+      "test_count": 15,
       "tool_versions": {
         "node": "20.19.1"
       }
     }
   ],
   "generated_hashes": {
-    "_docs/ralph/prototype-integration/core-rc-manifest.json": "4c4952b0c9ecb646ffd5bd2bae705e14bd9f87567137c9274c72cf5741278499"
+    "scripts/validate-fund-route-inventory.cjs": "6db4ef18df6d178b6e5adb4f2f1239414c8e3e1a392df518d36c09c909b71bfb",
+    "scripts/validate-fund-route-inventory.test.cjs": "74f85429a31f8b024ffbab6597b189ae6ed8a2fd36588e45902db607e94abbf2",
+    "_docs/ralph/prototype-integration/fund-route-inventory.json": "b6e3f042f20c74303c7be5b8fd1e8f04310fdbc1c017116a42bbb60b729147a4",
+    "_docs/ralph/prototype-integration/required-gate-matrix.json": "0b54d4c3c4ad9d683a30cac71bd56f8738deae7445a835fc0792294fd5d73c51"
   },
   "accepted_checkpoints": [],
   "rejected_checkpoints": [
@@ -80,9 +102,10 @@
     "No canonical chart remediation, failover, restore, or production render approval is claimed.",
     "The T4-12A diagnostic records 11 prohibited production AI, biometric, consent, custody, or stub-success finding paths; enforce mode rejects the current repository state.",
     "The T4-15A release gate records all ten AI/biometric security categories as partial or missing; enforce mode rejects release and external privacy, PAD, and production-model evaluations remain unavailable.",
+    "The T4-16A inventory binds 18 discovered production mover files to 20 value-moving routes; no accepted T5 FundAuthorization checkpoint exists and --require-ready rejects release.",
     "External production model privacy and security evaluation is unavailable.",
     "Task 88C is not complete."
   ],
   "next_checkpoint": null,
-  "expected_head": "b943c46388fd18674a3239940ae15d5f88b0b0ee"
+  "expected_head": "ad7c3fa6a7e04cea8afdd5a6949c45554f10ef8a"
 }
