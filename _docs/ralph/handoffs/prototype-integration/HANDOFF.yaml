@@ -1,36 +1,27 @@
 {
   "campaign": "three-day-prototype",
   "thread": "T4",
-  "checkpoint": "T4-12A",
+  "checkpoint": "T4-12B",
   "branch": "ve/prototype-integration",
-  "start_head": "1845068281db06ae1ada1a515b711731f1071011",
-  "end_head": "46c62da6a5222e907a6e82c385b16338ef73877d",
+  "start_head": "97d25b3f8c6d49caeb37379278412eeabaec4779",
+  "end_head": "30126351a0a053b0b4b171d1c09cc3282f144275",
   "origin_main": "79391a3df86d85522b92e0400c6904971ecbe65d",
   "tree_clean": true,
   "commits": [
-    "46c62da6a5222e907a6e82c385b16338ef73877d"
+    "30126351a0a053b0b4b171d1c09cc3282f144275"
   ],
   "owned_paths": [
     "_docs/ralph/prototype-integration/**",
     "_docs/ralph/handoffs/prototype-integration/**",
     "_docs/audits/task-t4-12a-ai-production-policy-2026-08-02.md",
-    "_docs/ralph/prototype-integration/ai-production-policy.json",
-    "_docs/ralph/prototype-integration/required-gate-matrix.json",
-    "scripts/validate-ai-production-policy.cjs",
-    "scripts/validate-ai-production-policy.test.cjs",
-    "scripts/validate-prototype-integration.cjs",
-    "scripts/validate-required-gate-matrix.cjs"
+    "scripts/generate-core-rc-manifest.cjs",
+    "scripts/generate-core-rc-manifest.test.cjs"
   ],
   "files_changed": [
     "_docs/ralph/handoffs/prototype-integration/HANDOFF.yaml",
-    "_docs/INDEX.md",
     "_docs/audits/task-t4-12a-ai-production-policy-2026-08-02.md",
-    "_docs/ralph/prototype-integration/ai-production-policy.json",
-    "_docs/ralph/prototype-integration/required-gate-matrix.json",
-    "scripts/validate-ai-production-policy.cjs",
-    "scripts/validate-ai-production-policy.test.cjs",
-    "scripts/validate-prototype-integration.cjs",
-    "scripts/validate-required-gate-matrix.cjs"
+    "scripts/generate-core-rc-manifest.cjs",
+    "scripts/generate-core-rc-manifest.test.cjs"
   ],
   "tests": [
     {
@@ -52,21 +43,19 @@
       }
     },
     {
-      "command": "node scripts/validate-prototype-integration.test.cjs && node scripts/validate-prototype-integration.cjs && node scripts/validate-agents-docs.mjs",
+      "command": "node scripts/generate-core-rc-manifest.test.cjs",
       "exit_code": 0,
       "result": "passed",
-      "test_count": 10,
+      "test_count": 12,
       "tool_versions": {
         "node": "20.19.1"
       }
     }
   ],
   "generated_hashes": {
-    "scripts/validate-ai-production-policy.cjs": "22cc44d54553d869c139a318cf3b5b143c2a9cb29a4f705eae72e94e27f7351b",
-    "scripts/validate-ai-production-policy.test.cjs": "599bc1e072dec3bb5081b12554b369622c480cf335e19ce17ec8ca9a193bf401",
-    "_docs/ralph/prototype-integration/ai-production-policy.json": "7df63a18a24e8b35ad69c21aed6fa583ff5589c2ddc1ea0830ca69f4b18e12b4",
-    "_docs/ralph/prototype-integration/required-gate-matrix.json": "a7d49b7d89bde8953ac03de1b3e5c3a269ca36b6a62d537752bda8c62b1311d6",
-    "_docs/audits/task-t4-12a-ai-production-policy-2026-08-02.md": "4eca14d898700ae6b9e4dc4bd704d2e41839c12e661837a6a4f063294c36b0c0"
+    "scripts/generate-core-rc-manifest.cjs": "1b1706606633fdc38dc95c67341a861d7dad7a4c6678b1fce1bc12455e1f8981",
+    "scripts/generate-core-rc-manifest.test.cjs": "815dcdb513c2f1f957f6c79da6b384c3602973fc12f6d7121cede67179d1179b",
+    "_docs/audits/task-t4-12a-ai-production-policy-2026-08-02.md": "7284743b201dc4ee11477ca4530ea81885bd29755c7564e1fec84bf8f0f8eaca"
   },
   "accepted_checkpoints": [],
   "rejected_checkpoints": [
@@ -102,5 +91,5 @@
     "Task 88C is not complete."
   ],
   "next_checkpoint": null,
-  "expected_head": "46c62da6a5222e907a6e82c385b16338ef73877d"
+  "expected_head": "30126351a0a053b0b4b171d1c09cc3282f144275"
 }
