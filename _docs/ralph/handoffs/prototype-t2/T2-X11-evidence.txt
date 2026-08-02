@@ -1,0 +1,44 @@
+T2-X11 retained validation evidence
+Implementation SHA: c704213ea3169ff1792a19f3daf2ee484b1862e1
+Node: v24.12.0
+
+COMMAND: lib\portal\node_modules\.bin\vitest.CMD run __tests__/marketplace/checkout-flow.test.tsx __tests__/marketplace/use-marketplace-commit.test.tsx --reporter=dot
+EXIT: 0
+RESULT: passed
+DETAIL: 2 files, 12 tests passed; no warnings
+
+COMMAND: lib\portal\node_modules\.bin\vitest.CMD run --reporter=dot
+EXIT: 0
+RESULT: passed
+DETAIL: 31 files, 708 tests passed; expected wallet reconnect-metadata stderr only
+
+COMMAND: portal\node_modules\.bin\prettier.CMD --check <eight T2-X11 marketplace source/test/declaration files>
+EXIT: 0
+RESULT: passed
+DETAIL: All matched files use Prettier code style.
+
+COMMAND: lib\portal\node_modules\.bin\tsc.CMD --noEmit <eight T2-X11 marketplace source/test/declaration files plus explicit compiler options>
+EXIT: 2
+RESULT: unrelated-pre-existing-failure
+DETAIL: Zero changed-file diagnostics and prior TS1355 is resolved. Compilation reaches the pre-existing lib/portal/src/wallet/utils.ts missing WalletChainConfig export error.
+
+COMMAND: node lib\portal\scripts\a11y-lint.js
+EXIT: 1
+RESULT: unrelated-pre-existing-failure
+DETAIL: 41 files scanned. CheckoutFlow has no finding after adding an explicit checkbox accessible name. Existing errors remain in MFAEnrollmentWizard, JobSubmissionForm, and components/accessible/index.ts; six unrelated warnings remain.
+
+BEHAVIOR:
+- Legacy useMarketplace order submission no longer calls a query endpoint as a pseudo-mutation.
+- Submission defaults unavailable without an injected mutation adapter/projector and exact live chain/customer context.
+- Validation generations clear stale quotes, block submission while pending, and prevent older responses/errors from updating replacement checkout state.
+- Signed requests bind chain, customer, offering, provider, duration, total amount, deposit amount, and denomination.
+- Completion requires immutable committed receipt evidence and an exact order projection matching ID, transaction hash, customer, provider, offering, duration, amount, deposit, and denomination.
+- Accepted commit evidence is retained across indexer lag and adapter/projector changes; projection retry cannot rebroadcast.
+- Submission and checkout nonces prevent duplicate work and late writes into replacement checkout state.
+- Order-list queries clear immediately on account/chain loss and ignore stale generations, preventing cross-account order display.
+- PortalProvider supplies query/account/chain context, withholds cross-chain wallet addresses, and leaves mutation authority explicitly injected and unavailable by default.
+
+NON-CLAIMS:
+- No production marketplace signing/broadcast adapter is wired by this checkpoint.
+- No live order or chain endpoint was certified.
+- PortalProvider retains its pre-existing ts-nocheck because unrelated Auth, Identity, MFA, Provider, and HPC providers still lack production dependency wiring.

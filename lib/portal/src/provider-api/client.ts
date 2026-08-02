@@ -9,8 +9,27 @@ import type {
   ProviderAPIErrorDetails,
   ProviderHealth,
   ResourceMetrics,
-  ShellSessionResponse,
 } from "./types";
+import {
+  buildProviderShellWebSocketUrl,
+  ProviderShellSessionError,
+  validateProviderShellSessionReceipt,
+} from "./shell-session";
+import type {
+  ProviderShellSessionCapability,
+  ProviderShellSessionReceipt,
+  ShellEligibilityProjection,
+} from "./shell-session";
+import {
+  ProviderDeploymentActionError,
+  validateProviderDeploymentActionReceipt,
+} from "./deployment-actions";
+import type {
+  ProviderDeploymentActionCapability,
+  ProviderDeploymentActionReceipt,
+  ProviderDeploymentActionReceiptValidator,
+  ProviderDeploymentTxEvidenceValidator,
+} from "./deployment-actions";
 
 export interface ProviderAPIClientOptions {
   endpoint: string;
@@ -27,12 +46,18 @@ export interface ProviderAPIClientOptions {
     principal: string;
   };
   fetcher?: typeof fetch;
+  providerId?: string;
+  deploymentActionCapability?: ProviderDeploymentActionCapability;
+  deploymentActionReceiptValidator?: ProviderDeploymentActionReceiptValidator;
+  deploymentTxEvidenceValidator?: ProviderDeploymentTxEvidenceValidator;
+  shellSessionCapability?: ProviderShellSessionCapability;
 }
 
 export interface ProviderAPIRequestOptions {
   params?: Record<string, string | number | boolean | undefined>;
   requiresAuth?: boolean;
   body?: unknown;
+  retry?: boolean;
 }
 
 export class ProviderAPIError extends Error {
@@ -207,8 +232,7 @@ export class ShellConnection {
 
   constructor(url: string) {
     this.socket = new ReconnectingWebSocket(url, {
-      retryDelayMs: 1500,
-      maxRetries: 10,
+      maxRetries: 0,
     });
   }
 
@@ -257,6 +281,12 @@ export class ProviderAPIClient {
   private wallet?: ProviderAPIClientOptions["wallet"];
   private hmac?: ProviderAPIClientOptions["hmac"];
   private fetcher: typeof fetch;
+  private providerId?: string;
+  private deploymentActionCapability?: ProviderDeploymentActionCapability;
+  private deploymentActionReceiptValidator: ProviderDeploymentActionReceiptValidator;
+  private deploymentTxEvidenceValidator?: ProviderDeploymentTxEvidenceValidator;
+  private shellSessionCapability?: ProviderShellSessionCapability;
+  private issuedShellReceipts = new WeakSet<ProviderShellSessionReceipt>();
 
   constructor(options: ProviderAPIClientOptions) {
     this.endpoint = options.endpoint.replace(/\/$/, "");
@@ -266,6 +296,13 @@ export class ProviderAPIClient {
     this.wallet = options.wallet;
     this.hmac = options.hmac;
     this.fetcher = options.fetcher ?? fetch;
+    this.providerId = options.providerId;
+    this.deploymentActionCapability = options.deploymentActionCapability;
+    this.deploymentActionReceiptValidator =
+      options.deploymentActionReceiptValidator ??
+      validateProviderDeploymentActionReceipt;
+    this.deploymentTxEvidenceValidator = options.deploymentTxEvidenceValidator;
+    this.shellSessionCapability = options.shellSessionCapability;
   }
 
   async health(): Promise<ProviderHealth> {
@@ -361,29 +398,96 @@ export class ProviderAPIClient {
   async performAction(
     leaseId: string,
     action: DeploymentAction,
-  ): Promise<{ success: boolean; message?: string }> {
-    return this.request("POST", `/api/v1/deployments/${leaseId}/actions`, {
-      body: { action },
+  ): Promise<ProviderDeploymentActionReceipt> {
+    if (
+      !this.providerId ||
+      this.deploymentActionCapability?.receiptVersion !== "v1"
+    ) {
+      throw new ProviderDeploymentActionError(
+        "feature_unavailable",
+        "Provider does not declare authoritative deployment action receipts",
+      );
+    }
+    if (this.deploymentActionCapability.requiresChainSigning && !this.wallet) {
+      throw new ProviderDeploymentActionError(
+        "chain_signing_required",
+        "This provider action requires a configured chain-signing wallet",
+      );
+    }
+
+    let response: unknown;
+    try {
+      response = await this.request(
+        "POST",
+        `/api/v1/deployments/${leaseId}/actions`,
+        { body: { action }, retry: false },
+      );
+    } catch (error) {
+      if (error instanceof ProviderDeploymentActionError) throw error;
+      throw new ProviderDeploymentActionError(
+        "action_rejected",
+        error instanceof Error ? error.message : "Provider rejected the action",
+        error,
+      );
+    }
+
+    return this.deploymentActionReceiptValidator(response, {
+      action,
+      deploymentId: leaseId,
+      providerId: this.providerId,
+      validateTxEvidence: this.deploymentTxEvidenceValidator,
     });
   }
 
   async createShellSession(
-    leaseId: string,
-    container?: string,
-  ): Promise<ShellSessionResponse> {
-    const response = await this.request<ShellSessionResponse>(
+    eligibility?: ShellEligibilityProjection,
+  ): Promise<ProviderShellSessionReceipt> {
+    if (!eligibility) {
+      return validateProviderShellSessionReceipt(undefined, {
+        eligibility,
+        capability: this.shellSessionCapability,
+        providerEndpoint: this.endpoint,
+      });
+    }
+    if (!this.shellSessionCapability) {
+      return validateProviderShellSessionReceipt(undefined, {
+        eligibility,
+        capability: this.shellSessionCapability,
+        providerEndpoint: this.endpoint,
+      });
+    }
+    if (!this.providerId || this.providerId !== eligibility.providerId) {
+      throw new ProviderShellSessionError(
+        "receipt_mismatch",
+        "Shell eligibility does not match this provider",
+      );
+    }
+    const response = await this.request<unknown>(
       "POST",
-      `/api/v1/deployments/${leaseId}/shell/session`,
+      `/api/v1/deployments/${eligibility.deploymentId}/shell/session`,
       {
-        body: container ? { container } : {},
+        retry: false,
+        body: {
+          container: eligibility.container,
+          account: eligibility.account,
+          provider_id: eligibility.providerId,
+          chain_id: eligibility.chainId,
+          eligibility_session_id: eligibility.sessionId,
+          policy_epoch: eligibility.policyEpoch,
+          status_epoch: eligibility.statusEpoch,
+          capability_digest: eligibility.capabilityDigest,
+          policy_digest: eligibility.policyDigest,
+        },
       },
     );
-
-    return {
-      ...response,
-      expiresAt: response.expiresAt ?? (response as any).expires_at,
-      sessionTtl: response.sessionTtl ?? (response as any).session_ttl,
-    };
+    const receipt = validateProviderShellSessionReceipt(response, {
+      eligibility,
+      capability: this.shellSessionCapability,
+      providerEndpoint: this.endpoint,
+    });
+    Object.freeze(receipt);
+    this.issuedShellReceipts.add(receipt);
+    return receipt;
   }
 
   async connectLogStream(
@@ -404,19 +508,20 @@ export class ProviderAPIClient {
     return new LogStream(url);
   }
 
-  async connectShell(
-    leaseId: string,
-    sessionToken?: string,
-    container?: string,
-  ): Promise<ShellConnection> {
-    const query = buildQuery({
-      token: sessionToken,
-      container,
-    });
-    const url = await this.buildWebSocketUrl(
-      `/api/v1/deployments/${leaseId}/shell${query}`,
+  connectShell(receipt: ProviderShellSessionReceipt): ShellConnection {
+    if (!this.issuedShellReceipts.delete(receipt)) {
+      throw new ProviderShellSessionError(
+        "receipt_invalid",
+        "Shell session receipt was not issued by this client or was already consumed",
+      );
+    }
+    return new ShellConnection(
+      buildProviderShellWebSocketUrl(
+        this.endpoint,
+        receipt.deploymentId,
+        receipt,
+      ),
     );
-    return new ShellConnection(url);
   }
 
   private normalizeDeployment = (
@@ -445,7 +550,8 @@ export class ProviderAPIClient {
 
     let lastError: Error | null = null;
 
-    for (let attempt = 0; attempt <= this.retries; attempt += 1) {
+    const retries = options.retry === false ? 0 : this.retries;
+    for (let attempt = 0; attempt <= retries; attempt += 1) {
       try {
         const headers: Record<string, string> = {
           "Content-Type": "application/json",
@@ -514,7 +620,7 @@ export class ProviderAPIClient {
         return payload as T;
       } catch (error) {
         lastError = error as Error;
-        if (attempt >= this.retries || !this.shouldRetry(error)) {
+        if (attempt >= retries || !this.shouldRetry(error)) {
           break;
         }
         await sleep(this.retryDelayMs * Math.max(1, attempt + 1));
@@ -526,6 +632,9 @@ export class ProviderAPIClient {
 
   private shouldRetry(error: unknown): boolean {
     if (error instanceof ProviderAPIError) {
+      if (error.code === "feature_unavailable") {
+        return false;
+      }
       return error.status >= 500;
     }
     return true;

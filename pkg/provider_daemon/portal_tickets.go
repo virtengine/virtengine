@@ -18,7 +18,7 @@ func (s *PortalAPIServer) handleListTickets(w http.ResponseWriter, r *http.Reque
 	deploymentID := r.URL.Query().Get("deployment_id")
 	tickets, err := s.chainQuery.ListTickets(r.Context(), principal, status, deploymentID)
 	if err != nil {
-		writeJSONError(w, http.StatusInternalServerError, err.Error())
+		writePortalError(w, err)
 		return
 	}
 
@@ -44,7 +44,7 @@ func (s *PortalAPIServer) handleCreateTicket(w http.ResponseWriter, r *http.Requ
 
 	ticket, err := s.chainQuery.CreateTicket(r.Context(), principal, req)
 	if err != nil {
-		writeJSONError(w, http.StatusInternalServerError, err.Error())
+		writePortalError(w, err)
 		return
 	}
 
@@ -64,7 +64,7 @@ func (s *PortalAPIServer) handleGetTicket(w http.ResponseWriter, r *http.Request
 			writeJSONError(w, http.StatusNotFound, "ticket not found")
 			return
 		}
-		writeJSONError(w, http.StatusInternalServerError, err.Error())
+		writePortalError(w, err)
 		return
 	}
 
@@ -100,7 +100,7 @@ func (s *PortalAPIServer) handleAddTicketComment(w http.ResponseWriter, r *http.
 			writeJSONError(w, http.StatusNotFound, "ticket not found")
 			return
 		}
-		writeJSONError(w, http.StatusInternalServerError, err.Error())
+		writePortalError(w, err)
 		return
 	}
 
@@ -126,7 +126,7 @@ func (s *PortalAPIServer) handleUpdateTicket(w http.ResponseWriter, r *http.Requ
 			writeJSONError(w, http.StatusNotFound, "ticket not found")
 			return
 		}
-		writeJSONError(w, http.StatusInternalServerError, err.Error())
+		writePortalError(w, err)
 		return
 	}
 

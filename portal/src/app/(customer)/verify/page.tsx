@@ -1,7 +1,11 @@
 'use client';
 
 import { useState, useCallback } from 'react';
-import { VerificationWizard, VerificationStatus } from '@/components/veid';
+import {
+  VerificationWizard,
+  VerificationStatus,
+  createVeidCaptureProviders,
+} from '@/components/veid';
 import { useVeidPolling } from '@/features/veid';
 import { ArrowLeft, Shield } from 'lucide-react';
 import Link from 'next/link';
@@ -10,6 +14,7 @@ type VerifyStep = 'overview' | 'verifying' | 'complete';
 
 export default function VerifyPage() {
   const [step, setStep] = useState<VerifyStep>('overview');
+  const captureProviders = createVeidCaptureProviders();
 
   // Poll for status updates while verification is processing
   useVeidPolling({ enabled: step === 'complete' || step === 'overview' });
@@ -55,12 +60,19 @@ export default function VerifyPage() {
           <VerificationStatus
             onStartVerification={handleStartVerification}
             onRetryVerification={handleStartVerification}
+            captureUnavailableReason={
+              captureProviders.status === 'unavailable' ? captureProviders.reason : undefined
+            }
           />
         </div>
       )}
 
       {step === 'verifying' && (
-        <VerificationWizard onComplete={handleVerificationComplete} onCancel={handleCancel} />
+        <VerificationWizard
+          providers={captureProviders}
+          onComplete={handleVerificationComplete}
+          onCancel={handleCancel}
+        />
       )}
 
       {step === 'complete' && <VerificationStatus compact />}

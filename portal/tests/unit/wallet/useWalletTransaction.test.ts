@@ -39,6 +39,7 @@ describe('useWalletTransaction', () => {
   it('broadcasts typed messages instead of fabricating a local success result', async () => {
     signAndBroadcastAmino.mockResolvedValue({
       txHash: 'ABC123',
+      blockHeight: 42,
       code: 0,
       rawLog: 'accepted',
       gasUsed: 180000,
@@ -70,7 +71,7 @@ describe('useWalletTransaction', () => {
     );
     expect(txResult).toEqual({
       txHash: 'ABC123',
-      blockHeight: null,
+      blockHeight: 42,
       code: 0,
       rawLog: 'accepted',
       gasUsed: 180000,

@@ -10,6 +10,7 @@ import type { ChatToolDefinition } from "../types";
 const listProposalsDefinition: ChatToolDefinition = {
   name: "list-governance-proposals",
   description: "List active governance proposals.",
+  kind: "query",
   parameters: {
     type: "object",
     properties: {
@@ -21,6 +22,7 @@ const listProposalsDefinition: ChatToolDefinition = {
 const voteProposalDefinition: ChatToolDefinition = {
   name: "vote-governance-proposal",
   description: "Vote on a governance proposal.",
+  kind: "mutation",
   parameters: {
     type: "object",
     properties: {

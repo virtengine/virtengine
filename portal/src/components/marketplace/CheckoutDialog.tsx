@@ -1,6 +1,12 @@
 'use client';
 
-import { CheckoutFlow, type Offering } from '@/lib/portal-adapter';
+import {
+  CheckoutFlow,
+  type CheckoutMutationAdapter,
+  type CheckoutMutationContext,
+  type CheckoutMutationProjector,
+  type Offering,
+} from '@/lib/portal-adapter';
 import { cn } from '@/lib/utils';
 import {
   Dialog,
@@ -16,6 +22,10 @@ interface CheckoutDialogProps {
   onOpenChange: (open: boolean) => void;
   onSuccess?: (orderId: string) => void;
   className?: string;
+  mutationAdapter?: CheckoutMutationAdapter;
+  mutationContext?: CheckoutMutationContext;
+  resultProjector?: CheckoutMutationProjector;
+  mutationTimeoutMs?: number;
 }
 
 /**
@@ -28,6 +38,10 @@ export function CheckoutDialog({
   onOpenChange,
   onSuccess,
   className,
+  mutationAdapter,
+  mutationContext,
+  resultProjector,
+  mutationTimeoutMs,
 }: CheckoutDialogProps) {
   if (!offering) {
     return null;
@@ -40,14 +54,23 @@ export function CheckoutDialog({
           <DialogTitle>Complete Your Order</DialogTitle>
           <DialogDescription>Review and confirm your order for {offering.title}</DialogDescription>
         </DialogHeader>
-        <CheckoutFlow
-          offering={offering}
-          onComplete={(orderId) => {
-            onSuccess?.(orderId);
-            onOpenChange(false);
-          }}
-          onCancel={() => onOpenChange(false)}
-        />
+        {open && (
+          <CheckoutFlow
+            offering={offering}
+            onComplete={(orderId) => {
+              try {
+                onOpenChange(false);
+              } finally {
+                onSuccess?.(orderId);
+              }
+            }}
+            onCancel={() => onOpenChange(false)}
+            mutationAdapter={mutationAdapter}
+            mutationContext={mutationContext}
+            resultProjector={resultProjector}
+            mutationTimeoutMs={mutationTimeoutMs}
+          />
+        )}
       </DialogContent>
     </Dialog>
   );

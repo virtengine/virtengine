@@ -9,6 +9,7 @@ import type {
   SocialMediaProfile
 } from "../core/captureModels";
 import { initializeCaptureSession } from "../core/captureSession";
+import { wipeCaptureSession } from "../services/cleanup/sensitiveData";
 
 export type CaptureStep =
   | "consent"
@@ -22,13 +23,16 @@ export type CaptureStep =
   | "upload"
   | "complete";
 
-interface CaptureState {
+export interface CaptureState {
   currentStep: CaptureStep;
   consentAccepted: boolean;
   session: CaptureSession;
+  temporaryEmbeddingReferences: string[];
+  encryptedPayloadBuffers: Uint8Array[];
+  offlineQueuePlaintext: unknown[];
 }
 
-type CaptureAction =
+export type CaptureAction =
   | { type: "accept_consent" }
   | { type: "set_document"; payload: DocumentCapture }
   | { type: "set_selfie"; payload: SelfieCapture }
@@ -36,6 +40,11 @@ type CaptureAction =
   | { type: "set_biometric"; payload: BiometricCapture }
   | { type: "set_ocr"; payload: OcrResult }
   | { type: "add_social"; payload: SocialMediaProfile }
+  | { type: "track_temporary_embeddings"; payload: string[] }
+  | { type: "track_encrypted_payload_buffer"; payload: Uint8Array }
+  | { type: "set_offline_queue_plaintext"; payload: unknown[] }
+  | { type: "wipe" }
+  | { type: "complete" }
   | { type: "next" }
   | { type: "prev" };
 
@@ -56,7 +65,7 @@ const CaptureContext = createContext<
   { state: CaptureState; dispatch: React.Dispatch<CaptureAction> } | undefined
 >(undefined);
 
-function reducer(state: CaptureState, action: CaptureAction): CaptureState {
+export function captureReducer(state: CaptureState, action: CaptureAction): CaptureState {
   switch (action.type) {
     case "accept_consent":
       return {
@@ -100,6 +109,21 @@ function reducer(state: CaptureState, action: CaptureAction): CaptureState {
         session: { ...state.session, socialMedia: [...filtered, action.payload] }
       };
     }
+    case "track_temporary_embeddings":
+      return { ...state, temporaryEmbeddingReferences: action.payload };
+    case "track_encrypted_payload_buffer":
+      return { ...state, encryptedPayloadBuffers: [...state.encryptedPayloadBuffers, action.payload] };
+    case "set_offline_queue_plaintext":
+      return { ...state, offlineQueuePlaintext: action.payload };
+    case "wipe":
+      wipeCaptureSession(state.session);
+      state.temporaryEmbeddingReferences.length = 0;
+      for (const buffer of state.encryptedPayloadBuffers) buffer.fill(0);
+      state.encryptedPayloadBuffers.length = 0;
+      state.offlineQueuePlaintext.length = 0;
+      return createInitialCaptureState();
+    case "complete":
+      return { ...state, currentStep: "complete" };
     case "next": {
       const index = steps.indexOf(state.currentStep);
       const requiresBack = state.session.documentType !== "passport";
@@ -123,14 +147,19 @@ function reducer(state: CaptureState, action: CaptureAction): CaptureState {
   }
 }
 
-const initialState: CaptureState = {
-  currentStep: "consent",
-  consentAccepted: false,
-  session: initializeCaptureSession("id_card")
-};
+export function createInitialCaptureState(): CaptureState {
+  return {
+    currentStep: "consent",
+    consentAccepted: false,
+    session: initializeCaptureSession("id_card"),
+    temporaryEmbeddingReferences: [],
+    encryptedPayloadBuffers: [],
+    offlineQueuePlaintext: []
+  };
+}
 
 export function CaptureProvider({ children }: { children: React.ReactNode }) {
-  const [state, dispatch] = useReducer(reducer, initialState);
+  const [state, dispatch] = useReducer(captureReducer, undefined, createInitialCaptureState);
   return <CaptureContext.Provider value={{ state, dispatch }}>{children}</CaptureContext.Provider>;
 }
 

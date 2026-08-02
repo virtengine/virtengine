@@ -24,6 +24,7 @@ export interface RequestVerificationInput {
 
 /**
  * Build MsgUploadScope.
+ * @deprecated Legacy only. New evidence flows must use SupplementalEvidenceBoundary.
  */
 export function buildMsgUploadScope(input: UploadScopeInput): ChainTxMessage {
   return {

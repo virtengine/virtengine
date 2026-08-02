@@ -10,6 +10,7 @@ import type { ChatToolDefinition } from "../types";
 const listOrdersDefinition: ChatToolDefinition = {
   name: "list-orders",
   description: "List marketplace orders for the current wallet.",
+  kind: "query",
   parameters: {
     type: "object",
     properties: {
@@ -24,6 +25,7 @@ const listOrdersDefinition: ChatToolDefinition = {
 const createOrderDefinition: ChatToolDefinition = {
   name: "create-order",
   description: "Create a marketplace order from a resource request.",
+  kind: "mutation",
   parameters: {
     type: "object",
     properties: {
@@ -39,6 +41,7 @@ const createOrderDefinition: ChatToolDefinition = {
 const closeOrderDefinition: ChatToolDefinition = {
   name: "close-order",
   description: "Close a marketplace order by id. Requires confirmation.",
+  kind: "mutation",
   parameters: {
     type: "object",
     properties: {

@@ -11,15 +11,23 @@ export {
   type EscrowInfo,
   type OrderCreateRequest,
   type OrderCreateResult,
+  type OrderResultProjector,
+  type OrderSubmissionAdapter,
+  type OrderSubmissionContext,
+  type OrderSubmissionErrorCode,
   type OrderWizardState,
+  OrderSubmissionError,
   WIZARD_STEPS,
   STEP_LABELS,
   DEFAULT_RESOURCE_CONFIG,
   RESOURCE_LIMITS,
   calculatePriceBreakdown,
+  buildOrderCreateRequest,
+  digestOrderCreateRequest,
   durationToHours,
   formatTokenAmount,
   validateResources,
+  validateCommittedOrderResult,
 } from './types';
 
 export { useOrderWizard } from './useOrderWizard';

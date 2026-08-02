@@ -214,16 +214,89 @@ export type WalletSigner = Pick<
 export interface SignedTxResult {
   txHash: string;
   code: number;
+  blockHeight: number;
   rawLog: string;
   gasUsed: number;
   gasWanted: number;
+  txResponse: Record<string, unknown>;
 }
+
+export type TransactionCommitErrorCode =
+  | 'broadcast_rejected'
+  | 'empty_tx_hash'
+  | 'malformed_response'
+  | 'commit_failed'
+  | 'commit_timeout'
+  | 'tx_hash_mismatch';
+
+export class TransactionCommitError extends Error {
+  code: TransactionCommitErrorCode;
+  payload?: unknown;
+
+  constructor(code: TransactionCommitErrorCode, message: string, payload?: unknown) {
+    super(message);
+    this.name = 'TransactionCommitError';
+    this.code = code;
+    this.payload = payload;
+  }
+}
+
+export interface SignAndBroadcastOptions {
+  fetch?: typeof fetch;
+  sleep?: (delayMs: number) => Promise<void>;
+  now?: () => number;
+  timeoutMs?: number;
+  initialPollDelayMs?: number;
+  maxPollDelayMs?: number;
+}
+
+const parseRequiredCode = (value: unknown, payload: unknown): number => {
+  const code = typeof value === 'number' ? value : typeof value === 'string' ? Number(value) : NaN;
+  if (!Number.isSafeInteger(code) || code < 0) {
+    throw new TransactionCommitError(
+      'malformed_response',
+      'Transaction response is missing a valid code',
+      payload
+    );
+  }
+  return code;
+};
+
+const parseCommittedHeight = (value: unknown, payload: unknown): number => {
+  const height =
+    typeof value === 'number' ? value : typeof value === 'string' ? Number(value) : NaN;
+  if (!Number.isSafeInteger(height) || height <= 0) {
+    throw new TransactionCommitError(
+      'malformed_response',
+      'Committed transaction response has an invalid height',
+      payload
+    );
+  }
+  return height;
+};
+
+const readJsonPayload = async (response: Response): Promise<Record<string, unknown>> => {
+  try {
+    const payload = (await response.json()) as unknown;
+    if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
+      throw new Error('Response is not an object');
+    }
+    return payload as Record<string, unknown>;
+  } catch (error) {
+    throw new TransactionCommitError(
+      'malformed_response',
+      'Transaction endpoint returned malformed JSON',
+      error
+    );
+  }
+};
 
 export async function signAndBroadcastAmino(
   wallet: WalletSigner,
   msgs: Array<{ typeUrl: string; value: unknown }>,
   memo = '',
-  gasLimit = 200000
+  gasLimit = 200000,
+  options: SignAndBroadcastOptions = {}
 ): Promise<SignedTxResult> {
   if (wallet.status !== 'connected') {
     throw new Error('Wallet is not connected');
@@ -236,13 +309,28 @@ export async function signAndBroadcastAmino(
 
   const fee = wallet.estimateFee(gasLimit);
 
-  const accountInfo = await fetchChainJson<{
+  const fetchImpl = options.fetch ?? fetch;
+  const accountResponse = await fetchImpl(
+    `${getRestEndpoint()}/cosmos/auth/v1beta1/accounts/${encodeURIComponent(account.address)}`,
+    { headers: { Accept: 'application/json' } }
+  );
+  const accountInfo = (await readJsonPayload(accountResponse)) as {
     account?: {
       account_number?: string;
       sequence?: string;
       base_account?: { account_number?: string; sequence?: string };
     };
-  }>(`/cosmos/auth/v1beta1/accounts/${account.address}`);
+  };
+  if (!accountResponse.ok) {
+    throw new TransactionCommitError(
+      'broadcast_rejected',
+      coerceString(
+        (accountInfo as Record<string, unknown>).message,
+        'Failed to load signer account'
+      ),
+      accountInfo
+    );
+  }
 
   const accountNumber =
     accountInfo.account?.account_number ?? accountInfo.account?.base_account?.account_number ?? '0';
@@ -289,14 +377,25 @@ export async function signAndBroadcastAmino(
     signatures: [signResponse.signature.signature],
   };
 
-  const response = await fetch(`${getRestEndpoint()}/cosmos/tx/v1beta1/txs`, {
+  const sleep =
+    options.sleep ?? ((delayMs) => new Promise((resolve) => setTimeout(resolve, delayMs)));
+  const now = options.now ?? Date.now;
+  const timeoutMs = options.timeoutMs ?? 30_000;
+  const initialPollDelayMs = options.initialPollDelayMs ?? 250;
+  const maxPollDelayMs = options.maxPollDelayMs ?? 2_000;
+
+  const response = await fetchImpl(`${getRestEndpoint()}/cosmos/tx/v1beta1/txs`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ tx, mode: 'BROADCAST_MODE_SYNC' }),
   });
-  const payload = (await response.json()) as Record<string, unknown>;
+  const payload = await readJsonPayload(response);
   if (!response.ok) {
-    throw new Error(coerceString(payload.message, 'Transaction broadcast failed'));
+    throw new TransactionCommitError(
+      'broadcast_rejected',
+      coerceString(payload.message, 'Transaction broadcast failed'),
+      payload
+    );
   }
 
   const maybeTxResponse = payload.tx_response;
@@ -304,11 +403,82 @@ export async function signAndBroadcastAmino(
     maybeTxResponse && typeof maybeTxResponse === 'object'
       ? (maybeTxResponse as Record<string, unknown>)
       : payload;
-  return {
-    txHash: coerceString(txResponse?.txhash, ''),
-    code: coerceNumber(txResponse?.code, 0),
-    rawLog: coerceString(txResponse?.raw_log, ''),
-    gasUsed: coerceNumber(txResponse?.gas_used, 0),
-    gasWanted: coerceNumber(txResponse?.gas_wanted, 0),
-  };
+  const txHash = coerceString(txResponse.txhash, '').trim();
+  if (!txHash) {
+    throw new TransactionCommitError(
+      'empty_tx_hash',
+      'Broadcast response has no transaction hash',
+      payload
+    );
+  }
+  const initialCode = parseRequiredCode(txResponse.code, payload);
+  if (initialCode !== 0) {
+    throw new TransactionCommitError(
+      'broadcast_rejected',
+      coerceString(txResponse.raw_log, `Transaction broadcast rejected with code ${initialCode}`),
+      payload
+    );
+  }
+
+  const deadline = now() + timeoutMs;
+  let pollDelayMs = initialPollDelayMs;
+  while (now() <= deadline) {
+    const committedResponse = await fetchImpl(
+      `${getRestEndpoint()}/cosmos/tx/v1beta1/txs/${encodeURIComponent(txHash)}`,
+      { headers: { Accept: 'application/json' } }
+    );
+    if (committedResponse.status === 404) {
+      await sleep(pollDelayMs);
+      pollDelayMs = Math.min(pollDelayMs * 2, maxPollDelayMs);
+      continue;
+    }
+
+    const committedPayload = await readJsonPayload(committedResponse);
+    if (!committedResponse.ok) {
+      throw new TransactionCommitError(
+        'malformed_response',
+        coerceString(committedPayload.message, 'Failed to query committed transaction'),
+        committedPayload
+      );
+    }
+    const canonical = committedPayload.tx_response;
+    if (!canonical || typeof canonical !== 'object' || Array.isArray(canonical)) {
+      throw new TransactionCommitError(
+        'malformed_response',
+        'Canonical transaction response is missing tx_response',
+        committedPayload
+      );
+    }
+    const committed = canonical as Record<string, unknown>;
+    const committedHash = coerceString(committed.txhash, '').trim();
+    if (committedHash !== txHash) {
+      throw new TransactionCommitError(
+        'tx_hash_mismatch',
+        'Canonical transaction hash does not match submitted transaction',
+        committedPayload
+      );
+    }
+    const code = parseRequiredCode(committed.code, committedPayload);
+    if (code !== 0) {
+      throw new TransactionCommitError(
+        'commit_failed',
+        coerceString(committed.raw_log, `Committed transaction failed with code ${code}`),
+        committedPayload
+      );
+    }
+    return {
+      txHash: committedHash,
+      code,
+      blockHeight: parseCommittedHeight(committed.height, committedPayload),
+      rawLog: coerceString(committed.raw_log, ''),
+      gasUsed: coerceNumber(committed.gas_used, 0),
+      gasWanted: coerceNumber(committed.gas_wanted, 0),
+      txResponse: committed,
+    };
+  }
+
+  throw new TransactionCommitError(
+    'commit_timeout',
+    `Timed out waiting for transaction ${txHash} to commit`
+  );
 }

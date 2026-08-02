@@ -5,9 +5,15 @@
  * @packageDocumentation
  */
 
-import type { ReactNode } from 'react';
-import type { ChainConfig } from './chain';
-import type { WalletProviderConfig } from '../src/wallet/types';
+import type { ReactNode } from "react";
+import type { ChainConfig } from "./chain";
+import type { WalletProviderConfig } from "../src/wallet/types";
+import type {
+  CheckoutMutationAdapter,
+  CheckoutMutationProjector,
+} from "../components/marketplace/checkout-mutation";
+import type { HPCSignerAdapter } from "../components/hpc/hpc-mutation";
+import type { HPCOutputAdapter } from "../components/hpc/hpc-output";
 
 /**
  * Portal configuration
@@ -72,7 +78,7 @@ export interface SSOConfig {
   /**
    * SSO provider type
    */
-  provider: 'oauth2' | 'oidc';
+  provider: "oauth2" | "oidc";
 
   /**
    * Authorization endpoint
@@ -179,7 +185,7 @@ export interface PortalLogger {
  */
 export const defaultLogger: PortalLogger = {
   debug: (message, context) => {
-    if (process.env.NODE_ENV === 'development') {
+    if (process.env.NODE_ENV === "development") {
       console.debug(`[Portal] ${message}`, filterSensitive(context));
     }
   },
@@ -198,42 +204,45 @@ export const defaultLogger: PortalLogger = {
  * Sensitive field names that should never be logged
  */
 const SENSITIVE_FIELDS = new Set([
-  'password',
-  'secret',
-  'token',
-  'key',
-  'privateKey',
-  'mnemonic',
-  'seed',
-  'signature',
-  'encryptedPayload',
-  'encryptedData',
-  'credential',
-  'credentials',
-  'accessToken',
-  'refreshToken',
-  'sessionToken',
-  'apiKey',
-  'authToken',
+  "password",
+  "secret",
+  "token",
+  "key",
+  "privateKey",
+  "mnemonic",
+  "seed",
+  "signature",
+  "encryptedPayload",
+  "encryptedData",
+  "credential",
+  "credentials",
+  "accessToken",
+  "refreshToken",
+  "sessionToken",
+  "apiKey",
+  "authToken",
 ]);
 
 /**
  * Filter sensitive fields from context before logging
  */
 function filterSensitive(
-  context?: Record<string, unknown>
+  context?: Record<string, unknown>,
 ): Record<string, unknown> | undefined {
   if (!context) return undefined;
 
   const filtered: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(context)) {
     const lowerKey = key.toLowerCase();
-    const isSensitive = SENSITIVE_FIELDS.has(key) ||
-      Array.from(SENSITIVE_FIELDS).some(s => lowerKey.includes(s.toLowerCase()));
+    const isSensitive =
+      SENSITIVE_FIELDS.has(key) ||
+      Array.from(SENSITIVE_FIELDS).some((s) =>
+        lowerKey.includes(s.toLowerCase()),
+      );
 
     if (isSensitive) {
-      filtered[key] = '[REDACTED]';
-    } else if (typeof value === 'object' && value !== null) {
+      filtered[key] = "[REDACTED]";
+    } else if (typeof value === "object" && value !== null) {
       filtered[key] = filterSensitive(value as Record<string, unknown>);
     } else {
       filtered[key] = value;
@@ -261,6 +270,12 @@ export interface PortalProviderProps {
    */
   walletConfig?: WalletProviderConfig;
 
+  marketplaceMutationAdapter?: CheckoutMutationAdapter;
+  marketplaceResultProjector?: CheckoutMutationProjector;
+  marketplaceMutationTimeoutMs?: number;
+  hpcMutationAdapter?: HPCSignerAdapter;
+  hpcOutputAdapter?: HPCOutputAdapter;
+
   /**
    * Child components
    */
@@ -271,15 +286,15 @@ export interface PortalProviderProps {
  * Default portal configuration
  */
 export const defaultPortalConfig: Partial<PortalConfig> = {
-  chainId: 'virtengine-1',
-  networkName: 'VirtEngine',
+  chainId: "virtengine-1",
+  networkName: "VirtEngine",
   enableSSO: false,
   debug: false,
   sessionConfig: {
     tokenLifetimeSeconds: 3600,
     refreshThresholdSeconds: 300,
     autoRefresh: true,
-    cookieName: 've_session',
+    cookieName: "ve_session",
     secureCookies: true,
   },
 };
@@ -291,37 +306,45 @@ export function validatePortalConfig(config: PortalConfig): string[] {
   const errors: string[] = [];
 
   if (!config.chainEndpoint) {
-    errors.push('chainEndpoint is required');
-  } else if (!config.chainEndpoint.startsWith('ws://') && !config.chainEndpoint.startsWith('wss://')) {
-    errors.push('chainEndpoint should be a WebSocket URL (ws:// or wss://)');
+    errors.push("chainEndpoint is required");
+  } else if (
+    !config.chainEndpoint.startsWith("ws://") &&
+    !config.chainEndpoint.startsWith("wss://")
+  ) {
+    errors.push("chainEndpoint should be a WebSocket URL (ws:// or wss://)");
   }
 
   // Enforce TLS in production
-  if (process.env.NODE_ENV === 'production') {
-    if (config.chainEndpoint && !config.chainEndpoint.startsWith('wss://')) {
-      errors.push('chainEndpoint must use wss:// in production');
+  if (process.env.NODE_ENV === "production") {
+    if (config.chainEndpoint && !config.chainEndpoint.startsWith("wss://")) {
+      errors.push("chainEndpoint must use wss:// in production");
     }
-    if (config.chainRestEndpoint && !config.chainRestEndpoint.startsWith('https://')) {
-      errors.push('chainRestEndpoint must use https:// in production');
+    if (
+      config.chainRestEndpoint &&
+      !config.chainRestEndpoint.startsWith("https://")
+    ) {
+      errors.push("chainRestEndpoint must use https:// in production");
     }
   }
 
   if (config.enableSSO && !config.ssoConfig) {
-    errors.push('ssoConfig is required when enableSSO is true');
+    errors.push("ssoConfig is required when enableSSO is true");
   }
 
   if (config.ssoConfig) {
     if (!config.ssoConfig.authorizationEndpoint) {
-      errors.push('ssoConfig.authorizationEndpoint is required');
+      errors.push("ssoConfig.authorizationEndpoint is required");
     }
     if (!config.ssoConfig.clientId) {
-      errors.push('ssoConfig.clientId is required');
+      errors.push("ssoConfig.clientId is required");
     }
     if (!config.ssoConfig.redirectUri) {
-      errors.push('ssoConfig.redirectUri is required');
+      errors.push("ssoConfig.redirectUri is required");
     }
     if (config.ssoConfig.enforcePKCE && !config.ssoConfig.tokenEndpoint) {
-      errors.push('ssoConfig.tokenEndpoint is required when enforcePKCE is true');
+      errors.push(
+        "ssoConfig.tokenEndpoint is required when enforcePKCE is true",
+      );
     }
   }
 

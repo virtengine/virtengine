@@ -3,6 +3,8 @@
  * VE-700: Wallet-based authentication
  */
 
+import type { WalletSigningAuthorizationAuthority } from './session';
+
 export type WalletType = 'keplr' | 'leap' | 'cosmostation' | 'walletconnect';
 
 export type WalletConnectionStatus = 'idle' | 'connecting' | 'connected' | 'error';
@@ -147,6 +149,7 @@ export interface WalletProviderConfig {
   walletConnectProjectId?: string;
   autoConnect?: boolean;
   persistKey?: string;
+  signingAuthorization?: WalletSigningAuthorizationAuthority;
   onError?: (error: WalletError) => void;
   metadata?: {
     name: string;

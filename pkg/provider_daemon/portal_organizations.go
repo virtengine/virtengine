@@ -18,7 +18,7 @@ func (s *PortalAPIServer) handleListOrganizations(w http.ResponseWriter, r *http
 	cursor := parseCursor(r)
 	orgs, _, err := s.chainQuery.ListOrganizations(r.Context(), principal, limit, cursor)
 	if err != nil {
-		writeJSONError(w, http.StatusInternalServerError, err.Error())
+		writePortalError(w, err)
 		return
 	}
 
@@ -38,7 +38,7 @@ func (s *PortalAPIServer) handleGetOrganization(w http.ResponseWriter, r *http.R
 			writeJSONError(w, http.StatusNotFound, "organization not found")
 			return
 		}
-		writeJSONError(w, http.StatusInternalServerError, err.Error())
+		writePortalError(w, err)
 		return
 	}
 
@@ -58,7 +58,7 @@ func (s *PortalAPIServer) handleOrganizationMembers(w http.ResponseWriter, r *ht
 			writeJSONError(w, http.StatusNotFound, "organization not found")
 			return
 		}
-		writeJSONError(w, http.StatusInternalServerError, err.Error())
+		writePortalError(w, err)
 		return
 	}
 
@@ -80,7 +80,7 @@ func (s *PortalAPIServer) handleInviteOrganizationMember(w http.ResponseWriter, 
 
 	isAdmin, err := s.chainQuery.IsOrganizationAdmin(r.Context(), orgID, principal)
 	if err != nil {
-		writeJSONError(w, http.StatusInternalServerError, err.Error())
+		writePortalError(w, err)
 		return
 	}
 	if !isAdmin {
@@ -100,7 +100,7 @@ func (s *PortalAPIServer) handleInviteOrganizationMember(w http.ResponseWriter, 
 
 	member, err := s.chainQuery.InviteOrganizationMember(r.Context(), orgID, req.Address, req.Role, principal)
 	if err != nil {
-		writeJSONError(w, http.StatusInternalServerError, err.Error())
+		writePortalError(w, err)
 		return
 	}
 
@@ -123,7 +123,7 @@ func (s *PortalAPIServer) handleRemoveOrganizationMember(w http.ResponseWriter, 
 
 	isAdmin, err := s.chainQuery.IsOrganizationAdmin(r.Context(), orgID, principal)
 	if err != nil {
-		writeJSONError(w, http.StatusInternalServerError, err.Error())
+		writePortalError(w, err)
 		return
 	}
 	if !isAdmin {
@@ -132,7 +132,7 @@ func (s *PortalAPIServer) handleRemoveOrganizationMember(w http.ResponseWriter, 
 	}
 
 	if err := s.chainQuery.RemoveOrganizationMember(r.Context(), orgID, address, principal); err != nil {
-		writeJSONError(w, http.StatusInternalServerError, err.Error())
+		writePortalError(w, err)
 		return
 	}
 

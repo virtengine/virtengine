@@ -1,0 +1,28 @@
+T2-15 retained validation evidence
+Implementation SHA: e4da83c0b586b06dbae33d30602a7925d090d1e9
+Node: v24.12.0
+
+COMMAND: C:\Users\pavil\AppData\Local\Temp\virtengine-node-v24.12.0\npm.cmd --prefix C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t2\lib\portal test
+EXIT: 0
+RESULT: passed
+DETAIL: 24 files, 615 tests passed; uniqueness enrollment 39 tests passed
+
+COMMAND: C:\Users\pavil\AppData\Local\Temp\virtengine-node-v24.12.0\npm.cmd --prefix C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t2\lib\portal run type-check
+EXIT: 0
+RESULT: passed
+
+COMMAND: C:\Users\pavil\AppData\Local\Temp\virtengine-node-v24.12.0\npm.cmd --prefix C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t2\portal run lint
+EXIT: 0
+RESULT: passed
+NOTE: Existing unsupported TypeScript parser-version warning only.
+
+COMMAND: C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t2\portal\node_modules\.bin\vitest.CMD run --reporter=dot
+EXIT: 0
+RESULT: passed
+DETAIL: 72 files, 525 tests passed
+
+NON-CLAIMS:
+- Canonical T1 uniqueness receipts are consumed only through an injected projector; production defaults remain unavailable.
+- Possible matches are review-only and never expose candidates, scores, templates, or identities.
+- Duplicate-confirmed requires governed final adjudication; manual non-biometric verification and appeal remain available.
+- No production route wiring or uniqueness-service certification is claimed.

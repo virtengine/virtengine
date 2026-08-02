@@ -1,0 +1,51 @@
+Thread: T2
+Checkpoint: T2-03B
+Implementation SHA: f5a5b7a7d350254f2b0abf2e034f06e26ccdc9a2
+Integration parent: fa21b1e540a5efcbe1822da4199be7acec7709d3
+Platform: windows/amd64
+
+PASS
+Command: C:\Users\pavil\AppData\Local\VirtEngine\toolchains\go1.25.8\go\bin\go.exe version
+Exit code: 0
+Output: go version go1.25.8 windows/amd64
+
+PASS
+Command: C:\Users\pavil\AppData\Local\VirtEngine\toolchains\go1.25.8\go\bin\go.exe -C C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t2 test -count=1 ./pkg/provider_daemon -run 'Portal|ChainQuery|Capability|Legacy'
+Exit code: 0
+Output: ok github.com/virtengine/virtengine/pkg/provider_daemon 2.844s
+
+PASS
+Command: C:\Users\pavil\AppData\Local\VirtEngine\toolchains\go1.25.8\go\bin\go.exe -C C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t2 vet ./pkg/provider_daemon
+Exit code: 0
+Output: no diagnostics
+
+PASS
+Command: C:\Users\pavil\AppData\Local\Temp\virtengine-node-v24.12.0\npm.cmd --prefix lib\portal test -- --runInBand __tests__/provider-api/client.test.ts
+Exit code: 0
+Output: Test Files 17 passed (17); Tests 431 passed (431)
+Tool: Node v24.12.0
+
+PASS
+Command: C:\Users\pavil\AppData\Local\Temp\virtengine-node-v24.12.0\npm.cmd --prefix lib\portal run type-check
+Exit code: 0
+Output: tsc -p tsconfig.chain.json --noEmit
+Tool: Node v24.12.0
+
+PASS
+Command: node scripts/validate-agents-docs.mjs
+Exit code: 0
+Output: AGENTS documentation validation passed (9 files).
+
+PASS
+Command: git diff --check
+Exit code: 0
+Output: no diagnostics
+
+KNOWN FAILURE
+Command: C:\Users\pavil\AppData\Local\VirtEngine\toolchains\go1.25.8\go\bin\go.exe -C C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t2 test -count=1 ./pkg/provider_daemon
+Exit code: 1
+Output: TestProviderMutationSubmitterStandbyTakesOverWithHigherFence failed with "provider mutation pipeline not ready: submitter lease lost".
+Discriminator: the exact test failed repeatedly with -count=10 at readiness and lease-loss assertions. This provider lease timing failure is outside the T2 portal capability slice and blocks full-package certification.
+
+SCHEMA BLOCKER
+The attached campaign plan requires an integration_parent handoff field. The integrated T4 producer-handoff.schema.json has additionalProperties=false but does not define integration_parent. T2 records the value in this retained artifact and does not make HANDOFF.yaml schema-invalid. T4 must reconcile its schema before intake can be accepted.

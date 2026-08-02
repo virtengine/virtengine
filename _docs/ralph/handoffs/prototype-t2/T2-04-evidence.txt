@@ -1,0 +1,37 @@
+Thread: T2
+Checkpoint: T2-04
+Implementation SHA: 8dc40f83e182ef8bec270f9d0a79c65182c02398
+Integration ancestor: fa21b1e540a5efcbe1822da4199be7acec7709d3
+Platform: Windows
+Tool: Node v24.12.0
+
+PASS
+Command: C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t2\portal\node_modules\.bin\vitest.CMD run src/features/hpc/lib/hpc-client.test.ts src/features/hpc/hooks/index.test.tsx src/features/hpc/components/JobWizard.test.tsx tests/unit/hpc/hpcClient.test.ts
+Exit code: 0
+Output: Test Files 4 passed (4); Tests 35 passed (35).
+
+PASS
+Command: C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t2\portal\node_modules\.bin\eslint.CMD src --ext .ts,.tsx --max-warnings 0
+Exit code: 0
+Output: no lint findings. Existing compatibility notice: installed TypeScript 5.9.3 is newer than the parser's declared supported range.
+
+PASS
+Command: C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t2\portal\node_modules\.bin\tsc.CMD --noEmit
+Exit code: 0
+Output: no diagnostics.
+
+PASS
+Command: C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t2\portal\node_modules\.bin\vitest.CMD run --reporter=dot
+Exit code: 0
+Output: Test Files 69 passed (69); Tests 499 passed (499).
+
+PASS
+Command: git diff --check
+Exit code: 0
+Output: no diagnostics.
+
+NON-CLAIMS
+T2-04 publishes a feature-local dependency injection contract. T4 still owns application-provider wiring and generated SDK integration. Without an injected authoritative client the production UI reports typed unavailability. Explicit fixture data is reachable only through createMockHPCClient and is not selected by default production construction.
+
+BLOCKER
+The campaign plan requires integration_parent in producer handoffs, while the integrated T4 producer-handoff.schema.json sets additionalProperties=false and does not define integration_parent. The integration ancestor is retained above pending T4 schema reconciliation.

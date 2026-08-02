@@ -105,10 +105,123 @@ export interface OrderCreateRequest {
 }
 
 export interface OrderCreateResult {
+  status: 'committed';
+  code: 0;
   orderId: string;
   txHash: string;
-  status: 'pending' | 'matched' | 'failed';
-  createdAt: string;
+  blockHeight: number;
+  requestDigest: string;
+  request: OrderCreateRequest;
+}
+
+export interface OrderSubmissionContext {
+  requestDigest: string;
+  idempotencyKey: string;
+  signal: AbortSignal;
+}
+
+export interface OrderSubmissionAdapter {
+  submitOrder(request: OrderCreateRequest, context: OrderSubmissionContext): Promise<unknown>;
+}
+
+export type OrderResultProjector = (result: unknown) => unknown;
+
+export type OrderSubmissionErrorCode =
+  | 'feature_unavailable'
+  | 'submission_timeout'
+  | 'submission_rejected'
+  | 'order_state_changed'
+  | 'invalid_committed_result';
+
+export class OrderSubmissionError extends Error {
+  constructor(readonly code: OrderSubmissionErrorCode) {
+    super(code);
+    this.name = 'OrderSubmissionError';
+  }
+}
+
+function canonicalOrderRequest(request: OrderCreateRequest): string {
+  return JSON.stringify({
+    offeringId: {
+      providerAddress: request.offeringId.providerAddress,
+      sequence: request.offeringId.sequence,
+    },
+    resources: {
+      cpu: request.resources.cpu,
+      memory: request.resources.memory,
+      storage: request.resources.storage,
+      gpu: request.resources.gpu,
+      duration: request.resources.duration,
+      durationUnit: request.resources.durationUnit,
+      region: request.resources.region,
+    },
+    priceBreakdown: {
+      items: request.priceBreakdown.items.map((item) => ({
+        label: item.label,
+        resourceType: item.resourceType,
+        quantity: item.quantity,
+        unitPrice: item.unitPrice,
+        unit: item.unit,
+        total: item.total,
+        ...(item.usdReference === undefined ? {} : { usdReference: item.usdReference }),
+      })),
+      subtotal: request.priceBreakdown.subtotal,
+      escrowDeposit: request.priceBreakdown.escrowDeposit,
+      estimatedTotal: request.priceBreakdown.estimatedTotal,
+      currency: request.priceBreakdown.currency,
+      denom: request.priceBreakdown.denom,
+    },
+    ...(request.memo === undefined ? {} : { memo: request.memo }),
+  });
+}
+
+export function buildOrderCreateRequest(state: OrderWizardState): OrderCreateRequest | null {
+  if (!state.offering || !state.priceBreakdown) return null;
+
+  return JSON.parse(
+    canonicalOrderRequest({
+      offeringId: state.offering.id,
+      resources: state.resources,
+      priceBreakdown: state.priceBreakdown,
+    })
+  ) as OrderCreateRequest;
+}
+
+export async function digestOrderCreateRequest(request: OrderCreateRequest): Promise<string> {
+  const bytes = new TextEncoder().encode(canonicalOrderRequest(request));
+  const digest = await globalThis.crypto.subtle.digest('SHA-256', bytes);
+  return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, '0')).join('');
+}
+
+export function validateCommittedOrderResult(
+  value: unknown,
+  request: OrderCreateRequest,
+  requestDigest: string
+): OrderCreateResult {
+  if (!value || typeof value !== 'object') throw new OrderSubmissionError('invalid_committed_result');
+
+  const result = value as Partial<OrderCreateResult>;
+  let valid = false;
+  try {
+    valid =
+      result.status === 'committed' &&
+      result.code === 0 &&
+      typeof result.orderId === 'string' &&
+      result.orderId.trim().length > 0 &&
+      typeof result.txHash === 'string' &&
+      result.txHash.trim().length > 0 &&
+      typeof result.blockHeight === 'number' &&
+      Number.isInteger(result.blockHeight) &&
+      result.blockHeight > 0 &&
+      result.requestDigest === requestDigest &&
+      result.request !== undefined &&
+      canonicalOrderRequest(result.request) === canonicalOrderRequest(request);
+  } catch {
+    valid = false;
+  }
+
+  if (!valid) throw new OrderSubmissionError('invalid_committed_result');
+  return result as OrderCreateResult;
 }
 
 // =============================================================================
@@ -123,7 +236,7 @@ export interface OrderWizardState {
   escrowInfo: EscrowInfo | null;
   orderResult: OrderCreateResult | null;
   isSubmitting: boolean;
-  error: string | null;
+  error: OrderSubmissionErrorCode | null;
 }
 
 // =============================================================================

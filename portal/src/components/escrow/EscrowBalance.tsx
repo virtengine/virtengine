@@ -18,9 +18,16 @@ interface EscrowBalanceProps {
   fiatRates: FiatRates;
   onDeposit: () => void;
   onWithdraw: () => void;
+  actionsAvailable?: boolean;
 }
 
-export function EscrowBalance({ account, fiatRates, onDeposit, onWithdraw }: EscrowBalanceProps) {
+export function EscrowBalance({
+  account,
+  fiatRates,
+  onDeposit,
+  onWithdraw,
+  actionsAvailable = true,
+}: EscrowBalanceProps) {
   const lockedEstimates = formatFiatEstimates(account.lockedBalance, fiatRates);
   const availableEstimates = formatFiatEstimates(account.availableBalance, fiatRates);
 
@@ -36,11 +43,11 @@ export function EscrowBalance({ account, fiatRates, onDeposit, onWithdraw }: Esc
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
-            <Button variant="outline" onClick={onWithdraw}>
+            <Button variant="outline" onClick={onWithdraw} disabled={!actionsAvailable}>
               <ArrowDownLeft className="h-4 w-4" />
               Withdraw
             </Button>
-            <Button onClick={onDeposit}>
+            <Button onClick={onDeposit} disabled={!actionsAvailable}>
               <ArrowUpRight className="h-4 w-4" />
               Deposit
             </Button>

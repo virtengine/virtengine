@@ -152,6 +152,7 @@ export function createPortalTxBroadcaster(wallet: WalletSigner): TxBroadcaster {
       const result = await signAndBroadcastAmino(wallet, [aminoMsg], memo ?? 'Submit VEID scope');
       return {
         txHash: result.txHash,
+        blockHeight: result.blockHeight,
         code: result.code,
         rawLog: result.rawLog,
         gasUsed: result.gasUsed,

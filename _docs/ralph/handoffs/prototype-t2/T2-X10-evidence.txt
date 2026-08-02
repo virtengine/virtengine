@@ -1,0 +1,49 @@
+T2-X10 retained validation evidence
+Implementation SHA: 513ea3f8f78d4b2fb92a5819a420356b82e929c3
+Node: v24.12.0
+
+COMMAND: lib\portal\node_modules\.bin\vitest.CMD run __tests__/marketplace/checkout-flow.test.tsx --reporter=dot
+EXIT: 0
+RESULT: passed
+DETAIL: 1 file, 6 tests passed; no warnings
+
+COMMAND: lib\portal\node_modules\.bin\vitest.CMD run --reporter=dot
+EXIT: 0
+RESULT: passed
+DETAIL: 30 files, 702 tests passed in 27.60s; expected wallet reconnect-metadata stderr only
+
+COMMAND: lib\portal\node_modules\.bin\tsc.CMD --noEmit --lib dom,dom.iterable,esnext --target ES2020 --module CommonJS --moduleResolution Node --esModuleInterop --skipLibCheck --jsx react-jsx lib\portal\components\marketplace\CheckoutFlow.tsx lib\portal\components\marketplace\checkout-mutation.ts
+EXIT: 0
+RESULT: passed
+
+COMMAND: portal\node_modules\.bin\tsc.CMD --noEmit -p portal\tsconfig.json
+EXIT: 0
+RESULT: passed
+DETAIL: Full portal TypeScript check completed with no diagnostics.
+
+COMMAND: portal\node_modules\.bin\eslint.CMD portal\src --ext .ts,.tsx --max-warnings 0
+EXIT: 0
+RESULT: passed
+DETAIL: Independent full portal ESLint completed with no diagnostics; retained touched-file ESLint also exited 0.
+
+COMMAND: portal\node_modules\.bin\vitest.CMD run src/components/escrow/__tests__/DepositModal.test.tsx src/components/escrow/__tests__/WithdrawForm.test.tsx --reporter=dot
+EXIT: 0
+RESULT: passed
+DETAIL: 2 files, 20 tests passed after correcting T2-X09 unbound-method lint assertions.
+
+COMMAND: lib\portal\node_modules\.bin\tsc.CMD -p lib\portal\tsconfig.json --noEmit
+EXIT: 1
+RESULT: unrelated-pre-existing-failure
+DETAIL: Existing duplicate SupportTicketDetail export and missing wallet adapter factory/WalletChainConfig exports outside the T2-X10 slice. Changed checkout files pass the focused TypeScript command above.
+
+BEHAVIOR:
+- Legacy checkout no longer waits on a timer or fabricates order IDs.
+- Place Order defaults unavailable unless an authoritative adapter, projector, and complete chain/customer/offering request are provided.
+- Completion requires immutable materialized committed evidence with code 0, nonempty order ID and transaction hash, positive block height, exact request/digest binding, and digest idempotency.
+- Duplicate submission is blocked; timeout, request drift, malformed projection, cancellation, unmount, dialog close, and authority-bound prop changes fail closed.
+- CheckoutDialog forwards authority and removes the flow immediately when closed; callback failures do not reclassify committed mutation evidence.
+- Public lib and portal adapter exports expose typed checkout mutation contracts.
+
+NON-CLAIMS:
+- No production checkout signing/broadcast adapter is wired by this checkpoint; checkout defaults unavailable.
+- No live order or chain endpoint was certified.
