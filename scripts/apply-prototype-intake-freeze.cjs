@@ -3,14 +3,26 @@
 "use strict";
 
 const assert = require("assert").strict;
-const { createHash } = require("crypto");
-const { readFileSync, writeFileSync } = require("fs");
+const { createHash, randomUUID } = require("crypto");
+const { readFileSync, renameSync, unlinkSync, writeFileSync } = require("fs");
 const { resolve } = require("path");
 const { spawnSync } = require("child_process");
 const { planFrozenEpoch, resolveAnnotatedTag, validateObservationBinding } = require("./plan-prototype-intake-freeze.cjs");
 
 const threads = ["T1", "T2", "T3", "T5"];
 const producerKeys = ["decision", "status", "tag", "thread"];
+
+function atomicWriteFile(path, content, operations = { renameSync, unlinkSync, writeFileSync }, temporaryPath = `${path}.tmp-${process.pid}-${randomUUID()}`) {
+  let temporaryCreated = false;
+  try {
+    operations.writeFileSync(temporaryPath, content, { encoding: "utf8", flag: "wx" });
+    temporaryCreated = true;
+    operations.renameSync(temporaryPath, path);
+    temporaryCreated = false;
+  } finally {
+    if (temporaryCreated) operations.unlinkSync(temporaryPath);
+  }
+}
 
 function validateFreezeTransition(current, proposed, now = Date.now()) {
   assert.deepEqual(Object.keys(proposed).sort(), Object.keys(current).sort(), "freeze plan changes epoch fields");
@@ -92,11 +104,11 @@ function main(argv) {
   const observationContent = readFileSync(resolve(options.repo, options.observation), "utf8");
   const manifest = JSON.parse(readFileSync(resolve(options.repo, options.manifest), "utf8"));
   validateFreezeEvidence(current, proposed, observationContent, options.observation, manifest, { repo: options.repo, resolveTag: (tag) => resolveAnnotatedTag(options.repo, options.remote, tag) });
-  writeFileSync(epochPath, `${JSON.stringify(proposed, null, 2)}\n`, "utf8");
+  atomicWriteFile(epochPath, `${JSON.stringify(proposed, null, 2)}\n`);
   process.stdout.write(`prototype intake epoch ${options.epoch} frozen\n`);
 }
 
-module.exports = { parseArgs, validateFreezeEvidence, validateFreezeTransition, validatePlanDigest, validateWorktreeBoundary };
+module.exports = { atomicWriteFile, parseArgs, validateFreezeEvidence, validateFreezeTransition, validatePlanDigest, validateWorktreeBoundary };
 
 if (require.main === module) {
   try { main(process.argv.slice(2)); }

@@ -4,7 +4,7 @@ const assert = require("assert").strict;
 const { createHash } = require("crypto");
 const { readFileSync } = require("fs");
 const { resolve } = require("path");
-const { parseArgs, validateFreezeEvidence, validateFreezeTransition, validatePlanDigest, validateWorktreeBoundary } = require("./apply-prototype-intake-freeze.cjs");
+const { atomicWriteFile, parseArgs, validateFreezeEvidence, validateFreezeTransition, validatePlanDigest, validateWorktreeBoundary } = require("./apply-prototype-intake-freeze.cjs");
 
 function epoch() {
   return {
@@ -32,6 +32,8 @@ function evidence() {
 const afterCutoff = Date.parse("2000-01-03T00:00:00Z");
 const cleanAt = (head) => (_command, args) => args[0] === "status" ? { status: 0, stdout: "" } : { status: 0, stdout: `${head}\n` };
 const tests = [
+  ["atomically replaces the epoch after exclusive temporary creation", () => { const calls = []; const operations = { writeFileSync: (...args) => calls.push(["write", ...args]), renameSync: (...args) => calls.push(["rename", ...args]), unlinkSync: (...args) => calls.push(["unlink", ...args]) }; atomicWriteFile("epoch.json", "frozen\n", operations, "epoch.json.tmp"); assert.deepEqual(calls.map(([name]) => name), ["write", "rename"]); assert.deepEqual(calls[0][3], { encoding: "utf8", flag: "wx" }); }],
+  ["removes the temporary file when atomic replacement fails", () => { const calls = []; const operations = { writeFileSync: () => calls.push("write"), renameSync: () => { calls.push("rename"); throw new Error("rename failed"); }, unlinkSync: () => calls.push("unlink") }; assert.throws(() => atomicWriteFile("epoch.json", "frozen\n", operations, "epoch.json.tmp"), /rename failed/); assert.deepEqual(calls, ["write", "rename", "unlink"]); }],
   ["accepts the exact open-to-frozen transition", () => assert.equal(validateFreezeTransition(epoch(), frozen(), afterCutoff), true)],
   ["rejects application before cutoff", () => assert.throws(() => validateFreezeTransition(epoch(), frozen(), Date.parse("2000-01-01T00:00:00Z")), /cutoff has not elapsed/)],
   ["rejects changed epoch metadata", () => { const value = frozen(); value.base_sha = "c".repeat(40); assert.throws(() => validateFreezeTransition(epoch(), value, afterCutoff), /changes base_sha/); }],
