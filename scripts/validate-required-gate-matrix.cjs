@@ -13,7 +13,7 @@ const planSchemaPath = resolve(root, "_docs/ralph/prototype-integration/required
 const resultSchemaPath = resolve(root, "_docs/ralph/prototype-integration/required-gate-results.schema.json");
 const categoryCommands = new Map([
   ["go", ["go vet ./...", "go test -count=1 ./..."]],
-  ["proto_api", ["docker build --file sdk/generation/Dockerfile --tag virtengine-proto-gen:1.0.0 .", "docker run --rm --volume $PWD:/src --workdir /src/sdk --entrypoint buf virtengine-proto-gen:1.0.0 lint", "bash scripts/verify-proto-generation.sh", "go test -count=1 ./api/... ./client/..."]],
+  ["proto_api", ["docker build --file sdk/generation/Dockerfile --tag virtengine-proto-gen:1.0.0 .", "docker run --rm --volume $PWD:/src --workdir /src/sdk --entrypoint buf virtengine-proto-gen:1.0.0 lint", "bash scripts/verify-proto-generation.sh", "go test -count=1 ./api/... ./client/...", "node scripts/validate-generated-contract-inventory.cjs --require-ready"]],
   ["sdk", ["pnpm --dir sdk/ts install --frozen-lockfile", "pnpm --dir sdk/ts build", "pnpm --dir sdk/ts test"]],
   ["portal", ["pnpm --dir portal install --frozen-lockfile", "pnpm --dir portal lint", "pnpm --dir portal test"]],
   ["mobile", ["pnpm --dir mobile/veid-capture-app install --frozen-lockfile", "pnpm --dir mobile/veid-capture-app typecheck", "pnpm --dir mobile/veid-capture-app test"]],

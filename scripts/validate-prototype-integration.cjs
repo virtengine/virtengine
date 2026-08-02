@@ -11,6 +11,7 @@ const { validateProductionPolicy } = require("./validate-ai-production-policy.cj
 const { validateManifest: validateCoreRcManifest } = require("./generate-core-rc-manifest.cjs");
 const { validateSchema: validateCoreRcSchema } = require("./validate-core-rc-manifest.cjs");
 const { validateFundRouteInventory } = require("./validate-fund-route-inventory.cjs");
+const { validateGeneratedContractInventory } = require("./validate-generated-contract-inventory.cjs");
 const { validateMigrationInventory } = require("./validate-migration-inventory.cjs");
 const { validateModelProvenance } = require("./validate-model-provenance.cjs");
 const { validateReportSchema: validatePublicationPreflightSchema } = require("./preflight-core-rc-publication.cjs");
@@ -26,6 +27,7 @@ const coreRcSchemaPath = resolve(root, "_docs/ralph/prototype-integration/core-r
 const schemaPath = resolve(root, "_docs/ralph/prototype-integration/producer-handoff.schema.json");
 const epochPath = resolve(root, "_docs/ralph/prototype-integration/epochs/epoch-1.json");
 const fundRouteInventoryPath = resolve(root, "_docs/ralph/prototype-integration/fund-route-inventory.json");
+const generatedContractInventoryPath = resolve(root, "_docs/ralph/prototype-integration/generated-contract-inventory.json");
 const handoffPath = resolve(root, "_docs/ralph/handoffs/prototype-integration/HANDOFF.yaml");
 const migrationInventoryPath = resolve(root, "_docs/ralph/prototype-integration/migration-inventory.json");
 const migrationSchemaPath = resolve(root, "_docs/ralph/prototype-integration/migration-inventory.schema.json");
@@ -155,6 +157,11 @@ if (require.main === module) {
     rootDir: root,
     verifyAcceptedCheckpoint: (checkpoint) => handoff.accepted_checkpoints.some((entry) => entry.thread === "T5" && entry.tag === checkpoint.tag && entry.payload_head === checkpoint.payload_sha)
       && checkpoint.evidence_paths.every((path) => spawnSync("git", ["cat-file", "-e", `${checkpoint.payload_sha}:${path}`], { cwd: root }).status === 0),
+  });
+  validateGeneratedContractInventory(loadJson(generatedContractInventoryPath), {
+    rootDir: root,
+    verifyAcceptedProducer: (contract) => handoff.accepted_checkpoints.some((entry) => entry.thread === contract.owner_thread && entry.tag === contract.producer.tag && entry.payload_head === contract.producer.payload_sha)
+      && contract.proto_sources.every((path) => spawnSync("git", ["cat-file", "-e", `${contract.producer.payload_sha}:${path}`], { cwd: root }).status === 0),
   });
   validateMigrationInventory(loadJson(migrationInventoryPath), loadJson(testCasesPath), {
     rootDir: root,

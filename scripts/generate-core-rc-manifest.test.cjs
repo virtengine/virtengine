@@ -60,6 +60,9 @@ const tests = [
   ["binds the fund route inventory as a control artifact", () => {
     assert.ok(sourceArtifacts.some(([id, path]) => id === "fund_route_inventory" && path === "_docs/ralph/prototype-integration/fund-route-inventory.json"));
   }],
+  ["binds the generated contract inventory as a control artifact", () => {
+    assert.ok(sourceArtifacts.some(([id, path]) => id === "generated_contract_inventory" && path === "_docs/ralph/prototype-integration/generated-contract-inventory.json"));
+  }],
   ["hashes every tracked canonical chart file", () => {
     const chartContract = artifactSelections.find((contract) => contract.id === "chart");
     const entries = listSourceEntries(sourceSha, root);

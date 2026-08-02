@@ -29,19 +29,20 @@
     },
     {
       "id": "proto_api",
-      "path_selectors": ["**/*.proto", "api/**", "openapi/**", "docs/api/**", "scripts/proto-*.sh"],
+      "path_selectors": ["**/*.proto", "api/**", "openapi/**", "docs/api/**", "scripts/proto-*.sh", "scripts/validate-generated-contract-inventory*.cjs", "_docs/ralph/prototype-integration/generated-contract-inventory.json"],
       "required_commands": [
         { "id": "proto-image", "kind": "setup", "command": "docker build --file sdk/generation/Dockerfile --tag virtengine-proto-gen:1.0.0 ." },
         { "id": "proto-lint", "kind": "lint", "command": "docker run --rm --volume $PWD:/src --workdir /src/sdk --entrypoint buf virtengine-proto-gen:1.0.0 lint" },
         { "id": "proto-drift", "kind": "drift", "command": "bash scripts/verify-proto-generation.sh" },
-        { "id": "proto-api-test", "kind": "test", "command": "go test -count=1 ./api/... ./client/..." }
+        { "id": "proto-api-test", "kind": "test", "command": "go test -count=1 ./api/... ./client/..." },
+        { "id": "generated-contract-integration", "kind": "policy", "command": "node scripts/validate-generated-contract-inventory.cjs --require-ready" }
       ],
       "pinned_tools": [{ "name": "buf", "version": "1.47.2", "source": "sdk/generation/go.mod" }, { "name": "go", "version": "1.25.8", "source": "go.mod" }],
       "zero_test_policy": { "applies_to": "test_commands", "minimum_discovered": 1, "minimum_executed": 1, "empty_selection": "fail" },
       "failure_semantics": { "nonzero_exit": "fail", "skipped": "fail", "missing_tool": "fail", "cancelled": "fail" },
       "dependencies": [{ "id": "86B", "status": "unavailable" }],
       "status": "dependency_blocked",
-      "blockers": ["dependency-86b"]
+      "blockers": ["dependency-86b", "generated-contract-integration-blocked"]
     },
     {
       "id": "sdk",
@@ -185,6 +186,7 @@
     { "id": "ai-production-policy-blocked", "description": "T4-12 diagnostic records prohibited production AI, biometric, consent, custody, or stub-success paths; enforce mode rejects them." },
     { "id": "ai-biometric-security-gates-blocked", "description": "T4-15 records incomplete AI and biometric security evidence; enforce mode rejects partial, missing, or externally blocked categories." },
     { "id": "fund-route-authorization-blocked", "description": "T4-16 records incomplete value-moving route authorization; release remains blocked until an accepted T5 checkpoint is wired atomically across every route." },
+    { "id": "generated-contract-integration-blocked", "description": "T4-13 generated contract families lack accepted canonical proto sources, generated targets, compatibility fixtures, or completed zero-drift generation evidence." },
     { "id": "real-process-evidence-absent", "description": "No accepted process-boundary lifecycle evidence is recorded by this matrix-only control." }
   ]
 }

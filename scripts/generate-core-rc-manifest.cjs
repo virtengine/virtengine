@@ -28,6 +28,7 @@ const sourceArtifacts = [
   ["ai_production_policy", "_docs/ralph/prototype-integration/ai-production-policy.json"],
   ["ai_biometric_security_gates", "_docs/ralph/prototype-integration/ai-biometric-security-gates.json"],
   ["fund_route_inventory", "_docs/ralph/prototype-integration/fund-route-inventory.json"],
+  ["generated_contract_inventory", "_docs/ralph/prototype-integration/generated-contract-inventory.json"],
 ];
 
 const artifactSelections = [
