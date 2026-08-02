@@ -1,6 +1,6 @@
 {
   "schema_version": "virtengine.prototype.slurm-chart-inventory/v2",
-  "checkpoint": "T4-06B",
+  "checkpoint": "T4-07A",
   "status": "blocked",
   "validation_mode": "executable-semantic",
   "research_scope": {
@@ -52,17 +52,22 @@
   },
   "semantic_report": {
     "path": "_docs/ralph/prototype-integration/slurm-chart-semantic-report.json",
-    "sha256": "34c6bb43206190025209c9d436c872b318100b4720df187196fc1d0f1407f38c",
+    "sha256": "07eca3ddc378a8d4b45c6253b12e3b65b2d548397595b0817effe739428d5e8a",
     "source": "deploy/slurm/slurm-cluster",
     "generated_by": "python scripts/validate_slurm_chart_semantics.py --chart deploy/slurm/slurm-cluster --diagnostic --json"
   },
   "semantic_invariants": [
     {
       "id": "stable-secrets",
-      "status": "violated",
+      "status": "satisfied",
       "requirement": "Production uses pre-provisioned or external secrets and never generates random credentials during render.",
-      "evidence": ["deploy/slurm/slurm-cluster/templates/secrets.yaml"],
-      "blocker": "Canonical templates call randAlphaNum for munge and database credentials."
+      "evidence": [
+        "deploy/slurm/slurm-cluster/templates/secrets.yaml",
+        "deploy/slurm/slurm-cluster/values.schema.json",
+        "deploy/slurm/slurm-cluster/tests/stable-secrets-values.yaml",
+        "scripts/validate_slurm_chart_semantics_test.py"
+      ],
+      "blocker": null
     },
     {
       "id": "replica-capacity-equality",
@@ -106,7 +111,6 @@
   ],
   "blockers": [
     "retire-source:_build/helm/slurm-cluster",
-    "invariant:stable-secrets",
     "invariant:replica-capacity-equality",
     "invariant:immutable-images",
     "invariant:least-privilege",

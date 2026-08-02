@@ -2,11 +2,12 @@
 
 import tempfile
 import unittest
+import json
 from pathlib import Path
 
 import yaml
 
-from validate_slurm_chart_semantics import DIGEST_IMAGE, HELM_RANDOM, load_rendered, validate, validate_source
+from validate_slurm_chart_semantics import DIGEST_IMAGE, HELM_RANDOM, load_rendered, result, validate, validate_source
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -146,8 +147,48 @@ class SlurmChartSemanticsTest(unittest.TestCase):
     def test_canonical_source_reports_known_current_violations(self) -> None:
         findings = validate_source(ROOT / "deploy" / "slurm" / "slurm-cluster")
         failed = {finding.invariant for finding in findings}
-        self.assertTrue({"stable-secrets", "replica-capacity-equality", "immutable-images", "least-privilege"}.issubset(failed))
+        self.assertNotIn("stable-secrets", failed)
+        self.assertTrue({"replica-capacity-equality", "immutable-images", "least-privilege"}.issubset(failed))
         self.assertNotIn("durable-state", failed)
+
+    def test_source_rejects_missing_fail_closed_secret_guard(self) -> None:
+        source = ROOT / "deploy" / "slurm" / "slurm-cluster"
+        with tempfile.TemporaryDirectory() as directory:
+            chart = Path(directory)
+            (chart / "templates").mkdir()
+            (chart / "values.yaml").write_text((source / "values.yaml").read_text(encoding="utf-8"), encoding="utf-8")
+            guards = (source / "templates" / "secrets.yaml").read_text(encoding="utf-8")
+            guards = guards.replace(".Values.munge.existingSecret", ".Values.munge.missingSecret")
+            (chart / "templates" / "secrets.yaml").write_text(guards, encoding="utf-8")
+            findings = validate_source(chart)
+        self.assertTrue(any(finding.invariant == "stable-secrets" and "munge" in finding.message for finding in findings))
+
+    def test_source_rejects_node_agent_tls_projection_mismatch(self) -> None:
+        source = ROOT / "deploy" / "slurm" / "slurm-cluster"
+        with tempfile.TemporaryDirectory() as directory:
+            chart = Path(directory)
+            (chart / "templates").mkdir()
+            (chart / "values.yaml").write_text((source / "values.yaml").read_text(encoding="utf-8"), encoding="utf-8")
+            for template in (source / "templates").glob("*.yaml"):
+                content = template.read_text(encoding="utf-8").replace("path: client.crt", "path: tls.crt")
+                (chart / "templates" / template.name).write_text(content, encoding="utf-8")
+            findings = validate_source(chart)
+        self.assertTrue(any(finding.invariant == "stable-secrets" and "projection mismatch" in finding.message for finding in findings))
+
+    def test_shared_secret_schema_requirements_are_unconditional(self) -> None:
+        schema = json.loads((ROOT / "deploy" / "slurm" / "slurm-cluster" / "values.schema.json").read_text(encoding="utf-8"))
+        self.assertEqual(schema["definitions"]["secretComponent"]["required"], ["existingSecret", "secretKeyName"])
+        self.assertEqual(schema["properties"]["database"]["required"], ["config"])
+        self.assertEqual(schema["definitions"]["databaseSecret"]["required"], ["existingSecret", "secretPasswordKey"])
+        self.assertEqual(schema["definitions"]["mariadbSecret"]["required"], ["existingSecret", "secretRootPasswordKey"])
+
+    def test_source_diagnostic_only_promotes_stable_secrets(self) -> None:
+        statuses = result([], diagnostic=True)["invariants"]
+        self.assertEqual(statuses["stable-secrets"], "passed")
+        self.assertEqual(
+            {status for invariant, status in statuses.items() if invariant != "stable-secrets"},
+            {"unverified"},
+        )
 
 
 if __name__ == "__main__":

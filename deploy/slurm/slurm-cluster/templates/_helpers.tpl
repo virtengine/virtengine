@@ -126,33 +126,21 @@ Node agent image
 Munge secret name
 */}}
 {{- define "slurm-cluster.munge.secretName" -}}
-{{- if .Values.munge.existingSecret }}
-{{- .Values.munge.existingSecret }}
-{{- else }}
-{{- include "slurm-cluster.fullname" . }}-munge
-{{- end }}
+{{- required "munge.existingSecret is required when munge.enabled=true; provision the Secret before installing" .Values.munge.existingSecret }}
 {{- end }}
 
 {{/*
 Database secret name
 */}}
 {{- define "slurm-cluster.database.secretName" -}}
-{{- if .Values.database.config.existingSecret }}
-{{- .Values.database.config.existingSecret }}
-{{- else }}
-{{- include "slurm-cluster.fullname" . }}-db
-{{- end }}
+{{- required "database.config.existingSecret is required when database.enabled=true; provision the Secret before installing" .Values.database.config.existingSecret }}
 {{- end }}
 
 {{/*
 MariaDB secret name
 */}}
 {{- define "slurm-cluster.mariadb.secretName" -}}
-{{- if .Values.mariadb.existingSecret }}
-{{- .Values.mariadb.existingSecret }}
-{{- else }}
-{{- include "slurm-cluster.fullname" . }}-mariadb
-{{- end }}
+{{- required "mariadb.existingSecret is required when mariadb.enabled=true; provision the Secret before installing" .Values.mariadb.existingSecret }}
 {{- end }}
 
 {{/*

@@ -50,6 +50,16 @@ func TestSLURMDeploymentKind(t *testing.T) {
 	if err := runKubectl(ctx, "create", "namespace", namespace); err != nil {
 		t.Fatalf("failed to create namespace: %v", err)
 	}
+	for _, secretArgs := range [][]string{
+		{"create", "secret", "generic", "slurm-test-munge", "--namespace", namespace, "--from-literal=munge.key=integration-test-munge-key"},
+		{"create", "secret", "generic", "slurm-test-database", "--namespace", namespace, "--from-literal=password=integration-test-database-password"},
+		{"create", "secret", "generic", "slurm-test-mariadb", "--namespace", namespace, "--from-literal=root-password=integration-test-root-password"},
+		{"create", "secret", "generic", "slurm-test-node-agent-tls", "--namespace", namespace, "--from-literal=ca.crt=integration-test-ca", "--from-literal=tls.crt=integration-test-cert", "--from-literal=tls.key=integration-test-key"},
+	} {
+		if err := runKubectl(ctx, secretArgs...); err != nil {
+			t.Fatalf("failed to create test secret: %v", err)
+		}
+	}
 
 	// Deploy SLURM cluster using Helm
 	t.Log("Deploying SLURM cluster...")
@@ -61,6 +71,7 @@ func TestSLURMDeploymentKind(t *testing.T) {
 		"--namespace", namespace,
 		"--set", "cluster.id=test-cluster",
 		"--set", "cluster.name=Test SLURM Cluster",
+		"--values", chartPath + "/tests/stable-secrets-values.yaml",
 		"--set", "compute.replicas=2",
 		"--set", "controller.persistence.size=1Gi",
 		"--set", "database.persistence.size=1Gi",
@@ -269,6 +280,7 @@ func testScaling(ctx context.Context, namespace, releaseName, chartPath string) 
 	// Scale up to 4 nodes
 	if err := runHelm(ctx, "upgrade", releaseName, chartPath,
 		"--namespace", namespace,
+		"--reuse-values",
 		"--set", "compute.replicas=4",
 		"--wait",
 		"--timeout", "5m"); err != nil {
@@ -285,6 +297,7 @@ func testScaling(ctx context.Context, namespace, releaseName, chartPath string) 
 	// Scale back down
 	if err := runHelm(ctx, "upgrade", releaseName, chartPath,
 		"--namespace", namespace,
+		"--reuse-values",
 		"--set", "compute.replicas=2",
 		"--wait",
 		"--timeout", "5m"); err != nil {

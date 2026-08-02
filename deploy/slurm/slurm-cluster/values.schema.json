@@ -1,0 +1,68 @@
+{
+  "$schema": "https://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "properties": {
+    "munge": { "$ref": "#/definitions/secretComponent" },
+    "database": {
+      "type": "object",
+      "properties": { "config": { "$ref": "#/definitions/databaseSecret" } },
+      "required": ["config"]
+    },
+    "mariadb": { "$ref": "#/definitions/mariadbSecret" },
+    "nodeAgent": {
+      "type": "object",
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "enabled": { "const": true },
+              "tls": { "properties": { "enabled": { "const": true } }, "required": ["enabled"] }
+            },
+            "required": ["enabled", "tls"]
+          },
+          "then": {
+            "properties": { "tls": { "$ref": "#/definitions/tlsSecret" } },
+            "required": ["tls"]
+          }
+        }
+      ]
+    }
+  },
+  "definitions": {
+    "nonEmptyString": { "type": "string", "minLength": 1 },
+    "secretComponent": {
+      "type": "object",
+      "properties": {
+        "existingSecret": { "$ref": "#/definitions/nonEmptyString" },
+        "secretKeyName": { "$ref": "#/definitions/nonEmptyString" }
+      },
+      "required": ["existingSecret", "secretKeyName"]
+    },
+    "databaseSecret": {
+      "type": "object",
+      "properties": {
+        "existingSecret": { "$ref": "#/definitions/nonEmptyString" },
+        "secretPasswordKey": { "$ref": "#/definitions/nonEmptyString" }
+      },
+      "required": ["existingSecret", "secretPasswordKey"]
+    },
+    "mariadbSecret": {
+      "type": "object",
+      "properties": {
+        "existingSecret": { "$ref": "#/definitions/nonEmptyString" },
+        "secretRootPasswordKey": { "$ref": "#/definitions/nonEmptyString" }
+      },
+      "required": ["existingSecret", "secretRootPasswordKey"]
+    },
+    "tlsSecret": {
+      "type": "object",
+      "properties": {
+        "existingSecret": { "$ref": "#/definitions/nonEmptyString" },
+        "caCertKey": { "$ref": "#/definitions/nonEmptyString" },
+        "clientCertKey": { "$ref": "#/definitions/nonEmptyString" },
+        "clientKeyKey": { "$ref": "#/definitions/nonEmptyString" }
+      },
+      "required": ["existingSecret", "caCertKey", "clientCertKey", "clientKeyKey"]
+    }
+  }
+}

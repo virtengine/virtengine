@@ -228,7 +228,14 @@ spec:
         {{- if .Values.nodeAgent.tls.enabled }}
         - name: node-agent-tls
           secret:
-            secretName: {{ .Values.nodeAgent.tls.existingSecret | default (printf "%s-node-agent-tls" (include "slurm-cluster.fullname" .)) }}
+            secretName: {{ required "nodeAgent.tls.existingSecret is required when nodeAgent TLS is enabled" .Values.nodeAgent.tls.existingSecret }}
+            items:
+              - key: {{ required "nodeAgent.tls.caCertKey is required when nodeAgent TLS is enabled" .Values.nodeAgent.tls.caCertKey }}
+                path: ca.crt
+              - key: {{ required "nodeAgent.tls.clientCertKey is required when nodeAgent TLS is enabled" .Values.nodeAgent.tls.clientCertKey }}
+                path: client.crt
+              - key: {{ required "nodeAgent.tls.clientKeyKey is required when nodeAgent TLS is enabled" .Values.nodeAgent.tls.clientKeyKey }}
+                path: client.key
         {{- end }}
         {{- end }}
         {{- with .Values.extraVolumes }}

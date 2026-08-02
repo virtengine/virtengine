@@ -29,12 +29,10 @@ munge:
     repository: slurm-munge
     tag: ""  # Defaults to global.slurmVersion
     pullPolicy: IfNotPresent
-  # -- Munge key (base64 encoded, auto-generated if empty)
-  key: ""
-  # -- Use existing secret for munge key
+  # -- Name of a pre-provisioned Secret containing the munge key (required when enabled)
   existingSecret: ""
-  # -- Secret key name within the secret
-  secretKeyName: "munge.key"
+  # -- Key in the pre-provisioned Secret (required when enabled)
+  secretKeyName: ""
   resources:
     requests:
       cpu: 50m
@@ -131,11 +129,10 @@ database:
     port: 3306
     name: "slurm_acct_db"
     user: "slurm"
-    # -- Database password (auto-generated if empty)
-    password: ""
-    # -- Use existing secret for DB credentials
+    # -- Name of a pre-provisioned Secret containing the database password (required when enabled)
     existingSecret: ""
-    secretPasswordKey: "password"
+    # -- Key in the pre-provisioned Secret (required when enabled)
+    secretPasswordKey: ""
   # -- Persistence for slurmdbd state
   persistence:
     enabled: true
@@ -171,11 +168,10 @@ mariadb:
     repository: mariadb
     tag: "10.11"
     pullPolicy: IfNotPresent
-  # -- Root password (auto-generated if empty)
-  rootPassword: ""
-  # -- Use existing secret
+  # -- Name of a pre-provisioned Secret containing the root password (required when enabled)
   existingSecret: ""
-  secretRootPasswordKey: "root-password"
+  # -- Key in the pre-provisioned Secret (required when enabled)
+  secretRootPasswordKey: ""
   # -- Persistence for database
   persistence:
     enabled: true
@@ -318,14 +314,12 @@ nodeAgent:
   # -- TLS configuration
   tls:
     enabled: true
-    # -- Use existing secret for TLS certs
+    # -- Name of a pre-provisioned Secret containing client TLS material (required when enabled)
     existingSecret: ""
-    # -- CA certificate
-    caCert: ""
-    # -- Client certificate
-    clientCert: ""
-    # -- Client key
-    clientKey: ""
+    # -- Keys in the pre-provisioned Secret (required when enabled)
+    caCertKey: ""
+    clientCertKey: ""
+    clientKeyKey: ""
   resources:
     requests:
       cpu: 50m

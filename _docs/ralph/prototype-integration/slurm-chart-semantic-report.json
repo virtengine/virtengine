@@ -21,26 +21,6 @@
       "message": "template contains privileged or root container defaults"
     },
     {
-      "invariant": "stable-secrets",
-      "location": "templates/secrets.yaml",
-      "message": "render-time random secret generation is forbidden"
-    },
-    {
-      "invariant": "stable-secrets",
-      "location": "values.yaml",
-      "message": "munge has no pre-provisioned secret configured"
-    },
-    {
-      "invariant": "stable-secrets",
-      "location": "values.yaml",
-      "message": "database has no pre-provisioned secret configured"
-    },
-    {
-      "invariant": "stable-secrets",
-      "location": "values.yaml",
-      "message": "mariadb has no pre-provisioned secret configured"
-    },
-    {
       "invariant": "replica-capacity-equality",
       "location": "values.yaml",
       "message": "partition normal advertises 32 nodes but values declare 2 compute replicas"
@@ -81,7 +61,7 @@
     "immutable-images": "failed",
     "least-privilege": "failed",
     "replica-capacity-equality": "failed",
-    "stable-secrets": "failed"
+    "stable-secrets": "passed"
   },
   "mode": "diagnostic",
   "passed": false,

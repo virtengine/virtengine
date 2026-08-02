@@ -22,6 +22,7 @@ INVARIANTS = (
     "least-privilege",
     "durable-state",
 )
+SOURCE_VERIFIABLE_INVARIANTS = {"stable-secrets"}
 WORKLOAD_KINDS = {"CronJob", "DaemonSet", "Deployment", "Job", "Pod", "ReplicaSet", "ReplicationController", "StatefulSet"}
 DURABLE_COMPONENTS = {"controller", "database", "mariadb"}
 DURABLE_PATHS = {
@@ -180,16 +181,42 @@ def _static_findings(chart_dir: Path) -> list[Finding]:
         if path.name != "values.yaml" and PRIVILEGED_SOURCE.search(content):
             findings.append(Finding("least-privilege", relative, "template contains privileged or root container defaults"))
 
-    secret_contracts = (
-        ("munge", values.get("munge", {}), "key", "existingSecret"),
-        ("database", values.get("database", {}).get("config", {}), "password", "existingSecret"),
-        ("mariadb", values.get("mariadb", {}), "rootPassword", "existingSecret"),
+    template_source = "\n".join(
+        path.read_text(encoding="utf-8")
+        for path in (chart_dir / "templates").rglob("*")
+        if path.is_file()
     )
-    for name, settings, inline_key, existing_key in secret_contracts:
-        if not isinstance(settings, dict) or not settings.get(existing_key):
-            findings.append(Finding("stable-secrets", "values.yaml", f"{name} has no pre-provisioned secret configured"))
-        if isinstance(settings, dict) and settings.get(inline_key):
+    secret_contracts = (
+        ("munge", values.get("munge", {}), ("key",), "munge.existingSecret", ("munge.secretKeyName",)),
+        ("database", values.get("database", {}).get("config", {}), ("password",), "database.config.existingSecret", ("database.config.secretPasswordKey",)),
+        ("mariadb", values.get("mariadb", {}), ("rootPassword",), "mariadb.existingSecret", ("mariadb.secretRootPasswordKey",)),
+        (
+            "nodeAgent TLS",
+            values.get("nodeAgent", {}).get("tls", {}),
+            ("caCert", "clientCert", "clientKey"),
+            "nodeAgent.tls.existingSecret",
+            ("nodeAgent.tls.caCertKey", "nodeAgent.tls.clientCertKey", "nodeAgent.tls.clientKeyKey"),
+        ),
+    )
+    for name, settings, inline_keys, secret_path, key_paths in secret_contracts:
+        required_secret = re.search(rf"\brequired\b[^}}]*\.Values\.{re.escape(secret_path)}\b", template_source)
+        if not isinstance(settings, dict) or (not settings.get("existingSecret") and not required_secret):
+            findings.append(Finding("stable-secrets", "values.yaml", f"{name} has no fail-closed pre-provisioned secret reference"))
+        for key_path in key_paths:
+            required_key = re.search(rf"\brequired\b[^}}]*\.Values\.{re.escape(key_path)}\b", template_source)
+            if not isinstance(settings, dict) or not required_key:
+                findings.append(Finding("stable-secrets", "values.yaml", f"{name} has no required {key_path.rsplit('.', 1)[-1]} reference"))
+        if isinstance(settings, dict) and any(settings.get(inline_key) for inline_key in inline_keys):
             findings.append(Finding("stable-secrets", "values.yaml", f"{name} contains a forbidden inline secret value"))
+
+    tls_projection_contract = (
+        ("path: ca.crt", 'ca_cert: "/etc/virtengine/virtengine-agent/tls/ca.crt"'),
+        ("path: client.crt", 'client_cert: "/etc/virtengine/virtengine-agent/tls/client.crt"'),
+        ("path: client.key", 'client_key: "/etc/virtengine/virtengine-agent/tls/client.key"'),
+    )
+    for projected_path, configured_path in tls_projection_contract:
+        if projected_path not in template_source or configured_path not in template_source:
+            findings.append(Finding("stable-secrets", "templates", f"nodeAgent TLS projection mismatch for {projected_path.removeprefix('path: ')}"))
 
     compute = values.get("compute", {}) if isinstance(values.get("compute"), dict) else {}
     replica_count = int(compute.get("replicas", 0)) if compute.get("enabled", True) else 0
@@ -315,11 +342,19 @@ def validate(documents: list[dict[str, Any]], chart_dir: Path | None = None) -> 
 
 def result(findings: list[Finding], diagnostic: bool) -> dict[str, Any]:
     failed = {finding.invariant for finding in findings}
+    statuses = {}
+    for invariant in INVARIANTS:
+        if invariant in failed:
+            statuses[invariant] = "failed"
+        elif not diagnostic or invariant in SOURCE_VERIFIABLE_INVARIANTS:
+            statuses[invariant] = "passed"
+        else:
+            statuses[invariant] = "unverified"
     return {
         "schema_version": "virtengine.slurm-semantic-validation/v1",
         "mode": "diagnostic" if diagnostic else "enforcing",
         "passed": not findings and not diagnostic,
-        "invariants": {invariant: ("failed" if invariant in failed else ("unverified" if diagnostic else "passed")) for invariant in INVARIANTS},
+        "invariants": statuses,
         "findings": [finding.as_dict() for finding in findings],
     }
 
