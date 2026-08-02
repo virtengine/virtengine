@@ -12,6 +12,22 @@ const { planFrozenEpoch, resolveAnnotatedTag, validateObservationBinding } = req
 const threads = ["T1", "T2", "T3", "T5"];
 const producerKeys = ["decision", "status", "tag", "thread"];
 
+function createLeaseRecord(options, now = Date.now(), pid = process.pid) {
+  assert.ok(Number.isInteger(pid) && pid > 0, "freeze lease PID is invalid");
+  assert.ok(Number.isFinite(now), "freeze lease start time is invalid");
+  assert.match(options.epoch || "", /^[1-9][0-9]*$/, "freeze lease epoch is invalid");
+  assert.match(options.expectedHead || "", /^[a-f0-9]{40}$/, "freeze lease expected HEAD is invalid");
+  assert.match(options.expectedPlanSha256 || "", /^[a-f0-9]{64}$/, "freeze lease plan digest is invalid");
+  return {
+    schema_version: "virtengine.prototype.intake-freeze-lease/v1",
+    pid,
+    started_at: new Date(now).toISOString(),
+    epoch: Number(options.epoch),
+    expected_head: options.expectedHead,
+    plan_sha256: options.expectedPlanSha256,
+  };
+}
+
 function atomicWriteFile(path, content, operations = { closeSync, fsyncSync, openSync, renameSync, unlinkSync, writeFileSync }, temporaryPath = `${path}.tmp-${process.pid}-${randomUUID()}`) {
   let temporaryCreated = false;
   try {
@@ -126,7 +142,8 @@ function main(argv) {
   const lock = spawnSync("git", ["rev-parse", "--git-path", `prototype-intake-freeze-epoch-${options.epoch}.lock`], { cwd: options.repo, encoding: "utf8" });
   assert.equal(lock.status, 0, "unable to resolve intake freeze lock path");
   const lockPath = resolve(options.repo, lock.stdout.trim());
-  withExclusiveLease(lockPath, `${options.expectedHead}\n`, () => {
+  const leaseRecord = createLeaseRecord(options);
+  withExclusiveLease(lockPath, `${JSON.stringify(leaseRecord, null, 2)}\n`, () => {
     const prepared = withStableWorktreeBoundary(options.repo, options.expectedHead, () => {
       const epochPath = resolve(options.repo, `_docs/ralph/prototype-integration/epochs/epoch-${options.epoch}.json`);
       const current = JSON.parse(readFileSync(epochPath, "utf8"));
@@ -145,7 +162,7 @@ function main(argv) {
   process.stdout.write(`prototype intake epoch ${options.epoch} frozen\n`);
 }
 
-module.exports = { atomicWriteFile, parseArgs, validateFreezeEvidence, validateFreezeTransition, validatePlanDigest, validateWorktreeBoundary, withExclusiveLease, withStableWorktreeBoundary };
+module.exports = { atomicWriteFile, createLeaseRecord, parseArgs, validateFreezeEvidence, validateFreezeTransition, validatePlanDigest, validateWorktreeBoundary, withExclusiveLease, withStableWorktreeBoundary };
 
 if (require.main === module) {
   try { main(process.argv.slice(2)); }

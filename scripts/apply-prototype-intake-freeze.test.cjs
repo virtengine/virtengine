@@ -4,7 +4,7 @@ const assert = require("assert").strict;
 const { createHash } = require("crypto");
 const { readFileSync } = require("fs");
 const { resolve } = require("path");
-const { atomicWriteFile, parseArgs, validateFreezeEvidence, validateFreezeTransition, validatePlanDigest, validateWorktreeBoundary, withExclusiveLease, withStableWorktreeBoundary } = require("./apply-prototype-intake-freeze.cjs");
+const { atomicWriteFile, createLeaseRecord, parseArgs, validateFreezeEvidence, validateFreezeTransition, validatePlanDigest, validateWorktreeBoundary, withExclusiveLease, withStableWorktreeBoundary } = require("./apply-prototype-intake-freeze.cjs");
 
 function epoch() {
   return {
@@ -32,6 +32,8 @@ function evidence() {
 const afterCutoff = Date.parse("2000-01-03T00:00:00Z");
 const cleanAt = (head) => (_command, args) => args[0] === "status" ? { status: 0, stdout: "" } : { status: 0, stdout: `${head}\n` };
 const tests = [
+  ["creates inspectable exact freeze lease metadata", () => { const record = createLeaseRecord({ epoch: "1", expectedHead: "a".repeat(40), expectedPlanSha256: "b".repeat(64) }, Date.parse("2000-01-01T12:00:00Z"), 42); assert.deepEqual(record, { schema_version: "virtengine.prototype.intake-freeze-lease/v1", pid: 42, started_at: "2000-01-01T12:00:00.000Z", epoch: 1, expected_head: "a".repeat(40), plan_sha256: "b".repeat(64) }); }],
+  ["rejects invalid freeze lease metadata", () => assert.throws(() => createLeaseRecord({ epoch: "1", expectedHead: "short", expectedPlanSha256: "b".repeat(64) }, Date.now(), 42), /expected HEAD is invalid/)],
   ["holds an exclusive lease through freeze application", () => { const calls = []; const operations = { openSync: () => { calls.push("open"); return 7; }, writeFileSync: () => calls.push("write"), fsyncSync: () => calls.push("fsync"), closeSync: () => calls.push("close"), unlinkSync: () => calls.push("unlink") }; assert.equal(withExclusiveLease("freeze.lock", "head\n", () => { calls.push("apply"); return "done"; }, operations), "done"); assert.deepEqual(calls, ["open", "write", "fsync", "close", "apply", "unlink"]); }],
   ["fails closed when another freeze lease exists", () => { const operations = { openSync: () => { const error = new Error("lease exists"); error.code = "EEXIST"; throw error; }, writeFileSync: () => assert.fail(), fsyncSync: () => assert.fail(), closeSync: () => assert.fail(), unlinkSync: () => assert.fail() }; assert.throws(() => withExclusiveLease("freeze.lock", "head\n", () => assert.fail(), operations), /lease exists/); }],
   ["flushes the exclusive temporary file before atomic replacement", () => { const calls = []; const operations = { openSync: (...args) => { calls.push(["open", ...args]); return 7; }, writeFileSync: (...args) => calls.push(["write", ...args]), fsyncSync: (...args) => calls.push(["fsync", ...args]), closeSync: (...args) => calls.push(["close", ...args]), renameSync: (...args) => calls.push(["rename", ...args]), unlinkSync: (...args) => calls.push(["unlink", ...args]) }; atomicWriteFile("epoch.json", "frozen\n", operations, "epoch.json.tmp"); assert.deepEqual(calls.map(([name]) => name), ["open", "write", "fsync", "close", "rename"]); assert.deepEqual(calls[0].slice(1), ["epoch.json.tmp", "wx"]); }],

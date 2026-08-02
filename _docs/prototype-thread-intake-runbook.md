@@ -173,7 +173,13 @@ later, separately validated transition. The clean reviewed HEAD boundary is
 checked both before evidence replay and immediately before replacement.
 An exclusive worktree-specific Git-path lease serializes the full application;
 an existing or crash-retained lease fails closed and requires explicit operator
-inspection before removal.
+inspection before removal. Inspect its schema, PID, UTC start time, epoch,
+reviewed HEAD, and plan digest before deciding whether recovery is safe:
+
+```powershell
+$freezeLease = git rev-parse --git-path prototype-intake-freeze-epoch-1.lock
+Get-Content -Raw $freezeLease
+```
 
 ## Core RC Publication Preflight
 
