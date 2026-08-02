@@ -1,48 +1,46 @@
 {
   "campaign": "three-day-prototype",
   "thread": "T4",
-  "checkpoint": "T4-01Y",
+  "checkpoint": "T4-01Z",
   "branch": "ve/prototype-integration",
-  "start_head": "041da9ef9882777809add2e69fff8cd8a679ae69",
-  "end_head": "3107cf35a0184389968c09de2a56dbc1f51d37fb",
+  "start_head": "274025d8de8cda9835b953ed46f0a485ce701a53",
+  "end_head": "083c86e0867cda11f5e3031bbf184f3b6242fb40",
   "origin_main": "79391a3df86d85522b92e0400c6904971ecbe65d",
   "tree_clean": true,
   "commits": [
-    "3107cf35a0184389968c09de2a56dbc1f51d37fb"
+    "083c86e0867cda11f5e3031bbf184f3b6242fb40"
   ],
   "owned_paths": [
+    "_docs/ralph/prototype-integration/**",
     "_docs/ralph/handoffs/prototype-integration/**",
-    "_docs/prototype-thread-intake-runbook.md",
-    "scripts/apply-prototype-intake-freeze.cjs",
-    "scripts/apply-prototype-intake-freeze.test.cjs"
+    "_docs/ralph/prototype-integration/core-rc-manifest.json"
   ],
   "files_changed": [
-    "_docs/prototype-thread-intake-runbook.md",
-    "scripts/apply-prototype-intake-freeze.cjs",
-    "scripts/apply-prototype-intake-freeze.test.cjs"
+    "_docs/ralph/handoffs/prototype-integration/HANDOFF.yaml",
+    "_docs/ralph/prototype-integration/core-rc-manifest.json"
   ],
   "tests": [
     {
-      "command": "node scripts/apply-prototype-intake-freeze.test.cjs",
+      "command": "node scripts/validate-prototype-integration.test.cjs && node scripts/validate-prototype-integration.cjs",
       "exit_code": 0,
       "result": "passed",
-      "test_count": 16,
+      "test_count": 12,
       "tool_versions": {
         "node": "20.19.1"
       }
     },
     {
-      "command": "node scripts/validate-required-gate-matrix.test.cjs && node scripts/validate-agents-docs.mjs",
+      "command": "node scripts/validate-agents-docs.mjs",
       "exit_code": 0,
       "result": "passed",
-      "test_count": 22,
+      "test_count": 9,
       "tool_versions": {
         "node": "20.19.1"
       }
     }
   ],
   "generated_hashes": {
-    "_docs/ralph/prototype-integration/core-rc-manifest.json": "6202fe8820cc971713f7cac2ec60c0da4021da14703b576b2ac05ff19beaed69"
+    "_docs/ralph/prototype-integration/core-rc-manifest.json": "55aecfc37455542589e45f18769bc64f296d5fd9bdcb0c46b719c89d40a3f44d"
   },
   "accepted_checkpoints": [],
   "rejected_checkpoints": [
@@ -82,5 +80,5 @@
     "Task 88C is not complete."
   ],
   "next_checkpoint": null,
-  "expected_head": "3107cf35a0184389968c09de2a56dbc1f51d37fb"
+  "expected_head": "083c86e0867cda11f5e3031bbf184f3b6242fb40"
 }
