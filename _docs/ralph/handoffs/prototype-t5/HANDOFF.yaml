@@ -1,13 +1,13 @@
 {
   "campaign": "three-day-prototype",
   "thread": "T5",
-  "checkpoint": "T5-37",
+  "checkpoint": "T5-38",
   "branch": "ve/prototype-t5-platform",
   "frozen_baseline": "79391a3df86d85522b92e0400c6904971ecbe65d",
   "planning_sha": "1436723bd78980aa0388dbe9fcfa24dda939c54a",
   "intake_epoch": 1,
   "intake_base_sha": "5587c384f634552c3a2dd7181ca49cafa4da1984",
-  "payload_head": "f3235f00d41fff954e1fa2780d93d0d2798cfafe",
+  "payload_head": "c300cd26b2358146335561f47ee06576120fcd97",
   "prior_accepted_payload": null,
   "tree_clean": true,
   "commits_since_prior_acceptance": [
@@ -83,7 +83,9 @@
     "fda3b4aec2300c8084963d73db4084e0840e3f7c",
     "92f5d39420758cca5a8775e139dcedab449b9eef",
     "977788b9a143eb70c9d4f4ed63c823292e3fc99a",
-    "f3235f00d41fff954e1fa2780d93d0d2798cfafe"
+    "f3235f00d41fff954e1fa2780d93d0d2798cfafe",
+    "a3c4a78958f672205c4baf4b78bf72c04ec75a08",
+    "c300cd26b2358146335561f47ee06576120fcd97"
   ],
   "owned_paths": [
     "_docs/ralph/evidence/prototype-t5/**",
@@ -134,6 +136,7 @@
     "_docs/ralph/evidence/prototype-t5/T5-34/validation.txt",
     "_docs/ralph/evidence/prototype-t5/T5-35/validation.txt",
     "_docs/ralph/evidence/prototype-t5/T5-36/validation.txt",
+    "_docs/ralph/evidence/prototype-t5/T5-37/validation.txt",
     "_docs/ralph/handoffs/prototype-integration/HANDOFF.yaml",
     "_docs/ralph/handoffs/prototype-t5/HANDOFF.yaml",
     "_docs/ralph/prototype-integration/control.json",
@@ -235,6 +238,8 @@
     "x/encryption/crypto/envelope.go",
     "x/encryption/crypto/envelope_fuzz_test.go",
     "x/encryption/crypto/envelope_test.go",
+    "x/encryption/keeper/access_control.go",
+    "x/encryption/keeper/access_control_test.go",
     "x/encryption/types/envelope.go",
     "x/encryption/types/envelope_test.go",
     "x/mfa/keeper/keeper.go",
@@ -274,42 +279,42 @@
   ],
   "tests": [
     {
-      "command": "C:\\Users\\pavil\\AppData\\Local\\VirtEngine\\toolchains\\go1.25.8\\go\\bin\\go.exe -C C:\\Users\\pavil\\Desktop\\virtengine-gh\\repos\\virtengine-t5 test -count=1 ./x/mfa/keeper",
+      "command": "C:\\Users\\pavil\\AppData\\Local\\VirtEngine\\toolchains\\go1.25.8\\go\\bin\\go.exe -C C:\\Users\\pavil\\Desktop\\virtengine-gh\\repos\\virtengine-t5 test -count=1 ./x/encryption/keeper ./x/encryption/types",
       "exit_code": 0,
       "result": "passed",
       "tool_versions": {
         "go": "go version go1.25.8 windows/amd64"
       },
-      "artifact": "_docs/ralph/evidence/prototype-t5/T5-37/validation.txt"
+      "artifact": "_docs/ralph/evidence/prototype-t5/T5-38/validation.txt"
     },
     {
-      "command": "C:\\Users\\pavil\\AppData\\Local\\VirtEngine\\toolchains\\go1.25.8\\go\\bin\\go.exe -C C:\\Users\\pavil\\Desktop\\virtengine-gh\\repos\\virtengine-t5 vet ./x/mfa/keeper",
+      "command": "C:\\Users\\pavil\\AppData\\Local\\VirtEngine\\toolchains\\go1.25.8\\go\\bin\\go.exe -C C:\\Users\\pavil\\Desktop\\virtengine-gh\\repos\\virtengine-t5 vet ./x/encryption/keeper ./x/encryption/types",
       "exit_code": 0,
       "result": "passed",
       "tool_versions": {
         "go": "go version go1.25.8 windows/amd64"
       },
-      "artifact": "_docs/ralph/evidence/prototype-t5/T5-37/validation.txt"
+      "artifact": "_docs/ralph/evidence/prototype-t5/T5-38/validation.txt"
     },
     {
-      "command": "CGO_ENABLED=1 CC=C:\\Users\\pavil\\AppData\\Local\\Microsoft\\WinGet\\Packages\\BrechtSanders.WinLibs.POSIX.UCRT_Microsoft.Winget.Source_8wekyb3d8bbwe\\mingw64\\bin\\gcc.exe C:\\Users\\pavil\\AppData\\Local\\VirtEngine\\toolchains\\go1.25.8\\go\\bin\\go.exe -C C:\\Users\\pavil\\Desktop\\virtengine-gh\\repos\\virtengine-t5 test -race -count=1 ./x/mfa/keeper -run '^TestPersistedAuthorizationSessionCorruptionFailsClosed$'",
+      "command": "CGO_ENABLED=1 CC=C:\\Users\\pavil\\AppData\\Local\\Microsoft\\WinGet\\Packages\\BrechtSanders.WinLibs.POSIX.UCRT_Microsoft.Winget.Source_8wekyb3d8bbwe\\mingw64\\bin\\gcc.exe C:\\Users\\pavil\\AppData\\Local\\VirtEngine\\toolchains\\go1.25.8\\go\\bin\\go.exe -C C:\\Users\\pavil\\Desktop\\virtengine-gh\\repos\\virtengine-t5 test -race -count=1 ./x/encryption/keeper -run '^TestCheckEnvelopeAccessRejectsUnusableFallbackKeys$'",
       "exit_code": 0,
       "result": "passed",
       "tool_versions": {
         "go": "go version go1.25.8 windows/amd64",
         "gcc": "gcc.exe (MinGW-W64 x86_64-ucrt-posix-seh, built by Brecht Sanders, r3) 16.1.0"
       },
-      "artifact": "_docs/ralph/evidence/prototype-t5/T5-37/validation.txt"
+      "artifact": "_docs/ralph/evidence/prototype-t5/T5-38/validation.txt"
     }
   ],
   "generated_hashes": {},
   "migrations": [],
   "external_evidence": [
-    "_docs/ralph/evidence/prototype-t5/T5-37/validation.txt"
+    "_docs/ralph/evidence/prototype-t5/T5-38/validation.txt"
   ],
   "known_failures": [],
   "blockers": [
-    "Epoch 1 completeChangedPaths contains 167 paths; honest T5 ownership covers 143 and leaves 24 inherited integration/T4 paths outside ownership, including upgrades/software/v1.6.0/upgrade.go, upgrades/software/v1.6.0/upgrade_handler_test.go, and upgrades/software/v1.6.0/upgrade_retry_test.go from merge a9e148436c73e398e8902d03303abafdc1117bb5; no active T5 generated-file lease covers them, so this checkpoint is untagged and not intake eligible.",
+    "Epoch 1 completeChangedPaths contains 170 paths; honest T5 ownership covers 146 and leaves 24 inherited integration/T4 paths outside ownership, including upgrades/software/v1.6.0/upgrade.go, upgrades/software/v1.6.0/upgrade_handler_test.go, and upgrades/software/v1.6.0/upgrade_retry_test.go from merge a9e148436c73e398e8902d03303abafdc1117bb5; no active T5 generated-file lease covers them, so this checkpoint is untagged and not intake eligible.",
     "T4 must register the prerequisite VEID evidence reference migration, then separately register the signed evidence payload cutover using D4 children 05 through 08.",
     "T4 must mount and wire the persistent FundAuthorization store and keeper.",
     "Production erasure requires a durable transactional ErasureOperationStore, production storage-deletion and KMS-destruction adapters, independent receipt signers and key resolver, consent, hold, backup, and finalization authorities, and authenticated restore-manifest authority."
