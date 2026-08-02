@@ -27,11 +27,12 @@ import (
 
 type GatingTestSuite struct {
 	suite.Suite
-	ctx    sdk.Context
-	keeper keeper.Keeper
-	hooks  keeper.MFAGatingHooks
-	cdc    codec.Codec
-	veid   *gatingVEIDKeeper
+	ctx      sdk.Context
+	keeper   keeper.Keeper
+	hooks    keeper.MFAGatingHooks
+	cdc      codec.Codec
+	veid     *gatingVEIDKeeper
+	storeKey *storetypes.KVStoreKey
 }
 
 type gatingVEIDKeeper struct {
@@ -53,6 +54,7 @@ func (s *GatingTestSuite) SetupTest() {
 	s.cdc = codec.NewProtoCodec(interfaceRegistry)
 
 	storeKey := storetypes.NewKVStoreKey(types.StoreKey)
+	s.storeKey = storeKey
 	s.ctx = s.createContextWithStore(storeKey)
 	s.veid = &gatingVEIDKeeper{scores: make(map[string]uint32)}
 	s.keeper = keeper.NewKeeper(s.cdc, storeKey, "authority", s.veid, &mockRolesKeeper{})
@@ -86,6 +88,27 @@ func (s *GatingTestSuite) TestRequiresMFA_PolicyDisabled() {
 	// No policy set means no MFA required
 	_, requires, _ := s.hooks.RequiresMFA(s.ctx, address, types.SensitiveTxLargeWithdrawal)
 	s.Require().False(requires)
+}
+
+func (s *GatingTestSuite) TestRequiresMFA_CorruptSensitiveTxConfigFailsClosed() {
+	address := sdk.AccAddress([]byte("corrupt-sensitive-config"))
+	store := s.ctx.KVStore(s.storeKey)
+	tests := []struct {
+		name  string
+		value string
+	}{
+		{name: "malformed", value: `{"enabled":`},
+		{name: "wrong transaction type", value: `{"transaction_type":3,"enabled":false}`},
+		{name: "invalid enabled config", value: `{"transaction_type":2,"enabled":true}`},
+	}
+	for _, test := range tests {
+		s.Run(test.name, func() {
+			store.Set(types.SensitiveTxConfigKey(types.SensitiveTxKeyRotation), []byte(test.value))
+			s.Require().Panics(func() {
+				s.hooks.RequiresMFA(s.ctx, address, types.SensitiveTxKeyRotation)
+			})
+		})
+	}
 }
 
 // Test: RequiresMFA - with policy enabled

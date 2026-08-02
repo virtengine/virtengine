@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
+	"fmt"
 
 	storetypes "cosmossdk.io/store/types"
 	"github.com/cosmos/cosmos-sdk/codec"
@@ -1372,9 +1373,11 @@ func (k Keeper) GetSensitiveTxConfig(ctx sdk.Context, txType types.SensitiveTran
 	}
 
 	var cs sensitiveTxConfigStore
-	_ = json.Unmarshal(bz, &cs)
+	if err := json.Unmarshal(bz, &cs); err != nil {
+		panic(fmt.Errorf("decode sensitive transaction config %s: %w", txType.String(), err))
+	}
 
-	return &types.SensitiveTxConfig{
+	config := &types.SensitiveTxConfig{
 		TransactionType:             cs.TransactionType,
 		Enabled:                     cs.Enabled,
 		MinVEIDScore:                cs.MinVEIDScore,
@@ -1385,7 +1388,15 @@ func (k Keeper) GetSensitiveTxConfig(ctx sdk.Context, txType types.SensitiveTran
 		ValueThreshold:              cs.ValueThreshold,
 		CooldownPeriod:              cs.CooldownPeriod,
 		Description:                 cs.Description,
-	}, true
+	}
+	if config.TransactionType != txType {
+		panic(fmt.Errorf("sensitive transaction config key mismatch: requested %s, stored %s", txType.String(), config.TransactionType.String()))
+	}
+	if err := config.Validate(); err != nil {
+		panic(fmt.Errorf("invalid persisted sensitive transaction config %s: %w", txType.String(), err))
+	}
+
+	return config, true
 }
 
 // GetAllSensitiveTxConfigs returns all sensitive transaction configurations
