@@ -538,6 +538,61 @@ def _static_findings(chart_dir: Path) -> list[Finding]:
         persistence = settings.get("persistence", {}) if isinstance(settings, dict) else {}
         if settings.get("enabled", True) and not persistence.get("enabled", False):
             findings.append(Finding("durable-state", "values.yaml", f"{component} persistence is not enabled"))
+        if settings.get("enabled", True) and set(persistence) != {"enabled", "existingClaim", "size", "storageClass", "accessMode"}:
+            findings.append(Finding("durable-state", "values.yaml", f"{component} persistence must expose only enabled, existingClaim, size, storageClass, and accessMode"))
+
+    durable_persistence = schema.get("definitions", {}).get("durablePersistence", {})
+    if durable_persistence.get("required") != ["enabled", "existingClaim", "size", "storageClass", "accessMode"] or durable_persistence.get("additionalProperties") is not False:
+        findings.append(Finding("durable-state", "values.schema.json", "durablePersistence must require the closed retained-claim contract"))
+    if durable_persistence.get("properties", {}).get("enabled") != {"const": True}:
+        findings.append(Finding("durable-state", "values.schema.json", "durable persistence cannot be disabled"))
+    claim_schema = durable_persistence.get("properties", {}).get("existingClaim", {})
+    if claim_schema.get("maxLength") != 253 or not claim_schema.get("pattern", "").startswith("^$|"):
+        findings.append(Finding("durable-state", "values.schema.json", "existingClaim must allow empty or a bounded Kubernetes PVC name"))
+    persistence_refs = {
+        "controller": properties.get("controller", {}).get("properties", {}).get("persistence"),
+        "database": properties.get("database", {}).get("properties", {}).get("persistence"),
+        "mariadb": schema.get("definitions", {}).get("mariadbComponent", {}).get("properties", {}).get("persistence"),
+    }
+    for component, reference in persistence_refs.items():
+        if reference != {"$ref": "#/definitions/durablePersistence"}:
+            findings.append(Finding("durable-state", "values.schema.json", f"{component} must use durablePersistence"))
+    replica_safety = schema.get("definitions", {}).get("existingClaimReplicaSafety", {})
+    if replica_safety.get("then") != {"properties": {"replicas": {"const": 1}}, "required": ["replicas"]}:
+        findings.append(Finding("durable-state", "values.schema.json", "existing claims must require exactly one replica"))
+    for component in ("controller", "database"):
+        component_schema = properties.get(component, {})
+        if component_schema.get("allOf") != [{"$ref": "#/definitions/existingClaimReplicaSafety"}]:
+            findings.append(Finding("durable-state", "values.schema.json", f"{component} must apply existing-claim replica safety"))
+    conditional_contract = json.dumps(schema.get("allOf", []), sort_keys=True)
+    for component in DURABLE_COMPONENTS:
+        if not re.search(rf'"{component}".*"required": \["image", "persistence"\]', conditional_contract):
+            findings.append(Finding("durable-state", "values.schema.json", f"enabled {component} must require persistence"))
+
+    durable_templates = {
+        "controller": ("templates/controller-statefulset.yaml", "slurm-spool", "/var/spool/slurm"),
+        "database": ("templates/database-statefulset.yaml", "slurmdbd-spool", "/var/spool/slurm"),
+        "mariadb": ("templates/mariadb-statefulset.yaml", "mariadb-data", "/var/lib/mysql"),
+    }
+    for component, (relative, volume_name, mount_path) in durable_templates.items():
+        content = (chart_dir / relative).read_text(encoding="utf-8") if (chart_dir / relative).is_file() else ""
+        required_fragments = (
+            f".Values.{component}.persistence.existingClaim",
+            'include "slurm-cluster.requireSafePersistenceReplicas"',
+            "persistentVolumeClaimRetentionPolicy:",
+            "whenDeleted: Retain",
+            "whenScaled: Retain",
+            "persistentVolumeClaim:",
+            "claimName:",
+            "volumeClaimTemplates:",
+            f"name: {volume_name}",
+            f"mountPath: {mount_path}",
+        )
+        for fragment in required_fragments:
+            if fragment not in content:
+                findings.append(Finding("durable-state", relative, f"durable-state contract is missing {fragment}"))
+        if re.search(rf"name:\s*{re.escape(volume_name)}\s*\n\s*emptyDir:", content):
+            findings.append(Finding("durable-state", relative, f"authoritative volume {volume_name} must not use emptyDir"))
     return findings
 
 
@@ -629,6 +684,14 @@ def validate(documents: list[dict[str, Any]], chart_dir: Path | None = None) -> 
             durable_seen.add(component)
             spec = document.get("spec", {})
             claims = {claim.get("metadata", {}).get("name") for claim in spec.get("volumeClaimTemplates", []) or [] if isinstance(claim, dict)}
+            if kind != "StatefulSet":
+                findings.append(Finding("durable-state", location, f"required durable component {component} must be a StatefulSet"))
+            if claims:
+                retention = spec.get("persistentVolumeClaimRetentionPolicy", {})
+                if retention != {"whenDeleted": "Retain", "whenScaled": "Retain"}:
+                    findings.append(Finding("durable-state", location, "generated claims must retain PVCs when deleted and scaled"))
+            elif int(spec.get("replicas", 1)) != 1:
+                findings.append(Finding("durable-state", location, "an existing durable claim requires replicas=1; HA must use generated per-replica claims"))
             volumes = {volume.get("name"): volume for volume in pod_spec.get("volumes", []) or [] if isinstance(volume, dict)}
             for container in _primary_containers(pod_spec, component):
                 mounted_paths = {mount.get("mountPath"): mount.get("name") for mount in container.get("volumeMounts", []) or [] if isinstance(mount, dict)}

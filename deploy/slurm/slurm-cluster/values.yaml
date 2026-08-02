@@ -93,8 +93,11 @@ controller:
   # -- Persistent storage for state
   persistence:
     enabled: true
+    # -- Existing retained PVC to mount instead of creating a StatefulSet claim
+    existingClaim: ""
     size: 10Gi
     storageClass: ""
+    # -- Access mode for generated per-replica claims; ignored when existingClaim is set
     accessMode: ReadWriteOnce
   resources:
     requests:
@@ -144,8 +147,12 @@ database:
   # -- Persistence for slurmdbd state
   persistence:
     enabled: true
+    # -- Existing retained PVC to mount instead of creating a StatefulSet claim
+    existingClaim: ""
     size: 5Gi
     storageClass: ""
+    # -- Access mode for generated per-replica claims; ignored when existingClaim is set
+    accessMode: ReadWriteOnce
   resources:
     requests:
       cpu: 250m
@@ -182,8 +189,12 @@ mariadb:
   # -- Persistence for database
   persistence:
     enabled: true
+    # -- Existing retained PVC to mount instead of creating a StatefulSet claim
+    existingClaim: ""
     size: 20Gi
     storageClass: ""
+    # -- Access mode for generated per-replica claims; ignored when existingClaim is set
+    accessMode: ReadWriteOnce
   resources:
     requests:
       cpu: 250m

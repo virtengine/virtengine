@@ -1,4 +1,5 @@
 {{- if .Values.database.enabled }}
+{{- include "slurm-cluster.requireSafePersistenceReplicas" (list "database" .Values.database.replicas .Values.database.persistence) }}
 apiVersion: apps/v1
 kind: StatefulSet
 metadata:
@@ -10,6 +11,11 @@ metadata:
 spec:
   serviceName: {{ include "slurm-cluster.database.serviceName" . }}
   replicas: {{ .Values.database.replicas }}
+  {{- if not .Values.database.persistence.existingClaim }}
+  persistentVolumeClaimRetentionPolicy:
+    whenDeleted: Retain
+    whenScaled: Retain
+  {{- end }}
   selector:
     matchLabels:
       {{- include "slurm-cluster.selectorLabels" . | nindent 6 }}
@@ -159,6 +165,11 @@ spec:
           emptyDir: {}
         - name: slurm-run
           emptyDir: {}
+        {{- if .Values.database.persistence.existingClaim }}
+        - name: slurmdbd-spool
+          persistentVolumeClaim:
+            claimName: {{ .Values.database.persistence.existingClaim | quote }}
+        {{- end }}
         {{- with .Values.extraVolumes }}
         {{- toYaml . | nindent 8 }}
         {{- end }}
@@ -170,12 +181,13 @@ spec:
       tolerations:
         {{- toYaml . | nindent 8 }}
       {{- end }}
+  {{- if not .Values.database.persistence.existingClaim }}
   volumeClaimTemplates:
     - metadata:
         name: slurmdbd-spool
       spec:
         accessModes:
-          - ReadWriteOnce
+          - {{ .Values.database.persistence.accessMode }}
         {{- if .Values.database.persistence.storageClass }}
         storageClassName: {{ .Values.database.persistence.storageClass }}
         {{- else if .Values.global.storageClass }}
@@ -184,6 +196,7 @@ spec:
         resources:
           requests:
             storage: {{ .Values.database.persistence.size }}
+  {{- end }}
 ---
 apiVersion: v1
 kind: Service

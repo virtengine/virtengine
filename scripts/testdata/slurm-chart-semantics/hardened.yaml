@@ -45,6 +45,9 @@ metadata:
   labels:
     app.kubernetes.io/component: controller
 spec:
+  persistentVolumeClaimRetentionPolicy:
+    whenDeleted: Retain
+    whenScaled: Retain
   template:
     spec:
       securityContext:
@@ -81,6 +84,9 @@ metadata:
   labels:
     app.kubernetes.io/component: database
 spec:
+  persistentVolumeClaimRetentionPolicy:
+    whenDeleted: Retain
+    whenScaled: Retain
   template:
     spec:
       securityContext:
@@ -117,6 +123,9 @@ metadata:
   labels:
     app.kubernetes.io/component: mariadb
 spec:
+  persistentVolumeClaimRetentionPolicy:
+    whenDeleted: Retain
+    whenScaled: Retain
   template:
     spec:
       securityContext:

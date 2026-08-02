@@ -24,6 +24,7 @@
       "type": "object",
       "properties": {
         "enabled": { "type": "boolean" },
+        "replicas": { "type": "integer", "minimum": 1 },
         "image": { "$ref": "#/definitions/pinnedImage" },
         "config": {
           "type": "object",
@@ -33,19 +34,24 @@
             "taskPlugin": { "const": "task/affinity" }
           },
           "required": ["jobAcctGatherType", "proctrackType", "taskPlugin"]
-        }
-      }
+        },
+        "persistence": { "$ref": "#/definitions/durablePersistence" }
+      },
+      "allOf": [{ "$ref": "#/definitions/existingClaimReplicaSafety" }]
     },
     "database": {
       "type": "object",
       "properties": {
         "enabled": { "type": "boolean" },
+        "replicas": { "type": "integer", "minimum": 1 },
         "config": { "$ref": "#/definitions/databaseSecret" },
-        "image": { "$ref": "#/definitions/pinnedImage" }
+        "image": { "$ref": "#/definitions/pinnedImage" },
+        "persistence": { "$ref": "#/definitions/durablePersistence" }
       },
-      "required": ["config"]
+      "required": ["config"],
+      "allOf": [{ "$ref": "#/definitions/existingClaimReplicaSafety" }]
     },
-    "mariadb": { "$ref": "#/definitions/mariadbSecret" },
+    "mariadb": { "$ref": "#/definitions/mariadbComponent" },
     "compute": {
       "type": "object",
       "properties": {
@@ -136,15 +142,15 @@
     { "$ref": "#/definitions/noSecurityOverrides" },
     {
       "if": { "properties": { "controller": { "properties": { "enabled": { "const": true } }, "required": ["enabled"] } }, "required": ["controller"] },
-      "then": { "properties": { "controller": { "required": ["image"] } } }
+      "then": { "properties": { "controller": { "required": ["image", "persistence"] } } }
     },
     {
       "if": { "properties": { "database": { "properties": { "enabled": { "const": true } }, "required": ["enabled"] } }, "required": ["database"] },
-      "then": { "properties": { "database": { "required": ["image"] } } }
+      "then": { "properties": { "database": { "required": ["image", "persistence"] } } }
     },
     {
       "if": { "properties": { "mariadb": { "properties": { "enabled": { "const": true } }, "required": ["enabled"] } }, "required": ["mariadb"] },
-      "then": { "properties": { "mariadb": { "required": ["image"] } } }
+      "then": { "properties": { "mariadb": { "required": ["image", "persistence"] } } }
     },
     {
       "if": {
@@ -261,6 +267,34 @@
       "required": ["reference", "pullPolicy"],
       "additionalProperties": false
     },
+    "durablePersistence": {
+      "type": "object",
+      "properties": {
+        "enabled": { "const": true },
+        "existingClaim": {
+          "type": "string",
+          "maxLength": 253,
+          "pattern": "^$|^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$"
+        },
+        "size": { "type": "string", "pattern": "^[1-9][0-9]*(?:Ei|Pi|Ti|Gi|Mi|Ki)$" },
+        "storageClass": { "type": "string" },
+        "accessMode": { "enum": ["ReadWriteOnce", "ReadWriteOncePod", "ReadWriteMany"] }
+      },
+      "required": ["enabled", "existingClaim", "size", "storageClass", "accessMode"],
+      "additionalProperties": false
+    },
+    "existingClaimReplicaSafety": {
+      "if": {
+        "properties": {
+          "persistence": {
+            "properties": { "existingClaim": { "type": "string", "minLength": 1 } },
+            "required": ["existingClaim"]
+          }
+        },
+        "required": ["persistence"]
+      },
+      "then": { "properties": { "replicas": { "const": 1 } }, "required": ["replicas"] }
+    },
     "secretComponent": {
       "type": "object",
       "properties": {
@@ -286,6 +320,17 @@
         "image": { "$ref": "#/definitions/pinnedImage" },
         "existingSecret": { "$ref": "#/definitions/nonEmptyString" },
         "secretRootPasswordKey": { "$ref": "#/definitions/nonEmptyString" }
+      },
+      "required": ["existingSecret", "secretRootPasswordKey"]
+    },
+    "mariadbComponent": {
+      "type": "object",
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "image": { "$ref": "#/definitions/pinnedImage" },
+        "existingSecret": { "$ref": "#/definitions/nonEmptyString" },
+        "secretRootPasswordKey": { "$ref": "#/definitions/nonEmptyString" },
+        "persistence": { "$ref": "#/definitions/durablePersistence" }
       },
       "required": ["existingSecret", "secretRootPasswordKey"]
     },

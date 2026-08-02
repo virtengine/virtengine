@@ -155,10 +155,27 @@ class SlurmChartSemanticsTest(unittest.TestCase):
 
     def test_accepts_preexisting_pvc(self) -> None:
         candidate = yaml.safe_load(yaml.safe_dump(self.hardened[2]))
+        candidate["spec"]["replicas"] = 1
         candidate["spec"].pop("volumeClaimTemplates")
+        candidate["spec"].pop("persistentVolumeClaimRetentionPolicy")
         candidate["spec"]["template"]["spec"]["volumes"] = [{"name": "state", "persistentVolumeClaim": {"claimName": "slurmdbd-state"}}]
         findings = validate([*self.hardened, candidate])
         self.assertFalse(any(finding.invariant == "durable-state" and "slurm-database" in finding.location for finding in findings))
+
+    def test_rejects_multiple_replicas_with_preexisting_pvc(self) -> None:
+        candidate = yaml.safe_load(yaml.safe_dump(self.hardened[2]))
+        candidate["spec"]["replicas"] = 2
+        candidate["spec"].pop("volumeClaimTemplates")
+        candidate["spec"].pop("persistentVolumeClaimRetentionPolicy")
+        candidate["spec"]["template"]["spec"]["volumes"] = [{"name": "state", "persistentVolumeClaim": {"claimName": "slurmdbd-state"}}]
+        findings = validate([*self.hardened, candidate])
+        self.assertTrue(any(finding.invariant == "durable-state" and "requires replicas=1" in finding.message for finding in findings))
+
+    def test_rejects_generated_claim_without_retain_policy(self) -> None:
+        candidate = yaml.safe_load(yaml.safe_dump(self.hardened[2]))
+        candidate["spec"].pop("persistentVolumeClaimRetentionPolicy")
+        findings = validate([*self.hardened, candidate])
+        self.assertTrue(any(finding.invariant == "durable-state" and "retain PVCs" in finding.message for finding in findings))
 
     def test_accepts_compressed_node_name(self) -> None:
         candidate = yaml.safe_load(yaml.safe_dump(self.hardened[0]))
@@ -425,6 +442,55 @@ class SlurmChartSemanticsTest(unittest.TestCase):
         self.assertEqual(partition["properties"]["nodePools"]["minItems"], 1)
         self.assertTrue(partition["properties"]["nodePools"]["uniqueItems"])
         self.assertEqual(partition["allOf"][0]["else"]["required"], ["nodePools"])
+
+    def test_durable_persistence_schema_is_closed_and_mandatory(self) -> None:
+        schema = json.loads((ROOT / "deploy" / "slurm" / "slurm-cluster" / "values.schema.json").read_text(encoding="utf-8"))
+        persistence = schema["definitions"]["durablePersistence"]
+        self.assertEqual(persistence["required"], ["enabled", "existingClaim", "size", "storageClass", "accessMode"])
+        self.assertEqual(persistence["properties"]["enabled"], {"const": True})
+        self.assertEqual(persistence["properties"]["existingClaim"]["maxLength"], 253)
+        self.assertTrue(persistence["properties"]["existingClaim"]["pattern"].startswith("^$|"))
+        self.assertFalse(persistence["additionalProperties"])
+        replica_safety = schema["definitions"]["existingClaimReplicaSafety"]
+        self.assertEqual(replica_safety["then"], {"properties": {"replicas": {"const": 1}}, "required": ["replicas"]})
+        for component in ("controller", "database"):
+            self.assertEqual(schema["properties"][component]["allOf"], [{"$ref": "#/definitions/existingClaimReplicaSafety"}])
+        self.assertEqual(schema["properties"]["controller"]["properties"]["persistence"], {"$ref": "#/definitions/durablePersistence"})
+        self.assertEqual(schema["properties"]["database"]["properties"]["persistence"], {"$ref": "#/definitions/durablePersistence"})
+        self.assertEqual(schema["definitions"]["mariadbComponent"]["properties"]["persistence"], {"$ref": "#/definitions/durablePersistence"})
+        conditionals = json.dumps(schema["allOf"], sort_keys=True)
+        for component in ("controller", "database", "mariadb"):
+            self.assertRegex(conditionals, rf'"{component}".*"required": \["image", "persistence"\]')
+
+    def test_source_rejects_missing_existing_claim_replica_guard(self) -> None:
+        source = ROOT / "deploy" / "slurm" / "slurm-cluster"
+        with tempfile.TemporaryDirectory() as directory:
+            chart = Path(directory) / "chart"
+            shutil.copytree(source, chart)
+            template = chart / "templates" / "controller-statefulset.yaml"
+            content = template.read_text(encoding="utf-8").replace(
+                '{{- include "slurm-cluster.requireSafePersistenceReplicas" (list "controller" .Values.controller.replicas .Values.controller.persistence) }}',
+                "",
+                1,
+            )
+            template.write_text(content, encoding="utf-8")
+            findings = validate_source(chart)
+        self.assertTrue(any(finding.invariant == "durable-state" and "requireSafePersistenceReplicas" in finding.message for finding in findings))
+
+    def test_source_rejects_emptydir_masking_authoritative_state(self) -> None:
+        source = ROOT / "deploy" / "slurm" / "slurm-cluster"
+        with tempfile.TemporaryDirectory() as directory:
+            chart = Path(directory) / "chart"
+            shutil.copytree(source, chart)
+            template = chart / "templates" / "controller-statefulset.yaml"
+            content = template.read_text(encoding="utf-8").replace(
+                "- name: slurm-spool\n          persistentVolumeClaim:",
+                "- name: slurm-spool\n          emptyDir: {}\n        - name: retained-spool\n          persistentVolumeClaim:",
+                1,
+            )
+            template.write_text(content, encoding="utf-8")
+            findings = validate_source(chart)
+        self.assertTrue(any(finding.invariant == "durable-state" and "must not use emptyDir" in finding.message for finding in findings))
 
     def test_security_identity_and_recursive_override_schema_contracts(self) -> None:
         schema = json.loads((ROOT / "deploy" / "slurm" / "slurm-cluster" / "values.schema.json").read_text(encoding="utf-8"))

@@ -115,6 +115,16 @@ Require one complete, lowercase, digest-pinned image reference.
 {{- $reference -}}
 {{- end }}
 
+{{/* Existing claims are single-writer checkpoints; HA uses one generated claim per ordinal. */}}
+{{- define "slurm-cluster.requireSafePersistenceReplicas" -}}
+{{- $component := index . 0 -}}
+{{- $replicas := int (index . 1) -}}
+{{- $persistence := index . 2 -}}
+{{- if and $persistence.existingClaim (ne $replicas 1) -}}
+{{- fail (printf "%s.replicas must be 1 when %s.persistence.existingClaim is set; accessMode does not make shared application state safe, so HA must use generated per-replica claims" $component $component) -}}
+{{- end -}}
+{{- end }}
+
 {{- define "slurm-cluster.controller.image" -}}
 {{- include "slurm-cluster.immutableImage" (list "controller" .Values.controller.image.reference) -}}
 {{- end }}

@@ -227,6 +227,54 @@ func TestImmutableImagesOfflineContracts(t *testing.T) {
 	}
 }
 
+func TestDurableStateOfflineContracts(t *testing.T) {
+	values := readRepoFile(t, "deploy", "slurm", "slurm-cluster", "values.yaml")
+	schema := readRepoFile(t, "deploy", "slurm", "slurm-cluster", "values.schema.json")
+	helpers := readRepoFile(t, "deploy", "slurm", "slurm-cluster", "templates", "_helpers.tpl")
+	runbook := readRepoFile(t, "_docs", "runbooks", "hpc-slurm", "deployment-runbook.md")
+	drill := readRepoFile(t, "scripts", "hpc", "slurm-durable-state-drill.py")
+
+	require.Equal(t, 3, strings.Count(values, `existingClaim: ""`))
+	for _, required := range []string{`"durablePersistence"`, `"existingClaimReplicaSafety"`, `"replicas": { "const": 1 }`, `"enabled": { "const": true }`, `"existingClaim"`, `"ReadWriteOncePod"`} {
+		require.Contains(t, schema, required)
+	}
+	require.Contains(t, helpers, `define "slurm-cluster.requireSafePersistenceReplicas"`)
+	require.Contains(t, helpers, "HA must use generated per-replica claims")
+	for _, required := range []string{"/var/spool/slurm", "/var/lib/mysql", "whenDeleted=Retain", "reclaimPolicy: Retain", "mariadb, slurmdbd, slurmctld", "sha256sum --check"} {
+		require.Contains(t, runbook, required)
+	}
+	for _, required := range []string{`RESTORE_ORDER = ("mariadb", "slurmdbd", "slurmctld")`, "checksum verification failed", "destination.exists()"} {
+		require.Contains(t, drill, required)
+	}
+
+	contracts := map[string]struct {
+		component string
+		volume    string
+		path      string
+	}{
+		"controller-statefulset.yaml": {component: "controller", volume: "slurm-spool", path: "/var/spool/slurm"},
+		"database-statefulset.yaml":   {component: "database", volume: "slurmdbd-spool", path: "/var/spool/slurm"},
+		"mariadb-statefulset.yaml":    {component: "mariadb", volume: "mariadb-data", path: "/var/lib/mysql"},
+	}
+	for name, contract := range contracts {
+		template := readRepoFile(t, "deploy", "slurm", "slurm-cluster", "templates", name)
+		for _, required := range []string{
+			`.Values.` + contract.component + `.persistence.existingClaim`,
+			`include "slurm-cluster.requireSafePersistenceReplicas"`,
+			"persistentVolumeClaimRetentionPolicy:",
+			"whenDeleted: Retain",
+			"whenScaled: Retain",
+			"persistentVolumeClaim:",
+			"volumeClaimTemplates:",
+			"name: " + contract.volume,
+			"mountPath: " + contract.path,
+		} {
+			require.Contains(t, template, required, name)
+		}
+		require.NotRegexp(t, `(?m)name:\s*`+regexp.QuoteMeta(contract.volume)+`\s*\n\s*emptyDir:`, template, name)
+	}
+}
+
 func TestLeastPrivilegeOfflineContracts(t *testing.T) {
 	chartRoot := filepath.Join(repoRoot(t), "deploy", "slurm", "slurm-cluster")
 	helpers := readRepoFile(t, "deploy", "slurm", "slurm-cluster", "templates", "_helpers.tpl")

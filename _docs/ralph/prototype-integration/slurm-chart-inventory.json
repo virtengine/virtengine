@@ -1,6 +1,6 @@
 {
   "schema_version": "virtengine.prototype.slurm-chart-inventory/v2",
-  "checkpoint": "T4-07D",
+  "checkpoint": "T4-07E",
   "status": "blocked",
   "validation_mode": "executable-semantic",
   "research_scope": {
@@ -119,9 +119,15 @@
       "evidence": [
         "deploy/slurm/slurm-cluster/templates/controller-statefulset.yaml",
         "deploy/slurm/slurm-cluster/templates/database-statefulset.yaml",
-        "deploy/slurm/slurm-cluster/templates/mariadb-statefulset.yaml"
+        "deploy/slurm/slurm-cluster/templates/mariadb-statefulset.yaml",
+        "deploy/slurm/slurm-cluster/values.schema.json",
+        "scripts/validate_slurm_chart_semantics_test.py",
+        "scripts/hpc/slurm-durable-state-drill.py",
+        "scripts/hpc/slurm-durable-state-drill-test.py",
+        "_docs/runbooks/hpc-slurm/deployment-runbook.md",
+        "_docs/audits/task-t4-07e-durable-state-evidence-2026-08-02.md"
       ],
-      "blocker": "PVC declarations exist, but no semantic render or failover/restore evidence is available in this checkpoint."
+      "blocker": "Static, schema, rendered-fixture, checksum, and restore-order checks pass offline, but Helm, kubectl, Kubernetes, CSI/StorageClass, retained-PV failover, and live backup/restore evidence are unavailable. Durable state remains unverified."
     }
   ],
   "dependencies": [
@@ -138,6 +144,7 @@
     "isolation:slurm-cgroup-tenant-enforcement-absent",
     "evidence:image-uid-gid-mapping-unverified",
     "invariant:durable-state",
+    "evidence:durable-state-live-storage-unavailable",
     "dependency:84B",
     "dependency:84C",
     "dependency:85C",
@@ -149,6 +156,7 @@
     "allowed": false,
     "required_evidence": [
       "semantic Helm render parsed as structured YAML",
+      "live retained-PVC deletion, scale, failover, backup, and restore drill with StorageClass/PV evidence",
       "verified image UID/GID mappings for every component",
       "reviewed delegated cgroup mechanism or equivalent tenant isolation boundary",
       "retired source absent and forbidden by discovery",
