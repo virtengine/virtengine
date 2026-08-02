@@ -1,13 +1,13 @@
 {
   "campaign": "three-day-prototype",
   "thread": "T1",
-  "checkpoint": "T1-08",
+  "checkpoint": "T1-09",
   "branch": "ve/prototype-t1-identity",
   "frozen_baseline": "79391a3df86d85522b92e0400c6904971ecbe65d",
   "planning_sha": "1436723bd78980aa0388dbe9fcfa24dda939c54a",
   "intake_epoch": 1,
   "intake_base_sha": "5587c384f634552c3a2dd7181ca49cafa4da1984",
-  "payload_head": "703127017d90cc93f9a7e1450165fbe45d525400",
+  "payload_head": "8a373fce29ad90c23eeb6773fe49c5f915335860",
   "prior_accepted_payload": null,
   "tree_clean": true,
   "commits_since_prior_acceptance": [
@@ -26,14 +26,18 @@
     "ac0aa9dfb6dd2bd496a3904b100ace709867473c",
     "ef2fdc835529ac4b0dc2e8641048a2d6051b8f6a",
     "6dfdc9d40d27fcf9b87ecb84d40052ee6bb6b20b",
-    "703127017d90cc93f9a7e1450165fbe45d525400"
+    "703127017d90cc93f9a7e1450165fbe45d525400",
+    "50cc330073ea47468fc3198a34c457b8164602eb",
+    "8a373fce29ad90c23eeb6773fe49c5f915335860"
   ],
   "owned_paths": [
     "_docs/ralph/handoffs/prototype-t1/**",
     "_docs/ralph/evidence/prototype-t1/**",
+    "_docs/ralph/prototype-t1/**",
     "pkg/enclave_runtime/workload_binding*.go",
     "pkg/inference/receipt_producer*.go",
     "scripts/task85d-preflight.ps1",
+    "scripts/validate-t1-contracts*.cjs",
     "x/veid/**",
     "x/veidregistry/**"
   ],
@@ -80,6 +84,15 @@
     "_docs/ralph/evidence/prototype-t1/t1-07/go-vet.txt",
     "_docs/ralph/evidence/prototype-t1/t1-07/payload-head.txt",
     "_docs/ralph/evidence/prototype-t1/t1-07/runtime-policy-tests.txt",
+    "_docs/ralph/evidence/prototype-t1/t1-08/commits.txt",
+    "_docs/ralph/evidence/prototype-t1/t1-08/files.txt",
+    "_docs/ralph/evidence/prototype-t1/t1-08/focused-tests.txt",
+    "_docs/ralph/evidence/prototype-t1/t1-08/git-diff-check.txt",
+    "_docs/ralph/evidence/prototype-t1/t1-08/git-version.txt",
+    "_docs/ralph/evidence/prototype-t1/t1-08/go-version.txt",
+    "_docs/ralph/evidence/prototype-t1/t1-08/go-vet.txt",
+    "_docs/ralph/evidence/prototype-t1/t1-08/payload-head.txt",
+    "_docs/ralph/evidence/prototype-t1/t1-08/types-tests.txt",
     "_docs/ralph/handoffs/prototype-integration/HANDOFF.yaml",
     "_docs/ralph/handoffs/prototype-t1/HANDOFF.yaml",
     "_docs/ralph/prototype-integration/control.json",
@@ -88,6 +101,8 @@
     "_docs/ralph/prototype-integration/model-provenance.json",
     "_docs/ralph/prototype-integration/model-provenance.schema.json",
     "_docs/ralph/prototype-integration/producer-handoff.schema.json",
+    "_docs/ralph/prototype-t1/t1-contracts.schema.json",
+    "_docs/ralph/prototype-t1/t1-contracts.v1.json",
     "cmd/inference-sidecar/manifest.go",
     "cmd/inference-sidecar/manifest_test.go",
     "ml/training/model/release_manifest.py",
@@ -105,6 +120,8 @@
     "scripts/validate-model-provenance.test.cjs",
     "scripts/validate-prototype-integration.cjs",
     "scripts/validate-prototype-integration.test.cjs",
+    "scripts/validate-t1-contracts.cjs",
+    "scripts/validate-t1-contracts.test.cjs",
     "tests/upgrade/test_cases_test.go",
     "upgrades/software/v1.6.0/upgrade.go",
     "upgrades/software/v1.6.0/upgrade_handler_test.go",
@@ -135,51 +152,87 @@
   ],
   "tests": [
     {
-      "command": "C:\\Users\\pavil\\AppData\\Local\\VirtEngine\\toolchains\\go1.25.8\\go\\bin\\go.exe -C C:\\Users\\pavil\\Desktop\\virtengine-gh\\repos\\virtengine-t1 test -count=1 ./x/veid/types -run CredentialDecisionEnvelope",
+      "command": "node C:\\Users\\pavil\\Desktop\\virtengine-gh\\repos\\virtengine-t1\\scripts\\validate-t1-contracts.test.cjs",
       "exit_code": 0,
       "result": "passed",
-      "tool_versions": { "go": "go version go1.25.8 windows/amd64" },
-      "artifact": "_docs/ralph/evidence/prototype-t1/t1-08/focused-tests.txt"
+      "tool_versions": { "node": "v20.19.1" },
+      "artifact": "_docs/ralph/evidence/prototype-t1/t1-09/validator-tests.txt"
     },
     {
-      "command": "C:\\Users\\pavil\\AppData\\Local\\VirtEngine\\toolchains\\go1.25.8\\go\\bin\\go.exe -C C:\\Users\\pavil\\Desktop\\virtengine-gh\\repos\\virtengine-t1 test -count=1 ./x/veid/types",
+      "command": "node C:\\Users\\pavil\\Desktop\\virtengine-gh\\repos\\virtengine-t1\\scripts\\validate-t1-contracts.cjs",
       "exit_code": 0,
       "result": "passed",
-      "tool_versions": { "go": "go version go1.25.8 windows/amd64" },
-      "artifact": "_docs/ralph/evidence/prototype-t1/t1-08/types-tests.txt"
+      "tool_versions": { "node": "v20.19.1" },
+      "artifact": "_docs/ralph/evidence/prototype-t1/t1-09/validator.txt"
     },
     {
-      "command": "C:\\Users\\pavil\\AppData\\Local\\VirtEngine\\toolchains\\go1.25.8\\go\\bin\\go.exe -C C:\\Users\\pavil\\Desktop\\virtengine-gh\\repos\\virtengine-t1 vet ./x/veid/types",
+      "command": "C:\\Users\\pavil\\AppData\\Local\\VirtEngine\\toolchains\\go1.25.8\\go\\bin\\go.exe -C C:\\Users\\pavil\\Desktop\\virtengine-gh\\repos\\virtengine-t1 test -count=1 ./x/veid/types -run '^(TestEvidenceEnvelopeGoldenCanonicalBytesAndDigests|TestCredentialDecisionEnvelopeGolden|TestCredentialDecisionEnvelopeContainsNoClaimsOrKeyMaterial)$'",
       "exit_code": 0,
       "result": "passed",
       "tool_versions": { "go": "go version go1.25.8 windows/amd64" },
-      "artifact": "_docs/ralph/evidence/prototype-t1/t1-08/go-vet.txt"
+      "artifact": "_docs/ralph/evidence/prototype-t1/t1-09/types-vectors.txt"
+    },
+    {
+      "command": "C:\\Users\\pavil\\AppData\\Local\\VirtEngine\\toolchains\\go1.25.8\\go\\bin\\go.exe -C C:\\Users\\pavil\\Desktop\\virtengine-gh\\repos\\virtengine-t1 test -count=1 ./pkg/inference -run '^TestReceiptProducerDeterministicInProcessVector$'",
+      "exit_code": 0,
+      "result": "passed",
+      "tool_versions": { "go": "go version go1.25.8 windows/amd64" },
+      "artifact": "_docs/ralph/evidence/prototype-t1/t1-09/producer-vector.txt"
+    },
+    {
+      "command": "C:\\Users\\pavil\\AppData\\Local\\VirtEngine\\toolchains\\go1.25.8\\go\\bin\\go.exe -C C:\\Users\\pavil\\Desktop\\virtengine-gh\\repos\\virtengine-t1 test -count=1 ./pkg/enclave_runtime -run '^TestWorkloadBinding(GoldenCanonicalAndChallenge|VerifierForcesStrictPolicy)$'",
+      "exit_code": 0,
+      "result": "passed",
+      "tool_versions": { "go": "go version go1.25.8 windows/amd64" },
+      "artifact": "_docs/ralph/evidence/prototype-t1/t1-09/workload-vectors.txt"
+    },
+    {
+      "command": "C:\\Users\\pavil\\AppData\\Local\\VirtEngine\\toolchains\\go1.25.8\\go\\bin\\go.exe -C C:\\Users\\pavil\\Desktop\\virtengine-gh\\repos\\virtengine-t1 test -count=1 ./x/veid/keeper -run '^TestRuntimePolicy(BootstrapActiveExactAcceptsWithoutMutation|RegistryLifecycleCompatibility)$'",
+      "exit_code": 0,
+      "result": "passed",
+      "tool_versions": { "go": "go version go1.25.8 windows/amd64" },
+      "artifact": "_docs/ralph/evidence/prototype-t1/t1-09/runtime-policy-vectors.txt"
+    },
+    {
+      "command": "CGO_ENABLED=1 CC=winlibs-gcc C:\\Users\\pavil\\AppData\\Local\\VirtEngine\\toolchains\\go1.25.8\\go\\bin\\go.exe -C C:\\Users\\pavil\\Desktop\\virtengine-gh\\repos\\virtengine-t1 test -race -count=1 ./x/veid/types ./pkg/inference ./pkg/enclave_runtime ./x/veid/keeper -run 'EvidenceEnvelopeGolden|CredentialDecisionEnvelopeGolden|ReceiptProducerDeterministic|WorkloadBindingGolden|RuntimePolicyRegistryLifecycle'",
+      "exit_code": 0,
+      "result": "passed",
+      "tool_versions": { "go": "go version go1.25.8 windows/amd64" },
+      "artifact": "_docs/ralph/evidence/prototype-t1/t1-09/race-vectors.txt"
+    },
+    {
+      "command": "C:\\Users\\pavil\\AppData\\Local\\VirtEngine\\toolchains\\go1.25.8\\go\\bin\\go.exe -C C:\\Users\\pavil\\Desktop\\virtengine-gh\\repos\\virtengine-t1 vet ./x/veid/types ./pkg/inference ./pkg/enclave_runtime ./x/veid/keeper",
+      "exit_code": 0,
+      "result": "passed",
+      "tool_versions": { "go": "go version go1.25.8 windows/amd64" },
+      "artifact": "_docs/ralph/evidence/prototype-t1/t1-09/go-vet.txt"
     },
     {
       "command": "git -C C:\\Users\\pavil\\Desktop\\virtengine-gh\\repos\\virtengine-t1 diff --check",
       "exit_code": 0,
       "result": "passed",
       "tool_versions": { "git": "git version 2.52.0.windows.1" },
-      "artifact": "_docs/ralph/evidence/prototype-t1/t1-08/git-diff-check.txt"
+      "artifact": "_docs/ralph/evidence/prototype-t1/t1-09/git-diff-check.txt"
     }
   ],
   "generated_hashes": {},
   "migrations": [],
   "external_evidence": [
-    "_docs/ralph/evidence/prototype-t1/t1-08/commits.txt",
-    "_docs/ralph/evidence/prototype-t1/t1-08/files.txt",
-    "_docs/ralph/evidence/prototype-t1/t1-08/git-version.txt",
-    "_docs/ralph/evidence/prototype-t1/t1-08/go-version.txt",
-    "_docs/ralph/evidence/prototype-t1/t1-08/payload-head.txt"
+    "_docs/ralph/evidence/prototype-t1/t1-09/commits.txt",
+    "_docs/ralph/evidence/prototype-t1/t1-09/files.txt",
+    "_docs/ralph/evidence/prototype-t1/t1-09/git-version.txt",
+    "_docs/ralph/evidence/prototype-t1/t1-09/go-version.txt",
+    "_docs/ralph/evidence/prototype-t1/t1-09/node-version.txt",
+    "_docs/ralph/evidence/prototype-t1/t1-09/payload-head.txt"
   ],
   "known_failures": [
-    "T1-08 freezes a read-only credential-decision envelope only; it does not issue, sign, store, revoke, or present credentials.",
-    "The envelope carries authenticated evidence and receipt digests only; it contains no age, residency, plaintext claims, proof bytes, signatures, or private/public key material."
+    "T1-09 freezes deterministic fixture contracts only; it does not certify production behavior, accuracy, hardware, collateral, custody, or external integration.",
+    "Store bytes 0xE8 through 0xEC and protobuf names are manifest-only requests; T4 remains the sole owner of activation, migration, source reservation, and generation."
   ],
   "blockers": [
     "T4 intake validation for the published T1-04 tag is currently blocked by an unrelated dirty T4 worktree path cmd/inference-sidecar/manifest_test2.go.",
     "T4 intake validator includes synchronized epoch-base merge paths in a first producer payload, causing integration-owned files to fail producer ownership and generated-file lease checks.",
     "Real-hardware attestation, current collateral, signer ownership resolution, durable replay consumption, and sidecar integration remain outside this checkpoint."
   ],
-  "next_checkpoint": "T1-09"
+  "next_checkpoint": "T1-10"
 }

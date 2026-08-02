@@ -1,0 +1,4 @@
+ok  	github.com/virtengine/virtengine/x/veid/types	2.089s
+ok  	github.com/virtengine/virtengine/pkg/inference	2.031s
+ok  	github.com/virtengine/virtengine/pkg/enclave_runtime	3.346s
+ok  	github.com/virtengine/virtengine/x/veid/keeper	8.771s
