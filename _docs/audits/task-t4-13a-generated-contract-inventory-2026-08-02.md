@@ -13,7 +13,10 @@ and target roots, requires an accepted producer tag/payload for every generated
 family, verifies producer source blobs through the accepted T4 ledger, and
 requires compatibility fixtures. A completed window must retain first/second
 run exit codes, zero-drift status, and an evidence path/hash verified at the
-exact generation source commit. `--require-ready` rejects the current state.
+exact generation source commit. Accepted producer tags are also re-read and
+every proto source must be declared in that checkpoint's committed handoff
+`files_changed`; unrelated historical proto files cannot satisfy readiness.
+`--require-ready` rejects the current state.
 
 This checkpoint does not open the generation window or claim generated output.
 Generation remains blocked until immutable producer checkpoints publish all

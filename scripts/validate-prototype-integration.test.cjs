@@ -1,7 +1,7 @@
 "use strict";
 
 const assert = require("assert").strict;
-const { validateIntegrationControl } = require("./validate-prototype-integration.cjs");
+const { producerHandoffDeclaresContract, validateIntegrationControl } = require("./validate-prototype-integration.cjs");
 
 const sha = "79391a3df86d85522b92e0400c6904971ecbe65d";
 
@@ -57,6 +57,12 @@ function validFixture() {
 }
 
 const tests = [
+  ["requires producer handoff ownership of generated proto sources", () => {
+    const contract = { owner_thread: "T1", producer: { payload_sha: sha }, proto_sources: ["sdk/proto/node/decision.proto"] };
+    assert.equal(producerHandoffDeclaresContract(contract, { thread: "T1", payload_head: sha, files_changed: ["sdk/proto/node/decision.proto"] }), true);
+    assert.equal(producerHandoffDeclaresContract(contract, { thread: "T1", payload_head: sha, files_changed: [] }), false);
+    assert.equal(producerHandoffDeclaresContract(contract, { thread: "T5", payload_head: sha, files_changed: ["sdk/proto/node/decision.proto"] }), false);
+  }],
   ["accepts the frozen T4 campaign controls", () => {
     const fixture = validFixture();
     assert.doesNotThrow(() => validateIntegrationControl(fixture.control, fixture.schema, fixture.handoff, fixture.epoch));

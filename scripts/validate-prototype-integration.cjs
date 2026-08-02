@@ -47,6 +47,13 @@ function loadJson(path) {
   return JSON.parse(readFileSync(path, "utf8"));
 }
 
+function producerHandoffDeclaresContract(contract, producerHandoff) {
+  return producerHandoff.thread === contract.owner_thread
+    && producerHandoff.payload_head === contract.producer.payload_sha
+    && Array.isArray(producerHandoff.files_changed)
+    && contract.proto_sources.every((path) => producerHandoff.files_changed.includes(path));
+}
+
 function validateEpoch(epoch, handoff = null) {
   const expectedKeys = ["announcement_cutoff", "base_sha", "base_tag", "campaign", "intake_epoch", "opens_at", "planning_sha", "producers", "schema_version", "status"];
   assert.deepEqual(Object.keys(epoch).sort(), expectedKeys);
@@ -145,7 +152,7 @@ function validateIntegrationControl(control, schema, handoff, epoch) {
   validateEpoch(epoch, handoff);
 }
 
-module.exports = { validateEpoch, validateIntegrationControl };
+module.exports = { producerHandoffDeclaresContract, validateEpoch, validateIntegrationControl };
 
 if (require.main === module) {
   const handoff = loadJson(handoffPath);
@@ -161,8 +168,20 @@ if (require.main === module) {
   });
   validateGeneratedContractInventory(loadJson(generatedContractInventoryPath), {
     rootDir: root,
-    verifyAcceptedProducer: (contract) => handoff.accepted_checkpoints.some((entry) => entry.thread === contract.owner_thread && entry.tag === contract.producer.tag && entry.payload_head === contract.producer.payload_sha)
-      && contract.proto_sources.every((path) => spawnSync("git", ["cat-file", "-e", `${contract.producer.payload_sha}:${path}`], { cwd: root }).status === 0),
+    verifyAcceptedProducer: (contract) => {
+      const accepted = handoff.accepted_checkpoints.some((entry) => entry.thread === contract.owner_thread && entry.tag === contract.producer.tag && entry.payload_head === contract.producer.payload_sha);
+      const tag = spawnSync("git", ["rev-parse", `${contract.producer.tag}^{}`], { cwd: root, encoding: "utf8" });
+      if (!accepted || tag.status !== 0) return false;
+      const handoffPath = `_docs/ralph/handoffs/prototype-${contract.owner_thread.toLowerCase()}/HANDOFF.yaml`;
+      const producer = spawnSync("git", ["show", `${tag.stdout.trim()}:${handoffPath}`], { cwd: root, encoding: "utf8" });
+      if (producer.status !== 0) return false;
+      try {
+        return producerHandoffDeclaresContract(contract, JSON.parse(producer.stdout))
+          && contract.proto_sources.every((path) => spawnSync("git", ["cat-file", "-e", `${contract.producer.payload_sha}:${path}`], { cwd: root }).status === 0);
+      } catch {
+        return false;
+      }
+    },
     verifyGenerationResult: (result) => {
       const evidence = spawnSync("git", ["show", `${result.source_sha}:${result.evidence_path}`], { cwd: root, encoding: "buffer" });
       return evidence.status === 0 && createHash("sha256").update(evidence.stdout).digest("hex") === result.evidence_sha256;
