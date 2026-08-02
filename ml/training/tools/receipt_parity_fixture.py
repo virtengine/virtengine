@@ -190,7 +190,7 @@ def _source_cases() -> list[dict[str, Any]]:
         },
         "issued_height": 1_234_500,
         "issued_at_unix": 1_700_000_000,
-        "expires_height": 1_234_520,
+        "expires_height": 1_234_502,
         "expires_at_unix": 1_700_000_120,
         "signer_key_id": "did:virtengine:receipt-parity:v1",
     }
