@@ -177,9 +177,14 @@ inspection before removal. Inspect its schema, PID, UTC start time, epoch,
 reviewed HEAD, and plan digest before deciding whether recovery is safe:
 
 ```powershell
-$freezeLease = git rev-parse --git-path prototype-intake-freeze-epoch-1.lock
-Get-Content -Raw $freezeLease
+node scripts/inspect-prototype-intake-freeze-lease.test.cjs
+node scripts/inspect-prototype-intake-freeze-lease.cjs --epoch 1 `
+  --expected-head $reviewedT4 `
+  --expected-plan-sha256 $reviewedPlanSha256
 ```
+
+The inspector is read-only. It rejects malformed or mismatched lease metadata
+and reports whether the recorded local PID is active; it never removes a lease.
 
 ## Core RC Publication Preflight
 
