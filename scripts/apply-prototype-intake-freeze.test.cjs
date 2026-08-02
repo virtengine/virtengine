@@ -1,6 +1,8 @@
 "use strict";
 
 const assert = require("assert").strict;
+const { readFileSync } = require("fs");
+const { resolve } = require("path");
 const { parseArgs, validateFreezeTransition, validateWorktreeBoundary } = require("./apply-prototype-intake-freeze.cjs");
 
 function epoch() {
@@ -35,6 +37,7 @@ const tests = [
   ["rejects an abbreviated expected HEAD", () => assert.throws(() => parseArgs(["--epoch", "1", "--expected-head", "abc123", "--plan", "plan.json"]), /exact commit SHA/)],
   ["accepts a clean worktree at the reviewed HEAD", () => assert.equal(validateWorktreeBoundary(".", "a".repeat(40), cleanAt("a".repeat(40))), true)],
   ["rejects a clean worktree at a stale HEAD", () => assert.throws(() => validateWorktreeBoundary(".", "a".repeat(40), cleanAt("b".repeat(40))), /does not match reviewed/)],
+  ["runbook requires a separately reviewed HEAD", () => { const runbook = readFileSync(resolve(__dirname, "../_docs/prototype-thread-intake-runbook.md"), "utf8"); assert.match(runbook, /\$reviewedT4 = '<full T4 SHA recorded during separate plan review>'/); assert.doesNotMatch(runbook, /--expected-head \(git rev-parse HEAD\)/); }],
 ];
 
 for (const [name, run] of tests) { run(); console.log(`ok - ${name}`); }

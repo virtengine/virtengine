@@ -151,14 +151,16 @@ commit the epoch file:
 
 ```powershell
 node scripts/apply-prototype-intake-freeze.test.cjs
+$reviewedT4 = '<full T4 SHA recorded during separate plan review>'
 node scripts/apply-prototype-intake-freeze.cjs --epoch 1 `
-  --expected-head (git rev-parse HEAD) `
+  --expected-head $reviewedT4 `
   --plan $env:TEMP\epoch-1-frozen-plan.json
 git diff -- _docs/ralph/prototype-integration/epochs/epoch-1.json
 ```
 
-The application command rejects dirty worktrees, a HEAD other than the reviewed
-exact SHA, pre-cutoff execution, changed
+Do not derive `$reviewedT4` from the checkout during application; that would let
+a stale checkout approve itself. The application command rejects dirty
+worktrees, a HEAD other than the separately reviewed exact SHA, pre-cutoff execution, changed
 epoch metadata or roster order, unknown producer fields, wrong-thread tags, and
 producer decisions other than announced or frozen out. Acceptance remains a
 later, separately validated transition.
