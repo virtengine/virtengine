@@ -1,62 +1,80 @@
 campaign: three-day-prototype
 thread: T2
-checkpoint: T2-X07
+checkpoint: T2-X08
 branch: ve/prototype-t2-product
-start_head: fa9dfc849a5ebfd91540cfab1e2f4fd72f51d046
-end_head: d5cfcbb3d4d89335c04f59df0fc8c141ca4887a3
+start_head: c323cd9c92a3f3f2abffb83130a776e0f2a65cfc
+end_head: cbb999b21fde3ed18971ca52edfaac6aeb75a600
 origin_main: 79391a3df86d85522b92e0400c6904971ecbe65d
 tree_clean: true
 commits:
-  - d5cfcbb3d4d89335c04f59df0fc8c141ca4887a3
+  - cbb999b21fde3ed18971ca52edfaac6aeb75a600
 owned_paths:
-  - portal/src/app/(customer)/organizations/
-  - portal/src/stores/organizationStore.ts
-  - portal/src/stores/__tests__/organizationStore.test.ts
-  - portal/src/stores/index.ts
+  - lib/portal/src/provider-api/
+  - lib/portal/src/multi-provider/
+  - lib/portal/src/hooks/
+  - lib/portal/__tests__/provider-api/
+  - lib/portal/index.ts
+  - lib/portal/index.d.ts
+  - portal/src/components/deployments/ShellTerminal.tsx
+  - portal/src/components/deployments/ShellTerminal.security.test.ts
+  - portal/src/app/provider/orders/[id]/DeploymentDetailClient.tsx
+  - portal/src/lib/portal-adapter.ts
 files_changed:
-  - portal/src/app/(customer)/organizations/page.tsx
-  - portal/src/app/(customer)/organizations/[id]/page.tsx
-  - portal/src/app/(customer)/organizations/OrganizationUnavailable.tsx
-  - portal/src/app/(customer)/organizations/organizations.test.tsx
-  - portal/src/stores/organizationStore.ts
-  - portal/src/stores/__tests__/organizationStore.test.ts
-  - portal/src/stores/index.ts
+  - lib/portal/src/provider-api/shell-session.ts
+  - lib/portal/src/provider-api/client.ts
+  - lib/portal/src/provider-api/index.ts
+  - lib/portal/src/provider-api/types.ts
+  - lib/portal/src/multi-provider/client.ts
+  - lib/portal/src/multi-provider/types.ts
+  - lib/portal/src/hooks/useDeploymentShell.ts
+  - lib/portal/src/hooks/useProviderAPI.ts
+  - lib/portal/index.ts
+  - lib/portal/index.d.ts
+  - lib/portal/__tests__/provider-api/shell-session.test.ts
+  - lib/portal/__tests__/provider-api/shell-client.test.ts
+  - lib/portal/__tests__/provider-api/multi-provider-shell.test.ts
+  - portal/src/components/deployments/ShellTerminal.tsx
+  - portal/src/components/deployments/ShellTerminal.security.test.ts
+  - portal/src/app/provider/orders/[id]/DeploymentDetailClient.tsx
+  - portal/src/lib/portal-adapter.ts
 tests:
-  - command: C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t2\portal\node_modules\.bin\vitest.CMD run "src/app/(customer)/organizations/organizations.test.tsx" src\stores\__tests__\organizationStore.test.ts --reporter=dot
+  - command: C:\Users\pavil\AppData\Local\Temp\virtengine-node-v24.12.0\npm.cmd --prefix C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t2\lib\portal test
     exit_code: 0
     result: passed
-    test_count: 5
+    test_count: 696
     tool_versions:
       node: v24.12.0
-    artifact: _docs/ralph/handoffs/prototype-t2/T2-X07-evidence.txt
+    artifact: _docs/ralph/handoffs/prototype-t2/T2-X08-evidence.txt
+  - command: C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t2\portal\node_modules\.bin\vitest.CMD run src\components\deployments\ShellTerminal.security.test.ts --reporter=dot
+    exit_code: 0
+    result: passed
+    test_count: 2
+    tool_versions:
+      node: v24.12.0
+    artifact: _docs/ralph/handoffs/prototype-t2/T2-X08-evidence.txt
   - command: C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t2\portal\node_modules\.bin\eslint.CMD C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t2\portal\src --ext .ts,.tsx --max-warnings 0
     exit_code: 0
     result: passed
     tool_versions:
       node: v24.12.0
-    artifact: _docs/ralph/handoffs/prototype-t2/T2-X07-evidence.txt
-  - command: C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t2\portal\node_modules\.bin\tsc.CMD --noEmit -p C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t2\portal\tsconfig.json
-    exit_code: 0
-    result: passed
-    tool_versions:
-      node: v24.12.0
-    artifact: _docs/ralph/handoffs/prototype-t2/T2-X07-evidence.txt
+    artifact: _docs/ralph/handoffs/prototype-t2/T2-X08-evidence.txt
   - command: C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t2\portal\node_modules\.bin\vitest.CMD run --reporter=dot
     exit_code: 0
     result: passed
-    test_count: 592
+    test_count: 594
     tool_versions:
       node: v24.12.0
-    artifact: _docs/ralph/handoffs/prototype-t2/T2-X07-evidence.txt
+    artifact: _docs/ralph/handoffs/prototype-t2/T2-X08-evidence.txt
 generated_hashes: {}
 migrations: []
 external_evidence:
-  - _docs/ralph/handoffs/prototype-t2/T2-X07-evidence.txt
+  - _docs/ralph/handoffs/prototype-t2/T2-X08-evidence.txt
 known_failures:
   - TestProviderMutationSubmitterStandbyTakesOverWithHigherFence fails repeatedly in the full provider package gate with submitter lease timing errors.
 blockers:
   - T4 producer-handoff.schema.json forbids the integration_parent field required by the updated campaign plan; integration ancestor fa21b1e540a5efcbe1822da4199be7acec7709d3 is retained in T2-05-evidence.txt.
   - Full provider package certification is blocked by the unrelated submitter lease timing failure retained in T2-03B-evidence.txt.
-  - T5/89C organization governance, APIs, projection, billing ownership and production wiring remain unavailable.
-next_checkpoint: T2-X08
-expected_head: d5cfcbb3d4d89335c04f59df0fc8c141ca4887a3
+  - Production identity/policy eligibility projection and provider shell receipt capability are not wired; shell defaults unavailable.
+  - No live provider shell session was certified.
+next_checkpoint: T2-X09
+expected_head: cbb999b21fde3ed18971ca52edfaac6aeb75a600
