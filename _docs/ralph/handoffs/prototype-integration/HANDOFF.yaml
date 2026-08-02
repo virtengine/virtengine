@@ -1,40 +1,23 @@
 {
   "campaign": "three-day-prototype",
   "thread": "T4",
-  "checkpoint": "T4-13A",
+  "checkpoint": "T4-13B",
   "branch": "ve/prototype-integration",
-  "start_head": "aa6cdade1a5ba2cbac4bf32634774e6658fc6557",
-  "end_head": "87b1e2e477446f13aff960ee21402b6ab00a621f",
+  "start_head": "2c4d4ea01aeb5005c4d4b753a68745dc64c2b174",
+  "end_head": "76aefafdf82931eb700a9aed5f067071a4c7595f",
   "origin_main": "79391a3df86d85522b92e0400c6904971ecbe65d",
   "tree_clean": true,
   "commits": [
-    "87b1e2e477446f13aff960ee21402b6ab00a621f"
+    "76aefafdf82931eb700a9aed5f067071a4c7595f"
   ],
   "owned_paths": [
     "_docs/ralph/prototype-integration/**",
     "_docs/ralph/handoffs/prototype-integration/**",
-    "_docs/audits/task-t4-13a-generated-contract-inventory-2026-08-02.md",
-    "_docs/ralph/prototype-integration/generated-contract-inventory.json",
-    "_docs/ralph/prototype-integration/required-gate-matrix.json",
-    "scripts/generate-core-rc-manifest.cjs",
-    "scripts/generate-core-rc-manifest.test.cjs",
-    "scripts/validate-generated-contract-inventory.cjs",
-    "scripts/validate-generated-contract-inventory.test.cjs",
-    "scripts/validate-prototype-integration.cjs",
-    "scripts/validate-required-gate-matrix.cjs"
+    "_docs/ralph/prototype-integration/core-rc-manifest.json"
   ],
   "files_changed": [
     "_docs/ralph/handoffs/prototype-integration/HANDOFF.yaml",
-    "_docs/INDEX.md",
-    "_docs/audits/task-t4-13a-generated-contract-inventory-2026-08-02.md",
-    "_docs/ralph/prototype-integration/generated-contract-inventory.json",
-    "_docs/ralph/prototype-integration/required-gate-matrix.json",
-    "scripts/generate-core-rc-manifest.cjs",
-    "scripts/generate-core-rc-manifest.test.cjs",
-    "scripts/validate-generated-contract-inventory.cjs",
-    "scripts/validate-generated-contract-inventory.test.cjs",
-    "scripts/validate-prototype-integration.cjs",
-    "scripts/validate-required-gate-matrix.cjs"
+    "_docs/ralph/prototype-integration/core-rc-manifest.json"
   ],
   "tests": [
     {
@@ -56,10 +39,7 @@
     }
   ],
   "generated_hashes": {
-    "scripts/validate-generated-contract-inventory.cjs": "69c478d20dc370475520fd451df92abdb160fc576f0c264fc51150f5597c2c25",
-    "scripts/validate-generated-contract-inventory.test.cjs": "40131182a2500d44193130b226463b56f4dc82fab70945756360a884586f3e33",
-    "_docs/ralph/prototype-integration/generated-contract-inventory.json": "3d175116d36a1ba77e24e91e63940dff0ad3b14f06f00e89b2a8d2f78de74369",
-    "_docs/ralph/prototype-integration/required-gate-matrix.json": "39ed0a6e2ea1dd20b380f6e812183d6412958b462b3065bd106a5280fc97cca8"
+    "_docs/ralph/prototype-integration/core-rc-manifest.json": "723a2169850e3477672b14d10e01dc736e32b8ced8c83cdfb76596045c48fed3"
   },
   "accepted_checkpoints": [],
   "rejected_checkpoints": [
@@ -98,5 +78,5 @@
     "Task 88C is not complete."
   ],
   "next_checkpoint": null,
-  "expected_head": "87b1e2e477446f13aff960ee21402b6ab00a621f"
+  "expected_head": "76aefafdf82931eb700a9aed5f067071a4c7595f"
 }
