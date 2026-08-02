@@ -138,6 +138,7 @@ selections and marks unselected producers frozen out:
 ```powershell
 node scripts/plan-prototype-intake-freeze.test.cjs
 node scripts/plan-prototype-intake-freeze.cjs --epoch 1 `
+  --observation _docs/ralph/prototype-integration/epochs/epoch-1-tag-observation.json `
   --tag T1=checkpoint/prototype-t1/t1-09 `
   --tag T3=checkpoint/prototype-t3/t3-13a `
   > $env:TEMP\epoch-1-frozen-plan.json

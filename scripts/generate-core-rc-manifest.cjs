@@ -29,6 +29,7 @@ const sourceArtifacts = [
   ["ai_biometric_security_gates", "_docs/ralph/prototype-integration/ai-biometric-security-gates.json"],
   ["fund_route_inventory", "_docs/ralph/prototype-integration/fund-route-inventory.json"],
   ["generated_contract_inventory", "_docs/ralph/prototype-integration/generated-contract-inventory.json"],
+  ["intake_tag_observation", "_docs/ralph/prototype-integration/epochs/epoch-1-tag-observation.json"],
 ];
 
 const artifactSelections = [

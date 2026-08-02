@@ -15,6 +15,7 @@ const { validateFundRouteInventory } = require("./validate-fund-route-inventory.
 const { validateGeneratedContractInventory } = require("./validate-generated-contract-inventory.cjs");
 const { validateMigrationInventory } = require("./validate-migration-inventory.cjs");
 const { validateModelProvenance } = require("./validate-model-provenance.cjs");
+const { validateTagObservation } = require("./observe-prototype-intake-tags.cjs");
 const { validateReportSchema: validatePublicationPreflightSchema } = require("./preflight-core-rc-publication.cjs");
 const { validateRequiredGateMatrix } = require("./validate-required-gate-matrix.cjs");
 const { validateSlurmChartInventory } = require("./validate-slurm-chart-inventory.cjs");
@@ -27,6 +28,7 @@ const coreRcManifestPath = resolve(root, "_docs/ralph/prototype-integration/core
 const coreRcSchemaPath = resolve(root, "_docs/ralph/prototype-integration/core-rc-manifest.schema.json");
 const schemaPath = resolve(root, "_docs/ralph/prototype-integration/producer-handoff.schema.json");
 const epochPath = resolve(root, "_docs/ralph/prototype-integration/epochs/epoch-1.json");
+const epochTagObservationPath = resolve(root, "_docs/ralph/prototype-integration/epochs/epoch-1-tag-observation.json");
 const fundRouteInventoryPath = resolve(root, "_docs/ralph/prototype-integration/fund-route-inventory.json");
 const generatedContractInventoryPath = resolve(root, "_docs/ralph/prototype-integration/generated-contract-inventory.json");
 const handoffPath = resolve(root, "_docs/ralph/handoffs/prototype-integration/HANDOFF.yaml");
@@ -157,6 +159,7 @@ module.exports = { producerHandoffDeclaresContract, validateEpoch, validateInteg
 if (require.main === module) {
   const handoff = loadJson(handoffPath);
   validateIntegrationControl(loadJson(controlPath), loadJson(schemaPath), handoff, loadJson(epochPath));
+  validateTagObservation(loadJson(epochTagObservationPath), loadJson(epochPath));
   validateSecurityGates(loadJson(aiBiometricSecurityGatesPath), { rootDir: root });
   validateProductionPolicy(loadJson(aiProductionPolicyPath), { rootDir: root });
   validateCoreRcSchema(loadJson(coreRcSchemaPath));

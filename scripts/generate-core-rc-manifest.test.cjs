@@ -63,6 +63,9 @@ const tests = [
   ["binds the generated contract inventory as a control artifact", () => {
     assert.ok(sourceArtifacts.some(([id, path]) => id === "generated_contract_inventory" && path === "_docs/ralph/prototype-integration/generated-contract-inventory.json"));
   }],
+  ["binds the pre-cutoff intake tag observation as a control artifact", () => {
+    assert.ok(sourceArtifacts.some(([id, path]) => id === "intake_tag_observation" && path === "_docs/ralph/prototype-integration/epochs/epoch-1-tag-observation.json"));
+  }],
   ["hashes every tracked canonical chart file", () => {
     const chartContract = artifactSelections.find((contract) => contract.id === "chart");
     const entries = listSourceEntries(sourceSha, root);

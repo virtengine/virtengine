@@ -33,6 +33,13 @@ function planFrozenEpoch(epoch, selections, options = {}) {
   assert.ok(now > cutoff, "epoch announcement cutoff has not elapsed");
   assert.equal(epoch.status, "open", "only an open epoch can be frozen");
   assert.deepEqual(epoch.producers.map((producer) => producer.thread), threads, "epoch producer roster is invalid");
+  const observation = options.observation;
+  assert.ok(observation && observation.schema_version === "virtengine.prototype.intake-tag-observation/v1", "pre-cutoff tag observation is required");
+  assert.equal(observation.intake_epoch, epoch.intake_epoch, "tag observation epoch mismatch");
+  assert.equal(observation.announcement_cutoff, epoch.announcement_cutoff, "tag observation cutoff mismatch");
+  const observedAt = Date.parse(observation.observed_at);
+  assert.ok(Number.isFinite(observedAt) && observedAt <= cutoff, "tag observation was not captured before cutoff");
+  assert.ok(Array.isArray(observation.tags), "tag observation tags are invalid");
   for (const thread of selections.keys()) assert.ok(threads.includes(thread), `unknown producer selection: ${thread}`);
 
   const producers = epoch.producers.map((producer) => {
@@ -42,6 +49,8 @@ function planFrozenEpoch(epoch, selections, options = {}) {
     assert.ok(match && `T${match[1]}` === producer.thread, `${producer.thread} selected an invalid tag`);
     const resolved = options.resolveTag(tag);
     assert.match(resolved.target, /^[a-f0-9]{40}$/, `${tag} target is not a commit SHA`);
+    const observed = observation.tags.filter((entry) => entry.thread === producer.thread && entry.tag === tag && entry.target === resolved.target);
+    assert.equal(observed.length, 1, `${tag} was not uniquely observed before cutoff`);
     const taggerTime = Date.parse(resolved.tagger_at);
     assert.ok(Number.isFinite(taggerTime), `${tag} tagger timestamp is invalid`);
     assert.ok(taggerTime <= cutoff, `${tag} was published after the announcement cutoff`);
@@ -51,10 +60,10 @@ function planFrozenEpoch(epoch, selections, options = {}) {
 }
 
 function parseArgs(argv) {
-  const options = { epoch: null, remote: "origin", repo: resolve(__dirname, ".."), selections: new Map() };
+  const options = { epoch: null, observation: null, remote: "origin", repo: resolve(__dirname, ".."), selections: new Map() };
   for (let index = 0; index < argv.length; index += 1) {
     const argument = argv[index];
-    if (["--epoch", "--remote", "--repo", "--tag"].includes(argument)) {
+    if (["--epoch", "--observation", "--remote", "--repo", "--tag"].includes(argument)) {
       const value = argv[++index];
       assert.ok(value, `${argument} requires a value`);
       if (argument === "--tag") {
@@ -66,6 +75,7 @@ function parseArgs(argv) {
     } else throw new Error(`unknown argument: ${argument}`);
   }
   assert.match(options.epoch || "", /^[1-9][0-9]*$/, "--epoch is required");
+  assert.ok(options.observation, "--observation is required");
   options.repo = resolve(options.repo);
   return options;
 }
@@ -74,7 +84,8 @@ function main(argv) {
   const options = parseArgs(argv);
   const path = resolve(options.repo, `_docs/ralph/prototype-integration/epochs/epoch-${options.epoch}.json`);
   const epoch = JSON.parse(readFileSync(path, "utf8"));
-  const plan = planFrozenEpoch(epoch, options.selections, { resolveTag: (tag) => resolveAnnotatedTag(options.repo, options.remote, tag) });
+  const observation = JSON.parse(readFileSync(resolve(options.repo, options.observation), "utf8"));
+  const plan = planFrozenEpoch(epoch, options.selections, { observation, resolveTag: (tag) => resolveAnnotatedTag(options.repo, options.remote, tag) });
   process.stdout.write(`${JSON.stringify(plan, null, 2)}\n`);
 }
 
