@@ -190,6 +190,19 @@ it never removes a lease. Both PID states require explicit operator review. Its
 `lease_sha256` binds the exact retained file bytes and must be recorded before
 any separately reviewed recovery operation.
 
+After confirming the recorded PID is absent and separately reviewing the exact
+lease digest, use compare-and-claim recovery. The command atomically renames the
+lease to a unique quarantine, revalidates its bytes and PID state, and removes
+only that claimed quarantine. Changed bytes remain quarantined for inspection:
+
+```powershell
+node scripts/recover-prototype-intake-freeze-lease.test.cjs
+node scripts/recover-prototype-intake-freeze-lease.cjs --epoch 1 `
+  --expected-head $reviewedT4 `
+  --expected-plan-sha256 $reviewedPlanSha256 `
+  --expected-lease-sha256 '<lease_sha256 from separate review>'
+```
+
 ## Core RC Publication Preflight
 
 T4-09A is diagnostic-only. It never creates or pushes a tag. Run it with the
