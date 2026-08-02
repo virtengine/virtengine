@@ -235,6 +235,22 @@ func TestEvidenceObjectMigrationRejectsContextAndReplayChanges(t *testing.T) {
 	}
 }
 
+func TestEvidenceObjectMigrationRejectsMalformedSignerEpochState(t *testing.T) {
+	k, ctx, _ := newEvidenceMigrationKeeper(t)
+	manifest, resolver := signedManifest(t, k, ctx, nil)
+	epochKey := evidenceMigrationUpgradeKey(types.PrefixEvidenceMigrationSignerEpoch, manifest.SignerKeyID)
+	ctx.KVStore(k.skey).Set(epochKey, []byte{1, 2, 3})
+	if _, err := k.MigrateEvidenceObjects(ctx, manifest, resolver); err == nil {
+		t.Fatal("malformed signer epoch floor was accepted")
+	}
+	store := ctx.KVStore(k.skey)
+	if store.Get(evidenceMigrationUpgradeKey(types.PrefixEvidenceMigrationConsumed, manifest.UpgradeID)) != nil ||
+		store.Get(evidenceMigrationUpgradeKey(types.PrefixEvidenceMigrationReport, manifest.UpgradeID)) != nil ||
+		store.Get(types.KeyEvidenceMigrationLatest) != nil {
+		t.Fatal("malformed signer epoch state allowed migration writes")
+	}
+}
+
 func TestEvidenceObjectMigrationDistinguishesSharedPrefixRows(t *testing.T) {
 	k, ctx, _ := newEvidenceMigrationKeeper(t)
 	store := ctx.KVStore(k.skey)

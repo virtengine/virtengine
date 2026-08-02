@@ -186,8 +186,13 @@ func (k Keeper) MigrateEvidenceObjects(ctx sdk.Context, manifest EvidenceMigrati
 		return report, nil
 	}
 	epochKey := evidenceMigrationUpgradeKey(types.PrefixEvidenceMigrationSignerEpoch, manifest.SignerKeyID)
-	if floor := store.Get(epochKey); len(floor) == 8 && manifest.SignerKeyEpoch < binary.BigEndian.Uint64(floor) {
-		return EvidenceMigrationReport{}, errors.New("evidence migration signer key epoch rollback")
+	if floor := store.Get(epochKey); floor != nil {
+		if len(floor) != 8 {
+			return EvidenceMigrationReport{}, errors.New("evidence migration signer key epoch state is corrupt")
+		}
+		if manifest.SignerKeyEpoch < binary.BigEndian.Uint64(floor) {
+			return EvidenceMigrationReport{}, errors.New("evidence migration signer key epoch rollback")
+		}
 	}
 	latest := store.Get(types.KeyEvidenceMigrationLatest)
 	if latest == nil {
