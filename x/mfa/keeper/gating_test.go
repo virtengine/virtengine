@@ -31,6 +31,16 @@ type GatingTestSuite struct {
 	keeper keeper.Keeper
 	hooks  keeper.MFAGatingHooks
 	cdc    codec.Codec
+	veid   *gatingVEIDKeeper
+}
+
+type gatingVEIDKeeper struct {
+	scores map[string]uint32
+}
+
+func (m *gatingVEIDKeeper) GetVEIDScore(_ sdk.Context, address sdk.AccAddress) (uint32, bool) {
+	score, found := m.scores[address.String()]
+	return score, found
 }
 
 func TestGatingTestSuite(t *testing.T) {
@@ -44,7 +54,8 @@ func (s *GatingTestSuite) SetupTest() {
 
 	storeKey := storetypes.NewKVStoreKey(types.StoreKey)
 	s.ctx = s.createContextWithStore(storeKey)
-	s.keeper = keeper.NewKeeper(s.cdc, storeKey, "authority", &mockVEIDKeeper{}, &mockRolesKeeper{})
+	s.veid = &gatingVEIDKeeper{scores: make(map[string]uint32)}
+	s.keeper = keeper.NewKeeper(s.cdc, storeKey, "authority", s.veid, &mockRolesKeeper{})
 	s.hooks = keeper.NewMFAGatingHooks(s.keeper)
 
 	// Set default params
@@ -161,6 +172,30 @@ func (s *GatingTestSuite) TestValidateMFAProof_Valid() {
 	s.Require().NoError(err)
 }
 
+func (s *GatingTestSuite) TestValidateMFAProof_RequiresBoundDeviceAndCurrentVEIDScore() {
+	address := sdk.AccAddress([]byte("proof-device-veid"))
+	now := s.ctx.BlockTime().Unix()
+	session := &types.AuthorizationSession{
+		SessionID: "device-veid-session", AccountAddress: address.String(), TransactionType: types.SensitiveTxMediumWithdrawal,
+		CreatedAt: now, ExpiresAt: now + 3600, VerifiedFactors: []types.FactorType{types.FactorTypeVEID},
+		DeviceFingerprint: "bound-proof-device",
+	}
+	s.Require().NoError(s.keeper.CreateAuthorizationSession(s.ctx, session))
+	s.Require().NoError(s.keeper.SetSensitiveTxConfig(s.ctx, &types.SensitiveTxConfig{
+		TransactionType: types.SensitiveTxMediumWithdrawal, Enabled: true, MinVEIDScore: 80,
+		RequiredFactorCombinations: []types.FactorCombination{{Factors: []types.FactorType{types.FactorTypeVEID}}},
+	}))
+	proof := &types.MFAProof{SessionID: session.SessionID, VerifiedFactors: session.VerifiedFactors, Timestamp: now}
+
+	err := s.hooks.ValidateMFAProof(s.ctx, address, types.SensitiveTxMediumWithdrawal, proof, "")
+	s.Require().ErrorIs(err, types.ErrDeviceMismatch)
+	s.veid.scores[address.String()] = 79
+	err = s.hooks.ValidateMFAProof(s.ctx, address, types.SensitiveTxMediumWithdrawal, proof, session.DeviceFingerprint)
+	s.Require().ErrorIs(err, types.ErrVEIDScoreInsufficient)
+	s.veid.scores[address.String()] = 80
+	s.Require().NoError(s.hooks.ValidateMFAProof(s.ctx, address, types.SensitiveTxMediumWithdrawal, proof, session.DeviceFingerprint))
+}
+
 // Test: ValidateMFAProof - step-up within category
 func (s *GatingTestSuite) TestValidateMFAProof_StepUpWithinCategory() {
 	address := sdk.AccAddress([]byte("test-proof-step-up"))
@@ -275,7 +310,7 @@ func (s *GatingTestSuite) TestCanBypassMFA_TrustedDevice() {
 		UserAgent:      "Test Agent",
 		TrustExpiresAt: s.ctx.BlockTime().Unix() + 86400, // Expires in 24 hours
 	}
-	_, err = s.keeper.AddTrustedDevice(s.ctx, address, deviceInfo)
+	trustToken, err := s.keeper.AddTrustedDevice(s.ctx, address, deviceInfo)
 	s.Require().NoError(err)
 
 	// Set policy to allow device bypass
@@ -306,8 +341,10 @@ func (s *GatingTestSuite) TestCanBypassMFA_TrustedDevice() {
 	err = s.keeper.SetSensitiveTxConfig(s.ctx, txConfig)
 	s.Require().NoError(err)
 
-	canBypass, _ := s.hooks.CanBypassMFA(s.ctx, address, types.SensitiveTxLargeWithdrawal, "trusted-device-fp")
+	canBypass, _ := s.hooks.CanBypassMFA(s.ctx, address, types.SensitiveTxLargeWithdrawal, "trusted-device-fp", trustToken)
 	s.Require().True(canBypass)
+	canBypass, _ = s.hooks.CanBypassMFA(s.ctx, address, types.SensitiveTxLargeWithdrawal, "trusted-device-fp", "")
+	s.Require().False(canBypass)
 }
 
 // Test: CanBypassMFA - expired trusted device
@@ -323,7 +360,7 @@ func (s *GatingTestSuite) TestCanBypassMFA_ExpiredDevice() {
 	_, err := s.keeper.AddTrustedDevice(s.ctx, address, deviceInfo)
 	s.Require().NoError(err)
 
-	canBypass, _ := s.hooks.CanBypassMFA(s.ctx, address, types.SensitiveTxLargeWithdrawal, "expired-device-fp")
+	canBypass, _ := s.hooks.CanBypassMFA(s.ctx, address, types.SensitiveTxLargeWithdrawal, "expired-device-fp", "invalid")
 	s.Require().False(canBypass)
 }
 
@@ -331,7 +368,7 @@ func (s *GatingTestSuite) TestCanBypassMFA_ExpiredDevice() {
 func (s *GatingTestSuite) TestCanBypassMFA_UnknownDevice() {
 	address := sdk.AccAddress([]byte("test-bypass-unknown"))
 
-	canBypass, _ := s.hooks.CanBypassMFA(s.ctx, address, types.SensitiveTxLargeWithdrawal, "unknown-device-fp")
+	canBypass, _ := s.hooks.CanBypassMFA(s.ctx, address, types.SensitiveTxLargeWithdrawal, "unknown-device-fp", "invalid")
 	s.Require().False(canBypass)
 }
 
@@ -362,7 +399,7 @@ func (s *GatingTestSuite) TestCanBypassMFA_PolicyDisallows() {
 	err = s.keeper.SetMFAPolicy(s.ctx, policy)
 	s.Require().NoError(err)
 
-	canBypass, _ := s.hooks.CanBypassMFA(s.ctx, address, types.SensitiveTxLargeWithdrawal, "device-fp")
+	canBypass, _ := s.hooks.CanBypassMFA(s.ctx, address, types.SensitiveTxLargeWithdrawal, "device-fp", "invalid")
 	s.Require().False(canBypass)
 }
 
@@ -373,7 +410,7 @@ func (s *GatingTestSuite) TestCheckMFARequired_FullFlow() {
 	msgTypeURL := "/virtengine.market.v1.MsgWithdrawLease" // Example msg type URL
 
 	// Step 1: No policy - should not require MFA
-	mfaRequired, bypassAllowed, _ := s.hooks.CheckMFARequired(s.ctx, address, msgTypeURL, "")
+	mfaRequired, bypassAllowed, _ := s.hooks.CheckMFARequired(s.ctx, address, msgTypeURL, "", "")
 	s.Require().False(mfaRequired)
 	s.Require().False(bypassAllowed)
 
@@ -409,7 +446,7 @@ func (s *GatingTestSuite) TestCheckMFARequired_FullFlow() {
 
 	// Note: For this test to work, the msgTypeURL must be registered in types.GetSensitiveTransactionType
 	// Since we don't have that mapping, we'll just verify the function can be called
-	mfaRequired, _, _ = s.hooks.CheckMFARequired(s.ctx, address, msgTypeURL, "")
+	mfaRequired, _, _ = s.hooks.CheckMFARequired(s.ctx, address, msgTypeURL, "", "")
 	// Result depends on whether msgTypeURL is registered as sensitive
 	_ = mfaRequired
 }
@@ -456,11 +493,11 @@ func (s *GatingTestSuite) TestCheckMFARequired_DeviceBypass() {
 		UserAgent:      "Trusted Device",
 		TrustExpiresAt: s.ctx.BlockTime().Unix() + 86400,
 	}
-	_, err = s.keeper.AddTrustedDevice(s.ctx, address, deviceInfo)
+	trustToken, err := s.keeper.AddTrustedDevice(s.ctx, address, deviceInfo)
 	s.Require().NoError(err)
 
 	// Check with trusted device fingerprint - should allow bypass
-	_, bypassAllowed, _ := s.hooks.CheckMFARequired(s.ctx, address, msgTypeURL, "bypass-device")
+	_, bypassAllowed, _ := s.hooks.CheckMFARequired(s.ctx, address, msgTypeURL, "bypass-device", trustToken)
 	// Result depends on whether msgTypeURL is registered as sensitive
 	_ = bypassAllowed
 }

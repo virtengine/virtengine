@@ -51,10 +51,11 @@ func (k Keeper) hasValidAuthSessionWithDevice(ctx sdk.Context, address sdk.AccAd
 		}
 
 		// If device fingerprint validation is requested and session is device-bound
-		if deviceFingerprint != "" && session.DeviceFingerprint != "" {
-			if session.DeviceFingerprint != deviceFingerprint {
-				continue
-			}
+		if session.DeviceFingerprint != "" && session.DeviceFingerprint != deviceFingerprint {
+			continue
+		}
+		if !k.sessionFactorsSatisfyPolicy(ctx, address, action, session.VerifiedFactors, deviceFingerprint) {
+			continue
 		}
 
 		return true
@@ -80,6 +81,8 @@ func (k Keeper) ConsumeAuthSessionWithDevice(ctx sdk.Context, address sdk.AccAdd
 func (k Keeper) consumeAuthSessionWithDevice(ctx sdk.Context, address sdk.AccAddress, action types.SensitiveTransactionType, deviceFingerprint string) error {
 	sessions := k.GetAccountSessions(ctx, address)
 	now := ctx.BlockTime()
+	insufficientFactors := false
+	deviceMismatch := false
 
 	for _, session := range sessions {
 		// Check if session can authorize the requested action (risk-based step-up)
@@ -93,10 +96,13 @@ func (k Keeper) consumeAuthSessionWithDevice(ctx sdk.Context, address sdk.AccAdd
 		}
 
 		// Validate device fingerprint if provided
-		if deviceFingerprint != "" && session.DeviceFingerprint != "" {
-			if session.DeviceFingerprint != deviceFingerprint {
-				return types.ErrDeviceMismatch.Wrap("device fingerprint does not match session")
-			}
+		if session.DeviceFingerprint != "" && session.DeviceFingerprint != deviceFingerprint {
+			deviceMismatch = true
+			continue
+		}
+		if !k.sessionFactorsSatisfyPolicy(ctx, address, action, session.VerifiedFactors, deviceFingerprint) {
+			insufficientFactors = true
+			continue
 		}
 
 		// For single-use sessions, mark as used
@@ -116,8 +122,36 @@ func (k Keeper) consumeAuthSessionWithDevice(ctx sdk.Context, address sdk.AccAdd
 
 		return nil
 	}
+	if insufficientFactors {
+		return types.ErrInsufficientFactors.Wrap("verified factors do not satisfy policy requirements")
+	}
+	if deviceMismatch {
+		return types.ErrDeviceMismatch.Wrap("device fingerprint does not match session")
+	}
 
 	return types.ErrSessionNotFound.Wrapf("no valid authorization session found for action %s", action.String())
+}
+
+func (k Keeper) sessionFactorsSatisfyPolicy(ctx sdk.Context, address sdk.AccAddress, action types.SensitiveTransactionType, verifiedFactors []types.FactorType, deviceFingerprint string) bool {
+	_, required, combinations := NewMFAGatingHooks(k).RequiresMFA(ctx, address, action)
+	if !required {
+		return true
+	}
+	if !checkFactorCombinations(combinations, verifiedFactors) {
+		return false
+	}
+	if !hasVEIDFactor(combinations) {
+		return true
+	}
+	threshold := NewMFAGatingHooks(k).GetVEIDThreshold(ctx, address)
+	if config, found := k.GetSensitiveTxConfig(ctx, action); found && config.MinVEIDScore > threshold {
+		threshold = config.MinVEIDScore
+	}
+	if k.veidKeeper == nil {
+		return false
+	}
+	score, found := k.veidKeeper.GetVEIDScore(ctx, address)
+	return found && score >= threshold
 }
 
 // CreateAuthSessionForAction creates an authorization session for the given action type
@@ -252,10 +286,11 @@ func (k Keeper) ValidateSessionForTransaction(
 	}
 
 	// Validate device fingerprint if session is device-bound
-	if session.DeviceFingerprint != "" && deviceFingerprint != "" {
-		if session.DeviceFingerprint != deviceFingerprint {
-			return types.ErrDeviceMismatch.Wrap("device fingerprint does not match session")
-		}
+	if session.DeviceFingerprint != "" && session.DeviceFingerprint != deviceFingerprint {
+		return types.ErrDeviceMismatch.Wrap("device fingerprint does not match session")
+	}
+	if !k.sessionFactorsSatisfyPolicy(ctx, address, action, session.VerifiedFactors, deviceFingerprint) {
+		return types.ErrInsufficientFactors.Wrap("verified factors do not satisfy policy requirements")
 	}
 
 	return nil
