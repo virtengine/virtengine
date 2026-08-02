@@ -185,6 +185,7 @@ type Member struct {
 	IdentityDigest [32]byte
 	State          MembershipState
 	Admin          bool
+	PolicySignerID string
 	Weight         uint64
 }
 
@@ -205,12 +206,34 @@ func ValidateMemberRemoval(members []Member, target [32]byte, policy DecisionPol
 	if err := policy.Validate(); err != nil {
 		return err
 	}
+	policyWeights := make(map[string]uint64, len(policy.Signers))
+	for _, signer := range policy.Signers {
+		policyWeights[signer.SignerID] = signer.Weight
+	}
 	found := false
 	var adminWeight uint64
 	adminCount := 0
+	seenMembers := make(map[[32]byte]struct{}, len(members))
+	seenPolicySigners := make(map[string]struct{}, len(policy.Signers))
 	for _, member := range members {
 		if zeroDigest(member.IdentityDigest) {
 			return errors.New("member identity commitment is required")
+		}
+		if _, duplicate := seenMembers[member.IdentityDigest]; duplicate {
+			return errors.New("duplicate member identity commitment")
+		}
+		seenMembers[member.IdentityDigest] = struct{}{}
+		if member.Admin {
+			weight, exists := policyWeights[member.PolicySignerID]
+			if member.PolicySignerID == "" || !exists || member.Weight != weight {
+				return errors.New("admin member does not match decision policy signer authority")
+			}
+			if _, duplicate := seenPolicySigners[member.PolicySignerID]; duplicate {
+				return errors.New("decision policy signer authority is claimed by multiple members")
+			}
+			seenPolicySigners[member.PolicySignerID] = struct{}{}
+		} else if member.PolicySignerID != "" {
+			return errors.New("non-admin member may not claim decision policy signer authority")
 		}
 		if member.IdentityDigest == target {
 			if member.State != MembershipActive {

@@ -74,21 +74,65 @@ func TestInvitationReplayExpiryAndTargetBinding(t *testing.T) {
 
 func TestMembershipLastAdminAndThresholdPreservation(t *testing.T) {
 	policy := fixturePolicy()
-	adminA := Member{IdentityDigest: digest(1), State: MembershipActive, Admin: true, Weight: 2}
+	adminA := Member{IdentityDigest: digest(1), State: MembershipActive, Admin: true, PolicySignerID: "admin-a", Weight: 1}
 	member := Member{IdentityDigest: digest(2), State: MembershipActive, Weight: 1}
 	if err := ValidateMemberRemoval([]Member{adminA, member}, adminA.IdentityDigest, policy); err == nil {
 		t.Fatal("last admin removal accepted")
 	}
-	adminB := Member{IdentityDigest: digest(3), State: MembershipActive, Admin: true, Weight: 1}
+	adminB := Member{IdentityDigest: digest(3), State: MembershipActive, Admin: true, PolicySignerID: "admin-b", Weight: 1}
 	if err := ValidateMemberRemoval([]Member{adminA, adminB}, adminA.IdentityDigest, policy); err == nil {
 		t.Fatal("removal violating threshold accepted")
 	}
+	thresholdPreserving := policy
+	thresholdPreserving.Signers[1].Weight = 2
 	adminB.Weight = 2
-	if err := ValidateMemberRemoval([]Member{adminA, adminB}, adminA.IdentityDigest, policy); err != nil {
+	if err := ValidateMemberRemoval([]Member{adminA, adminB}, adminA.IdentityDigest, thresholdPreserving); err != nil {
 		t.Fatalf("threshold-preserving removal rejected: %v", err)
 	}
 	if err := ValidateMembershipTransition(MembershipRemoved, MembershipActive); err == nil {
 		t.Fatal("removed membership reactivated")
+	}
+}
+
+func TestMembershipRemovalRejectsDuplicateCommitments(t *testing.T) {
+	policy := fixturePolicy()
+	target := Member{IdentityDigest: digest(1), State: MembershipActive, Admin: true, PolicySignerID: "admin-a", Weight: 1}
+	survivor := Member{IdentityDigest: digest(2), State: MembershipActive, Admin: true, PolicySignerID: "admin-b", Weight: 1}
+
+	duplicateSurvivor := []Member{target, survivor, survivor}
+	if err := ValidateMemberRemoval(duplicateSurvivor, target.IdentityDigest, policy); err == nil {
+		t.Fatal("duplicate surviving admin inflated removal authority")
+	}
+
+	secondAdmin := Member{IdentityDigest: digest(3), State: MembershipActive, Admin: true, PolicySignerID: "admin-b", Weight: 1}
+	duplicateTarget := []Member{target, target, secondAdmin}
+	if err := ValidateMemberRemoval(duplicateTarget, target.IdentityDigest, policy); err == nil {
+		t.Fatal("duplicate removal target was accepted")
+	}
+}
+
+func TestMembershipRemovalRequiresPolicyBoundAdmins(t *testing.T) {
+	policy := fixturePolicy()
+	target := Member{IdentityDigest: digest(1), State: MembershipActive, Admin: true, PolicySignerID: "admin-a", Weight: 1}
+	for name, survivor := range map[string]Member{
+		"unknown signer": {IdentityDigest: digest(2), State: MembershipActive, Admin: true, PolicySignerID: "outsider", Weight: 2},
+		"wrong weight":   {IdentityDigest: digest(2), State: MembershipActive, Admin: true, PolicySignerID: "admin-b", Weight: 2},
+		"missing signer": {IdentityDigest: digest(2), State: MembershipActive, Admin: true, Weight: 2},
+	} {
+		t.Run(name, func(t *testing.T) {
+			if err := ValidateMemberRemoval([]Member{target, survivor}, target.IdentityDigest, policy); err == nil {
+				t.Fatal("unbound admin authority preserved removal quorum")
+			}
+		})
+	}
+	nonAdminClaim := Member{IdentityDigest: digest(2), State: MembershipActive, PolicySignerID: "admin-b", Weight: 1}
+	if err := ValidateMemberRemoval([]Member{target, nonAdminClaim}, target.IdentityDigest, policy); err == nil {
+		t.Fatal("non-admin policy signer claim accepted")
+	}
+	aliasedA := Member{IdentityDigest: digest(2), State: MembershipActive, Admin: true, PolicySignerID: "admin-b", Weight: 1}
+	aliasedB := Member{IdentityDigest: digest(3), State: MembershipActive, Admin: true, PolicySignerID: "admin-b", Weight: 1}
+	if err := ValidateMemberRemoval([]Member{target, aliasedA, aliasedB}, target.IdentityDigest, policy); err == nil {
+		t.Fatal("multiple members aliased one policy signer authority")
 	}
 }
 
