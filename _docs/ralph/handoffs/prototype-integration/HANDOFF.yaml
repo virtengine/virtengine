@@ -1,31 +1,23 @@
 {
   "campaign": "three-day-prototype",
   "thread": "T4",
-  "checkpoint": "T4-16E",
+  "checkpoint": "T4-16F",
   "branch": "ve/prototype-integration",
-  "start_head": "8a9782f0763b0c479a647d68dc584a445ca83899",
-  "end_head": "0dbcc84c8e3d55b52be7d5bd6e558527e928b70b",
+  "start_head": "84095371c88b20a241616a3ff374bb2bd9c9ce4f",
+  "end_head": "fb791242ee37564279cccdb072a4be5d63d08075",
   "origin_main": "79391a3df86d85522b92e0400c6904971ecbe65d",
   "tree_clean": true,
   "commits": [
-    "0dbcc84c8e3d55b52be7d5bd6e558527e928b70b"
+    "fb791242ee37564279cccdb072a4be5d63d08075"
   ],
   "owned_paths": [
     "_docs/ralph/prototype-integration/**",
     "_docs/ralph/handoffs/prototype-integration/**",
-    "_docs/audits/task-t4-16a-fund-route-inventory-2026-08-02.md",
-    "_docs/ralph/prototype-integration/fund-route-inventory.json",
-    "scripts/validate-fund-route-inventory.cjs",
-    "scripts/validate-fund-route-inventory.test.cjs",
-    "scripts/validate-prototype-integration.cjs"
+    "_docs/ralph/prototype-integration/core-rc-manifest.json"
   ],
   "files_changed": [
     "_docs/ralph/handoffs/prototype-integration/HANDOFF.yaml",
-    "_docs/audits/task-t4-16a-fund-route-inventory-2026-08-02.md",
-    "_docs/ralph/prototype-integration/fund-route-inventory.json",
-    "scripts/validate-fund-route-inventory.cjs",
-    "scripts/validate-fund-route-inventory.test.cjs",
-    "scripts/validate-prototype-integration.cjs"
+    "_docs/ralph/prototype-integration/core-rc-manifest.json"
   ],
   "tests": [
     {
@@ -47,9 +39,7 @@
     }
   ],
   "generated_hashes": {
-    "scripts/validate-fund-route-inventory.cjs": "e6a8ea240aa251d6a48cc0cee36691ab18f3531f38defdad9dabc8226fdf8984",
-    "scripts/validate-fund-route-inventory.test.cjs": "b7d0b44e00f1e2fb5a99f0bffded1694da35adc650897d147561495a5d85b3e0",
-    "_docs/ralph/prototype-integration/fund-route-inventory.json": "ddb2b020a8bef05dc162b4a8d0b5ef64da37ab165b11782729e0606c195a2850"
+    "_docs/ralph/prototype-integration/core-rc-manifest.json": "3ebb26277c1242db921c1d5a1757217fe1f37617c11068c567cbd359d6bbeca1"
   },
   "accepted_checkpoints": [],
   "rejected_checkpoints": [
@@ -87,5 +77,5 @@
     "Task 88C is not complete."
   ],
   "next_checkpoint": null,
-  "expected_head": "0dbcc84c8e3d55b52be7d5bd6e558527e928b70b"
+  "expected_head": "fb791242ee37564279cccdb072a4be5d63d08075"
 }
