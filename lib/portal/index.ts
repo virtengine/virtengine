@@ -264,6 +264,15 @@ export { OfferingList } from "./components/marketplace/OfferingList";
 export { OfferingCard } from "./components/marketplace/OfferingCard";
 export { OfferingDetail } from "./components/marketplace/OfferingDetail";
 export { CheckoutFlow } from "./components/marketplace/CheckoutFlow";
+export type { CheckoutFlowProps } from "./components/marketplace/CheckoutFlow";
+export type {
+  CheckoutCommittedResult,
+  CheckoutMutationAdapter,
+  CheckoutMutationContext,
+  CheckoutMutationProjector,
+  CheckoutMutationRequest,
+  CheckoutMutationSubmission,
+} from "./components/marketplace/checkout-mutation";
 export { OrderDetail } from "./components/marketplace/OrderDetail";
 export { OrderTimeline } from "./components/marketplace/OrderTimeline";
 

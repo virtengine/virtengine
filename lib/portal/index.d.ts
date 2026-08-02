@@ -1,5 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
+import type * as React from "react";
+
 export type UnsupportedDocumentReasonCode =
   | "CATEGORY_NOT_SUPPORTED"
   | "COUNTRY_NOT_SUPPORTED"
@@ -137,7 +139,52 @@ export function validateUnsupportedDocumentTriageRequest(
   value: unknown,
   policy?: UnsupportedDocumentTriagePolicy,
 ): UnsupportedDocumentTriageRequest;
-export const CheckoutFlow: any;
+export interface CheckoutFlowProps {
+  offering: Offering;
+  onComplete: (orderId: string) => void;
+  onCancel?: () => void;
+  className?: string;
+  mutationAdapter?: CheckoutMutationAdapter;
+  mutationContext?: CheckoutMutationContext;
+  resultProjector?: CheckoutMutationProjector;
+  mutationTimeoutMs?: number;
+}
+export const CheckoutFlow: React.ComponentType<CheckoutFlowProps>;
+export interface CheckoutMutationContext {
+  chainId: string;
+  customerAddress: string;
+}
+export interface CheckoutMutationRequest {
+  chainId: string;
+  customerAddress: string;
+  offeringId: string;
+  providerAddress: string;
+  durationSeconds: number;
+  priceAmount: string;
+  priceDenom: string;
+}
+export interface CheckoutMutationSubmission {
+  requestDigest: string;
+  idempotencyKey: string;
+  signal: AbortSignal;
+}
+export interface CheckoutMutationAdapter {
+  submitOrder(
+    request: CheckoutMutationRequest,
+    submission: CheckoutMutationSubmission,
+  ): Promise<unknown>;
+}
+export type CheckoutMutationProjector = (result: unknown) => unknown;
+export interface CheckoutCommittedResult {
+  status: "committed";
+  code: 0;
+  orderId: string;
+  txHash: string;
+  blockHeight: number;
+  requestDigest: string;
+  idempotencyKey: string;
+  request: CheckoutMutationRequest;
+}
 export const clearAnnouncements: any;
 export const createChainConfig: any;
 export const createChainQueryClient: any;
@@ -281,7 +328,11 @@ export const ProviderAPIError: any;
 export class ProviderShellSessionError extends Error {
   readonly code: ProviderShellSessionErrorCode;
   readonly cause?: unknown;
-  constructor(code: ProviderShellSessionErrorCode, message: string, cause?: unknown);
+  constructor(
+    code: ProviderShellSessionErrorCode,
+    message: string,
+    cause?: unknown,
+  );
 }
 export const buildProviderShellWebSocketUrl: any;
 export const validateProviderShellSessionReceipt: any;

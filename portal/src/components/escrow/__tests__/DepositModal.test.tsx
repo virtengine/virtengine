@@ -126,30 +126,31 @@ describe('DepositModal', () => {
   it('ignores a pending result after cancellation', async () => {
     let resolveMutation: (() => void) | undefined;
     let submissionSignal: AbortSignal | undefined;
+    const mutate = vi.fn(
+      (request, submission) =>
+        new Promise((resolve) => {
+          submissionSignal = submission.signal;
+          resolveMutation = () =>
+            resolve({
+              status: 'committed',
+              txHash: 'STALE123',
+              code: 0,
+              blockHeight: 42,
+              operationId: 'stale-operation',
+              requestDigest: submission.requestDigest,
+              idempotencyKey: submission.idempotencyKey,
+              request,
+            });
+        })
+    );
     const adapter: EscrowMutationAdapter = {
-      mutate: vi.fn(
-        (request, submission) =>
-          new Promise((resolve) => {
-            submissionSignal = submission.signal;
-            resolveMutation = () =>
-              resolve({
-                status: 'committed',
-                txHash: 'STALE123',
-                code: 0,
-                blockHeight: 42,
-                operationId: 'stale-operation',
-                requestDigest: submission.requestDigest,
-                idempotencyKey: submission.idempotencyKey,
-                request,
-              });
-          })
-      ),
+      mutate,
     };
     renderModal({ mutationAdapter: adapter, mutationContext, resultProjector: (value) => value });
 
     fireEvent.click(screen.getByRole('button', { name: /^deposit$/i }));
     await screen.findByText('Submitting deposit');
-    await waitFor(() => expect(adapter.mutate).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(mutate).toHaveBeenCalledTimes(1));
     fireEvent.click(screen.getByRole('button', { name: /cancel/i }));
     expect(submissionSignal?.aborted).toBe(true);
     resolveMutation?.();
@@ -164,7 +165,8 @@ describe('DepositModal', () => {
       .mockImplementationOnce(
         () => new Promise<ArrayBuffer>((resolve) => (resolveDigest = resolve))
       );
-    const adapter: EscrowMutationAdapter = { mutate: vi.fn() };
+    const mutate = vi.fn();
+    const adapter: EscrowMutationAdapter = { mutate };
     renderModal({ mutationAdapter: adapter, mutationContext, resultProjector: (value) => value });
 
     fireEvent.click(screen.getByRole('button', { name: /^deposit$/i }));
@@ -172,7 +174,7 @@ describe('DepositModal', () => {
     fireEvent.click(screen.getByRole('button', { name: /cancel/i }));
     resolveDigest?.(new ArrayBuffer(32));
 
-    await waitFor(() => expect(adapter.mutate).not.toHaveBeenCalled());
+    await waitFor(() => expect(mutate).not.toHaveBeenCalled());
     digestSpy.mockRestore();
   });
 
@@ -183,7 +185,8 @@ describe('DepositModal', () => {
       .mockImplementationOnce(
         () => new Promise<ArrayBuffer>((resolve) => (resolveDigest = resolve))
       );
-    const adapter: EscrowMutationAdapter = { mutate: vi.fn() };
+    const mutate = vi.fn();
+    const adapter: EscrowMutationAdapter = { mutate };
     const props = {
       onOpenChange: vi.fn(),
       account: escrowAccount,
@@ -198,7 +201,7 @@ describe('DepositModal', () => {
     rerender(<DepositModal {...props} open={false} />);
     resolveDigest?.(new ArrayBuffer(32));
 
-    await waitFor(() => expect(adapter.mutate).not.toHaveBeenCalled());
+    await waitFor(() => expect(mutate).not.toHaveBeenCalled());
     digestSpy.mockRestore();
   });
 

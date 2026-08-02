@@ -240,6 +240,12 @@ export type {
   OrderEvent,
   CheckoutRequest,
   CheckoutValidation,
+  CheckoutCommittedResult,
+  CheckoutMutationAdapter,
+  CheckoutMutationContext,
+  CheckoutMutationProjector,
+  CheckoutMutationRequest,
+  CheckoutMutationSubmission,
 } from '../../../lib/portal';
 
 export {

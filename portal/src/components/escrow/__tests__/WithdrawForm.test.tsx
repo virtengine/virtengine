@@ -131,7 +131,8 @@ describe('WithdrawForm', () => {
       .mockImplementationOnce(
         () => new Promise<ArrayBuffer>((resolve) => (resolveDigest = resolve))
       );
-    const adapter: EscrowMutationAdapter = { mutate: vi.fn() };
+    const mutate = vi.fn();
+    const adapter: EscrowMutationAdapter = { mutate };
     const { unmount } = render(
       <WithdrawForm
         account={account}
@@ -146,7 +147,7 @@ describe('WithdrawForm', () => {
     unmount();
     resolveDigest?.(new ArrayBuffer(32));
 
-    await waitFor(() => expect(adapter.mutate).not.toHaveBeenCalled());
+    await waitFor(() => expect(mutate).not.toHaveBeenCalled());
     digestSpy.mockRestore();
   });
 
