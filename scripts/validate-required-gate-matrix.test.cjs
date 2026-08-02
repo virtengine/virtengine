@@ -69,6 +69,12 @@ const tests = [
     category.path_selectors = category.path_selectors.filter((selector) => selector !== "scripts/*.py");
     assert.throws(() => validateRequiredGateMatrix(candidate, { schema }), /must include scripts\/\*\.py/);
   }],
+  ["rejects missing root SQL coverage", () => {
+    const candidate = cloneMatrix();
+    const category = candidate.categories.find((entry) => entry.id === "docs_process_boundary_e2e");
+    category.path_selectors = category.path_selectors.filter((selector) => selector !== "scripts/*.sql");
+    assert.throws(() => validateRequiredGateMatrix(candidate, { schema }), /must include scripts\/\*\.sql/);
+  }],
   ["rejects a nonzero exit", () => {
     const category = cloneMatrix().categories[0];
     const result = validResult(category);

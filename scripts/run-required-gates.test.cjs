@@ -133,6 +133,10 @@ try {
       const plan = planFor(["scripts/validate_slurm_chart_semantics.py", "scripts/validate-agents-docs.mjs"]);
       assert.deepEqual(plan.categories.map((category) => category.id), ["docs_process_boundary_e2e"]);
     }],
+    ["selects docs/process gates for root script Markdown and SQL", () => {
+      const plan = planFor(["scripts/AGENTS.md", "scripts/archive-vk-data.sql"]);
+      assert.deepEqual(plan.categories.map((category) => category.id), ["docs_process_boundary_e2e"]);
+    }],
     ["records an explicit root metadata allowance", () => {
       const plan = planFor(["README.md"]);
       assert.equal(plan.categories.length, 0);
