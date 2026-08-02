@@ -3,11 +3,82 @@ package data_vault
 import (
 	"context"
 	"errors"
+	"sync"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 	"github.com/virtengine/virtengine/pkg/data_vault/keys"
 )
+
+type instrumentedRotationKeyManager struct {
+	keys.VaultKeyManager
+	mu             sync.Mutex
+	getActiveCalls int
+	rotateCalls    int
+}
+
+func (m *instrumentedRotationKeyManager) GetActiveKey(scope keys.Scope) (*keys.KeyInfo, error) {
+	m.mu.Lock()
+	m.getActiveCalls++
+	m.mu.Unlock()
+	return m.VaultKeyManager.GetActiveKey(scope)
+}
+
+func (m *instrumentedRotationKeyManager) RotateKey(scope keys.Scope, overlap time.Duration) error {
+	m.mu.Lock()
+	m.rotateCalls++
+	m.mu.Unlock()
+	return m.VaultKeyManager.RotateKey(scope, overlap)
+}
+
+func (m *instrumentedRotationKeyManager) reset() {
+	m.mu.Lock()
+	m.getActiveCalls = 0
+	m.rotateCalls = 0
+	m.mu.Unlock()
+}
+
+func (m *instrumentedRotationKeyManager) calls() (int, int) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.getActiveCalls, m.rotateCalls
+}
+
+type recordingAccessControl struct {
+	mu        sync.Mutex
+	requests  []AccessRequest
+	authorize func(context.Context, AccessRequest) error
+}
+
+func (a *recordingAccessControl) Authorize(ctx context.Context, req AccessRequest) error {
+	a.mu.Lock()
+	a.requests = append(a.requests, req)
+	a.mu.Unlock()
+	return a.authorize(ctx, req)
+}
+
+func (a *recordingAccessControl) reset() {
+	a.mu.Lock()
+	a.requests = nil
+	a.mu.Unlock()
+}
+
+func (a *recordingAccessControl) recorded() []AccessRequest {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	return append([]AccessRequest(nil), a.requests...)
+}
+
+func artifactPutCount(store *memoryArtifactStore) int {
+	store.mu.RLock()
+	defer store.mu.RUnlock()
+	count := 0
+	for _, refs := range store.owners {
+		count += len(refs)
+	}
+	return count
+}
 
 func TestVaultService_AccessAndAudit(t *testing.T) {
 	ctx := context.Background()
@@ -190,7 +261,7 @@ func TestVaultService_RotateKeysReencrypts(t *testing.T) {
 	require.NoError(t, err)
 
 	originalVersion := blob.Metadata.KeyVersion
-	require.NoError(t, vault.RotateKeys(ctx, ScopeSupport))
+	require.NoError(t, vault.RotateKeys(ctx, ScopeSupport, "owner", "org-1"))
 
 	_, meta, err := vault.Retrieve(ctx, &RetrieveRequest{
 		ID:        blob.Metadata.ID,
@@ -199,6 +270,192 @@ func TestVaultService_RotateKeysReencrypts(t *testing.T) {
 	})
 	require.NoError(t, err)
 	require.Greater(t, meta.KeyVersion, originalVersion)
+}
+
+func TestVaultService_RotateKeysPreauthorizesAllBlobsBeforeMutation(t *testing.T) {
+	ctx := context.Background()
+	baseKeyManager := keys.NewKeyManager()
+	require.NoError(t, baseKeyManager.Initialize())
+	keyManager := &instrumentedRotationKeyManager{VaultKeyManager: baseKeyManager}
+	backend := newMemoryArtifactStore()
+	policy := NewPolicyAccessControl(DefaultAccessPolicy(), nil, StaticOrgResolver{
+		Members: map[string]map[string]bool{"org-1": {"member": true}},
+		Roles:   map[string]map[string]string{"org-1": {"member": "member"}},
+	})
+	access := &recordingAccessControl{}
+	access.authorize = func(ctx context.Context, req AccessRequest) error {
+		if req.Action == AccessActionRotate {
+			getActiveCalls, rotateCalls := keyManager.calls()
+			require.Zero(t, getActiveCalls)
+			require.Zero(t, rotateCalls)
+		}
+		return policy.Authorize(ctx, req)
+	}
+	auditLogger := NewAuditLogger(DefaultAuditLogConfig(), NewMemoryAuditStore())
+	vault, err := NewVaultService(VaultConfig{
+		Store: NewEncryptedBlobStore(backend, keyManager), AccessControl: access,
+		ConsentResolver: AllowAllConsentResolver{}, AuditLogger: auditLogger,
+	})
+	require.NoError(t, err)
+	for _, owner := range []string{"owner-1", "owner-2"} {
+		_, err := vault.Upload(ctx, &UploadRequest{
+			Scope: ScopeSupport, Plaintext: []byte(owner), Owner: owner, OrgID: "org-1",
+		})
+		require.NoError(t, err)
+	}
+	keyManager.reset()
+	access.reset()
+
+	require.NoError(t, vault.RotateKeys(ctx, ScopeSupport, "member", "org-1"))
+	requests := access.recorded()
+	require.Len(t, requests, 2)
+	for _, req := range requests {
+		require.Equal(t, AccessActionRotate, req.Action)
+		require.Equal(t, "member", req.Requester)
+		require.Equal(t, ScopeSupport, req.Scope)
+		require.Equal(t, "org-1", req.OrgID)
+		require.Equal(t, "org-1", req.ResourceOrgID)
+		require.NotEmpty(t, req.Owner)
+	}
+	require.Equal(t, 4, artifactPutCount(backend))
+
+	events, err := auditLogger.QueryEvents(ctx, AuditFilter{Scope: ScopeSupport, Requester: "member"})
+	require.NoError(t, err)
+	require.Len(t, events, 2)
+	for _, event := range events {
+		require.Equal(t, string(AccessActionRotate), event.EventType)
+		require.Equal(t, "member", event.Requester)
+		require.Equal(t, "org-1", event.OrgID)
+		require.Equal(t, "org-1", event.Metadata["resource_org_id"])
+		require.True(t, event.Success)
+	}
+}
+
+func TestVaultService_RotateKeysLaterDenialHasNoMutation(t *testing.T) {
+	ctx := context.Background()
+	baseKeyManager := keys.NewKeyManager()
+	require.NoError(t, baseKeyManager.Initialize())
+	keyManager := &instrumentedRotationKeyManager{VaultKeyManager: baseKeyManager}
+	backend := newMemoryArtifactStore()
+	access := &recordingAccessControl{}
+	rotateAuthorizations := 0
+	access.authorize = func(_ context.Context, req AccessRequest) error {
+		if req.Action != AccessActionRotate {
+			return nil
+		}
+		rotateAuthorizations++
+		if rotateAuthorizations == 2 {
+			return NewVaultError("Authorize", ErrUnauthorized, "second blob denied")
+		}
+		return nil
+	}
+	auditLogger := NewAuditLogger(DefaultAuditLogConfig(), NewMemoryAuditStore())
+	vault, err := NewVaultService(VaultConfig{
+		Store: NewEncryptedBlobStore(backend, keyManager), AccessControl: access,
+		ConsentResolver: AllowAllConsentResolver{}, AuditLogger: auditLogger,
+	})
+	require.NoError(t, err)
+	blobs := make([]*EncryptedBlob, 0, 2)
+	for _, owner := range []string{"owner-1", "owner-2"} {
+		blob, err := vault.Upload(ctx, &UploadRequest{
+			Scope: ScopeSupport, Plaintext: []byte(owner), Owner: owner, OrgID: "org-1",
+		})
+		require.NoError(t, err)
+		blobs = append(blobs, blob)
+	}
+	keyManager.reset()
+	access.reset()
+	putsBefore := artifactPutCount(backend)
+
+	err = vault.RotateKeys(ctx, ScopeSupport, "requester", "org-1")
+	require.ErrorIs(t, err, ErrUnauthorized)
+	require.Len(t, access.recorded(), 2)
+	getActiveCalls, rotateCalls := keyManager.calls()
+	require.Zero(t, getActiveCalls)
+	require.Zero(t, rotateCalls)
+	require.Equal(t, putsBefore, artifactPutCount(backend))
+	for _, blob := range blobs {
+		metadata, metadataErr := vault.store.GetMetadata(blob.Metadata.ID)
+		require.NoError(t, metadataErr)
+		require.Equal(t, blob.Metadata.KeyID, metadata.KeyID)
+	}
+
+	events, queryErr := auditLogger.QueryEvents(ctx, AuditFilter{Requester: "requester"})
+	require.NoError(t, queryErr)
+	require.Len(t, events, 1)
+	require.Equal(t, string(AccessActionRotate), events[0].EventType)
+	require.Equal(t, "org-1", events[0].OrgID)
+	require.Equal(t, "org-1", events[0].Metadata["resource_org_id"])
+	require.False(t, events[0].Success)
+}
+
+func TestVaultService_RotateKeysRejectsMissingRequesterAndOrgMismatchBeforeMutation(t *testing.T) {
+	ctx := context.Background()
+	baseKeyManager := keys.NewKeyManager()
+	require.NoError(t, baseKeyManager.Initialize())
+	keyManager := &instrumentedRotationKeyManager{VaultKeyManager: baseKeyManager}
+	backend := newMemoryArtifactStore()
+	policy := NewPolicyAccessControl(DefaultAccessPolicy(), nil, StaticOrgResolver{
+		Members: map[string]map[string]bool{"org-1": {"member": true}},
+		Roles:   map[string]map[string]string{"org-1": {"member": "member"}},
+	})
+	access := &recordingAccessControl{authorize: policy.Authorize}
+	vault, err := NewVaultService(VaultConfig{
+		Store: NewEncryptedBlobStore(backend, keyManager), AccessControl: access,
+		ConsentResolver: AllowAllConsentResolver{},
+		AuditLogger:     NewAuditLogger(DefaultAuditLogConfig(), NewMemoryAuditStore()),
+	})
+	require.NoError(t, err)
+	_, err = vault.Upload(ctx, &UploadRequest{
+		Scope: ScopeSupport, Plaintext: []byte("secret"), Owner: "owner", OrgID: "org-1",
+	})
+	require.NoError(t, err)
+	keyManager.reset()
+	access.reset()
+	putsBefore := artifactPutCount(backend)
+
+	err = vault.RotateKeys(ctx, ScopeSupport, "", "org-1")
+	require.ErrorIs(t, err, ErrInvalidRequest)
+	require.Empty(t, access.recorded())
+	err = vault.RotateKeys(ctx, Scope("unknown"), "member", "org-1")
+	require.ErrorIs(t, err, ErrInvalidScope)
+	require.Empty(t, access.recorded())
+	err = vault.RotateKeys(ctx, ScopeSupport, "member", "org-2")
+	require.ErrorIs(t, err, ErrUnauthorized)
+	require.Len(t, access.recorded(), 1)
+	getActiveCalls, rotateCalls := keyManager.calls()
+	require.Zero(t, getActiveCalls)
+	require.Zero(t, rotateCalls)
+	require.Equal(t, putsBefore, artifactPutCount(backend))
+}
+
+func TestVaultService_RotateKeysEmptyScopeRequiresAuthorization(t *testing.T) {
+	ctx := context.Background()
+	baseKeyManager := keys.NewKeyManager()
+	require.NoError(t, baseKeyManager.Initialize())
+	keyManager := &instrumentedRotationKeyManager{VaultKeyManager: baseKeyManager}
+	access := &recordingAccessControl{authorize: func(_ context.Context, _ AccessRequest) error {
+		return NewVaultError("Authorize", ErrUnauthorized, "rotation denied")
+	}}
+	vault, err := NewVaultService(VaultConfig{
+		Store: NewEncryptedBlobStore(newMemoryArtifactStore(), keyManager), AccessControl: access,
+		ConsentResolver: AllowAllConsentResolver{},
+		AuditLogger:     NewAuditLogger(DefaultAuditLogConfig(), NewMemoryAuditStore()),
+	})
+	require.NoError(t, err)
+	keyManager.reset()
+
+	err = vault.RotateKeys(ctx, ScopeSupport, "requester", "org-1")
+	require.ErrorIs(t, err, ErrUnauthorized)
+	requests := access.recorded()
+	require.Len(t, requests, 1)
+	require.Equal(t, AccessRequest{
+		Action: AccessActionRotate, Requester: "requester", Scope: ScopeSupport,
+		OrgID: "org-1", ResourceOrgID: "org-1",
+	}, requests[0])
+	getActiveCalls, rotateCalls := keyManager.calls()
+	require.Zero(t, getActiveCalls)
+	require.Zero(t, rotateCalls)
 }
 
 func TestVaultServicePropagatesAuditFailures(t *testing.T) {

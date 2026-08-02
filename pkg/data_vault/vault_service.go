@@ -298,56 +298,119 @@ func (v *Vault) Delete(ctx context.Context, id BlobID, requester string) error {
 }
 
 // RotateKeys initiates key rotation for a scope.
-func (v *Vault) RotateKeys(ctx context.Context, scope Scope) error {
-	_ = ctx
+func (v *Vault) RotateKeys(ctx context.Context, scope Scope, requester, orgID string) error {
+	if requester == "" {
+		return NewVaultError("RotateKeys", ErrInvalidRequest, "requester required")
+	}
+	if scope != ScopeVEID && scope != ScopeSupport && scope != ScopeMarket && scope != ScopeAudit {
+		return NewVaultError("RotateKeys", ErrInvalidScope, fmt.Sprintf("unknown scope %s", scope))
+	}
 	if v.store == nil || v.store.KeyManager() == nil {
 		return NewVaultError("RotateKeys", ErrInvalidRequest, "key manager unavailable")
 	}
+	logFailure := func(blobID BlobID, resourceOrgID string, failure error, metadata map[string]string) {
+		v.recordAccess(AccessActionRotate, scope, requester, false, failure)
+		if metadata == nil {
+			metadata = make(map[string]string)
+		}
+		metadata["resource_org_id"] = resourceOrgID
+		v.logAudit(ctx, scope, blobID, requester, orgID, AccessActionRotate, false, failure, metadata)
+	}
+
+	metadata, err := v.store.ListByScope(scope)
+	if err != nil {
+		logFailure("", orgID, err, nil)
+		return NewVaultError("RotateKeys", err, "failed to list blobs")
+	}
+	nonNilMetadata := make([]*BlobMetadata, 0, len(metadata))
+	for _, meta := range metadata {
+		if meta == nil {
+			continue
+		}
+		nonNilMetadata = append(nonNilMetadata, meta)
+		if err := v.accessControl.Authorize(ctx, AccessRequest{
+			Action:        AccessActionRotate,
+			Requester:     requester,
+			Owner:         meta.Owner,
+			Scope:         scope,
+			OrgID:         orgID,
+			ResourceOrgID: meta.OrgID,
+		}); err != nil {
+			logFailure(meta.ID, meta.OrgID, err, nil)
+			return err
+		}
+	}
+	if len(nonNilMetadata) == 0 {
+		if err := v.accessControl.Authorize(ctx, AccessRequest{
+			Action:        AccessActionRotate,
+			Requester:     requester,
+			Scope:         scope,
+			OrgID:         orgID,
+			ResourceOrgID: orgID,
+		}); err != nil {
+			logFailure("", orgID, err, nil)
+			return err
+		}
+	}
+
 	keyMgr := v.store.KeyManager()
 	oldKey, err := keyMgr.GetActiveKey(keys.Scope(scope))
 	if err != nil {
+		logFailure("", orgID, err, nil)
 		return NewVaultError("RotateKeys", err, "active key unavailable")
 	}
 
 	if err := keyMgr.RotateKey(keys.Scope(scope), v.rotationOverlap); err != nil {
+		logFailure("", orgID, err, map[string]string{"old_key_id": oldKey.ID})
 		return NewVaultError("RotateKeys", err, "rotation failed")
 	}
 
 	rotation, err := keyMgr.GetRotationStatus(keys.Scope(scope))
 	if err != nil {
+		logFailure("", orgID, err, map[string]string{"old_key_id": oldKey.ID})
 		return NewVaultError("RotateKeys", err, "rotation status unavailable")
 	}
 
 	newKey, err := keyMgr.GetKey(keys.Scope(scope), rotation.NewKeyID)
 	if err != nil {
+		logFailure("", orgID, err, map[string]string{
+			"old_key_id": oldKey.ID,
+			"new_key_id": rotation.NewKeyID,
+		})
 		return NewVaultError("RotateKeys", err, "new key unavailable")
 	}
 
-	metadata, err := v.store.ListByScope(scope)
-	if err != nil {
-		return NewVaultError("RotateKeys", err, "failed to list blobs")
-	}
-
-	for _, meta := range metadata {
-		if meta == nil {
-			continue
-		}
+	for _, meta := range nonNilMetadata {
 		_, reencryptErr := v.store.Reencrypt(ctx, meta.ID, oldKey, newKey)
 		if reencryptErr != nil {
-			v.logAudit(ctx, scope, meta.ID, "", meta.OrgID, AccessActionRotate, false, reencryptErr, map[string]string{
+			logFailure(meta.ID, meta.OrgID, reencryptErr, map[string]string{
 				"old_key_id": oldKey.ID,
 				"new_key_id": newKey.ID,
 			})
 			return NewVaultError("RotateKeys", reencryptErr, "re-encryption failed")
 		}
-		v.logAudit(ctx, scope, meta.ID, "", meta.OrgID, AccessActionRotate, true, nil, map[string]string{
-			"old_key_id": oldKey.ID,
-			"new_key_id": newKey.ID,
+		v.recordAccess(AccessActionRotate, scope, requester, true, nil)
+		v.logAudit(ctx, scope, meta.ID, requester, orgID, AccessActionRotate, true, nil, map[string]string{
+			"old_key_id":      oldKey.ID,
+			"new_key_id":      newKey.ID,
+			"resource_org_id": meta.OrgID,
 		})
 	}
 
 	if err := keyMgr.CompleteRotation(keys.Scope(scope)); err != nil {
+		logFailure("", orgID, err, map[string]string{
+			"old_key_id": oldKey.ID,
+			"new_key_id": newKey.ID,
+		})
 		return NewVaultError("RotateKeys", err, "complete rotation failed")
+	}
+	if len(nonNilMetadata) == 0 {
+		v.recordAccess(AccessActionRotate, scope, requester, true, nil)
+		v.logAudit(ctx, scope, "", requester, orgID, AccessActionRotate, true, nil, map[string]string{
+			"old_key_id":      oldKey.ID,
+			"new_key_id":      newKey.ID,
+			"resource_org_id": orgID,
+		})
 	}
 
 	return nil

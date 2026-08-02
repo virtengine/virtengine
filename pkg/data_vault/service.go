@@ -28,7 +28,7 @@ type VaultService interface {
 
 	// RotateKeys initiates key rotation for a scope
 	// Old keys remain valid for decryption during transition
-	RotateKeys(ctx context.Context, scope Scope) error
+	RotateKeys(ctx context.Context, scope Scope, requester, orgID string) error
 
 	// ListKeyMetadata returns key metadata for a scope
 	ListKeyMetadata(ctx context.Context, scope Scope, requester, orgID string) ([]KeyMetadata, error)

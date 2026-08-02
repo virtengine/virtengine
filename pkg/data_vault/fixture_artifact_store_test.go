@@ -104,7 +104,7 @@ func TestFixtureVaultRestartRotationAndCryptoErasure(t *testing.T) {
 		AuditLogger: NewAuditLogger(DefaultAuditLogConfig(), NewMemoryAuditStore()),
 	})
 	require.NoError(t, err)
-	require.NoError(t, vault.RotateKeys(ctx, ScopeSupport))
+	require.NoError(t, vault.RotateKeys(ctx, ScopeSupport, "owner", ""))
 	require.NoError(t, vault.Close())
 
 	afterRotationPersistence, err := newTestKeyPersistence(keyPath, wrappingKey, "fixture", anchor)
