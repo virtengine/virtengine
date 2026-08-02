@@ -1,34 +1,52 @@
 {
   "campaign": "three-day-prototype",
   "thread": "T4",
-  "checkpoint": "T4-08B",
+  "checkpoint": "T4-09A",
   "branch": "ve/prototype-integration",
-  "start_head": "5626d5b73d40012dedbf44ac3f4c7909baa4246c",
-  "end_head": "0d08e2a43aba2f61816058900a7021865232fff8",
+  "start_head": "d4fcc673acbdea6774c0543a6b50e2f39898198c",
+  "end_head": "936b98df138c8d83c112180eb08a928624dbc8e0",
   "origin_main": "79391a3df86d85522b92e0400c6904971ecbe65d",
   "tree_clean": true,
   "commits": [
-    "0d08e2a43aba2f61816058900a7021865232fff8"
+    "936b98df138c8d83c112180eb08a928624dbc8e0"
   ],
   "owned_paths": [
     "_docs/ralph/prototype-integration/**",
     "_docs/ralph/handoffs/prototype-integration/**",
     "scripts/validate-prototype-integration.cjs",
-    "_docs/ralph/prototype-integration/core-rc-manifest.json",
-    "_docs/ralph/prototype-integration/core-rc-manifest.schema.json"
+    "_docs/ralph/prototype-integration/core-rc-publication-preflight.schema.json",
+    "scripts/preflight-core-rc-publication.cjs",
+    "scripts/preflight-core-rc-publication.test.cjs",
+    "scripts/validate-prototype-intake.cjs",
+    "scripts/validate-prototype-intake.test.cjs"
   ],
   "files_changed": [
     "_docs/ralph/handoffs/prototype-integration/HANDOFF.yaml",
     "_docs/INDEX.md",
-    "_docs/ralph/prototype-integration/core-rc-manifest.json",
-    "_docs/ralph/handoffs/prototype-integration/HANDOFF.yaml"
+    "_docs/prototype-thread-intake-runbook.md",
+    "_docs/ralph/prototype-integration/core-rc-publication-preflight.schema.json",
+    "scripts/preflight-core-rc-publication.cjs",
+    "scripts/preflight-core-rc-publication.test.cjs",
+    "scripts/validate-prototype-intake.cjs",
+    "scripts/validate-prototype-intake.test.cjs",
+    "scripts/validate-prototype-integration.cjs",
+    "scripts/validate-prototype-integration.test.cjs"
   ],
   "tests": [
     {
-      "command": "node scripts/generate-core-rc-manifest.cjs --check --source 5626d5b73d40012dedbf44ac3f4c7909baa4246c --tooling-source 5626d5b73d40012dedbf44ac3f4c7909baa4246c && node scripts/validate-core-rc-manifest.cjs",
+      "command": "node --test scripts/preflight-core-rc-publication.test.cjs",
       "exit_code": 0,
       "result": "passed",
-      "test_count": 2,
+      "test_count": 25,
+      "tool_versions": {
+        "node": "20.19.1"
+      }
+    },
+    {
+      "command": "node --test scripts/validate-prototype-intake.test.cjs",
+      "exit_code": 0,
+      "result": "passed",
+      "test_count": 31,
       "tool_versions": {
         "node": "20.19.1"
       }
@@ -37,13 +55,15 @@
       "command": "node scripts/validate-prototype-integration.test.cjs && node scripts/validate-prototype-integration.cjs && node scripts/validate-agents-docs.mjs",
       "exit_code": 0,
       "result": "passed",
+      "test_count": 10,
       "tool_versions": {
         "node": "20.19.1"
       }
     }
   ],
   "generated_hashes": {
-    "_docs/ralph/prototype-integration/core-rc-manifest.json": "305094d49400522c7006628279d0ced521faf7c90b43cc7041b8a27217fecdd3"
+    "scripts/preflight-core-rc-publication.cjs": "ceeab2a0fba3d8f96fd824ac3081a7577df93a7e0b9462182c3c1c47e6ba754c",
+    "_docs/ralph/prototype-integration/core-rc-publication-preflight.schema.json": "f0e262181a15d11fa557aa906264deabb96899327f3925eaebb5a22bb29424c6"
   },
   "accepted_checkpoints": [],
   "rejected_checkpoints": [
@@ -63,19 +83,20 @@
   "external_evidence": [],
   "known_failures": [
     "Go 1.26.5 cannot compile github.com/bytedance/sonic v1.14.1; checkpoint gates were rerun successfully with the repository-pinned Go 1.25.8 toolchain.",
-    "The full tagged HPC integration package times out in existing pkg/provider_daemon TestHeartbeatMonitor because RecordHeartbeat holds nodesMu while raiseAlert reacquires it; the focused T4-07D least-privilege contract passes."
+    "The full tagged HPC integration package times out in existing pkg/provider_daemon TestHeartbeatMonitor because RecordHeartbeat holds nodesMu while raiseAlert reacquires it; focused chart contracts pass.",
+    "The clean T4-09A real diagnostic exited 1 as required and reported 19 deterministic publication blockers."
   ],
   "blockers": [
     "Epoch 1 remains open with no announced intake-v2 producer tags; no producer checkpoint is accepted by this checkpoint.",
     "Stable secrets are remediated through explicit pre-provisioned Secret names/keys and legacy upgrade instructions; no render-time credential generation remains.",
-    "The core-RC manifest is non-authoritative, planned_functionality_complete=false, and milestone_m_eligible=false.",
-    "The refreshed manifest is bound to source and tooling payload 5626d5b73d40012dedbf44ac3f4c7909baa4246c; it contains zero accepted producer checkpoints.",
-    "Required gates, producer migrations, SLURM production evidence, model provenance, SBOM/release provenance, rollout, and rollback remain blocked or unavailable.",
+    "The diagnostic-only publication guard refuses --publish and created no local or remote checkpoint/prototype-integration/t4-09a tag.",
+    "Clean real diagnostics pass candidate HEAD/remote equality, manifest strict validity/hash/ancestry/boundary, accepted-ledger correspondence, and tag absence.",
+    "Publication remains blocked by 19 checks: CI availability and two exact workflows; epoch cutoff/state; model, producer, release-provenance, rollback, rollout, SBOM, and SLURM evidence; complete gate matrix/result envelope; future manifest status/prototype success; accepted tag revalidation; producer terminal/frozen-out decisions.",
     "The competing _build/helm/slurm-cluster chart remains present and must be retired.",
-    "The canonical diagnostic reports stable-secrets passed; capacity equality and durability unverified; immutable images and least privilege failed.",
+    "The canonical diagnostic reports stable secrets and immutable images passed; capacity equality, durability, and least privilege remain unverified without Helm/live evidence.",
     "No canonical chart remediation, failover, restore, or production render approval is claimed.",
     "Task 88C is not complete."
   ],
-  "next_checkpoint": "T4-09A",
-  "expected_head": "0d08e2a43aba2f61816058900a7021865232fff8"
+  "next_checkpoint": null,
+  "expected_head": "936b98df138c8d83c112180eb08a928624dbc8e0"
 }
