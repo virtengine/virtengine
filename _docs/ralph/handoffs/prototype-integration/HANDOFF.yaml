@@ -1,54 +1,59 @@
 {
   "campaign": "three-day-prototype",
   "thread": "T4",
-  "checkpoint": "T4-09A",
+  "checkpoint": "T4-07F",
   "branch": "ve/prototype-integration",
-  "start_head": "d4fcc673acbdea6774c0543a6b50e2f39898198c",
-  "end_head": "936b98df138c8d83c112180eb08a928624dbc8e0",
-  "origin_main": "79391a3df86d85522b92e0400c6904971ecbe65d",
+  "start_head": "a17ce5c28e1fa0a9a3bc4a6647f205a122c18501",
+  "end_head": "c5698992ea76bb6e136227f118b9ec25c5f5c71b",
+  "origin_main": "5dc7ab49d0449a5d69510a3c38f877b349d490dd",
   "tree_clean": true,
   "commits": [
-    "936b98df138c8d83c112180eb08a928624dbc8e0"
+    "c5698992ea76bb6e136227f118b9ec25c5f5c71b"
   ],
   "owned_paths": [
     "_docs/ralph/prototype-integration/**",
     "_docs/ralph/handoffs/prototype-integration/**",
-    "scripts/validate-prototype-integration.cjs",
-    "_docs/ralph/prototype-integration/core-rc-publication-preflight.schema.json",
-    "scripts/preflight-core-rc-publication.cjs",
-    "scripts/preflight-core-rc-publication.test.cjs",
-    "scripts/validate-prototype-intake.cjs",
-    "scripts/validate-prototype-intake.test.cjs"
+    "_build/helm/slurm-cluster/**",
+    "_docs/audits/task-t4-07f-slurm-chart-retirement-2026-08-02.md",
+    "_docs/ralph/prototype-integration/slurm-chart-inventory.json",
+    "_docs/ralph/prototype-integration/slurm-chart-inventory.schema.json",
+    "scripts/validate-slurm-chart-inventory.cjs",
+    "scripts/validate-slurm-chart-inventory.test.cjs"
   ],
   "files_changed": [
     "_docs/ralph/handoffs/prototype-integration/HANDOFF.yaml",
     "_docs/INDEX.md",
-    "_docs/prototype-thread-intake-runbook.md",
-    "_docs/ralph/prototype-integration/core-rc-publication-preflight.schema.json",
-    "scripts/preflight-core-rc-publication.cjs",
-    "scripts/preflight-core-rc-publication.test.cjs",
-    "scripts/validate-prototype-intake.cjs",
-    "scripts/validate-prototype-intake.test.cjs",
-    "scripts/validate-prototype-integration.cjs",
-    "scripts/validate-prototype-integration.test.cjs"
+    "_build/helm/slurm-cluster/Chart.yaml",
+    "_build/helm/slurm-cluster/templates/_helpers.tpl",
+    "_build/helm/slurm-cluster/templates/compute-statefulset.yaml",
+    "_build/helm/slurm-cluster/templates/configmap.yaml",
+    "_build/helm/slurm-cluster/templates/controller-deployment.yaml",
+    "_build/helm/slurm-cluster/templates/controller-service.yaml",
+    "_build/helm/slurm-cluster/templates/serviceaccount.yaml",
+    "_build/helm/slurm-cluster/values.yaml",
+    "_docs/audits/task-t4-07f-slurm-chart-retirement-2026-08-02.md",
+    "_docs/ralph/prototype-integration/slurm-chart-inventory.json",
+    "_docs/ralph/prototype-integration/slurm-chart-inventory.schema.json",
+    "scripts/validate-slurm-chart-inventory.cjs",
+    "scripts/validate-slurm-chart-inventory.test.cjs"
   ],
   "tests": [
     {
-      "command": "node --test scripts/preflight-core-rc-publication.test.cjs",
+      "command": "node scripts/validate-slurm-chart-inventory.test.cjs && node scripts/validate-slurm-chart-inventory.cjs",
       "exit_code": 0,
       "result": "passed",
-      "test_count": 25,
+      "test_count": 11,
       "tool_versions": {
         "node": "20.19.1"
       }
     },
     {
-      "command": "node --test scripts/validate-prototype-intake.test.cjs",
+      "command": "python scripts/validate_slurm_chart_semantics_test.py -v",
       "exit_code": 0,
       "result": "passed",
-      "test_count": 31,
+      "test_count": 53,
       "tool_versions": {
-        "node": "20.19.1"
+        "python": "3.14.6"
       }
     },
     {
@@ -62,8 +67,11 @@
     }
   ],
   "generated_hashes": {
-    "scripts/preflight-core-rc-publication.cjs": "ceeab2a0fba3d8f96fd824ac3081a7577df93a7e0b9462182c3c1c47e6ba754c",
-    "_docs/ralph/prototype-integration/core-rc-publication-preflight.schema.json": "f0e262181a15d11fa557aa906264deabb96899327f3925eaebb5a22bb29424c6"
+    "scripts/validate-slurm-chart-inventory.cjs": "14969916d053057fe4541d09e6deee8933020d2b02417d6454245ff9ea149050",
+    "scripts/validate-slurm-chart-inventory.test.cjs": "b5ddf0e78d68b4e183f281595558a8025f87a5f92264f4302792a1c9418cc91a",
+    "_docs/ralph/prototype-integration/slurm-chart-inventory.json": "cea8d14fee799e4bdfafe4f4d8e6448f3ddeef2a079bff9753db911e5eb0a090",
+    "_docs/ralph/prototype-integration/slurm-chart-inventory.schema.json": "5dd01624e2ab5c683ea5ed7aa16fe94a798ecc7684ec9f051e798f0c0cd4e550",
+    "_docs/audits/task-t4-07f-slurm-chart-retirement-2026-08-02.md": "5b2855aa0c506ce4614829a1d6c5960486281441670ac9b39ed6f1efb37935ae"
   },
   "accepted_checkpoints": [],
   "rejected_checkpoints": [
@@ -92,11 +100,10 @@
     "The diagnostic-only publication guard refuses --publish and created no local or remote checkpoint/prototype-integration/t4-09a tag.",
     "Clean real diagnostics pass candidate HEAD/remote equality, manifest strict validity/hash/ancestry/boundary, accepted-ledger correspondence, and tag absence.",
     "Publication remains blocked by 19 checks: CI availability and two exact workflows; epoch cutoff/state; model, producer, release-provenance, rollback, rollout, SBOM, and SLURM evidence; complete gate matrix/result envelope; future manifest status/prototype success; accepted tag revalidation; producer terminal/frozen-out decisions.",
-    "The competing _build/helm/slurm-cluster chart remains present and must be retired.",
     "The canonical diagnostic reports stable secrets and immutable images passed; capacity equality, durability, and least privilege remain unverified without Helm/live evidence.",
     "No canonical chart remediation, failover, restore, or production render approval is claimed.",
     "Task 88C is not complete."
   ],
   "next_checkpoint": null,
-  "expected_head": "936b98df138c8d83c112180eb08a928624dbc8e0"
+  "expected_head": "c5698992ea76bb6e136227f118b9ec25c5f5c71b"
 }
