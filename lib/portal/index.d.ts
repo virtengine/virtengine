@@ -1,49 +1,49 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
-import type * as React from "react";
+import type * as React from 'react';
 
 export type UnsupportedDocumentReasonCode =
-  | "CATEGORY_NOT_SUPPORTED"
-  | "COUNTRY_NOT_SUPPORTED"
-  | "DOCUMENT_EXPIRED"
-  | "DOCUMENT_FORMAT_NOT_SUPPORTED"
-  | "DOCUMENT_QUALITY_INSUFFICIENT"
-  | "LANGUAGE_NOT_SUPPORTED"
-  | "REQUIRED_SIDE_MISSING";
+  | 'CATEGORY_NOT_SUPPORTED'
+  | 'COUNTRY_NOT_SUPPORTED'
+  | 'DOCUMENT_EXPIRED'
+  | 'DOCUMENT_FORMAT_NOT_SUPPORTED'
+  | 'DOCUMENT_QUALITY_INSUFFICIENT'
+  | 'LANGUAGE_NOT_SUPPORTED'
+  | 'REQUIRED_SIDE_MISSING';
 export type UnsupportedDocumentCategory =
-  | "DRIVER_LICENSE"
-  | "NATIONAL_ID"
-  | "OTHER_GOVERNMENT_DOCUMENT"
-  | "PASSPORT"
-  | "RESIDENCE_PERMIT";
+  | 'DRIVER_LICENSE'
+  | 'NATIONAL_ID'
+  | 'OTHER_GOVERNMENT_DOCUMENT'
+  | 'PASSPORT'
+  | 'RESIDENCE_PERMIT';
 export type SupportLanguageCode =
-  | "ar"
-  | "de"
-  | "en"
-  | "es"
-  | "fr"
-  | "hi"
-  | "id"
-  | "ja"
-  | "ko"
-  | "pt"
-  | "zh";
+  | 'ar'
+  | 'de'
+  | 'en'
+  | 'es'
+  | 'fr'
+  | 'hi'
+  | 'id'
+  | 'ja'
+  | 'ko'
+  | 'pt'
+  | 'zh';
 export type RedactedReasonToken =
-  | "category-mismatch"
-  | "country-restricted"
-  | "expired-document"
-  | "format-unsupported"
-  | "language-assistance"
-  | "quality-insufficient"
-  | "review-required"
-  | "side-missing";
+  | 'category-mismatch'
+  | 'country-restricted'
+  | 'expired-document'
+  | 'format-unsupported'
+  | 'language-assistance'
+  | 'quality-insufficient'
+  | 'review-required'
+  | 'side-missing';
 export type SafeNextStepOption =
-  | "CONTACT_SUPPORT"
-  | "REQUEST_ACCESSIBLE_ASSISTANCE"
-  | "RETRY_WITH_SUPPORTED_DOCUMENT"
-  | "REVIEW_SUPPORTED_DOCUMENTS";
+  | 'CONTACT_SUPPORT'
+  | 'REQUEST_ACCESSIBLE_ASSISTANCE'
+  | 'RETRY_WITH_SUPPORTED_DOCUMENT'
+  | 'REVIEW_SUPPORTED_DOCUMENTS';
 export interface UnsupportedDocumentTriageRequest {
-  schemaVersion: "unsupported-document-triage.v1";
+  schemaVersion: 'unsupported-document-triage.v1';
   reasonCodes: UnsupportedDocumentReasonCode[];
   supportLanguageCode: SupportLanguageCode;
   redactedNotes: RedactedReasonToken[];
@@ -51,13 +51,13 @@ export interface UnsupportedDocumentTriageRequest {
   countryCode?: string;
 }
 export interface UnsupportedDocumentTriageOutput {
-  schemaVersion: "unsupported-document-triage.v1";
+  schemaVersion: 'unsupported-document-triage.v1';
   unsupportedDocumentCategory: UnsupportedDocumentCategory;
   safeNextStepOptions: SafeNextStepOption[];
   redactedCaseSummary: string;
 }
 export interface UnsupportedDocumentTriageDraft extends UnsupportedDocumentTriageOutput {
-  status: "draft";
+  status: 'draft';
   draftReference: string;
 }
 export interface HumanTriageConfirmation {
@@ -65,19 +65,17 @@ export interface HumanTriageConfirmation {
   draftReference: string;
 }
 export interface AcceptedUnsupportedDocumentSupportNote extends UnsupportedDocumentTriageOutput {
-  status: "accepted-support-note";
+  status: 'accepted-support-note';
   draftReference: string;
   humanConfirmed: true;
 }
 export interface UnsupportedDocumentModelAuthority {
   proposeUnsupportedDocumentTriage(
-    request: Readonly<UnsupportedDocumentTriageRequest>,
+    request: Readonly<UnsupportedDocumentTriageRequest>
   ): Promise<unknown>;
 }
 export interface UnsupportedDocumentOutputValidator {
-  validate(
-    output: Readonly<UnsupportedDocumentTriageOutput>,
-  ): void | Promise<void>;
+  validate(output: Readonly<UnsupportedDocumentTriageOutput>): void | Promise<void>;
 }
 export interface TriageDigestAuthority {
   sha256(canonicalValue: string): string | Promise<string>;
@@ -117,7 +115,7 @@ export class UnsupportedDocumentTriageAssistant {
   confirm(
     originalRequest: unknown,
     draftValue: unknown,
-    confirmationValue: unknown,
+    confirmationValue: unknown
   ): Promise<AcceptedUnsupportedDocumentSupportNote>;
 }
 export class UnsupportedDocumentTriageConfirmationError extends Error {}
@@ -125,7 +123,7 @@ export class UnsupportedDocumentTriageUnavailableError extends Error {}
 export class UnsupportedDocumentTriageValidationError extends Error {
   readonly path: string;
 }
-export const UNSUPPORTED_DOCUMENT_TRIAGE_SCHEMA_VERSION: "unsupported-document-triage.v1";
+export const UNSUPPORTED_DOCUMENT_TRIAGE_SCHEMA_VERSION: 'unsupported-document-triage.v1';
 export const UNSUPPORTED_DOCUMENT_REASON_CODES: readonly UnsupportedDocumentReasonCode[];
 export const UNSUPPORTED_DOCUMENT_CATEGORIES: readonly UnsupportedDocumentCategory[];
 export const SUPPORT_LANGUAGE_CODES: readonly SupportLanguageCode[];
@@ -133,11 +131,11 @@ export const REDACTED_REASON_TOKENS: readonly RedactedReasonToken[];
 export const REDACTED_SUMMARY_TOKENS: readonly string[];
 export const SAFE_NEXT_STEP_OPTIONS: readonly SafeNextStepOption[];
 export function validateUnsupportedDocumentTriageOutput(
-  value: unknown,
+  value: unknown
 ): UnsupportedDocumentTriageOutput;
 export function validateUnsupportedDocumentTriageRequest(
   value: unknown,
-  policy?: UnsupportedDocumentTriagePolicy,
+  policy?: UnsupportedDocumentTriagePolicy
 ): UnsupportedDocumentTriageRequest;
 export interface CheckoutFlowProps {
   offering: Offering;
@@ -161,6 +159,7 @@ export interface CheckoutMutationRequest {
   providerAddress: string;
   durationSeconds: number;
   priceAmount: string;
+  depositAmount: string;
   priceDenom: string;
 }
 export interface CheckoutMutationSubmission {
@@ -171,12 +170,12 @@ export interface CheckoutMutationSubmission {
 export interface CheckoutMutationAdapter {
   submitOrder(
     request: CheckoutMutationRequest,
-    submission: CheckoutMutationSubmission,
+    submission: CheckoutMutationSubmission
   ): Promise<unknown>;
 }
 export type CheckoutMutationProjector = (result: unknown) => unknown;
 export interface CheckoutCommittedResult {
-  status: "committed";
+  status: 'committed';
   code: 0;
   orderId: string;
   txHash: string;
@@ -228,12 +227,12 @@ export const IdentityProvider: any;
 export const IdentityScoreDisplay: any;
 export const IdentityStatusCard: any;
 export type UniquenessEnrollmentStatusValue =
-  | "processing"
-  | "possible-match-review"
-  | "unique"
-  | "duplicate-confirmed"
-  | "unavailable"
-  | "appeal";
+  | 'processing'
+  | 'possible-match-review'
+  | 'unique'
+  | 'duplicate-confirmed'
+  | 'unavailable'
+  | 'appeal';
 export interface UniquenessStatusProjection {
   status: UniquenessEnrollmentStatusValue;
   receiptId: string;
@@ -241,20 +240,18 @@ export interface UniquenessStatusProjection {
   supersedesReceiptId?: string;
   governedFinalAdjudication?: boolean;
 }
-export type UniquenessReceiptProjector = (
-  receipt: unknown,
-) => UniquenessStatusProjection;
+export type UniquenessReceiptProjector = (receipt: unknown) => UniquenessStatusProjection;
 export interface UniquenessEnrollmentState {
   status: UniquenessEnrollmentStatusValue;
   receiptId: string | null;
   revision: number | null;
 }
 export type UniquenessTransitionErrorCode =
-  | "invalid-projection"
-  | "invalid-transition"
-  | "stale-receipt"
-  | "superseded-receipt"
-  | "final-adjudication-required";
+  | 'invalid-projection'
+  | 'invalid-transition'
+  | 'stale-receipt'
+  | 'superseded-receipt'
+  | 'final-adjudication-required';
 export class UniquenessTransitionError extends Error {
   readonly code: UniquenessTransitionErrorCode;
 }
@@ -268,17 +265,15 @@ export interface UniquenessEnrollmentAdapterOptions {
   projectReceipt?: UniquenessReceiptProjector;
 }
 export function createUniquenessEnrollmentAdapter(
-  options?: UniquenessEnrollmentAdapterOptions,
+  options?: UniquenessEnrollmentAdapterOptions
 ): UniquenessEnrollmentAdapter;
 export interface UniquenessEnrollmentStatusProps {
-  state: Pick<UniquenessEnrollmentState, "status">;
+  state: Pick<UniquenessEnrollmentState, 'status'>;
   onManualVerification: () => void;
   onAppeal: () => void;
   className?: string;
 }
-export const UniquenessEnrollmentStatus: (
-  props: UniquenessEnrollmentStatusProps,
-) => any;
+export const UniquenessEnrollmentStatus: (props: UniquenessEnrollmentStatusProps) => any;
 export const initLiveRegions: any;
 export const InviteMemberDialog: any;
 export const isRetryableError: any;
@@ -328,29 +323,21 @@ export const ProviderAPIError: any;
 export class ProviderShellSessionError extends Error {
   readonly code: ProviderShellSessionErrorCode;
   readonly cause?: unknown;
-  constructor(
-    code: ProviderShellSessionErrorCode,
-    message: string,
-    cause?: unknown,
-  );
+  constructor(code: ProviderShellSessionErrorCode, message: string, cause?: unknown);
 }
 export const buildProviderShellWebSocketUrl: any;
 export const validateProviderShellSessionReceipt: any;
 export const providerDeploymentActions: readonly [
-  "start",
-  "stop",
-  "restart",
-  "update",
-  "terminate",
+  'start',
+  'stop',
+  'restart',
+  'update',
+  'terminate',
 ];
 export class ProviderDeploymentActionError extends Error {
   readonly code: ProviderDeploymentActionErrorCode;
   readonly cause?: unknown;
-  constructor(
-    code: ProviderDeploymentActionErrorCode,
-    message: string,
-    cause?: unknown,
-  );
+  constructor(code: ProviderDeploymentActionErrorCode, message: string, cause?: unknown);
 }
 export const validateProviderDeploymentActionReceipt: ProviderDeploymentActionReceiptValidator;
 export const ProviderProvider: any;
@@ -556,13 +543,8 @@ export type PortalWalletType = any;
 export type PricingConfig = any;
 export type ProviderAPIClientOptions = any;
 export type ProviderAPIErrorDetails = any;
-export type ProviderDeploymentAction =
-  | "start"
-  | "stop"
-  | "restart"
-  | "update"
-  | "terminate";
-export type ProviderDeploymentActionStatus = "accepted" | "committed";
+export type ProviderDeploymentAction = 'start' | 'stop' | 'restart' | 'update' | 'terminate';
+export type ProviderDeploymentActionStatus = 'accepted' | 'committed';
 export interface ProviderDeploymentActionTxEvidence {
   hash: string;
   chainId: string;
@@ -582,21 +564,21 @@ export interface ProviderDeploymentActionReceipt {
   txEvidence?: ProviderDeploymentActionTxEvidence;
 }
 export interface ProviderDeploymentActionCapability {
-  receiptVersion: "v1";
+  receiptVersion: 'v1';
   requiresChainSigning: boolean;
 }
 export type ProviderDeploymentActionErrorCode =
-  | "feature_unavailable"
-  | "action_rejected"
-  | "malformed_receipt"
-  | "receipt_mismatch"
-  | "refresh_failed"
-  | "deployment_drift"
-  | "duplicate_action"
-  | "chain_signing_required";
+  | 'feature_unavailable'
+  | 'action_rejected'
+  | 'malformed_receipt'
+  | 'receipt_mismatch'
+  | 'refresh_failed'
+  | 'deployment_drift'
+  | 'duplicate_action'
+  | 'chain_signing_required';
 export type ProviderDeploymentTxEvidenceValidator = (
   evidence: ProviderDeploymentActionTxEvidence,
-  receipt: Omit<ProviderDeploymentActionReceipt, "txEvidence">,
+  receipt: Omit<ProviderDeploymentActionReceipt, 'txEvidence'>
 ) => boolean | Promise<boolean>;
 export interface ProviderDeploymentActionValidationContext {
   action: ProviderDeploymentAction;
@@ -606,7 +588,7 @@ export interface ProviderDeploymentActionValidationContext {
 }
 export type ProviderDeploymentActionReceiptValidator = (
   value: unknown,
-  context: ProviderDeploymentActionValidationContext,
+  context: ProviderDeploymentActionValidationContext
 ) => Promise<ProviderDeploymentActionReceipt>;
 export type ProviderHealth = any;
 export type ProviderHealthStatus = any;

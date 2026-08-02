@@ -8,10 +8,15 @@ import { AuthProvider } from '../hooks/useAuth';
 import { IdentityProvider } from '../hooks/useIdentity';
 import { MFAProvider } from '../hooks/useMFA';
 import { MarketplaceProvider } from '../hooks/useMarketplace';
+import { useChain } from '../hooks/useChain';
 import { ProviderProvider } from '../hooks/useProvider';
 import { HPCProvider } from '../hooks/useHPC';
 import { ChainProvider } from '../hooks/useChain';
-import { WalletProvider } from '../src/wallet/context';
+import { WalletProvider, useWallet } from '../src/wallet/context';
+import type {
+  CheckoutMutationAdapter,
+  CheckoutMutationProjector,
+} from './marketplace/checkout-mutation';
 import type { WalletProviderConfig, WalletChainInfo } from '../src/wallet/types';
 import type { PortalConfig } from '../types/config';
 import type { ChainConfig } from '../types/chain';
@@ -35,10 +40,55 @@ export interface PortalProviderProps {
    */
   walletConfig?: WalletProviderConfig;
 
+  marketplaceMutationAdapter?: CheckoutMutationAdapter;
+  marketplaceResultProjector?: CheckoutMutationProjector;
+  marketplaceMutationTimeoutMs?: number;
+
   /**
    * Children
    */
   children: React.ReactNode;
+}
+
+function ProductProviders({
+  children,
+  mutationAdapter,
+  resultProjector,
+  mutationTimeoutMs,
+  queryChainId,
+}: {
+  children: React.ReactNode;
+  mutationAdapter?: CheckoutMutationAdapter;
+  resultProjector?: CheckoutMutationProjector;
+  mutationTimeoutMs?: number;
+  queryChainId: string;
+}) {
+  const chain = useChain();
+  const wallet = useWallet();
+  const walletAddress = wallet.accounts[wallet.activeAccountIndex]?.address ?? null;
+  const accountAddress = wallet.chainId === queryChainId ? walletAddress : null;
+  const mutationContext = React.useMemo(
+    () =>
+      accountAddress && wallet.chainId === queryChainId
+        ? { chainId: wallet.chainId, customerAddress: accountAddress }
+        : undefined,
+    [accountAddress, queryChainId, wallet.chainId]
+  );
+
+  return (
+    <MarketplaceProvider
+      queryClient={chain.queryClient}
+      accountAddress={accountAddress}
+      mutationAdapter={mutationAdapter}
+      mutationContext={mutationContext}
+      resultProjector={resultProjector}
+      mutationTimeoutMs={mutationTimeoutMs}
+    >
+      <ProviderProvider>
+        <HPCProvider>{children}</HPCProvider>
+      </ProviderProvider>
+    </MarketplaceProvider>
+  );
 }
 
 /**
@@ -66,6 +116,9 @@ export function PortalProvider({
   config,
   chainConfig,
   walletConfig,
+  marketplaceMutationAdapter,
+  marketplaceResultProjector,
+  marketplaceMutationTimeoutMs,
   children,
 }: PortalProviderProps): JSX.Element {
   const [isReady, setIsReady] = React.useState(false);
@@ -136,13 +189,14 @@ export function PortalProvider({
           <AuthProvider config={config}>
             <IdentityProvider>
               <MFAProvider>
-                <MarketplaceProvider>
-                  <ProviderProvider>
-                    <HPCProvider>
-                      {children}
-                    </HPCProvider>
-                  </ProviderProvider>
-                </MarketplaceProvider>
+                <ProductProviders
+                  mutationAdapter={marketplaceMutationAdapter}
+                  resultProjector={marketplaceResultProjector}
+                  mutationTimeoutMs={marketplaceMutationTimeoutMs}
+                  queryChainId={chainConfig.chainId}
+                >
+                  {children}
+                </ProductProviders>
               </MFAProvider>
             </IdentityProvider>
           </AuthProvider>
