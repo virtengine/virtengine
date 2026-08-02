@@ -397,12 +397,17 @@ export { useHPC, HPCProvider } from '../../../lib/portal';
 export {
   HPCClientUnavailableError,
   HPCMutationNotCommittedError,
+  HPCOutputValidationError,
   assertCommittedJobMutation,
+  requireHPCOutputAdapter,
   requireHPCSigner,
+  validateHPCOutputReferences,
+  validateResolvedHPCOutput,
 } from '../../../lib/portal';
 export type {
   CommittedJobMutation,
   HPCClientCapability,
+  HPCOutputAdapter,
   HPCSignerAdapter,
   SubmitJobParams,
   HPCState,

@@ -18,6 +18,7 @@ import type {
   CheckoutMutationProjector,
 } from "./marketplace/checkout-mutation";
 import type { HPCSignerAdapter } from "./hpc/hpc-mutation";
+import type { HPCOutputAdapter } from "./hpc/hpc-output";
 import type {
   WalletProviderConfig,
   WalletChainInfo,
@@ -31,6 +32,7 @@ function ProductProviders({
   mutationTimeoutMs,
   queryChainId,
   hpcMutationAdapter,
+  hpcOutputAdapter,
 }: {
   children: React.ReactNode;
   mutationAdapter?: CheckoutMutationAdapter;
@@ -38,6 +40,7 @@ function ProductProviders({
   mutationTimeoutMs?: number;
   queryChainId: string;
   hpcMutationAdapter?: HPCSignerAdapter;
+  hpcOutputAdapter?: HPCOutputAdapter;
 }) {
   const chain = useChain();
   const wallet = useWallet();
@@ -71,6 +74,13 @@ function ProductProviders({
             hpcMutationAdapter?.chainId === queryChainId &&
             hpcMutationAdapter.accountAddress === accountAddress
               ? hpcMutationAdapter
+              : undefined
+          }
+          outputAdapter={
+            accountAddress &&
+            hpcOutputAdapter?.chainId === queryChainId &&
+            hpcOutputAdapter.accountAddress === accountAddress
+              ? hpcOutputAdapter
               : undefined
           }
         >
@@ -110,6 +120,7 @@ export function PortalProvider({
   marketplaceResultProjector,
   marketplaceMutationTimeoutMs,
   hpcMutationAdapter,
+  hpcOutputAdapter,
   children,
 }: PortalProviderProps): JSX.Element {
   const [isReady, setIsReady] = React.useState(false);
@@ -186,6 +197,7 @@ export function PortalProvider({
                   mutationTimeoutMs={marketplaceMutationTimeoutMs}
                   queryChainId={chainConfig.chainId}
                   hpcMutationAdapter={hpcMutationAdapter}
+                  hpcOutputAdapter={hpcOutputAdapter}
                 >
                   {children}
                 </ProductProviders>

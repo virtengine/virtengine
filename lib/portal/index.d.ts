@@ -231,6 +231,7 @@ export interface HPCProviderProps {
   accountAddress: string | null;
   getAuthHeader?: () => Promise<string>;
   mutationAdapter?: HPCSignerAdapter;
+  outputAdapter?: HPCOutputAdapter;
 }
 export const HPCProvider: React.ComponentType<HPCProviderProps>;
 export type HPCClientCapability = "query" | "signer" | "provider";
@@ -278,6 +279,30 @@ export class HPCMutationNotCommittedError extends Error {
   readonly code: "hpc_mutation_not_committed";
   constructor();
 }
+export interface HPCOutputAdapter {
+  readonly chainId: string;
+  readonly accountAddress: string;
+  getOutputs(jobId: string): Promise<unknown>;
+  resolveOutput(outputRef: JobOutputReference): Promise<unknown>;
+}
+export class HPCOutputValidationError extends Error {
+  readonly code: "hpc_output_invalid";
+  constructor();
+}
+export function requireHPCOutputAdapter(
+  adapter: HPCOutputAdapter | undefined,
+  expected: { chainId: string; accountAddress: string },
+): HPCOutputAdapter;
+export function validateHPCOutputReferences(
+  value: unknown,
+  expected: { chainId: string; accountAddress: string; jobId: string },
+): readonly JobOutputReference[];
+export function validateResolvedHPCOutput(
+  value: unknown,
+  expected: JobOutputReference,
+  binding: { chainId: string; accountAddress: string; jobId: string },
+  now?: number,
+): JobOutput;
 export function assertCommittedJobMutation(
   result: unknown,
   expectedJobId?: string,
@@ -403,6 +428,7 @@ export interface PortalProviderProps {
   marketplaceResultProjector?: CheckoutMutationProjector;
   marketplaceMutationTimeoutMs?: number;
   hpcMutationAdapter?: HPCSignerAdapter;
+  hpcOutputAdapter?: HPCOutputAdapter;
   children: React.ReactNode;
 }
 export const PortalProvider: React.ComponentType<PortalProviderProps>;
@@ -481,8 +507,11 @@ export interface HPCActions {
   cancelSubmission(): void;
   getJobs(): Promise<void>;
   getJob(jobId: string): Promise<Job>;
-  getOutputs(jobId: string): Promise<JobOutputReference[]>;
-  decryptOutput(outputRef: JobOutputReference): Promise<JobOutput>;
+  getOutputs(jobId: string): Promise<readonly JobOutputReference[]>;
+  decryptOutput(
+    jobId: string,
+    outputRef: JobOutputReference,
+  ): Promise<JobOutput>;
   subscribeToJob(
     jobId: string,
     callback: (event: import("./types/chain").ChainEvent) => void,
@@ -582,9 +611,9 @@ export type Job = import("./types/hpc").Job;
 export type JobEvent = any;
 export type JobEventType = any;
 export type JobManifest = import("./types/hpc").JobManifest;
-export type JobOutput = any;
+export type JobOutput = import("./types/hpc").JobOutput;
 export type JobOutputReference = import("./types/hpc").JobOutputReference;
-export type JobOutputType = any;
+export type JobOutputType = import("./types/hpc").JobOutputType;
 export type JobParameter = any;
 export type JobPriceQuote = import("./types/hpc").JobPriceQuote;
 export type JobResources = import("./types/hpc").JobResources;

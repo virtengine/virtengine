@@ -29,12 +29,19 @@ import { initialHPCState } from "../types/hpc";
 import type { QueryClient, ChainEvent } from "../types/chain";
 import { sanitizePlainText, sanitizeObject } from "../utils/security";
 import {
+  HPCClientUnavailableError,
   assertCommittedJobMutation,
   requireHPCSigner,
   type CommittedJobMutation,
   type HPCSignerAdapter,
   type SubmitJobParams,
 } from "../components/hpc/hpc-mutation";
+import {
+  requireHPCOutputAdapter,
+  validateHPCOutputReferences,
+  validateResolvedHPCOutput,
+  type HPCOutputAdapter,
+} from "../components/hpc/hpc-output";
 
 interface HPCContextValue {
   state: HPCState;
@@ -54,8 +61,11 @@ interface HPCActions {
   getJobs: () => Promise<void>;
   getJob: (jobId: string) => Promise<Job>;
   cancelJob: (jobId: string) => Promise<CommittedJobMutation>;
-  getOutputs: (jobId: string) => Promise<JobOutputReference[]>;
-  decryptOutput: (outputRef: JobOutputReference) => Promise<JobOutput>;
+  getOutputs: (jobId: string) => Promise<readonly JobOutputReference[]>;
+  decryptOutput: (
+    jobId: string,
+    outputRef: JobOutputReference,
+  ) => Promise<JobOutput>;
   subscribeToJob: (
     jobId: string,
     callback: (event: ChainEvent) => void,
@@ -72,6 +82,7 @@ export interface HPCProviderProps {
   accountAddress: string | null;
   getAuthHeader?: () => Promise<string>;
   mutationAdapter?: HPCSignerAdapter;
+  outputAdapter?: HPCOutputAdapter;
 }
 
 export function HPCProvider({
@@ -81,12 +92,25 @@ export function HPCProvider({
   accountAddress,
   getAuthHeader,
   mutationAdapter,
+  outputAdapter,
 }: HPCProviderProps) {
   const [state, setState] = useState<HPCState>(initialHPCState);
   const submissionToken = useRef(0);
   const submissionInFlight = useRef(false);
   const mutationGeneration = useRef(0);
   const cancellationsInFlight = useRef(new Set<string>());
+  const outputGeneration = useRef(0);
+  const outputAuthority = useRef({ outputAdapter, chainId, accountAddress });
+
+  if (
+    outputAuthority.current.outputAdapter !== outputAdapter ||
+    outputAuthority.current.chainId !== chainId ||
+    outputAuthority.current.accountAddress !== accountAddress
+  ) {
+    outputAuthority.current = { outputAdapter, chainId, accountAddress };
+    outputGeneration.current += 1;
+  }
+  const renderOutputGeneration = outputGeneration.current;
 
   useEffect(() => {
     mutationGeneration.current += 1;
@@ -582,26 +606,50 @@ export function HPCProvider({
   );
 
   const getOutputs = useCallback(
-    async (jobId: string): Promise<JobOutputReference[]> => {
-      const job = state.jobs.find((j) => j.id === jobId);
-      return job?.outputRefs || [];
+    async (jobId: string): Promise<readonly JobOutputReference[]> => {
+      if (!accountAddress) throw new HPCClientUnavailableError("provider");
+      if (renderOutputGeneration !== outputGeneration.current) {
+        throw new HPCClientUnavailableError("provider");
+      }
+      const binding = { chainId, accountAddress, jobId };
+      const generation = renderOutputGeneration;
+      const result = await requireHPCOutputAdapter(
+        outputAdapter,
+        binding,
+      ).getOutputs(jobId);
+      if (generation !== outputGeneration.current) {
+        throw new HPCClientUnavailableError("provider");
+      }
+      return validateHPCOutputReferences(result, binding);
     },
-    [state.jobs],
+    [accountAddress, chainId, outputAdapter, renderOutputGeneration],
   );
 
   const decryptOutput = useCallback(
-    async (outputRef: JobOutputReference): Promise<JobOutput> => {
-      return {
-        refId: outputRef.id,
-        name: outputRef.name,
-        type: outputRef.type,
-        accessUrl: `https://outputs.virtengine.com/${outputRef.id}`,
-        urlExpiresAt: Date.now() + 3600000,
-        sizeBytes: outputRef.sizeBytes,
-        mimeType: "application/octet-stream",
-      };
+    async (
+      jobId: string,
+      outputRef: JobOutputReference,
+    ): Promise<JobOutput> => {
+      if (!accountAddress) throw new HPCClientUnavailableError("provider");
+      if (renderOutputGeneration !== outputGeneration.current) {
+        throw new HPCClientUnavailableError("provider");
+      }
+      const binding = { chainId, accountAddress, jobId };
+      const reference = validateHPCOutputReferences(
+        { ...binding, outputs: [outputRef] },
+        binding,
+      )[0];
+      const generation = renderOutputGeneration;
+      const result = await requireHPCOutputAdapter(
+        outputAdapter,
+        binding,
+      ).resolveOutput(reference);
+      if (generation !== outputGeneration.current) {
+        throw new HPCClientUnavailableError("provider");
+      }
+      return validateResolvedHPCOutput(result, reference, binding);
     },
-    [],
+    [accountAddress, chainId, outputAdapter, renderOutputGeneration],
   );
 
   const subscribeToJob = useCallback(

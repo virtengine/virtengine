@@ -13,6 +13,7 @@ import type {
   CheckoutMutationProjector,
 } from "../components/marketplace/checkout-mutation";
 import type { HPCSignerAdapter } from "../components/hpc/hpc-mutation";
+import type { HPCOutputAdapter } from "../components/hpc/hpc-output";
 
 /**
  * Portal configuration
@@ -273,6 +274,7 @@ export interface PortalProviderProps {
   marketplaceResultProjector?: CheckoutMutationProjector;
   marketplaceMutationTimeoutMs?: number;
   hpcMutationAdapter?: HPCSignerAdapter;
+  hpcOutputAdapter?: HPCOutputAdapter;
 
   /**
    * Child components

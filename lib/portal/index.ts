@@ -523,6 +523,13 @@ export {
   assertCommittedJobMutation,
   requireHPCSigner,
 } from "./components/hpc/hpc-mutation";
+export {
+  HPCOutputValidationError,
+  requireHPCOutputAdapter,
+  validateHPCOutputReferences,
+  validateResolvedHPCOutput,
+} from "./components/hpc/hpc-output";
+export type { HPCOutputAdapter } from "./components/hpc/hpc-output";
 export type {
   CommittedJobMutation,
   HPCClientCapability,
