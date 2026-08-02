@@ -153,7 +153,7 @@ function validateRequiredGateMatrix(matrix, options = {}) {
       assert.ok(typeof selector === "string" && selector.length > 0 && !selector.includes("\\"), `${category.id} has an invalid path selector`);
     }
     if (category.id === "docs_process_boundary_e2e") {
-      for (const selector of ["scripts/*.cjs", "scripts/*.js", "scripts/*.md", "scripts/*.mjs", "scripts/*.ps1", "scripts/*.py", "scripts/*.sh", "scripts/*.sql", "scripts/*.ts", "scripts/localnet.sh", "scripts/localnet.ps1"]) {
+      for (const selector of ["scripts/*.cjs", "scripts/*.js", "scripts/*.md", "scripts/*.mjs", "scripts/*.ps1", "scripts/*.py", "scripts/*.sh", "scripts/*.sql", "scripts/*.ts", "scripts/bosun", "scripts/localnet.sh", "scripts/localnet.ps1"]) {
         assert.ok(category.path_selectors.includes(selector), `docs/process selectors must include ${selector}`);
       }
     }

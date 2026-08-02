@@ -3,7 +3,9 @@
 const assert = require("assert").strict;
 const { readFileSync } = require("fs");
 const { resolve } = require("path");
+const { spawnSync } = require("child_process");
 const { validateGateResult, validateRequiredGateMatrix } = require("./validate-required-gate-matrix.cjs");
+const { matchesSelector } = require("./run-required-gates.cjs");
 
 const root = resolve(__dirname, "..");
 const matrix = JSON.parse(readFileSync(resolve(root, "_docs/ralph/prototype-integration/required-gate-matrix.json"), "utf8"));
@@ -74,6 +76,13 @@ const tests = [
     const category = candidate.categories.find((entry) => entry.id === "docs_process_boundary_e2e");
     category.path_selectors = category.path_selectors.filter((selector) => selector !== "scripts/*.sql");
     assert.throws(() => validateRequiredGateMatrix(candidate, { schema }), /must include scripts\/\*\.sql/);
+  }],
+  ["covers every tracked root scripts entry", () => {
+    const result = spawnSync("git", ["ls-files", "scripts/*"], { cwd: root, encoding: "utf8" });
+    assert.equal(result.status, 0);
+    const paths = result.stdout.trim().split(/\r?\n/).filter((path) => path && !/^scripts\/[^/]+\//.test(path));
+    const selectors = cloneMatrix().categories.flatMap((category) => category.path_selectors);
+    assert.deepEqual(paths.filter((path) => !selectors.some((selector) => matchesSelector(path, selector))), []);
   }],
   ["rejects a nonzero exit", () => {
     const category = cloneMatrix().categories[0];

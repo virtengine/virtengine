@@ -162,7 +162,7 @@
     },
     {
       "id": "docs_process_boundary_e2e",
-      "path_selectors": ["docs/**", "_docs/**", "tests/e2e/**", "tests/integration/**", "scripts/*.cjs", "scripts/*.js", "scripts/*.md", "scripts/*.mjs", "scripts/*.ps1", "scripts/*.py", "scripts/*.sh", "scripts/*.sql", "scripts/*.ts", "scripts/localnet.sh", "scripts/localnet.ps1"],
+      "path_selectors": ["docs/**", "_docs/**", "tests/e2e/**", "tests/integration/**", "scripts/*.cjs", "scripts/*.js", "scripts/*.md", "scripts/*.mjs", "scripts/*.ps1", "scripts/*.py", "scripts/*.sh", "scripts/*.sql", "scripts/*.ts", "scripts/bosun", "scripts/localnet.sh", "scripts/localnet.ps1"],
       "required_commands": [
         { "id": "docs-control", "kind": "policy", "command": "node scripts/validate-prototype-integration.cjs" },
         { "id": "intake-tag-observer", "kind": "test", "command": "node scripts/observe-prototype-intake-tags.test.cjs" },

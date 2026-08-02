@@ -137,6 +137,10 @@ try {
       const plan = planFor(["scripts/AGENTS.md", "scripts/archive-vk-data.sql"]);
       assert.deepEqual(plan.categories.map((category) => category.id), ["docs_process_boundary_e2e"]);
     }],
+    ["selects docs/process gates for the scripts bosun Gitlink", () => {
+      const plan = planFor(["scripts/bosun"]);
+      assert.deepEqual(plan.categories.map((category) => category.id), ["docs_process_boundary_e2e"]);
+    }],
     ["records an explicit root metadata allowance", () => {
       const plan = planFor(["README.md"]);
       assert.equal(plan.categories.length, 0);
