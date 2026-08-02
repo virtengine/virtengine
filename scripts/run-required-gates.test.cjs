@@ -129,6 +129,10 @@ try {
       const plan = planFor(["scripts/verify-modules.sh"]);
       assert.deepEqual(plan.categories.map((category) => category.id), ["docs_process_boundary_e2e"]);
     }],
+    ["selects docs/process gates for root Python and MJS scripts", () => {
+      const plan = planFor(["scripts/validate_slurm_chart_semantics.py", "scripts/validate-agents-docs.mjs"]);
+      assert.deepEqual(plan.categories.map((category) => category.id), ["docs_process_boundary_e2e"]);
+    }],
     ["records an explicit root metadata allowance", () => {
       const plan = planFor(["README.md"]);
       assert.equal(plan.categories.length, 0);
