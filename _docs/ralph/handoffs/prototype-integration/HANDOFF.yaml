@@ -1,39 +1,39 @@
 {
   "campaign": "three-day-prototype",
   "thread": "T4",
-  "checkpoint": "T4-01V",
+  "checkpoint": "T4-01W",
   "branch": "ve/prototype-integration",
-  "start_head": "ef792915fc0cccfeb393632f21c58fc558821020",
-  "end_head": "a68865f46686eb09cbf34c167c7cd1f81d7350e0",
+  "start_head": "1e7153d654a33062e2dfaa1cb8097c64ab354cba",
+  "end_head": "1552cc99a2cad8ebdc0d26b526508668a5a724ce",
   "origin_main": "79391a3df86d85522b92e0400c6904971ecbe65d",
   "tree_clean": true,
   "commits": [
-    "a68865f46686eb09cbf34c167c7cd1f81d7350e0"
+    "1552cc99a2cad8ebdc0d26b526508668a5a724ce"
   ],
   "owned_paths": [
-    "_docs/ralph/prototype-integration/**",
     "_docs/ralph/handoffs/prototype-integration/**",
-    "_docs/ralph/prototype-integration/core-rc-manifest.json"
+    "_docs/prototype-thread-intake-runbook.md",
+    "scripts/apply-prototype-intake-freeze.test.cjs"
   ],
   "files_changed": [
-    "_docs/ralph/handoffs/prototype-integration/HANDOFF.yaml",
-    "_docs/ralph/prototype-integration/core-rc-manifest.json"
+    "_docs/prototype-thread-intake-runbook.md",
+    "scripts/apply-prototype-intake-freeze.test.cjs"
   ],
   "tests": [
     {
-      "command": "node scripts/validate-prototype-integration.test.cjs && node scripts/validate-prototype-integration.cjs",
+      "command": "node scripts/apply-prototype-intake-freeze.test.cjs",
       "exit_code": 0,
       "result": "passed",
-      "test_count": 12,
+      "test_count": 13,
       "tool_versions": {
         "node": "20.19.1"
       }
     },
     {
-      "command": "node scripts/validate-agents-docs.mjs",
+      "command": "node scripts/validate-required-gate-matrix.test.cjs && node scripts/validate-agents-docs.mjs",
       "exit_code": 0,
       "result": "passed",
-      "test_count": 9,
+      "test_count": 22,
       "tool_versions": {
         "node": "20.19.1"
       }
@@ -80,5 +80,5 @@
     "Task 88C is not complete."
   ],
   "next_checkpoint": null,
-  "expected_head": "a68865f46686eb09cbf34c167c7cd1f81d7350e0"
+  "expected_head": "1552cc99a2cad8ebdc0d26b526508668a5a724ce"
 }
