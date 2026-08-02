@@ -578,6 +578,31 @@ func TestValidateSessionForTransaction(t *testing.T) {
 	require.ErrorIs(t, err, types.ErrDeviceMismatch)
 }
 
+func TestPersistedAuthorizationSessionCorruptionFailsClosed(t *testing.T) {
+	ctx, keeper := setupTestKeeper(t)
+	sessionID := "corrupt-session"
+	store := ctx.KVStore(keeper.skey)
+	tests := []struct {
+		name  string
+		value string
+	}{
+		{name: "malformed", value: `{"session_id":`},
+		{name: "wrong session id", value: `{"session_id":"other-session","account_address":"account","transaction_type":2,"verified_factors":[2],"created_at":1,"expires_at":2}`},
+		{name: "invalid session", value: `{"session_id":"corrupt-session","account_address":"account","transaction_type":2,"created_at":1,"expires_at":2}`},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			store.Set(types.AuthorizationSessionKey(sessionID), []byte(test.value))
+			require.Panics(t, func() {
+				keeper.GetAuthorizationSession(ctx, sessionID)
+			})
+			require.Panics(t, func() {
+				keeper.ValidateSessionForTransaction(ctx, sessionID, sdk.AccAddress([]byte("account")), types.SensitiveTxKeyRotation, "")
+			})
+		})
+	}
+}
+
 func TestValidateSessionForTransaction_StepUp(t *testing.T) {
 	ctx, keeper := setupTestKeeper(t)
 	addr := sdk.AccAddress([]byte("test_address_1234567"))

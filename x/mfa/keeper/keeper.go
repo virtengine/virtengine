@@ -1049,9 +1049,11 @@ func (k Keeper) GetAuthorizationSession(ctx sdk.Context, sessionID string) (*typ
 	}
 
 	var ss sessionStore
-	_ = json.Unmarshal(bz, &ss)
+	if err := json.Unmarshal(bz, &ss); err != nil {
+		panic(fmt.Errorf("decode authorization session %s: %w", sessionID, err))
+	}
 
-	return &types.AuthorizationSession{
+	session := &types.AuthorizationSession{
 		SessionID:         ss.SessionID,
 		AccountAddress:    ss.AccountAddress,
 		TransactionType:   ss.TransactionType,
@@ -1061,7 +1063,15 @@ func (k Keeper) GetAuthorizationSession(ctx sdk.Context, sessionID string) (*typ
 		UsedAt:            ss.UsedAt,
 		IsSingleUse:       ss.IsSingleUse,
 		DeviceFingerprint: ss.DeviceFingerprint,
-	}, true
+	}
+	if session.SessionID != sessionID {
+		panic(fmt.Errorf("authorization session key mismatch: requested %s, stored %s", sessionID, session.SessionID))
+	}
+	if err := session.Validate(); err != nil {
+		panic(fmt.Errorf("invalid persisted authorization session %s: %w", sessionID, err))
+	}
+
+	return session, true
 }
 
 // UseAuthorizationSession marks a session as used
