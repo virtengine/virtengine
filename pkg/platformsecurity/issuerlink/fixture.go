@@ -157,6 +157,13 @@ type nonceEntry struct {
 	recordKey          string
 }
 
+type authenticationReplayKey struct {
+	domainKey       string
+	nullifier       string
+	challengeDigest string
+	coordinate      uint64
+}
+
 type FixtureOption func(*MemoryAtomicIssuerLinkFixture)
 
 func WithThresholdPRF(prf ThresholdPRF) FixtureOption {
@@ -193,6 +200,7 @@ type MemoryAtomicIssuerLinkFixture struct {
 	tombstones          map[string]DeletionTombstone
 	idempotency         map[string]idempotencyEntry
 	nonces              map[string]nonceEntry
+	authentications     map[authenticationReplayKey]struct{}
 	wallets             map[string]string
 	failAfterInsertion  bool
 }
@@ -204,7 +212,8 @@ func NewMemoryAtomicIssuerLinkFixture(resolver IssuerKeyResolver, options ...Fix
 		authorizationScope: &authorizationScope{},
 		attestationPolicy:  AttestationPolicy{MaxLifetimeCoordinates: 100, MaxFutureSkew: 0},
 		records:            make(map[string]IssuerLinkRecord), tombstones: make(map[string]DeletionTombstone),
-		idempotency: make(map[string]idempotencyEntry), nonces: make(map[string]nonceEntry), wallets: make(map[string]string),
+		idempotency: make(map[string]idempotencyEntry), nonces: make(map[string]nonceEntry),
+		authentications: make(map[authenticationReplayKey]struct{}), wallets: make(map[string]string),
 	}
 	for _, option := range options {
 		option(store)
@@ -624,6 +633,16 @@ func (f *MemoryAtomicIssuerLinkFixture) Authenticate(ctx context.Context, domain
 	if err != nil || len(signature) != ed25519.SignatureSize || !ed25519.Verify(publicKey, message, signature) {
 		return errors.New("invalid canonical wallet authentication proof")
 	}
+	replayKey := authenticationReplayKey{
+		domainKey:       domainKey,
+		nullifier:       nullifier,
+		challengeDigest: challengeDigest,
+		coordinate:      f.coordinate,
+	}
+	if _, consumed := f.authentications[replayKey]; consumed {
+		return ErrAuthenticationReplay
+	}
+	f.authentications[replayKey] = struct{}{}
 	return nil
 }
 

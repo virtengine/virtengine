@@ -24,6 +24,7 @@ var (
 	ErrConflict              = errors.New("issuer-link idempotency conflict")
 	ErrDuplicateLink         = errors.New("duplicate issuer link")
 	ErrCrossDomainReplay     = errors.New("cross-domain challenge replay")
+	ErrAuthenticationReplay  = errors.New("issuer-link authentication challenge replay")
 	ErrProductionUnavailable = errors.New("production issuer linking is unavailable")
 	ErrStale                 = errors.New("stale or expired issuer-link request")
 	ErrUnauthorized          = errors.New("issuer-link authorization is invalid")

@@ -291,6 +291,86 @@ func TestRotationLineageAtomicActivationAndCanonicalAuthentication(t *testing.T)
 	}
 }
 
+func TestAuthenticationChallengeReplay(t *testing.T) {
+	profile, issuerKey, resolver := issuerFixture(t, VisibilityPairwise)
+	store := NewMemoryAtomicIssuerLinkFixture(resolver)
+	wallet := walletKeyFixture(t, 52)
+	request := requestFixture(t, pairwiseDomain("authentication-domain"), "authentication-replay", nil, wallet, 100)
+	record := activateInitial(t, store, registrationFixture(t, request, nil, wallet, profile, issuerKey, "same-person"))
+	otherWallet := walletKeyFixture(t, 53)
+	otherRequest := requestFixture(t, record.Domain, "authentication-other-nullifier", nil, otherWallet, 100)
+	otherRecord := activateInitial(t, store, registrationFixture(t, otherRequest, nil, otherWallet, profile, issuerKey, "other-person"))
+	crossDomainRequest := requestFixture(t, pairwiseDomain("authentication-other-domain"), "authentication-cross-domain", nil, wallet, 100)
+	crossDomainRecord := activateInitial(t, store, registrationFixture(t, crossDomainRequest, nil, wallet, profile, issuerKey, "same-person"))
+	challenge := fixtureDigest("authentication-replay-challenge")
+	publicKey := wallet.Public().(ed25519.PublicKey)
+	message, err := AuthenticationSigningBytes(record.Domain, record.ScopedNullifier, challenge, 110)
+	if err != nil {
+		t.Fatal(err)
+	}
+	validSignature := ed25519.Sign(wallet, message)
+	invalidSignature := append([]byte(nil), validSignature...)
+	invalidSignature[0] ^= 1
+	if err := store.Authenticate(context.Background(), record.Domain, record.ScopedNullifier, publicKey, invalidSignature, challenge); err == nil {
+		t.Fatal("invalid authentication proof was accepted")
+	}
+	if err := store.Authenticate(context.Background(), record.Domain, record.ScopedNullifier, publicKey, validSignature, challenge); err != nil {
+		t.Fatalf("valid proof after invalid attempt failed: %v", err)
+	}
+	if err := store.Authenticate(context.Background(), record.Domain, record.ScopedNullifier, publicKey, validSignature, challenge); !errors.Is(err, ErrAuthenticationReplay) {
+		t.Fatalf("authentication replay returned %v", err)
+	}
+
+	otherPublicKey := otherWallet.Public().(ed25519.PublicKey)
+	wrongNullifierSignature := ed25519.Sign(otherWallet, message)
+	if err := store.Authenticate(context.Background(), otherRecord.Domain, otherRecord.ScopedNullifier, otherPublicKey, wrongNullifierSignature, challenge); err == nil {
+		t.Fatal("authentication signature was not bound to the nullifier")
+	}
+	otherMessage, _ := AuthenticationSigningBytes(otherRecord.Domain, otherRecord.ScopedNullifier, challenge, 110)
+	if err := store.Authenticate(context.Background(), otherRecord.Domain, otherRecord.ScopedNullifier, otherPublicKey, ed25519.Sign(otherWallet, otherMessage), challenge); err != nil {
+		t.Fatalf("same challenge on another nullifier was not independent: %v", err)
+	}
+	if err := store.Authenticate(context.Background(), crossDomainRecord.Domain, crossDomainRecord.ScopedNullifier, publicKey, validSignature, challenge); err == nil {
+		t.Fatal("authentication signature was not bound to the domain")
+	}
+	crossDomainMessage, _ := AuthenticationSigningBytes(crossDomainRecord.Domain, crossDomainRecord.ScopedNullifier, challenge, 110)
+	if err := store.Authenticate(context.Background(), crossDomainRecord.Domain, crossDomainRecord.ScopedNullifier, publicKey, ed25519.Sign(wallet, crossDomainMessage), challenge); err != nil {
+		t.Fatalf("same challenge in another domain was not independent: %v", err)
+	}
+
+	concurrentChallenge := fixtureDigest("concurrent-authentication-challenge")
+	concurrentMessage, _ := AuthenticationSigningBytes(record.Domain, record.ScopedNullifier, concurrentChallenge, 110)
+	concurrentSignature := ed25519.Sign(wallet, concurrentMessage)
+	var successes atomic.Int32
+	var replays atomic.Int32
+	var wait sync.WaitGroup
+	for range 16 {
+		wait.Add(1)
+		go func() {
+			defer wait.Done()
+			err := store.Authenticate(context.Background(), record.Domain, record.ScopedNullifier, publicKey, concurrentSignature, concurrentChallenge)
+			switch {
+			case err == nil:
+				successes.Add(1)
+			case errors.Is(err, ErrAuthenticationReplay):
+				replays.Add(1)
+			default:
+				t.Errorf("unexpected concurrent authentication error: %v", err)
+			}
+		}()
+	}
+	wait.Wait()
+	if successes.Load() != 1 || replays.Load() != 15 {
+		t.Fatalf("authentication was not consumed atomically: successes=%d replays=%d", successes.Load(), replays.Load())
+	}
+
+	store.SetCurrentCoordinate(111)
+	newMessage, _ := AuthenticationSigningBytes(record.Domain, record.ScopedNullifier, challenge, 111)
+	if err := store.Authenticate(context.Background(), record.Domain, record.ScopedNullifier, publicKey, ed25519.Sign(wallet, newMessage), challenge); err != nil {
+		t.Fatalf("freshly signed challenge at new coordinate failed: %v", err)
+	}
+}
+
 func TestRotationRejectsCrossIssuerPolicyAndProfilePairing(t *testing.T) {
 	mutations := map[string]func(*IssuerLinkRecord){
 		"issuer":  func(record *IssuerLinkRecord) { record.IssuerCommitment = fixtureDigest("other-issuer") },
