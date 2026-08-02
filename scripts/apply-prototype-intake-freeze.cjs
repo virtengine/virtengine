@@ -4,7 +4,7 @@
 
 const assert = require("assert").strict;
 const { createHash, randomUUID } = require("crypto");
-const { readFileSync, renameSync, unlinkSync, writeFileSync } = require("fs");
+const { closeSync, fsyncSync, openSync, readFileSync, renameSync, unlinkSync, writeFileSync } = require("fs");
 const { resolve } = require("path");
 const { spawnSync } = require("child_process");
 const { planFrozenEpoch, resolveAnnotatedTag, validateObservationBinding } = require("./plan-prototype-intake-freeze.cjs");
@@ -12,11 +12,17 @@ const { planFrozenEpoch, resolveAnnotatedTag, validateObservationBinding } = req
 const threads = ["T1", "T2", "T3", "T5"];
 const producerKeys = ["decision", "status", "tag", "thread"];
 
-function atomicWriteFile(path, content, operations = { renameSync, unlinkSync, writeFileSync }, temporaryPath = `${path}.tmp-${process.pid}-${randomUUID()}`) {
+function atomicWriteFile(path, content, operations = { closeSync, fsyncSync, openSync, renameSync, unlinkSync, writeFileSync }, temporaryPath = `${path}.tmp-${process.pid}-${randomUUID()}`) {
   let temporaryCreated = false;
   try {
-    operations.writeFileSync(temporaryPath, content, { encoding: "utf8", flag: "wx" });
+    const descriptor = operations.openSync(temporaryPath, "wx");
     temporaryCreated = true;
+    try {
+      operations.writeFileSync(descriptor, content, "utf8");
+      operations.fsyncSync(descriptor);
+    } finally {
+      operations.closeSync(descriptor);
+    }
     operations.renameSync(temporaryPath, path);
     temporaryCreated = false;
   } finally {
