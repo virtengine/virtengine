@@ -6,26 +6,26 @@
   "planned_functionality_complete": false,
   "milestone_m_eligible": false,
   "source": {
-    "payload_sha": "ab534049a591d04ba8ae7ea489ff468d1d5a8b3c",
-    "tree": "af83c5202ae5869fc5674c18402e67ae23d07cee",
+    "payload_sha": "110571af5a3ef4caf9d17d8c7c311c8566a2f2b7",
+    "tree": "1baabc16fe57446494e83457a5f864732ce74d9d",
     "branch": "ve/prototype-integration",
     "binding": "declared_clean_parent_payload"
   },
   "tooling": {
-    "tooling_sha": "ab534049a591d04ba8ae7ea489ff468d1d5a8b3c",
-    "tree": "af83c5202ae5869fc5674c18402e67ae23d07cee",
+    "tooling_sha": "110571af5a3ef4caf9d17d8c7c311c8566a2f2b7",
+    "tree": "1baabc16fe57446494e83457a5f864732ce74d9d",
     "artifacts": [
       {
         "id": "generator",
         "path": "scripts/generate-core-rc-manifest.cjs",
-        "git_blob": "47a5d241bb2a89546dd74c59885682d4abc2b289",
-        "sha256": "1b1706606633fdc38dc95c67341a861d7dad7a4c6678b1fce1bc12455e1f8981"
+        "git_blob": "4fc8d642b3d4535b307b69393c26a4a89b2d3fd5",
+        "sha256": "94dbbce579cfcaa6662bee3d93e4ad7904fdb59a0bdc51591b0d8a80f6ff3cb1"
       },
       {
         "id": "schema",
         "path": "_docs/ralph/prototype-integration/core-rc-manifest.schema.json",
-        "git_blob": "ab4cad357796e38b7b35b9ba1edb3f278ae63e85",
-        "sha256": "b2b2412a5e716e08459b6f4a2a57144bb90f5928c564e67836ef89c26b3f0d07"
+        "git_blob": "55bd73e21f5c008bad0dadf7de112f53a6a7ba89",
+        "sha256": "72e8c083dad691496b3505aef6cb0ab81f437c3ace8525954d84ed794c113a0f"
       },
       {
         "id": "validator",
@@ -281,20 +281,127 @@
     "production_weights_status": "dependency_blocked",
     "blocker_id": "production-model-provenance-unavailable"
   },
+  "ai_assurance": {
+    "status": "dependency_blocked",
+    "provenance_digests": {
+      "models": [
+        {
+          "id": "trust-score-architecture",
+          "state": "fixture_only",
+          "sha256": "38f8a14dffa7444ed5da7d7823f1b855eba9ba285a6408cb73d9a9e9aba60eb2",
+          "source_blocker_id": null
+        },
+        {
+          "id": "trust-score-model-weights",
+          "state": "dependency_blocked",
+          "sha256": null,
+          "source_blocker_id": "model-weights-absent"
+        }
+      ],
+      "runtime": {
+        "state": "dependency_blocked",
+        "sha256": null,
+        "source_blocker_id": "runtime-image-absent",
+        "sbom_sha256": null,
+        "sbom_blocker_id": "runtime-sbom-absent"
+      },
+      "schema": {
+        "state": "present",
+        "sha256": "ccb183b971af38523deb6b29e0d1ce0dcd773146527e940dd9b870e721f6f76c",
+        "source_blocker_id": null
+      },
+      "licenses": [
+        {
+          "id": "production-dataset-license",
+          "state": "dependency_blocked",
+          "sha256": null,
+          "source_blocker_id": "approved-licenses-absent"
+        },
+        {
+          "id": "model-license",
+          "state": "dependency_blocked",
+          "sha256": null,
+          "source_blocker_id": "approved-licenses-absent"
+        }
+      ]
+    },
+    "feature_vector": {
+      "state": "fixture_only",
+      "dimension": 768,
+      "value_type": "ieee754-float32",
+      "byte_order": "big-endian",
+      "pre_hash_decimal_places": 6,
+      "hash_algorithm": "sha256",
+      "fixture_path": "pkg/inference/conformance/testdata/feature_parity_v1.json",
+      "test_vector_hashes": [
+        {
+          "id": "zero_missing",
+          "sha256": "92343b22e813b2ab3f92a528a463388edf33a5b31eab7c3b8625bf740d282c78"
+        },
+        {
+          "id": "unique_position_sentinel",
+          "sha256": "066c88ffa4085b1b3a39bf08aa6cd58b5ad0e6a2e0b1e9ffb2fdaeaea257f865"
+        },
+        {
+          "id": "boundary_values",
+          "sha256": "104b757840ad24aea9b4e2c21c7a4598b39aa8a59f661ac6513bfb7c88149e4b"
+        },
+        {
+          "id": "asymmetric_negative_height",
+          "sha256": "322ae5390de37114985a743298e4ae01579f38101ea4126fcb51f68eb2381720"
+        }
+      ]
+    },
+    "evaluation": {
+      "status": "dependency_blocked",
+      "report_sha256": null,
+      "source_blocker_id": "production-evaluation-absent"
+    },
+    "uniqueness": {
+      "status": "blocked",
+      "implementation_class": "truncated_salted_sha256_bucket_equality_not_lsh",
+      "evidence_path": "x/veid/keeper/biometric_hash.go"
+    },
+    "vault_kms": {
+      "status": "blocked",
+      "blob_backend": "process_memory",
+      "key_custody": "process_memory",
+      "kms_hsm": "not_configured_or_certified"
+    },
+    "consent_retention": {
+      "status": "blocked",
+      "consent": "allow_all_default",
+      "retention": "implementation_present_production_uncertified",
+      "production_retention_certified": false
+    },
+    "non_certification": {
+      "production_certified": false,
+      "not_certified": [
+        "production_model",
+        "production_runtime",
+        "production_evaluation",
+        "biometric_uniqueness",
+        "durable_vault_or_kms",
+        "production_consent_enforcement",
+        "production_retention_legal_hold_or_erasure"
+      ],
+      "blocker_id": "ai-production-assurance-unavailable"
+    }
+  },
   "test_evidence": {
     "status": "complete",
     "ledger_path": "_docs/ralph/handoffs/prototype-integration/HANDOFF.yaml",
-    "implementation_sha": "30126351a0a053b0b4b171d1c09cc3282f144275",
-    "ledger_sha": "ab534049a591d04ba8ae7ea489ff468d1d5a8b3c",
+    "implementation_sha": "0ec2b881e1bb6cae23b12d86728c82dc2d84410b",
+    "ledger_sha": "110571af5a3ef4caf9d17d8c7c311c8566a2f2b7",
     "record_count": 3,
-    "declared_test_count": 37,
+    "declared_test_count": 38,
     "uncounted_record_count": 0,
     "records": [
       {
         "command": "node scripts/validate-ai-production-policy.test.cjs && node scripts/validate-ai-production-policy.cjs",
         "exit_code": 0,
         "result": "passed",
-        "test_count": 12,
+        "test_count": 13,
         "tool_versions": {
           "node": "20.19.1"
         }
@@ -322,7 +429,7 @@
   },
   "producer_checkpoints": {
     "ledger_path": "_docs/ralph/handoffs/prototype-integration/HANDOFF.yaml",
-    "ledger_sha256": "26674a2ae8cad753a84c0df15275c042c8e6921ef9e3ce48c7c50ae467eb78ed",
+    "ledger_sha256": "420b25f28775377d185cae381b7af30c299fb09f1321e8a5a28fb42f2a78b11f",
     "accepted": [],
     "rejected": [
       {
@@ -395,6 +502,10 @@
     {
       "id": "production-model-provenance-unavailable",
       "description": "Production model provenance, approvals, evaluation, and runtime SBOM are unavailable."
+    },
+    {
+      "id": "ai-production-assurance-unavailable",
+      "description": "AI, biometric uniqueness, vault/KMS, consent, retention, and production evaluation assurance remain unavailable."
     },
     {
       "id": "test-evidence-partial",
