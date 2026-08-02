@@ -1,30 +1,47 @@
 {
   "campaign": "three-day-prototype",
   "thread": "T4",
-  "checkpoint": "T4-14B",
+  "checkpoint": "T4-15A",
   "branch": "ve/prototype-integration",
-  "start_head": "110571af5a3ef4caf9d17d8c7c311c8566a2f2b7",
-  "end_head": "0203273024264ad5c86e59a780eb297901a81307",
+  "start_head": "2f6d01cd68135a055a5695a4c335e0498971567c",
+  "end_head": "81bbd7b35de74242d1d383b1ac7a3bfb93a2b57c",
   "origin_main": "79391a3df86d85522b92e0400c6904971ecbe65d",
   "tree_clean": true,
   "commits": [
-    "0203273024264ad5c86e59a780eb297901a81307"
+    "81bbd7b35de74242d1d383b1ac7a3bfb93a2b57c"
   ],
   "owned_paths": [
     "_docs/ralph/prototype-integration/**",
     "_docs/ralph/handoffs/prototype-integration/**",
-    "_docs/ralph/prototype-integration/core-rc-manifest.json"
+    "_docs/audits/task-t4-15a-ai-biometric-security-gates-2026-08-02.md",
+    "_docs/ralph/prototype-integration/ai-biometric-security-gates.json",
+    "_docs/ralph/prototype-integration/required-gate-matrix.json",
+    "scripts/generate-core-rc-manifest.cjs",
+    "scripts/generate-core-rc-manifest.test.cjs",
+    "scripts/validate-ai-biometric-security-gates.cjs",
+    "scripts/validate-ai-biometric-security-gates.test.cjs",
+    "scripts/validate-prototype-integration.cjs",
+    "scripts/validate-required-gate-matrix.cjs"
   ],
   "files_changed": [
     "_docs/ralph/handoffs/prototype-integration/HANDOFF.yaml",
-    "_docs/ralph/prototype-integration/core-rc-manifest.json"
+    "_docs/INDEX.md",
+    "_docs/audits/task-t4-15a-ai-biometric-security-gates-2026-08-02.md",
+    "_docs/ralph/prototype-integration/ai-biometric-security-gates.json",
+    "_docs/ralph/prototype-integration/required-gate-matrix.json",
+    "scripts/generate-core-rc-manifest.cjs",
+    "scripts/generate-core-rc-manifest.test.cjs",
+    "scripts/validate-ai-biometric-security-gates.cjs",
+    "scripts/validate-ai-biometric-security-gates.test.cjs",
+    "scripts/validate-prototype-integration.cjs",
+    "scripts/validate-required-gate-matrix.cjs"
   ],
   "tests": [
     {
-      "command": "node scripts/validate-ai-production-policy.test.cjs && node scripts/validate-ai-production-policy.cjs",
+      "command": "node scripts/validate-ai-biometric-security-gates.test.cjs && node scripts/validate-ai-biometric-security-gates.cjs",
       "exit_code": 0,
       "result": "passed",
-      "test_count": 13,
+      "test_count": 12,
       "tool_versions": {
         "node": "20.19.1"
       }
@@ -42,14 +59,17 @@
       "command": "node scripts/generate-core-rc-manifest.test.cjs",
       "exit_code": 0,
       "result": "passed",
-      "test_count": 12,
+      "test_count": 14,
       "tool_versions": {
         "node": "20.19.1"
       }
     }
   ],
   "generated_hashes": {
-    "_docs/ralph/prototype-integration/core-rc-manifest.json": "9c70156619032e4d0f829965b6ee7b90119d26528e62c78a453694dff1b77243"
+    "scripts/validate-ai-biometric-security-gates.cjs": "d53483bcbdb3d9fb896020dcd34b0afb444b58368534eae4dee521d88b92991c",
+    "scripts/validate-ai-biometric-security-gates.test.cjs": "93229d327b409b0dcfcfe37fb7ecea8f1524a78a4b24be94152d30957109a58b",
+    "_docs/ralph/prototype-integration/ai-biometric-security-gates.json": "c6fdb50abff205ddab61fedbc209fffd4b62b8f16a592e1d2a6f9bb2d5fd56d1",
+    "_docs/ralph/prototype-integration/required-gate-matrix.json": "ba4328f22b9337056f757945b566e89f5c2de90bee9a777fcacd8c56340e97e2"
   },
   "accepted_checkpoints": [],
   "rejected_checkpoints": [
@@ -81,9 +101,10 @@
     "The canonical diagnostic reports stable secrets and immutable images passed; capacity equality, durability, and least privilege remain unverified without Helm/live evidence.",
     "No canonical chart remediation, failover, restore, or production render approval is claimed.",
     "The T4-12A diagnostic records 11 prohibited production AI, biometric, consent, custody, or stub-success finding paths; enforce mode rejects the current repository state.",
+    "The T4-15A release gate records all ten AI/biometric security categories as partial or missing; enforce mode rejects release and external privacy, PAD, and production-model evaluations remain unavailable.",
     "External production model privacy and security evaluation is unavailable.",
     "Task 88C is not complete."
   ],
   "next_checkpoint": null,
-  "expected_head": "0203273024264ad5c86e59a780eb297901a81307"
+  "expected_head": "81bbd7b35de74242d1d383b1ac7a3bfb93a2b57c"
 }
