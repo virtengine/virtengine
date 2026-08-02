@@ -1,0 +1,17 @@
+{
+  "name": "request-v1",
+  "domain": "virtengine/federation/request/v1",
+  "provider_id": "provider-1",
+  "service_id": "orders",
+  "method": "post",
+  "request_target": "/v1/orders?z=two&a=one",
+  "body_base64": "eyJpZCI6Im9yZGVyLTEifQ==",
+  "content_type": "application/json; charset=utf-8",
+  "timestamp_unix": 1800000000,
+  "nonce": "vector-nonce-1",
+  "signing_key_epoch": 7,
+  "discovery_digest_hex": "0102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f20",
+  "chain_id": "virtengine-1",
+  "canonical_base64": "AAAAIHZpcnRlbmdpbmUvZmVkZXJhdGlvbi9yZXF1ZXN0L3YxAAAAAQAAAApwcm92aWRlci0xAAAABm9yZGVycwAAAARQT1NUAAAACi92MS9vcmRlcnMAAAALYT1vbmUmej10d2/vsWkfMxeOtZppfoQVPZ1bwvZK5gOMS26uOVSx+UJmbwAAAB9hcHBsaWNhdGlvbi9qc29uOyBjaGFyc2V0PXV0Zi04AAAAAGtJ0gAAAAAOdmVjdG9yLW5vbmNlLTEAAAAAAAAABwECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8gAAAADHZpcnRlbmdpbmUtMQ==",
+  "digest_hex": "c578be4fa829c04d0222cc4375e24c437d959f86049507796353d99cf16c7dc0"
+}

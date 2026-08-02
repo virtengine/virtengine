@@ -131,6 +131,7 @@ func newTestVaultService() (data_vault.VaultService, error) {
 	return data_vault.NewVaultService(data_vault.VaultConfig{
 		Store:              store,
 		AccessControl:      access,
+		ConsentResolver:    data_vault.AllowAllConsentResolver{},
 		AuditLogger:        auditLogger,
 		AuditOwner:         "audit-system",
 		Metrics:            metrics,

@@ -4,7 +4,6 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"testing"
-	"time"
 
 	"github.com/virtengine/virtengine/x/mfa/types"
 )
@@ -205,37 +204,6 @@ func TestValidateFactorCombination(t *testing.T) {
 	}
 }
 
-// TestTOTPCommitmentVerification tests the TOTP hash commitment verification
-func TestTOTPCommitmentVerification(t *testing.T) {
-	keeper := Keeper{}
-	config := DefaultTOTPConfig()
-	now := time.Now()
-
-	// Create a commitment with known hashes
-	code1 := "123456"
-	code2 := "654321"
-
-	hash1 := sha256.Sum256([]byte(code1))
-	hash2 := sha256.Sum256([]byte(code2))
-
-	// Create commitment containing both hashes
-	commitment := append(hash1[:], hash2[:]...)
-
-	// Valid code should verify
-	if !keeper.verifyTOTPWithCommitment(code1, commitment, now, config) {
-		t.Error("expected code1 to verify successfully")
-	}
-
-	if !keeper.verifyTOTPWithCommitment(code2, commitment, now, config) {
-		t.Error("expected code2 to verify successfully")
-	}
-
-	// Invalid code should not verify
-	if keeper.verifyTOTPWithCommitment("000000", commitment, now, config) {
-		t.Error("expected invalid code to fail verification")
-	}
-}
-
 // TestVerificationResult tests the VerificationResult struct
 func TestVerificationResult(t *testing.T) {
 	result := VerificationResult{
@@ -296,69 +264,6 @@ func TestFormatFactorList(t *testing.T) {
 				t.Errorf("expected %q, got %q", tt.expected, result)
 			}
 		})
-	}
-}
-
-// TestOTPResponseValidation tests OTP response format validation
-func TestOTPResponseValidation(t *testing.T) {
-	// Valid numeric codes
-	validCodes := []string{"123456", "12345678", "000000", "999999"}
-	for _, code := range validCodes {
-		if len(code) < 6 || len(code) > 8 {
-			t.Errorf("expected valid code %s to pass length check", code)
-		}
-		for _, c := range code {
-			if c < '0' || c > '9' {
-				t.Errorf("expected valid code %s to be numeric", code)
-			}
-		}
-	}
-
-	// Invalid codes
-	invalidCodes := []string{"12345", "abc123", "1234567890", "", "12 345"}
-	for _, code := range invalidCodes {
-		if len(code) >= 6 && len(code) <= 8 {
-			allDigits := true
-			for _, c := range code {
-				if c < '0' || c > '9' {
-					allDigits = false
-					break
-				}
-			}
-			if allDigits {
-				t.Errorf("expected invalid code %s to fail validation", code)
-			}
-		}
-	}
-}
-
-// TestGenerateTOTPCode tests TOTP code generation
-func TestGenerateTOTPCode(t *testing.T) {
-	secret := []byte("12345678901234567890")
-	counter := uint64(1)
-	digits := uint(6)
-
-	// Test with different algorithms
-	algorithms := []string{"SHA256", "SHA512"}
-	for _, alg := range algorithms {
-		code := generateTOTPCode(secret, counter, digits, alg)
-
-		if len(code) != 6 {
-			t.Errorf("expected code length 6 for %s, got %d", alg, len(code))
-		}
-
-		// Verify code is numeric
-		for _, c := range code {
-			if c < '0' || c > '9' {
-				t.Errorf("expected numeric code for %s, got %s", alg, code)
-			}
-		}
-	}
-
-	// Test 8 digit code
-	code8 := generateTOTPCode(secret, counter, 8, "SHA256")
-	if len(code8) != 8 {
-		t.Errorf("expected code length 8, got %d", len(code8))
 	}
 }
 

@@ -1,6 +1,7 @@
 package types
 
 import (
+	"encoding/binary"
 	"time"
 )
 
@@ -368,6 +369,56 @@ type GlobalConsentUpdate struct {
 	ShareForVerification       *bool `json:"share_for_verification,omitempty"`
 	AllowReVerification        *bool `json:"allow_re_verification,omitempty"`
 	AllowDerivedFeatureSharing *bool `json:"allow_derived_feature_sharing,omitempty"`
+}
+
+// GetConsentUpdateSigningMessage returns deterministic sign bytes for the
+// complete update intent at the expected current consent version.
+func GetConsentUpdateSigningMessage(sender string, expectedVersion uint32, update ConsentUpdateRequest) []byte {
+	message := make([]byte, 0, 256)
+	message = appendConsentSigningText(message, "VEID_CONSENT_UPDATE_V2")
+	message = appendConsentSigningText(message, sender)
+	version := make([]byte, 4)
+	binary.BigEndian.PutUint32(version, expectedVersion)
+	message = append(message, version...)
+	message = appendConsentSigningText(message, update.ScopeID)
+	message = appendConsentSigningBool(message, update.GrantConsent)
+	message = appendConsentSigningText(message, update.Purpose)
+	if update.ExpiresAt == nil {
+		message = append(message, 0)
+	} else {
+		message = append(message, 1)
+		message = appendConsentSigningText(message, update.ExpiresAt.UTC().Format(time.RFC3339Nano))
+	}
+	if update.GlobalSettings == nil {
+		return append(message, 0)
+	}
+	message = append(message, 1)
+	message = appendConsentSigningOptionalBool(message, update.GlobalSettings.ShareWithProviders)
+	message = appendConsentSigningOptionalBool(message, update.GlobalSettings.ShareForVerification)
+	message = appendConsentSigningOptionalBool(message, update.GlobalSettings.AllowReVerification)
+	return appendConsentSigningOptionalBool(message, update.GlobalSettings.AllowDerivedFeatureSharing)
+}
+
+func appendConsentSigningText(message []byte, value string) []byte {
+	length := make([]byte, 8)
+	binary.BigEndian.PutUint64(length, uint64(len(value)))
+	message = append(message, length...)
+	return append(message, value...)
+}
+
+func appendConsentSigningBool(message []byte, value bool) []byte {
+	if value {
+		return append(message, 1)
+	}
+	return append(message, 0)
+}
+
+func appendConsentSigningOptionalBool(message []byte, value *bool) []byte {
+	if value == nil {
+		return append(message, 0)
+	}
+	message = append(message, 1)
+	return appendConsentSigningBool(message, *value)
 }
 
 // ApplyConsentUpdate applies a consent update request to consent settings

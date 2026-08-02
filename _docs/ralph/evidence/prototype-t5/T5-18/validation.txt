@@ -1,0 +1,40 @@
+T5-18 durable FundAuthorization keeper validation
+Payload: 489c0ef74f14562b200ffcb14fbf2258e9cb3754
+Platform: windows/amd64
+Toolchains: go version go1.25.8 windows/amd64; WinLibs POSIX UCRT GCC 16.1.0
+
+Command: C:\Users\pavil\AppData\Local\VirtEngine\toolchains\go1.25.8\go\bin\go.exe test -count=1 ./pkg/fundauth/...
+Output:
+- ok github.com/virtengine/virtengine/pkg/fundauth 1.941s
+- ok github.com/virtengine/virtengine/pkg/fundauth/keeper 3.638s
+Exit code: 0
+
+Command: C:\Users\pavil\AppData\Local\VirtEngine\toolchains\go1.25.8\go\bin\go.exe vet ./pkg/fundauth/...
+Output: no diagnostics
+Exit code: 0
+
+Environment: CGO_ENABLED=1; CC=gcc; PATH includes WinLibs UCRT bin
+Command: C:\Users\pavil\AppData\Local\VirtEngine\toolchains\go1.25.8\go\bin\go.exe test -race -count=1 ./pkg/fundauth/...
+Output:
+- ok github.com/virtengine/virtengine/pkg/fundauth 4.540s
+- ok github.com/virtengine/virtengine/pkg/fundauth/keeper 2.593s
+Exit code: 0
+
+Command: git diff --cached --check
+Output: no errors
+Exit code: 0
+
+Security evidence:
+- Cosmos SDK KV-backed consumer implements fundauth.AtomicAuthorizationConsumer with durable account+nonce replay markers.
+- Domain-separated length-prefixed keys bind canonical account IDs and nonce digests without concatenation ambiguity.
+- Protected mutation and replay marker execute in one CacheContext and write only after callback success and uncanceled outer context.
+- Outer context values/deadlines/cancellation remain visible while SDK context access resolves to the cached transaction.
+- Callback failure and cancellation roll back protected KV writes and replay state.
+- Shared stable store-name coordination gives exactly-once execution across independently constructed keeper instances; durable KV remains authoritative across committed DB reopen.
+- Malformed inputs, non-SDK contexts, transient/memory store keys, corrupt replay state, changed authorization under a consumed nonce, and concurrent duplicates fail closed.
+- Parent fundauth tests cover canonical sign bytes, key-epoch resolution, Ed25519 signature, block/expiry bounds, exact message/amount/party/policy binding, wrong chain/account/action, tampering, and policy-before-consume ordering.
+
+Integration obligations/non-claims:
+- T4-16 must mount the exact persistent KVStoreKey, construct the keeper, and route every registered value-moving handler through VerifyPolicyAndConsume using the callback-provided cached context.
+- T4 must verify BaseApp success/failure commits and rolls back both the protected mutation and nonce marker end to end.
+- No T4 intake epoch manifest/base tag/validator is published; payload remains untagged and not intake-eligible.

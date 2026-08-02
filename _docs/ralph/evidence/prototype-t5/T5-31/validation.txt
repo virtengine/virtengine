@@ -1,0 +1,73 @@
+T5-31 complete consent update intent binding
+Payload: a110cf4ecf4fc85d80208696be7eaedb114cfb18
+Branch: ve/prototype-t5-platform
+Platform: windows/amd64
+Toolchains: go version go1.25.8 windows/amd64; gcc.exe (MinGW-W64 x86_64-ucrt-posix-seh, built by Brecht Sanders, r3) 16.1.0; git version 2.51.2.windows.1
+
+Epoch ancestry:
+- Frozen baseline: 79391a3df86d85522b92e0400c6904971ecbe65d
+- Planning SHA: 1436723bd78980aa0388dbe9fcfa24dda939c54a
+- Intake epoch: 1
+- Intake base: 5587c384f634552c3a2dd7181ca49cafa4da1984
+- Prior accepted payload: null
+- Payload head: a110cf4ecf4fc85d80208696be7eaedb114cfb18
+- Next checkpoint: null
+- Payload descends from the intake base.
+- git rev-list --reverse --topo-order reports exactly 60 commits from the intake base to the payload.
+- Complete all-parent changed-path accounting reports exactly 159 paths, including integration-history parent diffs.
+- Honest T5 ownership covers 135 of 159 complete changed paths and leaves exactly 24 inherited integration/T4 paths uncovered.
+
+Consent update intent binding:
+- VEID_CONSENT_UPDATE_V2 sign bytes are deterministic, length-delimited, and bind sender, expected consent version, scope, grant/revoke intent, purpose, expiry presence/value, and every global-setting presence/value.
+- The expected consent version rejects replay after a successful update, and legacy partial-intent signatures are rejected.
+- Consent version overflow is rejected before mutation.
+- Wallet and consent-record persistence execute in one cache context and are committed only after every write succeeds.
+- Regression coverage rejects field tampering, delimiter ambiguity, replay, rollover, invalid record persistence, and partial writes.
+
+Process environment:
+- VEID_ZK_PARAMS_DIR=C:\Users\pavil\AppData\Local\Temp\virtengine-t5-zk-params-lf
+- External directory exists.
+- params_metadata.json: 3397 bytes, 0 CR bytes, SHA-256 a4e05914f7a3b5cc5914a535ee6c6ea61ebcffbbafcce9a824394c0397766462
+
+Command: C:\Users\pavil\AppData\Local\VirtEngine\toolchains\go1.25.8\go\bin\go.exe -C C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t5 test -count=1 ./x/veid/keeper -run '^(TestUpdateConsent|TestUpdateConsentRejectsTamperRolloverAndPartialPersistence|TestUpdateConsent_SignedIntentBinding|TestUpdateConsent_GlobalSettings|TestWalletConsentFlow|TestConsentRecordLifecycle|TestAddScopeRequiresConsent|TestMsgServerTestSuite)$'
+Output: ok github.com/virtengine/virtengine/x/veid/keeper 2.241s
+Wall time: 8.892s
+Exit code: 0
+
+Command: C:\Users\pavil\AppData\Local\VirtEngine\toolchains\go1.25.8\go\bin\go.exe -C C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t5 test -count=1 ./x/veid/types ./x/veid/keeper
+Output:
+- ok github.com/virtengine/virtengine/x/veid/types 1.418s
+- ok github.com/virtengine/virtengine/x/veid/keeper 68.916s
+Wall time: 96.461s
+Exit code: 0
+
+Command: C:\Users\pavil\AppData\Local\VirtEngine\toolchains\go1.25.8\go\bin\go.exe -C C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t5 vet ./x/veid/types ./x/veid/keeper
+Output: no diagnostics
+Wall time: 8.695s
+Exit code: 0
+
+Process environment:
+- VEID_ZK_PARAMS_DIR=C:\Users\pavil\AppData\Local\Temp\virtengine-t5-zk-params-lf
+- CGO_ENABLED=1
+- CC=C:\Users\pavil\AppData\Local\Microsoft\WinGet\Packages\BrechtSanders.WinLibs.POSIX.UCRT_Microsoft.Winget.Source_8wekyb3d8bbwe\mingw64\bin\gcc.exe
+Command: C:\Users\pavil\AppData\Local\VirtEngine\toolchains\go1.25.8\go\bin\go.exe -C C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t5 test -race -count=1 ./x/veid/keeper -run '^(TestUpdateConsent|TestUpdateConsentRejectsTamperRolloverAndPartialPersistence|TestUpdateConsent_SignedIntentBinding|TestUpdateConsent_GlobalSettings|TestWalletConsentFlow|TestConsentRecordLifecycle|TestAddScopeRequiresConsent|TestMsgServerTestSuite)$'
+Output: ok github.com/virtengine/virtengine/x/veid/keeper 17.358s; no race detector diagnostics
+Wall time: 52.041s
+Exit code: 0
+
+Ownership and blockers:
+- Honest T5 owned_paths claim only T5 evidence/handoff paths and T5-owned data-vault, fundauth, organization-contract, platform-security, provider-daemon contract, encryption, MFA, privileged-role, and VEID surfaces.
+- The same 24 inherited integration/T4 paths have no active T5 generated-file lease, so this checkpoint remains untagged and not intake eligible.
+- T4 must register the prerequisite VEID evidence reference migration and then separately register the signed evidence payload cutover using D4 children 05 through 08.
+- T4 must mount and wire the persistent FundAuthorization store and keeper.
+- Production erasure remains external: it requires durable transactional erasure storage, production storage-deletion and KMS-destruction adapters, independent receipt signers and key resolver, consent, hold, backup, and finalization authorities, and authenticated restore-manifest authority.
+- generated_hashes is {} because T5-31 changes no generated artifact.
+- migrations is [] because T4 registration is absent.
+
+Validation:
+- Payload commit diff --check: passed with no errors.
+- Strict JSON parse, schema-v2 shape, and integration-control validation: passed.
+- Epoch range validation: 60 exact commits and 159 exact complete changed paths from 5587c384f634552c3a2dd7181ca49cafa4da1984 through a110cf4ecf4fc85d80208696be7eaedb114cfb18.
+- Ownership validation: 135 covered paths and 24 uncovered inherited integration/T4 paths.
+- Git all-parent inventory and handoff files_changed both contain 159 paths with zero differences after the handoff update.
+- git diff --check for T5-31 evidence and handoff: passed with no errors.

@@ -1,0 +1,52 @@
+T5-37 persisted MFA authorization session boundary
+Payload: f3235f00d41fff954e1fa2780d93d0d2798cfafe
+Branch: ve/prototype-t5-platform
+Platform: windows/amd64
+Toolchains: go version go1.25.8 windows/amd64; gcc.exe (MinGW-W64 x86_64-ucrt-posix-seh, built by Brecht Sanders, r3) 16.1.0; git version 2.51.2.windows.1
+
+Epoch ancestry:
+- Frozen baseline: 79391a3df86d85522b92e0400c6904971ecbe65d
+- Planning SHA: 1436723bd78980aa0388dbe9fcfa24dda939c54a
+- Intake epoch: 1
+- Intake base: 5587c384f634552c3a2dd7181ca49cafa4da1984
+- Prior accepted payload: null
+- Payload head: f3235f00d41fff954e1fa2780d93d0d2798cfafe
+- Next checkpoint: null
+- Payload descends from the intake base.
+- git rev-list reports exactly 73 commits from the intake base to the payload.
+- Complete all-parent changed-path accounting reports exactly 167 paths.
+- Honest T5 ownership covers 143 paths and leaves exactly 24 inherited integration/T4 paths uncovered.
+
+Persisted authorization sessions:
+- GetAuthorizationSession deterministically panics on malformed JSON.
+- Persisted SessionID must match the lookup key.
+- Reconstructed sessions must pass AuthorizationSession.Validate before authorization paths can use them.
+- Direct lookup and ValidateSessionForTransaction reject malformed, cross-key, and structurally invalid state.
+
+Command: C:\Users\pavil\AppData\Local\VirtEngine\toolchains\go1.25.8\go\bin\go.exe -C C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t5 test -count=1 ./x/mfa/keeper
+Output: passed
+Exit code: 0
+
+Command: C:\Users\pavil\AppData\Local\VirtEngine\toolchains\go1.25.8\go\bin\go.exe -C C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t5 vet ./x/mfa/keeper
+Output: no diagnostics
+Exit code: 0
+
+Process environment: CGO_ENABLED=1; CC=C:\Users\pavil\AppData\Local\Microsoft\WinGet\Packages\BrechtSanders.WinLibs.POSIX.UCRT_Microsoft.Winget.Source_8wekyb3d8bbwe\mingw64\bin\gcc.exe
+Command: C:\Users\pavil\AppData\Local\VirtEngine\toolchains\go1.25.8\go\bin\go.exe -C C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t5 test -race -count=1 ./x/mfa/keeper -run '^TestPersistedAuthorizationSessionCorruptionFailsClosed$'
+Output: passed; no race detector diagnostics
+Exit code: 0
+
+Audit: exact-worktree blocker/high review reported no findings.
+
+Ownership and blockers:
+- The same 24 inherited integration/T4 paths have no active T5 lease, so this checkpoint remains untagged and not intake eligible.
+- T4 must register the VEID migrations and mount the persistent FundAuthorization keeper.
+- Production erasure remains dependent on external durable adapters and authorities.
+- generated_hashes is {}; migrations is [].
+
+Validation:
+- Strict JSON/schema-v2/integration validation: passed.
+- Epoch range: 73 commits and 167 paths through f3235f00d41fff954e1fa2780d93d0d2798cfafe.
+- Ownership: 143 covered and 24 uncovered inherited paths.
+- Exact inventory: Git and handoff each contain 167 paths with zero differences.
+- Documentation diff checks: passed with no errors.

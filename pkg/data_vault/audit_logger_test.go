@@ -2,8 +2,34 @@ package data_vault
 
 import (
 	"context"
+	"errors"
 	"testing"
 )
+
+type failOnceAuditStore struct {
+	events      []*AuditEvent
+	fail        bool
+	failAt      int
+	appendCalls int
+}
+
+func (s *failOnceAuditStore) Append(_ context.Context, event *AuditEvent) error {
+	s.appendCalls++
+	if s.fail || (s.failAt > 0 && s.appendCalls == s.failAt) {
+		s.fail = false
+		return errors.New("append failed")
+	}
+	s.events = append(s.events, cloneAuditEvent(event))
+	return nil
+}
+
+func (s *failOnceAuditStore) Query(context.Context, AuditFilter) ([]*AuditEvent, error) {
+	result := make([]*AuditEvent, 0, len(s.events))
+	for _, event := range s.events {
+		result = append(result, cloneAuditEvent(event))
+	}
+	return result, nil
+}
 
 func TestAuditLogger_Chaining(t *testing.T) {
 	store := NewMemoryAuditStore()
@@ -73,5 +99,34 @@ func TestAuditLogger_Query(t *testing.T) {
 	}
 	if len(events) != 1 {
 		t.Fatalf("expected 1 event, got %d", len(events))
+	}
+}
+
+func TestAuditLoggerAppendFailureDoesNotAdvanceChain(t *testing.T) {
+	store := &failOnceAuditStore{fail: true}
+	logger := NewAuditLogger(DefaultAuditLogConfig(), store)
+	failed := &AuditEvent{EventType: "upload", Requester: "owner", Metadata: map[string]string{"value": "original"}}
+	if err := logger.LogEvent(context.Background(), failed); err == nil {
+		t.Fatal("expected append failure")
+	}
+	failed.Metadata["value"] = "mutated"
+	succeeded := &AuditEvent{EventType: "upload", Requester: "owner"}
+	if err := logger.LogEvent(context.Background(), succeeded); err != nil {
+		t.Fatalf("second append: %v", err)
+	}
+	if succeeded.PreviousHash != "" {
+		t.Fatalf("failed append advanced predecessor to %q", succeeded.PreviousHash)
+	}
+	queried, err := logger.QueryEvents(context.Background(), AuditFilter{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	queried[0].Metadata = map[string]string{"mutated": "true"}
+	again, err := logger.QueryEvents(context.Background(), AuditFilter{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, exists := again[0].Metadata["mutated"]; exists {
+		t.Fatal("query returned store-owned audit metadata")
 	}
 }
