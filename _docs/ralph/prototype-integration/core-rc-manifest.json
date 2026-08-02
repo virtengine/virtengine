@@ -6,14 +6,14 @@
   "planned_functionality_complete": false,
   "milestone_m_eligible": false,
   "source": {
-    "payload_sha": "292e208d430534808c9f842725562856c9c028e9",
-    "tree": "0208ca23a3b0d4bcc929e77cc34e4ae1209a4e43",
+    "payload_sha": "4b80151374e8576917204697996ac0126ea9da89",
+    "tree": "18ba7786f0d6f45380d0c681cb5ce16d4d985dcd",
     "branch": "ve/prototype-integration",
     "binding": "declared_clean_parent_payload"
   },
   "tooling": {
-    "tooling_sha": "292e208d430534808c9f842725562856c9c028e9",
-    "tree": "0208ca23a3b0d4bcc929e77cc34e4ae1209a4e43",
+    "tooling_sha": "4b80151374e8576917204697996ac0126ea9da89",
+    "tree": "18ba7786f0d6f45380d0c681cb5ce16d4d985dcd",
     "artifacts": [
       {
         "id": "generator",
@@ -225,7 +225,7 @@
     {
       "id": "required_gate_matrix",
       "path": "_docs/ralph/prototype-integration/required-gate-matrix.json",
-      "sha256": "1f6624ea1d11e5d297282b48d49115465d326553fb108db400309f0d0f555dce",
+      "sha256": "c0db01eec73c9f714fd96f78dc67169c372c0337249740b5d66e35248a382a54",
       "status": "dependency_blocked"
     },
     {
@@ -415,36 +415,26 @@
   "test_evidence": {
     "status": "complete",
     "ledger_path": "_docs/ralph/handoffs/prototype-integration/HANDOFF.yaml",
-    "implementation_sha": "1887d01eb36a17500fde986302e15b85c4679fb3",
-    "ledger_sha": "292e208d430534808c9f842725562856c9c028e9",
-    "record_count": 3,
-    "declared_test_count": 28,
+    "implementation_sha": "b06e5116386c094331f8f909af59691f92b78261",
+    "ledger_sha": "4b80151374e8576917204697996ac0126ea9da89",
+    "record_count": 2,
+    "declared_test_count": 38,
     "uncounted_record_count": 0,
     "records": [
       {
-        "command": "node scripts/validate-localnet-integration-launchers.test.cjs && node scripts/validate-localnet-integration-launchers.cjs",
+        "command": "node scripts/validate-required-gate-matrix.test.cjs && node scripts/run-required-gates.test.cjs",
         "exit_code": 0,
         "result": "passed",
-        "test_count": 4,
+        "test_count": 29,
         "tool_versions": {
           "node": "20.19.1"
         }
       },
       {
-        "command": "bash -n scripts/localnet.sh && pwsh parser validation for scripts/localnet.ps1",
+        "command": "node scripts/validate-agents-docs.mjs",
         "exit_code": 0,
         "result": "passed",
-        "test_count": 2,
-        "tool_versions": {
-          "bash": "Git for Windows",
-          "pwsh": "7"
-        }
-      },
-      {
-        "command": "node scripts/validate-required-gate-matrix.test.cjs && node scripts/validate-agents-docs.mjs",
-        "exit_code": 0,
-        "result": "passed",
-        "test_count": 22,
+        "test_count": 9,
         "tool_versions": {
           "node": "20.19.1"
         }
@@ -454,7 +444,7 @@
   },
   "producer_checkpoints": {
     "ledger_path": "_docs/ralph/handoffs/prototype-integration/HANDOFF.yaml",
-    "ledger_sha256": "e9f796a96a36edbbcfce8df8c3eca2f047336a290babbe09a4a7b0dbd491b8e7",
+    "ledger_sha256": "d9a1684ca3c1d379f1ac98edea515f4ac7d8fb9b0c126877435d64ea7293598c",
     "accepted": [],
     "rejected": [
       {
