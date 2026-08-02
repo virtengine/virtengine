@@ -25,7 +25,11 @@ function inspectLease(lease, expected, options = {}) {
   const now = options.now ?? Date.now();
   assert.ok(Number.isFinite(startedAt) && startedAt <= now, "freeze lease start time is invalid");
   const alive = (options.isProcessAlive ?? processIsAlive)(lease.pid);
-  return { ...lease, process_alive: alive, recovery_status: alive ? "active_process" : "operator_review_required" };
+  return {
+    ...lease,
+    pid_present: alive,
+    recovery_status: alive ? "pid_present_operator_verification_required" : "pid_absent_operator_review_required",
+  };
 }
 
 function parseArgs(argv) {
