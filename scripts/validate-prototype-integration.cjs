@@ -5,6 +5,8 @@
 const assert = require("assert").strict;
 const { readFileSync } = require("fs");
 const { resolve } = require("path");
+const { validateManifest: validateCoreRcManifest } = require("./generate-core-rc-manifest.cjs");
+const { validateSchema: validateCoreRcSchema } = require("./validate-core-rc-manifest.cjs");
 const { validateMigrationInventory } = require("./validate-migration-inventory.cjs");
 const { validateModelProvenance } = require("./validate-model-provenance.cjs");
 const { validateRequiredGateMatrix } = require("./validate-required-gate-matrix.cjs");
@@ -12,6 +14,8 @@ const { validateSlurmChartInventory } = require("./validate-slurm-chart-inventor
 
 const root = resolve(__dirname, "..");
 const controlPath = resolve(root, "_docs/ralph/prototype-integration/control.json");
+const coreRcManifestPath = resolve(root, "_docs/ralph/prototype-integration/core-rc-manifest.json");
+const coreRcSchemaPath = resolve(root, "_docs/ralph/prototype-integration/core-rc-manifest.schema.json");
 const schemaPath = resolve(root, "_docs/ralph/prototype-integration/producer-handoff.schema.json");
 const epochPath = resolve(root, "_docs/ralph/prototype-integration/epochs/epoch-1.json");
 const handoffPath = resolve(root, "_docs/ralph/handoffs/prototype-integration/HANDOFF.yaml");
@@ -121,6 +125,8 @@ module.exports = { validateEpoch, validateIntegrationControl };
 
 if (require.main === module) {
   validateIntegrationControl(loadJson(controlPath), loadJson(schemaPath), loadJson(handoffPath), loadJson(epochPath));
+  validateCoreRcSchema(loadJson(coreRcSchemaPath));
+  validateCoreRcManifest(loadJson(coreRcManifestPath), { rootDir: root });
   validateMigrationInventory(loadJson(migrationInventoryPath), loadJson(testCasesPath), {
     rootDir: root,
     schema: loadJson(migrationSchemaPath),
