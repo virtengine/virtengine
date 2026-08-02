@@ -1,34 +1,30 @@
 {
   "campaign": "three-day-prototype",
   "thread": "T4",
-  "checkpoint": "T4-08G",
+  "checkpoint": "T4-08H",
   "branch": "ve/prototype-integration",
-  "start_head": "77be2740a42defcb5c5214c98a1ad4d6349d636f",
-  "end_head": "677a9011f87baffd1c2718ac0613b4a13d4fe1b4",
+  "start_head": "8e9512bf6e98abcfed8a6bde9713fb959d77c80c",
+  "end_head": "d13ed6454a2ab1d87ffd3d3069d219154a3219bb",
   "origin_main": "79391a3df86d85522b92e0400c6904971ecbe65d",
   "tree_clean": true,
   "commits": [
-    "677a9011f87baffd1c2718ac0613b4a13d4fe1b4"
+    "d13ed6454a2ab1d87ffd3d3069d219154a3219bb"
   ],
   "owned_paths": [
+    "_docs/ralph/prototype-integration/**",
     "_docs/ralph/handoffs/prototype-integration/**",
-    "_docs/ralph/prototype-integration/required-gate-matrix.json",
-    "scripts/run-required-gates.test.cjs",
-    "scripts/validate-required-gate-matrix.cjs",
-    "scripts/validate-required-gate-matrix.test.cjs"
+    "_docs/ralph/prototype-integration/core-rc-manifest.json"
   ],
   "files_changed": [
-    "_docs/ralph/prototype-integration/required-gate-matrix.json",
-    "scripts/run-required-gates.test.cjs",
-    "scripts/validate-required-gate-matrix.cjs",
-    "scripts/validate-required-gate-matrix.test.cjs"
+    "_docs/ralph/handoffs/prototype-integration/HANDOFF.yaml",
+    "_docs/ralph/prototype-integration/core-rc-manifest.json"
   ],
   "tests": [
     {
-      "command": "node scripts/validate-required-gate-matrix.test.cjs && node scripts/run-required-gates.test.cjs",
+      "command": "node scripts/validate-prototype-integration.test.cjs && node scripts/validate-prototype-integration.cjs",
       "exit_code": 0,
       "result": "passed",
-      "test_count": 33,
+      "test_count": 12,
       "tool_versions": {
         "node": "20.19.1"
       }
@@ -44,7 +40,7 @@
     }
   ],
   "generated_hashes": {
-    "_docs/ralph/prototype-integration/core-rc-manifest.json": "e918be7f6beb322e9639e103b11c7cad82af9163223a84dc385950185a29a2c9"
+    "_docs/ralph/prototype-integration/core-rc-manifest.json": "69aa78fecfd07eacf68f08e78aca1f7ffd27ce77deaa2b75b7e11247ce35b204"
   },
   "accepted_checkpoints": [],
   "rejected_checkpoints": [
@@ -84,5 +80,5 @@
     "Task 88C is not complete."
   ],
   "next_checkpoint": null,
-  "expected_head": "677a9011f87baffd1c2718ac0613b4a13d4fe1b4"
+  "expected_head": "d13ed6454a2ab1d87ffd3d3069d219154a3219bb"
 }
