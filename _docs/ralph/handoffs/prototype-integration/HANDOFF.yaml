@@ -1,30 +1,37 @@
 {
   "campaign": "three-day-prototype",
   "thread": "T4",
-  "checkpoint": "T4-12C",
+  "checkpoint": "T4-14A",
   "branch": "ve/prototype-integration",
-  "start_head": "ab534049a591d04ba8ae7ea489ff468d1d5a8b3c",
-  "end_head": "4e64fc249c610598652183ba8f8cf19913de0c95",
+  "start_head": "281a08b16f46c8790f68a48588a57037eceb957c",
+  "end_head": "0ec2b881e1bb6cae23b12d86728c82dc2d84410b",
   "origin_main": "79391a3df86d85522b92e0400c6904971ecbe65d",
   "tree_clean": true,
   "commits": [
-    "4e64fc249c610598652183ba8f8cf19913de0c95"
+    "0ec2b881e1bb6cae23b12d86728c82dc2d84410b"
   ],
   "owned_paths": [
     "_docs/ralph/prototype-integration/**",
     "_docs/ralph/handoffs/prototype-integration/**",
-    "_docs/ralph/prototype-integration/core-rc-manifest.json"
+    "_docs/audits/task-t4-14a-ai-assurance-manifest-2026-08-02.md",
+    "_docs/ralph/prototype-integration/core-rc-manifest.schema.json",
+    "scripts/generate-core-rc-manifest.cjs",
+    "scripts/generate-core-rc-manifest.test.cjs"
   ],
   "files_changed": [
     "_docs/ralph/handoffs/prototype-integration/HANDOFF.yaml",
-    "_docs/ralph/prototype-integration/core-rc-manifest.json"
+    "_docs/INDEX.md",
+    "_docs/audits/task-t4-14a-ai-assurance-manifest-2026-08-02.md",
+    "_docs/ralph/prototype-integration/core-rc-manifest.schema.json",
+    "scripts/generate-core-rc-manifest.cjs",
+    "scripts/generate-core-rc-manifest.test.cjs"
   ],
   "tests": [
     {
       "command": "node scripts/validate-ai-production-policy.test.cjs && node scripts/validate-ai-production-policy.cjs",
       "exit_code": 0,
       "result": "passed",
-      "test_count": 12,
+      "test_count": 13,
       "tool_versions": {
         "node": "20.19.1"
       }
@@ -46,27 +53,12 @@
       "tool_versions": {
         "node": "20.19.1"
       }
-    },
-    {
-      "command": "node scripts/validate-core-rc-manifest.cjs",
-      "exit_code": 0,
-      "result": "passed",
-      "tool_versions": {
-        "node": "20.19.1"
-      }
-    },
-    {
-      "command": "node scripts/validate-prototype-integration.test.cjs && node scripts/validate-prototype-integration.cjs && node scripts/validate-agents-docs.mjs",
-      "exit_code": 0,
-      "result": "passed",
-      "test_count": 10,
-      "tool_versions": {
-        "node": "20.19.1"
-      }
     }
   ],
   "generated_hashes": {
-    "_docs/ralph/prototype-integration/core-rc-manifest.json": "7d9325468afd791561d30789e772fcd2c5af42dca5b1a21d6ab8146dabba0611"
+    "scripts/generate-core-rc-manifest.cjs": "94dbbce579cfcaa6662bee3d93e4ad7904fdb59a0bdc51591b0d8a80f6ff3cb1",
+    "scripts/generate-core-rc-manifest.test.cjs": "dac8cde0ef537845d23919ca82f862bbf6062257d496231266c6eee97bc15eb3",
+    "_docs/ralph/prototype-integration/core-rc-manifest.schema.json": "72e8c083dad691496b3505aef6cb0ab81f437c3ace8525954d84ed794c113a0f"
   },
   "accepted_checkpoints": [],
   "rejected_checkpoints": [
@@ -102,5 +94,5 @@
     "Task 88C is not complete."
   ],
   "next_checkpoint": null,
-  "expected_head": "4e64fc249c610598652183ba8f8cf19913de0c95"
+  "expected_head": "0ec2b881e1bb6cae23b12d86728c82dc2d84410b"
 }
