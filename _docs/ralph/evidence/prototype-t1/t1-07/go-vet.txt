@@ -1,0 +1,1 @@
+PASS: go vet ./x/veid/keeper
