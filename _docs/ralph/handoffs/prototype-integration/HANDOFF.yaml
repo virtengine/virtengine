@@ -1,30 +1,38 @@
 {
   "campaign": "three-day-prototype",
   "thread": "T4",
-  "checkpoint": "T4-13B",
+  "checkpoint": "T4-13C",
   "branch": "ve/prototype-integration",
-  "start_head": "2c4d4ea01aeb5005c4d4b753a68745dc64c2b174",
-  "end_head": "76aefafdf82931eb700a9aed5f067071a4c7595f",
+  "start_head": "b415dbeedb25f75802ff62883bb165bbb47356e2",
+  "end_head": "7a0244ffd2583a359f842d1767034401d9ff01d6",
   "origin_main": "79391a3df86d85522b92e0400c6904971ecbe65d",
   "tree_clean": true,
   "commits": [
-    "76aefafdf82931eb700a9aed5f067071a4c7595f"
+    "7a0244ffd2583a359f842d1767034401d9ff01d6"
   ],
   "owned_paths": [
     "_docs/ralph/prototype-integration/**",
     "_docs/ralph/handoffs/prototype-integration/**",
-    "_docs/ralph/prototype-integration/core-rc-manifest.json"
+    "_docs/audits/task-t4-13a-generated-contract-inventory-2026-08-02.md",
+    "_docs/ralph/prototype-integration/generated-contract-inventory.json",
+    "scripts/validate-generated-contract-inventory.cjs",
+    "scripts/validate-generated-contract-inventory.test.cjs",
+    "scripts/validate-prototype-integration.cjs"
   ],
   "files_changed": [
     "_docs/ralph/handoffs/prototype-integration/HANDOFF.yaml",
-    "_docs/ralph/prototype-integration/core-rc-manifest.json"
+    "_docs/audits/task-t4-13a-generated-contract-inventory-2026-08-02.md",
+    "_docs/ralph/prototype-integration/generated-contract-inventory.json",
+    "scripts/validate-generated-contract-inventory.cjs",
+    "scripts/validate-generated-contract-inventory.test.cjs",
+    "scripts/validate-prototype-integration.cjs"
   ],
   "tests": [
     {
       "command": "node scripts/validate-generated-contract-inventory.test.cjs && node scripts/validate-generated-contract-inventory.cjs",
       "exit_code": 0,
       "result": "passed",
-      "test_count": 9,
+      "test_count": 12,
       "tool_versions": {
         "node": "20.19.1"
       }
@@ -39,7 +47,9 @@
     }
   ],
   "generated_hashes": {
-    "_docs/ralph/prototype-integration/core-rc-manifest.json": "723a2169850e3477672b14d10e01dc736e32b8ced8c83cdfb76596045c48fed3"
+    "scripts/validate-generated-contract-inventory.cjs": "db9b3dbbc71df5e14c4220d6805449193ad24146d1afa3758c1be4317a4296c3",
+    "scripts/validate-generated-contract-inventory.test.cjs": "0219e404ee3cec1ba1f549dc2035a9976099c6a79cd215f0e388286d83279678",
+    "_docs/ralph/prototype-integration/generated-contract-inventory.json": "9f8de2a05636f3f928db61f86320d59dfc50e451ea1a9477482c80e959e0cf3d"
   },
   "accepted_checkpoints": [],
   "rejected_checkpoints": [
@@ -78,5 +88,5 @@
     "Task 88C is not complete."
   ],
   "next_checkpoint": null,
-  "expected_head": "76aefafdf82931eb700a9aed5f067071a4c7595f"
+  "expected_head": "7a0244ffd2583a359f842d1767034401d9ff01d6"
 }
