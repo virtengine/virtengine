@@ -1,74 +1,66 @@
 campaign: three-day-prototype
 thread: T2
-checkpoint: T2-X05
+checkpoint: T2-X06
 branch: ve/prototype-t2-product
-start_head: 180356cc2b33f39669fb36651985ae0024435c8d
-end_head: 74f7236822bc18deedab2db1f0f3ba2ab0d08c10
+start_head: 459455941afdb522cf41931b645367f31d6d912a
+end_head: 5a2fc2d3dfea06b84e068e4e96f100ab5ba073bd
 origin_main: 79391a3df86d85522b92e0400c6904971ecbe65d
 tree_clean: true
 commits:
-  - 74f7236822bc18deedab2db1f0f3ba2ab0d08c10
+  - 5a2fc2d3dfea06b84e068e4e96f100ab5ba073bd
 owned_paths:
-  - portal/src/lib/api/chain.ts
-  - portal/src/lib/api/__tests__/chain.test.ts
-  - portal/src/lib/order-creation.ts
-  - portal/src/lib/__tests__/order-creation.test.ts
-  - portal/src/stores/orderStore.ts
-  - portal/src/stores/__tests__/orderStore.test.ts
-  - portal/src/app/(customer)/marketplace/[provider]/[sequence]/order/OrderCreateClient.tsx
-  - portal/src/hooks/useWalletTransaction.ts
-  - portal/tests/unit/wallet/useWalletTransaction.test.ts
-  - portal/src/lib/veid-submission.ts
-  - portal/src/stores/__tests__/identityStore.test.ts
+  - portal/src/types/consent.ts
+  - portal/src/app/api/consent/
+  - portal/src/components/consent/
+  - portal/src/__tests__/consent-types.test.ts
 files_changed:
-  - portal/src/lib/api/chain.ts
-  - portal/src/lib/api/__tests__/chain.test.ts
-  - portal/src/lib/order-creation.ts
-  - portal/src/lib/__tests__/order-creation.test.ts
-  - portal/src/stores/orderStore.ts
-  - portal/src/stores/__tests__/orderStore.test.ts
-  - portal/src/app/(customer)/marketplace/[provider]/[sequence]/order/OrderCreateClient.tsx
-  - portal/src/hooks/useWalletTransaction.ts
-  - portal/tests/unit/wallet/useWalletTransaction.test.ts
-  - portal/src/lib/veid-submission.ts
-  - portal/src/stores/__tests__/identityStore.test.ts
+  - portal/src/types/consent.ts
+  - portal/src/app/api/consent/data.ts
+  - portal/src/app/api/consent/grant/route.ts
+  - portal/src/app/api/consent/withdraw/route.ts
+  - portal/src/app/api/consent/__tests__/data.test.ts
+  - portal/src/components/consent/ConsentHistory.tsx
+  - portal/src/components/consent/ConsentManager.tsx
+  - portal/src/components/consent/__tests__/ConsentHistory.test.tsx
+  - portal/src/components/consent/__tests__/ConsentManager.test.tsx
+  - portal/src/__tests__/consent-types.test.ts
 tests:
-  - command: C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t2\portal\node_modules\.bin\vitest.CMD run src\lib\api\__tests__\chain.test.ts src\lib\__tests__\order-creation.test.ts src\stores\__tests__\orderStore.test.ts tests\unit\wallet\useWalletTransaction.test.ts --reporter=dot
+  - command: C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t2\portal\node_modules\.bin\vitest.CMD run src\__tests__\consent-types.test.ts src\app\api\consent\__tests__\data.test.ts src\components\consent\__tests__\ConsentHistory.test.tsx src\components\consent\__tests__\ConsentManager.test.tsx --reporter=dot
     exit_code: 0
     result: passed
-    test_count: 18
+    test_count: 25
     tool_versions:
       node: v24.12.0
-    artifact: _docs/ralph/handoffs/prototype-t2/T2-X05-evidence.txt
+    artifact: _docs/ralph/handoffs/prototype-t2/T2-X06-evidence.txt
   - command: C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t2\portal\node_modules\.bin\eslint.CMD C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t2\portal\src --ext .ts,.tsx --max-warnings 0
     exit_code: 0
     result: passed
     tool_versions:
       node: v24.12.0
-    artifact: _docs/ralph/handoffs/prototype-t2/T2-X05-evidence.txt
+    artifact: _docs/ralph/handoffs/prototype-t2/T2-X06-evidence.txt
   - command: C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t2\portal\node_modules\.bin\tsc.CMD --noEmit -p C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t2\portal\tsconfig.json
     exit_code: 0
     result: passed
     tool_versions:
       node: v24.12.0
-    artifact: _docs/ralph/handoffs/prototype-t2/T2-X05-evidence.txt
+    artifact: _docs/ralph/handoffs/prototype-t2/T2-X06-evidence.txt
   - command: C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t2\portal\node_modules\.bin\vitest.CMD run --reporter=dot
     exit_code: 0
     result: passed
-    test_count: 574
+    test_count: 587
     tool_versions:
       node: v24.12.0
-    artifact: _docs/ralph/handoffs/prototype-t2/T2-X05-evidence.txt
+    artifact: _docs/ralph/handoffs/prototype-t2/T2-X06-evidence.txt
 generated_hashes: {}
 migrations: []
 external_evidence:
-  - _docs/ralph/handoffs/prototype-t2/T2-X05-evidence.txt
+  - _docs/ralph/handoffs/prototype-t2/T2-X06-evidence.txt
 known_failures:
   - TestProviderMutationSubmitterStandbyTakesOverWithHigherFence fails repeatedly in the full provider package gate with submitter lease timing errors.
 blockers:
   - T4 producer-handoff.schema.json forbids the integration_parent field required by the updated campaign plan; integration ancestor fa21b1e540a5efcbe1822da4199be7acec7709d3 is retained in T2-05-evidence.txt.
   - Full provider package certification is blocked by the unrelated submitter lease timing failure retained in T2-03B-evidence.txt.
-  - No live chain transaction or external node route was certified.
-  - Marketplace confirmation remains unavailable when the committed transaction lacks an authoritative order-created event.
-next_checkpoint: T2-X06
-expected_head: 74f7236822bc18deedab2db1f0f3ba2ab0d08c10
+  - Consent grant and withdrawal remain process-local acknowledgements with no wallet signing or chain persistence.
+  - Chain provenance appears only after strict committed evidence projection; no chain consent route is wired.
+next_checkpoint: T2-X07
+expected_head: 5a2fc2d3dfea06b84e068e4e96f100ab5ba073bd
