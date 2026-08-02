@@ -1,38 +1,44 @@
 {
   "campaign": "three-day-prototype",
   "thread": "T4",
-  "checkpoint": "T4-08R",
+  "checkpoint": "T4-08S",
   "branch": "ve/prototype-integration",
-  "start_head": "c609ef4bdac3d21e6303323d111108e65f2962ca",
-  "end_head": "f0e06bf0a716874baccc15a5022d4edfa1d39a86",
+  "start_head": "2638d4faeb88fbcde07de01e05e53bcef92d597b",
+  "end_head": "e8499b88ca250073a56da963bc2680882851da76",
   "origin_main": "79391a3df86d85522b92e0400c6904971ecbe65d",
   "tree_clean": true,
   "commits": [
-    "f0e06bf0a716874baccc15a5022d4edfa1d39a86"
+    "e8499b88ca250073a56da963bc2680882851da76"
   ],
   "owned_paths": [
     "_docs/ralph/prototype-integration/**",
-    "_docs/ralph/handoffs/prototype-integration/**"
+    "_docs/ralph/handoffs/prototype-integration/**",
+    "scripts/run-required-gates.test.cjs",
+    "scripts/validate-required-gate-matrix.cjs",
+    "scripts/validate-required-gate-matrix.test.cjs"
   ],
   "files_changed": [
-    "_docs/ralph/handoffs/prototype-integration/HANDOFF.yaml",
-    "_docs/ralph/prototype-integration/core-rc-manifest.json"
+    "_docs/ralph/prototype-integration/required-gate-matrix.json",
+    "scripts/run-required-gates.test.cjs",
+    "scripts/validate-required-gate-matrix.cjs",
+    "scripts/validate-required-gate-matrix.test.cjs"
   ],
   "tests": [
     {
-      "command": "node scripts/validate-prototype-integration.test.cjs && node scripts/validate-prototype-integration.cjs",
+      "command": "helm lint deploy/slurm/slurm-cluster --values deploy/slurm/slurm-cluster/tests/stable-secrets-values.yaml --strict && helm template slurm-capacity deploy/slurm/slurm-cluster --namespace slurm-capacity --values deploy/slurm/slurm-cluster/tests/stable-secrets-values.yaml | python scripts/validate_slurm_chart_semantics.py --chart deploy/slurm/slurm-cluster --rendered -",
       "exit_code": 0,
       "result": "passed",
-      "test_count": 12,
+      "test_count": 5,
       "tool_versions": {
-        "node": "20.19.1"
+        "helm": "3.18.6",
+        "python": "3.14.6"
       }
     },
     {
-      "command": "node scripts/validate-agents-docs.mjs",
+      "command": "node scripts/validate-required-gate-matrix.test.cjs && node scripts/run-required-gates.test.cjs",
       "exit_code": 0,
       "result": "passed",
-      "test_count": 9,
+      "test_count": 45,
       "tool_versions": {
         "node": "20.19.1"
       }
@@ -79,5 +85,5 @@
     "Task 88C is not complete."
   ],
   "next_checkpoint": null,
-  "expected_head": "f0e06bf0a716874baccc15a5022d4edfa1d39a86"
+  "expected_head": "e8499b88ca250073a56da963bc2680882851da76"
 }
