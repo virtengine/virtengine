@@ -1,63 +1,45 @@
 {
   "campaign": "three-day-prototype",
   "thread": "T4",
-  "checkpoint": "T4-08Q",
+  "checkpoint": "T4-08R",
   "branch": "ve/prototype-integration",
-  "start_head": "42bf75394babd1f1f9a3b3bea5d28a1d96e758ab",
-  "end_head": "f2f65aa3b40d47b9c8318ff835ef1406d01885c6",
+  "start_head": "c609ef4bdac3d21e6303323d111108e65f2962ca",
+  "end_head": "f0e06bf0a716874baccc15a5022d4edfa1d39a86",
   "origin_main": "79391a3df86d85522b92e0400c6904971ecbe65d",
   "tree_clean": true,
   "commits": [
-    "f2f65aa3b40d47b9c8318ff835ef1406d01885c6"
+    "f0e06bf0a716874baccc15a5022d4edfa1d39a86"
   ],
   "owned_paths": [
     "_docs/ralph/prototype-integration/**",
-    "_docs/ralph/handoffs/prototype-integration/**",
-    "deploy/slurm/slurm-cluster/**",
-    "scripts/run-required-gates.test.cjs",
-    "scripts/validate-required-gate-matrix.cjs",
-    "scripts/validate-required-gate-matrix.test.cjs"
+    "_docs/ralph/handoffs/prototype-integration/**"
   ],
   "files_changed": [
-    "_docs/ralph/prototype-integration/required-gate-matrix.json",
-    "deploy/slurm/slurm-cluster/templates/_helpers.tpl",
-    "deploy/slurm/slurm-cluster/tests/stable-secrets-values.yaml",
-    "scripts/run-required-gates.test.cjs",
-    "scripts/validate-required-gate-matrix.cjs",
-    "scripts/validate-required-gate-matrix.test.cjs"
+    "_docs/ralph/handoffs/prototype-integration/HANDOFF.yaml",
+    "_docs/ralph/prototype-integration/core-rc-manifest.json"
   ],
   "tests": [
     {
-      "command": "helm lint deploy/slurm/slurm-cluster --values deploy/slurm/slurm-cluster/tests/stable-secrets-values.yaml --strict && helm template slurm-capacity deploy/slurm/slurm-cluster --namespace slurm-capacity --values deploy/slurm/slurm-cluster/tests/stable-secrets-values.yaml | python scripts/validate_slurm_chart_semantics.py --chart deploy/slurm/slurm-cluster --rendered -",
+      "command": "node scripts/validate-prototype-integration.test.cjs && node scripts/validate-prototype-integration.cjs",
       "exit_code": 0,
       "result": "passed",
-      "test_count": 5,
+      "test_count": 12,
       "tool_versions": {
-        "helm": "3.18.6",
-        "python": "3.14.6"
+        "node": "20.19.1"
       }
     },
     {
-      "command": "python scripts/validate_slurm_chart_semantics_test.py -v",
+      "command": "node scripts/validate-agents-docs.mjs",
       "exit_code": 0,
       "result": "passed",
-      "test_count": 53,
-      "tool_versions": {
-        "python": "3.14.6"
-      }
-    },
-    {
-      "command": "node scripts/validate-required-gate-matrix.test.cjs && node scripts/run-required-gates.test.cjs",
-      "exit_code": 0,
-      "result": "passed",
-      "test_count": 44,
+      "test_count": 9,
       "tool_versions": {
         "node": "20.19.1"
       }
     }
   ],
   "generated_hashes": {
-    "_docs/ralph/prototype-integration/core-rc-manifest.json": "11a85a03e542759b4e58e1b47e3a96076dc27655d6621ed27d3586a5fc8aec84"
+    "_docs/ralph/prototype-integration/core-rc-manifest.json": "daad03a7b7db73c7bd9a582d104f0fcb1621e70a0b7986a02bc846cec4d8980e"
   },
   "accepted_checkpoints": [],
   "rejected_checkpoints": [
@@ -97,5 +79,5 @@
     "Task 88C is not complete."
   ],
   "next_checkpoint": null,
-  "expected_head": "f2f65aa3b40d47b9c8318ff835ef1406d01885c6"
+  "expected_head": "f0e06bf0a716874baccc15a5022d4edfa1d39a86"
 }
