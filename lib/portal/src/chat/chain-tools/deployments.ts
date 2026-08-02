@@ -1,4 +1,6 @@
 import { MultiProviderClient } from "../../multi-provider/client";
+import { providerDeploymentActions } from "../../provider-api/deployment-actions";
+import type { ProviderDeploymentAction } from "../../provider-api/deployment-actions";
 import type { DeploymentWithProvider } from "../../multi-provider/types";
 import type {
   ChatAction,
@@ -92,7 +94,13 @@ const deleteDeployments = async (
   const ids = Array.isArray(args.deploymentIds)
     ? args.deploymentIds.map(String)
     : [];
-  const action = typeof args.action === "string" ? args.action : "stop";
+  const requestedAction =
+    typeof args.action === "string" ? args.action : "stop";
+  const action: ProviderDeploymentAction = providerDeploymentActions.includes(
+    requestedAction as ProviderDeploymentAction,
+  )
+    ? (requestedAction as ProviderDeploymentAction)
+    : "stop";
 
   const impactResources = ids.map((id) => ({ id }));
   const chatAction: ChatAction = {

@@ -401,6 +401,9 @@ export {
   ProviderAPIError,
   LogStream,
   ShellConnection,
+  providerDeploymentActions,
+  ProviderDeploymentActionError,
+  validateProviderDeploymentActionReceipt,
 } from "./src/provider-api";
 export type {
   ProviderAPIClientOptions,
@@ -417,6 +420,15 @@ export type {
   DeploymentAction,
   ShellSessionResponse,
   ProviderAPIErrorDetails,
+  ProviderDeploymentAction,
+  ProviderDeploymentActionStatus,
+  ProviderDeploymentActionTxEvidence,
+  ProviderDeploymentActionReceipt,
+  ProviderDeploymentActionCapability,
+  ProviderDeploymentActionErrorCode,
+  ProviderDeploymentTxEvidenceValidator,
+  ProviderDeploymentActionValidationContext,
+  ProviderDeploymentActionReceiptValidator,
 } from "./src/provider-api";
 
 export { signRequest } from "./src/auth/wallet-sign";

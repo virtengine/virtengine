@@ -278,6 +278,23 @@ export const prefersReducedMotion: any;
 export const PricingEditor: any;
 export const ProviderAPIClient: any;
 export const ProviderAPIError: any;
+export const providerDeploymentActions: readonly [
+  "start",
+  "stop",
+  "restart",
+  "update",
+  "terminate",
+];
+export class ProviderDeploymentActionError extends Error {
+  readonly code: ProviderDeploymentActionErrorCode;
+  readonly cause?: unknown;
+  constructor(
+    code: ProviderDeploymentActionErrorCode,
+    message: string,
+    cause?: unknown,
+  );
+}
+export const validateProviderDeploymentActionReceipt: ProviderDeploymentActionReceiptValidator;
 export const ProviderProvider: any;
 export const ProviderRegistrationFlow: any;
 export const RemediationGuide: any;
@@ -481,6 +498,58 @@ export type PortalWalletType = any;
 export type PricingConfig = any;
 export type ProviderAPIClientOptions = any;
 export type ProviderAPIErrorDetails = any;
+export type ProviderDeploymentAction =
+  | "start"
+  | "stop"
+  | "restart"
+  | "update"
+  | "terminate";
+export type ProviderDeploymentActionStatus = "accepted" | "committed";
+export interface ProviderDeploymentActionTxEvidence {
+  hash: string;
+  chainId: string;
+  height: number;
+}
+export interface ProviderDeploymentActionReceipt {
+  operationId: string;
+  action: ProviderDeploymentAction;
+  deploymentId: string;
+  providerId: string;
+  status: ProviderDeploymentActionStatus;
+  issuedAt: Date;
+  completedAt: Date;
+  state: string;
+  version: string;
+  revision: string;
+  txEvidence?: ProviderDeploymentActionTxEvidence;
+}
+export interface ProviderDeploymentActionCapability {
+  receiptVersion: "v1";
+  requiresChainSigning: boolean;
+}
+export type ProviderDeploymentActionErrorCode =
+  | "feature_unavailable"
+  | "action_rejected"
+  | "malformed_receipt"
+  | "receipt_mismatch"
+  | "refresh_failed"
+  | "deployment_drift"
+  | "duplicate_action"
+  | "chain_signing_required";
+export type ProviderDeploymentTxEvidenceValidator = (
+  evidence: ProviderDeploymentActionTxEvidence,
+  receipt: Omit<ProviderDeploymentActionReceipt, "txEvidence">,
+) => boolean | Promise<boolean>;
+export interface ProviderDeploymentActionValidationContext {
+  action: ProviderDeploymentAction;
+  deploymentId: string;
+  providerId: string;
+  validateTxEvidence?: ProviderDeploymentTxEvidenceValidator;
+}
+export type ProviderDeploymentActionReceiptValidator = (
+  value: unknown,
+  context: ProviderDeploymentActionValidationContext,
+) => Promise<ProviderDeploymentActionReceipt>;
 export type ProviderHealth = any;
 export type ProviderHealthStatus = any;
 export type ProviderProfile = any;

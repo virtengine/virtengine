@@ -11,6 +11,16 @@ import type {
   ResourceMetrics,
   ShellSessionResponse,
 } from "./types";
+import {
+  ProviderDeploymentActionError,
+  validateProviderDeploymentActionReceipt,
+} from "./deployment-actions";
+import type {
+  ProviderDeploymentActionCapability,
+  ProviderDeploymentActionReceipt,
+  ProviderDeploymentActionReceiptValidator,
+  ProviderDeploymentTxEvidenceValidator,
+} from "./deployment-actions";
 
 export interface ProviderAPIClientOptions {
   endpoint: string;
@@ -27,12 +37,17 @@ export interface ProviderAPIClientOptions {
     principal: string;
   };
   fetcher?: typeof fetch;
+  providerId?: string;
+  deploymentActionCapability?: ProviderDeploymentActionCapability;
+  deploymentActionReceiptValidator?: ProviderDeploymentActionReceiptValidator;
+  deploymentTxEvidenceValidator?: ProviderDeploymentTxEvidenceValidator;
 }
 
 export interface ProviderAPIRequestOptions {
   params?: Record<string, string | number | boolean | undefined>;
   requiresAuth?: boolean;
   body?: unknown;
+  retry?: boolean;
 }
 
 export class ProviderAPIError extends Error {
@@ -257,6 +272,10 @@ export class ProviderAPIClient {
   private wallet?: ProviderAPIClientOptions["wallet"];
   private hmac?: ProviderAPIClientOptions["hmac"];
   private fetcher: typeof fetch;
+  private providerId?: string;
+  private deploymentActionCapability?: ProviderDeploymentActionCapability;
+  private deploymentActionReceiptValidator: ProviderDeploymentActionReceiptValidator;
+  private deploymentTxEvidenceValidator?: ProviderDeploymentTxEvidenceValidator;
 
   constructor(options: ProviderAPIClientOptions) {
     this.endpoint = options.endpoint.replace(/\/$/, "");
@@ -266,6 +285,12 @@ export class ProviderAPIClient {
     this.wallet = options.wallet;
     this.hmac = options.hmac;
     this.fetcher = options.fetcher ?? fetch;
+    this.providerId = options.providerId;
+    this.deploymentActionCapability = options.deploymentActionCapability;
+    this.deploymentActionReceiptValidator =
+      options.deploymentActionReceiptValidator ??
+      validateProviderDeploymentActionReceipt;
+    this.deploymentTxEvidenceValidator = options.deploymentTxEvidenceValidator;
   }
 
   async health(): Promise<ProviderHealth> {
@@ -361,9 +386,44 @@ export class ProviderAPIClient {
   async performAction(
     leaseId: string,
     action: DeploymentAction,
-  ): Promise<{ success: boolean; message?: string }> {
-    return this.request("POST", `/api/v1/deployments/${leaseId}/actions`, {
-      body: { action },
+  ): Promise<ProviderDeploymentActionReceipt> {
+    if (
+      !this.providerId ||
+      this.deploymentActionCapability?.receiptVersion !== "v1"
+    ) {
+      throw new ProviderDeploymentActionError(
+        "feature_unavailable",
+        "Provider does not declare authoritative deployment action receipts",
+      );
+    }
+    if (this.deploymentActionCapability.requiresChainSigning && !this.wallet) {
+      throw new ProviderDeploymentActionError(
+        "chain_signing_required",
+        "This provider action requires a configured chain-signing wallet",
+      );
+    }
+
+    let response: unknown;
+    try {
+      response = await this.request(
+        "POST",
+        `/api/v1/deployments/${leaseId}/actions`,
+        { body: { action }, retry: false },
+      );
+    } catch (error) {
+      if (error instanceof ProviderDeploymentActionError) throw error;
+      throw new ProviderDeploymentActionError(
+        "action_rejected",
+        error instanceof Error ? error.message : "Provider rejected the action",
+        error,
+      );
+    }
+
+    return this.deploymentActionReceiptValidator(response, {
+      action,
+      deploymentId: leaseId,
+      providerId: this.providerId,
+      validateTxEvidence: this.deploymentTxEvidenceValidator,
     });
   }
 
@@ -445,7 +505,8 @@ export class ProviderAPIClient {
 
     let lastError: Error | null = null;
 
-    for (let attempt = 0; attempt <= this.retries; attempt += 1) {
+    const retries = options.retry === false ? 0 : this.retries;
+    for (let attempt = 0; attempt <= retries; attempt += 1) {
       try {
         const headers: Record<string, string> = {
           "Content-Type": "application/json",
@@ -514,7 +575,7 @@ export class ProviderAPIClient {
         return payload as T;
       } catch (error) {
         lastError = error as Error;
-        if (attempt >= this.retries || !this.shouldRetry(error)) {
+        if (attempt >= retries || !this.shouldRetry(error)) {
           break;
         }
         await sleep(this.retryDelayMs * Math.max(1, attempt + 1));

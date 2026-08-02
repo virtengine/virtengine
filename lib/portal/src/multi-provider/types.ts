@@ -1,5 +1,12 @@
 import type { ResourceMetrics, Deployment } from "../provider-api/types";
 import type { WalletRequestSigner } from "../auth/wallet-sign";
+import type {
+  ProviderDeploymentAction,
+  ProviderDeploymentActionCapability,
+  ProviderDeploymentActionReceipt,
+  ProviderDeploymentActionReceiptValidator,
+  ProviderDeploymentTxEvidenceValidator,
+} from "../provider-api/deployment-actions";
 
 export type ProviderStatus = "online" | "offline" | "unknown";
 
@@ -13,6 +20,7 @@ export interface ProviderRecord {
   attributes?: Record<string, string>;
   metadata?: Record<string, unknown>;
   error?: string;
+  deploymentActionCapability?: ProviderDeploymentActionCapability;
 }
 
 export interface DeploymentWithProvider extends Deployment {
@@ -44,4 +52,21 @@ export interface MultiProviderClientOptions {
   deploymentCacheTtlMs?: number;
   requestTimeoutMs?: number;
   fetcher?: typeof fetch;
+  deploymentActionCapability?:
+    | ProviderDeploymentActionCapability
+    | ((
+        provider: ProviderRecord,
+      ) => ProviderDeploymentActionCapability | undefined);
+  deploymentActionReceiptValidator?: ProviderDeploymentActionReceiptValidator;
+  deploymentTxEvidenceValidator?: ProviderDeploymentTxEvidenceValidator;
+  deploymentActionReceiptProjector?: (
+    receipt: ProviderDeploymentActionReceipt,
+    context: {
+      action: ProviderDeploymentAction;
+      deploymentId: string;
+      provider: ProviderRecord;
+    },
+  ) =>
+    | ProviderDeploymentActionReceipt
+    | Promise<ProviderDeploymentActionReceipt>;
 }

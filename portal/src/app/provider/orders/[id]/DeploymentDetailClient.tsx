@@ -9,7 +9,10 @@ import {
   type DeploymentStatus,
   type DeploymentUpdatePayload,
 } from '@/stores';
-import { useWallet } from '@/lib/portal-adapter';
+import {
+  type ProviderDeploymentAction,
+  type ProviderDeploymentActionReceipt,
+} from '@/lib/portal-adapter';
 import { useWalletModal } from '@/components/wallet';
 import {
   DeploymentActionsMenu,
@@ -18,13 +21,8 @@ import {
 } from '@/components/provider/deployments';
 import { LogViewer } from '@/components/deployments/LogViewer';
 import { ShellTerminal } from '@/components/deployments/ShellTerminal';
-import {
-  formatCurrency,
-  formatDate,
-  formatRelativeTime,
-  sleep,
-  truncateAddress,
-} from '@/lib/utils';
+import { formatCurrency, formatDate, formatRelativeTime, truncateAddress } from '@/lib/utils';
+import { executeProviderDeploymentAction } from './deploymentActionUI';
 
 const statusStyles: Record<DeploymentStatus, string> = {
   running: 'bg-success/10 text-success',
@@ -65,9 +63,7 @@ export default function DeploymentDetailClient() {
     refreshDeployment,
     isLoading,
   } = useDeploymentStore();
-  const wallet = useWallet();
   const { open: openWalletModal } = useWalletModal();
-  const activeAccount = wallet.accounts[wallet.activeAccountIndex];
 
   const deployment = deployments.find((item) => item.id === id);
 
@@ -77,12 +73,7 @@ export default function DeploymentDetailClient() {
   const [actionError, setActionError] = useState<string | null>(null);
   const [activePanel, setActivePanel] = useState<'logs' | 'shell'>('logs');
   const [activeContainer, setActiveContainer] = useState<string>('');
-  const [lastTx, setLastTx] = useState<{
-    id: string;
-    type: 'MsgUpdateDeployment' | 'MsgCloseDeployment';
-    memo: string;
-    createdAt: Date;
-  } | null>(null);
+  const [lastReceipt, setLastReceipt] = useState<ProviderDeploymentActionReceipt | null>(null);
   const containers = useMemo(
     () => deployment?.containers.map((container) => container.name) ?? [],
     [deployment]
@@ -139,28 +130,16 @@ export default function DeploymentDetailClient() {
     ];
   }, [deployment]);
 
-  const runSignedAction = async (
-    action: string,
-    messageType: 'MsgUpdateDeployment' | 'MsgCloseDeployment',
-    memo: string,
-    actionFn: () => Promise<void>
+  const runProviderAction = async (
+    action: ProviderDeploymentAction,
+    actionFn: () => Promise<ProviderDeploymentActionReceipt>
   ) => {
-    if (wallet.status !== 'connected') {
-      setActionError('Connect your wallet to sign this transaction.');
-      openWalletModal();
-      return;
-    }
-    setActionError(null);
-    setPendingAction(action);
-    await sleep(700);
-    await actionFn();
-    setLastTx({
-      id: `tx-${Math.random().toString(36).slice(2, 10)}`,
-      type: messageType,
-      memo,
-      createdAt: new Date(),
+    await executeProviderDeploymentAction(action, actionFn, {
+      setPendingAction,
+      setActionError,
+      setLastReceipt,
+      requestWallet: openWalletModal,
     });
-    setPendingAction(null);
   };
 
   if (!deployment && isLoading) {
@@ -219,36 +198,22 @@ export default function DeploymentDetailClient() {
           <div>
             <h2 className="text-sm font-semibold">Deployment actions</h2>
             <p className="text-xs text-muted-foreground">
-              {wallet.status === 'connected'
-                ? `Signing with ${wallet.walletType ?? 'wallet'} (${truncateAddress(activeAccount?.address ?? '')})`
-                : 'Connect wallet to sign actions'}
+              Provider operations use the authentication required by the selected adapter.
             </p>
           </div>
           <DeploymentActionsMenu
             status={deployment.status}
             disabled={pendingAction !== null}
-            onStart={() =>
-              void runSignedAction('start', 'MsgUpdateDeployment', 'Start deployment', () =>
-                startDeployment(id)
-              )
-            }
-            onStop={() =>
-              void runSignedAction('stop', 'MsgUpdateDeployment', 'Stop deployment', () =>
-                stopDeployment(id)
-              )
-            }
-            onRestart={() =>
-              void runSignedAction('restart', 'MsgUpdateDeployment', 'Restart deployment', () =>
-                restartDeployment(id)
-              )
-            }
+            onStart={() => void runProviderAction('start', () => startDeployment(id))}
+            onStop={() => void runProviderAction('stop', () => stopDeployment(id))}
+            onRestart={() => void runProviderAction('restart', () => restartDeployment(id))}
             onUpdate={() => setIsUpdateOpen(true)}
             onTerminate={() => setIsTerminateOpen(true)}
           />
         </div>
         {pendingAction && (
           <div className="mt-4 rounded-lg border border-border bg-muted/40 px-4 py-3 text-sm">
-            Signing transaction for {pendingAction}...
+            Requesting provider operation: {pendingAction}...
           </div>
         )}
         {actionError && (
@@ -299,18 +264,28 @@ export default function DeploymentDetailClient() {
         </div>
 
         <div className="rounded-xl border border-border bg-card p-6">
-          <h3 className="text-sm font-semibold">Latest transaction</h3>
-          {lastTx ? (
+          <h3 className="text-sm font-semibold">Latest provider operation</h3>
+          {lastReceipt ? (
             <div className="mt-3 space-y-2 text-sm">
               <div className="flex items-center justify-between text-xs text-muted-foreground">
-                <span>{lastTx.type}</span>
-                <span>{formatRelativeTime(lastTx.createdAt)}</span>
+                <span>{lastReceipt.action}</span>
+                <span>{formatRelativeTime(lastReceipt.completedAt)}</span>
               </div>
-              <p className="text-sm">{lastTx.memo}</p>
-              <p className="text-xs text-muted-foreground">Tx hash: {lastTx.id}</p>
+              <p className="text-sm">
+                {lastReceipt.status} as operation {lastReceipt.operationId}
+              </p>
+              <p className="text-xs text-muted-foreground">
+                Provider {truncateAddress(lastReceipt.providerId)} | state {lastReceipt.state} |
+                version {lastReceipt.version} | revision {lastReceipt.revision}
+              </p>
+              {lastReceipt.txEvidence && (
+                <p className="text-xs text-muted-foreground">
+                  Validated chain transaction: {lastReceipt.txEvidence.hash}
+                </p>
+              )}
             </div>
           ) : (
-            <p className="mt-3 text-sm text-muted-foreground">No transactions submitted yet.</p>
+            <p className="mt-3 text-sm text-muted-foreground">No provider operations completed.</p>
           )}
         </div>
       </div>
@@ -483,9 +458,7 @@ export default function DeploymentDetailClient() {
         ports={deployment.ports}
         onSubmit={(payload: DeploymentUpdatePayload) => {
           setIsUpdateOpen(false);
-          void runSignedAction('update', 'MsgUpdateDeployment', 'Update deployment resources', () =>
-            updateDeployment(id, payload)
-          );
+          void runProviderAction('update', () => updateDeployment(id, payload));
         }}
       />
 
@@ -494,9 +467,7 @@ export default function DeploymentDetailClient() {
         onClose={() => setIsTerminateOpen(false)}
         onConfirm={() => {
           setIsTerminateOpen(false);
-          void runSignedAction('terminate', 'MsgCloseDeployment', 'Terminate deployment', () =>
-            terminateDeployment(id)
-          );
+          void runProviderAction('terminate', () => terminateDeployment(id));
         }}
       />
     </div>

@@ -22,3 +22,20 @@ export {
 } from "./client";
 
 export type { ProviderAPIClientOptions } from "./client";
+
+export {
+  providerDeploymentActions,
+  ProviderDeploymentActionError,
+  validateProviderDeploymentActionReceipt,
+} from "./deployment-actions";
+export type {
+  ProviderDeploymentAction,
+  ProviderDeploymentActionStatus,
+  ProviderDeploymentActionTxEvidence,
+  ProviderDeploymentActionReceipt,
+  ProviderDeploymentActionCapability,
+  ProviderDeploymentActionErrorCode,
+  ProviderDeploymentTxEvidenceValidator,
+  ProviderDeploymentActionValidationContext,
+  ProviderDeploymentActionReceiptValidator,
+} from "./deployment-actions";

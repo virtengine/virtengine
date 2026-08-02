@@ -4,6 +4,7 @@
  */
 
 import type { Balance, IdentityInfo } from "../../types/chain";
+import type { ProviderDeploymentAction } from "../provider-api/deployment-actions";
 
 export type ChatRole = "system" | "user" | "assistant" | "tool";
 
@@ -94,7 +95,7 @@ export interface TransactionActionPayload {
 export interface ProviderActionPayload {
   kind: "provider-action";
   deploymentIds: string[];
-  action: string;
+  action: ProviderDeploymentAction;
 }
 
 export interface ChainQueryPayload {
