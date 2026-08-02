@@ -1,23 +1,23 @@
 {
   "campaign": "three-day-prototype",
   "thread": "T4",
-  "checkpoint": "T4-01C",
+  "checkpoint": "T4-01D",
   "branch": "ve/prototype-integration",
-  "start_head": "c784db17fc449e6e45fbfb1151915435d82528f7",
-  "end_head": "04338e44e11e9e3cd2fb232585afc63426820c91",
+  "start_head": "0f307fa73831c86a37494b73909bc7dc5f60ab07",
+  "end_head": "b943c46388fd18674a3239940ae15d5f88b0b0ee",
   "origin_main": "79391a3df86d85522b92e0400c6904971ecbe65d",
   "tree_clean": true,
   "commits": [
-    "04338e44e11e9e3cd2fb232585afc63426820c91"
+    "b943c46388fd18674a3239940ae15d5f88b0b0ee"
   ],
   "owned_paths": [
     "_docs/ralph/prototype-integration/**",
     "_docs/ralph/handoffs/prototype-integration/**",
-    "_docs/prototype-thread-intake-runbook.md"
+    "_docs/ralph/prototype-integration/core-rc-manifest.json"
   ],
   "files_changed": [
     "_docs/ralph/handoffs/prototype-integration/HANDOFF.yaml",
-    "_docs/prototype-thread-intake-runbook.md"
+    "_docs/ralph/prototype-integration/core-rc-manifest.json"
   ],
   "tests": [
     {
@@ -36,10 +36,18 @@
       "tool_versions": {
         "node": "20.19.1"
       }
+    },
+    {
+      "command": "node scripts/validate-core-rc-manifest.cjs && node scripts/validate-prototype-integration.cjs",
+      "exit_code": 0,
+      "result": "passed",
+      "tool_versions": {
+        "node": "20.19.1"
+      }
     }
   ],
   "generated_hashes": {
-    "_docs/prototype-thread-intake-runbook.md": "7c5954ccfcf67bc381a825890287e65f6052d2ad70ff016c1b30da9224257307"
+    "_docs/ralph/prototype-integration/core-rc-manifest.json": "4c4952b0c9ecb646ffd5bd2bae705e14bd9f87567137c9274c72cf5741278499"
   },
   "accepted_checkpoints": [],
   "rejected_checkpoints": [
@@ -76,5 +84,5 @@
     "Task 88C is not complete."
   ],
   "next_checkpoint": null,
-  "expected_head": "04338e44e11e9e3cd2fb232585afc63426820c91"
+  "expected_head": "b943c46388fd18674a3239940ae15d5f88b0b0ee"
 }
