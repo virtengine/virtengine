@@ -8,7 +8,7 @@ const { validateFundRouteInventory } = require("./validate-fund-route-inventory.
 const root = resolve(__dirname, "..");
 const inventory = JSON.parse(readFileSync(resolve(root, "_docs/ralph/prototype-integration/fund-route-inventory.json"), "utf8"));
 const clone = () => structuredClone(inventory);
-const validate = (value, options = {}) => validateFundRouteInventory(value, { rootDir: root, discoveredMoverFiles: options.discoveredMoverFiles || value.mover_files, requireReady: options.requireReady });
+const validate = (value, options = {}) => validateFundRouteInventory(value, { rootDir: root, discoveredMoverFiles: options.discoveredMoverFiles || value.mover_files, requireReady: options.requireReady, verifyAcceptedCheckpoint: options.verifyAcceptedCheckpoint });
 
 const tests = [
   ["accepts the dependency-blocked inventory", () => assert.doesNotThrow(() => validate(clone()))],
@@ -24,11 +24,16 @@ const tests = [
   ["accepts a fully wired future transition", () => {
     const value = clone();
     value.status = "complete";
-    value.accepted_fund_authorization_checkpoint = "a".repeat(40);
+    value.accepted_fund_authorization_checkpoint = { status: "accepted", thread: "T5", tag: "checkpoint/prototype-t5/t5-18", payload_sha: "a".repeat(40) };
     value.blockers = [];
     value.completion.allowed = true;
     value.routes.forEach((route) => { route.fund_authorization = "wired"; route.atomicity = "verified"; route.blockers = []; });
-    assert.doesNotThrow(() => validate(value, { requireReady: true }));
+    assert.doesNotThrow(() => validate(value, { requireReady: true, verifyAcceptedCheckpoint: () => true }));
+  }],
+  ["rejects an unverified accepted checkpoint", () => {
+    const value = clone();
+    value.accepted_fund_authorization_checkpoint = { status: "accepted", thread: "T5", tag: "checkpoint/prototype-t5/t5-18", payload_sha: "a".repeat(40) };
+    assert.throws(() => validate(value), /checkpoint verification failed/);
   }],
 ];
 

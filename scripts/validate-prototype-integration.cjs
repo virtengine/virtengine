@@ -144,12 +144,16 @@ function validateIntegrationControl(control, schema, handoff, epoch) {
 module.exports = { validateEpoch, validateIntegrationControl };
 
 if (require.main === module) {
-  validateIntegrationControl(loadJson(controlPath), loadJson(schemaPath), loadJson(handoffPath), loadJson(epochPath));
+  const handoff = loadJson(handoffPath);
+  validateIntegrationControl(loadJson(controlPath), loadJson(schemaPath), handoff, loadJson(epochPath));
   validateSecurityGates(loadJson(aiBiometricSecurityGatesPath), { rootDir: root });
   validateProductionPolicy(loadJson(aiProductionPolicyPath), { rootDir: root });
   validateCoreRcSchema(loadJson(coreRcSchemaPath));
   validateCoreRcManifest(loadJson(coreRcManifestPath), { rootDir: root });
-  validateFundRouteInventory(loadJson(fundRouteInventoryPath), { rootDir: root });
+  validateFundRouteInventory(loadJson(fundRouteInventoryPath), {
+    rootDir: root,
+    verifyAcceptedCheckpoint: (checkpoint) => handoff.accepted_checkpoints.some((entry) => entry.thread === "T5" && entry.tag === checkpoint.tag && entry.payload_head === checkpoint.payload_sha),
+  });
   validateMigrationInventory(loadJson(migrationInventoryPath), loadJson(testCasesPath), {
     rootDir: root,
     schema: loadJson(migrationSchemaPath),

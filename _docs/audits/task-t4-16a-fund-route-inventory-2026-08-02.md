@@ -11,8 +11,10 @@ settlement, staking, and standard Cosmos bank/distribution modules.
 Discovery fails on any added, removed, or unassigned mover file. Release
 enforcement uses `--require-ready` and remains blocked until an immutable T5
 FundAuthorization checkpoint is accepted and every route is wired and proven
-atomic. The inventory also records the known non-atomic expired-escrow refund
-path and incomplete standard bank/distribution route classification.
+atomic. A claimed checkpoint must match the accepted T4 ledger tag and payload;
+a syntactically valid SHA alone cannot enable readiness. The inventory also
+records the known non-atomic expired-escrow refund path and incomplete standard
+bank/distribution route classification.
 
 This checkpoint does not define or wire the producer-owned FundAuthorization
 keeper. It provides the fail-closed T4 integration boundary only.

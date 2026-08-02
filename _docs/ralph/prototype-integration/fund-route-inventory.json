@@ -2,7 +2,12 @@
   "schema_version": "virtengine.prototype.fund-route-inventory/v1",
   "checkpoint": "T4-16A",
   "status": "dependency_blocked",
-  "accepted_fund_authorization_checkpoint": null,
+  "accepted_fund_authorization_checkpoint": {
+    "status": "unavailable",
+    "thread": "T5",
+    "tag": null,
+    "payload_sha": null
+  },
   "movement_primitives": ["MintCoins", "BurnCoins", "SendCoinsFromAccountToModule", "SendCoinsFromModuleToAccount", "SendCoinsFromModuleToModule"],
   "mover_files": [
     "x/bme/keeper/escrow.go",

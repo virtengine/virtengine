@@ -36,6 +36,17 @@ function validateFundRouteInventory(inventory, options = {}) {
   assert.equal(inventory.schema_version, "virtengine.prototype.fund-route-inventory/v1");
   assert.equal(inventory.checkpoint, "T4-16A");
   assert.ok(["dependency_blocked", "complete"].includes(inventory.status));
+  exactKeys(inventory.accepted_fund_authorization_checkpoint, ["payload_sha", "status", "tag", "thread"], "accepted fund authorization checkpoint");
+  assert.equal(inventory.accepted_fund_authorization_checkpoint.thread, "T5");
+  assert.ok(["accepted", "unavailable"].includes(inventory.accepted_fund_authorization_checkpoint.status));
+  if (inventory.accepted_fund_authorization_checkpoint.status === "unavailable") {
+    assert.equal(inventory.accepted_fund_authorization_checkpoint.tag, null);
+    assert.equal(inventory.accepted_fund_authorization_checkpoint.payload_sha, null);
+  } else {
+    assert.match(inventory.accepted_fund_authorization_checkpoint.tag, /^checkpoint\/prototype-t5\/[a-z0-9-]+$/);
+    assert.match(inventory.accepted_fund_authorization_checkpoint.payload_sha, /^[a-f0-9]{40}$/);
+    assert.equal(options.verifyAcceptedCheckpoint?.(inventory.accepted_fund_authorization_checkpoint), true, "accepted T5 checkpoint verification failed");
+  }
   assert.deepEqual(inventory.mover_files, [...inventory.mover_files].sort(), "mover files must be sorted");
   assert.deepEqual(inventory.mover_files, discoveredMoverFiles, "production fund mover discovery drifted");
   assert.equal(new Set(inventory.mover_files).size, inventory.mover_files.length, "duplicate mover file");
@@ -63,8 +74,7 @@ function validateFundRouteInventory(inventory, options = {}) {
   const assignedMoverFiles = new Set(inventory.routes.flatMap((route) => route.paths).filter((path) => inventory.mover_files.includes(path)));
   assert.deepEqual([...assignedMoverFiles].sort(), inventory.mover_files, "discovered mover files are not fully assigned to routes");
 
-  const ready = typeof inventory.accepted_fund_authorization_checkpoint === "string"
-    && /^[a-f0-9]{40}$/.test(inventory.accepted_fund_authorization_checkpoint)
+  const ready = inventory.accepted_fund_authorization_checkpoint.status === "accepted"
     && inventory.routes.every((route) => route.fund_authorization === "wired" && route.atomicity === "verified" && route.blockers.length === 0)
     && inventory.blockers.length === 0;
   assert.equal(inventory.completion.allowed, ready, "fund route completion is premature");
