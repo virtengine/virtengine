@@ -1,20 +1,19 @@
 {
   "campaign": "three-day-prototype",
   "thread": "T4",
-  "checkpoint": "T4-07F",
+  "checkpoint": "T4-07G",
   "branch": "ve/prototype-integration",
-  "start_head": "a17ce5c28e1fa0a9a3bc4a6647f205a122c18501",
-  "end_head": "c5698992ea76bb6e136227f118b9ec25c5f5c71b",
-  "origin_main": "5dc7ab49d0449a5d69510a3c38f877b349d490dd",
+  "start_head": "e38f50f3e59f0ae8e277abadb2ed383770ea9af7",
+  "end_head": "2f4f20f731ad55fd10ef8aa8154b4208347fcef1",
+  "origin_main": "79391a3df86d85522b92e0400c6904971ecbe65d",
   "tree_clean": true,
   "commits": [
-    "c5698992ea76bb6e136227f118b9ec25c5f5c71b"
+    "2f4f20f731ad55fd10ef8aa8154b4208347fcef1"
   ],
   "owned_paths": [
     "_docs/ralph/prototype-integration/**",
     "_docs/ralph/handoffs/prototype-integration/**",
-    "_build/helm/slurm-cluster/**",
-    "_docs/audits/task-t4-07f-slurm-chart-retirement-2026-08-02.md",
+    "_docs/audits/task-t4-07g-slurm-retired-reference-guard-2026-08-02.md",
     "_docs/ralph/prototype-integration/slurm-chart-inventory.json",
     "_docs/ralph/prototype-integration/slurm-chart-inventory.schema.json",
     "scripts/validate-slurm-chart-inventory.cjs",
@@ -23,15 +22,7 @@
   "files_changed": [
     "_docs/ralph/handoffs/prototype-integration/HANDOFF.yaml",
     "_docs/INDEX.md",
-    "_build/helm/slurm-cluster/Chart.yaml",
-    "_build/helm/slurm-cluster/templates/_helpers.tpl",
-    "_build/helm/slurm-cluster/templates/compute-statefulset.yaml",
-    "_build/helm/slurm-cluster/templates/configmap.yaml",
-    "_build/helm/slurm-cluster/templates/controller-deployment.yaml",
-    "_build/helm/slurm-cluster/templates/controller-service.yaml",
-    "_build/helm/slurm-cluster/templates/serviceaccount.yaml",
-    "_build/helm/slurm-cluster/values.yaml",
-    "_docs/audits/task-t4-07f-slurm-chart-retirement-2026-08-02.md",
+    "_docs/audits/task-t4-07g-slurm-retired-reference-guard-2026-08-02.md",
     "_docs/ralph/prototype-integration/slurm-chart-inventory.json",
     "_docs/ralph/prototype-integration/slurm-chart-inventory.schema.json",
     "scripts/validate-slurm-chart-inventory.cjs",
@@ -42,18 +33,9 @@
       "command": "node scripts/validate-slurm-chart-inventory.test.cjs && node scripts/validate-slurm-chart-inventory.cjs",
       "exit_code": 0,
       "result": "passed",
-      "test_count": 11,
+      "test_count": 12,
       "tool_versions": {
         "node": "20.19.1"
-      }
-    },
-    {
-      "command": "python scripts/validate_slurm_chart_semantics_test.py -v",
-      "exit_code": 0,
-      "result": "passed",
-      "test_count": 53,
-      "tool_versions": {
-        "python": "3.14.6"
       }
     },
     {
@@ -67,11 +49,11 @@
     }
   ],
   "generated_hashes": {
-    "scripts/validate-slurm-chart-inventory.cjs": "14969916d053057fe4541d09e6deee8933020d2b02417d6454245ff9ea149050",
-    "scripts/validate-slurm-chart-inventory.test.cjs": "b5ddf0e78d68b4e183f281595558a8025f87a5f92264f4302792a1c9418cc91a",
-    "_docs/ralph/prototype-integration/slurm-chart-inventory.json": "cea8d14fee799e4bdfafe4f4d8e6448f3ddeef2a079bff9753db911e5eb0a090",
-    "_docs/ralph/prototype-integration/slurm-chart-inventory.schema.json": "5dd01624e2ab5c683ea5ed7aa16fe94a798ecc7684ec9f051e798f0c0cd4e550",
-    "_docs/audits/task-t4-07f-slurm-chart-retirement-2026-08-02.md": "5b2855aa0c506ce4614829a1d6c5960486281441670ac9b39ed6f1efb37935ae"
+    "scripts/validate-slurm-chart-inventory.cjs": "73f827fbae20d7a2a302cc3fe700c33ae7d127ffcd23d72741235c228f10ac7b",
+    "scripts/validate-slurm-chart-inventory.test.cjs": "344c513dae55f48128cfc82388e88f457f3b9c2f39ac5961fc32400f256ae44e",
+    "_docs/ralph/prototype-integration/slurm-chart-inventory.json": "55c55aa646e26e339fb2d278548700e7e1f4e684252ac7c65047936f826af1df",
+    "_docs/ralph/prototype-integration/slurm-chart-inventory.schema.json": "f2c8a1bdf109d30d0d290d22a2bf89c4cddf495877d85c0d06dd2f77ae2ffdc5",
+    "_docs/audits/task-t4-07g-slurm-retired-reference-guard-2026-08-02.md": "4256ef3a554945cf0663a28a199340d1976f8355fd742ea87a8f2ba78ac6f7d0"
   },
   "accepted_checkpoints": [],
   "rejected_checkpoints": [
@@ -105,5 +87,5 @@
     "Task 88C is not complete."
   ],
   "next_checkpoint": null,
-  "expected_head": "c5698992ea76bb6e136227f118b9ec25c5f5c71b"
+  "expected_head": "2f4f20f731ad55fd10ef8aa8154b4208347fcef1"
 }
