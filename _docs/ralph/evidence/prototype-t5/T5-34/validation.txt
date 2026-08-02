@@ -58,4 +58,4 @@ Validation:
 - Epoch range validation: 66 exact commits and 164 exact complete changed paths from 5587c384f634552c3a2dd7181ca49cafa4da1984 through f19e104c6f0c51219b0c69ebd79aa031547cdce7.
 - Ownership validation: 140 covered paths and 24 uncovered inherited integration/T4 paths.
 - Git all-parent inventory and handoff files_changed both contain 164 paths with zero differences.
-- git diff --check for T5-34 evidence and handoff: passed with no errors.
+- Initial staged diff check detected CRLF as trailing whitespace in this evidence file; the file was normalized to LF and the follow-up diff check passed with no errors.
