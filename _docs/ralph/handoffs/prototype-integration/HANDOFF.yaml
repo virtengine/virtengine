@@ -1,27 +1,23 @@
 {
   "campaign": "three-day-prototype",
   "thread": "T4",
-  "checkpoint": "T4-12B",
+  "checkpoint": "T4-12C",
   "branch": "ve/prototype-integration",
-  "start_head": "97d25b3f8c6d49caeb37379278412eeabaec4779",
-  "end_head": "30126351a0a053b0b4b171d1c09cc3282f144275",
+  "start_head": "ab534049a591d04ba8ae7ea489ff468d1d5a8b3c",
+  "end_head": "4e64fc249c610598652183ba8f8cf19913de0c95",
   "origin_main": "79391a3df86d85522b92e0400c6904971ecbe65d",
   "tree_clean": true,
   "commits": [
-    "30126351a0a053b0b4b171d1c09cc3282f144275"
+    "4e64fc249c610598652183ba8f8cf19913de0c95"
   ],
   "owned_paths": [
     "_docs/ralph/prototype-integration/**",
     "_docs/ralph/handoffs/prototype-integration/**",
-    "_docs/audits/task-t4-12a-ai-production-policy-2026-08-02.md",
-    "scripts/generate-core-rc-manifest.cjs",
-    "scripts/generate-core-rc-manifest.test.cjs"
+    "_docs/ralph/prototype-integration/core-rc-manifest.json"
   ],
   "files_changed": [
     "_docs/ralph/handoffs/prototype-integration/HANDOFF.yaml",
-    "_docs/audits/task-t4-12a-ai-production-policy-2026-08-02.md",
-    "scripts/generate-core-rc-manifest.cjs",
-    "scripts/generate-core-rc-manifest.test.cjs"
+    "_docs/ralph/prototype-integration/core-rc-manifest.json"
   ],
   "tests": [
     {
@@ -50,12 +46,27 @@
       "tool_versions": {
         "node": "20.19.1"
       }
+    },
+    {
+      "command": "node scripts/validate-core-rc-manifest.cjs",
+      "exit_code": 0,
+      "result": "passed",
+      "tool_versions": {
+        "node": "20.19.1"
+      }
+    },
+    {
+      "command": "node scripts/validate-prototype-integration.test.cjs && node scripts/validate-prototype-integration.cjs && node scripts/validate-agents-docs.mjs",
+      "exit_code": 0,
+      "result": "passed",
+      "test_count": 10,
+      "tool_versions": {
+        "node": "20.19.1"
+      }
     }
   ],
   "generated_hashes": {
-    "scripts/generate-core-rc-manifest.cjs": "1b1706606633fdc38dc95c67341a861d7dad7a4c6678b1fce1bc12455e1f8981",
-    "scripts/generate-core-rc-manifest.test.cjs": "815dcdb513c2f1f957f6c79da6b384c3602973fc12f6d7121cede67179d1179b",
-    "_docs/audits/task-t4-12a-ai-production-policy-2026-08-02.md": "7284743b201dc4ee11477ca4530ea81885bd29755c7564e1fec84bf8f0f8eaca"
+    "_docs/ralph/prototype-integration/core-rc-manifest.json": "7d9325468afd791561d30789e772fcd2c5af42dca5b1a21d6ab8146dabba0611"
   },
   "accepted_checkpoints": [],
   "rejected_checkpoints": [
@@ -91,5 +102,5 @@
     "Task 88C is not complete."
   ],
   "next_checkpoint": null,
-  "expected_head": "30126351a0a053b0b4b171d1c09cc3282f144275"
+  "expected_head": "4e64fc249c610598652183ba8f8cf19913de0c95"
 }
