@@ -167,6 +167,7 @@
         { "id": "docs-control", "kind": "policy", "command": "node scripts/validate-prototype-integration.cjs" },
         { "id": "intake-tag-observer", "kind": "test", "command": "node scripts/observe-prototype-intake-tags.test.cjs" },
         { "id": "intake-freeze-planner", "kind": "test", "command": "node scripts/plan-prototype-intake-freeze.test.cjs" },
+        { "id": "intake-freeze-application", "kind": "test", "command": "node scripts/apply-prototype-intake-freeze.test.cjs" },
         { "id": "integration-candidate-preflight", "kind": "test", "command": "node scripts/preflight-integration-candidate.test.cjs" },
         { "id": "process-boundary-e2e", "kind": "test", "command": "go test -count=1 -tags=e2e.integration ./tests/e2e/... ./tests/integration/..." }
       ],

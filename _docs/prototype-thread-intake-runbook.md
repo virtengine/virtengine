@@ -144,8 +144,21 @@ node scripts/plan-prototype-intake-freeze.cjs --epoch 1 `
   > $env:TEMP\epoch-1-frozen-plan.json
 ```
 
-Review and commit the proposed epoch separately. The planner never writes the
-epoch file and does not accept or merge any producer checkpoint.
+Review the proposed epoch separately. The planner never writes the epoch file
+and does not accept or merge any producer checkpoint. From a clean exact-SHA T4
+clone, apply only the reviewed open-to-frozen transition, then inspect and
+commit the epoch file:
+
+```powershell
+node scripts/apply-prototype-intake-freeze.test.cjs
+node scripts/apply-prototype-intake-freeze.cjs --epoch 1 `
+  --plan $env:TEMP\epoch-1-frozen-plan.json
+git diff -- _docs/ralph/prototype-integration/epochs/epoch-1.json
+```
+
+The application command rejects dirty worktrees, pre-cutoff execution, changed
+epoch metadata or roster order, and producer decisions other than announced or
+frozen out. Acceptance remains a later, separately validated transition.
 
 ## Core RC Publication Preflight
 
