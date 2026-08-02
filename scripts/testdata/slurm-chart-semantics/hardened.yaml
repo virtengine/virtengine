@@ -4,9 +4,13 @@ metadata:
   name: slurm-config
 data:
   slurm.conf: |
+    SlurmUser=slurm
+    SlurmdUser=slurm
     NodeName=slurm-compute-0 CPUs=4 RealMemory=4096 State=UNKNOWN
     NodeName=slurm-compute-1 CPUs=4 RealMemory=4096 State=UNKNOWN
     PartitionName=normal Nodes=slurm-compute-[0-1] MaxNodes=2 State=UP
+  slurmdbd.conf: |
+    SlurmUser=slurm
 ---
 apiVersion: apps/v1
 kind: StatefulSet
@@ -27,8 +31,10 @@ spec:
           securityContext:
             privileged: false
             runAsNonRoot: true
-            runAsUser: 1000
+            runAsUser: 1002
+            runAsGroup: 1002
             allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
             capabilities:
               drop: [ALL]
 ---
@@ -50,8 +56,10 @@ spec:
           securityContext:
             privileged: false
             runAsNonRoot: true
-            runAsUser: 1000
+            runAsUser: 1002
+            runAsGroup: 1002
             allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
             capabilities:
               drop: [ALL]
           volumeMounts:
@@ -84,8 +92,10 @@ spec:
           securityContext:
             privileged: false
             runAsNonRoot: true
-            runAsUser: 1000
+            runAsUser: 1002
+            runAsGroup: 1002
             allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
             capabilities:
               drop: [ALL]
           volumeMounts:
@@ -118,8 +128,9 @@ spec:
           securityContext:
             privileged: false
             runAsNonRoot: true
-            runAsUser: 1000
+            runAsUser: 1004
             allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
             capabilities:
               drop: [ALL]
           volumeMounts:

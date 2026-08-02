@@ -2,6 +2,7 @@
 
 import hashlib
 import json
+import shutil
 import tempfile
 import unittest
 from pathlib import Path
@@ -99,14 +100,58 @@ class SlurmChartSemanticsTest(unittest.TestCase):
         candidate["spec"]["template"]["spec"]["containers"][0]["securityContext"]["capabilities"]["add"] = ["CHOWN"]
         self.assertIn("least-privilege", {finding.invariant for finding in validate([*self.hardened, candidate])})
 
+    def test_rejects_writable_root_filesystem(self) -> None:
+        candidate = yaml.safe_load(yaml.safe_dump(self.hardened[1]))
+        candidate["spec"]["template"]["spec"]["containers"][0]["securityContext"]["readOnlyRootFilesystem"] = False
+        self.assertIn("least-privilege", {finding.invariant for finding in validate([*self.hardened, candidate])})
+
+    def test_rejects_host_path_volume(self) -> None:
+        candidate = yaml.safe_load(yaml.safe_dump(self.hardened[1]))
+        candidate["spec"]["template"]["spec"]["volumes"] = [{"name": "cgroup", "hostPath": {"path": "/sys/fs/cgroup"}}]
+        self.assertIn("least-privilege", {finding.invariant for finding in validate([*self.hardened, candidate])})
+
+    def test_rejects_host_namespaces(self) -> None:
+        for field in ("hostIPC", "hostNetwork", "hostPID"):
+            with self.subTest(field=field):
+                candidate = yaml.safe_load(yaml.safe_dump(self.hardened[1]))
+                candidate["spec"]["template"]["spec"][field] = True
+                self.assertIn("least-privilege", {finding.invariant for finding in validate([*self.hardened, candidate])})
+
+    def test_rejects_unmasked_proc_and_host_process(self) -> None:
+        for field, value in (("procMount", "Unmasked"), ("windowsOptions", {"hostProcess": True})):
+            with self.subTest(field=field):
+                candidate = yaml.safe_load(yaml.safe_dump(self.hardened[1]))
+                candidate["spec"]["template"]["spec"]["containers"][0]["securityContext"][field] = value
+                self.assertIn("least-privilege", {finding.invariant for finding in validate([*self.hardened, candidate])})
+
     def test_accepts_pod_level_non_root_and_seccomp_inheritance(self) -> None:
         candidate = yaml.safe_load(yaml.safe_dump(self.hardened[1]))
         pod_security = candidate["spec"]["template"]["spec"]["securityContext"]
-        pod_security.update({"runAsNonRoot": True, "runAsUser": 1000})
+        pod_security.update({"runAsNonRoot": True, "runAsUser": 1002, "runAsGroup": 1002})
         container_security = candidate["spec"]["template"]["spec"]["containers"][0]["securityContext"]
         container_security.pop("runAsNonRoot")
         container_security.pop("runAsUser")
+        container_security.pop("runAsGroup")
         self.assertNotIn("least-privilege", {finding.invariant for finding in validate([*self.hardened, candidate])})
+
+    def test_rejects_missing_or_inconsistent_slurm_daemon_users(self) -> None:
+        for label, mutate in (
+            ("missing SlurmUser", lambda config: config.replace("SlurmUser=slurm\n", "", 1)),
+            ("missing SlurmdUser", lambda config: config.replace("SlurmdUser=slurm\n", "", 1)),
+            ("different slurmd user", lambda config: config.replace("SlurmdUser=slurm", "SlurmdUser=slurmd", 1)),
+        ):
+            with self.subTest(label=label):
+                candidate = yaml.safe_load(yaml.safe_dump(self.hardened[0]))
+                candidate["data"]["slurm.conf"] = mutate(candidate["data"]["slurm.conf"])
+                findings = validate([candidate, *self.hardened[1:]])
+                self.assertTrue(any(finding.invariant == "least-privilege" and "user" in finding.location.lower() for finding in findings))
+
+    def test_rejects_divergent_rendered_slurm_daemon_ids(self) -> None:
+        candidate = yaml.safe_load(yaml.safe_dump(self.hardened[1]))
+        security = candidate["spec"]["template"]["spec"]["containers"][0]["securityContext"]
+        security.update(runAsUser=2002, runAsGroup=2002)
+        findings = validate([self.hardened[0], candidate, *self.hardened[2:]])
+        self.assertTrue(any(finding.invariant == "least-privilege" and "daemon identities" in finding.location for finding in findings))
 
     def test_accepts_preexisting_pvc(self) -> None:
         candidate = yaml.safe_load(yaml.safe_dump(self.hardened[2]))
@@ -171,14 +216,100 @@ class SlurmChartSemanticsTest(unittest.TestCase):
         unknown = {"apiVersion": "example/v1", "kind": "MysteryWorkload", "metadata": {"name": "unknown"}, "spec": {"template": {"spec": {"containers": []}}}}
         self.assertIn("least-privilege", {finding.invariant for finding in validate([*self.hardened, unknown])})
 
-    def test_canonical_source_reports_known_current_violations(self) -> None:
+    def test_canonical_source_has_no_known_current_violations(self) -> None:
         findings = validate_source(ROOT / "deploy" / "slurm" / "slurm-cluster")
         failed = {finding.invariant for finding in findings}
         self.assertNotIn("stable-secrets", failed)
         self.assertNotIn("replica-capacity-equality", failed)
         self.assertNotIn("immutable-images", failed)
-        self.assertIn("least-privilege", failed)
+        self.assertNotIn("least-privilege", failed)
         self.assertNotIn("durable-state", failed)
+
+    def test_source_rejects_missing_container_security_helper(self) -> None:
+        source = ROOT / "deploy" / "slurm" / "slurm-cluster"
+        with tempfile.TemporaryDirectory() as directory:
+            chart = Path(directory) / "chart"
+            shutil.copytree(source, chart)
+            template = chart / "templates" / "compute-statefulset.yaml"
+            content = template.read_text(encoding="utf-8")
+            content = content.replace('{{- include "slurm-cluster.containerSecurityContext" (list . "munge") | nindent 12 }}', "{}", 1)
+            template.write_text(content, encoding="utf-8")
+            findings = validate_source(chart)
+        self.assertTrue(any(finding.invariant == "least-privilege" and "security helper uses" in finding.message for finding in findings))
+
+    def test_source_rejects_missing_or_zero_component_identity(self) -> None:
+        source = ROOT / "deploy" / "slurm" / "slurm-cluster"
+        for label, mutate in (
+            ("missing", lambda values: values["securityIdentities"].pop("slurm")),
+            ("zero uid", lambda values: values["securityIdentities"]["slurm"].update(uid=0)),
+            ("zero gid", lambda values: values["securityIdentities"]["slurm"].update(gid=0)),
+        ):
+            with self.subTest(label=label), tempfile.TemporaryDirectory() as directory:
+                chart = Path(directory) / "chart"
+                shutil.copytree(source, chart)
+                values = yaml.safe_load((chart / "values.yaml").read_text(encoding="utf-8"))
+                mutate(values)
+                (chart / "values.yaml").write_text(yaml.safe_dump(values), encoding="utf-8")
+                findings = validate_source(chart)
+            self.assertTrue(any(finding.invariant == "least-privilege" and ("securityIdentities.slurm" in finding.message or "shared slurm identity" in finding.message) for finding in findings))
+
+    def test_source_rejects_missing_daemon_user_directives_and_divergent_ids(self) -> None:
+        source = ROOT / "deploy" / "slurm" / "slurm-cluster"
+        mutations = (
+            ("missing SlurmUser", "templates/configmap.yaml", lambda text: text.replace('SlurmUser={{ include "slurm-cluster.slurmUser" . }}', "", 1)),
+            ("missing SlurmdUser", "templates/configmap.yaml", lambda text: text.replace('SlurmdUser={{ include "slurm-cluster.slurmUser" . }}', "", 1)),
+            ("divergent compute IDs", "values.yaml", lambda text: text.replace("  mariadb: { uid: 1004, gid: 1004 }", "  compute: { uid: 2002, gid: 2002 }\n  mariadb: { uid: 1004, gid: 1004 }", 1)),
+        )
+        for label, relative, mutate in mutations:
+            with self.subTest(label=label), tempfile.TemporaryDirectory() as directory:
+                chart = Path(directory) / "chart"
+                shutil.copytree(source, chart)
+                path = chart / relative
+                path.write_text(mutate(path.read_text(encoding="utf-8")), encoding="utf-8")
+                findings = validate_source(chart)
+            self.assertTrue(any(finding.invariant == "least-privilege" for finding in findings))
+
+    def test_source_rejects_mismatched_container_identity_binding(self) -> None:
+        source = ROOT / "deploy" / "slurm" / "slurm-cluster"
+        with tempfile.TemporaryDirectory() as directory:
+            chart = Path(directory) / "chart"
+            shutil.copytree(source, chart)
+            template = chart / "templates" / "controller-statefulset.yaml"
+            content = template.read_text(encoding="utf-8").replace(
+                '(list . "controller")', '(list . "munge")', 1
+            )
+            template.write_text(content, encoding="utf-8")
+            findings = validate_source(chart)
+        self.assertTrue(any(finding.invariant == "least-privilege" and "identity contract for controller" in finding.message for finding in findings))
+
+    def test_source_rejects_malicious_values_at_any_depth(self) -> None:
+        source = ROOT / "deploy" / "slurm" / "slurm-cluster"
+        mutations = (
+            ("root sidecars", lambda values: values.update(extraContainers=[{"securityContext": {"privileged": True}}])),
+            ("component context", lambda values: values["controller"].update(podSecurityContext={"hostPID": True})),
+            ("node pool init", lambda values: values.update(nodePools=[{"name": "evil", "replicas": 1, "initContainers": []}])),
+            ("nested host path", lambda values: values.update(extraVolumes=[{"name": "escape", "source": {"hostPath": {"path": "/"}}}])),
+        )
+        for label, mutate in mutations:
+            with self.subTest(label=label), tempfile.TemporaryDirectory() as directory:
+                chart = Path(directory) / "chart"
+                shutil.copytree(source, chart)
+                values = yaml.safe_load((chart / "values.yaml").read_text(encoding="utf-8"))
+                mutate(values)
+                (chart / "values.yaml").write_text(yaml.safe_dump(values), encoding="utf-8")
+                findings = validate_source(chart)
+            self.assertTrue(any(finding.invariant == "least-privilege" and "security override is forbidden" in finding.message for finding in findings))
+
+    def test_source_rejects_cgroup_plugin_override(self) -> None:
+        source = ROOT / "deploy" / "slurm" / "slurm-cluster"
+        with tempfile.TemporaryDirectory() as directory:
+            chart = Path(directory) / "chart"
+            shutil.copytree(source, chart)
+            values = yaml.safe_load((chart / "values.yaml").read_text(encoding="utf-8"))
+            values["controller"]["config"]["taskPlugin"] = "task/cgroup,task/affinity"
+            (chart / "values.yaml").write_text(yaml.safe_dump(values), encoding="utf-8")
+            findings = validate_source(chart)
+        self.assertTrue(any(finding.invariant == "least-privilege" and "rootless prototype requires" in finding.message for finding in findings))
 
     def test_source_rejects_mutable_or_bypassed_image_contracts(self) -> None:
         source = ROOT / "deploy" / "slurm" / "slurm-cluster"
@@ -294,6 +425,31 @@ class SlurmChartSemanticsTest(unittest.TestCase):
         self.assertEqual(partition["properties"]["nodePools"]["minItems"], 1)
         self.assertTrue(partition["properties"]["nodePools"]["uniqueItems"])
         self.assertEqual(partition["allOf"][0]["else"]["required"], ["nodePools"])
+
+    def test_security_identity_and_recursive_override_schema_contracts(self) -> None:
+        schema = json.loads((ROOT / "deploy" / "slurm" / "slurm-cluster" / "values.schema.json").read_text(encoding="utf-8"))
+        components = ["munge", "slurm", "mariadb", "nodeAgent", "utility"]
+        self.assertEqual(schema["required"], ["securityIdentities"])
+        self.assertEqual(schema["definitions"]["securityIdentities"]["required"], components)
+        identity = schema["definitions"]["securityIdentity"]
+        self.assertEqual(identity["required"], ["uid", "gid"])
+        self.assertEqual(identity["properties"]["uid"], {"type": "integer", "minimum": 1})
+        self.assertEqual(identity["properties"]["gid"], {"type": "integer", "minimum": 1})
+        slurm_identity = schema["definitions"]["slurmSecurityIdentity"]
+        self.assertEqual(slurm_identity["required"], ["username", "uid", "gid"])
+        self.assertIn("pattern", slurm_identity["properties"]["username"])
+        self.assertNotIn("controller", schema["definitions"]["securityIdentities"]["properties"])
+        self.assertNotIn("database", schema["definitions"]["securityIdentities"]["properties"])
+        self.assertNotIn("compute", schema["definitions"]["securityIdentities"]["properties"])
+        recursive = json.dumps(schema["definitions"]["noSecurityOverrides"], sort_keys=True)
+        for key in ("securityContext", "podSecurityContext", "containerSecurityContext", "extraContainers", "initContainers", "hostPID", "hostIPC", "hostNetwork", "hostUsers", "hostPath", "hostPaths"):
+            self.assertIn(f'"{key}"', recursive)
+            self.assertIs(schema["properties"][key], False)
+        self.assertEqual(schema["properties"]["extraVolumes"]["items"], {"$ref": "#/definitions/noSecurityOverrides"})
+        profile = schema["properties"]["controller"]["properties"]["config"]
+        self.assertEqual(profile["properties"]["jobAcctGatherType"], {"const": "jobacct_gather/linux"})
+        self.assertEqual(profile["properties"]["proctrackType"], {"const": "proctrack/linuxproc"})
+        self.assertEqual(profile["properties"]["taskPlugin"], {"const": "task/affinity"})
 
     def test_source_requires_hash_stable_dns_and_selector_guards(self) -> None:
         source = ROOT / "deploy" / "slurm" / "slurm-cluster"

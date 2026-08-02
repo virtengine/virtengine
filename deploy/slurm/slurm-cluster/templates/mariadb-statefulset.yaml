@@ -32,6 +32,8 @@ spec:
       imagePullSecrets:
         {{- toYaml . | nindent 8 }}
       {{- end }}
+      securityContext:
+        {{- include "slurm-cluster.podSecurityContext" (list .) | nindent 8 }}
       containers:
         - name: mariadb
           image: {{ include "slurm-cluster.mariadb.image" . }}
@@ -45,6 +47,11 @@ spec:
               mountPath: /var/lib/mysql
             - name: init-scripts
               mountPath: /docker-entrypoint-initdb.d
+              readOnly: true
+            - name: mariadb-run
+              mountPath: /run/mysqld
+            - name: tmp
+              mountPath: /tmp
           livenessProbe:
             exec:
               command:
@@ -69,6 +76,8 @@ spec:
             failureThreshold: 3
           resources:
             {{- toYaml .Values.mariadb.resources | nindent 12 }}
+          securityContext:
+            {{- include "slurm-cluster.containerSecurityContext" (list . "mariadb") | nindent 12 }}
           env:
             - name: MYSQL_ROOT_PASSWORD
               valueFrom:
@@ -88,6 +97,10 @@ spec:
         - name: init-scripts
           configMap:
             name: {{ include "slurm-cluster.resourceName" (list . "mariadb-init" 0) }}
+        - name: mariadb-run
+          emptyDir: {}
+        - name: tmp
+          emptyDir: {}
       {{- with .Values.mariadb.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}

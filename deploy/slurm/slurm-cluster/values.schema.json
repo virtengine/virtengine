@@ -3,12 +3,37 @@
   "type": "object",
   "properties": {
     "utilityImage": { "$ref": "#/definitions/pinnedImage" },
+    "securityIdentities": { "$ref": "#/definitions/securityIdentities" },
+    "podSecurityContext": false,
+    "securityContext": false,
+    "containerSecurityContext": false,
+    "extraContainers": false,
+    "initContainers": false,
+    "hostPID": false,
+    "hostIPC": false,
+    "hostNetwork": false,
+    "hostUsers": false,
+    "hostPath": false,
+    "hostPaths": false,
+    "extraVolumes": {
+      "type": "array",
+      "items": { "$ref": "#/definitions/noSecurityOverrides" }
+    },
     "munge": { "$ref": "#/definitions/secretComponent" },
     "controller": {
       "type": "object",
       "properties": {
         "enabled": { "type": "boolean" },
-        "image": { "$ref": "#/definitions/pinnedImage" }
+        "image": { "$ref": "#/definitions/pinnedImage" },
+        "config": {
+          "type": "object",
+          "properties": {
+            "jobAcctGatherType": { "const": "jobacct_gather/linux" },
+            "proctrackType": { "const": "proctrack/linuxproc" },
+            "taskPlugin": { "const": "task/affinity" }
+          },
+          "required": ["jobAcctGatherType", "proctrackType", "taskPlugin"]
+        }
       }
     },
     "database": {
@@ -26,7 +51,8 @@
       "properties": {
         "enabled": { "type": "boolean" },
         "replicas": { "type": "integer", "minimum": 0 },
-        "image": { "$ref": "#/definitions/pinnedImage" }
+        "image": { "$ref": "#/definitions/pinnedImage" },
+        "hostCgroup": false
       },
       "required": ["enabled", "replicas"],
       "allOf": [
@@ -105,7 +131,9 @@
       ]
     }
   },
+  "required": ["securityIdentities"],
   "allOf": [
+    { "$ref": "#/definitions/noSecurityOverrides" },
     {
       "if": { "properties": { "controller": { "properties": { "enabled": { "const": true } }, "required": ["enabled"] } }, "required": ["controller"] },
       "then": { "properties": { "controller": { "required": ["image"] } } }
@@ -165,6 +193,62 @@
   ],
   "definitions": {
     "nonEmptyString": { "type": "string", "minLength": 1 },
+    "securityIdentity": {
+      "type": "object",
+      "properties": {
+        "uid": { "type": "integer", "minimum": 1 },
+        "gid": { "type": "integer", "minimum": 1 }
+      },
+      "required": ["uid", "gid"],
+      "additionalProperties": false
+    },
+    "slurmSecurityIdentity": {
+      "type": "object",
+      "properties": {
+        "username": { "type": "string", "pattern": "^[a-z_][a-z0-9_-]*$" },
+        "uid": { "type": "integer", "minimum": 1 },
+        "gid": { "type": "integer", "minimum": 1 }
+      },
+      "required": ["username", "uid", "gid"],
+      "additionalProperties": false
+    },
+    "securityIdentities": {
+      "type": "object",
+      "properties": {
+        "munge": { "$ref": "#/definitions/securityIdentity" },
+        "slurm": { "$ref": "#/definitions/slurmSecurityIdentity" },
+        "mariadb": { "$ref": "#/definitions/securityIdentity" },
+        "nodeAgent": { "$ref": "#/definitions/securityIdentity" },
+        "utility": { "$ref": "#/definitions/securityIdentity" }
+      },
+      "required": ["munge", "slurm", "mariadb", "nodeAgent", "utility"],
+      "additionalProperties": false
+    },
+    "noSecurityOverrides": {
+      "anyOf": [
+        {
+          "type": "object",
+          "not": {
+            "anyOf": [
+              { "required": ["securityContext"] },
+              { "required": ["podSecurityContext"] },
+              { "required": ["containerSecurityContext"] },
+              { "required": ["extraContainers"] },
+              { "required": ["initContainers"] },
+              { "required": ["hostPID"] },
+              { "required": ["hostIPC"] },
+              { "required": ["hostNetwork"] },
+              { "required": ["hostUsers"] },
+              { "required": ["hostPath"] },
+              { "required": ["hostPaths"] }
+            ]
+          },
+          "additionalProperties": { "$ref": "#/definitions/noSecurityOverrides" }
+        },
+        { "type": "array", "items": { "$ref": "#/definitions/noSecurityOverrides" } },
+        { "type": ["string", "number", "boolean", "null"] }
+      ]
+    },
     "pinnedImage": {
       "type": "object",
       "properties": {

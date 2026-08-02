@@ -44,8 +44,12 @@ HELM_RANDOM = re.compile(
     re.IGNORECASE,
 )
 PRIVILEGED_SOURCE = re.compile(r"^\s*(?:privileged:\s*true|runAsUser:\s*0|runAsNonRoot:\s*false|allowPrivilegeEscalation:\s*true)\b", re.MULTILINE)
+HOST_INTEGRATION_SOURCE = re.compile(r"^\s*(?:hostPath:|hostPID:\s*true|hostIPC:\s*true|hostNetwork:\s*true|hostUsers:\s*false|procMount:\s*Unmasked)\b", re.MULTILINE)
+CAPABILITY_ADD_SOURCE = re.compile(r"^\s*add:\s*(?:\[|$)", re.MULTILINE)
 NODE_LINE = re.compile(r"^\s*NodeName=(\S+)", re.MULTILINE)
 PARTITION_LINE = re.compile(r"^\s*PartitionName=(\S+)(.*)$", re.MULTILINE)
+SLURM_USER_LINE = re.compile(r"^\s*SlurmUser=(\S+)", re.MULTILINE)
+SLURMD_USER_LINE = re.compile(r"^\s*SlurmdUser=(\S+)", re.MULTILINE)
 HELPER_DEFINITION = re.compile(r'{{-?\s*define\s+"([^"]+)"\s*-?}}(.*?){{-?\s*end\s*}}', re.DOTALL)
 IMAGE_HELPERS = {
     "munge": ("slurm-cluster.munge.image", "munge", "munge.image"),
@@ -55,6 +59,21 @@ IMAGE_HELPERS = {
     "compute": ("slurm-cluster.compute.image", "compute", "compute.image"),
     "nodeAgent": ("slurm-cluster.nodeAgent.image", "nodeAgent", "nodeAgent.image"),
     "utility": ("slurm-cluster.utility.image", "utility", "utilityImage"),
+}
+IDENTITY_COMPONENTS = ("munge", "slurm", "mariadb", "nodeAgent", "utility")
+SLURM_DAEMON_COMPONENTS = ("controller", "database", "compute")
+FORBIDDEN_SECURITY_KEYS = {
+    "securityContext",
+    "podSecurityContext",
+    "containerSecurityContext",
+    "extraContainers",
+    "initContainers",
+    "hostPID",
+    "hostIPC",
+    "hostNetwork",
+    "hostUsers",
+    "hostPath",
+    "hostPaths",
 }
 
 
@@ -144,6 +163,7 @@ def _primary_containers(pod_spec: dict[str, Any], component: str) -> list[dict[s
         "controller": ("controller", "slurmctld"),
         "database": ("database", "slurmdbd"),
         "mariadb": ("mariadb", "mysql"),
+        "compute": ("compute", "slurmd"),
     }.get(component, (component,))
     matching = [container for container in containers if any(alias in str(container.get("name", "")).lower() for alias in aliases)]
     return matching or containers[:1]
@@ -180,6 +200,31 @@ def _slurm_config(documents: list[dict[str, Any]]) -> str:
     return "\n".join(chunks)
 
 
+def _slurmdbd_config(documents: list[dict[str, Any]]) -> str:
+    chunks = []
+    for document in documents:
+        if document.get("kind") != "ConfigMap":
+            continue
+        data = document.get("data") if isinstance(document.get("data"), dict) else {}
+        if isinstance(data.get("slurmdbd.conf"), str):
+            chunks.append(data["slurmdbd.conf"])
+    return "\n".join(chunks)
+
+
+def _forbidden_value_paths(value: Any, path: str = "") -> list[str]:
+    found: list[str] = []
+    if isinstance(value, dict):
+        for key, child in value.items():
+            child_path = f"{path}.{key}" if path else str(key)
+            if key in FORBIDDEN_SECURITY_KEYS:
+                found.append(child_path)
+            found.extend(_forbidden_value_paths(child, child_path))
+    elif isinstance(value, list):
+        for index, child in enumerate(value):
+            found.extend(_forbidden_value_paths(child, f"{path}[{index}]"))
+    return found
+
+
 def _static_findings(chart_dir: Path) -> list[Finding]:
     findings: list[Finding] = []
     values_path = chart_dir / "values.yaml"
@@ -194,12 +239,109 @@ def _static_findings(chart_dir: Path) -> list[Finding]:
             findings.append(Finding("stable-secrets", relative, "render-time random secret generation is forbidden"))
         if path.name != "values.yaml" and PRIVILEGED_SOURCE.search(content):
             findings.append(Finding("least-privilege", relative, "template contains privileged or root container defaults"))
+        if path.name != "values.yaml" and HOST_INTEGRATION_SOURCE.search(content):
+            findings.append(Finding("least-privilege", relative, "template contains forbidden host integration"))
+        if path.name != "values.yaml" and CAPABILITY_ADD_SOURCE.search(content):
+            findings.append(Finding("least-privilege", relative, "template adds Linux capabilities"))
 
     template_source = "\n".join(
         path.read_text(encoding="utf-8")
         for path in (chart_dir / "templates").rglob("*")
         if path.is_file()
     )
+    least_privilege_contract = {
+        "templates/_helpers.tpl": (
+            'define "slurm-cluster.podSecurityContext"',
+            "fsGroupChangePolicy: OnRootMismatch",
+            'define "slurm-cluster.containerSecurityContext"',
+            "allowPrivilegeEscalation: false",
+            "privileged: false",
+            "readOnlyRootFilesystem: true",
+            "runAsNonRoot: true",
+            "$identity.gid",
+            "$identity.uid",
+            '$identityKey = "slurm"',
+            'define "slurm-cluster.slurmUser"',
+            "securityIdentities.slurm.username is required",
+            "type: RuntimeDefault",
+        ),
+        "templates/controller-statefulset.yaml": ('include "slurm-cluster.podSecurityContext"', 'include "slurm-cluster.containerSecurityContext"'),
+        "templates/database-statefulset.yaml": ('include "slurm-cluster.podSecurityContext"', 'include "slurm-cluster.containerSecurityContext"'),
+        "templates/mariadb-statefulset.yaml": ('include "slurm-cluster.podSecurityContext"', 'include "slurm-cluster.containerSecurityContext"'),
+        "templates/compute-statefulset.yaml": ('include "slurm-cluster.podSecurityContext"', 'include "slurm-cluster.containerSecurityContext"'),
+        "templates/compute-nodepools-statefulset.yaml": ('include "slurm-cluster.podSecurityContext"', 'include "slurm-cluster.containerSecurityContext"'),
+        "templates/configmap.yaml": (
+            'SlurmUser={{ include "slurm-cluster.slurmUser" . }}',
+            'SlurmdUser={{ include "slurm-cluster.slurmUser" . }}',
+            "JobAcctGatherType={{ .Values.controller.config.jobAcctGatherType | default \"jobacct_gather/linux\" }}",
+            "ProctrackType={{ .Values.controller.config.proctrackType | default \"proctrack/linuxproc\" }}",
+            "TaskPlugin={{ .Values.controller.config.taskPlugin | default \"task/affinity\" }}",
+            "CgroupAutomount=no",
+            "ConstrainCores=no",
+            "ConstrainDevices=no",
+            "ConstrainRAMSpace=no",
+            "ConstrainSwapSpace=no",
+        ),
+    }
+    for relative, required_fragments in least_privilege_contract.items():
+        path = chart_dir / relative
+        content = path.read_text(encoding="utf-8") if path.is_file() else ""
+        for fragment in required_fragments:
+            if fragment not in content:
+                findings.append(Finding("least-privilege", relative, f"least-privilege contract is missing {fragment}"))
+    expected_security_helper_counts = {
+        "templates/controller-statefulset.yaml": 3,
+        "templates/database-statefulset.yaml": 4,
+        "templates/mariadb-statefulset.yaml": 1,
+        "templates/compute-statefulset.yaml": 5,
+        "templates/compute-nodepools-statefulset.yaml": 5,
+    }
+    for relative, expected_count in expected_security_helper_counts.items():
+        path = chart_dir / relative
+        content = path.read_text(encoding="utf-8") if path.is_file() else ""
+        pod_count = content.count('include "slurm-cluster.podSecurityContext"')
+        container_count = content.count('include "slurm-cluster.containerSecurityContext"')
+        image_count = len(re.findall(r"^\s*image:\s*", content, re.MULTILINE))
+        if pod_count != 1 or container_count != expected_count or container_count != image_count:
+            findings.append(Finding("least-privilege", relative, f"expected 1 pod and {expected_count} container security helper uses matching every image; found {pod_count}, {container_count}, and {image_count} images"))
+    identity_bindings = {
+        "templates/controller-statefulset.yaml": {"munge": 2, "controller": 1},
+        "templates/database-statefulset.yaml": {"munge": 2, "utility": 1, "database": 1},
+        "templates/mariadb-statefulset.yaml": {"mariadb": 1},
+        "templates/compute-statefulset.yaml": {"munge": 2, "utility": 1, "compute": 1, "nodeAgent": 1},
+        "templates/compute-nodepools-statefulset.yaml": {"munge": 2, "utility": 1, "compute": 1, "nodeAgent": 1},
+    }
+    for relative, bindings in identity_bindings.items():
+        path = chart_dir / relative
+        content = path.read_text(encoding="utf-8") if path.is_file() else ""
+        context = "$root" if "nodepools" in relative else "."
+        for component, expected in bindings.items():
+            binding = f'include "slurm-cluster.containerSecurityContext" (list {context} "{component}")'
+            if content.count(binding) != expected:
+                findings.append(Finding("least-privilege", relative, f"identity contract for {component} must be used {expected} time(s)"))
+    for forbidden in (".Values.podSecurityContext", ".Values.containerSecurityContext", "chown munge:munge", "/sys/fs/cgroup", "CgroupPlugin=", "ConstrainCores=yes", "ConstrainDevices=yes", "ConstrainRAMSpace=yes", "ConstrainSwapSpace=yes"):
+        if forbidden in template_source:
+            findings.append(Finding("least-privilege", "templates", f"least-privilege bypass is forbidden: {forbidden}"))
+    for forbidden_path in _forbidden_value_paths(values):
+        findings.append(Finding("least-privilege", "values.yaml", f"configurable security override is forbidden: {forbidden_path}"))
+    identities = values.get("securityIdentities") if isinstance(values, dict) else None
+    if not isinstance(identities, dict) or set(identities) != set(IDENTITY_COMPONENTS):
+        findings.append(Finding("least-privilege", "values.yaml", "securityIdentities must contain only the shared slurm identity and approved component-specific identities"))
+    for component in IDENTITY_COMPONENTS:
+        identity = identities.get(component) if isinstance(identities, dict) else None
+        required_fields = {"username", "uid", "gid"} if component == "slurm" else {"uid", "gid"}
+        if not isinstance(identity, dict) or set(identity) != required_fields:
+            findings.append(Finding("least-privilege", "values.yaml", f"securityIdentities.{component} must define exactly {', '.join(sorted(required_fields))}"))
+            continue
+        if not all(isinstance(identity[field], int) and not isinstance(identity[field], bool) and identity[field] > 0 for field in ("uid", "gid")):
+            findings.append(Finding("least-privilege", "values.yaml", f"securityIdentities.{component} uid and gid must be positive integers"))
+        if component == "slurm" and not isinstance(identity.get("username"), str):
+            findings.append(Finding("least-privilege", "values.yaml", "securityIdentities.slurm.username must be a string"))
+    configmap_source = (chart_dir / "templates" / "configmap.yaml").read_text(encoding="utf-8") if (chart_dir / "templates" / "configmap.yaml").is_file() else ""
+    slurm_user_directive = 'SlurmUser={{ include "slurm-cluster.slurmUser" . }}'
+    slurmd_user_directive = 'SlurmdUser={{ include "slurm-cluster.slurmUser" . }}'
+    if configmap_source.count(slurm_user_directive) != 2 or configmap_source.count(slurmd_user_directive) != 1:
+        findings.append(Finding("least-privilege", "templates/configmap.yaml", "slurm.conf and slurmdbd.conf must render the shared SlurmUser and slurm.conf must render SlurmdUser"))
     secret_contracts = (
         ("munge", values.get("munge", {}), ("key",), "munge.existingSecret", ("munge.secretKeyName",)),
         ("database", values.get("database", {}).get("config", {}), ("password",), "database.config.existingSecret", ("database.config.secretPasswordKey",)),
@@ -275,6 +417,43 @@ def _static_findings(chart_dir: Path) -> list[Finding]:
     schema_path = chart_dir / "values.schema.json"
     schema = json.loads(schema_path.read_text(encoding="utf-8")) if schema_path.is_file() else {}
     properties = schema.get("properties", {}) if isinstance(schema, dict) else {}
+    compute_schema = properties.get("compute", {}) if isinstance(properties.get("compute"), dict) else {}
+    extra_volume_items = properties.get("extraVolumes", {}).get("items", {}) if isinstance(properties.get("extraVolumes"), dict) else {}
+    if any(properties.get(key) is not False for key in FORBIDDEN_SECURITY_KEYS):
+        findings.append(Finding("least-privilege", "values.schema.json", "security context overrides must be forbidden"))
+    if compute_schema.get("properties", {}).get("hostCgroup") is not False:
+        findings.append(Finding("least-privilege", "values.schema.json", "compute.hostCgroup must be forbidden in the production chart"))
+    if extra_volume_items != {"$ref": "#/definitions/noSecurityOverrides"}:
+        findings.append(Finding("least-privilege", "values.schema.json", "extraVolumes must deeply reject hostPath and security overrides"))
+    rootless_profile = {
+        "jobAcctGatherType": "jobacct_gather/linux",
+        "proctrackType": "proctrack/linuxproc",
+        "taskPlugin": "task/affinity",
+    }
+    controller_config = values.get("controller", {}).get("config", {})
+    controller_config_schema = properties.get("controller", {}).get("properties", {}).get("config", {})
+    for key, expected in rootless_profile.items():
+        if controller_config.get(key) != expected:
+            findings.append(Finding("least-privilege", "values.yaml", f"rootless prototype requires controller.config.{key}={expected}"))
+        if controller_config_schema.get("properties", {}).get(key) != {"const": expected}:
+            findings.append(Finding("least-privilege", "values.schema.json", f"rootless prototype schema must lock controller.config.{key}"))
+    if controller_config_schema.get("required") != list(rootless_profile):
+        findings.append(Finding("least-privilege", "values.schema.json", "rootless prototype plugin settings must be required"))
+    identity_schema = schema.get("definitions", {}).get("securityIdentities", {})
+    identity_definition = schema.get("definitions", {}).get("securityIdentity", {})
+    slurm_identity_definition = schema.get("definitions", {}).get("slurmSecurityIdentity", {})
+    if schema.get("required") != ["securityIdentities"] or identity_schema.get("required") != list(IDENTITY_COMPONENTS):
+        findings.append(Finding("least-privilege", "values.schema.json", "all component security identities must be required"))
+    fields = identity_definition.get("properties", {})
+    if identity_definition.get("required") != ["uid", "gid"] or any(fields.get(field) != {"type": "integer", "minimum": 1} for field in ("uid", "gid")):
+        findings.append(Finding("least-privilege", "values.schema.json", "identity uid and gid must be required positive integers"))
+    slurm_fields = slurm_identity_definition.get("properties", {})
+    if slurm_identity_definition.get("required") != ["username", "uid", "gid"] or any(slurm_fields.get(field) != {"type": "integer", "minimum": 1} for field in ("uid", "gid")) or "pattern" not in slurm_fields.get("username", {}):
+        findings.append(Finding("least-privilege", "values.schema.json", "shared SLURM username, uid, and gid must be required"))
+    forbidden_definition = json.dumps(schema.get("definitions", {}).get("noSecurityOverrides", {}), sort_keys=True)
+    for key in FORBIDDEN_SECURITY_KEYS:
+        if f'"{key}"' not in forbidden_definition:
+            findings.append(Finding("least-privilege", "values.schema.json", f"recursive schema does not forbid {key}"))
     pool_schema = properties.get("nodePools", {}).get("items", {}) if isinstance(properties.get("nodePools"), dict) else {}
     partition_schema = properties.get("partitions", {}).get("items", {}) if isinstance(properties.get("partitions"), dict) else {}
     if pool_schema.get("required") != ["name", "replicas"] or not pool_schema.get("allOf"):
@@ -372,6 +551,7 @@ def validate(documents: list[dict[str, Any]], chart_dir: Path | None = None) -> 
     compute_replicas = 0
     stateful_compute_nodes: set[str] = set()
     durable_seen: set[str] = set()
+    daemon_identities: dict[str, set[tuple[Any, Any]]] = {component: set() for component in SLURM_DAEMON_COMPONENTS}
 
     for document in documents:
         kind, name, metadata = _metadata(document)
@@ -389,6 +569,17 @@ def validate(documents: list[dict[str, Any]], chart_dir: Path | None = None) -> 
             findings.append(Finding("least-privilege", location, "unsupported document contains an unvalidated pod or container structure"))
         if pod_spec is not None:
             pod_security = pod_spec.get("securityContext") if isinstance(pod_spec.get("securityContext"), dict) else {}
+            host_features = [field for field in ("hostIPC", "hostNetwork", "hostPID") if pod_spec.get(field) is True]
+            if pod_spec.get("hostUsers") is False:
+                host_features.append("hostUsers=false")
+            host_paths = [str(volume.get("name", "<unnamed>")) for volume in pod_spec.get("volumes", []) or [] if isinstance(volume, dict) and "hostPath" in volume]
+            if host_features or host_paths:
+                details = []
+                if host_features:
+                    details.append(f"host features are forbidden: {', '.join(host_features)}")
+                if host_paths:
+                    details.append(f"hostPath volumes are forbidden: {', '.join(host_paths)}")
+                findings.append(Finding("least-privilege", location, "; ".join(details)))
             for field, container in _containers(pod_spec):
                 container_location = f"{location}:{field}/{container.get('name', '<unnamed>')}"
                 image = str(container.get("image", ""))
@@ -409,14 +600,25 @@ def validate(documents: list[dict[str, Any]], chart_dir: Path | None = None) -> 
                     violations.append("container must run as non-root")
                 if security.get("allowPrivilegeEscalation") is not False:
                     violations.append("allowPrivilegeEscalation must be false")
+                if security.get("readOnlyRootFilesystem") is not True:
+                    violations.append("readOnlyRootFilesystem must be true")
                 if "ALL" not in dropped:
                     violations.append("capabilities.drop must include ALL")
                 if added:
                     violations.append(f"capabilities.add must be empty: {', '.join(sorted(added))}")
                 if seccomp_type not in {"RuntimeDefault", "Localhost"}:
                     violations.append("seccompProfile.type must be RuntimeDefault or Localhost")
+                if security.get("procMount") == "Unmasked":
+                    violations.append("procMount Unmasked is forbidden")
+                windows_options = security.get("windowsOptions") if isinstance(security.get("windowsOptions"), dict) else {}
+                if windows_options.get("hostProcess") is True:
+                    violations.append("windowsOptions.hostProcess is forbidden")
                 if violations:
                     findings.append(Finding("least-privilege", container_location, "; ".join(violations)))
+            if component in SLURM_DAEMON_COMPONENTS:
+                for container in _primary_containers(pod_spec, component):
+                    security = container.get("securityContext") if isinstance(container.get("securityContext"), dict) else {}
+                    daemon_identities[component].add((security.get("runAsUser", pod_security.get("runAsUser")), security.get("runAsGroup", pod_security.get("runAsGroup"))))
 
         if kind in {"Deployment", "ReplicaSet", "ReplicationController", "StatefulSet"} and component == "compute":
             replicas = int(document.get("spec", {}).get("replicas", 1))
@@ -437,6 +639,17 @@ def validate(documents: list[dict[str, Any]], chart_dir: Path | None = None) -> 
                         findings.append(Finding("durable-state", f"{location}:containers/{container.get('name', '<unnamed>')}", f"{required_path} is not backed by a persistent volume claim"))
 
     config = _slurm_config(documents)
+    slurmdbd_config = _slurmdbd_config(documents)
+    slurm_users = SLURM_USER_LINE.findall(config)
+    slurmd_users = SLURMD_USER_LINE.findall(config)
+    slurmdbd_users = SLURM_USER_LINE.findall(slurmdbd_config)
+    if len(slurm_users) != 1 or len(slurmd_users) != 1 or len(slurmdbd_users) != 1:
+        findings.append(Finding("least-privilege", "ConfigMap/SLURM user contracts", "slurm.conf must define one SlurmUser and SlurmdUser and slurmdbd.conf must define one SlurmUser"))
+    elif len({slurm_users[0], slurmd_users[0], slurmdbd_users[0]}) != 1:
+        findings.append(Finding("least-privilege", "ConfigMap/SLURM user contracts", "SlurmUser and SlurmdUser must use one shared daemon username"))
+    observed_daemon_ids = set().union(*daemon_identities.values())
+    if any(len(identities) != 1 or (None, None) in identities or any(None in identity for identity in identities) for identities in daemon_identities.values()) or len(observed_daemon_ids) != 1:
+        findings.append(Finding("least-privilege", "render/SLURM daemon identities", "controller, database, and compute daemons must use one explicit shared runAsUser/runAsGroup identity"))
     declared_nodes = set().union(*(_expand_hostlist(value) for value in NODE_LINE.findall(config))) if NODE_LINE.search(config) else set()
     partitions = []
     for partition_name, settings in PARTITION_LINE.findall(config):

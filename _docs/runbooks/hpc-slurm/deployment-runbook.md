@@ -4,6 +4,12 @@
 
 This runbook covers the deployment, scaling, and recovery procedures for SLURM HPC clusters on Kubernetes using the VirtEngine provider daemon.
 
+## Readiness and Isolation Status
+
+This chart is a rootless prototype and is blocked for production or multi-tenant use. Its default SLURM profile uses `proctrack/linuxproc`, `task/affinity`, and `jobacct_gather/linux`; all SLURM cgroup constraints are explicitly disabled because ordinary non-privileged Kubernetes pods do not receive a delegated writable cgroup v2 subtree. Kubernetes pod requests and limits can bound a pod, but SLURM cannot enforce per-job CPU, memory, swap, or device isolation inside that pod. Do not claim tenant isolation from this profile.
+
+Least privilege remains unverified until a rendered deployment is validated and each digest-pinned image is independently confirmed to run with the declared identity. `securityIdentities.slurm` supplies one username and numeric UID/GID for slurmctld, slurmdbd, and slurmd because shared authentication and filesystems require consistent ownership; `munge`, `mariadb`, `nodeAgent`, and `utility` retain component-specific UID/GID values. A production profile requires a reviewed cgroup delegation mechanism or an equivalent independently validated isolation boundary; changing plugins or enabling `Constrain*` settings alone is not sufficient.
+
 ## Prerequisites
 
 - Kubernetes cluster (v1.25+) with:
@@ -19,22 +25,22 @@ This runbook covers the deployment, scaling, and recovery procedures for SLURM H
 The chart never creates credentials. Before every install, provision the following Kubernetes Secrets in the release namespace from an approved secret manager or protected files. Do not place secret material in Helm values, command-line `--set` arguments, or source control.
 
 ```bash
-kubectl create namespace slurm-prod
+kubectl create namespace slurm-prototype
 
 kubectl create secret generic slurm-prod-munge \
-  --namespace slurm-prod \
+  --namespace slurm-prototype \
   --from-file=munge.key=/secure/path/munge.key
 
 kubectl create secret generic slurm-prod-database \
-  --namespace slurm-prod \
+  --namespace slurm-prototype \
   --from-file=password=/secure/path/database-password
 
 kubectl create secret generic slurm-prod-mariadb \
-  --namespace slurm-prod \
+  --namespace slurm-prototype \
   --from-file=root-password=/secure/path/mariadb-root-password
 
 kubectl create secret generic slurm-prod-node-agent-tls \
-  --namespace slurm-prod \
+  --namespace slurm-prototype \
   --from-file=ca.crt=/secure/path/ca.crt \
   --from-file=tls.crt=/secure/path/tls.crt \
   --from-file=tls.key=/secure/path/tls.key
@@ -53,11 +59,11 @@ An External Secrets controller may materialize the same Secret names and keys. W
 helm repo add virtengine https://charts.virtengine.dev
 helm repo update
 
-# Deploy SLURM cluster
+# Deploy a non-tenant prototype rehearsal only
 helm install slurm-cluster deploy/slurm/slurm-cluster \
-  --namespace slurm-prod \
-  --set cluster.id=hpc-cluster-prod \
-  --set cluster.name="Production HPC Cluster" \
+  --namespace slurm-prototype \
+  --set cluster.id=hpc-cluster-prototype \
+  --set cluster.name="Prototype HPC Cluster" \
   --set cluster.providerAddress=virtengine1provider123 \
   --set munge.existingSecret=slurm-prod-munge \
   --set munge.secretKeyName=munge.key \
@@ -87,9 +93,9 @@ Default `helm template`, `helm install`, and `helm lint` fail until all enabled 
 ```bash
 # Deploy via provider daemon gRPC
 grpcurl -d '{
-  "cluster_id": "hpc-cluster-prod",
-  "cluster_name": "Production HPC Cluster",
-  "namespace": "slurm-prod",
+  "cluster_id": "hpc-cluster-prototype",
+  "cluster_name": "Prototype HPC Cluster",
+  "namespace": "slurm-prototype",
   "template": {
     "partitions": [
       {"name": "normal", "nodes": 8, "max_runtime_seconds": 86400, "state": "up"},

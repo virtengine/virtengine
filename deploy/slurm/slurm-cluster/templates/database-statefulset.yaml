@@ -35,7 +35,7 @@ spec:
         {{- toYaml . | nindent 8 }}
       {{- end }}
       securityContext:
-        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+        {{- include "slurm-cluster.podSecurityContext" (list .) | nindent 8 }}
       initContainers:
         - name: init-munge
           image: {{ include "slurm-cluster.munge.image" . }}
@@ -46,7 +46,6 @@ spec:
             - |
               cp /munge-key/{{ .Values.munge.secretKeyName }} /etc/munge/munge.key
               chmod 400 /etc/munge/munge.key
-              chown munge:munge /etc/munge/munge.key
           volumeMounts:
             - name: munge-key
               mountPath: /munge-key
@@ -54,8 +53,7 @@ spec:
             - name: munge-socket
               mountPath: /etc/munge
           securityContext:
-            runAsUser: 0
-            runAsNonRoot: false
+            {{- include "slurm-cluster.containerSecurityContext" (list . "munge") | nindent 12 }}
         - name: wait-for-mariadb
           image: {{ include "slurm-cluster.utility.image" . }}
           imagePullPolicy: {{ .Values.utilityImage.pullPolicy }}
@@ -68,6 +66,8 @@ spec:
                 sleep 5
               done
               echo "MariaDB is ready"
+          securityContext:
+            {{- include "slurm-cluster.containerSecurityContext" (list . "utility") | nindent 12 }}
       containers:
         - name: munge
           image: {{ include "slurm-cluster.munge.image" . }}
@@ -85,8 +85,7 @@ spec:
           resources:
             {{- toYaml .Values.munge.resources | nindent 12 }}
           securityContext:
-            runAsUser: 0
-            runAsNonRoot: false
+            {{- include "slurm-cluster.containerSecurityContext" (list . "munge") | nindent 12 }}
         - name: slurmdbd
           image: {{ include "slurm-cluster.database.image" . }}
           imagePullPolicy: {{ .Values.database.image.pullPolicy }}
@@ -131,8 +130,7 @@ spec:
           resources:
             {{- toYaml .Values.database.resources | nindent 12 }}
           securityContext:
-            runAsUser: 0
-            runAsNonRoot: false
+            {{- include "slurm-cluster.containerSecurityContext" (list . "database") | nindent 12 }}
           env:
             - name: SLURM_CONF
               value: /etc/slurm/slurm.conf

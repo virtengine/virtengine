@@ -73,7 +73,7 @@ function validateSchemaContract(schema) {
   assert.equal(schema.$schema, "https://json-schema.org/draft/2020-12/schema");
   assert.equal(schema.additionalProperties, false);
   assert.equal(schema.properties.schema_version.const, "virtengine.prototype.slurm-chart-inventory/v2");
-  assert.equal(schema.properties.checkpoint.const, "T4-07C");
+  assert.equal(schema.properties.checkpoint.const, "T4-07D");
   assert.deepEqual(schema.properties.research_scope.properties.roots.const, ["deploy", "infra", "config", "charts", "scripts", "_build/helm"]);
   assert.equal(schema.$defs.source.additionalProperties, false);
   assert.equal(schema.$defs.invariant.additionalProperties, false);
@@ -89,12 +89,12 @@ function validateSlurmChartInventory(inventory, options = {}) {
 
   validateSchemaContract(schema);
   assert.equal(inventory.schema_version, "virtengine.prototype.slurm-chart-inventory/v2");
-  assert.equal(inventory.checkpoint, "T4-07C");
+  assert.equal(inventory.checkpoint, "T4-07D");
   assert.ok(["blocked", "complete"].includes(inventory.status), "status must be blocked or complete");
   assert.ok(["contract-only", "executable-semantic", "semantic-render"].includes(inventory.validation_mode), "unknown validation mode");
   assert.deepEqual(inventory.research_scope.roots, ["deploy", "infra", "config", "charts", "scripts", "_build/helm"]);
   assert.equal(inventory.canonical_source.path, "deploy/slurm/slurm-cluster");
-  assert.equal(inventory.canonical_source.allowed_use, "authoring-and-runtime-after-hardening");
+  assert.equal(inventory.canonical_source.allowed_use, "prototype-authoring-and-single-trust-domain-rehearsal-only");
 
   assert.deepEqual(inventory.semantic_validator, {
     contract: "virtengine.slurm-semantic-validation/v1",

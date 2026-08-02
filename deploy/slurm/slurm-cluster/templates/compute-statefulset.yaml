@@ -38,6 +38,8 @@ spec:
       imagePullSecrets:
         {{- toYaml . | nindent 8 }}
       {{- end }}
+      securityContext:
+        {{- include "slurm-cluster.podSecurityContext" (list .) | nindent 8 }}
       initContainers:
         - name: init-munge
           image: {{ include "slurm-cluster.munge.image" . }}
@@ -48,7 +50,6 @@ spec:
             - |
               cp /munge-key/{{ .Values.munge.secretKeyName }} /etc/munge/munge.key
               chmod 400 /etc/munge/munge.key
-              chown munge:munge /etc/munge/munge.key
           volumeMounts:
             - name: munge-key
               mountPath: /munge-key
@@ -56,8 +57,7 @@ spec:
             - name: munge-socket
               mountPath: /etc/munge
           securityContext:
-            runAsUser: 0
-            runAsNonRoot: false
+            {{- include "slurm-cluster.containerSecurityContext" (list . "munge") | nindent 12 }}
         - name: wait-for-controller
           image: {{ include "slurm-cluster.utility.image" . }}
           imagePullPolicy: {{ .Values.utilityImage.pullPolicy }}
@@ -70,6 +70,8 @@ spec:
                 sleep 5
               done
               echo "slurmctld is ready"
+          securityContext:
+            {{- include "slurm-cluster.containerSecurityContext" (list . "utility") | nindent 12 }}
       containers:
         - name: munge
           image: {{ include "slurm-cluster.munge.image" . }}
@@ -87,8 +89,7 @@ spec:
           resources:
             {{- toYaml .Values.munge.resources | nindent 12 }}
           securityContext:
-            runAsUser: 0
-            runAsNonRoot: false
+            {{- include "slurm-cluster.containerSecurityContext" (list . "munge") | nindent 12 }}
         - name: slurmd
           image: {{ include "slurm-cluster.compute.image" . }}
           imagePullPolicy: {{ .Values.compute.image.pullPolicy }}
@@ -162,9 +163,7 @@ spec:
               {{- end }}
             {{- end }}
           securityContext:
-            runAsUser: 0
-            runAsNonRoot: false
-            privileged: true  # Required for cgroup management
+            {{- include "slurm-cluster.containerSecurityContext" (list . "compute") | nindent 12 }}
           env:
             - name: SLURM_CONF
               value: /etc/slurm/slurm.conf
@@ -194,6 +193,8 @@ spec:
             {{- end }}
           resources:
             {{- toYaml .Values.nodeAgent.resources | nindent 12 }}
+          securityContext:
+            {{- include "slurm-cluster.containerSecurityContext" (list . "nodeAgent") | nindent 12 }}
           env:
             - name: NODE_ID
               valueFrom:

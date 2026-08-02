@@ -6,6 +6,7 @@ package hpc
 
 import (
 	"context"
+	"encoding/json"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -224,6 +225,134 @@ func TestImmutableImagesOfflineContracts(t *testing.T) {
 			}
 		}
 	}
+}
+
+func TestLeastPrivilegeOfflineContracts(t *testing.T) {
+	chartRoot := filepath.Join(repoRoot(t), "deploy", "slurm", "slurm-cluster")
+	helpers := readRepoFile(t, "deploy", "slurm", "slurm-cluster", "templates", "_helpers.tpl")
+	values := readRepoFile(t, "deploy", "slurm", "slurm-cluster", "values.yaml")
+	schema := readRepoFile(t, "deploy", "slurm", "slurm-cluster", "values.schema.json")
+	config := readRepoFile(t, "deploy", "slurm", "slurm-cluster", "templates", "configmap.yaml")
+
+	for _, required := range []string{
+		`define "slurm-cluster.podSecurityContext"`,
+		`define "slurm-cluster.containerSecurityContext"`,
+		"allowPrivilegeEscalation: false",
+		"privileged: false",
+		"readOnlyRootFilesystem: true",
+		"runAsNonRoot: true",
+		"$identity.uid",
+		"$identity.gid",
+		`$identityKey = "slurm"`,
+		`define "slurm-cluster.slurmUser"`,
+		"type: RuntimeDefault",
+	} {
+		require.Contains(t, helpers, required)
+	}
+	require.NotContains(t, values, "podSecurityContext:")
+	require.NotContains(t, values, "containerSecurityContext:")
+	require.Contains(t, schema, `"hostCgroup": false`)
+	require.Contains(t, schema, `"noSecurityOverrides"`)
+	require.Contains(t, schema, `"minimum": 1`)
+	require.Contains(t, values, "securityIdentities:")
+	require.Contains(t, values, "slurm: { username: slurm, uid: 1002, gid: 1002 }")
+	require.NotContains(t, values, "controller: { uid:")
+	require.NotContains(t, values, "database: { uid:")
+	require.NotContains(t, values, "compute: { uid:")
+	require.Contains(t, config, `SlurmUser={{ include "slurm-cluster.slurmUser" . }}`)
+	require.Contains(t, config, `SlurmdUser={{ include "slurm-cluster.slurmUser" . }}`)
+	require.Contains(t, config, "JobAcctGatherType={{ .Values.controller.config.jobAcctGatherType | default \"jobacct_gather/linux\" }}")
+	require.Contains(t, config, "ProctrackType={{ .Values.controller.config.proctrackType | default \"proctrack/linuxproc\" }}")
+	require.Contains(t, config, "TaskPlugin={{ .Values.controller.config.taskPlugin | default \"task/affinity\" }}")
+	require.Contains(t, config, "CgroupAutomount=no")
+	require.Contains(t, config, "ConstrainCores=no")
+	require.NotContains(t, config, "CgroupPlugin=")
+	require.NotContains(t, config, "/sys/fs/cgroup")
+
+	expectedContainerContexts := map[string]int{
+		"controller-statefulset.yaml":        3,
+		"database-statefulset.yaml":          4,
+		"mariadb-statefulset.yaml":           1,
+		"compute-statefulset.yaml":           5,
+		"compute-nodepools-statefulset.yaml": 5,
+	}
+	for name, expected := range expectedContainerContexts {
+		content := readRepoFile(t, "deploy", "slurm", "slurm-cluster", "templates", name)
+		require.Equal(t, 1, strings.Count(content, `include "slurm-cluster.podSecurityContext"`), name)
+		require.Equal(t, expected, strings.Count(content, `include "slurm-cluster.containerSecurityContext"`), name)
+		for _, forbidden := range []string{"privileged: true", "runAsUser: 0", "runAsNonRoot: false", "hostPath:", "capabilities:\n    add:"} {
+			require.NotContains(t, content, forbidden, name)
+		}
+	}
+
+	_, err := os.Stat(chartRoot)
+	require.NoError(t, err)
+}
+
+func TestSLURMIdentitySourceContractRejectsMissingUsersOrDivergentIDs(t *testing.T) {
+	python := ""
+	for _, candidate := range []string{"python", "python3"} {
+		if path, err := exec.LookPath(candidate); err == nil {
+			python = path
+			break
+		}
+	}
+	if python == "" {
+		t.Skip("python is required for the SLURM source-contract validator")
+	}
+
+	tests := map[string]func(string){
+		"missing SlurmUser": func(chartRoot string) {
+			replaceChartText(t, chartRoot, "templates/configmap.yaml", `SlurmUser={{ include "slurm-cluster.slurmUser" . }}`, "")
+		},
+		"missing SlurmdUser": func(chartRoot string) {
+			replaceChartText(t, chartRoot, "templates/configmap.yaml", `SlurmdUser={{ include "slurm-cluster.slurmUser" . }}`, "")
+		},
+		"divergent compute IDs": func(chartRoot string) {
+			replaceChartText(t, chartRoot, "values.yaml", "  mariadb: { uid: 1004, gid: 1004 }", "  compute: { uid: 2002, gid: 2002 }\n  mariadb: { uid: 1004, gid: 1004 }")
+		},
+	}
+
+	for name, mutate := range tests {
+		t.Run(name, func(t *testing.T) {
+			source := filepath.Join(repoRoot(t), "deploy", "slurm", "slurm-cluster")
+			chartRoot := filepath.Join(t.TempDir(), "chart")
+			require.NoError(t, os.CopyFS(chartRoot, os.DirFS(source)))
+			mutate(chartRoot)
+
+			validator := filepath.Join(repoRoot(t), "scripts", "validate_slurm_chart_semantics.py")
+			command := exec.Command(python, validator, "--chart", chartRoot, "--diagnostic", "--json")
+			output, err := command.CombinedOutput()
+			require.Error(t, err, "diagnostic validation must remain blocking")
+			var report struct {
+				Findings []struct {
+					Invariant string `json:"invariant"`
+				} `json:"findings"`
+			}
+			require.NoError(t, json.Unmarshal(output, &report), string(output))
+			require.Contains(t, findingInvariants(report.Findings), "least-privilege", string(output))
+		})
+	}
+}
+
+func replaceChartText(t *testing.T, chartRoot, relative, oldText, newText string) {
+	t.Helper()
+	path := filepath.Join(chartRoot, filepath.FromSlash(relative))
+	content, err := os.ReadFile(path)
+	require.NoError(t, err)
+	replaced := strings.Replace(string(content), oldText, newText, 1)
+	require.NotEqual(t, string(content), replaced, "mutation did not match %s", path)
+	require.NoError(t, os.WriteFile(path, []byte(replaced), 0o600))
+}
+
+func findingInvariants(findings []struct {
+	Invariant string `json:"invariant"`
+}) []string {
+	result := make([]string, 0, len(findings))
+	for _, finding := range findings {
+		result = append(result, finding.Invariant)
+	}
+	return result
 }
 
 func checkPrerequisites(t *testing.T) bool {

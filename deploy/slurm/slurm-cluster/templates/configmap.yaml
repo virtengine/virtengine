@@ -13,6 +13,8 @@ data:
     # Cluster identification
     ClusterName={{ .Values.controller.config.clusterName | default "virtengine" }}
     SlurmctldHost={{ include "slurm-cluster.controller.serviceName" . }}-0
+    SlurmUser={{ include "slurm-cluster.slurmUser" . }}
+    SlurmdUser={{ include "slurm-cluster.slurmUser" . }}
     
     # Authentication
     AuthType=auth/munge
@@ -44,14 +46,14 @@ data:
     AccountingStoreFlags=job_comment,job_env,job_extra,job_script
     
     # Job accounting
-    JobAcctGatherType={{ .Values.controller.config.jobAcctGatherType | default "jobacct_gather/cgroup" }}
+    JobAcctGatherType={{ .Values.controller.config.jobAcctGatherType | default "jobacct_gather/linux" }}
     JobAcctGatherFrequency=30
     
     # Process tracking
-    ProctrackType={{ .Values.controller.config.proctrackType | default "proctrack/cgroup" }}
+    ProctrackType={{ .Values.controller.config.proctrackType | default "proctrack/linuxproc" }}
     
     # Task management
-    TaskPlugin={{ .Values.controller.config.taskPlugin | default "task/cgroup,task/affinity" }}
+    TaskPlugin={{ .Values.controller.config.taskPlugin | default "task/affinity" }}
     
     # Logging
     SlurmctldLogFile=/var/log/slurm/slurmctld.log
@@ -114,7 +116,7 @@ data:
     AuthType=auth/munge
     DbdHost={{ include "slurm-cluster.database.serviceName" . }}
     DbdPort=6819
-    SlurmUser=slurm
+    SlurmUser={{ include "slurm-cluster.slurmUser" . }}
     DebugLevel=info
     LogFile=/var/log/slurm/slurmdbd.log
     PidFile=/run/slurm/slurmdbd.pid
@@ -144,13 +146,13 @@ data:
     PurgeUsageAfter=24month
 
   cgroup.conf: |
-    # VirtEngine SLURM cgroup Configuration
-    CgroupMountpoint=/sys/fs/cgroup
-    CgroupAutomount=yes
-    ConstrainCores=yes
-    ConstrainDevices=yes
-    ConstrainRAMSpace=yes
-    ConstrainSwapSpace=yes
+    # Rootless prototype profile: Kubernetes does not delegate a writable cgroup v2 subtree.
+    # SLURM cgroup resource enforcement is disabled; Kubernetes pod limits remain authoritative.
+    CgroupAutomount=no
+    ConstrainCores=no
+    ConstrainDevices=no
+    ConstrainRAMSpace=no
+    ConstrainSwapSpace=no
 
   gres.conf: |
     # VirtEngine SLURM GRES (GPU) Configuration

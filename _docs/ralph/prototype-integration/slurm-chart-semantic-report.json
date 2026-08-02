@@ -1,30 +1,9 @@
 {
-  "findings": [
-    {
-      "invariant": "least-privilege",
-      "location": "templates/compute-nodepools-statefulset.yaml",
-      "message": "template contains privileged or root container defaults"
-    },
-    {
-      "invariant": "least-privilege",
-      "location": "templates/compute-statefulset.yaml",
-      "message": "template contains privileged or root container defaults"
-    },
-    {
-      "invariant": "least-privilege",
-      "location": "templates/controller-statefulset.yaml",
-      "message": "template contains privileged or root container defaults"
-    },
-    {
-      "invariant": "least-privilege",
-      "location": "templates/database-statefulset.yaml",
-      "message": "template contains privileged or root container defaults"
-    }
-  ],
+  "findings": [],
   "invariants": {
     "durable-state": "unverified",
     "immutable-images": "passed",
-    "least-privilege": "failed",
+    "least-privilege": "unverified",
     "replica-capacity-equality": "unverified",
     "stable-secrets": "passed"
   },

@@ -1,6 +1,6 @@
 {
   "schema_version": "virtengine.prototype.slurm-chart-inventory/v2",
-  "checkpoint": "T4-07C",
+  "checkpoint": "T4-07D",
   "status": "blocked",
   "validation_mode": "executable-semantic",
   "research_scope": {
@@ -22,7 +22,7 @@
     "path": "deploy/slurm/slurm-cluster",
     "kind": "helm-chart",
     "state": "canonical-blocked",
-    "allowed_use": "authoring-and-runtime-after-hardening",
+    "allowed_use": "prototype-authoring-and-single-trust-domain-rehearsal-only",
     "evidence": [
       "_docs/runbooks/hpc-slurm/deployment-runbook.md",
       "deploy/slurm/slurm-cluster/Chart.yaml"
@@ -52,7 +52,7 @@
   },
   "semantic_report": {
     "path": "_docs/ralph/prototype-integration/slurm-chart-semantic-report.json",
-    "sha256": "268d7b66c9cc9da80f71df66e4ce0e1f8f09ab41d55cced8d9bb13d994b58e15",
+    "sha256": "d0573f44a9bb46362260ccadfe3fa1da4df93cc4ff4bd016259263449e788993",
     "source": "deploy/slurm/slurm-cluster",
     "generated_by": "python scripts/validate_slurm_chart_semantics.py --chart deploy/slurm/slurm-cluster --diagnostic --json"
   },
@@ -99,10 +99,18 @@
     },
     {
       "id": "least-privilege",
-      "status": "violated",
-      "requirement": "Blanket privilege is forbidden; any narrow exception is isolated, disabled by default, and non-tenant-controlled.",
-      "evidence": ["deploy/slurm/slurm-cluster/templates/compute-statefulset.yaml"],
-      "blocker": "The default slurmd container runs as root with privileged true."
+      "status": "unverified",
+      "requirement": "Rootless controls, one explicit username/UID/GID for all SLURM daemons, and component-specific supporting identities are non-overridable, rendered, and independently verified; production tenancy additionally requires effective per-job resource and device isolation.",
+      "evidence": [
+        "deploy/slurm/slurm-cluster/templates/_helpers.tpl",
+        "deploy/slurm/slurm-cluster/templates/compute-statefulset.yaml",
+        "deploy/slurm/slurm-cluster/templates/compute-nodepools-statefulset.yaml",
+        "deploy/slurm/slurm-cluster/values.schema.json",
+        "scripts/validate_slurm_chart_semantics.py",
+        "scripts/validate_slurm_chart_semantics_test.py",
+        "tests/integration/hpc/slurm_k8s_test.go"
+      ],
+      "blocker": "Least privilege remains unverified: the shared SLURM username/UID/GID, supporting image identity mappings, and rendered workloads are not independently verified. The rootless profile deliberately disables SLURM cgroup enforcement and therefore provides no production tenant CPU, memory, swap, or device isolation claim."
     },
     {
       "id": "durable-state",
@@ -127,6 +135,8 @@
     "retire-source:_build/helm/slurm-cluster",
     "invariant:replica-capacity-equality",
     "invariant:least-privilege",
+    "isolation:slurm-cgroup-tenant-enforcement-absent",
+    "evidence:image-uid-gid-mapping-unverified",
     "invariant:durable-state",
     "dependency:84B",
     "dependency:84C",
@@ -139,6 +149,8 @@
     "allowed": false,
     "required_evidence": [
       "semantic Helm render parsed as structured YAML",
+      "verified image UID/GID mappings for every component",
+      "reviewed delegated cgroup mechanism or equivalent tenant isolation boundary",
       "retired source absent and forbidden by discovery",
       "all semantic invariants satisfied",
       "all dependency contracts ready"
