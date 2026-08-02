@@ -1,39 +1,59 @@
 {
   "campaign": "three-day-prototype",
   "thread": "T4",
-  "checkpoint": "T4-01BB",
+  "checkpoint": "T4-08A",
   "branch": "ve/prototype-integration",
-  "start_head": "c24c1939f4169d2d8561294a3df8f7ee5873901a",
-  "end_head": "82b4d7816a929e0f57d96cda8e6b80c5371965cc",
+  "start_head": "6543c5b0ece3442bd0c72d7fbbd5f29ffd88f595",
+  "end_head": "1887d01eb36a17500fde986302e15b85c4679fb3",
   "origin_main": "79391a3df86d85522b92e0400c6904971ecbe65d",
   "tree_clean": true,
   "commits": [
-    "82b4d7816a929e0f57d96cda8e6b80c5371965cc"
+    "1887d01eb36a17500fde986302e15b85c4679fb3"
   ],
   "owned_paths": [
-    "_docs/ralph/prototype-integration/**",
     "_docs/ralph/handoffs/prototype-integration/**",
-    "_docs/ralph/prototype-integration/core-rc-manifest.json"
+    "_docs/prototype-thread-intake-runbook.md",
+    "_docs/ralph/prototype-integration/required-gate-matrix.json",
+    "scripts/localnet.sh",
+    "scripts/localnet.ps1",
+    "scripts/validate-localnet-integration-launchers.cjs",
+    "scripts/validate-localnet-integration-launchers.test.cjs",
+    "scripts/validate-required-gate-matrix.cjs"
   ],
   "files_changed": [
-    "_docs/ralph/handoffs/prototype-integration/HANDOFF.yaml",
-    "_docs/ralph/prototype-integration/core-rc-manifest.json"
+    "_docs/prototype-thread-intake-runbook.md",
+    "_docs/ralph/prototype-integration/required-gate-matrix.json",
+    "scripts/localnet.sh",
+    "scripts/localnet.ps1",
+    "scripts/validate-localnet-integration-launchers.cjs",
+    "scripts/validate-localnet-integration-launchers.test.cjs",
+    "scripts/validate-required-gate-matrix.cjs"
   ],
   "tests": [
     {
-      "command": "node scripts/validate-prototype-integration.test.cjs && node scripts/validate-prototype-integration.cjs",
+      "command": "node scripts/validate-localnet-integration-launchers.test.cjs && node scripts/validate-localnet-integration-launchers.cjs",
       "exit_code": 0,
       "result": "passed",
-      "test_count": 12,
+      "test_count": 4,
       "tool_versions": {
         "node": "20.19.1"
       }
     },
     {
-      "command": "node scripts/validate-agents-docs.mjs",
+      "command": "bash -n scripts/localnet.sh && pwsh parser validation for scripts/localnet.ps1",
       "exit_code": 0,
       "result": "passed",
-      "test_count": 9,
+      "test_count": 2,
+      "tool_versions": {
+        "bash": "Git for Windows",
+        "pwsh": "7"
+      }
+    },
+    {
+      "command": "node scripts/validate-required-gate-matrix.test.cjs && node scripts/validate-agents-docs.mjs",
+      "exit_code": 0,
+      "result": "passed",
+      "test_count": 22,
       "tool_versions": {
         "node": "20.19.1"
       }
@@ -80,5 +100,5 @@
     "Task 88C is not complete."
   ],
   "next_checkpoint": null,
-  "expected_head": "82b4d7816a929e0f57d96cda8e6b80c5371965cc"
+  "expected_head": "1887d01eb36a17500fde986302e15b85c4679fb3"
 }
