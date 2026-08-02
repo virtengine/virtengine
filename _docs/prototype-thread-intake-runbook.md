@@ -118,11 +118,17 @@ scripts/validate-prototype-intake.test.cjs
 
 ```powershell
 node --test scripts/validate-prototype-intake.test.cjs
-node scripts/validate-prototype-intake.cjs --epoch 1 --tag checkpoint/prototype-t2/t2-03b
+$expectedT4 = (git rev-parse HEAD).Trim()
+$validationClone = Join-Path $env:TEMP ("virtengine-prototype-intake-" + [guid]::NewGuid())
+git clone --no-local --branch ve/prototype-integration https://github.com/virtengine/virtengine.git $validationClone
+if ((git -C $validationClone rev-parse HEAD).Trim() -ne $expectedT4) { throw "validation clone is not the exact T4 SHA" }
+node scripts/validate-prototype-intake.cjs --repo $validationClone --epoch 1 --tag checkpoint/prototype-t2/t2-03b
 ```
 
 Both commands are mandatory. T4 performs no producer merge until the validator
-and its negative tests pass on the exact T4 SHA.
+and its negative tests pass on the exact T4 SHA. The validation clone must be
+new or independently verified clean; do not relax the validator's worktree
+cleanliness check to accommodate unrelated local files.
 
 ## Core RC Publication Preflight
 
