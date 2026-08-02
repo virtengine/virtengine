@@ -116,6 +116,11 @@ try {
       assert.deepEqual(plan.categories.map((category) => category.id), ["docs_process_boundary_e2e"]);
       assert.ok(plan.categories[0].commands.some((command) => command.id === "localnet-integration-launchers"));
     }],
+    ["selects launcher parity for a shell-only localnet change", () => {
+      const plan = planFor(["scripts/localnet.sh"]);
+      assert.deepEqual(plan.categories.map((category) => category.id), ["docs_process_boundary_e2e"]);
+      assert.ok(plan.categories[0].commands.some((command) => command.id === "localnet-integration-launchers"));
+    }],
     ["records an explicit root metadata allowance", () => {
       const plan = planFor(["README.md"]);
       assert.equal(plan.categories.length, 0);
