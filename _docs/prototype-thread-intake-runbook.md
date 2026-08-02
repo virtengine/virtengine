@@ -152,11 +152,13 @@ commit the epoch file:
 ```powershell
 node scripts/apply-prototype-intake-freeze.test.cjs
 node scripts/apply-prototype-intake-freeze.cjs --epoch 1 `
+  --expected-head (git rev-parse HEAD) `
   --plan $env:TEMP\epoch-1-frozen-plan.json
 git diff -- _docs/ralph/prototype-integration/epochs/epoch-1.json
 ```
 
-The application command rejects dirty worktrees, pre-cutoff execution, changed
+The application command rejects dirty worktrees, a HEAD other than the reviewed
+exact SHA, pre-cutoff execution, changed
 epoch metadata or roster order, unknown producer fields, wrong-thread tags, and
 producer decisions other than announced or frozen out. Acceptance remains a
 later, separately validated transition.

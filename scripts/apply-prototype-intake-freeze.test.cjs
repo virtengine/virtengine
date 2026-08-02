@@ -1,7 +1,7 @@
 "use strict";
 
 const assert = require("assert").strict;
-const { parseArgs, validateFreezeTransition } = require("./apply-prototype-intake-freeze.cjs");
+const { parseArgs, validateFreezeTransition, validateWorktreeBoundary } = require("./apply-prototype-intake-freeze.cjs");
 
 function epoch() {
   return {
@@ -21,6 +21,7 @@ function frozen() {
 }
 
 const afterCutoff = Date.parse("2000-01-03T00:00:00Z");
+const cleanAt = (head) => (_command, args) => args[0] === "status" ? { status: 0, stdout: "" } : { status: 0, stdout: `${head}\n` };
 const tests = [
   ["accepts the exact open-to-frozen transition", () => assert.equal(validateFreezeTransition(epoch(), frozen(), afterCutoff), true)],
   ["rejects application before cutoff", () => assert.throws(() => validateFreezeTransition(epoch(), frozen(), Date.parse("2000-01-01T00:00:00Z")), /cutoff has not elapsed/)],
@@ -29,7 +30,11 @@ const tests = [
   ["rejects a changed producer roster", () => { const value = frozen(); value.producers[0].thread = "T2"; assert.throws(() => validateFreezeTransition(epoch(), value, afterCutoff), /roster is invalid/); }],
   ["rejects a wrong-thread announced tag", () => { const value = frozen(); value.producers[0].tag = "checkpoint/prototype-t3/t3-13a"; assert.throws(() => validateFreezeTransition(epoch(), value, afterCutoff), /decision is invalid/); }],
   ["rejects unknown producer fields", () => { const value = frozen(); value.producers[0].accepted = true; assert.throws(() => validateFreezeTransition(epoch(), value, afterCutoff), /fields are invalid/); }],
-  ["parses an explicit epoch and plan", () => { const value = parseArgs(["--epoch", "1", "--plan", "plan.json"]); assert.equal(value.epoch, "1"); assert.equal(value.plan, "plan.json"); }],
+  ["parses an explicit epoch, plan, and expected HEAD", () => { const value = parseArgs(["--epoch", "1", "--expected-head", "a".repeat(40), "--plan", "plan.json"]); assert.equal(value.expectedHead, "a".repeat(40)); assert.equal(value.plan, "plan.json"); }],
+  ["rejects a missing expected HEAD", () => assert.throws(() => parseArgs(["--epoch", "1", "--plan", "plan.json"]), /expected-head/)],
+  ["rejects an abbreviated expected HEAD", () => assert.throws(() => parseArgs(["--epoch", "1", "--expected-head", "abc123", "--plan", "plan.json"]), /exact commit SHA/)],
+  ["accepts a clean worktree at the reviewed HEAD", () => assert.equal(validateWorktreeBoundary(".", "a".repeat(40), cleanAt("a".repeat(40))), true)],
+  ["rejects a clean worktree at a stale HEAD", () => assert.throws(() => validateWorktreeBoundary(".", "a".repeat(40), cleanAt("b".repeat(40))), /does not match reviewed/)],
 ];
 
 for (const [name, run] of tests) { run(); console.log(`ok - ${name}`); }

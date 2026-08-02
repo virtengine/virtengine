@@ -36,24 +36,33 @@ function validateFreezeTransition(current, proposed, now = Date.now()) {
 }
 
 function parseArgs(argv) {
-  const options = { epoch: null, plan: null, repo: resolve(__dirname, "..") };
+  const options = { epoch: null, expectedHead: null, plan: null, repo: resolve(__dirname, "..") };
   for (let index = 0; index < argv.length; index += 2) {
     const argument = argv[index];
     const value = argv[index + 1];
-    assert.ok(["--epoch", "--plan", "--repo"].includes(argument) && value, `invalid argument: ${argument || "missing"}`);
-    options[argument.slice(2)] = value;
+    assert.ok(["--epoch", "--expected-head", "--plan", "--repo"].includes(argument) && value, `invalid argument: ${argument || "missing"}`);
+    options[argument === "--expected-head" ? "expectedHead" : argument.slice(2)] = value;
   }
   assert.match(options.epoch || "", /^[1-9][0-9]*$/, "--epoch is required");
+  assert.match(options.expectedHead || "", /^[a-f0-9]{40}$/, "--expected-head requires an exact commit SHA");
   assert.ok(options.plan, "--plan is required");
   options.repo = resolve(options.repo);
   return options;
 }
 
-function main(argv) {
-  const options = parseArgs(argv);
-  const status = spawnSync("git", ["status", "--porcelain"], { cwd: options.repo, encoding: "utf8" });
+function validateWorktreeBoundary(repo, expectedHead, run = spawnSync) {
+  const status = run("git", ["status", "--porcelain"], { cwd: repo, encoding: "utf8" });
   assert.equal(status.status, 0, "unable to inspect T4 worktree");
   assert.equal(status.stdout.trim(), "", "T4 worktree must be clean before freezing intake");
+  const head = run("git", ["rev-parse", "HEAD"], { cwd: repo, encoding: "utf8" });
+  assert.equal(head.status, 0, "unable to resolve T4 HEAD");
+  assert.equal(head.stdout.trim(), expectedHead, "T4 HEAD does not match reviewed freeze SHA");
+  return true;
+}
+
+function main(argv) {
+  const options = parseArgs(argv);
+  validateWorktreeBoundary(options.repo, options.expectedHead);
   const epochPath = resolve(options.repo, `_docs/ralph/prototype-integration/epochs/epoch-${options.epoch}.json`);
   const current = JSON.parse(readFileSync(epochPath, "utf8"));
   const proposed = JSON.parse(readFileSync(resolve(options.plan), "utf8"));
@@ -63,7 +72,7 @@ function main(argv) {
   process.stdout.write(`prototype intake epoch ${options.epoch} frozen\n`);
 }
 
-module.exports = { parseArgs, validateFreezeTransition };
+module.exports = { parseArgs, validateFreezeTransition, validateWorktreeBoundary };
 
 if (require.main === module) {
   try { main(process.argv.slice(2)); }
