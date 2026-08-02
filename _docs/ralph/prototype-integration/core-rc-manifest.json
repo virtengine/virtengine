@@ -6,20 +6,20 @@
   "planned_functionality_complete": false,
   "milestone_m_eligible": false,
   "source": {
-    "payload_sha": "110571af5a3ef4caf9d17d8c7c311c8566a2f2b7",
-    "tree": "1baabc16fe57446494e83457a5f864732ce74d9d",
+    "payload_sha": "567e9fe695f4c2ca2807c358ad7a3ce1a7a2ead5",
+    "tree": "2ee47979cf7ba8ff6b56084860b54513bb37c5e8",
     "branch": "ve/prototype-integration",
     "binding": "declared_clean_parent_payload"
   },
   "tooling": {
-    "tooling_sha": "110571af5a3ef4caf9d17d8c7c311c8566a2f2b7",
-    "tree": "1baabc16fe57446494e83457a5f864732ce74d9d",
+    "tooling_sha": "567e9fe695f4c2ca2807c358ad7a3ce1a7a2ead5",
+    "tree": "2ee47979cf7ba8ff6b56084860b54513bb37c5e8",
     "artifacts": [
       {
         "id": "generator",
         "path": "scripts/generate-core-rc-manifest.cjs",
-        "git_blob": "4fc8d642b3d4535b307b69393c26a4a89b2d3fd5",
-        "sha256": "94dbbce579cfcaa6662bee3d93e4ad7904fdb59a0bdc51591b0d8a80f6ff3cb1"
+        "git_blob": "d8b0d461036c657c4ed33149e7cc9695a40364fb",
+        "sha256": "25b233daccd9c9e5da976b573fe842ad7fcc2cd72e4266f6873c23baa79d1bd5"
       },
       {
         "id": "schema",
@@ -225,7 +225,7 @@
     {
       "id": "required_gate_matrix",
       "path": "_docs/ralph/prototype-integration/required-gate-matrix.json",
-      "sha256": "a7d49b7d89bde8953ac03de1b3e5c3a269ca36b6a62d537752bda8c62b1311d6",
+      "sha256": "ba4328f22b9337056f757945b566e89f5c2de90bee9a777fcacd8c56340e97e2",
       "status": "dependency_blocked"
     },
     {
@@ -250,6 +250,12 @@
       "id": "ai_production_policy",
       "path": "_docs/ralph/prototype-integration/ai-production-policy.json",
       "sha256": "7df63a18a24e8b35ad69c21aed6fa583ff5589c2ddc1ea0830ca69f4b18e12b4",
+      "status": "blocked"
+    },
+    {
+      "id": "ai_biometric_security_gates",
+      "path": "_docs/ralph/prototype-integration/ai-biometric-security-gates.json",
+      "sha256": "c6fdb50abff205ddab61fedbc209fffd4b62b8f16a592e1d2a6f9bb2d5fd56d1",
       "status": "blocked"
     }
   ],
@@ -391,17 +397,17 @@
   "test_evidence": {
     "status": "complete",
     "ledger_path": "_docs/ralph/handoffs/prototype-integration/HANDOFF.yaml",
-    "implementation_sha": "0ec2b881e1bb6cae23b12d86728c82dc2d84410b",
-    "ledger_sha": "110571af5a3ef4caf9d17d8c7c311c8566a2f2b7",
+    "implementation_sha": "81bbd7b35de74242d1d383b1ac7a3bfb93a2b57c",
+    "ledger_sha": "567e9fe695f4c2ca2807c358ad7a3ce1a7a2ead5",
     "record_count": 3,
-    "declared_test_count": 38,
+    "declared_test_count": 39,
     "uncounted_record_count": 0,
     "records": [
       {
-        "command": "node scripts/validate-ai-production-policy.test.cjs && node scripts/validate-ai-production-policy.cjs",
+        "command": "node scripts/validate-ai-biometric-security-gates.test.cjs && node scripts/validate-ai-biometric-security-gates.cjs",
         "exit_code": 0,
         "result": "passed",
-        "test_count": 13,
+        "test_count": 12,
         "tool_versions": {
           "node": "20.19.1"
         }
@@ -419,7 +425,7 @@
         "command": "node scripts/generate-core-rc-manifest.test.cjs",
         "exit_code": 0,
         "result": "passed",
-        "test_count": 12,
+        "test_count": 14,
         "tool_versions": {
           "node": "20.19.1"
         }
@@ -429,7 +435,7 @@
   },
   "producer_checkpoints": {
     "ledger_path": "_docs/ralph/handoffs/prototype-integration/HANDOFF.yaml",
-    "ledger_sha256": "420b25f28775377d185cae381b7af30c299fb09f1321e8a5a28fb42f2a78b11f",
+    "ledger_sha256": "038f6e424620791eb7c9804bc3d50e1980fc13490ade103534f6079cd3dde19c",
     "accepted": [],
     "rejected": [
       {
