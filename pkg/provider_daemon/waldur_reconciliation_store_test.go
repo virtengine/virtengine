@@ -84,6 +84,13 @@ func TestFileReconciliationJobStoreRejectsConflictingCompletion(t *testing.T) {
 	conflict.Result.State = ReconciliationStateMatched
 	conflict.Result.ReasonCode = ReconciliationReasonExactMatch
 	conflict.Result.Score = 100
+	record := &UsageRecord{
+		ID: "usage-conflict", AllocationID: job.AllocationID,
+		StartTime: job.PeriodStart, EndTime: job.PeriodEnd, Metrics: conflict.Result.ProviderMetrics,
+	}
+	conflict.Result.ProviderRecordDigest, err = reconciliationProviderRecordDigest(record)
+	require.NoError(t, err)
+	conflict.Evidence.ProviderRecordDigest = conflict.Result.ProviderRecordDigest
 	conflict.ResultDigest, err = canonicalReconciliationResultDigest(conflict.Result)
 	require.NoError(t, err)
 	conflictingCursor := cursor
@@ -259,6 +266,15 @@ func TestReplayedDurableReconciliationResultRejectsStaleDigest(t *testing.T) {
 	result = testDurableReconciliationResult(testReconciliationJob(), 1)
 	result.Result.ReconciliationTime = result.Result.ReconciliationTime.Add(time.Nanosecond)
 	require.ErrorContains(t, validateReplayedDurableReconciliationResult(result), "result digest mismatch")
+}
+
+func TestDurableMatchedResultRequiresProviderRecordEvidence(t *testing.T) {
+	result := testDurableReconciliationResult(testReconciliationJob(), 1)
+	result.Result.State = ReconciliationStateMatched
+	result.Result.ReasonCode = ReconciliationReasonExactMatch
+	result.Result.Score = 100
+	result.ResultDigest, _ = canonicalReconciliationResultDigest(result.Result)
+	require.ErrorContains(t, validateDurableReconciliationResult(result), "provider record evidence")
 }
 
 func TestFileReconciliationJobStoreSharedReplicasDeduplicateJob(t *testing.T) {

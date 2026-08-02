@@ -510,11 +510,27 @@ func TestWaldurReconcilerDurableSettlementEligibilityRequiresCoveringMatchedResu
 	result.Result.State = ReconciliationStateMatched
 	result.Result.ReasonCode = ReconciliationReasonExactMatch
 	result.Result.Score = 100
+	result.Result.ProviderRecordDigest, err = reconciliationProviderRecordDigest(record)
+	require.NoError(t, err)
 	result.ResultDigest, err = canonicalReconciliationResultDigest(result.Result)
 	require.NoError(t, err)
+	result.Evidence.ProviderRecordDigest = result.Result.ProviderRecordDigest
 	cursor := ReconciliationCursor{StreamID: "waldur/default", JobID: job.ID, ResultDigest: result.ResultDigest}
 	require.NoError(t, store.CompleteAttempt(ctx, result, nil, cursor))
 	require.NoError(t, reconciler.DurableSettlementEligibility(record))
+
+	otherRecord := *record
+	otherRecord.ID = "usage-other"
+	require.ErrorIs(t, reconciler.DurableSettlementEligibility(&otherRecord), ErrSettlementReconciliationHold)
+	otherRecord = *record
+	otherRecord.Metrics.CPUMilliSeconds++
+	require.ErrorIs(t, reconciler.DurableSettlementEligibility(&otherRecord), ErrSettlementReconciliationHold)
+	otherRecord = *record
+	otherRecord.AllocationID = "other-allocation"
+	require.ErrorIs(t, reconciler.DurableSettlementEligibility(&otherRecord), ErrSettlementReconciliationHold)
+	otherRecord = *record
+	otherRecord.StartTime = otherRecord.StartTime.Add(time.Second)
+	require.ErrorIs(t, reconciler.DurableSettlementEligibility(&otherRecord), ErrSettlementReconciliationHold)
 
 	newerJob := newReconciliationJob(job.AllocationID, job.ResourceUUID, job.PeriodStart, job.PeriodEnd.Add(time.Minute))
 	_, _, err = store.PutJobIfAbsent(ctx, newerJob)
@@ -549,6 +565,28 @@ func TestWaldurReconcilerDurableSettlementEligibilityRejectsAuthorityTie(t *test
 	require.ErrorIs(t, reconciler.DurableSettlementEligibility(record), ErrSettlementReconciliationHold)
 
 	record.EndTime = record.StartTime
+	require.ErrorIs(t, reconciler.DurableSettlementEligibility(record), ErrSettlementReconciliationHold)
+}
+
+func TestWaldurReconcilerDurableSettlementEligibilityRejectsRecordDigestTie(t *testing.T) {
+	job := testReconciliationJob()
+	otherJob := job
+	otherJob.ID = "job-2"
+	record := &UsageRecord{ID: "usage-1", AllocationID: job.AllocationID, StartTime: job.PeriodStart, EndTime: job.PeriodEnd}
+	first := testDurableReconciliationResult(job, 1)
+	first.Result.State, first.Result.ReasonCode, first.Result.Score = ReconciliationStateMatched, ReconciliationReasonExactMatch, 100
+	first.Result.ProviderRecordDigest, _ = reconciliationProviderRecordDigest(record)
+	first.Evidence.ProviderRecordDigest = first.Result.ProviderRecordDigest
+	second := first
+	second.JobID = otherJob.ID
+	second.Result.ProviderRecordDigest = strings.Repeat("a", 64)
+	second.Evidence.ProviderRecordDigest = second.Result.ProviderRecordDigest
+	projection := &ReconciliationProjection{
+		Jobs:    map[string]ReconciliationJob{job.ID: job, otherJob.ID: otherJob},
+		Results: map[string]DurableReconciliationResult{job.ID: first, otherJob.ID: second},
+	}
+	reconciler := NewWaldurReconciler(DefaultWaldurReconcilerConfig(), nil, NewUsageSnapshotStore(), nil, nil)
+	reconciler.SetJobStore(&reconciliationCompletionTestStore{projection: projection})
 	require.ErrorIs(t, reconciler.DurableSettlementEligibility(record), ErrSettlementReconciliationHold)
 }
 

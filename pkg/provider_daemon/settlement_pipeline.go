@@ -212,6 +212,9 @@ type ReconciliationResult struct {
 	// ProviderMetrics is the provider-reported metrics.
 	ProviderMetrics ResourceMetrics `json:"provider_metrics"`
 
+	// ProviderRecordDigest binds the exact off-chain usage record used as evidence.
+	ProviderRecordDigest string `json:"provider_record_digest,omitempty"`
+
 	// WaldurMetrics is the Waldur-reported metrics (if available).
 	WaldurMetrics *ResourceMetrics `json:"waldur_metrics,omitempty"`
 

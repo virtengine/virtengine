@@ -311,6 +311,12 @@ func (r *WaldurReconciler) reconcileAllocation(ctx context.Context, allocationID
 		publishResult(result)
 		return result, nil
 	}
+	providerRecordDigest, err := reconciliationProviderRecordDigest(providerRecord)
+	if err != nil {
+		result := r.newClassifiedResult(allocationID, now, providerRecord.Metrics, ReconciliationStateUnresolved, ReconciliationReasonMalformedEvidence)
+		publishResult(result)
+		return result, nil
+	}
 
 	// Get Waldur usage stats
 	waldurStats, err := r.fetchWaldurUsage(ctx, resourceUUID, periodStart, periodEnd)
@@ -344,14 +350,15 @@ func (r *WaldurReconciler) reconcileAllocation(ctx context.Context, allocationID
 	score := r.calculateScore(discrepancies)
 
 	result := &ReconciliationResult{
-		AllocationID:       allocationID,
-		ReconciliationTime: now,
-		ProviderMetrics:    providerRecord.Metrics,
-		WaldurMetrics:      waldurMetrics,
-		Discrepancies:      discrepancies,
-		State:              ReconciliationStateMatched,
-		ReasonCode:         ReconciliationReasonExactMatch,
-		Score:              score,
+		AllocationID:         allocationID,
+		ReconciliationTime:   now,
+		ProviderMetrics:      providerRecord.Metrics,
+		ProviderRecordDigest: providerRecordDigest,
+		WaldurMetrics:        waldurMetrics,
+		Discrepancies:        discrepancies,
+		State:                ReconciliationStateMatched,
+		ReasonCode:           ReconciliationReasonExactMatch,
+		Score:                score,
 	}
 	if len(discrepancies) > 0 {
 		result.State = ReconciliationStateMismatched
@@ -717,14 +724,41 @@ func (r *WaldurReconciler) DurableSettlementEligibility(record *UsageRecord) err
 			(job.PeriodEnd.Equal(latestJob.PeriodEnd) && result.CompletedAt.After(latestResult.CompletedAt)) {
 			latestJob, latestResult, found, ambiguous = job, result, true, false
 		} else if job.PeriodEnd.Equal(latestJob.PeriodEnd) && result.CompletedAt.Equal(latestResult.CompletedAt) &&
-			result.Result.State != latestResult.Result.State {
+			(result.Result.State != latestResult.Result.State ||
+				result.Evidence.ProviderRecordDigest != latestResult.Evidence.ProviderRecordDigest ||
+				result.ResultDigest != latestResult.ResultDigest) {
 			ambiguous = true
 		}
 	}
 	if found && !ambiguous && latestResult.Result.State == ReconciliationStateMatched {
-		return nil
+		digest, err := reconciliationProviderRecordDigest(record)
+		if err == nil && latestResult.Evidence.ProviderRecordDigest != "" &&
+			digest == latestResult.Evidence.ProviderRecordDigest {
+			return nil
+		}
 	}
 	return ErrSettlementReconciliationHold
+}
+
+func reconciliationProviderRecordDigest(record *UsageRecord) (string, error) {
+	if record == nil || record.ID == "" || record.StartTime.IsZero() || record.EndTime.IsZero() || !record.EndTime.After(record.StartTime) {
+		return "", errors.New("invalid provider usage record evidence")
+	}
+	allocationID := record.AllocationID
+	if allocationID == "" {
+		allocationID = record.DeploymentID
+	}
+	if allocationID == "" {
+		return "", errors.New("provider usage record allocation is required")
+	}
+	evidence := struct {
+		ID           string          `json:"id"`
+		AllocationID string          `json:"allocation_id"`
+		StartTime    time.Time       `json:"start_time"`
+		EndTime      time.Time       `json:"end_time"`
+		Metrics      ResourceMetrics `json:"metrics"`
+	}{record.ID, allocationID, record.StartTime.UTC(), record.EndTime.UTC(), record.Metrics}
+	return canonicalReconciliationDigest("provider-record-evidence", evidence)
 }
 
 // GetRecentDiscrepancies returns recent discrepancies.

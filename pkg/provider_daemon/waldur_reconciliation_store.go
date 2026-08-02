@@ -61,10 +61,11 @@ type ReconciliationAttempt struct {
 }
 
 type ReconciliationEvidenceDigests struct {
-	Algorithm         string `json:"algorithm"`
-	SchemaVersion     string `json:"schema_version"`
-	ProviderDigest    string `json:"provider_digest"`
-	IndependentDigest string `json:"independent_digest"`
+	Algorithm            string `json:"algorithm"`
+	SchemaVersion        string `json:"schema_version"`
+	ProviderDigest       string `json:"provider_digest"`
+	ProviderRecordDigest string `json:"provider_record_digest,omitempty"`
+	IndependentDigest    string `json:"independent_digest"`
 }
 
 type DurableReconciliationResult struct {
@@ -680,6 +681,12 @@ func validateDurableReconciliationResult(result DurableReconciliationResult) err
 			return errors.New("invalid reconciliation digest")
 		}
 	}
+	if err := validateProviderRecordDigestBinding(result); err != nil {
+		return err
+	}
+	if result.Result.State == ReconciliationStateMatched && result.Evidence.ProviderRecordDigest == "" {
+		return errors.New("matched reconciliation requires provider record evidence")
+	}
 	if !validReconciliationResultDigest(result.Result, result.ResultDigest) {
 		return errors.New("reconciliation result digest mismatch")
 	}
@@ -704,6 +711,9 @@ func validateReplayedDurableReconciliationResult(result DurableReconciliationRes
 			return errors.New("invalid reconciliation digest")
 		}
 	}
+	if err := validateProviderRecordDigestBinding(result); err != nil {
+		return err
+	}
 	if !validReconciliationResultDigest(result.Result, result.ResultDigest) {
 		return errors.New("reconciliation result digest mismatch")
 	}
@@ -718,19 +728,35 @@ func validateReplayedDurableReconciliationResult(result DurableReconciliationRes
 	return validateReconciliationResultSemantics(result.Result)
 }
 
+func validateProviderRecordDigestBinding(result DurableReconciliationResult) error {
+	if result.Evidence.ProviderRecordDigest != result.Result.ProviderRecordDigest {
+		return errors.New("provider record evidence digest mismatch")
+	}
+	if result.Evidence.ProviderRecordDigest == "" {
+		return nil
+	}
+	decoded, err := hex.DecodeString(result.Evidence.ProviderRecordDigest)
+	if err != nil || len(decoded) != sha256.Size {
+		return errors.New("invalid provider record evidence digest")
+	}
+	return nil
+}
+
 func canonicalReconciliationResultDigest(result ReconciliationResult) (string, error) {
 	canonical := struct {
-		AllocationID       string                   `json:"allocation_id"`
-		ReconciliationTime string                   `json:"reconciliation_time"`
-		ProviderMetrics    ResourceMetrics          `json:"provider_metrics"`
-		WaldurMetrics      *ResourceMetrics         `json:"waldur_metrics,omitempty"`
-		Discrepancies      []MetricDiscrepancy      `json:"discrepancies,omitempty"`
-		State              ReconciliationState      `json:"state"`
-		ReasonCode         ReconciliationReasonCode `json:"reason_code"`
-		Score              int                      `json:"score"`
+		AllocationID         string                   `json:"allocation_id"`
+		ReconciliationTime   string                   `json:"reconciliation_time"`
+		ProviderMetrics      ResourceMetrics          `json:"provider_metrics"`
+		ProviderRecordDigest string                   `json:"provider_record_digest,omitempty"`
+		WaldurMetrics        *ResourceMetrics         `json:"waldur_metrics,omitempty"`
+		Discrepancies        []MetricDiscrepancy      `json:"discrepancies,omitempty"`
+		State                ReconciliationState      `json:"state"`
+		ReasonCode           ReconciliationReasonCode `json:"reason_code"`
+		Score                int                      `json:"score"`
 	}{
 		AllocationID: result.AllocationID, ReconciliationTime: result.ReconciliationTime.UTC().Format(time.RFC3339Nano),
-		ProviderMetrics: result.ProviderMetrics, WaldurMetrics: result.WaldurMetrics,
+		ProviderMetrics: result.ProviderMetrics, ProviderRecordDigest: result.ProviderRecordDigest,
+		WaldurMetrics: result.WaldurMetrics,
 		Discrepancies: result.Discrepancies, State: result.State, ReasonCode: result.ReasonCode, Score: result.Score,
 	}
 	return canonicalReconciliationDigest("result", canonical)
@@ -799,7 +825,8 @@ func buildDurableReconciliationCompletion(job ReconciliationJob, attempt Reconci
 		JobID: job.ID, AttemptNumber: attempt.Number,
 		Evidence: ReconciliationEvidenceDigests{
 			Algorithm: "sha256", SchemaVersion: "virtengine.reconciliation-evidence/v1",
-			ProviderDigest: providerDigest, IndependentDigest: independentDigest,
+			ProviderDigest: providerDigest, ProviderRecordDigest: result.ProviderRecordDigest,
+			IndependentDigest: independentDigest,
 		},
 		Result: result, ResultDigest: resultDigest, CompletedAt: job.PeriodEnd,
 	}
