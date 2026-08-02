@@ -1,57 +1,76 @@
 campaign: three-day-prototype
 thread: T2
-checkpoint: T2-X11
+checkpoint: T2-X12
 branch: ve/prototype-t2-product
-start_head: 8e8660dfffff1bd991f57545e00c7cbcc5680751
-end_head: c704213ea3169ff1792a19f3daf2ee484b1862e1
+start_head: a40695e0da255ab5bd8f6b5eda02c0f4b4ee47cc
+end_head: c9fe53a8f113e2664a9097b0de970f2cc0982566
 origin_main: 79391a3df86d85522b92e0400c6904971ecbe65d
 tree_clean: true
 commits:
-  - c704213ea3169ff1792a19f3daf2ee484b1862e1
+  - c9fe53a8f113e2664a9097b0de970f2cc0982566
 owned_paths:
-  - lib/portal/components/marketplace/
-  - lib/portal/__tests__/marketplace/
-  - lib/portal/hooks/useMarketplace.tsx
-  - lib/portal/types/marketplace.ts
+  - lib/portal/components/hpc/
+  - lib/portal/__tests__/hpc/
+  - lib/portal/hooks/useHPC.tsx
   - lib/portal/components/PortalProvider.tsx
+  - lib/portal/types/config.ts
+  - lib/portal/index.ts
   - lib/portal/index.d.ts
+  - portal/src/components/hpc/
+  - portal/src/features/hpc/
+  - portal/src/lib/portal-adapter.ts
 files_changed:
   - lib/portal/components/PortalProvider.tsx
-  - lib/portal/components/marketplace/CheckoutFlow.tsx
-  - lib/portal/components/marketplace/checkout-mutation.ts
-  - lib/portal/__tests__/marketplace/checkout-flow.test.tsx
-  - lib/portal/__tests__/marketplace/use-marketplace-commit.test.tsx
-  - lib/portal/hooks/useMarketplace.tsx
-  - lib/portal/types/marketplace.ts
+  - lib/portal/components/hpc/JobCancelDialog.tsx
+  - lib/portal/components/hpc/JobSubmissionForm.tsx
+  - lib/portal/components/hpc/hpc-mutation.ts
+  - lib/portal/__tests__/hpc/job-cancel-dialog.test.tsx
+  - lib/portal/__tests__/hpc/job-submission-form.test.tsx
+  - lib/portal/__tests__/hpc/use-hpc-mutations.test.tsx
+  - lib/portal/hooks/useHPC.tsx
+  - lib/portal/index.ts
   - lib/portal/index.d.ts
+  - lib/portal/types/config.ts
+  - portal/src/components/hpc/HPCJobDetails.tsx
+  - portal/src/components/hpc/HPCJobSubmit.tsx
+  - portal/src/features/hpc/hooks/index.test.tsx
+  - portal/src/features/hpc/lib/hpc-client.test.ts
+  - portal/src/features/hpc/lib/hpc-client.ts
+  - portal/src/lib/portal-adapter.ts
 tests:
-  - command: lib\portal\node_modules\.bin\vitest.CMD run __tests__/marketplace/checkout-flow.test.tsx __tests__/marketplace/use-marketplace-commit.test.tsx --reporter=dot
+  - command: lib\portal\node_modules\.bin\vitest.CMD run __tests__/hpc/use-hpc-mutations.test.tsx __tests__/hpc/job-cancel-dialog.test.tsx __tests__/hpc/job-submission-form.test.tsx --reporter=dot
     exit_code: 0
     result: passed
-    test_count: 12
+    test_count: 14
     tool_versions:
       node: v24.12.0
-    artifact: _docs/ralph/handoffs/prototype-t2/T2-X11-evidence.txt
+    artifact: _docs/ralph/handoffs/prototype-t2/T2-X12-evidence.txt
   - command: lib\portal\node_modules\.bin\vitest.CMD run --reporter=dot
     exit_code: 0
     result: passed
-    test_count: 708
+    test_count: 722
     tool_versions:
       node: v24.12.0
-    artifact: _docs/ralph/handoffs/prototype-t2/T2-X11-evidence.txt
+    artifact: _docs/ralph/handoffs/prototype-t2/T2-X12-evidence.txt
+  - command: portal\node_modules\.bin\vitest.CMD run portal/src/features/hpc --reporter=dot
+    exit_code: 0
+    result: passed
+    test_count: 17
+    tool_versions:
+      node: v24.12.0
+    artifact: _docs/ralph/handoffs/prototype-t2/T2-X12-evidence.txt
 generated_hashes: {}
 migrations: []
 external_evidence:
-  - _docs/ralph/handoffs/prototype-t2/T2-X11-evidence.txt
+  - _docs/ralph/handoffs/prototype-t2/T2-X12-evidence.txt
 known_failures:
-  - Focused TypeScript compilation has zero T2-X11 diagnostics but reaches the pre-existing lib/portal/src/wallet/utils.ts missing WalletChainConfig export.
-  - Full accessibility lint has pre-existing focus-visible errors in MFAEnrollmentWizard, JobSubmissionForm, and components/accessible/index.ts; CheckoutFlow has no finding.
+  - Focused TypeScript compilation has zero T2-X12 diagnostics but reaches the pre-existing lib/portal/src/wallet/utils.ts missing WalletChainConfig export; broader lib compilation retains unrelated support/wallet adapter export errors.
 blockers:
   - T4 producer-handoff.schema.json does not permit the established supplemental T2-X checkpoint names; T2-X01 through T2-X10 retain the campaign queue naming.
   - T4 producer-handoff.schema.json forbids the integration_parent field required by the updated campaign plan; integration ancestor fa21b1e540a5efcbe1822da4199be7acec7709d3 is retained in T2-05-evidence.txt.
   - Full provider package certification is blocked by the unrelated submitter lease timing failure retained in T2-03B-evidence.txt.
-  - PortalProvider retains pre-existing ts-nocheck because unrelated Auth, Identity, MFA, Provider, and HPC provider dependencies are not wired.
-  - No production marketplace signing/broadcast adapter is wired; checkout defaults unavailable.
-  - No live order or chain endpoint was certified.
-next_checkpoint: T2-X12
-expected_head: c704213ea3169ff1792a19f3daf2ee484b1862e1
+  - PortalProvider retains pre-existing ts-nocheck because unrelated Auth, Identity, MFA, and Provider dependencies are not wired.
+  - No production HPC signer adapter is wired; mutations default unavailable.
+  - No live HPC job, provider, scheduler, or chain endpoint was certified.
+next_checkpoint: T2-X13
+expected_head: c9fe53a8f113e2664a9097b0de970f2cc0982566

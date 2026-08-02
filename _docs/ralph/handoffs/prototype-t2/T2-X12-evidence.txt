@@ -1,0 +1,54 @@
+T2-X12 retained validation evidence
+Implementation SHA: c9fe53a8f113e2664a9097b0de970f2cc0982566
+Node: v24.12.0
+
+COMMAND: lib\portal\node_modules\.bin\vitest.CMD run __tests__/hpc/use-hpc-mutations.test.tsx __tests__/hpc/job-cancel-dialog.test.tsx __tests__/hpc/job-submission-form.test.tsx --reporter=dot
+EXIT: 0
+RESULT: passed
+DETAIL: 3 files, 14 tests passed; no warnings
+
+COMMAND: portal\node_modules\.bin\vitest.CMD run src/features/hpc/lib/hpc-client.test.ts src/features/hpc/hooks/index.test.tsx --reporter=dot
+EXIT: 0
+RESULT: passed
+DETAIL: 2 files, 15 tests passed
+
+COMMAND: lib\portal\node_modules\.bin\vitest.CMD run --reporter=dot
+EXIT: 0
+RESULT: passed
+DETAIL: 34 files, 722 tests passed; expected wallet reconnect-metadata stderr only
+
+COMMAND: portal\node_modules\.bin\vitest.CMD run portal/src/features/hpc --reporter=dot
+EXIT: 0
+RESULT: passed
+DETAIL: 3 files, 17 tests passed; no warnings
+
+COMMAND: portal\node_modules\.bin\tsc.CMD --noEmit -p portal\tsconfig.json
+EXIT: 0
+RESULT: passed
+DETAIL: Full portal TypeScript check completed with no diagnostics.
+
+COMMAND: lib\portal\node_modules\.bin\tsc.CMD --noEmit <17 T2-X12 source/test/declaration roots plus explicit compiler options>
+EXIT: 2
+RESULT: unrelated-pre-existing-failure
+DETAIL: Zero changed-file diagnostics. Compilation reaches the clean pre-existing lib/portal/src/wallet/utils.ts missing WalletChainConfig export; broader lib compilation also retains unrelated support/wallet adapter export errors.
+
+COMMAND: portal\node_modules\.bin\prettier.CMD --check <17 T2-X12 source/test/declaration files>
+EXIT: 0
+RESULT: passed
+DETAIL: All matched files use Prettier code style.
+
+BEHAVIOR:
+- The T2-04 hand-written HPC signer/receipt contract is canonical in lib/portal and re-exported by the feature client without competing definitions.
+- Legacy submission no longer fabricates job IDs, transaction hashes, jobs, or completion state; it requires a signing-ready adapter bound exactly to active chain/account and a committed code-0 receipt with authoritative job ID/hash/height.
+- PortalProvider supplies query/chain/account context and withholds the signer on disconnect, chain mismatch, or account mismatch; production defaults unavailable.
+- Signed payloads preserve offering, template, complete resource/GPU configuration, parameter values, environment, encrypted inputs, and input references.
+- Template parameters render controlled inputs and enforce required, numeric min/max, pattern, and select constraints; encrypted input JSON must be a non-null plain object.
+- Duplicate and stale submission/cancellation results are token/generation scoped and cannot update replacement state.
+- Cancellation changes local job state only after an exact-job committed receipt.
+- JobCancelDialog synchronously blocks duplicate confirmation, keeps open on failure, and ignores stale completion after job/open identity changes.
+- JobSubmissionForm initializes preselected defaults, explicit offering and quote progression, forwards only authoritative job IDs, and clears hook state before cancel notification.
+
+NON-CLAIMS:
+- No production HPC signer adapter is wired by this checkpoint; mutations default unavailable.
+- No live HPC job, provider, scheduler, or chain endpoint was certified.
+- PortalProvider retains pre-existing ts-nocheck because unrelated Auth, Identity, MFA, and Provider dependencies remain unwired.
