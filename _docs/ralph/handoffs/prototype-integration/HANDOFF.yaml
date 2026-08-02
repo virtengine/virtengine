@@ -1,30 +1,34 @@
 {
   "campaign": "three-day-prototype",
   "thread": "T4",
-  "checkpoint": "T4-13D",
+  "checkpoint": "T4-13E",
   "branch": "ve/prototype-integration",
-  "start_head": "33530f8a99057ea107057cf7cd8c2084aeac8070",
-  "end_head": "b653be24b726dd180681b9c6bec9dcbe33c222b5",
+  "start_head": "bc7e9a533b8c810b7031f105347f8fb24c2ca3d4",
+  "end_head": "12700822b324fd34a14204484703e14d7c4dd6d7",
   "origin_main": "79391a3df86d85522b92e0400c6904971ecbe65d",
   "tree_clean": true,
   "commits": [
-    "b653be24b726dd180681b9c6bec9dcbe33c222b5"
+    "12700822b324fd34a14204484703e14d7c4dd6d7"
   ],
   "owned_paths": [
     "_docs/ralph/prototype-integration/**",
     "_docs/ralph/handoffs/prototype-integration/**",
-    "_docs/ralph/prototype-integration/core-rc-manifest.json"
+    "_docs/audits/task-t4-13a-generated-contract-inventory-2026-08-02.md",
+    "scripts/validate-prototype-integration.cjs",
+    "scripts/validate-prototype-integration.test.cjs"
   ],
   "files_changed": [
     "_docs/ralph/handoffs/prototype-integration/HANDOFF.yaml",
-    "_docs/ralph/prototype-integration/core-rc-manifest.json"
+    "_docs/audits/task-t4-13a-generated-contract-inventory-2026-08-02.md",
+    "scripts/validate-prototype-integration.cjs",
+    "scripts/validate-prototype-integration.test.cjs"
   ],
   "tests": [
     {
-      "command": "node scripts/validate-generated-contract-inventory.test.cjs && node scripts/validate-generated-contract-inventory.cjs",
+      "command": "node scripts/validate-prototype-integration.test.cjs && node scripts/validate-prototype-integration.cjs",
       "exit_code": 0,
       "result": "passed",
-      "test_count": 12,
+      "test_count": 11,
       "tool_versions": {
         "node": "20.19.1"
       }
@@ -39,7 +43,8 @@
     }
   ],
   "generated_hashes": {
-    "_docs/ralph/prototype-integration/core-rc-manifest.json": "cca9fbaad8aeaa5146b2274c27a9acc566528a5e9bd09015436234187c2341af"
+    "scripts/validate-prototype-integration.cjs": "206af4ab53ff4b2d748340c96d08d16f792ddcc243d040d41381a8631738513d",
+    "scripts/validate-prototype-integration.test.cjs": "807b8d6d657e26f295b70f390f45f24615be4fa5c44894f951d0545e687d7539"
   },
   "accepted_checkpoints": [],
   "rejected_checkpoints": [
@@ -78,5 +83,5 @@
     "Task 88C is not complete."
   ],
   "next_checkpoint": null,
-  "expected_head": "b653be24b726dd180681b9c6bec9dcbe33c222b5"
+  "expected_head": "12700822b324fd34a14204484703e14d7c4dd6d7"
 }
