@@ -4,7 +4,7 @@ const assert = require("assert").strict;
 const { createHash } = require("crypto");
 const { readFileSync } = require("fs");
 const { resolve } = require("path");
-const { atomicWriteFile, parseArgs, validateFreezeEvidence, validateFreezeTransition, validatePlanDigest, validateWorktreeBoundary } = require("./apply-prototype-intake-freeze.cjs");
+const { atomicWriteFile, parseArgs, validateFreezeEvidence, validateFreezeTransition, validatePlanDigest, validateWorktreeBoundary, withStableWorktreeBoundary } = require("./apply-prototype-intake-freeze.cjs");
 
 function epoch() {
   return {
@@ -52,6 +52,8 @@ const tests = [
   ["rejects an announced tag absent from observation evidence", () => { const value = evidence(); const plan = frozen(); plan.producers[0].tag = "checkpoint/prototype-t1/t1-10"; assert.throws(() => validateFreezeEvidence(epoch(), plan, value.content, "observation.json", value.manifest, { now: afterCutoff, sourceContent: value.content, sourceIsAncestor: true, resolveTag: () => ({ target: "e".repeat(40), tagger_at: "2000-01-01T12:00:00Z" }) }), /not uniquely observed/); }],
   ["accepts a clean worktree at the reviewed HEAD", () => assert.equal(validateWorktreeBoundary(".", "a".repeat(40), cleanAt("a".repeat(40))), true)],
   ["rejects a clean worktree at a stale HEAD", () => assert.throws(() => validateWorktreeBoundary(".", "a".repeat(40), cleanAt("b".repeat(40))), /does not match reviewed/)],
+  ["accepts a stable worktree across evidence replay", () => assert.equal(withStableWorktreeBoundary(".", "a".repeat(40), () => "prepared", cleanAt("a".repeat(40))), "prepared")],
+  ["rejects a worktree changed during evidence replay", () => { let boundary = 0; const run = (_command, args) => args[0] === "status" ? { status: 0, stdout: boundary++ === 0 ? "" : " M epoch.json\n" } : { status: 0, stdout: `${"a".repeat(40)}\n` }; assert.throws(() => withStableWorktreeBoundary(".", "a".repeat(40), () => "prepared", run), /must be clean/); }],
   ["runbook requires separately reviewed HEAD and plan digest", () => { const runbook = readFileSync(resolve(__dirname, "../_docs/prototype-thread-intake-runbook.md"), "utf8"); assert.match(runbook, /\$reviewedT4 = '<full T4 SHA recorded during separate plan review>'/); assert.match(runbook, /\$reviewedPlanSha256 = '<SHA-256 recorded during separate plan review>'/); assert.doesNotMatch(runbook, /--expected-head \(git rev-parse HEAD\)|\$reviewedPlanSha256\s*=\s*\(Get-FileHash/); }],
 ];
 

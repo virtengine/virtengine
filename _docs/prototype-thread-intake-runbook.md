@@ -169,7 +169,8 @@ producer decisions other than announced or frozen out. It also recomputes the
 plan against the manifest-bound pre-cutoff observation and current annotated
 remote tags, then atomically replaces the epoch through a same-directory
 exclusive temporary file that is flushed before replacement. Acceptance remains a
-later, separately validated transition.
+later, separately validated transition. The clean reviewed HEAD boundary is
+checked both before evidence replay and immediately before replacement.
 
 ## Core RC Publication Preflight
 

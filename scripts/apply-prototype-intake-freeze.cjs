@@ -97,24 +97,33 @@ function validateWorktreeBoundary(repo, expectedHead, run = spawnSync) {
   return true;
 }
 
+function withStableWorktreeBoundary(repo, expectedHead, operation, run = spawnSync) {
+  validateWorktreeBoundary(repo, expectedHead, run);
+  const result = operation();
+  validateWorktreeBoundary(repo, expectedHead, run);
+  return result;
+}
+
 function main(argv) {
   const options = parseArgs(argv);
-  validateWorktreeBoundary(options.repo, options.expectedHead);
-  const epochPath = resolve(options.repo, `_docs/ralph/prototype-integration/epochs/epoch-${options.epoch}.json`);
-  const current = JSON.parse(readFileSync(epochPath, "utf8"));
-  const planContent = readFileSync(resolve(options.plan), "utf8");
-  validatePlanDigest(planContent, options.expectedPlanSha256);
-  const proposed = JSON.parse(planContent);
-  assert.equal(current.intake_epoch, Number(options.epoch), "epoch number mismatch");
-  validateFreezeTransition(current, proposed);
-  const observationContent = readFileSync(resolve(options.repo, options.observation), "utf8");
-  const manifest = JSON.parse(readFileSync(resolve(options.repo, options.manifest), "utf8"));
-  validateFreezeEvidence(current, proposed, observationContent, options.observation, manifest, { repo: options.repo, resolveTag: (tag) => resolveAnnotatedTag(options.repo, options.remote, tag) });
-  atomicWriteFile(epochPath, `${JSON.stringify(proposed, null, 2)}\n`);
+  const prepared = withStableWorktreeBoundary(options.repo, options.expectedHead, () => {
+    const epochPath = resolve(options.repo, `_docs/ralph/prototype-integration/epochs/epoch-${options.epoch}.json`);
+    const current = JSON.parse(readFileSync(epochPath, "utf8"));
+    const planContent = readFileSync(resolve(options.plan), "utf8");
+    validatePlanDigest(planContent, options.expectedPlanSha256);
+    const proposed = JSON.parse(planContent);
+    assert.equal(current.intake_epoch, Number(options.epoch), "epoch number mismatch");
+    validateFreezeTransition(current, proposed);
+    const observationContent = readFileSync(resolve(options.repo, options.observation), "utf8");
+    const manifest = JSON.parse(readFileSync(resolve(options.repo, options.manifest), "utf8"));
+    validateFreezeEvidence(current, proposed, observationContent, options.observation, manifest, { repo: options.repo, resolveTag: (tag) => resolveAnnotatedTag(options.repo, options.remote, tag) });
+    return { epochPath, serialized: `${JSON.stringify(proposed, null, 2)}\n` };
+  });
+  atomicWriteFile(prepared.epochPath, prepared.serialized);
   process.stdout.write(`prototype intake epoch ${options.epoch} frozen\n`);
 }
 
-module.exports = { atomicWriteFile, parseArgs, validateFreezeEvidence, validateFreezeTransition, validatePlanDigest, validateWorktreeBoundary };
+module.exports = { atomicWriteFile, parseArgs, validateFreezeEvidence, validateFreezeTransition, validatePlanDigest, validateWorktreeBoundary, withStableWorktreeBoundary };
 
 if (require.main === module) {
   try { main(process.argv.slice(2)); }
