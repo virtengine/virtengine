@@ -4,6 +4,7 @@
 package keeper_test
 
 import (
+	"fmt"
 	"testing"
 	"time"
 
@@ -104,6 +105,35 @@ func (s *GatingTestSuite) TestRequiresMFA_CorruptSensitiveTxConfigFailsClosed() 
 	for _, test := range tests {
 		s.Run(test.name, func() {
 			store.Set(types.SensitiveTxConfigKey(types.SensitiveTxKeyRotation), []byte(test.value))
+			s.Require().Panics(func() {
+				s.hooks.RequiresMFA(s.ctx, address, types.SensitiveTxKeyRotation)
+			})
+		})
+	}
+}
+
+func (s *GatingTestSuite) TestRequiresMFA_CorruptAccountPolicyFailsClosed() {
+	address := sdk.AccAddress([]byte("corrupt-account-policy"))
+	otherAddress := sdk.AccAddress([]byte("different-account-id"))
+	s.Require().NoError(s.keeper.SetSensitiveTxConfig(s.ctx, &types.SensitiveTxConfig{
+		TransactionType: types.SensitiveTxKeyRotation,
+		Enabled:         true,
+		RequiredFactorCombinations: []types.FactorCombination{{
+			Factors: []types.FactorType{types.FactorTypeFIDO2},
+		}},
+	}))
+	store := s.ctx.KVStore(s.storeKey)
+	tests := []struct {
+		name  string
+		value string
+	}{
+		{name: "malformed", value: `{"enabled":`},
+		{name: "wrong account", value: fmt.Sprintf(`{"account_address":%q,"enabled":false}`, otherAddress.String())},
+		{name: "invalid enabled policy", value: fmt.Sprintf(`{"account_address":%q,"enabled":true}`, address.String())},
+	}
+	for _, test := range tests {
+		s.Run(test.name, func() {
+			store.Set(types.MFAPolicyKey(address), []byte(test.value))
 			s.Require().Panics(func() {
 				s.hooks.RequiresMFA(s.ctx, address, types.SensitiveTxKeyRotation)
 			})

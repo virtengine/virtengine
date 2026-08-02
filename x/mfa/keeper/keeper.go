@@ -531,9 +531,11 @@ func (k Keeper) GetMFAPolicy(ctx sdk.Context, address sdk.AccAddress) (*types.MF
 	}
 
 	var ps mfaPolicyStore
-	_ = json.Unmarshal(bz, &ps)
+	if err := json.Unmarshal(bz, &ps); err != nil {
+		panic(fmt.Errorf("decode MFA policy for %s: %w", address.String(), err))
+	}
 
-	return &types.MFAPolicy{
+	policy := &types.MFAPolicy{
 		AccountAddress:     ps.AccountAddress,
 		RequiredFactors:    ps.RequiredFactors,
 		TrustedDeviceRule:  ps.TrustedDeviceRule,
@@ -544,7 +546,15 @@ func (k Keeper) GetMFAPolicy(ctx sdk.Context, address sdk.AccAddress) (*types.MF
 		Enabled:            ps.Enabled,
 		CreatedAt:          ps.CreatedAt,
 		UpdatedAt:          ps.UpdatedAt,
-	}, true
+	}
+	if policy.AccountAddress != address.String() {
+		panic(fmt.Errorf("MFA policy key mismatch: requested %s, stored %s", address.String(), policy.AccountAddress))
+	}
+	if err := policy.Validate(); err != nil {
+		panic(fmt.Errorf("invalid persisted MFA policy for %s: %w", address.String(), err))
+	}
+
+	return policy, true
 }
 
 // DeleteMFAPolicy deletes the MFA policy for an account
