@@ -8,6 +8,7 @@ import (
 
 	sdkmath "cosmossdk.io/math"
 
+	"github.com/stretchr/testify/require"
 	"github.com/virtengine/virtengine/pkg/usage"
 )
 
@@ -458,6 +459,7 @@ func TestSettlementPipeline_SubmitUsageToChain(t *testing.T) {
 
 	mockSubmitter := &mockChainSubmitter{}
 	pipeline := NewSettlementPipeline(cfg, nil, nil, NewUsageSnapshotStore(), mockSubmitter)
+	pipeline.SetSettlementEligibility(func(*UsageRecord) error { return nil })
 
 	now := time.Now()
 	record := &UsageRecord{
@@ -492,12 +494,24 @@ func TestSettlementPipeline_SubmitUsageToChain(t *testing.T) {
 	}
 }
 
+func TestSettlementPipelineSubmitUsageToChainRequiresEligibility(t *testing.T) {
+	pipeline := NewSettlementPipeline(DefaultSettlementConfig(), nil, nil, NewUsageSnapshotStore(), &mockChainSubmitter{})
+	record := &UsageRecord{
+		ID: "held-direct", DeploymentID: "order-held", AllocationID: "allocation-held",
+		StartTime: time.Now().Add(-time.Hour), EndTime: time.Now(),
+		Metrics:       ResourceMetrics{CPUMilliSeconds: 1_000},
+		PricingInputs: PricingInputs{AgreedCPURate: "0.01"},
+	}
+	require.ErrorIs(t, pipeline.SubmitUsageToChain(context.Background(), record), ErrSettlementReconciliationHold)
+}
+
 func TestSettlementPipeline_SubmitUsageToChain_MultiResource(t *testing.T) {
 	cfg := DefaultSettlementConfig()
 	cfg.ProviderAddress = "provider123"
 
 	mockSubmitter := &mockChainSubmitter{}
 	pipeline := NewSettlementPipeline(cfg, nil, nil, NewUsageSnapshotStore(), mockSubmitter)
+	pipeline.SetSettlementEligibility(func(*UsageRecord) error { return nil })
 
 	now := time.Now()
 	record := &UsageRecord{
@@ -546,6 +560,7 @@ func TestSettlementPipeline_SubmitUsageToChain_Retry(t *testing.T) {
 
 	mockSubmitter := &retryChainSubmitter{failUsageAttempts: 2}
 	pipeline := NewSettlementPipeline(cfg, nil, nil, NewUsageSnapshotStore(), mockSubmitter)
+	pipeline.SetSettlementEligibility(func(*UsageRecord) error { return nil })
 
 	now := time.Now()
 	record := &UsageRecord{
@@ -577,6 +592,7 @@ func TestSettlementPipeline_ProcessSettlements_PartialFailures(t *testing.T) {
 
 	mockSubmitter := &retryChainSubmitter{failSettlementAttempts: 1}
 	pipeline := NewSettlementPipeline(cfg, nil, nil, NewUsageSnapshotStore(), mockSubmitter)
+	pipeline.SetSettlementEligibility(func(*UsageRecord) error { return nil })
 
 	now := time.Now()
 	pipeline.AddPendingUsage(&UsageRecord{ID: "rec-1", DeploymentID: "order-a", LeaseID: "lease-a", StartTime: now.Add(-time.Hour), EndTime: now})
@@ -587,6 +603,49 @@ func TestSettlementPipeline_ProcessSettlements_PartialFailures(t *testing.T) {
 	if pipeline.GetPendingCount() != 1 {
 		t.Errorf("expected 1 pending record after partial failure, got %d", pipeline.GetPendingCount())
 	}
+}
+
+func TestSettlementPipelineProcessSettlementsRequiresReconciliationEligibility(t *testing.T) {
+	cfg := DefaultSettlementConfig()
+	cfg.RetryAttempts = 1
+	mockSubmitter := &retryChainSubmitter{}
+	pipeline := NewSettlementPipeline(cfg, nil, nil, NewUsageSnapshotStore(), mockSubmitter)
+	held := true
+	pipeline.SetSettlementEligibility(func(record *UsageRecord) error {
+		require.Equal(t, "allocation-1", record.AllocationID)
+		if held {
+			return ErrSettlementReconciliationHold
+		}
+		return nil
+	})
+	now := time.Now()
+	pipeline.AddPendingUsage(&UsageRecord{
+		ID: "rec-held", DeploymentID: "order-held", AllocationID: "allocation-1",
+		LeaseID: "lease-held", StartTime: now.Add(-time.Hour), EndTime: now,
+	})
+
+	pipeline.processSettlements(context.Background())
+	require.Equal(t, 0, mockSubmitter.settlementCalls)
+	require.Equal(t, 1, pipeline.GetPendingCount())
+
+	held = false
+	pipeline.processSettlements(context.Background())
+	require.Equal(t, 1, mockSubmitter.settlementCalls)
+	require.Equal(t, 0, pipeline.GetPendingCount())
+}
+
+func TestSettlementPipelineProcessSettlementsHoldsWhenEligibilityUnconfigured(t *testing.T) {
+	mockSubmitter := &retryChainSubmitter{}
+	pipeline := NewSettlementPipeline(DefaultSettlementConfig(), nil, nil, NewUsageSnapshotStore(), mockSubmitter)
+	now := time.Now()
+	pipeline.AddPendingUsage(&UsageRecord{
+		ID: "rec-unwired", DeploymentID: "order-unwired", AllocationID: "allocation-1",
+		LeaseID: "lease-unwired", StartTime: now.Add(-time.Hour), EndTime: now,
+	})
+
+	pipeline.processSettlements(context.Background())
+	require.Equal(t, 0, mockSubmitter.settlementCalls)
+	require.Equal(t, 1, pipeline.GetPendingCount())
 }
 
 func TestSettlementPipeline_AddPendingUsage_DuplicateIngestion(t *testing.T) {

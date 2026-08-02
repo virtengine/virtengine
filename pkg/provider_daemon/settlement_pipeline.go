@@ -175,6 +175,32 @@ type UsageCorrection struct {
 	Signature string `json:"signature"`
 }
 
+// ReconciliationState is the bounded outcome of comparing two evidence sources.
+type ReconciliationState string
+
+const (
+	ReconciliationStateMatched     ReconciliationState = "matched"
+	ReconciliationStateMismatched  ReconciliationState = "mismatched"
+	ReconciliationStateUnavailable ReconciliationState = "unavailable"
+	ReconciliationStateStale       ReconciliationState = "stale"
+	ReconciliationStateUnresolved  ReconciliationState = "unresolved"
+)
+
+// ReconciliationReasonCode is a stable machine-readable reconciliation reason.
+type ReconciliationReasonCode string
+
+const (
+	ReconciliationReasonExactMatch                     ReconciliationReasonCode = "exact_match"
+	ReconciliationReasonWithinTolerance                ReconciliationReasonCode = "within_tolerance"
+	ReconciliationReasonMetricThresholdExceeded        ReconciliationReasonCode = "metric_threshold_exceeded"
+	ReconciliationReasonProviderEvidenceUnavailable    ReconciliationReasonCode = "provider_evidence_unavailable"
+	ReconciliationReasonIndependentEvidenceUnavailable ReconciliationReasonCode = "independent_evidence_unavailable"
+	ReconciliationReasonProviderEvidenceStale          ReconciliationReasonCode = "provider_evidence_stale"
+	ReconciliationReasonIndependentEvidenceStale       ReconciliationReasonCode = "independent_evidence_stale"
+	ReconciliationReasonPartialEvidence                ReconciliationReasonCode = "partial_evidence"
+	ReconciliationReasonMalformedEvidence              ReconciliationReasonCode = "malformed_evidence"
+)
+
 // ReconciliationResult contains the result of a reconciliation check.
 type ReconciliationResult struct {
 	// AllocationID is the allocation being reconciled.
@@ -186,14 +212,20 @@ type ReconciliationResult struct {
 	// ProviderMetrics is the provider-reported metrics.
 	ProviderMetrics ResourceMetrics `json:"provider_metrics"`
 
+	// ProviderRecordDigest binds the exact off-chain usage record used as evidence.
+	ProviderRecordDigest string `json:"provider_record_digest,omitempty"`
+
 	// WaldurMetrics is the Waldur-reported metrics (if available).
 	WaldurMetrics *ResourceMetrics `json:"waldur_metrics,omitempty"`
 
 	// Discrepancies contains any discrepancies found.
 	Discrepancies []MetricDiscrepancy `json:"discrepancies,omitempty"`
 
-	// InSync indicates if provider and Waldur data are in sync.
-	InSync bool `json:"in_sync"`
+	// State is the explicit reconciliation outcome.
+	State ReconciliationState `json:"state"`
+
+	// ReasonCode is the stable explanation for State.
+	ReasonCode ReconciliationReasonCode `json:"reason_code"`
 
 	// Score is the reconciliation confidence score (0-100).
 	Score int `json:"score"`
@@ -309,11 +341,12 @@ type ChainUsageReport struct {
 type SettlementPipeline struct {
 	mu sync.RWMutex
 
-	cfg         SettlementConfig
-	keyManager  *KeyManager
-	usageMeter  *UsageMeter
-	usageStore  *UsageSnapshotStore
-	chainSubmit ChainUsageSubmitter
+	cfg                   SettlementConfig
+	keyManager            *KeyManager
+	usageMeter            *UsageMeter
+	usageStore            *UsageSnapshotStore
+	chainSubmit           ChainUsageSubmitter
+	settlementEligibility func(*UsageRecord) error
 
 	// pending contains usage records pending settlement.
 	pending map[string]*UsageRecord
@@ -341,6 +374,13 @@ type SettlementPipeline struct {
 
 	// wg waits for goroutines to finish.
 	wg sync.WaitGroup
+}
+
+// SetSettlementEligibility installs the final fail-closed settlement gate.
+func (p *SettlementPipeline) SetSettlementEligibility(check func(*UsageRecord) error) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.settlementEligibility = check
 }
 
 // NewSettlementPipeline creates a new settlement pipeline.
@@ -816,6 +856,15 @@ func (p *SettlementPipeline) SubmitUsageToChain(ctx context.Context, record *Usa
 	if p.chainSubmit == nil {
 		return fmt.Errorf("chain submitter not configured")
 	}
+	p.mu.RLock()
+	check := p.settlementEligibility
+	p.mu.RUnlock()
+	if check == nil {
+		return ErrSettlementReconciliationHold
+	}
+	if err := check(record); err != nil {
+		return err
+	}
 
 	reports := p.buildUsageReports(record)
 	if len(reports) == 0 {
@@ -1078,6 +1127,22 @@ func (p *SettlementPipeline) processSettlements(ctx context.Context) {
 
 		if hasDispute {
 			log.Printf("[settlement-pipeline] skipping order %s with pending dispute", orderID)
+			continue
+		}
+
+		eligible := p.settlementEligibility != nil
+		if !eligible {
+			log.Printf("[settlement-pipeline] holding order %s: reconciliation eligibility is not configured", orderID)
+		} else {
+			for _, record := range records {
+				if err := p.settlementEligibility(record); err != nil {
+					log.Printf("[settlement-pipeline] holding order %s for reconciliation: %v", orderID, err)
+					eligible = false
+					break
+				}
+			}
+		}
+		if !eligible {
 			continue
 		}
 

@@ -279,7 +279,7 @@ func (m *UsageAlertManager) CreateUsageAnomalyAlert(ctx context.Context, anomaly
 
 // CreateReconciliationAlert creates an alert for reconciliation issues.
 func (m *UsageAlertManager) CreateReconciliationAlert(ctx context.Context, result *ReconciliationResult) (*Alert, error) {
-	if result.InSync || len(result.Discrepancies) == 0 {
+	if result == nil || result.State == ReconciliationStateMatched {
 		return nil, nil
 	}
 
@@ -300,6 +300,8 @@ func (m *UsageAlertManager) CreateReconciliationAlert(ctx context.Context, resul
 	details := map[string]string{
 		"score":             formatIntAlert(result.Score),
 		"discrepancy_count": formatIntAlert(len(result.Discrepancies)),
+		"state":             string(result.State),
+		"reason_code":       string(result.ReasonCode),
 	}
 
 	// Add top discrepancies to details

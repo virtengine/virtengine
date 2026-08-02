@@ -8,8 +8,11 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
+	"math"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -17,6 +20,8 @@ import (
 	verrors "github.com/virtengine/virtengine/pkg/errors"
 	"github.com/virtengine/virtengine/pkg/waldur"
 )
+
+var ErrSettlementReconciliationHold = errors.New("settlement held pending matched reconciliation")
 
 // WaldurReconcilerConfig configures the Waldur reconciler.
 type WaldurReconcilerConfig struct {
@@ -92,6 +97,9 @@ type WaldurUsageStats struct {
 
 	// Components contains component-level usage.
 	Components []WaldurUsageComponent `json:"components,omitempty"`
+
+	// EvidenceTime is the newest timestamp among the independent records.
+	EvidenceTime time.Time `json:"evidence_time"`
 }
 
 // WaldurUsageComponent represents a usage component from Waldur.
@@ -122,6 +130,8 @@ type WaldurReconciler struct {
 	usageStore         *UsageSnapshotStore
 	settlementPipeline *SettlementPipeline
 	stateStore         *WaldurBridgeStateStore
+	jobStore           ReconciliationJobStore
+	metrics            *ReconciliationMetrics
 
 	// results stores reconciliation results by allocation ID.
 	results map[string]*ReconciliationResult
@@ -137,6 +147,20 @@ type WaldurReconciler struct {
 
 	// wg waits for goroutines to finish.
 	wg sync.WaitGroup
+}
+
+// SetJobStore installs the required durable reconciliation store.
+func (r *WaldurReconciler) SetJobStore(store ReconciliationJobStore) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.jobStore = store
+}
+
+// SetMetrics installs optional bounded reconciliation metrics.
+func (r *WaldurReconciler) SetMetrics(metrics *ReconciliationMetrics) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.metrics = metrics
 }
 
 const (
@@ -177,11 +201,46 @@ func (r *WaldurReconciler) Start(ctx context.Context) error {
 	if !r.cfg.Enabled {
 		return nil
 	}
-
+	r.mu.RLock()
+	alreadyRunning := r.running
+	r.mu.RUnlock()
+	if alreadyRunning {
+		return nil
+	}
+	r.mu.RLock()
+	jobStore, metrics := r.jobStore, r.metrics
+	r.mu.RUnlock()
+	if jobStore == nil {
+		return ErrReconciliationUnavailable
+	}
+	if err := jobStore.Open(ctx); err != nil {
+		return fmt.Errorf("open reconciliation store: %w", err)
+	}
+	projection, err := jobStore.LoadProjection(ctx)
+	if err != nil {
+		if metrics != nil {
+			metrics.ObserveProjectionFailure()
+		}
+		_ = jobStore.Close()
+		return fmt.Errorf("load reconciliation projection: %w", err)
+	}
+	if metrics != nil {
+		if err := metrics.ObserveProjection(projection); err != nil {
+			_ = jobStore.Close()
+			return fmt.Errorf("observe reconciliation projection: %w", err)
+		}
+	}
 	r.mu.Lock()
 	if r.running {
 		r.mu.Unlock()
 		return nil
+	}
+	r.results = make(map[string]*ReconciliationResult, len(projection.Results))
+	r.discrepancies = r.discrepancies[:0]
+	for _, durable := range projection.Results {
+		result := durable.Result
+		r.results[result.AllocationID] = &result
+		r.discrepancies = append(r.discrepancies, result.Discrepancies...)
 	}
 	r.running = true
 	r.mu.Unlock()
@@ -204,10 +263,14 @@ func (r *WaldurReconciler) Stop() {
 		return
 	}
 	r.running = false
+	jobStore := r.jobStore
 	r.mu.Unlock()
 
 	close(r.stopChan)
 	r.wg.Wait()
+	if jobStore != nil {
+		_ = jobStore.Close()
+	}
 
 	r.stopChan = make(chan struct{})
 	log.Printf("[waldur-reconciler] stopped")
@@ -216,31 +279,64 @@ func (r *WaldurReconciler) Stop() {
 // ReconcileAllocation reconciles usage for a specific allocation.
 func (r *WaldurReconciler) ReconcileAllocation(ctx context.Context, allocationID string, resourceUUID string) (*ReconciliationResult, error) {
 	now := time.Now()
+	periodEnd := now
+	periodStart := now.Add(-r.cfg.ReconciliationInterval)
+	return r.reconcileAllocation(ctx, allocationID, resourceUUID, now, periodStart, periodEnd, true)
+}
+
+func (r *WaldurReconciler) reconcileAllocation(ctx context.Context, allocationID, resourceUUID string, now, periodStart, periodEnd time.Time, publish bool) (*ReconciliationResult, error) {
 	if r.usageStore == nil {
 		return nil, fmt.Errorf("usage store not configured")
 	}
+	publishResult := func(result *ReconciliationResult) {
+		if publish {
+			r.storeResult(result)
+		}
+	}
 
 	// Get provider-reported usage
-	periodEnd := now
-	periodStart := now.Add(-r.cfg.ReconciliationInterval)
 	providerRecord, found := r.usageStore.FindLatest(allocationID, &periodStart, &periodEnd)
 	if !found {
-		return nil, fmt.Errorf("no provider usage record found for allocation %s", allocationID)
+		result := r.newClassifiedResult(allocationID, now, ResourceMetrics{}, ReconciliationStateUnavailable, ReconciliationReasonProviderEvidenceUnavailable)
+		publishResult(result)
+		return result, nil
+	}
+	if providerRecord.EndTime.IsZero() || providerRecord.EndTime.Before(providerRecord.StartTime) {
+		result := r.newClassifiedResult(allocationID, now, providerRecord.Metrics, ReconciliationStateUnresolved, ReconciliationReasonMalformedEvidence)
+		publishResult(result)
+		return result, nil
+	}
+	if r.evidenceStale(now, providerRecord.EndTime) {
+		result := r.newClassifiedResult(allocationID, now, providerRecord.Metrics, ReconciliationStateStale, ReconciliationReasonProviderEvidenceStale)
+		publishResult(result)
+		return result, nil
+	}
+	providerRecordDigest, err := reconciliationProviderRecordDigest(providerRecord)
+	if err != nil {
+		result := r.newClassifiedResult(allocationID, now, providerRecord.Metrics, ReconciliationStateUnresolved, ReconciliationReasonMalformedEvidence)
+		publishResult(result)
+		return result, nil
 	}
 
 	// Get Waldur usage stats
 	waldurStats, err := r.fetchWaldurUsage(ctx, resourceUUID, periodStart, periodEnd)
 	if err != nil {
-		// If Waldur stats not available, still return result with provider data only
-		result := &ReconciliationResult{
-			AllocationID:       allocationID,
-			ReconciliationTime: now,
-			ProviderMetrics:    providerRecord.Metrics,
-			WaldurMetrics:      nil,
-			InSync:             true, // Can't verify, assume in sync
-			Score:              50,   // Neutral score
+		state, reason := ReconciliationStateUnavailable, ReconciliationReasonIndependentEvidenceUnavailable
+		if validationErr, ok := err.(*reconciliationEvidenceError); ok {
+			state, reason = ReconciliationStateUnresolved, validationErr.reason
 		}
-		r.storeResult(result)
+		result := r.newClassifiedResult(allocationID, now, providerRecord.Metrics, state, reason)
+		publishResult(result)
+		return result, nil
+	}
+	if r.evidenceStale(now, waldurStats.EvidenceTime) {
+		result := r.newClassifiedResult(allocationID, now, providerRecord.Metrics, ReconciliationStateStale, ReconciliationReasonIndependentEvidenceStale)
+		publishResult(result)
+		return result, nil
+	}
+	if !hasCompleteIndependentEvidence(providerRecord.Metrics, waldurStats.Components) {
+		result := r.newClassifiedResult(allocationID, now, providerRecord.Metrics, ReconciliationStateUnresolved, ReconciliationReasonPartialEvidence)
+		publishResult(result)
 		return result, nil
 	}
 
@@ -254,16 +350,24 @@ func (r *WaldurReconciler) ReconcileAllocation(ctx context.Context, allocationID
 	score := r.calculateScore(discrepancies)
 
 	result := &ReconciliationResult{
-		AllocationID:       allocationID,
-		ReconciliationTime: now,
-		ProviderMetrics:    providerRecord.Metrics,
-		WaldurMetrics:      waldurMetrics,
-		Discrepancies:      discrepancies,
-		InSync:             len(discrepancies) == 0,
-		Score:              score,
+		AllocationID:         allocationID,
+		ReconciliationTime:   now,
+		ProviderMetrics:      providerRecord.Metrics,
+		ProviderRecordDigest: providerRecordDigest,
+		WaldurMetrics:        waldurMetrics,
+		Discrepancies:        discrepancies,
+		State:                ReconciliationStateMatched,
+		ReasonCode:           ReconciliationReasonExactMatch,
+		Score:                score,
+	}
+	if len(discrepancies) > 0 {
+		result.State = ReconciliationStateMismatched
+		result.ReasonCode = ReconciliationReasonMetricThresholdExceeded
+	} else if providerRecord.Metrics != *waldurMetrics {
+		result.ReasonCode = ReconciliationReasonWithinTolerance
 	}
 
-	r.storeResult(result)
+	publishResult(result)
 
 	// Handle discrepancies
 	if len(discrepancies) > 0 {
@@ -271,6 +375,21 @@ func (r *WaldurReconciler) ReconcileAllocation(ctx context.Context, allocationID
 	}
 
 	return result, nil
+}
+
+type reconciliationEvidenceError struct {
+	reason ReconciliationReasonCode
+	msg    string
+}
+
+func (e *reconciliationEvidenceError) Error() string { return e.msg }
+
+func (r *WaldurReconciler) newClassifiedResult(allocationID string, now time.Time, provider ResourceMetrics, state ReconciliationState, reason ReconciliationReasonCode) *ReconciliationResult {
+	return &ReconciliationResult{AllocationID: allocationID, ReconciliationTime: now, ProviderMetrics: provider, State: state, ReasonCode: reason}
+}
+
+func (r *WaldurReconciler) evidenceStale(now, evidenceTime time.Time) bool {
+	return evidenceTime.IsZero() || r.cfg.MaxAgeForReconciliation <= 0 || now.Sub(evidenceTime) > r.cfg.MaxAgeForReconciliation
 }
 
 // fetchWaldurUsage fetches usage statistics from Waldur.
@@ -283,6 +402,9 @@ func (r *WaldurReconciler) fetchWaldurUsage(ctx context.Context, resourceUUID st
 	if err != nil {
 		return nil, fmt.Errorf("fetch usage: %w", err)
 	}
+	if len(records) == 0 {
+		return nil, fmt.Errorf("independent usage evidence unavailable")
+	}
 
 	stats := &WaldurUsageStats{
 		ResourceUUID: resourceUUID,
@@ -291,10 +413,53 @@ func (r *WaldurReconciler) fetchWaldurUsage(ctx context.Context, resourceUUID st
 		Components:   make([]WaldurUsageComponent, 0, len(records)),
 	}
 	for _, record := range records {
+		if err := validateWaldurUsageRecord(record, resourceUUID); err != nil {
+			return nil, err
+		}
+		evidenceTime := record.Date
+		if record.Created.After(evidenceTime) {
+			evidenceTime = record.Created
+		}
+		if evidenceTime.After(stats.EvidenceTime) {
+			stats.EvidenceTime = evidenceTime
+		}
 		r.applyWaldurUsageRecord(stats, record)
 	}
 
 	return stats, nil
+}
+
+func validateWaldurUsageRecord(record waldur.UsageRecord, resourceUUID string) error {
+	componentType := strings.ToLower(strings.TrimSpace(record.ComponentType))
+	if record.ResourceUUID != resourceUUID || componentType == "" || usageUnitForComponentType(componentType) == "unit" ||
+		math.IsNaN(record.Usage) || math.IsInf(record.Usage, 0) || record.Usage < 0 || (record.Date.IsZero() && record.Created.IsZero()) {
+		return &reconciliationEvidenceError{reason: ReconciliationReasonMalformedEvidence, msg: "malformed independent usage evidence"}
+	}
+	return nil
+}
+
+func hasCompleteIndependentEvidence(provider ResourceMetrics, components []WaldurUsageComponent) bool {
+	present := make(map[string]bool)
+	for _, component := range components {
+		componentType := strings.ToLower(strings.TrimSpace(component.Type))
+		switch {
+		case strings.Contains(componentType, "cpu"):
+			present["cpu"] = true
+		case strings.Contains(componentType, "mem"), strings.Contains(componentType, "ram"):
+			present["memory"] = true
+		case strings.Contains(componentType, "storage"):
+			present["storage"] = true
+		case strings.Contains(componentType, "gpu"):
+			present["gpu"] = true
+		case strings.Contains(componentType, "network"), strings.Contains(componentType, "bandwidth"):
+			present["network"] = true
+		}
+	}
+	return (provider.CPUMilliSeconds == 0 || present["cpu"]) &&
+		(provider.MemoryByteSeconds == 0 || present["memory"]) &&
+		(provider.StorageByteSeconds == 0 || present["storage"]) &&
+		(provider.GPUSeconds == 0 || present["gpu"]) &&
+		(provider.NetworkBytesIn+provider.NetworkBytesOut == 0 || present["network"])
 }
 
 func (r *WaldurReconciler) applyWaldurUsageRecord(stats *WaldurUsageStats, record waldur.UsageRecord) {
@@ -511,6 +676,91 @@ func (r *WaldurReconciler) GetResult(allocationID string) (*ReconciliationResult
 	return result, ok
 }
 
+// SettlementEligibility fails closed unless a durably published result is matched.
+func (r *WaldurReconciler) SettlementEligibility(allocationID string) error {
+	if r == nil || strings.TrimSpace(allocationID) == "" {
+		return ErrSettlementReconciliationHold
+	}
+	result, found := r.GetResult(allocationID)
+	if !found || result.State != ReconciliationStateMatched {
+		return ErrSettlementReconciliationHold
+	}
+	return nil
+}
+
+// DurableSettlementEligibility requires a matched durable result covering the usage window.
+func (r *WaldurReconciler) DurableSettlementEligibility(record *UsageRecord) error {
+	if r == nil || record == nil || record.StartTime.IsZero() ||
+		record.EndTime.IsZero() || !record.EndTime.After(record.StartTime) {
+		return ErrSettlementReconciliationHold
+	}
+	r.mu.RLock()
+	jobStore := r.jobStore
+	r.mu.RUnlock()
+	if jobStore == nil {
+		return ErrSettlementReconciliationHold
+	}
+	allocationID := record.AllocationID
+	if allocationID == "" {
+		allocationID = record.DeploymentID
+	}
+	if allocationID == "" {
+		return ErrSettlementReconciliationHold
+	}
+	projection, err := jobStore.LoadProjection(context.Background())
+	if err != nil {
+		return ErrSettlementReconciliationHold
+	}
+	var latestJob ReconciliationJob
+	var latestResult DurableReconciliationResult
+	found := false
+	ambiguous := false
+	for jobID, result := range projection.Results {
+		job, ok := projection.Jobs[jobID]
+		if !ok || job.AllocationID != allocationID || job.PeriodStart.After(record.StartTime) || job.PeriodEnd.Before(record.EndTime) {
+			continue
+		}
+		if !found || job.PeriodEnd.After(latestJob.PeriodEnd) ||
+			(job.PeriodEnd.Equal(latestJob.PeriodEnd) && result.CompletedAt.After(latestResult.CompletedAt)) {
+			latestJob, latestResult, found, ambiguous = job, result, true, false
+		} else if job.PeriodEnd.Equal(latestJob.PeriodEnd) && result.CompletedAt.Equal(latestResult.CompletedAt) &&
+			(result.Result.State != latestResult.Result.State ||
+				result.Evidence.ProviderRecordDigest != latestResult.Evidence.ProviderRecordDigest ||
+				result.ResultDigest != latestResult.ResultDigest) {
+			ambiguous = true
+		}
+	}
+	if found && !ambiguous && latestResult.Result.State == ReconciliationStateMatched {
+		digest, err := reconciliationProviderRecordDigest(record)
+		if err == nil && latestResult.Evidence.ProviderRecordDigest != "" &&
+			digest == latestResult.Evidence.ProviderRecordDigest {
+			return nil
+		}
+	}
+	return ErrSettlementReconciliationHold
+}
+
+func reconciliationProviderRecordDigest(record *UsageRecord) (string, error) {
+	if record == nil || record.ID == "" || record.StartTime.IsZero() || record.EndTime.IsZero() || !record.EndTime.After(record.StartTime) {
+		return "", errors.New("invalid provider usage record evidence")
+	}
+	allocationID := record.AllocationID
+	if allocationID == "" {
+		allocationID = record.DeploymentID
+	}
+	if allocationID == "" {
+		return "", errors.New("provider usage record allocation is required")
+	}
+	evidence := struct {
+		ID           string          `json:"id"`
+		AllocationID string          `json:"allocation_id"`
+		StartTime    time.Time       `json:"start_time"`
+		EndTime      time.Time       `json:"end_time"`
+		Metrics      ResourceMetrics `json:"metrics"`
+	}{record.ID, allocationID, record.StartTime.UTC(), record.EndTime.UTC(), record.Metrics}
+	return canonicalReconciliationDigest("provider-record-evidence", evidence)
+}
+
 // GetRecentDiscrepancies returns recent discrepancies.
 func (r *WaldurReconciler) GetRecentDiscrepancies(limit int) []MetricDiscrepancy {
 	r.mu.RLock()
@@ -540,10 +790,17 @@ func (r *WaldurReconciler) GetSyncStatus() ReconciliationSyncStatus {
 		if result.ReconciliationTime.After(status.LastReconcileTime) {
 			status.LastReconcileTime = result.ReconciliationTime
 		}
-		if result.InSync {
-			status.InSyncCount++
-		} else {
-			status.OutOfSyncCount++
+		switch result.State {
+		case ReconciliationStateMatched:
+			status.MatchedCount++
+		case ReconciliationStateMismatched:
+			status.MismatchedCount++
+		case ReconciliationStateUnavailable:
+			status.UnavailableCount++
+		case ReconciliationStateStale:
+			status.StaleCount++
+		case ReconciliationStateUnresolved:
+			status.UnresolvedCount++
 		}
 		status.TotalScore += result.Score
 	}
@@ -560,11 +817,11 @@ type ReconciliationSyncStatus struct {
 	// TotalAllocations is the total number of reconciled allocations.
 	TotalAllocations int `json:"total_allocations"`
 
-	// InSyncCount is the count of in-sync allocations.
-	InSyncCount int `json:"in_sync_count"`
-
-	// OutOfSyncCount is the count of out-of-sync allocations.
-	OutOfSyncCount int `json:"out_of_sync_count"`
+	MatchedCount     int `json:"matched_count"`
+	MismatchedCount  int `json:"mismatched_count"`
+	UnavailableCount int `json:"unavailable_count"`
+	StaleCount       int `json:"stale_count"`
+	UnresolvedCount  int `json:"unresolved_count"`
 
 	// AverageScore is the average reconciliation score.
 	AverageScore int `json:"average_score"`
@@ -617,30 +874,92 @@ func (r *WaldurReconciler) runReconciliation(ctx context.Context) {
 		return
 	}
 
-	processed := 0
-	skipped := 0
-	for allocationID, mapping := range state.Mappings {
-		if mapping == nil {
-			skipped++
+	r.mu.RLock()
+	jobStore, metrics := r.jobStore, r.metrics
+	r.mu.RUnlock()
+	if jobStore == nil {
+		log.Printf("[waldur-reconciler] skipped: durable reconciliation store unavailable")
+		return
+	}
+
+	periodEnd := time.Now().UTC()
+	periodStart := periodEnd.Add(-r.cfg.ReconciliationInterval)
+	allocationIDs := make([]string, 0, len(state.Mappings))
+	for allocationID := range state.Mappings {
+		allocationIDs = append(allocationIDs, allocationID)
+	}
+	sort.Strings(allocationIDs)
+	for _, allocationID := range allocationIDs {
+		mapping := state.Mappings[allocationID]
+		if mapping == nil || mapping.ResourceUUID == "" {
 			continue
 		}
 		if mapping.AllocationID != "" {
 			allocationID = mapping.AllocationID
 		}
-		if allocationID == "" || mapping.ResourceUUID == "" {
-			skipped++
+		job := newReconciliationJob(allocationID, mapping.ResourceUUID, periodStart, periodEnd)
+		if _, _, err := jobStore.PutJobIfAbsent(ctx, job); err != nil {
+			log.Printf("[waldur-reconciler] failed to persist job %s: %v", job.ID, err)
+		}
+	}
+	r.refreshMetrics(ctx)
+
+	pending, err := jobStore.PendingJobs(ctx)
+	if err != nil {
+		if metrics != nil {
+			metrics.ObserveProjectionFailure()
+		}
+		log.Printf("[waldur-reconciler] failed to load pending jobs: %v", err)
+		return
+	}
+	processed := 0
+	skipped := 0
+	for _, job := range pending {
+		attempt, err := jobStore.BeginAttempt(ctx, job.ID)
+		if err != nil {
+			log.Printf("[waldur-reconciler] failed to begin job %s: %v", job.ID, err)
 			continue
 		}
-		if _, err := r.ReconcileAllocation(ctx, allocationID, mapping.ResourceUUID); err != nil {
-			log.Printf("[waldur-reconciler] failed to reconcile %s: %v", allocationID, err)
+		result, err := r.reconcileAllocation(ctx, job.AllocationID, job.ResourceUUID, job.PeriodEnd, job.PeriodStart, job.PeriodEnd, false)
+		if err != nil {
+			_ = jobStore.FailAttempt(ctx, job.ID, attempt.Number, "reconciliation_error")
+			r.refreshMetrics(ctx)
+			log.Printf("[waldur-reconciler] failed to reconcile %s: %v", job.AllocationID, err)
 			continue
 		}
+		durable, intents, cursor, err := buildDurableReconciliationCompletion(job, attempt, *result)
+		if err != nil {
+			_ = jobStore.FailAttempt(ctx, job.ID, attempt.Number, "evidence_digest_error")
+			r.refreshMetrics(ctx)
+			continue
+		}
+		if err := jobStore.CompleteAttempt(ctx, durable, intents, cursor); err != nil {
+			log.Printf("[waldur-reconciler] failed to commit job %s: %v", job.ID, err)
+			continue
+		}
+		r.refreshMetrics(ctx)
+		r.storeResult(result)
 		processed++
 	}
 
 	status := r.GetSyncStatus()
-	log.Printf("[waldur-reconciler] reconciliation complete: %d processed, %d skipped, %d allocations, %d in-sync, %d out-of-sync, avg score %d",
-		processed, skipped, status.TotalAllocations, status.InSyncCount, status.OutOfSyncCount, status.AverageScore)
+	log.Printf("[waldur-reconciler] reconciliation complete: %d processed, %d skipped, %d allocations, %d matched, %d mismatched, %d unavailable, %d stale, %d unresolved, avg score %d",
+		processed, skipped, status.TotalAllocations, status.MatchedCount, status.MismatchedCount, status.UnavailableCount, status.StaleCount, status.UnresolvedCount, status.AverageScore)
+}
+
+func (r *WaldurReconciler) refreshMetrics(ctx context.Context) {
+	r.mu.RLock()
+	metrics, jobStore := r.metrics, r.jobStore
+	r.mu.RUnlock()
+	if metrics == nil || jobStore == nil {
+		return
+	}
+	projection, err := jobStore.LoadProjection(ctx)
+	if err != nil {
+		metrics.ObserveProjectionFailure()
+		return
+	}
+	_ = metrics.ObserveProjection(projection)
 }
 
 // ScheduledUsageCollector collects usage on a schedule and integrates with settlement.
@@ -690,6 +1009,9 @@ func NewScheduledUsageCollector(
 	pipeline *SettlementPipeline,
 	reconciler *WaldurReconciler,
 ) *ScheduledUsageCollector {
+	if pipeline != nil && reconciler != nil {
+		pipeline.SetSettlementEligibility(reconciler.DurableSettlementEligibility)
+	}
 	return &ScheduledUsageCollector{
 		cfg:                cfg,
 		usageMeter:         usageMeter,
@@ -766,6 +1088,14 @@ func (c *ScheduledUsageCollector) CollectNow(ctx context.Context) error {
 			}
 
 			// Submit to chain
+			if c.reconciler == nil {
+				log.Printf("[scheduled-collector] settlement held for %s: reconciliation unavailable", workloadID)
+				continue
+			}
+			if err := c.reconciler.DurableSettlementEligibility(record); err != nil {
+				log.Printf("[scheduled-collector] settlement held for %s: %v", workloadID, err)
+				continue
+			}
 			if err := c.settlementPipeline.SubmitUsageToChain(ctx, record); err != nil {
 				log.Printf("[scheduled-collector] failed to submit to chain for %s: %v", workloadID, err)
 			}
