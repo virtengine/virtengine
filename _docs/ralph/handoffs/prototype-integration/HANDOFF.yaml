@@ -1,39 +1,45 @@
 {
   "campaign": "three-day-prototype",
   "thread": "T4",
-  "checkpoint": "T4-01AR",
+  "checkpoint": "T4-01AS",
   "branch": "ve/prototype-integration",
-  "start_head": "e82e2be0f0d8d5b5664e3ae3e6c322f51267393c",
-  "end_head": "383e3200c6ef1ed7c350fb8b6028e00180b2cdf6",
+  "start_head": "bb39654574324c2631bafa14a7268a2982a2a3c9",
+  "end_head": "7c525ba18bcb860fd0b7d503f729afa0b531a049",
   "origin_main": "79391a3df86d85522b92e0400c6904971ecbe65d",
   "tree_clean": true,
   "commits": [
-    "383e3200c6ef1ed7c350fb8b6028e00180b2cdf6"
+    "7c525ba18bcb860fd0b7d503f729afa0b531a049"
   ],
   "owned_paths": [
-    "_docs/ralph/prototype-integration/**",
     "_docs/ralph/handoffs/prototype-integration/**",
-    "_docs/ralph/prototype-integration/core-rc-manifest.json"
+    "_docs/prototype-thread-intake-runbook.md",
+    "_docs/ralph/prototype-integration/required-gate-matrix.json",
+    "scripts/recover-prototype-intake-freeze-lease.cjs",
+    "scripts/recover-prototype-intake-freeze-lease.test.cjs",
+    "scripts/validate-required-gate-matrix.cjs"
   ],
   "files_changed": [
-    "_docs/ralph/handoffs/prototype-integration/HANDOFF.yaml",
-    "_docs/ralph/prototype-integration/core-rc-manifest.json"
+    "_docs/prototype-thread-intake-runbook.md",
+    "_docs/ralph/prototype-integration/required-gate-matrix.json",
+    "scripts/recover-prototype-intake-freeze-lease.cjs",
+    "scripts/recover-prototype-intake-freeze-lease.test.cjs",
+    "scripts/validate-required-gate-matrix.cjs"
   ],
   "tests": [
     {
-      "command": "node scripts/validate-prototype-integration.test.cjs && node scripts/validate-prototype-integration.cjs",
+      "command": "node scripts/recover-prototype-intake-freeze-lease.test.cjs",
       "exit_code": 0,
       "result": "passed",
-      "test_count": 12,
+      "test_count": 5,
       "tool_versions": {
         "node": "20.19.1"
       }
     },
     {
-      "command": "node scripts/validate-agents-docs.mjs",
+      "command": "node scripts/validate-required-gate-matrix.test.cjs && node scripts/validate-agents-docs.mjs",
       "exit_code": 0,
       "result": "passed",
-      "test_count": 9,
+      "test_count": 22,
       "tool_versions": {
         "node": "20.19.1"
       }
@@ -80,5 +86,5 @@
     "Task 88C is not complete."
   ],
   "next_checkpoint": null,
-  "expected_head": "383e3200c6ef1ed7c350fb8b6028e00180b2cdf6"
+  "expected_head": "7c525ba18bcb860fd0b7d503f729afa0b531a049"
 }
