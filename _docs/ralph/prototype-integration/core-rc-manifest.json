@@ -6,14 +6,14 @@
   "planned_functionality_complete": false,
   "milestone_m_eligible": false,
   "source": {
-    "payload_sha": "1767a2975222810de07cfe8449b14c6482f2b49d",
-    "tree": "411bdcbbab7e0ebd85f7c8da5abd5936264a752c",
+    "payload_sha": "c609ef4bdac3d21e6303323d111108e65f2962ca",
+    "tree": "275c6ed46edda84c767ebebcaa7d69f08baa48fb",
     "branch": "ve/prototype-integration",
     "binding": "declared_clean_parent_payload"
   },
   "tooling": {
-    "tooling_sha": "1767a2975222810de07cfe8449b14c6482f2b49d",
-    "tree": "411bdcbbab7e0ebd85f7c8da5abd5936264a752c",
+    "tooling_sha": "c609ef4bdac3d21e6303323d111108e65f2962ca",
+    "tree": "275c6ed46edda84c767ebebcaa7d69f08baa48fb",
     "artifacts": [
       {
         "id": "generator",
@@ -52,6 +52,12 @@
       "name": "go",
       "version": "1.25.8",
       "source": "go.mod",
+      "status": "declared"
+    },
+    {
+      "name": "helm",
+      "version": "3.18.6",
+      "source": "required gate runner image",
       "status": "declared"
     },
     {
@@ -211,7 +217,7 @@
         "expected_file_count": 15
       },
       "file_count": 15,
-      "sha256": "0deffbe066f6662caa5e28157c1446a5ec34b524630cf803c6d0f4a459b43ae8",
+      "sha256": "e516c3e0a0cfba6b71473a3bc75bd287a475830438c918ab9bbfb993196258fa",
       "blocker_id": null
     }
   ],
@@ -225,7 +231,7 @@
     {
       "id": "required_gate_matrix",
       "path": "_docs/ralph/prototype-integration/required-gate-matrix.json",
-      "sha256": "e205e035d4dda0959d6372d58e8c9ca23fa9b6b40b7c5da56c8b701d80cd1104",
+      "sha256": "7dbfe26a4bec8a3071ae0fb92c5d25b8364f69495e15fdb60284679ee7eb399a",
       "status": "dependency_blocked"
     },
     {
@@ -415,26 +421,36 @@
   "test_evidence": {
     "status": "complete",
     "ledger_path": "_docs/ralph/handoffs/prototype-integration/HANDOFF.yaml",
-    "implementation_sha": "2f74ffd1deee697c074e678b9f9ad157c0b13264",
-    "ledger_sha": "1767a2975222810de07cfe8449b14c6482f2b49d",
-    "record_count": 2,
-    "declared_test_count": 50,
+    "implementation_sha": "f2f65aa3b40d47b9c8318ff835ef1406d01885c6",
+    "ledger_sha": "c609ef4bdac3d21e6303323d111108e65f2962ca",
+    "record_count": 3,
+    "declared_test_count": 102,
     "uncounted_record_count": 0,
     "records": [
+      {
+        "command": "helm lint deploy/slurm/slurm-cluster --values deploy/slurm/slurm-cluster/tests/stable-secrets-values.yaml --strict && helm template slurm-capacity deploy/slurm/slurm-cluster --namespace slurm-capacity --values deploy/slurm/slurm-cluster/tests/stable-secrets-values.yaml | python scripts/validate_slurm_chart_semantics.py --chart deploy/slurm/slurm-cluster --rendered -",
+        "exit_code": 0,
+        "result": "passed",
+        "test_count": 5,
+        "tool_versions": {
+          "helm": "3.18.6",
+          "python": "3.14.6"
+        }
+      },
+      {
+        "command": "python scripts/validate_slurm_chart_semantics_test.py -v",
+        "exit_code": 0,
+        "result": "passed",
+        "test_count": 53,
+        "tool_versions": {
+          "python": "3.14.6"
+        }
+      },
       {
         "command": "node scripts/validate-required-gate-matrix.test.cjs && node scripts/run-required-gates.test.cjs",
         "exit_code": 0,
         "result": "passed",
-        "test_count": 41,
-        "tool_versions": {
-          "node": "20.19.1"
-        }
-      },
-      {
-        "command": "node scripts/validate-agents-docs.mjs",
-        "exit_code": 0,
-        "result": "passed",
-        "test_count": 9,
+        "test_count": 44,
         "tool_versions": {
           "node": "20.19.1"
         }
@@ -444,7 +460,7 @@
   },
   "producer_checkpoints": {
     "ledger_path": "_docs/ralph/handoffs/prototype-integration/HANDOFF.yaml",
-    "ledger_sha256": "41024ba4982ac248fc7a0b29dc753e9ec43609b74dcf4b4b0841943135205dc8",
+    "ledger_sha256": "7ba4af0a3805105318a9a17995d24b65eb9c2610775314e3eb309f34e8f28e0d",
     "accepted": [],
     "rejected": [
       {
