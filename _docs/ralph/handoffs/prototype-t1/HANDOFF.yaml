@@ -1,13 +1,13 @@
 {
   "campaign": "three-day-prototype",
   "thread": "T1",
-  "checkpoint": "T1-04",
+  "checkpoint": "T1-05",
   "branch": "ve/prototype-t1-identity",
   "frozen_baseline": "79391a3df86d85522b92e0400c6904971ecbe65d",
   "planning_sha": "1436723bd78980aa0388dbe9fcfa24dda939c54a",
   "intake_epoch": 1,
   "intake_base_sha": "5587c384f634552c3a2dd7181ca49cafa4da1984",
-  "payload_head": "74b2e331e3785279c261d4d4decaede5809752fa",
+  "payload_head": "2c08d17206575f865f427510ff5c79598737e6ed",
   "prior_accepted_payload": null,
   "tree_clean": true,
   "commits_since_prior_acceptance": [
@@ -18,11 +18,14 @@
     "43421b0bc9198c138083d0a9cbefaf9a428ebae3",
     "938301d216f66ebe66fa62826b7d3baf5dcaea14",
     "29bab5c50234eb546619fde8e99c4f9de3596e0e",
-    "74b2e331e3785279c261d4d4decaede5809752fa"
+    "74b2e331e3785279c261d4d4decaede5809752fa",
+    "9a1618115680c19abd952ac3b381ed68cac1ea29",
+    "2c08d17206575f865f427510ff5c79598737e6ed"
   ],
   "owned_paths": [
     "_docs/ralph/handoffs/prototype-t1/**",
     "_docs/ralph/evidence/prototype-t1/**",
+    "pkg/enclave_runtime/workload_binding*.go",
     "scripts/task85d-preflight.ps1",
     "x/veid/**",
     "x/veidregistry/**"
@@ -31,6 +34,15 @@
     ".gitattributes",
     "_build/build-veid-pipeline.sh",
     "_docs/INDEX.md",
+    "_docs/ralph/evidence/prototype-t1/t1-04/commits.txt",
+    "_docs/ralph/evidence/prototype-t1/t1-04/files.txt",
+    "_docs/ralph/evidence/prototype-t1/t1-04/focused-tests.txt",
+    "_docs/ralph/evidence/prototype-t1/t1-04/git-diff-check.txt",
+    "_docs/ralph/evidence/prototype-t1/t1-04/git-version.txt",
+    "_docs/ralph/evidence/prototype-t1/t1-04/go-version.txt",
+    "_docs/ralph/evidence/prototype-t1/t1-04/go-vet.txt",
+    "_docs/ralph/evidence/prototype-t1/t1-04/keeper-tests.txt",
+    "_docs/ralph/evidence/prototype-t1/t1-04/payload-head.txt",
     "_docs/ralph/handoffs/prototype-integration/HANDOFF.yaml",
     "_docs/ralph/handoffs/prototype-t1/HANDOFF.yaml",
     "_docs/ralph/prototype-integration/control.json",
@@ -43,6 +55,10 @@
     "cmd/inference-sidecar/manifest_test.go",
     "ml/training/model/release_manifest.py",
     "ml/training/tests/test_release_manifest.py",
+    "pkg/enclave_runtime/workload_binding.go",
+    "pkg/enclave_runtime/workload_binding_test.go",
+    "pkg/enclave_runtime/workload_binding_verifier.go",
+    "pkg/enclave_runtime/workload_binding_verifier_test.go",
     "scripts/task85d-preflight.ps1",
     "scripts/validate-migration-inventory.cjs",
     "scripts/validate-migration-inventory.test.cjs",
@@ -74,53 +90,58 @@
   ],
   "tests": [
     {
-      "command": "C:\\Users\\pavil\\AppData\\Local\\VirtEngine\\toolchains\\go1.25.8\\go\\bin\\go.exe -C C:\\Users\\pavil\\Desktop\\virtengine-gh\\repos\\virtengine-t1 test -count=1 ./x/veid/keeper -run EvidenceVertical|SubmitSSOVerificationProof|SubmitWebEvidenceExactRetries|ScoringResult",
+      "command": "C:\\Users\\pavil\\AppData\\Local\\VirtEngine\\toolchains\\go1.25.8\\go\\bin\\go.exe -C C:\\Users\\pavil\\Desktop\\virtengine-gh\\repos\\virtengine-t1 test -count=1 ./pkg/enclave_runtime -run WorkloadBinding",
       "exit_code": 0,
       "result": "passed",
       "tool_versions": { "go": "go version go1.25.8 windows/amd64" },
-      "artifact": "_docs/ralph/evidence/prototype-t1/t1-04/focused-tests.txt"
+      "artifact": "_docs/ralph/evidence/prototype-t1/t1-05/focused-tests.txt"
     },
     {
-      "command": "C:\\Users\\pavil\\AppData\\Local\\VirtEngine\\toolchains\\go1.25.8\\go\\bin\\go.exe -C C:\\Users\\pavil\\Desktop\\virtengine-gh\\repos\\virtengine-t1 test -count=1 ./x/veid/keeper",
+      "command": "C:\\Users\\pavil\\AppData\\Local\\VirtEngine\\toolchains\\go1.25.8\\go\\bin\\go.exe -C C:\\Users\\pavil\\Desktop\\virtengine-gh\\repos\\virtengine-t1 test -count=1 ./pkg/enclave_runtime",
       "exit_code": 0,
       "result": "passed",
       "tool_versions": { "go": "go version go1.25.8 windows/amd64" },
-      "artifact": "_docs/ralph/evidence/prototype-t1/t1-04/keeper-tests.txt"
+      "artifact": "_docs/ralph/evidence/prototype-t1/t1-05/package-tests.txt"
     },
     {
-      "command": "C:\\Users\\pavil\\AppData\\Local\\VirtEngine\\toolchains\\go1.25.8\\go\\bin\\go.exe -C C:\\Users\\pavil\\Desktop\\virtengine-gh\\repos\\virtengine-t1 vet ./x/veid/keeper",
+      "command": "$env:CGO_ENABLED='1'; $env:CC='C:\\Users\\pavil\\AppData\\Local\\Microsoft\\WinGet\\Packages\\BrechtSanders.WinLibs.POSIX.UCRT_Microsoft.Winget.Source_8wekyb3d8bbwe\\mingw64\\bin\\gcc.exe'; C:\\Users\\pavil\\AppData\\Local\\VirtEngine\\toolchains\\go1.25.8\\go\\bin\\go.exe -C C:\\Users\\pavil\\Desktop\\virtengine-gh\\repos\\virtengine-t1 test -race -count=1 ./pkg/enclave_runtime -run WorkloadBinding",
       "exit_code": 0,
       "result": "passed",
       "tool_versions": { "go": "go version go1.25.8 windows/amd64" },
-      "artifact": "_docs/ralph/evidence/prototype-t1/t1-04/go-vet.txt"
+      "artifact": "_docs/ralph/evidence/prototype-t1/t1-05/race-tests.txt"
+    },
+    {
+      "command": "C:\\Users\\pavil\\AppData\\Local\\VirtEngine\\toolchains\\go1.25.8\\go\\bin\\go.exe -C C:\\Users\\pavil\\Desktop\\virtengine-gh\\repos\\virtengine-t1 vet ./pkg/enclave_runtime",
+      "exit_code": 0,
+      "result": "passed",
+      "tool_versions": { "go": "go version go1.25.8 windows/amd64" },
+      "artifact": "_docs/ralph/evidence/prototype-t1/t1-05/go-vet.txt"
     },
     {
       "command": "git -C C:\\Users\\pavil\\Desktop\\virtengine-gh\\repos\\virtengine-t1 diff --check",
       "exit_code": 0,
       "result": "passed",
       "tool_versions": { "git": "git version 2.52.0.windows.1" },
-      "artifact": "_docs/ralph/evidence/prototype-t1/t1-04/git-diff-check.txt"
+      "artifact": "_docs/ralph/evidence/prototype-t1/t1-05/git-diff-check.txt"
     }
   ],
   "generated_hashes": {},
   "migrations": [],
   "external_evidence": [
-    "_docs/ralph/evidence/prototype-t1/t1-04/commits.txt",
-    "_docs/ralph/evidence/prototype-t1/t1-04/files.txt",
-    "_docs/ralph/evidence/prototype-t1/t1-04/git-version.txt",
-    "_docs/ralph/evidence/prototype-t1/t1-04/go-version.txt",
-    "_docs/ralph/evidence/prototype-t1/t1-04/payload-head.txt"
+    "_docs/ralph/evidence/prototype-t1/t1-05/commits.txt",
+    "_docs/ralph/evidence/prototype-t1/t1-05/files.txt",
+    "_docs/ralph/evidence/prototype-t1/t1-05/git-version.txt",
+    "_docs/ralph/evidence/prototype-t1/t1-05/go-version.txt",
+    "_docs/ralph/evidence/prototype-t1/t1-05/payload-head.txt"
   ],
   "known_failures": [
-    "Separate-process SSO, issuer rotation, outage, restart, and production inference-runtime certification remain open; this checkpoint proves deterministic in-process engineering behavior only.",
-    "Real hardware, current vendor collateral, external signer custody, and production model or dataset certification are not claimed."
+    "T1-05 defines a verifier contract and fixture boundary only; it does not certify real hardware, current vendor collateral, signer-key ownership, replay consumption, or production readiness.",
+    "Workload identity persistence, sidecar/runtime integration, production certificate rotation, and external operator certification remain open."
   ],
   "blockers": [
+    "T4 intake validation for the published T1-04 tag is currently blocked by an unrelated dirty T4 worktree path cmd/inference-sidecar/manifest_test2.go.",
     "T4 intake validator includes synchronized epoch-base merge paths in a first producer payload, causing integration-owned files to fail producer ownership and generated-file lease checks.",
-    "Fresh-ID email, SMS, and social submissions still require governed account-and-evidence uniqueness enforcement to prevent repeated score contributions.",
-    "Same-account web scoring submissions at one height still require a deterministic history sequence to prevent lineage-key overwrite.",
-    "Caller-controlled evidence metadata requires a digest-only persistence policy before production eligibility.",
-    "Typed EventVerificationSubmitted currently projects as an empty ABCI event in this SDK wiring; T1-04 passes only the hashed nonce to the emitter so raw nonce disclosure remains fail closed."
+    "Real-hardware attestation, current collateral, signer ownership resolution, durable replay consumption, and sidecar integration remain outside this checkpoint."
   ],
-  "next_checkpoint": "T1-05"
+  "next_checkpoint": "T1-06"
 }
