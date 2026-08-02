@@ -1,38 +1,32 @@
 {
   "campaign": "three-day-prototype",
   "thread": "T4",
-  "checkpoint": "T4-08T",
+  "checkpoint": "T4-08U",
   "branch": "ve/prototype-integration",
-  "start_head": "820c06eaee5a9b0899840768a02784c32cc94826",
-  "end_head": "8b4028088a1c3a76fa27103fc9fa781c0dfba752",
+  "start_head": "8d2240d22486c1d728d8a615a5059f4617f944f3",
+  "end_head": "b75de77c53ff73d868d83c994c363200c0b3a5c1",
   "origin_main": "79391a3df86d85522b92e0400c6904971ecbe65d",
   "tree_clean": true,
   "commits": [
-    "8b4028088a1c3a76fa27103fc9fa781c0dfba752"
+    "b75de77c53ff73d868d83c994c363200c0b3a5c1"
   ],
   "owned_paths": [
     "_docs/ralph/prototype-integration/**",
-    "_docs/ralph/handoffs/prototype-integration/**"
+    "_docs/ralph/handoffs/prototype-integration/**",
+    "scripts/validate-slurm-chart-inventory.cjs",
+    "scripts/validate-slurm-chart-inventory.test.cjs"
   ],
   "files_changed": [
-    "_docs/ralph/handoffs/prototype-integration/HANDOFF.yaml",
-    "_docs/ralph/prototype-integration/core-rc-manifest.json"
+    "_docs/ralph/prototype-integration/slurm-chart-inventory.json",
+    "scripts/validate-slurm-chart-inventory.cjs",
+    "scripts/validate-slurm-chart-inventory.test.cjs"
   ],
   "tests": [
     {
-      "command": "node scripts/validate-prototype-integration.test.cjs && node scripts/validate-prototype-integration.cjs",
+      "command": "node scripts/validate-slurm-chart-inventory.test.cjs && node scripts/validate-slurm-chart-inventory.cjs",
       "exit_code": 0,
       "result": "passed",
-      "test_count": 12,
-      "tool_versions": {
-        "node": "20.19.1"
-      }
-    },
-    {
-      "command": "node scripts/validate-agents-docs.mjs",
-      "exit_code": 0,
-      "result": "passed",
-      "test_count": 9,
+      "test_count": 14,
       "tool_versions": {
         "node": "20.19.1"
       }
@@ -79,5 +73,5 @@
     "Task 88C is not complete."
   ],
   "next_checkpoint": null,
-  "expected_head": "8b4028088a1c3a76fa27103fc9fa781c0dfba752"
+  "expected_head": "b75de77c53ff73d868d83c994c363200c0b3a5c1"
 }
