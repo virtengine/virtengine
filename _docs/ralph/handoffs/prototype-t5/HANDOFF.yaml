@@ -1,62 +1,55 @@
 campaign: three-day-prototype
 thread: T5
-checkpoint: T5-16
+checkpoint: T5-17
 branch: ve/prototype-t5-platform
-start_head: 2884d7d0b9522a642c3b337eb7941089da847d1c
-end_head: 65508cd516f5e46fb055d47c0bb81f1bcf810eae
+start_head: 35945dd943d6f8dd647cae74cf11478b0acbc53a
+end_head: c3355b55f3f58aefebaad5b0b1be483e5be2dc1a
 origin_main: 79391a3df86d85522b92e0400c6904971ecbe65d
 tree_clean: true
 commits:
-  - 65508cd516f5e46fb055d47c0bb81f1bcf810eae
+  - c3355b55f3f58aefebaad5b0b1be483e5be2dc1a
 owned_paths:
-  - pkg/data_vault/erasure_coordinator.go
-  - pkg/data_vault/erasure_coordinator_test.go
-  - pkg/data_vault/restore_fence.go
-  - pkg/data_vault/contracts/evidence_lifecycle.go
-  - pkg/data_vault/contracts/evidence_lifecycle_test.go
+  - pkg/platformsecurity/uniqueness/incident.go
+  - pkg/platformsecurity/uniqueness/incident_test.go
   - _docs/ralph/handoffs/prototype-t5/HANDOFF.yaml
-  - _docs/ralph/evidence/prototype-t5/T5-16/validation.txt
+  - _docs/ralph/evidence/prototype-t5/T5-17/validation.txt
 files_changed:
-  - pkg/data_vault/erasure_coordinator.go
-  - pkg/data_vault/erasure_coordinator_test.go
-  - pkg/data_vault/restore_fence.go
-  - pkg/data_vault/contracts/evidence_lifecycle.go
-  - pkg/data_vault/contracts/evidence_lifecycle_test.go
+  - pkg/platformsecurity/uniqueness/incident.go
+  - pkg/platformsecurity/uniqueness/incident_test.go
   - _docs/ralph/handoffs/prototype-t5/HANDOFF.yaml
-  - _docs/ralph/evidence/prototype-t5/T5-16/validation.txt
+  - _docs/ralph/evidence/prototype-t5/T5-17/validation.txt
 tests:
-  - command: C:\Users\pavil\AppData\Local\VirtEngine\toolchains\go1.25.8\go\bin\go.exe -C C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t5 test -count=1 ./pkg/data_vault/...
+  - command: C:\Users\pavil\AppData\Local\VirtEngine\toolchains\go1.25.8\go\bin\go.exe test -count=1 ./pkg/platformsecurity/uniqueness
     exit_code: 0
     result: passed
     tool_versions:
       go: go1.25.8 windows/amd64
-    artifact: _docs/ralph/evidence/prototype-t5/T5-16/validation.txt
-  - command: C:\Users\pavil\AppData\Local\VirtEngine\toolchains\go1.25.8\go\bin\go.exe vet ./pkg/data_vault/...
+    artifact: _docs/ralph/evidence/prototype-t5/T5-17/validation.txt
+  - command: C:\Users\pavil\AppData\Local\VirtEngine\toolchains\go1.25.8\go\bin\go.exe vet ./pkg/platformsecurity/uniqueness
     exit_code: 0
     result: passed
     tool_versions:
       go: go1.25.8 windows/amd64
-    artifact: _docs/ralph/evidence/prototype-t5/T5-16/validation.txt
-  - command: $env:CGO_ENABLED='1'; $env:CC='gcc'; C:\Users\pavil\AppData\Local\VirtEngine\toolchains\go1.25.8\go\bin\go.exe test -race -count=1 ./pkg/data_vault/...
+    artifact: _docs/ralph/evidence/prototype-t5/T5-17/validation.txt
+  - command: $env:CGO_ENABLED='1'; $env:CC='gcc'; C:\Users\pavil\AppData\Local\VirtEngine\toolchains\go1.25.8\go\bin\go.exe test -race -count=1 ./pkg/platformsecurity/uniqueness
     exit_code: 0
     result: passed
     tool_versions:
       go: go1.25.8 windows/amd64
       gcc: WinLibs POSIX UCRT 16.1.0
-    artifact: _docs/ralph/evidence/prototype-t5/T5-16/validation.txt
-  - command: git diff --check
+    artifact: _docs/ralph/evidence/prototype-t5/T5-17/validation.txt
+  - command: git diff --cached --check
     exit_code: 0
     result: passed
-    artifact: _docs/ralph/evidence/prototype-t5/T5-16/validation.txt
+    artifact: _docs/ralph/evidence/prototype-t5/T5-17/validation.txt
 generated_hashes: {}
 migrations: []
 external_evidence:
-  - _docs/ralph/evidence/prototype-t5/T5-16/validation.txt
+  - _docs/ralph/evidence/prototype-t5/T5-17/validation.txt
 known_failures: []
 blockers:
-  - Production erasure requires a durable atomic store, distributed finalization fence, independent signer authority domains, and authenticated restore-manifest authority.
-  - T5-17 must implement biometric incident/recovery contracts.
-  - T5-18 must implement the durable keeper nonce consumer and cached-context transaction.
-  - T4 has not published the intake epoch manifest, epoch base tag, or intake validator; T5-16 remains untagged and not intake-eligible.
-next_checkpoint: T5-17
-expected_head: 65508cd516f5e46fb055d47c0bb81f1bcf810eae
+  - Contracts and memory consumer are fixture-only; production requires durable atomic resolution storage, authoritative audit and notification coordinates, and verification of off-chain evidence and receipt semantics.
+  - T5-18 must implement the durable FundAuthorization keeper consume API.
+  - T4 has not published the intake epoch manifest, epoch base tag, or intake validator; T5-17 remains untagged and not intake-eligible.
+next_checkpoint: T5-18
+expected_head: c3355b55f3f58aefebaad5b0b1be483e5be2dc1a
