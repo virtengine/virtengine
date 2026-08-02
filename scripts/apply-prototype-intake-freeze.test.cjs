@@ -1,9 +1,10 @@
 "use strict";
 
 const assert = require("assert").strict;
+const { createHash } = require("crypto");
 const { readFileSync } = require("fs");
 const { resolve } = require("path");
-const { parseArgs, validateFreezeTransition, validateWorktreeBoundary } = require("./apply-prototype-intake-freeze.cjs");
+const { parseArgs, validateFreezeTransition, validatePlanDigest, validateWorktreeBoundary } = require("./apply-prototype-intake-freeze.cjs");
 
 function epoch() {
   return {
@@ -32,12 +33,15 @@ const tests = [
   ["rejects a changed producer roster", () => { const value = frozen(); value.producers[0].thread = "T2"; assert.throws(() => validateFreezeTransition(epoch(), value, afterCutoff), /roster is invalid/); }],
   ["rejects a wrong-thread announced tag", () => { const value = frozen(); value.producers[0].tag = "checkpoint/prototype-t3/t3-13a"; assert.throws(() => validateFreezeTransition(epoch(), value, afterCutoff), /decision is invalid/); }],
   ["rejects unknown producer fields", () => { const value = frozen(); value.producers[0].accepted = true; assert.throws(() => validateFreezeTransition(epoch(), value, afterCutoff), /fields are invalid/); }],
-  ["parses an explicit epoch, plan, and expected HEAD", () => { const value = parseArgs(["--epoch", "1", "--expected-head", "a".repeat(40), "--plan", "plan.json"]); assert.equal(value.expectedHead, "a".repeat(40)); assert.equal(value.plan, "plan.json"); }],
-  ["rejects a missing expected HEAD", () => assert.throws(() => parseArgs(["--epoch", "1", "--plan", "plan.json"]), /expected-head/)],
-  ["rejects an abbreviated expected HEAD", () => assert.throws(() => parseArgs(["--epoch", "1", "--expected-head", "abc123", "--plan", "plan.json"]), /exact commit SHA/)],
+  ["parses explicit reviewed HEAD and plan digest", () => { const value = parseArgs(["--epoch", "1", "--expected-head", "a".repeat(40), "--expected-plan-sha256", "b".repeat(64), "--plan", "plan.json"]); assert.equal(value.expectedPlanSha256, "b".repeat(64)); }],
+  ["rejects a missing expected HEAD", () => assert.throws(() => parseArgs(["--epoch", "1", "--expected-plan-sha256", "b".repeat(64), "--plan", "plan.json"]), /expected-head/)],
+  ["rejects an abbreviated expected HEAD", () => assert.throws(() => parseArgs(["--epoch", "1", "--expected-head", "abc123", "--expected-plan-sha256", "b".repeat(64), "--plan", "plan.json"]), /exact commit SHA/)],
+  ["rejects a missing reviewed plan digest", () => assert.throws(() => parseArgs(["--epoch", "1", "--expected-head", "a".repeat(40), "--plan", "plan.json"]), /expected-plan-sha256/)],
+  ["accepts reviewed plan bytes", () => { const content = "reviewed plan\n"; assert.equal(validatePlanDigest(content, createHash("sha256").update(content).digest("hex")), true); }],
+  ["rejects substituted plan bytes", () => { const digest = createHash("sha256").update("reviewed").digest("hex"); assert.throws(() => validatePlanDigest("substituted", digest), /does not match reviewed/); }],
   ["accepts a clean worktree at the reviewed HEAD", () => assert.equal(validateWorktreeBoundary(".", "a".repeat(40), cleanAt("a".repeat(40))), true)],
   ["rejects a clean worktree at a stale HEAD", () => assert.throws(() => validateWorktreeBoundary(".", "a".repeat(40), cleanAt("b".repeat(40))), /does not match reviewed/)],
-  ["runbook requires a separately reviewed HEAD", () => { const runbook = readFileSync(resolve(__dirname, "../_docs/prototype-thread-intake-runbook.md"), "utf8"); assert.match(runbook, /\$reviewedT4 = '<full T4 SHA recorded during separate plan review>'/); assert.doesNotMatch(runbook, /--expected-head \(git rev-parse HEAD\)/); }],
+  ["runbook requires separately reviewed HEAD and plan digest", () => { const runbook = readFileSync(resolve(__dirname, "../_docs/prototype-thread-intake-runbook.md"), "utf8"); assert.match(runbook, /\$reviewedT4 = '<full T4 SHA recorded during separate plan review>'/); assert.match(runbook, /\$reviewedPlanSha256 = '<SHA-256 recorded during separate plan review>'/); assert.doesNotMatch(runbook, /--expected-head \(git rev-parse HEAD\)|\$reviewedPlanSha256\s*=\s*\(Get-FileHash/); }],
 ];
 
 for (const [name, run] of tests) { run(); console.log(`ok - ${name}`); }

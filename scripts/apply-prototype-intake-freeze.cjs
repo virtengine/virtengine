@@ -3,6 +3,7 @@
 "use strict";
 
 const assert = require("assert").strict;
+const { createHash } = require("crypto");
 const { readFileSync, writeFileSync } = require("fs");
 const { resolve } = require("path");
 const { spawnSync } = require("child_process");
@@ -36,18 +37,25 @@ function validateFreezeTransition(current, proposed, now = Date.now()) {
 }
 
 function parseArgs(argv) {
-  const options = { epoch: null, expectedHead: null, plan: null, repo: resolve(__dirname, "..") };
+  const options = { epoch: null, expectedHead: null, expectedPlanSha256: null, plan: null, repo: resolve(__dirname, "..") };
   for (let index = 0; index < argv.length; index += 2) {
     const argument = argv[index];
     const value = argv[index + 1];
-    assert.ok(["--epoch", "--expected-head", "--plan", "--repo"].includes(argument) && value, `invalid argument: ${argument || "missing"}`);
-    options[argument === "--expected-head" ? "expectedHead" : argument.slice(2)] = value;
+    assert.ok(["--epoch", "--expected-head", "--expected-plan-sha256", "--plan", "--repo"].includes(argument) && value, `invalid argument: ${argument || "missing"}`);
+    const key = argument === "--expected-head" ? "expectedHead" : argument === "--expected-plan-sha256" ? "expectedPlanSha256" : argument.slice(2);
+    options[key] = value;
   }
   assert.match(options.epoch || "", /^[1-9][0-9]*$/, "--epoch is required");
   assert.match(options.expectedHead || "", /^[a-f0-9]{40}$/, "--expected-head requires an exact commit SHA");
+  assert.match(options.expectedPlanSha256 || "", /^[a-f0-9]{64}$/, "--expected-plan-sha256 requires an exact SHA-256 digest");
   assert.ok(options.plan, "--plan is required");
   options.repo = resolve(options.repo);
   return options;
+}
+
+function validatePlanDigest(content, expectedDigest) {
+  assert.equal(createHash("sha256").update(content).digest("hex"), expectedDigest, "freeze plan does not match reviewed SHA-256");
+  return true;
 }
 
 function validateWorktreeBoundary(repo, expectedHead, run = spawnSync) {
@@ -65,14 +73,16 @@ function main(argv) {
   validateWorktreeBoundary(options.repo, options.expectedHead);
   const epochPath = resolve(options.repo, `_docs/ralph/prototype-integration/epochs/epoch-${options.epoch}.json`);
   const current = JSON.parse(readFileSync(epochPath, "utf8"));
-  const proposed = JSON.parse(readFileSync(resolve(options.plan), "utf8"));
+  const planContent = readFileSync(resolve(options.plan), "utf8");
+  validatePlanDigest(planContent, options.expectedPlanSha256);
+  const proposed = JSON.parse(planContent);
   assert.equal(current.intake_epoch, Number(options.epoch), "epoch number mismatch");
   validateFreezeTransition(current, proposed);
   writeFileSync(epochPath, `${JSON.stringify(proposed, null, 2)}\n`, "utf8");
   process.stdout.write(`prototype intake epoch ${options.epoch} frozen\n`);
 }
 
-module.exports = { parseArgs, validateFreezeTransition, validateWorktreeBoundary };
+module.exports = { parseArgs, validateFreezeTransition, validatePlanDigest, validateWorktreeBoundary };
 
 if (require.main === module) {
   try { main(process.argv.slice(2)); }
