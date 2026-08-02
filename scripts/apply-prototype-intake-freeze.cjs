@@ -130,10 +130,21 @@ function validateWorktreeBoundary(repo, expectedHead, run = spawnSync) {
   return true;
 }
 
-function withStableWorktreeBoundary(repo, expectedHead, operation, run = spawnSync) {
+function validateRemoteBoundary(repo, expectedHead, remote = "origin", run = spawnSync) {
+  const result = run("git", ["ls-remote", "--heads", remote, "refs/heads/ve/prototype-integration"], { cwd: repo, encoding: "utf8" });
+  assert.equal(result.status, 0, "unable to resolve remote T4 integration head");
+  const lines = result.stdout.trim().split(/\r?\n/).filter(Boolean);
+  assert.equal(lines.length, 1, "remote T4 integration head is unavailable or ambiguous");
+  assert.equal(lines[0].split(/\s+/)[0], expectedHead, "remote T4 integration head does not match reviewed freeze SHA");
+  return true;
+}
+
+function withStablePublishedBoundary(repo, expectedHead, remote, operation, run = spawnSync) {
   validateWorktreeBoundary(repo, expectedHead, run);
+  validateRemoteBoundary(repo, expectedHead, remote, run);
   const result = operation();
   validateWorktreeBoundary(repo, expectedHead, run);
+  validateRemoteBoundary(repo, expectedHead, remote, run);
   return result;
 }
 
@@ -144,7 +155,7 @@ function main(argv) {
   const lockPath = resolve(options.repo, lock.stdout.trim());
   const leaseRecord = createLeaseRecord(options);
   withExclusiveLease(lockPath, `${JSON.stringify(leaseRecord, null, 2)}\n`, () => {
-    const prepared = withStableWorktreeBoundary(options.repo, options.expectedHead, () => {
+    const prepared = withStablePublishedBoundary(options.repo, options.expectedHead, options.remote, () => {
       const epochPath = resolve(options.repo, `_docs/ralph/prototype-integration/epochs/epoch-${options.epoch}.json`);
       const current = JSON.parse(readFileSync(epochPath, "utf8"));
       const planContent = readFileSync(resolve(options.plan), "utf8");
@@ -162,7 +173,7 @@ function main(argv) {
   process.stdout.write(`prototype intake epoch ${options.epoch} frozen\n`);
 }
 
-module.exports = { atomicWriteFile, createLeaseRecord, parseArgs, validateFreezeEvidence, validateFreezeTransition, validatePlanDigest, validateWorktreeBoundary, withExclusiveLease, withStableWorktreeBoundary };
+module.exports = { atomicWriteFile, createLeaseRecord, parseArgs, validateFreezeEvidence, validateFreezeTransition, validatePlanDigest, validateRemoteBoundary, validateWorktreeBoundary, withExclusiveLease, withStablePublishedBoundary };
 
 if (require.main === module) {
   try { main(process.argv.slice(2)); }

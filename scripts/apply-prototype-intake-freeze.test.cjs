@@ -4,7 +4,7 @@ const assert = require("assert").strict;
 const { createHash } = require("crypto");
 const { readFileSync } = require("fs");
 const { resolve } = require("path");
-const { atomicWriteFile, createLeaseRecord, parseArgs, validateFreezeEvidence, validateFreezeTransition, validatePlanDigest, validateWorktreeBoundary, withExclusiveLease, withStableWorktreeBoundary } = require("./apply-prototype-intake-freeze.cjs");
+const { atomicWriteFile, createLeaseRecord, parseArgs, validateFreezeEvidence, validateFreezeTransition, validatePlanDigest, validateRemoteBoundary, validateWorktreeBoundary, withExclusiveLease, withStablePublishedBoundary } = require("./apply-prototype-intake-freeze.cjs");
 
 function epoch() {
   return {
@@ -31,6 +31,7 @@ function evidence() {
 
 const afterCutoff = Date.parse("2000-01-03T00:00:00Z");
 const cleanAt = (head) => (_command, args) => args[0] === "status" ? { status: 0, stdout: "" } : { status: 0, stdout: `${head}\n` };
+const publishedAt = (localHead, remoteHead = localHead) => (_command, args) => args[0] === "status" ? { status: 0, stdout: "" } : args[0] === "ls-remote" ? { status: 0, stdout: `${remoteHead}\trefs/heads/ve/prototype-integration\n` } : { status: 0, stdout: `${localHead}\n` };
 const tests = [
   ["creates inspectable exact freeze lease metadata", () => { const record = createLeaseRecord({ epoch: "1", expectedHead: "a".repeat(40), expectedPlanSha256: "b".repeat(64) }, Date.parse("2000-01-01T12:00:00Z"), 42); assert.deepEqual(record, { schema_version: "virtengine.prototype.intake-freeze-lease/v1", pid: 42, started_at: "2000-01-01T12:00:00.000Z", epoch: 1, expected_head: "a".repeat(40), plan_sha256: "b".repeat(64) }); }],
   ["rejects invalid freeze lease metadata", () => assert.throws(() => createLeaseRecord({ epoch: "1", expectedHead: "short", expectedPlanSha256: "b".repeat(64) }, Date.now(), 42), /expected HEAD is invalid/)],
@@ -56,8 +57,10 @@ const tests = [
   ["rejects an announced tag absent from observation evidence", () => { const value = evidence(); const plan = frozen(); plan.producers[0].tag = "checkpoint/prototype-t1/t1-10"; assert.throws(() => validateFreezeEvidence(epoch(), plan, value.content, "observation.json", value.manifest, { now: afterCutoff, sourceContent: value.content, sourceIsAncestor: true, resolveTag: () => ({ target: "e".repeat(40), tagger_at: "2000-01-01T12:00:00Z" }) }), /not uniquely observed/); }],
   ["accepts a clean worktree at the reviewed HEAD", () => assert.equal(validateWorktreeBoundary(".", "a".repeat(40), cleanAt("a".repeat(40))), true)],
   ["rejects a clean worktree at a stale HEAD", () => assert.throws(() => validateWorktreeBoundary(".", "a".repeat(40), cleanAt("b".repeat(40))), /does not match reviewed/)],
-  ["accepts a stable worktree across evidence replay", () => assert.equal(withStableWorktreeBoundary(".", "a".repeat(40), () => "prepared", cleanAt("a".repeat(40))), "prepared")],
-  ["rejects a worktree changed during evidence replay", () => { let boundary = 0; const run = (_command, args) => args[0] === "status" ? { status: 0, stdout: boundary++ === 0 ? "" : " M epoch.json\n" } : { status: 0, stdout: `${"a".repeat(40)}\n` }; assert.throws(() => withStableWorktreeBoundary(".", "a".repeat(40), () => "prepared", run), /must be clean/); }],
+  ["accepts a reviewed SHA published on the remote branch", () => assert.equal(validateRemoteBoundary(".", "a".repeat(40), "origin", publishedAt("a".repeat(40))), true)],
+  ["rejects a reviewed SHA absent from the remote branch", () => assert.throws(() => validateRemoteBoundary(".", "a".repeat(40), "origin", publishedAt("a".repeat(40), "b".repeat(40))), /remote T4 integration head does not match/)],
+  ["accepts stable local and remote boundaries across evidence replay", () => assert.equal(withStablePublishedBoundary(".", "a".repeat(40), "origin", () => "prepared", publishedAt("a".repeat(40))), "prepared")],
+  ["rejects a worktree changed during evidence replay", () => { let boundary = 0; const run = (_command, args) => args[0] === "status" ? { status: 0, stdout: boundary++ === 0 ? "" : " M epoch.json\n" } : args[0] === "ls-remote" ? { status: 0, stdout: `${"a".repeat(40)}\trefs/heads/ve/prototype-integration\n` } : { status: 0, stdout: `${"a".repeat(40)}\n` }; assert.throws(() => withStablePublishedBoundary(".", "a".repeat(40), "origin", () => "prepared", run), /must be clean/); }],
   ["runbook requires separately reviewed HEAD and plan digest", () => { const runbook = readFileSync(resolve(__dirname, "../_docs/prototype-thread-intake-runbook.md"), "utf8"); assert.match(runbook, /\$reviewedT4 = '<full T4 SHA recorded during separate plan review>'/); assert.match(runbook, /\$reviewedPlanSha256 = '<SHA-256 recorded during separate plan review>'/); assert.doesNotMatch(runbook, /--expected-head \(git rev-parse HEAD\)|\$reviewedPlanSha256\s*=\s*\(Get-FileHash/); }],
 ];
 

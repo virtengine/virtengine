@@ -7,7 +7,7 @@ const { randomUUID } = require("crypto");
 const { readFileSync, renameSync, unlinkSync } = require("fs");
 const { resolve } = require("path");
 const { spawnSync } = require("child_process");
-const { validateWorktreeBoundary } = require("./apply-prototype-intake-freeze.cjs");
+const { validateRemoteBoundary, validateWorktreeBoundary } = require("./apply-prototype-intake-freeze.cjs");
 const { inspectLeaseContent } = require("./inspect-prototype-intake-freeze-lease.cjs");
 
 function recoverLease(lockPath, expectedLeaseSha256, expected, options = {}) {
@@ -34,11 +34,11 @@ function recoverLease(lockPath, expectedLeaseSha256, expected, options = {}) {
 }
 
 function parseArgs(argv) {
-  const options = { epoch: null, expectedHead: null, expectedLeaseSha256: null, expectedPlanSha256: null, repo: resolve(__dirname, "..") };
+  const options = { epoch: null, expectedHead: null, expectedLeaseSha256: null, expectedPlanSha256: null, remote: "origin", repo: resolve(__dirname, "..") };
   for (let index = 0; index < argv.length; index += 2) {
     const argument = argv[index];
     const value = argv[index + 1];
-    assert.ok(["--epoch", "--expected-head", "--expected-lease-sha256", "--expected-plan-sha256", "--repo"].includes(argument) && value, `invalid argument: ${argument || "missing"}`);
+    assert.ok(["--epoch", "--expected-head", "--expected-lease-sha256", "--expected-plan-sha256", "--remote", "--repo"].includes(argument) && value, `invalid argument: ${argument || "missing"}`);
     const key = argument.split("-").slice(2).map((part, partIndex) => partIndex === 0 ? part : `${part[0].toUpperCase()}${part.slice(1)}`).join("");
     options[key] = value;
   }
@@ -55,7 +55,7 @@ function main(argv) {
   const options = parseArgs(argv);
   const lock = spawnSync("git", ["rev-parse", "--git-path", `prototype-intake-freeze-epoch-${options.epoch}.lock`], { cwd: options.repo, encoding: "utf8" });
   assert.equal(lock.status, 0, "unable to resolve intake freeze lock path");
-  const result = recoverLease(resolve(options.repo, lock.stdout.trim()), options.expectedLeaseSha256, options, { ...options, validateBoundary: () => validateWorktreeBoundary(options.repo, options.expectedHead) });
+  const result = recoverLease(resolve(options.repo, lock.stdout.trim()), options.expectedLeaseSha256, options, { ...options, validateBoundary: () => { validateWorktreeBoundary(options.repo, options.expectedHead); validateRemoteBoundary(options.repo, options.expectedHead, options.remote); } });
   process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
 }
 

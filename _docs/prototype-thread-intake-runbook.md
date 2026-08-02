@@ -170,7 +170,9 @@ plan against the manifest-bound pre-cutoff observation and current annotated
 remote tags, then atomically replaces the epoch through a same-directory
 exclusive temporary file that is flushed before replacement. Acceptance remains a
 later, separately validated transition. The clean reviewed HEAD boundary is
-checked both before evidence replay and immediately before replacement.
+checked both before evidence replay and immediately before replacement, and the
+reviewed SHA must equal the remote `ve/prototype-integration` branch at both
+boundaries.
 An exclusive worktree-specific Git-path lease serializes the full application;
 an existing or crash-retained lease fails closed and requires explicit operator
 inspection before removal. Inspect its schema, PID, UTC start time, epoch,
@@ -196,7 +198,8 @@ lease to a unique quarantine, revalidates its bytes and PID state, and removes
 only that claimed quarantine. Any post-claim read, validation, or removal
 failure reports the retained quarantine path for inspection:
 Recovery also requires a clean checkout at the separately reviewed exact T4
-SHA immediately before claiming the lease.
+SHA and matching remote integration branch immediately before claiming the
+lease.
 
 ```powershell
 node scripts/recover-prototype-intake-freeze-lease.test.cjs
