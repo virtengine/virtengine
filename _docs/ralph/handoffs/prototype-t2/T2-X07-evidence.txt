@@ -1,0 +1,31 @@
+T2-X07 retained validation evidence
+Implementation SHA: d5cfcbb3d4d89335c04f59df0fc8c141ca4887a3
+Node: v24.12.0
+
+COMMAND: C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t2\portal\node_modules\.bin\vitest.CMD run "src/app/(customer)/organizations/organizations.test.tsx" src\stores\__tests__\organizationStore.test.ts --reporter=dot
+EXIT: 0
+RESULT: passed
+DETAIL: 2 files, 5 tests passed
+
+COMMAND: C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t2\portal\node_modules\.bin\eslint.CMD C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t2\portal\src --ext .ts,.tsx --max-warnings 0
+EXIT: 0
+RESULT: passed
+NOTE: Existing unsupported TypeScript parser-version warning only.
+
+COMMAND: C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t2\portal\node_modules\.bin\tsc.CMD --noEmit -p C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t2\portal\tsconfig.json
+EXIT: 0
+RESULT: passed
+
+COMMAND: C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t2\portal\node_modules\.bin\vitest.CMD run --reporter=dot
+EXIT: 0
+RESULT: passed
+DETAIL: 592 tests passed (implementation subagent complete run)
+
+BEHAVIOR:
+- Organization list and detail routes render accessible typed feature_unavailable state.
+- Fake organizations, counts, roles, deployment totals, links and creation commands were removed.
+- Legacy persisted organization selection is cleared and never read as authority.
+- Organization selection requires an explicit authoritative capability token; production has no such provider.
+
+NON-CLAIMS:
+- T5/89C organization governance, APIs, projection, billing ownership and production wiring remain unavailable.
