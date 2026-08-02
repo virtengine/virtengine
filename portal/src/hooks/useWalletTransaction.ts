@@ -242,7 +242,7 @@ export function useWalletTransaction(): UseWalletTransactionResult {
         );
         const result: TransactionResult = {
           txHash: broadcast.txHash,
-          blockHeight: null,
+          blockHeight: broadcast.blockHeight,
           code: broadcast.code,
           rawLog: broadcast.rawLog,
           gasUsed: broadcast.gasUsed || parseInt(fee.gas, 10),
