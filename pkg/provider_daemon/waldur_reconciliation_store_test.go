@@ -114,6 +114,33 @@ func TestFileReconciliationJobStoreRejectsSupersededAttemptCompletion(t *testing
 	require.Equal(t, second.Number, projection.Results[job.ID].AttemptNumber)
 }
 
+func TestFileReconciliationJobStoreRejectsSupersededAttemptFailure(t *testing.T) {
+	ctx := context.Background()
+	path := filepath.Join(t.TempDir(), "reconciliation.json")
+	store := openReconciliationStore(t, path)
+	job := testReconciliationJob()
+	_, _, err := store.PutJobIfAbsent(ctx, job)
+	require.NoError(t, err)
+	first, err := store.BeginAttempt(ctx, job.ID)
+	require.NoError(t, err)
+	second, err := store.BeginAttempt(ctx, job.ID)
+	require.NoError(t, err)
+	result := testDurableReconciliationResult(job, second.Number)
+	cursor := ReconciliationCursor{StreamID: "waldur/default", JobID: job.ID, ResultDigest: result.ResultDigest}
+	require.NoError(t, store.CompleteAttempt(ctx, result, nil, cursor))
+	before, err := os.ReadFile(path)
+	require.NoError(t, err)
+
+	require.ErrorIs(t, store.FailAttempt(ctx, job.ID, first.Number, "late_worker_failure"), ErrReconciliationConflict)
+	after, err := os.ReadFile(path)
+	require.NoError(t, err)
+	require.Equal(t, before, after)
+	projection, err := store.LoadProjection(ctx)
+	require.NoError(t, err)
+	require.Equal(t, second.Number, projection.Results[job.ID].AttemptNumber)
+	require.True(t, projection.Attempts[job.ID][0].FinishedAt.IsZero())
+}
+
 func TestFileReconciliationJobStoreRejectsResultAllocationMismatch(t *testing.T) {
 	ctx := context.Background()
 	store := openReconciliationStore(t, filepath.Join(t.TempDir(), "reconciliation.json"))

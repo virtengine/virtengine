@@ -247,6 +247,10 @@ func (s *FileReconciliationJobStore) FailAttempt(ctx context.Context, jobID stri
 			}
 			return ErrReconciliationConflict
 		}
+		if _, completed := projection.Results[jobID]; completed ||
+			attemptNumber != uint32(len(projection.Attempts[jobID])) { //nolint:gosec // bounded by event capacity.
+			return ErrReconciliationConflict
+		}
 		attempt.FinishedAt, attempt.Outcome, attempt.Classification = s.now(), "failed", classification
 		return appendReconciliationEvent(state, ReconciliationEvent{Type: ReconciliationEventAttemptFailed, RecordedAt: s.now(), Attempt: &attempt})
 	})
@@ -583,7 +587,8 @@ func projectReconciliationState(state reconciliationStoreState) (ReconciliationP
 			projection.Attempts[event.Attempt.JobID] = append(projection.Attempts[event.Attempt.JobID], *event.Attempt)
 		case ReconciliationEventAttemptFailed:
 			attempt, err := findReconciliationAttempt(projection, event.Attempt.JobID, event.Attempt.Number)
-			if err != nil || !attempt.FinishedAt.IsZero() {
+			if err != nil || !attempt.FinishedAt.IsZero() ||
+				event.Attempt.Number != uint32(len(projection.Attempts[event.Attempt.JobID])) { //nolint:gosec // bounded by event count.
 				return projection, errors.New("invalid failed reconciliation attempt")
 			}
 			projection.Attempts[event.Attempt.JobID][event.Attempt.Number-1] = *event.Attempt
