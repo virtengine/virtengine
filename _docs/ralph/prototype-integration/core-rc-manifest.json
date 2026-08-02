@@ -6,20 +6,20 @@
   "planned_functionality_complete": false,
   "milestone_m_eligible": false,
   "source": {
-    "payload_sha": "84095371c88b20a241616a3ff374bb2bd9c9ce4f",
-    "tree": "272149fa5672d5c099674a93ab00bd553b49f9ad",
+    "payload_sha": "2c4d4ea01aeb5005c4d4b753a68745dc64c2b174",
+    "tree": "fa4158530d99c7b4ae14337c89e8e580b9eed29a",
     "branch": "ve/prototype-integration",
     "binding": "declared_clean_parent_payload"
   },
   "tooling": {
-    "tooling_sha": "84095371c88b20a241616a3ff374bb2bd9c9ce4f",
-    "tree": "272149fa5672d5c099674a93ab00bd553b49f9ad",
+    "tooling_sha": "2c4d4ea01aeb5005c4d4b753a68745dc64c2b174",
+    "tree": "fa4158530d99c7b4ae14337c89e8e580b9eed29a",
     "artifacts": [
       {
         "id": "generator",
         "path": "scripts/generate-core-rc-manifest.cjs",
-        "git_blob": "b59d3baee0966a97dde69551330ee2a70b8e6023",
-        "sha256": "0e96e26ee69eca82a937aa955ffefbbe2f68e8ddbc80e1c27d8e0103db375692"
+        "git_blob": "d5d29d173b29e5677093d37d4b61d23e86a4a77a",
+        "sha256": "948b57c8fbe6aef6c7dad2218d032f8ecbd2678eed7e11527f561f284e3c086e"
       },
       {
         "id": "schema",
@@ -225,7 +225,7 @@
     {
       "id": "required_gate_matrix",
       "path": "_docs/ralph/prototype-integration/required-gate-matrix.json",
-      "sha256": "0b54d4c3c4ad9d683a30cac71bd56f8738deae7445a835fc0792294fd5d73c51",
+      "sha256": "39ed0a6e2ea1dd20b380f6e812183d6412958b462b3065bd106a5280fc97cca8",
       "status": "dependency_blocked"
     },
     {
@@ -262,6 +262,12 @@
       "id": "fund_route_inventory",
       "path": "_docs/ralph/prototype-integration/fund-route-inventory.json",
       "sha256": "ddb2b020a8bef05dc162b4a8d0b5ef64da37ab165b11782729e0606c195a2850",
+      "status": "dependency_blocked"
+    },
+    {
+      "id": "generated_contract_inventory",
+      "path": "_docs/ralph/prototype-integration/generated-contract-inventory.json",
+      "sha256": "3d175116d36a1ba77e24e91e63940dff0ad3b14f06f00e89b2a8d2f78de74369",
       "status": "dependency_blocked"
     }
   ],
@@ -403,17 +409,17 @@
   "test_evidence": {
     "status": "partial",
     "ledger_path": "_docs/ralph/handoffs/prototype-integration/HANDOFF.yaml",
-    "implementation_sha": "0dbcc84c8e3d55b52be7d5bd6e558527e928b70b",
-    "ledger_sha": "84095371c88b20a241616a3ff374bb2bd9c9ce4f",
+    "implementation_sha": "87b1e2e477446f13aff960ee21402b6ab00a621f",
+    "ledger_sha": "2c4d4ea01aeb5005c4d4b753a68745dc64c2b174",
     "record_count": 2,
-    "declared_test_count": 13,
+    "declared_test_count": 9,
     "uncounted_record_count": 1,
     "records": [
       {
-        "command": "node scripts/validate-fund-route-inventory.test.cjs && node scripts/validate-fund-route-inventory.cjs",
+        "command": "node scripts/validate-generated-contract-inventory.test.cjs && node scripts/validate-generated-contract-inventory.cjs",
         "exit_code": 0,
         "result": "passed",
-        "test_count": 13,
+        "test_count": 9,
         "tool_versions": {
           "node": "20.19.1"
         }
@@ -432,7 +438,7 @@
   },
   "producer_checkpoints": {
     "ledger_path": "_docs/ralph/handoffs/prototype-integration/HANDOFF.yaml",
-    "ledger_sha256": "328fdb1ddc638e4e565243053d222c2b6590290a9ff40d9da7e465606c585470",
+    "ledger_sha256": "e88c171ed695af18b1f09f6f1cc12f7399fdd21491409d56477f4fcf7af89910",
     "accepted": [],
     "rejected": [
       {
