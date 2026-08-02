@@ -1,0 +1,156 @@
+{
+  "version": "virtengine.platformsecurity.persisted-schema-inventory/v1",
+  "thread": "T5",
+  "frozen_baseline": "79391a3df86d85522b92e0400c6904971ecbe65d",
+  "intake_base_sha": "5587c384f634552c3a2dd7181ca49cafa4da1984",
+  "payload_head": "b6980d266eb23d56e23108858cbbf1b2da9dfe8c",
+  "entries": [
+    {
+      "id": "data-vault-key-state",
+      "owner_path": "pkg/data_vault/keys/persistence.go",
+      "storage_class": "fixture_only",
+      "schema_version": "v1",
+      "domain": "data-vault key state",
+      "key_or_format": "namespace/file envelope",
+      "migration_disposition": "new_store",
+      "evidence_paths": ["pkg/data_vault/keys/persistence.go"]
+    },
+    {
+      "id": "data-vault-artifact-index",
+      "owner_path": "pkg/data_vault/fixture_artifact_store.go",
+      "storage_class": "fixture_only",
+      "schema_version": "v1",
+      "domain": "data-vault artifact index",
+      "key_or_format": "fixture envelope v1 namespace/revision/checksum; index.json maps artifacts/blob_metadata/legal_holds/erasure_intents/mutations; objects/<sha256>; .fixture-artifact.lock",
+      "migration_disposition": "new_store",
+      "evidence_paths": ["pkg/data_vault/fixture_artifact_store.go", "pkg/data_vault/fixture_erasure.go"]
+    },
+    {
+      "id": "data-vault-metadata-audit-operation",
+      "owner_path": "pkg/data_vault/types.go",
+      "storage_class": "off_chain",
+      "schema_version": "v1",
+      "domain": "data-vault blob metadata",
+      "key_or_format": "BlobMetadata JSON additive field",
+      "migration_disposition": "additive_no_rewrite",
+      "evidence_paths": ["pkg/data_vault/types.go", "pkg/data_vault/store.go"]
+    },
+    {
+      "id": "data-vault-audit-chain",
+      "owner_path": "pkg/data_vault/fixture_audit_store.go",
+      "storage_class": "fixture_only",
+      "schema_version": "v1",
+      "domain": "data-vault audit chain",
+      "key_or_format": "envelope/hash chain",
+      "migration_disposition": "new_store",
+      "evidence_paths": ["pkg/data_vault/fixture_audit_store.go", "pkg/data_vault/audit_logger.go"]
+    },
+    {
+      "id": "data-vault-erasure-operation-contract",
+      "owner_path": "pkg/data_vault/erasure_coordinator.go",
+      "storage_class": "off_chain",
+      "schema_version": "v1",
+      "domain": "backend-neutral erasure operation",
+      "key_or_format": "ErasureOperation journal + storage/KMS receipts + replay transaction",
+      "migration_disposition": "integration_required",
+      "evidence_paths": ["pkg/data_vault/erasure_coordinator.go", "pkg/data_vault/contracts/evidence_lifecycle.go"],
+      "blocker": "production erasure requires durable transactional ErasureOperationStore; production storage deletion and KMS destruction adapters; independent receipt signers/key resolver; consent, hold, backup and finalization authorities; authenticated restore-manifest authority"
+    },
+    {
+      "id": "fundauth-replay-store",
+      "owner_path": "pkg/fundauth/keeper/keeper.go",
+      "storage_class": "consensus",
+      "schema_version": "v1",
+      "domain": "virtengine/fundauth/authorization/v1",
+      "key_or_format": "domain-separated length-prefixed KV key + 32-byte auth digest",
+      "migration_disposition": "integration_required",
+      "evidence_paths": ["pkg/fundauth/keeper/keeper.go"],
+      "blocker": "T4 must mount and wire the fundauth keeper"
+    },
+    {
+      "id": "veid-evidence-reference",
+      "owner_path": "x/veid/keeper/evidence_object_store.go",
+      "storage_class": "consensus",
+      "schema_version": "v1",
+      "domain": "VEID evidence object reference",
+      "key_or_format": "0xD4 || ASCII(\"reference/\") || objectCommitment -> JSON EvidenceObjectRef v1",
+      "migration_disposition": "required_unwired",
+      "migration_id": "veid-evidence-object-v1",
+      "evidence_paths": ["pkg/data_vault/contracts/evidence_lifecycle.go", "x/veid/keeper/evidence_object_store.go", "x/veid/types/keys.go"],
+      "blocker": "T4 upgrade owner must register the VEID evidence migration"
+    },
+    {
+      "id": "veid-evidence-quarantine",
+      "owner_path": "x/veid/keeper/evidence_object_migration.go",
+      "storage_class": "consensus",
+      "schema_version": "v1",
+      "domain": "VEID evidence object quarantine",
+      "key_or_format": "0xD4 || ASCII(\"quarantine/\") || sourceKeyDigest -> JSON evidenceMigrationQuarantine v1",
+      "migration_disposition": "required_unwired",
+      "migration_id": "veid-evidence-object-v1",
+      "evidence_paths": ["x/veid/keeper/evidence_object_migration.go", "x/veid/types/keys.go"],
+      "blocker": "T4 upgrade owner must register the VEID evidence migration"
+    },
+    {
+      "id": "veid-evidence-migration-bookkeeping",
+      "owner_path": "x/veid/keeper/evidence_object_migration.go",
+      "storage_class": "consensus",
+      "schema_version": "v1",
+      "domain": "VEID evidence object migration",
+      "key_or_format": "D4 01 || UTF-8 upgradeID -> replay digest; D4 02 || upgradeID -> JSON report; singleton D4 03 -> manifest digest; D4 04 || UTF-8 signerKeyID -> BE64 epoch floor",
+      "migration_disposition": "required_unwired",
+      "migration_id": "veid-evidence-object-v1",
+      "evidence_paths": ["x/veid/keeper/evidence_object_migration.go", "x/veid/types/keys.go"],
+      "blocker": "T4 upgrade owner must register the VEID evidence migration"
+    },
+    {
+      "id": "veid-legacy-payload-cutover",
+      "owner_path": "x/veid/keeper/evidence_object_migration.go",
+      "storage_class": "consensus",
+      "schema_version": "v1",
+      "domain": "legacy VEID evidence payload cutover",
+      "key_or_format": "legacy PrefixScope 0x02 rows and classified shared-prefix 0x9A rows retain encrypted_payload until sanitize/delete cutover",
+      "migration_disposition": "required_unwired",
+      "migration_id": "veid-legacy-payload-cutover-v1",
+      "evidence_paths": ["x/veid/keeper/evidence_object_migration.go", "x/veid/keeper/evidence_object_migration_test.go"],
+      "blocker": "separate T4 migration must sanitize/delete legacy PrefixScope 0x02 rows and classified shared-prefix 0x9A rows"
+    },
+    {
+      "id": "encryption-envelope-v2",
+      "owner_path": "x/encryption/types/envelope.go",
+      "storage_class": "serialized",
+      "schema_version": "v2",
+      "domain": "VirtEngine encrypted payload",
+      "key_or_format": "authenticated envelope",
+      "migration_disposition": "explicit_reencrypt",
+      "evidence_paths": ["x/encryption/crypto/envelope.go", "x/encryption/types/envelope.go"]
+    },
+    {
+      "id": "mfa-otp-verifier-receipt",
+      "owner_path": "x/mfa/keeper/verification.go",
+      "storage_class": "transient",
+      "schema_version": "v1",
+      "domain": "virtengine/mfa/otp-verifier-receipt/v1",
+      "key_or_format": "signed receipt",
+      "migration_disposition": "none",
+      "evidence_paths": ["x/mfa/keeper/verification.go"]
+    }
+  ],
+  "non_persistent_surfaces": [
+    "organization-contracts",
+    "platformsecurity-dependency-manifest",
+    "issuerlink-contracts",
+    "uniqueness-contracts",
+    "biometric-incident-contracts",
+    "backendprofile-contracts",
+    "federation-contracts",
+    "privileged-role-contracts",
+    "mfa-prototype-contracts"
+  ],
+  "blockers": [
+    "T4 upgrade owner must register the VEID evidence migration",
+    "separate T4 migration must sanitize/delete legacy PrefixScope 0x02 rows and classified shared-prefix 0x9A rows",
+    "T4 must mount and wire the fundauth keeper",
+    "production erasure requires durable transactional ErasureOperationStore; production storage deletion and KMS destruction adapters; independent receipt signers/key resolver; consent, hold, backup and finalization authorities; authenticated restore-manifest authority"
+  ]
+}
