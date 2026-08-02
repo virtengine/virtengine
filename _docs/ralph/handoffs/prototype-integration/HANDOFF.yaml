@@ -1,39 +1,43 @@
 {
   "campaign": "three-day-prototype",
   "thread": "T4",
-  "checkpoint": "T4-01AX",
+  "checkpoint": "T4-01AY",
   "branch": "ve/prototype-integration",
-  "start_head": "d39e5d1250ee16ae5f824096cc219c52bdac3f2a",
-  "end_head": "27677b6fc666fea105c8ec84279d92e516837125",
+  "start_head": "e5d0be9be3efcb2a7bf85a0ce4e873bfe84b50a0",
+  "end_head": "9e33ff070df793f15dc21e1907a9e44d3fbc0930",
   "origin_main": "79391a3df86d85522b92e0400c6904971ecbe65d",
   "tree_clean": true,
   "commits": [
-    "27677b6fc666fea105c8ec84279d92e516837125"
+    "9e33ff070df793f15dc21e1907a9e44d3fbc0930"
   ],
   "owned_paths": [
-    "_docs/ralph/prototype-integration/**",
     "_docs/ralph/handoffs/prototype-integration/**",
-    "_docs/ralph/prototype-integration/core-rc-manifest.json"
+    "_docs/prototype-thread-intake-runbook.md",
+    "scripts/apply-prototype-intake-freeze.cjs",
+    "scripts/apply-prototype-intake-freeze.test.cjs",
+    "scripts/recover-prototype-intake-freeze-lease.cjs"
   ],
   "files_changed": [
-    "_docs/ralph/handoffs/prototype-integration/HANDOFF.yaml",
-    "_docs/ralph/prototype-integration/core-rc-manifest.json"
+    "_docs/prototype-thread-intake-runbook.md",
+    "scripts/apply-prototype-intake-freeze.cjs",
+    "scripts/apply-prototype-intake-freeze.test.cjs",
+    "scripts/recover-prototype-intake-freeze-lease.cjs"
   ],
   "tests": [
     {
-      "command": "node scripts/validate-prototype-integration.test.cjs && node scripts/validate-prototype-integration.cjs",
+      "command": "node scripts/plan-prototype-intake-freeze.test.cjs && node scripts/apply-prototype-intake-freeze.test.cjs && node scripts/recover-prototype-intake-freeze-lease.test.cjs",
       "exit_code": 0,
       "result": "passed",
-      "test_count": 12,
+      "test_count": 50,
       "tool_versions": {
         "node": "20.19.1"
       }
     },
     {
-      "command": "node scripts/validate-agents-docs.mjs",
+      "command": "node scripts/validate-required-gate-matrix.test.cjs && node scripts/validate-agents-docs.mjs",
       "exit_code": 0,
       "result": "passed",
-      "test_count": 9,
+      "test_count": 22,
       "tool_versions": {
         "node": "20.19.1"
       }
@@ -80,5 +84,5 @@
     "Task 88C is not complete."
   ],
   "next_checkpoint": null,
-  "expected_head": "27677b6fc666fea105c8ec84279d92e516837125"
+  "expected_head": "9e33ff070df793f15dc21e1907a9e44d3fbc0930"
 }
