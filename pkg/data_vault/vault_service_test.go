@@ -153,6 +153,14 @@ func TestVaultService_MissingConsentResolverDenies(t *testing.T) {
 	require.ErrorIs(t, err, ErrConsentRequired)
 }
 
+func TestVaultServiceRequiresExplicitAuditLogger(t *testing.T) {
+	keyMgr := keys.NewKeyManager()
+	require.NoError(t, keyMgr.Initialize())
+	store := NewEncryptedBlobStore(newMemoryArtifactStore(), keyMgr)
+	_, err := NewVaultService(VaultConfig{Store: store})
+	require.ErrorIs(t, err, ErrInvalidRequest)
+}
+
 func TestVaultService_RotateKeysReencrypts(t *testing.T) {
 	ctx := context.Background()
 

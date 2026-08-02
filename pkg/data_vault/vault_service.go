@@ -43,6 +43,9 @@ func NewVaultService(cfg VaultConfig) (*Vault, error) {
 	if cfg.Store == nil {
 		return nil, NewVaultError("NewVault", ErrInvalidRequest, "store required")
 	}
+	if cfg.AuditLogger == nil {
+		return nil, NewVaultError("NewVault", ErrInvalidRequest, "explicit audit logger required")
+	}
 	if cfg.AccessControl == nil {
 		cfg.AccessControl = OwnerOnlyAccessControl{}
 	}
@@ -51,10 +54,6 @@ func NewVaultService(cfg VaultConfig) (*Vault, error) {
 	}
 	if cfg.AuditOwner == "" {
 		cfg.AuditOwner = "audit-system"
-	}
-	if cfg.AuditLogger == nil {
-		cfg.AuditLogger = NewAuditLogger(DefaultAuditLogConfig(), nil)
-		cfg.AuditLogger.RegisterExporter(NewVaultAuditExporter(cfg.Store, cfg.AuditOwner))
 	}
 	if cfg.Metrics == nil {
 		cfg.Metrics = NewVaultMetrics()
