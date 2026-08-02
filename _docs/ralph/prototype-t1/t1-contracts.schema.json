@@ -1,0 +1,17 @@
+{
+  "$schema":"https://json-schema.org/draft/2020-12/schema",
+  "type":"object",
+  "additionalProperties":false,
+  "required":["schema_version","contract_set_id","checkpoint","status","contracts","store_reservations","protobuf_requests","handoffs","external_non_claims"],
+  "properties":{
+    "schema_version":{"const":"virtengine.t1-contract-set/v1"},
+    "contract_set_id":{"const":"t1-09-integrated-contracts"},
+    "checkpoint":{"const":"T1-09"},
+    "status":{"const":"fixture_only"},
+    "contracts":{"type":"array","minItems":5,"maxItems":5,"items":{"type":"object","additionalProperties":false,"required":["id","implementation","test","selector","outputs"],"properties":{"id":{"type":"string"},"implementation":{"type":"string"},"test":{"type":"string"},"selector":{"type":"string"},"outputs":{"type":"object"}}}},
+    "store_reservations":{"type":"array","minItems":5,"maxItems":5,"items":{"type":"object","additionalProperties":false,"required":["id","hex","status"],"properties":{"id":{"type":"string"},"hex":{"pattern":"^[a-f0-9]{2}$"},"status":{"const":"reserved_not_implemented"}}}},
+    "protobuf_requests":{"type":"array","minItems":5,"maxItems":5,"items":{"type":"object","additionalProperties":false,"required":["name","status"],"properties":{"name":{"type":"string"},"status":{"const":"requested_not_implemented"}}}},
+    "handoffs":{"type":"array","minItems":3,"maxItems":3,"items":{"type":"object","additionalProperties":false,"required":["thread","responsibility"],"properties":{"thread":{"enum":["T2","T4","T5"]},"responsibility":{"type":"string"}}}},
+    "external_non_claims":{"type":"array","minItems":6,"items":{"type":"string"}}
+  }
+}
