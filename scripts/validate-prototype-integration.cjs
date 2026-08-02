@@ -5,6 +5,7 @@
 const assert = require("assert").strict;
 const { readFileSync } = require("fs");
 const { resolve } = require("path");
+const { validateSecurityGates } = require("./validate-ai-biometric-security-gates.cjs");
 const { validateProductionPolicy } = require("./validate-ai-production-policy.cjs");
 const { validateManifest: validateCoreRcManifest } = require("./generate-core-rc-manifest.cjs");
 const { validateSchema: validateCoreRcSchema } = require("./validate-core-rc-manifest.cjs");
@@ -16,6 +17,7 @@ const { validateSlurmChartInventory } = require("./validate-slurm-chart-inventor
 
 const root = resolve(__dirname, "..");
 const controlPath = resolve(root, "_docs/ralph/prototype-integration/control.json");
+const aiBiometricSecurityGatesPath = resolve(root, "_docs/ralph/prototype-integration/ai-biometric-security-gates.json");
 const aiProductionPolicyPath = resolve(root, "_docs/ralph/prototype-integration/ai-production-policy.json");
 const coreRcManifestPath = resolve(root, "_docs/ralph/prototype-integration/core-rc-manifest.json");
 const coreRcSchemaPath = resolve(root, "_docs/ralph/prototype-integration/core-rc-manifest.schema.json");
@@ -141,6 +143,7 @@ module.exports = { validateEpoch, validateIntegrationControl };
 
 if (require.main === module) {
   validateIntegrationControl(loadJson(controlPath), loadJson(schemaPath), loadJson(handoffPath), loadJson(epochPath));
+  validateSecurityGates(loadJson(aiBiometricSecurityGatesPath), { rootDir: root });
   validateProductionPolicy(loadJson(aiProductionPolicyPath), { rootDir: root });
   validateCoreRcSchema(loadJson(coreRcSchemaPath));
   validateCoreRcManifest(loadJson(coreRcManifestPath), { rootDir: root });

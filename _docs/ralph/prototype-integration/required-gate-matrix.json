@@ -90,19 +90,20 @@
     },
     {
       "id": "ml",
-      "path_selectors": ["ml/**", "models/**", "cmd/inference-sidecar/**", "pkg/data_vault/**", "pkg/inference/**", "x/veid/**", "scripts/validate-ai-production-policy*.cjs", "_docs/ralph/prototype-integration/ai-production-policy.json"],
+      "path_selectors": ["ml/**", "models/**", "cmd/inference-sidecar/**", "pkg/data_vault/**", "pkg/inference/**", "x/veid/**", "scripts/validate-ai-production-policy*.cjs", "scripts/validate-ai-biometric-security-gates*.cjs", "_docs/ralph/prototype-integration/ai-production-policy.json", "_docs/ralph/prototype-integration/ai-biometric-security-gates.json"],
       "required_commands": [
         { "id": "ml-install", "kind": "setup", "command": "python -m pip install --require-hashes -r ml/requirements-deterministic.txt" },
         { "id": "ml-collect", "kind": "test", "command": "python -m pytest --collect-only -q ml/training/tests" },
         { "id": "ml-test", "kind": "test", "command": "python -m pytest -q ml/training/tests" },
-        { "id": "ai-production-policy", "kind": "policy", "command": "node scripts/validate-ai-production-policy.cjs --enforce" }
+        { "id": "ai-production-policy", "kind": "policy", "command": "node scripts/validate-ai-production-policy.cjs --enforce" },
+        { "id": "ai-biometric-security", "kind": "policy", "command": "node scripts/validate-ai-biometric-security-gates.cjs --enforce" }
       ],
       "pinned_tools": [{ "name": "python", "version": "3.11.9", "source": ".github workflow control" }, { "name": "node", "version": "24.12.0", "source": "required gate runner image" }],
       "zero_test_policy": { "applies_to": "test_commands", "minimum_discovered": 1, "minimum_executed": 1, "empty_selection": "fail" },
       "failure_semantics": { "nonzero_exit": "fail", "skipped": "fail", "missing_tool": "fail", "cancelled": "fail" },
       "dependencies": [{ "id": "87D", "status": "unavailable" }],
       "status": "dependency_blocked",
-      "blockers": ["dependency-87d", "ai-production-policy-blocked"]
+      "blockers": ["dependency-87d", "ai-production-policy-blocked", "ai-biometric-security-gates-blocked"]
     },
     {
       "id": "deployment",
@@ -181,6 +182,7 @@
     { "id": "dependency-87d", "description": "Task 87D is not available to this control checkpoint." },
     { "id": "dependency-88a", "description": "Task 88A is dependency-blocked and cannot provide accepted rehearsal evidence." },
     { "id": "ai-production-policy-blocked", "description": "T4-12 diagnostic records prohibited production AI, biometric, consent, custody, or stub-success paths; enforce mode rejects them." },
+    { "id": "ai-biometric-security-gates-blocked", "description": "T4-15 records incomplete AI and biometric security evidence; enforce mode rejects partial, missing, or externally blocked categories." },
     { "id": "real-process-evidence-absent", "description": "No accepted process-boundary lifecycle evidence is recorded by this matrix-only control." }
   ]
 }

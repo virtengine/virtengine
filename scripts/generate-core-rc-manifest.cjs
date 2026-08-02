@@ -26,6 +26,7 @@ const sourceArtifacts = [
   ["slurm_report", "_docs/ralph/prototype-integration/slurm-chart-semantic-report.json"],
   ["model_provenance", "_docs/ralph/prototype-integration/model-provenance.json"],
   ["ai_production_policy", "_docs/ralph/prototype-integration/ai-production-policy.json"],
+  ["ai_biometric_security_gates", "_docs/ralph/prototype-integration/ai-biometric-security-gates.json"],
 ];
 
 const artifactSelections = [
