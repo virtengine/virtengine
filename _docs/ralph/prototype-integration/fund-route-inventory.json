@@ -6,7 +6,8 @@
     "status": "unavailable",
     "thread": "T5",
     "tag": null,
-    "payload_sha": null
+    "payload_sha": null,
+    "evidence_paths": []
   },
   "movement_primitives": ["MintCoins", "BurnCoins", "SendCoinsFromAccountToModule", "SendCoinsFromModuleToAccount", "SendCoinsFromModuleToModule"],
   "mover_files": [

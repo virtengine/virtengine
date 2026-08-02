@@ -3,6 +3,7 @@
 "use strict";
 
 const assert = require("assert").strict;
+const { spawnSync } = require("child_process");
 const { readFileSync } = require("fs");
 const { resolve } = require("path");
 const { validateSecurityGates } = require("./validate-ai-biometric-security-gates.cjs");
@@ -152,7 +153,8 @@ if (require.main === module) {
   validateCoreRcManifest(loadJson(coreRcManifestPath), { rootDir: root });
   validateFundRouteInventory(loadJson(fundRouteInventoryPath), {
     rootDir: root,
-    verifyAcceptedCheckpoint: (checkpoint) => handoff.accepted_checkpoints.some((entry) => entry.thread === "T5" && entry.tag === checkpoint.tag && entry.payload_head === checkpoint.payload_sha),
+    verifyAcceptedCheckpoint: (checkpoint) => handoff.accepted_checkpoints.some((entry) => entry.thread === "T5" && entry.tag === checkpoint.tag && entry.payload_head === checkpoint.payload_sha)
+      && checkpoint.evidence_paths.every((path) => spawnSync("git", ["cat-file", "-e", `${checkpoint.payload_sha}:${path}`], { cwd: root }).status === 0),
   });
   validateMigrationInventory(loadJson(migrationInventoryPath), loadJson(testCasesPath), {
     rootDir: root,

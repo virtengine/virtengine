@@ -24,7 +24,7 @@ const tests = [
   ["accepts a fully wired future transition", () => {
     const value = clone();
     value.status = "complete";
-    value.accepted_fund_authorization_checkpoint = { status: "accepted", thread: "T5", tag: "checkpoint/prototype-t5/t5-18", payload_sha: "a".repeat(40) };
+    value.accepted_fund_authorization_checkpoint = { status: "accepted", thread: "T5", tag: "checkpoint/prototype-t5/t5-18", payload_sha: "a".repeat(40), evidence_paths: ["pkg/fundauth/authorization.go", "pkg/fundauth/keeper/keeper.go", "pkg/fundauth/policy.go", "pkg/fundauth/registry.go"] };
     value.blockers = [];
     value.completion.allowed = true;
     value.routes.forEach((route) => { route.fund_authorization = "wired"; route.atomicity = "verified"; route.blockers = []; });
@@ -32,8 +32,13 @@ const tests = [
   }],
   ["rejects an unverified accepted checkpoint", () => {
     const value = clone();
-    value.accepted_fund_authorization_checkpoint = { status: "accepted", thread: "T5", tag: "checkpoint/prototype-t5/t5-18", payload_sha: "a".repeat(40) };
+    value.accepted_fund_authorization_checkpoint = { status: "accepted", thread: "T5", tag: "checkpoint/prototype-t5/t5-18", payload_sha: "a".repeat(40), evidence_paths: ["pkg/fundauth/authorization.go", "pkg/fundauth/keeper/keeper.go", "pkg/fundauth/policy.go", "pkg/fundauth/registry.go"] };
     assert.throws(() => validate(value), /checkpoint verification failed/);
+  }],
+  ["rejects an unrelated T5 checkpoint without capability paths", () => {
+    const value = clone();
+    value.accepted_fund_authorization_checkpoint = { status: "accepted", thread: "T5", tag: "checkpoint/prototype-t5/t5-18", payload_sha: "a".repeat(40), evidence_paths: [] };
+    assert.throws(() => validate(value, { verifyAcceptedCheckpoint: () => true }), /lacks canonical FundAuthorization evidence paths/);
   }],
 ];
 
