@@ -173,6 +173,13 @@ function validateSlurmChartInventory(inventory, options = {}) {
     if (invariant.status === "satisfied") assert.equal(invariant.blocker, null, `satisfied invariant retains blocker: ${invariant.id}`);
     else assert.ok(invariant.blocker, `unsatisfied invariant lacks blocker: ${invariant.id}`);
   }
+  const capacityInvariant = inventory.semantic_invariants.find((item) => item.id === "replica-capacity-equality");
+  if (capacityInvariant.status === "unverified") {
+    assert.ok(capacityInvariant.evidence.includes("deploy/slurm/slurm-cluster/tests/stable-secrets-values.yaml"), "capacity evidence must include the Helm render fixture");
+    assert.ok(capacityInvariant.evidence.includes("_docs/ralph/prototype-integration/required-gate-matrix.json"), "capacity evidence must include the pinned render gate");
+    assert.doesNotMatch(capacityInvariant.blocker, /Helm is unavailable/i, "capacity blocker must not claim pinned Helm is unavailable");
+    assert.match(capacityInvariant.blocker, /production.*(?:unverified|no operator-approved)/i, "capacity blocker must retain the production evidence boundary");
+  }
 
   assert.deepEqual(inventory.dependencies.map((item) => item.id).sort(), [...dependencyIds].sort());
   const expectedBlockers = [

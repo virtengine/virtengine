@@ -64,6 +64,18 @@ function reportWithFailure(candidate, failedInvariant) {
 
 const tests = [
   ["accepts the blocked executable-semantic inventory", () => assert.doesNotThrow(() => validate(fixture()))],
+  ["rejects stale Helm-unavailable capacity evidence", () => {
+    const candidate = fixture();
+    const capacity = candidate.semantic_invariants.find((item) => item.id === "replica-capacity-equality");
+    capacity.blocker = "Helm is unavailable and rendered capacity is unverified.";
+    assert.throws(() => validate(candidate), /must not claim pinned Helm is unavailable/);
+  }],
+  ["rejects capacity evidence without the pinned render gate", () => {
+    const candidate = fixture();
+    const capacity = candidate.semantic_invariants.find((item) => item.id === "replica-capacity-equality");
+    capacity.evidence = capacity.evidence.filter((path) => path !== "_docs/ralph/prototype-integration/required-gate-matrix.json");
+    assert.throws(() => validate(candidate), /capacity evidence must include the pinned render gate/);
+  }],
   ["rejects an unknown competing source", () => {
     assert.throws(() => validate(fixture(), { discoveredSources: [...knownSources, "infra/charts/slurm"] }), /unknown competing SLURM chart source/);
   }],
