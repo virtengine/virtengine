@@ -555,9 +555,13 @@ func projectReconciliationState(state reconciliationStoreState) (ReconciliationP
 		Results: make(map[string]DurableReconciliationResult), Intents: make(map[string]ReconciliationActionIntent),
 		Cursors: make(map[string]ReconciliationCursor),
 	}
+	resultSequences := make(map[string]uint64)
 	for _, event := range state.Events {
 		switch event.Type {
 		case ReconciliationEventJobCreated:
+			if err := validateReconciliationJob(*event.Job); err != nil {
+				return projection, err
+			}
 			if _, exists := projection.Jobs[event.Job.ID]; exists {
 				return projection, ErrReconciliationConflict
 			}
@@ -574,11 +578,17 @@ func projectReconciliationState(state reconciliationStoreState) (ReconciliationP
 			}
 			projection.Attempts[event.Attempt.JobID][event.Attempt.Number-1] = *event.Attempt
 		case ReconciliationEventResultRecorded:
+			if err := validateReplayedDurableReconciliationResult(*event.Result); err != nil {
+				return projection, err
+			}
 			if _, exists := projection.Results[event.Result.JobID]; exists {
 				return projection, ErrReconciliationConflict
 			}
 			if _, exists := projection.Jobs[event.Result.JobID]; !exists {
 				return projection, errors.New("reconciliation result references missing job")
+			}
+			if event.Result.Result.AllocationID != projection.Jobs[event.Result.JobID].AllocationID {
+				return projection, errors.New("reconciliation result allocation mismatch")
 			}
 			attempt, err := findReconciliationAttempt(projection, event.Result.JobID, event.Result.AttemptNumber)
 			if err != nil || !attempt.FinishedAt.IsZero() {
@@ -587,15 +597,28 @@ func projectReconciliationState(state reconciliationStoreState) (ReconciliationP
 			attempt.FinishedAt, attempt.Outcome = event.Result.CompletedAt, "completed"
 			projection.Attempts[event.Result.JobID][event.Result.AttemptNumber-1] = attempt
 			projection.Results[event.Result.JobID] = *event.Result
+			resultSequences[event.Result.JobID] = event.Sequence
 		case ReconciliationEventIntentRecorded:
 			if _, exists := projection.Intents[event.Intent.ID]; exists {
 				return projection, ErrReconciliationConflict
 			}
+			result, exists := projection.Results[event.Intent.JobID]
+			if !exists || validateReconciliationIntent(*event.Intent, result) != nil {
+				return projection, errors.New("invalid reconciliation action intent")
+			}
 			projection.Intents[event.Intent.ID] = *event.Intent
 		case ReconciliationEventCursorAdvanced:
+			if event.Cursor.StreamID == "" || event.Cursor.JobID == "" || event.Cursor.ResultDigest == "" {
+				return projection, errors.New("invalid reconciliation cursor")
+			}
 			result, exists := projection.Results[event.Cursor.JobID]
-			if !exists || result.ResultDigest != event.Cursor.ResultDigest {
+			if !exists || result.ResultDigest != event.Cursor.ResultDigest ||
+				event.Cursor.LastCompletedJobSequence != resultSequences[event.Cursor.JobID] {
 				return projection, errors.New("cursor references missing reconciliation result")
+			}
+			if previous, exists := projection.Cursors[event.Cursor.StreamID]; exists &&
+				event.Cursor.LastCompletedJobSequence <= previous.LastCompletedJobSequence {
+				return projection, errors.New("reconciliation cursor cannot regress")
 			}
 			projection.Cursors[event.Cursor.StreamID] = *event.Cursor
 		}
@@ -622,13 +645,18 @@ func validateDurableReconciliationResult(result DurableReconciliationResult) err
 	if result.JobID == "" || result.AttemptNumber == 0 || result.ResultDigest == "" || result.CompletedAt.IsZero() || result.Evidence.Algorithm != "sha256" || result.Evidence.SchemaVersion == "" {
 		return errors.New("invalid durable reconciliation result")
 	}
+	if !validReconciliationMetricState(result.Result.State) {
+		return errors.New("unsupported durable reconciliation state")
+	}
+	if err := validateReconciliationResultSemantics(result.Result); err != nil {
+		return err
+	}
 	for _, digest := range []string{result.ResultDigest, result.Evidence.ProviderDigest, result.Evidence.IndependentDigest} {
 		if decoded, err := hex.DecodeString(digest); err != nil || len(decoded) != sha256.Size {
 			return errors.New("invalid reconciliation digest")
 		}
 	}
-	expectedResult, err := canonicalReconciliationDigest("result", result.Result)
-	if err != nil || expectedResult != result.ResultDigest {
+	if !validReconciliationResultDigest(result.Result, result.ResultDigest) {
 		return errors.New("reconciliation result digest mismatch")
 	}
 	expectedProvider, err := canonicalReconciliationDigest("provider-evidence", result.Result.ProviderMetrics)
@@ -642,8 +670,67 @@ func validateDurableReconciliationResult(result DurableReconciliationResult) err
 	return nil
 }
 
+func validateReplayedDurableReconciliationResult(result DurableReconciliationResult) error {
+	if result.JobID == "" || result.AttemptNumber == 0 || result.CompletedAt.IsZero() ||
+		result.Evidence.Algorithm != "sha256" || result.Evidence.SchemaVersion == "" {
+		return errors.New("invalid replayed reconciliation result")
+	}
+	for _, digest := range []string{result.ResultDigest, result.Evidence.ProviderDigest, result.Evidence.IndependentDigest} {
+		if decoded, err := hex.DecodeString(digest); err != nil || len(decoded) != sha256.Size {
+			return errors.New("invalid reconciliation digest")
+		}
+	}
+	if !validReconciliationResultDigest(result.Result, result.ResultDigest) {
+		return errors.New("reconciliation result digest mismatch")
+	}
+	expectedProvider, err := canonicalReconciliationDigest("provider-evidence", result.Result.ProviderMetrics)
+	if err != nil || expectedProvider != result.Evidence.ProviderDigest {
+		return errors.New("provider evidence digest mismatch")
+	}
+	expectedIndependent, err := canonicalReconciliationDigest("independent-evidence", result.Result.WaldurMetrics)
+	if err != nil || expectedIndependent != result.Evidence.IndependentDigest {
+		return errors.New("independent evidence digest mismatch")
+	}
+	return validateReconciliationResultSemantics(result.Result)
+}
+
+func canonicalReconciliationResultDigest(result ReconciliationResult) (string, error) {
+	canonical := struct {
+		AllocationID       string                   `json:"allocation_id"`
+		ReconciliationTime string                   `json:"reconciliation_time"`
+		ProviderMetrics    ResourceMetrics          `json:"provider_metrics"`
+		WaldurMetrics      *ResourceMetrics         `json:"waldur_metrics,omitempty"`
+		Discrepancies      []MetricDiscrepancy      `json:"discrepancies,omitempty"`
+		State              ReconciliationState      `json:"state"`
+		ReasonCode         ReconciliationReasonCode `json:"reason_code"`
+		Score              int                      `json:"score"`
+	}{
+		AllocationID: result.AllocationID, ReconciliationTime: result.ReconciliationTime.UTC().Format(time.RFC3339Nano),
+		ProviderMetrics: result.ProviderMetrics, WaldurMetrics: result.WaldurMetrics,
+		Discrepancies: result.Discrepancies, State: result.State, ReasonCode: result.ReasonCode, Score: result.Score,
+	}
+	return canonicalReconciliationDigest("result", canonical)
+}
+
+func validReconciliationResultDigest(result ReconciliationResult, digest string) bool {
+	canonical, err := canonicalReconciliationResultDigest(result)
+	if err == nil && canonical == digest {
+		return true
+	}
+	if result.ReconciliationTime.Nanosecond() == 0 {
+		for _, value := range []interface{}{result, &result} {
+			expected, err := canonicalReconciliationDigest("result", value)
+			if err == nil && expected == digest {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 func validateReconciliationIntent(intent ReconciliationActionIntent, result DurableReconciliationResult) error {
-	if intent.ID == "" || intent.JobID != result.JobID || intent.ResultDigest != result.ResultDigest || intent.AllocationID == "" || intent.CreatedAt.IsZero() || intent.Status != "pending" {
+	if intent.ID == "" || intent.JobID != result.JobID || intent.ResultDigest != result.ResultDigest ||
+		intent.AllocationID == "" || intent.AllocationID != result.Result.AllocationID || intent.CreatedAt.IsZero() || intent.Status != "pending" {
 		return errors.New("invalid reconciliation action intent")
 	}
 	if intent.Kind != "alert_discrepancy" && intent.Kind != "auto_correct" {
@@ -671,6 +758,7 @@ func newReconciliationJob(allocationID, resourceUUID string, periodStart, period
 }
 
 func buildDurableReconciliationCompletion(job ReconciliationJob, attempt ReconciliationAttempt, result ReconciliationResult) (DurableReconciliationResult, []ReconciliationActionIntent, ReconciliationCursor, error) {
+	result.ReconciliationTime = result.ReconciliationTime.UTC().Truncate(time.Second)
 	providerDigest, err := canonicalReconciliationDigest("provider-evidence", result.ProviderMetrics)
 	if err != nil {
 		return DurableReconciliationResult{}, nil, ReconciliationCursor{}, err
@@ -679,7 +767,7 @@ func buildDurableReconciliationCompletion(job ReconciliationJob, attempt Reconci
 	if err != nil {
 		return DurableReconciliationResult{}, nil, ReconciliationCursor{}, err
 	}
-	resultDigest, err := canonicalReconciliationDigest("result", result)
+	resultDigest, err := canonicalReconciliationResultDigest(result)
 	if err != nil {
 		return DurableReconciliationResult{}, nil, ReconciliationCursor{}, err
 	}

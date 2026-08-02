@@ -215,10 +215,18 @@ func (r *WaldurReconciler) Start(ctx context.Context) error {
 	}
 	projection, err := r.jobStore.LoadProjection(ctx)
 	if err != nil {
+		if r.metrics != nil {
+			r.metrics.ObserveProjectionFailure()
+		}
 		_ = r.jobStore.Close()
 		return fmt.Errorf("load reconciliation projection: %w", err)
 	}
-	r.metrics.ObserveProjection(projection)
+	if r.metrics != nil {
+		if err := r.metrics.ObserveProjection(projection); err != nil {
+			_ = r.jobStore.Close()
+			return fmt.Errorf("observe reconciliation projection: %w", err)
+		}
+	}
 	r.mu.Lock()
 	if r.running {
 		r.mu.Unlock()
@@ -811,6 +819,9 @@ func (r *WaldurReconciler) runReconciliation(ctx context.Context) {
 
 	pending, err := r.jobStore.PendingJobs(ctx)
 	if err != nil {
+		if r.metrics != nil {
+			r.metrics.ObserveProjectionFailure()
+		}
 		log.Printf("[waldur-reconciler] failed to load pending jobs: %v", err)
 		return
 	}
@@ -855,9 +866,10 @@ func (r *WaldurReconciler) refreshMetrics(ctx context.Context) {
 	}
 	projection, err := r.jobStore.LoadProjection(ctx)
 	if err != nil {
+		r.metrics.ObserveProjectionFailure()
 		return
 	}
-	r.metrics.ObserveProjection(projection)
+	_ = r.metrics.ObserveProjection(projection)
 }
 
 // ScheduledUsageCollector collects usage on a schedule and integrates with settlement.

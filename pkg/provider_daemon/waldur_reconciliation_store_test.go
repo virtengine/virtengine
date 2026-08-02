@@ -83,7 +83,8 @@ func TestFileReconciliationJobStoreRejectsConflictingCompletion(t *testing.T) {
 	conflict := result
 	conflict.Result.State = ReconciliationStateMatched
 	conflict.Result.ReasonCode = ReconciliationReasonExactMatch
-	conflict.ResultDigest, err = canonicalReconciliationDigest("result", conflict.Result)
+	conflict.Result.Score = 100
+	conflict.ResultDigest, err = canonicalReconciliationResultDigest(conflict.Result)
 	require.NoError(t, err)
 	conflictingCursor := cursor
 	conflictingCursor.ResultDigest = conflict.ResultDigest
@@ -125,6 +126,59 @@ func TestFileReconciliationJobStoreRejectsCorruption(t *testing.T) {
 	unknownStore, err := NewFileReconciliationJobStore(path)
 	require.NoError(t, err)
 	require.ErrorContains(t, unknownStore.Open(ctx), "unknown field")
+}
+
+func TestFileReconciliationJobStoreRejectsRehashedUnknownResultState(t *testing.T) {
+	ctx := context.Background()
+	path := filepath.Join(t.TempDir(), "reconciliation.json")
+	store := openReconciliationStore(t, path)
+	job := testReconciliationJob()
+	_, _, err := store.PutJobIfAbsent(ctx, job)
+	require.NoError(t, err)
+	attempt, err := store.BeginAttempt(ctx, job.ID)
+	require.NoError(t, err)
+	result := testDurableReconciliationResult(job, attempt.Number)
+	cursor := ReconciliationCursor{StreamID: "waldur/default", JobID: job.ID, ResultDigest: result.ResultDigest}
+	require.NoError(t, store.CompleteAttempt(ctx, result, nil, cursor))
+	require.NoError(t, store.Close())
+
+	raw, err := os.ReadFile(path)
+	require.NoError(t, err)
+	var state reconciliationStoreState
+	require.NoError(t, json.Unmarshal(raw, &state))
+	for index := range state.Events {
+		if state.Events[index].Result != nil {
+			state.Events[index].Result.Result.State = ReconciliationState("private-allocation-state")
+			state.Events[index].Result.ResultDigest, err = canonicalReconciliationDigest("result", state.Events[index].Result.Result)
+			require.NoError(t, err)
+		}
+		if state.Events[index].Cursor != nil {
+			state.Events[index].Cursor.ResultDigest = state.Events[index-1].Result.ResultDigest
+		}
+		if index > 0 {
+			state.Events[index].PreviousDigest = state.Events[index-1].Digest
+		}
+		state.Events[index].Digest, err = reconciliationEventDigest(state.Events[index])
+		require.NoError(t, err)
+	}
+	state.TailDigest = state.Events[len(state.Events)-1].Digest
+	tampered, err := json.Marshal(state)
+	require.NoError(t, err)
+	require.NoError(t, os.WriteFile(path, tampered, 0o600))
+
+	reopened, err := NewFileReconciliationJobStore(path)
+	require.NoError(t, err)
+	require.ErrorContains(t, reopened.Open(ctx), "invalid reconciliation result semantics")
+}
+
+func TestReplayedDurableReconciliationResultRejectsStaleDigest(t *testing.T) {
+	result := testDurableReconciliationResult(testReconciliationJob(), 1)
+	result.Result.Score++
+	require.ErrorContains(t, validateReplayedDurableReconciliationResult(result), "result digest mismatch")
+
+	result = testDurableReconciliationResult(testReconciliationJob(), 1)
+	result.Result.ReconciliationTime = result.Result.ReconciliationTime.Add(time.Nanosecond)
+	require.ErrorContains(t, validateReplayedDurableReconciliationResult(result), "result digest mismatch")
 }
 
 func TestFileReconciliationJobStoreSharedReplicasDeduplicateJob(t *testing.T) {

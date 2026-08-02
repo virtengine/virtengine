@@ -13,7 +13,6 @@ import (
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
-	"github.com/prometheus/client_golang/prometheus/testutil"
 	"github.com/stretchr/testify/require"
 	"github.com/virtengine/virtengine/pkg/waldur"
 )
@@ -22,7 +21,23 @@ type reconciliationCompletionTestStore struct {
 	ReconciliationJobStore
 	beforeComplete func()
 	completeErr    error
+	loadErr        error
+	pendingErr     error
 	duplicate      bool
+}
+
+func (s *reconciliationCompletionTestStore) LoadProjection(ctx context.Context) (*ReconciliationProjection, error) {
+	if s.loadErr != nil {
+		return nil, s.loadErr
+	}
+	return s.ReconciliationJobStore.LoadProjection(ctx)
+}
+
+func (s *reconciliationCompletionTestStore) PendingJobs(ctx context.Context) ([]ReconciliationJob, error) {
+	if s.pendingErr != nil {
+		return nil, s.pendingErr
+	}
+	return s.ReconciliationJobStore.PendingJobs(ctx)
 }
 
 func (s *reconciliationCompletionTestStore) CompleteAttempt(
@@ -128,6 +143,9 @@ func TestWaldurReconcilerFetchWaldurUsageUsesUsageAPI(t *testing.T) {
 	projection, err := jobStore.LoadProjection(context.Background())
 	require.NoError(t, err)
 	require.Len(t, projection.Results, 1)
+	for _, durable := range projection.Results {
+		require.True(t, validReconciliationResultDigest(durable.Result, durable.ResultDigest))
+	}
 	require.Len(t, projection.Cursors, 1)
 	require.Empty(t, projection.Intents)
 }
@@ -135,6 +153,16 @@ func TestWaldurReconcilerFetchWaldurUsageUsesUsageAPI(t *testing.T) {
 func TestWaldurReconcilerStartRequiresDurableStore(t *testing.T) {
 	reconciler := NewWaldurReconciler(DefaultWaldurReconcilerConfig(), nil, NewUsageSnapshotStore(), nil, nil)
 	require.ErrorIs(t, reconciler.Start(context.Background()), ErrReconciliationUnavailable)
+}
+
+func TestWaldurReconcilerStartLoadFailureWithoutMetrics(t *testing.T) {
+	fileStore := openReconciliationStore(t, filepath.Join(t.TempDir(), "reconciliation.json"))
+	reconciler := NewWaldurReconciler(DefaultWaldurReconcilerConfig(), nil, NewUsageSnapshotStore(), nil, nil)
+	reconciler.SetJobStore(&reconciliationCompletionTestStore{
+		ReconciliationJobStore: fileStore,
+		loadErr:                errors.New("injected startup load failure"),
+	})
+	require.ErrorContains(t, reconciler.Start(context.Background()), "injected startup load failure")
 }
 
 func TestWaldurReconcilerStartHydratesDurableResults(t *testing.T) {
@@ -208,13 +236,13 @@ func TestWaldurReconcilerDurableTransitionsUpdateMetrics(t *testing.T) {
 	require.NoError(t, err)
 	wrapper := &reconciliationCompletionTestStore{ReconciliationJobStore: fileStore, duplicate: true}
 	wrapper.beforeComplete = func() {
-		require.Equal(t, float64(1), testutil.ToFloat64(metrics.Backlog))
-		require.Equal(t, float64(0), testutil.ToFloat64(metrics.LastCompletedTimestamp))
+		require.Equal(t, float64(1), reconciliationMetricValue(t, registry, "virtengine_provider_reconciliation_backlog", nil))
+		require.Equal(t, float64(0), reconciliationMetricValue(t, registry, "virtengine_provider_reconciliation_last_completed_timestamp_seconds", nil))
 		for _, state := range []ReconciliationState{
 			ReconciliationStateMatched, ReconciliationStateMismatched, ReconciliationStateUnavailable,
 			ReconciliationStateStale, ReconciliationStateUnresolved,
 		} {
-			require.Equal(t, float64(0), testutil.ToFloat64(metrics.Results.WithLabelValues(string(state))))
+			require.Equal(t, float64(0), reconciliationMetricValue(t, registry, "virtengine_provider_reconciliation_results", map[string]string{"state": string(state)}))
 		}
 	}
 	reconciler := NewWaldurReconciler(DefaultWaldurReconcilerConfig(), nil, usageStore, nil, stateStore)
@@ -222,9 +250,9 @@ func TestWaldurReconcilerDurableTransitionsUpdateMetrics(t *testing.T) {
 	reconciler.SetMetrics(metrics)
 	reconciler.runReconciliation(ctx)
 
-	require.Equal(t, float64(0), testutil.ToFloat64(metrics.Backlog))
-	require.Equal(t, float64(1), testutil.ToFloat64(metrics.Results.WithLabelValues(string(ReconciliationStateUnavailable))))
-	require.Equal(t, float64(1), testutil.ToFloat64(metrics.ActionIntents.WithLabelValues("alert_discrepancy", "high", "pending")))
+	require.Equal(t, float64(0), reconciliationMetricValue(t, registry, "virtengine_provider_reconciliation_backlog", nil))
+	require.Equal(t, float64(1), reconciliationMetricValue(t, registry, "virtengine_provider_reconciliation_results", map[string]string{"state": string(ReconciliationStateUnavailable)}))
+	require.Equal(t, float64(1), reconciliationMetricValue(t, registry, "virtengine_provider_reconciliation_action_intents", map[string]string{"kind": "alert_discrepancy", "severity": "high", "status": "pending"}))
 	projection, err := fileStore.LoadProjection(ctx)
 	require.NoError(t, err)
 	require.Len(t, projection.Results, 1)
@@ -234,7 +262,7 @@ func TestWaldurReconcilerDurableTransitionsUpdateMetrics(t *testing.T) {
 	for _, result := range projection.Results {
 		completedAt = result.CompletedAt
 	}
-	require.Equal(t, float64(completedAt.Unix()), testutil.ToFloat64(metrics.LastCompletedTimestamp))
+	require.Equal(t, float64(completedAt.Unix()), reconciliationMetricValue(t, registry, "virtengine_provider_reconciliation_last_completed_timestamp_seconds", nil))
 
 	require.NoError(t, fileStore.Close())
 	reopened, err := NewFileReconciliationJobStore(path)
@@ -249,17 +277,18 @@ func TestWaldurReconcilerDurableTransitionsUpdateMetrics(t *testing.T) {
 	cancel()
 	require.NoError(t, restarted.Start(cancelled))
 	restarted.Stop()
-	require.Equal(t, float64(0), testutil.ToFloat64(restartMetrics.Backlog))
-	require.Equal(t, float64(1), testutil.ToFloat64(restartMetrics.Results.WithLabelValues(string(ReconciliationStateUnavailable))))
-	require.Equal(t, float64(1), testutil.ToFloat64(restartMetrics.ActionIntents.WithLabelValues("alert_discrepancy", "high", "pending")))
-	require.Equal(t, float64(completedAt.Unix()), testutil.ToFloat64(restartMetrics.LastCompletedTimestamp))
+	require.Equal(t, float64(0), reconciliationMetricValue(t, restartRegistry, "virtengine_provider_reconciliation_backlog", nil))
+	require.Equal(t, float64(1), reconciliationMetricValue(t, restartRegistry, "virtengine_provider_reconciliation_results", map[string]string{"state": string(ReconciliationStateUnavailable)}))
+	require.Equal(t, float64(1), reconciliationMetricValue(t, restartRegistry, "virtengine_provider_reconciliation_action_intents", map[string]string{"kind": "alert_discrepancy", "severity": "high", "status": "pending"}))
+	require.Equal(t, float64(completedAt.Unix()), reconciliationMetricValue(t, restartRegistry, "virtengine_provider_reconciliation_last_completed_timestamp_seconds", nil))
 }
 
 func TestWaldurReconcilerFailedCompletionDoesNotMutateMetrics(t *testing.T) {
 	ctx := context.Background()
 	stateStore, usageStore := unavailableReconciliationInputs(t)
 	fileStore := openReconciliationStore(t, filepath.Join(t.TempDir(), "reconciliation.json"))
-	metrics, err := NewReconciliationMetrics(prometheus.NewRegistry())
+	registry := prometheus.NewRegistry()
+	metrics, err := NewReconciliationMetrics(registry)
 	require.NoError(t, err)
 	wrapper := &reconciliationCompletionTestStore{
 		ReconciliationJobStore: fileStore,
@@ -270,13 +299,13 @@ func TestWaldurReconcilerFailedCompletionDoesNotMutateMetrics(t *testing.T) {
 	reconciler.SetMetrics(metrics)
 	reconciler.runReconciliation(ctx)
 
-	require.Equal(t, float64(1), testutil.ToFloat64(metrics.Backlog))
-	require.Equal(t, float64(0), testutil.ToFloat64(metrics.LastCompletedTimestamp))
+	require.Equal(t, float64(1), reconciliationMetricValue(t, registry, "virtengine_provider_reconciliation_backlog", nil))
+	require.Equal(t, float64(0), reconciliationMetricValue(t, registry, "virtengine_provider_reconciliation_last_completed_timestamp_seconds", nil))
 	for _, state := range []ReconciliationState{
 		ReconciliationStateMatched, ReconciliationStateMismatched, ReconciliationStateUnavailable,
 		ReconciliationStateStale, ReconciliationStateUnresolved,
 	} {
-		require.Equal(t, float64(0), testutil.ToFloat64(metrics.Results.WithLabelValues(string(state))))
+		require.Equal(t, float64(0), reconciliationMetricValue(t, registry, "virtengine_provider_reconciliation_results", map[string]string{"state": string(state)}))
 	}
 	projection, err := fileStore.LoadProjection(ctx)
 	require.NoError(t, err)
@@ -285,6 +314,51 @@ func TestWaldurReconcilerFailedCompletionDoesNotMutateMetrics(t *testing.T) {
 	require.Empty(t, projection.Cursors)
 	_, found := reconciler.GetResult("alloc-1")
 	require.False(t, found)
+}
+
+func TestWaldurReconcilerRefreshMetricsInvalidatesOnProjectionLoadFailure(t *testing.T) {
+	registry := prometheus.NewRegistry()
+	metrics, err := NewReconciliationMetrics(registry)
+	require.NoError(t, err)
+	require.NoError(t, metrics.ObserveProjection(validMetricProjection()))
+	require.Equal(t, float64(1), reconciliationMetricValue(t, registry, "virtengine_provider_reconciliation_projection_available", nil))
+
+	reconciler := &WaldurReconciler{
+		metrics: metrics,
+		jobStore: &reconciliationCompletionTestStore{
+			loadErr: errors.New("injected projection failure"),
+		},
+	}
+	reconciler.refreshMetrics(context.Background())
+
+	require.Equal(t, float64(0), reconciliationMetricValue(t, registry, "virtengine_provider_reconciliation_projection_available", nil))
+	for _, name := range []string{
+		"virtengine_provider_reconciliation_results",
+		"virtengine_provider_reconciliation_backlog",
+		"virtengine_provider_reconciliation_last_completed_timestamp_seconds",
+		"virtengine_provider_reconciliation_action_intents",
+	} {
+		require.Equal(t, 0, reconciliationMetricSeriesCount(t, registry, name), name)
+	}
+}
+
+func TestWaldurReconcilerPendingJobsFailureInvalidatesMetrics(t *testing.T) {
+	ctx := context.Background()
+	stateStore, usageStore := unavailableReconciliationInputs(t)
+	fileStore := openReconciliationStore(t, filepath.Join(t.TempDir(), "reconciliation.json"))
+	registry := prometheus.NewRegistry()
+	metrics, err := NewReconciliationMetrics(registry)
+	require.NoError(t, err)
+	reconciler := NewWaldurReconciler(DefaultWaldurReconcilerConfig(), nil, usageStore, nil, stateStore)
+	reconciler.SetJobStore(&reconciliationCompletionTestStore{
+		ReconciliationJobStore: fileStore,
+		pendingErr:             errors.New("injected pending jobs failure"),
+	})
+	reconciler.SetMetrics(metrics)
+	reconciler.runReconciliation(ctx)
+
+	require.Equal(t, float64(0), reconciliationMetricValue(t, registry, "virtengine_provider_reconciliation_projection_available", nil))
+	require.Equal(t, 0, reconciliationMetricSeriesCount(t, registry, "virtengine_provider_reconciliation_backlog"))
 }
 
 func unavailableReconciliationInputs(t *testing.T) (*WaldurBridgeStateStore, *UsageSnapshotStore) {
