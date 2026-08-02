@@ -1,13 +1,13 @@
 {
   "campaign": "three-day-prototype",
   "thread": "T5",
-  "checkpoint": "T5-32",
+  "checkpoint": "T5-33",
   "branch": "ve/prototype-t5-platform",
   "frozen_baseline": "79391a3df86d85522b92e0400c6904971ecbe65d",
   "planning_sha": "1436723bd78980aa0388dbe9fcfa24dda939c54a",
   "intake_epoch": 1,
   "intake_base_sha": "5587c384f634552c3a2dd7181ca49cafa4da1984",
-  "payload_head": "5f800614cd20e0d9905ff22d0fa0922a23bbb876",
+  "payload_head": "270a030ecc76f1a38429eb4fb14f0612b36f567e",
   "prior_accepted_payload": null,
   "tree_clean": true,
   "commits_since_prior_acceptance": [
@@ -72,7 +72,9 @@
     "d978b7a4a05eaf499b7229a324d311152f8fec10",
     "a110cf4ecf4fc85d80208696be7eaedb114cfb18",
     "b5859abd307adecb9df16331ae6ad65353bb16cd",
-    "5f800614cd20e0d9905ff22d0fa0922a23bbb876"
+    "5f800614cd20e0d9905ff22d0fa0922a23bbb876",
+    "6e4334f92f6d15fa04c93d39bfb9b05a3271abb9",
+    "270a030ecc76f1a38429eb4fb14f0612b36f567e"
   ],
   "owned_paths": [
     "_docs/ralph/evidence/prototype-t5/**",
@@ -118,6 +120,7 @@
     "_docs/ralph/evidence/prototype-t5/T5-29/validation.txt",
     "_docs/ralph/evidence/prototype-t5/T5-30/validation.txt",
     "_docs/ralph/evidence/prototype-t5/T5-31/validation.txt",
+    "_docs/ralph/evidence/prototype-t5/T5-32/validation.txt",
     "_docs/ralph/handoffs/prototype-integration/HANDOFF.yaml",
     "_docs/ralph/handoffs/prototype-t5/HANDOFF.yaml",
     "_docs/ralph/prototype-integration/control.json",
@@ -249,6 +252,7 @@
     "x/veid/keeper/evidence_object_store.go",
     "x/veid/keeper/evidence_payload_cutover.go",
     "x/veid/keeper/evidence_payload_cutover_test.go",
+    "x/veid/keeper/msg_server.go",
     "x/veid/keeper/msg_server_test.go",
     "x/veid/keeper/wallet.go",
     "x/veid/keeper/wallet_test.go",
@@ -257,51 +261,51 @@
   ],
   "tests": [
     {
-      "command": "C:\\Users\\pavil\\AppData\\Local\\VirtEngine\\toolchains\\go1.25.8\\go\\bin\\go.exe -C C:\\Users\\pavil\\Desktop\\virtengine-gh\\repos\\virtengine-t5 test -count=1 ./pkg/data_vault -run RotateKeys",
+      "command": "C:\\Users\\pavil\\AppData\\Local\\VirtEngine\\toolchains\\go1.25.8\\go\\bin\\go.exe -C C:\\Users\\pavil\\Desktop\\virtengine-gh\\repos\\virtengine-t5 test -count=1 ./x/veid/keeper -run 'TestMsgServerTestSuite/TestMsgUpdateDerivedFeatures_RequiresBondedValidator$'",
       "exit_code": 0,
       "result": "passed",
       "tool_versions": {
         "go": "go version go1.25.8 windows/amd64"
       },
-      "artifact": "_docs/ralph/evidence/prototype-t5/T5-32/validation.txt"
+      "artifact": "_docs/ralph/evidence/prototype-t5/T5-33/validation.txt"
     },
     {
-      "command": "C:\\Users\\pavil\\AppData\\Local\\VirtEngine\\toolchains\\go1.25.8\\go\\bin\\go.exe -C C:\\Users\\pavil\\Desktop\\virtengine-gh\\repos\\virtengine-t5 test -count=1 ./pkg/data_vault ./pkg/data_vault/contracts ./pkg/data_vault/keys",
+      "command": "C:\\Users\\pavil\\AppData\\Local\\VirtEngine\\toolchains\\go1.25.8\\go\\bin\\go.exe -C C:\\Users\\pavil\\Desktop\\virtengine-gh\\repos\\virtengine-t5 test -count=1 ./x/veid/keeper ./x/veid/types",
       "exit_code": 0,
       "result": "passed",
       "tool_versions": {
         "go": "go version go1.25.8 windows/amd64"
       },
-      "artifact": "_docs/ralph/evidence/prototype-t5/T5-32/validation.txt"
+      "artifact": "_docs/ralph/evidence/prototype-t5/T5-33/validation.txt"
     },
     {
-      "command": "C:\\Users\\pavil\\AppData\\Local\\VirtEngine\\toolchains\\go1.25.8\\go\\bin\\go.exe -C C:\\Users\\pavil\\Desktop\\virtengine-gh\\repos\\virtengine-t5 vet ./pkg/data_vault ./pkg/data_vault/contracts ./pkg/data_vault/keys",
+      "command": "C:\\Users\\pavil\\AppData\\Local\\VirtEngine\\toolchains\\go1.25.8\\go\\bin\\go.exe -C C:\\Users\\pavil\\Desktop\\virtengine-gh\\repos\\virtengine-t5 vet ./x/veid/keeper ./x/veid/types",
       "exit_code": 0,
       "result": "passed",
       "tool_versions": {
         "go": "go version go1.25.8 windows/amd64"
       },
-      "artifact": "_docs/ralph/evidence/prototype-t5/T5-32/validation.txt"
+      "artifact": "_docs/ralph/evidence/prototype-t5/T5-33/validation.txt"
     },
     {
-      "command": "CGO_ENABLED=1 CC=C:\\Users\\pavil\\AppData\\Local\\Microsoft\\WinGet\\Packages\\BrechtSanders.WinLibs.POSIX.UCRT_Microsoft.Winget.Source_8wekyb3d8bbwe\\mingw64\\bin\\gcc.exe C:\\Users\\pavil\\AppData\\Local\\VirtEngine\\toolchains\\go1.25.8\\go\\bin\\go.exe -C C:\\Users\\pavil\\Desktop\\virtengine-gh\\repos\\virtengine-t5 test -race -count=1 ./pkg/data_vault -run RotateKeys",
+      "command": "CGO_ENABLED=1 CC=C:\\Users\\pavil\\AppData\\Local\\Microsoft\\WinGet\\Packages\\BrechtSanders.WinLibs.POSIX.UCRT_Microsoft.Winget.Source_8wekyb3d8bbwe\\mingw64\\bin\\gcc.exe C:\\Users\\pavil\\AppData\\Local\\VirtEngine\\toolchains\\go1.25.8\\go\\bin\\go.exe -C C:\\Users\\pavil\\Desktop\\virtengine-gh\\repos\\virtengine-t5 test -race -count=1 ./x/veid/keeper -run 'TestMsgServerTestSuite/TestMsgUpdateDerivedFeatures_RequiresBondedValidator$'",
       "exit_code": 0,
       "result": "passed",
       "tool_versions": {
         "go": "go version go1.25.8 windows/amd64",
         "gcc": "gcc.exe (MinGW-W64 x86_64-ucrt-posix-seh, built by Brecht Sanders, r3) 16.1.0"
       },
-      "artifact": "_docs/ralph/evidence/prototype-t5/T5-32/validation.txt"
+      "artifact": "_docs/ralph/evidence/prototype-t5/T5-33/validation.txt"
     }
   ],
   "generated_hashes": {},
   "migrations": [],
   "external_evidence": [
-    "_docs/ralph/evidence/prototype-t5/T5-32/validation.txt"
+    "_docs/ralph/evidence/prototype-t5/T5-33/validation.txt"
   ],
   "known_failures": [],
   "blockers": [
-    "Epoch 1 completeChangedPaths contains 161 paths; honest T5 ownership covers 137 and leaves 24 inherited integration/T4 paths outside ownership, including upgrades/software/v1.6.0/upgrade.go, upgrades/software/v1.6.0/upgrade_handler_test.go, and upgrades/software/v1.6.0/upgrade_retry_test.go from merge a9e148436c73e398e8902d03303abafdc1117bb5; no active T5 generated-file lease covers them, so this checkpoint is untagged and not intake eligible.",
+    "Epoch 1 completeChangedPaths contains 163 paths; honest T5 ownership covers 139 and leaves 24 inherited integration/T4 paths outside ownership, including upgrades/software/v1.6.0/upgrade.go, upgrades/software/v1.6.0/upgrade_handler_test.go, and upgrades/software/v1.6.0/upgrade_retry_test.go from merge a9e148436c73e398e8902d03303abafdc1117bb5; no active T5 generated-file lease covers them, so this checkpoint is untagged and not intake eligible.",
     "T4 must register the prerequisite VEID evidence reference migration, then separately register the signed evidence payload cutover using D4 children 05 through 08.",
     "T4 must mount and wire the persistent FundAuthorization store and keeper.",
     "Production erasure requires a durable transactional ErasureOperationStore, production storage-deletion and KMS-destruction adapters, independent receipt signers and key resolver, consent, hold, backup, and finalization authorities, and authenticated restore-manifest authority."
