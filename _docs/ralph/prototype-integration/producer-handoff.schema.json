@@ -1,0 +1,66 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://virtengine.example/schemas/prototype-producer-handoff-v1.json",
+  "title": "VirtEngine prototype producer handoff",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "campaign",
+    "thread",
+    "checkpoint",
+    "branch",
+    "start_head",
+    "end_head",
+    "origin_main",
+    "tree_clean",
+    "commits",
+    "owned_paths",
+    "files_changed",
+    "tests",
+    "generated_hashes",
+    "migrations",
+    "external_evidence",
+    "known_failures",
+    "blockers",
+    "next_checkpoint",
+    "expected_head"
+  ],
+  "properties": {
+    "campaign": { "const": "three-day-prototype" },
+    "thread": { "enum": ["T1", "T2", "T3", "T5"] },
+    "checkpoint": { "type": "string", "pattern": "^T[1235]-[0-9]{2,}$" },
+    "branch": { "type": "string", "pattern": "^ve/prototype-(t1-identity|t2-product|t3-reliability|t5-platform)$" },
+    "start_head": { "$ref": "#/$defs/sha" },
+    "end_head": { "$ref": "#/$defs/sha" },
+    "origin_main": { "$ref": "#/$defs/sha" },
+    "tree_clean": { "const": true },
+    "commits": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/sha" }, "uniqueItems": true },
+    "owned_paths": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/path" }, "uniqueItems": true },
+    "files_changed": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/path" }, "uniqueItems": true },
+    "tests": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/testResult" } },
+    "generated_hashes": { "type": "object", "additionalProperties": { "type": "string", "pattern": "^[a-f0-9]{64}$" } },
+    "migrations": { "type": "array", "items": { "type": "string", "minLength": 1 }, "uniqueItems": true },
+    "external_evidence": { "type": "array", "items": { "type": "string", "minLength": 1 } },
+    "known_failures": { "type": "array", "items": { "type": "string", "minLength": 1 } },
+    "blockers": { "type": "array", "items": { "type": "string", "minLength": 1 } },
+    "next_checkpoint": { "type": ["string", "null"] },
+    "expected_head": { "$ref": "#/$defs/sha" }
+  },
+  "$defs": {
+    "sha": { "type": "string", "pattern": "^[a-f0-9]{40}$" },
+    "path": { "type": "string", "minLength": 1, "pattern": "^(?!/)(?!.*\\.\\.)" },
+    "testResult": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["command", "exit_code", "result"],
+      "properties": {
+        "command": { "type": "string", "minLength": 1 },
+        "exit_code": { "const": 0 },
+        "result": { "const": "passed" },
+        "test_count": { "type": "integer", "minimum": 1 },
+        "tool_versions": { "type": "object", "additionalProperties": { "type": "string", "minLength": 1 } },
+        "artifact": { "$ref": "#/$defs/path" }
+      }
+    }
+  }
+}

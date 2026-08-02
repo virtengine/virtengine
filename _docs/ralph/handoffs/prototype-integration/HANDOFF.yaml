@@ -1,0 +1,96 @@
+{
+  "campaign": "three-day-prototype",
+  "thread": "T4",
+  "checkpoint": "T4-10C",
+  "branch": "ve/prototype-integration",
+  "start_head": "fa21b1e540a5efcbe1822da4199be7acec7709d3",
+  "end_head": "c23ec6e2909ea144263aa7344a80f14ed98fd433",
+  "origin_main": "79391a3df86d85522b92e0400c6904971ecbe65d",
+  "tree_clean": true,
+  "commits": [
+    "c23ec6e2909ea144263aa7344a80f14ed98fd433"
+  ],
+  "owned_paths": [
+    "_docs/ralph/prototype-integration/**",
+    "_docs/ralph/handoffs/prototype-integration/**",
+    "scripts/validate-prototype-integration.cjs",
+    "_build/build-veid-pipeline.sh",
+    "cmd/inference-sidecar/manifest.go",
+    "ml/training/model/release_manifest.py",
+    "ml/training/tests/test_release_manifest.py"
+  ],
+  "files_changed": [
+    "_docs/ralph/handoffs/prototype-integration/HANDOFF.yaml",
+    "_build/build-veid-pipeline.sh",
+    "cmd/inference-sidecar/manifest.go",
+    "ml/training/model/release_manifest.py",
+    "ml/training/tests/test_release_manifest.py"
+  ],
+  "tests": [
+    {
+      "command": "python -m pytest -q ml/training/tests/test_release_manifest.py",
+      "exit_code": 0,
+      "result": "passed",
+      "test_count": 50,
+      "tool_versions": {
+        "python": "3.14.6 windows"
+      }
+    },
+    {
+      "command": "go1.25.8 test -count=1 ./cmd/inference-sidecar && go1.25.8 vet ./cmd/inference-sidecar",
+      "exit_code": 0,
+      "result": "passed",
+      "tool_versions": {
+        "go": "1.25.8 windows/amd64"
+      }
+    },
+    {
+      "command": "python -m py_compile ml/training/model/release_manifest.py ml/training/tests/test_release_manifest.py && bash -n _build/build-veid-pipeline.sh",
+      "exit_code": 0,
+      "result": "passed",
+      "tool_versions": {
+        "python": "3.14.6 windows",
+        "bash": "Git for Windows"
+      }
+    },
+    {
+      "command": "node scripts/validate-model-provenance.test.cjs && node scripts/validate-model-provenance.cjs && node scripts/validate-prototype-integration.test.cjs && node scripts/validate-prototype-integration.cjs && node scripts/validate-agents-docs.mjs",
+      "exit_code": 0,
+      "result": "passed",
+      "tool_versions": {
+        "node": "20.19.1"
+      }
+    }
+  ],
+  "generated_hashes": {
+    "ml/training/model/release_manifest.py": "e2374745f0f88404bfed58cf1a694b9d3f1ddd0557ef4be2e7408425daf0e671",
+    "_build/build-veid-pipeline.sh": "4b3f31a58e3096b143ac8891397c1f71067c4e9af87785360d6ab859f8f31206"
+  },
+  "accepted_checkpoints": [],
+  "rejected_checkpoints": [
+    {
+      "thread": "T2",
+      "checkpoint": "T2-01",
+      "tip": "62d8c4b99804b354b36031ea2fd8b609dcac8a87",
+      "reason": "Producer tip does not contain integration SHA 78c57fbaf9517caba7b0d9a0dc0ca427665eb12e; synchronize with current T4 and rerun exact-SHA gates."
+    },
+    {
+      "thread": "T3",
+      "checkpoint": "T3-01",
+      "tip": "9cc738fbb241890d069d6fb6c2ddb664a4e53447",
+      "reason": "Producer tip does not contain integration SHA 823c61a1a9fc2c3a8f8b59dd060bb6db4a1bc3db; synchronize with current T4 and rerun exact-SHA gates."
+    }
+  ],
+  "external_evidence": [],
+  "known_failures": [
+    "Go 1.26.5 cannot compile github.com/bytedance/sonic v1.14.1; checkpoint gates were rerun successfully with the repository-pinned Go 1.25.8 toolchain."
+  ],
+  "blockers": [
+    "T1 and T5 have incomplete dirty handoffs with PENDING_COMMIT; T2 and T3 are stale relative to current T4.",
+    "Model weights, production data, approved licenses and redistribution, runtime image/SBOM, approved model card, and production evaluation remain dependency-blocked.",
+    "No current model bundle carries production_approved provenance; generation and production sidecar readiness reject lower evidence states and fixture profiles.",
+    "T4-10 is not complete and no model, dataset, runtime, license, redistribution approval, or production profile is certified by this checkpoint."
+  ],
+  "next_checkpoint": "T4-11A",
+  "expected_head": "c23ec6e2909ea144263aa7344a80f14ed98fd433"
+}
