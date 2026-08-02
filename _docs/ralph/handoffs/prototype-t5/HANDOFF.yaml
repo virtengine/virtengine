@@ -1,13 +1,13 @@
 {
   "campaign": "three-day-prototype",
   "thread": "T5",
-  "checkpoint": "T5-27",
+  "checkpoint": "T5-28",
   "branch": "ve/prototype-t5-platform",
   "frozen_baseline": "79391a3df86d85522b92e0400c6904971ecbe65d",
   "planning_sha": "1436723bd78980aa0388dbe9fcfa24dda939c54a",
   "intake_epoch": 1,
   "intake_base_sha": "5587c384f634552c3a2dd7181ca49cafa4da1984",
-  "payload_head": "925209a163982fd88bae6e90ae79ca399a17b811",
+  "payload_head": "269e64845a0287f590bdd3bcae46e03d512892f7",
   "prior_accepted_payload": null,
   "tree_clean": true,
   "commits_since_prior_acceptance": [
@@ -62,7 +62,9 @@
     "571ea03e06794f3da1d247e4f0abdfb4ecdf113e",
     "a322d7f7dda8f27415d33f13d2f05f59e7dbac01",
     "5965c3acb5f6754afe76396fb321098381d04141",
-    "925209a163982fd88bae6e90ae79ca399a17b811"
+    "925209a163982fd88bae6e90ae79ca399a17b811",
+    "0cd2e904fe3d0699a5ce71ba978b37cf88cb12c5",
+    "269e64845a0287f590bdd3bcae46e03d512892f7"
   ],
   "owned_paths": [
     "_docs/ralph/evidence/prototype-t5/**",
@@ -103,6 +105,7 @@
     "_docs/ralph/evidence/prototype-t5/T5-24/validation.txt",
     "_docs/ralph/evidence/prototype-t5/T5-25/validation.txt",
     "_docs/ralph/evidence/prototype-t5/T5-26/validation.txt",
+    "_docs/ralph/evidence/prototype-t5/T5-27/validation.txt",
     "_docs/ralph/handoffs/prototype-integration/HANDOFF.yaml",
     "_docs/ralph/handoffs/prototype-t5/HANDOFF.yaml",
     "_docs/ralph/prototype-integration/control.json",
@@ -232,56 +235,38 @@
   ],
   "tests": [
     {
-      "command": "C:\\Users\\pavil\\AppData\\Local\\VirtEngine\\toolchains\\go1.25.8\\go\\bin\\go.exe -C C:\\Users\\pavil\\Desktop\\virtengine-gh\\repos\\virtengine-t5 test -count=1 ./pkg/data_vault",
+      "command": "C:\\Users\\pavil\\AppData\\Local\\VirtEngine\\toolchains\\go1.25.8\\go\\bin\\go.exe -C C:\\Users\\pavil\\Desktop\\virtengine-gh\\repos\\virtengine-t5 test -count=1 ./pkg/provider_daemon/federation",
       "exit_code": 0,
       "result": "passed",
       "tool_versions": {
         "go": "go version go1.25.8 windows/amd64"
       },
-      "artifact": "_docs/ralph/evidence/prototype-t5/T5-27/validation.txt"
+      "artifact": "_docs/ralph/evidence/prototype-t5/T5-28/validation.txt"
     },
     {
-      "command": "C:\\Users\\pavil\\AppData\\Local\\VirtEngine\\toolchains\\go1.25.8\\go\\bin\\go.exe -C C:\\Users\\pavil\\Desktop\\virtengine-gh\\repos\\virtengine-t5 test -count=1 ./pkg/data_vault/contracts",
+      "command": "C:\\Users\\pavil\\AppData\\Local\\VirtEngine\\toolchains\\go1.25.8\\go\\bin\\go.exe -C C:\\Users\\pavil\\Desktop\\virtengine-gh\\repos\\virtengine-t5 vet ./pkg/provider_daemon/federation",
       "exit_code": 0,
       "result": "passed",
       "tool_versions": {
         "go": "go version go1.25.8 windows/amd64"
       },
-      "artifact": "_docs/ralph/evidence/prototype-t5/T5-27/validation.txt"
+      "artifact": "_docs/ralph/evidence/prototype-t5/T5-28/validation.txt"
     },
     {
-      "command": "C:\\Users\\pavil\\AppData\\Local\\VirtEngine\\toolchains\\go1.25.8\\go\\bin\\go.exe -C C:\\Users\\pavil\\Desktop\\virtengine-gh\\repos\\virtengine-t5 test -count=1 ./pkg/data_vault/keys",
-      "exit_code": 0,
-      "result": "passed",
-      "tool_versions": {
-        "go": "go version go1.25.8 windows/amd64"
-      },
-      "artifact": "_docs/ralph/evidence/prototype-t5/T5-27/validation.txt"
-    },
-    {
-      "command": "C:\\Users\\pavil\\AppData\\Local\\VirtEngine\\toolchains\\go1.25.8\\go\\bin\\go.exe -C C:\\Users\\pavil\\Desktop\\virtengine-gh\\repos\\virtengine-t5 vet ./pkg/data_vault/...",
-      "exit_code": 0,
-      "result": "passed",
-      "tool_versions": {
-        "go": "go version go1.25.8 windows/amd64"
-      },
-      "artifact": "_docs/ralph/evidence/prototype-t5/T5-27/validation.txt"
-    },
-    {
-      "command": "[Environment]::SetEnvironmentVariable('CGO_ENABLED', '1', [EnvironmentVariableTarget]::Process); [Environment]::SetEnvironmentVariable('CC', 'C:\\Users\\pavil\\AppData\\Local\\Microsoft\\WinGet\\Packages\\BrechtSanders.WinLibs.POSIX.UCRT_Microsoft.Winget.Source_8wekyb3d8bbwe\\mingw64\\bin\\gcc.exe', [EnvironmentVariableTarget]::Process); C:\\Users\\pavil\\AppData\\Local\\VirtEngine\\toolchains\\go1.25.8\\go\\bin\\go.exe -C C:\\Users\\pavil\\Desktop\\virtengine-gh\\repos\\virtengine-t5 test -race -count=1 -run VaultService ./pkg/data_vault",
+      "command": "CGO_ENABLED=1 CC=gcc C:\\Users\\pavil\\AppData\\Local\\VirtEngine\\toolchains\\go1.25.8\\go\\bin\\go.exe test -race -count=1 ./pkg/provider_daemon/federation",
       "exit_code": 0,
       "result": "passed",
       "tool_versions": {
         "go": "go version go1.25.8 windows/amd64",
         "gcc": "gcc.exe (MinGW-W64 x86_64-ucrt-posix-seh, built by Brecht Sanders, r3) 16.1.0"
       },
-      "artifact": "_docs/ralph/evidence/prototype-t5/T5-27/validation.txt"
+      "artifact": "_docs/ralph/evidence/prototype-t5/T5-28/validation.txt"
     }
   ],
   "generated_hashes": {},
   "migrations": [],
   "external_evidence": [
-    "_docs/ralph/evidence/prototype-t5/T5-27/validation.txt"
+    "_docs/ralph/evidence/prototype-t5/T5-28/validation.txt"
   ],
   "known_failures": [],
   "blockers": [
