@@ -1,30 +1,47 @@
 {
   "campaign": "three-day-prototype",
   "thread": "T4",
-  "checkpoint": "T4-16F",
+  "checkpoint": "T4-13A",
   "branch": "ve/prototype-integration",
-  "start_head": "84095371c88b20a241616a3ff374bb2bd9c9ce4f",
-  "end_head": "fb791242ee37564279cccdb072a4be5d63d08075",
+  "start_head": "aa6cdade1a5ba2cbac4bf32634774e6658fc6557",
+  "end_head": "87b1e2e477446f13aff960ee21402b6ab00a621f",
   "origin_main": "79391a3df86d85522b92e0400c6904971ecbe65d",
   "tree_clean": true,
   "commits": [
-    "fb791242ee37564279cccdb072a4be5d63d08075"
+    "87b1e2e477446f13aff960ee21402b6ab00a621f"
   ],
   "owned_paths": [
     "_docs/ralph/prototype-integration/**",
     "_docs/ralph/handoffs/prototype-integration/**",
-    "_docs/ralph/prototype-integration/core-rc-manifest.json"
+    "_docs/audits/task-t4-13a-generated-contract-inventory-2026-08-02.md",
+    "_docs/ralph/prototype-integration/generated-contract-inventory.json",
+    "_docs/ralph/prototype-integration/required-gate-matrix.json",
+    "scripts/generate-core-rc-manifest.cjs",
+    "scripts/generate-core-rc-manifest.test.cjs",
+    "scripts/validate-generated-contract-inventory.cjs",
+    "scripts/validate-generated-contract-inventory.test.cjs",
+    "scripts/validate-prototype-integration.cjs",
+    "scripts/validate-required-gate-matrix.cjs"
   ],
   "files_changed": [
     "_docs/ralph/handoffs/prototype-integration/HANDOFF.yaml",
-    "_docs/ralph/prototype-integration/core-rc-manifest.json"
+    "_docs/INDEX.md",
+    "_docs/audits/task-t4-13a-generated-contract-inventory-2026-08-02.md",
+    "_docs/ralph/prototype-integration/generated-contract-inventory.json",
+    "_docs/ralph/prototype-integration/required-gate-matrix.json",
+    "scripts/generate-core-rc-manifest.cjs",
+    "scripts/generate-core-rc-manifest.test.cjs",
+    "scripts/validate-generated-contract-inventory.cjs",
+    "scripts/validate-generated-contract-inventory.test.cjs",
+    "scripts/validate-prototype-integration.cjs",
+    "scripts/validate-required-gate-matrix.cjs"
   ],
   "tests": [
     {
-      "command": "node scripts/validate-fund-route-inventory.test.cjs && node scripts/validate-fund-route-inventory.cjs",
+      "command": "node scripts/validate-generated-contract-inventory.test.cjs && node scripts/validate-generated-contract-inventory.cjs",
       "exit_code": 0,
       "result": "passed",
-      "test_count": 13,
+      "test_count": 9,
       "tool_versions": {
         "node": "20.19.1"
       }
@@ -39,7 +56,10 @@
     }
   ],
   "generated_hashes": {
-    "_docs/ralph/prototype-integration/core-rc-manifest.json": "3ebb26277c1242db921c1d5a1757217fe1f37617c11068c567cbd359d6bbeca1"
+    "scripts/validate-generated-contract-inventory.cjs": "69c478d20dc370475520fd451df92abdb160fc576f0c264fc51150f5597c2c25",
+    "scripts/validate-generated-contract-inventory.test.cjs": "40131182a2500d44193130b226463b56f4dc82fab70945756360a884586f3e33",
+    "_docs/ralph/prototype-integration/generated-contract-inventory.json": "3d175116d36a1ba77e24e91e63940dff0ad3b14f06f00e89b2a8d2f78de74369",
+    "_docs/ralph/prototype-integration/required-gate-matrix.json": "39ed0a6e2ea1dd20b380f6e812183d6412958b462b3065bd106a5280fc97cca8"
   },
   "accepted_checkpoints": [],
   "rejected_checkpoints": [
@@ -73,9 +93,10 @@
     "The T4-12A diagnostic records 11 prohibited production AI, biometric, consent, custody, or stub-success finding paths; enforce mode rejects the current repository state.",
     "The T4-15A release gate records all ten AI/biometric security categories as partial or missing; enforce mode rejects release and external privacy, PAD, and production-model evaluations remain unavailable.",
     "The T4-16A inventory binds 18 discovered production mover files to 20 value-moving routes; no accepted T5 FundAuthorization checkpoint exists and --require-ready rejects release.",
+    "The T4-13A inventory records five required generated contract families as absent or precursor-only; no canonical proto source is accepted and --require-ready rejects generation readiness.",
     "External production model privacy and security evaluation is unavailable.",
     "Task 88C is not complete."
   ],
   "next_checkpoint": null,
-  "expected_head": "fb791242ee37564279cccdb072a4be5d63d08075"
+  "expected_head": "87b1e2e477446f13aff960ee21402b6ab00a621f"
 }
