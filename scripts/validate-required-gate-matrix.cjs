@@ -53,7 +53,9 @@ function validateSchemaControl(schema) {
   assert.deepEqual(schema.required.slice().sort(), rootKeys.slice().sort(), "matrix schema root required fields must be exact");
   assert.equal(schema.properties.categories.minItems, categoryCommands.size);
   assert.equal(schema.properties.categories.maxItems, categoryCommands.size);
+  for (const property of ["unmatched_path_allowlist", "categories", "blockers"]) assert.equal(schema.properties[property].uniqueItems, true, `${property} must reject duplicates`);
   assert.equal(schema.$defs.category.additionalProperties, false);
+  for (const property of ["required_commands", "pinned_tools", "dependencies", "blockers"]) assert.equal(schema.$defs.category.properties[property].uniqueItems, true, `category ${property} must reject duplicates`);
   assert.deepEqual(schema.$defs.category.required.slice().sort(), categoryKeys.slice().sort(), "category schema required fields must be exact");
   assert.equal(schema.$defs.zeroTestPolicy.properties.minimum_discovered.const, 1);
   assert.equal(schema.$defs.zeroTestPolicy.properties.minimum_executed.const, 1);
@@ -196,8 +198,11 @@ function validateRequiredGateMatrix(matrix, options = {}) {
     assert.ok(category.required_commands.some((command) => command.kind === "test"), `${category.id} must define a test command`);
     assert.deepEqual(category.required_commands.map((entry) => entry.command), remaining.get(category.id), `${category.id} required literal commands changed`);
     assert.ok(Array.isArray(category.pinned_tools) && category.pinned_tools.length > 0, `${category.id} pinned tools must not be empty`);
+    const toolNames = new Set();
     for (const tool of category.pinned_tools) {
       assertExactKeys(tool, ["name", "version", "source"], `${category.id} pinned tool`);
+      assert.ok(!toolNames.has(tool.name), `${category.id} has duplicate pinned tool: ${tool.name}`);
+      toolNames.add(tool.name);
       assert.match(tool.version, /^[0-9]+\.[0-9]+(?:\.[0-9]+)?$/, `${category.id} tool ${tool.name} must use an exact version`);
     }
     for (const [name, version] of requiredToolVersions.get(category.id) || []) {
@@ -206,8 +211,11 @@ function validateRequiredGateMatrix(matrix, options = {}) {
     assert.deepEqual(category.zero_test_policy, { applies_to: "test_commands", minimum_discovered: 1, minimum_executed: 1, empty_selection: "fail" });
     assert.deepEqual(category.failure_semantics, { nonzero_exit: "fail", skipped: "fail", missing_tool: "fail", cancelled: "fail" });
     assert.ok(Array.isArray(category.dependencies) && category.dependencies.length > 0, `${category.id} dependencies must not be empty`);
+    const dependencyIds = category.dependencies.map((dependency) => dependency.id);
+    assert.equal(new Set(dependencyIds).size, dependencyIds.length, `${category.id} dependency IDs must be unique`);
     assert.ok(["dependency_blocked", "ready", "complete"].includes(category.status), `${category.id} has invalid status`);
     assert.ok(Array.isArray(category.blockers), `${category.id} blockers must be an array`);
+    assert.equal(new Set(category.blockers).size, category.blockers.length, `${category.id} blocker IDs must be unique`);
     const unavailable = category.dependencies.some((dependency) => dependency.status === "unavailable");
     if (unavailable) {
       assert.equal(category.status, "dependency_blocked", `${category.id} must remain dependency_blocked`);

@@ -72,6 +72,22 @@ const tests = [
     category.pinned_tools = category.pinned_tools.filter((tool) => tool.name !== "helm");
     assert.throws(() => validateRequiredGateMatrix(candidate, { schema }), /deployment must pin helm 3\.18\.6/);
   }],
+  ["rejects duplicate tool, dependency, and blocker identities", () => {
+    const duplicateTool = cloneMatrix();
+    duplicateTool.categories[0].pinned_tools.push({ ...duplicateTool.categories[0].pinned_tools[0], version: "9.9.9" });
+    assert.throws(() => validateRequiredGateMatrix(duplicateTool, { schema }), /duplicate pinned tool/);
+    const duplicateDependency = cloneMatrix();
+    duplicateDependency.categories[0].dependencies.push(structuredClone(duplicateDependency.categories[0].dependencies[0]));
+    assert.throws(() => validateRequiredGateMatrix(duplicateDependency, { schema }), /dependency IDs must be unique/);
+    const duplicateBlocker = cloneMatrix();
+    duplicateBlocker.categories[0].blockers.push(duplicateBlocker.categories[0].blockers[0]);
+    assert.throws(() => validateRequiredGateMatrix(duplicateBlocker, { schema }), /blocker IDs must be unique/);
+  }],
+  ["rejects a schema that permits duplicate pinned tools", () => {
+    const weakenedSchema = JSON.parse(JSON.stringify(schema));
+    weakenedSchema.$defs.category.properties.pinned_tools.uniqueItems = false;
+    assert.throws(() => validateRequiredGateMatrix(cloneMatrix(), { schema: weakenedSchema }), /category pinned_tools must reject duplicates/);
+  }],
   ["rejects a missing SLURM validator deployment selector", () => {
     const candidate = cloneMatrix();
     const category = candidate.categories.find((entry) => entry.id === "deployment");

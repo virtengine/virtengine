@@ -14,16 +14,19 @@
     "unmatched_path_allowlist": {
       "type": "array",
       "minItems": 1,
+      "uniqueItems": true,
       "items": { "$ref": "#/$defs/pathAllowance" }
     },
     "categories": {
       "type": "array",
       "minItems": 11,
       "maxItems": 11,
+      "uniqueItems": true,
       "items": { "$ref": "#/$defs/category" }
     },
     "blockers": {
       "type": "array",
+      "uniqueItems": true,
       "items": { "$ref": "#/$defs/blocker" }
     }
   },
@@ -113,11 +116,13 @@
         "required_commands": {
           "type": "array",
           "minItems": 1,
+          "uniqueItems": true,
           "items": { "$ref": "#/$defs/command" }
         },
         "pinned_tools": {
           "type": "array",
           "minItems": 1,
+          "uniqueItems": true,
           "items": { "$ref": "#/$defs/tool" }
         },
         "zero_test_policy": { "$ref": "#/$defs/zeroTestPolicy" },
@@ -125,11 +130,13 @@
         "dependencies": {
           "type": "array",
           "minItems": 1,
+          "uniqueItems": true,
           "items": { "$ref": "#/$defs/dependency" }
         },
         "status": { "enum": ["dependency_blocked", "ready", "complete"] },
         "blockers": {
           "type": "array",
+          "uniqueItems": true,
           "items": { "type": "string", "pattern": "^[a-z0-9.-]+$" }
         }
       }

@@ -35,7 +35,8 @@ projected as `integration-candidate-preflight-blocked`. Test results must execut
 every discovered case, while policy results must report zero test counters.
 Result evidence includes schema-validated command kind and must match the plan. The
 reported tool set must exactly match pinned tools by count, unique name, version,
-availability, and field shape. The
+availability, and field shape. Matrix commands, tools, dependencies, blockers,
+categories, and path allowances reject duplicate declarations. The
 acceptance commit must be the implementation's direct, single-parent child and
 change only the acceptance artifact. Accepted annotated tags must be exact tag
 objects published by `origin`; local-only or stale same-name tags are rejected.
