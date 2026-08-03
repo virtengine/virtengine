@@ -19,6 +19,12 @@ const tests = [
   ["rejects a mismatched reviewed HEAD", () => assert.throws(() => inspectLease(lease(), { ...expected, expectedHead: "c".repeat(40) }), /HEAD mismatch/)],
   ["rejects a future lease timestamp", () => assert.throws(() => inspectLease(lease(), expected, { now: Date.parse("1999-01-01T00:00:00Z") }), /start time is invalid/)],
   ["parses exact expected recovery evidence", () => { const value = parseArgs(["--epoch", "1", "--expected-head", head, "--expected-plan-sha256", digest]); assert.equal(value.epoch, 1); }],
+  ["rejects duplicate or incomplete inspection arguments", () => {
+    const required = ["--expected-head", head, "--expected-plan-sha256", digest];
+    assert.throws(() => parseArgs(["--epoch", "1", "--epoch", "2", ...required]), /duplicate argument/);
+    assert.throws(() => parseArgs(["--epoch", "--expected-head", head, ...required.slice(2)]), /requires a value/);
+    assert.throws(() => parseArgs(["--epoch", "1", ...required, "--repo"]), /requires a value/);
+  }],
 ];
 
 for (const [name, run] of tests) { run(); console.log(`ok - ${name}`); }

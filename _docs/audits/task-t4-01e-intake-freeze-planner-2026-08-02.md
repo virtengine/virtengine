@@ -15,7 +15,9 @@ option-looking values, so an ambiguous epoch, remote, or repository selection
 cannot produce observation evidence. Freeze-planner scalar options enforce the
 same rule while retaining repeated `--tag` selections for distinct producers.
 Freeze application also requires every reviewed boundary option exactly once
-and rejects missing or option-looking values before acquiring its lease.
+and rejects missing or option-looking values before acquiring its lease. Lease
+inspection and compare-and-claim recovery enforce the same single-assignment
+rule for the reviewed epoch, HEAD, plan digest, and retained lease digest.
 
 The planner hashes the selected observation, requires the checked core-RC
 manifest to bind that exact path/digest, verifies identical bytes at the
