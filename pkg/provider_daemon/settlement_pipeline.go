@@ -8,9 +8,12 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"log"
+	"sort"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	sdkmath "cosmossdk.io/math"
@@ -339,7 +342,8 @@ type ChainUsageReport struct {
 
 // SettlementPipeline coordinates usage reporting to settlement.
 type SettlementPipeline struct {
-	mu sync.RWMutex
+	mu         sync.RWMutex
+	idSequence atomic.Uint64
 
 	cfg                   SettlementConfig
 	keyManager            *KeyManager
@@ -349,7 +353,8 @@ type SettlementPipeline struct {
 	settlementEligibility func(*UsageRecord) error
 
 	// pending contains usage records pending settlement.
-	pending map[string]*UsageRecord
+	pending  map[string]*UsageRecord
+	settling map[string]bool
 
 	// disputes contains active disputes.
 	disputes map[string]*UsageDispute
@@ -398,6 +403,7 @@ func NewSettlementPipeline(
 		usageStore:      usageStore,
 		chainSubmit:     chainSubmit,
 		pending:         make(map[string]*UsageRecord),
+		settling:        make(map[string]bool),
 		disputes:        make(map[string]*UsageDispute),
 		corrections:     make(map[string]*UsageCorrection),
 		anomalies:       make(map[string]*UsageAnomaly),
@@ -447,20 +453,23 @@ func (p *SettlementPipeline) AddPendingUsage(record *UsageRecord) {
 	if record == nil || record.ID == "" {
 		return
 	}
+	snapshot := *record
 
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
-	if existing, ok := p.pending[record.ID]; ok {
-		if bytes.Equal(existing.Hash(), record.Hash()) {
+	if existing, ok := p.pending[snapshot.ID]; ok {
+		if bytes.Equal(existing.Hash(), snapshot.Hash()) {
 			return
 		}
-		p.recordDuplicateConflict(record)
+		p.recordDuplicateConflict(&snapshot)
 		return
 	}
 
-	p.pending[record.ID] = record
-	p.usageStore.Track(record)
+	p.pending[snapshot.ID] = &snapshot
+	if p.usageStore != nil {
+		p.usageStore.Track(&snapshot)
+	}
 }
 
 // GetPendingCount returns the number of pending usage records.
@@ -486,9 +495,18 @@ func (p *SettlementPipeline) CreateDispute(
 	if !ok {
 		return nil, fmt.Errorf("usage record not found: %s", usageRecordID)
 	}
+	if p.settling[usageRecordID] {
+		return nil, fmt.Errorf("usage record settlement is in progress: %s", usageRecordID)
+	}
 
 	now := time.Now()
 	disputeID := p.generateID("dispute", now)
+	reportedUsage := record.Metrics
+	var expectedSnapshot *ResourceMetrics
+	if expectedUsage != nil {
+		copy := *expectedUsage
+		expectedSnapshot = &copy
+	}
 
 	dispute := &UsageDispute{
 		DisputeID:     disputeID,
@@ -497,15 +515,15 @@ func (p *SettlementPipeline) CreateDispute(
 		Initiator:     initiator,
 		Reason:        reason,
 		Evidence:      evidence,
-		ExpectedUsage: expectedUsage,
-		ReportedUsage: &record.Metrics,
+		ExpectedUsage: expectedSnapshot,
+		ReportedUsage: &reportedUsage,
 		Status:        DisputeStatusPending,
 		CreatedAt:     now,
 		ExpiresAt:     now.Add(p.cfg.DisputeWindow),
 	}
 
 	p.disputes[disputeID] = dispute
-	return dispute, nil
+	return cloneUsageDispute(dispute), nil
 }
 
 // ResolveDispute resolves a dispute.
@@ -523,30 +541,30 @@ func (p *SettlementPipeline) ResolveDispute(disputeID string, resolution string,
 	}
 
 	now := time.Now()
-	dispute.Resolution = resolution
-	dispute.ResolvedAt = &now
-
 	if accept {
-		dispute.Status = DisputeStatusResolved
-
-		// Apply correction if expected usage was provided
 		if dispute.ExpectedUsage != nil {
-			if err := p.applyCorrection(dispute); err != nil {
-				log.Printf("[settlement-pipeline] failed to apply correction: %v", err)
+			if err := p.applyCorrection(dispute, resolution); err != nil {
+				return err
 			}
 		}
+		dispute.Status = DisputeStatusResolved
 	} else {
 		dispute.Status = DisputeStatusRejected
 	}
+	dispute.Resolution = resolution
+	dispute.ResolvedAt = &now
 
 	return nil
 }
 
 // applyCorrection applies a usage correction from a dispute.
-func (p *SettlementPipeline) applyCorrection(dispute *UsageDispute) error {
+func (p *SettlementPipeline) applyCorrection(dispute *UsageDispute, resolution string) error {
 	record, ok := p.pending[dispute.UsageRecordID]
 	if !ok {
 		return fmt.Errorf("usage record not found for correction")
+	}
+	if dispute.ExpectedUsage == nil || !validCorrectionMetrics(*dispute.ExpectedUsage) {
+		return errors.New("corrected usage metrics are invalid")
 	}
 
 	now := time.Now()
@@ -558,7 +576,7 @@ func (p *SettlementPipeline) applyCorrection(dispute *UsageDispute) error {
 		DisputeID:        dispute.DisputeID,
 		OriginalMetrics:  record.Metrics,
 		CorrectedMetrics: *dispute.ExpectedUsage,
-		Reason:           dispute.Resolution,
+		Reason:           resolution,
 		AppliedAt:        now,
 	}
 
@@ -575,6 +593,9 @@ func (p *SettlementPipeline) applyCorrection(dispute *UsageDispute) error {
 
 	// Update the usage record with corrected metrics
 	record.Metrics = *dispute.ExpectedUsage
+	if p.usageStore != nil {
+		p.usageStore.Track(record)
+	}
 
 	return nil
 }
@@ -817,7 +838,7 @@ func (p *SettlementPipeline) GetActiveDisputes() []*UsageDispute {
 	active := make([]*UsageDispute, 0)
 	for _, d := range p.disputes {
 		if d.Status == DisputeStatusPending || d.Status == DisputeStatusReviewing {
-			active = append(active, d)
+			active = append(active, cloneUsageDispute(d))
 		}
 	}
 	return active
@@ -856,23 +877,30 @@ func (p *SettlementPipeline) SubmitUsageToChain(ctx context.Context, record *Usa
 	if p.chainSubmit == nil {
 		return fmt.Errorf("chain submitter not configured")
 	}
+	if record == nil {
+		return fmt.Errorf("usage record is required")
+	}
+	snapshot := *record
 	p.mu.RLock()
 	check := p.settlementEligibility
 	p.mu.RUnlock()
 	if check == nil {
 		return ErrSettlementReconciliationHold
 	}
-	if err := check(record); err != nil {
+	if err := check(&snapshot); err != nil {
 		return err
 	}
 
-	reports := p.buildUsageReports(record)
+	reports := p.buildUsageReports(&snapshot)
 	if len(reports) == 0 {
 		return fmt.Errorf("no usage reports generated")
 	}
 
 	for _, report := range reports {
 		if err := p.withRetry(ctx, func() error {
+			if err := check(&snapshot); err != nil {
+				return err
+			}
 			return p.chainSubmit.SubmitUsageReport(ctx, report)
 		}); err != nil {
 			return err
@@ -1094,33 +1122,37 @@ func (p *SettlementPipeline) runLoop(ctx context.Context) {
 
 // processSettlements processes pending settlements.
 func (p *SettlementPipeline) processSettlements(ctx context.Context) {
-	p.mu.Lock()
-	defer p.mu.Unlock()
-
+	p.mu.RLock()
 	if len(p.pending) == 0 {
+		p.mu.RUnlock()
 		return
 	}
-
-	// Group pending records by order
 	byOrder := make(map[string][]*UsageRecord)
 	for _, record := range p.pending {
-		orderID := record.DeploymentID
-		byOrder[orderID] = append(byOrder[orderID], record)
+		snapshot := *record
+		byOrder[snapshot.DeploymentID] = append(byOrder[snapshot.DeploymentID], &snapshot)
 	}
+	disputed := make(map[string]bool)
+	for _, dispute := range p.disputes {
+		if dispute.Status == DisputeStatusPending || dispute.Status == DisputeStatusReviewing {
+			disputed[dispute.UsageRecordID] = true
+		}
+	}
+	check := p.settlementEligibility
+	submitter := p.chainSubmit
+	p.mu.RUnlock()
 
-	// Process each order
-	for orderID, records := range byOrder {
-		// Skip if any records are disputed
+	orderIDs := make([]string, 0, len(byOrder))
+	for orderID := range byOrder {
+		orderIDs = append(orderIDs, orderID)
+	}
+	sort.Strings(orderIDs)
+	for _, orderID := range orderIDs {
+		records := byOrder[orderID]
 		hasDispute := false
 		for _, record := range records {
-			for _, dispute := range p.disputes {
-				if dispute.UsageRecordID == record.ID &&
-					(dispute.Status == DisputeStatusPending || dispute.Status == DisputeStatusReviewing) {
-					hasDispute = true
-					break
-				}
-			}
-			if hasDispute {
+			if disputed[record.ID] {
+				hasDispute = true
 				break
 			}
 		}
@@ -1130,12 +1162,14 @@ func (p *SettlementPipeline) processSettlements(ctx context.Context) {
 			continue
 		}
 
-		eligible := p.settlementEligibility != nil
-		if !eligible {
+		eligible := check != nil && submitter != nil
+		if check == nil {
 			log.Printf("[settlement-pipeline] holding order %s: reconciliation eligibility is not configured", orderID)
+		} else if submitter == nil {
+			log.Printf("[settlement-pipeline] holding order %s: chain submitter is not configured", orderID)
 		} else {
 			for _, record := range records {
-				if err := p.settlementEligibility(record); err != nil {
+				if err := check(record); err != nil {
 					log.Printf("[settlement-pipeline] holding order %s for reconciliation: %v", orderID, err)
 					eligible = false
 					break
@@ -1145,29 +1179,90 @@ func (p *SettlementPipeline) processSettlements(ctx context.Context) {
 		if !eligible {
 			continue
 		}
+		p.mu.Lock()
+		admissionChanged := false
+		for _, record := range records {
+			current, exists := p.pending[record.ID]
+			if !exists || p.settling[record.ID] || !bytes.Equal(current.Hash(), record.Hash()) {
+				admissionChanged = true
+				break
+			}
+			for _, dispute := range p.disputes {
+				if dispute.UsageRecordID == record.ID &&
+					(dispute.Status == DisputeStatusPending || dispute.Status == DisputeStatusReviewing) {
+					admissionChanged = true
+					break
+				}
+			}
+			if admissionChanged {
+				break
+			}
+		}
+		if !admissionChanged {
+			for _, record := range records {
+				p.settling[record.ID] = true
+			}
+		}
+		p.mu.Unlock()
+		if admissionChanged {
+			log.Printf("[settlement-pipeline] holding order %s: usage or dispute changed during eligibility", orderID)
+			continue
+		}
 
-		// Submit settlement request
 		usageIDs := make([]string, len(records))
 		for i, r := range records {
 			usageIDs[i] = r.ID
 		}
+		sort.Strings(usageIDs)
 
-		if p.chainSubmit != nil {
-			if err := p.withRetry(ctx, func() error {
-				return p.chainSubmit.SubmitSettlementRequest(ctx, orderID, usageIDs, false)
-			}); err != nil {
-				log.Printf("[settlement-pipeline] failed to submit settlement for order %s: %v", orderID, err)
-				continue
+		if err := p.withRetry(ctx, func() error {
+			for _, record := range records {
+				if err := check(record); err != nil {
+					return err
+				}
+			}
+			return submitter.SubmitSettlementRequest(ctx, orderID, usageIDs, false)
+		}); err != nil {
+			p.mu.Lock()
+			for _, record := range records {
+				delete(p.settling, record.ID)
+			}
+			p.mu.Unlock()
+			log.Printf("[settlement-pipeline] failed to submit settlement for order %s: %v", orderID, err)
+			continue
+		}
+
+		p.mu.Lock()
+		for _, r := range records {
+			delete(p.settling, r.ID)
+			if current, ok := p.pending[r.ID]; ok && bytes.Equal(current.Hash(), r.Hash()) {
+				delete(p.pending, r.ID)
 			}
 		}
-
-		// Remove settled records from pending
-		for _, r := range records {
-			delete(p.pending, r.ID)
-		}
+		p.mu.Unlock()
 
 		log.Printf("[settlement-pipeline] settlement submitted for order %s with %d records", orderID, len(records))
 	}
+}
+
+func cloneUsageDispute(dispute *UsageDispute) *UsageDispute {
+	if dispute == nil {
+		return nil
+	}
+	clone := *dispute
+	if dispute.ExpectedUsage != nil {
+		expected := *dispute.ExpectedUsage
+		clone.ExpectedUsage = &expected
+	}
+	if dispute.ReportedUsage != nil {
+		reported := *dispute.ReportedUsage
+		clone.ReportedUsage = &reported
+	}
+	if dispute.ResolvedAt != nil {
+		resolved := *dispute.ResolvedAt
+		clone.ResolvedAt = &resolved
+	}
+	return &clone
 }
 
 // processExpiredDisputes handles expired disputes.
@@ -1187,9 +1282,15 @@ func (p *SettlementPipeline) processExpiredDisputes() {
 
 // generateID generates a unique ID with prefix.
 func (p *SettlementPipeline) generateID(prefix string, timestamp time.Time) string {
-	data := prefix + ":" + timestamp.Format(time.RFC3339Nano)
+	data := fmt.Sprintf("%s:%s:%d", prefix, timestamp.Format(time.RFC3339Nano), p.idSequence.Add(1))
 	hash := sha256.Sum256([]byte(data))
 	return hex.EncodeToString(hash[:8])
+}
+
+func validCorrectionMetrics(metrics ResourceMetrics) bool {
+	return metrics.CPUMilliSeconds >= 0 && metrics.MemoryByteSeconds >= 0 &&
+		metrics.StorageByteSeconds >= 0 && metrics.NetworkBytesIn >= 0 &&
+		metrics.NetworkBytesOut >= 0 && metrics.GPUSeconds >= 0
 }
 
 func (p *SettlementPipeline) recordDuplicateConflict(record *UsageRecord) {

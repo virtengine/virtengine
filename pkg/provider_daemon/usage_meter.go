@@ -137,27 +137,29 @@ type PricingInputs struct {
 // as on-chain authentication; canonical detached proof bytes are built later.
 func (ur *UsageRecord) Hash() []byte {
 	data := struct {
-		WorkloadID   string          `json:"workload_id"`
-		DeploymentID string          `json:"deployment_id"`
-		LeaseID      string          `json:"lease_id"`
-		ProviderID   string          `json:"provider_id"`
-		CustomerID   string          `json:"customer_id"`
-		AllocationID string          `json:"allocation_id"`
-		Type         UsageRecordType `json:"type"`
-		StartTime    int64           `json:"start_time"`
-		EndTime      int64           `json:"end_time"`
-		Metrics      ResourceMetrics `json:"metrics"`
+		WorkloadID    string          `json:"workload_id"`
+		DeploymentID  string          `json:"deployment_id"`
+		LeaseID       string          `json:"lease_id"`
+		ProviderID    string          `json:"provider_id"`
+		CustomerID    string          `json:"customer_id"`
+		AllocationID  string          `json:"allocation_id"`
+		Type          UsageRecordType `json:"type"`
+		StartTime     int64           `json:"start_time"`
+		EndTime       int64           `json:"end_time"`
+		Metrics       ResourceMetrics `json:"metrics"`
+		PricingInputs PricingInputs   `json:"pricing_inputs"`
 	}{
-		WorkloadID:   ur.WorkloadID,
-		DeploymentID: ur.DeploymentID,
-		LeaseID:      ur.LeaseID,
-		ProviderID:   ur.ProviderID,
-		CustomerID:   ur.CustomerID,
-		AllocationID: ur.AllocationID,
-		Type:         ur.Type,
-		StartTime:    ur.StartTime.Unix(),
-		EndTime:      ur.EndTime.Unix(),
-		Metrics:      ur.Metrics,
+		WorkloadID:    ur.WorkloadID,
+		DeploymentID:  ur.DeploymentID,
+		LeaseID:       ur.LeaseID,
+		ProviderID:    ur.ProviderID,
+		CustomerID:    ur.CustomerID,
+		AllocationID:  ur.AllocationID,
+		Type:          ur.Type,
+		StartTime:     ur.StartTime.Unix(),
+		EndTime:       ur.EndTime.Unix(),
+		Metrics:       ur.Metrics,
+		PricingInputs: ur.PricingInputs,
 	}
 	bytes, err := json.Marshal(data)
 	if err != nil {
