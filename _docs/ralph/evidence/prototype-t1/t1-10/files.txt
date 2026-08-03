@@ -21,3 +21,6 @@ pkg/inference/tensorflow_runtime_stub.go
 pkg/inference/test_vectors.go
 pkg/inference/types.go
 x/veid/types/inference_receipt_test.go
+x/veid/types/evidence_envelope.go
+x/veid/types/evidence_envelope_test.go
+x/veid/types/web_evidence_auth.go

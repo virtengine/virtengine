@@ -1,0 +1,13 @@
+command: go test -count=1 ./x/veid/types
+exit_code: 0
+result: ok github.com/virtengine/virtengine/x/veid/types 0.240s
+
+command: go test -count=1 ./x/veid/keeper -run 'WebEvidence|SubmitWeb|SubmitEmail|SubmitSMS|SubmitSSO|SubmitSocial'
+exit_code: 0
+result: ok github.com/virtengine/virtengine/x/veid/keeper 2.184s
+
+command: CGO_ENABLED=1 CC=winlibs-gcc go test -race -count=1 ./x/veid/types -run 'EvidenceEnvelope|WebEvidenceActionTypePairing'
+exit_code: 0
+result: ok github.com/virtengine/virtengine/x/veid/types 1.458s
+
+contract: SSO, email, SMS, and social attestation types accept only their matching reserved web action. Non-web evidence rejects all reserved web actions but retains non-web action extensibility.
