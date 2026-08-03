@@ -147,12 +147,13 @@ function validateResultEnvelope(plan, envelope) {
   }
   const seen = new Set();
   for (const result of envelope.results) {
-    exactKeys(result, ["category_id", "command_id", "command", "outcome", "exit_code", "discovered_tests", "executed_tests", "skipped_tests", "tools"], "gate result");
+    exactKeys(result, ["category_id", "command_id", "kind", "command", "outcome", "exit_code", "discovered_tests", "executed_tests", "skipped_tests", "tools"], "gate result");
     const key = `${result.category_id}\0${result.command_id}`;
     assert.ok(!seen.has(key), `duplicate gate result: ${result.category_id}.${result.command_id}`);
     seen.add(key);
     const required = expected.get(key);
     assert.ok(required, `extra gate result: ${result.category_id}.${result.command_id}`);
+    assert.equal(result.kind, required.command.kind, `command kind mismatch: ${result.category_id}.${result.command_id}`);
     assert.equal(result.command, required.command.command, `literal command mismatch: ${result.category_id}.${result.command_id}`);
     assert.equal(result.outcome, "passed", `gate result must pass: ${result.category_id}.${result.command_id}`);
     assert.equal(result.exit_code, 0, `gate result exit code must be zero: ${result.category_id}.${result.command_id}`);

@@ -68,6 +68,7 @@ function validEnvelope(plan) {
     results: plan.categories.flatMap((category) => category.commands.map((command) => ({
       category_id: category.id,
       command_id: command.id,
+      kind: command.kind,
       command: command.command,
       outcome: "passed",
       exit_code: 0,
@@ -208,6 +209,12 @@ try {
       policy.discovered_tests = 1;
       policy.executed_tests = 1;
       assert.throws(() => validateResultEnvelope(plan, envelope), /policy command must report zero test counts/);
+    }],
+    ["rejects a result command kind mismatch", () => {
+      const plan = planFor(["shared.go"]);
+      const envelope = validEnvelope(plan);
+      envelope.results[0].kind = "policy";
+      assert.throws(() => validateResultEnvelope(plan, envelope), /command kind mismatch/);
     }],
     ["rejects wrong SHA and matrix digest", () => {
       const plan = planFor(["shared.go"]);

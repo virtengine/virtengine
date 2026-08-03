@@ -57,7 +57,7 @@ function fixture(mutate = () => {}) {
       base_sha: source,
       head_sha: candidate,
       matrix_digest: createHash("sha256").update("{}\n").digest("hex"),
-      results: [{ category_id: "test", command_id: "unit", command: "node --test", outcome: "passed", exit_code: 0, discovered_tests: 1, executed_tests: 1, skipped_tests: 0, tools: [{ name: "node", version: "20.19.1", available: true }] }],
+      results: [{ category_id: "test", command_id: "unit", kind: "test", command: "node --test", outcome: "passed", exit_code: 0, discovered_tests: 1, executed_tests: 1, skipped_tests: 0, tools: [{ name: "node", version: "20.19.1", available: true }] }],
     },
     availability: { rollout: true, rollback: true, sbom: true, releaseProvenance: true, model: true, slurm: true, producers: true },
   };

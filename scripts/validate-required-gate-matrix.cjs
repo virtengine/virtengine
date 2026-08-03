@@ -77,6 +77,10 @@ function validateExecutionSchemas(planSchema, resultSchema) {
   assert.deepEqual(resultSchema.required.slice().sort(), ["schema_version", "base_sha", "head_sha", "matrix_digest", "results"].sort());
   assert.equal(resultSchema.properties.schema_version.const, "virtengine.task-88b.required-gate-results/v1");
   assert.equal(resultSchema.$defs.result.additionalProperties, false);
+  assert.ok(resultSchema.$defs.result.required.includes("kind"), "result schema must require command kind");
+  assert.deepEqual(resultSchema.$defs.result.properties.kind.enum, ["setup", "build", "lint", "test", "policy", "drift"]);
+  assert.equal(resultSchema.$defs.result.allOf[0].then.properties.discovered_tests.minimum, 1);
+  assert.equal(resultSchema.$defs.result.allOf[0].else.properties.discovered_tests.const, 0);
   assert.equal(resultSchema.$defs.result.properties.outcome.const, "passed");
   assert.equal(resultSchema.$defs.result.properties.exit_code.const, 0);
   assert.equal(resultSchema.$defs.result.properties.skipped_tests.const, 0);
@@ -90,9 +94,10 @@ function assertImmutableCommand(command, label) {
 }
 
 function validateGateResult(category, result) {
-  assertExactKeys(result, ["command_id", "command", "outcome", "exit_code", "discovered_tests", "executed_tests", "skipped_tests", "tools"], "gate result");
+  assertExactKeys(result, ["command_id", "kind", "command", "outcome", "exit_code", "discovered_tests", "executed_tests", "skipped_tests", "tools"], "gate result");
   const command = category.required_commands.find((entry) => entry.id === result.command_id);
   assert.ok(command, `gate result references unknown command: ${result.command_id}`);
+  assert.equal(result.kind, command.kind, "gate result kind must match the required command");
   assert.equal(result.command, command.command, "gate result command must match the required literal command");
   assert.equal(result.outcome, "passed", `gate result must pass, not ${result.outcome}`);
   assert.equal(result.exit_code, 0, "gate result exit code must be zero");

@@ -19,6 +19,7 @@ function validResult(category) {
   const command = category.required_commands.find((entry) => entry.kind === "test");
   return {
     command_id: command.id,
+    kind: command.kind,
     command: command.command,
     outcome: "passed",
     exit_code: 0,
@@ -158,8 +159,14 @@ const tests = [
     assert.throws(() => validateGateResult(testCategory, incomplete), /not all discovered tests executed/);
     const policyCategory = cloneMatrix().categories.find((entry) => entry.id === "docs_process_boundary_e2e");
     const policy = policyCategory.required_commands.find((entry) => entry.kind === "policy");
-    const result = { ...validResult(policyCategory), command_id: policy.id, command: policy.command, discovered_tests: 1, executed_tests: 1 };
+    const result = { ...validResult(policyCategory), command_id: policy.id, kind: policy.kind, command: policy.command, discovered_tests: 1, executed_tests: 1 };
     assert.throws(() => validateGateResult(policyCategory, result), /policy commands must report zero test counts/);
+  }],
+  ["rejects a mismatched result command kind", () => {
+    const category = cloneMatrix().categories[0];
+    const result = validResult(category);
+    result.kind = "policy";
+    assert.throws(() => validateGateResult(category, result), /kind must match/);
   }],
   ["rejects a cancelled result", () => {
     const category = cloneMatrix().categories[0];

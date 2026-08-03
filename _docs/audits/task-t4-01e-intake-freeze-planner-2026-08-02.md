@@ -32,7 +32,8 @@ are strict option/value pairs; unknown, duplicate, or incomplete inputs fail.
 Required gates run unit coverage and the published live-candidate policy
 separately; the latter currently fails on its informal acceptance schema and is
 projected as `integration-candidate-preflight-blocked`. Test results must execute
-every discovered case, while policy results must report zero test counters. The
+every discovered case, while policy results must report zero test counters.
+Result evidence includes schema-validated command kind and must match the plan. The
 acceptance commit must be the implementation's direct, single-parent child and
 change only the acceptance artifact. Accepted annotated tags must be exact tag
 objects published by `origin`; local-only or stale same-name tags are rejected.
