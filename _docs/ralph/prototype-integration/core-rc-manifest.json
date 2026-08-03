@@ -6,14 +6,14 @@
   "planned_functionality_complete": false,
   "milestone_m_eligible": false,
   "source": {
-    "payload_sha": "579866298d437a615205a5f2f7f3b0f9eae2d40b",
-    "tree": "ec2eb92609555d246915cab0f8f0f23fac741795",
+    "payload_sha": "e10c4b00df61dc20e0e14dde66cff9f062ce4885",
+    "tree": "78c785ced9ce8a9686091822b88a9cc1d3dd1121",
     "branch": "ve/prototype-integration",
     "binding": "declared_clean_parent_payload"
   },
   "tooling": {
-    "tooling_sha": "579866298d437a615205a5f2f7f3b0f9eae2d40b",
-    "tree": "ec2eb92609555d246915cab0f8f0f23fac741795",
+    "tooling_sha": "e10c4b00df61dc20e0e14dde66cff9f062ce4885",
+    "tree": "78c785ced9ce8a9686091822b88a9cc1d3dd1121",
     "artifacts": [
       {
         "id": "generator",
@@ -427,17 +427,17 @@
   "test_evidence": {
     "status": "complete",
     "ledger_path": "_docs/ralph/handoffs/prototype-integration/HANDOFF.yaml",
-    "implementation_sha": "c9d86fd061acaf896979d65e3635f1fd987f4bbb",
-    "ledger_sha": "579866298d437a615205a5f2f7f3b0f9eae2d40b",
+    "implementation_sha": "eaafabf9adba0e91c8d1f313de1b66536661a6df",
+    "ledger_sha": "e10c4b00df61dc20e0e14dde66cff9f062ce4885",
     "record_count": 1,
-    "declared_test_count": 20,
+    "declared_test_count": 65,
     "uncounted_record_count": 0,
     "records": [
       {
-        "command": "node scripts/prototype-intake-epochs.test.cjs && node scripts/open-prototype-intake-epoch.test.cjs && node scripts/validate-prototype-integration.cjs",
+        "command": "node scripts/prototype-intake-epochs.test.cjs && node scripts/observe-prototype-intake-tags.test.cjs && node scripts/plan-prototype-intake-freeze.test.cjs && node scripts/apply-prototype-intake-freeze.test.cjs",
         "exit_code": 0,
         "result": "passed",
-        "test_count": 20,
+        "test_count": 65,
         "tool_versions": {
           "node": "20.19.1"
         }
@@ -447,7 +447,7 @@
   },
   "producer_checkpoints": {
     "ledger_path": "_docs/ralph/handoffs/prototype-integration/HANDOFF.yaml",
-    "ledger_sha256": "cdc5ea85d28742d88f883f662e8c12d1e4ac3220f3078c08452603b65c8c959e",
+    "ledger_sha256": "066e8ff3369881935dfbc8b2a964b50291131b980604a8ee9d9114a3cde9377f",
     "accepted": [],
     "rejected": [
       {
