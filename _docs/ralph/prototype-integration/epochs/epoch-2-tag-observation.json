@@ -2,7 +2,7 @@
   "schema_version": "virtengine.prototype.intake-tag-observation/v1",
   "intake_epoch": 2,
   "announcement_cutoff": "2026-08-03T23:59:59Z",
-  "observed_at": "2026-08-03T00:47:02.022Z",
+  "observed_at": "2026-08-03T04:37:15.544Z",
   "remote": "origin",
   "tags": [
     {
@@ -42,6 +42,12 @@
       "target": "36a566a92c04d988255b10cc5a75451d59077273"
     },
     {
+      "thread": "T2",
+      "tag": "checkpoint/prototype-t2/t2-13",
+      "tag_object": "e4a6daeec8e306d6ae9b65cb7e90a7880afb773c",
+      "target": "ba9f49340bbd8136f8c19bcc0abc7c64831bfda8"
+    },
+    {
       "thread": "T3",
       "tag": "checkpoint/prototype-t3/t3-03",
       "tag_object": "abfba2930270f728c09e28956bff65e5b735ec08",
@@ -64,6 +70,18 @@
       "tag": "checkpoint/prototype-t3/t3-13a",
       "tag_object": "e513096cabf024e42e4e72056148e86b57df6f65",
       "target": "8dbbaf14d5fdfd4e8405f085842a595bc7f299ff"
+    },
+    {
+      "thread": "T3",
+      "tag": "checkpoint/prototype-t3/t3-14",
+      "tag_object": "4ba9c87cc56d618a400a785f7dae1c4acc866218",
+      "target": "117ad92be90cc8a6a733ff701f1bc83fbbaf6790"
+    },
+    {
+      "thread": "T5",
+      "tag": "checkpoint/prototype-t5/t5-39",
+      "tag_object": "7f98f328f88fac612390b11a9487655bb0707c79",
+      "target": "4efd873a4446c304f3ba5f25ec83d6f4185a0a3d"
     }
   ]
 }
