@@ -130,17 +130,22 @@ function planFrozenEpoch(epoch, selections, options = {}) {
 
 function parseArgs(argv) {
   const options = { epoch: null, manifest: "_docs/ralph/prototype-integration/core-rc-manifest.json", observation: null, remote: "origin", repo: resolve(__dirname, ".."), selections: new Map() };
+  const seen = new Set();
   for (let index = 0; index < argv.length; index += 1) {
     const argument = argv[index];
     if (["--epoch", "--manifest", "--observation", "--remote", "--repo", "--tag"].includes(argument)) {
       const value = argv[++index];
-      assert.ok(value, `${argument} requires a value`);
+      assert.ok(value && !value.startsWith("--"), `${argument} requires a value`);
       if (argument === "--tag") {
         const match = value.match(/^(T[1235])=(.+)$/);
         assert.ok(match, "--tag requires THREAD=TAG");
         assert.ok(!options.selections.has(match[1]), `duplicate producer selection: ${match[1]}`);
         options.selections.set(match[1], match[2]);
-      } else options[argument.slice(2)] = value;
+      } else {
+        assert.equal(seen.has(argument), false, `duplicate argument: ${argument}`);
+        seen.add(argument);
+        options[argument.slice(2)] = value;
+      }
     } else throw new Error(`unknown argument: ${argument}`);
   }
   assert.match(options.epoch || "", /^[1-9][0-9]*$/, "--epoch is required");
