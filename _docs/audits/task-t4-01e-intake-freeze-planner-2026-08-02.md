@@ -19,7 +19,9 @@ and rejects missing or option-looking values before acquiring its lease. Lease
 inspection and compare-and-claim recovery enforce the same single-assignment
 rule for the reviewed epoch, HEAD, plan digest, and retained lease digest. New
 epoch opening likewise rejects duplicate, missing, or option-looking reviewed
-HEAD and UTC window arguments before checking the published base boundary.
+HEAD and UTC window arguments before checking the published base boundary. The
+producer intake validator applies the same rule to epoch, tag, repository, and
+remote arguments before fetching or evaluating a checkpoint.
 
 The planner hashes the selected observation, requires the checked core-RC
 manifest to bind that exact path/digest, verifies identical bytes at the
