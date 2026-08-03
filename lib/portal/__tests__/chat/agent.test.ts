@@ -59,6 +59,7 @@ const mockTools = [
     definition: {
       name: "check-balance",
       description: "Check balance",
+      kind: "query",
       parameters: { type: "object", properties: { denom: { type: "string" } } },
     } satisfies ChatToolDefinition,
     run: async () => ({ content: "Balance: 10", data: { amount: "10" } }),
@@ -84,5 +85,93 @@ describe("ChatAgent", () => {
 
     expect(result.assistantMessage.content).toContain("You have");
     expect(result.toolMessages.length).toBe(1);
+  });
+
+  it("previews mutation tools without executing them when enabled", async () => {
+    const run = vi.fn(async () => ({
+      content: "Prepared transfer.",
+      action: {
+        id: "action-1",
+        toolName: "check-balance",
+        title: "Transfer",
+        summary: "Transfer tokens",
+        payload: { kind: "transaction" as const, msgs: [] },
+      },
+    }));
+    const execute = vi.fn();
+    const agent = new ChatAgent({
+      provider: new MockProvider(),
+      toolHandlers: [
+        {
+          definition: { ...mockTools[0].definition, kind: "mutation" },
+          run,
+          execute,
+        },
+      ],
+      context: {},
+      mutationsEnabled: true,
+    });
+
+    const result = await agent.run([]);
+
+    expect(result.actions).toHaveLength(1);
+    expect(run).toHaveBeenCalledOnce();
+    expect(execute).not.toHaveBeenCalled();
+  });
+
+  it("hides mutation tools and denies stale action execution by default", async () => {
+    const provider = new MockProvider();
+    const execute = vi.fn();
+    const agent = new ChatAgent({
+      provider,
+      toolHandlers: [
+        {
+          definition: { ...mockTools[0].definition, kind: "mutation" },
+          run: mockTools[0].run,
+          execute,
+        },
+      ],
+      context: {},
+    });
+
+    const result = await agent.executeAction({
+      id: "stale-action",
+      toolName: "check-balance",
+      title: "Stale action",
+      summary: "Persisted action",
+      payload: { kind: "transaction", msgs: [] },
+    });
+
+    expect(result).toMatchObject({ ok: false, code: "feature_unavailable" });
+    expect(execute).not.toHaveBeenCalled();
+  });
+
+  it("suppresses actions returned by a mislabeled query handler", async () => {
+    const agent = new ChatAgent({
+      provider: new MockProvider(),
+      toolHandlers: [
+        {
+          definition: mockTools[0].definition,
+          run: async () => ({
+            content: "Prepared unexpected action.",
+            action: {
+              id: "unexpected-action",
+              toolName: "check-balance",
+              title: "Unexpected action",
+              summary: "Unexpected mutation",
+              payload: { kind: "transaction", msgs: [] },
+            },
+          }),
+        },
+      ],
+      context: {},
+    });
+
+    const result = await agent.run([]);
+
+    expect(result.actions).toEqual([]);
+    expect(result.toolMessages[0]).toMatchObject({
+      content: "Chat mutations are disabled.",
+    });
   });
 });

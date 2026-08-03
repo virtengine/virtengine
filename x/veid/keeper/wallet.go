@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/json"
 	"fmt"
+	"math"
 	"time"
 
 	storetypes "cosmossdk.io/store/types"
@@ -508,14 +509,31 @@ func (k Keeper) UpdateConsent(
 	update types.ConsentUpdateRequest,
 	userSignature []byte,
 ) error {
+	versionIncrements := uint64(0)
+	if update.ScopeID != "" {
+		versionIncrements++
+	}
+	if update.GlobalSettings != nil {
+		versionIncrements++
+	}
+	if versionIncrements == 0 {
+		return types.ErrInvalidConsent.Wrap("consent update must change scope or global settings")
+	}
+
+	cacheCtx, write := ctx.CacheContext()
+	ctx = cacheCtx
+
 	// Get the wallet
 	wallet, found := k.GetWallet(ctx, accountAddr)
 	if !found {
 		return types.ErrWalletNotFound.Wrap("wallet not found for account")
 	}
+	if uint64(wallet.ConsentSettings.ConsentVersion)+versionIncrements > math.MaxUint32 {
+		return types.ErrInvalidConsent.Wrap("consent version exhausted")
+	}
 
 	// Verify user signature for consent update
-	if err := k.VerifyConsentUpdateSignature(accountAddr.String(), update.ScopeID, update.GrantConsent, wallet.BindingPubKey, userSignature); err != nil {
+	if err := k.VerifyConsentUpdateSignature(accountAddr.String(), wallet.ConsentSettings.ConsentVersion, update, wallet.BindingPubKey, userSignature); err != nil {
 		return err
 	}
 
@@ -536,6 +554,7 @@ func (k Keeper) UpdateConsent(
 	if record != nil && !update.GrantConsent {
 		k.HandleConsentWithdrawal(ctx, accountAddr, record.Purpose)
 	}
+	write()
 
 	k.Logger(ctx).Info("Updated consent settings",
 		"wallet_id", wallet.WalletID,
@@ -706,12 +725,8 @@ func (k Keeper) VerifyRevokeScopeSignature(sender, scopeID string, pubKey, signa
 }
 
 // VerifyConsentUpdateSignature verifies a signature for consent update
-func (k Keeper) VerifyConsentUpdateSignature(sender, scopeID string, grant bool, pubKey, signature []byte) error {
-	grantStr := "revoke"
-	if grant {
-		grantStr = "grant"
-	}
-	msg := []byte("VEID_CONSENT_UPDATE:" + sender + ":" + scopeID + ":" + grantStr)
+func (k Keeper) VerifyConsentUpdateSignature(sender string, expectedVersion uint32, update types.ConsentUpdateRequest, pubKey, signature []byte) error {
+	msg := types.GetConsentUpdateSigningMessage(sender, expectedVersion, update)
 	return k.verifySignature(pubKey, msg, signature, "consent update")
 }
 

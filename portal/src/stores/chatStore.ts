@@ -20,6 +20,7 @@ export interface ChatActions {
   updateMessage: (id: string, content: string) => void;
   addAction: (action: ChatAction) => void;
   setPendingAction: (id?: string) => void;
+  clearActions: () => void;
   clearError: () => void;
   setError: (error: string) => void;
   reset: () => void;
@@ -51,6 +52,7 @@ export const useChatStore = create<ChatStore>()(
         })),
       addAction: (action) => set((state) => ({ actions: [...state.actions, action] })),
       setPendingAction: (id) => set({ pendingActionId: id }),
+      clearActions: () => set({ actions: [], pendingActionId: undefined }),
       clearError: () => set({ error: null }),
       setError: (error) => set({ error }),
       reset: () => set(initialState),
@@ -61,7 +63,12 @@ export const useChatStore = create<ChatStore>()(
       partialize: (state) => ({
         isOpen: state.isOpen,
         messages: state.messages,
-        actions: state.actions,
+      }),
+      merge: (persistedState, currentState) => ({
+        ...currentState,
+        ...(persistedState as Partial<ChatState>),
+        actions: [],
+        pendingActionId: undefined,
       }),
     }
   )

@@ -198,6 +198,9 @@ func (m *msgServer) CreateChallenge(goCtx context.Context, msg *types.MsgCreateC
 	}
 
 	params := m.GetParams(ctx)
+	if msg.FactorType == types.FactorTypeTOTP || msg.FactorType == types.FactorTypeSMS || msg.FactorType == types.FactorTypeEmail {
+		return nil, types.ErrInvalidChallenge.Wrap("TOTP, SMS, and email challenges require factor-specific helpers")
+	}
 
 	// Find active enrollments for this factor type
 	enrollments := m.GetActiveFactorsByType(ctx, address, msg.FactorType)
@@ -313,13 +316,20 @@ func (m *msgServer) VerifyChallenge(goCtx context.Context, msg *types.MsgVerifyC
 	if err != nil {
 		return nil, types.ErrInvalidAddress.Wrapf("invalid sender address: %v", err)
 	}
+	challenge, found := m.GetChallenge(ctx, msg.ChallengeID)
+	if !found {
+		return nil, types.ErrChallengeNotFound.Wrapf("challenge %s not found", msg.ChallengeID)
+	}
+	if challenge.AccountAddress != msg.Sender {
+		return nil, types.ErrUnauthorized.Wrap("challenge belongs to another account")
+	}
 
 	// Verify the challenge
 	verified, err := m.VerifyMFAChallenge(ctx, msg.ChallengeID, msg.Response)
 	if err != nil {
 		return &types.MsgVerifyChallengeResponse{
 			Verified: false,
-		}, err
+		}, nil
 	}
 
 	if !verified {
@@ -327,9 +337,6 @@ func (m *msgServer) VerifyChallenge(goCtx context.Context, msg *types.MsgVerifyC
 			Verified: false,
 		}, nil
 	}
-
-	// Get the challenge to determine transaction type and create session
-	challenge, _ := m.GetChallenge(ctx, msg.ChallengeID)
 
 	// Get the policy to determine session duration
 	policy, found := m.GetMFAPolicy(ctx, address)

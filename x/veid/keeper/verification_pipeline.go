@@ -372,7 +372,10 @@ func (k Keeper) applyVerificationResult(
 
 		if k.issuancePolicyKeeper != nil {
 			verifierID := result.ModelVersion
-			activeVerifier, hasActiveVerifier := k.getActiveVerifierInfo(ctx)
+			activeVerifier, hasActiveVerifier, err := k.getActiveVerifierInfo(ctx)
+			if err != nil {
+				return err
+			}
 			if hasActiveVerifier && activeVerifier.VerifierID != "" {
 				verifierID = activeVerifier.VerifierID
 			}
@@ -401,7 +404,10 @@ func (k Keeper) enforceVerificationArtifactState(
 	request *types.VerificationRequest,
 	result *types.VerificationResult,
 ) error {
-	activeVerifier, hasActiveVerifier := k.getActiveVerifierInfo(ctx)
+	activeVerifier, hasActiveVerifier, err := k.getActiveVerifierInfo(ctx)
+	if err != nil {
+		return err
+	}
 	if hasActiveVerifier {
 		result.Metadata["active_verifier_id"] = activeVerifier.VerifierID
 		result.Metadata["active_verifier_spec_version"] = activeVerifier.SpecVersion

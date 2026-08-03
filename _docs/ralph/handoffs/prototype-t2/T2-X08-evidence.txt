@@ -1,0 +1,33 @@
+T2-X08 retained validation evidence
+Implementation SHA: cbb999b21fde3ed18971ca52edfaac6aeb75a600
+Node: v24.12.0
+
+COMMAND: C:\Users\pavil\AppData\Local\Temp\virtengine-node-v24.12.0\npm.cmd --prefix C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t2\lib\portal test
+EXIT: 0
+RESULT: passed
+DETAIL: 696 tests passed; focused shell validator/client/multi-provider tests 21 passed
+
+COMMAND: C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t2\portal\node_modules\.bin\vitest.CMD run src\components\deployments\ShellTerminal.security.test.ts --reporter=dot
+EXIT: 0
+RESULT: passed
+DETAIL: 2 tests passed
+
+COMMAND: C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t2\portal\node_modules\.bin\vitest.CMD run --reporter=dot
+EXIT: 0
+RESULT: passed
+DETAIL: 83 files, 594 tests passed
+
+COMMAND: C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t2\portal\node_modules\.bin\eslint.CMD C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t2\portal\src --ext .ts,.tsx --max-warnings 0
+EXIT: 0
+RESULT: passed
+NOTE: Existing unsupported TypeScript parser-version warning only.
+
+BEHAVIOR:
+- Shell access requires authoritative eligibility bound to chain/account/deployment/container/device/session, current policy/status epochs, and exact capability/policy digests.
+- Provider must declare typed shell receipt capability and issue a short-lived one-time reference or same-host validated server URL.
+- LocalStorage bearer tokens are ignored and no token query parameter is emitted.
+- Only opaque one-time `session_id` may appear in the validated WebSocket URL; lifecycle closes on unmount or binding change.
+
+NON-CLAIMS:
+- Production identity/policy projections and provider shell receipt capabilities are not wired; shell defaults unavailable.
+- No live shell session or provider was certified.

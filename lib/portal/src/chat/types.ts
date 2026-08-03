@@ -4,6 +4,7 @@
  */
 
 import type { Balance, IdentityInfo } from "../../types/chain";
+import type { ProviderDeploymentAction } from "../provider-api/deployment-actions";
 
 export type ChatRole = "system" | "user" | "assistant" | "tool";
 
@@ -23,6 +24,7 @@ export interface ChatToolDefinition {
   name: string;
   description: string;
   parameters: Record<string, unknown>;
+  kind: "query" | "mutation";
   destructive?: boolean;
 }
 
@@ -93,7 +95,7 @@ export interface TransactionActionPayload {
 export interface ProviderActionPayload {
   kind: "provider-action";
   deploymentIds: string[];
-  action: string;
+  action: ProviderDeploymentAction;
 }
 
 export interface ChainQueryPayload {
@@ -121,6 +123,7 @@ export interface ChatAction {
 export interface ChatActionExecution {
   ok: boolean;
   summary: string;
+  code?: "feature_unavailable" | "unsupported_action";
   details?: unknown;
 }
 

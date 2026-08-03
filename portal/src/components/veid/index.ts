@@ -11,5 +11,10 @@ export { VeidSelfieCapture } from './SelfieCapture';
 export { LivenessChallenge } from './LivenessChallenge';
 export { VerificationStatus } from './VerificationStatus';
 export { VerificationWizard } from './VerificationWizard';
+export {
+  createVeidCaptureProviders,
+  unavailableVeidCaptureProviders,
+} from './VeidCaptureProviders';
+export type { VeidCaptureProviderInput, VeidCaptureProviders } from './VeidCaptureProviders';
 export { TierDisplay } from './TierDisplay';
 export { VEIDScore } from './VEIDScore';

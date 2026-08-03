@@ -8,9 +8,9 @@ export async function POST(req: Request) {
     scopeId: string;
     purpose: ConsentPurpose;
     consentText: string;
-    signature: string;
+    acknowledgement: string;
   };
 
   const record = grantConsent(body);
-  return NextResponse.json(record);
+  return NextResponse.json({ record, status: 'recorded_locally' as const });
 }

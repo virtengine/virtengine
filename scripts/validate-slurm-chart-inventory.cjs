@@ -31,6 +31,12 @@ function sha256(content) {
   return createHash("sha256").update(content).digest("hex");
 }
 
+function matchesRepositoryTextHash(content, expectedHash) {
+  const lfText = content.toString("utf8").replace(/\r\n/g, "\n");
+  return [content, Buffer.from(lfText, "utf8"), Buffer.from(lfText.replace(/\n/g, "\r\n"), "utf8")]
+    .some((candidate) => sha256(candidate) === expectedHash);
+}
+
 function validateSemanticReport(report) {
   assert.deepEqual(Object.keys(report).sort(), ["findings", "invariants", "mode", "passed", "schema_version"]);
   assert.equal(report.schema_version, "virtengine.slurm-semantic-validation/v1");
@@ -143,7 +149,7 @@ function validateSlurmChartInventory(inventory, options = {}) {
     generated_by: inventory.semantic_validator.diagnostic_command,
   });
   assert.match(inventory.semantic_report.sha256, /^[a-f0-9]{64}$/);
-  assert.equal(sha256(reportContent), inventory.semantic_report.sha256, "semantic report SHA-256 mismatch");
+  assert.ok(matchesRepositoryTextHash(reportContent, inventory.semantic_report.sha256), "semantic report SHA-256 mismatch");
   validateSemanticReport(semanticReport);
 
   const declaredSources = [inventory.canonical_source, ...inventory.compatibility_import_only_shims, ...inventory.retired_sources];

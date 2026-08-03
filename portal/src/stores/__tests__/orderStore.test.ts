@@ -75,12 +75,24 @@ describe('orderStore', () => {
     signAndBroadcastMock.mockResolvedValue({
       txHash: 'txhash',
       code: 0,
+      blockHeight: 42,
       rawLog: '',
       gasUsed: 100,
       gasWanted: 200,
+      txResponse: {
+        events: [
+          {
+            type: 'marketplace_event',
+            attributes: [
+              { key: 'event_type', value: 'order_created' },
+              { key: 'payload_json', value: JSON.stringify({ order_id: 've1owner/7' }) },
+            ],
+          },
+        ],
+      },
     });
 
-    const txHash = await useOrderStore.getState().createOrder(
+    const result = await useOrderStore.getState().createOrder(
       {
         owner: 've1owner',
         offeringId: 've1provider/1',
@@ -90,7 +102,7 @@ describe('orderStore', () => {
       wallet
     );
 
-    expect(txHash).toBe('txhash');
+    expect(result).toMatchObject({ txHash: 'txhash', blockHeight: 42, orderId: 've1owner/7' });
 
     useOrderStore.setState({
       orders: [
@@ -112,5 +124,54 @@ describe('orderStore', () => {
 
     const { orders } = useOrderStore.getState();
     expect(orders[0].status).toBe('stopped');
+  });
+
+  it('does not confirm an order without an authoritative projected ID', async () => {
+    signAndBroadcastMock.mockResolvedValue({
+      txHash: 'txhash',
+      code: 0,
+      blockHeight: 42,
+      rawLog: '',
+      gasUsed: 100,
+      gasWanted: 200,
+      txResponse: { events: [] },
+    });
+
+    await expect(
+      useOrderStore.getState().createOrder(
+        {
+          owner: 've1owner',
+          offeringId: 've1provider/1',
+          resources: [{ resourceType: 'cpu', unit: 'core', quantity: 1 }],
+          deposit: { denom: 'uve', amount: '5' },
+        },
+        {} as WalletSigner
+      )
+    ).rejects.toMatchObject({ code: 'feature_unavailable' });
+  });
+
+  it('rejects a projector result not bound to the committed transaction', async () => {
+    signAndBroadcastMock.mockResolvedValue({
+      txHash: 'txhash',
+      code: 0,
+      blockHeight: 42,
+      rawLog: '',
+      gasUsed: 100,
+      gasWanted: 200,
+      txResponse: {},
+    });
+
+    await expect(
+      useOrderStore.getState().createOrder(
+        {
+          owner: 've1owner',
+          offeringId: 've1provider/1',
+          resources: [],
+          deposit: { denom: 'uve', amount: '5' },
+        },
+        {} as WalletSigner,
+        () => ({ orderId: 've1owner/7', txHash: 'other', blockHeight: 42 })
+      )
+    ).rejects.toMatchObject({ code: 'feature_unavailable' });
   });
 });

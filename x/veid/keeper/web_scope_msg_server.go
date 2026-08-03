@@ -100,20 +100,21 @@ func (ms msgServer) SubmitSSOVerificationProof(goCtx context.Context, msg *types
 	if ms.keeper.IsSSONonceUsed(ctx, hashNonce(att.OIDCNonce)) {
 		return nil, types.ErrNonceAlreadyUsed.Wrap("OIDC nonce already used")
 	}
-	if err := ms.keeper.recordWebEvidenceReplay(ctx, validation); err != nil {
+	applyCtx, write := ctx.CacheContext()
+	if err := ms.keeper.recordWebEvidenceReplay(applyCtx, validation); err != nil {
 		return nil, err
 	}
-	if err := ms.keeper.recordSSOAttestationSubmission(ctx, &att, validation.SignerKey); err != nil {
+	if err := ms.keeper.recordSSOAttestationSubmission(applyCtx, &att, validation.SignerKey); err != nil {
 		return nil, err
 	}
 
-	if err := ms.keeper.SetSSOLinkage(ctx, linkage); err != nil {
+	if err := ms.keeper.SetSSOLinkage(applyCtx, linkage); err != nil {
 		return nil, err
 	}
-	ms.keeper.SetSSOLinkageByAccountAndProvider(ctx, msg.AccountAddress, att.ProviderType, msg.LinkageId)
+	ms.keeper.SetSSOLinkageByAccountAndProvider(applyCtx, msg.AccountAddress, att.ProviderType, msg.LinkageId)
 
 	scoreContribution := types.GetSSOScoringWeight(att.ProviderType)
-	if err := ms.keeper.applyWebScopeScore(ctx, msg.AccountAddress, []webScopeContribution{
+	if err := ms.keeper.applyWebScopeScore(applyCtx, msg.AccountAddress, []webScopeContribution{
 		{
 			FeatureName:  "sso_" + string(att.ProviderType),
 			ScoreBasisPt: scoreContribution,
@@ -122,6 +123,7 @@ func (ms msgServer) SubmitSSOVerificationProof(goCtx context.Context, msg *types
 	}); err != nil {
 		return nil, err
 	}
+	write()
 
 	return &types.MsgSubmitSSOVerificationProofResponse{
 		LinkageId:         msg.LinkageId,
@@ -243,20 +245,21 @@ func (ms msgServer) SubmitEmailVerificationProof(goCtx context.Context, msg *typ
 	if ms.keeper.IsEmailNonceUsed(ctx, nonceHash) {
 		return nil, types.ErrNonceAlreadyUsed.Wrap("email nonce already used")
 	}
-	if err := ms.keeper.recordWebEvidenceReplay(ctx, validation); err != nil {
+	applyCtx, write := ctx.CacheContext()
+	if err := ms.keeper.recordWebEvidenceReplay(applyCtx, validation); err != nil {
 		return nil, err
 	}
-	if err := ms.keeper.SetEmailVerificationRecord(ctx, record); err != nil {
+	if err := ms.keeper.SetEmailVerificationRecord(applyCtx, record); err != nil {
 		return nil, err
 	}
 
 	nonceRecord := types.NewUsedNonceRecord(msg.Nonce, verifiedAt, msg.AccountAddress, msg.VerificationId, 365)
-	if err := ms.keeper.SetEmailUsedNonce(ctx, nonceRecord); err != nil {
+	if err := ms.keeper.SetEmailUsedNonce(applyCtx, nonceRecord); err != nil {
 		return nil, err
 	}
 
-	scoreContribution := types.CalculateEmailScore(record, types.DefaultEmailScoringWeight(), ctx.BlockTime())
-	if err := ms.keeper.applyWebScopeScore(ctx, msg.AccountAddress, []webScopeContribution{
+	scoreContribution := types.CalculateEmailScore(record, types.DefaultEmailScoringWeight(), applyCtx.BlockTime())
+	if err := ms.keeper.applyWebScopeScore(applyCtx, msg.AccountAddress, []webScopeContribution{
 		{
 			FeatureName:  "email_verification",
 			ScoreBasisPt: scoreContribution,
@@ -265,6 +268,7 @@ func (ms msgServer) SubmitEmailVerificationProof(goCtx context.Context, msg *typ
 	}); err != nil {
 		return nil, err
 	}
+	write()
 
 	return &types.MsgSubmitEmailVerificationProofResponse{
 		VerificationId:    msg.VerificationId,
@@ -387,15 +391,16 @@ func (ms msgServer) SubmitSMSVerificationProof(goCtx context.Context, msg *types
 	if validation.ExactReplay {
 		return nil, types.ErrNonceAlreadyUsed.Wrap("web evidence replay target missing")
 	}
-	if err := ms.keeper.recordWebEvidenceReplay(ctx, validation); err != nil {
+	applyCtx, write := ctx.CacheContext()
+	if err := ms.keeper.recordWebEvidenceReplay(applyCtx, validation); err != nil {
 		return nil, err
 	}
-	if err := ms.keeper.SetSMSVerificationRecord(ctx, record); err != nil {
+	if err := ms.keeper.SetSMSVerificationRecord(applyCtx, record); err != nil {
 		return nil, err
 	}
 
-	scoreContribution := types.CalculateSMSScore(record, types.DefaultSMSScoringWeight(), ctx.BlockTime())
-	if err := ms.keeper.applyWebScopeScore(ctx, msg.AccountAddress, []webScopeContribution{
+	scoreContribution := types.CalculateSMSScore(record, types.DefaultSMSScoringWeight(), applyCtx.BlockTime())
+	if err := ms.keeper.applyWebScopeScore(applyCtx, msg.AccountAddress, []webScopeContribution{
 		{
 			FeatureName:  "sms_verification",
 			ScoreBasisPt: scoreContribution,
@@ -404,6 +409,7 @@ func (ms msgServer) SubmitSMSVerificationProof(goCtx context.Context, msg *types
 	}); err != nil {
 		return nil, err
 	}
+	write()
 
 	return &types.MsgSubmitSMSVerificationProofResponse{
 		VerificationId:    msg.VerificationId,
@@ -534,16 +540,17 @@ func (ms msgServer) SubmitSocialMediaScope(goCtx context.Context, msg *types.Msg
 	if validation.ExactReplay {
 		return nil, types.ErrNonceAlreadyUsed.Wrap("web evidence replay target missing")
 	}
-	if err := ms.keeper.recordWebEvidenceReplay(ctx, validation); err != nil {
+	applyCtx, write := ctx.CacheContext()
+	if err := ms.keeper.recordWebEvidenceReplay(applyCtx, validation); err != nil {
 		return nil, err
 	}
-	if err := ms.keeper.SetSocialMediaScope(ctx, scope); err != nil {
+	if err := ms.keeper.SetSocialMediaScope(applyCtx, scope); err != nil {
 		return nil, err
 	}
 
-	nameMatch := webScopeSocialNameMatch(ctx, ms.keeper, msg.AccountAddress, msg.ProfileNameHash)
+	nameMatch := webScopeSocialNameMatch(applyCtx, ms.keeper, msg.AccountAddress, msg.ProfileNameHash)
 	scoreContribution := types.CalculateSocialMediaScore(scope, nameMatch, now)
-	if err := ms.keeper.applyWebScopeScore(ctx, msg.AccountAddress, []webScopeContribution{
+	if err := ms.keeper.applyWebScopeScore(applyCtx, msg.AccountAddress, []webScopeContribution{
 		{
 			FeatureName:  "social_media_" + string(provider),
 			ScoreBasisPt: scoreContribution,
@@ -552,6 +559,7 @@ func (ms msgServer) SubmitSocialMediaScope(goCtx context.Context, msg *types.Msg
 	}); err != nil {
 		return nil, err
 	}
+	write()
 
 	return &types.MsgSubmitSocialMediaScopeResponse{
 		ScopeId:           msg.ScopeId,

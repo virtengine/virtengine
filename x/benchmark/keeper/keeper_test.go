@@ -304,6 +304,42 @@ func TestReliabilityScore(t *testing.T) {
 	}
 }
 
+func TestLegacyReliabilityInputsDoNotFabricateUnavailableSources(t *testing.T) {
+	keeper, ctx, _, _ := setupKeeper(t)
+	providerAddr := bech32AddrBenchmark(t)
+	report := types.BenchmarkReport{
+		ReportID: "legacy-perfect-report", ProviderAddress: providerAddr,
+		ClusterID: "cluster-1", SummaryScore: 10000,
+	}
+	if err := keeper.SetBenchmarkReport(ctx, report); err != nil {
+		t.Fatalf("store benchmark report: %v", err)
+	}
+
+	inputs := keeper.computeReliabilityInputs(ctx, providerAddr)
+	if inputs.BenchmarkSummary != 10000 {
+		t.Fatalf("expected benchmark summary 10000, got %d", inputs.BenchmarkSummary)
+	}
+	if inputs.TotalUptimeSeconds != 0 || inputs.TotalDowntimeSeconds != 0 || inputs.MeanTimeBetweenFailures != 0 ||
+		inputs.ProvisioningAttempts != 0 || inputs.ProvisioningSuccesses != 0 || inputs.ProvisioningSuccessRate != 0 ||
+		inputs.MeanTimeToProvision != 0 || inputs.DisputeCount != 0 || inputs.DisputesResolved != 0 || inputs.DisputesLost != 0 {
+		t.Fatalf("unavailable reliability sources must remain zero: %+v", inputs)
+	}
+
+	if err := keeper.UpdateReliabilityScore(ctx, providerAddr, inputs); err != nil {
+		t.Fatalf("update reliability score: %v", err)
+	}
+	score, found := keeper.GetReliabilityScore(ctx, providerAddr)
+	if !found {
+		t.Fatal("expected reliability score")
+	}
+	if score.Score != 7500 || score.ComponentScores.UptimeScore != 5000 || score.ComponentScores.ProvisioningScore != 5000 {
+		t.Fatalf("unexpected fail-closed legacy score: %+v", score)
+	}
+	if score.Score >= 10000 || score.ScoreVersion != "1.0.1" {
+		t.Fatalf("legacy score must be non-perfect and versioned: %+v", score)
+	}
+}
+
 func TestComputeReliabilityScore_Deterministic(t *testing.T) {
 	inputs := types.ReliabilityScoreInputs{
 		BenchmarkSummary:        7500,

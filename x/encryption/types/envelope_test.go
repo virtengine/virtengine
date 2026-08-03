@@ -5,6 +5,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"golang.org/x/crypto/curve25519"
 )
 
 func TestEncryptedPayloadEnvelope_NewEnvelope(t *testing.T) {
@@ -243,6 +244,69 @@ func TestEncryptedPayloadEnvelope_Validate(t *testing.T) {
 			} else {
 				require.NoError(t, err)
 			}
+		})
+	}
+}
+
+func TestEncryptedPayloadEnvelope_ValidateV2Structure(t *testing.T) {
+	publicKey := func(seed byte) []byte {
+		privateKey := [32]byte{seed << 3}
+		var result [32]byte
+		curve25519.ScalarBaseMult(&result, &privateKey)
+		return result[:]
+	}
+	newValidEnvelope := func() *EncryptedPayloadEnvelope {
+		publicKey1 := publicKey(1)
+		publicKey2 := publicKey(2)
+		recipientID1 := ComputeKeyFingerprint(publicKey1)
+		recipientID2 := ComputeKeyFingerprint(publicKey2)
+		return &EncryptedPayloadEnvelope{
+			Version:             EnvelopeVersionV2,
+			AlgorithmID:         AlgorithmX25519XSalsa20Poly1305,
+			AlgorithmVersion:    AlgorithmVersionV1,
+			RecipientKeyIDs:     []string{recipientID1, recipientID2},
+			RecipientPublicKeys: [][]byte{publicKey1, publicKey2},
+			WrappedKeys: []WrappedKeyEntry{
+				{RecipientID: recipientID1, WrappedKey: make([]byte, 72), Algorithm: WrappedKeyAlgorithmX25519NaClBox, EphemeralPubKey: publicKey(3)},
+				{RecipientID: recipientID2, WrappedKey: make([]byte, 72), Algorithm: WrappedKeyAlgorithmX25519NaClBox, EphemeralPubKey: publicKey(4)},
+			},
+			Nonce:               make([]byte, XSalsa20NonceSize),
+			Ciphertext:          []byte("authenticated ciphertext"),
+			SenderSignature:     make([]byte, 64),
+			SenderPubKey:        publicKey(5),
+			SenderSigningPubKey: make([]byte, 32),
+		}
+	}
+
+	require.NoError(t, newValidEnvelope().Validate())
+	tests := []struct {
+		name   string
+		mutate func(*EncryptedPayloadEnvelope)
+	}{
+		{name: "missing signing public key", mutate: func(e *EncryptedPayloadEnvelope) { e.SenderSigningPubKey = nil }},
+		{name: "short signature", mutate: func(e *EncryptedPayloadEnvelope) { e.SenderSignature = make([]byte, 63) }},
+		{name: "legacy encrypted keys", mutate: func(e *EncryptedPayloadEnvelope) { e.EncryptedKeys = [][]byte{{1}, {2}} }},
+		{name: "missing wrapped key", mutate: func(e *EncryptedPayloadEnvelope) { e.WrappedKeys = e.WrappedKeys[:1] }},
+		{name: "short ephemeral key", mutate: func(e *EncryptedPayloadEnvelope) { e.WrappedKeys[0].EphemeralPubKey = make([]byte, 31) }},
+		{name: "low-order sender key", mutate: func(e *EncryptedPayloadEnvelope) { e.SenderPubKey = make([]byte, 32) }},
+		{name: "low-order recipient key", mutate: func(e *EncryptedPayloadEnvelope) {
+			e.RecipientPublicKeys[0] = make([]byte, 32)
+			e.RecipientKeyIDs[0] = ComputeKeyFingerprint(e.RecipientPublicKeys[0])
+			e.WrappedKeys[0].RecipientID = e.RecipientKeyIDs[0]
+		}},
+		{name: "low-order ephemeral key", mutate: func(e *EncryptedPayloadEnvelope) { e.WrappedKeys[0].EphemeralPubKey = make([]byte, 32) }},
+		{name: "duplicate normalized recipient", mutate: func(e *EncryptedPayloadEnvelope) {
+			e.RecipientPublicKeys[1] = append([]byte(nil), e.RecipientPublicKeys[0]...)
+			e.RecipientKeyIDs[1] = e.RecipientKeyIDs[0] + ":v2"
+			e.WrappedKeys[1].RecipientID = e.RecipientKeyIDs[1]
+		}},
+		{name: "short wrapped key", mutate: func(e *EncryptedPayloadEnvelope) { e.WrappedKeys[0].WrappedKey = make([]byte, 71) }},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			envelope := newValidEnvelope()
+			test.mutate(envelope)
+			require.Error(t, envelope.Validate())
 		})
 	}
 }

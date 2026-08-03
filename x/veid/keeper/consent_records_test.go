@@ -24,8 +24,7 @@ func TestConsentRecordLifecycle(t *testing.T) {
 		GrantConsent: true,
 		Purpose:      string(types.PurposeBiometricProcessing),
 	}
-	grantMsg := []byte("VEID_CONSENT_UPDATE:" + ts.address.String() + ":" + scopeID + ":grant")
-	grantSig := ts.signMessage(grantMsg)
+	grantSig := ts.signConsentUpdate(t, grantUpdate)
 	err = ts.keeper.UpdateConsent(ts.ctx, ts.address, grantUpdate, grantSig)
 	require.NoError(t, err)
 
@@ -44,8 +43,7 @@ func TestConsentRecordLifecycle(t *testing.T) {
 		ScopeID:      scopeID,
 		GrantConsent: false,
 	}
-	revokeMsg := []byte("VEID_CONSENT_UPDATE:" + ts.address.String() + ":" + scopeID + ":revoke")
-	revokeSig := ts.signMessage(revokeMsg)
+	revokeSig := ts.signConsentUpdate(t, revokeUpdate)
 	err = ts.keeper.UpdateConsent(ts.ctx, ts.address, revokeUpdate, revokeSig)
 	require.NoError(t, err)
 
@@ -87,8 +85,7 @@ func TestAddScopeRequiresConsent(t *testing.T) {
 		GrantConsent: true,
 		Purpose:      "KYC verification",
 	}
-	grantMsg := []byte("VEID_CONSENT_UPDATE:" + ts.address.String() + ":" + scopeID + ":grant")
-	grantSig := ts.signMessage(grantMsg)
+	grantSig := ts.signConsentUpdate(t, grantUpdate)
 	err = ts.keeper.UpdateConsent(ts.ctx, ts.address, grantUpdate, grantSig)
 	require.NoError(t, err)
 

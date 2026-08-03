@@ -18,6 +18,12 @@ import type { WalletContextValue } from '../../../lib/portal';
 
 export { PortalProvider, usePortal } from '../../../lib/portal';
 export type { PortalProviderProps, PortalConfig, WalletContextValue } from '../../../lib/portal';
+export { useDeploymentShell, ProviderShellSessionError } from '../../../lib/portal';
+export type {
+  ProviderShellSessionCapability,
+  ShellEligibilityProjection,
+  UseDeploymentShellResult,
+} from '../../../lib/portal';
 
 // ============================================================================
 // Chat Agent (VE-70D)
@@ -234,6 +240,12 @@ export type {
   OrderEvent,
   CheckoutRequest,
   CheckoutValidation,
+  CheckoutCommittedResult,
+  CheckoutMutationAdapter,
+  CheckoutMutationContext,
+  CheckoutMutationProjector,
+  CheckoutMutationRequest,
+  CheckoutMutationSubmission,
 } from '../../../lib/portal';
 
 export {
@@ -325,6 +337,9 @@ export {
   ProviderAPIError,
   LogStream,
   ShellConnection,
+  providerDeploymentActions,
+  ProviderDeploymentActionError,
+  validateProviderDeploymentActionReceipt,
   signRequest,
   MultiProviderClient,
   MultiProviderProvider,
@@ -346,8 +361,16 @@ export type {
   ServiceStatus,
   DeploymentListResponse,
   DeploymentAction,
-  ShellSessionResponse,
   ProviderAPIErrorDetails,
+  ProviderDeploymentAction,
+  ProviderDeploymentActionStatus,
+  ProviderDeploymentActionTxEvidence,
+  ProviderDeploymentActionReceipt,
+  ProviderDeploymentActionCapability,
+  ProviderDeploymentActionErrorCode,
+  ProviderDeploymentTxEvidenceValidator,
+  ProviderDeploymentActionValidationContext,
+  ProviderDeploymentActionReceiptValidator,
   SignedRequestHeaders,
   SignRequestOptions,
   ProviderRecord,
@@ -371,7 +394,22 @@ export type {
 // ============================================================================
 
 export { useHPC, HPCProvider } from '../../../lib/portal';
+export {
+  HPCClientUnavailableError,
+  HPCMutationNotCommittedError,
+  HPCOutputValidationError,
+  assertCommittedJobMutation,
+  requireHPCOutputAdapter,
+  requireHPCSigner,
+  validateHPCOutputReferences,
+  validateResolvedHPCOutput,
+} from '../../../lib/portal';
 export type {
+  CommittedJobMutation,
+  HPCClientCapability,
+  HPCOutputAdapter,
+  HPCSignerAdapter,
+  SubmitJobParams,
   HPCState,
   WorkloadTemplate,
   WorkloadCategory,

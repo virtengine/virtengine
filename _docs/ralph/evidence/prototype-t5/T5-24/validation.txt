@@ -1,0 +1,56 @@
+T5-24 corrupt evidence migration epoch floor validation
+Payload: 51fe504f0c8177b78d8b26918210184c156c44bc
+Branch: ve/prototype-t5-platform
+Platform: windows/amd64
+Toolchains: go version go1.25.8 windows/amd64; gcc.exe (MinGW-W64 x86_64-ucrt-posix-seh, built by Brecht Sanders, r3) 16.1.0; git version 2.51.2.windows.1; node v20.19.1
+
+Epoch ancestry:
+- Frozen baseline: 79391a3df86d85522b92e0400c6904971ecbe65d
+- Planning SHA: 1436723bd78980aa0388dbe9fcfa24dda939c54a
+- Intake epoch: 1
+- Intake base: 5587c384f634552c3a2dd7181ca49cafa4da1984
+- Prior accepted payload: null
+- Payload head: 51fe504f0c8177b78d8b26918210184c156c44bc
+- Next checkpoint: null
+- Payload descends from the intake base.
+- git rev-list --reverse --topo-order reports exactly 46 commits from the intake base to the payload.
+- T4 completeChangedPaths reports exactly 143 paths, including integration-history parent diffs.
+- Honest T5 ownership covers 119 of 143 completeChangedPaths and leaves exactly 24 inherited integration/T4 paths uncovered.
+
+Evidence migration epoch floor hardening:
+- A present, nonempty signer epoch floor must be exactly eight bytes before binary.BigEndian.Uint64 is called.
+- A malformed nonempty floor is rejected before legacy-row collection, CacheContext creation, or any migration cache or persistent-store write.
+- The malformed-floor regression verifies that consumed state, reports, signer epoch state, latest-manifest state, evidence references, and quarantine records remain unwritten.
+- An absent floor retains first-migration behavior, a valid eight-byte floor retains rollback protection, and exact replay remains unchanged because replay resolution precedes floor validation.
+
+Command: C:\Users\pavil\AppData\Local\VirtEngine\toolchains\go1.25.8\go\bin\go.exe -C C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t5 test -count=1 -run EvidenceObjectMigration ./x/veid/keeper
+Output: focused EvidenceObjectMigration tests passed.
+Exit code: 0
+
+Command: C:\Users\pavil\AppData\Local\VirtEngine\toolchains\go1.25.8\go\bin\go.exe -C C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t5 vet ./x/veid/keeper
+Output: no diagnostics
+Exit code: 0
+
+Process environment configured through .NET setters:
+- [Environment]::SetEnvironmentVariable('CGO_ENABLED', '1', [EnvironmentVariableTarget]::Process)
+- [Environment]::SetEnvironmentVariable('CC', 'C:\Users\pavil\AppData\Local\Microsoft\WinGet\Packages\BrechtSanders.WinLibs.POSIX.UCRT_Microsoft.Winget.Source_8wekyb3d8bbwe\mingw64\bin\gcc.exe', [EnvironmentVariableTarget]::Process)
+Command: C:\Users\pavil\AppData\Local\VirtEngine\toolchains\go1.25.8\go\bin\go.exe -C C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t5 test -race -count=1 -run EvidenceObjectMigration ./x/veid/keeper
+Output: focused EvidenceObjectMigration tests passed; no race detector diagnostics.
+Exit code: 0
+
+Diagnostic known failure:
+- Earlier fresh-runner environment-assignment attempts failed before compilation. They are non-authoritative diagnostic failures; the authoritative focused race command above used .NET process-environment setters with an absolute GCC path and exited successfully without detector output.
+
+Ownership and blockers:
+- Honest T5 owned_paths claim only T5 evidence/handoff paths and T5-owned data-vault, fundauth, organization-contract, platform-security, provider-daemon contract, encryption, MFA, privileged-role, and VEID surfaces.
+- The 24 inherited integration/T4 paths have no active T5 generated-file lease, so this checkpoint remains untagged and not intake eligible.
+- T4 must register the prerequisite VEID evidence reference migration and then separately register the signed evidence payload cutover using D4 children 05 through 08.
+- T4 must mount and wire the persistent FundAuthorization store and keeper.
+- Production erasure remains external: it requires durable transactional erasure storage, production storage-deletion and KMS-destruction adapters, independent receipt signers and key resolver, consent, hold, backup, and finalization authorities, and authenticated restore-manifest authority.
+- generated_hashes is {} because T5-24 changes no generated artifact.
+- migrations is [] because T4 registration is absent.
+
+Validation:
+- Strict schema-v2 JSON parse and field validation: passed.
+- Epoch range validation: 46 exact commits and 143 exact completeChangedPaths from 5587c384f634552c3a2dd7181ca49cafa4da1984 through 51fe504f0c8177b78d8b26918210184c156c44bc.
+- git diff --check -- _docs/ralph/evidence/prototype-t5/T5-24/validation.txt _docs/ralph/handoffs/prototype-t5/HANDOFF.yaml: passed with no errors.

@@ -132,9 +132,9 @@ func TestHasValidAuthSessionWithDevice(t *testing.T) {
 	hasSession = keeper.HasValidAuthSessionWithDevice(ctx, addr, types.SensitiveTxLargeWithdrawal, "wrong-device")
 	require.False(t, hasSession, "should return false for non-matching device fingerprint")
 
-	// Test: Empty device fingerprint (should match any)
+	// Test: Empty device fingerprint cannot authorize a device-bound session
 	hasSession = keeper.HasValidAuthSession(ctx, addr, types.SensitiveTxLargeWithdrawal)
-	require.True(t, hasSession, "should return true when not checking device fingerprint")
+	require.False(t, hasSession, "should require proof of the bound device")
 }
 
 func TestConsumeAuthSession_SingleUse(t *testing.T) {
@@ -169,6 +169,136 @@ func TestConsumeAuthSession_SingleUse(t *testing.T) {
 	// Trying to consume again should fail
 	err = keeper.ConsumeAuthSession(ctx, addr, types.SensitiveTxAccountRecovery)
 	require.Error(t, err)
+}
+
+func TestConsumeAuthSession_RejectsInsufficientFactors(t *testing.T) {
+	ctx, keeper := setupTestKeeper(t)
+	addr := sdk.AccAddress([]byte("insufficient_factors"))
+	require.NoError(t, keeper.SetSensitiveTxConfig(ctx, &types.SensitiveTxConfig{
+		TransactionType: types.SensitiveTxAccountRecovery,
+		Enabled:         true,
+		RequiredFactorCombinations: []types.FactorCombination{{
+			Factors: []types.FactorType{types.FactorTypeTOTP, types.FactorTypeFIDO2},
+		}},
+	}))
+
+	now := ctx.BlockTime().Unix()
+	session := &types.AuthorizationSession{
+		SessionID:       "insufficient-factor-session",
+		AccountAddress:  addr.String(),
+		TransactionType: types.SensitiveTxAccountRecovery,
+		VerifiedFactors: []types.FactorType{types.FactorTypeTOTP},
+		CreatedAt:       now,
+		ExpiresAt:       now + 5*60,
+		IsSingleUse:     true,
+	}
+	require.NoError(t, keeper.CreateAuthorizationSession(ctx, session))
+	require.False(t, keeper.HasValidAuthSession(ctx, addr, types.SensitiveTxAccountRecovery))
+	require.ErrorIs(t, keeper.ConsumeAuthSession(ctx, addr, types.SensitiveTxAccountRecovery), types.ErrInsufficientFactors)
+	require.ErrorIs(t, keeper.ValidateSessionForTransaction(ctx, session.SessionID, addr, types.SensitiveTxAccountRecovery, ""), types.ErrInsufficientFactors)
+
+	stored, found := keeper.GetAuthorizationSession(ctx, session.SessionID)
+	require.True(t, found)
+	require.Zero(t, stored.UsedAt, "insufficient session must not be consumed")
+}
+
+func TestAuthSessionPolicyReductionsAndSecurityLevel(t *testing.T) {
+	ctx, keeper := setupTestKeeper(t)
+	addr := sdk.AccAddress([]byte("session_policy_user"))
+	deviceFingerprint := "trusted-session-device"
+	require.NoError(t, enrollActiveSessionFactor(keeper, ctx, addr, types.FactorTypeTOTP, "session-policy-totp"))
+	require.NoError(t, enrollActiveSessionFactor(keeper, ctx, addr, types.FactorTypeFIDO2, "session-policy-fido2"))
+	_, err := keeper.AddTrustedDevice(ctx, addr, &types.DeviceInfo{
+		Fingerprint: deviceFingerprint, UserAgent: "session test", TrustExpiresAt: ctx.BlockTime().Unix() + 3600,
+	})
+	require.NoError(t, err)
+	require.NoError(t, keeper.SetMFAPolicy(ctx, &types.MFAPolicy{
+		AccountAddress: addr.String(),
+		Enabled:        true,
+		RequiredFactors: []types.FactorCombination{{
+			Factors: []types.FactorType{types.FactorTypeTOTP, types.FactorTypeFIDO2},
+		}},
+		TrustedDeviceRule: &types.TrustedDevicePolicy{
+			Enabled: true, TrustDuration: 3600, MaxTrustedDevices: 1,
+			ReducedFactors: &types.FactorCombination{Factors: []types.FactorType{types.FactorTypeTOTP}},
+		},
+	}))
+	require.NoError(t, keeper.SetSensitiveTxConfig(ctx, &types.SensitiveTxConfig{
+		TransactionType: types.SensitiveTxLargeWithdrawal, Enabled: true, AllowTrustedDeviceReduction: true,
+		RequiredFactorCombinations: []types.FactorCombination{{
+			Factors: []types.FactorType{types.FactorTypeTOTP, types.FactorTypeFIDO2},
+		}},
+	}))
+
+	now := ctx.BlockTime().Unix()
+	require.NoError(t, keeper.CreateAuthorizationSession(ctx, &types.AuthorizationSession{
+		SessionID: "reduced-factor-session", AccountAddress: addr.String(), TransactionType: types.SensitiveTxLargeWithdrawal,
+		VerifiedFactors: []types.FactorType{types.FactorTypeTOTP}, CreatedAt: now, ExpiresAt: now + 300,
+		DeviceFingerprint: deviceFingerprint,
+	}))
+	require.False(t, keeper.HasValidAuthSessionWithDevice(ctx, addr, types.SensitiveTxLargeWithdrawal, deviceFingerprint))
+	require.ErrorIs(t, keeper.ConsumeAuthSessionWithDevice(ctx, addr, types.SensitiveTxLargeWithdrawal, deviceFingerprint), types.ErrInsufficientFactors)
+	require.NoError(t, keeper.CreateAuthorizationSession(ctx, &types.AuthorizationSession{
+		SessionID: "full-factor-session", AccountAddress: addr.String(), TransactionType: types.SensitiveTxLargeWithdrawal,
+		VerifiedFactors: []types.FactorType{types.FactorTypeTOTP, types.FactorTypeFIDO2}, CreatedAt: now, ExpiresAt: now + 300,
+		DeviceFingerprint: deviceFingerprint,
+	}))
+	require.True(t, keeper.HasValidAuthSessionWithDevice(ctx, addr, types.SensitiveTxLargeWithdrawal, deviceFingerprint))
+	require.NoError(t, keeper.ConsumeAuthSessionWithDevice(ctx, addr, types.SensitiveTxLargeWithdrawal, deviceFingerprint))
+
+	require.NoError(t, keeper.SetSensitiveTxConfig(ctx, &types.SensitiveTxConfig{
+		TransactionType: types.SensitiveTxMediumWithdrawal, Enabled: true,
+		RequiredFactorCombinations: []types.FactorCombination{{
+			Factors: []types.FactorType{types.FactorTypeSMS}, MinSecurityLevel: types.FactorSecurityLevelHigh,
+		}},
+	}))
+	weakAddr := sdk.AccAddress([]byte("weak_session_factor"))
+	require.NoError(t, keeper.CreateAuthorizationSession(ctx, &types.AuthorizationSession{
+		SessionID: "weak-factor-session", AccountAddress: weakAddr.String(), TransactionType: types.SensitiveTxMediumWithdrawal,
+		VerifiedFactors: []types.FactorType{types.FactorTypeSMS}, CreatedAt: now, ExpiresAt: now + 300,
+	}))
+	require.False(t, keeper.HasValidAuthSession(ctx, weakAddr, types.SensitiveTxMediumWithdrawal))
+	require.ErrorIs(t, keeper.ConsumeAuthSession(ctx, weakAddr, types.SensitiveTxMediumWithdrawal), types.ErrInsufficientFactors)
+}
+
+func TestAuthSessionEnforcesCurrentVEIDScore(t *testing.T) {
+	ctx, keeper := setupTestKeeper(t)
+	addr := sdk.AccAddress([]byte("session_veid_score"))
+	require.NoError(t, keeper.SetSensitiveTxConfig(ctx, &types.SensitiveTxConfig{
+		TransactionType: types.SensitiveTxMediumWithdrawal, Enabled: true, MinVEIDScore: 80,
+		RequiredFactorCombinations: []types.FactorCombination{{Factors: []types.FactorType{types.FactorTypeVEID}}},
+	}))
+	now := ctx.BlockTime().Unix()
+	require.NoError(t, keeper.CreateAuthorizationSession(ctx, &types.AuthorizationSession{
+		SessionID: "veid-score-session", AccountAddress: addr.String(), TransactionType: types.SensitiveTxMediumWithdrawal,
+		VerifiedFactors: []types.FactorType{types.FactorTypeVEID}, CreatedAt: now, ExpiresAt: now + 300,
+	}))
+	veidKeeper := keeper.veidKeeper.(*mockVEIDKeeper)
+	veidKeeper.scores[addr.String()] = 79
+	require.False(t, keeper.HasValidAuthSession(ctx, addr, types.SensitiveTxMediumWithdrawal))
+	require.ErrorIs(t, keeper.ConsumeAuthSession(ctx, addr, types.SensitiveTxMediumWithdrawal), types.ErrInsufficientFactors)
+
+	veidKeeper.scores[addr.String()] = 80
+	require.True(t, keeper.HasValidAuthSession(ctx, addr, types.SensitiveTxMediumWithdrawal))
+	require.NoError(t, keeper.ValidateSessionForTransaction(ctx, "veid-score-session", addr, types.SensitiveTxMediumWithdrawal, ""))
+}
+
+func TestConsumeAuthSession_SkipsMismatchedDeviceSession(t *testing.T) {
+	ctx, keeper := setupTestKeeper(t)
+	addr := sdk.AccAddress([]byte("multiple_device_sessions"))
+	now := ctx.BlockTime().Unix()
+	for _, session := range []*types.AuthorizationSession{
+		{SessionID: "a-wrong-device", DeviceFingerprint: "device-a"},
+		{SessionID: "z-right-device", DeviceFingerprint: "device-b"},
+	} {
+		session.AccountAddress = addr.String()
+		session.TransactionType = types.SensitiveTxProviderRegistration
+		session.VerifiedFactors = []types.FactorType{types.FactorTypeFIDO2}
+		session.CreatedAt = now
+		session.ExpiresAt = now + 300
+		require.NoError(t, keeper.CreateAuthorizationSession(ctx, session))
+	}
+	require.NoError(t, keeper.ConsumeAuthSessionWithDevice(ctx, addr, types.SensitiveTxProviderRegistration, "device-b"))
 }
 
 func TestConsumeAuthSession_MultiUse(t *testing.T) {
@@ -444,6 +574,33 @@ func TestValidateSessionForTransaction(t *testing.T) {
 	err = keeper.ValidateSessionForTransaction(ctx, "validate-test-session", addr, types.SensitiveTxProviderRegistration, "wrong-device")
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "device")
+	err = keeper.ValidateSessionForTransaction(ctx, "validate-test-session", addr, types.SensitiveTxProviderRegistration, "")
+	require.ErrorIs(t, err, types.ErrDeviceMismatch)
+}
+
+func TestPersistedAuthorizationSessionCorruptionFailsClosed(t *testing.T) {
+	ctx, keeper := setupTestKeeper(t)
+	sessionID := "corrupt-session"
+	store := ctx.KVStore(keeper.skey)
+	tests := []struct {
+		name  string
+		value string
+	}{
+		{name: "malformed", value: `{"session_id":`},
+		{name: "wrong session id", value: `{"session_id":"other-session","account_address":"account","transaction_type":2,"verified_factors":[2],"created_at":1,"expires_at":2}`},
+		{name: "invalid session", value: `{"session_id":"corrupt-session","account_address":"account","transaction_type":2,"created_at":1,"expires_at":2}`},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			store.Set(types.AuthorizationSessionKey(sessionID), []byte(test.value))
+			require.Panics(t, func() {
+				keeper.GetAuthorizationSession(ctx, sessionID)
+			})
+			require.Panics(t, func() {
+				keeper.ValidateSessionForTransaction(ctx, sessionID, sdk.AccAddress([]byte("account")), types.SensitiveTxKeyRotation, "")
+			})
+		})
+	}
 }
 
 func TestValidateSessionForTransaction_StepUp(t *testing.T) {
@@ -590,4 +747,17 @@ func TestSessionStoreSerialization(t *testing.T) {
 	require.Equal(t, ss.TransactionType, decoded.TransactionType)
 	require.Equal(t, ss.VerifiedFactors, decoded.VerifiedFactors)
 	require.Equal(t, ss.DeviceFingerprint, decoded.DeviceFingerprint)
+}
+
+func enrollActiveSessionFactor(keeper Keeper, ctx sdk.Context, address sdk.AccAddress, factorType types.FactorType, factorID string) error {
+	enrollment := &types.FactorEnrollment{
+		AccountAddress: address.String(), FactorType: factorType, FactorID: factorID,
+		PublicIdentifier: []byte("factor-key"), Status: types.EnrollmentStatusActive, EnrolledAt: ctx.BlockTime().Unix(),
+	}
+	if factorType == types.FactorTypeFIDO2 {
+		enrollment.Metadata = &types.FactorMetadata{FIDO2Info: &types.FIDO2CredentialInfo{
+			CredentialID: []byte(factorID), PublicKey: []byte("public-key"),
+		}}
+	}
+	return keeper.EnrollFactor(ctx, enrollment)
 }

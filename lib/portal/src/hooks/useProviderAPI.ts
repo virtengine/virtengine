@@ -17,6 +17,9 @@ export function useProviderAPI(
   const walletChainId = options.wallet?.chainId;
   const hmacSecret = options.hmac?.secret;
   const hmacPrincipal = options.hmac?.principal;
+  const shellReceiptVersion = options.shellSessionCapability?.receiptVersion;
+  const shellTransport = options.shellSessionCapability?.transport;
+  const shellMaxTtlSeconds = options.shellSessionCapability?.maxTtlSeconds;
 
   return useMemo(
     () => new ProviderAPIClient(options),
@@ -28,6 +31,10 @@ export function useProviderAPI(
       hmacSecret,
       hmacPrincipal,
       options.fetcher,
+      options.providerId,
+      shellReceiptVersion,
+      shellTransport,
+      shellMaxTtlSeconds,
     ],
   );
 }

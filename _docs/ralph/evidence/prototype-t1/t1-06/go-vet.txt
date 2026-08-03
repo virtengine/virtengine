@@ -1,0 +1,1 @@
+PASS: go vet ./pkg/inference ./x/veid/types ./x/veid/keeper

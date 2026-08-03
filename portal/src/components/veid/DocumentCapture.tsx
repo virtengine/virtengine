@@ -15,14 +15,13 @@ import {
   type DocumentSide,
   type CaptureResult,
   type CaptureError,
-  type ClientKeyProvider,
-  type UserKeyProvider,
 } from '@/lib/capture-adapter';
 import { cn } from '@/lib/utils';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/Alert';
 import { Badge } from '@/components/ui/Badge';
+import { unavailableVeidCaptureProviders, type VeidCaptureProviders } from './VeidCaptureProviders';
 
 const DOCUMENT_TYPES: { type: DocumentType; label: string; description: string }[] = [
   { type: 'id_card', label: 'ID Card', description: 'National ID or government-issued card' },
@@ -31,6 +30,7 @@ const DOCUMENT_TYPES: { type: DocumentType; label: string; description: string }
 ];
 
 interface VeidDocumentCaptureProps {
+  providers?: VeidCaptureProviders;
   /** Pre-selected document type (skips selector) */
   documentType?: DocumentType;
   /** Which side to capture */
@@ -47,6 +47,7 @@ interface VeidDocumentCaptureProps {
 }
 
 export function VeidDocumentCapture({
+  providers = unavailableVeidCaptureProviders,
   documentType,
   side,
   onCapture,
@@ -58,21 +59,6 @@ export function VeidDocumentCapture({
   const [selectedType, setSelectedType] = useState<DocumentType | null>(documentType ?? null);
   const [error, setError] = useState<string | null>(null);
   const [retryCount, setRetryCount] = useState(0);
-
-  const mockClientKeyProvider: ClientKeyProvider = {
-    getClientId: () => Promise.resolve('virtengine-portal-v1'),
-    getClientVersion: () => Promise.resolve('1.0.0'),
-    sign: (_data: Uint8Array) => Promise.resolve(new Uint8Array(64)),
-    getPublicKey: () => Promise.resolve(new Uint8Array(32)),
-    getKeyType: () => Promise.resolve('ed25519' as const),
-  };
-
-  const mockUserKeyProvider: UserKeyProvider = {
-    getAccountAddress: () => Promise.resolve('virtengine1...'),
-    sign: (_data: Uint8Array) => Promise.resolve(new Uint8Array(64)),
-    getPublicKey: () => Promise.resolve(new Uint8Array(32)),
-    getKeyType: () => Promise.resolve('ed25519' as const),
-  };
 
   const handleTypeSelect = useCallback(
     (type: DocumentType) => {
@@ -113,12 +99,19 @@ export function VeidDocumentCapture({
           <CardDescription>Choose the type of identity document you will use</CardDescription>
         </CardHeader>
         <CardContent>
+          {providers.status === 'unavailable' && (
+            <Alert variant="destructive" className="mb-4">
+              <AlertTitle>Capture unavailable</AlertTitle>
+              <AlertDescription>{providers.reason}</AlertDescription>
+            </Alert>
+          )}
           <div className="grid gap-3 sm:grid-cols-3">
             {DOCUMENT_TYPES.map((doc) => (
               <button
                 key={doc.type}
                 type="button"
                 onClick={() => handleTypeSelect(doc.type)}
+                disabled={providers.status === 'unavailable'}
                 className="flex flex-col items-start gap-2 rounded-lg border border-border p-4 text-left transition-colors hover:border-primary hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               >
                 <span className="text-sm font-semibold">{doc.label}</span>
@@ -173,20 +166,27 @@ export function VeidDocumentCapture({
           </Alert>
         )}
 
-        <div
-          key={retryCount}
-          className="relative aspect-[4/3] w-full overflow-hidden rounded-lg bg-black"
-        >
-          <CaptureLib
-            documentType={activeType}
-            documentSide={side}
-            onCapture={handleCapture}
-            onError={handleError}
-            clientKeyProvider={mockClientKeyProvider}
-            userKeyProvider={mockUserKeyProvider}
-            className="h-full w-full"
-          />
-        </div>
+        {providers.status === 'available' ? (
+          <div
+            key={retryCount}
+            className="relative aspect-[4/3] w-full overflow-hidden rounded-lg bg-black"
+          >
+            <CaptureLib
+              documentType={activeType}
+              documentSide={side}
+              onCapture={handleCapture}
+              onError={handleError}
+              clientKeyProvider={providers.clientKeyProvider}
+              userKeyProvider={providers.userKeyProvider}
+              className="h-full w-full"
+            />
+          </div>
+        ) : (
+          <Alert variant="destructive">
+            <AlertTitle>Capture unavailable</AlertTitle>
+            <AlertDescription>{providers.reason}</AlertDescription>
+          </Alert>
+        )}
 
         <div className="flex items-center gap-2 text-sm text-muted-foreground">
           <span>💡</span>

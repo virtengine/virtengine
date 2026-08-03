@@ -1,0 +1,21 @@
+T2-11 retained validation evidence
+Implementation SHA: 557ec0eeeeb87f3839dc3f7455df5c22108a4f3e
+Node: v24.12.0
+
+COMMAND: C:\Users\pavil\AppData\Local\Temp\virtengine-node-v24.12.0\npm.cmd --prefix C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t2\lib\portal test
+EXIT: 0
+RESULT: passed
+DETAIL: 20 files, 497 tests passed; encrypted claim store 10 tests passed
+
+COMMAND: C:\Users\pavil\AppData\Local\Temp\virtengine-node-v24.12.0\npm.cmd --prefix C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t2\lib\portal run type-check
+EXIT: 0
+RESULT: passed
+
+COMMAND: git -C C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t2 diff --check
+EXIT: 0
+RESULT: passed
+
+NON-CLAIMS:
+- Encryption, DEK wrapping/unwrapping, recovery, and persistence authorities are injected; production defaults remain unavailable.
+- T2 defines no T5 canonical recovery, custody, or key schema.
+- Persisted records contain encrypted claims, wrapped DEKs, minimal metadata, and opaque recovery references only.

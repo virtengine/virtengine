@@ -6,6 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/Alert';
 
 interface HPCJobSubmitProps {
+  offeringId: string;
   className?: string;
   templateId?: string;
   onSubmitSuccess?: (jobId: string) => void;
@@ -17,6 +18,7 @@ interface HPCJobSubmitProps {
  * Form for submitting new HPC jobs
  */
 export function HPCJobSubmit({
+  offeringId,
   className,
   templateId,
   onSubmitSuccess,
@@ -50,6 +52,7 @@ export function HPCJobSubmit({
           </Alert>
         )}
         <JobSubmissionForm
+          offeringId={offeringId}
           template={selectedTemplate}
           onSubmit={(jobId) => {
             try {

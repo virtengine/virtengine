@@ -1,6 +1,11 @@
 import { create } from 'zustand';
-import type { Deployment as ProviderDeployment, ResourceMetrics } from '@/lib/portal-adapter';
-import { MultiProviderClient } from '@/lib/portal-adapter';
+import type {
+  Deployment as ProviderDeployment,
+  ProviderDeploymentAction,
+  ProviderDeploymentActionReceipt,
+  ResourceMetrics,
+} from '@/lib/portal-adapter';
+import { MultiProviderClient, ProviderDeploymentActionError } from '@/lib/portal-adapter';
 import { getPortalEndpoints } from '@/lib/config';
 import { coerceNumber, coerceString, toDate } from '@/lib/api/chain';
 
@@ -67,6 +72,10 @@ export interface DeploymentLogLine {
 
 export interface Deployment {
   id: string;
+  providerId: string;
+  providerState: string;
+  version: string;
+  revision: string;
   name: string;
   owner: string;
   status: DeploymentStatus;
@@ -94,11 +103,14 @@ export interface DeploymentState {
 export interface DeploymentActions {
   fetchDeployment: (id: string) => Promise<void>;
   refreshDeployment: (id: string) => Promise<void>;
-  stopDeployment: (id: string) => Promise<void>;
-  startDeployment: (id: string) => Promise<void>;
-  restartDeployment: (id: string) => Promise<void>;
-  updateDeployment: (id: string, update: DeploymentUpdatePayload) => Promise<void>;
-  terminateDeployment: (id: string) => Promise<void>;
+  stopDeployment: (id: string) => Promise<ProviderDeploymentActionReceipt>;
+  startDeployment: (id: string) => Promise<ProviderDeploymentActionReceipt>;
+  restartDeployment: (id: string) => Promise<ProviderDeploymentActionReceipt>;
+  updateDeployment: (
+    id: string,
+    update: DeploymentUpdatePayload
+  ) => Promise<ProviderDeploymentActionReceipt>;
+  terminateDeployment: (id: string) => Promise<ProviderDeploymentActionReceipt>;
 }
 
 export type DeploymentStore = DeploymentState & DeploymentActions;
@@ -118,6 +130,7 @@ const initialState: DeploymentState = {
 
 let providerClient: MultiProviderClient | null = null;
 let providerClientInit: Promise<void> | null = null;
+const pendingDeploymentActions = new Set<string>();
 
 const getProviderClient = async () => {
   if (!providerClient) {
@@ -173,6 +186,10 @@ const mapDeployment = (deployment: ProviderDeployment, metrics?: ResourceMetrics
 
   return {
     id: deployment.id,
+    providerId: coerceString(deployment.providerId),
+    providerState: coerceString(deployment.state),
+    version: coerceString(deployment.version),
+    revision: coerceString(deployment.revision),
     name: deployment.id,
     owner: coerceString(deployment.owner, ''),
     status: mapDeploymentStatus(coerceString(deployment.state, 'running')),
@@ -197,6 +214,56 @@ const mapDeployment = (deployment: ProviderDeployment, metrics?: ResourceMetrics
     ],
     logs: [],
   };
+};
+
+const performDeploymentAction = async (
+  id: string,
+  action: ProviderDeploymentAction
+): Promise<ProviderDeploymentActionReceipt> => {
+  if (pendingDeploymentActions.has(id)) {
+    throw new ProviderDeploymentActionError(
+      'duplicate_action',
+      `Another deployment action is already pending for ${id}`
+    );
+  }
+
+  pendingDeploymentActions.add(id);
+  try {
+    const client = await getProviderClient();
+    const receipt = await client.performAction(id, action);
+    await useDeploymentStore.getState().fetchDeployment(id);
+
+    const state = useDeploymentStore.getState();
+    if (state.error) {
+      throw new ProviderDeploymentActionError(
+        'refresh_failed',
+        `Provider accepted ${action}, but deployment refresh failed: ${state.error}`
+      );
+    }
+
+    const refreshed = state.deployments.find((deployment) => deployment.id === id);
+    if (!refreshed) {
+      throw new ProviderDeploymentActionError(
+        'refresh_failed',
+        `Provider accepted ${action}, but the refreshed deployment is missing`
+      );
+    }
+    if (
+      refreshed.providerId !== receipt.providerId ||
+      refreshed.providerState !== receipt.state ||
+      refreshed.version !== receipt.version ||
+      refreshed.revision !== receipt.revision
+    ) {
+      throw new ProviderDeploymentActionError(
+        'deployment_drift',
+        `Refreshed deployment does not match operation ${receipt.operationId}`
+      );
+    }
+
+    return receipt;
+  } finally {
+    pendingDeploymentActions.delete(id);
+  }
 };
 
 export const useDeploymentStore = create<DeploymentStore>()((set, get) => ({
@@ -249,32 +316,22 @@ export const useDeploymentStore = create<DeploymentStore>()((set, get) => ({
   },
 
   stopDeployment: async (id: string) => {
-    const client = await getProviderClient();
-    await client.performAction(id, 'stop');
-    await get().fetchDeployment(id);
+    return performDeploymentAction(id, 'stop');
   },
 
   startDeployment: async (id: string) => {
-    const client = await getProviderClient();
-    await client.performAction(id, 'start');
-    await get().fetchDeployment(id);
+    return performDeploymentAction(id, 'start');
   },
 
   restartDeployment: async (id: string) => {
-    const client = await getProviderClient();
-    await client.performAction(id, 'restart');
-    await get().fetchDeployment(id);
+    return performDeploymentAction(id, 'restart');
   },
 
   updateDeployment: async (id: string, _update: DeploymentUpdatePayload) => {
-    const client = await getProviderClient();
-    await client.performAction(id, 'update');
-    await get().fetchDeployment(id);
+    return performDeploymentAction(id, 'update');
   },
 
   terminateDeployment: async (id: string) => {
-    const client = await getProviderClient();
-    await client.performAction(id, 'terminate');
-    await get().fetchDeployment(id);
+    return performDeploymentAction(id, 'terminate');
   },
 }));

@@ -1,0 +1,41 @@
+T2-X13 retained validation evidence
+Implementation SHA: 9e717ff769b03dcb3830877d541b223d8d7154bf
+Node: v24.12.0
+
+COMMAND: lib\portal\node_modules\.bin\vitest.CMD run __tests__/hpc/use-hpc-outputs.test.tsx --reporter=dot
+EXIT: 0
+RESULT: passed
+DETAIL: 1 file, 4 tests passed; no warnings
+
+COMMAND: lib\portal\node_modules\.bin\vitest.CMD run --reporter=dot
+EXIT: 0
+RESULT: passed
+DETAIL: 35 files, 726 tests passed in 41.36s; expected wallet reconnect-metadata stderr only
+
+COMMAND: portal\node_modules\.bin\tsc.CMD --noEmit -p portal\tsconfig.json
+EXIT: 0
+RESULT: passed
+DETAIL: Full portal TypeScript check completed with no diagnostics.
+
+COMMAND: focused TypeScript noEmit compile for T2-X13 changed source files
+EXIT: 1
+RESULT: unrelated-pre-existing-failure
+DETAIL: Zero T2-X13 changed-file diagnostics; compilation reaches the pre-existing lib/portal/src/wallet/utils.ts missing WalletChainConfig export. Portal adapter focused compile exits 0.
+
+COMMAND: portal\node_modules\.bin\prettier.CMD --write ../lib/portal/components/PortalProvider.tsx ../lib/portal/hooks/useHPC.tsx ../lib/portal/index.d.ts ../lib/portal/index.ts ../lib/portal/types/config.ts ../lib/portal/components/hpc/hpc-output.ts ../lib/portal/__tests__/hpc/use-hpc-outputs.test.tsx src/lib/portal-adapter.ts
+EXIT: 0
+RESULT: passed
+DETAIL: All eight files unchanged by final formatting pass.
+
+BEHAVIOR:
+- Legacy HPC output listing and access default unavailable unless an adapter is bound exactly to the active chain and account.
+- Output-reference envelopes are bound to chain, account, and job; duplicate IDs and malformed or mutable references fail closed.
+- Accepted reference collections and references are materialized and frozen.
+- Resolved access evidence requires exact job/reference metadata, primitive HTTPS URL, nonempty MIME type, future expiry, and an expiry no later than the reference expiry.
+- Output callbacks capture render authority generation and reject stale invocations before adapter dispatch and late evidence after authority changes.
+- PortalProvider withholds mismatched output adapters; public lib and portal adapter exports expose typed output contracts.
+- No local or synthetic output URL is produced.
+
+NON-CLAIMS:
+- No production HPC output adapter is wired by this checkpoint; output access defaults unavailable.
+- No live provider output, encrypted artifact, scheduler, or chain endpoint was certified.

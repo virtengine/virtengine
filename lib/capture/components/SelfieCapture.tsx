@@ -11,7 +11,7 @@
  * - Metadata stripping and signing
  */
 
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import type {
   SelfieCaptureProps,
   SelfieResult,
@@ -19,36 +19,35 @@ import type {
   CaptureMetadata,
   LivenessCheckResult,
   QualityThresholds,
-} from '../types/capture';
-import { DEFAULT_QUALITY_THRESHOLDS } from '../types/capture';
-import { useCamera } from '../hooks/useCamera';
-import { useQualityCheck, useStableQualityFeedback } from '../hooks/useQualityCheck';
-import { CaptureGuidance } from './CaptureGuidance';
-import { QualityFeedback } from './QualityFeedback';
-import { stripMetadata } from '../utils/metadata-strip';
-import { generateDeviceBoundSalt } from '../utils/salt-generator';
+} from "../types/capture";
+import { DEFAULT_QUALITY_THRESHOLDS } from "../types/capture";
+import { useCamera } from "../hooks/useCamera";
+import {
+  useQualityCheck,
+  useStableQualityFeedback,
+} from "../hooks/useQualityCheck";
+import { CaptureGuidance } from "./CaptureGuidance";
+import { QualityFeedback } from "./QualityFeedback";
+import { stripMetadata } from "../utils/metadata-strip";
+import { generateDeviceBoundSalt } from "../utils/salt-generator";
 import {
   createSignaturePackage,
   generateDeviceFingerprint,
   createSessionId,
-} from '../utils/signature';
-
-/**
- * Liveness challenge type
- */
-type LivenessChallenge = 'none' | 'blink' | 'smile' | 'turn_left' | 'turn_right';
+} from "../utils/signature";
+import { requestLivenessEvidence } from "../utils/liveness";
 
 /**
  * Capture state
  */
 type CaptureState =
-  | 'initializing'
-  | 'ready'
-  | 'liveness_challenge'
-  | 'capturing'
-  | 'reviewing'
-  | 'processing'
-  | 'error';
+  | "initializing"
+  | "ready"
+  | "liveness_challenge"
+  | "capturing"
+  | "reviewing"
+  | "processing"
+  | "error";
 
 /**
  * Selfie-specific quality thresholds
@@ -66,197 +65,156 @@ const SELFIE_THRESHOLDS: Partial<QualityThresholds> = {
  */
 const styles = {
   container: {
-    position: 'relative' as const,
-    width: '100%',
-    maxWidth: '400px',
-    margin: '0 auto',
-    backgroundColor: '#000',
-    borderRadius: '12px',
-    overflow: 'hidden',
+    position: "relative" as const,
+    width: "100%",
+    maxWidth: "400px",
+    margin: "0 auto",
+    backgroundColor: "#000",
+    borderRadius: "12px",
+    overflow: "hidden",
   },
   videoContainer: {
-    position: 'relative' as const,
-    width: '100%',
-    paddingBottom: '133.33%', // 3:4 aspect ratio (portrait)
-    backgroundColor: '#1a1a1a',
+    position: "relative" as const,
+    width: "100%",
+    paddingBottom: "133.33%", // 3:4 aspect ratio (portrait)
+    backgroundColor: "#1a1a1a",
   },
   video: {
-    position: 'absolute' as const,
+    position: "absolute" as const,
     top: 0,
     left: 0,
-    width: '100%',
-    height: '100%',
-    objectFit: 'cover' as const,
-    transform: 'scaleX(-1)', // Mirror for selfie
+    width: "100%",
+    height: "100%",
+    objectFit: "cover" as const,
+    transform: "scaleX(-1)", // Mirror for selfie
   },
   previewImage: {
-    position: 'absolute' as const,
+    position: "absolute" as const,
     top: 0,
     left: 0,
-    width: '100%',
-    height: '100%',
-    objectFit: 'contain' as const,
-    backgroundColor: '#000',
-    transform: 'scaleX(-1)', // Mirror for selfie
+    width: "100%",
+    height: "100%",
+    objectFit: "contain" as const,
+    backgroundColor: "#000",
+    transform: "scaleX(-1)", // Mirror for selfie
   },
   controls: {
-    display: 'flex',
-    justifyContent: 'center',
-    alignItems: 'center',
-    gap: '16px',
-    padding: '20px',
-    backgroundColor: 'rgba(0, 0, 0, 0.9)',
+    display: "flex",
+    justifyContent: "center",
+    alignItems: "center",
+    gap: "16px",
+    padding: "20px",
+    backgroundColor: "rgba(0, 0, 0, 0.9)",
   },
   captureButton: {
-    width: '70px',
-    height: '70px',
-    borderRadius: '50%',
-    border: '4px solid white',
-    backgroundColor: 'transparent',
-    cursor: 'pointer',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    transition: 'all 0.2s ease',
+    width: "70px",
+    height: "70px",
+    borderRadius: "50%",
+    border: "4px solid white",
+    backgroundColor: "transparent",
+    cursor: "pointer",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    transition: "all 0.2s ease",
   },
   captureButtonInner: {
-    width: '56px',
-    height: '56px',
-    borderRadius: '50%',
-    backgroundColor: 'white',
-    transition: 'all 0.2s ease',
+    width: "56px",
+    height: "56px",
+    borderRadius: "50%",
+    backgroundColor: "white",
+    transition: "all 0.2s ease",
   },
   captureButtonDisabled: {
     opacity: 0.4,
-    cursor: 'not-allowed',
+    cursor: "not-allowed",
   },
   secondaryButton: {
-    padding: '12px 24px',
-    borderRadius: '8px',
-    border: 'none',
-    fontSize: '14px',
+    padding: "12px 24px",
+    borderRadius: "8px",
+    border: "none",
+    fontSize: "14px",
     fontWeight: 600,
-    cursor: 'pointer',
-    transition: 'all 0.2s ease',
+    cursor: "pointer",
+    transition: "all 0.2s ease",
   },
   retakeButton: {
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
-    color: 'white',
+    backgroundColor: "rgba(255, 255, 255, 0.2)",
+    color: "white",
   },
   confirmButton: {
-    backgroundColor: '#22c55e',
-    color: 'white',
+    backgroundColor: "#22c55e",
+    color: "white",
   },
   errorContainer: {
-    position: 'absolute' as const,
+    position: "absolute" as const,
     top: 0,
     left: 0,
     right: 0,
     bottom: 0,
-    display: 'flex',
-    flexDirection: 'column' as const,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: 'rgba(0, 0, 0, 0.9)',
-    color: 'white',
-    padding: '20px',
-    textAlign: 'center' as const,
+    display: "flex",
+    flexDirection: "column" as const,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(0, 0, 0, 0.9)",
+    color: "white",
+    padding: "20px",
+    textAlign: "center" as const,
   },
   livenessOverlay: {
-    position: 'absolute' as const,
-    top: '50%',
-    left: '50%',
-    transform: 'translate(-50%, -50%)',
-    backgroundColor: 'rgba(0, 0, 0, 0.8)',
-    borderRadius: '16px',
-    padding: '24px 32px',
-    color: 'white',
-    textAlign: 'center' as const,
-    maxWidth: '280px',
+    position: "absolute" as const,
+    top: "50%",
+    left: "50%",
+    transform: "translate(-50%, -50%)",
+    backgroundColor: "rgba(0, 0, 0, 0.8)",
+    borderRadius: "16px",
+    padding: "24px 32px",
+    color: "white",
+    textAlign: "center" as const,
+    maxWidth: "280px",
   },
   livenessIcon: {
-    fontSize: '48px',
-    marginBottom: '16px',
+    fontSize: "48px",
+    marginBottom: "16px",
   },
   livenessInstruction: {
-    fontSize: '18px',
+    fontSize: "18px",
     fontWeight: 600,
-    marginBottom: '8px',
+    marginBottom: "8px",
   },
   livenessHint: {
-    fontSize: '14px',
-    color: '#9ca3af',
-    marginBottom: '16px',
-  },
-  livenessProgress: {
-    width: '100%',
-    height: '4px',
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
-    borderRadius: '2px',
-    overflow: 'hidden',
-  },
-  livenessProgressBar: {
-    height: '100%',
-    backgroundColor: '#22c55e',
-    transition: 'width 0.3s ease',
+    fontSize: "14px",
+    color: "#9ca3af",
+    marginBottom: "16px",
   },
   processingOverlay: {
-    position: 'absolute' as const,
+    position: "absolute" as const,
     top: 0,
     left: 0,
     right: 0,
     bottom: 0,
-    display: 'flex',
-    flexDirection: 'column' as const,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: 'rgba(0, 0, 0, 0.8)',
-    color: 'white',
+    display: "flex",
+    flexDirection: "column" as const,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(0, 0, 0, 0.8)",
+    color: "white",
   },
   spinner: {
-    width: '40px',
-    height: '40px',
-    border: '4px solid rgba(255, 255, 255, 0.3)',
-    borderTop: '4px solid white',
-    borderRadius: '50%',
-    animation: 'spin 1s linear infinite',
-    marginBottom: '16px',
+    width: "40px",
+    height: "40px",
+    border: "4px solid rgba(255, 255, 255, 0.3)",
+    borderTop: "4px solid white",
+    borderRadius: "50%",
+    animation: "spin 1s linear infinite",
+    marginBottom: "16px",
   },
   qualityOverlay: {
-    position: 'absolute' as const,
-    bottom: '80px',
-    left: '10px',
-    right: '10px',
+    position: "absolute" as const,
+    bottom: "80px",
+    left: "10px",
+    right: "10px",
     zIndex: 10,
-  },
-};
-
-/**
- * Liveness challenge configuration
- */
-const LIVENESS_CHALLENGES: Record<
-  Exclude<LivenessChallenge, 'none'>,
-  { icon: string; instruction: string; hint: string }
-> = {
-  blink: {
-    icon: '👁️',
-    instruction: 'Blink your eyes',
-    hint: 'Close and open your eyes slowly',
-  },
-  smile: {
-    icon: '😊',
-    instruction: 'Smile',
-    hint: 'Give us a natural smile',
-  },
-  turn_left: {
-    icon: '⬅️',
-    instruction: 'Turn head left',
-    hint: 'Slowly turn your head to the left',
-  },
-  turn_right: {
-    icon: '➡️',
-    instruction: 'Turn head right',
-    hint: 'Slowly turn your head to the right',
   },
 };
 
@@ -266,13 +224,15 @@ const LIVENESS_CHALLENGES: Record<
 export const SelfieCapture: React.FC<SelfieCaptureProps> = ({
   mode,
   livenessCheck = false,
+  livenessProvider,
+  livenessTimeoutMs = 10_000,
   onCapture,
   onError,
   clientKeyProvider,
   userKeyProvider,
   onGuidanceChange,
   debug = false,
-  className = '',
+  className = "",
   sessionId: providedSessionId,
 }) => {
   // Merge thresholds for selfie
@@ -282,36 +242,35 @@ export const SelfieCapture: React.FC<SelfieCaptureProps> = ({
   };
 
   // State
-  const [captureState, setCaptureState] = useState<CaptureState>('initializing');
+  const [captureState, setCaptureState] =
+    useState<CaptureState>("initializing");
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [capturedBlob, setCapturedBlob] = useState<Blob | null>(null);
-  const [errorMessage, setErrorMessage] = useState<string>('');
+  const [errorMessage, setErrorMessage] = useState<string>("");
   const [sessionId] = useState(() => providedSessionId || createSessionId());
-  const [deviceFingerprint, setDeviceFingerprint] = useState<string>('');
+  const [deviceFingerprint, setDeviceFingerprint] = useState<string>("");
 
   // Liveness state
-  const [currentChallenge, setCurrentChallenge] = useState<LivenessChallenge>('none');
-  const [livenessProgress, setLivenessProgress] = useState(0);
-  const [livenessStartTime, setLivenessStartTime] = useState<number>(0);
-  const [livenessResult, setLivenessResult] = useState<LivenessCheckResult | null>(null);
+  const [livenessResult, setLivenessResult] =
+    useState<LivenessCheckResult | null>(null);
 
   // Refs
   const processingRef = useRef(false);
-  const livenessTimerRef = useRef<number | null>(null);
+  const livenessInFlightRef = useRef(false);
 
   // Camera hook (front-facing for selfie)
   const camera = useCamera({
     constraints: {
-      facingMode: 'user',
+      facingMode: "user",
       minWidth: thresholds.minResolution.width,
       minHeight: thresholds.minResolution.height,
       idealWidth: 1280,
       idealHeight: 960,
     },
     autoStart: true,
-    onReady: () => setCaptureState('ready'),
+    onReady: () => setCaptureState("ready"),
     onError: (err) => {
-      setCaptureState('error');
+      setCaptureState("error");
       setErrorMessage(getCameraErrorMessage(err.type));
     },
   });
@@ -332,7 +291,7 @@ export const SelfieCapture: React.FC<SelfieCaptureProps> = ({
 
   // Start continuous quality checking when camera is ready
   useEffect(() => {
-    if (captureState === 'ready' && camera.state.isStreaming) {
+    if (captureState === "ready" && camera.state.isStreaming) {
       quality.startContinuous(camera.getFrame);
     }
     return () => {
@@ -353,9 +312,6 @@ export const SelfieCapture: React.FC<SelfieCaptureProps> = ({
       if (previewUrl) {
         URL.revokeObjectURL(previewUrl);
       }
-      if (livenessTimerRef.current) {
-        clearInterval(livenessTimerRef.current);
-      }
     };
   }, [previewUrl]);
 
@@ -364,114 +320,92 @@ export const SelfieCapture: React.FC<SelfieCaptureProps> = ({
    */
   function getCameraErrorMessage(type: string): string {
     switch (type) {
-      case 'permission_denied':
-        return 'Camera access was denied. Please grant camera permission.';
-      case 'not_found':
-        return 'No front camera found on this device.';
-      case 'not_readable':
-        return 'Camera is in use by another application.';
+      case "permission_denied":
+        return "Camera access was denied. Please grant camera permission.";
+      case "not_found":
+        return "No front camera found on this device.";
+      case "not_readable":
+        return "Camera is in use by another application.";
       default:
-        return 'An error occurred while accessing the camera.';
+        return "An error occurred while accessing the camera.";
     }
   }
-
-  /**
-   * Start liveness challenge
-   */
-  const startLivenessChallenge = useCallback(() => {
-    // Pick a random challenge
-    const challenges: Exclude<LivenessChallenge, 'none'>[] = [
-      'blink',
-      'smile',
-      'turn_left',
-      'turn_right',
-    ];
-    const challenge = challenges[Math.floor(Math.random() * challenges.length)];
-
-    setCurrentChallenge(challenge);
-    setLivenessProgress(0);
-    setLivenessStartTime(Date.now());
-    setCaptureState('liveness_challenge');
-
-    // Simulate liveness detection progress
-    // In a real implementation, this would use ML-based face tracking
-    livenessTimerRef.current = window.setInterval(() => {
-      setLivenessProgress((prev) => {
-        const newProgress = prev + Math.random() * 15;
-        if (newProgress >= 100) {
-          // Challenge completed
-          if (livenessTimerRef.current) {
-            clearInterval(livenessTimerRef.current);
-          }
-          setLivenessResult({
-            passed: true,
-            score: 0.85 + Math.random() * 0.1,
-            challengeType: challenge === 'turn_left' || challenge === 'turn_right' ? 'turn' : challenge,
-            challengeDurationMs: Date.now() - livenessStartTime,
-          });
-          // Auto-capture after liveness check
-          setTimeout(() => handleCaptureAfterLiveness(), 500);
-          return 100;
-        }
-        return newProgress;
-      });
-    }, 200);
-  }, [livenessStartTime]);
-
-  /**
-   * Handle capture button click
-   */
-  const handleCapture = useCallback(async () => {
-    if (!quality.guidance.readyToCapture) {
-      return;
-    }
-
-    // If liveness check is enabled and not done, start it
-    if (livenessCheck && !livenessResult) {
-      startLivenessChallenge();
-      return;
-    }
-
-    await performCapture();
-  }, [quality.guidance.readyToCapture, livenessCheck, livenessResult, startLivenessChallenge]);
-
-  /**
-   * Capture after liveness check
-   */
-  const handleCaptureAfterLiveness = useCallback(async () => {
-    await performCapture();
-  }, []);
 
   /**
    * Perform the actual capture
    */
   const performCapture = useCallback(async () => {
-    setCaptureState('capturing');
+    setCaptureState("capturing");
 
     try {
       const blob = await camera.takePhoto();
       if (!blob) {
-        throw new Error('Failed to capture image');
+        throw new Error("Failed to capture image");
       }
 
       // Create preview URL
       const url = URL.createObjectURL(blob);
       setPreviewUrl(url);
       setCapturedBlob(blob);
-      setCaptureState('reviewing');
+      setCaptureState("reviewing");
 
       // Stop camera while reviewing
       camera.stop();
     } catch (err) {
-      setCaptureState('ready');
+      setCaptureState("ready");
       const error: CaptureError = {
-        type: 'camera_error',
-        message: 'Failed to capture selfie',
+        type: "camera_error",
+        message: "Failed to capture selfie",
         originalError: err as Error,
       };
       onError(error);
     }
   }, [camera, onError]);
+
+  const handleCapture = useCallback(async () => {
+    if (!quality.guidance.readyToCapture) return;
+
+    if (livenessCheck && !livenessResult) {
+      if (livenessInFlightRef.current) return;
+      livenessInFlightRef.current = true;
+      const challengeId = createSessionId();
+      setCaptureState("liveness_challenge");
+      try {
+        const evidence = await requestLivenessEvidence(livenessProvider, {
+          sessionId,
+          challengeId,
+          timeoutMs: livenessTimeoutMs,
+        });
+        setLivenessResult(evidence);
+        await performCapture();
+      } catch (err) {
+        setCaptureState("ready");
+        onError({
+          type:
+            err instanceof Error && err.message.includes("timed out")
+              ? "timeout"
+              : "validation_failed",
+          message:
+            err instanceof Error ? err.message : "Liveness verification failed",
+          originalError: err as Error,
+        });
+      } finally {
+        livenessInFlightRef.current = false;
+      }
+      return;
+    }
+
+    await performCapture();
+  }, [
+    quality.guidance.readyToCapture,
+    livenessCheck,
+    livenessResult,
+    livenessProvider,
+    livenessTimeoutMs,
+    sessionId,
+    performCapture,
+    onError,
+  ]);
 
   /**
    * Handle retake
@@ -482,10 +416,8 @@ export const SelfieCapture: React.FC<SelfieCaptureProps> = ({
     }
     setPreviewUrl(null);
     setCapturedBlob(null);
-    setCurrentChallenge('none');
-    setLivenessProgress(0);
     setLivenessResult(null);
-    setCaptureState('initializing');
+    setCaptureState("initializing");
     camera.start();
     quality.reset();
   }, [previewUrl, camera, quality]);
@@ -499,7 +431,7 @@ export const SelfieCapture: React.FC<SelfieCaptureProps> = ({
     }
 
     processingRef.current = true;
-    setCaptureState('processing');
+    setCaptureState("processing");
 
     try {
       // 1. Strip metadata
@@ -513,7 +445,7 @@ export const SelfieCapture: React.FC<SelfieCaptureProps> = ({
         deviceFingerprint,
         clientVersion: await clientKeyProvider.getClientVersion(),
         capturedAt: new Date().toISOString(),
-        documentType: 'selfie',
+        documentType: "selfie",
         qualityScore: quality.result?.score || 0,
         sessionId,
       };
@@ -524,7 +456,7 @@ export const SelfieCapture: React.FC<SelfieCaptureProps> = ({
         metadata,
         salt,
         clientKeyProvider,
-        userKeyProvider
+        userKeyProvider,
       );
 
       // 5. Get image dimensions
@@ -539,17 +471,17 @@ export const SelfieCapture: React.FC<SelfieCaptureProps> = ({
         userSignature: signaturePackage.userSignature,
         metadata,
         dimensions,
-        mimeType: cleanBlob.type || 'image/jpeg',
+        mimeType: cleanBlob.type || "image/jpeg",
         livenessCheck: livenessResult || undefined,
       };
 
       // 7. Return result
       onCapture(result);
     } catch (err) {
-      setCaptureState('reviewing');
+      setCaptureState("reviewing");
       const error: CaptureError = {
-        type: 'signing_failed',
-        message: 'Failed to process selfie',
+        type: "signing_failed",
+        message: "Failed to process selfie",
         originalError: err as Error,
       };
       onError(error);
@@ -571,7 +503,9 @@ export const SelfieCapture: React.FC<SelfieCaptureProps> = ({
   /**
    * Get image dimensions from blob
    */
-  async function getImageDimensions(blob: Blob): Promise<{ width: number; height: number }> {
+  async function getImageDimensions(
+    blob: Blob,
+  ): Promise<{ width: number; height: number }> {
     return new Promise((resolve, reject) => {
       const img = new Image();
       const url = URL.createObjectURL(blob);
@@ -581,7 +515,7 @@ export const SelfieCapture: React.FC<SelfieCaptureProps> = ({
       };
       img.onerror = () => {
         URL.revokeObjectURL(url);
-        reject(new Error('Failed to get image dimensions'));
+        reject(new Error("Failed to get image dimensions"));
       };
       img.src = url;
     });
@@ -591,8 +525,8 @@ export const SelfieCapture: React.FC<SelfieCaptureProps> = ({
    * Retry camera access
    */
   const handleRetry = useCallback(() => {
-    setCaptureState('initializing');
-    setErrorMessage('');
+    setCaptureState("initializing");
+    setErrorMessage("");
     camera.start();
   }, [camera]);
 
@@ -611,7 +545,7 @@ export const SelfieCapture: React.FC<SelfieCaptureProps> = ({
       {/* Video/Preview container */}
       <div style={styles.videoContainer}>
         {/* Live video feed */}
-        {captureState !== 'reviewing' && captureState !== 'processing' && (
+        {captureState !== "reviewing" && captureState !== "processing" && (
           <video
             ref={camera.videoRef}
             style={styles.video}
@@ -622,50 +556,42 @@ export const SelfieCapture: React.FC<SelfieCaptureProps> = ({
         )}
 
         {/* Preview image */}
-        {previewUrl && (captureState === 'reviewing' || captureState === 'processing') && (
-          <img src={previewUrl} style={styles.previewImage} alt="Captured selfie" />
-        )}
+        {previewUrl &&
+          (captureState === "reviewing" || captureState === "processing") && (
+            <img
+              src={previewUrl}
+              style={styles.previewImage}
+              alt="Captured selfie"
+            />
+          )}
 
         {/* Guidance overlay */}
-        {captureState === 'ready' && (
+        {captureState === "ready" && (
           <CaptureGuidance guidance={stableGuidance} captureType="selfie" />
         )}
 
         {/* Quality feedback */}
-        {captureState === 'ready' && quality.result && (
+        {captureState === "ready" && quality.result && (
           <div style={styles.qualityOverlay}>
             <QualityFeedback result={quality.result} compact />
           </div>
         )}
 
         {/* Liveness challenge overlay */}
-        {captureState === 'liveness_challenge' && currentChallenge !== 'none' && (
+        {captureState === "liveness_challenge" && (
           <div style={styles.livenessOverlay}>
-            <div style={styles.livenessIcon}>
-              {LIVENESS_CHALLENGES[currentChallenge].icon}
-            </div>
-            <div style={styles.livenessInstruction}>
-              {LIVENESS_CHALLENGES[currentChallenge].instruction}
-            </div>
+            <div style={styles.livenessInstruction}>Verifying liveness</div>
             <div style={styles.livenessHint}>
-              {LIVENESS_CHALLENGES[currentChallenge].hint}
-            </div>
-            <div style={styles.livenessProgress}>
-              <div
-                style={{
-                  ...styles.livenessProgressBar,
-                  width: `${livenessProgress}%`,
-                }}
-              />
+              Keep your face visible until verification completes.
             </div>
           </div>
         )}
 
         {/* Error overlay */}
-        {captureState === 'error' && (
+        {captureState === "error" && (
           <div style={styles.errorContainer}>
-            <div style={{ fontSize: '48px', marginBottom: '16px' }}>📷</div>
-            <p style={{ marginBottom: '20px' }}>{errorMessage}</p>
+            <div style={{ fontSize: "48px", marginBottom: "16px" }}>📷</div>
+            <p style={{ marginBottom: "20px" }}>{errorMessage}</p>
             <button
               style={{ ...styles.secondaryButton, ...styles.confirmButton }}
               onClick={handleRetry}
@@ -676,7 +602,7 @@ export const SelfieCapture: React.FC<SelfieCaptureProps> = ({
         )}
 
         {/* Processing overlay */}
-        {captureState === 'processing' && (
+        {captureState === "processing" && (
           <div style={styles.processingOverlay}>
             <div style={styles.spinner} />
             <span>Processing...</span>
@@ -686,11 +612,13 @@ export const SelfieCapture: React.FC<SelfieCaptureProps> = ({
 
       {/* Controls */}
       <div style={styles.controls}>
-        {captureState === 'ready' && (
+        {captureState === "ready" && (
           <button
             style={{
               ...styles.captureButton,
-              ...(quality.guidance.readyToCapture ? {} : styles.captureButtonDisabled),
+              ...(quality.guidance.readyToCapture
+                ? {}
+                : styles.captureButtonDisabled),
             }}
             onClick={handleCapture}
             disabled={!quality.guidance.readyToCapture}
@@ -699,13 +627,15 @@ export const SelfieCapture: React.FC<SelfieCaptureProps> = ({
             <div
               style={{
                 ...styles.captureButtonInner,
-                backgroundColor: quality.guidance.readyToCapture ? 'white' : '#666',
+                backgroundColor: quality.guidance.readyToCapture
+                  ? "white"
+                  : "#666",
               }}
             />
           </button>
         )}
 
-        {captureState === 'reviewing' && (
+        {captureState === "reviewing" && (
           <>
             <button
               style={{ ...styles.secondaryButton, ...styles.retakeButton }}
@@ -722,14 +652,14 @@ export const SelfieCapture: React.FC<SelfieCaptureProps> = ({
           </>
         )}
 
-        {captureState === 'initializing' && (
-          <span style={{ color: '#9ca3af', fontSize: '14px' }}>
+        {captureState === "initializing" && (
+          <span style={{ color: "#9ca3af", fontSize: "14px" }}>
             Initializing camera...
           </span>
         )}
 
-        {captureState === 'liveness_challenge' && (
-          <span style={{ color: '#9ca3af', fontSize: '14px' }}>
+        {captureState === "liveness_challenge" && (
+          <span style={{ color: "#9ca3af", fontSize: "14px" }}>
             Complete the challenge...
           </span>
         )}

@@ -149,12 +149,12 @@ export interface Offering {
  * Offering types
  */
 export type OfferingType =
-  | 'compute'      // General compute
-  | 'gpu'          // GPU compute
-  | 'storage'      // Storage
-  | 'kubernetes'   // Kubernetes cluster
-  | 'slurm'        // SLURM HPC cluster
-  | 'custom';      // Custom offering
+  | 'compute' // General compute
+  | 'gpu' // GPU compute
+  | 'storage' // Storage
+  | 'kubernetes' // Kubernetes cluster
+  | 'slurm' // SLURM HPC cluster
+  | 'custom'; // Custom offering
 
 /**
  * Offering status
@@ -479,6 +479,9 @@ export interface Order {
    */
   amount: string;
 
+  /** Order currency/token denomination. */
+  denom: string;
+
   /**
    * Deposit amount
    */
@@ -514,17 +517,17 @@ export interface Order {
  * Order states
  */
 export type OrderState =
-  | 'created'       // Order created, awaiting bids
-  | 'bid_placed'    // Provider bid received
-  | 'allocated'     // Order allocated to provider
-  | 'provisioning'  // Provider provisioning resources
-  | 'running'       // Resources running
-  | 'suspending'    // Suspending resources
-  | 'suspended'     // Resources suspended
-  | 'terminating'   // Terminating resources
-  | 'completed'     // Order completed successfully
-  | 'cancelled'     // Order cancelled
-  | 'failed';       // Order failed
+  | 'created' // Order created, awaiting bids
+  | 'bid_placed' // Provider bid received
+  | 'allocated' // Order allocated to provider
+  | 'provisioning' // Provider provisioning resources
+  | 'running' // Resources running
+  | 'suspending' // Suspending resources
+  | 'suspended' // Resources suspended
+  | 'terminating' // Terminating resources
+  | 'completed' // Order completed successfully
+  | 'cancelled' // Order cancelled
+  | 'failed'; // Order failed
 
 /**
  * Order state change record
@@ -722,6 +725,30 @@ export interface CheckoutState {
    * Checkout error
    */
   error: MarketplaceError | null;
+
+  /** Authoritative commit retained while order indexing catches up. */
+  commit: {
+    status: 'committed';
+    code: 0;
+    orderId: string;
+    txHash: string;
+    blockHeight: number;
+    requestDigest: string;
+    idempotencyKey: string;
+    request: {
+      chainId: string;
+      customerAddress: string;
+      offeringId: string;
+      providerAddress: string;
+      durationSeconds: number;
+      priceAmount: string;
+      depositAmount: string;
+      priceDenom: string;
+    };
+  } | null;
+
+  /** Distinguishes otherwise identical replacement checkout attempts. */
+  nonce: number;
 }
 
 /**
@@ -733,6 +760,7 @@ export type CheckoutStep =
   | 'mfa'
   | 'confirm'
   | 'submit'
+  | 'committed'
   | 'complete';
 
 /**

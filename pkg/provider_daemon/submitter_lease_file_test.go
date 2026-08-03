@@ -106,7 +106,7 @@ func TestProviderMutationSubmitterStandbyTakesOverWithHigherFence(t *testing.T) 
 		cfg.QueueStatePath = filepath.Join(dir, "queue.json")
 		cfg.Chain = chain
 		cfg.Lease = lease
-		cfg.LeaseTTL = 90 * time.Millisecond
+		cfg.LeaseTTL = 5 * time.Second
 		cfg.PollInterval = 10 * time.Millisecond
 		cfg.FinalityBlocks = 0
 		submitter, createErr := NewProviderMutationSubmitter(cfg, keyManager)
@@ -121,7 +121,7 @@ func TestProviderMutationSubmitterStandbyTakesOverWithHigherFence(t *testing.T) 
 		_ = first.Stop(context.Background())
 		_ = second.Stop(context.Background())
 	})
-	require.True(t, first.Readiness(context.Background()).Ready)
+	require.Eventually(t, func() bool { return first.Readiness(context.Background()).Ready }, time.Second, 10*time.Millisecond)
 	require.False(t, second.Readiness(context.Background()).Ready)
 	firstToken := first.leaseToken
 

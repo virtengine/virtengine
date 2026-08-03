@@ -35,27 +35,39 @@
 // Components
 // ============================================================================
 
-export { DocumentCapture } from './components/DocumentCapture';
-export type { DocumentCaptureProps } from './types/capture';
+export { DocumentCapture } from "./components/DocumentCapture";
+export type { DocumentCaptureProps } from "./types/capture";
 
-export { SelfieCapture } from './components/SelfieCapture';
-export type { SelfieCaptureProps } from './types/capture';
+export { SelfieCapture } from "./components/SelfieCapture";
+export type { SelfieCaptureProps } from "./types/capture";
 
-export { CaptureGuidance } from './components/CaptureGuidance';
-export type { CaptureGuidanceProps } from './components/CaptureGuidance';
+export { CaptureGuidance } from "./components/CaptureGuidance";
+export type { CaptureGuidanceProps } from "./components/CaptureGuidance";
 
-export { QualityFeedback, QualityIndicator } from './components/QualityFeedback';
-export type { QualityFeedbackProps, QualityIndicatorProps } from './components/QualityFeedback';
+export {
+  QualityFeedback,
+  QualityIndicator,
+} from "./components/QualityFeedback";
+export type {
+  QualityFeedbackProps,
+  QualityIndicatorProps,
+} from "./components/QualityFeedback";
 
 // ============================================================================
 // Hooks
 // ============================================================================
 
-export { useCamera } from './hooks/useCamera';
-export type { UseCameraOptions, UseCameraReturn } from './hooks/useCamera';
+export { useCamera } from "./hooks/useCamera";
+export type { UseCameraOptions, UseCameraReturn } from "./hooks/useCamera";
 
-export { useQualityCheck, useStableQualityFeedback } from './hooks/useQualityCheck';
-export type { UseQualityCheckOptions, UseQualityCheckReturn } from './hooks/useQualityCheck';
+export {
+  useQualityCheck,
+  useStableQualityFeedback,
+} from "./hooks/useQualityCheck";
+export type {
+  UseQualityCheckOptions,
+  UseQualityCheckReturn,
+} from "./hooks/useQualityCheck";
 
 // ============================================================================
 // Utilities
@@ -73,11 +85,15 @@ export {
   checkNoise,
   getImageDataFromVideo,
   getImageDataFromBlob,
-} from './utils/quality-checks';
+} from "./utils/quality-checks";
 
 // Metadata stripping
-export { stripMetadata, hasMetadata, STRIPPED_METADATA_TYPES } from './utils/metadata-strip';
-export type { MetadataStripResult } from './utils/metadata-strip';
+export {
+  stripMetadata,
+  hasMetadata,
+  STRIPPED_METADATA_TYPES,
+} from "./utils/metadata-strip";
+export type { MetadataStripResult } from "./utils/metadata-strip";
 
 // Salt generation
 export {
@@ -91,8 +107,8 @@ export {
   base64ToBytes,
   concatBytes,
   DEFAULT_SALT_LENGTH,
-} from './utils/salt-generator';
-export type { SaltOptions, GeneratedSalt } from './utils/salt-generator';
+} from "./utils/salt-generator";
+export type { SaltOptions, GeneratedSalt } from "./utils/salt-generator";
 
 // Signatures
 export {
@@ -104,8 +120,8 @@ export {
   serializeSignaturePackage,
   generateDeviceFingerprint,
   createSessionId,
-} from './utils/signature';
-export type { SignatureOptions } from './utils/signature';
+} from "./utils/signature";
+export type { SignatureOptions } from "./utils/signature";
 
 // ============================================================================
 // Types
@@ -134,6 +150,8 @@ export type {
   SelfieResult,
   CaptureMetadata,
   LivenessCheckResult,
+  LivenessProvider,
+  LivenessRequest,
   // Key provider types
   ClientKeyProvider,
   UserKeyProvider,
@@ -144,15 +162,20 @@ export type {
   GuidanceState,
   // Signature types
   SignaturePackage,
-} from './types/capture';
+} from "./types/capture";
 
-export { DEFAULT_QUALITY_THRESHOLDS } from './types/capture';
+export { DEFAULT_QUALITY_THRESHOLDS } from "./types/capture";
+export {
+  requestLivenessEvidence,
+  validateLivenessEvidence,
+} from "./utils/liveness";
+export type { LivenessValidationContext } from "./utils/liveness";
 
 // ============================================================================
 // Version
 // ============================================================================
 
-export const VERSION = '1.0.0';
+export const VERSION = "1.0.0";
 
 // ============================================================================
 // Submission (On-chain VEID)
@@ -169,7 +192,7 @@ export {
   createCosmjsBroadcaster,
   normalizeScopeType,
   createScopeId,
-} from './src/submission';
+} from "./src/submission";
 
 export type {
   SubmissionRequest,
@@ -186,7 +209,7 @@ export type {
   UploadScopeMessage,
   ScorePollOptions,
   ApprovedClientCheckOptions,
-} from './src/submission';
+} from "./src/submission";
 
 export {
   SubmissionError,
@@ -195,4 +218,4 @@ export {
   SigningError,
   BroadcastError,
   SubmissionTimeoutError,
-} from './src/submission';
+} from "./src/submission";

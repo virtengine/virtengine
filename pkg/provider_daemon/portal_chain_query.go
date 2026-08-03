@@ -9,6 +9,75 @@ import (
 // ErrPortalNotFound indicates the requested resource does not exist.
 var ErrPortalNotFound = errors.New("portal resource not found")
 
+// ErrPortalFeatureUnavailable identifies portal capabilities without an authoritative backend.
+var ErrPortalFeatureUnavailable = errors.New("portal feature unavailable")
+
+// PortalFeatureUnavailableError describes a portal capability that is not available.
+type PortalFeatureUnavailableError struct {
+	Capability PortalRouteCapability
+	Owner      string
+}
+
+func (e *PortalFeatureUnavailableError) Error() string {
+	return "portal feature unavailable: " + string(e.Capability) + " (owner: " + e.Owner + ")"
+}
+
+// Unwrap supports errors.Is checks against ErrPortalFeatureUnavailable.
+func (e *PortalFeatureUnavailableError) Unwrap() error {
+	return ErrPortalFeatureUnavailable
+}
+
+func featureUnavailable(capability PortalRouteCapability, owner string) error {
+	return &PortalFeatureUnavailableError{Capability: capability, Owner: owner}
+}
+
+// PortalRouteCapability identifies an independently backed portal query surface.
+type PortalRouteCapability string
+
+const (
+	PortalCapabilityOrganizations PortalRouteCapability = "organizations"
+	PortalCapabilityTickets       PortalRouteCapability = "tickets"
+	PortalCapabilityBilling       PortalRouteCapability = "billing"
+	PortalCapabilityUsage         PortalRouteCapability = "usage"
+	PortalCapabilityEvents        PortalRouteCapability = "events"
+	PortalCapabilityMetrics       PortalRouteCapability = "metrics"
+	PortalCapabilityRoles         PortalRouteCapability = "roles"
+	PortalCapabilityConsent       PortalRouteCapability = "consent"
+)
+
+var requiredPortalRouteCapabilities = []PortalRouteCapability{
+	PortalCapabilityTickets,
+	PortalCapabilityBilling,
+	PortalCapabilityUsage,
+	PortalCapabilityEvents,
+	PortalCapabilityMetrics,
+}
+
+// PortalChainQueryCapabilities lets a backend declare route-level availability.
+type PortalChainQueryCapabilities interface {
+	PortalCapability(capability PortalRouteCapability) error
+}
+
+func portalQueryCapability(query ChainQuery, capability PortalRouteCapability) error {
+	if query == nil {
+		return featureUnavailable(capability, "86C")
+	}
+	capabilities, ok := query.(PortalChainQueryCapabilities)
+	if !ok {
+		return featureUnavailable(capability, "86C")
+	}
+	return capabilities.PortalCapability(capability)
+}
+
+func validatePortalChainQuery(query ChainQuery) error {
+	for _, capability := range requiredPortalRouteCapabilities {
+		if err := portalQueryCapability(query, capability); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // ChainQuery provides access to on-chain data for portal endpoints.
 type ChainQuery interface {
 	// Organization management.
@@ -44,110 +113,124 @@ type ChainQuery interface {
 	HasConsent(ctx context.Context, address, scopeID string) (bool, error)
 }
 
-// NoopChainQuery is a default implementation that returns empty results.
+// NoopChainQuery is an explicitly selected development/test backend that fails closed.
 type NoopChainQuery struct{}
 
-// ListOrganizations returns no organizations.
+// UnavailablePortalChainQuery is installed when production construction has no query backend.
+type UnavailablePortalChainQuery struct {
+	NoopChainQuery
+}
+
+// PortalCapability reports every noop route as unavailable.
+func (NoopChainQuery) PortalCapability(capability PortalRouteCapability) error {
+	owner := "86C"
+	if capability == PortalCapabilityOrganizations {
+		owner = "89C"
+	}
+	return featureUnavailable(capability, owner)
+}
+
+// ListOrganizations reports that organization queries require the Task 89C backend.
 func (NoopChainQuery) ListOrganizations(_ context.Context, _ string, _ int, _ string) ([]Organization, string, error) {
-	return []Organization{}, "", nil
+	return nil, "", featureUnavailable(PortalCapabilityOrganizations, "89C")
 }
 
-// GetOrganization returns not found.
+// GetOrganization reports that organization queries require the Task 89C backend.
 func (NoopChainQuery) GetOrganization(_ context.Context, _ string) (*OrganizationDetail, error) {
-	return nil, ErrPortalNotFound
+	return nil, featureUnavailable(PortalCapabilityOrganizations, "89C")
 }
 
-// ListOrganizationMembers returns no members.
+// ListOrganizationMembers reports that organization queries require the Task 89C backend.
 func (NoopChainQuery) ListOrganizationMembers(_ context.Context, _ string) ([]OrganizationMember, error) {
-	return []OrganizationMember{}, nil
+	return nil, featureUnavailable(PortalCapabilityOrganizations, "89C")
 }
 
-// IsOrganizationAdmin returns false.
+// IsOrganizationAdmin reports that organization queries require the Task 89C backend.
 func (NoopChainQuery) IsOrganizationAdmin(_ context.Context, _ string, _ string) (bool, error) {
-	return false, nil
+	return false, featureUnavailable(PortalCapabilityOrganizations, "89C")
 }
 
-// InviteOrganizationMember is unsupported in noop implementation.
+// InviteOrganizationMember reports that organization mutations require the Task 89C backend.
 func (NoopChainQuery) InviteOrganizationMember(_ context.Context, _ string, _ string, _ string, _ string) (*OrganizationMember, error) {
-	return nil, errors.New("organization invites not supported")
+	return nil, featureUnavailable(PortalCapabilityOrganizations, "89C")
 }
 
-// RemoveOrganizationMember is unsupported in noop implementation.
+// RemoveOrganizationMember reports that organization mutations require the Task 89C backend.
 func (NoopChainQuery) RemoveOrganizationMember(_ context.Context, _ string, _ string, _ string) error {
-	return errors.New("organization member removal not supported")
+	return featureUnavailable(PortalCapabilityOrganizations, "89C")
 }
 
-// ListTickets returns no tickets.
+// ListTickets reports that ticket queries require an authoritative backend.
 func (NoopChainQuery) ListTickets(_ context.Context, _ string, _ string, _ string) ([]Ticket, error) {
-	return []Ticket{}, nil
+	return nil, featureUnavailable(PortalCapabilityTickets, "86C")
 }
 
-// CreateTicket is unsupported in noop implementation.
+// CreateTicket reports that ticket mutations require an authoritative backend.
 func (NoopChainQuery) CreateTicket(_ context.Context, _ string, _ CreateTicketRequest) (*Ticket, error) {
-	return nil, errors.New("ticket creation not supported")
+	return nil, featureUnavailable(PortalCapabilityTickets, "86C")
 }
 
-// GetTicket returns not found.
+// GetTicket reports that ticket queries require an authoritative backend.
 func (NoopChainQuery) GetTicket(_ context.Context, _ string) (*TicketDetail, error) {
-	return nil, ErrPortalNotFound
+	return nil, featureUnavailable(PortalCapabilityTickets, "86C")
 }
 
-// AddTicketComment is unsupported in noop implementation.
+// AddTicketComment reports that ticket mutations require an authoritative backend.
 func (NoopChainQuery) AddTicketComment(_ context.Context, _ string, _ string, _ string) (*TicketComment, error) {
-	return nil, errors.New("ticket comments not supported")
+	return nil, featureUnavailable(PortalCapabilityTickets, "86C")
 }
 
-// UpdateTicket is unsupported in noop implementation.
+// UpdateTicket reports that ticket mutations require an authoritative backend.
 func (NoopChainQuery) UpdateTicket(_ context.Context, _ string, _ UpdateTicketRequest) (*Ticket, error) {
-	return nil, errors.New("ticket updates not supported")
+	return nil, featureUnavailable(PortalCapabilityTickets, "86C")
 }
 
-// ListInvoices returns no invoices.
+// ListInvoices reports that billing queries require an authoritative backend.
 func (NoopChainQuery) ListInvoices(_ context.Context, _ string, _ string, _ int, _ string) ([]Invoice, string, error) {
-	return []Invoice{}, "", nil
+	return nil, "", featureUnavailable(PortalCapabilityBilling, "86C")
 }
 
-// GetInvoice returns not found.
+// GetInvoice reports that billing queries require an authoritative backend.
 func (NoopChainQuery) GetInvoice(_ context.Context, _ string) (*Invoice, error) {
-	return nil, ErrPortalNotFound
+	return nil, featureUnavailable(PortalCapabilityBilling, "86C")
 }
 
-// GetUsageSummary returns empty summary.
+// GetUsageSummary reports that usage queries require an authoritative backend.
 func (NoopChainQuery) GetUsageSummary(_ context.Context, _ string) (*UsageSummary, error) {
-	return &UsageSummary{}, nil
+	return nil, featureUnavailable(PortalCapabilityUsage, "86C")
 }
 
-// GetUsageHistory returns empty history.
+// GetUsageHistory reports that usage queries require an authoritative backend.
 func (NoopChainQuery) GetUsageHistory(_ context.Context, _ string, _ time.Time, _ time.Time, _ time.Duration) (*UsageHistoryResponse, error) {
-	return &UsageHistoryResponse{Series: []UsageHistoryPoint{}}, nil
+	return nil, featureUnavailable(PortalCapabilityUsage, "86C")
 }
 
-// GetDeploymentMetrics returns not found.
+// GetDeploymentMetrics reports that metrics queries require an authoritative backend.
 func (NoopChainQuery) GetDeploymentMetrics(_ context.Context, _ string) (*PortalResourceMetrics, error) {
-	return nil, ErrPortalNotFound
+	return nil, featureUnavailable(PortalCapabilityMetrics, "86C")
 }
 
-// GetDeploymentMetricsHistory returns empty series.
+// GetDeploymentMetricsHistory reports that metrics queries require an authoritative backend.
 func (NoopChainQuery) GetDeploymentMetricsHistory(_ context.Context, _ string, _ time.Time, _ time.Time, _ time.Duration) (*MetricsSeriesResponse, error) {
-	return &MetricsSeriesResponse{Series: []MetricsPoint{}}, nil
+	return nil, featureUnavailable(PortalCapabilityMetrics, "86C")
 }
 
-// GetDeploymentEvents returns empty events.
+// GetDeploymentEvents reports that event queries require an authoritative backend.
 func (NoopChainQuery) GetDeploymentEvents(_ context.Context, _ string, _ int, _ string) ([]DeploymentEvent, string, error) {
-	return []DeploymentEvent{}, "", nil
+	return nil, "", featureUnavailable(PortalCapabilityEvents, "86C")
 }
 
-// GetAggregatedMetrics returns empty series.
+// GetAggregatedMetrics reports that metrics queries require an authoritative backend.
 func (NoopChainQuery) GetAggregatedMetrics(_ context.Context, _ time.Time, _ time.Time, _ time.Duration) (*MetricsSeriesResponse, error) {
-	return &MetricsSeriesResponse{Series: []MetricsPoint{}}, nil
+	return nil, featureUnavailable(PortalCapabilityMetrics, "86C")
 }
 
-// HasRole returns false in noop implementation.
+// HasRole reports that role queries require an authoritative backend.
 func (NoopChainQuery) HasRole(_ context.Context, _ string, _ string) (bool, error) {
-	return false, nil
+	return false, featureUnavailable(PortalCapabilityRoles, "86C")
 }
 
-// HasConsent returns false in noop implementation.
+// HasConsent reports that consent queries require an authoritative backend.
 func (NoopChainQuery) HasConsent(_ context.Context, _ string, _ string) (bool, error) {
-	return false, nil
+	return false, featureUnavailable(PortalCapabilityConsent, "86C")
 }

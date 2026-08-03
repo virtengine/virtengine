@@ -54,6 +54,7 @@ export {
   type OrganizationStore,
   type OrganizationStoreState,
   type OrganizationStoreActions,
+  type OrganizationSelectionAuthority,
 } from './organizationStore';
 export {
   useMetricsStore,

@@ -1,0 +1,32 @@
+T2-08 integrated client journey blocker evidence
+Observed head: c668cb59bccc28a70de50d7eb59b8b3c1a3587d7
+Status: blocked_external_dependency
+Node: v24.12.0
+
+BROWSER ENTRY POINT:
+portal/src/app/(customer)/verify/page.tsx constructs unavailable capture providers and passes neither VeidSubmissionInput nor VeidSubmissionTransport to VerificationWizard.
+No production implementation of VeidSubmissionTransport exists in portal/src.
+
+MOBILE ENTRY POINT:
+mobile/veid-capture-app/App.tsx productionUploadDependencies supplies only createIdempotencyKey; evidence and transport are absent.
+No production implementation of CaptureUploadTransport exists in mobile/veid-capture-app.
+
+COMMAND: C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t2\portal\node_modules\.bin\vitest.CMD run tests\unit\veid\useVeidWizard.test.tsx -t "fails closed" --reporter=dot
+EXIT: 0
+RESULT: passed
+DETAIL: 5 tests passed, 30 skipped
+
+COMMAND: C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t2\mobile\veid-capture-app\node_modules\.bin\vitest.CMD run src\test\captureUploader.test.ts -t "fails typed unavailable" --reporter=dot
+EXIT: 0
+RESULT: passed
+DETAIL: 1 test passed, 15 skipped; asserts evidence_envelope_unavailable and upload_transport_unavailable
+
+BLOCKERS:
+- T1 canonical Evidence Envelope producer and canonical digest source are not available in this branch.
+- T4-approved production capture, upload, receipt-authentication, signer, and committed-transaction adapters are not wired.
+- No real local process path can satisfy the authenticated envelope-to-committed-transaction journey.
+
+NON-CLAIMS:
+- No screenshots are published because the real process path does not exist.
+- Fixture transports, mock providers, and simulated receipts were not used as completion evidence.
+- T2-08 does not certify production capture, provider operation, public-node routes, or Task 86D completion.

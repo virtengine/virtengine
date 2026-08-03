@@ -14,6 +14,7 @@ import {
   useWorkloadTemplate,
   useWorkloadTemplates,
 } from '@/features/hpc';
+import { assertCommittedJobMutation } from '../lib/hpc-client';
 import { useWizardStore } from '../stores/wizardStore';
 import type { JobResources } from '../types';
 
@@ -78,7 +79,7 @@ export function JobWizard() {
         environment: manifest.environment,
       });
 
-      // Success - redirect to job detail
+      assertCommittedJobMutation(result);
       reset();
       router.push(`/hpc/jobs/${result.jobId}`);
     } catch (err) {

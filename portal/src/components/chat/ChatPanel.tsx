@@ -26,6 +26,7 @@ import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { cn } from '@/lib/utils';
 import { useWalletTransaction } from '@/hooks/useWalletTransaction';
+import { executeChatAction } from './executeChatAction';
 
 const createMessage = (role: ChatMessageType['role'], content: string): ChatMessageType => ({
   id: `chat-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
@@ -33,6 +34,8 @@ const createMessage = (role: ChatMessageType['role'], content: string): ChatMess
   content,
   createdAt: Date.now(),
 });
+
+const chatMutationsEnabled = env.enableChat && env.enableChatMutations;
 
 export function ChatPanel() {
   const {
@@ -43,6 +46,7 @@ export function ChatPanel() {
     updateMessage,
     addAction,
     setPendingAction,
+    clearActions,
     setStreaming,
     isStreaming,
     pendingActionId,
@@ -75,9 +79,22 @@ export function ChatPanel() {
   );
 
   const provider = useMemo(() => createChatProvider(chatConfig), []);
-  const tools = useMemo(() => createDefaultChatTools(), []);
+  const tools = useMemo(
+    () =>
+      createDefaultChatTools({
+        chatEnabled: env.enableChat,
+        mutationsEnabled: chatMutationsEnabled,
+      }),
+    []
+  );
   const agent = useMemo(
-    () => createChatAgent({ provider, toolHandlers: tools, context }),
+    () =>
+      createChatAgent({
+        provider,
+        toolHandlers: tools,
+        context,
+        mutationsEnabled: chatMutationsEnabled,
+      }),
     [provider, tools, context]
   );
 
@@ -88,6 +105,12 @@ export function ChatPanel() {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
   }, [messages, pendingActionId, isStreaming]);
+
+  useEffect(() => {
+    if (!chatMutationsEnabled) {
+      clearActions();
+    }
+  }, [clearActions]);
 
   if (!env.enableChat) {
     return null;
@@ -133,21 +156,13 @@ export function ChatPanel() {
   const handleExecute = async (action: ChatAction) => {
     setIsExecuting(true);
     try {
-      if (action.payload.kind === 'transaction') {
-        const fee = estimateFee(200000);
-        const result = await sendTransaction(action.payload.msgs, { memo: action.payload.memo });
-        addMessage(
-          createMessage(
-            'system',
-            `Transaction submitted: ${result.txHash}. Estimated fee: ${fee.amount[0]?.amount ?? '0'} ${fee.amount[0]?.denom ?? ''}`
-          )
-        );
-      } else if (action.payload.kind === 'provider-action') {
-        const result = await agent.executeAction(action);
-        addMessage(createMessage('system', result.summary));
-      } else {
-        addMessage(createMessage('system', 'Action executed.'));
-      }
+      const result = await executeChatAction(action, {
+        mutationsEnabled: chatMutationsEnabled,
+        estimateFee,
+        sendTransaction,
+        executeHandler: (selectedAction) => agent.executeAction(selectedAction),
+      });
+      addMessage(createMessage('system', result.summary));
     } catch (err) {
       addMessage(createMessage('system', err instanceof Error ? err.message : 'Action failed.'));
     } finally {
@@ -185,8 +200,7 @@ export function ChatPanel() {
         <div ref={scrollRef} className="flex flex-1 flex-col gap-4 overflow-y-auto px-4 py-4">
           {messages.length === 0 && (
             <div className="rounded-lg border border-dashed border-border bg-muted/20 px-4 py-6 text-sm text-muted-foreground">
-              Ask about deployments, orders, balances, or request actions. Destructive actions
-              require confirmation.
+              Ask about deployments, orders, balances, or governance.
             </div>
           )}
           {messages.map((message) => (

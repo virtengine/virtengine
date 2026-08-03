@@ -7,10 +7,24 @@ import (
 	"fmt"
 	"math"
 	"sort"
+
+	"golang.org/x/crypto/curve25519"
 )
 
-// EnvelopeVersion is the current envelope format version
-const EnvelopeVersion uint32 = 1
+const (
+	// EnvelopeVersionV1 is the unauthenticated legacy envelope format.
+	EnvelopeVersionV1 uint32 = 1
+	// EnvelopeVersionV2 adds Ed25519 sender authentication and authenticated recipient wrapping.
+	EnvelopeVersionV2 uint32 = 2
+	// EnvelopeVersion is retained as the legacy generic-constructor default.
+	// Authenticated encryption APIs emit EnvelopeVersionV2 explicitly.
+	EnvelopeVersion = EnvelopeVersionV1
+	// CurrentEnvelopeVersion is the newest format accepted for authenticated envelopes.
+	CurrentEnvelopeVersion = EnvelopeVersionV2
+
+	// WrappedKeyAlgorithmX25519NaClBox identifies ephemeral X25519 NaCl box key wrapping.
+	WrappedKeyAlgorithmX25519NaClBox = "X25519-NACL-BOX"
+)
 
 // EncryptedPayloadEnvelope is the canonical encrypted payload structure
 // for all sensitive fields stored on-chain.
@@ -55,13 +69,16 @@ type EncryptedPayloadEnvelope struct {
 	// Ciphertext is the encrypted payload data
 	Ciphertext []byte `json:"ciphertext"`
 
-	// SenderSignature is the signature over hash(version || algorithm || ciphertext || nonce || recipients)
+	// SenderSignature is the Ed25519 signature over SigningPayload for v2 envelopes.
 	// Used to verify authenticity without decryption
 	SenderSignature []byte `json:"sender_signature"`
 
-	// SenderPubKey is the sender's public key for signature verification
-	// Also used as ephemeral public key in NaCl box scheme
+	// SenderPubKey is the sender's X25519 public key.
+	// It is used for direct single-recipient envelopes and bound by the v2 signature.
 	SenderPubKey []byte `json:"sender_pub_key"`
+
+	// SenderSigningPubKey is the sender's distinct Ed25519 public key.
+	SenderSigningPubKey []byte `json:"sender_signing_pub_key,omitempty"`
 
 	// Metadata contains optional public or encrypted metadata
 	// Keys starting with "_" are reserved for system use
@@ -89,9 +106,9 @@ func (e *EncryptedPayloadEnvelope) Validate() error {
 		return ErrInvalidEnvelope.Wrap("version cannot be zero")
 	}
 
-	if e.Version > EnvelopeVersion {
+	if e.Version > CurrentEnvelopeVersion {
 		return ErrUnsupportedVersion.Wrapf("envelope version %d not supported (max: %d)",
-			e.Version, EnvelopeVersion)
+			e.Version, CurrentEnvelopeVersion)
 	}
 
 	if !IsAlgorithmSupported(e.AlgorithmID) {
@@ -122,6 +139,30 @@ func (e *EncryptedPayloadEnvelope) Validate() error {
 		return ErrInvalidEnvelope.Wrap("sender signature required")
 	}
 
+	if e.Version == EnvelopeVersionV2 {
+		if len(e.SenderSigningPubKey) != 32 {
+			return ErrInvalidEnvelope.Wrapf("sender signing public key size mismatch: expected 32, got %d", len(e.SenderSigningPubKey))
+		}
+		if len(e.SenderSignature) != 64 {
+			return ErrInvalidEnvelope.Wrapf("sender signature size mismatch: expected 64, got %d", len(e.SenderSignature))
+		}
+		if len(e.RecipientPublicKeys) != len(e.RecipientKeyIDs) {
+			return ErrInvalidEnvelope.Wrap("v2 recipient public keys must align with recipient key IDs")
+		}
+		if len(e.EncryptedKeys) != 0 {
+			return ErrInvalidEnvelope.Wrap("v2 encrypted keys are forbidden; use wrapped keys")
+		}
+		if len(e.RecipientKeyIDs) > 1 && len(e.WrappedKeys) != len(e.RecipientKeyIDs) {
+			return ErrInvalidEnvelope.Wrap("v2 wrapped keys must align with recipient key IDs")
+		}
+		if len(e.RecipientKeyIDs) == 1 && len(e.WrappedKeys) != 0 {
+			return ErrInvalidEnvelope.Wrap("v2 direct envelopes must not contain wrapped keys")
+		}
+		if err := validateX25519PublicKey(e.SenderPubKey); err != nil {
+			return ErrInvalidEnvelope.Wrapf("invalid sender X25519 public key: %v", err)
+		}
+	}
+
 	// Validate algorithm-specific parameters
 	algInfo, err := GetAlgorithmInfo(e.AlgorithmID)
 	if err != nil {
@@ -147,6 +188,7 @@ func (e *EncryptedPayloadEnvelope) Validate() error {
 		if len(e.RecipientPublicKeys) != len(e.RecipientKeyIDs) {
 			return ErrInvalidEnvelope.Wrap("recipient public keys must align with recipient key IDs")
 		}
+		seenFingerprints := make(map[string]struct{}, len(e.RecipientPublicKeys))
 		for i, pubKey := range e.RecipientPublicKeys {
 			if len(pubKey) != algInfo.KeySize {
 				return ErrInvalidEnvelope.Wrapf("recipient public key size mismatch at index %d: expected %d, got %d",
@@ -155,6 +197,15 @@ func (e *EncryptedPayloadEnvelope) Validate() error {
 			fingerprint := ComputeKeyFingerprint(pubKey)
 			if fingerprint != NormalizeRecipientKeyID(e.RecipientKeyIDs[i]) {
 				return ErrInvalidEnvelope.Wrapf("recipient key id mismatch at index %d", i)
+			}
+			if e.Version == EnvelopeVersionV2 {
+				if err := validateX25519PublicKey(pubKey); err != nil {
+					return ErrInvalidEnvelope.Wrapf("invalid recipient X25519 public key at index %d: %v", i, err)
+				}
+				if _, exists := seenFingerprints[fingerprint]; exists {
+					return ErrInvalidEnvelope.Wrapf("duplicate normalized recipient at index %d", i)
+				}
+				seenFingerprints[fingerprint] = struct{}{}
 			}
 		}
 	}
@@ -183,37 +234,112 @@ func (e *EncryptedPayloadEnvelope) Validate() error {
 			if !recipientSet[entry.RecipientID] {
 				return ErrInvalidEnvelope.Wrapf("wrapped key recipient not in recipient key IDs: %s", entry.RecipientID)
 			}
+			if e.Version == EnvelopeVersionV2 {
+				if entry.RecipientID != e.RecipientKeyIDs[i] {
+					return ErrInvalidEnvelope.Wrapf("wrapped key entry %d must align with recipient order", i)
+				}
+				if entry.Algorithm != WrappedKeyAlgorithmX25519NaClBox {
+					return ErrInvalidEnvelope.Wrapf("wrapped key entry %d has unsupported algorithm %s", i, entry.Algorithm)
+				}
+				if len(entry.EphemeralPubKey) != X25519PublicKeySize {
+					return ErrInvalidEnvelope.Wrapf("wrapped key ephemeral public key size mismatch at index %d", i)
+				}
+				if err := validateX25519PublicKey(entry.EphemeralPubKey); err != nil {
+					return ErrInvalidEnvelope.Wrapf("invalid wrapped key ephemeral public key at index %d: %v", i, err)
+				}
+				if len(entry.WrappedKey) != XSalsa20NonceSize+X25519PrivateKeySize+Poly1305TagSize {
+					return ErrInvalidEnvelope.Wrapf("wrapped key size mismatch at index %d", i)
+				}
+			}
 		}
 	}
 
 	return nil
 }
 
+func validateX25519PublicKey(publicKey []byte) error {
+	if len(publicKey) != X25519PublicKeySize {
+		return fmt.Errorf("expected %d bytes, got %d", X25519PublicKeySize, len(publicKey))
+	}
+	testScalar := [32]byte{1}
+	if _, err := curve25519.X25519(testScalar[:], publicKey); err != nil {
+		return fmt.Errorf("low-order public key: %w", err)
+	}
+	return nil
+}
+
 // SigningPayload returns the bytes that should be signed/verified
 // This ensures the signature covers the important envelope components
 func (e *EncryptedPayloadEnvelope) SigningPayload() []byte {
-	h := sha256.New()
-
-	// Include version
-	h.Write([]byte{byte(e.Version >> 24), byte(e.Version >> 16), byte(e.Version >> 8), byte(e.Version)})
-
-	// Include algorithm
-	h.Write([]byte(e.AlgorithmID))
-
-	// Include algorithm version
-	h.Write([]byte{byte(e.AlgorithmVersion >> 24), byte(e.AlgorithmVersion >> 16), byte(e.AlgorithmVersion >> 8), byte(e.AlgorithmVersion)})
-
-	// Include ciphertext
-	h.Write(e.Ciphertext)
-
-	// Include nonce
-	h.Write(e.Nonce)
-
-	// Include all recipient key IDs in the provided order
-	for _, kid := range e.RecipientKeyIDs {
-		h.Write([]byte(kid))
+	if e.Version == EnvelopeVersionV1 {
+		return e.legacyV1SigningPayload()
 	}
 
+	var buf bytes.Buffer
+	writeUint32 := func(value uint32) {
+		_ = binary.Write(&buf, binary.BigEndian, value)
+	}
+	writeBytes := func(value []byte) {
+		writeUint32(safeUint32FromInt(len(value)))
+		buf.Write(value)
+	}
+	writeString := func(value string) { writeBytes([]byte(value)) }
+
+	writeString("virtengine/encrypted-payload-envelope/signing/v2")
+	writeUint32(e.Version)
+	writeString(e.AlgorithmID)
+	writeUint32(e.AlgorithmVersion)
+	writeBytes(e.Nonce)
+	writeBytes(e.Ciphertext)
+	writeBytes(e.SenderPubKey)
+	writeBytes(e.SenderSigningPubKey)
+	writeUint32(safeUint32FromInt(len(e.RecipientKeyIDs)))
+	for i, recipientID := range e.RecipientKeyIDs {
+		writeString(recipientID)
+		if i < len(e.RecipientPublicKeys) {
+			writeBytes(e.RecipientPublicKeys[i])
+		} else {
+			writeBytes(nil)
+		}
+		if i < len(e.WrappedKeys) {
+			entry := e.WrappedKeys[i]
+			writeString(entry.RecipientID)
+			writeString(entry.Algorithm)
+			writeBytes(entry.EphemeralPubKey)
+			writeBytes(entry.WrappedKey)
+		} else {
+			writeString("")
+			writeString("")
+			writeBytes(nil)
+			writeBytes(nil)
+		}
+	}
+
+	metadataKeys := make([]string, 0, len(e.Metadata))
+	for key := range e.Metadata {
+		metadataKeys = append(metadataKeys, key)
+	}
+	sort.Strings(metadataKeys)
+	writeUint32(safeUint32FromInt(len(metadataKeys)))
+	for _, key := range metadataKeys {
+		writeString(key)
+		writeString(e.Metadata[key])
+	}
+
+	digest := sha256.Sum256(buf.Bytes())
+	return digest[:]
+}
+
+func (e *EncryptedPayloadEnvelope) legacyV1SigningPayload() []byte {
+	h := sha256.New()
+	_ = binary.Write(h, binary.BigEndian, e.Version)
+	h.Write([]byte(e.AlgorithmID))
+	_ = binary.Write(h, binary.BigEndian, e.AlgorithmVersion)
+	h.Write(e.Ciphertext)
+	h.Write(e.Nonce)
+	for _, recipientID := range e.RecipientKeyIDs {
+		h.Write([]byte(recipientID))
+	}
 	return h.Sum(nil)
 }
 
@@ -308,6 +434,7 @@ func (e *EncryptedPayloadEnvelope) DeterministicBytes() ([]byte, error) {
 	writeBytes(e.Nonce)
 	writeBytes(e.Ciphertext)
 	writeBytes(e.SenderPubKey)
+	writeBytes(e.SenderSigningPubKey)
 	writeBytes(e.SenderSignature)
 
 	writeUint32(safeUint32FromInt(len(recipientIDs)))

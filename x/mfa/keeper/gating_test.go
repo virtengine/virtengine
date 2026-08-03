@@ -4,6 +4,7 @@
 package keeper_test
 
 import (
+	"fmt"
 	"testing"
 	"time"
 
@@ -27,10 +28,21 @@ import (
 
 type GatingTestSuite struct {
 	suite.Suite
-	ctx    sdk.Context
-	keeper keeper.Keeper
-	hooks  keeper.MFAGatingHooks
-	cdc    codec.Codec
+	ctx      sdk.Context
+	keeper   keeper.Keeper
+	hooks    keeper.MFAGatingHooks
+	cdc      codec.Codec
+	veid     *gatingVEIDKeeper
+	storeKey *storetypes.KVStoreKey
+}
+
+type gatingVEIDKeeper struct {
+	scores map[string]uint32
+}
+
+func (m *gatingVEIDKeeper) GetVEIDScore(_ sdk.Context, address sdk.AccAddress) (uint32, bool) {
+	score, found := m.scores[address.String()]
+	return score, found
 }
 
 func TestGatingTestSuite(t *testing.T) {
@@ -43,8 +55,10 @@ func (s *GatingTestSuite) SetupTest() {
 	s.cdc = codec.NewProtoCodec(interfaceRegistry)
 
 	storeKey := storetypes.NewKVStoreKey(types.StoreKey)
+	s.storeKey = storeKey
 	s.ctx = s.createContextWithStore(storeKey)
-	s.keeper = keeper.NewKeeper(s.cdc, storeKey, "authority", &mockVEIDKeeper{}, &mockRolesKeeper{})
+	s.veid = &gatingVEIDKeeper{scores: make(map[string]uint32)}
+	s.keeper = keeper.NewKeeper(s.cdc, storeKey, "authority", s.veid, &mockRolesKeeper{})
 	s.hooks = keeper.NewMFAGatingHooks(s.keeper)
 
 	// Set default params
@@ -75,6 +89,56 @@ func (s *GatingTestSuite) TestRequiresMFA_PolicyDisabled() {
 	// No policy set means no MFA required
 	_, requires, _ := s.hooks.RequiresMFA(s.ctx, address, types.SensitiveTxLargeWithdrawal)
 	s.Require().False(requires)
+}
+
+func (s *GatingTestSuite) TestRequiresMFA_CorruptSensitiveTxConfigFailsClosed() {
+	address := sdk.AccAddress([]byte("corrupt-sensitive-config"))
+	store := s.ctx.KVStore(s.storeKey)
+	tests := []struct {
+		name  string
+		value string
+	}{
+		{name: "malformed", value: `{"enabled":`},
+		{name: "wrong transaction type", value: `{"transaction_type":3,"enabled":false}`},
+		{name: "invalid enabled config", value: `{"transaction_type":2,"enabled":true}`},
+	}
+	for _, test := range tests {
+		s.Run(test.name, func() {
+			store.Set(types.SensitiveTxConfigKey(types.SensitiveTxKeyRotation), []byte(test.value))
+			s.Require().Panics(func() {
+				s.hooks.RequiresMFA(s.ctx, address, types.SensitiveTxKeyRotation)
+			})
+		})
+	}
+}
+
+func (s *GatingTestSuite) TestRequiresMFA_CorruptAccountPolicyFailsClosed() {
+	address := sdk.AccAddress([]byte("corrupt-account-policy"))
+	otherAddress := sdk.AccAddress([]byte("different-account-id"))
+	s.Require().NoError(s.keeper.SetSensitiveTxConfig(s.ctx, &types.SensitiveTxConfig{
+		TransactionType: types.SensitiveTxKeyRotation,
+		Enabled:         true,
+		RequiredFactorCombinations: []types.FactorCombination{{
+			Factors: []types.FactorType{types.FactorTypeFIDO2},
+		}},
+	}))
+	store := s.ctx.KVStore(s.storeKey)
+	tests := []struct {
+		name  string
+		value string
+	}{
+		{name: "malformed", value: `{"enabled":`},
+		{name: "wrong account", value: fmt.Sprintf(`{"account_address":%q,"enabled":false}`, otherAddress.String())},
+		{name: "invalid enabled policy", value: fmt.Sprintf(`{"account_address":%q,"enabled":true}`, address.String())},
+	}
+	for _, test := range tests {
+		s.Run(test.name, func() {
+			store.Set(types.MFAPolicyKey(address), []byte(test.value))
+			s.Require().Panics(func() {
+				s.hooks.RequiresMFA(s.ctx, address, types.SensitiveTxKeyRotation)
+			})
+		})
+	}
 }
 
 // Test: RequiresMFA - with policy enabled
@@ -159,6 +223,30 @@ func (s *GatingTestSuite) TestValidateMFAProof_Valid() {
 
 	err = s.hooks.ValidateMFAProof(s.ctx, address, types.SensitiveTxLargeWithdrawal, proof, "")
 	s.Require().NoError(err)
+}
+
+func (s *GatingTestSuite) TestValidateMFAProof_RequiresBoundDeviceAndCurrentVEIDScore() {
+	address := sdk.AccAddress([]byte("proof-device-veid"))
+	now := s.ctx.BlockTime().Unix()
+	session := &types.AuthorizationSession{
+		SessionID: "device-veid-session", AccountAddress: address.String(), TransactionType: types.SensitiveTxMediumWithdrawal,
+		CreatedAt: now, ExpiresAt: now + 3600, VerifiedFactors: []types.FactorType{types.FactorTypeVEID},
+		DeviceFingerprint: "bound-proof-device",
+	}
+	s.Require().NoError(s.keeper.CreateAuthorizationSession(s.ctx, session))
+	s.Require().NoError(s.keeper.SetSensitiveTxConfig(s.ctx, &types.SensitiveTxConfig{
+		TransactionType: types.SensitiveTxMediumWithdrawal, Enabled: true, MinVEIDScore: 80,
+		RequiredFactorCombinations: []types.FactorCombination{{Factors: []types.FactorType{types.FactorTypeVEID}}},
+	}))
+	proof := &types.MFAProof{SessionID: session.SessionID, VerifiedFactors: session.VerifiedFactors, Timestamp: now}
+
+	err := s.hooks.ValidateMFAProof(s.ctx, address, types.SensitiveTxMediumWithdrawal, proof, "")
+	s.Require().ErrorIs(err, types.ErrDeviceMismatch)
+	s.veid.scores[address.String()] = 79
+	err = s.hooks.ValidateMFAProof(s.ctx, address, types.SensitiveTxMediumWithdrawal, proof, session.DeviceFingerprint)
+	s.Require().ErrorIs(err, types.ErrVEIDScoreInsufficient)
+	s.veid.scores[address.String()] = 80
+	s.Require().NoError(s.hooks.ValidateMFAProof(s.ctx, address, types.SensitiveTxMediumWithdrawal, proof, session.DeviceFingerprint))
 }
 
 // Test: ValidateMFAProof - step-up within category
@@ -275,7 +363,7 @@ func (s *GatingTestSuite) TestCanBypassMFA_TrustedDevice() {
 		UserAgent:      "Test Agent",
 		TrustExpiresAt: s.ctx.BlockTime().Unix() + 86400, // Expires in 24 hours
 	}
-	_, err = s.keeper.AddTrustedDevice(s.ctx, address, deviceInfo)
+	trustToken, err := s.keeper.AddTrustedDevice(s.ctx, address, deviceInfo)
 	s.Require().NoError(err)
 
 	// Set policy to allow device bypass
@@ -306,8 +394,34 @@ func (s *GatingTestSuite) TestCanBypassMFA_TrustedDevice() {
 	err = s.keeper.SetSensitiveTxConfig(s.ctx, txConfig)
 	s.Require().NoError(err)
 
-	canBypass, _ := s.hooks.CanBypassMFA(s.ctx, address, types.SensitiveTxLargeWithdrawal, "trusted-device-fp")
+	canBypass, _ := s.hooks.CanBypassMFA(s.ctx, address, types.SensitiveTxLargeWithdrawal, "trusted-device-fp", trustToken)
 	s.Require().True(canBypass)
+	canBypass, _ = s.hooks.CanBypassMFA(s.ctx, address, types.SensitiveTxLargeWithdrawal, "trusted-device-fp", "")
+	s.Require().False(canBypass)
+}
+
+func (s *GatingTestSuite) TestValidateTrustToken_CorruptDeviceFailsClosed() {
+	address := sdk.AccAddress([]byte("corrupt-trusted-device"))
+	otherAddress := sdk.AccAddress([]byte("other-trusted-device__"))
+	fingerprint := "trusted-fingerprint"
+	store := s.ctx.KVStore(s.storeKey)
+	tests := []struct {
+		name  string
+		value string
+	}{
+		{name: "malformed", value: `{"device_info":`},
+		{name: "wrong account", value: fmt.Sprintf(`{"account_address":%q,"device_info":{"fingerprint":%q,"trust_expires_at":2,"trust_token_hash":"hash"},"added_at":1}`, otherAddress.String(), fingerprint)},
+		{name: "wrong fingerprint", value: fmt.Sprintf(`{"account_address":%q,"device_info":{"fingerprint":"other","trust_expires_at":2,"trust_token_hash":"hash"},"added_at":1}`, address.String())},
+		{name: "zero expiry with token hash", value: fmt.Sprintf(`{"account_address":%q,"device_info":{"fingerprint":%q,"trust_token_hash":"hash"},"added_at":1}`, address.String(), fingerprint)},
+	}
+	for _, test := range tests {
+		s.Run(test.name, func() {
+			store.Set(types.TrustedDeviceKey(address, fingerprint), []byte(test.value))
+			s.Require().Panics(func() {
+				s.keeper.ValidateTrustToken(s.ctx, address, fingerprint, "token")
+			})
+		})
+	}
 }
 
 // Test: CanBypassMFA - expired trusted device
@@ -323,7 +437,7 @@ func (s *GatingTestSuite) TestCanBypassMFA_ExpiredDevice() {
 	_, err := s.keeper.AddTrustedDevice(s.ctx, address, deviceInfo)
 	s.Require().NoError(err)
 
-	canBypass, _ := s.hooks.CanBypassMFA(s.ctx, address, types.SensitiveTxLargeWithdrawal, "expired-device-fp")
+	canBypass, _ := s.hooks.CanBypassMFA(s.ctx, address, types.SensitiveTxLargeWithdrawal, "expired-device-fp", "invalid")
 	s.Require().False(canBypass)
 }
 
@@ -331,7 +445,7 @@ func (s *GatingTestSuite) TestCanBypassMFA_ExpiredDevice() {
 func (s *GatingTestSuite) TestCanBypassMFA_UnknownDevice() {
 	address := sdk.AccAddress([]byte("test-bypass-unknown"))
 
-	canBypass, _ := s.hooks.CanBypassMFA(s.ctx, address, types.SensitiveTxLargeWithdrawal, "unknown-device-fp")
+	canBypass, _ := s.hooks.CanBypassMFA(s.ctx, address, types.SensitiveTxLargeWithdrawal, "unknown-device-fp", "invalid")
 	s.Require().False(canBypass)
 }
 
@@ -362,7 +476,7 @@ func (s *GatingTestSuite) TestCanBypassMFA_PolicyDisallows() {
 	err = s.keeper.SetMFAPolicy(s.ctx, policy)
 	s.Require().NoError(err)
 
-	canBypass, _ := s.hooks.CanBypassMFA(s.ctx, address, types.SensitiveTxLargeWithdrawal, "device-fp")
+	canBypass, _ := s.hooks.CanBypassMFA(s.ctx, address, types.SensitiveTxLargeWithdrawal, "device-fp", "invalid")
 	s.Require().False(canBypass)
 }
 
@@ -373,7 +487,7 @@ func (s *GatingTestSuite) TestCheckMFARequired_FullFlow() {
 	msgTypeURL := "/virtengine.market.v1.MsgWithdrawLease" // Example msg type URL
 
 	// Step 1: No policy - should not require MFA
-	mfaRequired, bypassAllowed, _ := s.hooks.CheckMFARequired(s.ctx, address, msgTypeURL, "")
+	mfaRequired, bypassAllowed, _ := s.hooks.CheckMFARequired(s.ctx, address, msgTypeURL, "", "")
 	s.Require().False(mfaRequired)
 	s.Require().False(bypassAllowed)
 
@@ -409,7 +523,7 @@ func (s *GatingTestSuite) TestCheckMFARequired_FullFlow() {
 
 	// Note: For this test to work, the msgTypeURL must be registered in types.GetSensitiveTransactionType
 	// Since we don't have that mapping, we'll just verify the function can be called
-	mfaRequired, _, _ = s.hooks.CheckMFARequired(s.ctx, address, msgTypeURL, "")
+	mfaRequired, _, _ = s.hooks.CheckMFARequired(s.ctx, address, msgTypeURL, "", "")
 	// Result depends on whether msgTypeURL is registered as sensitive
 	_ = mfaRequired
 }
@@ -456,11 +570,11 @@ func (s *GatingTestSuite) TestCheckMFARequired_DeviceBypass() {
 		UserAgent:      "Trusted Device",
 		TrustExpiresAt: s.ctx.BlockTime().Unix() + 86400,
 	}
-	_, err = s.keeper.AddTrustedDevice(s.ctx, address, deviceInfo)
+	trustToken, err := s.keeper.AddTrustedDevice(s.ctx, address, deviceInfo)
 	s.Require().NoError(err)
 
 	// Check with trusted device fingerprint - should allow bypass
-	_, bypassAllowed, _ := s.hooks.CheckMFARequired(s.ctx, address, msgTypeURL, "bypass-device")
+	_, bypassAllowed, _ := s.hooks.CheckMFARequired(s.ctx, address, msgTypeURL, "bypass-device", trustToken)
 	// Result depends on whether msgTypeURL is registered as sensitive
 	_ = bypassAllowed
 }

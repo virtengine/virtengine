@@ -6,6 +6,7 @@ export * from "./client";
 export * from "./config";
 export * from "./signing";
 export * from "./types";
+export * from "./evidence-boundary";
 
 export * from "./queries/market";
 export * from "./queries/escrow";

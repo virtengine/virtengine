@@ -1,18 +1,37 @@
-// @ts-nocheck
 /**
  * Job Submission Form Component
  * VE-705: HPC job submission UI
  */
-import * as React from 'react';
-import { useHPC } from '../../hooks/useHPC';
-import { formatTokenAmount, formatDuration } from '../../utils/format';
-import { sanitizePlainText, sanitizeJsonInput } from '../../utils/security';
-import type { WorkloadTemplate, JobManifest, JobPriceQuote, JobResources } from '../../types/hpc';
+import * as React from "react";
+import { useHPC } from "../../hooks/useHPC";
+import { formatTokenAmount, formatDuration } from "../../utils/format";
+import { sanitizePlainText, sanitizeJsonInput } from "../../utils/security";
+import type {
+  WorkloadTemplate,
+  JobManifest,
+  JobPriceQuote,
+  JobResources,
+  JobParameter,
+} from "../../types/hpc";
+
+function defaultParameterValues(
+  template: WorkloadTemplate | null,
+): Record<string, string | number | boolean> {
+  if (!template) return {};
+  return Object.fromEntries(
+    Object.entries(template.defaultParameters)
+      .filter(([, parameter]) => parameter.defaultValue !== undefined)
+      .map(([key, parameter]) => [key, parameter.defaultValue]),
+  ) as Record<string, string | number | boolean>;
+}
 
 /**
  * Job submission form props
  */
 export interface JobSubmissionFormProps {
+  /** Authoritative offering selected for this job. */
+  offeringId: string;
+
   /**
    * Pre-selected workload template
    */
@@ -37,42 +56,65 @@ export interface JobSubmissionFormProps {
 /**
  * Form step
  */
-type FormStep = 'template' | 'config' | 'review' | 'submitting';
+type FormStep = "template" | "config" | "review" | "submitting";
 
 /**
  * Job submission form component
  */
 export function JobSubmissionForm({
+  offeringId,
   template: initialTemplate,
   onSubmit,
   onCancel,
-  className = '',
+  className = "",
 }: JobSubmissionFormProps): JSX.Element {
   const { state, actions } = useHPC();
 
-  const [step, setStep] = React.useState<FormStep>(initialTemplate ? 'config' : 'template');
-  const [selectedTemplate, setSelectedTemplate] = React.useState<WorkloadTemplate | null>(
-    initialTemplate || null
+  const [step, setStep] = React.useState<FormStep>(
+    initialTemplate ? "config" : "template",
   );
+  const [selectedTemplate, setSelectedTemplate] =
+    React.useState<WorkloadTemplate | null>(initialTemplate || null);
   const [quote, setQuote] = React.useState<JobPriceQuote | null>(null);
   const [error, setError] = React.useState<string | null>(null);
 
   // Form state
-  const [name, setName] = React.useState('');
-  const [nodes, setNodes] = React.useState(1);
-  const [cpusPerNode, setCpusPerNode] = React.useState(8);
-  const [memoryGBPerNode, setMemoryGBPerNode] = React.useState(32);
-  const [gpusPerNode, setGpusPerNode] = React.useState(0);
-  const [maxRuntimeSeconds, setMaxRuntimeSeconds] = React.useState(3600); // 1 hour
-  const [storageGB, setStorageGB] = React.useState(10);
-  const [encryptedInputs, setEncryptedInputs] = React.useState('');
+  const [name, setName] = React.useState(
+    initialTemplate ? `${initialTemplate.name} Job` : "",
+  );
+  const [nodes, setNodes] = React.useState(
+    initialTemplate?.defaultResources.nodes ?? 1,
+  );
+  const [cpusPerNode, setCpusPerNode] = React.useState(
+    initialTemplate?.defaultResources.cpusPerNode ?? 8,
+  );
+  const [memoryGBPerNode, setMemoryGBPerNode] = React.useState(
+    initialTemplate?.defaultResources.memoryGBPerNode ?? 32,
+  );
+  const [gpusPerNode, setGpusPerNode] = React.useState(
+    initialTemplate?.defaultResources.gpusPerNode ?? 0,
+  );
+  const [maxRuntimeSeconds, setMaxRuntimeSeconds] = React.useState(
+    initialTemplate?.defaultResources.maxRuntimeSeconds ?? 3600,
+  );
+  const [storageGB, setStorageGB] = React.useState(
+    initialTemplate?.defaultResources.storageGB ?? 10,
+  );
+  const [encryptedInputs, setEncryptedInputs] = React.useState("");
+  const [parameterValues, setParameterValues] = React.useState<
+    Record<string, string | number | boolean>
+  >(() => defaultParameterValues(initialTemplate ?? null));
+  const initialized = React.useRef(false);
 
   // Load templates on mount
   React.useEffect(() => {
+    if (initialized.current) return;
+    initialized.current = true;
+    actions.startJobSubmission();
     if (!initialTemplate) {
-      actions.getWorkloadTemplates();
+      void actions.getWorkloadTemplates();
     }
-  }, [initialTemplate, actions]);
+  }, [actions, initialTemplate]);
 
   // Get templates from state
   const templates = state.workloadTemplates;
@@ -81,6 +123,7 @@ export function JobSubmissionForm({
    * Handle template selection
    */
   const handleSelectTemplate = (template: WorkloadTemplate) => {
+    actions.startJobSubmission();
     setSelectedTemplate(template);
     setName(`${template.name} Job`);
     setNodes(template.defaultResources.nodes);
@@ -89,7 +132,8 @@ export function JobSubmissionForm({
     setGpusPerNode(template.defaultResources.gpusPerNode || 0);
     setMaxRuntimeSeconds(template.defaultResources.maxRuntimeSeconds);
     setStorageGB(template.defaultResources.storageGB);
-    setStep('config');
+    setParameterValues(defaultParameterValues(template));
+    setStep("config");
   };
 
   /**
@@ -103,11 +147,12 @@ export function JobSubmissionForm({
     try {
       const sanitizedName = sanitizePlainText(name, { maxLength: 120 });
       if (!sanitizedName) {
-        setError('Job name is required');
+        setError("Job name is required");
         return;
       }
 
-      let sanitizedEncryptedInputs: Record<string, unknown> | undefined = undefined;
+      let sanitizedEncryptedInputs: Record<string, unknown> | undefined =
+        undefined;
       if (encryptedInputs && encryptedInputs.trim()) {
         try {
           sanitizedEncryptedInputs = sanitizeJsonInput(encryptedInputs, {
@@ -116,8 +161,16 @@ export function JobSubmissionForm({
             maxStringLength: 4096,
             escapeHtmlStrings: false,
           });
+          if (
+            sanitizedEncryptedInputs === null ||
+            Array.isArray(sanitizedEncryptedInputs) ||
+            typeof sanitizedEncryptedInputs !== "object"
+          ) {
+            setError("Encrypted inputs must be a JSON object");
+            return;
+          }
         } catch {
-          setError('Encrypted inputs must be valid JSON');
+          setError("Encrypted inputs must be valid JSON");
           return;
         }
       }
@@ -127,28 +180,73 @@ export function JobSubmissionForm({
         cpusPerNode,
         memoryGBPerNode,
         gpusPerNode: gpusPerNode > 0 ? gpusPerNode : undefined,
+        gpuType:
+          gpusPerNode > 0
+            ? selectedTemplate.defaultResources.gpuType
+            : undefined,
         maxRuntimeSeconds,
         storageGB,
       };
 
+      for (const [key, parameter] of Object.entries(
+        selectedTemplate.defaultParameters,
+      )) {
+        const value = parameterValues[key];
+        if (parameter.required && (value === undefined || value === "")) {
+          setError(`${parameter.name} is required`);
+          return;
+        }
+        if (value === undefined || value === "") continue;
+        if (parameter.type === "number") {
+          if (typeof value !== "number" || !Number.isFinite(value)) {
+            setError(`${parameter.name} must be a number`);
+            return;
+          }
+          if (parameter.min !== undefined && value < parameter.min) {
+            setError(`${parameter.name} must be at least ${parameter.min}`);
+            return;
+          }
+          if (parameter.max !== undefined && value > parameter.max) {
+            setError(`${parameter.name} must be at most ${parameter.max}`);
+            return;
+          }
+        }
+        if (
+          parameter.validationPattern &&
+          (typeof value !== "string" ||
+            !new RegExp(parameter.validationPattern).test(value))
+        ) {
+          setError(`${parameter.name} has an invalid format`);
+          return;
+        }
+        if (
+          parameter.type === "select" &&
+          !parameter.options?.some((option) => option.value === value)
+        ) {
+          setError(`${parameter.name} must use an allowed value`);
+          return;
+        }
+      }
+
       const manifest: Partial<JobManifest> = {
-        version: '1.0',
+        version: "1.0",
         templateId: selectedTemplate.id,
         name: sanitizedName,
         resources,
-        parameters: {},
+        parameters: { ...parameterValues },
         encryptedInputs: sanitizedEncryptedInputs,
       };
 
       // Update manifest in state
       actions.updateJobManifest(manifest);
+      actions.selectOffering(offeringId);
 
       // Get price quote
-      const priceQuote = await actions.getQuote();
+      const priceQuote = await actions.getQuote(resources);
       setQuote(priceQuote);
-      setStep('review');
+      setStep("review");
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to get quote');
+      setError(err instanceof Error ? err.message : "Failed to get quote");
     }
   };
 
@@ -156,15 +254,15 @@ export function JobSubmissionForm({
    * Handle job submission
    */
   const handleSubmit = async () => {
-    setStep('submitting');
+    setStep("submitting");
     setError(null);
 
     try {
       const result = await actions.submitJob();
-      onSubmit?.(result.id);
+      onSubmit?.(result.jobId);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to submit job');
-      setStep('review');
+      setError(err instanceof Error ? err.message : "Failed to submit job");
+      setStep("review");
     }
   };
 
@@ -172,20 +270,26 @@ export function JobSubmissionForm({
     <div className={`job-form ${className}`}>
       {/* Progress */}
       <div className="job-form__progress">
-        <div className={`job-form__progress-step ${step === 'template' ? 'job-form__progress-step--active' : step !== 'template' ? 'job-form__progress-step--done' : ''}`}>
+        <div
+          className={`job-form__progress-step ${step === "template" ? "job-form__progress-step--active" : "job-form__progress-step--done"}`}
+        >
           1. Template
         </div>
-        <div className={`job-form__progress-step ${step === 'config' ? 'job-form__progress-step--active' : ['review', 'submitting'].includes(step) ? 'job-form__progress-step--done' : ''}`}>
+        <div
+          className={`job-form__progress-step ${step === "config" ? "job-form__progress-step--active" : ["review", "submitting"].includes(step) ? "job-form__progress-step--done" : ""}`}
+        >
           2. Configure
         </div>
-        <div className={`job-form__progress-step ${step === 'review' || step === 'submitting' ? 'job-form__progress-step--active' : ''}`}>
+        <div
+          className={`job-form__progress-step ${step === "review" || step === "submitting" ? "job-form__progress-step--active" : ""}`}
+        >
           3. Review
         </div>
       </div>
 
       {/* Content */}
       <div className="job-form__content">
-        {step === 'template' && (
+        {step === "template" && (
           <TemplateSelector
             templates={templates}
             onSelect={handleSelectTemplate}
@@ -193,7 +297,7 @@ export function JobSubmissionForm({
           />
         )}
 
-        {step === 'config' && selectedTemplate && (
+        {step === "config" && selectedTemplate && (
           <ConfigurationForm
             template={selectedTemplate}
             name={name}
@@ -212,25 +316,29 @@ export function JobSubmissionForm({
             onStorageGBChange={setStorageGB}
             encryptedInputs={encryptedInputs}
             onEncryptedInputsChange={setEncryptedInputs}
+            parameterValues={parameterValues}
+            onParameterChange={(key, value) =>
+              setParameterValues((previous) => ({ ...previous, [key]: value }))
+            }
             onContinue={handleConfigComplete}
-            onBack={() => setStep('template')}
+            onBack={() => setStep("template")}
             isLoading={state.isLoading}
             error={error}
           />
         )}
 
-        {step === 'review' && quote && state.submission?.manifest && (
+        {step === "review" && quote && state.submission?.manifest && (
           <ReviewStep
             manifest={state.submission.manifest}
             quote={quote}
             onSubmit={handleSubmit}
-            onBack={() => setStep('config')}
+            onBack={() => setStep("config")}
             isLoading={false}
             error={error}
           />
         )}
 
-        {step === 'submitting' && (
+        {step === "submitting" && (
           <div className="job-form__submitting">
             <div className="job-form__spinner" />
             <p>Submitting job to the network...</p>
@@ -239,11 +347,14 @@ export function JobSubmissionForm({
       </div>
 
       {/* Cancel button */}
-      {step !== 'submitting' && (
+      {step !== "submitting" && (
         <div className="job-form__actions">
           <button
             className="job-form__button job-form__button--secondary"
-            onClick={onCancel}
+            onClick={() => {
+              actions.cancelSubmission();
+              onCancel?.();
+            }}
           >
             Cancel
           </button>
@@ -264,28 +375,30 @@ interface TemplateSelectorProps {
   isLoading: boolean;
 }
 
-function TemplateSelector({ templates, onSelect, isLoading }: TemplateSelectorProps): JSX.Element {
+function TemplateSelector({
+  templates,
+  onSelect,
+  isLoading,
+}: TemplateSelectorProps): JSX.Element {
   if (isLoading) {
-    return (
-      <div className="job-form__loading">Loading templates...</div>
-    );
+    return <div className="job-form__loading">Loading templates...</div>;
   }
 
   const getCategoryIcon = (category: string): string => {
     switch (category) {
-      case 'ml_training':
-      case 'ml_inference':
-        return '🧠';
-      case 'data_processing':
-        return '📊';
-      case 'rendering':
-        return '🎨';
-      case 'simulation':
-        return '🔬';
-      case 'scientific':
-        return '🔭';
+      case "ml_training":
+      case "ml_inference":
+        return "🧠";
+      case "data_processing":
+        return "📊";
+      case "rendering":
+        return "🎨";
+      case "simulation":
+        return "🔬";
+      case "scientific":
+        return "🔭";
       default:
-        return '🖥️';
+        return "🖥️";
     }
   };
 
@@ -299,9 +412,13 @@ function TemplateSelector({ templates, onSelect, isLoading }: TemplateSelectorPr
             className="job-form__template"
             onClick={() => onSelect(template)}
           >
-            <span className="job-form__template-icon">{getCategoryIcon(template.category)}</span>
+            <span className="job-form__template-icon">
+              {getCategoryIcon(template.category)}
+            </span>
             <span className="job-form__template-name">{template.name}</span>
-            <span className="job-form__template-desc">{template.description}</span>
+            <span className="job-form__template-desc">
+              {template.description}
+            </span>
           </button>
         ))}
       </div>
@@ -330,6 +447,8 @@ interface ConfigurationFormProps {
   onStorageGBChange: (storage: number) => void;
   encryptedInputs: string;
   onEncryptedInputsChange: (inputs: string) => void;
+  parameterValues: Record<string, string | number | boolean>;
+  onParameterChange: (key: string, value: string | number | boolean) => void;
   onContinue: () => void;
   onBack: () => void;
   isLoading: boolean;
@@ -354,14 +473,22 @@ function ConfigurationForm({
   onStorageGBChange,
   encryptedInputs,
   onEncryptedInputsChange,
+  parameterValues,
+  onParameterChange,
   onContinue,
   onBack,
   isLoading,
   error,
 }: ConfigurationFormProps): JSX.Element {
   return (
-    <div className="job-form__config" role="form" aria-label={`Configure ${template.name} job`}>
-      <h3 className="job-form__title" id="config-title">Configure {template.name}</h3>
+    <div
+      className="job-form__config"
+      role="form"
+      aria-label={`Configure ${template.name} job`}
+    >
+      <h3 className="job-form__title" id="config-title">
+        Configure {template.name}
+      </h3>
 
       <div className="job-form__field">
         <label htmlFor="job-name" className="job-form__label">
@@ -375,13 +502,15 @@ function ConfigurationForm({
           onChange={(e) => onNameChange(e.target.value)}
           placeholder="Enter job name"
           aria-required="true"
-          aria-describedby={error && !name ? 'job-name-error' : undefined}
+          aria-describedby={error && !name ? "job-name-error" : undefined}
         />
       </div>
 
       <div className="job-form__field-row">
         <div className="job-form__field">
-          <label htmlFor="nodes" className="job-form__label">Nodes</label>
+          <label htmlFor="nodes" className="job-form__label">
+            Nodes
+          </label>
           <input
             id="nodes"
             type="number"
@@ -392,7 +521,9 @@ function ConfigurationForm({
           />
         </div>
         <div className="job-form__field">
-          <label htmlFor="cpus-per-node" className="job-form__label">CPUs per Node</label>
+          <label htmlFor="cpus-per-node" className="job-form__label">
+            CPUs per Node
+          </label>
           <input
             id="cpus-per-node"
             type="number"
@@ -410,13 +541,17 @@ function ConfigurationForm({
 
       <div className="job-form__field-row">
         <div className="job-form__field">
-          <label htmlFor="memory-per-node" className="job-form__label">Memory per Node (GB)</label>
+          <label htmlFor="memory-per-node" className="job-form__label">
+            Memory per Node (GB)
+          </label>
           <input
             id="memory-per-node"
             type="number"
             className="job-form__input"
             value={memoryGBPerNode}
-            onChange={(e) => onMemoryGBPerNodeChange(parseInt(e.target.value, 10))}
+            onChange={(e) =>
+              onMemoryGBPerNodeChange(parseInt(e.target.value, 10))
+            }
             min={template.defaultResources.memoryGBPerNode}
             aria-describedby="memory-hint"
           />
@@ -425,7 +560,9 @@ function ConfigurationForm({
           </span>
         </div>
         <div className="job-form__field">
-          <label htmlFor="gpus-per-node" className="job-form__label">GPUs per Node</label>
+          <label htmlFor="gpus-per-node" className="job-form__label">
+            GPUs per Node
+          </label>
           <input
             id="gpus-per-node"
             type="number"
@@ -439,7 +576,9 @@ function ConfigurationForm({
 
       <div className="job-form__field-row">
         <div className="job-form__field">
-          <label htmlFor="storage" className="job-form__label">Storage (GB)</label>
+          <label htmlFor="storage" className="job-form__label">
+            Storage (GB)
+          </label>
           <input
             id="storage"
             type="number"
@@ -450,12 +589,16 @@ function ConfigurationForm({
           />
         </div>
         <div className="job-form__field">
-          <label htmlFor="max-runtime" className="job-form__label">Max Runtime</label>
+          <label htmlFor="max-runtime" className="job-form__label">
+            Max Runtime
+          </label>
           <select
             id="max-runtime"
             className="job-form__select"
             value={maxRuntimeSeconds}
-            onChange={(e) => onMaxRuntimeSecondsChange(parseInt(e.target.value, 10))}
+            onChange={(e) =>
+              onMaxRuntimeSecondsChange(parseInt(e.target.value, 10))
+            }
           >
             <option value={1800}>30 minutes</option>
             <option value={3600}>1 hour</option>
@@ -466,6 +609,16 @@ function ConfigurationForm({
           </select>
         </div>
       </div>
+
+      {Object.entries(template.defaultParameters).map(([key, parameter]) => (
+        <TemplateParameterField
+          key={key}
+          parameterKey={key}
+          parameter={parameter}
+          value={parameterValues[key]}
+          onChange={onParameterChange}
+        />
+      ))}
 
       <div className="job-form__field">
         <label htmlFor="encrypted-inputs" className="job-form__label">
@@ -486,7 +639,12 @@ function ConfigurationForm({
       </div>
 
       {error && (
-        <p id="job-name-error" className="job-form__error" role="alert" aria-live="assertive">
+        <p
+          id="job-name-error"
+          className="job-form__error"
+          role="alert"
+          aria-live="assertive"
+        >
           <span aria-hidden="true">⚠ </span>
           {error}
         </p>
@@ -507,10 +665,75 @@ function ConfigurationForm({
           aria-busy={isLoading}
           type="button"
         >
-          {isLoading ? 'Getting Quote...' : 'Continue'}
+          {isLoading ? "Getting Quote..." : "Continue"}
           {isLoading && <span className="sr-only">Please wait</span>}
         </button>
       </div>
+    </div>
+  );
+}
+
+function TemplateParameterField({
+  parameterKey,
+  parameter,
+  value,
+  onChange,
+}: {
+  parameterKey: string;
+  parameter: JobParameter;
+  value: string | number | boolean | undefined;
+  onChange: (key: string, value: string | number | boolean) => void;
+}) {
+  const inputId = `job-parameter-${parameterKey}`;
+  return (
+    <div className="job-form__field">
+      <label htmlFor={inputId} className="job-form__label">
+        {parameter.name}
+        {parameter.required && <span aria-hidden="true"> *</span>}
+      </label>
+      {parameter.type === "boolean" ? (
+        <input
+          id={inputId}
+          type="checkbox"
+          checked={value === true}
+          onChange={(event) => onChange(parameterKey, event.target.checked)}
+        />
+      ) : parameter.type === "select" ? (
+        <select
+          id={inputId}
+          className="job-form__select"
+          value={typeof value === "string" ? value : ""}
+          required={parameter.required}
+          onChange={(event) => onChange(parameterKey, event.target.value)}
+        >
+          <option value="">Select</option>
+          {parameter.options?.map((option) => (
+            <option key={option.value} value={option.value}>
+              {option.label}
+            </option>
+          ))}
+        </select>
+      ) : (
+        <input
+          id={inputId}
+          className="job-form__input"
+          type={parameter.type === "number" ? "number" : "text"}
+          value={value === undefined ? "" : String(value)}
+          required={parameter.required}
+          min={parameter.min}
+          max={parameter.max}
+          pattern={parameter.validationPattern}
+          onChange={(event) =>
+            onChange(
+              parameterKey,
+              parameter.type === "number" && event.target.value !== ""
+                ? Number(event.target.value)
+                : event.target.value,
+            )
+          }
+        />
+      )}
+      <span className="job-form__hint">{parameter.description}</span>
     </div>
   );
 }
@@ -557,10 +780,12 @@ function ReviewStep({
               <span className="job-form__summary-value">{resources.nodes}</span>
             </div>
             <div className="job-form__summary-row">
-              <span className="job-form__summary-label">Resources per Node</span>
+              <span className="job-form__summary-label">
+                Resources per Node
+              </span>
               <span className="job-form__summary-value">
                 {resources.cpusPerNode} CPUs, {resources.memoryGBPerNode}GB RAM
-                {resources.gpusPerNode ? `, ${resources.gpusPerNode} GPUs` : ''}
+                {resources.gpusPerNode ? `, ${resources.gpusPerNode} GPUs` : ""}
               </span>
             </div>
             <div className="job-form__summary-row">
@@ -571,7 +796,9 @@ function ReviewStep({
             </div>
             <div className="job-form__summary-row">
               <span className="job-form__summary-label">Storage</span>
-              <span className="job-form__summary-value">{resources.storageGB} GB</span>
+              <span className="job-form__summary-value">
+                {resources.storageGB} GB
+              </span>
             </div>
           </>
         )}
@@ -582,17 +809,17 @@ function ReviewStep({
         <div className="job-form__quote-row">
           <span>Estimated Cost</span>
           <span className="job-form__quote-amount">
-            {formatTokenAmount(quote.estimatedCost)}
+            {formatTokenAmount(quote.estimatedTotal)}
           </span>
         </div>
         <div className="job-form__quote-row">
           <span>Required Deposit</span>
           <span className="job-form__quote-amount">
-            {formatTokenAmount(quote.requiredDeposit)}
+            {formatTokenAmount(quote.depositRequired)}
           </span>
         </div>
         <p className="job-form__quote-note">
-          Valid until: {new Date(quote.validUntil * 1000).toLocaleString()}
+          Maximum runtime: {formatDuration(quote.maxHours * 3600)}
         </p>
       </div>
 

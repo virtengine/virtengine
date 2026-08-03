@@ -2,6 +2,7 @@ package keeper
 
 import (
 	"bytes"
+	"errors"
 	"io"
 	"testing"
 	"time"
@@ -37,6 +38,21 @@ func (s stubVerifierRegistryKeeper) MirrorLegacyPipelineActivation(ctx sdk.Conte
 
 func (s stubVerifierRegistryKeeper) GetActiveVerifierInfo(ctx sdk.Context) (ActiveVerifierInfo, bool) {
 	return s.info, s.found
+}
+
+type stubStrictVerifierRegistryKeeper struct {
+	stubVerifierRegistryKeeper
+	err        error
+	failOnCall int
+	calls      int
+}
+
+func (s *stubStrictVerifierRegistryKeeper) GetActiveVerifierInfoStrict(ctx sdk.Context) (ActiveVerifierInfo, bool, error) {
+	s.calls++
+	if s.err != nil && (s.failOnCall == 0 || s.calls == s.failOnCall) {
+		return ActiveVerifierInfo{}, true, s.err
+	}
+	return s.info, s.found, nil
 }
 
 type stubIssuanceRecord struct {
@@ -256,4 +272,102 @@ func TestApplyVerificationResultRejectsUnauthorizedArtifactState(t *testing.T) {
 
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "expects artifact")
+}
+
+func TestApplyVerificationResultRegistryReaderFailsClosedBeforeMutation(t *testing.T) {
+	malformedErr := errors.New("malformed active verifier")
+	tests := []struct {
+		name     string
+		registry VerifierRegistryKeeper
+		wantErr  error
+	}{
+		{name: "legacy missing", registry: stubVerifierRegistryKeeper{}},
+		{name: "strict missing", registry: &stubStrictVerifierRegistryKeeper{}},
+		{name: "strict malformed", registry: &stubStrictVerifierRegistryKeeper{err: malformedErr}, wantErr: malformedErr},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			k, ctx := setupGovernedVerificationKeeper(t)
+			ctx = authorizeGovernedVerificationApply(&k, ctx)
+			manifest := createIntegrationTestManifest(t)
+			_, err := k.RegisterPipelineVersion(ctx, testPipelineVersion, runtimePolicyImageA, "ghcr.io/virtengine/veid-pipeline:v1.2.0", manifest)
+			require.NoError(t, err)
+			require.NoError(t, k.ActivatePipelineVersion(ctx, testPipelineVersion))
+			k.SetVerifierRegistryKeeper(test.registry)
+			issuanceKeeper := &stubIssuancePolicyKeeper{}
+			k.SetIssuancePolicyKeeper(issuanceKeeper)
+
+			addr := sdk.AccAddress(bytes.Repeat([]byte{0x04}, 20))
+			request := &types.VerificationRequest{RequestID: "proof-reader-rejection", AccountAddress: addr.String(), RequestedBlock: ctx.BlockHeight()}
+			result := types.NewVerificationResult(request.RequestID, addr.String(), ctx.BlockTime(), ctx.BlockHeight())
+			result.Status = types.VerificationResultStatusSuccess
+			result.Score = 93
+			result.ModelVersion = testPipelineVersion
+			before := snapshotRuntimePolicyStore(t, k, ctx)
+
+			err = k.applyVerificationResult(ctx, addr, request, result)
+
+			require.Error(t, err)
+			if test.wantErr != nil {
+				require.ErrorIs(t, err, test.wantErr)
+			}
+			require.Equal(t, before, snapshotRuntimePolicyStore(t, k, ctx))
+			_, _, found := k.GetScore(ctx, addr.String())
+			require.False(t, found)
+			require.Empty(t, issuanceKeeper.records)
+			require.NotContains(t, result.Metadata, "active_verifier_id")
+		})
+	}
+}
+
+func TestApplyVerificationResultWithoutRegistryUsesLegacyPipelineFallback(t *testing.T) {
+	k, ctx := setupGovernedVerificationKeeper(t)
+	ctx = authorizeGovernedVerificationApply(&k, ctx)
+	manifest := createIntegrationTestManifest(t)
+	_, err := k.RegisterPipelineVersion(ctx, testPipelineVersion, runtimePolicyImageA, "ghcr.io/virtengine/veid-pipeline:v1.2.0", manifest)
+	require.NoError(t, err)
+	require.NoError(t, k.ActivatePipelineVersion(ctx, testPipelineVersion))
+	issuanceKeeper := &stubIssuancePolicyKeeper{}
+	k.SetIssuancePolicyKeeper(issuanceKeeper)
+
+	addr := sdk.AccAddress(bytes.Repeat([]byte{0x05}, 20))
+	request := &types.VerificationRequest{RequestID: "proof-legacy-fallback", AccountAddress: addr.String(), RequestedBlock: ctx.BlockHeight()}
+	result := types.NewVerificationResult(request.RequestID, addr.String(), ctx.BlockTime(), ctx.BlockHeight())
+	result.Status = types.VerificationResultStatusSuccess
+	result.Score = 94
+	result.ModelVersion = testPipelineVersion
+
+	require.NoError(t, k.applyVerificationResult(ctx, addr, request, result))
+	require.Equal(t, testPipelineVersion, issuanceKeeper.records[request.RequestID].verifierID)
+}
+
+func TestApplyVerificationResultPropagatesIssuanceRegistryReadError(t *testing.T) {
+	k, ctx := setupGovernedVerificationKeeper(t)
+	ctx = authorizeGovernedVerificationApply(&k, ctx)
+	manifest := createIntegrationTestManifest(t)
+	_, err := k.RegisterPipelineVersion(ctx, testPipelineVersion, runtimePolicyImageA, "ghcr.io/virtengine/veid-pipeline:v1.2.0", manifest)
+	require.NoError(t, err)
+	require.NoError(t, k.ActivatePipelineVersion(ctx, testPipelineVersion))
+	readerErr := errors.New("registry changed during issuance")
+	k.SetVerifierRegistryKeeper(&stubStrictVerifierRegistryKeeper{
+		stubVerifierRegistryKeeper: stubVerifierRegistryKeeper{info: ActiveVerifierInfo{
+			VerifierID: testPipelineVersion, SpecVersion: testPipelineVersion, WeightsSHA256: manifest.ManifestHash, ActivationHeight: ctx.BlockHeight(),
+		}, found: true},
+		err: readerErr, failOnCall: 2,
+	})
+	issuanceKeeper := &stubIssuancePolicyKeeper{}
+	k.SetIssuancePolicyKeeper(issuanceKeeper)
+
+	addr := sdk.AccAddress(bytes.Repeat([]byte{0x06}, 20))
+	request := &types.VerificationRequest{RequestID: "proof-issuance-reader-error", AccountAddress: addr.String(), RequestedBlock: ctx.BlockHeight()}
+	result := types.NewVerificationResult(request.RequestID, addr.String(), ctx.BlockTime(), ctx.BlockHeight())
+	result.Status = types.VerificationResultStatusSuccess
+	result.Score = 95
+	result.ModelVersion = testPipelineVersion
+
+	err = k.applyVerificationResult(ctx, addr, request, result)
+
+	require.ErrorIs(t, err, readerErr)
+	require.Empty(t, issuanceKeeper.records)
 }

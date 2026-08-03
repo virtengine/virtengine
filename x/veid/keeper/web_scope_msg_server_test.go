@@ -8,6 +8,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -729,6 +730,93 @@ func TestSubmitWebEvidenceExactRetriesAreIdempotent(t *testing.T) {
 			tt.run(t, f)
 		})
 	}
+}
+
+func TestSubmitSSOVerificationProofCommitsCompleteLineageExactlyOnce(t *testing.T) {
+	f := newWebEvidenceFixture(t)
+	defer CloseStoreIfNeeded(f.stateStore)
+	srv := keeper.NewMsgServerImpl(f.keeper)
+	msg := f.validSSOMsg(t, "sso-complete-lineage")
+
+	attestationData := append([]byte(nil), msg.AttestationData...)
+	var att types.SSOAttestation
+	mustJSONUnmarshal(msg.AttestationData, &att)
+	linkageSignature := append([]byte(nil), att.LinkageSignature...)
+	response, err := srv.SubmitSSOVerificationProof(f.ctx, msg)
+	require.NoError(t, err)
+	require.Equal(t, attestationData, msg.AttestationData)
+	var submittedAtt types.SSOAttestation
+	mustJSONUnmarshal(msg.AttestationData, &submittedAtt)
+	require.Equal(t, linkageSignature, submittedAtt.LinkageSignature)
+
+	linkage, found := f.keeper.GetSSOLinkage(f.ctx, msg.LinkageId)
+	require.True(t, found)
+	require.Equal(t, msg.LinkageId, f.keeper.GetSSOLinkageByAccountAndProvider(f.ctx, msg.AccountAddress, att.ProviderType))
+	require.Equal(t, hashTestEvidence(msg.AttestationData), linkage.EvidenceHash)
+	require.True(t, f.keeper.IsSSONonceUsed(f.ctx, sha256Hex(att.OIDCNonce)))
+	require.Equal(t, 1, f.storePrefixCount(types.PrefixWebEvidenceReplay))
+	require.Equal(t, 1, f.storePrefixCount(types.PrefixWebEvidenceReplayNonce))
+	for _, event := range f.ctx.EventManager().ABCIEvents() {
+		for _, attribute := range event.Attributes {
+			value := strings.Trim(attribute.Value, "\"")
+			require.NotEqual(t, att.OIDCNonce, value)
+		}
+	}
+
+	score, _, found := f.keeper.GetScore(f.ctx, f.accountAddress)
+	require.True(t, found)
+	require.Equal(t, response.ScoreContribution/100, score)
+	require.Len(t, f.keeper.GetScoringHistory(f.ctx, f.accountAddress), 1)
+	require.Len(t, f.keeper.GetScoreHistory(f.ctx, f.accountAddress), 1)
+	wallet, found := f.keeper.GetWallet(f.ctx, f.account)
+	require.True(t, found)
+	require.Len(t, wallet.VerificationHistory, 1)
+	require.Equal(t, score, wallet.VerificationHistory[0].NewScore)
+
+	retry, err := srv.SubmitSSOVerificationProof(f.ctx, msg)
+	require.NoError(t, err)
+	require.Equal(t, response, retry)
+	require.Equal(t, attestationData, msg.AttestationData)
+	mustJSONUnmarshal(msg.AttestationData, &submittedAtt)
+	require.Equal(t, linkageSignature, submittedAtt.LinkageSignature)
+	require.Equal(t, 1, f.storePrefixCount(types.PrefixWebEvidenceReplay))
+	require.Equal(t, 1, f.storePrefixCount(types.PrefixWebEvidenceReplayNonce))
+	require.Len(t, f.keeper.GetScoringHistory(f.ctx, f.accountAddress), 1)
+	require.Len(t, f.keeper.GetScoreHistory(f.ctx, f.accountAddress), 1)
+	wallet, found = f.keeper.GetWallet(f.ctx, f.account)
+	require.True(t, found)
+	require.Len(t, wallet.VerificationHistory, 1)
+}
+
+func TestSubmitSSOVerificationProofRollsBackWhenWalletHistoryFails(t *testing.T) {
+	f := newWebEvidenceFixture(t)
+	defer CloseStoreIfNeeded(f.stateStore)
+
+	store := f.ctx.KVStore(f.keeper.StoreKey())
+	walletKey := types.IdentityWalletKey(f.account.Bytes())
+	var storedWallet map[string]any
+	require.NoError(t, json.Unmarshal(store.Get(walletKey), &storedWallet))
+	storedWallet["wallet_id"] = ""
+	malformedWallet, err := json.Marshal(storedWallet)
+	require.NoError(t, err)
+	store.Set(walletKey, malformedWallet)
+
+	msg := f.validSSOMsg(t, "sso-wallet-history-rollback")
+	var att types.SSOAttestation
+	mustJSONUnmarshal(msg.AttestationData, &att)
+	_, err = keeper.NewMsgServerImpl(f.keeper).SubmitSSOVerificationProof(f.ctx, msg)
+	require.Error(t, err)
+
+	_, found := f.keeper.GetSSOLinkage(f.ctx, msg.LinkageId)
+	require.False(t, found)
+	require.Empty(t, f.keeper.GetSSOLinkageByAccountAndProvider(f.ctx, msg.AccountAddress, att.ProviderType))
+	require.False(t, f.keeper.IsSSONonceUsed(f.ctx, sha256Hex(att.OIDCNonce)))
+	require.Zero(t, f.storePrefixCount(types.PrefixWebEvidenceReplay))
+	require.Zero(t, f.storePrefixCount(types.PrefixWebEvidenceReplayNonce))
+	_, _, found = f.keeper.GetScore(f.ctx, f.accountAddress)
+	require.False(t, found)
+	require.Empty(t, f.keeper.GetScoringHistory(f.ctx, f.accountAddress))
+	require.Empty(t, f.keeper.GetScoreHistory(f.ctx, f.accountAddress))
 }
 
 func TestSubmitEmailVerificationProofRejectsExactReplayWithChangedStoragePointer(t *testing.T) {

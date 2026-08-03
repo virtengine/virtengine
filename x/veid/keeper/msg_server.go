@@ -391,6 +391,9 @@ func (ms msgServer) UpdateDerivedFeatures(goCtx context.Context, msg *types.MsgU
 	if err != nil {
 		return nil, types.ErrInvalidAddress.Wrap(errMsgInvalidSenderAddr)
 	}
+	if !ms.keeper.IsValidator(ctx, sender) {
+		return nil, types.ErrValidatorOnly.Wrap("derived feature updates require a bonded validator")
+	}
 
 	accountAddr, err := sdk.AccAddressFromBech32(msg.AccountAddress)
 	if err != nil {

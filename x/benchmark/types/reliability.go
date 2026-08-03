@@ -9,7 +9,7 @@ import (
 )
 
 // ScoreVersion is the current version of the scoring algorithm
-const ScoreVersion = "1.0.0"
+const ScoreVersion = "1.0.1"
 
 // FixedPointScale is the scale factor for fixed-point arithmetic (1e6)
 const FixedPointScale int64 = 1000000

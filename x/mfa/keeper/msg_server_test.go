@@ -1,6 +1,9 @@
 package keeper_test
 
 import (
+	"crypto/ed25519"
+	"crypto/sha256"
+	"encoding/json"
 	"testing"
 	"time"
 
@@ -70,8 +73,9 @@ func (s *MsgServerTestSuite) createContextWithStore(storeKey *storetypes.KVStore
 	}
 
 	ctx := sdk.NewContext(stateStore, cmtproto.Header{
-		Time:   time.Now().UTC(),
-		Height: 100,
+		ChainID: "virtengine-test-1",
+		Time:    time.Date(2026, time.August, 1, 12, 0, 0, 0, time.UTC),
+		Height:  100,
 	}, false, log.NewNopLogger())
 	return ctx
 }
@@ -301,38 +305,21 @@ func (s *MsgServerTestSuite) TestSetMFAPolicy_NoFactors() {
 	s.Require().Contains(err.Error(), "must enroll at least one factor")
 }
 
-// Test: CreateChallenge - success
-func (s *MsgServerTestSuite) TestCreateChallenge_Success() {
+// Test: generic CreateChallenge rejects factors that require verifier-receipt helpers.
+func (s *MsgServerTestSuite) TestCreateChallenge_RejectsOTPFactors() {
 	address := sdk.AccAddress([]byte("test-challenge-addr"))
 
-	// Enroll a factor first
-	enrollment := &types.FactorEnrollment{
-		AccountAddress:   address.String(),
-		FactorType:       types.FactorTypeTOTP,
-		FactorID:         "factor-for-challenge",
-		PublicIdentifier: []byte("totp-key"),
-		Status:           types.EnrollmentStatusActive,
-		EnrolledAt:       time.Now().Unix(),
+	for _, factorType := range []types.FactorType{types.FactorTypeTOTP, types.FactorTypeSMS, types.FactorTypeEmail} {
+		s.Run(factorType.String(), func() {
+			_, err := s.msgServer.CreateChallenge(s.ctx, &types.MsgCreateChallenge{
+				Sender:          address.String(),
+				FactorType:      factorType,
+				TransactionType: types.SensitiveTxLargeWithdrawal,
+			})
+			s.Require().Error(err)
+			s.Contains(err.Error(), "factor-specific helpers")
+		})
 	}
-	err := s.keeper.EnrollFactor(s.ctx, enrollment)
-	s.Require().NoError(err)
-
-	msg := &types.MsgCreateChallenge{
-		Sender:          address.String(),
-		FactorType:      types.FactorTypeTOTP,
-		TransactionType: types.SensitiveTxLargeWithdrawal,
-		ClientInfo: &types.ClientInfo{
-			DeviceFingerprint: "test-device-fp",
-			UserAgent:         "test-agent",
-		},
-	}
-
-	resp, err := s.msgServer.CreateChallenge(s.ctx, msg)
-	s.Require().NoError(err)
-	s.Require().NotNil(resp)
-	s.Require().NotEmpty(resp.ChallengeID)
-	s.Require().NotEmpty(resp.ChallengeData)
-	s.Require().Greater(resp.ExpiresAt, s.ctx.BlockTime().Unix())
 }
 
 // Test: CreateChallenge - no active factor
@@ -341,7 +328,7 @@ func (s *MsgServerTestSuite) TestCreateChallenge_NoActiveFactor() {
 
 	msg := &types.MsgCreateChallenge{
 		Sender:          address.String(),
-		FactorType:      types.FactorTypeTOTP,
+		FactorType:      types.FactorTypeHardwareKey,
 		TransactionType: types.SensitiveTxLargeWithdrawal,
 	}
 
@@ -361,6 +348,121 @@ func (s *MsgServerTestSuite) TestVerifyChallenge_InvalidAddress() {
 	_, err := s.msgServer.VerifyChallenge(s.ctx, msg)
 	s.Require().Error(err)
 	s.Require().Contains(err.Error(), "invalid")
+}
+
+func (s *MsgServerTestSuite) TestVerifyChallenge_OTPReceiptAndOwnership() {
+	address := sdk.AccAddress([]byte("msg-receipt-owner__"))
+	otherAddress := sdk.AccAddress([]byte("msg-receipt-other__"))
+	factorID := "msg-totp-verifier"
+	publicKey, privateKey := deterministicMsgVerifierKey()
+	s.Require().NoError(s.keeper.EnrollFactor(s.ctx, &types.FactorEnrollment{
+		AccountAddress:   address.String(),
+		FactorType:       types.FactorTypeTOTP,
+		FactorID:         factorID,
+		PublicIdentifier: publicKey,
+		Status:           types.EnrollmentStatusActive,
+		EnrolledAt:       s.ctx.BlockTime().Unix(),
+		VerifiedAt:       s.ctx.BlockTime().Unix(),
+	}))
+
+	challenge, err := s.keeper.CreateTOTPChallenge(s.ctx, address, factorID, types.SensitiveTxKeyRotation)
+	s.Require().NoError(err)
+	response := signedMsgReceipt(challenge, privateKey)
+
+	_, err = s.msgServer.VerifyChallenge(s.ctx, &types.MsgVerifyChallenge{
+		Sender:      otherAddress.String(),
+		ChallengeID: challenge.ChallengeID,
+		Response:    response,
+	})
+	s.Require().Error(err)
+	stored, found := s.keeper.GetChallenge(s.ctx, challenge.ChallengeID)
+	s.Require().True(found)
+	s.Zero(stored.AttemptCount)
+	s.Empty(s.keeper.GetAccountSessions(s.ctx, otherAddress))
+
+	result, err := s.msgServer.VerifyChallenge(s.ctx, &types.MsgVerifyChallenge{
+		Sender:      address.String(),
+		ChallengeID: challenge.ChallengeID,
+		Response:    response,
+	})
+	s.Require().NoError(err)
+	s.Require().True(result.Verified)
+	s.NotEmpty(result.SessionID)
+	s.Greater(result.SessionExpiresAt, s.ctx.BlockTime().Unix())
+	session, found := s.keeper.GetAuthorizationSession(s.ctx, result.SessionID)
+	s.Require().True(found)
+	s.Equal(address.String(), session.AccountAddress)
+	s.Equal(challenge.TransactionType, session.TransactionType)
+}
+
+func (s *MsgServerTestSuite) TestVerifyChallenge_FailedAttemptsCommit() {
+	address := sdk.AccAddress([]byte("msg-receipt-lockout"))
+	factorID := "msg-lockout-verifier"
+	publicKey, privateKey := deterministicMsgVerifierKey()
+	s.Require().NoError(s.keeper.EnrollFactor(s.ctx, &types.FactorEnrollment{
+		AccountAddress:   address.String(),
+		FactorType:       types.FactorTypeTOTP,
+		FactorID:         factorID,
+		PublicIdentifier: publicKey,
+		Status:           types.EnrollmentStatusActive,
+		EnrolledAt:       s.ctx.BlockTime().Unix(),
+	}))
+	challenge, err := s.keeper.CreateTOTPChallenge(s.ctx, address, factorID, types.SensitiveTxLargeWithdrawal)
+	s.Require().NoError(err)
+	challenge.MaxAttempts = 2
+	s.Require().NoError(s.keeper.UpdateChallenge(s.ctx, challenge))
+	badResponse := signedMsgReceipt(challenge, privateKey)
+	badResponse.ResponseData = []byte(`{"code":"123456"}`)
+
+	for expectedAttempts := uint32(1); expectedAttempts <= 2; expectedAttempts++ {
+		result, verifyErr := s.msgServer.VerifyChallenge(s.ctx, &types.MsgVerifyChallenge{
+			Sender: address.String(), ChallengeID: challenge.ChallengeID, Response: badResponse,
+		})
+		s.Require().NoError(verifyErr)
+		s.False(result.Verified)
+		stored, found := s.keeper.GetChallenge(s.ctx, challenge.ChallengeID)
+		s.Require().True(found)
+		s.Equal(expectedAttempts, stored.AttemptCount)
+		if expectedAttempts == 1 {
+			s.Equal(types.ChallengeStatusPending, stored.Status)
+		} else {
+			s.Equal(types.ChallengeStatusFailed, stored.Status)
+		}
+	}
+	closed, err := s.keeper.VerifyMFAChallenge(s.ctx, challenge.ChallengeID, signedMsgReceipt(challenge, privateKey))
+	s.False(closed)
+	s.Error(err)
+	s.Empty(s.keeper.GetAccountSessions(s.ctx, address))
+}
+
+func deterministicMsgVerifierKey() (ed25519.PublicKey, ed25519.PrivateKey) {
+	seed := sha256.Sum256([]byte("virtengine-mfa-msg-verifier-test-key"))
+	privateKey := ed25519.NewKeyFromSeed(seed[:])
+	return privateKey.Public().(ed25519.PublicKey), privateKey
+}
+
+func signedMsgReceipt(challenge *types.Challenge, privateKey ed25519.PrivateKey) *types.ChallengeResponse {
+	digest := sha256.Sum256(challenge.ChallengeData)
+	receipt := keeper.OTPVerifierReceipt{
+		Version: 1, ChainID: "virtengine-test-1", AccountAddress: challenge.AccountAddress,
+		ChallengeID: challenge.ChallengeID, FactorType: challenge.FactorType, FactorID: challenge.FactorID,
+		TransactionType: challenge.TransactionType, ChallengeNonce: challenge.Nonce,
+		ChallengeDataDigest: digest[:], IssuedAt: challenge.CreatedAt, ExpiresAt: challenge.ExpiresAt,
+		VerifierKeyEpoch: 1, ReceiptNonce: "msg-receipt-" + challenge.ChallengeID,
+	}
+	signBytes, err := receipt.SignBytes()
+	if err != nil {
+		panic(err)
+	}
+	receipt.Signature = ed25519.Sign(privateKey, signBytes)
+	data, err := json.Marshal(receipt)
+	if err != nil {
+		panic(err)
+	}
+	return &types.ChallengeResponse{
+		ChallengeID: challenge.ChallengeID, FactorType: challenge.FactorType,
+		ResponseData: data, Timestamp: receipt.IssuedAt,
+	}
 }
 
 // Test: AddTrustedDevice - success

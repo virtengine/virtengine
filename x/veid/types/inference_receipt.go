@@ -25,6 +25,8 @@ const (
 	InferenceReceiptMaxScopes                = 32
 	InferenceReceiptMaxConfidencePPM         = 1_000_000
 	InferenceReceiptRequiredRandomSeed int64 = 42
+	InferenceReceiptMaxLifetime               = 10 * time.Minute
+	InferenceReceiptMaxHeightLifetime   int64 = 2
 )
 
 // InferenceDeterminismProfile is the bounded deterministic runtime profile
@@ -513,8 +515,20 @@ func (r InferenceReceipt) validate(requireSignature bool) error {
 	if r.IssuedHeight <= 0 || r.ExpiresHeight <= r.IssuedHeight {
 		return ErrInvalidTimestamp.Wrap("invalid inference receipt height bounds")
 	}
+	if r.ExpiresHeight-r.IssuedHeight > InferenceReceiptMaxHeightLifetime {
+		return ErrInvalidTimestamp.Wrap("inference receipt height lifetime exceeds maximum")
+	}
 	if r.IssuedAt.IsZero() || r.ExpiresAt.IsZero() || !r.ExpiresAt.After(r.IssuedAt) {
 		return ErrInvalidTimestamp.Wrap("invalid inference receipt time bounds")
+	}
+	if r.IssuedAt.Location() != time.UTC || r.ExpiresAt.Location() != time.UTC {
+		return ErrInvalidTimestamp.Wrap("inference receipt times must use UTC")
+	}
+	if r.IssuedAt.Nanosecond() != 0 || r.ExpiresAt.Nanosecond() != 0 {
+		return ErrInvalidTimestamp.Wrap("inference receipt times must be second-aligned")
+	}
+	if r.ExpiresAt.Sub(r.IssuedAt) > InferenceReceiptMaxLifetime {
+		return ErrInvalidTimestamp.Wrap("inference receipt lifetime exceeds maximum")
 	}
 	if r.SignerSequence == 0 {
 		return ErrInvalidSignerKey.Wrap("signer sequence is required")

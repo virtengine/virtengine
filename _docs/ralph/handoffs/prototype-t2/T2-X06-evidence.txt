@@ -1,0 +1,31 @@
+T2-X06 retained validation evidence
+Implementation SHA: 5a2fc2d3dfea06b84e068e4e96f100ab5ba073bd
+Node: v24.12.0
+
+COMMAND: C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t2\portal\node_modules\.bin\vitest.CMD run src\__tests__\consent-types.test.ts src\app\api\consent\__tests__\data.test.ts src\components\consent\__tests__\ConsentHistory.test.tsx src\components\consent\__tests__\ConsentManager.test.tsx --reporter=dot
+EXIT: 0
+RESULT: passed
+DETAIL: 4 files, 25 tests passed
+
+COMMAND: C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t2\portal\node_modules\.bin\eslint.CMD C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t2\portal\src --ext .ts,.tsx --max-warnings 0
+EXIT: 0
+RESULT: passed
+NOTE: Existing unsupported TypeScript parser-version warning only.
+
+COMMAND: C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t2\portal\node_modules\.bin\tsc.CMD --noEmit -p C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t2\portal\tsconfig.json
+EXIT: 0
+RESULT: passed
+
+COMMAND: C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t2\portal\node_modules\.bin\vitest.CMD run --reporter=dot
+EXIT: 0
+RESULT: passed
+DETAIL: 587 tests passed (implementation subagent complete run)
+
+BEHAVIOR:
+- Consent events carry explicit local or validated-chain provenance.
+- Local demo/grant/withdraw events never contain block height or transaction hash and are labeled Not verified on chain.
+- Chain provenance requires injected/strict evidence with positive height, nonempty tx hash and chain ID, code 0, and matching event/consent IDs.
+- Malformed legacy bare heights downgrade to local and never render explorer links.
+
+NON-CLAIMS:
+- Grant and withdrawal remain process-local acknowledgements; no wallet signing, chain broadcast, or chain persistence is claimed.

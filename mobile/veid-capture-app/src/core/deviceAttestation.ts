@@ -65,28 +65,95 @@ export class MockDeviceAttestationProvider implements DeviceAttestationProviderA
 export function createDeviceAttestation(
   appVersion: string,
   appId = "com.virtengine.veid",
-  provider: DeviceAttestationProviderAdapter = new MockDeviceAttestationProvider()
+  provider?: DeviceAttestationProviderAdapter
 ): DeviceAttestation {
   const nonce = createId("nonce");
-  const response = provider.attest({ appId, appVersion, nonce });
-  const supported = provider.supportsAttestation() && response.supported;
 
+  if (!provider) {
+    return createUnavailableAttestation(appVersion, appId, nonce, "attestation_provider_unavailable");
+  }
+
+  let platform: DevicePlatform = "unknown";
+  let attestationProvider: DeviceAttestationProvider = "unavailable";
+  try {
+    platform = provider.getPlatform();
+    attestationProvider = provider.getProvider();
+    if (!provider.supportsAttestation()) {
+      return createUnavailableAttestation(
+        appVersion,
+        appId,
+        nonce,
+        "attestation_not_supported",
+        platform,
+        attestationProvider
+      );
+    }
+
+    const response = provider.attest({ appId, appVersion, nonce });
+    if (!response.supported) {
+      return createUnavailableAttestation(
+        appVersion,
+        appId,
+        nonce,
+        response.failureReason ?? "unsupported_device",
+        platform,
+        attestationProvider
+      );
+    }
+
+    return {
+      deviceId: createId("device"),
+      deviceModel: response.deviceModel,
+      osVersion: response.osVersion,
+      appVersion,
+      appId,
+      platform,
+      provider: attestationProvider,
+      integrityLevel: response.integrityLevel,
+      integrityScore: response.integrityScore,
+      supported: true,
+      nonce,
+      verdicts: response.verdicts,
+      attestationPayload: response.attestationPayload,
+      attestedAt: Date.now(),
+      attestationSignature: response.attestationSignature
+    };
+  } catch {
+    return createUnavailableAttestation(
+      appVersion,
+      appId,
+      nonce,
+      "attestation_provider_error",
+      platform,
+      attestationProvider
+    );
+  }
+}
+
+function createUnavailableAttestation(
+  appVersion: string,
+  appId: string,
+  nonce: string,
+  failureReason: string,
+  platform: DevicePlatform = "unknown",
+  provider: DeviceAttestationProvider = "unavailable"
+): DeviceAttestation {
   return {
     deviceId: createId("device"),
-    deviceModel: response.deviceModel,
-    osVersion: response.osVersion,
+    deviceModel: "unknown",
+    osVersion: "unknown",
     appVersion,
     appId,
-    platform: provider.getPlatform(),
-    provider: provider.getProvider(),
-    integrityLevel: supported ? response.integrityLevel : "unsupported",
-    integrityScore: supported ? response.integrityScore : 50,
-    supported,
-    failureReason: supported ? undefined : response.failureReason ?? "unsupported_device",
+    platform,
+    provider,
+    integrityLevel: "unsupported",
+    integrityScore: 0,
+    supported: false,
+    failureReason,
     nonce,
-    verdicts: response.verdicts,
-    attestationPayload: response.attestationPayload,
+    verdicts: {},
+    attestationPayload: "",
     attestedAt: Date.now(),
-    attestationSignature: response.attestationSignature
+    attestationSignature: ""
   };
 }

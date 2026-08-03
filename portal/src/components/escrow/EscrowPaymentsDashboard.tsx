@@ -24,8 +24,24 @@ import type {
   PayoutRecord,
   SettlementEvent,
 } from './data';
+import type {
+  EscrowMutationAdapter,
+  EscrowMutationContext,
+  EscrowMutationResultProjector,
+} from './mutations';
+import { isValidEscrowMutationContext } from './mutations';
 
-export function EscrowPaymentsDashboard() {
+interface EscrowPaymentsDashboardProps {
+  mutationAdapter?: EscrowMutationAdapter;
+  mutationContext?: EscrowMutationContext;
+  resultProjector?: EscrowMutationResultProjector;
+}
+
+export function EscrowPaymentsDashboard({
+  mutationAdapter,
+  mutationContext,
+  resultProjector,
+}: EscrowPaymentsDashboardProps = {}) {
   const [depositOpen, setDepositOpen] = useState(false);
   const wallet = useWallet();
   const account = wallet.accounts[wallet.activeAccountIndex];
@@ -37,6 +53,15 @@ export function EscrowPaymentsDashboard() {
   const isLoading = useCustomerDashboardStore((s) => s.isLoading);
   const error = useCustomerDashboardStore((s) => s.error);
   const { rate, stale, isLoading: rateLoading } = usePriceConversion();
+  const boundMutationContext =
+    account?.address &&
+    wallet.chainId &&
+    isValidEscrowMutationContext(mutationContext) &&
+    mutationContext.accountAddress === account.address &&
+    mutationContext.chainId === wallet.chainId
+      ? mutationContext
+      : undefined;
+  const mutationsAvailable = Boolean(mutationAdapter && boundMutationContext && resultProjector);
 
   useEffect(() => {
     if (!account?.address) return;
@@ -201,6 +226,13 @@ export function EscrowPaymentsDashboard() {
         </div>
       )}
 
+      {!mutationsAvailable && (
+        <div className="rounded-lg border border-border bg-card p-4 text-sm text-muted-foreground">
+          Escrow deposits and wallet withdrawals are unavailable because no authoritative signing
+          and broadcast adapter is configured.
+        </div>
+      )}
+
       {error && (
         <div className="rounded-lg border border-destructive bg-destructive/10 p-4">
           <p className="font-medium text-destructive">Failed to load escrow data</p>
@@ -215,6 +247,7 @@ export function EscrowPaymentsDashboard() {
         onWithdraw={() => {
           document.getElementById('withdraw-form')?.scrollIntoView({ behavior: 'smooth' });
         }}
+        actionsAvailable={mutationsAvailable}
       />
 
       <div className="grid gap-6 lg:grid-cols-[1.4fr_1fr]">
@@ -222,6 +255,9 @@ export function EscrowPaymentsDashboard() {
           account={escrowAccount}
           fiatRates={fiatRates}
           fiatOffRampUrl={env.fiatOffRampUrl || undefined}
+          mutationAdapter={mutationAdapter}
+          mutationContext={boundMutationContext}
+          resultProjector={resultProjector}
         />
         <div className="rounded-lg border border-border/60 bg-muted/30 p-6">
           <h2 className="text-lg font-semibold">Deposit Guidance</h2>
@@ -269,6 +305,9 @@ export function EscrowPaymentsDashboard() {
         onOpenChange={setDepositOpen}
         account={escrowAccount}
         fiatRates={fiatRates}
+        mutationAdapter={mutationAdapter}
+        mutationContext={boundMutationContext}
+        resultProjector={resultProjector}
       />
 
       {isLoading && !error && (

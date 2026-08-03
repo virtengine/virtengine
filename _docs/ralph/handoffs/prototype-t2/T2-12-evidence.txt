@@ -1,0 +1,21 @@
+T2-12 retained validation evidence
+Implementation SHA: 40244b69f36cb9773942c362ba53bf726998e570
+Node: v24.12.0
+
+COMMAND: C:\Users\pavil\AppData\Local\Temp\virtengine-node-v24.12.0\npm.cmd --prefix C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t2\lib\portal test
+EXIT: 0
+RESULT: passed
+DETAIL: 21 files, 528 tests passed; selective presentation 31 tests passed
+
+COMMAND: C:\Users\pavil\AppData\Local\Temp\virtengine-node-v24.12.0\npm.cmd --prefix C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t2\lib\portal run type-check
+EXIT: 0
+RESULT: passed
+
+COMMAND: git -C C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t2 diff --check
+EXIT: 0
+RESULT: passed
+
+NON-CLAIMS:
+- Canonical ClaimPolicy challenge and presentation schemas are external dependencies; T2 consumes opaque values through injected validators/projectors.
+- Challenge validation, status authority, replay guard, claim decryption and presentation signing are injected; production defaults remain unavailable.
+- Review displays only requested labels and exact consent, never decrypted values.

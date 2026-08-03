@@ -1,14 +1,12 @@
-export { WalletProvider, useWallet } from './context';
+export { WalletProvider, useWallet } from "./context";
 export {
   WalletSessionManager,
   walletSessionManager,
   createSessionManager,
-} from './session';
-export {
-  WalletDetector,
-  walletDetector,
-  WalletPriority,
-} from './detector';
+  WALLET_TRANSACTION_SIGNING_SCOPE,
+  WALLET_ARBITRARY_SIGNING_SCOPE,
+} from "./session";
+export { WalletDetector, walletDetector, WalletPriority } from "./detector";
 export {
   WalletError,
   WalletErrorCode,
@@ -21,7 +19,7 @@ export {
   isRetryableError,
   withWalletTimeout,
   wrapWithWalletError,
-} from './errors';
+} from "./errors";
 export type {
   WalletType,
   WalletConnectionStatus,
@@ -36,9 +34,18 @@ export type {
   DirectSignResponse,
   WalletContextValue,
   WalletProviderConfig,
-} from './types';
-export type { WalletSession, SessionConfig } from './session';
-export type { WalletDetectionResult } from './detector';
+} from "./types";
+export type {
+  WalletSession,
+  SessionConfig,
+  MfaAuthorization,
+  WalletAuthorizationBinding,
+  WalletAuthorizationContext,
+  WalletSigningOperation,
+  WalletSigningAuthorizationRequest,
+  WalletSigningAuthorizationAuthority,
+} from "./session";
+export type { WalletDetectionResult } from "./detector";
 export {
   GAS_TIERS,
   DEFAULT_GAS_ADJUSTMENT,
@@ -50,7 +57,7 @@ export {
   createTransactionPreview,
   validateTransaction,
   createDefaultGasSettings,
-} from './transaction';
+} from "./transaction";
 export type {
   GasTier,
   GasSettings,
@@ -58,4 +65,7 @@ export type {
   TransactionPreview,
   TransactionOptions,
   TransactionValidationResult,
-} from './transaction';
+} from "./transaction";
+export * from "./claims";
+export * from "./passkeys";
+export * from "./remote-face";

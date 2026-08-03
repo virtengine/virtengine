@@ -102,7 +102,7 @@ export function ConsentManager() {
             scopeId: entry.scopeId,
             purpose: entry.key,
             consentText: buildConsentText(entry.key),
-            signature: `sig-${Date.now()}`,
+            acknowledgement: `privacy-center-${Date.now()}`,
           }),
         });
       } else if (current) {

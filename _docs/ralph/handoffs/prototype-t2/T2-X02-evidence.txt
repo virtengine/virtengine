@@ -1,0 +1,36 @@
+T2-X02 retained validation evidence
+Implementation SHA: 7261750ec31160f6413bdc46e320187a9fa1eac6
+Node: v24.12.0
+
+COMMAND: C:\Users\pavil\AppData\Local\Temp\virtengine-node-v24.12.0\npm.cmd --prefix C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t2\lib\portal test
+EXIT: 0
+RESULT: passed
+DETAIL: 25 files, 661 tests passed; chat agent 4 tests and tool inventory 3 tests passed
+
+COMMAND: C:\Users\pavil\AppData\Local\Temp\virtengine-node-v24.12.0\npm.cmd --prefix C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t2\lib\portal run type-check
+EXIT: 0
+RESULT: passed
+
+COMMAND: C:\Users\pavil\AppData\Local\Temp\virtengine-node-v24.12.0\npm.cmd --prefix C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t2\portal run lint
+EXIT: 0
+RESULT: passed
+NOTE: Existing unsupported TypeScript parser-version warning only.
+
+COMMAND: C:\Users\pavil\AppData\Local\Temp\virtengine-node-v24.12.0\npm.cmd --prefix C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t2\portal run type-check
+EXIT: 0
+RESULT: passed
+
+COMMAND: C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t2\portal\node_modules\.bin\vitest.CMD run --reporter=dot
+EXIT: 0
+RESULT: passed
+DETAIL: 74 files, 528 tests passed
+
+BEHAVIOR:
+- Chat defaults disabled; mutation enablement is a separate explicit flag that also requires chat enabled.
+- Mutation-capable tools are excluded from model tool definitions unless explicitly enabled.
+- Stale or persisted actions return typed feature_unavailable before fee calculation, signing, transaction submission, or provider execution.
+- Preview/action preparation never reports execution success.
+
+NON-CLAIMS:
+- T2-07 action gate remains unregistered; Task 91B prerequisites are unavailable.
+- Production chat mutations remain disabled and are not certified.

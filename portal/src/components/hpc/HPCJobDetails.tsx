@@ -18,7 +18,7 @@ interface HPCJobDetailsProps {
  * Shows detailed information about a specific job
  */
 export function HPCJobDetails({ jobId, className, onBack }: HPCJobDetailsProps) {
-  const { state } = useHPC();
+  const { state, actions } = useHPC();
   const [showCancelDialog, setShowCancelDialog] = useState(false);
 
   const job = state.jobs.find((j) => j.id === jobId);
@@ -115,6 +115,9 @@ export function HPCJobDetails({ jobId, className, onBack }: HPCJobDetailsProps) 
         onOpenChange={setShowCancelDialog}
         jobId={jobId}
         jobName={job.name}
+        onConfirm={async () => {
+          await actions.cancelJob(jobId);
+        }}
       />
     </div>
   );

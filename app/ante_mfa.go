@@ -169,8 +169,12 @@ func validateMFAForSigner(
 ) error {
 	deviceFingerprint := proofProvider.GetDeviceFingerprint()
 	proof := proofProvider.GetMFAProof()
+	trustToken := ""
+	if proof != nil {
+		trustToken = proof.TrustToken
+	}
 
-	canBypass, reducedFactors := hooks.CanBypassMFA(ctx, signer, transactionType, deviceFingerprint)
+	canBypass, reducedFactors := hooks.CanBypassMFA(ctx, signer, transactionType, deviceFingerprint, trustToken)
 	if canBypass && reducedFactors == nil {
 		emitMFARequiredEvent(ctx, signer, transactionType, requiredCombinations, mfatypes.AttributeValueSuccess, "trusted_device_bypass", deviceFingerprint)
 		return nil
