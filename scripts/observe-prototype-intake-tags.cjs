@@ -29,8 +29,11 @@ function parseRemoteTagListing(listing) {
 
 function createObservation(epoch, listing, options = {}) {
   const now = options.now ?? Date.now();
+  const opensAt = Date.parse(epoch.opens_at);
   const cutoff = Date.parse(epoch.announcement_cutoff);
+  assert.ok(Number.isFinite(opensAt), "epoch opens_at is invalid");
   assert.ok(Number.isFinite(cutoff), "epoch cutoff is invalid");
+  assert.ok(now >= opensAt, "tag observation must be captured after epoch opens_at");
   assert.ok(now <= cutoff, "tag observation must be captured before cutoff");
   const observation = {
     schema_version: "virtengine.prototype.intake-tag-observation/v1",
@@ -50,7 +53,9 @@ function validateTagObservation(observation, epoch) {
   assert.equal(observation.intake_epoch, epoch.intake_epoch);
   assert.equal(observation.announcement_cutoff, epoch.announcement_cutoff);
   assert.equal(observation.remote, "origin");
-  assert.ok(Date.parse(observation.observed_at) <= Date.parse(epoch.announcement_cutoff), "tag observation was not captured before cutoff");
+  const observedAt = Date.parse(observation.observed_at);
+  assert.ok(observedAt >= Date.parse(epoch.opens_at), "tag observation was captured before epoch opens_at");
+  assert.ok(observedAt <= Date.parse(epoch.announcement_cutoff), "tag observation was not captured before cutoff");
   const keys = observation.tags.map((entry) => `${entry.thread}:${entry.tag}`);
   assert.deepEqual(keys, [...keys].sort(), "observed tags must be sorted");
   assert.equal(new Set(keys).size, keys.length, "observed tags must be unique");

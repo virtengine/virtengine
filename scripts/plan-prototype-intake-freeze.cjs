@@ -47,7 +47,9 @@ function validateObservationBinding(content, observationPath, manifest, options 
 
 function planFrozenEpoch(epoch, selections, options = {}) {
   const now = options.now ?? Date.now();
+  const opensAt = Date.parse(epoch.opens_at);
   const cutoff = Date.parse(epoch.announcement_cutoff);
+  assert.ok(Number.isFinite(opensAt), "epoch opens_at is invalid");
   assert.ok(Number.isFinite(cutoff), "epoch cutoff is invalid");
   assert.ok(now > cutoff, "epoch announcement cutoff has not elapsed");
   assert.equal(epoch.status, "open", "only an open epoch can be frozen");
@@ -57,7 +59,7 @@ function planFrozenEpoch(epoch, selections, options = {}) {
   assert.equal(observation.intake_epoch, epoch.intake_epoch, "tag observation epoch mismatch");
   assert.equal(observation.announcement_cutoff, epoch.announcement_cutoff, "tag observation cutoff mismatch");
   const observedAt = Date.parse(observation.observed_at);
-  assert.ok(Number.isFinite(observedAt) && observedAt <= cutoff, "tag observation was not captured before cutoff");
+  assert.ok(Number.isFinite(observedAt) && observedAt >= opensAt && observedAt <= cutoff, "tag observation was not captured within the epoch window");
   assert.ok(Array.isArray(observation.tags), "tag observation tags are invalid");
   for (const thread of selections.keys()) assert.ok(threads.includes(thread), `unknown producer selection: ${thread}`);
 
@@ -72,6 +74,7 @@ function planFrozenEpoch(epoch, selections, options = {}) {
     assert.equal(observed.length, 1, `${tag} was not uniquely observed before cutoff`);
     const taggerTime = Date.parse(resolved.tagger_at);
     assert.ok(Number.isFinite(taggerTime), `${tag} tagger timestamp is invalid`);
+    assert.ok(taggerTime >= opensAt, `${tag} was published before the epoch opened`);
     assert.ok(taggerTime <= cutoff, `${tag} was published after the announcement cutoff`);
     return { thread: producer.thread, status: "announced", tag, decision: null };
   });
