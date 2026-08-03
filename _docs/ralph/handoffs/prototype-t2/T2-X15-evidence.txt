@@ -1,0 +1,39 @@
+T2-X15 retained validation evidence
+Implementation SHA: 99e89ad8b226e2c1e1da88385343a443f54865d5
+Node: v20.19.1
+
+COMMAND: C:\Windows\System32\cmd.exe /d /c "cd /d C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t2\lib\portal && node_modules\.bin\vitest.CMD run __tests__/provider/use-provider-domain.test.tsx --reporter=dot"
+EXIT: 0
+RESULT: passed
+DETAIL: 1 file, 11 tests passed; no warnings
+
+COMMAND: C:\Windows\System32\cmd.exe /d /c "cd /d C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t2\lib\portal && node_modules\.bin\vitest.CMD run --reporter=dot --maxWorkers=1"
+EXIT: 0
+RESULT: passed
+DETAIL: 37 files, 749 tests passed in 36.21s; expected WalletSessionManager reconnect-metadata stderr only
+
+COMMAND: C:\Windows\System32\cmd.exe /d /c "cd /d C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t2 && portal\node_modules\.bin\tsc.CMD --noEmit --lib dom,dom.iterable,esnext --target ES2020 --module CommonJS --moduleResolution Node --esModuleInterop --skipLibCheck --jsx react-jsx lib\portal\components\provider\domain-verification.ts lib\portal\hooks\useProvider.tsx"
+EXIT: 0
+RESULT: passed
+DETAIL: Focused X15 TypeScript compilation completed with no diagnostics.
+
+COMMAND: C:\Windows\System32\cmd.exe /d /c "cd /d C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t2\portal && node_modules\.bin\prettier.CMD --write ../lib/portal/__tests__/provider/use-provider-domain.test.tsx ../lib/portal/components/provider/domain-verification.ts ../lib/portal/hooks/useProvider.tsx ../lib/portal/components/PortalProvider.tsx ../lib/portal/types/config.ts ../lib/portal/index.ts ../lib/portal/index.d.ts src/lib/portal-adapter.ts"
+EXIT: 0
+RESULT: passed
+DETAIL: All eight X15 files were unchanged by the final formatting pass; committed diff check passed.
+
+BEHAVIOR:
+- Provider domain challenge issuance and verification default unavailable without a verifier bound exactly to the active chain and account.
+- Domains are normalized and validated; runtime methods are allow-listed before external invocation.
+- Challenges and verification evidence are materialized, exact-bound, and frozen across chain, account, domain, method, challenge ID, timestamps, and evidence ID.
+- Challenges are registration-generation bound, single-use, expiry-checked after verification, and invalidated on primary-domain or account changes.
+- Duplicate challenge issuance and verification use owner-token locks; stale operations cannot clear newer locks or publish late evidence.
+- Provider queries and all retained provider actions are account-generation bound; disconnected or stale callbacks cannot mutate replacement state.
+- Account changes synchronously mask and clear provider profile, registration, and verification state.
+- PortalProvider withholds mismatched verifiers; public lib/declaration/portal-adapter exports expose typed verifier and provider action contracts.
+- No random local challenge or unconditional verified state remains.
+
+NON-CLAIMS:
+- No production provider-domain verifier is wired by this checkpoint; domain verification defaults unavailable.
+- No live DNS, HTTP well-known endpoint, provider process, or chain registration was certified.
+- Adjacent synthetic provider registration/offering mutations remain fail-closed by account authority but are queued for the next audit checkpoint.

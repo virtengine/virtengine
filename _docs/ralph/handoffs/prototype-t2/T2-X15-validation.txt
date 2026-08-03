@@ -1,0 +1,37 @@
+T2-X15 raw validation summary
+Implementation SHA: 99e89ad8b226e2c1e1da88385343a443f54865d5
+
+[node]
+COMMAND: node --version
+OUTPUT: v20.19.1
+EXIT: 0
+
+[focused-vitest]
+COMMAND: C:\Windows\System32\cmd.exe /d /c "cd /d C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t2\lib\portal && node_modules\.bin\vitest.CMD run __tests__/provider/use-provider-domain.test.tsx --reporter=dot"
+OUTPUT: Test Files 1 passed (1)
+OUTPUT: Tests 11 passed (11)
+OUTPUT: no warnings
+EXIT: 0
+
+[full-vitest]
+COMMAND: C:\Windows\System32\cmd.exe /d /c "cd /d C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t2\lib\portal && node_modules\.bin\vitest.CMD run --reporter=dot --maxWorkers=1"
+OUTPUT: Test Files 37 passed (37)
+OUTPUT: Tests 749 passed (749)
+OUTPUT: Duration 36.21s
+STDERR: Two expected WalletSessionManager invalid reconnect metadata clearing messages.
+EXIT: 0
+
+[focused-typescript]
+COMMAND: C:\Windows\System32\cmd.exe /d /c "cd /d C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t2 && portal\node_modules\.bin\tsc.CMD --noEmit --lib dom,dom.iterable,esnext --target ES2020 --module CommonJS --moduleResolution Node --esModuleInterop --skipLibCheck --jsx react-jsx lib\portal\components\provider\domain-verification.ts lib\portal\hooks\useProvider.tsx"
+OUTPUT: no diagnostics
+EXIT: 0
+
+[prettier]
+COMMAND: C:\Windows\System32\cmd.exe /d /c "cd /d C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t2\portal && node_modules\.bin\prettier.CMD --write ../lib/portal/__tests__/provider/use-provider-domain.test.tsx ../lib/portal/components/provider/domain-verification.ts ../lib/portal/hooks/useProvider.tsx ../lib/portal/components/PortalProvider.tsx ../lib/portal/types/config.ts ../lib/portal/index.ts ../lib/portal/index.d.ts src/lib/portal-adapter.ts"
+OUTPUT: all eight files unchanged
+EXIT: 0
+
+[committed-diff-check]
+COMMAND: C:\Windows\System32\cmd.exe /d /c "cd /d C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t2 && git show --check --format= 99e89ad8b226e2c1e1da88385343a443f54865d5 -- lib/portal/__tests__/provider/use-provider-domain.test.tsx lib/portal/components/provider/domain-verification.ts lib/portal/hooks/useProvider.tsx lib/portal/components/PortalProvider.tsx lib/portal/types/config.ts lib/portal/index.ts lib/portal/index.d.ts portal/src/lib/portal-adapter.ts"
+OUTPUT: no diagnostics
+EXIT: 0

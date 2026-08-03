@@ -1,74 +1,64 @@
 campaign: three-day-prototype
 thread: T2
-checkpoint: T2-X14
+checkpoint: T2-X15
 branch: ve/prototype-t2-product
-start_head: ba9f49340bbd8136f8c19bcc0abc7c64831bfda8
-end_head: 9d210092ee880ed8dd97e5a2dbb39197fca5fd2c
+start_head: 99c84da0a70b8689dcc0b4a05382196de32a2892
+end_head: 99e89ad8b226e2c1e1da88385343a443f54865d5
 origin_main: 79391a3df86d85522b92e0400c6904971ecbe65d
 tree_clean: true
 commits:
-  - 9d210092ee880ed8dd97e5a2dbb39197fca5fd2c
+  - 99e89ad8b226e2c1e1da88385343a443f54865d5
 owned_paths:
-  - lib/portal/components/hpc/
-  - lib/portal/__tests__/hpc/
-  - lib/portal/hooks/useHPC.tsx
+  - lib/portal/components/provider/
+  - lib/portal/__tests__/provider/
+  - lib/portal/hooks/useProvider.tsx
   - lib/portal/components/PortalProvider.tsx
   - lib/portal/types/config.ts
   - lib/portal/index.ts
   - lib/portal/index.d.ts
   - portal/src/lib/portal-adapter.ts
 files_changed:
-  - lib/portal/__tests__/hpc/job-submission-form.test.tsx
-  - lib/portal/__tests__/hpc/use-hpc-mutations.test.tsx
-  - lib/portal/__tests__/hpc/use-hpc-queries.test.tsx
+  - lib/portal/__tests__/provider/use-provider-domain.test.tsx
   - lib/portal/components/PortalProvider.tsx
-  - lib/portal/components/hpc/JobSubmissionForm.tsx
-  - lib/portal/components/hpc/hpc-mutation.ts
-  - lib/portal/components/hpc/hpc-query.ts
-  - lib/portal/hooks/useHPC.tsx
+  - lib/portal/components/provider/domain-verification.ts
+  - lib/portal/hooks/useProvider.tsx
   - lib/portal/index.ts
   - lib/portal/index.d.ts
   - lib/portal/types/config.ts
   - portal/src/lib/portal-adapter.ts
 tests:
-  - command: lib\portal\node_modules\.bin\vitest.CMD run __tests__/hpc/use-hpc-queries.test.tsx __tests__/hpc/job-submission-form.test.tsx __tests__/hpc/use-hpc-mutations.test.tsx --reporter=dot
+  - command: C:\Windows\System32\cmd.exe /d /c "cd /d C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t2\lib\portal && node_modules\.bin\vitest.CMD run __tests__/provider/use-provider-domain.test.tsx --reporter=dot"
     exit_code: 0
     result: passed
-    test_count: 24
+    test_count: 11
     tool_versions:
       node: v20.19.1
-    artifact: _docs/ralph/handoffs/prototype-t2/T2-X14-validation.txt
-  - command: lib\portal\node_modules\.bin\vitest.CMD run --reporter=dot --maxWorkers=1
+    artifact: _docs/ralph/handoffs/prototype-t2/T2-X15-validation.txt
+  - command: C:\Windows\System32\cmd.exe /d /c "cd /d C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t2\lib\portal && node_modules\.bin\vitest.CMD run --reporter=dot --maxWorkers=1"
     exit_code: 0
     result: passed
-    test_count: 738
+    test_count: 749
     tool_versions:
       node: v20.19.1
-    artifact: _docs/ralph/handoffs/prototype-t2/T2-X14-validation.txt
-  - command: portal\node_modules\.bin\tsc.CMD --noEmit --lib dom,dom.iterable,esnext --target ES2020 --module CommonJS --moduleResolution Node --esModuleInterop --skipLibCheck --jsx react-jsx lib\portal\components\hpc\hpc-query.ts lib\portal\components\hpc\hpc-mutation.ts lib\portal\hooks\useHPC.tsx
-    exit_code: 0
-    result: passed
-    tool_versions:
-      node: v20.19.1
-    artifact: _docs/ralph/handoffs/prototype-t2/T2-X14-validation.txt
-  - command: portal\node_modules\.bin\tsc.CMD --noEmit -p portal\tsconfig.json
+    artifact: _docs/ralph/handoffs/prototype-t2/T2-X15-validation.txt
+  - command: C:\Windows\System32\cmd.exe /d /c "cd /d C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t2 && portal\node_modules\.bin\tsc.CMD --noEmit --lib dom,dom.iterable,esnext --target ES2020 --module CommonJS --moduleResolution Node --esModuleInterop --skipLibCheck --jsx react-jsx lib\portal\components\provider\domain-verification.ts lib\portal\hooks\useProvider.tsx"
     exit_code: 0
     result: passed
     tool_versions:
       node: v20.19.1
-    artifact: _docs/ralph/handoffs/prototype-t2/T2-X14-validation.txt
+    artifact: _docs/ralph/handoffs/prototype-t2/T2-X15-validation.txt
 generated_hashes: {}
 migrations: []
 external_evidence:
-  - _docs/ralph/handoffs/prototype-t2/T2-X14-evidence.txt
-  - _docs/ralph/handoffs/prototype-t2/T2-X14-validation.txt
+  - _docs/ralph/handoffs/prototype-t2/T2-X15-evidence.txt
+  - _docs/ralph/handoffs/prototype-t2/T2-X15-validation.txt
 known_failures: []
 blockers:
   - T4 producer-handoff.schema.json does not permit the established supplemental T2-X checkpoint names; T2-X01 through T2-X10 retain the campaign queue naming.
   - T4 producer-handoff.schema.json forbids the integration_parent field required by the updated campaign plan; integration ancestor fa21b1e540a5efcbe1822da4199be7acec7709d3 is retained in T2-05-evidence.txt.
   - Full provider package certification is blocked by the unrelated submitter lease timing failure retained in T2-03B-evidence.txt.
   - PortalProvider retains pre-existing ts-nocheck because unrelated Auth, Identity, MFA, and Provider dependencies are not wired.
-  - No production HPC query adapter is wired; query features default unavailable.
-  - No live scheduler, provider query, subscription stream, or chain endpoint was certified.
-next_checkpoint: T2-X15
-expected_head: 9d210092ee880ed8dd97e5a2dbb39197fca5fd2c
+  - No production provider-domain verifier is wired; domain verification defaults unavailable.
+  - No live DNS, HTTP well-known endpoint, provider process, or chain registration was certified.
+next_checkpoint: T2-X16
+expected_head: 99e89ad8b226e2c1e1da88385343a443f54865d5
