@@ -1,29 +1,35 @@
 {
   "campaign": "three-day-prototype",
   "thread": "T4",
-  "checkpoint": "T4-01EAJ",
+  "checkpoint": "T4-01EAK",
   "branch": "ve/prototype-integration",
-  "start_head": "a4bff131bc0c4cbeb125e72e773d865259bc43ea",
-  "end_head": "1933a7732c2cadac125f69e0499ced11b31a1b73",
+  "start_head": "81a853a26549c7cf1fae20fc6cf74cef76cb4dc9",
+  "end_head": "092ddfd0cceef445fc68b0ce3158a15f8f59d609",
   "origin_main": "79391a3df86d85522b92e0400c6904971ecbe65d",
   "tree_clean": true,
   "commits": [
-    "1933a7732c2cadac125f69e0499ced11b31a1b73"
+    "092ddfd0cceef445fc68b0ce3158a15f8f59d609"
   ],
   "owned_paths": [
-    "_docs/ralph/prototype-integration/**",
-    "_docs/ralph/handoffs/prototype-integration/**"
+    "_docs/audits/**",
+    "_docs/ralph/prototype-integration/core-rc-manifest.schema.json",
+    "scripts/generate-core-rc-manifest.cjs",
+    "scripts/generate-core-rc-manifest.test.cjs",
+    "scripts/validate-core-rc-manifest.cjs"
   ],
   "files_changed": [
-    "_docs/ralph/handoffs/prototype-integration/HANDOFF.yaml",
-    "_docs/ralph/prototype-integration/core-rc-manifest.json"
+    "_docs/audits/task-t4-01e-intake-freeze-planner-2026-08-02.md",
+    "_docs/ralph/prototype-integration/core-rc-manifest.schema.json",
+    "scripts/generate-core-rc-manifest.cjs",
+    "scripts/generate-core-rc-manifest.test.cjs",
+    "scripts/validate-core-rc-manifest.cjs"
   ],
   "tests": [
     {
-      "command": "node scripts/validate-prototype-integration.test.cjs && node scripts/validate-prototype-integration.cjs",
+      "command": "node scripts/generate-core-rc-manifest.test.cjs && node scripts/validate-core-rc-manifest.cjs",
       "exit_code": 0,
       "result": "passed",
-      "test_count": 13,
+      "test_count": 22,
       "tool_versions": {
         "node": "20.19.1"
       }
@@ -38,9 +44,7 @@
       }
     }
   ],
-  "generated_hashes": {
-    "_docs/ralph/prototype-integration/core-rc-manifest.json": "de36099ee52150a7ed30a8b6c8316b7ebd8195378c67dd8ec559dfa9572e8af7"
-  },
+  "generated_hashes": {},
   "accepted_checkpoints": [],
   "rejected_checkpoints": [
     {
@@ -91,5 +95,5 @@
     "Task 88C is not complete."
   ],
   "next_checkpoint": null,
-  "expected_head": "1933a7732c2cadac125f69e0499ced11b31a1b73"
+  "expected_head": "092ddfd0cceef445fc68b0ce3158a15f8f59d609"
 }
