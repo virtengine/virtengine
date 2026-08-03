@@ -48,6 +48,12 @@ const tests = [
   ["rejects a wrong-thread announced tag", () => { const value = frozen(); value.producers[0].tag = "checkpoint/prototype-t3/t3-13a"; assert.throws(() => validateFreezeTransition(epoch(), value, afterCutoff), /decision is invalid/); }],
   ["rejects unknown producer fields", () => { const value = frozen(); value.producers[0].accepted = true; assert.throws(() => validateFreezeTransition(epoch(), value, afterCutoff), /fields are invalid/); }],
   ["parses explicit reviewed HEAD, plan digest, and observation", () => { const value = parseArgs(["--epoch", "1", "--expected-head", "a".repeat(40), "--expected-plan-sha256", "b".repeat(64), "--observation", "observation.json", "--plan", "plan.json"]); assert.equal(value.observation, "observation.json"); }],
+  ["rejects duplicate or incomplete application arguments", () => {
+    const required = ["--expected-head", "a".repeat(40), "--expected-plan-sha256", "b".repeat(64), "--observation", "observation.json", "--plan", "plan.json"];
+    assert.throws(() => parseArgs(["--epoch", "1", "--epoch", "2", ...required]), /duplicate argument/);
+    assert.throws(() => parseArgs(["--epoch", "--expected-head", "a".repeat(40), ...required.slice(2)]), /requires a value/);
+    assert.throws(() => parseArgs(["--epoch", "1", ...required, "--repo"]), /requires a value/);
+  }],
   ["rejects a missing expected HEAD", () => assert.throws(() => parseArgs(["--epoch", "1", "--expected-plan-sha256", "b".repeat(64), "--observation", "observation.json", "--plan", "plan.json"]), /expected-head/)],
   ["rejects an abbreviated expected HEAD", () => assert.throws(() => parseArgs(["--epoch", "1", "--expected-head", "abc123", "--expected-plan-sha256", "b".repeat(64), "--observation", "observation.json", "--plan", "plan.json"]), /exact commit SHA/)],
   ["rejects a missing reviewed plan digest", () => assert.throws(() => parseArgs(["--epoch", "1", "--expected-head", "a".repeat(40), "--observation", "observation.json", "--plan", "plan.json"]), /expected-plan-sha256/)],
