@@ -233,6 +233,8 @@ const tests = [
     assert.equal(schema.$defs.slurm.properties.blocker_id.const, "slurm-production-evidence-unavailable");
     assert.equal(schema.$defs.modelProvenance.properties.blocker_id.const, "production-model-provenance-unavailable");
     assert.equal(schema.$defs.producerCheckpoints.properties.blocker_id.const, "accepted-producer-checkpoints-unavailable");
+    assert.equal(schema.$defs.dependency.oneOf.length, 3);
+    assert.deepEqual(schema.$defs.dependency.properties.id.enum, ["producer-checkpoints", "sbom-and-release-provenance", "production-rollout"]);
     const mutated = clone(schema);
     mutated.$defs.testRecord.properties.command.bogus = true;
     assert.throws(() => validateSchema(mutated), /unknown schema keyword/);
@@ -252,6 +254,11 @@ const tests = [
     const candidate = clone(checkedManifest);
     [candidate.migrations.blocker_id, candidate.slurm.blocker_id] = [candidate.slurm.blocker_id, candidate.migrations.blocker_id];
     assert.throws(() => validateManifest(candidate, { rootDir: root }), /migration blocker mismatch/);
+  }],
+  ["rejects cross-wired external dependency blockers", () => {
+    const candidate = clone(checkedManifest);
+    [candidate.external_dependencies[0].blocker_id, candidate.external_dependencies[1].blocker_id] = [candidate.external_dependencies[1].blocker_id, candidate.external_dependencies[0].blocker_id];
+    assert.throws(() => validateManifest(candidate, { rootDir: root }), /external dependency inventory mismatch/);
   }],
   ["rejects duplicate manifest entry IDs", () => {
     assert.throws(() => assertUniqueIds([{ id: "chart" }, { id: "chart" }], "artifact group"), /must be unique/);

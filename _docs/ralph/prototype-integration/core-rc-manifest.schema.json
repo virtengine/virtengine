@@ -275,10 +275,15 @@
     "dependency": {
       "type": "object", "additionalProperties": false,
       "required": ["id", "status", "blocker_id"],
+      "oneOf": [
+        { "properties": { "id": { "const": "producer-checkpoints" }, "blocker_id": { "const": "accepted-producer-checkpoints-unavailable" } } },
+        { "properties": { "id": { "const": "sbom-and-release-provenance" }, "blocker_id": { "const": "release-sbom-provenance-unavailable" } } },
+        { "properties": { "id": { "const": "production-rollout" }, "blocker_id": { "const": "rollout-not-authorized" } } }
+      ],
       "properties": {
-        "id": { "type": "string", "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$" },
+        "id": { "enum": ["producer-checkpoints", "sbom-and-release-provenance", "production-rollout"] },
         "status": { "const": "unavailable" },
-        "blocker_id": { "type": "string", "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$" }
+        "blocker_id": { "enum": ["accepted-producer-checkpoints-unavailable", "release-sbom-provenance-unavailable", "rollout-not-authorized"] }
       }
     },
     "blocker": {

@@ -611,6 +611,11 @@ function validateManifest(manifest, options = {}) {
   linkedSections.forEach((section, index) => assertBlocker(manifest, section.blocker_id, `blocked section ${index}`));
   if (manifest.test_evidence.status === "complete") assert.equal(manifest.test_evidence.blocker_id, null, "complete test evidence cannot retain a blocker");
   else assertBlocker(manifest, manifest.test_evidence.blocker_id, "partial test evidence");
+  assert.deepEqual(manifest.external_dependencies, [
+    { id: "producer-checkpoints", status: "unavailable", blocker_id: "accepted-producer-checkpoints-unavailable" },
+    { id: "sbom-and-release-provenance", status: "unavailable", blocker_id: "release-sbom-provenance-unavailable" },
+    { id: "production-rollout", status: "unavailable", blocker_id: "rollout-not-authorized" },
+  ], "external dependency inventory mismatch");
   validateExternalDependencies(manifest.external_dependencies, manifest);
   assert.deepEqual([...blockerIds(manifest)].sort(), referencedRootBlockerIds(manifest), "root blockers must exactly match manifest blocker references");
 

@@ -118,6 +118,11 @@ sections each retain their dedicated canonical blocker ID. Runtime and schema
 validation reject cross-wired blockers even when every substituted blocker
 exists in the root blocker inventory.
 
+The external dependency inventory is the exact ordered producer-checkpoint,
+release-provenance, and rollout dependency set. Each identity is paired with
+its dedicated unavailable blocker, so reordered, substituted, or cross-wired
+dependency evidence fails runtime and schema validation.
+
 The planner hashes the selected observation, requires the checked core-RC
 manifest to bind that exact path/digest, verifies identical bytes at the
 manifest source commit, and requires that source to be an ancestor of current
