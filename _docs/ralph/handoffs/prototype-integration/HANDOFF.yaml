@@ -1,35 +1,45 @@
 {
   "campaign": "three-day-prototype",
   "thread": "T4",
-  "checkpoint": "T4-01BK",
+  "checkpoint": "T4-01BL",
   "branch": "ve/prototype-integration",
-  "start_head": "4511e90523fbc83a3a8819b9c8a29c53a9dc9495",
-  "end_head": "7f4b1106cb3b95135c43bc2ce06ed7ddc896267a",
+  "start_head": "4a8d56957349f5155fa1277421cb4986b081eb0c",
+  "end_head": "ba160785e4ba8f84df7cbdaf7fd2edb805764708",
   "origin_main": "79391a3df86d85522b92e0400c6904971ecbe65d",
   "tree_clean": true,
   "commits": [
-    "7f4b1106cb3b95135c43bc2ce06ed7ddc896267a"
+    "ba160785e4ba8f84df7cbdaf7fd2edb805764708"
   ],
   "owned_paths": [
     "_docs/ralph/prototype-integration/**",
     "_docs/ralph/handoffs/prototype-integration/**"
   ],
   "files_changed": [
-    "_docs/ralph/prototype-integration/epochs/epoch-2-tag-observation.json"
+    "_docs/ralph/handoffs/prototype-integration/HANDOFF.yaml",
+    "_docs/ralph/prototype-integration/core-rc-manifest.json"
   ],
   "tests": [
     {
-      "command": "node scripts/observe-prototype-intake-tags.test.cjs && node scripts/validate-prototype-integration.cjs",
+      "command": "node scripts/validate-prototype-integration.test.cjs && node scripts/validate-prototype-integration.cjs",
       "exit_code": 0,
       "result": "passed",
-      "test_count": 5,
+      "test_count": 13,
+      "tool_versions": {
+        "node": "20.19.1"
+      }
+    },
+    {
+      "command": "node scripts/validate-agents-docs.mjs",
+      "exit_code": 0,
+      "result": "passed",
+      "test_count": 9,
       "tool_versions": {
         "node": "20.19.1"
       }
     }
   ],
   "generated_hashes": {
-    "_docs/ralph/prototype-integration/core-rc-manifest.json": "f7ed592f54fe4e244a4c898fb3e80ef38fc5b2c87dfdb1c0241852a15065a64a"
+    "_docs/ralph/prototype-integration/core-rc-manifest.json": "f8c1c342912cf501e2051bc8f163cf1d9aecf6e56f42cdbd065123be7e102afd"
   },
   "accepted_checkpoints": [],
   "rejected_checkpoints": [
@@ -81,5 +91,5 @@
     "Task 88C is not complete."
   ],
   "next_checkpoint": null,
-  "expected_head": "7f4b1106cb3b95135c43bc2ce06ed7ddc896267a"
+  "expected_head": "ba160785e4ba8f84df7cbdaf7fd2edb805764708"
 }
