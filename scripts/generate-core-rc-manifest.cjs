@@ -4,7 +4,7 @@
 
 const assert = require("assert").strict;
 const { createHash } = require("crypto");
-const { existsSync, readFileSync, writeFileSync } = require("fs");
+const { existsSync, readFileSync, realpathSync, writeFileSync } = require("fs");
 const { isAbsolute, relative, resolve } = require("path");
 const { spawnSync } = require("child_process");
 const { validateEpochSequence } = require("./prototype-intake-epochs.cjs");
@@ -548,15 +548,25 @@ function serialize(manifest) {
   return `${JSON.stringify(manifest, null, 2)}\n`;
 }
 
+function pathsReferToSameFile(left, right) {
+  const normalize = (path) => process.platform === "win32" ? path.toLowerCase() : path;
+  const canonical = (path) => normalize(existsSync(path) ? realpathSync.native(path) : resolve(path));
+  return canonical(left) === canonical(right);
+}
+
 function parseArgs(argv) {
   const options = { check: false, output: manifestRelativePath, source: null, toolingSource: null };
+  const seen = new Set();
   for (let index = 0; index < argv.length; index += 1) {
     const argument = argv[index];
+    assert.equal(seen.has(argument), false, `duplicate argument: ${argument}`);
+    seen.add(argument);
     if (argument === "--check") options.check = true;
-    else if (argument === "--source") options.source = argv[++index];
-    else if (argument === "--tooling-source") options.toolingSource = argv[++index];
-    else if (argument === "--output") {
-      options.output = argv[++index];
+    else if (["--source", "--tooling-source", "--output"].includes(argument)) {
+      const value = argv[++index];
+      assert.ok(value && !value.startsWith("--"), `${argument} requires a value`);
+      const key = { "--source": "source", "--tooling-source": "toolingSource", "--output": "output" }[argument];
+      options[key] = value;
     }
     else throw new Error(`unknown argument: ${argument}`);
   }
@@ -570,7 +580,7 @@ function main(argv = process.argv.slice(2)) {
   const options = parseArgs(argv);
   const output = resolve(root, options.output);
   const checkedPath = resolve(root, manifestRelativePath);
-  if (options.check || output === checkedPath) {
+  if (options.check || pathsReferToSameFile(output, checkedPath)) {
     assert.equal(gitText(["status", "--porcelain"], root), "", "refusing checked manifest access from a dirty worktree; use a temporary --output with exact source and tooling SHAs");
   }
   const generationOptions = { toolingSha: options.toolingSource };
@@ -587,6 +597,6 @@ function main(argv = process.argv.slice(2)) {
   }
 }
 
-module.exports = { artifactSelections, assertUniqueIds, buildAiAssurance, buildArtifactGroup, buildTestEvidence, buildTooling, generateManifest, listSourceEntries, main, manifestRelativePath, serialize, sourceArtifacts, sourceArtifactsFor, validateManifest };
+module.exports = { artifactSelections, assertUniqueIds, buildAiAssurance, buildArtifactGroup, buildTestEvidence, buildTooling, generateManifest, listSourceEntries, main, manifestRelativePath, parseArgs, pathsReferToSameFile, serialize, sourceArtifacts, sourceArtifactsFor, validateManifest };
 
 if (require.main === module) main();

@@ -12,6 +12,8 @@ const {
   buildTestEvidence,
   buildTooling,
   listSourceEntries,
+  parseArgs,
+  pathsReferToSameFile,
   sourceArtifacts,
   sourceArtifactsFor,
 } = require("./generate-core-rc-manifest.cjs");
@@ -43,6 +45,17 @@ const productionPolicy = JSON.parse(readFileSync(resolve(root, "_docs/ralph/prot
 const featureParity = JSON.parse(readFileSync(resolve(root, "pkg/inference/conformance/testdata/feature_parity_v1.json"), "utf8"));
 
 const tests = [
+  ["rejects duplicate or incomplete generator arguments", () => {
+    assert.throws(() => parseArgs(["--source", sourceSha, "--source", "0".repeat(40), "--tooling-source", sourceSha]), /duplicate argument/);
+    assert.throws(() => parseArgs(["--source", "--tooling-source", sourceSha]), /requires a value/);
+    assert.throws(() => parseArgs(["--source", sourceSha, "--tooling-source"]), /requires a value/);
+    assert.throws(() => parseArgs(["--source", sourceSha, "--tooling-source", sourceSha, "--check", "--check"]), /duplicate argument/);
+  }],
+  ["recognizes checked manifest path aliases", () => {
+    const checked = resolve(root, checkedManifestPath);
+    assert.equal(pathsReferToSameFile(checked, resolve(root, ".", checkedManifestPath)), true);
+    if (process.platform === "win32") assert.equal(pathsReferToSameFile(checked.toUpperCase(), checked), true);
+  }],
   ["projects blocked AI assurance without certification", () => {
     const assurance = buildAiAssurance(modelProvenance, productionPolicy, featureParity);
     assert.equal(assurance.feature_vector.dimension, 768);

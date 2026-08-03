@@ -23,6 +23,11 @@ HEAD and UTC window arguments before checking the published base boundary. The
 producer intake validator applies the same rule to epoch, tag, repository, and
 remote arguments before fetching or evaluating a checkpoint.
 
+Exact-SHA manifest generation also rejects duplicate, missing, or option-looking
+source, tooling-source, output, and check arguments. Checked-manifest path
+identity resolves filesystem aliases and compares case-insensitively on Windows,
+so alternate spelling cannot bypass the clean-worktree guard.
+
 The planner hashes the selected observation, requires the checked core-RC
 manifest to bind that exact path/digest, verifies identical bytes at the
 manifest source commit, and requires that source to be an ancestor of current
