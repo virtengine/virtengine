@@ -50,6 +50,15 @@ const tests = [
     assert.equal(runtime.kind, "policy");
     assert.match(runtime.command, /preflight-integration-candidate\.cjs --repo \. --candidate origin\/ve\/prototype-integration-live/);
   }],
+  ["requires an explicit blocked live-candidate projection", () => {
+    const missingCategoryBlocker = cloneMatrix();
+    const category = missingCategoryBlocker.categories.find((entry) => entry.id === "docs_process_boundary_e2e");
+    category.blockers = category.blockers.filter((blocker) => blocker !== "integration-candidate-preflight-blocked");
+    assert.throws(() => validateRequiredGateMatrix(missingCategoryBlocker, { schema }), /must include integration-candidate-preflight-blocked/);
+    const missingRootBlocker = cloneMatrix();
+    missingRootBlocker.blockers = missingRootBlocker.blockers.filter((blocker) => blocker.id !== "integration-candidate-preflight-blocked");
+    assert.throws(() => validateRequiredGateMatrix(missingRootBlocker, { schema }), /must define integration-candidate-preflight-blocked|references unknown blocker/);
+  }],
   ["rejects a missing SLURM render command", () => {
     const candidate = cloneMatrix();
     const category = candidate.categories.find((entry) => entry.id === "deployment");

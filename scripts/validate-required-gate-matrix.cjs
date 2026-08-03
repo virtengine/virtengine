@@ -159,6 +159,7 @@ function validateRequiredGateMatrix(matrix, options = {}) {
       for (const selector of ["scripts/*.cjs", "scripts/*.js", "scripts/*.md", "scripts/*.mjs", "scripts/*.ps1", "scripts/*.py", "scripts/*.sh", "scripts/*.sql", "scripts/*.ts", "scripts/bosun", "scripts/localnet.sh", "scripts/localnet.ps1"]) {
         assert.ok(category.path_selectors.includes(selector), `docs/process selectors must include ${selector}`);
       }
+      assert.ok(category.blockers.includes("integration-candidate-preflight-blocked"), "docs/process blockers must include integration-candidate-preflight-blocked");
     }
     if (category.id === "deployment") {
       for (const selector of ["scripts/validate_slurm_chart_semantics.py", "scripts/validate_slurm_chart_semantics_test.py"]) {
@@ -198,6 +199,7 @@ function validateRequiredGateMatrix(matrix, options = {}) {
     remaining.delete(category.id);
   }
   assert.equal(remaining.size, 0, `missing category: ${[...remaining.keys()].join(", ")}`);
+  assert.ok(blockerIds.has("integration-candidate-preflight-blocked"), "matrix must define integration-candidate-preflight-blocked");
 
   const blocked = matrix.categories.some((category) => category.status === "dependency_blocked");
   if (blocked) assert.equal(matrix.status, "dependency_blocked", "matrix must remain dependency_blocked while a category is blocked");
