@@ -203,6 +203,7 @@ const tests = [
     assert.equal(schema.$defs.testEvidence.properties.records.uniqueItems, true);
     assert.equal(schema.$defs.testRecord.properties.tool_versions.propertyNames.pattern, "^\\S(?:.*\\S)?$");
     assert.equal(schema.$defs.testRecord.properties.tool_versions.additionalProperties.pattern, "^\\S(?:.*\\S)?$");
+    assert.equal(schema.properties.control_artifacts.uniqueItems, true);
     const mutated = clone(schema);
     mutated.$defs.testRecord.properties.command.bogus = true;
     assert.throws(() => validateSchema(mutated), /unknown schema keyword/);

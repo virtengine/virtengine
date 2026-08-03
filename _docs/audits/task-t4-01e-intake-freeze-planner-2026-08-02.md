@@ -62,6 +62,9 @@ Rejected producer evidence has exact thread, checkpoint, tip, and literal
 reason fields. Runtime and schema validation reject malformed records and exact
 duplicates, while the manifest remains byte-bound to the integration ledger.
 
+Control artifacts reject duplicate records in schema validation and duplicate
+IDs or paths at runtime before source-byte hashes and statuses are accepted.
+
 The planner hashes the selected observation, requires the checked core-RC
 manifest to bind that exact path/digest, verifies identical bytes at the
 manifest source commit, and requires that source to be an ancestor of current

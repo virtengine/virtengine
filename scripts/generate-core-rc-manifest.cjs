@@ -517,8 +517,14 @@ function validateManifest(manifest, options = {}) {
   }
 
   assert.deepEqual(manifest.control_artifacts.map((artifact) => [artifact.id, artifact.path]), controlArtifacts, "control artifact inventory mismatch");
+  const controlArtifactIds = new Set();
+  const controlArtifactPaths = new Set();
   for (const artifact of manifest.control_artifacts) {
     exactKeys(artifact, ["id", "path", "sha256", "status"], `control artifact ${artifact.id || "unknown"}`);
+    assert.equal(controlArtifactIds.has(artifact.id), false, `duplicate control artifact ID: ${artifact.id}`);
+    assert.equal(controlArtifactPaths.has(artifact.path), false, `duplicate control artifact path: ${artifact.path}`);
+    controlArtifactIds.add(artifact.id);
+    controlArtifactPaths.add(artifact.path);
     assert.match(artifact.sha256, digestPattern);
     assert.equal(sourceDigest(manifest.source.payload_sha, artifact.path, cwd), artifact.sha256, `${artifact.path} hash mismatch`);
     const document = sourceJson(manifest.source.payload_sha, artifact.path, cwd);
