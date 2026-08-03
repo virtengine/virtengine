@@ -1,31 +1,29 @@
 {
   "campaign": "three-day-prototype",
   "thread": "T4",
-  "checkpoint": "T4-01EBO",
+  "checkpoint": "T4-01EBP",
   "branch": "ve/prototype-integration",
-  "start_head": "a5f92fbab961a9b632aea832dbce07fc338902f7",
-  "end_head": "e43424ae4e9382fe8b8e17181bb43dd8720fb060",
+  "start_head": "6906d5eef6521e01cd42da99b258e6c9dbf9d891",
+  "end_head": "d89c7d04bcb10bbcfdcac3c1ff3bc3f1e034da2c",
   "origin_main": "79391a3df86d85522b92e0400c6904971ecbe65d",
   "tree_clean": true,
   "commits": [
-    "e43424ae4e9382fe8b8e17181bb43dd8720fb060"
+    "d89c7d04bcb10bbcfdcac3c1ff3bc3f1e034da2c"
   ],
   "owned_paths": [
-    "_docs/audits/**",
-    "_docs/ralph/prototype-integration/core-rc-manifest.schema.json",
-    "scripts/generate-core-rc-manifest.test.cjs"
+    "_docs/ralph/prototype-integration/**",
+    "_docs/ralph/handoffs/prototype-integration/**"
   ],
   "files_changed": [
-    "_docs/audits/task-t4-01e-intake-freeze-planner-2026-08-02.md",
-    "_docs/ralph/prototype-integration/core-rc-manifest.schema.json",
-    "scripts/generate-core-rc-manifest.test.cjs"
+    "_docs/ralph/handoffs/prototype-integration/HANDOFF.yaml",
+    "_docs/ralph/prototype-integration/core-rc-manifest.json"
   ],
   "tests": [
     {
-      "command": "node scripts/generate-core-rc-manifest.test.cjs && node scripts/validate-core-rc-manifest.cjs",
+      "command": "node scripts/validate-prototype-integration.test.cjs && node scripts/validate-prototype-integration.cjs",
       "exit_code": 0,
       "result": "passed",
-      "test_count": 30,
+      "test_count": 13,
       "tool_versions": {
         "node": "20.19.1"
       }
@@ -40,7 +38,9 @@
       }
     }
   ],
-  "generated_hashes": {},
+  "generated_hashes": {
+    "_docs/ralph/prototype-integration/core-rc-manifest.json": "10f4fa44d0260b7a22149c1e70802b9a16206bb260b788e96edd59920bce9420"
+  },
   "accepted_checkpoints": [],
   "rejected_checkpoints": [
     {
@@ -91,5 +91,5 @@
     "Task 88C is not complete."
   ],
   "next_checkpoint": null,
-  "expected_head": "e43424ae4e9382fe8b8e17181bb43dd8720fb060"
+  "expected_head": "d89c7d04bcb10bbcfdcac3c1ff3bc3f1e034da2c"
 }
