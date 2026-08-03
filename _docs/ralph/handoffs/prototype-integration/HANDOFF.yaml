@@ -1,31 +1,29 @@
 {
   "campaign": "three-day-prototype",
   "thread": "T4",
-  "checkpoint": "T4-01EK",
+  "checkpoint": "T4-01EL",
   "branch": "ve/prototype-integration",
-  "start_head": "0f7454201adc3c43f1d93939f16e56b0cf828025",
-  "end_head": "3fc4c8e7f7b8471160de33f547fb72eaf5bad136",
+  "start_head": "f15738dad9c6d9c03f321014ca3903ea33096fb6",
+  "end_head": "f0af72be20defc0ec830137830f72b4b314ce8a2",
   "origin_main": "79391a3df86d85522b92e0400c6904971ecbe65d",
   "tree_clean": true,
   "commits": [
-    "3fc4c8e7f7b8471160de33f547fb72eaf5bad136"
+    "f0af72be20defc0ec830137830f72b4b314ce8a2"
   ],
   "owned_paths": [
-    "_docs/audits/**",
-    "scripts/run-required-gates.cjs",
-    "scripts/run-required-gates.test.cjs"
+    "_docs/ralph/prototype-integration/**",
+    "_docs/ralph/handoffs/prototype-integration/**"
   ],
   "files_changed": [
-    "_docs/audits/task-t4-01e-intake-freeze-planner-2026-08-02.md",
-    "scripts/run-required-gates.cjs",
-    "scripts/run-required-gates.test.cjs"
+    "_docs/ralph/handoffs/prototype-integration/HANDOFF.yaml",
+    "_docs/ralph/prototype-integration/core-rc-manifest.json"
   ],
   "tests": [
     {
-      "command": "node scripts/run-required-gates.test.cjs",
+      "command": "node scripts/validate-prototype-integration.test.cjs && node scripts/validate-prototype-integration.cjs",
       "exit_code": 0,
       "result": "passed",
-      "test_count": 31,
+      "test_count": 13,
       "tool_versions": {
         "node": "20.19.1"
       }
@@ -40,7 +38,9 @@
       }
     }
   ],
-  "generated_hashes": {},
+  "generated_hashes": {
+    "_docs/ralph/prototype-integration/core-rc-manifest.json": "91c573230a6229477663b6b6c3de17df4ced80caed386e16f7a1231f29ca945a"
+  },
   "accepted_checkpoints": [],
   "rejected_checkpoints": [
     {
@@ -91,5 +91,5 @@
     "Task 88C is not complete."
   ],
   "next_checkpoint": null,
-  "expected_head": "3fc4c8e7f7b8471160de33f547fb72eaf5bad136"
+  "expected_head": "f0af72be20defc0ec830137830f72b4b314ce8a2"
 }
