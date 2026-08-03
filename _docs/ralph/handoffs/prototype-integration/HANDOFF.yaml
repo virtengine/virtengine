@@ -1,62 +1,45 @@
 {
   "campaign": "three-day-prototype",
   "thread": "T4",
-  "checkpoint": "T4-01BG",
+  "checkpoint": "T4-01BH",
   "branch": "ve/prototype-integration",
-  "start_head": "b2ba5c99254f56d556befa4f84f603f3fcfde2ce",
-  "end_head": "58b614949c35b61b611a72b04b31652ee40e7cb4",
+  "start_head": "4e87c1d3a133d1377b5a67f6e8fd95e26223e1d7",
+  "end_head": "9fa7fd0ad4ca0b104c7860562fd7f21df7c6a008",
   "origin_main": "79391a3df86d85522b92e0400c6904971ecbe65d",
   "tree_clean": true,
   "commits": [
-    "58b614949c35b61b611a72b04b31652ee40e7cb4"
+    "9fa7fd0ad4ca0b104c7860562fd7f21df7c6a008"
   ],
   "owned_paths": [
     "_docs/ralph/prototype-integration/**",
-    "_docs/ralph/handoffs/prototype-integration/**",
-    "_docs/prototype-thread-intake-runbook.md",
-    "scripts/generate-core-rc-manifest.cjs",
-    "scripts/generate-core-rc-manifest.test.cjs",
-    "scripts/open-prototype-intake-epoch.cjs",
-    "scripts/open-prototype-intake-epoch.test.cjs",
-    "scripts/prototype-intake-epochs.cjs",
-    "scripts/prototype-intake-epochs.test.cjs",
-    "scripts/validate-prototype-integration.cjs",
-    "scripts/validate-required-gate-matrix.cjs"
+    "_docs/ralph/handoffs/prototype-integration/**"
   ],
   "files_changed": [
-    "_docs/prototype-thread-intake-runbook.md",
-    "_docs/ralph/prototype-integration/required-gate-matrix.json",
-    "scripts/generate-core-rc-manifest.cjs",
-    "scripts/generate-core-rc-manifest.test.cjs",
-    "scripts/open-prototype-intake-epoch.cjs",
-    "scripts/open-prototype-intake-epoch.test.cjs",
-    "scripts/prototype-intake-epochs.cjs",
-    "scripts/prototype-intake-epochs.test.cjs",
-    "scripts/validate-prototype-integration.cjs",
-    "scripts/validate-required-gate-matrix.cjs"
+    "_docs/ralph/handoffs/prototype-integration/HANDOFF.yaml",
+    "_docs/ralph/prototype-integration/core-rc-manifest.json"
   ],
   "tests": [
     {
-      "command": "node scripts/generate-core-rc-manifest.test.cjs && node scripts/prototype-intake-epochs.test.cjs && node scripts/open-prototype-intake-epoch.test.cjs",
+      "command": "node scripts/validate-prototype-integration.test.cjs && node scripts/validate-prototype-integration.cjs",
       "exit_code": 0,
       "result": "passed",
-      "test_count": 32,
+      "test_count": 12,
       "tool_versions": {
         "node": "20.19.1"
       }
     },
     {
-      "command": "node scripts/validate-required-gate-matrix.test.cjs && node scripts/run-required-gates.test.cjs",
+      "command": "node scripts/validate-agents-docs.mjs",
       "exit_code": 0,
       "result": "passed",
-      "test_count": 45,
+      "test_count": 9,
       "tool_versions": {
         "node": "20.19.1"
       }
     }
   ],
   "generated_hashes": {
-    "_docs/ralph/prototype-integration/core-rc-manifest.json": "e79da46d93b51bcf3aae3ba00b5b36e21bad63a4f90674bfcc6552419065daec"
+    "_docs/ralph/prototype-integration/core-rc-manifest.json": "494a2e3f06cabc9659fd507928e324f782b83364bc36716733c0d263acb78af4"
   },
   "accepted_checkpoints": [],
   "rejected_checkpoints": [
@@ -108,5 +91,5 @@
     "Task 88C is not complete."
   ],
   "next_checkpoint": null,
-  "expected_head": "58b614949c35b61b611a72b04b31652ee40e7cb4"
+  "expected_head": "9fa7fd0ad4ca0b104c7860562fd7f21df7c6a008"
 }
