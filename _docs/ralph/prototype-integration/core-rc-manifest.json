@@ -6,14 +6,14 @@
   "planned_functionality_complete": false,
   "milestone_m_eligible": false,
   "source": {
-    "payload_sha": "4e87c1d3a133d1377b5a67f6e8fd95e26223e1d7",
-    "tree": "2ea80a539fd164c94df2db9a1a167fb1bf1d208e",
+    "payload_sha": "6f33ac007938972b777a1eb671df8e706d77f52b",
+    "tree": "c38bc5400255dfe8edbd1499a6e36170589afb63",
     "branch": "ve/prototype-integration",
     "binding": "declared_clean_parent_payload"
   },
   "tooling": {
-    "tooling_sha": "4e87c1d3a133d1377b5a67f6e8fd95e26223e1d7",
-    "tree": "2ea80a539fd164c94df2db9a1a167fb1bf1d208e",
+    "tooling_sha": "6f33ac007938972b777a1eb671df8e706d77f52b",
+    "tree": "c38bc5400255dfe8edbd1499a6e36170589afb63",
     "artifacts": [
       {
         "id": "generator",
@@ -278,15 +278,9 @@
     },
     {
       "id": "intake_epoch",
-      "path": "_docs/ralph/prototype-integration/epochs/epoch-1.json",
-      "sha256": "ee39159968e51553f4879e9ba7173709c011122c168fbed529b2aa3a4926e4e5",
-      "status": "closed"
-    },
-    {
-      "id": "intake_tag_observation",
-      "path": "_docs/ralph/prototype-integration/epochs/epoch-1-tag-observation.json",
-      "sha256": "fdcd4bbec27f84b159ba067d895ba2fe0038fca148e73bc397b6729f2b00af6a",
-      "status": "blocked"
+      "path": "_docs/ralph/prototype-integration/epochs/epoch-2.json",
+      "sha256": "71c390b644564ece2d9fa92f88c83a228c166759dae4bcd37349635dbbb88d62",
+      "status": "open"
     }
   ],
   "migrations": {
@@ -427,26 +421,26 @@
   "test_evidence": {
     "status": "complete",
     "ledger_path": "_docs/ralph/handoffs/prototype-integration/HANDOFF.yaml",
-    "implementation_sha": "58b614949c35b61b611a72b04b31652ee40e7cb4",
-    "ledger_sha": "4e87c1d3a133d1377b5a67f6e8fd95e26223e1d7",
+    "implementation_sha": "42af0bbb517120197d1de5dda564ffdef0a26f77",
+    "ledger_sha": "6f33ac007938972b777a1eb671df8e706d77f52b",
     "record_count": 2,
-    "declared_test_count": 77,
+    "declared_test_count": 28,
     "uncounted_record_count": 0,
     "records": [
       {
-        "command": "node scripts/generate-core-rc-manifest.test.cjs && node scripts/prototype-intake-epochs.test.cjs && node scripts/open-prototype-intake-epoch.test.cjs",
+        "command": "node scripts/prototype-intake-epochs.test.cjs && node scripts/validate-prototype-integration.test.cjs",
         "exit_code": 0,
         "result": "passed",
-        "test_count": 32,
+        "test_count": 20,
         "tool_versions": {
           "node": "20.19.1"
         }
       },
       {
-        "command": "node scripts/validate-required-gate-matrix.test.cjs && node scripts/run-required-gates.test.cjs",
+        "command": "node scripts/open-prototype-intake-epoch.test.cjs",
         "exit_code": 0,
         "result": "passed",
-        "test_count": 45,
+        "test_count": 8,
         "tool_versions": {
           "node": "20.19.1"
         }
@@ -456,7 +450,7 @@
   },
   "producer_checkpoints": {
     "ledger_path": "_docs/ralph/handoffs/prototype-integration/HANDOFF.yaml",
-    "ledger_sha256": "486f207b45467aab85c3cded9aec2114d1dd343324114363340435cf12f70217",
+    "ledger_sha256": "49df74f50f42685e2d1979cb4f9dc008017564933006066f8a36fafae7e041df",
     "accepted": [],
     "rejected": [
       {
