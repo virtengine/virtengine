@@ -39,7 +39,9 @@ before acceptance evidence is read.
 
 Manifest handoff test records may omit counts and remain explicitly partial,
 but any declared count must be a positive integer. Zero-count records cannot
-produce complete test evidence.
+produce complete test evidence. The manifest schema mirrors runtime semantics:
+complete evidence has zero uncounted records, while partial evidence retains at
+least one uncounted record.
 
 The planner hashes the selected observation, requires the checked core-RC
 manifest to bind that exact path/digest, verifies identical bytes at the

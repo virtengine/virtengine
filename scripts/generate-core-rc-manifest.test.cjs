@@ -162,6 +162,12 @@ const tests = [
   }],
   ["rejects mutated schema structure and duplicate schema IDs", () => {
     assert.doesNotThrow(() => validateSchema(schema));
+    assert.equal(schema.$defs.testRecord.properties.test_count.oneOf[0].minimum, 1);
+    assert.equal(schema.$defs.testEvidence.properties.uncounted_record_count.minimum, 0);
+    assert.equal(schema.$defs.testEvidence.oneOf[0].properties.status.const, "complete");
+    assert.equal(schema.$defs.testEvidence.oneOf[0].properties.uncounted_record_count.const, 0);
+    assert.equal(schema.$defs.testEvidence.oneOf[1].properties.status.const, "partial");
+    assert.equal(schema.$defs.testEvidence.oneOf[1].properties.uncounted_record_count.minimum, 1);
     const mutated = clone(schema);
     mutated.$defs.testRecord.properties.command.bogus = true;
     assert.throws(() => validateSchema(mutated), /unknown schema keyword/);

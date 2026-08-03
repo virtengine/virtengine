@@ -208,11 +208,15 @@
     "testEvidence": {
       "type": "object", "additionalProperties": false,
       "required": ["status", "ledger_path", "implementation_sha", "ledger_sha", "record_count", "declared_test_count", "uncounted_record_count", "records", "blocker_id"],
+      "oneOf": [
+        { "properties": { "status": { "const": "complete" }, "uncounted_record_count": { "const": 0 } } },
+        { "properties": { "status": { "const": "partial" }, "uncounted_record_count": { "minimum": 1 } } }
+      ],
       "properties": {
         "status": { "enum": ["complete", "partial"] }, "ledger_path": { "type": "string", "minLength": 1 },
         "implementation_sha": { "$ref": "#/$defs/sha" }, "ledger_sha": { "$ref": "#/$defs/sha" },
         "record_count": { "type": "integer", "minimum": 1 },
-        "declared_test_count": { "type": "integer", "minimum": 0 }, "uncounted_record_count": { "type": "integer", "minimum": 1 },
+        "declared_test_count": { "type": "integer", "minimum": 0 }, "uncounted_record_count": { "type": "integer", "minimum": 0 },
         "records": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/testRecord" } },
         "blocker_id": { "type": "string", "minLength": 1 }
       }
@@ -222,7 +226,7 @@
       "required": ["command", "exit_code", "result", "test_count", "tool_versions"],
       "properties": {
         "command": { "type": "string", "minLength": 1 }, "exit_code": { "const": 0 }, "result": { "const": "passed" },
-        "test_count": { "oneOf": [{ "type": "integer", "minimum": 0 }, { "type": "null" }] },
+        "test_count": { "oneOf": [{ "type": "integer", "minimum": 1 }, { "type": "null" }] },
         "tool_versions": { "type": "object", "minProperties": 1, "additionalProperties": { "type": "string", "minLength": 1 } }
       }
     },
