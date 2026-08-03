@@ -6,20 +6,20 @@
   "planned_functionality_complete": false,
   "milestone_m_eligible": false,
   "source": {
-    "payload_sha": "6f3eac6f407fbb890f7d67ae6a716ebae438d009",
-    "tree": "e803b89fc0e2963c4820609c66ac816b97ee1162",
+    "payload_sha": "9cbdd5b3e49dc720a0de66d7568178fe40d35b7f",
+    "tree": "9164b4b2d335913fe26fdba3e9d1664c270824c3",
     "branch": "ve/prototype-integration",
     "binding": "declared_clean_parent_payload"
   },
   "tooling": {
-    "tooling_sha": "6f3eac6f407fbb890f7d67ae6a716ebae438d009",
-    "tree": "e803b89fc0e2963c4820609c66ac816b97ee1162",
+    "tooling_sha": "9cbdd5b3e49dc720a0de66d7568178fe40d35b7f",
+    "tree": "9164b4b2d335913fe26fdba3e9d1664c270824c3",
     "artifacts": [
       {
         "id": "generator",
         "path": "scripts/generate-core-rc-manifest.cjs",
-        "git_blob": "4e886d7bb80bfbc8d71823f37b5f9c6db237ffd9",
-        "sha256": "b59e56c67efa1585f5203bb7bcd9bcb81e22b3af123d835f76bc98b6e5e3a043"
+        "git_blob": "9507f63b7b4b5b4808d4d509ec568a8bfeb8dfe4",
+        "sha256": "eb77b386c2d04a325ccdb280e29cf3f5b6073723f107477e7cc605449df0d018"
       },
       {
         "id": "schema",
@@ -107,7 +107,7 @@
         "expected_file_count": 11
       },
       "file_count": 11,
-      "sha256": "c5b80770179ed70536e6503543faa9d41cb4ce36c4def375e87cdef55480e5c8",
+      "sha256": "66ce0062b50ebca051ce0d6c3666fa2d7588c8bbbf82cd97f172a6c12c86cb2b",
       "blocker_id": null
     },
     {
@@ -124,7 +124,7 @@
         "expected_file_count": 17
       },
       "file_count": 17,
-      "sha256": "a86a9b6fa1c5ed1709fc908aa2185d874e9a0596106ca6fe18de96c5ffcf2c61",
+      "sha256": "17fb46ae28418c61435b348d100ecb17361d54464124570956f78a000b1255f0",
       "blocker_id": null
     },
     {
@@ -225,7 +225,7 @@
     {
       "id": "migration_inventory",
       "path": "_docs/ralph/prototype-integration/migration-inventory.json",
-      "sha256": "d625558ab2f018c1b603cce40bbd351110c8441b24397c13819c00cebae007b1",
+      "sha256": "89b48773f3dce99976965d3ea23db1fa8786fdc02a13043b9dfa39a7b992ab0b",
       "status": "dependency_blocked"
     },
     {
@@ -255,7 +255,7 @@
     {
       "id": "ai_production_policy",
       "path": "_docs/ralph/prototype-integration/ai-production-policy.json",
-      "sha256": "7df63a18a24e8b35ad69c21aed6fa583ff5589c2ddc1ea0830ca69f4b18e12b4",
+      "sha256": "3140914a1459eeef680e417cd0cb92cfcce51e86469d3e0b4101c349252b2124",
       "status": "blocked"
     },
     {
@@ -279,13 +279,13 @@
     {
       "id": "intake_epoch",
       "path": "_docs/ralph/prototype-integration/epochs/epoch-2.json",
-      "sha256": "71c390b644564ece2d9fa92f88c83a228c166759dae4bcd37349635dbbb88d62",
-      "status": "open"
+      "sha256": "86fd754be8a4f9e99500f57990b16bc1572d5fd1046be677e0c5581229a0bce9",
+      "status": "closed"
     },
     {
       "id": "intake_tag_observation",
       "path": "_docs/ralph/prototype-integration/epochs/epoch-2-tag-observation.json",
-      "sha256": "e9a43a4f2f5b4763b4c2662d94aa74c2d17e86075b1c146f1d41dc681c6c0a44",
+      "sha256": "67b5c4244909c841ca2c9d25a2b90d1b86984ae65fb879761ae0ecd6ac84031a",
       "status": "blocked"
     }
   ],
@@ -293,7 +293,7 @@
     "status": "dependency_blocked",
     "inventory_path": "_docs/ralph/prototype-integration/migration-inventory.json",
     "migration_count": 13,
-    "unavailable_producer_count": 4,
+    "unavailable_producer_count": 0,
     "blocker_id": "producer-migration-handoffs-unavailable"
   },
   "required_gates": {
@@ -427,28 +427,37 @@
   "test_evidence": {
     "status": "complete",
     "ledger_path": "_docs/ralph/handoffs/prototype-integration/HANDOFF.yaml",
-    "implementation_sha": "5d5659fbd34a61faa36312923e97c4fd53abc857",
-    "ledger_sha": "6f3eac6f407fbb890f7d67ae6a716ebae438d009",
-    "record_count": 2,
-    "declared_test_count": 29,
+    "implementation_sha": "2db1e0b3a12b18442e7aff6a21e62ca11dea2a23",
+    "ledger_sha": "9cbdd5b3e49dc720a0de66d7568178fe40d35b7f",
+    "record_count": 3,
+    "declared_test_count": 7,
     "uncounted_record_count": 0,
     "records": [
       {
-        "command": "node scripts/preflight-integration-candidate.test.cjs",
+        "command": "node --test scripts/validate-t1-contracts.test.cjs scripts/validate-prototype-integration.test.cjs scripts/validate-required-gate-matrix.test.cjs scripts/validate-model-provenance.test.cjs scripts/validate-ai-production-policy.test.cjs scripts/validate-slurm-chart-inventory.test.cjs scripts/validate-localnet-integration-launchers.test.cjs",
         "exit_code": 0,
         "result": "passed",
-        "test_count": 20,
+        "test_count": 7,
         "tool_versions": {
           "node": "20.19.1"
         }
       },
       {
-        "command": "node scripts/validate-agents-docs.mjs",
+        "command": "go1.25.8 test -run '^$' -count=1 ./...",
         "exit_code": 0,
         "result": "passed",
-        "test_count": 9,
+        "test_count": 0,
         "tool_versions": {
-          "node": "20.19.1"
+          "go": "go1.25.8 windows/amd64"
+        }
+      },
+      {
+        "command": "go1.25.8 test -count=1 ./x/veid/types ./pkg/inference/... ./pkg/data_vault/... ./pkg/fundauth/... ./x/encryption/... ./x/mfa/... ./pkg/provider_daemon ./x/settlement/ibc",
+        "exit_code": 0,
+        "result": "passed",
+        "test_count": 0,
+        "tool_versions": {
+          "go": "go1.25.8 windows/amd64"
         }
       }
     ],
@@ -456,8 +465,37 @@
   },
   "producer_checkpoints": {
     "ledger_path": "_docs/ralph/handoffs/prototype-integration/HANDOFF.yaml",
-    "ledger_sha256": "a593cec3ebcf0ec67f4992549667432c56ca324477896446998fc989ba69de94",
-    "accepted": [],
+    "ledger_sha256": "1d48537a1a9631c3c2fe11bdc97fac1902805eb4c17043b9d3a1221ff30b2736",
+    "accepted": [
+      {
+        "thread": "T1",
+        "checkpoint": "T1-09",
+        "tag": "checkpoint/prototype-t1/t1-09",
+        "tip": "36a566a92c04d988255b10cc5a75451d59077273",
+        "payload_head": "36a566a92c04d988255b10cc5a75451d59077273"
+      },
+      {
+        "thread": "T2",
+        "checkpoint": "T2-13",
+        "tag": "checkpoint/prototype-t2/t2-13",
+        "tip": "ba9f49340bbd8136f8c19bcc0abc7c64831bfda8",
+        "payload_head": "ba9f49340bbd8136f8c19bcc0abc7c64831bfda8"
+      },
+      {
+        "thread": "T3",
+        "checkpoint": "T3-14",
+        "tag": "checkpoint/prototype-t3/t3-14",
+        "tip": "117ad92be90cc8a6a733ff701f1bc83fbbaf6790",
+        "payload_head": "117ad92be90cc8a6a733ff701f1bc83fbbaf6790"
+      },
+      {
+        "thread": "T5",
+        "checkpoint": "T5-39",
+        "tag": "checkpoint/prototype-t5/t5-39",
+        "tip": "4efd873a4446c304f3ba5f25ec83d6f4185a0a3d",
+        "payload_head": "4efd873a4446c304f3ba5f25ec83d6f4185a0a3d"
+      }
+    ],
     "rejected": [
       {
         "thread": "T2",
