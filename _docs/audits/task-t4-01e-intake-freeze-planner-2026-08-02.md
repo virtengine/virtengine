@@ -17,7 +17,9 @@ same rule while retaining repeated `--tag` selections for distinct producers.
 Freeze application also requires every reviewed boundary option exactly once
 and rejects missing or option-looking values before acquiring its lease. Lease
 inspection and compare-and-claim recovery enforce the same single-assignment
-rule for the reviewed epoch, HEAD, plan digest, and retained lease digest.
+rule for the reviewed epoch, HEAD, plan digest, and retained lease digest. New
+epoch opening likewise rejects duplicate, missing, or option-looking reviewed
+HEAD and UTC window arguments before checking the published base boundary.
 
 The planner hashes the selected observation, requires the checked core-RC
 manifest to bind that exact path/digest, verifies identical bytes at the
