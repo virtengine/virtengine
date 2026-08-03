@@ -6,14 +6,14 @@
   "planned_functionality_complete": false,
   "milestone_m_eligible": false,
   "source": {
-    "payload_sha": "cf2854e13c4f01dd07ae4044c6f10e3cb59047f2",
-    "tree": "2bf9cab8ec036f734a82b441cd3c0220f62ad77a",
+    "payload_sha": "a8a52d1789a80c50bccf528531dfd4d1bc422f6a",
+    "tree": "7c26b0009b193ce71d06eca6407736afd2e7b711",
     "branch": "ve/prototype-integration",
     "binding": "declared_clean_parent_payload"
   },
   "tooling": {
-    "tooling_sha": "cf2854e13c4f01dd07ae4044c6f10e3cb59047f2",
-    "tree": "2bf9cab8ec036f734a82b441cd3c0220f62ad77a",
+    "tooling_sha": "a8a52d1789a80c50bccf528531dfd4d1bc422f6a",
+    "tree": "7c26b0009b193ce71d06eca6407736afd2e7b711",
     "artifacts": [
       {
         "id": "generator",
@@ -427,17 +427,17 @@
   "test_evidence": {
     "status": "complete",
     "ledger_path": "_docs/ralph/handoffs/prototype-integration/HANDOFF.yaml",
-    "implementation_sha": "e1fc9e40ab5680ba68f807644a889d6e7233dfa1",
-    "ledger_sha": "cf2854e13c4f01dd07ae4044c6f10e3cb59047f2",
+    "implementation_sha": "606fd3c0e9d7bfb6d6fe80aa6d4f166a32febd2f",
+    "ledger_sha": "a8a52d1789a80c50bccf528531dfd4d1bc422f6a",
     "record_count": 1,
-    "declared_test_count": 33,
+    "declared_test_count": 49,
     "uncounted_record_count": 0,
     "records": [
       {
-        "command": "node scripts/validate-prototype-intake.test.cjs",
+        "command": "node scripts/plan-prototype-intake-freeze.test.cjs && node scripts/apply-prototype-intake-freeze.test.cjs",
         "exit_code": 0,
         "result": "passed",
-        "test_count": 33,
+        "test_count": 49,
         "tool_versions": {
           "node": "20.19.1"
         }
@@ -447,7 +447,7 @@
   },
   "producer_checkpoints": {
     "ledger_path": "_docs/ralph/handoffs/prototype-integration/HANDOFF.yaml",
-    "ledger_sha256": "5a2d1797781f069c34ae3babec639ce506846fba5e1fccf68760ba7785703125",
+    "ledger_sha256": "2f6600db697c890fa4082c6946de5e5a0958dd3a56633ae0a8a467d833d4ce2f",
     "accepted": [],
     "rejected": [
       {
