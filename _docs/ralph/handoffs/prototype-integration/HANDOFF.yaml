@@ -1,14 +1,14 @@
 {
   "campaign": "three-day-prototype",
   "thread": "T4",
-    "checkpoint": "T4-01EI",
+    "checkpoint": "T4-01EJ",
   "branch": "ve/prototype-integration",
-  "start_head": "f7aee49dce94fcb6ee9538c80cea54df13968303",
-  "end_head": "4c78a9f70cb838c12f6e65424e4d42bd98434957",
+  "start_head": "138944ed231097725e248e11b1580673dc590c26",
+  "end_head": "01353354e08e20f2e1b2a07699256e05cae8fb6e",
   "origin_main": "79391a3df86d85522b92e0400c6904971ecbe65d",
   "tree_clean": true,
   "commits": [
-    "4c78a9f70cb838c12f6e65424e4d42bd98434957"
+    "01353354e08e20f2e1b2a07699256e05cae8fb6e"
   ],
   "owned_paths": [
     "_docs/ralph/prototype-integration/**",
@@ -20,10 +20,10 @@
   ],
   "tests": [
     {
-        "command": "node scripts/run-required-gates.test.cjs",
+        "command": "node scripts/validate-prototype-integration.test.cjs && node scripts/validate-prototype-integration.cjs",
       "exit_code": 0,
       "result": "passed",
-        "test_count": 30,
+        "test_count": 13,
       "tool_versions": {
         "node": "20.19.1"
       }
@@ -39,7 +39,7 @@
     }
   ],
   "generated_hashes": {
-      "_docs/ralph/prototype-integration/core-rc-manifest.json": "6ce5d49afa8fde30d039fe592ef829711842790952a73819416e96774ba47e97"
+      "_docs/ralph/prototype-integration/core-rc-manifest.json": "4e7c951849f80c66fd19ed74bf68514136bdeec378cee73aa44f3e8b342d8a4c"
   },
   "accepted_checkpoints": [],
   "rejected_checkpoints": [
@@ -91,5 +91,5 @@
     "Task 88C is not complete."
   ],
   "next_checkpoint": null,
-    "expected_head": "4c78a9f70cb838c12f6e65424e4d42bd98434957"
+    "expected_head": "01353354e08e20f2e1b2a07699256e05cae8fb6e"
 }
