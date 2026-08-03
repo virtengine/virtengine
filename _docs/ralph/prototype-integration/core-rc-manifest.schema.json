@@ -158,7 +158,14 @@
         },
         "non_certification": {
           "type": "object", "additionalProperties": false, "required": ["production_certified", "not_certified", "blocker_id"],
-          "properties": { "production_certified": { "const": false }, "not_certified": { "type": "array", "minItems": 7, "maxItems": 7, "uniqueItems": true, "items": { "type": "string", "minLength": 1 } }, "blocker_id": { "const": "ai-production-assurance-unavailable" } }
+          "properties": {
+            "production_certified": { "const": false },
+            "not_certified": {
+              "type": "array", "minItems": 7, "maxItems": 7, "uniqueItems": true,
+              "items": { "enum": ["production_model", "production_runtime", "production_evaluation", "biometric_uniqueness", "durable_vault_or_kms", "production_consent_enforcement", "production_retention_legal_hold_or_erasure"] }
+            },
+            "blocker_id": { "const": "ai-production-assurance-unavailable" }
+          }
         }
       }
     },

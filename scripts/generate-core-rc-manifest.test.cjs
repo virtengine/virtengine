@@ -222,6 +222,7 @@ const tests = [
     assert.equal(schema.$defs.aiAssurance.properties.provenance_digests.properties.licenses.uniqueItems, true);
     assert.equal(schema.$defs.aiAssurance.properties.feature_vector.properties.test_vector_hashes.uniqueItems, true);
     assert.equal(schema.$defs.aiAssurance.properties.non_certification.properties.not_certified.uniqueItems, true);
+    assert.deepEqual(schema.$defs.aiAssurance.properties.non_certification.properties.not_certified.items.enum, ["production_model", "production_runtime", "production_evaluation", "biometric_uniqueness", "durable_vault_or_kms", "production_consent_enforcement", "production_retention_legal_hold_or_erasure"]);
     const mutated = clone(schema);
     mutated.$defs.testRecord.properties.command.bogus = true;
     assert.throws(() => validateSchema(mutated), /unknown schema keyword/);

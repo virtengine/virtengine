@@ -100,6 +100,10 @@ Model, license, and feature-vector digest records also require unique semantic
 IDs and literal nonempty ID/state values at runtime, preventing distinct records
 from reusing one evidence identity.
 
+The AI non-certification array is restricted to the exact seven governed
+categories, so schema-only validation cannot substitute or omit a required
+production non-claim.
+
 The planner hashes the selected observation, requires the checked core-RC
 manifest to bind that exact path/digest, verifies identical bytes at the
 manifest source commit, and requires that source to be an ancestor of current
