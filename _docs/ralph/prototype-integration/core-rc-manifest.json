@@ -6,14 +6,14 @@
   "planned_functionality_complete": false,
   "milestone_m_eligible": false,
   "source": {
-    "payload_sha": "1ca7c80aa64d49a0c1a97876fbe98848622ffa4b",
-    "tree": "f1c14cbfd5f8394ab052e364fbbef111d12ceace",
+    "payload_sha": "c14fa31be86294e351ae23a366d48c0b86b5f3ee",
+    "tree": "63f7de8e8f571849e77eb432c65cae7971489897",
     "branch": "ve/prototype-integration",
     "binding": "declared_clean_parent_payload"
   },
   "tooling": {
-    "tooling_sha": "1ca7c80aa64d49a0c1a97876fbe98848622ffa4b",
-    "tree": "f1c14cbfd5f8394ab052e364fbbef111d12ceace",
+    "tooling_sha": "c14fa31be86294e351ae23a366d48c0b86b5f3ee",
+    "tree": "63f7de8e8f571849e77eb432c65cae7971489897",
     "artifacts": [
       {
         "id": "generator",
@@ -231,7 +231,7 @@
     {
       "id": "required_gate_matrix",
       "path": "_docs/ralph/prototype-integration/required-gate-matrix.json",
-      "sha256": "9a08448a42a74f8182d45616454d22fed6e3a68390dabc62e8285f45050a5296",
+      "sha256": "1eefd1fb89e9af3a1d0c1c6dfe81523a4b8749671f145fcbf0488bda086632fb",
       "status": "dependency_blocked"
     },
     {
@@ -427,17 +427,17 @@
   "test_evidence": {
     "status": "complete",
     "ledger_path": "_docs/ralph/handoffs/prototype-integration/HANDOFF.yaml",
-    "implementation_sha": "59a767bd91d4e12fb3a35263160d600d159ce423",
-    "ledger_sha": "1ca7c80aa64d49a0c1a97876fbe98848622ffa4b",
+    "implementation_sha": "850529d2dedcc554e0747b738ad2ad2a799d61bf",
+    "ledger_sha": "c14fa31be86294e351ae23a366d48c0b86b5f3ee",
     "record_count": 3,
-    "declared_test_count": 55,
+    "declared_test_count": 56,
     "uncounted_record_count": 0,
     "records": [
       {
         "command": "node scripts/validate-required-gate-matrix.test.cjs && node scripts/validate-required-gate-matrix.cjs",
         "exit_code": 0,
         "result": "passed",
-        "test_count": 24,
+        "test_count": 25,
         "tool_versions": {
           "node": "20.19.1"
         }
@@ -465,7 +465,7 @@
   },
   "producer_checkpoints": {
     "ledger_path": "_docs/ralph/handoffs/prototype-integration/HANDOFF.yaml",
-    "ledger_sha256": "04aaba86a632a3b39c817870468a647fcfefeffc7a6be4e1285e2ffdc598a197",
+    "ledger_sha256": "76345d8a8bb11ac838e00d8a2ec9b7a20fb4d265b26a075cc4ba1885f955ab7d",
     "accepted": [],
     "rejected": [
       {
