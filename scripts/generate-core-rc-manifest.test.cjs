@@ -157,6 +157,12 @@ const tests = [
     const zeroCount = clone(handoff);
     zeroCount.tests[0].test_count = 0;
     assert.throws(() => buildTestEvidence(sourceSha, zeroCount, handoffPath, root), /invalid test_count/);
+    const unsafe = clone(handoff);
+    unsafe.tests[0].test_count = Number.MAX_SAFE_INTEGER + 1;
+    assert.throws(() => buildTestEvidence(sourceSha, unsafe, handoffPath, root), /invalid test_count/);
+    const unsafeTotal = clone(handoff);
+    unsafeTotal.tests.forEach((test) => { test.test_count = Number.MAX_SAFE_INTEGER; });
+    assert.throws(() => buildTestEvidence(sourceSha, unsafeTotal, handoffPath, root), /safe integer range/);
   }],
   ["rejects empty, duplicate, or non-literal test evidence", () => {
     const empty = clone(handoff);
@@ -204,6 +210,8 @@ const tests = [
   ["rejects mutated schema structure and duplicate schema IDs", () => {
     assert.doesNotThrow(() => validateSchema(schema));
     assert.equal(schema.$defs.testRecord.properties.test_count.oneOf[0].minimum, 1);
+    assert.equal(schema.$defs.testRecord.properties.test_count.oneOf[0].maximum, Number.MAX_SAFE_INTEGER);
+    assert.equal(schema.$defs.testEvidence.properties.declared_test_count.maximum, Number.MAX_SAFE_INTEGER);
     assert.equal(schema.$defs.testEvidence.properties.uncounted_record_count.minimum, 0);
     assert.equal(schema.$defs.testEvidence.oneOf[0].properties.status.const, "complete");
     assert.equal(schema.$defs.testEvidence.oneOf[0].properties.uncounted_record_count.const, 0);

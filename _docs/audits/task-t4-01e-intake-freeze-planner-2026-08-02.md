@@ -43,6 +43,11 @@ produce complete test evidence. The manifest schema mirrors runtime semantics:
 complete evidence has zero uncounted records, while partial evidence retains at
 least one uncounted record.
 
+Declared per-record test counts must also be JavaScript-safe integers, and their
+aggregate must remain within the safe integer range. Runtime validation rejects
+unsafe or overflowed totals, while schema validation caps both record and
+aggregate counts at `9007199254740991`.
+
 Manifest test evidence must contain at least one unique literal command.
 Duplicate records and whitespace-padded command identities are rejected before
 record and declared-test counts are projected.

@@ -367,18 +367,20 @@ function buildTestEvidence(sourceSha, handoff, handoffPath, cwd = root) {
       assert.ok(tool.length > 0 && tool.trim() === tool, `test evidence ${index} has an invalid tool name`);
       assert.ok(typeof version === "string" && version.length > 0 && version.trim() === version, `test evidence ${index} has an invalid tool version`);
     }
-    assert.ok(test.test_count === undefined || (Number.isInteger(test.test_count) && test.test_count > 0), `test evidence ${index} has an invalid test_count`);
+    assert.ok(test.test_count === undefined || (Number.isSafeInteger(test.test_count) && test.test_count > 0), `test evidence ${index} has an invalid test_count`);
     return { command: test.command, exit_code: test.exit_code, result: test.result, test_count: test.test_count ?? null, tool_versions: test.tool_versions };
   });
   const counted = records.filter((test) => Number.isInteger(test.test_count));
   const complete = counted.length === records.length;
+  const declaredTestCount = counted.reduce((total, test) => total + test.test_count, 0);
+  assert.ok(Number.isSafeInteger(declaredTestCount), "declared test count exceeds the safe integer range");
   return {
     status: complete ? "complete" : "partial",
     ledger_path: handoffPath,
     implementation_sha: handoff.end_head,
     ledger_sha: ledgerSha,
     record_count: records.length,
-    declared_test_count: counted.reduce((total, test) => total + test.test_count, 0),
+    declared_test_count: declaredTestCount,
     uncounted_record_count: records.length - counted.length,
     records,
     blocker_id: complete ? null : "test-evidence-partial",

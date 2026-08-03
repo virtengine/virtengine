@@ -238,7 +238,7 @@
         "status": { "enum": ["complete", "partial"] }, "ledger_path": { "$ref": "#/$defs/repositoryPath" },
         "implementation_sha": { "$ref": "#/$defs/sha" }, "ledger_sha": { "$ref": "#/$defs/sha" },
         "record_count": { "type": "integer", "minimum": 1 },
-        "declared_test_count": { "type": "integer", "minimum": 0 }, "uncounted_record_count": { "type": "integer", "minimum": 0 },
+        "declared_test_count": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 }, "uncounted_record_count": { "type": "integer", "minimum": 0 },
         "records": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "$ref": "#/$defs/testRecord" } },
         "blocker_id": { "oneOf": [{ "type": "string", "minLength": 1 }, { "type": "null" }] }
       }
@@ -248,7 +248,7 @@
       "required": ["command", "exit_code", "result", "test_count", "tool_versions"],
       "properties": {
         "command": { "type": "string", "minLength": 1 }, "exit_code": { "const": 0 }, "result": { "const": "passed" },
-        "test_count": { "oneOf": [{ "type": "integer", "minimum": 1 }, { "type": "null" }] },
+        "test_count": { "oneOf": [{ "type": "integer", "minimum": 1, "maximum": 9007199254740991 }, { "type": "null" }] },
         "tool_versions": {
           "type": "object", "minProperties": 1,
           "propertyNames": { "type": "string", "pattern": "^\\S(?:.*\\S)?$" },
