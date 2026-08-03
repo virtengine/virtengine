@@ -4,6 +4,7 @@
 
 const assert = require("assert").strict;
 const { spawnSync } = require("child_process");
+const { validateAnnotatedTagName } = require("./prototype-intake-epochs.cjs");
 
 function git(repo, args, allowFailure = false) {
   const result = spawnSync("git", args, { cwd: repo, encoding: "utf8" });
@@ -29,9 +30,23 @@ function parseAcceptance(content) {
 }
 
 function verifyAcceptedPayload(repo, entry, runGit = git) {
-  const objectType = runGit(repo, ["cat-file", "-t", entry.tag], true);
-  const peeled = runGit(repo, ["rev-parse", `${entry.tag}^{}`], true);
-  return objectType.status === 0 && objectType.stdout.trim() === "tag" && peeled.status === 0 && peeled.stdout.trim() === entry.payload_sha;
+  try {
+    const objectType = runGit(repo, ["cat-file", "-t", entry.tag], true);
+    const tagContent = runGit(repo, ["cat-file", "-p", entry.tag], true);
+    const peeled = runGit(repo, ["rev-parse", `${entry.tag}^{commit}`], true);
+    if (objectType.status !== 0 || objectType.stdout.trim() !== "tag" || tagContent.status !== 0 || peeled.status !== 0) return false;
+    validateAnnotatedTagName(entry.tag, tagContent.stdout);
+    const handoffTarget = peeled.stdout.trim();
+    if (handoffTarget === entry.payload_sha) return false;
+    const handoffPath = `_docs/ralph/handoffs/prototype-${entry.thread.toLowerCase()}/HANDOFF.yaml`;
+    const handoffResult = runGit(repo, ["show", `${handoffTarget}:${handoffPath}`], true);
+    if (handoffResult.status !== 0) return false;
+    const handoff = JSON.parse(handoffResult.stdout);
+    const ancestry = runGit(repo, ["merge-base", "--is-ancestor", entry.payload_sha, handoffTarget], true);
+    return handoff.thread === entry.thread && handoff.payload_head === entry.payload_sha && ancestry.status === 0;
+  } catch {
+    return false;
+  }
 }
 
 function validateCandidatePlan(plan, options) {
