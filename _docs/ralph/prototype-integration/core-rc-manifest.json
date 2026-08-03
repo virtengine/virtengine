@@ -6,26 +6,26 @@
   "planned_functionality_complete": false,
   "milestone_m_eligible": false,
   "source": {
-    "payload_sha": "863d989332547a8d996b9ea5346488bb0801b096",
-    "tree": "1b0c96e1a9c65d6f67885e6c56ad3b26f782d778",
+    "payload_sha": "e93582a3ed9b471e662227586ca769369759a00b",
+    "tree": "858c857759cd9c6093d7979bd10d93e4a7ea19d9",
     "branch": "ve/prototype-integration",
     "binding": "declared_clean_parent_payload"
   },
   "tooling": {
-    "tooling_sha": "863d989332547a8d996b9ea5346488bb0801b096",
-    "tree": "1b0c96e1a9c65d6f67885e6c56ad3b26f782d778",
+    "tooling_sha": "e93582a3ed9b471e662227586ca769369759a00b",
+    "tree": "858c857759cd9c6093d7979bd10d93e4a7ea19d9",
     "artifacts": [
       {
         "id": "generator",
         "path": "scripts/generate-core-rc-manifest.cjs",
-        "git_blob": "77fdce57df889df019c1f8c0474fa25e1f5fa71a",
-        "sha256": "d9b179f9be0efd189df90691396c8fa583d2c08c27c2aad6981de0721e0509a2"
+        "git_blob": "6d8749a883bc2453c73e896adaca2ab7da4aba5b",
+        "sha256": "efaf511bee18ebd1e287c8e3a86606eaef6a3d1c549c82a9268c67a0b48dccc2"
       },
       {
         "id": "schema",
         "path": "_docs/ralph/prototype-integration/core-rc-manifest.schema.json",
-        "git_blob": "28dae0d982611c56b01a2320b3043a9896041f2b",
-        "sha256": "dc1b71369cafd909bcb7d596fd4d73cc4caf8fb85cee7c04bbac3966bedacc42"
+        "git_blob": "1c8d0c75d3ba65fbbfc4061377383a41a861aea5",
+        "sha256": "7d55fd19848520ee213c27af78f82a98363d5e64f81aa88ae299fb292618c485"
       },
       {
         "id": "validator",
@@ -427,17 +427,17 @@
   "test_evidence": {
     "status": "complete",
     "ledger_path": "_docs/ralph/handoffs/prototype-integration/HANDOFF.yaml",
-    "implementation_sha": "092ddfd0cceef445fc68b0ce3158a15f8f59d609",
-    "ledger_sha": "863d989332547a8d996b9ea5346488bb0801b096",
+    "implementation_sha": "8a51f5d13fb8be465fd421c9d8a6e4c68de4a32e",
+    "ledger_sha": "e93582a3ed9b471e662227586ca769369759a00b",
     "record_count": 2,
-    "declared_test_count": 31,
+    "declared_test_count": 32,
     "uncounted_record_count": 0,
     "records": [
       {
-        "command": "node scripts/generate-core-rc-manifest.test.cjs && node scripts/validate-core-rc-manifest.cjs",
+        "command": "node scripts/generate-core-rc-manifest.test.cjs",
         "exit_code": 0,
         "result": "passed",
-        "test_count": 22,
+        "test_count": 23,
         "tool_versions": {
           "node": "20.19.1"
         }
@@ -452,11 +452,11 @@
         }
       }
     ],
-    "blocker_id": "test-evidence-partial"
+    "blocker_id": null
   },
   "producer_checkpoints": {
     "ledger_path": "_docs/ralph/handoffs/prototype-integration/HANDOFF.yaml",
-    "ledger_sha256": "39f9947fdb6bb1cbb22e74f0c50ad9c86e2980054cbefd702f1868eb781a37bd",
+    "ledger_sha256": "e94c39fa87715724e0e50a67a3bff91edc3dade5052fa74281d6a07729fa184a",
     "accepted": [],
     "rejected": [
       {
@@ -545,10 +545,6 @@
     {
       "id": "ai-production-assurance-unavailable",
       "description": "AI, biometric uniqueness, vault/KMS, consent, retention, and production evaluation assurance remain unavailable."
-    },
-    {
-      "id": "test-evidence-partial",
-      "description": "Some passing handoff test records do not declare test counts."
     },
     {
       "id": "release-sbom-provenance-unavailable",
