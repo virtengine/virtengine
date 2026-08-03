@@ -22,8 +22,9 @@ current exact T4 HEAD and restricts evidence to a dedicated
 Older commits and unrelated historical blobs cannot authenticate generation.
 An accepted generated producer must also be accepted in the current epoch, and
 its committed ledger `tip`, pre-cutoff observed remote target, and locally
-peeled tag target must be identical. Local-only, stale, or retargeted tags
-cannot authenticate producer handoff evidence.
+peeled tag target must be identical. Its local annotated tag object must also
+equal the pre-cutoff observed remote tag object. Local-only, recreated, stale,
+or retargeted tags cannot authenticate producer handoff evidence.
 Every declared proto source, generated target, and compatibility fixture must
 also resolve to an existing regular file under the checked repository root;
 canonical-looking invented paths cannot satisfy generated readiness.

@@ -72,9 +72,9 @@ function verifyAcceptedGeneratedProducer(contract, options) {
   if (!epochProducer) return false;
   const observed = options.observation?.tags.find((entry) => entry.thread === contract.owner_thread && entry.tag === contract.producer.tag);
   if (!observed) return false;
-  const tagTarget = options.resolveTagTarget(contract.producer.tag);
-  if (tagTarget !== accepted.tip || tagTarget !== observed.target) return false;
-  const producerHandoff = options.loadProducerHandoff(tagTarget, contract.owner_thread);
+  const tag = options.resolveTag(contract.producer.tag);
+  if (!tag || tag.object !== observed.tag_object || tag.target !== accepted.tip || tag.target !== observed.target) return false;
+  const producerHandoff = options.loadProducerHandoff(tag.target, contract.owner_thread);
   return producerHandoffDeclaresContract(contract, producerHandoff)
     && contract.proto_sources.every((path) => options.sourceExists(contract.producer.payload_sha, path));
 }
@@ -243,9 +243,10 @@ if (require.main === module) {
           acceptedCheckpoints: handoff.accepted_checkpoints,
           epoch,
           observation,
-          resolveTagTarget: (tag) => {
-            const result = spawnSync("git", ["rev-parse", `${tag}^{}`], { cwd: root, encoding: "utf8" });
-            return result.status === 0 ? result.stdout.trim() : null;
+          resolveTag: (tag) => {
+            const object = spawnSync("git", ["rev-parse", `refs/tags/${tag}`], { cwd: root, encoding: "utf8" });
+            const target = spawnSync("git", ["rev-parse", `${tag}^{}`], { cwd: root, encoding: "utf8" });
+            return object.status === 0 && target.status === 0 ? { object: object.stdout.trim(), target: target.stdout.trim() } : null;
           },
           loadProducerHandoff: (tip, thread) => JSON.parse(spawnSync("git", ["show", `${tip}:_docs/ralph/handoffs/prototype-${thread.toLowerCase()}/HANDOFF.yaml`], { cwd: root, encoding: "utf8" }).stdout),
           sourceExists: (payloadSha, path) => spawnSync("git", ["cat-file", "-e", `${payloadSha}:${path}`], { cwd: root }).status === 0,

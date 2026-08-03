@@ -81,17 +81,19 @@ const tests = [
   }],
   ["binds generated producers to accepted and observed tag targets", () => {
     const tip = "b".repeat(40);
+    const tagObject = "d".repeat(40);
     const contract = { owner_thread: "T1", producer: { tag: "checkpoint/prototype-t1/t1-18", payload_sha: sha }, proto_sources: ["sdk/proto/node/decision.proto"] };
     const options = {
       acceptedCheckpoints: [{ thread: "T1", tag: contract.producer.tag, payload_head: sha, tip }],
       epoch: { producers: [{ thread: "T1", status: "accepted", tag: contract.producer.tag }] },
-      observation: { tags: [{ thread: "T1", tag: contract.producer.tag, target: tip }] },
-      resolveTagTarget: () => tip,
+      observation: { tags: [{ thread: "T1", tag: contract.producer.tag, tag_object: tagObject, target: tip }] },
+      resolveTag: () => ({ object: tagObject, target: tip }),
       loadProducerHandoff: () => ({ thread: "T1", payload_head: sha, files_changed: contract.proto_sources }),
       sourceExists: () => true,
     };
     assert.equal(verifyAcceptedGeneratedProducer(contract, options), true);
-    assert.equal(verifyAcceptedGeneratedProducer(contract, { ...options, resolveTagTarget: () => "c".repeat(40) }), false);
+    assert.equal(verifyAcceptedGeneratedProducer(contract, { ...options, resolveTag: () => ({ object: tagObject, target: "c".repeat(40) }) }), false);
+    assert.equal(verifyAcceptedGeneratedProducer(contract, { ...options, resolveTag: () => ({ object: "e".repeat(40), target: tip }) }), false);
     assert.equal(verifyAcceptedGeneratedProducer(contract, { ...options, observation: { tags: [] } }), false);
   }],
   ["accepts the frozen T4 campaign controls", () => {
