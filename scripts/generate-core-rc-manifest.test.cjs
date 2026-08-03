@@ -213,6 +213,10 @@ const tests = [
     for (const [definition, property] of [["toolingArtifact", "path"], ["controlArtifact", "path"], ["migrations", "inventory_path"], ["requiredGates", "matrix_path"], ["slurm", "inventory_path"], ["slurm", "report_path"], ["modelProvenance", "path"], ["testEvidence", "ledger_path"], ["producerCheckpoints", "ledger_path"]]) {
       assert.deepEqual(schema.$defs[definition].properties[property], { $ref: "#/$defs/repositoryPath" });
     }
+    for (const property of ["included_path_prefixes", "included_file_patterns", "excluded_path_patterns"]) {
+      assert.equal(schema.$defs.artifactSelection.properties[property].uniqueItems, true);
+      assert.deepEqual(schema.$defs.artifactSelection.properties[property].items, { $ref: "#/$defs/repositoryPath" });
+    }
     const mutated = clone(schema);
     mutated.$defs.testRecord.properties.command.bogus = true;
     assert.throws(() => validateSchema(mutated), /unknown schema keyword/);

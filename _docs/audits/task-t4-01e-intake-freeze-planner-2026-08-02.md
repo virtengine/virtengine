@@ -89,6 +89,9 @@ Committed tooling, control, inventory, report, model, and ledger path fields
 share one repository-relative schema. Absolute, traversing, backslash, or
 whitespace-padded paths fail schema-only validation.
 
+Artifact selection prefixes, inclusion patterns, and exclusion patterns use
+the same repository-relative contract and reject exact duplicates.
+
 The planner hashes the selected observation, requires the checked core-RC
 manifest to bind that exact path/digest, verifies identical bytes at the
 manifest source commit, and requires that source to be an ancestor of current

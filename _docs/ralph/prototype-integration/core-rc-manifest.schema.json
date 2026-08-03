@@ -92,9 +92,9 @@
       "type": "object", "additionalProperties": false,
       "required": ["included_path_prefixes", "included_file_patterns", "excluded_path_patterns", "minimum_file_count", "expected_file_count"],
       "properties": {
-        "included_path_prefixes": { "type": "array", "items": { "type": "string", "minLength": 1 } },
-        "included_file_patterns": { "type": "array", "items": { "type": "string", "minLength": 1 } },
-        "excluded_path_patterns": { "type": "array", "items": { "type": "string", "minLength": 1 } },
+        "included_path_prefixes": { "type": "array", "uniqueItems": true, "items": { "$ref": "#/$defs/repositoryPath" } },
+        "included_file_patterns": { "type": "array", "uniqueItems": true, "items": { "$ref": "#/$defs/repositoryPath" } },
+        "excluded_path_patterns": { "type": "array", "uniqueItems": true, "items": { "$ref": "#/$defs/repositoryPath" } },
         "minimum_file_count": { "type": "integer", "minimum": 1 }, "expected_file_count": { "type": "integer", "minimum": 1 }
       }
     },
