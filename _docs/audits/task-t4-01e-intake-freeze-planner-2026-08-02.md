@@ -24,10 +24,20 @@ missing producer refs or unaccepted out-of-band merges fail closed.
 
 Candidate-branch promotion additionally requires descent from current canonical
 T4 and a committed strict acceptance artifact whose `base_sha` matches canonical
-T4 and whose `candidate_sha` names the validated implementation parent. The
+T4 and whose `candidate_sha` names the validated implementation parent. Candidate
+evidence is read from the exact candidate head resolved at preflight start, not
+from the mutable candidate ref. Canonical or candidate inputs under `origin/*`
+must equal the current exact remote branch head before resolution. CLI options
+are strict option/value pairs; unknown, duplicate, or incomplete inputs fail.
+Required gates run unit coverage and the published live-candidate policy
+separately; the latter currently fails on its informal acceptance schema. The
 acceptance commit must be the implementation's direct, single-parent child and
-change only the acceptance artifact. Accepted annotated tags target committed handoffs that bind the declared
-payloads, and those payloads cover all contained producer history. The current `ve/prototype-integration-live` branch
+change only the acceptance artifact. Accepted annotated tags must be exact tag
+objects published by `origin`; local-only or stale same-name tags are rejected.
+Those tags target committed handoffs that bind the declared payloads, and those
+payloads cover all contained producer history. Containment scans require every
+local producer tracking ref to equal the current exact `origin` branch head, so
+stale refs cannot omit unaccepted commits. The current `ve/prototype-integration-live` branch
 fails because its acceptance summary is uncommitted and its base predates
 canonical T4; no promotion or merge is claimed.
 

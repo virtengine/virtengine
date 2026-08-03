@@ -31,9 +31,16 @@ function parseAcceptance(content) {
 
 function verifyAcceptedPayload(repo, entry, runGit = git) {
   try {
-    const objectType = runGit(repo, ["cat-file", "-t", entry.tag], true);
-    const tagContent = runGit(repo, ["cat-file", "-p", entry.tag], true);
-    const peeled = runGit(repo, ["rev-parse", `${entry.tag}^{commit}`], true);
+    const tagRef = `refs/tags/${entry.tag}`;
+    const remote = runGit(repo, ["ls-remote", "--exit-code", "--refs", "--tags", "origin", tagRef], true);
+    const local = runGit(repo, ["rev-parse", "--verify", tagRef], true);
+    const remoteFields = remote.stdout.trim().split(/\r?\n/).filter(Boolean).map((line) => line.split("\t"));
+    if (remote.status !== 0 || local.status !== 0 || remoteFields.length !== 1 || remoteFields[0].length !== 2
+      || !/^[a-f0-9]{40}$/.test(remoteFields[0][0]) || remoteFields[0][1] !== tagRef
+      || local.stdout.trim() !== remoteFields[0][0]) return false;
+    const objectType = runGit(repo, ["cat-file", "-t", tagRef], true);
+    const tagContent = runGit(repo, ["cat-file", "-p", tagRef], true);
+    const peeled = runGit(repo, ["rev-parse", "--verify", `${tagRef}^{commit}`], true);
     if (objectType.status !== 0 || objectType.stdout.trim() !== "tag" || tagContent.status !== 0 || peeled.status !== 0) return false;
     validateAnnotatedTagName(entry.tag, tagContent.stdout);
     const handoffTarget = peeled.stdout.trim();
@@ -81,38 +88,72 @@ function validateAcceptanceBoundary(boundary, options) {
   return true;
 }
 
-function buildCandidatePlan(repo, candidateRef, canonicalRef, acceptancePath, producerBranches) {
-  const canonicalHead = git(repo, ["rev-parse", `${canonicalRef}^{commit}`]).stdout.trim();
-  const candidateHead = git(repo, ["rev-parse", `${candidateRef}^{commit}`]).stdout.trim();
-  const acceptanceObject = git(repo, ["rev-parse", `${candidateRef}:${acceptancePath}`], true);
+function resolvePublishedBranch(repo, branch, runGit = git, label = "registered producer ref") {
+  const branchRef = `refs/heads/${branch}`;
+  const trackingRef = `refs/remotes/origin/${branch}`;
+  const remote = runGit(repo, ["ls-remote", "--exit-code", "--heads", "origin", branchRef], true);
+  const local = runGit(repo, ["rev-parse", "--verify", `${trackingRef}^{commit}`], true);
+  const remoteFields = remote.stdout.trim().split(/\r?\n/).filter(Boolean).map((line) => line.split("\t"));
+  assert.ok(remote.status === 0 && local.status === 0 && remoteFields.length === 1 && remoteFields[0].length === 2
+    && /^[a-f0-9]{40}$/.test(remoteFields[0][0]) && remoteFields[0][1] === branchRef,
+  `${label} is unavailable: ${branch}`);
+  assert.equal(local.stdout.trim(), remoteFields[0][0], `${label} is stale: ${branch}`);
+  return remoteFields[0][0];
+}
+
+function resolveCandidateInput(repo, ref, runGit = git, label = "candidate ref") {
+  if (ref.startsWith("origin/")) return resolvePublishedBranch(repo, ref.slice("origin/".length), runGit, label);
+  return runGit(repo, ["rev-parse", `${ref}^{commit}`]).stdout.trim();
+}
+
+function buildCandidatePlan(repo, candidateRef, canonicalRef, acceptancePath, producerBranches, runGit = git) {
+  const canonicalHead = resolveCandidateInput(repo, canonicalRef, runGit, "canonical ref");
+  const candidateHead = resolveCandidateInput(repo, candidateRef, runGit, "candidate ref");
+  const acceptanceObject = runGit(repo, ["rev-parse", `${candidateHead}:${acceptancePath}`], true);
   assert.equal(acceptanceObject.status, 0, "candidate acceptance artifact is not committed");
-  const acceptance = parseAcceptance(git(repo, ["show", `${candidateRef}:${acceptancePath}`]).stdout);
+  const acceptance = parseAcceptance(runGit(repo, ["show", `${candidateHead}:${acceptancePath}`]).stdout);
   assert.equal(acceptance.base_sha, canonicalHead, "acceptance base does not match canonical T4");
   validateAcceptanceBoundary({ canonical_head: canonicalHead, candidate_head: candidateHead, candidate_sha: acceptance.candidate_sha, acceptance_path: acceptancePath }, {
-    isAncestor: (ancestor, descendant) => git(repo, ["merge-base", "--is-ancestor", ancestor, descendant], true).status === 0,
-    parents: (commit) => git(repo, ["show", "-s", "--format=%P", commit]).stdout.trim().split(/\s+/).filter(Boolean),
-    changedPaths: (ancestor, descendant) => git(repo, ["diff", "--name-only", `${ancestor}..${descendant}`]).stdout.trim().split(/\r?\n/).filter(Boolean),
+    isAncestor: (ancestor, descendant) => runGit(repo, ["merge-base", "--is-ancestor", ancestor, descendant], true).status === 0,
+    parents: (commit) => runGit(repo, ["show", "-s", "--format=%P", commit]).stdout.trim().split(/\s+/).filter(Boolean),
+    changedPaths: (ancestor, descendant) => runGit(repo, ["diff", "--name-only", `${ancestor}..${descendant}`]).stdout.trim().split(/\r?\n/).filter(Boolean),
   });
   const acceptedPayloads = acceptance.accepted_payloads.map((entry) => ({ thread: entry.thread, tag: entry.tag, payload_sha: entry.payload_sha }));
-  const base = git(repo, ["merge-base", canonicalHead, candidateHead]).stdout.trim();
+  const base = runGit(repo, ["merge-base", canonicalHead, candidateHead]).stdout.trim();
   const contained = [];
   for (const [thread, branch] of producerBranches) {
-    const commits = git(repo, ["rev-list", "--reverse", `${base}..refs/remotes/origin/${branch}`], true);
-    if (commits.status !== 0) throw new Error(`registered producer ref is unavailable: ${branch}`);
+    const branchHead = resolvePublishedBranch(repo, branch, runGit);
+    const commits = runGit(repo, ["rev-list", "--reverse", `${base}..${branchHead}`], true);
+    if (commits.status !== 0) throw new Error(`cannot inspect registered producer ref: ${branch}`);
     for (const commit of commits.stdout.trim().split(/\r?\n/).filter(Boolean)) {
-      if (git(repo, ["merge-base", "--is-ancestor", commit, candidateHead], true).status === 0) contained.push({ thread, commit });
+      if (runGit(repo, ["merge-base", "--is-ancestor", commit, candidateHead], true).status === 0) contained.push({ thread, commit });
     }
   }
   return { canonical_head: canonicalHead, candidate_head: candidateHead, accepted_payloads: acceptedPayloads, contained_producer_commits: contained };
 }
 
+function parseCandidateArgs(argv) {
+  assert.equal(argv.length % 2, 0, "candidate arguments must be option/value pairs");
+  const allowed = new Set(["--repo", "--candidate", "--canonical", "--acceptance"]);
+  const args = {};
+  for (let index = 0; index < argv.length; index += 2) {
+    const option = argv[index];
+    const value = argv[index + 1];
+    assert.ok(allowed.has(option), `unknown candidate argument: ${option}`);
+    assert.ok(value && !value.startsWith("--"), `${option} requires a value`);
+    assert.equal(Object.hasOwn(args, option), false, `duplicate candidate argument: ${option}`);
+    args[option] = value;
+  }
+  assert.ok(args["--repo"] && args["--candidate"], "--repo and --candidate are required");
+  return args;
+}
+
 function main(argv) {
-  const args = Object.fromEntries(Array.from({ length: argv.length / 2 }, (_, index) => [argv[index * 2], argv[index * 2 + 1]]));
+  const args = parseCandidateArgs(argv);
   const repo = args["--repo"];
   const candidate = args["--candidate"];
   const canonical = args["--canonical"] || "origin/ve/prototype-integration";
   const acceptancePath = args["--acceptance"] || "_docs/ralph/prototype-integration/live-integration-acceptance.json";
-  assert.ok(repo && candidate, "--repo and --candidate are required");
   const producerBranches = [["T1", "ve/prototype-t1-identity"], ["T2", "ve/prototype-t2-product"], ["T3", "ve/prototype-t3-reliability"], ["T5", "ve/prototype-t5-platform"]];
   const plan = buildCandidatePlan(repo, candidate, canonical, acceptancePath, producerBranches);
   validateCandidatePlan(plan, {
@@ -123,7 +164,7 @@ function main(argv) {
   process.stdout.write(`${JSON.stringify(plan, null, 2)}\n`);
 }
 
-module.exports = { buildCandidatePlan, parseAcceptance, validateAcceptanceBoundary, validateCandidatePlan, verifyAcceptedPayload };
+module.exports = { buildCandidatePlan, parseAcceptance, parseCandidateArgs, resolveCandidateInput, resolvePublishedBranch, validateAcceptanceBoundary, validateCandidatePlan, verifyAcceptedPayload };
 
 if (require.main === module) {
   try { main(process.argv.slice(2)); }

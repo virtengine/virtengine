@@ -41,6 +41,15 @@ const tests = [
     candidate.categories[0].required_commands.shift();
     assert.throws(() => validateRequiredGateMatrix(candidate, { schema }), /required literal commands changed/);
   }],
+  ["requires a runtime integration candidate preflight", () => {
+    const candidate = cloneMatrix();
+    const category = candidate.categories.find((entry) => entry.id === "docs_process_boundary_e2e");
+    category.required_commands = category.required_commands.filter((command) => command.id !== "integration-candidate-preflight");
+    assert.throws(() => validateRequiredGateMatrix(candidate, { schema }), /required literal commands changed/);
+    const runtime = matrix.categories.find((entry) => entry.id === "docs_process_boundary_e2e").required_commands.find((command) => command.id === "integration-candidate-preflight");
+    assert.equal(runtime.kind, "policy");
+    assert.match(runtime.command, /preflight-integration-candidate\.cjs --repo \. --candidate origin\/ve\/prototype-integration-live/);
+  }],
   ["rejects a missing SLURM render command", () => {
     const candidate = cloneMatrix();
     const category = candidate.categories.find((entry) => entry.id === "deployment");
