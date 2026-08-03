@@ -1,0 +1,11 @@
+command: go vet ./pkg/inference
+exit_code: 0
+result: passed
+
+command: git diff --check
+exit_code: 0
+result: passed
+
+command: git status --porcelain
+exit_code: 0
+result: clean before evidence creation
