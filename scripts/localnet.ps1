@@ -240,7 +240,7 @@ function Invoke-IntegrationTests {
         Write-WarningMessage 'Chain is not running. Starting localnet first.'
         Start-Localnet
     }
-    Invoke-Compose run --rm test-runner go test -v ./tests/integration/...
+    Invoke-Compose run --rm test-runner go test -count=1 -tags=e2e.integration -v ./tests/integration/...
 }
 
 function Open-LocalnetShell {

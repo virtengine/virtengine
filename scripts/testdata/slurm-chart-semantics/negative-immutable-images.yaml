@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: mutable-image
+spec:
+  containers:
+    - name: slurm-client
+      image: ghcr.io/virtengine/slurm-client:latest
+      securityContext:
+        privileged: false
+        runAsNonRoot: true
+        runAsUser: 1000
+        allowPrivilegeEscalation: false
+        capabilities:
+          drop: [ALL]

@@ -1,0 +1,254 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://virtengine.com/schemas/core-rc-prototype-v0.json",
+  "title": "VirtEngine dependency-blocked prototype core RC manifest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "manifest_id", "status", "authoritative",
+    "planned_functionality_complete", "milestone_m_eligible", "source", "tooling",
+    "toolchains", "artifact_groups", "control_artifacts", "migrations",
+    "required_gates", "slurm", "model_provenance", "ai_assurance", "test_evidence",
+    "producer_checkpoints", "rollout", "rollback", "external_dependencies", "blockers"
+  ],
+  "properties": {
+    "schema_version": { "const": "virtengine.core-rc.prototype/v0" },
+    "manifest_id": { "const": "T4-08A" },
+    "status": { "const": "dependency_blocked" },
+    "authoritative": { "const": false },
+    "planned_functionality_complete": { "const": false },
+    "milestone_m_eligible": { "const": false },
+    "source": {
+      "type": "object", "additionalProperties": false,
+      "required": ["payload_sha", "tree", "branch", "binding"],
+      "properties": {
+        "payload_sha": { "$ref": "#/$defs/sha" },
+        "tree": { "$ref": "#/$defs/sha" },
+        "branch": { "const": "ve/prototype-integration" },
+        "binding": { "const": "declared_clean_parent_payload" }
+      }
+    },
+    "tooling": { "$ref": "#/$defs/tooling" },
+    "toolchains": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/toolchain" } },
+    "artifact_groups": { "type": "array", "minItems": 7, "items": { "$ref": "#/$defs/artifactGroup" } },
+    "control_artifacts": { "type": "array", "minItems": 5, "items": { "$ref": "#/$defs/controlArtifact" } },
+    "migrations": { "$ref": "#/$defs/migrations" },
+    "required_gates": { "$ref": "#/$defs/requiredGates" },
+    "slurm": { "$ref": "#/$defs/slurm" },
+    "model_provenance": { "$ref": "#/$defs/modelProvenance" },
+    "ai_assurance": { "$ref": "#/$defs/aiAssurance" },
+    "test_evidence": { "$ref": "#/$defs/testEvidence" },
+    "producer_checkpoints": { "$ref": "#/$defs/producerCheckpoints" },
+    "rollout": { "$ref": "#/$defs/releaseState" },
+    "rollback": { "$ref": "#/$defs/releaseState" },
+    "external_dependencies": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/dependency" } },
+    "blockers": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/blocker" } }
+  },
+  "$defs": {
+    "sha": { "type": "string", "pattern": "^[a-f0-9]{40}$" },
+    "digest": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+    "nullableDigest": { "oneOf": [{ "$ref": "#/$defs/digest" }, { "type": "null" }] },
+    "nullableString": { "oneOf": [{ "type": "string", "minLength": 1 }, { "type": "null" }] },
+    "tooling": {
+      "type": "object", "additionalProperties": false,
+      "required": ["tooling_sha", "tree", "artifacts"],
+      "properties": {
+        "tooling_sha": { "$ref": "#/$defs/sha" }, "tree": { "$ref": "#/$defs/sha" },
+        "artifacts": { "type": "array", "minItems": 3, "maxItems": 3, "items": { "$ref": "#/$defs/toolingArtifact" } }
+      }
+    },
+    "toolingArtifact": {
+      "type": "object", "additionalProperties": false,
+      "required": ["id", "path", "git_blob", "sha256"],
+      "properties": {
+        "id": { "enum": ["generator", "schema", "validator"] }, "path": { "type": "string", "minLength": 1 },
+        "git_blob": { "$ref": "#/$defs/sha" }, "sha256": { "$ref": "#/$defs/digest" }
+      }
+    },
+    "toolchain": {
+      "type": "object", "additionalProperties": false,
+      "required": ["name", "version", "source", "status"],
+      "properties": {
+        "name": { "type": "string", "minLength": 1 }, "version": { "type": "string", "minLength": 1 },
+        "source": { "type": "string", "minLength": 1 }, "status": { "const": "declared" }
+      }
+    },
+    "artifactGroup": {
+      "type": "object", "additionalProperties": false,
+      "required": ["id", "status", "selection", "file_count", "sha256", "blocker_id"],
+      "properties": {
+        "id": { "enum": ["lockfiles", "modules", "proto", "openapi", "sdk", "model", "chart"] },
+        "status": { "enum": ["available", "partial", "unavailable"] },
+        "selection": { "$ref": "#/$defs/artifactSelection" },
+        "file_count": { "type": "integer", "minimum": 0 }, "sha256": { "$ref": "#/$defs/nullableDigest" },
+        "blocker_id": { "$ref": "#/$defs/nullableString" }
+      }
+    },
+    "artifactSelection": {
+      "type": "object", "additionalProperties": false,
+      "required": ["included_path_prefixes", "included_file_patterns", "excluded_path_patterns", "minimum_file_count", "expected_file_count"],
+      "properties": {
+        "included_path_prefixes": { "type": "array", "items": { "type": "string", "minLength": 1 } },
+        "included_file_patterns": { "type": "array", "items": { "type": "string", "minLength": 1 } },
+        "excluded_path_patterns": { "type": "array", "items": { "type": "string", "minLength": 1 } },
+        "minimum_file_count": { "type": "integer", "minimum": 1 }, "expected_file_count": { "type": "integer", "minimum": 1 }
+      }
+    },
+    "controlArtifact": {
+      "type": "object", "additionalProperties": false,
+      "required": ["id", "path", "sha256", "status"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 }, "path": { "type": "string", "minLength": 1 },
+        "sha256": { "$ref": "#/$defs/digest" }, "status": { "type": "string", "minLength": 1 }
+      }
+    },
+    "aiAssurance": {
+      "type": "object", "additionalProperties": false,
+      "required": ["status", "provenance_digests", "feature_vector", "evaluation", "uniqueness", "vault_kms", "consent_retention", "non_certification"],
+      "properties": {
+        "status": { "const": "dependency_blocked" },
+        "provenance_digests": {
+          "type": "object", "additionalProperties": false,
+          "required": ["models", "runtime", "schema", "licenses"],
+          "properties": {
+            "models": { "type": "array", "minItems": 2, "items": { "$ref": "#/$defs/assuranceDigest" } },
+            "licenses": { "type": "array", "minItems": 2, "items": { "$ref": "#/$defs/assuranceDigest" } },
+            "runtime": {
+              "type": "object", "additionalProperties": false,
+              "required": ["state", "sha256", "source_blocker_id", "sbom_sha256", "sbom_blocker_id"],
+              "properties": {
+                "state": { "type": "string", "minLength": 1 }, "sha256": { "$ref": "#/$defs/nullableDigest" },
+                "source_blocker_id": { "$ref": "#/$defs/nullableString" }, "sbom_sha256": { "$ref": "#/$defs/nullableDigest" },
+                "sbom_blocker_id": { "$ref": "#/$defs/nullableString" }
+              }
+            },
+            "schema": {
+              "type": "object", "additionalProperties": false,
+              "required": ["state", "sha256", "source_blocker_id"],
+              "properties": { "state": { "type": "string", "minLength": 1 }, "sha256": { "$ref": "#/$defs/nullableDigest" }, "source_blocker_id": { "$ref": "#/$defs/nullableString" } }
+            }
+          }
+        },
+        "feature_vector": {
+          "type": "object", "additionalProperties": false,
+          "required": ["state", "dimension", "value_type", "byte_order", "pre_hash_decimal_places", "hash_algorithm", "fixture_path", "test_vector_hashes"],
+          "properties": {
+            "state": { "const": "fixture_only" }, "dimension": { "const": 768 }, "value_type": { "const": "ieee754-float32" },
+            "byte_order": { "const": "big-endian" }, "pre_hash_decimal_places": { "const": 6 }, "hash_algorithm": { "const": "sha256" },
+            "fixture_path": { "const": "pkg/inference/conformance/testdata/feature_parity_v1.json" },
+            "test_vector_hashes": { "type": "array", "minItems": 4, "maxItems": 4, "items": { "$ref": "#/$defs/namedDigest" } }
+          }
+        },
+        "evaluation": { "$ref": "#/$defs/assuranceStatus" },
+        "uniqueness": {
+          "type": "object", "additionalProperties": false, "required": ["status", "implementation_class", "evidence_path"],
+          "properties": { "status": { "const": "blocked" }, "implementation_class": { "const": "truncated_salted_sha256_bucket_equality_not_lsh" }, "evidence_path": { "const": "x/veid/keeper/biometric_hash.go" } }
+        },
+        "vault_kms": {
+          "type": "object", "additionalProperties": false, "required": ["status", "blob_backend", "key_custody", "kms_hsm"],
+          "properties": { "status": { "const": "blocked" }, "blob_backend": { "const": "process_memory" }, "key_custody": { "const": "process_memory" }, "kms_hsm": { "const": "not_configured_or_certified" } }
+        },
+        "consent_retention": {
+          "type": "object", "additionalProperties": false, "required": ["status", "consent", "retention", "production_retention_certified"],
+          "properties": { "status": { "const": "blocked" }, "consent": { "const": "allow_all_default" }, "retention": { "const": "implementation_present_production_uncertified" }, "production_retention_certified": { "const": false } }
+        },
+        "non_certification": {
+          "type": "object", "additionalProperties": false, "required": ["production_certified", "not_certified", "blocker_id"],
+          "properties": { "production_certified": { "const": false }, "not_certified": { "type": "array", "minItems": 7, "maxItems": 7, "items": { "type": "string", "minLength": 1 } }, "blocker_id": { "const": "ai-production-assurance-unavailable" } }
+        }
+      }
+    },
+    "assuranceDigest": {
+      "type": "object", "additionalProperties": false, "required": ["id", "state", "sha256", "source_blocker_id"],
+      "properties": { "id": { "type": "string", "minLength": 1 }, "state": { "type": "string", "minLength": 1 }, "sha256": { "$ref": "#/$defs/nullableDigest" }, "source_blocker_id": { "$ref": "#/$defs/nullableString" } }
+    },
+    "namedDigest": {
+      "type": "object", "additionalProperties": false, "required": ["id", "sha256"],
+      "properties": { "id": { "type": "string", "minLength": 1 }, "sha256": { "$ref": "#/$defs/digest" } }
+    },
+    "assuranceStatus": {
+      "type": "object", "additionalProperties": false, "required": ["status", "report_sha256", "source_blocker_id"],
+      "properties": { "status": { "type": "string", "minLength": 1 }, "report_sha256": { "$ref": "#/$defs/nullableDigest" }, "source_blocker_id": { "$ref": "#/$defs/nullableString" } }
+    },
+    "migrations": {
+      "type": "object", "additionalProperties": false,
+      "required": ["status", "inventory_path", "migration_count", "unavailable_producer_count", "blocker_id"],
+      "properties": {
+        "status": { "const": "dependency_blocked" }, "inventory_path": { "type": "string" },
+        "migration_count": { "type": "integer", "minimum": 0 }, "unavailable_producer_count": { "type": "integer", "minimum": 1 },
+        "blocker_id": { "type": "string", "minLength": 1 }
+      }
+    },
+    "requiredGates": {
+      "type": "object", "additionalProperties": false,
+      "required": ["status", "matrix_path", "category_count", "blocked_category_count", "blocker_id"],
+      "properties": {
+        "status": { "const": "dependency_blocked" }, "matrix_path": { "type": "string" },
+        "category_count": { "type": "integer", "minimum": 1 }, "blocked_category_count": { "type": "integer", "minimum": 1 },
+        "blocker_id": { "type": "string", "minLength": 1 }
+      }
+    },
+    "slurm": {
+      "type": "object", "additionalProperties": false,
+      "required": ["status", "inventory_path", "report_path", "report_status", "blocker_id"],
+      "properties": {
+        "status": { "const": "blocked" }, "inventory_path": { "type": "string" }, "report_path": { "type": "string" },
+        "report_status": { "const": "blocked" }, "blocker_id": { "type": "string", "minLength": 1 }
+      }
+    },
+    "modelProvenance": {
+      "type": "object", "additionalProperties": false,
+      "required": ["status", "path", "sbom_status", "production_weights_status", "blocker_id"],
+      "properties": {
+        "status": { "const": "dependency_blocked" }, "path": { "type": "string" },
+        "sbom_status": { "const": "dependency_blocked" }, "production_weights_status": { "const": "dependency_blocked" },
+        "blocker_id": { "type": "string", "minLength": 1 }
+      }
+    },
+    "testEvidence": {
+      "type": "object", "additionalProperties": false,
+      "required": ["status", "ledger_path", "implementation_sha", "ledger_sha", "record_count", "declared_test_count", "uncounted_record_count", "records", "blocker_id"],
+      "properties": {
+        "status": { "enum": ["complete", "partial"] }, "ledger_path": { "type": "string", "minLength": 1 },
+        "implementation_sha": { "$ref": "#/$defs/sha" }, "ledger_sha": { "$ref": "#/$defs/sha" },
+        "record_count": { "type": "integer", "minimum": 1 },
+        "declared_test_count": { "type": "integer", "minimum": 0 }, "uncounted_record_count": { "type": "integer", "minimum": 1 },
+        "records": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/testRecord" } },
+        "blocker_id": { "type": "string", "minLength": 1 }
+      }
+    },
+    "testRecord": {
+      "type": "object", "additionalProperties": false,
+      "required": ["command", "exit_code", "result", "test_count", "tool_versions"],
+      "properties": {
+        "command": { "type": "string", "minLength": 1 }, "exit_code": { "const": 0 }, "result": { "const": "passed" },
+        "test_count": { "oneOf": [{ "type": "integer", "minimum": 0 }, { "type": "null" }] },
+        "tool_versions": { "type": "object", "minProperties": 1, "additionalProperties": { "type": "string", "minLength": 1 } }
+      }
+    },
+    "producerCheckpoints": {
+      "type": "object", "additionalProperties": false,
+      "required": ["ledger_path", "ledger_sha256", "accepted", "rejected", "blocker_id"],
+      "properties": {
+        "ledger_path": { "type": "string" }, "ledger_sha256": { "$ref": "#/$defs/digest" },
+        "accepted": { "type": "array", "maxItems": 0 }, "rejected": { "type": "array" },
+        "blocker_id": { "type": "string", "minLength": 1 }
+      }
+    },
+    "releaseState": {
+      "type": "object", "additionalProperties": false,
+      "required": ["status", "evidence", "blocker_id"],
+      "properties": { "status": { "enum": ["not_authorized", "unverified"] }, "evidence": { "type": "null" }, "blocker_id": { "type": "string", "minLength": 1 } }
+    },
+    "dependency": {
+      "type": "object", "additionalProperties": false,
+      "required": ["id", "status", "blocker_id"],
+      "properties": { "id": { "type": "string", "minLength": 1 }, "status": { "const": "unavailable" }, "blocker_id": { "type": "string", "minLength": 1 } }
+    },
+    "blocker": {
+      "type": "object", "additionalProperties": false,
+      "required": ["id", "description"],
+      "properties": { "id": { "type": "string", "minLength": 1 }, "description": { "type": "string", "minLength": 1 } }
+    }
+  }
+}

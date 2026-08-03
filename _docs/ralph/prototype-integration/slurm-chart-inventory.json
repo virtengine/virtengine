@@ -1,0 +1,168 @@
+{
+  "schema_version": "virtengine.prototype.slurm-chart-inventory/v2",
+  "checkpoint": "T4-07G",
+  "status": "blocked",
+  "validation_mode": "executable-semantic",
+  "research_scope": {
+    "roots": ["deploy", "infra", "config", "charts", "scripts", "_build/helm"],
+    "selection_evidence": [
+      "_docs/protocol-completion-continuation-plan.md#task-19--88c-converge-and-harden-the-canonical-slurm-chart-for-tenancy-capacity-secrets-ha-and-signed-accounting",
+      "_docs/runbooks/hpc-slurm/deployment-runbook.md",
+      "deploy/slurm/slurm-cluster/Chart.yaml"
+    ],
+    "non_chart_hpc_sources": [
+      "deploy/monitoring/alerts/hpc-scheduling.yaml",
+      "deploy/monitoring/grafana/dashboards/hpc-scheduling.json",
+      "config/mainnet/genesis-params.json",
+      "config/mainnet/genesis-checks.json",
+      "scripts/hpc/"
+    ]
+  },
+  "canonical_source": {
+    "path": "deploy/slurm/slurm-cluster",
+    "kind": "helm-chart",
+    "state": "canonical-blocked",
+    "allowed_use": "prototype-authoring-and-single-trust-domain-rehearsal-only",
+    "evidence": [
+      "_docs/runbooks/hpc-slurm/deployment-runbook.md",
+      "deploy/slurm/slurm-cluster/Chart.yaml"
+    ]
+  },
+  "compatibility_import_only_shims": [],
+  "retired_sources": [
+    {
+      "path": "_build/helm/slurm-cluster",
+      "kind": "helm-chart",
+      "state": "absent-forbidden",
+      "allowed_use": "none",
+      "evidence": [
+        "_docs/protocol-completion-continuation-plan.md",
+        "_docs/audits/task-t4-07f-slurm-chart-retirement-2026-08-02.md"
+      ]
+    }
+  ],
+  "semantic_validator": {
+    "contract": "virtengine.slurm-semantic-validation/v1",
+    "implementation": "scripts/validate_slurm_chart_semantics.py",
+    "test": "scripts/validate_slurm_chart_semantics_test.py",
+    "testdata": "scripts/testdata/slurm-chart-semantics",
+    "passing_command": "python scripts/validate_slurm_chart_semantics_test.py -v",
+    "diagnostic_command": "python scripts/validate_slurm_chart_semantics.py --chart deploy/slurm/slurm-cluster --diagnostic --json",
+    "production_result": "blocked"
+  },
+  "semantic_report": {
+    "path": "_docs/ralph/prototype-integration/slurm-chart-semantic-report.json",
+    "sha256": "d0573f44a9bb46362260ccadfe3fa1da4df93cc4ff4bd016259263449e788993",
+    "source": "deploy/slurm/slurm-cluster",
+    "generated_by": "python scripts/validate_slurm_chart_semantics.py --chart deploy/slurm/slurm-cluster --diagnostic --json"
+  },
+  "semantic_invariants": [
+    {
+      "id": "stable-secrets",
+      "status": "satisfied",
+      "requirement": "Production uses pre-provisioned or external secrets and never generates random credentials during render.",
+      "evidence": [
+        "deploy/slurm/slurm-cluster/templates/secrets.yaml",
+        "deploy/slurm/slurm-cluster/values.schema.json",
+        "deploy/slurm/slurm-cluster/tests/stable-secrets-values.yaml",
+        "scripts/validate_slurm_chart_semantics_test.py"
+      ],
+      "blocker": null
+    },
+    {
+      "id": "replica-capacity-equality",
+      "status": "unverified",
+      "requirement": "Rendered partition membership and advertised capacity exactly equal rendered compute replicas and node pools.",
+      "evidence": [
+        "deploy/slurm/slurm-cluster/templates/_helpers.tpl",
+        "deploy/slurm/slurm-cluster/templates/configmap.yaml",
+        "deploy/slurm/slurm-cluster/values.schema.json",
+        "deploy/slurm/slurm-cluster/tests/stable-secrets-values.yaml",
+        "_docs/ralph/prototype-integration/required-gate-matrix.json",
+        "scripts/testdata/slurm-chart-semantics/hardened-multiple-pools.yaml",
+        "scripts/validate_slurm_chart_semantics_test.py",
+        "tests/integration/hpc/slurm_k8s_test.go"
+      ],
+      "blocker": "Pinned Helm 3.18.6 lint and fixture rendering pass structured workload, StatefulSet pod-name, partition-membership, and slurm.conf capacity checks. Production remains unverified because no operator-approved production values/render or live cluster workload report is available."
+    },
+    {
+      "id": "immutable-images",
+      "status": "satisfied",
+      "requirement": "Every enabled production workload, init container, and sidecar image is an explicit complete repository@sha256:<lowercase64> reference.",
+      "evidence": [
+        "deploy/slurm/slurm-cluster/templates/_helpers.tpl",
+        "deploy/slurm/slurm-cluster/values.schema.json",
+        "deploy/slurm/slurm-cluster/values.yaml",
+        "deploy/slurm/slurm-cluster/tests/stable-secrets-values.yaml",
+        "scripts/validate_slurm_chart_semantics_test.py",
+        "tests/integration/hpc/slurm_k8s_test.go"
+      ],
+      "blocker": null
+    },
+    {
+      "id": "least-privilege",
+      "status": "unverified",
+      "requirement": "Rootless controls, one explicit username/UID/GID for all SLURM daemons, and component-specific supporting identities are non-overridable, rendered, and independently verified; production tenancy additionally requires effective per-job resource and device isolation.",
+      "evidence": [
+        "deploy/slurm/slurm-cluster/templates/_helpers.tpl",
+        "deploy/slurm/slurm-cluster/templates/compute-statefulset.yaml",
+        "deploy/slurm/slurm-cluster/templates/compute-nodepools-statefulset.yaml",
+        "deploy/slurm/slurm-cluster/values.schema.json",
+        "scripts/validate_slurm_chart_semantics.py",
+        "scripts/validate_slurm_chart_semantics_test.py",
+        "tests/integration/hpc/slurm_k8s_test.go"
+      ],
+      "blocker": "Least privilege remains unverified: the shared SLURM username/UID/GID, supporting image identity mappings, and rendered workloads are not independently verified. The rootless profile deliberately disables SLURM cgroup enforcement and therefore provides no production tenant CPU, memory, swap, or device isolation claim."
+    },
+    {
+      "id": "durable-state",
+      "status": "unverified",
+      "requirement": "Controller, accounting database, and required scheduler state survive upgrade, failover, rollback, and restore.",
+      "evidence": [
+        "deploy/slurm/slurm-cluster/templates/controller-statefulset.yaml",
+        "deploy/slurm/slurm-cluster/templates/database-statefulset.yaml",
+        "deploy/slurm/slurm-cluster/templates/mariadb-statefulset.yaml",
+        "deploy/slurm/slurm-cluster/values.schema.json",
+        "scripts/validate_slurm_chart_semantics_test.py",
+        "scripts/hpc/slurm-durable-state-drill.py",
+        "scripts/hpc/slurm-durable-state-drill-test.py",
+        "_docs/runbooks/hpc-slurm/deployment-runbook.md",
+        "_docs/audits/task-t4-07e-durable-state-evidence-2026-08-02.md"
+      ],
+      "blocker": "Static, schema, rendered-fixture, checksum, and restore-order checks pass offline, but Helm, kubectl, Kubernetes, CSI/StorageClass, retained-PV failover, and live backup/restore evidence are unavailable. Durable state remains unverified."
+    }
+  ],
+  "dependencies": [
+    { "id": "84B", "status": "unverified", "reason": "Canonical signed accounting contract is not intake-verified for this checkpoint." },
+    { "id": "84C", "status": "unverified", "reason": "Authoritative reservation and capacity contract is not intake-verified for this checkpoint." },
+    { "id": "85C", "status": "unverified", "reason": "Governed workload identity and durable secret contract is not intake-verified for this checkpoint." },
+    { "id": "87A", "status": "unverified", "reason": "Required integration contract is not intake-verified for this checkpoint." },
+    { "id": "87D", "status": "unverified", "reason": "Required integration contract is not intake-verified for this checkpoint." }
+  ],
+  "blockers": [
+    "invariant:replica-capacity-equality",
+    "invariant:least-privilege",
+    "isolation:slurm-cgroup-tenant-enforcement-absent",
+    "evidence:image-uid-gid-mapping-unverified",
+    "invariant:durable-state",
+    "evidence:durable-state-live-storage-unavailable",
+    "dependency:84B",
+    "dependency:84C",
+    "dependency:85C",
+    "dependency:87A",
+    "dependency:87D",
+    "evidence:production-render-not-provided"
+  ],
+  "completion": {
+    "allowed": false,
+    "required_evidence": [
+      "semantic Helm render parsed as structured YAML",
+      "live retained-PVC deletion, scale, failover, backup, and restore drill with StorageClass/PV evidence",
+      "verified image UID/GID mappings for every component",
+      "reviewed delegated cgroup mechanism or equivalent tenant isolation boundary",
+      "retired source absent and forbidden by discovery",
+      "all semantic invariants satisfied",
+      "all dependency contracts ready"
+    ]
+  }
+}

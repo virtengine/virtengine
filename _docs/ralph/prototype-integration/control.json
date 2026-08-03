@@ -1,0 +1,76 @@
+{
+  "schema_version": "virtengine.prototype.integration-control/v1",
+  "campaign": "three-day-prototype",
+  "baseline": {
+    "branch": "stable-virtengine-beta",
+    "sha": "79391a3df86d85522b92e0400c6904971ecbe65d",
+    "frozen": true
+  },
+  "integration": {
+    "thread": "T4",
+    "branch": "ve/prototype-integration"
+  },
+  "producers": [
+    {
+      "thread": "T1",
+      "branch": "ve/prototype-t1-identity",
+      "handoff": "_docs/ralph/handoffs/prototype-t1/HANDOFF.yaml"
+    },
+    {
+      "thread": "T2",
+      "branch": "ve/prototype-t2-product",
+      "handoff": "_docs/ralph/handoffs/prototype-t2/HANDOFF.yaml"
+    },
+    {
+      "thread": "T3",
+      "branch": "ve/prototype-t3-reliability",
+      "handoff": "_docs/ralph/handoffs/prototype-t3/HANDOFF.yaml"
+    },
+    {
+      "thread": "T5",
+      "branch": "ve/prototype-t5-platform",
+      "handoff": "_docs/ralph/handoffs/prototype-t5/HANDOFF.yaml"
+    }
+  ],
+  "path_ownership": {
+    "integration_only": [
+      "app/**",
+      "upgrades/**",
+      "go.work",
+      "go.mod",
+      "go.sum",
+      "vendor/**",
+      "sdk/go/**",
+      "sdk/ts/src/generated/**",
+      "openapi/**",
+      "docs/api/**",
+      ".github/workflows/**",
+      "deploy/**",
+      "infra/**",
+      "artifacts/release/**"
+    ],
+    "coordination_rule": "Producer changes to integration-only paths require an active generated-file lease recorded here before modification."
+  },
+  "dependency_ledger": {
+    "ready": ["T4-01", "T4-06B"],
+    "blocked": {
+      "T4-02": ["T1 persisted schema inventory", "T2 persisted schema inventory", "T3 persisted schema inventory", "T5 persisted schema inventory"],
+      "T4-03": ["T4-02"],
+      "T4-04": ["eligible producer checkpoint synchronized with current integration SHA"],
+      "T4-05": ["85D", "86A", "86B", "86C", "86D", "87D", "88A"],
+      "T4-06": ["T4-06B", "eligible 88C dependency contracts", "hardened production render passes semantic validator"],
+      "T4-06A": ["84B", "84C", "85C", "87A", "87D"],
+      "T4-07": ["T4-06"],
+      "T4-08": ["accepted prototype checkpoints", "T4-02", "T4-03", "T4-05", "T4-07"],
+      "T4-09": ["T4-08"]
+    }
+  },
+  "generated_file_lease": {
+    "state": "available",
+    "holder": null,
+    "checkpoint": null,
+    "paths": [],
+    "base_sha": null,
+    "expires_at": null
+  }
+}

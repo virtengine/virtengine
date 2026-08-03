@@ -39,8 +39,18 @@ func (up *upgrade) UpgradeHandler() upgradetypes.UpgradeHandler {
 			return cloneVersionMap(fromVM), nil
 		}
 		sdkCtx := sdk.UnwrapSDKContext(ctx)
-		if up.Keepers.VirtEngine.Marketplace.IsCanonicalLifecycleActive(sdkCtx) {
-			return nil, fmt.Errorf("%s precondition: mktplace canonical write fence already active", UpgradeName)
+		marketplaceActive := up.Keepers.VirtEngine.Marketplace.IsCanonicalLifecycleActive(sdkCtx)
+		resourcesActive := up.Keepers.VirtEngine.Resources.IsCanonicalReservationsActive(sdkCtx)
+		if retryVM, completed, err := completedRetryVersionMap(fromVM, marketplaceActive, resourcesActive); err != nil {
+			return nil, err
+		} else if completed {
+			if err := up.Keepers.VirtEngine.Resources.ValidateCapacityConservation(sdkCtx); err != nil {
+				return nil, fmt.Errorf("completed retry capacity invariant: %w", err)
+			}
+			if err := up.ValidateReservationLineage(sdkCtx); err != nil {
+				return nil, fmt.Errorf("completed retry lineage invariant: %w", err)
+			}
+			return retryVM, nil
 		}
 		report, err := up.reconcileLegacyLifecycle(sdkCtx)
 		if err != nil {
@@ -76,6 +86,22 @@ func cloneVersionMap(source module.VersionMap) module.VersionMap {
 		clone[name] = version
 	}
 	return clone
+}
+
+func completedRetryVersionMap(fromVM module.VersionMap, marketplaceActive, resourcesActive bool) (module.VersionMap, bool, error) {
+	if marketplaceActive && !resourcesActive {
+		return nil, false, fmt.Errorf("%s precondition: canonical activation is partial", UpgradeName)
+	}
+	if !marketplaceActive {
+		return nil, false, nil
+	}
+
+	retryVM := cloneVersionMap(fromVM)
+	retryVM[marketv1.ModuleName] = 8
+	retryVM[marketplacetypes.ModuleName] = 2
+	retryVM[resourcetypes.ModuleName] = 2
+	retryVM[hpctypes.ModuleName] = 2
+	return retryVM, true, nil
 }
 
 type reconciliationReport struct {

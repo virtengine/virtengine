@@ -1,0 +1,95 @@
+{
+  "campaign": "three-day-prototype",
+  "thread": "T4",
+  "checkpoint": "T4-01CN",
+  "branch": "ve/prototype-integration",
+  "start_head": "6f3eac6f407fbb890f7d67ae6a716ebae438d009",
+  "end_head": "53299d41cd13760f08bdefcb30c39af8eca2bec6",
+  "origin_main": "79391a3df86d85522b92e0400c6904971ecbe65d",
+  "tree_clean": true,
+  "commits": [
+    "53299d41cd13760f08bdefcb30c39af8eca2bec6"
+  ],
+  "owned_paths": [
+    "_docs/ralph/prototype-integration/**",
+    "_docs/ralph/handoffs/prototype-integration/**"
+  ],
+  "files_changed": [
+    "_docs/ralph/handoffs/prototype-integration/HANDOFF.yaml",
+    "_docs/ralph/prototype-integration/core-rc-manifest.json"
+  ],
+  "tests": [
+    {
+      "command": "node scripts/validate-prototype-integration.test.cjs && node scripts/validate-prototype-integration.cjs",
+      "exit_code": 0,
+      "result": "passed",
+      "test_count": 13,
+      "tool_versions": {
+        "node": "20.19.1"
+      }
+    },
+    {
+      "command": "node scripts/validate-agents-docs.mjs",
+      "exit_code": 0,
+      "result": "passed",
+      "test_count": 9,
+      "tool_versions": {
+        "node": "20.19.1"
+      }
+    }
+  ],
+  "generated_hashes": {
+    "_docs/ralph/prototype-integration/core-rc-manifest.json": "cec131dfd50c66f047845fd9154bf21f4d0ed826b3a8ea07f1d5f4d54d02c364"
+  },
+  "accepted_checkpoints": [],
+  "rejected_checkpoints": [
+    {
+      "thread": "T2",
+      "checkpoint": "T2-01",
+      "tip": "62d8c4b99804b354b36031ea2fd8b609dcac8a87",
+      "reason": "Producer tip does not contain integration SHA 78c57fbaf9517caba7b0d9a0dc0ca427665eb12e; synchronize with current T4 and rerun exact-SHA gates."
+    },
+    {
+      "thread": "T3",
+      "checkpoint": "T3-01",
+      "tip": "9cc738fbb241890d069d6fb6c2ddb664a4e53447",
+      "reason": "Producer tip does not contain integration SHA 823c61a1a9fc2c3a8f8b59dd060bb6db4a1bc3db; synchronize with current T4 and rerun exact-SHA gates."
+    },
+    {
+      "thread": "T1",
+      "checkpoint": "T1-09",
+      "tip": "36a566a92c04d988255b10cc5a75451d59077273",
+      "reason": "Frozen intake validation rejects payload history because .gitattributes is outside the checkpoint's declared owned_paths."
+    },
+    {
+      "thread": "T3",
+      "checkpoint": "T3-13A",
+      "tip": "8dbbaf14d5fdfd4e8405f085842a595bc7f299ff",
+      "reason": "Frozen intake validation rejects the checkpoint because declared files_changed and retained evidence do not match the complete payload range."
+    }
+  ],
+  "external_evidence": [],
+  "known_failures": [
+    "Go 1.26.5 cannot compile github.com/bytedance/sonic v1.14.1; checkpoint gates were rerun successfully with the repository-pinned Go 1.25.8 toolchain.",
+    "The full tagged HPC integration package times out in existing pkg/provider_daemon TestHeartbeatMonitor because RecordHeartbeat holds nodesMu while raiseAlert reacquires it; focused chart contracts pass.",
+    "The clean T4-09A real diagnostic exited 1 as required and reported 19 deterministic publication blockers."
+  ],
+  "blockers": [
+    "Epoch 1 is closed: T1 t1-09 and T3 t3-13a failed immutable intake validation; T2 and T5 are frozen out; no producer checkpoint is accepted.",
+    "Stable secrets are remediated through explicit pre-provisioned Secret names/keys and legacy upgrade instructions; no render-time credential generation remains.",
+    "The diagnostic-only publication guard refuses --publish and created no local or remote checkpoint/prototype-integration/t4-09a tag.",
+    "Clean real diagnostics pass candidate HEAD/remote equality, manifest strict validity/hash/ancestry/boundary, accepted-ledger correspondence, and tag absence.",
+    "Publication remains blocked by 18 checks: candidate publication boundary, CI availability and two exact workflows; model, producer, release-provenance, rollback, rollout, SBOM, and SLURM evidence; complete gate matrix/result envelope; future manifest status/prototype success; recorded final digest; and accepted tag revalidation. Epoch cutoff/state and producer terminal/frozen-out checks pass.",
+    "The canonical diagnostic reports stable secrets and immutable images passed; capacity equality, durability, and least privilege remain unverified without Helm/live evidence.",
+    "No canonical chart remediation, failover, restore, or production render approval is claimed.",
+    "The T4-12A diagnostic records 11 prohibited production AI, biometric, consent, custody, or stub-success finding paths; enforce mode rejects the current repository state.",
+    "The T4-15A release gate records all ten AI/biometric security categories as partial or missing; enforce mode rejects release and external privacy, PAD, and production-model evaluations remain unavailable.",
+    "The T4-16A inventory binds 18 discovered production mover files to 20 value-moving routes; no accepted T5 FundAuthorization checkpoint exists and --require-ready rejects release.",
+    "The T4-13A inventory records five required generated contract families as absent or precursor-only; no canonical proto source is accepted and --require-ready rejects generation readiness.",
+    "The divergent ve/prototype-integration-live candidate is not promotable: its acceptance artifact is uncommitted, its ancestry predates canonical T4, and no strict exact-SHA acceptance evidence is available.",
+    "External production model privacy and security evaluation is unavailable.",
+    "Task 88C is not complete."
+  ],
+  "next_checkpoint": null,
+  "expected_head": "53299d41cd13760f08bdefcb30c39af8eca2bec6"
+}

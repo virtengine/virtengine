@@ -1,0 +1,348 @@
+{
+  "$schema": "https://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "properties": {
+    "utilityImage": { "$ref": "#/definitions/pinnedImage" },
+    "securityIdentities": { "$ref": "#/definitions/securityIdentities" },
+    "podSecurityContext": false,
+    "securityContext": false,
+    "containerSecurityContext": false,
+    "extraContainers": false,
+    "initContainers": false,
+    "hostPID": false,
+    "hostIPC": false,
+    "hostNetwork": false,
+    "hostUsers": false,
+    "hostPath": false,
+    "hostPaths": false,
+    "extraVolumes": {
+      "type": "array",
+      "items": { "$ref": "#/definitions/noSecurityOverrides" }
+    },
+    "munge": { "$ref": "#/definitions/secretComponent" },
+    "controller": {
+      "type": "object",
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "replicas": { "type": "integer", "minimum": 1 },
+        "image": { "$ref": "#/definitions/pinnedImage" },
+        "config": {
+          "type": "object",
+          "properties": {
+            "jobAcctGatherType": { "const": "jobacct_gather/linux" },
+            "proctrackType": { "const": "proctrack/linuxproc" },
+            "taskPlugin": { "const": "task/affinity" }
+          },
+          "required": ["jobAcctGatherType", "proctrackType", "taskPlugin"]
+        },
+        "persistence": { "$ref": "#/definitions/durablePersistence" }
+      },
+      "allOf": [{ "$ref": "#/definitions/existingClaimReplicaSafety" }]
+    },
+    "database": {
+      "type": "object",
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "replicas": { "type": "integer", "minimum": 1 },
+        "config": { "$ref": "#/definitions/databaseSecret" },
+        "image": { "$ref": "#/definitions/pinnedImage" },
+        "persistence": { "$ref": "#/definitions/durablePersistence" }
+      },
+      "required": ["config"],
+      "allOf": [{ "$ref": "#/definitions/existingClaimReplicaSafety" }]
+    },
+    "mariadb": { "$ref": "#/definitions/mariadbComponent" },
+    "compute": {
+      "type": "object",
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "replicas": { "type": "integer", "minimum": 0 },
+        "image": { "$ref": "#/definitions/pinnedImage" },
+        "hostCgroup": false
+      },
+      "required": ["enabled", "replicas"],
+      "allOf": [
+        {
+          "if": { "properties": { "enabled": { "const": true } }, "required": ["enabled"] },
+          "then": { "properties": { "replicas": { "minimum": 1 } } }
+        }
+      ]
+    },
+    "nodePools": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "pattern": "^[a-z0-9]([-a-z0-9]*[a-z0-9])?$",
+            "not": { "enum": ["controller", "slurmdbd", "database", "mariadb", "mariadb-init", "compute", "munge", "node-agent", "config", "default"] }
+          },
+          "enabled": { "type": "boolean", "default": true },
+          "replicas": { "type": "integer", "minimum": 0 }
+        },
+        "required": ["name", "replicas"],
+        "allOf": [
+          {
+            "if": { "properties": { "enabled": { "const": false } }, "required": ["enabled"] },
+            "else": { "properties": { "replicas": { "minimum": 1 } } }
+          }
+        ]
+      }
+    },
+    "partitions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "name": { "type": "string", "minLength": 1 },
+          "default": { "type": "boolean", "default": false },
+          "nodePools": {
+            "type": "array",
+            "minItems": 1,
+            "uniqueItems": true,
+            "items": { "type": "string", "pattern": "^[a-z0-9]([-a-z0-9]*[a-z0-9])?$" }
+          }
+        },
+        "required": ["name"],
+        "not": { "anyOf": [{ "required": ["nodes"] }, { "required": ["maxNodes"] }] },
+        "allOf": [
+          {
+            "if": { "properties": { "default": { "const": true } }, "required": ["default"] },
+            "else": { "required": ["nodePools"] }
+          }
+        ]
+      }
+    },
+    "nodeAgent": {
+      "type": "object",
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "image": { "$ref": "#/definitions/pinnedImage" }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "enabled": { "const": true },
+              "tls": { "properties": { "enabled": { "const": true } }, "required": ["enabled"] }
+            },
+            "required": ["enabled", "tls"]
+          },
+          "then": {
+            "properties": { "tls": { "$ref": "#/definitions/tlsSecret" } },
+            "required": ["tls"]
+          }
+        }
+      ]
+    }
+  },
+  "required": ["securityIdentities"],
+  "allOf": [
+    { "$ref": "#/definitions/noSecurityOverrides" },
+    {
+      "if": { "properties": { "controller": { "properties": { "enabled": { "const": true } }, "required": ["enabled"] } }, "required": ["controller"] },
+      "then": { "properties": { "controller": { "required": ["image", "persistence"] } } }
+    },
+    {
+      "if": { "properties": { "database": { "properties": { "enabled": { "const": true } }, "required": ["enabled"] } }, "required": ["database"] },
+      "then": { "properties": { "database": { "required": ["image", "persistence"] } } }
+    },
+    {
+      "if": { "properties": { "mariadb": { "properties": { "enabled": { "const": true } }, "required": ["enabled"] } }, "required": ["mariadb"] },
+      "then": { "properties": { "mariadb": { "required": ["image", "persistence"] } } }
+    },
+    {
+      "if": {
+        "anyOf": [
+          { "properties": { "controller": { "properties": { "enabled": { "const": true } }, "required": ["enabled"] } }, "required": ["controller"] },
+          { "properties": { "database": { "properties": { "enabled": { "const": true } }, "required": ["enabled"] } }, "required": ["database"] },
+          { "properties": { "compute": { "properties": { "enabled": { "const": true } }, "required": ["enabled"] } }, "required": ["compute"] },
+          { "properties": { "nodePools": { "contains": { "not": { "properties": { "enabled": { "const": false } }, "required": ["enabled"] } } } }, "required": ["nodePools"] }
+        ]
+      },
+      "then": { "properties": { "munge": { "required": ["image"] } }, "required": ["munge"] }
+    },
+    {
+      "if": {
+        "anyOf": [
+          { "properties": { "database": { "properties": { "enabled": { "const": true } }, "required": ["enabled"] } }, "required": ["database"] },
+          { "properties": { "compute": { "properties": { "enabled": { "const": true } }, "required": ["enabled"] } }, "required": ["compute"] },
+          { "properties": { "nodePools": { "contains": { "not": { "properties": { "enabled": { "const": false } }, "required": ["enabled"] } } } }, "required": ["nodePools"] }
+        ]
+      },
+      "then": { "required": ["utilityImage"] }
+    },
+    {
+      "if": {
+        "allOf": [
+          {
+            "anyOf": [
+              { "properties": { "compute": { "properties": { "enabled": { "const": true } }, "required": ["enabled"] } }, "required": ["compute"] },
+              { "properties": { "nodePools": { "contains": { "not": { "properties": { "enabled": { "const": false } }, "required": ["enabled"] } } } }, "required": ["nodePools"] }
+            ]
+          },
+          { "properties": { "nodeAgent": { "properties": { "enabled": { "const": true } }, "required": ["enabled"] } }, "required": ["nodeAgent"] }
+        ]
+      },
+      "then": { "properties": { "nodeAgent": { "required": ["image"] } } }
+    },
+    {
+      "if": {
+        "anyOf": [
+          { "properties": { "compute": { "properties": { "enabled": { "const": true } }, "required": ["enabled"] } }, "required": ["compute"] },
+          { "properties": { "nodePools": { "contains": { "not": { "properties": { "enabled": { "const": false } }, "required": ["enabled"] } } } }, "required": ["nodePools"] }
+        ]
+      },
+      "then": { "properties": { "compute": { "required": ["image"] } }, "required": ["compute"] }
+    }
+  ],
+  "definitions": {
+    "nonEmptyString": { "type": "string", "minLength": 1 },
+    "securityIdentity": {
+      "type": "object",
+      "properties": {
+        "uid": { "type": "integer", "minimum": 1 },
+        "gid": { "type": "integer", "minimum": 1 }
+      },
+      "required": ["uid", "gid"],
+      "additionalProperties": false
+    },
+    "slurmSecurityIdentity": {
+      "type": "object",
+      "properties": {
+        "username": { "type": "string", "pattern": "^[a-z_][a-z0-9_-]*$" },
+        "uid": { "type": "integer", "minimum": 1 },
+        "gid": { "type": "integer", "minimum": 1 }
+      },
+      "required": ["username", "uid", "gid"],
+      "additionalProperties": false
+    },
+    "securityIdentities": {
+      "type": "object",
+      "properties": {
+        "munge": { "$ref": "#/definitions/securityIdentity" },
+        "slurm": { "$ref": "#/definitions/slurmSecurityIdentity" },
+        "mariadb": { "$ref": "#/definitions/securityIdentity" },
+        "nodeAgent": { "$ref": "#/definitions/securityIdentity" },
+        "utility": { "$ref": "#/definitions/securityIdentity" }
+      },
+      "required": ["munge", "slurm", "mariadb", "nodeAgent", "utility"],
+      "additionalProperties": false
+    },
+    "noSecurityOverrides": {
+      "anyOf": [
+        {
+          "type": "object",
+          "not": {
+            "anyOf": [
+              { "required": ["securityContext"] },
+              { "required": ["podSecurityContext"] },
+              { "required": ["containerSecurityContext"] },
+              { "required": ["extraContainers"] },
+              { "required": ["initContainers"] },
+              { "required": ["hostPID"] },
+              { "required": ["hostIPC"] },
+              { "required": ["hostNetwork"] },
+              { "required": ["hostUsers"] },
+              { "required": ["hostPath"] },
+              { "required": ["hostPaths"] }
+            ]
+          },
+          "additionalProperties": { "$ref": "#/definitions/noSecurityOverrides" }
+        },
+        { "type": "array", "items": { "$ref": "#/definitions/noSecurityOverrides" } },
+        { "type": ["string", "number", "boolean", "null"] }
+      ]
+    },
+    "pinnedImage": {
+      "type": "object",
+      "properties": {
+        "reference": {
+          "type": "string",
+          "pattern": "^[a-z0-9]+(?:[._-][a-z0-9]+)*(?::[0-9]+)?(?:/[a-z0-9]+(?:[._-][a-z0-9]+)*)*@sha256:[a-f0-9]{64}$"
+        },
+        "pullPolicy": { "enum": ["Always", "IfNotPresent", "Never"] }
+      },
+      "required": ["reference", "pullPolicy"],
+      "additionalProperties": false
+    },
+    "durablePersistence": {
+      "type": "object",
+      "properties": {
+        "enabled": { "const": true },
+        "existingClaim": {
+          "type": "string",
+          "maxLength": 253,
+          "pattern": "^$|^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$"
+        },
+        "size": { "type": "string", "pattern": "^[1-9][0-9]*(?:Ei|Pi|Ti|Gi|Mi|Ki)$" },
+        "storageClass": { "type": "string" },
+        "accessMode": { "enum": ["ReadWriteOnce", "ReadWriteOncePod", "ReadWriteMany"] }
+      },
+      "required": ["enabled", "existingClaim", "size", "storageClass", "accessMode"],
+      "additionalProperties": false
+    },
+    "existingClaimReplicaSafety": {
+      "if": {
+        "properties": {
+          "persistence": {
+            "properties": { "existingClaim": { "type": "string", "minLength": 1 } },
+            "required": ["existingClaim"]
+          }
+        },
+        "required": ["persistence"]
+      },
+      "then": { "properties": { "replicas": { "const": 1 } }, "required": ["replicas"] }
+    },
+    "secretComponent": {
+      "type": "object",
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "image": { "$ref": "#/definitions/pinnedImage" },
+        "existingSecret": { "$ref": "#/definitions/nonEmptyString" },
+        "secretKeyName": { "$ref": "#/definitions/nonEmptyString" }
+      },
+      "required": ["existingSecret", "secretKeyName"]
+    },
+    "databaseSecret": {
+      "type": "object",
+      "properties": {
+        "existingSecret": { "$ref": "#/definitions/nonEmptyString" },
+        "secretPasswordKey": { "$ref": "#/definitions/nonEmptyString" }
+      },
+      "required": ["existingSecret", "secretPasswordKey"]
+    },
+    "mariadbSecret": {
+      "type": "object",
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "image": { "$ref": "#/definitions/pinnedImage" },
+        "existingSecret": { "$ref": "#/definitions/nonEmptyString" },
+        "secretRootPasswordKey": { "$ref": "#/definitions/nonEmptyString" }
+      },
+      "required": ["existingSecret", "secretRootPasswordKey"]
+    },
+    "mariadbComponent": {
+      "type": "object",
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "image": { "$ref": "#/definitions/pinnedImage" },
+        "existingSecret": { "$ref": "#/definitions/nonEmptyString" },
+        "secretRootPasswordKey": { "$ref": "#/definitions/nonEmptyString" },
+        "persistence": { "$ref": "#/definitions/durablePersistence" }
+      },
+      "required": ["existingSecret", "secretRootPasswordKey"]
+    },
+    "tlsSecret": {
+      "type": "object",
+      "properties": {
+        "existingSecret": { "$ref": "#/definitions/nonEmptyString" },
+        "caCertKey": { "$ref": "#/definitions/nonEmptyString" },
+        "clientCertKey": { "$ref": "#/definitions/nonEmptyString" },
+        "clientKeyKey": { "$ref": "#/definitions/nonEmptyString" }
+      },
+      "required": ["existingSecret", "caCertKey", "clientCertKey", "clientKeyKey"]
+    }
+  }
+}

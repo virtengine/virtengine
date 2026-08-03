@@ -1,0 +1,8 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: mismatched-slurm-config
+data:
+  slurm.conf: |
+    NodeName=slurm-compute-0 CPUs=4 State=UNKNOWN
+    PartitionName=normal Nodes=slurm-compute-[0-3] MaxNodes=4 State=UP

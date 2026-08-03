@@ -1,0 +1,69 @@
+{
+  "schema_version": "virtengine.prototype.intake-tag-observation/v1",
+  "intake_epoch": 2,
+  "announcement_cutoff": "2026-08-03T23:59:59Z",
+  "observed_at": "2026-08-03T00:47:02.022Z",
+  "remote": "origin",
+  "tags": [
+    {
+      "thread": "T1",
+      "tag": "checkpoint/prototype-t1/t1-04",
+      "tag_object": "2eb9237f34b0a21de303bdd9ce9da970faddbb2f",
+      "target": "9a1618115680c19abd952ac3b381ed68cac1ea29"
+    },
+    {
+      "thread": "T1",
+      "tag": "checkpoint/prototype-t1/t1-05",
+      "tag_object": "4e7c2346af74ccbc2f6b6bb8e071eabe5864dd4d",
+      "target": "40b2ff52ee01021482374851a3a9d4befddbffa1"
+    },
+    {
+      "thread": "T1",
+      "tag": "checkpoint/prototype-t1/t1-06",
+      "tag_object": "79154eea61b6ea664e0c1754e41f4c99f76d6284",
+      "target": "ac0aa9dfb6dd2bd496a3904b100ace709867473c"
+    },
+    {
+      "thread": "T1",
+      "tag": "checkpoint/prototype-t1/t1-07",
+      "tag_object": "6d7f999a27e4f4b93b727217958861b7770c6994",
+      "target": "6dfdc9d40d27fcf9b87ecb84d40052ee6bb6b20b"
+    },
+    {
+      "thread": "T1",
+      "tag": "checkpoint/prototype-t1/t1-08",
+      "tag_object": "1047293c7b31b97215faad8cd6cd35619bcc3e26",
+      "target": "50cc330073ea47468fc3198a34c457b8164602eb"
+    },
+    {
+      "thread": "T1",
+      "tag": "checkpoint/prototype-t1/t1-09",
+      "tag_object": "4932ae2c5cecc1e23f20a466aadc2f8ced6d09cd",
+      "target": "36a566a92c04d988255b10cc5a75451d59077273"
+    },
+    {
+      "thread": "T3",
+      "tag": "checkpoint/prototype-t3/t3-03",
+      "tag_object": "abfba2930270f728c09e28956bff65e5b735ec08",
+      "target": "38bb57c61949b63a6c1d60065ff5390d6bcfb171"
+    },
+    {
+      "thread": "T3",
+      "tag": "checkpoint/prototype-t3/t3-10",
+      "tag_object": "64744ec93a2f47decec5f21c175ec626a6f14bba",
+      "target": "82705f9a4d1ad1348f836628ff76539bad40304f"
+    },
+    {
+      "thread": "T3",
+      "tag": "checkpoint/prototype-t3/t3-13",
+      "tag_object": "958b3ef6b7b2a73553fcad1152089add39e2d763",
+      "target": "1903debe559315a305b17bda6b5e5bd7ca56d94f"
+    },
+    {
+      "thread": "T3",
+      "tag": "checkpoint/prototype-t3/t3-13a",
+      "tag_object": "e513096cabf024e42e4e72056148e86b57df6f65",
+      "target": "8dbbaf14d5fdfd4e8405f085842a595bc7f299ff"
+    }
+  ]
+}

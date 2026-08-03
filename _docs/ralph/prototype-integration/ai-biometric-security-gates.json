@@ -1,0 +1,28 @@
+{
+  "schema_version": "virtengine.prototype.ai-biometric-security-gates/v1",
+  "checkpoint": "T4-15A",
+  "status": "blocked",
+  "categories": [
+    { "id": "template-inversion", "state": "missing", "command": null, "result": null, "evidence_files": [], "blockers": ["privacy-evaluation-absent"] },
+    { "id": "biometric-linkability", "state": "partial", "command": "go test -count=1 ./x/veid/keeper -run '^(TestGenerateTemplateSalt|TestHashBiometricTemplate|TestMatchTemplateHash)$'", "result": null, "evidence_files": ["x/veid/keeper/biometric_hash_test.go"], "blockers": ["privacy-evaluation-absent", "biometric-uniqueness-production-blocked"] },
+    { "id": "replay", "state": "partial", "command": "go test -count=1 ./pkg/capture_protocol -run '^TestReplayPrevention$'", "result": null, "evidence_files": ["pkg/capture_protocol/capture_protocol_test.go"], "blockers": ["concurrent-replay-atomicity-absent"] },
+    { "id": "concurrent-enrollment", "state": "missing", "command": null, "result": null, "evidence_files": [], "blockers": ["concurrent-enrollment-evidence-absent"] },
+    { "id": "arbitrary-otp", "state": "partial", "command": "go test -count=1 ./pkg/verification/sms -run '^TestSMSChallenge_VerifyOTP$'", "result": null, "evidence_files": ["pkg/verification/sms/service_test.go"], "blockers": ["arbitrary-otp-matrix-absent"] },
+    { "id": "forged-envelopes", "state": "partial", "command": "go test -count=1 ./x/veid/types -run '^TestEmbeddingEnvelope_(NewAndValidate|Validate_Errors)$'", "result": null, "evidence_files": ["x/veid/types/embedding_envelope_test.go"], "blockers": ["forged-envelope-matrix-absent"] },
+    { "id": "transferred-proofs", "state": "partial", "command": "go test -count=1 ./x/veid/keeper -run '^TestPrivacyProofsTestSuite$/^TestGenerateSelectiveDisclosureProof_SubjectMismatch$'", "result": null, "evidence_files": ["x/veid/keeper/privacy_proofs_test.go"], "blockers": ["transferred-proof-verification-absent"] },
+    { "id": "fund-route-coverage", "state": "partial", "command": "go test -count=1 ./tests/security -run '^TestMFAGatingDecorator_(BankSendThresholds|AccountRecoveryRequiresValidProof|RebindWalletAcceptsSerializedProof)$'", "result": null, "evidence_files": ["tests/security/mfa_enforcement_test.go"], "blockers": ["fund-route-inventory-incomplete"] },
+    { "id": "deletion-receipts", "state": "missing", "command": null, "result": null, "evidence_files": [], "blockers": ["deletion-receipt-contract-absent"] },
+    { "id": "client-cleanup", "state": "partial", "command": "corepack pnpm --dir portal exec vitest run tests/unit/mfa/store.test.ts", "result": null, "evidence_files": ["portal/tests/unit/mfa/store.test.ts"], "blockers": ["sensitive-client-cleanup-evidence-incomplete"] }
+  ],
+  "external_blockers": [
+    { "id": "privacy-evaluation-absent", "description": "No retained template inversion, membership inference, or biometric linkability evaluation is available." },
+    { "id": "pad-evaluation-absent", "description": "No retained presentation-attack dataset and evaluation report is available." },
+    { "id": "production-model-evaluation-absent", "description": "No production model evaluation bound to approved weights and data is available." }
+  ],
+  "blockers": [
+    "privacy-evaluation-absent", "pad-evaluation-absent", "production-model-evaluation-absent",
+    "biometric-uniqueness-production-blocked", "concurrent-replay-atomicity-absent", "concurrent-enrollment-evidence-absent", "arbitrary-otp-matrix-absent",
+    "forged-envelope-matrix-absent", "transferred-proof-verification-absent", "fund-route-inventory-incomplete",
+    "deletion-receipt-contract-absent", "sensitive-client-cleanup-evidence-incomplete"
+  ]
+}

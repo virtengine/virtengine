@@ -22,9 +22,36 @@ T4 also commits an epoch manifest with epoch number, base tag/SHA, planning SHA,
 `opens_at`, `announcement_cutoff`, and producer states. A checkpoint is announced
 only when its remote annotated tag exists before the cutoff. At cutoff, T4 freezes
 the announced tag list. Unannounced work automatically moves to the next epoch;
-it does not block closure. T4 accepts or rejects every frozen tag, records the
-decision, closes the epoch, then opens the next. A rejected payload is immutable;
+T4 records it as `status: unannounced`, `tag: null`, and `decision: frozen-out`
+before treating it as terminal for closure. T4 accepts or rejects every frozen
+tag, records the decision, closes the epoch, then opens the next. A rejected payload is immutable;
 a correction receives a new checkpoint ID in a later epoch.
+
+Epoch files form one contiguous history and every predecessor must remain
+closed. Publish an annotated immutable base tag at the separately reviewed
+integration SHA before generating the next open epoch:
+
+```powershell
+$reviewedT4 = '<full published T4 SHA>'
+git tag -a checkpoint/prototype-integration/epoch-2-base `
+  -m "Prototype intake epoch 2 base" $reviewedT4
+git push origin refs/tags/checkpoint/prototype-integration/epoch-2-base
+node scripts/prototype-intake-epochs.test.cjs
+node scripts/open-prototype-intake-epoch.test.cjs
+node scripts/open-prototype-intake-epoch.cjs --epoch 2 `
+  --expected-head $reviewedT4 `
+  --opens-at '2026-08-03T00:30:00Z' `
+  --announcement-cutoff '2026-08-03T23:59:59Z' `
+  > _docs/ralph/prototype-integration/epochs/epoch-2.json
+```
+
+The opener writes only to stdout. It rejects a dirty worktree, a non-contiguous
+epoch number, a predecessor that is not closed, a local or remote integration
+SHA mismatch, a missing or lightweight base tag, or a base tag that does not
+peel to the reviewed SHA. Commit and publish the new epoch before producers
+synchronize to it. An open current epoch may omit a tag observation until one
+is captured and committed; frozen or closed epochs require their matching
+observation.
 
 A producer merges the epoch base into its branch before validation. It must not
 rebase or rewrite shared history.
@@ -117,11 +144,136 @@ scripts/validate-prototype-intake.test.cjs
 
 ```powershell
 node --test scripts/validate-prototype-intake.test.cjs
-node scripts/validate-prototype-intake.cjs --epoch 1 --tag checkpoint/prototype-t2/t2-03b
+$expectedT4 = (git rev-parse HEAD).Trim()
+$validationClone = Join-Path $env:TEMP ("virtengine-prototype-intake-" + [guid]::NewGuid())
+git clone --no-local --branch ve/prototype-integration https://github.com/virtengine/virtengine.git $validationClone
+if ((git -C $validationClone rev-parse HEAD).Trim() -ne $expectedT4) { throw "validation clone is not the exact T4 SHA" }
+node scripts/validate-prototype-intake.cjs --repo $validationClone --epoch 1 --tag checkpoint/prototype-t2/t2-03b
 ```
 
 Both commands are mandatory. T4 performs no producer merge until the validator
-and its negative tests pass on the exact T4 SHA.
+and its negative tests pass on the exact T4 SHA. The validation clone must be
+new or independently verified clean; do not relax the validator's worktree
+cleanliness check to accommodate unrelated local files.
+
+Localnet integration entry points must preserve the canonical explicit build
+tag and disable cached results on both platforms:
+
+```powershell
+node scripts/validate-localnet-integration-launchers.test.cjs
+./scripts/localnet.sh test
+./scripts/localnet.ps1 test
+```
+
+Both launchers execute `go test -count=1 -tags=e2e.integration -v
+./tests/integration/...` in the `test-runner` container. Untagged launcher output
+is not integration evidence.
+
+After `announcement_cutoff`, plan the frozen roster without mutating the epoch.
+Select at most one intake-format annotated tag per producer explicitly; the
+planner rejects early, late, lightweight, wrong-thread, duplicate, or unknown
+selections and marks unselected producers frozen out:
+
+```powershell
+node scripts/plan-prototype-intake-freeze.test.cjs
+node scripts/plan-prototype-intake-freeze.cjs --epoch 1 `
+  --observation _docs/ralph/prototype-integration/epochs/epoch-1-tag-observation.json `
+  --tag T1=checkpoint/prototype-t1/t1-09 `
+  --tag T3=checkpoint/prototype-t3/t3-13a `
+  > $env:TEMP\epoch-1-frozen-plan.json
+```
+
+Review the proposed epoch separately. The planner never writes the epoch file
+and does not accept or merge any producer checkpoint. From a clean exact-SHA T4
+clone, apply only the reviewed open-to-frozen transition, then inspect and
+commit the epoch file:
+
+```powershell
+node scripts/apply-prototype-intake-freeze.test.cjs
+$reviewedT4 = '<full T4 SHA recorded during separate plan review>'
+$reviewedPlanSha256 = '<SHA-256 recorded during separate plan review>'
+node scripts/apply-prototype-intake-freeze.cjs --epoch 1 `
+  --expected-head $reviewedT4 `
+  --expected-plan-sha256 $reviewedPlanSha256 `
+  --observation _docs/ralph/prototype-integration/epochs/epoch-1-tag-observation.json `
+  --plan $env:TEMP\epoch-1-frozen-plan.json
+git diff -- _docs/ralph/prototype-integration/epochs/epoch-1.json
+```
+
+Do not derive `$reviewedT4` or `$reviewedPlanSha256` during application; that
+would let a stale checkout or substituted plan approve itself. The application command rejects dirty
+worktrees, a HEAD other than the separately reviewed exact SHA, pre-cutoff execution, changed
+epoch metadata or roster order, unknown producer fields, wrong-thread tags, and
+producer decisions other than announced or frozen out. It also recomputes the
+plan against the manifest-bound pre-cutoff observation and current annotated
+remote tags, then atomically replaces the epoch through a same-directory
+exclusive temporary file that is flushed before replacement. Acceptance remains a
+later, separately validated transition. The clean reviewed HEAD boundary is
+checked both before evidence replay and immediately before replacement, and the
+reviewed SHA must equal the remote `ve/prototype-integration` branch at both
+boundaries. After replacement, the command rereads the exact epoch bytes and
+checks the remote branch once more before reporting success.
+An exclusive worktree-specific Git-path lease serializes the full application;
+an existing or crash-retained lease fails closed and requires explicit operator
+inspection before removal. Inspect its schema, PID, UTC start time, epoch,
+reviewed HEAD, and plan digest before deciding whether recovery is safe:
+
+```powershell
+node scripts/inspect-prototype-intake-freeze-lease.test.cjs
+node scripts/inspect-prototype-intake-freeze-lease.cjs --epoch 1 `
+  --expected-head $reviewedT4 `
+  --expected-plan-sha256 $reviewedPlanSha256
+```
+
+The inspector is read-only. It rejects malformed or mismatched lease metadata
+and reports whether the recorded local PID is present; it never treats PID
+presence as proof of lease ownership because operating systems reuse PIDs, and
+it never removes a lease. Both PID states require explicit operator review. Its
+`lease_sha256` binds the exact retained file bytes and must be recorded before
+any separately reviewed recovery operation.
+
+After confirming the recorded PID is absent and separately reviewing the exact
+lease digest, use compare-and-claim recovery. The command atomically renames the
+lease to a unique quarantine, revalidates its bytes and PID state, and removes
+only that claimed quarantine. Any post-claim read, validation, or removal
+failure reports the retained quarantine path for inspection:
+Recovery also requires a clean checkout at the separately reviewed exact T4
+SHA and matching remote integration branch immediately before claiming the
+lease.
+
+```powershell
+node scripts/recover-prototype-intake-freeze-lease.test.cjs
+node scripts/recover-prototype-intake-freeze-lease.cjs --epoch 1 `
+  --expected-head $reviewedT4 `
+  --expected-plan-sha256 $reviewedPlanSha256 `
+  --expected-lease-sha256 '<lease_sha256 from separate review>'
+```
+
+## Core RC Publication Preflight
+
+T4-09A is diagnostic-only. It never creates or pushes a tag. Run it with the
+exact candidate, intake epoch, and reserved checkpoint tag:
+
+```powershell
+node scripts/preflight-core-rc-publication.cjs --candidate <full-sha> --epoch 1 --tag checkpoint/prototype-integration/t4-09a --json
+```
+
+The command exits nonzero while any blocker remains and emits a deterministic
+report conforming to `core-rc-publication-preflight.schema.json`. `--publish` is
+intentionally unavailable. Publication requires a clean local/remote exact-SHA
+boundary, terminal producer decisions, accepted ledger/tag/payload
+correspondence, and revalidated accepted tags. The current strict v0 manifest
+must retain its schema-required false authority flags; publication readiness is
+evaluated separately from that contract and remains blocked until a future
+valid manifest reports a ready status with no prototype-success blockers.
+
+Gate results must validate against the exact execution plan computed from the
+declared base to the candidate. Their committed bytes must be SHA-256 bound in
+both the manifest and integration ledger. Required CI evidence is accepted only
+from the immutable workflow paths and job names, exact VirtEngine repository,
+`ve/prototype-integration` branch, allowed event, successful run attempt and
+job, exact candidate SHA, and matching required-gate artifact digest. The local
+and remote publication tag must remain absent.
 
 ## Toolchains
 

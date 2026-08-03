@@ -1,0 +1,85 @@
+{
+  "schema_version": "virtengine.prototype.ai-production-policy/v1",
+  "checkpoint": "T4-12A",
+  "status": "blocked",
+  "scan_roots": [
+    "cmd/inference-sidecar",
+    "ml",
+    "pkg/data_vault",
+    "pkg/inference",
+    "x/veid"
+  ],
+  "rules": [
+    {
+      "id": "runtime-model-download",
+      "description": "Production inference must not download or trust weights at runtime.",
+      "paths": ["cmd/inference-sidecar", "ml/facial_verification", "ml/gan_detection", "ml/liveness_detection", "pkg/inference"],
+      "patterns": ["\\b(?:torch\\.hub\\.load|load_state_dict_from_url|from_pretrained|hf_hub_download|urlretrieve)\\s*\\("]
+    },
+    {
+      "id": "placeholder-model",
+      "description": "Production inference must not use random, untrained, placeholder, or fallback stub models.",
+      "paths": ["cmd/inference-sidecar", "ml/facial_verification", "ml/gan_detection", "ml/liveness_detection", "pkg/inference"],
+      "patterns": ["allow-fallback-to-stub", "local_stub", "#\\s*Placeholder", "\\b(?:np|numpy)\\.random\\.(?:rand|randn|uniform|random)\\s*\\("]
+    },
+    {
+      "id": "synthetic-age",
+      "description": "Production decisions must not synthesize age from random or placeholder values.",
+      "paths": ["cmd/inference-sidecar", "ml", "pkg/inference", "x/veid"],
+      "patterns": ["synthetic[_ ]age", "(?:estimate|predict)[A-Za-z_]*age[^\\n]*(?:random|randint|uniform)"]
+    },
+    {
+      "id": "fake-biometric-lsh",
+      "description": "Truncated salted hashes must not be represented as fuzzy biometric LSH.",
+      "paths": ["x/veid/keeper/biometric_hash.go"],
+      "patterns": ["generateLSHHashes", "fullHash\\[:LSHHashSize\\]"]
+    },
+    {
+      "id": "insecure-xor-base64-encryption",
+      "description": "Production evidence encryption must not use XOR or base64 as a cipher.",
+      "paths": ["cmd/inference-sidecar", "pkg/data_vault", "pkg/inference", "x/veid"],
+      "patterns": ["XOR-FALLBACK-INSECURE", "Simple XOR", "base64[^\\n]{0,40}(?:encrypt|cipher)"]
+    },
+    {
+      "id": "allow-all-consent",
+      "description": "Missing production consent configuration must fail closed.",
+      "paths": ["pkg/data_vault"],
+      "patterns": ["AllowAllConsentResolver"]
+    },
+    {
+      "id": "memory-vault",
+      "description": "Production evidence and key custody must not use process-local memory storage.",
+      "paths": ["pkg/data_vault", "x/veid"],
+      "patterns": ["NewInMemoryKeyProvider", "InMemory[A-Za-z]*Vault", "MemoryBackend"]
+    },
+    {
+      "id": "stub-success",
+      "description": "Production inference failures must not become successful stub results.",
+      "paths": ["cmd/inference-sidecar", "pkg/inference"],
+      "patterns": ["allow-fallback-to-stub", "local_stub", "Stub[A-Za-z]*Success", "Success[^\\n]{0,40}stub"]
+    }
+  ],
+  "exclude_paths": [
+    "(?:^|/)(?:tests?|testdata)/",
+    "_test\\.go$",
+    "(?:^|/)test_[^/]*\\.py$",
+    "\\.test\\.[cm]?[jt]s$"
+  ],
+  "known_findings": [
+    { "rule": "allow-all-consent", "path": "pkg/data_vault/consent.go", "count": 3 },
+    { "rule": "allow-all-consent", "path": "pkg/data_vault/vault_service.go", "count": 1 },
+    { "rule": "fake-biometric-lsh", "path": "x/veid/keeper/biometric_hash.go", "count": 5 },
+    { "rule": "memory-vault", "path": "x/veid/keeper/decryption.go", "count": 2 },
+    { "rule": "placeholder-model", "path": "cmd/inference-sidecar/main.go", "count": 1 },
+    { "rule": "placeholder-model", "path": "cmd/inference-sidecar/server.go", "count": 2 },
+    { "rule": "placeholder-model", "path": "ml/gan_detection/deepfake_detection.py", "count": 2 },
+    { "rule": "placeholder-model", "path": "ml/gan_detection/discriminator.py", "count": 3 },
+    { "rule": "stub-success", "path": "cmd/inference-sidecar/main.go", "count": 1 },
+    { "rule": "stub-success", "path": "cmd/inference-sidecar/server.go", "count": 2 },
+    { "rule": "stub-success", "path": "pkg/inference/tensorflow_runtime_stub.go", "count": 1 }
+  ],
+  "blockers": [
+    "production-prohibited-paths-remain",
+    "external-model-privacy-and-security-evaluation-unavailable"
+  ]
+}

@@ -100,6 +100,17 @@ This index lists internal-only documentation. Do not add internal docs outside `
 
 ## Protocols & Schemas
 - `_docs/protocols/veid-ai-biometric-architecture.md`
+- `_docs/ralph/prototype-integration/slurm-chart-inventory.json`
+- `_docs/ralph/prototype-integration/slurm-chart-inventory.schema.json`
+- `_docs/audits/task-t4-07e-durable-state-evidence-2026-08-02.md`
+- `_docs/audits/task-t4-07f-slurm-chart-retirement-2026-08-02.md`
+- `_docs/audits/task-t4-07g-slurm-retired-reference-guard-2026-08-02.md`
+- `_docs/audits/task-t4-12a-ai-production-policy-2026-08-02.md`
+- `_docs/audits/task-t4-14a-ai-assurance-manifest-2026-08-02.md`
+- `_docs/audits/task-t4-15a-ai-biometric-security-gates-2026-08-02.md`
+- `_docs/audits/task-t4-16a-fund-route-inventory-2026-08-02.md`
+- `_docs/audits/task-t4-13a-generated-contract-inventory-2026-08-02.md`
+- `_docs/audits/task-t4-01e-intake-freeze-planner-2026-08-02.md`
 - `_docs/protocols/hpc-cluster-template-spec.md`
 - `_docs/protocols/hpc-node-agent-protocol.md`
 - `_docs/protocols/mobile-capture-protocol-v1.md`
@@ -152,7 +163,22 @@ This index lists internal-only documentation. Do not add internal docs outside `
 - `_docs/VirtEngine Identification System Technical Report.pdf`
 
 ## Ralph
+- `_docs/prototype-thread-intake-runbook.md`
 - `_docs/ralph/progress.md`
+- `_docs/ralph/prototype-integration/control.json`
+- `_docs/ralph/prototype-integration/core-rc-manifest.json`
+- `_docs/ralph/prototype-integration/core-rc-manifest.schema.json`
+- `_docs/ralph/prototype-integration/core-rc-publication-preflight.schema.json`
+- `_docs/ralph/prototype-integration/epochs/epoch-1.json`
+- `_docs/ralph/prototype-integration/migration-inventory.json`
+- `_docs/ralph/prototype-integration/migration-inventory.schema.json`
+- `_docs/ralph/prototype-integration/model-provenance.json`
+- `_docs/ralph/prototype-integration/model-provenance.schema.json`
+- `_docs/ralph/prototype-integration/producer-handoff.schema.json`
+- `_docs/ralph/prototype-integration/required-gate-matrix.json`
+- `_docs/ralph/prototype-integration/required-gate-matrix.schema.json`
+- `_docs/ralph/prototype-integration/required-gate-plan.schema.json`
+- `_docs/ralph/prototype-integration/required-gate-results.schema.json`
 - `_docs/ralph/ralph_patent_text.txt`
 
 ## Visual Assets

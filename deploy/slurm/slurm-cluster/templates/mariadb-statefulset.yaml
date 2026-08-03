@@ -1,4 +1,5 @@
 {{- if .Values.mariadb.enabled }}
+{{- include "slurm-cluster.requireSafePersistenceReplicas" (list "mariadb" 1 .Values.mariadb.persistence) }}
 apiVersion: apps/v1
 kind: StatefulSet
 metadata:
@@ -10,6 +11,11 @@ metadata:
 spec:
   serviceName: {{ include "slurm-cluster.mariadb.serviceName" . }}
   replicas: 1
+  {{- if not .Values.mariadb.persistence.existingClaim }}
+  persistentVolumeClaimRetentionPolicy:
+    whenDeleted: Retain
+    whenScaled: Retain
+  {{- end }}
   selector:
     matchLabels:
       {{- include "slurm-cluster.selectorLabels" . | nindent 6 }}
@@ -32,9 +38,11 @@ spec:
       imagePullSecrets:
         {{- toYaml . | nindent 8 }}
       {{- end }}
+      securityContext:
+        {{- include "slurm-cluster.podSecurityContext" (list .) | nindent 8 }}
       containers:
         - name: mariadb
-          image: {{ .Values.mariadb.image.repository }}:{{ .Values.mariadb.image.tag }}
+          image: {{ include "slurm-cluster.mariadb.image" . }}
           imagePullPolicy: {{ .Values.mariadb.image.pullPolicy }}
           ports:
             - name: mysql
@@ -45,6 +53,11 @@ spec:
               mountPath: /var/lib/mysql
             - name: init-scripts
               mountPath: /docker-entrypoint-initdb.d
+              readOnly: true
+            - name: mariadb-run
+              mountPath: /run/mysqld
+            - name: tmp
+              mountPath: /tmp
           livenessProbe:
             exec:
               command:
@@ -69,6 +82,8 @@ spec:
             failureThreshold: 3
           resources:
             {{- toYaml .Values.mariadb.resources | nindent 12 }}
+          securityContext:
+            {{- include "slurm-cluster.containerSecurityContext" (list . "mariadb") | nindent 12 }}
           env:
             - name: MYSQL_ROOT_PASSWORD
               valueFrom:
@@ -87,7 +102,16 @@ spec:
       volumes:
         - name: init-scripts
           configMap:
-            name: {{ include "slurm-cluster.fullname" . }}-mariadb-init
+            name: {{ include "slurm-cluster.resourceName" (list . "mariadb-init" 0) }}
+        - name: mariadb-run
+          emptyDir: {}
+        - name: tmp
+          emptyDir: {}
+        {{- if .Values.mariadb.persistence.existingClaim }}
+        - name: mariadb-data
+          persistentVolumeClaim:
+            claimName: {{ .Values.mariadb.persistence.existingClaim | quote }}
+        {{- end }}
       {{- with .Values.mariadb.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}
@@ -96,12 +120,13 @@ spec:
       tolerations:
         {{- toYaml . | nindent 8 }}
       {{- end }}
+  {{- if not .Values.mariadb.persistence.existingClaim }}
   volumeClaimTemplates:
     - metadata:
         name: mariadb-data
       spec:
         accessModes:
-          - ReadWriteOnce
+          - {{ .Values.mariadb.persistence.accessMode }}
         {{- if .Values.mariadb.persistence.storageClass }}
         storageClassName: {{ .Values.mariadb.persistence.storageClass }}
         {{- else if .Values.global.storageClass }}
@@ -110,6 +135,7 @@ spec:
         resources:
           requests:
             storage: {{ .Values.mariadb.persistence.size }}
+  {{- end }}
 ---
 apiVersion: v1
 kind: Service
@@ -133,7 +159,7 @@ spec:
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: {{ include "slurm-cluster.fullname" . }}-mariadb-init
+  name: {{ include "slurm-cluster.resourceName" (list . "mariadb-init" 0) }}
   namespace: {{ .Release.Namespace }}
   labels:
     {{- include "slurm-cluster.labels" . | nindent 4 }}
