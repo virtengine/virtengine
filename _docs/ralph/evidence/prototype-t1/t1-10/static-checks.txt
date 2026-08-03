@@ -8,7 +8,7 @@ result: passed
 
 command: git status --porcelain
 exit_code: 0
-result: clean at payload cb990ae983e96fa48d66bb07e533599449e9e176
+result: clean at payload e188891f86aca5970aef0bed98d06dd2ca97d0ff
 
 command: python .github/tests/test_inference_deployment_policy.py
 exit_code: 0
