@@ -6,7 +6,7 @@ const assert = require("assert").strict;
 const { createHash } = require("crypto");
 const { execFileSync } = require("child_process");
 const { resolve } = require("path");
-const { discoverEpochs, requireCurrentEpoch } = require("./prototype-intake-epochs.cjs");
+const { discoverEpochs, requireCurrentEpoch, validateAnnotatedTagName } = require("./prototype-intake-epochs.cjs");
 
 const CAMPAIGN = "three-day-prototype";
 const FROZEN_BASELINE = "79391a3df86d85522b92e0400c6904971ecbe65d";
@@ -163,6 +163,7 @@ function fetchAnnotatedTag(repo, remote, tag) {
   assert.ok(lines.some((line) => line.endsWith(`refs/tags/${tag}^{}`)));
   git(repo, ["fetch", "--force", "--no-tags", remote, `refs/tags/${tag}:refs/tags/${tag}`]);
   assert.equal(git(repo, ["cat-file", "-t", `refs/tags/${tag}`]), "tag", `${tag} must be annotated`);
+  validateAnnotatedTagName(tag, git(repo, ["cat-file", "-p", `refs/tags/${tag}`]));
   return git(repo, ["rev-parse", `refs/tags/${tag}^{commit}`]);
 }
 

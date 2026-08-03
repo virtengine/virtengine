@@ -7,7 +7,7 @@ const { createHash } = require("crypto");
 const { readFileSync } = require("fs");
 const { isAbsolute, resolve } = require("path");
 const { spawnSync } = require("child_process");
-const { discoverEpochs, requireCurrentEpoch, validateEpochBase } = require("./prototype-intake-epochs.cjs");
+const { discoverEpochs, requireCurrentEpoch, validateAnnotatedTagName, validateEpochBase } = require("./prototype-intake-epochs.cjs");
 
 const threads = ["T1", "T2", "T3", "T5"];
 const tagPattern = /^checkpoint\/prototype-t([1235])\/(t[1235]-[0-9]{2,}[a-z]?)$/;
@@ -22,6 +22,7 @@ function resolveAnnotatedTag(repo, remote, tag) {
   const ref = `refs/tags/${tag}`;
   git(repo, ["fetch", remote, `${ref}:${ref}`]);
   assert.equal(git(repo, ["cat-file", "-t", ref]), "tag", `${tag} is not an annotated tag`);
+  validateAnnotatedTagName(tag, git(repo, ["cat-file", "-p", ref]));
   return {
     tag_object: git(repo, ["rev-parse", ref]),
     tagger_at: git(repo, ["for-each-ref", "--format=%(taggerdate:iso-strict)", ref]),
@@ -33,8 +34,9 @@ function resolveEpochBaseTag(repo, remote, epoch) {
   const ref = `refs/tags/${epoch.base_tag}`;
   git(repo, ["fetch", remote, `${ref}:${ref}`]);
   const type = git(repo, ["cat-file", "-t", ref]);
+  const declaredName = type === "tag" ? validateAnnotatedTagName(epoch.base_tag, git(repo, ["cat-file", "-p", ref])) : null;
   const target = type === "tag" ? git(repo, ["rev-parse", `${ref}^{}`]) : git(repo, ["rev-parse", ref]);
-  return { type, target };
+  return { type, declared_name: declaredName, target };
 }
 
 function listRemoteIntakeTags(repo, remote) {

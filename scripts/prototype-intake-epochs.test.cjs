@@ -1,7 +1,7 @@
 "use strict";
 
 const assert = require("assert").strict;
-const { currentEpoch, requireCurrentEpoch, validateEpochBase, validateEpochSequence } = require("./prototype-intake-epochs.cjs");
+const { currentEpoch, requireCurrentEpoch, validateAnnotatedTagName, validateEpochBase, validateEpochSequence } = require("./prototype-intake-epochs.cjs");
 
 function epoch(number, status) {
   return {
@@ -53,13 +53,17 @@ const tests = [
   ["accepts an annotated exact epoch base target", () => {
     const candidate = epoch(2, "open").document;
     candidate.base_sha = "b".repeat(40);
-    assert.doesNotThrow(() => validateEpochBase(candidate, { type: "tag", target: candidate.base_sha }));
+    assert.doesNotThrow(() => validateEpochBase(candidate, { type: "tag", declared_name: candidate.base_tag, target: candidate.base_sha }));
   }],
   ["rejects a lightweight or mismatched epoch base target", () => {
     const candidate = epoch(2, "open").document;
     candidate.base_sha = "b".repeat(40);
-    assert.throws(() => validateEpochBase(candidate, { type: "commit", target: candidate.base_sha }), /must be annotated/);
-    assert.throws(() => validateEpochBase(candidate, { type: "tag", target: "c".repeat(40) }), /does not target base_sha/);
+    assert.throws(() => validateEpochBase(candidate, { type: "commit", declared_name: candidate.base_tag, target: candidate.base_sha }), /must be annotated/);
+    assert.throws(() => validateEpochBase(candidate, { type: "tag", declared_name: candidate.base_tag, target: "c".repeat(40) }), /does not target base_sha/);
+  }],
+  ["rejects an annotated object declaring another tag name", () => {
+    assert.equal(validateAnnotatedTagName("checkpoint/prototype-t1/t1-10", "object abc\ntype commit\ntag checkpoint/prototype-t1/t1-10\n"), "checkpoint/prototype-t1/t1-10");
+    assert.throws(() => validateAnnotatedTagName("checkpoint/prototype-t1/t1-10", "object abc\ntype commit\ntag checkpoint/prototype-t1/t1-09\n"), /declares checkpoint\/prototype-t1\/t1-09/);
   }],
 ];
 

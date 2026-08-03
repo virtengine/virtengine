@@ -55,9 +55,16 @@ function requireCurrentEpoch(epochs, requestedEpoch) {
 
 function validateEpochBase(epoch, resolvedTag) {
   assert.equal(resolvedTag.type, "tag", `epoch ${epoch.intake_epoch} base tag must be annotated`);
+  assert.equal(resolvedTag.declared_name, epoch.base_tag, `epoch ${epoch.intake_epoch} base tag object declares another name`);
   assert.match(resolvedTag.target || "", /^[a-f0-9]{40}$/, `epoch ${epoch.intake_epoch} base tag target is invalid`);
   assert.equal(resolvedTag.target, epoch.base_sha, `epoch ${epoch.intake_epoch} base tag does not target base_sha`);
   return true;
 }
 
-module.exports = { currentEpoch, discoverEpochs, requireCurrentEpoch, validateEpochBase, validateEpochSequence };
+function validateAnnotatedTagName(expected, content) {
+  const declared = content.match(/^tag (.+)$/m)?.[1];
+  assert.equal(declared, expected, `annotated tag object for ${expected} declares ${declared || "no tag name"}`);
+  return declared;
+}
+
+module.exports = { currentEpoch, discoverEpochs, requireCurrentEpoch, validateAnnotatedTagName, validateEpochBase, validateEpochSequence };
