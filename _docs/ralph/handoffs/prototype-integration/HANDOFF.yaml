@@ -1,31 +1,29 @@
 {
   "campaign": "three-day-prototype",
   "thread": "T4",
-  "checkpoint": "T4-01EQ",
+  "checkpoint": "T4-01ER",
   "branch": "ve/prototype-integration",
-  "start_head": "507cd900a67566c150e653e2e2e5dd4db34f6121",
-  "end_head": "bc479299e7b8f1025fc253a9ff86717e5fa74be1",
+  "start_head": "85f940266d3d827dc82d05c64f56cf6e50ddeb24",
+  "end_head": "ab9a76b416304aefa9254de112fb0df51c305af0",
   "origin_main": "79391a3df86d85522b92e0400c6904971ecbe65d",
   "tree_clean": true,
   "commits": [
-    "bc479299e7b8f1025fc253a9ff86717e5fa74be1"
+    "ab9a76b416304aefa9254de112fb0df51c305af0"
   ],
   "owned_paths": [
-    "_docs/audits/**",
-    "scripts/apply-prototype-intake-freeze.cjs",
-    "scripts/apply-prototype-intake-freeze.test.cjs"
+    "_docs/ralph/prototype-integration/**",
+    "_docs/ralph/handoffs/prototype-integration/**"
   ],
   "files_changed": [
-    "_docs/audits/task-t4-01e-intake-freeze-planner-2026-08-02.md",
-    "scripts/apply-prototype-intake-freeze.cjs",
-    "scripts/apply-prototype-intake-freeze.test.cjs"
+    "_docs/ralph/handoffs/prototype-integration/HANDOFF.yaml",
+    "_docs/ralph/prototype-integration/core-rc-manifest.json"
   ],
   "tests": [
     {
-      "command": "node scripts/apply-prototype-intake-freeze.test.cjs",
+      "command": "node scripts/validate-prototype-integration.test.cjs && node scripts/validate-prototype-integration.cjs",
       "exit_code": 0,
       "result": "passed",
-      "test_count": 34,
+      "test_count": 13,
       "tool_versions": {
         "node": "20.19.1"
       }
@@ -40,7 +38,9 @@
       }
     }
   ],
-  "generated_hashes": {},
+  "generated_hashes": {
+    "_docs/ralph/prototype-integration/core-rc-manifest.json": "64c1e9d741de44131b2b58e7ac4831831687ccb3be823e44abda4e841554aa95"
+  },
   "accepted_checkpoints": [],
   "rejected_checkpoints": [
     {
@@ -91,5 +91,5 @@
     "Task 88C is not complete."
   ],
   "next_checkpoint": null,
-  "expected_head": "bc479299e7b8f1025fc253a9ff86717e5fa74be1"
+  "expected_head": "ab9a76b416304aefa9254de112fb0df51c305af0"
 }
