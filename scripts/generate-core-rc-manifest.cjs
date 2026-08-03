@@ -224,7 +224,7 @@ function validateRejectedCheckpoints(checkpoints) {
     assert.match(checkpoint.checkpoint, new RegExp(`^${checkpoint.thread}-[0-9]{2,}[A-Z]?$`), "rejected producer checkpoint is invalid");
     assert.match(checkpoint.tip, shaPattern, "rejected producer tip must be an exact SHA");
     assert.ok(typeof checkpoint.reason === "string" && checkpoint.reason.length > 0 && checkpoint.reason.trim() === checkpoint.reason, "rejected producer reason must be literal and nonempty");
-    const identity = `${checkpoint.thread}\0${checkpoint.checkpoint}\0${checkpoint.tip}`;
+    const identity = `${checkpoint.thread}\0${checkpoint.checkpoint}`;
     assert.equal(identities.has(identity), false, `duplicate rejected producer checkpoint: ${checkpoint.thread}.${checkpoint.checkpoint}`);
     identities.add(identity);
   }

@@ -278,6 +278,7 @@ const tests = [
     const rejection = { thread: "T3", checkpoint: "T3-13A", tip: "a".repeat(40), reason: "Immutable intake failed." };
     assert.equal(validateRejectedCheckpoints([rejection]), true);
     assert.throws(() => validateRejectedCheckpoints([rejection, clone(rejection)]), /duplicate rejected producer checkpoint/);
+    assert.throws(() => validateRejectedCheckpoints([rejection, { ...rejection, tip: "b".repeat(40), reason: "Rejected at a conflicting tip." }]), /duplicate rejected producer checkpoint/);
     assert.throws(() => validateRejectedCheckpoints([{ ...rejection, reason: " padded " }]), /literal and nonempty/);
     assert.throws(() => validateRejectedCheckpoints([{ ...rejection, thread: "T4" }]), /thread is invalid/);
   }],
