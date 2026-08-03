@@ -145,6 +145,29 @@ fixtureTest("rejects a frozen roster with an undecided unannounced producer", {
   static: ({ epoch }) => { epoch.producers[0].decision = null; },
 }, /must record decision=frozen-out/);
 
+test("rejects intake from a stale predecessor epoch", () => {
+  const fixture = buildFixture();
+  try {
+    const epoch1Path = "_docs/ralph/prototype-integration/epochs/epoch-1.json";
+    const epoch1 = JSON.parse(readFileSync(resolve(fixture.repo, epoch1Path), "utf8"));
+    epoch1.status = "closed";
+    write(fixture.repo, epoch1Path, `${JSON.stringify(epoch1, null, 2)}\n`);
+    write(fixture.repo, "_docs/ralph/prototype-integration/epochs/epoch-2.json", `${JSON.stringify({
+      ...epoch1,
+      intake_epoch: 2,
+      base_tag: "checkpoint/prototype-integration/epoch-2-base",
+      status: "open",
+      opens_at: "2000-01-03T00:00:00Z",
+      announcement_cutoff: "2000-01-04T00:00:00Z",
+      producers: epoch1.producers.map((producer) => ({ ...producer, status: "unannounced", tag: null, decision: null })),
+    }, null, 2)}\n`);
+    commitAll(fixture.repo, "open epoch 2");
+    assert.throws(() => run(fixture), /requested epoch 1 is stale; current epoch is 2/);
+  } finally {
+    rmSync(fixture.directory, { recursive: true, force: true });
+  }
+});
+
 test("accepts an annotated, announced intake-v2 checkpoint", () => {
   const fixture = buildFixture();
   try {
@@ -195,7 +218,7 @@ fixtureTest("rejects the wrong frozen baseline", { handoff: (handoff) => { hando
 fixtureTest("rejects the wrong planning SHA", { handoff: (handoff) => { handoff.planning_sha = "0".repeat(40); } }, /wrong planning SHA/);
 fixtureTest("rejects a branch that does not match its thread", { handoff: (handoff) => { handoff.branch = "ve/prototype-t3-reliability"; } }, /branch does not match thread/);
 fixtureTest("rejects an open epoch before its roster is frozen", { static: ({ epoch }) => { epoch.status = "open"; } }, /roster is not frozen/);
-fixtureTest("rejects an unknown epoch", {}, /unknown|failed/, { epoch: 2 });
+fixtureTest("rejects an unknown epoch", {}, /unknown|failed|current epoch/, { epoch: 2 });
 fixtureTest("rejects an absent payload commit", { handoff: (handoff) => { handoff.payload_head = "0".repeat(40); handoff.commits_since_prior_acceptance = ["0".repeat(40)]; } }, /payload commit is missing/);
 fixtureTest("rejects undeclared tag-only paths", { tagFile: "rogue.txt" }, /undeclared handoff\/evidence/);
 fixtureTest("rejects an incomplete changed-file range", { handoff: (handoff) => { handoff.files_changed = ["src/other.txt"]; } }, /complete payload range/);

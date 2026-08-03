@@ -6,6 +6,7 @@ const assert = require("assert").strict;
 const { createHash } = require("crypto");
 const { execFileSync } = require("child_process");
 const { resolve } = require("path");
+const { discoverEpochs, requireCurrentEpoch } = require("./prototype-intake-epochs.cjs");
 
 const CAMPAIGN = "three-day-prototype";
 const FROZEN_BASELINE = "79391a3df86d85522b92e0400c6904971ecbe65d";
@@ -290,6 +291,8 @@ function validateIntake(options) {
   assert.equal(git(repo, ["status", "--porcelain"]), "", "T4 worktree must be clean before intake");
   git(repo, ["fetch", "--prune", remote]);
 
+  const epochDirectory = resolve(repo, "_docs/ralph/prototype-integration/epochs");
+  requireCurrentEpoch(discoverEpochs(epochDirectory), requestedEpoch);
   const epochPath = `_docs/ralph/prototype-integration/epochs/epoch-${requestedEpoch}.json`;
   assert.ok(objectExistsAt(repo, "HEAD", epochPath), `unknown intake epoch ${requestedEpoch}`);
   const epoch = parseJsonDocument(gitShow(repo, "HEAD", epochPath), "epoch manifest");
