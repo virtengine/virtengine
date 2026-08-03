@@ -1,4 +1,4 @@
-command: go vet ./pkg/inference
+command: go vet ./x/veid/types ./pkg/inference
 exit_code: 0
 result: passed
 
@@ -8,7 +8,7 @@ result: passed
 
 command: git status --porcelain
 exit_code: 0
-result: clean at synchronized payload 704654b86dc2ae6544d26738f6fb849f1b318454
+result: clean at payload 5ad232f99090c7a93b28b7e28312ab92295d43e7
 
 command: python .github/tests/test_inference_deployment_policy.py
 exit_code: 0

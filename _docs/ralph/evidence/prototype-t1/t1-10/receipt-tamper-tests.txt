@@ -1,0 +1,7 @@
+command: go test -count=1 ./x/veid/types
+exit_code: 0
+result: ok github.com/virtengine/virtengine/x/veid/types 0.264s
+
+focused_vector: TestInferenceReceiptRejectsTamperedFields/pipeline_version
+binding: A valid-looking PipelineVersion substitution invalidates the original Ed25519 receipt signature.
+keeper_companion: TestVerifyInferenceReceiptCommitmentMismatches/pipeline re-signs the substituted receipt, rejects the commitment mismatch, and records no replay/result mutation.

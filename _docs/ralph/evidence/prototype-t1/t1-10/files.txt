@@ -20,3 +20,4 @@ pkg/inference/sidecar.go
 pkg/inference/tensorflow_runtime_stub.go
 pkg/inference/test_vectors.go
 pkg/inference/types.go
+x/veid/types/inference_receipt_test.go
