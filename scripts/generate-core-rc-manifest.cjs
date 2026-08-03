@@ -142,6 +142,22 @@ function referencedRootBlockerIds(manifest) {
   return [...references].sort();
 }
 
+function validateRejectedCheckpoints(checkpoints) {
+  assert.ok(Array.isArray(checkpoints), "rejected producer checkpoints must be an array");
+  const identities = new Set();
+  for (const checkpoint of checkpoints) {
+    exactKeys(checkpoint, ["thread", "checkpoint", "tip", "reason"], "rejected producer checkpoint");
+    assert.ok(["T1", "T2", "T3", "T5"].includes(checkpoint.thread), "rejected producer thread is invalid");
+    assert.match(checkpoint.checkpoint, new RegExp(`^${checkpoint.thread}-[0-9]{2,}[A-Z]?$`), "rejected producer checkpoint is invalid");
+    assert.match(checkpoint.tip, shaPattern, "rejected producer tip must be an exact SHA");
+    assert.ok(typeof checkpoint.reason === "string" && checkpoint.reason.length > 0 && checkpoint.reason.trim() === checkpoint.reason, "rejected producer reason must be literal and nonempty");
+    const identity = `${checkpoint.thread}\0${checkpoint.checkpoint}\0${checkpoint.tip}`;
+    assert.equal(identities.has(identity), false, `duplicate rejected producer checkpoint: ${checkpoint.thread}.${checkpoint.checkpoint}`);
+    identities.add(identity);
+  }
+  return true;
+}
+
 function listSourceEntries(sourceSha, cwd = root) {
   const key = `${cwd}\0${sourceSha}`;
   if (sourceEntriesCache.has(key)) return sourceEntriesCache.get(key);
@@ -560,6 +576,7 @@ function validateManifest(manifest, options = {}) {
   assert.equal(sourceDigest(manifest.source.payload_sha, manifest.producer_checkpoints.ledger_path, cwd), manifest.producer_checkpoints.ledger_sha256, "producer ledger hash mismatch");
   assert.deepEqual(manifest.producer_checkpoints.accepted, handoff.accepted_checkpoints, "accepted producer ledger binding mismatch");
   assert.deepEqual(manifest.producer_checkpoints.rejected, handoff.rejected_checkpoints, "rejected producer ledger binding mismatch");
+  validateRejectedCheckpoints(manifest.producer_checkpoints.rejected);
   assert.equal(manifest.producer_checkpoints.accepted.length, 0, "payload must not claim integrated producers");
   assert.notEqual(manifest.rollout.status, "complete");
   assert.notEqual(manifest.rollback.status, "verified");
@@ -620,6 +637,6 @@ function main(argv = process.argv.slice(2)) {
   }
 }
 
-module.exports = { artifactSelections, assertUniqueIds, buildAiAssurance, buildArtifactGroup, buildTestEvidence, buildTooling, generateManifest, listSourceEntries, main, manifestRelativePath, parseArgs, pathsReferToSameFile, referencedRootBlockerIds, serialize, sourceArtifacts, sourceArtifactsFor, validateManifest };
+module.exports = { artifactSelections, assertUniqueIds, buildAiAssurance, buildArtifactGroup, buildTestEvidence, buildTooling, generateManifest, listSourceEntries, main, manifestRelativePath, parseArgs, pathsReferToSameFile, referencedRootBlockerIds, serialize, sourceArtifacts, sourceArtifactsFor, validateManifest, validateRejectedCheckpoints };
 
 if (require.main === module) main();

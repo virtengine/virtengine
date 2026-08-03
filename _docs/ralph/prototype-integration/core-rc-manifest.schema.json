@@ -239,8 +239,19 @@
       "required": ["ledger_path", "ledger_sha256", "accepted", "rejected", "blocker_id"],
       "properties": {
         "ledger_path": { "type": "string" }, "ledger_sha256": { "$ref": "#/$defs/digest" },
-        "accepted": { "type": "array", "maxItems": 0 }, "rejected": { "type": "array" },
+        "accepted": { "type": "array", "maxItems": 0 },
+        "rejected": { "type": "array", "uniqueItems": true, "items": { "$ref": "#/$defs/rejectedCheckpoint" } },
         "blocker_id": { "type": "string", "minLength": 1 }
+      }
+    },
+    "rejectedCheckpoint": {
+      "type": "object", "additionalProperties": false,
+      "required": ["thread", "checkpoint", "tip", "reason"],
+      "properties": {
+        "thread": { "enum": ["T1", "T2", "T3", "T5"] },
+        "checkpoint": { "type": "string", "pattern": "^T[1235]-[0-9]{2,}[A-Z]?$" },
+        "tip": { "$ref": "#/$defs/sha" },
+        "reason": { "type": "string", "minLength": 1, "pattern": "^\\S(?:.*\\S)?$" }
       }
     },
     "releaseState": {

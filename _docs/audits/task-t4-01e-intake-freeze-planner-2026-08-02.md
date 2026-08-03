@@ -58,6 +58,10 @@ Root manifest blockers exactly equal the blocker IDs referenced by artifact
 groups, blocked sections, external dependencies, and AI non-certification.
 Cleared artifact coverage cannot leave a stale blocker declaration.
 
+Rejected producer evidence has exact thread, checkpoint, tip, and literal
+reason fields. Runtime and schema validation reject malformed records and exact
+duplicates, while the manifest remains byte-bound to the integration ledger.
+
 The planner hashes the selected observation, requires the checked core-RC
 manifest to bind that exact path/digest, verifies identical bytes at the
 manifest source commit, and requires that source to be an ancestor of current

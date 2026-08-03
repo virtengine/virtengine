@@ -17,6 +17,7 @@ const {
   referencedRootBlockerIds,
   sourceArtifacts,
   sourceArtifactsFor,
+  validateRejectedCheckpoints,
 } = require("./generate-core-rc-manifest.cjs");
 const { validateSchema } = require("./validate-core-rc-manifest.cjs");
 
@@ -222,6 +223,13 @@ const tests = [
       ai_assurance: { non_certification: { blocker_id: "ai" } },
     };
     assert.deepEqual(referencedRootBlockerIds(manifest), ["ai", "artifact", "gates", "migration", "model", "producer", "rollback", "rollout", "slurm"]);
+  }],
+  ["rejects malformed or duplicate producer rejection evidence", () => {
+    const rejection = { thread: "T3", checkpoint: "T3-13A", tip: "a".repeat(40), reason: "Immutable intake failed." };
+    assert.equal(validateRejectedCheckpoints([rejection]), true);
+    assert.throws(() => validateRejectedCheckpoints([rejection, clone(rejection)]), /duplicate rejected producer checkpoint/);
+    assert.throws(() => validateRejectedCheckpoints([{ ...rejection, reason: " padded " }]), /literal and nonempty/);
+    assert.throws(() => validateRejectedCheckpoints([{ ...rejection, thread: "T4" }]), /thread is invalid/);
   }],
 ];
 
