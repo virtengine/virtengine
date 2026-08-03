@@ -16,6 +16,10 @@ run exit codes, zero-drift status, and an evidence path/hash verified at the
 exact generation source commit. Accepted producer tags are also re-read and
 every proto source must be declared in that checkpoint's committed handoff
 `files_changed`; unrelated historical proto files cannot satisfy readiness.
+Aggregate validation requires the generation result source SHA to equal the
+current exact T4 HEAD and restricts evidence to a dedicated
+`_docs/ralph/prototype-integration/evidence/generated-contract-*.json` path.
+Older commits and unrelated historical blobs cannot authenticate generation.
 Every declared proto source, generated target, and compatibility fixture must
 also resolve to an existing regular file under the checked repository root;
 canonical-looking invented paths cannot satisfy generated readiness.

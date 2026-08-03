@@ -56,6 +56,13 @@ function producerHandoffDeclaresContract(contract, producerHandoff) {
     && contract.proto_sources.every((path) => producerHandoff.files_changed.includes(path));
 }
 
+function verifyGenerationResult(result, options) {
+  if (result.source_sha !== options.currentSha) return false;
+  if (!/^_docs\/ralph\/prototype-integration\/evidence\/generated-contract-[a-z0-9-]+\.json$/.test(result.evidence_path)) return false;
+  const evidence = options.readEvidence(result.source_sha, result.evidence_path);
+  return Buffer.isBuffer(evidence) && createHash("sha256").update(evidence).digest("hex") === result.evidence_sha256;
+}
+
 function validateContainedProducerCommits(containedCommits, acceptedCheckpoints, isAncestor) {
   for (const contained of containedCommits) {
     const covering = acceptedCheckpoints.filter((entry) => entry.thread === contained.thread
@@ -188,7 +195,7 @@ function validateIntegrationControl(control, schema, handoff, epoch) {
   validateEpoch(epoch, handoff);
 }
 
-module.exports = { producerHandoffDeclaresContract, validateContainedProducerCommits, validateEpoch, validateIntegrationControl, validateManifestEpochBinding };
+module.exports = { producerHandoffDeclaresContract, validateContainedProducerCommits, validateEpoch, validateIntegrationControl, validateManifestEpochBinding, verifyGenerationResult };
 
 if (require.main === module) {
   const epochEntry = currentEpoch(discoverEpochs(epochDirectory));
@@ -227,10 +234,13 @@ if (require.main === module) {
         return false;
       }
     },
-    verifyGenerationResult: (result) => {
-      const evidence = spawnSync("git", ["show", `${result.source_sha}:${result.evidence_path}`], { cwd: root, encoding: "buffer" });
-      return evidence.status === 0 && createHash("sha256").update(evidence.stdout).digest("hex") === result.evidence_sha256;
-    },
+    verifyGenerationResult: (result) => verifyGenerationResult(result, {
+      currentSha: spawnSync("git", ["rev-parse", "HEAD"], { cwd: root, encoding: "utf8" }).stdout.trim(),
+      readEvidence: (sourceSha, path) => {
+        const evidence = spawnSync("git", ["show", `${sourceSha}:${path}`], { cwd: root, encoding: "buffer" });
+        return evidence.status === 0 ? evidence.stdout : null;
+      },
+    }),
   });
   validateMigrationInventory(loadJson(migrationInventoryPath), loadJson(testCasesPath), {
     rootDir: root,

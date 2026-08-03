@@ -1,7 +1,8 @@
 "use strict";
 
 const assert = require("assert").strict;
-const { producerHandoffDeclaresContract, validateContainedProducerCommits, validateIntegrationControl, validateManifestEpochBinding } = require("./validate-prototype-integration.cjs");
+const { createHash } = require("crypto");
+const { producerHandoffDeclaresContract, validateContainedProducerCommits, validateIntegrationControl, validateManifestEpochBinding, verifyGenerationResult } = require("./validate-prototype-integration.cjs");
 
 const sha = "79391a3df86d85522b92e0400c6904971ecbe65d";
 
@@ -69,6 +70,14 @@ const tests = [
     assert.equal(producerHandoffDeclaresContract(contract, { thread: "T1", payload_head: sha, files_changed: ["sdk/proto/node/decision.proto"] }), true);
     assert.equal(producerHandoffDeclaresContract(contract, { thread: "T1", payload_head: sha, files_changed: [] }), false);
     assert.equal(producerHandoffDeclaresContract(contract, { thread: "T5", payload_head: sha, files_changed: ["sdk/proto/node/decision.proto"] }), false);
+  }],
+  ["binds generation results to current HEAD and dedicated evidence", () => {
+    const evidence = Buffer.from("{\"drift_clean\":true}\n");
+    const result = { source_sha: sha, evidence_path: "_docs/ralph/prototype-integration/evidence/generated-contract-zero-drift.json", evidence_sha256: createHash("sha256").update(evidence).digest("hex") };
+    const options = { currentSha: sha, readEvidence: () => evidence };
+    assert.equal(verifyGenerationResult(result, options), true);
+    assert.equal(verifyGenerationResult({ ...result, source_sha: "a".repeat(40) }, options), false);
+    assert.equal(verifyGenerationResult({ ...result, evidence_path: "_docs/INDEX.md" }, options), false);
   }],
   ["accepts the frozen T4 campaign controls", () => {
     const fixture = validFixture();
