@@ -9,6 +9,7 @@ const {
   assertExecutionReady,
   buildExecutionPlan,
   collectChangedPaths,
+  planDigest,
   validateResultEnvelope,
 } = require("./run-required-gates.cjs");
 
@@ -65,6 +66,7 @@ function validEnvelope(plan) {
     base_sha: plan.base_sha,
     head_sha: plan.head_sha,
     matrix_digest: plan.matrix_digest,
+    plan_digest: planDigest(plan),
     results: plan.categories.flatMap((category) => category.commands.map((command) => ({
       category_id: category.id,
       command_id: command.id,
@@ -224,6 +226,9 @@ try {
       const wrongDigest = validEnvelope(plan);
       wrongDigest.matrix_digest = "0".repeat(64);
       assert.throws(() => validateResultEnvelope(plan, wrongDigest), /matrix digest mismatch/);
+      const wrongPlan = validEnvelope(plan);
+      wrongPlan.plan_digest = "0".repeat(64);
+      assert.throws(() => validateResultEnvelope(plan, wrongPlan), /plan digest mismatch/);
     }],
     ["rejects missing, unavailable, or wrong pinned tools", () => {
       const plan = planFor(["shared.go"]);

@@ -87,6 +87,10 @@ function matrixDigest(matrixBytes) {
   return createHash("sha256").update(matrixBytes).digest("hex");
 }
 
+function planDigest(plan) {
+  return createHash("sha256").update(JSON.stringify(plan)).digest("hex");
+}
+
 function buildExecutionPlan({ repoDir = root, base, head, matrixPath = defaultMatrixPath }) {
   const bytes = readFileSync(matrixPath);
   const matrix = JSON.parse(bytes.toString("utf8"));
@@ -136,11 +140,12 @@ function buildExecutionPlan({ repoDir = root, base, head, matrixPath = defaultMa
 }
 
 function validateResultEnvelope(plan, envelope) {
-  exactKeys(envelope, ["schema_version", "base_sha", "head_sha", "matrix_digest", "results"], "result envelope");
+  exactKeys(envelope, ["schema_version", "base_sha", "head_sha", "matrix_digest", "plan_digest", "results"], "result envelope");
   assert.equal(envelope.schema_version, resultSchemaVersion, "result schema version mismatch");
   assert.equal(envelope.base_sha, plan.base_sha, "result base SHA mismatch");
   assert.equal(envelope.head_sha, plan.head_sha, "result head SHA mismatch");
   assert.equal(envelope.matrix_digest, plan.matrix_digest, "result matrix digest mismatch");
+  assert.equal(envelope.plan_digest, planDigest(plan), "result plan digest mismatch");
   assert.ok(Array.isArray(envelope.results), "results must be an array");
 
   const expected = new Map();
@@ -239,6 +244,7 @@ module.exports = {
   collectChangedPaths,
   globToRegExp,
   matchesSelector,
+  planDigest,
   validateResultEnvelope,
 };
 

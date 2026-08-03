@@ -89,7 +89,8 @@ function validateExecutionSchemas(planSchema, resultSchema) {
 
   assert.equal(resultSchema.$schema, "https://json-schema.org/draft/2020-12/schema");
   assert.equal(resultSchema.additionalProperties, false, "result schema root must reject additional properties");
-  assert.deepEqual(resultSchema.required.slice().sort(), ["schema_version", "base_sha", "head_sha", "matrix_digest", "results"].sort());
+  assert.deepEqual(resultSchema.required.slice().sort(), ["schema_version", "base_sha", "head_sha", "matrix_digest", "plan_digest", "results"].sort());
+  assert.deepEqual(resultSchema.properties.plan_digest, { $ref: "#/$defs/digest" });
   assert.equal(resultSchema.properties.schema_version.const, "virtengine.task-88b.required-gate-results/v1");
   assert.equal(resultSchema.$defs.result.additionalProperties, false);
   assert.equal(resultSchema.properties.results.uniqueItems, true, "result schema must reject duplicate result records");

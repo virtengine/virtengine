@@ -4,12 +4,13 @@
   "title": "T4-05B required-gate result evidence",
   "type": "object",
   "additionalProperties": false,
-  "required": ["schema_version", "base_sha", "head_sha", "matrix_digest", "results"],
+  "required": ["schema_version", "base_sha", "head_sha", "matrix_digest", "plan_digest", "results"],
   "properties": {
     "schema_version": { "const": "virtengine.task-88b.required-gate-results/v1" },
     "base_sha": { "$ref": "#/$defs/sha" },
     "head_sha": { "$ref": "#/$defs/sha" },
     "matrix_digest": { "$ref": "#/$defs/digest" },
+    "plan_digest": { "$ref": "#/$defs/digest" },
     "results": { "type": "array", "uniqueItems": true, "items": { "$ref": "#/$defs/result" } }
   },
   "$defs": {
