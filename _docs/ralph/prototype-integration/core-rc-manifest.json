@@ -6,14 +6,14 @@
   "planned_functionality_complete": false,
   "milestone_m_eligible": false,
   "source": {
-    "payload_sha": "02f30d60dd372c3de30c6ffcdf6f876ba18ac332",
-    "tree": "095ab56650e8c1fffa816370d7fa079f8173f3d3",
+    "payload_sha": "d79b8d16cf8f85aa0d8a147a6a69feb0f6649593",
+    "tree": "80991fe04ce9a4a79b768dde0048fa813aa09fca",
     "branch": "ve/prototype-integration",
     "binding": "declared_clean_parent_payload"
   },
   "tooling": {
-    "tooling_sha": "02f30d60dd372c3de30c6ffcdf6f876ba18ac332",
-    "tree": "095ab56650e8c1fffa816370d7fa079f8173f3d3",
+    "tooling_sha": "d79b8d16cf8f85aa0d8a147a6a69feb0f6649593",
+    "tree": "80991fe04ce9a4a79b768dde0048fa813aa09fca",
     "artifacts": [
       {
         "id": "generator",
@@ -427,17 +427,17 @@
   "test_evidence": {
     "status": "complete",
     "ledger_path": "_docs/ralph/handoffs/prototype-integration/HANDOFF.yaml",
-    "implementation_sha": "01a5d1917ebf9b4046cb17940a9a2780cd21c729",
-    "ledger_sha": "02f30d60dd372c3de30c6ffcdf6f876ba18ac332",
+    "implementation_sha": "5d7548a88dfe6f4df9a4332cc1da74177223fb1f",
+    "ledger_sha": "d79b8d16cf8f85aa0d8a147a6a69feb0f6649593",
     "record_count": 1,
-    "declared_test_count": 21,
+    "declared_test_count": 88,
     "uncounted_record_count": 0,
     "records": [
       {
-        "command": "node scripts/observe-prototype-intake-tags.test.cjs && node scripts/plan-prototype-intake-freeze.test.cjs",
+        "command": "node scripts/preflight-core-rc-publication.test.cjs && node scripts/prototype-intake-epochs.test.cjs && node scripts/observe-prototype-intake-tags.test.cjs && node scripts/plan-prototype-intake-freeze.test.cjs && node scripts/apply-prototype-intake-freeze.test.cjs",
         "exit_code": 0,
         "result": "passed",
-        "test_count": 21,
+        "test_count": 88,
         "tool_versions": {
           "node": "20.19.1"
         }
@@ -447,7 +447,7 @@
   },
   "producer_checkpoints": {
     "ledger_path": "_docs/ralph/handoffs/prototype-integration/HANDOFF.yaml",
-    "ledger_sha256": "f90eb059efcbc5538dca32e09ff24a6ecb30bcc775c610dcf8f56159ca739d0f",
+    "ledger_sha256": "9377cedfe5d12c8cf5f89013ec0c0fb84316962d84383d0f138ab1cd7d8636ed",
     "accepted": [],
     "rejected": [
       {
