@@ -23,6 +23,9 @@ Generated targets must also match their root's generated artifact type: OpenAPI
 JSON/YAML, binary/hash inventory artifacts, Go protobuf/gateway output, or
 generated TypeScript. Existing handwritten files under a canonical target root
 cannot satisfy readiness.
+Compatibility evidence must be a regular file under `tests/`, `testutil/`, or
+a `testdata` directory. Arbitrary existing source or documentation files cannot
+be relabeled as compatibility fixtures.
 Per-contract blocker lists are sorted and unique, and the root blocker list
 must exactly match first-use contract references. Duplicate, undeclared, or
 stale generated-contract blockers fail validation.

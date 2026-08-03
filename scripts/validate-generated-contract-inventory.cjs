@@ -32,6 +32,10 @@ function isGeneratedTarget(path) {
   return false;
 }
 
+function isCompatibilityFixture(path) {
+  return path.startsWith("tests/") || path.startsWith("testutil/") || path.includes("/testdata/");
+}
+
 function validateGeneratedContractInventory(inventory, options = {}) {
   const rootDir = options.rootDir || root;
   exactKeys(inventory, ["blockers", "checkpoint", "completion", "contracts", "generation_window", "schema_version", "status"], "generated contract inventory");
@@ -104,6 +108,7 @@ function validateGeneratedContractInventory(inventory, options = {}) {
       }
       for (const fixture of contract.compatibility_fixtures) {
         assert.ok(!isAbsolute(fixture) && !fixture.split(/[\\/]/).includes(".."), `${contract.id} fixture escapes repository`);
+        assert.ok(isCompatibilityFixture(fixture), `${contract.id} compatibility fixture is outside test fixture paths`);
         const path = resolve(rootDir, fixture);
         assert.ok(existsSync(path) && statSync(path).isFile(), `${contract.id} compatibility fixture is missing`);
       }
@@ -124,7 +129,7 @@ function validateGeneratedContractInventory(inventory, options = {}) {
   return true;
 }
 
-module.exports = { isGeneratedTarget, validateGeneratedContractInventory };
+module.exports = { isCompatibilityFixture, isGeneratedTarget, validateGeneratedContractInventory };
 
 if (require.main === module) {
   const inventory = JSON.parse(readFileSync(inventoryPath, "utf8"));
