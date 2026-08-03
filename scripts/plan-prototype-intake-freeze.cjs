@@ -23,6 +23,7 @@ function resolveAnnotatedTag(repo, remote, tag) {
   git(repo, ["fetch", remote, `${ref}:${ref}`]);
   assert.equal(git(repo, ["cat-file", "-t", ref]), "tag", `${tag} is not an annotated tag`);
   return {
+    tag_object: git(repo, ["rev-parse", ref]),
     tagger_at: git(repo, ["for-each-ref", "--format=%(taggerdate:iso-strict)", ref]),
     target: git(repo, ["rev-parse", `${ref}^{}`]),
   };
@@ -78,8 +79,9 @@ function planFrozenEpoch(epoch, selections, options = {}) {
     const match = tag.match(tagPattern);
     assert.ok(match && `T${match[1]}` === producer.thread, `${producer.thread} selected an invalid tag`);
     const resolved = options.resolveTag(tag);
+    assert.match(resolved.tag_object, /^[a-f0-9]{40}$/, `${tag} tag object is not a SHA`);
     assert.match(resolved.target, /^[a-f0-9]{40}$/, `${tag} target is not a commit SHA`);
-    const observed = observation.tags.filter((entry) => entry.thread === producer.thread && entry.tag === tag && entry.target === resolved.target);
+    const observed = observation.tags.filter((entry) => entry.thread === producer.thread && entry.tag === tag && entry.tag_object === resolved.tag_object && entry.target === resolved.target);
     assert.equal(observed.length, 1, `${tag} was not uniquely observed before cutoff`);
     const taggerTime = Date.parse(resolved.tagger_at);
     assert.ok(Number.isFinite(taggerTime), `${tag} tagger timestamp is invalid`);

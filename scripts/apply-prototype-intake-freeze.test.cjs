@@ -24,7 +24,7 @@ function frozen() {
 }
 
 function evidence() {
-  const observation = { schema_version: "virtengine.prototype.intake-tag-observation/v1", intake_epoch: 1, announcement_cutoff: "2000-01-02T00:00:00Z", observed_at: "2000-01-01T18:00:00Z", tags: [{ thread: "T1", tag: "checkpoint/prototype-t1/t1-09", target: "c".repeat(40) }] };
+  const observation = { schema_version: "virtengine.prototype.intake-tag-observation/v1", intake_epoch: 1, announcement_cutoff: "2000-01-02T00:00:00Z", observed_at: "2000-01-01T18:00:00Z", tags: [{ thread: "T1", tag: "checkpoint/prototype-t1/t1-09", tag_object: "f".repeat(40), target: "c".repeat(40) }] };
   const content = JSON.stringify(observation);
   return { content, manifest: { source: { payload_sha: "d".repeat(40) }, control_artifacts: [{ id: "intake_tag_observation", path: "observation.json", sha256: createHash("sha256").update(content).digest("hex") }] } };
 }
@@ -53,8 +53,8 @@ const tests = [
   ["rejects a missing reviewed plan digest", () => assert.throws(() => parseArgs(["--epoch", "1", "--expected-head", "a".repeat(40), "--observation", "observation.json", "--plan", "plan.json"]), /expected-plan-sha256/)],
   ["accepts reviewed plan bytes", () => { const content = "reviewed plan\n"; assert.equal(validatePlanDigest(content, createHash("sha256").update(content).digest("hex")), true); }],
   ["rejects substituted plan bytes", () => { const digest = createHash("sha256").update("reviewed").digest("hex"); assert.throws(() => validatePlanDigest("substituted", digest), /does not match reviewed/); }],
-  ["accepts a plan backed by observed tag evidence", () => { const value = evidence(); assert.equal(validateFreezeEvidence(epoch(), frozen(), value.content, "observation.json", value.manifest, { now: afterCutoff, sourceContent: value.content, sourceIsAncestor: true, resolveTag: () => ({ target: "c".repeat(40), tagger_at: "2000-01-01T12:00:00Z" }) }), true); }],
-  ["rejects an announced tag absent from observation evidence", () => { const value = evidence(); const plan = frozen(); plan.producers[0].tag = "checkpoint/prototype-t1/t1-10"; assert.throws(() => validateFreezeEvidence(epoch(), plan, value.content, "observation.json", value.manifest, { now: afterCutoff, sourceContent: value.content, sourceIsAncestor: true, resolveTag: () => ({ target: "e".repeat(40), tagger_at: "2000-01-01T12:00:00Z" }) }), /not uniquely observed/); }],
+  ["accepts a plan backed by observed tag evidence", () => { const value = evidence(); assert.equal(validateFreezeEvidence(epoch(), frozen(), value.content, "observation.json", value.manifest, { now: afterCutoff, sourceContent: value.content, sourceIsAncestor: true, resolveTag: () => ({ tag_object: "f".repeat(40), target: "c".repeat(40), tagger_at: "2000-01-01T12:00:00Z" }) }), true); }],
+  ["rejects an announced tag absent from observation evidence", () => { const value = evidence(); const plan = frozen(); plan.producers[0].tag = "checkpoint/prototype-t1/t1-10"; assert.throws(() => validateFreezeEvidence(epoch(), plan, value.content, "observation.json", value.manifest, { now: afterCutoff, sourceContent: value.content, sourceIsAncestor: true, resolveTag: () => ({ tag_object: "f".repeat(40), target: "e".repeat(40), tagger_at: "2000-01-01T12:00:00Z" }) }), /not uniquely observed/); }],
   ["accepts a clean worktree at the reviewed HEAD", () => assert.equal(validateWorktreeBoundary(".", "a".repeat(40), cleanAt("a".repeat(40))), true)],
   ["rejects a clean worktree at a stale HEAD", () => assert.throws(() => validateWorktreeBoundary(".", "a".repeat(40), cleanAt("b".repeat(40))), /does not match reviewed/)],
   ["accepts a reviewed SHA published on the remote branch", () => assert.equal(validateRemoteBoundary(".", "a".repeat(40), "origin", publishedAt("a".repeat(40))), true)],
