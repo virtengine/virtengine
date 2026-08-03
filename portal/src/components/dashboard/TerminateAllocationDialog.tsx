@@ -33,19 +33,29 @@ export function TerminateAllocationDialog({
 }: TerminateAllocationDialogProps) {
   const { t } = useTranslation();
   const [isTerminating, setIsTerminating] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const handleOpenChange = (nextOpen: boolean) => {
+    if (isTerminating && !nextOpen) return;
+    setError(null);
+    onOpenChange(nextOpen);
+  };
 
   const handleConfirm = async () => {
     setIsTerminating(true);
+    setError(null);
     try {
       await onConfirm(allocation.id);
-      onOpenChange(false);
+      handleOpenChange(false);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : t('Termination was not committed'));
     } finally {
       setIsTerminating(false);
     }
   };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent>
         <DialogHeader>
           <DialogTitle>{t('Terminate Allocation')}</DialogTitle>
@@ -54,19 +64,33 @@ export function TerminateAllocationDialog({
               offering: allocation.offeringName,
               provider: allocation.providerName,
             })}{' '}
-            {t('This action cannot be undone and all provisioned resources will be released.')}
+            {t(
+              'This action cannot be undone. The dialog closes only after the provider commits termination.'
+            )}
           </DialogDescription>
         </DialogHeader>
         <div className="rounded-md bg-destructive/10 p-3 text-sm text-destructive">
           <p className="font-medium">{t('Warning')}</p>
           <p>
             {t(
-              'Terminating this allocation will immediately stop all running workloads and release associated resources. Any unsaved data may be lost.'
+              'A committed termination stops workloads and releases associated resources. Until committed provider evidence is returned, the allocation remains active.'
             )}
           </p>
         </div>
+        {error && (
+          <div
+            role="alert"
+            className="rounded-md border border-destructive p-3 text-sm text-destructive"
+          >
+            {error}
+          </div>
+        )}
         <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={isTerminating}>
+          <Button
+            variant="outline"
+            onClick={() => handleOpenChange(false)}
+            disabled={isTerminating}
+          >
             {t('Cancel')}
           </Button>
           <Button variant="destructive" onClick={handleConfirm} disabled={isTerminating}>
