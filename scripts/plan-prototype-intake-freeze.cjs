@@ -56,6 +56,10 @@ function listRemoteIntakeTags(repo, remote) {
 function validateObservationCompleteness(epoch, observation, currentTags, resolveTag) {
   const opensAt = Date.parse(epoch.opens_at);
   const cutoff = Date.parse(epoch.announcement_cutoff);
+  for (const observed of observation.tags) {
+    const matches = currentTags.filter((current) => current.thread === observed.thread && current.tag === observed.tag && current.tag_object === observed.tag_object && current.target === observed.target);
+    assert.equal(matches.length, 1, `${observed.tag} no longer matches the observed remote tag object and target`);
+  }
   for (const current of currentTags) {
     const resolved = resolveTag(current.tag);
     const taggerTime = Date.parse(resolved.tagger_at);
