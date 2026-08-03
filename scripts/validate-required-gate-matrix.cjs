@@ -79,10 +79,13 @@ function validateExecutionSchemas(planSchema, resultSchema) {
   assert.equal(planSchema.properties.schema_version.const, "virtengine.task-88b.required-gate-plan/v1");
   assert.deepEqual(planSchema.properties.matrix_status.enum, ["dependency_blocked", "ready", "complete"]);
   assert.equal(planSchema.$defs.category.additionalProperties, false);
+  assert.deepEqual(planSchema.$defs.category.required.slice().sort(), ["id", "status", "matched_paths", "matched_selectors", "commands", "pinned_tools", "dependencies", "blockers"].sort());
   assert.equal(planSchema.$defs.command.additionalProperties, false);
   assert.equal(planSchema.$defs.tool.additionalProperties, false);
   for (const property of ["allowlisted_paths", "categories"]) assert.equal(planSchema.properties[property].uniqueItems, true, `plan ${property} must reject duplicates`);
   for (const property of ["commands", "pinned_tools"]) assert.equal(planSchema.$defs.category.properties[property].uniqueItems, true, `plan category ${property} must reject duplicates`);
+  assert.equal(planSchema.$defs.category.properties.dependencies.uniqueItems, true, "plan category dependencies must reject duplicates");
+  assert.equal(planSchema.$defs.dependency.additionalProperties, false);
 
   assert.equal(resultSchema.$schema, "https://json-schema.org/draft/2020-12/schema");
   assert.equal(resultSchema.additionalProperties, false, "result schema root must reject additional properties");

@@ -49,17 +49,28 @@
         "source": { "type": "string", "minLength": 1 }
       }
     },
+    "dependency": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "status"],
+      "properties": {
+        "id": { "type": "string", "pattern": "^[0-9]+[A-Z]?$" },
+        "status": { "enum": ["unavailable", "available"] }
+      }
+    },
     "category": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["id", "status", "matched_paths", "matched_selectors", "commands", "pinned_tools"],
+      "required": ["id", "status", "matched_paths", "matched_selectors", "commands", "pinned_tools", "dependencies", "blockers"],
       "properties": {
         "id": { "type": "string", "pattern": "^[a-z0-9_]+$" },
         "status": { "enum": ["dependency_blocked", "ready", "complete"] },
         "matched_paths": { "$ref": "#/$defs/uniqueStrings" },
         "matched_selectors": { "$ref": "#/$defs/uniqueStrings" },
         "commands": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "$ref": "#/$defs/command" } },
-        "pinned_tools": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "$ref": "#/$defs/tool" } }
+        "pinned_tools": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "$ref": "#/$defs/tool" } },
+        "dependencies": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "$ref": "#/$defs/dependency" } },
+        "blockers": { "$ref": "#/$defs/uniqueStrings" }
       }
     }
   }

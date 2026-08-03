@@ -109,6 +109,8 @@ function buildExecutionPlan({ repoDir = root, base, head, matrixPath = defaultMa
       matched_selectors: category.path_selectors.filter((selector) => categoryPaths.some((path) => matchesSelector(path, selector))),
       commands: category.required_commands.map((command) => ({ id: command.id, kind: command.kind, command: command.command })),
       pinned_tools: category.pinned_tools.map((tool) => ({ name: tool.name, version: tool.version, source: tool.source })),
+      dependencies: category.dependencies.map((dependency) => ({ id: dependency.id, status: dependency.status })),
+      blockers: [...category.blockers],
     });
   }
 
@@ -191,6 +193,10 @@ function assertExecutionReady(plan) {
   assert.ok(["ready", "complete"].includes(plan.matrix_status), `execution refused; matrix status is ${plan.matrix_status}`);
   const blocked = plan.categories.filter((category) => !["ready", "complete"].includes(category.status));
   assert.deepEqual(blocked.map((category) => category.id), [], `execution refused; selected categories are not ready or complete: ${blocked.map((category) => category.id).join(", ")}`);
+  const unavailable = plan.categories.filter((category) => category.dependencies.some((dependency) => dependency.status !== "available"));
+  assert.deepEqual(unavailable.map((category) => category.id), [], `execution refused; selected categories retain unavailable dependencies: ${unavailable.map((category) => category.id).join(", ")}`);
+  const withBlockers = plan.categories.filter((category) => category.blockers.length > 0);
+  assert.deepEqual(withBlockers.map((category) => category.id), [], `execution refused; selected categories retain blockers: ${withBlockers.map((category) => category.id).join(", ")}`);
 }
 
 function parseArguments(argv) {

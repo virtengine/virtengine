@@ -246,6 +246,16 @@ try {
         delete process.env.VE_REQUIRED_GATES_BYPASS;
       }
     }],
+    ["refuses a tampered ready plan retaining dependency evidence", () => {
+      const plan = planFor(["shared.go"]);
+      plan.matrix_status = "ready";
+      plan.categories.forEach((category) => { category.status = "ready"; });
+      assert.throws(() => assertExecutionReady(plan), /retain unavailable dependencies/);
+      plan.categories.forEach((category) => {
+        category.dependencies.forEach((dependency) => { dependency.status = "available"; });
+      });
+      assert.throws(() => assertExecutionReady(plan), /retain blockers/);
+    }],
     ["refuses matrix-wide blocked execution for allowlist-only changes", () => {
       assert.throws(() => assertExecutionReady(planFor(["README.md"])), /matrix status is dependency_blocked/);
     }],
