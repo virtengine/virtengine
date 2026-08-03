@@ -102,6 +102,11 @@ Model, license, and feature-vector digest records also require unique semantic
 IDs and literal nonempty ID/state values at runtime, preventing distinct records
 from reusing one evidence identity.
 
+Every non-null AI model, license, runtime, runtime-SBOM, schema, evaluation,
+and non-certification blocker reference must resolve in the exact root blocker
+inventory. The validator rejects both dangling assurance references and stale
+unreferenced blocker declarations.
+
 The AI non-certification array is restricted to the exact seven governed
 categories, so schema-only validation cannot substitute or omit a required
 production non-claim.

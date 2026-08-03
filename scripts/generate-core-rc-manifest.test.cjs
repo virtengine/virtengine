@@ -270,9 +270,15 @@ const tests = [
       model_provenance: { blocker_id: "model" }, test_evidence: { blocker_id: null }, producer_checkpoints: { blocker_id: "producer" },
       rollout: { blocker_id: "rollout" }, rollback: { blocker_id: "rollback" },
       external_dependencies: [{ blocker_id: "producer" }],
-      ai_assurance: { non_certification: { blocker_id: "ai" } },
+      ai_assurance: {
+        provenance_digests: {
+          models: [{ source_blocker_id: "model-source" }], licenses: [{ source_blocker_id: "license" }],
+          runtime: { source_blocker_id: "runtime", sbom_blocker_id: "runtime-sbom" }, schema: { source_blocker_id: "schema" },
+        },
+        evaluation: { source_blocker_id: "evaluation" }, non_certification: { blocker_id: "ai" },
+      },
     };
-    assert.deepEqual(referencedRootBlockerIds(manifest), ["ai", "artifact", "gates", "migration", "model", "producer", "rollback", "rollout", "slurm"]);
+    assert.deepEqual(referencedRootBlockerIds(manifest), ["ai", "artifact", "evaluation", "gates", "license", "migration", "model", "model-source", "producer", "rollback", "rollout", "runtime", "runtime-sbom", "schema", "slurm"]);
   }],
   ["rejects malformed or duplicate producer rejection evidence", () => {
     const rejection = { thread: "T3", checkpoint: "T3-13A", tip: "a".repeat(40), reason: "Immutable intake failed." };

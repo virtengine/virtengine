@@ -211,7 +211,13 @@ function referencedRootBlockerIds(manifest) {
     if (section.blocker_id) references.add(section.blocker_id);
   }
   for (const dependency of manifest.external_dependencies) if (dependency.blocker_id) references.add(dependency.blocker_id);
-  references.add(manifest.ai_assurance.non_certification.blocker_id);
+  const assurance = manifest.ai_assurance;
+  for (const entry of [...assurance.provenance_digests.models, ...assurance.provenance_digests.licenses]) {
+    if (entry.source_blocker_id) references.add(entry.source_blocker_id);
+  }
+  for (const blockerId of [assurance.provenance_digests.runtime.source_blocker_id, assurance.provenance_digests.runtime.sbom_blocker_id, assurance.provenance_digests.schema.source_blocker_id, assurance.evaluation.source_blocker_id, assurance.non_certification.blocker_id]) {
+    if (blockerId) references.add(blockerId);
+  }
   return [...references].sort();
 }
 
@@ -514,6 +520,11 @@ function generateManifest(sourceSha, options = {}) {
       { id: "slurm-production-evidence-unavailable", description: "SLURM production render, isolation, and live durability evidence remain unavailable." },
       { id: "production-model-artifacts-unavailable", description: "Production model weights and release artifacts are unavailable." },
       { id: "production-model-provenance-unavailable", description: "Production model provenance, approvals, evaluation, and runtime SBOM are unavailable." },
+      { id: "model-weights-absent", description: "Production model weights are absent." },
+      { id: "runtime-image-absent", description: "The production inference runtime image is absent." },
+      { id: "runtime-sbom-absent", description: "The production inference runtime SBOM is absent." },
+      { id: "approved-licenses-absent", description: "Approved production model and dataset licenses are absent." },
+      { id: "production-evaluation-absent", description: "Production model evaluation evidence is absent." },
       { id: "ai-production-assurance-unavailable", description: "AI, biometric uniqueness, vault/KMS, consent, retention, and production evaluation assurance remain unavailable." },
       ...(testEvidence.status === "partial" ? [{ id: "test-evidence-partial", description: "Some passing handoff test records do not declare test counts." }] : []),
       { id: "release-sbom-provenance-unavailable", description: "No release SBOM or signed release provenance is available." },

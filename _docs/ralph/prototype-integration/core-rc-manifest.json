@@ -539,6 +539,26 @@
       "description": "Production model provenance, approvals, evaluation, and runtime SBOM are unavailable."
     },
     {
+      "id": "model-weights-absent",
+      "description": "Production model weights are absent."
+    },
+    {
+      "id": "runtime-image-absent",
+      "description": "The production inference runtime image is absent."
+    },
+    {
+      "id": "runtime-sbom-absent",
+      "description": "The production inference runtime SBOM is absent."
+    },
+    {
+      "id": "approved-licenses-absent",
+      "description": "Approved production model and dataset licenses are absent."
+    },
+    {
+      "id": "production-evaluation-absent",
+      "description": "Production model evaluation evidence is absent."
+    },
+    {
       "id": "ai-production-assurance-unavailable",
       "description": "AI, biometric uniqueness, vault/KMS, consent, retention, and production evaluation assurance remain unavailable."
     },
