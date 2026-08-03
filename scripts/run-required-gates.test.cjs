@@ -119,6 +119,15 @@ try {
       assert.equal(planDigest(left), planDigest(right));
       assert.notEqual(planDigest(left), planDigest({ ...right, values: ["b", "a"] }));
     }],
+    ["rejects ambiguous canonical JSON values", () => {
+      for (const value of [undefined, () => true, Symbol("value"), 1n, NaN, Infinity, -Infinity, -0, Number.MAX_SAFE_INTEGER + 1]) {
+        assert.throws(() => canonicalJson(value), /canonical JSON/);
+      }
+      const sparse = [];
+      sparse.length = 1;
+      assert.throws(() => canonicalJson(sparse), /sparse arrays/);
+      assert.throws(() => canonicalJson(new Date(0)), /plain objects only/);
+    }],
     ["collects complete merge history including a final-tree-hidden path", () => {
       const paths = collectChangedPaths(fixture.repo, fixture.base, fixture.head);
       assert.ok(paths.includes("shared.go"));

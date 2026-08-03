@@ -47,7 +47,9 @@ category dependencies and blockers, and execution rechecks both independently
 of projected status. Result envelopes reject duplicate records in schema and
 runtime validation and bind a deterministic digest of the complete execution
 plan using recursively key-sorted JSON while preserving array order. Passing
-result evidence is rejected unless that exact plan is execution-ready. The
+result evidence is rejected unless that exact plan is execution-ready. Canonical
+serialization rejects sparse arrays, non-plain objects, unsupported values,
+non-finite or unsafe numbers, and negative zero. The
 acceptance commit must be the implementation's direct, single-parent child and
 change only the acceptance artifact. Accepted annotated tags must be exact tag
 objects published by `origin`; local-only or stale same-name tags are rejected.

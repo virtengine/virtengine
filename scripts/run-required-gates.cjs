@@ -88,9 +88,19 @@ function matrixDigest(matrixBytes) {
 }
 
 function canonicalJson(value) {
-  if (Array.isArray(value)) return `[${value.map(canonicalJson).join(",")}]`;
+  if (Array.isArray(value)) {
+    assert.equal(Object.keys(value).length, value.length, "canonical JSON rejects sparse arrays");
+    return `[${value.map(canonicalJson).join(",")}]`;
+  }
   if (value && typeof value === "object") {
+    assert.equal(Object.getPrototypeOf(value), Object.prototype, "canonical JSON accepts plain objects only");
     return `{${Object.keys(value).sort().map((key) => `${JSON.stringify(key)}:${canonicalJson(value[key])}`).join(",")}}`;
+  }
+  assert.ok(value === null || ["string", "boolean", "number"].includes(typeof value), `canonical JSON rejects ${typeof value}`);
+  if (typeof value === "number") {
+    assert.ok(Number.isFinite(value), "canonical JSON rejects non-finite numbers");
+    assert.ok(Number.isSafeInteger(value), "canonical JSON accepts safe integers only");
+    assert.equal(Object.is(value, -0), false, "canonical JSON rejects negative zero");
   }
   return JSON.stringify(value);
 }
