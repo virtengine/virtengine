@@ -1,29 +1,31 @@
 {
   "campaign": "three-day-prototype",
   "thread": "T4",
-  "checkpoint": "T4-01EAB",
+  "checkpoint": "T4-01EAC",
   "branch": "ve/prototype-integration",
-  "start_head": "ebd7a3f2e45a5274f24b99703dca8af02585fe86",
-  "end_head": "f2215c4f5803e6daa3d2129caf7d5594764c21e7",
+  "start_head": "73ddea1247cb86d923a2c744ed99cc56911bdf63",
+  "end_head": "bedd831f3cb46455f649e81ee135b9ec3f5970a3",
   "origin_main": "79391a3df86d85522b92e0400c6904971ecbe65d",
   "tree_clean": true,
   "commits": [
-    "f2215c4f5803e6daa3d2129caf7d5594764c21e7"
+    "bedd831f3cb46455f649e81ee135b9ec3f5970a3"
   ],
   "owned_paths": [
-    "_docs/ralph/prototype-integration/**",
-    "_docs/ralph/handoffs/prototype-integration/**"
+    "_docs/audits/**",
+    "scripts/preflight-integration-candidate.cjs",
+    "scripts/preflight-integration-candidate.test.cjs"
   ],
   "files_changed": [
-    "_docs/ralph/handoffs/prototype-integration/HANDOFF.yaml",
-    "_docs/ralph/prototype-integration/core-rc-manifest.json"
+    "_docs/audits/task-t4-01e-intake-freeze-planner-2026-08-02.md",
+    "scripts/preflight-integration-candidate.cjs",
+    "scripts/preflight-integration-candidate.test.cjs"
   ],
   "tests": [
     {
-      "command": "node scripts/validate-prototype-integration.test.cjs && node scripts/validate-prototype-integration.cjs",
+      "command": "node scripts/preflight-integration-candidate.test.cjs",
       "exit_code": 0,
       "result": "passed",
-      "test_count": 13,
+      "test_count": 30,
       "tool_versions": {
         "node": "20.19.1"
       }
@@ -38,9 +40,7 @@
       }
     }
   ],
-  "generated_hashes": {
-    "_docs/ralph/prototype-integration/core-rc-manifest.json": "677581bd9263b38f45b12aa1ef898e54c5ec11e82ba9c84928fa149c81b454f8"
-  },
+  "generated_hashes": {},
   "accepted_checkpoints": [],
   "rejected_checkpoints": [
     {
@@ -91,5 +91,5 @@
     "Task 88C is not complete."
   ],
   "next_checkpoint": null,
-  "expected_head": "f2215c4f5803e6daa3d2129caf7d5594764c21e7"
+  "expected_head": "bedd831f3cb46455f649e81ee135b9ec3f5970a3"
 }
