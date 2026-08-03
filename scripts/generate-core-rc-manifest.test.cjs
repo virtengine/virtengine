@@ -18,6 +18,7 @@ const {
   sourceArtifacts,
   sourceArtifactsFor,
   validateBlockers,
+  validateExternalDependencies,
   validateRejectedCheckpoints,
 } = require("./generate-core-rc-manifest.cjs");
 const { validateSchema } = require("./validate-core-rc-manifest.cjs");
@@ -241,6 +242,15 @@ const tests = [
     assert.throws(() => validateBlockers([blocker, clone(blocker)]), /duplicate blocker ID/);
     assert.throws(() => validateBlockers([{ ...blocker, id: "Required Gates" }]), /canonical lowercase kebab-case/);
     assert.throws(() => validateBlockers([{ ...blocker, description: " padded " }]), /literal and nonempty/);
+  }],
+  ["rejects malformed or duplicate external dependencies", () => {
+    const blocker = { id: "provider-unavailable", description: "Provider remains unavailable." };
+    const manifest = { blockers: [blocker] };
+    const dependency = { id: "provider-operator", status: "unavailable", blocker_id: blocker.id };
+    assert.equal(validateExternalDependencies([dependency], manifest), true);
+    assert.throws(() => validateExternalDependencies([dependency, clone(dependency)], manifest), /duplicate external dependency ID/);
+    assert.throws(() => validateExternalDependencies([{ ...dependency, id: "Provider Operator" }], manifest), /canonical lowercase kebab-case/);
+    assert.throws(() => validateExternalDependencies([{ ...dependency, status: "available" }], manifest), /must remain unavailable/);
   }],
 ];
 

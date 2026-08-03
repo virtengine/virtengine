@@ -73,6 +73,10 @@ Root blocker IDs are canonical lowercase kebab-case and descriptions are
 nonempty literal strings without surrounding whitespace. Runtime and schema
 validation reject malformed or duplicate blocker declarations.
 
+External dependencies use canonical lowercase IDs, remain explicitly
+unavailable, and reference canonical existing blockers. Runtime and schema
+validation reject malformed or duplicate dependency declarations.
+
 The planner hashes the selected observation, requires the checked core-RC
 manifest to bind that exact path/digest, verifies identical bytes at the
 manifest source commit, and requires that source to be an ancestor of current

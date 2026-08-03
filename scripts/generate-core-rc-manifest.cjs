@@ -134,6 +134,21 @@ function validateBlockers(blockers) {
   return true;
 }
 
+function validateExternalDependencies(dependencies, manifest) {
+  assert.ok(Array.isArray(dependencies) && dependencies.length > 0, "external dependencies must not be empty");
+  const ids = new Set();
+  for (const dependency of dependencies) {
+    exactKeys(dependency, ["id", "status", "blocker_id"], `external dependency ${dependency.id || "unknown"}`);
+    assert.match(dependency.id, /^[a-z0-9]+(?:-[a-z0-9]+)*$/, "external dependency ID must be canonical lowercase kebab-case");
+    assert.equal(dependency.status, "unavailable", "prototype external dependency must remain unavailable");
+    assert.match(dependency.blocker_id, /^[a-z0-9]+(?:-[a-z0-9]+)*$/, "external dependency blocker ID must be canonical lowercase kebab-case");
+    assertBlocker(manifest, dependency.blocker_id, `external dependency ${dependency.id}`);
+    assert.equal(ids.has(dependency.id), false, `duplicate external dependency ID: ${dependency.id}`);
+    ids.add(dependency.id);
+  }
+  return true;
+}
+
 function assertBlocker(manifest, blockerId, label) {
   assert.equal(typeof blockerId, "string", `${label} must name a blocker`);
   assert.ok(blockerIds(manifest).has(blockerId), `${label} references missing blocker ${blockerId}`);
@@ -552,12 +567,7 @@ function validateManifest(manifest, options = {}) {
   linkedSections.forEach((section, index) => assertBlocker(manifest, section.blocker_id, `blocked section ${index}`));
   if (manifest.test_evidence.status === "complete") assert.equal(manifest.test_evidence.blocker_id, null, "complete test evidence cannot retain a blocker");
   else assertBlocker(manifest, manifest.test_evidence.blocker_id, "partial test evidence");
-  for (const dependency of manifest.external_dependencies) {
-    exactKeys(dependency, ["id", "status", "blocker_id"], `external dependency ${dependency.id || "unknown"}`);
-    assert.notEqual(dependency.status, "available");
-    assertBlocker(manifest, dependency.blocker_id, `external dependency ${dependency.id}`);
-  }
-  assertUniqueIds(manifest.external_dependencies, "external dependency");
+  validateExternalDependencies(manifest.external_dependencies, manifest);
   assert.deepEqual([...blockerIds(manifest)].sort(), referencedRootBlockerIds(manifest), "root blockers must exactly match manifest blocker references");
 
   const handoff = sourceJson(manifest.source.payload_sha, manifest.producer_checkpoints.ledger_path, cwd);
@@ -651,6 +661,6 @@ function main(argv = process.argv.slice(2)) {
   }
 }
 
-module.exports = { artifactSelections, assertUniqueIds, buildAiAssurance, buildArtifactGroup, buildTestEvidence, buildTooling, generateManifest, listSourceEntries, main, manifestRelativePath, parseArgs, pathsReferToSameFile, referencedRootBlockerIds, serialize, sourceArtifacts, sourceArtifactsFor, validateBlockers, validateManifest, validateRejectedCheckpoints };
+module.exports = { artifactSelections, assertUniqueIds, buildAiAssurance, buildArtifactGroup, buildTestEvidence, buildTooling, generateManifest, listSourceEntries, main, manifestRelativePath, parseArgs, pathsReferToSameFile, referencedRootBlockerIds, serialize, sourceArtifacts, sourceArtifactsFor, validateBlockers, validateExternalDependencies, validateManifest, validateRejectedCheckpoints };
 
 if (require.main === module) main();
