@@ -2,7 +2,7 @@
   "schema_version": "virtengine.prototype.integration-candidate-acceptance/v1",
   "status": "validated",
   "base_sha": "016c4145624deff9673c1c5cff3029277b1f41e0",
-  "candidate_sha": "324dbb3e1149a3ddb52a2553c4319f095b03d26f",
+  "candidate_sha": "7b61f33036645ed535e640db7a1147baace811a0",
   "accepted_payloads": [
     {
       "thread": "T1",
