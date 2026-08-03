@@ -31,9 +31,16 @@ function parseAcceptance(content) {
 
 function verifyAcceptedPayload(repo, entry, runGit = git) {
   try {
-    const objectType = runGit(repo, ["cat-file", "-t", entry.tag], true);
-    const tagContent = runGit(repo, ["cat-file", "-p", entry.tag], true);
-    const peeled = runGit(repo, ["rev-parse", `${entry.tag}^{commit}`], true);
+    const tagRef = `refs/tags/${entry.tag}`;
+    const remote = runGit(repo, ["ls-remote", "--exit-code", "--refs", "--tags", "origin", tagRef], true);
+    const local = runGit(repo, ["rev-parse", "--verify", tagRef], true);
+    const remoteFields = remote.stdout.trim().split(/\r?\n/).filter(Boolean).map((line) => line.split("\t"));
+    if (remote.status !== 0 || local.status !== 0 || remoteFields.length !== 1 || remoteFields[0].length !== 2
+      || !/^[a-f0-9]{40}$/.test(remoteFields[0][0]) || remoteFields[0][1] !== tagRef
+      || local.stdout.trim() !== remoteFields[0][0]) return false;
+    const objectType = runGit(repo, ["cat-file", "-t", tagRef], true);
+    const tagContent = runGit(repo, ["cat-file", "-p", tagRef], true);
+    const peeled = runGit(repo, ["rev-parse", "--verify", `${tagRef}^{commit}`], true);
     if (objectType.status !== 0 || objectType.stdout.trim() !== "tag" || tagContent.status !== 0 || peeled.status !== 0) return false;
     validateAnnotatedTagName(entry.tag, tagContent.stdout);
     const handoffTarget = peeled.stdout.trim();
