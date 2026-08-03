@@ -5,7 +5,7 @@
 const assert = require("assert").strict;
 const { spawnSync } = require("child_process");
 const { createHash } = require("crypto");
-const { readFileSync } = require("fs");
+const { existsSync, readFileSync } = require("fs");
 const { resolve } = require("path");
 const { validateSecurityGates } = require("./validate-ai-biometric-security-gates.cjs");
 const { validateProductionPolicy } = require("./validate-ai-production-policy.cjs");
@@ -19,6 +19,7 @@ const { validateTagObservation } = require("./observe-prototype-intake-tags.cjs"
 const { validateReportSchema: validatePublicationPreflightSchema } = require("./preflight-core-rc-publication.cjs");
 const { validateRequiredGateMatrix } = require("./validate-required-gate-matrix.cjs");
 const { validateSlurmChartInventory } = require("./validate-slurm-chart-inventory.cjs");
+const { currentEpoch, discoverEpochs } = require("./prototype-intake-epochs.cjs");
 
 const root = resolve(__dirname, "..");
 const controlPath = resolve(root, "_docs/ralph/prototype-integration/control.json");
@@ -27,8 +28,7 @@ const aiProductionPolicyPath = resolve(root, "_docs/ralph/prototype-integration/
 const coreRcManifestPath = resolve(root, "_docs/ralph/prototype-integration/core-rc-manifest.json");
 const coreRcSchemaPath = resolve(root, "_docs/ralph/prototype-integration/core-rc-manifest.schema.json");
 const schemaPath = resolve(root, "_docs/ralph/prototype-integration/producer-handoff.schema.json");
-const epochPath = resolve(root, "_docs/ralph/prototype-integration/epochs/epoch-1.json");
-const epochTagObservationPath = resolve(root, "_docs/ralph/prototype-integration/epochs/epoch-1-tag-observation.json");
+const epochDirectory = resolve(root, "_docs/ralph/prototype-integration/epochs");
 const fundRouteInventoryPath = resolve(root, "_docs/ralph/prototype-integration/fund-route-inventory.json");
 const generatedContractInventoryPath = resolve(root, "_docs/ralph/prototype-integration/generated-contract-inventory.json");
 const handoffPath = resolve(root, "_docs/ralph/handoffs/prototype-integration/HANDOFF.yaml");
@@ -86,9 +86,10 @@ function validateEpoch(epoch, handoff = null) {
   assert.deepEqual(Object.keys(epoch).sort(), expectedKeys);
   assert.equal(epoch.schema_version, "virtengine.prototype.intake-epoch/v2");
   assert.equal(epoch.campaign, "three-day-prototype");
-  assert.equal(epoch.intake_epoch, 1);
-  assert.equal(epoch.base_tag, "checkpoint/prototype-integration/epoch-1-base");
-  assert.equal(epoch.base_sha, "5587c384f634552c3a2dd7181ca49cafa4da1984");
+  assert.ok(Number.isInteger(epoch.intake_epoch) && epoch.intake_epoch > 0, "epoch number must be positive");
+  assert.equal(epoch.base_tag, `checkpoint/prototype-integration/epoch-${epoch.intake_epoch}-base`);
+  assert.match(epoch.base_sha, /^[a-f0-9]{40}$/);
+  if (epoch.intake_epoch === 1) assert.equal(epoch.base_sha, "5587c384f634552c3a2dd7181ca49cafa4da1984");
   assert.equal(epoch.planning_sha, "1436723bd78980aa0388dbe9fcfa24dda939c54a");
   assert.ok(["open", "frozen", "closed"].includes(epoch.status), "epoch status must be open, frozen, or closed");
   assert.ok(Number.isFinite(Date.parse(epoch.opens_at)), "epoch opens_at must be UTC date-time");
@@ -182,12 +183,15 @@ function validateIntegrationControl(control, schema, handoff, epoch) {
 module.exports = { producerHandoffDeclaresContract, validateContainedProducerCommits, validateEpoch, validateIntegrationControl };
 
 if (require.main === module) {
+  const epochEntry = currentEpoch(discoverEpochs(epochDirectory));
+  const epoch = epochEntry.document;
+  const epochTagObservationPath = resolve(epochDirectory, `epoch-${epoch.intake_epoch}-tag-observation.json`);
   const handoff = loadJson(handoffPath);
   const control = loadJson(controlPath);
-  const epoch = loadJson(epochPath);
   validateIntegrationControl(control, loadJson(schemaPath), handoff, epoch);
   validateContainedProducerCommits(discoverContainedProducerCommits(control, epoch), handoff.accepted_checkpoints, (ancestor, descendant) => spawnSync("git", ["merge-base", "--is-ancestor", ancestor, descendant], { cwd: root }).status === 0);
-  validateTagObservation(loadJson(epochTagObservationPath), epoch);
+  if (existsSync(epochTagObservationPath)) validateTagObservation(loadJson(epochTagObservationPath), epoch);
+  else assert.equal(epoch.status, "open", `current epoch ${epoch.intake_epoch} requires a tag observation once frozen or closed`);
   validateSecurityGates(loadJson(aiBiometricSecurityGatesPath), { rootDir: root });
   validateProductionPolicy(loadJson(aiProductionPolicyPath), { rootDir: root });
   validateCoreRcSchema(loadJson(coreRcSchemaPath));

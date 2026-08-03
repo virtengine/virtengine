@@ -167,6 +167,8 @@
       "path_selectors": ["docs/**", "_docs/**", "tests/e2e/**", "tests/integration/**", "scripts/*.cjs", "scripts/*.js", "scripts/*.md", "scripts/*.mjs", "scripts/*.ps1", "scripts/*.py", "scripts/*.sh", "scripts/*.sql", "scripts/*.ts", "scripts/bosun", "scripts/localnet.sh", "scripts/localnet.ps1"],
       "required_commands": [
         { "id": "docs-control", "kind": "policy", "command": "node scripts/validate-prototype-integration.cjs" },
+        { "id": "intake-epoch-lifecycle", "kind": "test", "command": "node scripts/prototype-intake-epochs.test.cjs" },
+        { "id": "intake-epoch-opening", "kind": "test", "command": "node scripts/open-prototype-intake-epoch.test.cjs" },
         { "id": "intake-tag-observer", "kind": "test", "command": "node scripts/observe-prototype-intake-tags.test.cjs" },
         { "id": "intake-freeze-planner", "kind": "test", "command": "node scripts/plan-prototype-intake-freeze.test.cjs" },
         { "id": "intake-freeze-application", "kind": "test", "command": "node scripts/apply-prototype-intake-freeze.test.cjs" },

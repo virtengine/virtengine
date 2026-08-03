@@ -13,6 +13,7 @@ const {
   buildTooling,
   listSourceEntries,
   sourceArtifacts,
+  sourceArtifactsFor,
 } = require("./generate-core-rc-manifest.cjs");
 const { validateSchema } = require("./validate-core-rc-manifest.cjs");
 
@@ -63,8 +64,10 @@ const tests = [
   ["binds the generated contract inventory as a control artifact", () => {
     assert.ok(sourceArtifacts.some(([id, path]) => id === "generated_contract_inventory" && path === "_docs/ralph/prototype-integration/generated-contract-inventory.json"));
   }],
-  ["binds the pre-cutoff intake tag observation as a control artifact", () => {
-    assert.ok(sourceArtifacts.some(([id, path]) => id === "intake_tag_observation" && path === "_docs/ralph/prototype-integration/epochs/epoch-1-tag-observation.json"));
+  ["binds the source current epoch and matching observation", () => {
+    const artifacts = sourceArtifactsFor(sourceSha, root);
+    assert.ok(artifacts.some(([id, path]) => id === "intake_epoch" && path === "_docs/ralph/prototype-integration/epochs/epoch-1.json"));
+    assert.equal(artifacts.some(([id]) => id === "intake_tag_observation"), false, "open historical source without an observation must not fabricate one");
   }],
   ["hashes every tracked canonical chart file", () => {
     const chartContract = artifactSelections.find((contract) => contract.id === "chart");

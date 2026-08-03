@@ -29,7 +29,6 @@ const sourceArtifacts = [
   ["ai_biometric_security_gates", "_docs/ralph/prototype-integration/ai-biometric-security-gates.json"],
   ["fund_route_inventory", "_docs/ralph/prototype-integration/fund-route-inventory.json"],
   ["generated_contract_inventory", "_docs/ralph/prototype-integration/generated-contract-inventory.json"],
-  ["intake_tag_observation", "_docs/ralph/prototype-integration/epochs/epoch-1-tag-observation.json"],
 ];
 
 const artifactSelections = [
@@ -144,6 +143,30 @@ function listSourceEntries(sourceSha, cwd = root) {
     .sort((left, right) => compareBytewise(left.path, right.path));
   sourceEntriesCache.set(key, entries);
   return entries;
+}
+
+function sourceArtifactsFor(sourceSha, cwd = root) {
+  const entries = listSourceEntries(sourceSha, cwd);
+  const epochs = entries
+    .map((entry) => ({ entry, match: entry.path.match(/^_docs\/ralph\/prototype-integration\/epochs\/epoch-([1-9][0-9]*)\.json$/) }))
+    .filter((item) => item.match)
+    .map((item) => ({ number: Number(item.match[1]), path: item.entry.path, document: sourceJson(sourceSha, item.entry.path, cwd) }))
+    .sort((left, right) => left.number - right.number);
+  assert.ok(epochs.length > 0, "manifest source must contain an intake epoch");
+  for (let index = 0; index < epochs.length; index += 1) {
+    assert.equal(epochs[index].number, index + 1, `manifest intake epoch sequence is not contiguous at epoch ${index + 1}`);
+    assert.equal(epochs[index].document.intake_epoch, index + 1, `manifest intake epoch body mismatch at epoch ${index + 1}`);
+    if (index < epochs.length - 1) assert.equal(epochs[index].document.status, "closed", `manifest predecessor epoch ${index + 1} must be closed`);
+  }
+  const current = epochs.at(-1);
+  const observationPath = `_docs/ralph/prototype-integration/epochs/epoch-${current.number}-tag-observation.json`;
+  const observationPresent = entries.some((entry) => entry.path === observationPath);
+  if (current.document.status !== "open") assert.equal(observationPresent, true, `manifest current epoch ${current.number} requires a tag observation`);
+  return [
+    ...sourceArtifacts,
+    ["intake_epoch", current.path],
+    ...(observationPresent ? [["intake_tag_observation", observationPath]] : []),
+  ];
 }
 
 function buildArtifactGroup(entries, contract) {
@@ -311,6 +334,7 @@ function generateManifest(sourceSha, options = {}) {
   const productionPolicy = sourceJson(sourceSha, sourceArtifacts[5][1], cwd);
   const featureParity = sourceJson(sourceSha, "pkg/inference/conformance/testdata/feature_parity_v1.json", cwd);
   const entries = listSourceEntries(sourceSha, cwd);
+  const controlArtifacts = sourceArtifactsFor(sourceSha, cwd);
   const tooling = buildTooling(options.toolingSha, sourceSha, cwd);
   const testEvidence = buildTestEvidence(sourceSha, handoff, handoffPath, cwd);
 
@@ -330,7 +354,7 @@ function generateManifest(sourceSha, options = {}) {
     tooling,
     toolchains: buildToolchains(gates),
     artifact_groups: artifactSelections.map((contract) => buildArtifactGroup(entries, contract)),
-    control_artifacts: sourceArtifacts.map(([id, path]) => {
+    control_artifacts: controlArtifacts.map(([id, path]) => {
       const document = sourceJson(sourceSha, path, cwd);
       return { id, path, sha256: sourceDigest(sourceSha, path, cwd), status: document.status || (document.passed ? "passed" : "blocked") };
     }),
@@ -431,7 +455,8 @@ function validateManifest(manifest, options = {}) {
     toolingIds.add(artifact.id);
   }
 
-  const gateMatrix = sourceJson(manifest.source.payload_sha, sourceArtifacts[1][1], cwd);
+  const controlArtifacts = sourceArtifactsFor(manifest.source.payload_sha, cwd);
+  const gateMatrix = sourceJson(manifest.source.payload_sha, controlArtifacts[1][1], cwd);
   assert.deepEqual(manifest.toolchains, buildToolchains(gateMatrix), "toolchain declarations do not match the source gate matrix");
   const repeat = new Set();
   for (const tool of manifest.toolchains) {
@@ -460,7 +485,7 @@ function validateManifest(manifest, options = {}) {
     else assert.match(group.sha256, digestPattern);
   }
 
-  assert.deepEqual(manifest.control_artifacts.map((artifact) => [artifact.id, artifact.path]), sourceArtifacts, "control artifact inventory mismatch");
+  assert.deepEqual(manifest.control_artifacts.map((artifact) => [artifact.id, artifact.path]), controlArtifacts, "control artifact inventory mismatch");
   for (const artifact of manifest.control_artifacts) {
     exactKeys(artifact, ["id", "path", "sha256", "status"], `control artifact ${artifact.id || "unknown"}`);
     assert.match(artifact.sha256, digestPattern);
@@ -567,6 +592,6 @@ function main(argv = process.argv.slice(2)) {
   }
 }
 
-module.exports = { artifactSelections, assertUniqueIds, buildAiAssurance, buildArtifactGroup, buildTestEvidence, buildTooling, generateManifest, listSourceEntries, main, manifestRelativePath, serialize, sourceArtifacts, validateManifest };
+module.exports = { artifactSelections, assertUniqueIds, buildAiAssurance, buildArtifactGroup, buildTestEvidence, buildTooling, generateManifest, listSourceEntries, main, manifestRelativePath, serialize, sourceArtifacts, sourceArtifactsFor, validateManifest };
 
 if (require.main === module) main();

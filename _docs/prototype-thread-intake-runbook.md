@@ -27,6 +27,32 @@ before treating it as terminal for closure. T4 accepts or rejects every frozen
 tag, records the decision, closes the epoch, then opens the next. A rejected payload is immutable;
 a correction receives a new checkpoint ID in a later epoch.
 
+Epoch files form one contiguous history and every predecessor must remain
+closed. Publish an annotated immutable base tag at the separately reviewed
+integration SHA before generating the next open epoch:
+
+```powershell
+$reviewedT4 = '<full published T4 SHA>'
+git tag -a checkpoint/prototype-integration/epoch-2-base `
+  -m "Prototype intake epoch 2 base" $reviewedT4
+git push origin refs/tags/checkpoint/prototype-integration/epoch-2-base
+node scripts/prototype-intake-epochs.test.cjs
+node scripts/open-prototype-intake-epoch.test.cjs
+node scripts/open-prototype-intake-epoch.cjs --epoch 2 `
+  --expected-head $reviewedT4 `
+  --opens-at '2026-08-03T00:30:00Z' `
+  --announcement-cutoff '2026-08-03T23:59:59Z' `
+  > _docs/ralph/prototype-integration/epochs/epoch-2.json
+```
+
+The opener writes only to stdout. It rejects a dirty worktree, a non-contiguous
+epoch number, a predecessor that is not closed, a local or remote integration
+SHA mismatch, a missing or lightweight base tag, or a base tag that does not
+peel to the reviewed SHA. Commit and publish the new epoch before producers
+synchronize to it. An open current epoch may omit a tag observation until one
+is captured and committed; frozen or closed epochs require their matching
+observation.
+
 A producer merges the epoch base into its branch before validation. It must not
 rebase or rewrite shared history.
 
