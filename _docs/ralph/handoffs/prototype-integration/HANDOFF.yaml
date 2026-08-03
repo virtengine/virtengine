@@ -1,32 +1,51 @@
 {
   "campaign": "three-day-prototype",
   "thread": "T4",
-  "checkpoint": "T4-01DT",
+  "checkpoint": "T4-01DU",
   "branch": "ve/prototype-integration",
-  "start_head": "f5ce70cc2d7d4d2f7aecc369c188eb56aae65b6b",
-  "end_head": "38ec2bc15d2e183fa30e76df36a92277b0738268",
+  "start_head": "ea7f6e3800f7c7c14734aba9d5bfdce11b3ea7ce",
+  "end_head": "f2ade57d974a97d9cedcc97f7b04615c437fe3a3",
   "origin_main": "79391a3df86d85522b92e0400c6904971ecbe65d",
   "tree_clean": true,
   "commits": [
-    "38ec2bc15d2e183fa30e76df36a92277b0738268"
+    "f2ade57d974a97d9cedcc97f7b04615c437fe3a3"
   ],
   "owned_paths": [
     "_docs/ralph/prototype-integration/**",
-    "_docs/ralph/handoffs/prototype-integration/**"
+    "_docs/ralph/handoffs/prototype-integration/**",
+    "_docs/audits/task-t4-01e-intake-freeze-planner-2026-08-02.md",
+    "scripts/validate-required-gate-matrix.cjs",
+    "scripts/validate-required-gate-matrix.test.cjs"
   ],
   "files_changed": [
-    "_docs/ralph/handoffs/prototype-integration/HANDOFF.yaml",
-    "_docs/ralph/prototype-integration/core-rc-manifest.json"
+    "_docs/audits/task-t4-01e-intake-freeze-planner-2026-08-02.md",
+    "_docs/ralph/prototype-integration/required-gate-plan.schema.json",
+    "scripts/validate-required-gate-matrix.cjs",
+    "scripts/validate-required-gate-matrix.test.cjs"
   ],
   "tests": [
     {
-      "command": "node scripts/validate-prototype-integration.test.cjs && node scripts/validate-prototype-integration.cjs",
+      "command": "node scripts/validate-required-gate-matrix.test.cjs && node scripts/validate-required-gate-matrix.cjs",
       "exit_code": 0,
       "result": "passed",
-      "test_count": 13,
+      "test_count": 36,
       "tool_versions": {
         "node": "20.19.1"
       }
+    },
+    {
+      "command": "node scripts/run-required-gates.test.cjs",
+      "exit_code": 0,
+      "result": "passed",
+      "test_count": 24,
+      "tool_versions": { "node": "20.19.1" }
+    },
+    {
+      "command": "node scripts/preflight-core-rc-publication.test.cjs",
+      "exit_code": 0,
+      "result": "passed",
+      "test_count": 26,
+      "tool_versions": { "node": "20.19.1" }
     },
     {
       "command": "node scripts/validate-agents-docs.mjs",
@@ -91,5 +110,5 @@
     "Task 88C is not complete."
   ],
   "next_checkpoint": null,
-  "expected_head": "38ec2bc15d2e183fa30e76df36a92277b0738268"
+  "expected_head": "f2ade57d974a97d9cedcc97f7b04615c437fe3a3"
 }
