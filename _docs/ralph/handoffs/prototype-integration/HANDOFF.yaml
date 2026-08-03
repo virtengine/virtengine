@@ -1,35 +1,29 @@
 {
   "campaign": "three-day-prototype",
   "thread": "T4",
-  "checkpoint": "T4-01ES",
+  "checkpoint": "T4-01ET",
   "branch": "ve/prototype-integration",
-  "start_head": "7b8ebaffa215729c5aba50b7e3aec261abfb83d9",
-  "end_head": "1a354ba910c6dbaddd8619145f2afa60809f43fa",
+  "start_head": "e824fd8d09c6ad769f039937515f9bc12104b5f9",
+  "end_head": "50ef3a8d649b0735a24a8a5624f972fd0d1f957b",
   "origin_main": "79391a3df86d85522b92e0400c6904971ecbe65d",
   "tree_clean": true,
   "commits": [
-    "1a354ba910c6dbaddd8619145f2afa60809f43fa"
+    "50ef3a8d649b0735a24a8a5624f972fd0d1f957b"
   ],
   "owned_paths": [
-    "_docs/audits/**",
-    "scripts/inspect-prototype-intake-freeze-lease.cjs",
-    "scripts/inspect-prototype-intake-freeze-lease.test.cjs",
-    "scripts/recover-prototype-intake-freeze-lease.cjs",
-    "scripts/recover-prototype-intake-freeze-lease.test.cjs"
+    "_docs/ralph/prototype-integration/**",
+    "_docs/ralph/handoffs/prototype-integration/**"
   ],
   "files_changed": [
-    "_docs/audits/task-t4-01e-intake-freeze-planner-2026-08-02.md",
-    "scripts/inspect-prototype-intake-freeze-lease.cjs",
-    "scripts/inspect-prototype-intake-freeze-lease.test.cjs",
-    "scripts/recover-prototype-intake-freeze-lease.cjs",
-    "scripts/recover-prototype-intake-freeze-lease.test.cjs"
+    "_docs/ralph/handoffs/prototype-integration/HANDOFF.yaml",
+    "_docs/ralph/prototype-integration/core-rc-manifest.json"
   ],
   "tests": [
     {
-      "command": "node scripts/inspect-prototype-intake-freeze-lease.test.cjs && node scripts/recover-prototype-intake-freeze-lease.test.cjs",
+      "command": "node scripts/validate-prototype-integration.test.cjs && node scripts/validate-prototype-integration.cjs",
       "exit_code": 0,
       "result": "passed",
-      "test_count": 19,
+      "test_count": 13,
       "tool_versions": {
         "node": "20.19.1"
       }
@@ -44,7 +38,9 @@
       }
     }
   ],
-  "generated_hashes": {},
+  "generated_hashes": {
+    "_docs/ralph/prototype-integration/core-rc-manifest.json": "1e6b5c9d27bbeb6f83f687f3131bf01197abf4d3d1713a6c812a7a3224755cb2"
+  },
   "accepted_checkpoints": [],
   "rejected_checkpoints": [
     {
@@ -95,5 +91,5 @@
     "Task 88C is not complete."
   ],
   "next_checkpoint": null,
-  "expected_head": "1a354ba910c6dbaddd8619145f2afa60809f43fa"
+  "expected_head": "50ef3a8d649b0735a24a8a5624f972fd0d1f957b"
 }
