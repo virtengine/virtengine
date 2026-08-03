@@ -181,6 +181,19 @@ function validateToolchains(toolchains) {
   return true;
 }
 
+function validateAssuranceDigests(entries, label) {
+  assert.ok(Array.isArray(entries) && entries.length > 0, `${label} must not be empty`);
+  const ids = new Set();
+  for (const entry of entries) {
+    assert.ok(typeof entry.id === "string" && entry.id.length > 0 && entry.id.trim() === entry.id, `${label} ID must be literal and nonempty`);
+    assert.equal(ids.has(entry.id), false, `duplicate ${label} ID: ${entry.id}`);
+    ids.add(entry.id);
+    if (Object.hasOwn(entry, "state")) assert.ok(typeof entry.state === "string" && entry.state.length > 0 && entry.state.trim() === entry.state, `${label} state must be literal and nonempty`);
+    if (Object.hasOwn(entry, "sha256") && entry.sha256 !== null) assert.match(entry.sha256, digestPattern, `${label} digest is invalid`);
+  }
+  return true;
+}
+
 function assertBlocker(manifest, blockerId, label) {
   assert.equal(typeof blockerId, "string", `${label} must name a blocker`);
   assert.ok(blockerIds(manifest).has(blockerId), `${label} references missing blocker ${blockerId}`);
@@ -609,6 +622,9 @@ function validateManifest(manifest, options = {}) {
   const productionPolicy = sourceJson(manifest.source.payload_sha, sourceArtifacts[5][1], cwd);
   const featureParity = sourceJson(manifest.source.payload_sha, "pkg/inference/conformance/testdata/feature_parity_v1.json", cwd);
   assert.deepEqual(manifest.ai_assurance, buildAiAssurance(modelProvenance, productionPolicy, featureParity), "AI assurance projection mismatch");
+  validateAssuranceDigests(manifest.ai_assurance.provenance_digests.models, "model provenance");
+  validateAssuranceDigests(manifest.ai_assurance.provenance_digests.licenses, "license provenance");
+  validateAssuranceDigests(manifest.ai_assurance.feature_vector.test_vector_hashes, "feature vector");
   const expectedEvidence = buildTestEvidence(manifest.source.payload_sha, handoff, manifest.test_evidence.ledger_path, cwd);
   assert.deepEqual(manifest.test_evidence, expectedEvidence, "test evidence binding mismatch");
   const expectedTestRecords = expectedEvidence.records;
@@ -681,6 +697,6 @@ function main(argv = process.argv.slice(2)) {
   }
 }
 
-module.exports = { artifactSelections, assertUniqueIds, buildAiAssurance, buildArtifactGroup, buildTestEvidence, buildTooling, generateManifest, listSourceEntries, main, manifestRelativePath, parseArgs, pathsReferToSameFile, referencedRootBlockerIds, serialize, sourceArtifacts, sourceArtifactsFor, validateBlockers, validateExternalDependencies, validateManifest, validateRejectedCheckpoints, validateToolchains, validateToolingArtifacts };
+module.exports = { artifactSelections, assertUniqueIds, buildAiAssurance, buildArtifactGroup, buildTestEvidence, buildTooling, generateManifest, listSourceEntries, main, manifestRelativePath, parseArgs, pathsReferToSameFile, referencedRootBlockerIds, serialize, sourceArtifacts, sourceArtifactsFor, validateAssuranceDigests, validateBlockers, validateExternalDependencies, validateManifest, validateRejectedCheckpoints, validateToolchains, validateToolingArtifacts };
 
 if (require.main === module) main();

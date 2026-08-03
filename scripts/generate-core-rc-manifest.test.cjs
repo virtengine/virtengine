@@ -17,6 +17,7 @@ const {
   referencedRootBlockerIds,
   sourceArtifacts,
   sourceArtifactsFor,
+  validateAssuranceDigests,
   validateBlockers,
   validateExternalDependencies,
   validateRejectedCheckpoints,
@@ -285,6 +286,13 @@ const tests = [
     assert.throws(() => validateToolchains([tool, clone(tool)]), /duplicate toolchain declaration/);
     for (const field of ["name", "version", "source"]) assert.throws(() => validateToolchains([{ ...tool, [field]: " padded " }]), new RegExp(`toolchain ${field}`));
     assert.throws(() => validateToolchains([{ ...tool, status: "available" }]), /status must be declared/);
+  }],
+  ["rejects malformed or duplicate assurance digest identities", () => {
+    const digest = { id: "fixture-a", state: "fixture_only", sha256: "a".repeat(64), source_blocker_id: null };
+    assert.equal(validateAssuranceDigests([digest], "model provenance"), true);
+    assert.throws(() => validateAssuranceDigests([digest, { ...digest, sha256: "b".repeat(64) }], "model provenance"), /duplicate model provenance ID/);
+    assert.throws(() => validateAssuranceDigests([{ ...digest, id: " padded " }], "model provenance"), /ID must be literal/);
+    assert.throws(() => validateAssuranceDigests([{ ...digest, state: " padded " }], "model provenance"), /state must be literal/);
   }],
 ];
 

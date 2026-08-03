@@ -164,11 +164,11 @@
     },
     "assuranceDigest": {
       "type": "object", "additionalProperties": false, "required": ["id", "state", "sha256", "source_blocker_id"],
-      "properties": { "id": { "type": "string", "minLength": 1 }, "state": { "type": "string", "minLength": 1 }, "sha256": { "$ref": "#/$defs/nullableDigest" }, "source_blocker_id": { "$ref": "#/$defs/nullableString" } }
+      "properties": { "id": { "type": "string", "pattern": "^\\S(?:.*\\S)?$" }, "state": { "type": "string", "pattern": "^\\S(?:.*\\S)?$" }, "sha256": { "$ref": "#/$defs/nullableDigest" }, "source_blocker_id": { "$ref": "#/$defs/nullableString" } }
     },
     "namedDigest": {
       "type": "object", "additionalProperties": false, "required": ["id", "sha256"],
-      "properties": { "id": { "type": "string", "minLength": 1 }, "sha256": { "$ref": "#/$defs/digest" } }
+      "properties": { "id": { "type": "string", "pattern": "^\\S(?:.*\\S)?$" }, "sha256": { "$ref": "#/$defs/digest" } }
     },
     "assuranceStatus": {
       "type": "object", "additionalProperties": false, "required": ["status", "report_sha256", "source_blocker_id"],
