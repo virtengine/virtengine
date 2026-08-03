@@ -1,14 +1,14 @@
 {
   "campaign": "three-day-prototype",
   "thread": "T4",
-    "checkpoint": "T4-01EF",
+    "checkpoint": "T4-01EG",
   "branch": "ve/prototype-integration",
-  "start_head": "e3363512c9f3e57d664f34b7e8220eabde63b1ec",
-  "end_head": "1e668788d2647beb9992fa9f7b0d8badf40a2d69",
+  "start_head": "1eaab4def1860747872b4cc915f0ffe5ce9e51dd",
+  "end_head": "f46d6fd9f01560284ad03276b0e5fab7f80fab90",
   "origin_main": "79391a3df86d85522b92e0400c6904971ecbe65d",
   "tree_clean": true,
   "commits": [
-    "1e668788d2647beb9992fa9f7b0d8badf40a2d69"
+    "f46d6fd9f01560284ad03276b0e5fab7f80fab90"
   ],
   "owned_paths": [
     "_docs/ralph/prototype-integration/**",
@@ -20,10 +20,10 @@
   ],
   "tests": [
     {
-        "command": "node scripts/validate-prototype-integration.test.cjs && node scripts/validate-prototype-integration.cjs",
+        "command": "node scripts/run-required-gates.test.cjs",
       "exit_code": 0,
       "result": "passed",
-        "test_count": 13,
+        "test_count": 29,
       "tool_versions": {
         "node": "20.19.1"
       }
@@ -91,5 +91,5 @@
     "Task 88C is not complete."
   ],
   "next_checkpoint": null,
-    "expected_head": "1e668788d2647beb9992fa9f7b0d8badf40a2d69"
+    "expected_head": "f46d6fd9f01560284ad03276b0e5fab7f80fab90"
 }
