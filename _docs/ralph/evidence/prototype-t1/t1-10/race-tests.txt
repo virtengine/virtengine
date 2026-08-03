@@ -1,3 +1,3 @@
 command: CGO_ENABLED=1 CC=winlibs-gcc go test -race -count=1 ./pkg/inference -run 'FeatureParity|FeatureSchema|ProductionFeature|FeatureExtractorRejects'
 exit_code: 0
-result: ok github.com/virtengine/virtengine/pkg/inference 5.389s
+result: ok github.com/virtengine/virtengine/pkg/inference 1.440s

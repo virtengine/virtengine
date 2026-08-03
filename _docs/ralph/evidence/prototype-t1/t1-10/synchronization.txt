@@ -1,0 +1,8 @@
+payload_head: 704654b86dc2ae6544d26738f6fb849f1b318454
+payload_tree: 68ca1ed2c6eac1c367c126b9139f11ff0971d694
+first_parent: 9d092aa55baf1686f46952b2f43158fd1dada246
+stable_parent: 576c3830f8d6e961e62f4c871fbca8b8720ca99e
+prior_t1_payload: 4f706ffd35ce6c38ed8de9bb90cad7cc574d7844
+schema_sha256: 010cf22b18a8df11da2f33ee84f80b602773449db7ed75db92e3c41a4385beff
+status: synchronized_and_green
+blocker: No intake epoch after closed epoch 2 announces checkpoint/prototype-t1/t1-10. The current intake validator also counts synchronized integration paths against producer owned_paths; T4 must exclude the frozen epoch base delta or otherwise grant the synchronization range before intake can validate.

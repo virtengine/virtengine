@@ -1,6 +1,6 @@
 command: python -m pytest ml/training/tests/test_feature_parity.py ml/training/tests/test_features.py -q
 exit_code: 0
-result: 30 passed in 0.29s
+result: 38 passed in 2.07s
 
 command: python -m ml.training.tools.feature_parity_fixture --check
 exit_code: 0
