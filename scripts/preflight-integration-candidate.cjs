@@ -88,6 +88,19 @@ function validateAcceptanceBoundary(boundary, options) {
   return true;
 }
 
+function resolvePublishedBranch(repo, branch, runGit = git) {
+  const branchRef = `refs/heads/${branch}`;
+  const trackingRef = `refs/remotes/origin/${branch}`;
+  const remote = runGit(repo, ["ls-remote", "--exit-code", "--heads", "origin", branchRef], true);
+  const local = runGit(repo, ["rev-parse", "--verify", `${trackingRef}^{commit}`], true);
+  const remoteFields = remote.stdout.trim().split(/\r?\n/).filter(Boolean).map((line) => line.split("\t"));
+  assert.ok(remote.status === 0 && local.status === 0 && remoteFields.length === 1 && remoteFields[0].length === 2
+    && /^[a-f0-9]{40}$/.test(remoteFields[0][0]) && remoteFields[0][1] === branchRef,
+  `registered producer ref is unavailable: ${branch}`);
+  assert.equal(local.stdout.trim(), remoteFields[0][0], `registered producer ref is stale: ${branch}`);
+  return remoteFields[0][0];
+}
+
 function buildCandidatePlan(repo, candidateRef, canonicalRef, acceptancePath, producerBranches, runGit = git) {
   const canonicalHead = runGit(repo, ["rev-parse", `${canonicalRef}^{commit}`]).stdout.trim();
   const candidateHead = runGit(repo, ["rev-parse", `${candidateRef}^{commit}`]).stdout.trim();
@@ -104,8 +117,9 @@ function buildCandidatePlan(repo, candidateRef, canonicalRef, acceptancePath, pr
   const base = runGit(repo, ["merge-base", canonicalHead, candidateHead]).stdout.trim();
   const contained = [];
   for (const [thread, branch] of producerBranches) {
-    const commits = runGit(repo, ["rev-list", "--reverse", `${base}..refs/remotes/origin/${branch}`], true);
-    if (commits.status !== 0) throw new Error(`registered producer ref is unavailable: ${branch}`);
+    const branchHead = resolvePublishedBranch(repo, branch, runGit);
+    const commits = runGit(repo, ["rev-list", "--reverse", `${base}..${branchHead}`], true);
+    if (commits.status !== 0) throw new Error(`cannot inspect registered producer ref: ${branch}`);
     for (const commit of commits.stdout.trim().split(/\r?\n/).filter(Boolean)) {
       if (runGit(repo, ["merge-base", "--is-ancestor", commit, candidateHead], true).status === 0) contained.push({ thread, commit });
     }
@@ -130,7 +144,7 @@ function main(argv) {
   process.stdout.write(`${JSON.stringify(plan, null, 2)}\n`);
 }
 
-module.exports = { buildCandidatePlan, parseAcceptance, validateAcceptanceBoundary, validateCandidatePlan, verifyAcceptedPayload };
+module.exports = { buildCandidatePlan, parseAcceptance, resolvePublishedBranch, validateAcceptanceBoundary, validateCandidatePlan, verifyAcceptedPayload };
 
 if (require.main === module) {
   try { main(process.argv.slice(2)); }

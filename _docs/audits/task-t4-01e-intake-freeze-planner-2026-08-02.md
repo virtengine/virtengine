@@ -31,7 +31,9 @@ acceptance commit must be the implementation's direct, single-parent child and
 change only the acceptance artifact. Accepted annotated tags must be exact tag
 objects published by `origin`; local-only or stale same-name tags are rejected.
 Those tags target committed handoffs that bind the declared payloads, and those
-payloads cover all contained producer history. The current `ve/prototype-integration-live` branch
+payloads cover all contained producer history. Containment scans require every
+local producer tracking ref to equal the current exact `origin` branch head, so
+stale refs cannot omit unaccepted commits. The current `ve/prototype-integration-live` branch
 fails because its acceptance summary is uncommitted and its base predates
 canonical T4; no promotion or merge is claimed.
 
