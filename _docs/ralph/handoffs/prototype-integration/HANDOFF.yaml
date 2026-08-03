@@ -1,29 +1,58 @@
 {
   "campaign": "three-day-prototype",
   "thread": "T4",
-  "checkpoint": "T4-01DF",
+  "checkpoint": "T4-01DG",
   "branch": "ve/prototype-integration",
-  "start_head": "ba99a7513bb92dff5c015b591142b14d786500d3",
-  "end_head": "49fb69d08be96c6f2f1b6fb0e71aa82bfb8024bc",
+  "start_head": "49ce061455a1efa7085271d736eaa29afa474532",
+  "end_head": "6fe6a8aa396427444f49612ee435a0cb437fd033",
   "origin_main": "79391a3df86d85522b92e0400c6904971ecbe65d",
   "tree_clean": true,
   "commits": [
-    "49fb69d08be96c6f2f1b6fb0e71aa82bfb8024bc"
+    "6fe6a8aa396427444f49612ee435a0cb437fd033"
   ],
   "owned_paths": [
     "_docs/ralph/prototype-integration/**",
-    "_docs/ralph/handoffs/prototype-integration/**"
+    "_docs/ralph/handoffs/prototype-integration/**",
+    "_docs/audits/task-t4-01e-intake-freeze-planner-2026-08-02.md",
+    "scripts/preflight-core-rc-publication.test.cjs",
+    "scripts/run-required-gates.cjs",
+    "scripts/run-required-gates.test.cjs",
+    "scripts/validate-required-gate-matrix.cjs",
+    "scripts/validate-required-gate-matrix.test.cjs"
   ],
   "files_changed": [
-    "_docs/ralph/handoffs/prototype-integration/HANDOFF.yaml",
-    "_docs/ralph/prototype-integration/core-rc-manifest.json"
+    "_docs/audits/task-t4-01e-intake-freeze-planner-2026-08-02.md",
+    "_docs/ralph/prototype-integration/required-gate-results.schema.json",
+    "scripts/preflight-core-rc-publication.test.cjs",
+    "scripts/run-required-gates.cjs",
+    "scripts/run-required-gates.test.cjs",
+    "scripts/validate-required-gate-matrix.cjs",
+    "scripts/validate-required-gate-matrix.test.cjs"
   ],
   "tests": [
     {
-      "command": "node scripts/validate-prototype-integration.test.cjs && node scripts/validate-prototype-integration.cjs",
+      "command": "node scripts/validate-required-gate-matrix.test.cjs && node scripts/validate-required-gate-matrix.cjs",
       "exit_code": 0,
       "result": "passed",
-      "test_count": 13,
+      "test_count": 27,
+      "tool_versions": {
+        "node": "20.19.1"
+      }
+    },
+    {
+      "command": "node scripts/run-required-gates.test.cjs",
+      "exit_code": 0,
+      "result": "passed",
+      "test_count": 24,
+      "tool_versions": {
+        "node": "20.19.1"
+      }
+    },
+    {
+      "command": "node scripts/preflight-core-rc-publication.test.cjs",
+      "exit_code": 0,
+      "result": "passed",
+      "test_count": 26,
       "tool_versions": {
         "node": "20.19.1"
       }
@@ -91,5 +120,5 @@
     "Task 88C is not complete."
   ],
   "next_checkpoint": null,
-  "expected_head": "49fb69d08be96c6f2f1b6fb0e71aa82bfb8024bc"
+  "expected_head": "6fe6a8aa396427444f49612ee435a0cb437fd033"
 }
