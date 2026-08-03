@@ -1,46 +1,52 @@
 {
   "campaign": "three-day-prototype",
   "thread": "T4",
-  "checkpoint": "T4-01CN",
+  "checkpoint": "STABLE-CANDIDATE-01",
   "branch": "ve/prototype-integration",
-  "start_head": "6f3eac6f407fbb890f7d67ae6a716ebae438d009",
-  "end_head": "53299d41cd13760f08bdefcb30c39af8eca2bec6",
+  "start_head": "f799e59b3713a77ff3c460413b4a5b80a2df98e2",
+  "end_head": "2db1e0b3a12b18442e7aff6a21e62ca11dea2a23",
   "origin_main": "79391a3df86d85522b92e0400c6904971ecbe65d",
   "tree_clean": true,
   "commits": [
-    "53299d41cd13760f08bdefcb30c39af8eca2bec6"
+    "2db1e0b3a12b18442e7aff6a21e62ca11dea2a23"
   ],
   "owned_paths": [
     "_docs/ralph/prototype-integration/**",
     "_docs/ralph/handoffs/prototype-integration/**"
   ],
   "files_changed": [
-    "_docs/ralph/handoffs/prototype-integration/HANDOFF.yaml",
-    "_docs/ralph/prototype-integration/core-rc-manifest.json"
+    "_docs/ralph/handoffs/prototype-integration/HANDOFF.yaml"
   ],
   "tests": [
     {
-      "command": "node scripts/validate-prototype-integration.test.cjs && node scripts/validate-prototype-integration.cjs",
+      "command": "node --test scripts/validate-t1-contracts.test.cjs scripts/validate-prototype-integration.test.cjs scripts/validate-required-gate-matrix.test.cjs scripts/validate-model-provenance.test.cjs scripts/validate-ai-production-policy.test.cjs scripts/validate-slurm-chart-inventory.test.cjs scripts/validate-localnet-integration-launchers.test.cjs",
       "exit_code": 0,
       "result": "passed",
-      "test_count": 13,
+      "test_count": 7,
       "tool_versions": {
         "node": "20.19.1"
       }
     },
     {
-      "command": "node scripts/validate-agents-docs.mjs",
+      "command": "go1.25.8 test -run '^$' -count=1 ./...",
       "exit_code": 0,
       "result": "passed",
-      "test_count": 9,
+      "test_count": 0,
       "tool_versions": {
-        "node": "20.19.1"
+        "go": "go1.25.8 windows/amd64"
+      }
+    },
+    {
+      "command": "go1.25.8 test -count=1 ./x/veid/types ./pkg/inference/... ./pkg/data_vault/... ./pkg/fundauth/... ./x/encryption/... ./x/mfa/... ./pkg/provider_daemon ./x/settlement/ibc",
+      "exit_code": 0,
+      "result": "passed",
+      "test_count": 0,
+      "tool_versions": {
+        "go": "go1.25.8 windows/amd64"
       }
     }
   ],
-  "generated_hashes": {
-    "_docs/ralph/prototype-integration/core-rc-manifest.json": "cec131dfd50c66f047845fd9154bf21f4d0ed826b3a8ea07f1d5f4d54d02c364"
-  },
+  "generated_hashes": {},
   "accepted_checkpoints": [
     {
       "thread": "T1",
@@ -120,5 +126,5 @@
     "Task 88C is not complete."
   ],
   "next_checkpoint": null,
-  "expected_head": "53299d41cd13760f08bdefcb30c39af8eca2bec6"
+  "expected_head": "2db1e0b3a12b18442e7aff6a21e62ca11dea2a23"
 }
