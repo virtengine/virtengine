@@ -114,21 +114,19 @@ func (h MFAGatingHooks) ValidateMFAProof(
 	}
 
 	// Verify device fingerprint matches if session is bound to a device
-	if session.DeviceFingerprint != "" && deviceFingerprint != "" {
-		if session.DeviceFingerprint != deviceFingerprint {
-			return types.ErrDeviceMismatch.Wrap("request from different device than session")
-		}
+	if session.DeviceFingerprint != "" && session.DeviceFingerprint != deviceFingerprint {
+		return types.ErrDeviceMismatch.Wrap("request from different device than session")
 	}
 
 	// Get the policy to verify factors are sufficient
-	policy, found, requiredCombinations := h.RequiresMFA(ctx, account, txType)
+	_, found, requiredCombinations := h.RequiresMFA(ctx, account, txType)
 	if !found && len(requiredCombinations) == 0 {
 		// No MFA required (shouldn't happen if we got here)
 		return nil
 	}
 
 	// Apply trusted device reduction if allowed
-	_, reducedFactors := h.CanBypassMFA(ctx, account, txType, deviceFingerprint)
+	_, reducedFactors := h.CanBypassMFA(ctx, account, txType, deviceFingerprint, proof.TrustToken)
 	if reducedFactors != nil {
 		requiredCombinations = []types.FactorCombination{*reducedFactors}
 	}
@@ -141,16 +139,16 @@ func (h MFAGatingHooks) ValidateMFAProof(
 
 	// Check VEID threshold if required
 	if hasVEIDFactor(requiredCombinations) {
-		threshold := uint32(50)
-		if policy != nil && policy.VEIDThreshold > 0 {
-			threshold = policy.VEIDThreshold
+		threshold := h.GetVEIDThreshold(ctx, account)
+		if config, found := h.keeper.GetSensitiveTxConfig(ctx, txType); found && config.MinVEIDScore > threshold {
+			threshold = config.MinVEIDScore
 		}
-
-		if h.keeper.veidKeeper != nil {
-			score, found := h.keeper.veidKeeper.GetVEIDScore(ctx, account)
-			if !found || score < threshold {
-				return types.ErrVEIDScoreInsufficient.Wrapf("VEID score %d below threshold %d", score, threshold)
-			}
+		if h.keeper.veidKeeper == nil {
+			return types.ErrVEIDScoreInsufficient.Wrap("VEID score keeper is unavailable")
+		}
+		score, found := h.keeper.veidKeeper.GetVEIDScore(ctx, account)
+		if !found || score < threshold {
+			return types.ErrVEIDScoreInsufficient.Wrapf("VEID score %d below threshold %d", score, threshold)
 		}
 	}
 
@@ -180,6 +178,7 @@ func (h MFAGatingHooks) CanBypassMFA(
 	account sdk.AccAddress,
 	txType types.SensitiveTransactionType,
 	deviceFingerprint string,
+	trustToken string,
 ) (bool, *types.FactorCombination) {
 	// Check if there's a sensitive tx config that allows trusted device bypass
 	config, found := h.keeper.GetSensitiveTxConfig(ctx, txType)
@@ -188,7 +187,7 @@ func (h MFAGatingHooks) CanBypassMFA(
 	}
 
 	// Check if device is trusted
-	if deviceFingerprint == "" || !h.keeper.IsTrustedDevice(ctx, account, deviceFingerprint) {
+	if deviceFingerprint == "" || trustToken == "" || !h.keeper.ValidateTrustToken(ctx, account, deviceFingerprint, trustToken) {
 		return false, nil
 	}
 
@@ -228,6 +227,7 @@ func (h MFAGatingHooks) CheckMFARequired(
 	account sdk.AccAddress,
 	msgTypeURL string,
 	deviceFingerprint string,
+	trustToken string,
 ) (bool, bool, []types.FactorCombination) {
 	// First check if this is a sensitive transaction
 	txType, isSensitive := h.GetSensitiveTransactionType(msgTypeURL)
@@ -242,7 +242,7 @@ func (h MFAGatingHooks) CheckMFARequired(
 	}
 
 	// Check if bypass is allowed
-	canBypass, reducedFactors := h.CanBypassMFA(ctx, account, txType, deviceFingerprint)
+	canBypass, reducedFactors := h.CanBypassMFA(ctx, account, txType, deviceFingerprint, trustToken)
 	if canBypass && reducedFactors == nil {
 		return true, true, nil
 	}
@@ -256,11 +256,12 @@ func (h MFAGatingHooks) CheckMFARequired(
 }
 
 func (h MFAGatingHooks) GetVEIDThreshold(ctx sdk.Context, account sdk.AccAddress) uint32 {
+	threshold := h.keeper.GetParams(ctx).MinVEIDScoreForMFA
 	policy, found := h.keeper.GetMFAPolicy(ctx, account)
-	if found && policy.Enabled && policy.VEIDThreshold > 0 {
-		return policy.VEIDThreshold
+	if found && policy.Enabled && policy.VEIDThreshold > threshold {
+		threshold = policy.VEIDThreshold
 	}
-	return h.keeper.GetParams(ctx).MinVEIDScoreForMFA
+	return threshold
 }
 
 func (h MFAGatingHooks) ShouldEnforceMFA(ctx sdk.Context, account sdk.AccAddress, veidScore uint32) bool {
@@ -346,6 +347,9 @@ func checkFactorCombinations(combinations []types.FactorCombination, verified []
 
 	// Check each combination (OR logic)
 	for _, combo := range combinations {
+		if combo.MinSecurityLevel > 0 && combo.GetSecurityLevel() < combo.MinSecurityLevel {
+			continue
+		}
 		allPresent := true
 		for _, requiredFactor := range combo.Factors {
 			if !verifiedSet[requiredFactor] {

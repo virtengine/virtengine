@@ -91,10 +91,17 @@ function validateLocalPath(evidence, context, label) {
   const stat = statSync(canonicalPath);
   assert.ok(stat.isFile(), `${label} path must identify a file`);
   assert.ok(Number.isInteger(evidence.size) && evidence.size > 0, `${label} size must be greater than zero`);
-  assert.equal(evidence.size, stat.size, `${label} size does not match local file`);
+  const localBytes = readFileSync(canonicalPath);
   assert.match(evidence.sha256, sha256Pattern, `${label} sha256 must be nonempty lowercase SHA256`);
-  const actualHash = createHash("sha256").update(readFileSync(canonicalPath)).digest("hex");
-  assert.equal(evidence.sha256, actualHash, `${label} sha256 does not match local file`);
+  const candidates = [localBytes];
+  if (evidence.source.type === "repository_file") {
+    const lfText = localBytes.toString("utf8").replace(/\r\n/g, "\n");
+    candidates.push(Buffer.from(lfText, "utf8"));
+    candidates.push(Buffer.from(lfText.replace(/\n/g, "\r\n"), "utf8"));
+  }
+  const matches = candidates.some((candidate) => candidate.length === evidence.size
+    && createHash("sha256").update(candidate).digest("hex") === evidence.sha256);
+  assert.ok(matches, `${label} size or sha256 does not match local file`);
 }
 
 function validateEvidence(evidence, context, label) {

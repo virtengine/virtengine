@@ -121,6 +121,8 @@ export {
   WalletSessionManager,
   walletSessionManager,
   createSessionManager,
+  WALLET_TRANSACTION_SIGNING_SCOPE,
+  WALLET_ARBITRARY_SIGNING_SCOPE,
   // Wallet detection
   WalletDetector,
   walletDetector,
@@ -141,6 +143,12 @@ export {
 export type {
   WalletSession,
   SessionConfig as WalletSessionConfig,
+  MfaAuthorization,
+  WalletAuthorizationBinding,
+  WalletAuthorizationContext,
+  WalletSigningOperation,
+  WalletSigningAuthorizationRequest,
+  WalletSigningAuthorizationAuthority,
   WalletDetectionResult,
   GasTier,
   GasSettings,
@@ -155,6 +163,12 @@ export type {
 // ============================================================================
 
 export * from "./src/chain";
+
+// ============================================================================
+// Isolated Support AI (T2-16)
+// ============================================================================
+
+export * from "./src/support-ai";
 
 // ============================================================================
 // Identity / VEID (VE-701)
@@ -182,6 +196,21 @@ export { IdentityScoreDisplay } from "./components/identity/IdentityScoreDisplay
 export { ScopeRequirements } from "./components/identity/ScopeRequirements";
 export { UploadHistory } from "./components/identity/UploadHistory";
 export { RemediationGuide } from "./components/identity/RemediationGuide";
+export { UniquenessEnrollmentStatus } from "./components/identity/UniquenessEnrollmentStatus";
+export type { UniquenessEnrollmentStatusProps } from "./components/identity/UniquenessEnrollmentStatus";
+export {
+  createUniquenessEnrollmentAdapter,
+  UniquenessTransitionError,
+} from "./src/identity/uniqueness-enrollment";
+export type {
+  UniquenessEnrollmentAdapter,
+  UniquenessEnrollmentAdapterOptions,
+  UniquenessEnrollmentState,
+  UniquenessEnrollmentStatus as UniquenessEnrollmentStatusValue,
+  UniquenessReceiptProjector,
+  UniquenessStatusProjection,
+  UniquenessTransitionErrorCode,
+} from "./src/identity/uniqueness-enrollment";
 
 // ============================================================================
 // MFA (VE-702)
@@ -235,6 +264,15 @@ export { OfferingList } from "./components/marketplace/OfferingList";
 export { OfferingCard } from "./components/marketplace/OfferingCard";
 export { OfferingDetail } from "./components/marketplace/OfferingDetail";
 export { CheckoutFlow } from "./components/marketplace/CheckoutFlow";
+export type { CheckoutFlowProps } from "./components/marketplace/CheckoutFlow";
+export type {
+  CheckoutCommittedResult,
+  CheckoutMutationAdapter,
+  CheckoutMutationContext,
+  CheckoutMutationProjector,
+  CheckoutMutationRequest,
+  CheckoutMutationSubmission,
+} from "./components/marketplace/checkout-mutation";
 export { OrderDetail } from "./components/marketplace/OrderDetail";
 export { OrderTimeline } from "./components/marketplace/OrderTimeline";
 
@@ -372,6 +410,12 @@ export {
   ProviderAPIError,
   LogStream,
   ShellConnection,
+  providerDeploymentActions,
+  ProviderDeploymentActionError,
+  validateProviderDeploymentActionReceipt,
+  ProviderShellSessionError,
+  buildProviderShellWebSocketUrl,
+  validateProviderShellSessionReceipt,
 } from "./src/provider-api";
 export type {
   ProviderAPIClientOptions,
@@ -386,8 +430,21 @@ export type {
   ServiceStatus,
   DeploymentListResponse,
   DeploymentAction,
-  ShellSessionResponse,
   ProviderAPIErrorDetails,
+  ProviderDeploymentAction,
+  ProviderDeploymentActionStatus,
+  ProviderDeploymentActionTxEvidence,
+  ProviderDeploymentActionReceipt,
+  ProviderDeploymentActionCapability,
+  ProviderDeploymentActionErrorCode,
+  ProviderDeploymentTxEvidenceValidator,
+  ProviderDeploymentActionValidationContext,
+  ProviderDeploymentActionReceiptValidator,
+  ProviderShellSessionErrorCode,
+  ProviderShellSessionCapability,
+  ProviderShellSessionReceipt,
+  ShellEligibilityProjection,
+  ShellSessionValidationContext,
 } from "./src/provider-api";
 
 export { signRequest } from "./src/auth/wallet-sign";
@@ -460,6 +517,25 @@ export type { DeploymentWithProviderState } from "./src/hooks/useDeploymentWithP
 // ============================================================================
 
 export { useHPC, HPCProvider } from "./hooks/useHPC";
+export {
+  HPCClientUnavailableError,
+  HPCMutationNotCommittedError,
+  assertCommittedJobMutation,
+  requireHPCSigner,
+} from "./components/hpc/hpc-mutation";
+export {
+  HPCOutputValidationError,
+  requireHPCOutputAdapter,
+  validateHPCOutputReferences,
+  validateResolvedHPCOutput,
+} from "./components/hpc/hpc-output";
+export type { HPCOutputAdapter } from "./components/hpc/hpc-output";
+export type {
+  CommittedJobMutation,
+  HPCClientCapability,
+  HPCSignerAdapter,
+  SubmitJobParams,
+} from "./components/hpc/hpc-mutation";
 export type {
   HPCState,
   WorkloadTemplate,

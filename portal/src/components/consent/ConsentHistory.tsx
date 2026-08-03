@@ -12,7 +12,8 @@ import {
   TableRow,
 } from '@/components/ui/Table';
 import { Badge } from '@/components/ui/Badge';
-import type { ConsentEvent, ConsentSettingsResponse } from '@/types/consent';
+import { normalizeConsentEvent, type ConsentEvent } from '@/types/consent';
+import { blockLink, txLink } from '@/lib/explorer';
 import { useTranslation } from 'react-i18next';
 
 const EVENT_LABELS: Record<string, string> = {
@@ -34,7 +35,19 @@ export function ConsentHistory() {
   useEffect(() => {
     fetch(`/api/consent/${address}`)
       .then((res) => res.json())
-      .then((data: ConsentSettingsResponse) => setEvents(data.history))
+      .then((data: unknown) => {
+        const history =
+          typeof data === 'object' &&
+          data !== null &&
+          Array.isArray((data as { history?: unknown }).history)
+            ? (data as { history: unknown[] }).history
+            : [];
+        setEvents(
+          history
+            .map(normalizeConsentEvent)
+            .filter((event): event is ConsentEvent => event !== null)
+        );
+      })
       .catch(() => {})
       .finally(() => setLoading(false));
   }, [address]);
@@ -59,7 +72,7 @@ export function ConsentHistory() {
                 <TableHead>Event</TableHead>
                 <TableHead>Scope</TableHead>
                 <TableHead>When</TableHead>
-                <TableHead>Block</TableHead>
+                <TableHead>Provenance</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -78,7 +91,41 @@ export function ConsentHistory() {
                     {new Date(event.occurredAt).toLocaleString()}
                   </TableCell>
                   <TableCell className="text-sm text-muted-foreground">
-                    {event.blockHeight}
+                    {event.source === 'chain' ? (
+                      <div className="flex flex-col gap-1">
+                        <Badge variant="secondary" className="w-fit">
+                          Validated chain
+                        </Badge>
+                        <span className="text-xs">{event.chain.chainId}</span>
+                        <div className="flex gap-3">
+                          <a
+                            href={blockLink(event.chain.blockHeight)}
+                            className="underline underline-offset-2"
+                            target="_blank"
+                            rel="noreferrer"
+                            aria-label={`View block ${event.chain.blockHeight} in explorer`}
+                          >
+                            Block {event.chain.blockHeight}
+                          </a>
+                          <a
+                            href={txLink(event.chain.txHash)}
+                            className="underline underline-offset-2"
+                            target="_blank"
+                            rel="noreferrer"
+                            aria-label="View consent transaction in explorer"
+                          >
+                            Transaction
+                          </a>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="flex flex-col gap-1">
+                        <Badge variant="outline" className="w-fit">
+                          Local record
+                        </Badge>
+                        <span className="text-xs">Not verified on chain</span>
+                      </div>
+                    )}
                   </TableCell>
                 </TableRow>
               ))}

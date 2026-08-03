@@ -1,6 +1,7 @@
-{{- if .Values.compute.enabled }}
 {{- $root := . }}
+{{- $_ := include "slurm-cluster.compute.capacity" . }}
 {{- range $pool := .Values.nodePools }}
+{{- if eq (include "slurm-cluster.nodePool.enabled" (list $root $pool)) "true" }}
 {{- $serviceName := include "slurm-cluster.nodePool.serviceName" (list $root $pool) }}
 apiVersion: apps/v1
 kind: StatefulSet
@@ -13,7 +14,7 @@ metadata:
     virtengine.com/node-pool: {{ $pool.name | quote }}
 spec:
   serviceName: {{ $serviceName }}
-  replicas: {{ $pool.replicas | default 0 }}
+  replicas: {{ $pool.replicas }}
   podManagementPolicy: Parallel
   selector:
     matchLabels:
@@ -41,6 +42,8 @@ spec:
       imagePullSecrets:
         {{- toYaml . | nindent 8 }}
       {{- end }}
+      securityContext:
+        {{- include "slurm-cluster.podSecurityContext" (list $root) | nindent 8 }}
       initContainers:
         - name: init-munge
           image: {{ include "slurm-cluster.munge.image" $root }}
@@ -51,7 +54,6 @@ spec:
             - |
               cp /munge-key/{{ $root.Values.munge.secretKeyName }} /etc/munge/munge.key
               chmod 400 /etc/munge/munge.key
-              chown munge:munge /etc/munge/munge.key
           volumeMounts:
             - name: munge-key
               mountPath: /munge-key
@@ -59,10 +61,10 @@ spec:
             - name: munge-socket
               mountPath: /etc/munge
           securityContext:
-            runAsUser: 0
-            runAsNonRoot: false
+            {{- include "slurm-cluster.containerSecurityContext" (list $root "munge") | nindent 12 }}
         - name: wait-for-controller
-          image: busybox:1.36
+          image: {{ include "slurm-cluster.utility.image" $root }}
+          imagePullPolicy: {{ $root.Values.utilityImage.pullPolicy }}
           command:
             - /bin/sh
             - -c
@@ -72,6 +74,8 @@ spec:
                 sleep 5
               done
               echo "slurmctld is ready"
+          securityContext:
+            {{- include "slurm-cluster.containerSecurityContext" (list $root "utility") | nindent 12 }}
       containers:
         - name: munge
           image: {{ include "slurm-cluster.munge.image" $root }}
@@ -89,8 +93,7 @@ spec:
           resources:
             {{- toYaml $root.Values.munge.resources | nindent 12 }}
           securityContext:
-            runAsUser: 0
-            runAsNonRoot: false
+            {{- include "slurm-cluster.containerSecurityContext" (list $root "munge") | nindent 12 }}
         - name: slurmd
           image: {{ include "slurm-cluster.compute.image" $root }}
           imagePullPolicy: {{ $root.Values.compute.image.pullPolicy }}
@@ -172,9 +175,7 @@ spec:
               {{- end }}
             {{- end }}
           securityContext:
-            runAsUser: 0
-            runAsNonRoot: false
-            privileged: true
+            {{- include "slurm-cluster.containerSecurityContext" (list $root "compute") | nindent 12 }}
           env:
             - name: SLURM_CONF
               value: /etc/slurm/slurm.conf
@@ -204,6 +205,8 @@ spec:
             {{- end }}
           resources:
             {{- toYaml $root.Values.nodeAgent.resources | nindent 12 }}
+          securityContext:
+            {{- include "slurm-cluster.containerSecurityContext" (list $root "nodeAgent") | nindent 12 }}
           env:
             - name: NODE_ID
               valueFrom:
@@ -217,7 +220,7 @@ spec:
       volumes:
         - name: slurm-config
           configMap:
-            name: {{ include "slurm-cluster.fullname" $root }}-config
+            name: {{ include "slurm-cluster.resourceName" (list $root "config" 0) }}
             defaultMode: 0644
         - name: munge-key
           secret:
@@ -235,11 +238,18 @@ spec:
         {{- if $root.Values.nodeAgent.enabled }}
         - name: node-agent-config
           configMap:
-            name: {{ include "slurm-cluster.fullname" $root }}-node-agent
+            name: {{ include "slurm-cluster.resourceName" (list $root "node-agent" 0) }}
         {{- if $root.Values.nodeAgent.tls.enabled }}
         - name: node-agent-tls
           secret:
-            secretName: {{ $root.Values.nodeAgent.tls.existingSecret | default (printf "%s-node-agent-tls" (include "slurm-cluster.fullname" $root)) }}
+            secretName: {{ required "nodeAgent.tls.existingSecret is required when nodeAgent TLS is enabled" $root.Values.nodeAgent.tls.existingSecret }}
+            items:
+              - key: {{ required "nodeAgent.tls.caCertKey is required when nodeAgent TLS is enabled" $root.Values.nodeAgent.tls.caCertKey }}
+                path: ca.crt
+              - key: {{ required "nodeAgent.tls.clientCertKey is required when nodeAgent TLS is enabled" $root.Values.nodeAgent.tls.clientCertKey }}
+                path: client.crt
+              - key: {{ required "nodeAgent.tls.clientKeyKey is required when nodeAgent TLS is enabled" $root.Values.nodeAgent.tls.clientKeyKey }}
+                path: client.key
         {{- end }}
         {{- end }}
         {{- with $root.Values.extraVolumes }}

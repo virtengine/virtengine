@@ -1,0 +1,28 @@
+{
+  "schema_version": "virtengine.prototype.integration-candidate-acceptance/v1",
+  "status": "validated",
+  "base_sha": "016c4145624deff9673c1c5cff3029277b1f41e0",
+  "candidate_sha": "7b61f33036645ed535e640db7a1147baace811a0",
+  "accepted_payloads": [
+    {
+      "thread": "T1",
+      "tag": "checkpoint/prototype-t1/t1-09",
+      "payload_sha": "8a373fce29ad90c23eeb6773fe49c5f915335860"
+    },
+    {
+      "thread": "T2",
+      "tag": "checkpoint/prototype-t2/t2-13a",
+      "payload_sha": "9e717ff769b03dcb3830877d541b223d8d7154bf"
+    },
+    {
+      "thread": "T3",
+      "tag": "checkpoint/prototype-t3/t3-x08",
+      "payload_sha": "ea5eaba07c0cb93e78d4945144dcb02138122220"
+    },
+    {
+      "thread": "T5",
+      "tag": "checkpoint/prototype-t5/t5-39",
+      "payload_sha": "5bc107d384d816b5d7da0aed29fad25c1e972f30"
+    }
+  ]
+}

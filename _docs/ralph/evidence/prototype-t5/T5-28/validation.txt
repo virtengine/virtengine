@@ -1,0 +1,61 @@
+T5-28 disabled federation service boundary validation
+Payload: 269e64845a0287f590bdd3bcae46e03d512892f7
+Branch: ve/prototype-t5-platform
+Platform: windows/amd64
+Toolchains: go version go1.25.8 windows/amd64; gcc.exe (MinGW-W64 x86_64-ucrt-posix-seh, built by Brecht Sanders, r3) 16.1.0; git version 2.51.2.windows.1
+
+Epoch ancestry:
+- Frozen baseline: 79391a3df86d85522b92e0400c6904971ecbe65d
+- Planning SHA: 1436723bd78980aa0388dbe9fcfa24dda939c54a
+- Intake epoch: 1
+- Intake base: 5587c384f634552c3a2dd7181ca49cafa4da1984
+- Prior accepted payload: null
+- Payload head: 269e64845a0287f590bdd3bcae46e03d512892f7
+- Next checkpoint: null
+- Payload descends from the intake base.
+- git rev-list --count reports exactly 54 commits from the intake base to the payload.
+- Complete all-parent changed-path accounting remains exactly 146 paths, including integration-history parent diffs.
+- Honest T5 ownership covers 122 of 146 complete changed paths and leaves exactly 24 inherited integration/T4 paths uncovered.
+
+Disabled federation service boundary:
+- Disabled service records remain structurally valid for lifecycle representation.
+- Signed discovery verification rejects disabled service records.
+- Route authorization requires StateFixtureOnly and exact provider, service, revision, discovery digest, and active key epoch bindings.
+- Request signing key epoch must equal the service record active key epoch, including while a retired key remains time-valid in an overlapping discovery window.
+- Atomic request consumption rejects disabled records before nonce storage or protected mutation.
+- Federation remains fixture-only with no live route integration or production activation claim.
+
+Command: C:\Users\pavil\AppData\Local\VirtEngine\toolchains\go1.25.8\go\bin\go.exe -C C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t5 test -count=1 ./pkg/provider_daemon/federation
+Output: ok github.com/virtengine/virtengine/pkg/provider_daemon/federation 1.432s
+Exit code: 0
+
+Command: C:\Users\pavil\AppData\Local\VirtEngine\toolchains\go1.25.8\go\bin\go.exe -C C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t5 vet ./pkg/provider_daemon/federation
+Output: no diagnostics
+Exit code: 0
+
+Process environment:
+- CGO_ENABLED=1
+- CC=gcc from C:\Users\pavil\AppData\Local\Microsoft\WinGet\Packages\BrechtSanders.WinLibs.POSIX.UCRT_Microsoft.Winget.Source_8wekyb3d8bbwe\mingw64\bin
+Command: C:\Users\pavil\AppData\Local\VirtEngine\toolchains\go1.25.8\go\bin\go.exe test -race -count=1 ./pkg/provider_daemon/federation
+Output: passed; no race detector diagnostics
+Exit code: 0
+
+Adversarial review:
+- Initial review found direct request authorization accepted cached discovery without current service state; ServiceRecord was added to RoutePolicy.Authorize and VerifyAndConsume.
+- Final review found an overlapping-old-key bypass; binding.SigningKeyEpoch is now pinned to record.ActiveKeyEpoch with a regression test.
+- Re-review reported no blocker or high-severity findings.
+
+Ownership and blockers:
+- Honest T5 owned_paths claim only T5 evidence/handoff paths and T5-owned data-vault, fundauth, organization-contract, platform-security, provider-daemon contract, encryption, MFA, privileged-role, and VEID surfaces.
+- The 24 inherited integration/T4 paths have no active T5 generated-file lease, so this checkpoint remains untagged and not intake eligible.
+- T4 must register the prerequisite VEID evidence reference migration and then separately register the signed evidence payload cutover using D4 children 05 through 08.
+- T4 must mount and wire the persistent FundAuthorization store and keeper.
+- Production erasure remains external: it requires durable transactional erasure storage, production storage-deletion and KMS-destruction adapters, independent receipt signers and key resolver, consent, hold, backup, and finalization authorities, and authenticated restore-manifest authority.
+- generated_hashes is {} because T5-28 changes no generated artifact.
+- migrations is [] because T4 registration is absent.
+
+Validation:
+- Strict schema-v2 JSON parse and integration-control validation: passed.
+- Epoch range validation: 54 exact commits and 146 exact complete changed paths from 5587c384f634552c3a2dd7181ca49cafa4da1984 through 269e64845a0287f590bdd3bcae46e03d512892f7.
+- Ownership validation: 122 covered paths and 24 uncovered inherited integration/T4 paths.
+- git diff --check for T5-28 evidence and handoff: passed with no errors.

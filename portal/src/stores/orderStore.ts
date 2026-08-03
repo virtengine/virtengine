@@ -6,6 +6,7 @@ import {
   coerceString,
   toDate,
   signAndBroadcastAmino,
+  type SignedTxResult,
   type WalletSigner,
 } from '@/lib/api/chain';
 
@@ -57,7 +58,11 @@ export interface OrderActions {
   selectOrder: (orderId: string | null) => void;
   updateOrderStatus: (orderId: string, status: OrderStatus) => void;
   setFilter: (filters: Partial<OrderState['filters']>) => void;
-  createOrder: (payload: CreateOrderPayload, wallet: WalletSigner) => Promise<string>;
+  createOrder: (
+    payload: CreateOrderPayload,
+    wallet: WalletSigner,
+    projector?: OrderResultProjector
+  ) => Promise<CreateOrderResult>;
   closeOrder: (orderId: string, owner: string, wallet: WalletSigner) => Promise<void>;
 }
 
@@ -72,6 +77,27 @@ export interface CreateOrderPayload {
     quantity: number;
   }>;
   deposit: { denom: string; amount: string };
+}
+
+export interface CreateOrderResult extends SignedTxResult {
+  orderId: string;
+}
+
+export interface OrderResultProjection {
+  orderId: string;
+  txHash: string;
+  blockHeight: number;
+}
+
+export type OrderResultProjector = (result: SignedTxResult) => OrderResultProjection | null;
+
+export class OrderFeatureUnavailableError extends Error {
+  readonly code = 'feature_unavailable';
+
+  constructor(message = 'The committed transaction did not expose an authoritative order ID') {
+    super(message);
+    this.name = 'OrderFeatureUnavailableError';
+  }
 }
 
 const ORDER_ENDPOINTS = ['/virtengine/market/v1beta5/orders', '/virtengine/market/v1/orders'];
@@ -118,6 +144,68 @@ const parseProviderName = (raw: Record<string, unknown>, fallback: string) => {
   const info = raw.info as Record<string, unknown> | undefined;
   const name = info ? coerceString(info.name, '') : '';
   return name || fallback;
+};
+
+const parseEventAttributes = (event: Record<string, unknown>): Map<string, string> => {
+  const attributes = new Map<string, string>();
+  if (!Array.isArray(event.attributes)) return attributes;
+  for (const attribute of event.attributes) {
+    if (!attribute || typeof attribute !== 'object') continue;
+    const record = attribute as Record<string, unknown>;
+    const key = coerceString(record.key, '').trim();
+    const value = coerceString(record.value, '').trim();
+    if (key && value) attributes.set(key, value);
+  }
+  return attributes;
+};
+
+const eventOrderId = (event: Record<string, unknown>): string => {
+  const type = coerceString(event.type, '').toLowerCase();
+  const attributes = parseEventAttributes(event);
+  const marketplaceType = attributes.get('event_type')?.toLowerCase();
+  const isOrderCreated =
+    type.includes('ordercreated') ||
+    type.includes('order_created') ||
+    (type === 'marketplace_event' && marketplaceType === 'order_created');
+  if (!isOrderCreated) return '';
+
+  const direct = attributes.get('order_id') ?? attributes.get('orderId');
+  if (direct) return direct;
+
+  const payloadJson = attributes.get('payload_json');
+  if (payloadJson) {
+    try {
+      const payload = JSON.parse(payloadJson) as Record<string, unknown>;
+      const projected = coerceString(payload.order_id ?? payload.orderId, '').trim();
+      if (projected) return projected;
+    } catch {
+      return '';
+    }
+  }
+  return '';
+};
+
+export const projectOrderFromCommittedTx: OrderResultProjector = (result) => {
+  const eventGroups: unknown[] = [result.txResponse.events];
+  if (Array.isArray(result.txResponse.logs)) {
+    for (const log of result.txResponse.logs) {
+      if (log && typeof log === 'object') {
+        eventGroups.push((log as Record<string, unknown>).events);
+      }
+    }
+  }
+
+  for (const group of eventGroups) {
+    if (!Array.isArray(group)) continue;
+    for (const event of group) {
+      if (!event || typeof event !== 'object') continue;
+      const orderId = eventOrderId(event as Record<string, unknown>);
+      if (orderId) {
+        return { orderId, txHash: result.txHash, blockHeight: result.blockHeight };
+      }
+    }
+  }
+  return null;
 };
 
 export const useOrderStore = create<OrderStore>()((set, get) => ({
@@ -217,13 +305,27 @@ export const useOrderStore = create<OrderStore>()((set, get) => ({
     }));
   },
 
-  createOrder: async (payload: CreateOrderPayload, wallet: WalletSigner) => {
+  createOrder: async (
+    payload: CreateOrderPayload,
+    wallet: WalletSigner,
+    projector = projectOrderFromCommittedTx
+  ) => {
     const msg = {
       typeUrl: '/virtengine.market.v1beta5.MsgCreateOrder',
       value: payload,
     };
     const result = await signAndBroadcastAmino(wallet, [msg], 'Create order');
-    return result.txHash;
+    const projection = projector(result);
+    if (
+      !projection ||
+      typeof projection.orderId !== 'string' ||
+      !projection.orderId.trim() ||
+      projection.txHash !== result.txHash ||
+      projection.blockHeight !== result.blockHeight
+    ) {
+      throw new OrderFeatureUnavailableError();
+    }
+    return { ...result, orderId: projection.orderId.trim() };
   },
 
   closeOrder: async (orderId: string, owner: string, wallet: WalletSigner) => {

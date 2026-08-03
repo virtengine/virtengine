@@ -1,72 +1,91 @@
 {
   "campaign": "three-day-prototype",
   "thread": "T4",
-  "checkpoint": "T4-10C",
+  "checkpoint": "STABLE-CANDIDATE-03",
   "branch": "ve/prototype-integration",
-  "start_head": "fa21b1e540a5efcbe1822da4199be7acec7709d3",
-  "end_head": "c23ec6e2909ea144263aa7344a80f14ed98fd433",
+  "start_head": "53d9249b70885b20c0ff15c807ac1d1c15bcdb6f",
+  "end_head": "2209c7c633d3450bdf929638e08d231793f06614",
   "origin_main": "79391a3df86d85522b92e0400c6904971ecbe65d",
   "tree_clean": true,
   "commits": [
-    "c23ec6e2909ea144263aa7344a80f14ed98fd433"
+    "2209c7c633d3450bdf929638e08d231793f06614"
   ],
   "owned_paths": [
     "_docs/ralph/prototype-integration/**",
-    "_docs/ralph/handoffs/prototype-integration/**",
-    "scripts/validate-prototype-integration.cjs",
-    "_build/build-veid-pipeline.sh",
-    "cmd/inference-sidecar/manifest.go",
-    "ml/training/model/release_manifest.py",
-    "ml/training/tests/test_release_manifest.py"
+    "_docs/ralph/handoffs/prototype-integration/**"
   ],
   "files_changed": [
-    "_docs/ralph/handoffs/prototype-integration/HANDOFF.yaml",
-    "_build/build-veid-pipeline.sh",
-    "cmd/inference-sidecar/manifest.go",
-    "ml/training/model/release_manifest.py",
-    "ml/training/tests/test_release_manifest.py"
+    "_docs/ralph/handoffs/prototype-integration/HANDOFF.yaml"
   ],
   "tests": [
     {
-      "command": "python -m pytest -q ml/training/tests/test_release_manifest.py",
+      "command": "node --test scripts/validate-t1-contracts.test.cjs scripts/validate-prototype-integration.test.cjs scripts/validate-required-gate-matrix.test.cjs scripts/validate-model-provenance.test.cjs scripts/validate-ai-production-policy.test.cjs scripts/validate-slurm-chart-inventory.test.cjs scripts/validate-localnet-integration-launchers.test.cjs",
       "exit_code": 0,
       "result": "passed",
-      "test_count": 50,
+      "test_count": 7,
       "tool_versions": {
-        "python": "3.14.6 windows"
+        "node": "20.19.1"
       }
     },
     {
-      "command": "go1.25.8 test -count=1 ./cmd/inference-sidecar && go1.25.8 vet ./cmd/inference-sidecar",
+      "command": "go1.25.8 test -run '^$' -count=1 ./...",
       "exit_code": 0,
       "result": "passed",
+      "test_count": 0,
       "tool_versions": {
-        "go": "1.25.8 windows/amd64"
+        "go": "go1.25.8 windows/amd64"
       }
     },
     {
-      "command": "python -m py_compile ml/training/model/release_manifest.py ml/training/tests/test_release_manifest.py && bash -n _build/build-veid-pipeline.sh",
+      "command": "go1.25.8 test -count=1 ./x/veid/types ./pkg/inference/... ./pkg/data_vault/... ./pkg/fundauth/... ./x/encryption/... ./x/mfa/... ./pkg/provider_daemon ./x/settlement/ibc",
       "exit_code": 0,
       "result": "passed",
+      "test_count": 0,
       "tool_versions": {
-        "python": "3.14.6 windows",
-        "bash": "Git for Windows"
+        "go": "go1.25.8 windows/amd64"
       }
     },
     {
-      "command": "node scripts/validate-model-provenance.test.cjs && node scripts/validate-model-provenance.cjs && node scripts/validate-prototype-integration.test.cjs && node scripts/validate-prototype-integration.cjs && node scripts/validate-agents-docs.mjs",
+      "command": "node --test scripts/preflight-integration-candidate.test.cjs scripts/validate-required-gate-matrix.test.cjs",
       "exit_code": 0,
       "result": "passed",
+      "test_count": 2,
       "tool_versions": {
         "node": "20.19.1"
       }
     }
   ],
-  "generated_hashes": {
-    "ml/training/model/release_manifest.py": "e2374745f0f88404bfed58cf1a694b9d3f1ddd0557ef4be2e7408425daf0e671",
-    "_build/build-veid-pipeline.sh": "4b3f31a58e3096b143ac8891397c1f71067c4e9af87785360d6ab859f8f31206"
-  },
-  "accepted_checkpoints": [],
+  "generated_hashes": {},
+  "accepted_checkpoints": [
+    {
+      "thread": "T1",
+      "checkpoint": "T1-09",
+      "tag": "checkpoint/prototype-t1/t1-09",
+      "tip": "36a566a92c04d988255b10cc5a75451d59077273",
+      "payload_head": "36a566a92c04d988255b10cc5a75451d59077273"
+    },
+    {
+      "thread": "T2",
+      "checkpoint": "T2-13",
+      "tag": "checkpoint/prototype-t2/t2-13",
+      "tip": "ba9f49340bbd8136f8c19bcc0abc7c64831bfda8",
+      "payload_head": "ba9f49340bbd8136f8c19bcc0abc7c64831bfda8"
+    },
+    {
+      "thread": "T3",
+      "checkpoint": "T3-14",
+      "tag": "checkpoint/prototype-t3/t3-14",
+      "tip": "117ad92be90cc8a6a733ff701f1bc83fbbaf6790",
+      "payload_head": "117ad92be90cc8a6a733ff701f1bc83fbbaf6790"
+    },
+    {
+      "thread": "T5",
+      "checkpoint": "T5-39",
+      "tag": "checkpoint/prototype-t5/t5-39",
+      "tip": "4efd873a4446c304f3ba5f25ec83d6f4185a0a3d",
+      "payload_head": "4efd873a4446c304f3ba5f25ec83d6f4185a0a3d"
+    }
+  ],
   "rejected_checkpoints": [
     {
       "thread": "T2",
@@ -79,18 +98,42 @@
       "checkpoint": "T3-01",
       "tip": "9cc738fbb241890d069d6fb6c2ddb664a4e53447",
       "reason": "Producer tip does not contain integration SHA 823c61a1a9fc2c3a8f8b59dd060bb6db4a1bc3db; synchronize with current T4 and rerun exact-SHA gates."
+    },
+    {
+      "thread": "T1",
+      "checkpoint": "T1-09",
+      "tip": "36a566a92c04d988255b10cc5a75451d59077273",
+      "reason": "Frozen intake validation rejects payload history because .gitattributes is outside the checkpoint's declared owned_paths."
+    },
+    {
+      "thread": "T3",
+      "checkpoint": "T3-13A",
+      "tip": "8dbbaf14d5fdfd4e8405f085842a595bc7f299ff",
+      "reason": "Frozen intake validation rejects the checkpoint because declared files_changed and retained evidence do not match the complete payload range."
     }
   ],
   "external_evidence": [],
   "known_failures": [
-    "Go 1.26.5 cannot compile github.com/bytedance/sonic v1.14.1; checkpoint gates were rerun successfully with the repository-pinned Go 1.25.8 toolchain."
+    "Go 1.26.5 cannot compile github.com/bytedance/sonic v1.14.1; checkpoint gates were rerun successfully with the repository-pinned Go 1.25.8 toolchain.",
+    "The full tagged HPC integration package times out in existing pkg/provider_daemon TestHeartbeatMonitor because RecordHeartbeat holds nodesMu while raiseAlert reacquires it; focused chart contracts pass.",
+    "The clean T4-09A real diagnostic exited 1 as required and reported 19 deterministic publication blockers."
   ],
   "blockers": [
-    "T1 and T5 have incomplete dirty handoffs with PENDING_COMMIT; T2 and T3 are stale relative to current T4.",
-    "Model weights, production data, approved licenses and redistribution, runtime image/SBOM, approved model card, and production evaluation remain dependency-blocked.",
-    "No current model bundle carries production_approved provenance; generation and production sidecar readiness reject lower evidence states and fixture profiles.",
-    "T4-10 is not complete and no model, dataset, runtime, license, redistribution approval, or production profile is certified by this checkpoint."
+    "Epoch 2 consolidates and accepts the exact tested T1-09, T2-13, T3-14, and T5-39 payload boundaries; later dirty producer work remains excluded.",
+    "Stable secrets are remediated through explicit pre-provisioned Secret names/keys and legacy upgrade instructions; no render-time credential generation remains.",
+    "The diagnostic-only publication guard refuses --publish and created no local or remote checkpoint/prototype-integration/t4-09a tag.",
+    "Clean real diagnostics pass candidate HEAD/remote equality, manifest strict validity/hash/ancestry/boundary, accepted-ledger correspondence, and tag absence.",
+    "Publication remains blocked by 18 checks: candidate publication boundary, CI availability and two exact workflows; model, producer, release-provenance, rollback, rollout, SBOM, and SLURM evidence; complete gate matrix/result envelope; future manifest status/prototype success; recorded final digest; and accepted tag revalidation. Epoch cutoff/state and producer terminal/frozen-out checks pass.",
+    "The canonical diagnostic reports stable secrets and immutable images passed; capacity equality, durability, and least privilege remain unverified without Helm/live evidence.",
+    "No canonical chart remediation, failover, restore, or production render approval is claimed.",
+    "The T4-12A diagnostic records 11 prohibited production AI, biometric, consent, custody, or stub-success finding paths; enforce mode rejects the current repository state.",
+    "The T4-15A release gate records all ten AI/biometric security categories as partial or missing; enforce mode rejects release and external privacy, PAD, and production-model evaluations remain unavailable.",
+    "The T4-16A inventory binds 18 discovered production mover files to 20 value-moving routes; no accepted T5 FundAuthorization checkpoint exists and --require-ready rejects release.",
+    "The T4-13A inventory records five required generated contract families as absent or precursor-only; no canonical proto source is accepted and --require-ready rejects generation readiness.",
+    "The divergent ve/prototype-integration-live candidate is not promotable: its acceptance artifact is uncommitted, its ancestry predates canonical T4, and no strict exact-SHA acceptance evidence is available.",
+    "External production model privacy and security evaluation is unavailable.",
+    "Task 88C is not complete."
   ],
-  "next_checkpoint": "T4-11A",
-  "expected_head": "c23ec6e2909ea144263aa7344a80f14ed98fd433"
+  "next_checkpoint": null,
+  "expected_head": "2209c7c633d3450bdf929638e08d231793f06614"
 }

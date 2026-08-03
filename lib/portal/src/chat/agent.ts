@@ -15,6 +15,7 @@ interface ChatAgentOptions {
   provider: ChatProvider;
   toolHandlers: ChatToolHandler[];
   context: ChatToolContext;
+  mutationsEnabled?: boolean;
   systemPrompt?: string;
   temperature?: number;
   maxTokens?: number;
@@ -74,12 +75,21 @@ export class ChatAgent {
   private readonly systemPrompt: string;
   private readonly temperature?: number;
   private readonly maxTokens?: number;
+  private readonly mutationsEnabled: boolean;
 
   constructor(options: ChatAgentOptions) {
     this.provider = options.provider;
-    this.toolHandlers = options.toolHandlers;
+    this.mutationsEnabled = options.mutationsEnabled === true;
+    this.toolHandlers = this.mutationsEnabled
+      ? options.toolHandlers
+      : options.toolHandlers.filter(
+          (handler) =>
+            handler.definition.kind === "query" &&
+            handler.definition.destructive !== true &&
+            handler.execute === undefined,
+        );
     this.toolMap = new Map(
-      options.toolHandlers.map((handler) => [handler.definition.name, handler]),
+      this.toolHandlers.map((handler) => [handler.definition.name, handler]),
     );
     this.context = options.context;
     this.systemPrompt =
@@ -139,7 +149,14 @@ export class ChatAgent {
             args = {};
           }
         }
-        const response = await handler.run(args, this.context);
+        const handlerResponse = await handler.run(args, this.context);
+        const response =
+          !this.mutationsEnabled && handlerResponse.action
+            ? {
+                content: "Chat mutations are disabled.",
+                data: { code: "feature_unavailable" },
+              }
+            : handlerResponse;
         toolResponses.push({ toolCallId: call.id, response });
         if (response.action) {
           actions.push(response.action);
@@ -191,6 +208,14 @@ export class ChatAgent {
   }
 
   async executeAction(action: ChatAction): Promise<ChatActionExecution> {
+    if (!this.mutationsEnabled) {
+      return {
+        ok: false,
+        code: "feature_unavailable",
+        summary: "Chat mutations are disabled.",
+      };
+    }
+
     const handler = this.toolMap.get(action.toolName);
     if (!handler || !handler.execute) {
       return {

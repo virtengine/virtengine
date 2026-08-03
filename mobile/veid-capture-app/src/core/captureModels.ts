@@ -111,6 +111,7 @@ export type DeviceAttestationProvider =
   | "android_safetynet"
   | "ios_devicecheck"
   | "ios_app_attest"
+  | "unavailable"
   | "mock";
 export type DeviceIntegrityLevel = "unknown" | "basic" | "strong" | "hardware_backed" | "unsupported";
 

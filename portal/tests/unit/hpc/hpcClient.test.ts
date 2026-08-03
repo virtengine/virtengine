@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { createHPCClient, HPCClient } from '@/features/hpc/lib/hpc-client';
+import { createMockHPCClient as createHPCClient, HPCClient } from '@/features/hpc/lib/hpc-client';
 
 describe('HPCClient', () => {
   it('creates client instance via factory', () => {

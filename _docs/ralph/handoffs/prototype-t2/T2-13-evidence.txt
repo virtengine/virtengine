@@ -1,0 +1,17 @@
+T2-13 retained validation evidence
+Implementation SHA: 6f1f48a229bae442f08aba0aab055ebd3c5492cb
+Node: v24.12.0
+
+COMMAND: C:\Users\pavil\AppData\Local\Temp\virtengine-node-v24.12.0\npm.cmd --prefix C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t2\lib\portal test
+EXIT: 0
+RESULT: passed
+DETAIL: 22 files, 555 tests passed; passkey client 27 tests passed
+
+COMMAND: C:\Users\pavil\AppData\Local\Temp\virtengine-node-v24.12.0\npm.cmd --prefix C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t2\lib\portal run type-check
+EXIT: 0
+RESULT: passed
+
+NON-CLAIMS:
+- WebAuthn platform authority, server verifier, challenge projector, and counter store are injected; production defaults remain unavailable.
+- Device biometrics remain local to the authenticator; no face image, template, embedding, or metric is returned.
+- No production UI wiring or authenticator certification is claimed.

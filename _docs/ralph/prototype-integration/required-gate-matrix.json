@@ -1,0 +1,204 @@
+{
+  "schema_version": "virtengine.task-88b.required-gate-matrix/v1",
+  "task": "88B",
+  "control_scope": "required_gate_matrix_only",
+  "status": "dependency_blocked",
+  "completion_claim": false,
+  "unmatched_path_allowlist": [
+    { "selector": "*.md", "reason": "Root-level policy, legal, and repository narrative metadata has no executable gate." },
+    { "selector": "*.txt", "reason": "Root-level repository text metadata has no executable gate." },
+    { "selector": ".editorconfig", "reason": "Repository editor metadata has no executable gate." },
+    { "selector": ".gitattributes", "reason": "Repository Git attribute metadata has no executable gate." },
+    { "selector": ".gitignore", "reason": "Repository Git ignore metadata has no executable gate." },
+    { "selector": "codecov.yml", "reason": "Repository coverage-reporting metadata has no local executable gate." }
+  ],
+  "categories": [
+    {
+      "id": "go",
+      "path_selectors": ["**/*.go", "go.mod", "go.sum", "go.work", "vendor/**"],
+      "required_commands": [
+        { "id": "go-vet", "kind": "lint", "command": "go vet ./..." },
+        { "id": "go-test", "kind": "test", "command": "go test -count=1 ./..." }
+      ],
+      "pinned_tools": [{ "name": "go", "version": "1.25.8", "source": "go.mod" }],
+      "zero_test_policy": { "applies_to": "test_commands", "minimum_discovered": 1, "minimum_executed": 1, "empty_selection": "fail" },
+      "failure_semantics": { "nonzero_exit": "fail", "skipped": "fail", "missing_tool": "fail", "cancelled": "fail" },
+      "dependencies": [{ "id": "86A", "status": "unavailable" }],
+      "status": "dependency_blocked",
+      "blockers": ["dependency-86a"]
+    },
+    {
+      "id": "proto_api",
+      "path_selectors": ["**/*.proto", "api/**", "openapi/**", "docs/api/**", "scripts/proto-*.sh", "scripts/validate-generated-contract-inventory*.cjs", "_docs/ralph/prototype-integration/generated-contract-inventory.json"],
+      "required_commands": [
+        { "id": "proto-image", "kind": "setup", "command": "docker build --file sdk/generation/Dockerfile --tag virtengine-proto-gen:1.0.0 ." },
+        { "id": "proto-lint", "kind": "lint", "command": "docker run --rm --volume $PWD:/src --workdir /src/sdk --entrypoint buf virtengine-proto-gen:1.0.0 lint" },
+        { "id": "proto-drift", "kind": "drift", "command": "bash scripts/verify-proto-generation.sh" },
+        { "id": "proto-api-test", "kind": "test", "command": "go test -count=1 ./api/... ./client/..." },
+        { "id": "generated-contract-integration", "kind": "policy", "command": "node scripts/validate-generated-contract-inventory.cjs --require-ready" }
+      ],
+      "pinned_tools": [{ "name": "buf", "version": "1.47.2", "source": "sdk/generation/go.mod" }, { "name": "go", "version": "1.25.8", "source": "go.mod" }],
+      "zero_test_policy": { "applies_to": "test_commands", "minimum_discovered": 1, "minimum_executed": 1, "empty_selection": "fail" },
+      "failure_semantics": { "nonzero_exit": "fail", "skipped": "fail", "missing_tool": "fail", "cancelled": "fail" },
+      "dependencies": [{ "id": "86B", "status": "unavailable" }],
+      "status": "dependency_blocked",
+      "blockers": ["dependency-86b", "generated-contract-integration-blocked"]
+    },
+    {
+      "id": "sdk",
+      "path_selectors": ["sdk/**", "pnpm-lock.yaml"],
+      "required_commands": [
+        { "id": "sdk-install", "kind": "setup", "command": "pnpm --dir sdk/ts install --frozen-lockfile" },
+        { "id": "sdk-build", "kind": "build", "command": "pnpm --dir sdk/ts build" },
+        { "id": "sdk-test", "kind": "test", "command": "pnpm --dir sdk/ts test" }
+      ],
+      "pinned_tools": [{ "name": "node", "version": "24.12.0", "source": "sdk/ts/package.json volta" }, { "name": "pnpm", "version": "10.28.2", "source": ".github workflow control" }],
+      "zero_test_policy": { "applies_to": "test_commands", "minimum_discovered": 1, "minimum_executed": 1, "empty_selection": "fail" },
+      "failure_semantics": { "nonzero_exit": "fail", "skipped": "fail", "missing_tool": "fail", "cancelled": "fail" },
+      "dependencies": [{ "id": "86B", "status": "unavailable" }],
+      "status": "dependency_blocked",
+      "blockers": ["dependency-86b"]
+    },
+    {
+      "id": "portal",
+      "path_selectors": ["portal/**", "lib/portal/**", "lib/capture/**", "pnpm-lock.yaml"],
+      "required_commands": [
+        { "id": "portal-install", "kind": "setup", "command": "pnpm --dir portal install --frozen-lockfile" },
+        { "id": "portal-lint", "kind": "lint", "command": "pnpm --dir portal lint" },
+        { "id": "portal-test", "kind": "test", "command": "pnpm --dir portal test" }
+      ],
+      "pinned_tools": [{ "name": "node", "version": "20.19.4", "source": ".github workflow control" }, { "name": "pnpm", "version": "10.28.2", "source": ".github workflow control" }],
+      "zero_test_policy": { "applies_to": "test_commands", "minimum_discovered": 1, "minimum_executed": 1, "empty_selection": "fail" },
+      "failure_semantics": { "nonzero_exit": "fail", "skipped": "fail", "missing_tool": "fail", "cancelled": "fail" },
+      "dependencies": [{ "id": "86C", "status": "unavailable" }],
+      "status": "dependency_blocked",
+      "blockers": ["dependency-86c"]
+    },
+    {
+      "id": "mobile",
+      "path_selectors": ["mobile/**", "lib/capture/**", "pnpm-lock.yaml"],
+      "required_commands": [
+        { "id": "mobile-install", "kind": "setup", "command": "pnpm --dir mobile/veid-capture-app install --frozen-lockfile" },
+        { "id": "mobile-typecheck", "kind": "build", "command": "pnpm --dir mobile/veid-capture-app typecheck" },
+        { "id": "mobile-test", "kind": "test", "command": "pnpm --dir mobile/veid-capture-app test" }
+      ],
+      "pinned_tools": [{ "name": "node", "version": "20.19.4", "source": ".github workflow control" }, { "name": "pnpm", "version": "10.28.2", "source": ".github workflow control" }],
+      "zero_test_policy": { "applies_to": "test_commands", "minimum_discovered": 1, "minimum_executed": 1, "empty_selection": "fail" },
+      "failure_semantics": { "nonzero_exit": "fail", "skipped": "fail", "missing_tool": "fail", "cancelled": "fail" },
+      "dependencies": [{ "id": "85D", "status": "unavailable" }, { "id": "86D", "status": "unavailable" }],
+      "status": "dependency_blocked",
+      "blockers": ["dependency-85d", "dependency-86d"]
+    },
+    {
+      "id": "ml",
+      "path_selectors": ["ml/**", "models/**", "cmd/inference-sidecar/**", "pkg/data_vault/**", "pkg/inference/**", "x/veid/**", "scripts/validate-ai-production-policy*.cjs", "scripts/validate-ai-biometric-security-gates*.cjs", "_docs/ralph/prototype-integration/ai-production-policy.json", "_docs/ralph/prototype-integration/ai-biometric-security-gates.json"],
+      "required_commands": [
+        { "id": "ml-install", "kind": "setup", "command": "python -m pip install --require-hashes -r ml/requirements-deterministic.txt" },
+        { "id": "ml-collect", "kind": "test", "command": "python -m pytest --collect-only -q ml/training/tests" },
+        { "id": "ml-test", "kind": "test", "command": "python -m pytest -q ml/training/tests" },
+        { "id": "ai-production-policy", "kind": "policy", "command": "node scripts/validate-ai-production-policy.cjs --enforce" },
+        { "id": "ai-biometric-security", "kind": "policy", "command": "node scripts/validate-ai-biometric-security-gates.cjs --enforce" }
+      ],
+      "pinned_tools": [{ "name": "python", "version": "3.11.9", "source": ".github workflow control" }, { "name": "node", "version": "24.12.0", "source": "required gate runner image" }],
+      "zero_test_policy": { "applies_to": "test_commands", "minimum_discovered": 1, "minimum_executed": 1, "empty_selection": "fail" },
+      "failure_semantics": { "nonzero_exit": "fail", "skipped": "fail", "missing_tool": "fail", "cancelled": "fail" },
+      "dependencies": [{ "id": "87D", "status": "unavailable" }],
+      "status": "dependency_blocked",
+      "blockers": ["dependency-87d", "ai-production-policy-blocked", "ai-biometric-security-gates-blocked"]
+    },
+    {
+      "id": "deployment",
+      "path_selectors": ["deploy/**", "infra/**", "docker-compose*.yaml", "scripts/ci/**", "scripts/validate_slurm_chart_semantics.py", "scripts/validate_slurm_chart_semantics_test.py"],
+      "required_commands": [
+        { "id": "deployment-compose", "kind": "policy", "command": "docker compose -f docker-compose.yaml config --quiet" },
+        { "id": "slurm-chart-lint", "kind": "lint", "command": "helm lint deploy/slurm/slurm-cluster --values deploy/slurm/slurm-cluster/tests/stable-secrets-values.yaml --strict" },
+        { "id": "slurm-chart-render", "kind": "policy", "command": "helm template slurm-capacity deploy/slurm/slurm-cluster --namespace slurm-capacity --values deploy/slurm/slurm-cluster/tests/stable-secrets-values.yaml | python scripts/validate_slurm_chart_semantics.py --chart deploy/slurm/slurm-cluster --rendered -" },
+        { "id": "deployment-smoke", "kind": "test", "command": "bash scripts/ci/post-deploy-smoke-test.sh" }
+      ],
+      "pinned_tools": [{ "name": "docker-compose", "version": "2.39.1", "source": "required gate runner image" }, { "name": "helm", "version": "3.18.6", "source": "required gate runner image" }, { "name": "python", "version": "3.11.9", "source": ".github workflow control" }],
+      "zero_test_policy": { "applies_to": "test_commands", "minimum_discovered": 1, "minimum_executed": 1, "empty_selection": "fail" },
+      "failure_semantics": { "nonzero_exit": "fail", "skipped": "fail", "missing_tool": "fail", "cancelled": "fail" },
+      "dependencies": [{ "id": "86C", "status": "unavailable" }],
+      "status": "dependency_blocked",
+      "blockers": ["dependency-86c"]
+    },
+    {
+      "id": "observability",
+      "path_selectors": ["docker-compose.observability.yaml", "config/**", "deploy/monitoring/**", "infra/monitoring/**"],
+      "required_commands": [
+        { "id": "observability-compose", "kind": "policy", "command": "docker compose -f docker-compose.observability.yaml config --quiet" },
+        { "id": "observability-test", "kind": "test", "command": "go test -count=1 ./pkg/observability/..." }
+      ],
+      "pinned_tools": [{ "name": "go", "version": "1.25.8", "source": "go.mod" }, { "name": "docker-compose", "version": "2.39.1", "source": "required gate runner image" }],
+      "zero_test_policy": { "applies_to": "test_commands", "minimum_discovered": 1, "minimum_executed": 1, "empty_selection": "fail" },
+      "failure_semantics": { "nonzero_exit": "fail", "skipped": "fail", "missing_tool": "fail", "cancelled": "fail" },
+      "dependencies": [{ "id": "86C", "status": "unavailable" }],
+      "status": "dependency_blocked",
+      "blockers": ["dependency-86c"]
+    },
+    {
+      "id": "upgrades",
+      "path_selectors": ["upgrades/**", "app/upgrades.go", "tests/upgrade/**"],
+      "required_commands": [{ "id": "upgrade-test", "kind": "test", "command": "go test -count=1 ./tests/upgrade/..." }],
+      "pinned_tools": [{ "name": "go", "version": "1.25.8", "source": "go.mod" }],
+      "zero_test_policy": { "applies_to": "test_commands", "minimum_discovered": 1, "minimum_executed": 1, "empty_selection": "fail" },
+      "failure_semantics": { "nonzero_exit": "fail", "skipped": "fail", "missing_tool": "fail", "cancelled": "fail" },
+      "dependencies": [{ "id": "88A", "status": "unavailable" }],
+      "status": "dependency_blocked",
+      "blockers": ["dependency-88a"]
+    },
+    {
+      "id": "security",
+      "path_selectors": [".github/**", "SECURITY.md", "SUPPLY_CHAIN_SECURITY.md", "app/**", "x/**", "scripts/security/**", "scripts/validate-fund-route-inventory*.cjs", "tests/integration/security/**", "_docs/ralph/prototype-integration/fund-route-inventory.json"],
+      "required_commands": [
+        { "id": "security-policy", "kind": "policy", "command": "python .github/scripts/validate_security_policies.py" },
+        { "id": "security-test", "kind": "test", "command": "go test -count=1 -tags=e2e.integration ./tests/integration/security/..." },
+        { "id": "fund-route-authorization", "kind": "policy", "command": "node scripts/validate-fund-route-inventory.cjs --require-ready" }
+      ],
+      "pinned_tools": [{ "name": "go", "version": "1.25.8", "source": "go.mod" }, { "name": "python", "version": "3.11.9", "source": ".github workflow control" }, { "name": "node", "version": "24.12.0", "source": "required gate runner image" }],
+      "zero_test_policy": { "applies_to": "test_commands", "minimum_discovered": 1, "minimum_executed": 1, "empty_selection": "fail" },
+      "failure_semantics": { "nonzero_exit": "fail", "skipped": "fail", "missing_tool": "fail", "cancelled": "fail" },
+      "dependencies": [{ "id": "86D", "status": "unavailable" }],
+      "status": "dependency_blocked",
+      "blockers": ["dependency-86d", "fund-route-authorization-blocked"]
+    },
+    {
+      "id": "docs_process_boundary_e2e",
+      "path_selectors": ["docs/**", "_docs/**", "tests/e2e/**", "tests/integration/**", "scripts/*.cjs", "scripts/*.js", "scripts/*.md", "scripts/*.mjs", "scripts/*.ps1", "scripts/*.py", "scripts/*.sh", "scripts/*.sql", "scripts/*.ts", "scripts/bosun", "scripts/localnet.sh", "scripts/localnet.ps1"],
+      "required_commands": [
+        { "id": "docs-control", "kind": "policy", "command": "node scripts/validate-prototype-integration.cjs" },
+        { "id": "intake-epoch-lifecycle", "kind": "test", "command": "node scripts/prototype-intake-epochs.test.cjs" },
+        { "id": "intake-epoch-opening", "kind": "test", "command": "node scripts/open-prototype-intake-epoch.test.cjs" },
+        { "id": "intake-tag-observer", "kind": "test", "command": "node scripts/observe-prototype-intake-tags.test.cjs" },
+        { "id": "intake-freeze-planner", "kind": "test", "command": "node scripts/plan-prototype-intake-freeze.test.cjs" },
+        { "id": "intake-freeze-application", "kind": "test", "command": "node scripts/apply-prototype-intake-freeze.test.cjs" },
+        { "id": "intake-freeze-lease-inspection", "kind": "test", "command": "node scripts/inspect-prototype-intake-freeze-lease.test.cjs" },
+        { "id": "intake-freeze-lease-recovery", "kind": "test", "command": "node scripts/recover-prototype-intake-freeze-lease.test.cjs" },
+        { "id": "integration-candidate-preflight-unit", "kind": "test", "command": "node scripts/preflight-integration-candidate.test.cjs" },
+        { "id": "integration-candidate-preflight", "kind": "policy", "command": "node scripts/preflight-integration-candidate.cjs --repo . --candidate origin/stable-virtengine-beta --canonical 016c4145624deff9673c1c5cff3029277b1f41e0" },
+        { "id": "localnet-integration-launchers", "kind": "test", "command": "node scripts/validate-localnet-integration-launchers.test.cjs" },
+        { "id": "process-boundary-e2e", "kind": "test", "command": "go test -count=1 -tags=e2e.integration ./tests/e2e/... ./tests/integration/..." }
+      ],
+      "pinned_tools": [{ "name": "go", "version": "1.25.8", "source": "go.mod" }, { "name": "node", "version": "24.12.0", "source": "required gate runner image" }],
+      "zero_test_policy": { "applies_to": "test_commands", "minimum_discovered": 1, "minimum_executed": 1, "empty_selection": "fail" },
+      "failure_semantics": { "nonzero_exit": "fail", "skipped": "fail", "missing_tool": "fail", "cancelled": "fail" },
+      "dependencies": [{ "id": "85D", "status": "unavailable" }, { "id": "86A", "status": "unavailable" }, { "id": "86B", "status": "unavailable" }, { "id": "86C", "status": "unavailable" }, { "id": "86D", "status": "unavailable" }, { "id": "87D", "status": "unavailable" }, { "id": "88A", "status": "unavailable" }],
+      "status": "dependency_blocked",
+      "blockers": ["dependency-85d", "dependency-86a", "dependency-86b", "dependency-86c", "dependency-86d", "dependency-87d", "dependency-88a", "real-process-evidence-absent"]
+    }
+  ],
+  "blockers": [
+    { "id": "dependency-85d", "description": "Task 85D is not available to this control checkpoint." },
+    { "id": "dependency-86a", "description": "Task 86A is not available to this control checkpoint." },
+    { "id": "dependency-86b", "description": "Task 86B is not available to this control checkpoint." },
+    { "id": "dependency-86c", "description": "Task 86C is not available to this control checkpoint." },
+    { "id": "dependency-86d", "description": "Task 86D is not available to this control checkpoint." },
+    { "id": "dependency-87d", "description": "Task 87D is not available to this control checkpoint." },
+    { "id": "dependency-88a", "description": "Task 88A is dependency-blocked and cannot provide accepted rehearsal evidence." },
+    { "id": "ai-production-policy-blocked", "description": "T4-12 diagnostic records prohibited production AI, biometric, consent, custody, or stub-success paths; enforce mode rejects them." },
+    { "id": "ai-biometric-security-gates-blocked", "description": "T4-15 records incomplete AI and biometric security evidence; enforce mode rejects partial, missing, or externally blocked categories." },
+    { "id": "fund-route-authorization-blocked", "description": "T4-16 records incomplete value-moving route authorization; release remains blocked until an accepted T5 checkpoint is wired atomically across every route." },
+    { "id": "generated-contract-integration-blocked", "description": "T4-13 generated contract families lack accepted canonical proto sources, generated targets, compatibility fixtures, or completed zero-drift generation evidence." },
+    { "id": "real-process-evidence-absent", "description": "No accepted process-boundary lifecycle evidence is recorded by this matrix-only control." }
+  ]
+}

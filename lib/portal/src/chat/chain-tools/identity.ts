@@ -10,12 +10,14 @@ import type { ChatToolDefinition } from "../types";
 const getVeidDefinition: ChatToolDefinition = {
   name: "get-veid-status",
   description: "Get VEID status and score for the current wallet.",
+  kind: "query",
   parameters: { type: "object", properties: {} },
 };
 
 const requestVerificationDefinition: ChatToolDefinition = {
   name: "request-veid-verification",
   description: "Submit a request to start VEID verification.",
+  kind: "mutation",
   parameters: {
     type: "object",
     properties: {

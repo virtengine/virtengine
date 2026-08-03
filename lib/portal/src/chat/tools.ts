@@ -5,10 +5,31 @@ import { createIdentityTools } from "./chain-tools/identity";
 import { createGovernanceTools } from "./chain-tools/governance";
 import { createWalletTools } from "./chain-tools/wallet";
 
-export const createDefaultChatTools = (): ChatToolHandler[] => [
-  ...createDeploymentTools(),
-  ...createMarketplaceTools(),
-  ...createIdentityTools(),
-  ...createGovernanceTools(),
-  ...createWalletTools(),
-];
+export interface DefaultChatToolOptions {
+  chatEnabled?: boolean;
+  mutationsEnabled?: boolean;
+}
+
+export const createDefaultChatTools = (
+  options: DefaultChatToolOptions = {},
+): ChatToolHandler[] => {
+  if (!options.chatEnabled) {
+    return [];
+  }
+
+  const tools = [
+    ...createDeploymentTools(),
+    ...createMarketplaceTools(),
+    ...createIdentityTools(),
+    ...createGovernanceTools(),
+    ...createWalletTools(),
+  ];
+
+  return tools.filter(
+    (tool) =>
+      options.mutationsEnabled === true ||
+      (tool.definition.kind === "query" &&
+        tool.definition.destructive !== true &&
+        tool.execute === undefined),
+  );
+};

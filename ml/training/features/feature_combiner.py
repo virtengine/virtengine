@@ -170,7 +170,7 @@ class FeatureExtractor:
         self.strict_production = strict_production
         if strict_production and self.config.combined_feature_dim != TOTAL_FEATURE_DIM:
             raise ValueError(
-                f"production feature dimension must be {TOTAL_FEATURE_DIM}"
+                f"production combined_feature_dim must be {TOTAL_FEATURE_DIM}"
             )
 
         # Initialize component extractors
@@ -232,7 +232,11 @@ class FeatureExtractor:
 
         # Combine into unified vector
         combined_vector = self._combine_features(
-            face_features, doc_features, ocr_features, meta_features
+            face_features,
+            doc_features,
+            ocr_features,
+            meta_features,
+            sample.annotations,
         )
 
         # Build OCR field scores dict
@@ -264,6 +268,7 @@ class FeatureExtractor:
         doc_features: DocumentFeatures,
         ocr_features: OCRFeatures,
         meta_features: MetadataFeatures,
+        annotations: Optional[Dict[str, Any]] = None,
     ) -> np.ndarray:
         """Combine extracted values using the shared canonical schema."""
         if self.strict_production and not ocr_features.ocr_success:
@@ -358,6 +363,9 @@ class FeatureExtractor:
         split: DatasetSplit
     ) -> List[FeatureVector]:
         """Extract features for a dataset split."""
+        if self.strict_production and not split.samples:
+            raise RuntimeError("production split has zero selected samples")
+
         features = []
 
         for sample in split.samples:
@@ -366,7 +374,9 @@ class FeatureExtractor:
                 features.append(feature_vector)
             except Exception as e:
                 if self.strict_production:
-                    raise
+                    raise RuntimeError(
+                        f"production extraction failed for selected sample {sample.sample_id}"
+                    ) from e
                 logger.error(f"Feature extraction failed for {sample.sample_id}: {e}")
 
         return features
@@ -376,13 +386,17 @@ class FeatureExtractor:
         samples: List[PreprocessedSample],
     ) -> List[FeatureVector]:
         """Extract features from preprocessed samples."""
+        if self.strict_production and not samples:
+            raise RuntimeError("production preprocessing produced zero selected vectors")
+
         features = []
 
         for sample in samples:
             if not sample.success or sample.original_sample is None:
                 if self.strict_production:
-                    raise ValueError(
-                        f"production preprocessing failed for {sample.sample_id}"
+                    raise RuntimeError(
+                        "production preprocessing failed for selected "
+                        f"preprocessed sample {sample.sample_id}"
                     )
                 continue
 
@@ -395,7 +409,10 @@ class FeatureExtractor:
                 features.append(feature_vector)
             except Exception as e:
                 if self.strict_production:
-                    raise
+                    raise RuntimeError(
+                        "production extraction failed for selected preprocessed "
+                        f"sample {sample.sample_id}"
+                    ) from e
                 logger.error(f"Feature extraction failed for {sample.sample_id}: {e}")
 
         return features
@@ -405,6 +422,9 @@ class FeatureExtractor:
         samples: List[AugmentedSample],
     ) -> List[FeatureVector]:
         """Extract features from augmented samples."""
+        if self.strict_production and not samples:
+            raise RuntimeError("production augmentation produced zero selected vectors")
+
         features = []
 
         for sample in samples:
@@ -435,7 +455,10 @@ class FeatureExtractor:
                 features.append(feature_vector)
             except Exception as e:
                 if self.strict_production:
-                    raise
+                    raise RuntimeError(
+                        "production extraction failed for selected augmented sample "
+                        f"{sample.augmentation_id}"
+                    ) from e
                 logger.error(
                     f"Feature extraction failed for {sample.augmentation_id}: {e}"
                 )

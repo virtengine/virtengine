@@ -1,0 +1,23 @@
+{
+  "schema_version": "virtengine.prototype.generated-contract-inventory/v1",
+  "checkpoint": "T4-13A",
+  "status": "dependency_blocked",
+  "contracts": [
+    { "id": "stage-decision", "owner_thread": "T5", "state": "absent", "producer": { "status": "unavailable", "tag": null, "payload_sha": null }, "proto_sources": [], "generated_targets": [], "compatibility_fixtures": [], "blockers": ["canonical-producer-contract-unavailable"] },
+    { "id": "uniqueness-receipt", "owner_thread": "T5", "state": "precursor_only", "producer": { "status": "unavailable", "tag": null, "payload_sha": null }, "proto_sources": [], "generated_targets": [], "compatibility_fixtures": [], "blockers": ["canonical-producer-contract-unavailable", "fixture-only-uniqueness-precursor"] },
+    { "id": "eligibility-decision", "owner_thread": "T1", "state": "precursor_only", "producer": { "status": "unavailable", "tag": null, "payload_sha": null }, "proto_sources": [], "generated_targets": [], "compatibility_fixtures": [], "blockers": ["canonical-producer-contract-unavailable", "handwritten-eligibility-precursor"] },
+    { "id": "claim-presentation", "owner_thread": "T2", "state": "precursor_only", "producer": { "status": "unavailable", "tag": null, "payload_sha": null }, "proto_sources": [], "generated_targets": [], "compatibility_fixtures": [], "blockers": ["canonical-producer-contract-unavailable", "opaque-presentation-precursor"] },
+    { "id": "fund-authorization", "owner_thread": "T5", "state": "precursor_only", "producer": { "status": "unavailable", "tag": null, "payload_sha": null }, "proto_sources": [], "generated_targets": [], "compatibility_fixtures": [], "blockers": ["canonical-producer-contract-unavailable", "handwritten-fund-authorization-precursor"] }
+  ],
+  "generation_window": {
+    "mode": "all",
+    "source_roots": ["sdk/proto/node", "sdk/proto/provider"],
+    "command": "./scripts/proto-generate.sh all",
+    "second_run_command": "./scripts/verify-proto-generation.sh",
+    "tracked_target_roots": ["api/openapi", "sdk/artifacts/proto", "sdk/go/node", "sdk/ts/src/generated"],
+    "state": "closed",
+    "result": null
+  },
+  "blockers": ["canonical-producer-contract-unavailable", "fixture-only-uniqueness-precursor", "handwritten-eligibility-precursor", "opaque-presentation-precursor", "handwritten-fund-authorization-precursor"],
+  "completion": { "allowed": false }
+}

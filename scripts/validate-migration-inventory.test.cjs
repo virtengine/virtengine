@@ -43,6 +43,7 @@ const tests = [
   ["rejects an accepted producer without a SHA", () => {
     const candidate = fixture();
     candidate.producers[0].status = "accepted";
+    candidate.producers[0].sha = null;
     assert.throws(() => validate(candidate), /accepted producer must have/);
   }],
   ["rejects premature completion", () => {

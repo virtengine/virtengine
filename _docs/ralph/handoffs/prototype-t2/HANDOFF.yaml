@@ -1,0 +1,37 @@
+{
+  "campaign": "three-day-prototype",
+  "thread": "T2",
+  "checkpoint": "T2-13A",
+  "branch": "ve/prototype-t2-product",
+  "payload_head": "9e717ff769b03dcb3830877d541b223d8d7154bf",
+  "tree_clean": true,
+  "files_changed": [
+    "lib/portal/components/PortalProvider.tsx",
+    "lib/portal/components/hpc/hpc-output.ts",
+    "lib/portal/__tests__/hpc/use-hpc-outputs.test.tsx",
+    "lib/portal/hooks/useHPC.tsx",
+    "lib/portal/index.ts",
+    "lib/portal/index.d.ts",
+    "lib/portal/types/config.ts",
+    "portal/src/lib/portal-adapter.ts"
+  ],
+  "tests": [
+    {
+      "command": "vitest run __tests__/hpc/use-hpc-outputs.test.tsx",
+      "exit_code": 0,
+      "result": "passed",
+      "test_count": 4,
+      "tool_versions": { "node": "v24.12.0" }
+    },
+    {
+      "command": "vitest run lib/portal",
+      "exit_code": 0,
+      "result": "passed",
+      "test_count": 726,
+      "tool_versions": { "node": "v24.12.0" }
+    }
+  ],
+  "blockers": [
+    "Live provider endpoints and SDK generator vendor-tree certification remain separate gates."
+  ]
+}

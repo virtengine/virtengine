@@ -2,6 +2,9 @@ package crypto
 
 import (
 	"bytes"
+	"crypto/ed25519"
+	"encoding/json"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -22,6 +25,10 @@ func TestGenerateKeyPair(t *testing.T) {
 	// Keys should not be all zeros
 	assert.NotEqual(t, [32]byte{}, kp1.PublicKey)
 	assert.NotEqual(t, [32]byte{}, kp1.PrivateKey)
+	assert.NotEqual(t, [ed25519.PublicKeySize]byte{}, kp1.SigningPublicKey)
+	assert.NotEqual(t, [ed25519.PrivateKeySize]byte{}, kp1.SigningPrivateKey)
+	assert.NotEqual(t, kp1.PublicKey[:], kp1.SigningPublicKey[:])
+	assert.True(t, bytes.Equal(kp1.SigningPublicKey[:], ed25519.PrivateKey(kp1.SigningPrivateKey[:]).Public().(ed25519.PublicKey)))
 
 	// Each generation should produce different keys
 	kp2, err := GenerateKeyPair()
@@ -73,7 +80,7 @@ func TestCreateAndOpenEnvelope(t *testing.T) {
 	require.NotNil(t, envelope)
 
 	// Validate envelope structure
-	assert.Equal(t, types.EnvelopeVersion, envelope.Version)
+	assert.Equal(t, types.EnvelopeVersionV2, envelope.Version)
 	assert.Equal(t, types.AlgorithmX25519XSalsa20Poly1305, envelope.AlgorithmID)
 	assert.Len(t, envelope.RecipientKeyIDs, 1)
 	assert.Len(t, envelope.RecipientPublicKeys, 1)
@@ -82,6 +89,7 @@ func TestCreateAndOpenEnvelope(t *testing.T) {
 	assert.NotEmpty(t, envelope.Ciphertext)
 	assert.NotEmpty(t, envelope.SenderSignature)
 	assert.Equal(t, sender.PublicKey[:], envelope.SenderPubKey)
+	assert.Equal(t, sender.SigningPublicKey[:], envelope.SenderSigningPubKey)
 
 	// Ciphertext should be different from plaintext
 	assert.NotEqual(t, plaintext, envelope.Ciphertext)
@@ -102,6 +110,64 @@ func TestCreateEnvelope_InvalidRecipientKey(t *testing.T) {
 	_, err = CreateEnvelope(plaintext, make([]byte, 16), sender)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "invalid recipient public key size")
+}
+
+func TestCreateEnvelope_RejectsMismatchedSenderKeys(t *testing.T) {
+	sender, err := GenerateKeyPair()
+	require.NoError(t, err)
+	recipient, err := GenerateKeyPair()
+	require.NoError(t, err)
+
+	t.Run("X25519", func(t *testing.T) {
+		mismatched := *sender
+		mismatched.PublicKey[0] ^= 1
+		_, err := CreateEnvelope([]byte("test"), recipient.PublicKey[:], &mismatched)
+		require.ErrorContains(t, err, "X25519 public key does not match")
+	})
+
+	t.Run("Ed25519", func(t *testing.T) {
+		mismatched := *sender
+		mismatched.SigningPublicKey[0] ^= 1
+		_, err := CreateEnvelope([]byte("test"), recipient.PublicKey[:], &mismatched)
+		require.ErrorContains(t, err, "Ed25519 public key does not match")
+	})
+}
+
+func TestCreateEnvelope_RejectsLowOrderRecipientAndMismatchedID(t *testing.T) {
+	sender, err := GenerateKeyPair()
+	require.NoError(t, err)
+	recipient, err := GenerateKeyPair()
+	require.NoError(t, err)
+
+	_, err = CreateEnvelope([]byte("test"), make([]byte, 32), sender)
+	require.ErrorContains(t, err, "low-order recipient public key")
+
+	_, err = CreateEnvelopeWithRecipient([]byte("test"), RecipientInfo{
+		PublicKey: recipient.PublicKey[:],
+		KeyID:     strings.Repeat("0", types.KeyFingerprintSize*2),
+	}, sender)
+	require.ErrorContains(t, err, "key ID does not match")
+
+	_, err = CreateMultiRecipientEnvelope([]byte("test"), [][]byte{recipient.PublicKey[:], recipient.PublicKey[:]}, sender)
+	require.ErrorContains(t, err, "duplicate recipient public key")
+}
+
+func TestValidateEnvelopeSignatureWithExpectedKey(t *testing.T) {
+	sender, err := GenerateKeyPair()
+	require.NoError(t, err)
+	recipient, err := GenerateKeyPair()
+	require.NoError(t, err)
+	envelope, err := CreateEnvelope([]byte("test"), recipient.PublicKey[:], sender)
+	require.NoError(t, err)
+
+	valid, err := ValidateEnvelopeSignatureWithExpectedKey(envelope, sender.SigningPublicKey[:])
+	require.NoError(t, err)
+	require.True(t, valid)
+
+	otherSender, err := GenerateKeyPair()
+	require.NoError(t, err)
+	_, err = ValidateEnvelopeSignatureWithExpectedKey(envelope, otherSender.SigningPublicKey[:])
+	require.ErrorContains(t, err, "does not match trusted key")
 }
 
 func TestOpenEnvelope_WrongKey(t *testing.T) {
@@ -173,10 +239,17 @@ func TestCreateMultiRecipientEnvelope(t *testing.T) {
 	require.NotNil(t, envelope)
 
 	// Validate structure
-	assert.Equal(t, types.EnvelopeVersion, envelope.Version)
+	assert.Equal(t, types.EnvelopeVersionV2, envelope.Version)
 	assert.Len(t, envelope.RecipientKeyIDs, 3)
-	assert.Len(t, envelope.EncryptedKeys, 3)
+	assert.Empty(t, envelope.EncryptedKeys)
+	assert.Len(t, envelope.WrappedKeys, 3)
 	assert.Len(t, envelope.RecipientPublicKeys, 3)
+	for _, wrappedKey := range envelope.WrappedKeys {
+		assert.Equal(t, types.WrappedKeyAlgorithmX25519NaClBox, wrappedKey.Algorithm)
+		assert.Len(t, wrappedKey.EphemeralPubKey, 32)
+		assert.Len(t, wrappedKey.WrappedKey, 24+32+16)
+	}
+	assert.NotEqual(t, envelope.WrappedKeys[0].EphemeralPubKey, envelope.WrappedKeys[1].EphemeralPubKey)
 
 	// Check mode metadata
 	mode, ok := envelope.GetMetadata("_mode")
@@ -268,6 +341,146 @@ func TestValidateEnvelopeSignature(t *testing.T) {
 	valid, err = ValidateEnvelopeSignature(envelope)
 	require.NoError(t, err)
 	assert.False(t, valid)
+}
+
+func TestEnvelopeV2SignatureBindsSecurityFields(t *testing.T) {
+	sender, err := GenerateKeyPair()
+	require.NoError(t, err)
+	recipient1, err := GenerateKeyPair()
+	require.NoError(t, err)
+	recipient2, err := GenerateKeyPair()
+	require.NoError(t, err)
+
+	envelope, err := CreateMultiRecipientEnvelopeWithRecipients([]byte("signed payload"), []RecipientInfo{
+		{PublicKey: recipient1.PublicKey[:], KeyVersion: 1},
+		{PublicKey: recipient2.PublicKey[:], KeyVersion: 2},
+	}, sender)
+	require.NoError(t, err)
+
+	tests := []struct {
+		name   string
+		mutate func(*types.EncryptedPayloadEnvelope)
+	}{
+		{name: "algorithm", mutate: func(e *types.EncryptedPayloadEnvelope) { e.AlgorithmID += "-forged" }},
+		{name: "algorithm version", mutate: func(e *types.EncryptedPayloadEnvelope) { e.AlgorithmVersion++ }},
+		{name: "payload nonce", mutate: func(e *types.EncryptedPayloadEnvelope) { e.Nonce[0] ^= 1 }},
+		{name: "ciphertext", mutate: func(e *types.EncryptedPayloadEnvelope) { e.Ciphertext[0] ^= 1 }},
+		{name: "wrapped key", mutate: func(e *types.EncryptedPayloadEnvelope) { e.WrappedKeys[0].WrappedKey[24] ^= 1 }},
+		{name: "wrapped key algorithm", mutate: func(e *types.EncryptedPayloadEnvelope) { e.WrappedKeys[0].Algorithm += "-forged" }},
+		{name: "ephemeral key", mutate: func(e *types.EncryptedPayloadEnvelope) { e.WrappedKeys[0].EphemeralPubKey[0] ^= 1 }},
+		{name: "recipient removal", mutate: func(e *types.EncryptedPayloadEnvelope) {
+			e.RecipientKeyIDs = e.RecipientKeyIDs[:1]
+			e.RecipientPublicKeys = e.RecipientPublicKeys[:1]
+			e.WrappedKeys = e.WrappedKeys[:1]
+		}},
+		{name: "recipient reorder", mutate: func(e *types.EncryptedPayloadEnvelope) {
+			e.RecipientKeyIDs[0], e.RecipientKeyIDs[1] = e.RecipientKeyIDs[1], e.RecipientKeyIDs[0]
+			e.RecipientPublicKeys[0], e.RecipientPublicKeys[1] = e.RecipientPublicKeys[1], e.RecipientPublicKeys[0]
+			e.WrappedKeys[0], e.WrappedKeys[1] = e.WrappedKeys[1], e.WrappedKeys[0]
+		}},
+		{name: "recipient substitution", mutate: func(e *types.EncryptedPayloadEnvelope) {
+			e.RecipientPublicKeys[0][0] ^= 1
+			e.RecipientKeyIDs[0] = types.ComputeKeyFingerprint(e.RecipientPublicKeys[0]) + ":v1"
+			e.WrappedKeys[0].RecipientID = e.RecipientKeyIDs[0]
+		}},
+		{name: "sender encryption key", mutate: func(e *types.EncryptedPayloadEnvelope) { e.SenderPubKey[0] ^= 1 }},
+		{name: "forged sender signing key", mutate: func(e *types.EncryptedPayloadEnvelope) { e.SenderSigningPubKey[0] ^= 1 }},
+		{name: "metadata", mutate: func(e *types.EncryptedPayloadEnvelope) { e.Metadata["purpose"] = "forged" }},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			mutated := cloneEnvelope(t, envelope)
+			test.mutate(mutated)
+			valid, err := ValidateEnvelopeSignature(mutated)
+			require.NoError(t, err)
+			assert.False(t, valid)
+		})
+	}
+}
+
+func TestOpenEnvelopeAuthenticatesBeforeDecrypting(t *testing.T) {
+	sender, err := GenerateKeyPair()
+	require.NoError(t, err)
+	recipient, err := GenerateKeyPair()
+	require.NoError(t, err)
+	envelope, err := CreateEnvelope([]byte("authenticated"), recipient.PublicKey[:], sender)
+	require.NoError(t, err)
+	envelope.Ciphertext[0] ^= 1
+
+	_, err = OpenEnvelope(envelope, recipient.PrivateKey[:])
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "signature")
+}
+
+func TestEd25519EnvelopeSignatureIsDeterministic(t *testing.T) {
+	seed := bytes.Repeat([]byte{0x42}, ed25519.SeedSize)
+	privateKey := ed25519.NewKeyFromSeed(seed)
+	envelope := &types.EncryptedPayloadEnvelope{
+		Version:             types.EnvelopeVersionV2,
+		AlgorithmID:         types.AlgorithmX25519XSalsa20Poly1305,
+		AlgorithmVersion:    types.AlgorithmVersionV1,
+		RecipientKeyIDs:     []string{"recipient:v7"},
+		RecipientPublicKeys: [][]byte{bytes.Repeat([]byte{1}, 32)},
+		Nonce:               bytes.Repeat([]byte{2}, 24),
+		Ciphertext:          []byte("fixture ciphertext"),
+		SenderPubKey:        bytes.Repeat([]byte{3}, 32),
+		SenderSigningPubKey: append([]byte(nil), privateKey.Public().(ed25519.PublicKey)...),
+		Metadata:            map[string]string{"context": "T5-08"},
+	}
+
+	signature1, err := signEnvelope(envelope, privateKey)
+	require.NoError(t, err)
+	signature2, err := signEnvelope(envelope, privateKey)
+	require.NoError(t, err)
+	assert.Equal(t, signature1, signature2)
+	envelope.SenderSignature = signature1
+	valid, err := ValidateEnvelopeSignature(envelope)
+	require.NoError(t, err)
+	assert.True(t, valid)
+}
+
+func TestEnvelopeV2VersionedRecipientIDsAndLegacyV1(t *testing.T) {
+	sender, err := GenerateKeyPair()
+	require.NoError(t, err)
+	recipient1, err := GenerateKeyPair()
+	require.NoError(t, err)
+	recipient2, err := GenerateKeyPair()
+	require.NoError(t, err)
+
+	envelope, err := CreateMultiRecipientEnvelopeWithRecipients([]byte("rotation"), []RecipientInfo{
+		{PublicKey: recipient1.PublicKey[:], KeyVersion: 4},
+		{PublicKey: recipient2.PublicKey[:], KeyVersion: 5},
+	}, sender)
+	require.NoError(t, err)
+	assert.Contains(t, envelope.RecipientKeyIDs[0], ":v4")
+	assert.Contains(t, envelope.RecipientKeyIDs[1], ":v5")
+	for _, recipient := range []*KeyPair{recipient1, recipient2} {
+		plaintext, err := OpenEnvelope(envelope, recipient.PrivateKey[:])
+		require.NoError(t, err)
+		assert.Equal(t, []byte("rotation"), plaintext)
+	}
+
+	legacy, err := CreateEnvelope([]byte("migrate me"), recipient1.PublicKey[:], sender)
+	require.NoError(t, err)
+	legacy.Version = types.EnvelopeVersionV1
+	valid, err := ValidateEnvelopeSignature(legacy)
+	require.Error(t, err)
+	assert.False(t, valid)
+	_, err = OpenEnvelope(legacy, recipient1.PrivateKey[:])
+	require.Error(t, err)
+	plaintext, err := OpenUnauthenticatedLegacyEnvelopeV1(legacy, recipient1.PrivateKey[:])
+	require.NoError(t, err)
+	assert.Equal(t, []byte("migrate me"), plaintext)
+}
+
+func cloneEnvelope(t *testing.T, envelope *types.EncryptedPayloadEnvelope) *types.EncryptedPayloadEnvelope {
+	t.Helper()
+	encoded, err := json.Marshal(envelope)
+	require.NoError(t, err)
+	var cloned types.EncryptedPayloadEnvelope
+	require.NoError(t, json.Unmarshal(encoded, &cloned))
+	return &cloned
 }
 
 func TestValidateEnvelopeSignature_NoSignature(t *testing.T) {

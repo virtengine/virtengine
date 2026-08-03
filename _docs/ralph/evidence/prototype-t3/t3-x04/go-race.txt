@@ -1,0 +1,7 @@
+command: set CGO_ENABLED=1 && set CC=C:\Users\pavil\AppData\Local\Microsoft\WinGet\Packages\BrechtSanders.WinLibs.POSIX.UCRT_Microsoft.Winget.Source_8wekyb3d8bbwe\mingw64\bin\gcc.exe && C:\Users\pavil\AppData\Local\VirtEngine\toolchains\go1.25.8\go\bin\go.exe -C C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t3 test -race -count=1 ./pkg/provider_daemon -run Reconciliation
+exit_code: 0
+tools:
+  go: go version go1.25.8 windows/amd64
+  gcc: gcc.exe (MinGW-W64 x86_64-ucrt-posix-seh, built by Brecht Sanders, r3) 16.1.0
+
+ok      github.com/virtengine/virtengine/pkg/provider_daemon    4.044s

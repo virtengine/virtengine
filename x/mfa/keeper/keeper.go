@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
+	"fmt"
 
 	storetypes "cosmossdk.io/store/types"
 	"github.com/cosmos/cosmos-sdk/codec"
@@ -530,9 +531,11 @@ func (k Keeper) GetMFAPolicy(ctx sdk.Context, address sdk.AccAddress) (*types.MF
 	}
 
 	var ps mfaPolicyStore
-	_ = json.Unmarshal(bz, &ps)
+	if err := json.Unmarshal(bz, &ps); err != nil {
+		panic(fmt.Errorf("decode MFA policy for %s: %w", address.String(), err))
+	}
 
-	return &types.MFAPolicy{
+	policy := &types.MFAPolicy{
 		AccountAddress:     ps.AccountAddress,
 		RequiredFactors:    ps.RequiredFactors,
 		TrustedDeviceRule:  ps.TrustedDeviceRule,
@@ -543,7 +546,15 @@ func (k Keeper) GetMFAPolicy(ctx sdk.Context, address sdk.AccAddress) (*types.MF
 		Enabled:            ps.Enabled,
 		CreatedAt:          ps.CreatedAt,
 		UpdatedAt:          ps.UpdatedAt,
-	}, true
+	}
+	if policy.AccountAddress != address.String() {
+		panic(fmt.Errorf("MFA policy key mismatch: requested %s, stored %s", address.String(), policy.AccountAddress))
+	}
+	if err := policy.Validate(); err != nil {
+		panic(fmt.Errorf("invalid persisted MFA policy for %s: %w", address.String(), err))
+	}
+
+	return policy, true
 }
 
 // DeleteMFAPolicy deletes the MFA policy for an account
@@ -773,6 +784,27 @@ func (k Keeper) VerifyMFAChallenge(ctx sdk.Context, challengeID string, response
 	// Record this attempt
 	challenge.RecordAttempt()
 
+	failAttempt := func(err error) (bool, error) {
+		if challenge.AttemptCount >= challenge.MaxAttempts {
+			challenge.MarkFailed()
+		}
+		_ = k.UpdateChallenge(ctx, challenge)
+		return false, err
+	}
+
+	if response == nil {
+		return failAttempt(types.ErrInvalidChallengeResponse.Wrap("missing response"))
+	}
+	if err := response.Validate(); err != nil {
+		return failAttempt(err)
+	}
+	if response.ChallengeID != challengeID {
+		return failAttempt(types.ErrInvalidChallengeResponse.Wrap("challenge ID mismatch"))
+	}
+	if response.FactorType != challenge.FactorType {
+		return failAttempt(types.ErrInvalidChallengeResponse.Wrap("factor type mismatch"))
+	}
+
 	// Verify based on factor type
 	verified := false
 	var verifyErr error
@@ -793,14 +825,10 @@ func (k Keeper) VerifyMFAChallenge(ctx sdk.Context, challengeID string, response
 	}
 
 	if verifyErr != nil {
-		challenge.MarkFailed()
-		_ = k.UpdateChallenge(ctx, challenge)
-		return false, verifyErr
+		return failAttempt(verifyErr)
 	}
 
 	if !verified {
-		_ = k.UpdateChallenge(ctx, challenge)
-
 		ctx.EventManager().EmitEvent(
 			sdk.NewEvent(
 				types.EventTypeChallengeFailed,
@@ -809,7 +837,7 @@ func (k Keeper) VerifyMFAChallenge(ctx sdk.Context, challengeID string, response
 			),
 		)
 
-		return false, types.ErrVerificationFailed.Wrap("verification failed")
+		return failAttempt(types.ErrVerificationFailed.Wrap("verification failed"))
 	}
 
 	// Mark as verified
@@ -863,34 +891,14 @@ func (k Keeper) verifyFIDO2Response(ctx sdk.Context, challenge *types.Challenge,
 	return true, nil
 }
 
-// verifyTOTPResponse verifies a TOTP code
-//
-//nolint:unparam // ctx kept for future on-chain TOTP enrollment lookup
-func (k Keeper) verifyTOTPResponse(_ sdk.Context, _ *types.Challenge, response *types.ChallengeResponse) (bool, error) {
-	// TOTP verification happens off-chain as we don't store seeds on-chain
-	// The response should contain proof of verification from an off-chain verifier
-	// For now, assume the response is a signed attestation from a trusted verifier
-
-	if len(response.ResponseData) == 0 {
-		return false, types.ErrInvalidChallengeResponse.Wrap("empty response data")
-	}
-
-	// In production, this would verify a signed attestation from an off-chain TOTP verifier
-	return true, nil
+// verifyTOTPResponse verifies a TOTP verifier receipt.
+func (k Keeper) verifyTOTPResponse(ctx sdk.Context, challenge *types.Challenge, response *types.ChallengeResponse) (bool, error) {
+	return k.verifyOTPVerifierReceipt(ctx, challenge, response)
 }
 
-// verifyOTPResponse verifies an SMS/Email OTP code
-//
-//nolint:unparam // ctx kept for future on-chain OTP enrollment lookup
-func (k Keeper) verifyOTPResponse(_ sdk.Context, _ *types.Challenge, response *types.ChallengeResponse) (bool, error) {
-	// Similar to TOTP, OTP verification happens off-chain
-	// The response should contain proof of verification
-
-	if len(response.ResponseData) == 0 {
-		return false, types.ErrInvalidChallengeResponse.Wrap("empty response data")
-	}
-
-	return true, nil
+// verifyOTPResponse verifies an SMS/Email verifier receipt and delivery binding.
+func (k Keeper) verifyOTPResponse(ctx sdk.Context, challenge *types.Challenge, response *types.ChallengeResponse) (bool, error) {
+	return k.verifyOTPVerifierReceipt(ctx, challenge, response)
 }
 
 // verifyVEIDThreshold verifies that the account meets the VEID score threshold
@@ -1041,9 +1049,11 @@ func (k Keeper) GetAuthorizationSession(ctx sdk.Context, sessionID string) (*typ
 	}
 
 	var ss sessionStore
-	_ = json.Unmarshal(bz, &ss)
+	if err := json.Unmarshal(bz, &ss); err != nil {
+		panic(fmt.Errorf("decode authorization session %s: %w", sessionID, err))
+	}
 
-	return &types.AuthorizationSession{
+	session := &types.AuthorizationSession{
 		SessionID:         ss.SessionID,
 		AccountAddress:    ss.AccountAddress,
 		TransactionType:   ss.TransactionType,
@@ -1053,7 +1063,15 @@ func (k Keeper) GetAuthorizationSession(ctx sdk.Context, sessionID string) (*typ
 		UsedAt:            ss.UsedAt,
 		IsSingleUse:       ss.IsSingleUse,
 		DeviceFingerprint: ss.DeviceFingerprint,
-	}, true
+	}
+	if session.SessionID != sessionID {
+		panic(fmt.Errorf("authorization session key mismatch: requested %s, stored %s", sessionID, session.SessionID))
+	}
+	if err := session.Validate(); err != nil {
+		panic(fmt.Errorf("invalid persisted authorization session %s: %w", sessionID, err))
+	}
+
+	return session, true
 }
 
 // UseAuthorizationSession marks a session as used
@@ -1250,14 +1268,24 @@ func (k Keeper) GetTrustedDevice(ctx sdk.Context, address sdk.AccAddress, finger
 	}
 
 	var ds trustedDeviceStore
-	_ = json.Unmarshal(bz, &ds)
+	if err := json.Unmarshal(bz, &ds); err != nil {
+		panic(fmt.Errorf("decode trusted device %s for %s: %w", fingerprint, address.String(), err))
+	}
 
-	return &types.TrustedDevice{
+	device := &types.TrustedDevice{
 		AccountAddress: ds.AccountAddress,
 		DeviceInfo:     ds.DeviceInfo,
 		AddedAt:        ds.AddedAt,
 		LastUsedAt:     ds.LastUsedAt,
-	}, true
+	}
+	if device.AccountAddress != address.String() || device.DeviceInfo.Fingerprint != fingerprint {
+		panic(fmt.Errorf("trusted device key mismatch for %s and fingerprint %s", address.String(), fingerprint))
+	}
+	if err := device.Validate(); err != nil {
+		panic(fmt.Errorf("invalid persisted trusted device %s for %s: %w", fingerprint, address.String(), err))
+	}
+
+	return device, true
 }
 
 // GetTrustedDevices returns all trusted devices for an account
@@ -1375,9 +1403,11 @@ func (k Keeper) GetSensitiveTxConfig(ctx sdk.Context, txType types.SensitiveTran
 	}
 
 	var cs sensitiveTxConfigStore
-	_ = json.Unmarshal(bz, &cs)
+	if err := json.Unmarshal(bz, &cs); err != nil {
+		panic(fmt.Errorf("decode sensitive transaction config %s: %w", txType.String(), err))
+	}
 
-	return &types.SensitiveTxConfig{
+	config := &types.SensitiveTxConfig{
 		TransactionType:             cs.TransactionType,
 		Enabled:                     cs.Enabled,
 		MinVEIDScore:                cs.MinVEIDScore,
@@ -1388,7 +1418,15 @@ func (k Keeper) GetSensitiveTxConfig(ctx sdk.Context, txType types.SensitiveTran
 		ValueThreshold:              cs.ValueThreshold,
 		CooldownPeriod:              cs.CooldownPeriod,
 		Description:                 cs.Description,
-	}, true
+	}
+	if config.TransactionType != txType {
+		panic(fmt.Errorf("sensitive transaction config key mismatch: requested %s, stored %s", txType.String(), config.TransactionType.String()))
+	}
+	if err := config.Validate(); err != nil {
+		panic(fmt.Errorf("invalid persisted sensitive transaction config %s: %w", txType.String(), err))
+	}
+
+	return config, true
 }
 
 // GetAllSensitiveTxConfigs returns all sensitive transaction configurations

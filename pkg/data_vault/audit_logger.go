@@ -5,6 +5,8 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
+	"fmt"
 	"sort"
 	"sync"
 	"time"
@@ -52,9 +54,12 @@ func NewMemoryAuditStore() *MemoryAuditStore {
 
 // Append stores a new event.
 func (s *MemoryAuditStore) Append(_ context.Context, event *AuditEvent) error {
+	if event == nil {
+		return errors.New("audit event required")
+	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.events = append(s.events, event)
+	s.events = append(s.events, cloneAuditEvent(event))
 	return nil
 }
 
@@ -83,7 +88,7 @@ func (s *MemoryAuditStore) Query(_ context.Context, filter AuditFilter) ([]*Audi
 		if filter.EndTime != nil && event.Timestamp.Unix() > *filter.EndTime {
 			continue
 		}
-		result = append(result, event)
+		result = append(result, cloneAuditEvent(event))
 		if filter.Limit > 0 && len(result) >= filter.Limit {
 			break
 		}
@@ -100,6 +105,7 @@ type AuditLogger struct {
 
 	mu       sync.Mutex
 	lastHash string
+	initErr  error
 }
 
 // NewAuditLogger creates a new audit logger with a memory store by default.
@@ -110,10 +116,18 @@ func NewAuditLogger(cfg AuditLogConfig, store AuditStore) *AuditLogger {
 	if cfg == (AuditLogConfig{}) {
 		cfg = DefaultAuditLogConfig()
 	}
-	return &AuditLogger{
+	logger := &AuditLogger{
 		cfg:   cfg,
 		store: store,
 	}
+	if events, err := store.Query(context.Background(), AuditFilter{}); err != nil {
+		logger.initErr = fmt.Errorf("load audit chain: %w", err)
+	} else if err := validateAuditEvents(events); err != nil {
+		logger.initErr = err
+	} else if len(events) > 0 {
+		logger.lastHash = events[len(events)-1].Hash
+	}
+	return logger
 }
 
 // RegisterExporter registers an exporter for audit events.
@@ -137,39 +151,93 @@ func (l *AuditLogger) LogEvent(ctx context.Context, event *AuditEvent) error {
 
 	l.mu.Lock()
 	defer l.mu.Unlock()
-
-	if event.Timestamp.IsZero() {
-		event.Timestamp = time.Now().UTC()
+	if l.initErr != nil {
+		return l.initErr
 	}
-	if event.ID == "" {
-		event.ID = generateAuditEventID(event)
+
+	stored := cloneAuditEvent(event)
+
+	if stored.Timestamp.IsZero() {
+		stored.Timestamp = time.Now().UTC()
+	}
+	if stored.ID == "" {
+		stored.ID = generateAuditEventID(stored)
 	}
 
 	if l.cfg.EnableChaining {
-		event.PreviousHash = l.lastHash
-		event.Hash = computeAuditHash(event)
-		l.lastHash = event.Hash
+		stored.PreviousHash = l.lastHash
+		stored.Hash = computeAuditHash(stored)
 	} else {
-		event.Hash = computeAuditHash(event)
+		stored.Hash = computeAuditHash(stored)
 	}
 
-	if err := l.store.Append(ctx, event); err != nil {
+	if err := l.store.Append(ctx, stored); err != nil {
 		return err
 	}
+	if l.cfg.EnableChaining {
+		l.lastHash = stored.Hash
+	}
+	*event = *cloneAuditEvent(stored)
 
 	for _, exporter := range l.exporters {
 		exp := exporter
+		exported := cloneAuditEvent(stored)
 		verrors.SafeGo("data-vault:audit-export", func() {
-			_ = exp.Export(ctx, event)
+			_ = exp.Export(ctx, exported)
 		})
 	}
 
 	return nil
 }
 
+func cloneAuditEvent(event *AuditEvent) *AuditEvent {
+	if event == nil {
+		return nil
+	}
+	cloned := *event
+	cloned.Metadata = cloneStringMap(event.Metadata)
+	return &cloned
+}
+
+func validateAuditEvents(events []*AuditEvent) error {
+	previous := ""
+	for index, event := range events {
+		if event == nil {
+			return fmt.Errorf("audit chain event %d is nil", index)
+		}
+		if event.PreviousHash != previous {
+			return fmt.Errorf("audit chain event %d predecessor mismatch", index)
+		}
+		if event.Hash == "" || event.Hash != computeAuditHash(event) {
+			return fmt.Errorf("audit chain event %d hash mismatch", index)
+		}
+		previous = event.Hash
+	}
+	return nil
+}
+
+func cloneStringMap(source map[string]string) map[string]string {
+	if source == nil {
+		return nil
+	}
+	cloned := make(map[string]string, len(source))
+	for key, value := range source {
+		cloned[key] = value
+	}
+	return cloned
+}
+
 // QueryEvents returns audit events matching the filter.
 func (l *AuditLogger) QueryEvents(ctx context.Context, filter AuditFilter) ([]*AuditEvent, error) {
 	return l.store.Query(ctx, filter)
+}
+
+// Close releases resources held by a durable audit store.
+func (l *AuditLogger) Close() error {
+	if closer, ok := l.store.(interface{ Close() error }); ok {
+		return closer.Close()
+	}
+	return nil
 }
 
 func generateAuditEventID(event *AuditEvent) string {

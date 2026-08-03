@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: privileged-worker
+spec:
+  containers:
+    - name: slurmd
+      image: ghcr.io/virtengine/slurm-compute@sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee
+      securityContext:
+        privileged: true
+        runAsNonRoot: false
+        runAsUser: 0
+        allowPrivilegeEscalation: true
+        capabilities:
+          add: [SYS_ADMIN]

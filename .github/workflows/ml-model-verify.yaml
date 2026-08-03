@@ -36,7 +36,7 @@ on:
         default: ''
 
 env:
-  GO_VERSION: "1.25.5"
+  GO_VERSION: "1.25.8"
   PYTHON_VERSION: "3.11"
   GOWORK: "off"  # Disable workspace mode for vendor operations
   TF_VERSION: "2.15.0"
@@ -74,6 +74,18 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r ml/requirements-deterministic.txt
           pip install pytest pytest-cov
+
+      - name: Verify canonical Python parity fixtures
+        run: |
+          set -euo pipefail
+          command -v python
+          python --version
+          python -m ml.training.tools.feature_parity_fixture --check
+          python -m ml.training.tools.receipt_parity_fixture --check
+          pytest ml/training/tests/test_feature_parity.py ml/training/tests/test_receipt_parity.py ml/training/tests/test_features.py -v --tb=short
+          pytest --collect-only -q ml/training/tests/test_receipt_parity.py | grep -Eq '[1-9][0-9]* tests? collected'
+        env:
+          PYTHONPATH: ${{ github.workspace }}
 
       - name: Run training module tests
         run: |
@@ -131,6 +143,15 @@ jobs:
         run: |
           go mod tidy
           go mod vendor
+
+      - name: Run canonical Go parity tests
+        run: |
+          set -euo pipefail
+          command -v go
+          go version | grep -F "go${{ env.GO_VERSION }}"
+          go test -json -count=1 -run '^(TestCanonicalFeatureParityFixture|TestInferenceReceiptParityFixture)$' ./pkg/inference | tee parity-go.json
+          grep -q '"Action":"pass","Test":"TestCanonicalFeatureParityFixture"' parity-go.json
+          grep -q '"Action":"pass","Test":"TestInferenceReceiptParityFixture"' parity-go.json
 
       - name: Run inference package tests
         run: |

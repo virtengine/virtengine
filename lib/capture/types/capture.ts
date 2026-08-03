@@ -12,17 +12,17 @@
 /**
  * Supported document types for identity verification
  */
-export type DocumentType = 'id_card' | 'passport' | 'drivers_license';
+export type DocumentType = "id_card" | "passport" | "drivers_license";
 
 /**
  * Selfie capture mode
  */
-export type SelfieCaptureMode = 'photo' | 'video';
+export type SelfieCaptureMode = "photo" | "video";
 
 /**
  * Document capture side
  */
-export type DocumentSide = 'front' | 'back';
+export type DocumentSide = "front" | "back";
 
 // ============================================================================
 // Quality Check Types
@@ -32,20 +32,20 @@ export type DocumentSide = 'front' | 'back';
  * Types of quality issues that can be detected
  */
 export type QualityIssueType =
-  | 'blur'
-  | 'dark'
-  | 'bright'
-  | 'skew'
-  | 'resolution'
-  | 'glare'
-  | 'noise'
-  | 'partial'
-  | 'reflection';
+  | "blur"
+  | "dark"
+  | "bright"
+  | "skew"
+  | "resolution"
+  | "glare"
+  | "noise"
+  | "partial"
+  | "reflection";
 
 /**
  * Severity level of a quality issue
  */
-export type QualityIssueSeverity = 'warning' | 'error';
+export type QualityIssueSeverity = "warning" | "error";
 
 /**
  * Individual quality issue detected during capture
@@ -110,7 +110,7 @@ export interface QualityCheckDetail {
 export interface CameraDevice {
   deviceId: string;
   label: string;
-  facing: 'user' | 'environment' | 'unknown';
+  facing: "user" | "environment" | "unknown";
 }
 
 /**
@@ -118,7 +118,7 @@ export interface CameraDevice {
  */
 export interface CameraConstraints {
   /** Preferred camera facing mode */
-  facingMode: 'user' | 'environment';
+  facingMode: "user" | "environment";
   /** Minimum resolution width */
   minWidth: number;
   /** Minimum resolution height */
@@ -153,12 +153,12 @@ export interface CameraState {
  * Camera error types
  */
 export type CameraErrorType =
-  | 'permission_denied'
-  | 'not_found'
-  | 'not_readable'
-  | 'overconstrained'
-  | 'security_error'
-  | 'unknown';
+  | "permission_denied"
+  | "not_found"
+  | "not_readable"
+  | "overconstrained"
+  | "security_error"
+  | "unknown";
 
 /**
  * Camera error
@@ -184,7 +184,7 @@ export interface CaptureMetadata {
   /** ISO timestamp of capture */
   capturedAt: string;
   /** Document type captured */
-  documentType: DocumentType | 'selfie';
+  documentType: DocumentType | "selfie";
   /** Quality score achieved */
   qualityScore: number;
   /** Document side (for documents) */
@@ -226,17 +226,37 @@ export interface SelfieResult extends CaptureResult {
 }
 
 /**
- * Liveness check result
+ * Evidence returned by an injected liveness provider.
  */
 export interface LivenessCheckResult {
   /** Whether liveness was verified */
   passed: boolean;
+  /** Stable provider identity */
+  providerId: string;
+  /** Provider implementation or model version */
+  providerVersion: string;
+  /** Challenge identifier bound to this capture */
+  challengeId: string;
+  /** Capture session identifier bound to this evidence */
+  sessionId: string;
   /** Liveness score (0-1) */
   score: number;
   /** Type of liveness challenge completed */
-  challengeType: 'blink' | 'smile' | 'turn' | 'passive';
+  challengeType: "blink" | "smile" | "turn" | "passive";
   /** Time taken for challenge */
   challengeDurationMs: number;
+  /** Digest of the provider evidence */
+  evidenceDigest: string;
+}
+
+export interface LivenessRequest {
+  sessionId: string;
+  challengeId: string;
+  timeoutMs: number;
+}
+
+export interface LivenessProvider {
+  verify(request: LivenessRequest): Promise<LivenessCheckResult>;
 }
 
 // ============================================================================
@@ -257,7 +277,7 @@ export interface ClientKeyProvider {
   /** Get public key for verification */
   getPublicKey(): Promise<Uint8Array>;
   /** Key type (ed25519 or secp256k1) */
-  getKeyType(): Promise<'ed25519' | 'secp256k1'>;
+  getKeyType(): Promise<"ed25519" | "secp256k1">;
 }
 
 /**
@@ -271,7 +291,7 @@ export interface UserKeyProvider {
   /** Get public key for verification */
   getPublicKey(): Promise<Uint8Array>;
   /** Key type */
-  getKeyType(): Promise<'ed25519' | 'secp256k1'>;
+  getKeyType(): Promise<"ed25519" | "secp256k1">;
 }
 
 // ============================================================================
@@ -282,14 +302,14 @@ export interface UserKeyProvider {
  * Capture error types
  */
 export type CaptureErrorType =
-  | 'camera_error'
-  | 'quality_check_failed'
-  | 'metadata_strip_failed'
-  | 'signing_failed'
-  | 'validation_failed'
-  | 'timeout'
-  | 'cancelled'
-  | 'unknown';
+  | "camera_error"
+  | "quality_check_failed"
+  | "metadata_strip_failed"
+  | "signing_failed"
+  | "validation_failed"
+  | "timeout"
+  | "cancelled"
+  | "unknown";
 
 /**
  * Capture error
@@ -358,6 +378,10 @@ export interface SelfieCaptureProps {
   mode: SelfieCaptureMode;
   /** Enable liveness check */
   livenessCheck?: boolean;
+  /** Provider used to obtain bound liveness evidence */
+  livenessProvider?: LivenessProvider;
+  /** Maximum time allowed for liveness verification */
+  livenessTimeoutMs?: number;
   /** Callback when capture is successful */
   onCapture: (result: SelfieResult) => void;
   /** Callback when an error occurs */

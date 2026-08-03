@@ -8,11 +8,31 @@ import (
 	veidv1 "github.com/virtengine/virtengine/sdk/go/node/veid/v1"
 )
 
-// GRPCPortalChainQuery resolves role and consent checks via gRPC while falling back to noop for others.
+// GRPCPortalChainQuery resolves role and consent checks via gRPC and fails closed for other routes.
 type GRPCPortalChainQuery struct {
 	NoopChainQuery
 	rolesClient rolesv1.QueryClient
 	veidClient  veidv1.QueryClient
+}
+
+// PortalCapability reports the gRPC query surfaces backed by configured clients.
+func (q *GRPCPortalChainQuery) PortalCapability(capability PortalRouteCapability) error {
+	if q == nil {
+		return featureUnavailable(capability, "86C")
+	}
+	switch capability {
+	case PortalCapabilityRoles:
+		if q.rolesClient != nil {
+			return nil
+		}
+	case PortalCapabilityConsent:
+		if q.veidClient != nil {
+			return nil
+		}
+	default:
+		return q.NoopChainQuery.PortalCapability(capability)
+	}
+	return featureUnavailable(capability, "86C")
 }
 
 // NewGRPCPortalChainQuery creates a chain query backed by roles + veid gRPC clients.

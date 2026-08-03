@@ -1,0 +1,71 @@
+T5-20 persisted schema inventory validation
+Payload: 825c0e9fb331a730aaa209be7e6d25558ec1ade2
+Branch: ve/prototype-t5-platform
+Platform: windows/amd64
+Toolchains: go version go1.25.8 windows/amd64; WinLibs POSIX UCRT GCC 16.1.0
+
+Epoch ancestry:
+- Frozen baseline: 79391a3df86d85522b92e0400c6904971ecbe65d
+- Planning SHA: 1436723bd78980aa0388dbe9fcfa24dda939c54a
+- Intake epoch: 1
+- Intake base: 5587c384f634552c3a2dd7181ca49cafa4da1984
+- Prior accepted payload: null
+- Payload head: 825c0e9fb331a730aaa209be7e6d25558ec1ade2
+- Payload descends from the intake base.
+- git rev-list --reverse --topo-order reports exactly 38 commits from the intake base to the payload.
+- T4 completeChangedPaths reports exactly 137 paths, including integration-history parent diffs.
+
+Inventory boundary and artifact:
+- Inventoried code boundary: b6980d266eb23d56e23108858cbbf1b2da9dfe8c
+- The inventory implementation, tests, and fixture are metadata/code committed in payload 825c0e9fb331a730aaa209be7e6d25558ec1ade2, a descendant of the inventoried boundary.
+- The payload includes the inventory contract itself but adds no persisted schema.
+- Canonical inventory digest: 4ea63d9160ff0fefabb04f1854c1700386a93b2567f9fde0c4b7153b75b8fd44
+- Committed fixture SHA256: f920e0aab1f594165a7e906a196f375572c634107d2671f957ae353798ed083b
+
+Inventory entries and classifications:
+- data-vault-key-state: fixture_only; new_store
+- data-vault-artifact-index: fixture_only; new_store
+- data-vault-metadata-audit-operation: off_chain; additive_no_rewrite
+- data-vault-audit-chain: fixture_only; new_store
+- data-vault-erasure-operation-contract: off_chain; integration_required
+- fundauth-replay-store: consensus; integration_required
+- veid-evidence-reference: consensus; required_unwired
+- veid-evidence-quarantine: consensus; required_unwired
+- veid-evidence-migration-bookkeeping: consensus; required_unwired
+- veid-legacy-payload-cutover: consensus; required_unwired
+- encryption-envelope-v2: serialized; explicit_reencrypt
+- mfa-otp-verifier-receipt: transient; none
+- Non-persistent surfaces: organization contracts, platformsecurity dependency manifest, issuer-link contracts, uniqueness contracts, biometric incident contracts, backend-profile contracts, federation contracts, privileged-role contracts, and MFA prototype contracts.
+
+Command: C:\Users\pavil\AppData\Local\VirtEngine\toolchains\go1.25.8\go\bin\go.exe test -count=1 ./pkg/platformsecurity/contracts
+Output:
+- ok github.com/virtengine/virtengine/pkg/platformsecurity/contracts 3.037s
+Exit code: 0
+
+Command: C:\Users\pavil\AppData\Local\VirtEngine\toolchains\go1.25.8\go\bin\go.exe vet ./pkg/platformsecurity/contracts
+Output: no diagnostics
+Exit code: 0
+
+Persistent-shell environment: CGO_ENABLED=1; CC=gcc; PATH includes the WinLibs POSIX UCRT bin directory.
+Command: C:\Users\pavil\AppData\Local\VirtEngine\toolchains\go1.25.8\go\bin\go.exe test -race -count=1 ./pkg/platformsecurity/contracts
+Output:
+- ok github.com/virtengine/virtengine/pkg/platformsecurity/contracts 25.345s
+Exit code: 0
+
+Ownership and intake diagnostic:
+- Honest T5 owned_paths are the T5-19 declarations plus pkg/platformsecurity/contracts/**; no integration-only or T4-owned path is claimed.
+- T4 validator matching covers 113 of 137 completeChangedPaths and leaves 24 inherited integration/T4 paths uncovered.
+- Merge a9e148436c73e398e8902d03303abafdc1117bb5 contributes upgrades/software/v1.6.0/upgrade.go, upgrades/software/v1.6.0/upgrade_handler_test.go, and upgrades/software/v1.6.0/upgrade_retry_test.go through merge-parent diffs.
+- No active T5 generated-file lease covers those paths.
+- A descendant commit or revert cannot remove paths already accumulated by completeChangedPaths for this epoch range.
+
+Integration obligations:
+- T4 must consume the persisted schema inventory, register the VEID evidence reference migration, and separately sanitize/delete legacy PrefixScope 0x02 rows and classified shared-prefix 0x9A rows.
+- T4 must mount and wire the persistent FundAuthorization store and keeper.
+- Production erasure requires a durable transactional ErasureOperationStore, production storage-deletion and KMS-destruction adapters, independent receipt signers/key resolver, consent/hold/backup/finalization authorities, and authenticated restore-manifest authority.
+- migrations is empty because T5-20 claims no registered module migration.
+- This checkpoint is untagged and not intake eligible.
+
+Command: git diff --check -- _docs/ralph/evidence/prototype-t5/T5-20/validation.txt _docs/ralph/handoffs/prototype-t5/HANDOFF.yaml
+Output: no errors
+Exit code: 0

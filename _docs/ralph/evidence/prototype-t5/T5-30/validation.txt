@@ -1,0 +1,63 @@
+T5-30 freshness lifetime overflow boundary
+Payload: 7d9dc946088893a2f4847b76bc8fbc028a760b0d
+Branch: ve/prototype-t5-platform
+Platform: windows/amd64
+Toolchains: go version go1.25.8 windows/amd64; gcc.exe (MinGW-W64 x86_64-ucrt-posix-seh, built by Brecht Sanders, r3) 16.1.0; git version 2.51.2.windows.1
+
+Epoch ancestry:
+- Frozen baseline: 79391a3df86d85522b92e0400c6904971ecbe65d
+- Planning SHA: 1436723bd78980aa0388dbe9fcfa24dda939c54a
+- Intake epoch: 1
+- Intake base: 5587c384f634552c3a2dd7181ca49cafa4da1984
+- Prior accepted payload: null
+- Payload head: 7d9dc946088893a2f4847b76bc8fbc028a760b0d
+- Next checkpoint: null
+- Payload descends from the intake base.
+- git rev-list --count reports exactly 58 commits from the intake base to the payload.
+- Complete all-parent changed-path accounting reports exactly 153 paths, including integration-history parent diffs.
+- Honest T5 ownership covers 129 of 153 complete changed paths and leaves exactly 24 inherited integration/T4 paths uncovered.
+
+Freshness lifetime overflow boundary:
+- Freshness.ValidateAt compares the integer-second interval directly with the policy lifetime converted to integer seconds.
+- The comparison cannot wrap a large freshness interval through time.Duration multiplication.
+- A regression case with ExpiresAt 9_223_372_037 seconds rejects the overflowing interval.
+
+Command: C:\Users\pavil\AppData\Local\VirtEngine\toolchains\go1.25.8\go\bin\go.exe -C C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t5 test -count=1 ./pkg/platformsecurity/uniqueness -run '^TestQuorumAttestationAuthorityFreshnessAndTamper$'
+Output: ok github.com/virtengine/virtengine/pkg/platformsecurity/uniqueness 1.201s
+Wall time: 4.970s
+Exit code: 0
+
+Command: C:\Users\pavil\AppData\Local\VirtEngine\toolchains\go1.25.8\go\bin\go.exe -C C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t5 test -count=1 ./pkg/platformsecurity/uniqueness
+Output: ok github.com/virtengine/virtengine/pkg/platformsecurity/uniqueness 1.014s
+Wall time: 4.604s
+Exit code: 0
+
+Command: C:\Users\pavil\AppData\Local\VirtEngine\toolchains\go1.25.8\go\bin\go.exe -C C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t5 vet ./pkg/platformsecurity/uniqueness
+Output: no diagnostics
+Wall time: 3.625s
+Exit code: 0
+
+Process environment:
+- CGO_ENABLED=1
+- CC=C:\Users\pavil\AppData\Local\Microsoft\WinGet\Packages\BrechtSanders.WinLibs.POSIX.UCRT_Microsoft.Winget.Source_8wekyb3d8bbwe\mingw64\bin\gcc.exe
+Command: C:\Users\pavil\AppData\Local\VirtEngine\toolchains\go1.25.8\go\bin\go.exe -C C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t5 test -race -count=1 ./pkg/platformsecurity/uniqueness
+Output: ok github.com/virtengine/virtengine/pkg/platformsecurity/uniqueness 3.041s; no race detector diagnostics
+Wall time: 10.467s
+Exit code: 0
+
+Ownership and blockers:
+- Honest T5 owned_paths claim only T5 evidence/handoff paths and T5-owned data-vault, fundauth, organization-contract, platform-security, provider-daemon contract, encryption, MFA, privileged-role, and VEID surfaces.
+- The 24 inherited integration/T4 paths have no active T5 generated-file lease, so this checkpoint remains untagged and not intake eligible.
+- T4 must register the prerequisite VEID evidence reference migration and then separately register the signed evidence payload cutover using D4 children 05 through 08.
+- T4 must mount and wire the persistent FundAuthorization store and keeper.
+- Production erasure remains external: it requires durable transactional erasure storage, production storage-deletion and KMS-destruction adapters, independent receipt signers and key resolver, consent, hold, backup, and finalization authorities, and authenticated restore-manifest authority.
+- generated_hashes is {} because T5-30 changes no generated artifact.
+- migrations is [] because T4 registration is absent.
+
+Validation:
+- Payload commit diff --check: passed with no errors.
+- Strict schema-v2 JSON parse and integration-control validation: passed.
+- Epoch range validation: 58 exact commits and 153 exact complete changed paths from 5587c384f634552c3a2dd7181ca49cafa4da1984 through 7d9dc946088893a2f4847b76bc8fbc028a760b0d.
+- Ownership validation: 129 covered paths and 24 uncovered inherited integration/T4 paths.
+- Git all-parent inventory and handoff files_changed both contain 153 paths with zero differences after the handoff update.
+- git diff --check for T5-30 evidence and handoff: passed with no errors.

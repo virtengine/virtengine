@@ -9,6 +9,8 @@ import {
   createSessionManager,
   walletSessionManager,
   type WalletSession,
+  type WalletAuthorizationBinding,
+  type WalletAuthorizationContext,
   type SessionConfig,
 } from '../../src/wallet/session';
 
@@ -38,6 +40,7 @@ describe('WalletSessionManager', () => {
   let manager: WalletSessionManager;
   let mockLocalStorage: ReturnType<typeof createMockLocalStorage>;
   let originalWindow: typeof globalThis.window;
+  let storageListener: ((event: StorageEvent) => void) | undefined;
 
   const createTestSession = (overrides: Partial<WalletSession> = {}): WalletSession => ({
     walletType: 'keplr',
@@ -47,6 +50,25 @@ describe('WalletSessionManager', () => {
     lastActiveAt: Date.now(),
     expiresAt: Date.now() + 7 * 24 * 60 * 60 * 1000,
     autoReconnect: true,
+    ...overrides,
+  });
+
+  const authorizationContext: WalletAuthorizationContext = {
+    chainId: 'virtengine-1',
+    account: 'virtengine1abc123xyz',
+    publicKey: 'pubkey-1',
+    walletType: 'keplr',
+    deviceId: 'device-1',
+    sessionId: 'session-1',
+  };
+
+  const createAuthorization = (
+    overrides: Partial<WalletAuthorizationBinding> = {}
+  ): WalletAuthorizationBinding => ({
+    ...authorizationContext,
+    issuedAt: Date.now(),
+    expiresAt: Date.now() + 60_000,
+    mfa: { scopes: ['market:write', 'veid:write'], expiresAt: Date.now() + 30_000 },
     ...overrides,
   });
 
@@ -63,6 +85,10 @@ describe('WalletSessionManager', () => {
     // Mock window with localStorage
     const mockWindow = {
       localStorage: mockLocalStorage,
+      addEventListener: vi.fn((type: string, listener: (event: StorageEvent) => void) => {
+        if (type === 'storage') storageListener = listener;
+      }),
+      removeEventListener: vi.fn(),
     };
     
     // @ts-expect-error - Mocking window
@@ -150,18 +176,21 @@ describe('WalletSessionManager', () => {
       );
     });
 
-    it('should encode session when encryption is enabled', () => {
-      const encryptedManager = new WalletSessionManager({ encryptionEnabled: true });
-      const session = createTestSession();
-      
-      encryptedManager.saveSession(session);
-      
-      // Find the call that saves the session (not the storage test)
-      const sessionCall = mockLocalStorage.setItem.mock.calls.find(
-        call => call[0] === 'virtengine_wallet_session'
-      );
-      expect(sessionCall).toBeDefined();
-      expect(sessionCall![1]).toMatch(/^v1:/);
+    it('persists only versioned reconnect metadata', () => {
+      manager.saveSession(createTestSession());
+      const stored = mockLocalStorage._store['virtengine_wallet_session'];
+
+      expect(Object.keys(JSON.parse(stored)).sort()).toEqual([
+        'address',
+        'autoReconnect',
+        'chainId',
+        'connectedAt',
+        'expiresAt',
+        'lastActiveAt',
+        'version',
+        'walletType',
+      ]);
+      expect(stored).not.toMatch(/privateKey|signature|proof|token|authorization|publicKey/i);
     });
   });
 
@@ -217,18 +246,14 @@ describe('WalletSessionManager', () => {
       expect(mockLocalStorage.removeItem).toHaveBeenCalledWith('virtengine_wallet_session');
     });
 
-    it('should decode encrypted session', () => {
-      const encryptedManager = new WalletSessionManager({ encryptionEnabled: true });
-      const session = createTestSession();
-      
-      encryptedManager.saveSession(session);
-      
-      // Load with new encrypted manager
-      const newEncryptedManager = new WalletSessionManager({ encryptionEnabled: true });
-      const loadedSession = newEncryptedManager.loadSession();
-      
-      expect(loadedSession).not.toBeNull();
-      expect(loadedSession?.walletType).toBe('keplr');
+    it('clears unknown legacy and extra-field storage', () => {
+      mockLocalStorage._store['virtengine_wallet_session'] = JSON.stringify({
+        ...createTestSession(),
+        token: 'legacy-token',
+      });
+
+      expect(manager.loadSession()).toBeNull();
+      expect(mockLocalStorage.removeItem).toHaveBeenCalledWith('virtengine_wallet_session');
     });
 
     it('should validate walletType is valid', () => {
@@ -289,7 +314,7 @@ describe('WalletSessionManager', () => {
       expect(isValid).toBe(true);
     });
 
-    it('should handle session with null expiration', () => {
+    it('should reject stored session with null expiration', () => {
       const session = createTestSession();
       manager.saveSession(session);
       
@@ -302,7 +327,7 @@ describe('WalletSessionManager', () => {
       const newManager = new WalletSessionManager();
       newManager.loadSession();
       
-      expect(newManager.isSessionValid()).toBe(true);
+      expect(newManager.isSessionValid()).toBe(false);
     });
 
     it('should clear expired session from storage', () => {
@@ -392,6 +417,83 @@ describe('WalletSessionManager', () => {
       manager.clearSession();
       
       expect(manager.getCachedSession()).toBeNull();
+    });
+  });
+
+  describe('live authorization', () => {
+    beforeEach(() => manager.saveSession(createTestSession()));
+
+    it('keeps authorization in memory only and requires MFA scopes', () => {
+      expect(manager.setLiveAuthorization(createAuthorization())).toBe(true);
+      expect(manager.getLiveAuthorization(authorizationContext, ['market:write'])).not.toBeNull();
+      expect(mockLocalStorage._store['virtengine_wallet_session']).not.toContain('pubkey-1');
+
+      expect(manager.getLiveAuthorization(authorizationContext, ['admin:write'])).toBeNull();
+    });
+
+    it.each([
+      ['chainId', 'other-chain'],
+      ['account', 'virtengine1other'],
+      ['publicKey', 'pubkey-2'],
+      ['walletType', 'leap'],
+      ['deviceId', 'device-2'],
+      ['sessionId', 'session-2'],
+    ] as const)('invalidates on %s mismatch', (field, value) => {
+      expect(manager.setLiveAuthorization(createAuthorization())).toBe(true);
+      expect(
+        manager.getLiveAuthorization({ ...authorizationContext, [field]: value })
+      ).toBeNull();
+      expect(manager.getLiveAuthorization(authorizationContext)).toBeNull();
+    });
+
+    it('rejects expired authorization and expired MFA', () => {
+      expect(
+        manager.setLiveAuthorization(
+          createAuthorization({ issuedAt: Date.now() - 2000, expiresAt: Date.now() - 1000 })
+        )
+      ).toBe(false);
+      expect(
+        manager.setLiveAuthorization(
+          createAuthorization({
+            mfa: { scopes: ['market:write'], expiresAt: Date.now() - 1 },
+          })
+        )
+      ).toBe(false);
+    });
+
+    it('invalidates authorization when persisted storage changes', () => {
+      expect(manager.setLiveAuthorization(createAuthorization())).toBe(true);
+      storageListener?.({
+        key: 'virtengine_wallet_session',
+        newValue: '{"tampered":true}',
+      } as StorageEvent);
+
+      expect(manager.getLiveAuthorization(authorizationContext)).toBeNull();
+      expect(mockLocalStorage.removeItem).toHaveBeenCalledWith('virtengine_wallet_session');
+    });
+
+    it('invalidates reconnect state and authorization on cross-tab disconnect', () => {
+      expect(manager.setLiveAuthorization(createAuthorization())).toBe(true);
+      storageListener?.({
+        key: 'virtengine_wallet_session:disconnect',
+        newValue: String(Date.now()),
+      } as StorageEvent);
+
+      expect(manager.getCachedSession()).toBeNull();
+      expect(manager.getLiveAuthorization(authorizationContext)).toBeNull();
+    });
+
+    it.each([
+      ['removed', 'virtengine_wallet_session', null],
+      ['tampered', 'virtengine_wallet_session', '{"tampered":true}'],
+      ['disconnect', 'virtengine_wallet_session:disconnect', String(Date.now())],
+    ] as const)('notifies consumers when storage is %s', (reason, key, newValue) => {
+      const listener = vi.fn();
+      manager.onInvalidated(listener);
+
+      storageListener?.({ key, newValue } as StorageEvent);
+
+      expect(listener).toHaveBeenCalledWith(reason);
     });
   });
 

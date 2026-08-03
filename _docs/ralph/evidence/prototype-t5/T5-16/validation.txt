@@ -1,0 +1,43 @@
+T5-16 durable erasure coordinator validation
+Payload: 65508cd516f5e46fb055d47c0bb81f1bcf810eae
+Platform: windows/amd64
+Toolchains: go version go1.25.8 windows/amd64; WinLibs POSIX UCRT GCC 16.1.0
+
+Command: C:\Users\pavil\AppData\Local\VirtEngine\toolchains\go1.25.8\go\bin\go.exe -C C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t5 test -count=1 ./pkg/data_vault/...
+Output:
+- ok github.com/virtengine/virtengine/pkg/data_vault 19.297s
+- ok github.com/virtengine/virtengine/pkg/data_vault/contracts 2.293s
+- ok github.com/virtengine/virtengine/pkg/data_vault/keys 6.853s
+Exit code: 0
+
+Command: C:\Users\pavil\AppData\Local\VirtEngine\toolchains\go1.25.8\go\bin\go.exe vet ./pkg/data_vault/...
+Output: no diagnostics
+Exit code: 0
+
+Environment: CGO_ENABLED=1; CC=gcc; PATH includes WinLibs UCRT bin
+Command: C:\Users\pavil\AppData\Local\VirtEngine\toolchains\go1.25.8\go\bin\go.exe test -race -count=1 ./pkg/data_vault/...
+Output:
+- ok github.com/virtengine/virtengine/pkg/data_vault 49.768s
+- ok github.com/virtengine/virtengine/pkg/data_vault/contracts 2.066s
+- ok github.com/virtengine/virtengine/pkg/data_vault/keys 39.821s
+Exit code: 0
+
+Command: git diff --check
+Output: no errors
+Exit code: 0
+
+Security evidence:
+- Durable operation contracts journal irreversible storage deletion, backup fencing, KMS destruction, signed receipts, and atomic resolution/replay consumption.
+- Finalization authority fence spans KMS destruction through resolution and is reacquired when resuming after persisted KMS work.
+- Consent, legal-hold, and governed-backup state fail closed before irreversible key destruction.
+- Storage and KMS receipts bind exact request, object, consent, policy, backup, epoch, and independently administered signer authority domains.
+- Exact retry returns byte-identical receipts; changed requests, mixed/partial receipt replay, duplicate operations, and duplicate receipt digests fail closed.
+- Restore validation rejects pre-erasure snapshots, ciphertext/key resurrection, unauthenticated manifests, and mismatched backup generations.
+- Resolution state writes are available only through the durable store-supplied transaction.
+
+Blockers/non-claims:
+- Memory operation store, fixture deletion adapters, fixture signers, and fixture authorities are test infrastructure only.
+- Production requires a durable atomic store, distributed finalization fence, independent signer authority domains, and authenticated restore-manifest authority.
+- T5-17 must implement biometric incident/recovery contracts.
+- T5-18 must implement the durable keeper nonce consumer and cached-context transaction.
+- No T4 intake epoch manifest/base tag/validator is published; payload remains untagged and not intake-eligible.

@@ -1,0 +1,138 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://virtengine.com/schemas/prototype-integration/required-gate-matrix.schema.json",
+  "title": "T4-05B Task 88B required-gate matrix control",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "task", "control_scope", "status", "completion_claim", "unmatched_path_allowlist", "categories", "blockers"],
+  "properties": {
+    "schema_version": { "const": "virtengine.task-88b.required-gate-matrix/v1" },
+    "task": { "const": "88B" },
+    "control_scope": { "const": "required_gate_matrix_only" },
+    "status": { "enum": ["dependency_blocked", "ready", "complete"] },
+    "completion_claim": { "type": "boolean" },
+    "unmatched_path_allowlist": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/pathAllowance" }
+    },
+    "categories": {
+      "type": "array",
+      "minItems": 11,
+      "maxItems": 11,
+      "items": { "$ref": "#/$defs/category" }
+    },
+    "blockers": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/blocker" }
+    }
+  },
+  "$defs": {
+    "stringArray": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": { "type": "string", "minLength": 1 }
+    },
+    "blocker": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "description"],
+      "properties": {
+        "id": { "type": "string", "pattern": "^[a-z0-9.-]+$" },
+        "description": { "type": "string", "minLength": 1 }
+      }
+    },
+    "pathAllowance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["selector", "reason"],
+      "properties": {
+        "selector": { "type": "string", "minLength": 1 },
+        "reason": { "type": "string", "minLength": 1 }
+      }
+    },
+    "tool": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "version", "source"],
+      "properties": {
+        "name": { "type": "string", "pattern": "^[a-z0-9.-]+$" },
+        "version": { "type": "string", "pattern": "^[0-9]+\\.[0-9]+(?:\\.[0-9]+)?$" },
+        "source": { "type": "string", "minLength": 1 }
+      }
+    },
+    "command": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "kind", "command"],
+      "properties": {
+        "id": { "type": "string", "pattern": "^[a-z0-9.-]+$" },
+        "kind": { "enum": ["setup", "build", "lint", "test", "policy", "drift"] },
+        "command": { "type": "string", "minLength": 1 }
+      }
+    },
+    "zeroTestPolicy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["applies_to", "minimum_discovered", "minimum_executed", "empty_selection"],
+      "properties": {
+        "applies_to": { "const": "test_commands" },
+        "minimum_discovered": { "const": 1 },
+        "minimum_executed": { "const": 1 },
+        "empty_selection": { "const": "fail" }
+      }
+    },
+    "failureSemantics": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["nonzero_exit", "skipped", "missing_tool", "cancelled"],
+      "properties": {
+        "nonzero_exit": { "const": "fail" },
+        "skipped": { "const": "fail" },
+        "missing_tool": { "const": "fail" },
+        "cancelled": { "const": "fail" }
+      }
+    },
+    "dependency": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "status"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "status": { "enum": ["unavailable", "available"] }
+      }
+    },
+    "category": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "path_selectors", "required_commands", "pinned_tools", "zero_test_policy", "failure_semantics", "dependencies", "status", "blockers"],
+      "properties": {
+        "id": { "type": "string", "pattern": "^[a-z0-9_]+$" },
+        "path_selectors": { "$ref": "#/$defs/stringArray" },
+        "required_commands": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/command" }
+        },
+        "pinned_tools": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/tool" }
+        },
+        "zero_test_policy": { "$ref": "#/$defs/zeroTestPolicy" },
+        "failure_semantics": { "$ref": "#/$defs/failureSemantics" },
+        "dependencies": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/dependency" }
+        },
+        "status": { "enum": ["dependency_blocked", "ready", "complete"] },
+        "blockers": {
+          "type": "array",
+          "items": { "type": "string", "pattern": "^[a-z0-9.-]+$" }
+        }
+      }
+    }
+  }
+}

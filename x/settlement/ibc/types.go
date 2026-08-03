@@ -4,6 +4,7 @@
 package ibc
 
 import (
+	"crypto/sha256"
 	"encoding/json"
 	"fmt"
 	"time"
@@ -17,6 +18,8 @@ import (
 const (
 	// Version defines the current IBC settlement module version.
 	Version = "settlement-1"
+	// TransferContractVersion defines the persisted transfer lifecycle schema.
+	TransferContractVersion = "settlement-transfer/v1"
 
 	// PortID is the default port id for the settlement IBC module.
 	PortID = "settlement"
@@ -44,8 +47,9 @@ const (
 
 // SettlementPacketData wraps packet type and data payload.
 type SettlementPacketData struct {
-	Type PacketType      `json:"type"`
-	Data json.RawMessage `json:"data"`
+	Version string          `json:"version"`
+	Type    PacketType      `json:"type"`
+	Data    json.RawMessage `json:"data"`
 }
 
 // NewPacketData creates a new SettlementPacketData.
@@ -55,8 +59,9 @@ func NewPacketData(packetType PacketType, data interface{}) (SettlementPacketDat
 		return SettlementPacketData{}, err
 	}
 	return SettlementPacketData{
-		Type: packetType,
-		Data: bz,
+		Version: TransferContractVersion,
+		Type:    packetType,
+		Data:    bz,
 	}, nil
 }
 
@@ -68,6 +73,10 @@ func (p SettlementPacketData) GetBytes() []byte {
 
 // Validate validates the packet data wrapper.
 func (p SettlementPacketData) Validate() error {
+	if p.Version != TransferContractVersion {
+		return fmt.Errorf("unsupported transfer contract version: %q", p.Version)
+	}
+
 	switch p.Type {
 	case PacketTypeEscrowDeposit, PacketTypeEscrowRelease, PacketTypeSettlementRecord:
 		// valid
@@ -82,23 +91,108 @@ func (p SettlementPacketData) Validate() error {
 	return nil
 }
 
+// TransferState is the durable lifecycle state of an outgoing transfer.
+type TransferState string
+
+const (
+	TransferStatePending          TransferState = "pending"
+	TransferStateFinalizing       TransferState = "finalizing"
+	TransferStateCompensating     TransferState = "compensating"
+	TransferStateFinalized        TransferState = "finalized"
+	TransferStateCompensated      TransferState = "compensated"
+	TransferStateRecoveryRequired TransferState = "recovery_required"
+)
+
+// CompensationReason is a stable reason code for a compensating transition.
+type CompensationReason string
+
+const (
+	CompensationReasonNone           CompensationReason = ""
+	CompensationReasonErrorAck       CompensationReason = "error_acknowledgement"
+	CompensationReasonTimeout        CompensationReason = "timeout"
+	CompensationReasonChannelClosed  CompensationReason = "channel_closed"
+	CompensationReasonCustodyFailure CompensationReason = "custody_failure"
+)
+
+// TransferIdentity canonically identifies one IBC packet for one logical payout.
+type TransferIdentity struct {
+	Version         string `json:"version"`
+	LogicalPayoutID string `json:"logical_payout_id"`
+	SourcePort      string `json:"source_port"`
+	SourceChannel   string `json:"source_channel"`
+	Sequence        uint64 `json:"sequence"`
+	PayloadDigest   []byte `json:"payload_digest"`
+}
+
+// Validate validates the immutable transfer identity.
+func (id TransferIdentity) Validate() error {
+	if id.Version != TransferContractVersion {
+		return fmt.Errorf("unsupported transfer identity version: %q", id.Version)
+	}
+	if id.LogicalPayoutID == "" || id.SourcePort == "" || id.SourceChannel == "" || id.Sequence == 0 {
+		return fmt.Errorf("transfer identity fields cannot be empty")
+	}
+	if len(id.PayloadDigest) != sha256.Size {
+		return fmt.Errorf("transfer payload digest must be %d bytes", sha256.Size)
+	}
+	return nil
+}
+
+// TerminalMarker records the one accepted terminal callback for a transfer.
+type TerminalMarker struct {
+	Identity           TransferIdentity   `json:"identity"`
+	State              TransferState      `json:"state"`
+	CompensationReason CompensationReason `json:"compensation_reason,omitempty"`
+	CallbackDigest     []byte             `json:"callback_digest"`
+	TransitionedAt     time.Time          `json:"transitioned_at"`
+}
+
+// TransferTransition describes one compare-and-transition operation.
+type TransferTransition struct {
+	Identity           TransferIdentity   `json:"identity"`
+	PacketType         PacketType         `json:"packet_type"`
+	FromState          TransferState      `json:"from_state"`
+	IntermediateState  TransferState      `json:"intermediate_state"`
+	TerminalState      TransferState      `json:"terminal_state"`
+	CompensationReason CompensationReason `json:"compensation_reason,omitempty"`
+	CallbackDigest     []byte             `json:"callback_digest"`
+}
+
+func acknowledgementDigest(acknowledgement []byte) []byte {
+	digest := sha256.Sum256(append([]byte("ack/v1:"), acknowledgement...))
+	return digest[:]
+}
+
+func timeoutDigest() []byte {
+	digest := sha256.Sum256([]byte("timeout/v1"))
+	return digest[:]
+}
+
+func payloadDigest(payload []byte) []byte {
+	digest := sha256.Sum256(payload)
+	return digest[:]
+}
+
 // EscrowDepositPacket represents a cross-chain escrow deposit request.
 type EscrowDepositPacket struct {
-	DepositID       string                   `json:"deposit_id"`
-	OrderID         string                   `json:"order_id"`
-	Depositor       string                   `json:"depositor"`
-	Amount          sdk.Coins                `json:"amount"`
-	ExpiresInSeconds uint64                  `json:"expires_in_seconds"`
-	Conditions      []types.ReleaseCondition `json:"conditions,omitempty"`
-	SourceChainID   string                   `json:"source_chain_id"`
-	SourceChannel   string                   `json:"source_channel"`
-	RequestedAt     time.Time                `json:"requested_at"`
-	TimeoutHeight   clienttypes.Height       `json:"timeout_height"`
-	TimeoutTimestamp uint64                  `json:"timeout_timestamp"`
+	DepositID        string                   `json:"deposit_id"`
+	OrderID          string                   `json:"order_id"`
+	Depositor        string                   `json:"depositor"`
+	Amount           sdk.Coins                `json:"amount"`
+	ExpiresInSeconds uint64                   `json:"expires_in_seconds"`
+	Conditions       []types.ReleaseCondition `json:"conditions,omitempty"`
+	SourceChainID    string                   `json:"source_chain_id"`
+	SourceChannel    string                   `json:"source_channel"`
+	RequestedAt      time.Time                `json:"requested_at"`
+	TimeoutHeight    clienttypes.Height       `json:"timeout_height"`
+	TimeoutTimestamp uint64                   `json:"timeout_timestamp"`
 }
 
 // Validate validates the escrow deposit packet.
 func (p EscrowDepositPacket) Validate() error {
+	if p.DepositID == "" {
+		return fmt.Errorf("deposit_id cannot be empty")
+	}
 	if p.OrderID == "" {
 		return fmt.Errorf("order_id cannot be empty")
 	}
@@ -217,6 +311,14 @@ type SettlementRecordAck struct {
 type Acknowledgement struct {
 	Result []byte `json:"result,omitempty"`
 	Error  string `json:"error,omitempty"`
+}
+
+// Validate rejects ambiguous acknowledgements.
+func (a Acknowledgement) Validate() error {
+	if (len(a.Result) == 0) == (a.Error == "") {
+		return fmt.Errorf("acknowledgement must contain exactly one of result or error")
+	}
+	return nil
 }
 
 // NewResultAcknowledgement creates a successful acknowledgement.

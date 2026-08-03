@@ -3,16 +3,21 @@ import { Pressable, StyleSheet, Text, View } from "react-native";
 import { CaptureFooter } from "../components/CaptureFooter";
 import { CaptureHeader } from "../components/CaptureHeader";
 import { captureBiometric } from "../core/biometric";
+import type { BiometricProviderAdapter } from "../core/biometric/provider";
 import type { BiometricCapture, BiometricModality } from "../core/captureModels";
 import { useCaptureStore } from "../state/captureStore";
 
-export function BiometricCaptureScreen() {
+interface BiometricCaptureScreenProps {
+  biometricProvider?: BiometricProviderAdapter;
+}
+
+export function BiometricCaptureScreen({ biometricProvider }: BiometricCaptureScreenProps) {
   const { state, dispatch } = useCaptureStore();
   const [modality, setModality] = useState<BiometricModality>("fingerprint");
   const [capture, setCapture] = useState<BiometricCapture | undefined>(state.session.biometric);
 
   const handleCapture = () => {
-    const result = captureBiometric(modality);
+    const result = captureBiometric(modality, biometricProvider);
     dispatch({ type: "set_biometric", payload: result });
     setCapture(result);
   };
@@ -47,6 +52,9 @@ export function BiometricCaptureScreen() {
             <Text style={styles.cardLine}>Liveness: {capture.liveness.passed ? "Passed" : "Failed"}</Text>
             <Text style={styles.cardLine}>Anti-spoof: {capture.antiSpoofing.passed ? "Passed" : "Failed"}</Text>
             <Text style={styles.cardLine}>Security: {capture.deviceInfo.securityLevel}</Text>
+            {capture.failureReason ? (
+              <Text style={styles.error}>Unavailable: {capture.failureReason}</Text>
+            ) : null}
           </>
         ) : null}
         <Pressable style={styles.captureButton} onPress={handleCapture}>
@@ -58,7 +66,7 @@ export function BiometricCaptureScreen() {
         onPrimary={() => dispatch({ type: "next" })}
         secondaryLabel="Back"
         onSecondary={() => dispatch({ type: "prev" })}
-        disabled={!capture}
+        disabled={!capture?.supported}
       />
     </View>
   );
@@ -112,6 +120,11 @@ const styles = StyleSheet.create({
     marginTop: 6,
     fontSize: 13,
     color: "#4b5563"
+  },
+  error: {
+    marginTop: 8,
+    color: "#dc2626",
+    fontSize: 13
   },
   captureButton: {
     marginTop: 14,

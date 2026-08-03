@@ -13,16 +13,16 @@ import {
   SelfieCapture as CaptureLib,
   type SelfieResult,
   type CaptureError,
-  type ClientKeyProvider,
-  type UserKeyProvider,
 } from '@/lib/capture-adapter';
 import { cn } from '@/lib/utils';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/Alert';
 import { Badge } from '@/components/ui/Badge';
+import { unavailableVeidCaptureProviders, type VeidCaptureProviders } from './VeidCaptureProviders';
 
 interface VeidSelfieCaptureProps {
+  providers?: VeidCaptureProviders;
   /** Enable liveness check */
   livenessCheck?: boolean;
   /** Callback on successful capture */
@@ -35,6 +35,7 @@ interface VeidSelfieCaptureProps {
 }
 
 export function VeidSelfieCapture({
+  providers = unavailableVeidCaptureProviders,
   livenessCheck = true,
   onCapture,
   onError,
@@ -43,21 +44,6 @@ export function VeidSelfieCapture({
 }: VeidSelfieCaptureProps) {
   const [error, setError] = useState<string | null>(null);
   const [retryCount, setRetryCount] = useState(0);
-
-  const mockClientKeyProvider: ClientKeyProvider = {
-    getClientId: () => Promise.resolve('virtengine-portal-v1'),
-    getClientVersion: () => Promise.resolve('1.0.0'),
-    sign: (_data: Uint8Array) => Promise.resolve(new Uint8Array(64)),
-    getPublicKey: () => Promise.resolve(new Uint8Array(32)),
-    getKeyType: () => Promise.resolve('ed25519' as const),
-  };
-
-  const mockUserKeyProvider: UserKeyProvider = {
-    getAccountAddress: () => Promise.resolve('virtengine1...'),
-    sign: (_data: Uint8Array) => Promise.resolve(new Uint8Array(64)),
-    getPublicKey: () => Promise.resolve(new Uint8Array(32)),
-    getKeyType: () => Promise.resolve('ed25519' as const),
-  };
 
   const handleCapture = useCallback(
     (result: SelfieResult) => {
@@ -109,20 +95,28 @@ export function VeidSelfieCapture({
           </Alert>
         )}
 
-        <div
-          key={retryCount}
-          className="relative mx-auto aspect-square w-full max-w-sm overflow-hidden rounded-full bg-black"
-        >
-          <CaptureLib
-            mode="photo"
-            livenessCheck={livenessCheck}
-            onCapture={handleCapture}
-            onError={handleError}
-            clientKeyProvider={mockClientKeyProvider}
-            userKeyProvider={mockUserKeyProvider}
-            className="h-full w-full"
-          />
-        </div>
+        {providers.status === 'available' ? (
+          <div
+            key={retryCount}
+            className="relative mx-auto aspect-square w-full max-w-sm overflow-hidden rounded-full bg-black"
+          >
+            <CaptureLib
+              mode="photo"
+              livenessCheck={livenessCheck}
+              livenessProvider={providers.livenessProvider}
+              onCapture={handleCapture}
+              onError={handleError}
+              clientKeyProvider={providers.clientKeyProvider}
+              userKeyProvider={providers.userKeyProvider}
+              className="h-full w-full"
+            />
+          </div>
+        ) : (
+          <Alert variant="destructive">
+            <AlertTitle>Capture unavailable</AlertTitle>
+            <AlertDescription>{providers.reason}</AlertDescription>
+          </Alert>
+        )}
 
         <div className="flex items-center gap-2 text-sm text-muted-foreground">
           <span>💡</span>

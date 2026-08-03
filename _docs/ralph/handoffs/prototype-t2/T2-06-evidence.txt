@@ -1,0 +1,40 @@
+T2-06 retained validation evidence
+Implementation SHA: d50d150ed0d296f44135445afbe4d0846e9c603d
+Node: v24.12.0
+
+COMMAND: C:\Users\pavil\AppData\Local\Temp\virtengine-node-v24.12.0\npm.cmd --prefix C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t2\mobile\veid-capture-app test
+EXIT: 0
+RESULT: passed
+DETAIL: 6 files, 31 tests passed
+
+COMMAND: C:\Users\pavil\AppData\Local\Temp\virtengine-node-v24.12.0\npm.cmd --prefix C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t2\mobile\veid-capture-app run typecheck
+EXIT: 0
+RESULT: passed
+
+COMMAND: C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t2\portal\node_modules\.bin\vitest.CMD run tests\unit\veid\useVeidWizard.test.tsx src\components\veid\VerificationWizard.test.tsx --reporter=dot
+EXIT: 0
+RESULT: passed
+DETAIL: 2 files, 38 tests passed
+
+COMMAND: C:\Users\pavil\AppData\Local\Temp\virtengine-node-v24.12.0\npm.cmd --prefix C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t2\portal run lint
+EXIT: 0
+RESULT: passed
+NOTE: Existing unsupported TypeScript 5.9.3 parser-version warning only.
+
+COMMAND: C:\Users\pavil\AppData\Local\Temp\virtengine-node-v24.12.0\npm.cmd --prefix C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t2\portal run type-check
+EXIT: 0
+RESULT: passed
+
+COMMAND: C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t2\portal\node_modules\.bin\vitest.CMD run --reporter=dot
+EXIT: 0
+RESULT: passed
+DETAIL: 72 files, 525 tests passed
+
+COMMAND: git -C C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t2 diff --check
+EXIT: 0
+RESULT: passed
+
+NON-CLAIMS:
+- T1 canonical Evidence Envelope construction is not implemented by T2; browser and mobile consume opaque envelope data plus caller-supplied canonical digests.
+- Production browser and mobile constructors remain typed unavailable until T4 wires approved envelope and transport providers.
+- No live provider upload or public-node committed transaction was exercised.

@@ -1,0 +1,41 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://virtengine.com/schemas/prototype-integration/core-rc-publication-preflight.schema.json",
+  "title": "T4-09A core RC publication diagnostic report",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "candidate", "epoch", "tag", "passed", "checks", "blockers"],
+  "properties": {
+    "schema_version": { "const": "virtengine.core-rc-publication-preflight/v1" },
+    "candidate": { "$ref": "#/$defs/sha" },
+    "epoch": { "type": "integer", "minimum": 1 },
+    "tag": { "const": "checkpoint/prototype-integration/t4-09a" },
+    "passed": { "type": "boolean" },
+    "checks": { "type": "array", "minItems": 31, "maxItems": 33, "items": { "$ref": "#/$defs/check" } },
+    "blockers": { "type": "array", "uniqueItems": true, "items": { "$ref": "#/$defs/id" } }
+  },
+  "$defs": {
+    "sha": { "type": "string", "pattern": "^[a-f0-9]{40}$" },
+    "id": {
+      "type": "string",
+      "enum": [
+        "candidate.clean", "candidate.head", "candidate.remote-integration", "ci.available", "ci.core-rc-required-gates", "ci.prototype-integration-controls",
+        "controls.available", "epoch.cutoff-elapsed", "epoch.frozen-or-closed", "evidence.model", "evidence.producers", "evidence.release-provenance",
+        "evidence.rollback", "evidence.rollout", "evidence.sbom", "evidence.slurm", "gates.matrix-complete", "gates.result-envelope", "manifest.ancestry",
+        "manifest.candidate-boundary", "manifest.non-authoritative-contract", "manifest.prototype-success", "manifest.recorded-hash", "manifest.status-ready", "manifest.strict-valid",
+        "producers.accepted-ledger-correspondence", "producers.accepted-tags-revalidated", "producers.terminal", "producers.unannounced-frozen-out", "tag.local-absent", "tag.local-target",
+        "tag.remote-absent", "tag.remote-target"
+      ]
+    },
+    "check": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "passed", "detail"],
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "passed": { "type": "boolean" },
+        "detail": { "type": "string", "minLength": 1 }
+      }
+    }
+  }
+}

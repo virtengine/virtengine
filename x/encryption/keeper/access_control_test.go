@@ -2,6 +2,7 @@ package keeper
 
 import (
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 
@@ -78,6 +79,43 @@ func TestCheckEnvelopeAccess(t *testing.T) {
 		require.Error(t, err)
 		require.Contains(t, err.Error(), "requester address is required")
 	})
+}
+
+func TestCheckEnvelopeAccessRejectsUnusableFallbackKeys(t *testing.T) {
+	t.Run("expired before end block", func(t *testing.T) {
+		ctx, k := setupKeeper(t)
+		params := types.DefaultParams()
+		params.DefaultKeyTtlSeconds = 1
+		require.NoError(t, k.SetParams(ctx, params))
+		address := sdk.AccAddress([]byte("expired_recipient__"))
+		keyPair, err := crypto.GenerateKeyPair()
+		require.NoError(t, err)
+		fingerprint, err := k.RegisterRecipientKey(ctx, address, keyPair.PublicKey[:], types.DefaultAlgorithm(), "expired")
+		require.NoError(t, err)
+		envelope := types.NewEncryptedPayloadEnvelope()
+		envelope.RecipientKeyIDs = []string{fingerprint}
+
+		ctx = ctx.WithBlockTime(ctx.BlockTime().Add(2 * time.Second))
+		require.ErrorIs(t, k.CheckEnvelopeAccess(ctx, envelope, address), types.ErrUnauthorizedAccess)
+	})
+
+	t.Run("deprecated predecessor during rotation", func(t *testing.T) {
+		ctx, k := setupKeeper(t)
+		address := sdk.AccAddress([]byte("rotation_recipient__"))
+		oldKey, err := crypto.GenerateKeyPair()
+		require.NoError(t, err)
+		newKey, err := crypto.GenerateKeyPair()
+		require.NoError(t, err)
+		oldFingerprint, err := k.RegisterRecipientKey(ctx, address, oldKey.PublicKey[:], types.DefaultAlgorithm(), "old")
+		require.NoError(t, err)
+		_, err = k.RotateRecipientKey(ctx, address, oldFingerprint, newKey.PublicKey[:], types.DefaultAlgorithm(), "new", "rotation", 0)
+		require.NoError(t, err)
+		envelope := types.NewEncryptedPayloadEnvelope()
+		envelope.RecipientKeyIDs = []string{oldFingerprint}
+
+		require.NoError(t, k.CheckEnvelopeAccess(ctx, envelope, address))
+	})
+
 }
 
 func TestCheckEnvelopeAccessByFingerprint(t *testing.T) {

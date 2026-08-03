@@ -192,6 +192,20 @@ func writeJSONError(w http.ResponseWriter, status int, message string) {
 	writeJSON(w, status, map[string]string{"error": message})
 }
 
+func writePortalError(w http.ResponseWriter, err error) {
+	var unavailable *PortalFeatureUnavailableError
+	if errors.As(err, &unavailable) {
+		writeJSON(w, http.StatusServiceUnavailable, map[string]string{
+			"error":      unavailable.Error(),
+			"code":       "feature_unavailable",
+			"capability": string(unavailable.Capability),
+			"owner":      unavailable.Owner,
+		})
+		return
+	}
+	writeJSONError(w, http.StatusInternalServerError, err.Error())
+}
+
 func errorsIsNotFound(err error) bool {
 	return err != nil && errors.Is(err, ErrPortalNotFound)
 }

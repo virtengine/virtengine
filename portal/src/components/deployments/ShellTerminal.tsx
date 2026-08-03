@@ -1,16 +1,23 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef } from 'react';
 import { Terminal } from 'xterm';
 import { FitAddon } from 'xterm-addon-fit';
 import 'xterm/css/xterm.css';
 
-import { env } from '@/config/env';
+import {
+  useDeploymentShell,
+  type ProviderShellSessionCapability,
+  type ShellEligibilityProjection,
+} from '@/lib/portal-adapter';
 import { cn } from '@/lib/utils';
 
 export interface ShellTerminalProps {
   deploymentId: string;
   containerName: string;
+  providerEndpoint?: string;
+  capability?: ProviderShellSessionCapability;
+  eligibility?: ShellEligibilityProjection;
   onDisconnect?: () => void;
 }
 
@@ -21,98 +28,53 @@ const SHELL_FAILURE = 103;
 const SHELL_STDIN = 104;
 const SHELL_RESIZE = 105;
 
-function getAuthToken(): string | null {
-  if (typeof window === 'undefined') return null;
-  return (
-    window.localStorage.getItem('ve_session_token') ??
-    window.localStorage.getItem('ve_portal_token') ??
-    null
-  );
-}
-
-function toWebSocketUrl(url: string): string {
-  if (url.startsWith('https://')) {
-    return url.replace('https://', 'wss://');
-  }
-  if (url.startsWith('http://')) {
-    return url.replace('http://', 'ws://');
-  }
-  return url;
-}
-
-export function ShellTerminal({ deploymentId, containerName, onDisconnect }: ShellTerminalProps) {
+export function ShellTerminal({
+  deploymentId,
+  containerName,
+  providerEndpoint,
+  capability,
+  eligibility,
+  onDisconnect,
+}: ShellTerminalProps) {
   const terminalRef = useRef<HTMLDivElement | null>(null);
   const termInstanceRef = useRef<Terminal | null>(null);
   const fitAddonRef = useRef<FitAddon | null>(null);
-  const wsRef = useRef<WebSocket | null>(null);
   const dataListenerRef = useRef<() => void>();
   const resizeObserverRef = useRef<ResizeObserver | null>(null);
-
-  const [status, setStatus] = useState<'idle' | 'connecting' | 'connected' | 'closed' | 'error'>(
-    'idle'
-  );
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const wasConnectedRef = useRef(false);
+  const authorityMatchesProps =
+    eligibility?.deploymentId === deploymentId && eligibility?.container === containerName;
+  const shell = useDeploymentShell({
+    endpoint: providerEndpoint ?? 'https://shell-authority-unavailable.invalid',
+    shellSessionCapability: capability,
+    eligibility: authorityMatchesProps ? eligibility : undefined,
+  });
+  const { isConnected, isConnecting, error, send, onData } = shell;
 
   const sendResize = useCallback(() => {
     const term = termInstanceRef.current;
-    const ws = wsRef.current;
-    if (!term || !ws || ws.readyState !== WebSocket.OPEN) return;
+    if (!term) return;
 
     const payload = new ArrayBuffer(5);
     const view = new DataView(payload);
     view.setUint8(0, SHELL_RESIZE);
     view.setUint16(1, term.cols, false);
     view.setUint16(3, term.rows, false);
-    ws.send(payload);
-  }, []);
+    send(payload);
+  }, [send]);
 
   const writeSystemLine = useCallback((text: string) => {
     termInstanceRef.current?.writeln(`\x1b[38;5;244m${text}\x1b[0m`);
   }, []);
 
-  const closeSocket = useCallback(() => {
-    if (wsRef.current) {
-      wsRef.current.close();
-      wsRef.current = null;
-    }
-  }, []);
-
-  const connectSocket = useCallback(() => {
-    if (!deploymentId || !containerName) return;
-    const term = termInstanceRef.current;
-    if (!term) return;
-
-    closeSocket();
-    setStatus('connecting');
-    setErrorMessage(null);
-
-    const wsBase = toWebSocketUrl(env.apiUrl);
-    const wsUrl = new URL(`${wsBase}/deployments/${deploymentId}/shell`);
-    wsUrl.searchParams.set('container', containerName);
-    wsUrl.searchParams.set('tty', '1');
-    wsUrl.searchParams.set('stdin', '1');
-    const token = getAuthToken();
-    if (token) {
-      wsUrl.searchParams.set('token', token);
-    }
-
-    const ws = new WebSocket(wsUrl.toString());
-    ws.binaryType = 'arraybuffer';
-    wsRef.current = ws;
-
-    ws.onopen = () => {
-      setStatus('connected');
-      writeSystemLine('Shell session connected.');
-      sendResize();
-    };
-
-    ws.onmessage = (event: MessageEvent<ArrayBuffer>) => {
-      if (!(event.data instanceof ArrayBuffer)) {
-        return;
-      }
-      const view = new DataView(event.data);
+  const handleShellData = useCallback(
+    (data: ArrayBuffer) => {
+      const term = termInstanceRef.current;
+      if (!term) return;
+      if (data.byteLength === 0) return;
+      const view = new DataView(data);
       const messageType = view.getUint8(0);
-      const payload = new Uint8Array(event.data.slice(1));
+      const payload = new Uint8Array(data.slice(1));
 
       switch (messageType) {
         case SHELL_STDOUT:
@@ -133,21 +95,9 @@ export function ShellTerminal({ deploymentId, containerName, onDisconnect }: She
         default:
           break;
       }
-    };
-
-    ws.onclose = (event) => {
-      setStatus('closed');
-      const reason = event.reason || 'Shell session closed.';
-      writeSystemLine(reason);
-      onDisconnect?.();
-    };
-
-    ws.onerror = () => {
-      setStatus('error');
-      setErrorMessage('Shell connection error.');
-      writeSystemLine('Shell connection error.');
-    };
-  }, [closeSocket, containerName, deploymentId, onDisconnect, sendResize, writeSystemLine]);
+    },
+    [writeSystemLine]
+  );
 
   useEffect(() => {
     if (!terminalRef.current) return;
@@ -179,13 +129,11 @@ export function ShellTerminal({ deploymentId, containerName, onDisconnect }: She
     resizeObserverRef.current = resizeObserver;
 
     const disposable = terminal.onData((data) => {
-      const ws = wsRef.current;
-      if (!ws || ws.readyState !== WebSocket.OPEN) return;
       const payload = new TextEncoder().encode(data);
       const buffer = new Uint8Array(payload.length + 1);
       buffer[0] = SHELL_STDIN;
       buffer.set(payload, 1);
-      ws.send(buffer);
+      send(buffer);
     });
     dataListenerRef.current = () => disposable.dispose();
 
@@ -196,15 +144,30 @@ export function ShellTerminal({ deploymentId, containerName, onDisconnect }: She
       termInstanceRef.current = null;
       fitAddonRef.current = null;
     };
-  }, [sendResize]);
+  }, [send, sendResize]);
 
   useEffect(() => {
-    if (!termInstanceRef.current) return;
-    connectSocket();
-    return () => {
-      closeSocket();
-    };
-  }, [closeSocket, connectSocket, containerName, deploymentId]);
+    onData(handleShellData);
+  }, [handleShellData, onData]);
+
+  useEffect(() => {
+    if (isConnected) {
+      writeSystemLine('Shell session connected.');
+      sendResize();
+    } else if (wasConnectedRef.current) {
+      writeSystemLine('Shell session closed.');
+      onDisconnect?.();
+    }
+    wasConnectedRef.current = isConnected;
+  }, [isConnected, onDisconnect, sendResize, writeSystemLine]);
+
+  const status = isConnected
+    ? 'connected'
+    : isConnecting
+      ? 'connecting'
+      : error
+        ? 'unavailable'
+        : 'closed';
 
   return (
     <div className="flex h-full flex-col rounded-lg border border-border bg-card">
@@ -228,14 +191,7 @@ export function ShellTerminal({ deploymentId, containerName, onDisconnect }: She
             />
             {status === 'connected' ? 'Connected' : status}
           </span>
-          {errorMessage && <span>{errorMessage}</span>}
-          <button
-            type="button"
-            onClick={connectSocket}
-            className="rounded-full border border-muted px-3 py-1 text-xs text-muted-foreground hover:border-primary hover:text-primary"
-          >
-            Reconnect
-          </button>
+          {error && <span>{error.message}</span>}
         </div>
       </div>
       <div className="flex-1 bg-[#0c0f12]">

@@ -218,40 +218,40 @@
       "thread": "T1",
       "branch": "ve/prototype-t1-identity",
       "handoff_path": "_docs/ralph/handoffs/prototype-t1/HANDOFF.yaml",
-      "status": "awaiting_committed_handoff",
-      "sha": null,
+      "status": "accepted",
+      "sha": "36a566a92c04d988255b10cc5a75451d59077273",
       "migrations": [],
-      "blockers": ["Committed T1 persisted schema inventory handoff is not available on the integration branch."]
+      "blockers": []
     },
     {
       "thread": "T2",
       "branch": "ve/prototype-t2-product",
       "handoff_path": "_docs/ralph/handoffs/prototype-t2/HANDOFF.yaml",
-      "status": "awaiting_committed_handoff",
-      "sha": null,
+      "status": "accepted",
+      "sha": "ba9f49340bbd8136f8c19bcc0abc7c64831bfda8",
       "migrations": [],
-      "blockers": ["Committed T2 persisted schema inventory handoff is not available on the integration branch."]
+      "blockers": []
     },
     {
       "thread": "T3",
       "branch": "ve/prototype-t3-reliability",
       "handoff_path": "_docs/ralph/handoffs/prototype-t3/HANDOFF.yaml",
-      "status": "awaiting_committed_handoff",
-      "sha": null,
+      "status": "accepted",
+      "sha": "117ad92be90cc8a6a733ff701f1bc83fbbaf6790",
       "migrations": [],
-      "blockers": ["Committed T3 persisted schema inventory handoff is not available on the integration branch."]
+      "blockers": []
     },
     {
       "thread": "T5",
       "branch": "ve/prototype-t5-platform",
       "handoff_path": "_docs/ralph/handoffs/prototype-t5/HANDOFF.yaml",
-      "status": "awaiting_committed_handoff",
-      "sha": null,
+      "status": "accepted",
+      "sha": "4efd873a4446c304f3ba5f25ec83d6f4185a0a3d",
       "migrations": [],
-      "blockers": ["Committed T5 persisted schema inventory handoff is not available on the integration branch."]
+      "blockers": ["T5 VEID evidence and FundAuthorization precursor contracts are accepted, but persisted-store activation and app upgrade registration remain integration-owned work."]
     }
   ],
   "blockers": [
-    "T1, T2, T3, and T5 committed persisted schema inventory handoffs are required before Task 88A can be complete."
+    "T5 persisted-store activation and app upgrade registration remain required before Task 88A can be complete."
   ]
 }

@@ -148,7 +148,7 @@ func NewPortalAPIServer(cfg PortalAPIServerConfig) (*PortalAPIServer, error) {
 		cfg.LogStore = NewDeploymentLogStore()
 	}
 	if cfg.ChainQuery == nil {
-		cfg.ChainQuery = NoopChainQuery{}
+		cfg.ChainQuery = UnavailablePortalChainQuery{}
 	}
 	if cfg.WalletAuthNonceStore == nil {
 		cfg.WalletAuthNonceStore = portalauth.NewInMemoryNonceStore()
@@ -192,6 +192,9 @@ func NewPortalAPIServer(cfg PortalAPIServerConfig) (*PortalAPIServer, error) {
 }
 
 func (s *PortalAPIServer) Start(ctx context.Context) error {
+	if err := validatePortalChainQuery(s.chainQuery); err != nil {
+		return fmt.Errorf("portal chain query startup validation: %w", err)
+	}
 	router := mux.NewRouter()
 	s.setupRoutes(router)
 
@@ -277,6 +280,10 @@ func (s *PortalAPIServer) handleHealth(w http.ResponseWriter, _ *http.Request) {
 }
 
 func (s *PortalAPIServer) handleReady(w http.ResponseWriter, r *http.Request) {
+	if err := validatePortalChainQuery(s.chainQuery); err != nil {
+		writePortalError(w, err)
+		return
+	}
 	if s.readiness == nil {
 		http.Error(w, "readiness dependencies unavailable", http.StatusServiceUnavailable)
 		return
@@ -288,6 +295,11 @@ func (s *PortalAPIServer) handleReady(w http.ResponseWriter, r *http.Request) {
 	}
 	w.WriteHeader(http.StatusOK)
 	_, _ = w.Write([]byte("ready"))
+}
+
+// RouteCapability reports whether the configured query backend supports a portal route surface.
+func (s *PortalAPIServer) RouteCapability(capability PortalRouteCapability) error {
+	return portalQueryCapability(s.chainQuery, capability)
 }
 
 func (s *PortalAPIServer) handleLogs(w http.ResponseWriter, r *http.Request) {

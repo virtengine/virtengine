@@ -72,7 +72,8 @@ export const env = {
   llmApiKey: getEnvVar('NEXT_PUBLIC_LLM_API_KEY', ''),
   llmOrganizationId: getEnvVar('NEXT_PUBLIC_LLM_ORG_ID', ''),
   llmLocalMode: getEnvVar('NEXT_PUBLIC_LLM_LOCAL_MODE', 'openai'),
-  enableChat: getBoolEnvVar('NEXT_PUBLIC_ENABLE_CHAT', true),
+  enableChat: getBoolEnvVar('NEXT_PUBLIC_ENABLE_CHAT', false),
+  enableChatMutations: getBoolEnvVar('NEXT_PUBLIC_ENABLE_CHAT_MUTATIONS', false),
 } as const;
 
 export type Env = typeof env;

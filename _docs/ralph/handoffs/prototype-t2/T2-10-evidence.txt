@@ -1,0 +1,21 @@
+T2-10 retained validation evidence
+Implementation SHA: fe96075c22c002256853bb52170f36bb5a9045d6
+Node: v24.12.0
+
+COMMAND: C:\Users\pavil\AppData\Local\Temp\virtengine-node-v24.12.0\npm.cmd --prefix C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t2\mobile\veid-capture-app test
+EXIT: 0
+RESULT: passed
+DETAIL: 8 files, 44 tests passed
+
+COMMAND: C:\Users\pavil\AppData\Local\Temp\virtengine-node-v24.12.0\npm.cmd --prefix C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t2\mobile\veid-capture-app run typecheck
+EXIT: 0
+RESULT: passed
+
+COMMAND: git -C C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t2 diff --check
+EXIT: 0
+RESULT: passed
+
+NON-CLAIMS:
+- Durable acknowledgement validation, artifact deletion, and journal persistence are injected interfaces; production defaults remain unavailable until approved implementations are wired.
+- T2 defines no T5 deletion receipt or durable storage schema.
+- Cleanup success is never reported after missing/invalid acknowledgement or failed artifact/memory cleanup.

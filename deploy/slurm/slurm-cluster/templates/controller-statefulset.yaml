@@ -1,4 +1,5 @@
 {{- if .Values.controller.enabled }}
+{{- include "slurm-cluster.requireSafePersistenceReplicas" (list "controller" .Values.controller.replicas .Values.controller.persistence) }}
 apiVersion: apps/v1
 kind: StatefulSet
 metadata:
@@ -10,6 +11,11 @@ metadata:
 spec:
   serviceName: {{ include "slurm-cluster.controller.serviceName" . }}
   replicas: {{ .Values.controller.replicas }}
+  {{- if not .Values.controller.persistence.existingClaim }}
+  persistentVolumeClaimRetentionPolicy:
+    whenDeleted: Retain
+    whenScaled: Retain
+  {{- end }}
   selector:
     matchLabels:
       {{- include "slurm-cluster.selectorLabels" . | nindent 6 }}
@@ -35,7 +41,7 @@ spec:
         {{- toYaml . | nindent 8 }}
       {{- end }}
       securityContext:
-        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+        {{- include "slurm-cluster.podSecurityContext" (list .) | nindent 8 }}
       initContainers:
         - name: init-munge
           image: {{ include "slurm-cluster.munge.image" . }}
@@ -46,7 +52,6 @@ spec:
             - |
               cp /munge-key/{{ .Values.munge.secretKeyName }} /etc/munge/munge.key
               chmod 400 /etc/munge/munge.key
-              chown munge:munge /etc/munge/munge.key
           volumeMounts:
             - name: munge-key
               mountPath: /munge-key
@@ -54,8 +59,7 @@ spec:
             - name: munge-socket
               mountPath: /etc/munge
           securityContext:
-            runAsUser: 0
-            runAsNonRoot: false
+            {{- include "slurm-cluster.containerSecurityContext" (list . "munge") | nindent 12 }}
       containers:
         - name: munge
           image: {{ include "slurm-cluster.munge.image" . }}
@@ -73,8 +77,7 @@ spec:
           resources:
             {{- toYaml .Values.munge.resources | nindent 12 }}
           securityContext:
-            runAsUser: 0
-            runAsNonRoot: false
+            {{- include "slurm-cluster.containerSecurityContext" (list . "munge") | nindent 12 }}
         - name: slurmctld
           image: {{ include "slurm-cluster.controller.image" . }}
           imagePullPolicy: {{ .Values.controller.image.pullPolicy }}
@@ -124,8 +127,7 @@ spec:
           resources:
             {{- toYaml .Values.controller.resources | nindent 12 }}
           securityContext:
-            runAsUser: 0
-            runAsNonRoot: false
+            {{- include "slurm-cluster.containerSecurityContext" (list . "controller") | nindent 12 }}
           env:
             - name: SLURM_CONF
               value: /etc/slurm/slurm.conf
@@ -135,7 +137,7 @@ spec:
       volumes:
         - name: slurm-config
           configMap:
-            name: {{ include "slurm-cluster.fullname" . }}-config
+            name: {{ include "slurm-cluster.resourceName" (list . "config" 0) }}
         - name: munge-key
           secret:
             secretName: {{ include "slurm-cluster.munge.secretName" . }}
@@ -147,6 +149,11 @@ spec:
           emptyDir: {}
         - name: slurm-run
           emptyDir: {}
+        {{- if .Values.controller.persistence.existingClaim }}
+        - name: slurm-spool
+          persistentVolumeClaim:
+            claimName: {{ .Values.controller.persistence.existingClaim | quote }}
+        {{- end }}
         {{- with .Values.extraVolumes }}
         {{- toYaml . | nindent 8 }}
         {{- end }}
@@ -162,6 +169,7 @@ spec:
       tolerations:
         {{- toYaml . | nindent 8 }}
       {{- end }}
+  {{- if not .Values.controller.persistence.existingClaim }}
   volumeClaimTemplates:
     - metadata:
         name: slurm-spool
@@ -176,6 +184,7 @@ spec:
         resources:
           requests:
             storage: {{ .Values.controller.persistence.size }}
+  {{- end }}
 ---
 apiVersion: v1
 kind: Service

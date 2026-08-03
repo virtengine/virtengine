@@ -6,9 +6,11 @@ package hpc
 
 import (
 	"context"
+	"encoding/json"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"runtime"
 	"strings"
 	"testing"
@@ -50,6 +52,16 @@ func TestSLURMDeploymentKind(t *testing.T) {
 	if err := runKubectl(ctx, "create", "namespace", namespace); err != nil {
 		t.Fatalf("failed to create namespace: %v", err)
 	}
+	for _, secretArgs := range [][]string{
+		{"create", "secret", "generic", "slurm-test-munge", "--namespace", namespace, "--from-literal=munge.key=integration-test-munge-key"},
+		{"create", "secret", "generic", "slurm-test-database", "--namespace", namespace, "--from-literal=password=integration-test-database-password"},
+		{"create", "secret", "generic", "slurm-test-mariadb", "--namespace", namespace, "--from-literal=root-password=integration-test-root-password"},
+		{"create", "secret", "generic", "slurm-test-node-agent-tls", "--namespace", namespace, "--from-literal=ca.crt=integration-test-ca", "--from-literal=tls.crt=integration-test-cert", "--from-literal=tls.key=integration-test-key"},
+	} {
+		if err := runKubectl(ctx, secretArgs...); err != nil {
+			t.Fatalf("failed to create test secret: %v", err)
+		}
+	}
 
 	// Deploy SLURM cluster using Helm
 	t.Log("Deploying SLURM cluster...")
@@ -61,6 +73,7 @@ func TestSLURMDeploymentKind(t *testing.T) {
 		"--namespace", namespace,
 		"--set", "cluster.id=test-cluster",
 		"--set", "cluster.name=Test SLURM Cluster",
+		"--values", chartPath + "/tests/stable-secrets-values.yaml",
 		"--set", "compute.replicas=2",
 		"--set", "controller.persistence.size=1Gi",
 		"--set", "database.persistence.size=1Gi",
@@ -126,11 +139,17 @@ func verifyOfflineSLURMContracts(t *testing.T) {
 	t.Helper()
 	chart := readRepoFile(t, "deploy", "slurm", "slurm-cluster", "templates", "compute-nodepools-statefulset.yaml")
 	helpers := readRepoFile(t, "deploy", "slurm", "slurm-cluster", "templates", "_helpers.tpl")
+	config := readRepoFile(t, "deploy", "slurm", "slurm-cluster", "templates", "configmap.yaml")
+	schema := readRepoFile(t, "deploy", "slurm", "slurm-cluster", "values.schema.json")
+	values := readRepoFile(t, "deploy", "slurm", "slurm-cluster", "values.yaml")
 	adapter := readRepoFile(t, "pkg", "provider_daemon", "slurm_k8s", "adapter.go")
 
 	for label, required := range map[string][]string{
-		"chart":   {"StatefulSet", ".Values.nodePools", "virtengine.com/node-pool"},
-		"helpers": {"slurm-cluster.nodePool.serviceName", "printf"},
+		"chart":   {"StatefulSet", ".Values.nodePools", "slurm-cluster.nodePool.enabled", "virtengine.com/node-pool"},
+		"helpers": {"slurm-cluster.dnsName", "sha256sum $raw", "ordinalBudget", "is reserved by an existing chart resource", "slurm-cluster.compute.capacity", "slurm-cluster.partition.capacity", "selects unknown node pool", "selects disabled node pool", "at least one compute replica must be enabled"},
+		"config":  {`include "slurm-cluster.compute.capacity" . | fromJson`, `include "slurm-cluster.partition.capacity"`, "Nodes={{ $partitionCapacity.nodes }}", "MaxNodes={{ $partitionCapacity.replicas }}"},
+		"schema":  {`"nodePools"`, `"uniqueItems": true`, `"controller"`, `"node-agent"`},
+		"values":  {"compute:", "replicas: 2", "nodePools: []"},
 		"adapter": {"func (a *SLURMKubernetesAdapter) Scale", "poolName", "waitForScaledStatefulSet"},
 	} {
 		var contents string
@@ -139,6 +158,12 @@ func verifyOfflineSLURMContracts(t *testing.T) {
 			contents = chart
 		case "helpers":
 			contents = helpers
+		case "config":
+			contents = config
+		case "schema":
+			contents = schema
+		case "values":
+			contents = values
 		case "adapter":
 			contents = adapter
 		}
@@ -148,6 +173,234 @@ func verifyOfflineSLURMContracts(t *testing.T) {
 			}
 		}
 	}
+}
+
+func TestReplicaCapacityOfflineContracts(t *testing.T) {
+	verifyOfflineSLURMContracts(t)
+}
+
+func TestImmutableImagesOfflineContracts(t *testing.T) {
+	chartRoot := filepath.Join(repoRoot(t), "deploy", "slurm", "slurm-cluster")
+	helpers := readRepoFile(t, "deploy", "slurm", "slurm-cluster", "templates", "_helpers.tpl")
+	values := readRepoFile(t, "deploy", "slurm", "slurm-cluster", "values.yaml")
+	schema := readRepoFile(t, "deploy", "slurm", "slurm-cluster", "values.schema.json")
+	fixture := readRepoFile(t, "deploy", "slurm", "slurm-cluster", "tests", "stable-secrets-values.yaml")
+
+	for _, required := range []string{
+		`define "slurm-cluster.immutableImage"`,
+		`required (printf`,
+		`@sha256:[a-f0-9]{64}$`,
+		`slurm-cluster.munge.image`,
+		`slurm-cluster.controller.image`,
+		`slurm-cluster.database.image`,
+		`slurm-cluster.mariadb.image`,
+		`slurm-cluster.compute.image`,
+		`slurm-cluster.nodeAgent.image`,
+		`slurm-cluster.utility.image`,
+	} {
+		require.Contains(t, helpers, required)
+	}
+	helperPattern := `^[a-z0-9]+([._-][a-z0-9]+)*(:[0-9]+)?(/[a-z0-9]+([._-][a-z0-9]+)*)*@sha256:[a-f0-9]{64}$`
+	_, err := regexp.Compile(helperPattern)
+	require.NoError(t, err)
+	require.Contains(t, helpers, `regexMatch "`+helperPattern+`"`)
+	require.NotContains(t, values, "repository:")
+	require.NotContains(t, values, "tag:")
+	require.Equal(t, 7, strings.Count(values, `reference: ""`))
+	require.Contains(t, schema, `"required": ["reference", "pullPolicy"]`)
+	require.Contains(t, schema, `@sha256:[a-f0-9]{64}$`)
+
+	exactReference := regexp.MustCompile(`(?m)^\s+reference:\s+\S+@sha256:[a-f0-9]{64}\s*$`)
+	require.Len(t, exactReference.FindAllString(fixture, -1), 7)
+
+	templates, err := filepath.Glob(filepath.Join(chartRoot, "templates", "*.yaml"))
+	require.NoError(t, err)
+	imageHelper := regexp.MustCompile(`include "slurm-cluster\.(munge|controller|database|mariadb|compute|nodeAgent|utility)\.image"`)
+	for _, template := range templates {
+		content, err := os.ReadFile(template)
+		require.NoError(t, err)
+		for _, line := range strings.Split(string(content), "\n") {
+			if strings.HasPrefix(strings.TrimSpace(line), "image:") {
+				require.Regexp(t, imageHelper, line, "container image bypasses immutable helper in %s", template)
+			}
+		}
+	}
+}
+
+func TestDurableStateOfflineContracts(t *testing.T) {
+	values := readRepoFile(t, "deploy", "slurm", "slurm-cluster", "values.yaml")
+	schema := readRepoFile(t, "deploy", "slurm", "slurm-cluster", "values.schema.json")
+	helpers := readRepoFile(t, "deploy", "slurm", "slurm-cluster", "templates", "_helpers.tpl")
+	runbook := readRepoFile(t, "_docs", "runbooks", "hpc-slurm", "deployment-runbook.md")
+	drill := readRepoFile(t, "scripts", "hpc", "slurm-durable-state-drill.py")
+
+	require.Equal(t, 3, strings.Count(values, `existingClaim: ""`))
+	for _, required := range []string{`"durablePersistence"`, `"existingClaimReplicaSafety"`, `"replicas": { "const": 1 }`, `"enabled": { "const": true }`, `"existingClaim"`, `"ReadWriteOncePod"`} {
+		require.Contains(t, schema, required)
+	}
+	require.Contains(t, helpers, `define "slurm-cluster.requireSafePersistenceReplicas"`)
+	require.Contains(t, helpers, "HA must use generated per-replica claims")
+	for _, required := range []string{"/var/spool/slurm", "/var/lib/mysql", "whenDeleted=Retain", "reclaimPolicy: Retain", "mariadb, slurmdbd, slurmctld", "sha256sum --check"} {
+		require.Contains(t, runbook, required)
+	}
+	for _, required := range []string{`RESTORE_ORDER = ("mariadb", "slurmdbd", "slurmctld")`, "checksum verification failed", "destination.exists()"} {
+		require.Contains(t, drill, required)
+	}
+
+	contracts := map[string]struct {
+		component string
+		volume    string
+		path      string
+	}{
+		"controller-statefulset.yaml": {component: "controller", volume: "slurm-spool", path: "/var/spool/slurm"},
+		"database-statefulset.yaml":   {component: "database", volume: "slurmdbd-spool", path: "/var/spool/slurm"},
+		"mariadb-statefulset.yaml":    {component: "mariadb", volume: "mariadb-data", path: "/var/lib/mysql"},
+	}
+	for name, contract := range contracts {
+		template := readRepoFile(t, "deploy", "slurm", "slurm-cluster", "templates", name)
+		for _, required := range []string{
+			`.Values.` + contract.component + `.persistence.existingClaim`,
+			`include "slurm-cluster.requireSafePersistenceReplicas"`,
+			"persistentVolumeClaimRetentionPolicy:",
+			"whenDeleted: Retain",
+			"whenScaled: Retain",
+			"persistentVolumeClaim:",
+			"volumeClaimTemplates:",
+			"name: " + contract.volume,
+			"mountPath: " + contract.path,
+		} {
+			require.Contains(t, template, required, name)
+		}
+		require.NotRegexp(t, `(?m)name:\s*`+regexp.QuoteMeta(contract.volume)+`\s*\n\s*emptyDir:`, template, name)
+	}
+}
+
+func TestLeastPrivilegeOfflineContracts(t *testing.T) {
+	chartRoot := filepath.Join(repoRoot(t), "deploy", "slurm", "slurm-cluster")
+	helpers := readRepoFile(t, "deploy", "slurm", "slurm-cluster", "templates", "_helpers.tpl")
+	values := readRepoFile(t, "deploy", "slurm", "slurm-cluster", "values.yaml")
+	schema := readRepoFile(t, "deploy", "slurm", "slurm-cluster", "values.schema.json")
+	config := readRepoFile(t, "deploy", "slurm", "slurm-cluster", "templates", "configmap.yaml")
+
+	for _, required := range []string{
+		`define "slurm-cluster.podSecurityContext"`,
+		`define "slurm-cluster.containerSecurityContext"`,
+		"allowPrivilegeEscalation: false",
+		"privileged: false",
+		"readOnlyRootFilesystem: true",
+		"runAsNonRoot: true",
+		"$identity.uid",
+		"$identity.gid",
+		`$identityKey = "slurm"`,
+		`define "slurm-cluster.slurmUser"`,
+		"type: RuntimeDefault",
+	} {
+		require.Contains(t, helpers, required)
+	}
+	require.NotContains(t, values, "podSecurityContext:")
+	require.NotContains(t, values, "containerSecurityContext:")
+	require.Contains(t, schema, `"hostCgroup": false`)
+	require.Contains(t, schema, `"noSecurityOverrides"`)
+	require.Contains(t, schema, `"minimum": 1`)
+	require.Contains(t, values, "securityIdentities:")
+	require.Contains(t, values, "slurm: { username: slurm, uid: 1002, gid: 1002 }")
+	require.NotContains(t, values, "controller: { uid:")
+	require.NotContains(t, values, "database: { uid:")
+	require.NotContains(t, values, "compute: { uid:")
+	require.Contains(t, config, `SlurmUser={{ include "slurm-cluster.slurmUser" . }}`)
+	require.Contains(t, config, `SlurmdUser={{ include "slurm-cluster.slurmUser" . }}`)
+	require.Contains(t, config, "JobAcctGatherType={{ .Values.controller.config.jobAcctGatherType | default \"jobacct_gather/linux\" }}")
+	require.Contains(t, config, "ProctrackType={{ .Values.controller.config.proctrackType | default \"proctrack/linuxproc\" }}")
+	require.Contains(t, config, "TaskPlugin={{ .Values.controller.config.taskPlugin | default \"task/affinity\" }}")
+	require.Contains(t, config, "CgroupAutomount=no")
+	require.Contains(t, config, "ConstrainCores=no")
+	require.NotContains(t, config, "CgroupPlugin=")
+	require.NotContains(t, config, "/sys/fs/cgroup")
+
+	expectedContainerContexts := map[string]int{
+		"controller-statefulset.yaml":        3,
+		"database-statefulset.yaml":          4,
+		"mariadb-statefulset.yaml":           1,
+		"compute-statefulset.yaml":           5,
+		"compute-nodepools-statefulset.yaml": 5,
+	}
+	for name, expected := range expectedContainerContexts {
+		content := readRepoFile(t, "deploy", "slurm", "slurm-cluster", "templates", name)
+		require.Equal(t, 1, strings.Count(content, `include "slurm-cluster.podSecurityContext"`), name)
+		require.Equal(t, expected, strings.Count(content, `include "slurm-cluster.containerSecurityContext"`), name)
+		for _, forbidden := range []string{"privileged: true", "runAsUser: 0", "runAsNonRoot: false", "hostPath:", "capabilities:\n    add:"} {
+			require.NotContains(t, content, forbidden, name)
+		}
+	}
+
+	_, err := os.Stat(chartRoot)
+	require.NoError(t, err)
+}
+
+func TestSLURMIdentitySourceContractRejectsMissingUsersOrDivergentIDs(t *testing.T) {
+	python := ""
+	for _, candidate := range []string{"python", "python3"} {
+		if path, err := exec.LookPath(candidate); err == nil {
+			python = path
+			break
+		}
+	}
+	if python == "" {
+		t.Skip("python is required for the SLURM source-contract validator")
+	}
+
+	tests := map[string]func(string){
+		"missing SlurmUser": func(chartRoot string) {
+			replaceChartText(t, chartRoot, "templates/configmap.yaml", `SlurmUser={{ include "slurm-cluster.slurmUser" . }}`, "")
+		},
+		"missing SlurmdUser": func(chartRoot string) {
+			replaceChartText(t, chartRoot, "templates/configmap.yaml", `SlurmdUser={{ include "slurm-cluster.slurmUser" . }}`, "")
+		},
+		"divergent compute IDs": func(chartRoot string) {
+			replaceChartText(t, chartRoot, "values.yaml", "  mariadb: { uid: 1004, gid: 1004 }", "  compute: { uid: 2002, gid: 2002 }\n  mariadb: { uid: 1004, gid: 1004 }")
+		},
+	}
+
+	for name, mutate := range tests {
+		t.Run(name, func(t *testing.T) {
+			source := filepath.Join(repoRoot(t), "deploy", "slurm", "slurm-cluster")
+			chartRoot := filepath.Join(t.TempDir(), "chart")
+			require.NoError(t, os.CopyFS(chartRoot, os.DirFS(source)))
+			mutate(chartRoot)
+
+			validator := filepath.Join(repoRoot(t), "scripts", "validate_slurm_chart_semantics.py")
+			command := exec.Command(python, validator, "--chart", chartRoot, "--diagnostic", "--json")
+			output, err := command.CombinedOutput()
+			require.Error(t, err, "diagnostic validation must remain blocking")
+			var report struct {
+				Findings []struct {
+					Invariant string `json:"invariant"`
+				} `json:"findings"`
+			}
+			require.NoError(t, json.Unmarshal(output, &report), string(output))
+			require.Contains(t, findingInvariants(report.Findings), "least-privilege", string(output))
+		})
+	}
+}
+
+func replaceChartText(t *testing.T, chartRoot, relative, oldText, newText string) {
+	t.Helper()
+	path := filepath.Join(chartRoot, filepath.FromSlash(relative))
+	content, err := os.ReadFile(path)
+	require.NoError(t, err)
+	replaced := strings.Replace(string(content), oldText, newText, 1)
+	require.NotEqual(t, string(content), replaced, "mutation did not match %s", path)
+	require.NoError(t, os.WriteFile(path, []byte(replaced), 0o600))
+}
+
+func findingInvariants(findings []struct {
+	Invariant string `json:"invariant"`
+}) []string {
+	result := make([]string, 0, len(findings))
+	for _, finding := range findings {
+		result = append(result, finding.Invariant)
+	}
+	return result
 }
 
 func checkPrerequisites(t *testing.T) bool {
@@ -161,7 +414,7 @@ func checkPrerequisites(t *testing.T) bool {
 		}
 	}
 	if len(missing) > 0 {
-		t.Logf("real Kubernetes deployment harness unavailable; validating offline SLURM contracts instead: missing %v", missing)
+		t.Logf("real Kubernetes deployment harness unavailable; validating source contract guards only (rendered replica-capacity equality remains unverified): missing %v", missing)
 		verifyOfflineSLURMContracts(t)
 		return false
 	}
@@ -269,6 +522,7 @@ func testScaling(ctx context.Context, namespace, releaseName, chartPath string) 
 	// Scale up to 4 nodes
 	if err := runHelm(ctx, "upgrade", releaseName, chartPath,
 		"--namespace", namespace,
+		"--reuse-values",
 		"--set", "compute.replicas=4",
 		"--wait",
 		"--timeout", "5m"); err != nil {
@@ -285,6 +539,7 @@ func testScaling(ctx context.Context, namespace, releaseName, chartPath string) 
 	// Scale back down
 	if err := runHelm(ctx, "upgrade", releaseName, chartPath,
 		"--namespace", namespace,
+		"--reuse-values",
 		"--set", "compute.replicas=2",
 		"--wait",
 		"--timeout", "5m"); err != nil {

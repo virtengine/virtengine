@@ -1,0 +1,183 @@
+#!/usr/bin/env node
+
+"use strict";
+
+const assert = require("assert").strict;
+const { spawnSync } = require("child_process");
+const { validateAnnotatedTagName } = require("./prototype-intake-epochs.cjs");
+
+function git(repo, args, allowFailure = false) {
+  const result = spawnSync("git", args, { cwd: repo, encoding: "utf8" });
+  if (!allowFailure && result.status !== 0) throw new Error((result.stderr || result.stdout || `git ${args.join(" ")} failed`).trim());
+  return result;
+}
+
+function parseAcceptance(content) {
+  const acceptance = JSON.parse(content);
+  assert.deepEqual(Object.keys(acceptance).sort(), ["accepted_payloads", "base_sha", "candidate_sha", "schema_version", "status"]);
+  assert.equal(acceptance.schema_version, "virtengine.prototype.integration-candidate-acceptance/v1");
+  assert.equal(acceptance.status, "validated");
+  assert.match(acceptance.base_sha, /^[a-f0-9]{40}$/);
+  assert.match(acceptance.candidate_sha, /^[a-f0-9]{40}$/);
+  assert.ok(Array.isArray(acceptance.accepted_payloads));
+  for (const entry of acceptance.accepted_payloads) {
+    assert.deepEqual(Object.keys(entry).sort(), ["payload_sha", "tag", "thread"]);
+    assert.ok(["T1", "T2", "T3", "T5"].includes(entry.thread));
+    assert.match(entry.payload_sha, /^[a-f0-9]{40}$/);
+    assert.match(entry.tag, new RegExp(`^checkpoint/prototype-${entry.thread.toLowerCase()}/[a-z0-9-]+$`));
+  }
+  return acceptance;
+}
+
+function resolveAcceptedHandoffTarget(repo, entry, runGit = git) {
+  try {
+    const tagRef = `refs/tags/${entry.tag}`;
+    const remote = runGit(repo, ["ls-remote", "--exit-code", "--refs", "--tags", "origin", tagRef], true);
+    const local = runGit(repo, ["rev-parse", "--verify", tagRef], true);
+    const remoteFields = remote.stdout.trim().split(/\r?\n/).filter(Boolean).map((line) => line.split("\t"));
+    if (remote.status !== 0 || local.status !== 0 || remoteFields.length !== 1 || remoteFields[0].length !== 2
+      || !/^[a-f0-9]{40}$/.test(remoteFields[0][0]) || remoteFields[0][1] !== tagRef
+      || local.stdout.trim() !== remoteFields[0][0]) return null;
+    const objectType = runGit(repo, ["cat-file", "-t", tagRef], true);
+    const tagContent = runGit(repo, ["cat-file", "-p", tagRef], true);
+    const peeled = runGit(repo, ["rev-parse", "--verify", `${tagRef}^{commit}`], true);
+    if (objectType.status !== 0 || objectType.stdout.trim() !== "tag" || tagContent.status !== 0 || peeled.status !== 0) return null;
+    validateAnnotatedTagName(entry.tag, tagContent.stdout);
+    const handoffTarget = peeled.stdout.trim();
+    if (handoffTarget === entry.payload_sha) return null;
+    const handoffPath = `_docs/ralph/handoffs/prototype-${entry.thread.toLowerCase()}/HANDOFF.yaml`;
+    const handoffResult = runGit(repo, ["show", `${handoffTarget}:${handoffPath}`], true);
+    if (handoffResult.status !== 0) return null;
+    const handoff = JSON.parse(handoffResult.stdout);
+    const ancestry = runGit(repo, ["merge-base", "--is-ancestor", entry.payload_sha, handoffTarget], true);
+    const checkpoint = entry.tag.split("/").at(-1).toUpperCase();
+    const expectedBranch = { T1: "ve/prototype-t1-identity", T2: "ve/prototype-t2-product", T3: "ve/prototype-t3-reliability", T5: "ve/prototype-t5-platform" }[entry.thread];
+    return handoff.thread === entry.thread && handoff.checkpoint === checkpoint && handoff.branch === expectedBranch && handoff.payload_head === entry.payload_sha && ancestry.status === 0
+      ? handoffTarget : null;
+  } catch {
+    return null;
+  }
+}
+
+function verifyAcceptedPayload(repo, entry, runGit = git) {
+  return resolveAcceptedHandoffTarget(repo, entry, runGit) !== null;
+}
+
+function validateCandidatePlan(plan, options) {
+  assert.match(plan.canonical_head, /^[a-f0-9]{40}$/);
+  assert.match(plan.candidate_head, /^[a-f0-9]{40}$/);
+  assert.equal(options.isAncestor(plan.canonical_head, plan.candidate_head), true, "candidate does not descend canonical T4");
+  assert.equal(options.acceptanceCommitted, true, "candidate acceptance artifact is not committed");
+  assert.ok(Array.isArray(plan.accepted_payloads), "accepted payloads must be an array");
+  assert.equal(new Set(plan.accepted_payloads.map((entry) => entry.thread)).size, plan.accepted_payloads.length, "accepted payload threads must be unique");
+  for (const entry of plan.accepted_payloads) {
+    assert.ok(["T1", "T2", "T3", "T5"].includes(entry.thread), `unknown accepted thread ${entry.thread}`);
+    assert.match(entry.payload_sha, /^[a-f0-9]{40}$/);
+    assert.match(entry.tag, new RegExp(`^checkpoint/prototype-${entry.thread.toLowerCase()}/[a-z0-9-]+$`));
+    assert.match(entry.handoff_sha, /^[a-f0-9]{40}$/);
+    assert.equal(options.verifyAcceptedPayload(entry), true, `${entry.thread} acceptance verification failed`);
+    assert.equal(options.isAncestor(entry.payload_sha, plan.candidate_head), true, `${entry.thread} payload is not in candidate history`);
+    assert.equal(options.isAncestor(entry.handoff_sha, plan.candidate_head), true, `${entry.thread} handoff is not in candidate history`);
+  }
+  for (const contained of plan.contained_producer_commits) {
+    const covered = plan.accepted_payloads.some((entry) => entry.thread === contained.thread && options.isAncestor(contained.commit, entry.handoff_sha));
+    assert.equal(covered, true, `candidate contains unaccepted ${contained.thread} commit ${contained.commit}`);
+  }
+  return true;
+}
+
+function validateAcceptanceBoundary(boundary, options) {
+  assert.equal(options.isAncestor(boundary.canonical_head, boundary.candidate_sha), true, "accepted candidate does not descend canonical T4");
+  assert.notEqual(boundary.candidate_sha, boundary.candidate_head, "acceptance artifact cannot self-reference its containing commit");
+  assert.equal(options.isAncestor(boundary.candidate_sha, boundary.candidate_head), true, "acceptance commit does not descend the validated candidate");
+  assert.deepEqual(options.parents(boundary.candidate_head), [boundary.candidate_sha], "acceptance commit must be a direct non-merge child of the validated candidate");
+  assert.deepEqual(options.changedPaths(boundary.candidate_sha, boundary.candidate_head), [boundary.acceptance_path], "candidate acceptance range changes paths other than the acceptance artifact");
+  return true;
+}
+
+function resolvePublishedBranch(repo, branch, runGit = git, label = "registered producer ref") {
+  const branchRef = `refs/heads/${branch}`;
+  const trackingRef = `refs/remotes/origin/${branch}`;
+  const remote = runGit(repo, ["ls-remote", "--exit-code", "--heads", "origin", branchRef], true);
+  const local = runGit(repo, ["rev-parse", "--verify", `${trackingRef}^{commit}`], true);
+  const remoteFields = remote.stdout.trim().split(/\r?\n/).filter(Boolean).map((line) => line.split("\t"));
+  assert.ok(remote.status === 0 && local.status === 0 && remoteFields.length === 1 && remoteFields[0].length === 2
+    && /^[a-f0-9]{40}$/.test(remoteFields[0][0]) && remoteFields[0][1] === branchRef,
+  `${label} is unavailable: ${branch}`);
+  assert.equal(local.stdout.trim(), remoteFields[0][0], `${label} is stale: ${branch}`);
+  return remoteFields[0][0];
+}
+
+function resolveCandidateInput(repo, ref, runGit = git, label = "candidate ref") {
+  if (ref.startsWith("origin/")) return resolvePublishedBranch(repo, ref.slice("origin/".length), runGit, label);
+  return runGit(repo, ["rev-parse", `${ref}^{commit}`]).stdout.trim();
+}
+
+function buildCandidatePlan(repo, candidateRef, canonicalRef, acceptancePath, producerBranches, runGit = git) {
+  const canonicalHead = resolveCandidateInput(repo, canonicalRef, runGit, "canonical ref");
+  const candidateHead = resolveCandidateInput(repo, candidateRef, runGit, "candidate ref");
+  const acceptanceObject = runGit(repo, ["rev-parse", `${candidateHead}:${acceptancePath}`], true);
+  assert.equal(acceptanceObject.status, 0, "candidate acceptance artifact is not committed");
+  const acceptance = parseAcceptance(runGit(repo, ["show", `${candidateHead}:${acceptancePath}`]).stdout);
+  assert.equal(acceptance.base_sha, canonicalHead, "acceptance base does not match canonical T4");
+  validateAcceptanceBoundary({ canonical_head: canonicalHead, candidate_head: candidateHead, candidate_sha: acceptance.candidate_sha, acceptance_path: acceptancePath }, {
+    isAncestor: (ancestor, descendant) => runGit(repo, ["merge-base", "--is-ancestor", ancestor, descendant], true).status === 0,
+    parents: (commit) => runGit(repo, ["show", "-s", "--format=%P", commit]).stdout.trim().split(/\s+/).filter(Boolean),
+    changedPaths: (ancestor, descendant) => runGit(repo, ["diff", "--name-only", `${ancestor}..${descendant}`]).stdout.trim().split(/\r?\n/).filter(Boolean),
+  });
+  const acceptedPayloads = acceptance.accepted_payloads.map((entry) => {
+    const handoffSha = resolveAcceptedHandoffTarget(repo, entry, runGit);
+    assert.match(handoffSha || "", /^[a-f0-9]{40}$/, `${entry.thread} acceptance verification failed`);
+    return { thread: entry.thread, tag: entry.tag, payload_sha: entry.payload_sha, handoff_sha: handoffSha };
+  });
+  const base = runGit(repo, ["merge-base", canonicalHead, candidateHead]).stdout.trim();
+  const contained = [];
+  for (const [thread, branch] of producerBranches) {
+    const branchHead = resolvePublishedBranch(repo, branch, runGit);
+    const commits = runGit(repo, ["rev-list", "--reverse", `${base}..${branchHead}`], true);
+    if (commits.status !== 0) throw new Error(`cannot inspect registered producer ref: ${branch}`);
+    for (const commit of commits.stdout.trim().split(/\r?\n/).filter(Boolean)) {
+      if (runGit(repo, ["merge-base", "--is-ancestor", commit, candidateHead], true).status === 0) contained.push({ thread, commit });
+    }
+  }
+  return { canonical_head: canonicalHead, candidate_head: candidateHead, accepted_payloads: acceptedPayloads, contained_producer_commits: contained };
+}
+
+function parseCandidateArgs(argv) {
+  assert.equal(argv.length % 2, 0, "candidate arguments must be option/value pairs");
+  const allowed = new Set(["--repo", "--candidate", "--canonical", "--acceptance"]);
+  const args = {};
+  for (let index = 0; index < argv.length; index += 2) {
+    const option = argv[index];
+    const value = argv[index + 1];
+    assert.ok(allowed.has(option), `unknown candidate argument: ${option}`);
+    assert.ok(value && !value.startsWith("--"), `${option} requires a value`);
+    assert.equal(Object.hasOwn(args, option), false, `duplicate candidate argument: ${option}`);
+    args[option] = value;
+  }
+  assert.ok(args["--repo"] && args["--candidate"], "--repo and --candidate are required");
+  return args;
+}
+
+function main(argv) {
+  const args = parseCandidateArgs(argv);
+  const repo = args["--repo"];
+  const candidate = args["--candidate"];
+  const canonical = args["--canonical"] || "origin/ve/prototype-integration";
+  const acceptancePath = args["--acceptance"] || "_docs/ralph/prototype-integration/live-integration-acceptance.json";
+  const producerBranches = [["T1", "ve/prototype-t1-identity"], ["T2", "ve/prototype-t2-product"], ["T3", "ve/prototype-t3-reliability"], ["T5", "ve/prototype-t5-platform"]];
+  const plan = buildCandidatePlan(repo, candidate, canonical, acceptancePath, producerBranches);
+  validateCandidatePlan(plan, {
+    acceptanceCommitted: true,
+    isAncestor: (ancestor, descendant) => git(repo, ["merge-base", "--is-ancestor", ancestor, descendant], true).status === 0,
+    verifyAcceptedPayload: (entry) => verifyAcceptedPayload(repo, entry),
+  });
+  process.stdout.write(`${JSON.stringify(plan, null, 2)}\n`);
+}
+
+module.exports = { buildCandidatePlan, parseAcceptance, parseCandidateArgs, resolveAcceptedHandoffTarget, resolveCandidateInput, resolvePublishedBranch, validateAcceptanceBoundary, validateCandidatePlan, verifyAcceptedPayload };
+
+if (require.main === module) {
+  try { main(process.argv.slice(2)); }
+  catch (error) { console.error(`integration candidate preflight: invalid: ${error.message}`); process.exitCode = 1; }
+}

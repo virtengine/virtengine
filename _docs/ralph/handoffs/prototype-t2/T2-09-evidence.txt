@@ -1,0 +1,21 @@
+T2-09 retained validation evidence
+Implementation SHA: f9efd60804075e08b83777273b25632fc3f02f1b
+Node: v24.12.0
+
+COMMAND: C:\Users\pavil\AppData\Local\Temp\virtengine-node-v24.12.0\npm.cmd --prefix C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t2\lib\portal test
+EXIT: 0
+RESULT: passed
+DETAIL: 19 files, 487 tests passed; evidence boundary 21 tests passed
+
+COMMAND: C:\Users\pavil\AppData\Local\Temp\virtengine-node-v24.12.0\npm.cmd --prefix C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t2\lib\portal run type-check
+EXIT: 0
+RESULT: passed
+
+COMMAND: git -C C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t2 diff --check
+EXIT: 0
+RESULT: passed
+
+NON-CLAIMS:
+- T5 canonical EvidenceObjectRef is unavailable in this branch; T2 defines no competing schema and accepts only opaque references through an injected T5 adapter.
+- Production ingestion, T5 validation/projection, chain submission, and durable persistence remain unavailable until injected.
+- Legacy MsgUploadScope remains for compatibility but is deprecated; the new boundary rejects MsgUploadScope and complete evidence references from chain requests.

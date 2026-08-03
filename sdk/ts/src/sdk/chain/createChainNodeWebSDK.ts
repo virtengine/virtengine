@@ -3,36 +3,30 @@ import { createSDK as createNodeSDK } from "../../generated/createNodeSDK.ts";
 import { patches as cosmosPatches } from "../../generated/patches/cosmosCustomTypePatches.ts";
 import { patches as nodePatches } from "../../generated/patches/nodeCustomTypePatches.ts";
 import { getMessageType } from "../getMessageType.ts";
-import { createNoopTransport } from "../transport/createNoopTransport.ts";
 import { createGrpcGatewayTransport } from "../transport/grpc-gateway/createGrpcGatewayTransport.ts";
 import { getRetryInterceptors, type RetryOptions } from "../transport/interceptors/retry.ts";
-import { createTxTransport } from "../transport/tx/createTxTransport.ts";
 import type { TxClient } from "../transport/tx/TxClient.ts";
+import { ChainCapabilityController } from "./ChainCapability.ts";
+import { createCapabilityQueryTransport, createCapabilityTxTransport } from "./createCapabilityTransports.ts";
 
 export type { PayloadOf, ResponseOf } from "../types.ts";
 
 export function createChainNodeWebSDK(options: ChainNodeWebSDKOptions) {
   const { retry: retryOptions, ...transportOptions } = options.query.transportOptions ?? {};
-  const queryTransport = createGrpcGatewayTransport({
+  const capability = new ChainCapabilityController(options.tx?.signer);
+  const queryTransport = createCapabilityQueryTransport(capability, createGrpcGatewayTransport({
     ...transportOptions,
     baseUrl: options.query.baseUrl,
     interceptors: getRetryInterceptors(retryOptions),
-  });
-  const txTransport = options.tx
-    ? createTxTransport({
-        getMessageType,
-        client: options.tx.signer,
-      })
-    : createNoopTransport({
-        unaryErrorMessage: `Unable to sign transaction. "tx" option is not provided during chain SDK creation`,
-      });
+  }));
+  const txTransport = createCapabilityTxTransport(capability, getMessageType);
   const nodeSDK = createNodeSDK(queryTransport, txTransport, {
     clientOptions: { typePatches: { ...cosmosPatches, ...nodePatches } },
   });
   const cosmosSDK = createCosmosSDK(queryTransport, txTransport, {
     clientOptions: { typePatches: cosmosPatches },
   });
-  return { ...nodeSDK, ...cosmosSDK };
+  return { ...nodeSDK, ...cosmosSDK, capability };
 }
 
 export interface ChainNodeWebSDKOptions {

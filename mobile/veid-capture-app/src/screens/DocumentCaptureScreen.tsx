@@ -5,14 +5,16 @@ import { CaptureFooter } from "../components/CaptureFooter";
 import { CaptureHeader } from "../components/CaptureHeader";
 import { DocumentGuidance } from "../components/DocumentGuidance";
 import type { DocumentSide } from "../core/captureModels";
+import type { CameraAdapter } from "../services/camera/cameraAdapter";
 import { useCaptureStore } from "../state/captureStore";
 
 interface DocumentCaptureScreenProps {
   side: DocumentSide;
   stepIndex: number;
+  cameraAdapter?: CameraAdapter;
 }
 
-export function DocumentCaptureScreen({ side, stepIndex }: DocumentCaptureScreenProps) {
+export function DocumentCaptureScreen({ side, stepIndex, cameraAdapter }: DocumentCaptureScreenProps) {
   const { state, dispatch } = useCaptureStore();
   const [hasCapture, setHasCapture] = useState(false);
 
@@ -26,6 +28,7 @@ export function DocumentCaptureScreen({ side, stepIndex }: DocumentCaptureScreen
       <DocumentGuidance side={side} />
       <CameraFrame
         label={`document_${side}`}
+        cameraAdapter={cameraAdapter}
         onCapture={(asset) => {
           dispatch({
             type: "set_document",

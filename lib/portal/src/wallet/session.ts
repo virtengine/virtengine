@@ -1,237 +1,270 @@
 /**
- * Wallet Session Management for Portal
- * VE-700: Wallet-based authentication session handling
+ * Wallet reconnect metadata and in-memory authorization management.
+ * Persistent storage is untrusted and never contains authorization material.
  */
 
 import type { WalletType } from './types';
 
-// ============================================================================
-// Interfaces
-// ============================================================================
-
-/**
- * Represents a wallet session with connection and timing information.
- */
 export interface WalletSession {
-  /** Type of wallet connected */
   walletType: WalletType;
-  /** Wallet address (bech32 encoded) */
   address: string;
-  /** Chain ID the wallet is connected to */
   chainId: string;
-  /** Timestamp when the wallet was connected (ms since epoch) */
   connectedAt: number;
-  /** Timestamp of last activity (ms since epoch) */
   lastActiveAt: number;
-  /** Timestamp when session expires (ms since epoch), null if no expiration */
   expiresAt: number | null;
-  /** Whether to attempt automatic reconnection */
   autoReconnect: boolean;
 }
 
-/**
- * Configuration for session management behavior.
- */
 export interface SessionConfig {
-  /** Key used for localStorage persistence */
   persistKey: string;
-  /** Maximum session age in milliseconds (default: 7 days) */
   maxAge: number;
-  /** Whether to attempt automatic reconnection on page load */
   autoReconnect: boolean;
-  /** Whether to encrypt sensitive session data */
-  encryptionEnabled: boolean;
 }
 
-// ============================================================================
-// Constants
-// ============================================================================
+export interface MfaAuthorization {
+  scopes: readonly string[];
+  expiresAt: number;
+}
 
-const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
-const DEFAULT_PERSIST_KEY = 'virtengine_wallet_session';
+export interface WalletAuthorizationBinding {
+  chainId: string;
+  account: string;
+  publicKey: string;
+  walletType: WalletType;
+  deviceId: string;
+  sessionId: string;
+  issuedAt: number;
+  expiresAt: number;
+  mfa: MfaAuthorization;
+}
+
+export const WALLET_TRANSACTION_SIGNING_SCOPE = 'wallet:sign:transaction';
+export const WALLET_ARBITRARY_SIGNING_SCOPE = 'wallet:sign:arbitrary';
+
+export type WalletSigningOperation = 'amino' | 'direct' | 'arbitrary';
+
+export interface WalletSigningAuthorizationRequest {
+  operation: WalletSigningOperation;
+  requiredScope:
+    | typeof WALLET_TRANSACTION_SIGNING_SCOPE
+    | typeof WALLET_ARBITRARY_SIGNING_SCOPE;
+  chainId: string;
+  account: string;
+  publicKey: string;
+  walletType: WalletType;
+}
+
+export interface WalletSigningAuthorizationAuthority {
+  authorize(
+    request: WalletSigningAuthorizationRequest
+  ): Promise<WalletAuthorizationBinding | null>;
+}
+
+export type WalletSessionInvalidationReason = 'removed' | 'tampered' | 'disconnect';
+
+export type WalletAuthorizationContext = Pick<
+  WalletAuthorizationBinding,
+  'chainId' | 'account' | 'publicKey' | 'walletType' | 'deviceId' | 'sessionId'
+>;
+
+interface PersistedReconnectMetadata {
+  version: 2;
+  walletType: WalletType;
+  address: string;
+  chainId: string;
+  connectedAt: number;
+  lastActiveAt: number;
+  expiresAt: number;
+  autoReconnect: boolean;
+}
 
 const DEFAULT_CONFIG: SessionConfig = {
-  persistKey: DEFAULT_PERSIST_KEY,
-  maxAge: SEVEN_DAYS_MS,
+  persistKey: 'virtengine_wallet_session',
+  maxAge: 7 * 24 * 60 * 60 * 1000,
   autoReconnect: true,
-  encryptionEnabled: false,
 };
+const WALLET_TYPES: readonly WalletType[] = [
+  'keplr',
+  'leap',
+  'cosmostation',
+  'walletconnect',
+];
+const RECONNECT_KEYS = [
+  'version',
+  'walletType',
+  'address',
+  'chainId',
+  'connectedAt',
+  'lastActiveAt',
+  'expiresAt',
+  'autoReconnect',
+] as const;
 
-// ============================================================================
-// Storage Abstraction
-// ============================================================================
+const memoryStorage = new Map<string, string>();
 
-/**
- * Checks if we're in a browser environment with localStorage available.
- */
 function isStorageAvailable(): boolean {
-  if (typeof window === 'undefined') {
-    return false;
-  }
-  
+  if (typeof window === 'undefined') return false;
   try {
-    const testKey = '__virtengine_storage_test__';
-    window.localStorage.setItem(testKey, 'test');
-    window.localStorage.removeItem(testKey);
+    const key = '__virtengine_storage_test__';
+    window.localStorage.setItem(key, 'test');
+    window.localStorage.removeItem(key);
     return true;
   } catch {
     return false;
   }
 }
 
-/**
- * In-memory fallback storage for SSR or when localStorage is unavailable.
- */
-const memoryStorage: Map<string, string> = new Map();
-
-/**
- * Storage abstraction that handles SSR and localStorage unavailability.
- */
 const storage = {
   getItem(key: string): string | null {
-    if (isStorageAvailable()) {
-      return window.localStorage.getItem(key);
-    }
-    return memoryStorage.get(key) ?? null;
+    return isStorageAvailable()
+      ? window.localStorage.getItem(key)
+      : memoryStorage.get(key) ?? null;
   },
-
   setItem(key: string, value: string): void {
-    if (isStorageAvailable()) {
-      window.localStorage.setItem(key, value);
-    } else {
-      memoryStorage.set(key, value);
-    }
+    if (isStorageAvailable()) window.localStorage.setItem(key, value);
+    else memoryStorage.set(key, value);
   },
-
   removeItem(key: string): void {
-    if (isStorageAvailable()) {
-      window.localStorage.removeItem(key);
-    } else {
-      memoryStorage.delete(key);
-    }
+    if (isStorageAvailable()) window.localStorage.removeItem(key);
+    else memoryStorage.delete(key);
   },
 };
 
-// ============================================================================
-// Encryption Utilities
-// ============================================================================
-
-/**
- * Simple encoding for session data.
- * TODO: Implement proper encryption using Web Crypto API with AES-GCM
- * This is a placeholder that provides basic obfuscation only.
- */
-function encodeData(data: string): string {
-  try {
-    // Base64 encode with a simple transformation
-    // NOTE: This is NOT secure encryption - just obfuscation
-    const base64 = btoa(encodeURIComponent(data));
-    return `v1:${base64}`;
-  } catch {
-    return data;
-  }
+function isNonEmptyString(value: unknown): value is string {
+  return typeof value === 'string' && value.length > 0;
 }
 
-/**
- * Simple decoding for session data.
- * TODO: Implement proper decryption using Web Crypto API with AES-GCM
- */
-function decodeData(encoded: string): string {
-  try {
-    if (encoded.startsWith('v1:')) {
-      const base64 = encoded.slice(3);
-      return decodeURIComponent(atob(base64));
-    }
-    // Handle unencoded legacy data
-    return encoded;
-  } catch {
-    // Return original if decoding fails
-    return encoded;
-  }
+function isTimestamp(value: unknown): value is number {
+  return typeof value === 'number' && Number.isFinite(value) && value > 0;
 }
 
-// ============================================================================
-// Session Validation
-// ============================================================================
+function isWalletType(value: unknown): value is WalletType {
+  return typeof value === 'string' && WALLET_TYPES.includes(value as WalletType);
+}
 
-/**
- * Type guard to validate WalletSession structure.
- */
-function isValidSessionShape(obj: unknown): obj is WalletSession {
-  if (typeof obj !== 'object' || obj === null) {
-    return false;
-  }
+function hasExactKeys(value: Record<string, unknown>): boolean {
+  const actual = Object.keys(value).sort();
+  const expected = [...RECONNECT_KEYS].sort();
+  return actual.length === expected.length && actual.every((key, i) => key === expected[i]);
+}
 
-  const session = obj as Record<string, unknown>;
-
+function isReconnectMetadata(value: unknown): value is PersistedReconnectMetadata {
+  if (typeof value !== 'object' || value === null) return false;
+  const metadata = value as Record<string, unknown>;
   return (
-    typeof session.walletType === 'string' &&
-    ['keplr', 'leap', 'cosmostation', 'walletconnect'].includes(session.walletType) &&
-    typeof session.address === 'string' &&
-    session.address.length > 0 &&
-    typeof session.chainId === 'string' &&
-    session.chainId.length > 0 &&
-    typeof session.connectedAt === 'number' &&
-    session.connectedAt > 0 &&
-    typeof session.lastActiveAt === 'number' &&
-    session.lastActiveAt > 0 &&
-    (session.expiresAt === null || typeof session.expiresAt === 'number') &&
-    typeof session.autoReconnect === 'boolean'
+    hasExactKeys(metadata) &&
+    metadata.version === 2 &&
+    isWalletType(metadata.walletType) &&
+    isNonEmptyString(metadata.address) &&
+    isNonEmptyString(metadata.chainId) &&
+    isTimestamp(metadata.connectedAt) &&
+    isTimestamp(metadata.lastActiveAt) &&
+    isTimestamp(metadata.expiresAt) &&
+    metadata.connectedAt <= metadata.lastActiveAt &&
+    typeof metadata.autoReconnect === 'boolean'
   );
 }
 
-// ============================================================================
-// WalletSessionManager Class
-// ============================================================================
+function isAuthorizationBinding(value: WalletAuthorizationBinding): boolean {
+  const now = Date.now();
+  return (
+    isNonEmptyString(value.chainId) &&
+    isNonEmptyString(value.account) &&
+    isNonEmptyString(value.publicKey) &&
+    isWalletType(value.walletType) &&
+    isNonEmptyString(value.deviceId) &&
+    isNonEmptyString(value.sessionId) &&
+    isTimestamp(value.issuedAt) &&
+    isTimestamp(value.expiresAt) &&
+    value.issuedAt <= now &&
+    value.issuedAt < value.expiresAt &&
+    value.expiresAt > now &&
+    Array.isArray(value.mfa?.scopes) &&
+    value.mfa.scopes.length > 0 &&
+    value.mfa.scopes.every(isNonEmptyString) &&
+    new Set(value.mfa.scopes).size === value.mfa.scopes.length &&
+    isTimestamp(value.mfa.expiresAt) &&
+    value.mfa.expiresAt > now &&
+    value.mfa.expiresAt <= value.expiresAt
+  );
+}
 
-/**
- * Manages wallet session persistence, validation, and lifecycle.
- * Handles SSR gracefully and provides storage abstraction.
- */
 export class WalletSessionManager {
-  private config: SessionConfig;
+  private readonly config: SessionConfig;
   private cachedSession: WalletSession | null = null;
-  private expectedChainId: string | null = null;
+  private liveAuthorization: WalletAuthorizationBinding | null = null;
+  private expectedContext: Partial<WalletAuthorizationContext> = {};
+  private readonly invalidationListeners = new Set<
+    (reason: WalletSessionInvalidationReason) => void
+  >();
+  private readonly storageListener: ((event: StorageEvent) => void) | null;
 
   constructor(config: Partial<SessionConfig> = {}) {
     this.config = { ...DEFAULT_CONFIG, ...config };
+    this.storageListener =
+      typeof window !== 'undefined' && typeof window.addEventListener === 'function'
+        ? event => this.handleStorageEvent(event)
+        : null;
+    if (this.storageListener) window.addEventListener('storage', this.storageListener);
   }
 
-  /**
-   * Sets the expected chain ID for session validation.
-   * Sessions with mismatched chain IDs will be considered invalid.
-   */
+  dispose(): void {
+    if (this.storageListener && typeof window?.removeEventListener === 'function') {
+      window.removeEventListener('storage', this.storageListener);
+    }
+    this.liveAuthorization = null;
+    this.invalidationListeners.clear();
+  }
+
+  onInvalidated(listener: (reason: WalletSessionInvalidationReason) => void): () => void {
+    this.invalidationListeners.add(listener);
+    return () => this.invalidationListeners.delete(listener);
+  }
+
   setExpectedChainId(chainId: string): void {
-    this.expectedChainId = chainId;
+    this.setExpectedContext({ ...this.expectedContext, chainId });
   }
 
-  /**
-   * Saves a wallet session to persistent storage.
-   */
-  saveSession(session: WalletSession): void {
-    try {
-      const sessionWithExpiry: WalletSession = {
-        ...session,
-        expiresAt: session.expiresAt ?? Date.now() + this.config.maxAge,
-        lastActiveAt: Date.now(),
-      };
-
-      const serialized = JSON.stringify(sessionWithExpiry);
-      const encoded = this.config.encryptionEnabled
-        ? encodeData(serialized)
-        : serialized;
-
-      storage.setItem(this.config.persistKey, encoded);
-      this.cachedSession = sessionWithExpiry;
-    } catch (error) {
-      console.warn('[WalletSessionManager] Failed to save session:', error);
+  setExpectedContext(context: Partial<WalletAuthorizationContext>): void {
+    this.expectedContext = { ...context };
+    if (this.liveAuthorization && !this.matchesExpectedContext(this.liveAuthorization)) {
+      this.liveAuthorization = null;
+    }
+    if (this.cachedSession && !this.matchesReconnectContext(this.cachedSession)) {
+      this.clearInvalidStorage();
     }
   }
 
-  /**
-   * Loads a wallet session from persistent storage.
-   * Returns null if no session exists, is invalid, or is corrupted.
-   */
+  saveSession(session: WalletSession): void {
+    try {
+      const now = Date.now();
+      const metadata: PersistedReconnectMetadata = {
+        version: 2,
+        walletType: session.walletType,
+        address: session.address,
+        chainId: session.chainId,
+        connectedAt: session.connectedAt,
+        lastActiveAt: now,
+        expiresAt: session.expiresAt ?? now + this.config.maxAge,
+        autoReconnect: session.autoReconnect,
+      };
+      if (!isReconnectMetadata(metadata)) throw new Error('Invalid reconnect metadata');
+      if (
+        this.liveAuthorization &&
+        (this.liveAuthorization.chainId !== metadata.chainId ||
+          this.liveAuthorization.account !== metadata.address ||
+          this.liveAuthorization.walletType !== metadata.walletType)
+      ) {
+        this.liveAuthorization = null;
+      }
+      storage.setItem(this.config.persistKey, JSON.stringify(metadata));
+      this.cachedSession = this.toSession(metadata);
+    } catch (error) {
+      this.clearInvalidStorage();
+      console.warn('[WalletSessionManager] Failed to save reconnect metadata:', error);
+    }
+  }
+
   loadSession(): WalletSession | null {
     try {
       const stored = storage.getItem(this.config.persistKey);
@@ -239,169 +272,120 @@ export class WalletSessionManager {
         this.cachedSession = null;
         return null;
       }
-
-      const decoded = this.config.encryptionEnabled
-        ? decodeData(stored)
-        : stored;
-
-      const parsed: unknown = JSON.parse(decoded);
-
-      if (!isValidSessionShape(parsed)) {
-        console.warn('[WalletSessionManager] Invalid session shape, clearing');
-        this.clearSession();
+      const parsed: unknown = JSON.parse(stored);
+      if (!isReconnectMetadata(parsed) || parsed.expiresAt <= Date.now()) {
+        console.warn('[WalletSessionManager] Invalid reconnect metadata, clearing');
+        this.clearInvalidStorage();
         return null;
       }
-
-      this.cachedSession = parsed;
-      return parsed;
+      const session = this.toSession(parsed);
+      if (!this.matchesReconnectContext(session)) {
+        this.clearInvalidStorage();
+        return null;
+      }
+      this.cachedSession = session;
+      return session;
     } catch (error) {
-      console.warn('[WalletSessionManager] Failed to load session:', error);
-      this.clearSession();
+      console.warn('[WalletSessionManager] Invalid reconnect metadata, clearing:', error);
+      this.clearInvalidStorage();
       return null;
     }
   }
 
-  /**
-   * Clears the current session from storage.
-   */
   clearSession(): void {
-    storage.removeItem(this.config.persistKey);
-    this.cachedSession = null;
+    this.clearInvalidStorage();
+    try {
+      storage.setItem(this.disconnectKey, String(Date.now()));
+      storage.removeItem(this.disconnectKey);
+    } catch {
+      // Local state remains cleared if a cross-tab broadcast cannot be written.
+    }
   }
 
-  /**
-   * Checks if the current session is valid.
-   * Validates expiration and chain ID match.
-   */
-  isSessionValid(): boolean {
-    const session = this.cachedSession ?? this.loadSession();
-    if (!session) {
+  setLiveAuthorization(binding: WalletAuthorizationBinding): boolean {
+    this.liveAuthorization = null;
+    if (!isAuthorizationBinding(binding) || !this.matchesExpectedContext(binding)) return false;
+    const reconnect = this.cachedSession ?? this.loadSession();
+    if (
+      reconnect &&
+      (binding.chainId !== reconnect.chainId ||
+        binding.account !== reconnect.address ||
+        binding.walletType !== reconnect.walletType)
+    ) {
       return false;
     }
-
-    // Check expiration
-    if (session.expiresAt !== null && Date.now() > session.expiresAt) {
-      console.debug('[WalletSessionManager] Session expired');
-      this.clearSession();
-      return false;
-    }
-
-    // Check chain ID match if expected chain is set
-    if (this.expectedChainId && session.chainId !== this.expectedChainId) {
-      console.debug('[WalletSessionManager] Chain ID mismatch');
-      return false;
-    }
-
+    this.liveAuthorization = this.cloneAuthorization(binding);
     return true;
   }
 
-  /**
-   * Refreshes the session by extending its expiration.
-   * Does nothing if no valid session exists.
-   */
+  getLiveAuthorization(
+    context: WalletAuthorizationContext,
+    requiredScopes: readonly string[] = []
+  ): WalletAuthorizationBinding | null {
+    const authorization = this.liveAuthorization;
+    if (
+      !authorization ||
+      !isAuthorizationBinding(authorization) ||
+      !this.matchesContext(authorization, context) ||
+      !requiredScopes.every(scope => authorization.mfa.scopes.includes(scope))
+    ) {
+      this.liveAuthorization = null;
+      return null;
+    }
+    return this.cloneAuthorization(authorization);
+  }
+
+  clearLiveAuthorization(): void {
+    this.liveAuthorization = null;
+  }
+
+  isSessionValid(): boolean {
+    const session = this.cachedSession ?? this.loadSession();
+    if (
+      !session ||
+      session.expiresAt === null ||
+      session.expiresAt <= Date.now() ||
+      !this.matchesReconnectContext(session)
+    ) {
+      if (session) this.clearInvalidStorage();
+      return false;
+    }
+    return true;
+  }
+
   refreshSession(): void {
     const session = this.cachedSession ?? this.loadSession();
-    if (!session) {
-      return;
+    if (session && this.isSessionValid()) {
+      this.saveSession({ ...session, expiresAt: Date.now() + this.config.maxAge });
     }
-
-    if (!this.isSessionValid()) {
-      return;
-    }
-
-    this.saveSession({
-      ...session,
-      expiresAt: Date.now() + this.config.maxAge,
-      lastActiveAt: Date.now(),
-    });
   }
 
-  /**
-   * Returns the session age in milliseconds since connection.
-   * Returns -1 if no session exists.
-   */
   getSessionAge(): number {
     const session = this.cachedSession ?? this.loadSession();
-    if (!session) {
-      return -1;
-    }
-    return Date.now() - session.connectedAt;
+    return session ? Date.now() - session.connectedAt : -1;
   }
 
-  /**
-   * Determines if auto-reconnect should be attempted.
-   * Considers both config and session-level settings.
-   */
   shouldAutoReconnect(): boolean {
-    if (!this.config.autoReconnect) {
-      return false;
-    }
-
+    if (!this.config.autoReconnect) return false;
     const session = this.cachedSession ?? this.loadSession();
-    if (!session) {
-      return false;
-    }
-
-    if (!session.autoReconnect) {
-      return false;
-    }
-
-    return this.isSessionValid();
+    return Boolean(session?.autoReconnect && this.isSessionValid());
   }
 
-  /**
-   * Updates the last active timestamp for the current session.
-   * Does nothing if no valid session exists.
-   */
   updateLastActive(): void {
     const session = this.cachedSession ?? this.loadSession();
-    if (!session || !this.isSessionValid()) {
-      return;
-    }
-
-    try {
-      const updated: WalletSession = {
-        ...session,
-        lastActiveAt: Date.now(),
-      };
-
-      const serialized = JSON.stringify(updated);
-      const encoded = this.config.encryptionEnabled
-        ? encodeData(serialized)
-        : serialized;
-
-      storage.setItem(this.config.persistKey, encoded);
-      this.cachedSession = updated;
-    } catch (error) {
-      console.warn('[WalletSessionManager] Failed to update last active:', error);
-    }
+    if (session && this.isSessionValid()) this.saveSession(session);
   }
 
-  /**
-   * Returns the currently cached session without loading from storage.
-   */
   getCachedSession(): WalletSession | null {
     return this.cachedSession;
   }
 
-  /**
-   * Returns the time until session expires in milliseconds.
-   * Returns -1 if no session or session has no expiration.
-   * Returns 0 if session is already expired.
-   */
   getTimeUntilExpiry(): number {
     const session = this.cachedSession ?? this.loadSession();
-    if (!session || session.expiresAt === null) {
-      return -1;
-    }
-
-    const remaining = session.expiresAt - Date.now();
-    return remaining > 0 ? remaining : 0;
+    if (!session || session.expiresAt === null) return -1;
+    return Math.max(0, session.expiresAt - Date.now());
   }
 
-  /**
-   * Creates a new session from connection parameters.
-   */
   createSession(params: {
     walletType: WalletType;
     address: string;
@@ -419,21 +403,103 @@ export class WalletSessionManager {
       autoReconnect: params.autoReconnect ?? this.config.autoReconnect,
     };
   }
+
+  private get disconnectKey(): string {
+    return `${this.config.persistKey}:disconnect`;
+  }
+
+  private clearInvalidStorage(): void {
+    storage.removeItem(this.config.persistKey);
+    this.cachedSession = null;
+    this.liveAuthorization = null;
+  }
+
+  private handleStorageEvent(event: StorageEvent): void {
+    if (event.key === this.disconnectKey) {
+      this.cachedSession = null;
+      this.liveAuthorization = null;
+      this.notifyInvalidated('disconnect');
+    } else if (event.key === this.config.persistKey) {
+      this.cachedSession = null;
+      this.liveAuthorization = null;
+      if (event.newValue === null) {
+        this.notifyInvalidated('removed');
+        return;
+      }
+      try {
+        const parsed: unknown = JSON.parse(event.newValue);
+        if (!isReconnectMetadata(parsed) || parsed.expiresAt <= Date.now()) {
+          this.clearInvalidStorage();
+          this.notifyInvalidated('tampered');
+          return;
+        }
+        const session = this.toSession(parsed);
+        if (!this.matchesReconnectContext(session)) {
+          this.clearInvalidStorage();
+          this.notifyInvalidated('tampered');
+          return;
+        }
+        this.cachedSession = session;
+      } catch {
+        this.clearInvalidStorage();
+        this.notifyInvalidated('tampered');
+      }
+    }
+  }
+
+  private notifyInvalidated(reason: WalletSessionInvalidationReason): void {
+    this.invalidationListeners.forEach(listener => listener(reason));
+  }
+
+  private matchesReconnectContext(session: WalletSession): boolean {
+    return (
+      (!this.expectedContext.chainId || this.expectedContext.chainId === session.chainId) &&
+      (!this.expectedContext.account || this.expectedContext.account === session.address) &&
+      (!this.expectedContext.walletType || this.expectedContext.walletType === session.walletType)
+    );
+  }
+
+  private matchesExpectedContext(binding: WalletAuthorizationBinding): boolean {
+    return Object.entries(this.expectedContext).every(
+      ([key, value]) => !value || binding[key as keyof WalletAuthorizationContext] === value
+    );
+  }
+
+  private matchesContext(
+    binding: WalletAuthorizationBinding,
+    context: WalletAuthorizationContext
+  ): boolean {
+    return (
+      binding.chainId === context.chainId &&
+      binding.account === context.account &&
+      binding.publicKey === context.publicKey &&
+      binding.walletType === context.walletType &&
+      binding.deviceId === context.deviceId &&
+      binding.sessionId === context.sessionId
+    );
+  }
+
+  private cloneAuthorization(binding: WalletAuthorizationBinding): WalletAuthorizationBinding {
+    return { ...binding, mfa: { ...binding.mfa, scopes: [...binding.mfa.scopes] } };
+  }
+
+  private toSession(metadata: PersistedReconnectMetadata): WalletSession {
+    return {
+      walletType: metadata.walletType,
+      address: metadata.address,
+      chainId: metadata.chainId,
+      connectedAt: metadata.connectedAt,
+      lastActiveAt: metadata.lastActiveAt,
+      expiresAt: metadata.expiresAt,
+      autoReconnect: metadata.autoReconnect,
+    };
+  }
 }
 
-// ============================================================================
-// Default Instance Export
-// ============================================================================
-
-/**
- * Default session manager instance for convenience.
- * Can be used directly or create custom instances with different configs.
- */
 export const walletSessionManager = new WalletSessionManager();
 
-/**
- * Creates a new session manager with custom configuration.
- */
-export function createSessionManager(config: Partial<SessionConfig> = {}): WalletSessionManager {
+export function createSessionManager(
+  config: Partial<SessionConfig> = {}
+): WalletSessionManager {
   return new WalletSessionManager(config);
 }

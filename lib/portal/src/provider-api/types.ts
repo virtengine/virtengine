@@ -48,6 +48,8 @@ export interface Deployment {
   state: DeploymentState;
   createdAt?: Date;
   resources?: ResourceMetrics;
+  version?: string | number;
+  revision?: string | number;
 }
 
 export interface DeploymentStatus {
@@ -70,15 +72,12 @@ export interface DeploymentListResponse {
   nextCursor?: string | null;
 }
 
-export type DeploymentAction = "start" | "stop" | "restart" | string;
-
-export interface ShellSessionResponse {
-  token: string;
-  expiresAt: string;
-  deployment: string;
-  container?: string;
-  sessionTtl?: number;
-}
+export type DeploymentAction =
+  | "start"
+  | "stop"
+  | "restart"
+  | "update"
+  | "terminate";
 
 export interface ProviderAPIErrorDetails {
   code?: string;

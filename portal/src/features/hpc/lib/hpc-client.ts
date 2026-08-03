@@ -1,52 +1,81 @@
 /**
- * HPC Client
+ * HPC client capability boundary.
  *
- * Wrapper around VirtEngine SDK for HPC operations.
- * For now, provides mock data until SDK integration is complete.
- *
- * TODO: Replace mock implementation with real SDK calls when:
- * - SDK is added to portal dependencies
- * - Wallet connection provides signing capability
- * - Provider network is live
+ * Production callers must inject authoritative query, signer, and provider
+ * adapters. The default client is deliberately unavailable.
  */
 
 import type { Job, JobOutput, JobStatus, SDKOffering, WorkloadTemplate } from '../types';
+import {
+  HPCClientUnavailableError,
+  assertCommittedJobMutation,
+  requireHPCSigner,
+  type CommittedJobMutation,
+  type HPCSignerAdapter,
+  type SubmitJobParams,
+} from '@/lib/portal-adapter';
+
+export {
+  HPCClientUnavailableError,
+  HPCMutationNotCommittedError,
+  assertCommittedJobMutation,
+} from '@/lib/portal-adapter';
+export type {
+  CommittedJobMutation,
+  HPCClientCapability,
+  HPCSignerAdapter,
+  SubmitJobParams,
+} from '@/lib/portal-adapter';
 
 /**
  * HPC Client Configuration
  */
-export interface HPCClientConfig {
-  /**
-   * Chain RPC endpoint
-   */
-  rpcEndpoint?: string;
-
-  /**
-   * User address (for filtering user's jobs)
-   */
-  userAddress?: string;
+export interface JobUsage {
+  cpuPercent: number;
+  memoryPercent: number;
+  gpuPercent?: number;
+  elapsedSeconds: number;
+  estimatedRemainingSeconds?: number;
 }
 
-/**
- * Job submission parameters
- */
-export interface SubmitJobParams {
-  offeringId: string;
-  name: string;
-  description?: string;
-  templateId?: string;
-  resources: {
-    nodes: number;
-    cpusPerNode: number;
-    memoryGBPerNode: number;
-    gpusPerNode?: number;
-    gpuType?: string;
-    maxRuntimeSeconds: number;
-    storageGB: number;
+export interface JobCostEstimate {
+  estimatedTotal: string;
+  pricePerHour: string;
+  breakdown: {
+    compute: string;
+    storage: string;
+    network: string;
+    gpu?: string;
   };
-  command?: string;
-  containerImage?: string;
-  environment?: Record<string, string>;
+  denom: string;
+}
+
+export interface HPCQueryAdapter {
+  listWorkloadTemplates(): Promise<WorkloadTemplate[]>;
+  getWorkloadTemplate(templateId: string): Promise<WorkloadTemplate | null>;
+  listOfferings(): Promise<SDKOffering[]>;
+  getOffering(offeringId: string): Promise<SDKOffering | null>;
+  listJobs(filters?: { status?: JobStatus[] }): Promise<Job[]>;
+  getJob(jobId: string): Promise<Job | null>;
+  estimateJobCost(
+    offeringId: string,
+    resources: SubmitJobParams['resources']
+  ): Promise<JobCostEstimate>;
+}
+
+export interface HPCProviderAdapter {
+  getJobLogs(
+    jobId: string,
+    options?: { tail?: number; since?: number }
+  ): Promise<{ lines: string[]; hasMore: boolean }>;
+  getJobOutputs(jobId: string): Promise<JobOutput[]>;
+  getJobUsage(jobId: string): Promise<JobUsage>;
+}
+
+export interface HPCClientDependencies {
+  query?: HPCQueryAdapter;
+  signer?: HPCSignerAdapter;
+  provider?: HPCProviderAdapter;
 }
 
 /**
@@ -55,95 +84,64 @@ export interface SubmitJobParams {
  * Provides methods for interacting with the HPC module on chain.
  */
 export class HPCClient {
-  private config: HPCClientConfig;
-
-  constructor(config: HPCClientConfig = {}) {
-    this.config = config;
-  }
+  constructor(private readonly dependencies: HPCClientDependencies = {}) {}
 
   /**
    * List available workload templates
    */
   async listWorkloadTemplates(): Promise<WorkloadTemplate[]> {
-    // Mock data for now
-    await this.delay(300);
-
-    return MOCK_TEMPLATES;
+    return this.requireQuery().listWorkloadTemplates();
   }
 
   /**
    * Get workload template by ID
    */
   async getWorkloadTemplate(templateId: string): Promise<WorkloadTemplate | null> {
-    await this.delay(200);
-
-    return MOCK_TEMPLATES.find((t) => t.id === templateId) ?? null;
+    return this.requireQuery().getWorkloadTemplate(templateId);
   }
 
   /**
    * List available offerings
    */
   async listOfferings(): Promise<SDKOffering[]> {
-    await this.delay(300);
-
-    return MOCK_OFFERINGS;
+    return this.requireQuery().listOfferings();
   }
 
   /**
    * Get offering by ID
    */
   async getOffering(offeringId: string): Promise<SDKOffering | null> {
-    await this.delay(200);
-
-    return MOCK_OFFERINGS.find((o) => o.offeringId === offeringId) ?? null;
+    return this.requireQuery().getOffering(offeringId);
   }
 
   /**
    * List user's jobs
    */
   async listJobs(filters?: { status?: JobStatus[] }): Promise<Job[]> {
-    await this.delay(400);
-
-    let jobs = MOCK_JOBS;
-
-    if (filters?.status && filters.status.length > 0) {
-      jobs = jobs.filter((job) => filters.status!.includes(job.status));
-    }
-
-    return jobs;
+    return this.requireQuery().listJobs(filters);
   }
 
   /**
    * Get job by ID
    */
   async getJob(jobId: string): Promise<Job | null> {
-    await this.delay(200);
-
-    return MOCK_JOBS.find((j) => j.id === jobId) ?? null;
+    return this.requireQuery().getJob(jobId);
   }
 
   /**
    * Submit a new job
    */
-  async submitJob(_params: SubmitJobParams): Promise<{ jobId: string; txHash: string }> {
-    await this.delay(1000); // Simulate blockchain transaction time
-
-    // Mock response
-    const jobId = `job-${Date.now()}`;
-    const txHash = `0x${Math.random().toString(16).substring(2, 66)}`;
-
-    return { jobId, txHash };
+  async submitJob(params: SubmitJobParams): Promise<CommittedJobMutation> {
+    const result = await this.requireSigner().submitJob(params);
+    return this.requireCommittedMutation(result);
   }
 
   /**
    * Cancel a job
    */
-  async cancelJob(_jobId: string): Promise<{ txHash: string }> {
-    await this.delay(800);
-
-    const txHash = `0x${Math.random().toString(16).substring(2, 66)}`;
-
-    return { txHash };
+  async cancelJob(jobId: string): Promise<CommittedJobMutation> {
+    const result = await this.requireSigner().cancelJob(jobId);
+    return this.requireCommittedMutation(result, jobId);
   }
 
   /**
@@ -153,51 +151,24 @@ export class HPCClient {
     jobId: string,
     options?: { tail?: number; since?: number }
   ): Promise<{ lines: string[]; hasMore: boolean }> {
-    await this.delay(300);
-
-    const tail = options?.tail ?? 100;
-    const lines = MOCK_LOG_LINES.slice(-tail);
-
-    return { lines, hasMore: MOCK_LOG_LINES.length > tail };
+    this.requireQuery();
+    return this.requireProvider().getJobLogs(jobId, options);
   }
 
   /**
    * Get job outputs
    */
   async getJobOutputs(jobId: string): Promise<JobOutput[]> {
-    await this.delay(200);
-
-    const job = MOCK_JOBS.find((j) => j.id === jobId);
-    if (!job || job.status !== 'completed') return [];
-
-    return MOCK_OUTPUTS;
+    this.requireQuery();
+    return this.requireProvider().getJobOutputs(jobId);
   }
 
   /**
    * Get job resource usage
    */
-  async getJobUsage(jobId: string): Promise<{
-    cpuPercent: number;
-    memoryPercent: number;
-    gpuPercent?: number;
-    elapsedSeconds: number;
-    estimatedRemainingSeconds?: number;
-  }> {
-    await this.delay(200);
-
-    const job = MOCK_JOBS.find((j) => j.id === jobId);
-    if (!job || job.status !== 'running') {
-      return { cpuPercent: 0, memoryPercent: 0, elapsedSeconds: 0 };
-    }
-
-    const elapsed = Math.floor((Date.now() - (job.startedAt ?? job.createdAt)) / 1000);
-    return {
-      cpuPercent: 72,
-      memoryPercent: 58,
-      gpuPercent: job.resources.gpusPerNode ? 85 : undefined,
-      elapsedSeconds: elapsed,
-      estimatedRemainingSeconds: Math.max(0, job.resources.maxRuntimeSeconds - elapsed),
-    };
+  async getJobUsage(jobId: string): Promise<JobUsage> {
+    this.requireQuery();
+    return this.requireProvider().getJobUsage(jobId);
   }
 
   /**
@@ -206,43 +177,27 @@ export class HPCClient {
   async estimateJobCost(
     offeringId: string,
     resources: SubmitJobParams['resources']
-  ): Promise<{
-    estimatedTotal: string;
-    pricePerHour: string;
-    breakdown: {
-      compute: string;
-      storage: string;
-      network: string;
-      gpu?: string;
-    };
-    denom: string;
-  }> {
-    await this.delay(200);
-
-    // Simple mock calculation
-    const basePrice = resources.nodes * resources.cpusPerNode * 0.5;
-    const gpuPrice = (resources.gpusPerNode ?? 0) * resources.nodes * 2.5;
-    const storagePrice = resources.storageGB * 0.01;
-
-    const hourlyRate = basePrice + gpuPrice + storagePrice;
-    const maxHours = resources.maxRuntimeSeconds / 3600;
-    const total = hourlyRate * maxHours;
-
-    return {
-      estimatedTotal: `${total.toFixed(2)}`,
-      pricePerHour: `${hourlyRate.toFixed(2)}`,
-      breakdown: {
-        compute: `${basePrice.toFixed(2)}`,
-        storage: `${storagePrice.toFixed(2)}`,
-        network: '0.50',
-        gpu: resources.gpusPerNode ? `${gpuPrice.toFixed(2)}` : undefined,
-      },
-      denom: 'uakt',
-    };
+  ): Promise<JobCostEstimate> {
+    return this.requireQuery().estimateJobCost(offeringId, resources);
   }
 
-  private delay(ms: number): Promise<void> {
-    return new Promise((resolve) => setTimeout(resolve, ms));
+  private requireQuery(): HPCQueryAdapter {
+    if (!this.dependencies.query) throw new HPCClientUnavailableError('query');
+    return this.dependencies.query;
+  }
+
+  private requireSigner(): HPCSignerAdapter {
+    return requireHPCSigner(this.dependencies.signer);
+  }
+
+  private requireProvider(): HPCProviderAdapter {
+    if (!this.dependencies.provider) throw new HPCClientUnavailableError('provider');
+    return this.dependencies.provider;
+  }
+
+  private requireCommittedMutation(result: unknown, expectedJobId?: string): CommittedJobMutation {
+    assertCommittedJobMutation(result, expectedJobId);
+    return result;
   }
 }
 
@@ -500,6 +455,98 @@ const MOCK_OUTPUTS: JobOutput[] = [
 /**
  * Create HPC client instance
  */
-export function createHPCClient(config?: HPCClientConfig): HPCClient {
-  return new HPCClient(config);
+export function createHPCClient(dependencies: HPCClientDependencies = {}): HPCClient {
+  return new HPCClient(dependencies);
+}
+
+/** Explicit fixture client for tests and development stories only. */
+export function createMockHPCClient(): HPCClient {
+  const query: HPCQueryAdapter = {
+    listWorkloadTemplates: () => Promise.resolve(MOCK_TEMPLATES),
+    getWorkloadTemplate: (templateId) =>
+      Promise.resolve(MOCK_TEMPLATES.find((template) => template.id === templateId) ?? null),
+    listOfferings: () => Promise.resolve(MOCK_OFFERINGS),
+    getOffering: (offeringId) =>
+      Promise.resolve(
+        MOCK_OFFERINGS.find((offering) => offering.offeringId === offeringId) ?? null
+      ),
+    listJobs: (filters) =>
+      Promise.resolve(
+        filters?.status?.length
+          ? MOCK_JOBS.filter((job) => filters.status?.includes(job.status))
+          : MOCK_JOBS
+      ),
+    getJob: (jobId) => Promise.resolve(MOCK_JOBS.find((job) => job.id === jobId) ?? null),
+    estimateJobCost: (_offeringId, resources) => {
+      const compute = resources.nodes * resources.cpusPerNode * 0.5;
+      const gpu = (resources.gpusPerNode ?? 0) * resources.nodes * 2.5;
+      const storage = resources.storageGB * 0.01;
+      const pricePerHour = compute + gpu + storage + 0.5;
+      return Promise.resolve({
+        estimatedTotal: (pricePerHour * (resources.maxRuntimeSeconds / 3600)).toFixed(2),
+        pricePerHour: pricePerHour.toFixed(2),
+        breakdown: {
+          compute: compute.toFixed(2),
+          storage: storage.toFixed(2),
+          network: '0.50',
+          gpu: resources.gpusPerNode ? gpu.toFixed(2) : undefined,
+        },
+        denom: 'uakt',
+      });
+    },
+  };
+  const signer: HPCSignerAdapter = {
+    state: 'signing-ready',
+    chainId: 'virtengine-1',
+    accountAddress: 'virtengine1fixture',
+    submitJob: () =>
+      Promise.resolve({
+        committed: true,
+        jobId: 'fixture-job',
+        txHash: 'fixture-submit',
+        code: 0,
+        blockHeight: 1,
+      }),
+    cancelJob: (jobId) =>
+      Promise.resolve({
+        committed: true,
+        jobId,
+        txHash: 'fixture-cancel',
+        code: 0,
+        blockHeight: 1,
+      }),
+  };
+  const provider: HPCProviderAdapter = {
+    getJobLogs: (_jobId, options) => {
+      const tail = options?.tail ?? 100;
+      return Promise.resolve({
+        lines: MOCK_LOG_LINES.slice(-tail),
+        hasMore: MOCK_LOG_LINES.length > tail,
+      });
+    },
+    getJobOutputs: (jobId) =>
+      Promise.resolve(
+        MOCK_JOBS.find((job) => job.id === jobId)?.status === 'completed' ? MOCK_OUTPUTS : []
+      ),
+    getJobUsage: (jobId) => {
+      const isRunning = MOCK_JOBS.find((job) => job.id === jobId)?.status === 'running';
+      return Promise.resolve(
+        isRunning
+          ? {
+              cpuPercent: 72,
+              memoryPercent: 58,
+              gpuPercent: 85,
+              elapsedSeconds: 6000,
+              estimatedRemainingSeconds: 80400,
+            }
+          : {
+              cpuPercent: 0,
+              memoryPercent: 0,
+              elapsedSeconds: 0,
+            }
+      );
+    },
+  };
+
+  return createHPCClient({ query, signer, provider });
 }
