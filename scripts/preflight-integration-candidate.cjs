@@ -43,7 +43,9 @@ function verifyAcceptedPayload(repo, entry, runGit = git) {
     if (handoffResult.status !== 0) return false;
     const handoff = JSON.parse(handoffResult.stdout);
     const ancestry = runGit(repo, ["merge-base", "--is-ancestor", entry.payload_sha, handoffTarget], true);
-    return handoff.thread === entry.thread && handoff.payload_head === entry.payload_sha && ancestry.status === 0;
+    const checkpoint = entry.tag.split("/").at(-1).toUpperCase();
+    const expectedBranch = { T1: "ve/prototype-t1-identity", T2: "ve/prototype-t2-product", T3: "ve/prototype-t3-reliability", T5: "ve/prototype-t5-platform" }[entry.thread];
+    return handoff.thread === entry.thread && handoff.checkpoint === checkpoint && handoff.branch === expectedBranch && handoff.payload_head === entry.payload_sha && ancestry.status === 0;
   } catch {
     return false;
   }
