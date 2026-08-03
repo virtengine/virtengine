@@ -1,0 +1,17 @@
+command: go test -count=1 ./x/veid/types
+exit_code: 0
+result: ok github.com/virtengine/virtengine/x/veid/types 0.194s
+
+command: go test -count=1 ./pkg/inference -run 'ReceiptProducer|ReceiptParity'
+exit_code: 0
+result: ok github.com/virtengine/virtengine/pkg/inference 0.259s
+
+command: go test -count=1 ./x/veid/keeper -run 'InferenceReceipt'
+exit_code: 0
+result: ok github.com/virtengine/virtengine/x/veid/keeper 1.874s
+
+command: CGO_ENABLED=1 CC=winlibs-gcc go test -race -count=1 ./x/veid/types -run 'InferenceReceipt'
+exit_code: 0
+result: ok github.com/virtengine/virtengine/x/veid/types 1.436s
+
+contract: Chain ID, account, request, nonce, pipeline, signer key, and scope identifiers must be bounded printable ASCII without surrounding whitespace. Regression cases cover whitespace, NUL/control bytes, and Unicode substitutions across identifier classes.
