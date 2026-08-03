@@ -107,6 +107,12 @@ production non-claim.
 AI provenance and evaluation blocker references use canonical nullable blocker
 IDs, while assurance state and status fields reject surrounding whitespace.
 
+Prototype rollout and rollback states are exact non-claims: rollout remains
+`not_authorized` with no evidence and its dedicated blocker, while rollback
+remains `unverified` with no evidence and its dedicated blocker. Alternate
+status strings, fabricated evidence, and unrelated blocker substitutions fail
+runtime validation.
+
 The planner hashes the selected observation, requires the checked core-RC
 manifest to bind that exact path/digest, verifies identical bytes at the
 manifest source commit, and requires that source to be an ancestor of current

@@ -20,6 +20,7 @@ const {
   validateAssuranceDigests,
   validateBlockers,
   validateExternalDependencies,
+  validateManifest,
   validateRejectedCheckpoints,
   validateToolchains,
   validateToolingArtifacts,
@@ -50,6 +51,7 @@ const schema = JSON.parse(readFileSync(resolve(root, "_docs/ralph/prototype-inte
 const modelProvenance = JSON.parse(readFileSync(resolve(root, "_docs/ralph/prototype-integration/model-provenance.json"), "utf8"));
 const productionPolicy = JSON.parse(readFileSync(resolve(root, "_docs/ralph/prototype-integration/ai-production-policy.json"), "utf8"));
 const featureParity = JSON.parse(readFileSync(resolve(root, "pkg/inference/conformance/testdata/feature_parity_v1.json"), "utf8"));
+const checkedManifest = JSON.parse(readFileSync(resolve(root, checkedManifestPath), "utf8"));
 
 const tests = [
   ["rejects duplicate or incomplete generator arguments", () => {
@@ -232,6 +234,14 @@ const tests = [
     const duplicate = clone(schema);
     duplicate.$defs.artifactGroup.properties.id.enum.push("chart");
     assert.throws(() => validateSchema(duplicate), /must be unique/);
+  }],
+  ["rejects forged rollout and rollback evidence", () => {
+    const rollout = clone(checkedManifest);
+    rollout.rollout = { status: "authorized", evidence: { result: "passed", source: "fabricated" }, blocker_id: "rollout-not-authorized" };
+    assert.throws(() => validateManifest(rollout, { rootDir: root }), /rollout/);
+    const rollback = clone(checkedManifest);
+    rollback.rollback = { status: "verified", evidence: { result: "passed", source: "fabricated" }, blocker_id: "rollback-evidence-unavailable" };
+    assert.throws(() => validateManifest(rollback, { rootDir: root }), /rollback/);
   }],
   ["rejects duplicate manifest entry IDs", () => {
     assert.throws(() => assertUniqueIds([{ id: "chart" }, { id: "chart" }], "artifact group"), /must be unique/);

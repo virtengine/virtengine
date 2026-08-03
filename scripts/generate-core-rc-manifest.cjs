@@ -596,6 +596,12 @@ function validateManifest(manifest, options = {}) {
   exactKeys(manifest.producer_checkpoints, ["ledger_path", "ledger_sha256", "accepted", "rejected", "blocker_id"], "producer_checkpoints");
   exactKeys(manifest.rollout, ["status", "evidence", "blocker_id"], "rollout");
   exactKeys(manifest.rollback, ["status", "evidence", "blocker_id"], "rollback");
+  assert.equal(manifest.rollout.status, "not_authorized", "rollout must remain not authorized");
+  assert.equal(manifest.rollout.evidence, null, "rollout evidence must remain unavailable");
+  assert.equal(manifest.rollout.blocker_id, "rollout-not-authorized", "rollout blocker mismatch");
+  assert.equal(manifest.rollback.status, "unverified", "rollback must remain unverified");
+  assert.equal(manifest.rollback.evidence, null, "rollback evidence must remain unavailable");
+  assert.equal(manifest.rollback.blocker_id, "rollback-evidence-unavailable", "rollback blocker mismatch");
   const linkedSections = [manifest.migrations, manifest.required_gates, manifest.slurm, manifest.model_provenance, manifest.producer_checkpoints, manifest.rollout, manifest.rollback];
   linkedSections.forEach((section, index) => assertBlocker(manifest, section.blocker_id, `blocked section ${index}`));
   if (manifest.test_evidence.status === "complete") assert.equal(manifest.test_evidence.blocker_id, null, "complete test evidence cannot retain a blocker");
@@ -638,8 +644,6 @@ function validateManifest(manifest, options = {}) {
   assert.deepEqual(manifest.producer_checkpoints.rejected, handoff.rejected_checkpoints, "rejected producer ledger binding mismatch");
   validateRejectedCheckpoints(manifest.producer_checkpoints.rejected);
   assert.equal(manifest.producer_checkpoints.accepted.length, 0, "payload must not claim integrated producers");
-  assert.notEqual(manifest.rollout.status, "complete");
-  assert.notEqual(manifest.rollback.status, "verified");
   assert.notEqual(manifest.model_provenance.sbom_status, "available");
   return true;
 }
