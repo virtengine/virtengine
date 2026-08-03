@@ -1,33 +1,29 @@
 {
   "campaign": "three-day-prototype",
   "thread": "T4",
-  "checkpoint": "T4-01EBC",
+  "checkpoint": "T4-01EBD",
   "branch": "ve/prototype-integration",
-  "start_head": "8dfcf531733086ecc283c8d09ab2f8995f5a74b1",
-  "end_head": "f20593e526c2d39d94d6ee8666ff4b6961e422e9",
+  "start_head": "0b8bea542add70574064e34b2ebe9dd1243e4966",
+  "end_head": "f76e1cfc3b4fc01b5cc6228ed9889a0e222cb5df",
   "origin_main": "79391a3df86d85522b92e0400c6904971ecbe65d",
   "tree_clean": true,
   "commits": [
-    "f20593e526c2d39d94d6ee8666ff4b6961e422e9"
+    "f76e1cfc3b4fc01b5cc6228ed9889a0e222cb5df"
   ],
   "owned_paths": [
-    "_docs/audits/**",
-    "_docs/ralph/prototype-integration/core-rc-manifest.schema.json",
-    "scripts/generate-core-rc-manifest.cjs",
-    "scripts/generate-core-rc-manifest.test.cjs"
+    "_docs/ralph/prototype-integration/**",
+    "_docs/ralph/handoffs/prototype-integration/**"
   ],
   "files_changed": [
-    "_docs/audits/task-t4-01e-intake-freeze-planner-2026-08-02.md",
-    "_docs/ralph/prototype-integration/core-rc-manifest.schema.json",
-    "scripts/generate-core-rc-manifest.cjs",
-    "scripts/generate-core-rc-manifest.test.cjs"
+    "_docs/ralph/handoffs/prototype-integration/HANDOFF.yaml",
+    "_docs/ralph/prototype-integration/core-rc-manifest.json"
   ],
   "tests": [
     {
-      "command": "node scripts/generate-core-rc-manifest.test.cjs && node scripts/validate-core-rc-manifest.cjs",
+      "command": "node scripts/validate-prototype-integration.test.cjs && node scripts/validate-prototype-integration.cjs",
       "exit_code": 0,
       "result": "passed",
-      "test_count": 29,
+      "test_count": 13,
       "tool_versions": {
         "node": "20.19.1"
       }
@@ -42,7 +38,9 @@
       }
     }
   ],
-  "generated_hashes": {},
+  "generated_hashes": {
+    "_docs/ralph/prototype-integration/core-rc-manifest.json": "628a1e46d4e8de287cf6b55f209272d336549217eb653632f15e841724b5e3a0"
+  },
   "accepted_checkpoints": [],
   "rejected_checkpoints": [
     {
@@ -93,5 +91,5 @@
     "Task 88C is not complete."
   ],
   "next_checkpoint": null,
-  "expected_head": "f20593e526c2d39d94d6ee8666ff4b6961e422e9"
+  "expected_head": "f76e1cfc3b4fc01b5cc6228ed9889a0e222cb5df"
 }
