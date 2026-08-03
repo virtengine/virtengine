@@ -1,31 +1,29 @@
 {
   "campaign": "three-day-prototype",
   "thread": "T4",
-  "checkpoint": "T4-01EM",
+  "checkpoint": "T4-01EN",
   "branch": "ve/prototype-integration",
-  "start_head": "2a21f0582202e424ef936e6eed7dc6d9ac842f48",
-  "end_head": "77cc730348d7a47496505034087f900db68412b2",
+  "start_head": "61267fadc922b1a111b5d7b907ee74afeef2a3b4",
+  "end_head": "5bc6b1177ee91aaa7a8a5e6a1bf153f25cc4d57a",
   "origin_main": "79391a3df86d85522b92e0400c6904971ecbe65d",
   "tree_clean": true,
   "commits": [
-    "77cc730348d7a47496505034087f900db68412b2"
+    "5bc6b1177ee91aaa7a8a5e6a1bf153f25cc4d57a"
   ],
   "owned_paths": [
-    "_docs/audits/**",
-    "scripts/observe-prototype-intake-tags.cjs",
-    "scripts/observe-prototype-intake-tags.test.cjs"
+    "_docs/ralph/prototype-integration/**",
+    "_docs/ralph/handoffs/prototype-integration/**"
   ],
   "files_changed": [
-    "_docs/audits/task-t4-01e-intake-freeze-planner-2026-08-02.md",
-    "scripts/observe-prototype-intake-tags.cjs",
-    "scripts/observe-prototype-intake-tags.test.cjs"
+    "_docs/ralph/handoffs/prototype-integration/HANDOFF.yaml",
+    "_docs/ralph/prototype-integration/core-rc-manifest.json"
   ],
   "tests": [
     {
-      "command": "node scripts/observe-prototype-intake-tags.test.cjs",
+      "command": "node scripts/validate-prototype-integration.test.cjs && node scripts/validate-prototype-integration.cjs",
       "exit_code": 0,
       "result": "passed",
-      "test_count": 7,
+      "test_count": 13,
       "tool_versions": {
         "node": "20.19.1"
       }
@@ -40,7 +38,9 @@
       }
     }
   ],
-  "generated_hashes": {},
+  "generated_hashes": {
+    "_docs/ralph/prototype-integration/core-rc-manifest.json": "1ceec7921ee7997e960f3937a090cc7ad56e0c82cfaf79a006b63bb46f9e31b0"
+  },
   "accepted_checkpoints": [],
   "rejected_checkpoints": [
     {
@@ -91,5 +91,5 @@
     "Task 88C is not complete."
   ],
   "next_checkpoint": null,
-  "expected_head": "77cc730348d7a47496505034087f900db68412b2"
+  "expected_head": "5bc6b1177ee91aaa7a8a5e6a1bf153f25cc4d57a"
 }
