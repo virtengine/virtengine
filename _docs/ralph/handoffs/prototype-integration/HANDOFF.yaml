@@ -1,29 +1,33 @@
 {
   "campaign": "three-day-prototype",
   "thread": "T4",
-  "checkpoint": "T4-01CL",
+  "checkpoint": "T4-01CM",
   "branch": "ve/prototype-integration",
-  "start_head": "9b8f317576813f049db200b1b31fdd0f14287106",
-  "end_head": "091f6fba83f060e708b4bd2f61a80d8989d9d160",
+  "start_head": "f053ed2d71c418cb5b906d7930b6a0b55611a469",
+  "end_head": "5d5659fbd34a61faa36312923e97c4fd53abc857",
   "origin_main": "79391a3df86d85522b92e0400c6904971ecbe65d",
   "tree_clean": true,
   "commits": [
-    "091f6fba83f060e708b4bd2f61a80d8989d9d160"
+    "5d5659fbd34a61faa36312923e97c4fd53abc857"
   ],
   "owned_paths": [
     "_docs/ralph/prototype-integration/**",
-    "_docs/ralph/handoffs/prototype-integration/**"
+    "_docs/ralph/handoffs/prototype-integration/**",
+    "_docs/audits/task-t4-01e-intake-freeze-planner-2026-08-02.md",
+    "scripts/preflight-integration-candidate.cjs",
+    "scripts/preflight-integration-candidate.test.cjs"
   ],
   "files_changed": [
-    "_docs/ralph/handoffs/prototype-integration/HANDOFF.yaml",
-    "_docs/ralph/prototype-integration/core-rc-manifest.json"
+    "_docs/audits/task-t4-01e-intake-freeze-planner-2026-08-02.md",
+    "scripts/preflight-integration-candidate.cjs",
+    "scripts/preflight-integration-candidate.test.cjs"
   ],
   "tests": [
     {
-      "command": "node scripts/validate-prototype-integration.test.cjs && node scripts/validate-prototype-integration.cjs",
+      "command": "node scripts/preflight-integration-candidate.test.cjs",
       "exit_code": 0,
       "result": "passed",
-      "test_count": 13,
+      "test_count": 20,
       "tool_versions": {
         "node": "20.19.1"
       }
@@ -91,5 +95,5 @@
     "Task 88C is not complete."
   ],
   "next_checkpoint": null,
-  "expected_head": "091f6fba83f060e708b4bd2f61a80d8989d9d160"
+  "expected_head": "5d5659fbd34a61faa36312923e97c4fd53abc857"
 }
