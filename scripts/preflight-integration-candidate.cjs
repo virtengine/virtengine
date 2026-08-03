@@ -81,26 +81,26 @@ function validateAcceptanceBoundary(boundary, options) {
   return true;
 }
 
-function buildCandidatePlan(repo, candidateRef, canonicalRef, acceptancePath, producerBranches) {
-  const canonicalHead = git(repo, ["rev-parse", `${canonicalRef}^{commit}`]).stdout.trim();
-  const candidateHead = git(repo, ["rev-parse", `${candidateRef}^{commit}`]).stdout.trim();
-  const acceptanceObject = git(repo, ["rev-parse", `${candidateRef}:${acceptancePath}`], true);
+function buildCandidatePlan(repo, candidateRef, canonicalRef, acceptancePath, producerBranches, runGit = git) {
+  const canonicalHead = runGit(repo, ["rev-parse", `${canonicalRef}^{commit}`]).stdout.trim();
+  const candidateHead = runGit(repo, ["rev-parse", `${candidateRef}^{commit}`]).stdout.trim();
+  const acceptanceObject = runGit(repo, ["rev-parse", `${candidateHead}:${acceptancePath}`], true);
   assert.equal(acceptanceObject.status, 0, "candidate acceptance artifact is not committed");
-  const acceptance = parseAcceptance(git(repo, ["show", `${candidateRef}:${acceptancePath}`]).stdout);
+  const acceptance = parseAcceptance(runGit(repo, ["show", `${candidateHead}:${acceptancePath}`]).stdout);
   assert.equal(acceptance.base_sha, canonicalHead, "acceptance base does not match canonical T4");
   validateAcceptanceBoundary({ canonical_head: canonicalHead, candidate_head: candidateHead, candidate_sha: acceptance.candidate_sha, acceptance_path: acceptancePath }, {
-    isAncestor: (ancestor, descendant) => git(repo, ["merge-base", "--is-ancestor", ancestor, descendant], true).status === 0,
-    parents: (commit) => git(repo, ["show", "-s", "--format=%P", commit]).stdout.trim().split(/\s+/).filter(Boolean),
-    changedPaths: (ancestor, descendant) => git(repo, ["diff", "--name-only", `${ancestor}..${descendant}`]).stdout.trim().split(/\r?\n/).filter(Boolean),
+    isAncestor: (ancestor, descendant) => runGit(repo, ["merge-base", "--is-ancestor", ancestor, descendant], true).status === 0,
+    parents: (commit) => runGit(repo, ["show", "-s", "--format=%P", commit]).stdout.trim().split(/\s+/).filter(Boolean),
+    changedPaths: (ancestor, descendant) => runGit(repo, ["diff", "--name-only", `${ancestor}..${descendant}`]).stdout.trim().split(/\r?\n/).filter(Boolean),
   });
   const acceptedPayloads = acceptance.accepted_payloads.map((entry) => ({ thread: entry.thread, tag: entry.tag, payload_sha: entry.payload_sha }));
-  const base = git(repo, ["merge-base", canonicalHead, candidateHead]).stdout.trim();
+  const base = runGit(repo, ["merge-base", canonicalHead, candidateHead]).stdout.trim();
   const contained = [];
   for (const [thread, branch] of producerBranches) {
-    const commits = git(repo, ["rev-list", "--reverse", `${base}..refs/remotes/origin/${branch}`], true);
+    const commits = runGit(repo, ["rev-list", "--reverse", `${base}..refs/remotes/origin/${branch}`], true);
     if (commits.status !== 0) throw new Error(`registered producer ref is unavailable: ${branch}`);
     for (const commit of commits.stdout.trim().split(/\r?\n/).filter(Boolean)) {
-      if (git(repo, ["merge-base", "--is-ancestor", commit, candidateHead], true).status === 0) contained.push({ thread, commit });
+      if (runGit(repo, ["merge-base", "--is-ancestor", commit, candidateHead], true).status === 0) contained.push({ thread, commit });
     }
   }
   return { canonical_head: canonicalHead, candidate_head: candidateHead, accepted_payloads: acceptedPayloads, contained_producer_commits: contained };
