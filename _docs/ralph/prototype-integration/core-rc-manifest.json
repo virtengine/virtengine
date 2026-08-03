@@ -6,14 +6,14 @@
   "planned_functionality_complete": false,
   "milestone_m_eligible": false,
   "source": {
-    "payload_sha": "371251b31e54cf273c88cf3471e4d2711b8bb8af",
-    "tree": "d29b88e464a062ec05a849a4e9cb5b75d39a362c",
+    "payload_sha": "4d8b1ee60c87455059443b0c571d0cd139984243",
+    "tree": "4a9f1c5babe29f496730f253133d6ba5b7b03fe9",
     "branch": "ve/prototype-integration",
     "binding": "declared_clean_parent_payload"
   },
   "tooling": {
-    "tooling_sha": "371251b31e54cf273c88cf3471e4d2711b8bb8af",
-    "tree": "d29b88e464a062ec05a849a4e9cb5b75d39a362c",
+    "tooling_sha": "4d8b1ee60c87455059443b0c571d0cd139984243",
+    "tree": "4a9f1c5babe29f496730f253133d6ba5b7b03fe9",
     "artifacts": [
       {
         "id": "generator",
@@ -427,17 +427,17 @@
   "test_evidence": {
     "status": "complete",
     "ledger_path": "_docs/ralph/handoffs/prototype-integration/HANDOFF.yaml",
-    "implementation_sha": "1829a6150522f2f5ac53752df382514706a15968",
-    "ledger_sha": "371251b31e54cf273c88cf3471e4d2711b8bb8af",
+    "implementation_sha": "0e8dfa0efaaf224cba3d7a7db07f2129d80c23a9",
+    "ledger_sha": "4d8b1ee60c87455059443b0c571d0cd139984243",
     "record_count": 1,
-    "declared_test_count": 54,
+    "declared_test_count": 68,
     "uncounted_record_count": 0,
     "records": [
       {
-        "command": "node scripts/plan-prototype-intake-freeze.test.cjs && node scripts/apply-prototype-intake-freeze.test.cjs",
+        "command": "node scripts/prototype-intake-epochs.test.cjs && node scripts/plan-prototype-intake-freeze.test.cjs && node scripts/validate-prototype-intake.test.cjs",
         "exit_code": 0,
         "result": "passed",
-        "test_count": 54,
+        "test_count": 68,
         "tool_versions": {
           "node": "20.19.1"
         }
@@ -447,7 +447,7 @@
   },
   "producer_checkpoints": {
     "ledger_path": "_docs/ralph/handoffs/prototype-integration/HANDOFF.yaml",
-    "ledger_sha256": "ff79aaed016c37aab29aa43f2366463273662f793031011ab80d0732b227405f",
+    "ledger_sha256": "3b969ef6d103e45400f75f1bfa2666bf0f6b8b7538368ea84551948cdcc7c1b6",
     "accepted": [],
     "rejected": [
       {
