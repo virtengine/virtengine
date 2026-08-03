@@ -1,14 +1,14 @@
 {
   "campaign": "three-day-prototype",
   "thread": "T4",
-  "checkpoint": "STABLE-CANDIDATE-01",
+  "checkpoint": "STABLE-CANDIDATE-02",
   "branch": "ve/prototype-integration",
-  "start_head": "f799e59b3713a77ff3c460413b4a5b80a2df98e2",
-  "end_head": "2db1e0b3a12b18442e7aff6a21e62ca11dea2a23",
+  "start_head": "bf09d6e137d1ea2a17634fc2303454065b1a6cc1",
+  "end_head": "ab41196e8d6265e676d97f843ad8151099aade2e",
   "origin_main": "79391a3df86d85522b92e0400c6904971ecbe65d",
   "tree_clean": true,
   "commits": [
-    "2db1e0b3a12b18442e7aff6a21e62ca11dea2a23"
+    "ab41196e8d6265e676d97f843ad8151099aade2e"
   ],
   "owned_paths": [
     "_docs/ralph/prototype-integration/**",
@@ -43,6 +43,15 @@
       "test_count": 0,
       "tool_versions": {
         "go": "go1.25.8 windows/amd64"
+      }
+    },
+    {
+      "command": "node --test scripts/preflight-integration-candidate.test.cjs scripts/validate-required-gate-matrix.test.cjs",
+      "exit_code": 0,
+      "result": "passed",
+      "test_count": 2,
+      "tool_versions": {
+        "node": "20.19.1"
       }
     }
   ],
@@ -126,5 +135,5 @@
     "Task 88C is not complete."
   ],
   "next_checkpoint": null,
-  "expected_head": "2db1e0b3a12b18442e7aff6a21e62ca11dea2a23"
+  "expected_head": "ab41196e8d6265e676d97f843ad8151099aade2e"
 }
