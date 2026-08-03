@@ -20,6 +20,7 @@ import type {
 import type { HPCSignerAdapter } from "./hpc/hpc-mutation";
 import type { HPCOutputAdapter } from "./hpc/hpc-output";
 import type { HPCQueryAdapter } from "./hpc/hpc-query";
+import type { ProviderDomainVerifier } from "./provider/domain-verification";
 import type {
   WalletProviderConfig,
   WalletChainInfo,
@@ -35,6 +36,7 @@ function ProductProviders({
   hpcMutationAdapter,
   hpcOutputAdapter,
   hpcQueryAdapter,
+  providerDomainVerifier,
 }: {
   children: React.ReactNode;
   mutationAdapter?: CheckoutMutationAdapter;
@@ -44,6 +46,7 @@ function ProductProviders({
   hpcMutationAdapter?: HPCSignerAdapter;
   hpcOutputAdapter?: HPCOutputAdapter;
   hpcQueryAdapter?: HPCQueryAdapter;
+  providerDomainVerifier?: ProviderDomainVerifier;
 }) {
   const chain = useChain();
   const wallet = useWallet();
@@ -67,7 +70,18 @@ function ProductProviders({
       resultProjector={resultProjector}
       mutationTimeoutMs={mutationTimeoutMs}
     >
-      <ProviderProvider>
+      <ProviderProvider
+        queryClient={chain.queryClient}
+        chainId={queryChainId}
+        accountAddress={accountAddress}
+        domainVerifier={
+          accountAddress &&
+          providerDomainVerifier?.chainId === queryChainId &&
+          providerDomainVerifier.accountAddress === accountAddress
+            ? providerDomainVerifier
+            : undefined
+        }
+      >
         <HPCProvider
           queryClient={chain.queryClient}
           chainId={queryChainId}
@@ -132,6 +146,7 @@ export function PortalProvider({
   hpcMutationAdapter,
   hpcOutputAdapter,
   hpcQueryAdapter,
+  providerDomainVerifier,
   children,
 }: PortalProviderProps): JSX.Element {
   const [isReady, setIsReady] = React.useState(false);
@@ -210,6 +225,7 @@ export function PortalProvider({
                   hpcMutationAdapter={hpcMutationAdapter}
                   hpcOutputAdapter={hpcOutputAdapter}
                   hpcQueryAdapter={hpcQueryAdapter}
+                  providerDomainVerifier={providerDomainVerifier}
                 >
                   {children}
                 </ProductProviders>

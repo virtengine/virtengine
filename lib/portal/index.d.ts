@@ -490,6 +490,7 @@ export interface PortalProviderProps {
   hpcMutationAdapter?: HPCSignerAdapter;
   hpcOutputAdapter?: HPCOutputAdapter;
   hpcQueryAdapter?: HPCQueryAdapter;
+  providerDomainVerifier?: ProviderDomainVerifier;
   children: React.ReactNode;
 }
 export const PortalProvider: React.ComponentType<PortalProviderProps>;
@@ -526,7 +527,67 @@ export class ProviderDeploymentActionError extends Error {
   );
 }
 export const validateProviderDeploymentActionReceipt: ProviderDeploymentActionReceiptValidator;
-export const ProviderProvider: any;
+export interface ProviderDomainBinding {
+  chainId: string;
+  accountAddress: string;
+}
+export interface ProviderDomainChallenge
+  extends DomainChallenge, ProviderDomainBinding {
+  challengeId: string;
+}
+export interface ProviderDomainVerificationEvidence
+  extends DomainVerification, ProviderDomainBinding {
+  status: "verified";
+  challengeId: string;
+  evidenceId: string;
+}
+export interface ProviderDomainVerifier {
+  readonly chainId: string;
+  readonly accountAddress: string;
+  issueChallenge(
+    domain: string,
+    method: DomainVerificationMethod,
+  ): Promise<unknown>;
+  verifyChallenge(challenge: ProviderDomainChallenge): Promise<unknown>;
+}
+export class ProviderDomainVerificationError extends Error {
+  readonly code:
+    | "feature_unavailable"
+    | "invalid_domain"
+    | "invalid_challenge"
+    | "invalid_verification"
+    | "authority_changed"
+    | "challenge_in_progress"
+    | "verification_in_progress";
+  constructor(code: ProviderDomainVerificationError["code"]);
+}
+export interface ProviderProviderProps {
+  children: React.ReactNode;
+  queryClient: import("./types/chain").QueryClient;
+  chainId: string;
+  accountAddress: string | null;
+  getAuthHeader?: () => Promise<string>;
+  domainVerifier?: ProviderDomainVerifier;
+}
+export const ProviderProvider: React.ComponentType<ProviderProviderProps>;
+export function normalizeProviderDomain(value: string): string;
+export function requireProviderDomainVerifier(
+  verifier: ProviderDomainVerifier | undefined,
+  binding: ProviderDomainBinding,
+): ProviderDomainVerifier;
+export function validateProviderDomainChallenge(
+  value: unknown,
+  binding: ProviderDomainBinding,
+  domain: string,
+  method: DomainVerificationMethod,
+  now?: number,
+): ProviderDomainChallenge;
+export function validateProviderDomainVerification(
+  value: unknown,
+  binding: ProviderDomainBinding,
+  challenge: ProviderDomainChallenge,
+  now?: number,
+): ProviderDomainVerificationEvidence;
 export const ProviderRegistrationFlow: any;
 export const RemediationGuide: any;
 export const ResourceAccess: any;
@@ -591,7 +652,37 @@ export const useMultiProvider: any;
 export const useOrderTracking: any;
 export const useOrganization: any;
 export const usePortal: any;
-export const useProvider: any;
+export interface ProviderActions {
+  refresh(): Promise<void>;
+  startRegistration(): void;
+  updateRegistrationData(data: Partial<ProviderRegistration>): void;
+  startDomainVerification(
+    domain: string,
+    method: DomainVerificationMethod,
+  ): Promise<ProviderDomainChallenge>;
+  checkDomainVerification(
+    domain: string,
+  ): Promise<ProviderDomainVerificationEvidence>;
+  submitRegistration(): Promise<void>;
+  createOffering(draft: OfferingDraft): Promise<ProviderOffering>;
+  updateOffering(
+    offeringId: string,
+    updates: Partial<OfferingDraft>,
+  ): Promise<ProviderOffering>;
+  publishOffering(offeringId: string): Promise<void>;
+  pauseOffering(offeringId: string): Promise<void>;
+  getIncomingOrders(): Promise<void>;
+  getActiveBids(): Promise<void>;
+  getActiveAllocations(): Promise<void>;
+  getUsageRecords(allocationId?: string): Promise<void>;
+  getSettlementSummary(): Promise<void>;
+  clearError(): void;
+}
+export interface ProviderContextValue {
+  state: ProviderState;
+  actions: ProviderActions;
+}
+export function useProvider(): ProviderContextValue;
 export const validateAddress: any;
 export const validateMnemonic: any;
 export const validateTransaction: any;

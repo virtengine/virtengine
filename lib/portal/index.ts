@@ -378,6 +378,24 @@ export type { OrderTrackingPageProps } from "./src/pages/orders";
 
 export { useProvider, ProviderProvider } from "./hooks/useProvider";
 export type {
+  ProviderActions,
+  ProviderContextValue,
+  ProviderProviderProps,
+} from "./hooks/useProvider";
+export {
+  ProviderDomainVerificationError,
+  normalizeProviderDomain,
+  requireProviderDomainVerifier,
+  validateProviderDomainChallenge,
+  validateProviderDomainVerification,
+} from "./components/provider/domain-verification";
+export type {
+  ProviderDomainBinding,
+  ProviderDomainChallenge,
+  ProviderDomainVerificationEvidence,
+  ProviderDomainVerifier,
+} from "./components/provider/domain-verification";
+export type {
   ProviderState,
   ProviderProfile,
   ProviderRegistration,

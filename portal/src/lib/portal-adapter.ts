@@ -302,6 +302,22 @@ export type {
 // ============================================================================
 
 export { useProvider, ProviderProvider } from '../../../lib/portal';
+export {
+  ProviderDomainVerificationError,
+  normalizeProviderDomain,
+  requireProviderDomainVerifier,
+  validateProviderDomainChallenge,
+  validateProviderDomainVerification,
+} from '../../../lib/portal';
+export type {
+  ProviderDomainBinding,
+  ProviderDomainChallenge,
+  ProviderDomainVerificationEvidence,
+  ProviderDomainVerifier,
+  ProviderActions,
+  ProviderContextValue,
+  ProviderProviderProps,
+} from '../../../lib/portal';
 export type {
   ProviderState,
   ProviderProfile,
