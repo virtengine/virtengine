@@ -1,30 +1,26 @@
 {
   "campaign": "three-day-prototype",
   "thread": "T4",
-  "checkpoint": "T4-01ECK",
+  "checkpoint": "T4-01ECL",
   "branch": "ve/prototype-integration",
-  "start_head": "e116eec3f67262ea87731faabfdbe93a4e87e88d",
-  "end_head": "eb22ab05c3c7bd098c25d8f9b1b703eb6da37b10",
+  "start_head": "1d5838ef4f84f601e04513a4c668306d39c3d0de",
+  "end_head": "25e42f9d3ca25c5acdf05ab6056bba62c10a711a",
   "origin_main": "79391a3df86d85522b92e0400c6904971ecbe65d",
   "tree_clean": true,
   "commits": [
-    "eb22ab05c3c7bd098c25d8f9b1b703eb6da37b10"
+    "25e42f9d3ca25c5acdf05ab6056bba62c10a711a"
   ],
   "owned_paths": [
-    "_docs/audits/**",
-    "scripts/validate-generated-contract-inventory.cjs",
-    "scripts/validate-generated-contract-inventory.test.cjs",
+    "_docs/ralph/prototype-integration/**",
     "_docs/ralph/handoffs/prototype-integration/**"
   ],
   "files_changed": [
     "_docs/ralph/handoffs/prototype-integration/HANDOFF.yaml",
-    "_docs/audits/task-t4-13a-generated-contract-inventory-2026-08-02.md",
-    "scripts/validate-generated-contract-inventory.cjs",
-    "scripts/validate-generated-contract-inventory.test.cjs"
+    "_docs/ralph/prototype-integration/core-rc-manifest.json"
   ],
   "tests": [
     {
-      "command": "node scripts/validate-generated-contract-inventory.test.cjs && node scripts/validate-generated-contract-inventory.cjs",
+      "command": "node scripts/validate-prototype-integration.test.cjs && node scripts/validate-prototype-integration.cjs",
       "exit_code": 0,
       "result": "passed",
       "test_count": 13,
@@ -42,7 +38,9 @@
       }
     }
   ],
-  "generated_hashes": {},
+  "generated_hashes": {
+    "_docs/ralph/prototype-integration/core-rc-manifest.json": "d84786301906fe55c27ea1300b810d041f8eee1ce6507f3c1a56e392447437c3"
+  },
   "accepted_checkpoints": [],
   "rejected_checkpoints": [
     {
@@ -93,5 +91,5 @@
     "Task 88C is not complete."
   ],
   "next_checkpoint": null,
-  "expected_head": "eb22ab05c3c7bd098c25d8f9b1b703eb6da37b10"
+  "expected_head": "25e42f9d3ca25c5acdf05ab6056bba62c10a711a"
 }
