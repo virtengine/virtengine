@@ -66,6 +66,7 @@ function validateGeneratedContractInventory(inventory, options = {}) {
     sortedUnique(contract.proto_sources, `${contract.id} proto sources`);
     sortedUnique(contract.generated_targets, `${contract.id} generated targets`);
     sortedUnique(contract.compatibility_fixtures, `${contract.id} compatibility fixtures`);
+    sortedUnique(contract.blockers, `${contract.id} blockers`);
     for (const blocker of contract.blockers) assert.ok(inventory.blockers.includes(blocker), `${contract.id} references undeclared blocker ${blocker}`);
 
     if (contract.producer.status === "unavailable") {
@@ -103,6 +104,9 @@ function validateGeneratedContractInventory(inventory, options = {}) {
       assert.deepEqual(contract.generated_targets, [], `${contract.id} incomplete contract claims generated targets`);
     }
   }
+
+  const referencedBlockers = [...new Set(inventory.contracts.flatMap((contract) => contract.blockers))];
+  assert.deepEqual(inventory.blockers, referencedBlockers, "root blockers must exactly match contract blocker usage");
 
   const complete = inventory.contracts.every((contract) => contract.state === "generated") && inventory.generation_window.state === "completed" && inventory.blockers.length === 0;
   assert.equal(inventory.completion.allowed, complete, "generated contract completion is premature");

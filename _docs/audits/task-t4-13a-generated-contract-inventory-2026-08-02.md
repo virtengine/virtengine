@@ -19,6 +19,9 @@ every proto source must be declared in that checkpoint's committed handoff
 Every declared proto source, generated target, and compatibility fixture must
 also resolve to an existing regular file under the checked repository root;
 canonical-looking invented paths cannot satisfy generated readiness.
+Per-contract blocker lists are sorted and unique, and the root blocker list
+must exactly match first-use contract references. Duplicate, undeclared, or
+stale generated-contract blockers fail validation.
 `--require-ready` rejects the current state.
 
 This checkpoint does not open the generation window or claim generated output.
