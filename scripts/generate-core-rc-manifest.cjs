@@ -131,6 +131,17 @@ function assertUniqueIds(entries, label) {
   assert.equal(new Set(ids).size, ids.length, `${label} IDs must be unique`);
 }
 
+function referencedRootBlockerIds(manifest) {
+  const references = new Set();
+  for (const group of manifest.artifact_groups) if (group.blocker_id) references.add(group.blocker_id);
+  for (const section of [manifest.migrations, manifest.required_gates, manifest.slurm, manifest.model_provenance, manifest.test_evidence, manifest.producer_checkpoints, manifest.rollout, manifest.rollback]) {
+    if (section.blocker_id) references.add(section.blocker_id);
+  }
+  for (const dependency of manifest.external_dependencies) if (dependency.blocker_id) references.add(dependency.blocker_id);
+  references.add(manifest.ai_assurance.non_certification.blocker_id);
+  return [...references].sort();
+}
+
 function listSourceEntries(sourceSha, cwd = root) {
   const key = `${cwd}\0${sourceSha}`;
   if (sourceEntriesCache.has(key)) return sourceEntriesCache.get(key);
@@ -337,6 +348,7 @@ function generateManifest(sourceSha, options = {}) {
   const productionPolicy = sourceJson(sourceSha, sourceArtifacts[5][1], cwd);
   const featureParity = sourceJson(sourceSha, "pkg/inference/conformance/testdata/feature_parity_v1.json", cwd);
   const entries = listSourceEntries(sourceSha, cwd);
+  const artifactGroups = artifactSelections.map((contract) => buildArtifactGroup(entries, contract));
   const controlArtifacts = sourceArtifactsFor(sourceSha, cwd);
   const tooling = buildTooling(options.toolingSha, sourceSha, cwd);
   const testEvidence = buildTestEvidence(sourceSha, handoff, handoffPath, cwd);
@@ -356,7 +368,7 @@ function generateManifest(sourceSha, options = {}) {
     },
     tooling,
     toolchains: buildToolchains(gates),
-    artifact_groups: artifactSelections.map((contract) => buildArtifactGroup(entries, contract)),
+    artifact_groups: artifactGroups,
     control_artifacts: controlArtifacts.map(([id, path]) => {
       const document = sourceJson(sourceSha, path, cwd);
       return { id, path, sha256: sourceDigest(sourceSha, path, cwd), status: document.status || (document.passed ? "passed" : "blocked") };
@@ -407,7 +419,7 @@ function generateManifest(sourceSha, options = {}) {
     ],
     blockers: [
       { id: "accepted-producer-checkpoints-unavailable", description: "No producer checkpoint is accepted by the payload ledger." },
-      { id: "artifact-selection-incomplete", description: "One or more artifact selections do not meet their declared coverage contract." },
+      ...(artifactGroups.some((group) => group.blocker_id === "artifact-selection-incomplete") ? [{ id: "artifact-selection-incomplete", description: "One or more artifact selections do not meet their declared coverage contract." }] : []),
       { id: "producer-migration-handoffs-unavailable", description: "Committed producer migration handoffs are unavailable." },
       { id: "required-gates-dependency-blocked", description: "The required gate matrix remains dependency-blocked." },
       { id: "slurm-production-evidence-unavailable", description: "SLURM production render, isolation, and live durability evidence remain unavailable." },
@@ -516,6 +528,7 @@ function validateManifest(manifest, options = {}) {
     assertBlocker(manifest, dependency.blocker_id, `external dependency ${dependency.id}`);
   }
   assertUniqueIds(manifest.external_dependencies, "external dependency");
+  assert.deepEqual([...blockerIds(manifest)].sort(), referencedRootBlockerIds(manifest), "root blockers must exactly match manifest blocker references");
 
   const handoff = sourceJson(manifest.source.payload_sha, manifest.producer_checkpoints.ledger_path, cwd);
   const migration = sourceJson(manifest.source.payload_sha, manifest.migrations.inventory_path, cwd);
@@ -607,6 +620,6 @@ function main(argv = process.argv.slice(2)) {
   }
 }
 
-module.exports = { artifactSelections, assertUniqueIds, buildAiAssurance, buildArtifactGroup, buildTestEvidence, buildTooling, generateManifest, listSourceEntries, main, manifestRelativePath, parseArgs, pathsReferToSameFile, serialize, sourceArtifacts, sourceArtifactsFor, validateManifest };
+module.exports = { artifactSelections, assertUniqueIds, buildAiAssurance, buildArtifactGroup, buildTestEvidence, buildTooling, generateManifest, listSourceEntries, main, manifestRelativePath, parseArgs, pathsReferToSameFile, referencedRootBlockerIds, serialize, sourceArtifacts, sourceArtifactsFor, validateManifest };
 
 if (require.main === module) main();

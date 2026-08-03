@@ -54,6 +54,10 @@ Complete manifest test evidence carries no partial-evidence blocker. The
 `test-evidence-partial` blocker is emitted only when one or more passing records
 omit test counts, and schema validation enforces that status/blocker coupling.
 
+Root manifest blockers exactly equal the blocker IDs referenced by artifact
+groups, blocked sections, external dependencies, and AI non-certification.
+Cleared artifact coverage cannot leave a stale blocker declaration.
+
 The planner hashes the selected observation, requires the checked core-RC
 manifest to bind that exact path/digest, verifies identical bytes at the
 manifest source commit, and requires that source to be an ancestor of current

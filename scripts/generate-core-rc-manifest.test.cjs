@@ -14,6 +14,7 @@ const {
   listSourceEntries,
   parseArgs,
   pathsReferToSameFile,
+  referencedRootBlockerIds,
   sourceArtifacts,
   sourceArtifactsFor,
 } = require("./generate-core-rc-manifest.cjs");
@@ -210,6 +211,17 @@ const tests = [
   }],
   ["rejects duplicate manifest entry IDs", () => {
     assert.throws(() => assertUniqueIds([{ id: "chart" }, { id: "chart" }], "artifact group"), /must be unique/);
+  }],
+  ["collects every referenced root blocker exactly once", () => {
+    const manifest = {
+      artifact_groups: [{ blocker_id: "artifact" }],
+      migrations: { blocker_id: "migration" }, required_gates: { blocker_id: "gates" }, slurm: { blocker_id: "slurm" },
+      model_provenance: { blocker_id: "model" }, test_evidence: { blocker_id: null }, producer_checkpoints: { blocker_id: "producer" },
+      rollout: { blocker_id: "rollout" }, rollback: { blocker_id: "rollback" },
+      external_dependencies: [{ blocker_id: "producer" }],
+      ai_assurance: { non_certification: { blocker_id: "ai" } },
+    };
+    assert.deepEqual(referencedRootBlockerIds(manifest), ["ai", "artifact", "gates", "migration", "model", "producer", "rollback", "rollout", "slurm"]);
   }],
 ];
 
