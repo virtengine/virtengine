@@ -1,33 +1,29 @@
 {
   "campaign": "three-day-prototype",
   "thread": "T4",
-  "checkpoint": "T4-01EAM",
+  "checkpoint": "T4-01EAN",
   "branch": "ve/prototype-integration",
-  "start_head": "ec7ddbf072d5432e1099b5101dde11c8c2e305e6",
-  "end_head": "8a51f5d13fb8be465fd421c9d8a6e4c68de4a32e",
+  "start_head": "e93582a3ed9b471e662227586ca769369759a00b",
+  "end_head": "6a4004d56688d2838b3df4d1d3c34bb6bd8b740f",
   "origin_main": "79391a3df86d85522b92e0400c6904971ecbe65d",
   "tree_clean": true,
   "commits": [
-    "8a51f5d13fb8be465fd421c9d8a6e4c68de4a32e"
+    "6a4004d56688d2838b3df4d1d3c34bb6bd8b740f"
   ],
   "owned_paths": [
-    "_docs/audits/**",
-    "_docs/ralph/prototype-integration/core-rc-manifest.schema.json",
-    "scripts/generate-core-rc-manifest.cjs",
-    "scripts/generate-core-rc-manifest.test.cjs"
+    "_docs/ralph/prototype-integration/**",
+    "_docs/ralph/handoffs/prototype-integration/**"
   ],
   "files_changed": [
-    "_docs/audits/task-t4-01e-intake-freeze-planner-2026-08-02.md",
-    "_docs/ralph/prototype-integration/core-rc-manifest.schema.json",
-    "scripts/generate-core-rc-manifest.cjs",
-    "scripts/generate-core-rc-manifest.test.cjs"
+    "_docs/ralph/handoffs/prototype-integration/HANDOFF.yaml",
+    "_docs/ralph/prototype-integration/core-rc-manifest.json"
   ],
   "tests": [
     {
-      "command": "node scripts/generate-core-rc-manifest.test.cjs",
+      "command": "node scripts/validate-prototype-integration.test.cjs && node scripts/validate-prototype-integration.cjs",
       "exit_code": 0,
       "result": "passed",
-      "test_count": 23,
+      "test_count": 13,
       "tool_versions": {
         "node": "20.19.1"
       }
@@ -42,7 +38,9 @@
       }
     }
   ],
-  "generated_hashes": {},
+  "generated_hashes": {
+    "_docs/ralph/prototype-integration/core-rc-manifest.json": "8cddbc381d99530ccb51af70700e60baefe7a658a1f450aeefd76f3e547c517d"
+  },
   "accepted_checkpoints": [],
   "rejected_checkpoints": [
     {
@@ -93,5 +91,5 @@
     "Task 88C is not complete."
   ],
   "next_checkpoint": null,
-  "expected_head": "8a51f5d13fb8be465fd421c9d8a6e4c68de4a32e"
+  "expected_head": "6a4004d56688d2838b3df4d1d3c34bb6bd8b740f"
 }
