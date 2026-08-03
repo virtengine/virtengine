@@ -12,8 +12,8 @@
     "matrix_digest": { "$ref": "#/$defs/digest" },
     "matrix_status": { "enum": ["dependency_blocked", "ready", "complete"] },
     "changed_paths": { "$ref": "#/$defs/uniqueStrings" },
-    "allowlisted_paths": { "type": "array", "items": { "$ref": "#/$defs/allowlistedPath" } },
-    "categories": { "type": "array", "items": { "$ref": "#/$defs/category" } }
+    "allowlisted_paths": { "type": "array", "uniqueItems": true, "items": { "$ref": "#/$defs/allowlistedPath" } },
+    "categories": { "type": "array", "uniqueItems": true, "items": { "$ref": "#/$defs/category" } }
   },
   "$defs": {
     "sha": { "type": "string", "pattern": "^[a-f0-9]{40}$" },
@@ -58,8 +58,8 @@
         "status": { "enum": ["dependency_blocked", "ready", "complete"] },
         "matched_paths": { "$ref": "#/$defs/uniqueStrings" },
         "matched_selectors": { "$ref": "#/$defs/uniqueStrings" },
-        "commands": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/command" } },
-        "pinned_tools": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/tool" } }
+        "commands": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "$ref": "#/$defs/command" } },
+        "pinned_tools": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "$ref": "#/$defs/tool" } }
       }
     }
   }

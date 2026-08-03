@@ -91,6 +91,12 @@ const tests = [
     weakenedSchema.$defs.category.properties.pinned_tools.uniqueItems = false;
     assert.throws(() => validateRequiredGateMatrix(cloneMatrix(), { schema: weakenedSchema }), /category pinned_tools must reject duplicates/);
   }],
+  ["rejects a plan schema that permits duplicate categories", () => {
+    const planSchema = JSON.parse(readFileSync(resolve(root, "_docs/ralph/prototype-integration/required-gate-plan.schema.json"), "utf8"));
+    const resultSchema = JSON.parse(readFileSync(resolve(root, "_docs/ralph/prototype-integration/required-gate-results.schema.json"), "utf8"));
+    planSchema.properties.categories.uniqueItems = false;
+    assert.throws(() => validateRequiredGateMatrix(cloneMatrix(), { schema, planSchema, resultSchema }), /plan categories must reject duplicates/);
+  }],
   ["rejects malformed dependency declarations and missing blockers", () => {
     const invalidStatus = cloneMatrix();
     invalidStatus.categories[0].dependencies[0].status = "unavailble";

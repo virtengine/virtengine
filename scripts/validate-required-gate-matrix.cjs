@@ -81,6 +81,8 @@ function validateExecutionSchemas(planSchema, resultSchema) {
   assert.equal(planSchema.$defs.category.additionalProperties, false);
   assert.equal(planSchema.$defs.command.additionalProperties, false);
   assert.equal(planSchema.$defs.tool.additionalProperties, false);
+  for (const property of ["allowlisted_paths", "categories"]) assert.equal(planSchema.properties[property].uniqueItems, true, `plan ${property} must reject duplicates`);
+  for (const property of ["commands", "pinned_tools"]) assert.equal(planSchema.$defs.category.properties[property].uniqueItems, true, `plan category ${property} must reject duplicates`);
 
   assert.equal(resultSchema.$schema, "https://json-schema.org/draft/2020-12/schema");
   assert.equal(resultSchema.additionalProperties, false, "result schema root must reject additional properties");

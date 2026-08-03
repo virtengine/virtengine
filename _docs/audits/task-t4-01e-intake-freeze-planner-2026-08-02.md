@@ -41,7 +41,8 @@ dependency schema is exact, and each unavailable dependency requires its
 canonical `dependency-<id>` blocker with no stale dependency blockers retained.
 Categories marked `ready` or `complete` cannot retain any blocker. The
 matrix status is derived from category states, completion claims are complete-only,
-and root blockers exactly equal category blocker usage. The
+and root blockers exactly equal category blocker usage. Execution-plan categories,
+allowances, commands, and pinned tools reject duplicate records. The
 acceptance commit must be the implementation's direct, single-parent child and
 change only the acceptance artifact. Accepted annotated tags must be exact tag
 objects published by `origin`; local-only or stale same-name tags are rejected.
