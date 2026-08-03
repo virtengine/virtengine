@@ -1,29 +1,31 @@
 {
   "campaign": "three-day-prototype",
   "thread": "T4",
-  "checkpoint": "T4-01EL",
+  "checkpoint": "T4-01EM",
   "branch": "ve/prototype-integration",
-  "start_head": "f15738dad9c6d9c03f321014ca3903ea33096fb6",
-  "end_head": "f0af72be20defc0ec830137830f72b4b314ce8a2",
+  "start_head": "2a21f0582202e424ef936e6eed7dc6d9ac842f48",
+  "end_head": "77cc730348d7a47496505034087f900db68412b2",
   "origin_main": "79391a3df86d85522b92e0400c6904971ecbe65d",
   "tree_clean": true,
   "commits": [
-    "f0af72be20defc0ec830137830f72b4b314ce8a2"
+    "77cc730348d7a47496505034087f900db68412b2"
   ],
   "owned_paths": [
-    "_docs/ralph/prototype-integration/**",
-    "_docs/ralph/handoffs/prototype-integration/**"
+    "_docs/audits/**",
+    "scripts/observe-prototype-intake-tags.cjs",
+    "scripts/observe-prototype-intake-tags.test.cjs"
   ],
   "files_changed": [
-    "_docs/ralph/handoffs/prototype-integration/HANDOFF.yaml",
-    "_docs/ralph/prototype-integration/core-rc-manifest.json"
+    "_docs/audits/task-t4-01e-intake-freeze-planner-2026-08-02.md",
+    "scripts/observe-prototype-intake-tags.cjs",
+    "scripts/observe-prototype-intake-tags.test.cjs"
   ],
   "tests": [
     {
-      "command": "node scripts/validate-prototype-integration.test.cjs && node scripts/validate-prototype-integration.cjs",
+      "command": "node scripts/observe-prototype-intake-tags.test.cjs",
       "exit_code": 0,
       "result": "passed",
-      "test_count": 13,
+      "test_count": 7,
       "tool_versions": {
         "node": "20.19.1"
       }
@@ -38,9 +40,7 @@
       }
     }
   ],
-  "generated_hashes": {
-    "_docs/ralph/prototype-integration/core-rc-manifest.json": "91c573230a6229477663b6b6c3de17df4ced80caed386e16f7a1231f29ca945a"
-  },
+  "generated_hashes": {},
   "accepted_checkpoints": [],
   "rejected_checkpoints": [
     {
@@ -91,5 +91,5 @@
     "Task 88C is not complete."
   ],
   "next_checkpoint": null,
-  "expected_head": "f0af72be20defc0ec830137830f72b4b314ce8a2"
+  "expected_head": "77cc730348d7a47496505034087f900db68412b2"
 }
