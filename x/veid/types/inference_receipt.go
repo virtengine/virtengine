@@ -450,6 +450,9 @@ func (r InferenceReceipt) validate(requireSignature bool) error {
 		if len(value) > InferenceReceiptMaxString {
 			return ErrInvalidVerificationResult.Wrapf("inference receipt %s exceeds %d bytes", name, InferenceReceiptMaxString)
 		}
+		if value != strings.TrimSpace(value) || !isPrintableEvidenceEnvelopeASCII(value) {
+			return ErrInvalidVerificationResult.Wrapf("inference receipt %s must contain printable ASCII without surrounding whitespace", name)
+		}
 	}
 	if r.SignerFingerprint != strings.ToLower(r.SignerFingerprint) {
 		return ErrInvalidSignerKey.Wrap("signer fingerprint must use lowercase hex")
@@ -463,6 +466,9 @@ func (r InferenceReceipt) validate(requireSignature bool) error {
 	for i, scopeID := range r.ScopeIDs {
 		if scopeID == "" || len(scopeID) > InferenceReceiptMaxString {
 			return ErrInvalidVerificationResult.Wrap("invalid inference receipt scope id")
+		}
+		if scopeID != strings.TrimSpace(scopeID) || !isPrintableEvidenceEnvelopeASCII(scopeID) {
+			return ErrInvalidVerificationResult.Wrap("inference receipt scope id must contain printable ASCII without surrounding whitespace")
 		}
 		if i > 0 && scopeID <= r.ScopeIDs[i-1] {
 			return ErrInvalidVerificationResult.Wrap("inference receipt scope ids must be strictly sorted")

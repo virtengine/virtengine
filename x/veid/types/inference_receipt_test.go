@@ -150,6 +150,28 @@ func TestInferenceReceiptRejectsNonCanonicalFingerprintCase(t *testing.T) {
 	require.ErrorContains(t, receipt.VerifySignature(pub), "lowercase")
 }
 
+func TestInferenceReceiptRejectsNonCanonicalIdentifiers(t *testing.T) {
+	pub, _ := deterministicReceiptKey(t)
+	tests := map[string]func(*InferenceReceipt){
+		"chain_whitespace":   func(r *InferenceReceipt) { r.ChainID = " chain-A" },
+		"account_control":    func(r *InferenceReceipt) { r.AccountAddress += "\x00" },
+		"request_unicode":    func(r *InferenceReceipt) { r.RequestID = "request-\u00e9" },
+		"nonce_whitespace":   func(r *InferenceReceipt) { r.Nonce += " " },
+		"pipeline_control":   func(r *InferenceReceipt) { r.PipelineVersion += "\x1f" },
+		"signer_key_unicode": func(r *InferenceReceipt) { r.SignerKeyID += "\u2603" },
+		"scope_whitespace":   func(r *InferenceReceipt) { r.ScopeIDs = []string{" scope-a"} },
+		"scope_control":      func(r *InferenceReceipt) { r.ScopeIDs = []string{"scope-a\x00"} },
+		"scope_unicode":      func(r *InferenceReceipt) { r.ScopeIDs = []string{"scope-\u00e9"} },
+	}
+	for name, mutate := range tests {
+		t.Run(name, func(t *testing.T) {
+			receipt := testInferenceReceipt(t, pub)
+			mutate(&receipt)
+			require.ErrorContains(t, receipt.validate(false), "printable ASCII")
+		})
+	}
+}
+
 func TestInferenceReceiptRejectsSubsecondTamperBeforeSignatureVerification(t *testing.T) {
 	pub, priv := deterministicReceiptKey(t)
 	receipt := testInferenceReceipt(t, pub)
