@@ -69,6 +69,10 @@ Schema-only validation also rejects exact duplicates in tooling artifacts,
 toolchains, artifact groups, external dependencies, and root blockers, matching
 their stronger runtime identity and inventory checks.
 
+Root blocker IDs are canonical lowercase kebab-case and descriptions are
+nonempty literal strings without surrounding whitespace. Runtime and schema
+validation reject malformed or duplicate blocker declarations.
+
 The planner hashes the selected observation, requires the checked core-RC
 manifest to bind that exact path/digest, verifies identical bytes at the
 manifest source commit, and requires that source to be an ancestor of current

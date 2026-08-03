@@ -17,6 +17,7 @@ const {
   referencedRootBlockerIds,
   sourceArtifacts,
   sourceArtifactsFor,
+  validateBlockers,
   validateRejectedCheckpoints,
 } = require("./generate-core-rc-manifest.cjs");
 const { validateSchema } = require("./validate-core-rc-manifest.cjs");
@@ -233,6 +234,13 @@ const tests = [
     assert.throws(() => validateRejectedCheckpoints([rejection, clone(rejection)]), /duplicate rejected producer checkpoint/);
     assert.throws(() => validateRejectedCheckpoints([{ ...rejection, reason: " padded " }]), /literal and nonempty/);
     assert.throws(() => validateRejectedCheckpoints([{ ...rejection, thread: "T4" }]), /thread is invalid/);
+  }],
+  ["rejects malformed or duplicate root blockers", () => {
+    const blocker = { id: "required-gates-unavailable", description: "Required gates remain unavailable." };
+    assert.equal(validateBlockers([blocker]), true);
+    assert.throws(() => validateBlockers([blocker, clone(blocker)]), /duplicate blocker ID/);
+    assert.throws(() => validateBlockers([{ ...blocker, id: "Required Gates" }]), /canonical lowercase kebab-case/);
+    assert.throws(() => validateBlockers([{ ...blocker, description: " padded " }]), /literal and nonempty/);
   }],
 ];
 

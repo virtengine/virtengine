@@ -121,6 +121,19 @@ function blockerIds(manifest) {
   return new Set(manifest.blockers.map((blocker) => blocker.id));
 }
 
+function validateBlockers(blockers) {
+  assert.ok(Array.isArray(blockers) && blockers.length > 0, "blocked manifest must include blockers");
+  const ids = new Set();
+  for (const blocker of blockers) {
+    exactKeys(blocker, ["id", "description"], `blocker ${blocker.id || "unknown"}`);
+    assert.match(blocker.id, /^[a-z0-9]+(?:-[a-z0-9]+)*$/, "blocker ID must be canonical lowercase kebab-case");
+    assert.ok(typeof blocker.description === "string" && blocker.description.length > 0 && blocker.description.trim() === blocker.description, "blocker description must be literal and nonempty");
+    assert.equal(ids.has(blocker.id), false, `duplicate blocker ID: ${blocker.id}`);
+    ids.add(blocker.id);
+  }
+  return true;
+}
+
 function assertBlocker(manifest, blockerId, label) {
   assert.equal(typeof blockerId, "string", `${label} must name a blocker`);
   assert.ok(blockerIds(manifest).has(blockerId), `${label} references missing blocker ${blockerId}`);
@@ -461,12 +474,7 @@ function validateManifest(manifest, options = {}) {
   assert.equal(manifest.authoritative, false, "prototype manifest must never be authoritative");
   assert.equal(manifest.planned_functionality_complete, false, "prototype manifest must not claim planned functionality complete");
   assert.equal(manifest.milestone_m_eligible, false, "prototype manifest must not claim milestone M eligibility");
-  assert.ok(Array.isArray(manifest.blockers) && manifest.blockers.length > 0, "blocked manifest must include blockers");
-  for (const blocker of manifest.blockers) {
-    exactKeys(blocker, ["id", "description"], `blocker ${blocker.id || "unknown"}`);
-    assert.ok(blocker.id && blocker.description);
-  }
-  assert.equal(blockerIds(manifest).size, manifest.blockers.length, "blocker IDs must be unique");
+  validateBlockers(manifest.blockers);
 
   exactKeys(manifest.source, ["payload_sha", "tree", "branch", "binding"], "source");
   assert.match(manifest.source.payload_sha, shaPattern);
@@ -643,6 +651,6 @@ function main(argv = process.argv.slice(2)) {
   }
 }
 
-module.exports = { artifactSelections, assertUniqueIds, buildAiAssurance, buildArtifactGroup, buildTestEvidence, buildTooling, generateManifest, listSourceEntries, main, manifestRelativePath, parseArgs, pathsReferToSameFile, referencedRootBlockerIds, serialize, sourceArtifacts, sourceArtifactsFor, validateManifest, validateRejectedCheckpoints };
+module.exports = { artifactSelections, assertUniqueIds, buildAiAssurance, buildArtifactGroup, buildTestEvidence, buildTooling, generateManifest, listSourceEntries, main, manifestRelativePath, parseArgs, pathsReferToSameFile, referencedRootBlockerIds, serialize, sourceArtifacts, sourceArtifactsFor, validateBlockers, validateManifest, validateRejectedCheckpoints };
 
 if (require.main === module) main();
