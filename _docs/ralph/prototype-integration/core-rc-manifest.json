@@ -6,14 +6,14 @@
   "planned_functionality_complete": false,
   "milestone_m_eligible": false,
   "source": {
-    "payload_sha": "b831ea6f035c9342b2c83924df7cdc3cb96da95e",
-    "tree": "0ee8fa3f0fc190f803b8eecdd75f8f8d0ee2187b",
+    "payload_sha": "4151e9389df3bde11456f7b696364aaae503e3f5",
+    "tree": "e44a2e0f4714c2937f7dc48b3cc39209f5d2a753",
     "branch": "ve/prototype-integration",
     "binding": "declared_clean_parent_payload"
   },
   "tooling": {
-    "tooling_sha": "b831ea6f035c9342b2c83924df7cdc3cb96da95e",
-    "tree": "0ee8fa3f0fc190f803b8eecdd75f8f8d0ee2187b",
+    "tooling_sha": "4151e9389df3bde11456f7b696364aaae503e3f5",
+    "tree": "e44a2e0f4714c2937f7dc48b3cc39209f5d2a753",
     "artifacts": [
       {
         "id": "generator",
@@ -421,17 +421,44 @@
   "test_evidence": {
     "status": "complete",
     "ledger_path": "_docs/ralph/handoffs/prototype-integration/HANDOFF.yaml",
-    "implementation_sha": "b75de77c53ff73d868d83c994c363200c0b3a5c1",
-    "ledger_sha": "b831ea6f035c9342b2c83924df7cdc3cb96da95e",
-    "record_count": 1,
-    "declared_test_count": 14,
+    "implementation_sha": "9e8f1dc43e9d09e84be92833ccdaac338416249f",
+    "ledger_sha": "4151e9389df3bde11456f7b696364aaae503e3f5",
+    "record_count": 4,
+    "declared_test_count": 98,
     "uncounted_record_count": 0,
     "records": [
       {
-        "command": "node scripts/validate-slurm-chart-inventory.test.cjs && node scripts/validate-slurm-chart-inventory.cjs",
+        "command": "node scripts/plan-prototype-intake-freeze.test.cjs && node scripts/apply-prototype-intake-freeze.test.cjs",
         "exit_code": 0,
         "result": "passed",
-        "test_count": 14,
+        "test_count": 45,
+        "tool_versions": {
+          "node": "20.19.1"
+        }
+      },
+      {
+        "command": "node scripts/validate-prototype-intake.test.cjs",
+        "exit_code": 0,
+        "result": "passed",
+        "test_count": 32,
+        "tool_versions": {
+          "node": "20.19.1"
+        }
+      },
+      {
+        "command": "node scripts/validate-prototype-integration.test.cjs && node scripts/validate-prototype-integration.cjs",
+        "exit_code": 0,
+        "result": "passed",
+        "test_count": 12,
+        "tool_versions": {
+          "node": "20.19.1"
+        }
+      },
+      {
+        "command": "node scripts/validate-agents-docs.mjs",
+        "exit_code": 0,
+        "result": "passed",
+        "test_count": 9,
         "tool_versions": {
           "node": "20.19.1"
         }
@@ -441,7 +468,7 @@
   },
   "producer_checkpoints": {
     "ledger_path": "_docs/ralph/handoffs/prototype-integration/HANDOFF.yaml",
-    "ledger_sha256": "00624608eb0288948e913072c48a290bc5438dda83ab509c6639ba560ba52803",
+    "ledger_sha256": "3498635243c2b56ec4714a6fb43ad76a9cec667e654f1e710bcc6f7665e12055",
     "accepted": [],
     "rejected": [
       {
@@ -455,6 +482,18 @@
         "checkpoint": "T3-01",
         "tip": "9cc738fbb241890d069d6fb6c2ddb664a4e53447",
         "reason": "Producer tip does not contain integration SHA 823c61a1a9fc2c3a8f8b59dd060bb6db4a1bc3db; synchronize with current T4 and rerun exact-SHA gates."
+      },
+      {
+        "thread": "T1",
+        "checkpoint": "T1-09",
+        "tip": "36a566a92c04d988255b10cc5a75451d59077273",
+        "reason": "Frozen intake validation rejects payload history because .gitattributes is outside the checkpoint's declared owned_paths."
+      },
+      {
+        "thread": "T3",
+        "checkpoint": "T3-13A",
+        "tip": "8dbbaf14d5fdfd4e8405f085842a595bc7f299ff",
+        "reason": "Frozen intake validation rejects the checkpoint because declared files_changed and retained evidence do not match the complete payload range."
       }
     ],
     "blocker_id": "accepted-producer-checkpoints-unavailable"
