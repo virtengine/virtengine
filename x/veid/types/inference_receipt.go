@@ -25,8 +25,8 @@ const (
 	InferenceReceiptMaxScopes                = 32
 	InferenceReceiptMaxConfidencePPM         = 1_000_000
 	InferenceReceiptRequiredRandomSeed int64 = 42
-	InferenceReceiptMaxLifetime               = 10 * time.Minute
-	InferenceReceiptMaxHeightLifetime   int64 = 2
+	InferenceReceiptMaxLifetime              = 10 * time.Minute
+	InferenceReceiptMaxHeightLifetime  int64 = 2
 )
 
 // InferenceDeterminismProfile is the bounded deterministic runtime profile
@@ -450,6 +450,9 @@ func (r InferenceReceipt) validate(requireSignature bool) error {
 		if len(value) > InferenceReceiptMaxString {
 			return ErrInvalidVerificationResult.Wrapf("inference receipt %s exceeds %d bytes", name, InferenceReceiptMaxString)
 		}
+	}
+	if r.SignerFingerprint != strings.ToLower(r.SignerFingerprint) {
+		return ErrInvalidSignerKey.Wrap("signer fingerprint must use lowercase hex")
 	}
 	if _, err := hex.DecodeString(r.SignerFingerprint); err != nil || len(r.SignerFingerprint) != sha256.Size*2 {
 		return ErrInvalidSignerKey.Wrap("signer fingerprint must be a SHA-256 hex digest")

@@ -140,6 +140,16 @@ func TestInferenceReceiptValidSubstitutionsInvalidateSignature(t *testing.T) {
 	}
 }
 
+func TestInferenceReceiptRejectsNonCanonicalFingerprintCase(t *testing.T) {
+	pub, priv := deterministicReceiptKey(t)
+	receipt := testInferenceReceipt(t, pub)
+	require.NoError(t, receipt.Sign(priv))
+	receipt.SignerFingerprint = strings.ToUpper(receipt.SignerFingerprint)
+
+	require.ErrorContains(t, receipt.Validate(), "lowercase")
+	require.ErrorContains(t, receipt.VerifySignature(pub), "lowercase")
+}
+
 func TestInferenceReceiptRejectsSubsecondTamperBeforeSignatureVerification(t *testing.T) {
 	pub, priv := deterministicReceiptKey(t)
 	receipt := testInferenceReceipt(t, pub)
