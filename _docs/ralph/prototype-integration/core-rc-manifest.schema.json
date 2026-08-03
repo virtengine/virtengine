@@ -70,8 +70,10 @@
       "type": "object", "additionalProperties": false,
       "required": ["name", "version", "source", "status"],
       "properties": {
-        "name": { "type": "string", "minLength": 1 }, "version": { "type": "string", "minLength": 1 },
-        "source": { "type": "string", "minLength": 1 }, "status": { "const": "declared" }
+        "name": { "type": "string", "pattern": "^\\S(?:.*\\S)?$" },
+        "version": { "type": "string", "pattern": "^\\S(?:.*\\S)?$" },
+        "source": { "type": "string", "pattern": "^\\S(?:.*\\S)?$" },
+        "status": { "const": "declared" }
       }
     },
     "artifactGroup": {

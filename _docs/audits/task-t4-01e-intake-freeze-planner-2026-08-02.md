@@ -81,6 +81,10 @@ Tooling artifacts use unique repository-relative literal paths. Absolute,
 parent-traversing, backslash, padded, or duplicate paths fail before Git blob
 and SHA-256 provenance is accepted.
 
+Toolchain declarations require literal nonempty name, version, and source
+values, declared status, and unique complete tuples in runtime and schema
+validation.
+
 The planner hashes the selected observation, requires the checked core-RC
 manifest to bind that exact path/digest, verifies identical bytes at the
 manifest source commit, and requires that source to be an ancestor of current

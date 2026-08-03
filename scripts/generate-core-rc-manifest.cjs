@@ -167,6 +167,20 @@ function validateToolingArtifacts(artifacts) {
   return true;
 }
 
+function validateToolchains(toolchains) {
+  assert.ok(Array.isArray(toolchains) && toolchains.length > 0, "toolchain declarations must not be empty");
+  const identities = new Set();
+  for (const tool of toolchains) {
+    exactKeys(tool, ["name", "version", "source", "status"], `toolchain ${tool.name || "unknown"}`);
+    for (const field of ["name", "version", "source"]) assert.ok(typeof tool[field] === "string" && tool[field].length > 0 && tool[field].trim() === tool[field], `toolchain ${field} must be literal and nonempty`);
+    assert.equal(tool.status, "declared", "toolchain status must be declared");
+    const identity = `${tool.name}\0${tool.version}\0${tool.source}`;
+    assert.equal(identities.has(identity), false, `duplicate toolchain declaration: ${tool.name}`);
+    identities.add(identity);
+  }
+  return true;
+}
+
 function assertBlocker(manifest, blockerId, label) {
   assert.equal(typeof blockerId, "string", `${label} must name a blocker`);
   assert.ok(blockerIds(manifest).has(blockerId), `${label} references missing blocker ${blockerId}`);
@@ -525,14 +539,7 @@ function validateManifest(manifest, options = {}) {
   const controlArtifacts = sourceArtifactsFor(manifest.source.payload_sha, cwd);
   const gateMatrix = sourceJson(manifest.source.payload_sha, controlArtifacts[1][1], cwd);
   assert.deepEqual(manifest.toolchains, buildToolchains(gateMatrix), "toolchain declarations do not match the source gate matrix");
-  const repeat = new Set();
-  for (const tool of manifest.toolchains) {
-    exactKeys(tool, ["name", "version", "source", "status"], `toolchain ${tool.name || "unknown"}`);
-    assert.equal(tool.status, "declared");
-    const key = `${tool.name}\0${tool.version}\0${tool.source}`;
-    assert.ok(!repeat.has(key), "duplicate toolchain declaration");
-    repeat.add(key);
-  }
+  validateToolchains(manifest.toolchains);
 
   const sourceEntries = listSourceEntries(manifest.source.payload_sha, cwd);
   const expectedGroups = artifactSelections.map((contract) => buildArtifactGroup(sourceEntries, contract));
@@ -674,6 +681,6 @@ function main(argv = process.argv.slice(2)) {
   }
 }
 
-module.exports = { artifactSelections, assertUniqueIds, buildAiAssurance, buildArtifactGroup, buildTestEvidence, buildTooling, generateManifest, listSourceEntries, main, manifestRelativePath, parseArgs, pathsReferToSameFile, referencedRootBlockerIds, serialize, sourceArtifacts, sourceArtifactsFor, validateBlockers, validateExternalDependencies, validateManifest, validateRejectedCheckpoints, validateToolingArtifacts };
+module.exports = { artifactSelections, assertUniqueIds, buildAiAssurance, buildArtifactGroup, buildTestEvidence, buildTooling, generateManifest, listSourceEntries, main, manifestRelativePath, parseArgs, pathsReferToSameFile, referencedRootBlockerIds, serialize, sourceArtifacts, sourceArtifactsFor, validateBlockers, validateExternalDependencies, validateManifest, validateRejectedCheckpoints, validateToolchains, validateToolingArtifacts };
 
 if (require.main === module) main();

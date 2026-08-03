@@ -20,6 +20,7 @@ const {
   validateBlockers,
   validateExternalDependencies,
   validateRejectedCheckpoints,
+  validateToolchains,
   validateToolingArtifacts,
 } = require("./generate-core-rc-manifest.cjs");
 const { validateSchema } = require("./validate-core-rc-manifest.cjs");
@@ -266,6 +267,13 @@ const tests = [
       const malformed = clone(artifacts); malformed[0].path = path;
       assert.throws(() => validateToolingArtifacts(malformed), /repository-relative/);
     }
+  }],
+  ["rejects malformed or duplicate toolchain declarations", () => {
+    const tool = { name: "node", version: "20.19.1", source: "required gate matrix", status: "declared" };
+    assert.equal(validateToolchains([tool]), true);
+    assert.throws(() => validateToolchains([tool, clone(tool)]), /duplicate toolchain declaration/);
+    for (const field of ["name", "version", "source"]) assert.throws(() => validateToolchains([{ ...tool, [field]: " padded " }]), new RegExp(`toolchain ${field}`));
+    assert.throws(() => validateToolchains([{ ...tool, status: "available" }]), /status must be declared/);
   }],
 ];
 
