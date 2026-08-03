@@ -225,16 +225,22 @@ function assertExecutionReady(plan) {
 
 function parseArguments(argv) {
   const options = { repoDir: root, matrixPath: defaultMatrixPath };
+  const seen = new Set();
   for (let index = 0; index < argv.length; index += 1) {
     const argument = argv[index];
     if (["--base", "--head", "--repo", "--matrix", "--validate-results"].includes(argument)) {
-      assert.ok(argv[index + 1], `${argument} requires a value`);
+      assert.equal(seen.has(argument), false, `duplicate argument: ${argument}`);
+      seen.add(argument);
+      assert.ok(argv[index + 1] && !argv[index + 1].startsWith("--"), `${argument} requires a value`);
       const key = { "--base": "base", "--head": "head", "--repo": "repoDir", "--matrix": "matrixPath", "--validate-results": "resultsPath" }[argument];
       options[key] = resolve(argv[index + 1]);
       if (["base", "head"].includes(key)) options[key] = argv[index + 1];
       index += 1;
-    } else if (argument === "--execute") options.execute = true;
-    else throw new Error(`unknown argument: ${argument}`);
+    } else if (argument === "--execute") {
+      assert.equal(seen.has(argument), false, `duplicate argument: ${argument}`);
+      seen.add(argument);
+      options.execute = true;
+    } else throw new Error(`unknown argument: ${argument}`);
   }
   assert.ok(options.base, "--base is required");
   assert.ok(options.head, "--head is required");
@@ -265,6 +271,7 @@ module.exports = {
   globToRegExp,
   matchesSelector,
   planDigest,
+  parseArguments,
   validateResultEnvelope,
 };
 

@@ -11,6 +11,7 @@ const {
   canonicalJson,
   collectChangedPaths,
   planDigest,
+  parseArguments,
   validateResultEnvelope,
 } = require("./run-required-gates.cjs");
 
@@ -112,6 +113,11 @@ try {
   };
 
   const tests = [
+    ["rejects duplicate or incomplete runner arguments", () => {
+      assert.throws(() => parseArguments(["--base", "a", "--base", "b", "--head", "c"]), /duplicate argument/);
+      assert.throws(() => parseArguments(["--base", "--head", "c"]), /requires a value/);
+      assert.throws(() => parseArguments(["--base", "a", "--head", "c", "--execute", "--execute"]), /duplicate argument/);
+    }],
     ["canonicalizes plan object keys while preserving array order", () => {
       const left = { z: 1, nested: { b: 2, a: 1 }, values: ["a", "b"] };
       const right = { values: ["a", "b"], nested: { a: 1, b: 2 }, z: 1 };
