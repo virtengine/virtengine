@@ -37,6 +37,35 @@ function resolveEpochBaseTag(repo, remote, epoch) {
   return { type, target };
 }
 
+function listRemoteIntakeTags(repo, remote) {
+  const patterns = [1, 2, 3, 5].flatMap((thread) => [`refs/tags/checkpoint/prototype-t${thread}/*`, `refs/tags/checkpoint/prototype-t${thread}/*^{}`]);
+  const listing = git(repo, ["ls-remote", "--tags", remote, ...patterns]);
+  const direct = new Map();
+  const peeled = new Map();
+  for (const line of listing.split(/\r?\n/).filter(Boolean)) {
+    const [sha, ref] = line.split(/\s+/, 2);
+    if (ref.endsWith("^{}")) peeled.set(ref.slice(0, -3), sha);
+    else direct.set(ref, sha);
+  }
+  return [...direct].flatMap(([ref, tagObject]) => {
+    const match = ref.match(/^refs\/tags\/(checkpoint\/prototype-t([1235])\/t[1235]-[0-9]{2,}[a-z]?)$/);
+    return match && peeled.has(ref) ? [{ thread: `T${match[2]}`, tag: match[1], tag_object: tagObject, target: peeled.get(ref) }] : [];
+  });
+}
+
+function validateObservationCompleteness(epoch, observation, currentTags, resolveTag) {
+  const opensAt = Date.parse(epoch.opens_at);
+  const cutoff = Date.parse(epoch.announcement_cutoff);
+  for (const current of currentTags) {
+    const resolved = resolveTag(current.tag);
+    const taggerTime = Date.parse(resolved.tagger_at);
+    if (!Number.isFinite(taggerTime) || taggerTime < opensAt || taggerTime > cutoff) continue;
+    const matches = observation.tags.filter((entry) => entry.thread === current.thread && entry.tag === current.tag && entry.tag_object === current.tag_object && entry.target === current.target);
+    assert.equal(matches.length, 1, `${current.tag} was omitted from the in-window tag observation`);
+  }
+  return true;
+}
+
 function validateObservationBinding(content, observationPath, manifest, options = {}) {
   assert.ok(!observationPath.startsWith("/") && !observationPath.split(/[\\/]/).includes(".."), "observation path must be repository-relative");
   const digest = createHash("sha256").update(content).digest("hex");
@@ -71,6 +100,7 @@ function planFrozenEpoch(epoch, selections, options = {}) {
   const observedAt = Date.parse(observation.observed_at);
   assert.ok(Number.isFinite(observedAt) && observedAt >= opensAt && observedAt <= cutoff, "tag observation was not captured within the epoch window");
   assert.ok(Array.isArray(observation.tags), "tag observation tags are invalid");
+  if (options.currentTags) validateObservationCompleteness(epoch, observation, options.currentTags, options.resolveTag);
   for (const thread of selections.keys()) assert.ok(threads.includes(thread), `unknown producer selection: ${thread}`);
 
   const producers = epoch.producers.map((producer) => {
@@ -123,11 +153,11 @@ function main(argv) {
   const observation = JSON.parse(observationContent);
   const manifest = JSON.parse(readFileSync(resolve(options.repo, options.manifest), "utf8"));
   validateObservationBinding(observationContent, options.observation, manifest, { repo: options.repo });
-  const plan = planFrozenEpoch(epoch, options.selections, { observation, resolveTag: (tag) => resolveAnnotatedTag(options.repo, options.remote, tag) });
+  const plan = planFrozenEpoch(epoch, options.selections, { observation, currentTags: listRemoteIntakeTags(options.repo, options.remote), resolveTag: (tag) => resolveAnnotatedTag(options.repo, options.remote, tag) });
   process.stdout.write(`${JSON.stringify(plan, null, 2)}\n`);
 }
 
-module.exports = { parseArgs, planFrozenEpoch, resolveAnnotatedTag, resolveEpochBaseTag, validateObservationBinding };
+module.exports = { listRemoteIntakeTags, parseArgs, planFrozenEpoch, resolveAnnotatedTag, resolveEpochBaseTag, validateObservationBinding, validateObservationCompleteness };
 
 if (require.main === module) {
   try { main(process.argv.slice(2)); }

@@ -7,7 +7,7 @@ const { createHash, randomUUID } = require("crypto");
 const { closeSync, fsyncSync, openSync, readFileSync, renameSync, unlinkSync, writeFileSync } = require("fs");
 const { resolve } = require("path");
 const { spawnSync } = require("child_process");
-const { planFrozenEpoch, resolveAnnotatedTag, resolveEpochBaseTag, validateObservationBinding } = require("./plan-prototype-intake-freeze.cjs");
+const { listRemoteIntakeTags, planFrozenEpoch, resolveAnnotatedTag, resolveEpochBaseTag, validateObservationBinding } = require("./plan-prototype-intake-freeze.cjs");
 const { discoverEpochs, requireCurrentEpoch, validateEpochBase } = require("./prototype-intake-epochs.cjs");
 
 const threads = ["T1", "T2", "T3", "T5"];
@@ -111,7 +111,7 @@ function validateFreezeEvidence(current, proposed, observationContent, observati
   validateObservationBinding(observationContent, observationPath, manifest, options);
   const observation = JSON.parse(observationContent);
   const selections = new Map(proposed.producers.filter((producer) => producer.status === "announced").map((producer) => [producer.thread, producer.tag]));
-  const recomputed = planFrozenEpoch(current, selections, { now: options.now, observation, resolveTag: options.resolveTag });
+  const recomputed = planFrozenEpoch(current, selections, { now: options.now, observation, currentTags: options.currentTags, resolveTag: options.resolveTag });
   assert.deepEqual(proposed, recomputed, "freeze plan does not match revalidated observation evidence");
   return true;
 }
@@ -175,7 +175,7 @@ function main(argv) {
       validateFreezeTransition(current, proposed);
       const observationContent = readFileSync(resolve(options.repo, options.observation), "utf8");
       const manifest = JSON.parse(readFileSync(resolve(options.repo, options.manifest), "utf8"));
-      validateFreezeEvidence(current, proposed, observationContent, options.observation, manifest, { repo: options.repo, resolveTag: (tag) => resolveAnnotatedTag(options.repo, options.remote, tag) });
+      validateFreezeEvidence(current, proposed, observationContent, options.observation, manifest, { repo: options.repo, currentTags: listRemoteIntakeTags(options.repo, options.remote), resolveTag: (tag) => resolveAnnotatedTag(options.repo, options.remote, tag) });
       return { epochPath, serialized: `${JSON.stringify(proposed, null, 2)}\n` };
     });
     atomicWriteFile(prepared.epochPath, prepared.serialized);
