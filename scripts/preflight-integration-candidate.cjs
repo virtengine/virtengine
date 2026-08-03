@@ -76,6 +76,7 @@ function validateAcceptanceBoundary(boundary, options) {
   assert.equal(options.isAncestor(boundary.canonical_head, boundary.candidate_sha), true, "accepted candidate does not descend canonical T4");
   assert.notEqual(boundary.candidate_sha, boundary.candidate_head, "acceptance artifact cannot self-reference its containing commit");
   assert.equal(options.isAncestor(boundary.candidate_sha, boundary.candidate_head), true, "acceptance commit does not descend the validated candidate");
+  assert.deepEqual(options.parents(boundary.candidate_head), [boundary.candidate_sha], "acceptance commit must be a direct non-merge child of the validated candidate");
   assert.deepEqual(options.changedPaths(boundary.candidate_sha, boundary.candidate_head), [boundary.acceptance_path], "candidate acceptance range changes paths other than the acceptance artifact");
   return true;
 }
@@ -89,6 +90,7 @@ function buildCandidatePlan(repo, candidateRef, canonicalRef, acceptancePath, pr
   assert.equal(acceptance.base_sha, canonicalHead, "acceptance base does not match canonical T4");
   validateAcceptanceBoundary({ canonical_head: canonicalHead, candidate_head: candidateHead, candidate_sha: acceptance.candidate_sha, acceptance_path: acceptancePath }, {
     isAncestor: (ancestor, descendant) => git(repo, ["merge-base", "--is-ancestor", ancestor, descendant], true).status === 0,
+    parents: (commit) => git(repo, ["show", "-s", "--format=%P", commit]).stdout.trim().split(/\s+/).filter(Boolean),
     changedPaths: (ancestor, descendant) => git(repo, ["diff", "--name-only", `${ancestor}..${descendant}`]).stdout.trim().split(/\r?\n/).filter(Boolean),
   });
   const acceptedPayloads = acceptance.accepted_payloads.map((entry) => ({ thread: entry.thread, tag: entry.tag, payload_sha: entry.payload_sha }));
