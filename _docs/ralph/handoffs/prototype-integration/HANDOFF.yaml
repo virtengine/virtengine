@@ -1,38 +1,41 @@
 {
   "campaign": "three-day-prototype",
   "thread": "T4",
-  "checkpoint": "T4-01BN",
+  "checkpoint": "T4-01BO",
   "branch": "ve/prototype-integration",
-  "start_head": "02f30d60dd372c3de30c6ffcdf6f876ba18ac332",
-  "end_head": "bbe412ce6c7f1ac4d92ab93cb571bfa9d31e607a",
+  "start_head": "1fbca9ffe2c7424d206237af3cd446a5b7041a63",
+  "end_head": "5d7548a88dfe6f4df9a4332cc1da74177223fb1f",
   "origin_main": "79391a3df86d85522b92e0400c6904971ecbe65d",
   "tree_clean": true,
   "commits": [
-    "bbe412ce6c7f1ac4d92ab93cb571bfa9d31e607a"
+    "5d7548a88dfe6f4df9a4332cc1da74177223fb1f"
   ],
   "owned_paths": [
     "_docs/ralph/prototype-integration/**",
-    "_docs/ralph/handoffs/prototype-integration/**"
+    "_docs/ralph/handoffs/prototype-integration/**",
+    "scripts/apply-prototype-intake-freeze.cjs",
+    "scripts/observe-prototype-intake-tags.cjs",
+    "scripts/plan-prototype-intake-freeze.cjs",
+    "scripts/preflight-core-rc-publication.cjs",
+    "scripts/preflight-core-rc-publication.test.cjs",
+    "scripts/prototype-intake-epochs.cjs",
+    "scripts/prototype-intake-epochs.test.cjs"
   ],
   "files_changed": [
-    "_docs/ralph/handoffs/prototype-integration/HANDOFF.yaml",
-    "_docs/ralph/prototype-integration/core-rc-manifest.json"
+    "scripts/apply-prototype-intake-freeze.cjs",
+    "scripts/observe-prototype-intake-tags.cjs",
+    "scripts/plan-prototype-intake-freeze.cjs",
+    "scripts/preflight-core-rc-publication.cjs",
+    "scripts/preflight-core-rc-publication.test.cjs",
+    "scripts/prototype-intake-epochs.cjs",
+    "scripts/prototype-intake-epochs.test.cjs"
   ],
   "tests": [
     {
-      "command": "node scripts/validate-prototype-integration.test.cjs && node scripts/validate-prototype-integration.cjs",
+      "command": "node scripts/preflight-core-rc-publication.test.cjs && node scripts/prototype-intake-epochs.test.cjs && node scripts/observe-prototype-intake-tags.test.cjs && node scripts/plan-prototype-intake-freeze.test.cjs && node scripts/apply-prototype-intake-freeze.test.cjs",
       "exit_code": 0,
       "result": "passed",
-      "test_count": 13,
-      "tool_versions": {
-        "node": "20.19.1"
-      }
-    },
-    {
-      "command": "node scripts/validate-agents-docs.mjs",
-      "exit_code": 0,
-      "result": "passed",
-      "test_count": 9,
+      "test_count": 88,
       "tool_versions": {
         "node": "20.19.1"
       }
@@ -91,5 +94,5 @@
     "Task 88C is not complete."
   ],
   "next_checkpoint": null,
-  "expected_head": "bbe412ce6c7f1ac4d92ab93cb571bfa9d31e607a"
+  "expected_head": "5d7548a88dfe6f4df9a4332cc1da74177223fb1f"
 }
