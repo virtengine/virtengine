@@ -18,6 +18,9 @@ const {
   sourceArtifacts,
   sourceArtifactsFor,
   validateAssuranceDigests,
+  validateAssuranceRuntime,
+  validateAssuranceSchema,
+  validateAssuranceStatus,
   validateBlockers,
   validateExternalDependencies,
   validateManifest,
@@ -228,8 +231,10 @@ const tests = [
     assert.deepEqual(schema.$defs.assuranceDigest.properties.source_blocker_id, { $ref: "#/$defs/nullableBlockerId" });
     assert.equal(schema.$defs.assuranceDigest.oneOf[0].properties.state.const, "dependency_blocked");
     assert.deepEqual(schema.$defs.assuranceDigest.oneOf[1].properties.state.enum, ["fixture_only", "present"]);
-    assert.deepEqual(schema.$defs.assuranceStatus.properties.source_blocker_id, { $ref: "#/$defs/nullableBlockerId" });
-    assert.equal(schema.$defs.assuranceStatus.properties.status.pattern, "^\\S(?:.*\\S)?$");
+    assert.deepEqual(schema.$defs.assuranceStatus.properties.source_blocker_id, { $ref: "#/$defs/blockerId" });
+    assert.equal(schema.$defs.assuranceStatus.properties.status.const, "dependency_blocked");
+    assert.equal(schema.$defs.aiAssurance.properties.provenance_digests.properties.runtime.properties.state.const, "dependency_blocked");
+    assert.equal(schema.$defs.aiAssurance.properties.provenance_digests.properties.schema.properties.state.const, "present");
     assert.equal(schema.$defs.migrations.properties.blocker_id.const, "producer-migration-handoffs-unavailable");
     assert.equal(schema.$defs.requiredGates.properties.blocker_id.const, "required-gates-dependency-blocked");
     assert.equal(schema.$defs.slurm.properties.blocker_id.const, "slurm-production-evidence-unavailable");
@@ -335,6 +340,17 @@ const tests = [
     assert.throws(() => validateAssuranceDigests([{ ...digest, state: " padded " }], "model provenance"), /state is invalid/);
     assert.throws(() => validateAssuranceDigests([{ ...digest, state: "dependency_blocked", sha256: null }], "model provenance"), /blocked digest must name a blocker/);
     assert.throws(() => validateAssuranceDigests([{ ...digest, sha256: null }], "model provenance"), /digest is invalid/);
+  }],
+  ["rejects contradictory assurance runtime and evaluation states", () => {
+    const runtime = { state: "dependency_blocked", sha256: null, source_blocker_id: "runtime-image-absent", sbom_sha256: null, sbom_blocker_id: "runtime-sbom-absent" };
+    assert.equal(validateAssuranceRuntime(runtime), true);
+    assert.throws(() => validateAssuranceRuntime({ ...runtime, source_blocker_id: null }), /source blocker/);
+    const schemaDigest = { state: "present", sha256: "a".repeat(64), source_blocker_id: null };
+    assert.equal(validateAssuranceSchema(schemaDigest), true);
+    assert.throws(() => validateAssuranceSchema({ ...schemaDigest, source_blocker_id: "schema-blocked" }), /cannot retain a blocker/);
+    const evaluation = { status: "dependency_blocked", report_sha256: null, source_blocker_id: "production-evaluation-absent" };
+    assert.equal(validateAssuranceStatus(evaluation), true);
+    assert.throws(() => validateAssuranceStatus({ ...evaluation, source_blocker_id: null }), /must name a blocker/);
   }],
 ];
 

@@ -112,6 +112,13 @@ AI model and license digest records couple state, digest, and blocker presence.
 `fixture_only` and `present` records require a SHA-256 digest and no blocker.
 Runtime and schema validation reject contradictory combinations.
 
+The v0 assurance projection also fixes runtime and runtime-SBOM evidence as
+dependency-blocked with null digests and canonical blockers, the feature schema
+as present with a digest and no blocker, and production evaluation as
+dependency-blocked with a null report digest and canonical blocker. A readiness
+transition requires a versioned contract change rather than a contradictory v0
+record.
+
 The AI non-certification array is restricted to the exact seven governed
 categories, so schema-only validation cannot substitute or omit a required
 production non-claim.

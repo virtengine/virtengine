@@ -123,15 +123,15 @@
               "type": "object", "additionalProperties": false,
               "required": ["state", "sha256", "source_blocker_id", "sbom_sha256", "sbom_blocker_id"],
               "properties": {
-                "state": { "type": "string", "pattern": "^\\S(?:.*\\S)?$" }, "sha256": { "$ref": "#/$defs/nullableDigest" },
-                "source_blocker_id": { "$ref": "#/$defs/nullableBlockerId" }, "sbom_sha256": { "$ref": "#/$defs/nullableDigest" },
-                "sbom_blocker_id": { "$ref": "#/$defs/nullableBlockerId" }
+                "state": { "const": "dependency_blocked" }, "sha256": { "type": "null" },
+                "source_blocker_id": { "$ref": "#/$defs/blockerId" }, "sbom_sha256": { "type": "null" },
+                "sbom_blocker_id": { "$ref": "#/$defs/blockerId" }
               }
             },
             "schema": {
               "type": "object", "additionalProperties": false,
               "required": ["state", "sha256", "source_blocker_id"],
-              "properties": { "state": { "type": "string", "pattern": "^\\S(?:.*\\S)?$" }, "sha256": { "$ref": "#/$defs/nullableDigest" }, "source_blocker_id": { "$ref": "#/$defs/nullableBlockerId" } }
+              "properties": { "state": { "const": "present" }, "sha256": { "$ref": "#/$defs/digest" }, "source_blocker_id": { "type": "null" } }
             }
           }
         },
@@ -185,7 +185,7 @@
     },
     "assuranceStatus": {
       "type": "object", "additionalProperties": false, "required": ["status", "report_sha256", "source_blocker_id"],
-      "properties": { "status": { "type": "string", "pattern": "^\\S(?:.*\\S)?$" }, "report_sha256": { "$ref": "#/$defs/nullableDigest" }, "source_blocker_id": { "$ref": "#/$defs/nullableBlockerId" } }
+      "properties": { "status": { "const": "dependency_blocked" }, "report_sha256": { "type": "null" }, "source_blocker_id": { "$ref": "#/$defs/blockerId" } }
     },
     "migrations": {
       "type": "object", "additionalProperties": false,

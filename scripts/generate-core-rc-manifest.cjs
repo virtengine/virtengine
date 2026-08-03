@@ -206,6 +206,32 @@ function validateAssuranceDigests(entries, label) {
   return true;
 }
 
+function validateAssuranceRuntime(runtime) {
+  exactKeys(runtime, ["state", "sha256", "source_blocker_id", "sbom_sha256", "sbom_blocker_id"], "assurance runtime");
+  assert.equal(runtime.state, "dependency_blocked", "assurance runtime must remain dependency blocked");
+  assert.equal(runtime.sha256, null, "blocked assurance runtime digest must be null");
+  assert.match(runtime.source_blocker_id, /^[a-z0-9]+(?:-[a-z0-9]+)*$/, "blocked assurance runtime must name a source blocker");
+  assert.equal(runtime.sbom_sha256, null, "blocked assurance runtime SBOM digest must be null");
+  assert.match(runtime.sbom_blocker_id, /^[a-z0-9]+(?:-[a-z0-9]+)*$/, "blocked assurance runtime must name an SBOM blocker");
+  return true;
+}
+
+function validateAssuranceSchema(schema) {
+  exactKeys(schema, ["state", "sha256", "source_blocker_id"], "assurance schema");
+  assert.equal(schema.state, "present", "assurance schema must remain present");
+  assert.match(schema.sha256, digestPattern, "assurance schema digest is invalid");
+  assert.equal(schema.source_blocker_id, null, "present assurance schema cannot retain a blocker");
+  return true;
+}
+
+function validateAssuranceStatus(status) {
+  exactKeys(status, ["status", "report_sha256", "source_blocker_id"], "assurance evaluation");
+  assert.equal(status.status, "dependency_blocked", "assurance evaluation must remain dependency blocked");
+  assert.equal(status.report_sha256, null, "blocked assurance evaluation digest must be null");
+  assert.match(status.source_blocker_id, /^[a-z0-9]+(?:-[a-z0-9]+)*$/, "blocked assurance evaluation must name a blocker");
+  return true;
+}
+
 function assertBlocker(manifest, blockerId, label) {
   assert.equal(typeof blockerId, "string", `${label} must name a blocker`);
   assert.ok(blockerIds(manifest).has(blockerId), `${label} references missing blocker ${blockerId}`);
@@ -663,6 +689,9 @@ function validateManifest(manifest, options = {}) {
   assert.deepEqual(manifest.ai_assurance, buildAiAssurance(modelProvenance, productionPolicy, featureParity), "AI assurance projection mismatch");
   validateAssuranceDigests(manifest.ai_assurance.provenance_digests.models, "model provenance");
   validateAssuranceDigests(manifest.ai_assurance.provenance_digests.licenses, "license provenance");
+  validateAssuranceRuntime(manifest.ai_assurance.provenance_digests.runtime);
+  validateAssuranceSchema(manifest.ai_assurance.provenance_digests.schema);
+  validateAssuranceStatus(manifest.ai_assurance.evaluation);
   validateAssuranceDigests(manifest.ai_assurance.feature_vector.test_vector_hashes, "feature vector");
   const expectedEvidence = buildTestEvidence(manifest.source.payload_sha, handoff, manifest.test_evidence.ledger_path, cwd);
   assert.deepEqual(manifest.test_evidence, expectedEvidence, "test evidence binding mismatch");
@@ -734,6 +763,6 @@ function main(argv = process.argv.slice(2)) {
   }
 }
 
-module.exports = { artifactSelections, assertUniqueIds, buildAiAssurance, buildArtifactGroup, buildTestEvidence, buildTooling, generateManifest, listSourceEntries, main, manifestRelativePath, parseArgs, pathsReferToSameFile, referencedRootBlockerIds, serialize, sourceArtifacts, sourceArtifactsFor, validateAssuranceDigests, validateBlockers, validateExternalDependencies, validateManifest, validateRejectedCheckpoints, validateToolchains, validateToolingArtifacts };
+module.exports = { artifactSelections, assertUniqueIds, buildAiAssurance, buildArtifactGroup, buildTestEvidence, buildTooling, generateManifest, listSourceEntries, main, manifestRelativePath, parseArgs, pathsReferToSameFile, referencedRootBlockerIds, serialize, sourceArtifacts, sourceArtifactsFor, validateAssuranceDigests, validateAssuranceRuntime, validateAssuranceSchema, validateAssuranceStatus, validateBlockers, validateExternalDependencies, validateManifest, validateRejectedCheckpoints, validateToolchains, validateToolingArtifacts };
 
 if (require.main === module) main();
