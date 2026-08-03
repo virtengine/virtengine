@@ -65,6 +65,10 @@ duplicates, while the manifest remains byte-bound to the integration ledger.
 Control artifacts reject duplicate records in schema validation and duplicate
 IDs or paths at runtime before source-byte hashes and statuses are accepted.
 
+Schema-only validation also rejects exact duplicates in tooling artifacts,
+toolchains, artifact groups, external dependencies, and root blockers, matching
+their stronger runtime identity and inventory checks.
+
 The planner hashes the selected observation, requires the checked core-RC
 manifest to bind that exact path/digest, verifies identical bytes at the
 manifest source commit, and requires that source to be an ancestor of current

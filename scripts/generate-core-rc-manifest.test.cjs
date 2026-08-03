@@ -204,6 +204,8 @@ const tests = [
     assert.equal(schema.$defs.testRecord.properties.tool_versions.propertyNames.pattern, "^\\S(?:.*\\S)?$");
     assert.equal(schema.$defs.testRecord.properties.tool_versions.additionalProperties.pattern, "^\\S(?:.*\\S)?$");
     assert.equal(schema.properties.control_artifacts.uniqueItems, true);
+    for (const property of ["toolchains", "artifact_groups", "external_dependencies", "blockers"]) assert.equal(schema.properties[property].uniqueItems, true);
+    assert.equal(schema.$defs.tooling.properties.artifacts.uniqueItems, true);
     const mutated = clone(schema);
     mutated.$defs.testRecord.properties.command.bogus = true;
     assert.throws(() => validateSchema(mutated), /unknown schema keyword/);

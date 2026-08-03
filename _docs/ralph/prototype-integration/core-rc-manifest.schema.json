@@ -29,8 +29,8 @@
       }
     },
     "tooling": { "$ref": "#/$defs/tooling" },
-    "toolchains": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/toolchain" } },
-    "artifact_groups": { "type": "array", "minItems": 7, "items": { "$ref": "#/$defs/artifactGroup" } },
+    "toolchains": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "$ref": "#/$defs/toolchain" } },
+    "artifact_groups": { "type": "array", "minItems": 7, "uniqueItems": true, "items": { "$ref": "#/$defs/artifactGroup" } },
     "control_artifacts": { "type": "array", "minItems": 5, "uniqueItems": true, "items": { "$ref": "#/$defs/controlArtifact" } },
     "migrations": { "$ref": "#/$defs/migrations" },
     "required_gates": { "$ref": "#/$defs/requiredGates" },
@@ -41,8 +41,8 @@
     "producer_checkpoints": { "$ref": "#/$defs/producerCheckpoints" },
     "rollout": { "$ref": "#/$defs/releaseState" },
     "rollback": { "$ref": "#/$defs/releaseState" },
-    "external_dependencies": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/dependency" } },
-    "blockers": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/blocker" } }
+    "external_dependencies": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "$ref": "#/$defs/dependency" } },
+    "blockers": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "$ref": "#/$defs/blocker" } }
   },
   "$defs": {
     "sha": { "type": "string", "pattern": "^[a-f0-9]{40}$" },
@@ -54,7 +54,7 @@
       "required": ["tooling_sha", "tree", "artifacts"],
       "properties": {
         "tooling_sha": { "$ref": "#/$defs/sha" }, "tree": { "$ref": "#/$defs/sha" },
-        "artifacts": { "type": "array", "minItems": 3, "maxItems": 3, "items": { "$ref": "#/$defs/toolingArtifact" } }
+        "artifacts": { "type": "array", "minItems": 3, "maxItems": 3, "uniqueItems": true, "items": { "$ref": "#/$defs/toolingArtifact" } }
       }
     },
     "toolingArtifact": {
