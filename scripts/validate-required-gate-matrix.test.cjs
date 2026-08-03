@@ -97,7 +97,25 @@ const tests = [
     assert.throws(() => validateRequiredGateMatrix(extraField, { schema }), /unexpected or missing properties/);
     const missingBlocker = cloneMatrix();
     missingBlocker.categories[0].blockers = [];
-    assert.throws(() => validateRequiredGateMatrix(missingBlocker, { schema }), /must identify blocker for unavailable dependency/);
+    assert.throws(() => validateRequiredGateMatrix(missingBlocker, { schema }), /dependency blockers must exactly match unavailable dependencies/);
+  }],
+  ["rejects stale dependency and ready-category blockers", () => {
+    const staleDependency = cloneMatrix();
+    staleDependency.categories[0].dependencies[0].status = "available";
+    assert.throws(() => validateRequiredGateMatrix(staleDependency, { schema }), /dependency blockers must exactly match unavailable dependencies/);
+    const readyBlocked = cloneMatrix();
+    const category = readyBlocked.categories.find((entry) => entry.id === "proto_api");
+    category.dependencies.forEach((dependency) => { dependency.status = "available"; });
+    category.blockers = ["generated-contract-integration-blocked"];
+    category.status = "ready";
+    assert.throws(() => validateRequiredGateMatrix(readyBlocked, { schema }), /ready category cannot retain blockers/);
+  }],
+  ["accepts an available dependency transition with blockers cleared", () => {
+    const candidate = cloneMatrix();
+    candidate.categories[0].dependencies[0].status = "available";
+    candidate.categories[0].blockers = [];
+    candidate.categories[0].status = "ready";
+    assert.doesNotThrow(() => validateRequiredGateMatrix(candidate, { schema }));
   }],
   ["rejects a missing SLURM validator deployment selector", () => {
     const candidate = cloneMatrix();

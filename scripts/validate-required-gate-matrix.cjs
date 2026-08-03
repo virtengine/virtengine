@@ -57,6 +57,8 @@ function validateSchemaControl(schema) {
   assert.equal(schema.$defs.category.additionalProperties, false);
   for (const property of ["required_commands", "pinned_tools", "dependencies", "blockers"]) assert.equal(schema.$defs.category.properties[property].uniqueItems, true, `category ${property} must reject duplicates`);
   assert.deepEqual(schema.$defs.category.required.slice().sort(), categoryKeys.slice().sort(), "category schema required fields must be exact");
+  assert.equal(schema.$defs.category.allOf[0].then.properties.blockers.maxItems, 0, "ready/complete categories must reject blockers");
+  assert.equal(schema.$defs.category.allOf[0].else.properties.blockers.minItems, 1, "dependency-blocked categories must require blockers");
   assert.equal(schema.$defs.dependency.additionalProperties, false);
   assert.deepEqual(schema.$defs.dependency.required.slice().sort(), ["id", "status"]);
   assert.deepEqual(schema.$defs.dependency.properties.status.enum, ["unavailable", "available"]);
@@ -225,13 +227,14 @@ function validateRequiredGateMatrix(matrix, options = {}) {
     assert.ok(Array.isArray(category.blockers), `${category.id} blockers must be an array`);
     assert.equal(new Set(category.blockers).size, category.blockers.length, `${category.id} blocker IDs must be unique`);
     const unavailable = category.dependencies.some((dependency) => dependency.status === "unavailable");
-    for (const dependency of category.dependencies.filter((entry) => entry.status === "unavailable")) {
-      assert.ok(category.blockers.includes(`dependency-${dependency.id.toLowerCase()}`), `${category.id} must identify blocker for unavailable dependency ${dependency.id}`);
-    }
+    const expectedDependencyBlockers = category.dependencies.filter((entry) => entry.status === "unavailable").map((dependency) => `dependency-${dependency.id.toLowerCase()}`).sort();
+    const actualDependencyBlockers = category.blockers.filter((blocker) => blocker.startsWith("dependency-")).sort();
+    assert.deepEqual(actualDependencyBlockers, expectedDependencyBlockers, `${category.id} dependency blockers must exactly match unavailable dependencies`);
     if (unavailable) {
       assert.equal(category.status, "dependency_blocked", `${category.id} must remain dependency_blocked`);
       assert.ok(category.blockers.length > 0, `${category.id} must identify dependency blockers`);
     }
+    if (["ready", "complete"].includes(category.status)) assert.deepEqual(category.blockers, [], `${category.id} ${category.status} category cannot retain blockers`);
     for (const blocker of category.blockers) assert.ok(blockerIds.has(blocker), `${category.id} references unknown blocker: ${blocker}`);
     if (category.status === "complete") assert.equal(unavailable, false, `${category.id} cannot complete with unavailable dependencies`);
     remaining.delete(category.id);

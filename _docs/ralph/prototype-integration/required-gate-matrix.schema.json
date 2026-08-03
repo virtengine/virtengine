@@ -139,7 +139,14 @@
           "uniqueItems": true,
           "items": { "type": "string", "pattern": "^[a-z0-9.-]+$" }
         }
-      }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "status": { "enum": ["ready", "complete"] } }, "required": ["status"] },
+          "then": { "properties": { "blockers": { "maxItems": 0 } } },
+          "else": { "properties": { "blockers": { "minItems": 1 } } }
+        }
+      ]
     }
   }
 }

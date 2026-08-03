@@ -38,7 +38,8 @@ reported tool set must exactly match pinned tools by count, unique name, version
 availability, and field shape. Matrix commands, tools, dependencies, blockers,
 categories, and path allowances reject duplicate declarations. The
 dependency schema is exact, and each unavailable dependency requires its
-canonical `dependency-<id>` blocker. The
+canonical `dependency-<id>` blocker with no stale dependency blockers retained.
+Categories marked `ready` or `complete` cannot retain any blocker. The
 acceptance commit must be the implementation's direct, single-parent child and
 change only the acceptance artifact. Accepted annotated tags must be exact tag
 objects published by `origin`; local-only or stale same-name tags are rejected.
