@@ -1,14 +1,14 @@
 {
   "campaign": "three-day-prototype",
   "thread": "T4",
-  "checkpoint": "STABLE-CANDIDATE-02",
+  "checkpoint": "STABLE-CANDIDATE-03",
   "branch": "ve/prototype-integration",
-  "start_head": "bf09d6e137d1ea2a17634fc2303454065b1a6cc1",
-  "end_head": "ab41196e8d6265e676d97f843ad8151099aade2e",
+  "start_head": "53d9249b70885b20c0ff15c807ac1d1c15bcdb6f",
+  "end_head": "2209c7c633d3450bdf929638e08d231793f06614",
   "origin_main": "79391a3df86d85522b92e0400c6904971ecbe65d",
   "tree_clean": true,
   "commits": [
-    "ab41196e8d6265e676d97f843ad8151099aade2e"
+    "2209c7c633d3450bdf929638e08d231793f06614"
   ],
   "owned_paths": [
     "_docs/ralph/prototype-integration/**",
@@ -135,5 +135,5 @@
     "Task 88C is not complete."
   ],
   "next_checkpoint": null,
-  "expected_head": "ab41196e8d6265e676d97f843ad8151099aade2e"
+  "expected_head": "2209c7c633d3450bdf929638e08d231793f06614"
 }
