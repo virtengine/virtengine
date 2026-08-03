@@ -6,20 +6,20 @@
   "planned_functionality_complete": false,
   "milestone_m_eligible": false,
   "source": {
-    "payload_sha": "a8a52d1789a80c50bccf528531dfd4d1bc422f6a",
-    "tree": "7c26b0009b193ce71d06eca6407736afd2e7b711",
+    "payload_sha": "7c2e2e0f02654b3c1672c5f44ad52ed9d6a32be3",
+    "tree": "df3a69ed7b379c3b6e5572cb7dc09a974e6c9ba5",
     "branch": "ve/prototype-integration",
     "binding": "declared_clean_parent_payload"
   },
   "tooling": {
-    "tooling_sha": "a8a52d1789a80c50bccf528531dfd4d1bc422f6a",
-    "tree": "7c26b0009b193ce71d06eca6407736afd2e7b711",
+    "tooling_sha": "7c2e2e0f02654b3c1672c5f44ad52ed9d6a32be3",
+    "tree": "df3a69ed7b379c3b6e5572cb7dc09a974e6c9ba5",
     "artifacts": [
       {
         "id": "generator",
         "path": "scripts/generate-core-rc-manifest.cjs",
-        "git_blob": "2ea06d317a3affe21a4e30b8b84b80100bcd75f2",
-        "sha256": "e34931b6d8308289b6db719c2053e6dbed5427594956183988193a5a7e1cd7df"
+        "git_blob": "4e886d7bb80bfbc8d71823f37b5f9c6db237ffd9",
+        "sha256": "b59e56c67efa1585f5203bb7bcd9bcb81e22b3af123d835f76bc98b6e5e3a043"
       },
       {
         "id": "schema",
@@ -427,17 +427,17 @@
   "test_evidence": {
     "status": "complete",
     "ledger_path": "_docs/ralph/handoffs/prototype-integration/HANDOFF.yaml",
-    "implementation_sha": "606fd3c0e9d7bfb6d6fe80aa6d4f166a32febd2f",
-    "ledger_sha": "a8a52d1789a80c50bccf528531dfd4d1bc422f6a",
+    "implementation_sha": "5071fbb770b69f8283fb225e60e5f0eac404d982",
+    "ledger_sha": "7c2e2e0f02654b3c1672c5f44ad52ed9d6a32be3",
     "record_count": 1,
-    "declared_test_count": 49,
+    "declared_test_count": 31,
     "uncounted_record_count": 0,
     "records": [
       {
-        "command": "node scripts/plan-prototype-intake-freeze.test.cjs && node scripts/apply-prototype-intake-freeze.test.cjs",
+        "command": "node scripts/prototype-intake-epochs.test.cjs && node scripts/generate-core-rc-manifest.test.cjs && node scripts/validate-core-rc-manifest.cjs",
         "exit_code": 0,
         "result": "passed",
-        "test_count": 49,
+        "test_count": 31,
         "tool_versions": {
           "node": "20.19.1"
         }
@@ -447,7 +447,7 @@
   },
   "producer_checkpoints": {
     "ledger_path": "_docs/ralph/handoffs/prototype-integration/HANDOFF.yaml",
-    "ledger_sha256": "2f6600db697c890fa4082c6946de5e5a0958dd3a56633ae0a8a467d833d4ce2f",
+    "ledger_sha256": "f01ad933490ce7d04f5f2107fba704e739f535a0aa8cb0206ae2106e2f59722e",
     "accepted": [],
     "rejected": [
       {
