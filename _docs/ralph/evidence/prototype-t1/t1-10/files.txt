@@ -25,3 +25,5 @@ x/veid/types/inference_receipt.go
 x/veid/types/evidence_envelope.go
 x/veid/types/evidence_envelope_test.go
 x/veid/types/web_evidence_auth.go
+x/veid/keeper/inference_receipt.go
+x/veid/keeper/inference_receipt_test.go

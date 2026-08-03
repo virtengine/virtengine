@@ -1,0 +1,17 @@
+command: go test -count=1 ./x/veid/keeper
+exit_code: 0
+result: ok github.com/virtengine/virtengine/x/veid/keeper 47.939s
+
+command: go test -count=1 ./pkg/inference -run 'ReceiptProducerReasonNormalization|ReceiptProducer'
+exit_code: 0
+result: ok github.com/virtengine/virtengine/pkg/inference 0.177s
+
+command: go test -count=1 ./x/veid/types -run 'InferenceReceiptResultSemantics|InferenceReceipt'
+exit_code: 0
+result: ok github.com/virtengine/virtengine/x/veid/types 0.180s
+
+command: CGO_ENABLED=1 CC=winlibs-gcc go test -race -count=1 ./x/veid/keeper -run 'ReceiptScopeSemantics|StagesPartialModelOutcome'
+exit_code: 0
+result: ok github.com/virtengine/virtengine/x/veid/keeper 1.889s
+
+regression: Producer quality warnings normalize to a partial receipt, but keeper scope checks previously required mixed payload-validation outcomes even though processing rejects any invalid payload before receipt verification. The keeper now requires every input scope payload to validate for every model outcome and stages signed partial outcomes without conflating input validity with model decision status.
