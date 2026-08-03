@@ -47,6 +47,9 @@ Manifest test evidence must contain at least one unique literal command.
 Duplicate records and whitespace-padded command identities are rejected before
 record and declared-test counts are projected.
 
+Tool-version evidence also requires nonempty literal tool names and version
+strings with no surrounding whitespace in both runtime and schema validation.
+
 The planner hashes the selected observation, requires the checked core-RC
 manifest to bind that exact path/digest, verifies identical bytes at the
 manifest source commit, and requires that source to be an ancestor of current

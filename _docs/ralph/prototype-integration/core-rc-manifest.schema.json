@@ -227,7 +227,11 @@
       "properties": {
         "command": { "type": "string", "minLength": 1 }, "exit_code": { "const": 0 }, "result": { "const": "passed" },
         "test_count": { "oneOf": [{ "type": "integer", "minimum": 1 }, { "type": "null" }] },
-        "tool_versions": { "type": "object", "minProperties": 1, "additionalProperties": { "type": "string", "minLength": 1 } }
+        "tool_versions": {
+          "type": "object", "minProperties": 1,
+          "propertyNames": { "type": "string", "pattern": "^\\S(?:.*\\S)?$" },
+          "additionalProperties": { "type": "string", "minLength": 1, "pattern": "^\\S(?:.*\\S)?$" }
+        }
       }
     },
     "producerCheckpoints": {

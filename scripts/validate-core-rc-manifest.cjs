@@ -20,7 +20,7 @@ function assertUnique(values, label) {
 
 function validateSchemaNode(node, label) {
   assert.ok(node && typeof node === "object" && !Array.isArray(node), `${label} must be an object`);
-  const allowed = new Set(["$ref", "type", "const", "enum", "pattern", "title", "description", "additionalProperties", "required", "properties", "items", "oneOf", "minItems", "maxItems", "uniqueItems", "minimum", "minLength", "minProperties"]);
+  const allowed = new Set(["$ref", "type", "const", "enum", "pattern", "title", "description", "additionalProperties", "propertyNames", "required", "properties", "items", "oneOf", "minItems", "maxItems", "uniqueItems", "minimum", "minLength", "minProperties"]);
   for (const key of Object.keys(node)) assert.ok(allowed.has(key), `${label} has unknown schema keyword ${key}`);
   if (node.enum) assertUnique(node.enum, `${label} enum`);
   if (Object.hasOwn(node, "uniqueItems")) assert.equal(node.uniqueItems, true, `${label} uniqueItems must fail closed`);
@@ -33,6 +33,7 @@ function validateSchemaNode(node, label) {
   } else if (node.additionalProperties && typeof node.additionalProperties === "object") {
     validateSchemaNode(node.additionalProperties, `${label}.additionalProperties`);
   }
+  if (node.propertyNames) validateSchemaNode(node.propertyNames, `${label}.propertyNames`);
   if (node.items) validateSchemaNode(node.items, `${label}.items`);
   if (node.oneOf) node.oneOf.forEach((child, index) => validateSchemaNode(child, `${label}.oneOf[${index}]`));
 }

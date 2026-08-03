@@ -217,7 +217,10 @@ function buildTestEvidence(sourceSha, handoff, handoffPath, cwd = root) {
     assert.equal(test.result, "passed", `test evidence ${index} did not pass`);
     assert.ok(test.tool_versions && typeof test.tool_versions === "object" && !Array.isArray(test.tool_versions), `test evidence ${index} is missing tool_versions`);
     assert.ok(Object.keys(test.tool_versions).length > 0, `test evidence ${index} is missing tool_versions`);
-    for (const version of Object.values(test.tool_versions)) assert.ok(typeof version === "string" && version.trim(), `test evidence ${index} has an empty tool version`);
+    for (const [tool, version] of Object.entries(test.tool_versions)) {
+      assert.ok(tool.length > 0 && tool.trim() === tool, `test evidence ${index} has an invalid tool name`);
+      assert.ok(typeof version === "string" && version.length > 0 && version.trim() === version, `test evidence ${index} has an invalid tool version`);
+    }
     assert.ok(test.test_count === undefined || (Number.isInteger(test.test_count) && test.test_count > 0), `test evidence ${index} has an invalid test_count`);
     return { command: test.command, exit_code: test.exit_code, result: test.result, test_count: test.test_count ?? null, tool_versions: test.tool_versions };
   });

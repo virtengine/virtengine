@@ -131,6 +131,15 @@ const tests = [
     delete versionless.tests[0].tool_versions;
     assert.throws(() => buildTestEvidence(sourceSha, versionless, handoffPath, root), /missing tool_versions/);
   }],
+  ["rejects non-literal tool names and versions", () => {
+    const paddedName = clone(handoff);
+    paddedName.tests[0].tool_versions[" node"] = paddedName.tests[0].tool_versions.node;
+    delete paddedName.tests[0].tool_versions.node;
+    assert.throws(() => buildTestEvidence(sourceSha, paddedName, handoffPath, root), /invalid tool name/);
+    const paddedVersion = clone(handoff);
+    paddedVersion.tests[0].tool_versions.node = ` ${paddedVersion.tests[0].tool_versions.node}`;
+    assert.throws(() => buildTestEvidence(sourceSha, paddedVersion, handoffPath, root), /invalid tool version/);
+  }],
   ["rejects zero-count test evidence", () => {
     const zeroCount = clone(handoff);
     zeroCount.tests[0].test_count = 0;
@@ -180,6 +189,8 @@ const tests = [
     assert.equal(schema.$defs.testEvidence.oneOf[1].properties.status.const, "partial");
     assert.equal(schema.$defs.testEvidence.oneOf[1].properties.uncounted_record_count.minimum, 1);
     assert.equal(schema.$defs.testEvidence.properties.records.uniqueItems, true);
+    assert.equal(schema.$defs.testRecord.properties.tool_versions.propertyNames.pattern, "^\\S(?:.*\\S)?$");
+    assert.equal(schema.$defs.testRecord.properties.tool_versions.additionalProperties.pattern, "^\\S(?:.*\\S)?$");
     const mutated = clone(schema);
     mutated.$defs.testRecord.properties.command.bogus = true;
     assert.throws(() => validateSchema(mutated), /unknown schema keyword/);
