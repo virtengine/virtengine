@@ -1,33 +1,29 @@
 {
   "campaign": "three-day-prototype",
   "thread": "T4",
-  "checkpoint": "T4-01CW",
+  "checkpoint": "T4-01CX",
   "branch": "ve/prototype-integration",
-  "start_head": "6ac7cd125e695194f70bc048cf868b805cc19132",
-  "end_head": "61941d7aa1c41d07cb7db1ba1b7c83bcc88895f1",
+  "start_head": "a3f2b8f4b1dc271e7163e6f31fc5c7b80ed4113e",
+  "end_head": "a724495d882ddac25487d95d0ec6d6609cd78419",
   "origin_main": "79391a3df86d85522b92e0400c6904971ecbe65d",
   "tree_clean": true,
   "commits": [
-    "61941d7aa1c41d07cb7db1ba1b7c83bcc88895f1"
+    "a724495d882ddac25487d95d0ec6d6609cd78419"
   ],
   "owned_paths": [
     "_docs/ralph/prototype-integration/**",
-    "_docs/ralph/handoffs/prototype-integration/**",
-    "_docs/audits/task-t4-01e-intake-freeze-planner-2026-08-02.md",
-    "scripts/preflight-integration-candidate.cjs",
-    "scripts/preflight-integration-candidate.test.cjs"
+    "_docs/ralph/handoffs/prototype-integration/**"
   ],
   "files_changed": [
-    "_docs/audits/task-t4-01e-intake-freeze-planner-2026-08-02.md",
-    "scripts/preflight-integration-candidate.cjs",
-    "scripts/preflight-integration-candidate.test.cjs"
+    "_docs/ralph/handoffs/prototype-integration/HANDOFF.yaml",
+    "_docs/ralph/prototype-integration/core-rc-manifest.json"
   ],
   "tests": [
     {
-      "command": "node scripts/preflight-integration-candidate.test.cjs",
+      "command": "node scripts/validate-prototype-integration.test.cjs && node scripts/validate-prototype-integration.cjs",
       "exit_code": 0,
       "result": "passed",
-      "test_count": 27,
+      "test_count": 13,
       "tool_versions": {
         "node": "20.19.1"
       }
@@ -43,7 +39,7 @@
     }
   ],
   "generated_hashes": {
-    "_docs/ralph/prototype-integration/core-rc-manifest.json": "c4cead47835158df3da7dbda0b0a0048450e7afb2e937e8a82d4395f47a8e7c5"
+    "_docs/ralph/prototype-integration/core-rc-manifest.json": "1f4b8c7c9f42c2e02bd0a85d6d0c9bd75fd79104a657a8e17d9def69cdbb48f0"
   },
   "accepted_checkpoints": [],
   "rejected_checkpoints": [
@@ -95,5 +91,5 @@
     "Task 88C is not complete."
   ],
   "next_checkpoint": null,
-  "expected_head": "61941d7aa1c41d07cb7db1ba1b7c83bcc88895f1"
+  "expected_head": "a724495d882ddac25487d95d0ec6d6609cd78419"
 }
