@@ -376,8 +376,11 @@ async function preflight(options) {
 
 function parseArgs(argv) {
   const options = { json: false };
+  const seen = new Set();
   for (let index = 0; index < argv.length; index += 1) {
     const key = argv[index];
+    assert.equal(seen.has(key), false, `duplicate argument: ${key}`);
+    seen.add(key);
     if (key === "--json") options.json = true;
     else if (key === "--publish") throw new Error("--publish is unavailable; T4-09A is diagnostic-only");
     else if (["--candidate", "--epoch", "--tag", "--repo", "--remote"].includes(key)) {

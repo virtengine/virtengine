@@ -160,6 +160,10 @@ test("rejects invalid arguments and publication mode", () => {
   assert.throws(() => parseArgs(["--publish"]), /unavailable/);
   assert.throws(() => parseArgs(["--candidate", "0".repeat(40), "--epoch", "0", "--tag", TAG]));
   assert.throws(() => parseArgs(["--candidate", "0".repeat(40), "--epoch", "1", "--tag", "wrong"]));
+  assert.throws(() => parseArgs(["--candidate", "0".repeat(40), "--candidate", "1".repeat(40), "--epoch", "1", "--tag", TAG]), /duplicate argument/);
+  assert.throws(() => parseArgs(["--candidate", "0".repeat(40), "--epoch", "--tag", TAG]), /requires a value/);
+  assert.throws(() => parseArgs(["--candidate", "0".repeat(40), "--epoch", "1", "--tag"]), /requires a value/);
+  assert.throws(() => parseArgs(["--candidate", "0".repeat(40), "--epoch", "1", "--tag", TAG, "--json", "--json"]), /duplicate argument/);
 });
 
 test("requires the requested publication epoch to be current and contiguous", () => {

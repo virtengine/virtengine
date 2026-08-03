@@ -28,6 +28,10 @@ source, tooling-source, output, and check arguments. Checked-manifest path
 identity resolves filesystem aliases and compares case-insensitively on Windows,
 so alternate spelling cannot bypass the clean-worktree guard.
 
+The diagnostic core-RC publication preflight makes candidate, epoch, tag,
+repository, remote, and JSON mode single-assignment. Duplicate, missing, or
+option-looking values fail before publication evidence is evaluated.
+
 The planner hashes the selected observation, requires the checked core-RC
 manifest to bind that exact path/digest, verifies identical bytes at the
 manifest source commit, and requires that source to be an ancestor of current
