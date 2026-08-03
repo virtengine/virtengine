@@ -6,14 +6,14 @@
   "planned_functionality_complete": false,
   "milestone_m_eligible": false,
   "source": {
-    "payload_sha": "9cbdd5b3e49dc720a0de66d7568178fe40d35b7f",
-    "tree": "9164b4b2d335913fe26fdba3e9d1664c270824c3",
+    "payload_sha": "f68c64b4119b9d31c15eccb26a542004db33543d",
+    "tree": "eee95245c01affdf03cee5a73bbe080a70344255",
     "branch": "ve/prototype-integration",
     "binding": "declared_clean_parent_payload"
   },
   "tooling": {
-    "tooling_sha": "9cbdd5b3e49dc720a0de66d7568178fe40d35b7f",
-    "tree": "9164b4b2d335913fe26fdba3e9d1664c270824c3",
+    "tooling_sha": "f68c64b4119b9d31c15eccb26a542004db33543d",
+    "tree": "eee95245c01affdf03cee5a73bbe080a70344255",
     "artifacts": [
       {
         "id": "generator",
@@ -231,7 +231,7 @@
     {
       "id": "required_gate_matrix",
       "path": "_docs/ralph/prototype-integration/required-gate-matrix.json",
-      "sha256": "8fe667a2e2c308a31b0cd97dc579e0649952dab3410fed8b484f04bdc340094c",
+      "sha256": "9a08448a42a74f8182d45616454d22fed6e3a68390dabc62e8285f45050a5296",
       "status": "dependency_blocked"
     },
     {
@@ -427,10 +427,10 @@
   "test_evidence": {
     "status": "complete",
     "ledger_path": "_docs/ralph/handoffs/prototype-integration/HANDOFF.yaml",
-    "implementation_sha": "2db1e0b3a12b18442e7aff6a21e62ca11dea2a23",
-    "ledger_sha": "9cbdd5b3e49dc720a0de66d7568178fe40d35b7f",
-    "record_count": 3,
-    "declared_test_count": 7,
+    "implementation_sha": "ab41196e8d6265e676d97f843ad8151099aade2e",
+    "ledger_sha": "f68c64b4119b9d31c15eccb26a542004db33543d",
+    "record_count": 4,
+    "declared_test_count": 9,
     "uncounted_record_count": 0,
     "records": [
       {
@@ -459,13 +459,22 @@
         "tool_versions": {
           "go": "go1.25.8 windows/amd64"
         }
+      },
+      {
+        "command": "node --test scripts/preflight-integration-candidate.test.cjs scripts/validate-required-gate-matrix.test.cjs",
+        "exit_code": 0,
+        "result": "passed",
+        "test_count": 2,
+        "tool_versions": {
+          "node": "20.19.1"
+        }
       }
     ],
     "blocker_id": "test-evidence-partial"
   },
   "producer_checkpoints": {
     "ledger_path": "_docs/ralph/handoffs/prototype-integration/HANDOFF.yaml",
-    "ledger_sha256": "1d48537a1a9631c3c2fe11bdc97fac1902805eb4c17043b9d3a1221ff30b2736",
+    "ledger_sha256": "c55437ea707e8c54af1fb441d6493539683185af10d3cac2fe78e201fe21e0a0",
     "accepted": [
       {
         "thread": "T1",
