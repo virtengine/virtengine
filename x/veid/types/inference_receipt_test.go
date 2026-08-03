@@ -64,6 +64,7 @@ func TestInferenceReceiptRejectsTamperedFields(t *testing.T) {
 		"feature":                   func(r *InferenceReceipt) { r.FeatureDigest[0] ^= 0x01 },
 		"schema":                    func(r *InferenceReceipt) { r.SchemaDigest[0] ^= 0x01 },
 		"lineage":                   func(r *InferenceReceipt) { r.EvidenceLineageDigest[0] ^= 0x01 },
+		"pipeline_version":          func(r *InferenceReceipt) { r.PipelineVersion = "v2.0.0" },
 		"manifest":                  func(r *InferenceReceipt) { r.ModelManifestDigest[0] ^= 0x01 },
 		"model":                     func(r *InferenceReceipt) { r.ModelDigest[0] ^= 0x01 },
 		"runtime_image":             func(r *InferenceReceipt) { r.RuntimeImageDigest[0] ^= 0x01 },
@@ -85,10 +86,10 @@ func TestInferenceReceiptRejectsTamperedFields(t *testing.T) {
 			r.Score = 0
 			r.ReasonCodes = []ReasonCode{ReasonCodeSuccess}
 		},
-		"issued_height":   func(r *InferenceReceipt) { r.IssuedHeight = 0 },
-		"expiry_height":   func(r *InferenceReceipt) { r.ExpiresHeight = r.IssuedHeight },
-		"issued_time":     func(r *InferenceReceipt) { r.IssuedAt = time.Time{} },
-		"expires_at":      func(r *InferenceReceipt) { r.ExpiresAt = r.IssuedAt },
+		"issued_height": func(r *InferenceReceipt) { r.IssuedHeight = 0 },
+		"expiry_height": func(r *InferenceReceipt) { r.ExpiresHeight = r.IssuedHeight },
+		"issued_time":   func(r *InferenceReceipt) { r.IssuedAt = time.Time{} },
+		"expires_at":    func(r *InferenceReceipt) { r.ExpiresAt = r.IssuedAt },
 		"issued_precision": func(r *InferenceReceipt) {
 			r.IssuedAt = r.IssuedAt.Add(time.Nanosecond)
 		},
