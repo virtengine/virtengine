@@ -1,7 +1,7 @@
 "use strict";
 
 const assert = require("assert").strict;
-const { currentEpoch, requireCurrentEpoch, validateEpochSequence } = require("./prototype-intake-epochs.cjs");
+const { currentEpoch, requireCurrentEpoch, validateEpochBase, validateEpochSequence } = require("./prototype-intake-epochs.cjs");
 
 function epoch(number, status) {
   return {
@@ -49,6 +49,17 @@ const tests = [
     const epochs = [epoch(1, "closed"), epoch(2, "open")];
     epochs[1].document.base_tag = "checkpoint/prototype-integration/epoch-1-base";
     assert.throws(() => validateEpochSequence(epochs), /base tag mismatch/);
+  }],
+  ["accepts an annotated exact epoch base target", () => {
+    const candidate = epoch(2, "open").document;
+    candidate.base_sha = "b".repeat(40);
+    assert.doesNotThrow(() => validateEpochBase(candidate, { type: "tag", target: candidate.base_sha }));
+  }],
+  ["rejects a lightweight or mismatched epoch base target", () => {
+    const candidate = epoch(2, "open").document;
+    candidate.base_sha = "b".repeat(40);
+    assert.throws(() => validateEpochBase(candidate, { type: "commit", target: candidate.base_sha }), /must be annotated/);
+    assert.throws(() => validateEpochBase(candidate, { type: "tag", target: "c".repeat(40) }), /does not target base_sha/);
   }],
 ];
 

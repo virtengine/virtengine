@@ -7,7 +7,7 @@ const { createHash } = require("crypto");
 const { readFileSync } = require("fs");
 const { isAbsolute, resolve } = require("path");
 const { spawnSync } = require("child_process");
-const { discoverEpochs, requireCurrentEpoch } = require("./prototype-intake-epochs.cjs");
+const { discoverEpochs, requireCurrentEpoch, validateEpochBase } = require("./prototype-intake-epochs.cjs");
 
 const threads = ["T1", "T2", "T3", "T5"];
 const tagPattern = /^checkpoint\/prototype-t([1235])\/(t[1235]-[0-9]{2,}[a-z]?)$/;
@@ -26,6 +26,14 @@ function resolveAnnotatedTag(repo, remote, tag) {
     tagger_at: git(repo, ["for-each-ref", "--format=%(taggerdate:iso-strict)", ref]),
     target: git(repo, ["rev-parse", `${ref}^{}`]),
   };
+}
+
+function resolveEpochBaseTag(repo, remote, epoch) {
+  const ref = `refs/tags/${epoch.base_tag}`;
+  git(repo, ["fetch", remote, `${ref}:${ref}`]);
+  const type = git(repo, ["cat-file", "-t", ref]);
+  const target = type === "tag" ? git(repo, ["rev-parse", `${ref}^{}`]) : git(repo, ["rev-parse", ref]);
+  return { type, target };
 }
 
 function validateObservationBinding(content, observationPath, manifest, options = {}) {
@@ -108,6 +116,7 @@ function main(argv) {
   const options = parseArgs(argv);
   const epochDirectory = resolve(options.repo, "_docs/ralph/prototype-integration/epochs");
   const epoch = requireCurrentEpoch(discoverEpochs(epochDirectory), options.epoch);
+  validateEpochBase(epoch, resolveEpochBaseTag(options.repo, options.remote, epoch));
   const observationContent = readFileSync(resolve(options.repo, options.observation), "utf8");
   const observation = JSON.parse(observationContent);
   const manifest = JSON.parse(readFileSync(resolve(options.repo, options.manifest), "utf8"));
@@ -116,7 +125,7 @@ function main(argv) {
   process.stdout.write(`${JSON.stringify(plan, null, 2)}\n`);
 }
 
-module.exports = { parseArgs, planFrozenEpoch, resolveAnnotatedTag, validateObservationBinding };
+module.exports = { parseArgs, planFrozenEpoch, resolveAnnotatedTag, resolveEpochBaseTag, validateObservationBinding };
 
 if (require.main === module) {
   try { main(process.argv.slice(2)); }

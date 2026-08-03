@@ -5,7 +5,8 @@
 const assert = require("assert").strict;
 const { resolve } = require("path");
 const { spawnSync } = require("child_process");
-const { discoverEpochs, requireCurrentEpoch } = require("./prototype-intake-epochs.cjs");
+const { discoverEpochs, requireCurrentEpoch, validateEpochBase } = require("./prototype-intake-epochs.cjs");
+const { resolveEpochBaseTag } = require("./plan-prototype-intake-freeze.cjs");
 
 const tagPattern = /^refs\/tags\/(checkpoint\/prototype-t([1235])\/(t[1235]-[0-9]{2,}[a-z]?))$/;
 
@@ -83,6 +84,7 @@ function main(argv) {
   const epochDirectory = resolve(options.repo, "_docs/ralph/prototype-integration/epochs");
   const epoch = requireCurrentEpoch(discoverEpochs(epochDirectory), options.epoch);
   assert.equal(epoch.status, "open", "tag observation requires the current epoch to be open");
+  validateEpochBase(epoch, resolveEpochBaseTag(options.repo, options.remote, epoch));
   const patterns = [1, 2, 3, 5].flatMap((thread) => [`refs/tags/checkpoint/prototype-t${thread}/*`, `refs/tags/checkpoint/prototype-t${thread}/*^{}`]);
   const result = spawnSync("git", ["ls-remote", "--tags", options.remote, ...patterns], { cwd: options.repo, encoding: "utf8" });
   assert.equal(result.status, 0, (result.stderr || "remote tag observation failed").trim());

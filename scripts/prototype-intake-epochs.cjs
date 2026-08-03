@@ -53,4 +53,11 @@ function requireCurrentEpoch(epochs, requestedEpoch) {
   return current.document;
 }
 
-module.exports = { currentEpoch, discoverEpochs, requireCurrentEpoch, validateEpochSequence };
+function validateEpochBase(epoch, resolvedTag) {
+  assert.equal(resolvedTag.type, "tag", `epoch ${epoch.intake_epoch} base tag must be annotated`);
+  assert.match(resolvedTag.target || "", /^[a-f0-9]{40}$/, `epoch ${epoch.intake_epoch} base tag target is invalid`);
+  assert.equal(resolvedTag.target, epoch.base_sha, `epoch ${epoch.intake_epoch} base tag does not target base_sha`);
+  return true;
+}
+
+module.exports = { currentEpoch, discoverEpochs, requireCurrentEpoch, validateEpochBase, validateEpochSequence };
