@@ -217,6 +217,10 @@ const tests = [
       assert.equal(schema.$defs.artifactSelection.properties[property].uniqueItems, true);
       assert.deepEqual(schema.$defs.artifactSelection.properties[property].items, { $ref: "#/$defs/repositoryPath" });
     }
+    assert.equal(schema.$defs.aiAssurance.properties.provenance_digests.properties.models.uniqueItems, true);
+    assert.equal(schema.$defs.aiAssurance.properties.provenance_digests.properties.licenses.uniqueItems, true);
+    assert.equal(schema.$defs.aiAssurance.properties.feature_vector.properties.test_vector_hashes.uniqueItems, true);
+    assert.equal(schema.$defs.aiAssurance.properties.non_certification.properties.not_certified.uniqueItems, true);
     const mutated = clone(schema);
     mutated.$defs.testRecord.properties.command.bogus = true;
     assert.throws(() => validateSchema(mutated), /unknown schema keyword/);

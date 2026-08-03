@@ -92,6 +92,10 @@ whitespace-padded paths fail schema-only validation.
 Artifact selection prefixes, inclusion patterns, and exclusion patterns use
 the same repository-relative contract and reject exact duplicates.
 
+AI model/license provenance, feature-vector hashes, and explicit
+non-certification lists reject exact duplicate entries in schema-only
+validation.
+
 The planner hashes the selected observation, requires the checked core-RC
 manifest to bind that exact path/digest, verifies identical bytes at the
 manifest source commit, and requires that source to be an ancestor of current
