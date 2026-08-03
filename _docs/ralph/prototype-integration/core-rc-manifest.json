@@ -6,14 +6,14 @@
   "planned_functionality_complete": false,
   "milestone_m_eligible": false,
   "source": {
-    "payload_sha": "51001fc4eaa0f5ddfb3affffa02fa048028afabc",
-    "tree": "34475f8d87b082971c769f8c85159cd2a92085e1",
+    "payload_sha": "04c196966a636643923f0bd4b8ab033e7c899606",
+    "tree": "4b06462c48a91e061769d9852f72a7c385e90907",
     "branch": "ve/prototype-integration",
     "binding": "declared_clean_parent_payload"
   },
   "tooling": {
-    "tooling_sha": "51001fc4eaa0f5ddfb3affffa02fa048028afabc",
-    "tree": "34475f8d87b082971c769f8c85159cd2a92085e1",
+    "tooling_sha": "04c196966a636643923f0bd4b8ab033e7c899606",
+    "tree": "4b06462c48a91e061769d9852f72a7c385e90907",
     "artifacts": [
       {
         "id": "generator",
@@ -24,8 +24,8 @@
       {
         "id": "schema",
         "path": "_docs/ralph/prototype-integration/core-rc-manifest.schema.json",
-        "git_blob": "26e00d21675ef7216b3cd1427d1f710a3349f2c1",
-        "sha256": "9c4bb00d98fb8b3134b7f739a1ad36c7ec698a79906c9d58d3ad1d10f66c290d"
+        "git_blob": "8e64919dabe5bbbf689e53d0831c5889c035743f",
+        "sha256": "cee0abefd8a422c0daaae091e9ee9fdfc923fda7cc52c27d939c11badf666cb7"
       },
       {
         "id": "validator",
@@ -427,8 +427,8 @@
   "test_evidence": {
     "status": "complete",
     "ledger_path": "_docs/ralph/handoffs/prototype-integration/HANDOFF.yaml",
-    "implementation_sha": "63c2eb64572aa805b55cf6aea95bdb42b61cbaff",
-    "ledger_sha": "51001fc4eaa0f5ddfb3affffa02fa048028afabc",
+    "implementation_sha": "68950f7d0ce41cd72c2eac17a5650b0f5114d35e",
+    "ledger_sha": "04c196966a636643923f0bd4b8ab033e7c899606",
     "record_count": 2,
     "declared_test_count": 34,
     "uncounted_record_count": 0,
@@ -456,7 +456,7 @@
   },
   "producer_checkpoints": {
     "ledger_path": "_docs/ralph/handoffs/prototype-integration/HANDOFF.yaml",
-    "ledger_sha256": "872bd895b3d5c8ff93bffc22efa354ee2d444e279c7373e1e001f7f3c0372779",
+    "ledger_sha256": "d78c2635d0c3cf470e853089f86d794d130744744f311c4bebc0b388743d5639",
     "accepted": [],
     "rejected": [
       {
