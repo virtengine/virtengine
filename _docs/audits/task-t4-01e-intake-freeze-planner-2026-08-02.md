@@ -32,6 +32,11 @@ The diagnostic core-RC publication preflight makes candidate, epoch, tag,
 repository, remote, and JSON mode single-assignment. Duplicate, missing, or
 option-looking values fail before publication evidence is evaluated.
 
+Integration candidate and canonical inputs must be exact lowercase commit SHAs
+or `origin/*` branches whose tracking commits equal the live remote head.
+Mutable local names such as `HEAD`, local branches, and abbreviated SHAs fail
+before acceptance evidence is read.
+
 The planner hashes the selected observation, requires the checked core-RC
 manifest to bind that exact path/digest, verifies identical bytes at the
 manifest source commit, and requires that source to be an ancestor of current

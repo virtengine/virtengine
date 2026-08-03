@@ -103,6 +103,7 @@ function resolvePublishedBranch(repo, branch, runGit = git, label = "registered 
 
 function resolveCandidateInput(repo, ref, runGit = git, label = "candidate ref") {
   if (ref.startsWith("origin/")) return resolvePublishedBranch(repo, ref.slice("origin/".length), runGit, label);
+  assert.match(ref, /^[a-f0-9]{40}$/, `${label} must be an exact commit SHA or origin branch`);
   return runGit(repo, ["rev-parse", `${ref}^{commit}`]).stdout.trim();
 }
 
