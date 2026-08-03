@@ -27,7 +27,8 @@ T4 and a committed strict acceptance artifact whose `base_sha` matches canonical
 T4 and whose `candidate_sha` names the validated implementation parent. Candidate
 evidence is read from the exact candidate head resolved at preflight start, not
 from the mutable candidate ref. Canonical or candidate inputs under `origin/*`
-must equal the current exact remote branch head before resolution. The
+must equal the current exact remote branch head before resolution. CLI options
+are strict option/value pairs; unknown, duplicate, or incomplete inputs fail. The
 acceptance commit must be the implementation's direct, single-parent child and
 change only the acceptance artifact. Accepted annotated tags must be exact tag
 objects published by `origin`; local-only or stale same-name tags are rejected.

@@ -132,13 +132,28 @@ function buildCandidatePlan(repo, candidateRef, canonicalRef, acceptancePath, pr
   return { canonical_head: canonicalHead, candidate_head: candidateHead, accepted_payloads: acceptedPayloads, contained_producer_commits: contained };
 }
 
+function parseCandidateArgs(argv) {
+  assert.equal(argv.length % 2, 0, "candidate arguments must be option/value pairs");
+  const allowed = new Set(["--repo", "--candidate", "--canonical", "--acceptance"]);
+  const args = {};
+  for (let index = 0; index < argv.length; index += 2) {
+    const option = argv[index];
+    const value = argv[index + 1];
+    assert.ok(allowed.has(option), `unknown candidate argument: ${option}`);
+    assert.ok(value && !value.startsWith("--"), `${option} requires a value`);
+    assert.equal(Object.hasOwn(args, option), false, `duplicate candidate argument: ${option}`);
+    args[option] = value;
+  }
+  assert.ok(args["--repo"] && args["--candidate"], "--repo and --candidate are required");
+  return args;
+}
+
 function main(argv) {
-  const args = Object.fromEntries(Array.from({ length: argv.length / 2 }, (_, index) => [argv[index * 2], argv[index * 2 + 1]]));
+  const args = parseCandidateArgs(argv);
   const repo = args["--repo"];
   const candidate = args["--candidate"];
   const canonical = args["--canonical"] || "origin/ve/prototype-integration";
   const acceptancePath = args["--acceptance"] || "_docs/ralph/prototype-integration/live-integration-acceptance.json";
-  assert.ok(repo && candidate, "--repo and --candidate are required");
   const producerBranches = [["T1", "ve/prototype-t1-identity"], ["T2", "ve/prototype-t2-product"], ["T3", "ve/prototype-t3-reliability"], ["T5", "ve/prototype-t5-platform"]];
   const plan = buildCandidatePlan(repo, candidate, canonical, acceptancePath, producerBranches);
   validateCandidatePlan(plan, {
@@ -149,7 +164,7 @@ function main(argv) {
   process.stdout.write(`${JSON.stringify(plan, null, 2)}\n`);
 }
 
-module.exports = { buildCandidatePlan, parseAcceptance, resolveCandidateInput, resolvePublishedBranch, validateAcceptanceBoundary, validateCandidatePlan, verifyAcceptedPayload };
+module.exports = { buildCandidatePlan, parseAcceptance, parseCandidateArgs, resolveCandidateInput, resolvePublishedBranch, validateAcceptanceBoundary, validateCandidatePlan, verifyAcceptedPayload };
 
 if (require.main === module) {
   try { main(process.argv.slice(2)); }
