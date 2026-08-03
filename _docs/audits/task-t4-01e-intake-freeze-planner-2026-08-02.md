@@ -104,6 +104,9 @@ The AI non-certification array is restricted to the exact seven governed
 categories, so schema-only validation cannot substitute or omit a required
 production non-claim.
 
+AI provenance and evaluation blocker references use canonical nullable blocker
+IDs, while assurance state and status fields reject surrounding whitespace.
+
 The planner hashes the selected observation, requires the checked core-RC
 manifest to bind that exact path/digest, verifies identical bytes at the
 manifest source commit, and requires that source to be an ancestor of current
