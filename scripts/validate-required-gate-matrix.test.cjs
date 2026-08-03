@@ -150,6 +150,17 @@ const tests = [
     result.skipped_tests = 1;
     assert.throws(() => validateGateResult(category, result), /skipped tests/);
   }],
+  ["rejects incomplete tests and nonzero policy counts", () => {
+    const testCategory = cloneMatrix().categories[0];
+    const incomplete = validResult(testCategory);
+    incomplete.discovered_tests = 3;
+    incomplete.executed_tests = 2;
+    assert.throws(() => validateGateResult(testCategory, incomplete), /not all discovered tests executed/);
+    const policyCategory = cloneMatrix().categories.find((entry) => entry.id === "docs_process_boundary_e2e");
+    const policy = policyCategory.required_commands.find((entry) => entry.kind === "policy");
+    const result = { ...validResult(policyCategory), command_id: policy.id, command: policy.command, discovered_tests: 1, executed_tests: 1 };
+    assert.throws(() => validateGateResult(policyCategory, result), /policy commands must report zero test counts/);
+  }],
   ["rejects a cancelled result", () => {
     const category = cloneMatrix().categories[0];
     const result = validResult(category);

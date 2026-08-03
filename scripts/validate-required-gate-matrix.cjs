@@ -96,6 +96,9 @@ function validateGateResult(category, result) {
   assert.equal(result.command, command.command, "gate result command must match the required literal command");
   assert.equal(result.outcome, "passed", `gate result must pass, not ${result.outcome}`);
   assert.equal(result.exit_code, 0, "gate result exit code must be zero");
+  for (const field of ["discovered_tests", "executed_tests", "skipped_tests"]) {
+    assert.ok(Number.isSafeInteger(result[field]) && result[field] >= 0, `${field} must be a non-negative integer`);
+  }
   assert.ok(Array.isArray(result.tools), "gate result tools must be an array");
   for (const pinned of category.pinned_tools) {
     const actual = result.tools.find((tool) => tool.name === pinned.name);
@@ -106,6 +109,9 @@ function validateGateResult(category, result) {
     assert.ok(result.discovered_tests >= category.zero_test_policy.minimum_discovered, "zero tests discovered");
     assert.ok(result.executed_tests >= category.zero_test_policy.minimum_executed, "zero tests executed");
     assert.equal(result.skipped_tests, 0, "skipped tests are not allowed");
+    assert.equal(result.executed_tests, result.discovered_tests, "not all discovered tests executed");
+  } else {
+    assert.deepEqual([result.discovered_tests, result.executed_tests, result.skipped_tests], [0, 0, 0], "policy commands must report zero test counts");
   }
 }
 

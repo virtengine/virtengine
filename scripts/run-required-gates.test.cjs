@@ -201,6 +201,14 @@ try {
       incomplete.results[testIndex].executed_tests = 1;
       assert.throws(() => validateResultEnvelope(plan, incomplete), /not all discovered tests executed/);
     }],
+    ["rejects nonzero test counts for policy commands", () => {
+      const plan = planFor(["scripts/validate-prototype-integration.cjs"]);
+      const envelope = validEnvelope(plan);
+      const policy = envelope.results.find((result) => result.command_id === "docs-control");
+      policy.discovered_tests = 1;
+      policy.executed_tests = 1;
+      assert.throws(() => validateResultEnvelope(plan, envelope), /policy command must report zero test counts/);
+    }],
     ["rejects wrong SHA and matrix digest", () => {
       const plan = planFor(["shared.go"]);
       const wrongSha = validEnvelope(plan);

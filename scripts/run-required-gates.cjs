@@ -177,6 +177,8 @@ function validateResultEnvelope(plan, envelope) {
       assert.ok(result.executed_tests >= 1, `zero tests executed: ${result.category_id}.${result.command_id}`);
       assert.equal(result.skipped_tests, 0, `skipped tests are not allowed: ${result.category_id}.${result.command_id}`);
       assert.equal(result.executed_tests, result.discovered_tests, `not all discovered tests executed: ${result.category_id}.${result.command_id}`);
+    } else {
+      assert.deepEqual([result.discovered_tests, result.executed_tests, result.skipped_tests], [0, 0, 0], `policy command must report zero test counts: ${result.category_id}.${result.command_id}`);
     }
   }
   const missing = [...expected.keys()].filter((key) => !seen.has(key)).map((key) => key.replace("\0", "."));
