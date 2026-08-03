@@ -1,29 +1,31 @@
 {
   "campaign": "three-day-prototype",
   "thread": "T4",
-  "checkpoint": "T4-01EN",
+  "checkpoint": "T4-01EO",
   "branch": "ve/prototype-integration",
-  "start_head": "61267fadc922b1a111b5d7b907ee74afeef2a3b4",
-  "end_head": "5bc6b1177ee91aaa7a8a5e6a1bf153f25cc4d57a",
+  "start_head": "ef4848944000714ecdff74b9bd43ff380650b9ee",
+  "end_head": "2e4b236cfa2caab0b8da8429ba248992cdcc5fe5",
   "origin_main": "79391a3df86d85522b92e0400c6904971ecbe65d",
   "tree_clean": true,
   "commits": [
-    "5bc6b1177ee91aaa7a8a5e6a1bf153f25cc4d57a"
+    "2e4b236cfa2caab0b8da8429ba248992cdcc5fe5"
   ],
   "owned_paths": [
-    "_docs/ralph/prototype-integration/**",
-    "_docs/ralph/handoffs/prototype-integration/**"
+    "_docs/audits/**",
+    "scripts/plan-prototype-intake-freeze.cjs",
+    "scripts/plan-prototype-intake-freeze.test.cjs"
   ],
   "files_changed": [
-    "_docs/ralph/handoffs/prototype-integration/HANDOFF.yaml",
-    "_docs/ralph/prototype-integration/core-rc-manifest.json"
+    "_docs/audits/task-t4-01e-intake-freeze-planner-2026-08-02.md",
+    "scripts/plan-prototype-intake-freeze.cjs",
+    "scripts/plan-prototype-intake-freeze.test.cjs"
   ],
   "tests": [
     {
-      "command": "node scripts/validate-prototype-integration.test.cjs && node scripts/validate-prototype-integration.cjs",
+      "command": "node scripts/plan-prototype-intake-freeze.test.cjs",
       "exit_code": 0,
       "result": "passed",
-      "test_count": 13,
+      "test_count": 21,
       "tool_versions": {
         "node": "20.19.1"
       }
@@ -38,9 +40,7 @@
       }
     }
   ],
-  "generated_hashes": {
-    "_docs/ralph/prototype-integration/core-rc-manifest.json": "1ceec7921ee7997e960f3937a090cc7ad56e0c82cfaf79a006b63bb46f9e31b0"
-  },
+  "generated_hashes": {},
   "accepted_checkpoints": [],
   "rejected_checkpoints": [
     {
@@ -91,5 +91,5 @@
     "Task 88C is not complete."
   ],
   "next_checkpoint": null,
-  "expected_head": "5bc6b1177ee91aaa7a8a5e6a1bf153f25cc4d57a"
+  "expected_head": "2e4b236cfa2caab0b8da8429ba248992cdcc5fe5"
 }
