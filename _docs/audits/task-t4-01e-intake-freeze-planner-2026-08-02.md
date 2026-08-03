@@ -85,6 +85,10 @@ Toolchain declarations require literal nonempty name, version, and source
 values, declared status, and unique complete tuples in runtime and schema
 validation.
 
+Committed tooling, control, inventory, report, model, and ledger path fields
+share one repository-relative schema. Absolute, traversing, backslash, or
+whitespace-padded paths fail schema-only validation.
+
 The planner hashes the selected observation, requires the checked core-RC
 manifest to bind that exact path/digest, verifies identical bytes at the
 manifest source commit, and requires that source to be an ancestor of current

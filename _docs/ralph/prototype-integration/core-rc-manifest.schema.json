@@ -47,6 +47,7 @@
   "$defs": {
     "sha": { "type": "string", "pattern": "^[a-f0-9]{40}$" },
     "digest": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+    "repositoryPath": { "type": "string", "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$))(?!.*\\\\)\\S(?:.*\\S)?$" },
     "nullableDigest": { "oneOf": [{ "$ref": "#/$defs/digest" }, { "type": "null" }] },
     "nullableString": { "oneOf": [{ "type": "string", "minLength": 1 }, { "type": "null" }] },
     "tooling": {
@@ -62,7 +63,7 @@
       "required": ["id", "path", "git_blob", "sha256"],
       "properties": {
         "id": { "enum": ["generator", "schema", "validator"] },
-        "path": { "type": "string", "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$))(?!.*\\\\)\\S(?:.*\\S)?$" },
+        "path": { "$ref": "#/$defs/repositoryPath" },
         "git_blob": { "$ref": "#/$defs/sha" }, "sha256": { "$ref": "#/$defs/digest" }
       }
     },
@@ -101,7 +102,7 @@
       "type": "object", "additionalProperties": false,
       "required": ["id", "path", "sha256", "status"],
       "properties": {
-        "id": { "type": "string", "minLength": 1 }, "path": { "type": "string", "minLength": 1 },
+        "id": { "type": "string", "minLength": 1 }, "path": { "$ref": "#/$defs/repositoryPath" },
         "sha256": { "$ref": "#/$defs/digest" }, "status": { "type": "string", "minLength": 1 }
       }
     },
@@ -177,7 +178,7 @@
       "type": "object", "additionalProperties": false,
       "required": ["status", "inventory_path", "migration_count", "unavailable_producer_count", "blocker_id"],
       "properties": {
-        "status": { "const": "dependency_blocked" }, "inventory_path": { "type": "string" },
+        "status": { "const": "dependency_blocked" }, "inventory_path": { "$ref": "#/$defs/repositoryPath" },
         "migration_count": { "type": "integer", "minimum": 0 }, "unavailable_producer_count": { "type": "integer", "minimum": 1 },
         "blocker_id": { "type": "string", "minLength": 1 }
       }
@@ -186,7 +187,7 @@
       "type": "object", "additionalProperties": false,
       "required": ["status", "matrix_path", "category_count", "blocked_category_count", "blocker_id"],
       "properties": {
-        "status": { "const": "dependency_blocked" }, "matrix_path": { "type": "string" },
+        "status": { "const": "dependency_blocked" }, "matrix_path": { "$ref": "#/$defs/repositoryPath" },
         "category_count": { "type": "integer", "minimum": 1 }, "blocked_category_count": { "type": "integer", "minimum": 1 },
         "blocker_id": { "type": "string", "minLength": 1 }
       }
@@ -195,7 +196,7 @@
       "type": "object", "additionalProperties": false,
       "required": ["status", "inventory_path", "report_path", "report_status", "blocker_id"],
       "properties": {
-        "status": { "const": "blocked" }, "inventory_path": { "type": "string" }, "report_path": { "type": "string" },
+        "status": { "const": "blocked" }, "inventory_path": { "$ref": "#/$defs/repositoryPath" }, "report_path": { "$ref": "#/$defs/repositoryPath" },
         "report_status": { "const": "blocked" }, "blocker_id": { "type": "string", "minLength": 1 }
       }
     },
@@ -203,7 +204,7 @@
       "type": "object", "additionalProperties": false,
       "required": ["status", "path", "sbom_status", "production_weights_status", "blocker_id"],
       "properties": {
-        "status": { "const": "dependency_blocked" }, "path": { "type": "string" },
+        "status": { "const": "dependency_blocked" }, "path": { "$ref": "#/$defs/repositoryPath" },
         "sbom_status": { "const": "dependency_blocked" }, "production_weights_status": { "const": "dependency_blocked" },
         "blocker_id": { "type": "string", "minLength": 1 }
       }
@@ -216,7 +217,7 @@
         { "properties": { "status": { "const": "partial" }, "uncounted_record_count": { "minimum": 1 }, "blocker_id": { "type": "string", "minLength": 1 } } }
       ],
       "properties": {
-        "status": { "enum": ["complete", "partial"] }, "ledger_path": { "type": "string", "minLength": 1 },
+        "status": { "enum": ["complete", "partial"] }, "ledger_path": { "$ref": "#/$defs/repositoryPath" },
         "implementation_sha": { "$ref": "#/$defs/sha" }, "ledger_sha": { "$ref": "#/$defs/sha" },
         "record_count": { "type": "integer", "minimum": 1 },
         "declared_test_count": { "type": "integer", "minimum": 0 }, "uncounted_record_count": { "type": "integer", "minimum": 0 },
@@ -241,7 +242,7 @@
       "type": "object", "additionalProperties": false,
       "required": ["ledger_path", "ledger_sha256", "accepted", "rejected", "blocker_id"],
       "properties": {
-        "ledger_path": { "type": "string" }, "ledger_sha256": { "$ref": "#/$defs/digest" },
+        "ledger_path": { "$ref": "#/$defs/repositoryPath" }, "ledger_sha256": { "$ref": "#/$defs/digest" },
         "accepted": { "type": "array", "maxItems": 0 },
         "rejected": { "type": "array", "uniqueItems": true, "items": { "$ref": "#/$defs/rejectedCheckpoint" } },
         "blocker_id": { "type": "string", "minLength": 1 }
