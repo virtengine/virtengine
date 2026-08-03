@@ -6,20 +6,20 @@
   "planned_functionality_complete": false,
   "milestone_m_eligible": false,
   "source": {
-    "payload_sha": "e93582a3ed9b471e662227586ca769369759a00b",
-    "tree": "858c857759cd9c6093d7979bd10d93e4a7ea19d9",
+    "payload_sha": "9a0b3a8581d6e0f8b5786ff7b68908f57d75859b",
+    "tree": "f7f4744fb2be2c3b7edf9df3294f320b108cb814",
     "branch": "ve/prototype-integration",
     "binding": "declared_clean_parent_payload"
   },
   "tooling": {
-    "tooling_sha": "e93582a3ed9b471e662227586ca769369759a00b",
-    "tree": "858c857759cd9c6093d7979bd10d93e4a7ea19d9",
+    "tooling_sha": "9a0b3a8581d6e0f8b5786ff7b68908f57d75859b",
+    "tree": "f7f4744fb2be2c3b7edf9df3294f320b108cb814",
     "artifacts": [
       {
         "id": "generator",
         "path": "scripts/generate-core-rc-manifest.cjs",
-        "git_blob": "6d8749a883bc2453c73e896adaca2ab7da4aba5b",
-        "sha256": "efaf511bee18ebd1e287c8e3a86606eaef6a3d1c549c82a9268c67a0b48dccc2"
+        "git_blob": "f0b523c1d9a3cfd3539ac92574c63fb1925f6a49",
+        "sha256": "04062c25952eca63c81e40dd7e4fa6415184e8c26938be143061dcb343ef1530"
       },
       {
         "id": "schema",
@@ -427,17 +427,17 @@
   "test_evidence": {
     "status": "complete",
     "ledger_path": "_docs/ralph/handoffs/prototype-integration/HANDOFF.yaml",
-    "implementation_sha": "8a51f5d13fb8be465fd421c9d8a6e4c68de4a32e",
-    "ledger_sha": "e93582a3ed9b471e662227586ca769369759a00b",
+    "implementation_sha": "52523dc826192f9fc87267545d8f8bf3c06ce0e6",
+    "ledger_sha": "9a0b3a8581d6e0f8b5786ff7b68908f57d75859b",
     "record_count": 2,
-    "declared_test_count": 32,
+    "declared_test_count": 33,
     "uncounted_record_count": 0,
     "records": [
       {
         "command": "node scripts/generate-core-rc-manifest.test.cjs",
         "exit_code": 0,
         "result": "passed",
-        "test_count": 23,
+        "test_count": 24,
         "tool_versions": {
           "node": "20.19.1"
         }
@@ -456,7 +456,7 @@
   },
   "producer_checkpoints": {
     "ledger_path": "_docs/ralph/handoffs/prototype-integration/HANDOFF.yaml",
-    "ledger_sha256": "e94c39fa87715724e0e50a67a3bff91edc3dade5052fa74281d6a07729fa184a",
+    "ledger_sha256": "ed96af2454faafbd549bb9c0daf0ba8549e8805183f06f4933346838d3540e2f",
     "accepted": [],
     "rejected": [
       {
@@ -517,10 +517,6 @@
     {
       "id": "accepted-producer-checkpoints-unavailable",
       "description": "No producer checkpoint is accepted by the payload ledger."
-    },
-    {
-      "id": "artifact-selection-incomplete",
-      "description": "One or more artifact selections do not meet their declared coverage contract."
     },
     {
       "id": "producer-migration-handoffs-unavailable",
