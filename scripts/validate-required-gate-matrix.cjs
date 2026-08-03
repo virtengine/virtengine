@@ -54,6 +54,9 @@ function validateSchemaControl(schema) {
   assert.equal(schema.properties.categories.minItems, categoryCommands.size);
   assert.equal(schema.properties.categories.maxItems, categoryCommands.size);
   for (const property of ["unmatched_path_allowlist", "categories", "blockers"]) assert.equal(schema.properties[property].uniqueItems, true, `${property} must reject duplicates`);
+  assert.equal(schema.allOf[0].then.properties.completion_claim.const, true, "complete matrix must claim completion");
+  assert.equal(schema.allOf[0].else.properties.completion_claim.const, false, "non-complete matrix cannot claim completion");
+  assert.equal(schema.allOf[1].then.properties.blockers.maxItems, 0, "ready matrix cannot retain blockers");
   assert.equal(schema.$defs.category.additionalProperties, false);
   for (const property of ["required_commands", "pinned_tools", "dependencies", "blockers"]) assert.equal(schema.$defs.category.properties[property].uniqueItems, true, `category ${property} must reject duplicates`);
   assert.deepEqual(schema.$defs.category.required.slice().sort(), categoryKeys.slice().sort(), "category schema required fields must be exact");
@@ -185,7 +188,6 @@ function validateRequiredGateMatrix(matrix, options = {}) {
       for (const selector of ["scripts/*.cjs", "scripts/*.js", "scripts/*.md", "scripts/*.mjs", "scripts/*.ps1", "scripts/*.py", "scripts/*.sh", "scripts/*.sql", "scripts/*.ts", "scripts/bosun", "scripts/localnet.sh", "scripts/localnet.ps1"]) {
         assert.ok(category.path_selectors.includes(selector), `docs/process selectors must include ${selector}`);
       }
-      assert.ok(category.blockers.includes("integration-candidate-preflight-blocked"), "docs/process blockers must include integration-candidate-preflight-blocked");
     }
     if (category.id === "deployment") {
       for (const selector of ["scripts/validate_slurm_chart_semantics.py", "scripts/validate_slurm_chart_semantics_test.py"]) {
@@ -240,13 +242,19 @@ function validateRequiredGateMatrix(matrix, options = {}) {
     remaining.delete(category.id);
   }
   assert.equal(remaining.size, 0, `missing category: ${[...remaining.keys()].join(", ")}`);
-  assert.ok(blockerIds.has("integration-candidate-preflight-blocked"), "matrix must define integration-candidate-preflight-blocked");
-
+  const usedBlockers = [...new Set(matrix.categories.flatMap((category) => category.blockers))].sort();
+  assert.deepEqual([...blockerIds].sort(), usedBlockers, "root blockers must exactly match category blocker usage");
   const blocked = matrix.categories.some((category) => category.status === "dependency_blocked");
-  if (blocked) assert.equal(matrix.status, "dependency_blocked", "matrix must remain dependency_blocked while a category is blocked");
+  const allComplete = matrix.categories.every((category) => category.status === "complete");
+  const expectedStatus = blocked ? "dependency_blocked" : (allComplete ? "complete" : "ready");
+  assert.equal(matrix.status, expectedStatus, "matrix status must be derived from category states");
   if (matrix.status === "dependency_blocked") {
     assert.equal(matrix.completion_claim, false, "dependency-blocked matrix cannot claim Task 88B completion");
     assert.ok(matrix.blockers.length > 0, "dependency-blocked matrix must declare blockers");
+  }
+  if (matrix.status === "ready") {
+    assert.equal(matrix.completion_claim, false, "ready matrix cannot claim Task 88B completion");
+    assert.equal(matrix.blockers.length, 0, "ready matrix cannot retain blockers");
   }
   if (matrix.status === "complete") {
     assert.equal(matrix.completion_claim, true, "complete matrix must explicitly claim completion");

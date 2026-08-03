@@ -30,6 +30,17 @@
       "items": { "$ref": "#/$defs/blocker" }
     }
   },
+  "allOf": [
+    {
+      "if": { "properties": { "status": { "const": "complete" } }, "required": ["status"] },
+      "then": { "properties": { "completion_claim": { "const": true }, "blockers": { "maxItems": 0 } } },
+      "else": { "properties": { "completion_claim": { "const": false } } }
+    },
+    {
+      "if": { "properties": { "status": { "const": "ready" } }, "required": ["status"] },
+      "then": { "properties": { "blockers": { "maxItems": 0 } } }
+    }
+  ],
   "$defs": {
     "stringArray": {
       "type": "array",

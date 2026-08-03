@@ -52,13 +52,16 @@ const tests = [
     assert.match(runtime.command, /preflight-integration-candidate\.cjs --repo \. --candidate origin\/ve\/prototype-integration-live/);
   }],
   ["requires an explicit blocked live-candidate projection", () => {
+    const currentCategory = matrix.categories.find((entry) => entry.id === "docs_process_boundary_e2e");
+    assert.ok(currentCategory.blockers.includes("integration-candidate-preflight-blocked"));
+    assert.ok(matrix.blockers.some((blocker) => blocker.id === "integration-candidate-preflight-blocked"));
     const missingCategoryBlocker = cloneMatrix();
     const category = missingCategoryBlocker.categories.find((entry) => entry.id === "docs_process_boundary_e2e");
     category.blockers = category.blockers.filter((blocker) => blocker !== "integration-candidate-preflight-blocked");
-    assert.throws(() => validateRequiredGateMatrix(missingCategoryBlocker, { schema }), /must include integration-candidate-preflight-blocked/);
+    assert.throws(() => validateRequiredGateMatrix(missingCategoryBlocker, { schema }), /root blockers must exactly match category blocker usage/);
     const missingRootBlocker = cloneMatrix();
     missingRootBlocker.blockers = missingRootBlocker.blockers.filter((blocker) => blocker.id !== "integration-candidate-preflight-blocked");
-    assert.throws(() => validateRequiredGateMatrix(missingRootBlocker, { schema }), /must define integration-candidate-preflight-blocked|references unknown blocker/);
+    assert.throws(() => validateRequiredGateMatrix(missingRootBlocker, { schema }), /references unknown blocker/);
   }],
   ["rejects a missing SLURM render command", () => {
     const candidate = cloneMatrix();
@@ -116,6 +119,34 @@ const tests = [
     candidate.categories[0].blockers = [];
     candidate.categories[0].status = "ready";
     assert.doesNotThrow(() => validateRequiredGateMatrix(candidate, { schema }));
+  }],
+  ["derives ready and complete matrix states exactly", () => {
+    const ready = cloneMatrix();
+    ready.categories.forEach((category) => {
+      category.dependencies.forEach((dependency) => { dependency.status = "available"; });
+      category.blockers = [];
+      category.status = "ready";
+    });
+    ready.blockers = [];
+    ready.status = "ready";
+    ready.completion_claim = false;
+    assert.doesNotThrow(() => validateRequiredGateMatrix(ready, { schema }));
+    const complete = JSON.parse(JSON.stringify(ready));
+    complete.categories.forEach((category) => { category.status = "complete"; });
+    complete.status = "complete";
+    complete.completion_claim = true;
+    assert.doesNotThrow(() => validateRequiredGateMatrix(complete, { schema }));
+  }],
+  ["rejects stale root blockers and inconsistent matrix status", () => {
+    const unused = cloneMatrix();
+    unused.blockers.push({ id: "unused-blocker", description: "Not referenced by any category." });
+    assert.throws(() => validateRequiredGateMatrix(unused, { schema }), /root blockers must exactly match category blocker usage/);
+    const wrongStatus = cloneMatrix();
+    wrongStatus.status = "ready";
+    assert.throws(() => validateRequiredGateMatrix(wrongStatus, { schema }), /matrix status must be derived from category states/);
+    const falseClaim = cloneMatrix();
+    falseClaim.completion_claim = true;
+    assert.throws(() => validateRequiredGateMatrix(falseClaim, { schema }), /cannot claim Task 88B completion/);
   }],
   ["rejects a missing SLURM validator deployment selector", () => {
     const candidate = cloneMatrix();
@@ -252,7 +283,7 @@ const tests = [
     const candidate = cloneMatrix();
     candidate.status = "complete";
     candidate.completion_claim = true;
-    assert.throws(() => validateRequiredGateMatrix(candidate, { schema }), /remain dependency_blocked/);
+    assert.throws(() => validateRequiredGateMatrix(candidate, { schema }), /matrix status must be derived from category states/);
   }],
 ];
 
