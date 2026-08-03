@@ -61,7 +61,8 @@
       "type": "object", "additionalProperties": false,
       "required": ["id", "path", "git_blob", "sha256"],
       "properties": {
-        "id": { "enum": ["generator", "schema", "validator"] }, "path": { "type": "string", "minLength": 1 },
+        "id": { "enum": ["generator", "schema", "validator"] },
+        "path": { "type": "string", "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$))(?!.*\\\\)\\S(?:.*\\S)?$" },
         "git_blob": { "$ref": "#/$defs/sha" }, "sha256": { "$ref": "#/$defs/digest" }
       }
     },

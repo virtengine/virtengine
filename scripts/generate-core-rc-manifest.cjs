@@ -149,6 +149,24 @@ function validateExternalDependencies(dependencies, manifest) {
   return true;
 }
 
+function validateToolingArtifacts(artifacts) {
+  assert.ok(Array.isArray(artifacts) && artifacts.length === toolingArtifacts.length, "tooling artifact inventory is incomplete");
+  const ids = new Set();
+  const paths = new Set();
+  for (const artifact of artifacts) {
+    exactKeys(artifact, ["id", "path", "git_blob", "sha256"], `tooling artifact ${artifact.id || "unknown"}`);
+    assert.ok(toolingArtifacts.some(([id]) => id === artifact.id), `unknown tooling artifact ID: ${artifact.id}`);
+    assert.ok(typeof artifact.path === "string" && artifact.path.length > 0 && artifact.path.trim() === artifact.path && !artifact.path.startsWith("/") && !artifact.path.includes("\\") && !artifact.path.split("/").includes(".."), `tooling artifact path must be repository-relative: ${artifact.path}`);
+    assert.match(artifact.git_blob, shaPattern, "tooling artifact Git blob is invalid");
+    assert.match(artifact.sha256, digestPattern, "tooling artifact digest is invalid");
+    assert.equal(ids.has(artifact.id), false, `duplicate tooling artifact ID: ${artifact.id}`);
+    assert.equal(paths.has(artifact.path), false, `duplicate tooling artifact path: ${artifact.path}`);
+    ids.add(artifact.id);
+    paths.add(artifact.path);
+  }
+  return true;
+}
+
 function assertBlocker(manifest, blockerId, label) {
   assert.equal(typeof blockerId, "string", `${label} must name a blocker`);
   assert.ok(blockerIds(manifest).has(blockerId), `${label} references missing blocker ${blockerId}`);
@@ -502,12 +520,7 @@ function validateManifest(manifest, options = {}) {
 
   exactKeys(manifest.tooling, ["tooling_sha", "tree", "artifacts"], "tooling");
   assert.deepEqual(manifest.tooling, buildTooling(manifest.tooling.tooling_sha, manifest.source.payload_sha, cwd), "tooling provenance mismatch");
-  const toolingIds = new Set();
-  for (const artifact of manifest.tooling.artifacts) {
-    exactKeys(artifact, ["id", "path", "git_blob", "sha256"], `tooling artifact ${artifact.id || "unknown"}`);
-    assert.ok(!toolingIds.has(artifact.id), `duplicate tooling artifact ID ${artifact.id}`);
-    toolingIds.add(artifact.id);
-  }
+  validateToolingArtifacts(manifest.tooling.artifacts);
 
   const controlArtifacts = sourceArtifactsFor(manifest.source.payload_sha, cwd);
   const gateMatrix = sourceJson(manifest.source.payload_sha, controlArtifacts[1][1], cwd);
@@ -661,6 +674,6 @@ function main(argv = process.argv.slice(2)) {
   }
 }
 
-module.exports = { artifactSelections, assertUniqueIds, buildAiAssurance, buildArtifactGroup, buildTestEvidence, buildTooling, generateManifest, listSourceEntries, main, manifestRelativePath, parseArgs, pathsReferToSameFile, referencedRootBlockerIds, serialize, sourceArtifacts, sourceArtifactsFor, validateBlockers, validateExternalDependencies, validateManifest, validateRejectedCheckpoints };
+module.exports = { artifactSelections, assertUniqueIds, buildAiAssurance, buildArtifactGroup, buildTestEvidence, buildTooling, generateManifest, listSourceEntries, main, manifestRelativePath, parseArgs, pathsReferToSameFile, referencedRootBlockerIds, serialize, sourceArtifacts, sourceArtifactsFor, validateBlockers, validateExternalDependencies, validateManifest, validateRejectedCheckpoints, validateToolingArtifacts };
 
 if (require.main === module) main();

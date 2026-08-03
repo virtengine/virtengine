@@ -20,6 +20,7 @@ const {
   validateBlockers,
   validateExternalDependencies,
   validateRejectedCheckpoints,
+  validateToolingArtifacts,
 } = require("./generate-core-rc-manifest.cjs");
 const { validateSchema } = require("./validate-core-rc-manifest.cjs");
 
@@ -251,6 +252,20 @@ const tests = [
     assert.throws(() => validateExternalDependencies([dependency, clone(dependency)], manifest), /duplicate external dependency ID/);
     assert.throws(() => validateExternalDependencies([{ ...dependency, id: "Provider Operator" }], manifest), /canonical lowercase kebab-case/);
     assert.throws(() => validateExternalDependencies([{ ...dependency, status: "available" }], manifest), /must remain unavailable/);
+  }],
+  ["rejects malformed or duplicate tooling artifact paths", () => {
+    const artifacts = [
+      { id: "generator", path: "scripts/generate.cjs", git_blob: "a".repeat(40), sha256: "a".repeat(64) },
+      { id: "schema", path: "docs/schema.json", git_blob: "b".repeat(40), sha256: "b".repeat(64) },
+      { id: "validator", path: "scripts/validate.cjs", git_blob: "c".repeat(40), sha256: "c".repeat(64) },
+    ];
+    assert.equal(validateToolingArtifacts(artifacts), true);
+    const duplicate = clone(artifacts); duplicate[2].path = duplicate[0].path;
+    assert.throws(() => validateToolingArtifacts(duplicate), /duplicate tooling artifact path/);
+    for (const path of ["/absolute", "../escape", "scripts\\tool.cjs", " padded "]) {
+      const malformed = clone(artifacts); malformed[0].path = path;
+      assert.throws(() => validateToolingArtifacts(malformed), /repository-relative/);
+    }
   }],
 ];
 
