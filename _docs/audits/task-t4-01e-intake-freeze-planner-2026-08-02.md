@@ -50,6 +50,10 @@ record and declared-test counts are projected.
 Tool-version evidence also requires nonempty literal tool names and version
 strings with no surrounding whitespace in both runtime and schema validation.
 
+Complete manifest test evidence carries no partial-evidence blocker. The
+`test-evidence-partial` blocker is emitted only when one or more passing records
+omit test counts, and schema validation enforces that status/blocker coupling.
+
 The planner hashes the selected observation, requires the checked core-RC
 manifest to bind that exact path/digest, verifies identical bytes at the
 manifest source commit, and requires that source to be an ancestor of current

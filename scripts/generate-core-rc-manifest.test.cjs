@@ -111,6 +111,7 @@ const tests = [
     assert.equal(evidence.implementation_sha, handoff.end_head);
     assert.equal(evidence.ledger_sha, sourceSha);
     assert.equal(evidence.status, "partial");
+    assert.equal(evidence.blocker_id, "test-evidence-partial");
     assert.ok(evidence.records.every((record) => Object.hasOwn(record, "exit_code") && Object.hasOwn(record, "test_count") && Object.hasOwn(record, "tool_versions")));
   }],
   ["rejects stale evidence with unrelated intervening changes", () => {
@@ -156,6 +157,14 @@ const tests = [
     padded.tests[0].command = ` ${padded.tests[0].command}`;
     assert.throws(() => buildTestEvidence(sourceSha, padded, handoffPath, root), /literal and nonempty/);
   }],
+  ["omits the partial blocker from complete test evidence", () => {
+    const counted = clone(handoff);
+    counted.tests.forEach((test) => { test.test_count = 1; });
+    const evidence = buildTestEvidence(sourceSha, counted, handoffPath, root);
+    assert.equal(evidence.status, "complete");
+    assert.equal(evidence.uncounted_record_count, 0);
+    assert.equal(evidence.blocker_id, null);
+  }],
   ["rejects checked-path dirty guard bypasses", () => {
     const common = ["--source", sourceSha, "--tooling-source", sourceSha];
     const dirtyMarker = resolve(root, "core-rc-manifest-dirty-guard.tmp");
@@ -186,6 +195,7 @@ const tests = [
     assert.equal(schema.$defs.testEvidence.properties.uncounted_record_count.minimum, 0);
     assert.equal(schema.$defs.testEvidence.oneOf[0].properties.status.const, "complete");
     assert.equal(schema.$defs.testEvidence.oneOf[0].properties.uncounted_record_count.const, 0);
+    assert.equal(schema.$defs.testEvidence.oneOf[0].properties.blocker_id.type, "null");
     assert.equal(schema.$defs.testEvidence.oneOf[1].properties.status.const, "partial");
     assert.equal(schema.$defs.testEvidence.oneOf[1].properties.uncounted_record_count.minimum, 1);
     assert.equal(schema.$defs.testEvidence.properties.records.uniqueItems, true);

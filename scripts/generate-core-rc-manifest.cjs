@@ -225,8 +225,9 @@ function buildTestEvidence(sourceSha, handoff, handoffPath, cwd = root) {
     return { command: test.command, exit_code: test.exit_code, result: test.result, test_count: test.test_count ?? null, tool_versions: test.tool_versions };
   });
   const counted = records.filter((test) => Number.isInteger(test.test_count));
+  const complete = counted.length === records.length;
   return {
-    status: counted.length === records.length ? "complete" : "partial",
+    status: complete ? "complete" : "partial",
     ledger_path: handoffPath,
     implementation_sha: handoff.end_head,
     ledger_sha: ledgerSha,
@@ -234,7 +235,7 @@ function buildTestEvidence(sourceSha, handoff, handoffPath, cwd = root) {
     declared_test_count: counted.reduce((total, test) => total + test.test_count, 0),
     uncounted_record_count: records.length - counted.length,
     records,
-    blocker_id: "test-evidence-partial",
+    blocker_id: complete ? null : "test-evidence-partial",
   };
 }
 
@@ -413,7 +414,7 @@ function generateManifest(sourceSha, options = {}) {
       { id: "production-model-artifacts-unavailable", description: "Production model weights and release artifacts are unavailable." },
       { id: "production-model-provenance-unavailable", description: "Production model provenance, approvals, evaluation, and runtime SBOM are unavailable." },
       { id: "ai-production-assurance-unavailable", description: "AI, biometric uniqueness, vault/KMS, consent, retention, and production evaluation assurance remain unavailable." },
-      { id: "test-evidence-partial", description: "Some passing handoff test records do not declare test counts." },
+      ...(testEvidence.status === "partial" ? [{ id: "test-evidence-partial", description: "Some passing handoff test records do not declare test counts." }] : []),
       { id: "release-sbom-provenance-unavailable", description: "No release SBOM or signed release provenance is available." },
       { id: "rollout-not-authorized", description: "This non-authoritative prototype manifest does not authorize rollout." },
       { id: "rollback-evidence-unavailable", description: "No production rollback execution evidence is available." },
@@ -505,8 +506,10 @@ function validateManifest(manifest, options = {}) {
   exactKeys(manifest.producer_checkpoints, ["ledger_path", "ledger_sha256", "accepted", "rejected", "blocker_id"], "producer_checkpoints");
   exactKeys(manifest.rollout, ["status", "evidence", "blocker_id"], "rollout");
   exactKeys(manifest.rollback, ["status", "evidence", "blocker_id"], "rollback");
-  const linkedSections = [manifest.migrations, manifest.required_gates, manifest.slurm, manifest.model_provenance, manifest.test_evidence, manifest.producer_checkpoints, manifest.rollout, manifest.rollback];
+  const linkedSections = [manifest.migrations, manifest.required_gates, manifest.slurm, manifest.model_provenance, manifest.producer_checkpoints, manifest.rollout, manifest.rollback];
   linkedSections.forEach((section, index) => assertBlocker(manifest, section.blocker_id, `blocked section ${index}`));
+  if (manifest.test_evidence.status === "complete") assert.equal(manifest.test_evidence.blocker_id, null, "complete test evidence cannot retain a blocker");
+  else assertBlocker(manifest, manifest.test_evidence.blocker_id, "partial test evidence");
   for (const dependency of manifest.external_dependencies) {
     exactKeys(dependency, ["id", "status", "blocker_id"], `external dependency ${dependency.id || "unknown"}`);
     assert.notEqual(dependency.status, "available");

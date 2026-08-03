@@ -209,8 +209,8 @@
       "type": "object", "additionalProperties": false,
       "required": ["status", "ledger_path", "implementation_sha", "ledger_sha", "record_count", "declared_test_count", "uncounted_record_count", "records", "blocker_id"],
       "oneOf": [
-        { "properties": { "status": { "const": "complete" }, "uncounted_record_count": { "const": 0 } } },
-        { "properties": { "status": { "const": "partial" }, "uncounted_record_count": { "minimum": 1 } } }
+        { "properties": { "status": { "const": "complete" }, "uncounted_record_count": { "const": 0 }, "blocker_id": { "type": "null" } } },
+        { "properties": { "status": { "const": "partial" }, "uncounted_record_count": { "minimum": 1 }, "blocker_id": { "type": "string", "minLength": 1 } } }
       ],
       "properties": {
         "status": { "enum": ["complete", "partial"] }, "ledger_path": { "type": "string", "minLength": 1 },
@@ -218,7 +218,7 @@
         "record_count": { "type": "integer", "minimum": 1 },
         "declared_test_count": { "type": "integer", "minimum": 0 }, "uncounted_record_count": { "type": "integer", "minimum": 0 },
         "records": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "$ref": "#/$defs/testRecord" } },
-        "blocker_id": { "type": "string", "minLength": 1 }
+        "blocker_id": { "oneOf": [{ "type": "string", "minLength": 1 }, { "type": "null" }] }
       }
     },
     "testRecord": {
