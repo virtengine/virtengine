@@ -465,6 +465,28 @@ function buildAiAssurance(modelProvenance, productionPolicy, featureParity) {
   };
 }
 
+function buildBlockers(artifactGroups, testEvidence) {
+  return [
+    { id: "accepted-producer-checkpoints-unavailable", description: "No producer checkpoint is accepted by the payload ledger." },
+    ...(artifactGroups.some((group) => group.blocker_id === "artifact-selection-incomplete") ? [{ id: "artifact-selection-incomplete", description: "One or more artifact selections do not meet their declared coverage contract." }] : []),
+    { id: "producer-migration-handoffs-unavailable", description: "Committed producer migration handoffs are unavailable." },
+    { id: "required-gates-dependency-blocked", description: "The required gate matrix remains dependency-blocked." },
+    { id: "slurm-production-evidence-unavailable", description: "SLURM production render, isolation, and live durability evidence remain unavailable." },
+    { id: "production-model-artifacts-unavailable", description: "Production model weights and release artifacts are unavailable." },
+    { id: "production-model-provenance-unavailable", description: "Production model provenance, approvals, evaluation, and runtime SBOM are unavailable." },
+    { id: "model-weights-absent", description: "Production model weights are absent." },
+    { id: "runtime-image-absent", description: "The production inference runtime image is absent." },
+    { id: "runtime-sbom-absent", description: "The production inference runtime SBOM is absent." },
+    { id: "approved-licenses-absent", description: "Approved production model and dataset licenses are absent." },
+    { id: "production-evaluation-absent", description: "Production model evaluation evidence is absent." },
+    { id: "ai-production-assurance-unavailable", description: "AI, biometric uniqueness, vault/KMS, consent, retention, and production evaluation assurance remain unavailable." },
+    ...(testEvidence.status === "partial" ? [{ id: "test-evidence-partial", description: "Some passing handoff test records do not declare test counts." }] : []),
+    { id: "release-sbom-provenance-unavailable", description: "No release SBOM or signed release provenance is available." },
+    { id: "rollout-not-authorized", description: "This non-authoritative prototype manifest does not authorize rollout." },
+    { id: "rollback-evidence-unavailable", description: "No production rollback execution evidence is available." },
+  ];
+}
+
 function generateManifest(sourceSha, options = {}) {
   const cwd = options.rootDir || root;
   assertCommit(sourceSha, "--source", cwd);
@@ -552,25 +574,7 @@ function generateManifest(sourceSha, options = {}) {
       { id: "sbom-and-release-provenance", status: "unavailable", blocker_id: "release-sbom-provenance-unavailable" },
       { id: "production-rollout", status: "unavailable", blocker_id: "rollout-not-authorized" },
     ],
-    blockers: [
-      { id: "accepted-producer-checkpoints-unavailable", description: "No producer checkpoint is accepted by the payload ledger." },
-      ...(artifactGroups.some((group) => group.blocker_id === "artifact-selection-incomplete") ? [{ id: "artifact-selection-incomplete", description: "One or more artifact selections do not meet their declared coverage contract." }] : []),
-      { id: "producer-migration-handoffs-unavailable", description: "Committed producer migration handoffs are unavailable." },
-      { id: "required-gates-dependency-blocked", description: "The required gate matrix remains dependency-blocked." },
-      { id: "slurm-production-evidence-unavailable", description: "SLURM production render, isolation, and live durability evidence remain unavailable." },
-      { id: "production-model-artifacts-unavailable", description: "Production model weights and release artifacts are unavailable." },
-      { id: "production-model-provenance-unavailable", description: "Production model provenance, approvals, evaluation, and runtime SBOM are unavailable." },
-      { id: "model-weights-absent", description: "Production model weights are absent." },
-      { id: "runtime-image-absent", description: "The production inference runtime image is absent." },
-      { id: "runtime-sbom-absent", description: "The production inference runtime SBOM is absent." },
-      { id: "approved-licenses-absent", description: "Approved production model and dataset licenses are absent." },
-      { id: "production-evaluation-absent", description: "Production model evaluation evidence is absent." },
-      { id: "ai-production-assurance-unavailable", description: "AI, biometric uniqueness, vault/KMS, consent, retention, and production evaluation assurance remain unavailable." },
-      ...(testEvidence.status === "partial" ? [{ id: "test-evidence-partial", description: "Some passing handoff test records do not declare test counts." }] : []),
-      { id: "release-sbom-provenance-unavailable", description: "No release SBOM or signed release provenance is available." },
-      { id: "rollout-not-authorized", description: "This non-authoritative prototype manifest does not authorize rollout." },
-      { id: "rollback-evidence-unavailable", description: "No production rollback execution evidence is available." },
-    ],
+    blockers: buildBlockers(artifactGroups, testEvidence),
   };
   validateManifest(manifest, { rootDir: cwd });
   return manifest;
@@ -703,6 +707,7 @@ function validateManifest(manifest, options = {}) {
   assert.equal(manifest.test_evidence.record_count, expectedTestRecords.length, "test evidence record count mismatch");
   assert.equal(manifest.test_evidence.declared_test_count, countedTests.reduce((total, test) => total + test.test_count, 0), "declared test count mismatch");
   assert.equal(manifest.test_evidence.uncounted_record_count, expectedTestRecords.length - countedTests.length, "uncounted test record count mismatch");
+  assert.deepEqual(manifest.blockers, buildBlockers(expectedGroups, expectedEvidence), "blocker inventory mismatch");
   assert.equal(sourceDigest(manifest.source.payload_sha, manifest.producer_checkpoints.ledger_path, cwd), manifest.producer_checkpoints.ledger_sha256, "producer ledger hash mismatch");
   assert.deepEqual(manifest.producer_checkpoints.accepted, handoff.accepted_checkpoints, "accepted producer ledger binding mismatch");
   assert.deepEqual(manifest.producer_checkpoints.rejected, handoff.rejected_checkpoints, "rejected producer ledger binding mismatch");
@@ -765,6 +770,6 @@ function main(argv = process.argv.slice(2)) {
   }
 }
 
-module.exports = { artifactSelections, assertUniqueIds, buildAiAssurance, buildArtifactGroup, buildTestEvidence, buildTooling, generateManifest, listSourceEntries, main, manifestRelativePath, parseArgs, pathsReferToSameFile, referencedRootBlockerIds, serialize, sourceArtifacts, sourceArtifactsFor, validateAssuranceDigests, validateAssuranceRuntime, validateAssuranceSchema, validateAssuranceStatus, validateBlockers, validateExternalDependencies, validateManifest, validateRejectedCheckpoints, validateToolchains, validateToolingArtifacts };
+module.exports = { artifactSelections, assertUniqueIds, buildAiAssurance, buildArtifactGroup, buildBlockers, buildTestEvidence, buildTooling, generateManifest, listSourceEntries, main, manifestRelativePath, parseArgs, pathsReferToSameFile, referencedRootBlockerIds, serialize, sourceArtifacts, sourceArtifactsFor, validateAssuranceDigests, validateAssuranceRuntime, validateAssuranceSchema, validateAssuranceStatus, validateBlockers, validateExternalDependencies, validateManifest, validateRejectedCheckpoints, validateToolchains, validateToolingArtifacts };
 
 if (require.main === module) main();

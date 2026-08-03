@@ -298,6 +298,25 @@
     "blocker": {
       "type": "object", "additionalProperties": false,
       "required": ["id", "description"],
+      "oneOf": [
+        { "properties": { "id": { "const": "accepted-producer-checkpoints-unavailable" }, "description": { "const": "No producer checkpoint is accepted by the payload ledger." } } },
+        { "properties": { "id": { "const": "artifact-selection-incomplete" }, "description": { "const": "One or more artifact selections do not meet their declared coverage contract." } } },
+        { "properties": { "id": { "const": "producer-migration-handoffs-unavailable" }, "description": { "const": "Committed producer migration handoffs are unavailable." } } },
+        { "properties": { "id": { "const": "required-gates-dependency-blocked" }, "description": { "const": "The required gate matrix remains dependency-blocked." } } },
+        { "properties": { "id": { "const": "slurm-production-evidence-unavailable" }, "description": { "const": "SLURM production render, isolation, and live durability evidence remain unavailable." } } },
+        { "properties": { "id": { "const": "production-model-artifacts-unavailable" }, "description": { "const": "Production model weights and release artifacts are unavailable." } } },
+        { "properties": { "id": { "const": "production-model-provenance-unavailable" }, "description": { "const": "Production model provenance, approvals, evaluation, and runtime SBOM are unavailable." } } },
+        { "properties": { "id": { "const": "model-weights-absent" }, "description": { "const": "Production model weights are absent." } } },
+        { "properties": { "id": { "const": "runtime-image-absent" }, "description": { "const": "The production inference runtime image is absent." } } },
+        { "properties": { "id": { "const": "runtime-sbom-absent" }, "description": { "const": "The production inference runtime SBOM is absent." } } },
+        { "properties": { "id": { "const": "approved-licenses-absent" }, "description": { "const": "Approved production model and dataset licenses are absent." } } },
+        { "properties": { "id": { "const": "production-evaluation-absent" }, "description": { "const": "Production model evaluation evidence is absent." } } },
+        { "properties": { "id": { "const": "ai-production-assurance-unavailable" }, "description": { "const": "AI, biometric uniqueness, vault/KMS, consent, retention, and production evaluation assurance remain unavailable." } } },
+        { "properties": { "id": { "const": "test-evidence-partial" }, "description": { "const": "Some passing handoff test records do not declare test counts." } } },
+        { "properties": { "id": { "const": "release-sbom-provenance-unavailable" }, "description": { "const": "No release SBOM or signed release provenance is available." } } },
+        { "properties": { "id": { "const": "rollout-not-authorized" }, "description": { "const": "This non-authoritative prototype manifest does not authorize rollout." } } },
+        { "properties": { "id": { "const": "rollback-evidence-unavailable" }, "description": { "const": "No production rollback execution evidence is available." } } }
+      ],
       "properties": {
         "id": { "type": "string", "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$" },
         "description": { "type": "string", "minLength": 1, "pattern": "^\\S(?:.*\\S)?$" }

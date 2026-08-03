@@ -268,6 +268,11 @@ const tests = [
     [candidate.external_dependencies[0].blocker_id, candidate.external_dependencies[1].blocker_id] = [candidate.external_dependencies[1].blocker_id, candidate.external_dependencies[0].blocker_id];
     assert.throws(() => validateManifest(candidate, { rootDir: root }), /external dependency inventory mismatch/);
   }],
+  ["rejects cross-wired blocker descriptions", () => {
+    const candidate = clone(checkedManifest);
+    [candidate.blockers[0].description, candidate.blockers[1].description] = [candidate.blockers[1].description, candidate.blockers[0].description];
+    assert.throws(() => validateManifest(candidate, { rootDir: root }), /blocker inventory mismatch/);
+  }],
   ["rejects duplicate manifest entry IDs", () => {
     assert.throws(() => assertUniqueIds([{ id: "chart" }, { id: "chart" }], "artifact group"), /must be unique/);
   }],

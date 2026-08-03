@@ -75,6 +75,11 @@ Root blocker IDs are canonical lowercase kebab-case and descriptions are
 nonempty literal strings without surrounding whitespace. Runtime and schema
 validation reject malformed or duplicate blocker declarations.
 
+Each root blocker ID is also bound to its canonical description. Generation
+and runtime validation share one derived blocker inventory, while schema
+validation enumerates the same permitted pairs; semantically swapped
+descriptions fail even when both IDs and descriptions are individually valid.
+
 External dependencies use canonical lowercase IDs, remain explicitly
 unavailable, and reference canonical existing blockers. Runtime and schema
 validation reject malformed or duplicate dependency declarations.
