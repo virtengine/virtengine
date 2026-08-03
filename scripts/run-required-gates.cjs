@@ -148,6 +148,7 @@ function buildExecutionPlan({ repoDir = root, base, head, matrixPath = defaultMa
 }
 
 function validateResultEnvelope(plan, envelope) {
+  assertExecutionReady(plan);
   exactKeys(envelope, ["schema_version", "base_sha", "head_sha", "matrix_digest", "plan_digest", "results"], "result envelope");
   assert.equal(envelope.schema_version, resultSchemaVersion, "result schema version mismatch");
   assert.equal(envelope.base_sha, plan.base_sha, "result base SHA mismatch");

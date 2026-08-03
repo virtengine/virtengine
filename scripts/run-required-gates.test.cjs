@@ -100,6 +100,16 @@ try {
     const head = commit(fixture.repo, `plan case ${caseNumber}`);
     return buildExecutionPlan({ repoDir: fixture.repo, base, head, matrixPath });
   };
+  const readyPlanFor = (changedPaths) => {
+    const plan = planFor(changedPaths);
+    plan.matrix_status = "ready";
+    plan.categories.forEach((category) => {
+      category.status = "ready";
+      category.dependencies.forEach((dependency) => { dependency.status = "available"; });
+      category.blockers = [];
+    });
+    return plan;
+  };
 
   const tests = [
     ["canonicalizes plan object keys while preserving array order", () => {
@@ -168,17 +178,17 @@ try {
       assert.throws(() => planFor(["unowned/component.rs"]), /no required-gate category or metadata allowlist/);
     }],
     ["accepts one exact result per selected command", () => {
-      const plan = planFor(["shared.go"]);
+      const plan = readyPlanFor(["shared.go"]);
       assert.equal(validateResultEnvelope(plan, validEnvelope(plan)), true);
     }],
     ["rejects a missing result", () => {
-      const plan = planFor(["shared.go"]);
+      const plan = readyPlanFor(["shared.go"]);
       const envelope = validEnvelope(plan);
       envelope.results.pop();
       assert.throws(() => validateResultEnvelope(plan, envelope), /missing gate results/);
     }],
     ["rejects duplicate and extra results", () => {
-      const plan = planFor(["shared.go"]);
+      const plan = readyPlanFor(["shared.go"]);
       const duplicate = validEnvelope(plan);
       duplicate.results.push(clone(duplicate.results[0]));
       assert.throws(() => validateResultEnvelope(plan, duplicate), /duplicate gate result/);
@@ -187,7 +197,7 @@ try {
       assert.throws(() => validateResultEnvelope(plan, extra), /extra gate result/);
     }],
     ["rejects literal command drift and cancellation", () => {
-      const plan = planFor(["shared.go"]);
+      const plan = readyPlanFor(["shared.go"]);
       const wrongCommand = validEnvelope(plan);
       wrongCommand.results[0].command += " --changed";
       assert.throws(() => validateResultEnvelope(plan, wrongCommand), /literal command mismatch/);
@@ -196,7 +206,7 @@ try {
       assert.throws(() => validateResultEnvelope(plan, cancelled), /must pass/);
     }],
     ["rejects zero discovered or executed tests and skipped tests", () => {
-      const plan = planFor(["shared.go"]);
+      const plan = readyPlanFor(["shared.go"]);
       const testIndex = validEnvelope(plan).results.findIndex((result) => result.command_id === "go-test");
       const zeroDiscovered = validEnvelope(plan);
       zeroDiscovered.results[testIndex].discovered_tests = 0;
@@ -213,7 +223,7 @@ try {
       assert.throws(() => validateResultEnvelope(plan, incomplete), /not all discovered tests executed/);
     }],
     ["rejects nonzero test counts for policy commands", () => {
-      const plan = planFor(["scripts/validate-prototype-integration.cjs"]);
+      const plan = readyPlanFor(["scripts/validate-prototype-integration.cjs"]);
       const envelope = validEnvelope(plan);
       const policy = envelope.results.find((result) => result.command_id === "docs-control");
       policy.discovered_tests = 1;
@@ -221,13 +231,13 @@ try {
       assert.throws(() => validateResultEnvelope(plan, envelope), /policy command must report zero test counts/);
     }],
     ["rejects a result command kind mismatch", () => {
-      const plan = planFor(["shared.go"]);
+      const plan = readyPlanFor(["shared.go"]);
       const envelope = validEnvelope(plan);
       envelope.results[0].kind = "policy";
       assert.throws(() => validateResultEnvelope(plan, envelope), /command kind mismatch/);
     }],
     ["rejects wrong SHA and matrix digest", () => {
-      const plan = planFor(["shared.go"]);
+      const plan = readyPlanFor(["shared.go"]);
       const wrongSha = validEnvelope(plan);
       wrongSha.head_sha = "0".repeat(40);
       assert.throws(() => validateResultEnvelope(plan, wrongSha), /head SHA mismatch/);
@@ -239,7 +249,7 @@ try {
       assert.throws(() => validateResultEnvelope(plan, wrongPlan), /plan digest mismatch/);
     }],
     ["rejects missing, unavailable, or wrong pinned tools", () => {
-      const plan = planFor(["shared.go"]);
+      const plan = readyPlanFor(["shared.go"]);
       const missing = validEnvelope(plan);
       missing.results[0].tools = [];
       assert.throws(() => validateResultEnvelope(plan, missing), /pinned tool count mismatch/);
@@ -258,6 +268,10 @@ try {
       } finally {
         delete process.env.VE_REQUIRED_GATES_BYPASS;
       }
+    }],
+    ["refuses passing results for a dependency-blocked plan", () => {
+      const plan = planFor(["shared.go"]);
+      assert.throws(() => validateResultEnvelope(plan, validEnvelope(plan)), /execution refused/);
     }],
     ["refuses a tampered ready plan retaining dependency evidence", () => {
       const plan = planFor(["shared.go"]);
