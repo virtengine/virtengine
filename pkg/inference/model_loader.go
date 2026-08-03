@@ -515,7 +515,7 @@ func (m *TFModel) stubInference(features []float32) []float32 {
 	}
 
 	// Add document quality contribution
-	docOffset := FaceEmbeddingDim
+	docOffset := DocQualityOffset
 	if docOffset+DocQualityDim <= len(features) {
 		for i := 0; i < DocQualityDim; i++ {
 			sum += features[docOffset+i] * 1.5
@@ -524,7 +524,7 @@ func (m *TFModel) stubInference(features []float32) []float32 {
 	}
 
 	// Add OCR contribution
-	ocrOffset := FaceEmbeddingDim + DocQualityDim
+	ocrOffset := OCROffset
 	if ocrOffset+OCRFieldsDim <= len(features) {
 		for i := 0; i < OCRFieldsDim; i++ {
 			sum += features[ocrOffset+i]

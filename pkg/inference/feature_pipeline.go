@@ -81,6 +81,18 @@ func DefaultPipelineConfig() PipelineConfig {
 	}
 }
 
+// ProductionPipelineConfig returns a fail-closed production extraction profile.
+func ProductionPipelineConfig() PipelineConfig {
+	config := DefaultPipelineConfig()
+	config.FaceConfig.UseFallbackOnError = false
+	config.OCRConfig.UseFallbackOnError = false
+	config.LivenessConfig.UseFallbackOnError = false
+	config.LivenessConfig.StrictMode = true
+	config.FeatureConfig = ProductionFeatureExtractorConfig()
+	config.ContinueOnPartialFailure = false
+	return config
+}
+
 // ScopeData represents input data from an identity scope
 type ScopeData struct {
 	// ScopeID is the unique identifier for this scope
@@ -769,19 +781,13 @@ func NewDefaultFeaturePipeline() *FeaturePipeline {
 func NewProductionFeaturePipeline(
 	faceSidecar, ocrSidecar, livenessSidecar string,
 ) *FeaturePipeline {
-	config := DefaultPipelineConfig()
+	config := ProductionPipelineConfig()
 
 	config.FaceConfig.SidecarAddress = faceSidecar
-	config.FaceConfig.UseFallbackOnError = false
 
 	config.OCRConfig.SidecarAddress = ocrSidecar
-	config.OCRConfig.UseFallbackOnError = false
 
 	config.LivenessConfig.SidecarAddress = livenessSidecar
-	config.LivenessConfig.UseFallbackOnError = false
-	config.LivenessConfig.StrictMode = true
-
-	config.ContinueOnPartialFailure = false
 	config.ValidateOutputs = true
 	config.SanitizeOutputs = true
 

@@ -620,7 +620,7 @@ func (s *MultiMachineConformanceSuite) TestOCRFeaturesDeterministic(t *testing.T
 	features1, _ := s.extractor.ExtractFeatures(inputs)
 	features2, _ := s.extractor.ExtractFeatures(inputs)
 
-	ocrOffset := FaceEmbeddingDim + DocQualityDim
+	ocrOffset := OCROffset
 	for i := 0; i < OCRFieldsDim; i++ {
 		if features1[ocrOffset+i] != features2[ocrOffset+i] {
 			t.Errorf("OCR feature %d not deterministic", i)
