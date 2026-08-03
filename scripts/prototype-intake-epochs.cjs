@@ -23,13 +23,22 @@ function discoverEpochs(directory) {
 
 function validateEpochSequence(epochs) {
   assert.ok(Array.isArray(epochs) && epochs.length > 0, "at least one intake epoch is required");
+  const planningSha = epochs[0].document.planning_sha;
   for (let index = 0; index < epochs.length; index += 1) {
     const expected = index + 1;
     const epoch = epochs[index];
     assert.equal(epoch.number, expected, `intake epoch sequence is not contiguous at epoch ${expected}`);
     assert.equal(epoch.file, `epoch-${expected}.json`, `intake epoch filename mismatch at epoch ${expected}`);
     assert.equal(epoch.document.intake_epoch, expected, `intake epoch body mismatch at epoch ${expected}`);
+    assert.equal(epoch.document.base_tag, `checkpoint/prototype-integration/epoch-${expected}-base`, `intake epoch base tag mismatch at epoch ${expected}`);
+    assert.equal(epoch.document.planning_sha, planningSha, `intake epoch planning SHA changed at epoch ${expected}`);
+    assert.ok(Number.isFinite(Date.parse(epoch.document.opens_at)), `intake epoch ${expected} opens_at is invalid`);
+    assert.ok(Number.isFinite(Date.parse(epoch.document.announcement_cutoff)), `intake epoch ${expected} cutoff is invalid`);
+    assert.ok(Date.parse(epoch.document.opens_at) < Date.parse(epoch.document.announcement_cutoff), `intake epoch ${expected} window is invalid`);
     if (index < epochs.length - 1) assert.equal(epoch.document.status, "closed", `predecessor epoch ${expected} must be closed`);
+    if (index > 0) {
+      assert.ok(Date.parse(epoch.document.opens_at) >= Date.parse(epochs[index - 1].document.announcement_cutoff), `intake epoch ${expected} overlaps its predecessor window`);
+    }
   }
   return epochs;
 }
