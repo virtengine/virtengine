@@ -1,38 +1,45 @@
 {
   "campaign": "three-day-prototype",
   "thread": "T4",
-  "checkpoint": "T4-01BU",
+  "checkpoint": "T4-01BV",
   "branch": "ve/prototype-integration",
-  "start_head": "60a603078a5f72d93674e35f5ba08f3dd5031f10",
-  "end_head": "e1fc9e40ab5680ba68f807644a889d6e7233dfa1",
+  "start_head": "cf2854e13c4f01dd07ae4044c6f10e3cb59047f2",
+  "end_head": "565231d168252274e4a8b706fd9d427e83d16e99",
   "origin_main": "79391a3df86d85522b92e0400c6904971ecbe65d",
   "tree_clean": true,
   "commits": [
-    "e1fc9e40ab5680ba68f807644a889d6e7233dfa1"
+    "565231d168252274e4a8b706fd9d427e83d16e99"
   ],
   "owned_paths": [
     "_docs/ralph/prototype-integration/**",
-    "_docs/ralph/handoffs/prototype-integration/**",
-    "scripts/validate-prototype-intake.cjs",
-    "scripts/validate-prototype-intake.test.cjs"
+    "_docs/ralph/handoffs/prototype-integration/**"
   ],
   "files_changed": [
-    "scripts/validate-prototype-intake.cjs",
-    "scripts/validate-prototype-intake.test.cjs"
+    "_docs/ralph/handoffs/prototype-integration/HANDOFF.yaml",
+    "_docs/ralph/prototype-integration/core-rc-manifest.json"
   ],
   "tests": [
     {
-      "command": "node scripts/validate-prototype-intake.test.cjs",
+      "command": "node scripts/validate-prototype-integration.test.cjs && node scripts/validate-prototype-integration.cjs",
       "exit_code": 0,
       "result": "passed",
-      "test_count": 33,
+      "test_count": 13,
+      "tool_versions": {
+        "node": "20.19.1"
+      }
+    },
+    {
+      "command": "node scripts/validate-agents-docs.mjs",
+      "exit_code": 0,
+      "result": "passed",
+      "test_count": 9,
       "tool_versions": {
         "node": "20.19.1"
       }
     }
   ],
   "generated_hashes": {
-    "_docs/ralph/prototype-integration/core-rc-manifest.json": "8530a2bc9dc45357616f6b2440d7233d2415246140688d0e885dff19f0ef6dfc"
+    "_docs/ralph/prototype-integration/core-rc-manifest.json": "cde14cb8242deb916c532eb9a95d0a5cda0fc840c1288c6a25512494c3609f66"
   },
   "accepted_checkpoints": [],
   "rejected_checkpoints": [
@@ -84,5 +91,5 @@
     "Task 88C is not complete."
   ],
   "next_checkpoint": null,
-  "expected_head": "e1fc9e40ab5680ba68f807644a889d6e7233dfa1"
+  "expected_head": "565231d168252274e4a8b706fd9d427e83d16e99"
 }
