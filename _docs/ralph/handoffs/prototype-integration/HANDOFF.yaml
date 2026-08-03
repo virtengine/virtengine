@@ -1,38 +1,29 @@
 {
   "campaign": "three-day-prototype",
   "thread": "T4",
-  "checkpoint": "T4-01BX",
+  "checkpoint": "T4-01BY",
   "branch": "ve/prototype-integration",
-  "start_head": "a8a52d1789a80c50bccf528531dfd4d1bc422f6a",
-  "end_head": "9a26901cc4042d9159d61c787eebe0555172ccdb",
+  "start_head": "e52b80b51558ee450eba7bcc98b577be7ad28dec",
+  "end_head": "5071fbb770b69f8283fb225e60e5f0eac404d982",
   "origin_main": "79391a3df86d85522b92e0400c6904971ecbe65d",
   "tree_clean": true,
   "commits": [
-    "9a26901cc4042d9159d61c787eebe0555172ccdb"
+    "5071fbb770b69f8283fb225e60e5f0eac404d982"
   ],
   "owned_paths": [
     "_docs/ralph/prototype-integration/**",
-    "_docs/ralph/handoffs/prototype-integration/**"
+    "_docs/ralph/handoffs/prototype-integration/**",
+    "scripts/generate-core-rc-manifest.cjs"
   ],
   "files_changed": [
-    "_docs/ralph/handoffs/prototype-integration/HANDOFF.yaml",
-    "_docs/ralph/prototype-integration/core-rc-manifest.json"
+    "scripts/generate-core-rc-manifest.cjs"
   ],
   "tests": [
     {
-      "command": "node scripts/validate-prototype-integration.test.cjs && node scripts/validate-prototype-integration.cjs",
+      "command": "node scripts/prototype-intake-epochs.test.cjs && node scripts/generate-core-rc-manifest.test.cjs && node scripts/validate-core-rc-manifest.cjs",
       "exit_code": 0,
       "result": "passed",
-      "test_count": 13,
-      "tool_versions": {
-        "node": "20.19.1"
-      }
-    },
-    {
-      "command": "node scripts/validate-agents-docs.mjs",
-      "exit_code": 0,
-      "result": "passed",
-      "test_count": 9,
+      "test_count": 31,
       "tool_versions": {
         "node": "20.19.1"
       }
@@ -91,5 +82,5 @@
     "Task 88C is not complete."
   ],
   "next_checkpoint": null,
-  "expected_head": "9a26901cc4042d9159d61c787eebe0555172ccdb"
+  "expected_head": "5071fbb770b69f8283fb225e60e5f0eac404d982"
 }
