@@ -66,6 +66,14 @@ function validateContainedProducerCommits(containedCommits, acceptedCheckpoints,
   return true;
 }
 
+function validateManifestEpochBinding(manifest, epoch) {
+  const expectedPath = `_docs/ralph/prototype-integration/epochs/epoch-${epoch.intake_epoch}.json`;
+  const bindings = manifest.control_artifacts.filter((artifact) => artifact.id === "intake_epoch");
+  assert.equal(bindings.length, 1, "manifest must bind exactly one current intake epoch");
+  assert.equal(bindings[0].path, expectedPath, `manifest does not bind current intake epoch ${epoch.intake_epoch}`);
+  return true;
+}
+
 function discoverContainedProducerCommits(control, epoch) {
   const contained = [];
   for (const producer of control.producers) {
@@ -180,7 +188,7 @@ function validateIntegrationControl(control, schema, handoff, epoch) {
   validateEpoch(epoch, handoff);
 }
 
-module.exports = { producerHandoffDeclaresContract, validateContainedProducerCommits, validateEpoch, validateIntegrationControl };
+module.exports = { producerHandoffDeclaresContract, validateContainedProducerCommits, validateEpoch, validateIntegrationControl, validateManifestEpochBinding };
 
 if (require.main === module) {
   const epochEntry = currentEpoch(discoverEpochs(epochDirectory));
@@ -195,7 +203,9 @@ if (require.main === module) {
   validateSecurityGates(loadJson(aiBiometricSecurityGatesPath), { rootDir: root });
   validateProductionPolicy(loadJson(aiProductionPolicyPath), { rootDir: root });
   validateCoreRcSchema(loadJson(coreRcSchemaPath));
-  validateCoreRcManifest(loadJson(coreRcManifestPath), { rootDir: root });
+  const coreRcManifest = loadJson(coreRcManifestPath);
+  validateCoreRcManifest(coreRcManifest, { rootDir: root });
+  validateManifestEpochBinding(coreRcManifest, epoch);
   validateFundRouteInventory(loadJson(fundRouteInventoryPath), {
     rootDir: root,
     verifyAcceptedCheckpoint: (checkpoint) => handoff.accepted_checkpoints.some((entry) => entry.thread === "T5" && entry.tag === checkpoint.tag && entry.payload_head === checkpoint.payload_sha)

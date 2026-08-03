@@ -1,7 +1,7 @@
 "use strict";
 
 const assert = require("assert").strict;
-const { producerHandoffDeclaresContract, validateContainedProducerCommits, validateIntegrationControl } = require("./validate-prototype-integration.cjs");
+const { producerHandoffDeclaresContract, validateContainedProducerCommits, validateIntegrationControl, validateManifestEpochBinding } = require("./validate-prototype-integration.cjs");
 
 const sha = "79391a3df86d85522b92e0400c6904971ecbe65d";
 
@@ -127,6 +127,13 @@ const tests = [
     fixture.epoch.status = "closed";
     fixture.epoch.producers[0] = { thread: "T1", status: "rejected", tag: "checkpoint/prototype-t1/t1-10", decision: "accepted" };
     assert.throws(() => validateIntegrationControl(fixture.control, fixture.schema, fixture.handoff, fixture.epoch), /decision=rejected/);
+  }],
+  ["requires the manifest to bind the current epoch", () => {
+    const epoch = { intake_epoch: 2 };
+    const manifest = { control_artifacts: [{ id: "intake_epoch", path: "_docs/ralph/prototype-integration/epochs/epoch-1.json" }] };
+    assert.throws(() => validateManifestEpochBinding(manifest, epoch), /does not bind current intake epoch 2/);
+    manifest.control_artifacts[0].path = "_docs/ralph/prototype-integration/epochs/epoch-2.json";
+    assert.doesNotThrow(() => validateManifestEpochBinding(manifest, epoch));
   }],
 ];
 
