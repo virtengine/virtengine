@@ -1,29 +1,52 @@
 {
   "campaign": "three-day-prototype",
   "thread": "T4",
-  "checkpoint": "T4-01DJ",
+  "checkpoint": "T4-01DK",
   "branch": "ve/prototype-integration",
-  "start_head": "075e1756c4b8467817c1606da7534b0a3ac99d33",
-  "end_head": "fad1ada476aa228cae88dbb7fcc49dc95eada770",
+  "start_head": "27bf3029e0dad8717f2ba20ee1b052df49035cdc",
+  "end_head": "08782a14281ec425f6a74ea1de792c5bba413a2e",
   "origin_main": "79391a3df86d85522b92e0400c6904971ecbe65d",
   "tree_clean": true,
   "commits": [
-    "fad1ada476aa228cae88dbb7fcc49dc95eada770"
+    "08782a14281ec425f6a74ea1de792c5bba413a2e"
   ],
   "owned_paths": [
     "_docs/ralph/prototype-integration/**",
-    "_docs/ralph/handoffs/prototype-integration/**"
+    "_docs/ralph/handoffs/prototype-integration/**",
+    "_docs/audits/task-t4-01e-intake-freeze-planner-2026-08-02.md",
+    "scripts/validate-required-gate-matrix.cjs",
+    "scripts/validate-required-gate-matrix.test.cjs"
   ],
   "files_changed": [
-    "_docs/ralph/handoffs/prototype-integration/HANDOFF.yaml",
-    "_docs/ralph/prototype-integration/core-rc-manifest.json"
+    "_docs/audits/task-t4-01e-intake-freeze-planner-2026-08-02.md",
+    "_docs/ralph/prototype-integration/required-gate-results.schema.json",
+    "scripts/validate-required-gate-matrix.cjs",
+    "scripts/validate-required-gate-matrix.test.cjs"
   ],
   "tests": [
     {
-      "command": "node scripts/validate-prototype-integration.test.cjs && node scripts/validate-prototype-integration.cjs",
+      "command": "node scripts/validate-required-gate-matrix.test.cjs && node scripts/validate-required-gate-matrix.cjs",
       "exit_code": 0,
       "result": "passed",
-      "test_count": 13,
+      "test_count": 28,
+      "tool_versions": {
+        "node": "20.19.1"
+      }
+    },
+    {
+      "command": "node scripts/run-required-gates.test.cjs",
+      "exit_code": 0,
+      "result": "passed",
+      "test_count": 24,
+      "tool_versions": {
+        "node": "20.19.1"
+      }
+    },
+    {
+      "command": "node scripts/preflight-core-rc-publication.test.cjs",
+      "exit_code": 0,
+      "result": "passed",
+      "test_count": 26,
       "tool_versions": {
         "node": "20.19.1"
       }
@@ -91,5 +114,5 @@
     "Task 88C is not complete."
   ],
   "next_checkpoint": null,
-  "expected_head": "fad1ada476aa228cae88dbb7fcc49dc95eada770"
+  "expected_head": "08782a14281ec425f6a74ea1de792c5bba413a2e"
 }
