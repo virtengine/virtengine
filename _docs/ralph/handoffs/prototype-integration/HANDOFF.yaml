@@ -1,29 +1,31 @@
 {
   "campaign": "three-day-prototype",
   "thread": "T4",
-  "checkpoint": "T4-01EAN",
+  "checkpoint": "T4-01EAO",
   "branch": "ve/prototype-integration",
-  "start_head": "e93582a3ed9b471e662227586ca769369759a00b",
-  "end_head": "6a4004d56688d2838b3df4d1d3c34bb6bd8b740f",
+  "start_head": "ca85374728a928ba46b04b4cb66311223aed3e01",
+  "end_head": "52523dc826192f9fc87267545d8f8bf3c06ce0e6",
   "origin_main": "79391a3df86d85522b92e0400c6904971ecbe65d",
   "tree_clean": true,
   "commits": [
-    "6a4004d56688d2838b3df4d1d3c34bb6bd8b740f"
+    "52523dc826192f9fc87267545d8f8bf3c06ce0e6"
   ],
   "owned_paths": [
-    "_docs/ralph/prototype-integration/**",
-    "_docs/ralph/handoffs/prototype-integration/**"
+    "_docs/audits/**",
+    "scripts/generate-core-rc-manifest.cjs",
+    "scripts/generate-core-rc-manifest.test.cjs"
   ],
   "files_changed": [
-    "_docs/ralph/handoffs/prototype-integration/HANDOFF.yaml",
-    "_docs/ralph/prototype-integration/core-rc-manifest.json"
+    "_docs/audits/task-t4-01e-intake-freeze-planner-2026-08-02.md",
+    "scripts/generate-core-rc-manifest.cjs",
+    "scripts/generate-core-rc-manifest.test.cjs"
   ],
   "tests": [
     {
-      "command": "node scripts/validate-prototype-integration.test.cjs && node scripts/validate-prototype-integration.cjs",
+      "command": "node scripts/generate-core-rc-manifest.test.cjs",
       "exit_code": 0,
       "result": "passed",
-      "test_count": 13,
+      "test_count": 24,
       "tool_versions": {
         "node": "20.19.1"
       }
@@ -38,9 +40,7 @@
       }
     }
   ],
-  "generated_hashes": {
-    "_docs/ralph/prototype-integration/core-rc-manifest.json": "8cddbc381d99530ccb51af70700e60baefe7a658a1f450aeefd76f3e547c517d"
-  },
+  "generated_hashes": {},
   "accepted_checkpoints": [],
   "rejected_checkpoints": [
     {
@@ -91,5 +91,5 @@
     "Task 88C is not complete."
   ],
   "next_checkpoint": null,
-  "expected_head": "6a4004d56688d2838b3df4d1d3c34bb6bd8b740f"
+  "expected_head": "52523dc826192f9fc87267545d8f8bf3c06ce0e6"
 }
