@@ -1,31 +1,29 @@
 {
   "campaign": "three-day-prototype",
   "thread": "T4",
-  "checkpoint": "T4-01EAE",
+  "checkpoint": "T4-01EAF",
   "branch": "ve/prototype-integration",
-  "start_head": "106fdcd1d763567f343cc9e91efee84efb4692e9",
-  "end_head": "c3cb809d66510fcf4a50706d9659ef60bd0a8030",
+  "start_head": "36fabfbdc2f3b52fb72261ecac06de996ca80b2d",
+  "end_head": "f834728d351b1287322b39ba318ff54d5ad84474",
   "origin_main": "79391a3df86d85522b92e0400c6904971ecbe65d",
   "tree_clean": true,
   "commits": [
-    "c3cb809d66510fcf4a50706d9659ef60bd0a8030"
+    "f834728d351b1287322b39ba318ff54d5ad84474"
   ],
   "owned_paths": [
-    "_docs/audits/**",
-    "scripts/generate-core-rc-manifest.cjs",
-    "scripts/generate-core-rc-manifest.test.cjs"
+    "_docs/ralph/prototype-integration/**",
+    "_docs/ralph/handoffs/prototype-integration/**"
   ],
   "files_changed": [
-    "_docs/audits/task-t4-01e-intake-freeze-planner-2026-08-02.md",
-    "scripts/generate-core-rc-manifest.cjs",
-    "scripts/generate-core-rc-manifest.test.cjs"
+    "_docs/ralph/handoffs/prototype-integration/HANDOFF.yaml",
+    "_docs/ralph/prototype-integration/core-rc-manifest.json"
   ],
   "tests": [
     {
-      "command": "node scripts/generate-core-rc-manifest.test.cjs",
+      "command": "node scripts/validate-prototype-integration.test.cjs && node scripts/validate-prototype-integration.cjs",
       "exit_code": 0,
       "result": "passed",
-      "test_count": 20,
+      "test_count": 13,
       "tool_versions": {
         "node": "20.19.1"
       }
@@ -40,7 +38,9 @@
       }
     }
   ],
-  "generated_hashes": {},
+  "generated_hashes": {
+    "_docs/ralph/prototype-integration/core-rc-manifest.json": "88a0f1bbd3f2a98fc5d46eeb26937786563855b7d5612c8c179d6d18b67be562"
+  },
   "accepted_checkpoints": [],
   "rejected_checkpoints": [
     {
@@ -91,5 +91,5 @@
     "Task 88C is not complete."
   ],
   "next_checkpoint": null,
-  "expected_head": "c3cb809d66510fcf4a50706d9659ef60bd0a8030"
+  "expected_head": "f834728d351b1287322b39ba318ff54d5ad84474"
 }
