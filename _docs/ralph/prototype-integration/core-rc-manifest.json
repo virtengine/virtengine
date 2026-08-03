@@ -6,32 +6,32 @@
   "planned_functionality_complete": false,
   "milestone_m_eligible": false,
   "source": {
-    "payload_sha": "a4bff131bc0c4cbeb125e72e773d865259bc43ea",
-    "tree": "86ebd5231ab2ffeec991fd98246b3c5dc896712d",
+    "payload_sha": "863d989332547a8d996b9ea5346488bb0801b096",
+    "tree": "1b0c96e1a9c65d6f67885e6c56ad3b26f782d778",
     "branch": "ve/prototype-integration",
     "binding": "declared_clean_parent_payload"
   },
   "tooling": {
-    "tooling_sha": "a4bff131bc0c4cbeb125e72e773d865259bc43ea",
-    "tree": "86ebd5231ab2ffeec991fd98246b3c5dc896712d",
+    "tooling_sha": "863d989332547a8d996b9ea5346488bb0801b096",
+    "tree": "1b0c96e1a9c65d6f67885e6c56ad3b26f782d778",
     "artifacts": [
       {
         "id": "generator",
         "path": "scripts/generate-core-rc-manifest.cjs",
-        "git_blob": "dca4c868ca23857214a3ba48402b05674e2547c0",
-        "sha256": "f927fb265bf2889ab849123aa0d6c97eba32fe190c770cbe4e0be6874ed64cc1"
+        "git_blob": "77fdce57df889df019c1f8c0474fa25e1f5fa71a",
+        "sha256": "d9b179f9be0efd189df90691396c8fa583d2c08c27c2aad6981de0721e0509a2"
       },
       {
         "id": "schema",
         "path": "_docs/ralph/prototype-integration/core-rc-manifest.schema.json",
-        "git_blob": "9809fb3211a23d92c747914afc96f98f9cbe96e4",
-        "sha256": "1947324a9699006f4f35ff29ba85e0e84e65f47b2dcbfcae914807c1c649fc87"
+        "git_blob": "28dae0d982611c56b01a2320b3043a9896041f2b",
+        "sha256": "dc1b71369cafd909bcb7d596fd4d73cc4caf8fb85cee7c04bbac3966bedacc42"
       },
       {
         "id": "validator",
         "path": "scripts/validate-core-rc-manifest.cjs",
-        "git_blob": "a885d9e750c76e863f3d2de3bb6cc662f2e7e092",
-        "sha256": "b9e1d630b370e9a2d191cc0ffcad92db58de67b7102defeab4d35106119df05d"
+        "git_blob": "3832ef33516397b1bb75d8aef4c4d15024a7e91b",
+        "sha256": "47b38fb0c14e34c0b43000f75333c3249dfb0433b14d3ff5bd1ad801c611224e"
       }
     ]
   },
@@ -427,17 +427,17 @@
   "test_evidence": {
     "status": "complete",
     "ledger_path": "_docs/ralph/handoffs/prototype-integration/HANDOFF.yaml",
-    "implementation_sha": "1eaae0fd5bcd4078f00facb8a6c7f3e4ba6c573d",
-    "ledger_sha": "a4bff131bc0c4cbeb125e72e773d865259bc43ea",
+    "implementation_sha": "092ddfd0cceef445fc68b0ce3158a15f8f59d609",
+    "ledger_sha": "863d989332547a8d996b9ea5346488bb0801b096",
     "record_count": 2,
-    "declared_test_count": 30,
+    "declared_test_count": 31,
     "uncounted_record_count": 0,
     "records": [
       {
         "command": "node scripts/generate-core-rc-manifest.test.cjs && node scripts/validate-core-rc-manifest.cjs",
         "exit_code": 0,
         "result": "passed",
-        "test_count": 21,
+        "test_count": 22,
         "tool_versions": {
           "node": "20.19.1"
         }
@@ -456,7 +456,7 @@
   },
   "producer_checkpoints": {
     "ledger_path": "_docs/ralph/handoffs/prototype-integration/HANDOFF.yaml",
-    "ledger_sha256": "0134579ab8e910559890478b4c4b07a25d816e25ef2c6a397f7114de7fbf8077",
+    "ledger_sha256": "39f9947fdb6bb1cbb22e74f0c50ad9c86e2980054cbefd702f1868eb781a37bd",
     "accepted": [],
     "rejected": [
       {
