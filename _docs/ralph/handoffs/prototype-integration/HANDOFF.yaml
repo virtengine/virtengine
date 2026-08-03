@@ -1,38 +1,41 @@
 {
   "campaign": "three-day-prototype",
   "thread": "T4",
-  "checkpoint": "T4-01BH",
+  "checkpoint": "T4-01BI",
   "branch": "ve/prototype-integration",
-  "start_head": "4e87c1d3a133d1377b5a67f6e8fd95e26223e1d7",
-  "end_head": "9fa7fd0ad4ca0b104c7860562fd7f21df7c6a008",
+  "start_head": "d252c7cee7eb88db5c4458e502f9a1bd5ae18bbd",
+  "end_head": "42af0bbb517120197d1de5dda564ffdef0a26f77",
   "origin_main": "79391a3df86d85522b92e0400c6904971ecbe65d",
   "tree_clean": true,
   "commits": [
-    "9fa7fd0ad4ca0b104c7860562fd7f21df7c6a008"
+    "42af0bbb517120197d1de5dda564ffdef0a26f77"
   ],
   "owned_paths": [
     "_docs/ralph/prototype-integration/**",
-    "_docs/ralph/handoffs/prototype-integration/**"
+    "_docs/ralph/handoffs/prototype-integration/**",
+    "scripts/validate-prototype-integration.cjs",
+    "scripts/validate-prototype-integration.test.cjs"
   ],
   "files_changed": [
-    "_docs/ralph/handoffs/prototype-integration/HANDOFF.yaml",
-    "_docs/ralph/prototype-integration/core-rc-manifest.json"
+    "_docs/ralph/prototype-integration/epochs/epoch-2.json",
+    "scripts/validate-prototype-integration.cjs",
+    "scripts/validate-prototype-integration.test.cjs"
   ],
   "tests": [
     {
-      "command": "node scripts/validate-prototype-integration.test.cjs && node scripts/validate-prototype-integration.cjs",
+      "command": "node scripts/prototype-intake-epochs.test.cjs && node scripts/validate-prototype-integration.test.cjs",
       "exit_code": 0,
       "result": "passed",
-      "test_count": 12,
+      "test_count": 20,
       "tool_versions": {
         "node": "20.19.1"
       }
     },
     {
-      "command": "node scripts/validate-agents-docs.mjs",
+      "command": "node scripts/open-prototype-intake-epoch.test.cjs",
       "exit_code": 0,
       "result": "passed",
-      "test_count": 9,
+      "test_count": 8,
       "tool_versions": {
         "node": "20.19.1"
       }
@@ -91,5 +94,5 @@
     "Task 88C is not complete."
   ],
   "next_checkpoint": null,
-  "expected_head": "9fa7fd0ad4ca0b104c7860562fd7f21df7c6a008"
+  "expected_head": "42af0bbb517120197d1de5dda564ffdef0a26f77"
 }
