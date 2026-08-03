@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"crypto/ed25519"
 	"crypto/sha256"
+	"strings"
 	"testing"
 	"time"
 
@@ -105,6 +106,36 @@ func TestInferenceReceiptRejectsTamperedFields(t *testing.T) {
 			receipt := cloneInferenceReceipt(base)
 			tamper(&receipt)
 			require.Error(t, receipt.VerifySignature(pub))
+		})
+	}
+}
+
+func TestInferenceReceiptValidSubstitutionsInvalidateSignature(t *testing.T) {
+	pub, priv := deterministicReceiptKey(t)
+	base := testInferenceReceipt(t, pub)
+	require.NoError(t, base.Sign(priv))
+
+	tests := map[string]func(*InferenceReceipt){
+		"scope":      func(r *InferenceReceipt) { r.ScopeIDs = []string{"scope-a", "scope-c"} },
+		"score":      func(r *InferenceReceipt) { r.Score = 90 },
+		"confidence": func(r *InferenceReceipt) { r.ConfidenceMillionths = 900_000 },
+		"status_and_reasons": func(r *InferenceReceipt) {
+			r.Status = VerificationResultStatusPartial
+			r.ReasonCodes = []ReasonCode{ReasonCodeLowConfidence}
+		},
+		"issued_height":      func(r *InferenceReceipt) { r.IssuedHeight++ },
+		"expires_height":     func(r *InferenceReceipt) { r.ExpiresHeight-- },
+		"issued_time":        func(r *InferenceReceipt) { r.IssuedAt = r.IssuedAt.Add(time.Second) },
+		"expires_time":       func(r *InferenceReceipt) { r.ExpiresAt = r.ExpiresAt.Add(-time.Second) },
+		"signer_fingerprint": func(r *InferenceReceipt) { r.SignerFingerprint = strings.Repeat("a", 64) },
+		"signer_sequence":    func(r *InferenceReceipt) { r.SignerSequence++ },
+	}
+	for name, mutate := range tests {
+		t.Run(name, func(t *testing.T) {
+			receipt := cloneInferenceReceipt(base)
+			mutate(&receipt)
+			require.NoError(t, receipt.Validate())
+			require.ErrorContains(t, receipt.VerifySignature(pub), "invalid inference receipt signature")
 		})
 	}
 }
