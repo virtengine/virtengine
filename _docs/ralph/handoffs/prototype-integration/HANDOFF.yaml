@@ -1,31 +1,29 @@
 {
   "campaign": "three-day-prototype",
   "thread": "T4",
-  "checkpoint": "T4-01EW",
+  "checkpoint": "T4-01EX",
   "branch": "ve/prototype-integration",
-  "start_head": "71dbf07ee0220cbfc763d4863ba345b379e56ad7",
-  "end_head": "0252a5a1d7c0c11f5cc2466a4f7699eab5944aef",
+  "start_head": "2c19056cbc749adbf17c183a2d6ec9fe47236eec",
+  "end_head": "c70baabdaabf0ff684a5a065e339342c8aa34f96",
   "origin_main": "79391a3df86d85522b92e0400c6904971ecbe65d",
   "tree_clean": true,
   "commits": [
-    "0252a5a1d7c0c11f5cc2466a4f7699eab5944aef"
+    "c70baabdaabf0ff684a5a065e339342c8aa34f96"
   ],
   "owned_paths": [
-    "_docs/audits/**",
-    "scripts/validate-prototype-intake.cjs",
-    "scripts/validate-prototype-intake.test.cjs"
+    "_docs/ralph/prototype-integration/**",
+    "_docs/ralph/handoffs/prototype-integration/**"
   ],
   "files_changed": [
-    "_docs/audits/task-t4-01e-intake-freeze-planner-2026-08-02.md",
-    "scripts/validate-prototype-intake.cjs",
-    "scripts/validate-prototype-intake.test.cjs"
+    "_docs/ralph/handoffs/prototype-integration/HANDOFF.yaml",
+    "_docs/ralph/prototype-integration/core-rc-manifest.json"
   ],
   "tests": [
     {
-      "command": "node scripts/validate-prototype-intake.test.cjs",
+      "command": "node scripts/validate-prototype-integration.test.cjs && node scripts/validate-prototype-integration.cjs",
       "exit_code": 0,
       "result": "passed",
-      "test_count": 34,
+      "test_count": 13,
       "tool_versions": {
         "node": "20.19.1"
       }
@@ -40,7 +38,9 @@
       }
     }
   ],
-  "generated_hashes": {},
+  "generated_hashes": {
+    "_docs/ralph/prototype-integration/core-rc-manifest.json": "7f12a21ff231019216e41a8e612f78703d52eb32d929744a69135564dd77e9cf"
+  },
   "accepted_checkpoints": [],
   "rejected_checkpoints": [
     {
@@ -91,5 +91,5 @@
     "Task 88C is not complete."
   ],
   "next_checkpoint": null,
-  "expected_head": "0252a5a1d7c0c11f5cc2466a4f7699eab5944aef"
+  "expected_head": "c70baabdaabf0ff684a5a065e339342c8aa34f96"
 }
