@@ -7,6 +7,7 @@ const { createHash } = require("crypto");
 const { existsSync, readFileSync, writeFileSync } = require("fs");
 const { isAbsolute, relative, resolve } = require("path");
 const { spawnSync } = require("child_process");
+const { validateEpochSequence } = require("./prototype-intake-epochs.cjs");
 
 const root = resolve(__dirname, "..");
 const manifestRelativePath = "_docs/ralph/prototype-integration/core-rc-manifest.json";
@@ -150,15 +151,9 @@ function sourceArtifactsFor(sourceSha, cwd = root) {
   const epochs = entries
     .map((entry) => ({ entry, match: entry.path.match(/^_docs\/ralph\/prototype-integration\/epochs\/epoch-([1-9][0-9]*)\.json$/) }))
     .filter((item) => item.match)
-    .map((item) => ({ number: Number(item.match[1]), path: item.entry.path, document: sourceJson(sourceSha, item.entry.path, cwd) }))
+    .map((item) => ({ file: `epoch-${item.match[1]}.json`, number: Number(item.match[1]), path: item.entry.path, document: sourceJson(sourceSha, item.entry.path, cwd) }))
     .sort((left, right) => left.number - right.number);
-  assert.ok(epochs.length > 0, "manifest source must contain an intake epoch");
-  for (let index = 0; index < epochs.length; index += 1) {
-    assert.equal(epochs[index].number, index + 1, `manifest intake epoch sequence is not contiguous at epoch ${index + 1}`);
-    assert.equal(epochs[index].document.intake_epoch, index + 1, `manifest intake epoch body mismatch at epoch ${index + 1}`);
-    if (index < epochs.length - 1) assert.equal(epochs[index].document.status, "closed", `manifest predecessor epoch ${index + 1} must be closed`);
-  }
-  const current = epochs.at(-1);
+  const current = validateEpochSequence(epochs).at(-1);
   const observationPath = `_docs/ralph/prototype-integration/epochs/epoch-${current.number}-tag-observation.json`;
   const observationPresent = entries.some((entry) => entry.path === observationPath);
   if (current.document.status !== "open") assert.equal(observationPresent, true, `manifest current epoch ${current.number} requires a tag observation`);
