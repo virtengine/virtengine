@@ -116,6 +116,9 @@ function validateMigrationInventory(inventory, testCases, options = {}) {
   if (inventory.producers.some((producer) => producer.status === "awaiting_committed_handoff")) {
     assert.notEqual(inventory.status, "complete", "inventory cannot be complete while a producer awaits committed handoff");
   }
+  if (inventory.producers.some((producer) => producer.blockers.length > 0)) {
+    assert.notEqual(inventory.status, "complete", "inventory cannot be complete while a producer retains migration blockers");
+  }
   if (inventory.status === "dependency_blocked") assert.ok(inventory.blockers.length > 0, "dependency-blocked inventory must declare blockers");
 }
 

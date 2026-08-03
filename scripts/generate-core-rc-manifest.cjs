@@ -537,7 +537,13 @@ function validateManifest(manifest, options = {}) {
   assert.equal(sourceDigest(manifest.source.payload_sha, manifest.producer_checkpoints.ledger_path, cwd), manifest.producer_checkpoints.ledger_sha256, "producer ledger hash mismatch");
   assert.deepEqual(manifest.producer_checkpoints.accepted, handoff.accepted_checkpoints, "accepted producer ledger binding mismatch");
   assert.deepEqual(manifest.producer_checkpoints.rejected, handoff.rejected_checkpoints, "rejected producer ledger binding mismatch");
-  assert.equal(manifest.producer_checkpoints.accepted.length, 0, "payload must not claim integrated producers");
+  for (const checkpoint of manifest.producer_checkpoints.accepted) {
+    assert.equal(
+      spawnSync("git", ["merge-base", "--is-ancestor", checkpoint.payload_head, manifest.source.payload_sha], { cwd }).status,
+      0,
+      `accepted producer payload is not contained in source: ${checkpoint.thread} ${checkpoint.payload_head}`,
+    );
+  }
   assert.notEqual(manifest.rollout.status, "complete");
   assert.notEqual(manifest.rollback.status, "verified");
   assert.notEqual(manifest.model_provenance.sbom_status, "available");

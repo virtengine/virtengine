@@ -41,7 +41,36 @@
   "generated_hashes": {
     "_docs/ralph/prototype-integration/core-rc-manifest.json": "cec131dfd50c66f047845fd9154bf21f4d0ed826b3a8ea07f1d5f4d54d02c364"
   },
-  "accepted_checkpoints": [],
+  "accepted_checkpoints": [
+    {
+      "thread": "T1",
+      "checkpoint": "T1-09",
+      "tag": "checkpoint/prototype-t1/t1-09",
+      "tip": "36a566a92c04d988255b10cc5a75451d59077273",
+      "payload_head": "36a566a92c04d988255b10cc5a75451d59077273"
+    },
+    {
+      "thread": "T2",
+      "checkpoint": "T2-13",
+      "tag": "checkpoint/prototype-t2/t2-13",
+      "tip": "ba9f49340bbd8136f8c19bcc0abc7c64831bfda8",
+      "payload_head": "ba9f49340bbd8136f8c19bcc0abc7c64831bfda8"
+    },
+    {
+      "thread": "T3",
+      "checkpoint": "T3-14",
+      "tag": "checkpoint/prototype-t3/t3-14",
+      "tip": "117ad92be90cc8a6a733ff701f1bc83fbbaf6790",
+      "payload_head": "117ad92be90cc8a6a733ff701f1bc83fbbaf6790"
+    },
+    {
+      "thread": "T5",
+      "checkpoint": "T5-39",
+      "tag": "checkpoint/prototype-t5/t5-39",
+      "tip": "4efd873a4446c304f3ba5f25ec83d6f4185a0a3d",
+      "payload_head": "4efd873a4446c304f3ba5f25ec83d6f4185a0a3d"
+    }
+  ],
   "rejected_checkpoints": [
     {
       "thread": "T2",
@@ -75,7 +104,7 @@
     "The clean T4-09A real diagnostic exited 1 as required and reported 19 deterministic publication blockers."
   ],
   "blockers": [
-    "Epoch 1 is closed: T1 t1-09 and T3 t3-13a failed immutable intake validation; T2 and T5 are frozen out; no producer checkpoint is accepted.",
+    "Epoch 2 consolidates and accepts the exact tested T1-09, T2-13, T3-14, and T5-39 payload boundaries; later dirty producer work remains excluded.",
     "Stable secrets are remediated through explicit pre-provisioned Secret names/keys and legacy upgrade instructions; no render-time credential generation remains.",
     "The diagnostic-only publication guard refuses --publish and created no local or remote checkpoint/prototype-integration/t4-09a tag.",
     "Clean real diagnostics pass candidate HEAD/remote equality, manifest strict validity/hash/ancestry/boundary, accepted-ledger correspondence, and tag absence.",
