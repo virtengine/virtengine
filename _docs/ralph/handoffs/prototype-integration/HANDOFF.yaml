@@ -1,29 +1,32 @@
 {
   "campaign": "three-day-prototype",
   "thread": "T4",
-  "checkpoint": "T4-01ET",
+  "checkpoint": "T4-01EUA",
   "branch": "ve/prototype-integration",
-  "start_head": "e824fd8d09c6ad769f039937515f9bc12104b5f9",
-  "end_head": "50ef3a8d649b0735a24a8a5624f972fd0d1f957b",
+  "start_head": "3855595ce842b80880fff4ef286690a77c29145a",
+  "end_head": "bc42abd2fac180b181280f0190df0fc20bdf24f5",
   "origin_main": "79391a3df86d85522b92e0400c6904971ecbe65d",
   "tree_clean": true,
   "commits": [
-    "50ef3a8d649b0735a24a8a5624f972fd0d1f957b"
+    "0bb57613fe6ee6938844b3bf730ebc619d25b813",
+    "bc42abd2fac180b181280f0190df0fc20bdf24f5"
   ],
   "owned_paths": [
-    "_docs/ralph/prototype-integration/**",
-    "_docs/ralph/handoffs/prototype-integration/**"
+    "_docs/audits/**",
+    "scripts/open-prototype-intake-epoch.cjs",
+    "scripts/open-prototype-intake-epoch.test.cjs"
   ],
   "files_changed": [
-    "_docs/ralph/handoffs/prototype-integration/HANDOFF.yaml",
-    "_docs/ralph/prototype-integration/core-rc-manifest.json"
+    "_docs/audits/task-t4-01e-intake-freeze-planner-2026-08-02.md",
+    "scripts/open-prototype-intake-epoch.cjs",
+    "scripts/open-prototype-intake-epoch.test.cjs"
   ],
   "tests": [
     {
-      "command": "node scripts/validate-prototype-integration.test.cjs && node scripts/validate-prototype-integration.cjs",
+      "command": "node scripts/open-prototype-intake-epoch.test.cjs",
       "exit_code": 0,
       "result": "passed",
-      "test_count": 13,
+      "test_count": 9,
       "tool_versions": {
         "node": "20.19.1"
       }
@@ -38,9 +41,7 @@
       }
     }
   ],
-  "generated_hashes": {
-    "_docs/ralph/prototype-integration/core-rc-manifest.json": "1e6b5c9d27bbeb6f83f687f3131bf01197abf4d3d1713a6c812a7a3224755cb2"
-  },
+  "generated_hashes": {},
   "accepted_checkpoints": [],
   "rejected_checkpoints": [
     {
@@ -91,5 +92,5 @@
     "Task 88C is not complete."
   ],
   "next_checkpoint": null,
-  "expected_head": "50ef3a8d649b0735a24a8a5624f972fd0d1f957b"
+  "expected_head": "bc42abd2fac180b181280f0190df0fc20bdf24f5"
 }
