@@ -92,6 +92,7 @@ function validateExecutionSchemas(planSchema, resultSchema) {
   assert.deepEqual(resultSchema.required.slice().sort(), ["schema_version", "base_sha", "head_sha", "matrix_digest", "results"].sort());
   assert.equal(resultSchema.properties.schema_version.const, "virtengine.task-88b.required-gate-results/v1");
   assert.equal(resultSchema.$defs.result.additionalProperties, false);
+  assert.equal(resultSchema.properties.results.uniqueItems, true, "result schema must reject duplicate result records");
   assert.ok(resultSchema.$defs.result.required.includes("kind"), "result schema must require command kind");
   assert.deepEqual(resultSchema.$defs.result.properties.kind.enum, ["setup", "build", "lint", "test", "policy", "drift"]);
   assert.equal(resultSchema.$defs.result.allOf[0].then.properties.discovered_tests.minimum, 1);

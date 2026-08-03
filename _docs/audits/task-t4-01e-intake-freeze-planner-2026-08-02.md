@@ -44,7 +44,8 @@ matrix status is derived from category states, completion claims are complete-on
 and root blockers exactly equal category blocker usage. Execution-plan categories,
 allowances, commands, and pinned tools reject duplicate records. Plans retain
 category dependencies and blockers, and execution rechecks both independently
-of projected status. The
+of projected status. Result envelopes reject duplicate records in schema and
+runtime validation. The
 acceptance commit must be the implementation's direct, single-parent child and
 change only the acceptance artifact. Accepted annotated tags must be exact tag
 objects published by `origin`; local-only or stale same-name tags are rejected.

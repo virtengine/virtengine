@@ -10,7 +10,7 @@
     "base_sha": { "$ref": "#/$defs/sha" },
     "head_sha": { "$ref": "#/$defs/sha" },
     "matrix_digest": { "$ref": "#/$defs/digest" },
-    "results": { "type": "array", "items": { "$ref": "#/$defs/result" } }
+    "results": { "type": "array", "uniqueItems": true, "items": { "$ref": "#/$defs/result" } }
   },
   "$defs": {
     "sha": { "type": "string", "pattern": "^[a-f0-9]{40}$" },

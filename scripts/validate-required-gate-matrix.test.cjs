@@ -97,6 +97,12 @@ const tests = [
     planSchema.properties.categories.uniqueItems = false;
     assert.throws(() => validateRequiredGateMatrix(cloneMatrix(), { schema, planSchema, resultSchema }), /plan categories must reject duplicates/);
   }],
+  ["rejects a result schema that permits duplicate records", () => {
+    const planSchema = JSON.parse(readFileSync(resolve(root, "_docs/ralph/prototype-integration/required-gate-plan.schema.json"), "utf8"));
+    const resultSchema = JSON.parse(readFileSync(resolve(root, "_docs/ralph/prototype-integration/required-gate-results.schema.json"), "utf8"));
+    resultSchema.properties.results.uniqueItems = false;
+    assert.throws(() => validateRequiredGateMatrix(cloneMatrix(), { schema, planSchema, resultSchema }), /result schema must reject duplicate result records/);
+  }],
   ["rejects malformed dependency declarations and missing blockers", () => {
     const invalidStatus = cloneMatrix();
     invalidStatus.categories[0].dependencies[0].status = "unavailble";
