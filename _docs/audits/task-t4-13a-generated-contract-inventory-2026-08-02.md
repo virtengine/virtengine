@@ -19,6 +19,10 @@ every proto source must be declared in that checkpoint's committed handoff
 Every declared proto source, generated target, and compatibility fixture must
 also resolve to an existing regular file under the checked repository root;
 canonical-looking invented paths cannot satisfy generated readiness.
+Generated targets must also match their root's generated artifact type: OpenAPI
+JSON/YAML, binary/hash inventory artifacts, Go protobuf/gateway output, or
+generated TypeScript. Existing handwritten files under a canonical target root
+cannot satisfy readiness.
 Per-contract blocker lists are sorted and unique, and the root blocker list
 must exactly match first-use contract references. Duplicate, undeclared, or
 stale generated-contract blockers fail validation.

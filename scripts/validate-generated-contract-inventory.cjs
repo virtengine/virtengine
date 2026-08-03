@@ -24,6 +24,14 @@ function insideRoots(path, roots) {
   return roots.some((rootPath) => path === rootPath || path.startsWith(`${rootPath}/`));
 }
 
+function isGeneratedTarget(path) {
+  if (path.startsWith("api/openapi/")) return /\.(?:json|ya?ml)$/.test(path);
+  if (path.startsWith("sdk/artifacts/proto/")) return /(?:\.binpb|\.sha256|\/inventory\.json)$/.test(path);
+  if (path.startsWith("sdk/go/node/")) return /\.pb(?:\.gw)?\.go$/.test(path);
+  if (path.startsWith("sdk/ts/src/generated/")) return path.endsWith(".ts");
+  return false;
+}
+
 function validateGeneratedContractInventory(inventory, options = {}) {
   const rootDir = options.rootDir || root;
   exactKeys(inventory, ["blockers", "checkpoint", "completion", "contracts", "generation_window", "schema_version", "status"], "generated contract inventory");
@@ -90,6 +98,7 @@ function validateGeneratedContractInventory(inventory, options = {}) {
       }
       for (const target of contract.generated_targets) {
         assert.ok(insideRoots(target, targetRoots), `${contract.id} target is outside canonical roots`);
+        assert.ok(isGeneratedTarget(target), `${contract.id} target is not a generated artifact type`);
         const path = resolve(rootDir, target);
         assert.ok(existsSync(path) && statSync(path).isFile(), `${contract.id} generated target is missing`);
       }
@@ -115,7 +124,7 @@ function validateGeneratedContractInventory(inventory, options = {}) {
   return true;
 }
 
-module.exports = { validateGeneratedContractInventory };
+module.exports = { isGeneratedTarget, validateGeneratedContractInventory };
 
 if (require.main === module) {
   const inventory = JSON.parse(readFileSync(inventoryPath, "utf8"));
