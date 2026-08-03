@@ -1,83 +1,28 @@
 {
-  "schema_version": "virtengine.prototype.live-integration-acceptance/v1",
-  "campaign": "three-day-prototype",
-  "status": "integrated_with_blockers",
-  "base": {
-    "branch": "ve/prototype-integration",
-    "sha": "6567b422e38effe327d3684df29bb0e505f6c1fc"
-  },
-  "integration_branch": "ve/prototype-integration-live",
+  "schema_version": "virtengine.prototype.integration-candidate-acceptance/v1",
+  "status": "validated",
+  "base_sha": "016c4145624deff9673c1c5cff3029277b1f41e0",
+  "candidate_sha": "53d9249b70885b20c0ff15c807ac1d1c15bcdb6f",
   "accepted_payloads": [
     {
       "thread": "T1",
-      "checkpoint": "T1-07",
-      "sha": "6dfdc9d40d27fcf9b87ecb84d40052ee6bb6b20b",
-      "merge_commit": "3c8b077f"
-    },
-    {
-      "thread": "T5",
-      "checkpoint": "T5-39 committed boundary",
-      "sha": "4efd873a4446c304f3ba5f25ec83d6f4185a0a3d",
-      "merge_commit": "9aae4d0f"
-    },
-    {
-      "thread": "T3",
-      "checkpoint": "T3-X08",
-      "sha": "117ad92be90cc8a6a733ff701f1bc83fbbaf6790",
-      "merge_commit": "1350ffc8"
+      "tag": "checkpoint/prototype-t1/t1-09",
+      "payload_sha": "8a373fce29ad90c23eeb6773fe49c5f915335860"
     },
     {
       "thread": "T2",
-      "checkpoint": "T2-X13 committed boundary",
-      "sha": "ba9f49340bbd8136f8c19bcc0abc7c64831bfda8",
-      "merge_commit": "5290a5ed"
+      "tag": "checkpoint/prototype-t2/t2-13a",
+      "payload_sha": "9e717ff769b03dcb3830877d541b223d8d7154bf"
+    },
+    {
+      "thread": "T3",
+      "tag": "checkpoint/prototype-t3/t3-x08",
+      "payload_sha": "ea5eaba07c0cb93e78d4945144dcb02138122220"
+    },
+    {
+      "thread": "T5",
+      "tag": "checkpoint/prototype-t5/t5-39",
+      "payload_sha": "5bc107d384d816b5d7da0aed29fad25c1e972f30"
     }
-  ],
-  "integration_repairs": [
-    {
-      "commit": "b4d7ecb9",
-      "scope": "receipt parity lifetime and cross-platform evidence hashing"
-    },
-    {
-      "commit": "d658ecfc",
-      "scope": "prompt standby lease acquisition and deterministic failover"
-    },
-    {
-      "commit": "18797b20",
-      "scope": "portal lint and resolved AI policy finding"
-    },
-    {
-      "commit": "93dc6cc8",
-      "scope": "MFA trust-token propagation through app ante"
-    }
-  ],
-  "passed_gates": [
-    "repository-wide Go compile with Go 1.25.8",
-    "integrated T1 VEID, inference, enclave and registry tests",
-    "integrated T5 vault, fundauth, security, encryption, MFA and VEID migration tests",
-    "integrated T3 provider, reconciliation, IBC, benchmark, review, uniqueness and incident tests",
-    "provider lease takeover stress test count=20 and full provider package",
-    "portal type-check and lint",
-    "portal library: 35 files and 726 tests",
-    "portal application: 84 files and 631 tests",
-    "TypeScript SDK focused capability tests: 4 suites and 18 tests",
-    "T4 integration, model provenance, AI policy, required-gate and SLURM validator suites",
-    "race: inference, vault, fundauth, encryption, MFA and focused provider lifecycle",
-    "race: VEID keeper/types and VEID registry"
-  ],
-  "excluded_active_work": [
-    "uncommitted work in virtengine-t1",
-    "uncommitted work in virtengine-t2",
-    "uncommitted work in virtengine-t3",
-    "uncommitted work in virtengine-t4",
-    "uncommitted work in virtengine-t5"
-  ],
-  "blockers": [
-    "Full TypeScript SDK generator suites require the missing sdk/go/vendor Cosmos proto trees; 32 of 39 suites and 1047 tests passed before the environment failures.",
-    "The SDK build requires the declared Node 24 toolchain because --experimental-strip-types is unavailable in Node 20.19.1.",
-    "Production model weights, representative datasets, approved licenses, runtime image, SBOM and external model/PAD/privacy evaluations remain unavailable.",
-    "AI production policy remains blocked by declared placeholder, fake biometric LSH, memory-vault and stub-success paths.",
-    "SLURM capacity, durability and least-privilege production evidence remains unverified.",
-    "This record integrates committed producer boundaries and does not claim ongoing dirty work from any producer thread."
   ]
 }
