@@ -6,14 +6,14 @@
   "planned_functionality_complete": false,
   "milestone_m_eligible": false,
   "source": {
-    "payload_sha": "a14add3b9f6b1febc2328d38011829acd5cbfdf2",
-    "tree": "56205a6951367afc9d2af4247fed2c213057074a",
+    "payload_sha": "1ca7c80aa64d49a0c1a97876fbe98848622ffa4b",
+    "tree": "f1c14cbfd5f8394ab052e364fbbef111d12ceace",
     "branch": "ve/prototype-integration",
     "binding": "declared_clean_parent_payload"
   },
   "tooling": {
-    "tooling_sha": "a14add3b9f6b1febc2328d38011829acd5cbfdf2",
-    "tree": "56205a6951367afc9d2af4247fed2c213057074a",
+    "tooling_sha": "1ca7c80aa64d49a0c1a97876fbe98848622ffa4b",
+    "tree": "f1c14cbfd5f8394ab052e364fbbef111d12ceace",
     "artifacts": [
       {
         "id": "generator",
@@ -231,7 +231,7 @@
     {
       "id": "required_gate_matrix",
       "path": "_docs/ralph/prototype-integration/required-gate-matrix.json",
-      "sha256": "8fe667a2e2c308a31b0cd97dc579e0649952dab3410fed8b484f04bdc340094c",
+      "sha256": "9a08448a42a74f8182d45616454d22fed6e3a68390dabc62e8285f45050a5296",
       "status": "dependency_blocked"
     },
     {
@@ -427,17 +427,26 @@
   "test_evidence": {
     "status": "complete",
     "ledger_path": "_docs/ralph/handoffs/prototype-integration/HANDOFF.yaml",
-    "implementation_sha": "827e2fbf9730acf98322c0571b9051ec3cab9630",
-    "ledger_sha": "a14add3b9f6b1febc2328d38011829acd5cbfdf2",
-    "record_count": 2,
-    "declared_test_count": 38,
+    "implementation_sha": "59a767bd91d4e12fb3a35263160d600d159ce423",
+    "ledger_sha": "1ca7c80aa64d49a0c1a97876fbe98848622ffa4b",
+    "record_count": 3,
+    "declared_test_count": 55,
     "uncounted_record_count": 0,
     "records": [
       {
-        "command": "node scripts/preflight-integration-candidate.test.cjs",
+        "command": "node scripts/validate-required-gate-matrix.test.cjs && node scripts/validate-required-gate-matrix.cjs",
         "exit_code": 0,
         "result": "passed",
-        "test_count": 29,
+        "test_count": 24,
+        "tool_versions": {
+          "node": "20.19.1"
+        }
+      },
+      {
+        "command": "node scripts/run-required-gates.test.cjs",
+        "exit_code": 0,
+        "result": "passed",
+        "test_count": 22,
         "tool_versions": {
           "node": "20.19.1"
         }
@@ -456,7 +465,7 @@
   },
   "producer_checkpoints": {
     "ledger_path": "_docs/ralph/handoffs/prototype-integration/HANDOFF.yaml",
-    "ledger_sha256": "65fb7193b7a5894426ece3115099fd739529d75abc36c59c49c85cda8b1354e5",
+    "ledger_sha256": "04aaba86a632a3b39c817870468a647fcfefeffc7a6be4e1285e2ffdc598a197",
     "accepted": [],
     "rejected": [
       {
