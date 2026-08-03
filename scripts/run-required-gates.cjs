@@ -87,8 +87,16 @@ function matrixDigest(matrixBytes) {
   return createHash("sha256").update(matrixBytes).digest("hex");
 }
 
+function canonicalJson(value) {
+  if (Array.isArray(value)) return `[${value.map(canonicalJson).join(",")}]`;
+  if (value && typeof value === "object") {
+    return `{${Object.keys(value).sort().map((key) => `${JSON.stringify(key)}:${canonicalJson(value[key])}`).join(",")}}`;
+  }
+  return JSON.stringify(value);
+}
+
 function planDigest(plan) {
-  return createHash("sha256").update(JSON.stringify(plan)).digest("hex");
+  return createHash("sha256").update(canonicalJson(plan)).digest("hex");
 }
 
 function buildExecutionPlan({ repoDir = root, base, head, matrixPath = defaultMatrixPath }) {
@@ -241,6 +249,7 @@ function main(argv) {
 module.exports = {
   assertExecutionReady,
   buildExecutionPlan,
+  canonicalJson,
   collectChangedPaths,
   globToRegExp,
   matchesSelector,

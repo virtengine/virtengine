@@ -8,6 +8,7 @@ const { spawnSync } = require("child_process");
 const {
   assertExecutionReady,
   buildExecutionPlan,
+  canonicalJson,
   collectChangedPaths,
   planDigest,
   validateResultEnvelope,
@@ -101,6 +102,13 @@ try {
   };
 
   const tests = [
+    ["canonicalizes plan object keys while preserving array order", () => {
+      const left = { z: 1, nested: { b: 2, a: 1 }, values: ["a", "b"] };
+      const right = { values: ["a", "b"], nested: { a: 1, b: 2 }, z: 1 };
+      assert.equal(canonicalJson(left), canonicalJson(right));
+      assert.equal(planDigest(left), planDigest(right));
+      assert.notEqual(planDigest(left), planDigest({ ...right, values: ["b", "a"] }));
+    }],
     ["collects complete merge history including a final-tree-hidden path", () => {
       const paths = collectChangedPaths(fixture.repo, fixture.base, fixture.head);
       assert.ok(paths.includes("shared.go"));
