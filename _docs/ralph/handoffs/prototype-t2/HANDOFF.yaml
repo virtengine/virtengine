@@ -1,13 +1,13 @@
 campaign: three-day-prototype
 thread: T2
-checkpoint: T2-X13
+checkpoint: T2-X14
 branch: ve/prototype-t2-product
-start_head: 1ce294901857dbfc8048016afc0292d376369628
-end_head: 9e717ff769b03dcb3830877d541b223d8d7154bf
+start_head: ba9f49340bbd8136f8c19bcc0abc7c64831bfda8
+end_head: 9d210092ee880ed8dd97e5a2dbb39197fca5fd2c
 origin_main: 79391a3df86d85522b92e0400c6904971ecbe65d
 tree_clean: true
 commits:
-  - 9e717ff769b03dcb3830877d541b223d8d7154bf
+  - 9d210092ee880ed8dd97e5a2dbb39197fca5fd2c
 owned_paths:
   - lib/portal/components/hpc/
   - lib/portal/__tests__/hpc/
@@ -18,47 +18,57 @@ owned_paths:
   - lib/portal/index.d.ts
   - portal/src/lib/portal-adapter.ts
 files_changed:
+  - lib/portal/__tests__/hpc/job-submission-form.test.tsx
+  - lib/portal/__tests__/hpc/use-hpc-mutations.test.tsx
+  - lib/portal/__tests__/hpc/use-hpc-queries.test.tsx
   - lib/portal/components/PortalProvider.tsx
-  - lib/portal/components/hpc/hpc-output.ts
-  - lib/portal/__tests__/hpc/use-hpc-outputs.test.tsx
+  - lib/portal/components/hpc/JobSubmissionForm.tsx
+  - lib/portal/components/hpc/hpc-mutation.ts
+  - lib/portal/components/hpc/hpc-query.ts
   - lib/portal/hooks/useHPC.tsx
   - lib/portal/index.ts
   - lib/portal/index.d.ts
   - lib/portal/types/config.ts
   - portal/src/lib/portal-adapter.ts
 tests:
-  - command: lib\portal\node_modules\.bin\vitest.CMD run __tests__/hpc/use-hpc-outputs.test.tsx --reporter=dot
+  - command: lib\portal\node_modules\.bin\vitest.CMD run __tests__/hpc/use-hpc-queries.test.tsx __tests__/hpc/job-submission-form.test.tsx __tests__/hpc/use-hpc-mutations.test.tsx --reporter=dot
     exit_code: 0
     result: passed
-    test_count: 4
+    test_count: 24
     tool_versions:
-      node: v24.12.0
-    artifact: _docs/ralph/handoffs/prototype-t2/T2-X13-evidence.txt
-  - command: lib\portal\node_modules\.bin\vitest.CMD run --reporter=dot
+      node: v20.19.1
+    artifact: _docs/ralph/handoffs/prototype-t2/T2-X14-validation.txt
+  - command: lib\portal\node_modules\.bin\vitest.CMD run --reporter=dot --maxWorkers=1
     exit_code: 0
     result: passed
-    test_count: 726
+    test_count: 738
     tool_versions:
-      node: v24.12.0
-    artifact: _docs/ralph/handoffs/prototype-t2/T2-X13-evidence.txt
+      node: v20.19.1
+    artifact: _docs/ralph/handoffs/prototype-t2/T2-X14-validation.txt
+  - command: portal\node_modules\.bin\tsc.CMD --noEmit --lib dom,dom.iterable,esnext --target ES2020 --module CommonJS --moduleResolution Node --esModuleInterop --skipLibCheck --jsx react-jsx lib\portal\components\hpc\hpc-query.ts lib\portal\components\hpc\hpc-mutation.ts lib\portal\hooks\useHPC.tsx
+    exit_code: 0
+    result: passed
+    tool_versions:
+      node: v20.19.1
+    artifact: _docs/ralph/handoffs/prototype-t2/T2-X14-validation.txt
   - command: portal\node_modules\.bin\tsc.CMD --noEmit -p portal\tsconfig.json
     exit_code: 0
     result: passed
     tool_versions:
-      node: v24.12.0
-    artifact: _docs/ralph/handoffs/prototype-t2/T2-X13-evidence.txt
+      node: v20.19.1
+    artifact: _docs/ralph/handoffs/prototype-t2/T2-X14-validation.txt
 generated_hashes: {}
 migrations: []
 external_evidence:
-  - _docs/ralph/handoffs/prototype-t2/T2-X13-evidence.txt
-known_failures:
-  - Focused TypeScript compilation has zero T2-X13 diagnostics but reaches the pre-existing lib/portal/src/wallet/utils.ts missing WalletChainConfig export; portal adapter focused compilation and full portal type-check pass.
+  - _docs/ralph/handoffs/prototype-t2/T2-X14-evidence.txt
+  - _docs/ralph/handoffs/prototype-t2/T2-X14-validation.txt
+known_failures: []
 blockers:
   - T4 producer-handoff.schema.json does not permit the established supplemental T2-X checkpoint names; T2-X01 through T2-X10 retain the campaign queue naming.
   - T4 producer-handoff.schema.json forbids the integration_parent field required by the updated campaign plan; integration ancestor fa21b1e540a5efcbe1822da4199be7acec7709d3 is retained in T2-05-evidence.txt.
   - Full provider package certification is blocked by the unrelated submitter lease timing failure retained in T2-03B-evidence.txt.
   - PortalProvider retains pre-existing ts-nocheck because unrelated Auth, Identity, MFA, and Provider dependencies are not wired.
-  - No production HPC output adapter is wired; output access defaults unavailable.
-  - No live provider output, encrypted artifact, scheduler, or chain endpoint was certified.
-next_checkpoint: T2-X14
-expected_head: 9e717ff769b03dcb3830877d541b223d8d7154bf
+  - No production HPC query adapter is wired; query features default unavailable.
+  - No live scheduler, provider query, subscription stream, or chain endpoint was certified.
+next_checkpoint: T2-X15
+expected_head: 9d210092ee880ed8dd97e5a2dbb39197fca5fd2c
