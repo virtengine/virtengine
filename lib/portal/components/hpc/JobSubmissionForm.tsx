@@ -242,7 +242,7 @@ export function JobSubmissionForm({
       actions.selectOffering(offeringId);
 
       // Get price quote
-      const priceQuote = await actions.getQuote(resources);
+      const priceQuote = await actions.getQuote({ offeringId, resources });
       setQuote(priceQuote);
       setStep("review");
     } catch (err) {

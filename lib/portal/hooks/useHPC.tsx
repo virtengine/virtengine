@@ -30,6 +30,7 @@ import type { QueryClient, ChainEvent } from "../types/chain";
 import { sanitizePlainText, sanitizeObject } from "../utils/security";
 import {
   HPCClientUnavailableError,
+  assertValidSubmitJobParams,
   assertCommittedJobMutation,
   requireHPCSigner,
   type CommittedJobMutation,
@@ -42,6 +43,18 @@ import {
   validateResolvedHPCOutput,
   type HPCOutputAdapter,
 } from "../components/hpc/hpc-output";
+import {
+  HPCQueryValidationError,
+  requireHPCQueryAdapter,
+  validateHPCJob,
+  validateHPCJobPriceQuote,
+  validateHPCQuoteRequest,
+  validateHPCJobSubscriptionEvent,
+  validateHPCJobs,
+  validateHPCWorkloadTemplates,
+  type HPCQueryAdapter,
+  type HPCQuoteRequest,
+} from "../components/hpc/hpc-query";
 
 interface HPCContextValue {
   state: HPCState;
@@ -54,7 +67,9 @@ interface HPCActions {
   startJobSubmission: (templateId?: string) => void;
   updateJobManifest: (manifest: Partial<JobManifest>) => void;
   selectOffering: (offeringId: string) => void;
-  getQuote: (resources?: JobManifest["resources"]) => Promise<JobPriceQuote>;
+  getQuote: (
+    request?: JobManifest["resources"] | HPCQuoteRequest,
+  ) => Promise<JobPriceQuote>;
   validateJob: () => JobValidationError[];
   submitJob: () => Promise<CommittedJobMutation>;
   cancelSubmission: () => void;
@@ -73,6 +88,18 @@ interface HPCActions {
   clearError: () => void;
 }
 
+const sameResources = (
+  left: JobManifest["resources"],
+  right: JobManifest["resources"],
+): boolean =>
+  left.nodes === right.nodes &&
+  left.cpusPerNode === right.cpusPerNode &&
+  left.memoryGBPerNode === right.memoryGBPerNode &&
+  left.gpusPerNode === right.gpusPerNode &&
+  left.gpuType === right.gpuType &&
+  left.maxRuntimeSeconds === right.maxRuntimeSeconds &&
+  left.storageGB === right.storageGB;
+
 const HPCContext = createContext<HPCContextValue | null>(null);
 
 export interface HPCProviderProps {
@@ -83,6 +110,7 @@ export interface HPCProviderProps {
   getAuthHeader?: () => Promise<string>;
   mutationAdapter?: HPCSignerAdapter;
   outputAdapter?: HPCOutputAdapter;
+  queryAdapter?: HPCQueryAdapter;
 }
 
 export function HPCProvider({
@@ -93,14 +121,50 @@ export function HPCProvider({
   getAuthHeader,
   mutationAdapter,
   outputAdapter,
+  queryAdapter,
 }: HPCProviderProps) {
   const [state, setState] = useState<HPCState>(initialHPCState);
   const submissionToken = useRef(0);
   const submissionInFlight = useRef(false);
   const mutationGeneration = useRef(0);
+  const mutationAuthority = useRef({
+    mutationAdapter,
+    chainId,
+    accountAddress,
+  });
   const cancellationsInFlight = useRef(new Set<string>());
   const outputGeneration = useRef(0);
   const outputAuthority = useRef({ outputAdapter, chainId, accountAddress });
+  const queryGeneration = useRef(0);
+  const queryAuthority = useRef({ queryAdapter, chainId, accountAddress });
+  const queryStateGeneration = useRef(0);
+  const queryResetPending = useRef(false);
+  const templateRequest = useRef(0);
+  const jobsRequest = useRef(0);
+  const jobRequest = useRef(0);
+  const quoteRequest = useRef(0);
+  const quotedSubmission = useRef<{
+    submissionId: number;
+    offeringId: string;
+    resources: JobManifest["resources"];
+    quote: JobPriceQuote;
+  } | null>(null);
+  const activeQuerySubscriptions = useRef(new Set<() => void>());
+  const activeQueryOperations = useRef(new Set<string>());
+  const queryErrors = useRef(new Map<string, HPCState["error"]>());
+
+  if (
+    mutationAuthority.current.mutationAdapter !== mutationAdapter ||
+    mutationAuthority.current.chainId !== chainId ||
+    mutationAuthority.current.accountAddress !== accountAddress
+  ) {
+    mutationAuthority.current = { mutationAdapter, chainId, accountAddress };
+    mutationGeneration.current += 1;
+    submissionToken.current += 1;
+    submissionInFlight.current = false;
+    cancellationsInFlight.current.clear();
+  }
+  const renderMutationGeneration = mutationGeneration.current;
 
   if (
     outputAuthority.current.outputAdapter !== outputAdapter ||
@@ -112,148 +176,131 @@ export function HPCProvider({
   }
   const renderOutputGeneration = outputGeneration.current;
 
-  useEffect(() => {
-    mutationGeneration.current += 1;
-    submissionToken.current += 1;
-    submissionInFlight.current = false;
-    cancellationsInFlight.current.clear();
-  }, [accountAddress, chainId, mutationAdapter]);
+  if (
+    queryAuthority.current.queryAdapter !== queryAdapter ||
+    queryAuthority.current.chainId !== chainId ||
+    queryAuthority.current.accountAddress !== accountAddress
+  ) {
+    queryAuthority.current = { queryAdapter, chainId, accountAddress };
+    queryGeneration.current += 1;
+    templateRequest.current += 1;
+    jobsRequest.current += 1;
+    jobRequest.current += 1;
+    quoteRequest.current += 1;
+    quotedSubmission.current = null;
+    queryResetPending.current = true;
+    activeQueryOperations.current.clear();
+    queryErrors.current.clear();
+  }
+  const renderQueryGeneration = queryGeneration.current;
+  const effectiveState: HPCState =
+    queryStateGeneration.current === renderQueryGeneration
+      ? state
+      : {
+          ...state,
+          workloadTemplates: [],
+          jobs: [],
+          selectedJob: null,
+          submission: null,
+        };
 
-  const getWorkloadTemplates = useCallback(async () => {
-    setState((prev) => ({ ...prev, isLoading: true }));
+  const beginQueryOperation = useCallback((operation: string) => {
+    activeQueryOperations.current.add(operation);
+    queryErrors.current.delete(operation);
+    setState((prev) => ({
+      ...prev,
+      isLoading: true,
+      error: Array.from(queryErrors.current.values()).at(-1) ?? null,
+    }));
+  }, []);
 
-    try {
-      const templates: WorkloadTemplate[] = [
-        {
-          id: "pytorch-training",
-          name: "PyTorch Training",
-          description: "Train PyTorch models on distributed GPU clusters",
-          category: "ml_training",
-          defaultResources: {
-            nodes: 1,
-            cpusPerNode: 8,
-            memoryGBPerNode: 32,
-            gpusPerNode: 4,
-            gpuType: "nvidia-a100",
-            maxRuntimeSeconds: 86400,
-            storageGB: 100,
-          },
-          defaultParameters: {
-            model: {
-              name: "model",
-              type: "string",
-              description: "Model name",
-              required: true,
-            },
-            epochs: {
-              name: "epochs",
-              type: "number",
-              description: "Training epochs",
-              required: true,
-              defaultValue: 10,
-              min: 1,
-              max: 1000,
-            },
-          },
-          requiredIdentityScore: 50,
-          mfaRequired: true,
-          estimatedCostPerHour: "10.00",
-          version: "1.0.0",
-          iconUrl: "/icons/pytorch.png",
-          docsUrl: "https://docs.virtengine.com/hpc/pytorch",
-        },
-        {
-          id: "molecular-dynamics",
-          name: "Molecular Dynamics",
-          description: "Run GROMACS molecular dynamics simulations",
-          category: "simulation",
-          defaultResources: {
-            nodes: 4,
-            cpusPerNode: 32,
-            memoryGBPerNode: 128,
-            maxRuntimeSeconds: 604800,
-            storageGB: 500,
-          },
-          defaultParameters: {
-            structure: {
-              name: "structure",
-              type: "file",
-              description: "PDB structure file",
-              required: true,
-            },
-            steps: {
-              name: "steps",
-              type: "number",
-              description: "Simulation steps",
-              required: true,
-              defaultValue: 1000000,
-            },
-          },
-          requiredIdentityScore: 60,
-          mfaRequired: true,
-          estimatedCostPerHour: "25.00",
-          version: "1.0.0",
-        },
-        {
-          id: "rendering",
-          name: "Blender Rendering",
-          description: "Render Blender scenes on GPU clusters",
-          category: "rendering",
-          defaultResources: {
-            nodes: 1,
-            cpusPerNode: 16,
-            memoryGBPerNode: 64,
-            gpusPerNode: 2,
-            gpuType: "nvidia-a100",
-            maxRuntimeSeconds: 43200,
-            storageGB: 200,
-          },
-          defaultParameters: {
-            scene: {
-              name: "scene",
-              type: "file",
-              description: "Blender scene file",
-              required: true,
-            },
-            startFrame: {
-              name: "startFrame",
-              type: "number",
-              description: "Start frame",
-              required: true,
-              defaultValue: 1,
-            },
-            endFrame: {
-              name: "endFrame",
-              type: "number",
-              description: "End frame",
-              required: true,
-              defaultValue: 250,
-            },
-          },
-          requiredIdentityScore: 40,
-          mfaRequired: false,
-          estimatedCostPerHour: "15.00",
-          version: "1.0.0",
-        },
-      ];
-
-      setState((prev) => ({
-        ...prev,
-        isLoading: false,
-        workloadTemplates: templates,
-      }));
-    } catch (error) {
-      setState((prev) => ({
-        ...prev,
-        isLoading: false,
-        error: {
+  const finishQueryOperation = useCallback(
+    (operation: string, error?: unknown) => {
+      activeQueryOperations.current.delete(operation);
+      if (error !== undefined) {
+        queryErrors.current.set(operation, {
           code: "network_error",
           message:
-            error instanceof Error ? error.message : "Failed to load templates",
-        },
+            error instanceof Error
+              ? error.message
+              : `HPC ${operation} query failed`,
+        });
+      }
+      setState((prev) => ({
+        ...prev,
+        isLoading: activeQueryOperations.current.size > 0,
+        error: Array.from(queryErrors.current.values()).at(-1) ?? null,
       }));
+    },
+    [renderQueryGeneration],
+  );
+
+  useEffect(() => {
+    if (!queryResetPending.current) return;
+    queryResetPending.current = false;
+    queryStateGeneration.current = renderQueryGeneration;
+    setState((prev) => ({
+      ...prev,
+      workloadTemplates: [],
+      jobs: [],
+      selectedJob: null,
+      submission: null,
+      isLoading: false,
+      error: null,
+    }));
+  }, [renderQueryGeneration]);
+
+  useEffect(
+    () => () => {
+      for (const unsubscribe of activeQuerySubscriptions.current) unsubscribe();
+      activeQuerySubscriptions.current.clear();
+    },
+    [renderQueryGeneration],
+  );
+
+  const getWorkloadTemplates = useCallback(async () => {
+    const generation = renderQueryGeneration;
+    if (!accountAddress || generation !== queryGeneration.current) {
+      throw new HPCClientUnavailableError("query");
     }
-  }, []);
+    const requestId = ++templateRequest.current;
+    const binding = { chainId, accountAddress };
+    const adapter = requireHPCQueryAdapter(queryAdapter, binding);
+    beginQueryOperation("templates");
+
+    try {
+      const evidence = await adapter.getWorkloadTemplates();
+      if (
+        generation !== queryGeneration.current ||
+        requestId !== templateRequest.current
+      ) {
+        throw new HPCClientUnavailableError("query");
+      }
+      const templates = validateHPCWorkloadTemplates(evidence, binding);
+
+      setState((prev) => ({
+        ...prev,
+        workloadTemplates: templates,
+      }));
+      finishQueryOperation("templates");
+    } catch (error) {
+      if (
+        generation !== queryGeneration.current ||
+        requestId !== templateRequest.current
+      ) {
+        throw error;
+      }
+      finishQueryOperation("templates", error);
+      throw error;
+    }
+  }, [
+    accountAddress,
+    beginQueryOperation,
+    chainId,
+    finishQueryOperation,
+    queryAdapter,
+    renderQueryGeneration,
+  ]);
 
   const refresh = useCallback(async () => {
     await Promise.all([getWorkloadTemplates(), getJobs()]);
@@ -261,10 +308,15 @@ export function HPCProvider({
 
   const startJobSubmission = useCallback(
     (templateId?: string) => {
+      if (renderQueryGeneration !== queryGeneration.current) {
+        throw new HPCClientUnavailableError("query");
+      }
       submissionToken.current += 1;
+      quoteRequest.current += 1;
+      quotedSubmission.current = null;
       submissionInFlight.current = false;
       const template = templateId
-        ? state.workloadTemplates.find((t) => t.id === templateId)
+        ? effectiveState.workloadTemplates.find((t) => t.id === templateId)
         : null;
 
       const defaultParams: Record<string, string | number | boolean> = {};
@@ -308,11 +360,14 @@ export function HPCProvider({
         },
       }));
     },
-    [state.workloadTemplates],
+    [effectiveState.workloadTemplates, renderQueryGeneration],
   );
 
   const updateJobManifest = useCallback(
     (manifestUpdate: Partial<JobManifest>) => {
+      if (renderQueryGeneration !== queryGeneration.current) {
+        throw new HPCClientUnavailableError("query");
+      }
       const sanitizedUpdate: Partial<JobManifest> = { ...manifestUpdate };
 
       if (typeof manifestUpdate.name === "string") {
@@ -363,12 +418,22 @@ export function HPCProvider({
         }) as Record<string, string | number | boolean>;
       }
 
+      if (manifestUpdate.resources) {
+        sanitizedUpdate.resources = Object.freeze({
+          ...manifestUpdate.resources,
+        });
+      }
+
+      quoteRequest.current += 1;
+      quotedSubmission.current = null;
+
       setState((prev) => ({
         ...prev,
         submission: prev.submission
           ? {
               ...prev.submission,
               manifest: { ...prev.submission.manifest, ...sanitizedUpdate },
+              priceQuote: null,
             }
           : null,
       }));
@@ -376,58 +441,114 @@ export function HPCProvider({
     [],
   );
 
-  const selectOffering = useCallback((offeringId: string) => {
-    setState((prev) => ({
-      ...prev,
-      submission: prev.submission
-        ? {
-            ...prev.submission,
-            selectedOffering: offeringId,
-            step: "review",
-          }
-        : null,
-    }));
-  }, []);
-
-  const getQuote = useCallback(
-    async (
-      resourceSnapshot?: JobManifest["resources"],
-    ): Promise<JobPriceQuote> => {
-      const resources =
-        resourceSnapshot ?? state.submission?.manifest.resources;
-      if (!resources) {
-        throw new Error("No job configured");
+  const selectOffering = useCallback(
+    (offeringId: string) => {
+      if (renderQueryGeneration !== queryGeneration.current) {
+        throw new HPCClientUnavailableError("query");
       }
-      const hours = resources.maxRuntimeSeconds / 3600;
-      const computeCost = resources.nodes * resources.cpusPerNode * hours * 0.1;
-      const storageCost = resources.storageGB * 0.01;
-      const gpuCost = (resources.gpusPerNode || 0) * hours * 2;
-      const totalCost = computeCost + storageCost + gpuCost;
-
-      const quote: JobPriceQuote = {
-        estimatedTotal: totalCost.toFixed(2),
-        depositRequired: (totalCost * 1.1).toFixed(2),
-        breakdown: {
-          compute: computeCost.toFixed(2),
-          storage: storageCost.toFixed(2),
-          network: "0.00",
-          gpu: gpuCost > 0 ? gpuCost.toFixed(2) : undefined,
-        },
-        pricePerHour: (totalCost / hours).toFixed(2),
-        maxHours: hours,
-        denom: "uve",
-      };
-
+      quoteRequest.current += 1;
+      quotedSubmission.current = null;
       setState((prev) => ({
         ...prev,
         submission: prev.submission
-          ? { ...prev.submission, priceQuote: quote }
+          ? {
+              ...prev.submission,
+              selectedOffering: offeringId,
+              step: "review",
+              priceQuote: null,
+            }
           : null,
+      }));
+    },
+    [renderQueryGeneration],
+  );
+
+  const getQuote = useCallback(
+    async (
+      requestSnapshot?: JobManifest["resources"] | HPCQuoteRequest,
+    ): Promise<JobPriceQuote> => {
+      const explicitRequest =
+        requestSnapshot && "offeringId" in requestSnapshot
+          ? requestSnapshot
+          : undefined;
+      const resources =
+        explicitRequest?.resources ??
+        requestSnapshot ??
+        effectiveState.submission?.manifest.resources;
+      const offeringId =
+        explicitRequest?.offeringId ??
+        effectiveState.submission?.selectedOffering;
+      if (!resources || !offeringId) {
+        throw new Error("No job configured");
+      }
+      if (
+        !accountAddress ||
+        renderQueryGeneration !== queryGeneration.current
+      ) {
+        throw new HPCClientUnavailableError("query");
+      }
+      const binding = { chainId, accountAddress };
+      const generation = renderQueryGeneration;
+      const submissionId = submissionToken.current;
+      const requestId = ++quoteRequest.current;
+      const request = validateHPCQuoteRequest({
+        offeringId,
+        resources,
+      });
+      const adapter = requireHPCQueryAdapter(queryAdapter, binding);
+      beginQueryOperation("quote");
+      let quote: JobPriceQuote;
+      try {
+        const evidence = await adapter.getQuote(request);
+        if (
+          generation !== queryGeneration.current ||
+          requestId !== quoteRequest.current ||
+          submissionId !== submissionToken.current
+        ) {
+          throw new HPCClientUnavailableError("query");
+        }
+        quote = validateHPCJobPriceQuote(evidence, binding, request);
+        quotedSubmission.current = Object.freeze({
+          submissionId,
+          offeringId,
+          resources: request.resources,
+          quote,
+        });
+        finishQueryOperation("quote");
+      } catch (error) {
+        if (
+          generation === queryGeneration.current &&
+          requestId === quoteRequest.current &&
+          submissionId === submissionToken.current
+        ) {
+          finishQueryOperation("quote", error);
+        }
+        throw error;
+      }
+
+      setState((prev) => ({
+        ...prev,
+        submission:
+          prev.submission?.selectedOffering === offeringId &&
+          prev.submission.manifest.resources &&
+          JSON.stringify(prev.submission.manifest.resources) ===
+            JSON.stringify(resources)
+            ? { ...prev.submission, priceQuote: quote }
+            : null,
       }));
 
       return quote;
     },
-    [state.submission?.manifest.resources],
+    [
+      accountAddress,
+      beginQueryOperation,
+      chainId,
+      finishQueryOperation,
+      queryAdapter,
+      renderQueryGeneration,
+      effectiveState.submission?.manifest.resources,
+      effectiveState.submission?.selectedOffering,
+    ],
   );
 
   const validateJob = useCallback((): JobValidationError[] => {
@@ -460,13 +581,32 @@ export function HPCProvider({
 
   const submitJob = useCallback(async (): Promise<CommittedJobMutation> => {
     if (submissionInFlight.current) throw new Error("submission_in_progress");
+    if (
+      !accountAddress ||
+      renderMutationGeneration !== mutationGeneration.current ||
+      mutationAuthority.current.mutationAdapter !== mutationAdapter ||
+      mutationAuthority.current.chainId !== chainId ||
+      mutationAuthority.current.accountAddress !== accountAddress
+    ) {
+      throw new HPCClientUnavailableError("signer");
+    }
     const errors = validateJob();
     if (errors.length > 0) {
       throw new Error("Validation failed");
     }
 
     const submission = state.submission;
-    if (!submission?.selectedOffering || !submission.manifest.resources) {
+    const quoteBinding = quotedSubmission.current;
+    if (
+      !submission?.selectedOffering ||
+      !submission.manifest.resources ||
+      !submission.priceQuote ||
+      !quoteBinding ||
+      quoteBinding.submissionId !== submissionToken.current ||
+      quoteBinding.offeringId !== submission.selectedOffering ||
+      quoteBinding.quote !== submission.priceQuote ||
+      !sameResources(quoteBinding.resources, submission.manifest.resources)
+    ) {
       throw new Error("feature_unavailable");
     }
     const params: SubmitJobParams = Object.freeze({
@@ -489,10 +629,18 @@ export function HPCProvider({
       inputRefs: submission.manifest.inputRefs
         ? Object.freeze([...submission.manifest.inputRefs])
         : undefined,
+      quote: Object.freeze({
+        estimatedTotal: submission.priceQuote.estimatedTotal,
+        depositRequired: submission.priceQuote.depositRequired,
+        pricePerHour: submission.priceQuote.pricePerHour,
+        maxHours: submission.priceQuote.maxHours,
+        denom: submission.priceQuote.denom,
+      }),
     });
+    assertValidSubmitJobParams(params, true);
     submissionInFlight.current = true;
     const token = ++submissionToken.current;
-    const generation = mutationGeneration.current;
+    const generation = renderMutationGeneration;
 
     setState((prev) => ({
       ...prev,
@@ -502,7 +650,15 @@ export function HPCProvider({
     }));
 
     try {
-      if (!accountAddress) throw new Error("feature_unavailable");
+      if (
+        !accountAddress ||
+        generation !== mutationGeneration.current ||
+        mutationAuthority.current.mutationAdapter !== mutationAdapter ||
+        mutationAuthority.current.chainId !== chainId ||
+        mutationAuthority.current.accountAddress !== accountAddress
+      ) {
+        throw new HPCClientUnavailableError("signer");
+      }
       const result = await requireHPCSigner(mutationAdapter, {
         chainId,
         accountAddress,
@@ -548,41 +704,134 @@ export function HPCProvider({
     } finally {
       if (submissionToken.current === token) submissionInFlight.current = false;
     }
-  }, [accountAddress, chainId, mutationAdapter, validateJob, state.submission]);
+  }, [
+    accountAddress,
+    chainId,
+    mutationAdapter,
+    renderMutationGeneration,
+    validateJob,
+    state.submission,
+  ]);
 
   const cancelSubmission = useCallback(() => {
+    if (renderQueryGeneration !== queryGeneration.current) {
+      throw new HPCClientUnavailableError("query");
+    }
     submissionToken.current += 1;
+    quoteRequest.current += 1;
+    quotedSubmission.current = null;
     submissionInFlight.current = false;
     setState((prev) => ({ ...prev, submission: null }));
-  }, []);
+  }, [renderQueryGeneration]);
 
   const getJobs = useCallback(async () => {
-    if (!accountAddress) {
-      setState((prev) => ({ ...prev, jobs: [] }));
-      return;
+    if (!accountAddress || renderQueryGeneration !== queryGeneration.current) {
+      throw new HPCClientUnavailableError("query");
     }
-
-    // Would fetch jobs from chain
-    setState((prev) => ({ ...prev, jobs: prev.jobs }));
-  }, [accountAddress]);
+    const binding = { chainId, accountAddress };
+    const generation = renderQueryGeneration;
+    const requestId = ++jobsRequest.current;
+    const adapter = requireHPCQueryAdapter(queryAdapter, binding);
+    beginQueryOperation("jobs");
+    try {
+      const evidence = await adapter.getJobs();
+      if (
+        generation !== queryGeneration.current ||
+        requestId !== jobsRequest.current
+      ) {
+        throw new HPCClientUnavailableError("query");
+      }
+      const jobs = validateHPCJobs(evidence, binding);
+      setState((prev) => ({ ...prev, jobs: jobs as Job[] }));
+      finishQueryOperation("jobs");
+    } catch (error) {
+      if (
+        generation === queryGeneration.current &&
+        requestId === jobsRequest.current
+      ) {
+        finishQueryOperation("jobs", error);
+      }
+      throw error;
+    }
+  }, [
+    accountAddress,
+    beginQueryOperation,
+    chainId,
+    finishQueryOperation,
+    queryAdapter,
+    renderQueryGeneration,
+  ]);
 
   const getJob = useCallback(
     async (jobId: string): Promise<Job> => {
-      const job = state.jobs.find((j) => j.id === jobId);
-      if (!job) throw new Error("Job not found");
-      return job;
+      if (
+        !accountAddress ||
+        renderQueryGeneration !== queryGeneration.current
+      ) {
+        throw new HPCClientUnavailableError("query");
+      }
+      const binding = { chainId, accountAddress, jobId };
+      const generation = renderQueryGeneration;
+      const requestId = ++jobRequest.current;
+      const adapter = requireHPCQueryAdapter(queryAdapter, binding);
+      beginQueryOperation("job");
+      try {
+        const evidence = await adapter.getJob(jobId);
+        if (
+          generation !== queryGeneration.current ||
+          requestId !== jobRequest.current
+        ) {
+          throw new HPCClientUnavailableError("query");
+        }
+        const job = validateHPCJob(evidence, binding);
+        setState((prev) => ({ ...prev, selectedJob: job }));
+        finishQueryOperation("job");
+        return job;
+      } catch (error) {
+        if (
+          generation === queryGeneration.current &&
+          requestId === jobRequest.current
+        ) {
+          finishQueryOperation("job", error);
+        }
+        throw error;
+      }
     },
-    [state.jobs],
+    [
+      accountAddress,
+      beginQueryOperation,
+      chainId,
+      finishQueryOperation,
+      queryAdapter,
+      renderQueryGeneration,
+    ],
   );
 
   const cancelJob = useCallback(
     async (jobId: string): Promise<CommittedJobMutation> => {
+      if (
+        !accountAddress ||
+        renderMutationGeneration !== mutationGeneration.current ||
+        mutationAuthority.current.mutationAdapter !== mutationAdapter ||
+        mutationAuthority.current.chainId !== chainId ||
+        mutationAuthority.current.accountAddress !== accountAddress
+      ) {
+        throw new HPCClientUnavailableError("signer");
+      }
       if (cancellationsInFlight.current.has(jobId))
         throw new Error("cancellation_in_progress");
       cancellationsInFlight.current.add(jobId);
-      const generation = mutationGeneration.current;
+      const generation = renderMutationGeneration;
       try {
-        if (!accountAddress) throw new Error("feature_unavailable");
+        if (
+          !accountAddress ||
+          generation !== mutationGeneration.current ||
+          mutationAuthority.current.mutationAdapter !== mutationAdapter ||
+          mutationAuthority.current.chainId !== chainId ||
+          mutationAuthority.current.accountAddress !== accountAddress
+        ) {
+          throw new HPCClientUnavailableError("signer");
+        }
         const result = await requireHPCSigner(mutationAdapter, {
           chainId,
           accountAddress,
@@ -590,19 +839,13 @@ export function HPCProvider({
         assertCommittedJobMutation(result, jobId);
         if (mutationGeneration.current !== generation)
           throw new Error("submission_cancelled");
-        setState((prev) => ({
-          ...prev,
-          jobs: prev.jobs.map((j) =>
-            j.id === jobId ? { ...j, status: "cancelled" as JobStatus } : j,
-          ),
-        }));
         return Object.freeze({ ...result });
       } finally {
         if (mutationGeneration.current === generation)
           cancellationsInFlight.current.delete(jobId);
       }
     },
-    [accountAddress, chainId, mutationAdapter],
+    [accountAddress, chainId, mutationAdapter, renderMutationGeneration],
   );
 
   const getOutputs = useCallback(
@@ -654,22 +897,54 @@ export function HPCProvider({
 
   const subscribeToJob = useCallback(
     (jobId: string, callback: (event: ChainEvent) => void): (() => void) => {
-      return () => {};
+      if (
+        !accountAddress ||
+        renderQueryGeneration !== queryGeneration.current
+      ) {
+        throw new HPCClientUnavailableError("query");
+      }
+      const adapter = requireHPCQueryAdapter(queryAdapter, {
+        chainId,
+        accountAddress,
+      });
+      if (!adapter.subscribeToJob) {
+        throw new HPCClientUnavailableError("query");
+      }
+      const generation = renderQueryGeneration;
+      let stopped = false;
+      const unsubscribe = adapter.subscribeToJob(jobId, (event) => {
+        if (generation !== queryGeneration.current) {
+          return;
+        }
+        callback(validateHPCJobSubscriptionEvent(event, jobId));
+      });
+      if (typeof unsubscribe !== "function") {
+        throw new HPCQueryValidationError();
+      }
+      const stop = () => {
+        if (stopped) return;
+        stopped = true;
+        activeQuerySubscriptions.current.delete(stop);
+        unsubscribe();
+      };
+      activeQuerySubscriptions.current.add(stop);
+      return stop;
     },
-    [],
+    [accountAddress, chainId, queryAdapter, renderQueryGeneration],
   );
 
   const clearError = useCallback(() => {
+    queryErrors.current.clear();
     setState((prev) => ({ ...prev, error: null }));
   }, []);
 
   useEffect(() => {
-    getWorkloadTemplates();
+    void getWorkloadTemplates().catch(() => undefined);
   }, [getWorkloadTemplates]);
 
   useEffect(() => {
     if (accountAddress) {
-      getJobs();
+      void getJobs().catch(() => undefined);
     }
   }, [accountAddress, getJobs]);
 
@@ -693,7 +968,7 @@ export function HPCProvider({
   };
 
   return (
-    <HPCContext.Provider value={{ state, actions }}>
+    <HPCContext.Provider value={{ state: effectiveState, actions }}>
       {children}
     </HPCContext.Provider>
   );

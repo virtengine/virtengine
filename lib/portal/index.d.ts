@@ -232,6 +232,7 @@ export interface HPCProviderProps {
   getAuthHeader?: () => Promise<string>;
   mutationAdapter?: HPCSignerAdapter;
   outputAdapter?: HPCOutputAdapter;
+  queryAdapter?: HPCQueryAdapter;
 }
 export const HPCProvider: React.ComponentType<HPCProviderProps>;
 export type HPCClientCapability = "query" | "signer" | "provider";
@@ -255,7 +256,18 @@ export interface SubmitJobParams {
   parameters?: Record<string, string | number | boolean>;
   encryptedInputs?: Record<string, unknown>;
   inputRefs?: string[];
+  quote?: {
+    estimatedTotal: string;
+    depositRequired: string;
+    pricePerHour: string;
+    maxHours: number;
+    denom: string;
+  };
 }
+export function assertValidSubmitJobParams(
+  params: SubmitJobParams,
+  requireQuote?: boolean,
+): void;
 export interface CommittedJobMutation {
   committed: true;
   jobId: string;
@@ -285,6 +297,54 @@ export interface HPCOutputAdapter {
   getOutputs(jobId: string): Promise<unknown>;
   resolveOutput(outputRef: JobOutputReference): Promise<unknown>;
 }
+export interface HPCQueryAdapter {
+  readonly chainId: string;
+  readonly accountAddress: string;
+  getWorkloadTemplates(): Promise<unknown>;
+  getQuote(request: HPCQuoteRequest): Promise<unknown>;
+  getJobs(): Promise<unknown>;
+  getJob(jobId: string): Promise<unknown>;
+  subscribeToJob?(
+    jobId: string,
+    callback: (event: unknown) => void,
+  ): () => void;
+}
+export interface HPCQuoteRequest {
+  offeringId: string;
+  resources: JobResources;
+}
+export interface HPCQueryEnvelope {
+  chainId: string;
+  accountAddress: string;
+}
+export class HPCQueryValidationError extends Error {
+  readonly code: "hpc_query_invalid";
+  constructor();
+}
+export function requireHPCQueryAdapter(
+  adapter: HPCQueryAdapter | undefined,
+  expected: HPCQueryEnvelope,
+): HPCQueryAdapter;
+export function validateHPCWorkloadTemplates(
+  value: unknown,
+  expected: HPCQueryEnvelope,
+): readonly WorkloadTemplate[];
+export function validateHPCJobPriceQuote(
+  value: unknown,
+  expected: HPCQueryEnvelope,
+  expectedRequest: HPCQuoteRequest,
+): JobPriceQuote;
+export function validateHPCQuoteRequest(
+  value: HPCQuoteRequest,
+): HPCQuoteRequest;
+export function validateHPCJobs(
+  value: unknown,
+  expected: HPCQueryEnvelope,
+): readonly Job[];
+export function validateHPCJob(
+  value: unknown,
+  expected: HPCQueryEnvelope & { jobId: string },
+): Job;
 export class HPCOutputValidationError extends Error {
   readonly code: "hpc_output_invalid";
   constructor();
@@ -429,6 +489,7 @@ export interface PortalProviderProps {
   marketplaceMutationTimeoutMs?: number;
   hpcMutationAdapter?: HPCSignerAdapter;
   hpcOutputAdapter?: HPCOutputAdapter;
+  hpcQueryAdapter?: HPCQueryAdapter;
   children: React.ReactNode;
 }
 export const PortalProvider: React.ComponentType<PortalProviderProps>;
@@ -500,7 +561,7 @@ export interface HPCActions {
   startJobSubmission(templateId?: string): void;
   updateJobManifest(manifest: Partial<JobManifest>): void;
   selectOffering(offeringId: string): void;
-  getQuote(resources?: JobResources): Promise<JobPriceQuote>;
+  getQuote(request?: JobResources | HPCQuoteRequest): Promise<JobPriceQuote>;
   validateJob(): JobValidationError[];
   submitJob(): Promise<CommittedJobMutation>;
   cancelJob(jobId: string): Promise<CommittedJobMutation>;

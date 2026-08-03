@@ -6,8 +6,10 @@ import { HPCProvider, useHPC } from "../../hooks/useHPC";
 import {
   HPCClientUnavailableError,
   HPCMutationNotCommittedError,
+  assertValidSubmitJobParams,
   type HPCSignerAdapter,
 } from "../../components/hpc/hpc-mutation";
+import type { HPCQueryAdapter } from "../../components/hpc/hpc-query";
 import type { QueryClient } from "../../types/chain";
 
 describe("legacy HPC committed mutations", () => {
@@ -24,6 +26,30 @@ describe("legacy HPC committed mutations", () => {
     return null;
   };
 
+  const queryAdapter: HPCQueryAdapter = {
+    ...signerBinding,
+    getWorkloadTemplates: vi
+      .fn()
+      .mockResolvedValue({ ...signerBinding, templates: [] }),
+    getQuote: vi.fn().mockImplementation((request) =>
+      Promise.resolve({
+        ...signerBinding,
+        offeringId: request.offeringId,
+        resources: request.resources,
+        quote: {
+          estimatedTotal: "1.00",
+          depositRequired: "1.00",
+          breakdown: { compute: "1.00", storage: "0", network: "0" },
+          pricePerHour: "1.00",
+          maxHours: 1,
+          denom: "uve",
+        },
+      }),
+    ),
+    getJobs: vi.fn().mockResolvedValue({ ...signerBinding, jobs: [] }),
+    getJob: vi.fn(),
+  };
+
   const renderProvider = async (mutationAdapter?: HPCSignerAdapter) => {
     await act(async () =>
       root.render(
@@ -33,6 +59,7 @@ describe("legacy HPC committed mutations", () => {
           accountAddress="virtengine1customer"
           getAuthHeader={async () => ""}
           mutationAdapter={mutationAdapter}
+          queryAdapter={queryAdapter}
         >
           <Consumer />
         </HPCProvider>,
@@ -53,6 +80,18 @@ describe("legacy HPC committed mutations", () => {
       }),
     );
     await act(async () => hpc.actions.selectOffering("offering-1"));
+    await act(async () => {
+      await hpc.actions.getQuote({
+        offeringId: "offering-1",
+        resources: {
+          nodes: 1,
+          cpusPerNode: 4,
+          memoryGBPerNode: 16,
+          maxRuntimeSeconds: 3600,
+          storageGB: 50,
+        },
+      });
+    });
   };
 
   beforeEach(() => {
@@ -173,6 +212,7 @@ describe("legacy HPC committed mutations", () => {
       submitJob,
       cancelJob: vi.fn(),
     });
+    await prepareSubmission();
     let malformedError: unknown;
     await act(async () => {
       try {
@@ -295,5 +335,61 @@ describe("legacy HPC committed mutations", () => {
     });
     await expect(pending).resolves.toMatchObject({ jobId: "job-1" });
     expect(cancelJob).toHaveBeenCalledTimes(1);
+  });
+
+  it("rejects retained mutation callbacks before old signer dispatch", async () => {
+    const oldSubmit = vi.fn();
+    const oldCancel = vi.fn();
+    await renderProvider({
+      state: "signing-ready",
+      ...signerBinding,
+      submitJob: oldSubmit,
+      cancelJob: oldCancel,
+    });
+    await prepareSubmission();
+    const staleSubmit = hpc.actions.submitJob;
+    const staleCancel = hpc.actions.cancelJob;
+
+    await renderProvider({
+      state: "signing-ready",
+      ...signerBinding,
+      submitJob: vi.fn(),
+      cancelJob: vi.fn(),
+    });
+
+    await expect(staleSubmit()).rejects.toBeInstanceOf(
+      HPCClientUnavailableError,
+    );
+    await expect(staleCancel("job-1")).rejects.toBeInstanceOf(
+      HPCClientUnavailableError,
+    );
+    expect(oldSubmit).not.toHaveBeenCalled();
+    expect(oldCancel).not.toHaveBeenCalled();
+  });
+
+  it("rejects invalid direct submission resources and quote economics", () => {
+    expect(() =>
+      assertValidSubmitJobParams(
+        {
+          offeringId: "offering-1",
+          name: "invalid",
+          resources: {
+            nodes: 0,
+            cpusPerNode: 4,
+            memoryGBPerNode: 16,
+            maxRuntimeSeconds: 3600,
+            storageGB: 50,
+          },
+          quote: {
+            estimatedTotal: "1.00",
+            depositRequired: "1.00",
+            pricePerHour: "1.00",
+            maxHours: 1,
+            denom: "uve",
+          },
+        },
+        true,
+      ),
+    ).toThrow(HPCMutationNotCommittedError);
   });
 });

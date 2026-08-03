@@ -19,6 +19,7 @@ import type {
 } from "./marketplace/checkout-mutation";
 import type { HPCSignerAdapter } from "./hpc/hpc-mutation";
 import type { HPCOutputAdapter } from "./hpc/hpc-output";
+import type { HPCQueryAdapter } from "./hpc/hpc-query";
 import type {
   WalletProviderConfig,
   WalletChainInfo,
@@ -33,6 +34,7 @@ function ProductProviders({
   queryChainId,
   hpcMutationAdapter,
   hpcOutputAdapter,
+  hpcQueryAdapter,
 }: {
   children: React.ReactNode;
   mutationAdapter?: CheckoutMutationAdapter;
@@ -41,6 +43,7 @@ function ProductProviders({
   queryChainId: string;
   hpcMutationAdapter?: HPCSignerAdapter;
   hpcOutputAdapter?: HPCOutputAdapter;
+  hpcQueryAdapter?: HPCQueryAdapter;
 }) {
   const chain = useChain();
   const wallet = useWallet();
@@ -83,6 +86,13 @@ function ProductProviders({
               ? hpcOutputAdapter
               : undefined
           }
+          queryAdapter={
+            accountAddress &&
+            hpcQueryAdapter?.chainId === queryChainId &&
+            hpcQueryAdapter.accountAddress === accountAddress
+              ? hpcQueryAdapter
+              : undefined
+          }
         >
           {children}
         </HPCProvider>
@@ -121,6 +131,7 @@ export function PortalProvider({
   marketplaceMutationTimeoutMs,
   hpcMutationAdapter,
   hpcOutputAdapter,
+  hpcQueryAdapter,
   children,
 }: PortalProviderProps): JSX.Element {
   const [isReady, setIsReady] = React.useState(false);
@@ -198,6 +209,7 @@ export function PortalProvider({
                   queryChainId={chainConfig.chainId}
                   hpcMutationAdapter={hpcMutationAdapter}
                   hpcOutputAdapter={hpcOutputAdapter}
+                  hpcQueryAdapter={hpcQueryAdapter}
                 >
                   {children}
                 </ProductProviders>

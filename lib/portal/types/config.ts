@@ -14,6 +14,7 @@ import type {
 } from "../components/marketplace/checkout-mutation";
 import type { HPCSignerAdapter } from "../components/hpc/hpc-mutation";
 import type { HPCOutputAdapter } from "../components/hpc/hpc-output";
+import type { HPCQueryAdapter } from "../components/hpc/hpc-query";
 
 /**
  * Portal configuration
@@ -275,6 +276,7 @@ export interface PortalProviderProps {
   marketplaceMutationTimeoutMs?: number;
   hpcMutationAdapter?: HPCSignerAdapter;
   hpcOutputAdapter?: HPCOutputAdapter;
+  hpcQueryAdapter?: HPCQueryAdapter;
 
   /**
    * Child components

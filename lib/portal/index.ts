@@ -521,6 +521,7 @@ export {
   HPCClientUnavailableError,
   HPCMutationNotCommittedError,
   assertCommittedJobMutation,
+  assertValidSubmitJobParams,
   requireHPCSigner,
 } from "./components/hpc/hpc-mutation";
 export {
@@ -530,6 +531,20 @@ export {
   validateResolvedHPCOutput,
 } from "./components/hpc/hpc-output";
 export type { HPCOutputAdapter } from "./components/hpc/hpc-output";
+export {
+  HPCQueryValidationError,
+  requireHPCQueryAdapter,
+  validateHPCJob,
+  validateHPCJobPriceQuote,
+  validateHPCQuoteRequest,
+  validateHPCJobs,
+  validateHPCWorkloadTemplates,
+} from "./components/hpc/hpc-query";
+export type {
+  HPCQueryAdapter,
+  HPCQueryEnvelope,
+  HPCQuoteRequest,
+} from "./components/hpc/hpc-query";
 export type {
   CommittedJobMutation,
   HPCClientCapability,

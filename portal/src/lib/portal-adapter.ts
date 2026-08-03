@@ -395,10 +395,21 @@ export type {
 
 export { useHPC, HPCProvider } from '../../../lib/portal';
 export {
+  HPCQueryValidationError,
+  requireHPCQueryAdapter,
+  validateHPCJob,
+  validateHPCJobPriceQuote,
+  validateHPCQuoteRequest,
+  validateHPCJobs,
+  validateHPCWorkloadTemplates,
+} from '../../../lib/portal';
+export type { HPCQueryAdapter, HPCQueryEnvelope, HPCQuoteRequest } from '../../../lib/portal';
+export {
   HPCClientUnavailableError,
   HPCMutationNotCommittedError,
   HPCOutputValidationError,
   assertCommittedJobMutation,
+  assertValidSubmitJobParams,
   requireHPCOutputAdapter,
   requireHPCSigner,
   validateHPCOutputReferences,

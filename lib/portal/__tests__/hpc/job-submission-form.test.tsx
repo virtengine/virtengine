@@ -4,6 +4,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { HPCProvider } from "../../hooks/useHPC";
 import { JobSubmissionForm } from "../../components/hpc/JobSubmissionForm";
+import type { HPCQueryAdapter } from "../../components/hpc/hpc-query";
 import type { QueryClient } from "../../types/chain";
 import type { WorkloadTemplate } from "../../types/hpc";
 
@@ -36,6 +37,43 @@ const template: WorkloadTemplate = {
   version: "1",
 };
 
+const queryAdapter: HPCQueryAdapter = {
+  chainId: "virtengine-1",
+  accountAddress: "virtengine1customer",
+  getWorkloadTemplates: vi.fn().mockResolvedValue({
+    chainId: "virtengine-1",
+    accountAddress: "virtengine1customer",
+    templates: [template],
+  }),
+  getQuote: vi.fn().mockImplementation((request) =>
+    Promise.resolve({
+      chainId: "virtengine-1",
+      accountAddress: "virtengine1customer",
+      offeringId: request.offeringId,
+      resources: request.resources,
+      quote: {
+        estimatedTotal: "10.00",
+        depositRequired: "11.00",
+        breakdown: {
+          compute: "8.00",
+          storage: "1.00",
+          network: "0.00",
+          gpu: "1.00",
+        },
+        pricePerHour: "5.00",
+        maxHours: 2,
+        denom: "uve",
+      },
+    }),
+  ),
+  getJobs: vi.fn().mockResolvedValue({
+    chainId: "virtengine-1",
+    accountAddress: "virtengine1customer",
+    jobs: [],
+  }),
+  getJob: vi.fn(),
+};
+
 describe("JobSubmissionForm", () => {
   let container: HTMLDivElement;
   let root: Root;
@@ -66,6 +104,7 @@ describe("JobSubmissionForm", () => {
           queryClient={{} as QueryClient}
           chainId="virtengine-1"
           accountAddress="virtengine1customer"
+          queryAdapter={queryAdapter}
           mutationAdapter={{
             state: "signing-ready",
             chainId: "virtengine-1",
