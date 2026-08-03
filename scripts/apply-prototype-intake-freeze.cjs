@@ -8,6 +8,7 @@ const { closeSync, fsyncSync, openSync, readFileSync, renameSync, unlinkSync, wr
 const { resolve } = require("path");
 const { spawnSync } = require("child_process");
 const { planFrozenEpoch, resolveAnnotatedTag, validateObservationBinding } = require("./plan-prototype-intake-freeze.cjs");
+const { discoverEpochs, requireCurrentEpoch } = require("./prototype-intake-epochs.cjs");
 
 const threads = ["T1", "T2", "T3", "T5"];
 const producerKeys = ["decision", "status", "tag", "thread"];
@@ -164,7 +165,8 @@ function main(argv) {
   withExclusiveLease(lockPath, `${JSON.stringify(leaseRecord, null, 2)}\n`, () => {
     const prepared = withStablePublishedBoundary(options.repo, options.expectedHead, options.remote, () => {
       const epochPath = resolve(options.repo, `_docs/ralph/prototype-integration/epochs/epoch-${options.epoch}.json`);
-      const current = JSON.parse(readFileSync(epochPath, "utf8"));
+      const epochDirectory = resolve(options.repo, "_docs/ralph/prototype-integration/epochs");
+      const current = requireCurrentEpoch(discoverEpochs(epochDirectory), options.epoch);
       const planContent = readFileSync(resolve(options.plan), "utf8");
       validatePlanDigest(planContent, options.expectedPlanSha256);
       const proposed = JSON.parse(planContent);

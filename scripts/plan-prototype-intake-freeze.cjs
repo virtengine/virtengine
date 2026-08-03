@@ -7,6 +7,7 @@ const { createHash } = require("crypto");
 const { readFileSync } = require("fs");
 const { isAbsolute, resolve } = require("path");
 const { spawnSync } = require("child_process");
+const { discoverEpochs, requireCurrentEpoch } = require("./prototype-intake-epochs.cjs");
 
 const threads = ["T1", "T2", "T3", "T5"];
 const tagPattern = /^checkpoint\/prototype-t([1235])\/(t[1235]-[0-9]{2,}[a-z]?)$/;
@@ -105,8 +106,8 @@ function parseArgs(argv) {
 
 function main(argv) {
   const options = parseArgs(argv);
-  const path = resolve(options.repo, `_docs/ralph/prototype-integration/epochs/epoch-${options.epoch}.json`);
-  const epoch = JSON.parse(readFileSync(path, "utf8"));
+  const epochDirectory = resolve(options.repo, "_docs/ralph/prototype-integration/epochs");
+  const epoch = requireCurrentEpoch(discoverEpochs(epochDirectory), options.epoch);
   const observationContent = readFileSync(resolve(options.repo, options.observation), "utf8");
   const observation = JSON.parse(observationContent);
   const manifest = JSON.parse(readFileSync(resolve(options.repo, options.manifest), "utf8"));

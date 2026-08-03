@@ -7,7 +7,7 @@ const { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } = require(
 const { tmpdir } = require("os");
 const { dirname, join } = require("path");
 const test = require("node:test");
-const { REQUIRED_CI_CHECKS, TAG, parseArgs, preflight, validateReport, validateReportSchema } = require("./preflight-core-rc-publication.cjs");
+const { REQUIRED_CI_CHECKS, TAG, parseArgs, preflight, validateCandidateEpochSelection, validateReport, validateReportSchema } = require("./preflight-core-rc-publication.cjs");
 
 function git(repo, ...args) {
   return execFileSync("git", ["-C", repo, ...args], { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }).trim();
@@ -151,6 +151,16 @@ test("rejects invalid arguments and publication mode", () => {
   assert.throws(() => parseArgs(["--publish"]), /unavailable/);
   assert.throws(() => parseArgs(["--candidate", "0".repeat(40), "--epoch", "0", "--tag", TAG]));
   assert.throws(() => parseArgs(["--candidate", "0".repeat(40), "--epoch", "1", "--tag", "wrong"]));
+});
+
+test("requires the requested publication epoch to be current and contiguous", () => {
+  const paths = [
+    "_docs/ralph/prototype-integration/epochs/epoch-1.json",
+    "_docs/ralph/prototype-integration/epochs/epoch-2.json",
+  ];
+  assert.doesNotThrow(() => validateCandidateEpochSelection(paths, 2));
+  assert.throws(() => validateCandidateEpochSelection(paths, 1), /candidate current epoch is 2/);
+  assert.throws(() => validateCandidateEpochSelection([paths[1]], 2), /contiguous from epoch 1/);
 });
 
 test("rejects a forged empty pass report", () => {

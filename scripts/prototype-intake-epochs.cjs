@@ -38,4 +38,10 @@ function currentEpoch(epochs) {
   return validateEpochSequence(epochs).at(-1);
 }
 
-module.exports = { currentEpoch, discoverEpochs, validateEpochSequence };
+function requireCurrentEpoch(epochs, requestedEpoch) {
+  const current = currentEpoch(epochs);
+  assert.equal(Number(requestedEpoch), current.number, `requested epoch ${requestedEpoch} is stale; current epoch is ${current.number}`);
+  return current.document;
+}
+
+module.exports = { currentEpoch, discoverEpochs, requireCurrentEpoch, validateEpochSequence };

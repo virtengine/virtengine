@@ -131,6 +131,8 @@ function validateReportSchema(schema) {
 
 function loadCandidateControls(repo, candidate, epochNumber) {
   const prefix = "_docs/ralph/prototype-integration";
+  const epochPaths = git(repo, ["ls-tree", "-r", "--name-only", candidate, `${prefix}/epochs`]).split(/\r?\n/).filter((path) => /\/epoch-[1-9][0-9]*\.json$/.test(path));
+  validateCandidateEpochSelection(epochPaths, epochNumber);
   return {
     epoch: gitJson(repo, candidate, `${prefix}/epochs/epoch-${epochNumber}.json`),
     ledger: gitJson(repo, candidate, "_docs/ralph/handoffs/prototype-integration/HANDOFF.yaml"),
@@ -144,6 +146,13 @@ function loadCandidateControls(repo, candidate, epochNumber) {
     manifestText: gitFile(repo, candidate, `${prefix}/core-rc-manifest.json`),
     matrixText: gitFile(repo, candidate, `${prefix}/required-gate-matrix.json`),
   };
+}
+
+function validateCandidateEpochSelection(paths, requestedEpoch) {
+  const numbers = paths.map((path) => Number(path.match(/\/epoch-([1-9][0-9]*)\.json$/)?.[1])).sort((left, right) => left - right);
+  assert.ok(numbers.length > 0 && numbers.every((number, index) => number === index + 1), "candidate intake epoch history must be contiguous from epoch 1");
+  assert.equal(Number(requestedEpoch), numbers.at(-1), `requested epoch ${requestedEpoch} is stale; candidate current epoch is ${numbers.at(-1)}`);
+  return true;
 }
 
 function defaultCiProvider({ repo, candidate, remote }) {
@@ -399,6 +408,6 @@ async function main(argv = process.argv.slice(2)) {
   }
 }
 
-module.exports = { ALLOWED_REPORT_CHECK_IDS, REPORT_VERSION, REQUIRED_CI_CHECKS, REQUIRED_REPORT_CHECK_IDS, TAG, parseArgs, preflight, validateReport, validateReportSchema };
+module.exports = { ALLOWED_REPORT_CHECK_IDS, REPORT_VERSION, REQUIRED_CI_CHECKS, REQUIRED_REPORT_CHECK_IDS, TAG, parseArgs, preflight, validateCandidateEpochSelection, validateReport, validateReportSchema };
 
 if (require.main === module) main();

@@ -1,7 +1,7 @@
 "use strict";
 
 const assert = require("assert").strict;
-const { currentEpoch, validateEpochSequence } = require("./prototype-intake-epochs.cjs");
+const { currentEpoch, requireCurrentEpoch, validateEpochSequence } = require("./prototype-intake-epochs.cjs");
 
 function epoch(number, status) {
   return { file: `epoch-${number}.json`, number, document: { intake_epoch: number, status } };
@@ -22,6 +22,8 @@ const tests = [
     assert.throws(() => validateEpochSequence([candidate]), /body mismatch/);
   }],
   ["rejects a non-closed predecessor", () => assert.throws(() => validateEpochSequence([epoch(1, "frozen"), epoch(2, "open")]), /must be closed/)],
+  ["rejects a stale requested epoch", () => assert.throws(() => requireCurrentEpoch([epoch(1, "closed"), epoch(2, "open")], 1), /current epoch is 2/)],
+  ["returns the requested current epoch", () => assert.equal(requireCurrentEpoch([epoch(1, "closed"), epoch(2, "open")], 2).intake_epoch, 2)],
 ];
 
 for (const [name, run] of tests) {
