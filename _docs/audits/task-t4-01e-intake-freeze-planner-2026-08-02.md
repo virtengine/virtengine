@@ -10,7 +10,9 @@ time at or before the epoch cutoff. Unselected producers become frozen out.
 Remote publication timing is not inferred from the producer-controlled tagger
 date alone. The planner requires a committed pre-cutoff observation containing
 each annotated tag object and peeled target; unobserved tags cannot enter the
-frozen roster.
+frozen roster. Observer CLI options are single-assignment and reject missing or
+option-looking values, so an ambiguous epoch, remote, or repository selection
+cannot produce observation evidence.
 
 The planner hashes the selected observation, requires the checked core-RC
 manifest to bind that exact path/digest, verifies identical bytes at the

@@ -70,17 +70,25 @@ function validateTagObservation(observation, epoch) {
   return true;
 }
 
-function main(argv) {
+function parseArguments(argv) {
   const options = { epoch: null, remote: "origin", repo: resolve(__dirname, "..") };
+  const seen = new Set();
   for (let index = 0; index < argv.length; index += 1) {
     const argument = argv[index];
     assert.ok(["--epoch", "--remote", "--repo"].includes(argument), `unknown argument: ${argument}`);
+    assert.equal(seen.has(argument), false, `duplicate argument: ${argument}`);
+    seen.add(argument);
     const value = argv[++index];
-    assert.ok(value, `${argument} requires a value`);
+    assert.ok(value && !value.startsWith("--"), `${argument} requires a value`);
     options[argument.slice(2)] = value;
   }
   assert.match(options.epoch || "", /^[1-9][0-9]*$/, "--epoch is required");
   options.repo = resolve(options.repo);
+  return options;
+}
+
+function main(argv) {
+  const options = parseArguments(argv);
   const epochDirectory = resolve(options.repo, "_docs/ralph/prototype-integration/epochs");
   const epoch = requireCurrentEpoch(discoverEpochs(epochDirectory), options.epoch);
   assert.equal(epoch.status, "open", "tag observation requires the current epoch to be open");
@@ -91,7 +99,7 @@ function main(argv) {
   process.stdout.write(`${JSON.stringify(createObservation(epoch, result.stdout, options), null, 2)}\n`);
 }
 
-module.exports = { createObservation, parseRemoteTagListing, validateTagObservation };
+module.exports = { createObservation, parseArguments, parseRemoteTagListing, validateTagObservation };
 
 if (require.main === module) {
   try { main(process.argv.slice(2)); }
