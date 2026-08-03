@@ -72,6 +72,14 @@ function validateCandidatePlan(plan, options) {
   return true;
 }
 
+function validateAcceptanceBoundary(boundary, options) {
+  assert.equal(options.isAncestor(boundary.canonical_head, boundary.candidate_sha), true, "accepted candidate does not descend canonical T4");
+  assert.notEqual(boundary.candidate_sha, boundary.candidate_head, "acceptance artifact cannot self-reference its containing commit");
+  assert.equal(options.isAncestor(boundary.candidate_sha, boundary.candidate_head), true, "acceptance commit does not descend the validated candidate");
+  assert.deepEqual(options.changedPaths(boundary.candidate_sha, boundary.candidate_head), [boundary.acceptance_path], "candidate acceptance range changes paths other than the acceptance artifact");
+  return true;
+}
+
 function buildCandidatePlan(repo, candidateRef, canonicalRef, acceptancePath, producerBranches) {
   const canonicalHead = git(repo, ["rev-parse", `${canonicalRef}^{commit}`]).stdout.trim();
   const candidateHead = git(repo, ["rev-parse", `${candidateRef}^{commit}`]).stdout.trim();
@@ -79,7 +87,10 @@ function buildCandidatePlan(repo, candidateRef, canonicalRef, acceptancePath, pr
   assert.equal(acceptanceObject.status, 0, "candidate acceptance artifact is not committed");
   const acceptance = parseAcceptance(git(repo, ["show", `${candidateRef}:${acceptancePath}`]).stdout);
   assert.equal(acceptance.base_sha, canonicalHead, "acceptance base does not match canonical T4");
-  assert.equal(acceptance.candidate_sha, candidateHead, "acceptance candidate does not match candidate HEAD");
+  validateAcceptanceBoundary({ canonical_head: canonicalHead, candidate_head: candidateHead, candidate_sha: acceptance.candidate_sha, acceptance_path: acceptancePath }, {
+    isAncestor: (ancestor, descendant) => git(repo, ["merge-base", "--is-ancestor", ancestor, descendant], true).status === 0,
+    changedPaths: (ancestor, descendant) => git(repo, ["diff", "--name-only", `${ancestor}..${descendant}`]).stdout.trim().split(/\r?\n/).filter(Boolean),
+  });
   const acceptedPayloads = acceptance.accepted_payloads.map((entry) => ({ thread: entry.thread, tag: entry.tag, payload_sha: entry.payload_sha }));
   const base = git(repo, ["merge-base", canonicalHead, candidateHead]).stdout.trim();
   const contained = [];
@@ -110,7 +121,7 @@ function main(argv) {
   process.stdout.write(`${JSON.stringify(plan, null, 2)}\n`);
 }
 
-module.exports = { buildCandidatePlan, parseAcceptance, validateCandidatePlan, verifyAcceptedPayload };
+module.exports = { buildCandidatePlan, parseAcceptance, validateAcceptanceBoundary, validateCandidatePlan, verifyAcceptedPayload };
 
 if (require.main === module) {
   try { main(process.argv.slice(2)); }

@@ -23,9 +23,11 @@ covered by an accepted same-thread payload that is itself reachable from T4;
 missing producer refs or unaccepted out-of-band merges fail closed.
 
 Candidate-branch promotion additionally requires descent from current canonical
-T4 and a committed strict acceptance artifact whose base/candidate SHAs match,
-whose annotated tag objects peel to the declared payloads, and whose accepted payloads cover all
-contained producer history. The current `ve/prototype-integration-live` branch
+T4 and a committed strict acceptance artifact whose `base_sha` matches canonical
+T4 and whose `candidate_sha` names the validated implementation parent. The
+acceptance commit must descend that implementation and change only the acceptance
+artifact. Accepted annotated tags target committed handoffs that bind the declared
+payloads, and those payloads cover all contained producer history. The current `ve/prototype-integration-live` branch
 fails because its acceptance summary is uncommitted and its base predates
 canonical T4; no promotion or merge is claimed.
 
