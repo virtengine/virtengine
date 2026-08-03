@@ -1,48 +1,24 @@
 {
   "campaign": "three-day-prototype",
   "thread": "T4",
-  "checkpoint": "T4-01BE",
+  "checkpoint": "T4-01BF",
   "branch": "ve/prototype-integration",
-  "start_head": "81761b026ac96b5be7e70ca12caf5e853e26bdfe",
-  "end_head": "9e8f1dc43e9d09e84be92833ccdaac338416249f",
+  "start_head": "4151e9389df3bde11456f7b696364aaae503e3f5",
+  "end_head": "45a29587be6c6e8656ab5f510d48eef4cbdacf9d",
   "origin_main": "79391a3df86d85522b92e0400c6904971ecbe65d",
   "tree_clean": true,
   "commits": [
-    "8e92a4a64c46a1cde90be1f17477f249cdc2311e",
-    "81d0b77a3dbb239b3fa5864168adc9a19977e4b6",
-    "9e8f1dc43e9d09e84be92833ccdaac338416249f"
+    "45a29587be6c6e8656ab5f510d48eef4cbdacf9d"
   ],
   "owned_paths": [
     "_docs/ralph/prototype-integration/**",
-    "_docs/ralph/handoffs/prototype-integration/**",
-    "scripts/validate-prototype-intake.cjs",
-    "scripts/validate-prototype-intake.test.cjs"
+    "_docs/ralph/handoffs/prototype-integration/**"
   ],
   "files_changed": [
     "_docs/ralph/handoffs/prototype-integration/HANDOFF.yaml",
-    "_docs/ralph/prototype-integration/epochs/epoch-1.json",
-    "scripts/validate-prototype-intake.cjs",
-    "scripts/validate-prototype-intake.test.cjs"
+    "_docs/ralph/prototype-integration/core-rc-manifest.json"
   ],
   "tests": [
-    {
-      "command": "node scripts/plan-prototype-intake-freeze.test.cjs && node scripts/apply-prototype-intake-freeze.test.cjs",
-      "exit_code": 0,
-      "result": "passed",
-      "test_count": 45,
-      "tool_versions": {
-        "node": "20.19.1"
-      }
-    },
-    {
-      "command": "node scripts/validate-prototype-intake.test.cjs",
-      "exit_code": 0,
-      "result": "passed",
-      "test_count": 32,
-      "tool_versions": {
-        "node": "20.19.1"
-      }
-    },
     {
       "command": "node scripts/validate-prototype-integration.test.cjs && node scripts/validate-prototype-integration.cjs",
       "exit_code": 0,
@@ -63,7 +39,7 @@
     }
   ],
   "generated_hashes": {
-    "_docs/ralph/prototype-integration/core-rc-manifest.json": "51e6965356aed0782269ac15627f5e47c26fa05cec2bbbebd8a1960f80d422fc"
+    "_docs/ralph/prototype-integration/core-rc-manifest.json": "e79da46d93b51bcf3aae3ba00b5b36e21bad63a4f90674bfcc6552419065daec"
   },
   "accepted_checkpoints": [],
   "rejected_checkpoints": [
@@ -103,7 +79,7 @@
     "Stable secrets are remediated through explicit pre-provisioned Secret names/keys and legacy upgrade instructions; no render-time credential generation remains.",
     "The diagnostic-only publication guard refuses --publish and created no local or remote checkpoint/prototype-integration/t4-09a tag.",
     "Clean real diagnostics pass candidate HEAD/remote equality, manifest strict validity/hash/ancestry/boundary, accepted-ledger correspondence, and tag absence.",
-    "Publication remains blocked by 19 checks: CI availability and two exact workflows; epoch cutoff/state; model, producer, release-provenance, rollback, rollout, SBOM, and SLURM evidence; complete gate matrix/result envelope; future manifest status/prototype success; accepted tag revalidation; producer terminal/frozen-out decisions.",
+    "Publication remains blocked by 18 checks: candidate publication boundary, CI availability and two exact workflows; model, producer, release-provenance, rollback, rollout, SBOM, and SLURM evidence; complete gate matrix/result envelope; future manifest status/prototype success; recorded final digest; and accepted tag revalidation. Epoch cutoff/state and producer terminal/frozen-out checks pass.",
     "The canonical diagnostic reports stable secrets and immutable images passed; capacity equality, durability, and least privilege remain unverified without Helm/live evidence.",
     "No canonical chart remediation, failover, restore, or production render approval is claimed.",
     "The T4-12A diagnostic records 11 prohibited production AI, biometric, consent, custody, or stub-success finding paths; enforce mode rejects the current repository state.",
@@ -115,5 +91,5 @@
     "Task 88C is not complete."
   ],
   "next_checkpoint": null,
-  "expected_head": "9e8f1dc43e9d09e84be92833ccdaac338416249f"
+  "expected_head": "45a29587be6c6e8656ab5f510d48eef4cbdacf9d"
 }
