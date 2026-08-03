@@ -16,6 +16,9 @@ run exit codes, zero-drift status, and an evidence path/hash verified at the
 exact generation source commit. Accepted producer tags are also re-read and
 every proto source must be declared in that checkpoint's committed handoff
 `files_changed`; unrelated historical proto files cannot satisfy readiness.
+Every declared proto source, generated target, and compatibility fixture must
+also resolve to an existing regular file under the checked repository root;
+canonical-looking invented paths cannot satisfy generated readiness.
 `--require-ready` rejects the current state.
 
 This checkpoint does not open the generation window or claim generated output.

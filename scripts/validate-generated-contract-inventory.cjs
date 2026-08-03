@@ -82,8 +82,16 @@ function validateGeneratedContractInventory(inventory, options = {}) {
       assert.equal(contract.producer.status, "accepted", `${contract.id} generated without accepted producer`);
       assert.ok(contract.proto_sources.length > 0 && contract.generated_targets.length > 0 && contract.compatibility_fixtures.length > 0, `${contract.id} generated evidence is incomplete`);
       assert.deepEqual(contract.blockers, [], `${contract.id} generated contract retains blockers`);
-      for (const source of contract.proto_sources) assert.ok(insideRoots(source, inventory.generation_window.source_roots) && source.endsWith(".proto"), `${contract.id} proto source is outside canonical roots`);
-      for (const target of contract.generated_targets) assert.ok(insideRoots(target, targetRoots), `${contract.id} target is outside canonical roots`);
+      for (const source of contract.proto_sources) {
+        assert.ok(insideRoots(source, inventory.generation_window.source_roots) && source.endsWith(".proto"), `${contract.id} proto source is outside canonical roots`);
+        const path = resolve(rootDir, source);
+        assert.ok(existsSync(path) && statSync(path).isFile(), `${contract.id} proto source is missing`);
+      }
+      for (const target of contract.generated_targets) {
+        assert.ok(insideRoots(target, targetRoots), `${contract.id} target is outside canonical roots`);
+        const path = resolve(rootDir, target);
+        assert.ok(existsSync(path) && statSync(path).isFile(), `${contract.id} generated target is missing`);
+      }
       for (const fixture of contract.compatibility_fixtures) {
         assert.ok(!isAbsolute(fixture) && !fixture.split(/[\\/]/).includes(".."), `${contract.id} fixture escapes repository`);
         const path = resolve(rootDir, fixture);
