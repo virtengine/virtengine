@@ -1,31 +1,29 @@
 {
   "campaign": "three-day-prototype",
   "thread": "T4",
-  "checkpoint": "T4-01EO",
+  "checkpoint": "T4-01EP",
   "branch": "ve/prototype-integration",
-  "start_head": "ef4848944000714ecdff74b9bd43ff380650b9ee",
-  "end_head": "2e4b236cfa2caab0b8da8429ba248992cdcc5fe5",
+  "start_head": "d5c1cc84967a211560bf9e5de13944873b84d8c3",
+  "end_head": "91cc30956e27121de595840710f8e216777ae717",
   "origin_main": "79391a3df86d85522b92e0400c6904971ecbe65d",
   "tree_clean": true,
   "commits": [
-    "2e4b236cfa2caab0b8da8429ba248992cdcc5fe5"
+    "91cc30956e27121de595840710f8e216777ae717"
   ],
   "owned_paths": [
-    "_docs/audits/**",
-    "scripts/plan-prototype-intake-freeze.cjs",
-    "scripts/plan-prototype-intake-freeze.test.cjs"
+    "_docs/ralph/prototype-integration/**",
+    "_docs/ralph/handoffs/prototype-integration/**"
   ],
   "files_changed": [
-    "_docs/audits/task-t4-01e-intake-freeze-planner-2026-08-02.md",
-    "scripts/plan-prototype-intake-freeze.cjs",
-    "scripts/plan-prototype-intake-freeze.test.cjs"
+    "_docs/ralph/handoffs/prototype-integration/HANDOFF.yaml",
+    "_docs/ralph/prototype-integration/core-rc-manifest.json"
   ],
   "tests": [
     {
-      "command": "node scripts/plan-prototype-intake-freeze.test.cjs",
+      "command": "node scripts/validate-prototype-integration.test.cjs && node scripts/validate-prototype-integration.cjs",
       "exit_code": 0,
       "result": "passed",
-      "test_count": 21,
+      "test_count": 13,
       "tool_versions": {
         "node": "20.19.1"
       }
@@ -40,7 +38,9 @@
       }
     }
   ],
-  "generated_hashes": {},
+  "generated_hashes": {
+    "_docs/ralph/prototype-integration/core-rc-manifest.json": "356508d7e8b158ffc616445478c8ea3f2d66071ef8248c14e940bdcf7faa7293"
+  },
   "accepted_checkpoints": [],
   "rejected_checkpoints": [
     {
@@ -91,5 +91,5 @@
     "Task 88C is not complete."
   ],
   "next_checkpoint": null,
-  "expected_head": "2e4b236cfa2caab0b8da8429ba248992cdcc5fe5"
+  "expected_head": "91cc30956e27121de595840710f8e216777ae717"
 }
