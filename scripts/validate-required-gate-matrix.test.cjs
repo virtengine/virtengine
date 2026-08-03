@@ -88,6 +88,17 @@ const tests = [
     weakenedSchema.$defs.category.properties.pinned_tools.uniqueItems = false;
     assert.throws(() => validateRequiredGateMatrix(cloneMatrix(), { schema: weakenedSchema }), /category pinned_tools must reject duplicates/);
   }],
+  ["rejects malformed dependency declarations and missing blockers", () => {
+    const invalidStatus = cloneMatrix();
+    invalidStatus.categories[0].dependencies[0].status = "unavailble";
+    assert.throws(() => validateRequiredGateMatrix(invalidStatus, { schema }), /invalid status/);
+    const extraField = cloneMatrix();
+    extraField.categories[0].dependencies[0].reason = "informal";
+    assert.throws(() => validateRequiredGateMatrix(extraField, { schema }), /unexpected or missing properties/);
+    const missingBlocker = cloneMatrix();
+    missingBlocker.categories[0].blockers = [];
+    assert.throws(() => validateRequiredGateMatrix(missingBlocker, { schema }), /must identify blocker for unavailable dependency/);
+  }],
   ["rejects a missing SLURM validator deployment selector", () => {
     const candidate = cloneMatrix();
     const category = candidate.categories.find((entry) => entry.id === "deployment");

@@ -57,6 +57,9 @@ function validateSchemaControl(schema) {
   assert.equal(schema.$defs.category.additionalProperties, false);
   for (const property of ["required_commands", "pinned_tools", "dependencies", "blockers"]) assert.equal(schema.$defs.category.properties[property].uniqueItems, true, `category ${property} must reject duplicates`);
   assert.deepEqual(schema.$defs.category.required.slice().sort(), categoryKeys.slice().sort(), "category schema required fields must be exact");
+  assert.equal(schema.$defs.dependency.additionalProperties, false);
+  assert.deepEqual(schema.$defs.dependency.required.slice().sort(), ["id", "status"]);
+  assert.deepEqual(schema.$defs.dependency.properties.status.enum, ["unavailable", "available"]);
   assert.equal(schema.$defs.zeroTestPolicy.properties.minimum_discovered.const, 1);
   assert.equal(schema.$defs.zeroTestPolicy.properties.minimum_executed.const, 1);
   for (const field of ["nonzero_exit", "skipped", "missing_tool", "cancelled"]) {
@@ -211,12 +214,20 @@ function validateRequiredGateMatrix(matrix, options = {}) {
     assert.deepEqual(category.zero_test_policy, { applies_to: "test_commands", minimum_discovered: 1, minimum_executed: 1, empty_selection: "fail" });
     assert.deepEqual(category.failure_semantics, { nonzero_exit: "fail", skipped: "fail", missing_tool: "fail", cancelled: "fail" });
     assert.ok(Array.isArray(category.dependencies) && category.dependencies.length > 0, `${category.id} dependencies must not be empty`);
+    for (const dependency of category.dependencies) {
+      assertExactKeys(dependency, ["id", "status"], `${category.id} dependency`);
+      assert.match(dependency.id, /^[0-9]+[A-Z]?$/, `${category.id} has invalid dependency ID`);
+      assert.ok(["unavailable", "available"].includes(dependency.status), `${category.id} dependency ${dependency.id} has invalid status`);
+    }
     const dependencyIds = category.dependencies.map((dependency) => dependency.id);
     assert.equal(new Set(dependencyIds).size, dependencyIds.length, `${category.id} dependency IDs must be unique`);
     assert.ok(["dependency_blocked", "ready", "complete"].includes(category.status), `${category.id} has invalid status`);
     assert.ok(Array.isArray(category.blockers), `${category.id} blockers must be an array`);
     assert.equal(new Set(category.blockers).size, category.blockers.length, `${category.id} blocker IDs must be unique`);
     const unavailable = category.dependencies.some((dependency) => dependency.status === "unavailable");
+    for (const dependency of category.dependencies.filter((entry) => entry.status === "unavailable")) {
+      assert.ok(category.blockers.includes(`dependency-${dependency.id.toLowerCase()}`), `${category.id} must identify blocker for unavailable dependency ${dependency.id}`);
+    }
     if (unavailable) {
       assert.equal(category.status, "dependency_blocked", `${category.id} must remain dependency_blocked`);
       assert.ok(category.blockers.length > 0, `${category.id} must identify dependency blockers`);
