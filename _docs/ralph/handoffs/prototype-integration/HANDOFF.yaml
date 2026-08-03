@@ -1,29 +1,43 @@
 {
   "campaign": "three-day-prototype",
   "thread": "T4",
-  "checkpoint": "T4-01DB",
+  "checkpoint": "T4-01DC",
   "branch": "ve/prototype-integration",
-  "start_head": "1ca7c80aa64d49a0c1a97876fbe98848622ffa4b",
-  "end_head": "03fefa0dadf602da4a9b57beca1dc4169592125a",
+  "start_head": "016c4145624deff9673c1c5cff3029277b1f41e0",
+  "end_head": "850529d2dedcc554e0747b738ad2ad2a799d61bf",
   "origin_main": "79391a3df86d85522b92e0400c6904971ecbe65d",
   "tree_clean": true,
   "commits": [
-    "03fefa0dadf602da4a9b57beca1dc4169592125a"
+    "850529d2dedcc554e0747b738ad2ad2a799d61bf"
   ],
   "owned_paths": [
     "_docs/ralph/prototype-integration/**",
-    "_docs/ralph/handoffs/prototype-integration/**"
+    "_docs/ralph/handoffs/prototype-integration/**",
+    "_docs/audits/task-t4-01e-intake-freeze-planner-2026-08-02.md",
+    "scripts/validate-required-gate-matrix.cjs",
+    "scripts/validate-required-gate-matrix.test.cjs"
   ],
   "files_changed": [
-    "_docs/ralph/handoffs/prototype-integration/HANDOFF.yaml",
-    "_docs/ralph/prototype-integration/core-rc-manifest.json"
+    "_docs/audits/task-t4-01e-intake-freeze-planner-2026-08-02.md",
+    "_docs/ralph/prototype-integration/required-gate-matrix.json",
+    "scripts/validate-required-gate-matrix.cjs",
+    "scripts/validate-required-gate-matrix.test.cjs"
   ],
   "tests": [
     {
-      "command": "node scripts/validate-prototype-integration.test.cjs && node scripts/validate-prototype-integration.cjs",
+      "command": "node scripts/validate-required-gate-matrix.test.cjs && node scripts/validate-required-gate-matrix.cjs",
       "exit_code": 0,
       "result": "passed",
-      "test_count": 13,
+      "test_count": 25,
+      "tool_versions": {
+        "node": "20.19.1"
+      }
+    },
+    {
+      "command": "node scripts/run-required-gates.test.cjs",
+      "exit_code": 0,
+      "result": "passed",
+      "test_count": 22,
       "tool_versions": {
         "node": "20.19.1"
       }
@@ -91,5 +105,5 @@
     "Task 88C is not complete."
   ],
   "next_checkpoint": null,
-  "expected_head": "03fefa0dadf602da4a9b57beca1dc4169592125a"
+  "expected_head": "850529d2dedcc554e0747b738ad2ad2a799d61bf"
 }
