@@ -19,7 +19,10 @@ every proto source must be declared in that checkpoint's committed handoff
 Aggregate validation requires the generation result source SHA to equal the
 current exact T4 HEAD and restricts evidence to a dedicated
 `_docs/ralph/prototype-integration/evidence/generated-contract-*.json` path.
-Older commits and unrelated historical blobs cannot authenticate generation.
+The hashed bytes must parse as an exact v1 generated-contract evidence envelope
+whose source SHA, first/second run exit codes, and drift result equal the
+inventory result. Older commits, unrelated historical blobs, and unrelated JSON
+cannot authenticate generation.
 An accepted generated producer must also be accepted in the current epoch, and
 its committed ledger `tip`, pre-cutoff observed remote target, and locally
 peeled tag target must be identical. Its local annotated tag object must also

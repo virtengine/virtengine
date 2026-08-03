@@ -60,7 +60,18 @@ function verifyGenerationResult(result, options) {
   if (result.source_sha !== options.currentSha) return false;
   if (!/^_docs\/ralph\/prototype-integration\/evidence\/generated-contract-[a-z0-9-]+\.json$/.test(result.evidence_path)) return false;
   const evidence = options.readEvidence(result.source_sha, result.evidence_path);
-  return Buffer.isBuffer(evidence) && createHash("sha256").update(evidence).digest("hex") === result.evidence_sha256;
+  if (!Buffer.isBuffer(evidence) || createHash("sha256").update(evidence).digest("hex") !== result.evidence_sha256) return false;
+  try {
+    const document = JSON.parse(evidence.toString("utf8"));
+    assert.deepEqual(Object.keys(document).sort(), ["drift_clean", "first_run_exit_code", "schema_version", "second_run_exit_code", "source_sha"]);
+    return document.schema_version === "virtengine.prototype.generated-contract-evidence/v1"
+      && document.source_sha === result.source_sha
+      && document.first_run_exit_code === result.first_run_exit_code
+      && document.second_run_exit_code === result.second_run_exit_code
+      && document.drift_clean === result.drift_clean;
+  } catch {
+    return false;
+  }
 }
 
 function verifyAcceptedGeneratedProducer(contract, options) {

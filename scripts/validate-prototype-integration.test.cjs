@@ -72,12 +72,14 @@ const tests = [
     assert.equal(producerHandoffDeclaresContract(contract, { thread: "T5", payload_head: sha, files_changed: ["sdk/proto/node/decision.proto"] }), false);
   }],
   ["binds generation results to current HEAD and dedicated evidence", () => {
-    const evidence = Buffer.from("{\"drift_clean\":true}\n");
-    const result = { source_sha: sha, evidence_path: "_docs/ralph/prototype-integration/evidence/generated-contract-zero-drift.json", evidence_sha256: createHash("sha256").update(evidence).digest("hex") };
+    const evidence = Buffer.from(`${JSON.stringify({ schema_version: "virtengine.prototype.generated-contract-evidence/v1", source_sha: sha, first_run_exit_code: 0, second_run_exit_code: 0, drift_clean: true })}\n`);
+    const result = { source_sha: sha, first_run_exit_code: 0, second_run_exit_code: 0, drift_clean: true, evidence_path: "_docs/ralph/prototype-integration/evidence/generated-contract-zero-drift.json", evidence_sha256: createHash("sha256").update(evidence).digest("hex") };
     const options = { currentSha: sha, readEvidence: () => evidence };
     assert.equal(verifyGenerationResult(result, options), true);
     assert.equal(verifyGenerationResult({ ...result, source_sha: "a".repeat(40) }, options), false);
     assert.equal(verifyGenerationResult({ ...result, evidence_path: "_docs/INDEX.md" }, options), false);
+    const unrelated = Buffer.from("{\"drift_clean\":true}\n");
+    assert.equal(verifyGenerationResult({ ...result, evidence_sha256: createHash("sha256").update(unrelated).digest("hex") }, { ...options, readEvidence: () => unrelated }), false);
   }],
   ["binds generated producers to accepted and observed tag targets", () => {
     const tip = "b".repeat(40);
