@@ -7,12 +7,12 @@ const sha = (character) => character.repeat(40);
 function fixture() {
   return {
     canonical_head: sha("a"), candidate_head: sha("b"),
-    accepted_payloads: [{ thread: "T1", tag: "checkpoint/prototype-t1/t1-09", payload_sha: sha("c") }],
+    accepted_payloads: [{ thread: "T1", tag: "checkpoint/prototype-t1/t1-09", payload_sha: sha("c"), handoff_sha: sha("d") }],
     contained_producer_commits: [{ thread: "T1", commit: sha("d") }],
   };
 }
 function options() {
-  return { acceptanceCommitted: true, isAncestor: (ancestor, descendant) => [[sha("a"), sha("b")], [sha("c"), sha("b")], [sha("d"), sha("c")]].some(([left, right]) => left === ancestor && right === descendant), verifyAcceptedPayload: () => true };
+  return { acceptanceCommitted: true, isAncestor: (ancestor, descendant) => [[sha("a"), sha("b")], [sha("c"), sha("b")], [sha("d"), sha("b")], [sha("d"), sha("d")]].some(([left, right]) => left === ancestor && right === descendant), verifyAcceptedPayload: () => true };
 }
 function withPublishedTag(entry, runGit) {
   const tagRef = `refs/tags/${entry.tag}`;

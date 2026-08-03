@@ -29,7 +29,7 @@ function parseAcceptance(content) {
   return acceptance;
 }
 
-function verifyAcceptedPayload(repo, entry, runGit = git) {
+function resolveAcceptedHandoffTarget(repo, entry, runGit = git) {
   try {
     const tagRef = `refs/tags/${entry.tag}`;
     const remote = runGit(repo, ["ls-remote", "--exit-code", "--refs", "--tags", "origin", tagRef], true);
@@ -37,25 +37,30 @@ function verifyAcceptedPayload(repo, entry, runGit = git) {
     const remoteFields = remote.stdout.trim().split(/\r?\n/).filter(Boolean).map((line) => line.split("\t"));
     if (remote.status !== 0 || local.status !== 0 || remoteFields.length !== 1 || remoteFields[0].length !== 2
       || !/^[a-f0-9]{40}$/.test(remoteFields[0][0]) || remoteFields[0][1] !== tagRef
-      || local.stdout.trim() !== remoteFields[0][0]) return false;
+      || local.stdout.trim() !== remoteFields[0][0]) return null;
     const objectType = runGit(repo, ["cat-file", "-t", tagRef], true);
     const tagContent = runGit(repo, ["cat-file", "-p", tagRef], true);
     const peeled = runGit(repo, ["rev-parse", "--verify", `${tagRef}^{commit}`], true);
-    if (objectType.status !== 0 || objectType.stdout.trim() !== "tag" || tagContent.status !== 0 || peeled.status !== 0) return false;
+    if (objectType.status !== 0 || objectType.stdout.trim() !== "tag" || tagContent.status !== 0 || peeled.status !== 0) return null;
     validateAnnotatedTagName(entry.tag, tagContent.stdout);
     const handoffTarget = peeled.stdout.trim();
-    if (handoffTarget === entry.payload_sha) return false;
+    if (handoffTarget === entry.payload_sha) return null;
     const handoffPath = `_docs/ralph/handoffs/prototype-${entry.thread.toLowerCase()}/HANDOFF.yaml`;
     const handoffResult = runGit(repo, ["show", `${handoffTarget}:${handoffPath}`], true);
-    if (handoffResult.status !== 0) return false;
+    if (handoffResult.status !== 0) return null;
     const handoff = JSON.parse(handoffResult.stdout);
     const ancestry = runGit(repo, ["merge-base", "--is-ancestor", entry.payload_sha, handoffTarget], true);
     const checkpoint = entry.tag.split("/").at(-1).toUpperCase();
     const expectedBranch = { T1: "ve/prototype-t1-identity", T2: "ve/prototype-t2-product", T3: "ve/prototype-t3-reliability", T5: "ve/prototype-t5-platform" }[entry.thread];
-    return handoff.thread === entry.thread && handoff.checkpoint === checkpoint && handoff.branch === expectedBranch && handoff.payload_head === entry.payload_sha && ancestry.status === 0;
+    return handoff.thread === entry.thread && handoff.checkpoint === checkpoint && handoff.branch === expectedBranch && handoff.payload_head === entry.payload_sha && ancestry.status === 0
+      ? handoffTarget : null;
   } catch {
-    return false;
+    return null;
   }
+}
+
+function verifyAcceptedPayload(repo, entry, runGit = git) {
+  return resolveAcceptedHandoffTarget(repo, entry, runGit) !== null;
 }
 
 function validateCandidatePlan(plan, options) {
@@ -69,11 +74,13 @@ function validateCandidatePlan(plan, options) {
     assert.ok(["T1", "T2", "T3", "T5"].includes(entry.thread), `unknown accepted thread ${entry.thread}`);
     assert.match(entry.payload_sha, /^[a-f0-9]{40}$/);
     assert.match(entry.tag, new RegExp(`^checkpoint/prototype-${entry.thread.toLowerCase()}/[a-z0-9-]+$`));
+    assert.match(entry.handoff_sha, /^[a-f0-9]{40}$/);
     assert.equal(options.verifyAcceptedPayload(entry), true, `${entry.thread} acceptance verification failed`);
     assert.equal(options.isAncestor(entry.payload_sha, plan.candidate_head), true, `${entry.thread} payload is not in candidate history`);
+    assert.equal(options.isAncestor(entry.handoff_sha, plan.candidate_head), true, `${entry.thread} handoff is not in candidate history`);
   }
   for (const contained of plan.contained_producer_commits) {
-    const covered = plan.accepted_payloads.some((entry) => entry.thread === contained.thread && options.isAncestor(contained.commit, entry.payload_sha));
+    const covered = plan.accepted_payloads.some((entry) => entry.thread === contained.thread && options.isAncestor(contained.commit, entry.handoff_sha));
     assert.equal(covered, true, `candidate contains unaccepted ${contained.thread} commit ${contained.commit}`);
   }
   return true;
@@ -118,7 +125,11 @@ function buildCandidatePlan(repo, candidateRef, canonicalRef, acceptancePath, pr
     parents: (commit) => runGit(repo, ["show", "-s", "--format=%P", commit]).stdout.trim().split(/\s+/).filter(Boolean),
     changedPaths: (ancestor, descendant) => runGit(repo, ["diff", "--name-only", `${ancestor}..${descendant}`]).stdout.trim().split(/\r?\n/).filter(Boolean),
   });
-  const acceptedPayloads = acceptance.accepted_payloads.map((entry) => ({ thread: entry.thread, tag: entry.tag, payload_sha: entry.payload_sha }));
+  const acceptedPayloads = acceptance.accepted_payloads.map((entry) => {
+    const handoffSha = resolveAcceptedHandoffTarget(repo, entry, runGit);
+    assert.match(handoffSha || "", /^[a-f0-9]{40}$/, `${entry.thread} acceptance verification failed`);
+    return { thread: entry.thread, tag: entry.tag, payload_sha: entry.payload_sha, handoff_sha: handoffSha };
+  });
   const base = runGit(repo, ["merge-base", canonicalHead, candidateHead]).stdout.trim();
   const contained = [];
   for (const [thread, branch] of producerBranches) {
@@ -164,7 +175,7 @@ function main(argv) {
   process.stdout.write(`${JSON.stringify(plan, null, 2)}\n`);
 }
 
-module.exports = { buildCandidatePlan, parseAcceptance, parseCandidateArgs, resolveCandidateInput, resolvePublishedBranch, validateAcceptanceBoundary, validateCandidatePlan, verifyAcceptedPayload };
+module.exports = { buildCandidatePlan, parseAcceptance, parseCandidateArgs, resolveAcceptedHandoffTarget, resolveCandidateInput, resolvePublishedBranch, validateAcceptanceBoundary, validateCandidatePlan, verifyAcceptedPayload };
 
 if (require.main === module) {
   try { main(process.argv.slice(2)); }
