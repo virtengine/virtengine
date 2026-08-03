@@ -2,7 +2,7 @@
 
 const assert = require("assert").strict;
 const { createHash } = require("crypto");
-const { producerHandoffDeclaresContract, validateContainedProducerCommits, validateIntegrationControl, validateManifestEpochBinding, verifyGenerationResult } = require("./validate-prototype-integration.cjs");
+const { producerHandoffDeclaresContract, validateContainedProducerCommits, validateIntegrationControl, validateManifestEpochBinding, verifyAcceptedGeneratedProducer, verifyGenerationResult } = require("./validate-prototype-integration.cjs");
 
 const sha = "79391a3df86d85522b92e0400c6904971ecbe65d";
 
@@ -78,6 +78,21 @@ const tests = [
     assert.equal(verifyGenerationResult(result, options), true);
     assert.equal(verifyGenerationResult({ ...result, source_sha: "a".repeat(40) }, options), false);
     assert.equal(verifyGenerationResult({ ...result, evidence_path: "_docs/INDEX.md" }, options), false);
+  }],
+  ["binds generated producers to accepted and observed tag targets", () => {
+    const tip = "b".repeat(40);
+    const contract = { owner_thread: "T1", producer: { tag: "checkpoint/prototype-t1/t1-18", payload_sha: sha }, proto_sources: ["sdk/proto/node/decision.proto"] };
+    const options = {
+      acceptedCheckpoints: [{ thread: "T1", tag: contract.producer.tag, payload_head: sha, tip }],
+      epoch: { producers: [{ thread: "T1", status: "accepted", tag: contract.producer.tag }] },
+      observation: { tags: [{ thread: "T1", tag: contract.producer.tag, target: tip }] },
+      resolveTagTarget: () => tip,
+      loadProducerHandoff: () => ({ thread: "T1", payload_head: sha, files_changed: contract.proto_sources }),
+      sourceExists: () => true,
+    };
+    assert.equal(verifyAcceptedGeneratedProducer(contract, options), true);
+    assert.equal(verifyAcceptedGeneratedProducer(contract, { ...options, resolveTagTarget: () => "c".repeat(40) }), false);
+    assert.equal(verifyAcceptedGeneratedProducer(contract, { ...options, observation: { tags: [] } }), false);
   }],
   ["accepts the frozen T4 campaign controls", () => {
     const fixture = validFixture();

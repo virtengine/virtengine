@@ -63,6 +63,22 @@ function verifyGenerationResult(result, options) {
   return Buffer.isBuffer(evidence) && createHash("sha256").update(evidence).digest("hex") === result.evidence_sha256;
 }
 
+function verifyAcceptedGeneratedProducer(contract, options) {
+  const accepted = options.acceptedCheckpoints.find((entry) => entry.thread === contract.owner_thread
+    && entry.tag === contract.producer.tag && entry.payload_head === contract.producer.payload_sha);
+  if (!accepted) return false;
+  const epochProducer = options.epoch.producers.find((entry) => entry.thread === contract.owner_thread
+    && entry.status === "accepted" && entry.tag === contract.producer.tag);
+  if (!epochProducer) return false;
+  const observed = options.observation?.tags.find((entry) => entry.thread === contract.owner_thread && entry.tag === contract.producer.tag);
+  if (!observed) return false;
+  const tagTarget = options.resolveTagTarget(contract.producer.tag);
+  if (tagTarget !== accepted.tip || tagTarget !== observed.target) return false;
+  const producerHandoff = options.loadProducerHandoff(tagTarget, contract.owner_thread);
+  return producerHandoffDeclaresContract(contract, producerHandoff)
+    && contract.proto_sources.every((path) => options.sourceExists(contract.producer.payload_sha, path));
+}
+
 function validateContainedProducerCommits(containedCommits, acceptedCheckpoints, isAncestor) {
   for (const contained of containedCommits) {
     const covering = acceptedCheckpoints.filter((entry) => entry.thread === contained.thread
@@ -195,7 +211,7 @@ function validateIntegrationControl(control, schema, handoff, epoch) {
   validateEpoch(epoch, handoff);
 }
 
-module.exports = { producerHandoffDeclaresContract, validateContainedProducerCommits, validateEpoch, validateIntegrationControl, validateManifestEpochBinding, verifyGenerationResult };
+module.exports = { producerHandoffDeclaresContract, validateContainedProducerCommits, validateEpoch, validateIntegrationControl, validateManifestEpochBinding, verifyAcceptedGeneratedProducer, verifyGenerationResult };
 
 if (require.main === module) {
   const epochEntry = currentEpoch(discoverEpochs(epochDirectory));
@@ -205,7 +221,8 @@ if (require.main === module) {
   const control = loadJson(controlPath);
   validateIntegrationControl(control, loadJson(schemaPath), handoff, epoch);
   validateContainedProducerCommits(discoverContainedProducerCommits(control, epoch), handoff.accepted_checkpoints, (ancestor, descendant) => spawnSync("git", ["merge-base", "--is-ancestor", ancestor, descendant], { cwd: root }).status === 0);
-  if (existsSync(epochTagObservationPath)) validateTagObservation(loadJson(epochTagObservationPath), epoch);
+  const observation = existsSync(epochTagObservationPath) ? loadJson(epochTagObservationPath) : null;
+  if (observation) validateTagObservation(observation, epoch);
   else assert.equal(epoch.status, "open", `current epoch ${epoch.intake_epoch} requires a tag observation once frozen or closed`);
   validateSecurityGates(loadJson(aiBiometricSecurityGatesPath), { rootDir: root });
   validateProductionPolicy(loadJson(aiProductionPolicyPath), { rootDir: root });
@@ -221,15 +238,18 @@ if (require.main === module) {
   validateGeneratedContractInventory(loadJson(generatedContractInventoryPath), {
     rootDir: root,
     verifyAcceptedProducer: (contract) => {
-      const accepted = handoff.accepted_checkpoints.some((entry) => entry.thread === contract.owner_thread && entry.tag === contract.producer.tag && entry.payload_head === contract.producer.payload_sha);
-      const tag = spawnSync("git", ["rev-parse", `${contract.producer.tag}^{}`], { cwd: root, encoding: "utf8" });
-      if (!accepted || tag.status !== 0) return false;
-      const handoffPath = `_docs/ralph/handoffs/prototype-${contract.owner_thread.toLowerCase()}/HANDOFF.yaml`;
-      const producer = spawnSync("git", ["show", `${tag.stdout.trim()}:${handoffPath}`], { cwd: root, encoding: "utf8" });
-      if (producer.status !== 0) return false;
       try {
-        return producerHandoffDeclaresContract(contract, JSON.parse(producer.stdout))
-          && contract.proto_sources.every((path) => spawnSync("git", ["cat-file", "-e", `${contract.producer.payload_sha}:${path}`], { cwd: root }).status === 0);
+        return verifyAcceptedGeneratedProducer(contract, {
+          acceptedCheckpoints: handoff.accepted_checkpoints,
+          epoch,
+          observation,
+          resolveTagTarget: (tag) => {
+            const result = spawnSync("git", ["rev-parse", `${tag}^{}`], { cwd: root, encoding: "utf8" });
+            return result.status === 0 ? result.stdout.trim() : null;
+          },
+          loadProducerHandoff: (tip, thread) => JSON.parse(spawnSync("git", ["show", `${tip}:_docs/ralph/handoffs/prototype-${thread.toLowerCase()}/HANDOFF.yaml`], { cwd: root, encoding: "utf8" }).stdout),
+          sourceExists: (payloadSha, path) => spawnSync("git", ["cat-file", "-e", `${payloadSha}:${path}`], { cwd: root }).status === 0,
+        });
       } catch {
         return false;
       }
