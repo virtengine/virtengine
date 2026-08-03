@@ -58,10 +58,10 @@ function buildFixture(mutation = {}) {
     opens_at: "2000-01-01T00:00:00Z",
     announcement_cutoff: "2000-01-02T00:00:00Z",
     producers: [
-      { thread: "T1", status: "unannounced", tag: null, decision: null },
+        { thread: "T1", status: "unannounced", tag: null, decision: "frozen-out" },
       { thread: "T2", status: "announced", tag, decision: null },
-      { thread: "T3", status: "unannounced", tag: null, decision: null },
-      { thread: "T5", status: "unannounced", tag: null, decision: null },
+        { thread: "T3", status: "unannounced", tag: null, decision: "frozen-out" },
+        { thread: "T5", status: "unannounced", tag: null, decision: "frozen-out" },
     ],
   };
   const ledger = { accepted_checkpoints: [], rejected_checkpoints: [] };
@@ -140,6 +140,10 @@ function fixtureTest(name, mutation, expected, overrides) {
     }
   });
 }
+
+fixtureTest("rejects a frozen roster with an undecided unannounced producer", {
+  static: ({ epoch }) => { epoch.producers[0].decision = null; },
+}, /must record decision=frozen-out/);
 
 test("accepts an annotated, announced intake-v2 checkpoint", () => {
   const fixture = buildFixture();

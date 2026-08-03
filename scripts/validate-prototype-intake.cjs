@@ -265,7 +265,7 @@ function validateEpoch(epoch, requestedEpoch, tagInfo, revalidateAccepted = fals
     assert.ok(["unannounced", "announced", "accepted", "rejected"].includes(entry.status), `invalid epoch producer status for ${entry.thread}`);
     if (entry.status === "unannounced") {
       assert.equal(entry.tag, null);
-      assert.equal(entry.decision, null);
+      assert.equal(entry.decision, "frozen-out", `unannounced producer ${entry.thread} must record decision=frozen-out`);
     }
     if (["announced", "accepted", "rejected"].includes(entry.status)) assert.equal(typeof entry.tag, "string", `${entry.status} producer ${entry.thread} must record a tag`);
     if (entry.status === "accepted") assert.equal(entry.decision, "accepted", `accepted producer ${entry.thread} must record decision=accepted`);
