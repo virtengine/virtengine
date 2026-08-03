@@ -131,6 +131,11 @@ const tests = [
     delete versionless.tests[0].tool_versions;
     assert.throws(() => buildTestEvidence(sourceSha, versionless, handoffPath, root), /missing tool_versions/);
   }],
+  ["rejects zero-count test evidence", () => {
+    const zeroCount = clone(handoff);
+    zeroCount.tests[0].test_count = 0;
+    assert.throws(() => buildTestEvidence(sourceSha, zeroCount, handoffPath, root), /invalid test_count/);
+  }],
   ["rejects checked-path dirty guard bypasses", () => {
     const common = ["--source", sourceSha, "--tooling-source", sourceSha];
     const dirtyMarker = resolve(root, "core-rc-manifest-dirty-guard.tmp");

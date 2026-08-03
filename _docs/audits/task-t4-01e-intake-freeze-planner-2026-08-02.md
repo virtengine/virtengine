@@ -37,6 +37,10 @@ or `origin/*` branches whose tracking commits equal the live remote head.
 Mutable local names such as `HEAD`, local branches, and abbreviated SHAs fail
 before acceptance evidence is read.
 
+Manifest handoff test records may omit counts and remain explicitly partial,
+but any declared count must be a positive integer. Zero-count records cannot
+produce complete test evidence.
+
 The planner hashes the selected observation, requires the checked core-RC
 manifest to bind that exact path/digest, verifies identical bytes at the
 manifest source commit, and requires that source to be an ancestor of current

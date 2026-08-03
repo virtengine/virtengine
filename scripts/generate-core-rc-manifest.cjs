@@ -214,7 +214,7 @@ function buildTestEvidence(sourceSha, handoff, handoffPath, cwd = root) {
     assert.ok(test.tool_versions && typeof test.tool_versions === "object" && !Array.isArray(test.tool_versions), `test evidence ${index} is missing tool_versions`);
     assert.ok(Object.keys(test.tool_versions).length > 0, `test evidence ${index} is missing tool_versions`);
     for (const version of Object.values(test.tool_versions)) assert.ok(typeof version === "string" && version.trim(), `test evidence ${index} has an empty tool version`);
-    assert.ok(test.test_count === undefined || (Number.isInteger(test.test_count) && test.test_count >= 0), `test evidence ${index} has an invalid test_count`);
+    assert.ok(test.test_count === undefined || (Number.isInteger(test.test_count) && test.test_count > 0), `test evidence ${index} has an invalid test_count`);
     return { command: test.command, exit_code: test.exit_code, result: test.result, test_count: test.test_count ?? null, tool_versions: test.tool_versions };
   });
   const counted = records.filter((test) => Number.isInteger(test.test_count));
