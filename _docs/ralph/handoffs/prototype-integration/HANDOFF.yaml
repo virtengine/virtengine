@@ -1,29 +1,31 @@
 {
   "campaign": "three-day-prototype",
   "thread": "T4",
-  "checkpoint": "T4-01EV",
+  "checkpoint": "T4-01EW",
   "branch": "ve/prototype-integration",
-  "start_head": "0c33ddce86aaefe197e4be9873386a01ac1abb15",
-  "end_head": "c3a14e415eb7c61873b048b0181d50dd87f38f70",
+  "start_head": "71dbf07ee0220cbfc763d4863ba345b379e56ad7",
+  "end_head": "0252a5a1d7c0c11f5cc2466a4f7699eab5944aef",
   "origin_main": "79391a3df86d85522b92e0400c6904971ecbe65d",
   "tree_clean": true,
   "commits": [
-    "c3a14e415eb7c61873b048b0181d50dd87f38f70"
+    "0252a5a1d7c0c11f5cc2466a4f7699eab5944aef"
   ],
   "owned_paths": [
-    "_docs/ralph/prototype-integration/**",
-    "_docs/ralph/handoffs/prototype-integration/**"
+    "_docs/audits/**",
+    "scripts/validate-prototype-intake.cjs",
+    "scripts/validate-prototype-intake.test.cjs"
   ],
   "files_changed": [
-    "_docs/ralph/handoffs/prototype-integration/HANDOFF.yaml",
-    "_docs/ralph/prototype-integration/core-rc-manifest.json"
+    "_docs/audits/task-t4-01e-intake-freeze-planner-2026-08-02.md",
+    "scripts/validate-prototype-intake.cjs",
+    "scripts/validate-prototype-intake.test.cjs"
   ],
   "tests": [
     {
-      "command": "node scripts/validate-prototype-integration.test.cjs && node scripts/validate-prototype-integration.cjs",
+      "command": "node scripts/validate-prototype-intake.test.cjs",
       "exit_code": 0,
       "result": "passed",
-      "test_count": 13,
+      "test_count": 34,
       "tool_versions": {
         "node": "20.19.1"
       }
@@ -38,9 +40,7 @@
       }
     }
   ],
-  "generated_hashes": {
-    "_docs/ralph/prototype-integration/core-rc-manifest.json": "6d557d5a2227f54f050fd084370216327fbee8038c80e2f2647ee58756128611"
-  },
+  "generated_hashes": {},
   "accepted_checkpoints": [],
   "rejected_checkpoints": [
     {
@@ -91,5 +91,5 @@
     "Task 88C is not complete."
   ],
   "next_checkpoint": null,
-  "expected_head": "c3a14e415eb7c61873b048b0181d50dd87f38f70"
+  "expected_head": "0252a5a1d7c0c11f5cc2466a4f7699eab5944aef"
 }
