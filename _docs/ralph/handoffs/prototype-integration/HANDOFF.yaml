@@ -1,29 +1,28 @@
 {
   "campaign": "three-day-prototype",
   "thread": "T4",
-  "checkpoint": "T4-01DH",
+  "checkpoint": "T4-01DI",
   "branch": "ve/prototype-integration",
-  "start_head": "e702dd1f2f40817de72c2fb9ba56f6f2273663d1",
-  "end_head": "e25de876be64852269da10174e3dfb586372a8ac",
+  "start_head": "c7bed923609f98af27af127ae0d451512df99194",
+  "end_head": "955240c19293896b155508e7428646526dc9dd5e",
   "origin_main": "79391a3df86d85522b92e0400c6904971ecbe65d",
   "tree_clean": true,
   "commits": [
-    "e25de876be64852269da10174e3dfb586372a8ac"
+    "955240c19293896b155508e7428646526dc9dd5e"
   ],
   "owned_paths": [
     "_docs/ralph/prototype-integration/**",
     "_docs/ralph/handoffs/prototype-integration/**"
   ],
   "files_changed": [
-    "_docs/ralph/handoffs/prototype-integration/HANDOFF.yaml",
-    "_docs/ralph/prototype-integration/core-rc-manifest.json"
+    "_docs/ralph/prototype-integration/epochs/epoch-2-tag-observation.json"
   ],
   "tests": [
     {
-      "command": "node scripts/validate-prototype-integration.test.cjs && node scripts/validate-prototype-integration.cjs",
+      "command": "node scripts/observe-prototype-intake-tags.test.cjs",
       "exit_code": 0,
       "result": "passed",
-      "test_count": 13,
+      "test_count": 6,
       "tool_versions": {
         "node": "20.19.1"
       }
@@ -91,5 +90,5 @@
     "Task 88C is not complete."
   ],
   "next_checkpoint": null,
-  "expected_head": "e25de876be64852269da10174e3dfb586372a8ac"
+  "expected_head": "955240c19293896b155508e7428646526dc9dd5e"
 }
