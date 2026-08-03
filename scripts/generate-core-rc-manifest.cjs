@@ -207,8 +207,12 @@ function buildTestEvidence(sourceSha, handoff, handoffPath, cwd = root) {
   assert.deepEqual(unrelated, [], `source commits after handoff end_head change non-evidence paths: ${unrelated.join(", ")}`);
   const ledgerSha = gitText(["log", "-1", "--format=%H", sourceSha, "--", handoffPath], cwd);
   assert.match(ledgerSha, shaPattern, "handoff ledger commit is unavailable");
+  assert.ok(Array.isArray(handoff.tests) && handoff.tests.length > 0, "handoff test evidence must not be empty");
+  const commands = new Set();
   const records = handoff.tests.map((test, index) => {
-    assert.ok(typeof test.command === "string" && test.command.trim(), `test evidence ${index} is missing command`);
+    assert.ok(typeof test.command === "string" && test.command.length > 0 && test.command.trim() === test.command, `test evidence ${index} command must be literal and nonempty`);
+    assert.equal(commands.has(test.command), false, `duplicate test evidence command: ${test.command}`);
+    commands.add(test.command);
     assert.equal(test.exit_code, 0, `test evidence ${index} has nonzero or missing exit_code`);
     assert.equal(test.result, "passed", `test evidence ${index} did not pass`);
     assert.ok(test.tool_versions && typeof test.tool_versions === "object" && !Array.isArray(test.tool_versions), `test evidence ${index} is missing tool_versions`);

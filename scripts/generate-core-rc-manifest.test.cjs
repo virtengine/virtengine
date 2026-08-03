@@ -136,6 +136,17 @@ const tests = [
     zeroCount.tests[0].test_count = 0;
     assert.throws(() => buildTestEvidence(sourceSha, zeroCount, handoffPath, root), /invalid test_count/);
   }],
+  ["rejects empty, duplicate, or non-literal test evidence", () => {
+    const empty = clone(handoff);
+    empty.tests = [];
+    assert.throws(() => buildTestEvidence(sourceSha, empty, handoffPath, root), /must not be empty/);
+    const duplicate = clone(handoff);
+    duplicate.tests.push(clone(duplicate.tests[0]));
+    assert.throws(() => buildTestEvidence(sourceSha, duplicate, handoffPath, root), /duplicate test evidence command/);
+    const padded = clone(handoff);
+    padded.tests[0].command = ` ${padded.tests[0].command}`;
+    assert.throws(() => buildTestEvidence(sourceSha, padded, handoffPath, root), /literal and nonempty/);
+  }],
   ["rejects checked-path dirty guard bypasses", () => {
     const common = ["--source", sourceSha, "--tooling-source", sourceSha];
     const dirtyMarker = resolve(root, "core-rc-manifest-dirty-guard.tmp");
@@ -168,6 +179,7 @@ const tests = [
     assert.equal(schema.$defs.testEvidence.oneOf[0].properties.uncounted_record_count.const, 0);
     assert.equal(schema.$defs.testEvidence.oneOf[1].properties.status.const, "partial");
     assert.equal(schema.$defs.testEvidence.oneOf[1].properties.uncounted_record_count.minimum, 1);
+    assert.equal(schema.$defs.testEvidence.properties.records.uniqueItems, true);
     const mutated = clone(schema);
     mutated.$defs.testRecord.properties.command.bogus = true;
     assert.throws(() => validateSchema(mutated), /unknown schema keyword/);

@@ -43,6 +43,10 @@ produce complete test evidence. The manifest schema mirrors runtime semantics:
 complete evidence has zero uncounted records, while partial evidence retains at
 least one uncounted record.
 
+Manifest test evidence must contain at least one unique literal command.
+Duplicate records and whitespace-padded command identities are rejected before
+record and declared-test counts are projected.
+
 The planner hashes the selected observation, requires the checked core-RC
 manifest to bind that exact path/digest, verifies identical bytes at the
 manifest source commit, and requires that source to be an ancestor of current
