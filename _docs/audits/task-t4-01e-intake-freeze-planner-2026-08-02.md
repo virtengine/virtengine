@@ -113,6 +113,11 @@ remains `unverified` with no evidence and its dedicated blocker. Alternate
 status strings, fabricated evidence, and unrelated blocker substitutions fail
 runtime validation.
 
+Migration, required-gate, SLURM, model-provenance, and producer-checkpoint
+sections each retain their dedicated canonical blocker ID. Runtime and schema
+validation reject cross-wired blockers even when every substituted blocker
+exists in the root blocker inventory.
+
 The planner hashes the selected observation, requires the checked core-RC
 manifest to bind that exact path/digest, verifies identical bytes at the
 manifest source commit, and requires that source to be an ancestor of current

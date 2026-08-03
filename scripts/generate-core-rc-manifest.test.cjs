@@ -228,6 +228,11 @@ const tests = [
     assert.deepEqual(schema.$defs.assuranceDigest.properties.source_blocker_id, { $ref: "#/$defs/nullableBlockerId" });
     assert.deepEqual(schema.$defs.assuranceStatus.properties.source_blocker_id, { $ref: "#/$defs/nullableBlockerId" });
     assert.equal(schema.$defs.assuranceStatus.properties.status.pattern, "^\\S(?:.*\\S)?$");
+    assert.equal(schema.$defs.migrations.properties.blocker_id.const, "producer-migration-handoffs-unavailable");
+    assert.equal(schema.$defs.requiredGates.properties.blocker_id.const, "required-gates-dependency-blocked");
+    assert.equal(schema.$defs.slurm.properties.blocker_id.const, "slurm-production-evidence-unavailable");
+    assert.equal(schema.$defs.modelProvenance.properties.blocker_id.const, "production-model-provenance-unavailable");
+    assert.equal(schema.$defs.producerCheckpoints.properties.blocker_id.const, "accepted-producer-checkpoints-unavailable");
     const mutated = clone(schema);
     mutated.$defs.testRecord.properties.command.bogus = true;
     assert.throws(() => validateSchema(mutated), /unknown schema keyword/);
@@ -242,6 +247,11 @@ const tests = [
     const rollback = clone(checkedManifest);
     rollback.rollback = { status: "verified", evidence: { result: "passed", source: "fabricated" }, blocker_id: "rollback-evidence-unavailable" };
     assert.throws(() => validateManifest(rollback, { rootDir: root }), /rollback/);
+  }],
+  ["rejects cross-wired blocked-section blockers", () => {
+    const candidate = clone(checkedManifest);
+    [candidate.migrations.blocker_id, candidate.slurm.blocker_id] = [candidate.slurm.blocker_id, candidate.migrations.blocker_id];
+    assert.throws(() => validateManifest(candidate, { rootDir: root }), /migration blocker mismatch/);
   }],
   ["rejects duplicate manifest entry IDs", () => {
     assert.throws(() => assertUniqueIds([{ id: "chart" }, { id: "chart" }], "artifact group"), /must be unique/);

@@ -591,9 +591,14 @@ function validateManifest(manifest, options = {}) {
   exactKeys(manifest.required_gates, ["status", "matrix_path", "category_count", "blocked_category_count", "blocker_id"], "required_gates");
   exactKeys(manifest.slurm, ["status", "inventory_path", "report_path", "report_status", "blocker_id"], "slurm");
   exactKeys(manifest.model_provenance, ["status", "path", "sbom_status", "production_weights_status", "blocker_id"], "model_provenance");
+  assert.equal(manifest.migrations.blocker_id, "producer-migration-handoffs-unavailable", "migration blocker mismatch");
+  assert.equal(manifest.required_gates.blocker_id, "required-gates-dependency-blocked", "required gate blocker mismatch");
+  assert.equal(manifest.slurm.blocker_id, "slurm-production-evidence-unavailable", "SLURM blocker mismatch");
+  assert.equal(manifest.model_provenance.blocker_id, "production-model-provenance-unavailable", "model provenance blocker mismatch");
   assertBlocker(manifest, manifest.ai_assurance.non_certification.blocker_id, "AI assurance");
   exactKeys(manifest.test_evidence, ["status", "ledger_path", "implementation_sha", "ledger_sha", "record_count", "declared_test_count", "uncounted_record_count", "records", "blocker_id"], "test_evidence");
   exactKeys(manifest.producer_checkpoints, ["ledger_path", "ledger_sha256", "accepted", "rejected", "blocker_id"], "producer_checkpoints");
+  assert.equal(manifest.producer_checkpoints.blocker_id, "accepted-producer-checkpoints-unavailable", "producer checkpoint blocker mismatch");
   exactKeys(manifest.rollout, ["status", "evidence", "blocker_id"], "rollout");
   exactKeys(manifest.rollback, ["status", "evidence", "blocker_id"], "rollback");
   assert.equal(manifest.rollout.status, "not_authorized", "rollout must remain not authorized");

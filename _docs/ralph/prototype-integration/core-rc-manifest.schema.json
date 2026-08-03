@@ -189,7 +189,7 @@
       "properties": {
         "status": { "const": "dependency_blocked" }, "inventory_path": { "$ref": "#/$defs/repositoryPath" },
         "migration_count": { "type": "integer", "minimum": 0 }, "unavailable_producer_count": { "type": "integer", "minimum": 1 },
-        "blocker_id": { "type": "string", "minLength": 1 }
+        "blocker_id": { "const": "producer-migration-handoffs-unavailable" }
       }
     },
     "requiredGates": {
@@ -198,7 +198,7 @@
       "properties": {
         "status": { "const": "dependency_blocked" }, "matrix_path": { "$ref": "#/$defs/repositoryPath" },
         "category_count": { "type": "integer", "minimum": 1 }, "blocked_category_count": { "type": "integer", "minimum": 1 },
-        "blocker_id": { "type": "string", "minLength": 1 }
+        "blocker_id": { "const": "required-gates-dependency-blocked" }
       }
     },
     "slurm": {
@@ -206,7 +206,7 @@
       "required": ["status", "inventory_path", "report_path", "report_status", "blocker_id"],
       "properties": {
         "status": { "const": "blocked" }, "inventory_path": { "$ref": "#/$defs/repositoryPath" }, "report_path": { "$ref": "#/$defs/repositoryPath" },
-        "report_status": { "const": "blocked" }, "blocker_id": { "type": "string", "minLength": 1 }
+        "report_status": { "const": "blocked" }, "blocker_id": { "const": "slurm-production-evidence-unavailable" }
       }
     },
     "modelProvenance": {
@@ -215,7 +215,7 @@
       "properties": {
         "status": { "const": "dependency_blocked" }, "path": { "$ref": "#/$defs/repositoryPath" },
         "sbom_status": { "const": "dependency_blocked" }, "production_weights_status": { "const": "dependency_blocked" },
-        "blocker_id": { "type": "string", "minLength": 1 }
+        "blocker_id": { "const": "production-model-provenance-unavailable" }
       }
     },
     "testEvidence": {
@@ -254,7 +254,7 @@
         "ledger_path": { "$ref": "#/$defs/repositoryPath" }, "ledger_sha256": { "$ref": "#/$defs/digest" },
         "accepted": { "type": "array", "maxItems": 0 },
         "rejected": { "type": "array", "uniqueItems": true, "items": { "$ref": "#/$defs/rejectedCheckpoint" } },
-        "blocker_id": { "type": "string", "minLength": 1 }
+        "blocker_id": { "const": "accepted-producer-checkpoints-unavailable" }
       }
     },
     "rejectedCheckpoint": {
