@@ -6,14 +6,14 @@
   "planned_functionality_complete": false,
   "milestone_m_eligible": false,
   "source": {
-    "payload_sha": "1d5838ef4f84f601e04513a4c668306d39c3d0de",
-    "tree": "207d3059ce8575feec454a3abf521ce7e18d45fe",
+    "payload_sha": "986a04b55c38b32f62a6de9eb15197ff7d6af900",
+    "tree": "5890240241de6b08d4d0f91ddd7e170b54a52cc2",
     "branch": "ve/prototype-integration",
     "binding": "declared_clean_parent_payload"
   },
   "tooling": {
-    "tooling_sha": "1d5838ef4f84f601e04513a4c668306d39c3d0de",
-    "tree": "207d3059ce8575feec454a3abf521ce7e18d45fe",
+    "tooling_sha": "986a04b55c38b32f62a6de9eb15197ff7d6af900",
+    "tree": "5890240241de6b08d4d0f91ddd7e170b54a52cc2",
     "artifacts": [
       {
         "id": "generator",
@@ -427,17 +427,17 @@
   "test_evidence": {
     "status": "complete",
     "ledger_path": "_docs/ralph/handoffs/prototype-integration/HANDOFF.yaml",
-    "implementation_sha": "eb22ab05c3c7bd098c25d8f9b1b703eb6da37b10",
-    "ledger_sha": "1d5838ef4f84f601e04513a4c668306d39c3d0de",
+    "implementation_sha": "65ba2338d70514f46e5829f4d8f728ebebaa8c72",
+    "ledger_sha": "986a04b55c38b32f62a6de9eb15197ff7d6af900",
     "record_count": 2,
-    "declared_test_count": 22,
+    "declared_test_count": 23,
     "uncounted_record_count": 0,
     "records": [
       {
         "command": "node scripts/validate-generated-contract-inventory.test.cjs && node scripts/validate-generated-contract-inventory.cjs",
         "exit_code": 0,
         "result": "passed",
-        "test_count": 13,
+        "test_count": 14,
         "tool_versions": {
           "node": "20.19.1"
         }
@@ -456,7 +456,7 @@
   },
   "producer_checkpoints": {
     "ledger_path": "_docs/ralph/handoffs/prototype-integration/HANDOFF.yaml",
-    "ledger_sha256": "8f576b695e3a6d9ec8bbb0cc9945da06c94c82bce0cc2cb90f40d6420bdc6ece",
+    "ledger_sha256": "32e25d5b2558c44aee6a1d74b65bed9eccc12a4eb10695e011a1a0a61558dda9",
     "accepted": [],
     "rejected": [
       {
