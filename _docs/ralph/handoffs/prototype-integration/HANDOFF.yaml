@@ -54,6 +54,18 @@
       "checkpoint": "T3-01",
       "tip": "9cc738fbb241890d069d6fb6c2ddb664a4e53447",
       "reason": "Producer tip does not contain integration SHA 823c61a1a9fc2c3a8f8b59dd060bb6db4a1bc3db; synchronize with current T4 and rerun exact-SHA gates."
+    },
+    {
+      "thread": "T1",
+      "checkpoint": "T1-09",
+      "tip": "36a566a92c04d988255b10cc5a75451d59077273",
+      "reason": "Frozen intake validation rejects payload history because .gitattributes is outside the checkpoint's declared owned_paths."
+    },
+    {
+      "thread": "T3",
+      "checkpoint": "T3-13A",
+      "tip": "8dbbaf14d5fdfd4e8405f085842a595bc7f299ff",
+      "reason": "Frozen intake validation rejects the checkpoint because declared files_changed and retained evidence do not match the complete payload range."
     }
   ],
   "external_evidence": [],
@@ -63,7 +75,7 @@
     "The clean T4-09A real diagnostic exited 1 as required and reported 19 deterministic publication blockers."
   ],
   "blockers": [
-    "Epoch 1 remains open before its announcement cutoff. Remote T1 and T3 tags are observable, but the roster is not frozen and no producer checkpoint is accepted by this checkpoint.",
+    "Epoch 1 is closed: T1 t1-09 and T3 t3-13a failed immutable intake validation; T2 and T5 are frozen out; no producer checkpoint is accepted.",
     "Stable secrets are remediated through explicit pre-provisioned Secret names/keys and legacy upgrade instructions; no render-time credential generation remains.",
     "The diagnostic-only publication guard refuses --publish and created no local or remote checkpoint/prototype-integration/t4-09a tag.",
     "Clean real diagnostics pass candidate HEAD/remote equality, manifest strict validity/hash/ancestry/boundary, accepted-ledger correspondence, and tag absence.",
