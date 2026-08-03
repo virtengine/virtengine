@@ -1,7 +1,7 @@
 "use strict";
 
 const assert = require("assert").strict;
-const { readFileSync } = require("fs");
+const { readFileSync, unlinkSync, writeFileSync } = require("fs");
 const { spawnSync } = require("child_process");
 const { resolve } = require("path");
 const {
@@ -119,19 +119,29 @@ const tests = [
     assert.throws(() => buildTestEvidence(sourceSha, versionless, handoffPath, root), /missing tool_versions/);
   }],
   ["rejects checked-path dirty guard bypasses", () => {
-    const common = ["--source", sourceSha, "--tooling-source", sourceSha];
-    for (const args of [
-      [...common, "--output", checkedManifestPath],
-      [...common, "--check", "--output", "core-rc-manifest.tmp.json"],
-    ]) {
-      const result = runGenerator(args);
-      assert.notEqual(result.status, 0);
-      assert.match(result.stderr, /dirty worktree/);
+    const currentSha = spawnSync("git", ["rev-parse", "HEAD"], { cwd: root, encoding: "utf8" }).stdout.trim();
+    const declaredPayloadSha = JSON.parse(readFileSync(resolve(root, checkedManifestPath), "utf8")).source.payload_sha;
+    const marker = resolve(root, "core-rc-manifest.dirty-marker.tmp");
+    const temporaryPath = resolve(root, "core-rc-manifest.tmp.json");
+    const common = ["--source", declaredPayloadSha, "--tooling-source", currentSha];
+    writeFileSync(marker, "dirty\n", "utf8");
+    try {
+      for (const args of [
+        [...common, "--output", checkedManifestPath],
+        [...common, "--check", "--output", "core-rc-manifest.tmp.json"],
+      ]) {
+        const result = runGenerator(args);
+        assert.notEqual(result.status, 0);
+        assert.match(result.stderr, /dirty worktree/);
+      }
+      const temporary = runGenerator([...common, "--output", "core-rc-manifest.tmp.json"]);
+      assert.equal(temporary.status, 0, temporary.stderr);
+    } finally {
+      unlinkSync(marker);
+      try { unlinkSync(temporaryPath); } catch (error) {
+        if (error.code !== "ENOENT") throw error;
+      }
     }
-    const temporary = runGenerator([...common, "--output", "core-rc-manifest.tmp.json"]);
-    assert.notEqual(temporary.status, 0);
-    assert.doesNotMatch(temporary.stderr, /dirty worktree/);
-    assert.match(temporary.stderr, /(?:does not exist|not) in/);
   }],
   ["blocks tooling provenance when the declared commit lacks tool blobs", () => {
     assert.throws(() => buildTooling(sourceSha, sourceSha, root), /(?:does not exist|not) in/);
