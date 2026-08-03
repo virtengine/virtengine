@@ -1,24 +1,48 @@
 {
   "campaign": "three-day-prototype",
   "thread": "T4",
-  "checkpoint": "T4-08V",
+  "checkpoint": "T4-01BE",
   "branch": "ve/prototype-integration",
-  "start_head": "b831ea6f035c9342b2c83924df7cdc3cb96da95e",
-  "end_head": "0bcfb480fee05f12ffb84c10995e9e9d1106677d",
+  "start_head": "81761b026ac96b5be7e70ca12caf5e853e26bdfe",
+  "end_head": "9e8f1dc43e9d09e84be92833ccdaac338416249f",
   "origin_main": "79391a3df86d85522b92e0400c6904971ecbe65d",
   "tree_clean": true,
   "commits": [
-    "0bcfb480fee05f12ffb84c10995e9e9d1106677d"
+    "8e92a4a64c46a1cde90be1f17477f249cdc2311e",
+    "81d0b77a3dbb239b3fa5864168adc9a19977e4b6",
+    "9e8f1dc43e9d09e84be92833ccdaac338416249f"
   ],
   "owned_paths": [
     "_docs/ralph/prototype-integration/**",
-    "_docs/ralph/handoffs/prototype-integration/**"
+    "_docs/ralph/handoffs/prototype-integration/**",
+    "scripts/validate-prototype-intake.cjs",
+    "scripts/validate-prototype-intake.test.cjs"
   ],
   "files_changed": [
     "_docs/ralph/handoffs/prototype-integration/HANDOFF.yaml",
-    "_docs/ralph/prototype-integration/core-rc-manifest.json"
+    "_docs/ralph/prototype-integration/epochs/epoch-1.json",
+    "scripts/validate-prototype-intake.cjs",
+    "scripts/validate-prototype-intake.test.cjs"
   ],
   "tests": [
+    {
+      "command": "node scripts/plan-prototype-intake-freeze.test.cjs && node scripts/apply-prototype-intake-freeze.test.cjs",
+      "exit_code": 0,
+      "result": "passed",
+      "test_count": 45,
+      "tool_versions": {
+        "node": "20.19.1"
+      }
+    },
+    {
+      "command": "node scripts/validate-prototype-intake.test.cjs",
+      "exit_code": 0,
+      "result": "passed",
+      "test_count": 32,
+      "tool_versions": {
+        "node": "20.19.1"
+      }
+    },
     {
       "command": "node scripts/validate-prototype-integration.test.cjs && node scripts/validate-prototype-integration.cjs",
       "exit_code": 0,
@@ -91,5 +115,5 @@
     "Task 88C is not complete."
   ],
   "next_checkpoint": null,
-  "expected_head": "0bcfb480fee05f12ffb84c10995e9e9d1106677d"
+  "expected_head": "9e8f1dc43e9d09e84be92833ccdaac338416249f"
 }
