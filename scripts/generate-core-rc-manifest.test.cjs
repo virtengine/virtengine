@@ -1,7 +1,7 @@
 "use strict";
 
 const assert = require("assert").strict;
-const { readFileSync } = require("fs");
+const { readFileSync, unlinkSync, writeFileSync } = require("fs");
 const { spawnSync } = require("child_process");
 const { resolve } = require("path");
 const {
@@ -133,13 +133,19 @@ const tests = [
   }],
   ["rejects checked-path dirty guard bypasses", () => {
     const common = ["--source", sourceSha, "--tooling-source", sourceSha];
-    for (const args of [
-      [...common, "--output", checkedManifestPath],
-      [...common, "--check", "--output", "core-rc-manifest.tmp.json"],
-    ]) {
-      const result = runGenerator(args);
-      assert.notEqual(result.status, 0);
-      assert.match(result.stderr, /dirty worktree/);
+    const dirtyMarker = resolve(root, "core-rc-manifest-dirty-guard.tmp");
+    writeFileSync(dirtyMarker, "dirty\n");
+    try {
+      for (const args of [
+        [...common, "--output", checkedManifestPath],
+        [...common, "--check", "--output", "core-rc-manifest.tmp.json"],
+      ]) {
+        const result = runGenerator(args);
+        assert.notEqual(result.status, 0);
+        assert.match(result.stderr, /dirty worktree/);
+      }
+    } finally {
+      unlinkSync(dirtyMarker);
     }
     const temporary = runGenerator([...common, "--output", "core-rc-manifest.tmp.json"]);
     assert.notEqual(temporary.status, 0);
