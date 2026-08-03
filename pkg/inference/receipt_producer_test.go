@@ -49,6 +49,7 @@ func TestReceiptProducerDeterministicInProcessVector(t *testing.T) {
 	require.NoError(t, err)
 	secondDigest, err := second.DigestHex()
 	require.NoError(t, err)
+	require.Equal(t, "1612825d75caee35c4b030d158bd2769dca0973fc399d9fde2e528b82b06847d", firstDigest)
 	require.Equal(t, firstDigest, secondDigest)
 	require.True(t, reflect.DeepEqual(first, second))
 
