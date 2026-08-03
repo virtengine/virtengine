@@ -6,14 +6,14 @@
   "planned_functionality_complete": false,
   "milestone_m_eligible": false,
   "source": {
-    "payload_sha": "eeeccb10b377c2cf79c77eac102850aa40abfb66",
-    "tree": "8d4d1eaf48cf5595db77bc9a57be0968be338764",
+    "payload_sha": "8ddac6d3a6b84bf42ccebfda8f6c828b88982974",
+    "tree": "ad635d8738d83bee4c81c1f63f02937561f811b4",
     "branch": "ve/prototype-integration",
     "binding": "declared_clean_parent_payload"
   },
   "tooling": {
-    "tooling_sha": "eeeccb10b377c2cf79c77eac102850aa40abfb66",
-    "tree": "8d4d1eaf48cf5595db77bc9a57be0968be338764",
+    "tooling_sha": "8ddac6d3a6b84bf42ccebfda8f6c828b88982974",
+    "tree": "ad635d8738d83bee4c81c1f63f02937561f811b4",
     "artifacts": [
       {
         "id": "generator",
@@ -24,8 +24,8 @@
       {
         "id": "schema",
         "path": "_docs/ralph/prototype-integration/core-rc-manifest.schema.json",
-        "git_blob": "0a1f1500f8b827f5e6efa5d1b42802ca45e2822a",
-        "sha256": "8bfecfb9e7a5ee3438580db8b26f2f19d088cb5b58d9d0152d16112e34d13fc0"
+        "git_blob": "0c16c3b795bfe73d7f737965bf9aabc0b92e18d3",
+        "sha256": "a9753d965bd92aeaa0b5d5ac7ada5720cac159a1ed98fd05d4424f4a3f9c3e52"
       },
       {
         "id": "validator",
@@ -427,8 +427,8 @@
   "test_evidence": {
     "status": "complete",
     "ledger_path": "_docs/ralph/handoffs/prototype-integration/HANDOFF.yaml",
-    "implementation_sha": "34d3dadf8c4dd4e6ab832b1b98aa8c68c4a94adb",
-    "ledger_sha": "eeeccb10b377c2cf79c77eac102850aa40abfb66",
+    "implementation_sha": "c8064b3095e1b8d172da2bff95f2f7d9356ee8d9",
+    "ledger_sha": "8ddac6d3a6b84bf42ccebfda8f6c828b88982974",
     "record_count": 2,
     "declared_test_count": 39,
     "uncounted_record_count": 0,
@@ -456,7 +456,7 @@
   },
   "producer_checkpoints": {
     "ledger_path": "_docs/ralph/handoffs/prototype-integration/HANDOFF.yaml",
-    "ledger_sha256": "4b3d2743cb0a0aefd3c1e01417acd062008dd20adbca3cd567343c24281face2",
+    "ledger_sha256": "040fd4d0387b8d6a656bb5e631e68f893ffe69878e1f1cf7f17a900194cc4b32",
     "accepted": [],
     "rejected": [
       {
