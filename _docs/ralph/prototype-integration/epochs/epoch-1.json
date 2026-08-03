@@ -5,13 +5,33 @@
   "base_tag": "checkpoint/prototype-integration/epoch-1-base",
   "base_sha": "5587c384f634552c3a2dd7181ca49cafa4da1984",
   "planning_sha": "1436723bd78980aa0388dbe9fcfa24dda939c54a",
-  "status": "open",
+  "status": "frozen",
   "opens_at": "2026-08-02T00:00:00Z",
   "announcement_cutoff": "2026-08-02T23:59:59Z",
   "producers": [
-    { "thread": "T1", "status": "unannounced", "tag": null, "decision": null },
-    { "thread": "T2", "status": "unannounced", "tag": null, "decision": null },
-    { "thread": "T3", "status": "unannounced", "tag": null, "decision": null },
-    { "thread": "T5", "status": "unannounced", "tag": null, "decision": null }
+    {
+      "thread": "T1",
+      "status": "announced",
+      "tag": "checkpoint/prototype-t1/t1-09",
+      "decision": null
+    },
+    {
+      "thread": "T2",
+      "status": "unannounced",
+      "tag": null,
+      "decision": "frozen-out"
+    },
+    {
+      "thread": "T3",
+      "status": "announced",
+      "tag": "checkpoint/prototype-t3/t3-13a",
+      "decision": null
+    },
+    {
+      "thread": "T5",
+      "status": "unannounced",
+      "tag": null,
+      "decision": "frozen-out"
+    }
   ]
 }
