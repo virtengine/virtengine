@@ -1,33 +1,29 @@
 {
   "campaign": "three-day-prototype",
   "thread": "T4",
-  "checkpoint": "T4-01EC",
+    "checkpoint": "T4-01ED",
   "branch": "ve/prototype-integration",
-  "start_head": "e7e60d207f1d59abf5c85dc8b43ee3809f544f9f",
-  "end_head": "2b1da1c828e88373fa1426385564e60a7516d0e4",
+  "start_head": "f323e7c7948c9eb5c66223792aca191274230698",
+    "end_head": "a0a8651429fb9cae3d0eac075bd9ac4732e03819",
   "origin_main": "79391a3df86d85522b92e0400c6904971ecbe65d",
   "tree_clean": true,
   "commits": [
-    "2b1da1c828e88373fa1426385564e60a7516d0e4"
+    "a0a8651429fb9cae3d0eac075bd9ac4732e03819"
   ],
   "owned_paths": [
     "_docs/ralph/prototype-integration/**",
-    "_docs/ralph/handoffs/prototype-integration/**",
-    "_docs/audits/task-t4-01e-intake-freeze-planner-2026-08-02.md",
-    "scripts/run-required-gates.cjs",
-    "scripts/run-required-gates.test.cjs"
+    "_docs/ralph/handoffs/prototype-integration/**"
   ],
   "files_changed": [
-    "_docs/audits/task-t4-01e-intake-freeze-planner-2026-08-02.md",
-    "scripts/run-required-gates.cjs",
-    "scripts/run-required-gates.test.cjs"
+    "_docs/ralph/handoffs/prototype-integration/HANDOFF.yaml",
+    "_docs/ralph/prototype-integration/core-rc-manifest.json"
   ],
   "tests": [
     {
-      "command": "node scripts/run-required-gates.test.cjs",
+        "command": "node scripts/validate-prototype-integration.test.cjs && node scripts/validate-prototype-integration.cjs",
       "exit_code": 0,
       "result": "passed",
-      "test_count": 26,
+        "test_count": 13,
       "tool_versions": {
         "node": "20.19.1"
       }
@@ -43,7 +39,7 @@
     }
   ],
   "generated_hashes": {
-    "_docs/ralph/prototype-integration/core-rc-manifest.json": "56fe637a2e8399deafce2bcee0ea2f136d9791976502422d8446674d7df36df7"
+      "_docs/ralph/prototype-integration/core-rc-manifest.json": "7f3fad570ca8ab614d9d24e5a8a55d065fa17ae0877938862e807ba9288b728a"
   },
   "accepted_checkpoints": [],
   "rejected_checkpoints": [
@@ -95,5 +91,5 @@
     "Task 88C is not complete."
   ],
   "next_checkpoint": null,
-  "expected_head": "2b1da1c828e88373fa1426385564e60a7516d0e4"
+    "expected_head": "a0a8651429fb9cae3d0eac075bd9ac4732e03819"
 }
