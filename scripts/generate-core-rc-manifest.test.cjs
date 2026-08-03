@@ -216,6 +216,7 @@ const tests = [
     assert.equal(schema.properties.control_artifacts.uniqueItems, true);
     for (const property of ["toolchains", "artifact_groups", "external_dependencies", "blockers"]) assert.equal(schema.properties[property].uniqueItems, true);
     assert.equal(schema.$defs.tooling.properties.artifacts.uniqueItems, true);
+    assert.equal(schema.$defs.toolingArtifact.oneOf.length, 3);
     for (const [definition, property] of [["toolingArtifact", "path"], ["controlArtifact", "path"], ["migrations", "inventory_path"], ["requiredGates", "matrix_path"], ["slurm", "inventory_path"], ["slurm", "report_path"], ["modelProvenance", "path"], ["testEvidence", "ledger_path"], ["producerCheckpoints", "ledger_path"]]) {
       assert.deepEqual(schema.$defs[definition].properties[property], { $ref: "#/$defs/repositoryPath" });
     }
@@ -313,13 +314,15 @@ const tests = [
   }],
   ["rejects malformed or duplicate tooling artifact paths", () => {
     const artifacts = [
-      { id: "generator", path: "scripts/generate.cjs", git_blob: "a".repeat(40), sha256: "a".repeat(64) },
-      { id: "schema", path: "docs/schema.json", git_blob: "b".repeat(40), sha256: "b".repeat(64) },
-      { id: "validator", path: "scripts/validate.cjs", git_blob: "c".repeat(40), sha256: "c".repeat(64) },
+      { id: "generator", path: "scripts/generate-core-rc-manifest.cjs", git_blob: "a".repeat(40), sha256: "a".repeat(64) },
+      { id: "schema", path: "_docs/ralph/prototype-integration/core-rc-manifest.schema.json", git_blob: "b".repeat(40), sha256: "b".repeat(64) },
+      { id: "validator", path: "scripts/validate-core-rc-manifest.cjs", git_blob: "c".repeat(40), sha256: "c".repeat(64) },
     ];
     assert.equal(validateToolingArtifacts(artifacts), true);
     const duplicate = clone(artifacts); duplicate[2].path = duplicate[0].path;
-    assert.throws(() => validateToolingArtifacts(duplicate), /duplicate tooling artifact path/);
+    assert.throws(() => validateToolingArtifacts(duplicate), /path mismatch/);
+    const crossWired = clone(artifacts); [crossWired[0].path, crossWired[1].path] = [crossWired[1].path, crossWired[0].path];
+    assert.throws(() => validateToolingArtifacts(crossWired), /path mismatch/);
     for (const path of ["/absolute", "../escape", "scripts\\tool.cjs", " padded "]) {
       const malformed = clone(artifacts); malformed[0].path = path;
       assert.throws(() => validateToolingArtifacts(malformed), /repository-relative/);

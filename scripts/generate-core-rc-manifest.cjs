@@ -155,8 +155,10 @@ function validateToolingArtifacts(artifacts) {
   const paths = new Set();
   for (const artifact of artifacts) {
     exactKeys(artifact, ["id", "path", "git_blob", "sha256"], `tooling artifact ${artifact.id || "unknown"}`);
-    assert.ok(toolingArtifacts.some(([id]) => id === artifact.id), `unknown tooling artifact ID: ${artifact.id}`);
+    const expected = toolingArtifacts.find(([id]) => id === artifact.id);
+    assert.ok(expected, `unknown tooling artifact ID: ${artifact.id}`);
     assert.ok(typeof artifact.path === "string" && artifact.path.length > 0 && artifact.path.trim() === artifact.path && !artifact.path.startsWith("/") && !artifact.path.includes("\\") && !artifact.path.split("/").includes(".."), `tooling artifact path must be repository-relative: ${artifact.path}`);
+    assert.equal(artifact.path, expected[1], `tooling artifact ${artifact.id} path mismatch`);
     assert.match(artifact.git_blob, shaPattern, "tooling artifact Git blob is invalid");
     assert.match(artifact.sha256, digestPattern, "tooling artifact digest is invalid");
     assert.equal(ids.has(artifact.id), false, `duplicate tooling artifact ID: ${artifact.id}`);

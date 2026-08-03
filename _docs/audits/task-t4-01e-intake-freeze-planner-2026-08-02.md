@@ -83,6 +83,11 @@ Tooling artifacts use unique repository-relative literal paths. Absolute,
 parent-traversing, backslash, padded, or duplicate paths fail before Git blob
 and SHA-256 provenance is accepted.
 
+Generator, schema, and validator tooling identities are each bound to their
+canonical repository path. Runtime and schema validation reject substituted or
+cross-wired tooling paths even when all paths and hashes are individually
+well-formed.
+
 Toolchain declarations require literal nonempty name, version, and source
 values, declared status, and unique complete tuples in runtime and schema
 validation.

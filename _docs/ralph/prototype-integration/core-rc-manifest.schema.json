@@ -63,6 +63,11 @@
     "toolingArtifact": {
       "type": "object", "additionalProperties": false,
       "required": ["id", "path", "git_blob", "sha256"],
+      "oneOf": [
+        { "properties": { "id": { "const": "generator" }, "path": { "const": "scripts/generate-core-rc-manifest.cjs" } } },
+        { "properties": { "id": { "const": "schema" }, "path": { "const": "_docs/ralph/prototype-integration/core-rc-manifest.schema.json" } } },
+        { "properties": { "id": { "const": "validator" }, "path": { "const": "scripts/validate-core-rc-manifest.cjs" } } }
+      ],
       "properties": {
         "id": { "enum": ["generator", "schema", "validator"] },
         "path": { "$ref": "#/$defs/repositoryPath" },
