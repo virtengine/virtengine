@@ -304,6 +304,9 @@ try {
     ["rejects a reversed base and head range", () => {
       assert.throws(() => buildExecutionPlan({ repoDir: fixture.repo, base: fixture.head, head: fixture.base, matrixPath }), /base must be an ancestor/);
     }],
+    ["rejects an empty commit range", () => {
+      assert.throws(() => buildExecutionPlan({ repoDir: fixture.repo, base: fixture.head, head: fixture.head, matrixPath }), /non-empty commit range/);
+    }],
   ];
 
   for (const [name, run] of tests) {

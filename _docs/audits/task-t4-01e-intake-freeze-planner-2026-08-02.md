@@ -50,7 +50,9 @@ plan using recursively key-sorted JSON while preserving array order. Passing
 result evidence is rejected unless that exact plan is execution-ready. Canonical
 serialization rejects sparse arrays, non-plain objects, unsupported values,
 non-finite or unsafe numbers, and negative zero. Runner CLI options are
-single-assignment and reject missing or option-looking values. The
+single-assignment and reject missing or option-looking values. Required-gate
+planning rejects identical base/head revisions and ranges with no changed paths,
+so an empty result envelope cannot represent a no-op checkpoint. The
 acceptance commit must be the implementation's direct, single-parent child and
 change only the acceptance artifact. Accepted annotated tags must be exact tag
 objects published by `origin`; local-only or stale same-name tags are rejected.

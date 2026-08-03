@@ -115,8 +115,10 @@ function buildExecutionPlan({ repoDir = root, base, head, matrixPath = defaultMa
   validateRequiredGateMatrix(matrix);
   const baseSha = resolveCommit(repoDir, base);
   const headSha = resolveCommit(repoDir, head);
+  assert.notEqual(baseSha, headSha, "base and head must identify a non-empty commit range");
   assert.ok(isAncestor(repoDir, baseSha, headSha), "base must be an ancestor of head");
   const paths = collectChangedPaths(repoDir, baseSha, headSha);
+  assert.ok(paths.length > 0, "required-gate range must contain changed paths");
   const selectedCategories = [];
   const matchedPaths = new Set();
 
