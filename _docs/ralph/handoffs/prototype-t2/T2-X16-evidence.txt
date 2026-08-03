@@ -1,0 +1,41 @@
+T2-X16 retained validation evidence
+Implementation SHA: 3e1cdcbf302eb2fdf5fdf1ae39a10dcbf37c540f
+Node: v20.19.1
+
+COMMAND: C:\Windows\System32\cmd.exe /d /c "cd /d C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t2\portal && node_modules\.bin\vitest.CMD run tests/unit/dashboard/customerDashboardStore.test.ts tests/unit/dashboard/components.test.tsx --reporter=dot --maxWorkers=1"
+EXIT: 0
+RESULT: passed
+DETAIL: 2 files, 49 tests passed; no warnings
+
+COMMAND: C:\Windows\System32\cmd.exe /d /c "cd /d C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t2\portal && node_modules\.bin\vitest.CMD run --reporter=dot --maxWorkers=1"
+EXIT: 0
+RESULT: passed
+DETAIL: 84 files, 638 tests passed in 148.10s
+
+COMMAND: C:\Windows\System32\cmd.exe /d /c "cd /d C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t2\portal && node_modules\.bin\tsc.CMD --noEmit"
+EXIT: 0
+RESULT: passed
+DETAIL: Full portal TypeScript completed with no diagnostics.
+
+COMMAND: C:\Windows\System32\cmd.exe /d /c "cd /d C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t2\portal && node node_modules\eslint\bin\eslint.js src/stores/customerDashboardStore.ts src/components/dashboard/TerminateAllocationDialog.tsx ^"src/app/(customer)/dashboard/allocations/[id]/AllocationDetailClient.tsx^" tests/unit/dashboard/customerDashboardStore.test.ts tests/unit/dashboard/components.test.tsx --max-warnings 0"
+EXIT: 0
+RESULT: passed
+DETAIL: Zero lint diagnostics; existing unsupported TypeScript parser-version banner only.
+
+COMMAND: C:\Windows\System32\cmd.exe /d /c "cd /d C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t2\portal && node_modules\.bin\prettier.CMD --write src/stores/customerDashboardStore.ts src/components/dashboard/TerminateAllocationDialog.tsx ^"src/app/(customer)/dashboard/allocations/[id]/AllocationDetailClient.tsx^" tests/unit/dashboard/customerDashboardStore.test.ts tests/unit/dashboard/components.test.tsx"
+EXIT: 0
+RESULT: passed
+DETAIL: Final formatting pass succeeded; committed diff check passed.
+
+BEHAVIOR:
+- Customer allocation termination no longer resolves a local no-op or marks state optimistically.
+- Termination requires an exact provider receipt bound to terminate action, allocation ID, provider ID, committed status, and explicit terminal provider state.
+- Provider rejection, accepted-only/mismatched evidence, duplicate operations, allocation replacement, owner change, and wallet disconnect preserve active state and rethrow failure.
+- Pending operations and committed convergence markers are owner/allocation scoped; stale or overlapping dashboard fetches cannot overwrite newer owner state or committed termination.
+- Dashboard fetches are request-generation bound; owner changes and disconnect synchronously clear owner-scoped allocations.
+- Derived active allocation counts update after commit and are reconciled on refresh.
+- The termination dialog stays open during pending work, blocks dismissal, displays failure, clears stale errors, and closes only after committed termination plus dashboard refresh.
+
+NON-CLAIMS:
+- No live provider termination or chain endpoint was certified.
+- Provider receipt capability and deployment-to-allocation identity still depend on production provider wiring.
