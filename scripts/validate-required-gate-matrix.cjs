@@ -81,6 +81,7 @@ function validateExecutionSchemas(planSchema, resultSchema) {
   assert.deepEqual(resultSchema.$defs.result.properties.kind.enum, ["setup", "build", "lint", "test", "policy", "drift"]);
   assert.equal(resultSchema.$defs.result.allOf[0].then.properties.discovered_tests.minimum, 1);
   assert.equal(resultSchema.$defs.result.allOf[0].else.properties.discovered_tests.const, 0);
+  assert.equal(resultSchema.$defs.result.properties.tools.uniqueItems, true, "result schema must reject duplicate tool records");
   assert.equal(resultSchema.$defs.result.properties.outcome.const, "passed");
   assert.equal(resultSchema.$defs.result.properties.exit_code.const, 0);
   assert.equal(resultSchema.$defs.result.properties.skipped_tests.const, 0);
@@ -105,8 +106,15 @@ function validateGateResult(category, result) {
     assert.ok(Number.isSafeInteger(result[field]) && result[field] >= 0, `${field} must be a non-negative integer`);
   }
   assert.ok(Array.isArray(result.tools), "gate result tools must be an array");
+  assert.equal(result.tools.length, category.pinned_tools.length, "pinned tool count mismatch");
+  const actualTools = new Map();
+  for (const tool of result.tools) {
+    assertExactKeys(tool, ["name", "version", "available"], "gate result tool");
+    assert.ok(!actualTools.has(tool.name), `duplicate result tool: ${tool.name}`);
+    actualTools.set(tool.name, tool);
+  }
   for (const pinned of category.pinned_tools) {
-    const actual = result.tools.find((tool) => tool.name === pinned.name);
+    const actual = actualTools.get(pinned.name);
     assert.ok(actual && actual.available === true, `missing pinned tool: ${pinned.name}`);
     assert.equal(actual.version, pinned.version, `pinned tool version mismatch: ${pinned.name}`);
   }

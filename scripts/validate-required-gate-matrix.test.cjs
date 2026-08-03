@@ -178,7 +178,20 @@ const tests = [
     const category = cloneMatrix().categories[0];
     const result = validResult(category);
     result.tools = [];
-    assert.throws(() => validateGateResult(category, result), /missing pinned tool/);
+    assert.throws(() => validateGateResult(category, result), /pinned tool count mismatch/);
+  }],
+  ["rejects extra, duplicate, or malformed tool evidence", () => {
+    const category = cloneMatrix().categories[0];
+    const extra = validResult(category);
+    extra.tools.push({ name: "extra", version: "1.0.0", available: true });
+    assert.throws(() => validateGateResult(category, extra), /pinned tool count mismatch/);
+    const twoToolCategory = cloneMatrix().categories.find((entry) => entry.id === "docs_process_boundary_e2e");
+    const duplicate = validResult(twoToolCategory);
+    duplicate.tools[1] = structuredClone(duplicate.tools[0]);
+    assert.throws(() => validateGateResult(twoToolCategory, duplicate), /duplicate result tool/);
+    const malformed = validResult(category);
+    malformed.tools[0].source = "undeclared";
+    assert.throws(() => validateGateResult(category, malformed), /unexpected or missing properties/);
   }],
   ["rejects a mutable command", () => {
     const candidate = cloneMatrix();
