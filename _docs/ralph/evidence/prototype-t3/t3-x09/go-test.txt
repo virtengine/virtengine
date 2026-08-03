@@ -1,0 +1,5 @@
+command: C:\Users\pavil\AppData\Local\VirtEngine\toolchains\go1.25.8\go\bin\go.exe -C C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t3 test -count=1 ./pkg/provider_daemon -run 'SettlementPipeline|UsageSnapshotStore'
+exit_code: 0
+tool: go version go1.25.8 windows/amd64
+
+ok      github.com/virtengine/virtengine/pkg/provider_daemon    15.615s
