@@ -88,7 +88,7 @@ function validateAcceptanceBoundary(boundary, options) {
   return true;
 }
 
-function resolvePublishedBranch(repo, branch, runGit = git) {
+function resolvePublishedBranch(repo, branch, runGit = git, label = "registered producer ref") {
   const branchRef = `refs/heads/${branch}`;
   const trackingRef = `refs/remotes/origin/${branch}`;
   const remote = runGit(repo, ["ls-remote", "--exit-code", "--heads", "origin", branchRef], true);
@@ -96,14 +96,19 @@ function resolvePublishedBranch(repo, branch, runGit = git) {
   const remoteFields = remote.stdout.trim().split(/\r?\n/).filter(Boolean).map((line) => line.split("\t"));
   assert.ok(remote.status === 0 && local.status === 0 && remoteFields.length === 1 && remoteFields[0].length === 2
     && /^[a-f0-9]{40}$/.test(remoteFields[0][0]) && remoteFields[0][1] === branchRef,
-  `registered producer ref is unavailable: ${branch}`);
-  assert.equal(local.stdout.trim(), remoteFields[0][0], `registered producer ref is stale: ${branch}`);
+  `${label} is unavailable: ${branch}`);
+  assert.equal(local.stdout.trim(), remoteFields[0][0], `${label} is stale: ${branch}`);
   return remoteFields[0][0];
 }
 
+function resolveCandidateInput(repo, ref, runGit = git, label = "candidate ref") {
+  if (ref.startsWith("origin/")) return resolvePublishedBranch(repo, ref.slice("origin/".length), runGit, label);
+  return runGit(repo, ["rev-parse", `${ref}^{commit}`]).stdout.trim();
+}
+
 function buildCandidatePlan(repo, candidateRef, canonicalRef, acceptancePath, producerBranches, runGit = git) {
-  const canonicalHead = runGit(repo, ["rev-parse", `${canonicalRef}^{commit}`]).stdout.trim();
-  const candidateHead = runGit(repo, ["rev-parse", `${candidateRef}^{commit}`]).stdout.trim();
+  const canonicalHead = resolveCandidateInput(repo, canonicalRef, runGit, "canonical ref");
+  const candidateHead = resolveCandidateInput(repo, candidateRef, runGit, "candidate ref");
   const acceptanceObject = runGit(repo, ["rev-parse", `${candidateHead}:${acceptancePath}`], true);
   assert.equal(acceptanceObject.status, 0, "candidate acceptance artifact is not committed");
   const acceptance = parseAcceptance(runGit(repo, ["show", `${candidateHead}:${acceptancePath}`]).stdout);
@@ -144,7 +149,7 @@ function main(argv) {
   process.stdout.write(`${JSON.stringify(plan, null, 2)}\n`);
 }
 
-module.exports = { buildCandidatePlan, parseAcceptance, resolvePublishedBranch, validateAcceptanceBoundary, validateCandidatePlan, verifyAcceptedPayload };
+module.exports = { buildCandidatePlan, parseAcceptance, resolveCandidateInput, resolvePublishedBranch, validateAcceptanceBoundary, validateCandidatePlan, verifyAcceptedPayload };
 
 if (require.main === module) {
   try { main(process.argv.slice(2)); }
