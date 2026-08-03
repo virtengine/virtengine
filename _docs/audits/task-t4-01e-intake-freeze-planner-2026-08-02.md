@@ -107,6 +107,11 @@ and non-certification blocker reference must resolve in the exact root blocker
 inventory. The validator rejects both dangling assurance references and stale
 unreferenced blocker declarations.
 
+AI model and license digest records couple state, digest, and blocker presence.
+`dependency_blocked` records require a null digest and canonical blocker;
+`fixture_only` and `present` records require a SHA-256 digest and no blocker.
+Runtime and schema validation reject contradictory combinations.
+
 The AI non-certification array is restricted to the exact seven governed
 categories, so schema-only validation cannot substitute or omit a required
 production non-claim.

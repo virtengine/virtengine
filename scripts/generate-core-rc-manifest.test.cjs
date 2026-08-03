@@ -226,6 +226,8 @@ const tests = [
     assert.equal(schema.$defs.aiAssurance.properties.non_certification.properties.not_certified.uniqueItems, true);
     assert.deepEqual(schema.$defs.aiAssurance.properties.non_certification.properties.not_certified.items.enum, ["production_model", "production_runtime", "production_evaluation", "biometric_uniqueness", "durable_vault_or_kms", "production_consent_enforcement", "production_retention_legal_hold_or_erasure"]);
     assert.deepEqual(schema.$defs.assuranceDigest.properties.source_blocker_id, { $ref: "#/$defs/nullableBlockerId" });
+    assert.equal(schema.$defs.assuranceDigest.oneOf[0].properties.state.const, "dependency_blocked");
+    assert.deepEqual(schema.$defs.assuranceDigest.oneOf[1].properties.state.enum, ["fixture_only", "present"]);
     assert.deepEqual(schema.$defs.assuranceStatus.properties.source_blocker_id, { $ref: "#/$defs/nullableBlockerId" });
     assert.equal(schema.$defs.assuranceStatus.properties.status.pattern, "^\\S(?:.*\\S)?$");
     assert.equal(schema.$defs.migrations.properties.blocker_id.const, "producer-migration-handoffs-unavailable");
@@ -330,7 +332,9 @@ const tests = [
     assert.equal(validateAssuranceDigests([digest], "model provenance"), true);
     assert.throws(() => validateAssuranceDigests([digest, { ...digest, sha256: "b".repeat(64) }], "model provenance"), /duplicate model provenance ID/);
     assert.throws(() => validateAssuranceDigests([{ ...digest, id: " padded " }], "model provenance"), /ID must be literal/);
-    assert.throws(() => validateAssuranceDigests([{ ...digest, state: " padded " }], "model provenance"), /state must be literal/);
+    assert.throws(() => validateAssuranceDigests([{ ...digest, state: " padded " }], "model provenance"), /state is invalid/);
+    assert.throws(() => validateAssuranceDigests([{ ...digest, state: "dependency_blocked", sha256: null }], "model provenance"), /blocked digest must name a blocker/);
+    assert.throws(() => validateAssuranceDigests([{ ...digest, sha256: null }], "model provenance"), /digest is invalid/);
   }],
 ];
 

@@ -173,7 +173,11 @@
     },
     "assuranceDigest": {
       "type": "object", "additionalProperties": false, "required": ["id", "state", "sha256", "source_blocker_id"],
-      "properties": { "id": { "type": "string", "pattern": "^\\S(?:.*\\S)?$" }, "state": { "type": "string", "pattern": "^\\S(?:.*\\S)?$" }, "sha256": { "$ref": "#/$defs/nullableDigest" }, "source_blocker_id": { "$ref": "#/$defs/nullableBlockerId" } }
+      "oneOf": [
+        { "properties": { "state": { "const": "dependency_blocked" }, "sha256": { "type": "null" }, "source_blocker_id": { "$ref": "#/$defs/blockerId" } } },
+        { "properties": { "state": { "enum": ["fixture_only", "present"] }, "sha256": { "$ref": "#/$defs/digest" }, "source_blocker_id": { "type": "null" } } }
+      ],
+      "properties": { "id": { "type": "string", "pattern": "^\\S(?:.*\\S)?$" }, "state": { "enum": ["dependency_blocked", "fixture_only", "present"] }, "sha256": { "$ref": "#/$defs/nullableDigest" }, "source_blocker_id": { "$ref": "#/$defs/nullableBlockerId" } }
     },
     "namedDigest": {
       "type": "object", "additionalProperties": false, "required": ["id", "sha256"],

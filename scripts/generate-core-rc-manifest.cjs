@@ -188,8 +188,20 @@ function validateAssuranceDigests(entries, label) {
     assert.ok(typeof entry.id === "string" && entry.id.length > 0 && entry.id.trim() === entry.id, `${label} ID must be literal and nonempty`);
     assert.equal(ids.has(entry.id), false, `duplicate ${label} ID: ${entry.id}`);
     ids.add(entry.id);
-    if (Object.hasOwn(entry, "state")) assert.ok(typeof entry.state === "string" && entry.state.length > 0 && entry.state.trim() === entry.state, `${label} state must be literal and nonempty`);
-    if (Object.hasOwn(entry, "sha256") && entry.sha256 !== null) assert.match(entry.sha256, digestPattern, `${label} digest is invalid`);
+    if (Object.hasOwn(entry, "state")) {
+      exactKeys(entry, ["id", "state", "sha256", "source_blocker_id"], `${label} ${entry.id}`);
+      assert.ok(["dependency_blocked", "fixture_only", "present"].includes(entry.state), `${label} state is invalid`);
+      if (entry.state === "dependency_blocked") {
+        assert.equal(entry.sha256, null, `${label} blocked digest must be null`);
+        assert.match(entry.source_blocker_id, /^[a-z0-9]+(?:-[a-z0-9]+)*$/, `${label} blocked digest must name a blocker`);
+      } else {
+        assert.match(entry.sha256, digestPattern, `${label} digest is invalid`);
+        assert.equal(entry.source_blocker_id, null, `${label} available digest cannot retain a blocker`);
+      }
+    } else {
+      exactKeys(entry, ["id", "sha256"], `${label} ${entry.id}`);
+      assert.match(entry.sha256, digestPattern, `${label} digest is invalid`);
+    }
   }
   return true;
 }
