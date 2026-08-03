@@ -1,31 +1,29 @@
 {
   "campaign": "three-day-prototype",
   "thread": "T4",
-  "checkpoint": "T4-01EY",
+  "checkpoint": "T4-01EZ",
   "branch": "ve/prototype-integration",
-  "start_head": "600c531e541dbea04f801e4ffd7b6fbbc44b9f5a",
-  "end_head": "d0615bbfb5c4242addedb90d5b41efa8c98737dd",
+  "start_head": "1da0df7ed85829dd3df6ca7dc771bca89c337fb1",
+  "end_head": "5354cf0b0f9e2d4a905a1bbf65274fb1b2f306c3",
   "origin_main": "79391a3df86d85522b92e0400c6904971ecbe65d",
   "tree_clean": true,
   "commits": [
-    "d0615bbfb5c4242addedb90d5b41efa8c98737dd"
+    "5354cf0b0f9e2d4a905a1bbf65274fb1b2f306c3"
   ],
   "owned_paths": [
-    "_docs/audits/**",
-    "scripts/generate-core-rc-manifest.cjs",
-    "scripts/generate-core-rc-manifest.test.cjs"
+    "_docs/ralph/prototype-integration/**",
+    "_docs/ralph/handoffs/prototype-integration/**"
   ],
   "files_changed": [
-    "_docs/audits/task-t4-01e-intake-freeze-planner-2026-08-02.md",
-    "scripts/generate-core-rc-manifest.cjs",
-    "scripts/generate-core-rc-manifest.test.cjs"
+    "_docs/ralph/handoffs/prototype-integration/HANDOFF.yaml",
+    "_docs/ralph/prototype-integration/core-rc-manifest.json"
   ],
   "tests": [
     {
-      "command": "node scripts/generate-core-rc-manifest.test.cjs",
+      "command": "node scripts/validate-prototype-integration.test.cjs && node scripts/validate-prototype-integration.cjs",
       "exit_code": 0,
       "result": "passed",
-      "test_count": 19,
+      "test_count": 13,
       "tool_versions": {
         "node": "20.19.1"
       }
@@ -40,7 +38,9 @@
       }
     }
   ],
-  "generated_hashes": {},
+  "generated_hashes": {
+    "_docs/ralph/prototype-integration/core-rc-manifest.json": "1a9bc2062271eb3ef0cf17286cd03ccc02d7c8703da972787ba6919cb689bf35"
+  },
   "accepted_checkpoints": [],
   "rejected_checkpoints": [
     {
@@ -91,5 +91,5 @@
     "Task 88C is not complete."
   ],
   "next_checkpoint": null,
-  "expected_head": "d0615bbfb5c4242addedb90d5b41efa8c98737dd"
+  "expected_head": "5354cf0b0f9e2d4a905a1bbf65274fb1b2f306c3"
 }
