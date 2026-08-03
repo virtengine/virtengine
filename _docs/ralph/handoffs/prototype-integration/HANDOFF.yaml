@@ -1,33 +1,29 @@
 {
   "campaign": "three-day-prototype",
   "thread": "T4",
-  "checkpoint": "T4-01ECQ",
+  "checkpoint": "T4-01ECR",
   "branch": "ve/prototype-integration",
-  "start_head": "a675a21df3358e1bc9b29b65ce9251c351422b11",
-  "end_head": "be893ba659a01e4697d6b85b4b7566f51286f80e",
+  "start_head": "3d9577f8f6a32602e1a0594d0c05856f61c814ae",
+  "end_head": "c36a99f2fb005154f41580e0090619a3f982d749",
   "origin_main": "79391a3df86d85522b92e0400c6904971ecbe65d",
   "tree_clean": true,
   "commits": [
-    "be893ba659a01e4697d6b85b4b7566f51286f80e"
+    "c36a99f2fb005154f41580e0090619a3f982d749"
   ],
   "owned_paths": [
-    "_docs/audits/**",
-    "scripts/validate-generated-contract-inventory.cjs",
-    "scripts/validate-generated-contract-inventory.test.cjs",
+    "_docs/ralph/prototype-integration/**",
     "_docs/ralph/handoffs/prototype-integration/**"
   ],
   "files_changed": [
     "_docs/ralph/handoffs/prototype-integration/HANDOFF.yaml",
-    "_docs/audits/task-t4-13a-generated-contract-inventory-2026-08-02.md",
-    "scripts/validate-generated-contract-inventory.cjs",
-    "scripts/validate-generated-contract-inventory.test.cjs"
+    "_docs/ralph/prototype-integration/core-rc-manifest.json"
   ],
   "tests": [
     {
-      "command": "node scripts/validate-generated-contract-inventory.test.cjs && node scripts/validate-generated-contract-inventory.cjs",
+      "command": "node scripts/validate-prototype-integration.test.cjs && node scripts/validate-prototype-integration.cjs",
       "exit_code": 0,
       "result": "passed",
-      "test_count": 16,
+      "test_count": 13,
       "tool_versions": {
         "node": "20.19.1"
       }
@@ -42,7 +38,9 @@
       }
     }
   ],
-  "generated_hashes": {},
+  "generated_hashes": {
+    "_docs/ralph/prototype-integration/core-rc-manifest.json": "bb2b9930008902cba7452ab02b09052a448572d8156d3371d630b814026db5a2"
+  },
   "accepted_checkpoints": [],
   "rejected_checkpoints": [
     {
@@ -93,5 +91,5 @@
     "Task 88C is not complete."
   ],
   "next_checkpoint": null,
-  "expected_head": "be893ba659a01e4697d6b85b4b7566f51286f80e"
+  "expected_head": "c36a99f2fb005154f41580e0090619a3f982d749"
 }
