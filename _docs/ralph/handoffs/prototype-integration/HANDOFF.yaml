@@ -1,48 +1,45 @@
 {
   "campaign": "three-day-prototype",
   "thread": "T4",
-  "checkpoint": "T4-01BO",
+  "checkpoint": "T4-01BP",
   "branch": "ve/prototype-integration",
-  "start_head": "1fbca9ffe2c7424d206237af3cd446a5b7041a63",
-  "end_head": "5d7548a88dfe6f4df9a4332cc1da74177223fb1f",
+  "start_head": "d79b8d16cf8f85aa0d8a147a6a69feb0f6649593",
+  "end_head": "ac3a3cf581f1da1569b548bdf99a6927b1ed278e",
   "origin_main": "79391a3df86d85522b92e0400c6904971ecbe65d",
   "tree_clean": true,
   "commits": [
-    "5d7548a88dfe6f4df9a4332cc1da74177223fb1f"
+    "ac3a3cf581f1da1569b548bdf99a6927b1ed278e"
   ],
   "owned_paths": [
     "_docs/ralph/prototype-integration/**",
-    "_docs/ralph/handoffs/prototype-integration/**",
-    "scripts/apply-prototype-intake-freeze.cjs",
-    "scripts/observe-prototype-intake-tags.cjs",
-    "scripts/plan-prototype-intake-freeze.cjs",
-    "scripts/preflight-core-rc-publication.cjs",
-    "scripts/preflight-core-rc-publication.test.cjs",
-    "scripts/prototype-intake-epochs.cjs",
-    "scripts/prototype-intake-epochs.test.cjs"
+    "_docs/ralph/handoffs/prototype-integration/**"
   ],
   "files_changed": [
-    "scripts/apply-prototype-intake-freeze.cjs",
-    "scripts/observe-prototype-intake-tags.cjs",
-    "scripts/plan-prototype-intake-freeze.cjs",
-    "scripts/preflight-core-rc-publication.cjs",
-    "scripts/preflight-core-rc-publication.test.cjs",
-    "scripts/prototype-intake-epochs.cjs",
-    "scripts/prototype-intake-epochs.test.cjs"
+    "_docs/ralph/handoffs/prototype-integration/HANDOFF.yaml",
+    "_docs/ralph/prototype-integration/core-rc-manifest.json"
   ],
   "tests": [
     {
-      "command": "node scripts/preflight-core-rc-publication.test.cjs && node scripts/prototype-intake-epochs.test.cjs && node scripts/observe-prototype-intake-tags.test.cjs && node scripts/plan-prototype-intake-freeze.test.cjs && node scripts/apply-prototype-intake-freeze.test.cjs",
+      "command": "node scripts/validate-prototype-integration.test.cjs && node scripts/validate-prototype-integration.cjs",
       "exit_code": 0,
       "result": "passed",
-      "test_count": 88,
+      "test_count": 13,
+      "tool_versions": {
+        "node": "20.19.1"
+      }
+    },
+    {
+      "command": "node scripts/validate-agents-docs.mjs",
+      "exit_code": 0,
+      "result": "passed",
+      "test_count": 9,
       "tool_versions": {
         "node": "20.19.1"
       }
     }
   ],
   "generated_hashes": {
-    "_docs/ralph/prototype-integration/core-rc-manifest.json": "ab6dbfc8cdac006e0a33b283331755cf98e5fc288a1f22de387188b9ca53e1ce"
+    "_docs/ralph/prototype-integration/core-rc-manifest.json": "5d945be522fefcced6c416968c959606e148055804a973ca384eb665af963553"
   },
   "accepted_checkpoints": [],
   "rejected_checkpoints": [
@@ -94,5 +91,5 @@
     "Task 88C is not complete."
   ],
   "next_checkpoint": null,
-  "expected_head": "5d7548a88dfe6f4df9a4332cc1da74177223fb1f"
+  "expected_head": "ac3a3cf581f1da1569b548bdf99a6927b1ed278e"
 }
