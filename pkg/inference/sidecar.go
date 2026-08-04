@@ -80,7 +80,7 @@ func NewSidecarClient(config InferenceConfig) (*SidecarClient, error) {
 
 	client := &SidecarClient{
 		config:      config,
-		extractor:   NewFeatureExtractor(DefaultFeatureExtractorConfig()),
+		extractor:   NewFeatureExtractor(ProductionFeatureExtractorConfig()),
 		determinism: NewDeterminismController(config.RandomSeed, config.ForceCPU),
 		isConnected: false,
 		useTLS:      config.SidecarTLS,

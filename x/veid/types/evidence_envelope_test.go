@@ -188,24 +188,48 @@ func TestEvidenceEnvelopeHumanReadableFieldsRequirePrintableASCII(t *testing.T) 
 }
 
 func TestEvidenceEnvelopeInferenceReceiptRequiresModelVersion(t *testing.T) {
-	for _, evidenceType := range []AttestationType{
-		AttestationTypeEmailVerification,
-		AttestationTypeSMSVerification,
-		AttestationTypeSSOVerification,
-		AttestationTypeSocialMediaVerification,
+	for _, test := range []struct {
+		evidenceType AttestationType
+		action       string
+	}{
+		{AttestationTypeEmailVerification, WebEvidenceActionSubmitEmail},
+		{AttestationTypeSMSVerification, WebEvidenceActionSubmitSMS},
+		{AttestationTypeSSOVerification, WebEvidenceActionSubmitSSO},
+		{AttestationTypeSocialMediaVerification, WebEvidenceActionSubmitSocial},
 	} {
 		envelope := evidenceEnvelopeTestValue()
-		envelope.EvidenceType = evidenceType
+		envelope.EvidenceType = test.evidenceType
+		envelope.Action = test.action
 		envelope.ModelVersion = ""
 		require.NoError(t, envelope.Validate())
 	}
 
 	inference := evidenceEnvelopeTestValue()
 	inference.EvidenceType = AttestationTypeInferenceReceipt
+	inference.Action = "submit_inference_receipt"
 	inference.ModelVersion = ""
 	require.Error(t, inference.Validate())
 	inference.ModelVersion = "model-3"
 	require.NoError(t, inference.Validate())
+}
+
+func TestEvidenceEnvelopeWebActionTypePairing(t *testing.T) {
+	valid := []struct {
+		evidenceType AttestationType
+		action       string
+	}{
+		{AttestationTypeSSOVerification, WebEvidenceActionSubmitSSO},
+		{AttestationTypeEmailVerification, WebEvidenceActionSubmitEmail},
+		{AttestationTypeSMSVerification, WebEvidenceActionSubmitSMS},
+		{AttestationTypeSocialMediaVerification, WebEvidenceActionSubmitSocial},
+	}
+	for _, test := range valid {
+		require.NoError(t, validateWebEvidenceActionPair(test.evidenceType, test.action))
+	}
+
+	require.Error(t, validateWebEvidenceActionPair(AttestationTypeEmailVerification, WebEvidenceActionSubmitSMS))
+	require.Error(t, validateWebEvidenceActionPair(AttestationTypeDocumentVerification, WebEvidenceActionSubmitEmail))
+	require.NoError(t, validateWebEvidenceActionPair(AttestationTypeDocumentVerification, "submit_document_verification"))
 }
 
 func TestEvidenceEnvelopeEveryFieldTamper(t *testing.T) {
@@ -260,7 +284,7 @@ func TestEvidenceEnvelopeEveryFieldTamper(t *testing.T) {
 			mutated := base
 			test.mutate(&mutated)
 			if err := mutated.Validate(); err != nil {
-				require.Contains(t, []string{"domain", "version"}, test.name)
+				require.Contains(t, []string{"domain", "version", "evidence type", "action"}, test.name)
 				return
 			}
 			issuer, err := mutated.IssuerSignBytes()

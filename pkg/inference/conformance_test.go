@@ -253,7 +253,8 @@ func TestFeatureDimensionConstantsMatch(t *testing.T) {
 		pyValue int // Expected value from Python config
 	}{
 		{"FaceEmbeddingDim", FaceEmbeddingDim, 512},
-		{"DocQualityDim", DocQualityDim, 5},
+		{"FaceConfidenceDim", FaceConfidenceDim, 1},
+		{"DocQualityDim", DocQualityDim, 6},
 		{"OCRFieldsDim", OCRFieldsDim, 10}, // 5 fields * 2
 		{"MetadataDim", MetadataDim, 16},
 		{"TotalFeatureDim", TotalFeatureDim, 768},
@@ -269,7 +270,7 @@ func TestFeatureDimensionConstantsMatch(t *testing.T) {
 	}
 
 	// Verify dimensions sum correctly
-	expectedSum := FaceEmbeddingDim + DocQualityDim + OCRFieldsDim + MetadataDim + PaddingDim
+	expectedSum := FaceEmbeddingDim + FaceConfidenceDim + DocQualityDim + OCRFieldsDim + MetadataDim + PaddingDim
 	if expectedSum != TotalFeatureDim {
 		t.Errorf("Dimension sum mismatch: %d != %d", expectedSum, TotalFeatureDim)
 	}

@@ -1,9 +1,9 @@
 # Five-Thread Prototype Completion Plan
 
-**Campaign branch:** `stable-virtengine-beta`  
-**Planning baseline:** `79391a3df86d85522b92e0400c6904971ecbe65d`  
-**Prepared:** 2026-08-01  
-**Source of scope:** `_docs/protocol-completion-continuation-plan.md`  
+**Campaign branch:** `stable-virtengine-beta`
+**Planning baseline:** `79391a3df86d85522b92e0400c6904971ecbe65d`
+**Prepared:** 2026-08-01
+**Source of scope:** `_docs/protocol-completion-continuation-plan.md`
 **Source of status:** `_docs/ralph/progress.md`
 
 ## 1. Confirmed Boundary

@@ -1,0 +1,9 @@
+command: go test -count=1 ./x/veid/types
+exit_code: 0
+result: ok github.com/virtengine/virtengine/x/veid/types 0.207s
+
+command: CGO_ENABLED=1 CC=winlibs-gcc go test -race -count=1 ./x/veid/types -run 'InferenceReceipt(ValidSubstitutions|RejectsTamperedFields)'
+exit_code: 0
+result: ok github.com/virtengine/virtengine/x/veid/types 1.369s
+
+contract: Each substituted receipt remains structurally valid before verification. Scope content, score, confidence, coherent status/reasons, issued/expiry height, issued/expiry time, signer fingerprint, and signer sequence substitutions all invalidate the original Ed25519 signature.

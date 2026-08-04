@@ -209,6 +209,9 @@ func (e EvidenceEnvelopeV1) Validate() error {
 	if !IsValidAttestationType(e.EvidenceType) {
 		return ErrInvalidAttestation.Wrapf("invalid evidence envelope type: %s", e.EvidenceType)
 	}
+	if err := validateWebEvidenceActionPair(e.EvidenceType, e.Action); err != nil {
+		return err
+	}
 	if e.EvidenceType == AttestationTypeInferenceReceipt && e.ModelVersion == "" {
 		return ErrInvalidAttestation.Wrap("evidence envelope model_version is required for inference receipts")
 	}

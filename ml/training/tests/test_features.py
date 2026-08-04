@@ -14,6 +14,7 @@ from ml.training.features.feature_combiner import FeatureExtractor, FeatureVecto
 from ml.training.features.canonical_vector import (
     CanonicalInferenceInputs,
     DOC_QUALITY_OFFSET,
+    FACE_CONFIDENCE_OFFSET,
     METADATA_OFFSET,
     OCR_OFFSET,
     TOTAL_FEATURE_DIM,
@@ -216,7 +217,9 @@ class TestFeatureCombiner:
 
     def test_feature_extractor_rejects_noncanonical_dimension(self):
         with pytest.raises(ValueError, match="combined_feature_dim"):
-            FeatureExtractor(FeatureConfig(combined_feature_dim=512))
+            FeatureExtractor(
+                FeatureConfig(combined_feature_dim=512), strict_production=True
+            )
     
     def test_feature_extraction_from_sample(self, sample_identity_sample):
         """Test extracting features from an identity sample."""
@@ -247,14 +250,15 @@ class TestFeatureCombiner:
         ))
 
         assert vector[511] == -1.0
-        assert vector[DOC_QUALITY_OFFSET:DOC_QUALITY_OFFSET + 5].tolist() == pytest.approx(
-            [0.1, 0.2, 0.3, 0.4, 0.75]
+        assert vector[FACE_CONFIDENCE_OFFSET] == 0.75
+        assert vector[DOC_QUALITY_OFFSET:DOC_QUALITY_OFFSET + 6].tolist() == pytest.approx(
+            [0.1, 0.2, 0.3, 0.4, 0.75, 1.0]
         )
         assert vector[OCR_OFFSET:OCR_OFFSET + 2].tolist() == pytest.approx([0.6, 1.0])
         assert vector[METADATA_OFFSET] == 1.0
         assert vector[METADATA_OFFSET + 1] == 1.0
-        assert vector[METADATA_OFFSET + 9] == 0.75
-        assert vector[METADATA_OFFSET + 10] == pytest.approx(0.000001)
+        assert vector[METADATA_OFFSET + 9] == pytest.approx(0.000001)
+        assert vector[METADATA_OFFSET + 10] == 0.0
 
     @pytest.mark.parametrize("embedding", [np.zeros(511), np.zeros(513)])
     def test_canonical_rejects_wrong_embedding_dimension(self, embedding):
@@ -298,7 +302,7 @@ class TestFeatureCombiner:
     def test_selected_sample_failure_is_not_dropped(
         self, sample_dataset, monkeypatch
     ):
-        extractor = FeatureExtractor(FeatureConfig())
+        extractor = FeatureExtractor(FeatureConfig(), strict_production=True)
 
         def fail_extraction(_sample):
             raise ValueError("broken selected sample")
@@ -308,7 +312,7 @@ class TestFeatureCombiner:
             extractor._extract_split(sample_dataset.train)
 
     def test_invalid_selected_preprocessed_sample_fails(self):
-        extractor = FeatureExtractor(FeatureConfig())
+        extractor = FeatureExtractor(FeatureConfig(), strict_production=True)
         sample = type("FailedPreprocessed", (), {
             "success": False,
             "original_sample": None,
@@ -319,7 +323,7 @@ class TestFeatureCombiner:
             extractor.extract_from_preprocessed([sample])
 
     def test_zero_selected_preprocessed_vectors_fail(self):
-        extractor = FeatureExtractor(FeatureConfig())
+        extractor = FeatureExtractor(FeatureConfig(), strict_production=True)
 
         with pytest.raises(RuntimeError, match="zero selected vectors"):
             extractor.extract_from_preprocessed([])

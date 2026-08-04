@@ -239,8 +239,8 @@ func (r *TensorFlowRuntime) stubInference(features []float32) []float32 {
 		count++
 	}
 
-	// Weight document quality (indices 512-516)
-	docOffset := FaceEmbeddingDim
+	// Weight document quality.
+	docOffset := DocQualityOffset
 	if docOffset+DocQualityDim <= len(features) {
 		for i := 0; i < DocQualityDim; i++ {
 			sum += features[docOffset+i] * 1.5
@@ -248,8 +248,8 @@ func (r *TensorFlowRuntime) stubInference(features []float32) []float32 {
 		}
 	}
 
-	// Weight OCR features (indices 517-526)
-	ocrOffset := FaceEmbeddingDim + DocQualityDim
+	// Weight OCR features.
+	ocrOffset := OCROffset
 	if ocrOffset+OCRFieldsDim <= len(features) {
 		for i := 0; i < OCRFieldsDim; i++ {
 			sum += features[ocrOffset+i]

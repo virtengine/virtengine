@@ -1,30 +1,29 @@
 {
   "schema": "virtengine.inference.feature_parity",
   "version": 1,
+  "contract": "fixture_only",
+  "feature_schema_sha256": "010cf22b18a8df11da2f33ee84f80b602773449db7ed75db92e3c41a4385beff",
   "layout": {
     "total_dimension": 768,
     "components": [
       {
-        "name": "face_embedding",
+        "name": "selfie_embedding",
         "offset": 0,
-        "dimension": 512,
-        "position_name": "face_embedding[{index}]"
+        "dimension": 512
+      },
+      {
+        "name": "face_confidence",
+        "offset": 512,
+        "dimension": 1
       },
       {
         "name": "document_quality",
-        "offset": 512,
-        "dimension": 5,
-        "position_names": [
-          "doc_quality_score",
-          "sharpness",
-          "brightness",
-          "contrast",
-          "one_minus_noise_level"
-        ]
+        "offset": 513,
+        "dimension": 6
       },
       {
         "name": "ocr",
-        "offset": 517,
+        "offset": 519,
         "dimension": 10,
         "fields": [
           "name",
@@ -32,64 +31,46 @@
           "document_number",
           "expiry_date",
           "nationality"
-        ],
-        "position_names_per_field": [
-          "confidence",
-          "validated"
         ]
       },
       {
         "name": "metadata",
-        "offset": 527,
-        "dimension": 16,
-        "position_names": [
-          "scope_count_div_10_capped",
-          "scope_type[id_document]",
-          "scope_type[selfie]",
-          "scope_type[face_video]",
-          "scope_type[biometric]",
-          "scope_type[sso_metadata]",
-          "scope_type[email_proof]",
-          "scope_type[sms_proof]",
-          "scope_type[domain_verify]",
-          "face_confidence",
-          "block_height_mod_1000000_div_1000000",
-          "reserved[0]",
-          "reserved[1]",
-          "reserved[2]",
-          "reserved[3]",
-          "reserved[4]"
-        ]
+        "offset": 529,
+        "dimension": 16
       },
       {
-        "name": "padding",
-        "offset": 543,
-        "dimension": 225,
-        "position_name": "reserved_padding[{index}]"
+        "name": "reserved",
+        "offset": 545,
+        "dimension": 223
       }
     ],
     "encoding": {
       "value_type": "ieee754-float32",
       "byte_order": "big-endian",
       "pre_hash_decimal_places": 6,
+      "rounding": "half_away_from_zero",
       "hash_algorithm": "sha256"
     }
   },
   "cases": [
     {
-      "name": "zero_missing",
+      "name": "explicit_development_missing",
+      "profile": "development",
       "source": {
         "face_embedding": {
           "kind": "missing"
         }
       },
-      "expected_vector_hash": "92343b22e813b2ab3f92a528a463388edf33a5b31eab7c3b8625bf740d282c78",
+      "expected_vector_hash": "90a21e5490b5e19f04af56ba45b25d232f705ddfb821b8e687b295ef2420941e",
+      "expected_raw_vector_hash": "90a21e5490b5e19f04af56ba45b25d232f705ddfb821b8e687b295ef2420941e",
       "expected_nonzero_positions": {
-        "516": 1.0
+        "517": 1.0,
+        "518": 1.0
       }
     },
     {
       "name": "unique_position_sentinel",
+      "profile": "production",
       "source": {
         "face_embedding": {
           "kind": "single_index",
@@ -103,7 +84,8 @@
           "sharpness": 0.22,
           "brightness": 0.33,
           "contrast": 0.44,
-          "noise_level": 0.45
+          "noise_level": 0.45,
+          "blur_score": 0.27
         },
         "ocr_confidences": {
           "name": 0.61,
@@ -128,33 +110,36 @@
         "scope_count": 7,
         "block_height": 1234567
       },
-      "expected_vector_hash": "066c88ffa4085b1b3a39bf08aa6cd58b5ad0e6a2e0b1e9ffb2fdaeaea257f865",
+      "expected_vector_hash": "c989d0b939c8ee40d4aee7492f1323b9fe5ead34476ffe59d19cf2d2fa04e16d",
+      "expected_raw_vector_hash": "c989d0b939c8ee40d4aee7492f1323b9fe5ead34476ffe59d19cf2d2fa04e16d",
       "expected_nonzero_positions": {
         "511": -1.0,
-        "512": 0.10999999940395355,
-        "513": 0.2199999988079071,
-        "514": 0.33000001311302185,
-        "515": 0.4399999976158142,
-        "516": 0.550000011920929,
-        "517": 0.6100000143051147,
-        "518": 1.0,
-        "519": 0.6200000047683716,
-        "521": 0.6299999952316284,
-        "522": 1.0,
-        "523": 0.6399999856948853,
-        "525": 0.6499999761581421,
-        "526": 1.0,
-        "527": 0.699999988079071,
+        "512": 0.9100000262260437,
+        "513": 0.10999999940395355,
+        "514": 0.2199999988079071,
+        "515": 0.33000001311302185,
+        "516": 0.4399999976158142,
+        "517": 0.550000011920929,
+        "518": 0.7300000190734863,
+        "519": 0.6100000143051147,
+        "520": 1.0,
+        "521": 0.6200000047683716,
+        "523": 0.6299999952316284,
+        "524": 1.0,
+        "525": 0.6399999856948853,
+        "527": 0.6499999761581421,
         "528": 1.0,
+        "529": 0.699999988079071,
         "530": 1.0,
         "532": 1.0,
         "534": 1.0,
-        "536": 0.9100000262260437,
-        "537": 0.23456700146198273
+        "536": 1.0,
+        "538": 0.23456700146198273
       }
     },
     {
       "name": "boundary_values",
+      "profile": "production",
       "source": {
         "face_embedding": {
           "kind": "alternating_bounds",
@@ -168,7 +153,8 @@
           "sharpness": 0.0,
           "brightness": 1.0,
           "contrast": 0.0,
-          "noise_level": 1.0
+          "noise_level": 1.0,
+          "blur_score": 0.0
         },
         "ocr_confidences": {
           "name": 0.0,
@@ -197,7 +183,8 @@
         "scope_count": 10,
         "block_height": 999999
       },
-      "expected_vector_hash": "104b757840ad24aea9b4e2c21c7a4598b39aa8a59f661ac6513bfb7c88149e4b",
+      "expected_vector_hash": "1696f9867d1b2edbd0abbbaa2d5df94b98aa614bdf773b06b822dbfbc79f1055",
+      "expected_raw_vector_hash": "3714fd835667ee03727edafda01a1c49fc261cfc73c4c90dffed1c34fbc51268",
       "expected_nonzero_positions": {
         "0": -0.04419417306780815,
         "1": 0.04419417306780815,
@@ -712,13 +699,13 @@
         "510": -0.04419417306780815,
         "511": 0.04419417306780815,
         "512": 1.0,
-        "514": 1.0,
-        "519": 1.0,
-        "520": 1.0,
-        "523": 1.0,
-        "524": 1.0,
-        "527": 1.0,
-        "528": 1.0,
+        "513": 1.0,
+        "515": 1.0,
+        "518": 1.0,
+        "521": 1.0,
+        "522": 1.0,
+        "525": 1.0,
+        "526": 1.0,
         "529": 1.0,
         "530": 1.0,
         "531": 1.0,
@@ -727,11 +714,13 @@
         "534": 1.0,
         "535": 1.0,
         "536": 1.0,
-        "537": 0.9999989867210388
+        "537": 1.0,
+        "538": 0.9999989867210388
       }
     },
     {
       "name": "asymmetric_negative_height",
+      "profile": "development",
       "source": {
         "face_embedding": {
           "kind": "asymmetric_sequence",
@@ -740,10 +729,34 @@
           "step": 0.0031
         },
         "face_confidence": 0.37,
+        "doc_quality_score": 0.0,
+        "document_quality": {
+          "sharpness": 0.0,
+          "brightness": 0.0,
+          "contrast": 0.0,
+          "noise_level": 1.0,
+          "blur_score": 1.0
+        },
+        "ocr_confidences": {
+          "name": 0.0,
+          "date_of_birth": 0.0,
+          "document_number": 0.0,
+          "expiry_date": 0.0,
+          "nationality": 0.0
+        },
+        "ocr_field_validation": {
+          "name": false,
+          "date_of_birth": false,
+          "document_number": false,
+          "expiry_date": false,
+          "nationality": false
+        },
+        "scope_types": [],
         "scope_count": 3,
         "block_height": -1234567
       },
-      "expected_vector_hash": "322ae5390de37114985a743298e4ae01579f38101ea4126fcb51f68eb2381720",
+      "expected_vector_hash": "962e29cee006ecb33eafd684568ef513ad939cd892f3336db9943359f6450dca",
+      "expected_raw_vector_hash": "3929518b40af5c8682543210362671ed6791b0fa134d0fc7400da47dc2183cfc",
       "expected_nonzero_positions": {
         "0": -0.06977522373199463,
         "1": -0.06947892159223557,
@@ -1257,10 +1270,9 @@
         "509": 0.08104439824819565,
         "510": 0.08134070783853531,
         "511": 0.08163700997829437,
-        "516": 1.0,
-        "527": 0.30000001192092896,
-        "536": 0.3700000047683716,
-        "537": -0.23456700146198273
+        "512": 0.3700000047683716,
+        "529": 0.30000001192092896,
+        "538": -0.23456700146198273
       }
     }
   ]

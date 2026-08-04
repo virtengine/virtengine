@@ -329,7 +329,7 @@ def main():
         logger.info("STEP 4: Feature Extraction")
         logger.info("-" * 40)
         
-        feature_extractor = FeatureExtractor(config.features)
+        feature_extractor = FeatureExtractor(config.features, strict_production=True)
         
         if train_augmented:
             train_features = feature_extractor.extract_from_augmented(train_augmented)

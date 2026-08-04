@@ -521,19 +521,8 @@ func validateInferenceReceiptScopeResults(
 			successes++
 		}
 	}
-	switch receipt.Status {
-	case types.VerificationResultStatusSuccess:
-		if successes != len(requiredScopeIDs) {
-			return types.ErrInvalidVerificationResult.Wrap("successful inference receipt requires all scopes validated")
-		}
-	case types.VerificationResultStatusPartial:
-		if successes == 0 || successes == len(requiredScopeIDs) {
-			return types.ErrInvalidVerificationResult.Wrap("partial inference receipt requires mixed scope outcomes")
-		}
-	case types.VerificationResultStatusFailed, types.VerificationResultStatusError:
-		if successes != 0 {
-			return types.ErrInvalidVerificationResult.Wrap("failed inference receipt cannot carry successful scopes")
-		}
+	if successes != len(requiredScopeIDs) {
+		return types.ErrInvalidVerificationResult.Wrap("inference receipt requires all scope payloads validated")
 	}
 	return nil
 }

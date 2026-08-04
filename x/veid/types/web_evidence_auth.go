@@ -148,6 +148,9 @@ func (c WebEvidenceContext) validate() error {
 	if !IsValidAttestationType(c.EvidenceType) {
 		return ErrInvalidAttestation.Wrapf("invalid web evidence type: %s", c.EvidenceType)
 	}
+	if err := validateWebEvidenceActionPair(c.EvidenceType, c.Action); err != nil {
+		return err
+	}
 	if !IsValidProofType(c.IssuerAlgorithm) {
 		return ErrInvalidSignerKey.Wrapf("invalid web evidence algorithm: %s", c.IssuerAlgorithm)
 	}
@@ -171,6 +174,27 @@ func (c WebEvidenceContext) validate() error {
 		}
 		if strings.HasPrefix(field.Name, WebEvidenceMetadataPrefix) {
 			return ErrInvalidAttestation.Wrap("web evidence caller field name uses reserved prefix")
+		}
+	}
+	return nil
+}
+
+func validateWebEvidenceActionPair(evidenceType AttestationType, action string) error {
+	expectedActions := map[AttestationType]string{
+		AttestationTypeSSOVerification:         WebEvidenceActionSubmitSSO,
+		AttestationTypeEmailVerification:       WebEvidenceActionSubmitEmail,
+		AttestationTypeSMSVerification:         WebEvidenceActionSubmitSMS,
+		AttestationTypeSocialMediaVerification: WebEvidenceActionSubmitSocial,
+	}
+	if expected, isWebType := expectedActions[evidenceType]; isWebType {
+		if action != expected {
+			return ErrInvalidAttestation.Wrapf("web evidence action %q does not match type %q", action, evidenceType)
+		}
+		return nil
+	}
+	for _, reserved := range expectedActions {
+		if action == reserved {
+			return ErrInvalidAttestation.Wrapf("reserved web evidence action %q requires a matching web evidence type", action)
 		}
 	}
 	return nil

@@ -352,13 +352,39 @@ func TestReceiptScopeSemanticsDoNotUpgradeFailedScopes(t *testing.T) {
 	receipt := testKeeperInferenceReceipt(t, ctx, request, key, expectations, priv)
 	failedScope := *types.NewScopeVerificationResult("scope-a", types.ScopeTypeIDDocument)
 	failedScope.SetFailure(types.ReasonCodeInvalidPayload)
-	require.ErrorContains(t, validateInferenceReceiptScopeResults(receipt, expectations.ScopeIDs, []types.ScopeVerificationResult{failedScope}), "all scopes validated")
+	require.ErrorContains(t, validateInferenceReceiptScopeResults(receipt, expectations.ScopeIDs, []types.ScopeVerificationResult{failedScope}), "all scope payloads validated")
 
 	replay := inferenceReceiptReplayCheck{ReceiptDigest: hex.EncodeToString(testHash(0x66)), ContextDigest: hex.EncodeToString(testHash(0x67))}
 	result := keeper.verificationResultFromReceipt(ctx, request, receipt, []types.ScopeVerificationResult{failedScope}, replay)
 	require.False(t, result.ScopeResults[0].Success)
 	require.Equal(t, uint32(0), result.ScopeResults[0].Score)
 	require.Equal(t, []types.ReasonCode{types.ReasonCodeInvalidPayload}, result.ScopeResults[0].ReasonCodes)
+}
+
+func TestReceiptScopeSemanticsAllowModelOutcomesAfterPayloadValidation(t *testing.T) {
+	expectations := testInferenceReceiptExpectations()
+	validatedScope := *types.NewScopeVerificationResult("scope-a", types.ScopeTypeIDDocument)
+	validatedScope.SetSuccess(0)
+
+	tests := []struct {
+		status  types.VerificationResultStatus
+		score   uint32
+		reasons []types.ReasonCode
+	}{
+		{types.VerificationResultStatusPartial, 60, []types.ReasonCode{types.ReasonCodeLowConfidence}},
+		{types.VerificationResultStatusFailed, 0, []types.ReasonCode{types.ReasonCodeLivenessCheckFailed}},
+		{types.VerificationResultStatusError, 0, []types.ReasonCode{types.ReasonCodeMLInferenceError}},
+	}
+	for _, test := range tests {
+		receipt := types.InferenceReceipt{
+			ScopeIDs:    expectations.ScopeIDs,
+			Status:      test.status,
+			Score:       test.score,
+			ReasonCodes: test.reasons,
+		}
+		require.NoError(t, types.ValidateInferenceReceiptResultSemantics(receipt.Status, receipt.Score, receipt.ReasonCodes))
+		require.NoError(t, validateInferenceReceiptScopeResults(receipt, expectations.ScopeIDs, []types.ScopeVerificationResult{validatedScope}))
+	}
 }
 
 func TestCreateVerificationRequestFailsWithoutActiveProfileNoMutation(t *testing.T) {
@@ -496,6 +522,36 @@ func TestProcessVerificationRequestWithReceiptStagesOnlyInVoteExtension(t *testi
 	replayed, err := keeper.ProcessVerificationRequestWithReceipt(ctx.WithExecMode(sdk.ExecModeVoteExtension), request, keyProvider, receipt)
 	require.NoError(t, err)
 	require.Equal(t, result.Metadata[types.VerificationResultMetadataReceiptDigest], replayed.Metadata[types.VerificationResultMetadataReceiptDigest])
+	require.Len(t, keeper.GetBlockVerificationResults(ctx, ctx.BlockHeight()), 1)
+}
+
+func TestProcessVerificationRequestWithReceiptStagesPartialModelOutcome(t *testing.T) {
+	keeper, ctx, stateStore := setupInferenceReceiptKeeper(t)
+	t.Cleanup(func() { closeStoreIfNeeded(stateStore) })
+	params := types.DefaultParams()
+	params.RequireClientSignature = false
+	params.RequireUserSignature = false
+	require.NoError(t, keeper.SetParams(ctx, params))
+	registerActiveInferencePipeline(t, keeper, ctx)
+
+	account, request, keyProvider, key, priv := setupReceiptBackedRequest(t, keeper, ctx, "partial-model-outcome")
+	expectations := buildReceiptExpectationsForRequest(t, keeper, ctx, account, request, keyProvider)
+	receipt := testKeeperInferenceReceipt(t, ctx, request, key, expectations, priv)
+	receipt.Status = types.VerificationResultStatusPartial
+	receipt.Score = 60
+	receipt.ConfidenceMillionths = 600_000
+	receipt.ReasonCodes = []types.ReasonCode{types.ReasonCodeLowConfidence}
+	require.NoError(t, receipt.Sign(priv))
+
+	result, err := keeper.ProcessVerificationRequestWithReceipt(ctx.WithExecMode(sdk.ExecModeVoteExtension), request, keyProvider, receipt)
+	require.NoError(t, err)
+	require.Equal(t, types.VerificationResultStatusPartial, result.Status)
+	require.Equal(t, uint32(60), result.Score)
+	require.Equal(t, []types.ReasonCode{types.ReasonCodeLowConfidence}, result.ReasonCodes)
+	require.Len(t, result.ScopeResults, len(request.ScopeIDs))
+	for _, scopeResult := range result.ScopeResults {
+		require.True(t, scopeResult.Success)
+	}
 	require.Len(t, keeper.GetBlockVerificationResults(ctx, ctx.BlockHeight()), 1)
 }
 

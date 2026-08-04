@@ -375,7 +375,9 @@ def train_and_export(
             preprocessor = DatasetPreprocessor(config.preprocessing)
             preprocessed = preprocessor.preprocess_dataset(dataset)
             
-            feature_extractor = FeatureExtractor(config.features)
+            feature_extractor = FeatureExtractor(
+                config.features, strict_production=True
+            )
             train_features = feature_extractor.extract_from_preprocessed(preprocessed.train)
             val_features = feature_extractor.extract_from_preprocessed(preprocessed.validation)
             test_features = feature_extractor.extract_from_preprocessed(preprocessed.test)

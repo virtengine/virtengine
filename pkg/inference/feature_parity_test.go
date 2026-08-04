@@ -2,37 +2,42 @@ package inference
 
 import (
 	"bytes"
+	"crypto/sha256"
+	"encoding/binary"
+	"encoding/hex"
 	"encoding/json"
 	"math"
 	"os"
 	"strconv"
+	"strings"
 	"testing"
 )
 
 type featureParityFixture struct {
-	Schema  string `json:"schema"`
-	Version int    `json:"version"`
-	Layout  struct {
+	Schema              string `json:"schema"`
+	Version             int    `json:"version"`
+	Contract            string `json:"contract"`
+	FeatureSchemaSHA256 string `json:"feature_schema_sha256"`
+	Layout              struct {
 		TotalDimension int `json:"total_dimension"`
 		Components     []struct {
-			Name                  string   `json:"name"`
-			Offset                int      `json:"offset"`
-			Dimension             int      `json:"dimension"`
-			PositionName          string   `json:"position_name"`
-			PositionNames         []string `json:"position_names"`
-			Fields                []string `json:"fields"`
-			PositionNamesPerField []string `json:"position_names_per_field"`
+			Name      string   `json:"name"`
+			Offset    int      `json:"offset"`
+			Dimension int      `json:"dimension"`
+			Fields    []string `json:"fields"`
 		} `json:"components"`
 		Encoding struct {
 			ValueType            string `json:"value_type"`
 			ByteOrder            string `json:"byte_order"`
 			PreHashDecimalPlaces int    `json:"pre_hash_decimal_places"`
+			Rounding             string `json:"rounding"`
 			HashAlgorithm        string `json:"hash_algorithm"`
 		} `json:"encoding"`
 	} `json:"layout"`
 	Cases []struct {
-		Name   string `json:"name"`
-		Source struct {
+		Name    string `json:"name"`
+		Profile string `json:"profile"`
+		Source  struct {
 			FaceEmbedding struct {
 				Kind      string  `json:"kind"`
 				Dimension int     `json:"dimension"`
@@ -50,6 +55,7 @@ type featureParityFixture struct {
 				Brightness float32 `json:"brightness"`
 				Contrast   float32 `json:"contrast"`
 				NoiseLevel float32 `json:"noise_level"`
+				BlurScore  float32 `json:"blur_score"`
 			} `json:"document_quality"`
 			OCRConfidences     map[string]float32 `json:"ocr_confidences"`
 			OCRFieldValidation map[string]bool    `json:"ocr_field_validation"`
@@ -58,6 +64,7 @@ type featureParityFixture struct {
 			BlockHeight        int64              `json:"block_height"`
 		} `json:"source"`
 		ExpectedVectorHash       string             `json:"expected_vector_hash"`
+		ExpectedRawVectorHash    string             `json:"expected_raw_vector_hash"`
 		ExpectedNonzeroPositions map[string]float32 `json:"expected_nonzero_positions"`
 	} `json:"cases"`
 }
@@ -74,95 +81,95 @@ func TestCanonicalFeatureParityFixture(t *testing.T) {
 		t.Fatalf("decode feature parity fixture: %v", err)
 	}
 	validateFeatureParityLayout(t, &fixture)
-	if len(fixture.Cases) == 0 {
-		t.Fatal("feature parity fixture has zero cases")
-	}
 
-	extractor := NewFeatureExtractor(DefaultFeatureExtractorConfig())
 	hasher := NewDeterminismController(42, true)
-	for _, testCase := range fixture.Cases {
+	for index := range fixture.Cases {
+		testCase := &fixture.Cases[index]
 		t.Run(testCase.Name, func(t *testing.T) {
-			inputs := featureParityInputs(t, &testCase)
-			features, err := extractor.ExtractFeatures(inputs)
+			config := DefaultFeatureExtractorConfig()
+			if testCase.Profile == "production" {
+				config = ProductionFeatureExtractorConfig()
+			} else if testCase.Profile != "development" {
+				t.Fatalf("unsupported fixture profile %q", testCase.Profile)
+			}
+			features, err := NewFeatureExtractor(config).ExtractFeatures(featureParityInputs(t, testCase))
 			if err != nil {
 				t.Fatalf("extract canonical features: %v", err)
-			}
-			if len(features) != TotalFeatureDim {
-				t.Fatalf("feature dimension: got %d, want %d", len(features), TotalFeatureDim)
 			}
 			if got := hasher.ComputeFeatureHash(features); got != testCase.ExpectedVectorHash {
 				t.Fatalf("feature hash: got %s, want %s", got, testCase.ExpectedVectorHash)
 			}
-			for index, value := range features {
-				expected, nonzero := testCase.ExpectedNonzeroPositions[strconv.Itoa(index)]
-				if nonzero {
-					if value != expected {
-						t.Errorf("position %d: got %v, want %v", index, value, expected)
-					}
-				} else if value != 0 {
-					t.Errorf("position %d: got unexpected nonzero value %v", index, value)
+			if got := rawFeatureVectorHash(features); got != testCase.ExpectedRawVectorHash {
+				t.Fatalf("raw feature hash: got %s, want %s", got, testCase.ExpectedRawVectorHash)
+			}
+			for position, value := range features {
+				expected, nonzero := testCase.ExpectedNonzeroPositions[strconv.Itoa(position)]
+				if nonzero && value != expected {
+					t.Errorf("position %d: got %v, want %v", position, value, expected)
+				} else if !nonzero && value != 0 {
+					t.Errorf("position %d: unexpected nonzero %v", position, value)
 				}
 			}
 		})
 	}
 }
 
+func rawFeatureVectorHash(features []float32) string {
+	hasher := sha256.New()
+	var encoded [4]byte
+	for _, value := range features {
+		binary.BigEndian.PutUint32(encoded[:], math.Float32bits(value))
+		_, _ = hasher.Write(encoded[:])
+	}
+	return hex.EncodeToString(hasher.Sum(nil))
+}
+
 func validateFeatureParityLayout(t *testing.T, fixture *featureParityFixture) {
 	t.Helper()
-	if fixture.Schema != "virtengine.inference.feature_parity" || fixture.Version != 1 {
-		t.Fatalf("unsupported feature parity schema %q version %d", fixture.Schema, fixture.Version)
+	if fixture.Schema != "virtengine.inference.feature_parity" || fixture.Version != 1 || fixture.Contract != "fixture_only" {
+		t.Fatalf("unsupported feature parity contract")
 	}
-	if fixture.Layout.TotalDimension != TotalFeatureDim {
-		t.Fatalf("fixture dimension: got %d, want %d", fixture.Layout.TotalDimension, TotalFeatureDim)
+	schemaBytes, err := os.ReadFile("schema/trust_score_features_v1.json")
+	if err != nil {
+		t.Fatalf("read canonical schema: %v", err)
+	}
+	if !bytes.Equal(schemaBytes, canonicalFeatureSchemaJSON) {
+		t.Fatal("embedded schema bytes differ from repository artifact")
+	}
+	digest := sha256.Sum256(schemaBytes)
+	if got := hex.EncodeToString(digest[:]); got != fixture.FeatureSchemaSHA256 {
+		t.Fatalf("schema hash: got %s, want %s", got, fixture.FeatureSchemaSHA256)
 	}
 	expected := []struct {
 		name              string
 		offset, dimension int
 	}{
-		{"face_embedding", 0, FaceEmbeddingDim},
-		{"document_quality", FaceEmbeddingDim, DocQualityDim},
-		{"ocr", FaceEmbeddingDim + DocQualityDim, OCRFieldsDim},
-		{"metadata", FaceEmbeddingDim + DocQualityDim + OCRFieldsDim, MetadataDim},
-		{"padding", FaceEmbeddingDim + DocQualityDim + OCRFieldsDim + MetadataDim, PaddingDim},
+		{"selfie_embedding", SelfieEmbeddingOffset, FaceEmbeddingDim},
+		{"face_confidence", FaceConfidenceOffset, FaceConfidenceDim},
+		{"document_quality", DocQualityOffset, DocQualityDim},
+		{"ocr", OCROffset, OCRFieldsDim},
+		{"metadata", MetadataOffset, MetadataDim},
+		{"reserved", ReservedOffset, PaddingDim},
 	}
-	if len(fixture.Layout.Components) != len(expected) {
-		t.Fatalf("layout components: got %d, want %d", len(fixture.Layout.Components), len(expected))
+	if fixture.Layout.TotalDimension != TotalFeatureDim || len(fixture.Layout.Components) != len(expected) {
+		t.Fatal("fixture layout dimensions do not match serving")
 	}
 	for index, want := range expected {
 		got := fixture.Layout.Components[index]
 		if got.Name != want.name || got.Offset != want.offset || got.Dimension != want.dimension {
-			t.Errorf("layout component %d: got %s/%d/%d, want %s/%d/%d",
-				index, got.Name, got.Offset, got.Dimension, want.name, want.offset, want.dimension)
+			t.Errorf("component %d: got %s/%d/%d, want %s/%d/%d", index, got.Name, got.Offset, got.Dimension, want.name, want.offset, want.dimension)
 		}
-	}
-	if got := fixture.Layout.Components[1].PositionNames; len(got) != DocQualityDim {
-		t.Fatalf("document quality position names: got %d, want %d", len(got), DocQualityDim)
-	}
-	ocr := fixture.Layout.Components[2]
-	if len(ocr.Fields) != len(OCRFieldNames) {
-		t.Fatalf("OCR fields: got %d, want %d", len(ocr.Fields), len(OCRFieldNames))
-	}
-	for index, want := range OCRFieldNames {
-		if ocr.Fields[index] != want {
-			t.Fatalf("OCR field %d: got %q, want %q", index, ocr.Fields[index], want)
-		}
-	}
-	if len(ocr.PositionNamesPerField) != 2 || ocr.PositionNamesPerField[0] != "confidence" || ocr.PositionNamesPerField[1] != "validated" {
-		t.Fatalf("unexpected OCR position names: %v", ocr.PositionNamesPerField)
-	}
-	if got := fixture.Layout.Components[3].PositionNames; len(got) != MetadataDim {
-		t.Fatalf("metadata position names: got %d, want %d", len(got), MetadataDim)
 	}
 	encoding := fixture.Layout.Encoding
-	if encoding.ValueType != "ieee754-float32" || encoding.ByteOrder != "big-endian" ||
-		encoding.PreHashDecimalPlaces != 6 || encoding.HashAlgorithm != "sha256" {
-		t.Fatalf("unsupported feature hash encoding: %+v", encoding)
+	if encoding.ValueType != "ieee754-float32" || encoding.ByteOrder != "big-endian" || encoding.PreHashDecimalPlaces != 6 || encoding.Rounding != "half_away_from_zero" || encoding.HashAlgorithm != "sha256" {
+		t.Fatalf("unsupported fixture encoding: %+v", encoding)
 	}
 }
 
 func featureParityInputs(t *testing.T, testCase *struct {
-	Name   string `json:"name"`
-	Source struct {
+	Name    string `json:"name"`
+	Profile string `json:"profile"`
+	Source  struct {
 		FaceEmbedding struct {
 			Kind      string  `json:"kind"`
 			Dimension int     `json:"dimension"`
@@ -180,6 +187,7 @@ func featureParityInputs(t *testing.T, testCase *struct {
 			Brightness float32 `json:"brightness"`
 			Contrast   float32 `json:"contrast"`
 			NoiseLevel float32 `json:"noise_level"`
+			BlurScore  float32 `json:"blur_score"`
 		} `json:"document_quality"`
 		OCRConfidences     map[string]float32 `json:"ocr_confidences"`
 		OCRFieldValidation map[string]bool    `json:"ocr_field_validation"`
@@ -188,6 +196,7 @@ func featureParityInputs(t *testing.T, testCase *struct {
 		BlockHeight        int64              `json:"block_height"`
 	} `json:"source"`
 	ExpectedVectorHash       string             `json:"expected_vector_hash"`
+	ExpectedRawVectorHash    string             `json:"expected_raw_vector_hash"`
 	ExpectedNonzeroPositions map[string]float32 `json:"expected_nonzero_positions"`
 }) *ScoreInputs {
 	t.Helper()
@@ -195,13 +204,8 @@ func featureParityInputs(t *testing.T, testCase *struct {
 	var embedding []float32
 	switch source.FaceEmbedding.Kind {
 	case "missing":
-	case "zeros":
-		embedding = make([]float32, source.FaceEmbedding.Dimension)
 	case "single_index":
 		embedding = make([]float32, source.FaceEmbedding.Dimension)
-		if source.FaceEmbedding.Index < 0 || source.FaceEmbedding.Index >= len(embedding) {
-			t.Fatalf("face sentinel index %d outside dimension %d", source.FaceEmbedding.Index, len(embedding))
-		}
 		embedding[source.FaceEmbedding.Index] = source.FaceEmbedding.Value
 	case "alternating_bounds":
 		embedding = make([]float32, source.FaceEmbedding.Dimension)
@@ -221,27 +225,59 @@ func featureParityInputs(t *testing.T, testCase *struct {
 		t.Fatalf("unsupported face source kind %q", source.FaceEmbedding.Kind)
 	}
 	return &ScoreInputs{
-		FaceEmbedding:   embedding,
-		FaceConfidence:  source.FaceConfidence,
-		DocQualityScore: source.DocQualityScore,
-		DocQualityFeatures: DocQualityFeatures{
-			Sharpness: source.DocumentQuality.Sharpness, Brightness: source.DocumentQuality.Brightness,
-			Contrast: source.DocumentQuality.Contrast, NoiseLevel: source.DocumentQuality.NoiseLevel,
-		},
-		OCRConfidences: source.OCRConfidences, OCRFieldValidation: source.OCRFieldValidation,
-		ScopeTypes: source.ScopeTypes, ScopeCount: source.ScopeCount,
-		Metadata: InferenceMetadata{BlockHeight: source.BlockHeight},
+		FaceEmbedding: embedding, FaceConfidence: source.FaceConfidence, DocQualityScore: source.DocQualityScore,
+		DocQualityFeatures: DocQualityFeatures{Sharpness: source.DocumentQuality.Sharpness, Brightness: source.DocumentQuality.Brightness, Contrast: source.DocumentQuality.Contrast, NoiseLevel: source.DocumentQuality.NoiseLevel, BlurScore: source.DocumentQuality.BlurScore},
+		OCRConfidences:     source.OCRConfidences, OCRFieldValidation: source.OCRFieldValidation,
+		ScopeTypes: source.ScopeTypes, ScopeCount: source.ScopeCount, Metadata: InferenceMetadata{BlockHeight: source.BlockHeight},
 	}
 }
 
-func TestFeatureExtractorRejectsNonfiniteInputs(t *testing.T) {
-	inputs := &ScoreInputs{FaceEmbedding: make([]float32, FaceEmbeddingDim)}
-	inputs.FaceEmbedding[7] = float32(math.NaN())
-	_, err := NewFeatureExtractor(DefaultFeatureExtractorConfig()).ExtractFeatures(inputs)
-	if err == nil {
-		t.Fatal("expected nonfinite feature input to fail")
+func TestProductionFeatureExtractorRejectsIncompleteOrInvalidInputs(t *testing.T) {
+	valid := func() *ScoreInputs {
+		inputs := &ScoreInputs{
+			FaceEmbedding: make([]float32, FaceEmbeddingDim), FaceConfidence: 0.5, DocQualityScore: 0.5,
+			DocQualityFeatures: DocQualityFeatures{Sharpness: 0.5, Brightness: 0.5, Contrast: 0.5, NoiseLevel: 0.5, BlurScore: 0.5},
+			OCRConfidences:     make(map[string]float32), OCRFieldValidation: make(map[string]bool), ScopeTypes: []string{}, ScopeCount: 1,
+		}
+		inputs.FaceEmbedding[0] = 1
+		for _, field := range OCRFieldNames {
+			inputs.OCRConfidences[field] = 0.5
+			inputs.OCRFieldValidation[field] = true
+		}
+		return inputs
 	}
-	if got := err.Error(); got != "face embedding[7] must be finite" {
-		t.Fatalf("unexpected error: %s", got)
+	tests := []struct {
+		name, want string
+		mutate     func(*ScoreInputs)
+	}{
+		{"missing face", "missing face embedding", func(inputs *ScoreInputs) { inputs.FaceEmbedding = nil }},
+		{"zero norm face", "nonzero norm", func(inputs *ScoreInputs) { inputs.FaceEmbedding[0] = 0 }},
+		{"missing OCR field", "missing OCR confidence", func(inputs *ScoreInputs) { delete(inputs.OCRConfidences, "name") }},
+		{"nonfinite", "must be finite", func(inputs *ScoreInputs) { inputs.FaceEmbedding[3] = float32(math.NaN()) }},
+		{"invalid scalar", "blur score out of range", func(inputs *ScoreInputs) { inputs.DocQualityFeatures.BlurScore = 1.1 }},
+		{"invalid scope count", "scope count out of range", func(inputs *ScoreInputs) { inputs.ScopeCount = 11 }},
+		{"missing scope types", "missing scope types", func(inputs *ScoreInputs) { inputs.ScopeTypes = nil }},
+		{"negative block height", "negative block height", func(inputs *ScoreInputs) { inputs.Metadata.BlockHeight = -1 }},
+	}
+	extractor := NewFeatureExtractor(ProductionFeatureExtractorConfig())
+	for _, testCase := range tests {
+		t.Run(testCase.name, func(t *testing.T) {
+			inputs := valid()
+			testCase.mutate(inputs)
+			if _, err := extractor.ExtractFeatures(inputs); err == nil || !strings.Contains(err.Error(), testCase.want) {
+				t.Fatalf("error = %v, want containing %q", err, testCase.want)
+			}
+		})
+	}
+	if _, err := extractor.ExtractFeatures(nil); err == nil {
+		t.Fatal("nil inputs must fail")
+	}
+
+	config := ProductionFeatureExtractorConfig()
+	config.NormalizeFeatures = true
+	config.FeatureMean = make([]float32, TotalFeatureDim-1)
+	config.FeatureStd = make([]float32, TotalFeatureDim-1)
+	if _, err := NewFeatureExtractor(config).ExtractFeatures(valid()); err == nil || !strings.Contains(err.Error(), "normalization dimensions") {
+		t.Fatalf("normalization mismatch error = %v", err)
 	}
 }

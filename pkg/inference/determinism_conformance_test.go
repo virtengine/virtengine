@@ -8,7 +8,7 @@ import (
 )
 
 func TestDeterministicInferenceOutputPinned(t *testing.T) {
-	const expectedOutputHash = "80072992f02580f61fc1af5536ce5ff5246746f28b2294b07c4c98057bd4c8fd"
+	const expectedOutputHash = "f574f825314a053d71a89e185045592ac9e8912134e8c83604247ea619f90173"
 
 	tempDir, err := os.MkdirTemp("", "test-determinism-hash-*")
 	if err != nil {

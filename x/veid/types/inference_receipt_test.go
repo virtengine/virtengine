@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"crypto/ed25519"
 	"crypto/sha256"
+	"strings"
 	"testing"
 	"time"
 
@@ -64,6 +65,7 @@ func TestInferenceReceiptRejectsTamperedFields(t *testing.T) {
 		"feature":                   func(r *InferenceReceipt) { r.FeatureDigest[0] ^= 0x01 },
 		"schema":                    func(r *InferenceReceipt) { r.SchemaDigest[0] ^= 0x01 },
 		"lineage":                   func(r *InferenceReceipt) { r.EvidenceLineageDigest[0] ^= 0x01 },
+		"pipeline_version":          func(r *InferenceReceipt) { r.PipelineVersion = "v2.0.0" },
 		"manifest":                  func(r *InferenceReceipt) { r.ModelManifestDigest[0] ^= 0x01 },
 		"model":                     func(r *InferenceReceipt) { r.ModelDigest[0] ^= 0x01 },
 		"runtime_image":             func(r *InferenceReceipt) { r.RuntimeImageDigest[0] ^= 0x01 },
@@ -85,10 +87,10 @@ func TestInferenceReceiptRejectsTamperedFields(t *testing.T) {
 			r.Score = 0
 			r.ReasonCodes = []ReasonCode{ReasonCodeSuccess}
 		},
-		"issued_height":   func(r *InferenceReceipt) { r.IssuedHeight = 0 },
-		"expiry_height":   func(r *InferenceReceipt) { r.ExpiresHeight = r.IssuedHeight },
-		"issued_time":     func(r *InferenceReceipt) { r.IssuedAt = time.Time{} },
-		"expires_at":      func(r *InferenceReceipt) { r.ExpiresAt = r.IssuedAt },
+		"issued_height": func(r *InferenceReceipt) { r.IssuedHeight = 0 },
+		"expiry_height": func(r *InferenceReceipt) { r.ExpiresHeight = r.IssuedHeight },
+		"issued_time":   func(r *InferenceReceipt) { r.IssuedAt = time.Time{} },
+		"expires_at":    func(r *InferenceReceipt) { r.ExpiresAt = r.IssuedAt },
 		"issued_precision": func(r *InferenceReceipt) {
 			r.IssuedAt = r.IssuedAt.Add(time.Nanosecond)
 		},
@@ -104,6 +106,68 @@ func TestInferenceReceiptRejectsTamperedFields(t *testing.T) {
 			receipt := cloneInferenceReceipt(base)
 			tamper(&receipt)
 			require.Error(t, receipt.VerifySignature(pub))
+		})
+	}
+}
+
+func TestInferenceReceiptValidSubstitutionsInvalidateSignature(t *testing.T) {
+	pub, priv := deterministicReceiptKey(t)
+	base := testInferenceReceipt(t, pub)
+	require.NoError(t, base.Sign(priv))
+
+	tests := map[string]func(*InferenceReceipt){
+		"scope":      func(r *InferenceReceipt) { r.ScopeIDs = []string{"scope-a", "scope-c"} },
+		"score":      func(r *InferenceReceipt) { r.Score = 90 },
+		"confidence": func(r *InferenceReceipt) { r.ConfidenceMillionths = 900_000 },
+		"status_and_reasons": func(r *InferenceReceipt) {
+			r.Status = VerificationResultStatusPartial
+			r.ReasonCodes = []ReasonCode{ReasonCodeLowConfidence}
+		},
+		"issued_height":      func(r *InferenceReceipt) { r.IssuedHeight++ },
+		"expires_height":     func(r *InferenceReceipt) { r.ExpiresHeight-- },
+		"issued_time":        func(r *InferenceReceipt) { r.IssuedAt = r.IssuedAt.Add(time.Second) },
+		"expires_time":       func(r *InferenceReceipt) { r.ExpiresAt = r.ExpiresAt.Add(-time.Second) },
+		"signer_fingerprint": func(r *InferenceReceipt) { r.SignerFingerprint = strings.Repeat("a", 64) },
+		"signer_sequence":    func(r *InferenceReceipt) { r.SignerSequence++ },
+	}
+	for name, mutate := range tests {
+		t.Run(name, func(t *testing.T) {
+			receipt := cloneInferenceReceipt(base)
+			mutate(&receipt)
+			require.NoError(t, receipt.Validate())
+			require.ErrorContains(t, receipt.VerifySignature(pub), "invalid inference receipt signature")
+		})
+	}
+}
+
+func TestInferenceReceiptRejectsNonCanonicalFingerprintCase(t *testing.T) {
+	pub, priv := deterministicReceiptKey(t)
+	receipt := testInferenceReceipt(t, pub)
+	require.NoError(t, receipt.Sign(priv))
+	receipt.SignerFingerprint = strings.ToUpper(receipt.SignerFingerprint)
+
+	require.ErrorContains(t, receipt.Validate(), "lowercase")
+	require.ErrorContains(t, receipt.VerifySignature(pub), "lowercase")
+}
+
+func TestInferenceReceiptRejectsNonCanonicalIdentifiers(t *testing.T) {
+	pub, _ := deterministicReceiptKey(t)
+	tests := map[string]func(*InferenceReceipt){
+		"chain_whitespace":   func(r *InferenceReceipt) { r.ChainID = " chain-A" },
+		"account_control":    func(r *InferenceReceipt) { r.AccountAddress += "\x00" },
+		"request_unicode":    func(r *InferenceReceipt) { r.RequestID = "request-\u00e9" },
+		"nonce_whitespace":   func(r *InferenceReceipt) { r.Nonce += " " },
+		"pipeline_control":   func(r *InferenceReceipt) { r.PipelineVersion += "\x1f" },
+		"signer_key_unicode": func(r *InferenceReceipt) { r.SignerKeyID += "\u2603" },
+		"scope_whitespace":   func(r *InferenceReceipt) { r.ScopeIDs = []string{" scope-a"} },
+		"scope_control":      func(r *InferenceReceipt) { r.ScopeIDs = []string{"scope-a\x00"} },
+		"scope_unicode":      func(r *InferenceReceipt) { r.ScopeIDs = []string{"scope-\u00e9"} },
+	}
+	for name, mutate := range tests {
+		t.Run(name, func(t *testing.T) {
+			receipt := testInferenceReceipt(t, pub)
+			mutate(&receipt)
+			require.ErrorContains(t, receipt.validate(false), "printable ASCII")
 		})
 	}
 }

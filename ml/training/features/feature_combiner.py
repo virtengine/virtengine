@@ -22,6 +22,7 @@ from ml.training.features.ocr_features import OCRFeatureExtractor, OCRFeatures
 from ml.training.features.metadata_features import MetadataFeatureExtractor, MetadataFeatures
 from ml.training.features.canonical_vector import (
     CanonicalInferenceInputs,
+    OCR_FIELD_NAMES,
     TOTAL_FEATURE_DIM,
     assemble_canonical_inference_vector,
 )
@@ -32,36 +33,36 @@ logger = logging.getLogger(__name__)
 @dataclass
 class FeatureVector:
     """Combined feature vector for a single sample."""
-    
+
     # Sample identification
     sample_id: str
-    
+
     # Component features
     face_embedding: np.ndarray = field(default_factory=lambda: np.zeros(512))
     face_confidence: float = 0.0
     face_features: Optional[FaceFeatures] = None
-    
+
     doc_quality_score: float = 0.0
     doc_features: Optional[DocumentFeatures] = None
-    
+
     ocr_field_scores: Dict[str, float] = field(default_factory=dict)
     ocr_features: Optional[OCRFeatures] = None
-    
+
     metadata_features: Optional[MetadataFeatures] = None
-    
+
     # Combined vector for model input
     combined_vector: np.ndarray = field(default_factory=lambda: np.zeros(768))
-    
+
     # Label
     trust_score: float = 0.0
-    
+
     # Metadata
     extraction_time_ms: float = 0.0
-    
+
     def to_model_input(self) -> np.ndarray:
         """Get the combined vector as model input."""
         return self.combined_vector.astype(np.float32)
-    
+
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary (excluding large arrays)."""
         return {
@@ -78,32 +79,32 @@ class FeatureVector:
 @dataclass
 class FeatureDataset:
     """Dataset of feature vectors ready for training."""
-    
+
     # Feature vectors by split
     train: List[FeatureVector]
     validation: List[FeatureVector]
     test: List[FeatureVector]
-    
+
     # Feature dimensions
     feature_dim: int = 768
-    
+
     # Normalization parameters (computed from training set)
     feature_mean: Optional[np.ndarray] = None
     feature_std: Optional[np.ndarray] = None
-    
+
     # Statistics
     total_extraction_time_ms: float = 0.0
-    
+
     def get_arrays(
         self,
         split: str = "train"
     ) -> Tuple[np.ndarray, np.ndarray]:
         """
         Get feature and label arrays for a split.
-        
+
         Args:
             split: "train", "validation", or "test"
-            
+
         Returns:
             Tuple of (features, labels) arrays
         """
@@ -115,25 +116,25 @@ class FeatureDataset:
             vectors = self.test
         else:
             raise ValueError(f"Unknown split: {split}")
-        
+
         if len(vectors) == 0:
             return np.array([]), np.array([])
-        
+
         features = np.stack([v.combined_vector for v in vectors])
         labels = np.array([v.trust_score for v in vectors])
-        
+
         return features, labels
-    
+
     def normalize(self) -> None:
         """Normalize features using training set statistics."""
         if len(self.train) == 0:
             return
-        
+
         # Compute mean and std from training set
         train_features = np.stack([v.combined_vector for v in self.train])
         self.feature_mean = np.mean(train_features, axis=0)
         self.feature_std = np.std(train_features, axis=0) + 1e-8
-        
+
         # Apply normalization to all splits
         for vectors in [self.train, self.validation, self.test]:
             for v in vectors:
@@ -145,46 +146,47 @@ class FeatureDataset:
 class FeatureExtractor:
     """
     Unified feature extractor combining all feature types.
-    
+
     Extracts and combines:
     - Face embeddings and confidence scores
     - Document quality features
     - OCR field scores and validation
     - Capture metadata features
     """
-    
-    def __init__(self, config: Optional[FeatureConfig] = None):
+
+    def __init__(
+        self,
+        config: Optional[FeatureConfig] = None,
+        *,
+        strict_production: bool = False,
+    ):
         """
         Initialize the feature extractor.
-        
+
         Args:
             config: Feature configuration
         """
         self.config = config or FeatureConfig()
-        
+        self.strict_production = strict_production
+        if strict_production and self.config.combined_feature_dim != TOTAL_FEATURE_DIM:
+            raise ValueError(
+                f"production combined_feature_dim must be {TOTAL_FEATURE_DIM}"
+            )
+
         # Initialize component extractors
         self.face_extractor = FaceFeatureExtractor(config)
         self.doc_extractor = DocumentFeatureExtractor(config)
         self.ocr_extractor = OCRFeatureExtractor(config)
         self.meta_extractor = MetadataFeatureExtractor(config)
-        
+
         # Compute total feature dimension
         self._compute_feature_dim()
-    
+
     def _compute_feature_dim(self) -> None:
         """Compute the total feature dimension."""
-        if self.config.combined_feature_dim != TOTAL_FEATURE_DIM:
-            raise ValueError(
-                "production inference vectors require combined_feature_dim "
-                f"{TOTAL_FEATURE_DIM}, got {self.config.combined_feature_dim}"
-            )
-        if self.config.face_embedding_dim != 512:
-            raise ValueError(
-                "production inference vectors require face_embedding_dim 512, "
-                f"got {self.config.face_embedding_dim}"
-            )
-        self._feature_dim = TOTAL_FEATURE_DIM
-    
+        # Use configured dimension or compute from components
+        self._feature_dim = self.config.combined_feature_dim
+
     def extract_all(
         self,
         sample: IdentitySample,
@@ -193,32 +195,41 @@ class FeatureExtractor:
     ) -> FeatureVector:
         """
         Extract all features from a sample.
-        
+
         Args:
             sample: Identity sample with metadata
             document_image: Preprocessed document image
             selfie_image: Preprocessed selfie image
-            
+
         Returns:
             FeatureVector with combined features
         """
         start_time = time.perf_counter()
-        
+
+        if self.strict_production and (
+            document_image is None and sample.document_image is None
+        ):
+            raise ValueError("production feature extraction requires a document image")
+        if self.strict_production and (
+            selfie_image is None and sample.selfie_image is None
+        ):
+            raise ValueError("production feature extraction requires a selfie image")
+
         # Use images from sample if not provided
         if document_image is None and sample.document_image is not None:
             document_image = sample.document_image.data
         if selfie_image is None and sample.selfie_image is not None:
             selfie_image = sample.selfie_image.data
-        
+
         # Extract component features
         face_features = self.face_extractor.extract(document_image, selfie_image)
         doc_features = self.doc_extractor.extract(document_image)
-        
+
         doc_type = sample.document_info.doc_type if sample.document_info else "id_card"
         ocr_features = self.ocr_extractor.extract(document_image, doc_type)
-        
+
         meta_features = self.meta_extractor.extract(sample.capture_metadata)
-        
+
         # Combine into unified vector
         combined_vector = self._combine_features(
             face_features,
@@ -227,15 +238,15 @@ class FeatureExtractor:
             meta_features,
             sample.annotations,
         )
-        
+
         # Build OCR field scores dict
         ocr_field_scores = {
             name: score.confidence
             for name, score in ocr_features.field_scores.items()
         }
-        
+
         extraction_time = (time.perf_counter() - start_time) * 1000
-        
+
         return FeatureVector(
             sample_id=sample.sample_id,
             face_embedding=face_features.combined_embedding if face_features.combined_embedding is not None else np.zeros(512),
@@ -250,7 +261,7 @@ class FeatureExtractor:
             trust_score=sample.trust_score,
             extraction_time_ms=extraction_time,
         )
-    
+
     def _combine_features(
         self,
         face_features: FaceFeatures,
@@ -259,102 +270,52 @@ class FeatureExtractor:
         meta_features: MetadataFeatures,
         annotations: Optional[Dict[str, Any]] = None,
     ) -> np.ndarray:
-        """Combine extracted values using the canonical Go inference layout."""
-        del meta_features
-        annotations = annotations or {}
-        embedding = (
-            face_features.combined_embedding
-            if face_features.combined_embedding is not None
-            else ()
-        )
-        return assemble_canonical_inference_vector(CanonicalInferenceInputs(
-            face_embedding=embedding,
-            face_confidence=face_features.selfie_face_confidence,
-            doc_quality_score=doc_features.overall_quality_score,
-            sharpness=doc_features.sharpness_score,
-            brightness=doc_features.brightness_score,
-            contrast=doc_features.contrast_score,
-            noise_level=doc_features.noise_level,
-            ocr_confidences={
-                name: score.confidence
-                for name, score in ocr_features.field_scores.items()
-            },
-            ocr_field_validation={
-                name: score.validated
-                for name, score in ocr_features.field_scores.items()
-            },
-            scope_types=annotations.get("scope_types", ()),
-            scope_count=annotations.get("scope_count", 0),
-            block_height=annotations.get("block_height", 0),
-        ))
+        """Combine extracted values using the shared canonical schema."""
+        if self.strict_production and not ocr_features.ocr_success:
+            raise ValueError("production OCR extraction was not successful")
 
-    def combine_training_features(
-        self,
-        face_features: FaceFeatures,
-        doc_features: DocumentFeatures,
-        ocr_features: OCRFeatures,
-        meta_features: MetadataFeatures,
-    ) -> np.ndarray:
-        """Build the legacy rich training-only component vector."""
-        components = []
-        
-        # Face embedding (primary feature)
-        if face_features.combined_embedding is not None:
-            face_emb = face_features.combined_embedding
-            # Pad or truncate to target size
-            target_face_dim = self.config.face_embedding_dim
-            if len(face_emb) < target_face_dim:
-                face_emb = np.pad(face_emb, (0, target_face_dim - len(face_emb)))
-            else:
-                face_emb = face_emb[:target_face_dim]
-            components.append(face_emb)
-        else:
-            components.append(np.zeros(self.config.face_embedding_dim))
-        
-        # Face scalar features
-        face_scalars = np.array([
-            face_features.face_similarity,
-            face_features.document_face_confidence,
-            face_features.selfie_face_confidence,
-            face_features.document_face_quality,
-            face_features.selfie_face_quality,
-            float(face_features.document_face_detected),
-            float(face_features.selfie_face_detected),
-        ], dtype=np.float32)
-        components.append(face_scalars)
-        
-        # Document features
-        components.append(doc_features.to_vector())
-        
-        # OCR features (simplified)
-        ocr_scalars = np.array([
-            ocr_features.overall_ocr_confidence,
-            ocr_features.fields_extracted_ratio,
-            ocr_features.fields_validated_ratio,
-            float(ocr_features.ocr_success),
-            float(ocr_features.has_name),
-            float(ocr_features.has_dob),
-            float(ocr_features.has_doc_number),
-            float(ocr_features.has_expiry),
-            float(ocr_features.has_nationality),
-        ], dtype=np.float32)
-        components.append(ocr_scalars)
-        
-        # Metadata features
-        components.append(meta_features.to_vector())
-        
-        # Concatenate all components
-        combined = np.concatenate(components)
-        
-        # Pad or truncate to target dimension
-        target_dim = self._feature_dim
-        if len(combined) < target_dim:
-            combined = np.pad(combined, (0, target_dim - len(combined)))
-        else:
-            combined = combined[:target_dim]
-        
-        return combined.astype(np.float32)
-    
+        confidences = {
+            name: score.confidence
+            for name, score in ocr_features.field_scores.items()
+        }
+        validations = {
+            name: score.validated
+            for name, score in ocr_features.field_scores.items()
+        }
+        if self.strict_production:
+            missing = [name for name in OCR_FIELD_NAMES if name not in confidences]
+            if missing:
+                raise ValueError(f"missing required OCR fields: {', '.join(missing)}")
+
+        canonical = assemble_canonical_inference_vector(
+            CanonicalInferenceInputs(
+                face_embedding=face_features.combined_embedding,
+                face_confidence=face_features.selfie_face_confidence,
+                doc_quality_score=doc_features.overall_quality_score,
+                sharpness=doc_features.sharpness_score,
+                brightness=doc_features.brightness_score,
+                contrast=doc_features.contrast_score,
+                noise_level=doc_features.noise_level,
+                blur_score=doc_features.blur_score,
+                ocr_confidences=confidences,
+                ocr_field_validation=validations,
+                scope_types=(),
+                scope_count=0,
+                block_height=0,
+            ),
+            strict_production=self.strict_production,
+        )
+
+        if self._feature_dim == TOTAL_FEATURE_DIM:
+            return canonical
+        if self.strict_production:
+            raise ValueError("production features cannot be resized")
+        if self._feature_dim < TOTAL_FEATURE_DIM:
+            return canonical[: self._feature_dim]
+        return np.pad(canonical, (0, self._feature_dim - TOTAL_FEATURE_DIM)).astype(
+            np.float32
+        )
+
     def extract_batch(
         self,
         dataset: Dataset,
@@ -362,25 +323,22 @@ class FeatureExtractor:
     ) -> FeatureDataset:
         """
         Extract features for an entire dataset.
-        
+
         Args:
             dataset: Dataset with samples
             normalize: Whether to normalize features
-            
+
         Returns:
             FeatureDataset with extracted features
         """
         start_time = time.perf_counter()
-        
+
         train_features = self._extract_split(dataset.train)
         val_features = self._extract_split(dataset.validation)
         test_features = self._extract_split(dataset.test)
 
-        if not train_features and not val_features and not test_features:
-            raise RuntimeError("feature extraction produced zero selected vectors")
-        
         total_time = (time.perf_counter() - start_time) * 1000
-        
+
         feature_dataset = FeatureDataset(
             train=train_features,
             validation=val_features,
@@ -388,108 +346,125 @@ class FeatureExtractor:
             feature_dim=self._feature_dim,
             total_extraction_time_ms=total_time,
         )
-        
+
         if normalize:
             feature_dataset.normalize()
-        
+
         logger.info(
             f"Extracted features: {len(train_features)} train, "
             f"{len(val_features)} val, {len(test_features)} test "
             f"in {total_time:.2f}ms"
         )
-        
+
         return feature_dataset
-    
+
     def _extract_split(
         self,
         split: DatasetSplit
     ) -> List[FeatureVector]:
         """Extract features for a dataset split."""
+        if self.strict_production and not split.samples:
+            raise RuntimeError("production split has zero selected samples")
+
         features = []
-        
+
         for sample in split.samples:
             try:
                 feature_vector = self.extract_all(sample)
-            except Exception as error:
-                raise RuntimeError(
-                    f"feature extraction failed for selected sample {sample.sample_id}"
-                ) from error
-            features.append(feature_vector)
+                features.append(feature_vector)
+            except Exception as e:
+                if self.strict_production:
+                    raise RuntimeError(
+                        f"production extraction failed for selected sample {sample.sample_id}"
+                    ) from e
+                logger.error(f"Feature extraction failed for {sample.sample_id}: {e}")
 
-        if split.samples and not features:
-            raise RuntimeError("feature extraction produced zero selected vectors")
-        
         return features
-    
+
     def extract_from_preprocessed(
         self,
         samples: List[PreprocessedSample],
     ) -> List[FeatureVector]:
         """Extract features from preprocessed samples."""
+        if self.strict_production and not samples:
+            raise RuntimeError("production preprocessing produced zero selected vectors")
+
         features = []
-        
+
         for sample in samples:
             if not sample.success or sample.original_sample is None:
-                raise RuntimeError(
-                    f"selected preprocessed sample {sample.sample_id} is invalid"
-                )
-            
+                if self.strict_production:
+                    raise RuntimeError(
+                        "production preprocessing failed for selected "
+                        f"preprocessed sample {sample.sample_id}"
+                    )
+                continue
+
             try:
                 feature_vector = self.extract_all(
                     sample.original_sample,
                     document_image=sample.document_image,
                     selfie_image=sample.selfie_image,
                 )
-            except Exception as error:
-                raise RuntimeError(
-                    f"feature extraction failed for selected sample {sample.sample_id}"
-                ) from error
-            features.append(feature_vector)
+                features.append(feature_vector)
+            except Exception as e:
+                if self.strict_production:
+                    raise RuntimeError(
+                        "production extraction failed for selected preprocessed "
+                        f"sample {sample.sample_id}"
+                    ) from e
+                logger.error(f"Feature extraction failed for {sample.sample_id}: {e}")
 
-        if not features:
-            raise RuntimeError("feature extraction produced zero selected vectors")
-        
         return features
-    
+
     def extract_from_augmented(
         self,
         samples: List[AugmentedSample],
     ) -> List[FeatureVector]:
         """Extract features from augmented samples."""
+        if self.strict_production and not samples:
+            raise RuntimeError("production augmentation produced zero selected vectors")
+
         features = []
-        
+
         for sample in samples:
             if sample.original_sample is None:
-                raise RuntimeError(
-                    f"selected augmentation {sample.augmentation_id} has no source sample"
-                )
-            
+                if self.strict_production:
+                    raise ValueError(
+                        f"production augmentation lacks source for {sample.augmentation_id}"
+                    )
+                continue
+
             original = sample.original_sample.original_sample
             if original is None:
-                raise RuntimeError(
-                    f"selected augmentation {sample.augmentation_id} has no original sample"
-                )
-            
+                if self.strict_production:
+                    raise ValueError(
+                        f"production augmentation lacks original sample for {sample.augmentation_id}"
+                    )
+                continue
+
             try:
                 feature_vector = self.extract_all(
                     original,
                     document_image=sample.document_image,
                     selfie_image=sample.selfie_image,
                 )
-            except Exception as error:
-                raise RuntimeError(
-                    "feature extraction failed for selected augmentation "
-                    f"{sample.augmentation_id}"
-                ) from error
-            feature_vector.sample_id = sample.augmentation_id
-            feature_vector.trust_score = sample.trust_score
-            features.append(feature_vector)
+                # Use augmentation ID
+                feature_vector.sample_id = sample.augmentation_id
+                feature_vector.trust_score = sample.trust_score
+                features.append(feature_vector)
+            except Exception as e:
+                if self.strict_production:
+                    raise RuntimeError(
+                        "production extraction failed for selected augmented sample "
+                        f"{sample.augmentation_id}"
+                    ) from e
+                logger.error(
+                    f"Feature extraction failed for {sample.augmentation_id}: {e}"
+                )
 
-        if not features:
-            raise RuntimeError("feature extraction produced zero selected vectors")
-        
         return features
-    
+
     def get_feature_dim(self) -> int:
         """Get the total feature dimension."""
         return self._feature_dim

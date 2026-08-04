@@ -1,0 +1,17 @@
+command: go test -count=1 ./x/veid/types
+exit_code: 0
+result: ok github.com/virtengine/virtengine/x/veid/types 0.245s
+
+command: go test -count=1 ./pkg/inference -run 'ReceiptProducer|ReceiptParity'
+exit_code: 0
+result: ok github.com/virtengine/virtengine/pkg/inference 0.194s
+
+command: go test -count=1 ./x/veid/keeper -run 'InferenceReceipt'
+exit_code: 0
+result: ok github.com/virtengine/virtengine/x/veid/keeper 4.004s
+
+command: CGO_ENABLED=1 CC=winlibs-gcc go test -race -count=1 ./x/veid/types -run 'InferenceReceipt'
+exit_code: 0
+result: ok github.com/virtengine/virtengine/x/veid/types 1.374s
+
+regression: Uppercase signer fingerprints previously validated and produced the same canonical sign bytes because serialization lowercased the value. Receipt validation now rejects non-lowercase fingerprints before signing or verification.
