@@ -1,8 +1,11 @@
 package main
 
 import (
+	"bytes"
 	"context"
+	"crypto/ed25519"
 	"crypto/sha256"
+	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -297,6 +300,56 @@ func TestVerifyModelBundleRejectsInvalidProductionProvenanceStatuses(t *testing.
 	}
 }
 
+func TestVerifyModelBundleRejectsMissingSignedProductionEvaluation(t *testing.T) {
+	modelDir, manifestPath := createReleaseBundle(t)
+	provenance := mustReadJSON(t, filepath.Join(filepath.Dir(manifestPath), "model_provenance.json"))
+	delete(provenance, "evaluation")
+	rewriteProvenance(t, manifestPath, provenance)
+
+	_, err := verifyModelBundle(modelDir, manifestPath, releaseBundleVersion, "")
+	assertVerificationError(t, err, verificationStateBadManifest, "signed evaluation evidence")
+}
+
+func TestVerifyModelBundleRejectsInvalidProductionEvaluationSignature(t *testing.T) {
+	modelDir, manifestPath := createReleaseBundle(t)
+	provenance := mustReadJSON(t, filepath.Join(filepath.Dir(manifestPath), "model_provenance.json"))
+	provenance["evaluation"].(map[string]any)["signature"] = base64.StdEncoding.EncodeToString(make([]byte, ed25519.SignatureSize))
+	rewriteProvenance(t, manifestPath, provenance)
+
+	_, err := verifyModelBundle(modelDir, manifestPath, releaseBundleVersion, "")
+	assertVerificationError(t, err, verificationStateBadManifest, "signature verification failed")
+}
+
+func TestVerifyModelBundleRejectsEvaluationThresholdOrCoverageGaps(t *testing.T) {
+	for _, test := range []struct {
+		name       string
+		update     func(map[string]any)
+		wantReason string
+	}{
+		{
+			name: "deepfake threshold exceeded",
+			update: func(report map[string]any) {
+				report["metrics_ppm"].(map[string]any)["deepfake_far_ppm"] = 201
+			},
+			wantReason: "deepfake_far_ppm",
+		},
+		{
+			name: "attack set coverage missing",
+			update: func(report map[string]any) {
+				delete(report["coverage"].(map[string]any), "deepfake_attack_set_digest")
+			},
+			wantReason: "invalid evidence or policy digest",
+		},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			modelDir, manifestPath := createReleaseBundle(t)
+			resignEvaluationEvidence(t, manifestPath, test.update)
+			_, err := verifyModelBundle(modelDir, manifestPath, releaseBundleVersion, "")
+			assertVerificationError(t, err, verificationStateBadManifest, test.wantReason)
+		})
+	}
+}
+
 func TestVerifyModelBundleRejectsInvalidProfiles(t *testing.T) {
 	for _, profile := range []string{"", "prod", "Production", "unknown"} {
 		t.Run(profile, func(t *testing.T) {
@@ -571,15 +624,18 @@ func createReleaseBundle(t *testing.T) (string, string) {
 	mustWriteFile(t, filepath.Join(versionDir, "MODEL_HASH.txt"), []byte(
 		"SHA256="+modelHash+"\nVERSION="+releaseBundleVersion+"\n",
 	))
+	evaluationPath, evaluationDeclaration := writeSignedEvaluationEvidence(t, versionDir, modelHash)
 	writeJSON(t, filepath.Join(versionDir, "model_provenance.json"), map[string]any{
 		"schema_version": "virtengine.model-provenance/v1",
 		"status":         "production_approved",
+		"evaluation":     evaluationDeclaration,
 	})
 
 	artifacts := []string{
 		"MODEL_HASH.txt",
 		"export_metadata.json",
 		"manifest.json",
+		filepath.Base(evaluationPath),
 		"model_provenance.json",
 		"model_frozen.pb",
 		filepath.ToSlash(filepath.Join("model", "saved_model.pb")),
@@ -628,6 +684,82 @@ func createReleaseBundle(t *testing.T) (string, string) {
 	})
 
 	return modelDir, releaseManifestPath
+}
+
+func writeSignedEvaluationEvidence(t *testing.T, versionDir, modelHash string) (string, map[string]any) {
+	t.Helper()
+	digest := stringsOfLength(64, "a")
+	metrics := map[string]any{}
+	thresholds := map[string]any{}
+	for _, name := range requiredEvaluationMetricNames {
+		metrics[name] = 100
+		thresholds[name] = 200
+	}
+	report := map[string]any{
+		"schema_version":          "veid.model-evaluation/v1",
+		"model_digest":            modelHash,
+		"quality_evidence_digest": digest,
+		"coverage": map[string]any{
+			"document_dataset_digest": digest, "ocr_dataset_digest": digest, "face_dataset_digest": digest,
+			"pad_attack_set_digest": digest, "deepfake_attack_set_digest": digest, "demographic_coverage_digest": digest,
+		},
+		"metrics_ppm": metrics, "thresholds_ppm": thresholds,
+		"drift":    map[string]any{"baseline_evaluation_digest": digest, "maximum_score_drift_ppm": 50_000, "monitor_interval_seconds": 3600},
+		"rollback": map[string]any{"policy_digest": digest, "previous_model_digest": digest, "maximum_rollback_seconds": 300},
+	}
+	reportData, err := json.MarshalIndent(report, "", "  ")
+	if err != nil {
+		t.Fatalf("marshal evaluation report: %v", err)
+	}
+	reportData = append(reportData, '\n')
+	privateKey := testEvaluationSigningKey()
+	path := filepath.Join(versionDir, "model_evaluation.json")
+	mustWriteFile(t, path, reportData)
+	return path, map[string]any{
+		"path":              filepath.Base(path),
+		"sha256":            mustComputeHash(t, path),
+		"signer_key_id":     "test-evaluation-release-key",
+		"signer_public_key": base64.StdEncoding.EncodeToString(privateKey.Public().(ed25519.PublicKey)),
+		"signature":         base64.StdEncoding.EncodeToString(ed25519.Sign(privateKey, reportData)),
+	}
+}
+
+func resignEvaluationEvidence(t *testing.T, manifestPath string, update func(map[string]any)) {
+	t.Helper()
+	provenancePath := filepath.Join(filepath.Dir(manifestPath), "model_provenance.json")
+	provenance := mustReadJSON(t, provenancePath)
+	declaration := provenance["evaluation"].(map[string]any)
+	evaluationPath := filepath.Join(filepath.Dir(manifestPath), declaration["path"].(string))
+	report := mustReadJSON(t, evaluationPath)
+	update(report)
+	writeJSON(t, evaluationPath, report)
+	data, err := os.ReadFile(evaluationPath)
+	if err != nil {
+		t.Fatalf("read evaluation report: %v", err)
+	}
+	privateKey := testEvaluationSigningKey()
+	declaration["sha256"] = mustComputeHash(t, evaluationPath)
+	declaration["signature"] = base64.StdEncoding.EncodeToString(ed25519.Sign(privateKey, data))
+	info, err := os.Stat(evaluationPath)
+	if err != nil {
+		t.Fatalf("stat evaluation report: %v", err)
+	}
+	manifest := mustReadJSON(t, manifestPath)
+	for _, item := range manifest["artifacts"].([]any) {
+		artifact := item.(map[string]any)
+		if artifact["path"] == declaration["path"] {
+			artifact["sha256"] = declaration["sha256"]
+			artifact["size_bytes"] = info.Size()
+			break
+		}
+	}
+	writeJSON(t, manifestPath, manifest)
+	writeJSON(t, provenancePath, provenance)
+	rebindProvenanceArtifact(t, manifestPath)
+}
+
+func testEvaluationSigningKey() ed25519.PrivateKey {
+	return ed25519.NewKeyFromSeed(bytes.Repeat([]byte{0x42}, ed25519.SeedSize))
 }
 
 func rewriteProvenance(t *testing.T, manifestPath string, provenance map[string]any) {
