@@ -1,31 +1,29 @@
 {
   "campaign": "three-day-prototype",
   "thread": "T4",
-  "checkpoint": "T4-01EDA",
+  "checkpoint": "T4-01EDB",
   "branch": "ve/prototype-integration",
-  "start_head": "5db9c5ea326776e2d2dac2812b831e835ef74eed",
-  "end_head": "97a916ff3a6a3b75f13006aa03fe8945a9f107cc",
+  "start_head": "88f34dc4d55cb52a2f29df48e2e23e9f8400859b",
+  "end_head": "684c7af9b7477ae866fdf5acdf677bc1c47ce97c",
   "origin_main": "79391a3df86d85522b92e0400c6904971ecbe65d",
   "tree_clean": true,
   "commits": [
-    "97a916ff3a6a3b75f13006aa03fe8945a9f107cc"
+    "684c7af9b7477ae866fdf5acdf677bc1c47ce97c"
   ],
   "owned_paths": [
-    "_docs/audits/**",
-    "_docs/ralph/prototype-integration/epochs/**",
+    "_docs/ralph/prototype-integration/**",
     "_docs/ralph/handoffs/prototype-integration/**"
   ],
   "files_changed": [
     "_docs/ralph/handoffs/prototype-integration/HANDOFF.yaml",
-    "_docs/audits/task-t4-01e-intake-freeze-planner-2026-08-02.md",
-    "_docs/ralph/prototype-integration/epochs/epoch-2.json"
+    "_docs/ralph/prototype-integration/core-rc-manifest.json"
   ],
   "tests": [
     {
-      "command": "node scripts/plan-prototype-intake-freeze.test.cjs && node scripts/apply-prototype-intake-freeze.test.cjs",
+      "command": "node scripts/validate-prototype-integration.test.cjs && node scripts/validate-prototype-integration.cjs",
       "exit_code": 0,
       "result": "passed",
-      "test_count": 55,
+      "test_count": 15,
       "tool_versions": {
         "node": "20.19.1"
       }
@@ -40,7 +38,9 @@
       }
     }
   ],
-  "generated_hashes": {},
+  "generated_hashes": {
+    "_docs/ralph/prototype-integration/core-rc-manifest.json": "bcd373e987fb68cd53bf81057d85615be62da44ffbbffde98d90e88db86e1149"
+  },
   "accepted_checkpoints": [],
   "rejected_checkpoints": [
     {
@@ -92,5 +92,5 @@
     "Task 88C is not complete."
   ],
   "next_checkpoint": null,
-  "expected_head": "97a916ff3a6a3b75f13006aa03fe8945a9f107cc"
+  "expected_head": "684c7af9b7477ae866fdf5acdf677bc1c47ce97c"
 }
