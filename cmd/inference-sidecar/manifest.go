@@ -1,7 +1,9 @@
 package main
 
 import (
+	"crypto/ed25519"
 	"crypto/sha256"
+	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -79,8 +81,58 @@ type releaseArtifact struct {
 }
 
 type modelProvenance struct {
-	SchemaVersion string `json:"schema_version"`
-	Status        string `json:"status"`
+	SchemaVersion string                 `json:"schema_version"`
+	Status        string                 `json:"status"`
+	Evaluation    *evaluationDeclaration `json:"evaluation,omitempty"`
+}
+
+// evaluationDeclaration binds an independently signed release-gate report to
+// the provenance artifact. The public key is intentionally part of the
+// signed-release declaration so a deployment can verify evidence without
+// access to an evaluation system or its source datasets.
+type evaluationDeclaration struct {
+	Path            string `json:"path"`
+	SHA256          string `json:"sha256"`
+	SignerKeyID     string `json:"signer_key_id"`
+	SignerPublicKey string `json:"signer_public_key"`
+	Signature       string `json:"signature"`
+}
+
+type modelEvaluationReport struct {
+	SchemaVersion         string             `json:"schema_version"`
+	ModelDigest           string             `json:"model_digest"`
+	QualityEvidenceDigest string             `json:"quality_evidence_digest"`
+	Coverage              evaluationCoverage `json:"coverage"`
+	MetricsPPM            map[string]uint64  `json:"metrics_ppm"`
+	ThresholdsPPM         map[string]uint64  `json:"thresholds_ppm"`
+	Drift                 driftPolicy        `json:"drift"`
+	Rollback              rollbackPolicy     `json:"rollback"`
+}
+
+type evaluationCoverage struct {
+	DocumentDatasetDigest     string `json:"document_dataset_digest"`
+	OCRDatasetDigest          string `json:"ocr_dataset_digest"`
+	FaceDatasetDigest         string `json:"face_dataset_digest"`
+	PADAttackSetDigest        string `json:"pad_attack_set_digest"`
+	DeepfakeAttackSetDigest   string `json:"deepfake_attack_set_digest"`
+	DemographicCoverageDigest string `json:"demographic_coverage_digest"`
+}
+
+type driftPolicy struct {
+	BaselineEvaluationDigest string `json:"baseline_evaluation_digest"`
+	MaximumScoreDriftPPM     uint64 `json:"maximum_score_drift_ppm"`
+	MonitorIntervalSeconds   uint64 `json:"monitor_interval_seconds"`
+}
+
+type rollbackPolicy struct {
+	PolicyDigest           string `json:"policy_digest"`
+	PreviousModelDigest    string `json:"previous_model_digest"`
+	MaximumRollbackSeconds uint64 `json:"maximum_rollback_seconds"`
+}
+
+var requiredEvaluationMetricNames = []string{
+	"ocr_cer_ppm", "document_fpr_ppm", "document_fnr_ppm", "face_far_ppm", "face_frr_ppm",
+	"pad_apcer_ppm", "pad_bpcer_ppm", "deepfake_far_ppm", "deepfake_frr_ppm",
 }
 
 type verificationResult struct {
@@ -486,6 +538,11 @@ func verifyModelBundleForProfile(modelPath, manifestPath, expectedVersion, expec
 			Err:   fmt.Errorf("manifest profile must be production or fixture_only, got %q", manifest.Profile),
 		}
 	}
+	if manifest.Profile == "production" {
+		if err := verifyProductionEvaluationEvidence(manifestDir, absProvenancePath, provenance.Evaluation, runtimeHash, verifiedArtifacts); err != nil {
+			return nil, err
+		}
+	}
 	if manifest.Profile != expectedProfile {
 		return nil, &verificationError{
 			State: verificationStateBadManifest,
@@ -503,6 +560,79 @@ func verifyModelBundleForProfile(modelPath, manifestPath, expectedVersion, expec
 		FailurePath:   "",
 		FailureReason: "",
 	}, nil
+}
+
+func verifyProductionEvaluationEvidence(bundleRoot, provenancePath string, declaration *evaluationDeclaration, runtimeHash string, verifiedArtifacts map[string]string) error {
+	if declaration == nil {
+		return &verificationError{State: verificationStateBadManifest, Path: provenancePath, Err: fmt.Errorf("production provenance requires signed evaluation evidence")}
+	}
+	if strings.TrimSpace(declaration.SignerKeyID) == "" || placeholderPattern.MatchString(declaration.SignerKeyID) {
+		return &verificationError{State: verificationStateBadManifest, Path: provenancePath, Err: fmt.Errorf("evaluation signer key ID is required")}
+	}
+	path := strings.TrimSpace(declaration.Path)
+	if path == "" || filepath.IsAbs(path) || filepath.VolumeName(path) != "" {
+		return &verificationError{State: verificationStateBadManifest, Path: provenancePath, Err: fmt.Errorf("evaluation evidence path must be repository-relative")}
+	}
+	absPath, normalizedPath, err := resolveBundlePath(bundleRoot, path, provenancePath, "evaluation evidence path")
+	if err != nil {
+		return err
+	}
+	artifactHash, exists := verifiedArtifacts[normalizedPath]
+	if !exists {
+		return &verificationError{State: verificationStateBadManifest, Path: provenancePath, Err: fmt.Errorf("evaluation evidence is not a verified artifact: %s", normalizedPath)}
+	}
+	declaredHash := normalizeHash(declaration.SHA256)
+	if !isValidHash(declaredHash) || declaredHash != artifactHash {
+		return &verificationError{State: verificationStateStaleManifest, Path: absPath, Err: fmt.Errorf("evaluation evidence digest mismatch")}
+	}
+	publicKey, err := base64.StdEncoding.DecodeString(declaration.SignerPublicKey)
+	if err != nil || len(publicKey) != ed25519.PublicKeySize {
+		return &verificationError{State: verificationStateBadManifest, Path: provenancePath, Err: fmt.Errorf("evaluation signer public key must be base64 Ed25519")}
+	}
+	signature, err := base64.StdEncoding.DecodeString(declaration.Signature)
+	if err != nil || len(signature) != ed25519.SignatureSize {
+		return &verificationError{State: verificationStateBadManifest, Path: provenancePath, Err: fmt.Errorf("evaluation signature must be base64 Ed25519")}
+	}
+	reportData, err := os.ReadFile(absPath)
+	if err != nil {
+		return &verificationError{State: verificationStateBadManifest, Path: absPath, Err: err}
+	}
+	if !ed25519.Verify(ed25519.PublicKey(publicKey), reportData, signature) {
+		return &verificationError{State: verificationStateBadManifest, Path: absPath, Err: fmt.Errorf("evaluation signature verification failed")}
+	}
+	var report modelEvaluationReport
+	if err := json.Unmarshal(reportData, &report); err != nil {
+		return &verificationError{State: verificationStateBadManifest, Path: absPath, Err: err}
+	}
+	if err := report.Validate(runtimeHash); err != nil {
+		return &verificationError{State: verificationStateBadManifest, Path: absPath, Err: err}
+	}
+	return nil
+}
+
+func (report modelEvaluationReport) Validate(modelDigest string) error {
+	if report.SchemaVersion != "veid.model-evaluation/v1" || normalizeHash(report.ModelDigest) != modelDigest {
+		return fmt.Errorf("evaluation report schema or model digest is invalid")
+	}
+	for _, digest := range []string{report.QualityEvidenceDigest, report.Coverage.DocumentDatasetDigest, report.Coverage.OCRDatasetDigest, report.Coverage.FaceDatasetDigest, report.Coverage.PADAttackSetDigest, report.Coverage.DeepfakeAttackSetDigest, report.Coverage.DemographicCoverageDigest, report.Drift.BaselineEvaluationDigest, report.Rollback.PolicyDigest, report.Rollback.PreviousModelDigest} {
+		if !isValidHash(normalizeHash(digest)) {
+			return fmt.Errorf("evaluation report contains an invalid evidence or policy digest")
+		}
+	}
+	if report.Drift.MaximumScoreDriftPPM > 1_000_000 || report.Drift.MonitorIntervalSeconds == 0 || report.Rollback.MaximumRollbackSeconds == 0 {
+		return fmt.Errorf("evaluation drift or rollback policy is invalid")
+	}
+	for _, name := range requiredEvaluationMetricNames {
+		metric, hasMetric := report.MetricsPPM[name]
+		threshold, hasThreshold := report.ThresholdsPPM[name]
+		if !hasMetric || !hasThreshold || metric > 1_000_000 || threshold > 1_000_000 {
+			return fmt.Errorf("evaluation metric and threshold %q are required", name)
+		}
+		if metric > threshold {
+			return fmt.Errorf("evaluation metric %q exceeds approved threshold", name)
+		}
+	}
+	return nil
 }
 
 func computeModelDirHash(modelPath string) (string, error) {
