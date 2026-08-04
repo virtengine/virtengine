@@ -1,0 +1,27 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: veid-inference-config
+  namespace: virtengine
+  labels:
+    app.kubernetes.io/name: veid-inference
+    app.kubernetes.io/component: inference
+data:
+  # A release automation job must replace these values with the approved,
+  # signed bundle. The sidecar remains unready if the manifest is absent or
+  # any artifact/provenance digest differs from the release manifest.
+  VEID_INFERENCE_MODEL_PATH: /var/lib/veid/models/current/model
+  VEID_INFERENCE_MANIFEST_PATH: /var/lib/veid/models/current/release_manifest.json
+  VEID_INFERENCE_GRPC_ADDR: :50051
+  VEID_INFERENCE_METRICS_ADDR: :9090
+  VEID_INFERENCE_FORCE_CPU: "true"
+  VEID_INFERENCE_RANDOM_SEED: "42"
+  VEID_INFERENCE_TIMEOUT: 2s
+  VEID_INFERENCE_MAX_MEMORY_MB: "512"
+  VEID_INFERENCE_TLS_CERT_FILE: /var/run/veid/tls/tls.crt
+  VEID_INFERENCE_TLS_KEY_FILE: /var/run/veid/tls/tls.key
+  VEID_INFERENCE_TLS_CLIENT_CA_FILE: /var/run/veid/tls/ca.crt
+  VEID_INFERENCE_TLS_REQUIRE_CLIENT_CERT: "true"
+  VEID_RECEIPT_SIGNER_MODE: kms
+  VEID_RECEIPT_KMS_KEY_ID: ""
+  VEID_RECEIPT_KMS_ENDPOINT: ""
