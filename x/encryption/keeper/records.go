@@ -54,6 +54,9 @@ func (k Keeper) deleteRecipientKeyStore(ctx sdk.Context, address sdk.AccAddress,
 
 // ImportRecipientKeyRecord stores a recipient key record directly.
 func (k Keeper) ImportRecipientKeyRecord(ctx sdk.Context, record types.RecipientKeyRecord) error {
+	if err := record.Validate(); err != nil {
+		return err
+	}
 	storeRecord := recipientKeyStore{
 		Address:        record.Address,
 		PublicKey:      record.PublicKey,

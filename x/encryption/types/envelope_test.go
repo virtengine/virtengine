@@ -1,6 +1,7 @@
 package types
 
 import (
+	"bytes"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -442,10 +443,20 @@ func TestRecipientKeyRecord_Validate(t *testing.T) {
 			record: RecipientKeyRecord{
 				Address:        "cosmos1xyz...",
 				PublicKey:      make([]byte, 32),
-				KeyFingerprint: "abc123",
+				KeyFingerprint: ComputeKeyFingerprint(make([]byte, 32)),
 				AlgorithmID:    AlgorithmX25519XSalsa20Poly1305,
 			},
 			expectErr: false,
+		},
+		{
+			name: "fingerprint does not match public key",
+			record: RecipientKeyRecord{
+				Address:        "cosmos1xyz...",
+				PublicKey:      make([]byte, 32),
+				KeyFingerprint: ComputeKeyFingerprint(bytes.Repeat([]byte{1}, 32)),
+				AlgorithmID:    AlgorithmX25519XSalsa20Poly1305,
+			},
+			expectErr: true,
 		},
 		{
 			name: "empty address",

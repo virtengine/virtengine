@@ -93,4 +93,3 @@ Owner: Release Management (Ops)
 | Action | Owner | Due date | Status |
 | --- | --- | --- | --- |
 | Confirm exact launch date within the January 2027 window and re-run the prelaunch checklist ahead of it | Release Manager | 2026-12-31 | Open |
-
