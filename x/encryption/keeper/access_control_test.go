@@ -1,6 +1,7 @@
 package keeper
 
 import (
+	"encoding/json"
 	"testing"
 	"time"
 
@@ -116,6 +117,28 @@ func TestCheckEnvelopeAccessRejectsUnusableFallbackKeys(t *testing.T) {
 		require.NoError(t, k.CheckEnvelopeAccess(ctx, envelope, address))
 	})
 
+}
+
+func TestRecipientKeyFingerprintBindingFailsClosed(t *testing.T) {
+	ctx, k := setupKeeper(t)
+	address := sdk.AccAddress([]byte("corrupt_key_binding_"))
+	victimKey, err := crypto.GenerateKeyPair()
+	require.NoError(t, err)
+	attackerKey, err := crypto.GenerateKeyPair()
+	require.NoError(t, err)
+	fingerprint := types.ComputeKeyFingerprint(victimKey.PublicKey[:])
+	record := recipientKeyStore{Address: address.String(), PublicKey: attackerKey.PublicKey[:], KeyFingerprint: fingerprint, KeyVersion: 1, AlgorithmID: types.DefaultAlgorithm(), RegisteredAt: ctx.BlockTime().Unix()}
+	bz, err := json.Marshal(record)
+	require.NoError(t, err)
+	store := ctx.KVStore(k.skey)
+	store.Set(types.RecipientKeyKey(address.Bytes(), []byte(fingerprint)), bz)
+	store.Set(types.KeyByFingerprintKey([]byte(fingerprint)), address.Bytes())
+	envelope := types.NewEncryptedPayloadEnvelope()
+	envelope.RecipientKeyIDs = []string{fingerprint}
+
+	require.Panics(t, func() { k.CheckEnvelopeAccess(ctx, envelope, address) })
+	require.Panics(t, func() { k.WithRecipientKeys(ctx, func(types.RecipientKeyRecord) bool { return false }) })
+	require.Error(t, k.ImportRecipientKeyRecord(ctx, types.RecipientKeyRecord{Address: address.String(), PublicKey: attackerKey.PublicKey[:], KeyFingerprint: fingerprint, KeyVersion: 1, AlgorithmID: types.DefaultAlgorithm(), RegisteredAt: ctx.BlockTime().Unix()}))
 }
 
 func TestCheckEnvelopeAccessByFingerprint(t *testing.T) {

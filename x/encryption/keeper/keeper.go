@@ -2,6 +2,7 @@ package keeper
 
 import (
 	"encoding/json"
+	"fmt"
 	"math"
 	"time"
 
@@ -290,9 +291,9 @@ func (k Keeper) GetRecipientKeys(ctx sdk.Context, address sdk.AccAddress) []type
 	for ; iter.Valid(); iter.Next() {
 		var record recipientKeyStore
 		if err := json.Unmarshal(iter.Value(), &record); err != nil {
-			continue
+			panic(fmt.Errorf("decode recipient key for %s: %w", address.String(), err))
 		}
-		keys = append(keys, types.RecipientKeyRecord{
+		key := types.RecipientKeyRecord{
 			Address:        record.Address,
 			PublicKey:      record.PublicKey,
 			KeyFingerprint: record.KeyFingerprint,
@@ -304,7 +305,14 @@ func (k Keeper) GetRecipientKeys(ctx sdk.Context, address sdk.AccAddress) []type
 			PurgeAt:        record.PurgeAt,
 			Label:          record.Label,
 			KeyVersion:     record.KeyVersion,
-		})
+		}
+		if err := key.Validate(); err != nil {
+			panic(fmt.Errorf("invalid persisted recipient key %s: %w", key.KeyFingerprint, err))
+		}
+		if key.Address != address.String() {
+			continue
+		}
+		keys = append(keys, key)
 	}
 
 	return keys
@@ -323,20 +331,20 @@ func (k Keeper) GetRecipientKeyByFingerprint(ctx sdk.Context, fingerprint string
 	// Get key record by address + fingerprint
 	bz := store.Get(types.RecipientKeyKey(addrBytes, []byte(fingerprint)))
 	if bz == nil {
-		return types.RecipientKeyRecord{}, false
+		panic(fmt.Errorf("recipient key mapping %s has no record", fingerprint))
 	}
 
 	var record recipientKeyStore
 	if err := json.Unmarshal(bz, &record); err != nil {
-		return types.RecipientKeyRecord{}, false
+		panic(fmt.Errorf("decode recipient key %s: %w", fingerprint, err))
 	}
 
 	// Verify fingerprint matches
 	if record.KeyFingerprint != fingerprint {
-		return types.RecipientKeyRecord{}, false
+		panic(fmt.Errorf("recipient key mapping mismatch: requested %s, stored %s", fingerprint, record.KeyFingerprint))
 	}
 
-	return types.RecipientKeyRecord{
+	key := types.RecipientKeyRecord{
 		Address:        record.Address,
 		PublicKey:      record.PublicKey,
 		KeyFingerprint: record.KeyFingerprint,
@@ -348,7 +356,14 @@ func (k Keeper) GetRecipientKeyByFingerprint(ctx sdk.Context, fingerprint string
 		PurgeAt:        record.PurgeAt,
 		Label:          record.Label,
 		KeyVersion:     record.KeyVersion,
-	}, true
+	}
+	if key.Address != sdk.AccAddress(addrBytes).String() {
+		panic(fmt.Errorf("recipient key address mapping mismatch for %s", fingerprint))
+	}
+	if err := key.Validate(); err != nil {
+		panic(fmt.Errorf("invalid persisted recipient key %s: %w", key.KeyFingerprint, err))
+	}
+	return key, true
 }
 
 // GetRecipientKeyByVersion returns a key record by address and version.
@@ -358,7 +373,17 @@ func (k Keeper) GetRecipientKeyByVersion(ctx sdk.Context, address sdk.AccAddress
 	if len(fp) == 0 {
 		return types.RecipientKeyRecord{}, false
 	}
-	return k.GetRecipientKeyByFingerprint(ctx, string(fp))
+	record, found := k.GetRecipientKeyByFingerprint(ctx, string(fp))
+	if !found {
+		panic(fmt.Errorf("recipient key version mapping missing fingerprint %s", string(fp)))
+	}
+	if record.Address != address.String() {
+		panic(fmt.Errorf("recipient key version mapping address mismatch for %s version %d", address.String(), version))
+	}
+	if record.KeyVersion != version {
+		panic(fmt.Errorf("recipient key version mapping mismatch for %s: requested %d, stored %d", address.String(), version, record.KeyVersion))
+	}
+	return record, true
 }
 
 // ResolveRecipientKeyID resolves a recipient key ID (fingerprint or versioned) to a key record.
@@ -492,7 +517,7 @@ func (k Keeper) WithRecipientKeys(ctx sdk.Context, fn func(record types.Recipien
 	for ; iter.Valid(); iter.Next() {
 		var record recipientKeyStore
 		if err := json.Unmarshal(iter.Value(), &record); err != nil {
-			continue
+			panic(fmt.Errorf("decode recipient key during traversal: %w", err))
 		}
 
 		keyRecord := types.RecipientKeyRecord{
@@ -507,6 +532,13 @@ func (k Keeper) WithRecipientKeys(ctx sdk.Context, fn func(record types.Recipien
 			PurgeAt:        record.PurgeAt,
 			Label:          record.Label,
 			KeyVersion:     record.KeyVersion,
+		}
+		address, err := sdk.AccAddressFromBech32(keyRecord.Address)
+		if err != nil || address.String() != keyRecord.Address {
+			panic(fmt.Errorf("invalid persisted recipient key address %q", keyRecord.Address))
+		}
+		if err := keyRecord.Validate(); err != nil {
+			panic(fmt.Errorf("invalid persisted recipient key %s: %w", keyRecord.KeyFingerprint, err))
 		}
 
 		if stop := fn(keyRecord); stop {

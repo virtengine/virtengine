@@ -567,6 +567,9 @@ func (r *RecipientKeyRecord) Validate() error {
 		return ErrInvalidPublicKey.Wrapf("public key size mismatch: expected %d, got %d",
 			algInfo.KeySize, len(r.PublicKey))
 	}
+	if ComputeKeyFingerprint(r.PublicKey) != r.KeyFingerprint {
+		return ErrInvalidPublicKey.Wrap("key fingerprint does not match public key")
+	}
 
 	return nil
 }
