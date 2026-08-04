@@ -1,7 +1,14 @@
 # Mainnet Go/No-Go Decision Record
 
-Last updated: 2026-04-11
+Last updated: 2026-08-03
 Owner: Release Management (Ops)
+
+> **Status update (2026-08-03):** The launch window originally approved below
+> (2026-04-18 / 2026-04-19 UTC) did not proceed as scheduled. The decision
+> remains `GO`, rescheduled to the **January 2027** launch window
+> (2027-01-01 through 2027-01-31 UTC). See "Update — 2026-08-03" at the end of
+> this record. The network must not be described as live before the new
+> approved window begins.
 
 ## Meeting details
 - Meeting date/time (UTC): 2026-04-11 08:18 to 2026-04-11 08:28
@@ -69,3 +76,21 @@ Owner: Release Management (Ops)
 | Insert signed canonical treasury, community-pool, and team-vesting addresses into `config/mainnet/genesis-allocations.json` | Release Manager | 2026-04-11 | Closed - completed 2026-04-11 07:44 UTC |
 | Rebuild final mainnet genesis bundle and publish current hashes | Ops Lead | 2026-04-11 | Closed - completed 2026-04-11 |
 | Re-run `scripts/mainnet/prelaunch-checklist.sh` after final genesis publication and record the control-window result | Release Manager | 2026-04-11 | Closed - completed 2026-04-11 |
+
+## Update — 2026-08-03: Launch window rescheduled
+
+- Decision: `GO` (reaffirmed), launch window rescheduled
+- The approved 2026-04-18 / 2026-04-19 UTC window did not proceed as scheduled
+- New launch window: **January 2027** (2027-01-01 through 2027-01-31 UTC);
+  exact launch date within the window to be confirmed closer to launch
+- Prior sign-offs, checklist evidence, and the published genesis bundle remain
+  valid as a baseline; a follow-up go/no-go confirmation is required ahead of
+  the new window to re-verify freeze-window and rollback-criteria readiness
+- Public launch messaging must continue to state "scheduled for approved UTC
+  window" and must not describe the network as live until the new window
+  begins
+
+| Action | Owner | Due date | Status |
+| --- | --- | --- | --- |
+| Confirm exact launch date within the January 2027 window and re-run the prelaunch checklist ahead of it | Release Manager | 2026-12-31 | Open |
+
