@@ -1,57 +1,58 @@
 campaign: three-day-prototype
 thread: T2
-checkpoint: T2-X16
+checkpoint: T2-X17
 branch: ve/prototype-t2-product
-start_head: 825b5f7aed3af3c4527d2d620e3eae8c06c99b29
-end_head: 3e1cdcbf302eb2fdf5fdf1ae39a10dcbf37c540f
+start_head: 229950294fd2c11433a225548fad492402fe2746
+end_head: e0218b5cb3fb57f861f28ac93ee94b3f43d8288b
 origin_main: 79391a3df86d85522b92e0400c6904971ecbe65d
 tree_clean: true
 commits:
-  - 3e1cdcbf302eb2fdf5fdf1ae39a10dcbf37c540f
+  - e0218b5cb3fb57f861f28ac93ee94b3f43d8288b
 owned_paths:
-  - portal/src/stores/customerDashboardStore.ts
-  - portal/src/components/dashboard/TerminateAllocationDialog.tsx
-  - portal/src/app/(customer)/dashboard/allocations/[id]/AllocationDetailClient.tsx
-  - portal/tests/unit/dashboard/
+  - portal/src/app/api/consent/
+  - portal/src/components/consent/DataExportStatus.tsx
+  - portal/src/components/consent/__tests__/DataDeletionRequest.test.tsx
 files_changed:
-  - portal/src/stores/customerDashboardStore.ts
-  - portal/src/components/dashboard/TerminateAllocationDialog.tsx
-  - portal/src/app/(customer)/dashboard/allocations/[id]/AllocationDetailClient.tsx
-  - portal/tests/unit/dashboard/customerDashboardStore.test.ts
-  - portal/tests/unit/dashboard/components.test.tsx
+  - portal/src/app/api/consent/data.ts
+  - portal/src/app/api/consent/deletion/route.ts
+  - portal/src/app/api/consent/deletion/route.test.ts
+  - portal/src/app/api/consent/deletion/workflow.ts
+  - portal/src/app/api/consent/requests/route.ts
+  - portal/src/components/consent/DataExportStatus.tsx
+  - portal/src/components/consent/__tests__/DataDeletionRequest.test.tsx
 tests:
-  - command: C:\Windows\System32\cmd.exe /d /c "cd /d C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t2\portal && node_modules\.bin\vitest.CMD run tests/unit/dashboard/customerDashboardStore.test.ts tests/unit/dashboard/components.test.tsx --reporter=dot --maxWorkers=1"
+  - command: C:\Windows\System32\cmd.exe /d /c "cd /d C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t2\portal && node_modules\.bin\vitest.CMD run src/app/api/consent/deletion/route.test.ts src/components/consent/__tests__/DataDeletionRequest.test.tsx --reporter=dot --maxWorkers=1"
     exit_code: 0
     result: passed
-    test_count: 49
+    test_count: 25
     tool_versions:
       node: v20.19.1
-    artifact: _docs/ralph/handoffs/prototype-t2/T2-X16-validation.txt
+    artifact: _docs/ralph/handoffs/prototype-t2/T2-X17-validation.txt
   - command: C:\Windows\System32\cmd.exe /d /c "cd /d C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t2\portal && node_modules\.bin\vitest.CMD run --reporter=dot --maxWorkers=1"
     exit_code: 0
     result: passed
-    test_count: 638
+    test_count: 659
     tool_versions:
       node: v20.19.1
-    artifact: _docs/ralph/handoffs/prototype-t2/T2-X16-validation.txt
+    artifact: _docs/ralph/handoffs/prototype-t2/T2-X17-validation.txt
   - command: C:\Windows\System32\cmd.exe /d /c "cd /d C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t2\portal && node_modules\.bin\tsc.CMD --noEmit"
     exit_code: 0
     result: passed
     tool_versions:
       node: v20.19.1
-    artifact: _docs/ralph/handoffs/prototype-t2/T2-X16-validation.txt
+    artifact: _docs/ralph/handoffs/prototype-t2/T2-X17-validation.txt
 generated_hashes: {}
 migrations: []
 external_evidence:
-  - _docs/ralph/handoffs/prototype-t2/T2-X16-evidence.txt
-  - _docs/ralph/handoffs/prototype-t2/T2-X16-validation.txt
+  - _docs/ralph/handoffs/prototype-t2/T2-X17-evidence.txt
+  - _docs/ralph/handoffs/prototype-t2/T2-X17-validation.txt
 known_failures: []
 blockers:
   - T4 producer-handoff.schema.json does not permit the established supplemental T2-X checkpoint names; T2-X01 through T2-X10 retain the campaign queue naming.
   - T4 producer-handoff.schema.json forbids the integration_parent field required by the updated campaign plan; integration ancestor fa21b1e540a5efcbe1822da4199be7acec7709d3 is retained in T2-05-evidence.txt.
   - Full provider package certification is blocked by the unrelated submitter lease timing failure retained in T2-03B-evidence.txt.
   - PortalProvider retains pre-existing ts-nocheck because unrelated Auth, Identity, MFA, and Provider dependencies are not wired.
-  - No live provider termination or chain endpoint was certified.
-  - Provider receipt capability and deployment-to-allocation identity still depend on production provider wiring.
-next_checkpoint: T2-X17
-expected_head: 3e1cdcbf302eb2fdf5fdf1ae39a10dcbf37c540f
+  - No production durable deletion adapter is wired; deletion submit/history routes default unavailable.
+  - No live deletion worker, durable database, legal-hold integration, or erasure completion was certified.
+next_checkpoint: T2-X18
+expected_head: e0218b5cb3fb57f861f28ac93ee94b3f43d8288b
