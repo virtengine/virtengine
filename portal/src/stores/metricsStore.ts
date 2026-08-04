@@ -6,7 +6,6 @@
  */
 
 import { create } from 'zustand';
-import { generateId } from '@/lib/utils';
 import type {
   Alert,
   AlertEvent,
@@ -21,6 +20,12 @@ import type {
 } from '@virtengine/portal/types/metrics';
 import { MultiProviderClient } from '@/lib/portal-adapter';
 import { getPortalEndpoints } from '@/lib/config';
+import {
+  MetricsAlertMutationError,
+  submitMetricsAlertMutation,
+  type MetricsAlertMutationAdapter,
+  type MetricsAlertMutationRequest,
+} from './metrics-alert-mutation';
 
 export interface MetricsState {
   summary: MetricsSummary | null;
@@ -31,6 +36,8 @@ export interface MetricsState {
   selectedDeploymentId: string | null;
   isLoading: boolean;
   isStreaming: boolean;
+  alertMutationPending: boolean;
+  alertMutationsAvailable: boolean;
   error: string | null;
 }
 
@@ -39,9 +46,9 @@ export interface MetricsActions {
   setTimeRange: (range: TimeRange) => void;
   selectDeployment: (id: string | null) => void;
   toggleStreaming: () => void;
-  createAlert: (alert: Omit<Alert, 'id' | 'status' | 'lastFired'>) => void;
-  deleteAlert: (id: string) => void;
-  acknowledgeAlertEvent: (eventId: string) => void;
+  createAlert: (alert: Omit<Alert, 'id' | 'status' | 'lastFired'>) => Promise<void>;
+  deleteAlert: (id: string) => Promise<void>;
+  acknowledgeAlertEvent: (eventId: string) => Promise<void>;
   clearError: () => void;
 }
 
@@ -56,11 +63,35 @@ const initialState: MetricsState = {
   selectedDeploymentId: null,
   isLoading: false,
   isStreaming: false,
+  alertMutationPending: false,
+  alertMutationsAvailable: false,
   error: null,
 };
 
 let providerClient: MultiProviderClient | null = null;
 let providerClientInit: Promise<void> | null = null;
+let alertMutationAdapter: MetricsAlertMutationAdapter | null = null;
+let alertMutationSubject = '';
+let alertMutationGeneration = 0;
+let alertMutationPending = false;
+let activeAlertMutation: AbortController | null = null;
+
+export const configureMetricsAlertMutations = (
+  adapter: MetricsAlertMutationAdapter | null,
+  subject = ''
+) => {
+  activeAlertMutation?.abort();
+  activeAlertMutation = null;
+  alertMutationPending = false;
+  alertMutationGeneration += 1;
+  alertMutationAdapter = adapter;
+  alertMutationSubject = subject.trim();
+  useMetricsStore.setState({
+    alertMutationPending: false,
+    alertMutationsAvailable: Boolean(adapter && alertMutationSubject),
+    error: null,
+  });
+};
 
 const getProviderClient = async () => {
   if (!providerClient) {
@@ -138,169 +169,192 @@ const buildDeploymentMetrics = (
   };
 };
 
-export const useMetricsStore = create<MetricsStore>()((set) => ({
-  ...initialState,
-
-  fetchMetrics: async () => {
-    set({ isLoading: true, error: null });
-
+export const useMetricsStore = create<MetricsStore>()((set) => {
+  const mutateAlert = async (request: Omit<MetricsAlertMutationRequest, 'subject'>) => {
+    if (alertMutationPending) throw new MetricsAlertMutationError('request_changed');
+    const adapter = alertMutationAdapter;
+    const subject = alertMutationSubject;
+    if (!adapter || !subject) {
+      set({ error: 'Alert persistence is unavailable.' });
+      throw new MetricsAlertMutationError('unavailable');
+    }
+    alertMutationPending = true;
+    const controller = new AbortController();
+    activeAlertMutation = controller;
+    const generation = alertMutationGeneration;
+    set({ alertMutationPending: true, error: null });
     try {
-      const client = await getProviderClient();
-      const providers = client.getProviders();
-      const deployments = await client.listAllDeployments({ refresh: true });
+      const result = await submitMetricsAlertMutation({
+        adapter,
+        request: { ...request, subject },
+        signal: controller.signal,
+        isCurrent: () =>
+          alertMutationGeneration === generation &&
+          alertMutationAdapter === adapter &&
+          alertMutationSubject === subject,
+      });
+      if (alertMutationGeneration !== generation) return;
+      set({ alerts: [...result.alerts], alertEvents: [...result.alertEvents] });
+    } catch (error) {
+      if (alertMutationGeneration === generation) {
+        set({ error: 'Alert change was not committed.' });
+      }
+      throw error;
+    } finally {
+      if (alertMutationGeneration === generation) {
+        alertMutationPending = false;
+        activeAlertMutation = null;
+        set({ alertMutationPending: false });
+      }
+    }
+  };
 
-      const metricsResults = await Promise.allSettled(
-        deployments.map(async (deployment) => {
-          const provider = providers.find((p) => p.address === deployment.providerId);
-          const daemonClient = client.getClient(deployment.providerId);
-          if (!daemonClient) return null;
-          const metrics = await daemonClient.getDeploymentMetrics(deployment.id);
-          return {
-            deploymentId: deployment.id,
-            providerName: provider?.name ?? deployment.providerId,
-            providerId: deployment.providerId,
-            metrics,
-          };
-        })
-      );
+  return {
+    ...initialState,
 
-      const deploymentMetrics: DeploymentMetrics[] = [];
-      const providerMetricsMap = new Map<string, ProviderMetrics>();
-      let totalCpuUsed = 0;
-      let totalCpuLimit = 0;
-      let totalMemUsed = 0;
-      let totalMemLimit = 0;
-      let totalStorageUsed = 0;
-      let totalStorageLimit = 0;
-      let totalNetRx = 0;
-      let totalNetTx = 0;
+    fetchMetrics: async () => {
+      set({ isLoading: true, error: null });
 
-      metricsResults.forEach((result) => {
-        if (result.status !== 'fulfilled' || !result.value) return;
-        const { deploymentId, providerName, providerId, metrics } = result.value;
-        deploymentMetrics.push(
-          buildDeploymentMetrics(deploymentId, providerName, {
-            cpu: metrics.cpu,
-            memory: metrics.memory,
-            storage: metrics.storage,
-            network: metrics.network,
-            gpu: metrics.gpu,
+      try {
+        const client = await getProviderClient();
+        const providers = client.getProviders();
+        const deployments = await client.listAllDeployments({ refresh: true });
+
+        const metricsResults = await Promise.allSettled(
+          deployments.map(async (deployment) => {
+            const provider = providers.find((p) => p.address === deployment.providerId);
+            const daemonClient = client.getClient(deployment.providerId);
+            if (!daemonClient) return null;
+            const metrics = await daemonClient.getDeploymentMetrics(deployment.id);
+            return {
+              deploymentId: deployment.id,
+              providerName: provider?.name ?? deployment.providerId,
+              providerId: deployment.providerId,
+              metrics,
+            };
           })
         );
 
-        totalCpuUsed += metrics.cpu.usage ?? 0;
-        totalCpuLimit += metrics.cpu.limit ?? 0;
-        totalMemUsed += metrics.memory.usage ?? 0;
-        totalMemLimit += metrics.memory.limit ?? 0;
-        totalStorageUsed += metrics.storage.usage ?? 0;
-        totalStorageLimit += metrics.storage.limit ?? 0;
-        totalNetRx += metrics.network?.rxBytes ?? 0;
-        totalNetTx += metrics.network?.txBytes ?? 0;
+        const deploymentMetrics: DeploymentMetrics[] = [];
+        const providerMetricsMap = new Map<string, ProviderMetrics>();
+        let totalCpuUsed = 0;
+        let totalCpuLimit = 0;
+        let totalMemUsed = 0;
+        let totalMemLimit = 0;
+        let totalStorageUsed = 0;
+        let totalStorageLimit = 0;
+        let totalNetRx = 0;
+        let totalNetTx = 0;
 
-        const existing = providerMetricsMap.get(providerId);
-        if (existing) {
-          existing.cpu.used += metrics.cpu.usage ?? 0;
-          existing.cpu.limit += metrics.cpu.limit ?? 0;
-          existing.memory.used += metrics.memory.usage ?? 0;
-          existing.memory.limit += metrics.memory.limit ?? 0;
-          existing.storage.used += metrics.storage.usage ?? 0;
-          existing.storage.limit += metrics.storage.limit ?? 0;
-          existing.deploymentCount += 1;
-        } else {
-          providerMetricsMap.set(providerId, {
-            providerName,
-            providerAddress: providerId,
-            deploymentCount: 1,
-            cpu: buildResourceMetric(metrics.cpu.usage ?? 0, metrics.cpu.limit ?? 0, 'cores'),
-            memory: buildResourceMetric(metrics.memory.usage ?? 0, metrics.memory.limit ?? 0, 'GB'),
-            storage: buildResourceMetric(
-              metrics.storage.usage ?? 0,
-              metrics.storage.limit ?? 0,
-              'GB'
-            ),
-          });
-        }
-      });
+        metricsResults.forEach((result) => {
+          if (result.status !== 'fulfilled' || !result.value) return;
+          const { deploymentId, providerName, providerId, metrics } = result.value;
+          deploymentMetrics.push(
+            buildDeploymentMetrics(deploymentId, providerName, {
+              cpu: metrics.cpu,
+              memory: metrics.memory,
+              storage: metrics.storage,
+              network: metrics.network,
+              gpu: metrics.gpu,
+            })
+          );
 
-      const summary: MetricsSummary = {
-        totalCPU: buildResourceMetric(totalCpuUsed, totalCpuLimit, 'cores'),
-        totalMemory: buildResourceMetric(totalMemUsed, totalMemLimit, 'GB'),
-        totalStorage: buildResourceMetric(totalStorageUsed, totalStorageLimit, 'GB'),
-        totalNetwork: {
-          rxBytesPerSec: totalNetRx,
-          txBytesPerSec: totalNetTx,
-          rxPacketsPerSec: 0,
-          txPacketsPerSec: 0,
-        },
-        activeDeployments: deploymentMetrics.length,
-        totalProviders: providerMetricsMap.size,
-        byProvider: Array.from(providerMetricsMap.values()),
-        byDeployment: deploymentMetrics,
-        healthOverview: {
-          healthy: deploymentMetrics.length,
-          degraded: 0,
-          warning: 0,
-          critical: 0,
-        },
-      };
+          totalCpuUsed += metrics.cpu.usage ?? 0;
+          totalCpuLimit += metrics.cpu.limit ?? 0;
+          totalMemUsed += metrics.memory.usage ?? 0;
+          totalMemLimit += metrics.memory.limit ?? 0;
+          totalStorageUsed += metrics.storage.usage ?? 0;
+          totalStorageLimit += metrics.storage.limit ?? 0;
+          totalNetRx += metrics.network?.rxBytes ?? 0;
+          totalNetTx += metrics.network?.txBytes ?? 0;
 
-      set({
-        summary,
-        deploymentMetrics,
-        isLoading: false,
-      });
-    } catch (error) {
-      set({
-        isLoading: false,
-        error: error instanceof Error ? error.message : 'Failed to load metrics',
-      });
-    }
-  },
+          const existing = providerMetricsMap.get(providerId);
+          if (existing) {
+            existing.cpu.used += metrics.cpu.usage ?? 0;
+            existing.cpu.limit += metrics.cpu.limit ?? 0;
+            existing.memory.used += metrics.memory.usage ?? 0;
+            existing.memory.limit += metrics.memory.limit ?? 0;
+            existing.storage.used += metrics.storage.usage ?? 0;
+            existing.storage.limit += metrics.storage.limit ?? 0;
+            existing.deploymentCount += 1;
+          } else {
+            providerMetricsMap.set(providerId, {
+              providerName,
+              providerAddress: providerId,
+              deploymentCount: 1,
+              cpu: buildResourceMetric(metrics.cpu.usage ?? 0, metrics.cpu.limit ?? 0, 'cores'),
+              memory: buildResourceMetric(
+                metrics.memory.usage ?? 0,
+                metrics.memory.limit ?? 0,
+                'GB'
+              ),
+              storage: buildResourceMetric(
+                metrics.storage.usage ?? 0,
+                metrics.storage.limit ?? 0,
+                'GB'
+              ),
+            });
+          }
+        });
 
-  setTimeRange: (range) => {
-    set({ selectedTimeRange: range });
-  },
+        const summary: MetricsSummary = {
+          totalCPU: buildResourceMetric(totalCpuUsed, totalCpuLimit, 'cores'),
+          totalMemory: buildResourceMetric(totalMemUsed, totalMemLimit, 'GB'),
+          totalStorage: buildResourceMetric(totalStorageUsed, totalStorageLimit, 'GB'),
+          totalNetwork: {
+            rxBytesPerSec: totalNetRx,
+            txBytesPerSec: totalNetTx,
+            rxPacketsPerSec: 0,
+            txPacketsPerSec: 0,
+          },
+          activeDeployments: deploymentMetrics.length,
+          totalProviders: providerMetricsMap.size,
+          byProvider: Array.from(providerMetricsMap.values()),
+          byDeployment: deploymentMetrics,
+          healthOverview: {
+            healthy: deploymentMetrics.length,
+            degraded: 0,
+            warning: 0,
+            critical: 0,
+          },
+        };
 
-  selectDeployment: (id) => {
-    set({ selectedDeploymentId: id });
-  },
+        set({
+          summary,
+          deploymentMetrics,
+          isLoading: false,
+        });
+      } catch (error) {
+        set({
+          isLoading: false,
+          error: error instanceof Error ? error.message : 'Failed to load metrics',
+        });
+      }
+    },
 
-  toggleStreaming: () => {
-    set((state) => ({ isStreaming: !state.isStreaming }));
-  },
+    setTimeRange: (range) => {
+      set({ selectedTimeRange: range });
+    },
 
-  createAlert: (alertData) => {
-    const newAlert: Alert = {
-      ...alertData,
-      id: generateId('alert'),
-      status: 'active',
-    };
-    set((state) => ({
-      alerts: [...state.alerts, newAlert],
-    }));
-  },
+    selectDeployment: (id) => {
+      set({ selectedDeploymentId: id });
+    },
 
-  deleteAlert: (id) => {
-    set((state) => ({
-      alerts: state.alerts.filter((a) => a.id !== id),
-      alertEvents: state.alertEvents.filter((e) => e.alertId !== id),
-    }));
-  },
+    toggleStreaming: () => {
+      set((state) => ({ isStreaming: !state.isStreaming }));
+    },
 
-  acknowledgeAlertEvent: (eventId) => {
-    set((state) => ({
-      alertEvents: state.alertEvents.map((e) =>
-        e.id === eventId
-          ? { ...e, acknowledged: true, acknowledgedBy: 'user', acknowledgedAt: Date.now() }
-          : e
-      ),
-    }));
-  },
+    createAlert: (alert) => mutateAlert({ action: 'create', alert }),
 
-  clearError: () => {
-    set({ error: null });
-  },
-}));
+    deleteAlert: (alertId) => mutateAlert({ action: 'delete', alertId }),
+
+    acknowledgeAlertEvent: (eventId) => mutateAlert({ action: 'acknowledge', eventId }),
+
+    clearError: () => {
+      set({ error: null });
+    },
+  };
+});
 
 export const selectFiringAlerts = (state: MetricsStore): Alert[] =>
   state.alerts.filter((a) => a.status === 'firing');

@@ -11,6 +11,7 @@ import { Bell, Check } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
+import { Alert as AlertMessage, AlertDescription } from '@/components/ui/Alert';
 import { cn } from '@/lib/utils';
 import { formatRelativeTime } from '@/lib/utils';
 import {
@@ -24,42 +25,75 @@ export function AlertsPanel() {
   const firingAlerts = useMetricsStore(selectFiringAlerts);
   const recentEvents = useMetricsStore(selectRecentAlertEvents);
   const acknowledgeEvent = useMetricsStore((s) => s.acknowledgeAlertEvent);
+  const alertMutationPending = useMetricsStore((s) => s.alertMutationPending);
+  const alertMutationsAvailable = useMetricsStore((s) => s.alertMutationsAvailable);
+  const error = useMetricsStore((s) => s.error);
+
+  const handleAcknowledgeEvent = async (eventId: string) => {
+    try {
+      await acknowledgeEvent(eventId);
+    } catch {
+      return;
+    }
+  };
 
   return (
     <Card>
       <CardHeader className="flex flex-row items-center justify-between pb-2">
         <CardTitle className="text-sm font-medium">Alerts</CardTitle>
-        <Badge variant={firingAlerts.length > 0 ? 'destructive' : 'secondary'}>
-          {firingAlerts.length} active
-        </Badge>
+        {alertMutationsAvailable && (
+          <Badge variant={firingAlerts.length > 0 ? 'destructive' : 'secondary'}>
+            {firingAlerts.length} active
+          </Badge>
+        )}
       </CardHeader>
       <CardContent>
-        {firingAlerts.length === 0 ? (
-          <div className="py-8 text-center text-muted-foreground">
-            <Bell className="mx-auto mb-2 h-8 w-8 opacity-50" />
-            <p className="text-sm">No active alerts</p>
-          </div>
+        {!alertMutationsAvailable ? (
+          <AlertMessage variant="warning">
+            <AlertDescription>Alert changes are unavailable.</AlertDescription>
+          </AlertMessage>
         ) : (
-          <div className="space-y-3">
-            {firingAlerts.map((alert) => (
-              <FiringAlertRow key={alert.id} alert={alert} />
-            ))}
-          </div>
-        )}
+          <>
+            {error && (
+              <AlertMessage variant="destructive" className="mb-4">
+                <AlertDescription>{error}</AlertDescription>
+              </AlertMessage>
+            )}
+            {alertMutationPending && (
+              <p role="status" className="mb-4 text-sm text-muted-foreground">
+                Committing alert change…
+              </p>
+            )}
 
-        {recentEvents.length > 0 && (
-          <div className="mt-4 border-t pt-4">
-            <h3 className="mb-2 text-sm font-medium">Recent Events</h3>
-            <div className="space-y-2">
-              {recentEvents.map((event) => (
-                <AlertEventRow
-                  key={event.id}
-                  event={event}
-                  onAcknowledge={() => acknowledgeEvent(event.id)}
-                />
-              ))}
-            </div>
-          </div>
+            {firingAlerts.length === 0 ? (
+              <div className="py-8 text-center text-muted-foreground">
+                <Bell className="mx-auto mb-2 h-8 w-8 opacity-50" />
+                <p className="text-sm">No active alerts</p>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {firingAlerts.map((alert) => (
+                  <FiringAlertRow key={alert.id} alert={alert} />
+                ))}
+              </div>
+            )}
+
+            {recentEvents.length > 0 && (
+              <div className="mt-4 border-t pt-4">
+                <h3 className="mb-2 text-sm font-medium">Recent Events</h3>
+                <div className="space-y-2">
+                  {recentEvents.map((event) => (
+                    <AlertEventRow
+                      key={event.id}
+                      event={event}
+                      mutationDisabled={alertMutationPending}
+                      onAcknowledge={() => handleAcknowledgeEvent(event.id)}
+                    />
+                  ))}
+                </div>
+              </div>
+            )}
+          </>
         )}
       </CardContent>
     </Card>
@@ -80,7 +114,15 @@ function FiringAlertRow({ alert }: { alert: Alert }) {
   );
 }
 
-function AlertEventRow({ event, onAcknowledge }: { event: AlertEvent; onAcknowledge: () => void }) {
+function AlertEventRow({
+  event,
+  mutationDisabled,
+  onAcknowledge,
+}: {
+  event: AlertEvent;
+  mutationDisabled: boolean;
+  onAcknowledge: () => Promise<void>;
+}) {
   return (
     <div className="flex items-center justify-between text-sm">
       <div className="flex items-center gap-2">
@@ -94,7 +136,13 @@ function AlertEventRow({ event, onAcknowledge }: { event: AlertEvent; onAcknowle
           {formatRelativeTime(new Date(event.timestamp))}
         </span>
         {!event.acknowledged && (
-          <Button size="icon-sm" variant="ghost" onClick={onAcknowledge}>
+          <Button
+            size="icon-sm"
+            variant="ghost"
+            aria-label={`Acknowledge ${event.alertName}`}
+            disabled={mutationDisabled}
+            onClick={() => void onAcknowledge()}
+          >
             <Check className="h-3 w-3" />
           </Button>
         )}
