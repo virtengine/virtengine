@@ -1,6 +1,6 @@
 # T4-01E Intake Freeze Planner Evidence
 
-Status: diagnostic-green, cutoff-blocked
+Status: epoch-2-frozen, no-producer-accepted
 
 The diagnostic planner accepts explicit producer tag selections and emits a
 proposed frozen epoch without writing repository files. It verifies strict tag
@@ -210,6 +210,11 @@ canonical T4; no promotion or merge is claimed.
 
 The negative suite rejects planning before cutoff, late tags, wrong-thread tags,
 invalid targets, unknown producers, duplicate selections, unobserved tags, and
-post-cutoff observations. The real epoch
-planner currently exits nonzero because the authoritative UTC cutoff has not
-elapsed. Planning does not accept or merge producer payloads.
+post-cutoff observations. After the authoritative epoch-2 cutoff elapsed, T4
+reviewed plan SHA-256
+`28698850216e7c328bd4768118200a1cb55433dba1c71ec105c42d2e84edaea2`
+at published head `5db9c5ea326776e2d2dac2812b831e835ef74eed`.
+The exact reviewed plan froze out T1, T2, T3, and T5 because no producer tag was
+selected. Lease-protected application replayed the committed pre-cutoff
+observation and atomically changed epoch 2 from open to frozen. No producer
+checkpoint was accepted or merged.
