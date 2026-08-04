@@ -1,0 +1,42 @@
+T2-X23 retained validation evidence
+Implementation SHA: cdc6a88bc0e4221007c74eab125754334c1271b8
+Node: v20.19.1
+
+COMMAND: C:\Windows\System32\cmd.exe /d /c "cd /d C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t2\portal && node_modules\.bin\vitest.CMD run src\stores\__tests__\dashboardConfigStore.test.ts src\components\metrics\__tests__\CustomDashboard.test.tsx --reporter=dot --maxWorkers=1 --no-color"
+EXIT: 0
+RESULT: passed
+DETAIL: 2 files, 33 tests passed; no warnings.
+
+COMMAND: C:\Windows\System32\cmd.exe /d /c "cd /d C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t2\portal && node_modules\.bin\vitest.CMD run --reporter=dot --maxWorkers=1 --no-color"
+EXIT: 0
+RESULT: passed
+DETAIL: 90 files, 772 tests passed in 197.31s; no warnings or stderr.
+
+COMMAND: C:\Windows\System32\cmd.exe /d /c "cd /d C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t2\portal && node_modules\.bin\tsc.CMD --noEmit --incremental false"
+EXIT: 0
+RESULT: passed
+DETAIL: Full portal TypeScript completed with no diagnostics.
+
+COMMAND: C:\Windows\System32\cmd.exe /d /c "cd /d C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t2\portal && node_modules\.bin\prettier.CMD --check src\stores\dashboard-config-mutation.ts src\stores\dashboardConfigStore.ts src\stores\__tests__\dashboardConfigStore.test.ts src\components\metrics\CustomDashboard.tsx src\components\metrics\DashboardWidget.tsx src\components\metrics\__tests__\CustomDashboard.test.tsx"
+EXIT: 0
+RESULT: passed
+DETAIL: Prettier 3.8.1 checked the exact six X23 implementation files.
+
+COMMAND: C:\Windows\System32\cmd.exe /d /c "cd /d C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t2\portal && node_modules\.bin\eslint.CMD src\stores\dashboard-config-mutation.ts src\stores\dashboardConfigStore.ts src\stores\__tests__\dashboardConfigStore.test.ts src\components\metrics\CustomDashboard.tsx src\components\metrics\DashboardWidget.tsx src\components\metrics\__tests__\CustomDashboard.test.tsx"
+EXIT: 0
+RESULT: passed
+DETAIL: ESLint 8.57.1 reported no findings; it emitted the repository's TypeScript 5.9.3 parser-support notice.
+
+BEHAVIOR:
+- Custom dashboard create/delete/rename and widget add/remove/update no longer fabricate browser IDs, timestamps, or durable success in Zustand.
+- Mutations require a configured authenticated-subject adapter and default visibly unavailable when none is wired.
+- The built-in Overview dashboard remains deterministic, deeply immutable, local, viewable, and outside persistence mutation authority.
+- Requests are strict exhaustive discriminated unions, immutable, key-sorted, SHA-256 digested, and digest-bound for idempotency; create/add omit authority-owned IDs and timestamps.
+- Completion requires committed code 0 evidence, canonical operation/affected IDs, positive monotonic revision, exact request/digest echo, strict complete authoritative custom-dashboard snapshots, and action-specific postconditions.
+- Custom dashboard/widget IDs are unique and cannot collide with the reserved default; timestamps, positions, config values, and layout are strictly materialized without getter or mutable aliases.
+- Duplicate operations serialize before hashing; adapter/subject changes abort work and reject ABA, stale generation, cooperative abort, or non-cooperative late results.
+- The UI masks custom cached state while unavailable, awaits mutations, closes create/add only after commit, preserves state on failure, disables conflicting controls, and announces pending/errors.
+
+NON-CLAIMS:
+- No production dashboard persistence adapter or authenticated subject integration is wired; custom dashboard changes remain unavailable by default.
+- No database persistence, cross-device synchronization, collaborative layout editing, or live backend was certified.
