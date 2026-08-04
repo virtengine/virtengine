@@ -28,14 +28,16 @@ func (s *UsageSnapshotStore) Track(record *UsageRecord) {
 	if record == nil {
 		return
 	}
+	snapshot := *record
 
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	s.trackKey(record.WorkloadID, record)
-	s.trackKey(record.DeploymentID, record)
-	s.trackKey(record.LeaseID, record)
-	s.trackKey(record.ID, record)
+	s.trackKey(snapshot.WorkloadID, &snapshot)
+	s.trackKey(snapshot.DeploymentID, &snapshot)
+	s.trackKey(snapshot.LeaseID, &snapshot)
+	s.trackKey(snapshot.AllocationID, &snapshot)
+	s.trackKey(snapshot.ID, &snapshot)
 }
 
 // FindLatest returns the latest usage record for the requested allocation ID.
@@ -59,7 +61,8 @@ func (s *UsageSnapshotStore) FindLatest(allocationID string, periodStart, period
 		return nil, false
 	}
 
-	return record, true
+	snapshot := *record
+	return &snapshot, true
 }
 
 func (s *UsageSnapshotStore) trackKey(key string, record *UsageRecord) {
@@ -68,7 +71,12 @@ func (s *UsageSnapshotStore) trackKey(key string, record *UsageRecord) {
 	}
 
 	current := s.byKey[key]
-	if current == nil || record.EndTime.After(current.EndTime) {
+	newer := current == nil || record.EndTime.After(current.EndTime)
+	if current != nil && record.EndTime.Equal(current.EndTime) {
+		newer = record.CreatedAt.After(current.CreatedAt) ||
+			(record.CreatedAt.Equal(current.CreatedAt) && record.ID > current.ID)
+	}
+	if newer || (current != nil && record.ID != "" && record.ID == current.ID) {
 		s.byKey[key] = record
 	}
 }
