@@ -1,0 +1,35 @@
+T2-X19 raw validation summary
+Implementation SHA: 65d21f19afeff95862a88eb543d4fa99e80d06ef
+Node: v20.19.1
+
+[focused-vitest]
+OUTPUT: Test Files 1 passed (1)
+OUTPUT: Tests 17 passed (17)
+OUTPUT: no warnings or unhandled errors
+EXIT: 0
+
+[full-lib-vitest]
+OUTPUT: Test Files 39 passed (39)
+OUTPUT: Tests 773 passed (773)
+OUTPUT: Duration 46.73s
+EXIT: 0
+
+[full-portal-vitest]
+OUTPUT: Test Files 85 passed (85)
+OUTPUT: Tests 659 passed (659)
+OUTPUT: Duration 160.68s
+EXIT: 0
+
+[typechecks]
+OUTPUT: full lib chain and full portal checks completed with no diagnostics
+EXIT: 0
+
+[prettier]
+COMMAND: C:\Windows\System32\cmd.exe /d /c "cd /d C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t2\portal && node_modules\.bin\prettier.CMD --check -- ..\lib\portal\components\organization\organization-mutation.ts ..\lib\portal\hooks\useOrganization.tsx ..\lib\portal\__tests__\organization\use-organization-mutations.test.tsx ..\lib\portal\components\PortalProvider.tsx ..\lib\portal\types\config.ts ..\lib\portal\index.ts ..\lib\portal\index.d.ts src\lib\portal-adapter.ts"
+OUTPUT: exact eight-file formatting completed
+EXIT: 0
+
+[committed-diff-check]
+COMMAND: git -C C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t2 show --check --format= 65d21f19afeff95862a88eb543d4fa99e80d06ef -- lib/portal/components/organization/organization-mutation.ts lib/portal/hooks/useOrganization.tsx lib/portal/__tests__/organization/use-organization-mutations.test.tsx lib/portal/components/PortalProvider.tsx lib/portal/types/config.ts lib/portal/index.ts lib/portal/index.d.ts portal/src/lib/portal-adapter.ts
+OUTPUT: no diagnostics
+EXIT: 0

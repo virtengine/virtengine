@@ -1,0 +1,43 @@
+T2-X14 retained validation evidence
+Implementation SHA: 9d210092ee880ed8dd97e5a2dbb39197fca5fd2c
+Node: v20.19.1
+
+COMMAND: lib\portal\node_modules\.bin\vitest.CMD run __tests__/hpc/use-hpc-queries.test.tsx __tests__/hpc/job-submission-form.test.tsx __tests__/hpc/use-hpc-mutations.test.tsx --reporter=dot
+EXIT: 0
+RESULT: passed
+DETAIL: 3 files, 24 tests passed; no warnings
+
+COMMAND: lib\portal\node_modules\.bin\vitest.CMD run --reporter=dot --maxWorkers=1
+EXIT: 0
+RESULT: passed
+DETAIL: 36 files, 738 tests passed in 117.85s; expected wallet reconnect-metadata stderr only
+
+COMMAND: portal\node_modules\.bin\tsc.CMD --noEmit --lib dom,dom.iterable,esnext --target ES2020 --module CommonJS --moduleResolution Node --esModuleInterop --skipLibCheck --jsx react-jsx lib\portal\components\hpc\hpc-query.ts lib\portal\components\hpc\hpc-mutation.ts lib\portal\hooks\useHPC.tsx
+EXIT: 0
+RESULT: passed
+DETAIL: Focused X14 core TypeScript compilation completed with no diagnostics.
+
+COMMAND: portal\node_modules\.bin\prettier.CMD --write ../lib/portal/__tests__/hpc/use-hpc-queries.test.tsx ../lib/portal/components/hpc/hpc-query.ts ../lib/portal/hooks/useHPC.tsx ../lib/portal/index.d.ts ../lib/portal/index.ts src/lib/portal-adapter.ts
+EXIT: 0
+RESULT: passed
+DETAIL: Final six reported X14 files formatted successfully; scoped git diff --check passed.
+ARTIFACT: _docs/ralph/handoffs/prototype-t2/T2-X14-validation.txt
+
+COMMAND: portal\node_modules\.bin\tsc.CMD --noEmit -p portal\tsconfig.json
+EXIT: 0
+RESULT: passed
+DETAIL: Full portal TypeScript compilation completed with no diagnostics.
+
+BEHAVIOR:
+- Legacy HPC templates, quotes, job lists, selected jobs, and subscriptions default unavailable without an adapter bound exactly to the active chain and account.
+- Query envelopes are materialized, validated, and frozen; malformed templates, parameter defaults, resources, economics, lifecycle history, duplicate IDs, and mismatched identities fail closed.
+- Per-operation request sequencing rejects stale same-authority responses and tracks loading/error provenance without cross-operation clearing.
+- Quote evidence is bound to offering, immutable resources, runtime, denomination, component totals, deposit, and the current submission token; signer requests preserve the validated quote commitment.
+- Retained query, local submission, submit, and cancel callbacks reject before dispatch after authority changes.
+- Job subscription events are job-bound, frozen, ignored after authority changes, and actively unsubscribed.
+- PortalProvider withholds mismatched query adapters; public lib and portal adapter exports expose typed query contracts.
+- No hard-coded templates, local fixed-rate quote, cached job read, optimistic cancellation projection, or no-op subscription remains in the legacy hook.
+
+NON-CLAIMS:
+- No production HPC query adapter is wired by this checkpoint; query features default unavailable.
+- No live scheduler, provider query, subscription stream, or chain endpoint was certified.

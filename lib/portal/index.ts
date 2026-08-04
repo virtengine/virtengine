@@ -378,9 +378,42 @@ export type { OrderTrackingPageProps } from "./src/pages/orders";
 
 export { useProvider, ProviderProvider } from "./hooks/useProvider";
 export type {
+  ProviderActions,
+  ProviderContextValue,
+  ProviderProviderProps,
+} from "./hooks/useProvider";
+export {
+  ProviderDomainVerificationError,
+  normalizeProviderDomain,
+  requireProviderDomainVerifier,
+  validateProviderDomainChallenge,
+  validateProviderDomainVerification,
+} from "./components/provider/domain-verification";
+export {
+  ProviderOfferingMutationError,
+  buildProviderOfferingMutationRequest,
+  digestProviderOfferingRequest,
+  requireProviderOfferingMutationAdapter,
+  validateCommittedProviderOfferingMutation,
+} from "./components/provider/offering-mutation";
+export type {
+  CommittedProviderOfferingMutation,
+  ProviderOfferingMutationAction,
+  ProviderOfferingMutationAdapter,
+  ProviderOfferingMutationContext,
+  ProviderOfferingMutationRequest,
+} from "./components/provider/offering-mutation";
+export type {
+  ProviderDomainBinding,
+  ProviderDomainChallenge,
+  ProviderDomainVerificationEvidence,
+  ProviderDomainVerifier,
+} from "./components/provider/domain-verification";
+export type {
   ProviderState,
   ProviderProfile,
   ProviderRegistration,
+  ProviderOffering,
   DomainVerification,
   OfferingDraft,
   PricingConfig,
@@ -521,6 +554,7 @@ export {
   HPCClientUnavailableError,
   HPCMutationNotCommittedError,
   assertCommittedJobMutation,
+  assertValidSubmitJobParams,
   requireHPCSigner,
 } from "./components/hpc/hpc-mutation";
 export {
@@ -530,6 +564,20 @@ export {
   validateResolvedHPCOutput,
 } from "./components/hpc/hpc-output";
 export type { HPCOutputAdapter } from "./components/hpc/hpc-output";
+export {
+  HPCQueryValidationError,
+  requireHPCQueryAdapter,
+  validateHPCJob,
+  validateHPCJobPriceQuote,
+  validateHPCQuoteRequest,
+  validateHPCJobs,
+  validateHPCWorkloadTemplates,
+} from "./components/hpc/hpc-query";
+export type {
+  HPCQueryAdapter,
+  HPCQueryEnvelope,
+  HPCQuoteRequest,
+} from "./components/hpc/hpc-query";
 export type {
   CommittedJobMutation,
   HPCClientCapability,
@@ -730,6 +778,20 @@ export type {
   OrganizationContextValue,
   OrganizationProviderProps,
 } from "./hooks/useOrganization";
+export {
+  OrganizationMutationError,
+  buildOrganizationMutationRequest,
+  digestOrganizationMutationRequest,
+  requireOrganizationMutationAdapter,
+  validateCommittedOrganizationMutation,
+} from "./components/organization/organization-mutation";
+export type {
+  CommittedOrganizationMutation,
+  OrganizationMutationAction,
+  OrganizationMutationAdapter,
+  OrganizationMutationContext,
+  OrganizationMutationRequest,
+} from "./components/organization/organization-mutation";
 
 export type {
   Organization,

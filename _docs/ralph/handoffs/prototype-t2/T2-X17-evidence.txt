@@ -1,0 +1,41 @@
+T2-X17 retained validation evidence
+Implementation SHA: e0218b5cb3fb57f861f28ac93ee94b3f43d8288b
+Node: v20.19.1
+
+COMMAND: C:\Windows\System32\cmd.exe /d /c "cd /d C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t2\portal && node_modules\.bin\vitest.CMD run src/app/api/consent/deletion/route.test.ts src/components/consent/__tests__/DataDeletionRequest.test.tsx --reporter=dot --maxWorkers=1"
+EXIT: 0
+RESULT: passed
+DETAIL: 2 files, 25 tests passed; no warnings
+
+COMMAND: C:\Windows\System32\cmd.exe /d /c "cd /d C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t2\portal && node_modules\.bin\vitest.CMD run --reporter=dot --maxWorkers=1"
+EXIT: 0
+RESULT: passed
+DETAIL: 85 files, 659 tests passed in 147.47s; no unhandled errors
+
+COMMAND: C:\Windows\System32\cmd.exe /d /c "cd /d C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t2\portal && node_modules\.bin\tsc.CMD --noEmit"
+EXIT: 0
+RESULT: passed
+DETAIL: Full portal TypeScript completed with no diagnostics.
+
+COMMAND: C:\Windows\System32\cmd.exe /d /c "cd /d C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t2\portal && node node_modules\eslint\bin\eslint.js src/app/api/consent/deletion/workflow.ts src/app/api/consent/deletion/route.ts src/app/api/consent/deletion/route.test.ts src/app/api/consent/requests/route.ts src/app/api/consent/data.ts src/components/consent/DataExportStatus.tsx src/components/consent/__tests__/DataDeletionRequest.test.tsx --max-warnings 0"
+EXIT: 0
+RESULT: passed
+DETAIL: Zero lint diagnostics; existing TypeScript parser-version compatibility banner only.
+
+COMMAND: C:\Windows\System32\cmd.exe /d /c "cd /d C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t2\portal && node_modules\.bin\prettier.CMD --write src/app/api/consent/deletion/workflow.ts src/app/api/consent/deletion/route.ts src/app/api/consent/deletion/route.test.ts src/app/api/consent/requests/route.ts src/app/api/consent/data.ts src/components/consent/DataExportStatus.tsx src/components/consent/__tests__/DataDeletionRequest.test.tsx"
+EXIT: 0
+RESULT: passed
+DETAIL: Final seven-file formatting pass succeeded; committed diff check passed.
+
+BEHAVIOR:
+- GDPR deletion POST no longer fabricates Date.now IDs or stores requests in process memory.
+- Submit and history routes share an injected durable workflow adapter and default to typed 503 unavailable until T4 wires production storage/workers.
+- Submission carries a deterministic subject-bound idempotency key that must be echoed by authoritative evidence.
+- Receipts and history are exact-subject validated, status-field consistent, materialized, deduplicated, and frozen; malformed evidence fails 502.
+- Malformed request bodies fail 400, duplicate in-process submissions fail 409, and unavailable/upstream workflow failures fail 503.
+- UI checks response.ok, displays only authoritative records, handles failures, blocks duplicate clicks, aborts on unmount/subject change, sequences list loads, and lets newer server history supersede accepted pending records.
+- No stale subject/export/deletion response can mutate a replacement subject view.
+
+NON-CLAIMS:
+- No production durable deletion adapter is wired by this checkpoint; deletion submit/history routes default unavailable.
+- No live deletion worker, durable database, legal-hold integration, or erasure completion was certified.

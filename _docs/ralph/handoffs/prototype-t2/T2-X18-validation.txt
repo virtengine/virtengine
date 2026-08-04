@@ -1,0 +1,34 @@
+T2-X18 raw validation summary
+Implementation SHA: 31d700339a3f44fd05bd4b6c0dab0376760bb517
+Node: v20.19.1
+
+[focused-vitest]
+OUTPUT: Test Files 1 passed (1)
+OUTPUT: Tests 12 passed (12)
+OUTPUT: no warnings or unhandled errors
+EXIT: 0
+
+[full-lib-vitest]
+OUTPUT: Test Files 38 passed (38)
+OUTPUT: Tests 761 passed (761)
+OUTPUT: Duration 41.84s
+EXIT: 0
+
+[full-portal-vitest]
+OUTPUT: Test Files 85 passed (85)
+OUTPUT: Tests 659 passed (659)
+OUTPUT: Duration 144.64s
+EXIT: 0
+
+[typechecks]
+OUTPUT: focused, full lib chain, and full portal checks completed with no diagnostics
+EXIT: 0
+
+[prettier]
+OUTPUT: exact eight-file formatting completed
+EXIT: 0
+
+[committed-diff-check]
+COMMAND: git -C C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t2 show --check --format= 31d700339a3f44fd05bd4b6c0dab0376760bb517 -- lib/portal/__tests__/provider/use-provider-offerings.test.tsx lib/portal/components/provider/offering-mutation.ts lib/portal/hooks/useProvider.tsx lib/portal/components/PortalProvider.tsx lib/portal/types/config.ts lib/portal/index.ts lib/portal/index.d.ts portal/src/lib/portal-adapter.ts
+OUTPUT: no diagnostics
+EXIT: 0

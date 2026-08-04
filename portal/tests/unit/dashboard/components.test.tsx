@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { act } from 'react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { AllocationCard, AllocationList } from '@/components/dashboard/AllocationCard';
 import { UsageSummary } from '@/components/dashboard/UsageSummary';
 import { BillingSummary } from '@/components/dashboard/BillingSummary';
@@ -243,5 +244,40 @@ describe('TerminateAllocationDialog', () => {
       />
     );
     expect(screen.queryByText('Terminate Allocation')).not.toBeInTheDocument();
+  });
+
+  it('stays open while authoritative termination is pending', async () => {
+    let resolveConfirm!: () => void;
+    const onOpenChange = vi.fn();
+    render(
+      <TerminateAllocationDialog
+        allocation={mockAllocation}
+        open
+        onOpenChange={onOpenChange}
+        onConfirm={vi.fn(() => new Promise<void>((resolve) => (resolveConfirm = resolve)))}
+      />
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Terminate Allocation' }));
+    fireEvent.keyDown(document, { key: 'Escape' });
+    expect(onOpenChange).not.toHaveBeenCalled();
+
+    act(() => resolveConfirm());
+    await waitFor(() => expect(onOpenChange).toHaveBeenCalledWith(false));
+  });
+
+  it('stays open and displays provider termination failure', async () => {
+    const onOpenChange = vi.fn();
+    render(
+      <TerminateAllocationDialog
+        allocation={mockAllocation}
+        open
+        onOpenChange={onOpenChange}
+        onConfirm={vi.fn().mockRejectedValue(new Error('provider rejected termination'))}
+      />
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Terminate Allocation' }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('provider rejected termination');
+    expect(onOpenChange).not.toHaveBeenCalledWith(false);
   });
 });

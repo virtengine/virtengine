@@ -15,6 +15,7 @@ import { Input } from '@/components/ui/Input';
 import { Badge } from '@/components/ui/Badge';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/Tabs';
 import {
+  DEFAULT_DASHBOARD,
   useDashboardConfigStore,
   selectActiveDashboard,
   selectDashboardNames,
@@ -33,9 +34,12 @@ const WIDGET_PRESETS: Array<{ type: WidgetType; title: string; metric?: string }
 ];
 
 export function CustomDashboard() {
-  const activeDashboard = useDashboardConfigStore(selectActiveDashboard);
-  const dashboardNames = useDashboardConfigStore(selectDashboardNames);
+  const storedActiveDashboard = useDashboardConfigStore(selectActiveDashboard);
+  const storedDashboardNames = useDashboardConfigStore(selectDashboardNames);
   const isEditing = useDashboardConfigStore((s) => s.isEditing);
+  const mutationPending = useDashboardConfigStore((s) => s.dashboardMutationPending);
+  const mutationsAvailable = useDashboardConfigStore((s) => s.dashboardMutationsAvailable);
+  const mutationError = useDashboardConfigStore((s) => s.error);
   const setActiveDashboard = useDashboardConfigStore((s) => s.setActiveDashboard);
   const toggleEditing = useDashboardConfigStore((s) => s.toggleEditing);
   const createDashboard = useDashboardConfigStore((s) => s.createDashboard);
@@ -47,20 +51,55 @@ export function CustomDashboard() {
   const [showCreate, setShowCreate] = useState(false);
   const [showAddWidget, setShowAddWidget] = useState(false);
 
-  function handleCreateDashboard() {
-    if (!newDashboardName.trim()) return;
-    createDashboard(newDashboardName.trim());
-    setNewDashboardName('');
-    setShowCreate(false);
+  const activeDashboard = mutationsAvailable ? storedActiveDashboard : DEFAULT_DASHBOARD;
+  const dashboardNames = mutationsAvailable
+    ? storedDashboardNames
+    : [{ id: DEFAULT_DASHBOARD.id, name: DEFAULT_DASHBOARD.name, isDefault: true }];
+  const canMutateActive = Boolean(
+    mutationsAvailable && activeDashboard && !activeDashboard.isDefault
+  );
+
+  async function handleCreateDashboard() {
+    const name = newDashboardName.trim();
+    if (!name || !mutationsAvailable || mutationPending) return;
+    try {
+      await createDashboard(name);
+      setNewDashboardName('');
+      setShowCreate(false);
+    } catch {
+      // The store exposes the user-facing commit error.
+    }
   }
 
-  function handleAddWidget(preset: (typeof WIDGET_PRESETS)[number]) {
-    if (!activeDashboard) return;
-    addWidget(activeDashboard.id, preset.type, preset.title, {
-      metric: preset.metric,
-      timeRange: '24h',
-    });
-    setShowAddWidget(false);
+  async function handleAddWidget(preset: (typeof WIDGET_PRESETS)[number]) {
+    if (!activeDashboard || !canMutateActive || mutationPending) return;
+    try {
+      await addWidget(activeDashboard.id, preset.type, preset.title, {
+        metric: preset.metric,
+        timeRange: '24h',
+      });
+      setShowAddWidget(false);
+    } catch {
+      // The store exposes the user-facing commit error.
+    }
+  }
+
+  async function handleDeleteDashboard() {
+    if (!activeDashboard || !canMutateActive || mutationPending) return;
+    try {
+      await deleteDashboard(activeDashboard.id);
+    } catch {
+      // The store exposes the user-facing commit error.
+    }
+  }
+
+  async function handleRemoveWidget(widgetId: string) {
+    if (!activeDashboard || !canMutateActive || mutationPending) return;
+    try {
+      await removeWidget(activeDashboard.id, widgetId);
+    } catch {
+      // The store exposes the user-facing commit error.
+    }
   }
 
   if (!activeDashboard) {
@@ -78,12 +117,31 @@ export function CustomDashboard() {
 
   return (
     <div className="space-y-4">
+      {!mutationsAvailable && (
+        <p role="alert" className="rounded-md border border-warning p-3 text-sm text-warning">
+          Dashboard persistence is unavailable. Showing the built-in Overview dashboard.
+        </p>
+      )}
+      {mutationPending && (
+        <p role="status" aria-live="polite" className="text-sm text-muted-foreground">
+          Saving dashboard change...
+        </p>
+      )}
+      {mutationError && (
+        <p role="alert" className="text-sm text-destructive">
+          {mutationError}
+        </p>
+      )}
+
       {/* Dashboard tabs */}
       <div className="flex items-center justify-between">
-        <Tabs value={activeDashboard.id} onValueChange={setActiveDashboard}>
+        <Tabs
+          value={activeDashboard.id}
+          onValueChange={(id) => !mutationPending && setActiveDashboard(id)}
+        >
           <TabsList>
             {dashboardNames.map((d) => (
-              <TabsTrigger key={d.id} value={d.id}>
+              <TabsTrigger key={d.id} value={d.id} disabled={mutationPending}>
                 {d.name}
                 {d.isDefault && (
                   <Badge variant="secondary" className="ml-2" size="sm">
@@ -99,26 +157,47 @@ export function CustomDashboard() {
           {showCreate ? (
             <div className="flex items-center gap-2">
               <Input
+                aria-label="Dashboard name"
                 value={newDashboardName}
                 onChange={(e) => setNewDashboardName(e.target.value)}
                 placeholder="Dashboard name"
                 className="h-9 w-40"
-                onKeyDown={(e) => e.key === 'Enter' && handleCreateDashboard()}
+                disabled={mutationPending}
+                onKeyDown={(e) => e.key === 'Enter' && void handleCreateDashboard()}
               />
-              <Button size="sm" onClick={handleCreateDashboard}>
+              <Button
+                size="sm"
+                onClick={() => void handleCreateDashboard()}
+                disabled={!newDashboardName.trim() || !mutationsAvailable || mutationPending}
+              >
                 Create
               </Button>
-              <Button size="sm" variant="ghost" onClick={() => setShowCreate(false)}>
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() => setShowCreate(false)}
+                disabled={mutationPending}
+              >
                 Cancel
               </Button>
             </div>
           ) : (
             <>
-              <Button size="sm" variant="outline" onClick={() => setShowCreate(true)}>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => setShowCreate(true)}
+                disabled={!mutationsAvailable || mutationPending}
+              >
                 <Plus className="mr-1 h-3 w-3" />
                 New
               </Button>
-              <Button size="sm" variant={isEditing ? 'default' : 'outline'} onClick={toggleEditing}>
+              <Button
+                size="sm"
+                variant={isEditing ? 'default' : 'outline'}
+                onClick={toggleEditing}
+                disabled={!canMutateActive || mutationPending}
+              >
                 <Pencil className="mr-1 h-3 w-3" />
                 {isEditing ? 'Done' : 'Edit'}
               </Button>
@@ -126,7 +205,10 @@ export function CustomDashboard() {
                 <Button
                   size="sm"
                   variant="destructive"
-                  onClick={() => deleteDashboard(activeDashboard.id)}
+                  aria-label={`Delete dashboard ${activeDashboard.name}`}
+                  title={`Delete dashboard ${activeDashboard.name}`}
+                  onClick={() => void handleDeleteDashboard()}
+                  disabled={!canMutateActive || mutationPending}
                 >
                   <Trash2 className="h-3 w-3" />
                 </Button>
@@ -137,7 +219,7 @@ export function CustomDashboard() {
       </div>
 
       {/* Add widget panel */}
-      {isEditing && (
+      {isEditing && canMutateActive && (
         <div className="rounded-lg border border-dashed p-3">
           {showAddWidget ? (
             <div className="space-y-2">
@@ -148,13 +230,19 @@ export function CustomDashboard() {
                     key={preset.title}
                     size="sm"
                     variant="outline"
-                    onClick={() => handleAddWidget(preset)}
+                    onClick={() => void handleAddWidget(preset)}
+                    disabled={mutationPending}
                   >
                     {preset.title}
                   </Button>
                 ))}
               </div>
-              <Button size="sm" variant="ghost" onClick={() => setShowAddWidget(false)}>
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() => setShowAddWidget(false)}
+                disabled={mutationPending}
+              >
                 Cancel
               </Button>
             </div>
@@ -164,6 +252,7 @@ export function CustomDashboard() {
               variant="ghost"
               className="w-full"
               onClick={() => setShowAddWidget(true)}
+              disabled={mutationPending}
             >
               <Plus className="mr-2 h-4 w-4" />
               Add Widget
@@ -176,7 +265,7 @@ export function CustomDashboard() {
       {activeDashboard.layout.length === 0 ? (
         <div className="py-12 text-center text-muted-foreground">
           <p>This dashboard has no widgets.</p>
-          {!isEditing && (
+          {!isEditing && canMutateActive && (
             <Button className="mt-4" variant="outline" onClick={toggleEditing}>
               <Plus className="mr-2 h-4 w-4" />
               Add Widgets
@@ -189,17 +278,19 @@ export function CustomDashboard() {
             <div
               key={widget.id}
               className={
-                widget.position.w >= 6
-                  ? 'md:col-span-2'
-                  : widget.position.w >= 9
-                    ? 'md:col-span-2 lg:col-span-3'
+                widget.position.w >= 9
+                  ? 'md:col-span-2 lg:col-span-3'
+                  : widget.position.w >= 6
+                    ? 'md:col-span-2'
                     : ''
               }
             >
               <DashboardWidget
                 widget={widget}
-                isEditing={isEditing}
-                onRemove={() => removeWidget(activeDashboard.id, widget.id)}
+                isEditing={isEditing && canMutateActive}
+                onRemove={() => void handleRemoveWidget(widget.id)}
+                removeDisabled={!canMutateActive || mutationPending}
+                removePending={mutationPending}
               />
             </div>
           ))}

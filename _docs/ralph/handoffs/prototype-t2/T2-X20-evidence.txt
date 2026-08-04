@@ -1,0 +1,41 @@
+T2-X20 retained validation evidence
+Implementation SHA: 16d2c07c0002bc173a0fdbe9b1d45a9222ee3fdd
+Node: v20.19.1
+
+COMMAND: C:\Windows\System32\cmd.exe /d /c "cd /d C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t2\portal && node_modules\.bin\vitest.CMD run tests/unit/billing/BillingDashboard.test.tsx --reporter=dot --maxWorkers=1 --no-color"
+EXIT: 0
+RESULT: passed
+DETAIL: 1 file, 17 tests passed.
+
+COMMAND: C:\Windows\System32\cmd.exe /d /c "cd /d C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t2\portal && node_modules\.bin\vitest.CMD run --reporter=dot --maxWorkers=1 --no-color"
+EXIT: 0
+RESULT: passed
+DETAIL: 86 files, 676 tests passed in 141.70s; no warnings or stderr.
+
+COMMAND: C:\Windows\System32\cmd.exe /d /c "cd /d C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t2\portal && node_modules\.bin\tsc.CMD --noEmit --incremental false"
+EXIT: 0
+RESULT: passed
+DETAIL: Full portal TypeScript completed with no diagnostics.
+
+COMMAND: C:\Windows\System32\cmd.exe /d /c "cd /d C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t2\portal && node_modules\.bin\prettier.CMD --check src\components\billing\BillingDashboard.tsx src\components\billing\withdrawal-mutation.ts tests\unit\billing\BillingDashboard.test.tsx"
+EXIT: 0
+RESULT: passed
+DETAIL: Prettier 3.8.1 checked the exact three X20 implementation files.
+
+COMMAND: C:\Windows\System32\cmd.exe /d /c "cd /d C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t2\portal && node_modules\.bin\eslint.CMD src\components\billing\BillingDashboard.tsx src\components\billing\withdrawal-mutation.ts tests\unit\billing\BillingDashboard.test.tsx"
+EXIT: 0
+RESULT: passed
+DETAIL: ESLint 8.57.1 reported no lint findings; it emitted the repository's TypeScript 5.9.3 parser-support notice.
+
+BEHAVIOR:
+- Billing withdrawal no longer reports submission after MFA without performing an authoritative mutation.
+- Production BillingPage supplies no adapter or authority context, so withdrawal is visibly unavailable and disabled by default.
+- Requests normalize chain/account identity, freeze a canonical snapshot, and reuse its SHA-256 digest as the idempotency key.
+- Success requires exact committed status, code 0, canonical transaction hash and operation ID, positive safe block height, digest/idempotency echo, and exact request echo.
+- MFA authorization is authority-generation bound and single-use, including adapter/context ABA cycles, replacement, unmount, and sequential stale callbacks.
+- Duplicate operations serialize before asynchronous hashing; authority changes abort active work and reject non-cooperative late results.
+- Caller-owned request aliases and accessor-based receipt authority changes cannot produce committed UI state.
+
+NON-CLAIMS:
+- No production billing withdrawal adapter is wired; withdrawal remains unavailable by default.
+- No live chain transaction, signer, billing backend, settlement process, or funds movement was certified.

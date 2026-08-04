@@ -1,0 +1,35 @@
+T2-X21 raw validation summary
+Implementation SHA: fa190cb9e573f7d1af607da10844e412f41c9e07
+Node: v20.19.1
+
+[focused-vitest]
+OUTPUT: Test Files 2 passed (2)
+OUTPUT: Tests 25 passed (25)
+OUTPUT: no React act warnings
+EXIT: 0
+
+[full-portal-vitest]
+OUTPUT: Test Files 87 passed (87)
+OUTPUT: Tests 700 passed (700)
+OUTPUT: Duration 318.17s
+OUTPUT: no warnings or stderr
+EXIT: 0
+
+[typecheck]
+OUTPUT: full portal check completed with no diagnostics
+EXIT: 0
+
+[prettier]
+COMMAND: C:\Windows\System32\cmd.exe /d /c "cd /d C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t2\portal && node_modules\.bin\prettier.CMD --check src\stores\metrics-alert-mutation.ts src\stores\metricsStore.ts src\stores\__tests__\metricsStore.test.ts src\components\metrics\AlertConfigDialog.tsx src\components\metrics\__tests__\AlertConfigDialog.test.tsx src\components\metrics\AlertsPanel.tsx src\components\metrics\MetricsDashboard.tsx src\app\metrics\alerts\page.tsx"
+OUTPUT: exact eight-file formatting completed
+EXIT: 0
+
+[eslint]
+COMMAND: C:\Windows\System32\cmd.exe /d /c "cd /d C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t2\portal && node_modules\.bin\eslint.CMD src\stores\metrics-alert-mutation.ts src\stores\metricsStore.ts src\stores\__tests__\metricsStore.test.ts src\components\metrics\AlertConfigDialog.tsx src\components\metrics\__tests__\AlertConfigDialog.test.tsx src\components\metrics\AlertsPanel.tsx src\components\metrics\MetricsDashboard.tsx src\app\metrics\alerts\page.tsx"
+OUTPUT: no lint findings; TypeScript parser-support notice only
+EXIT: 0
+
+[committed-diff-check]
+COMMAND: git -C C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t2 show --check --format= fa190cb9e573f7d1af607da10844e412f41c9e07 -- portal/src/stores/metrics-alert-mutation.ts portal/src/stores/metricsStore.ts portal/src/stores/__tests__/metricsStore.test.ts portal/src/components/metrics/AlertConfigDialog.tsx portal/src/components/metrics/__tests__/AlertConfigDialog.test.tsx portal/src/components/metrics/AlertsPanel.tsx portal/src/components/metrics/MetricsDashboard.tsx portal/src/app/metrics/alerts/page.tsx
+OUTPUT: no diagnostics
+EXIT: 0

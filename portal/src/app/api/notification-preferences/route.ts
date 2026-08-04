@@ -1,17 +1,60 @@
 import { NextResponse } from 'next/server';
-import { getPreferences, setPreferences } from '../notifications/data';
-import type { NotificationPreferences } from '@/types/notifications';
+import {
+  getNotificationPreferenceWorkflow,
+  loadNotificationPreferences,
+  NotificationPreferenceError,
+  saveNotificationPreferences,
+  type NotificationPreferencePersistenceAdapter,
+  type NotificationPreferenceSessionResolver,
+} from './workflow';
 
-export function GET() {
-  return NextResponse.json(getPreferences());
-}
+const statusFor = (error: NotificationPreferenceError) => {
+  if (error.code === 'unauthenticated') return 401;
+  if (error.code === 'invalid_request') return 400;
+  if (error.code === 'invalid_receipt') return 502;
+  return 503;
+};
 
-export async function PUT(req: Request) {
-  const body = (await req.json()) as NotificationPreferences;
-  const merged = {
-    ...getPreferences(),
-    ...body,
-  };
-  setPreferences(merged);
-  return NextResponse.json(merged);
-}
+const failure = (error: unknown) => {
+  const workflowError =
+    error instanceof NotificationPreferenceError
+      ? error
+      : new NotificationPreferenceError('persistence_failed');
+  return NextResponse.json({ error: workflowError.code }, { status: statusFor(workflowError) });
+};
+
+export const createNotificationPreferenceHandlers = (
+  resolver?: NotificationPreferenceSessionResolver,
+  adapter?: NotificationPreferencePersistenceAdapter
+) => ({
+  GET: async (request: Request) => {
+    try {
+      return NextResponse.json(await loadNotificationPreferences(request, resolver, adapter));
+    } catch (error) {
+      return failure(error);
+    }
+  },
+  PUT: async (request: Request) => {
+    let body: unknown;
+    try {
+      body = await request.json();
+    } catch {
+      return failure(new NotificationPreferenceError('invalid_request'));
+    }
+    try {
+      return NextResponse.json(await saveNotificationPreferences(request, body, resolver, adapter));
+    } catch (error) {
+      return failure(error);
+    }
+  },
+});
+
+export const GET = (request: Request) => {
+  const workflow = getNotificationPreferenceWorkflow();
+  return createNotificationPreferenceHandlers(workflow.resolver, workflow.adapter).GET(request);
+};
+
+export const PUT = (request: Request) => {
+  const workflow = getNotificationPreferenceWorkflow();
+  return createNotificationPreferenceHandlers(workflow.resolver, workflow.adapter).PUT(request);
+};

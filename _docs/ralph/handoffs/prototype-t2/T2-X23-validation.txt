@@ -1,0 +1,35 @@
+T2-X23 raw validation summary
+Implementation SHA: cdc6a88bc0e4221007c74eab125754334c1271b8
+Node: v20.19.1
+
+[focused-vitest]
+OUTPUT: Test Files 2 passed (2)
+OUTPUT: Tests 33 passed (33)
+OUTPUT: no warnings
+EXIT: 0
+
+[full-portal-vitest]
+OUTPUT: Test Files 90 passed (90)
+OUTPUT: Tests 772 passed (772)
+OUTPUT: Duration 197.31s
+OUTPUT: no warnings or stderr
+EXIT: 0
+
+[typecheck]
+OUTPUT: full portal check completed with no diagnostics
+EXIT: 0
+
+[prettier]
+COMMAND: C:\Windows\System32\cmd.exe /d /c "cd /d C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t2\portal && node_modules\.bin\prettier.CMD --check src\stores\dashboard-config-mutation.ts src\stores\dashboardConfigStore.ts src\stores\__tests__\dashboardConfigStore.test.ts src\components\metrics\CustomDashboard.tsx src\components\metrics\DashboardWidget.tsx src\components\metrics\__tests__\CustomDashboard.test.tsx"
+OUTPUT: exact six-file formatting completed
+EXIT: 0
+
+[eslint]
+COMMAND: C:\Windows\System32\cmd.exe /d /c "cd /d C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t2\portal && node_modules\.bin\eslint.CMD src\stores\dashboard-config-mutation.ts src\stores\dashboardConfigStore.ts src\stores\__tests__\dashboardConfigStore.test.ts src\components\metrics\CustomDashboard.tsx src\components\metrics\DashboardWidget.tsx src\components\metrics\__tests__\CustomDashboard.test.tsx"
+OUTPUT: no lint findings; TypeScript parser-support notice only
+EXIT: 0
+
+[committed-diff-check]
+COMMAND: git -C C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t2 show --check --format= cdc6a88bc0e4221007c74eab125754334c1271b8 -- portal/src/stores/dashboard-config-mutation.ts portal/src/stores/dashboardConfigStore.ts portal/src/stores/__tests__/dashboardConfigStore.test.ts portal/src/components/metrics/CustomDashboard.tsx portal/src/components/metrics/DashboardWidget.tsx portal/src/components/metrics/__tests__/CustomDashboard.test.tsx
+OUTPUT: no diagnostics
+EXIT: 0

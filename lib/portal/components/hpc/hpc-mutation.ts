@@ -40,6 +40,54 @@ export interface SubmitJobParams {
   parameters?: Record<string, string | number | boolean>;
   encryptedInputs?: Record<string, unknown>;
   inputRefs?: string[];
+  quote?: {
+    estimatedTotal: string;
+    depositRequired: string;
+    pricePerHour: string;
+    maxHours: number;
+    denom: string;
+  };
+}
+
+export function assertValidSubmitJobParams(
+  params: SubmitJobParams,
+  requireQuote = false,
+): void {
+  const resources = params.resources;
+  const positiveInteger = (value: number) =>
+    Number.isSafeInteger(value) && value > 0;
+  if (
+    !params.offeringId.trim() ||
+    !params.name.trim() ||
+    !positiveInteger(resources.nodes) ||
+    !positiveInteger(resources.cpusPerNode) ||
+    !positiveInteger(resources.memoryGBPerNode) ||
+    !positiveInteger(resources.maxRuntimeSeconds) ||
+    !Number.isSafeInteger(resources.storageGB) ||
+    resources.storageGB < 0 ||
+    (resources.gpusPerNode !== undefined &&
+      (!Number.isSafeInteger(resources.gpusPerNode) ||
+        resources.gpusPerNode < 0)) ||
+    Boolean(resources.gpuType) !== Boolean(resources.gpusPerNode)
+  ) {
+    throw new HPCMutationNotCommittedError();
+  }
+  if (requireQuote) {
+    const quote = params.quote;
+    const amount = (value: string | undefined) =>
+      typeof value === "string" && /^(0|[1-9]\d*)(\.\d{1,18})?$/.test(value);
+    if (
+      !quote ||
+      !amount(quote.estimatedTotal) ||
+      !amount(quote.depositRequired) ||
+      !amount(quote.pricePerHour) ||
+      !Number.isFinite(quote.maxHours) ||
+      quote.maxHours !== resources.maxRuntimeSeconds / 3600 ||
+      !/^[a-z][a-z0-9/._-]{1,127}$/.test(quote.denom)
+    ) {
+      throw new HPCMutationNotCommittedError();
+    }
+  }
 }
 
 export interface CommittedJobMutation {

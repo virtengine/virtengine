@@ -1,0 +1,33 @@
+T2-X16 raw validation summary
+Implementation SHA: 3e1cdcbf302eb2fdf5fdf1ae39a10dcbf37c540f
+Node: v20.19.1
+
+[focused-vitest]
+OUTPUT: Test Files 2 passed (2)
+OUTPUT: Tests 49 passed (49)
+OUTPUT: no warnings
+EXIT: 0
+
+[full-vitest]
+OUTPUT: Test Files 84 passed (84)
+OUTPUT: Tests 638 passed (638)
+OUTPUT: Duration 148.10s
+EXIT: 0
+
+[typescript]
+OUTPUT: no diagnostics
+EXIT: 0
+
+[eslint]
+OUTPUT: no diagnostics
+OUTPUT: existing unsupported TypeScript parser-version banner only
+EXIT: 0
+
+[prettier]
+OUTPUT: final five-file formatting pass succeeded
+EXIT: 0
+
+[committed-diff-check]
+COMMAND: git show --check --format= 3e1cdcbf302eb2fdf5fdf1ae39a10dcbf37c540f -- portal/src/stores/customerDashboardStore.ts portal/src/components/dashboard/TerminateAllocationDialog.tsx portal/src/app/(customer)/dashboard/allocations/[id]/AllocationDetailClient.tsx portal/tests/unit/dashboard/customerDashboardStore.test.ts portal/tests/unit/dashboard/components.test.tsx
+OUTPUT: no diagnostics
+EXIT: 0

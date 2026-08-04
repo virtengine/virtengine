@@ -24,6 +24,20 @@ export type {
   ShellEligibilityProjection,
   UseDeploymentShellResult,
 } from '../../../lib/portal';
+export {
+  ProviderOfferingMutationError,
+  buildProviderOfferingMutationRequest,
+  digestProviderOfferingRequest,
+  requireProviderOfferingMutationAdapter,
+  validateCommittedProviderOfferingMutation,
+} from '../../../lib/portal';
+export type {
+  CommittedProviderOfferingMutation,
+  ProviderOfferingMutationAction,
+  ProviderOfferingMutationAdapter,
+  ProviderOfferingMutationContext,
+  ProviderOfferingMutationRequest,
+} from '../../../lib/portal';
 
 // ============================================================================
 // Chat Agent (VE-70D)
@@ -302,6 +316,22 @@ export type {
 // ============================================================================
 
 export { useProvider, ProviderProvider } from '../../../lib/portal';
+export {
+  ProviderDomainVerificationError,
+  normalizeProviderDomain,
+  requireProviderDomainVerifier,
+  validateProviderDomainChallenge,
+  validateProviderDomainVerification,
+} from '../../../lib/portal';
+export type {
+  ProviderDomainBinding,
+  ProviderDomainChallenge,
+  ProviderDomainVerificationEvidence,
+  ProviderDomainVerifier,
+  ProviderActions,
+  ProviderContextValue,
+  ProviderProviderProps,
+} from '../../../lib/portal';
 export type {
   ProviderState,
   ProviderProfile,
@@ -395,10 +425,21 @@ export type {
 
 export { useHPC, HPCProvider } from '../../../lib/portal';
 export {
+  HPCQueryValidationError,
+  requireHPCQueryAdapter,
+  validateHPCJob,
+  validateHPCJobPriceQuote,
+  validateHPCQuoteRequest,
+  validateHPCJobs,
+  validateHPCWorkloadTemplates,
+} from '../../../lib/portal';
+export type { HPCQueryAdapter, HPCQueryEnvelope, HPCQuoteRequest } from '../../../lib/portal';
+export {
   HPCClientUnavailableError,
   HPCMutationNotCommittedError,
   HPCOutputValidationError,
   assertCommittedJobMutation,
+  assertValidSubmitJobParams,
   requireHPCOutputAdapter,
   requireHPCSigner,
   validateHPCOutputReferences,
@@ -512,6 +553,20 @@ export type {
   OrganizationActions,
   OrganizationContextValue,
   OrganizationProviderProps,
+} from '../../../lib/portal';
+export {
+  OrganizationMutationError,
+  buildOrganizationMutationRequest,
+  digestOrganizationMutationRequest,
+  requireOrganizationMutationAdapter,
+  validateCommittedOrganizationMutation,
+} from '../../../lib/portal';
+export type {
+  CommittedOrganizationMutation,
+  OrganizationMutationAction,
+  OrganizationMutationAdapter,
+  OrganizationMutationContext,
+  OrganizationMutationRequest,
 } from '../../../lib/portal';
 
 export type {

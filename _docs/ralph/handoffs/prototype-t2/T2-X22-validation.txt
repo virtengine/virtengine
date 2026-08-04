@@ -1,0 +1,34 @@
+T2-X22 raw validation summary
+Implementation SHA: a30606b23d61575dd0a4f97be8a394596f44b553
+Node: v20.19.1
+
+[focused-vitest]
+OUTPUT: Test Files 2 passed (2)
+OUTPUT: Tests 43 passed (43)
+EXIT: 0
+
+[full-portal-vitest]
+OUTPUT: Test Files 88 passed (88)
+OUTPUT: Tests 739 passed (739)
+OUTPUT: Duration 150.36s
+OUTPUT: no warnings, failures, or skips
+EXIT: 0
+
+[typecheck]
+OUTPUT: full portal check completed with no diagnostics
+EXIT: 0
+
+[prettier]
+COMMAND: C:\Windows\System32\cmd.exe /d /c "cd /d C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t2\portal && node_modules\.bin\prettier.CMD --check src\app\api\notification-preferences\workflow.ts src\app\api\notification-preferences\route.ts src\app\api\notification-preferences\route.test.ts src\components\notifications\NotificationPreferences.tsx src\components\notifications\__tests__\NotificationPreferences.test.tsx"
+OUTPUT: exact five-file formatting completed
+EXIT: 0
+
+[eslint]
+COMMAND: C:\Windows\System32\cmd.exe /d /c "cd /d C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t2\portal && node_modules\.bin\eslint.CMD src\app\api\notification-preferences\workflow.ts src\app\api\notification-preferences\route.ts src\app\api\notification-preferences\route.test.ts src\components\notifications\NotificationPreferences.tsx src\components\notifications\__tests__\NotificationPreferences.test.tsx"
+OUTPUT: no lint findings; TypeScript parser-support notice only
+EXIT: 0
+
+[committed-diff-check]
+COMMAND: git -C C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t2 show --check --format= a30606b23d61575dd0a4f97be8a394596f44b553 -- portal/src/app/api/notification-preferences/workflow.ts portal/src/app/api/notification-preferences/route.ts portal/src/app/api/notification-preferences/route.test.ts portal/src/components/notifications/NotificationPreferences.tsx portal/src/components/notifications/__tests__/NotificationPreferences.test.tsx
+OUTPUT: no diagnostics
+EXIT: 0

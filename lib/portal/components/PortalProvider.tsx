@@ -10,6 +10,7 @@ import { MFAProvider } from "../hooks/useMFA";
 import { MarketplaceProvider } from "../hooks/useMarketplace";
 import { useChain } from "../hooks/useChain";
 import { ProviderProvider } from "../hooks/useProvider";
+import { OrganizationProvider } from "../hooks/useOrganization";
 import { HPCProvider } from "../hooks/useHPC";
 import { ChainProvider } from "../hooks/useChain";
 import { WalletProvider, useWallet } from "../src/wallet/context";
@@ -19,6 +20,10 @@ import type {
 } from "./marketplace/checkout-mutation";
 import type { HPCSignerAdapter } from "./hpc/hpc-mutation";
 import type { HPCOutputAdapter } from "./hpc/hpc-output";
+import type { HPCQueryAdapter } from "./hpc/hpc-query";
+import type { ProviderDomainVerifier } from "./provider/domain-verification";
+import type { ProviderOfferingMutationAdapter } from "./provider/offering-mutation";
+import type { OrganizationMutationAdapter } from "./organization/organization-mutation";
 import type {
   WalletProviderConfig,
   WalletChainInfo,
@@ -33,6 +38,10 @@ function ProductProviders({
   queryChainId,
   hpcMutationAdapter,
   hpcOutputAdapter,
+  hpcQueryAdapter,
+  providerDomainVerifier,
+  providerOfferingMutationAdapter,
+  organizationMutationAdapter,
 }: {
   children: React.ReactNode;
   mutationAdapter?: CheckoutMutationAdapter;
@@ -41,6 +50,10 @@ function ProductProviders({
   queryChainId: string;
   hpcMutationAdapter?: HPCSignerAdapter;
   hpcOutputAdapter?: HPCOutputAdapter;
+  hpcQueryAdapter?: HPCQueryAdapter;
+  providerDomainVerifier?: ProviderDomainVerifier;
+  providerOfferingMutationAdapter?: ProviderOfferingMutationAdapter;
+  organizationMutationAdapter?: OrganizationMutationAdapter;
 }) {
   const chain = useChain();
   const wallet = useWallet();
@@ -64,28 +77,66 @@ function ProductProviders({
       resultProjector={resultProjector}
       mutationTimeoutMs={mutationTimeoutMs}
     >
-      <ProviderProvider>
-        <HPCProvider
+      <ProviderProvider
+        queryClient={chain.queryClient}
+        chainId={queryChainId}
+        accountAddress={accountAddress}
+        domainVerifier={
+          accountAddress &&
+          providerDomainVerifier?.chainId === queryChainId &&
+          providerDomainVerifier.accountAddress === accountAddress
+            ? providerDomainVerifier
+            : undefined
+        }
+        offeringMutationAdapter={
+          accountAddress &&
+          providerOfferingMutationAdapter?.chainId === queryChainId &&
+          providerOfferingMutationAdapter.accountAddress === accountAddress
+            ? providerOfferingMutationAdapter
+            : undefined
+        }
+      >
+        <OrganizationProvider
           queryClient={chain.queryClient}
           chainId={queryChainId}
           accountAddress={accountAddress}
           mutationAdapter={
             accountAddress &&
-            hpcMutationAdapter?.chainId === queryChainId &&
-            hpcMutationAdapter.accountAddress === accountAddress
-              ? hpcMutationAdapter
-              : undefined
-          }
-          outputAdapter={
-            accountAddress &&
-            hpcOutputAdapter?.chainId === queryChainId &&
-            hpcOutputAdapter.accountAddress === accountAddress
-              ? hpcOutputAdapter
+            organizationMutationAdapter?.chainId === queryChainId &&
+            organizationMutationAdapter.accountAddress === accountAddress
+              ? organizationMutationAdapter
               : undefined
           }
         >
-          {children}
-        </HPCProvider>
+          <HPCProvider
+            queryClient={chain.queryClient}
+            chainId={queryChainId}
+            accountAddress={accountAddress}
+            mutationAdapter={
+              accountAddress &&
+              hpcMutationAdapter?.chainId === queryChainId &&
+              hpcMutationAdapter.accountAddress === accountAddress
+                ? hpcMutationAdapter
+                : undefined
+            }
+            outputAdapter={
+              accountAddress &&
+              hpcOutputAdapter?.chainId === queryChainId &&
+              hpcOutputAdapter.accountAddress === accountAddress
+                ? hpcOutputAdapter
+                : undefined
+            }
+            queryAdapter={
+              accountAddress &&
+              hpcQueryAdapter?.chainId === queryChainId &&
+              hpcQueryAdapter.accountAddress === accountAddress
+                ? hpcQueryAdapter
+                : undefined
+            }
+          >
+            {children}
+          </HPCProvider>
+        </OrganizationProvider>
       </ProviderProvider>
     </MarketplaceProvider>
   );
@@ -121,6 +172,10 @@ export function PortalProvider({
   marketplaceMutationTimeoutMs,
   hpcMutationAdapter,
   hpcOutputAdapter,
+  hpcQueryAdapter,
+  providerDomainVerifier,
+  providerOfferingMutationAdapter,
+  organizationMutationAdapter,
   children,
 }: PortalProviderProps): JSX.Element {
   const [isReady, setIsReady] = React.useState(false);
@@ -198,6 +253,12 @@ export function PortalProvider({
                   queryChainId={chainConfig.chainId}
                   hpcMutationAdapter={hpcMutationAdapter}
                   hpcOutputAdapter={hpcOutputAdapter}
+                  hpcQueryAdapter={hpcQueryAdapter}
+                  providerDomainVerifier={providerDomainVerifier}
+                  providerOfferingMutationAdapter={
+                    providerOfferingMutationAdapter
+                  }
+                  organizationMutationAdapter={organizationMutationAdapter}
                 >
                   {children}
                 </ProductProviders>

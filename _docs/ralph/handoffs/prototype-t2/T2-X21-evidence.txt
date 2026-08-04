@@ -1,0 +1,42 @@
+T2-X21 retained validation evidence
+Implementation SHA: fa190cb9e573f7d1af607da10844e412f41c9e07
+Node: v20.19.1
+
+COMMAND: C:\Windows\System32\cmd.exe /d /c "cd /d C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t2\portal && node_modules\.bin\vitest.CMD run src\stores\__tests__\metricsStore.test.ts src\components\metrics\__tests__\AlertConfigDialog.test.tsx --reporter=dot --maxWorkers=1 --no-color"
+EXIT: 0
+RESULT: passed
+DETAIL: 2 files, 25 tests passed; no React act warnings.
+
+COMMAND: C:\Windows\System32\cmd.exe /d /c "cd /d C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t2\portal && node_modules\.bin\vitest.CMD run --reporter=dot --maxWorkers=1 --no-color"
+EXIT: 0
+RESULT: passed
+DETAIL: 87 files, 700 tests passed in 318.17s; no warnings or stderr.
+
+COMMAND: C:\Windows\System32\cmd.exe /d /c "cd /d C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t2\portal && node_modules\.bin\tsc.CMD --noEmit --incremental false"
+EXIT: 0
+RESULT: passed
+DETAIL: Full portal TypeScript completed with no diagnostics.
+
+COMMAND: C:\Windows\System32\cmd.exe /d /c "cd /d C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t2\portal && node_modules\.bin\prettier.CMD --check src\stores\metrics-alert-mutation.ts src\stores\metricsStore.ts src\stores\__tests__\metricsStore.test.ts src\components\metrics\AlertConfigDialog.tsx src\components\metrics\__tests__\AlertConfigDialog.test.tsx src\components\metrics\AlertsPanel.tsx src\components\metrics\MetricsDashboard.tsx src\app\metrics\alerts\page.tsx"
+EXIT: 0
+RESULT: passed
+DETAIL: Prettier 3.8.1 checked the exact eight X21 implementation files.
+
+COMMAND: C:\Windows\System32\cmd.exe /d /c "cd /d C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t2\portal && node_modules\.bin\eslint.CMD src\stores\metrics-alert-mutation.ts src\stores\metricsStore.ts src\stores\__tests__\metricsStore.test.ts src\components\metrics\AlertConfigDialog.tsx src\components\metrics\__tests__\AlertConfigDialog.test.tsx src\components\metrics\AlertsPanel.tsx src\components\metrics\MetricsDashboard.tsx src\app\metrics\alerts\page.tsx"
+EXIT: 0
+RESULT: passed
+DETAIL: ESLint 8.57.1 reported no lint findings; it emitted the repository's TypeScript 5.9.3 parser-support notice.
+
+BEHAVIOR:
+- Metrics alert create/delete/acknowledge no longer fabricate random IDs, local status, actors, or timestamps in Zustand.
+- Mutations require a configured subject-bound authoritative adapter and default visibly unavailable in production when none is wired.
+- Requests are exhaustive canonical discriminated unions, immutable, key-sorted, SHA-256 digested, and digest-bound for idempotency.
+- Completion requires committed code 0 evidence, canonical operation/affected IDs, exact request/digest echo, strict authoritative alert/event snapshots, and action-specific postconditions.
+- Create proves the affected alert is present, delete proves it is absent, and acknowledge proves the exact event is acknowledged with authoritative actor/time.
+- Duplicate operations serialize before hashing; adapter/subject changes abort work and reject ABA or non-cooperative late results.
+- Request and receipt getters are snapshot once, mutable aliases are removed, and malformed/non-finite/incompatible payloads fail closed.
+- Dialog/page/panel await mutations, preserve state on failure, block duplicate/dismissal while pending, announce progress, and mask cached counts/lists/history while authority is unavailable.
+
+NON-CLAIMS:
+- No production metrics alert persistence adapter or authenticated subject integration is wired; alert changes remain unavailable by default.
+- No live alert evaluator, notification delivery, provider daemon mutation, or external monitoring backend was certified.

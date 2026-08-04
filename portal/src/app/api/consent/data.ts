@@ -5,7 +5,6 @@ import type {
   ConsentSettingsResponse,
   ConsentPurpose,
   DataExportRequest,
-  DeletionRequest,
 } from '@/types/consent';
 
 const DEFAULT_SUBJECT = 'virtengine1demo';
@@ -101,7 +100,6 @@ const consentEvents = new Map<string, ConsentEvent[]>([
 ]);
 
 let exportRequests: DataExportRequest[] = [];
-let deletionRequests: DeletionRequest[] = [];
 
 export function getConsentSettings(dataSubject: string): ConsentSettingsResponse {
   const subject = dataSubject || DEFAULT_SUBJECT;
@@ -217,21 +215,10 @@ export function requestExport(dataSubject: string, format: 'json' | 'csv'): Data
   return req;
 }
 
-export function requestDeletion(dataSubject: string): DeletionRequest {
-  const req: DeletionRequest = {
-    id: `deletion-${Date.now()}`,
-    dataSubject,
-    requestedAt: new Date().toISOString(),
-    status: 'pending',
-  };
-  deletionRequests = [req, ...deletionRequests];
-  return req;
-}
-
 export function listRequests(dataSubject: string) {
   return {
     exports: exportRequests.filter((req) => req.dataSubject === dataSubject),
-    deletions: deletionRequests.filter((req) => req.dataSubject === dataSubject),
+    deletions: [],
   };
 }
 

@@ -1,37 +1,66 @@
-{
-  "campaign": "three-day-prototype",
-  "thread": "T2",
-  "checkpoint": "T2-13A",
-  "branch": "ve/prototype-t2-product",
-  "payload_head": "9e717ff769b03dcb3830877d541b223d8d7154bf",
-  "tree_clean": true,
-  "files_changed": [
-    "lib/portal/components/PortalProvider.tsx",
-    "lib/portal/components/hpc/hpc-output.ts",
-    "lib/portal/__tests__/hpc/use-hpc-outputs.test.tsx",
-    "lib/portal/hooks/useHPC.tsx",
-    "lib/portal/index.ts",
-    "lib/portal/index.d.ts",
-    "lib/portal/types/config.ts",
-    "portal/src/lib/portal-adapter.ts"
-  ],
-  "tests": [
-    {
-      "command": "vitest run __tests__/hpc/use-hpc-outputs.test.tsx",
-      "exit_code": 0,
-      "result": "passed",
-      "test_count": 4,
-      "tool_versions": { "node": "v24.12.0" }
-    },
-    {
-      "command": "vitest run lib/portal",
-      "exit_code": 0,
-      "result": "passed",
-      "test_count": 726,
-      "tool_versions": { "node": "v24.12.0" }
-    }
-  ],
-  "blockers": [
-    "Live provider endpoints and SDK generator vendor-tree certification remain separate gates."
-  ]
-}
+campaign: three-day-prototype
+thread: T2
+checkpoint: T2-X24
+branch: ve/prototype-t2-product
+start_head: 0354d5b9889b5b1c627fa34b77e84df786010b00
+end_head: c805573911620632d1b045140be760d3cee28ca4
+origin_main: 79391a3df86d85522b92e0400c6904971ecbe65d
+tree_clean: false
+commits:
+  - c805573911620632d1b045140be760d3cee28ca4
+owned_paths:
+  - portal/src/features/mfa/store.ts
+  - portal/src/features/mfa/useMFAGate.ts
+  - portal/tests/unit/mfa/store.test.ts
+  - portal/tests/unit/mfa/useMFAGate.test.tsx
+  - portal/src/components/billing/BillingDashboard.tsx
+  - portal/tests/unit/billing/BillingDashboard.test.tsx
+  - portal/src/app/provider/offerings/page.tsx
+  - portal/src/components/account/DelegationSection.tsx
+files_changed:
+  - portal/src/features/mfa/store.ts
+  - portal/src/features/mfa/useMFAGate.ts
+  - portal/tests/unit/mfa/store.test.ts
+  - portal/tests/unit/mfa/useMFAGate.test.tsx
+  - portal/src/components/billing/BillingDashboard.tsx
+  - portal/tests/unit/billing/BillingDashboard.test.tsx
+  - portal/src/app/provider/offerings/page.tsx
+  - portal/src/components/account/DelegationSection.tsx
+tests:
+  - command: C:\Windows\System32\cmd.exe /d /c "cd /d C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t2\portal && node_modules\.bin\vitest.CMD run tests\unit\mfa\store.test.ts tests\unit\mfa\useMFAGate.test.tsx tests\unit\billing\BillingDashboard.test.tsx --reporter=dot --maxWorkers=1 --no-color"
+    exit_code: 0
+    result: passed
+    test_count: 77
+    tool_versions:
+      node: v20.19.1
+    artifact: _docs/ralph/handoffs/prototype-t2/T2-X24-validation.txt
+  - command: C:\Windows\System32\cmd.exe /d /c "cd /d C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t2\portal && node_modules\.bin\vitest.CMD run --reporter=dot --maxWorkers=1 --no-color"
+    exit_code: 0
+    result: passed
+    test_count: 818
+    tool_versions:
+      node: v20.19.1
+    artifact: _docs/ralph/handoffs/prototype-t2/T2-X24-validation.txt
+  - command: C:\Windows\System32\cmd.exe /d /c "cd /d C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t2\portal && node_modules\.bin\tsc.CMD --noEmit --incremental false"
+    exit_code: 0
+    result: passed
+    tool_versions:
+      node: v20.19.1
+    artifact: _docs/ralph/handoffs/prototype-t2/T2-X24-validation.txt
+generated_hashes: {}
+migrations: []
+external_evidence:
+  - _docs/ralph/handoffs/prototype-t2/T2-X24-evidence.txt
+  - _docs/ralph/handoffs/prototype-t2/T2-X24-validation.txt
+known_failures: []
+blockers:
+  - The shared checkout contains 85 unrelated concurrent worktree changes; the X24 implementation payload and index are clean, but repository-wide tree cleanliness is not claimed.
+  - T4 producer-handoff.schema.json does not permit the established supplemental T2-X checkpoint names; T2-X01 through T2-X10 retain the campaign queue naming.
+  - T4 producer-handoff.schema.json forbids the integration_parent field required by the updated campaign plan; integration ancestor fa21b1e540a5efcbe1822da4199be7acec7709d3 is retained in T2-05-evidence.txt.
+  - Full provider package certification is blocked by the unrelated submitter lease timing failure retained in T2-03B-evidence.txt.
+  - PortalProvider retains pre-existing ts-nocheck because unrelated Auth, Identity, MFA, and Provider dependencies are not wired.
+  - Provider offering creation is still gated only at one navigation entry; the direct route and actual submission require a separate authoritative submission gate.
+  - DelegationSection still fabricates invite success after authorization and requires a committed delegation mutation adapter.
+  - No production MFA service, policy endpoint, authenticator enrollment, challenge verification backend, or live account session was certified.
+next_checkpoint: T2-X25
+expected_head: c805573911620632d1b045140be760d3cee28ca4

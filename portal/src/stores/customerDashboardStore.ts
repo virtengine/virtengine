@@ -23,8 +23,10 @@ import {
 } from '@/lib/api/chain';
 import { getPortalEndpoints } from '@/lib/config';
 import { MultiProviderClient } from '@/lib/portal-adapter';
+import type { ProviderDeploymentActionReceipt } from '@/lib/portal-adapter';
 
 export interface CustomerDashboardState {
+  dashboardOwnerAddress: string | null;
   stats: CustomerDashboardStats;
   allocations: CustomerAllocation[];
   escrowAccounts: Array<{
@@ -59,6 +61,7 @@ export interface CustomerDashboardActions {
   markNotificationRead: (id: string) => void;
   dismissNotification: (id: string) => void;
   terminateAllocation: (id: string) => Promise<void>;
+  clearDashboard: () => void;
   clearError: () => void;
 }
 
@@ -82,6 +85,7 @@ const PROVIDER_ENDPOINTS = (address: string) => [
 ];
 
 const initialState: CustomerDashboardState = {
+  dashboardOwnerAddress: null,
   stats: {
     activeAllocations: 0,
     totalOrders: 0,
@@ -113,6 +117,22 @@ const initialState: CustomerDashboardState = {
 
 let providerClient: MultiProviderClient | null = null;
 let providerClientInit: Promise<void> | null = null;
+const pendingTerminations = new Set<string>();
+const committedTerminations = new Map<string, { ownerAddress: string; providerAddress: string }>();
+const TERMINAL_PROVIDER_STATES = new Set(['terminated', 'closed']);
+let dashboardRequest = 0;
+const terminationKey = (ownerAddress: string, allocationId: string) =>
+  `${ownerAddress}\u0000${allocationId}`;
+
+const isCommittedTermination = (
+  receipt: ProviderDeploymentActionReceipt,
+  allocation: CustomerAllocation
+): boolean =>
+  receipt.action === 'terminate' &&
+  receipt.deploymentId === allocation.id &&
+  receipt.providerId === allocation.providerAddress &&
+  receipt.status === 'committed' &&
+  TERMINAL_PROVIDER_STATES.has(receipt.state.trim().toLowerCase());
 
 const getProviderClient = async () => {
   if (!providerClient) {
@@ -121,7 +141,11 @@ const getProviderClient = async () => {
     });
   }
   if (!providerClientInit) {
-    providerClientInit = providerClient.initialize().catch(() => undefined);
+    providerClientInit = providerClient.initialize().catch((error) => {
+      providerClientInit = null;
+      providerClient = null;
+      throw error;
+    });
   }
   await providerClientInit;
   return providerClient;
@@ -202,7 +226,18 @@ export const useCustomerDashboardStore = create<CustomerDashboardStore>()((set, 
   ...initialState,
 
   fetchDashboard: async (ownerAddress: string) => {
-    set({ isLoading: true, error: null });
+    const requestId = ++dashboardRequest;
+    if (get().dashboardOwnerAddress !== ownerAddress) {
+      const allocationFilter = get().allocationFilter;
+      set({
+        ...initialState,
+        dashboardOwnerAddress: ownerAddress,
+        allocationFilter,
+        isLoading: true,
+      });
+    } else {
+      set({ isLoading: true, error: null });
+    }
 
     try {
       if (!ownerAddress) {
@@ -531,9 +566,38 @@ export const useCustomerDashboardStore = create<CustomerDashboardStore>()((set, 
         }
       });
 
+      if (requestId !== dashboardRequest) return;
+      const authoritativeLeaseProviders = new Map(
+        allocations.map((allocation) => [allocation.id, allocation.providerAddress])
+      );
+      for (const [key, marker] of committedTerminations) {
+        if (marker.ownerAddress !== ownerAddress) continue;
+        const allocationId = key.slice(key.indexOf('\u0000') + 1);
+        const authoritativeProvider = authoritativeLeaseProviders.get(allocationId);
+        const authoritativeAllocation = allocations.find((item) => item.id === allocationId);
+        if (
+          authoritativeProvider !== marker.providerAddress ||
+          authoritativeAllocation?.status === 'terminated'
+        ) {
+          committedTerminations.delete(key);
+        }
+      }
+      const finalAllocations = allocations.map((allocation) =>
+        committedTerminations.get(terminationKey(ownerAddress, allocation.id))?.providerAddress ===
+        allocation.providerAddress
+          ? { ...allocation, status: 'terminated' as const }
+          : allocation
+      );
+      const finalStats = {
+        ...stats,
+        activeAllocations: finalAllocations.filter((allocation) =>
+          ['running', 'deploying', 'paused'].includes(allocation.status)
+        ).length,
+      };
       set({
-        stats,
-        allocations,
+        dashboardOwnerAddress: ownerAddress,
+        stats: finalStats,
+        allocations: finalAllocations,
         escrowAccounts,
         escrowPayments,
         usage,
@@ -542,6 +606,7 @@ export const useCustomerDashboardStore = create<CustomerDashboardStore>()((set, 
         isLoading: false,
       });
     } catch (error) {
+      if (requestId !== dashboardRequest) return;
       set({
         isLoading: false,
         error: error instanceof Error ? error.message : 'Failed to load customer dashboard',
@@ -568,19 +633,65 @@ export const useCustomerDashboardStore = create<CustomerDashboardStore>()((set, 
   },
 
   terminateAllocation: async (id) => {
+    const ownerAddress = get().dashboardOwnerAddress;
+    const pendingKey = ownerAddress ? terminationKey(ownerAddress, id) : id;
+    if (pendingTerminations.has(pendingKey)) {
+      throw new Error(`Allocation termination is already pending for ${id}`);
+    }
+    const allocation = get().allocations.find((item) => item.id === id);
+    if (
+      !ownerAddress ||
+      !allocation ||
+      !['running', 'paused', 'deploying'].includes(allocation.status)
+    ) {
+      throw new Error(`Allocation ${id} is unavailable for termination`);
+    }
+    pendingTerminations.add(pendingKey);
+    set({ error: null });
     try {
-      await Promise.resolve();
-      const { allocations } = get();
+      const client = await getProviderClient();
+      const receipt = await client.performAction(id, 'terminate');
+      if (!isCommittedTermination(receipt, allocation)) {
+        throw new Error('Provider did not return exact committed termination evidence');
+      }
+      const { allocations, stats, dashboardOwnerAddress } = get();
+      const current = allocations.find((item) => item.id === id);
+      if (
+        dashboardOwnerAddress !== ownerAddress ||
+        !current ||
+        current.providerAddress !== allocation.providerAddress ||
+        !['running', 'paused', 'deploying'].includes(current.status)
+      ) {
+        throw new Error('Allocation changed while termination was pending');
+      }
+      committedTerminations.set(terminationKey(ownerAddress, id), {
+        ownerAddress,
+        providerAddress: allocation.providerAddress,
+      });
       set({
         allocations: allocations.map((a) =>
           a.id === id ? { ...a, status: 'terminated', updatedAt: new Date().toISOString() } : a
         ),
+        stats: {
+          ...stats,
+          activeAllocations: Math.max(0, stats.activeAllocations - 1),
+        },
       });
     } catch (error) {
+      const failure = error instanceof Error ? error : new Error('Failed to terminate allocation');
       set({
-        error: error instanceof Error ? error.message : 'Failed to terminate allocation',
+        error: failure.message,
       });
+      throw failure;
+    } finally {
+      pendingTerminations.delete(pendingKey);
     }
+  },
+
+  clearDashboard: () => {
+    dashboardRequest += 1;
+    const allocationFilter = get().allocationFilter;
+    set({ ...initialState, allocationFilter });
   },
 
   clearError: () => {

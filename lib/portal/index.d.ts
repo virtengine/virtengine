@@ -232,6 +232,7 @@ export interface HPCProviderProps {
   getAuthHeader?: () => Promise<string>;
   mutationAdapter?: HPCSignerAdapter;
   outputAdapter?: HPCOutputAdapter;
+  queryAdapter?: HPCQueryAdapter;
 }
 export const HPCProvider: React.ComponentType<HPCProviderProps>;
 export type HPCClientCapability = "query" | "signer" | "provider";
@@ -255,7 +256,18 @@ export interface SubmitJobParams {
   parameters?: Record<string, string | number | boolean>;
   encryptedInputs?: Record<string, unknown>;
   inputRefs?: string[];
+  quote?: {
+    estimatedTotal: string;
+    depositRequired: string;
+    pricePerHour: string;
+    maxHours: number;
+    denom: string;
+  };
 }
+export function assertValidSubmitJobParams(
+  params: SubmitJobParams,
+  requireQuote?: boolean,
+): void;
 export interface CommittedJobMutation {
   committed: true;
   jobId: string;
@@ -285,6 +297,54 @@ export interface HPCOutputAdapter {
   getOutputs(jobId: string): Promise<unknown>;
   resolveOutput(outputRef: JobOutputReference): Promise<unknown>;
 }
+export interface HPCQueryAdapter {
+  readonly chainId: string;
+  readonly accountAddress: string;
+  getWorkloadTemplates(): Promise<unknown>;
+  getQuote(request: HPCQuoteRequest): Promise<unknown>;
+  getJobs(): Promise<unknown>;
+  getJob(jobId: string): Promise<unknown>;
+  subscribeToJob?(
+    jobId: string,
+    callback: (event: unknown) => void,
+  ): () => void;
+}
+export interface HPCQuoteRequest {
+  offeringId: string;
+  resources: JobResources;
+}
+export interface HPCQueryEnvelope {
+  chainId: string;
+  accountAddress: string;
+}
+export class HPCQueryValidationError extends Error {
+  readonly code: "hpc_query_invalid";
+  constructor();
+}
+export function requireHPCQueryAdapter(
+  adapter: HPCQueryAdapter | undefined,
+  expected: HPCQueryEnvelope,
+): HPCQueryAdapter;
+export function validateHPCWorkloadTemplates(
+  value: unknown,
+  expected: HPCQueryEnvelope,
+): readonly WorkloadTemplate[];
+export function validateHPCJobPriceQuote(
+  value: unknown,
+  expected: HPCQueryEnvelope,
+  expectedRequest: HPCQuoteRequest,
+): JobPriceQuote;
+export function validateHPCQuoteRequest(
+  value: HPCQuoteRequest,
+): HPCQuoteRequest;
+export function validateHPCJobs(
+  value: unknown,
+  expected: HPCQueryEnvelope,
+): readonly Job[];
+export function validateHPCJob(
+  value: unknown,
+  expected: HPCQueryEnvelope & { jobId: string },
+): Job;
 export class HPCOutputValidationError extends Error {
   readonly code: "hpc_output_invalid";
   constructor();
@@ -417,7 +477,7 @@ export const OrganizationBilling: any;
 export const OrganizationCard: any;
 export const OrganizationDetail: any;
 export const OrganizationList: any;
-export const OrganizationProvider: any;
+export const OrganizationProvider: React.ComponentType<OrganizationProviderProps>;
 export const OrganizationSwitcher: any;
 export const parseWalletError: any;
 export interface PortalProviderProps {
@@ -429,6 +489,10 @@ export interface PortalProviderProps {
   marketplaceMutationTimeoutMs?: number;
   hpcMutationAdapter?: HPCSignerAdapter;
   hpcOutputAdapter?: HPCOutputAdapter;
+  hpcQueryAdapter?: HPCQueryAdapter;
+  providerDomainVerifier?: ProviderDomainVerifier;
+  providerOfferingMutationAdapter?: ProviderOfferingMutationAdapter;
+  organizationMutationAdapter?: OrganizationMutationAdapter;
   children: React.ReactNode;
 }
 export const PortalProvider: React.ComponentType<PortalProviderProps>;
@@ -465,7 +529,132 @@ export class ProviderDeploymentActionError extends Error {
   );
 }
 export const validateProviderDeploymentActionReceipt: ProviderDeploymentActionReceiptValidator;
-export const ProviderProvider: any;
+export interface ProviderDomainBinding {
+  chainId: string;
+  accountAddress: string;
+}
+export interface ProviderDomainChallenge
+  extends DomainChallenge, ProviderDomainBinding {
+  challengeId: string;
+}
+export interface ProviderDomainVerificationEvidence
+  extends DomainVerification, ProviderDomainBinding {
+  status: "verified";
+  challengeId: string;
+  evidenceId: string;
+}
+export interface ProviderDomainVerifier {
+  readonly chainId: string;
+  readonly accountAddress: string;
+  issueChallenge(
+    domain: string,
+    method: DomainVerificationMethod,
+  ): Promise<unknown>;
+  verifyChallenge(challenge: ProviderDomainChallenge): Promise<unknown>;
+}
+export class ProviderDomainVerificationError extends Error {
+  readonly code:
+    | "feature_unavailable"
+    | "invalid_domain"
+    | "invalid_challenge"
+    | "invalid_verification"
+    | "authority_changed"
+    | "challenge_in_progress"
+    | "verification_in_progress";
+  constructor(code: ProviderDomainVerificationError["code"]);
+}
+export interface ProviderProviderProps {
+  children: React.ReactNode;
+  queryClient: import("./types/chain").QueryClient;
+  chainId: string;
+  accountAddress: string | null;
+  getAuthHeader?: () => Promise<string>;
+  domainVerifier?: ProviderDomainVerifier;
+  offeringMutationAdapter?: ProviderOfferingMutationAdapter;
+}
+export const ProviderProvider: React.ComponentType<ProviderProviderProps>;
+export function normalizeProviderDomain(value: string): string;
+export function requireProviderDomainVerifier(
+  verifier: ProviderDomainVerifier | undefined,
+  binding: ProviderDomainBinding,
+): ProviderDomainVerifier;
+export function validateProviderDomainChallenge(
+  value: unknown,
+  binding: ProviderDomainBinding,
+  domain: string,
+  method: DomainVerificationMethod,
+  now?: number,
+): ProviderDomainChallenge;
+export function validateProviderDomainVerification(
+  value: unknown,
+  binding: ProviderDomainBinding,
+  challenge: ProviderDomainChallenge,
+  now?: number,
+): ProviderDomainVerificationEvidence;
+export type ProviderOfferingMutationAction =
+  | "create"
+  | "update"
+  | "publish"
+  | "pause";
+export interface ProviderOfferingMutationRequest {
+  chainId: string;
+  accountAddress: string;
+  action: ProviderOfferingMutationAction;
+  offeringId?: string;
+  draft?: OfferingDraft | Partial<OfferingDraft>;
+}
+export interface ProviderOfferingMutationContext {
+  requestDigest: string;
+  idempotencyKey: string;
+  signal: AbortSignal;
+}
+export interface ProviderOfferingMutationAdapter {
+  readonly chainId: string;
+  readonly accountAddress: string;
+  mutateOffering(
+    request: ProviderOfferingMutationRequest,
+    context: ProviderOfferingMutationContext,
+  ): Promise<unknown>;
+}
+export interface CommittedProviderOfferingMutation {
+  status: "committed";
+  code: 0;
+  txHash: string;
+  blockHeight: number;
+  operationId: string;
+  requestDigest: string;
+  idempotencyKey: string;
+  request: ProviderOfferingMutationRequest;
+  offering: ProviderOffering;
+}
+export class ProviderOfferingMutationError extends Error {
+  readonly code:
+    | "feature_unavailable"
+    | "invalid_request"
+    | "invalid_committed_result"
+    | "request_changed"
+    | "submission_cancelled"
+    | "submission_in_progress";
+  constructor(code: ProviderOfferingMutationError["code"]);
+}
+export function buildProviderOfferingMutationRequest(
+  action: ProviderOfferingMutationAction,
+  binding: { chainId: string; accountAddress: string },
+  offeringId?: string,
+  draft?: OfferingDraft | Partial<OfferingDraft>,
+): ProviderOfferingMutationRequest;
+export function digestProviderOfferingRequest(
+  request: ProviderOfferingMutationRequest,
+): Promise<string>;
+export function requireProviderOfferingMutationAdapter(
+  adapter: ProviderOfferingMutationAdapter | undefined,
+  binding: { chainId: string; accountAddress: string },
+): ProviderOfferingMutationAdapter;
+export function validateCommittedProviderOfferingMutation(
+  value: unknown,
+  request: ProviderOfferingMutationRequest,
+  requestDigest: string,
+): CommittedProviderOfferingMutation;
 export const ProviderRegistrationFlow: any;
 export const RemediationGuide: any;
 export const ResourceAccess: any;
@@ -500,7 +689,7 @@ export interface HPCActions {
   startJobSubmission(templateId?: string): void;
   updateJobManifest(manifest: Partial<JobManifest>): void;
   selectOffering(offeringId: string): void;
-  getQuote(resources?: JobResources): Promise<JobPriceQuote>;
+  getQuote(request?: JobResources | HPCQuoteRequest): Promise<JobPriceQuote>;
   validateJob(): JobValidationError[];
   submitJob(): Promise<CommittedJobMutation>;
   cancelJob(jobId: string): Promise<CommittedJobMutation>;
@@ -528,9 +717,81 @@ export const useMarketplace: any;
 export const useMFA: any;
 export const useMultiProvider: any;
 export const useOrderTracking: any;
-export const useOrganization: any;
+export function useOrganization(): OrganizationContextValue;
+export interface OrganizationState {
+  isLoading: boolean;
+  organizations: Organization[];
+  selectedOrgId: string | null;
+  error: string | null;
+}
+export interface OrganizationDetailState {
+  isLoading: boolean;
+  organization: Organization | null;
+  members: OrganizationMember[];
+  billing: OrganizationBillingSummary | null;
+  error: string | null;
+}
+export interface OrganizationActions {
+  fetchOrganizations(): Promise<void>;
+  selectOrganization(orgId: string | null): void;
+  createOrganization(request: CreateOrganizationRequest): Promise<Organization>;
+  fetchOrganizationDetail(orgId: string): Promise<void>;
+  inviteMember(orgId: string, request: InviteMemberRequest): Promise<void>;
+  removeMember(orgId: string, memberAddress: string): Promise<void>;
+  updateMemberRole(
+    orgId: string,
+    memberAddress: string,
+    role: OrganizationRole,
+  ): Promise<void>;
+  leaveOrganization(orgId: string): Promise<void>;
+  fetchBilling(orgId: string): Promise<void>;
+}
+export interface OrganizationContextValue {
+  state: OrganizationState;
+  detail: OrganizationDetailState;
+  actions: OrganizationActions;
+  selectedOrganization: Organization | null;
+  currentUserRole: OrganizationRole | null;
+}
+export interface OrganizationProviderProps {
+  children: React.ReactNode;
+  queryClient?: import("./types/chain").QueryClient;
+  chainId: string;
+  accountAddress?: string | null;
+  mutationAdapter?: OrganizationMutationAdapter;
+}
 export const usePortal: any;
-export const useProvider: any;
+export interface ProviderActions {
+  refresh(): Promise<void>;
+  startRegistration(): void;
+  updateRegistrationData(data: Partial<ProviderRegistration>): void;
+  startDomainVerification(
+    domain: string,
+    method: DomainVerificationMethod,
+  ): Promise<ProviderDomainChallenge>;
+  checkDomainVerification(
+    domain: string,
+  ): Promise<ProviderDomainVerificationEvidence>;
+  submitRegistration(): Promise<void>;
+  createOffering(draft: OfferingDraft): Promise<ProviderOffering>;
+  updateOffering(
+    offeringId: string,
+    updates: Partial<OfferingDraft>,
+  ): Promise<ProviderOffering>;
+  publishOffering(offeringId: string): Promise<void>;
+  pauseOffering(offeringId: string): Promise<void>;
+  getIncomingOrders(): Promise<void>;
+  getActiveBids(): Promise<void>;
+  getActiveAllocations(): Promise<void>;
+  getUsageRecords(allocationId?: string): Promise<void>;
+  getSettlementSummary(): Promise<void>;
+  clearError(): void;
+}
+export interface ProviderContextValue {
+  state: ProviderState;
+  actions: ProviderActions;
+}
+export function useProvider(): ProviderContextValue;
 export const validateAddress: any;
 export const validateMnemonic: any;
 export const validateTransaction: any;
@@ -579,7 +840,8 @@ export type ChatToolHandler = any;
 export type CheckoutRequest = any;
 export type CheckoutValidation = any;
 export type CreateOrganizationDialogProps = any;
-export type CreateOrganizationRequest = any;
+export type CreateOrganizationRequest =
+  import("./types/organization").CreateOrganizationRequest;
 export type DecryptionResult = any;
 export type Deployment = any;
 export type DeploymentAction = any;
@@ -605,8 +867,9 @@ export type IdentityState = any;
 export type IdentityStatus = any;
 export type IdentityTier = any;
 export type InviteMemberDialogProps = any;
-export type InviteMemberRequest = any;
-export type InviteStatus = any;
+export type InviteMemberRequest =
+  import("./types/organization").InviteMemberRequest;
+export type InviteStatus = import("./types/organization").InviteStatus;
 export type Job = import("./types/hpc").Job;
 export type JobEvent = any;
 export type JobEventType = any;
@@ -627,7 +890,7 @@ export type LogOptions = any;
 export type MarketplaceAction = any;
 export type MarketplaceState = any;
 export type MemberListProps = any;
-export type MemberMetadata = any;
+export type MemberMetadata = import("./types/organization").MemberMetadata;
 export type MFAAuditEntry = any;
 export type MFAChallenge = any;
 export type MFAChallengeResponse = any;
@@ -647,7 +910,8 @@ export type MultiProviderClientOptions = any;
 export type MultiProviderProviderProps = any;
 export type MultiProviderWallet = any;
 export type Offering = any;
-export type OfferingDraft = any;
+export type OfferingDraft = import("./types/provider").OfferingDraft;
+export type ProviderOffering = import("./types/provider").ProviderOffering;
 export type OfferingFilter = any;
 export type OfferingSortField = any;
 export type Order = any;
@@ -673,23 +937,127 @@ export type OrderUsageAlert = any;
 export type OrderUsageMetric = any;
 export type OrderUsageSample = any;
 export type OrderUsageSnapshot = any;
-export type Organization = any;
-export type OrganizationActions = any;
-export type OrganizationBillingPeriod = any;
+export type Organization = import("./types/organization").Organization;
+export type OrganizationBillingPeriod =
+  import("./types/organization").OrganizationBillingPeriod;
 export type OrganizationBillingProps = any;
-export type OrganizationBillingSummary = any;
+export type OrganizationBillingSummary =
+  import("./types/organization").OrganizationBillingSummary;
 export type OrganizationCardProps = any;
-export type OrganizationContextValue = any;
 export type OrganizationDetailProps = any;
-export type OrganizationDetailState = any;
-export type OrganizationInvite = any;
+export type OrganizationInvite =
+  import("./types/organization").OrganizationInvite;
 export type OrganizationListProps = any;
-export type OrganizationMember = any;
-export type OrganizationMetadata = any;
-export type OrganizationProviderProps = any;
-export type OrganizationRole = any;
-export type OrganizationState = any;
+export type OrganizationMember =
+  import("./types/organization").OrganizationMember;
+export type OrganizationMetadata =
+  import("./types/organization").OrganizationMetadata;
+export type OrganizationRole = import("./types/organization").OrganizationRole;
 export type OrganizationSwitcherProps = any;
+export type OrganizationMutationAction =
+  | "create"
+  | "invite"
+  | "remove"
+  | "update_role"
+  | "leave";
+export type OrganizationMutationRequest =
+  | {
+      chainId: string;
+      accountAddress: string;
+      action: "create";
+      organization: CreateOrganizationRequest;
+    }
+  | {
+      chainId: string;
+      accountAddress: string;
+      action: "invite";
+      organizationId: string;
+      invitation: InviteMemberRequest;
+    }
+  | {
+      chainId: string;
+      accountAddress: string;
+      action: "remove";
+      organizationId: string;
+      memberAddress: string;
+    }
+  | {
+      chainId: string;
+      accountAddress: string;
+      action: "update_role";
+      organizationId: string;
+      memberAddress: string;
+      role: OrganizationRole;
+    }
+  | {
+      chainId: string;
+      accountAddress: string;
+      action: "leave";
+      organizationId: string;
+    };
+export interface OrganizationMutationContext {
+  requestDigest: string;
+  idempotencyKey: string;
+  signal: AbortSignal;
+}
+export interface OrganizationMutationAdapter {
+  readonly chainId: string;
+  readonly accountAddress: string;
+  mutateOrganization(
+    request: OrganizationMutationRequest,
+    context: OrganizationMutationContext,
+  ): Promise<unknown>;
+}
+interface CommittedOrganizationMutationBase {
+  status: "committed";
+  code: 0;
+  txHash: string;
+  blockHeight: number;
+  operationId: string;
+  requestDigest: string;
+  idempotencyKey: string;
+  request: OrganizationMutationRequest;
+}
+export type CommittedOrganizationMutation =
+  | (CommittedOrganizationMutationBase & {
+      action: "create";
+      organization: Organization;
+    })
+  | (CommittedOrganizationMutationBase & {
+      action: "invite" | "remove" | "update_role";
+      members: readonly OrganizationMember[];
+    })
+  | (CommittedOrganizationMutationBase & {
+      action: "leave";
+      organizationId: string;
+    });
+export class OrganizationMutationError extends Error {
+  readonly code:
+    | "feature_unavailable"
+    | "invalid_request"
+    | "invalid_committed_result"
+    | "request_changed"
+    | "submission_cancelled"
+    | "submission_in_progress";
+  constructor(code: OrganizationMutationError["code"]);
+}
+export function buildOrganizationMutationRequest(
+  action: OrganizationMutationAction,
+  binding: { chainId: string; accountAddress: string },
+  input: CreateOrganizationRequest | Record<string, unknown>,
+): OrganizationMutationRequest;
+export function digestOrganizationMutationRequest(
+  request: OrganizationMutationRequest,
+): Promise<string>;
+export function requireOrganizationMutationAdapter(
+  adapter: OrganizationMutationAdapter | undefined,
+  binding: { chainId: string; accountAddress: string },
+): OrganizationMutationAdapter;
+export function validateCommittedOrganizationMutation(
+  value: unknown,
+  request: OrganizationMutationRequest,
+  requestDigest: string,
+): CommittedOrganizationMutation;
 export type PortalConfig = any;
 export type PortalWalletType = any;
 export type PricingConfig = any;
