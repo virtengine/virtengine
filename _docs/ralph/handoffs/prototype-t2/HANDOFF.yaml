@@ -1,53 +1,61 @@
 campaign: three-day-prototype
 thread: T2
-checkpoint: T2-X20
+checkpoint: T2-X21
 branch: ve/prototype-t2-product
-start_head: 31c97228cbdceadbcbf41615ccb820d403fe89f0
-end_head: 16d2c07c0002bc173a0fdbe9b1d45a9222ee3fdd
+start_head: 1d135e607b624517973ca05fc282b1da066129df
+end_head: fa190cb9e573f7d1af607da10844e412f41c9e07
 origin_main: 79391a3df86d85522b92e0400c6904971ecbe65d
 tree_clean: true
 commits:
-  - 16d2c07c0002bc173a0fdbe9b1d45a9222ee3fdd
+  - fa190cb9e573f7d1af607da10844e412f41c9e07
 owned_paths:
-  - portal/src/components/billing/
-  - portal/tests/unit/billing/
+  - portal/src/stores/metrics-alert-mutation.ts
+  - portal/src/stores/metricsStore.ts
+  - portal/src/stores/__tests__/metricsStore.test.ts
+  - portal/src/components/metrics/
+  - portal/src/app/metrics/alerts/page.tsx
 files_changed:
-  - portal/src/components/billing/BillingDashboard.tsx
-  - portal/src/components/billing/withdrawal-mutation.ts
-  - portal/tests/unit/billing/BillingDashboard.test.tsx
+  - portal/src/stores/metrics-alert-mutation.ts
+  - portal/src/stores/metricsStore.ts
+  - portal/src/stores/__tests__/metricsStore.test.ts
+  - portal/src/components/metrics/AlertConfigDialog.tsx
+  - portal/src/components/metrics/__tests__/AlertConfigDialog.test.tsx
+  - portal/src/components/metrics/AlertsPanel.tsx
+  - portal/src/components/metrics/MetricsDashboard.tsx
+  - portal/src/app/metrics/alerts/page.tsx
 tests:
-  - command: C:\Windows\System32\cmd.exe /d /c "cd /d C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t2\portal && node_modules\.bin\vitest.CMD run tests/unit/billing/BillingDashboard.test.tsx --reporter=dot --maxWorkers=1 --no-color"
+  - command: C:\Windows\System32\cmd.exe /d /c "cd /d C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t2\portal && node_modules\.bin\vitest.CMD run src\stores\__tests__\metricsStore.test.ts src\components\metrics\__tests__\AlertConfigDialog.test.tsx --reporter=dot --maxWorkers=1 --no-color"
     exit_code: 0
     result: passed
-    test_count: 17
+    test_count: 25
     tool_versions:
       node: v20.19.1
-    artifact: _docs/ralph/handoffs/prototype-t2/T2-X20-validation.txt
+    artifact: _docs/ralph/handoffs/prototype-t2/T2-X21-validation.txt
   - command: C:\Windows\System32\cmd.exe /d /c "cd /d C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t2\portal && node_modules\.bin\vitest.CMD run --reporter=dot --maxWorkers=1 --no-color"
     exit_code: 0
     result: passed
-    test_count: 676
+    test_count: 700
     tool_versions:
       node: v20.19.1
-    artifact: _docs/ralph/handoffs/prototype-t2/T2-X20-validation.txt
+    artifact: _docs/ralph/handoffs/prototype-t2/T2-X21-validation.txt
   - command: C:\Windows\System32\cmd.exe /d /c "cd /d C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t2\portal && node_modules\.bin\tsc.CMD --noEmit --incremental false"
     exit_code: 0
     result: passed
     tool_versions:
       node: v20.19.1
-    artifact: _docs/ralph/handoffs/prototype-t2/T2-X20-validation.txt
+    artifact: _docs/ralph/handoffs/prototype-t2/T2-X21-validation.txt
 generated_hashes: {}
 migrations: []
 external_evidence:
-  - _docs/ralph/handoffs/prototype-t2/T2-X20-evidence.txt
-  - _docs/ralph/handoffs/prototype-t2/T2-X20-validation.txt
+  - _docs/ralph/handoffs/prototype-t2/T2-X21-evidence.txt
+  - _docs/ralph/handoffs/prototype-t2/T2-X21-validation.txt
 known_failures: []
 blockers:
   - T4 producer-handoff.schema.json does not permit the established supplemental T2-X checkpoint names; T2-X01 through T2-X10 retain the campaign queue naming.
   - T4 producer-handoff.schema.json forbids the integration_parent field required by the updated campaign plan; integration ancestor fa21b1e540a5efcbe1822da4199be7acec7709d3 is retained in T2-05-evidence.txt.
   - Full provider package certification is blocked by the unrelated submitter lease timing failure retained in T2-03B-evidence.txt.
   - PortalProvider retains pre-existing ts-nocheck because unrelated Auth, Identity, MFA, and Provider dependencies are not wired.
-  - No production billing withdrawal adapter is wired; withdrawal remains unavailable by default.
-  - No live chain transaction, signer, billing backend, settlement process, or funds movement was certified.
-next_checkpoint: T2-X21
-expected_head: 16d2c07c0002bc173a0fdbe9b1d45a9222ee3fdd
+  - No production metrics alert persistence adapter or authenticated subject integration is wired; alert changes remain unavailable by default.
+  - No live alert evaluator, notification delivery, provider daemon mutation, or external monitoring backend was certified.
+next_checkpoint: T2-X22
+expected_head: fa190cb9e573f7d1af607da10844e412f41c9e07
