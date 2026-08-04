@@ -87,14 +87,38 @@ function matrixDigest(matrixBytes) {
   return createHash("sha256").update(matrixBytes).digest("hex");
 }
 
+function canonicalJson(value) {
+  if (Array.isArray(value)) {
+    assert.equal(Object.keys(value).length, value.length, "canonical JSON rejects sparse arrays");
+    return `[${value.map(canonicalJson).join(",")}]`;
+  }
+  if (value && typeof value === "object") {
+    assert.equal(Object.getPrototypeOf(value), Object.prototype, "canonical JSON accepts plain objects only");
+    return `{${Object.keys(value).sort().map((key) => `${JSON.stringify(key)}:${canonicalJson(value[key])}`).join(",")}}`;
+  }
+  assert.ok(value === null || ["string", "boolean", "number"].includes(typeof value), `canonical JSON rejects ${typeof value}`);
+  if (typeof value === "number") {
+    assert.ok(Number.isFinite(value), "canonical JSON rejects non-finite numbers");
+    assert.ok(Number.isSafeInteger(value), "canonical JSON accepts safe integers only");
+    assert.equal(Object.is(value, -0), false, "canonical JSON rejects negative zero");
+  }
+  return JSON.stringify(value);
+}
+
+function planDigest(plan) {
+  return createHash("sha256").update(canonicalJson(plan)).digest("hex");
+}
+
 function buildExecutionPlan({ repoDir = root, base, head, matrixPath = defaultMatrixPath }) {
   const bytes = readFileSync(matrixPath);
   const matrix = JSON.parse(bytes.toString("utf8"));
   validateRequiredGateMatrix(matrix);
   const baseSha = resolveCommit(repoDir, base);
   const headSha = resolveCommit(repoDir, head);
+  assert.notEqual(baseSha, headSha, "base and head must identify a non-empty commit range");
   assert.ok(isAncestor(repoDir, baseSha, headSha), "base must be an ancestor of head");
   const paths = collectChangedPaths(repoDir, baseSha, headSha);
+  assert.ok(paths.length > 0, "required-gate range must contain changed paths");
   const selectedCategories = [];
   const matchedPaths = new Set();
 
@@ -109,6 +133,8 @@ function buildExecutionPlan({ repoDir = root, base, head, matrixPath = defaultMa
       matched_selectors: category.path_selectors.filter((selector) => categoryPaths.some((path) => matchesSelector(path, selector))),
       commands: category.required_commands.map((command) => ({ id: command.id, kind: command.kind, command: command.command })),
       pinned_tools: category.pinned_tools.map((tool) => ({ name: tool.name, version: tool.version, source: tool.source })),
+      dependencies: category.dependencies.map((dependency) => ({ id: dependency.id, status: dependency.status })),
+      blockers: [...category.blockers],
     });
   }
 
@@ -134,11 +160,13 @@ function buildExecutionPlan({ repoDir = root, base, head, matrixPath = defaultMa
 }
 
 function validateResultEnvelope(plan, envelope) {
-  exactKeys(envelope, ["schema_version", "base_sha", "head_sha", "matrix_digest", "results"], "result envelope");
+  assertExecutionReady(plan);
+  exactKeys(envelope, ["schema_version", "base_sha", "head_sha", "matrix_digest", "plan_digest", "results"], "result envelope");
   assert.equal(envelope.schema_version, resultSchemaVersion, "result schema version mismatch");
   assert.equal(envelope.base_sha, plan.base_sha, "result base SHA mismatch");
   assert.equal(envelope.head_sha, plan.head_sha, "result head SHA mismatch");
   assert.equal(envelope.matrix_digest, plan.matrix_digest, "result matrix digest mismatch");
+  assert.equal(envelope.plan_digest, planDigest(plan), "result plan digest mismatch");
   assert.ok(Array.isArray(envelope.results), "results must be an array");
 
   const expected = new Map();
@@ -147,12 +175,13 @@ function validateResultEnvelope(plan, envelope) {
   }
   const seen = new Set();
   for (const result of envelope.results) {
-    exactKeys(result, ["category_id", "command_id", "command", "outcome", "exit_code", "discovered_tests", "executed_tests", "skipped_tests", "tools"], "gate result");
+    exactKeys(result, ["category_id", "command_id", "kind", "command", "outcome", "exit_code", "discovered_tests", "executed_tests", "skipped_tests", "tools"], "gate result");
     const key = `${result.category_id}\0${result.command_id}`;
     assert.ok(!seen.has(key), `duplicate gate result: ${result.category_id}.${result.command_id}`);
     seen.add(key);
     const required = expected.get(key);
     assert.ok(required, `extra gate result: ${result.category_id}.${result.command_id}`);
+    assert.equal(result.kind, required.command.kind, `command kind mismatch: ${result.category_id}.${result.command_id}`);
     assert.equal(result.command, required.command.command, `literal command mismatch: ${result.category_id}.${result.command_id}`);
     assert.equal(result.outcome, "passed", `gate result must pass: ${result.category_id}.${result.command_id}`);
     assert.equal(result.exit_code, 0, `gate result exit code must be zero: ${result.category_id}.${result.command_id}`);
@@ -177,6 +206,8 @@ function validateResultEnvelope(plan, envelope) {
       assert.ok(result.executed_tests >= 1, `zero tests executed: ${result.category_id}.${result.command_id}`);
       assert.equal(result.skipped_tests, 0, `skipped tests are not allowed: ${result.category_id}.${result.command_id}`);
       assert.equal(result.executed_tests, result.discovered_tests, `not all discovered tests executed: ${result.category_id}.${result.command_id}`);
+    } else {
+      assert.deepEqual([result.discovered_tests, result.executed_tests, result.skipped_tests], [0, 0, 0], `policy command must report zero test counts: ${result.category_id}.${result.command_id}`);
     }
   }
   const missing = [...expected.keys()].filter((key) => !seen.has(key)).map((key) => key.replace("\0", "."));
@@ -188,20 +219,30 @@ function assertExecutionReady(plan) {
   assert.ok(["ready", "complete"].includes(plan.matrix_status), `execution refused; matrix status is ${plan.matrix_status}`);
   const blocked = plan.categories.filter((category) => !["ready", "complete"].includes(category.status));
   assert.deepEqual(blocked.map((category) => category.id), [], `execution refused; selected categories are not ready or complete: ${blocked.map((category) => category.id).join(", ")}`);
+  const unavailable = plan.categories.filter((category) => category.dependencies.some((dependency) => dependency.status !== "available"));
+  assert.deepEqual(unavailable.map((category) => category.id), [], `execution refused; selected categories retain unavailable dependencies: ${unavailable.map((category) => category.id).join(", ")}`);
+  const withBlockers = plan.categories.filter((category) => category.blockers.length > 0);
+  assert.deepEqual(withBlockers.map((category) => category.id), [], `execution refused; selected categories retain blockers: ${withBlockers.map((category) => category.id).join(", ")}`);
 }
 
 function parseArguments(argv) {
   const options = { repoDir: root, matrixPath: defaultMatrixPath };
+  const seen = new Set();
   for (let index = 0; index < argv.length; index += 1) {
     const argument = argv[index];
     if (["--base", "--head", "--repo", "--matrix", "--validate-results"].includes(argument)) {
-      assert.ok(argv[index + 1], `${argument} requires a value`);
+      assert.equal(seen.has(argument), false, `duplicate argument: ${argument}`);
+      seen.add(argument);
+      assert.ok(argv[index + 1] && !argv[index + 1].startsWith("--"), `${argument} requires a value`);
       const key = { "--base": "base", "--head": "head", "--repo": "repoDir", "--matrix": "matrixPath", "--validate-results": "resultsPath" }[argument];
       options[key] = resolve(argv[index + 1]);
       if (["base", "head"].includes(key)) options[key] = argv[index + 1];
       index += 1;
-    } else if (argument === "--execute") options.execute = true;
-    else throw new Error(`unknown argument: ${argument}`);
+    } else if (argument === "--execute") {
+      assert.equal(seen.has(argument), false, `duplicate argument: ${argument}`);
+      seen.add(argument);
+      options.execute = true;
+    } else throw new Error(`unknown argument: ${argument}`);
   }
   assert.ok(options.base, "--base is required");
   assert.ok(options.head, "--head is required");
@@ -227,9 +268,12 @@ function main(argv) {
 module.exports = {
   assertExecutionReady,
   buildExecutionPlan,
+  canonicalJson,
   collectChangedPaths,
   globToRegExp,
   matchesSelector,
+  planDigest,
+  parseArguments,
   validateResultEnvelope,
 };
 

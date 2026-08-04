@@ -8,7 +8,7 @@ const { tmpdir } = require("os");
 const { join, resolve } = require("path");
 
 const test = require("node:test");
-const { completeChangedPaths, validateIntake } = require("./validate-prototype-intake.cjs");
+const { completeChangedPaths, parseArgs, validateIntake } = require("./validate-prototype-intake.cjs");
 
 const root = resolve(__dirname, "..");
 const schemaSource = resolve(root, "_docs/ralph/prototype-integration/producer-handoff.schema.json");
@@ -140,6 +140,12 @@ function fixtureTest(name, mutation, expected, overrides) {
     }
   });
 }
+
+test("rejects duplicate or incomplete intake arguments", () => {
+  assert.throws(() => parseArgs(["--epoch", "1", "--epoch", "2", "--tag", tag]), /duplicate argument/);
+  assert.throws(() => parseArgs(["--epoch", "--tag", tag]), /requires a value/);
+  assert.throws(() => parseArgs(["--epoch", "1", "--tag"]), /requires a value/);
+});
 
 fixtureTest("rejects a frozen roster with an undecided unannounced producer", {
   static: ({ epoch }) => { epoch.producers[0].decision = null; },

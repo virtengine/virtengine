@@ -8,6 +8,20 @@ const { tmpdir } = require("os");
 const { dirname, join } = require("path");
 const test = require("node:test");
 const { REQUIRED_CI_CHECKS, TAG, parseArgs, preflight, validateCandidateEpochSelection, validateReport, validateReportSchema } = require("./preflight-core-rc-publication.cjs");
+const { planDigest } = require("./run-required-gates.cjs");
+
+function fixturePlan(state) {
+  return {
+    schema_version: "virtengine.task-88b.required-gate-plan/v1",
+    base_sha: state.controls.results.base_sha,
+    head_sha: state.candidate,
+    matrix_digest: state.controls.results.matrix_digest,
+    matrix_status: "complete",
+    changed_paths: [],
+    allowlisted_paths: [],
+    categories: state.controls.matrix.categories.map((category) => ({ id: category.id, status: category.status, matched_paths: [], matched_selectors: [], commands: category.required_commands, pinned_tools: category.pinned_tools, dependencies: category.dependencies, blockers: category.blockers })),
+  };
+}
 
 function git(repo, ...args) {
   return execFileSync("git", ["-C", repo, ...args], { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }).trim();
@@ -40,6 +54,7 @@ function fixture(mutate = () => {}) {
   const command = { id: "unit", kind: "test", command: "node --test" };
   const category = {
     id: "test", status: "complete", required_commands: [command], pinned_tools: [{ name: "node", version: "20.19.1" }],
+    dependencies: [{ id: "88A", status: "available" }], blockers: [],
     zero_test_policy: { minimum_discovered: 1, minimum_executed: 1 },
   };
   const controls = {
@@ -57,32 +72,26 @@ function fixture(mutate = () => {}) {
       base_sha: source,
       head_sha: candidate,
       matrix_digest: createHash("sha256").update("{}\n").digest("hex"),
-      results: [{ category_id: "test", command_id: "unit", command: "node --test", outcome: "passed", exit_code: 0, discovered_tests: 1, executed_tests: 1, skipped_tests: 0, tools: [{ name: "node", version: "20.19.1", available: true }] }],
+      plan_digest: "0".repeat(64),
+      results: [{ category_id: "test", command_id: "unit", kind: "test", command: "node --test", outcome: "passed", exit_code: 0, discovered_tests: 1, executed_tests: 1, skipped_tests: 0, tools: [{ name: "node", version: "20.19.1", available: true }] }],
     },
     availability: { rollout: true, rollback: true, sbom: true, releaseProvenance: true, model: true, slurm: true, producers: true },
   };
+  const state = { directory, repo, remote, candidate, controls, ci: [] };
+  controls.results.plan_digest = planDigest(fixturePlan(state));
   const resultsDigest = createHash("sha256").update(`${JSON.stringify(controls.results, null, 2)}\n`).digest("hex");
   controls.resultsText = `${JSON.stringify(controls.results, null, 2)}\n`;
   controls.ledger.generated_hashes["_docs/ralph/prototype-integration/core-rc-manifest.json"] = createHash("sha256").update(controls.manifestText).digest("hex");
   controls.ledger.generated_hashes["_docs/ralph/prototype-integration/required-gate-results.json"] = resultsDigest;
   controls.manifest.control_artifacts.push({ path: "_docs/ralph/prototype-integration/required-gate-results.json", sha256: resultsDigest });
   controls.ledger.accepted_checkpoints = controls.epoch.producers.map((producer) => ({ thread: producer.thread, checkpoint: producer.tag.split("/").pop().toUpperCase(), tag: producer.tag, tip: candidate, payload_head: source }));
-  const state = { directory, repo, remote, candidate, controls, ci: REQUIRED_CI_CHECKS.map(({ workflow, workflowPath, job, expectsResults }, index) => ({ repository: "virtengine/virtengine", workflow, workflowPath, workflowId: index + 1, runId: index + 10, runAttempt: 1, runConclusion: "success", event: "push", branch: "ve/prototype-integration", job, jobConclusion: "success", sha: candidate, resultsDigest: expectsResults ? resultsDigest : undefined })) };
+  state.ci = REQUIRED_CI_CHECKS.map(({ workflow, workflowPath, job, expectsResults }, index) => ({ repository: "virtengine/virtengine", workflow, workflowPath, workflowId: index + 1, runId: index + 10, runAttempt: 1, runConclusion: "success", event: "push", branch: "ve/prototype-integration", job, jobConclusion: "success", sha: candidate, resultsDigest: expectsResults ? resultsDigest : undefined }));
   mutate(state);
   return state;
 }
 
 async function run(state, overrides = {}) {
-  const planProvider = async () => ({
-    schema_version: "virtengine.task-88b.required-gate-plan/v1",
-    base_sha: state.controls.results.base_sha,
-    head_sha: state.candidate,
-    matrix_digest: state.controls.results.matrix_digest,
-    matrix_status: "complete",
-    changed_paths: [],
-    allowlisted_paths: [],
-    categories: state.controls.matrix.categories.map((category) => ({ id: category.id, status: category.status, matched_paths: [], matched_selectors: [], commands: category.required_commands, pinned_tools: category.pinned_tools })),
-  });
+  const planProvider = async () => fixturePlan(state);
   return preflight({
     candidate: state.candidate, epoch: 1, tag: TAG, repo: state.repo, remote: "fixture", controls: state.controls,
     ciProvider: async () => state.ci, intakeProvider: async () => true, planProvider,
@@ -151,6 +160,10 @@ test("rejects invalid arguments and publication mode", () => {
   assert.throws(() => parseArgs(["--publish"]), /unavailable/);
   assert.throws(() => parseArgs(["--candidate", "0".repeat(40), "--epoch", "0", "--tag", TAG]));
   assert.throws(() => parseArgs(["--candidate", "0".repeat(40), "--epoch", "1", "--tag", "wrong"]));
+  assert.throws(() => parseArgs(["--candidate", "0".repeat(40), "--candidate", "1".repeat(40), "--epoch", "1", "--tag", TAG]), /duplicate argument/);
+  assert.throws(() => parseArgs(["--candidate", "0".repeat(40), "--epoch", "--tag", TAG]), /requires a value/);
+  assert.throws(() => parseArgs(["--candidate", "0".repeat(40), "--epoch", "1", "--tag"]), /requires a value/);
+  assert.throws(() => parseArgs(["--candidate", "0".repeat(40), "--epoch", "1", "--tag", TAG, "--json", "--json"]), /duplicate argument/);
 });
 
 test("requires the requested publication epoch to be current and contiguous", () => {

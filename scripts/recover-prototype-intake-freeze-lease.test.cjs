@@ -25,6 +25,12 @@ const tests = [
   ["reports quarantine when the claimed lease cannot be read", () => { const ops = operations([content]); assert.throws(() => recoverLease("freeze.lock", leaseDigest, expected, { ...inspection, operations: ops.value, quarantinePath: "freeze.claimed" }), /retained at freeze.claimed/); assert.deepEqual(ops.calls.map(([name]) => name), ["read", "rename", "read"]); }],
   ["reports quarantine when validated lease removal fails", () => { const ops = operations(); ops.value.unlinkSync = () => { ops.calls.push(["unlink", "freeze.claimed"]); throw new Error("access denied"); }; assert.throws(() => recoverLease("freeze.lock", leaseDigest, expected, { ...inspection, operations: ops.value, quarantinePath: "freeze.claimed" }), /retained at freeze.claimed: access denied/); }],
   ["parses exact compare-and-claim recovery evidence", () => { const value = parseArgs(["--epoch", "1", "--expected-head", head, "--expected-plan-sha256", planDigest, "--expected-lease-sha256", leaseDigest]); assert.equal(value.expectedLeaseSha256, leaseDigest); }],
+  ["rejects duplicate or incomplete recovery arguments", () => {
+    const required = ["--expected-head", head, "--expected-plan-sha256", planDigest, "--expected-lease-sha256", leaseDigest];
+    assert.throws(() => parseArgs(["--epoch", "1", "--epoch", "2", ...required]), /duplicate argument/);
+    assert.throws(() => parseArgs(["--epoch", "--expected-head", head, ...required.slice(2)]), /requires a value/);
+    assert.throws(() => parseArgs(["--epoch", "1", ...required, "--remote"]), /requires a value/);
+  }],
 ];
 
 for (const [name, run] of tests) { run(); console.log(`ok - ${name}`); }

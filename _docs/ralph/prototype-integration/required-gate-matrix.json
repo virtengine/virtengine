@@ -184,7 +184,7 @@
       "failure_semantics": { "nonzero_exit": "fail", "skipped": "fail", "missing_tool": "fail", "cancelled": "fail" },
       "dependencies": [{ "id": "85D", "status": "unavailable" }, { "id": "86A", "status": "unavailable" }, { "id": "86B", "status": "unavailable" }, { "id": "86C", "status": "unavailable" }, { "id": "86D", "status": "unavailable" }, { "id": "87D", "status": "unavailable" }, { "id": "88A", "status": "unavailable" }],
       "status": "dependency_blocked",
-      "blockers": ["dependency-85d", "dependency-86a", "dependency-86b", "dependency-86c", "dependency-86d", "dependency-87d", "dependency-88a", "real-process-evidence-absent"]
+      "blockers": ["dependency-85d", "dependency-86a", "dependency-86b", "dependency-86c", "dependency-86d", "dependency-87d", "dependency-88a", "integration-candidate-preflight-blocked", "real-process-evidence-absent"]
     }
   ],
   "blockers": [
@@ -199,6 +199,7 @@
     { "id": "ai-biometric-security-gates-blocked", "description": "T4-15 records incomplete AI and biometric security evidence; enforce mode rejects partial, missing, or externally blocked categories." },
     { "id": "fund-route-authorization-blocked", "description": "T4-16 records incomplete value-moving route authorization; release remains blocked until an accepted T5 checkpoint is wired atomically across every route." },
     { "id": "generated-contract-integration-blocked", "description": "T4-13 generated contract families lack accepted canonical proto sources, generated targets, compatibility fixtures, or completed zero-drift generation evidence." },
+    { "id": "integration-candidate-preflight-blocked", "description": "The published live integration candidate fails the strict committed acceptance schema and cannot be promoted." },
     { "id": "real-process-evidence-absent", "description": "No accepted process-boundary lifecycle evidence is recorded by this matrix-only control." }
   ]
 }

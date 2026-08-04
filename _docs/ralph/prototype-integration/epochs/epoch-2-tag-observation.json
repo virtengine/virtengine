@@ -2,7 +2,7 @@
   "schema_version": "virtengine.prototype.intake-tag-observation/v1",
   "intake_epoch": 2,
   "announcement_cutoff": "2026-08-03T23:59:59Z",
-  "observed_at": "2026-08-03T04:35:44.038Z",
+  "observed_at": "2026-08-03T05:29:42.785Z",
   "remote": "origin",
   "tags": [
     {
@@ -46,6 +46,12 @@
       "tag": "checkpoint/prototype-t2/t2-13",
       "tag_object": "e4a6daeec8e306d6ae9b65cb7e90a7880afb773c",
       "target": "ba9f49340bbd8136f8c19bcc0abc7c64831bfda8"
+    },
+    {
+      "thread": "T2",
+      "tag": "checkpoint/prototype-t2/t2-13a",
+      "tag_object": "171d180a68ea08bba39e02d6155d5e62588515fc",
+      "target": "c2b5091117e23b331a118bcda52a2d5e7cecd762"
     },
     {
       "thread": "T3",

@@ -32,6 +32,11 @@ const tests = [
   ["rejects a pre-open observation", () => { const value = observation(); value.observed_at = "1999-12-31T23:59:59Z"; assert.throws(() => planFrozenEpoch(epoch(), new Map(), { now: Date.parse("2000-01-03T00:00:00Z"), observation: value, resolveTag: resolver }), /within the epoch window/); }],
   ["rejects a post-cutoff observation", () => { const value = observation(); value.observed_at = "2000-01-02T00:00:01Z"; assert.throws(() => planFrozenEpoch(epoch(), new Map(), { now: Date.parse("2000-01-03T00:00:00Z"), observation: value, resolveTag: resolver }), /within the epoch window/); }],
   ["parses explicit tag selections", () => { const parsed = parseArgs(["--epoch", "1", "--observation", "observation.json", "--tag", "T1=checkpoint/prototype-t1/t1-09"]); assert.equal(parsed.selections.get("T1"), "checkpoint/prototype-t1/t1-09"); }],
+  ["rejects duplicate or incomplete scalar arguments", () => {
+    assert.throws(() => parseArgs(["--epoch", "1", "--epoch", "2", "--observation", "observation.json"]), /duplicate argument/);
+    assert.throws(() => parseArgs(["--epoch", "--observation", "observation.json"]), /requires a value/);
+    assert.throws(() => parseArgs(["--epoch", "1", "--observation"]), /requires a value/);
+  }],
   ["rejects duplicate selections", () => assert.throws(() => parseArgs(["--epoch", "1", "--observation", "observation.json", "--tag", "T1=a", "--tag", "T1=b"]), /duplicate producer/)],
   ["accepts manifest-bound observation bytes", () => { const content = JSON.stringify(observation()); const digest = createHash("sha256").update(content).digest("hex"); const manifest = { source: { payload_sha: "a".repeat(40) }, control_artifacts: [{ id: "intake_tag_observation", path: "observation.json", sha256: digest }] }; assert.doesNotThrow(() => validateObservationBinding(content, "observation.json", manifest, { sourceContent: content, sourceIsAncestor: true })); }],
   ["rejects observation bytes not bound by manifest", () => { const content = JSON.stringify(observation()); const manifest = { source: { payload_sha: "a".repeat(40) }, control_artifacts: [{ id: "intake_tag_observation", path: "observation.json", sha256: "b".repeat(64) }] }; assert.throws(() => validateObservationBinding(content, "observation.json", manifest, { sourceContent: content, sourceIsAncestor: true }), /digest does not match/); }],

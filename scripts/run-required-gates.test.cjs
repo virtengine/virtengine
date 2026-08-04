@@ -8,7 +8,10 @@ const { spawnSync } = require("child_process");
 const {
   assertExecutionReady,
   buildExecutionPlan,
+  canonicalJson,
   collectChangedPaths,
+  planDigest,
+  parseArguments,
   validateResultEnvelope,
 } = require("./run-required-gates.cjs");
 
@@ -65,9 +68,11 @@ function validEnvelope(plan) {
     base_sha: plan.base_sha,
     head_sha: plan.head_sha,
     matrix_digest: plan.matrix_digest,
+    plan_digest: planDigest(plan),
     results: plan.categories.flatMap((category) => category.commands.map((command) => ({
       category_id: category.id,
       command_id: command.id,
+      kind: command.kind,
       command: command.command,
       outcome: "passed",
       exit_code: 0,
@@ -96,8 +101,39 @@ try {
     const head = commit(fixture.repo, `plan case ${caseNumber}`);
     return buildExecutionPlan({ repoDir: fixture.repo, base, head, matrixPath });
   };
+  const readyPlanFor = (changedPaths) => {
+    const plan = planFor(changedPaths);
+    plan.matrix_status = "ready";
+    plan.categories.forEach((category) => {
+      category.status = "ready";
+      category.dependencies.forEach((dependency) => { dependency.status = "available"; });
+      category.blockers = [];
+    });
+    return plan;
+  };
 
   const tests = [
+    ["rejects duplicate or incomplete runner arguments", () => {
+      assert.throws(() => parseArguments(["--base", "a", "--base", "b", "--head", "c"]), /duplicate argument/);
+      assert.throws(() => parseArguments(["--base", "--head", "c"]), /requires a value/);
+      assert.throws(() => parseArguments(["--base", "a", "--head", "c", "--execute", "--execute"]), /duplicate argument/);
+    }],
+    ["canonicalizes plan object keys while preserving array order", () => {
+      const left = { z: 1, nested: { b: 2, a: 1 }, values: ["a", "b"] };
+      const right = { values: ["a", "b"], nested: { a: 1, b: 2 }, z: 1 };
+      assert.equal(canonicalJson(left), canonicalJson(right));
+      assert.equal(planDigest(left), planDigest(right));
+      assert.notEqual(planDigest(left), planDigest({ ...right, values: ["b", "a"] }));
+    }],
+    ["rejects ambiguous canonical JSON values", () => {
+      for (const value of [undefined, () => true, Symbol("value"), 1n, NaN, Infinity, -Infinity, -0, Number.MAX_SAFE_INTEGER + 1]) {
+        assert.throws(() => canonicalJson(value), /canonical JSON/);
+      }
+      const sparse = [];
+      sparse.length = 1;
+      assert.throws(() => canonicalJson(sparse), /sparse arrays/);
+      assert.throws(() => canonicalJson(new Date(0)), /plain objects only/);
+    }],
     ["collects complete merge history including a final-tree-hidden path", () => {
       const paths = collectChangedPaths(fixture.repo, fixture.base, fixture.head);
       assert.ok(paths.includes("shared.go"));
@@ -157,17 +193,17 @@ try {
       assert.throws(() => planFor(["unowned/component.rs"]), /no required-gate category or metadata allowlist/);
     }],
     ["accepts one exact result per selected command", () => {
-      const plan = planFor(["shared.go"]);
+      const plan = readyPlanFor(["shared.go"]);
       assert.equal(validateResultEnvelope(plan, validEnvelope(plan)), true);
     }],
     ["rejects a missing result", () => {
-      const plan = planFor(["shared.go"]);
+      const plan = readyPlanFor(["shared.go"]);
       const envelope = validEnvelope(plan);
       envelope.results.pop();
       assert.throws(() => validateResultEnvelope(plan, envelope), /missing gate results/);
     }],
     ["rejects duplicate and extra results", () => {
-      const plan = planFor(["shared.go"]);
+      const plan = readyPlanFor(["shared.go"]);
       const duplicate = validEnvelope(plan);
       duplicate.results.push(clone(duplicate.results[0]));
       assert.throws(() => validateResultEnvelope(plan, duplicate), /duplicate gate result/);
@@ -176,7 +212,7 @@ try {
       assert.throws(() => validateResultEnvelope(plan, extra), /extra gate result/);
     }],
     ["rejects literal command drift and cancellation", () => {
-      const plan = planFor(["shared.go"]);
+      const plan = readyPlanFor(["shared.go"]);
       const wrongCommand = validEnvelope(plan);
       wrongCommand.results[0].command += " --changed";
       assert.throws(() => validateResultEnvelope(plan, wrongCommand), /literal command mismatch/);
@@ -185,7 +221,7 @@ try {
       assert.throws(() => validateResultEnvelope(plan, cancelled), /must pass/);
     }],
     ["rejects zero discovered or executed tests and skipped tests", () => {
-      const plan = planFor(["shared.go"]);
+      const plan = readyPlanFor(["shared.go"]);
       const testIndex = validEnvelope(plan).results.findIndex((result) => result.command_id === "go-test");
       const zeroDiscovered = validEnvelope(plan);
       zeroDiscovered.results[testIndex].discovered_tests = 0;
@@ -201,17 +237,34 @@ try {
       incomplete.results[testIndex].executed_tests = 1;
       assert.throws(() => validateResultEnvelope(plan, incomplete), /not all discovered tests executed/);
     }],
+    ["rejects nonzero test counts for policy commands", () => {
+      const plan = readyPlanFor(["scripts/validate-prototype-integration.cjs"]);
+      const envelope = validEnvelope(plan);
+      const policy = envelope.results.find((result) => result.command_id === "docs-control");
+      policy.discovered_tests = 1;
+      policy.executed_tests = 1;
+      assert.throws(() => validateResultEnvelope(plan, envelope), /policy command must report zero test counts/);
+    }],
+    ["rejects a result command kind mismatch", () => {
+      const plan = readyPlanFor(["shared.go"]);
+      const envelope = validEnvelope(plan);
+      envelope.results[0].kind = "policy";
+      assert.throws(() => validateResultEnvelope(plan, envelope), /command kind mismatch/);
+    }],
     ["rejects wrong SHA and matrix digest", () => {
-      const plan = planFor(["shared.go"]);
+      const plan = readyPlanFor(["shared.go"]);
       const wrongSha = validEnvelope(plan);
       wrongSha.head_sha = "0".repeat(40);
       assert.throws(() => validateResultEnvelope(plan, wrongSha), /head SHA mismatch/);
       const wrongDigest = validEnvelope(plan);
       wrongDigest.matrix_digest = "0".repeat(64);
       assert.throws(() => validateResultEnvelope(plan, wrongDigest), /matrix digest mismatch/);
+      const wrongPlan = validEnvelope(plan);
+      wrongPlan.plan_digest = "0".repeat(64);
+      assert.throws(() => validateResultEnvelope(plan, wrongPlan), /plan digest mismatch/);
     }],
     ["rejects missing, unavailable, or wrong pinned tools", () => {
-      const plan = planFor(["shared.go"]);
+      const plan = readyPlanFor(["shared.go"]);
       const missing = validEnvelope(plan);
       missing.results[0].tools = [];
       assert.throws(() => validateResultEnvelope(plan, missing), /pinned tool count mismatch/);
@@ -231,11 +284,28 @@ try {
         delete process.env.VE_REQUIRED_GATES_BYPASS;
       }
     }],
+    ["refuses passing results for a dependency-blocked plan", () => {
+      const plan = planFor(["shared.go"]);
+      assert.throws(() => validateResultEnvelope(plan, validEnvelope(plan)), /execution refused/);
+    }],
+    ["refuses a tampered ready plan retaining dependency evidence", () => {
+      const plan = planFor(["shared.go"]);
+      plan.matrix_status = "ready";
+      plan.categories.forEach((category) => { category.status = "ready"; });
+      assert.throws(() => assertExecutionReady(plan), /retain unavailable dependencies/);
+      plan.categories.forEach((category) => {
+        category.dependencies.forEach((dependency) => { dependency.status = "available"; });
+      });
+      assert.throws(() => assertExecutionReady(plan), /retain blockers/);
+    }],
     ["refuses matrix-wide blocked execution for allowlist-only changes", () => {
       assert.throws(() => assertExecutionReady(planFor(["README.md"])), /matrix status is dependency_blocked/);
     }],
     ["rejects a reversed base and head range", () => {
       assert.throws(() => buildExecutionPlan({ repoDir: fixture.repo, base: fixture.head, head: fixture.base, matrixPath }), /base must be an ancestor/);
+    }],
+    ["rejects an empty commit range", () => {
+      assert.throws(() => buildExecutionPlan({ repoDir: fixture.repo, base: fixture.head, head: fixture.head, matrixPath }), /non-empty commit range/);
     }],
   ];
 

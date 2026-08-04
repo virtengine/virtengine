@@ -4,13 +4,14 @@
   "title": "T4-05B required-gate result evidence",
   "type": "object",
   "additionalProperties": false,
-  "required": ["schema_version", "base_sha", "head_sha", "matrix_digest", "results"],
+  "required": ["schema_version", "base_sha", "head_sha", "matrix_digest", "plan_digest", "results"],
   "properties": {
     "schema_version": { "const": "virtengine.task-88b.required-gate-results/v1" },
     "base_sha": { "$ref": "#/$defs/sha" },
     "head_sha": { "$ref": "#/$defs/sha" },
     "matrix_digest": { "$ref": "#/$defs/digest" },
-    "results": { "type": "array", "items": { "$ref": "#/$defs/result" } }
+    "plan_digest": { "$ref": "#/$defs/digest" },
+    "results": { "type": "array", "uniqueItems": true, "items": { "$ref": "#/$defs/result" } }
   },
   "$defs": {
     "sha": { "type": "string", "pattern": "^[a-f0-9]{40}$" },
@@ -28,18 +29,26 @@
     "result": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["category_id", "command_id", "command", "outcome", "exit_code", "discovered_tests", "executed_tests", "skipped_tests", "tools"],
+      "required": ["category_id", "command_id", "kind", "command", "outcome", "exit_code", "discovered_tests", "executed_tests", "skipped_tests", "tools"],
       "properties": {
         "category_id": { "type": "string", "pattern": "^[a-z0-9_]+$" },
         "command_id": { "type": "string", "pattern": "^[a-z0-9.-]+$" },
+        "kind": { "enum": ["setup", "build", "lint", "test", "policy", "drift"] },
         "command": { "type": "string", "minLength": 1 },
         "outcome": { "const": "passed" },
         "exit_code": { "const": 0 },
         "discovered_tests": { "type": "integer", "minimum": 0 },
         "executed_tests": { "type": "integer", "minimum": 0 },
         "skipped_tests": { "const": 0 },
-        "tools": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/tool" } }
-      }
+        "tools": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "$ref": "#/$defs/tool" } }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "kind": { "const": "test" } }, "required": ["kind"] },
+          "then": { "properties": { "discovered_tests": { "minimum": 1 }, "executed_tests": { "minimum": 1 } } },
+          "else": { "properties": { "discovered_tests": { "const": 0 }, "executed_tests": { "const": 0 }, "skipped_tests": { "const": 0 } } }
+        }
+      ]
     }
   }
 }

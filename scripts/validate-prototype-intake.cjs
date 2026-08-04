@@ -394,10 +394,14 @@ function validateIntake(options) {
 
 function parseArgs(argv) {
   const options = {};
+  const seen = new Set();
   for (let index = 0; index < argv.length; index += 2) {
     const key = argv[index];
     const value = argv[index + 1];
-    assert.ok(["--epoch", "--tag", "--repo", "--remote"].includes(key) && value, `unknown or incomplete argument: ${key || "<none>"}`);
+    assert.ok(["--epoch", "--tag", "--repo", "--remote"].includes(key), `unknown argument: ${key || "<none>"}`);
+    assert.equal(seen.has(key), false, `duplicate argument: ${key}`);
+    seen.add(key);
+    assert.ok(value && !value.startsWith("--"), `${key} requires a value`);
     options[key.slice(2)] = value;
   }
   assert.ok(options.epoch, "--epoch is required");
@@ -405,7 +409,7 @@ function parseArgs(argv) {
   return options;
 }
 
-module.exports = { completeChangedPaths, parseJsonDocument, validateHandoff, validateIntake, validateSchemaContract };
+module.exports = { completeChangedPaths, parseArgs, parseJsonDocument, validateHandoff, validateIntake, validateSchemaContract };
 
 if (require.main === module) {
   try {

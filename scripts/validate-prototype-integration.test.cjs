@@ -1,7 +1,8 @@
 "use strict";
 
 const assert = require("assert").strict;
-const { producerHandoffDeclaresContract, validateContainedProducerCommits, validateIntegrationControl, validateManifestEpochBinding } = require("./validate-prototype-integration.cjs");
+const { createHash } = require("crypto");
+const { producerHandoffDeclaresContract, validateContainedProducerCommits, validateIntegrationControl, validateManifestEpochBinding, verifyAcceptedGeneratedProducer, verifyGenerationResult } = require("./validate-prototype-integration.cjs");
 
 const sha = "79391a3df86d85522b92e0400c6904971ecbe65d";
 
@@ -69,6 +70,33 @@ const tests = [
     assert.equal(producerHandoffDeclaresContract(contract, { thread: "T1", payload_head: sha, files_changed: ["sdk/proto/node/decision.proto"] }), true);
     assert.equal(producerHandoffDeclaresContract(contract, { thread: "T1", payload_head: sha, files_changed: [] }), false);
     assert.equal(producerHandoffDeclaresContract(contract, { thread: "T5", payload_head: sha, files_changed: ["sdk/proto/node/decision.proto"] }), false);
+  }],
+  ["binds generation results to current HEAD and dedicated evidence", () => {
+    const evidence = Buffer.from(`${JSON.stringify({ schema_version: "virtengine.prototype.generated-contract-evidence/v1", source_sha: sha, first_run_exit_code: 0, second_run_exit_code: 0, drift_clean: true })}\n`);
+    const result = { source_sha: sha, first_run_exit_code: 0, second_run_exit_code: 0, drift_clean: true, evidence_path: "_docs/ralph/prototype-integration/evidence/generated-contract-zero-drift.json", evidence_sha256: createHash("sha256").update(evidence).digest("hex") };
+    const options = { currentSha: sha, readEvidence: () => evidence };
+    assert.equal(verifyGenerationResult(result, options), true);
+    assert.equal(verifyGenerationResult({ ...result, source_sha: "a".repeat(40) }, options), false);
+    assert.equal(verifyGenerationResult({ ...result, evidence_path: "_docs/INDEX.md" }, options), false);
+    const unrelated = Buffer.from("{\"drift_clean\":true}\n");
+    assert.equal(verifyGenerationResult({ ...result, evidence_sha256: createHash("sha256").update(unrelated).digest("hex") }, { ...options, readEvidence: () => unrelated }), false);
+  }],
+  ["binds generated producers to accepted and observed tag targets", () => {
+    const tip = "b".repeat(40);
+    const tagObject = "d".repeat(40);
+    const contract = { owner_thread: "T1", producer: { tag: "checkpoint/prototype-t1/t1-18", payload_sha: sha }, proto_sources: ["sdk/proto/node/decision.proto"] };
+    const options = {
+      acceptedCheckpoints: [{ thread: "T1", tag: contract.producer.tag, payload_head: sha, tip }],
+      epoch: { producers: [{ thread: "T1", status: "accepted", tag: contract.producer.tag }] },
+      observation: { tags: [{ thread: "T1", tag: contract.producer.tag, tag_object: tagObject, target: tip }] },
+      resolveTag: () => ({ object: tagObject, target: tip }),
+      loadProducerHandoff: () => ({ thread: "T1", payload_head: sha, files_changed: contract.proto_sources }),
+      sourceExists: () => true,
+    };
+    assert.equal(verifyAcceptedGeneratedProducer(contract, options), true);
+    assert.equal(verifyAcceptedGeneratedProducer(contract, { ...options, resolveTag: () => ({ object: tagObject, target: "c".repeat(40) }) }), false);
+    assert.equal(verifyAcceptedGeneratedProducer(contract, { ...options, resolveTag: () => ({ object: "e".repeat(40), target: tip }) }), false);
+    assert.equal(verifyAcceptedGeneratedProducer(contract, { ...options, observation: { tags: [] } }), false);
   }],
   ["accepts the frozen T4 campaign controls", () => {
     const fixture = validFixture();

@@ -1,91 +1,47 @@
 {
   "campaign": "three-day-prototype",
   "thread": "T4",
-  "checkpoint": "STABLE-CANDIDATE-03",
+  "checkpoint": "T4-01EDB",
   "branch": "ve/prototype-integration",
-  "start_head": "53d9249b70885b20c0ff15c807ac1d1c15bcdb6f",
-  "end_head": "2209c7c633d3450bdf929638e08d231793f06614",
+  "start_head": "88f34dc4d55cb52a2f29df48e2e23e9f8400859b",
+  "end_head": "684c7af9b7477ae866fdf5acdf677bc1c47ce97c",
   "origin_main": "79391a3df86d85522b92e0400c6904971ecbe65d",
   "tree_clean": true,
   "commits": [
-    "2209c7c633d3450bdf929638e08d231793f06614"
+    "684c7af9b7477ae866fdf5acdf677bc1c47ce97c"
   ],
   "owned_paths": [
     "_docs/ralph/prototype-integration/**",
     "_docs/ralph/handoffs/prototype-integration/**"
   ],
   "files_changed": [
-    "_docs/ralph/handoffs/prototype-integration/HANDOFF.yaml"
+    "_docs/ralph/handoffs/prototype-integration/HANDOFF.yaml",
+    "_docs/ralph/prototype-integration/core-rc-manifest.json"
   ],
   "tests": [
     {
-      "command": "node --test scripts/validate-t1-contracts.test.cjs scripts/validate-prototype-integration.test.cjs scripts/validate-required-gate-matrix.test.cjs scripts/validate-model-provenance.test.cjs scripts/validate-ai-production-policy.test.cjs scripts/validate-slurm-chart-inventory.test.cjs scripts/validate-localnet-integration-launchers.test.cjs",
+      "command": "node scripts/validate-prototype-integration.test.cjs && node scripts/validate-prototype-integration.cjs",
       "exit_code": 0,
       "result": "passed",
-      "test_count": 7,
+      "test_count": 15,
       "tool_versions": {
         "node": "20.19.1"
       }
     },
     {
-      "command": "go1.25.8 test -run '^$' -count=1 ./...",
+      "command": "node scripts/validate-agents-docs.mjs",
       "exit_code": 0,
       "result": "passed",
-      "test_count": 0,
-      "tool_versions": {
-        "go": "go1.25.8 windows/amd64"
-      }
-    },
-    {
-      "command": "go1.25.8 test -count=1 ./x/veid/types ./pkg/inference/... ./pkg/data_vault/... ./pkg/fundauth/... ./x/encryption/... ./x/mfa/... ./pkg/provider_daemon ./x/settlement/ibc",
-      "exit_code": 0,
-      "result": "passed",
-      "test_count": 0,
-      "tool_versions": {
-        "go": "go1.25.8 windows/amd64"
-      }
-    },
-    {
-      "command": "node --test scripts/preflight-integration-candidate.test.cjs scripts/validate-required-gate-matrix.test.cjs",
-      "exit_code": 0,
-      "result": "passed",
-      "test_count": 2,
+      "test_count": 9,
       "tool_versions": {
         "node": "20.19.1"
       }
     }
   ],
-  "generated_hashes": {},
-  "accepted_checkpoints": [
-    {
-      "thread": "T1",
-      "checkpoint": "T1-09",
-      "tag": "checkpoint/prototype-t1/t1-09",
-      "tip": "36a566a92c04d988255b10cc5a75451d59077273",
-      "payload_head": "36a566a92c04d988255b10cc5a75451d59077273"
-    },
-    {
-      "thread": "T2",
-      "checkpoint": "T2-13",
-      "tag": "checkpoint/prototype-t2/t2-13",
-      "tip": "ba9f49340bbd8136f8c19bcc0abc7c64831bfda8",
-      "payload_head": "ba9f49340bbd8136f8c19bcc0abc7c64831bfda8"
-    },
-    {
-      "thread": "T3",
-      "checkpoint": "T3-14",
-      "tag": "checkpoint/prototype-t3/t3-14",
-      "tip": "117ad92be90cc8a6a733ff701f1bc83fbbaf6790",
-      "payload_head": "117ad92be90cc8a6a733ff701f1bc83fbbaf6790"
-    },
-    {
-      "thread": "T5",
-      "checkpoint": "T5-39",
-      "tag": "checkpoint/prototype-t5/t5-39",
-      "tip": "4efd873a4446c304f3ba5f25ec83d6f4185a0a3d",
-      "payload_head": "4efd873a4446c304f3ba5f25ec83d6f4185a0a3d"
-    }
-  ],
+  "generated_hashes": {
+    "_docs/ralph/prototype-integration/core-rc-manifest.json": "bcd373e987fb68cd53bf81057d85615be62da44ffbbffde98d90e88db86e1149"
+  },
+  "accepted_checkpoints": [],
   "rejected_checkpoints": [
     {
       "thread": "T2",
@@ -119,7 +75,8 @@
     "The clean T4-09A real diagnostic exited 1 as required and reported 19 deterministic publication blockers."
   ],
   "blockers": [
-    "Epoch 2 consolidates and accepts the exact tested T1-09, T2-13, T3-14, and T5-39 payload boundaries; later dirty producer work remains excluded.",
+    "Epoch 2 is frozen: T1, T2, T3, and T5 are frozen out; no producer checkpoint was announced, accepted, or merged.",
+    "Epoch 1 is closed: T1 t1-09 and T3 t3-13a failed immutable intake validation; T2 and T5 are frozen out; no producer checkpoint is accepted.",
     "Stable secrets are remediated through explicit pre-provisioned Secret names/keys and legacy upgrade instructions; no render-time credential generation remains.",
     "The diagnostic-only publication guard refuses --publish and created no local or remote checkpoint/prototype-integration/t4-09a tag.",
     "Clean real diagnostics pass candidate HEAD/remote equality, manifest strict validity/hash/ancestry/boundary, accepted-ledger correspondence, and tag absence.",
@@ -135,5 +92,5 @@
     "Task 88C is not complete."
   ],
   "next_checkpoint": null,
-  "expected_head": "2209c7c633d3450bdf929638e08d231793f06614"
+  "expected_head": "684c7af9b7477ae866fdf5acdf677bc1c47ce97c"
 }

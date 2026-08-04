@@ -24,6 +24,18 @@ function insideRoots(path, roots) {
   return roots.some((rootPath) => path === rootPath || path.startsWith(`${rootPath}/`));
 }
 
+function isGeneratedTarget(path) {
+  if (path.startsWith("api/openapi/")) return /\.(?:json|ya?ml)$/.test(path);
+  if (path.startsWith("sdk/artifacts/proto/")) return /(?:\.binpb|\.sha256|\/inventory\.json)$/.test(path);
+  if (path.startsWith("sdk/go/node/")) return /\.pb(?:\.gw)?\.go$/.test(path);
+  if (path.startsWith("sdk/ts/src/generated/")) return path.endsWith(".ts");
+  return false;
+}
+
+function isCompatibilityFixture(path) {
+  return path.startsWith("tests/") || path.startsWith("testutil/") || path.includes("/testdata/");
+}
+
 function validateGeneratedContractInventory(inventory, options = {}) {
   const rootDir = options.rootDir || root;
   exactKeys(inventory, ["blockers", "checkpoint", "completion", "contracts", "generation_window", "schema_version", "status"], "generated contract inventory");
@@ -66,6 +78,7 @@ function validateGeneratedContractInventory(inventory, options = {}) {
     sortedUnique(contract.proto_sources, `${contract.id} proto sources`);
     sortedUnique(contract.generated_targets, `${contract.id} generated targets`);
     sortedUnique(contract.compatibility_fixtures, `${contract.id} compatibility fixtures`);
+    sortedUnique(contract.blockers, `${contract.id} blockers`);
     for (const blocker of contract.blockers) assert.ok(inventory.blockers.includes(blocker), `${contract.id} references undeclared blocker ${blocker}`);
 
     if (contract.producer.status === "unavailable") {
@@ -82,10 +95,20 @@ function validateGeneratedContractInventory(inventory, options = {}) {
       assert.equal(contract.producer.status, "accepted", `${contract.id} generated without accepted producer`);
       assert.ok(contract.proto_sources.length > 0 && contract.generated_targets.length > 0 && contract.compatibility_fixtures.length > 0, `${contract.id} generated evidence is incomplete`);
       assert.deepEqual(contract.blockers, [], `${contract.id} generated contract retains blockers`);
-      for (const source of contract.proto_sources) assert.ok(insideRoots(source, inventory.generation_window.source_roots) && source.endsWith(".proto"), `${contract.id} proto source is outside canonical roots`);
-      for (const target of contract.generated_targets) assert.ok(insideRoots(target, targetRoots), `${contract.id} target is outside canonical roots`);
+      for (const source of contract.proto_sources) {
+        assert.ok(insideRoots(source, inventory.generation_window.source_roots) && source.endsWith(".proto"), `${contract.id} proto source is outside canonical roots`);
+        const path = resolve(rootDir, source);
+        assert.ok(existsSync(path) && statSync(path).isFile(), `${contract.id} proto source is missing`);
+      }
+      for (const target of contract.generated_targets) {
+        assert.ok(insideRoots(target, targetRoots), `${contract.id} target is outside canonical roots`);
+        assert.ok(isGeneratedTarget(target), `${contract.id} target is not a generated artifact type`);
+        const path = resolve(rootDir, target);
+        assert.ok(existsSync(path) && statSync(path).isFile(), `${contract.id} generated target is missing`);
+      }
       for (const fixture of contract.compatibility_fixtures) {
         assert.ok(!isAbsolute(fixture) && !fixture.split(/[\\/]/).includes(".."), `${contract.id} fixture escapes repository`);
+        assert.ok(isCompatibilityFixture(fixture), `${contract.id} compatibility fixture is outside test fixture paths`);
         const path = resolve(rootDir, fixture);
         assert.ok(existsSync(path) && statSync(path).isFile(), `${contract.id} compatibility fixture is missing`);
       }
@@ -96,6 +119,9 @@ function validateGeneratedContractInventory(inventory, options = {}) {
     }
   }
 
+  const referencedBlockers = [...new Set(inventory.contracts.flatMap((contract) => contract.blockers))];
+  assert.deepEqual(inventory.blockers, referencedBlockers, "root blockers must exactly match contract blocker usage");
+
   const complete = inventory.contracts.every((contract) => contract.state === "generated") && inventory.generation_window.state === "completed" && inventory.blockers.length === 0;
   assert.equal(inventory.completion.allowed, complete, "generated contract completion is premature");
   assert.equal(inventory.status === "complete", complete, "generated contract status disagrees with readiness");
@@ -103,7 +129,7 @@ function validateGeneratedContractInventory(inventory, options = {}) {
   return true;
 }
 
-module.exports = { validateGeneratedContractInventory };
+module.exports = { isCompatibilityFixture, isGeneratedTarget, validateGeneratedContractInventory };
 
 if (require.main === module) {
   const inventory = JSON.parse(readFileSync(inventoryPath, "utf8"));

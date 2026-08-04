@@ -40,10 +40,14 @@ function inspectLeaseContent(content, expected, options = {}) {
 
 function parseArgs(argv) {
   const options = { epoch: null, expectedHead: null, expectedPlanSha256: null, repo: resolve(__dirname, "..") };
+  const seen = new Set();
   for (let index = 0; index < argv.length; index += 2) {
     const argument = argv[index];
     const value = argv[index + 1];
-    assert.ok(["--epoch", "--expected-head", "--expected-plan-sha256", "--repo"].includes(argument) && value, `invalid argument: ${argument || "missing"}`);
+    assert.ok(["--epoch", "--expected-head", "--expected-plan-sha256", "--repo"].includes(argument), `invalid argument: ${argument || "missing"}`);
+    assert.equal(seen.has(argument), false, `duplicate argument: ${argument}`);
+    seen.add(argument);
+    assert.ok(value && !value.startsWith("--"), `${argument} requires a value`);
     const key = argument === "--expected-head" ? "expectedHead" : argument === "--expected-plan-sha256" ? "expectedPlanSha256" : argument.slice(2);
     options[key] = value;
   }

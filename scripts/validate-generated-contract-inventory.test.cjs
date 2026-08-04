@@ -3,7 +3,7 @@
 const assert = require("assert").strict;
 const { readFileSync } = require("fs");
 const { resolve } = require("path");
-const { validateGeneratedContractInventory } = require("./validate-generated-contract-inventory.cjs");
+const { isCompatibilityFixture, isGeneratedTarget, validateGeneratedContractInventory } = require("./validate-generated-contract-inventory.cjs");
 
 const root = resolve(__dirname, "..");
 const inventory = JSON.parse(readFileSync(resolve(root, "_docs/ralph/prototype-integration/generated-contract-inventory.json"), "utf8"));
@@ -20,6 +20,10 @@ const tests = [
   ["rejects an unverified accepted producer", () => { const value = clone(); value.contracts[0].producer = { status: "accepted", tag: "checkpoint/prototype-t5/t5-18", payload_sha: "a".repeat(40) }; assert.throws(() => validate(value), /verification failed/); }],
   ["rejects noncanonical proto sources", () => { const value = clone(); const contract = value.contracts[0]; contract.state = "generated"; contract.producer = { status: "accepted", tag: "checkpoint/prototype-t5/t5-18", payload_sha: "a".repeat(40) }; contract.proto_sources = ["proto/unsafe.proto"]; contract.generated_targets = ["sdk/go/node/task413.pb.go"]; contract.compatibility_fixtures = ["_docs/INDEX.md"]; contract.blockers = []; assert.throws(() => validate(value, { verifyAcceptedProducer: () => true }), /outside canonical roots/); }],
   ["rejects generated state without compatibility fixtures", () => { const value = clone(); const contract = value.contracts[0]; contract.state = "generated"; contract.producer = { status: "accepted", tag: "checkpoint/prototype-t5/t5-18", payload_sha: "a".repeat(40) }; contract.proto_sources = ["sdk/proto/node/task413.proto"]; contract.generated_targets = ["sdk/go/node/task413.pb.go"]; contract.blockers = []; assert.throws(() => validate(value, { verifyAcceptedProducer: () => true }), /evidence is incomplete/); }],
+  ["rejects nonexistent generated contract files", () => { const value = clone(); const contract = value.contracts[0]; contract.state = "generated"; contract.producer = { status: "accepted", tag: "checkpoint/prototype-t5/t5-18", payload_sha: "a".repeat(40) }; contract.proto_sources = ["sdk/proto/node/virtengine/veid/v1/types.proto"]; contract.generated_targets = ["sdk/go/node/veid/v1/missing.pb.go"]; contract.compatibility_fixtures = ["_docs/INDEX.md"]; contract.blockers = []; assert.throws(() => validate(value, { verifyAcceptedProducer: () => true }), /generated target is missing/); }],
+  ["rejects handwritten files as generated targets", () => { assert.equal(isGeneratedTarget("sdk/go/node/veid/v1/types.pb.go"), true); assert.equal(isGeneratedTarget("sdk/go/node/veid/v1/encryption.go"), false); const value = clone(); const contract = value.contracts[0]; contract.state = "generated"; contract.producer = { status: "accepted", tag: "checkpoint/prototype-t5/t5-18", payload_sha: "a".repeat(40) }; contract.proto_sources = ["sdk/proto/node/virtengine/veid/v1/types.proto"]; contract.generated_targets = ["sdk/go/node/veid/v1/encryption.go"]; contract.compatibility_fixtures = ["_docs/INDEX.md"]; contract.blockers = []; assert.throws(() => validate(value, { verifyAcceptedProducer: () => true }), /not a generated artifact type/); }],
+  ["rejects non-fixture files as compatibility evidence", () => { assert.equal(isCompatibilityFixture("pkg/inference/conformance/testdata/feature_parity_v1.json"), true); assert.equal(isCompatibilityFixture("_docs/INDEX.md"), false); const value = clone(); const contract = value.contracts[0]; contract.state = "generated"; contract.producer = { status: "accepted", tag: "checkpoint/prototype-t5/t5-18", payload_sha: "a".repeat(40) }; contract.proto_sources = ["sdk/proto/node/virtengine/veid/v1/types.proto"]; contract.generated_targets = ["sdk/go/node/veid/v1/types.pb.go"]; contract.compatibility_fixtures = ["_docs/INDEX.md"]; contract.blockers = []; assert.throws(() => validate(value, { verifyAcceptedProducer: () => true }), /outside test fixture paths/); }],
+  ["rejects stale or duplicate contract blockers", () => { const stale = clone(); stale.blockers.push("stale-blocker"); assert.throws(() => validate(stale), /exactly match/); const duplicate = clone(); duplicate.contracts[0].blockers.push(duplicate.contracts[0].blockers[0]); assert.throws(() => validate(duplicate), /must be unique/); }],
   ["rejects premature completion", () => { const value = clone(); value.status = "complete"; assert.throws(() => validate(value), /status disagrees/); }],
   ["require-ready rejects blocked inventory", () => assert.throws(() => validate(clone(), { requireReady: true }), /not ready/)],
   ["accepts a fully evidenced future transition", () => {
@@ -32,9 +36,9 @@ const tests = [
     for (const contract of value.contracts) {
       contract.state = "generated";
       contract.producer = { status: "accepted", tag: `checkpoint/prototype-${contract.owner_thread.toLowerCase()}/${contract.owner_thread.toLowerCase()}-18`, payload_sha: "a".repeat(40) };
-      contract.proto_sources = [`sdk/proto/node/${contract.id}.proto`];
-      contract.generated_targets = [`sdk/go/node/${contract.id}.pb.go`];
-      contract.compatibility_fixtures = ["_docs/INDEX.md"];
+      contract.proto_sources = ["sdk/proto/node/virtengine/veid/v1/types.proto"];
+      contract.generated_targets = ["sdk/go/node/veid/v1/types.pb.go"];
+      contract.compatibility_fixtures = ["pkg/inference/conformance/testdata/feature_parity_v1.json"];
       contract.blockers = [];
     }
     assert.doesNotThrow(() => validate(value, { requireReady: true, verifyAcceptedProducer: () => true, verifyGenerationResult: () => true }));

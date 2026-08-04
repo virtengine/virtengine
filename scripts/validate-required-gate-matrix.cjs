@@ -53,8 +53,18 @@ function validateSchemaControl(schema) {
   assert.deepEqual(schema.required.slice().sort(), rootKeys.slice().sort(), "matrix schema root required fields must be exact");
   assert.equal(schema.properties.categories.minItems, categoryCommands.size);
   assert.equal(schema.properties.categories.maxItems, categoryCommands.size);
+  for (const property of ["unmatched_path_allowlist", "categories", "blockers"]) assert.equal(schema.properties[property].uniqueItems, true, `${property} must reject duplicates`);
+  assert.equal(schema.allOf[0].then.properties.completion_claim.const, true, "complete matrix must claim completion");
+  assert.equal(schema.allOf[0].else.properties.completion_claim.const, false, "non-complete matrix cannot claim completion");
+  assert.equal(schema.allOf[1].then.properties.blockers.maxItems, 0, "ready matrix cannot retain blockers");
   assert.equal(schema.$defs.category.additionalProperties, false);
+  for (const property of ["required_commands", "pinned_tools", "dependencies", "blockers"]) assert.equal(schema.$defs.category.properties[property].uniqueItems, true, `category ${property} must reject duplicates`);
   assert.deepEqual(schema.$defs.category.required.slice().sort(), categoryKeys.slice().sort(), "category schema required fields must be exact");
+  assert.equal(schema.$defs.category.allOf[0].then.properties.blockers.maxItems, 0, "ready/complete categories must reject blockers");
+  assert.equal(schema.$defs.category.allOf[0].else.properties.blockers.minItems, 1, "dependency-blocked categories must require blockers");
+  assert.equal(schema.$defs.dependency.additionalProperties, false);
+  assert.deepEqual(schema.$defs.dependency.required.slice().sort(), ["id", "status"]);
+  assert.deepEqual(schema.$defs.dependency.properties.status.enum, ["unavailable", "available"]);
   assert.equal(schema.$defs.zeroTestPolicy.properties.minimum_discovered.const, 1);
   assert.equal(schema.$defs.zeroTestPolicy.properties.minimum_executed.const, 1);
   for (const field of ["nonzero_exit", "skipped", "missing_tool", "cancelled"]) {
@@ -69,14 +79,26 @@ function validateExecutionSchemas(planSchema, resultSchema) {
   assert.equal(planSchema.properties.schema_version.const, "virtengine.task-88b.required-gate-plan/v1");
   assert.deepEqual(planSchema.properties.matrix_status.enum, ["dependency_blocked", "ready", "complete"]);
   assert.equal(planSchema.$defs.category.additionalProperties, false);
+  assert.deepEqual(planSchema.$defs.category.required.slice().sort(), ["id", "status", "matched_paths", "matched_selectors", "commands", "pinned_tools", "dependencies", "blockers"].sort());
   assert.equal(planSchema.$defs.command.additionalProperties, false);
   assert.equal(planSchema.$defs.tool.additionalProperties, false);
+  for (const property of ["allowlisted_paths", "categories"]) assert.equal(planSchema.properties[property].uniqueItems, true, `plan ${property} must reject duplicates`);
+  for (const property of ["commands", "pinned_tools"]) assert.equal(planSchema.$defs.category.properties[property].uniqueItems, true, `plan category ${property} must reject duplicates`);
+  assert.equal(planSchema.$defs.category.properties.dependencies.uniqueItems, true, "plan category dependencies must reject duplicates");
+  assert.equal(planSchema.$defs.dependency.additionalProperties, false);
 
   assert.equal(resultSchema.$schema, "https://json-schema.org/draft/2020-12/schema");
   assert.equal(resultSchema.additionalProperties, false, "result schema root must reject additional properties");
-  assert.deepEqual(resultSchema.required.slice().sort(), ["schema_version", "base_sha", "head_sha", "matrix_digest", "results"].sort());
+  assert.deepEqual(resultSchema.required.slice().sort(), ["schema_version", "base_sha", "head_sha", "matrix_digest", "plan_digest", "results"].sort());
+  assert.deepEqual(resultSchema.properties.plan_digest, { $ref: "#/$defs/digest" });
   assert.equal(resultSchema.properties.schema_version.const, "virtengine.task-88b.required-gate-results/v1");
   assert.equal(resultSchema.$defs.result.additionalProperties, false);
+  assert.equal(resultSchema.properties.results.uniqueItems, true, "result schema must reject duplicate result records");
+  assert.ok(resultSchema.$defs.result.required.includes("kind"), "result schema must require command kind");
+  assert.deepEqual(resultSchema.$defs.result.properties.kind.enum, ["setup", "build", "lint", "test", "policy", "drift"]);
+  assert.equal(resultSchema.$defs.result.allOf[0].then.properties.discovered_tests.minimum, 1);
+  assert.equal(resultSchema.$defs.result.allOf[0].else.properties.discovered_tests.const, 0);
+  assert.equal(resultSchema.$defs.result.properties.tools.uniqueItems, true, "result schema must reject duplicate tool records");
   assert.equal(resultSchema.$defs.result.properties.outcome.const, "passed");
   assert.equal(resultSchema.$defs.result.properties.exit_code.const, 0);
   assert.equal(resultSchema.$defs.result.properties.skipped_tests.const, 0);
@@ -90,15 +112,26 @@ function assertImmutableCommand(command, label) {
 }
 
 function validateGateResult(category, result) {
-  assertExactKeys(result, ["command_id", "command", "outcome", "exit_code", "discovered_tests", "executed_tests", "skipped_tests", "tools"], "gate result");
+  assertExactKeys(result, ["command_id", "kind", "command", "outcome", "exit_code", "discovered_tests", "executed_tests", "skipped_tests", "tools"], "gate result");
   const command = category.required_commands.find((entry) => entry.id === result.command_id);
   assert.ok(command, `gate result references unknown command: ${result.command_id}`);
+  assert.equal(result.kind, command.kind, "gate result kind must match the required command");
   assert.equal(result.command, command.command, "gate result command must match the required literal command");
   assert.equal(result.outcome, "passed", `gate result must pass, not ${result.outcome}`);
   assert.equal(result.exit_code, 0, "gate result exit code must be zero");
+  for (const field of ["discovered_tests", "executed_tests", "skipped_tests"]) {
+    assert.ok(Number.isSafeInteger(result[field]) && result[field] >= 0, `${field} must be a non-negative integer`);
+  }
   assert.ok(Array.isArray(result.tools), "gate result tools must be an array");
+  assert.equal(result.tools.length, category.pinned_tools.length, "pinned tool count mismatch");
+  const actualTools = new Map();
+  for (const tool of result.tools) {
+    assertExactKeys(tool, ["name", "version", "available"], "gate result tool");
+    assert.ok(!actualTools.has(tool.name), `duplicate result tool: ${tool.name}`);
+    actualTools.set(tool.name, tool);
+  }
   for (const pinned of category.pinned_tools) {
-    const actual = result.tools.find((tool) => tool.name === pinned.name);
+    const actual = actualTools.get(pinned.name);
     assert.ok(actual && actual.available === true, `missing pinned tool: ${pinned.name}`);
     assert.equal(actual.version, pinned.version, `pinned tool version mismatch: ${pinned.name}`);
   }
@@ -106,6 +139,9 @@ function validateGateResult(category, result) {
     assert.ok(result.discovered_tests >= category.zero_test_policy.minimum_discovered, "zero tests discovered");
     assert.ok(result.executed_tests >= category.zero_test_policy.minimum_executed, "zero tests executed");
     assert.equal(result.skipped_tests, 0, "skipped tests are not allowed");
+    assert.equal(result.executed_tests, result.discovered_tests, "not all discovered tests executed");
+  } else {
+    assert.deepEqual([result.discovered_tests, result.executed_tests, result.skipped_tests], [0, 0, 0], "policy commands must report zero test counts");
   }
 }
 
@@ -176,8 +212,11 @@ function validateRequiredGateMatrix(matrix, options = {}) {
     assert.ok(category.required_commands.some((command) => command.kind === "test"), `${category.id} must define a test command`);
     assert.deepEqual(category.required_commands.map((entry) => entry.command), remaining.get(category.id), `${category.id} required literal commands changed`);
     assert.ok(Array.isArray(category.pinned_tools) && category.pinned_tools.length > 0, `${category.id} pinned tools must not be empty`);
+    const toolNames = new Set();
     for (const tool of category.pinned_tools) {
       assertExactKeys(tool, ["name", "version", "source"], `${category.id} pinned tool`);
+      assert.ok(!toolNames.has(tool.name), `${category.id} has duplicate pinned tool: ${tool.name}`);
+      toolNames.add(tool.name);
       assert.match(tool.version, /^[0-9]+\.[0-9]+(?:\.[0-9]+)?$/, `${category.id} tool ${tool.name} must use an exact version`);
     }
     for (const [name, version] of requiredToolVersions.get(category.id) || []) {
@@ -186,24 +225,43 @@ function validateRequiredGateMatrix(matrix, options = {}) {
     assert.deepEqual(category.zero_test_policy, { applies_to: "test_commands", minimum_discovered: 1, minimum_executed: 1, empty_selection: "fail" });
     assert.deepEqual(category.failure_semantics, { nonzero_exit: "fail", skipped: "fail", missing_tool: "fail", cancelled: "fail" });
     assert.ok(Array.isArray(category.dependencies) && category.dependencies.length > 0, `${category.id} dependencies must not be empty`);
+    for (const dependency of category.dependencies) {
+      assertExactKeys(dependency, ["id", "status"], `${category.id} dependency`);
+      assert.match(dependency.id, /^[0-9]+[A-Z]?$/, `${category.id} has invalid dependency ID`);
+      assert.ok(["unavailable", "available"].includes(dependency.status), `${category.id} dependency ${dependency.id} has invalid status`);
+    }
+    const dependencyIds = category.dependencies.map((dependency) => dependency.id);
+    assert.equal(new Set(dependencyIds).size, dependencyIds.length, `${category.id} dependency IDs must be unique`);
     assert.ok(["dependency_blocked", "ready", "complete"].includes(category.status), `${category.id} has invalid status`);
     assert.ok(Array.isArray(category.blockers), `${category.id} blockers must be an array`);
+    assert.equal(new Set(category.blockers).size, category.blockers.length, `${category.id} blocker IDs must be unique`);
     const unavailable = category.dependencies.some((dependency) => dependency.status === "unavailable");
+    const expectedDependencyBlockers = category.dependencies.filter((entry) => entry.status === "unavailable").map((dependency) => `dependency-${dependency.id.toLowerCase()}`).sort();
+    const actualDependencyBlockers = category.blockers.filter((blocker) => blocker.startsWith("dependency-")).sort();
+    assert.deepEqual(actualDependencyBlockers, expectedDependencyBlockers, `${category.id} dependency blockers must exactly match unavailable dependencies`);
     if (unavailable) {
       assert.equal(category.status, "dependency_blocked", `${category.id} must remain dependency_blocked`);
       assert.ok(category.blockers.length > 0, `${category.id} must identify dependency blockers`);
     }
+    if (["ready", "complete"].includes(category.status)) assert.deepEqual(category.blockers, [], `${category.id} ${category.status} category cannot retain blockers`);
     for (const blocker of category.blockers) assert.ok(blockerIds.has(blocker), `${category.id} references unknown blocker: ${blocker}`);
     if (category.status === "complete") assert.equal(unavailable, false, `${category.id} cannot complete with unavailable dependencies`);
     remaining.delete(category.id);
   }
   assert.equal(remaining.size, 0, `missing category: ${[...remaining.keys()].join(", ")}`);
-
+  const usedBlockers = [...new Set(matrix.categories.flatMap((category) => category.blockers))].sort();
+  assert.deepEqual([...blockerIds].sort(), usedBlockers, "root blockers must exactly match category blocker usage");
   const blocked = matrix.categories.some((category) => category.status === "dependency_blocked");
-  if (blocked) assert.equal(matrix.status, "dependency_blocked", "matrix must remain dependency_blocked while a category is blocked");
+  const allComplete = matrix.categories.every((category) => category.status === "complete");
+  const expectedStatus = blocked ? "dependency_blocked" : (allComplete ? "complete" : "ready");
+  assert.equal(matrix.status, expectedStatus, "matrix status must be derived from category states");
   if (matrix.status === "dependency_blocked") {
     assert.equal(matrix.completion_claim, false, "dependency-blocked matrix cannot claim Task 88B completion");
     assert.ok(matrix.blockers.length > 0, "dependency-blocked matrix must declare blockers");
+  }
+  if (matrix.status === "ready") {
+    assert.equal(matrix.completion_claim, false, "ready matrix cannot claim Task 88B completion");
+    assert.equal(matrix.blockers.length, 0, "ready matrix cannot retain blockers");
   }
   if (matrix.status === "complete") {
     assert.equal(matrix.completion_claim, true, "complete matrix must explicitly claim completion");

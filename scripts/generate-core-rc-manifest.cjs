@@ -4,7 +4,7 @@
 
 const assert = require("assert").strict;
 const { createHash } = require("crypto");
-const { existsSync, readFileSync, writeFileSync } = require("fs");
+const { existsSync, readFileSync, realpathSync, writeFileSync } = require("fs");
 const { isAbsolute, relative, resolve } = require("path");
 const { spawnSync } = require("child_process");
 const { validateEpochSequence } = require("./prototype-intake-epochs.cjs");
@@ -121,6 +121,119 @@ function blockerIds(manifest) {
   return new Set(manifest.blockers.map((blocker) => blocker.id));
 }
 
+function validateBlockers(blockers) {
+  assert.ok(Array.isArray(blockers) && blockers.length > 0, "blocked manifest must include blockers");
+  const ids = new Set();
+  for (const blocker of blockers) {
+    exactKeys(blocker, ["id", "description"], `blocker ${blocker.id || "unknown"}`);
+    assert.match(blocker.id, /^[a-z0-9]+(?:-[a-z0-9]+)*$/, "blocker ID must be canonical lowercase kebab-case");
+    assert.ok(typeof blocker.description === "string" && blocker.description.length > 0 && blocker.description.trim() === blocker.description, "blocker description must be literal and nonempty");
+    assert.equal(ids.has(blocker.id), false, `duplicate blocker ID: ${blocker.id}`);
+    ids.add(blocker.id);
+  }
+  return true;
+}
+
+function validateExternalDependencies(dependencies, manifest) {
+  assert.ok(Array.isArray(dependencies) && dependencies.length > 0, "external dependencies must not be empty");
+  const ids = new Set();
+  for (const dependency of dependencies) {
+    exactKeys(dependency, ["id", "status", "blocker_id"], `external dependency ${dependency.id || "unknown"}`);
+    assert.match(dependency.id, /^[a-z0-9]+(?:-[a-z0-9]+)*$/, "external dependency ID must be canonical lowercase kebab-case");
+    assert.equal(dependency.status, "unavailable", "prototype external dependency must remain unavailable");
+    assert.match(dependency.blocker_id, /^[a-z0-9]+(?:-[a-z0-9]+)*$/, "external dependency blocker ID must be canonical lowercase kebab-case");
+    assertBlocker(manifest, dependency.blocker_id, `external dependency ${dependency.id}`);
+    assert.equal(ids.has(dependency.id), false, `duplicate external dependency ID: ${dependency.id}`);
+    ids.add(dependency.id);
+  }
+  return true;
+}
+
+function validateToolingArtifacts(artifacts) {
+  assert.ok(Array.isArray(artifacts) && artifacts.length === toolingArtifacts.length, "tooling artifact inventory is incomplete");
+  const ids = new Set();
+  const paths = new Set();
+  for (const artifact of artifacts) {
+    exactKeys(artifact, ["id", "path", "git_blob", "sha256"], `tooling artifact ${artifact.id || "unknown"}`);
+    const expected = toolingArtifacts.find(([id]) => id === artifact.id);
+    assert.ok(expected, `unknown tooling artifact ID: ${artifact.id}`);
+    assert.ok(typeof artifact.path === "string" && artifact.path.length > 0 && artifact.path.trim() === artifact.path && !artifact.path.startsWith("/") && !artifact.path.includes("\\") && !artifact.path.split("/").includes(".."), `tooling artifact path must be repository-relative: ${artifact.path}`);
+    assert.equal(artifact.path, expected[1], `tooling artifact ${artifact.id} path mismatch`);
+    assert.match(artifact.git_blob, shaPattern, "tooling artifact Git blob is invalid");
+    assert.match(artifact.sha256, digestPattern, "tooling artifact digest is invalid");
+    assert.equal(ids.has(artifact.id), false, `duplicate tooling artifact ID: ${artifact.id}`);
+    assert.equal(paths.has(artifact.path), false, `duplicate tooling artifact path: ${artifact.path}`);
+    ids.add(artifact.id);
+    paths.add(artifact.path);
+  }
+  return true;
+}
+
+function validateToolchains(toolchains) {
+  assert.ok(Array.isArray(toolchains) && toolchains.length > 0, "toolchain declarations must not be empty");
+  const identities = new Set();
+  for (const tool of toolchains) {
+    exactKeys(tool, ["name", "version", "source", "status"], `toolchain ${tool.name || "unknown"}`);
+    for (const field of ["name", "version", "source"]) assert.ok(typeof tool[field] === "string" && tool[field].length > 0 && tool[field].trim() === tool[field], `toolchain ${field} must be literal and nonempty`);
+    assert.equal(tool.status, "declared", "toolchain status must be declared");
+    const identity = `${tool.name}\0${tool.version}\0${tool.source}`;
+    assert.equal(identities.has(identity), false, `duplicate toolchain declaration: ${tool.name}`);
+    identities.add(identity);
+  }
+  return true;
+}
+
+function validateAssuranceDigests(entries, label) {
+  assert.ok(Array.isArray(entries) && entries.length > 0, `${label} must not be empty`);
+  const ids = new Set();
+  for (const entry of entries) {
+    assert.ok(typeof entry.id === "string" && entry.id.length > 0 && entry.id.trim() === entry.id, `${label} ID must be literal and nonempty`);
+    assert.equal(ids.has(entry.id), false, `duplicate ${label} ID: ${entry.id}`);
+    ids.add(entry.id);
+    if (Object.hasOwn(entry, "state")) {
+      exactKeys(entry, ["id", "state", "sha256", "source_blocker_id"], `${label} ${entry.id}`);
+      assert.ok(["dependency_blocked", "fixture_only", "present"].includes(entry.state), `${label} state is invalid`);
+      if (entry.state === "dependency_blocked") {
+        assert.equal(entry.sha256, null, `${label} blocked digest must be null`);
+        assert.match(entry.source_blocker_id, /^[a-z0-9]+(?:-[a-z0-9]+)*$/, `${label} blocked digest must name a blocker`);
+      } else {
+        assert.match(entry.sha256, digestPattern, `${label} digest is invalid`);
+        assert.equal(entry.source_blocker_id, null, `${label} available digest cannot retain a blocker`);
+      }
+    } else {
+      exactKeys(entry, ["id", "sha256"], `${label} ${entry.id}`);
+      assert.match(entry.sha256, digestPattern, `${label} digest is invalid`);
+    }
+  }
+  return true;
+}
+
+function validateAssuranceRuntime(runtime) {
+  exactKeys(runtime, ["state", "sha256", "source_blocker_id", "sbom_sha256", "sbom_blocker_id"], "assurance runtime");
+  assert.equal(runtime.state, "dependency_blocked", "assurance runtime must remain dependency blocked");
+  assert.equal(runtime.sha256, null, "blocked assurance runtime digest must be null");
+  assert.match(runtime.source_blocker_id, /^[a-z0-9]+(?:-[a-z0-9]+)*$/, "blocked assurance runtime must name a source blocker");
+  assert.equal(runtime.sbom_sha256, null, "blocked assurance runtime SBOM digest must be null");
+  assert.match(runtime.sbom_blocker_id, /^[a-z0-9]+(?:-[a-z0-9]+)*$/, "blocked assurance runtime must name an SBOM blocker");
+  return true;
+}
+
+function validateAssuranceSchema(schema) {
+  exactKeys(schema, ["state", "sha256", "source_blocker_id"], "assurance schema");
+  assert.equal(schema.state, "present", "assurance schema must remain present");
+  assert.match(schema.sha256, digestPattern, "assurance schema digest is invalid");
+  assert.equal(schema.source_blocker_id, null, "present assurance schema cannot retain a blocker");
+  return true;
+}
+
+function validateAssuranceStatus(status) {
+  exactKeys(status, ["status", "report_sha256", "source_blocker_id"], "assurance evaluation");
+  assert.equal(status.status, "dependency_blocked", "assurance evaluation must remain dependency blocked");
+  assert.equal(status.report_sha256, null, "blocked assurance evaluation digest must be null");
+  assert.match(status.source_blocker_id, /^[a-z0-9]+(?:-[a-z0-9]+)*$/, "blocked assurance evaluation must name a blocker");
+  return true;
+}
+
 function assertBlocker(manifest, blockerId, label) {
   assert.equal(typeof blockerId, "string", `${label} must name a blocker`);
   assert.ok(blockerIds(manifest).has(blockerId), `${label} references missing blocker ${blockerId}`);
@@ -129,6 +242,39 @@ function assertBlocker(manifest, blockerId, label) {
 function assertUniqueIds(entries, label) {
   const ids = entries.map((entry) => entry.id);
   assert.equal(new Set(ids).size, ids.length, `${label} IDs must be unique`);
+}
+
+function referencedRootBlockerIds(manifest) {
+  const references = new Set();
+  for (const group of manifest.artifact_groups) if (group.blocker_id) references.add(group.blocker_id);
+  for (const section of [manifest.migrations, manifest.required_gates, manifest.slurm, manifest.model_provenance, manifest.test_evidence, manifest.producer_checkpoints, manifest.rollout, manifest.rollback]) {
+    if (section.blocker_id) references.add(section.blocker_id);
+  }
+  for (const dependency of manifest.external_dependencies) if (dependency.blocker_id) references.add(dependency.blocker_id);
+  const assurance = manifest.ai_assurance;
+  for (const entry of [...assurance.provenance_digests.models, ...assurance.provenance_digests.licenses]) {
+    if (entry.source_blocker_id) references.add(entry.source_blocker_id);
+  }
+  for (const blockerId of [assurance.provenance_digests.runtime.source_blocker_id, assurance.provenance_digests.runtime.sbom_blocker_id, assurance.provenance_digests.schema.source_blocker_id, assurance.evaluation.source_blocker_id, assurance.non_certification.blocker_id]) {
+    if (blockerId) references.add(blockerId);
+  }
+  return [...references].sort();
+}
+
+function validateRejectedCheckpoints(checkpoints) {
+  assert.ok(Array.isArray(checkpoints), "rejected producer checkpoints must be an array");
+  const identities = new Set();
+  for (const checkpoint of checkpoints) {
+    exactKeys(checkpoint, ["thread", "checkpoint", "tip", "reason"], "rejected producer checkpoint");
+    assert.ok(["T1", "T2", "T3", "T5"].includes(checkpoint.thread), "rejected producer thread is invalid");
+    assert.match(checkpoint.checkpoint, new RegExp(`^${checkpoint.thread}-[0-9]{2,}[A-Z]?$`), "rejected producer checkpoint is invalid");
+    assert.match(checkpoint.tip, shaPattern, "rejected producer tip must be an exact SHA");
+    assert.ok(typeof checkpoint.reason === "string" && checkpoint.reason.length > 0 && checkpoint.reason.trim() === checkpoint.reason, "rejected producer reason must be literal and nonempty");
+    const identity = `${checkpoint.thread}\0${checkpoint.checkpoint}`;
+    assert.equal(identities.has(identity), false, `duplicate rejected producer checkpoint: ${checkpoint.thread}.${checkpoint.checkpoint}`);
+    identities.add(identity);
+  }
+  return true;
 }
 
 function listSourceEntries(sourceSha, cwd = root) {
@@ -207,27 +353,37 @@ function buildTestEvidence(sourceSha, handoff, handoffPath, cwd = root) {
   assert.deepEqual(unrelated, [], `source commits after handoff end_head change non-evidence paths: ${unrelated.join(", ")}`);
   const ledgerSha = gitText(["log", "-1", "--format=%H", sourceSha, "--", handoffPath], cwd);
   assert.match(ledgerSha, shaPattern, "handoff ledger commit is unavailable");
+  assert.ok(Array.isArray(handoff.tests) && handoff.tests.length > 0, "handoff test evidence must not be empty");
+  const commands = new Set();
   const records = handoff.tests.map((test, index) => {
-    assert.ok(typeof test.command === "string" && test.command.trim(), `test evidence ${index} is missing command`);
+    assert.ok(typeof test.command === "string" && test.command.length > 0 && test.command.trim() === test.command, `test evidence ${index} command must be literal and nonempty`);
+    assert.equal(commands.has(test.command), false, `duplicate test evidence command: ${test.command}`);
+    commands.add(test.command);
     assert.equal(test.exit_code, 0, `test evidence ${index} has nonzero or missing exit_code`);
     assert.equal(test.result, "passed", `test evidence ${index} did not pass`);
     assert.ok(test.tool_versions && typeof test.tool_versions === "object" && !Array.isArray(test.tool_versions), `test evidence ${index} is missing tool_versions`);
     assert.ok(Object.keys(test.tool_versions).length > 0, `test evidence ${index} is missing tool_versions`);
-    for (const version of Object.values(test.tool_versions)) assert.ok(typeof version === "string" && version.trim(), `test evidence ${index} has an empty tool version`);
-    assert.ok(test.test_count === undefined || (Number.isInteger(test.test_count) && test.test_count >= 0), `test evidence ${index} has an invalid test_count`);
+    for (const [tool, version] of Object.entries(test.tool_versions)) {
+      assert.ok(tool.length > 0 && tool.trim() === tool, `test evidence ${index} has an invalid tool name`);
+      assert.ok(typeof version === "string" && version.length > 0 && version.trim() === version, `test evidence ${index} has an invalid tool version`);
+    }
+    assert.ok(test.test_count === undefined || (Number.isSafeInteger(test.test_count) && test.test_count > 0), `test evidence ${index} has an invalid test_count`);
     return { command: test.command, exit_code: test.exit_code, result: test.result, test_count: test.test_count ?? null, tool_versions: test.tool_versions };
   });
   const counted = records.filter((test) => Number.isInteger(test.test_count));
+  const complete = counted.length === records.length;
+  const declaredTestCount = counted.reduce((total, test) => total + test.test_count, 0);
+  assert.ok(Number.isSafeInteger(declaredTestCount), "declared test count exceeds the safe integer range");
   return {
-    status: counted.length === records.length ? "complete" : "partial",
+    status: complete ? "complete" : "partial",
     ledger_path: handoffPath,
     implementation_sha: handoff.end_head,
     ledger_sha: ledgerSha,
     record_count: records.length,
-    declared_test_count: counted.reduce((total, test) => total + test.test_count, 0),
+    declared_test_count: declaredTestCount,
     uncounted_record_count: records.length - counted.length,
     records,
-    blocker_id: "test-evidence-partial",
+    blocker_id: complete ? null : "test-evidence-partial",
   };
 }
 
@@ -311,6 +467,28 @@ function buildAiAssurance(modelProvenance, productionPolicy, featureParity) {
   };
 }
 
+function buildBlockers(artifactGroups, testEvidence) {
+  return [
+    { id: "accepted-producer-checkpoints-unavailable", description: "No producer checkpoint is accepted by the payload ledger." },
+    ...(artifactGroups.some((group) => group.blocker_id === "artifact-selection-incomplete") ? [{ id: "artifact-selection-incomplete", description: "One or more artifact selections do not meet their declared coverage contract." }] : []),
+    { id: "producer-migration-handoffs-unavailable", description: "Committed producer migration handoffs are unavailable." },
+    { id: "required-gates-dependency-blocked", description: "The required gate matrix remains dependency-blocked." },
+    { id: "slurm-production-evidence-unavailable", description: "SLURM production render, isolation, and live durability evidence remain unavailable." },
+    { id: "production-model-artifacts-unavailable", description: "Production model weights and release artifacts are unavailable." },
+    { id: "production-model-provenance-unavailable", description: "Production model provenance, approvals, evaluation, and runtime SBOM are unavailable." },
+    { id: "model-weights-absent", description: "Production model weights are absent." },
+    { id: "runtime-image-absent", description: "The production inference runtime image is absent." },
+    { id: "runtime-sbom-absent", description: "The production inference runtime SBOM is absent." },
+    { id: "approved-licenses-absent", description: "Approved production model and dataset licenses are absent." },
+    { id: "production-evaluation-absent", description: "Production model evaluation evidence is absent." },
+    { id: "ai-production-assurance-unavailable", description: "AI, biometric uniqueness, vault/KMS, consent, retention, and production evaluation assurance remain unavailable." },
+    ...(testEvidence.status === "partial" ? [{ id: "test-evidence-partial", description: "Some passing handoff test records do not declare test counts." }] : []),
+    { id: "release-sbom-provenance-unavailable", description: "No release SBOM or signed release provenance is available." },
+    { id: "rollout-not-authorized", description: "This non-authoritative prototype manifest does not authorize rollout." },
+    { id: "rollback-evidence-unavailable", description: "No production rollback execution evidence is available." },
+  ];
+}
+
 function generateManifest(sourceSha, options = {}) {
   const cwd = options.rootDir || root;
   assertCommit(sourceSha, "--source", cwd);
@@ -329,6 +507,7 @@ function generateManifest(sourceSha, options = {}) {
   const productionPolicy = sourceJson(sourceSha, sourceArtifacts[5][1], cwd);
   const featureParity = sourceJson(sourceSha, "pkg/inference/conformance/testdata/feature_parity_v1.json", cwd);
   const entries = listSourceEntries(sourceSha, cwd);
+  const artifactGroups = artifactSelections.map((contract) => buildArtifactGroup(entries, contract));
   const controlArtifacts = sourceArtifactsFor(sourceSha, cwd);
   const tooling = buildTooling(options.toolingSha, sourceSha, cwd);
   const testEvidence = buildTestEvidence(sourceSha, handoff, handoffPath, cwd);
@@ -348,7 +527,7 @@ function generateManifest(sourceSha, options = {}) {
     },
     tooling,
     toolchains: buildToolchains(gates),
-    artifact_groups: artifactSelections.map((contract) => buildArtifactGroup(entries, contract)),
+    artifact_groups: artifactGroups,
     control_artifacts: controlArtifacts.map(([id, path]) => {
       const document = sourceJson(sourceSha, path, cwd);
       return { id, path, sha256: sourceDigest(sourceSha, path, cwd), status: document.status || (document.passed ? "passed" : "blocked") };
@@ -397,20 +576,7 @@ function generateManifest(sourceSha, options = {}) {
       { id: "sbom-and-release-provenance", status: "unavailable", blocker_id: "release-sbom-provenance-unavailable" },
       { id: "production-rollout", status: "unavailable", blocker_id: "rollout-not-authorized" },
     ],
-    blockers: [
-      { id: "accepted-producer-checkpoints-unavailable", description: "No producer checkpoint is accepted by the payload ledger." },
-      { id: "artifact-selection-incomplete", description: "One or more artifact selections do not meet their declared coverage contract." },
-      { id: "producer-migration-handoffs-unavailable", description: "Committed producer migration handoffs are unavailable." },
-      { id: "required-gates-dependency-blocked", description: "The required gate matrix remains dependency-blocked." },
-      { id: "slurm-production-evidence-unavailable", description: "SLURM production render, isolation, and live durability evidence remain unavailable." },
-      { id: "production-model-artifacts-unavailable", description: "Production model weights and release artifacts are unavailable." },
-      { id: "production-model-provenance-unavailable", description: "Production model provenance, approvals, evaluation, and runtime SBOM are unavailable." },
-      { id: "ai-production-assurance-unavailable", description: "AI, biometric uniqueness, vault/KMS, consent, retention, and production evaluation assurance remain unavailable." },
-      { id: "test-evidence-partial", description: "Some passing handoff test records do not declare test counts." },
-      { id: "release-sbom-provenance-unavailable", description: "No release SBOM or signed release provenance is available." },
-      { id: "rollout-not-authorized", description: "This non-authoritative prototype manifest does not authorize rollout." },
-      { id: "rollback-evidence-unavailable", description: "No production rollback execution evidence is available." },
-    ],
+    blockers: buildBlockers(artifactGroups, testEvidence),
   };
   validateManifest(manifest, { rootDir: cwd });
   return manifest;
@@ -425,12 +591,7 @@ function validateManifest(manifest, options = {}) {
   assert.equal(manifest.authoritative, false, "prototype manifest must never be authoritative");
   assert.equal(manifest.planned_functionality_complete, false, "prototype manifest must not claim planned functionality complete");
   assert.equal(manifest.milestone_m_eligible, false, "prototype manifest must not claim milestone M eligibility");
-  assert.ok(Array.isArray(manifest.blockers) && manifest.blockers.length > 0, "blocked manifest must include blockers");
-  for (const blocker of manifest.blockers) {
-    exactKeys(blocker, ["id", "description"], `blocker ${blocker.id || "unknown"}`);
-    assert.ok(blocker.id && blocker.description);
-  }
-  assert.equal(blockerIds(manifest).size, manifest.blockers.length, "blocker IDs must be unique");
+  validateBlockers(manifest.blockers);
 
   exactKeys(manifest.source, ["payload_sha", "tree", "branch", "binding"], "source");
   assert.match(manifest.source.payload_sha, shaPattern);
@@ -443,24 +604,12 @@ function validateManifest(manifest, options = {}) {
 
   exactKeys(manifest.tooling, ["tooling_sha", "tree", "artifacts"], "tooling");
   assert.deepEqual(manifest.tooling, buildTooling(manifest.tooling.tooling_sha, manifest.source.payload_sha, cwd), "tooling provenance mismatch");
-  const toolingIds = new Set();
-  for (const artifact of manifest.tooling.artifacts) {
-    exactKeys(artifact, ["id", "path", "git_blob", "sha256"], `tooling artifact ${artifact.id || "unknown"}`);
-    assert.ok(!toolingIds.has(artifact.id), `duplicate tooling artifact ID ${artifact.id}`);
-    toolingIds.add(artifact.id);
-  }
+  validateToolingArtifacts(manifest.tooling.artifacts);
 
   const controlArtifacts = sourceArtifactsFor(manifest.source.payload_sha, cwd);
   const gateMatrix = sourceJson(manifest.source.payload_sha, controlArtifacts[1][1], cwd);
   assert.deepEqual(manifest.toolchains, buildToolchains(gateMatrix), "toolchain declarations do not match the source gate matrix");
-  const repeat = new Set();
-  for (const tool of manifest.toolchains) {
-    exactKeys(tool, ["name", "version", "source", "status"], `toolchain ${tool.name || "unknown"}`);
-    assert.equal(tool.status, "declared");
-    const key = `${tool.name}\0${tool.version}\0${tool.source}`;
-    assert.ok(!repeat.has(key), "duplicate toolchain declaration");
-    repeat.add(key);
-  }
+  validateToolchains(manifest.toolchains);
 
   const sourceEntries = listSourceEntries(manifest.source.payload_sha, cwd);
   const expectedGroups = artifactSelections.map((contract) => buildArtifactGroup(sourceEntries, contract));
@@ -481,8 +630,14 @@ function validateManifest(manifest, options = {}) {
   }
 
   assert.deepEqual(manifest.control_artifacts.map((artifact) => [artifact.id, artifact.path]), controlArtifacts, "control artifact inventory mismatch");
+  const controlArtifactIds = new Set();
+  const controlArtifactPaths = new Set();
   for (const artifact of manifest.control_artifacts) {
     exactKeys(artifact, ["id", "path", "sha256", "status"], `control artifact ${artifact.id || "unknown"}`);
+    assert.equal(controlArtifactIds.has(artifact.id), false, `duplicate control artifact ID: ${artifact.id}`);
+    assert.equal(controlArtifactPaths.has(artifact.path), false, `duplicate control artifact path: ${artifact.path}`);
+    controlArtifactIds.add(artifact.id);
+    controlArtifactPaths.add(artifact.path);
     assert.match(artifact.sha256, digestPattern);
     assert.equal(sourceDigest(manifest.source.payload_sha, artifact.path, cwd), artifact.sha256, `${artifact.path} hash mismatch`);
     const document = sourceJson(manifest.source.payload_sha, artifact.path, cwd);
@@ -493,19 +648,33 @@ function validateManifest(manifest, options = {}) {
   exactKeys(manifest.required_gates, ["status", "matrix_path", "category_count", "blocked_category_count", "blocker_id"], "required_gates");
   exactKeys(manifest.slurm, ["status", "inventory_path", "report_path", "report_status", "blocker_id"], "slurm");
   exactKeys(manifest.model_provenance, ["status", "path", "sbom_status", "production_weights_status", "blocker_id"], "model_provenance");
+  assert.equal(manifest.migrations.blocker_id, "producer-migration-handoffs-unavailable", "migration blocker mismatch");
+  assert.equal(manifest.required_gates.blocker_id, "required-gates-dependency-blocked", "required gate blocker mismatch");
+  assert.equal(manifest.slurm.blocker_id, "slurm-production-evidence-unavailable", "SLURM blocker mismatch");
+  assert.equal(manifest.model_provenance.blocker_id, "production-model-provenance-unavailable", "model provenance blocker mismatch");
   assertBlocker(manifest, manifest.ai_assurance.non_certification.blocker_id, "AI assurance");
   exactKeys(manifest.test_evidence, ["status", "ledger_path", "implementation_sha", "ledger_sha", "record_count", "declared_test_count", "uncounted_record_count", "records", "blocker_id"], "test_evidence");
   exactKeys(manifest.producer_checkpoints, ["ledger_path", "ledger_sha256", "accepted", "rejected", "blocker_id"], "producer_checkpoints");
+  assert.equal(manifest.producer_checkpoints.blocker_id, "accepted-producer-checkpoints-unavailable", "producer checkpoint blocker mismatch");
   exactKeys(manifest.rollout, ["status", "evidence", "blocker_id"], "rollout");
   exactKeys(manifest.rollback, ["status", "evidence", "blocker_id"], "rollback");
-  const linkedSections = [manifest.migrations, manifest.required_gates, manifest.slurm, manifest.model_provenance, manifest.test_evidence, manifest.producer_checkpoints, manifest.rollout, manifest.rollback];
+  assert.equal(manifest.rollout.status, "not_authorized", "rollout must remain not authorized");
+  assert.equal(manifest.rollout.evidence, null, "rollout evidence must remain unavailable");
+  assert.equal(manifest.rollout.blocker_id, "rollout-not-authorized", "rollout blocker mismatch");
+  assert.equal(manifest.rollback.status, "unverified", "rollback must remain unverified");
+  assert.equal(manifest.rollback.evidence, null, "rollback evidence must remain unavailable");
+  assert.equal(manifest.rollback.blocker_id, "rollback-evidence-unavailable", "rollback blocker mismatch");
+  const linkedSections = [manifest.migrations, manifest.required_gates, manifest.slurm, manifest.model_provenance, manifest.producer_checkpoints, manifest.rollout, manifest.rollback];
   linkedSections.forEach((section, index) => assertBlocker(manifest, section.blocker_id, `blocked section ${index}`));
-  for (const dependency of manifest.external_dependencies) {
-    exactKeys(dependency, ["id", "status", "blocker_id"], `external dependency ${dependency.id || "unknown"}`);
-    assert.notEqual(dependency.status, "available");
-    assertBlocker(manifest, dependency.blocker_id, `external dependency ${dependency.id}`);
-  }
-  assertUniqueIds(manifest.external_dependencies, "external dependency");
+  if (manifest.test_evidence.status === "complete") assert.equal(manifest.test_evidence.blocker_id, null, "complete test evidence cannot retain a blocker");
+  else assertBlocker(manifest, manifest.test_evidence.blocker_id, "partial test evidence");
+  assert.deepEqual(manifest.external_dependencies, [
+    { id: "producer-checkpoints", status: "unavailable", blocker_id: "accepted-producer-checkpoints-unavailable" },
+    { id: "sbom-and-release-provenance", status: "unavailable", blocker_id: "release-sbom-provenance-unavailable" },
+    { id: "production-rollout", status: "unavailable", blocker_id: "rollout-not-authorized" },
+  ], "external dependency inventory mismatch");
+  validateExternalDependencies(manifest.external_dependencies, manifest);
+  assert.deepEqual([...blockerIds(manifest)].sort(), referencedRootBlockerIds(manifest), "root blockers must exactly match manifest blocker references");
 
   const handoff = sourceJson(manifest.source.payload_sha, manifest.producer_checkpoints.ledger_path, cwd);
   const migration = sourceJson(manifest.source.payload_sha, manifest.migrations.inventory_path, cwd);
@@ -526,6 +695,12 @@ function validateManifest(manifest, options = {}) {
   const productionPolicy = sourceJson(manifest.source.payload_sha, sourceArtifacts[5][1], cwd);
   const featureParity = sourceJson(manifest.source.payload_sha, "pkg/inference/conformance/testdata/feature_parity_v1.json", cwd);
   assert.deepEqual(manifest.ai_assurance, buildAiAssurance(modelProvenance, productionPolicy, featureParity), "AI assurance projection mismatch");
+  validateAssuranceDigests(manifest.ai_assurance.provenance_digests.models, "model provenance");
+  validateAssuranceDigests(manifest.ai_assurance.provenance_digests.licenses, "license provenance");
+  validateAssuranceRuntime(manifest.ai_assurance.provenance_digests.runtime);
+  validateAssuranceSchema(manifest.ai_assurance.provenance_digests.schema);
+  validateAssuranceStatus(manifest.ai_assurance.evaluation);
+  validateAssuranceDigests(manifest.ai_assurance.feature_vector.test_vector_hashes, "feature vector");
   const expectedEvidence = buildTestEvidence(manifest.source.payload_sha, handoff, manifest.test_evidence.ledger_path, cwd);
   assert.deepEqual(manifest.test_evidence, expectedEvidence, "test evidence binding mismatch");
   const expectedTestRecords = expectedEvidence.records;
@@ -534,18 +709,12 @@ function validateManifest(manifest, options = {}) {
   assert.equal(manifest.test_evidence.record_count, expectedTestRecords.length, "test evidence record count mismatch");
   assert.equal(manifest.test_evidence.declared_test_count, countedTests.reduce((total, test) => total + test.test_count, 0), "declared test count mismatch");
   assert.equal(manifest.test_evidence.uncounted_record_count, expectedTestRecords.length - countedTests.length, "uncounted test record count mismatch");
+  assert.deepEqual(manifest.blockers, buildBlockers(expectedGroups, expectedEvidence), "blocker inventory mismatch");
   assert.equal(sourceDigest(manifest.source.payload_sha, manifest.producer_checkpoints.ledger_path, cwd), manifest.producer_checkpoints.ledger_sha256, "producer ledger hash mismatch");
   assert.deepEqual(manifest.producer_checkpoints.accepted, handoff.accepted_checkpoints, "accepted producer ledger binding mismatch");
   assert.deepEqual(manifest.producer_checkpoints.rejected, handoff.rejected_checkpoints, "rejected producer ledger binding mismatch");
-  for (const checkpoint of manifest.producer_checkpoints.accepted) {
-    assert.equal(
-      spawnSync("git", ["merge-base", "--is-ancestor", checkpoint.payload_head, manifest.source.payload_sha], { cwd }).status,
-      0,
-      `accepted producer payload is not contained in source: ${checkpoint.thread} ${checkpoint.payload_head}`,
-    );
-  }
-  assert.notEqual(manifest.rollout.status, "complete");
-  assert.notEqual(manifest.rollback.status, "verified");
+  validateRejectedCheckpoints(manifest.producer_checkpoints.rejected);
+  assert.equal(manifest.producer_checkpoints.accepted.length, 0, "payload must not claim integrated producers");
   assert.notEqual(manifest.model_provenance.sbom_status, "available");
   return true;
 }
@@ -554,15 +723,25 @@ function serialize(manifest) {
   return `${JSON.stringify(manifest, null, 2)}\n`;
 }
 
+function pathsReferToSameFile(left, right) {
+  const normalize = (path) => process.platform === "win32" ? path.toLowerCase() : path;
+  const canonical = (path) => normalize(existsSync(path) ? realpathSync.native(path) : resolve(path));
+  return canonical(left) === canonical(right);
+}
+
 function parseArgs(argv) {
   const options = { check: false, output: manifestRelativePath, source: null, toolingSource: null };
+  const seen = new Set();
   for (let index = 0; index < argv.length; index += 1) {
     const argument = argv[index];
+    assert.equal(seen.has(argument), false, `duplicate argument: ${argument}`);
+    seen.add(argument);
     if (argument === "--check") options.check = true;
-    else if (argument === "--source") options.source = argv[++index];
-    else if (argument === "--tooling-source") options.toolingSource = argv[++index];
-    else if (argument === "--output") {
-      options.output = argv[++index];
+    else if (["--source", "--tooling-source", "--output"].includes(argument)) {
+      const value = argv[++index];
+      assert.ok(value && !value.startsWith("--"), `${argument} requires a value`);
+      const key = { "--source": "source", "--tooling-source": "toolingSource", "--output": "output" }[argument];
+      options[key] = value;
     }
     else throw new Error(`unknown argument: ${argument}`);
   }
@@ -576,7 +755,7 @@ function main(argv = process.argv.slice(2)) {
   const options = parseArgs(argv);
   const output = resolve(root, options.output);
   const checkedPath = resolve(root, manifestRelativePath);
-  if (options.check || output === checkedPath) {
+  if (options.check || pathsReferToSameFile(output, checkedPath)) {
     assert.equal(gitText(["status", "--porcelain"], root), "", "refusing checked manifest access from a dirty worktree; use a temporary --output with exact source and tooling SHAs");
   }
   const generationOptions = { toolingSha: options.toolingSource };
@@ -593,6 +772,6 @@ function main(argv = process.argv.slice(2)) {
   }
 }
 
-module.exports = { artifactSelections, assertUniqueIds, buildAiAssurance, buildArtifactGroup, buildTestEvidence, buildTooling, generateManifest, listSourceEntries, main, manifestRelativePath, serialize, sourceArtifacts, sourceArtifactsFor, validateManifest };
+module.exports = { artifactSelections, assertUniqueIds, buildAiAssurance, buildArtifactGroup, buildBlockers, buildTestEvidence, buildTooling, generateManifest, listSourceEntries, main, manifestRelativePath, parseArgs, pathsReferToSameFile, referencedRootBlockerIds, serialize, sourceArtifacts, sourceArtifactsFor, validateAssuranceDigests, validateAssuranceRuntime, validateAssuranceSchema, validateAssuranceStatus, validateBlockers, validateExternalDependencies, validateManifest, validateRejectedCheckpoints, validateToolchains, validateToolingArtifacts };
 
 if (require.main === module) main();

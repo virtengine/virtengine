@@ -24,6 +24,12 @@ const tests = [
   ["rejects a non-exact reviewed SHA", () => assert.throws(() => buildOpenEpoch(previous, { ...options, expectedHead: "HEAD" }), /exact commit SHA/)],
   ["rejects an invalid time window", () => assert.throws(() => buildOpenEpoch(previous, { ...options, announcementCutoff: options.opensAt }), /must follow/)],
   ["parses explicit opening arguments", () => assert.equal(parseArgs(["--epoch", "2", "--expected-head", head, "--opens-at", options.opensAt, "--announcement-cutoff", options.announcementCutoff]).epoch, "2")],
+  ["rejects duplicate or incomplete opening arguments", () => {
+    const required = ["--expected-head", head, "--opens-at", options.opensAt, "--announcement-cutoff", options.announcementCutoff];
+    assert.throws(() => parseArgs(["--epoch", "2", "--epoch", "3", ...required]), /duplicate argument/);
+    assert.throws(() => parseArgs(["--epoch", "--expected-head", head, ...required.slice(2)]), /requires a value/);
+    assert.throws(() => parseArgs(["--epoch", "2", ...required, "--remote"]), /requires a value/);
+  }],
   ["accepts a clean published boundary and annotated exact tag", () => {
     const outputs = new Map([
       ["status --porcelain", ""], ["rev-parse HEAD", head], ["ls-remote --heads origin ve/prototype-integration", `${head}\trefs/heads/ve/prototype-integration`],

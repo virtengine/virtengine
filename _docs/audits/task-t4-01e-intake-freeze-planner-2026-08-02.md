@@ -1,6 +1,6 @@
 # T4-01E Intake Freeze Planner Evidence
 
-Status: diagnostic-green, cutoff-blocked
+Status: epoch-2-frozen, no-producer-accepted
 
 The diagnostic planner accepts explicit producer tag selections and emits a
 proposed frozen epoch without writing repository files. It verifies strict tag
@@ -10,7 +10,152 @@ time at or before the epoch cutoff. Unselected producers become frozen out.
 Remote publication timing is not inferred from the producer-controlled tagger
 date alone. The planner requires a committed pre-cutoff observation containing
 each annotated tag object and peeled target; unobserved tags cannot enter the
-frozen roster.
+frozen roster. Observer CLI options are single-assignment and reject missing or
+option-looking values, so an ambiguous epoch, remote, or repository selection
+cannot produce observation evidence. Freeze-planner scalar options enforce the
+same rule while retaining repeated `--tag` selections for distinct producers.
+Freeze application also requires every reviewed boundary option exactly once
+and rejects missing or option-looking values before acquiring its lease. Lease
+inspection and compare-and-claim recovery enforce the same single-assignment
+rule for the reviewed epoch, HEAD, plan digest, and retained lease digest. New
+epoch opening likewise rejects duplicate, missing, or option-looking reviewed
+HEAD and UTC window arguments before checking the published base boundary. The
+producer intake validator applies the same rule to epoch, tag, repository, and
+remote arguments before fetching or evaluating a checkpoint.
+
+Exact-SHA manifest generation also rejects duplicate, missing, or option-looking
+source, tooling-source, output, and check arguments. Checked-manifest path
+identity resolves filesystem aliases and compares case-insensitively on Windows,
+so alternate spelling cannot bypass the clean-worktree guard.
+
+The diagnostic core-RC publication preflight makes candidate, epoch, tag,
+repository, remote, and JSON mode single-assignment. Duplicate, missing, or
+option-looking values fail before publication evidence is evaluated.
+
+Integration candidate and canonical inputs must be exact lowercase commit SHAs
+or `origin/*` branches whose tracking commits equal the live remote head.
+Mutable local names such as `HEAD`, local branches, and abbreviated SHAs fail
+before acceptance evidence is read.
+
+Manifest handoff test records may omit counts and remain explicitly partial,
+but any declared count must be a positive integer. Zero-count records cannot
+produce complete test evidence. The manifest schema mirrors runtime semantics:
+complete evidence has zero uncounted records, while partial evidence retains at
+least one uncounted record.
+
+Declared per-record test counts must also be JavaScript-safe integers, and their
+aggregate must remain within the safe integer range. Runtime validation rejects
+unsafe or overflowed totals, while schema validation caps both record and
+aggregate counts at `9007199254740991`.
+
+Manifest test evidence must contain at least one unique literal command.
+Duplicate records and whitespace-padded command identities are rejected before
+record and declared-test counts are projected.
+
+Tool-version evidence also requires nonempty literal tool names and version
+strings with no surrounding whitespace in both runtime and schema validation.
+
+Complete manifest test evidence carries no partial-evidence blocker. The
+`test-evidence-partial` blocker is emitted only when one or more passing records
+omit test counts, and schema validation enforces that status/blocker coupling.
+
+Root manifest blockers exactly equal the blocker IDs referenced by artifact
+groups, blocked sections, external dependencies, and AI non-certification.
+Cleared artifact coverage cannot leave a stale blocker declaration.
+
+Rejected producer evidence has exact thread, checkpoint, tip, and literal
+reason fields. Runtime and schema validation reject malformed records and exact
+duplicates, while runtime identity is the thread/checkpoint pair and rejects
+conflicting tips for one named checkpoint. The manifest remains byte-bound to
+the integration ledger.
+
+Control artifacts reject duplicate records in schema validation and duplicate
+IDs or paths at runtime before source-byte hashes and statuses are accepted.
+
+Schema-only validation also rejects exact duplicates in tooling artifacts,
+toolchains, artifact groups, external dependencies, and root blockers, matching
+their stronger runtime identity and inventory checks.
+
+Root blocker IDs are canonical lowercase kebab-case and descriptions are
+nonempty literal strings without surrounding whitespace. Runtime and schema
+validation reject malformed or duplicate blocker declarations.
+
+Each root blocker ID is also bound to its canonical description. Generation
+and runtime validation share one derived blocker inventory, while schema
+validation enumerates the same permitted pairs; semantically swapped
+descriptions fail even when both IDs and descriptions are individually valid.
+
+External dependencies use canonical lowercase IDs, remain explicitly
+unavailable, and reference canonical existing blockers. Runtime and schema
+validation reject malformed or duplicate dependency declarations.
+
+Tooling artifacts use unique repository-relative literal paths. Absolute,
+parent-traversing, backslash, padded, or duplicate paths fail before Git blob
+and SHA-256 provenance is accepted.
+
+Generator, schema, and validator tooling identities are each bound to their
+canonical repository path. Runtime and schema validation reject substituted or
+cross-wired tooling paths even when all paths and hashes are individually
+well-formed.
+
+Toolchain declarations require literal nonempty name, version, and source
+values, declared status, and unique complete tuples in runtime and schema
+validation.
+
+Committed tooling, control, inventory, report, model, and ledger path fields
+share one repository-relative schema. Absolute, traversing, backslash, or
+whitespace-padded paths fail schema-only validation.
+
+Artifact selection prefixes, inclusion patterns, and exclusion patterns use
+the same repository-relative contract and reject exact duplicates.
+
+AI model/license provenance, feature-vector hashes, and explicit
+non-certification lists reject exact duplicate entries in schema-only
+validation.
+
+Model, license, and feature-vector digest records also require unique semantic
+IDs and literal nonempty ID/state values at runtime, preventing distinct records
+from reusing one evidence identity.
+
+Every non-null AI model, license, runtime, runtime-SBOM, schema, evaluation,
+and non-certification blocker reference must resolve in the exact root blocker
+inventory. The validator rejects both dangling assurance references and stale
+unreferenced blocker declarations.
+
+AI model and license digest records couple state, digest, and blocker presence.
+`dependency_blocked` records require a null digest and canonical blocker;
+`fixture_only` and `present` records require a SHA-256 digest and no blocker.
+Runtime and schema validation reject contradictory combinations.
+
+The v0 assurance projection also fixes runtime and runtime-SBOM evidence as
+dependency-blocked with null digests and canonical blockers, the feature schema
+as present with a digest and no blocker, and production evaluation as
+dependency-blocked with a null report digest and canonical blocker. A readiness
+transition requires a versioned contract change rather than a contradictory v0
+record.
+
+The AI non-certification array is restricted to the exact seven governed
+categories, so schema-only validation cannot substitute or omit a required
+production non-claim.
+
+AI provenance and evaluation blocker references use canonical nullable blocker
+IDs, while assurance state and status fields reject surrounding whitespace.
+
+Prototype rollout and rollback states are exact non-claims: rollout remains
+`not_authorized` with no evidence and its dedicated blocker, while rollback
+remains `unverified` with no evidence and its dedicated blocker. Alternate
+status strings, fabricated evidence, and unrelated blocker substitutions fail
+runtime validation.
+
+Migration, required-gate, SLURM, model-provenance, and producer-checkpoint
+sections each retain their dedicated canonical blocker ID. Runtime and schema
+validation reject cross-wired blockers even when every substituted blocker
+exists in the root blocker inventory.
+
+The external dependency inventory is the exact ordered producer-checkpoint,
+release-provenance, and rollout dependency set. Each identity is paired with
+its dedicated unavailable blocker, so reordered, substituted, or cross-wired
+dependency evidence fails runtime and schema validation.
 
 The planner hashes the selected observation, requires the checked core-RC
 manifest to bind that exact path/digest, verifies identical bytes at the
@@ -30,7 +175,29 @@ from the mutable candidate ref. Canonical or candidate inputs under `origin/*`
 must equal the current exact remote branch head before resolution. CLI options
 are strict option/value pairs; unknown, duplicate, or incomplete inputs fail.
 Required gates run unit coverage and the published live-candidate policy
-separately; the latter currently fails on its informal acceptance schema. The
+separately; the latter currently fails on its informal acceptance schema and is
+projected as `integration-candidate-preflight-blocked`. Test results must execute
+every discovered case, while policy results must report zero test counters.
+Result evidence includes schema-validated command kind and must match the plan. The
+reported tool set must exactly match pinned tools by count, unique name, version,
+availability, and field shape. Matrix commands, tools, dependencies, blockers,
+categories, and path allowances reject duplicate declarations. The
+dependency schema is exact, and each unavailable dependency requires its
+canonical `dependency-<id>` blocker with no stale dependency blockers retained.
+Categories marked `ready` or `complete` cannot retain any blocker. The
+matrix status is derived from category states, completion claims are complete-only,
+and root blockers exactly equal category blocker usage. Execution-plan categories,
+allowances, commands, and pinned tools reject duplicate records. Plans retain
+category dependencies and blockers, and execution rechecks both independently
+of projected status. Result envelopes reject duplicate records in schema and
+runtime validation and bind a deterministic digest of the complete execution
+plan using recursively key-sorted JSON while preserving array order. Passing
+result evidence is rejected unless that exact plan is execution-ready. Canonical
+serialization rejects sparse arrays, non-plain objects, unsupported values,
+non-finite or unsafe numbers, and negative zero. Runner CLI options are
+single-assignment and reject missing or option-looking values. Required-gate
+planning rejects identical base/head revisions and ranges with no changed paths,
+so an empty result envelope cannot represent a no-op checkpoint. The
 acceptance commit must be the implementation's direct, single-parent child and
 change only the acceptance artifact. Accepted annotated tags must be exact tag
 objects published by `origin`; local-only or stale same-name tags are rejected.
@@ -43,6 +210,11 @@ canonical T4; no promotion or merge is claimed.
 
 The negative suite rejects planning before cutoff, late tags, wrong-thread tags,
 invalid targets, unknown producers, duplicate selections, unobserved tags, and
-post-cutoff observations. The real epoch
-planner currently exits nonzero because the authoritative UTC cutoff has not
-elapsed. Planning does not accept or merge producer payloads.
+post-cutoff observations. After the authoritative epoch-2 cutoff elapsed, T4
+reviewed plan SHA-256
+`28698850216e7c328bd4768118200a1cb55433dba1c71ec105c42d2e84edaea2`
+at published head `5db9c5ea326776e2d2dac2812b831e835ef74eed`.
+The exact reviewed plan froze out T1, T2, T3, and T5 because no producer tag was
+selected. Lease-protected application replayed the committed pre-cutoff
+observation and atomically changed epoch 2 from open to frozen. No producer
+checkpoint was accepted or merged.

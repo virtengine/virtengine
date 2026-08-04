@@ -14,19 +14,33 @@
     "unmatched_path_allowlist": {
       "type": "array",
       "minItems": 1,
+      "uniqueItems": true,
       "items": { "$ref": "#/$defs/pathAllowance" }
     },
     "categories": {
       "type": "array",
       "minItems": 11,
       "maxItems": 11,
+      "uniqueItems": true,
       "items": { "$ref": "#/$defs/category" }
     },
     "blockers": {
       "type": "array",
+      "uniqueItems": true,
       "items": { "$ref": "#/$defs/blocker" }
     }
   },
+  "allOf": [
+    {
+      "if": { "properties": { "status": { "const": "complete" } }, "required": ["status"] },
+      "then": { "properties": { "completion_claim": { "const": true }, "blockers": { "maxItems": 0 } } },
+      "else": { "properties": { "completion_claim": { "const": false } } }
+    },
+    {
+      "if": { "properties": { "status": { "const": "ready" } }, "required": ["status"] },
+      "then": { "properties": { "blockers": { "maxItems": 0 } } }
+    }
+  ],
   "$defs": {
     "stringArray": {
       "type": "array",
@@ -113,11 +127,13 @@
         "required_commands": {
           "type": "array",
           "minItems": 1,
+          "uniqueItems": true,
           "items": { "$ref": "#/$defs/command" }
         },
         "pinned_tools": {
           "type": "array",
           "minItems": 1,
+          "uniqueItems": true,
           "items": { "$ref": "#/$defs/tool" }
         },
         "zero_test_policy": { "$ref": "#/$defs/zeroTestPolicy" },
@@ -125,14 +141,23 @@
         "dependencies": {
           "type": "array",
           "minItems": 1,
+          "uniqueItems": true,
           "items": { "$ref": "#/$defs/dependency" }
         },
         "status": { "enum": ["dependency_blocked", "ready", "complete"] },
         "blockers": {
           "type": "array",
+          "uniqueItems": true,
           "items": { "type": "string", "pattern": "^[a-z0-9.-]+$" }
         }
-      }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "status": { "enum": ["ready", "complete"] } }, "required": ["status"] },
+          "then": { "properties": { "blockers": { "maxItems": 0 } } },
+          "else": { "properties": { "blockers": { "minItems": 1 } } }
+        }
+      ]
     }
   }
 }

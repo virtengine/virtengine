@@ -12,8 +12,21 @@ const {
   buildTestEvidence,
   buildTooling,
   listSourceEntries,
+  parseArgs,
+  pathsReferToSameFile,
+  referencedRootBlockerIds,
   sourceArtifacts,
   sourceArtifactsFor,
+  validateAssuranceDigests,
+  validateAssuranceRuntime,
+  validateAssuranceSchema,
+  validateAssuranceStatus,
+  validateBlockers,
+  validateExternalDependencies,
+  validateManifest,
+  validateRejectedCheckpoints,
+  validateToolchains,
+  validateToolingArtifacts,
 } = require("./generate-core-rc-manifest.cjs");
 const { validateSchema } = require("./validate-core-rc-manifest.cjs");
 
@@ -41,8 +54,20 @@ const schema = JSON.parse(readFileSync(resolve(root, "_docs/ralph/prototype-inte
 const modelProvenance = JSON.parse(readFileSync(resolve(root, "_docs/ralph/prototype-integration/model-provenance.json"), "utf8"));
 const productionPolicy = JSON.parse(readFileSync(resolve(root, "_docs/ralph/prototype-integration/ai-production-policy.json"), "utf8"));
 const featureParity = JSON.parse(readFileSync(resolve(root, "pkg/inference/conformance/testdata/feature_parity_v1.json"), "utf8"));
+const checkedManifest = JSON.parse(readFileSync(resolve(root, checkedManifestPath), "utf8"));
 
 const tests = [
+  ["rejects duplicate or incomplete generator arguments", () => {
+    assert.throws(() => parseArgs(["--source", sourceSha, "--source", "0".repeat(40), "--tooling-source", sourceSha]), /duplicate argument/);
+    assert.throws(() => parseArgs(["--source", "--tooling-source", sourceSha]), /requires a value/);
+    assert.throws(() => parseArgs(["--source", sourceSha, "--tooling-source"]), /requires a value/);
+    assert.throws(() => parseArgs(["--source", sourceSha, "--tooling-source", sourceSha, "--check", "--check"]), /duplicate argument/);
+  }],
+  ["recognizes checked manifest path aliases", () => {
+    const checked = resolve(root, checkedManifestPath);
+    assert.equal(pathsReferToSameFile(checked, resolve(root, ".", checkedManifestPath)), true);
+    if (process.platform === "win32") assert.equal(pathsReferToSameFile(checked.toUpperCase(), checked), true);
+  }],
   ["projects blocked AI assurance without certification", () => {
     const assurance = buildAiAssurance(modelProvenance, productionPolicy, featureParity);
     assert.equal(assurance.feature_vector.dimension, 768);
@@ -98,6 +123,7 @@ const tests = [
     assert.equal(evidence.implementation_sha, handoff.end_head);
     assert.equal(evidence.ledger_sha, sourceSha);
     assert.equal(evidence.status, "partial");
+    assert.equal(evidence.blocker_id, "test-evidence-partial");
     assert.ok(evidence.records.every((record) => Object.hasOwn(record, "exit_code") && Object.hasOwn(record, "test_count") && Object.hasOwn(record, "tool_versions")));
   }],
   ["rejects stale evidence with unrelated intervening changes", () => {
@@ -118,13 +144,49 @@ const tests = [
     delete versionless.tests[0].tool_versions;
     assert.throws(() => buildTestEvidence(sourceSha, versionless, handoffPath, root), /missing tool_versions/);
   }],
+  ["rejects non-literal tool names and versions", () => {
+    const paddedName = clone(handoff);
+    paddedName.tests[0].tool_versions[" node"] = paddedName.tests[0].tool_versions.node;
+    delete paddedName.tests[0].tool_versions.node;
+    assert.throws(() => buildTestEvidence(sourceSha, paddedName, handoffPath, root), /invalid tool name/);
+    const paddedVersion = clone(handoff);
+    paddedVersion.tests[0].tool_versions.node = ` ${paddedVersion.tests[0].tool_versions.node}`;
+    assert.throws(() => buildTestEvidence(sourceSha, paddedVersion, handoffPath, root), /invalid tool version/);
+  }],
+  ["rejects zero-count test evidence", () => {
+    const zeroCount = clone(handoff);
+    zeroCount.tests[0].test_count = 0;
+    assert.throws(() => buildTestEvidence(sourceSha, zeroCount, handoffPath, root), /invalid test_count/);
+    const unsafe = clone(handoff);
+    unsafe.tests[0].test_count = Number.MAX_SAFE_INTEGER + 1;
+    assert.throws(() => buildTestEvidence(sourceSha, unsafe, handoffPath, root), /invalid test_count/);
+    const unsafeTotal = clone(handoff);
+    unsafeTotal.tests.forEach((test) => { test.test_count = Number.MAX_SAFE_INTEGER; });
+    assert.throws(() => buildTestEvidence(sourceSha, unsafeTotal, handoffPath, root), /safe integer range/);
+  }],
+  ["rejects empty, duplicate, or non-literal test evidence", () => {
+    const empty = clone(handoff);
+    empty.tests = [];
+    assert.throws(() => buildTestEvidence(sourceSha, empty, handoffPath, root), /must not be empty/);
+    const duplicate = clone(handoff);
+    duplicate.tests.push(clone(duplicate.tests[0]));
+    assert.throws(() => buildTestEvidence(sourceSha, duplicate, handoffPath, root), /duplicate test evidence command/);
+    const padded = clone(handoff);
+    padded.tests[0].command = ` ${padded.tests[0].command}`;
+    assert.throws(() => buildTestEvidence(sourceSha, padded, handoffPath, root), /literal and nonempty/);
+  }],
+  ["omits the partial blocker from complete test evidence", () => {
+    const counted = clone(handoff);
+    counted.tests.forEach((test) => { test.test_count = 1; });
+    const evidence = buildTestEvidence(sourceSha, counted, handoffPath, root);
+    assert.equal(evidence.status, "complete");
+    assert.equal(evidence.uncounted_record_count, 0);
+    assert.equal(evidence.blocker_id, null);
+  }],
   ["rejects checked-path dirty guard bypasses", () => {
-    const currentSha = spawnSync("git", ["rev-parse", "HEAD"], { cwd: root, encoding: "utf8" }).stdout.trim();
-    const declaredPayloadSha = JSON.parse(readFileSync(resolve(root, checkedManifestPath), "utf8")).source.payload_sha;
-    const marker = resolve(root, "core-rc-manifest.dirty-marker.tmp");
-    const temporaryPath = resolve(root, "core-rc-manifest.tmp.json");
-    const common = ["--source", declaredPayloadSha, "--tooling-source", currentSha];
-    writeFileSync(marker, "dirty\n", "utf8");
+    const common = ["--source", sourceSha, "--tooling-source", sourceSha];
+    const dirtyMarker = resolve(root, "core-rc-manifest-dirty-guard.tmp");
+    writeFileSync(dirtyMarker, "dirty\n");
     try {
       for (const args of [
         [...common, "--output", checkedManifestPath],
@@ -134,20 +196,61 @@ const tests = [
         assert.notEqual(result.status, 0);
         assert.match(result.stderr, /dirty worktree/);
       }
-      const temporary = runGenerator([...common, "--output", "core-rc-manifest.tmp.json"]);
-      assert.equal(temporary.status, 0, temporary.stderr);
     } finally {
-      unlinkSync(marker);
-      try { unlinkSync(temporaryPath); } catch (error) {
-        if (error.code !== "ENOENT") throw error;
-      }
+      unlinkSync(dirtyMarker);
     }
+    const temporary = runGenerator([...common, "--output", "core-rc-manifest.tmp.json"]);
+    assert.notEqual(temporary.status, 0);
+    assert.doesNotMatch(temporary.stderr, /dirty worktree/);
+    assert.match(temporary.stderr, /(?:does not exist|not) in/);
   }],
   ["blocks tooling provenance when the declared commit lacks tool blobs", () => {
     assert.throws(() => buildTooling(sourceSha, sourceSha, root), /(?:does not exist|not) in/);
   }],
   ["rejects mutated schema structure and duplicate schema IDs", () => {
     assert.doesNotThrow(() => validateSchema(schema));
+    assert.equal(schema.$defs.testRecord.properties.test_count.oneOf[0].minimum, 1);
+    assert.equal(schema.$defs.testRecord.properties.test_count.oneOf[0].maximum, Number.MAX_SAFE_INTEGER);
+    assert.equal(schema.$defs.testEvidence.properties.declared_test_count.maximum, Number.MAX_SAFE_INTEGER);
+    assert.equal(schema.$defs.testEvidence.properties.uncounted_record_count.minimum, 0);
+    assert.equal(schema.$defs.testEvidence.oneOf[0].properties.status.const, "complete");
+    assert.equal(schema.$defs.testEvidence.oneOf[0].properties.uncounted_record_count.const, 0);
+    assert.equal(schema.$defs.testEvidence.oneOf[0].properties.blocker_id.type, "null");
+    assert.equal(schema.$defs.testEvidence.oneOf[1].properties.status.const, "partial");
+    assert.equal(schema.$defs.testEvidence.oneOf[1].properties.uncounted_record_count.minimum, 1);
+    assert.equal(schema.$defs.testEvidence.properties.records.uniqueItems, true);
+    assert.equal(schema.$defs.testRecord.properties.tool_versions.propertyNames.pattern, "^\\S(?:.*\\S)?$");
+    assert.equal(schema.$defs.testRecord.properties.tool_versions.additionalProperties.pattern, "^\\S(?:.*\\S)?$");
+    assert.equal(schema.properties.control_artifacts.uniqueItems, true);
+    for (const property of ["toolchains", "artifact_groups", "external_dependencies", "blockers"]) assert.equal(schema.properties[property].uniqueItems, true);
+    assert.equal(schema.$defs.tooling.properties.artifacts.uniqueItems, true);
+    assert.equal(schema.$defs.toolingArtifact.oneOf.length, 3);
+    for (const [definition, property] of [["toolingArtifact", "path"], ["controlArtifact", "path"], ["migrations", "inventory_path"], ["requiredGates", "matrix_path"], ["slurm", "inventory_path"], ["slurm", "report_path"], ["modelProvenance", "path"], ["testEvidence", "ledger_path"], ["producerCheckpoints", "ledger_path"]]) {
+      assert.deepEqual(schema.$defs[definition].properties[property], { $ref: "#/$defs/repositoryPath" });
+    }
+    for (const property of ["included_path_prefixes", "included_file_patterns", "excluded_path_patterns"]) {
+      assert.equal(schema.$defs.artifactSelection.properties[property].uniqueItems, true);
+      assert.deepEqual(schema.$defs.artifactSelection.properties[property].items, { $ref: "#/$defs/repositoryPath" });
+    }
+    assert.equal(schema.$defs.aiAssurance.properties.provenance_digests.properties.models.uniqueItems, true);
+    assert.equal(schema.$defs.aiAssurance.properties.provenance_digests.properties.licenses.uniqueItems, true);
+    assert.equal(schema.$defs.aiAssurance.properties.feature_vector.properties.test_vector_hashes.uniqueItems, true);
+    assert.equal(schema.$defs.aiAssurance.properties.non_certification.properties.not_certified.uniqueItems, true);
+    assert.deepEqual(schema.$defs.aiAssurance.properties.non_certification.properties.not_certified.items.enum, ["production_model", "production_runtime", "production_evaluation", "biometric_uniqueness", "durable_vault_or_kms", "production_consent_enforcement", "production_retention_legal_hold_or_erasure"]);
+    assert.deepEqual(schema.$defs.assuranceDigest.properties.source_blocker_id, { $ref: "#/$defs/nullableBlockerId" });
+    assert.equal(schema.$defs.assuranceDigest.oneOf[0].properties.state.const, "dependency_blocked");
+    assert.deepEqual(schema.$defs.assuranceDigest.oneOf[1].properties.state.enum, ["fixture_only", "present"]);
+    assert.deepEqual(schema.$defs.assuranceStatus.properties.source_blocker_id, { $ref: "#/$defs/blockerId" });
+    assert.equal(schema.$defs.assuranceStatus.properties.status.const, "dependency_blocked");
+    assert.equal(schema.$defs.aiAssurance.properties.provenance_digests.properties.runtime.properties.state.const, "dependency_blocked");
+    assert.equal(schema.$defs.aiAssurance.properties.provenance_digests.properties.schema.properties.state.const, "present");
+    assert.equal(schema.$defs.migrations.properties.blocker_id.const, "producer-migration-handoffs-unavailable");
+    assert.equal(schema.$defs.requiredGates.properties.blocker_id.const, "required-gates-dependency-blocked");
+    assert.equal(schema.$defs.slurm.properties.blocker_id.const, "slurm-production-evidence-unavailable");
+    assert.equal(schema.$defs.modelProvenance.properties.blocker_id.const, "production-model-provenance-unavailable");
+    assert.equal(schema.$defs.producerCheckpoints.properties.blocker_id.const, "accepted-producer-checkpoints-unavailable");
+    assert.equal(schema.$defs.dependency.oneOf.length, 3);
+    assert.deepEqual(schema.$defs.dependency.properties.id.enum, ["producer-checkpoints", "sbom-and-release-provenance", "production-rollout"]);
     const mutated = clone(schema);
     mutated.$defs.testRecord.properties.command.bogus = true;
     assert.throws(() => validateSchema(mutated), /unknown schema keyword/);
@@ -155,8 +258,115 @@ const tests = [
     duplicate.$defs.artifactGroup.properties.id.enum.push("chart");
     assert.throws(() => validateSchema(duplicate), /must be unique/);
   }],
+  ["rejects forged rollout and rollback evidence", () => {
+    const rollout = clone(checkedManifest);
+    rollout.rollout = { status: "authorized", evidence: { result: "passed", source: "fabricated" }, blocker_id: "rollout-not-authorized" };
+    assert.throws(() => validateManifest(rollout, { rootDir: root }), /rollout/);
+    const rollback = clone(checkedManifest);
+    rollback.rollback = { status: "verified", evidence: { result: "passed", source: "fabricated" }, blocker_id: "rollback-evidence-unavailable" };
+    assert.throws(() => validateManifest(rollback, { rootDir: root }), /rollback/);
+  }],
+  ["rejects cross-wired blocked-section blockers", () => {
+    const candidate = clone(checkedManifest);
+    [candidate.migrations.blocker_id, candidate.slurm.blocker_id] = [candidate.slurm.blocker_id, candidate.migrations.blocker_id];
+    assert.throws(() => validateManifest(candidate, { rootDir: root }), /migration blocker mismatch/);
+  }],
+  ["rejects cross-wired external dependency blockers", () => {
+    const candidate = clone(checkedManifest);
+    [candidate.external_dependencies[0].blocker_id, candidate.external_dependencies[1].blocker_id] = [candidate.external_dependencies[1].blocker_id, candidate.external_dependencies[0].blocker_id];
+    assert.throws(() => validateManifest(candidate, { rootDir: root }), /external dependency inventory mismatch/);
+  }],
+  ["rejects cross-wired blocker descriptions", () => {
+    const candidate = clone(checkedManifest);
+    [candidate.blockers[0].description, candidate.blockers[1].description] = [candidate.blockers[1].description, candidate.blockers[0].description];
+    assert.throws(() => validateManifest(candidate, { rootDir: root }), /blocker inventory mismatch/);
+  }],
   ["rejects duplicate manifest entry IDs", () => {
     assert.throws(() => assertUniqueIds([{ id: "chart" }, { id: "chart" }], "artifact group"), /must be unique/);
+  }],
+  ["collects every referenced root blocker exactly once", () => {
+    const manifest = {
+      artifact_groups: [{ blocker_id: "artifact" }],
+      migrations: { blocker_id: "migration" }, required_gates: { blocker_id: "gates" }, slurm: { blocker_id: "slurm" },
+      model_provenance: { blocker_id: "model" }, test_evidence: { blocker_id: null }, producer_checkpoints: { blocker_id: "producer" },
+      rollout: { blocker_id: "rollout" }, rollback: { blocker_id: "rollback" },
+      external_dependencies: [{ blocker_id: "producer" }],
+      ai_assurance: {
+        provenance_digests: {
+          models: [{ source_blocker_id: "model-source" }], licenses: [{ source_blocker_id: "license" }],
+          runtime: { source_blocker_id: "runtime", sbom_blocker_id: "runtime-sbom" }, schema: { source_blocker_id: "schema" },
+        },
+        evaluation: { source_blocker_id: "evaluation" }, non_certification: { blocker_id: "ai" },
+      },
+    };
+    assert.deepEqual(referencedRootBlockerIds(manifest), ["ai", "artifact", "evaluation", "gates", "license", "migration", "model", "model-source", "producer", "rollback", "rollout", "runtime", "runtime-sbom", "schema", "slurm"]);
+  }],
+  ["rejects malformed or duplicate producer rejection evidence", () => {
+    const rejection = { thread: "T3", checkpoint: "T3-13A", tip: "a".repeat(40), reason: "Immutable intake failed." };
+    assert.equal(validateRejectedCheckpoints([rejection]), true);
+    assert.throws(() => validateRejectedCheckpoints([rejection, clone(rejection)]), /duplicate rejected producer checkpoint/);
+    assert.throws(() => validateRejectedCheckpoints([rejection, { ...rejection, tip: "b".repeat(40), reason: "Rejected at a conflicting tip." }]), /duplicate rejected producer checkpoint/);
+    assert.throws(() => validateRejectedCheckpoints([{ ...rejection, reason: " padded " }]), /literal and nonempty/);
+    assert.throws(() => validateRejectedCheckpoints([{ ...rejection, thread: "T4" }]), /thread is invalid/);
+  }],
+  ["rejects malformed or duplicate root blockers", () => {
+    const blocker = { id: "required-gates-unavailable", description: "Required gates remain unavailable." };
+    assert.equal(validateBlockers([blocker]), true);
+    assert.throws(() => validateBlockers([blocker, clone(blocker)]), /duplicate blocker ID/);
+    assert.throws(() => validateBlockers([{ ...blocker, id: "Required Gates" }]), /canonical lowercase kebab-case/);
+    assert.throws(() => validateBlockers([{ ...blocker, description: " padded " }]), /literal and nonempty/);
+  }],
+  ["rejects malformed or duplicate external dependencies", () => {
+    const blocker = { id: "provider-unavailable", description: "Provider remains unavailable." };
+    const manifest = { blockers: [blocker] };
+    const dependency = { id: "provider-operator", status: "unavailable", blocker_id: blocker.id };
+    assert.equal(validateExternalDependencies([dependency], manifest), true);
+    assert.throws(() => validateExternalDependencies([dependency, clone(dependency)], manifest), /duplicate external dependency ID/);
+    assert.throws(() => validateExternalDependencies([{ ...dependency, id: "Provider Operator" }], manifest), /canonical lowercase kebab-case/);
+    assert.throws(() => validateExternalDependencies([{ ...dependency, status: "available" }], manifest), /must remain unavailable/);
+  }],
+  ["rejects malformed or duplicate tooling artifact paths", () => {
+    const artifacts = [
+      { id: "generator", path: "scripts/generate-core-rc-manifest.cjs", git_blob: "a".repeat(40), sha256: "a".repeat(64) },
+      { id: "schema", path: "_docs/ralph/prototype-integration/core-rc-manifest.schema.json", git_blob: "b".repeat(40), sha256: "b".repeat(64) },
+      { id: "validator", path: "scripts/validate-core-rc-manifest.cjs", git_blob: "c".repeat(40), sha256: "c".repeat(64) },
+    ];
+    assert.equal(validateToolingArtifacts(artifacts), true);
+    const duplicate = clone(artifacts); duplicate[2].path = duplicate[0].path;
+    assert.throws(() => validateToolingArtifacts(duplicate), /path mismatch/);
+    const crossWired = clone(artifacts); [crossWired[0].path, crossWired[1].path] = [crossWired[1].path, crossWired[0].path];
+    assert.throws(() => validateToolingArtifacts(crossWired), /path mismatch/);
+    for (const path of ["/absolute", "../escape", "scripts\\tool.cjs", " padded "]) {
+      const malformed = clone(artifacts); malformed[0].path = path;
+      assert.throws(() => validateToolingArtifacts(malformed), /repository-relative/);
+    }
+  }],
+  ["rejects malformed or duplicate toolchain declarations", () => {
+    const tool = { name: "node", version: "20.19.1", source: "required gate matrix", status: "declared" };
+    assert.equal(validateToolchains([tool]), true);
+    assert.throws(() => validateToolchains([tool, clone(tool)]), /duplicate toolchain declaration/);
+    for (const field of ["name", "version", "source"]) assert.throws(() => validateToolchains([{ ...tool, [field]: " padded " }]), new RegExp(`toolchain ${field}`));
+    assert.throws(() => validateToolchains([{ ...tool, status: "available" }]), /status must be declared/);
+  }],
+  ["rejects malformed or duplicate assurance digest identities", () => {
+    const digest = { id: "fixture-a", state: "fixture_only", sha256: "a".repeat(64), source_blocker_id: null };
+    assert.equal(validateAssuranceDigests([digest], "model provenance"), true);
+    assert.throws(() => validateAssuranceDigests([digest, { ...digest, sha256: "b".repeat(64) }], "model provenance"), /duplicate model provenance ID/);
+    assert.throws(() => validateAssuranceDigests([{ ...digest, id: " padded " }], "model provenance"), /ID must be literal/);
+    assert.throws(() => validateAssuranceDigests([{ ...digest, state: " padded " }], "model provenance"), /state is invalid/);
+    assert.throws(() => validateAssuranceDigests([{ ...digest, state: "dependency_blocked", sha256: null }], "model provenance"), /blocked digest must name a blocker/);
+    assert.throws(() => validateAssuranceDigests([{ ...digest, sha256: null }], "model provenance"), /digest is invalid/);
+  }],
+  ["rejects contradictory assurance runtime and evaluation states", () => {
+    const runtime = { state: "dependency_blocked", sha256: null, source_blocker_id: "runtime-image-absent", sbom_sha256: null, sbom_blocker_id: "runtime-sbom-absent" };
+    assert.equal(validateAssuranceRuntime(runtime), true);
+    assert.throws(() => validateAssuranceRuntime({ ...runtime, source_blocker_id: null }), /source blocker/);
+    const schemaDigest = { state: "present", sha256: "a".repeat(64), source_blocker_id: null };
+    assert.equal(validateAssuranceSchema(schemaDigest), true);
+    assert.throws(() => validateAssuranceSchema({ ...schemaDigest, source_blocker_id: "schema-blocked" }), /cannot retain a blocker/);
+    const evaluation = { status: "dependency_blocked", report_sha256: null, source_blocker_id: "production-evaluation-absent" };
+    assert.equal(validateAssuranceStatus(evaluation), true);
+    assert.throws(() => validateAssuranceStatus({ ...evaluation, source_blocker_id: null }), /must name a blocker/);
   }],
 ];
 
