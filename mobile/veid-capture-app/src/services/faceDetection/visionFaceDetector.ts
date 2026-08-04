@@ -3,6 +3,10 @@ import { VerificationTerminalError } from "../../core/verificationError";
 
 let cachedModule: any;
 
+export interface VisionFaceDetectorOptions {
+  moduleLoader?: () => Promise<{ scanFaces(frame: unknown): unknown }>;
+}
+
 async function loadFaceDetector() {
   if (cachedModule) {
     return cachedModule;
@@ -16,10 +20,12 @@ async function loadFaceDetector() {
   }
 }
 
-export const visionFaceDetector: FaceDetector = {
+export function createVisionFaceDetector(options: VisionFaceDetectorOptions = {}): FaceDetector {
+  const moduleLoader = options.moduleLoader ?? loadFaceDetector;
+  return {
   detect: async (frame: unknown): Promise<FaceDetectionResult[]> => {
     try {
-      const module = await loadFaceDetector();
+      const module = await moduleLoader();
       const faces = module.scanFaces(frame);
       if (!Array.isArray(faces)) {
         throw new VerificationTerminalError("face_detection_failed", "Face detector returned an invalid result.");
@@ -38,4 +44,7 @@ export const visionFaceDetector: FaceDetector = {
       throw new VerificationTerminalError("face_detection_failed", "Face detection failed.", { cause: error });
     }
   }
-};
+  };
+}
+
+export const visionFaceDetector = createVisionFaceDetector();
