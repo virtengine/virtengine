@@ -1,0 +1,34 @@
+T2-X20 raw validation summary
+Implementation SHA: 16d2c07c0002bc173a0fdbe9b1d45a9222ee3fdd
+Node: v20.19.1
+
+[focused-vitest]
+OUTPUT: Test Files 1 passed (1)
+OUTPUT: Tests 17 passed (17)
+EXIT: 0
+
+[full-portal-vitest]
+OUTPUT: Test Files 86 passed (86)
+OUTPUT: Tests 676 passed (676)
+OUTPUT: Duration 141.70s
+OUTPUT: no warnings or stderr
+EXIT: 0
+
+[typecheck]
+OUTPUT: full portal check completed with no diagnostics
+EXIT: 0
+
+[prettier]
+COMMAND: C:\Windows\System32\cmd.exe /d /c "cd /d C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t2\portal && node_modules\.bin\prettier.CMD --check src\components\billing\BillingDashboard.tsx src\components\billing\withdrawal-mutation.ts tests\unit\billing\BillingDashboard.test.tsx"
+OUTPUT: exact three-file formatting completed
+EXIT: 0
+
+[eslint]
+COMMAND: C:\Windows\System32\cmd.exe /d /c "cd /d C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t2\portal && node_modules\.bin\eslint.CMD src\components\billing\BillingDashboard.tsx src\components\billing\withdrawal-mutation.ts tests\unit\billing\BillingDashboard.test.tsx"
+OUTPUT: no lint findings; TypeScript parser-support notice only
+EXIT: 0
+
+[committed-diff-check]
+COMMAND: git -C C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t2 show --check --format= 16d2c07c0002bc173a0fdbe9b1d45a9222ee3fdd -- portal/src/components/billing/BillingDashboard.tsx portal/src/components/billing/withdrawal-mutation.ts portal/tests/unit/billing/BillingDashboard.test.tsx
+OUTPUT: no diagnostics
+EXIT: 0

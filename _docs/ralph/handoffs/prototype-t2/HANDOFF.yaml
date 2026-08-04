@@ -1,71 +1,53 @@
 campaign: three-day-prototype
 thread: T2
-checkpoint: T2-X19
+checkpoint: T2-X20
 branch: ve/prototype-t2-product
-start_head: 997fcbccd934074368d022b9b37ab20cc9c64d68
-end_head: 65d21f19afeff95862a88eb543d4fa99e80d06ef
+start_head: 31c97228cbdceadbcbf41615ccb820d403fe89f0
+end_head: 16d2c07c0002bc173a0fdbe9b1d45a9222ee3fdd
 origin_main: 79391a3df86d85522b92e0400c6904971ecbe65d
 tree_clean: true
 commits:
-  - 65d21f19afeff95862a88eb543d4fa99e80d06ef
+  - 16d2c07c0002bc173a0fdbe9b1d45a9222ee3fdd
 owned_paths:
-  - lib/portal/components/organization/
-  - lib/portal/__tests__/organization/
-  - lib/portal/hooks/useOrganization.tsx
-  - lib/portal/components/PortalProvider.tsx
-  - lib/portal/types/config.ts
-  - lib/portal/index.ts
-  - lib/portal/index.d.ts
-  - portal/src/lib/portal-adapter.ts
+  - portal/src/components/billing/
+  - portal/tests/unit/billing/
 files_changed:
-  - lib/portal/components/organization/organization-mutation.ts
-  - lib/portal/hooks/useOrganization.tsx
-  - lib/portal/__tests__/organization/use-organization-mutations.test.tsx
-  - lib/portal/components/PortalProvider.tsx
-  - lib/portal/types/config.ts
-  - lib/portal/index.ts
-  - lib/portal/index.d.ts
-  - portal/src/lib/portal-adapter.ts
+  - portal/src/components/billing/BillingDashboard.tsx
+  - portal/src/components/billing/withdrawal-mutation.ts
+  - portal/tests/unit/billing/BillingDashboard.test.tsx
 tests:
-  - command: C:\Windows\System32\cmd.exe /d /c "cd /d C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t2\lib\portal && node_modules\.bin\vitest.CMD run __tests__/organization/use-organization-mutations.test.tsx --reporter=dot --maxWorkers=1"
+  - command: C:\Windows\System32\cmd.exe /d /c "cd /d C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t2\portal && node_modules\.bin\vitest.CMD run tests/unit/billing/BillingDashboard.test.tsx --reporter=dot --maxWorkers=1 --no-color"
     exit_code: 0
     result: passed
     test_count: 17
     tool_versions:
       node: v20.19.1
-    artifact: _docs/ralph/handoffs/prototype-t2/T2-X19-validation.txt
-  - command: C:\Windows\System32\cmd.exe /d /c "cd /d C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t2\lib\portal && node_modules\.bin\vitest.CMD run --reporter=dot --maxWorkers=1"
+    artifact: _docs/ralph/handoffs/prototype-t2/T2-X20-validation.txt
+  - command: C:\Windows\System32\cmd.exe /d /c "cd /d C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t2\portal && node_modules\.bin\vitest.CMD run --reporter=dot --maxWorkers=1 --no-color"
     exit_code: 0
     result: passed
-    test_count: 773
+    test_count: 676
     tool_versions:
       node: v20.19.1
-    artifact: _docs/ralph/handoffs/prototype-t2/T2-X19-validation.txt
-  - command: C:\Windows\System32\cmd.exe /d /c "cd /d C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t2\portal && node_modules\.bin\vitest.CMD run --reporter=dot --maxWorkers=1"
-    exit_code: 0
-    result: passed
-    test_count: 659
-    tool_versions:
-      node: v20.19.1
-    artifact: _docs/ralph/handoffs/prototype-t2/T2-X19-validation.txt
-  - command: C:\Windows\System32\cmd.exe /d /c "cd /d C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t2\lib\portal && node_modules\.bin\tsc.CMD -p tsconfig.chain.json --noEmit --incremental false"
+    artifact: _docs/ralph/handoffs/prototype-t2/T2-X20-validation.txt
+  - command: C:\Windows\System32\cmd.exe /d /c "cd /d C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t2\portal && node_modules\.bin\tsc.CMD --noEmit --incremental false"
     exit_code: 0
     result: passed
     tool_versions:
       node: v20.19.1
-    artifact: _docs/ralph/handoffs/prototype-t2/T2-X19-validation.txt
+    artifact: _docs/ralph/handoffs/prototype-t2/T2-X20-validation.txt
 generated_hashes: {}
 migrations: []
 external_evidence:
-  - _docs/ralph/handoffs/prototype-t2/T2-X19-evidence.txt
-  - _docs/ralph/handoffs/prototype-t2/T2-X19-validation.txt
+  - _docs/ralph/handoffs/prototype-t2/T2-X20-evidence.txt
+  - _docs/ralph/handoffs/prototype-t2/T2-X20-validation.txt
 known_failures: []
 blockers:
   - T4 producer-handoff.schema.json does not permit the established supplemental T2-X checkpoint names; T2-X01 through T2-X10 retain the campaign queue naming.
   - T4 producer-handoff.schema.json forbids the integration_parent field required by the updated campaign plan; integration ancestor fa21b1e540a5efcbe1822da4199be7acec7709d3 is retained in T2-05-evidence.txt.
   - Full provider package certification is blocked by the unrelated submitter lease timing failure retained in T2-03B-evidence.txt.
   - PortalProvider retains pre-existing ts-nocheck because unrelated Auth, Identity, MFA, and Provider dependencies are not wired.
-  - No production organization mutation adapter is wired; writes default unavailable.
-  - No live x/group transaction, chain endpoint, organization billing backend, or external authorization was certified.
-next_checkpoint: T2-X20
-expected_head: 65d21f19afeff95862a88eb543d4fa99e80d06ef
+  - No production billing withdrawal adapter is wired; withdrawal remains unavailable by default.
+  - No live chain transaction, signer, billing backend, settlement process, or funds movement was certified.
+next_checkpoint: T2-X21
+expected_head: 16d2c07c0002bc173a0fdbe9b1d45a9222ee3fdd
