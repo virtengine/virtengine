@@ -5,12 +5,19 @@ import type {
   DevicePlatform
 } from "./captureModels";
 import { createId } from "../utils/id";
+import { VerificationTerminalError } from "./verificationError";
 
 export interface DeviceAttestationProviderAdapter {
   getPlatform(): DevicePlatform;
   getProvider(): DeviceAttestationProvider;
   supportsAttestation(): boolean;
   attest(request: DeviceAttestationRequest): DeviceAttestationResponse;
+}
+
+export function requireProductionAttestation(attestation: DeviceAttestation | undefined): asserts attestation is DeviceAttestation {
+  if (!attestation?.supported || attestation.provider === "mock" || !attestation.attestationPayload || !attestation.attestationSignature) {
+    throw new VerificationTerminalError("attestation_required", "A verified hardware-backed device attestation is required.");
+  }
 }
 
 export interface DeviceAttestationRequest {

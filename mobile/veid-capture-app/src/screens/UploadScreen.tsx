@@ -3,7 +3,7 @@ import { ActivityIndicator, StyleSheet, Text, View } from "react-native";
 import { CaptureFooter } from "../components/CaptureFooter";
 import { CaptureHeader } from "../components/CaptureHeader";
 import { buildCapturePayload, finalizeCaptureSession } from "../core/captureSession";
-import type { DeviceAttestationProviderAdapter } from "../core/deviceAttestation";
+import { requireProductionAttestation, type DeviceAttestationProviderAdapter } from "../core/deviceAttestation";
 import {
   createCaptureUploadAttempt,
   type CaptureUploadAttempt,
@@ -79,11 +79,7 @@ export function UploadScreen({
       }
 
       const session = finalizeCaptureSession(state.session, "0.1.0", attestationProvider);
-      if (!session.deviceAttestation?.supported) {
-        setStatus("error");
-        setError(session.deviceAttestation?.failureReason ?? "attestation_unavailable");
-        return;
-      }
+      requireProductionAttestation(session.deviceAttestation);
 
       if (!uploadAttempt.current) {
         const payload = buildCapturePayload(session, "https://api.virtengine.local/veid/capture");
