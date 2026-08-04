@@ -1,61 +1,56 @@
 campaign: three-day-prototype
 thread: T2
-checkpoint: T2-X21
+checkpoint: T2-X22
 branch: ve/prototype-t2-product
-start_head: 1d135e607b624517973ca05fc282b1da066129df
-end_head: fa190cb9e573f7d1af607da10844e412f41c9e07
+start_head: 1ff9f529b618bcc998879b366536fdc1a6de198d
+end_head: a30606b23d61575dd0a4f97be8a394596f44b553
 origin_main: 79391a3df86d85522b92e0400c6904971ecbe65d
 tree_clean: true
 commits:
-  - fa190cb9e573f7d1af607da10844e412f41c9e07
+  - a30606b23d61575dd0a4f97be8a394596f44b553
 owned_paths:
-  - portal/src/stores/metrics-alert-mutation.ts
-  - portal/src/stores/metricsStore.ts
-  - portal/src/stores/__tests__/metricsStore.test.ts
-  - portal/src/components/metrics/
-  - portal/src/app/metrics/alerts/page.tsx
+  - portal/src/app/api/notification-preferences/
+  - portal/src/components/notifications/NotificationPreferences.tsx
+  - portal/src/components/notifications/__tests__/NotificationPreferences.test.tsx
 files_changed:
-  - portal/src/stores/metrics-alert-mutation.ts
-  - portal/src/stores/metricsStore.ts
-  - portal/src/stores/__tests__/metricsStore.test.ts
-  - portal/src/components/metrics/AlertConfigDialog.tsx
-  - portal/src/components/metrics/__tests__/AlertConfigDialog.test.tsx
-  - portal/src/components/metrics/AlertsPanel.tsx
-  - portal/src/components/metrics/MetricsDashboard.tsx
-  - portal/src/app/metrics/alerts/page.tsx
+  - portal/src/app/api/notification-preferences/workflow.ts
+  - portal/src/app/api/notification-preferences/route.ts
+  - portal/src/app/api/notification-preferences/route.test.ts
+  - portal/src/components/notifications/NotificationPreferences.tsx
+  - portal/src/components/notifications/__tests__/NotificationPreferences.test.tsx
 tests:
-  - command: C:\Windows\System32\cmd.exe /d /c "cd /d C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t2\portal && node_modules\.bin\vitest.CMD run src\stores\__tests__\metricsStore.test.ts src\components\metrics\__tests__\AlertConfigDialog.test.tsx --reporter=dot --maxWorkers=1 --no-color"
+  - command: C:\Windows\System32\cmd.exe /d /c "cd /d C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t2\portal && node_modules\.bin\vitest.CMD run src\app\api\notification-preferences\route.test.ts src\components\notifications\__tests__\NotificationPreferences.test.tsx --reporter=dot --maxWorkers=1 --no-color"
     exit_code: 0
     result: passed
-    test_count: 25
+    test_count: 43
     tool_versions:
       node: v20.19.1
-    artifact: _docs/ralph/handoffs/prototype-t2/T2-X21-validation.txt
+    artifact: _docs/ralph/handoffs/prototype-t2/T2-X22-validation.txt
   - command: C:\Windows\System32\cmd.exe /d /c "cd /d C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t2\portal && node_modules\.bin\vitest.CMD run --reporter=dot --maxWorkers=1 --no-color"
     exit_code: 0
     result: passed
-    test_count: 700
+    test_count: 739
     tool_versions:
       node: v20.19.1
-    artifact: _docs/ralph/handoffs/prototype-t2/T2-X21-validation.txt
+    artifact: _docs/ralph/handoffs/prototype-t2/T2-X22-validation.txt
   - command: C:\Windows\System32\cmd.exe /d /c "cd /d C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t2\portal && node_modules\.bin\tsc.CMD --noEmit --incremental false"
     exit_code: 0
     result: passed
     tool_versions:
       node: v20.19.1
-    artifact: _docs/ralph/handoffs/prototype-t2/T2-X21-validation.txt
+    artifact: _docs/ralph/handoffs/prototype-t2/T2-X22-validation.txt
 generated_hashes: {}
 migrations: []
 external_evidence:
-  - _docs/ralph/handoffs/prototype-t2/T2-X21-evidence.txt
-  - _docs/ralph/handoffs/prototype-t2/T2-X21-validation.txt
+  - _docs/ralph/handoffs/prototype-t2/T2-X22-evidence.txt
+  - _docs/ralph/handoffs/prototype-t2/T2-X22-validation.txt
 known_failures: []
 blockers:
   - T4 producer-handoff.schema.json does not permit the established supplemental T2-X checkpoint names; T2-X01 through T2-X10 retain the campaign queue naming.
   - T4 producer-handoff.schema.json forbids the integration_parent field required by the updated campaign plan; integration ancestor fa21b1e540a5efcbe1822da4199be7acec7709d3 is retained in T2-05-evidence.txt.
   - Full provider package certification is blocked by the unrelated submitter lease timing failure retained in T2-03B-evidence.txt.
   - PortalProvider retains pre-existing ts-nocheck because unrelated Auth, Identity, MFA, and Provider dependencies are not wired.
-  - No production metrics alert persistence adapter or authenticated subject integration is wired; alert changes remain unavailable by default.
-  - No live alert evaluator, notification delivery, provider daemon mutation, or external monitoring backend was certified.
-next_checkpoint: T2-X22
-expected_head: fa190cb9e573f7d1af607da10844e412f41c9e07
+  - No production server session resolver or durable notification preference adapter is wired; the endpoint remains unavailable by default.
+  - No notification delivery service, database persistence, cross-device synchronization, or live authenticated session was certified.
+next_checkpoint: T2-X23
+expected_head: a30606b23d61575dd0a4f97be8a394596f44b553
