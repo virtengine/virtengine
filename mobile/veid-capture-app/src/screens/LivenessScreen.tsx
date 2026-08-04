@@ -13,6 +13,7 @@ export function LivenessScreen({ stepIndex = 4 }: { stepIndex?: number }) {
   const engineRef = useRef(new LivenessEngine(challenges, DEFAULT_LIVENESS_CONFIG));
   const [update, setUpdate] = useState<LivenessUpdate | null>(null);
   const [completed, setCompleted] = useState(false);
+  const simulationAllowed = process.env.NODE_ENV === "test" || process.env.NODE_ENV === "development";
 
   useEffect(() => {
     engineRef.current.start();
@@ -89,7 +90,7 @@ export function LivenessScreen({ stepIndex = 4 }: { stepIndex?: number }) {
       {update ? (
         <LivenessPrompt instruction={update.instruction} progress={update.progress} note={update.note} />
       ) : null}
-      <View style={styles.simulationCard}>
+      {simulationAllowed ? <View style={styles.simulationCard}>
         <Text style={styles.simulationTitle}>Live detection ready</Text>
         <Text style={styles.simulationText}>
           Use the simulator button to advance through challenges when native face detection is unavailable.
@@ -97,7 +98,10 @@ export function LivenessScreen({ stepIndex = 4 }: { stepIndex?: number }) {
         <Pressable style={styles.simulateButton} onPress={simulateSignal}>
           <Text style={styles.simulateText}>Simulate Challenge</Text>
         </Pressable>
-      </View>
+      </View> : <View style={styles.simulationCard}>
+        <Text style={styles.simulationTitle}>Liveness capture unavailable</Text>
+        <Text style={styles.simulationText}>A native face detector and approved PAD model are required to continue.</Text>
+      </View>}
       <CaptureFooter
         primaryLabel={completed ? "Continue" : "Complete Liveness"}
         onPrimary={() => dispatch({ type: "next" })}
