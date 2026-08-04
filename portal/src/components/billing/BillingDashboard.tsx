@@ -5,7 +5,7 @@
 
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { Badge } from '@/components/ui/Badge';
@@ -38,6 +38,14 @@ import { CostTrendChart } from './CostTrendChart';
 import { useUsageHistory } from '@virtengine/portal/hooks/useBilling';
 import { MFAChallenge } from '@/components/mfa';
 import { useMFAGate } from '@/features/mfa';
+import {
+  billingWithdrawalRequestsEqual,
+  buildBillingWithdrawalRequest,
+  submitBillingWithdrawal,
+  type BillingWithdrawalAdapter,
+  type BillingWithdrawalContext,
+  type BillingWithdrawalMutationResult,
+} from './withdrawal-mutation';
 
 function thirtyDaysAgo(): Date {
   const d = new Date();
@@ -60,15 +68,126 @@ interface BillingDashboardProps {
   onViewInvoice?: (id: string) => void;
   onViewAllInvoices?: () => void;
   onViewUsage?: () => void;
+  withdrawalAdapter?: BillingWithdrawalAdapter;
+  withdrawalContext?: BillingWithdrawalContext;
 }
 
 export function BillingDashboard({
   onViewInvoice,
   onViewAllInvoices,
   onViewUsage,
+  withdrawalAdapter,
+  withdrawalContext,
 }: BillingDashboardProps) {
-  const [withdrawalNotice, setWithdrawalNotice] = useState(false);
+  const [withdrawalStatus, setWithdrawalStatus] = useState<
+    'idle' | 'submitting' | 'committed' | 'error'
+  >('idle');
+  const [withdrawalResult, setWithdrawalResult] =
+    useState<Readonly<BillingWithdrawalMutationResult> | null>(null);
+  const withdrawalRequest = buildBillingWithdrawalRequest(withdrawalContext);
+  const requestRef = useRef(withdrawalRequest);
+  requestRef.current = withdrawalRequest;
+  const inFlightRef = useRef(false);
+  const generationRef = useRef(0);
+  const authorizationRef = useRef(0);
+  const mountedRef = useRef(true);
+  const activeControllerRef = useRef<AbortController | null>(null);
+  const authorityRef = useRef({ withdrawalAdapter, withdrawalRequest });
+  authorityRef.current = { withdrawalAdapter, withdrawalRequest };
   const { gateAction, challengeProps } = useMFAGate();
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    activeControllerRef.current?.abort();
+    activeControllerRef.current = null;
+    generationRef.current += 1;
+    authorizationRef.current += 1;
+    inFlightRef.current = false;
+    setWithdrawalResult(null);
+    setWithdrawalStatus('idle');
+    return () => {
+      activeControllerRef.current?.abort();
+      activeControllerRef.current = null;
+      generationRef.current += 1;
+      authorizationRef.current += 1;
+      inFlightRef.current = false;
+    };
+  }, [withdrawalAdapter, withdrawalContext?.accountAddress, withdrawalContext?.chainId]);
+
+  const requestWithdrawal = async (
+    adapter: BillingWithdrawalAdapter,
+    request: Readonly<BillingWithdrawalMutationResult['request']>,
+    generation: number,
+    authorization: number
+  ) => {
+    if (
+      !mountedRef.current ||
+      generationRef.current !== generation ||
+      authorityRef.current.withdrawalAdapter !== adapter ||
+      !billingWithdrawalRequestsEqual(authorityRef.current.withdrawalRequest, request) ||
+      authorizationRef.current !== authorization ||
+      inFlightRef.current
+    ) {
+      return;
+    }
+    authorizationRef.current += 1;
+    inFlightRef.current = true;
+    const controller = new AbortController();
+    activeControllerRef.current = controller;
+    setWithdrawalResult(null);
+    setWithdrawalStatus('submitting');
+    try {
+      const result = await submitBillingWithdrawal({
+        adapter,
+        request,
+        signal: controller.signal,
+        getCurrentRequest: () =>
+          mountedRef.current &&
+          generationRef.current === generation &&
+          authorityRef.current.withdrawalAdapter === adapter
+            ? requestRef.current
+            : null,
+      });
+      if (
+        !mountedRef.current ||
+        generationRef.current !== generation ||
+        authorityRef.current.withdrawalAdapter !== adapter ||
+        !billingWithdrawalRequestsEqual(authorityRef.current.withdrawalRequest, request) ||
+        controller.signal.aborted
+      ) {
+        return;
+      }
+      setWithdrawalResult(result);
+      setWithdrawalStatus('committed');
+    } catch {
+      if (generationRef.current === generation) setWithdrawalStatus('error');
+    } finally {
+      if (generationRef.current === generation) {
+        activeControllerRef.current = null;
+        inFlightRef.current = false;
+      }
+    }
+  };
+
+  const authorizeWithdrawal = () => {
+    if (!withdrawalAdapter || !withdrawalRequest) return;
+    const adapter = withdrawalAdapter;
+    const request = withdrawalRequest;
+    const generation = generationRef.current;
+    const authorization = authorizationRef.current + 1;
+    authorizationRef.current = authorization;
+    void gateAction({
+      transactionType: 'withdrawal',
+      actionDescription: 'Request a withdrawal',
+      onAuthorized: () => requestWithdrawal(adapter, request, generation, authorization),
+    });
+  };
 
   const { data: usage, isLoading: usageLoading } = useCurrentUsage();
   const { data: projection, isLoading: projectionLoading } = useCostProjection();
@@ -88,26 +207,35 @@ export function BillingDashboard({
         <h1 className="text-2xl font-bold">Billing</h1>
         <Button
           variant="outline"
-          onClick={() =>
-            gateAction({
-              transactionType: 'withdrawal',
-              actionDescription: 'Request a withdrawal',
-              onAuthorized: () => setWithdrawalNotice(true),
-            })
-          }
+          disabled={!withdrawalAdapter || !withdrawalRequest || withdrawalStatus === 'submitting'}
+          onClick={authorizeWithdrawal}
         >
-          Request Withdrawal
+          {withdrawalStatus === 'submitting' ? 'Submitting Withdrawal' : 'Request Withdrawal'}
         </Button>
       </div>
 
-      {withdrawalNotice && (
-        <Alert variant="success">
+      {!withdrawalAdapter || !withdrawalRequest ? (
+        <Alert>
           <AlertDescription>
-            Withdrawal request submitted. You&apos;ll receive a confirmation once it&apos;s
-            processed.
+            Withdrawals are unavailable because no authoritative billing mutation is configured.
           </AlertDescription>
         </Alert>
-      )}
+      ) : withdrawalStatus === 'error' ? (
+        <Alert variant="destructive">
+          <AlertDescription>
+            Withdrawal was not committed. The request failed or returned invalid evidence.
+          </AlertDescription>
+        </Alert>
+      ) : withdrawalStatus === 'committed' &&
+        withdrawalResult &&
+        billingWithdrawalRequestsEqual(withdrawalResult.request, withdrawalRequest) ? (
+        <Alert variant="success">
+          <AlertDescription>
+            Withdrawal committed in transaction {withdrawalResult.txHash} at height{' '}
+            {withdrawalResult.blockHeight}.
+          </AlertDescription>
+        </Alert>
+      ) : null}
 
       {/* Summary cards */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
