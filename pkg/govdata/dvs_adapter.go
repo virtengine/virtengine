@@ -280,6 +280,13 @@ func (a *dvsDMVAdapter) baseURL() string {
 	return DVSSandboxURL
 }
 
+// DigitalIDProvider reports that DVS document lookup is not an OAuth/OIDC or
+// verifiable-credential authorization protocol. It intentionally fails closed
+// until an approved Australian Digital ID profile is implemented.
+func (a *dvsDMVAdapter) DigitalIDProvider() DigitalIDProvider {
+	return UnavailableDigitalIDProvider{ID: string(DataSourceDVS)}
+}
+
 // Verify performs DVS verification
 func (a *dvsDMVAdapter) Verify(ctx context.Context, req *VerificationRequest) (*VerificationResponse, error) {
 	startTime := time.Now()
