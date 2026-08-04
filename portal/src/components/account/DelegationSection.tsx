@@ -27,12 +27,13 @@ export function DelegationSection({ delegates }: DelegationSectionProps) {
   const [scope, setScope] = useState('Marketplace + Orders');
   const [success, setSuccess] = useState(false);
 
-  const { gateAction, challengeProps } = useMFAGate();
+  const { gateAction, challengeProps, isPending, error, clearError } = useMFAGate();
 
   const canSubmit = useMemo(() => address.trim().length > 0, [address]);
 
   const handleInvite = async () => {
     setSuccess(false);
+    clearError();
     await gateAction({
       transactionType: 'delegation_change',
       actionDescription: 'Send delegation invite',
@@ -40,7 +41,7 @@ export function DelegationSection({ delegates }: DelegationSectionProps) {
         setSuccess(true);
         setAddress('');
       },
-    });
+    }).catch(() => undefined);
   };
 
   return (
@@ -115,13 +116,21 @@ export function DelegationSection({ delegates }: DelegationSectionProps) {
                 Delegation invite sent. Pending MFA verification is now complete.
               </div>
             )}
+            {error && (
+              <div
+                role="alert"
+                className="rounded-lg border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs text-destructive"
+              >
+                Authorization failed: {error}
+              </div>
+            )}
             <button
               type="button"
               className="w-full rounded-lg bg-primary px-4 py-2 text-sm text-primary-foreground hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-50"
               onClick={handleInvite}
-              disabled={!canSubmit}
+              disabled={!canSubmit || isPending}
             >
-              Send delegation invite
+              {isPending ? 'Authorizing...' : 'Send delegation invite'}
             </button>
             <p className="text-xs text-muted-foreground">
               Delegation changes require MFA verification for account security.

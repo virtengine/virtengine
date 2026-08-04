@@ -6,6 +6,7 @@
  */
 
 import { describe, it, expect, beforeEach, vi, type Mock } from 'vitest';
+import type { MFAPolicy } from '@/lib/portal-adapter';
 import { useMFAStore } from '../../../src/features/mfa/store';
 import * as mfaApi from '../../../src/features/mfa/api';
 
@@ -54,6 +55,16 @@ const mockPolicy = {
   lowValueThreshold: '100',
 };
 
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  let reject!: (reason?: unknown) => void;
+  const promise = new Promise<T>((resolvePromise, rejectPromise) => {
+    resolve = resolvePromise;
+    reject = rejectPromise;
+  });
+  return { promise, resolve, reject };
+}
+
 describe('useMFAStore', () => {
   beforeEach(() => {
     useMFAStore.getState().reset();
@@ -75,6 +86,7 @@ describe('useMFAStore', () => {
       expect(state.factors).toHaveLength(1);
       expect(state.factors[0]!.id).toBe('factor-1');
       expect(state.policy).toEqual(mockPolicy);
+      expect(state.policyStatus).toBe('ready');
     });
 
     it('sets error on failure', async () => {
@@ -88,6 +100,115 @@ describe('useMFAStore', () => {
       const state = useMFAStore.getState();
       expect(state.isLoading).toBe(false);
       expect(state.error).toBe('Network error');
+      expect(state.policyStatus).toBe('error');
+      expect(state.policy).toBeNull();
+      expect(state.factors).toEqual([]);
+    });
+
+    it('fails closed when the policy is malformed', async () => {
+      (mfaApi.fetchFactors as Mock).mockResolvedValue([mockFactor]);
+      (mfaApi.fetchPolicy as Mock).mockResolvedValue({
+        ...mockPolicy,
+        sensitiveTransactions: ['unknown_transaction'],
+      });
+      (mfaApi.fetchTrustedBrowsers as Mock).mockResolvedValue([]);
+      (mfaApi.fetchAuditLog as Mock).mockResolvedValue([]);
+
+      await useMFAStore.getState().loadMFAData();
+
+      const state = useMFAStore.getState();
+      expect(state.policyStatus).toBe('error');
+      expect(state.error).toBe('Invalid MFA policy');
+      expect(state.policy).toBeNull();
+      expect(state.factors).toEqual([]);
+      expect(state.isEnabled).toBe(false);
+    });
+
+    it.each([
+      ['missing field', ({ lowValueThreshold: _removed, ...rest }) => rest],
+      ['extra field', (value) => ({ ...value, unexpected: true })],
+      ['non-canonical id', (value) => ({ ...value, id: ' policy-1' })],
+      ['unsafe updatedAt', (value) => ({ ...value, updatedAt: Number.MAX_SAFE_INTEGER + 1 })],
+      ['unknown factor', (value) => ({ ...value, requiredFactorTypes: ['unknown'] })],
+      ['duplicate factor', (value) => ({ ...value, requiredFactorTypes: ['otp', 'otp'] })],
+      ['zero factor count', (value) => ({ ...value, requiredFactorCount: 0 })],
+      ['excess factor count', (value) => ({ ...value, requiredFactorCount: 2 })],
+      ['unknown transaction', (value) => ({ ...value, sensitiveTransactions: ['unknown'] })],
+      [
+        'duplicate transaction',
+        (value) => ({ ...value, sensitiveTransactions: ['withdrawal', 'withdrawal'] }),
+      ],
+      ['non-boolean trusted flag', (value) => ({ ...value, allowTrustedBrowsers: 1 })],
+      ['negative trusted duration', (value) => ({ ...value, trustedBrowserDurationSeconds: -1 })],
+      [
+        'unsafe trusted duration',
+        (value) => ({
+          ...value,
+          trustedBrowserDurationSeconds: Number.MAX_SAFE_INTEGER + 1,
+        }),
+      ],
+      ['non-boolean biometric flag', (value) => ({ ...value, biometricForLowValue: 'false' })],
+      ['numeric threshold', (value) => ({ ...value, lowValueThreshold: 100 })],
+      ['non-canonical threshold', (value) => ({ ...value, lowValueThreshold: '0100' })],
+    ])('rejects a policy with %s', async (_name, mutate) => {
+      (mfaApi.fetchFactors as Mock).mockResolvedValue([mockFactor]);
+      (mfaApi.fetchPolicy as Mock).mockResolvedValue(mutate(mockPolicy));
+      (mfaApi.fetchTrustedBrowsers as Mock).mockResolvedValue([]);
+      (mfaApi.fetchAuditLog as Mock).mockResolvedValue([]);
+
+      await useMFAStore.getState().loadMFAData();
+
+      expect(useMFAStore.getState()).toMatchObject({
+        policyStatus: 'error',
+        policy: null,
+        error: 'Invalid MFA policy',
+      });
+    });
+
+    it('materializes an immutable policy snapshot', async () => {
+      const source: MFAPolicy = {
+        ...mockPolicy,
+        requiredFactorTypes: [...mockPolicy.requiredFactorTypes],
+        sensitiveTransactions: [...mockPolicy.sensitiveTransactions],
+      };
+      (mfaApi.fetchFactors as Mock).mockResolvedValue([]);
+      (mfaApi.fetchPolicy as Mock).mockResolvedValue(source);
+      (mfaApi.fetchTrustedBrowsers as Mock).mockResolvedValue([]);
+      (mfaApi.fetchAuditLog as Mock).mockResolvedValue([]);
+
+      await useMFAStore.getState().loadMFAData();
+      const stored = useMFAStore.getState().policy!;
+      source.id = 'changed';
+      source.requiredFactorTypes.push('sms');
+      source.sensitiveTransactions.length = 0;
+
+      expect(stored).toEqual(mockPolicy);
+      expect(Object.isFrozen(stored)).toBe(true);
+      expect(Object.isFrozen(stored.requiredFactorTypes)).toBe(true);
+      expect(Object.isFrozen(stored.sensitiveTransactions)).toBe(true);
+    });
+
+    it('shares concurrent loads and publishes only after all data succeeds', async () => {
+      const policyRequest = deferred<typeof mockPolicy>();
+      (mfaApi.fetchFactors as Mock).mockResolvedValue([mockFactor]);
+      (mfaApi.fetchPolicy as Mock).mockReturnValue(policyRequest.promise);
+      (mfaApi.fetchTrustedBrowsers as Mock).mockResolvedValue([]);
+      (mfaApi.fetchAuditLog as Mock).mockResolvedValue([]);
+
+      const firstLoad = useMFAStore.getState().loadMFAData();
+      const secondLoad = useMFAStore.getState().loadMFAData();
+
+      expect(firstLoad).toBe(secondLoad);
+      expect(useMFAStore.getState().policyStatus).toBe('loading');
+      expect(useMFAStore.getState().policy).toBeNull();
+      expect(useMFAStore.getState().factors).toEqual([]);
+      expect(mfaApi.fetchPolicy).toHaveBeenCalledTimes(1);
+
+      policyRequest.resolve(mockPolicy);
+      await firstLoad;
+
+      expect(useMFAStore.getState().policyStatus).toBe('ready');
+      expect(useMFAStore.getState().policy).toEqual(mockPolicy);
     });
 
     it('sets isEnabled to false when no active factors', async () => {
@@ -207,6 +328,214 @@ describe('useMFAStore', () => {
     });
   });
 
+  describe('challenge ownership', () => {
+    it('binds challenge creation to its owner and transaction', async () => {
+      (mfaApi.createChallenge as Mock).mockResolvedValue({
+        id: 'challenge-1',
+        transactionType: 'withdrawal',
+      });
+      const owner = useMFAStore.getState().acquireGateOwner()!;
+
+      await useMFAStore.getState().createChallenge(owner, 'withdrawal');
+
+      const state = useMFAStore.getState();
+      expect(state.ownsGate(owner, 'challenge-1')).toBe(true);
+      expect(state.activeChallengeOwnerToken).toBe(owner);
+      expect(state.activeChallengeTransactionType).toBe('withdrawal');
+    });
+
+    it('rejects cross-owner and mismatched challenge responses', async () => {
+      const owner = useMFAStore.getState().acquireGateOwner()!;
+      await expect(
+        useMFAStore.getState().createChallenge('other-owner', 'withdrawal')
+      ).rejects.toThrow('authorization_pending');
+
+      (mfaApi.createChallenge as Mock).mockResolvedValue({
+        id: 'challenge-1',
+        transactionType: 'delegation_change',
+      });
+      await expect(useMFAStore.getState().createChallenge(owner, 'withdrawal')).rejects.toThrow(
+        'Invalid MFA challenge'
+      );
+      expect(useMFAStore.getState().gateOwnerToken).toBeNull();
+      expect(useMFAStore.getState().activeChallenge).toBeNull();
+    });
+
+    it('does not publish a stale response over a new owner', async () => {
+      const request = deferred<{ id: string; transactionType: 'withdrawal' }>();
+      (mfaApi.createChallenge as Mock).mockReturnValue(request.promise);
+      const ownerA = useMFAStore.getState().acquireGateOwner()!;
+      const creationA = useMFAStore.getState().createChallenge(ownerA, 'withdrawal');
+      useMFAStore.getState().reset();
+      const ownerB = useMFAStore.getState().acquireGateOwner()!;
+
+      request.resolve({ id: 'challenge-a', transactionType: 'withdrawal' });
+      await expect(creationA).rejects.toThrow('Stale MFA challenge');
+
+      expect(useMFAStore.getState().gateOwnerToken).toBe(ownerB);
+      expect(useMFAStore.getState().activeChallenge).toBeNull();
+    });
+
+    it('clears the old challenge and owner when replacement creation fails', async () => {
+      const owner = useMFAStore.getState().acquireGateOwner()!;
+      useMFAStore.setState({
+        activeChallenge: { id: 'old-challenge' } as never,
+        activeChallengeOwnerToken: owner,
+        activeChallengeTransactionType: 'withdrawal',
+      });
+      (mfaApi.createChallenge as Mock).mockRejectedValue(new Error('challenge failed'));
+
+      await expect(useMFAStore.getState().createChallenge(owner, 'withdrawal')).rejects.toThrow(
+        'challenge failed'
+      );
+
+      expect(useMFAStore.getState()).toMatchObject({
+        activeChallenge: null,
+        activeChallengeOwnerToken: null,
+        activeChallengeTransactionType: null,
+        gateOwnerToken: null,
+      });
+    });
+
+    it('retains a verified owner-bound challenge until the owner releases it', async () => {
+      const owner = useMFAStore.getState().acquireGateOwner()!;
+      useMFAStore.setState({
+        activeChallenge: { id: 'challenge-1' } as never,
+        activeChallengeOwnerToken: owner,
+        activeChallengeTransactionType: 'withdrawal',
+      });
+      (mfaApi.verifyChallenge as Mock).mockResolvedValue({ verified: true });
+
+      await useMFAStore.getState().verifyChallenge('factor-1', '123456');
+
+      expect(useMFAStore.getState().ownsGate(owner, 'challenge-1')).toBe(true);
+      useMFAStore.getState().releaseGateOwner(owner);
+      expect(useMFAStore.getState().activeChallenge).toBeNull();
+    });
+
+    it('rejects a stale OTP success without mutating the replacement challenge', async () => {
+      const request = deferred<{ verified: boolean }>();
+      (mfaApi.verifyChallenge as Mock).mockReturnValue(request.promise);
+      const ownerA = useMFAStore.getState().acquireGateOwner()!;
+      useMFAStore.setState({
+        activeChallenge: { id: 'challenge-a' } as never,
+        activeChallengeOwnerToken: ownerA,
+        activeChallengeTransactionType: 'withdrawal',
+      });
+      const verificationA = useMFAStore.getState().verifyChallenge('factor-1', '123456');
+
+      useMFAStore.getState().releaseGateOwner(ownerA);
+      const ownerB = useMFAStore.getState().acquireGateOwner()!;
+      const challengeB = { id: 'challenge-b' } as never;
+      useMFAStore.setState({
+        activeChallenge: challengeB,
+        activeChallengeOwnerToken: ownerB,
+        activeChallengeTransactionType: 'delegation_change',
+        isMutating: true,
+        error: 'challenge-b-error',
+      });
+      const expectedB = useMFAStore.getState();
+
+      request.resolve({ verified: true });
+      await expect(verificationA).rejects.toThrow('Stale MFA verification');
+      const state = useMFAStore.getState();
+      expect(state.activeChallenge).toBe(challengeB);
+      expect(state).toMatchObject({
+        activeChallengeOwnerToken: expectedB.activeChallengeOwnerToken,
+        activeChallengeTransactionType: expectedB.activeChallengeTransactionType,
+        challengeGeneration: expectedB.challengeGeneration,
+        gateOwnerToken: expectedB.gateOwnerToken,
+        isMutating: expectedB.isMutating,
+        error: expectedB.error,
+      });
+    });
+
+    it('rejects a stale OTP failure without overwriting replacement error or loading', async () => {
+      const request = deferred<{ verified: boolean }>();
+      (mfaApi.verifyChallenge as Mock).mockReturnValue(request.promise);
+      const ownerA = useMFAStore.getState().acquireGateOwner()!;
+      useMFAStore.setState({
+        activeChallenge: { id: 'challenge-a' } as never,
+        activeChallengeOwnerToken: ownerA,
+        activeChallengeTransactionType: 'withdrawal',
+      });
+      const verificationA = useMFAStore.getState().verifyChallenge('factor-1', '123456');
+
+      useMFAStore.getState().reset();
+      const ownerB = useMFAStore.getState().acquireGateOwner()!;
+      const challengeB = { id: 'challenge-b' } as never;
+      useMFAStore.setState({
+        activeChallenge: challengeB,
+        activeChallengeOwnerToken: ownerB,
+        activeChallengeTransactionType: 'delegation_change',
+        isMutating: true,
+        error: 'challenge-b-error',
+      });
+      const generationB = useMFAStore.getState().challengeGeneration;
+
+      request.reject(new Error('challenge-a-error'));
+      await expect(verificationA).rejects.toThrow('Stale MFA verification');
+      const state = useMFAStore.getState();
+      expect(state.activeChallenge).toBe(challengeB);
+      expect(state).toMatchObject({
+        activeChallengeOwnerToken: ownerB,
+        activeChallengeTransactionType: 'delegation_change',
+        challengeGeneration: generationB,
+        gateOwnerToken: ownerB,
+        isMutating: true,
+        error: 'challenge-b-error',
+      });
+    });
+
+    it('rejects a stale WebAuthn success without mutating the replacement challenge', async () => {
+      const request = deferred<{ verified: boolean }>();
+      (mfaApi.verifyWebAuthnChallenge as Mock).mockReturnValue(request.promise);
+      const ownerA = useMFAStore.getState().acquireGateOwner()!;
+      useMFAStore.setState({
+        activeChallenge: { id: 'challenge-a' } as never,
+        activeChallengeOwnerToken: ownerA,
+        activeChallengeTransactionType: 'withdrawal',
+      });
+      const responseBuffer = new Uint8Array([1]).buffer;
+      const credential = {
+        id: 'credential-a',
+        rawId: responseBuffer,
+        type: 'public-key',
+        response: {
+          authenticatorData: responseBuffer,
+          clientDataJSON: responseBuffer,
+          signature: responseBuffer,
+        },
+      } as unknown as PublicKeyCredential;
+      const verificationA = useMFAStore.getState().verifyWebAuthnChallenge('factor-1', credential);
+
+      useMFAStore.getState().releaseGateOwner(ownerA);
+      const ownerB = useMFAStore.getState().acquireGateOwner()!;
+      const challengeB = { id: 'challenge-b' } as never;
+      useMFAStore.setState({
+        activeChallenge: challengeB,
+        activeChallengeOwnerToken: ownerB,
+        activeChallengeTransactionType: 'delegation_change',
+        isMutating: true,
+        error: 'challenge-b-error',
+      });
+      const generationB = useMFAStore.getState().challengeGeneration;
+
+      request.resolve({ verified: true });
+      await expect(verificationA).rejects.toThrow('Stale MFA verification');
+      const state = useMFAStore.getState();
+      expect(state.activeChallenge).toBe(challengeB);
+      expect(state).toMatchObject({
+        activeChallengeOwnerToken: ownerB,
+        activeChallengeTransactionType: 'delegation_change',
+        challengeGeneration: generationB,
+        gateOwnerToken: ownerB,
+        isMutating: true,
+        error: 'challenge-b-error',
+      });
+    });
+  });
+
   describe('clearEnrollment', () => {
     it('clears enrollment state', () => {
       useMFAStore.setState({
@@ -270,6 +599,7 @@ describe('useMFAStore', () => {
       expect(state.isEnabled).toBe(false);
       expect(state.factors).toHaveLength(0);
       expect(state.error).toBeNull();
+      expect(state.policyStatus).toBe('idle');
     });
   });
 });

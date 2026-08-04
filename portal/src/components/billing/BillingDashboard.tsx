@@ -94,7 +94,13 @@ export function BillingDashboard({
   const activeControllerRef = useRef<AbortController | null>(null);
   const authorityRef = useRef({ withdrawalAdapter, withdrawalRequest });
   authorityRef.current = { withdrawalAdapter, withdrawalRequest };
-  const { gateAction, challengeProps } = useMFAGate();
+  const {
+    gateAction,
+    challengeProps,
+    isPending,
+    error: authorizationError,
+    clearError,
+  } = useMFAGate();
 
   useEffect(() => {
     mountedRef.current = true;
@@ -111,6 +117,7 @@ export function BillingDashboard({
     inFlightRef.current = false;
     setWithdrawalResult(null);
     setWithdrawalStatus('idle');
+    clearError();
     return () => {
       activeControllerRef.current?.abort();
       activeControllerRef.current = null;
@@ -118,7 +125,12 @@ export function BillingDashboard({
       authorizationRef.current += 1;
       inFlightRef.current = false;
     };
-  }, [withdrawalAdapter, withdrawalContext?.accountAddress, withdrawalContext?.chainId]);
+  }, [
+    clearError,
+    withdrawalAdapter,
+    withdrawalContext?.accountAddress,
+    withdrawalContext?.chainId,
+  ]);
 
   const requestWithdrawal = async (
     adapter: BillingWithdrawalAdapter,
@@ -177,6 +189,7 @@ export function BillingDashboard({
 
   const authorizeWithdrawal = () => {
     if (!withdrawalAdapter || !withdrawalRequest) return;
+    clearError();
     const adapter = withdrawalAdapter;
     const request = withdrawalRequest;
     const generation = generationRef.current;
@@ -186,7 +199,7 @@ export function BillingDashboard({
       transactionType: 'withdrawal',
       actionDescription: 'Request a withdrawal',
       onAuthorized: () => requestWithdrawal(adapter, request, generation, authorization),
-    });
+    }).catch(() => undefined);
   };
 
   const { data: usage, isLoading: usageLoading } = useCurrentUsage();
@@ -207,14 +220,23 @@ export function BillingDashboard({
         <h1 className="text-2xl font-bold">Billing</h1>
         <Button
           variant="outline"
-          disabled={!withdrawalAdapter || !withdrawalRequest || withdrawalStatus === 'submitting'}
+          disabled={
+            !withdrawalAdapter ||
+            !withdrawalRequest ||
+            isPending ||
+            withdrawalStatus === 'submitting'
+          }
           onClick={authorizeWithdrawal}
         >
           {withdrawalStatus === 'submitting' ? 'Submitting Withdrawal' : 'Request Withdrawal'}
         </Button>
       </div>
 
-      {!withdrawalAdapter || !withdrawalRequest ? (
+      {authorizationError ? (
+        <Alert variant="destructive">
+          <AlertDescription>Authorization failed: {authorizationError}</AlertDescription>
+        </Alert>
+      ) : !withdrawalAdapter || !withdrawalRequest ? (
         <Alert>
           <AlertDescription>
             Withdrawals are unavailable because no authoritative billing mutation is configured.

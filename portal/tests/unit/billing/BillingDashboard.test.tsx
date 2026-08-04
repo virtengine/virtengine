@@ -12,13 +12,28 @@ type AuthorizedAction = () => void | Promise<void>;
 
 const mfa = vi.hoisted(() => ({
   authorizations: [] as AuthorizedAction[],
+  isPending: false,
+  error: null as string | null,
+  rejection: null as Error | null,
 }));
+
+const clearMFAError = () => {
+  mfa.error = null;
+};
 
 vi.mock('@/features/mfa', () => ({
   useMFAGate: () => ({
     gateAction: ({ onAuthorized }: { onAuthorized: AuthorizedAction }) => {
+      if (mfa.rejection) {
+        mfa.error = 'MFA policy is unavailable. Try again.';
+        return Promise.reject(mfa.rejection);
+      }
       mfa.authorizations.push(onAuthorized);
+      return Promise.resolve();
     },
+    isPending: mfa.isPending,
+    error: mfa.error,
+    clearError: clearMFAError,
     challengeProps: {},
   }),
 }));
@@ -89,7 +104,35 @@ const clickAndAuthorize = async () => {
 describe('BillingDashboard withdrawal mutation', () => {
   beforeEach(() => {
     mfa.authorizations.length = 0;
+    mfa.isPending = false;
+    mfa.error = null;
+    mfa.rejection = null;
     vi.restoreAllMocks();
+  });
+
+  it('shows an authorization failure without invoking the withdrawal adapter', async () => {
+    const requestWithdrawal = vi.fn<BillingWithdrawalAdapter['requestWithdrawal']>();
+    const adapter: BillingWithdrawalAdapter = { requestWithdrawal };
+    mfa.rejection = new Error('policy unavailable');
+    const { rerender } = render(
+      <BillingDashboard withdrawalAdapter={adapter} withdrawalContext={context} />
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Request Withdrawal' }));
+    await act(async () => Promise.resolve());
+    rerender(<BillingDashboard withdrawalAdapter={adapter} withdrawalContext={context} />);
+
+    expect(screen.getByRole('alert')).toHaveTextContent(/authorization failed.*policy/i);
+    expect(requestWithdrawal).not.toHaveBeenCalled();
+  });
+
+  it('disables withdrawal requests while MFA authorization is pending', () => {
+    mfa.isPending = true;
+    const adapter: BillingWithdrawalAdapter = { requestWithdrawal: vi.fn() };
+
+    render(<BillingDashboard withdrawalAdapter={adapter} withdrawalContext={context} />);
+
+    expect(screen.getByRole('button', { name: 'Request Withdrawal' })).toBeDisabled();
   });
 
   it('is unavailable by default and cannot fabricate a success', () => {

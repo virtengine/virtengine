@@ -43,7 +43,22 @@ export default function ProviderOfferingsPage() {
   const [showDeprecateModal, setShowDeprecateModal] = useState(false);
   const [statusFilter, setStatusFilter] = useState<OfferingPublicationStatus | ''>('');
   const [actionLoading, setActionLoading] = useState<string | null>(null);
-  const { gateAction, challengeProps } = useMFAGate();
+  const {
+    gateAction,
+    challengeProps,
+    isPending,
+    error: authorizationError,
+    clearError,
+  } = useMFAGate();
+
+  const handleCreateOffering = () => {
+    clearError();
+    void gateAction({
+      transactionType: 'offering_creation',
+      actionDescription: 'Create a new offering',
+      onAuthorized: () => router.push('/provider/offerings/new'),
+    }).catch(() => undefined);
+  };
 
   const handleStatusFilterChange = (status: OfferingPublicationStatus | '') => {
     setStatusFilter(status);
@@ -121,6 +136,11 @@ export default function ProviderOfferingsPage() {
           </p>
         </div>
         <div className="flex items-center gap-4">
+          {authorizationError && (
+            <p role="alert" className="text-sm text-destructive">
+              Authorization failed: {authorizationError}
+            </p>
+          )}
           {syncStatus && (
             <div className="text-sm text-muted-foreground">
               {syncStatus.isRunning ? (
@@ -136,15 +156,10 @@ export default function ProviderOfferingsPage() {
           <button
             type="button"
             className="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90"
-            onClick={() =>
-              gateAction({
-                transactionType: 'offering_creation',
-                actionDescription: 'Create a new offering',
-                onAuthorized: () => router.push('/provider/offerings/new'),
-              })
-            }
+            onClick={handleCreateOffering}
+            disabled={isPending}
           >
-            Create Offering
+            {isPending ? 'Authorizing...' : 'Create Offering'}
           </button>
         </div>
       </div>
