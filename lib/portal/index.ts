@@ -778,6 +778,20 @@ export type {
   OrganizationContextValue,
   OrganizationProviderProps,
 } from "./hooks/useOrganization";
+export {
+  OrganizationMutationError,
+  buildOrganizationMutationRequest,
+  digestOrganizationMutationRequest,
+  requireOrganizationMutationAdapter,
+  validateCommittedOrganizationMutation,
+} from "./components/organization/organization-mutation";
+export type {
+  CommittedOrganizationMutation,
+  OrganizationMutationAction,
+  OrganizationMutationAdapter,
+  OrganizationMutationContext,
+  OrganizationMutationRequest,
+} from "./components/organization/organization-mutation";
 
 export type {
   Organization,

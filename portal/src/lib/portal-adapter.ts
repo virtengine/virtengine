@@ -554,6 +554,20 @@ export type {
   OrganizationContextValue,
   OrganizationProviderProps,
 } from '../../../lib/portal';
+export {
+  OrganizationMutationError,
+  buildOrganizationMutationRequest,
+  digestOrganizationMutationRequest,
+  requireOrganizationMutationAdapter,
+  validateCommittedOrganizationMutation,
+} from '../../../lib/portal';
+export type {
+  CommittedOrganizationMutation,
+  OrganizationMutationAction,
+  OrganizationMutationAdapter,
+  OrganizationMutationContext,
+  OrganizationMutationRequest,
+} from '../../../lib/portal';
 
 export type {
   Organization,

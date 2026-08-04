@@ -477,7 +477,7 @@ export const OrganizationBilling: any;
 export const OrganizationCard: any;
 export const OrganizationDetail: any;
 export const OrganizationList: any;
-export const OrganizationProvider: any;
+export const OrganizationProvider: React.ComponentType<OrganizationProviderProps>;
 export const OrganizationSwitcher: any;
 export const parseWalletError: any;
 export interface PortalProviderProps {
@@ -492,6 +492,7 @@ export interface PortalProviderProps {
   hpcQueryAdapter?: HPCQueryAdapter;
   providerDomainVerifier?: ProviderDomainVerifier;
   providerOfferingMutationAdapter?: ProviderOfferingMutationAdapter;
+  organizationMutationAdapter?: OrganizationMutationAdapter;
   children: React.ReactNode;
 }
 export const PortalProvider: React.ComponentType<PortalProviderProps>;
@@ -716,7 +717,49 @@ export const useMarketplace: any;
 export const useMFA: any;
 export const useMultiProvider: any;
 export const useOrderTracking: any;
-export const useOrganization: any;
+export function useOrganization(): OrganizationContextValue;
+export interface OrganizationState {
+  isLoading: boolean;
+  organizations: Organization[];
+  selectedOrgId: string | null;
+  error: string | null;
+}
+export interface OrganizationDetailState {
+  isLoading: boolean;
+  organization: Organization | null;
+  members: OrganizationMember[];
+  billing: OrganizationBillingSummary | null;
+  error: string | null;
+}
+export interface OrganizationActions {
+  fetchOrganizations(): Promise<void>;
+  selectOrganization(orgId: string | null): void;
+  createOrganization(request: CreateOrganizationRequest): Promise<Organization>;
+  fetchOrganizationDetail(orgId: string): Promise<void>;
+  inviteMember(orgId: string, request: InviteMemberRequest): Promise<void>;
+  removeMember(orgId: string, memberAddress: string): Promise<void>;
+  updateMemberRole(
+    orgId: string,
+    memberAddress: string,
+    role: OrganizationRole,
+  ): Promise<void>;
+  leaveOrganization(orgId: string): Promise<void>;
+  fetchBilling(orgId: string): Promise<void>;
+}
+export interface OrganizationContextValue {
+  state: OrganizationState;
+  detail: OrganizationDetailState;
+  actions: OrganizationActions;
+  selectedOrganization: Organization | null;
+  currentUserRole: OrganizationRole | null;
+}
+export interface OrganizationProviderProps {
+  children: React.ReactNode;
+  queryClient?: import("./types/chain").QueryClient;
+  chainId: string;
+  accountAddress?: string | null;
+  mutationAdapter?: OrganizationMutationAdapter;
+}
 export const usePortal: any;
 export interface ProviderActions {
   refresh(): Promise<void>;
@@ -797,7 +840,8 @@ export type ChatToolHandler = any;
 export type CheckoutRequest = any;
 export type CheckoutValidation = any;
 export type CreateOrganizationDialogProps = any;
-export type CreateOrganizationRequest = any;
+export type CreateOrganizationRequest =
+  import("./types/organization").CreateOrganizationRequest;
 export type DecryptionResult = any;
 export type Deployment = any;
 export type DeploymentAction = any;
@@ -823,8 +867,9 @@ export type IdentityState = any;
 export type IdentityStatus = any;
 export type IdentityTier = any;
 export type InviteMemberDialogProps = any;
-export type InviteMemberRequest = any;
-export type InviteStatus = any;
+export type InviteMemberRequest =
+  import("./types/organization").InviteMemberRequest;
+export type InviteStatus = import("./types/organization").InviteStatus;
 export type Job = import("./types/hpc").Job;
 export type JobEvent = any;
 export type JobEventType = any;
@@ -845,7 +890,7 @@ export type LogOptions = any;
 export type MarketplaceAction = any;
 export type MarketplaceState = any;
 export type MemberListProps = any;
-export type MemberMetadata = any;
+export type MemberMetadata = import("./types/organization").MemberMetadata;
 export type MFAAuditEntry = any;
 export type MFAChallenge = any;
 export type MFAChallengeResponse = any;
@@ -892,23 +937,127 @@ export type OrderUsageAlert = any;
 export type OrderUsageMetric = any;
 export type OrderUsageSample = any;
 export type OrderUsageSnapshot = any;
-export type Organization = any;
-export type OrganizationActions = any;
-export type OrganizationBillingPeriod = any;
+export type Organization = import("./types/organization").Organization;
+export type OrganizationBillingPeriod =
+  import("./types/organization").OrganizationBillingPeriod;
 export type OrganizationBillingProps = any;
-export type OrganizationBillingSummary = any;
+export type OrganizationBillingSummary =
+  import("./types/organization").OrganizationBillingSummary;
 export type OrganizationCardProps = any;
-export type OrganizationContextValue = any;
 export type OrganizationDetailProps = any;
-export type OrganizationDetailState = any;
-export type OrganizationInvite = any;
+export type OrganizationInvite =
+  import("./types/organization").OrganizationInvite;
 export type OrganizationListProps = any;
-export type OrganizationMember = any;
-export type OrganizationMetadata = any;
-export type OrganizationProviderProps = any;
-export type OrganizationRole = any;
-export type OrganizationState = any;
+export type OrganizationMember =
+  import("./types/organization").OrganizationMember;
+export type OrganizationMetadata =
+  import("./types/organization").OrganizationMetadata;
+export type OrganizationRole = import("./types/organization").OrganizationRole;
 export type OrganizationSwitcherProps = any;
+export type OrganizationMutationAction =
+  | "create"
+  | "invite"
+  | "remove"
+  | "update_role"
+  | "leave";
+export type OrganizationMutationRequest =
+  | {
+      chainId: string;
+      accountAddress: string;
+      action: "create";
+      organization: CreateOrganizationRequest;
+    }
+  | {
+      chainId: string;
+      accountAddress: string;
+      action: "invite";
+      organizationId: string;
+      invitation: InviteMemberRequest;
+    }
+  | {
+      chainId: string;
+      accountAddress: string;
+      action: "remove";
+      organizationId: string;
+      memberAddress: string;
+    }
+  | {
+      chainId: string;
+      accountAddress: string;
+      action: "update_role";
+      organizationId: string;
+      memberAddress: string;
+      role: OrganizationRole;
+    }
+  | {
+      chainId: string;
+      accountAddress: string;
+      action: "leave";
+      organizationId: string;
+    };
+export interface OrganizationMutationContext {
+  requestDigest: string;
+  idempotencyKey: string;
+  signal: AbortSignal;
+}
+export interface OrganizationMutationAdapter {
+  readonly chainId: string;
+  readonly accountAddress: string;
+  mutateOrganization(
+    request: OrganizationMutationRequest,
+    context: OrganizationMutationContext,
+  ): Promise<unknown>;
+}
+interface CommittedOrganizationMutationBase {
+  status: "committed";
+  code: 0;
+  txHash: string;
+  blockHeight: number;
+  operationId: string;
+  requestDigest: string;
+  idempotencyKey: string;
+  request: OrganizationMutationRequest;
+}
+export type CommittedOrganizationMutation =
+  | (CommittedOrganizationMutationBase & {
+      action: "create";
+      organization: Organization;
+    })
+  | (CommittedOrganizationMutationBase & {
+      action: "invite" | "remove" | "update_role";
+      members: readonly OrganizationMember[];
+    })
+  | (CommittedOrganizationMutationBase & {
+      action: "leave";
+      organizationId: string;
+    });
+export class OrganizationMutationError extends Error {
+  readonly code:
+    | "feature_unavailable"
+    | "invalid_request"
+    | "invalid_committed_result"
+    | "request_changed"
+    | "submission_cancelled"
+    | "submission_in_progress";
+  constructor(code: OrganizationMutationError["code"]);
+}
+export function buildOrganizationMutationRequest(
+  action: OrganizationMutationAction,
+  binding: { chainId: string; accountAddress: string },
+  input: CreateOrganizationRequest | Record<string, unknown>,
+): OrganizationMutationRequest;
+export function digestOrganizationMutationRequest(
+  request: OrganizationMutationRequest,
+): Promise<string>;
+export function requireOrganizationMutationAdapter(
+  adapter: OrganizationMutationAdapter | undefined,
+  binding: { chainId: string; accountAddress: string },
+): OrganizationMutationAdapter;
+export function validateCommittedOrganizationMutation(
+  value: unknown,
+  request: OrganizationMutationRequest,
+  requestDigest: string,
+): CommittedOrganizationMutation;
 export type PortalConfig = any;
 export type PortalWalletType = any;
 export type PricingConfig = any;
