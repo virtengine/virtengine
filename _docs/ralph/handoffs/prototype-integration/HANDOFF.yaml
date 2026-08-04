@@ -1,29 +1,31 @@
 {
   "campaign": "three-day-prototype",
   "thread": "T4",
-  "checkpoint": "T4-01ECZ",
+  "checkpoint": "T4-01EDA",
   "branch": "ve/prototype-integration",
-  "start_head": "3dad2d73707749ed26a4ce46851622b85d4e7d42",
-  "end_head": "1f78ebf848cb962e365488122fa5a704a2ef4b02",
+  "start_head": "5db9c5ea326776e2d2dac2812b831e835ef74eed",
+  "end_head": "97a916ff3a6a3b75f13006aa03fe8945a9f107cc",
   "origin_main": "79391a3df86d85522b92e0400c6904971ecbe65d",
   "tree_clean": true,
   "commits": [
-    "1f78ebf848cb962e365488122fa5a704a2ef4b02"
+    "97a916ff3a6a3b75f13006aa03fe8945a9f107cc"
   ],
   "owned_paths": [
-    "_docs/ralph/prototype-integration/**",
+    "_docs/audits/**",
+    "_docs/ralph/prototype-integration/epochs/**",
     "_docs/ralph/handoffs/prototype-integration/**"
   ],
   "files_changed": [
     "_docs/ralph/handoffs/prototype-integration/HANDOFF.yaml",
-    "_docs/ralph/prototype-integration/core-rc-manifest.json"
+    "_docs/audits/task-t4-01e-intake-freeze-planner-2026-08-02.md",
+    "_docs/ralph/prototype-integration/epochs/epoch-2.json"
   ],
   "tests": [
     {
-      "command": "node scripts/validate-prototype-integration.test.cjs && node scripts/validate-prototype-integration.cjs",
+      "command": "node scripts/plan-prototype-intake-freeze.test.cjs && node scripts/apply-prototype-intake-freeze.test.cjs",
       "exit_code": 0,
       "result": "passed",
-      "test_count": 13,
+      "test_count": 55,
       "tool_versions": {
         "node": "20.19.1"
       }
@@ -38,9 +40,7 @@
       }
     }
   ],
-  "generated_hashes": {
-    "_docs/ralph/prototype-integration/core-rc-manifest.json": "57d12f6bd05a4a48bd765dcb6d67645cbc8eb8a18e5408c1834d2a24dc643271"
-  },
+  "generated_hashes": {},
   "accepted_checkpoints": [],
   "rejected_checkpoints": [
     {
@@ -75,6 +75,7 @@
     "The clean T4-09A real diagnostic exited 1 as required and reported 19 deterministic publication blockers."
   ],
   "blockers": [
+    "Epoch 2 is frozen: T1, T2, T3, and T5 are frozen out; no producer checkpoint was announced, accepted, or merged.",
     "Epoch 1 is closed: T1 t1-09 and T3 t3-13a failed immutable intake validation; T2 and T5 are frozen out; no producer checkpoint is accepted.",
     "Stable secrets are remediated through explicit pre-provisioned Secret names/keys and legacy upgrade instructions; no render-time credential generation remains.",
     "The diagnostic-only publication guard refuses --publish and created no local or remote checkpoint/prototype-integration/t4-09a tag.",
@@ -91,5 +92,5 @@
     "Task 88C is not complete."
   ],
   "next_checkpoint": null,
-  "expected_head": "1f78ebf848cb962e365488122fa5a704a2ef4b02"
+  "expected_head": "97a916ff3a6a3b75f13006aa03fe8945a9f107cc"
 }
