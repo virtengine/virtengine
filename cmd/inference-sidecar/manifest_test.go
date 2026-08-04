@@ -2,6 +2,8 @@ package main
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"os"
@@ -20,6 +22,25 @@ func (noopLogger) Debug(string, ...interface{}) {}
 func (noopLogger) Info(string, ...interface{})  {}
 func (noopLogger) Warn(string, ...interface{})  {}
 func (noopLogger) Error(string, ...interface{}) {}
+
+func TestComputeModelDirHashSortsNormalizedRelativeSlashPaths(t *testing.T) {
+	modelDir := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(modelDir, "a"), 0o750); err != nil {
+		t.Fatalf("mkdir nested model dir: %v", err)
+	}
+	mustWriteFile(t, filepath.Join(modelDir, "a", "x"), []byte("first"))
+	mustWriteFile(t, filepath.Join(modelDir, "a0"), []byte("second"))
+	mustWriteFile(t, filepath.Join(modelDir, "export_metadata.json"), []byte("excluded"))
+
+	actual, err := computeModelDirHash(modelDir)
+	if err != nil {
+		t.Fatalf("compute model dir hash: %v", err)
+	}
+	expected := sha256.Sum256([]byte("firstsecond"))
+	if actual != hex.EncodeToString(expected[:]) {
+		t.Fatalf("expected normalized relative lexical hash %x, got %s", expected, actual)
+	}
+}
 
 func TestVerifyModelBundleMissingManifest(t *testing.T) {
 	modelDir := filepath.Join(t.TempDir(), "model")
@@ -265,15 +286,59 @@ func TestVerifyModelBundleRejectsProvenanceDigestMismatch(t *testing.T) {
 	assertVerificationError(t, err, verificationStateStaleManifest, "provenance digest mismatch")
 }
 
-func TestVerifyModelBundleRejectsDependencyBlockedProductionProvenance(t *testing.T) {
-	modelDir, manifestPath := createReleaseBundle(t)
-	rewriteProvenance(t, manifestPath, map[string]any{
-		"schema_version": "virtengine.model-provenance/v1",
-		"status":         "dependency_blocked",
-	})
+func TestVerifyModelBundleRejectsInvalidProductionProvenanceStatuses(t *testing.T) {
+	for _, status := range []string{"", "fixture_only", "dependency_blocked", "release_candidate"} {
+		t.Run(status, func(t *testing.T) {
+			modelDir, manifestPath := createReleaseBundle(t)
+			rewriteProvenance(t, manifestPath, map[string]any{"schema_version": "virtengine.model-provenance/v1", "status": status})
+			_, err := verifyModelBundle(modelDir, manifestPath, releaseBundleVersion, "")
+			assertVerificationError(t, err, verificationStateBadManifest, "production_approved")
+		})
+	}
+}
 
+func TestVerifyModelBundleRejectsInvalidProfiles(t *testing.T) {
+	for _, profile := range []string{"", "prod", "Production", "unknown"} {
+		t.Run(profile, func(t *testing.T) {
+			modelDir, manifestPath := createReleaseBundle(t)
+			payload := mustReadJSON(t, manifestPath)
+			payload["profile"] = profile
+			writeJSON(t, manifestPath, payload)
+			_, err := verifyModelBundle(modelDir, manifestPath, releaseBundleVersion, "")
+			assertVerificationError(t, err, verificationStateBadManifest, "profile must be production or fixture_only")
+		})
+	}
+}
+
+func TestVerifyModelBundleFixtureOnlyProvenanceStatuses(t *testing.T) {
+	for _, test := range []struct {
+		status  string
+		wantErr bool
+	}{{"fixture_only", false}, {"production_approved", false}, {"dependency_blocked", true}, {"release_candidate", true}} {
+		t.Run(test.status, func(t *testing.T) {
+			modelDir, manifestPath := createReleaseBundle(t)
+			payload := mustReadJSON(t, manifestPath)
+			payload["profile"] = "fixture_only"
+			writeJSON(t, manifestPath, payload)
+			rewriteProvenance(t, manifestPath, map[string]any{"schema_version": "virtengine.model-provenance/v1", "status": test.status})
+			_, err := verifyModelBundleForProfile(modelDir, manifestPath, releaseBundleVersion, "", "fixture_only")
+			if test.wantErr {
+				assertVerificationError(t, err, verificationStateBadManifest, "fixture_only or production_approved")
+			} else if err != nil {
+				t.Fatalf("expected provenance status %q to be accepted: %v", test.status, err)
+			}
+		})
+	}
+}
+
+func TestVerifyModelBundleRejectsFixtureProfileByDefault(t *testing.T) {
+	modelDir, manifestPath := createReleaseBundle(t)
+	payload := mustReadJSON(t, manifestPath)
+	payload["profile"] = "fixture_only"
+	writeJSON(t, manifestPath, payload)
+	rewriteProvenance(t, manifestPath, map[string]any{"schema_version": "virtengine.model-provenance/v1", "status": "fixture_only"})
 	_, err := verifyModelBundle(modelDir, manifestPath, releaseBundleVersion, "")
-	assertVerificationError(t, err, verificationStateBadManifest, "production_approved")
+	assertVerificationError(t, err, verificationStateBadManifest, "expected production, got fixture_only")
 }
 
 func TestVerifyModelBundleRejectsWrongProvenanceSchema(t *testing.T) {
