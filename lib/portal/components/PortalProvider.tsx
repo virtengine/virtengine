@@ -21,6 +21,7 @@ import type { HPCSignerAdapter } from "./hpc/hpc-mutation";
 import type { HPCOutputAdapter } from "./hpc/hpc-output";
 import type { HPCQueryAdapter } from "./hpc/hpc-query";
 import type { ProviderDomainVerifier } from "./provider/domain-verification";
+import type { ProviderOfferingMutationAdapter } from "./provider/offering-mutation";
 import type {
   WalletProviderConfig,
   WalletChainInfo,
@@ -37,6 +38,7 @@ function ProductProviders({
   hpcOutputAdapter,
   hpcQueryAdapter,
   providerDomainVerifier,
+  providerOfferingMutationAdapter,
 }: {
   children: React.ReactNode;
   mutationAdapter?: CheckoutMutationAdapter;
@@ -47,6 +49,7 @@ function ProductProviders({
   hpcOutputAdapter?: HPCOutputAdapter;
   hpcQueryAdapter?: HPCQueryAdapter;
   providerDomainVerifier?: ProviderDomainVerifier;
+  providerOfferingMutationAdapter?: ProviderOfferingMutationAdapter;
 }) {
   const chain = useChain();
   const wallet = useWallet();
@@ -79,6 +82,13 @@ function ProductProviders({
           providerDomainVerifier?.chainId === queryChainId &&
           providerDomainVerifier.accountAddress === accountAddress
             ? providerDomainVerifier
+            : undefined
+        }
+        offeringMutationAdapter={
+          accountAddress &&
+          providerOfferingMutationAdapter?.chainId === queryChainId &&
+          providerOfferingMutationAdapter.accountAddress === accountAddress
+            ? providerOfferingMutationAdapter
             : undefined
         }
       >
@@ -147,6 +157,7 @@ export function PortalProvider({
   hpcOutputAdapter,
   hpcQueryAdapter,
   providerDomainVerifier,
+  providerOfferingMutationAdapter,
   children,
 }: PortalProviderProps): JSX.Element {
   const [isReady, setIsReady] = React.useState(false);
@@ -226,6 +237,9 @@ export function PortalProvider({
                   hpcOutputAdapter={hpcOutputAdapter}
                   hpcQueryAdapter={hpcQueryAdapter}
                   providerDomainVerifier={providerDomainVerifier}
+                  providerOfferingMutationAdapter={
+                    providerOfferingMutationAdapter
+                  }
                 >
                   {children}
                 </ProductProviders>

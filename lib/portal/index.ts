@@ -389,6 +389,20 @@ export {
   validateProviderDomainChallenge,
   validateProviderDomainVerification,
 } from "./components/provider/domain-verification";
+export {
+  ProviderOfferingMutationError,
+  buildProviderOfferingMutationRequest,
+  digestProviderOfferingRequest,
+  requireProviderOfferingMutationAdapter,
+  validateCommittedProviderOfferingMutation,
+} from "./components/provider/offering-mutation";
+export type {
+  CommittedProviderOfferingMutation,
+  ProviderOfferingMutationAction,
+  ProviderOfferingMutationAdapter,
+  ProviderOfferingMutationContext,
+  ProviderOfferingMutationRequest,
+} from "./components/provider/offering-mutation";
 export type {
   ProviderDomainBinding,
   ProviderDomainChallenge,
@@ -399,6 +413,7 @@ export type {
   ProviderState,
   ProviderProfile,
   ProviderRegistration,
+  ProviderOffering,
   DomainVerification,
   OfferingDraft,
   PricingConfig,

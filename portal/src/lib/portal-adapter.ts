@@ -24,6 +24,20 @@ export type {
   ShellEligibilityProjection,
   UseDeploymentShellResult,
 } from '../../../lib/portal';
+export {
+  ProviderOfferingMutationError,
+  buildProviderOfferingMutationRequest,
+  digestProviderOfferingRequest,
+  requireProviderOfferingMutationAdapter,
+  validateCommittedProviderOfferingMutation,
+} from '../../../lib/portal';
+export type {
+  CommittedProviderOfferingMutation,
+  ProviderOfferingMutationAction,
+  ProviderOfferingMutationAdapter,
+  ProviderOfferingMutationContext,
+  ProviderOfferingMutationRequest,
+} from '../../../lib/portal';
 
 // ============================================================================
 // Chat Agent (VE-70D)

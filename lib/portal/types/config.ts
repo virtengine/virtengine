@@ -16,6 +16,7 @@ import type { HPCSignerAdapter } from "../components/hpc/hpc-mutation";
 import type { HPCOutputAdapter } from "../components/hpc/hpc-output";
 import type { HPCQueryAdapter } from "../components/hpc/hpc-query";
 import type { ProviderDomainVerifier } from "../components/provider/domain-verification";
+import type { ProviderOfferingMutationAdapter } from "../components/provider/offering-mutation";
 
 /**
  * Portal configuration
@@ -279,6 +280,7 @@ export interface PortalProviderProps {
   hpcOutputAdapter?: HPCOutputAdapter;
   hpcQueryAdapter?: HPCQueryAdapter;
   providerDomainVerifier?: ProviderDomainVerifier;
+  providerOfferingMutationAdapter?: ProviderOfferingMutationAdapter;
 
   /**
    * Child components

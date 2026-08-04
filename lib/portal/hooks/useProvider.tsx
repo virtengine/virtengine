@@ -38,6 +38,15 @@ import {
   type ProviderDomainVerificationEvidence,
   type ProviderDomainVerifier,
 } from "../components/provider/domain-verification";
+import {
+  ProviderOfferingMutationError,
+  buildProviderOfferingMutationRequest,
+  digestProviderOfferingRequest,
+  requireProviderOfferingMutationAdapter,
+  validateCommittedProviderOfferingMutation,
+  type ProviderOfferingMutationAction,
+  type ProviderOfferingMutationAdapter,
+} from "../components/provider/offering-mutation";
 
 /**
  * Provider context value
@@ -86,6 +95,7 @@ export interface ProviderProviderProps {
   accountAddress: string | null;
   getAuthHeader?: () => Promise<string>;
   domainVerifier?: ProviderDomainVerifier;
+  offeringMutationAdapter?: ProviderOfferingMutationAdapter;
 }
 
 export function ProviderProvider({
@@ -95,6 +105,7 @@ export function ProviderProvider({
   accountAddress,
   getAuthHeader,
   domainVerifier,
+  offeringMutationAdapter,
 }: ProviderProviderProps) {
   const [state, setState] = useState<ProviderState>(initialProviderState);
   const verifierGeneration = useRef(0);
@@ -113,6 +124,42 @@ export function ProviderProvider({
   const operationSequence = useRef(0);
   const challengeIssuanceInFlight = useRef(new Map<string, number>());
   const verificationsInFlight = useRef(new Map<string, number>());
+  const offeringMutationGeneration = useRef(0);
+  const offeringMutationAuthority = useRef({
+    offeringMutationAdapter,
+    chainId,
+    accountAddress,
+  });
+  const offeringMutationsInFlight = useRef(new Set<string>());
+  const activeOfferingControllers = useRef(new Map<string, AbortController>());
+  if (
+    offeringMutationAuthority.current.offeringMutationAdapter !==
+      offeringMutationAdapter ||
+    offeringMutationAuthority.current.chainId !== chainId ||
+    offeringMutationAuthority.current.accountAddress !== accountAddress
+  ) {
+    for (const controller of activeOfferingControllers.current.values())
+      controller.abort();
+    activeOfferingControllers.current.clear();
+    offeringMutationAuthority.current = {
+      offeringMutationAdapter,
+      chainId,
+      accountAddress,
+    };
+    offeringMutationGeneration.current += 1;
+    offeringMutationsInFlight.current.clear();
+  }
+  const renderOfferingMutationGeneration = offeringMutationGeneration.current;
+  useEffect(
+    () => () => {
+      offeringMutationGeneration.current += 1;
+      for (const controller of activeOfferingControllers.current.values())
+        controller.abort();
+      activeOfferingControllers.current.clear();
+      offeringMutationsInFlight.current.clear();
+    },
+    [],
+  );
   const registrationDomain = useRef<string | null>(null);
   if (
     accountAuthority.current.chainId !== chainId ||
@@ -454,31 +501,100 @@ export function ProviderProvider({
     await refresh();
   }, [assertAccountAuthority, refresh]);
 
+  const mutateOffering = useCallback(
+    async (
+      action: ProviderOfferingMutationAction,
+      offeringId?: string,
+      draft?: OfferingDraft | Partial<OfferingDraft>,
+    ): Promise<ProviderOffering> => {
+      assertAccountAuthority();
+      if (
+        !accountAddress ||
+        renderOfferingMutationGeneration !== offeringMutationGeneration.current
+      ) {
+        throw new ProviderOfferingMutationError("feature_unavailable");
+      }
+      const binding = { chainId, accountAddress };
+      const adapter = requireProviderOfferingMutationAdapter(
+        offeringMutationAdapter,
+        binding,
+      );
+      const normalizedOfferingId = offeringId?.trim();
+      const key = normalizedOfferingId ?? "create";
+      if (offeringMutationsInFlight.current.has(key)) {
+        throw new ProviderOfferingMutationError("submission_in_progress");
+      }
+      offeringMutationsInFlight.current.add(key);
+      try {
+        const request = buildProviderOfferingMutationRequest(
+          action,
+          binding,
+          normalizedOfferingId,
+          draft,
+        );
+        const requestDigest = await digestProviderOfferingRequest(request);
+        if (
+          renderOfferingMutationGeneration !==
+            offeringMutationGeneration.current ||
+          offeringMutationAuthority.current.offeringMutationAdapter !== adapter
+        ) {
+          throw new ProviderOfferingMutationError("request_changed");
+        }
+        const controller = new AbortController();
+        activeOfferingControllers.current.set(key, controller);
+        const rawResult = await adapter.mutateOffering(request, {
+          requestDigest,
+          idempotencyKey: requestDigest,
+          signal: controller.signal,
+        });
+        if (
+          renderOfferingMutationGeneration !==
+            offeringMutationGeneration.current ||
+          offeringMutationAuthority.current.offeringMutationAdapter !== adapter
+        ) {
+          controller.abort();
+          throw new ProviderOfferingMutationError("submission_cancelled");
+        }
+        return validateCommittedProviderOfferingMutation(
+          rawResult,
+          request,
+          requestDigest,
+        ).offering;
+      } finally {
+        if (
+          renderOfferingMutationGeneration ===
+          offeringMutationGeneration.current
+        ) {
+          offeringMutationsInFlight.current.delete(key);
+          activeOfferingControllers.current.delete(key);
+        }
+      }
+    },
+    [
+      accountAddress,
+      assertAccountAuthority,
+      chainId,
+      offeringMutationAdapter,
+      renderOfferingMutationGeneration,
+    ],
+  );
+
   const createOffering = useCallback(
     async (draft: OfferingDraft): Promise<ProviderOffering> => {
-      assertAccountAuthority();
-      // Would create offering transaction
-      const offering: ProviderOffering = {
-        id: `offering-${Date.now()}`,
-        title: draft.title,
-        type: draft.type,
-        status: draft.autoPublish ? "active" : "draft",
-        activeOrders: 0,
-        totalOrders: 0,
-        capacityUtilization: 0,
-        totalRevenue: "0",
-        createdAt: Date.now(),
-        updatedAt: Date.now(),
-      };
+      const offering = await mutateOffering("create", undefined, draft);
 
       setState((prev) => ({
         ...prev,
-        offerings: [...prev.offerings, offering],
+        offerings: prev.offerings.some((item) => item.id === offering.id)
+          ? prev.offerings.map((item) =>
+              item.id === offering.id ? offering : item,
+            )
+          : [...prev.offerings, offering],
       }));
 
       return offering;
     },
-    [assertAccountAuthority],
+    [mutateOffering],
   );
 
   const updateOffering = useCallback(
@@ -486,51 +602,54 @@ export function ProviderProvider({
       offeringId: string,
       updates: Partial<OfferingDraft>,
     ): Promise<ProviderOffering> => {
-      assertAccountAuthority();
-      const offering = state.offerings.find((o) => o.id === offeringId);
+      const normalizedOfferingId = offeringId.trim();
+      const offering = state.offerings.find(
+        (o) => o.id === normalizedOfferingId,
+      );
       if (!offering) throw new Error("Offering not found");
-
-      const updated = { ...offering, ...updates, updatedAt: Date.now() };
+      const updated = await mutateOffering(
+        "update",
+        normalizedOfferingId,
+        updates,
+      );
       setState((prev) => ({
         ...prev,
         offerings: prev.offerings.map((o) =>
-          o.id === offeringId ? updated : o,
+          o.id === normalizedOfferingId ? updated : o,
         ),
       }));
 
       return updated;
     },
-    [assertAccountAuthority, state.offerings],
+    [mutateOffering, state.offerings],
   );
 
   const publishOffering = useCallback(
     async (offeringId: string) => {
-      assertAccountAuthority();
+      const normalizedOfferingId = offeringId.trim();
+      const updated = await mutateOffering("publish", normalizedOfferingId);
       setState((prev) => ({
         ...prev,
         offerings: prev.offerings.map((o) =>
-          o.id === offeringId
-            ? { ...o, status: "active", updatedAt: Date.now() }
-            : o,
+          o.id === normalizedOfferingId ? updated : o,
         ),
       }));
     },
-    [assertAccountAuthority],
+    [mutateOffering],
   );
 
   const pauseOffering = useCallback(
     async (offeringId: string) => {
-      assertAccountAuthority();
+      const normalizedOfferingId = offeringId.trim();
+      const updated = await mutateOffering("pause", normalizedOfferingId);
       setState((prev) => ({
         ...prev,
         offerings: prev.offerings.map((o) =>
-          o.id === offeringId
-            ? { ...o, status: "paused", updatedAt: Date.now() }
-            : o,
+          o.id === normalizedOfferingId ? updated : o,
         ),
       }));
     },
-    [assertAccountAuthority],
+    [mutateOffering],
   );
 
   const getIncomingOrders = useCallback(async () => {

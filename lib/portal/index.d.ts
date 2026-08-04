@@ -491,6 +491,7 @@ export interface PortalProviderProps {
   hpcOutputAdapter?: HPCOutputAdapter;
   hpcQueryAdapter?: HPCQueryAdapter;
   providerDomainVerifier?: ProviderDomainVerifier;
+  providerOfferingMutationAdapter?: ProviderOfferingMutationAdapter;
   children: React.ReactNode;
 }
 export const PortalProvider: React.ComponentType<PortalProviderProps>;
@@ -568,6 +569,7 @@ export interface ProviderProviderProps {
   accountAddress: string | null;
   getAuthHeader?: () => Promise<string>;
   domainVerifier?: ProviderDomainVerifier;
+  offeringMutationAdapter?: ProviderOfferingMutationAdapter;
 }
 export const ProviderProvider: React.ComponentType<ProviderProviderProps>;
 export function normalizeProviderDomain(value: string): string;
@@ -588,6 +590,70 @@ export function validateProviderDomainVerification(
   challenge: ProviderDomainChallenge,
   now?: number,
 ): ProviderDomainVerificationEvidence;
+export type ProviderOfferingMutationAction =
+  | "create"
+  | "update"
+  | "publish"
+  | "pause";
+export interface ProviderOfferingMutationRequest {
+  chainId: string;
+  accountAddress: string;
+  action: ProviderOfferingMutationAction;
+  offeringId?: string;
+  draft?: OfferingDraft | Partial<OfferingDraft>;
+}
+export interface ProviderOfferingMutationContext {
+  requestDigest: string;
+  idempotencyKey: string;
+  signal: AbortSignal;
+}
+export interface ProviderOfferingMutationAdapter {
+  readonly chainId: string;
+  readonly accountAddress: string;
+  mutateOffering(
+    request: ProviderOfferingMutationRequest,
+    context: ProviderOfferingMutationContext,
+  ): Promise<unknown>;
+}
+export interface CommittedProviderOfferingMutation {
+  status: "committed";
+  code: 0;
+  txHash: string;
+  blockHeight: number;
+  operationId: string;
+  requestDigest: string;
+  idempotencyKey: string;
+  request: ProviderOfferingMutationRequest;
+  offering: ProviderOffering;
+}
+export class ProviderOfferingMutationError extends Error {
+  readonly code:
+    | "feature_unavailable"
+    | "invalid_request"
+    | "invalid_committed_result"
+    | "request_changed"
+    | "submission_cancelled"
+    | "submission_in_progress";
+  constructor(code: ProviderOfferingMutationError["code"]);
+}
+export function buildProviderOfferingMutationRequest(
+  action: ProviderOfferingMutationAction,
+  binding: { chainId: string; accountAddress: string },
+  offeringId?: string,
+  draft?: OfferingDraft | Partial<OfferingDraft>,
+): ProviderOfferingMutationRequest;
+export function digestProviderOfferingRequest(
+  request: ProviderOfferingMutationRequest,
+): Promise<string>;
+export function requireProviderOfferingMutationAdapter(
+  adapter: ProviderOfferingMutationAdapter | undefined,
+  binding: { chainId: string; accountAddress: string },
+): ProviderOfferingMutationAdapter;
+export function validateCommittedProviderOfferingMutation(
+  value: unknown,
+  request: ProviderOfferingMutationRequest,
+  requestDigest: string,
+): CommittedProviderOfferingMutation;
 export const ProviderRegistrationFlow: any;
 export const RemediationGuide: any;
 export const ResourceAccess: any;
@@ -799,7 +865,8 @@ export type MultiProviderClientOptions = any;
 export type MultiProviderProviderProps = any;
 export type MultiProviderWallet = any;
 export type Offering = any;
-export type OfferingDraft = any;
+export type OfferingDraft = import("./types/provider").OfferingDraft;
+export type ProviderOffering = import("./types/provider").ProviderOffering;
 export type OfferingFilter = any;
 export type OfferingSortField = any;
 export type Order = any;
