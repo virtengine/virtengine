@@ -8,8 +8,13 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@react-native-ml-kit/text-recognition": "2.0.0",
     "react": "^18.2.0",
-    "react-native": "^0.84.0"
+    "react-native": "^0.84.0",
+    "react-native-nitro-image": "0.15.1",
+    "react-native-nitro-modules": "0.36.5",
+    "react-native-vision-camera": "5.2.1",
+    "vision-camera-face-detector": "0.1.8"
   },
   "devDependencies": {
     "@types/node": "^20.11.30",
