@@ -335,6 +335,9 @@ func (k IBCKeeper) OnRecvPacket(
 	if err := packetData.Validate(); err != nil {
 		return NewErrorAcknowledgement(err)
 	}
+	if packetData.Type == PacketTypeEscrowDeposit {
+		return NewErrorAcknowledgement(ErrInboundDepositUnauthorized)
+	}
 
 	if err := k.CheckRateLimit(ctx, relayer, packetData.Type); err != nil {
 		return NewErrorAcknowledgement(err)
@@ -354,17 +357,6 @@ func (k IBCKeeper) OnRecvPacket(
 	k.relayerHooks.OnPacketReceived(ctx, relayer, packet, packetData.Type)
 
 	switch packetData.Type {
-	case PacketTypeEscrowDeposit:
-		var deposit EscrowDepositPacket
-		if err := json.Unmarshal(packetData.Data, &deposit); err != nil {
-			return NewErrorAcknowledgement(ErrInvalidPacket.Wrap(err.Error()))
-		}
-		ack, err := k.handleEscrowDeposit(ctx, packet, deposit)
-		if err != nil {
-			return NewErrorAcknowledgement(err)
-		}
-		return NewResultAcknowledgement(ack)
-
 	case PacketTypeEscrowRelease:
 		var release EscrowReleasePacket
 		if err := json.Unmarshal(packetData.Data, &release); err != nil {

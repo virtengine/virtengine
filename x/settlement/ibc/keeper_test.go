@@ -520,7 +520,7 @@ func validDepositPacket(now time.Time) EscrowDepositPacket {
 	}
 }
 
-func TestIBCKeeperOnRecvEscrowDeposit(t *testing.T) {
+func TestIBCKeeperOnRecvEscrowDepositFailsClosed(t *testing.T) {
 	env := setupIBCTestEnv(t)
 
 	depositor := sdk.AccAddress([]byte("depositor_addr______"))
@@ -555,10 +555,12 @@ func TestIBCKeeperOnRecvEscrowDeposit(t *testing.T) {
 	ackBz := ack.Acknowledgement()
 	var parsed Acknowledgement
 	require.NoError(t, json.Unmarshal(ackBz, &parsed))
-	require.True(t, parsed.Success())
+	require.False(t, parsed.Success())
+	require.Contains(t, parsed.Error, ErrInboundDepositUnauthorized.Error())
 
 	_, found := env.settle.GetEscrowByOrder(env.ctx, deposit.OrderID)
-	require.True(t, found)
+	require.False(t, found)
+	require.Empty(t, env.ctx.EventManager().Events())
 }
 
 func TestIBCKeeperOnRecvEscrowRelease(t *testing.T) {
