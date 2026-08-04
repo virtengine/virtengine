@@ -19,3 +19,7 @@ resources:
   - tee-enclave-configmap.yaml
   - tee-enclave-deployment.yaml
   - tee-enclave-service.yaml
+  - veid-inference-configmap.yaml
+  - veid-inference-deployment.yaml
+  - veid-inference-service.yaml
+  - veid-inference-networkpolicy.yaml

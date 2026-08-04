@@ -10,6 +10,8 @@ package main
 
 import (
 	"context"
+	"crypto/tls"
+	"crypto/x509"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -21,6 +23,7 @@ import (
 	"time"
 
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/health"
 	"google.golang.org/grpc/health/grpc_health_v1"
 	"google.golang.org/grpc/reflection"
@@ -60,6 +63,10 @@ var (
 	servingHealth = flag.String("serving-health-path", "", "Optional TensorFlow Serving health path override")
 	servingFail   = flag.String("serving-fallback-url", "", "Fallback TensorFlow Serving base URL")
 	allowStub     = flag.Bool("allow-fallback-to-stub", false, "Allow fallback to local stub inference on serving failure")
+	tlsCertFile   = flag.String("tls-cert-file", "", "PEM server certificate for gRPC mTLS; required with --tls-key-file")
+	tlsKeyFile    = flag.String("tls-key-file", "", "PEM server key for gRPC mTLS; required with --tls-cert-file")
+	tlsClientCA   = flag.String("tls-client-ca-file", "", "PEM client CA bundle required when --tls-require-client-cert is true")
+	tlsRequireMTL = flag.Bool("tls-require-client-cert", false, "Require and verify a client certificate for every gRPC connection")
 )
 
 func main() {
@@ -124,11 +131,21 @@ func run() int {
 	go startMetricsServer(*metricsAddr, server, log)
 
 	// Start gRPC server
-	grpcServer := grpc.NewServer(
-		grpc.MaxRecvMsgSize(16*1024*1024), // 16MB max message size
-		grpc.MaxSendMsgSize(16*1024*1024),
+	grpcOptions := []grpc.ServerOption{
+		grpc.MaxRecvMsgSize(16 * 1024 * 1024), // 16MB max message size
+		grpc.MaxSendMsgSize(16 * 1024 * 1024),
 		grpc.StatsHandler(observability.GRPCServerStatsHandler()),
-	)
+	}
+	if *tlsCertFile != "" || *tlsKeyFile != "" || *tlsClientCA != "" || *tlsRequireMTL {
+		tlsConfig, err := loadServerTLSConfig(*tlsCertFile, *tlsKeyFile, *tlsClientCA, *tlsRequireMTL)
+		if err != nil {
+			log.Error("Invalid gRPC TLS configuration", "error", err)
+			return 1
+		}
+		grpcOptions = append(grpcOptions, grpc.Creds(credentials.NewTLS(tlsConfig)))
+		log.Info("gRPC mTLS enabled", "require_client_certificate", *tlsRequireMTL)
+	}
+	grpcServer := grpc.NewServer(grpcOptions...)
 
 	// Register services
 	inferencepb.RegisterInferenceServiceServer(grpcServer, server)
@@ -181,6 +198,45 @@ func run() int {
 
 	log.Info("Server stopped gracefully")
 	return 0
+}
+
+// loadServerTLSConfig validates the complete server-side mTLS contract before
+// opening a listener. It deliberately rejects partial TLS configuration: an
+// identity-scoring sidecar must not silently downgrade to plaintext when a
+// workload is misconfigured.
+func loadServerTLSConfig(certFile, keyFile, clientCAFile string, requireClientCert bool) (*tls.Config, error) {
+	if certFile == "" || keyFile == "" {
+		return nil, fmt.Errorf("tls-cert-file and tls-key-file must both be set when TLS is enabled")
+	}
+	certificate, err := tls.LoadX509KeyPair(certFile, keyFile)
+	if err != nil {
+		return nil, fmt.Errorf("load server certificate: %w", err)
+	}
+
+	config := &tls.Config{
+		Certificates: []tls.Certificate{certificate},
+		MinVersion:   tls.VersionTLS13,
+	}
+	if !requireClientCert {
+		if clientCAFile != "" {
+			return nil, fmt.Errorf("tls-client-ca-file requires tls-require-client-cert=true")
+		}
+		return config, nil
+	}
+	if clientCAFile == "" {
+		return nil, fmt.Errorf("tls-client-ca-file is required when tls-require-client-cert=true")
+	}
+	clientCAPEM, err := os.ReadFile(clientCAFile)
+	if err != nil {
+		return nil, fmt.Errorf("read client CA bundle: %w", err)
+	}
+	clientCAs := x509.NewCertPool()
+	if !clientCAs.AppendCertsFromPEM(clientCAPEM) {
+		return nil, fmt.Errorf("client CA bundle contains no certificates")
+	}
+	config.ClientAuth = tls.RequireAndVerifyClientCert
+	config.ClientCAs = clientCAs
+	return config, nil
 }
 
 func startMetricsServer(addr string, server *InferenceSidecarServer, log Logger) {

@@ -1,0 +1,146 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: veid-inference
+  namespace: virtengine
+  labels:
+    app.kubernetes.io/name: veid-inference
+    app.kubernetes.io/component: inference
+    app.kubernetes.io/part-of: virtengine-platform
+spec:
+  replicas: 2
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 0
+      maxSurge: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: veid-inference
+      app.kubernetes.io/component: inference
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: veid-inference
+        app.kubernetes.io/component: inference
+        app.kubernetes.io/part-of: virtengine-platform
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "9090"
+        prometheus.io/path: /metrics
+        # Enforced by the ambient/service-mesh control plane in production.
+        security.istio.io/tlsMode: istio
+    spec:
+      serviceAccountName: veid-inference
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        runAsGroup: 65532
+        fsGroup: 65532
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: veid-inference
+          # Release automation replaces this syntactically pinned placeholder
+          # with the digest signed and attested by the supply-chain pipeline.
+          image: ghcr.io/virtengine/veid-inference@sha256:0000000000000000000000000000000000000000000000000000000000000000
+          imagePullPolicy: IfNotPresent
+          args:
+            - --grpc-addr=$(VEID_INFERENCE_GRPC_ADDR)
+            - --metrics-addr=$(VEID_INFERENCE_METRICS_ADDR)
+            - --model-path=$(VEID_INFERENCE_MODEL_PATH)
+            - --manifest-path=$(VEID_INFERENCE_MANIFEST_PATH)
+            - --force-cpu=$(VEID_INFERENCE_FORCE_CPU)
+            - --random-seed=$(VEID_INFERENCE_RANDOM_SEED)
+            - --timeout=$(VEID_INFERENCE_TIMEOUT)
+            - --max-memory-mb=$(VEID_INFERENCE_MAX_MEMORY_MB)
+            - --tls-cert-file=$(VEID_INFERENCE_TLS_CERT_FILE)
+            - --tls-key-file=$(VEID_INFERENCE_TLS_KEY_FILE)
+            - --tls-client-ca-file=$(VEID_INFERENCE_TLS_CLIENT_CA_FILE)
+            - --tls-require-client-cert=$(VEID_INFERENCE_TLS_REQUIRE_CLIENT_CERT)
+          envFrom:
+            - configMapRef:
+                name: veid-inference-config
+          ports:
+            - name: grpc
+              containerPort: 50051
+            - name: metrics
+              containerPort: 9090
+          resources:
+            requests:
+              cpu: "500m"
+              memory: 1Gi
+            limits:
+              cpu: "2"
+              memory: 2Gi
+          startupProbe:
+            httpGet:
+              path: /health
+              port: metrics
+            periodSeconds: 5
+            failureThreshold: 30
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: metrics
+            periodSeconds: 10
+            failureThreshold: 3
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: metrics
+            periodSeconds: 20
+            failureThreshold: 3
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - name: model-bundle
+              mountPath: /var/lib/veid/models
+              readOnly: true
+            - name: mtls
+              mountPath: /var/run/veid/tls
+              readOnly: true
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        # Provisioned only by the signed-model release controller. No model is
+        # embedded in the image and the startup verifier rejects tampering.
+        - name: model-bundle
+          persistentVolumeClaim:
+            claimName: veid-inference-model-bundle
+        - name: mtls
+          secret:
+            secretName: veid-inference-mtls
+            defaultMode: 0400
+        - name: tmp
+          emptyDir:
+            sizeLimit: 64Mi
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: veid-inference
+  namespace: virtengine
+  labels:
+    app.kubernetes.io/name: veid-inference
+    app.kubernetes.io/component: inference
+  annotations:
+    # Production overlays set a workload-identity role limited to the receipt
+    # signing key. The private key itself is never mounted in this workload.
+    virtengine.com/receipt-signer: kms-or-hsm-required
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: veid-inference-pdb
+  namespace: virtengine
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: veid-inference
+      app.kubernetes.io/component: inference
