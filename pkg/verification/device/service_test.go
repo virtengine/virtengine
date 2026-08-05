@@ -2,6 +2,7 @@ package device
 
 import (
 	"context"
+	"crypto/sha256"
 	"testing"
 	"time"
 
@@ -33,7 +34,8 @@ func TestServiceVerifyAttestation(t *testing.T) {
 	require.True(t, result.Verified)
 	require.Equal(t, AttestationStatusVerified, result.Status)
 
-	record := BuildDeviceAttestationRecord(result, "vault://device/attestation", []byte("hash"))
+	payloadHash := sha256.Sum256([]byte("attestation-payload"))
+	record := BuildDeviceAttestationRecord(result, "vault://device/attestation", payloadHash[:])
 	require.NoError(t, record.Validate())
 }
 

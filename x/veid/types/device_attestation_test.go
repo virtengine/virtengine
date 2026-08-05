@@ -1,6 +1,7 @@
 package types
 
 import (
+	"crypto/sha256"
 	"testing"
 	"time"
 
@@ -8,6 +9,7 @@ import (
 )
 
 func TestDeviceAttestationRecordValidate(t *testing.T) {
+	payloadHash := sha256.Sum256([]byte("attestation-payload"))
 	valid := DeviceAttestationRecord{
 		AttestationID:  "attest-001",
 		Platform:       DevicePlatformAndroid,
@@ -22,6 +24,8 @@ func TestDeviceAttestationRecordValidate(t *testing.T) {
 		HardwareBacked: true,
 		Supported:      true,
 		Verified:       true,
+		PayloadHash:    payloadHash[:],
+		VaultRef:       "vault://attestations/attest-001",
 	}
 
 	require.NoError(t, valid.Validate())
@@ -33,6 +37,18 @@ func TestDeviceAttestationRecordValidate(t *testing.T) {
 	incompatibleProvider := valid
 	incompatibleProvider.Platform = DevicePlatformIOS
 	require.ErrorContains(t, incompatibleProvider.Validate(), "incompatible")
+
+	missingPayloadHash := valid
+	missingPayloadHash.PayloadHash = nil
+	require.ErrorContains(t, missingPayloadHash.Validate(), "payload hash")
+
+	missingVaultRef := valid
+	missingVaultRef.VaultRef = ""
+	require.ErrorContains(t, missingVaultRef.Validate(), "vault reference")
+
+	whitespaceVaultRef := valid
+	whitespaceVaultRef.VaultRef = " vault://attestations/attest-001"
+	require.ErrorContains(t, whitespaceVaultRef.Validate(), "vault reference")
 
 	unsupported := DeviceAttestationRecord{
 		AttestationID: "attest-unsupported",

@@ -1,7 +1,9 @@
 package types
 
 import (
+	"crypto/sha256"
 	"fmt"
+	"strings"
 	"time"
 )
 
@@ -101,6 +103,14 @@ func (r DeviceAttestationRecord) Validate() error {
 	}
 	if r.AppID == "" {
 		return ErrInvalidScope.Wrap("app_id is required")
+	}
+	if r.Verified {
+		if len(r.PayloadHash) != sha256.Size {
+			return ErrInvalidScope.Wrap("verified device attestation payload hash must be SHA-256")
+		}
+		if vaultRef := strings.TrimSpace(r.VaultRef); vaultRef == "" || vaultRef != r.VaultRef {
+			return ErrInvalidScope.Wrap("verified device attestation vault reference is required")
+		}
 	}
 
 	return nil
