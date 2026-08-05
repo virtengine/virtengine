@@ -26,6 +26,9 @@ func TestValidateDigitalIDIdentityFailsClosedForRevocationAndAssurance(t *testin
 	identity.Status = CredentialStatusActive
 	identity.Assurance = AssuranceLevelLow
 	require.ErrorContains(t, ValidateIdentity(req, identity, now), "assurance")
+	identity.Assurance = AssuranceLevelHigh
+	identity.ExpiresAt = req.ExpiresAt.Add(time.Second)
+	require.ErrorContains(t, ValidateIdentity(req, identity, now), "consent window")
 }
 
 func TestUnavailableDigitalIDProviderNeverSimulatesSuccess(t *testing.T) {

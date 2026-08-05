@@ -159,6 +159,9 @@ func ValidateIdentity(request DigitalIDAuthorizationRequest, identity DigitalIDI
 	if identity.IssuedAt.IsZero() || identity.ExpiresAt.IsZero() || !identity.ExpiresAt.After(now.UTC()) || identity.IssuedAt.After(now.UTC()) {
 		return fmt.Errorf("digital ID identity timing is invalid")
 	}
+	if identity.ExpiresAt.After(request.ExpiresAt.UTC()) {
+		return fmt.Errorf("digital ID identity expiry exceeds authorization consent window")
+	}
 	if identity.Status != CredentialStatusActive {
 		return fmt.Errorf("digital ID credential is not active")
 	}
