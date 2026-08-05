@@ -14,6 +14,7 @@ export function LivenessScreen({ stepIndex = 4 }: { stepIndex?: number }) {
   const [update, setUpdate] = useState<LivenessUpdate | null>(null);
   const [completed, setCompleted] = useState(false);
   const simulationAllowed = process.env.NODE_ENV === "test" || process.env.NODE_ENV === "development";
+  const terminalError = simulationAllowed ? null : "liveness_detector_unavailable";
 
   useEffect(() => {
     engineRef.current.start();
@@ -101,6 +102,7 @@ export function LivenessScreen({ stepIndex = 4 }: { stepIndex?: number }) {
       </View> : <View style={styles.simulationCard}>
         <Text style={styles.simulationTitle}>Liveness capture unavailable</Text>
         <Text style={styles.simulationText}>A native face detector and approved PAD model are required to continue.</Text>
+        <Text style={styles.error}>Verification stopped: {terminalError}</Text>
       </View>}
       <CaptureFooter
         primaryLabel={completed ? "Continue" : "Complete Liveness"}
@@ -147,5 +149,6 @@ const styles = StyleSheet.create({
   simulateText: {
     color: "#ffffff",
     fontWeight: "600"
-  }
+  },
+  error: { marginTop: 10, color: "#b91c1c", fontWeight: "600" }
 });
