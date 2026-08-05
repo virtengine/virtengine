@@ -409,12 +409,8 @@ func CreateProductionService() (EnclaveService, error) {
 		config = &defaultConfig
 	}
 
-	// Validate configuration for production readiness
-	if config.Mode == TEEModeProduction {
-		ready, issues := config.IsProductionReady()
-		if !ready {
-			fmt.Printf("WARNING: Production config has issues: %v\n", issues)
-		}
+	if err := validateProductionServiceConfig(config); err != nil {
+		return nil, err
 	}
 
 	// Create factory from production config
@@ -428,12 +424,8 @@ func CreateProductionService() (EnclaveService, error) {
 
 // CreateProductionServiceWithConfig creates a production service with explicit config
 func CreateProductionServiceWithConfig(config *ProductionConfig) (EnclaveService, error) {
-	if config == nil {
-		return nil, fmt.Errorf("production config cannot be nil")
-	}
-
-	if err := config.Validate(); err != nil {
-		return nil, fmt.Errorf("invalid production config: %w", err)
+	if err := validateProductionServiceConfig(config); err != nil {
+		return nil, err
 	}
 
 	factory, err := config.CreateFactory()
@@ -442,6 +434,26 @@ func CreateProductionServiceWithConfig(config *ProductionConfig) (EnclaveService
 	}
 
 	return factory.CreateService()
+}
+
+// validateProductionServiceConfig prevents production-named entry points from
+// silently constructing a development/simulated service.  Validation belongs
+// here as well as in configuration loading because these constructors are
+// public and are frequently called directly by embedding applications.
+func validateProductionServiceConfig(config *ProductionConfig) error {
+	if config == nil {
+		return fmt.Errorf("production config cannot be nil")
+	}
+	if config.Mode != TEEModeProduction {
+		return fmt.Errorf("production service requires production TEE mode")
+	}
+	if err := config.Validate(); err != nil {
+		return fmt.Errorf("invalid production config: %w", err)
+	}
+	if ready, issues := config.IsProductionReady(); !ready {
+		return fmt.Errorf("production config not ready: %v", issues)
+	}
+	return nil
 }
 
 // CreateDevelopmentService creates a service configured for development
