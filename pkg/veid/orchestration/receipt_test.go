@@ -33,6 +33,20 @@ func TestValidateReceiptRequestFailsClosedOnUnverifiedDevice(t *testing.T) {
 	require.ErrorContains(t, ValidateReceiptRequest(ReceiptRequest{Receipt: receipt, Evidence: evidence}, now), "supported and verified")
 }
 
+func TestValidateReceiptRequestRejectsInvalidAttestationOrdering(t *testing.T) {
+	now := time.Date(2026, 8, 5, 10, 0, 0, 0, time.UTC)
+	evidence := validEvidence(now)
+	receipt, privateKey := validReceipt(now, evidence)
+	require.NoError(t, receipt.Sign(privateKey))
+	evidence.DeviceAttestation.AttestedAt = now.Add(time.Second)
+	require.ErrorContains(t, ValidateReceiptRequest(ReceiptRequest{Receipt: receipt, Evidence: evidence}, now), "attestation time is in the future")
+	evidence = validEvidence(now)
+	evidence.DeviceAttestation.AttestedAt = evidence.GovernmentVerificationTime.Add(time.Second)
+	receipt, privateKey = validReceipt(now, evidence)
+	require.NoError(t, receipt.Sign(privateKey))
+	require.ErrorContains(t, ValidateReceiptRequest(ReceiptRequest{Receipt: receipt, Evidence: evidence}, now), "predate government")
+}
+
 func TestValidateReceiptRequestRejectsStaleOrFutureReceipt(t *testing.T) {
 	now := time.Date(2026, 8, 5, 10, 0, 0, 0, time.UTC)
 	evidence := validEvidence(now)

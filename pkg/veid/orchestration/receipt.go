@@ -105,11 +105,17 @@ func ValidateReceiptRequest(request ReceiptRequest, now time.Time) error {
 	if !request.Evidence.DeviceAttestation.Supported || !request.Evidence.DeviceAttestation.Verified {
 		return fmt.Errorf("device attestation must be supported and verified")
 	}
+	if request.Evidence.DeviceAttestation.AttestedAt.After(now.UTC()) {
+		return fmt.Errorf("device attestation time is in the future")
+	}
 	if request.Evidence.GovernmentVerificationTime.IsZero() {
 		return fmt.Errorf("government verification time is required")
 	}
 	if request.Evidence.GovernmentVerificationTime.After(now.UTC()) {
 		return fmt.Errorf("government verification time is in the future")
+	}
+	if request.Evidence.DeviceAttestation.AttestedAt.After(request.Evidence.GovernmentVerificationTime.UTC()) {
+		return fmt.Errorf("device attestation must predate government verification")
 	}
 	if request.Receipt.IssuedAt.UTC().Before(request.Evidence.GovernmentVerificationTime.UTC()) {
 		return fmt.Errorf("receipt predates government verification")
