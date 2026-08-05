@@ -54,13 +54,32 @@ func VerifyAndPrepare(ctx context.Context, verifier ReceiptVerifier, request Rec
 	if verifier == nil {
 		return veidtypes.InferenceReceipt{}, fmt.Errorf("inference receipt verifier is required")
 	}
-	if err := verifier.VerifyInferenceReceipt(ctx, request.Receipt); err != nil {
+	prepared := cloneInferenceReceipt(request.Receipt)
+	request.Receipt = prepared
+	if err := verifier.VerifyInferenceReceipt(ctx, prepared); err != nil {
 		return veidtypes.InferenceReceipt{}, fmt.Errorf("inference receipt signer verification failed: %w", err)
 	}
 	if err := ValidateReceiptRequest(request, now); err != nil {
 		return veidtypes.InferenceReceipt{}, err
 	}
-	return request.Receipt, nil
+	return prepared, nil
+}
+
+func cloneInferenceReceipt(receipt veidtypes.InferenceReceipt) veidtypes.InferenceReceipt {
+	cloned := receipt
+	cloned.ScopeIDs = append([]string(nil), receipt.ScopeIDs...)
+	cloned.InputDigest = append([]byte(nil), receipt.InputDigest...)
+	cloned.FeatureDigest = append([]byte(nil), receipt.FeatureDigest...)
+	cloned.SchemaDigest = append([]byte(nil), receipt.SchemaDigest...)
+	cloned.EvidenceLineageDigest = append([]byte(nil), receipt.EvidenceLineageDigest...)
+	cloned.ModelManifestDigest = append([]byte(nil), receipt.ModelManifestDigest...)
+	cloned.ModelDigest = append([]byte(nil), receipt.ModelDigest...)
+	cloned.RuntimeImageDigest = append([]byte(nil), receipt.RuntimeImageDigest...)
+	cloned.RuntimeDigest = append([]byte(nil), receipt.RuntimeDigest...)
+	cloned.ConfigDigest = append([]byte(nil), receipt.ConfigDigest...)
+	cloned.ReasonCodes = append([]veidtypes.ReasonCode(nil), receipt.ReasonCodes...)
+	cloned.Signature = append([]byte(nil), receipt.Signature...)
+	return cloned
 }
 
 // ValidateReceiptRequest validates an off-chain receipt submission and ensures

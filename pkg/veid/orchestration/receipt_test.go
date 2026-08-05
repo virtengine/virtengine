@@ -42,6 +42,19 @@ func TestVerifyAndPrepareRequiresSignerVerification(t *testing.T) {
 	require.ErrorContains(t, err, "signer verification failed")
 }
 
+func TestVerifyAndPrepareReturnsDefensiveReceiptCopy(t *testing.T) {
+	now := time.Date(2026, 8, 5, 10, 0, 0, 0, time.UTC)
+	evidence := validEvidence(now)
+	receipt, privateKey := validReceipt(now, evidence)
+	require.NoError(t, receipt.Sign(privateKey))
+	prepared, err := VerifyAndPrepare(context.Background(), receiptVerifierFunc(func(context.Context, veidtypes.InferenceReceipt) error { return nil }), ReceiptRequest{Receipt: receipt, Evidence: evidence}, now)
+	require.NoError(t, err)
+	receipt.InputDigest[0] ^= 0xff
+	receipt.ScopeIDs[0] = "mutated"
+	require.NotEqual(t, receipt.InputDigest, prepared.InputDigest)
+	require.Equal(t, "scope-1", prepared.ScopeIDs[0])
+}
+
 type receiptVerifierFunc func(context.Context, veidtypes.InferenceReceipt) error
 
 func (f receiptVerifierFunc) VerifyInferenceReceipt(ctx context.Context, receipt veidtypes.InferenceReceipt) error {
