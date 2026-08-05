@@ -30,15 +30,21 @@ export function createVisionFaceDetector(options: VisionFaceDetectorOptions = {}
       if (!Array.isArray(faces)) {
         throw new VerificationTerminalError("face_detection_failed", "Face detector returned an invalid result.");
       }
-      return faces.map((face: any) => ({
-      faceConfidence: 0.8,
-      yaw: face.yawAngle ?? 0,
-      roll: face.rollAngle ?? 0,
-      leftEyeOpenProbability: face.leftEyeOpenProbability,
-      rightEyeOpenProbability: face.rightEyeOpenProbability,
-      smileProbability: face.smilingProbability,
-        bounds: face.bounds
-      }));
+      return faces.map((face: any) => {
+        const confidence = face.confidence ?? face.faceConfidence ?? face.probability;
+        if (typeof confidence !== "number" || !Number.isFinite(confidence) || confidence < 0 || confidence > 1) {
+          throw new VerificationTerminalError("face_detection_failed", "Face detector returned no valid confidence score.");
+        }
+        return {
+          faceConfidence: confidence,
+          yaw: face.yawAngle ?? 0,
+          roll: face.rollAngle ?? 0,
+          leftEyeOpenProbability: face.leftEyeOpenProbability,
+          rightEyeOpenProbability: face.rightEyeOpenProbability,
+          smileProbability: face.smilingProbability,
+          bounds: face.bounds
+        };
+      });
     } catch (error) {
       if (error instanceof VerificationTerminalError) throw error;
       throw new VerificationTerminalError("face_detection_failed", "Face detection failed.", { cause: error });

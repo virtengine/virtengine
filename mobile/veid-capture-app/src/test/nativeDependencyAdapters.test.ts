@@ -20,4 +20,14 @@ describe("declared native dependency adapters", () => {
     const detector = createVisionFaceDetector({ moduleLoader: async () => { throw new Error("bridge missing"); } });
     await expect(detector.detect({})).rejects.toMatchObject({ code: "face_detection_failed" });
   });
+
+  it("rejects face results that omit a real confidence score", async () => {
+    const detector = createVisionFaceDetector({ moduleLoader: async () => ({ scanFaces: () => [{ yawAngle: 0 }] }) });
+    await expect(detector.detect({})).rejects.toMatchObject({ code: "face_detection_failed" });
+  });
+
+  it("preserves the native detector confidence instead of inventing one", async () => {
+    const detector = createVisionFaceDetector({ moduleLoader: async () => ({ scanFaces: () => [{ confidence: 0.73, yawAngle: 1 }] }) });
+    await expect(detector.detect({})).resolves.toMatchObject([{ faceConfidence: 0.73, yaw: 1 }]);
+  });
 });
