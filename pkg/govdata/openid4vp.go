@@ -42,6 +42,14 @@ type AuthorizationReplayGuard interface {
 	ConsumeAuthorizationState(context.Context, string, time.Time) error
 }
 
+// DurableAuthorizationReplayGuard identifies guards whose consumed state
+// survives process restart. OpenID4VP never accepts a process-local replay
+// cache because callbacks may be retried against another instance.
+type DurableAuthorizationReplayGuard interface {
+	AuthorizationReplayGuard
+	Durable() bool
+}
+
 // OpenID4VPVerifierConfig pins the protocol issuer and policy. A production
 // integration creates one verifier config per trusted issuer/profile.
 type OpenID4VPVerifierConfig struct {
@@ -55,7 +63,8 @@ func (c OpenID4VPVerifierConfig) validate() error {
 	if strings.TrimSpace(c.ProviderID) == "" || strings.TrimSpace(c.Issuer) == "" {
 		return fmt.Errorf("%w: provider ID and issuer are required", ErrOpenID4VPVerification)
 	}
-	if c.ReplayGuard == nil {
+	durableGuard, ok := c.ReplayGuard.(DurableAuthorizationReplayGuard)
+	if !ok || !durableGuard.Durable() {
 		return fmt.Errorf("%w: authorization replay guard is required", ErrOpenID4VPVerification)
 	}
 	if c.Leeway < 0 || c.Leeway > 2*time.Minute {

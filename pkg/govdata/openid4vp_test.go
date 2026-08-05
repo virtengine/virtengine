@@ -51,6 +51,11 @@ func TestVerifyOpenID4VPFailsClosedForUnsignedOrWrongNonceToken(t *testing.T) {
 	require.ErrorIs(t, err, ErrOpenID4VPVerification)
 }
 
+func TestOpenID4VPVerifierRejectsNonDurableReplayGuard(t *testing.T) {
+	config := OpenID4VPVerifierConfig{ProviderID: "provider", Issuer: "https://issuer.example", ReplayGuard: nonDurableReplayGuard{}}
+	require.ErrorContains(t, config.validate(), "replay guard")
+}
+
 func TestVerifyOpenID4VPRejectsUncommittedDisclosure(t *testing.T) {
 	now := time.Date(2026, 8, 5, 10, 0, 0, 0, time.UTC)
 	request := validDigitalIDRequest(now)
@@ -102,6 +107,14 @@ type testReplayGuard struct {
 	mu     sync.Mutex
 	states map[string]struct{}
 }
+
+type nonDurableReplayGuard struct{}
+
+func (nonDurableReplayGuard) ConsumeAuthorizationState(context.Context, string, time.Time) error {
+	return nil
+}
+
+func (*testReplayGuard) Durable() bool { return true }
 
 func (g *testReplayGuard) ConsumeAuthorizationState(_ context.Context, state string, _ time.Time) error {
 	g.mu.Lock()
