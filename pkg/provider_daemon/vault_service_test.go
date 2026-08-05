@@ -33,7 +33,7 @@ func TestVaultServiceProductionRejectsUnsafeDependencies(t *testing.T) {
 	_, err := NewVaultService(cfg)
 	require.Error(t, err)
 	for _, expected := range []string{
-		"production durable artifact backend", "process-local key manager", "role resolver",
+		"production durable artifact backend", "production-safe KMS envelope cipher", "role resolver",
 		"organization resolver", "consent resolver", "durable audit store", "non-exportable KMS operation interface",
 	} {
 		require.True(t, strings.Contains(err.Error(), expected), "error %q should contain %q", err, expected)

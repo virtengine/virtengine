@@ -16,6 +16,8 @@ import (
 type VaultServiceConfig struct {
 	Enabled                  bool
 	Backend                  string
+	ArtifactBackend          artifact_store.ArtifactStore
+	BlobCipher               data_vault.BlobCipher
 	Environment              string
 	Profile                  string
 	DevelopmentOnly          bool
@@ -74,7 +76,7 @@ func NewVaultService(cfg VaultServiceConfig) (data_vault.VaultService, error) {
 		}
 	}
 
-	store, err := data_vault.NewEncryptedBlobStoreWithError(backend, keyMgr)
+	store, err := data_vault.NewEncryptedBlobStoreWithCipher(backend, keyMgr, cfg.BlobCipher)
 	if err != nil {
 		closeIfPossible(backend)
 		closeIfPossible(keyMgr)
@@ -129,6 +131,11 @@ func closeIfPossible(value any) {
 
 func createVaultBackend(cfg VaultServiceConfig) (artifact_store.ArtifactStore, error) {
 	switch cfg.Backend {
+	case "external":
+		if cfg.ArtifactBackend == nil {
+			return nil, errors.New("external vault backend is required")
+		}
+		return cfg.ArtifactBackend, nil
 	case "memory":
 		return artifact_store.NewMemoryBackend(), nil
 	case "fixture-filesystem":
@@ -178,14 +185,14 @@ func createVaultKeyManager(cfg VaultServiceConfig) (keys.VaultKeyManager, error)
 func validateVaultServiceConfig(cfg VaultServiceConfig) error {
 	if cfg.Environment == "production" || cfg.Profile == "production" {
 		violations := make([]string, 0)
-		violations = append(violations, "production requires a non-exportable KMS operation interface; prototype key export is forbidden")
-		if cfg.Backend == "" || cfg.Backend == "memory" || cfg.Backend == "fixture-filesystem" {
+		if cfg.Backend != "external" || !isDurableArtifactStore(cfg.ArtifactBackend) {
 			violations = append(violations, "production requires a production durable artifact backend")
 		}
-		if cfg.KeyManager == nil {
-			violations = append(violations, "production requires a durable key manager")
-		} else if _, processLocal := cfg.KeyManager.(*keys.KeyManager); processLocal {
-			violations = append(violations, "production rejects process-local key manager")
+		if nonExportable, ok := cfg.KeyManager.(keys.NonExportableVaultKeyManager); !ok || !nonExportable.UsesNonExportableKeys() {
+			violations = append(violations, "production requires a non-exportable KMS operation interface; prototype key export is forbidden")
+		}
+		if cfg.BlobCipher == nil || !cfg.BlobCipher.ProductionSafe() {
+			violations = append(violations, "production requires a production-safe KMS envelope cipher")
 		}
 		if cfg.RoleResolver == nil {
 			violations = append(violations, "production requires role resolver")
@@ -208,7 +215,7 @@ func validateVaultServiceConfig(cfg VaultServiceConfig) error {
 		if len(violations) > 0 {
 			return errors.New(strings.Join(violations, "; "))
 		}
-		return errors.New("production vault backend is not implemented; production readiness is false")
+		return nil
 	}
 	if cfg.Backend == "memory" {
 		if cfg.Environment != "development" || cfg.Profile != "development" || !cfg.DevelopmentOnly {
@@ -239,5 +246,10 @@ func validateVaultServiceConfig(cfg VaultServiceConfig) error {
 
 func durableAuditStore(store data_vault.AuditStore) bool {
 	durable, ok := store.(data_vault.DurableAuditStore)
+	return ok && durable.Durable()
+}
+
+func isDurableArtifactStore(store artifact_store.ArtifactStore) bool {
+	durable, ok := store.(data_vault.DurableVaultArtifactStore)
 	return ok && durable.Durable()
 }
