@@ -3,6 +3,7 @@ package adapters
 import (
 	"context"
 	"image"
+	"sort"
 	"strings"
 	"time"
 
@@ -36,6 +37,7 @@ func (a *MRZAdapter) SupportedCountries() []documents.CountryCode {
 	for code := range a.countries {
 		countries = append(countries, code)
 	}
+	sort.Slice(countries, func(i, j int) bool { return countries[i] < countries[j] })
 	return countries
 }
 

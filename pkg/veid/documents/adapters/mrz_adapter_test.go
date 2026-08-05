@@ -3,6 +3,7 @@ package adapters
 import (
 	"context"
 	"errors"
+	"reflect"
 	"testing"
 
 	"github.com/virtengine/virtengine/pkg/veid/documents"
@@ -19,6 +20,16 @@ func TestMRZAdapterDoesNotInventConfidence(t *testing.T) {
 	}
 	if data.MRZData == nil || !data.MRZData.IsValid {
 		t.Fatal("expected valid deterministic MRZ evidence")
+	}
+}
+
+func TestMRZAdapterSupportedCountriesAreDeterministic(t *testing.T) {
+	adapter := NewMRZAdapter([]documents.CountryCode{"USA", "AUS", "DEU"})
+	want := []documents.CountryCode{"AUS", "DEU", "USA"}
+	for range 100 {
+		if got := adapter.SupportedCountries(); !reflect.DeepEqual(got, want) {
+			t.Fatalf("got %v, want %v", got, want)
+		}
 	}
 }
 
