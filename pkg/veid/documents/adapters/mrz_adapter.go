@@ -64,23 +64,21 @@ func (a *MRZAdapter) ExtractWithMRZ(ctx context.Context, img image.Image, mrzVal
 	docType := mapDocumentType(parsed.DocumentType)
 
 	data := &documents.DocumentData{
-		GivenNames:        parsed.GivenNames,
-		Surname:           parsed.Surname,
-		DateOfBirth:       parsed.DateOfBirth,
-		Sex:               parsed.Sex,
-		Nationality:       documents.CountryCode(parsed.Nationality),
-		DocumentType:      docType,
-		DocumentNumber:    parsed.DocumentNumber,
-		IssuingCountry:    documents.CountryCode(parsed.IssuingCountry),
-		ExpiryDate:        parsed.ExpiryDate,
-		MRZData:           parsed,
-		OverallConfidence: 0.92,
-		FieldConfidences: map[string]float64{
-			"name":            0.95,
-			"document_number": 0.94,
-			"date_of_birth":   0.93,
-			"expiry_date":     0.93,
-		},
+		GivenNames:     parsed.GivenNames,
+		Surname:        parsed.Surname,
+		DateOfBirth:    parsed.DateOfBirth,
+		Sex:            parsed.Sex,
+		Nationality:    documents.CountryCode(parsed.Nationality),
+		DocumentType:   docType,
+		DocumentNumber: parsed.DocumentNumber,
+		IssuingCountry: documents.CountryCode(parsed.IssuingCountry),
+		ExpiryDate:     parsed.ExpiryDate,
+		MRZData:        parsed,
+		// MRZ parsing provides deterministic check-digit validity, not calibrated
+		// OCR/model confidence. Consumers must use MRZData.IsValid and must not
+		// treat parser heuristics as a biometric or document-quality score.
+		OverallConfidence: 0,
+		FieldConfidences:  nil,
 	}
 
 	return data, nil
