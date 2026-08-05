@@ -1,6 +1,7 @@
 package ocr
 
 import (
+	"sort"
 	"unicode"
 )
 
@@ -32,5 +33,6 @@ func DetectLanguages(text string) []Language {
 	for lang := range seen {
 		languages = append(languages, lang)
 	}
+	sort.Slice(languages, func(i, j int) bool { return languages[i] < languages[j] })
 	return languages
 }
