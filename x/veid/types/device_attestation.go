@@ -105,6 +105,12 @@ func (r DeviceAttestationRecord) Validate() error {
 		return ErrInvalidScope.Wrap("app_id is required")
 	}
 	if r.Verified {
+		if r.IntegrityLevel == DeviceIntegrityUnknown || r.IntegrityLevel == DeviceIntegrityUnsupported {
+			return ErrInvalidScope.Wrap("verified device attestation requires a concrete integrity level")
+		}
+		if r.IntegrityLevel == DeviceIntegrityHardwareBacked && !r.HardwareBacked {
+			return ErrInvalidScope.Wrap("hardware-backed integrity requires hardware-backed attestation")
+		}
 		if len(r.PayloadHash) != sha256.Size {
 			return ErrInvalidScope.Wrap("verified device attestation payload hash must be SHA-256")
 		}

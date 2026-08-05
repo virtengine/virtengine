@@ -50,6 +50,15 @@ func TestDeviceAttestationRecordValidate(t *testing.T) {
 	whitespaceVaultRef.VaultRef = " vault://attestations/attest-001"
 	require.ErrorContains(t, whitespaceVaultRef.Validate(), "vault reference")
 
+	unknownIntegrity := valid
+	unknownIntegrity.IntegrityLevel = DeviceIntegrityUnknown
+	require.ErrorContains(t, unknownIntegrity.Validate(), "concrete integrity")
+
+	inconsistentHardware := valid
+	inconsistentHardware.IntegrityLevel = DeviceIntegrityHardwareBacked
+	inconsistentHardware.HardwareBacked = false
+	require.ErrorContains(t, inconsistentHardware.Validate(), "hardware-backed integrity")
+
 	unsupported := DeviceAttestationRecord{
 		AttestationID: "attest-unsupported",
 		Supported:     false,
