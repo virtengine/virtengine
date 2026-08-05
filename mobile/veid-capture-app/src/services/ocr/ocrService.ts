@@ -5,7 +5,7 @@ import { VerificationTerminalError } from "../../core/verificationError";
 const sampleText = "ID CARD\nNAME JOHN DOE\nDOB 01/02/1990\nDOC 9A1B2C3D\nEXPIRY 01/02/2030";
 
 export interface OcrRecognizer {
-  recognize(imageUri: string): Promise<{ text?: string }>;
+  recognize(imageUri: string): Promise<{ text?: string; confidence?: number }>;
 }
 
 export interface OcrServiceOptions {
@@ -43,7 +43,10 @@ export function createOcrService(options: OcrServiceOptions = {}) {
     if (!text.trim()) {
       throw new VerificationTerminalError("ocr_empty_result", "OCR returned no readable text.");
     }
-    return parseOcrFields(text);
+    if (typeof recognition.confidence !== "number" || !Number.isFinite(recognition.confidence) || recognition.confidence <= 0 || recognition.confidence > 1) {
+      throw new VerificationTerminalError("ocr_confidence_unavailable", "OCR recognizer returned no calibrated confidence.");
+    }
+    return parseOcrFields(text, recognition.confidence);
   } catch (error) {
     if (error instanceof VerificationTerminalError) throw error;
     throw new VerificationTerminalError("ocr_recognition_failed", "OCR recognition failed; capture cannot proceed.", { cause: error });

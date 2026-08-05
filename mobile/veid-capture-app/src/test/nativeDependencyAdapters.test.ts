@@ -16,6 +16,11 @@ describe("declared native dependency adapters", () => {
     await expect(extract("file://document.jpg")).rejects.toMatchObject({ code: "ocr_recognition_failed" });
   });
 
+  it("rejects OCR text without calibrated recognizer confidence", async () => {
+    const extract = createOcrService({ loadRecognizer: async () => ({ recognize: async () => ({ text: "NAME TEST" }) }) });
+    await expect(extract("file://document.jpg")).rejects.toMatchObject({ code: "ocr_confidence_unavailable" });
+  });
+
   it("does not turn a missing face detector into an empty face list", async () => {
     const detector = createVisionFaceDetector({ moduleLoader: async () => { throw new Error("bridge missing"); } });
     await expect(detector.detect({})).rejects.toMatchObject({ code: "face_detection_failed" });
