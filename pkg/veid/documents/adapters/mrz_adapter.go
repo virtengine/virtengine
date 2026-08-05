@@ -56,6 +56,9 @@ func (a *MRZAdapter) Extract(ctx context.Context, img image.Image) (*documents.D
 }
 
 func (a *MRZAdapter) ExtractWithMRZ(ctx context.Context, img image.Image, mrzValue string) (*documents.DocumentData, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	parsed, err := mrz.Parse(mrzValue)
 	if err != nil {
 		return nil, err
@@ -109,6 +112,21 @@ func (a *MRZAdapter) Validate(data *documents.DocumentData) ([]documents.Validat
 	}
 	if data.MRZData != nil && !data.MRZData.IsValid {
 		errs = append(errs, documents.ValidationError{Field: "mrz", Message: "mrz check digits failed"})
+	}
+	if data.MRZData != nil {
+		parsed := data.MRZData
+		if data.DocumentNumber != parsed.DocumentNumber {
+			errs = append(errs, documents.ValidationError{Field: "document_number", Message: "does not match MRZ"})
+		}
+		if data.IssuingCountry != documents.CountryCode(parsed.IssuingCountry) {
+			errs = append(errs, documents.ValidationError{Field: "issuing_country", Message: "does not match MRZ"})
+		}
+		if data.Nationality != documents.CountryCode(parsed.Nationality) {
+			errs = append(errs, documents.ValidationError{Field: "nationality", Message: "does not match MRZ"})
+		}
+		if !data.DateOfBirth.Equal(parsed.DateOfBirth) || !data.ExpiryDate.Equal(parsed.ExpiryDate) {
+			errs = append(errs, documents.ValidationError{Field: "dates", Message: "do not match MRZ"})
+		}
 	}
 
 	if len(errs) > 0 {

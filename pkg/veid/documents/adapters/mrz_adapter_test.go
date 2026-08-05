@@ -2,6 +2,7 @@ package adapters
 
 import (
 	"context"
+	"errors"
 	"testing"
 
 	"github.com/virtengine/virtengine/pkg/veid/documents"
@@ -18,5 +19,23 @@ func TestMRZAdapterDoesNotInventConfidence(t *testing.T) {
 	}
 	if data.MRZData == nil || !data.MRZData.IsValid {
 		t.Fatal("expected valid deterministic MRZ evidence")
+	}
+}
+
+func TestMRZAdapterHonorsCancellationAndRejectsTamperedDerivedFields(t *testing.T) {
+	adapter := NewMRZAdapter([]documents.CountryCode{"UTO"})
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	if _, err := adapter.ExtractWithMRZ(ctx, nil, "ignored"); !errors.Is(err, context.Canceled) {
+		t.Fatalf("expected cancellation, got %v", err)
+	}
+	data, err := adapter.ExtractWithMRZ(context.Background(), nil, "P<UTOERIKSSON<<ANNA<MARIA<<<<<<<<<<<<<<<<<<<\nL898902C36UTO7408122F1204159ZE184226B<<<<<10")
+	if err != nil {
+		t.Fatal(err)
+	}
+	data.DocumentNumber = "tampered"
+	validation, err := adapter.Validate(data)
+	if !errors.Is(err, documents.ErrInvalidDocument) || len(validation) == 0 {
+		t.Fatalf("expected invalid tampered MRZ data, got %v / %#v", err, validation)
 	}
 }
