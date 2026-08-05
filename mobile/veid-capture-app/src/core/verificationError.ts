@@ -2,6 +2,7 @@ export type VerificationFailureCode =
   | "ocr_module_unavailable"
   | "ocr_recognition_failed"
   | "ocr_empty_result"
+  | "ocr_confidence_unavailable"
   | "face_detector_unavailable"
   | "face_detection_failed"
   | "liveness_detector_unavailable"

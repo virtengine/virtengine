@@ -5,6 +5,7 @@ import { CaptureHeader } from "../components/CaptureHeader";
 import { extractOcr } from "../services/ocr/ocrService";
 import { useCaptureStore } from "../state/captureStore";
 import { VerificationTerminalError } from "../core/verificationError";
+import { hasCalibratedFieldConfidence } from "../core/ocr/confidence";
 
 export function ReviewScreen() {
   const { state, dispatch } = useCaptureStore();
@@ -32,6 +33,9 @@ export function ReviewScreen() {
       setLoading(true);
       try {
         const result = await extractOcr(state.session.documentFront.image.uri);
+        if (!hasCalibratedFieldConfidence(result)) {
+          throw new VerificationTerminalError("ocr_confidence_unavailable", "OCR output lacks calibrated field confidence and cannot be used for verification.");
+        }
         dispatch({ type: "set_ocr", payload: result });
       } catch (error) {
         setTerminalError(error instanceof VerificationTerminalError ? error.code : "ocr_recognition_failed");
