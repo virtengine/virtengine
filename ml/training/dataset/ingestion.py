@@ -503,10 +503,13 @@ class DatasetIngestion:
         config: DatasetConfig
     ) -> List[IdentitySample]:
         """Load samples from a TFRecord file."""
-        # TFRecord loading would require TensorFlow
-        # This is a placeholder for the actual implementation
-        logger.warning("TFRecord loading not fully implemented")
-        return []
+        # Do not silently turn a configured binary dataset into zero training
+        # samples. A verified reader/feature schema must be wired explicitly
+        # before TFRecord is accepted as a supported production input.
+        raise RuntimeError(
+            f"TFRecord ingestion is unavailable for {tfrecord_path}; "
+            "configure a supported JSON, CSV, or manifest dataset source"
+        )
     
     def _load_image(self, image_path: Path) -> Optional[ImageData]:
         """Load an image from disk."""

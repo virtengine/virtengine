@@ -131,6 +131,13 @@ class TestDatasetIngestion:
             
             # Check that samples were loaded
             assert len(dataset) == 2
+
+    def test_tfrecord_input_fails_instead_of_silently_creating_empty_dataset(self, tmp_path):
+        tfrecord = tmp_path / "training.tfrecord"
+        tfrecord.write_bytes(b"not-a-tfrecord")
+        ingestion = DatasetIngestion(DatasetConfig(data_paths=[str(tfrecord)]))
+        with pytest.raises(RuntimeError, match="TFRecord ingestion is unavailable"):
+            ingestion.load_dataset()
     
     def test_dataset_splitting(self, sample_dataset):
         """Test that dataset is split correctly."""
