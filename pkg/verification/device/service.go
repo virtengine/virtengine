@@ -3,6 +3,7 @@ package device
 import (
 	"context"
 	"errors"
+	"fmt"
 	"time"
 
 	veidtypes "github.com/virtengine/virtengine/x/veid/types"
@@ -24,6 +25,7 @@ func (s *Service) VerifyAttestation(ctx context.Context, req AttestationRequest)
 	if provider == "" {
 		provider = defaultProviderForPlatform(req.Platform)
 	}
+	req.Provider = provider
 
 	verifier, ok := s.providers[provider]
 	if !ok {
@@ -41,14 +43,45 @@ func (s *Service) VerifyAttestation(ctx context.Context, req AttestationRequest)
 		return AttestationResult{}, err
 	}
 
-	if result.AttestedAt.IsZero() {
-		result.AttestedAt = time.Now().UTC()
-	}
-	if result.Nonce == "" {
-		result.Nonce = req.Nonce
+	if err := validateAttestationResult(result, req); err != nil {
+		return AttestationResult{}, err
 	}
 
 	return result, nil
+}
+
+func validateAttestationResult(result AttestationResult, request AttestationRequest) error {
+	switch result.Status {
+	case AttestationStatusVerified:
+		if !result.Verified {
+			return errors.New("verified attestation status requires a verified result")
+		}
+	case AttestationStatusFailed, AttestationStatusUnsupported:
+		if result.Verified {
+			return fmt.Errorf("%s attestation status cannot be verified", result.Status)
+		}
+	default:
+		return fmt.Errorf("invalid device attestation status: %s", result.Status)
+	}
+	if result.Provider != request.Provider {
+		return errors.New("attestation result provider does not match request")
+	}
+	if result.Platform != request.Platform {
+		return errors.New("attestation result platform does not match request")
+	}
+	if result.AppID != request.AppID || result.AppVersion != request.AppVersion {
+		return errors.New("attestation result app binding does not match request")
+	}
+	if result.DeviceModel != request.DeviceModel || result.OSVersion != request.OSVersion {
+		return errors.New("attestation result device binding does not match request")
+	}
+	if result.Nonce != request.Nonce {
+		return errors.New("attestation result nonce does not match request")
+	}
+	if result.AttestedAt.IsZero() {
+		return errors.New("attestation result time is required")
+	}
+	return nil
 }
 
 func defaultProviderForPlatform(platform veidtypes.DevicePlatform) veidtypes.DeviceAttestationProvider {

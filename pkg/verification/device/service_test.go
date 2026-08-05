@@ -61,3 +61,63 @@ func TestServiceVerifyAttestationFallback(t *testing.T) {
 	require.Equal(t, AttestationStatusUnsupported, result.Status)
 	require.False(t, result.Verified)
 }
+
+func TestServiceRejectsUnboundAttestationResult(t *testing.T) {
+	req := AttestationRequest{
+		AccountAddress: "virt1device",
+		Platform:       veidtypes.DevicePlatformAndroid,
+		Provider:       veidtypes.DeviceAttestationProviderPlayIntegrity,
+		AppID:          "com.virtengine.veid",
+		AppVersion:     "1.0.0",
+		DeviceModel:    "Pixel",
+		OSVersion:      "Android 16",
+		Nonce:          "expected-nonce",
+		RequestedAt:    time.Now().UTC(),
+	}
+	valid, err := (MockVerifier{}).Verify(context.Background(), req)
+	require.NoError(t, err)
+
+	for name, mutate := range map[string]func(*AttestationResult){
+		"nonce":     func(result *AttestationResult) { result.Nonce = "other-nonce" },
+		"provider":  func(result *AttestationResult) { result.Provider = veidtypes.DeviceAttestationProviderAppAttest },
+		"status":    func(result *AttestationResult) { result.Status = AttestationStatusFailed; result.Verified = true },
+		"timestamp": func(result *AttestationResult) { result.AttestedAt = time.Time{} },
+	} {
+		t.Run(name, func(t *testing.T) {
+			result := valid
+			mutate(&result)
+			service := NewService(map[veidtypes.DeviceAttestationProvider]AttestationVerifier{
+				veidtypes.DeviceAttestationProviderPlayIntegrity: attestationVerifierFunc(func(context.Context, AttestationRequest) (AttestationResult, error) {
+					return result, nil
+				}),
+			})
+
+			_, err := service.VerifyAttestation(context.Background(), req)
+			require.Error(t, err)
+		})
+	}
+}
+
+func TestServiceBindsDefaultProviderBeforeVerification(t *testing.T) {
+	service := NewService(map[veidtypes.DeviceAttestationProvider]AttestationVerifier{
+		veidtypes.DeviceAttestationProviderPlayIntegrity: MockVerifier{},
+	})
+	req := AttestationRequest{
+		Platform:    veidtypes.DevicePlatformAndroid,
+		AppID:       "com.virtengine.veid",
+		AppVersion:  "1.0.0",
+		DeviceModel: "Pixel",
+		OSVersion:   "Android 16",
+		Nonce:       "nonce",
+	}
+
+	result, err := service.VerifyAttestation(context.Background(), req)
+	require.NoError(t, err)
+	require.Equal(t, veidtypes.DeviceAttestationProviderPlayIntegrity, result.Provider)
+}
+
+type attestationVerifierFunc func(context.Context, AttestationRequest) (AttestationResult, error)
+
+func (f attestationVerifierFunc) Verify(ctx context.Context, req AttestationRequest) (AttestationResult, error) {
+	return f(ctx, req)
+}
