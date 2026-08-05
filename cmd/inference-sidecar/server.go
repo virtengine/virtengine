@@ -65,6 +65,9 @@ type InferenceSidecarServer struct {
 
 // NewInferenceSidecarServer creates a new inference sidecar server.
 func NewInferenceSidecarServer(config inference.InferenceConfig, servingConfig inference.TFServingConfig, manifestPath string, log Logger) (*InferenceSidecarServer, error) {
+	if config.AllowFallbackToStub {
+		return nil, fmt.Errorf("local stub inference fallback is forbidden by the VEID inference sidecar")
+	}
 	// Set determinism environment variables
 	determinism := inference.NewDeterminismController(config.RandomSeed, config.ForceCPU)
 	for k, v := range determinism.GetTensorFlowEnvVars() {

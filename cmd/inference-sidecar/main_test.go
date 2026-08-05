@@ -17,6 +17,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/virtengine/virtengine/pkg/inference"
 )
 
 func TestLoadServerTLSConfigRejectsPartialConfiguration(t *testing.T) {
@@ -51,6 +53,13 @@ func TestLoadServerTLSConfigRequiresVerifiedClientCertificates(t *testing.T) {
 
 	if _, err := loadServerTLSConfig(certPath, keyPath, caPath, false); err == nil || !strings.Contains(err.Error(), "tls-client-ca-file requires") {
 		t.Fatalf("expected client CA without mTLS to be rejected, got %v", err)
+	}
+}
+
+func TestInferenceSidecarRejectsStubFallback(t *testing.T) {
+	_, err := NewInferenceSidecarServer(inference.InferenceConfig{AllowFallbackToStub: true}, inference.TFServingConfig{}, "", noopLogger{})
+	if err == nil || !strings.Contains(err.Error(), "stub inference fallback is forbidden") {
+		t.Fatalf("expected stub fallback rejection, got %v", err)
 	}
 }
 

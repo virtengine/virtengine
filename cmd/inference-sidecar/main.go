@@ -62,7 +62,7 @@ var (
 	servingTO     = flag.Duration("serving-timeout", 5*time.Second, "TensorFlow Serving request timeout")
 	servingHealth = flag.String("serving-health-path", "", "Optional TensorFlow Serving health path override")
 	servingFail   = flag.String("serving-fallback-url", "", "Fallback TensorFlow Serving base URL")
-	allowStub     = flag.Bool("allow-fallback-to-stub", false, "Allow fallback to local stub inference on serving failure")
+	allowStub     = flag.Bool("allow-fallback-to-stub", false, "Deprecated: stub fallback is forbidden by the inference sidecar")
 	tlsCertFile   = flag.String("tls-cert-file", "", "PEM server certificate for gRPC mTLS; required with --tls-key-file")
 	tlsKeyFile    = flag.String("tls-key-file", "", "PEM server key for gRPC mTLS; required with --tls-cert-file")
 	tlsClientCA   = flag.String("tls-client-ca-file", "", "PEM client CA bundle required when --tls-require-client-cert is true")
@@ -78,6 +78,10 @@ func run() int {
 
 	// Setup logging
 	log := setupLogger(*logLevel)
+	if *allowStub {
+		log.Error("Local stub inference fallback is forbidden", "flag", "allow-fallback-to-stub")
+		return 1
+	}
 
 	log.Info("Starting inference sidecar",
 		"version", Version,
