@@ -136,6 +136,37 @@ func TestConfigValidation(t *testing.T) {
 			},
 			expectError: true,
 		},
+		{
+			name: "enabled inference requires sidecar",
+			modifyFunc: func(c *InferenceConfig) {
+				c.Enabled = true
+				c.ExpectedHash = strings.Repeat("a", 64)
+			},
+			expectError: true,
+		},
+		{
+			name: "enabled inference rejects score fallback",
+			modifyFunc: func(c *InferenceConfig) {
+				c.Enabled = true
+				c.UseSidecar = true
+				c.SidecarAddress = testSidecarAddress
+				c.ExpectedHash = strings.Repeat("a", 64)
+				c.StrictDeterminism = true
+			},
+			expectError: true,
+		},
+		{
+			name: "strict enabled sidecar config",
+			modifyFunc: func(c *InferenceConfig) {
+				c.Enabled = true
+				c.UseSidecar = true
+				c.SidecarAddress = testSidecarAddress
+				c.ExpectedHash = strings.Repeat("a", 64)
+				c.UseFallbackOnError = false
+				c.StrictDeterminism = true
+			},
+			expectError: false,
+		},
 	}
 
 	for _, tt := range tests {

@@ -159,6 +159,10 @@ func (sc *SidecarClient) refreshModelInfo() error {
 	sc.modelHash = resp.Hash
 	sc.lastHealthCheck = time.Now()
 
+	if sc.config.ModelVersion != "" && sc.modelVersion != sc.config.ModelVersion {
+		return fmt.Errorf("model version mismatch: expected %s, got %s", sc.config.ModelVersion, sc.modelVersion)
+	}
+
 	// Verify model hash matches expected if configured
 	if sc.config.ExpectedHash != "" && sc.modelHash != sc.config.ExpectedHash {
 		return fmt.Errorf("model hash mismatch: expected %s, got %s",
@@ -298,11 +302,8 @@ func (sc *SidecarClient) callSidecar(ctx context.Context, features []float32, in
 		return nil, fmt.Errorf("sidecar ComputeScore RPC failed: %w", err)
 	}
 
-	// Verify output hash if we computed one locally
-	localOutputHash := sc.determinism.ComputeOutputHash([]float32{resp.RawScore})
-	if resp.OutputHash != "" && localOutputHash != resp.OutputHash {
-		return nil, fmt.Errorf("output hash mismatch: local=%s, remote=%s",
-			localOutputHash, resp.OutputHash)
+	if err := sc.validateScoreResponse(resp, sc.determinism.ComputeFeatureHash(features)); err != nil {
+		return nil, err
 	}
 
 	// Convert response to ScoreResult
@@ -320,6 +321,37 @@ func (sc *SidecarClient) callSidecar(ctx context.Context, features []float32, in
 	}
 
 	return result, nil
+}
+
+func (sc *SidecarClient) validateScoreResponse(resp *inferencepb.ComputeScoreResponse, localFeatureHash string) error {
+	if resp == nil {
+		return fmt.Errorf("sidecar returned an empty response")
+	}
+	if sc.config.RequireHashVerification && resp.InputHash == "" {
+		return fmt.Errorf("sidecar response is missing input hash")
+	}
+	if resp.InputHash != "" && resp.InputHash != localFeatureHash {
+		return fmt.Errorf("input hash mismatch: local=%s, remote=%s", localFeatureHash, resp.InputHash)
+	}
+
+	localOutputHash := sc.determinism.ComputeOutputHash([]float32{resp.RawScore})
+	if sc.config.RequireHashVerification && resp.OutputHash == "" {
+		return fmt.Errorf("sidecar response is missing output hash")
+	}
+	if resp.OutputHash != "" && localOutputHash != resp.OutputHash {
+		return fmt.Errorf("output hash mismatch: local=%s, remote=%s", localOutputHash, resp.OutputHash)
+	}
+
+	if sc.config.RequireHashVerification && (resp.ModelVersion == "" || resp.ModelHash == "") {
+		return fmt.Errorf("sidecar response is missing model identity")
+	}
+	if resp.ModelVersion != "" && resp.ModelVersion != sc.modelVersion {
+		return fmt.Errorf("sidecar response model version mismatch: expected %s, got %s", sc.modelVersion, resp.ModelVersion)
+	}
+	if resp.ModelHash != "" && resp.ModelHash != sc.modelHash {
+		return fmt.Errorf("sidecar response model hash mismatch: expected %s, got %s", sc.modelHash, resp.ModelHash)
+	}
+	return nil
 }
 
 // simulateSidecarResponse simulates sidecar response for explicitly enabled

@@ -20,8 +20,15 @@ func TestIsRealInferenceEnabledRequiresSidecar(t *testing.T) {
 	}
 
 	config.UseSidecar = true
+	config.UseFallbackOnError = false
+	config.StrictDeterminism = true
 	if !config.IsRealInferenceEnabled() {
-		t.Fatal("sidecar-backed config should report real inference as enabled")
+		t.Fatal("strict sidecar-backed config should report real inference as enabled")
+	}
+
+	config.UseFallbackOnError = true
+	if config.IsRealInferenceEnabled() {
+		t.Fatal("fallback score config must not report real inference as enabled")
 	}
 }
 

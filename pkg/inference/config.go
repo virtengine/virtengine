@@ -203,6 +203,23 @@ func (c *InferenceConfig) Validate() error {
 			return fmt.Errorf("expected_hash must be set when deterministic mode is enabled")
 		}
 	}
+	if c.Enabled {
+		if !c.UseSidecar {
+			return fmt.Errorf("enabled inference requires a sidecar")
+		}
+		if c.AllowFallbackToStub {
+			return fmt.Errorf("enabled inference cannot allow fallback to stub")
+		}
+		if c.UseFallbackOnError {
+			return fmt.Errorf("enabled inference cannot return fallback scores")
+		}
+		if !c.RequireHashVerification {
+			return fmt.Errorf("enabled inference requires hash verification")
+		}
+		if !c.StrictDeterminism {
+			return fmt.Errorf("enabled inference requires strict determinism")
+		}
+	}
 
 	return nil
 }
@@ -253,7 +270,7 @@ func (c InferenceConfig) WithFallback(enabled bool, score uint32) InferenceConfi
 
 // IsRealInferenceEnabled returns true if real inference is enabled
 func (c InferenceConfig) IsRealInferenceEnabled() bool {
-	return c.Enabled && c.UseSidecar
+	return c.Enabled && c.UseSidecar && !c.AllowFallbackToStub && !c.UseFallbackOnError && c.RequireHashVerification && c.StrictDeterminism
 }
 
 // IsConsensusSafe returns true if the configuration is safe for consensus
