@@ -2,6 +2,7 @@ package documents
 
 import (
 	"context"
+	"fmt"
 	"image"
 )
 
@@ -38,8 +39,27 @@ func (r *Registry) Extract(ctx context.Context, docType DocumentType, country Co
 	if !ok {
 		return nil, ErrNoAdapter
 	}
+	var data *DocumentData
+	var err error
 	if mrzValue != "" {
-		return adapter.ExtractWithMRZ(ctx, img, mrzValue)
+		data, err = adapter.ExtractWithMRZ(ctx, img, mrzValue)
+	} else {
+		data, err = adapter.Extract(ctx, img)
 	}
-	return adapter.Extract(ctx, img)
+	if err != nil {
+		return nil, err
+	}
+	if data == nil {
+		return nil, fmt.Errorf("%w: adapter returned no document data", ErrInvalidDocument)
+	}
+	if data.DocumentType != docType {
+		return nil, fmt.Errorf("%w: requested type %s, extracted %s", ErrInvalidDocument, docType, data.DocumentType)
+	}
+	if data.IssuingCountry != country {
+		return nil, fmt.Errorf("%w: requested country %s, extracted %s", ErrInvalidDocument, country, data.IssuingCountry)
+	}
+	if _, err := adapter.Validate(data); err != nil {
+		return nil, err
+	}
+	return data, nil
 }
