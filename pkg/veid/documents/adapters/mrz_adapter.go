@@ -95,6 +95,9 @@ func (a *MRZAdapter) Validate(data *documents.DocumentData) ([]documents.Validat
 	}
 
 	var errs []documents.ValidationError
+	if !a.CanProcess(data.DocumentType, data.IssuingCountry) {
+		errs = append(errs, documents.ValidationError{Field: "document", Message: "document type or issuing country is unsupported by MRZ adapter"})
+	}
 	if strings.TrimSpace(data.Surname) == "" {
 		errs = append(errs, documents.ValidationError{Field: "surname", Message: "missing surname"})
 	}

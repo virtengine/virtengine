@@ -33,6 +33,25 @@ func TestMRZAdapterSupportedCountriesAreDeterministic(t *testing.T) {
 	}
 }
 
+func TestMRZAdapterValidateRejectsUnsupportedCapabilityBinding(t *testing.T) {
+	adapter := NewMRZAdapter([]documents.CountryCode{"UTO"})
+	data, err := adapter.ExtractWithMRZ(context.Background(), nil, "P<UTOERIKSSON<<ANNA<MARIA<<<<<<<<<<<<<<<<<<<\nL898902C36UTO7408122F1204159ZE184226B<<<<<10")
+	if err != nil {
+		t.Fatal(err)
+	}
+	data.IssuingCountry = "USA"
+	validation, err := adapter.Validate(data)
+	if !errors.Is(err, documents.ErrInvalidDocument) {
+		t.Fatalf("expected unsupported capability validation error, got %v", err)
+	}
+	for _, issue := range validation {
+		if issue.Field == "document" {
+			return
+		}
+	}
+	t.Fatalf("expected document capability issue, got %#v", validation)
+}
+
 func TestMRZAdapterHonorsCancellationAndRejectsTamperedDerivedFields(t *testing.T) {
 	adapter := NewMRZAdapter([]documents.CountryCode{"UTO"})
 	ctx, cancel := context.WithCancel(context.Background())
