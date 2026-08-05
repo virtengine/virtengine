@@ -58,8 +58,5 @@ func (r *Registry) Extract(ctx context.Context, docType DocumentType, country Co
 	if data.IssuingCountry != country {
 		return nil, fmt.Errorf("%w: requested country %s, extracted %s", ErrInvalidDocument, country, data.IssuingCountry)
 	}
-	if _, err := adapter.Validate(data); err != nil {
-		return nil, err
-	}
 	return data, nil
 }
