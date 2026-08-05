@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { StyleSheet, View } from "react-native";
+import { StyleSheet, Text, View } from "react-native";
 import { CameraFrame } from "../components/CameraFrame";
 import { CaptureFooter } from "../components/CaptureFooter";
 import { CaptureHeader } from "../components/CaptureHeader";
@@ -17,6 +17,7 @@ interface DocumentCaptureScreenProps {
 export function DocumentCaptureScreen({ side, stepIndex, cameraAdapter }: DocumentCaptureScreenProps) {
   const { state, dispatch } = useCaptureStore();
   const [hasCapture, setHasCapture] = useState(false);
+  const [terminalError, setTerminalError] = useState<string | null>(null);
 
   return (
     <View style={styles.container}>
@@ -42,13 +43,18 @@ export function DocumentCaptureScreen({ side, stepIndex, cameraAdapter }: Docume
           });
           setHasCapture(true);
         }}
+        onFailure={(error) => {
+          setHasCapture(false);
+          setTerminalError(error.code);
+        }}
       />
+      {terminalError ? <Text style={styles.error}>Verification stopped: {terminalError}</Text> : null}
       <CaptureFooter
         primaryLabel="Continue"
         onPrimary={() => dispatch({ type: "next" })}
         secondaryLabel="Back"
         onSecondary={() => dispatch({ type: "prev" })}
-        disabled={!hasCapture}
+        disabled={!hasCapture || Boolean(terminalError)}
       />
     </View>
   );
@@ -58,5 +64,6 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: "#f9fafb"
-  }
+  },
+  error: { color: "#b91c1c", paddingHorizontal: 20, paddingBottom: 8 }
 });

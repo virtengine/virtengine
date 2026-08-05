@@ -6,7 +6,10 @@ export type VerificationFailureCode =
   | "face_detection_failed"
   | "liveness_detector_unavailable"
   | "attestation_required"
-  | "attestation_unavailable";
+  | "attestation_unavailable"
+  | "camera_permission_denied"
+  | "camera_unavailable"
+  | "camera_capture_failed";
 
 /** A terminal failure: callers must not replace it with an inferred success. */
 export class VerificationTerminalError extends Error {

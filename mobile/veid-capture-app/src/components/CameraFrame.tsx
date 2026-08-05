@@ -4,14 +4,17 @@ import type { ImageAsset } from "../core/captureModels";
 import type { CameraAdapter } from "../services/camera/cameraAdapter";
 import { CameraUnavailableError } from "../services/camera/cameraAdapter";
 import { visionCameraAdapter } from "../services/camera/visionCameraAdapter";
+import { VerificationTerminalError } from "../core/verificationError";
+import { toTerminalCameraError } from "../core/cameraFailure";
 
 interface CameraFrameProps {
   label: string;
   onCapture: (asset: ImageAsset) => void;
+  onFailure?: (error: VerificationTerminalError) => void;
   cameraAdapter?: CameraAdapter;
 }
 
-export function CameraFrame({ label, onCapture, cameraAdapter = visionCameraAdapter }: CameraFrameProps) {
+export function CameraFrame({ label, onCapture, onFailure, cameraAdapter = visionCameraAdapter }: CameraFrameProps) {
   const [permissionGranted, setPermissionGranted] = useState(false);
   const [captured, setCaptured] = useState<ImageAsset | null>(null);
   const [unavailableReason, setUnavailableReason] = useState<string | null>(null);
@@ -23,12 +26,15 @@ export function CameraFrame({ label, onCapture, cameraAdapter = visionCameraAdap
         if (isMounted) {
           setPermissionGranted(granted);
           setUnavailableReason(granted ? null : "camera_permission_denied");
+          if (!granted) onFailure?.(toTerminalCameraError("camera_permission_denied"));
         }
       })
       .catch((error: unknown) => {
         if (isMounted) {
           setPermissionGranted(false);
-          setUnavailableReason(getCameraFailureReason(error));
+          const reason = getCameraFailureReason(error);
+          setUnavailableReason(reason);
+          onFailure?.(toTerminalCameraError(reason, error));
         }
       });
     return () => {
@@ -43,7 +49,9 @@ export function CameraFrame({ label, onCapture, cameraAdapter = visionCameraAdap
       setUnavailableReason(null);
       onCapture(asset);
     } catch (error) {
-      setUnavailableReason(getCameraFailureReason(error));
+      const reason = getCameraFailureReason(error);
+      setUnavailableReason(reason);
+      onFailure?.(toTerminalCameraError(reason, error));
     }
   };
 
@@ -74,6 +82,7 @@ export function CameraFrame({ label, onCapture, cameraAdapter = visionCameraAdap
 function getCameraFailureReason(error: unknown): string {
   return error instanceof CameraUnavailableError ? error.code : "camera_unavailable";
 }
+
 
 const styles = StyleSheet.create({
   container: {

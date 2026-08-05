@@ -14,6 +14,7 @@ interface SelfieCaptureScreenProps {
 export function SelfieCaptureScreen({ stepIndex = 3, cameraAdapter }: SelfieCaptureScreenProps) {
   const { dispatch } = useCaptureStore();
   const [hasCapture, setHasCapture] = useState(false);
+  const [terminalError, setTerminalError] = useState<string | null>(null);
 
   return (
     <View style={styles.container}>
@@ -37,13 +38,18 @@ export function SelfieCaptureScreen({ stepIndex = 3, cameraAdapter }: SelfieCapt
           });
           setHasCapture(true);
         }}
+        onFailure={(error) => {
+          setHasCapture(false);
+          setTerminalError(error.code);
+        }}
       />
+      {terminalError ? <Text style={styles.error}>Verification stopped: {terminalError}</Text> : null}
       <CaptureFooter
         primaryLabel="Continue"
         onPrimary={() => dispatch({ type: "next" })}
         secondaryLabel="Back"
         onSecondary={() => dispatch({ type: "prev" })}
-        disabled={!hasCapture}
+        disabled={!hasCapture || Boolean(terminalError)}
       />
     </View>
   );
@@ -59,5 +65,6 @@ const styles = StyleSheet.create({
     paddingTop: 12,
     color: "#6b7280",
     fontSize: 13
-  }
+  },
+  error: { color: "#b91c1c", paddingHorizontal: 20, paddingBottom: 8 }
 });
