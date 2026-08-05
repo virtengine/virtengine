@@ -35,6 +35,9 @@ func (r *Registry) AdapterFor(docType DocumentType, country CountryCode) (Docume
 }
 
 func (r *Registry) Extract(ctx context.Context, docType DocumentType, country CountryCode, img image.Image, mrzValue string) (*DocumentData, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	adapter, ok := r.AdapterFor(docType, country)
 	if !ok {
 		return nil, ErrNoAdapter
@@ -57,6 +60,13 @@ func (r *Registry) Extract(ctx context.Context, docType DocumentType, country Co
 	}
 	if data.IssuingCountry != country {
 		return nil, fmt.Errorf("%w: requested country %s, extracted %s", ErrInvalidDocument, country, data.IssuingCountry)
+	}
+	validationErrors, err := adapter.Validate(data)
+	if err != nil {
+		return nil, fmt.Errorf("%w: adapter validation failed: %v", ErrInvalidDocument, err)
+	}
+	if len(validationErrors) > 0 {
+		return nil, fmt.Errorf("%w: adapter returned validation errors", ErrInvalidDocument)
 	}
 	return data, nil
 }

@@ -9,7 +9,7 @@ import (
 	"github.com/virtengine/virtengine/pkg/veid/documents/adapters"
 )
 
-const passportMRZ = "P<UTOERIKSSON<<ANNA<MARIA<<<<<<<<<<<<<<<<<<<\nL898902C36UTO7408122F1204159ZE184226B<<<<<10"
+const passportMRZ = "P<UTOERIKSSON<<ANNA<MARIA<<<<<<<<<<<<<<<<<<<\nL898902C36UTO7408122F3004157ZE184226B<<<<<16"
 
 func TestRegistryBindsExtractedMRZToRequestedDocumentIdentity(t *testing.T) {
 	registry := documents.NewRegistry(adapters.NewMRZAdapter([]documents.CountryCode{"UTO", "USA"}))
@@ -27,5 +27,26 @@ func TestRegistryBindsExtractedMRZToRequestedDocumentIdentity(t *testing.T) {
 	_, err = registry.Extract(context.Background(), documents.DocumentTypeIDCard, "UTO", nil, passportMRZ)
 	if !errors.Is(err, documents.ErrInvalidDocument) {
 		t.Fatalf("expected type binding rejection, got %v", err)
+	}
+}
+
+func TestRegistryRejectsInvalidMRZValidation(t *testing.T) {
+	registry := documents.NewRegistry(adapters.NewMRZAdapter([]documents.CountryCode{"UTO"}))
+	invalidCheckDigit := "P<UTOERIKSSON<<ANNA<MARIA<<<<<<<<<<<<<<<<<<<\nL898902C36UTO7408122F3004157ZE184226B<<<<<10"
+
+	_, err := registry.Extract(context.Background(), documents.DocumentTypePassport, "UTO", nil, invalidCheckDigit)
+	if !errors.Is(err, documents.ErrInvalidDocument) {
+		t.Fatalf("expected MRZ validation rejection, got %v", err)
+	}
+}
+
+func TestRegistryHonorsCancellationBeforeAdapterSelection(t *testing.T) {
+	registry := documents.NewRegistry(adapters.NewMRZAdapter([]documents.CountryCode{"UTO"}))
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	_, err := registry.Extract(ctx, documents.DocumentTypePassport, "UTO", nil, passportMRZ)
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("expected cancellation, got %v", err)
 	}
 }
