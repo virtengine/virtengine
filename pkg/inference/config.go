@@ -48,6 +48,17 @@ type InferenceConfig struct {
 	// SidecarTLS enables TLS for sidecar connections
 	SidecarTLS bool
 
+	// SidecarTLSCAFile is the PEM bundle used to verify the sidecar server.
+	SidecarTLSCAFile string
+
+	// SidecarTLSCertFile and SidecarTLSKeyFile identify the client certificate
+	// presented to the sidecar when mutual TLS is enabled.
+	SidecarTLSCertFile string
+	SidecarTLSKeyFile  string
+
+	// SidecarTLSServerName is the certificate DNS name expected from the sidecar.
+	SidecarTLSServerName string
+
 	// Determinism Configuration
 	// Deterministic forces deterministic inference mode
 	Deterministic bool
@@ -174,6 +185,12 @@ func (c *InferenceConfig) Validate() error {
 	} else if c.ModelPath == "" {
 		return fmt.Errorf("model_path is required when not using sidecar")
 	}
+	if !c.SidecarTLS && (c.SidecarTLSCAFile != "" || c.SidecarTLSCertFile != "" || c.SidecarTLSKeyFile != "" || c.SidecarTLSServerName != "") {
+		return fmt.Errorf("sidecar TLS files or server name require sidecar_tls")
+	}
+	if (c.SidecarTLSCertFile == "") != (c.SidecarTLSKeyFile == "") {
+		return fmt.Errorf("sidecar TLS client certificate and key must be configured together")
+	}
 
 	if c.Timeout <= 0 {
 		return fmt.Errorf("timeout must be positive")
@@ -218,6 +235,12 @@ func (c *InferenceConfig) Validate() error {
 		}
 		if !c.StrictDeterminism {
 			return fmt.Errorf("enabled inference requires strict determinism")
+		}
+		if !c.SidecarTLS {
+			return fmt.Errorf("enabled inference requires sidecar TLS")
+		}
+		if c.SidecarTLSCAFile == "" || c.SidecarTLSCertFile == "" || c.SidecarTLSKeyFile == "" || c.SidecarTLSServerName == "" {
+			return fmt.Errorf("enabled inference requires sidecar mTLS CA, client certificate, key, and server name")
 		}
 	}
 
@@ -270,7 +293,7 @@ func (c InferenceConfig) WithFallback(enabled bool, score uint32) InferenceConfi
 
 // IsRealInferenceEnabled returns true if real inference is enabled
 func (c InferenceConfig) IsRealInferenceEnabled() bool {
-	return c.Enabled && c.UseSidecar && !c.AllowFallbackToStub && !c.UseFallbackOnError && c.RequireHashVerification && c.StrictDeterminism
+	return c.Enabled && c.UseSidecar && c.SidecarTLS && c.SidecarTLSCAFile != "" && c.SidecarTLSCertFile != "" && c.SidecarTLSKeyFile != "" && c.SidecarTLSServerName != "" && !c.AllowFallbackToStub && !c.UseFallbackOnError && c.RequireHashVerification && c.StrictDeterminism
 }
 
 // IsConsensusSafe returns true if the configuration is safe for consensus

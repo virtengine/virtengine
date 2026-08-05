@@ -164,8 +164,35 @@ func TestConfigValidation(t *testing.T) {
 				c.ExpectedHash = strings.Repeat("a", 64)
 				c.UseFallbackOnError = false
 				c.StrictDeterminism = true
+				c.SidecarTLS = true
+				c.SidecarTLSCAFile = "test-ca.pem"
+				c.SidecarTLSCertFile = "test-cert.pem"
+				c.SidecarTLSKeyFile = "test-key.pem"
+				c.SidecarTLSServerName = "veid-inference.test"
 			},
 			expectError: false,
+		},
+		{
+			name: "enabled inference requires mTLS identity",
+			modifyFunc: func(c *InferenceConfig) {
+				c.Enabled = true
+				c.UseSidecar = true
+				c.SidecarAddress = testSidecarAddress
+				c.ExpectedHash = strings.Repeat("a", 64)
+				c.UseFallbackOnError = false
+				c.StrictDeterminism = true
+				c.SidecarTLS = true
+			},
+			expectError: true,
+		},
+		{
+			name: "sidecar client certificate requires key",
+			modifyFunc: func(c *InferenceConfig) {
+				c.ExpectedHash = strings.Repeat("a", 64)
+				c.SidecarTLS = true
+				c.SidecarTLSCertFile = "test-cert.pem"
+			},
+			expectError: true,
 		},
 	}
 

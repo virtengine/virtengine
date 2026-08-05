@@ -3,7 +3,9 @@ package inference
 import (
 	"context"
 	"crypto/tls"
+	"crypto/x509"
 	"fmt"
+	"os"
 	"sync"
 	"time"
 
@@ -107,9 +109,9 @@ func (sc *SidecarClient) connect() error {
 	var opts []grpc.DialOption
 
 	if sc.useTLS {
-		// Use TLS with system root CAs
-		tlsConfig := &tls.Config{
-			MinVersion: tls.VersionTLS12,
+		tlsConfig, err := sc.sidecarTLSConfig()
+		if err != nil {
+			return err
 		}
 		opts = append(opts, grpc.WithTransportCredentials(credentials.NewTLS(tlsConfig)))
 	} else {
@@ -132,6 +134,32 @@ func (sc *SidecarClient) connect() error {
 	}
 
 	return nil
+}
+
+func (sc *SidecarClient) sidecarTLSConfig() (*tls.Config, error) {
+	config := &tls.Config{
+		MinVersion: tls.VersionTLS13,
+		ServerName: sc.config.SidecarTLSServerName,
+	}
+	if sc.config.SidecarTLSCAFile != "" {
+		pem, err := os.ReadFile(sc.config.SidecarTLSCAFile)
+		if err != nil {
+			return nil, fmt.Errorf("read sidecar TLS CA: %w", err)
+		}
+		pool := x509.NewCertPool()
+		if !pool.AppendCertsFromPEM(pem) {
+			return nil, fmt.Errorf("sidecar TLS CA file contains no certificates")
+		}
+		config.RootCAs = pool
+	}
+	if sc.config.SidecarTLSCertFile != "" {
+		certificate, err := tls.LoadX509KeyPair(sc.config.SidecarTLSCertFile, sc.config.SidecarTLSKeyFile)
+		if err != nil {
+			return nil, fmt.Errorf("load sidecar TLS client certificate: %w", err)
+		}
+		config.Certificates = []tls.Certificate{certificate}
+	}
+	return config, nil
 }
 
 // refreshModelInfo fetches model version and hash from sidecar
