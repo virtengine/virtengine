@@ -35,17 +35,28 @@ type AssuranceMapper interface {
 	MapAssurance(string) (AssuranceLevel, bool)
 }
 
+// AuthorizationReplayGuard atomically consumes a successfully verified
+// authorization state. Implementations must retain the state through expiry
+// and reject a second consume attempt.
+type AuthorizationReplayGuard interface {
+	ConsumeAuthorizationState(context.Context, string, time.Time) error
+}
+
 // OpenID4VPVerifierConfig pins the protocol issuer and policy. A production
 // integration creates one verifier config per trusted issuer/profile.
 type OpenID4VPVerifierConfig struct {
-	ProviderID string
-	Issuer     string
-	Leeway     time.Duration
+	ProviderID  string
+	Issuer      string
+	Leeway      time.Duration
+	ReplayGuard AuthorizationReplayGuard
 }
 
 func (c OpenID4VPVerifierConfig) validate() error {
 	if strings.TrimSpace(c.ProviderID) == "" || strings.TrimSpace(c.Issuer) == "" {
 		return fmt.Errorf("%w: provider ID and issuer are required", ErrOpenID4VPVerification)
+	}
+	if c.ReplayGuard == nil {
+		return fmt.Errorf("%w: authorization replay guard is required", ErrOpenID4VPVerification)
 	}
 	if c.Leeway < 0 || c.Leeway > 2*time.Minute {
 		return fmt.Errorf("%w: leeway must be between zero and two minutes", ErrOpenID4VPVerification)
@@ -147,6 +158,9 @@ func VerifyOpenID4VP(
 	identity := DigitalIDIdentity{ProviderID: config.ProviderID, Subject: claims.Subject, Assurance: level, Claims: verifiedClaims, IssuedAt: claims.IssuedAt.Time.UTC(), ExpiresAt: claims.ExpiresAt.Time.UTC(), Status: credentialStatus}
 	if err := ValidateIdentity(request, identity, now); err != nil {
 		return DigitalIDIdentity{}, fmt.Errorf("%w: %v", ErrOpenID4VPVerification, err)
+	}
+	if err := config.ReplayGuard.ConsumeAuthorizationState(ctx, request.State, request.ExpiresAt.UTC()); err != nil {
+		return DigitalIDIdentity{}, fmt.Errorf("%w: authorization state already consumed or unavailable: %v", ErrOpenID4VPVerification, err)
 	}
 	return identity, nil
 }

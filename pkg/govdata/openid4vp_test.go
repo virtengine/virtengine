@@ -8,6 +8,8 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
+	"sync"
 	"testing"
 	"time"
 
@@ -24,9 +26,12 @@ func TestVerifyOpenID4VPVerifiesSignedNonceBoundSDJWT(t *testing.T) {
 	disclosure := encodeDisclosure(t, "salt", "given_name", "Ada")
 	digest := sha256.Sum256([]byte(disclosure))
 	token := signedVPToken(t, private, request, now, []string{base64.RawURLEncoding.EncodeToString(digest[:])})
-	identity, err := VerifyOpenID4VP(context.Background(), request, OpenID4VPAuthorizationResponse{State: request.State, VPToken: token, Disclosures: []string{disclosure}}, OpenID4VPVerifierConfig{ProviderID: request.ProviderID, Issuer: "https://issuer.example"}, staticIssuerKey{public}, activeCredentialStatus{}, testAssuranceMapper{}, now)
+	config := testVerifierConfig(request)
+	identity, err := VerifyOpenID4VP(context.Background(), request, OpenID4VPAuthorizationResponse{State: request.State, VPToken: token, Disclosures: []string{disclosure}}, config, staticIssuerKey{public}, activeCredentialStatus{}, testAssuranceMapper{}, now)
 	require.NoError(t, err)
 	require.Equal(t, "Ada", identity.Claims["given_name"])
+	_, err = VerifyOpenID4VP(context.Background(), request, OpenID4VPAuthorizationResponse{State: request.State, VPToken: token, Disclosures: []string{disclosure}}, config, staticIssuerKey{public}, activeCredentialStatus{}, testAssuranceMapper{}, now)
+	require.ErrorIs(t, err, ErrOpenID4VPVerification)
 }
 
 func TestVerifyOpenID4VPFailsClosedForUnsignedOrWrongNonceToken(t *testing.T) {
@@ -37,12 +42,12 @@ func TestVerifyOpenID4VPFailsClosedForUnsignedOrWrongNonceToken(t *testing.T) {
 	disclosure := encodeDisclosure(t, "salt", "given_name", "Ada")
 	digest := sha256.Sum256([]byte(disclosure))
 	token := signedVPToken(t, private, request, now, []string{base64.RawURLEncoding.EncodeToString(digest[:])})
-	_, err = VerifyOpenID4VP(context.Background(), request, OpenID4VPAuthorizationResponse{State: request.State, VPToken: token, Disclosures: []string{disclosure}}, OpenID4VPVerifierConfig{ProviderID: request.ProviderID, Issuer: "https://issuer.example"}, staticIssuerKey{public}, activeCredentialStatus{}, testAssuranceMapper{}, now)
+	_, err = VerifyOpenID4VP(context.Background(), request, OpenID4VPAuthorizationResponse{State: request.State, VPToken: token, Disclosures: []string{disclosure}}, testVerifierConfig(request), staticIssuerKey{public}, activeCredentialStatus{}, testAssuranceMapper{}, now)
 	require.NoError(t, err)
 	request.Nonce = "changed-nonce-which-is-long-enough"
-	_, err = VerifyOpenID4VP(context.Background(), request, OpenID4VPAuthorizationResponse{State: request.State, VPToken: token, Disclosures: []string{disclosure}}, OpenID4VPVerifierConfig{ProviderID: request.ProviderID, Issuer: "https://issuer.example"}, staticIssuerKey{public}, activeCredentialStatus{}, testAssuranceMapper{}, now)
+	_, err = VerifyOpenID4VP(context.Background(), request, OpenID4VPAuthorizationResponse{State: request.State, VPToken: token, Disclosures: []string{disclosure}}, testVerifierConfig(request), staticIssuerKey{public}, activeCredentialStatus{}, testAssuranceMapper{}, now)
 	require.ErrorIs(t, err, ErrOpenID4VPVerification)
-	_, err = VerifyOpenID4VP(context.Background(), request, OpenID4VPAuthorizationResponse{State: request.State, VPToken: "eyJhbGciOiJub25lIn0.eyJzdWIiOiJ4In0.", Disclosures: []string{disclosure}}, OpenID4VPVerifierConfig{ProviderID: request.ProviderID, Issuer: "https://issuer.example"}, staticIssuerKey{public}, activeCredentialStatus{}, testAssuranceMapper{}, now)
+	_, err = VerifyOpenID4VP(context.Background(), request, OpenID4VPAuthorizationResponse{State: request.State, VPToken: "eyJhbGciOiJub2luIn0.eyJzdWIiOiJ4In0.", Disclosures: []string{disclosure}}, testVerifierConfig(request), staticIssuerKey{public}, activeCredentialStatus{}, testAssuranceMapper{}, now)
 	require.ErrorIs(t, err, ErrOpenID4VPVerification)
 }
 
@@ -54,7 +59,7 @@ func TestVerifyOpenID4VPRejectsUncommittedDisclosure(t *testing.T) {
 	disclosure := encodeDisclosure(t, "salt", "given_name", "Mallory")
 	digest := sha256.Sum256([]byte("different"))
 	token := signedVPToken(t, private, request, now, []string{base64.RawURLEncoding.EncodeToString(digest[:])})
-	_, err = VerifyOpenID4VP(context.Background(), request, OpenID4VPAuthorizationResponse{State: request.State, VPToken: token, Disclosures: []string{disclosure}}, OpenID4VPVerifierConfig{ProviderID: request.ProviderID, Issuer: "https://issuer.example"}, staticIssuerKey{public}, activeCredentialStatus{}, testAssuranceMapper{}, now)
+	_, err = VerifyOpenID4VP(context.Background(), request, OpenID4VPAuthorizationResponse{State: request.State, VPToken: token, Disclosures: []string{disclosure}}, testVerifierConfig(request), staticIssuerKey{public}, activeCredentialStatus{}, testAssuranceMapper{}, now)
 	require.ErrorIs(t, err, ErrOpenID4VPVerification)
 }
 
@@ -91,4 +96,22 @@ type testAssuranceMapper struct{}
 
 func (testAssuranceMapper) MapAssurance(value string) (AssuranceLevel, bool) {
 	return AssuranceLevel(value), AssuranceLevel(value).Valid()
+}
+
+type testReplayGuard struct {
+	mu     sync.Mutex
+	states map[string]struct{}
+}
+
+func (g *testReplayGuard) ConsumeAuthorizationState(_ context.Context, state string, _ time.Time) error {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	if _, exists := g.states[state]; exists {
+		return errors.New("replayed")
+	}
+	g.states[state] = struct{}{}
+	return nil
+}
+func testVerifierConfig(request DigitalIDAuthorizationRequest) OpenID4VPVerifierConfig {
+	return OpenID4VPVerifierConfig{ProviderID: request.ProviderID, Issuer: "https://issuer.example", ReplayGuard: &testReplayGuard{states: map[string]struct{}{}}}
 }
