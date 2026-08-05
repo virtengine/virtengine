@@ -90,6 +90,12 @@ func ValidateReceiptRequest(request ReceiptRequest, now time.Time) error {
 	if err := request.Receipt.Validate(); err != nil {
 		return fmt.Errorf("invalid signed inference receipt: %w", err)
 	}
+	if now.IsZero() || !request.Receipt.ExpiresAt.After(now.UTC()) {
+		return fmt.Errorf("inference receipt is expired at preparation time")
+	}
+	if request.Receipt.IssuedAt.After(now.UTC()) {
+		return fmt.Errorf("inference receipt issue time is in the future")
+	}
 	if len(request.Evidence.CaptureEvidenceDigest) != sha256.Size || len(request.Evidence.GovernmentEvidenceDigest) != sha256.Size {
 		return fmt.Errorf("capture and government evidence digests must be SHA-256 digests")
 	}

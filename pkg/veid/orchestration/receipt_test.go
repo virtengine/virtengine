@@ -33,6 +33,22 @@ func TestValidateReceiptRequestFailsClosedOnUnverifiedDevice(t *testing.T) {
 	require.ErrorContains(t, ValidateReceiptRequest(ReceiptRequest{Receipt: receipt, Evidence: evidence}, now), "supported and verified")
 }
 
+func TestValidateReceiptRequestRejectsStaleOrFutureReceipt(t *testing.T) {
+	now := time.Date(2026, 8, 5, 10, 0, 0, 0, time.UTC)
+	evidence := validEvidence(now)
+	evidence.GovernmentVerificationTime = now.Add(-3 * time.Minute)
+	receipt, privateKey := validReceipt(now, evidence)
+	receipt.IssuedAt = now.Add(-2 * time.Minute)
+	receipt.ExpiresAt = now.Add(-time.Minute)
+	require.NoError(t, receipt.Sign(privateKey))
+	require.ErrorContains(t, ValidateReceiptRequest(ReceiptRequest{Receipt: receipt, Evidence: evidence}, now), "expired")
+	receipt, privateKey = validReceipt(now, evidence)
+	receipt.IssuedAt = now.Add(time.Second)
+	receipt.ExpiresAt = now.Add(2 * time.Minute)
+	require.NoError(t, receipt.Sign(privateKey))
+	require.ErrorContains(t, ValidateReceiptRequest(ReceiptRequest{Receipt: receipt, Evidence: evidence}, now), "future")
+}
+
 func TestVerifyAndPrepareRequiresSignerVerification(t *testing.T) {
 	now := time.Date(2026, 8, 5, 10, 0, 0, 0, time.UTC)
 	evidence := validEvidence(now)
