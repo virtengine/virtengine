@@ -30,6 +30,10 @@ func TestDeviceAttestationRecordValidate(t *testing.T) {
 	invalidProvider.Provider = DeviceAttestationProvider("invalid")
 	require.Error(t, invalidProvider.Validate())
 
+	incompatibleProvider := valid
+	incompatibleProvider.Platform = DevicePlatformIOS
+	require.ErrorContains(t, incompatibleProvider.Validate(), "incompatible")
+
 	unsupported := DeviceAttestationRecord{
 		AttestationID: "attest-unsupported",
 		Supported:     false,

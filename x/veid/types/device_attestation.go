@@ -78,6 +78,9 @@ func (r DeviceAttestationRecord) Validate() error {
 	if !IsValidDeviceAttestationProvider(r.Provider) {
 		return ErrInvalidScope.Wrapf("invalid device attestation provider: %s", r.Provider)
 	}
+	if !providerMatchesPlatform(r.Provider, r.Platform) {
+		return ErrInvalidScope.Wrapf("device attestation provider %s is incompatible with platform %s", r.Provider, r.Platform)
+	}
 	if r.Nonce == "" {
 		return ErrInvalidScope.Wrap("attestation nonce is required")
 	}
@@ -101,6 +104,17 @@ func (r DeviceAttestationRecord) Validate() error {
 	}
 
 	return nil
+}
+
+func providerMatchesPlatform(provider DeviceAttestationProvider, platform DevicePlatform) bool {
+	switch platform {
+	case DevicePlatformAndroid:
+		return provider == DeviceAttestationProviderPlayIntegrity || provider == DeviceAttestationProviderSafetyNet
+	case DevicePlatformIOS:
+		return provider == DeviceAttestationProviderDeviceCheck || provider == DeviceAttestationProviderAppAttest
+	default:
+		return false
+	}
 }
 
 // IsValidDevicePlatform checks if a platform is supported.
