@@ -1,4 +1,4 @@
-import { QueryDelegationRequest, QueryDelegationResponse, QueryDelegatorAllRewardsRequest, QueryDelegatorAllRewardsResponse, QueryDelegatorDelegationsRequest, QueryDelegatorDelegationsResponse, QueryDelegatorRedelegationsRequest, QueryDelegatorRedelegationsResponse, QueryDelegatorRewardsRequest, QueryDelegatorRewardsResponse, QueryDelegatorUnbondingDelegationsRequest, QueryDelegatorUnbondingDelegationsResponse, QueryParamsRequest, QueryParamsResponse, QueryRedelegationRequest, QueryRedelegationResponse, QueryUnbondingDelegationRequest, QueryUnbondingDelegationResponse, QueryValidatorDelegationsRequest, QueryValidatorDelegationsResponse, QueryValidatorSharesRequest, QueryValidatorSharesResponse } from "./query.ts";
+import { QueryDelegationRequest, QueryDelegationResponse, QueryDelegatorAllRewardsRequest, QueryDelegatorAllRewardsResponse, QueryDelegatorDelegationsRequest, QueryDelegatorDelegationsResponse, QueryDelegatorRedelegationsRequest, QueryDelegatorRedelegationsResponse, QueryDelegatorRewardsRequest, QueryDelegatorRewardsResponse, QueryDelegatorUnbondingDelegationsRequest, QueryDelegatorUnbondingDelegationsResponse, QueryHistoricalRewardsRequest, QueryHistoricalRewardsResponse, QueryParamsRequest, QueryParamsResponse, QueryRedelegationRequest, QueryRedelegationResponse, QueryRedelegationsRequest, QueryRedelegationsResponse, QuerySlashingEventsRequest, QuerySlashingEventsResponse, QueryUnbondingDelegationRequest, QueryUnbondingDelegationResponse, QueryValidatorDelegationsRequest, QueryValidatorDelegationsResponse, QueryValidatorSharesRequest, QueryValidatorSharesResponse } from "./query.ts";
 
 export const Query = {
   typeName: "virtengine.delegation.v1.Query",
@@ -59,11 +59,32 @@ export const Query = {
       output: QueryDelegatorRedelegationsResponse,
       get parent() { return Query; },
     },
+    redelegations: {
+      name: "Redelegations",
+      httpPath: "/virtengine/delegation/v1/redelegations",
+      input: QueryRedelegationsRequest,
+      output: QueryRedelegationsResponse,
+      get parent() { return Query; },
+    },
     delegatorRewards: {
       name: "DelegatorRewards",
       httpPath: "/virtengine/delegation/v1/delegator/{delegator_address}/rewards/{validator_address}",
       input: QueryDelegatorRewardsRequest,
       output: QueryDelegatorRewardsResponse,
+      get parent() { return Query; },
+    },
+    historicalRewards: {
+      name: "HistoricalRewards",
+      httpPath: "/virtengine/delegation/v1/delegator/{delegator_address}/rewards/{validator_address}/history",
+      input: QueryHistoricalRewardsRequest,
+      output: QueryHistoricalRewardsResponse,
+      get parent() { return Query; },
+    },
+    slashingEvents: {
+      name: "SlashingEvents",
+      httpPath: "/virtengine/delegation/v1/delegator/{delegator_address}/slashing",
+      input: QuerySlashingEventsRequest,
+      output: QuerySlashingEventsResponse,
       get parent() { return Query; },
     },
     delegatorAllRewards: {

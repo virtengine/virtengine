@@ -1,8 +1,7 @@
 package keeper
 
 import (
-	"crypto/rand"
-	"encoding/hex"
+	"crypto/sha256"
 	"encoding/json"
 	"fmt"
 	"strings"
@@ -172,11 +171,8 @@ func (k Keeper) TriggerBorderlineFallback(
 		return types.VerificationStatusRejected, types.ErrNoEnrolledFactors
 	}
 
-	// Generate fallback ID
-	fallbackID, err := generateFallbackID()
-	if err != nil {
-		return types.VerificationStatusRejected, err
-	}
+	// Derive the fallback ID from committed, domain-separated inputs.
+	fallbackID := generateFallbackID(ctx, "fallback", accountAddr)
 
 	// Create MFA challenge for borderline verification
 	challengeID, err := k.createBorderlineMFAChallenge(ctx, address, availableFactors, params)
@@ -335,13 +331,11 @@ func (k Keeper) createBorderlineMFAChallenge(
 	return challenge.ChallengeID, nil
 }
 
-// generateFallbackID generates a unique fallback ID
-func generateFallbackID() (string, error) {
-	bytes := make([]byte, 16)
-	if _, err := rand.Read(bytes); err != nil {
-		return "", fmt.Errorf("failed to generate fallback ID: %w", err)
-	}
-	return hex.EncodeToString(bytes), nil
+// generateFallbackID deterministically binds an ID to committed block inputs.
+func generateFallbackID(ctx sdk.Context, domain, subject string) string {
+	input := fmt.Sprintf("%s:%d:%s:%s", ctx.ChainID(), ctx.BlockHeight(), domain, subject)
+	hash := sha256.Sum256([]byte(input))
+	return fmt.Sprintf("%x", hash[:16])
 }
 
 // ============================================================================

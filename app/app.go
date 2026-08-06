@@ -41,6 +41,7 @@ import (
 	"github.com/cosmos/cosmos-sdk/server/config"
 	servertypes "github.com/cosmos/cosmos-sdk/server/types"
 	sdk "github.com/cosmos/cosmos-sdk/types"
+	"github.com/cosmos/cosmos-sdk/types/mempool"
 	"github.com/cosmos/cosmos-sdk/types/module"
 	"github.com/cosmos/cosmos-sdk/version"
 	"github.com/cosmos/cosmos-sdk/x/auth/ante"
@@ -77,6 +78,7 @@ import (
 	encryptiontypes "github.com/virtengine/virtengine/x/encryption/types"
 	fraudtypes "github.com/virtengine/virtengine/x/fraud/types"
 	hpctypes "github.com/virtengine/virtengine/x/hpc/types"
+	issuancepolicytypes "github.com/virtengine/virtengine/x/issuancepolicy/types"
 	marketplacetypes "github.com/virtengine/virtengine/x/market/types/marketplace"
 	mfatypes "github.com/virtengine/virtengine/x/mfa/types"
 	oracletypes "github.com/virtengine/virtengine/x/oracle/types"
@@ -87,6 +89,7 @@ import (
 	virtstakingtypes "github.com/virtengine/virtengine/x/staking/types"
 	supporttypes "github.com/virtengine/virtengine/x/support/types"
 	veidtypes "github.com/virtengine/virtengine/x/veid/types"
+	veidregistrytypes "github.com/virtengine/virtengine/x/veidregistry/types"
 
 	"github.com/virtengine/virtengine/app/gaspricing"
 	apptypes "github.com/virtengine/virtengine/app/types"
@@ -180,6 +183,7 @@ func NewApp(
 		ModuleAccountPerms(),
 		app.BlockedAddrs(),
 		invCheckPeriod,
+		cast.ToBool(appOpts.Get("test_enable_unordered_transactions")),
 	)
 
 	minGasPricesStr := cast.ToString(appOpts.Get(cflags.FlagMinGasPrices))
@@ -191,11 +195,8 @@ func NewApp(
 	gasParams := gaspricing.DefaultParams(minGasPrices)
 	app.Keepers.VirtEngine.GasPricing = gaspricing.NewKeeper(app.GetKey(apptypes.GasPricingStoreKey), logger, gasParams)
 
-	// TODO: There is a bug here, where we register the govRouter routes in InitNormalKeepers and then
-	// call setupHooks afterwards. Therefore, if a gov proposal needs to call a method and that method calls a
-	// hook, we will get a nil pointer dereference error due to the hooks in the keeper not being
-	// setup yet. I will refrain from creating an issue in the sdk for now until after we unfork to 0.47,
-	// because I believe the concept of Routes is going away.
+	// Rebind legacy governance proposal handlers after hook setup so any handlers
+	// that capture keepers by value see the final hooked keeper state.
 	app.SetupHooks()
 
 	// NOTE: All module / keeper changes should happen prior to this module.NewManager line being called.
@@ -213,6 +214,14 @@ func NewApp(
 	if app.Keepers.Cosmos.Crisis != nil {
 		//nolint:staticcheck // required for crisis invariant registration in this build
 		app.MM.RegisterInvariants(app.Keepers.Cosmos.Crisis)
+		app.Keepers.Cosmos.Crisis.RegisterRoute("reservation", "cross-module-lineage", func(ctx sdk.Context) (string, bool) {
+			if err := app.ValidateReservationLineage(ctx); err != nil {
+				//nolint:staticcheck // crisis invariant formatting remains required while x/crisis is wired.
+				return sdk.FormatInvariant("reservation", "cross-module-lineage", err.Error()), true
+			}
+			//nolint:staticcheck // crisis invariant formatting remains required while x/crisis is wired.
+			return sdk.FormatInvariant("reservation", "cross-module-lineage", "lineage valid"), false
+		})
 	}
 
 	// During begin block slashing happens after distr.BeginBlocker so that
@@ -231,11 +240,14 @@ func NewApp(
 	app.MM.SetOrderBeginBlockers(orderBeginBlockers(app.MM.ModuleNames())...)
 	app.MM.SetOrderEndBlockers(OrderEndBlockers(app.MM.ModuleNames())...)
 	app.MM.SetOrderInitGenesis(OrderInitGenesis(app.MM.ModuleNames())...)
+	app.MM.SetOrderMigrations(OrderMigrations(app.MM.ModuleNames())...)
 
 	app.Configurator = module.NewConfigurator(app.AppCodec(), app.MsgServiceRouter(), app.GRPCQueryRouter())
-	err = app.MM.RegisterServices(app.Configurator)
-	if err != nil {
-		panic(err)
+	if !cast.ToBool(appOpts.Get("skip_module_service_registration")) {
+		err = app.MM.RegisterServices(app.Configurator)
+		if err != nil {
+			panic(err)
+		}
 	}
 
 	// register the upgrade handler
@@ -246,10 +258,12 @@ func NewApp(
 	app.sm = module.NewSimulationManager(appSimModules(app, encodingConfig)...)
 	app.sm.RegisterStoreDecoders()
 
-	autocliv1.RegisterQueryServer(app.GRPCQueryRouter(), runtimeservices.NewAutoCLIQueryService(app.MM.Modules))
+	if !cast.ToBool(appOpts.Get("skip_module_service_registration")) {
+		autocliv1.RegisterQueryServer(app.GRPCQueryRouter(), runtimeservices.NewAutoCLIQueryService(app.MM.Modules))
 
-	reflectionSvc := getReflectionService()
-	reflectionv1.RegisterReflectionServiceServer(app.GRPCQueryRouter(), reflectionSvc)
+		reflectionSvc := getReflectionService()
+		reflectionv1.RegisterReflectionServiceServer(app.GRPCQueryRouter(), reflectionSvc)
+	}
 
 	// initialize stores
 	app.MountKVStores(app.GetKVStoreKey())
@@ -270,22 +284,51 @@ func NewApp(
 		RolesKeeper:      &app.Keepers.VirtEngine.Roles,
 		GasPricingKeeper: &app.Keepers.VirtEngine.GasPricing,
 	}
+	if rateLimitParams, ok := appOpts.Get("test_rate_limit_params").(apptypes.RateLimitParams); ok {
+		anteOpts.RateLimitParams = rateLimitParams
+	}
 
 	anteHandler, err := NewAnteHandler(anteOpts)
 	if err != nil {
 		panic(err)
 	}
 
-	app.SetPrepareProposal(baseapp.NoOpPrepareProposal())
-
-	// we use a no-op ProcessProposal, this way, we accept all proposals in avoidance
-	// of liveness failures due to Prepare / Process inconsistency. In other words,
-	// this ProcessProposal always returns ACCEPT.
-	app.SetProcessProposal(baseapp.NoOpProcessProposal())
+	// Require the SDK no-op mempool so default selection remains limited to the
+	// bounded FIFO CometBFT candidate window. A custom app mempool may enumerate
+	// entries not present in that window and would defeat the work bound.
+	if _, ok := app.Mempool().(mempool.NoOpMempool); !ok {
+		panic("Task 84A proposal admission requires the SDK no-op mempool")
+	}
+	sdkProposalHandler := baseapp.NewDefaultProposalHandler(app.Mempool(), app.BaseApp)
+	proposalHandler := NewProposalHandler(
+		app.BaseApp,
+		sdkProposalHandler.PrepareProposalHandler(),
+		NewUpgradeProposalActivation(app.Keepers.Cosmos.Upgrade),
+		DefaultProposalLimits(),
+		NewVEIDSystemTxCodec(app.txConfig, app.BaseApp, app.Keepers.Cosmos.Staking, &app.Keepers.VirtEngine.VEID),
+	)
+	if observer, ok := appOpts.Get("test_proposal_observer").(func(string, error)); ok {
+		WithProposalObserver(observer)(proposalHandler)
+	}
+	if cast.ToBool(appOpts.Get("test_checktx_prevalidated_proposals")) {
+		WithCheckTxPrevalidatedProposals()(proposalHandler)
+	}
+	configureConsensusSystemTxAuthorization(&app.Keepers.VirtEngine.VEID, app.Keepers.Cosmos.Staking)
+	app.SetPrepareProposal(FailClosedPrepareProposal(proposalHandler.PrepareProposal))
+	app.SetProcessProposal(proposalHandler.ProcessProposal)
+	app.SetPreBlocker(func(ctx sdk.Context, req *abci.RequestFinalizeBlock) (*sdk.ResponsePreBlock, error) {
+		ctx, err := proposalHandler.AuthorizeFinalizeBlock(ctx, req)
+		if err != nil {
+			return nil, err
+		}
+		return app.PreBlocker(ctx, req)
+	})
+	extendVote, verifyVoteExtension := newVEIDVoteExtensionHandlers(&app.Keepers.VirtEngine.VEID)
+	app.SetExtendVoteHandler(extendVote)
+	app.SetVerifyVoteExtensionHandler(verifyVoteExtension)
 
 	// initialize BaseApp
 	app.SetInitChainer(app.InitChainer)
-	app.SetPreBlocker(app.PreBlocker)
 	app.SetBeginBlocker(app.BeginBlocker)
 	app.SetAnteHandler(anteHandler)
 	app.SetEndBlocker(app.EndBlocker)
@@ -331,6 +374,8 @@ func orderBeginBlockers(_ []string) []string {
 		ibchost.ModuleName,
 		feegrant.ModuleName,
 		// VirtEngine patent modules (AU2024203136A1)
+		veidregistrytypes.ModuleName,
+		issuancepolicytypes.ModuleName,
 		veidtypes.ModuleName,
 		mfatypes.ModuleName,
 		encryptiontypes.ModuleName,
@@ -381,6 +426,8 @@ func OrderEndBlockers(_ []string) []string {
 		consensusparamtypes.ModuleName,
 		ibctm.ModuleName,
 		// VirtEngine patent modules (AU2024203136A1)
+		veidregistrytypes.ModuleName,
+		issuancepolicytypes.ModuleName,
 		veidtypes.ModuleName,
 		mfatypes.ModuleName,
 		encryptiontypes.ModuleName,
@@ -559,7 +606,7 @@ func (app *VirtEngineApp) ModuleAccountAddrs() map[string]bool {
 // BlockedAddrs returns all the app's module account addresses that are not
 // allowed to receive external tokens.
 func (app *VirtEngineApp) BlockedAddrs() map[string]bool {
-	perms := ModuleAccountAddrs()
+	perms := ModuleAccountPerms()
 	blockedAddrs := make(map[string]bool)
 	for acc := range perms {
 		blockedAddrs[authtypes.NewModuleAddress(acc).String()] = !allowedReceivingModAcc[acc]

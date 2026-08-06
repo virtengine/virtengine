@@ -96,7 +96,7 @@ var VirtEngineUtilsExtraAccountTypes map[reflect.Type]struct{}
 // creation at the address.
 // else, we do not.
 //
-// TODO: This is generally from an SDK design flaw
+// This helper exists to safely work around the legacy SDK module-account collision constraint.
 // code based off wasmd code: https://github.com/CosmWasm/wasmd/pull/996
 // Its _mandatory_ that the caller do the API safe construction to generate a module account addr,
 // namely, address.Module(ModuleName, {key})

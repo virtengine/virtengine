@@ -306,8 +306,8 @@ func (k Keeper) SubmitAppeal(ctx sdk.Context, msg *types.MsgSubmitAppeal) (*type
 		rejectionBlock = 0
 	} else {
 		// Calculate blocks elapsed since upload (rough estimate)
-		elapsedSeconds := ctx.BlockTime().Sub(scope.UploadedAt).Seconds()
-		blocksElapsed := int64(elapsedSeconds / 6) // Assume ~6 second blocks
+		elapsedSeconds := int64(ctx.BlockTime().Sub(scope.UploadedAt) / time.Second)
+		blocksElapsed := elapsedSeconds / 6 // Assume ~6 second blocks
 		rejectionBlock = ctx.BlockHeight() - blocksElapsed
 		if rejectionBlock < 0 {
 			rejectionBlock = 0

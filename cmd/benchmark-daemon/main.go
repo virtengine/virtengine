@@ -5,7 +5,9 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"os/signal"
 	"syscall"
@@ -13,6 +15,8 @@ import (
 
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
+
+	benchmarkdaemon "github.com/virtengine/virtengine/pkg/benchmark_daemon"
 )
 
 const (
@@ -141,35 +145,52 @@ func runDaemon(cmd *cobra.Command, args []string) error {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	// Load configuration
 	config, err := loadConfig(cmd)
 	if err != nil {
 		return fmt.Errorf("failed to load configuration: %w", err)
 	}
 
-	fmt.Printf("Starting benchmark daemon for provider %s (cluster: %s)\n",
+	return executeDaemon(ctx, config, os.Stdout)
+}
+
+func executeDaemon(ctx context.Context, config *daemonConfig, out io.Writer) error {
+	daemonCfg := buildBenchmarkDaemonConfig(config)
+	runner := benchmarkdaemon.NewDefaultBenchmarkRunner()
+	daemon, err := benchmarkdaemon.NewBenchmarkDaemon(daemonCfg, nil, runner, nil)
+	if err != nil {
+		return fmt.Errorf("failed to initialize benchmark daemon: %w", err)
+	}
+	if err := daemon.Start(ctx); err != nil {
+		return fmt.Errorf("failed to start benchmark daemon: %w", err)
+	}
+	defer func() {
+		if err := daemon.Stop(); err != nil {
+			fmt.Fprintf(os.Stderr, "failed to stop benchmark daemon: %v\n", err)
+		}
+	}()
+
+	fmt.Fprintf(out, "Starting benchmark daemon for provider %s (cluster: %s)\n",
 		config.providerAddress, config.clusterID)
-	fmt.Printf("Schedule interval: %s, Challenge check: %s\n",
+	fmt.Fprintf(out, "Schedule interval: %s, Challenge check: %s\n",
 		config.scheduleInterval, config.challengeCheck)
-	fmt.Printf("Chain endpoint: %s\n", config.chainEndpoint)
+	fmt.Fprintf(out, "Chain endpoint: %s\n", config.chainEndpoint)
+	fmt.Fprintln(out, "Chain submission disabled in standalone CLI mode; local benchmark reports will not be broadcast.")
 
-	// In a real implementation, we would:
-	// 1. Load the signing key from keyPath
-	// 2. Create a real chain client
-	// 3. Create a real benchmark runner
-	// 4. Create and start the daemon
+	reporterCtx, reporterCancel := context.WithCancel(ctx)
+	defer reporterCancel()
+	go streamDaemonResults(reporterCtx, daemon, out)
 
-	// For now, we just wait for signals
 	sigCh := make(chan os.Signal, 1)
 	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
+	defer signal.Stop(sigCh)
 
-	fmt.Println("Daemon started. Press Ctrl+C to stop.")
+	fmt.Fprintln(out, "Daemon started. Press Ctrl+C to stop.")
 
 	select {
 	case sig := <-sigCh:
-		fmt.Printf("\nReceived signal %s, shutting down...\n", sig)
+		fmt.Fprintf(out, "\nReceived signal %s, shutting down...\n", sig)
 	case <-ctx.Done():
-		fmt.Println("\nContext cancelled, shutting down...")
+		fmt.Fprintln(out, "\nContext cancelled, shutting down...")
 	}
 
 	return nil
@@ -184,23 +205,23 @@ func runOnce(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("failed to load configuration: %w", err)
 	}
 
-	fmt.Printf("Running single benchmark for provider %s (cluster: %s)\n",
+	return executeSingleBenchmark(ctx, config, os.Stdout)
+}
+
+func executeSingleBenchmark(ctx context.Context, config *daemonConfig, out io.Writer) error {
+	fmt.Fprintf(out, "Running single benchmark for provider %s (cluster: %s)\n",
 		config.providerAddress, config.clusterID)
+	fmt.Fprintln(out, "Chain submission disabled in standalone CLI mode; printing the local benchmark report.")
 
-	// In a real implementation, we would:
-	// 1. Create a benchmark runner
-	// 2. Run the benchmark
-	// 3. Sign and submit the report
-	// 4. Print the results
-
-	// For now, just print placeholder
-	fmt.Println("Benchmark completed successfully.")
-	deadline, hasDeadline := ctx.Deadline()
-	if hasDeadline {
-		fmt.Printf("Context deadline: %v\n", deadline)
+	result, err := benchmarkdaemon.RunLocalBenchmark(ctx, buildBenchmarkDaemonConfig(config), benchmarkdaemon.NewDefaultBenchmarkRunner())
+	if err != nil {
+		if result != nil {
+			_ = printBenchmarkResult(out, result)
+		}
+		return fmt.Errorf("benchmark execution failed: %w", err)
 	}
 
-	return nil
+	return printBenchmarkResult(out, result)
 }
 
 func printVersion(cmd *cobra.Command, args []string) error {
@@ -221,6 +242,54 @@ type daemonConfig struct {
 	enableGPU        bool
 	keyPath          string
 	suiteVersion     string
+}
+
+func buildBenchmarkDaemonConfig(config *daemonConfig) benchmarkdaemon.BenchmarkDaemonConfig {
+	daemonCfg := benchmarkdaemon.DefaultBenchmarkDaemonConfig()
+	daemonCfg.ProviderAddress = config.providerAddress
+	daemonCfg.ClusterID = config.clusterID
+	daemonCfg.Region = config.region
+	daemonCfg.ChainEndpoint = config.chainEndpoint
+	daemonCfg.ScheduleInterval = config.scheduleInterval
+	daemonCfg.ChallengeCheckInterval = config.challengeCheck
+	daemonCfg.EnableGPU = config.enableGPU
+	daemonCfg.NetworkReferenceEndpoint = config.networkEndpoint
+	daemonCfg.SuiteVersion = config.suiteVersion
+
+	return daemonCfg
+}
+
+func printBenchmarkResult(out io.Writer, result *benchmarkdaemon.BenchmarkResult) error {
+	payload, err := json.MarshalIndent(result, "", "  ")
+	if err != nil {
+		return fmt.Errorf("failed to encode benchmark result: %w", err)
+	}
+
+	_, err = fmt.Fprintln(out, string(payload))
+	return err
+}
+
+func streamDaemonResults(ctx context.Context, daemon *benchmarkdaemon.BenchmarkDaemon, out io.Writer) {
+	ticker := time.NewTicker(time.Second)
+	defer ticker.Stop()
+
+	var lastReportID string
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			result, ok := daemon.GetLatestResult()
+			if !ok || result.ReportID == "" || result.ReportID == lastReportID {
+				continue
+			}
+
+			if err := printBenchmarkResult(out, result); err == nil {
+				lastReportID = result.ReportID
+			}
+		}
+	}
 }
 
 func loadConfig(cmd *cobra.Command) (*daemonConfig, error) {

@@ -19,18 +19,7 @@ resources:
   - tee-enclave-configmap.yaml
   - tee-enclave-deployment.yaml
   - tee-enclave-service.yaml
-
-configMapGenerator:
-  - name: virtengine-config
-    behavior: merge
-    literals:
-      - CHAIN_ID=virtengine-1
-      - LOG_LEVEL=info
-
-images:
-  - name: virtengine/virtengine-node
-    newTag: latest
-  - name: virtengine/provider-daemon
-    newTag: latest
-  - name: virtengine/tee-enclave
-    newTag: 0.1.0
+  - veid-inference-configmap.yaml
+  - veid-inference-deployment.yaml
+  - veid-inference-service.yaml
+  - veid-inference-networkpolicy.yaml

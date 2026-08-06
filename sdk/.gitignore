@@ -1,6 +1,7 @@
 ### dev environment configurations
 .idea
 .cache
+.generation
 .vscode
 
 ### Go template

@@ -4,7 +4,7 @@
 //
 // This package implements:
 //   - PayPal Payouts API integration for instant payouts
-//   - ACH bank transfer integration via Stripe Treasury
+//   - ACH bank transfer integration via Stripe Treasury or direct ACH gateways
 //   - KYC/AML gating for compliance
 //   - Payout status tracking and reconciliation
 //   - Webhook handling for payout notifications
@@ -24,8 +24,8 @@
 //	└────────┬────────┘ └───┬───┘ └───────────────┘
 //	         │              │
 //	┌────────▼────────┐ ┌───▼───────────────┐
-//	│  PayPal Payouts │ │  Stripe Treasury  │
-//	│      API        │ │       API         │
+//	│  PayPal Payouts │ │ Stripe / Direct   │
+//	│      API        │ │    ACH APIs       │
 //	└─────────────────┘ └───────────────────┘
 //
 // # Compliance

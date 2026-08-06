@@ -9,10 +9,55 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 )
 
 var ErrMissingUser = errors.New("notification user address missing")
+
+// DeliveryFailure captures a single channel failure during notification delivery.
+type DeliveryFailure struct {
+	Channel   Channel
+	Target    string
+	Err       error
+	Retryable bool
+}
+
+func (f DeliveryFailure) Error() string {
+	target := strings.TrimSpace(f.Target)
+	if target == "" {
+		return fmt.Sprintf("%s delivery failed: %v", f.Channel, f.Err)
+	}
+	return fmt.Sprintf("%s delivery failed for %s: %v", f.Channel, target, f.Err)
+}
+
+// DeliveryError aggregates channel failures for a notification.
+type DeliveryError struct {
+	NotificationID string
+	Failures       []DeliveryFailure
+}
+
+func (e *DeliveryError) Error() string {
+	if e == nil || len(e.Failures) == 0 {
+		return ""
+	}
+	parts := make([]string, 0, len(e.Failures))
+	for _, failure := range e.Failures {
+		parts = append(parts, failure.Error())
+	}
+	return fmt.Sprintf("notification %s delivery failed: %s", e.NotificationID, strings.Join(parts, "; "))
+}
+
+func (e *DeliveryError) Unwrap() error {
+	if e == nil || len(e.Failures) == 0 {
+		return nil
+	}
+	errs := make([]error, 0, len(e.Failures))
+	for _, failure := range e.Failures {
+		errs = append(errs, failure.Err)
+	}
+	return errors.Join(errs...)
+}
 
 // DefaultService implements the notification service.
 type DefaultService struct {
@@ -44,6 +89,8 @@ func NewDefaultService(store Store, prefs PreferencesStore, devices DeviceTokenS
 
 // Send delivers a notification based on user preferences.
 func (s *DefaultService) Send(ctx context.Context, notif Notification) error {
+	notif = cloneNotification(notif)
+	notif.UserAddress = strings.TrimSpace(notif.UserAddress)
 	if notif.UserAddress == "" {
 		return ErrMissingUser
 	}
@@ -57,17 +104,19 @@ func (s *DefaultService) Send(ctx context.Context, notif Notification) error {
 	prefs := s.defaultPrefs
 	if s.prefs != nil {
 		if stored, err := s.prefs.Get(ctx, notif.UserAddress); err == nil {
-			prefs = stored
+			prefs = normalizePreferences(stored)
 		}
 	}
+	prefs = normalizePreferences(prefs)
 
-	channels := notif.Channels
+	channels := append([]Channel(nil), notif.Channels...)
 	if len(channels) == 0 {
-		channels = prefs.Channels[notif.Type]
+		channels = append([]Channel(nil), prefs.Channels[notif.Type]...)
 	}
 	if len(channels) == 0 {
 		channels = []Channel{ChannelInApp}
 	}
+	channels = normalizeChannels(channels)
 
 	frequency := prefs.Frequencies[notif.Type]
 	if frequency == "" {
@@ -84,12 +133,20 @@ func (s *DefaultService) Send(ctx context.Context, notif Notification) error {
 		}
 	}
 
+	failures := make([]DeliveryFailure, 0, len(channels))
 	if s.inApp != nil {
-		_ = s.inApp.Publish(ctx, notif)
+		if err := s.inApp.Publish(ctx, notif); err != nil {
+			failures = append(failures, DeliveryFailure{
+				Channel:   ChannelInApp,
+				Target:    notif.UserAddress,
+				Err:       err,
+				Retryable: true,
+			})
+		}
 	}
 
 	if len(channels) == 0 {
-		return nil
+		return buildDeliveryError(notif.ID, failures)
 	}
 
 	if isQuietHours(prefs.QuietHours, s.timeNow(), notif.Type) {
@@ -102,32 +159,36 @@ func (s *DefaultService) Send(ctx context.Context, notif Notification) error {
 			if s.push == nil {
 				continue
 			}
-			if err := s.sendPush(ctx, notif); err != nil {
-				return err
-			}
+			failures = append(failures, s.sendPush(ctx, notif)...)
 		case ChannelEmail:
 			if s.email == nil {
 				continue
 			}
 			if err := s.email.Send(ctx, notif, notif.UserAddress); err != nil {
-				return err
+				failures = append(failures, DeliveryFailure{
+					Channel:   ChannelEmail,
+					Target:    notif.UserAddress,
+					Err:       err,
+					Retryable: true,
+				})
 			}
 		case ChannelInApp:
 			// already stored/published
 		}
 	}
 
-	return nil
+	return buildDeliveryError(notif.ID, failures)
 }
 
 // SendBatch sends multiple notifications.
 func (s *DefaultService) SendBatch(ctx context.Context, notifs []Notification) error {
+	var errs []error
 	for _, notif := range notifs {
 		if err := s.Send(ctx, notif); err != nil {
-			return err
+			errs = append(errs, err)
 		}
 	}
-	return nil
+	return errors.Join(errs...)
 }
 
 // GetUserNotifications returns notifications for a user.
@@ -152,19 +213,19 @@ func (s *DefaultService) UpdatePreferences(ctx context.Context, userAddr string,
 		return nil
 	}
 	prefs.UserAddress = userAddr
-	return s.prefs.Put(ctx, prefs)
+	return s.prefs.Put(ctx, normalizePreferences(prefs))
 }
 
 // GetPreferences returns preferences for a user.
 func (s *DefaultService) GetPreferences(ctx context.Context, userAddr string) (Preferences, error) {
 	if s.prefs == nil {
-		return s.defaultPrefs, nil
+		return clonePreferences(s.defaultPrefs), nil
 	}
 	prefs, err := s.prefs.Get(ctx, userAddr)
 	if err != nil {
-		return s.defaultPrefs, nil
+		return clonePreferences(s.defaultPrefs), nil
 	}
-	return prefs, nil
+	return normalizePreferences(prefs), nil
 }
 
 // RegisterDevice stores a device token.
@@ -191,9 +252,18 @@ func (s *DefaultService) ListDevices(ctx context.Context, userAddr string) ([]De
 	return s.devices.List(ctx, userAddr)
 }
 
-func (s *DefaultService) sendPush(ctx context.Context, notif Notification) error {
+func (s *DefaultService) sendPush(ctx context.Context, notif Notification) []DeliveryFailure {
 	if notif.Topic != "" {
-		return s.push.SendToTopic(ctx, notif.Topic, notif)
+		if err := s.push.SendToTopic(ctx, notif.Topic, notif); err != nil {
+			disposition := classifyPushError(err)
+			return []DeliveryFailure{{
+				Channel:   ChannelPush,
+				Target:    notif.Topic,
+				Err:       err,
+				Retryable: disposition.retryable,
+			}}
+		}
+		return nil
 	}
 
 	if s.devices == nil {
@@ -201,28 +271,53 @@ func (s *DefaultService) sendPush(ctx context.Context, notif Notification) error
 	}
 	devices, err := s.devices.List(ctx, notif.UserAddress)
 	if err != nil {
-		return err
+		return []DeliveryFailure{{
+			Channel:   ChannelPush,
+			Target:    notif.UserAddress,
+			Err:       err,
+			Retryable: true,
+		}}
 	}
+	recorder, _ := s.devices.(DeviceDeliveryRecorder)
+	failures := make([]DeliveryFailure, 0, len(devices))
+	successes := 0
 	for _, device := range devices {
 		if !device.Enabled {
 			continue
 		}
+		var sendErr error
 		if notif.Silent {
-			if err := s.push.SendSilent(ctx, device, notif); err != nil {
-				return err
+			sendErr = s.push.SendSilent(ctx, device, notif)
+		} else {
+			sendErr = s.push.SendToDevice(ctx, device, notif)
+		}
+		if sendErr != nil {
+			disposition := classifyPushError(sendErr)
+			if recorder != nil {
+				_ = recorder.RecordDeliveryFailure(ctx, device.UserAddress, device.Token, sendErr.Error(), s.timeNow(), disposition.disableToken)
 			}
+			failures = append(failures, DeliveryFailure{
+				Channel:   ChannelPush,
+				Target:    describeDevice(device),
+				Err:       sendErr,
+				Retryable: disposition.retryable,
+			})
 			continue
 		}
-		if err := s.push.SendToDevice(ctx, device, notif); err != nil {
-			return err
+		successes++
+		if recorder != nil {
+			_ = recorder.RecordDeliverySuccess(ctx, device.UserAddress, device.Token, s.timeNow())
 		}
 	}
 
-	return nil
+	if successes > 0 {
+		return nil
+	}
+	return failures
 }
 
 func filterChannels(channels []Channel, allow func(Channel) bool) []Channel {
-	filtered := channels[:0]
+	filtered := make([]Channel, 0, len(channels))
 	for _, ch := range channels {
 		if allow(ch) {
 			filtered = append(filtered, ch)
@@ -255,6 +350,10 @@ func isQuietHours(qh *QuietHours, now time.Time, notifType NotificationType) boo
 
 // DefaultPreferences provides sensible defaults for new users.
 func DefaultPreferences() Preferences {
+	return normalizePreferences(defaultPreferencesSeed())
+}
+
+func defaultPreferencesSeed() Preferences {
 	return Preferences{
 		Channels: map[NotificationType][]Channel{
 			NotificationTypeVEIDStatus:    {ChannelEmail, ChannelPush, ChannelInApp},
@@ -273,4 +372,75 @@ func DefaultPreferences() Preferences {
 		DigestEnabled: false,
 		DigestTime:    "09:00",
 	}
+}
+
+func buildDeliveryError(notificationID string, failures []DeliveryFailure) error {
+	if len(failures) == 0 {
+		return nil
+	}
+	return &DeliveryError{
+		NotificationID: notificationID,
+		Failures:       failures,
+	}
+}
+
+type pushFailureDisposition struct {
+	retryable    bool
+	disableToken bool
+}
+
+func classifyPushError(err error) pushFailureDisposition {
+	if err == nil {
+		return pushFailureDisposition{}
+	}
+	lower := strings.ToLower(err.Error())
+	invalidMarkers := []string{
+		"unregistered",
+		"registration-token-not-registered",
+		"notregistered",
+		"baddevicetoken",
+		"bad device token",
+		"invalid token",
+		"invalid registration token",
+		"device token not for topic",
+	}
+	for _, marker := range invalidMarkers {
+		if strings.Contains(lower, marker) {
+			return pushFailureDisposition{disableToken: true}
+		}
+	}
+
+	retryableMarkers := []string{
+		"timeout",
+		"temporarily unavailable",
+		"unavailable",
+		"deadline exceeded",
+		"connection reset",
+		"too many requests",
+		"429",
+		"500",
+		"502",
+		"503",
+		"504",
+	}
+	for _, marker := range retryableMarkers {
+		if strings.Contains(lower, marker) {
+			return pushFailureDisposition{retryable: true}
+		}
+	}
+
+	return pushFailureDisposition{}
+}
+
+func describeDevice(device DeviceToken) string {
+	if device.ID != "" {
+		return device.ID
+	}
+	parts := []string{string(device.Platform), device.AppID}
+	description := strings.Join(parts, "/")
+	description = strings.Trim(description, "/")
+	if description == "" {
+		return device.UserAddress
+	}
+	return description
 }

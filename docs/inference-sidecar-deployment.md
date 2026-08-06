@@ -35,6 +35,10 @@ This provides:
 - Independent scaling and resource management
 - Easier model updates without chain restarts
 
+Production and staging deployments must keep local stub fallback disabled. Do not
+add the sidecar's local fallback flag to deployment commands, manifests, Docker
+arguments, or CI automation. Pull requests are validated against this policy.
+
 **Configuration:**
 ```bash
 # On the validator node
@@ -255,6 +259,10 @@ services:
       retries: 3
 ```
 
+Keep compose or container runtime overrides fail-closed in production. If you
+need local fallback behavior for troubleshooting, use a separate dev/test-only
+override file rather than modifying the production service definition.
+
 ## Kubernetes Deployment
 
 ### Sidecar Container
@@ -306,6 +314,10 @@ spec:
         periodSeconds: 10
 ```
 
+Production overlays should pin the explicit sidecar args they require and should
+not introduce local stub fallback as a runtime override. Treat any production
+deployment that falls back to a local stub as a policy violation.
+
 ## Troubleshooting
 
 ### Common Issues
@@ -324,6 +336,10 @@ spec:
    - Verify sidecar is running
    - Check port configuration
    - Verify network policies
+
+4. **Unexpected fallback behavior**
+   - Production or staging should not be configured to fall back to a local stub
+   - If the sidecar reports fallback mode in production, treat it as a deployment incident
 
 ### Debug Mode
 

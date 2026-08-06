@@ -11,6 +11,15 @@ from ml.training.features.doc_features import DocumentFeatureExtractor, Document
 from ml.training.features.ocr_features import OCRFeatureExtractor, OCRFeatures
 from ml.training.features.metadata_features import MetadataFeatureExtractor, MetadataFeatures
 from ml.training.features.feature_combiner import FeatureExtractor, FeatureVector
+from ml.training.features.canonical_vector import (
+    CanonicalInferenceInputs,
+    DOC_QUALITY_OFFSET,
+    FACE_CONFIDENCE_OFFSET,
+    METADATA_OFFSET,
+    OCR_OFFSET,
+    TOTAL_FEATURE_DIM,
+    assemble_canonical_inference_vector,
+)
 
 
 class TestFaceFeatures:
@@ -202,22 +211,67 @@ class TestFeatureCombiner:
     
     def test_feature_extractor_creation(self):
         """Test creating the combined feature extractor."""
-        config = FeatureConfig(combined_feature_dim=512)
-        extractor = FeatureExtractor(config)
-        
-        assert extractor is not None
-        assert extractor.get_feature_dim() == 512
+        extractor = FeatureExtractor(FeatureConfig())
+
+        assert extractor.get_feature_dim() == TOTAL_FEATURE_DIM
+
+    def test_feature_extractor_rejects_noncanonical_dimension(self):
+        with pytest.raises(ValueError, match="combined_feature_dim"):
+            FeatureExtractor(
+                FeatureConfig(combined_feature_dim=512), strict_production=True
+            )
     
     def test_feature_extraction_from_sample(self, sample_identity_sample):
         """Test extracting features from an identity sample."""
-        config = FeatureConfig(combined_feature_dim=256)
-        extractor = FeatureExtractor(config)
+        extractor = FeatureExtractor(FeatureConfig())
         
         features = extractor.extract_all(sample_identity_sample)
         
         assert features.sample_id == sample_identity_sample.sample_id
         assert features.trust_score == sample_identity_sample.trust_score
-        assert len(features.combined_vector) == 256
+        assert len(features.combined_vector) == TOTAL_FEATURE_DIM
+
+    def test_canonical_positions_and_normalization(self):
+        embedding = np.zeros(512, dtype=np.float32)
+        embedding[511] = -2.0
+        vector = assemble_canonical_inference_vector(CanonicalInferenceInputs(
+            face_embedding=embedding,
+            face_confidence=0.75,
+            doc_quality_score=0.1,
+            sharpness=0.2,
+            brightness=0.3,
+            contrast=0.4,
+            noise_level=0.25,
+            ocr_confidences={"name": 0.6},
+            ocr_field_validation={"name": True},
+            scope_types=("id_document",),
+            scope_count=12,
+            block_height=1_000_001,
+        ))
+
+        assert vector[511] == -1.0
+        assert vector[FACE_CONFIDENCE_OFFSET] == 0.75
+        assert vector[DOC_QUALITY_OFFSET:DOC_QUALITY_OFFSET + 6].tolist() == pytest.approx(
+            [0.1, 0.2, 0.3, 0.4, 0.75, 1.0]
+        )
+        assert vector[OCR_OFFSET:OCR_OFFSET + 2].tolist() == pytest.approx([0.6, 1.0])
+        assert vector[METADATA_OFFSET] == 1.0
+        assert vector[METADATA_OFFSET + 1] == 1.0
+        assert vector[METADATA_OFFSET + 9] == pytest.approx(0.000001)
+        assert vector[METADATA_OFFSET + 10] == 0.0
+
+    @pytest.mark.parametrize("embedding", [np.zeros(511), np.zeros(513)])
+    def test_canonical_rejects_wrong_embedding_dimension(self, embedding):
+        with pytest.raises(ValueError, match="dimension mismatch"):
+            assemble_canonical_inference_vector(CanonicalInferenceInputs(
+                face_embedding=embedding
+            ))
+
+    def test_canonical_rejects_nonfinite_values(self):
+        with pytest.raises(ValueError, match="finite"):
+            assemble_canonical_inference_vector(CanonicalInferenceInputs(
+                face_embedding=np.full(512, np.nan)
+            ))
     
     def test_feature_dataset_arrays(self, sample_feature_dataset):
         """Test getting arrays from feature dataset."""
@@ -244,3 +298,32 @@ class TestFeatureCombiner:
         mean_after = np.mean(train_X_after)
         
         assert abs(mean_after) < abs(mean_before) or abs(mean_after) < 0.1
+
+    def test_selected_sample_failure_is_not_dropped(
+        self, sample_dataset, monkeypatch
+    ):
+        extractor = FeatureExtractor(FeatureConfig(), strict_production=True)
+
+        def fail_extraction(_sample):
+            raise ValueError("broken selected sample")
+
+        monkeypatch.setattr(extractor, "extract_all", fail_extraction)
+        with pytest.raises(RuntimeError, match="selected sample sample_000"):
+            extractor._extract_split(sample_dataset.train)
+
+    def test_invalid_selected_preprocessed_sample_fails(self):
+        extractor = FeatureExtractor(FeatureConfig(), strict_production=True)
+        sample = type("FailedPreprocessed", (), {
+            "success": False,
+            "original_sample": None,
+            "sample_id": "failed_001",
+        })()
+
+        with pytest.raises(RuntimeError, match="selected preprocessed sample failed_001"):
+            extractor.extract_from_preprocessed([sample])
+
+    def test_zero_selected_preprocessed_vectors_fail(self):
+        extractor = FeatureExtractor(FeatureConfig(), strict_production=True)
+
+        with pytest.raises(RuntimeError, match="zero selected vectors"):
+            extractor.extract_from_preprocessed([])

@@ -85,12 +85,90 @@ func (k Keeper) GetActivePipelineVersion(ctx sdk.Context) (*types.PipelineVersio
 	return pv, nil
 }
 
+func (k Keeper) ensurePipelineVersionUsable(
+	ctx sdk.Context,
+	pv *types.PipelineVersion,
+) (*types.ModelManifest, error) {
+	if pv == nil {
+		return nil, types.ErrPipelineVersionNotFound.Wrap("pipeline version is nil")
+	}
+
+	if err := pv.Validate(); err != nil {
+		return nil, types.ErrInvalidPipelineVersion.Wrapf("validation failed: %v", err)
+	}
+
+	if pv.Status != string(types.PipelineVersionStatusActive) {
+		return nil, types.ErrPipelineVersionMismatch.Wrapf(
+			"pipeline version %s is %s, not active",
+			pv.Version,
+			pv.Status,
+		)
+	}
+
+	if pv.ActivatedAt == nil || pv.ActivatedAtHeight <= 0 {
+		return nil, types.ErrPipelineVersionMismatch.Wrapf(
+			"pipeline version %s has not been activated",
+			pv.Version,
+		)
+	}
+
+	if ctx.BlockHeight() < pv.ActivatedAtHeight {
+		return nil, types.ErrPipelineVersionMismatch.Wrapf(
+			"pipeline version %s is not active until height %d",
+			pv.Version,
+			pv.ActivatedAtHeight,
+		)
+	}
+
+	manifest, found := k.GetModelManifest(ctx, pv.ModelManifest.ManifestHash)
+	if !found {
+		return nil, types.ErrModelManifestMismatch.Wrapf(
+			"stored manifest %s not found for pipeline version %s",
+			pv.ModelManifest.ManifestHash,
+			pv.Version,
+		)
+	}
+
+	if err := manifest.Validate(); err != nil {
+		return nil, types.ErrModelManifestMismatch.Wrapf("stored manifest validation failed: %v", err)
+	}
+
+	if manifest.ManifestHash != pv.ModelManifest.ManifestHash {
+		return nil, types.ErrModelManifestMismatch.Wrapf(
+			"pipeline version %s references manifest %s but stored manifest is %s",
+			pv.Version,
+			pv.ModelManifest.ManifestHash,
+			manifest.ManifestHash,
+		)
+	}
+
+	return manifest, nil
+}
+
 // SetActivePipelineVersion sets the active pipeline version
 func (k Keeper) SetActivePipelineVersion(ctx sdk.Context, version string) error {
 	// Verify the version exists
 	pv, found := k.GetPipelineVersion(ctx, version)
 	if !found {
 		return types.ErrPipelineVersionNotFound.Wrapf("version %s not found", version)
+	}
+
+	switch types.PipelineVersionStatus(pv.Status) {
+	case types.PipelineVersionStatusPending, types.PipelineVersionStatusActive:
+	default:
+		return types.ErrPipelineVersionMismatch.Wrapf(
+			"pipeline version %s cannot be activated from status %s",
+			version,
+			pv.Status,
+		)
+	}
+
+	if _, found := k.GetModelManifest(ctx, pv.ModelManifest.ManifestHash); !found {
+		return types.ErrModelManifestMismatch.Wrapf(
+			"model manifest %s not found for pipeline version %s",
+			pv.ModelManifest.ManifestHash,
+			version,
+		)
 	}
 
 	// Update the version status to active
@@ -107,6 +185,12 @@ func (k Keeper) SetActivePipelineVersion(ctx sdk.Context, version string) error 
 	store := ctx.KVStore(k.skey)
 	key := types.ActivePipelineVersionKey()
 	store.Set(key, []byte(version))
+
+	if k.verifierRegistryKeeper != nil {
+		if err := k.verifierRegistryKeeper.MirrorLegacyPipelineActivation(ctx, version, ctx.BlockHeight()); err != nil {
+			return err
+		}
+	}
 
 	k.Logger(ctx).Info("active pipeline version set",
 		"version", version,
@@ -163,6 +247,12 @@ func (k Keeper) RegisterPipelineVersion(
 
 	if err := k.SetPipelineVersion(ctx, pv); err != nil {
 		return nil, err
+	}
+
+	if k.verifierRegistryKeeper != nil {
+		if err := k.verifierRegistryKeeper.MirrorLegacyPipelineVersion(ctx, version, imageHash, modelManifest.ManifestHash); err != nil {
+			return nil, err
+		}
 	}
 
 	return pv, nil
@@ -328,8 +418,13 @@ func (k Keeper) VerifyPipelineVersion(
 		return err
 	}
 
+	manifest, err := k.ensurePipelineVersionUsable(ctx, activePV)
+	if err != nil {
+		return err
+	}
+
 	// Verify version matches
-	if activePV.Version != pipelineVersion {
+	if !versionsMatch(activePV.Version, pipelineVersion) {
 		return types.ErrPipelineVersionMismatch.Wrapf(
 			"expected version %s, got %s",
 			activePV.Version,
@@ -346,7 +441,7 @@ func (k Keeper) VerifyPipelineVersion(
 	}
 
 	// Verify model manifest hash matches
-	if activePV.ModelManifest.ManifestHash != modelManifestHash {
+	if manifest.ManifestHash != modelManifestHash {
 		return types.ErrModelManifestMismatch.Wrapf(
 			"model manifest hash mismatch for version %s",
 			pipelineVersion,
@@ -405,7 +500,7 @@ func (k Keeper) RecordPipelineExecution(
 	record.InputHash = params.InputHash
 	record.OutputHash = params.OutputHash
 	record.ExecutionDurationMs = params.ExecutionDurationMs
-	record.DeterminismVerified = true
+	record.DeterminismVerified = params.InputHash != "" && params.OutputHash != ""
 
 	// Store by request ID
 	if err := k.SetPipelineExecutionRecord(ctx, params.RequestID, record); err != nil {

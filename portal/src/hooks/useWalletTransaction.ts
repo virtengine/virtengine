@@ -7,6 +7,7 @@
 
 import { useState, useCallback } from 'react';
 
+import { signAndBroadcastAmino, type WalletSigner } from '@/lib/api/chain';
 import { useWallet } from '@/lib/portal-adapter';
 
 /**
@@ -220,40 +221,32 @@ export function useWalletTransaction(): UseWalletTransactionResult {
         const adjustedGasLimit = Math.ceil(gasLimit * gasAdjustment);
 
         const fee = estimateFee(adjustedGasLimit);
+        const normalizedMsgs = msgs.map((msg) => {
+          const typed = msg as { typeUrl?: string; type?: string; value?: unknown };
+          const typeUrl = typed.typeUrl || typed.type;
+          if (!typeUrl || typeUrl === 'unknown') {
+            throw new Error('Transaction message is missing a type URL');
+          }
 
-        // Build the sign doc for Amino signing
-        const signDoc = {
-          chain_id: wallet.chainId || '',
-          account_number: '0',
-          sequence: '0',
-          fee: {
-            gas: fee.gas,
-            amount: fee.amount,
-          },
-          msgs: msgs.map((msg) => {
-            const typed = msg as { typeUrl?: string; type?: string; value?: unknown };
-            return {
-              type: typed.typeUrl || typed.type || 'unknown',
-              value: typed.value || msg,
-            };
-          }),
-          memo: options?.memo || '',
-        };
-
-        const signResponse = await wallet.signAmino(signDoc, {
-          preferNoSetFee: options?.preferNoSetFee,
-          preferNoSetMemo: options?.preferNoSetMemo,
+          return {
+            typeUrl,
+            value: typed.value ?? msg,
+          };
         });
 
-        // In a real implementation, this would broadcast to the chain
-        // For now, return a mock successful result
+        const broadcast = await signAndBroadcastAmino(
+          wallet as WalletSigner,
+          normalizedMsgs,
+          options?.memo || '',
+          adjustedGasLimit
+        );
         const result: TransactionResult = {
-          txHash: `${Date.now().toString(16)}${Math.random().toString(16).slice(2)}`,
-          blockHeight: null,
-          code: 0,
-          rawLog: JSON.stringify(signResponse),
-          gasUsed: parseInt(fee.gas, 10),
-          gasWanted: adjustedGasLimit,
+          txHash: broadcast.txHash,
+          blockHeight: broadcast.blockHeight,
+          code: broadcast.code,
+          rawLog: broadcast.rawLog,
+          gasUsed: broadcast.gasUsed || parseInt(fee.gas, 10),
+          gasWanted: broadcast.gasWanted || adjustedGasLimit,
         };
 
         setPreview(null);

@@ -39,7 +39,7 @@ func NewMockHPCScheduler() *MockHPCScheduler {
 	return &MockHPCScheduler{
 		jobs:         make(map[string]*HPCSchedulerJob),
 		callbacks:    make([]HPCJobLifecycleCallback, 0),
-		ProviderAddr: "ve1365yvmc4s7awdyj3n2sav7xfx76adc6dzaf4vr",
+		ProviderAddr: backendManagerTestProviderAddress,
 	}
 }
 
@@ -330,7 +330,7 @@ func createTestJob(jobID string) *hpctypes.HPCJob {
 		JobID:           jobID,
 		OfferingID:      "offering-1",
 		ClusterID:       "cluster-test",
-		ProviderAddress: "ve1365yvmc4s7awdyj3n2sav7xfx76adc6dzaf4vr",
+		ProviderAddress: backendManagerTestProviderAddress,
 		CustomerAddress: "ve18qa2a2ltfyvkyj0ggj3hkvuj6twzyumuv92kx8",
 		State:           hpctypes.JobStatePending,
 		QueueName:       "default",
@@ -356,6 +356,7 @@ func createTestConfig() HPCConfig {
 	config := DefaultHPCConfig()
 	config.Enabled = true
 	config.ClusterID = "cluster-test"
+	config.ProviderAddress = backendManagerTestProviderAddress
 	config.JobService.JobPollInterval = 100 * time.Millisecond
 	config.UsageReporting.ReportInterval = 100 * time.Millisecond
 	config.Retry.MaxRetries = 2
@@ -387,6 +388,7 @@ func TestHPCConfig_Validate(t *testing.T) {
 				c := DefaultHPCConfig()
 				c.Enabled = true
 				c.ClusterID = testClusterID
+				c.ProviderAddress = backendManagerTestProviderAddress
 				return c
 			}(),
 			wantErr: false,
@@ -406,7 +408,8 @@ func TestHPCConfig_Validate(t *testing.T) {
 			config: func() HPCConfig {
 				c := DefaultHPCConfig()
 				c.Enabled = true
-				c.ClusterID = "test"
+				c.ClusterID = testLiteral
+				c.ProviderAddress = backendManagerTestProviderAddress
 				c.SchedulerType = "invalid"
 				return c
 			}(),
@@ -681,7 +684,7 @@ func TestHPCUsageReporter_CreateUsageRecord(t *testing.T) {
 		ReportInterval: time.Minute,
 		BatchSize:      10,
 	}
-	signer := NewMockSigner("ve1365yvmc4s7awdyj3n2sav7xfx76adc6dzaf4vr")
+	signer := NewMockSigner(backendManagerTestProviderAddress)
 	reporter := NewHPCUsageReporter(config, "test-cluster", signer)
 
 	job := &HPCSchedulerJob{

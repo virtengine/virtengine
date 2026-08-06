@@ -29,6 +29,7 @@ import {
   NodeMetadata,
   Params,
   SchedulingDecision,
+  SchedulingMetrics,
 } from "./types.ts";
 
 /** QueryClusterRequest is the request for Query/Cluster */
@@ -197,6 +198,17 @@ export interface QuerySchedulingDecisionByJobRequest {
 /** QuerySchedulingDecisionByJobResponse is the response for Query/SchedulingDecisionByJob */
 export interface QuerySchedulingDecisionByJobResponse {
   decision: SchedulingDecision | undefined;
+}
+
+/** QuerySchedulingMetricsRequest is the request for Query/SchedulingMetrics */
+export interface QuerySchedulingMetricsRequest {
+  clusterId: string;
+  queueName: string;
+}
+
+/** QuerySchedulingMetricsResponse is the response for Query/SchedulingMetrics */
+export interface QuerySchedulingMetricsResponse {
+  metrics: SchedulingMetrics | undefined;
 }
 
 /** QueryRewardRequest is the request for Query/Reward */
@@ -2351,6 +2363,144 @@ export const QuerySchedulingDecisionByJobResponse: MessageFns<
     const message = createBaseQuerySchedulingDecisionByJobResponse();
     message.decision = (object.decision !== undefined && object.decision !== null)
       ? SchedulingDecision.fromPartial(object.decision)
+      : undefined;
+    return message;
+  },
+};
+
+function createBaseQuerySchedulingMetricsRequest(): QuerySchedulingMetricsRequest {
+  return { clusterId: "", queueName: "" };
+}
+
+export const QuerySchedulingMetricsRequest: MessageFns<
+  QuerySchedulingMetricsRequest,
+  "virtengine.hpc.v1.QuerySchedulingMetricsRequest"
+> = {
+  $type: "virtengine.hpc.v1.QuerySchedulingMetricsRequest" as const,
+
+  encode(message: QuerySchedulingMetricsRequest, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.clusterId !== "") {
+      writer.uint32(10).string(message.clusterId);
+    }
+    if (message.queueName !== "") {
+      writer.uint32(18).string(message.queueName);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): QuerySchedulingMetricsRequest {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseQuerySchedulingMetricsRequest();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.clusterId = reader.string();
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.queueName = reader.string();
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): QuerySchedulingMetricsRequest {
+    return {
+      clusterId: isSet(object.cluster_id) ? globalThis.String(object.cluster_id) : "",
+      queueName: isSet(object.queue_name) ? globalThis.String(object.queue_name) : "",
+    };
+  },
+
+  toJSON(message: QuerySchedulingMetricsRequest): unknown {
+    const obj: any = {};
+    if (message.clusterId !== "") {
+      obj.cluster_id = message.clusterId;
+    }
+    if (message.queueName !== "") {
+      obj.queue_name = message.queueName;
+    }
+    return obj;
+  },
+  fromPartial(object: DeepPartial<QuerySchedulingMetricsRequest>): QuerySchedulingMetricsRequest {
+    const message = createBaseQuerySchedulingMetricsRequest();
+    message.clusterId = object.clusterId ?? "";
+    message.queueName = object.queueName ?? "";
+    return message;
+  },
+};
+
+function createBaseQuerySchedulingMetricsResponse(): QuerySchedulingMetricsResponse {
+  return { metrics: undefined };
+}
+
+export const QuerySchedulingMetricsResponse: MessageFns<
+  QuerySchedulingMetricsResponse,
+  "virtengine.hpc.v1.QuerySchedulingMetricsResponse"
+> = {
+  $type: "virtengine.hpc.v1.QuerySchedulingMetricsResponse" as const,
+
+  encode(message: QuerySchedulingMetricsResponse, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.metrics !== undefined) {
+      SchedulingMetrics.encode(message.metrics, writer.uint32(10).fork()).join();
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): QuerySchedulingMetricsResponse {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseQuerySchedulingMetricsResponse();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.metrics = SchedulingMetrics.decode(reader, reader.uint32());
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): QuerySchedulingMetricsResponse {
+    return { metrics: isSet(object.metrics) ? SchedulingMetrics.fromJSON(object.metrics) : undefined };
+  },
+
+  toJSON(message: QuerySchedulingMetricsResponse): unknown {
+    const obj: any = {};
+    if (message.metrics !== undefined) {
+      obj.metrics = SchedulingMetrics.toJSON(message.metrics);
+    }
+    return obj;
+  },
+  fromPartial(object: DeepPartial<QuerySchedulingMetricsResponse>): QuerySchedulingMetricsResponse {
+    const message = createBaseQuerySchedulingMetricsResponse();
+    message.metrics = (object.metrics !== undefined && object.metrics !== null)
+      ? SchedulingMetrics.fromPartial(object.metrics)
       : undefined;
     return message;
   },

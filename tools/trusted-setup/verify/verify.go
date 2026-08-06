@@ -14,6 +14,7 @@ import (
 	cs "github.com/consensys/gnark/constraint/bn254"
 
 	"github.com/virtengine/virtengine/tools/trusted-setup/coordinator"
+	"github.com/virtengine/virtengine/tools/trusted-setup/participant"
 	"github.com/virtengine/virtengine/tools/trusted-setup/transcript"
 )
 
@@ -28,6 +29,7 @@ type Result struct {
 	VerifyingKeyHash string                 `json:"verifying_key_hash,omitempty"`
 	Phase1Files      []string               `json:"phase1_files"`
 	Phase2Files      []string               `json:"phase2_files"`
+	SignaturesValid  bool                   `json:"signatures_valid"`
 }
 
 // Verify validates the ceremony transcript and contributions within a workspace.
@@ -73,6 +75,7 @@ func Verify(dir string) (*Result, error) {
 	result.Phase2Valid = phase2Valid
 	result.ProvingKeyHash = pkHash
 	result.VerifyingKeyHash = vkHash
+	result.SignaturesValid = true
 
 	return result, nil
 }
@@ -150,6 +153,17 @@ func verifyPhase1(tr *transcript.Transcript, paths []string) (bool, error) {
 			if record.File != "" && filepath.Base(path) != record.File {
 				return false, fmt.Errorf("phase1 file mismatch: %s != %s", record.File, filepath.Base(path))
 			}
+			if err := participant.VerifyContributionSignature(
+				record.Phase,
+				record.ParticipantID,
+				record.PublicKey,
+				record.Attestation,
+				record.Signature,
+				prevBytes,
+				data,
+			); err != nil {
+				return false, fmt.Errorf("phase1 signature verification failed for %s: %w", record.File, err)
+			}
 		}
 
 		prev = next
@@ -217,6 +231,17 @@ func verifyPhase2(state coordinator.State, cfg *coordinator.Config, tr *transcri
 			}
 			if record.File != "" && filepath.Base(path) != record.File {
 				return false, "", "", fmt.Errorf("phase2 file mismatch: %s != %s", record.File, filepath.Base(path))
+			}
+			if err := participant.VerifyContributionSignature(
+				record.Phase,
+				record.ParticipantID,
+				record.PublicKey,
+				record.Attestation,
+				record.Signature,
+				prevBytes,
+				data,
+			); err != nil {
+				return false, "", "", fmt.Errorf("phase2 signature verification failed for %s: %w", record.File, err)
 			}
 		}
 

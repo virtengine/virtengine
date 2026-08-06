@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import YAML from "js-yaml";
+import { load as loadYaml } from "js-yaml";
 import { default as stableStringify } from "json-stable-stringify";
 
 import { MAINNET_ID } from "../../network/config.ts";
@@ -107,9 +107,9 @@ export class SDL {
    * `;
    * const sdl = SDL.fromString(yaml);
    * ```
-   */
+  */
   static fromString(yaml: string, version: NetworkVersion = "beta3", networkId: NetworkId = MAINNET_ID): SDL {
-    const data = YAML.load(yaml) as v3Sdl;
+    const data = loadYaml(yaml) as v3Sdl;
     return new SDL(data, version, networkId);
   }
 

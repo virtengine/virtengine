@@ -1,378 +1,161 @@
-# VEID Verification Service Deployment Guide
+# VEID Verification TEE Deployment
 
-This document describes how to deploy and scale the VEID verification shared infrastructure.
+This guide is the production deployment contract for the TEE-backed VEID verification path defined in `deploy/tee/`.
 
-## Overview
+## Scope
 
-The VEID verification infrastructure consists of several components:
+The deployable package is:
 
-- **Signer Service**: Issues verifiable attestations with key rotation support
-- **Key Storage**: Secure storage for signing keys (Memory, File, Vault, HSM)
-- **Nonce Store**: Replay protection for attestations
-- **Rate Limiter**: Abuse prevention and traffic control
-- **Audit Logger**: Append-only audit trail
-- **Metrics Collector**: Prometheus metrics for monitoring
+- `deploy/tee/kustomization.yaml`
+- `deploy/tee/common-resources.yaml`
+- `deploy/tee/config.yaml`
+- `deploy/tee/secrets.yaml`
+- `deploy/tee/monitoring.yaml`
+- `deploy/tee/sgx-deployment.yaml`
+- `deploy/tee/sev-deployment.yaml`
+- `deploy/tee/validate.sh`
+- `deploy/tee/failure-recovery-drill.sh`
 
-## Architecture
+The package deploys two hardware-backed verifier pools in the `virtengine` namespace:
 
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                     Verification Service                        │
-├─────────────────────────────────────────────────────────────────┤
-│  ┌─────────────┐  ┌─────────────┐  ┌─────────────────────────┐  │
-│  │   Signer    │  │  Rate       │  │   Audit Logger          │  │
-│  │   Service   │  │  Limiter    │  │                         │  │
-│  └──────┬──────┘  └──────┬──────┘  └────────────┬────────────┘  │
-│         │                │                      │               │
-│  ┌──────▼──────┐  ┌──────▼──────┐  ┌───────────▼─────────────┐  │
-│  │   Key       │  │   Redis     │  │   Audit Storage         │  │
-│  │   Storage   │  │             │  │   (File/Redis/ES)       │  │
-│  └─────────────┘  └─────────────┘  └─────────────────────────┘  │
-│         │                                                       │
-│  ┌──────▼──────────────────────────────────────────────────┐   │
-│  │   Nonce Store (Memory/Redis)                             │   │
-│  └──────────────────────────────────────────────────────────┘   │
-└─────────────────────────────────────────────────────────────────┘
-```
+- `tee-enclave-sgx`
+- `tee-enclave-sev-snp`
 
-## Prerequisites
+Shared objects created by the package:
 
-- Go 1.25.5+ for building
-- Redis 6.0+ (for production rate limiting and nonce storage)
-- HashiCorp Vault (optional, for secure key storage)
-- Prometheus (for metrics collection)
-- Grafana (for visualization, optional)
+- `ServiceAccount/tee-enclave`
+- `Service/tee-enclave`
+- `Service/tee-enclave-headless`
+- `PodDisruptionBudget/tee-enclave-pdb`
+- `ConfigMap/tee-enclave-config`
+- `ExternalSecret/tee-attestation-material`
+- `ExternalSecret/tee-measurement-allowlist`
+- `ServiceMonitor/tee-enclave`
+- `PrometheusRule/tee-enclave`
 
-## Configuration
+## Secret Sources
 
-### Signer Service Configuration
+The deployment fails closed until External Secrets sync the required material from AWS Secrets Manager.
 
-```yaml
-# config/verification-signer.yaml
-signer:
-  signer_id: "veid-signer-prod-1"
-  signer_name: "VEID Production Signer"
-  validator_address: "virtenginevaloper1..."
-  
-  key_storage_type: "vault"  # memory, file, vault, hsm
-  key_storage_config:
-    address: "https://vault.internal:8200"
-    token: "${VAULT_TOKEN}"
-    mount_path: "secret"
-    key_path: "veid/signer/keys"
-  
-  default_algorithm: "Ed25519Signature2020"
-  
-  key_policy:
-    max_key_age_seconds: 7776000  # 90 days
-    rotation_overlap_seconds: 604800  # 7 days
-    min_rotation_notice_seconds: 259200  # 3 days
-    max_pending_keys: 2
-    require_successor_key: true
-    allow_emergency_revocation: true
-    key_algorithms:
-      - "Ed25519Signature2020"
-      - "EcdsaSecp256k1Signature2019"
-    min_key_strength: 256
-  
-  audit_log_enabled: true
-  metrics_enabled: true
-  service_endpoint: "https://signer.veid.virtengine.com"
-```
+`ExternalSecret/tee-attestation-material` reads from `virtengine/prod/tee/attestation` and must publish:
 
-### Rate Limiter Configuration
+- `attestation-client-cert.pem`
+- `attestation-client-key.pem`
+- `attestation-ca.pem`
+- `signer-public.pem`
+- `rotation-bundle.json`
 
-```yaml
-# config/verification-ratelimit.yaml
-ratelimit:
-  redis_url: "redis://redis:6379/1"
-  redis_prefix: "virtengine:veid:ratelimit"
-  enabled: true
-  
-  verification_limits:
-    email_verification:
-      requests_per_hour: 10
-      requests_per_day: 50
-      max_failures_per_hour: 5
-      cooldown_minutes: 60
-    
-    sms_verification:
-      requests_per_hour: 5
-      requests_per_day: 20
-      max_failures_per_hour: 3
-      cooldown_minutes: 120
-    
-    facial_verification:
-      requests_per_hour: 20
-      requests_per_day: 100
-      max_failures_per_hour: 10
-      cooldown_minutes: 30
-  
-  abuse_scoring:
-    enabled: true
-    score_threshold_for_captcha: 40
-    score_threshold_for_block: 80
-    score_decay_per_hour: 5
-```
+`ExternalSecret/tee-measurement-allowlist` reads from `virtengine/prod/tee/measurements` and must publish:
 
-### Nonce Store Configuration
+- `measurements.json`
 
-```yaml
-# config/verification-nonce.yaml
-nonce:
-  backend: "redis"  # memory, redis
-  
-  policy:
-    nonce_window_seconds: 3600
-    require_timestamp_binding: true
-    max_clock_skew_seconds: 300
-    max_nonces_per_issuer: 10000
-    require_issuer_binding: true
-    track_nonce_history: true
-  
-  cleanup_interval: "5m"
-  
-  redis:
-    url: "redis://redis:6379/2"
-    prefix: "virtengine:veid:nonce"
-    pool_size: 10
-```
+The SGX and SEV init containers refuse startup when any required file is missing, empty, or still carries forbidden launch-token text.
 
-## Deployment
+## Readiness Model
 
-### Docker Compose (Development)
+Each platform deployment uses three layers of protection:
 
-```yaml
-version: '3.8'
+1. `tee-secret-preflight` validates synced secret files and non-empty measurement allowlists before the main container starts.
+2. `tee-hardware-preflight` validates platform hardware access:
+   - SGX: `/dev/sgx_enclave` or `/dev/sgx/enclave`, plus `/dev/sgx_provision` or `/dev/sgx/provision`
+   - SEV-SNP: `/dev/sev-guest`
+3. The main container exposes:
+   - `startupProbe` on `GET /healthz`
+   - `livenessProbe` on `GET /healthz`
+   - `readinessProbe` on `GET /readyz`
 
-services:
-  verification-signer:
-    image: virtengine/verification-signer:latest
-    ports:
-      - "8080:8080"
-      - "9090:9090"
-    environment:
-      - SIGNER_ID=dev-signer-1
-      - KEY_STORAGE_TYPE=memory
-      - REDIS_URL=redis://redis:6379
-    depends_on:
-      - redis
+The operational meaning is:
 
-  redis:
-    image: redis:7-alpine
-    ports:
-      - "6379:6379"
-    volumes:
-      - redis_data:/data
+- no secret sync: pod never starts
+- bad hardware mapping: pod never starts
+- stale or broken runtime: pod starts but never becomes ready
+- repeated runtime failure: pod is restarted by liveness
 
-volumes:
-  redis_data:
-```
+## Deployment Procedure
 
-### Kubernetes (Production)
-
-```yaml
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: verification-signer
-  namespace: virtengine-veid
-spec:
-  replicas: 3
-  selector:
-    matchLabels:
-      app: verification-signer
-  template:
-    metadata:
-      labels:
-        app: verification-signer
-      annotations:
-        prometheus.io/scrape: "true"
-        prometheus.io/port: "9090"
-    spec:
-      containers:
-      - name: signer
-        image: virtengine/verification-signer:v1.0.0
-        ports:
-        - containerPort: 8080
-          name: http
-        - containerPort: 9090
-          name: metrics
-        env:
-        - name: SIGNER_ID
-          valueFrom:
-            fieldRef:
-              fieldPath: metadata.name
-        - name: VAULT_ADDR
-          value: "https://vault.virtengine.com:8200"
-        - name: VAULT_TOKEN
-          valueFrom:
-            secretKeyRef:
-              name: vault-token
-              key: token
-        resources:
-          requests:
-            cpu: "100m"
-            memory: "128Mi"
-          limits:
-            cpu: "500m"
-            memory: "512Mi"
-        livenessProbe:
-          httpGet:
-            path: /healthz
-            port: 8080
-          initialDelaySeconds: 10
-          periodSeconds: 30
-        readinessProbe:
-          httpGet:
-            path: /readyz
-            port: 8080
-          initialDelaySeconds: 5
-          periodSeconds: 10
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: verification-signer
-  namespace: virtengine-veid
-spec:
-  selector:
-    app: verification-signer
-  ports:
-  - port: 8080
-    targetPort: 8080
-    name: http
-  - port: 9090
-    targetPort: 9090
-    name: metrics
-```
-
-### Vault Configuration
+1. Render and validate the package locally:
 
 ```bash
-# Enable the KV secrets engine
-vault secrets enable -path=secret kv-v2
-
-# Create a policy for the signer
-vault policy write veid-signer - <<EOF
-path "secret/data/veid/signer/*" {
-  capabilities = ["create", "read", "update", "delete", "list"]
-}
-EOF
-
-# Create a role for the signer (if using Kubernetes auth)
-vault write auth/kubernetes/role/veid-signer \
-  bound_service_account_names=verification-signer \
-  bound_service_account_namespaces=virtengine-veid \
-  policies=veid-signer \
-  ttl=1h
+./deploy/tee/validate.sh
 ```
 
-## Scaling Recommendations
+2. Confirm the secret backends contain the current attestation and measurement artifacts:
 
-### Horizontal Scaling
+- `virtengine/prod/tee/attestation`
+- `virtengine/prod/tee/measurements`
 
-The verification signer service is designed for horizontal scaling:
+3. Apply the package:
 
-| Component | Recommendation |
-|-----------|----------------|
-| Signer Service | 3+ replicas behind load balancer |
-| Redis | Redis Cluster with 3+ nodes |
-| Vault | HA deployment with 3+ nodes |
-| Metrics | Prometheus with Thanos for HA |
-
-### Resource Sizing
-
-| Load Level | CPU | Memory | Redis Memory |
-|------------|-----|--------|--------------|
-| Low (<100 req/s) | 0.5 vCPU | 256 MB | 1 GB |
-| Medium (100-1000 req/s) | 2 vCPU | 1 GB | 4 GB |
-| High (1000+ req/s) | 4 vCPU | 2 GB | 8 GB |
-
-### Performance Tuning
-
-1. **Redis Connection Pooling**: Set pool size based on expected concurrency
-2. **Nonce Cleanup**: Adjust cleanup interval based on nonce volume
-3. **Audit Buffer**: Configure buffer size to batch writes efficiently
-4. **Key Caching**: Active keys are cached in memory for performance
-
-## Monitoring
-
-### Key Metrics
-
-| Metric | Description | Alert Threshold |
-|--------|-------------|-----------------|
-| `signer_sign_requests_total` | Total signing requests | - |
-| `signer_sign_latency_seconds` | Signing latency | p99 > 100ms |
-| `signer_key_age_seconds` | Active key age | > 80 days |
-| `nonce_store_size` | Number of tracked nonces | > 80% capacity |
-| `ratelimit_blocked_total` | Blocked requests | Spike detection |
-| `service_health` | Service health status | < 1 |
-
-### Grafana Dashboard
-
-Import the verification dashboard from `deploy/grafana/veid-verification.json`.
-
-### Alerts
-
-```yaml
-groups:
-- name: veid-verification
-  rules:
-  - alert: VerificationSignerUnhealthy
-    expr: virtengine_verification_service_health{service="signer"} < 1
-    for: 5m
-    labels:
-      severity: critical
-    annotations:
-      summary: "Verification signer unhealthy"
-      
-  - alert: VerificationKeyNearExpiry
-    expr: virtengine_verification_signer_key_age_seconds > 6912000  # 80 days
-    for: 1h
-    labels:
-      severity: warning
-    annotations:
-      summary: "Signing key approaching expiration"
-      
-  - alert: VerificationHighErrorRate
-    expr: rate(virtengine_verification_signer_errors_total[5m]) > 0.1
-    for: 5m
-    labels:
-      severity: warning
-    annotations:
-      summary: "High verification error rate"
+```bash
+kubectl apply -k deploy/tee
 ```
 
-## Security Considerations
+4. Wait for External Secrets to reconcile:
 
-1. **Key Storage**: Always use Vault or HSM in production
-2. **Network**: Signer should only be accessible from internal network
-3. **TLS**: Use TLS for all connections (Vault, Redis, API)
-4. **Secrets**: Never log or expose private keys
-5. **Rotation**: Automate key rotation before expiry
-6. **Audit**: Enable audit logging and monitor for anomalies
+```bash
+kubectl get externalsecret -n virtengine tee-attestation-material tee-measurement-allowlist
+kubectl get secret -n virtengine tee-attestation-material tee-measurement-allowlist
+```
 
-## Troubleshooting
+5. Wait for both verifier pools:
 
-### Common Issues
+```bash
+kubectl rollout status deployment/tee-enclave-sgx -n virtengine --timeout=10m
+kubectl rollout status deployment/tee-enclave-sev-snp -n virtengine --timeout=10m
+```
 
-1. **No active key available**
-   - Check key storage connectivity
-   - Verify key generation succeeded
-   - Check for key expiration
+6. Check services and monitoring objects:
 
-2. **Nonce validation failures**
-   - Verify clock synchronization
-   - Check Redis connectivity
-   - Review nonce window settings
+```bash
+kubectl get svc -n virtengine tee-enclave tee-enclave-headless
+kubectl get servicemonitor -n virtengine tee-enclave
+kubectl get prometheusrule -n virtengine tee-enclave
+```
 
-3. **High latency**
-   - Check Redis latency
-   - Review key storage performance
-   - Monitor CPU and memory usage
+## Rotation Contract
 
-4. **Rate limit false positives**
-   - Review rate limit thresholds
-   - Check for abuse score misconfiguration
-   - Verify IP detection is accurate
+Signer and attestation trust material is rotated by updating the backing Secrets Manager entries and forcing an External Secret refresh. The rollout order is:
+
+1. Update `virtengine/prod/tee/attestation`
+2. Update `virtengine/prod/tee/measurements` if the new signer bundle changes approved measurements
+3. Force `ExternalSecret` refresh
+4. Restart one platform deployment at a time
+5. Wait for `rollout status`
+6. Verify no signer or stale-attestation alerts remain firing
+
+Use the drill script to execute the restart and reconciliation flow:
+
+```bash
+./deploy/tee/failure-recovery-drill.sh sgx
+./deploy/tee/failure-recovery-drill.sh sev-snp
+```
+
+## Alert Expectations
+
+`PrometheusRule/tee-enclave` defines the required operator alerts:
+
+- `TEEEnclaveReplicasUnavailable`
+- `TEEEnclaveSignatureFailures`
+- `TEEEnclaveAttestationFailures`
+- `TEEEnclaveStaleAttestations`
+- `TEEEnclaveUnhealthyValidators`
+
+Operator response rules:
+
+- `TEEEnclaveSignatureFailures`: treat as critical signer-path failure; rotate or roll back signer material before re-enabling traffic.
+- `TEEEnclaveAttestationFailures`: treat as critical attestation-path failure; check cert chain, trust roots, and hardware quote freshness.
+- `TEEEnclaveStaleAttestations`: refresh attestation material and restart the affected pool before the 24-hour freshness budget is exceeded further.
+- `TEEEnclaveReplicasUnavailable`: restore at least one SGX replica and one SEV-SNP replica before closing the incident.
+
+## Recovery Expectations
+
+Operators should use the runbook in `_docs/verification-runbook.md` for:
+
+- signer rotation
+- stale attestation recovery
+- External Secret sync failure
+- SGX node loss
+- SEV-SNP node loss
+- platform-by-platform rollback
+
+The deployment is considered production-ready only when both platform deployments pass probes, both External Secrets have synced successfully, and the drill script has completed cleanly for the active platform.

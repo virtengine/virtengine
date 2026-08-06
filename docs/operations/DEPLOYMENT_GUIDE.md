@@ -1,234 +1,208 @@
-# VirtEngine Deployment and Operations Guide
+# VirtEngine Deployment and Recovery Guide
 
-This guide replaces the old "\_run" references and provides a clear path for:
+This guide is the operator-facing path that matches the A18 infrastructure
+automation and the B18 repo-owned deploy and recovery assets.
 
-- Local deployment (single-node development)
-- Multi-node deployment (VMs or bare metal)
-- Kubernetes deployment (multi-node)
-- Validator operations (VEID + consensus)
-- Provider operations (Waldur + listings)
-- Joining an existing cluster (state sync, peers)
+## Canonical Paths
 
-If you only need a local dev environment, start with the localnet section below.
+- Infrastructure parity gate: [`infra/scripts/check-environment-parity.sh`](../../infra/scripts/check-environment-parity.sh)
+- Reviewed Terraform plan/apply wrapper: [`infra/scripts/terraform-run.sh`](../../infra/scripts/terraform-run.sh)
+- Kubernetes platform overlays: [`deploy/kubernetes/overlays`](../../deploy/kubernetes/overlays)
+- ArgoCD bootstrap and applications: [`deploy/argocd`](../../deploy/argocd)
+- DR drill wrapper: [`infra/dr/run-failover-drill.sh`](../../infra/dr/run-failover-drill.sh)
+- Backup and restore scripts: [`scripts/dr`](../../scripts/dr)
+- Rollback scripts: [`scripts/rollback`](../../scripts/rollback)
 
-## Quick Links
+## Deployment Model
 
-- Local dev environment: [Development Environment](../../_docs/development-environment.md)
-- Validator onboarding: [Validator Onboarding](../../_docs/validator-onboarding.md)
-- Provider onboarding: [Provider Guide](../../_docs/provider-guide.md)
-- Provider/Waldur integration: [Provider Daemon Waldur Integration](../../_docs/provider-daemon-waldur-integration.md)
-- Provider ops runbook: [Provider Operations](runbooks/PROVIDER_OPERATIONS.md)
-- State sync bootstrap: [state-sync-bootstrap.sh](../../scripts/state-sync-bootstrap.sh)
-- Kubernetes manifests: [deploy/kubernetes/](../../deploy/kubernetes/)
+- `dev`, `staging`, and `prod` are separate environments with their own
+  Terraform state backends and reviewed-plan workflow approvals.
+- The runtime namespace is `virtengine` in every environment. Environment
+  separation happens at the cluster and Terraform layer, not via suffixed
+  runtime namespaces.
+- Validator workloads schedule onto nodes labeled `role=validator` and
+  `virtengine.com/chain=true`, with the `dedicated=validator:NoSchedule` taint.
+- Provider workloads schedule onto nodes labeled `role=workload`.
+- External secrets resolve from `secret/virtengine/{env}/{service}` and are
+  patched in each Kustomize overlay.
 
-## 1) Deploy the System Locally (Single Node)
+## 1. Validate Infra Parity
 
-VirtEngine ships a localnet script that runs the chain, provider-daemon, portal,
-gateway, and mock services using Docker Compose.
-
-Prerequisites:
-
-- Docker + Docker Compose
-- Go 1.21+ (tests) / Go 1.22+ (localnet script notes)
-- Bash shell (WSL2 on Windows or Git Bash)
-
-Start localnet:
+Run this before any cluster bootstrap or environment rollout:
 
 ```bash
-chmod +x scripts/localnet.sh scripts/init-chain.sh
-./scripts/localnet.sh start
+./infra/scripts/check-environment-parity.sh
 ```
 
-Useful commands:
+The parity gate fails if the Terraform env layout, region layout, workflow
+versions, or critical infra trust configuration drift from the A18 contract.
+
+## 2. Produce a Reviewed Terraform Plan
+
+Use the wrapper instead of direct `terraform plan` or `terraform apply` so the
+artifact set is reproducible and checksum-backed.
 
 ```bash
-./scripts/localnet.sh status
-./scripts/localnet.sh logs
-./scripts/localnet.sh logs virtengine-node
-./scripts/localnet.sh test
-./scripts/localnet.sh stop
-./scripts/localnet.sh update   # Smart rebuild - only changes
-./scripts/localnet.sh restart  # Full restart (all services)
-./scripts/localnet.sh reset    # Destructive - wipes all data# Creates admin in Waldur Portal
-./scripts/localnet.sh create-admin -u myuser -p mypassword -e myuser@example.com
+./infra/scripts/terraform-run.sh plan infra/terraform/environments/staging output/infra/staging-plan
 ```
 
-Notes:
+Review:
 
-- This starts a single validator chain plus supporting services.
-- Use `update` after code changes to rebuild only what changed (preserves chain data).
-- Use `reset` only when you need to wipe all data and start fresh.
-- Windows users should run localnet from WSL2 as documented in
-  [Development Environment](../../_docs/development-environment.md).
+- `output/infra/staging-plan/plan.txt`
+- `output/infra/staging-plan/plan.json`
+- `output/infra/staging-plan/tfplan.sha256`
+- `output/infra/staging-plan/manifest.env`
 
-## 2) Deploy Across Multiple Nodes (VMs or Bare Metal)
-
-Use this when you want a real multi-node devnet without Kubernetes.
-The flow is standard Cosmos SDK: create a shared genesis, collect gentxs,
-distribute `genesis.json`, then start each node with proper peer config.
-
-High-level steps:
-
-1. Build the binary:
-   ```bash
-   make virtengine
-   ```
-2. Initialize a "genesis coordinator" node:
-   ```bash
-   virtengine init "devnet-validator-0" --chain-id devnet-1
-   ```
-3. Create the first validator key + gentx on the coordinator:
-   ```bash
-   virtengine keys add validator-0 --keyring-backend file
-   virtengine genesis add-account $(virtengine keys show validator-0 -a --keyring-backend file) 100000000000uve
-   virtengine genesis gentx validator-0 10000000000uve --chain-id devnet-1 --keyring-backend file
-   ```
-4. For each additional validator:
-   - Run `virtengine init` on that host with the same chain ID.
-   - Create a key and gentx on that host.
-   - Send the gentx file to the coordinator.
-5. On the coordinator, collect gentxs:
-   ```bash
-   virtengine genesis collect
-   ```
-6. Distribute the final `~/.virtengine/config/genesis.json` to every node.
-7. Configure peers in `config.toml` (seeds/persistent_peers) for all nodes.
-8. Start nodes:
-   ```bash
-   virtengine start
-   ```
-
-Tip: for rapid bootstrap, use state sync via `scripts/state-sync-bootstrap.sh`.
-
-## 3) Deploy Across Multiple Nodes (Kubernetes)
-
-The repo includes Kustomize overlays for dev/staging/prod plus ArgoCD apps.
-This is the recommended path for a production-like multi-node deployment.
-
-Options:
-
-- Kustomize: apply manifests directly.
-- ArgoCD: deploy via GitOps using `deploy/argocd/`.
-
-Kustomize (example):
+Apply only the reviewed plan artifact:
 
 ```bash
-kubectl apply -k deploy/kubernetes/overlays/dev
+./infra/scripts/terraform-run.sh apply infra/terraform/environments/staging output/infra/staging-plan
 ```
 
-ArgoCD (example):
+For drift-only checks:
+
+```bash
+./infra/scripts/terraform-run.sh drift infra/terraform/environments/prod output/infra/prod-drift
+```
+
+## 3. Bootstrap ArgoCD
+
+The repo-owned ArgoCD base now pulls the pinned upstream HA install manifest and
+applies the local config, project, and ingress resources in one step:
 
 ```bash
 kubectl apply -k deploy/argocd/base
-kubectl apply -k deploy/argocd/apps
+kubectl apply -f deploy/argocd/apps/applicationsets.yaml
 ```
 
-What gets deployed:
+What this creates:
 
-- `virtengine-node` (validator/full node)
-- `provider-daemon`
-- monitoring stack (optional)
+- ArgoCD control plane in `argocd`
+- `virtengine-platform-{env}` applications that point at
+  `deploy/kubernetes/overlays/{env}`
+- `monitoring-{env}` applications for `deploy/monitoring/overlays/{env}`
 
-Review and customize:
+## 4. Deploy the Platform Manifests
 
-- `deploy/kubernetes/base/*` for core services
-- `deploy/kubernetes/overlays/*` for env-specific overrides
+Direct apply remains available for emergency or break-glass use:
 
-## 4) Become a Validator Operator
+```bash
+kubectl apply -k deploy/kubernetes/overlays/dev
+kubectl apply -k deploy/kubernetes/overlays/staging
+kubectl apply -k deploy/kubernetes/overlays/prod
+```
 
-If you plan to validate blocks and run VEID scoring, start here:
+The overlays now align with the infrastructure model:
 
-- [Validator Onboarding](../../_docs/validator-onboarding.md) (end-to-end setup and operations)
+- the chain node is a valid `StatefulSet`
+- service discovery uses stable names with no overlay name prefixes
+- readiness and liveness probes are defined for validator, provider, and TEE
+  paths
+- production blue/green routing references the real `virtengine` namespace
+- prod-only autoscaling resources no longer point at non-existent RPC workloads
 
-Minimum workflow:
+## 5. Secrets and Runtime Dependencies
 
-1. Install `virtengine` and initialize the node.
-2. Configure P2P/RPC/REST/gRPC ports in `config.toml` and `app.toml`.
-3. Sync the chain (use state sync when joining an existing network).
-4. Create a validator transaction:
-   ```bash
-   virtengine tx staking create-validator ...
-   ```
-5. Set up VEID scoring dependencies (model + runtime) per the onboarding guide.
+Before syncing an environment, ensure these secret paths exist:
 
-Operational essentials:
+- `secret/virtengine/dev/virtengine-node`
+- `secret/virtengine/dev/provider-daemon`
+- `secret/virtengine/dev/database`
+- `secret/virtengine/staging/virtengine-node`
+- `secret/virtengine/staging/provider-daemon`
+- `secret/virtengine/staging/database`
+- `secret/virtengine/prod/virtengine-node`
+- `secret/virtengine/prod/provider-daemon`
+- `secret/virtengine/prod/database`
 
-- Keep validator keys secure (HSM strongly recommended).
-- Do not run two validators with the same key (double-sign risk).
-- Monitor uptime and missed blocks.
+Operator expectation:
 
-## 5) Become a Provider Operator
+- ESO or Vault wiring supplies the secret material.
+- Pods do not rely on blank IRSA stubs in the manifest layer.
+- Provider ingress TLS is handled by the deployed service/backend path instead
+  of an unset ACM annotation.
 
-Providers run the provider-daemon and connect a control plane (Waldur or
-Kubernetes/SLURM adapters) to fulfill on-chain workloads.
+## 6. Backup, Restore, and DR Validation
 
-Start here:
+Run the backup scripts directly when needed:
 
-- [Provider Guide](../../_docs/provider-guide.md)
-- [Provider Daemon Waldur Integration](../../_docs/provider-daemon-waldur-integration.md)
-- [Provider Operations Runbook](runbooks/PROVIDER_OPERATIONS.md)
+```bash
+./scripts/dr/backup-chain-state.sh
+./scripts/dr/backup-provider-state.sh
+./scripts/dr/backup-keys.sh --type all
+```
 
-Minimum workflow:
+Run the continuous DR validation suite:
 
-1. Install `provider-daemon` and create a provider config.
-2. Register your provider on-chain:
-   ```bash
-   virtengine tx provider create ...
-   ```
-3. Register encryption keys for encrypted order payloads:
-   ```bash
-   virtengine tx encryption register-recipient-key ...
-   ```
-4. Connect to your orchestration backend:
-   - Kubernetes adapter for container workloads
-   - SLURM adapter for HPC workloads
-   - Waldur bridge for cloud/HPC control planes
-5. Publish listings (offerings) and start bidding.
+```bash
+./scripts/dr/dr-test.sh --environment staging --report
+```
 
-Waldur note:
+Run a failover drill and keep the emitted evidence bundle:
 
-- Waldur is provider-operated; validators do not run Waldur.
-- The provider-daemon signs callbacks back to chain.
-- See [Provider Daemon Waldur Integration](../../_docs/provider-daemon-waldur-integration.md) for the attach guide and
-  offering mapping (Waldur offering UUIDs to on-chain offering IDs).
+```bash
+./infra/dr/run-failover-drill.sh --mode rehearsal --output-dir output/drill/rehearsal
+./infra/dr/run-failover-drill.sh --mode live --live-validation --output-dir output/drill/live
+```
 
-## 6) Joining an Existing Cluster (Devnet/Testnet/Mainnet)
+Evidence produced by the drill wrapper:
 
-If a network already exists, you need the official chain ID, genesis file,
-and seed/persistent peers from the network operator.
+- `failover-drill.log`
+- `failover-drill-summary.md`
+- `failover-drill-evidence.json`
 
-Steps:
+## 7. Rollback Paths
 
-1. Initialize the node:
-   ```bash
-   virtengine init "my-node" --chain-id <chain-id>
-   ```
-2. Place the official `genesis.json` in `~/.virtengine/config/`.
-3. Configure `seeds` and `persistent_peers` in `config.toml`.
-4. Use state sync for fast bootstrapping:
-   ```bash
-   scripts/state-sync-bootstrap.sh --rpc-servers <rpc1>,<rpc2>
-   ```
-5. Start the node:
-   ```bash
-   virtengine start
-   ```
+### ArgoCD Revision Rollback
 
-Important:
+```bash
+./scripts/rollback/argocd-rollback.sh virtengine-platform-prod --dry-run
+./scripts/rollback/argocd-rollback.sh virtengine-platform-prod --yes
+```
 
-- As of 2026-02-01, public mainnet/testnet deployments are not published in
-  this repo. When they are, the official genesis and seed list will be
-  published alongside the network release notes.
+Artifacts land under `output/rollback/argocd/...` unless `--artifact-dir` is
+provided.
 
-## 7) Operating the System
+### Blue/Green Traffic Shift
 
-For day-2 operations and incident handling, use the existing runbooks:
+Gradual shifts require Prometheus so the script can fail closed on elevated 5xx
+rates:
 
-- Provider ops: [Provider Operations](runbooks/PROVIDER_OPERATIONS.md)
-- Provider deployment troubleshooting: [Provider Deployment](runbooks/provider-deployment.md)
-- Disaster recovery: [Disaster Recovery](../../_docs/disaster-recovery.md)
-- Horizontal scaling: [Horizontal Scaling Guide](../../_docs/horizontal-scaling-guide.md)
+```bash
+PROMETHEUS_URL=https://prometheus.monitoring.svc.cluster.local:9090 \
+./scripts/rollback/blue-green-switch.sh provider-daemon green --mode gradual --yes
+```
 
-Keep validators and providers on compatible versions:
+For emergency break-glass:
 
-- [Compatibility Guide](../COMPATIBILITY.md)
+```bash
+./scripts/rollback/blue-green-switch.sh provider-daemon blue --mode instant --yes
+```
+
+### Terraform Backend State Rollback
+
+```bash
+./scripts/rollback/terraform-rollback.sh prod --steps-back 1 --dry-run
+./scripts/rollback/terraform-rollback.sh prod --steps-back 1 --yes
+```
+
+This script now:
+
+- resolves the real backend bucket/key from `infra/terraform/environments/{env}`
+- downloads the exact target object version
+- captures the current state first
+- pushes the rollback state only on non-dry-run execution
+- generates a reviewed post-rollback plan via `infra/scripts/terraform-run.sh`
+
+## 8. Operator Validation Checklist
+
+Before calling an environment deployable, verify:
+
+1. `infra/scripts/check-environment-parity.sh` passes.
+2. The reviewed Terraform plan artifact exists and matches its checksum.
+3. `kubectl kustomize deploy/kubernetes/overlays/{env}` renders cleanly.
+4. `kubectl kustomize deploy/argocd/base` renders cleanly.
+5. `scripts/dr/dr-test.sh --environment {env} --report` passes for the target
+   environment or has an explicit, recorded blocker.
+6. Rollback operators can run the `--dry-run` mode of each rollback helper
+   without missing dependencies or unresolved inputs.

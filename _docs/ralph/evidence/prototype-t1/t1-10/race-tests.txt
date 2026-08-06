@@ -1,0 +1,3 @@
+command: CGO_ENABLED=1 CC=winlibs-gcc go test -race -count=1 ./x/veid/types ./pkg/inference -run 'InferenceReceiptRejectsTamperedFields|FeatureParity|FeatureSchema|ProductionFeature|FeatureExtractorRejects'
+exit_code: 0
+result: ok github.com/virtengine/virtengine/x/veid/types 1.560s; ok github.com/virtengine/virtengine/pkg/inference 1.482s

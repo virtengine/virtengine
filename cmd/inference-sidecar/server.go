@@ -45,6 +45,9 @@ type InferenceSidecarServer struct {
 	// log is the logger
 	log Logger
 
+	// verification records bundle verification state for readiness reporting.
+	verification *verificationResult
+
 	// Metrics
 	startTime            time.Time
 	totalInferences      atomic.Uint64
@@ -61,7 +64,10 @@ type InferenceSidecarServer struct {
 }
 
 // NewInferenceSidecarServer creates a new inference sidecar server.
-func NewInferenceSidecarServer(config inference.InferenceConfig, servingConfig inference.TFServingConfig, log Logger) (*InferenceSidecarServer, error) {
+func NewInferenceSidecarServer(config inference.InferenceConfig, servingConfig inference.TFServingConfig, manifestPath string, log Logger) (*InferenceSidecarServer, error) {
+	if config.AllowFallbackToStub {
+		return nil, fmt.Errorf("local stub inference fallback is forbidden by the VEID inference sidecar")
+	}
 	// Set determinism environment variables
 	determinism := inference.NewDeterminismController(config.RandomSeed, config.ForceCPU)
 	for k, v := range determinism.GetTensorFlowEnvVars() {
@@ -76,6 +82,31 @@ func NewInferenceSidecarServer(config inference.InferenceConfig, servingConfig i
 		"force_cpu", config.ForceCPU,
 		"random_seed", config.RandomSeed,
 	)
+
+	manifestPath = deriveManifestPath(config.ModelPath, manifestPath)
+	server := &InferenceSidecarServer{
+		config:           config,
+		determinism:      determinism,
+		extractor:        inference.NewFeatureExtractor(inference.DefaultFeatureExtractorConfig()),
+		log:              log,
+		startTime:        time.Now(),
+		latencyHistogram: make(map[string]uint64),
+	}
+
+	verification, err := verifyModelBundle(config.ModelPath, manifestPath, config.ModelVersion, config.ExpectedHash)
+	if err != nil {
+		server.verification = newVerificationFailureResult(manifestPath, err)
+		log.Warn("Model verification failed",
+			"state", server.verification.State,
+			"path", server.verification.FailurePath,
+			"error", server.verification.FailureReason,
+		)
+		return server, nil
+	}
+	server.verification = verification
+	config.ExpectedHash = verification.ModelHash
+	config.ModelVersion = verification.Version
+	server.config = config
 
 	// Create model loader
 	loader := inference.NewModelLoader(config)
@@ -97,16 +128,8 @@ func NewInferenceSidecarServer(config inference.InferenceConfig, servingConfig i
 			config.ExpectedHash, model.GetModelHash())
 	}
 
-	server := &InferenceSidecarServer{
-		config:           config,
-		model:            model,
-		loader:           loader,
-		determinism:      determinism,
-		extractor:        inference.NewFeatureExtractor(inference.DefaultFeatureExtractorConfig()),
-		log:              log,
-		startTime:        time.Now(),
-		latencyHistogram: make(map[string]uint64),
-	}
+	server.model = model
+	server.loader = loader
 
 	inputName := ""
 	outputName := ""
@@ -130,6 +153,22 @@ func NewInferenceSidecarServer(config inference.InferenceConfig, servingConfig i
 	return server, nil
 }
 
+// Readiness returns the current model verification state.
+func (s *InferenceSidecarServer) Readiness() *verificationResult {
+	return s.verification
+}
+
+func (s *InferenceSidecarServer) verificationReady() bool {
+	return s.verification != nil && s.verification.Ready()
+}
+
+func (s *InferenceSidecarServer) readinessMessage() string {
+	if s.verification == nil {
+		return "model verification status unavailable"
+	}
+	return s.verification.StatusMessage()
+}
+
 // Close releases resources held by the server.
 func (s *InferenceSidecarServer) Close() error {
 	if s.loader != nil {
@@ -146,7 +185,17 @@ func (s *InferenceSidecarServer) Close() error {
 func (s *InferenceSidecarServer) GetModelInfo(ctx context.Context, req *inferencepb.GetModelInfoRequest) (*inferencepb.GetModelInfoResponse, error) {
 	s.log.Debug("GetModelInfo called")
 
-	metadata := s.model.GetMetadata()
+	var metadata *inference.ModelMetadata
+	modelVersion := ""
+	modelHash := ""
+	if s.model != nil {
+		metadata = s.model.GetMetadata()
+		modelVersion = s.model.GetVersion()
+		modelHash = s.model.GetModelHash()
+	} else if s.verification != nil {
+		modelVersion = s.verification.Version
+		modelHash = s.verification.ModelHash
+	}
 	tfVersion := ""
 	exportTimestamp := ""
 	if metadata != nil {
@@ -155,8 +204,8 @@ func (s *InferenceSidecarServer) GetModelInfo(ctx context.Context, req *inferenc
 	}
 
 	return &inferencepb.GetModelInfoResponse{
-		Version:           s.model.GetVersion(),
-		Hash:              s.model.GetModelHash(),
+		Version:           modelVersion,
+		Hash:              modelHash,
 		InputDim:          int32(inference.TotalFeatureDim),
 		OutputDim:         1,
 		TensorFlowVersion: tfVersion,
@@ -176,6 +225,15 @@ func (s *InferenceSidecarServer) GetModelInfo(ctx context.Context, req *inferenc
 func (s *InferenceSidecarServer) ComputeScore(ctx context.Context, req *inferencepb.ComputeScoreRequest) (*inferencepb.ComputeScoreResponse, error) {
 	startTime := time.Now()
 	s.totalInferences.Add(1)
+
+	if !s.verificationReady() {
+		s.failedInferences.Add(1)
+		return nil, fmt.Errorf("model verification failed: %s", s.readinessMessage())
+	}
+	if s.model == nil || !s.model.IsLoaded() {
+		s.failedInferences.Add(1)
+		return nil, fmt.Errorf("model not loaded")
+	}
 
 	s.log.Debug("ComputeScore called",
 		"features_len", len(req.Features),
@@ -234,7 +292,10 @@ func (s *InferenceSidecarServer) HealthCheck(ctx context.Context, req *inference
 	status := inferencepb.HealthStatus_HEALTH_STATUS_HEALTHY
 	errorMsg := ""
 
-	if s.model == nil || !s.model.IsLoaded() {
+	if !s.verificationReady() {
+		status = inferencepb.HealthStatus_HEALTH_STATUS_UNHEALTHY
+		errorMsg = s.readinessMessage()
+	} else if s.model == nil || !s.model.IsLoaded() {
 		status = inferencepb.HealthStatus_HEALTH_STATUS_UNHEALTHY
 		errorMsg = "model not loaded"
 	} else if s.servingClient != nil {
@@ -249,11 +310,18 @@ func (s *InferenceSidecarServer) HealthCheck(ctx context.Context, req *inference
 		lastInference = time.Unix(0, ts).Format(time.RFC3339)
 	}
 
+	modelVersion := ""
+	modelHash := ""
+	if s.model != nil {
+		modelVersion = s.model.GetVersion()
+		modelHash = s.model.GetModelHash()
+	}
+
 	return &inferencepb.HealthCheckResponse{
 		Status:                 status,
 		ModelLoaded:            s.model != nil && s.model.IsLoaded(),
-		ModelVersion:           s.model.GetVersion(),
-		ModelHash:              s.model.GetModelHash(),
+		ModelVersion:           modelVersion,
+		ModelHash:              modelHash,
 		UptimeSeconds:          int64(time.Since(s.startTime).Seconds()),
 		LastInferenceTimestamp: lastInference,
 		ErrorMessage:           errorMsg,
@@ -286,14 +354,21 @@ func (s *InferenceSidecarServer) GetMetrics(ctx context.Context, req *inferencep
 	var memStats runtime.MemStats
 	runtime.ReadMemStats(&memStats)
 
+	modelVersion := ""
+	modelHash := ""
+	if s.model != nil {
+		modelVersion = s.model.GetVersion()
+		modelHash = s.model.GetModelHash()
+	}
+
 	return &inferencepb.GetMetricsResponse{
 		TotalInferences:      s.totalInferences.Load(),
 		SuccessfulInferences: s.successfulInferences.Load(),
 		FailedInferences:     s.failedInferences.Load(),
 		AverageLatencyMs:     avgLatency,
 		P99LatencyMs:         p99Latency,
-		ModelVersion:         s.model.GetVersion(),
-		ModelHash:            s.model.GetModelHash(),
+		ModelVersion:         modelVersion,
+		ModelHash:            modelHash,
 		UptimeSeconds:        int64(time.Since(s.startTime).Seconds()),
 		MemoryUsageMB:        float32(memStats.Alloc) / (1024 * 1024),
 		LatencyHistogram:     histogramCopy,

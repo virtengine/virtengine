@@ -52,6 +52,10 @@ export interface MsgRedelegateResponse {
 export interface MsgClaimRewards {
   delegator: string;
   validator: string;
+  /** start_height is the starting block height (inclusive) for reward claims */
+  startHeight: Long;
+  /** end_height is the ending block height (inclusive) for reward claims */
+  endHeight: Long;
 }
 
 /** MsgClaimRewardsResponse is the response for MsgClaimRewards */
@@ -535,7 +539,7 @@ export const MsgRedelegateResponse: MessageFns<
 };
 
 function createBaseMsgClaimRewards(): MsgClaimRewards {
-  return { delegator: "", validator: "" };
+  return { delegator: "", validator: "", startHeight: Long.ZERO, endHeight: Long.ZERO };
 }
 
 export const MsgClaimRewards: MessageFns<MsgClaimRewards, "virtengine.delegation.v1.MsgClaimRewards"> = {
@@ -547,6 +551,12 @@ export const MsgClaimRewards: MessageFns<MsgClaimRewards, "virtengine.delegation
     }
     if (message.validator !== "") {
       writer.uint32(18).string(message.validator);
+    }
+    if (!message.startHeight.equals(Long.ZERO)) {
+      writer.uint32(24).int64(message.startHeight.toString());
+    }
+    if (!message.endHeight.equals(Long.ZERO)) {
+      writer.uint32(32).int64(message.endHeight.toString());
     }
     return writer;
   },
@@ -574,6 +584,22 @@ export const MsgClaimRewards: MessageFns<MsgClaimRewards, "virtengine.delegation
           message.validator = reader.string();
           continue;
         }
+        case 3: {
+          if (tag !== 24) {
+            break;
+          }
+
+          message.startHeight = Long.fromString(reader.int64().toString());
+          continue;
+        }
+        case 4: {
+          if (tag !== 32) {
+            break;
+          }
+
+          message.endHeight = Long.fromString(reader.int64().toString());
+          continue;
+        }
       }
       if ((tag & 7) === 4 || tag === 0) {
         break;
@@ -587,6 +613,8 @@ export const MsgClaimRewards: MessageFns<MsgClaimRewards, "virtengine.delegation
     return {
       delegator: isSet(object.delegator) ? globalThis.String(object.delegator) : "",
       validator: isSet(object.validator) ? globalThis.String(object.validator) : "",
+      startHeight: isSet(object.start_height) ? Long.fromValue(object.start_height) : Long.ZERO,
+      endHeight: isSet(object.end_height) ? Long.fromValue(object.end_height) : Long.ZERO,
     };
   },
 
@@ -598,12 +626,24 @@ export const MsgClaimRewards: MessageFns<MsgClaimRewards, "virtengine.delegation
     if (message.validator !== "") {
       obj.validator = message.validator;
     }
+    if (!message.startHeight.equals(Long.ZERO)) {
+      obj.start_height = (message.startHeight || Long.ZERO).toString();
+    }
+    if (!message.endHeight.equals(Long.ZERO)) {
+      obj.end_height = (message.endHeight || Long.ZERO).toString();
+    }
     return obj;
   },
   fromPartial(object: DeepPartial<MsgClaimRewards>): MsgClaimRewards {
     const message = createBaseMsgClaimRewards();
     message.delegator = object.delegator ?? "";
     message.validator = object.validator ?? "";
+    message.startHeight = (object.startHeight !== undefined && object.startHeight !== null)
+      ? Long.fromValue(object.startHeight)
+      : Long.ZERO;
+    message.endHeight = (object.endHeight !== undefined && object.endHeight !== null)
+      ? Long.fromValue(object.endHeight)
+      : Long.ZERO;
     return message;
   },
 };

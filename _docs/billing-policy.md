@@ -24,7 +24,7 @@ This document defines the billing schema, pricing rules, tax handling, and settl
 ### Invoice Lifecycle
 
 ```
-Draft → Pending → [Paid | Partially Paid | Overdue | Disputed] → [Paid | Cancelled | Refunded]
+draft → pending → [paid | partially paid | overdue | disputed] → [paid | cancelled | refunded]
 ```
 
 ### Invoice Fields
@@ -334,10 +334,25 @@ Customers can set their tax profile:
 ### Dispute Lifecycle
 
 ```
-Open → Under Review → [Resolved | Escalated] → Closed
-                           ↓
-                       Arbitration
+Open → Evidence → Review → [Escalated] → Resolved Pending Appeal → Final
+  └──────────── quarantine/recovery ──────────────────────────────┘
 ```
+
+`x/settlement` is the sole financial-case authority after software upgrade
+`v1.7.0`. Escrow billing disputes, fraud reports, HPC disputes, reviews and
+moderation findings are compatibility projections or typed claims. They cannot
+release, refund, transfer, reward or slash value independently after activation.
+
+One active canonical subject group covers all supplied order, invoice, usage,
+HPC job, settlement, escrow, lease and reservation aliases. Simultaneous filings
+merge into that case. Payout, escrow, unclaimed rewards and capacity remain held
+through review and appeal.
+
+The case records provider/customer financial roles separately from
+claimant/respondent filing roles. Either party may file, but terminal provider
+and customer allocations always route to the committed financial parties.
+Public filings prove party lineage; only application-wired module adapters can
+submit trusted projection claims.
 
 ### Dispute Resolutions
 
@@ -348,6 +363,26 @@ Open → Under Review → [Resolved | Escalated] → Closed
 | `partial_refund` | Partial refund agreed |
 | `mutual_agreement` | Custom settlement |
 | `arbitration` | Third-party decision |
+
+Terminal allocations are multi-denomination `sdk.Coins`. For every denomination
+independently, provider + customer/refund + platform/fees + slash/witness must
+equal the original held exposure exactly. Cross-denomination netting, floating
+point allocation and release before the appeal deadline are prohibited.
+
+### Evidence privacy
+
+Canonical claims store a SHA-256 evidence hash and a bounded encrypted or
+content-addressed reference only. Raw descriptions, evidence files, manifests,
+PII, biometrics, ciphertext payloads and keys must not be copied into public
+case state, events or logs.
+
+### Legacy compatibility
+
+Historical completed billing dispute records remain queryable and immutable.
+Before `v1.7.0`, legacy replay semantics remain available. After activation,
+legacy open/resolve APIs create a projection or request canonical escalation;
+independent money-changing resolution is rejected. Ambiguous migration roots
+remain held and quarantined under the financial-case remediation runbook.
 
 ### Settlement Hooks
 
@@ -513,7 +548,7 @@ Providers submit usage reports via the `UsagePipelineKeeper.SubmitUsageReport` i
 1. Each `ResourceUsage` entry becomes a `LineItem`
 2. Line item amounts are calculated as `quantity × unit_price`
 3. All line items are summed into the invoice subtotal
-4. The invoice is created in `Pending` status with a 30-day due date
+4. The invoice is created in `pending` status with a 30-day due date
 5. A resource breakdown is stored on-chain for audit
 
 **Resource types supported:**
@@ -570,6 +605,25 @@ Reconciliation reports include:
 - Total payouts verified
 - Discrepancy count by type and severity
 - Summary totals (usage amount, invoiced amount, paid out amount)
+
+### Treasury Payout Evidence and Finance Sign-Off
+
+Provider payout completion is not considered final for finance until the off-ramp bridge evidence has been captured and archived. The approval packet is generated from:
+
+- `go test ./pkg/payments/offramp -count=1`
+- `go test -tags "e2e.integration" ./pkg/payments/offramp -count=1`
+- `go test -tags "e2e.integration" ./tests/integration/settlement -run 'TestFiatConversionPipelineSuccess|TestFiatConversionReconciliation' -count=1 -v`
+
+The settlement integration suite emits a `finance-evidence=` JSON line that finance must archive exactly as produced. At minimum, the packet must prove:
+
+- invoice, settlement, payout, and conversion IDs are linked
+- payout and conversion idempotency keys are present
+- the selected off-ramp provider, quote, payout ID, and reference are stable
+- the bridge status and provider status both end in `completed`
+- the payout ledger contains the terminal `completed` entry
+- treasury balance matches the expected platform plus validator fee balance
+
+The operating procedure is defined in [Finance Reconciliation Runbook](runbooks/finance-reconciliation-runbook.md). Billing policy sign-off is invalid if finance relies on a manual spreadsheet or provider portal export without the corresponding `finance-evidence` packet.
 
 ### Export Formats
 

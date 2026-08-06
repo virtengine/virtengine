@@ -142,6 +142,10 @@ type TFRuntimeConfig struct {
 
 	// SidecarTimeout is the timeout for sidecar requests
 	SidecarTimeout time.Duration
+
+	// AllowFallbackToStub is reserved for config parity with non-mlruntime
+	// builds. Real runtime builds do not use a simulated execution path.
+	AllowFallbackToStub bool
 }
 
 // DefaultTFRuntimeConfig returns the default runtime configuration
@@ -163,6 +167,7 @@ func DefaultTFRuntimeConfig() TFRuntimeConfig {
 		HealthCheckInterval:    30 * time.Second,
 		SidecarURL:             "http://localhost:8501",
 		SidecarTimeout:         10 * time.Second,
+		AllowFallbackToStub:    false,
 	}
 }
 

@@ -8,9 +8,12 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"log"
+	"sort"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	sdkmath "cosmossdk.io/math"
@@ -18,6 +21,12 @@ import (
 
 	verrors "github.com/virtengine/virtengine/pkg/errors"
 	"github.com/virtengine/virtengine/pkg/usage"
+)
+
+const (
+	usageTypeCompute = "compute"
+	usageTypeGPU     = "gpu"
+	usageTypeStorage = "storage"
 )
 
 // SettlementConfig configures the settlement pipeline.
@@ -169,6 +178,32 @@ type UsageCorrection struct {
 	Signature string `json:"signature"`
 }
 
+// ReconciliationState is the bounded outcome of comparing two evidence sources.
+type ReconciliationState string
+
+const (
+	ReconciliationStateMatched     ReconciliationState = "matched"
+	ReconciliationStateMismatched  ReconciliationState = "mismatched"
+	ReconciliationStateUnavailable ReconciliationState = "unavailable"
+	ReconciliationStateStale       ReconciliationState = "stale"
+	ReconciliationStateUnresolved  ReconciliationState = "unresolved"
+)
+
+// ReconciliationReasonCode is a stable machine-readable reconciliation reason.
+type ReconciliationReasonCode string
+
+const (
+	ReconciliationReasonExactMatch                     ReconciliationReasonCode = "exact_match"
+	ReconciliationReasonWithinTolerance                ReconciliationReasonCode = "within_tolerance"
+	ReconciliationReasonMetricThresholdExceeded        ReconciliationReasonCode = "metric_threshold_exceeded"
+	ReconciliationReasonProviderEvidenceUnavailable    ReconciliationReasonCode = "provider_evidence_unavailable"
+	ReconciliationReasonIndependentEvidenceUnavailable ReconciliationReasonCode = "independent_evidence_unavailable"
+	ReconciliationReasonProviderEvidenceStale          ReconciliationReasonCode = "provider_evidence_stale"
+	ReconciliationReasonIndependentEvidenceStale       ReconciliationReasonCode = "independent_evidence_stale"
+	ReconciliationReasonPartialEvidence                ReconciliationReasonCode = "partial_evidence"
+	ReconciliationReasonMalformedEvidence              ReconciliationReasonCode = "malformed_evidence"
+)
+
 // ReconciliationResult contains the result of a reconciliation check.
 type ReconciliationResult struct {
 	// AllocationID is the allocation being reconciled.
@@ -180,14 +215,20 @@ type ReconciliationResult struct {
 	// ProviderMetrics is the provider-reported metrics.
 	ProviderMetrics ResourceMetrics `json:"provider_metrics"`
 
+	// ProviderRecordDigest binds the exact off-chain usage record used as evidence.
+	ProviderRecordDigest string `json:"provider_record_digest,omitempty"`
+
 	// WaldurMetrics is the Waldur-reported metrics (if available).
 	WaldurMetrics *ResourceMetrics `json:"waldur_metrics,omitempty"`
 
 	// Discrepancies contains any discrepancies found.
 	Discrepancies []MetricDiscrepancy `json:"discrepancies,omitempty"`
 
-	// InSync indicates if provider and Waldur data are in sync.
-	InSync bool `json:"in_sync"`
+	// State is the explicit reconciliation outcome.
+	State ReconciliationState `json:"state"`
+
+	// ReasonCode is the stable explanation for State.
+	ReasonCode ReconciliationReasonCode `json:"reason_code"`
 
 	// Score is the reconciliation confidence score (0-100).
 	Score int `json:"score"`
@@ -261,6 +302,9 @@ type ChainUsageReport struct {
 	// LeaseID is the lease ID.
 	LeaseID string `json:"lease_id"`
 
+	CustomerAddress string `json:"customer_address"`
+	AllocationID    string `json:"allocation_id,omitempty"`
+
 	// UsageUnits is the number of usage units.
 	UsageUnits uint64 `json:"usage_units"`
 
@@ -278,20 +322,39 @@ type ChainUsageReport struct {
 
 	// Signature is the provider's signature.
 	Signature []byte `json:"signature"`
+
+	RawMetrics       ResourceMetrics `json:"raw_metrics"`
+	ChainID          string          `json:"chain_id,omitempty"`
+	PricingVersion   uint32          `json:"pricing_version"`
+	FormulaVersion   uint32          `json:"formula_version"`
+	ModelVersion     uint32          `json:"model_version"`
+	StreamSequence   uint64          `json:"stream_sequence"`
+	Nonce            []byte          `json:"nonce,omitempty"`
+	IdempotencyKey   []byte          `json:"idempotency_key,omitempty"`
+	ProviderKeyEpoch uint64          `json:"provider_key_epoch"`
+	ProviderKeyID    string          `json:"provider_key_id,omitempty"`
+	IssuedAtHeight   int64           `json:"issued_at_height"`
+	ExpiresAtHeight  int64           `json:"expires_at_height"`
+	IssuedAtUnix     int64           `json:"issued_at_unix"`
+	ExpiresAtUnix    int64           `json:"expires_at_unix"`
+	SignatureVersion uint32          `json:"signature_version"`
 }
 
 // SettlementPipeline coordinates usage reporting to settlement.
 type SettlementPipeline struct {
-	mu sync.RWMutex
+	mu         sync.RWMutex
+	idSequence atomic.Uint64
 
-	cfg         SettlementConfig
-	keyManager  *KeyManager
-	usageMeter  *UsageMeter
-	usageStore  *UsageSnapshotStore
-	chainSubmit ChainUsageSubmitter
+	cfg                   SettlementConfig
+	keyManager            *KeyManager
+	usageMeter            *UsageMeter
+	usageStore            *UsageSnapshotStore
+	chainSubmit           ChainUsageSubmitter
+	settlementEligibility func(*UsageRecord) error
 
 	// pending contains usage records pending settlement.
-	pending map[string]*UsageRecord
+	pending  map[string]*UsageRecord
+	settling map[string]bool
 
 	// disputes contains active disputes.
 	disputes map[string]*UsageDispute
@@ -318,6 +381,13 @@ type SettlementPipeline struct {
 	wg sync.WaitGroup
 }
 
+// SetSettlementEligibility installs the final fail-closed settlement gate.
+func (p *SettlementPipeline) SetSettlementEligibility(check func(*UsageRecord) error) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.settlementEligibility = check
+}
+
 // NewSettlementPipeline creates a new settlement pipeline.
 func NewSettlementPipeline(
 	cfg SettlementConfig,
@@ -333,6 +403,7 @@ func NewSettlementPipeline(
 		usageStore:      usageStore,
 		chainSubmit:     chainSubmit,
 		pending:         make(map[string]*UsageRecord),
+		settling:        make(map[string]bool),
 		disputes:        make(map[string]*UsageDispute),
 		corrections:     make(map[string]*UsageCorrection),
 		anomalies:       make(map[string]*UsageAnomaly),
@@ -382,20 +453,23 @@ func (p *SettlementPipeline) AddPendingUsage(record *UsageRecord) {
 	if record == nil || record.ID == "" {
 		return
 	}
+	snapshot := *record
 
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
-	if existing, ok := p.pending[record.ID]; ok {
-		if bytes.Equal(existing.Hash(), record.Hash()) {
+	if existing, ok := p.pending[snapshot.ID]; ok {
+		if bytes.Equal(existing.Hash(), snapshot.Hash()) {
 			return
 		}
-		p.recordDuplicateConflict(record)
+		p.recordDuplicateConflict(&snapshot)
 		return
 	}
 
-	p.pending[record.ID] = record
-	p.usageStore.Track(record)
+	p.pending[snapshot.ID] = &snapshot
+	if p.usageStore != nil {
+		p.usageStore.Track(&snapshot)
+	}
 }
 
 // GetPendingCount returns the number of pending usage records.
@@ -421,9 +495,18 @@ func (p *SettlementPipeline) CreateDispute(
 	if !ok {
 		return nil, fmt.Errorf("usage record not found: %s", usageRecordID)
 	}
+	if p.settling[usageRecordID] {
+		return nil, fmt.Errorf("usage record settlement is in progress: %s", usageRecordID)
+	}
 
 	now := time.Now()
 	disputeID := p.generateID("dispute", now)
+	reportedUsage := record.Metrics
+	var expectedSnapshot *ResourceMetrics
+	if expectedUsage != nil {
+		copy := *expectedUsage
+		expectedSnapshot = &copy
+	}
 
 	dispute := &UsageDispute{
 		DisputeID:     disputeID,
@@ -432,15 +515,15 @@ func (p *SettlementPipeline) CreateDispute(
 		Initiator:     initiator,
 		Reason:        reason,
 		Evidence:      evidence,
-		ExpectedUsage: expectedUsage,
-		ReportedUsage: &record.Metrics,
+		ExpectedUsage: expectedSnapshot,
+		ReportedUsage: &reportedUsage,
 		Status:        DisputeStatusPending,
 		CreatedAt:     now,
 		ExpiresAt:     now.Add(p.cfg.DisputeWindow),
 	}
 
 	p.disputes[disputeID] = dispute
-	return dispute, nil
+	return cloneUsageDispute(dispute), nil
 }
 
 // ResolveDispute resolves a dispute.
@@ -458,30 +541,30 @@ func (p *SettlementPipeline) ResolveDispute(disputeID string, resolution string,
 	}
 
 	now := time.Now()
-	dispute.Resolution = resolution
-	dispute.ResolvedAt = &now
-
 	if accept {
-		dispute.Status = DisputeStatusResolved
-
-		// Apply correction if expected usage was provided
 		if dispute.ExpectedUsage != nil {
-			if err := p.applyCorrection(dispute); err != nil {
-				log.Printf("[settlement-pipeline] failed to apply correction: %v", err)
+			if err := p.applyCorrection(dispute, resolution); err != nil {
+				return err
 			}
 		}
+		dispute.Status = DisputeStatusResolved
 	} else {
 		dispute.Status = DisputeStatusRejected
 	}
+	dispute.Resolution = resolution
+	dispute.ResolvedAt = &now
 
 	return nil
 }
 
 // applyCorrection applies a usage correction from a dispute.
-func (p *SettlementPipeline) applyCorrection(dispute *UsageDispute) error {
+func (p *SettlementPipeline) applyCorrection(dispute *UsageDispute, resolution string) error {
 	record, ok := p.pending[dispute.UsageRecordID]
 	if !ok {
 		return fmt.Errorf("usage record not found for correction")
+	}
+	if dispute.ExpectedUsage == nil || !validCorrectionMetrics(*dispute.ExpectedUsage) {
+		return errors.New("corrected usage metrics are invalid")
 	}
 
 	now := time.Now()
@@ -493,7 +576,7 @@ func (p *SettlementPipeline) applyCorrection(dispute *UsageDispute) error {
 		DisputeID:        dispute.DisputeID,
 		OriginalMetrics:  record.Metrics,
 		CorrectedMetrics: *dispute.ExpectedUsage,
-		Reason:           dispute.Resolution,
+		Reason:           resolution,
 		AppliedAt:        now,
 	}
 
@@ -510,6 +593,9 @@ func (p *SettlementPipeline) applyCorrection(dispute *UsageDispute) error {
 
 	// Update the usage record with corrected metrics
 	record.Metrics = *dispute.ExpectedUsage
+	if p.usageStore != nil {
+		p.usageStore.Track(record)
+	}
 
 	return nil
 }
@@ -544,7 +630,7 @@ func (p *SettlementPipeline) ProcessUsageToLineItems(record *UsageRecord) ([]*us
 	// Convert Storage usage
 	if record.Metrics.StorageByteSeconds > 0 {
 		storageGBHours := float64(record.Metrics.StorageByteSeconds) / (1024.0 * 1024.0 * 1024.0 * 3600.0)
-		item := p.createLineItem(record, "storage", storageGBHours, "gb-hours", record.PricingInputs.AgreedStorageRate, now)
+		item := p.createLineItem(record, usageTypeStorage, storageGBHours, "gb-hours", record.PricingInputs.AgreedStorageRate, now)
 		if item != nil {
 			items = append(items, item)
 		}
@@ -553,7 +639,7 @@ func (p *SettlementPipeline) ProcessUsageToLineItems(record *UsageRecord) ([]*us
 	// Convert GPU usage
 	if record.Metrics.GPUSeconds > 0 {
 		gpuHours := float64(record.Metrics.GPUSeconds) / 3600.0
-		item := p.createLineItem(record, "gpu", gpuHours, "gpu-hours", record.PricingInputs.AgreedGPURate, now)
+		item := p.createLineItem(record, usageTypeGPU, gpuHours, "gpu-hours", record.PricingInputs.AgreedGPURate, now)
 		if item != nil {
 			items = append(items, item)
 		}
@@ -752,7 +838,7 @@ func (p *SettlementPipeline) GetActiveDisputes() []*UsageDispute {
 	active := make([]*UsageDispute, 0)
 	for _, d := range p.disputes {
 		if d.Status == DisputeStatusPending || d.Status == DisputeStatusReviewing {
-			active = append(active, d)
+			active = append(active, cloneUsageDispute(d))
 		}
 	}
 	return active
@@ -791,26 +877,30 @@ func (p *SettlementPipeline) SubmitUsageToChain(ctx context.Context, record *Usa
 	if p.chainSubmit == nil {
 		return fmt.Errorf("chain submitter not configured")
 	}
+	if record == nil {
+		return fmt.Errorf("usage record is required")
+	}
+	snapshot := *record
+	p.mu.RLock()
+	check := p.settlementEligibility
+	p.mu.RUnlock()
+	if check == nil {
+		return ErrSettlementReconciliationHold
+	}
+	if err := check(&snapshot); err != nil {
+		return err
+	}
 
-	reports := p.buildUsageReports(record)
+	reports := p.buildUsageReports(&snapshot)
 	if len(reports) == 0 {
 		return fmt.Errorf("no usage reports generated")
 	}
 
-	// Sign the report
-	if p.keyManager != nil {
-		hash := record.Hash()
-		sig, err := p.keyManager.Sign(hash)
-		if err == nil {
-			sigBytes, _ := hex.DecodeString(sig.Signature)
-			for _, report := range reports {
-				report.Signature = sigBytes
-			}
-		}
-	}
-
 	for _, report := range reports {
 		if err := p.withRetry(ctx, func() error {
+			if err := check(&snapshot); err != nil {
+				return err
+			}
 			return p.chainSubmit.SubmitUsageReport(ctx, report)
 		}); err != nil {
 			return err
@@ -835,12 +925,12 @@ func (p *SettlementPipeline) buildUsageReports(record *UsageRecord) []*ChainUsag
 
 	storageUnits := usageUnitsFromByteSeconds(record.Metrics.StorageByteSeconds)
 	if storageUnits > 0 {
-		reports = append(reports, p.buildReport(record, "storage", storageUnits, record.PricingInputs.AgreedStorageRate))
+		reports = append(reports, p.buildReport(record, usageTypeStorage, storageUnits, record.PricingInputs.AgreedStorageRate))
 	}
 
 	gpuUnits := usageUnitsFromSeconds(record.Metrics.GPUSeconds)
 	if gpuUnits > 0 {
-		reports = append(reports, p.buildReport(record, "gpu", gpuUnits, record.PricingInputs.AgreedGPURate))
+		reports = append(reports, p.buildReport(record, usageTypeGPU, gpuUnits, record.PricingInputs.AgreedGPURate))
 	}
 
 	networkUnits := usageUnitsFromBytes(record.Metrics.NetworkBytesIn + record.Metrics.NetworkBytesOut)
@@ -857,13 +947,19 @@ func (p *SettlementPipeline) buildUsageReports(record *UsageRecord) []*ChainUsag
 
 func (p *SettlementPipeline) buildReport(record *UsageRecord, usageType string, units uint64, rateStr string) *ChainUsageReport {
 	return &ChainUsageReport{
-		OrderID:     record.DeploymentID,
-		LeaseID:     record.LeaseID,
-		UsageUnits:  units,
-		UsageType:   usageType,
-		PeriodStart: record.StartTime,
-		PeriodEnd:   record.EndTime,
-		UnitPrice:   parseUnitPrice(rateStr),
+		OrderID:         record.DeploymentID,
+		LeaseID:         record.LeaseID,
+		CustomerAddress: record.CustomerID,
+		AllocationID:    record.AllocationID,
+		UsageUnits:      units,
+		UsageType:       usageType,
+		PeriodStart:     record.StartTime,
+		PeriodEnd:       record.EndTime,
+		UnitPrice:       parseUnitPrice(rateStr),
+		RawMetrics:      record.Metrics,
+		PricingVersion:  1,
+		FormulaVersion:  1,
+		ModelVersion:    1,
 	}
 }
 
@@ -872,7 +968,7 @@ func usageUnitsFromMilliSeconds(ms int64) uint64 {
 		return 0
 	}
 	//nolint:gosec // usage metrics should be non-negative
-	return uint64(ms / (1000 * 3600))
+	return uint64((ms-1)/(1000*3600) + 1)
 }
 
 func usageUnitsFromByteSeconds(byteSeconds int64) uint64 {
@@ -880,7 +976,7 @@ func usageUnitsFromByteSeconds(byteSeconds int64) uint64 {
 		return 0
 	}
 	//nolint:gosec // usage metrics should be non-negative
-	return uint64(byteSeconds / (1024 * 1024 * 1024 * 3600))
+	return uint64((byteSeconds-1)/(1024*1024*1024*3600) + 1)
 }
 
 func usageUnitsFromSeconds(seconds int64) uint64 {
@@ -888,7 +984,7 @@ func usageUnitsFromSeconds(seconds int64) uint64 {
 		return 0
 	}
 	//nolint:gosec // usage metrics should be non-negative
-	return uint64(seconds / 3600)
+	return uint64((seconds-1)/3600 + 1)
 }
 
 func usageUnitsFromBytes(bytes int64) uint64 {
@@ -896,7 +992,7 @@ func usageUnitsFromBytes(bytes int64) uint64 {
 		return 0
 	}
 	//nolint:gosec // usage metrics should be non-negative
-	return uint64(bytes / (1024 * 1024 * 1024))
+	return uint64((bytes-1)/(1024*1024*1024) + 1)
 }
 
 func parseUnitPrice(rateStr string) sdk.DecCoin {
@@ -953,15 +1049,15 @@ func (p *SettlementPipeline) calculateUsageUnits(record *UsageRecord) uint64 {
 func (p *SettlementPipeline) determineUsageType(record *UsageRecord) string {
 	// Return the type with highest usage
 	maxUsage := record.Metrics.CPUMilliSeconds
-	usageType := "compute"
+	usageType := usageTypeCompute
 
 	if record.Metrics.GPUSeconds*1000 > maxUsage {
 		maxUsage = record.Metrics.GPUSeconds * 1000
-		usageType = "gpu"
+		usageType = usageTypeGPU
 	}
 	if record.Metrics.StorageByteSeconds/(1024*1024*1024) > maxUsage {
 		maxUsage = record.Metrics.StorageByteSeconds / (1024 * 1024 * 1024)
-		usageType = "storage"
+		usageType = usageTypeStorage
 	}
 	networkBytes := record.Metrics.NetworkBytesIn + record.Metrics.NetworkBytesOut
 	if networkBytes/(1024*1024) > maxUsage {
@@ -978,11 +1074,11 @@ func (p *SettlementPipeline) getPrimaryRate(record *UsageRecord, usageType strin
 	var rateStr string
 
 	switch usageType {
-	case "compute":
+	case usageTypeCompute:
 		rateStr = record.PricingInputs.AgreedCPURate
-	case "gpu":
+	case usageTypeGPU:
 		rateStr = record.PricingInputs.AgreedGPURate
-	case "storage":
+	case usageTypeStorage:
 		rateStr = record.PricingInputs.AgreedStorageRate
 	case "network":
 		rateStr = record.PricingInputs.AgreedNetworkRate
@@ -1026,33 +1122,37 @@ func (p *SettlementPipeline) runLoop(ctx context.Context) {
 
 // processSettlements processes pending settlements.
 func (p *SettlementPipeline) processSettlements(ctx context.Context) {
-	p.mu.Lock()
-	defer p.mu.Unlock()
-
+	p.mu.RLock()
 	if len(p.pending) == 0 {
+		p.mu.RUnlock()
 		return
 	}
-
-	// Group pending records by order
 	byOrder := make(map[string][]*UsageRecord)
 	for _, record := range p.pending {
-		orderID := record.DeploymentID
-		byOrder[orderID] = append(byOrder[orderID], record)
+		snapshot := *record
+		byOrder[snapshot.DeploymentID] = append(byOrder[snapshot.DeploymentID], &snapshot)
 	}
+	disputed := make(map[string]bool)
+	for _, dispute := range p.disputes {
+		if dispute.Status == DisputeStatusPending || dispute.Status == DisputeStatusReviewing {
+			disputed[dispute.UsageRecordID] = true
+		}
+	}
+	check := p.settlementEligibility
+	submitter := p.chainSubmit
+	p.mu.RUnlock()
 
-	// Process each order
-	for orderID, records := range byOrder {
-		// Skip if any records are disputed
+	orderIDs := make([]string, 0, len(byOrder))
+	for orderID := range byOrder {
+		orderIDs = append(orderIDs, orderID)
+	}
+	sort.Strings(orderIDs)
+	for _, orderID := range orderIDs {
+		records := byOrder[orderID]
 		hasDispute := false
 		for _, record := range records {
-			for _, dispute := range p.disputes {
-				if dispute.UsageRecordID == record.ID &&
-					(dispute.Status == DisputeStatusPending || dispute.Status == DisputeStatusReviewing) {
-					hasDispute = true
-					break
-				}
-			}
-			if hasDispute {
+			if disputed[record.ID] {
+				hasDispute = true
 				break
 			}
 		}
@@ -1062,28 +1162,107 @@ func (p *SettlementPipeline) processSettlements(ctx context.Context) {
 			continue
 		}
 
-		// Submit settlement request
+		eligible := check != nil && submitter != nil
+		if check == nil {
+			log.Printf("[settlement-pipeline] holding order %s: reconciliation eligibility is not configured", orderID)
+		} else if submitter == nil {
+			log.Printf("[settlement-pipeline] holding order %s: chain submitter is not configured", orderID)
+		} else {
+			for _, record := range records {
+				if err := check(record); err != nil {
+					log.Printf("[settlement-pipeline] holding order %s for reconciliation: %v", orderID, err)
+					eligible = false
+					break
+				}
+			}
+		}
+		if !eligible {
+			continue
+		}
+		p.mu.Lock()
+		admissionChanged := false
+		for _, record := range records {
+			current, exists := p.pending[record.ID]
+			if !exists || p.settling[record.ID] || !bytes.Equal(current.Hash(), record.Hash()) {
+				admissionChanged = true
+				break
+			}
+			for _, dispute := range p.disputes {
+				if dispute.UsageRecordID == record.ID &&
+					(dispute.Status == DisputeStatusPending || dispute.Status == DisputeStatusReviewing) {
+					admissionChanged = true
+					break
+				}
+			}
+			if admissionChanged {
+				break
+			}
+		}
+		if !admissionChanged {
+			for _, record := range records {
+				p.settling[record.ID] = true
+			}
+		}
+		p.mu.Unlock()
+		if admissionChanged {
+			log.Printf("[settlement-pipeline] holding order %s: usage or dispute changed during eligibility", orderID)
+			continue
+		}
+
 		usageIDs := make([]string, len(records))
 		for i, r := range records {
 			usageIDs[i] = r.ID
 		}
+		sort.Strings(usageIDs)
 
-		if p.chainSubmit != nil {
-			if err := p.withRetry(ctx, func() error {
-				return p.chainSubmit.SubmitSettlementRequest(ctx, orderID, usageIDs, false)
-			}); err != nil {
-				log.Printf("[settlement-pipeline] failed to submit settlement for order %s: %v", orderID, err)
-				continue
+		if err := p.withRetry(ctx, func() error {
+			for _, record := range records {
+				if err := check(record); err != nil {
+					return err
+				}
+			}
+			return submitter.SubmitSettlementRequest(ctx, orderID, usageIDs, false)
+		}); err != nil {
+			p.mu.Lock()
+			for _, record := range records {
+				delete(p.settling, record.ID)
+			}
+			p.mu.Unlock()
+			log.Printf("[settlement-pipeline] failed to submit settlement for order %s: %v", orderID, err)
+			continue
+		}
+
+		p.mu.Lock()
+		for _, r := range records {
+			delete(p.settling, r.ID)
+			if current, ok := p.pending[r.ID]; ok && bytes.Equal(current.Hash(), r.Hash()) {
+				delete(p.pending, r.ID)
 			}
 		}
-
-		// Remove settled records from pending
-		for _, r := range records {
-			delete(p.pending, r.ID)
-		}
+		p.mu.Unlock()
 
 		log.Printf("[settlement-pipeline] settlement submitted for order %s with %d records", orderID, len(records))
 	}
+}
+
+func cloneUsageDispute(dispute *UsageDispute) *UsageDispute {
+	if dispute == nil {
+		return nil
+	}
+	clone := *dispute
+	if dispute.ExpectedUsage != nil {
+		expected := *dispute.ExpectedUsage
+		clone.ExpectedUsage = &expected
+	}
+	if dispute.ReportedUsage != nil {
+		reported := *dispute.ReportedUsage
+		clone.ReportedUsage = &reported
+	}
+	if dispute.ResolvedAt != nil {
+		resolved := *dispute.ResolvedAt
+		clone.ResolvedAt = &resolved
+	}
+	return &clone
 }
 
 // processExpiredDisputes handles expired disputes.
@@ -1103,9 +1282,15 @@ func (p *SettlementPipeline) processExpiredDisputes() {
 
 // generateID generates a unique ID with prefix.
 func (p *SettlementPipeline) generateID(prefix string, timestamp time.Time) string {
-	data := prefix + ":" + timestamp.Format(time.RFC3339Nano)
+	data := fmt.Sprintf("%s:%s:%d", prefix, timestamp.Format(time.RFC3339Nano), p.idSequence.Add(1))
 	hash := sha256.Sum256([]byte(data))
 	return hex.EncodeToString(hash[:8])
+}
+
+func validCorrectionMetrics(metrics ResourceMetrics) bool {
+	return metrics.CPUMilliSeconds >= 0 && metrics.MemoryByteSeconds >= 0 &&
+		metrics.StorageByteSeconds >= 0 && metrics.NetworkBytesIn >= 0 &&
+		metrics.NetworkBytesOut >= 0 && metrics.GPUSeconds >= 0
 }
 
 func (p *SettlementPipeline) recordDuplicateConflict(record *UsageRecord) {

@@ -12,29 +12,37 @@ cluster:
 
 # -- Global settings
 global:
-  # -- Image registry
-  imageRegistry: "ghcr.io/virtengine"
   # -- Image pull secrets
   imagePullSecrets: []
   # -- Storage class for persistent volumes
   storageClass: ""
-  # -- SLURM version tag
-  slurmVersion: "23.02.7"
+
+# -- Utility image used by readiness init containers. Production must provide an exact digest reference.
+utilityImage:
+  reference: ""
+  pullPolicy: IfNotPresent
+
+# -- Numeric identities verified against the selected images before deployment.
+# The chart is a rootless prototype until those image mappings are independently verified.
+securityIdentities:
+  munge: { uid: 1001, gid: 1001 }
+  # -- Shared account required by slurmctld, slurmdbd, and slurmd on shared storage.
+  slurm: { username: slurm, uid: 1002, gid: 1002 }
+  mariadb: { uid: 1004, gid: 1004 }
+  nodeAgent: { uid: 1006, gid: 1006 }
+  utility: { uid: 1007, gid: 1007 }
 
 # -- Munge authentication daemon
 munge:
   # -- Enable munge deployment
   enabled: true
   image:
-    repository: slurm-munge
-    tag: ""  # Defaults to global.slurmVersion
+    reference: ""
     pullPolicy: IfNotPresent
-  # -- Munge key (base64 encoded, auto-generated if empty)
-  key: ""
-  # -- Use existing secret for munge key
+  # -- Name of a pre-provisioned Secret containing the munge key (required when enabled)
   existingSecret: ""
-  # -- Secret key name within the secret
-  secretKeyName: "munge.key"
+  # -- Key in the pre-provisioned Secret (required when enabled)
+  secretKeyName: ""
   resources:
     requests:
       cpu: 50m
@@ -54,8 +62,7 @@ controller:
   # -- Number of controller replicas (1 for single, 2 for HA)
   replicas: 1
   image:
-    repository: slurm-controller
-    tag: ""
+    reference: ""
     pullPolicy: IfNotPresent
   # -- Controller configuration
   config:
@@ -77,17 +84,20 @@ controller:
     priorityWeightQOS: 10000
     # -- Accounting storage (none, slurmdbd)
     accountingStorageType: "accounting_storage/slurmdbd"
-    # -- Job accounting gather type
-    jobAcctGatherType: "jobacct_gather/cgroup"
+    # -- Rootless prototype accounting does not depend on a delegated cgroup namespace
+    jobAcctGatherType: "jobacct_gather/linux"
     # -- Proctrack type
-    proctrackType: "proctrack/cgroup"
+    proctrackType: "proctrack/linuxproc"
     # -- Task plugin
-    taskPlugin: "task/cgroup,task/affinity"
+    taskPlugin: "task/affinity"
   # -- Persistent storage for state
   persistence:
     enabled: true
+    # -- Existing retained PVC to mount instead of creating a StatefulSet claim
+    existingClaim: ""
     size: 10Gi
     storageClass: ""
+    # -- Access mode for generated per-replica claims; ignored when existingClaim is set
     accessMode: ReadWriteOnce
   resources:
     requests:
@@ -121,8 +131,7 @@ database:
   # -- Number of replicas
   replicas: 1
   image:
-    repository: slurm-dbd
-    tag: ""
+    reference: ""
     pullPolicy: IfNotPresent
   # -- Database configuration
   config:
@@ -131,16 +140,19 @@ database:
     port: 3306
     name: "slurm_acct_db"
     user: "slurm"
-    # -- Database password (auto-generated if empty)
-    password: ""
-    # -- Use existing secret for DB credentials
+    # -- Name of a pre-provisioned Secret containing the database password (required when enabled)
     existingSecret: ""
-    secretPasswordKey: "password"
+    # -- Key in the pre-provisioned Secret (required when enabled)
+    secretPasswordKey: ""
   # -- Persistence for slurmdbd state
   persistence:
     enabled: true
+    # -- Existing retained PVC to mount instead of creating a StatefulSet claim
+    existingClaim: ""
     size: 5Gi
     storageClass: ""
+    # -- Access mode for generated per-replica claims; ignored when existingClaim is set
+    accessMode: ReadWriteOnce
   resources:
     requests:
       cpu: 250m
@@ -168,19 +180,21 @@ mariadb:
   # -- Enable internal MariaDB
   enabled: true
   image:
-    repository: mariadb
-    tag: "10.11"
+    reference: ""
     pullPolicy: IfNotPresent
-  # -- Root password (auto-generated if empty)
-  rootPassword: ""
-  # -- Use existing secret
+  # -- Name of a pre-provisioned Secret containing the root password (required when enabled)
   existingSecret: ""
-  secretRootPasswordKey: "root-password"
+  # -- Key in the pre-provisioned Secret (required when enabled)
+  secretRootPasswordKey: ""
   # -- Persistence for database
   persistence:
     enabled: true
+    # -- Existing retained PVC to mount instead of creating a StatefulSet claim
+    existingClaim: ""
     size: 20Gi
     storageClass: ""
+    # -- Access mode for generated per-replica claims; ignored when existingClaim is set
+    accessMode: ReadWriteOnce
   resources:
     requests:
       cpu: 250m
@@ -200,8 +214,7 @@ compute:
   # -- Number of compute node replicas (for statefulset)
   replicas: 2
   image:
-    repository: slurm-compute
-    tag: ""
+    reference: ""
     pullPolicy: IfNotPresent
   # -- Node configuration
   config:
@@ -257,6 +270,7 @@ compute:
 # -- Node pools (additional compute node configurations)
 nodePools: []
   # - name: gpu-nodes
+  #   enabled: true
   #   replicas: 4
   #   cpus: 64
   #   memory: 256000
@@ -276,14 +290,13 @@ partitions:
     default: true
     maxTime: "24:00:00"
     defaultTime: "1:00:00"
-    maxNodes: 32
     state: UP
-    nodes: "compute-[0-31]"  # Auto-generated based on compute.replicas
   - name: debug
     default: false
+    # -- Explicit compute pools: "default" is the built-in compute pool
+    nodePools: ["default"]
     maxTime: "00:30:00"
     defaultTime: "00:15:00"
-    maxNodes: 2
     state: UP
     priority: 10
 
@@ -304,8 +317,7 @@ nodeAgent:
   # -- Enable node agent sidecar on compute nodes
   enabled: true
   image:
-    repository: virtengine-node-agent
-    tag: "0.9.1"
+    reference: ""
     pullPolicy: IfNotPresent
   # -- Agent configuration
   config:
@@ -318,14 +330,12 @@ nodeAgent:
   # -- TLS configuration
   tls:
     enabled: true
-    # -- Use existing secret for TLS certs
+    # -- Name of a pre-provisioned Secret containing client TLS material (required when enabled)
     existingSecret: ""
-    # -- CA certificate
-    caCert: ""
-    # -- Client certificate
-    clientCert: ""
-    # -- Client key
-    clientKey: ""
+    # -- Keys in the pre-provisioned Secret (required when enabled)
+    caCertKey: ""
+    clientCertKey: ""
+    clientKeyKey: ""
   resources:
     requests:
       cpu: 50m
@@ -342,22 +352,6 @@ networkPolicy:
   allowNamespaces: []
   # -- Additional ingress rules
   additionalIngress: []
-
-# -- Pod security
-podSecurityContext:
-  fsGroup: 1000
-  runAsNonRoot: true
-  runAsUser: 1000
-
-# -- Container security
-containerSecurityContext:
-  allowPrivilegeEscalation: false
-  capabilities:
-    drop:
-      - ALL
-  readOnlyRootFilesystem: false
-  runAsNonRoot: true
-  runAsUser: 1000
 
 # -- Service account
 serviceAccount:

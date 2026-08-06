@@ -22,7 +22,7 @@ import {
   selectFilteredCustomerAllocations,
   selectUnreadNotificationCount,
 } from '@/stores/customerDashboardStore';
-import { formatCurrency } from '@/lib/utils';
+import { formatToken } from '@/components/escrow/utils';
 import type { CustomerAllocationStatus } from '@/types/customer';
 import { useTranslation } from 'react-i18next';
 import { useWallet } from '@/lib/portal-adapter';
@@ -138,7 +138,7 @@ export function CustomerDashboardPage() {
         />
         <StatCard
           title={t('Monthly Spend')}
-          value={formatCurrency(stats.monthlySpend)}
+          value={formatToken(stats.monthlySpend, 'UVE')}
           change={stats.spendChange}
         />
         <StatCard

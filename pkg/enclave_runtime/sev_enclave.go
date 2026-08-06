@@ -1,20 +1,13 @@
 // Package enclave_runtime provides TEE enclave implementations.
 //
 // This file implements the AMD SEV-SNP enclave service interface for VirtEngine VEID.
-// The implementation provides POC stubs for SEV-SNP operations including:
+// The implementation provides SEV-SNP runtime, attestation, and key-derivation operations including:
 // - SNP attestation report generation
 // - Memory encryption verification
 // - Launch measurement verification
 // - vTPM-based key derivation
 //
 // Task Reference: VE-2023 - TEE Integration Planning and POC
-//
-// IMPORTANT: This is a POC implementation. Real SEV-SNP hardware calls are stubbed
-// and marked with TODO comments. Full implementation requires:
-// - AMD EPYC processor with SEV-SNP support (Milan or later)
-// - Linux kernel 6.0+ with SNP patches
-// - Access to /dev/sev-guest device
-// - AMD KDS (Key Distribution Server) for VCEK certificates
 package enclave_runtime
 
 import (
@@ -24,9 +17,12 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"strconv"
+	"strings"
 	"sync"
 	"time"
 
+	sevkds "github.com/virtengine/virtengine/pkg/enclave_runtime/sev"
 	"golang.org/x/crypto/hkdf"
 )
 
@@ -197,12 +193,9 @@ type SEVSNPEnclaveServiceImpl struct {
 // Compile-time interface check
 var _ EnclaveService = (*SEVSNPEnclaveServiceImpl)(nil)
 
-// NewSEVSNPEnclaveServiceImpl creates a new SEV-SNP enclave service implementation
-//
-// This is a POC implementation that simulates SEV-SNP operations.
-// For production use, this must be replaced with actual /dev/sev-guest ioctls.
+// NewSEVSNPEnclaveServiceImpl creates a new SEV-SNP enclave service implementation.
 func NewSEVSNPEnclaveServiceImpl(config SEVSNPConfig) (*SEVSNPEnclaveServiceImpl, error) {
-	return NewSEVSNPEnclaveServiceImplWithMode(config, HardwareModeAuto)
+	return NewSEVSNPEnclaveServiceImplWithMode(config, HardwareModeSimulate)
 }
 
 // NewSEVSNPEnclaveServiceImplWithMode creates a new SEV-SNP enclave service with explicit hardware mode
@@ -262,15 +255,20 @@ func (s *SEVSNPEnclaveServiceImpl) Initialize(config RuntimeConfig) error {
 	s.runtimeConfig = config
 	s.startTime = time.Now()
 
-	// TODO: Real SEV-SNP implementation would:
-	// 1. Verify we're running in an SNP guest (check /dev/sev-guest)
-	// 2. Fetch launch measurement from platform
-	// 3. Initialize gRPC server for enclave communication
-	// 4. Set up connection to AMD KDS for VCEK certificates
-
-	// Simulate CVM initialization
-	if err := s.simulateCVMInitialization(); err != nil {
-		return fmt.Errorf("failed to initialize CVM: %w", err)
+	if s.hardwareBackend != nil {
+		if err := s.initializeHardwareCVMLocked(); err != nil {
+			s.lastError = err.Error()
+			return fmt.Errorf("failed to initialize hardware SEV-SNP runtime: %w", err)
+		}
+	} else {
+		// TODO: Real SEV-SNP implementation would:
+		// 1. Verify we're running in an SNP guest (check /dev/sev-guest)
+		// 2. Fetch launch measurement from platform
+		// 3. Initialize gRPC server for enclave communication
+		// 4. Set up connection to AMD KDS for VCEK certificates
+		if err := s.simulateCVMInitialization(); err != nil {
+			return fmt.Errorf("failed to initialize CVM: %w", err)
+		}
 	}
 
 	// Derive enclave keys
@@ -309,6 +307,15 @@ func (s *SEVSNPEnclaveServiceImpl) Score(ctx context.Context, request *ScoringRe
 	}
 
 	startTime := time.Now()
+
+	if s.hardwareBackend != nil {
+		err := unsupportedHardwareOperation(AttestationTypeSEVSNP, "score",
+			"SEV-SNP scoring RPC path is not wired for hardware-selected execution")
+		s.mu.Lock()
+		s.lastError = err.Error()
+		s.mu.Unlock()
+		return nil, err
+	}
 
 	// TODO: Real SEV-SNP implementation would:
 	// 1. Receive encrypted payload via gRPC/vsock
@@ -362,8 +369,8 @@ func (s *SEVSNPEnclaveServiceImpl) GetSigningPubKey() ([]byte, error) {
 
 // GenerateAttestation generates an SNP attestation report
 func (s *SEVSNPEnclaveServiceImpl) GenerateAttestation(reportData []byte) ([]byte, error) {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
+	s.mu.Lock()
+	defer s.mu.Unlock()
 
 	if !s.initialized {
 		return nil, ErrEnclaveNotInitialized
@@ -378,10 +385,9 @@ func (s *SEVSNPEnclaveServiceImpl) GenerateAttestation(reportData []byte) ([]byt
 		attestation, err := s.hardwareBackend.GetAttestation(reportData)
 		if err != nil {
 			s.lastError = fmt.Sprintf("hardware attestation failed: %v", err)
-			// Fall back to simulation
-		} else {
-			return attestation, nil
+			return nil, err
 		}
+		return attestation, nil
 	}
 
 	// TODO: Real SEV-SNP implementation would:
@@ -488,8 +494,8 @@ func (s *SEVSNPEnclaveServiceImpl) GetHardwareMode() HardwareMode {
 
 // DeriveKey derives a key from the SEV-SNP root of trust
 func (s *SEVSNPEnclaveServiceImpl) DeriveKey(context []byte, keySize int) ([]byte, error) {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
+	s.mu.Lock()
+	defer s.mu.Unlock()
 
 	if !s.initialized {
 		return nil, ErrEnclaveNotInitialized
@@ -500,10 +506,9 @@ func (s *SEVSNPEnclaveServiceImpl) DeriveKey(context []byte, keySize int) ([]byt
 		key, err := s.hardwareBackend.DeriveKey(context, keySize)
 		if err != nil {
 			s.lastError = fmt.Sprintf("hardware key derivation failed: %v", err)
-			// Fall back to simulation
-		} else {
-			return key, nil
+			return nil, err
 		}
+		return key, nil
 	}
 
 	// Simulated key derivation
@@ -598,12 +603,20 @@ func (s *SEVSNPEnclaveServiceImpl) FetchVCEKCertificate() ([]byte, error) {
 		return nil, ErrEnclaveNotInitialized
 	}
 
-	// TODO: Real implementation would:
-	// 1. Extract chip_id from attestation report
-	// 2. Query AMD KDS: https://kdsintf.amd.com/vcek/v1/{product_name}/{chip_id}?blSPL=..&teeSPL=..&snpSPL=..&ucodeSPL=..
-	// 3. Cache certificate locally
+	if s.hardwareBackend != nil {
+		kds := sevkds.NewKDSClient(nil)
+		cert, err := kds.GetVCEK(s.chipID[:], sevkds.TCBVersion{
+			BootLoader: s.currentTCB.BootLoader,
+			TEE:        s.currentTCB.TEE,
+			SNP:        s.currentTCB.SNP,
+			Microcode:  s.currentTCB.Microcode,
+		})
+		if err != nil {
+			return nil, fmt.Errorf("failed to fetch VCEK certificate from AMD KDS: %w", err)
+		}
+		return cert.Raw, nil
+	}
 
-	// POC: Return simulated certificate
 	cert := sha512.Sum512(s.chipID[:])
 	return cert[:], nil
 }
@@ -617,18 +630,34 @@ func (s *SEVSNPEnclaveServiceImpl) GenerateExtendedReport(reportData []byte) ([]
 		return nil, nil, ErrEnclaveNotInitialized
 	}
 
-	// Generate base report
+	if s.hardwareBackend != nil {
+		var userData [64]byte
+		copy(userData[:], reportData)
+
+		extended, err := s.hardwareBackend.extReportReq.RequestExtendedReport(userData, 0)
+		if err != nil {
+			return nil, nil, err
+		}
+
+		serialized, err := sevkds.SerializeReport(convertRuntimeReportToSEV(extended.Report))
+		if err != nil {
+			return nil, nil, fmt.Errorf("failed to serialize extended SNP report: %w", err)
+		}
+
+		certChain := [][]byte{
+			append([]byte(nil), extended.VCEKCert...),
+			append([]byte(nil), extended.ASKCert...),
+			append([]byte(nil), extended.ARKCert...),
+		}
+
+		return serialized, certChain, nil
+	}
+
 	report, err := s.simulateSNPReportGeneration(reportData)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	// TODO: Real implementation would:
-	// 1. Use SNP_EXTENDED_REPORT ioctl
-	// 2. Include VCEK certificate chain
-	// 3. Include TCB certificates
-
-	// POC: Return simulated certificate chain
 	vcek, _ := s.FetchVCEKCertificate()
 	ask := sha256Bytes([]byte("AMD_SEV_SIGNING_KEY")) // AMD SEV Signing Key
 	ark := sha256Bytes([]byte("AMD_ROOT_KEY"))        // AMD Root Key
@@ -717,6 +746,32 @@ func (s *SEVSNPEnclaveServiceImpl) hkdfDerive(secret, salt, info []byte, length 
 	key := make([]byte, length)
 	_, _ = reader.Read(key)
 	return key
+}
+
+func (s *SEVSNPEnclaveServiceImpl) initializeHardwareCVMLocked() error {
+	if s.hardwareBackend == nil || !s.hardwareBackend.initialized {
+		return ErrHardwareNotInitialized
+	}
+
+	var userData [64]byte
+	copy(userData[:], []byte("virtengine-sev-init"))
+
+	report, err := s.hardwareBackend.reportReq.RequestReport(userData, 0)
+	if err != nil {
+		return err
+	}
+
+	rootKey, err := s.hardwareBackend.keyReq.RequestKey(SNP_KEY_ROOT_VCEK, SNP_KEY_GUEST_FIELD, 0)
+	if err != nil {
+		return err
+	}
+
+	s.launchDigest = report.LaunchDigest
+	s.chipID = report.ChipID
+	s.guestPolicy = report.Policy
+	s.currentTCB = report.CurrentTCB
+	s.vcekPrivateKey = append(s.vcekPrivateKey[:0], rootKey...)
+	return nil
 }
 
 // simulateCVMScoring simulates scoring inside the SEV-SNP CVM
@@ -880,25 +935,105 @@ func (s *SEVSNPEnclaveServiceImpl) signWithVCEK(data []byte) []byte {
 
 // VerifyReport verifies an SNP attestation report
 func (s *SEVSNPEnclaveServiceImpl) VerifyReport(report []byte) error {
-	if len(report) < 100 {
+	if len(report) < sevsnpMinReportSize {
 		return errors.New("report too short")
 	}
 
-	// TODO: Real implementation would:
-	// 1. Fetch VCEK certificate from AMD KDS
-	// 2. Verify certificate chain (VCEK -> ASK -> ARK)
-	// 3. Verify report signature with VCEK public key
-	// 4. Check TCB version against minimum requirements
-	// 5. Validate guest policy (debug=false, etc.)
-	// 6. Verify launch measurement against allowlist
-
-	// POC: Basic format validation
 	version := binary.LittleEndian.Uint32(report[:4])
 	if version < SNPReportVersion {
 		return fmt.Errorf("unsupported report version: %d", version)
 	}
 
+	if s.hardwareBackend == nil {
+		return errors.New("hardware-backed SEV-SNP attestation is required for validator verification")
+	}
+
+	verifier, err := NewSNPVerifier()
+	if err != nil {
+		return fmt.Errorf("failed to initialize SNP verifier: %w", err)
+	}
+
+	verifyResult, err := verifier.Verify(context.Background(), report, ProductMilan)
+	if err != nil {
+		return fmt.Errorf("SEV-SNP verification failed: %w", err)
+	}
+	if verifyResult == nil || verifyResult.Report == nil {
+		return errors.New("SEV-SNP verification did not return a parsed report")
+	}
+	if !verifyResult.Valid {
+		if len(verifyResult.Errors) == 0 {
+			return errors.New("SEV-SNP attestation verification failed")
+		}
+		return fmt.Errorf("SEV-SNP attestation verification failed: %s", verifyResult.Errors[0])
+	}
+	if !s.config.AllowDebugPolicy && verifyResult.Report.IsDebugPolicy() {
+		return errors.New("debug policy enabled - not secure for production")
+	}
+
+	minimumTCB, err := parseMinimumTCBVersion(s.config.MinTCBVersion)
+	if err != nil {
+		return fmt.Errorf("invalid minimum TCB version: %w", err)
+	}
+	if minimumTCB != nil && !snpTCBMeetsMinimum(verifyResult.Report.CurrentTCB, *minimumTCB) {
+		return fmt.Errorf("reported TCB below configured minimum: have %s want %s", verifyResult.TCBVersion, s.config.MinTCBVersion)
+	}
+
+	if !isZeroBytes(s.launchDigest[:]) && !bytesEqual(verifyResult.Report.Measurement[:], s.launchDigest[:]) {
+		return errors.New("launch digest mismatch")
+	}
+
 	return nil
+}
+
+func parseMinimumTCBVersion(value string) (*SNPTCBVersion, error) {
+	trimmed := strings.TrimSpace(value)
+	if trimmed == "" {
+		return nil, nil
+	}
+
+	parts := strings.Split(trimmed, ".")
+	if len(parts) != 4 {
+		return nil, fmt.Errorf("expected 4 components, got %d", len(parts))
+	}
+
+	parsed := make([]uint8, 4)
+	for i, part := range parts {
+		component, err := strconv.ParseUint(strings.TrimSpace(part), 10, 8)
+		if err != nil {
+			return nil, fmt.Errorf("invalid component %q: %w", part, err)
+		}
+		parsed[i] = uint8(component)
+	}
+
+	return &SNPTCBVersion{
+		BootLoader: parsed[0],
+		TEE:        parsed[1],
+		SNP:        parsed[2],
+		Microcode:  parsed[3],
+	}, nil
+}
+
+func snpTCBMeetsMinimum(current uint64, minimum SNPTCBVersion) bool {
+	currentVersion := SNPTCBVersion{
+		BootLoader: uint8(current & 0xFF),         // #nosec G115 -- masked to one byte
+		TEE:        uint8((current >> 8) & 0xFF),  // #nosec G115 -- masked to one byte
+		SNP:        uint8((current >> 48) & 0xFF), // #nosec G115 -- masked to one byte
+		Microcode:  uint8((current >> 56) & 0xFF), // #nosec G115 -- masked to one byte
+	}
+
+	return currentVersion.BootLoader >= minimum.BootLoader &&
+		currentVersion.TEE >= minimum.TEE &&
+		currentVersion.SNP >= minimum.SNP &&
+		currentVersion.Microcode >= minimum.Microcode
+}
+
+func isZeroBytes(data []byte) bool {
+	for _, b := range data {
+		if b != 0 {
+			return false
+		}
+	}
+	return true
 }
 
 // scrubKeys securely clears keys from memory

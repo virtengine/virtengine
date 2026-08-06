@@ -32,7 +32,11 @@ func (k Keeper) CreateEscrow(
 
 	// Validate expiration
 	params := k.GetParams(ctx)
-	expiresInSeconds := uint64(expiresIn.Seconds())
+	if expiresIn < 0 {
+		return "", types.ErrInvalidEscrow.Wrap("expires_in cannot be negative")
+	}
+	expiresInSecondsInt64 := int64(expiresIn / time.Second)
+	expiresInSeconds := uint64(expiresInSecondsInt64) //nolint:gosec // non-negative duration checked above
 	if expiresInSeconds < params.MinEscrowDuration {
 		return "", types.ErrInvalidEscrow.Wrapf("expires_in must be at least %d seconds", params.MinEscrowDuration)
 	}
@@ -152,6 +156,9 @@ func (k Keeper) ActivateEscrow(ctx sdk.Context, escrowID, leaseID string, recipi
 
 // ReleaseEscrow releases escrow funds to the recipient
 func (k Keeper) ReleaseEscrow(ctx sdk.Context, escrowID string, reason string) error {
+	if caseID, held := k.HasActiveFinancialCase(ctx, "escrow", escrowID); held {
+		return types.ErrDisputeActive.Wrapf("escrow held by canonical case %s", caseID)
+	}
 	escrow, found := k.GetEscrow(ctx, escrowID)
 	if !found {
 		return types.ErrEscrowNotFound.Wrapf("escrow %s not found", escrowID)
@@ -250,6 +257,9 @@ func (k Keeper) ReleaseEscrow(ctx sdk.Context, escrowID string, reason string) e
 
 // RefundEscrow refunds escrow funds to the depositor
 func (k Keeper) RefundEscrow(ctx sdk.Context, escrowID string, reason string) error {
+	if caseID, held := k.HasActiveFinancialCase(ctx, "escrow", escrowID); held {
+		return types.ErrDisputeActive.Wrapf("escrow held by canonical case %s", caseID)
+	}
 	escrow, found := k.GetEscrow(ctx, escrowID)
 	if !found {
 		return types.ErrEscrowNotFound.Wrapf("escrow %s not found", escrowID)
@@ -430,6 +440,9 @@ func (k Keeper) ProcessExpiredEscrows(ctx sdk.Context) error {
 
 	for _, state := range states {
 		k.WithEscrowsByState(ctx, state, func(escrow types.EscrowAccount) bool {
+			if _, held := k.HasActiveFinancialCase(ctx, "escrow", escrow.EscrowID); held {
+				return false
+			}
 			if escrow.CheckExpiry(ctx.BlockTime()) {
 				oldState := escrow.State
 

@@ -3,6 +3,8 @@ package handler
 import (
 	"context"
 	"fmt"
+	"math"
+	"strings"
 
 	"github.com/cosmos/cosmos-sdk/telemetry"
 	sdk "github.com/cosmos/cosmos-sdk/types"
@@ -13,6 +15,13 @@ import (
 	v1 "github.com/virtengine/virtengine/sdk/go/node/market/v1"
 	types "github.com/virtengine/virtengine/sdk/go/node/market/v1beta5"
 	ptypes "github.com/virtengine/virtengine/sdk/go/node/provider/v1beta4"
+	resourcesv1 "github.com/virtengine/virtengine/sdk/go/node/resources/v1"
+	attributesv1 "github.com/virtengine/virtengine/sdk/go/node/types/attributes/v1"
+)
+
+const (
+	marketCPUUnitsPerCore = uint64(1000)
+	marketBytesPerGiB     = uint64(1024 * 1024 * 1024)
 )
 
 type msgServer struct {
@@ -116,6 +125,16 @@ func (ms msgServer) CreateBid(goCtx context.Context, msg *types.MsgCreateBid) (*
 
 func (ms msgServer) CloseBid(goCtx context.Context, msg *types.MsgCloseBid) (*types.MsgCloseBidResponse, error) {
 	ctx := sdk.UnwrapSDKContext(goCtx)
+	cacheCtx, write := ctx.CacheContext()
+	response, err := ms.closeBid(cacheCtx, msg)
+	if err != nil {
+		return nil, err
+	}
+	write()
+	return response, nil
+}
+
+func (ms msgServer) closeBid(ctx sdk.Context, msg *types.MsgCloseBid) (*types.MsgCloseBidResponse, error) {
 
 	bid, found := ms.keepers.Market.GetBid(ctx, msg.ID)
 	if !found {
@@ -128,7 +147,9 @@ func (ms msgServer) CloseBid(goCtx context.Context, msg *types.MsgCloseBid) (*ty
 	}
 
 	if bid.State == types.BidOpen {
-		_ = ms.keepers.Market.OnBidClosed(ctx, bid)
+		if err := ms.keepers.Market.OnBidClosed(ctx, bid); err != nil {
+			return nil, err
+		}
 		return &types.MsgCloseBidResponse{}, nil
 	}
 
@@ -149,11 +170,19 @@ func (ms msgServer) CloseBid(goCtx context.Context, msg *types.MsgCloseBid) (*ty
 		return nil, err
 	}
 
-	_ = ms.keepers.Market.OnLeaseClosed(ctx, lease, v1.LeaseClosed, msg.Reason)
-	_ = ms.keepers.Market.OnBidClosed(ctx, bid)
-	_ = ms.keepers.Market.OnOrderClosed(ctx, order)
+	if err := ms.keepers.Market.OnLeaseClosed(ctx, lease, v1.LeaseClosed, msg.Reason); err != nil {
+		return nil, err
+	}
+	if err := ms.keepers.Market.OnBidClosed(ctx, bid); err != nil {
+		return nil, err
+	}
+	if err := ms.keepers.Market.OnOrderClosed(ctx, order); err != nil {
+		return nil, err
+	}
 
-	_ = ms.keepers.Escrow.PaymentClose(ctx, lease.ID.ToEscrowPaymentID())
+	if err := ms.keepers.Escrow.PaymentClose(ctx, lease.ID.ToEscrowPaymentID()); err != nil {
+		return nil, err
+	}
 
 	telemetry.IncrCounter(1.0, "ve.order_closed")
 
@@ -177,6 +206,16 @@ func (ms msgServer) WithdrawLease(goCtx context.Context, msg *types.MsgWithdrawL
 
 func (ms msgServer) CreateLease(goCtx context.Context, msg *types.MsgCreateLease) (*types.MsgCreateLeaseResponse, error) {
 	ctx := sdk.UnwrapSDKContext(goCtx)
+	cacheCtx, write := ctx.CacheContext()
+	response, err := ms.createLease(cacheCtx, msg)
+	if err != nil {
+		return nil, err
+	}
+	write()
+	return response, nil
+}
+
+func (ms msgServer) createLease(ctx sdk.Context, msg *types.MsgCreateLease) (*types.MsgCreateLeaseResponse, error) {
 
 	bid, found := ms.keepers.Market.GetBid(ctx, msg.BidID)
 	if !found {
@@ -210,7 +249,29 @@ func (ms msgServer) CreateLease(goCtx context.Context, msg *types.MsgCreateLease
 		return &types.MsgCreateLeaseResponse{}, err
 	}
 
-	err = ms.keepers.Escrow.PaymentCreate(ctx, msg.BidID.LeaseID().ToEscrowPaymentID(), provider, bid.Price)
+	if ms.keepers.Resources == nil {
+		return nil, fmt.Errorf("resources keeper is required for lease creation")
+	}
+	capacity, err := marketResourceCapacity(bid.ResourcesOffer)
+	if err != nil {
+		return nil, err
+	}
+	leaseID := msg.BidID.LeaseID()
+	reservationRequest := resourcesv1.ReservationRequest{
+		IdempotencyKey: "market/lease/" + leaseID.String(), RequestId: "market/order/" + order.ID.String(),
+		RequesterAddress: order.ID.Owner, ProviderAddress: msg.BidID.Provider,
+		ResourceClass: resourcesv1.ResourceClass_RESOURCE_CLASS_COMPUTE, Capacity: capacity,
+		ConsumerType: "market_lease", ConsumerId: leaseID.String(), MarketOrderId: order.ID.String(),
+		MarketBidId: bid.ID.String(), MarketLeaseId: leaseID.String(), EscrowId: "market/payment/" + leaseID.String(), Version: 1,
+	}
+	reservation, err := ms.keepers.Resources.Reserve(ctx, reservationRequest)
+	if err != nil {
+		return nil, err
+	}
+	bid.ReservationId = reservation.ReservationId
+	order.ReservationId = reservation.ReservationId
+
+	err = ms.keepers.Escrow.PaymentCreate(ctx, leaseID.ToEscrowPaymentID(), provider, bid.Price)
 	if err != nil {
 		return &types.MsgCreateLeaseResponse{}, err
 	}
@@ -222,6 +283,12 @@ func (ms msgServer) CreateLease(goCtx context.Context, msg *types.MsgCreateLease
 
 	ms.keepers.Market.OnOrderMatched(ctx, order)
 	ms.keepers.Market.OnBidMatched(ctx, bid)
+	if _, err = ms.keepers.Resources.ActivateReservation(ctx, reservation.ReservationId, resourcesv1.ReservationLink{
+		ConsumerType: "market_lease", ConsumerId: leaseID.String(), MarketOrderId: order.ID.String(),
+		MarketBidId: bid.ID.String(), MarketLeaseId: leaseID.String(), EscrowId: "market/payment/" + leaseID.String(),
+	}); err != nil {
+		return nil, err
+	}
 
 	// close losing bids
 	ms.keepers.Market.WithBidsForOrder(ctx, msg.BidID.OrderID(), types.BidOpen, func(cbid types.Bid) bool {
@@ -232,12 +299,25 @@ func (ms msgServer) CreateLease(goCtx context.Context, msg *types.MsgCreateLease
 		}
 		return false
 	})
+	if err != nil {
+		return nil, err
+	}
 
-	return &types.MsgCreateLeaseResponse{}, nil
+	return &types.MsgCreateLeaseResponse{ReservationId: reservation.ReservationId}, nil
 }
 
 func (ms msgServer) CloseLease(goCtx context.Context, msg *types.MsgCloseLease) (*types.MsgCloseLeaseResponse, error) {
 	ctx := sdk.UnwrapSDKContext(goCtx)
+	cacheCtx, write := ctx.CacheContext()
+	response, err := ms.closeLease(cacheCtx, msg)
+	if err != nil {
+		return nil, err
+	}
+	write()
+	return response, nil
+}
+
+func (ms msgServer) closeLease(ctx sdk.Context, msg *types.MsgCloseLease) (*types.MsgCloseLeaseResponse, error) {
 
 	order, found := ms.keepers.Market.GetOrder(ctx, msg.ID.OrderID())
 	if !found {
@@ -264,10 +344,15 @@ func (ms msgServer) CloseLease(goCtx context.Context, msg *types.MsgCloseLease) 
 		return &types.MsgCloseLeaseResponse{}, v1.ErrOrderClosed
 	}
 
-	_ = ms.keepers.Market.OnLeaseClosed(ctx, lease, v1.LeaseClosed, v1.LeaseClosedReasonOwner)
-	_ = ms.keepers.Market.OnBidClosed(ctx, bid)
-	_ = ms.keepers.Market.OnOrderClosed(ctx, order)
-
+	if err := ms.keepers.Market.OnLeaseClosed(ctx, lease, v1.LeaseClosed, v1.LeaseClosedReasonOwner); err != nil {
+		return nil, err
+	}
+	if err := ms.keepers.Market.OnBidClosed(ctx, bid); err != nil {
+		return nil, err
+	}
+	if err := ms.keepers.Market.OnOrderClosed(ctx, order); err != nil {
+		return nil, err
+	}
 	err := ms.keepers.Escrow.PaymentClose(ctx, lease.ID.ToEscrowPaymentID())
 	if err != nil {
 		return &types.MsgCloseLeaseResponse{}, err
@@ -287,6 +372,143 @@ func (ms msgServer) CloseLease(goCtx context.Context, msg *types.MsgCloseLease) 
 	}
 
 	return &types.MsgCloseLeaseResponse{}, nil
+}
+
+func marketResourceCapacity(offers types.ResourcesOffer) (resourcesv1.ResourceCapacity, error) {
+	capacity := resourcesv1.ResourceCapacity{}
+	for _, offer := range offers {
+		count := int64(offer.Count)
+		if count <= 0 {
+			return capacity, fmt.Errorf("resource offer count must be positive")
+		}
+		if offer.Resources.CPU != nil {
+			units, err := checkedMarketProductUint(offer.Resources.CPU.Units.Value(), uint64(offer.Count))
+			if err != nil {
+				return capacity, err
+			}
+			value, err := checkedMarketUintToInt64(ceilMarketUnits(units, marketCPUUnitsPerCore))
+			if err != nil {
+				return capacity, err
+			}
+			capacity.CpuCores, err = checkedMarketAdd(capacity.CpuCores, value)
+			if err != nil {
+				return capacity, err
+			}
+		}
+		if offer.Resources.Memory != nil {
+			bytes, err := checkedMarketProductUint(offer.Resources.Memory.Quantity.Value(), uint64(offer.Count))
+			if err != nil {
+				return capacity, err
+			}
+			value, err := checkedMarketUintToInt64(ceilMarketUnits(bytes, marketBytesPerGiB))
+			if err != nil {
+				return capacity, err
+			}
+			capacity.MemoryGb, err = checkedMarketAdd(capacity.MemoryGb, value)
+			if err != nil {
+				return capacity, err
+			}
+		}
+		for _, storage := range offer.Resources.Storage {
+			bytes, err := checkedMarketProductUint(storage.Quantity.Value(), uint64(offer.Count))
+			if err != nil {
+				return capacity, err
+			}
+			value, err := checkedMarketUintToInt64(ceilMarketUnits(bytes, marketBytesPerGiB))
+			if err != nil {
+				return capacity, err
+			}
+			capacity.StorageGb, err = checkedMarketAdd(capacity.StorageGb, value)
+			if err != nil {
+				return capacity, err
+			}
+		}
+		if offer.Resources.GPU != nil {
+			value, err := checkedMarketProduct(offer.Resources.GPU.Units.Value(), uint64(offer.Count))
+			if err != nil {
+				return capacity, err
+			}
+			capacity.Gpus, err = checkedMarketAdd(capacity.Gpus, value)
+			if err != nil {
+				return capacity, err
+			}
+			gpuType, err := marketGPUType(offer.Resources.GPU.Attributes)
+			if err != nil {
+				return capacity, err
+			}
+			if value > 0 && gpuType == "" {
+				return capacity, fmt.Errorf("GPU type is required when GPU capacity is nonzero")
+			}
+			if capacity.GpuType != "" && gpuType != "" && capacity.GpuType != gpuType {
+				return capacity, fmt.Errorf("resource offer contains multiple GPU types")
+			}
+			if capacity.GpuType == "" {
+				capacity.GpuType = gpuType
+			}
+		}
+	}
+	if capacity.CpuCores == 0 && capacity.MemoryGb == 0 && capacity.StorageGb == 0 && capacity.Gpus == 0 {
+		return capacity, fmt.Errorf("bid contains no reservable capacity")
+	}
+	return capacity, nil
+}
+
+func checkedMarketProduct(value, count uint64) (int64, error) {
+	if count > 0 && value > uint64(math.MaxInt64)/count {
+		return 0, fmt.Errorf("resource capacity overflow")
+	}
+	return int64(value * count), nil //nolint:gosec // bounded above
+}
+
+func checkedMarketProductUint(value, count uint64) (uint64, error) {
+	if count > 0 && value > math.MaxUint64/count {
+		return 0, fmt.Errorf("resource capacity overflow")
+	}
+	return value * count, nil
+}
+
+func checkedMarketUintToInt64(value uint64) (int64, error) {
+	if value > math.MaxInt64 {
+		return 0, fmt.Errorf("resource capacity overflow")
+	}
+	return int64(value), nil //nolint:gosec // bounded above
+}
+
+func ceilMarketUnits(value, unit uint64) uint64 {
+	if value == 0 {
+		return 0
+	}
+	return 1 + (value-1)/unit
+}
+
+func marketGPUType(attributes attributesv1.Attributes) (string, error) {
+	var gpuType string
+	for _, attribute := range attributes {
+		key := strings.ToLower(strings.TrimSpace(attribute.Key))
+		value := strings.TrimSpace(attribute.Value)
+		candidate := ""
+		switch {
+		case key == "gpu_type" || strings.HasSuffix(key, "/gpu_type"):
+			candidate = value
+		case strings.HasPrefix(key, "vendor/nvidia/model/"):
+			candidate = strings.Split(strings.TrimPrefix(key, "vendor/nvidia/model/"), "/")[0]
+		}
+		if candidate == "" || candidate == "*" {
+			continue
+		}
+		if gpuType != "" && gpuType != candidate {
+			return "", fmt.Errorf("resource offer contains conflicting GPU attributes")
+		}
+		gpuType = candidate
+	}
+	return gpuType, nil
+}
+
+func checkedMarketAdd(current, value int64) (int64, error) {
+	if value < 0 || current > math.MaxInt64-value {
+		return 0, fmt.Errorf("resource capacity overflow")
+	}
+	return current + value, nil
 }
 
 func (ms msgServer) UpdateParams(goCtx context.Context, req *types.MsgUpdateParams) (*types.MsgUpdateParamsResponse, error) {

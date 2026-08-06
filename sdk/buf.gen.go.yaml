@@ -1,0 +1,32 @@
+version: v2
+clean: true
+managed:
+  enabled: false
+plugins:
+  - local: /go/bin/protoc-gen-gocosmos
+    out: .generation/go
+    strategy: directory
+    include_imports: false
+    include_wkt: false
+    opt:
+      - plugins=grpc
+      - Mgoogle/protobuf/any.proto=github.com/cosmos/gogoproto/types/any
+  - local: /go/bin/protoc-gen-grpc-gateway
+    out: .generation/go
+    strategy: directory
+    opt:
+      - logtostderr=true
+      - allow_colon_final_segments=true
+inputs:
+  - directory: proto/node
+    exclude_paths:
+      - proto/node/virtengine/audit/v1beta3
+      - proto/node/virtengine/base/v1beta3
+      - proto/node/virtengine/cert/v1beta3
+      - proto/node/virtengine/deployment/v1beta3
+      - proto/node/virtengine/deployment/v1beta5
+      - proto/node/virtengine/escrow/v1beta3
+      - proto/node/virtengine/market/v1beta4
+      - proto/node/virtengine/market/v2beta1
+      - proto/node/virtengine/provider/v1beta3
+      - proto/node/virtengine/take/v1beta3

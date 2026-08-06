@@ -90,6 +90,10 @@ func (AppModuleBasic) RegisterGRPCGatewayRoutes(clientCtx client.Context, mux *r
 	if err != nil {
 		panic(fmt.Sprintf("couldn't register provider grpc routes: %s", err.Error()))
 	}
+	err = types.RegisterQueryAuditLogHandlerClient(context.Background(), mux, types.NewQueryAuditLogClient(clientCtx))
+	if err != nil {
+		panic(fmt.Sprintf("couldn't register audit log grpc routes: %s", err.Error()))
+	}
 }
 
 // RegisterGRPCRoutes registers the gRPC Gateway routes for the provider module.
@@ -148,10 +152,12 @@ func (am AppModule) QuerierRoute() string {
 // RegisterServices registers the module's services
 func (am AppModule) RegisterServices(cfg module.Configurator) {
 	types.RegisterMsgServer(cfg.MsgServer(), handler.NewMsgServerImpl(am.keeper))
+	types.RegisterMsgServiceServer(cfg.MsgServer(), keeper.NewMsgServer(am.keeper))
 
 	querier := keeper.Querier{Keeper: am.keeper}
 
 	types.RegisterQueryServer(cfg.QueryServer(), querier)
+	types.RegisterQueryAuditLogServer(cfg.QueryServer(), keeper.NewQueryServer(am.keeper))
 }
 
 // RegisterQueryService registers a GRPC query service to respond to the

@@ -16,6 +16,16 @@ import (
 	"time"
 )
 
+func requireEmbeddedCertificateFixture(t *testing.T, name string, err error) bool {
+	t.Helper()
+	if err == nil {
+		return true
+	}
+
+	t.Logf("%s fixture rejected invalid embedded certificate material as expected: %v", name, err)
+	return false
+}
+
 // =============================================================================
 // Common Crypto Tests
 // =============================================================================
@@ -474,9 +484,8 @@ func TestDCAPSignatureVerification(t *testing.T) {
 func TestPCKCertificateChain(t *testing.T) {
 	t.Run("create verifier", func(t *testing.T) {
 		verifier, err := NewPCKCertificateVerifier()
-		if err != nil {
-			// Skip if using placeholder certificates
-			t.Skipf("skipping: placeholder certificates in use: %v", err)
+		if !requireEmbeddedCertificateFixture(t, "Intel SGX certificate chain verifier", err) {
+			return
 		}
 		if verifier == nil {
 			t.Fatal("verifier is nil")
@@ -696,9 +705,8 @@ func TestSNPSignatureVerification(t *testing.T) {
 func TestVCEKCertificateChain(t *testing.T) {
 	t.Run("create verifier", func(t *testing.T) {
 		verifier, err := NewVCEKCertificateVerifier()
-		if err != nil {
-			// Skip if using placeholder certificates
-			t.Skipf("skipping: placeholder certificates in use: %v", err)
+		if !requireEmbeddedCertificateFixture(t, "AMD VCEK certificate chain verifier", err) {
+			return
 		}
 		if verifier == nil {
 			t.Fatal("verifier is nil")
@@ -707,9 +715,8 @@ func TestVCEKCertificateChain(t *testing.T) {
 
 	t.Run("get AMD Root Key Milan", func(t *testing.T) {
 		cert, err := GetAMDRootKey(ProductMilan)
-		if err != nil {
-			// Skip if using placeholder certificates
-			t.Skipf("skipping: placeholder certificates in use: %v", err)
+		if !requireEmbeddedCertificateFixture(t, "AMD Milan root key", err) {
+			return
 		}
 
 		if cert.Subject.CommonName != "ARK-Milan" {
@@ -728,22 +735,21 @@ func TestVCEKCertificateChain(t *testing.T) {
 func TestASKARKVerifier(t *testing.T) {
 	t.Run("create verifier", func(t *testing.T) {
 		verifier, err := NewASKARKVerifier()
-		if err != nil {
-			// Skip if using placeholder certificates
-			t.Skipf("skipping: placeholder certificates in use: %v", err)
+		if !requireEmbeddedCertificateFixture(t, "AMD ASK/ARK verifier", err) {
+			return
 		}
 
 		ark, err := verifier.GetARK(ProductMilan)
-		if err != nil {
-			t.Skipf("skipping: placeholder ARK certificates in use: %v", err)
+		if !requireEmbeddedCertificateFixture(t, "AMD Milan ARK", err) {
+			return
 		}
 		if ark == nil {
 			t.Error("ARK is nil")
 		}
 
 		ask, err := verifier.GetASK(ProductMilan)
-		if err != nil {
-			t.Skipf("skipping: placeholder ASK certificates in use: %v", err)
+		if !requireEmbeddedCertificateFixture(t, "AMD Milan ASK", err) {
+			return
 		}
 		if ask == nil {
 			t.Error("ASK is nil")
@@ -752,8 +758,8 @@ func TestASKARKVerifier(t *testing.T) {
 
 	t.Run("unknown product", func(t *testing.T) {
 		verifier, err := NewASKARKVerifier()
-		if err != nil {
-			t.Skipf("skipping: placeholder certificates in use: %v", err)
+		if !requireEmbeddedCertificateFixture(t, "AMD ASK/ARK verifier", err) {
+			return
 		}
 		_, err = verifier.GetARK("UnknownProduct")
 		if err == nil {
@@ -896,9 +902,8 @@ func TestCOSESign1Verification(t *testing.T) {
 func TestNitroCertificateChain(t *testing.T) {
 	t.Run("create verifier", func(t *testing.T) {
 		verifier, err := NewNitroCertificateVerifier()
-		if err != nil {
-			// Skip if using placeholder certificates
-			t.Skipf("skipping: placeholder certificates in use: %v", err)
+		if !requireEmbeddedCertificateFixture(t, "AWS Nitro certificate verifier", err) {
+			return
 		}
 		if verifier == nil {
 			t.Fatal("verifier is nil")
@@ -907,9 +912,8 @@ func TestNitroCertificateChain(t *testing.T) {
 
 	t.Run("get AWS Nitro Root CA", func(t *testing.T) {
 		cert, err := GetAWSNitroRootCA()
-		if err != nil {
-			// Skip if using placeholder certificates
-			t.Skipf("skipping: placeholder certificates in use: %v", err)
+		if !requireEmbeddedCertificateFixture(t, "AWS Nitro root CA", err) {
+			return
 		}
 
 		// Check it's a CA certificate
@@ -927,9 +931,8 @@ func TestNitroCertificateChain(t *testing.T) {
 func TestNitroRootCAVerifier(t *testing.T) {
 	t.Run("create verifier", func(t *testing.T) {
 		verifier, err := NewNitroRootCAVerifier()
-		if err != nil {
-			// Skip if using placeholder certificates
-			t.Skipf("skipping: placeholder certificates in use: %v", err)
+		if !requireEmbeddedCertificateFixture(t, "AWS Nitro root CA verifier", err) {
+			return
 		}
 
 		rootCA := verifier.GetRootCA()
@@ -940,9 +943,8 @@ func TestNitroRootCAVerifier(t *testing.T) {
 
 	t.Run("empty chain", func(t *testing.T) {
 		verifier, err := NewNitroRootCAVerifier()
-		if err != nil {
-			// Skip if using placeholder certificates
-			t.Skipf("skipping: placeholder certificates in use: %v", err)
+		if !requireEmbeddedCertificateFixture(t, "AWS Nitro root CA verifier", err) {
+			return
 		}
 		err = verifier.VerifyChainToRoot(nil)
 		if err == nil {
@@ -1061,9 +1063,8 @@ func TestValidateNitroUserData(t *testing.T) {
 func TestDCAPVerifierIntegration(t *testing.T) {
 	t.Run("create verifier", func(t *testing.T) {
 		verifier, err := NewDCAPVerifier()
-		if err != nil {
-			// Skip if using placeholder certificates
-			t.Skipf("skipping: placeholder certificates in use: %v", err)
+		if !requireEmbeddedCertificateFixture(t, "DCAP verifier", err) {
+			return
 		}
 		if verifier == nil {
 			t.Fatal("verifier is nil")
@@ -1072,9 +1073,8 @@ func TestDCAPVerifierIntegration(t *testing.T) {
 
 	t.Run("verify test quote", func(t *testing.T) {
 		verifier, err := NewDCAPVerifier()
-		if err != nil {
-			// Skip if using placeholder certificates
-			t.Skipf("skipping: placeholder certificates in use: %v", err)
+		if !requireEmbeddedCertificateFixture(t, "DCAP verifier", err) {
+			return
 		}
 
 		mrenclave := make([]byte, 32)
@@ -1104,9 +1104,8 @@ func TestDCAPVerifierIntegration(t *testing.T) {
 func TestSNPVerifierIntegration(t *testing.T) {
 	t.Run("create verifier", func(t *testing.T) {
 		verifier, err := NewSNPVerifier()
-		if err != nil {
-			// Skip if using placeholder certificates
-			t.Skipf("skipping: placeholder certificates in use: %v", err)
+		if !requireEmbeddedCertificateFixture(t, "SNP verifier", err) {
+			return
 		}
 		if verifier == nil {
 			t.Fatal("verifier is nil")
@@ -1117,9 +1116,8 @@ func TestSNPVerifierIntegration(t *testing.T) {
 func TestNitroCryptoVerifierIntegration(t *testing.T) {
 	t.Run("create verifier", func(t *testing.T) {
 		verifier, err := NewNitroCryptoVerifier()
-		if err != nil {
-			// Skip if using placeholder certificates
-			t.Skipf("skipping: placeholder certificates in use: %v", err)
+		if !requireEmbeddedCertificateFixture(t, "Nitro crypto verifier", err) {
+			return
 		}
 		if verifier == nil {
 			t.Fatal("verifier is nil")
@@ -1128,9 +1126,8 @@ func TestNitroCryptoVerifierIntegration(t *testing.T) {
 
 	t.Run("set expected PCR", func(t *testing.T) {
 		verifier, err := NewNitroCryptoVerifier()
-		if err != nil {
-			// Skip if using placeholder certificates
-			t.Skipf("skipping: placeholder certificates in use: %v", err)
+		if !requireEmbeddedCertificateFixture(t, "Nitro crypto verifier", err) {
+			return
 		}
 
 		pcr0 := make([]byte, 48)
@@ -1150,9 +1147,8 @@ func TestNitroCryptoVerifierIntegration(t *testing.T) {
 func TestParseCertificateChain(t *testing.T) {
 	t.Run("parse Intel SGX Root CA", func(t *testing.T) {
 		certs, err := ParseCertificateChain([]byte(IntelSGXRootCAPEM))
-		if err != nil {
-			// Skip if using placeholder certificates
-			t.Skipf("skipping: placeholder certificates in use: %v", err)
+		if !requireEmbeddedCertificateFixture(t, "Intel SGX Root CA PEM", err) {
+			return
 		}
 		if len(certs) != 1 {
 			t.Errorf("expected 1 cert, got %d", len(certs))
@@ -1161,9 +1157,8 @@ func TestParseCertificateChain(t *testing.T) {
 
 	t.Run("parse AMD Root Key", func(t *testing.T) {
 		certs, err := ParseCertificateChain([]byte(AMDRootKeyMilanPEM))
-		if err != nil {
-			// Skip if using placeholder certificates
-			t.Skipf("skipping: placeholder certificates in use: %v", err)
+		if !requireEmbeddedCertificateFixture(t, "AMD Milan Root Key PEM", err) {
+			return
 		}
 		if len(certs) != 1 {
 			t.Errorf("expected 1 cert, got %d", len(certs))
@@ -1172,9 +1167,8 @@ func TestParseCertificateChain(t *testing.T) {
 
 	t.Run("parse AWS Nitro Root CA", func(t *testing.T) {
 		certs, err := ParseCertificateChain([]byte(AWSNitroRootCAPEM))
-		if err != nil {
-			// Skip if using placeholder certificates
-			t.Skipf("skipping: placeholder certificates in use: %v", err)
+		if !requireEmbeddedCertificateFixture(t, "AWS Nitro Root CA PEM", err) {
+			return
 		}
 		if len(certs) != 1 {
 			t.Errorf("expected 1 cert, got %d", len(certs))
@@ -1191,9 +1185,8 @@ func TestParseCertificateChain(t *testing.T) {
 	t.Run("multiple certificates", func(t *testing.T) {
 		combinedPEM := IntelSGXRootCAPEM + "\n" + IntelSGXPCKProcessorCAPEM
 		certs, err := ParseCertificateChain([]byte(combinedPEM))
-		if err != nil {
-			// Skip if using placeholder certificates
-			t.Skipf("skipping: placeholder certificates in use: %v", err)
+		if !requireEmbeddedCertificateFixture(t, "Intel SGX chain PEM bundle", err) {
+			return
 		}
 		if len(certs) != 2 {
 			t.Errorf("expected 2 certs, got %d", len(certs))
@@ -1205,12 +1198,12 @@ func TestParseDERCertificate(t *testing.T) {
 	t.Run("parse from DER", func(t *testing.T) {
 		block, _ := pem.Decode([]byte(IntelSGXRootCAPEM))
 		if block == nil {
-			t.Skipf("skipping: placeholder certificate could not be decoded")
+			t.Fatal("Intel SGX Root CA PEM fixture must decode successfully")
 		}
 
 		cert, err := ParseDERCertificate(block.Bytes)
-		if err != nil {
-			t.Skipf("skipping: placeholder certificate could not be parsed: %v", err)
+		if !requireEmbeddedCertificateFixture(t, "Intel SGX Root CA DER", err) {
+			return
 		}
 		if cert.Subject.CommonName != "Intel SGX Root CA" {
 			t.Errorf("unexpected CN: %s", cert.Subject.CommonName)
@@ -1228,8 +1221,8 @@ func TestParseDERCertificate(t *testing.T) {
 func TestExtractPublicKeyFromCert(t *testing.T) {
 	t.Run("extract from Intel SGX Root CA", func(t *testing.T) {
 		cert, err := GetIntelSGXRootCA()
-		if err != nil {
-			t.Skipf("skipping: placeholder certificate could not be loaded: %v", err)
+		if !requireEmbeddedCertificateFixture(t, "Intel SGX Root CA", err) {
+			return
 		}
 		pubKey, err := ExtractPublicKeyFromCert(cert)
 		if err != nil {
@@ -1242,12 +1235,12 @@ func TestExtractPublicKeyFromCert(t *testing.T) {
 
 	t.Run("extract from AWS Nitro Root CA", func(t *testing.T) {
 		cert, err := GetAWSNitroRootCA()
-		if err != nil {
-			t.Skipf("skipping: placeholder certificate could not be loaded: %v", err)
+		if !requireEmbeddedCertificateFixture(t, "AWS Nitro Root CA", err) {
+			return
 		}
 		pubKey, err := ExtractPublicKeyFromCert(cert)
-		if err != nil {
-			t.Skipf("skipping: placeholder certificate public key could not be extracted: %v", err)
+		if !requireEmbeddedCertificateFixture(t, "AWS Nitro Root CA public key", err) {
+			return
 		}
 		if pubKey.Curve != elliptic.P384() {
 			t.Errorf("expected P-384 curve, got %s", pubKey.Curve.Params().Name)

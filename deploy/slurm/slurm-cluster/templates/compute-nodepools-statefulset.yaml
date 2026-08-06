@@ -1,0 +1,340 @@
+{{- $root := . }}
+{{- $_ := include "slurm-cluster.compute.capacity" . }}
+{{- range $pool := .Values.nodePools }}
+{{- if eq (include "slurm-cluster.nodePool.enabled" (list $root $pool)) "true" }}
+{{- $serviceName := include "slurm-cluster.nodePool.serviceName" (list $root $pool) }}
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ $serviceName }}
+  namespace: {{ $root.Release.Namespace }}
+  labels:
+    {{- include "slurm-cluster.labels" $root | nindent 4 }}
+    app.kubernetes.io/component: compute
+    virtengine.com/node-pool: {{ $pool.name | quote }}
+spec:
+  serviceName: {{ $serviceName }}
+  replicas: {{ $pool.replicas }}
+  podManagementPolicy: Parallel
+  selector:
+    matchLabels:
+      {{- include "slurm-cluster.selectorLabels" $root | nindent 6 }}
+      app.kubernetes.io/component: compute
+      virtengine.com/node-pool: {{ $pool.name | quote }}
+  template:
+    metadata:
+      labels:
+        {{- include "slurm-cluster.selectorLabels" $root | nindent 8 }}
+        app.kubernetes.io/component: compute
+        virtengine.com/node-pool: {{ $pool.name | quote }}
+        {{- with $root.Values.podLabels }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      annotations:
+        checksum/config: {{ include (print $root.Template.BasePath "/configmap.yaml") $root | sha256sum }}
+        checksum/secret: {{ include (print $root.Template.BasePath "/secrets.yaml") $root | sha256sum }}
+        {{- with $root.Values.podAnnotations }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+    spec:
+      serviceAccountName: {{ include "slurm-cluster.serviceAccountName" $root }}
+      {{- with $root.Values.global.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      securityContext:
+        {{- include "slurm-cluster.podSecurityContext" (list $root) | nindent 8 }}
+      initContainers:
+        - name: init-munge
+          image: {{ include "slurm-cluster.munge.image" $root }}
+          imagePullPolicy: {{ $root.Values.munge.image.pullPolicy }}
+          command:
+            - /bin/sh
+            - -c
+            - |
+              cp /munge-key/{{ $root.Values.munge.secretKeyName }} /etc/munge/munge.key
+              chmod 400 /etc/munge/munge.key
+          volumeMounts:
+            - name: munge-key
+              mountPath: /munge-key
+              readOnly: true
+            - name: munge-socket
+              mountPath: /etc/munge
+          securityContext:
+            {{- include "slurm-cluster.containerSecurityContext" (list $root "munge") | nindent 12 }}
+        - name: wait-for-controller
+          image: {{ include "slurm-cluster.utility.image" $root }}
+          imagePullPolicy: {{ $root.Values.utilityImage.pullPolicy }}
+          command:
+            - /bin/sh
+            - -c
+            - |
+              until nc -z {{ include "slurm-cluster.controller.serviceName" $root }} 6817; do
+                echo "Waiting for slurmctld..."
+                sleep 5
+              done
+              echo "slurmctld is ready"
+          securityContext:
+            {{- include "slurm-cluster.containerSecurityContext" (list $root "utility") | nindent 12 }}
+      containers:
+        - name: munge
+          image: {{ include "slurm-cluster.munge.image" $root }}
+          imagePullPolicy: {{ $root.Values.munge.image.pullPolicy }}
+          command:
+            - /usr/sbin/munged
+            - --foreground
+            - --key-file=/etc/munge/munge.key
+            - --socket=/run/munge/munge.socket.2
+          volumeMounts:
+            - name: munge-socket
+              mountPath: /etc/munge
+            - name: munge-run
+              mountPath: /run/munge
+          resources:
+            {{- toYaml $root.Values.munge.resources | nindent 12 }}
+          securityContext:
+            {{- include "slurm-cluster.containerSecurityContext" (list $root "munge") | nindent 12 }}
+        - name: slurmd
+          image: {{ include "slurm-cluster.compute.image" $root }}
+          imagePullPolicy: {{ $root.Values.compute.image.pullPolicy }}
+          command:
+            - /usr/sbin/slurmd
+            - -D
+            - -vvv
+          ports:
+            - name: slurmd
+              containerPort: 6818
+              protocol: TCP
+            - name: health
+              containerPort: {{ $root.Values.healthCheck.port }}
+              protocol: TCP
+          volumeMounts:
+            - name: slurm-config
+              mountPath: /etc/slurm
+              readOnly: true
+            - name: munge-run
+              mountPath: /run/munge
+            - name: slurmd-spool
+              mountPath: /var/spool/slurm
+            - name: slurm-log
+              mountPath: /var/log/slurm
+            - name: slurm-run
+              mountPath: /run/slurm
+            - name: tmp
+              mountPath: /tmp
+            {{- if $root.Values.compute.persistence.enabled }}
+            - name: scratch
+              mountPath: {{ $root.Values.compute.config.tmpPath | default "/scratch" }}
+            {{- end }}
+            {{- with $root.Values.extraVolumeMounts }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+          {{- if $root.Values.compute.livenessProbe.enabled }}
+          livenessProbe:
+            tcpSocket:
+              port: slurmd
+            initialDelaySeconds: {{ $root.Values.compute.livenessProbe.initialDelaySeconds }}
+            periodSeconds: {{ $root.Values.compute.livenessProbe.periodSeconds }}
+            timeoutSeconds: {{ $root.Values.compute.livenessProbe.timeoutSeconds }}
+            failureThreshold: {{ $root.Values.compute.livenessProbe.failureThreshold }}
+          {{- end }}
+          {{- if $root.Values.compute.readinessProbe.enabled }}
+          readinessProbe:
+            exec:
+              command:
+                - /bin/sh
+                - -c
+                - "scontrol show node $(hostname) | grep -q 'State='"
+            initialDelaySeconds: {{ $root.Values.compute.readinessProbe.initialDelaySeconds }}
+            periodSeconds: {{ $root.Values.compute.readinessProbe.periodSeconds }}
+            timeoutSeconds: {{ $root.Values.compute.readinessProbe.timeoutSeconds }}
+            failureThreshold: {{ $root.Values.compute.readinessProbe.failureThreshold }}
+          {{- end }}
+          resources:
+            requests:
+              {{- if $pool.cpus }}
+              cpu: {{ $pool.cpus }}
+              {{- else }}
+              cpu: {{ $root.Values.compute.resources.requests.cpu }}
+              {{- end }}
+              {{- if $pool.memory }}
+              memory: {{ printf "%dMi" (int $pool.memory) }}
+              {{- else }}
+              memory: {{ $root.Values.compute.resources.requests.memory }}
+              {{- end }}
+            {{- if or $root.Values.compute.resources.limits.cpu $root.Values.compute.resources.limits.memory $pool.gpus }}
+            limits:
+              {{- if $root.Values.compute.resources.limits.cpu }}
+              cpu: {{ $root.Values.compute.resources.limits.cpu }}
+              {{- end }}
+              {{- if $root.Values.compute.resources.limits.memory }}
+              memory: {{ $root.Values.compute.resources.limits.memory }}
+              {{- end }}
+              {{- if $pool.gpus }}
+              {{ $root.Values.compute.gpu.resourceKey }}: {{ $pool.gpus | quote }}
+              {{- end }}
+            {{- end }}
+          securityContext:
+            {{- include "slurm-cluster.containerSecurityContext" (list $root "compute") | nindent 12 }}
+          env:
+            - name: SLURM_CONF
+              value: /etc/slurm/slurm.conf
+            - name: HOSTNAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            {{- with $root.Values.extraEnv }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+        {{- if $root.Values.nodeAgent.enabled }}
+        - name: node-agent
+          image: {{ include "slurm-cluster.nodeAgent.image" $root }}
+          imagePullPolicy: {{ $root.Values.nodeAgent.image.pullPolicy }}
+          command:
+            - /usr/local/bin/virtengine-node-agent
+            - run
+            - --config=/etc/virtengine/virtengine-agent/config.yaml
+          volumeMounts:
+            - name: node-agent-config
+              mountPath: /etc/virtengine/virtengine-agent
+              readOnly: true
+            {{- if $root.Values.nodeAgent.tls.enabled }}
+            - name: node-agent-tls
+              mountPath: /etc/virtengine/virtengine-agent/tls
+              readOnly: true
+            {{- end }}
+          resources:
+            {{- toYaml $root.Values.nodeAgent.resources | nindent 12 }}
+          securityContext:
+            {{- include "slurm-cluster.containerSecurityContext" (list $root "nodeAgent") | nindent 12 }}
+          env:
+            - name: NODE_ID
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: CLUSTER_ID
+              value: {{ $root.Values.cluster.id | quote }}
+            - name: PROVIDER_ADDRESS
+              value: {{ $root.Values.cluster.providerAddress | quote }}
+        {{- end }}
+      volumes:
+        - name: slurm-config
+          configMap:
+            name: {{ include "slurm-cluster.resourceName" (list $root "config" 0) }}
+            defaultMode: 0644
+        - name: munge-key
+          secret:
+            secretName: {{ include "slurm-cluster.munge.secretName" $root }}
+        - name: munge-socket
+          emptyDir: {}
+        - name: munge-run
+          emptyDir: {}
+        - name: slurm-log
+          emptyDir: {}
+        - name: slurm-run
+          emptyDir: {}
+        - name: tmp
+          emptyDir: {}
+        {{- if $root.Values.nodeAgent.enabled }}
+        - name: node-agent-config
+          configMap:
+            name: {{ include "slurm-cluster.resourceName" (list $root "node-agent" 0) }}
+        {{- if $root.Values.nodeAgent.tls.enabled }}
+        - name: node-agent-tls
+          secret:
+            secretName: {{ required "nodeAgent.tls.existingSecret is required when nodeAgent TLS is enabled" $root.Values.nodeAgent.tls.existingSecret }}
+            items:
+              - key: {{ required "nodeAgent.tls.caCertKey is required when nodeAgent TLS is enabled" $root.Values.nodeAgent.tls.caCertKey }}
+                path: ca.crt
+              - key: {{ required "nodeAgent.tls.clientCertKey is required when nodeAgent TLS is enabled" $root.Values.nodeAgent.tls.clientCertKey }}
+                path: client.crt
+              - key: {{ required "nodeAgent.tls.clientKeyKey is required when nodeAgent TLS is enabled" $root.Values.nodeAgent.tls.clientKeyKey }}
+                path: client.key
+        {{- end }}
+        {{- end }}
+        {{- with $root.Values.extraVolumes }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      {{- with $pool.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- else }}
+      {{- with $root.Values.compute.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- end }}
+      {{- with $pool.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- else }}
+      {{- with $root.Values.compute.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- end }}
+      {{- with $pool.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- else }}
+      {{- with $root.Values.compute.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- end }}
+  volumeClaimTemplates:
+    - metadata:
+        name: slurmd-spool
+      spec:
+        accessModes:
+          - ReadWriteOnce
+        {{- if $root.Values.global.storageClass }}
+        storageClassName: {{ $root.Values.global.storageClass }}
+        {{- end }}
+        resources:
+          requests:
+            storage: 1Gi
+    {{- if $root.Values.compute.persistence.enabled }}
+    - metadata:
+        name: scratch
+      spec:
+        accessModes:
+          - ReadWriteOnce
+        {{- if $root.Values.compute.persistence.storageClass }}
+        storageClassName: {{ $root.Values.compute.persistence.storageClass }}
+        {{- else if $root.Values.global.storageClass }}
+        storageClassName: {{ $root.Values.global.storageClass }}
+        {{- end }}
+        resources:
+          requests:
+            storage: {{ $root.Values.compute.persistence.size }}
+    {{- end }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $serviceName }}
+  namespace: {{ $root.Release.Namespace }}
+  labels:
+    {{- include "slurm-cluster.labels" $root | nindent 4 }}
+    app.kubernetes.io/component: compute
+    virtengine.com/node-pool: {{ $pool.name | quote }}
+spec:
+  type: ClusterIP
+  clusterIP: None
+  ports:
+    - port: 6818
+      targetPort: slurmd
+      protocol: TCP
+      name: slurmd
+    - port: {{ $root.Values.healthCheck.port }}
+      targetPort: health
+      protocol: TCP
+      name: health
+  selector:
+    {{- include "slurm-cluster.selectorLabels" $root | nindent 4 }}
+    app.kubernetes.io/component: compute
+    virtengine.com/node-pool: {{ $pool.name | quote }}
+---
+{{- end }}
+{{- end }}

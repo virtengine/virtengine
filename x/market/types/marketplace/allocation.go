@@ -240,6 +240,11 @@ func (s BidState) IsValid() bool {
 	return s >= BidStateOpen && s <= BidStateExpired
 }
 
+// IsTerminal returns true when a bid can no longer mutate lifecycle state.
+func (s BidState) IsTerminal() bool {
+	return s == BidStateAccepted || s == BidStateRejected || s == BidStateWithdrawn || s == BidStateExpired
+}
+
 // ProvisioningStatus holds the current provisioning status
 type ProvisioningStatus struct {
 	// Phase is the current provisioning phase

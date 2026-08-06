@@ -34,7 +34,7 @@ func TestUsagePipelineTestSuite(t *testing.T) {
 
 func (suite *UsagePipelineTestSuite) SetupTest() {
 	suite.ctx, suite.escrowKeeper = testutil.SetupEscrowKeeper(suite.T())
-	suite.usagePipeline = suite.escrowKeeper.NewUsagePipelineKeeper()
+	suite.usagePipeline = requireUsagePipelineKeeper(suite.T(), suite.escrowKeeper)
 
 	suite.provider = testutil.AccAddress(suite.T())
 	suite.customer = testutil.AccAddress(suite.T())
@@ -95,9 +95,11 @@ func (suite *UsagePipelineTestSuite) TestGenerateInvoiceFromUsage() {
 
 	// Submit multiple usage reports
 	for i := 0; i < 3; i++ {
+		suite.ctx = ctx
 		report := suite.createUsageReport(leaseID, i)
 		_, err := suite.usagePipeline.SubmitUsageReport(ctx, report)
 		require.NoError(t, err)
+		ctx = ctx.WithBlockHeight(ctx.BlockHeight() + 1).WithBlockTime(ctx.BlockTime().Add(time.Minute))
 	}
 
 	// Generate invoice from accumulated usage
@@ -164,7 +166,7 @@ func (suite *UsagePipelineTestSuite) TestApproveInvoice() {
 	require.NoError(t, err)
 
 	// Verify status changed to paid
-	ik := suite.escrowKeeper.NewInvoiceKeeper()
+	ik := requireInvoiceKeeper(t, suite.escrowKeeper)
 	updated, err := ik.GetInvoice(ctx, invoiceRecord.InvoiceID)
 	require.NoError(t, err)
 	require.Equal(t, billing.InvoiceStatusPaid, updated.Status)
@@ -190,7 +192,7 @@ func (suite *UsagePipelineTestSuite) TestDisputeInvoice() {
 	require.NoError(t, err)
 
 	// Verify status changed to disputed
-	ik := suite.escrowKeeper.NewInvoiceKeeper()
+	ik := requireInvoiceKeeper(t, suite.escrowKeeper)
 	updated, err := ik.GetInvoice(ctx, invoiceRecord.InvoiceID)
 	require.NoError(t, err)
 	require.Equal(t, billing.InvoiceStatusDisputed, updated.Status)

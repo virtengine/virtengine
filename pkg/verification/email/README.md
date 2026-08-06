@@ -50,6 +50,7 @@ config.Provider = "ses"                          // ses, sendgrid, or mock
 config.FromAddress = "noreply@virtengine.com"
 config.FromName = "VirtEngine Identity"
 config.BaseURL = "https://verify.virtengine.com"
+config.DestinationEncryptionKey = os.Getenv("VE_EMAIL_DESTINATION_KEY") // base64-encoded 32-byte key
 config.OTPLength = 6
 config.OTPTTLSeconds = 600                       // 10 minutes
 config.MaxAttempts = 5

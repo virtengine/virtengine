@@ -1,6 +1,9 @@
 package types
 
 import (
+	"fmt"
+
+	sdk "github.com/cosmos/cosmos-sdk/types"
 	encryptionv1 "github.com/virtengine/virtengine/sdk/go/node/encryption/v1"
 )
 
@@ -36,14 +39,27 @@ func DefaultParams() Params {
 func ValidateGenesis(gs *GenesisState) error {
 	// Validate recipient keys
 	seen := make(map[string]bool)
+	seenVersions := make(map[string]struct{})
 	for _, key := range gs.RecipientKeys {
 		if err := ValidateRecipientKeyRecord(&key); err != nil {
 			return err
+		}
+		address, err := sdk.AccAddressFromBech32(key.Address)
+		if err != nil {
+			return ErrInvalidAddress.Wrapf("invalid recipient key address: %v", err)
+		}
+		if address.String() != key.Address {
+			return ErrInvalidAddress.Wrap("recipient key address must use canonical encoding")
 		}
 		if seen[key.KeyFingerprint] {
 			return ErrKeyAlreadyExists.Wrapf("duplicate key fingerprint: %s", key.KeyFingerprint)
 		}
 		seen[key.KeyFingerprint] = true
+		versionKey := fmt.Sprintf("%s/%d", address.String(), key.KeyVersion)
+		if _, exists := seenVersions[versionKey]; exists {
+			return ErrKeyAlreadyExists.Wrapf("duplicate key version %d for address %s", key.KeyVersion, key.Address)
+		}
+		seenVersions[versionKey] = struct{}{}
 	}
 
 	// Validate params
@@ -115,6 +131,9 @@ func ValidateRecipientKeyRecord(r *encryptionv1.RecipientKeyRecord) error {
 	if len(r.PublicKey) != algInfo.KeySize {
 		return ErrInvalidPublicKey.Wrapf("public key size mismatch: expected %d, got %d",
 			algInfo.KeySize, len(r.PublicKey))
+	}
+	if ComputeKeyFingerprint(r.PublicKey) != r.KeyFingerprint {
+		return ErrInvalidPublicKey.Wrap("key fingerprint does not match public key")
 	}
 
 	return nil

@@ -45,10 +45,6 @@ type IdentityIntegrationTestSuite struct {
 
 // TestIdentityIntegration runs the identity integration test suite.
 func TestIdentityIntegration(t *testing.T) {
-	if testing.Short() {
-		t.Skip("Skipping integration tests in short mode")
-	}
-
 	suite.Run(t, new(IdentityIntegrationTestSuite))
 }
 
@@ -94,6 +90,7 @@ func (s *IdentityIntegrationTestSuite) TestIdentityScopeUploadAndScoreCommit() {
 	envelope.Nonce = bytes.Repeat([]byte{0x02}, encryptiontypes.XSalsa20NonceSize)
 	envelope.Ciphertext = []byte("encrypted-identity-payload")
 	envelope.SenderPubKey = bytes.Repeat([]byte{0x03}, encryptiontypes.X25519PublicKeySize)
+	envelope.SenderSignature = bytes.Repeat([]byte{0x05}, 64)
 
 	payloadHash := sha256.Sum256(envelope.Ciphertext)
 
@@ -107,7 +104,10 @@ func (s *IdentityIntegrationTestSuite) TestIdentityScopeUploadAndScoreCommit() {
 	)
 
 	clientSignature := ed25519.Sign(s.client.PrivateKey, metadata.SigningPayload())
-	userSignature := []byte("user-signature")
+	userSignature := make([]byte, keeper.Secp256k1SignatureSize)
+	for i := range userSignature {
+		userSignature[i] = 0x04
+	}
 
 	msg := veidtypes.NewMsgUploadScope(
 		owner.String(),
@@ -127,26 +127,22 @@ func (s *IdentityIntegrationTestSuite) TestIdentityScopeUploadAndScoreCommit() {
 	require.NoError(s.T(), err)
 	require.Equal(s.T(), scopeID, resp.ScopeId)
 
-	s.app.Commit()
-	ctx = s.app.NewContext(false)
+	ctx = ctx.
+		WithBlockHeight(ctx.BlockHeight() + 1).
+		WithBlockTime(ctx.BlockTime().Add(time.Minute)).
+		WithEventManager(sdk.NewEventManager())
 
 	record, found := s.app.Keepers.VirtEngine.VEID.GetIdentityRecord(ctx, owner)
 	require.True(s.T(), found)
 	require.Len(s.T(), record.ScopeRefs, 1)
 	require.Equal(s.T(), scopeID, record.ScopeRefs[0].ScopeID)
 
-	updateScore := veidtypes.NewMsgUpdateScore(
-		s.validator.String(),
-		owner.String(),
-		82,
-		"score-model-v1",
-	)
+	require.NoError(s.T(), s.app.Keepers.VirtEngine.VEID.UpdateScore(ctx, owner, 82, "score-model-v1"))
 
-	_, err = s.msgServer.UpdateScore(ctx, updateScore)
-	require.NoError(s.T(), err)
-
-	s.app.Commit()
-	ctx = s.app.NewContext(false)
+	ctx = ctx.
+		WithBlockHeight(ctx.BlockHeight() + 1).
+		WithBlockTime(ctx.BlockTime().Add(time.Minute)).
+		WithEventManager(sdk.NewEventManager())
 
 	updated, found := s.app.Keepers.VirtEngine.VEID.GetIdentityRecord(ctx, owner)
 	require.True(s.T(), found)

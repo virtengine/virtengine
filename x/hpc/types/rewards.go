@@ -229,6 +229,11 @@ type HPCDispute struct {
 
 	// BlockHeight is when the dispute was recorded
 	BlockHeight int64 `json:"block_height"`
+
+	// FinancialCaseID is the canonical settlement financial authority.
+	FinancialCaseID string `json:"financial_case_id,omitempty"`
+	// FinancialCaseStatus is a compatibility projection, never an authority.
+	FinancialCaseStatus string `json:"financial_case_status,omitempty"`
 }
 
 // Validate validates a dispute

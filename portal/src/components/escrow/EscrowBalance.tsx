@@ -11,16 +11,26 @@ import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
 import { formatRelativeTime } from '@/lib/utils';
 import type { EscrowAccount, FiatRates } from './data';
-import { formatFiat, formatToken } from './utils';
+import { formatFiatEstimates, formatToken } from './utils';
 
 interface EscrowBalanceProps {
   account: EscrowAccount;
   fiatRates: FiatRates;
   onDeposit: () => void;
   onWithdraw: () => void;
+  actionsAvailable?: boolean;
 }
 
-export function EscrowBalance({ account, fiatRates, onDeposit, onWithdraw }: EscrowBalanceProps) {
+export function EscrowBalance({
+  account,
+  fiatRates,
+  onDeposit,
+  onWithdraw,
+  actionsAvailable = true,
+}: EscrowBalanceProps) {
+  const lockedEstimates = formatFiatEstimates(account.lockedBalance, fiatRates);
+  const availableEstimates = formatFiatEstimates(account.availableBalance, fiatRates);
+
   return (
     <Card className="relative overflow-hidden">
       <div className="absolute right-0 top-0 h-32 w-32 -translate-y-1/3 translate-x-1/3 rounded-full bg-primary/10" />
@@ -33,11 +43,11 @@ export function EscrowBalance({ account, fiatRates, onDeposit, onWithdraw }: Esc
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
-            <Button variant="outline" onClick={onWithdraw}>
+            <Button variant="outline" onClick={onWithdraw} disabled={!actionsAvailable}>
               <ArrowDownLeft className="h-4 w-4" />
               Withdraw
             </Button>
-            <Button onClick={onDeposit}>
+            <Button onClick={onDeposit} disabled={!actionsAvailable}>
               <ArrowUpRight className="h-4 w-4" />
               Deposit
             </Button>
@@ -51,9 +61,9 @@ export function EscrowBalance({ account, fiatRates, onDeposit, onWithdraw }: Esc
             {formatToken(account.lockedBalance, account.currency)}
           </p>
           <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
-            <span>{formatFiat(account.lockedBalance * fiatRates.usd, 'USD')} USD</span>
-            <span>·</span>
-            <span>{formatFiat(account.lockedBalance * fiatRates.eur, 'EUR')} EUR</span>
+            {lockedEstimates.length > 0
+              ? lockedEstimates.join(' · ')
+              : 'Live fiat conversion unavailable'}
           </div>
         </div>
         <div className="space-y-2 rounded-lg border border-border/60 bg-background/60 p-4">
@@ -62,9 +72,9 @@ export function EscrowBalance({ account, fiatRates, onDeposit, onWithdraw }: Esc
             {formatToken(account.availableBalance, account.currency)}
           </p>
           <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
-            <span>{formatFiat(account.availableBalance * fiatRates.usd, 'USD')} USD</span>
-            <span>·</span>
-            <span>{formatFiat(account.availableBalance * fiatRates.eur, 'EUR')} EUR</span>
+            {availableEstimates.length > 0
+              ? availableEstimates.join(' · ')
+              : 'Live fiat conversion unavailable'}
           </div>
         </div>
         <div className="space-y-2 rounded-lg border border-border/60 bg-background/60 p-4">

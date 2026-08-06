@@ -51,6 +51,7 @@ export function MetricsDashboard() {
   const cpuTrend = useMetricsStore(selectCPUTrend);
   const memoryTrend = useMetricsStore(selectMemoryTrend);
   const firingAlerts = useMetricsStore(selectFiringAlerts);
+  const alertMutationsAvailable = useMetricsStore((state) => state.alertMutationsAvailable);
 
   useEffect(() => {
     void fetchMetrics();
@@ -89,7 +90,7 @@ export function MetricsDashboard() {
           </Button>
 
           {/* Alert badge */}
-          {firingAlerts.length > 0 && (
+          {alertMutationsAvailable && firingAlerts.length > 0 && (
             <Badge variant="destructive" dot>
               {firingAlerts.length} alert{firingAlerts.length !== 1 ? 's' : ''}
             </Badge>

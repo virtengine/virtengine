@@ -16,6 +16,7 @@ import (
 	mv1 "github.com/virtengine/virtengine/sdk/go/node/market/v1"
 	types "github.com/virtengine/virtengine/sdk/go/node/market/v1beta5"
 
+	resourcesv1 "github.com/virtengine/virtengine/sdk/go/node/resources/v1"
 	"github.com/virtengine/virtengine/x/market/keeper/keys"
 	"github.com/virtengine/virtengine/x/market/types/marketplace"
 )
@@ -59,6 +60,10 @@ type IKeeper interface {
 	// VEID Gating (VE-301: Marketplace gating)
 	CheckVEIDGating(ctx sdk.Context, customerAddr sdk.AccAddress, requirements VEIDGatingRequirements) (*VEIDGatingResult, error)
 	SetVEIDKeeper(veidKeeper VEIDKeeper)
+	SetResourcesKeeper(resources ResourcesKeeper)
+	OnDeploymentFailed(ctx sdk.Context, leaseID mv1.LeaseID, reason string) error
+	OnDisputeOpened(ctx sdk.Context, leaseID mv1.LeaseID, reason string) error
+	SetLegacyReservationLinks(ctx sdk.Context, leaseID mv1.LeaseID, reservationID string) error
 }
 
 // Keeper of the market store
@@ -72,7 +77,13 @@ type Keeper struct {
 	// veidKeeper is the VEID module keeper for identity gating checks.
 	// This is optional and can be set after initialization via SetVEIDKeeper.
 	// VE-301: Marketplace gating
-	veidKeeper VEIDKeeper
+	veidKeeper      VEIDKeeper
+	resourcesKeeper ResourcesKeeper
+}
+
+type ResourcesKeeper interface {
+	ReleaseReservation(ctx sdk.Context, reservationID, reason string) (*resourcesv1.Reservation, error)
+	QuarantineReservation(ctx sdk.Context, reservationID, reason string) (*resourcesv1.Reservation, error)
 }
 
 // NewKeeper creates and returns an instance for Market keeper
@@ -90,6 +101,85 @@ func NewKeeper(cdc codec.BinaryCodec, skey storetypes.StoreKey, ekeeper EscrowKe
 // VE-301: Marketplace gating
 func (k *Keeper) SetVEIDKeeper(veidKeeper VEIDKeeper) {
 	k.veidKeeper = veidKeeper
+}
+
+func (k *Keeper) SetResourcesKeeper(resources ResourcesKeeper) { k.resourcesKeeper = resources }
+
+// SetLegacyReservationLinks records deterministic migration lineage on the
+// canonical order, bid, and lease without changing their lifecycle states.
+func (k Keeper) SetLegacyReservationLinks(ctx sdk.Context, leaseID mv1.LeaseID, reservationID string) error {
+	if reservationID == "" {
+		return fmt.Errorf("reservation ID is required")
+	}
+	order, found := k.GetOrder(ctx, leaseID.OrderID())
+	if !found {
+		return mv1.ErrOrderNotFound
+	}
+	bid, found := k.GetBid(ctx, leaseID.BidID())
+	if !found {
+		return mv1.ErrBidNotFound
+	}
+	lease, found := k.GetLease(ctx, leaseID)
+	if !found {
+		return mv1.ErrLeaseNotFound
+	}
+	order.ReservationId = reservationID
+	bid.ReservationId = reservationID
+	lease.ReservationId = reservationID
+	store := ctx.KVStore(k.skey)
+	orderBytes := k.cdc.MustMarshal(&order)
+	store.Set(keys.MustOrderKey(keys.OrderStateToPrefix(order.State), order.ID), orderBytes)
+	bidBytes := k.cdc.MustMarshal(&bid)
+	store.Set(keys.MustBidKey(keys.BidStateToPrefix(bid.State), bid.ID), bidBytes)
+	if reverse := keys.MustBidStateRevereKey(bid.State, bid.ID); len(reverse) > 0 {
+		store.Set(reverse, bidBytes)
+	}
+	leaseBytes := k.cdc.MustMarshal(&lease)
+	store.Set(keys.MustLeaseKey(keys.LeaseStateToPrefix(lease.State), lease.ID), leaseBytes)
+	if reverse := keys.MustLeaseStateReverseKey(lease.State, lease.ID); len(reverse) > 0 {
+		store.Set(reverse, leaseBytes)
+	}
+	return nil
+}
+
+// OnDeploymentFailed releases capacity for a failed executable deployment.
+func (k Keeper) OnDeploymentFailed(ctx sdk.Context, leaseID mv1.LeaseID, reason string) error {
+	lease, found := k.GetLease(ctx, leaseID)
+	if !found {
+		return mv1.ErrLeaseNotFound
+	}
+	if lease.State != mv1.LeaseActive {
+		return fmt.Errorf("lease %s is not active", leaseID.String())
+	}
+	if k.resourcesKeeper == nil || lease.ReservationId == "" {
+		return fmt.Errorf("lease %s has no authoritative reservation", leaseID.String())
+	}
+	_, err := k.resourcesKeeper.ReleaseReservation(ctx, lease.ReservationId, "deployment_failed:"+boundedMarketReason(reason))
+	return err
+}
+
+// OnDisputeOpened retains capacity in quarantine until Task 84D resolution.
+func (k Keeper) OnDisputeOpened(ctx sdk.Context, leaseID mv1.LeaseID, reason string) error {
+	lease, found := k.GetLease(ctx, leaseID)
+	if !found {
+		return mv1.ErrLeaseNotFound
+	}
+	if lease.State != mv1.LeaseActive {
+		return fmt.Errorf("lease %s is not active", leaseID.String())
+	}
+	if k.resourcesKeeper == nil || lease.ReservationId == "" {
+		return fmt.Errorf("lease %s has no authoritative reservation", leaseID.String())
+	}
+	_, err := k.resourcesKeeper.QuarantineReservation(ctx, lease.ReservationId, "dispute_opened:"+boundedMarketReason(reason))
+	return err
+}
+
+func boundedMarketReason(reason string) string {
+	const maxLength = 512
+	if len(reason) > maxLength {
+		return reason[:maxLength]
+	}
+	return reason
 }
 
 func (k Keeper) NewQuerier() Querier {
@@ -290,13 +380,17 @@ func (k Keeper) CreateBid(ctx sdk.Context, id mv1.BidID, price sdk.DecCoin, roff
 // CreateLease creates lease for bid with given bidID.
 // Should only be called by the EndBlock handler or unit tests.
 func (k Keeper) CreateLease(ctx sdk.Context, bid types.Bid) error {
+	if k.resourcesKeeper != nil && bid.ReservationId == "" {
+		return fmt.Errorf("bid %s has no authoritative reservation", bid.ID.String())
+	}
 	store := ctx.KVStore(k.skey)
 
 	lease := mv1.Lease{
-		ID:        mv1.LeaseID(bid.ID),
-		State:     mv1.LeaseActive,
-		Price:     bid.Price,
-		CreatedAt: ctx.BlockHeight(),
+		ID:            mv1.LeaseID(bid.ID),
+		State:         mv1.LeaseActive,
+		Price:         bid.Price,
+		CreatedAt:     ctx.BlockHeight(),
+		ReservationId: bid.ReservationId,
 	}
 
 	data := k.cdc.MustMarshal(&lease)
@@ -395,6 +489,15 @@ func (k Keeper) OnOrderClosed(ctx sdk.Context, order types.Order) error {
 
 // OnLeaseClosed updates lease state to closed
 func (k Keeper) OnLeaseClosed(ctx sdk.Context, lease mv1.Lease, state mv1.Lease_State, reason mv1.LeaseClosedReason) error {
+	cacheCtx, write := ctx.CacheContext()
+	if err := k.onLeaseClosed(cacheCtx, lease, state, reason); err != nil {
+		return err
+	}
+	write()
+	return nil
+}
+
+func (k Keeper) onLeaseClosed(ctx sdk.Context, lease mv1.Lease, state mv1.Lease_State, reason mv1.LeaseClosedReason) error {
 	switch lease.State {
 	case mv1.LeaseClosed, mv1.LeaseInsufficientFunds:
 		return nil
@@ -417,6 +520,11 @@ func (k Keeper) OnLeaseClosed(ctx sdk.Context, lease mv1.Lease, state mv1.Lease_
 
 	key = keys.MustLeaseKey(keys.LeaseStateToPrefix(lease.State), lease.ID)
 	store.Set(key, k.cdc.MustMarshal(&lease))
+	if k.resourcesKeeper != nil && lease.ReservationId != "" {
+		if _, err := k.resourcesKeeper.ReleaseReservation(ctx, lease.ReservationId, "market_lease_closed"); err != nil {
+			return err
+		}
+	}
 
 	err := ctx.EventManager().EmitTypedEvent(
 		&mv1.EventLeaseClosed{
@@ -433,6 +541,15 @@ func (k Keeper) OnLeaseClosed(ctx sdk.Context, lease mv1.Lease, state mv1.Lease_
 
 // OnGroupClosed updates state of all orders, bids and leases in group to closed
 func (k Keeper) OnGroupClosed(ctx sdk.Context, id dtypes.GroupID) error {
+	cacheCtx, write := ctx.CacheContext()
+	if err := k.onGroupClosed(cacheCtx, id); err != nil {
+		return err
+	}
+	write()
+	return nil
+}
+
+func (k Keeper) onGroupClosed(ctx sdk.Context, id dtypes.GroupID) error {
 	processClose := func(ctx sdk.Context, bid types.Bid) error {
 		err := k.OnBidClosed(ctx, bid)
 		if err != nil {
@@ -441,14 +558,11 @@ func (k Keeper) OnGroupClosed(ctx sdk.Context, id dtypes.GroupID) error {
 
 		if lease, ok := k.GetLease(ctx, bid.ID.LeaseID()); ok {
 			// OnGroupClosed is callable by x/deployment only so only reason is owner
-			err = k.OnLeaseClosed(ctx, lease, mv1.LeaseClosed, mv1.LeaseClosedReasonOwner)
+			err = k.onLeaseClosed(ctx, lease, mv1.LeaseClosed, mv1.LeaseClosedReasonOwner)
 			if err != nil {
 				return err
 			}
 			if err := k.ekeeper.PaymentClose(ctx, lease.ID.ToEscrowPaymentID()); err != nil {
-				ctx.Logger().With("err", err).Info("error closing payment")
-			}
-			if err != nil {
 				return err
 			}
 		}

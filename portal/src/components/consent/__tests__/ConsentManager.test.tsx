@@ -26,7 +26,7 @@ const baseSettings = {
       consentVersion: 3,
       grantedAt: new Date().toISOString(),
       consentHash: 'hash',
-      signatureHash: 'sig',
+      acknowledgementHash: 'acknowledgement',
     },
     {
       id: 'consent-retention-001',
@@ -39,7 +39,7 @@ const baseSettings = {
       grantedAt: new Date().toISOString(),
       withdrawnAt: new Date().toISOString(),
       consentHash: 'hash',
-      signatureHash: 'sig',
+      acknowledgementHash: 'acknowledgement',
     },
   ],
   history: [],

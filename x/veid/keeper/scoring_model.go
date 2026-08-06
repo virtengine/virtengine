@@ -343,14 +343,13 @@ func (k Keeper) RecordScoringResult(
 		return err
 	}
 
+	// Store the full evidence summary before publishing its history reference.
+	if err := k.storeEvidenceSummary(ctx, address.Bytes(), summary); err != nil {
+		return err
+	}
+
 	store := ctx.KVStore(k.skey)
 	store.Set(types.ScoringHistoryKey(address.Bytes(), summary.BlockHeight), bz)
-
-	// Also store the full evidence summary
-	if err := k.storeEvidenceSummary(ctx, address.Bytes(), summary); err != nil {
-		k.Logger(ctx).Error("failed to store evidence summary", "error", err)
-		// Non-fatal - continue
-	}
 
 	return nil
 }

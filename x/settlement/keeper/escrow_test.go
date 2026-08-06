@@ -16,12 +16,14 @@ import (
 	"github.com/cosmos/cosmos-sdk/codec"
 	codectypes "github.com/cosmos/cosmos-sdk/codec/types"
 	sdk "github.com/cosmos/cosmos-sdk/types"
+	authtypes "github.com/cosmos/cosmos-sdk/x/auth/types"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
 
 	escrowid "github.com/virtengine/virtengine/sdk/go/node/escrow/id/v1"
 	escrowmodule "github.com/virtengine/virtengine/sdk/go/node/escrow/module"
 	etypes "github.com/virtengine/virtengine/sdk/go/node/escrow/types/v1"
+	delegationkeeper "github.com/virtengine/virtengine/x/delegation/keeper"
 	"github.com/virtengine/virtengine/x/settlement/keeper"
 	"github.com/virtengine/virtengine/x/settlement/types"
 )
@@ -57,7 +59,7 @@ func (m *MockBankKeeper) SendCoins(_ context.Context, fromAddr sdk.AccAddress, t
 }
 
 func (m *MockBankKeeper) SendCoinsFromModuleToModule(_ context.Context, senderModule string, recipientModule string, amt sdk.Coins) error {
-	if senderBalance, ok := m.balances[senderModule]; ok {
+	if senderBalance, configured := m.balances[senderModule]; configured {
 		if !senderBalance.IsAllGTE(amt) {
 			return types.ErrInsufficientFunds
 		}
@@ -68,7 +70,7 @@ func (m *MockBankKeeper) SendCoinsFromModuleToModule(_ context.Context, senderMo
 }
 
 func (m *MockBankKeeper) SendCoinsFromModuleToAccount(_ context.Context, senderModule string, recipientAddr sdk.AccAddress, amt sdk.Coins) error {
-	if senderBalance, ok := m.balances[senderModule]; ok {
+	if senderBalance, configured := m.balances[senderModule]; configured {
 		if !senderBalance.IsAllGTE(amt) {
 			return types.ErrInsufficientFunds
 		}
@@ -90,16 +92,30 @@ func (m *MockBankKeeper) SendCoinsFromAccountToModule(_ context.Context, senderA
 }
 
 func (m *MockBankKeeper) SpendableCoins(_ context.Context, addr sdk.AccAddress) sdk.Coins {
+	if addr.Equals(authtypes.NewModuleAddress(types.ModuleAccountName)) {
+		return m.balances[types.ModuleAccountName]
+	}
+	if addr.Equals(authtypes.NewModuleAddress(types.FiatConversionCustodyAccountName)) {
+		return m.balances[types.FiatConversionCustodyAccountName]
+	}
 	return m.balances[addr.String()]
 }
 
 func (m *MockBankKeeper) GetBalance(_ context.Context, addr sdk.AccAddress, denom string) sdk.Coin {
-	balance := m.balances[addr.String()]
+	balance := m.SpendableCoins(context.Background(), addr)
 	return sdk.NewCoin(denom, balance.AmountOf(denom))
 }
 
 func (m *MockBankKeeper) SetBalance(addr sdk.AccAddress, coins sdk.Coins) {
 	m.balances[addr.String()] = coins
+}
+
+func (m *MockBankKeeper) SetModuleBalance(module string, coins sdk.Coins) {
+	m.balances[module] = coins
+}
+
+func (m *MockBankKeeper) ModuleBalance(module string) sdk.Coins {
+	return m.balances[module]
 }
 
 // MockEscrowKeeper is a minimal escrow keeper implementation for tests.
@@ -215,17 +231,21 @@ func (m *MockEscrowKeeper) SaveAccount(_ sdk.Context, account etypes.Account) er
 type KeeperTestSuite struct {
 	suite.Suite
 
-	ctx        sdk.Context
-	keeper     keeper.Keeper
-	bankKeeper *MockBankKeeper
-	escrow     *MockEscrowKeeper
-	cdc        codec.Codec
-	storeKey   storetypes.StoreKey
+	ctx              sdk.Context
+	keeper           keeper.Keeper
+	delegationKeeper delegationkeeper.Keeper
+	bankKeeper       *MockBankKeeper
+	escrow           *MockEscrowKeeper
+	cdc              codec.Codec
+	storeKey         storetypes.StoreKey
 
 	// Test addresses
-	depositor sdk.AccAddress
-	provider  sdk.AccAddress
-	validator sdk.AccAddress
+	depositor    sdk.AccAddress
+	provider     sdk.AccAddress
+	validator    sdk.AccAddress
+	validatorTwo sdk.AccAddress
+	delegatorOne sdk.AccAddress
+	delegatorTwo sdk.AccAddress
 }
 
 func TestKeeperTestSuite(t *testing.T) {
@@ -236,6 +256,7 @@ func (s *KeeperTestSuite) SetupTest() {
 	// Create store key
 	storeKey := storetypes.NewKVStoreKey(types.StoreKey)
 	s.storeKey = storeKey
+	delegationStoreKey := storetypes.NewKVStoreKey("delegation")
 
 	// Create codec
 	interfaceRegistry := codectypes.NewInterfaceRegistry()
@@ -245,6 +266,7 @@ func (s *KeeperTestSuite) SetupTest() {
 	db := dbm.NewMemDB()
 	stateStore := store.NewCommitMultiStore(db, log.NewNopLogger(), metrics.NewNoOpMetrics())
 	stateStore.MountStoreWithDB(storeKey, storetypes.StoreTypeIAVL, db)
+	stateStore.MountStoreWithDB(delegationStoreKey, storetypes.StoreTypeIAVL, db)
 	require.NoError(s.T(), stateStore.LoadLatestVersion())
 
 	// Create proper context with multi-store
@@ -259,11 +281,16 @@ func (s *KeeperTestSuite) SetupTest() {
 
 	// Create keeper
 	s.keeper = keeper.NewKeeper(s.cdc, storeKey, s.bankKeeper, s.escrow, "authority", mockEncryptionKeeper{})
+	s.delegationKeeper = delegationkeeper.NewKeeper(s.cdc, delegationStoreKey, s.bankKeeper, nil, "authority")
+	s.keeper.SetStakeRoutingKeeper(s.delegationKeeper)
 
 	// Create test addresses
 	s.depositor = sdk.AccAddress([]byte("depositor___________"))
 	s.provider = sdk.AccAddress([]byte("provider____________"))
 	s.validator = sdk.AccAddress([]byte("validator___________"))
+	s.validatorTwo = sdk.AccAddress([]byte("validator2__________"))
+	s.delegatorOne = sdk.AccAddress([]byte("delegator1__________"))
+	s.delegatorTwo = sdk.AccAddress([]byte("delegator2__________"))
 
 	// Fund depositor
 	s.bankKeeper.SetBalance(s.depositor, sdk.NewCoins(sdk.NewCoin("uve", sdkmath.NewInt(1000000))))

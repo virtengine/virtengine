@@ -155,6 +155,8 @@ export interface MsgAddTrustedDeviceResponse {
   success: boolean;
   /** TrustExpiresAt is when the device trust expires */
   trustExpiresAt: Long;
+  /** TrustToken is the one-time trust token to be stored by the client */
+  trustToken: string;
 }
 
 /** MsgRemoveTrustedDevice is the message for removing a trusted device */
@@ -184,6 +186,62 @@ export interface MsgUpdateSensitiveTxConfig {
 /** MsgUpdateSensitiveTxConfigResponse is the response for MsgUpdateSensitiveTxConfig */
 export interface MsgUpdateSensitiveTxConfigResponse {
   /** Success indicates if the update was successful */
+  success: boolean;
+}
+
+/** MsgIssueSession is the message for issuing an authorization session */
+export interface MsgIssueSession {
+  /** Sender is the account requesting the session */
+  sender: string;
+  /** TransactionType is the transaction type to authorize */
+  transactionType: SensitiveTransactionType;
+  /** MFAProof is proof of MFA for this operation */
+  mfaProof:
+    | MFAProof
+    | undefined;
+  /** DeviceFingerprint identifies the device for binding the session */
+  deviceFingerprint: string;
+}
+
+/** MsgIssueSessionResponse is the response for MsgIssueSession */
+export interface MsgIssueSessionResponse {
+  /** SessionID is the issued session ID */
+  sessionId: string;
+  /** SessionExpiresAt is when the session expires */
+  sessionExpiresAt: Long;
+  /** IsSingleUse indicates if the session is single-use */
+  isSingleUse: boolean;
+}
+
+/** MsgRefreshSession is the message for refreshing an authorization session */
+export interface MsgRefreshSession {
+  /** Sender is the account refreshing the session */
+  sender: string;
+  /** SessionID is the session to refresh */
+  sessionId: string;
+  /** MFAProof is proof of MFA for this operation */
+  mfaProof: MFAProof | undefined;
+}
+
+/** MsgRefreshSessionResponse is the response for MsgRefreshSession */
+export interface MsgRefreshSessionResponse {
+  /** SessionID is the refreshed session ID */
+  sessionId: string;
+  /** SessionExpiresAt is when the session expires */
+  sessionExpiresAt: Long;
+}
+
+/** MsgRevokeSession is the message for revoking an authorization session */
+export interface MsgRevokeSession {
+  /** Sender is the account revoking the session */
+  sender: string;
+  /** SessionID is the session to revoke */
+  sessionId: string;
+}
+
+/** MsgRevokeSessionResponse is the response for MsgRevokeSession */
+export interface MsgRevokeSessionResponse {
+  /** Success indicates if the session was revoked */
   success: boolean;
 }
 
@@ -1268,7 +1326,7 @@ export const MsgAddTrustedDevice: MessageFns<MsgAddTrustedDevice, "virtengine.mf
 };
 
 function createBaseMsgAddTrustedDeviceResponse(): MsgAddTrustedDeviceResponse {
-  return { success: false, trustExpiresAt: Long.ZERO };
+  return { success: false, trustExpiresAt: Long.ZERO, trustToken: "" };
 }
 
 export const MsgAddTrustedDeviceResponse: MessageFns<
@@ -1283,6 +1341,9 @@ export const MsgAddTrustedDeviceResponse: MessageFns<
     }
     if (!message.trustExpiresAt.equals(Long.ZERO)) {
       writer.uint32(16).int64(message.trustExpiresAt.toString());
+    }
+    if (message.trustToken !== "") {
+      writer.uint32(26).string(message.trustToken);
     }
     return writer;
   },
@@ -1310,6 +1371,14 @@ export const MsgAddTrustedDeviceResponse: MessageFns<
           message.trustExpiresAt = Long.fromString(reader.int64().toString());
           continue;
         }
+        case 3: {
+          if (tag !== 26) {
+            break;
+          }
+
+          message.trustToken = reader.string();
+          continue;
+        }
       }
       if ((tag & 7) === 4 || tag === 0) {
         break;
@@ -1323,6 +1392,7 @@ export const MsgAddTrustedDeviceResponse: MessageFns<
     return {
       success: isSet(object.success) ? globalThis.Boolean(object.success) : false,
       trustExpiresAt: isSet(object.trust_expires_at) ? Long.fromValue(object.trust_expires_at) : Long.ZERO,
+      trustToken: isSet(object.trust_token) ? globalThis.String(object.trust_token) : "",
     };
   },
 
@@ -1334,6 +1404,9 @@ export const MsgAddTrustedDeviceResponse: MessageFns<
     if (!message.trustExpiresAt.equals(Long.ZERO)) {
       obj.trust_expires_at = (message.trustExpiresAt || Long.ZERO).toString();
     }
+    if (message.trustToken !== "") {
+      obj.trust_token = message.trustToken;
+    }
     return obj;
   },
   fromPartial(object: DeepPartial<MsgAddTrustedDeviceResponse>): MsgAddTrustedDeviceResponse {
@@ -1342,6 +1415,7 @@ export const MsgAddTrustedDeviceResponse: MessageFns<
     message.trustExpiresAt = (object.trustExpiresAt !== undefined && object.trustExpiresAt !== null)
       ? Long.fromValue(object.trustExpiresAt)
       : Long.ZERO;
+    message.trustToken = object.trustToken ?? "";
     return message;
   },
 };
@@ -1630,6 +1704,511 @@ export const MsgUpdateSensitiveTxConfigResponse: MessageFns<
   },
   fromPartial(object: DeepPartial<MsgUpdateSensitiveTxConfigResponse>): MsgUpdateSensitiveTxConfigResponse {
     const message = createBaseMsgUpdateSensitiveTxConfigResponse();
+    message.success = object.success ?? false;
+    return message;
+  },
+};
+
+function createBaseMsgIssueSession(): MsgIssueSession {
+  return { sender: "", transactionType: 0, mfaProof: undefined, deviceFingerprint: "" };
+}
+
+export const MsgIssueSession: MessageFns<MsgIssueSession, "virtengine.mfa.v1.MsgIssueSession"> = {
+  $type: "virtengine.mfa.v1.MsgIssueSession" as const,
+
+  encode(message: MsgIssueSession, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.sender !== "") {
+      writer.uint32(10).string(message.sender);
+    }
+    if (message.transactionType !== 0) {
+      writer.uint32(16).int32(message.transactionType);
+    }
+    if (message.mfaProof !== undefined) {
+      MFAProof.encode(message.mfaProof, writer.uint32(26).fork()).join();
+    }
+    if (message.deviceFingerprint !== "") {
+      writer.uint32(34).string(message.deviceFingerprint);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): MsgIssueSession {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseMsgIssueSession();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.sender = reader.string();
+          continue;
+        }
+        case 2: {
+          if (tag !== 16) {
+            break;
+          }
+
+          message.transactionType = reader.int32() as any;
+          continue;
+        }
+        case 3: {
+          if (tag !== 26) {
+            break;
+          }
+
+          message.mfaProof = MFAProof.decode(reader, reader.uint32());
+          continue;
+        }
+        case 4: {
+          if (tag !== 34) {
+            break;
+          }
+
+          message.deviceFingerprint = reader.string();
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): MsgIssueSession {
+    return {
+      sender: isSet(object.sender) ? globalThis.String(object.sender) : "",
+      transactionType: isSet(object.transaction_type) ? sensitiveTransactionTypeFromJSON(object.transaction_type) : 0,
+      mfaProof: isSet(object.mfa_proof) ? MFAProof.fromJSON(object.mfa_proof) : undefined,
+      deviceFingerprint: isSet(object.device_fingerprint) ? globalThis.String(object.device_fingerprint) : "",
+    };
+  },
+
+  toJSON(message: MsgIssueSession): unknown {
+    const obj: any = {};
+    if (message.sender !== "") {
+      obj.sender = message.sender;
+    }
+    if (message.transactionType !== 0) {
+      obj.transaction_type = sensitiveTransactionTypeToJSON(message.transactionType);
+    }
+    if (message.mfaProof !== undefined) {
+      obj.mfa_proof = MFAProof.toJSON(message.mfaProof);
+    }
+    if (message.deviceFingerprint !== "") {
+      obj.device_fingerprint = message.deviceFingerprint;
+    }
+    return obj;
+  },
+  fromPartial(object: DeepPartial<MsgIssueSession>): MsgIssueSession {
+    const message = createBaseMsgIssueSession();
+    message.sender = object.sender ?? "";
+    message.transactionType = object.transactionType ?? 0;
+    message.mfaProof = (object.mfaProof !== undefined && object.mfaProof !== null)
+      ? MFAProof.fromPartial(object.mfaProof)
+      : undefined;
+    message.deviceFingerprint = object.deviceFingerprint ?? "";
+    return message;
+  },
+};
+
+function createBaseMsgIssueSessionResponse(): MsgIssueSessionResponse {
+  return { sessionId: "", sessionExpiresAt: Long.ZERO, isSingleUse: false };
+}
+
+export const MsgIssueSessionResponse: MessageFns<MsgIssueSessionResponse, "virtengine.mfa.v1.MsgIssueSessionResponse"> =
+  {
+    $type: "virtengine.mfa.v1.MsgIssueSessionResponse" as const,
+
+    encode(message: MsgIssueSessionResponse, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+      if (message.sessionId !== "") {
+        writer.uint32(10).string(message.sessionId);
+      }
+      if (!message.sessionExpiresAt.equals(Long.ZERO)) {
+        writer.uint32(16).int64(message.sessionExpiresAt.toString());
+      }
+      if (message.isSingleUse !== false) {
+        writer.uint32(24).bool(message.isSingleUse);
+      }
+      return writer;
+    },
+
+    decode(input: BinaryReader | Uint8Array, length?: number): MsgIssueSessionResponse {
+      const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+      const end = length === undefined ? reader.len : reader.pos + length;
+      const message = createBaseMsgIssueSessionResponse();
+      while (reader.pos < end) {
+        const tag = reader.uint32();
+        switch (tag >>> 3) {
+          case 1: {
+            if (tag !== 10) {
+              break;
+            }
+
+            message.sessionId = reader.string();
+            continue;
+          }
+          case 2: {
+            if (tag !== 16) {
+              break;
+            }
+
+            message.sessionExpiresAt = Long.fromString(reader.int64().toString());
+            continue;
+          }
+          case 3: {
+            if (tag !== 24) {
+              break;
+            }
+
+            message.isSingleUse = reader.bool();
+            continue;
+          }
+        }
+        if ((tag & 7) === 4 || tag === 0) {
+          break;
+        }
+        reader.skip(tag & 7);
+      }
+      return message;
+    },
+
+    fromJSON(object: any): MsgIssueSessionResponse {
+      return {
+        sessionId: isSet(object.session_id) ? globalThis.String(object.session_id) : "",
+        sessionExpiresAt: isSet(object.session_expires_at) ? Long.fromValue(object.session_expires_at) : Long.ZERO,
+        isSingleUse: isSet(object.is_single_use) ? globalThis.Boolean(object.is_single_use) : false,
+      };
+    },
+
+    toJSON(message: MsgIssueSessionResponse): unknown {
+      const obj: any = {};
+      if (message.sessionId !== "") {
+        obj.session_id = message.sessionId;
+      }
+      if (!message.sessionExpiresAt.equals(Long.ZERO)) {
+        obj.session_expires_at = (message.sessionExpiresAt || Long.ZERO).toString();
+      }
+      if (message.isSingleUse !== false) {
+        obj.is_single_use = message.isSingleUse;
+      }
+      return obj;
+    },
+    fromPartial(object: DeepPartial<MsgIssueSessionResponse>): MsgIssueSessionResponse {
+      const message = createBaseMsgIssueSessionResponse();
+      message.sessionId = object.sessionId ?? "";
+      message.sessionExpiresAt = (object.sessionExpiresAt !== undefined && object.sessionExpiresAt !== null)
+        ? Long.fromValue(object.sessionExpiresAt)
+        : Long.ZERO;
+      message.isSingleUse = object.isSingleUse ?? false;
+      return message;
+    },
+  };
+
+function createBaseMsgRefreshSession(): MsgRefreshSession {
+  return { sender: "", sessionId: "", mfaProof: undefined };
+}
+
+export const MsgRefreshSession: MessageFns<MsgRefreshSession, "virtengine.mfa.v1.MsgRefreshSession"> = {
+  $type: "virtengine.mfa.v1.MsgRefreshSession" as const,
+
+  encode(message: MsgRefreshSession, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.sender !== "") {
+      writer.uint32(10).string(message.sender);
+    }
+    if (message.sessionId !== "") {
+      writer.uint32(18).string(message.sessionId);
+    }
+    if (message.mfaProof !== undefined) {
+      MFAProof.encode(message.mfaProof, writer.uint32(26).fork()).join();
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): MsgRefreshSession {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseMsgRefreshSession();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.sender = reader.string();
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.sessionId = reader.string();
+          continue;
+        }
+        case 3: {
+          if (tag !== 26) {
+            break;
+          }
+
+          message.mfaProof = MFAProof.decode(reader, reader.uint32());
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): MsgRefreshSession {
+    return {
+      sender: isSet(object.sender) ? globalThis.String(object.sender) : "",
+      sessionId: isSet(object.session_id) ? globalThis.String(object.session_id) : "",
+      mfaProof: isSet(object.mfa_proof) ? MFAProof.fromJSON(object.mfa_proof) : undefined,
+    };
+  },
+
+  toJSON(message: MsgRefreshSession): unknown {
+    const obj: any = {};
+    if (message.sender !== "") {
+      obj.sender = message.sender;
+    }
+    if (message.sessionId !== "") {
+      obj.session_id = message.sessionId;
+    }
+    if (message.mfaProof !== undefined) {
+      obj.mfa_proof = MFAProof.toJSON(message.mfaProof);
+    }
+    return obj;
+  },
+  fromPartial(object: DeepPartial<MsgRefreshSession>): MsgRefreshSession {
+    const message = createBaseMsgRefreshSession();
+    message.sender = object.sender ?? "";
+    message.sessionId = object.sessionId ?? "";
+    message.mfaProof = (object.mfaProof !== undefined && object.mfaProof !== null)
+      ? MFAProof.fromPartial(object.mfaProof)
+      : undefined;
+    return message;
+  },
+};
+
+function createBaseMsgRefreshSessionResponse(): MsgRefreshSessionResponse {
+  return { sessionId: "", sessionExpiresAt: Long.ZERO };
+}
+
+export const MsgRefreshSessionResponse: MessageFns<
+  MsgRefreshSessionResponse,
+  "virtengine.mfa.v1.MsgRefreshSessionResponse"
+> = {
+  $type: "virtengine.mfa.v1.MsgRefreshSessionResponse" as const,
+
+  encode(message: MsgRefreshSessionResponse, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.sessionId !== "") {
+      writer.uint32(10).string(message.sessionId);
+    }
+    if (!message.sessionExpiresAt.equals(Long.ZERO)) {
+      writer.uint32(16).int64(message.sessionExpiresAt.toString());
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): MsgRefreshSessionResponse {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseMsgRefreshSessionResponse();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.sessionId = reader.string();
+          continue;
+        }
+        case 2: {
+          if (tag !== 16) {
+            break;
+          }
+
+          message.sessionExpiresAt = Long.fromString(reader.int64().toString());
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): MsgRefreshSessionResponse {
+    return {
+      sessionId: isSet(object.session_id) ? globalThis.String(object.session_id) : "",
+      sessionExpiresAt: isSet(object.session_expires_at) ? Long.fromValue(object.session_expires_at) : Long.ZERO,
+    };
+  },
+
+  toJSON(message: MsgRefreshSessionResponse): unknown {
+    const obj: any = {};
+    if (message.sessionId !== "") {
+      obj.session_id = message.sessionId;
+    }
+    if (!message.sessionExpiresAt.equals(Long.ZERO)) {
+      obj.session_expires_at = (message.sessionExpiresAt || Long.ZERO).toString();
+    }
+    return obj;
+  },
+  fromPartial(object: DeepPartial<MsgRefreshSessionResponse>): MsgRefreshSessionResponse {
+    const message = createBaseMsgRefreshSessionResponse();
+    message.sessionId = object.sessionId ?? "";
+    message.sessionExpiresAt = (object.sessionExpiresAt !== undefined && object.sessionExpiresAt !== null)
+      ? Long.fromValue(object.sessionExpiresAt)
+      : Long.ZERO;
+    return message;
+  },
+};
+
+function createBaseMsgRevokeSession(): MsgRevokeSession {
+  return { sender: "", sessionId: "" };
+}
+
+export const MsgRevokeSession: MessageFns<MsgRevokeSession, "virtengine.mfa.v1.MsgRevokeSession"> = {
+  $type: "virtengine.mfa.v1.MsgRevokeSession" as const,
+
+  encode(message: MsgRevokeSession, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.sender !== "") {
+      writer.uint32(10).string(message.sender);
+    }
+    if (message.sessionId !== "") {
+      writer.uint32(18).string(message.sessionId);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): MsgRevokeSession {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseMsgRevokeSession();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.sender = reader.string();
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.sessionId = reader.string();
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): MsgRevokeSession {
+    return {
+      sender: isSet(object.sender) ? globalThis.String(object.sender) : "",
+      sessionId: isSet(object.session_id) ? globalThis.String(object.session_id) : "",
+    };
+  },
+
+  toJSON(message: MsgRevokeSession): unknown {
+    const obj: any = {};
+    if (message.sender !== "") {
+      obj.sender = message.sender;
+    }
+    if (message.sessionId !== "") {
+      obj.session_id = message.sessionId;
+    }
+    return obj;
+  },
+  fromPartial(object: DeepPartial<MsgRevokeSession>): MsgRevokeSession {
+    const message = createBaseMsgRevokeSession();
+    message.sender = object.sender ?? "";
+    message.sessionId = object.sessionId ?? "";
+    return message;
+  },
+};
+
+function createBaseMsgRevokeSessionResponse(): MsgRevokeSessionResponse {
+  return { success: false };
+}
+
+export const MsgRevokeSessionResponse: MessageFns<
+  MsgRevokeSessionResponse,
+  "virtengine.mfa.v1.MsgRevokeSessionResponse"
+> = {
+  $type: "virtengine.mfa.v1.MsgRevokeSessionResponse" as const,
+
+  encode(message: MsgRevokeSessionResponse, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.success !== false) {
+      writer.uint32(8).bool(message.success);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): MsgRevokeSessionResponse {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseMsgRevokeSessionResponse();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 8) {
+            break;
+          }
+
+          message.success = reader.bool();
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): MsgRevokeSessionResponse {
+    return { success: isSet(object.success) ? globalThis.Boolean(object.success) : false };
+  },
+
+  toJSON(message: MsgRevokeSessionResponse): unknown {
+    const obj: any = {};
+    if (message.success !== false) {
+      obj.success = message.success;
+    }
+    return obj;
+  },
+  fromPartial(object: DeepPartial<MsgRevokeSessionResponse>): MsgRevokeSessionResponse {
+    const message = createBaseMsgRevokeSessionResponse();
     message.success = object.success ?? false;
     return message;
   },

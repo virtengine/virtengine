@@ -4,10 +4,13 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/json"
+	"fmt"
 	"time"
 
+	coreaddress "cosmossdk.io/core/address"
 	"cosmossdk.io/log"
 	storetypes "cosmossdk.io/store/types"
+	"github.com/cosmos/cosmos-sdk/baseapp"
 	"github.com/cosmos/cosmos-sdk/codec"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	stakingtypes "github.com/cosmos/cosmos-sdk/x/staking/types"
@@ -96,6 +99,9 @@ type IKeeper interface {
 type StakingKeeper interface {
 	// GetValidator returns the validator with the given operator address
 	GetValidator(ctx context.Context, addr sdk.ValAddress) (stakingtypes.Validator, error)
+	GetValidatorByConsAddr(ctx context.Context, addr sdk.ConsAddress) (stakingtypes.Validator, error)
+	GetLastValidatorPower(ctx context.Context, operator sdk.ValAddress) (int64, error)
+	ValidatorAddressCodec() coreaddress.Codec
 }
 
 // Keeper of the veid store
@@ -124,6 +130,12 @@ type Keeper struct {
 	// delegationKeeper is the delegation keeper reference for GDPR portability exports
 	delegationKeeper DelegationQueryKeeper
 
+	// verifierRegistryKeeper provides the canonical active verifier definition.
+	verifierRegistryKeeper VerifierRegistryKeeper
+
+	// issuancePolicyKeeper records deterministic issuance entitlements for successful proofs.
+	issuancePolicyKeeper IssuancePolicyKeeper
+
 	// zkSystem is the ZK proof system for privacy-preserving proofs
 	// Initialized during keeper setup with compiled circuits
 	zkSystem *ZKProofSystem
@@ -131,26 +143,42 @@ type Keeper struct {
 	// randSource provides deterministic randomness derived from tx context.
 	// It must never be nil during state transitions to preserve consensus safety.
 	randSource RandomSource
+
+	// developmentMLScorer is an explicit test/development-only injection point.
+	// Production keeper construction intentionally leaves this nil and fails
+	// closed instead of selecting a scorer from environment variables.
+	developmentMLScorer *developmentMLScorerSlot
+
+	// receiptBuffer is validator-local pre-consensus memory. Vote extensions
+	// may carry snapshots from it, but finalized state must trust only signed
+	// extensions plus committed chain state.
+	receiptBuffer *inferenceReceiptBuffer
+
+	// consensusSystemTxAuthorizer confirms that the exact finalized transaction
+	// bytes were independently validated by the application pre-block boundary.
+	consensusSystemTxAuthorizer func(sdk.Context) bool
+	consensusValidatorStore     baseapp.ValidatorStore
 }
 
 // NewKeeper creates and returns an instance for veid keeper
 func NewKeeper(cdc codec.BinaryCodec, skey storetypes.StoreKey, authority string) Keeper {
 	// Initialize ZK proof system
-	// Note: Circuit compilation and trusted setup happens here
-	// In production, this would load pre-compiled circuits and verification keys
+	// Note: Circuit compilation and trusted setup parameter verification happens here.
+	// The application must fail closed if the embedded or staged ceremony artifacts
+	// are placeholder, corrupted, or do not match the compiled circuits.
 	zkSystem, err := NewZKProofSystem()
 	if err != nil {
-		// Log warning but don't fail - fall back to hash-based proofs
-		// In production, this should be a hard requirement
-		log.NewNopLogger().Error("Failed to initialize ZK proof system", "error", err)
+		panic(fmt.Errorf("failed to initialize VEID ZK proof system: %w", err))
 	}
 
 	return Keeper{
-		cdc:        cdc,
-		skey:       skey,
-		authority:  authority,
-		zkSystem:   zkSystem,
-		randSource: DeterministicRandomSource{},
+		cdc:                 cdc,
+		skey:                skey,
+		authority:           authority,
+		zkSystem:            zkSystem,
+		randSource:          DeterministicRandomSource{},
+		developmentMLScorer: newDevelopmentMLScorerSlot(),
+		receiptBuffer:       newInferenceReceiptBuffer(),
 	}
 }
 
@@ -179,6 +207,17 @@ func (k *Keeper) SetStakingKeeper(stakingKeeper StakingKeeper) {
 	k.stakingKeeper = stakingKeeper
 }
 
+// SetConsensusSystemTxAuthorizer installs the application finalization guard.
+func (k *Keeper) SetConsensusSystemTxAuthorizer(authorizer func(sdk.Context) bool) {
+	k.consensusSystemTxAuthorizer = authorizer
+}
+
+// SetConsensusValidatorStore installs the committed validator key source used
+// to revalidate carried extension signatures during final execution.
+func (k *Keeper) SetConsensusValidatorStore(store baseapp.ValidatorStore) {
+	k.consensusValidatorStore = store
+}
+
 // SetMarketKeeper sets the market keeper reference for GDPR portability exports.
 func (k *Keeper) SetMarketKeeper(marketKeeper MarketKeeper) {
 	k.marketKeeper = marketKeeper
@@ -202,6 +241,37 @@ func (k *Keeper) SetRandomSource(src RandomSource) {
 		return
 	}
 	k.randSource = src
+}
+
+// SetDevelopmentMLScorer explicitly installs a development/test scorer.
+// Passing nil restores production fail-closed scoring behavior.
+func (k *Keeper) SetDevelopmentMLScorer(scorer MLScorer) {
+	k.ensureDevelopmentMLScorerSlot().set(scorer)
+}
+
+// ReplaceDevelopmentMLScorer installs a development/test scorer and optionally
+// closes the scorer it replaces while holding the scorer mutex.
+func (k *Keeper) ReplaceDevelopmentMLScorer(scorer MLScorer, closePrevious bool) error {
+	return k.ensureDevelopmentMLScorerSlot().replace(scorer, closePrevious)
+}
+
+// CloseDevelopmentMLScorer explicitly closes and removes the injected scorer.
+func (k *Keeper) CloseDevelopmentMLScorer() error {
+	return k.ensureDevelopmentMLScorerSlot().closeActive()
+}
+
+func (k *Keeper) ensureDevelopmentMLScorerSlot() *developmentMLScorerSlot {
+	if k.developmentMLScorer == nil {
+		k.developmentMLScorer = newDevelopmentMLScorerSlot()
+	}
+	return k.developmentMLScorer
+}
+
+func (k *Keeper) ensureReceiptBuffer() *inferenceReceiptBuffer {
+	if k.receiptBuffer == nil {
+		k.receiptBuffer = newInferenceReceiptBuffer()
+	}
+	return k.receiptBuffer
 }
 
 // IsValidator checks if the given account address is a bonded validator

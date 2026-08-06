@@ -1,4 +1,5 @@
 {{- if .Values.database.enabled }}
+{{- include "slurm-cluster.requireSafePersistenceReplicas" (list "database" .Values.database.replicas .Values.database.persistence) }}
 apiVersion: apps/v1
 kind: StatefulSet
 metadata:
@@ -10,6 +11,11 @@ metadata:
 spec:
   serviceName: {{ include "slurm-cluster.database.serviceName" . }}
   replicas: {{ .Values.database.replicas }}
+  {{- if not .Values.database.persistence.existingClaim }}
+  persistentVolumeClaimRetentionPolicy:
+    whenDeleted: Retain
+    whenScaled: Retain
+  {{- end }}
   selector:
     matchLabels:
       {{- include "slurm-cluster.selectorLabels" . | nindent 6 }}
@@ -35,7 +41,7 @@ spec:
         {{- toYaml . | nindent 8 }}
       {{- end }}
       securityContext:
-        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+        {{- include "slurm-cluster.podSecurityContext" (list .) | nindent 8 }}
       initContainers:
         - name: init-munge
           image: {{ include "slurm-cluster.munge.image" . }}
@@ -46,7 +52,6 @@ spec:
             - |
               cp /munge-key/{{ .Values.munge.secretKeyName }} /etc/munge/munge.key
               chmod 400 /etc/munge/munge.key
-              chown munge:munge /etc/munge/munge.key
           volumeMounts:
             - name: munge-key
               mountPath: /munge-key
@@ -54,10 +59,10 @@ spec:
             - name: munge-socket
               mountPath: /etc/munge
           securityContext:
-            runAsUser: 0
-            runAsNonRoot: false
+            {{- include "slurm-cluster.containerSecurityContext" (list . "munge") | nindent 12 }}
         - name: wait-for-mariadb
-          image: busybox:1.36
+          image: {{ include "slurm-cluster.utility.image" . }}
+          imagePullPolicy: {{ .Values.utilityImage.pullPolicy }}
           command:
             - /bin/sh
             - -c
@@ -67,6 +72,8 @@ spec:
                 sleep 5
               done
               echo "MariaDB is ready"
+          securityContext:
+            {{- include "slurm-cluster.containerSecurityContext" (list . "utility") | nindent 12 }}
       containers:
         - name: munge
           image: {{ include "slurm-cluster.munge.image" . }}
@@ -84,8 +91,7 @@ spec:
           resources:
             {{- toYaml .Values.munge.resources | nindent 12 }}
           securityContext:
-            runAsUser: 0
-            runAsNonRoot: false
+            {{- include "slurm-cluster.containerSecurityContext" (list . "munge") | nindent 12 }}
         - name: slurmdbd
           image: {{ include "slurm-cluster.database.image" . }}
           imagePullPolicy: {{ .Values.database.image.pullPolicy }}
@@ -130,8 +136,7 @@ spec:
           resources:
             {{- toYaml .Values.database.resources | nindent 12 }}
           securityContext:
-            runAsUser: 0
-            runAsNonRoot: false
+            {{- include "slurm-cluster.containerSecurityContext" (list . "database") | nindent 12 }}
           env:
             - name: SLURM_CONF
               value: /etc/slurm/slurm.conf
@@ -148,7 +153,7 @@ spec:
       volumes:
         - name: slurm-config
           configMap:
-            name: {{ include "slurm-cluster.fullname" . }}-config
+            name: {{ include "slurm-cluster.resourceName" (list . "config" 0) }}
         - name: munge-key
           secret:
             secretName: {{ include "slurm-cluster.munge.secretName" . }}
@@ -160,6 +165,11 @@ spec:
           emptyDir: {}
         - name: slurm-run
           emptyDir: {}
+        {{- if .Values.database.persistence.existingClaim }}
+        - name: slurmdbd-spool
+          persistentVolumeClaim:
+            claimName: {{ .Values.database.persistence.existingClaim | quote }}
+        {{- end }}
         {{- with .Values.extraVolumes }}
         {{- toYaml . | nindent 8 }}
         {{- end }}
@@ -171,12 +181,13 @@ spec:
       tolerations:
         {{- toYaml . | nindent 8 }}
       {{- end }}
+  {{- if not .Values.database.persistence.existingClaim }}
   volumeClaimTemplates:
     - metadata:
         name: slurmdbd-spool
       spec:
         accessModes:
-          - ReadWriteOnce
+          - {{ .Values.database.persistence.accessMode }}
         {{- if .Values.database.persistence.storageClass }}
         storageClassName: {{ .Values.database.persistence.storageClass }}
         {{- else if .Values.global.storageClass }}
@@ -185,6 +196,7 @@ spec:
         resources:
           requests:
             storage: {{ .Values.database.persistence.size }}
+  {{- end }}
 ---
 apiVersion: v1
 kind: Service

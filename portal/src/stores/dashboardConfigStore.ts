@@ -7,35 +7,55 @@
  */
 
 import { create } from 'zustand';
-import { generateId } from '@/lib/utils';
 import type {
   DashboardConfig,
-  DashboardWidget,
   WidgetType,
   WidgetConfig,
   WidgetPosition,
 } from '@virtengine/portal/types/metrics';
+import {
+  DashboardConfigMutationError,
+  submitDashboardConfigMutation,
+  type DashboardConfigMutationAdapter,
+  type DashboardConfigMutationCommand,
+} from './dashboard-config-mutation';
 
 // =============================================================================
 // Store Interface
 // =============================================================================
 
 export interface DashboardConfigState {
-  dashboards: DashboardConfig[];
+  dashboards: readonly DashboardConfig[];
   activeDashboardId: string | null;
   isEditing: boolean;
+  dashboardMutationPending: boolean;
+  dashboardMutationsAvailable: boolean;
+  error: string | null;
 }
 
 export interface DashboardConfigActions {
-  createDashboard: (name: string) => string;
-  deleteDashboard: (id: string) => void;
+  createDashboard: (name: string) => Promise<void>;
+  deleteDashboard: (id: string) => Promise<void>;
   setActiveDashboard: (id: string) => void;
   toggleEditing: () => void;
-  addWidget: (dashboardId: string, type: WidgetType, title: string, config: WidgetConfig) => void;
-  removeWidget: (dashboardId: string, widgetId: string) => void;
-  updateWidgetPosition: (dashboardId: string, widgetId: string, position: WidgetPosition) => void;
-  updateWidgetConfig: (dashboardId: string, widgetId: string, config: WidgetConfig) => void;
-  renameDashboard: (id: string, name: string) => void;
+  addWidget: (
+    dashboardId: string,
+    type: WidgetType,
+    title: string,
+    config: WidgetConfig
+  ) => Promise<void>;
+  removeWidget: (dashboardId: string, widgetId: string) => Promise<void>;
+  updateWidgetPosition: (
+    dashboardId: string,
+    widgetId: string,
+    position: WidgetPosition
+  ) => Promise<void>;
+  updateWidgetConfig: (
+    dashboardId: string,
+    widgetId: string,
+    config: WidgetConfig
+  ) => Promise<void>;
+  renameDashboard: (id: string, name: string) => Promise<void>;
 }
 
 export type DashboardConfigStore = DashboardConfigState & DashboardConfigActions;
@@ -44,7 +64,15 @@ export type DashboardConfigStore = DashboardConfigState & DashboardConfigActions
 // Default Dashboard
 // =============================================================================
 
-const DEFAULT_DASHBOARD: DashboardConfig = {
+const deepFreeze = <T>(value: T): T => {
+  if (value && typeof value === 'object' && !Object.isFrozen(value)) {
+    Object.freeze(value);
+    for (const child of Object.values(value as Record<string, unknown>)) deepFreeze(child);
+  }
+  return value;
+};
+
+export const DEFAULT_DASHBOARD: Readonly<DashboardConfig> = deepFreeze({
   id: 'dashboard-default',
   name: 'Overview',
   isDefault: true,
@@ -106,121 +134,139 @@ const DEFAULT_DASHBOARD: DashboardConfig = {
       position: { x: 6, y: 6, w: 6, h: 3 },
     },
   ],
-  createdAt: Date.now(),
-  updatedAt: Date.now(),
+  createdAt: 0,
+  updatedAt: 0,
+});
+
+const DEFAULT_DASHBOARDS: readonly DashboardConfig[] = Object.freeze([DEFAULT_DASHBOARD]);
+
+let mutationAdapter: DashboardConfigMutationAdapter | null = null;
+let mutationSubject = '';
+let mutationGeneration = 0;
+let acceptedRevision = 0;
+let mutationPending = false;
+let activeMutation: AbortController | null = null;
+
+export const configureDashboardConfigMutations = (
+  adapter: DashboardConfigMutationAdapter | null,
+  subject = ''
+) => {
+  activeMutation?.abort();
+  activeMutation = null;
+  mutationPending = false;
+  mutationGeneration += 1;
+  acceptedRevision = 0;
+  mutationAdapter = adapter;
+  mutationSubject = subject.trim();
+  useDashboardConfigStore.setState({
+    dashboards: DEFAULT_DASHBOARDS,
+    activeDashboardId: DEFAULT_DASHBOARD.id,
+    isEditing: false,
+    dashboardMutationPending: false,
+    dashboardMutationsAvailable: Boolean(adapter && mutationSubject),
+    error: null,
+  });
 };
 
 // =============================================================================
 // Store Implementation
 // =============================================================================
 
-export const useDashboardConfigStore = create<DashboardConfigStore>()((set, get) => ({
-  dashboards: [DEFAULT_DASHBOARD],
-  activeDashboardId: DEFAULT_DASHBOARD.id,
-  isEditing: false,
+export const useDashboardConfigStore = create<DashboardConfigStore>()((set, get) => {
+  const mutate = async (request: DashboardConfigMutationCommand) => {
+    if (mutationPending) throw new DashboardConfigMutationError('request_changed');
+    const adapter = mutationAdapter;
+    const subject = mutationSubject;
+    if (!adapter || !subject) {
+      set({ error: 'Dashboard persistence is unavailable.' });
+      throw new DashboardConfigMutationError('unavailable');
+    }
+    mutationPending = true;
+    const controller = new AbortController();
+    activeMutation = controller;
+    const generation = mutationGeneration;
+    set({ dashboardMutationPending: true, error: null });
+    try {
+      const result = await submitDashboardConfigMutation({
+        adapter,
+        request: { ...request, subject },
+        signal: controller.signal,
+        isCurrent: () =>
+          generation === mutationGeneration &&
+          adapter === mutationAdapter &&
+          subject === mutationSubject,
+      });
+      if (generation !== mutationGeneration) {
+        throw new DashboardConfigMutationError('request_changed');
+      }
+      if (result.revision <= acceptedRevision) {
+        throw new DashboardConfigMutationError('invalid_committed_result');
+      }
+      acceptedRevision = result.revision;
+      const dashboards = Object.freeze([DEFAULT_DASHBOARD, ...result.dashboards]);
+      const selectedId = request.action === 'create' ? result.affectedId : get().activeDashboardId;
+      set({
+        dashboards,
+        activeDashboardId: dashboards.some((dashboard) => dashboard.id === selectedId)
+          ? selectedId
+          : DEFAULT_DASHBOARD.id,
+      });
+    } catch (error) {
+      if (generation === mutationGeneration) set({ error: 'Dashboard change was not committed.' });
+      throw error;
+    } finally {
+      if (generation === mutationGeneration) {
+        mutationPending = false;
+        activeMutation = null;
+        set({ dashboardMutationPending: false });
+      }
+    }
+  };
 
-  createDashboard: (name) => {
-    const id = generateId('dashboard');
-    const newDashboard: DashboardConfig = {
-      id,
-      name,
-      isDefault: false,
-      layout: [],
-      createdAt: Date.now(),
-      updatedAt: Date.now(),
-    };
-    set((state) => ({
-      dashboards: [...state.dashboards, newDashboard],
-      activeDashboardId: id,
-    }));
-    return id;
-  },
+  return {
+    dashboards: DEFAULT_DASHBOARDS,
+    activeDashboardId: DEFAULT_DASHBOARD.id,
+    isEditing: false,
+    dashboardMutationPending: false,
+    dashboardMutationsAvailable: false,
+    error: null,
 
-  deleteDashboard: (id) => {
-    const { dashboards, activeDashboardId } = get();
-    const target = dashboards.find((d) => d.id === id);
-    if (target?.isDefault) return;
-    const filtered = dashboards.filter((d) => d.id !== id);
-    set({
-      dashboards: filtered,
-      activeDashboardId: activeDashboardId === id ? (filtered[0]?.id ?? null) : activeDashboardId,
-    });
-  },
+    createDashboard: async (name) => mutate({ action: 'create', name }),
 
-  setActiveDashboard: (id) => {
-    set({ activeDashboardId: id });
-  },
+    deleteDashboard: async (dashboardId) => {
+      if (dashboardId === DEFAULT_DASHBOARD.id) {
+        throw new DashboardConfigMutationError('invalid_request');
+      }
+      await mutate({ action: 'delete', dashboardId });
+    },
 
-  toggleEditing: () => {
-    set((state) => ({ isEditing: !state.isEditing }));
-  },
+    setActiveDashboard: (id) => {
+      if (get().dashboards.some((dashboard) => dashboard.id === id)) set({ activeDashboardId: id });
+    },
 
-  addWidget: (dashboardId, type, title, config) => {
-    const widgetId = generateId('widget');
-    const widget: DashboardWidget = {
-      id: widgetId,
-      type,
-      title,
-      config,
-      position: { x: 0, y: 0, w: 6, h: 3 },
-    };
-    set((state) => ({
-      dashboards: state.dashboards.map((d) =>
-        d.id === dashboardId ? { ...d, layout: [...d.layout, widget], updatedAt: Date.now() } : d
-      ),
-    }));
-  },
+    toggleEditing: () => {
+      set((state) => ({ isEditing: !state.isEditing }));
+    },
 
-  removeWidget: (dashboardId, widgetId) => {
-    set((state) => ({
-      dashboards: state.dashboards.map((d) =>
-        d.id === dashboardId
-          ? {
-              ...d,
-              layout: d.layout.filter((w) => w.id !== widgetId),
-              updatedAt: Date.now(),
-            }
-          : d
-      ),
-    }));
-  },
+    addWidget: async (dashboardId, type, title, config) =>
+      mutate({
+        action: 'add',
+        dashboardId,
+        widget: { type, title, config, position: { x: 0, y: 0, w: 6, h: 3 } },
+      }),
 
-  updateWidgetPosition: (dashboardId, widgetId, position) => {
-    set((state) => ({
-      dashboards: state.dashboards.map((d) =>
-        d.id === dashboardId
-          ? {
-              ...d,
-              layout: d.layout.map((w) => (w.id === widgetId ? { ...w, position } : w)),
-              updatedAt: Date.now(),
-            }
-          : d
-      ),
-    }));
-  },
+    removeWidget: async (dashboardId, widgetId) =>
+      mutate({ action: 'remove', dashboardId, widgetId }),
 
-  updateWidgetConfig: (dashboardId, widgetId, config) => {
-    set((state) => ({
-      dashboards: state.dashboards.map((d) =>
-        d.id === dashboardId
-          ? {
-              ...d,
-              layout: d.layout.map((w) => (w.id === widgetId ? { ...w, config } : w)),
-              updatedAt: Date.now(),
-            }
-          : d
-      ),
-    }));
-  },
+    updateWidgetPosition: async (dashboardId, widgetId, position) =>
+      mutate({ action: 'update-position', dashboardId, widgetId, position }),
 
-  renameDashboard: (id, name) => {
-    set((state) => ({
-      dashboards: state.dashboards.map((d) =>
-        d.id === id ? { ...d, name, updatedAt: Date.now() } : d
-      ),
-    }));
-  },
-}));
+    updateWidgetConfig: async (dashboardId, widgetId, config) =>
+      mutate({ action: 'update-config', dashboardId, widgetId, config }),
+
+    renameDashboard: async (dashboardId, name) => mutate({ action: 'rename', dashboardId, name }),
+  };
+});
 
 // =============================================================================
 // Selectors
@@ -233,5 +279,5 @@ export const selectActiveDashboard = (state: DashboardConfigStore): DashboardCon
 
 export const selectDashboardNames = (
   state: DashboardConfigStore
-): Array<{ id: string; name: string; isDefault: boolean }> =>
+): ReadonlyArray<{ id: string; name: string; isDefault: boolean }> =>
   state.dashboards.map((d) => ({ id: d.id, name: d.name, isDefault: d.isDefault }));

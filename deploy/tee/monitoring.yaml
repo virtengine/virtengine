@@ -1,0 +1,82 @@
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: tee-enclave
+  namespace: virtengine
+  labels:
+    app.kubernetes.io/name: tee-enclave
+    app.kubernetes.io/component: enclave
+    app.kubernetes.io/part-of: virtengine
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: tee-enclave
+      app.kubernetes.io/component: enclave
+  namespaceSelector:
+    matchNames:
+      - virtengine
+  endpoints:
+    - port: metrics
+      interval: 30s
+      scrapeTimeout: 10s
+      path: /metrics
+---
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: tee-enclave
+  namespace: virtengine
+  labels:
+    app.kubernetes.io/name: tee-enclave
+    app.kubernetes.io/component: enclave
+    app.kubernetes.io/part-of: virtengine
+spec:
+  groups:
+    - name: tee-enclave.health
+      interval: 30s
+      rules:
+        - alert: TEEEnclaveReplicasUnavailable
+          expr: kube_deployment_status_replicas_available{namespace="virtengine",deployment=~"tee-enclave-(sgx|sev-snp)"} < 1
+          for: 5m
+          labels:
+            severity: critical
+            service: tee-enclave
+          annotations:
+            summary: "TEE deployment has no available replicas"
+            description: "Deployment {{ $labels.deployment }} has had zero ready replicas for 5 minutes."
+        - alert: TEEEnclaveSignatureFailures
+          expr: increase(virtengine_enclave_signature_failures_total[10m]) > 0
+          for: 0m
+          labels:
+            severity: critical
+            service: tee-enclave
+          annotations:
+            summary: "TEE signer failures detected"
+            description: "Validator {{ $labels.validator }} recorded signer verification failures in the last 10 minutes."
+        - alert: TEEEnclaveAttestationFailures
+          expr: increase(virtengine_enclave_attestation_failures_total[10m]) > 0
+          for: 0m
+          labels:
+            severity: critical
+            service: tee-enclave
+          annotations:
+            summary: "TEE attestation failures detected"
+            description: "Validator {{ $labels.validator }} recorded attestation failures in the last 10 minutes."
+        - alert: TEEEnclaveStaleAttestations
+          expr: histogram_quantile(0.99, sum by (le) (rate(virtengine_enclave_attestation_age_blocks_bucket[30m]))) > 17280
+          for: 15m
+          labels:
+            severity: warning
+            service: tee-enclave
+          annotations:
+            summary: "TEE attestation age exceeded 24 hours"
+            description: "The 99th percentile attestation age has exceeded 17,280 blocks for 15 minutes."
+        - alert: TEEEnclaveUnhealthyValidators
+          expr: sum(virtengine_enclave_health_status_total{status="unhealthy"}) > 0
+          for: 5m
+          labels:
+            severity: warning
+            service: tee-enclave
+          annotations:
+            summary: "TEE validators are reporting unhealthy"
+            description: "One or more validators are in the unhealthy enclave health state."

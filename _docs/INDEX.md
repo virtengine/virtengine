@@ -4,6 +4,14 @@ This index lists internal-only documentation. Do not add internal docs outside `
 
 ## Core References
 - `_docs/architecture.md`
+- `_docs/protocol-completion-continuation-plan.md`
+- `_docs/five-agent-protocol-completion-plan.md`
+- `_docs/prototype-thread-intake-runbook.md`
+- `_docs/thread-queues/thread-1-identity-trust.md`
+- `_docs/thread-queues/thread-2-product-clients.md`
+- `_docs/thread-queues/thread-3-protocol-reliability.md`
+- `_docs/thread-queues/thread-4-integration-release.md`
+- `_docs/thread-queues/thread-5-platform-security.md`
 - `_docs/api-gateway.md`
 - `_docs/developer-guide.md`
 - `_docs/development-environment.md`
@@ -20,6 +28,12 @@ This index lists internal-only documentation. Do not add internal docs outside `
 - `_docs/architecture/hybrid-portal-implementation-plan.md`
 - `_docs/architecture/waldur-market-mapping-spec.md`
 - `_docs/adr/ADR-001-portal-architecture.md`
+- `_docs/adr/ADR-004-veid-governed-verifier.md`
+- `_docs/adr/ADR-005-consensus-determinism.md`
+- `_docs/adr/ADR-006-authenticated-metering.md`
+- `_docs/adr/ADR-007-canonical-market-reservations.md`
+- `_docs/adr/ADR-008-canonical-financial-cases.md`
+- `_docs/adr/ADR-009-canonical-kubernetes-rendering-and-identity.md`
 - `_docs/adr/adr-001-network-upgrades.md`
 - `_docs/adr/adr-002-manifest-v2beta2.md`
 - `_docs/adr/adr-003-technical-debt-refactoring.md`
@@ -41,9 +55,18 @@ This index lists internal-only documentation. Do not add internal docs outside `
 - `_docs/operations/incident-response.md`
 - `_docs/operations/lifecycle-control.md`
 - `_docs/operations/mainnet-dress-rehearsal-report.md`
+- `_docs/operations/mainnet-backup-restore-drill-report-2026-04-11.md`
+- `_docs/operations/mainnet-allocation-control-record-2026-04-11.md`
+- `_docs/operations/mainnet-finance-reconciliation-report-2026-04-11.md`
 - `_docs/operations/mainnet-go-no-go-decision.md`
+- `_docs/operations/mainnet-launch-evidence-audit-2026-04-10.md`
+- `_docs/operations/mainnet-launch-evidence-audit-2026-04-11.md`
+- `_docs/operations/mainnet-launch-comms-packet-2026-04-11.md`
+- `_docs/operations/mainnet-launch-control-record-2026-04-11.md`
 - `_docs/operations/mainnet-launch-packet.md`
 - `_docs/operations/mainnet-launch-readiness-checklist.md`
+- `_docs/operations/mainnet-provider-hpc-e2e-report-2026-04-11.md`
+- `_docs/operations/mainnet-veid-e2e-report-2026-04-11.md`
 - `_docs/operations/monitoring.md`
 - `_docs/operations/offering-sync-guide.md`
 - `_docs/operations/servicedesk-sync.md`
@@ -54,6 +77,7 @@ This index lists internal-only documentation. Do not add internal docs outside `
 - `_docs/runbooks/finance-reconciliation-runbook.md`
 - `_docs/runbooks/mainnet-genesis-ceremony.md`
 - `_docs/runbooks/mainnet-launch-runbook.md`
+- `_docs/runbooks/kubernetes-identity-backup-restore-runbook.md`
 - `_docs/runbooks/tee-incident-response.md`
 - `_docs/runbooks/treasury-ops-runbook.md`
 - `_docs/runbooks/validator-onboarding.md`
@@ -70,23 +94,28 @@ This index lists internal-only documentation. Do not add internal docs outside `
 - `_docs/security/vendor-risk.md`
 
 ## Audit
-- `_docs/audit/crypto-audit-scope.md`
-- `_docs/audit/infra-audit-scope.md`
-- `_docs/audit/ml-audit-scope.md`
-- `_docs/audit/module-audit-scope.md`
-- `_docs/audit/pentest-scope.md`
-- `_docs/audit/remediation-process.md`
-- `_docs/audit/rfp-template.md`
-- `_docs/audit/pre-audit-checklist.yaml`
-- `_docs/audit/vendor-evaluation.yaml`
-- `_docs/audits/external-security-audit-engagement.md`
-- `_docs/audits/security-audit-report-2026-02-06.md`
+- `_docs/audits/prototype-thread-progress-audit-2026-08-01.md`
+- `_docs/audits/task-85c-completion-report-2026-07-23.md`
+- `_docs/audits/task-86a-completion-report-2026-07-21.md`
 
 ## Protocols & Schemas
+- `_docs/protocols/veid-ai-biometric-architecture.md`
+- `_docs/ralph/prototype-integration/slurm-chart-inventory.json`
+- `_docs/ralph/prototype-integration/slurm-chart-inventory.schema.json`
+- `_docs/audits/task-t4-07e-durable-state-evidence-2026-08-02.md`
+- `_docs/audits/task-t4-07f-slurm-chart-retirement-2026-08-02.md`
+- `_docs/audits/task-t4-07g-slurm-retired-reference-guard-2026-08-02.md`
+- `_docs/audits/task-t4-12a-ai-production-policy-2026-08-02.md`
+- `_docs/audits/task-t4-14a-ai-assurance-manifest-2026-08-02.md`
+- `_docs/audits/task-t4-15a-ai-biometric-security-gates-2026-08-02.md`
+- `_docs/audits/task-t4-16a-fund-route-inventory-2026-08-02.md`
+- `_docs/audits/task-t4-13a-generated-contract-inventory-2026-08-02.md`
+- `_docs/audits/task-t4-01e-intake-freeze-planner-2026-08-02.md`
 - `_docs/protocols/hpc-cluster-template-spec.md`
 - `_docs/protocols/hpc-node-agent-protocol.md`
 - `_docs/protocols/mobile-capture-protocol-v1.md`
 - `_docs/protocols/mobile-capture-sdk.md`
+- `_docs/protocols/veid-registry-and-issuance-policy.md`
 - `_docs/protocols/veid-attestation-schema.md`
 - `_docs/veid-flow-spec.md`
 - `_docs/veid-ml-feature-schema.md`
@@ -134,7 +163,22 @@ This index lists internal-only documentation. Do not add internal docs outside `
 - `_docs/VirtEngine Identification System Technical Report.pdf`
 
 ## Ralph
+- `_docs/prototype-thread-intake-runbook.md`
 - `_docs/ralph/progress.md`
+- `_docs/ralph/prototype-integration/control.json`
+- `_docs/ralph/prototype-integration/core-rc-manifest.json`
+- `_docs/ralph/prototype-integration/core-rc-manifest.schema.json`
+- `_docs/ralph/prototype-integration/core-rc-publication-preflight.schema.json`
+- `_docs/ralph/prototype-integration/epochs/epoch-1.json`
+- `_docs/ralph/prototype-integration/migration-inventory.json`
+- `_docs/ralph/prototype-integration/migration-inventory.schema.json`
+- `_docs/ralph/prototype-integration/model-provenance.json`
+- `_docs/ralph/prototype-integration/model-provenance.schema.json`
+- `_docs/ralph/prototype-integration/producer-handoff.schema.json`
+- `_docs/ralph/prototype-integration/required-gate-matrix.json`
+- `_docs/ralph/prototype-integration/required-gate-matrix.schema.json`
+- `_docs/ralph/prototype-integration/required-gate-plan.schema.json`
+- `_docs/ralph/prototype-integration/required-gate-results.schema.json`
 - `_docs/ralph/ralph_patent_text.txt`
 
 ## Visual Assets

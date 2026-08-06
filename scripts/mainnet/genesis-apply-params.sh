@@ -13,6 +13,21 @@ Applies mainnet parameter overrides to a genesis.json file.
 USAGE
 }
 
+die() {
+  echo "ERROR: $*" >&2
+  exit 1
+}
+
+require_cmd() {
+  command -v "$1" >/dev/null 2>&1 || die "$1 is required"
+}
+
+apply_filter() {
+  local next_file="${TMP_GENESIS}.next"
+  jq "$@" "$TMP_GENESIS" > "$next_file"
+  mv "$next_file" "$TMP_GENESIS"
+}
+
 GENESIS=""
 PARAMS="config/mainnet/genesis-params.json"
 CHAIN_ID=""
@@ -41,36 +56,26 @@ while [[ $# -gt 0 ]]; do
       exit 0
       ;;
     *)
-      echo "Unknown argument: $1" >&2
-      usage
-      exit 1
+      die "unknown argument: $1"
       ;;
   esac
 done
 
-if [[ -z "$GENESIS" ]]; then
-  echo "ERROR: --genesis is required" >&2
+[[ -n "$GENESIS" ]] || {
   usage
-  exit 1
-fi
+  die "--genesis is required"
+}
+[[ -f "$GENESIS" ]] || die "genesis file not found: $GENESIS"
+[[ -f "$PARAMS" ]] || die "params file not found: $PARAMS"
 
-if [[ ! -f "$GENESIS" ]]; then
-  echo "ERROR: genesis file not found: $GENESIS" >&2
-  exit 1
-fi
+require_cmd jq
 
-if [[ ! -f "$PARAMS" ]]; then
-  echo "ERROR: params file not found: $PARAMS" >&2
-  exit 1
-fi
+TMP_PARAMS=$(mktemp)
+TMP_GENESIS=$(mktemp)
+trap 'rm -f "$TMP_PARAMS" "$TMP_GENESIS" "${TMP_PARAMS}.next" "${TMP_GENESIS}.next"' EXIT
 
-if ! command -v jq >/dev/null 2>&1; then
-  echo "ERROR: jq is required" >&2
-  exit 1
-fi
-
-tmp_params=$(mktemp)
-cp "$PARAMS" "$tmp_params"
+cp "$PARAMS" "$TMP_PARAMS"
+cp "$GENESIS" "$TMP_GENESIS"
 
 if [[ -n "$CHAIN_ID" || -n "$GENESIS_TIME" ]]; then
   jq \
@@ -78,33 +83,73 @@ if [[ -n "$CHAIN_ID" || -n "$GENESIS_TIME" ]]; then
     --arg genesis_time "$GENESIS_TIME" \
     '(.chain_id = (if $chain_id != "" then $chain_id else .chain_id end)) |
      (.genesis_time = (if $genesis_time != "" then $genesis_time else .genesis_time end))' \
-    "$tmp_params" > "${tmp_params}.tmp"
-  mv "${tmp_params}.tmp" "$tmp_params"
+    "$TMP_PARAMS" > "${TMP_PARAMS}.next"
+  mv "${TMP_PARAMS}.next" "$TMP_PARAMS"
 fi
 
-tmp_genesis=$(mktemp)
+apply_filter --slurpfile params "$TMP_PARAMS" '
+  .app_name =
+    (if ($params[0].app_name? // "") != "" then
+       $params[0].app_name
+     elif (.app_name // "") == "" or .app_name == "<appd>" then
+       "virtengine"
+     else
+       .app_name
+     end)'
 
-jq --argfile params "$tmp_params" '
-  .chain_id = $params.chain_id |
-  .genesis_time = $params.genesis_time |
-  (if $params.consensus_params? and $params.consensus_params != null then .consensus_params = $params.consensus_params else . end) |
-  .app_state.bank.denom_metadata = $params.denom_metadata |
-  .app_state.staking.params = $params.staking_params |
-  .app_state.mint.params = $params.mint_params |
-  .app_state.distribution.params = $params.distribution_params |
-  (if .app_state.gov.params? then .app_state.gov.params = $params.gov_params else . end) |
-  (if .app_state.gov.deposit_params? then .app_state.gov.deposit_params = $params.gov_deposit_params else . end) |
-  (if .app_state.gov.voting_params? then .app_state.gov.voting_params = $params.gov_voting_params else . end) |
-  (if .app_state.gov.tally_params? then .app_state.gov.tally_params = $params.gov_tally_params else . end) |
-  .app_state.crisis.constant_fee = $params.crisis_constant_fee |
-  .app_state.slashing.params = $params.slashing_params |
-  .app_state.veid.params = $params.veid_params |
-  .app_state.mfa.params = $params.mfa_params |
-  .app_state.encryption.params = $params.encryption_params |
-  .app_state.hpc.params = $params.hpc_params
-' "$GENESIS" > "$tmp_genesis"
+while IFS= read -r key; do
+  key=${key%$'\r'}
+  [[ -n "$key" ]] || continue
+  case "$key" in
+    app_name)
+      apply_filter --slurpfile params "$TMP_PARAMS" '.app_name = ($params[0].app_name // "virtengine")'
+      ;;
+    chain_id)
+      apply_filter --slurpfile params "$TMP_PARAMS" '.chain_id = $params[0].chain_id'
+      ;;
+    genesis_time)
+      apply_filter --slurpfile params "$TMP_PARAMS" '.genesis_time = $params[0].genesis_time'
+      ;;
+    consensus_params)
+      if jq -e '.consensus_params? != null' "$TMP_PARAMS" >/dev/null 2>&1; then
+        apply_filter --slurpfile params "$TMP_PARAMS" '.consensus_params = ((.consensus_params // {}) * $params[0].consensus_params)'
+      fi
+      ;;
+    denom_metadata)
+      apply_filter --slurpfile params "$TMP_PARAMS" '.app_state.bank.denom_metadata = $params[0].denom_metadata'
+      ;;
+    gov_params)
+      apply_filter --slurpfile params "$TMP_PARAMS" '.app_state.gov.params = ((.app_state.gov.params // {}) * $params[0].gov_params)'
+      ;;
+    gov_deposit_params)
+      apply_filter --slurpfile params "$TMP_PARAMS" '.app_state.gov.deposit_params = ((.app_state.gov.deposit_params // {}) * $params[0].gov_deposit_params)'
+      ;;
+    gov_voting_params)
+      apply_filter --slurpfile params "$TMP_PARAMS" '.app_state.gov.voting_params = ((.app_state.gov.voting_params // {}) * $params[0].gov_voting_params)'
+      ;;
+    gov_tally_params)
+      apply_filter --slurpfile params "$TMP_PARAMS" '.app_state.gov.tally_params = ((.app_state.gov.tally_params // {}) * $params[0].gov_tally_params)'
+      ;;
+    crisis_constant_fee)
+      apply_filter --slurpfile params "$TMP_PARAMS" '.app_state.crisis.constant_fee = $params[0].crisis_constant_fee'
+      ;;
+    *_params)
+      module_name=${key%_params}
+      if jq -e --arg module "$module_name" '.app_state[$module].params? != null' "$TMP_GENESIS" >/dev/null 2>&1; then
+        apply_filter --arg module "$module_name" --arg key "$key" --slurpfile params "$TMP_PARAMS" \
+          '.app_state[$module].params = ((.app_state[$module].params // {}) * $params[0][$key])'
+      elif jq -e --arg module "$module_name" '.app_state[$module].Params? != null' "$TMP_GENESIS" >/dev/null 2>&1; then
+        apply_filter --arg module "$module_name" --arg key "$key" --slurpfile params "$TMP_PARAMS" \
+          '.app_state[$module].Params = ((.app_state[$module].Params // {}) * $params[0][$key])'
+      else
+        die "params key '$key' does not map to a known module params path in $GENESIS"
+      fi
+      ;;
+    *)
+      die "unsupported params key '$key' in $PARAMS"
+      ;;
+  esac
+done < <(jq -r 'keys[]' "$TMP_PARAMS")
 
-mv "$tmp_genesis" "$GENESIS"
-rm -f "$tmp_params"
-
+mv "$TMP_GENESIS" "$GENESIS"
 echo "Applied mainnet params to $GENESIS"

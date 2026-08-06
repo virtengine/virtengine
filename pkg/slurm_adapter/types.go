@@ -70,6 +70,35 @@ type SLURMConfig struct {
 	// DefaultPartition is the default partition
 	DefaultPartition string `json:"default_partition"`
 
+	// SSHHost is the SSH host used to execute SLURM commands.
+	// Defaults to ControllerHost when unset.
+	SSHHost string `json:"ssh_host,omitempty"`
+
+	// SSHPort is the SSH port for the SLURM login/controller node.
+	// Defaults to 22 when unset.
+	SSHPort int `json:"ssh_port,omitempty"`
+
+	// SSHUser is the SSH username used to access the SLURM cluster.
+	SSHUser string `json:"ssh_user,omitempty"`
+
+	// SSHPrivateKeyPath is the path to the SSH private key file.
+	SSHPrivateKeyPath string `json:"ssh_private_key_path,omitempty"`
+
+	// SSHPrivateKey is the raw SSH private key content.
+	SSHPrivateKey string `json:"-"` // Never log this
+
+	// SSHPassword is the SSH password when password auth is used.
+	SSHPassword string `json:"-"` // Never log this
+
+	// SSHPassphrase is the passphrase used to decrypt the SSH private key.
+	SSHPassphrase string `json:"-"` // Never log this
+
+	// SSHHostKeyCallback controls host key verification.
+	SSHHostKeyCallback string `json:"ssh_host_key_callback,omitempty"`
+
+	// SSHKnownHostsPath is the path to the known_hosts file.
+	SSHKnownHostsPath string `json:"ssh_known_hosts_path,omitempty"`
+
 	// JobPollInterval is how often to poll for job status
 	JobPollInterval time.Duration `json:"job_poll_interval"`
 

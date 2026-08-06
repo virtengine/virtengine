@@ -65,6 +65,27 @@ export interface EventProviderDomainVerified {
   domain: string;
 }
 
+/** EventProviderDomainVerificationRequested defines an SDK message for when domain verification is requested */
+export interface EventProviderDomainVerificationRequested {
+  owner: string;
+  domain: string;
+  method: string;
+  token: string;
+}
+
+/** EventProviderDomainVerificationConfirmed defines an SDK message for when domain verification is confirmed */
+export interface EventProviderDomainVerificationConfirmed {
+  owner: string;
+  domain: string;
+  method: string;
+}
+
+/** EventProviderDomainVerificationRevoked defines an SDK message for when domain verification is revoked */
+export interface EventProviderDomainVerificationRevoked {
+  owner: string;
+  domain: string;
+}
+
 function createBaseEventProviderCreated(): EventProviderCreated {
   return { owner: "" };
 }
@@ -406,6 +427,285 @@ export const EventProviderDomainVerified: MessageFns<
   },
   fromPartial(object: DeepPartial<EventProviderDomainVerified>): EventProviderDomainVerified {
     const message = createBaseEventProviderDomainVerified();
+    message.owner = object.owner ?? "";
+    message.domain = object.domain ?? "";
+    return message;
+  },
+};
+
+function createBaseEventProviderDomainVerificationRequested(): EventProviderDomainVerificationRequested {
+  return { owner: "", domain: "", method: "", token: "" };
+}
+
+export const EventProviderDomainVerificationRequested: MessageFns<
+  EventProviderDomainVerificationRequested,
+  "virtengine.provider.v1beta4.EventProviderDomainVerificationRequested"
+> = {
+  $type: "virtengine.provider.v1beta4.EventProviderDomainVerificationRequested" as const,
+
+  encode(message: EventProviderDomainVerificationRequested, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.owner !== "") {
+      writer.uint32(10).string(message.owner);
+    }
+    if (message.domain !== "") {
+      writer.uint32(18).string(message.domain);
+    }
+    if (message.method !== "") {
+      writer.uint32(26).string(message.method);
+    }
+    if (message.token !== "") {
+      writer.uint32(34).string(message.token);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): EventProviderDomainVerificationRequested {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseEventProviderDomainVerificationRequested();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.owner = reader.string();
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.domain = reader.string();
+          continue;
+        }
+        case 3: {
+          if (tag !== 26) {
+            break;
+          }
+
+          message.method = reader.string();
+          continue;
+        }
+        case 4: {
+          if (tag !== 34) {
+            break;
+          }
+
+          message.token = reader.string();
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): EventProviderDomainVerificationRequested {
+    return {
+      owner: isSet(object.owner) ? globalThis.String(object.owner) : "",
+      domain: isSet(object.domain) ? globalThis.String(object.domain) : "",
+      method: isSet(object.method) ? globalThis.String(object.method) : "",
+      token: isSet(object.token) ? globalThis.String(object.token) : "",
+    };
+  },
+
+  toJSON(message: EventProviderDomainVerificationRequested): unknown {
+    const obj: any = {};
+    if (message.owner !== "") {
+      obj.owner = message.owner;
+    }
+    if (message.domain !== "") {
+      obj.domain = message.domain;
+    }
+    if (message.method !== "") {
+      obj.method = message.method;
+    }
+    if (message.token !== "") {
+      obj.token = message.token;
+    }
+    return obj;
+  },
+  fromPartial(object: DeepPartial<EventProviderDomainVerificationRequested>): EventProviderDomainVerificationRequested {
+    const message = createBaseEventProviderDomainVerificationRequested();
+    message.owner = object.owner ?? "";
+    message.domain = object.domain ?? "";
+    message.method = object.method ?? "";
+    message.token = object.token ?? "";
+    return message;
+  },
+};
+
+function createBaseEventProviderDomainVerificationConfirmed(): EventProviderDomainVerificationConfirmed {
+  return { owner: "", domain: "", method: "" };
+}
+
+export const EventProviderDomainVerificationConfirmed: MessageFns<
+  EventProviderDomainVerificationConfirmed,
+  "virtengine.provider.v1beta4.EventProviderDomainVerificationConfirmed"
+> = {
+  $type: "virtengine.provider.v1beta4.EventProviderDomainVerificationConfirmed" as const,
+
+  encode(message: EventProviderDomainVerificationConfirmed, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.owner !== "") {
+      writer.uint32(10).string(message.owner);
+    }
+    if (message.domain !== "") {
+      writer.uint32(18).string(message.domain);
+    }
+    if (message.method !== "") {
+      writer.uint32(26).string(message.method);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): EventProviderDomainVerificationConfirmed {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseEventProviderDomainVerificationConfirmed();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.owner = reader.string();
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.domain = reader.string();
+          continue;
+        }
+        case 3: {
+          if (tag !== 26) {
+            break;
+          }
+
+          message.method = reader.string();
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): EventProviderDomainVerificationConfirmed {
+    return {
+      owner: isSet(object.owner) ? globalThis.String(object.owner) : "",
+      domain: isSet(object.domain) ? globalThis.String(object.domain) : "",
+      method: isSet(object.method) ? globalThis.String(object.method) : "",
+    };
+  },
+
+  toJSON(message: EventProviderDomainVerificationConfirmed): unknown {
+    const obj: any = {};
+    if (message.owner !== "") {
+      obj.owner = message.owner;
+    }
+    if (message.domain !== "") {
+      obj.domain = message.domain;
+    }
+    if (message.method !== "") {
+      obj.method = message.method;
+    }
+    return obj;
+  },
+  fromPartial(object: DeepPartial<EventProviderDomainVerificationConfirmed>): EventProviderDomainVerificationConfirmed {
+    const message = createBaseEventProviderDomainVerificationConfirmed();
+    message.owner = object.owner ?? "";
+    message.domain = object.domain ?? "";
+    message.method = object.method ?? "";
+    return message;
+  },
+};
+
+function createBaseEventProviderDomainVerificationRevoked(): EventProviderDomainVerificationRevoked {
+  return { owner: "", domain: "" };
+}
+
+export const EventProviderDomainVerificationRevoked: MessageFns<
+  EventProviderDomainVerificationRevoked,
+  "virtengine.provider.v1beta4.EventProviderDomainVerificationRevoked"
+> = {
+  $type: "virtengine.provider.v1beta4.EventProviderDomainVerificationRevoked" as const,
+
+  encode(message: EventProviderDomainVerificationRevoked, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.owner !== "") {
+      writer.uint32(10).string(message.owner);
+    }
+    if (message.domain !== "") {
+      writer.uint32(18).string(message.domain);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): EventProviderDomainVerificationRevoked {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseEventProviderDomainVerificationRevoked();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.owner = reader.string();
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.domain = reader.string();
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): EventProviderDomainVerificationRevoked {
+    return {
+      owner: isSet(object.owner) ? globalThis.String(object.owner) : "",
+      domain: isSet(object.domain) ? globalThis.String(object.domain) : "",
+    };
+  },
+
+  toJSON(message: EventProviderDomainVerificationRevoked): unknown {
+    const obj: any = {};
+    if (message.owner !== "") {
+      obj.owner = message.owner;
+    }
+    if (message.domain !== "") {
+      obj.domain = message.domain;
+    }
+    return obj;
+  },
+  fromPartial(object: DeepPartial<EventProviderDomainVerificationRevoked>): EventProviderDomainVerificationRevoked {
+    const message = createBaseEventProviderDomainVerificationRevoked();
     message.owner = object.owner ?? "";
     message.domain = object.domain ?? "";
     return message;

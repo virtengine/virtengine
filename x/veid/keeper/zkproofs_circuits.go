@@ -59,7 +59,7 @@ func NewZKProofSystem() (*ZKProofSystem, error) {
 	system.ageCircuit = ageCircuit
 	system.ageConstraints = ageCS
 
-	ageVK, err := params.GetVerifyingKey("age")
+	ageVK, err := params.GetVerifiedVerifyingKey("age", ageCS)
 	if err != nil {
 		return nil, fmt.Errorf("failed to load age verifying key: %w", err)
 	}
@@ -74,7 +74,7 @@ func NewZKProofSystem() (*ZKProofSystem, error) {
 	system.residencyCircuit = residencyCircuit
 	system.residencyConstraints = residencyCS
 
-	residencyVK, err := params.GetVerifyingKey("residency")
+	residencyVK, err := params.GetVerifiedVerifyingKey("residency", residencyCS)
 	if err != nil {
 		return nil, fmt.Errorf("failed to load residency verifying key: %w", err)
 	}
@@ -89,7 +89,7 @@ func NewZKProofSystem() (*ZKProofSystem, error) {
 	system.scoreCircuit = scoreCircuit
 	system.scoreConstraints = scoreCS
 
-	scoreVK, err := params.GetVerifyingKey("score")
+	scoreVK, err := params.GetVerifiedVerifyingKey("score", scoreCS)
 	if err != nil {
 		return nil, fmt.Errorf("failed to load score verifying key: %w", err)
 	}

@@ -1,4 +1,4 @@
-import { MsgAddTrustedDevice, MsgAddTrustedDeviceResponse, MsgCreateChallenge, MsgCreateChallengeResponse, MsgEnrollFactor, MsgEnrollFactorResponse, MsgRemoveTrustedDevice, MsgRemoveTrustedDeviceResponse, MsgRevokeFactor, MsgRevokeFactorResponse, MsgSetMFAPolicy, MsgSetMFAPolicyResponse, MsgUpdateParams, MsgUpdateParamsResponse, MsgUpdateSensitiveTxConfig, MsgUpdateSensitiveTxConfigResponse, MsgVerifyChallenge, MsgVerifyChallengeResponse } from "./tx.ts";
+import { MsgAddTrustedDevice, MsgAddTrustedDeviceResponse, MsgCreateChallenge, MsgCreateChallengeResponse, MsgEnrollFactor, MsgEnrollFactorResponse, MsgIssueSession, MsgIssueSessionResponse, MsgRefreshSession, MsgRefreshSessionResponse, MsgRemoveTrustedDevice, MsgRemoveTrustedDeviceResponse, MsgRevokeFactor, MsgRevokeFactorResponse, MsgRevokeSession, MsgRevokeSessionResponse, MsgSetMFAPolicy, MsgSetMFAPolicyResponse, MsgUpdateParams, MsgUpdateParamsResponse, MsgUpdateSensitiveTxConfig, MsgUpdateSensitiveTxConfigResponse, MsgVerifyChallenge, MsgVerifyChallengeResponse } from "./tx.ts";
 
 export const Msg = {
   typeName: "virtengine.mfa.v1.Msg",
@@ -49,6 +49,24 @@ export const Msg = {
       name: "UpdateSensitiveTxConfig",
       input: MsgUpdateSensitiveTxConfig,
       output: MsgUpdateSensitiveTxConfigResponse,
+      get parent() { return Msg; },
+    },
+    issueSession: {
+      name: "IssueSession",
+      input: MsgIssueSession,
+      output: MsgIssueSessionResponse,
+      get parent() { return Msg; },
+    },
+    refreshSession: {
+      name: "RefreshSession",
+      input: MsgRefreshSession,
+      output: MsgRefreshSessionResponse,
+      get parent() { return Msg; },
+    },
+    revokeSession: {
+      name: "RevokeSession",
+      input: MsgRevokeSession,
+      output: MsgRevokeSessionResponse,
       get parent() { return Msg; },
     },
     updateParams: {

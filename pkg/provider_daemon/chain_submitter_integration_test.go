@@ -122,6 +122,7 @@ func TestChainSubmitterIntegrationUsageLifecycle(t *testing.T) {
 		ID:           "usage-1",
 		LeaseID:      "lease-1",
 		DeploymentID: "order-1",
+		CustomerID:   "customer-1",
 		StartTime:    time.Now().Add(-time.Hour),
 		EndTime:      time.Now(),
 		Type:         UsageRecordTypePeriodic,
@@ -164,14 +165,15 @@ func TestChainSubmitterIntegrationWaldurUsageEvent(t *testing.T) {
 	}
 
 	report := &ChainUsageReport{
-		OrderID:     waldurReport.BackendID,
-		LeaseID:     "lease-2",
-		UsageUnits:  uint64(waldurReport.Components[0].Amount),
-		UsageType:   waldurReport.Components[0].Type,
-		PeriodStart: waldurReport.PeriodStart,
-		PeriodEnd:   waldurReport.PeriodEnd,
-		UnitPrice:   sdk.NewDecCoinFromDec("uvirt", sdkmath.LegacyNewDec(1)),
-		Signature:   []byte("waldur"),
+		OrderID:         waldurReport.BackendID,
+		LeaseID:         "lease-2",
+		CustomerAddress: "customer-2",
+		UsageUnits:      uint64(waldurReport.Components[0].Amount),
+		UsageType:       waldurReport.Components[0].Type,
+		PeriodStart:     waldurReport.PeriodStart,
+		PeriodEnd:       waldurReport.PeriodEnd,
+		UnitPrice:       sdk.NewDecCoinFromDec("uvirt", sdkmath.LegacyNewDec(1)),
+		RawMetrics:      ResourceMetrics{CPUMilliSeconds: 18_000_000},
 	}
 
 	err := submitter.submitSingleReport(context.Background(), report)

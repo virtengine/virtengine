@@ -350,6 +350,15 @@ func (ck *CachedProviderKeeper) RotateProviderPublicKey(ctx sdk.Context, owner s
 	return err
 }
 
+// RevokeProviderSigningKey revokes an active epoch and invalidates cache.
+func (ck *CachedProviderKeeper) RevokeProviderSigningKey(ctx sdk.Context, owner sdk.AccAddress, keyID string) error {
+	err := ck.Keeper.RevokeProviderSigningKey(ctx, owner, keyID)
+	if err == nil {
+		ck.cache.InvalidatePublicKey(owner)
+	}
+	return err
+}
+
 // DeleteProviderPublicKey deletes a public key and invalidates cache.
 func (ck *CachedProviderKeeper) DeleteProviderPublicKey(ctx sdk.Context, owner sdk.AccAddress) {
 	ck.Keeper.DeleteProviderPublicKey(ctx, owner)

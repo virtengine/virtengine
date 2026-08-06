@@ -41,25 +41,38 @@ export default function AllocationDetailClient() {
   const params = useParams();
   const id = params.id as string;
 
-  const { fetchDashboard, terminateAllocation, isLoading, allocations } =
+  const { fetchDashboard, terminateAllocation, clearDashboard, isLoading, dashboardOwnerAddress } =
     useCustomerDashboardStore();
-  const allocation = useCustomerDashboardStore((state) => selectAllocationById(state, id));
   const wallet = useWallet();
   const account = wallet.accounts[wallet.activeAccountIndex];
+  const allocation = useCustomerDashboardStore((state) =>
+    account?.address && state.dashboardOwnerAddress === account.address
+      ? selectAllocationById(state, id)
+      : undefined
+  );
 
   const [showTerminate, setShowTerminate] = useState(false);
 
   useEffect(() => {
-    if (allocations.length === 0 && account?.address) {
+    if (!account?.address) {
+      if (dashboardOwnerAddress) clearDashboard();
+    } else if (dashboardOwnerAddress !== account.address) {
       void fetchDashboard(account.address);
     }
-  }, [account?.address, allocations.length, fetchDashboard]);
+  }, [account?.address, clearDashboard, dashboardOwnerAddress, fetchDashboard]);
 
   const handleTerminate = useCallback(
     async (allocationId: string) => {
       await terminateAllocation(allocationId);
+      if (!account?.address) {
+        throw new Error('Wallet disconnected before allocation refresh');
+      }
+      if (useCustomerDashboardStore.getState().dashboardOwnerAddress !== account.address) {
+        throw new Error('Wallet changed before allocation refresh');
+      }
+      await fetchDashboard(account.address);
     },
-    [terminateAllocation]
+    [account?.address, fetchDashboard, terminateAllocation]
   );
 
   if (isLoading && !allocation) {

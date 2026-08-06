@@ -13,6 +13,7 @@ package enclave_runtime
 
 import (
 	"bytes"
+	"context"
 	"encoding/binary"
 	"encoding/hex"
 	"encoding/json"
@@ -21,6 +22,8 @@ import (
 	"os"
 	"sync"
 	"time"
+
+	nitroatt "github.com/virtengine/virtengine/pkg/enclave_runtime/nitro"
 )
 
 // AttestationType represents the type of TEE attestation.
@@ -79,31 +82,37 @@ type VerificationPolicy struct {
 	RequireNonce bool `json:"require_nonce"`
 	// TrustedSignerKeys lists trusted signer public keys.
 	TrustedSignerKeys [][]byte `json:"trusted_signer_keys"`
+	// AllowIncompleteVerification permits development/test attestations that do not
+	// carry full platform certificate/signature evidence. This must remain false
+	// in production.
+	AllowIncompleteVerification bool `json:"allow_incomplete_verification"`
 }
 
 // DefaultVerificationPolicy returns a strict default policy.
 func DefaultVerificationPolicy() VerificationPolicy {
 	return VerificationPolicy{
-		AllowDebugMode:       false,
-		RequireLatestTCB:     false,
-		AllowedPlatforms:     []AttestationType{AttestationTypeSGX, AttestationTypeSEVSNP, AttestationTypeNitro},
-		MinimumSecurityLevel: 2,
-		MaxAttestationAge:    24 * time.Hour,
-		RequireNonce:         true,
-		TrustedSignerKeys:    nil,
+		AllowDebugMode:              false,
+		RequireLatestTCB:            false,
+		AllowedPlatforms:            []AttestationType{AttestationTypeSGX, AttestationTypeSEVSNP, AttestationTypeNitro},
+		MinimumSecurityLevel:        2,
+		MaxAttestationAge:           24 * time.Hour,
+		RequireNonce:                true,
+		TrustedSignerKeys:           nil,
+		AllowIncompleteVerification: false,
 	}
 }
 
 // PermissiveVerificationPolicy returns a permissive policy for testing.
 func PermissiveVerificationPolicy() VerificationPolicy {
 	return VerificationPolicy{
-		AllowDebugMode:       true,
-		RequireLatestTCB:     false,
-		AllowedPlatforms:     []AttestationType{AttestationTypeSGX, AttestationTypeSEVSNP, AttestationTypeNitro, AttestationTypeSimulated},
-		MinimumSecurityLevel: 1,
-		MaxAttestationAge:    365 * 24 * time.Hour,
-		RequireNonce:         false,
-		TrustedSignerKeys:    nil,
+		AllowDebugMode:              true,
+		RequireLatestTCB:            false,
+		AllowedPlatforms:            []AttestationType{AttestationTypeSGX, AttestationTypeSEVSNP, AttestationTypeNitro, AttestationTypeSimulated},
+		MinimumSecurityLevel:        1,
+		MaxAttestationAge:           365 * 24 * time.Hour,
+		RequireNonce:                false,
+		TrustedSignerKeys:           nil,
+		AllowIncompleteVerification: true,
 	}
 }
 
@@ -573,24 +582,44 @@ func (v *SEVSNPVerifier) Verify(attestation []byte, nonce []byte, policy Verific
 		result.AddError("launch digest not in allowlist: %s", hex.EncodeToString(result.Measurement))
 	}
 
-	// Real cryptographic verification of SNP attestation report
-	// Note: SNP full Verify requires context and product name, but we don't have these
-	// in the simple verifier. We parse the report to validate structure
-	snpParser := NewSNPReportParser()
-	snpReport, parseErr := snpParser.Parse(attestation)
-	if parseErr != nil {
-		result.AddWarning("SNP report parsing failed: %v", parseErr)
-	} else if snpReport != nil {
-		// Update TCB version from parsed report
-		result.TCBVersion = fmt.Sprintf("tcb-%d", snpReport.CurrentTCB)
-
-		// Create SNP verifier to check if it's available
-		_, err := NewSNPVerifier()
-		if err != nil {
-			result.AddWarning("SNP verifier initialization: %v", err)
+	if policy.AllowIncompleteVerification {
+		// Permissive verification still parses and surfaces structure/TCB data for
+		// test fixtures that do not carry real VCEK-backed evidence.
+		snpParser := NewSNPReportParser()
+		snpReport, parseErr := snpParser.Parse(attestation)
+		if parseErr != nil {
+			result.AddWarning("SNP report parsing failed: %v", parseErr)
+		} else if snpReport != nil {
+			result.TCBVersion = fmt.Sprintf("tcb-%d", snpReport.CurrentTCB)
+			result.AddWarning("SNP cryptographic verification skipped by permissive policy")
+		}
+	} else {
+		chipID := attestation[sevsnpChipIDOffset : sevsnpChipIDOffset+64]
+		signature := attestation[sevsnpSignatureOffset : sevsnpSignatureOffset+256]
+		if isZeroBytes(chipID) || isZeroBytes(signature) {
+			result.AddError("SNP verification failed: report missing hardware-backed chip ID or signature evidence")
 		} else {
-			// SNP signature verification is available but requires VCEK cert or AMD KDS
-			result.AddWarning("SNP signature verification requires VCEK certificate or AMD KDS access (not performed)")
+			snpVerifier, err := NewSNPVerifier()
+			if err != nil {
+				result.AddError("SNP verifier initialization failed: %v", err)
+			} else {
+				snpResult, verifyErr := snpVerifier.Verify(context.Background(), attestation, ProductMilan)
+				if verifyErr != nil {
+					result.AddError("SNP verification failed: %v", verifyErr)
+				} else if snpResult != nil {
+					if snpResult.TCBVersion != "" {
+						result.TCBVersion = snpResult.TCBVersion
+					}
+					for _, warning := range snpResult.Warnings {
+						result.AddWarning("SNP: %s", warning)
+					}
+					if !snpResult.Valid {
+						for _, verificationErr := range snpResult.Errors {
+							result.AddError("SNP verification failed: %s", verificationErr)
+						}
+					}
+				}
+			}
 		}
 	}
 
@@ -617,14 +646,6 @@ func (v *NitroVerifier) Type() AttestationType {
 	return AttestationTypeNitro
 }
 
-// Nitro attestation document structure (simplified).
-// Real implementation would use CBOR/COSE parsing.
-const (
-	nitroMinDocSize = 64
-	nitroPCROffset  = 32
-	nitroPCRLength  = 48
-)
-
 // Verify verifies a Nitro attestation document.
 func (v *NitroVerifier) Verify(attestation []byte, nonce []byte, policy VerificationPolicy) (*VerificationResult, error) {
 	result := &VerificationResult{
@@ -636,78 +657,44 @@ func (v *NitroVerifier) Verify(attestation []byte, nonce []byte, policy Verifica
 		DebugMode:       false, // Nitro doesn't have debug mode in production
 	}
 
-	// Check minimum size
-	if len(attestation) < nitroMinDocSize {
-		result.AddError("Nitro document too small: got %d bytes, need at least %d", len(attestation), nitroMinDocSize)
-		return result, nil
-	}
+	verifyConfig := nitroatt.DefaultVerifierConfig()
+	verifyConfig.MaxDocumentAge = policy.MaxAttestationAge
+	verifyConfig.RequireNonce = policy.RequireNonce
+	verifyConfig.ExpectedNonce = append([]byte(nil), nonce...)
+	verifyConfig.AllowSimulated = policy.AllowIncompleteVerification
+	verifyConfig.SkipSignatureVerification = policy.AllowIncompleteVerification
+	verifyConfig.SkipCertificateChainVerification = policy.AllowIncompleteVerification
 
-	// Check CBOR/COSE magic bytes
-	if len(attestation) >= 2 && !bytes.HasPrefix(attestation, nitroMagic) {
-		result.AddWarning("Nitro document does not start with expected COSE tag")
-	}
-
-	// TODO: Parse CBOR/COSE structure
-	// For now, extract simulated PCR values from fixed offset
-	if len(attestation) >= nitroPCROffset+nitroPCRLength {
-		result.Measurement = make([]byte, nitroPCRLength)
-		copy(result.Measurement, attestation[nitroPCROffset:nitroPCROffset+nitroPCRLength])
-	} else {
-		// Use hash of document as simulated measurement
-		result.Measurement = make([]byte, 32)
-		for i := 0; i < 32 && i < len(attestation); i++ {
-			result.Measurement[i] = attestation[i]
+	nitroResult, verifyErr := nitroatt.NewVerifierWithConfig(verifyConfig).VerifyRaw(attestation)
+	if nitroResult != nil {
+		if !nitroResult.Timestamp.IsZero() {
+			result.Timestamp = nitroResult.Timestamp
 		}
-	}
-
-	// Extract nonce from document (simulated)
-	if len(attestation) > 96 {
-		result.Nonce = attestation[64:96]
-	}
-
-	// Extract enclave ID (simulated)
-	//nolint:gosec // G602: bounds checked above with len(attestation) > 96
-	result.NitroEnclaveID = fmt.Sprintf("i-%x", attestation[:8])
-
-	// TCB version for Nitro
-	result.TCBVersion = "nitro-v1"
-
-	// Verify nonce if required
-	if policy.RequireNonce && len(nonce) > 0 {
-		//nolint:gosec // G602: bounds checked by len(result.Nonce) < len(nonce)
-		if len(result.Nonce) < len(nonce) || !bytes.Equal(result.Nonce[:len(nonce)], nonce) {
-			result.AddError("nonce mismatch: document does not contain expected nonce")
+		result.NitroEnclaveID = nitroResult.ModuleID
+		for _, warning := range nitroResult.Warnings {
+			result.AddWarning("Nitro: %s", warning)
 		}
-	}
-
-	// Check measurement against allowlist
-	if v.allowlist != nil && !v.allowlist.IsTrusted(AttestationTypeNitro, result.Measurement) {
-		result.AddError("PCR values not in allowlist: %s", hex.EncodeToString(result.Measurement))
-	}
-
-	// Real cryptographic verification of Nitro attestation document
-	nitroVerifier, err := NewNitroCryptoVerifier()
-	if err != nil {
-		result.AddWarning("failed to create Nitro verifier: %v", err)
-	} else {
-		nitroResult, verifyErr := nitroVerifier.Verify(attestation)
-		if verifyErr != nil {
-			result.AddWarning("Nitro verification error: %v", verifyErr)
-		} else if nitroResult != nil {
-			// Merge Nitro verification results
-			if !nitroResult.Valid {
-				for _, e := range nitroResult.Errors {
-					result.AddError("Nitro verification failed: %s", e)
-				}
+		if nitroResult.Document != nil && nitroResult.Document.Payload != nil {
+			if pcr0, ok := nitroResult.Document.Payload.PCRs[nitroatt.PCRIndexEIF]; ok {
+				result.Measurement = append([]byte(nil), pcr0...)
 			}
-			for _, w := range nitroResult.Warnings {
-				result.AddWarning("Nitro: %s", w)
-			}
-			// Update enclave ID if available
-			if nitroResult.Document != nil && nitroResult.Document.ModuleID != "" {
-				result.NitroEnclaveID = nitroResult.Document.ModuleID
+			result.Nonce = append([]byte(nil), nitroResult.Document.Payload.Nonce...)
+			if nitroResult.Document.Payload.Digest != "" {
+				result.TCBVersion = nitroResult.Document.Payload.Digest
 			}
 		}
+	}
+
+	if len(result.Measurement) == 0 {
+		result.AddError("Nitro attestation missing PCR0 measurement")
+	}
+
+	if v.allowlist != nil && len(result.Measurement) > 0 && !v.allowlist.IsTrusted(AttestationTypeNitro, result.Measurement) {
+		result.AddError("PCR0 not in allowlist: %s", hex.EncodeToString(result.Measurement))
+	}
+
+	if verifyErr != nil {
+		result.AddError("Nitro verification failed: %v", verifyErr)
 	}
 
 	// Check platform is allowed
@@ -1091,22 +1078,32 @@ func CreateTestSEVSNPReport(measurement []byte, debugMode bool, nonce []byte) []
 
 // CreateTestNitroDocument creates a test Nitro document for testing purposes.
 func CreateTestNitroDocument(pcrs []byte, nonce []byte) []byte {
-	doc := make([]byte, 128)
-
-	// CBOR/COSE magic
-	copy(doc[0:], nitroMagic)
-
-	// PCRs at offset 32
-	if len(pcrs) > 0 {
-		copy(doc[nitroPCROffset:], pcrs)
+	pcr0 := make([]byte, nitroatt.PCRDigestSize)
+	copy(pcr0, pcrs)
+	timestamp := time.Now().UnixMilli()
+	if timestamp < 0 {
+		timestamp = 0
 	}
 
-	// Nonce at offset 64
-	if len(nonce) > 0 {
-		copy(doc[64:], nonce)
+	doc := &nitroatt.AttestationDocument{
+		Protected: []byte{0xA1, 0x01, 0x38, 0x22}, // {1: -35} => ES384
+		Payload: &nitroatt.DocumentPayload{
+			ModuleID:    "sim-nitro-test",
+			Digest:      nitroatt.DigestAlgorithmSHA384,
+			Timestamp:   uint64(timestamp), // #nosec G115 -- negative values are clamped above
+			PCRs:        map[int][]byte{nitroatt.PCRIndexEIF: pcr0},
+			Certificate: []byte("SIMULATED-NITRO-CERT"),
+			Nonce:       append([]byte(nil), nonce...),
+		},
+		Signature: make([]byte, nitroatt.ES384SignatureSize),
 	}
 
-	return doc
+	serialized, err := nitroatt.SerializeDocument(doc)
+	if err != nil {
+		panic(fmt.Sprintf("failed to build test Nitro document: %v", err))
+	}
+
+	return serialized
 }
 
 // CreateTestSimulatedAttestation creates a test simulated attestation.

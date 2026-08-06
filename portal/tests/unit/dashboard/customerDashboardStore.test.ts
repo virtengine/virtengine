@@ -15,6 +15,18 @@ import type {
   CustomerDashboardStats,
 } from '@/types/customer';
 
+const providerMocks = vi.hoisted(() => ({
+  performAction: vi.fn(),
+}));
+
+vi.mock('@/lib/portal-adapter', () => ({
+  MultiProviderClient: class {
+    initialize = vi.fn().mockResolvedValue(undefined);
+    performAction = providerMocks.performAction;
+    getClient = vi.fn();
+  },
+}));
+
 const now = new Date().toISOString();
 
 const mockAllocations: CustomerAllocation[] = [
@@ -139,6 +151,7 @@ const mockStats: CustomerDashboardStats = {
 
 function seedCustomerData() {
   useCustomerDashboardStore.setState({
+    dashboardOwnerAddress: 'virtengine1customer',
     allocations: mockAllocations,
     notifications: mockNotifications,
     billing: mockBilling,
@@ -154,12 +167,14 @@ describe('customerDashboardStore', () => {
   beforeEach(() => {
     vi.useFakeTimers();
     useCustomerDashboardStore.setState({
+      dashboardOwnerAddress: null,
       allocations: [],
       notifications: [],
       isLoading: false,
       error: null,
       allocationFilter: 'all',
     });
+    providerMocks.performAction.mockReset();
   });
 
   afterEach(() => {
@@ -180,7 +195,7 @@ describe('customerDashboardStore', () => {
       expect(state.usage.resources.length).toBeGreaterThan(0);
     });
 
-    it('sets loading state while fetching', async () => {
+    it('sets loading state while fetching', () => {
       useCustomerDashboardStore.setState({ isLoading: true });
       expect(useCustomerDashboardStore.getState().isLoading).toBe(true);
 
@@ -375,12 +390,24 @@ describe('customerDashboardStore', () => {
   });
 
   describe('terminateAllocation', () => {
-    it('sets allocation status to terminated', async () => {
+    it('sets allocation status only from exact committed provider evidence', async () => {
       seedCustomerData();
 
       const { allocations } = useCustomerDashboardStore.getState();
       const running = allocations.find((a) => a.status === 'running');
       expect(running).toBeDefined();
+      providerMocks.performAction.mockResolvedValue({
+        operationId: 'operation-1',
+        action: 'terminate',
+        deploymentId: running!.id,
+        providerId: running!.providerAddress,
+        status: 'committed',
+        issuedAt: new Date(),
+        completedAt: new Date(),
+        state: 'terminated',
+        version: '1',
+        revision: '1',
+      });
 
       await useCustomerDashboardStore.getState().terminateAllocation(running!.id);
 
@@ -388,25 +415,126 @@ describe('customerDashboardStore', () => {
         .getState()
         .allocations.find((a) => a.id === running!.id);
       expect(updated!.status).toBe('terminated');
+      expect(providerMocks.performAction).toHaveBeenCalledWith(running!.id, 'terminate');
+      expect(useCustomerDashboardStore.getState().stats.activeAllocations).toBe(
+        mockStats.activeAllocations - 1
+      );
     });
 
-    it('does not affect other allocations', async () => {
+    it('preserves allocation state and rethrows provider failure', async () => {
       seedCustomerData();
+      const running = useCustomerDashboardStore.getState().allocations[0];
+      providerMocks.performAction.mockRejectedValue(new Error('provider rejected termination'));
 
-      const { allocations } = useCustomerDashboardStore.getState();
-      const running = allocations.filter((a) => a.status === 'running');
-      expect(running.length).toBeGreaterThan(1);
+      await expect(
+        useCustomerDashboardStore.getState().terminateAllocation(running.id)
+      ).rejects.toThrow('provider rejected termination');
+      expect(useCustomerDashboardStore.getState().allocations[0].status).toBe('running');
+      expect(useCustomerDashboardStore.getState().error).toContain('provider rejected');
+    });
 
-      await useCustomerDashboardStore.getState().terminateAllocation(running[0].id);
-
-      const others = useCustomerDashboardStore
-        .getState()
-        .allocations.filter((a) => a.id !== running[0].id);
-      const originalOthers = allocations.filter((a) => a.id !== running[0].id);
-      expect(others.length).toBe(originalOthers.length);
-      others.forEach((a, i) => {
-        expect(a.status).toBe(originalOthers[i].status);
+    it('rejects accepted-only or mismatched termination evidence', async () => {
+      seedCustomerData();
+      const running = useCustomerDashboardStore.getState().allocations[0];
+      providerMocks.performAction.mockResolvedValue({
+        action: 'terminate',
+        deploymentId: running.id,
+        providerId: running.providerAddress,
+        status: 'accepted',
+        state: 'terminating',
       });
+
+      await expect(
+        useCustomerDashboardStore.getState().terminateAllocation(running.id)
+      ).rejects.toThrow('committed termination evidence');
+      expect(useCustomerDashboardStore.getState().allocations[0].status).toBe('running');
+    });
+
+    it('blocks duplicate termination while provider evidence is pending', async () => {
+      seedCustomerData();
+      const running = useCustomerDashboardStore.getState().allocations[0];
+      let resolveReceipt!: (value: unknown) => void;
+      providerMocks.performAction.mockImplementation(
+        () => new Promise((resolve) => (resolveReceipt = resolve))
+      );
+      const pending = useCustomerDashboardStore
+        .getState()
+        .terminateAllocation(running.id)
+        .catch((error) => error);
+
+      await expect(
+        useCustomerDashboardStore.getState().terminateAllocation(running.id)
+      ).rejects.toThrow('already pending');
+      await vi.waitFor(() => expect(providerMocks.performAction).toHaveBeenCalledTimes(1));
+      resolveReceipt({
+        action: 'terminate',
+        deploymentId: running.id,
+        providerId: running.providerAddress,
+        status: 'committed',
+        state: 'terminated',
+      });
+      await pending;
+      expect(providerMocks.performAction).toHaveBeenCalledTimes(1);
+    });
+
+    it('rejects a receipt when the current allocation identity changes', async () => {
+      seedCustomerData();
+      const running = useCustomerDashboardStore.getState().allocations[0];
+      let resolveReceipt!: (value: unknown) => void;
+      providerMocks.performAction.mockImplementation(
+        () => new Promise((resolve) => (resolveReceipt = resolve))
+      );
+      const pending = useCustomerDashboardStore.getState().terminateAllocation(running.id);
+      await vi.waitFor(() => expect(providerMocks.performAction).toHaveBeenCalledTimes(1));
+      useCustomerDashboardStore.setState((state) => ({
+        allocations: state.allocations.map((item) =>
+          item.id === running.id ? { ...item, providerAddress: 've1replacement' } : item
+        ),
+      }));
+      resolveReceipt({
+        action: 'terminate',
+        deploymentId: running.id,
+        providerId: running.providerAddress,
+        status: 'committed',
+        state: 'terminated',
+      });
+
+      await expect(pending).rejects.toThrow('changed while termination was pending');
+      expect(useCustomerDashboardStore.getState().allocations[0].status).toBe('running');
+    });
+
+    it('rejects a receipt after dashboard owner changes', async () => {
+      seedCustomerData();
+      const running = useCustomerDashboardStore.getState().allocations[0];
+      let resolveReceipt!: (value: unknown) => void;
+      providerMocks.performAction.mockImplementation(
+        () => new Promise((resolve) => (resolveReceipt = resolve))
+      );
+      const pending = useCustomerDashboardStore.getState().terminateAllocation(running.id);
+      await vi.waitFor(() => expect(providerMocks.performAction).toHaveBeenCalledTimes(1));
+      useCustomerDashboardStore.setState({ dashboardOwnerAddress: 'virtengine1other' });
+      resolveReceipt({
+        action: 'terminate',
+        deploymentId: running.id,
+        providerId: running.providerAddress,
+        status: 'committed',
+        state: 'terminated',
+      });
+
+      await expect(pending).rejects.toThrow('changed while termination was pending');
+      expect(useCustomerDashboardStore.getState().allocations[0].status).toBe('running');
+    });
+  });
+
+  describe('clearDashboard', () => {
+    it('clears owner-bound dashboard state', () => {
+      seedCustomerData();
+      useCustomerDashboardStore.getState().clearDashboard();
+
+      const state = useCustomerDashboardStore.getState();
+      expect(state.dashboardOwnerAddress).toBeNull();
+      expect(state.allocations).toEqual([]);
+      expect(state.notifications).toEqual([]);
     });
   });
 

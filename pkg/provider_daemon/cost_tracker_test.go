@@ -9,6 +9,8 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/require"
 )
 
 const (
@@ -56,9 +58,7 @@ func TestNewCostTracker(t *testing.T) {
 
 	tracker := NewCostTracker(cfg)
 
-	if tracker == nil {
-		t.Fatal("NewCostTracker should not return nil")
-	}
+	require.NotNil(t, tracker)
 	if tracker.cfg.ProviderID != testProviderID {
 		t.Error("Provider ID not set correctly")
 	}
@@ -76,9 +76,8 @@ func TestCostTrackerStartWorkloadTracking(t *testing.T) {
 	tracker.StartWorkloadTracking(workloadID, deploymentID, leaseID)
 
 	cost, ok := tracker.GetWorkloadCost(workloadID)
-	if !ok {
-		t.Fatal("Workload should be tracked")
-	}
+	require.True(t, ok)
+	require.NotNil(t, cost)
 
 	if cost.WorkloadID != workloadID {
 		t.Errorf("Expected workload ID %s, got %s", workloadID, cost.WorkloadID)
@@ -117,9 +116,8 @@ func TestCostTrackerUpdateWorkloadCost(t *testing.T) {
 	}
 
 	cost, ok := tracker.GetWorkloadCost(workloadID)
-	if !ok {
-		t.Fatal("Workload should still be tracked")
-	}
+	require.True(t, ok)
+	require.NotNil(t, cost)
 
 	if cost.TotalCost <= 0 {
 		t.Error("Total cost should be positive after update")
@@ -156,9 +154,7 @@ func TestCostTrackerStopWorkloadTracking(t *testing.T) {
 
 	cost := tracker.StopWorkloadTracking(workloadID)
 
-	if cost == nil {
-		t.Fatal("Should return cost on stop")
-	}
+	require.NotNil(t, cost)
 	if cost.WorkloadID != workloadID {
 		t.Error("Returned cost should have correct workload ID")
 	}

@@ -298,6 +298,7 @@ func Setup(opts ...SetupAppOption) *VirtEngineApp {
 	appOpts := viper.New()
 
 	appOpts.Set("home", cfg.home)
+	appOpts.Set("skip_module_service_registration", cfg.skipModuleServiceRegistration)
 
 	r := rand.New(rand.NewSource(0)) // #nosec G404 -- deterministic simulation random for genesis export
 	genTime := simulation.RandTimestamp(r)

@@ -90,11 +90,16 @@ type EnclaveHealthStatus struct {
 
 // NewEnclaveHealthStatus creates a new EnclaveHealthStatus with default values
 func NewEnclaveHealthStatus(validatorAddress string) EnclaveHealthStatus {
-	now := time.Now()
+	return NewEnclaveHealthStatusAt(validatorAddress, time.Now().UTC())
+}
+
+// NewEnclaveHealthStatusAt creates a health status using a deterministic timestamp source.
+func NewEnclaveHealthStatusAt(validatorAddress string, now time.Time) EnclaveHealthStatus {
+	now = now.UTC()
 	return EnclaveHealthStatus{
 		ValidatorAddress:    validatorAddress,
-		LastHeartbeat:       now,
-		LastAttestation:     now,
+		LastHeartbeat:       time.Time{},
+		LastAttestation:     time.Time{},
 		AttestationFailures: 0,
 		SignatureFailures:   0,
 		Status:              HealthStatusHealthy,
@@ -132,9 +137,14 @@ func (h *EnclaveHealthStatus) IsUnhealthy() bool {
 
 // UpdateStatus updates the health status and tracks when it changed
 func (h *EnclaveHealthStatus) UpdateStatus(newStatus HealthStatus) {
+	h.UpdateStatusAt(newStatus, time.Now().UTC())
+}
+
+// UpdateStatusAt updates health status using a deterministic timestamp source.
+func (h *EnclaveHealthStatus) UpdateStatusAt(newStatus HealthStatus, now time.Time) {
 	if h.Status != newStatus {
 		h.Status = newStatus
-		h.LastStatusChange = time.Now()
+		h.LastStatusChange = now.UTC()
 	}
 }
 

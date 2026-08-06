@@ -227,11 +227,356 @@ func (m *QueryProviderResponse) GetProvider() Provider {
 	return Provider{}
 }
 
+type ProviderSigningKeyRecord struct {
+	PublicKey         []byte `protobuf:"bytes,1,opt,name=public_key,json=publicKey,proto3" json:"public_key,omitempty"`
+	KeyType           string `protobuf:"bytes,2,opt,name=key_type,json=keyType,proto3" json:"key_type,omitempty"`
+	KeyId             string `protobuf:"bytes,3,opt,name=key_id,json=keyId,proto3" json:"key_id,omitempty"`
+	Epoch             uint64 `protobuf:"varint,4,opt,name=epoch,proto3" json:"epoch,omitempty"`
+	ActivatedAtHeight int64  `protobuf:"varint,5,opt,name=activated_at_height,json=activatedAtHeight,proto3" json:"activated_at_height,omitempty"`
+	ActivatedAtUnix   int64  `protobuf:"varint,6,opt,name=activated_at_unix,json=activatedAtUnix,proto3" json:"activated_at_unix,omitempty"`
+	ExpiresAtHeight   int64  `protobuf:"varint,7,opt,name=expires_at_height,json=expiresAtHeight,proto3" json:"expires_at_height,omitempty"`
+	ExpiresAtUnix     int64  `protobuf:"varint,8,opt,name=expires_at_unix,json=expiresAtUnix,proto3" json:"expires_at_unix,omitempty"`
+	RetiredAtHeight   int64  `protobuf:"varint,9,opt,name=retired_at_height,json=retiredAtHeight,proto3" json:"retired_at_height,omitempty"`
+	RetiredAtUnix     int64  `protobuf:"varint,10,opt,name=retired_at_unix,json=retiredAtUnix,proto3" json:"retired_at_unix,omitempty"`
+	RevokedAtHeight   int64  `protobuf:"varint,11,opt,name=revoked_at_height,json=revokedAtHeight,proto3" json:"revoked_at_height,omitempty"`
+	RevokedAtUnix     int64  `protobuf:"varint,12,opt,name=revoked_at_unix,json=revokedAtUnix,proto3" json:"revoked_at_unix,omitempty"`
+	PreviousKeyId     string `protobuf:"bytes,13,opt,name=previous_key_id,json=previousKeyId,proto3" json:"previous_key_id,omitempty"`
+	RotationCount     uint32 `protobuf:"varint,14,opt,name=rotation_count,json=rotationCount,proto3" json:"rotation_count,omitempty"`
+}
+
+func (m *ProviderSigningKeyRecord) Reset()         { *m = ProviderSigningKeyRecord{} }
+func (m *ProviderSigningKeyRecord) String() string { return proto.CompactTextString(m) }
+func (*ProviderSigningKeyRecord) ProtoMessage()    {}
+func (*ProviderSigningKeyRecord) Descriptor() ([]byte, []int) {
+	return fileDescriptor_e15949ca246fd2a1, []int{4}
+}
+func (m *ProviderSigningKeyRecord) XXX_Unmarshal(b []byte) error {
+	return m.Unmarshal(b)
+}
+func (m *ProviderSigningKeyRecord) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	if deterministic {
+		return xxx_messageInfo_ProviderSigningKeyRecord.Marshal(b, m, deterministic)
+	} else {
+		b = b[:cap(b)]
+		n, err := m.MarshalToSizedBuffer(b)
+		if err != nil {
+			return nil, err
+		}
+		return b[:n], nil
+	}
+}
+func (m *ProviderSigningKeyRecord) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_ProviderSigningKeyRecord.Merge(m, src)
+}
+func (m *ProviderSigningKeyRecord) XXX_Size() int {
+	return m.Size()
+}
+func (m *ProviderSigningKeyRecord) XXX_DiscardUnknown() {
+	xxx_messageInfo_ProviderSigningKeyRecord.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_ProviderSigningKeyRecord proto.InternalMessageInfo
+
+func (m *ProviderSigningKeyRecord) GetPublicKey() []byte {
+	if m != nil {
+		return m.PublicKey
+	}
+	return nil
+}
+
+func (m *ProviderSigningKeyRecord) GetKeyType() string {
+	if m != nil {
+		return m.KeyType
+	}
+	return ""
+}
+
+func (m *ProviderSigningKeyRecord) GetKeyId() string {
+	if m != nil {
+		return m.KeyId
+	}
+	return ""
+}
+
+func (m *ProviderSigningKeyRecord) GetEpoch() uint64 {
+	if m != nil {
+		return m.Epoch
+	}
+	return 0
+}
+
+func (m *ProviderSigningKeyRecord) GetActivatedAtHeight() int64 {
+	if m != nil {
+		return m.ActivatedAtHeight
+	}
+	return 0
+}
+
+func (m *ProviderSigningKeyRecord) GetActivatedAtUnix() int64 {
+	if m != nil {
+		return m.ActivatedAtUnix
+	}
+	return 0
+}
+
+func (m *ProviderSigningKeyRecord) GetExpiresAtHeight() int64 {
+	if m != nil {
+		return m.ExpiresAtHeight
+	}
+	return 0
+}
+
+func (m *ProviderSigningKeyRecord) GetExpiresAtUnix() int64 {
+	if m != nil {
+		return m.ExpiresAtUnix
+	}
+	return 0
+}
+
+func (m *ProviderSigningKeyRecord) GetRetiredAtHeight() int64 {
+	if m != nil {
+		return m.RetiredAtHeight
+	}
+	return 0
+}
+
+func (m *ProviderSigningKeyRecord) GetRetiredAtUnix() int64 {
+	if m != nil {
+		return m.RetiredAtUnix
+	}
+	return 0
+}
+
+func (m *ProviderSigningKeyRecord) GetRevokedAtHeight() int64 {
+	if m != nil {
+		return m.RevokedAtHeight
+	}
+	return 0
+}
+
+func (m *ProviderSigningKeyRecord) GetRevokedAtUnix() int64 {
+	if m != nil {
+		return m.RevokedAtUnix
+	}
+	return 0
+}
+
+func (m *ProviderSigningKeyRecord) GetPreviousKeyId() string {
+	if m != nil {
+		return m.PreviousKeyId
+	}
+	return ""
+}
+
+func (m *ProviderSigningKeyRecord) GetRotationCount() uint32 {
+	if m != nil {
+		return m.RotationCount
+	}
+	return 0
+}
+
+type QueryProviderSigningKeyRequest struct {
+	Owner string `protobuf:"bytes,1,opt,name=owner,proto3" json:"owner,omitempty"`
+	KeyId string `protobuf:"bytes,2,opt,name=key_id,json=keyId,proto3" json:"key_id,omitempty"`
+	Epoch uint64 `protobuf:"varint,3,opt,name=epoch,proto3" json:"epoch,omitempty"`
+}
+
+func (m *QueryProviderSigningKeyRequest) Reset()         { *m = QueryProviderSigningKeyRequest{} }
+func (m *QueryProviderSigningKeyRequest) String() string { return proto.CompactTextString(m) }
+func (*QueryProviderSigningKeyRequest) ProtoMessage()    {}
+func (*QueryProviderSigningKeyRequest) Descriptor() ([]byte, []int) {
+	return fileDescriptor_e15949ca246fd2a1, []int{5}
+}
+func (m *QueryProviderSigningKeyRequest) XXX_Unmarshal(b []byte) error {
+	return m.Unmarshal(b)
+}
+func (m *QueryProviderSigningKeyRequest) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	if deterministic {
+		return xxx_messageInfo_QueryProviderSigningKeyRequest.Marshal(b, m, deterministic)
+	} else {
+		b = b[:cap(b)]
+		n, err := m.MarshalToSizedBuffer(b)
+		if err != nil {
+			return nil, err
+		}
+		return b[:n], nil
+	}
+}
+func (m *QueryProviderSigningKeyRequest) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_QueryProviderSigningKeyRequest.Merge(m, src)
+}
+func (m *QueryProviderSigningKeyRequest) XXX_Size() int {
+	return m.Size()
+}
+func (m *QueryProviderSigningKeyRequest) XXX_DiscardUnknown() {
+	xxx_messageInfo_QueryProviderSigningKeyRequest.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_QueryProviderSigningKeyRequest proto.InternalMessageInfo
+
+func (m *QueryProviderSigningKeyRequest) GetOwner() string {
+	if m != nil {
+		return m.Owner
+	}
+	return ""
+}
+
+func (m *QueryProviderSigningKeyRequest) GetKeyId() string {
+	if m != nil {
+		return m.KeyId
+	}
+	return ""
+}
+
+func (m *QueryProviderSigningKeyRequest) GetEpoch() uint64 {
+	if m != nil {
+		return m.Epoch
+	}
+	return 0
+}
+
+type QueryProviderSigningKeyResponse struct {
+	Key ProviderSigningKeyRecord `protobuf:"bytes,1,opt,name=key,proto3" json:"key"`
+}
+
+func (m *QueryProviderSigningKeyResponse) Reset()         { *m = QueryProviderSigningKeyResponse{} }
+func (m *QueryProviderSigningKeyResponse) String() string { return proto.CompactTextString(m) }
+func (*QueryProviderSigningKeyResponse) ProtoMessage()    {}
+func (*QueryProviderSigningKeyResponse) Descriptor() ([]byte, []int) {
+	return fileDescriptor_e15949ca246fd2a1, []int{6}
+}
+func (m *QueryProviderSigningKeyResponse) XXX_Unmarshal(b []byte) error {
+	return m.Unmarshal(b)
+}
+func (m *QueryProviderSigningKeyResponse) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	if deterministic {
+		return xxx_messageInfo_QueryProviderSigningKeyResponse.Marshal(b, m, deterministic)
+	} else {
+		b = b[:cap(b)]
+		n, err := m.MarshalToSizedBuffer(b)
+		if err != nil {
+			return nil, err
+		}
+		return b[:n], nil
+	}
+}
+func (m *QueryProviderSigningKeyResponse) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_QueryProviderSigningKeyResponse.Merge(m, src)
+}
+func (m *QueryProviderSigningKeyResponse) XXX_Size() int {
+	return m.Size()
+}
+func (m *QueryProviderSigningKeyResponse) XXX_DiscardUnknown() {
+	xxx_messageInfo_QueryProviderSigningKeyResponse.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_QueryProviderSigningKeyResponse proto.InternalMessageInfo
+
+func (m *QueryProviderSigningKeyResponse) GetKey() ProviderSigningKeyRecord {
+	if m != nil {
+		return m.Key
+	}
+	return ProviderSigningKeyRecord{}
+}
+
+type QueryProviderSigningKeyEpochsRequest struct {
+	Owner string `protobuf:"bytes,1,opt,name=owner,proto3" json:"owner,omitempty"`
+}
+
+func (m *QueryProviderSigningKeyEpochsRequest) Reset()         { *m = QueryProviderSigningKeyEpochsRequest{} }
+func (m *QueryProviderSigningKeyEpochsRequest) String() string { return proto.CompactTextString(m) }
+func (*QueryProviderSigningKeyEpochsRequest) ProtoMessage()    {}
+func (*QueryProviderSigningKeyEpochsRequest) Descriptor() ([]byte, []int) {
+	return fileDescriptor_e15949ca246fd2a1, []int{7}
+}
+func (m *QueryProviderSigningKeyEpochsRequest) XXX_Unmarshal(b []byte) error {
+	return m.Unmarshal(b)
+}
+func (m *QueryProviderSigningKeyEpochsRequest) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	if deterministic {
+		return xxx_messageInfo_QueryProviderSigningKeyEpochsRequest.Marshal(b, m, deterministic)
+	} else {
+		b = b[:cap(b)]
+		n, err := m.MarshalToSizedBuffer(b)
+		if err != nil {
+			return nil, err
+		}
+		return b[:n], nil
+	}
+}
+func (m *QueryProviderSigningKeyEpochsRequest) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_QueryProviderSigningKeyEpochsRequest.Merge(m, src)
+}
+func (m *QueryProviderSigningKeyEpochsRequest) XXX_Size() int {
+	return m.Size()
+}
+func (m *QueryProviderSigningKeyEpochsRequest) XXX_DiscardUnknown() {
+	xxx_messageInfo_QueryProviderSigningKeyEpochsRequest.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_QueryProviderSigningKeyEpochsRequest proto.InternalMessageInfo
+
+func (m *QueryProviderSigningKeyEpochsRequest) GetOwner() string {
+	if m != nil {
+		return m.Owner
+	}
+	return ""
+}
+
+type QueryProviderSigningKeyEpochsResponse struct {
+	Keys []ProviderSigningKeyRecord `protobuf:"bytes,1,rep,name=keys,proto3" json:"keys"`
+}
+
+func (m *QueryProviderSigningKeyEpochsResponse) Reset()         { *m = QueryProviderSigningKeyEpochsResponse{} }
+func (m *QueryProviderSigningKeyEpochsResponse) String() string { return proto.CompactTextString(m) }
+func (*QueryProviderSigningKeyEpochsResponse) ProtoMessage()    {}
+func (*QueryProviderSigningKeyEpochsResponse) Descriptor() ([]byte, []int) {
+	return fileDescriptor_e15949ca246fd2a1, []int{8}
+}
+func (m *QueryProviderSigningKeyEpochsResponse) XXX_Unmarshal(b []byte) error {
+	return m.Unmarshal(b)
+}
+func (m *QueryProviderSigningKeyEpochsResponse) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	if deterministic {
+		return xxx_messageInfo_QueryProviderSigningKeyEpochsResponse.Marshal(b, m, deterministic)
+	} else {
+		b = b[:cap(b)]
+		n, err := m.MarshalToSizedBuffer(b)
+		if err != nil {
+			return nil, err
+		}
+		return b[:n], nil
+	}
+}
+func (m *QueryProviderSigningKeyEpochsResponse) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_QueryProviderSigningKeyEpochsResponse.Merge(m, src)
+}
+func (m *QueryProviderSigningKeyEpochsResponse) XXX_Size() int {
+	return m.Size()
+}
+func (m *QueryProviderSigningKeyEpochsResponse) XXX_DiscardUnknown() {
+	xxx_messageInfo_QueryProviderSigningKeyEpochsResponse.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_QueryProviderSigningKeyEpochsResponse proto.InternalMessageInfo
+
+func (m *QueryProviderSigningKeyEpochsResponse) GetKeys() []ProviderSigningKeyRecord {
+	if m != nil {
+		return m.Keys
+	}
+	return nil
+}
+
 func init() {
 	proto.RegisterType((*QueryProvidersRequest)(nil), "virtengine.provider.v1beta4.QueryProvidersRequest")
 	proto.RegisterType((*QueryProvidersResponse)(nil), "virtengine.provider.v1beta4.QueryProvidersResponse")
 	proto.RegisterType((*QueryProviderRequest)(nil), "virtengine.provider.v1beta4.QueryProviderRequest")
 	proto.RegisterType((*QueryProviderResponse)(nil), "virtengine.provider.v1beta4.QueryProviderResponse")
+	proto.RegisterType((*ProviderSigningKeyRecord)(nil), "virtengine.provider.v1beta4.ProviderSigningKeyRecord")
+	proto.RegisterType((*QueryProviderSigningKeyRequest)(nil), "virtengine.provider.v1beta4.QueryProviderSigningKeyRequest")
+	proto.RegisterType((*QueryProviderSigningKeyResponse)(nil), "virtengine.provider.v1beta4.QueryProviderSigningKeyResponse")
+	proto.RegisterType((*QueryProviderSigningKeyEpochsRequest)(nil), "virtengine.provider.v1beta4.QueryProviderSigningKeyEpochsRequest")
+	proto.RegisterType((*QueryProviderSigningKeyEpochsResponse)(nil), "virtengine.provider.v1beta4.QueryProviderSigningKeyEpochsResponse")
 }
 
 func init() {
@@ -239,35 +584,61 @@ func init() {
 }
 
 var fileDescriptor_e15949ca246fd2a1 = []byte{
-	// 447 bytes of a gzipped FileDescriptorProto
-	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0x94, 0x93, 0xc1, 0x8e, 0xd2, 0x40,
-	0x1c, 0xc6, 0x3b, 0xe8, 0x9a, 0x65, 0xf6, 0xe4, 0x04, 0xcd, 0x06, 0x4d, 0x77, 0xd3, 0xc4, 0x5d,
-	0x62, 0xcc, 0x8c, 0x14, 0xe3, 0xcd, 0x0b, 0x07, 0xb9, 0x62, 0x0f, 0x9a, 0x78, 0xd1, 0x16, 0x26,
-	0x63, 0xa3, 0xcc, 0xbf, 0x74, 0x0a, 0xc6, 0x18, 0x2f, 0x3e, 0x81, 0x89, 0xaf, 0xe0, 0x45, 0xdf,
-	0xc0, 0x37, 0xe0, 0x48, 0xe2, 0xc5, 0x78, 0x50, 0x03, 0x3e, 0x88, 0xe9, 0x74, 0x86, 0x02, 0x1a,
-	0xb6, 0xdc, 0x06, 0xfa, 0xfd, 0xbf, 0xef, 0xf7, 0xfd, 0xa7, 0xc5, 0xe7, 0xd3, 0x38, 0xcd, 0xb8,
-	0x14, 0xb1, 0xe4, 0x2c, 0x49, 0x61, 0x1a, 0x0f, 0x79, 0xca, 0xa6, 0xed, 0x88, 0x67, 0xe1, 0x3d,
-	0x36, 0x9e, 0xf0, 0xf4, 0x0d, 0x4d, 0x52, 0xc8, 0x80, 0xdc, 0x28, 0x85, 0xd4, 0x0a, 0xa9, 0x11,
-	0x36, 0x1b, 0x02, 0x04, 0x68, 0x1d, 0xcb, 0x4f, 0xc5, 0x48, 0xf3, 0xa6, 0x00, 0x10, 0xaf, 0x38,
-	0x0b, 0x93, 0x98, 0x85, 0x52, 0x42, 0x16, 0x66, 0x31, 0x48, 0x65, 0x9e, 0xde, 0x1e, 0x80, 0x1a,
-	0x81, 0x62, 0x51, 0xa8, 0x78, 0x91, 0x64, 0x72, 0xdb, 0x2c, 0x09, 0x45, 0x2c, 0xb5, 0xd8, 0x6a,
-	0x77, 0x51, 0xae, 0x68, 0xb4, 0xd6, 0x7b, 0x86, 0xaf, 0x3d, 0xca, 0xdd, 0xfa, 0xe6, 0x6f, 0x15,
-	0xf0, 0xf1, 0x84, 0xab, 0x8c, 0x3c, 0xc4, 0xb8, 0x34, 0x3e, 0x46, 0xa7, 0xa8, 0x75, 0xe4, 0x9f,
-	0xd1, 0x82, 0x82, 0xe6, 0x14, 0xb4, 0xe8, 0x6b, 0x28, 0x68, 0x3f, 0x14, 0xdc, 0xcc, 0x06, 0x6b,
-	0x93, 0xde, 0x57, 0x84, 0xaf, 0x6f, 0x27, 0xa8, 0x04, 0xa4, 0xe2, 0xe4, 0x31, 0xae, 0x5b, 0x1a,
-	0x75, 0x8c, 0x4e, 0x2f, 0xb5, 0x8e, 0xfc, 0x5b, 0x74, 0xc7, 0xe2, 0xa8, 0xb5, 0xe8, 0x5e, 0x9d,
-	0xfd, 0x3c, 0x71, 0xbe, 0xfc, 0x3a, 0xa9, 0x97, 0xa6, 0xa5, 0x15, 0xe9, 0x6d, 0xa0, 0xd7, 0x34,
-	0xfa, 0xf9, 0x85, 0xe8, 0x05, 0xd4, 0x06, 0xfb, 0x1d, 0xdc, 0xd8, 0x40, 0xb7, 0xbb, 0x69, 0xe0,
-	0x03, 0x78, 0x2d, 0x79, 0xaa, 0xd7, 0x52, 0x0f, 0x8a, 0x1f, 0xde, 0xf3, 0xad, 0x55, 0xae, 0x7a,
-	0xf6, 0xf0, 0xa1, 0x85, 0x33, 0x8b, 0xac, 0x58, 0xf3, 0x72, 0x5e, 0x33, 0x58, 0x0d, 0xfb, 0x3f,
-	0x6a, 0xf8, 0x40, 0x47, 0x90, 0x4f, 0x08, 0x97, 0xdd, 0x89, 0xbf, 0xd3, 0xee, 0xbf, 0xf7, 0xdb,
-	0xec, 0xec, 0x35, 0x53, 0x34, 0xf1, 0xe8, 0xfb, 0x6f, 0x7f, 0x3e, 0xd6, 0x5a, 0xe4, 0x8c, 0x55,
-	0x79, 0xc5, 0x14, 0xf9, 0x8c, 0xf0, 0xa1, 0x75, 0x21, 0xed, 0xea, 0x89, 0x16, 0xd2, 0xdf, 0x67,
-	0xc4, 0x30, 0xde, 0xd7, 0x8c, 0x77, 0x09, 0xad, 0xc6, 0xc8, 0xde, 0xea, 0xdb, 0x7b, 0xd7, 0x7d,
-	0x32, 0x5b, 0xb8, 0x68, 0xbe, 0x70, 0xd1, 0xef, 0x85, 0x8b, 0x3e, 0x2c, 0x5d, 0x67, 0xbe, 0x74,
-	0x9d, 0xef, 0x4b, 0xd7, 0x79, 0xfa, 0x40, 0xc4, 0xd9, 0x8b, 0x49, 0x44, 0x07, 0x30, 0x5a, 0xf7,
-	0x5c, 0x3b, 0xaa, 0xe1, 0x4b, 0x26, 0x80, 0x49, 0x18, 0xfe, 0x1b, 0x15, 0x5d, 0xd1, 0x5f, 0x5a,
-	0xe7, 0x6f, 0x00, 0x00, 0x00, 0xff, 0xff, 0xc1, 0xb3, 0x50, 0xcd, 0x3d, 0x04, 0x00, 0x00,
+	// 856 bytes of a gzipped FileDescriptorProto
+	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0xa4, 0x96, 0xdd, 0x4e, 0xdb, 0x48,
+	0x14, 0xc7, 0x63, 0x12, 0x42, 0x32, 0x21, 0x20, 0x66, 0x61, 0xe5, 0xcd, 0xee, 0x86, 0xc8, 0x5a,
+	0x42, 0x84, 0x76, 0xed, 0x25, 0xec, 0xee, 0x0d, 0x70, 0x01, 0x88, 0xa5, 0x55, 0x54, 0x95, 0xba,
+	0x5f, 0x52, 0x6f, 0x52, 0xc7, 0x19, 0x39, 0xa3, 0x80, 0xc7, 0xd8, 0x4e, 0x1a, 0x0b, 0x71, 0xd3,
+	0x27, 0xa8, 0xd4, 0x37, 0xa8, 0x7a, 0xd1, 0xf6, 0x0d, 0xfa, 0x06, 0x5c, 0x22, 0xf5, 0xa6, 0x17,
+	0x55, 0x5b, 0x41, 0xd5, 0xe7, 0xa8, 0x3c, 0x9e, 0x71, 0x6c, 0x3e, 0x42, 0x80, 0xbb, 0x78, 0xce,
+	0xff, 0xfc, 0xce, 0xff, 0xcc, 0x9c, 0x19, 0x00, 0xf3, 0x5d, 0x6c, 0xbb, 0xc8, 0x34, 0xb0, 0x89,
+	0x14, 0xcb, 0x26, 0x5d, 0xdc, 0x44, 0xb6, 0xd2, 0x5d, 0x6c, 0x20, 0x57, 0xfb, 0x47, 0xd9, 0xeb,
+	0x20, 0xdb, 0x93, 0x2d, 0x9b, 0xb8, 0x04, 0xfe, 0xda, 0x17, 0xca, 0x5c, 0x28, 0x33, 0x61, 0x61,
+	0xda, 0x20, 0x06, 0xa1, 0x3a, 0xc5, 0xff, 0x15, 0xa4, 0x14, 0x7e, 0x33, 0x08, 0x31, 0x76, 0x90,
+	0xa2, 0x59, 0x58, 0xd1, 0x4c, 0x93, 0xb8, 0x9a, 0x8b, 0x89, 0xe9, 0xb0, 0xe8, 0x82, 0x4e, 0x9c,
+	0x5d, 0xe2, 0x28, 0x0d, 0xcd, 0x41, 0x41, 0x25, 0x56, 0x77, 0x51, 0xb1, 0x34, 0x03, 0x9b, 0x54,
+	0xcc, 0xb5, 0x83, 0x5c, 0x86, 0x6e, 0xa8, 0x56, 0xaa, 0x83, 0x99, 0x7b, 0x3e, 0x6d, 0x9b, 0x2d,
+	0x3b, 0x2a, 0xda, 0xeb, 0x20, 0xc7, 0x85, 0xff, 0x03, 0xd0, 0x07, 0x8b, 0x42, 0x49, 0xa8, 0xe4,
+	0xaa, 0x65, 0x39, 0x70, 0x21, 0xfb, 0x2e, 0xe4, 0xa0, 0x5f, 0xe6, 0x42, 0xde, 0xd6, 0x0c, 0xc4,
+	0x72, 0xd5, 0x48, 0xa6, 0xf4, 0x5e, 0x00, 0x3f, 0x9f, 0xae, 0xe0, 0x58, 0xc4, 0x74, 0x10, 0x7c,
+	0x04, 0xb2, 0xdc, 0x8d, 0x23, 0x0a, 0xa5, 0x64, 0x25, 0x57, 0x9d, 0x93, 0x07, 0x6c, 0x9c, 0xcc,
+	0x11, 0xeb, 0x53, 0x87, 0x9f, 0x67, 0x13, 0xef, 0xbe, 0xcc, 0x66, 0xfb, 0xd0, 0x3e, 0x0a, 0x6e,
+	0xc5, 0xac, 0x8f, 0x50, 0xeb, 0xf3, 0x97, 0x5a, 0x0f, 0x4c, 0xc5, 0xbc, 0xff, 0x09, 0xa6, 0x63,
+	0xd6, 0xf9, 0xde, 0x4c, 0x83, 0x51, 0xf2, 0xcc, 0x44, 0x36, 0xdd, 0x96, 0xac, 0x1a, 0x7c, 0x48,
+	0x4f, 0x4f, 0x6d, 0x65, 0xd8, 0xe7, 0x16, 0xc8, 0x70, 0x73, 0x6c, 0x23, 0x87, 0x6c, 0x33, 0xe5,
+	0xb7, 0xa9, 0x86, 0xc9, 0xd2, 0x9b, 0x14, 0x10, 0x79, 0xf0, 0x3e, 0x36, 0x4c, 0x6c, 0x1a, 0x35,
+	0xe4, 0xa9, 0x48, 0x27, 0x76, 0x13, 0xfe, 0x0e, 0x80, 0xd5, 0x69, 0xec, 0x60, 0xbd, 0xde, 0x46,
+	0x1e, 0xad, 0x33, 0xae, 0x66, 0x83, 0x95, 0x1a, 0xf2, 0xe0, 0x2f, 0x20, 0xd3, 0x46, 0x5e, 0xdd,
+	0xf5, 0x2c, 0x44, 0xb7, 0x24, 0xab, 0x8e, 0xb5, 0x91, 0xf7, 0xc0, 0xb3, 0x10, 0x9c, 0x01, 0x69,
+	0x3f, 0x84, 0x9b, 0x62, 0x32, 0xe8, 0xa7, 0x8d, 0xbc, 0xdb, 0x4d, 0xbf, 0x4b, 0x64, 0x11, 0xbd,
+	0x25, 0xa6, 0x4a, 0x42, 0x25, 0xa5, 0x06, 0x1f, 0x50, 0x06, 0x3f, 0x69, 0xba, 0x8b, 0xbb, 0x9a,
+	0x8b, 0x9a, 0x75, 0xcd, 0xad, 0xb7, 0x10, 0x36, 0x5a, 0xae, 0x38, 0x5a, 0x12, 0x2a, 0x49, 0x75,
+	0x2a, 0x0c, 0xad, 0xb9, 0xb7, 0x68, 0x00, 0x2e, 0x80, 0xa9, 0x98, 0xbe, 0x63, 0xe2, 0x9e, 0x98,
+	0xa6, 0xea, 0xc9, 0x88, 0xfa, 0xa1, 0x89, 0x7b, 0xbe, 0x16, 0xf5, 0x2c, 0x6c, 0x23, 0x27, 0x42,
+	0x1e, 0x0b, 0xb4, 0x2c, 0x10, 0x72, 0xcb, 0x60, 0x32, 0xa2, 0xa5, 0xd4, 0x0c, 0x55, 0xe6, 0x43,
+	0x25, 0x67, 0xda, 0xc8, 0xc5, 0x76, 0xcc, 0x6d, 0x36, 0x60, 0xb2, 0x40, 0x94, 0x19, 0xd1, 0x52,
+	0x26, 0x08, 0x98, 0xa1, 0xb2, 0xcf, 0xec, 0x92, 0x76, 0x8c, 0x99, 0xe3, 0x4c, 0x1a, 0x88, 0x33,
+	0x43, 0x2d, 0x65, 0x8e, 0x73, 0x26, 0x53, 0x52, 0x66, 0x19, 0x4c, 0x5a, 0x36, 0xea, 0x62, 0xd2,
+	0x71, 0xea, 0xec, 0x34, 0xf2, 0xf4, 0x34, 0xf2, 0x7c, 0xb9, 0x46, 0x4f, 0x65, 0x0e, 0x4c, 0xd8,
+	0xec, 0x6d, 0xa8, 0xeb, 0xa4, 0x63, 0xba, 0xe2, 0x44, 0x49, 0xa8, 0xe4, 0xd5, 0x3c, 0x5f, 0xdd,
+	0xf0, 0x17, 0x25, 0x1d, 0x14, 0x63, 0xc3, 0x18, 0x1d, 0x97, 0x01, 0x43, 0x1c, 0x99, 0x85, 0x91,
+	0x73, 0x67, 0x21, 0x19, 0x99, 0x05, 0xc9, 0x02, 0xb3, 0x17, 0x16, 0x61, 0xb3, 0x7f, 0x07, 0x24,
+	0xf9, 0x38, 0xe6, 0xaa, 0xff, 0x0e, 0x35, 0xf6, 0xa7, 0x27, 0x9b, 0x5d, 0x03, 0x9f, 0x23, 0xad,
+	0x80, 0x3f, 0x2e, 0xa8, 0xb8, 0xe9, 0x3b, 0x72, 0x06, 0xdf, 0xd0, 0x1e, 0x98, 0xbb, 0x24, 0x9b,
+	0xb9, 0xbe, 0x0b, 0x52, 0x6d, 0xe4, 0xf1, 0x47, 0xe9, 0x46, 0xb6, 0x29, 0xa8, 0xfa, 0x2a, 0x0d,
+	0x46, 0x69, 0x69, 0xf8, 0x5a, 0x00, 0xfd, 0x57, 0x0b, 0x56, 0x07, 0xa2, 0xcf, 0x7d, 0x99, 0x0b,
+	0x4b, 0x57, 0xca, 0x09, 0x3a, 0x92, 0xe4, 0xe7, 0x1f, 0xbe, 0xbd, 0x1c, 0xa9, 0xc0, 0xb2, 0x32,
+	0xcc, 0x1f, 0x07, 0x07, 0xbe, 0x15, 0x40, 0x86, 0x53, 0xe0, 0xe2, 0xf0, 0x15, 0xb9, 0xc9, 0xea,
+	0x55, 0x52, 0x98, 0xc7, 0xff, 0xa8, 0xc7, 0xbf, 0xa1, 0x3c, 0x9c, 0x47, 0x65, 0x9f, 0x9e, 0xea,
+	0x01, 0xfc, 0x24, 0x00, 0x78, 0xf6, 0x14, 0xe0, 0xf2, 0xf0, 0x16, 0xce, 0xdc, 0x8e, 0xc2, 0xca,
+	0xf5, 0x92, 0x59, 0x27, 0x35, 0xda, 0xc9, 0x26, 0xdc, 0xb8, 0x5a, 0x27, 0x8a, 0x13, 0xa0, 0xfe,
+	0xf2, 0x67, 0x46, 0xd9, 0xa7, 0x97, 0xec, 0x00, 0x7e, 0x17, 0xce, 0x7b, 0xf5, 0x83, 0x89, 0x85,
+	0x6b, 0xd7, 0xf1, 0x19, 0xbb, 0x2b, 0x85, 0xf5, 0x9b, 0x20, 0x58, 0xc3, 0x1b, 0xb4, 0xe1, 0x55,
+	0xb8, 0x7c, 0x83, 0x86, 0xd7, 0x1f, 0x1f, 0x1e, 0x17, 0x85, 0xa3, 0xe3, 0xa2, 0xf0, 0xf5, 0xb8,
+	0x28, 0xbc, 0x38, 0x29, 0x26, 0x8e, 0x4e, 0x8a, 0x89, 0x8f, 0x27, 0xc5, 0xc4, 0x93, 0x55, 0x03,
+	0xbb, 0xad, 0x4e, 0x43, 0xd6, 0xc9, 0x6e, 0xb4, 0x40, 0xe4, 0xa7, 0xd3, 0x6c, 0x2b, 0x06, 0x51,
+	0x4c, 0xd2, 0x3c, 0x5b, 0xb7, 0x91, 0xa6, 0xff, 0xeb, 0x2c, 0xfd, 0x08, 0x00, 0x00, 0xff, 0xff,
+	0xcd, 0x8c, 0xf6, 0xad, 0xbf, 0x09, 0x00, 0x00,
 }
 
 // Reference imports to suppress errors if they are not otherwise used.
@@ -286,6 +657,8 @@ type QueryClient interface {
 	Providers(ctx context.Context, in *QueryProvidersRequest, opts ...grpc.CallOption) (*QueryProvidersResponse, error)
 	// Provider queries provider details
 	Provider(ctx context.Context, in *QueryProviderRequest, opts ...grpc.CallOption) (*QueryProviderResponse, error)
+	ProviderSigningKey(ctx context.Context, in *QueryProviderSigningKeyRequest, opts ...grpc.CallOption) (*QueryProviderSigningKeyResponse, error)
+	ProviderSigningKeyEpochs(ctx context.Context, in *QueryProviderSigningKeyEpochsRequest, opts ...grpc.CallOption) (*QueryProviderSigningKeyEpochsResponse, error)
 }
 
 type queryClient struct {
@@ -314,12 +687,32 @@ func (c *queryClient) Provider(ctx context.Context, in *QueryProviderRequest, op
 	return out, nil
 }
 
+func (c *queryClient) ProviderSigningKey(ctx context.Context, in *QueryProviderSigningKeyRequest, opts ...grpc.CallOption) (*QueryProviderSigningKeyResponse, error) {
+	out := new(QueryProviderSigningKeyResponse)
+	err := c.cc.Invoke(ctx, "/virtengine.provider.v1beta4.Query/ProviderSigningKey", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *queryClient) ProviderSigningKeyEpochs(ctx context.Context, in *QueryProviderSigningKeyEpochsRequest, opts ...grpc.CallOption) (*QueryProviderSigningKeyEpochsResponse, error) {
+	out := new(QueryProviderSigningKeyEpochsResponse)
+	err := c.cc.Invoke(ctx, "/virtengine.provider.v1beta4.Query/ProviderSigningKeyEpochs", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // QueryServer is the server API for Query service.
 type QueryServer interface {
 	// Providers queries providers
 	Providers(context.Context, *QueryProvidersRequest) (*QueryProvidersResponse, error)
 	// Provider queries provider details
 	Provider(context.Context, *QueryProviderRequest) (*QueryProviderResponse, error)
+	ProviderSigningKey(context.Context, *QueryProviderSigningKeyRequest) (*QueryProviderSigningKeyResponse, error)
+	ProviderSigningKeyEpochs(context.Context, *QueryProviderSigningKeyEpochsRequest) (*QueryProviderSigningKeyEpochsResponse, error)
 }
 
 // UnimplementedQueryServer can be embedded to have forward compatible implementations.
@@ -331,6 +724,12 @@ func (*UnimplementedQueryServer) Providers(ctx context.Context, req *QueryProvid
 }
 func (*UnimplementedQueryServer) Provider(ctx context.Context, req *QueryProviderRequest) (*QueryProviderResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method Provider not implemented")
+}
+func (*UnimplementedQueryServer) ProviderSigningKey(ctx context.Context, req *QueryProviderSigningKeyRequest) (*QueryProviderSigningKeyResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ProviderSigningKey not implemented")
+}
+func (*UnimplementedQueryServer) ProviderSigningKeyEpochs(ctx context.Context, req *QueryProviderSigningKeyEpochsRequest) (*QueryProviderSigningKeyEpochsResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ProviderSigningKeyEpochs not implemented")
 }
 
 func RegisterQueryServer(s grpc1.Server, srv QueryServer) {
@@ -373,6 +772,42 @@ func _Query_Provider_Handler(srv interface{}, ctx context.Context, dec func(inte
 	return interceptor(ctx, in, info, handler)
 }
 
+func _Query_ProviderSigningKey_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(QueryProviderSigningKeyRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(QueryServer).ProviderSigningKey(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/virtengine.provider.v1beta4.Query/ProviderSigningKey",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(QueryServer).ProviderSigningKey(ctx, req.(*QueryProviderSigningKeyRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Query_ProviderSigningKeyEpochs_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(QueryProviderSigningKeyEpochsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(QueryServer).ProviderSigningKeyEpochs(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/virtengine.provider.v1beta4.Query/ProviderSigningKeyEpochs",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(QueryServer).ProviderSigningKeyEpochs(ctx, req.(*QueryProviderSigningKeyEpochsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 var Query_serviceDesc = _Query_serviceDesc
 var _Query_serviceDesc = grpc.ServiceDesc{
 	ServiceName: "virtengine.provider.v1beta4.Query",
@@ -385,6 +820,14 @@ var _Query_serviceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "Provider",
 			Handler:    _Query_Provider_Handler,
+		},
+		{
+			MethodName: "ProviderSigningKey",
+			Handler:    _Query_ProviderSigningKey_Handler,
+		},
+		{
+			MethodName: "ProviderSigningKeyEpochs",
+			Handler:    _Query_ProviderSigningKeyEpochs_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},
@@ -538,6 +981,249 @@ func (m *QueryProviderResponse) MarshalToSizedBuffer(dAtA []byte) (int, error) {
 	return len(dAtA) - i, nil
 }
 
+func (m *ProviderSigningKeyRecord) Marshal() (dAtA []byte, err error) {
+	size := m.Size()
+	dAtA = make([]byte, size)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
+	if err != nil {
+		return nil, err
+	}
+	return dAtA[:n], nil
+}
+
+func (m *ProviderSigningKeyRecord) MarshalTo(dAtA []byte) (int, error) {
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *ProviderSigningKeyRecord) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
+	_ = i
+	var l int
+	_ = l
+	if m.RotationCount != 0 {
+		i = encodeVarintQuery(dAtA, i, uint64(m.RotationCount))
+		i--
+		dAtA[i] = 0x70
+	}
+	if len(m.PreviousKeyId) > 0 {
+		i -= len(m.PreviousKeyId)
+		copy(dAtA[i:], m.PreviousKeyId)
+		i = encodeVarintQuery(dAtA, i, uint64(len(m.PreviousKeyId)))
+		i--
+		dAtA[i] = 0x6a
+	}
+	if m.RevokedAtUnix != 0 {
+		i = encodeVarintQuery(dAtA, i, uint64(m.RevokedAtUnix))
+		i--
+		dAtA[i] = 0x60
+	}
+	if m.RevokedAtHeight != 0 {
+		i = encodeVarintQuery(dAtA, i, uint64(m.RevokedAtHeight))
+		i--
+		dAtA[i] = 0x58
+	}
+	if m.RetiredAtUnix != 0 {
+		i = encodeVarintQuery(dAtA, i, uint64(m.RetiredAtUnix))
+		i--
+		dAtA[i] = 0x50
+	}
+	if m.RetiredAtHeight != 0 {
+		i = encodeVarintQuery(dAtA, i, uint64(m.RetiredAtHeight))
+		i--
+		dAtA[i] = 0x48
+	}
+	if m.ExpiresAtUnix != 0 {
+		i = encodeVarintQuery(dAtA, i, uint64(m.ExpiresAtUnix))
+		i--
+		dAtA[i] = 0x40
+	}
+	if m.ExpiresAtHeight != 0 {
+		i = encodeVarintQuery(dAtA, i, uint64(m.ExpiresAtHeight))
+		i--
+		dAtA[i] = 0x38
+	}
+	if m.ActivatedAtUnix != 0 {
+		i = encodeVarintQuery(dAtA, i, uint64(m.ActivatedAtUnix))
+		i--
+		dAtA[i] = 0x30
+	}
+	if m.ActivatedAtHeight != 0 {
+		i = encodeVarintQuery(dAtA, i, uint64(m.ActivatedAtHeight))
+		i--
+		dAtA[i] = 0x28
+	}
+	if m.Epoch != 0 {
+		i = encodeVarintQuery(dAtA, i, uint64(m.Epoch))
+		i--
+		dAtA[i] = 0x20
+	}
+	if len(m.KeyId) > 0 {
+		i -= len(m.KeyId)
+		copy(dAtA[i:], m.KeyId)
+		i = encodeVarintQuery(dAtA, i, uint64(len(m.KeyId)))
+		i--
+		dAtA[i] = 0x1a
+	}
+	if len(m.KeyType) > 0 {
+		i -= len(m.KeyType)
+		copy(dAtA[i:], m.KeyType)
+		i = encodeVarintQuery(dAtA, i, uint64(len(m.KeyType)))
+		i--
+		dAtA[i] = 0x12
+	}
+	if len(m.PublicKey) > 0 {
+		i -= len(m.PublicKey)
+		copy(dAtA[i:], m.PublicKey)
+		i = encodeVarintQuery(dAtA, i, uint64(len(m.PublicKey)))
+		i--
+		dAtA[i] = 0xa
+	}
+	return len(dAtA) - i, nil
+}
+
+func (m *QueryProviderSigningKeyRequest) Marshal() (dAtA []byte, err error) {
+	size := m.Size()
+	dAtA = make([]byte, size)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
+	if err != nil {
+		return nil, err
+	}
+	return dAtA[:n], nil
+}
+
+func (m *QueryProviderSigningKeyRequest) MarshalTo(dAtA []byte) (int, error) {
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *QueryProviderSigningKeyRequest) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
+	_ = i
+	var l int
+	_ = l
+	if m.Epoch != 0 {
+		i = encodeVarintQuery(dAtA, i, uint64(m.Epoch))
+		i--
+		dAtA[i] = 0x18
+	}
+	if len(m.KeyId) > 0 {
+		i -= len(m.KeyId)
+		copy(dAtA[i:], m.KeyId)
+		i = encodeVarintQuery(dAtA, i, uint64(len(m.KeyId)))
+		i--
+		dAtA[i] = 0x12
+	}
+	if len(m.Owner) > 0 {
+		i -= len(m.Owner)
+		copy(dAtA[i:], m.Owner)
+		i = encodeVarintQuery(dAtA, i, uint64(len(m.Owner)))
+		i--
+		dAtA[i] = 0xa
+	}
+	return len(dAtA) - i, nil
+}
+
+func (m *QueryProviderSigningKeyResponse) Marshal() (dAtA []byte, err error) {
+	size := m.Size()
+	dAtA = make([]byte, size)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
+	if err != nil {
+		return nil, err
+	}
+	return dAtA[:n], nil
+}
+
+func (m *QueryProviderSigningKeyResponse) MarshalTo(dAtA []byte) (int, error) {
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *QueryProviderSigningKeyResponse) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
+	_ = i
+	var l int
+	_ = l
+	{
+		size, err := m.Key.MarshalToSizedBuffer(dAtA[:i])
+		if err != nil {
+			return 0, err
+		}
+		i -= size
+		i = encodeVarintQuery(dAtA, i, uint64(size))
+	}
+	i--
+	dAtA[i] = 0xa
+	return len(dAtA) - i, nil
+}
+
+func (m *QueryProviderSigningKeyEpochsRequest) Marshal() (dAtA []byte, err error) {
+	size := m.Size()
+	dAtA = make([]byte, size)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
+	if err != nil {
+		return nil, err
+	}
+	return dAtA[:n], nil
+}
+
+func (m *QueryProviderSigningKeyEpochsRequest) MarshalTo(dAtA []byte) (int, error) {
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *QueryProviderSigningKeyEpochsRequest) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
+	_ = i
+	var l int
+	_ = l
+	if len(m.Owner) > 0 {
+		i -= len(m.Owner)
+		copy(dAtA[i:], m.Owner)
+		i = encodeVarintQuery(dAtA, i, uint64(len(m.Owner)))
+		i--
+		dAtA[i] = 0xa
+	}
+	return len(dAtA) - i, nil
+}
+
+func (m *QueryProviderSigningKeyEpochsResponse) Marshal() (dAtA []byte, err error) {
+	size := m.Size()
+	dAtA = make([]byte, size)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
+	if err != nil {
+		return nil, err
+	}
+	return dAtA[:n], nil
+}
+
+func (m *QueryProviderSigningKeyEpochsResponse) MarshalTo(dAtA []byte) (int, error) {
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *QueryProviderSigningKeyEpochsResponse) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
+	_ = i
+	var l int
+	_ = l
+	if len(m.Keys) > 0 {
+		for iNdEx := len(m.Keys) - 1; iNdEx >= 0; iNdEx-- {
+			{
+				size, err := m.Keys[iNdEx].MarshalToSizedBuffer(dAtA[:i])
+				if err != nil {
+					return 0, err
+				}
+				i -= size
+				i = encodeVarintQuery(dAtA, i, uint64(size))
+			}
+			i--
+			dAtA[i] = 0xa
+		}
+	}
+	return len(dAtA) - i, nil
+}
+
 func encodeVarintQuery(dAtA []byte, offset int, v uint64) int {
 	offset -= sovQuery(v)
 	base := offset
@@ -602,6 +1288,120 @@ func (m *QueryProviderResponse) Size() (n int) {
 	_ = l
 	l = m.Provider.Size()
 	n += 1 + l + sovQuery(uint64(l))
+	return n
+}
+
+func (m *ProviderSigningKeyRecord) Size() (n int) {
+	if m == nil {
+		return 0
+	}
+	var l int
+	_ = l
+	l = len(m.PublicKey)
+	if l > 0 {
+		n += 1 + l + sovQuery(uint64(l))
+	}
+	l = len(m.KeyType)
+	if l > 0 {
+		n += 1 + l + sovQuery(uint64(l))
+	}
+	l = len(m.KeyId)
+	if l > 0 {
+		n += 1 + l + sovQuery(uint64(l))
+	}
+	if m.Epoch != 0 {
+		n += 1 + sovQuery(uint64(m.Epoch))
+	}
+	if m.ActivatedAtHeight != 0 {
+		n += 1 + sovQuery(uint64(m.ActivatedAtHeight))
+	}
+	if m.ActivatedAtUnix != 0 {
+		n += 1 + sovQuery(uint64(m.ActivatedAtUnix))
+	}
+	if m.ExpiresAtHeight != 0 {
+		n += 1 + sovQuery(uint64(m.ExpiresAtHeight))
+	}
+	if m.ExpiresAtUnix != 0 {
+		n += 1 + sovQuery(uint64(m.ExpiresAtUnix))
+	}
+	if m.RetiredAtHeight != 0 {
+		n += 1 + sovQuery(uint64(m.RetiredAtHeight))
+	}
+	if m.RetiredAtUnix != 0 {
+		n += 1 + sovQuery(uint64(m.RetiredAtUnix))
+	}
+	if m.RevokedAtHeight != 0 {
+		n += 1 + sovQuery(uint64(m.RevokedAtHeight))
+	}
+	if m.RevokedAtUnix != 0 {
+		n += 1 + sovQuery(uint64(m.RevokedAtUnix))
+	}
+	l = len(m.PreviousKeyId)
+	if l > 0 {
+		n += 1 + l + sovQuery(uint64(l))
+	}
+	if m.RotationCount != 0 {
+		n += 1 + sovQuery(uint64(m.RotationCount))
+	}
+	return n
+}
+
+func (m *QueryProviderSigningKeyRequest) Size() (n int) {
+	if m == nil {
+		return 0
+	}
+	var l int
+	_ = l
+	l = len(m.Owner)
+	if l > 0 {
+		n += 1 + l + sovQuery(uint64(l))
+	}
+	l = len(m.KeyId)
+	if l > 0 {
+		n += 1 + l + sovQuery(uint64(l))
+	}
+	if m.Epoch != 0 {
+		n += 1 + sovQuery(uint64(m.Epoch))
+	}
+	return n
+}
+
+func (m *QueryProviderSigningKeyResponse) Size() (n int) {
+	if m == nil {
+		return 0
+	}
+	var l int
+	_ = l
+	l = m.Key.Size()
+	n += 1 + l + sovQuery(uint64(l))
+	return n
+}
+
+func (m *QueryProviderSigningKeyEpochsRequest) Size() (n int) {
+	if m == nil {
+		return 0
+	}
+	var l int
+	_ = l
+	l = len(m.Owner)
+	if l > 0 {
+		n += 1 + l + sovQuery(uint64(l))
+	}
+	return n
+}
+
+func (m *QueryProviderSigningKeyEpochsResponse) Size() (n int) {
+	if m == nil {
+		return 0
+	}
+	var l int
+	_ = l
+	if len(m.Keys) > 0 {
+		for _, e := range m.Keys {
+			l = e.Size()
+			n += 1 + l + sovQuery(uint64(l))
+		}
+	}
 	return n
 }
 
@@ -958,6 +1758,758 @@ func (m *QueryProviderResponse) Unmarshal(dAtA []byte) error {
 				return io.ErrUnexpectedEOF
 			}
 			if err := m.Provider.Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
+				return err
+			}
+			iNdEx = postIndex
+		default:
+			iNdEx = preIndex
+			skippy, err := skipQuery(dAtA[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if (skippy < 0) || (iNdEx+skippy) < 0 {
+				return ErrInvalidLengthQuery
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			iNdEx += skippy
+		}
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
+func (m *ProviderSigningKeyRecord) Unmarshal(dAtA []byte) error {
+	l := len(dAtA)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return ErrIntOverflowQuery
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := dAtA[iNdEx]
+			iNdEx++
+			wire |= uint64(b&0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: ProviderSigningKeyRecord: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: ProviderSigningKeyRecord: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
+		case 1:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field PublicKey", wireType)
+			}
+			var byteLen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowQuery
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				byteLen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if byteLen < 0 {
+				return ErrInvalidLengthQuery
+			}
+			postIndex := iNdEx + byteLen
+			if postIndex < 0 {
+				return ErrInvalidLengthQuery
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.PublicKey = append(m.PublicKey[:0], dAtA[iNdEx:postIndex]...)
+			if m.PublicKey == nil {
+				m.PublicKey = []byte{}
+			}
+			iNdEx = postIndex
+		case 2:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field KeyType", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowQuery
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLengthQuery
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthQuery
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.KeyType = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
+		case 3:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field KeyId", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowQuery
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLengthQuery
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthQuery
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.KeyId = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
+		case 4:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Epoch", wireType)
+			}
+			m.Epoch = 0
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowQuery
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				m.Epoch |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+		case 5:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field ActivatedAtHeight", wireType)
+			}
+			m.ActivatedAtHeight = 0
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowQuery
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				m.ActivatedAtHeight |= int64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+		case 6:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field ActivatedAtUnix", wireType)
+			}
+			m.ActivatedAtUnix = 0
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowQuery
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				m.ActivatedAtUnix |= int64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+		case 7:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field ExpiresAtHeight", wireType)
+			}
+			m.ExpiresAtHeight = 0
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowQuery
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				m.ExpiresAtHeight |= int64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+		case 8:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field ExpiresAtUnix", wireType)
+			}
+			m.ExpiresAtUnix = 0
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowQuery
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				m.ExpiresAtUnix |= int64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+		case 9:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field RetiredAtHeight", wireType)
+			}
+			m.RetiredAtHeight = 0
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowQuery
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				m.RetiredAtHeight |= int64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+		case 10:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field RetiredAtUnix", wireType)
+			}
+			m.RetiredAtUnix = 0
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowQuery
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				m.RetiredAtUnix |= int64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+		case 11:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field RevokedAtHeight", wireType)
+			}
+			m.RevokedAtHeight = 0
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowQuery
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				m.RevokedAtHeight |= int64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+		case 12:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field RevokedAtUnix", wireType)
+			}
+			m.RevokedAtUnix = 0
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowQuery
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				m.RevokedAtUnix |= int64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+		case 13:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field PreviousKeyId", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowQuery
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLengthQuery
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthQuery
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.PreviousKeyId = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
+		case 14:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field RotationCount", wireType)
+			}
+			m.RotationCount = 0
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowQuery
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				m.RotationCount |= uint32(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+		default:
+			iNdEx = preIndex
+			skippy, err := skipQuery(dAtA[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if (skippy < 0) || (iNdEx+skippy) < 0 {
+				return ErrInvalidLengthQuery
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			iNdEx += skippy
+		}
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
+func (m *QueryProviderSigningKeyRequest) Unmarshal(dAtA []byte) error {
+	l := len(dAtA)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return ErrIntOverflowQuery
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := dAtA[iNdEx]
+			iNdEx++
+			wire |= uint64(b&0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: QueryProviderSigningKeyRequest: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: QueryProviderSigningKeyRequest: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
+		case 1:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Owner", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowQuery
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLengthQuery
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthQuery
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.Owner = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
+		case 2:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field KeyId", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowQuery
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLengthQuery
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthQuery
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.KeyId = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
+		case 3:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Epoch", wireType)
+			}
+			m.Epoch = 0
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowQuery
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				m.Epoch |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+		default:
+			iNdEx = preIndex
+			skippy, err := skipQuery(dAtA[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if (skippy < 0) || (iNdEx+skippy) < 0 {
+				return ErrInvalidLengthQuery
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			iNdEx += skippy
+		}
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
+func (m *QueryProviderSigningKeyResponse) Unmarshal(dAtA []byte) error {
+	l := len(dAtA)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return ErrIntOverflowQuery
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := dAtA[iNdEx]
+			iNdEx++
+			wire |= uint64(b&0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: QueryProviderSigningKeyResponse: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: QueryProviderSigningKeyResponse: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
+		case 1:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Key", wireType)
+			}
+			var msglen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowQuery
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				msglen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if msglen < 0 {
+				return ErrInvalidLengthQuery
+			}
+			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLengthQuery
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			if err := m.Key.Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
+				return err
+			}
+			iNdEx = postIndex
+		default:
+			iNdEx = preIndex
+			skippy, err := skipQuery(dAtA[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if (skippy < 0) || (iNdEx+skippy) < 0 {
+				return ErrInvalidLengthQuery
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			iNdEx += skippy
+		}
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
+func (m *QueryProviderSigningKeyEpochsRequest) Unmarshal(dAtA []byte) error {
+	l := len(dAtA)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return ErrIntOverflowQuery
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := dAtA[iNdEx]
+			iNdEx++
+			wire |= uint64(b&0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: QueryProviderSigningKeyEpochsRequest: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: QueryProviderSigningKeyEpochsRequest: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
+		case 1:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Owner", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowQuery
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLengthQuery
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthQuery
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.Owner = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
+		default:
+			iNdEx = preIndex
+			skippy, err := skipQuery(dAtA[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if (skippy < 0) || (iNdEx+skippy) < 0 {
+				return ErrInvalidLengthQuery
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			iNdEx += skippy
+		}
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
+func (m *QueryProviderSigningKeyEpochsResponse) Unmarshal(dAtA []byte) error {
+	l := len(dAtA)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return ErrIntOverflowQuery
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := dAtA[iNdEx]
+			iNdEx++
+			wire |= uint64(b&0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: QueryProviderSigningKeyEpochsResponse: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: QueryProviderSigningKeyEpochsResponse: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
+		case 1:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Keys", wireType)
+			}
+			var msglen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowQuery
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				msglen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if msglen < 0 {
+				return ErrInvalidLengthQuery
+			}
+			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLengthQuery
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.Keys = append(m.Keys, ProviderSigningKeyRecord{})
+			if err := m.Keys[len(m.Keys)-1].Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
 				return err
 			}
 			iNdEx = postIndex

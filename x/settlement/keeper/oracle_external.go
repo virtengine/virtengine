@@ -92,5 +92,7 @@ func externalPriceTimestamp(ctx context.Context, ts time.Time) time.Time {
 	if err == nil {
 		return sdkCtx.BlockTime()
 	}
-	return time.Now().UTC()
+	// Without a committed timestamp or SDK block context the observation is
+	// invalid; never substitute validator-local wall time.
+	return time.Time{}
 }

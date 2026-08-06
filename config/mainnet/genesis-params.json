@@ -145,7 +145,7 @@
     "max_recipients_per_envelope": 100,
     "max_keys_per_account": 10,
     "allowed_algorithms": [
-      "X25519-XSalsa20-Poly1305"
+      "X25519-XSALSA20-POLY1305"
     ],
     "require_signature": true
   },

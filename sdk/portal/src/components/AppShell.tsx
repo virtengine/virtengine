@@ -4,6 +4,7 @@ import { WalletConnect } from "./WalletConnect";
 
 const navItems = [
   { to: "/", label: "Overview" },
+  { to: "/marketplace", label: "Marketplace" },
   { to: "/account", label: "Account" },
 ];
 

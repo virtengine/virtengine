@@ -1,0 +1,35 @@
+T5-17 biometric incident and recovery contract validation
+Payload: c3355b55f3f58aefebaad5b0b1be483e5be2dc1a
+Platform: windows/amd64
+Toolchains: go version go1.25.8 windows/amd64; WinLibs POSIX UCRT GCC 16.1.0
+
+Command: C:\Users\pavil\AppData\Local\VirtEngine\toolchains\go1.25.8\go\bin\go.exe test -count=1 ./pkg/platformsecurity/uniqueness
+Output: ok github.com/virtengine/virtengine/pkg/platformsecurity/uniqueness 1.364s
+Exit code: 0
+
+Command: C:\Users\pavil\AppData\Local\VirtEngine\toolchains\go1.25.8\go\bin\go.exe vet ./pkg/platformsecurity/uniqueness
+Output: no diagnostics
+Exit code: 0
+
+Environment: CGO_ENABLED=1; CC=gcc; PATH includes WinLibs UCRT bin
+Command: C:\Users\pavil\AppData\Local\VirtEngine\toolchains\go1.25.8\go\bin\go.exe test -race -count=1 ./pkg/platformsecurity/uniqueness
+Output: ok github.com/virtengine/virtengine/pkg/platformsecurity/uniqueness 5.271s
+Exit code: 0
+
+Command: git diff --cached --check
+Output: no errors
+Exit code: 0
+
+Security evidence:
+- Covers template/index compromise, transform/key compromise, mass false matches, unlawful processing, model poisoning, and dedup enumeration.
+- Threshold-signed fixture recovery plans are required before recovery approval and bind frozen custody authority/key epoch.
+- Mandatory per-kind recovery actions, advanced compromised epochs, replacement models, reenrollment, deletion receipts, and per-action completion evidence fail closed.
+- Closure requires complete monotonic audit state, timely user/regulator notification state, independent quorum signatures, and atomic replay consumption with store-owned transaction application.
+- Public records are commitment-only; production matching resume is unavailable and unlawful-processing incidents can never authorize fixture resume.
+- Callback failure rolls back replay consumption and exact closure replay is rejected.
+
+Blockers/non-claims:
+- Contracts and memory consumer are fixture-only and require external review.
+- Production requires durable atomic resolution storage, authoritative audit/notification coordinates, and verification of off-chain evidence/receipt semantics.
+- T5-18 must implement the durable FundAuthorization keeper consume API.
+- No T4 intake epoch manifest/base tag/validator is published; payload remains untagged and not intake-eligible.

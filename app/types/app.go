@@ -58,7 +58,6 @@ import (
 	ibctm "github.com/cosmos/ibc-go/v10/modules/light-clients/07-tendermint"
 	emodule "github.com/virtengine/virtengine/sdk/go/node/escrow/module"
 
-	"github.com/virtengine/virtengine/pkg/pricefeed"
 	atypes "github.com/virtengine/virtengine/sdk/go/node/audit/v1"
 	ctypes "github.com/virtengine/virtengine/sdk/go/node/cert/v1"
 	dtypes "github.com/virtengine/virtengine/sdk/go/node/deployment/v1"
@@ -91,6 +90,8 @@ import (
 	fraudtypes "github.com/virtengine/virtengine/x/fraud/types"
 	hpckeeper "github.com/virtengine/virtengine/x/hpc/keeper"
 	hpctypes "github.com/virtengine/virtengine/x/hpc/types"
+	issuancepolicykeeper "github.com/virtengine/virtengine/x/issuancepolicy/keeper"
+	issuancepolicytypes "github.com/virtengine/virtengine/x/issuancepolicy/types"
 	mhooks "github.com/virtengine/virtengine/x/market/hooks"
 	mkeeper "github.com/virtengine/virtengine/x/market/keeper"
 	marketplacetypes "github.com/virtengine/virtengine/x/market/types/marketplace"
@@ -115,6 +116,8 @@ import (
 	tkeeper "github.com/virtengine/virtengine/x/take/keeper"
 	veidkeeper "github.com/virtengine/virtengine/x/veid/keeper"
 	veidtypes "github.com/virtengine/virtengine/x/veid/types"
+	veidregistrykeeper "github.com/virtengine/virtengine/x/veidregistry/keeper"
+	veidregistrytypes "github.com/virtengine/virtengine/x/veidregistry/types"
 
 	gaspricing "github.com/virtengine/virtengine/app/gaspricing"
 )
@@ -155,25 +158,27 @@ type AppKeepers struct {
 		Audit       akeeper.Keeper
 		Cert        ckeeper.Keeper
 		// VirtEngine patent-specific modules (AU2024203136A1)
-		Encryption    encryptionkeeper.Keeper
-		Roles         roleskeeper.Keeper
-		VEID          veidkeeper.Keeper
-		MFA           mfakeeper.Keeper
-		Config        configkeeper.Keeper
-		HPC           hpckeeper.Keeper
-		Resources     resourceskeeper.Keeper
-		Benchmark     benchkeeper.Keeper
-		Enclave       enclavekeeper.Keeper
-		Settlement    settlementkeeper.Keeper
-		SettlementIBC settlementibc.IBCKeeper
-		Fraud         fraudkeeper.Keeper
-		Review        reviewkeeper.Keeper
-		Support       supportkeeper.Keeper
-		Delegation    delegationkeeper.Keeper
-		VirtStaking   virtstakingkeeper.Keeper
-		GasPricing    gaspricing.Keeper
-		BME           bmekeeper.IKeeper
-		Oracle        oraclekeeper.IKeeper
+		Encryption     encryptionkeeper.Keeper
+		Roles          roleskeeper.Keeper
+		VEIDRegistry   veidregistrykeeper.Keeper
+		IssuancePolicy issuancepolicykeeper.Keeper
+		VEID           veidkeeper.Keeper
+		MFA            mfakeeper.Keeper
+		Config         configkeeper.Keeper
+		HPC            hpckeeper.Keeper
+		Resources      resourceskeeper.Keeper
+		Benchmark      benchkeeper.Keeper
+		Enclave        enclavekeeper.Keeper
+		Settlement     settlementkeeper.Keeper
+		SettlementIBC  settlementibc.IBCKeeper
+		Fraud          fraudkeeper.Keeper
+		Review         reviewkeeper.Keeper
+		Support        supportkeeper.Keeper
+		Delegation     delegationkeeper.Keeper
+		VirtStaking    virtstakingkeeper.Keeper
+		GasPricing     gaspricing.Keeper
+		BME            bmekeeper.IKeeper
+		Oracle         oraclekeeper.IKeeper
 	}
 
 	Modules struct {
@@ -306,10 +311,12 @@ func (app *App) InitNormalKeepers(
 	maccPerms map[string][]string,
 	blockedAddresses map[string]bool,
 	invCheckPeriod uint,
+	enableUnorderedTxs ...bool,
 ) {
 
 	legacyAmino := encodingConfig.Amino
 
+	unorderedEnabled := len(enableUnorderedTxs) > 0 && enableUnorderedTxs[0]
 	app.Keepers.Cosmos.Acct = authkeeper.NewAccountKeeper(
 		cdc,
 		runtime.NewKVStoreService(app.keys[authtypes.StoreKey]),
@@ -318,6 +325,7 @@ func (app *App) InitNormalKeepers(
 		addresscodec.NewBech32Codec(sdk.GetConfig().GetBech32AccountAddrPrefix()),
 		AccountAddressPrefix,
 		authtypes.NewModuleAddress(govtypes.ModuleName).String(),
+		authkeeper.WithUnorderedTransactions(unorderedEnabled),
 	)
 
 	app.Keepers.Cosmos.Bank = bankkeeper.NewBaseKeeper(
@@ -403,22 +411,6 @@ func (app *App) InitNormalKeepers(
 		authtypes.NewModuleAddress(govtypes.ModuleName).String(),
 	)
 
-	// register the proposal types
-	govRouter := govtypesv1.NewRouter()
-	govRouter.
-		AddRoute(
-			govtypes.RouterKey,
-			govtypesv1.ProposalHandler,
-		).
-		AddRoute(
-			enclavetypes.RouterKey,
-			enclavekeeper.NewEnclaveProposalHandler(app.Keepers.VirtEngine.Enclave),
-		).
-		AddRoute(
-			paramproposal.RouterKey,
-			params.NewParamChangeProposalHandler(app.Keepers.Cosmos.Params),
-		)
-
 	govConfig := govtypes.DefaultConfig()
 	// Set the maximum metadata length for government-related configurations to 10,200, deviating from the default value of 256.
 	govConfig.MaxMetadataLen = 10200
@@ -434,8 +426,6 @@ func (app *App) InitNormalKeepers(
 		govConfig,
 		authtypes.NewModuleAddress(govtypes.ModuleName).String(),
 	)
-
-	app.Keepers.Cosmos.Gov.SetLegacyRouter(govRouter)
 
 	app.Keepers.Cosmos.FeeGrant = feegrantkeeper.NewKeeper(
 		cdc,
@@ -537,6 +527,18 @@ func (app *App) InitNormalKeepers(
 		authtypes.NewModuleAddress(govtypes.ModuleName).String(),
 	)
 
+	app.Keepers.VirtEngine.VEIDRegistry = veidregistrykeeper.NewKeeper(
+		cdc,
+		app.keys[veidregistrytypes.StoreKey],
+		authtypes.NewModuleAddress(govtypes.ModuleName).String(),
+	)
+
+	app.Keepers.VirtEngine.IssuancePolicy = issuancepolicykeeper.NewKeeper(
+		cdc,
+		app.keys[issuancepolicytypes.StoreKey],
+		authtypes.NewModuleAddress(govtypes.ModuleName).String(),
+	)
+
 	app.Keepers.VirtEngine.Enclave = enclavekeeper.NewKeeper(
 		cdc,
 		app.keys[enclavetypes.StoreKey],
@@ -555,6 +557,8 @@ func (app *App) InitNormalKeepers(
 		app.GetSubspace(resourcestypes.ModuleName),
 		authtypes.NewModuleAddress(govtypes.ModuleName).String(),
 	)
+	app.Keepers.VirtEngine.Resources.SetEligibilityKeeper(newReservationEligibilityAdapter(app.Keepers.VirtEngine.Provider))
+	app.Keepers.VirtEngine.Market.SetResourcesKeeper(app.Keepers.VirtEngine.Resources)
 
 	// Keepers with dependencies
 	app.Keepers.VirtEngine.MFA = mfakeeper.NewKeeper(
@@ -580,6 +584,8 @@ func (app *App) InitNormalKeepers(
 
 	// Set MFA keeper on VEID for circular dependency resolution
 	app.Keepers.VirtEngine.VEID.SetMFAKeeper(app.Keepers.VirtEngine.MFA)
+	app.Keepers.VirtEngine.VEID.SetVerifierRegistryKeeper(app.Keepers.VirtEngine.VEIDRegistry)
+	app.Keepers.VirtEngine.VEID.SetIssuancePolicyKeeper(app.Keepers.VirtEngine.IssuancePolicy)
 
 	// Set staking keeper on VEID for validator authorization (VE-2013)
 	// This enables validator-only operations like UpdateVerificationStatus and UpdateScore
@@ -596,6 +602,8 @@ func (app *App) InitNormalKeepers(
 		app.Keepers.Cosmos.Bank,
 		authtypes.NewModuleAddress(govtypes.ModuleName).String(),
 	)
+	app.Keepers.VirtEngine.HPC.SetResourcesKeeper(app.Keepers.VirtEngine.Resources)
+	app.Keepers.VirtEngine.HPC.SetMarketKeeper(app.Keepers.VirtEngine.Market)
 
 	app.Keepers.VirtEngine.Benchmark = benchkeeper.NewKeeper(
 		cdc,
@@ -613,6 +621,12 @@ func (app *App) InitNormalKeepers(
 		authtypes.NewModuleAddress(govtypes.ModuleName).String(),
 		app.Keepers.VirtEngine.Encryption,
 	)
+	app.Keepers.VirtEngine.Settlement.SetUsageAuthenticationKeepers(
+		app.Keepers.VirtEngine.Provider,
+		app.Keepers.Cosmos.Acct,
+	)
+	app.Keepers.VirtEngine.Settlement.SetFinancialReservationKeeper(app.Keepers.VirtEngine.Resources)
+	app.Keepers.VirtEngine.Escrow.SetCanonicalFinancialCases(app.Keepers.VirtEngine.Settlement)
 
 	app.Keepers.VirtEngine.SettlementIBC = settlementibc.NewIBCKeeper(
 		cdc,
@@ -639,6 +653,7 @@ func (app *App) InitNormalKeepers(
 		app.Keepers.VirtEngine.Provider,
 		authtypes.NewModuleAddress(govtypes.ModuleName).String(),
 	)
+	app.Keepers.VirtEngine.Fraud.SetFinancialCaseKeeper(app.Keepers.VirtEngine.Settlement)
 
 	app.Keepers.VirtEngine.Review = reviewkeeper.NewKeeper(
 		cdc,
@@ -647,6 +662,7 @@ func (app *App) InitNormalKeepers(
 		app.Keepers.VirtEngine.Roles,
 		authtypes.NewModuleAddress(govtypes.ModuleName).String(),
 	)
+	app.Keepers.VirtEngine.Review.SetFinancialCaseKeeper(app.Keepers.VirtEngine.Settlement)
 
 	app.Keepers.VirtEngine.Delegation = delegationkeeper.NewKeeper(
 		cdc,
@@ -655,6 +671,7 @@ func (app *App) InitNormalKeepers(
 		nil, // StakingRewardsKeeper - will be set after VirtStaking
 		authtypes.NewModuleAddress(govtypes.ModuleName).String(),
 	)
+	app.Keepers.VirtEngine.Settlement.SetStakeRoutingKeeper(app.Keepers.VirtEngine.Delegation)
 
 	app.Keepers.VirtEngine.VirtStaking = virtstakingkeeper.NewKeeper(
 		cdc,
@@ -681,7 +698,6 @@ func (app *App) InitNormalKeepers(
 	)
 
 	app.Keepers.VirtEngine.Settlement.SetOracleKeeper(app.Keepers.VirtEngine.Oracle)
-	configureSettlementExternalPriceFeeds(&app.Keepers.VirtEngine.Settlement)
 
 	if billingKeeper, ok := app.Keepers.VirtEngine.Escrow.(settlementkeeper.BillingKeeper); ok {
 		app.Keepers.VirtEngine.Settlement.SetBillingKeeper(billingKeeper)
@@ -692,25 +708,7 @@ func (app *App) InitNormalKeepers(
 	}
 
 	app.Keepers.VirtEngine.HPC.SetSettlementKeeper(app.Keepers.VirtEngine.Settlement)
-}
-
-func configureSettlementExternalPriceFeeds(keeper *settlementkeeper.Keeper) {
-	cfg := pricefeed.DefaultConfig()
-	cfg.HealthCheckInterval = 0
-
-	aggregator, err := pricefeed.NewAggregator(cfg)
-	if err != nil {
-		return
-	}
-
-	keeper.SetPriceFeed(
-		settlementtypes.OracleSourceTypeBandIBC,
-		settlementkeeper.NewExternalOraclePriceFeed(aggregator, settlementtypes.OracleSourceTypeBandIBC),
-	)
-	keeper.SetPriceFeed(
-		settlementtypes.OracleSourceTypeChainlinkIBC,
-		settlementkeeper.NewExternalOraclePriceFeed(aggregator, settlementtypes.OracleSourceTypeChainlinkIBC),
-	)
+	app.refreshGovLegacyRouter()
 }
 
 func (app *App) SetupHooks() {
@@ -736,6 +734,38 @@ func (app *App) SetupHooks() {
 
 	app.Keepers.VirtEngine.Escrow.AddOnAccountClosedHook(hook.OnEscrowAccountClosed)
 	app.Keepers.VirtEngine.Escrow.AddOnPaymentClosedHook(hook.OnEscrowPaymentClosed)
+	app.refreshGovLegacyRouter()
+}
+
+func (app *App) refreshGovLegacyRouter() {
+	if app.Keepers.Cosmos.Gov == nil {
+		return
+	}
+
+	govRouter := govtypesv1.NewRouter()
+	govRouter.
+		AddRoute(
+			govtypes.RouterKey,
+			govtypesv1.ProposalHandler,
+		).
+		AddRoute(
+			enclavetypes.RouterKey,
+			enclavekeeper.NewEnclaveProposalHandler(app.Keepers.VirtEngine.Enclave),
+		).
+		AddRoute(
+			veidregistrytypes.RouterKey,
+			veidregistrykeeper.NewProposalHandler(app.Keepers.VirtEngine.VEIDRegistry),
+		).
+		AddRoute(
+			issuancepolicytypes.RouterKey,
+			issuancepolicykeeper.NewProposalHandler(app.Keepers.VirtEngine.IssuancePolicy),
+		).
+		AddRoute(
+			paramproposal.RouterKey,
+			params.NewParamChangeProposalHandler(app.Keepers.Cosmos.Params),
+		)
+
+	app.Keepers.Cosmos.Gov.SetLegacyRouter(govRouter)
 }
 
 // initParamsKeeper init params keeper and its subspaces
@@ -808,6 +838,8 @@ func virtengineKVStoreKeys() []string {
 		encryptiontypes.StoreKey,
 		rolestypes.StoreKey,
 		supporttypes.StoreKey,
+		veidregistrytypes.StoreKey,
+		issuancepolicytypes.StoreKey,
 		veidtypes.StoreKey,
 		mfatypes.StoreKey,
 		configtypes.StoreKey,

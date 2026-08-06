@@ -90,6 +90,7 @@ func initRootCmd(rootCmd *cobra.Command, encodingConfig sdkutil.EncodingConfig) 
 
 	debugCmd := debug.Cmd()
 	debugCmd.AddCommand(ConvertBech32Cmd())
+	debugCmd.AddCommand(ModuleAddressCmd())
 
 	rootCmd.AddCommand(
 		sdkserver.StatusCommand(),

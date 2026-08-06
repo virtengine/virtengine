@@ -17,12 +17,19 @@ package e2e
 import (
 	"bytes"
 	"context"
+	"crypto/ecdsa"
+	"crypto/elliptic"
 	"crypto/rand"
 	"crypto/sha256"
+	"crypto/x509"
+	"crypto/x509/pkix"
 	"encoding/hex"
 	"errors"
 	"fmt"
-	"os"
+	"math/big"
+	"net/http"
+	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -60,10 +67,6 @@ type TEEAttestationE2ETestSuite struct {
 
 // TestTEEAttestationE2E runs the TEE attestation E2E test suite.
 func TestTEEAttestationE2E(t *testing.T) {
-	if testing.Short() {
-		t.Skip("Skipping E2E tests in short mode")
-	}
-
 	suite.Run(t, new(TEEAttestationE2ETestSuite))
 }
 
@@ -212,14 +215,12 @@ func (s *TEEAttestationE2ETestSuite) TestSGXQuoteSerialization() {
 func (s *TEEAttestationE2ETestSuite) TestSGXDCAPVerification() {
 	t := s.T()
 
-	if os.Getenv("VEID_E2E_DCAP") != "true" {
-		t.Skip("VEID_E2E_DCAP not set; skipping DCAP verification")
-	}
-
-	// Create DCAP client with simulation mode
+	// Create a DCAP client that fails over to the built-in simulated collateral
+	// path immediately when PCS is unavailable.
 	cfg := sgx.DefaultDCAPClientConfig()
-	cfg.PCSBaseURL = "https://api.trustedservices.intel.com/sgx/certification/v4"
-	cfg.Timeout = 30 * time.Second
+	cfg.PCSBaseURL = "http://127.0.0.1:1"
+	cfg.Timeout = 250 * time.Millisecond
+	cfg.MaxRetries = 0
 	cfg.AllowOutOfDateTCB = true
 	cfg.SkipCRLCheck = true
 	client := sgx.NewDCAPClient(cfg)
@@ -354,12 +355,15 @@ func (s *TEEAttestationE2ETestSuite) TestSEVSNPKeyDerivation() {
 func (s *TEEAttestationE2ETestSuite) TestSEVSNPKDSClient() {
 	t := s.T()
 
-	if os.Getenv("VEID_E2E_KDS") != "true" {
-		t.Skip("VEID_E2E_KDS not set; skipping KDS verification")
-	}
+	server := newSEVKDSTestServer(t)
+	defer server.Close()
 
-	// Create KDS client
-	client := sev.NewKDSClient(sev.MilanConfig())
+	cfg := sev.MilanConfig()
+	cfg.BaseURL = server.URL
+	cfg.HTTPClient = server.Client()
+	cfg.RequestTimeout = 2 * time.Second
+	cfg.MaxRetries = 0
+	client := sev.NewKDSClient(cfg)
 	require.NotNil(t, client)
 
 	// Get simulated certificate chain
@@ -376,6 +380,93 @@ func (s *TEEAttestationE2ETestSuite) TestSEVSNPKDSClient() {
 	require.NotNil(t, chain.ARK)
 
 	t.Log("SEV-SNP KDS client working (simulation mode)")
+}
+
+type sevKDSTestChain struct {
+	arkDER  []byte
+	askDER  []byte
+	vcekDER []byte
+}
+
+func newSEVKDSTestServer(t testing.TB) *httptest.Server {
+	t.Helper()
+
+	chain := mustBuildSEVKDSTestChain(t)
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/x-x509-ca-cert")
+		switch {
+		case strings.HasPrefix(r.URL.Path, "/vcek/v1/Milan/"):
+			_, _ = w.Write(chain.vcekDER)
+		case r.URL.Path == "/cek/v1/Milan/ask":
+			_, _ = w.Write(chain.askDER)
+		case r.URL.Path == "/cek/v1/Milan/ark":
+			_, _ = w.Write(chain.arkDER)
+		default:
+			http.NotFound(w, r)
+		}
+	})
+
+	return httptest.NewServer(handler)
+}
+
+func mustBuildSEVKDSTestChain(t testing.TB) sevKDSTestChain {
+	t.Helper()
+
+	now := time.Now().UTC().Add(-time.Hour)
+
+	arkKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	require.NoError(t, err)
+	askKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	require.NoError(t, err)
+	vcekKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	require.NoError(t, err)
+
+	arkTemplate := &x509.Certificate{
+		SerialNumber:          big.NewInt(1),
+		Subject:               pkix.Name{CommonName: "VirtEngine Test ARK"},
+		NotBefore:             now,
+		NotAfter:              now.Add(24 * time.Hour),
+		KeyUsage:              x509.KeyUsageCertSign | x509.KeyUsageCRLSign | x509.KeyUsageDigitalSignature,
+		BasicConstraintsValid: true,
+		IsCA:                  true,
+		MaxPathLen:            1,
+	}
+	arkDER, err := x509.CreateCertificate(rand.Reader, arkTemplate, arkTemplate, &arkKey.PublicKey, arkKey)
+	require.NoError(t, err)
+	arkCert, err := x509.ParseCertificate(arkDER)
+	require.NoError(t, err)
+
+	askTemplate := &x509.Certificate{
+		SerialNumber:          big.NewInt(2),
+		Subject:               pkix.Name{CommonName: "VirtEngine Test ASK"},
+		NotBefore:             now,
+		NotAfter:              now.Add(24 * time.Hour),
+		KeyUsage:              x509.KeyUsageCertSign | x509.KeyUsageDigitalSignature,
+		BasicConstraintsValid: true,
+		IsCA:                  true,
+		MaxPathLen:            0,
+	}
+	askDER, err := x509.CreateCertificate(rand.Reader, askTemplate, arkCert, &askKey.PublicKey, arkKey)
+	require.NoError(t, err)
+	askCert, err := x509.ParseCertificate(askDER)
+	require.NoError(t, err)
+
+	vcekTemplate := &x509.Certificate{
+		SerialNumber:          big.NewInt(3),
+		Subject:               pkix.Name{CommonName: "VirtEngine Test VCEK"},
+		NotBefore:             now,
+		NotAfter:              now.Add(24 * time.Hour),
+		KeyUsage:              x509.KeyUsageDigitalSignature,
+		BasicConstraintsValid: true,
+	}
+	vcekDER, err := x509.CreateCertificate(rand.Reader, vcekTemplate, askCert, &vcekKey.PublicKey, askKey)
+	require.NoError(t, err)
+
+	return sevKDSTestChain{
+		arkDER:  arkDER,
+		askDER:  askDER,
+		vcekDER: vcekDER,
+	}
 }
 
 // ============================================================================

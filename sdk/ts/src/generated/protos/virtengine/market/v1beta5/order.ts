@@ -19,6 +19,7 @@ export interface Order {
   state: Order_State;
   spec: GroupSpec | undefined;
   createdAt: Long;
+  reservationId: string;
 }
 
 /** State is an enum which refers to state of order. */
@@ -72,7 +73,7 @@ export function order_StateToJSON(object: Order_State): string {
 }
 
 function createBaseOrder(): Order {
-  return { id: undefined, state: 0, spec: undefined, createdAt: Long.ZERO };
+  return { id: undefined, state: 0, spec: undefined, createdAt: Long.ZERO, reservationId: "" };
 }
 
 export const Order: MessageFns<Order, "virtengine.market.v1beta5.Order"> = {
@@ -90,6 +91,9 @@ export const Order: MessageFns<Order, "virtengine.market.v1beta5.Order"> = {
     }
     if (!message.createdAt.equals(Long.ZERO)) {
       writer.uint32(32).int64(message.createdAt.toString());
+    }
+    if (message.reservationId !== "") {
+      writer.uint32(42).string(message.reservationId);
     }
     return writer;
   },
@@ -133,6 +137,14 @@ export const Order: MessageFns<Order, "virtengine.market.v1beta5.Order"> = {
           message.createdAt = Long.fromString(reader.int64().toString());
           continue;
         }
+        case 5: {
+          if (tag !== 42) {
+            break;
+          }
+
+          message.reservationId = reader.string();
+          continue;
+        }
       }
       if ((tag & 7) === 4 || tag === 0) {
         break;
@@ -148,6 +160,7 @@ export const Order: MessageFns<Order, "virtengine.market.v1beta5.Order"> = {
       state: isSet(object.state) ? order_StateFromJSON(object.state) : 0,
       spec: isSet(object.spec) ? GroupSpec.fromJSON(object.spec) : undefined,
       createdAt: isSet(object.created_at) ? Long.fromValue(object.created_at) : Long.ZERO,
+      reservationId: isSet(object.reservation_id) ? globalThis.String(object.reservation_id) : "",
     };
   },
 
@@ -165,6 +178,9 @@ export const Order: MessageFns<Order, "virtengine.market.v1beta5.Order"> = {
     if (!message.createdAt.equals(Long.ZERO)) {
       obj.created_at = (message.createdAt || Long.ZERO).toString();
     }
+    if (message.reservationId !== "") {
+      obj.reservation_id = message.reservationId;
+    }
     return obj;
   },
   fromPartial(object: DeepPartial<Order>): Order {
@@ -175,6 +191,7 @@ export const Order: MessageFns<Order, "virtengine.market.v1beta5.Order"> = {
     message.createdAt = (object.createdAt !== undefined && object.createdAt !== null)
       ? Long.fromValue(object.createdAt)
       : Long.ZERO;
+    message.reservationId = object.reservationId ?? "";
     return message;
   },
 };

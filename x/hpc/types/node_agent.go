@@ -474,7 +474,8 @@ type HeartbeatError struct {
 	Message string `json:"message"`
 }
 
-// Validate validates a node heartbeat
+// Validate validates the time-independent heartbeat fields. Consensus callers
+// must additionally call ValidateAt with ctx.BlockTime().
 func (h *NodeHeartbeat) Validate() error {
 	if h.NodeID == "" {
 		return ErrInvalidHeartbeat.Wrap("node_id required")
@@ -486,15 +487,6 @@ func (h *NodeHeartbeat) Validate() error {
 		return ErrInvalidHeartbeat.Wrap("sequence_number must be > 0")
 	}
 
-	// Timestamp validation (not too far in past or future)
-	now := time.Now()
-	if h.Timestamp.Before(now.Add(-5 * time.Minute)) {
-		return ErrInvalidHeartbeat.Wrap("timestamp too old")
-	}
-	if h.Timestamp.After(now.Add(1 * time.Minute)) {
-		return ErrInvalidHeartbeat.Wrap("timestamp in future")
-	}
-
 	if err := h.Capacity.Validate(); err != nil {
 		return ErrInvalidHeartbeat.Wrapf("capacity: %s", err.Error())
 	}
@@ -503,6 +495,20 @@ func (h *NodeHeartbeat) Validate() error {
 		return ErrInvalidHeartbeat.Wrapf("health: %s", err.Error())
 	}
 
+	return nil
+}
+
+// ValidateAt validates a heartbeat relative to an explicit deterministic time.
+func (h *NodeHeartbeat) ValidateAt(now time.Time) error {
+	if err := h.Validate(); err != nil {
+		return err
+	}
+	if h.Timestamp.Before(now.Add(-5 * time.Minute)) {
+		return ErrInvalidHeartbeat.Wrap("timestamp too old")
+	}
+	if h.Timestamp.After(now.Add(time.Minute)) {
+		return ErrInvalidHeartbeat.Wrap("timestamp in future")
+	}
 	return nil
 }
 

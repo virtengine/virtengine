@@ -119,9 +119,11 @@ jobs:
         run: npx playwright install --with-deps chromium
 
       - name: Run smoke tests
-        run: pnpm -C portal test:e2e --project=chromium --grep @smoke
         env:
-          PLAYWRIGHT_BASE_URL: https://staging.portal.virtengine.com
+          PLAYWRIGHT_BASE_URL: ${{ secrets.VE_SMOKE_PORTAL_URL }}
+        run: |
+          chmod +x scripts/ci/run-portal-smoke.sh
+          scripts/ci/run-portal-smoke.sh
 
   deploy-production:
     name: Deploy to Production

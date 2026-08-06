@@ -54,7 +54,7 @@ variable "enable_github_actions_role" {
 variable "github_org" {
   description = "GitHub organization name"
   type        = string
-  default     = "virtengine-network"
+  default     = "virtengine"
 }
 
 variable "github_repo" {

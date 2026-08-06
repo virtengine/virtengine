@@ -45,10 +45,6 @@ type VEIDOnboardingIntegrationTestSuite struct {
 
 // TestVEIDOnboardingIntegration runs the VEID onboarding integration test suite.
 func TestVEIDOnboardingIntegration(t *testing.T) {
-	if testing.Short() {
-		t.Skip("Skipping integration tests in short mode")
-	}
-
 	suite.Run(t, new(VEIDOnboardingIntegrationTestSuite))
 }
 
@@ -84,8 +80,9 @@ func (s *VEIDOnboardingIntegrationTestSuite) TestVEIDOnboardingFlow() {
 	envelope := encryptiontypes.NewEncryptedPayloadEnvelope()
 	envelope.RecipientKeyIDs = []string{"validator-recipient"}
 	envelope.Nonce = bytes.Repeat([]byte{0x02}, encryptiontypes.XSalsa20NonceSize)
-	envelope.Ciphertext = []byte("encrypted-identity-payload")
+	envelope.Ciphertext = []byte("encrypted-identity-payload-" + scopeID)
 	envelope.SenderPubKey = bytes.Repeat([]byte{0x03}, encryptiontypes.X25519PublicKeySize)
+	envelope.SenderSignature = bytes.Repeat([]byte{0x05}, 64)
 
 	payloadHash := sha256.Sum256(envelope.Ciphertext)
 
@@ -119,10 +116,10 @@ func (s *VEIDOnboardingIntegrationTestSuite) TestVEIDOnboardingFlow() {
 	require.NoError(s.T(), err)
 	require.Equal(s.T(), scopeID, resp.ScopeId)
 
-	s.app.Commit()
-	ctx = s.app.NewContext(false).
-		WithBlockHeight(2).
-		WithBlockTime(ctx.BlockTime().Add(time.Minute))
+	ctx = ctx.
+		WithBlockHeight(ctx.BlockHeight() + 1).
+		WithBlockTime(ctx.BlockTime().Add(time.Minute)).
+		WithEventManager(sdk.NewEventManager())
 
 	record, found := s.app.Keepers.VirtEngine.VEID.GetIdentityRecord(ctx, customer)
 	require.True(s.T(), found)
@@ -131,10 +128,10 @@ func (s *VEIDOnboardingIntegrationTestSuite) TestVEIDOnboardingFlow() {
 	// Step 2: Simulate validator score update to a low tier
 	require.NoError(s.T(), s.app.Keepers.VirtEngine.VEID.UpdateScore(ctx, customer, 25, "score-model-v1"))
 
-	s.app.Commit()
-	ctx = s.app.NewContext(false).
-		WithBlockHeight(3).
-		WithBlockTime(ctx.BlockTime().Add(time.Minute))
+	ctx = ctx.
+		WithBlockHeight(ctx.BlockHeight() + 1).
+		WithBlockTime(ctx.BlockTime().Add(time.Minute)).
+		WithEventManager(sdk.NewEventManager())
 
 	record, found = s.app.Keepers.VirtEngine.VEID.GetIdentityRecord(ctx, customer)
 	require.True(s.T(), found)
@@ -187,10 +184,10 @@ func (s *VEIDOnboardingIntegrationTestSuite) TestVEIDOnboardingFlow() {
 	// Step 5: Simulate validator score update to higher tier
 	require.NoError(s.T(), s.app.Keepers.VirtEngine.VEID.UpdateScore(ctx, customer, 82, "score-model-v1"))
 
-	s.app.Commit()
-	ctx = s.app.NewContext(false).
-		WithBlockHeight(4).
-		WithBlockTime(ctx.BlockTime().Add(time.Minute))
+	ctx = ctx.
+		WithBlockHeight(ctx.BlockHeight() + 1).
+		WithBlockTime(ctx.BlockTime().Add(time.Minute)).
+		WithEventManager(sdk.NewEventManager())
 
 	record, found = s.app.Keepers.VirtEngine.VEID.GetIdentityRecord(ctx, customer)
 	require.True(s.T(), found)

@@ -6,12 +6,19 @@ package provider_daemon
 
 import (
 	"crypto"
+	"crypto/ecdsa"
+	"crypto/ed25519"
+	"crypto/elliptic"
 	"crypto/rand"
 	"crypto/sha256"
+	"crypto/x509"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
+	"math/big"
+	"sort"
 	"sync"
 	"time"
 )
@@ -298,6 +305,20 @@ type softHSMKey struct {
 	publicKey  []byte
 }
 
+type softHSMBackup struct {
+	Version   int                  `json:"version"`
+	CreatedAt time.Time            `json:"created_at"`
+	Keys      []softHSMBackupEntry `json:"keys"`
+}
+
+type softHSMBackupEntry struct {
+	Handle     *HSMKeyHandle `json:"handle"`
+	PrivateKey []byte        `json:"private_key"`
+	PublicKey  []byte        `json:"public_key"`
+}
+
+const softHSMBackupVersion = 1
+
 // NewSoftHSMProvider creates a new SoftHSM provider
 func NewSoftHSMProvider() *SoftHSMProvider {
 	return &SoftHSMProvider{
@@ -359,7 +380,7 @@ func (p *SoftHSMProvider) GetInfo() (*HSMInfo, error) {
 	return &HSMInfo{
 		Type:            HSMTypeSoftHSM,
 		ManufacturerID:  "VirtEngine",
-		Model:           "SoftHSM (Development)",
+		Model:           "SoftHSM (Software)",
 		SerialNumber:    "DEV-001",
 		FirmwareVersion: "1.0.0",
 		TotalSlots:      1,
@@ -657,109 +678,226 @@ func (p *SoftHSMProvider) Backup() ([]byte, error) {
 		return nil, ErrHSMNotInitialized
 	}
 
-	// SoftHSM backup not implemented for security reasons in development mode
-	return nil, fmt.Errorf("backup not supported for SoftHSM (development mode)")
+	labels := make([]string, 0, len(p.keys))
+	for label := range p.keys {
+		labels = append(labels, label)
+	}
+	sort.Strings(labels)
+
+	backup := softHSMBackup{
+		Version:   softHSMBackupVersion,
+		CreatedAt: time.Now().UTC(),
+		Keys:      make([]softHSMBackupEntry, 0, len(labels)),
+	}
+
+	for _, label := range labels {
+		key := p.keys[label]
+		backup.Keys = append(backup.Keys, softHSMBackupEntry{
+			Handle:     cloneHSMKeyHandle(key.handle),
+			PrivateKey: cloneBytes(key.privateKey),
+			PublicKey:  cloneBytes(key.publicKey),
+		})
+	}
+
+	return json.Marshal(backup)
 }
 
 // Restore restores HSM keys from backup
 func (p *SoftHSMProvider) Restore(backup []byte) error {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
 	if !p.initialized {
 		return ErrHSMNotInitialized
 	}
 
-	return fmt.Errorf("restore not supported for SoftHSM (development mode)")
+	var snapshot softHSMBackup
+	if err := json.Unmarshal(backup, &snapshot); err != nil {
+		return fmt.Errorf("failed to decode SoftHSM backup: %w", err)
+	}
+
+	if snapshot.Version != softHSMBackupVersion {
+		return fmt.Errorf("unsupported SoftHSM backup version: %d", snapshot.Version)
+	}
+
+	for _, key := range p.keys {
+		scrubBytes(key.privateKey)
+	}
+
+	restoredKeys := make(map[string]*softHSMKey, len(snapshot.Keys))
+	for _, entry := range snapshot.Keys {
+		if entry.Handle == nil {
+			return fmt.Errorf("SoftHSM backup entry is missing key metadata")
+		}
+
+		restoredKeys[entry.Handle.Label] = &softHSMKey{
+			handle:     cloneHSMKeyHandle(entry.Handle),
+			privateKey: cloneBytes(entry.PrivateKey),
+			publicKey:  cloneBytes(entry.PublicKey),
+		}
+	}
+
+	p.keys = restoredKeys
+
+	return nil
 }
 
 // Helper functions for cryptographic operations
 
 func generateEd25519KeyPair() (publicKey, privateKey []byte, err error) {
-	seed := make([]byte, 32)
-	if _, err := io.ReadFull(rand.Reader, seed); err != nil {
+	pub, priv, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
 		return nil, nil, err
 	}
 
-	// Use crypto/ed25519 via provider_daemon's existing implementation
-	// This is a simplified implementation - in production would use actual ed25519
-	privateKey = make([]byte, 64)
-	copy(privateKey[:32], seed)
-
-	// Derive public key (simplified - would use proper ed25519 derivation)
-	hash := sha256.Sum256(seed)
-	publicKey = make([]byte, 32)
-	copy(publicKey, hash[:])
-
-	return publicKey, privateKey, nil
+	return cloneBytes(pub), cloneBytes(priv), nil
 }
 
 func generateP256KeyPair() (publicKey, privateKey []byte, err error) {
-	// Simplified implementation - would use crypto/ecdsa in production
-	privateKey = make([]byte, 32)
-	if _, err := io.ReadFull(rand.Reader, privateKey); err != nil {
+	privKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	if err != nil {
 		return nil, nil, err
 	}
 
-	hash := sha256.Sum256(privateKey)
-	publicKey = make([]byte, 65) // Uncompressed P-256 point
-	publicKey[0] = 0x04          // Uncompressed point indicator
-	copy(publicKey[1:33], hash[:])
-	copy(publicKey[33:], hash[:])
+	privateKey, err = x509.MarshalECPrivateKey(privKey)
+	if err != nil {
+		return nil, nil, err
+	}
 
-	return publicKey, privateKey, nil
+	publicKey, err = privKey.PublicKey.Bytes()
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return cloneBytes(publicKey), cloneBytes(privateKey), nil
 }
 
 func extractEd25519PublicKey(privateKey []byte) ([]byte, error) {
-	if len(privateKey) < 32 {
-		return nil, errors.New("invalid ed25519 private key length")
+	priv, err := normalizeEd25519PrivateKey(privateKey)
+	if err != nil {
+		return nil, err
 	}
 
-	hash := sha256.Sum256(privateKey[:32])
-	publicKey := make([]byte, 32)
-	copy(publicKey, hash[:])
-
-	return publicKey, nil
+	publicKey := priv.Public().(ed25519.PublicKey)
+	return cloneBytes(publicKey), nil
 }
 
 func extractP256PublicKey(privateKey []byte) ([]byte, error) {
-	if len(privateKey) < 32 {
-		return nil, errors.New("invalid P-256 private key length")
+	priv, err := parseP256PrivateKey(privateKey)
+	if err != nil {
+		return nil, err
 	}
 
-	hash := sha256.Sum256(privateKey)
-	publicKey := make([]byte, 65)
-	publicKey[0] = 0x04
-	copy(publicKey[1:33], hash[:])
-	copy(publicKey[33:], hash[:])
-
-	return publicKey, nil
+	publicKey, err := priv.PublicKey.Bytes()
+	if err != nil {
+		return nil, err
+	}
+	return cloneBytes(publicKey), nil
 }
 
-//nolint:unparam // result 1 (error) reserved for future signing failures
 func signEd25519(privateKey, data []byte) ([]byte, error) {
-	// Simplified signing - would use crypto/ed25519 in production
-	hash := sha256.Sum256(append(privateKey, data...))
-	return hash[:], nil
+	priv, err := normalizeEd25519PrivateKey(privateKey)
+	if err != nil {
+		return nil, err
+	}
+
+	return ed25519.Sign(priv, data), nil
 }
 
-//nolint:unparam // result 1 (error) reserved for future signing failures
 func signP256(privateKey, data []byte) ([]byte, error) {
-	// Simplified signing - would use crypto/ecdsa in production
-	hash := sha256.Sum256(append(privateKey, data...))
-	return hash[:], nil
+	priv, err := parseP256PrivateKey(privateKey)
+	if err != nil {
+		return nil, err
+	}
+
+	digest := sha256.Sum256(data)
+	return ecdsa.SignASN1(rand.Reader, priv, digest[:])
 }
 
-func verifyEd25519(_ []byte, _ []byte, signature []byte) bool {
-	// Simplified verification - would use crypto/ed25519 in production
-	return len(signature) == 32
+func verifyEd25519(publicKey []byte, data []byte, signature []byte) bool {
+	if len(publicKey) != ed25519.PublicKeySize {
+		return false
+	}
+
+	return ed25519.Verify(ed25519.PublicKey(publicKey), data, signature)
 }
 
-func verifyP256(_ []byte, _ []byte, signature []byte) bool {
-	// Simplified verification - would use crypto/ecdsa in production
-	return len(signature) == 32
+func verifyP256(publicKey []byte, data []byte, signature []byte) bool {
+	pub, err := ecdsa.ParseUncompressedPublicKey(elliptic.P256(), publicKey)
+	if err != nil {
+		return false
+	}
+
+	digest := sha256.Sum256(data)
+	return ecdsa.VerifyASN1(pub, digest[:], signature)
 }
 
 func computeFingerprint(publicKey []byte) string {
 	hash := sha256.Sum256(publicKey)
 	return hex.EncodeToString(hash[:])
+}
+
+func cloneHSMKeyHandle(handle *HSMKeyHandle) *HSMKeyHandle {
+	if handle == nil {
+		return nil
+	}
+
+	cloned := *handle
+	cloned.ID = cloneBytes(handle.ID)
+	return &cloned
+}
+
+func cloneBytes(data []byte) []byte {
+	if data == nil {
+		return nil
+	}
+
+	cloned := make([]byte, len(data))
+	copy(cloned, data)
+	return cloned
+}
+
+func scrubBytes(data []byte) {
+	for i := range data {
+		data[i] = 0
+	}
+}
+
+func normalizeEd25519PrivateKey(privateKey []byte) (ed25519.PrivateKey, error) {
+	switch len(privateKey) {
+	case ed25519.PrivateKeySize:
+		return ed25519.PrivateKey(cloneBytes(privateKey)), nil
+	case ed25519.SeedSize:
+		return ed25519.NewKeyFromSeed(privateKey), nil
+	default:
+		return nil, fmt.Errorf("invalid ed25519 private key length: %d", len(privateKey))
+	}
+}
+
+func parseP256PrivateKey(privateKey []byte) (*ecdsa.PrivateKey, error) {
+	if priv, err := x509.ParseECPrivateKey(privateKey); err == nil {
+		return priv, nil
+	}
+
+	if len(privateKey) != 32 {
+		return nil, fmt.Errorf("invalid P-256 private key length: %d", len(privateKey))
+	}
+
+	curve := elliptic.P256()
+	d := new(big.Int).SetBytes(privateKey)
+	if d.Sign() <= 0 || d.Cmp(curve.Params().N) >= 0 {
+		return nil, errors.New("invalid P-256 private scalar")
+	}
+
+	priv := &ecdsa.PrivateKey{D: d}
+	pub := &priv.PublicKey
+	pub.Curve = curve
+	pub.X, pub.Y = curve.ScalarBaseMult(privateKey)
+	if pub.X == nil || pub.Y == nil {
+		return nil, errors.New("invalid P-256 private key")
+	}
+
+	return priv, nil
 }
 
 // Ensure SoftHSMProvider implements crypto.Signer interface compatibility

@@ -5,6 +5,7 @@ package provider_daemon
 
 import (
 	"context"
+	"crypto/ed25519"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -27,6 +28,7 @@ import (
 	settlementv1 "github.com/virtengine/virtengine/sdk/go/node/settlement/v1"
 	"github.com/virtengine/virtengine/sdk/go/sdkutil"
 	"github.com/virtengine/virtengine/x/settlement"
+	settlementtypes "github.com/virtengine/virtengine/x/settlement/types"
 )
 
 // ChainSubmitterConfig configures the chain usage submitter.
@@ -79,11 +81,16 @@ type ChainSubmitterConfig struct {
 	// ClaimTTL is the duration of a queue claim lease.
 	ClaimTTL time.Duration
 
-	// RPCClient is an optional preconfigured RPC client (for tests).
+	// ChainClient handles gas estimation and broadcast for legacy unit tests.
+	ChainClient ChainSubmitterClient
+
+	// RPCClient is a preconfigured Comet client for process-boundary integration
+	// tests only. Production code must use MutationSubmitter.
 	RPCClient *rpchttp.HTTP
 
-	// ChainClient handles gas estimation and broadcast (for tests).
-	ChainClient ChainSubmitterClient
+	// AllowTestLegacyChainClient permits ChainClient without MutationSubmitter.
+	// Production code must leave this false so all writes use ProviderMutationSubmitter.
+	AllowTestLegacyChainClient bool
 
 	// EnableIdempotency enables duplicate submission detection.
 	EnableIdempotency bool
@@ -96,6 +103,18 @@ type ChainSubmitterConfig struct {
 
 	// Sequence is the starting account sequence (optional).
 	Sequence uint64
+
+	// ProviderSigningState resolves the actual governed x/provider key epoch and
+	// deterministic chain height/time before detached metering signatures.
+	ProviderSigningState ProviderSigningStateResolver
+
+	// UsageStreamState resolves committed sequence state before allocating a
+	// new detached usage proof.
+	UsageStreamState UsageStreamStateResolver
+
+	// MutationSubmitter delegates final signed transaction delivery to the
+	// generalized durable pipeline while preserving Task 84B proof allocation.
+	MutationSubmitter *ProviderMutationSubmitter
 }
 
 // DefaultChainSubmitterConfig returns default chain submitter config.
@@ -141,13 +160,17 @@ type ChainSubmitterClient interface {
 	BroadcastTx(ctx context.Context, tx []byte) (string, error)
 }
 
+// AccountSequenceResolver resolves committed transaction signer state.
+type AccountSequenceResolver interface {
+	ResolveAccountSequence(ctx context.Context, address string) (accountNumber uint64, sequence uint64, err error)
+}
+
 // ChainUsageSubmitterImpl implements ChainUsageSubmitter.
 type ChainUsageSubmitterImpl struct {
 	mu sync.RWMutex
 
 	cfg         ChainSubmitterConfig
 	keyManager  *KeyManager
-	rpcClient   *rpchttp.HTTP
 	chainClient ChainSubmitterClient
 	metrics     *UsageMetricsCollector
 
@@ -160,10 +183,12 @@ type ChainUsageSubmitterImpl struct {
 	sequence      uint64
 	accountNumber uint64
 
-	reportValidator UsageReportValidator
+	reportValidator   UsageReportValidator
+	mutationSubmitter *ProviderMutationSubmitter
 
 	queueStore *txSubmissionQueueStore
 	queueState *txSubmissionQueueState
+	queueLock  *txSubmissionQueuePathLock
 	workerID   string
 	encCfg     sdkutil.EncodingConfig
 
@@ -188,17 +213,42 @@ func NewChainUsageSubmitter(
 	if !cfg.Enabled {
 		return nil, nil
 	}
+	if cfg.RPCClient != nil && cfg.ChainClient == nil {
+		cfg.ChainClient = &rpcSubmitterClient{rpc: cfg.RPCClient, cfg: cfg}
+		cfg.AllowTestLegacyChainClient = true
+	}
+	if cfg.MutationSubmitter == nil && cfg.ChainClient == nil {
+		return nil, fmt.Errorf("%w: generalized mutation submitter is required", ErrProviderMutationUnavailable)
+	}
+	if cfg.MutationSubmitter == nil && cfg.ChainClient != nil && !cfg.AllowTestLegacyChainClient {
+		return nil, fmt.Errorf("%w: legacy chain client requires explicit test-only opt-in", ErrProviderMutationUnavailable)
+	}
 
 	if cfg.ProviderAddress == "" {
 		return nil, errors.New("provider address is required")
 	}
 
-	if cfg.CometRPC == "" && cfg.RPCClient == nil && cfg.ChainClient == nil {
+	if cfg.CometRPC == "" && cfg.MutationSubmitter == nil && cfg.ChainClient == nil {
 		return nil, errors.New("comet RPC endpoint is required")
 	}
 	if cfg.QueueStatePath == "" {
 		cfg.QueueStatePath = DefaultChainSubmitterConfig().QueueStatePath
 	}
+	queuePath, err := filepath.Abs(cfg.QueueStatePath)
+	if err != nil {
+		return nil, fmt.Errorf("resolve queue state path: %w", err)
+	}
+	queueLock, err := claimTxSubmissionQueuePath(queuePath)
+	if err != nil {
+		return nil, err
+	}
+	claimedQueueLock := true
+	defer func() {
+		if claimedQueueLock {
+			queueLock.release()
+		}
+	}()
+	cfg.QueueStatePath = queuePath
 	if cfg.WorkerPollInterval <= 0 {
 		cfg.WorkerPollInterval = DefaultChainSubmitterConfig().WorkerPollInterval
 	}
@@ -218,7 +268,6 @@ func NewChainUsageSubmitter(
 	submitter := &ChainUsageSubmitterImpl{
 		cfg:               cfg,
 		keyManager:        keyManager,
-		rpcClient:         cfg.RPCClient,
 		chainClient:       cfg.ChainClient,
 		metrics:           metrics,
 		pendingBatch:      make([]*ChainUsageReport, 0),
@@ -227,8 +276,9 @@ func NewChainUsageSubmitter(
 		sequence:          cfg.Sequence,
 		accountNumber:     cfg.AccountNumber,
 		reportValidator:   cfg.ReportValidator,
+		mutationSubmitter: cfg.MutationSubmitter,
 		workerID:          fmt.Sprintf("chain-submitter-%d", time.Now().UnixNano()),
-		useLegacyEnvelope: cfg.ChainClient != nil,
+		useLegacyEnvelope: cfg.MutationSubmitter == nil && cfg.ChainClient != nil,
 	}
 	if submitter.reportValidator == nil {
 		submitter.reportValidator = defaultUsageReportValidator
@@ -246,9 +296,11 @@ func NewChainUsageSubmitter(
 	}
 	submitter.queueStore = store
 	submitter.queueState = state
+	submitter.queueLock = queueLock
 	if !submitter.useLegacyEnvelope {
 		submitter.encCfg = sdkutil.MakeEncodingConfig(settlement.AppModuleBasic{})
 	}
+	claimedQueueLock = false
 	return submitter, nil
 }
 
@@ -258,20 +310,16 @@ func (s *ChainUsageSubmitterImpl) Start(ctx context.Context) error {
 		return nil
 	}
 
-	if s.rpcClient == nil && s.chainClient == nil {
-		// Connect to RPC
-		rpc, err := rpchttp.New(s.cfg.CometRPC, "/websocket")
-		if err != nil {
-			return fmt.Errorf("create rpc client: %w", err)
-		}
-		if err := rpc.Start(); err != nil {
-			return fmt.Errorf("start rpc client: %w", err)
-		}
-		s.rpcClient = rpc
+	if s.mutationSubmitter == nil && s.chainClient == nil {
+		return fmt.Errorf("%w: generalized mutation submitter is required", ErrProviderMutationUnavailable)
 	}
-
-	if s.chainClient == nil && s.rpcClient != nil {
-		s.chainClient = &rpcSubmitterClient{rpc: s.rpcClient, cfg: s.cfg}
+	if s.mutationSubmitter == nil && s.chainClient != nil && !s.cfg.AllowTestLegacyChainClient {
+		return fmt.Errorf("%w: legacy chain client requires explicit test-only opt-in", ErrProviderMutationUnavailable)
+	}
+	if !s.useLegacyEnvelope {
+		if err := s.reconcileAccountSequence(ctx); err != nil {
+			return err
+		}
 	}
 
 	s.mu.Lock()
@@ -303,6 +351,7 @@ func (s *ChainUsageSubmitterImpl) Stop() {
 	s.mu.Lock()
 	if !s.running {
 		s.mu.Unlock()
+		s.queueLock.release()
 		return
 	}
 	s.running = false
@@ -311,9 +360,7 @@ func (s *ChainUsageSubmitterImpl) Stop() {
 	close(s.stopChan)
 	s.wg.Wait()
 
-	if s.rpcClient != nil {
-		_ = s.rpcClient.Stop()
-	}
+	s.queueLock.release()
 
 	s.stopChan = make(chan struct{})
 	log.Printf("[chain-submitter] stopped")
@@ -329,16 +376,9 @@ func (s *ChainUsageSubmitterImpl) SubmitUsageReport(ctx context.Context, report 
 		return errors.New("report is nil")
 	}
 
-	// Add to queue for batching
-	select {
-	case s.submissionQueue <- report:
-		return nil
-	case <-ctx.Done():
-		return ctx.Err()
-	default:
-		// Queue full, submit immediately
-		return s.submitSingleReport(ctx, report)
-	}
+	// Usage proofs and their monotonic sequence allocation are persisted before
+	// this method returns, so daemon restart cannot lose an accepted local item.
+	return s.submitSingleReport(ctx, report)
 }
 
 // SubmitSettlementRequest submits a settlement request to the chain.
@@ -375,6 +415,9 @@ func (s *ChainUsageSubmitterImpl) SubmitSettlementRequest(ctx context.Context, o
 // submitSingleReport submits a single usage report.
 func (s *ChainUsageSubmitterImpl) submitSingleReport(ctx context.Context, report *ChainUsageReport) error {
 	start := time.Now()
+	if err := s.prepareAuthenticatedUsageReport(ctx, report); err != nil {
+		return err
+	}
 
 	if err := s.validateReport(report); err != nil {
 		return err
@@ -382,15 +425,31 @@ func (s *ChainUsageSubmitterImpl) submitSingleReport(ctx context.Context, report
 
 	// Build MsgRecordUsage
 	msg := &MsgRecordUsageWrapper{
-		Sender:      s.cfg.ProviderAddress,
-		OrderID:     report.OrderID,
-		LeaseID:     report.LeaseID,
-		UsageUnits:  report.UsageUnits,
-		UsageType:   report.UsageType,
-		PeriodStart: report.PeriodStart.Unix(),
-		PeriodEnd:   report.PeriodEnd.Unix(),
-		UnitPrice:   report.UnitPrice,
-		Signature:   report.Signature,
+		Sender:           s.cfg.ProviderAddress,
+		OrderID:          report.OrderID,
+		LeaseID:          report.LeaseID,
+		UsageUnits:       report.UsageUnits,
+		UsageType:        report.UsageType,
+		PeriodStart:      report.PeriodStart.Unix(),
+		PeriodEnd:        report.PeriodEnd.Unix(),
+		UnitPrice:        report.UnitPrice,
+		Signature:        report.Signature,
+		AllocationID:     report.AllocationID,
+		ChainID:          report.ChainID,
+		RawMetrics:       report.RawMetrics,
+		PricingVersion:   report.PricingVersion,
+		FormulaVersion:   report.FormulaVersion,
+		ModelVersion:     report.ModelVersion,
+		StreamSequence:   report.StreamSequence,
+		Nonce:            report.Nonce,
+		IdempotencyKey:   report.IdempotencyKey,
+		ProviderKeyEpoch: report.ProviderKeyEpoch,
+		ProviderKeyID:    report.ProviderKeyID,
+		IssuedAtHeight:   report.IssuedAtHeight,
+		ExpiresAtHeight:  report.ExpiresAtHeight,
+		IssuedAtUnix:     report.IssuedAtUnix,
+		ExpiresAtUnix:    report.ExpiresAtUnix,
+		SignatureVersion: report.SignatureVersion,
 	}
 
 	item, existed, err := s.enqueueMessage(queueItemKindUsage, msg)
@@ -423,6 +482,9 @@ func (s *ChainUsageSubmitterImpl) submitBatch(ctx context.Context, reports []*Ch
 	}
 
 	for _, report := range reports {
+		if err := s.prepareAuthenticatedUsageReport(ctx, report); err != nil {
+			return err
+		}
 		if err := s.validateReport(report); err != nil {
 			return err
 		}
@@ -433,15 +495,31 @@ func (s *ChainUsageSubmitterImpl) submitBatch(ctx context.Context, reports []*Ch
 
 	for _, report := range reports {
 		msg := &MsgRecordUsageWrapper{
-			Sender:      s.cfg.ProviderAddress,
-			OrderID:     report.OrderID,
-			LeaseID:     report.LeaseID,
-			UsageUnits:  report.UsageUnits,
-			UsageType:   report.UsageType,
-			PeriodStart: report.PeriodStart.Unix(),
-			PeriodEnd:   report.PeriodEnd.Unix(),
-			UnitPrice:   report.UnitPrice,
-			Signature:   report.Signature,
+			Sender:           s.cfg.ProviderAddress,
+			OrderID:          report.OrderID,
+			LeaseID:          report.LeaseID,
+			UsageUnits:       report.UsageUnits,
+			UsageType:        report.UsageType,
+			PeriodStart:      report.PeriodStart.Unix(),
+			PeriodEnd:        report.PeriodEnd.Unix(),
+			UnitPrice:        report.UnitPrice,
+			Signature:        report.Signature,
+			AllocationID:     report.AllocationID,
+			ChainID:          report.ChainID,
+			RawMetrics:       report.RawMetrics,
+			PricingVersion:   report.PricingVersion,
+			FormulaVersion:   report.FormulaVersion,
+			ModelVersion:     report.ModelVersion,
+			StreamSequence:   report.StreamSequence,
+			Nonce:            report.Nonce,
+			IdempotencyKey:   report.IdempotencyKey,
+			ProviderKeyEpoch: report.ProviderKeyEpoch,
+			ProviderKeyID:    report.ProviderKeyID,
+			IssuedAtHeight:   report.IssuedAtHeight,
+			ExpiresAtHeight:  report.ExpiresAtHeight,
+			IssuedAtUnix:     report.IssuedAtUnix,
+			ExpiresAtUnix:    report.ExpiresAtUnix,
+			SignatureVersion: report.SignatureVersion,
 		}
 
 		item, existed, err := s.enqueueMessage(queueItemKindUsage, msg)
@@ -485,6 +563,21 @@ func (s *ChainUsageSubmitterImpl) submitBatch(ctx context.Context, reports []*Ch
 //
 //nolint:unparam // ctx kept for future context deadline handling
 func (s *ChainUsageSubmitterImpl) signAndBroadcast(ctx context.Context, msg interface{}) (string, error) {
+	if s.mutationSubmitter != nil {
+		sdkMsgs, err := s.toSDKMsgs(msg)
+		if err != nil {
+			return "", err
+		}
+		if len(sdkMsgs) != 1 {
+			return "", fmt.Errorf("generalized mutation pipeline requires one durable message per queue item")
+		}
+		kind, err := providerMutationKindForSDKMsg(sdkMsgs[0])
+		if err != nil {
+			return "", err
+		}
+		result, err := s.mutationSubmitter.Submit(ctx, kind, sdkMsgs[0])
+		return result.TxHash, err
+	}
 	if s.keyManager == nil {
 		return "", errors.New("key manager not configured")
 	}
@@ -515,7 +608,11 @@ func (s *ChainUsageSubmitterImpl) signAndBroadcast(ctx context.Context, msg inte
 	txHash, err := s.chainClient.BroadcastTx(ctx, txBytes)
 	if err != nil {
 		if errors.Is(err, ErrSequenceMismatch) {
-			s.incrementSequence()
+			if s.useLegacyEnvelope {
+				s.incrementSequence()
+			} else if reconcileErr := s.reconcileAccountSequence(ctx); reconcileErr != nil {
+				return txHash, reconcileErr
+			}
 		}
 		return txHash, err
 	}
@@ -523,33 +620,36 @@ func (s *ChainUsageSubmitterImpl) signAndBroadcast(ctx context.Context, msg inte
 	return txHash, nil
 }
 
-func (s *ChainUsageSubmitterImpl) signAndBroadcastWithRetry(ctx context.Context, msg interface{}) (string, error) {
-	attempts := s.cfg.MaxAttempts
-	if attempts <= 0 {
-		attempts = 1
+func providerMutationKindForSDKMsg(msg sdk.Msg) (ProviderMutationKind, error) {
+	switch msg.(type) {
+	case *settlementv1.MsgRecordUsage:
+		return MutationSettlementRecordUsage, nil
+	case *settlementv1.MsgSettleOrder:
+		return MutationSettlementSettleOrder, nil
+	case *settlementv1.MsgRecordFiatConversionObservation:
+		return MutationSettlementFiatObservation, nil
+	default:
+		return "", fmt.Errorf("unsupported generalized usage mutation %T", msg)
 	}
-	var lastErr error
-	var txHash string
-	for attempt := 0; attempt < attempts; attempt++ {
-		hash, err := s.signAndBroadcast(ctx, msg)
-		if hash != "" {
-			txHash = hash
+}
+
+func (s *ChainUsageSubmitterImpl) reconcileAccountSequence(ctx context.Context) error {
+	resolver, ok := s.cfg.ProviderSigningState.(AccountSequenceResolver)
+	if !ok {
+		if s.useLegacyEnvelope {
+			return nil
 		}
-		if err == nil {
-			return txHash, nil
-		}
-		lastErr = err
-		if !isRetryableBroadcastError(err) {
-			return txHash, err
-		}
-		if attempt < attempts-1 {
-			if err := s.sleepBackoff(ctx, attempt); err != nil {
-				return txHash, err
-			}
-			continue
-		}
+		return fmt.Errorf("account sequence resolver not configured")
 	}
-	return txHash, lastErr
+	accountNumber, sequence, err := resolver.ResolveAccountSequence(ctx, s.cfg.ProviderAddress)
+	if err != nil {
+		return fmt.Errorf("resolve account sequence: %w", err)
+	}
+	s.mu.Lock()
+	s.accountNumber = accountNumber
+	s.sequence = sequence
+	s.mu.Unlock()
+	return nil
 }
 
 func isRetryableBroadcastError(err error) bool {
@@ -605,25 +705,42 @@ type classifiedBroadcastError struct {
 	Retryable bool
 }
 
+type rpcSubmitterClient struct {
+	rpc *rpchttp.HTTP
+	cfg ChainSubmitterConfig
+}
+
+func (c *rpcSubmitterClient) EstimateGas(_ context.Context, _ []byte) (uint64, error) {
+	if c.cfg.GasLimit == 0 {
+		return DefaultChainSubmitterConfig().GasLimit, nil
+	}
+	return c.cfg.GasLimit, nil
+}
+
+func (c *rpcSubmitterClient) BroadcastTx(ctx context.Context, tx []byte) (string, error) {
+	if c.rpc == nil {
+		return "", errors.New("rpc client not configured")
+	}
+	localHash := strings.ToUpper(hex.EncodeToString(tmtypes.Tx(tx).Hash()))
+	result, err := c.rpc.BroadcastTxCommit(ctx, tx)
+	if err != nil {
+		return localHash, &classifiedBroadcastError{Message: fmt.Sprintf("broadcast tx: %v", err), Retryable: true}
+	}
+	txHash := strings.ToUpper(hex.EncodeToString(result.Hash))
+	if txHash == "" {
+		txHash = localHash
+	}
+	if result.CheckTx.Code != 0 {
+		return txHash, classifyBroadcastError(result.CheckTx.Log)
+	}
+	if result.TxResult.Code != 0 {
+		return txHash, classifyBroadcastError(result.TxResult.Log)
+	}
+	return txHash, nil
+}
+
 func (e *classifiedBroadcastError) Error() string {
 	return e.Message
-}
-
-// signAndBroadcastBatch signs and broadcasts multiple messages.
-func (s *ChainUsageSubmitterImpl) signAndBroadcastBatch(ctx context.Context, msgs []*MsgRecordUsageWrapper) error {
-	if len(msgs) == 0 {
-		return nil
-	}
-
-	batchMsg := &batchUsageMsgs{
-		Msgs: msgs,
-	}
-	_, err := s.signAndBroadcastWithRetry(ctx, batchMsg)
-	return err
-}
-
-type batchUsageMsgs struct {
-	Msgs []*MsgRecordUsageWrapper `json:"msgs"`
 }
 
 type txEnvelope struct {
@@ -635,74 +752,17 @@ type txEnvelope struct {
 	AccountNumber uint64          `json:"account_number"`
 }
 
-type rpcSubmitterClient struct {
-	rpc *rpchttp.HTTP
-	cfg ChainSubmitterConfig
-}
-
-func (c *rpcSubmitterClient) EstimateGas(_ context.Context, _ []byte) (uint64, error) {
-	if c.cfg.GasLimit == 0 {
-		return 200000, nil
-	}
-	return c.cfg.GasLimit, nil
-}
-
-func (c *rpcSubmitterClient) BroadcastTx(ctx context.Context, tx []byte) (string, error) {
-	if c.rpc == nil {
-		return "", errors.New("rpc client not configured")
-	}
-	localHash := strings.ToUpper(hex.EncodeToString(tmtypes.Tx(tx).Hash()))
-	res, err := c.rpc.BroadcastTxSync(ctx, tx)
-	if err != nil {
-		reconciledHash, reconcileErr := c.reconcileBroadcastError(ctx, localHash)
-		if reconcileErr == nil {
-			return reconciledHash, nil
-		}
-		return "", &classifiedBroadcastError{
-			Message:   fmt.Sprintf("broadcast tx: %v", err),
-			Retryable: true,
-		}
-	}
-	txHash := strings.ToUpper(hex.EncodeToString(res.Hash))
-	if txHash == "" {
-		txHash = localHash
-	}
-	if res.Code != 0 {
-		err := classifyBroadcastError(res.Log)
-		if err == nil {
-			err = fmt.Errorf("broadcast rejected with code=%d", res.Code)
-		}
-		return txHash, err
-	}
-	return txHash, nil
-}
-
-func (c *rpcSubmitterClient) reconcileBroadcastError(ctx context.Context, txHash string) (string, error) {
-	if c.rpc == nil || txHash == "" {
-		return "", fmt.Errorf("rpc reconciliation unavailable")
-	}
-	hashBytes, err := hex.DecodeString(strings.ToLower(txHash))
-	if err != nil {
-		return "", fmt.Errorf("decode tx hash: %w", err)
-	}
-
-	qctx, cancel := context.WithTimeout(ctx, 2*time.Second)
-	defer cancel()
-	txRes, err := c.rpc.Tx(qctx, hashBytes, false)
-	if err != nil || txRes == nil {
-		return "", fmt.Errorf("tx reconciliation failed: %w", err)
-	}
-	if txRes.TxResult.Code != 0 {
-		return txHash, classifyBroadcastError(txRes.TxResult.Log)
-	}
-	return txHash, nil
-}
-
 func defaultUsageReportValidator(report *ChainUsageReport) error {
 	if report == nil {
 		return ErrInvalidReport
 	}
 	if report.OrderID == "" || report.LeaseID == "" {
+		return ErrInvalidReport
+	}
+	if report.CustomerAddress == "" || report.ChainID == "" || report.StreamSequence == 0 ||
+		report.ProviderKeyEpoch == 0 || report.ProviderKeyID == "" ||
+		len(report.Nonce) != 32 || len(report.IdempotencyKey) != 32 ||
+		report.SignatureVersion != 1 || len(report.Signature) == 0 {
 		return ErrInvalidReport
 	}
 	if report.UsageUnits == 0 {
@@ -853,15 +913,38 @@ func (s *ChainUsageSubmitterImpl) toSDKMsgs(msg interface{}) ([]sdk.Msg, error) 
 	switch m := msg.(type) {
 	case *MsgRecordUsageWrapper:
 		return []sdk.Msg{&settlementv1.MsgRecordUsage{
-			Sender:      m.Sender,
-			OrderId:     m.OrderID,
-			LeaseId:     m.LeaseID,
-			UsageUnits:  m.UsageUnits,
-			UsageType:   m.UsageType,
-			PeriodStart: m.PeriodStart,
-			PeriodEnd:   m.PeriodEnd,
-			UnitPrice:   m.UnitPrice,
-			Signature:   m.Signature,
+			Sender:       m.Sender,
+			OrderId:      m.OrderID,
+			LeaseId:      m.LeaseID,
+			UsageUnits:   m.UsageUnits,
+			UsageType:    m.UsageType,
+			PeriodStart:  m.PeriodStart,
+			PeriodEnd:    m.PeriodEnd,
+			UnitPrice:    m.UnitPrice,
+			Signature:    m.Signature,
+			AllocationId: m.AllocationID,
+			ChainId:      m.ChainID,
+			RawMetrics: &settlementv1.RawUsageMetrics{
+				CpuMilliSeconds:    m.RawMetrics.CPUMilliSeconds,
+				MemoryByteSeconds:  m.RawMetrics.MemoryByteSeconds,
+				StorageByteSeconds: m.RawMetrics.StorageByteSeconds,
+				NetworkBytesIn:     m.RawMetrics.NetworkBytesIn,
+				NetworkBytesOut:    m.RawMetrics.NetworkBytesOut,
+				GpuSeconds:         m.RawMetrics.GPUSeconds,
+			},
+			PricingVersion:   m.PricingVersion,
+			FormulaVersion:   m.FormulaVersion,
+			ModelVersion:     m.ModelVersion,
+			StreamSequence:   m.StreamSequence,
+			Nonce:            m.Nonce,
+			IdempotencyKey:   m.IdempotencyKey,
+			ProviderKeyEpoch: m.ProviderKeyEpoch,
+			ProviderKeyId:    m.ProviderKeyID,
+			IssuedAtHeight:   m.IssuedAtHeight,
+			ExpiresAtHeight:  m.ExpiresAtHeight,
+			IssuedAtUnix:     m.IssuedAtUnix,
+			ExpiresAtUnix:    m.ExpiresAtUnix,
+			SignatureVersion: m.SignatureVersion,
 		}}, nil
 	case *MsgSettleOrderWrapper:
 		return []sdk.Msg{&settlementv1.MsgSettleOrder{
@@ -870,28 +953,6 @@ func (s *ChainUsageSubmitterImpl) toSDKMsgs(msg interface{}) ([]sdk.Msg, error) 
 			UsageRecordIds: append([]string(nil), m.UsageRecordIDs...),
 			IsFinal:        m.IsFinal,
 		}}, nil
-	case *batchUsageMsgs:
-		out := make([]sdk.Msg, 0, len(m.Msgs))
-		for _, one := range m.Msgs {
-			if one == nil {
-				continue
-			}
-			out = append(out, &settlementv1.MsgRecordUsage{
-				Sender:      one.Sender,
-				OrderId:     one.OrderID,
-				LeaseId:     one.LeaseID,
-				UsageUnits:  one.UsageUnits,
-				UsageType:   one.UsageType,
-				PeriodStart: one.PeriodStart,
-				PeriodEnd:   one.PeriodEnd,
-				UnitPrice:   one.UnitPrice,
-				Signature:   one.Signature,
-			})
-		}
-		if len(out) == 0 {
-			return nil, fmt.Errorf("batch message contains no usage entries")
-		}
-		return out, nil
 	default:
 		return nil, fmt.Errorf("unsupported queue message type %T", msg)
 	}
@@ -988,15 +1049,31 @@ func (s *ChainUsageSubmitterImpl) flushBatch(ctx context.Context) {
 
 // MsgRecordUsageWrapper wraps the MsgRecordUsage for serialization.
 type MsgRecordUsageWrapper struct {
-	Sender      string      `json:"sender"`
-	OrderID     string      `json:"order_id"`
-	LeaseID     string      `json:"lease_id"`
-	UsageUnits  uint64      `json:"usage_units"`
-	UsageType   string      `json:"usage_type"`
-	PeriodStart int64       `json:"period_start"`
-	PeriodEnd   int64       `json:"period_end"`
-	UnitPrice   sdk.DecCoin `json:"unit_price"`
-	Signature   []byte      `json:"signature"`
+	Sender           string          `json:"sender"`
+	OrderID          string          `json:"order_id"`
+	LeaseID          string          `json:"lease_id"`
+	UsageUnits       uint64          `json:"usage_units"`
+	UsageType        string          `json:"usage_type"`
+	PeriodStart      int64           `json:"period_start"`
+	PeriodEnd        int64           `json:"period_end"`
+	UnitPrice        sdk.DecCoin     `json:"unit_price"`
+	Signature        []byte          `json:"signature"`
+	AllocationID     string          `json:"allocation_id,omitempty"`
+	ChainID          string          `json:"chain_id"`
+	RawMetrics       ResourceMetrics `json:"raw_metrics"`
+	PricingVersion   uint32          `json:"pricing_version"`
+	FormulaVersion   uint32          `json:"formula_version"`
+	ModelVersion     uint32          `json:"model_version"`
+	StreamSequence   uint64          `json:"stream_sequence"`
+	Nonce            []byte          `json:"nonce"`
+	IdempotencyKey   []byte          `json:"idempotency_key"`
+	ProviderKeyEpoch uint64          `json:"provider_key_epoch"`
+	ProviderKeyID    string          `json:"provider_key_id"`
+	IssuedAtHeight   int64           `json:"issued_at_height"`
+	ExpiresAtHeight  int64           `json:"expires_at_height"`
+	IssuedAtUnix     int64           `json:"issued_at_unix"`
+	ExpiresAtUnix    int64           `json:"expires_at_unix"`
+	SignatureVersion uint32          `json:"signature_version"`
 }
 
 // MsgSettleOrderWrapper wraps the MsgSettleOrder for serialization.
@@ -1032,15 +1109,31 @@ func NewTransactionBuilder(cfg ChainSubmitterConfig, keyManager *KeyManager) *Tr
 func (b *TransactionBuilder) BuildUsageReportTx(report *ChainUsageReport, signingData SigningData) ([]byte, error) {
 	// Build the message
 	msg := MsgRecordUsageWrapper{
-		Sender:      b.cfg.ProviderAddress,
-		OrderID:     report.OrderID,
-		LeaseID:     report.LeaseID,
-		UsageUnits:  report.UsageUnits,
-		UsageType:   report.UsageType,
-		PeriodStart: report.PeriodStart.Unix(),
-		PeriodEnd:   report.PeriodEnd.Unix(),
-		UnitPrice:   report.UnitPrice,
-		Signature:   report.Signature,
+		Sender:           b.cfg.ProviderAddress,
+		OrderID:          report.OrderID,
+		LeaseID:          report.LeaseID,
+		UsageUnits:       report.UsageUnits,
+		UsageType:        report.UsageType,
+		PeriodStart:      report.PeriodStart.Unix(),
+		PeriodEnd:        report.PeriodEnd.Unix(),
+		UnitPrice:        report.UnitPrice,
+		Signature:        report.Signature,
+		AllocationID:     report.AllocationID,
+		ChainID:          report.ChainID,
+		RawMetrics:       report.RawMetrics,
+		PricingVersion:   report.PricingVersion,
+		FormulaVersion:   report.FormulaVersion,
+		ModelVersion:     report.ModelVersion,
+		StreamSequence:   report.StreamSequence,
+		Nonce:            report.Nonce,
+		IdempotencyKey:   report.IdempotencyKey,
+		ProviderKeyEpoch: report.ProviderKeyEpoch,
+		ProviderKeyID:    report.ProviderKeyID,
+		IssuedAtHeight:   report.IssuedAtHeight,
+		ExpiresAtHeight:  report.ExpiresAtHeight,
+		IssuedAtUnix:     report.IssuedAtUnix,
+		ExpiresAtUnix:    report.ExpiresAtUnix,
+		SignatureVersion: report.SignatureVersion,
 	}
 
 	// Serialize for signing
@@ -1148,11 +1241,14 @@ func (v *SignatureVerifier) VerifyUsageReport(report *ChainUsageReport, provider
 		return false, fmt.Errorf("unknown provider: %s", providerAddress)
 	}
 
-	// In a real implementation, this would verify the signature
-	// using the provider's public key
-	_ = publicKey
-
-	return true, nil
+	if len(publicKey) != ed25519.PublicKeySize || len(report.Signature) != ed25519.SignatureSize {
+		return false, nil
+	}
+	signBytes, err := settlementtypes.CanonicalUsageSignBytes(canonicalPayloadForReport(providerAddress, report))
+	if err != nil {
+		return false, err
+	}
+	return ed25519.Verify(publicKey, signBytes, report.Signature), nil
 }
 
 // UsageReportHash generates a hash of a usage report for signing.

@@ -1,4 +1,51 @@
 {
+    "v1.8.0": {
+        "modules": { "added": [], "removed": [] },
+        "migrations": {
+            "settlement": [{"from": "3", "to": "4"}]
+        }
+    },
+    "v1.7.0": {
+        "modules": { "added": [], "removed": [] },
+        "migrations": {
+            "settlement": [{"from": "2", "to": "3"}],
+            "fraud": [{"from": "1", "to": "2"}],
+            "hpc": [{"from": "2", "to": "3"}],
+            "review": [{"from": "1", "to": "2"}],
+            "escrow": [{"from": "3", "to": "4"}],
+            "resources": [{"from": "2", "to": "3"}]
+        }
+    },
+    "v1.5.0": {
+        "modules": {
+            "added": [],
+            "removed": []
+        },
+        "migrations": {
+            "provider": [{"from": "3", "to": "4"}],
+            "settlement": [{"from": "1", "to": "2"}]
+        }
+    },
+    "v1.4.0": {
+        "modules": {
+            "added": [],
+            "removed": []
+        },
+        "migrations": {
+        }
+    },
+    "v1.6.0": {
+        "modules": {
+            "added": [],
+            "removed": []
+        },
+        "migrations": {
+            "market": [{"from": "7", "to": "8"}],
+            "mktplace": [{"from": "1", "to": "2"}],
+            "resources": [{"from": "1", "to": "2"}],
+            "hpc": [{"from": "1", "to": "2"}]
+        }
+    },
     "v1.3.0": {
         "modules": {
             "added": [],

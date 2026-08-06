@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/require"
 	"github.com/virtengine/virtengine/x/market/types/marketplace"
 )
 
@@ -73,9 +74,7 @@ func TestOrderStatusCallbackHandler_MapsState(t *testing.T) {
 	}
 
 	last := sink.last()
-	if last == nil {
-		t.Fatal("expected callback to be submitted")
-	}
+	require.NotNil(t, last)
 	if got := last.Payload["state"]; got != "active" {
 		t.Fatalf("payload state = %s, want active", got)
 	}

@@ -1,19 +1,20 @@
-# VirtEngine Node Services
+# VirtEngine chain services
 apiVersion: v1
 kind: Service
 metadata:
-  name: virtengine-node
+  name: virtengine-validator
   namespace: virtengine
   labels:
-    app.kubernetes.io/name: virtengine-node
-    app.kubernetes.io/component: blockchain
+    app.kubernetes.io/name: virtengine-validator
+    app.kubernetes.io/component: validator
   annotations:
     prometheus.io/scrape: "true"
     prometheus.io/port: "26660"
 spec:
   type: ClusterIP
   selector:
-    app.kubernetes.io/name: virtengine-node
+    app.kubernetes.io/name: virtengine-validator
+    app.kubernetes.io/component: validator
   ports:
     - name: p2p
       port: 26656
@@ -40,7 +41,70 @@ spec:
       targetPort: prometheus
       protocol: TCP
 ---
-# Headless service for StatefulSet DNS
+apiVersion: v1
+kind: Service
+metadata:
+  name: virtengine-validator-headless
+  namespace: virtengine
+  labels:
+    app.kubernetes.io/name: virtengine-validator
+    app.kubernetes.io/component: validator
+spec:
+  type: ClusterIP
+  clusterIP: None
+  selector:
+    app.kubernetes.io/name: virtengine-validator
+    app.kubernetes.io/component: validator
+  ports:
+    - name: p2p
+      port: 26656
+      targetPort: p2p
+    - name: rpc
+      port: 26657
+      targetPort: rpc
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: virtengine-node
+  namespace: virtengine
+  labels:
+    app.kubernetes.io/name: virtengine-node
+    app.kubernetes.io/component: sentry
+  annotations:
+    prometheus.io/scrape: "true"
+    prometheus.io/port: "26660"
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: virtengine-node
+    app.kubernetes.io/component: sentry
+  ports:
+    - name: p2p
+      port: 26656
+      targetPort: p2p
+      protocol: TCP
+    - name: rpc
+      port: 26657
+      targetPort: rpc
+      protocol: TCP
+    - name: rest
+      port: 1317
+      targetPort: rest
+      protocol: TCP
+    - name: grpc
+      port: 9090
+      targetPort: grpc
+      protocol: TCP
+    - name: grpc-web
+      port: 9091
+      targetPort: grpc-web
+      protocol: TCP
+    - name: prometheus
+      port: 26660
+      targetPort: prometheus
+      protocol: TCP
+---
 apiVersion: v1
 kind: Service
 metadata:
@@ -48,18 +112,22 @@ metadata:
   namespace: virtengine
   labels:
     app.kubernetes.io/name: virtengine-node
-    app.kubernetes.io/component: blockchain
+    app.kubernetes.io/component: sentry
 spec:
   type: ClusterIP
   clusterIP: None
   selector:
     app.kubernetes.io/name: virtengine-node
+    app.kubernetes.io/component: sentry
   ports:
     - name: p2p
       port: 26656
       targetPort: p2p
+    - name: rpc
+      port: 26657
+      targetPort: rpc
 ---
-# External P2P service (for validators)
+# External P2P service exposes sentry nodes only. Validator P2P remains private.
 apiVersion: v1
 kind: Service
 metadata:
@@ -67,7 +135,7 @@ metadata:
   namespace: virtengine
   labels:
     app.kubernetes.io/name: virtengine-node
-    app.kubernetes.io/component: blockchain
+    app.kubernetes.io/component: sentry
   annotations:
     service.beta.kubernetes.io/aws-load-balancer-type: "nlb"
     service.beta.kubernetes.io/aws-load-balancer-scheme: "internet-facing"
@@ -76,6 +144,7 @@ spec:
   type: LoadBalancer
   selector:
     app.kubernetes.io/name: virtengine-node
+    app.kubernetes.io/component: sentry
   ports:
     - name: p2p
       port: 26656

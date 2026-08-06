@@ -17,6 +17,7 @@ import (
 type BillingKeeper interface {
 	SaveUsageRecord(ctx sdk.Context, record *billing.UsageRecord) error
 	GetUsageRecord(ctx sdk.Context, recordID string) (*billing.UsageRecord, error)
+	GetInvoice(ctx sdk.Context, invoiceID string) (*billing.InvoiceLedgerRecord, error)
 	CreateInvoice(ctx sdk.Context, invoice *billing.Invoice, artifactCID string) (*billing.InvoiceLedgerRecord, error)
 	UpdateInvoiceStatus(ctx sdk.Context, invoiceID string, newStatus billing.InvoiceStatus, initiator string) (*billing.InvoiceLedgerEntry, error)
 	RecordPayment(ctx sdk.Context, invoiceID string, amount sdk.Coins, initiator string) (*billing.InvoiceLedgerEntry, error)
@@ -172,7 +173,7 @@ func (k Keeper) generateInvoiceForSettlement(
 		BillingPeriod: billing.BillingPeriod{
 			StartTime:       settlement.PeriodStart,
 			EndTime:         settlement.PeriodEnd,
-			DurationSeconds: int64(settlement.PeriodEnd.Sub(settlement.PeriodStart).Seconds()),
+			DurationSeconds: int64(settlement.PeriodEnd.Sub(settlement.PeriodStart) / time.Second),
 			PeriodType:      billing.BillingPeriodTypeUsageBased,
 		},
 		Currency: settlementCurrency(settlement.TotalAmount, config.DefaultCurrency),
@@ -188,7 +189,7 @@ func (k Keeper) generateInvoiceForSettlement(
 		return "", err
 	}
 
-	reconcileInvoiceTotals(invoice, settlement.TotalAmount, "settlement adjustment")
+	reconcileInvoiceTotals(invoice, settlement.TotalAmount, "settlement adjustment", ctx.BlockTime())
 	recalculateInvoiceTotals(invoice)
 
 	invoice.SettlementID = settlement.SettlementID
@@ -254,7 +255,8 @@ func usageUnitsToInt64(units uint64) int64 {
 	return int64(units)
 }
 
-func reconcileInvoiceTotals(inv *billing.Invoice, target sdk.Coins, reason string) {
+func reconcileInvoiceTotals(inv *billing.Invoice, target sdk.Coins, reason string, now time.Time) {
+	now = now.UTC()
 	targetDenoms := make(map[string]struct{}, len(target))
 	for _, coin := range target {
 		targetDenoms[coin.Denom] = struct{}{}
@@ -283,7 +285,7 @@ func reconcileInvoiceTotals(inv *billing.Invoice, target sdk.Coins, reason strin
 			Type:        billing.DiscountTypeFixed,
 			Description: reason,
 			Amount:      sdk.NewCoins(sdk.NewCoin(coin.Denom, diff.Neg())),
-			AppliedAt:   time.Now().UTC(),
+			AppliedAt:   now,
 			AppliedBy:   "settlement",
 		}
 		inv.Discounts = append(inv.Discounts, discount)
@@ -304,7 +306,7 @@ func reconcileInvoiceTotals(inv *billing.Invoice, target sdk.Coins, reason strin
 			Type:        billing.DiscountTypeFixed,
 			Description: reason,
 			Amount:      sdk.NewCoins(coin),
-			AppliedAt:   time.Now().UTC(),
+			AppliedAt:   now,
 			AppliedBy:   "settlement",
 		}
 		inv.Discounts = append(inv.Discounts, discount)

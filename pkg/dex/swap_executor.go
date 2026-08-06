@@ -5,8 +5,6 @@ package dex
 
 import (
 	"context"
-	"crypto/rand"
-	"encoding/hex"
 	"errors"
 	"fmt"
 	"sort"
@@ -31,6 +29,9 @@ func newSwapExecutor(cfg SwapConfig, svc *service) *swapExecutorImpl {
 
 // GetQuote generates a swap quote with optimal routing
 func (e *swapExecutorImpl) GetQuote(ctx context.Context, request SwapRequest) (SwapQuote, error) {
+	if !request.SlippageToleranceExact.IsNil() {
+		return e.getExactAdapterQuote(ctx, request)
+	}
 	// Apply default slippage if not specified
 	if request.SlippageTolerance == 0 {
 		request.SlippageTolerance = e.cfg.DefaultSlippage
@@ -67,16 +68,9 @@ func (e *swapExecutorImpl) GetQuote(ctx context.Context, request SwapRequest) (S
 	// Calculate total fee
 	totalFee := e.calculateRouteFee(route, inputAmount)
 
-	// Generate quote ID
-	quoteID, err := generateQuoteID()
-	if err != nil {
-		return SwapQuote{}, fmt.Errorf("failed to generate quote ID: %w", err)
-	}
-
 	now := time.Now().UTC()
 
-	return SwapQuote{
-		ID:              quoteID,
+	quote := SwapQuote{
 		Request:         request,
 		Route:           route,
 		InputAmount:     inputAmount,
@@ -88,7 +82,42 @@ func (e *swapExecutorImpl) GetQuote(ctx context.Context, request SwapRequest) (S
 		GasEstimate:     route.TotalGas,
 		ExpiresAt:       now.Add(e.cfg.QuoteValidityPeriod),
 		CreatedAt:       now,
-	}, nil
+	}
+	quote.ID, err = genericQuoteDigest(quote)
+	if err != nil {
+		return SwapQuote{}, fmt.Errorf("failed to generate quote ID: %w", err)
+	}
+	return quote, nil
+}
+
+func (e *swapExecutorImpl) getExactAdapterQuote(ctx context.Context, request SwapRequest) (SwapQuote, error) {
+	if err := request.Validate(); err != nil {
+		return SwapQuote{}, err
+	}
+	if request.PreferredDEX != "" {
+		adapter, err := e.service.GetAdapter(request.PreferredDEX)
+		if err != nil {
+			return SwapQuote{}, err
+		}
+		if !adapter.IsHealthy(ctx) {
+			return SwapQuote{}, ErrProviderUnavailable
+		}
+		return adapter.GetSwapQuote(ctx, request)
+	}
+	var best SwapQuote
+	for _, adapter := range e.service.getHealthyAdapters(ctx) {
+		quote, err := adapter.GetSwapQuote(ctx, request)
+		if err != nil || quote.QuoteDigest == "" || quote.OutputAmount.IsNil() {
+			continue
+		}
+		if best.ID == "" || quote.OutputAmount.GT(best.OutputAmount) {
+			best = quote
+		}
+	}
+	if best.ID == "" {
+		return SwapQuote{}, ErrUnsupportedPair
+	}
+	return best, nil
 }
 
 // ExecuteSwap executes a previously quoted swap
@@ -134,6 +163,16 @@ func (e *swapExecutorImpl) FindBestRoute(ctx context.Context, request SwapReques
 	if len(routes) == 0 {
 		return SwapRoute{}, ErrUnsupportedPair
 	}
+	validRoutes := routes[:0]
+	for _, route := range routes {
+		if err := validateGenericRoute(route, e.cfg.MaxHops); err == nil {
+			validRoutes = append(validRoutes, route)
+		}
+	}
+	routes = validRoutes
+	if len(routes) == 0 {
+		return SwapRoute{}, ErrUnsupportedPair
+	}
 
 	// Sort by output amount (descending) for exact-in, input amount (ascending) for exact-out
 	if request.Type == SwapTypeExactIn {
@@ -158,6 +197,19 @@ func (e *swapExecutorImpl) ValidateQuote(ctx context.Context, quote SwapQuote) e
 	// Check expiration
 	if quote.IsExpired() {
 		return ErrQuoteExpired
+	}
+	if quote.OutputAmount.IsNil() || quote.MinOutputAmount.IsNil() || quote.OutputAmount.LT(quote.MinOutputAmount) {
+		return ErrMinimumOutput
+	}
+	if quote.QuoteDigest != "" {
+		digest, err := QuoteDigest(quote)
+		if err != nil || digest != quote.ID || digest != quote.QuoteDigest {
+			return ErrExecutionPayload
+		}
+		if quote.PriceImpactExact.IsNil() {
+			return ErrPriceImpactExceeded
+		}
+		return nil
 	}
 
 	// Validate current price hasn't deviated too much
@@ -214,14 +266,303 @@ func (e *swapExecutorImpl) findAllRoutes(ctx context.Context, request SwapReques
 		}
 	}
 
-	// TODO: Implement multi-hop route discovery across DEXes
-	// This would involve:
-	// 1. Finding all pools containing fromToken
-	// 2. Finding all pools containing toToken
-	// 3. Finding intermediate tokens that connect them
-	// 4. Building routes up to maxHops
+	if e.cfg.MaxHops <= 1 {
+		return dedupeRoutes(routes), nil
+	}
 
-	return routes, nil
+	pools, err := e.service.ListPools(ctx, PoolQuery{})
+	if err != nil {
+		return dedupeRoutes(routes), nil
+	}
+
+	switch request.Type {
+	case SwapTypeExactOut:
+		reverseVisited := map[string]struct{}{request.ToToken.Symbol: {}}
+		routes = append(routes, e.discoverExactOutRoutes(ctx, request, request.ToToken, request.FromToken, request.Amount, pools, reverseVisited, e.cfg.MaxHops)...)
+	default:
+		forwardVisited := map[string]struct{}{request.FromToken.Symbol: {}}
+		routes = append(routes, e.discoverExactInRoutes(ctx, request, request.FromToken, request.ToToken, request.Amount, pools, forwardVisited, e.cfg.MaxHops)...)
+	}
+
+	return dedupeRoutes(routes), nil
+}
+
+func (e *swapExecutorImpl) discoverExactInRoutes(
+	ctx context.Context,
+	baseRequest SwapRequest,
+	current Token,
+	target Token,
+	amountIn sdkmath.Int,
+	pools []LiquidityPool,
+	visited map[string]struct{},
+	remainingHops int,
+) []SwapRoute {
+	if remainingHops <= 0 {
+		return nil
+	}
+
+	var routes []SwapRoute
+	for _, edge := range findPoolEdges(pools, current.Symbol, visited) {
+		hopRequest := baseRequest
+		hopRequest.FromToken = current
+		hopRequest.ToToken = edge.ToToken
+		hopRequest.Amount = amountIn
+		hopRequest.Type = SwapTypeExactIn
+
+		segment, ok := e.quoteRouteSegment(ctx, hopRequest, remainingHops)
+		if !ok {
+			continue
+		}
+
+		if edge.ToToken.Symbol == target.Symbol {
+			routes = append(routes, segment)
+			continue
+		}
+
+		nextVisited := cloneVisitedTokens(visited)
+		nextVisited[edge.ToToken.Symbol] = struct{}{}
+		nextAmount := e.calculateRouteOutput(segment)
+		if !nextAmount.IsPositive() {
+			continue
+		}
+
+		childRoutes := e.discoverExactInRoutes(
+			ctx,
+			baseRequest,
+			edge.ToToken,
+			target,
+			nextAmount,
+			pools,
+			nextVisited,
+			remainingHops-len(segment.Hops),
+		)
+		for _, child := range childRoutes {
+			routes = append(routes, combineRoutes(segment, child))
+		}
+	}
+
+	return routes
+}
+
+func (e *swapExecutorImpl) discoverExactOutRoutes(
+	ctx context.Context,
+	baseRequest SwapRequest,
+	currentTarget Token,
+	source Token,
+	requiredOutput sdkmath.Int,
+	pools []LiquidityPool,
+	visited map[string]struct{},
+	remainingHops int,
+) []SwapRoute {
+	if remainingHops <= 0 {
+		return nil
+	}
+
+	var routes []SwapRoute
+	for _, edge := range findPoolEdges(pools, currentTarget.Symbol, visited) {
+		hopRequest := baseRequest
+		hopRequest.FromToken = edge.ToToken
+		hopRequest.ToToken = currentTarget
+		hopRequest.Amount = requiredOutput
+		hopRequest.Type = SwapTypeExactOut
+
+		segment, ok := e.quoteRouteSegment(ctx, hopRequest, remainingHops)
+		if !ok {
+			continue
+		}
+
+		requiredInput := e.calculateRouteInput(segment)
+		if !requiredInput.IsPositive() {
+			continue
+		}
+
+		if edge.ToToken.Symbol == source.Symbol {
+			routes = append(routes, segment)
+			continue
+		}
+
+		nextVisited := cloneVisitedTokens(visited)
+		nextVisited[edge.ToToken.Symbol] = struct{}{}
+
+		childRoutes := e.discoverExactOutRoutes(
+			ctx,
+			baseRequest,
+			edge.ToToken,
+			source,
+			requiredInput,
+			pools,
+			nextVisited,
+			remainingHops-len(segment.Hops),
+		)
+		for _, child := range childRoutes {
+			routes = append(routes, combineRoutes(child, segment))
+		}
+	}
+
+	return routes
+}
+
+func (e *swapExecutorImpl) quoteRouteSegment(ctx context.Context, request SwapRequest, remainingHops int) (SwapRoute, bool) {
+	adapter, err := e.service.GetAdapter(request.PreferredDEX)
+	if request.PreferredDEX != "" && err == nil && adapter != nil && !adapter.IsHealthy(ctx) {
+		return SwapRoute{}, false
+	}
+
+	if request.PreferredDEX != "" && err == nil && adapter != nil {
+		quote, quoteErr := adapter.GetSwapQuote(ctx, request)
+		if quoteErr != nil || len(quote.Route.Hops) == 0 || len(quote.Route.Hops) > remainingHops {
+			return SwapRoute{}, false
+		}
+		return quote.Route, true
+	}
+
+	adapters := e.service.getHealthyAdapters(ctx)
+	for _, adapter := range adapters {
+		quote, quoteErr := adapter.GetSwapQuote(ctx, request)
+		if quoteErr != nil || len(quote.Route.Hops) == 0 || len(quote.Route.Hops) > remainingHops {
+			continue
+		}
+		return quote.Route, true
+	}
+
+	return SwapRoute{}, false
+}
+
+type poolEdge struct {
+	ToToken Token
+}
+
+func findPoolEdges(pools []LiquidityPool, currentSymbol string, visited map[string]struct{}) []poolEdge {
+	var edges []poolEdge
+	seen := make(map[string]struct{})
+
+	for _, pool := range pools {
+		if !poolContainsToken(pool, currentSymbol) {
+			continue
+		}
+
+		for _, token := range pool.Tokens {
+			if token.Symbol == currentSymbol {
+				continue
+			}
+			if _, alreadyVisited := visited[token.Symbol]; alreadyVisited {
+				continue
+			}
+			key := currentSymbol + "->" + token.Symbol
+			if _, duplicate := seen[key]; duplicate {
+				continue
+			}
+			seen[key] = struct{}{}
+			edges = append(edges, poolEdge{ToToken: token})
+		}
+	}
+
+	return edges
+}
+
+func poolContainsToken(pool LiquidityPool, symbol string) bool {
+	for _, token := range pool.Tokens {
+		if token.Symbol == symbol {
+			return true
+		}
+	}
+
+	return false
+}
+
+func cloneVisitedTokens(visited map[string]struct{}) map[string]struct{} {
+	next := make(map[string]struct{}, len(visited)+1)
+	for key := range visited {
+		next[key] = struct{}{}
+	}
+	return next
+}
+
+func combineRoutes(left, right SwapRoute) SwapRoute {
+	hops := make([]SwapHop, 0, len(left.Hops)+len(right.Hops))
+	hops = append(hops, left.Hops...)
+	hops = append(hops, right.Hops...)
+
+	return SwapRoute{
+		Hops:             hops,
+		TotalGas:         left.TotalGas + right.TotalGas,
+		PriceImpact:      left.PriceImpact + right.PriceImpact,
+		PriceImpactExact: addOptionalDecimals(left.PriceImpactExact, right.PriceImpactExact),
+	}
+}
+
+func dedupeRoutes(routes []SwapRoute) []SwapRoute {
+	seen := make(map[string]struct{}, len(routes))
+	deduped := make([]SwapRoute, 0, len(routes))
+
+	for _, route := range routes {
+		key := routeSignature(route)
+		if _, exists := seen[key]; exists {
+			continue
+		}
+		seen[key] = struct{}{}
+		deduped = append(deduped, route)
+	}
+
+	return deduped
+}
+
+func validateGenericRoute(route SwapRoute, maxHops int) error {
+	if len(route.Hops) == 0 || maxHops <= 0 || len(route.Hops) > maxHops {
+		return ErrRouteHopsExceeded
+	}
+	visited := make(map[string]struct{}, len(route.Hops)+1)
+	for i, hop := range route.Hops {
+		from := hop.FromToken.Denom
+		if from == "" {
+			from = hop.FromToken.Symbol
+		}
+		to := hop.ToToken.Denom
+		if to == "" {
+			to = hop.ToToken.Symbol
+		}
+		if from == "" || to == "" || from == to {
+			return ErrRouteCycle
+		}
+		if _, duplicate := visited[from]; duplicate {
+			return ErrRouteCycle
+		}
+		visited[from] = struct{}{}
+		if i > 0 {
+			previous := route.Hops[i-1]
+			previousTo := previous.ToToken.Denom
+			if previousTo == "" {
+				previousTo = previous.ToToken.Symbol
+			}
+			if previousTo != from || !previous.AmountOut.Equal(hop.AmountIn) {
+				return ErrPoolStateEvidence
+			}
+		}
+	}
+	last := route.Hops[len(route.Hops)-1].ToToken.Denom
+	if last == "" {
+		last = route.Hops[len(route.Hops)-1].ToToken.Symbol
+	}
+	if _, duplicate := visited[last]; duplicate {
+		return ErrRouteCycle
+	}
+	return nil
+}
+
+func routeSignature(route SwapRoute) string {
+	signature := fmt.Sprintf("gas:%d:impact:%0.6f", route.TotalGas, route.PriceImpact)
+	for _, hop := range route.Hops {
+		signature += fmt.Sprintf("|%s:%s:%s>%s:%s:%s",
+			hop.DEX,
+			hop.PoolID,
+			hop.FromToken.Symbol,
+			hop.ToToken.Symbol,
+			hop.AmountIn.String(),
+			hop.AmountOut.String(),
+		)
+	}
+
+	return signature
 }
 
 // calculateRouteOutput calculates the total output amount from a route
@@ -252,11 +593,12 @@ func (e *swapExecutorImpl) calculateRouteFee(route SwapRoute, _ sdkmath.Int) sdk
 	return totalFee
 }
 
-// generateQuoteID generates a unique quote ID
-func generateQuoteID() (string, error) {
-	bytes := make([]byte, 16)
-	if _, err := rand.Read(bytes); err != nil {
-		return "", err
+func addOptionalDecimals(left, right sdkmath.LegacyDec) sdkmath.LegacyDec {
+	if left.IsNil() {
+		return right
 	}
-	return "quote_" + hex.EncodeToString(bytes), nil
+	if right.IsNil() {
+		return left
+	}
+	return left.Add(right)
 }

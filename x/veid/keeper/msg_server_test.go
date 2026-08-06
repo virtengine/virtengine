@@ -1,13 +1,16 @@
 package keeper_test
 
 import (
+	"bytes"
 	"crypto/ed25519"
 	"crypto/rand"
 	"crypto/sha256"
+	"fmt"
 	"testing"
 	"time"
 
 	sdk "github.com/cosmos/cosmos-sdk/types"
+	stakingtypes "github.com/cosmos/cosmos-sdk/x/staking/types"
 	"github.com/stretchr/testify/suite"
 
 	veidv1 "github.com/virtengine/virtengine/sdk/go/node/veid/v1"
@@ -297,8 +300,67 @@ func (s *MsgServerTestSuite) TestMsgUpdateScore_RecordNotFound() {
 
 	_, err := s.msgServer.UpdateScore(s.ctx, msg)
 	s.Require().Error(err)
-	// Should fail due to not being a validator
-	s.Require().Contains(err.Error(), "validator")
+	s.Require().Contains(err.Error(), "disabled")
+}
+
+func (s *MsgServerTestSuite) TestMsgUpdateVerificationStatus_DisabledEvenForBondedValidator() {
+	stakingKeeper := NewMockStakingKeeper()
+	validatorAddr := sdk.AccAddress(bytes.Repeat([]byte{0x01}, 20))
+	stakingKeeper.AddValidator(sdk.ValAddress(validatorAddr), stakingtypes.Bonded)
+	s.keeper.SetStakingKeeper(stakingKeeper)
+
+	params := types.DefaultParams()
+	params.RequireClientSignature = false
+	params.RequireUserSignature = false
+	s.Require().NoError(s.keeper.SetParams(s.ctx, params))
+
+	accountAddr := sdk.AccAddress(bytes.Repeat([]byte{0x02}, 20))
+	metadata := s.createTestUploadMetadata()
+	scope := types.NewIdentityScope(
+		"scope-disabled-status",
+		types.ScopeTypeIDDocument,
+		s.createTestPayload(),
+		metadata,
+		time.Now(),
+	)
+	s.Require().NoError(s.keeper.UploadScope(s.ctx, accountAddr, scope))
+
+	_, err := s.msgServer.UpdateVerificationStatus(s.ctx, &types.MsgUpdateVerificationStatus{
+		Sender:         validatorAddr.String(),
+		AccountAddress: accountAddr.String(),
+		ScopeId:        "scope-disabled-status",
+		NewStatus:      veidv1.VerificationStatusVerified,
+		Reason:         "bonded validator attempt",
+	})
+	s.Require().Error(err)
+	s.Require().Contains(err.Error(), "disabled")
+	stored, found := s.keeper.GetScope(s.ctx, accountAddr, "scope-disabled-status")
+	s.Require().True(found)
+	s.Require().Equal(types.VerificationStatusPending, stored.Status)
+}
+
+func (s *MsgServerTestSuite) TestMsgUpdateScore_DisabledEvenForBondedValidator() {
+	stakingKeeper := NewMockStakingKeeper()
+	validatorAddr := sdk.AccAddress(bytes.Repeat([]byte{0x03}, 20))
+	stakingKeeper.AddValidator(sdk.ValAddress(validatorAddr), stakingtypes.Bonded)
+	s.keeper.SetStakingKeeper(stakingKeeper)
+
+	accountAddr := sdk.AccAddress(bytes.Repeat([]byte{0x04}, 20))
+	_, err := s.keeper.CreateIdentityRecord(s.ctx, accountAddr)
+	s.Require().NoError(err)
+
+	_, err = s.msgServer.UpdateScore(s.ctx, &types.MsgUpdateScore{
+		Sender:         validatorAddr.String(),
+		AccountAddress: accountAddr.String(),
+		NewScore:       99,
+		ScoreVersion:   "v-disabled",
+	})
+	s.Require().Error(err)
+	s.Require().Contains(err.Error(), "disabled")
+	record, found := s.keeper.GetIdentityRecord(s.ctx, accountAddr)
+	s.Require().True(found)
+	s.Require().Zero(record.CurrentScore)
+	s.Require().Empty(record.ScoreVersion)
 }
 
 // Test: MsgCreateIdentityWallet - success
@@ -389,19 +451,15 @@ func (s *MsgServerTestSuite) grantScopeConsent(address sdk.AccAddress, scopeID, 
 		GrantConsent: true,
 		Purpose:      purpose,
 	}
-	consentMsg := []byte("VEID_CONSENT_UPDATE:" + address.String() + ":" + scopeID + ":grant")
-	consentSig := kp.signMessage(consentMsg)
+	wallet, found := s.keeper.GetWallet(s.ctx, address)
+	s.Require().True(found)
+	consentSig := kp.signConsentUpdate(address.String(), wallet.ConsentSettings.ConsentVersion, update)
 	err := s.keeper.UpdateConsent(s.ctx, address, update, consentSig)
 	s.Require().NoError(err)
 }
 
-// signConsentUpdate signs the consent update message: "VEID_CONSENT_UPDATE:" + sender + ":" + scopeID + ":" + grant/revoke
-func (kp testKeyPair) signConsentUpdate(sender, scopeID string, grant bool) []byte {
-	grantStr := "revoke"
-	if grant {
-		grantStr = "grant"
-	}
-	msg := []byte("VEID_CONSENT_UPDATE:" + sender + ":" + scopeID + ":" + grantStr)
+func (kp testKeyPair) signConsentUpdate(sender string, version uint32, update types.ConsentUpdateRequest) []byte {
+	msg := types.GetConsentUpdateSigningMessage(sender, version, update)
 	return kp.signMessage(msg)
 }
 
@@ -541,7 +599,7 @@ func (s *MsgServerTestSuite) TestMsgUpdateConsentSettings_Success() {
 	s.createWalletWithKey(address, kp)
 
 	scopeID := "scope-consent-update"
-	consentSig := kp.signConsentUpdate(address.String(), scopeID, true)
+	consentSig := kp.signConsentUpdate(address.String(), 1, types.ConsentUpdateRequest{ScopeID: scopeID, GrantConsent: true, Purpose: "identity verification"})
 
 	msg := &types.MsgUpdateConsentSettings{
 		Sender:        address.String(),
@@ -596,6 +654,68 @@ func (s *MsgServerTestSuite) TestMsgRebindWallet_Success() {
 	wallet, found := s.keeper.GetWallet(s.ctx, address)
 	s.Require().True(found)
 	s.Require().Equal([]byte(newKP.pub), wallet.BindingPubKey)
+}
+
+func (s *MsgServerTestSuite) TestMsgUpdateDerivedFeatures_RequiresBondedValidator() {
+	testCases := []struct {
+		name             string
+		setStakingKeeper bool
+		addValidator     bool
+		status           stakingtypes.BondStatus
+	}{
+		{name: "nil staking keeper"},
+		{name: "non-validator", setStakingKeeper: true},
+		{name: "unbonding validator", setStakingKeeper: true, addValidator: true, status: stakingtypes.Unbonding},
+		{name: "unbonded validator", setStakingKeeper: true, addValidator: true, status: stakingtypes.Unbonded},
+	}
+
+	for index, testCase := range testCases {
+		s.Run(testCase.name, func() {
+			target := sdk.AccAddress([]byte(fmt.Sprintf("derived-target-%02d", index)))
+			s.createWalletWithKey(target, generateTestKeyPair())
+			sender := sdk.AccAddress([]byte(fmt.Sprintf("derived-sender-%02d", index)))
+			if !testCase.setStakingKeeper {
+				s.keeper.SetStakingKeeper(nil)
+			} else {
+				stakingKeeper := NewMockStakingKeeper()
+				if testCase.addValidator {
+					stakingKeeper.AddValidator(sdk.ValAddress(sender), testCase.status)
+				}
+				s.keeper.SetStakingKeeper(stakingKeeper)
+			}
+			s.msgServer = keeper.NewMsgServerImpl(s.keeper)
+
+			msg := &types.MsgUpdateDerivedFeatures{
+				Sender: sender.String(), AccountAddress: target.String(), ModelVersion: "model-v1",
+				FaceEmbeddingHash: bytes.Repeat([]byte{1}, 32),
+			}
+			_, err := s.msgServer.UpdateDerivedFeatures(s.ctx, msg)
+			s.Require().ErrorIs(err, types.ErrValidatorOnly)
+			wallet, found := s.keeper.GetWallet(s.ctx, target)
+			s.Require().True(found)
+			s.Require().Empty(wallet.DerivedFeatures.FaceEmbeddingHash)
+			s.Require().Empty(wallet.DerivedFeatures.ComputedBy)
+		})
+	}
+
+	target := sdk.AccAddress([]byte("derived-feature-target"))
+	s.createWalletWithKey(target, generateTestKeyPair())
+	stakingKeeper := NewMockStakingKeeper()
+	validator := sdk.AccAddress([]byte("derived-validator-01"))
+	stakingKeeper.AddValidator(sdk.ValAddress(validator), stakingtypes.Bonded)
+	s.keeper.SetStakingKeeper(stakingKeeper)
+	s.msgServer = keeper.NewMsgServerImpl(s.keeper)
+	msg := &types.MsgUpdateDerivedFeatures{
+		Sender: validator.String(), AccountAddress: target.String(), ModelVersion: "model-v1",
+		FaceEmbeddingHash: bytes.Repeat([]byte{1}, 32),
+	}
+	response, err := s.msgServer.UpdateDerivedFeatures(s.ctx, msg)
+	s.Require().NoError(err)
+	s.Require().NotNil(response)
+	wallet, found := s.keeper.GetWallet(s.ctx, target)
+	s.Require().True(found)
+	s.Require().Equal(msg.FaceEmbeddingHash, wallet.DerivedFeatures.FaceEmbeddingHash)
+	s.Require().Equal(validator.String(), wallet.DerivedFeatures.ComputedBy)
 }
 
 // Test: MsgUpdateBorderlineParams - unauthorized

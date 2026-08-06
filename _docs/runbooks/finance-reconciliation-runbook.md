@@ -1,183 +1,155 @@
 # Finance Reconciliation Runbook
 
-This runbook describes the procedures for reconciling payouts, invoices, and escrow settlements in VirtEngine.
+This runbook defines the exact evidence finance signs when a treasury-funded provider payout is executed through the off-ramp bridge. It is intentionally limited to commands and artifacts that exist in the current codebase.
 
-## Overview
+## Objective
 
-The settlement module handles three key financial flows:
-1. **Invoice Processing** - Converting usage into billable invoices
-2. **Escrow Settlement** - Releasing funds from escrow upon completion
-3. **Provider Payouts** - Transferring funds to providers after deducting fees
+Finance sign-off is complete only when the same settlement can be traced across:
 
-## Key Concepts
+1. The bridge contract tests in `pkg/payments/offramp`
+2. The settlement integration tests in `tests/integration/settlement`
+3. Optional chain spot-checks using supported settlement queries
 
-### Payout States
+The authoritative evidence payload is the `finance-evidence=` JSON line emitted by `TestFiatConversionPipelineSuccess` and `TestFiatConversionReconciliation`.
 
-| State | Description |
-|-------|-------------|
-| `pending` | Payout created, awaiting execution |
-| `processing` | Payout execution in progress |
-| `completed` | Funds successfully transferred |
-| `failed` | Transfer failed (will be retried) |
-| `held` | Payout frozen due to dispute |
-| `refunded` | Funds returned to customer |
-| `cancelled` | Payout cancelled before execution |
+## Evidence Sources
 
-### Fee Structure
+The sign-off packet must include these artifacts for every reconciliation run:
 
-- **Platform Fee**: Percentage of gross amount (default 5%)
-- **Validator Fee**: Percentage of gross amount (default 1%)
-- **Holdback**: Optional percentage reserved for disputes (default 0%)
-- **Net Amount**: Gross - Platform Fee - Validator Fee - Holdback
+| Artifact | Source | Purpose |
+|----------|--------|---------|
+| `bridge-unit.log` | `go test ./pkg/payments/offramp` | Proves bridge quote, metadata, status, and retry behavior |
+| `bridge-e2e.log` | `go test -tags "e2e.integration" ./pkg/payments/offramp` | Proves the bridge lifecycle remains valid under the package e2e contract |
+| `settlement-offramp.log` | `go test -tags "e2e.integration" ./tests/integration/settlement -run 'TestFiatConversionPipelineSuccess|TestFiatConversionReconciliation' -v` | Emits the finance sign-off records |
+| `finance-evidence.jsonl` | extracted from `settlement-offramp.log` | Machine-readable approval record |
+| `payouts-by-provider.json` | `virtengined query settlement payouts --provider ...` | Optional chain spot-check for the provider payout record |
+| `fiat-conversion-<id>.json` | `virtengined query settlement fiat-conversion <conversion-id>` | Optional chain spot-check for conversion state and off-ramp fields |
 
-## Daily Reconciliation Procedure
+## Operator Sequence
 
-### Step 1: Generate Reconciliation Report
+### 1. Run the bridge validation suite
 
 ```bash
-# Query all payouts for a specific date
-virtengined query settlement reconciliation-report \
-  --start-time 2024-01-15T00:00:00Z \
-  --end-time 2024-01-16T00:00:00Z \
-  --output json > daily_report.json
+go test ./pkg/payments/offramp -count=1 | tee bridge-unit.log
+go test -tags "e2e.integration" ./pkg/payments/offramp -count=1 | tee bridge-e2e.log
 ```
 
-### Step 2: Verify Invoice-to-Payout Matching
+Use PowerShell if you are on Windows:
 
-For each paid invoice, verify a corresponding payout record exists:
+```powershell
+go test ./pkg/payments/offramp -count=1 | Tee-Object -FilePath bridge-unit.log
+go test -tags "e2e.integration" ./pkg/payments/offramp -count=1 | Tee-Object -FilePath bridge-e2e.log
+```
+
+### 2. Generate the reconciliation evidence
 
 ```bash
-# List all paid invoices
-virtengined query escrow invoices --status paid --output json
-
-# Verify payout exists for invoice
-virtengined query settlement payout-by-invoice <invoice_id>
+go test -tags "e2e.integration" ./tests/integration/settlement \
+  -run 'TestFiatConversionPipelineSuccess|TestFiatConversionReconciliation' \
+  -count=1 -v | tee settlement-offramp.log
 ```
 
-### Step 3: Check Failed Payouts
+PowerShell equivalent:
+
+```powershell
+go test -tags "e2e.integration" ./tests/integration/settlement `
+  -run 'TestFiatConversionPipelineSuccess|TestFiatConversionReconciliation' `
+  -count=1 -v | Tee-Object -FilePath settlement-offramp.log
+```
+
+### 3. Extract the sign-off packet
 
 ```bash
-# List failed payouts requiring attention
-virtengined query settlement payouts --state failed --output json
-
-# Retry failed payout (if within retry limit)
-virtengined tx settlement retry-payout <payout_id> \
-  --from <operator_key>
+rg 'finance-evidence=' settlement-offramp.log | sed 's/^.*finance-evidence=//' > finance-evidence.jsonl
 ```
 
-### Step 4: Verify Treasury Balances
+PowerShell equivalent:
+
+```powershell
+Select-String 'finance-evidence=' settlement-offramp.log |
+  ForEach-Object { $_.Line.Substring($_.Line.IndexOf('finance-evidence=') + 17) } |
+  Set-Content finance-evidence.jsonl
+```
+
+The extraction must produce one line for `TestFiatConversionPipelineSuccess` and one line for `TestFiatConversionReconciliation`.
+
+### 4. Optional chain spot-checks
+
+Use the provider address from the evidence record.
 
 ```bash
-# Check module account balance
-virtengined query bank balance settlement
-
-# Verify treasury records match
-virtengined query settlement treasury-summary \
-  --start-time 2024-01-15T00:00:00Z \
-  --end-time 2024-01-16T00:00:00Z
+virtengined query settlement payouts --provider <provider-address> --output json > payouts-by-provider.json
+virtengined query settlement fiat-conversion <conversion-id> --output json > fiat-conversion-<conversion-id>.json
 ```
 
-## Dispute Handling
+These queries are a spot-check only. Finance sign-off still depends on the test-backed evidence packet above.
 
-### When a Dispute is Opened
+## Required Evidence Fields
 
-1. The payout is automatically placed in `held` state
-2. Funds remain in the settlement module account
-3. No further processing occurs until resolution
+Every `finance-evidence` record must contain these fields:
 
-### Dispute Resolution Outcomes
+| Field | Meaning |
+|-------|---------|
+| `provider` | Provider receiving the payout |
+| `invoice_id` | Invoice linked to the payout |
+| `settlement_id` | Settlement being reconciled |
+| `payout_id` | Settlement payout record identifier |
+| `payout_state` | Expected terminal payout state |
+| `payout_tx_hash` | Deterministic payout execution reference |
+| `payout_idempotency_key` | Duplicate-prevention key for payout execution |
+| `payout_ledger_entry_types` | Ledger entry sequence observed during payout handling |
+| `treasury_balance` | Treasury balance after payout processing |
+| `expected_treasury_balance` | Expected treasury balance from platform plus validator fees |
+| `conversion_id` | Fiat conversion record identifier |
+| `conversion_state` | Fiat conversion terminal state |
+| `conversion_idempotency_key` | Duplicate-prevention key for off-ramp submission |
+| `off_ramp_provider` | Selected bridge adapter |
+| `off_ramp_quote_id` | Quote accepted by the bridge |
+| `off_ramp_id` | Provider payout identifier |
+| `off_ramp_status` | Provider-reported payout status |
+| `off_ramp_reference` | Provider payout reference |
+| `bridge_status` | Status returned by the bridge |
+| `bridge_reference` | Bridge-visible provider reference |
+| `bridge_quote_id` | Bridge-visible quote identifier |
+| `conversion_audit_actions` | Ordered conversion audit trail |
+| `transition_count` | Number of recorded conversion transitions |
 
-| Resolution | Action |
-|------------|--------|
-| Provider Win | Payout released, funds transferred to provider |
-| Customer Win | Payout refunded, funds returned to customer |
-| Partial Settlement | Proportional payout/refund based on ruling |
+## Finance Sign-Off Rules
 
-### Processing Dispute Resolution
+Finance signs the packet only when all of these are true:
 
-```bash
-# After dispute resolved in provider's favor
-virtengined tx settlement release-payout-hold <payout_id> \
-  --from <operator_key>
+- `payout_state` is `completed`
+- `conversion_state` is `payout_completed`
+- `off_ramp_status` is `completed`
+- `bridge_status` is `completed`
+- `payout_tx_hash` equals the deterministic `fiat-<conversion_id>` reference
+- `treasury_balance` matches `expected_treasury_balance`
+- `payout_ledger_entry_types` contains `completed`
+- `conversion_idempotency_key` and `payout_idempotency_key` are both present
+- `off_ramp_reference` matches `bridge_reference`
+- `off_ramp_quote_id` matches `bridge_quote_id`
+- both evidence lines are present: one immediate-completion flow and one reconciliation-after-processing flow
 
-# After dispute resolved in customer's favor
-virtengined tx settlement refund-payout <payout_id> \
-  --from <operator_key>
-```
+## Stop Conditions
 
-## Idempotency and Duplicate Prevention
+Do not sign and escalate to engineering if any of these occur:
 
-Each payout has a unique idempotency key: `payout-{invoiceID}-{settlementID}`
+- `finance-evidence.jsonl` is missing or contains fewer than two records
+- any record contains `processing`, `failed`, `cancelled`, or `refunded` in the final bridge or conversion status fields
+- `treasury_balance` differs from `expected_treasury_balance`
+- the bridge quote ID, provider reference, or provider payout ID does not match the chain spot-check
+- an idempotency key is blank
+- the bridge suite or bridge e2e suite fails
 
-If a duplicate payout attempt is made:
-- The existing payout record is returned
-- No duplicate transfer occurs
-- Event `payout_idempotent_skip` is emitted
+## Audit Retention
 
-### Checking for Duplicates
+Archive these files together for each reconciliation window:
 
-```bash
-# Query by idempotency key
-virtengined query settlement payout-by-key \
-  "payout-inv-12345-settle-67890"
-```
+- `bridge-unit.log`
+- `bridge-e2e.log`
+- `settlement-offramp.log`
+- `finance-evidence.jsonl`
+- any optional `payouts-by-provider.json`
+- any optional `fiat-conversion-<id>.json`
 
-## Monthly Reconciliation Checklist
-
-- [ ] Verify total platform fees collected match treasury records
-- [ ] Verify total validator fees distributed match staking records
-- [ ] Ensure all completed payouts have valid transaction hashes
-- [ ] Verify no payouts stuck in `processing` state > 24 hours
-- [ ] Review and resolve all `held` payouts > 30 days
-- [ ] Generate and archive monthly reconciliation report
-
-## Troubleshooting
-
-### Payout Stuck in Processing
-
-If a payout remains in `processing` for extended time:
-
-1. Check transaction status on-chain
-2. If transaction failed but payout not updated:
-   ```bash
-   virtengined tx settlement mark-payout-failed <payout_id> \
-     --error "transaction timeout" \
-     --from <operator_key>
-   ```
-
-### Missing Payout for Paid Invoice
-
-1. Verify invoice status is actually `paid`
-2. Check for invoice hooks execution in logs
-3. Manually trigger payout if needed:
-   ```bash
-   virtengined tx settlement execute-payout \
-     --invoice-id <invoice_id> \
-     --from <operator_key>
-   ```
-
-### Balance Mismatch
-
-If settlement module balance doesn't match expected:
-
-1. Export all ledger entries for the period
-2. Calculate expected balance from entries
-3. Identify missing or duplicate entries
-4. Report discrepancy to development team
-
-## Events for Monitoring
-
-Configure alerting on these events:
-
-| Event | Alert Level | Description |
-|-------|-------------|-------------|
-| `payout_failed` | Warning | Payout execution failed |
-| `payout_held` | Info | Dispute halted a payout |
-| `payout_completed` | Debug | Successful payout |
-| `treasury_withdrawal` | Critical | Manual treasury withdrawal |
-
-## Contact
-
-- **Finance Operations**: finance-ops@virtengine.com
-- **On-call Engineering**: oncall@virtengine.com
-- **Escalation**: settlement-escalation@virtengine.com
+The archive is the finance approval packet for treasury payout release and month-end reconciliation.

@@ -19,8 +19,10 @@ runNodeJs(
 
 function generateTs(schema: Schema): void {
   const allCustomTypeFieldPaths: DescField[][] = [];
+	const generatedMessageNames = new Set<string>();
 
   schema.files.forEach((file) => {
+		file.messages.forEach((message) => generatedMessageNames.add(message.typeName));
     file.messages.forEach((message) => {
       const paths = findPathsToCustomField(message, () => true);
       allCustomTypeFieldPaths.push(...paths);
@@ -30,7 +32,9 @@ function generateTs(schema: Schema): void {
   const typesNamesToPatch = new Set<string>();
   allCustomTypeFieldPaths.forEach((path) => {
     path.forEach((field) => {
-      typesNamesToPatch.add(field.parent.typeName);
+		if (generatedMessageNames.has(field.parent.typeName)) {
+			typesNamesToPatch.add(field.parent.typeName);
+		}
     });
   });
   const protoSource = process.env.PROTO_SOURCE;

@@ -1,0 +1,63 @@
+=== RUN   TestVEIDE2E
+15:53:45 INF compiling circuit
+15:53:45 INF parsed circuit inputs nbPublic=3 nbSecret=2
+15:53:45 INF building constraint builder nbConstraints=1524
+15:53:45 INF compiling circuit
+15:53:45 INF parsed circuit inputs nbPublic=2 nbSecret=3
+15:53:45 INF building constraint builder nbConstraints=2
+15:53:45 INF compiling circuit
+15:53:45 INF parsed circuit inputs nbPublic=2 nbSecret=2
+15:53:45 INF building constraint builder nbConstraints=1524
+=== RUN   TestVEIDE2E/TestAttestationRecording
+    veid_e2e_test.go:595:   → facial_verification attestation created (score: 85, hash: f24401c45f9f0d50...)
+    veid_e2e_test.go:595:   → liveness_check attestation created (score: 90, hash: 361d8e8a933027aa...)
+    veid_e2e_test.go:595:   → document_verification attestation created (score: 88, hash: 6f1196c8b393bbc2...)
+    veid_e2e_test.go:530: ✅ Attestation recording test passed
+=== RUN   TestVEIDE2E/TestCompleteOnboardingFlow
+    veid_e2e_test.go:201: ✅ Complete onboarding flow passed
+=== RUN   TestVEIDE2E/TestEmailVerificationExpiredOTP
+    veid_e2e_test.go:286: ✅ Expired OTP rejection test passed
+=== RUN   TestVEIDE2E/TestEmailVerificationFlow
+    veid_e2e_test.go:265: ✅ Email verification flow passed - Score contribution: 300
+=== RUN   TestVEIDE2E/TestInvalidClientSignatureRejection
+    veid_e2e_test.go:744: ✅ Invalid client signature rejection test passed
+=== RUN   TestVEIDE2E/TestLowScoreRejection
+    veid_e2e_test.go:707: ✅ Low score rejection test passed
+=== RUN   TestVEIDE2E/TestMLScoringAndTierTransitions
+    veid_e2e_test.go:479:   → unverified -> basic (score: 25)
+    veid_e2e_test.go:492:   → basic -> verified (score: 75)
+    veid_e2e_test.go:505:   → verified -> trusted (score: 90)
+    veid_e2e_test.go:507: ✅ ML scoring and tier transitions test passed
+=== RUN   TestVEIDE2E/TestMarketplaceVEIDGating
+    veid_e2e_test.go:658:   → Order rejected: [Identity score 25 is below minimum required score of 70]
+    veid_e2e_test.go:678:   → Order accepted after score increase
+    veid_e2e_test.go:680: ✅ Marketplace VEID gating test passed
+=== RUN   TestVEIDE2E/TestMaxAttemptsExceeded
+    veid_e2e_test.go:771: ✅ Max attempts exceeded test passed
+=== RUN   TestVEIDE2E/TestSMSVerificationFlow
+    veid_e2e_test.go:355: ✅ SMS verification flow passed - Score contribution: 500
+=== RUN   TestVEIDE2E/TestSMSVerificationVoIPBlocking
+    veid_e2e_test.go:387: ✅ VoIP blocking test passed
+=== RUN   TestVEIDE2E/TestSSOVerificationFlow
+    veid_e2e_test.go:451:   → google SSO verified (weight: 250)
+    veid_e2e_test.go:451:   → microsoft SSO verified (weight: 300)
+    veid_e2e_test.go:451:   → github SSO verified (weight: 200)
+    veid_e2e_test.go:415: ✅ SSO verification flow passed for all providers
+=== RUN   TestVEIDE2E/TestScopeRevocation
+    veid_e2e_test.go:828: ✅ Scope revocation test passed
+--- PASS: TestVEIDE2E (0.11s)
+    --- PASS: TestVEIDE2E/TestAttestationRecording (0.00s)
+    --- PASS: TestVEIDE2E/TestCompleteOnboardingFlow (0.00s)
+    --- PASS: TestVEIDE2E/TestEmailVerificationExpiredOTP (0.00s)
+    --- PASS: TestVEIDE2E/TestEmailVerificationFlow (0.00s)
+    --- PASS: TestVEIDE2E/TestInvalidClientSignatureRejection (0.00s)
+    --- PASS: TestVEIDE2E/TestLowScoreRejection (0.00s)
+    --- PASS: TestVEIDE2E/TestMLScoringAndTierTransitions (0.00s)
+    --- PASS: TestVEIDE2E/TestMarketplaceVEIDGating (0.00s)
+    --- PASS: TestVEIDE2E/TestMaxAttemptsExceeded (0.00s)
+    --- PASS: TestVEIDE2E/TestSMSVerificationFlow (0.00s)
+    --- PASS: TestVEIDE2E/TestSMSVerificationVoIPBlocking (0.00s)
+    --- PASS: TestVEIDE2E/TestSSOVerificationFlow (0.00s)
+    --- PASS: TestVEIDE2E/TestScopeRevocation (0.00s)
+PASS
+ok  	github.com/virtengine/virtengine/tests/e2e	0.358s

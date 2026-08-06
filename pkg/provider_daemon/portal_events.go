@@ -21,7 +21,7 @@ func (s *PortalAPIServer) handleDeploymentEvents(w http.ResponseWriter, r *http.
 			writeJSONError(w, http.StatusNotFound, "deployment not found")
 			return
 		}
-		writeJSONError(w, http.StatusInternalServerError, err.Error())
+		writePortalError(w, err)
 		return
 	}
 

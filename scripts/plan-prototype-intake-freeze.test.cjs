@@ -1,0 +1,46 @@
+"use strict";
+
+const assert = require("assert").strict;
+const { createHash } = require("crypto");
+const { parseArgs, planFrozenEpoch, validateObservationBinding } = require("./plan-prototype-intake-freeze.cjs");
+
+function epoch() {
+  return {
+    schema_version: "virtengine.prototype.intake-epoch/v2", campaign: "three-day-prototype", intake_epoch: 1,
+    base_tag: "checkpoint/prototype-integration/epoch-1-base", base_sha: "a".repeat(40), planning_sha: "b".repeat(40),
+    status: "open", opens_at: "2000-01-01T00:00:00Z", announcement_cutoff: "2000-01-02T00:00:00Z",
+    producers: ["T1", "T2", "T3", "T5"].map((thread) => ({ thread, status: "unannounced", tag: null, decision: null })),
+  };
+}
+
+const resolver = () => ({ tag_object: "d".repeat(40), target: "c".repeat(40), tagger_at: "2000-01-01T12:00:00Z" });
+const observation = () => ({ schema_version: "virtengine.prototype.intake-tag-observation/v1", intake_epoch: 1, announcement_cutoff: "2000-01-02T00:00:00Z", observed_at: "2000-01-01T18:00:00Z", tags: [{ thread: "T1", tag: "checkpoint/prototype-t1/t1-09", tag_object: "d".repeat(40), target: "c".repeat(40) }] });
+const tests = [
+  ["plans an announced tag and freezes out unselected producers", () => { const plan = planFrozenEpoch(epoch(), new Map([["T1", "checkpoint/prototype-t1/t1-09"]]), { now: Date.parse("2000-01-03T00:00:00Z"), observation: observation(), resolveTag: resolver }); assert.equal(plan.status, "frozen"); assert.deepEqual(plan.producers[0], { thread: "T1", status: "announced", tag: "checkpoint/prototype-t1/t1-09", decision: null }); assert.ok(plan.producers.slice(1).every((producer) => producer.decision === "frozen-out")); }],
+  ["rejects planning before cutoff", () => assert.throws(() => planFrozenEpoch(epoch(), new Map(), { now: Date.parse("2000-01-01T12:00:00Z"), resolveTag: resolver }), /cutoff has not elapsed/)],
+  ["rejects a late tag", () => assert.throws(() => planFrozenEpoch(epoch(), new Map([["T1", "checkpoint/prototype-t1/t1-09"]]), { now: Date.parse("2000-01-03T00:00:00Z"), observation: observation(), resolveTag: () => ({ tag_object: "d".repeat(40), target: "c".repeat(40), tagger_at: "2000-01-02T00:00:01Z" }) }), /after the announcement cutoff/)],
+  ["rejects a tag published before the epoch opened", () => assert.throws(() => planFrozenEpoch(epoch(), new Map([["T1", "checkpoint/prototype-t1/t1-09"]]), { now: Date.parse("2000-01-03T00:00:00Z"), observation: observation(), resolveTag: () => ({ tag_object: "d".repeat(40), target: "c".repeat(40), tagger_at: "1999-12-31T23:59:59Z" }) }), /before the epoch opened/)],
+  ["rejects a tag from another thread", () => assert.throws(() => planFrozenEpoch(epoch(), new Map([["T1", "checkpoint/prototype-t3/t3-09"]]), { now: Date.parse("2000-01-03T00:00:00Z"), observation: observation(), resolveTag: resolver }), /invalid tag/)],
+  ["rejects an invalid target", () => assert.throws(() => planFrozenEpoch(epoch(), new Map([["T1", "checkpoint/prototype-t1/t1-09"]]), { now: Date.parse("2000-01-03T00:00:00Z"), observation: observation(), resolveTag: () => ({ tag_object: "d".repeat(40), target: "HEAD", tagger_at: "2000-01-01T12:00:00Z" }) }), /not a commit SHA/)],
+  ["rejects a recreated tag object with the same target", () => assert.throws(() => planFrozenEpoch(epoch(), new Map([["T1", "checkpoint/prototype-t1/t1-09"]]), { now: Date.parse("2000-01-03T00:00:00Z"), observation: observation(), resolveTag: () => ({ tag_object: "e".repeat(40), target: "c".repeat(40), tagger_at: "2000-01-01T12:00:00Z" }) }), /not uniquely observed/)],
+  ["rejects an unknown producer", () => assert.throws(() => planFrozenEpoch(epoch(), new Map([["T4", "checkpoint/prototype-t1/t1-09"]]), { now: Date.parse("2000-01-03T00:00:00Z"), observation: observation(), resolveTag: resolver }), /unknown producer/)],
+  ["rejects an unobserved tag", () => { const value = observation(); value.tags = []; assert.throws(() => planFrozenEpoch(epoch(), new Map([["T1", "checkpoint/prototype-t1/t1-09"]]), { now: Date.parse("2000-01-03T00:00:00Z"), observation: value, resolveTag: resolver }), /not uniquely observed/); }],
+  ["rejects an omitted in-window remote tag", () => { const value = observation(); value.tags = []; const currentTags = [{ thread: "T1", tag: "checkpoint/prototype-t1/t1-09", tag_object: "d".repeat(40), target: "c".repeat(40) }]; assert.throws(() => planFrozenEpoch(epoch(), new Map(), { now: Date.parse("2000-01-03T00:00:00Z"), observation: value, currentTags, resolveTag: resolver }), /omitted from the in-window tag observation/); }],
+  ["rejects an observed tag deleted from the remote", () => { assert.throws(() => planFrozenEpoch(epoch(), new Map(), { now: Date.parse("2000-01-03T00:00:00Z"), observation: observation(), currentTags: [], resolveTag: resolver }), /no longer matches the observed remote tag object and target/); }],
+  ["rejects an observed tag recreated with another object", () => { const currentTags = [{ thread: "T1", tag: "checkpoint/prototype-t1/t1-09", tag_object: "e".repeat(40), target: "c".repeat(40) }]; assert.throws(() => planFrozenEpoch(epoch(), new Map(), { now: Date.parse("2000-01-03T00:00:00Z"), observation: observation(), currentTags, resolveTag: resolver }), /no longer matches the observed remote tag object and target/); }],
+  ["ignores an omitted post-cutoff remote tag", () => { const value = observation(); value.tags = []; const currentTags = [{ thread: "T1", tag: "checkpoint/prototype-t1/t1-09", tag_object: "d".repeat(40), target: "c".repeat(40) }]; assert.doesNotThrow(() => planFrozenEpoch(epoch(), new Map(), { now: Date.parse("2000-01-03T00:00:00Z"), observation: value, currentTags, resolveTag: () => ({ ...resolver(), tagger_at: "2000-01-02T00:00:01Z" }) })); }],
+  ["rejects a pre-open observation", () => { const value = observation(); value.observed_at = "1999-12-31T23:59:59Z"; assert.throws(() => planFrozenEpoch(epoch(), new Map(), { now: Date.parse("2000-01-03T00:00:00Z"), observation: value, resolveTag: resolver }), /within the epoch window/); }],
+  ["rejects a post-cutoff observation", () => { const value = observation(); value.observed_at = "2000-01-02T00:00:01Z"; assert.throws(() => planFrozenEpoch(epoch(), new Map(), { now: Date.parse("2000-01-03T00:00:00Z"), observation: value, resolveTag: resolver }), /within the epoch window/); }],
+  ["parses explicit tag selections", () => { const parsed = parseArgs(["--epoch", "1", "--observation", "observation.json", "--tag", "T1=checkpoint/prototype-t1/t1-09"]); assert.equal(parsed.selections.get("T1"), "checkpoint/prototype-t1/t1-09"); }],
+  ["rejects duplicate or incomplete scalar arguments", () => {
+    assert.throws(() => parseArgs(["--epoch", "1", "--epoch", "2", "--observation", "observation.json"]), /duplicate argument/);
+    assert.throws(() => parseArgs(["--epoch", "--observation", "observation.json"]), /requires a value/);
+    assert.throws(() => parseArgs(["--epoch", "1", "--observation"]), /requires a value/);
+  }],
+  ["rejects duplicate selections", () => assert.throws(() => parseArgs(["--epoch", "1", "--observation", "observation.json", "--tag", "T1=a", "--tag", "T1=b"]), /duplicate producer/)],
+  ["accepts manifest-bound observation bytes", () => { const content = JSON.stringify(observation()); const digest = createHash("sha256").update(content).digest("hex"); const manifest = { source: { payload_sha: "a".repeat(40) }, control_artifacts: [{ id: "intake_tag_observation", path: "observation.json", sha256: digest }] }; assert.doesNotThrow(() => validateObservationBinding(content, "observation.json", manifest, { sourceContent: content, sourceIsAncestor: true })); }],
+  ["rejects observation bytes not bound by manifest", () => { const content = JSON.stringify(observation()); const manifest = { source: { payload_sha: "a".repeat(40) }, control_artifacts: [{ id: "intake_tag_observation", path: "observation.json", sha256: "b".repeat(64) }] }; assert.throws(() => validateObservationBinding(content, "observation.json", manifest, { sourceContent: content, sourceIsAncestor: true }), /digest does not match/); }],
+  ["rejects observation bytes changed after manifest source", () => { const content = JSON.stringify(observation()); const digest = createHash("sha256").update(content).digest("hex"); const manifest = { source: { payload_sha: "a".repeat(40) }, control_artifacts: [{ id: "intake_tag_observation", path: "observation.json", sha256: digest }] }; assert.throws(() => validateObservationBinding(content, "observation.json", manifest, { sourceContent: "changed", sourceIsAncestor: true }), /source commit/); }],
+];
+
+for (const [name, run] of tests) { run(); console.log(`ok - ${name}`); }

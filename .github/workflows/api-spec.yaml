@@ -8,6 +8,10 @@ on:
   push:
     paths:
       - 'api/openapi/portal_api.yaml'
+      - 'api/openapi/virtengine-proto.swagger.json'
+      - 'sdk/proto/**'
+      - 'sdk/buf*.yaml'
+      - 'sdk/generation/**'
       - 'scripts/generate-api-types.sh'
       - 'lib/portal/src/provider-api/generated/**'
       - 'pkg/provider_daemon/api/generated/**'
@@ -15,6 +19,10 @@ on:
   pull_request:
     paths:
       - 'api/openapi/portal_api.yaml'
+      - 'api/openapi/virtengine-proto.swagger.json'
+      - 'sdk/proto/**'
+      - 'sdk/buf*.yaml'
+      - 'sdk/generation/**'
       - 'scripts/generate-api-types.sh'
       - 'lib/portal/src/provider-api/generated/**'
       - 'pkg/provider_daemon/api/generated/**'
@@ -47,3 +55,8 @@ jobs:
             git status --porcelain
             exit 1
           fi
+
+      - name: Verify protobuf OpenAPI inventory
+        run: |
+          node scripts/protoinventory/inventory.mjs
+          git diff --exit-code -- sdk/artifacts/proto/inventory.json sdk/artifacts/proto/inventory.json.sha256

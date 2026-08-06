@@ -10,7 +10,15 @@ import type { DeepPartial, MessageFns } from "../../../../../encoding/typeEncodi
 import { BinaryReader, BinaryWriter } from "@bufbuild/protobuf/wire";
 import Long from "long";
 import { PageRequest, PageResponse } from "../../../cosmos/base/query/v1beta1/pagination.ts";
-import { Delegation, DelegatorReward, Params, Redelegation, UnbondingDelegation, ValidatorShares } from "./types.ts";
+import {
+  Delegation,
+  DelegatorReward,
+  DelegatorSlashingEvent,
+  Params,
+  Redelegation,
+  UnbondingDelegation,
+  ValidatorShares,
+} from "./types.ts";
 
 /** QueryParamsRequest is the request for QueryParams */
 export interface QueryParamsRequest {
@@ -184,6 +192,60 @@ export interface QueryValidatorSharesResponse {
     | undefined;
   /** found indicates if the validator shares were found */
   found: boolean;
+}
+
+/** QueryRedelegationsRequest is the request for QueryRedelegations */
+export interface QueryRedelegationsRequest {
+  /** pagination is optional pagination parameters */
+  pagination: PageRequest | undefined;
+}
+
+/** QueryRedelegationsResponse is the response for QueryRedelegations */
+export interface QueryRedelegationsResponse {
+  /** redelegations are the active redelegation records */
+  redelegations: Redelegation[];
+  /** pagination is the pagination response */
+  pagination: PageResponse | undefined;
+}
+
+/** QueryHistoricalRewardsRequest is the request for QueryHistoricalRewards */
+export interface QueryHistoricalRewardsRequest {
+  /** delegator_address is the delegator's address */
+  delegatorAddress: string;
+  /** validator_address is the validator's address */
+  validatorAddress: string;
+  /** start_height is the starting block height (inclusive) */
+  startHeight: Long;
+  /** end_height is the ending block height (inclusive) */
+  endHeight: Long;
+  /** pagination is optional pagination parameters */
+  pagination: PageRequest | undefined;
+}
+
+/** QueryHistoricalRewardsResponse is the response for QueryHistoricalRewards */
+export interface QueryHistoricalRewardsResponse {
+  /** rewards are the historical reward records */
+  rewards: DelegatorReward[];
+  /** total_reward is the sum of all unclaimed rewards in the range */
+  totalReward: string;
+  /** pagination is the pagination response */
+  pagination: PageResponse | undefined;
+}
+
+/** QuerySlashingEventsRequest is the request for QuerySlashingEvents */
+export interface QuerySlashingEventsRequest {
+  /** delegator_address is the delegator's address */
+  delegatorAddress: string;
+  /** pagination is optional pagination parameters */
+  pagination: PageRequest | undefined;
+}
+
+/** QuerySlashingEventsResponse is the response for QuerySlashingEvents */
+export interface QuerySlashingEventsResponse {
+  /** events are the delegator slashing events */
+  events: DelegatorSlashingEvent[];
+  /** pagination is the pagination response */
+  pagination: PageResponse | undefined;
 }
 
 function createBaseQueryParamsRequest(): QueryParamsRequest {
@@ -1829,6 +1891,542 @@ export const QueryValidatorSharesResponse: MessageFns<
       ? ValidatorShares.fromPartial(object.validatorShares)
       : undefined;
     message.found = object.found ?? false;
+    return message;
+  },
+};
+
+function createBaseQueryRedelegationsRequest(): QueryRedelegationsRequest {
+  return { pagination: undefined };
+}
+
+export const QueryRedelegationsRequest: MessageFns<
+  QueryRedelegationsRequest,
+  "virtengine.delegation.v1.QueryRedelegationsRequest"
+> = {
+  $type: "virtengine.delegation.v1.QueryRedelegationsRequest" as const,
+
+  encode(message: QueryRedelegationsRequest, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.pagination !== undefined) {
+      PageRequest.encode(message.pagination, writer.uint32(10).fork()).join();
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): QueryRedelegationsRequest {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseQueryRedelegationsRequest();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.pagination = PageRequest.decode(reader, reader.uint32());
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): QueryRedelegationsRequest {
+    return { pagination: isSet(object.pagination) ? PageRequest.fromJSON(object.pagination) : undefined };
+  },
+
+  toJSON(message: QueryRedelegationsRequest): unknown {
+    const obj: any = {};
+    if (message.pagination !== undefined) {
+      obj.pagination = PageRequest.toJSON(message.pagination);
+    }
+    return obj;
+  },
+  fromPartial(object: DeepPartial<QueryRedelegationsRequest>): QueryRedelegationsRequest {
+    const message = createBaseQueryRedelegationsRequest();
+    message.pagination = (object.pagination !== undefined && object.pagination !== null)
+      ? PageRequest.fromPartial(object.pagination)
+      : undefined;
+    return message;
+  },
+};
+
+function createBaseQueryRedelegationsResponse(): QueryRedelegationsResponse {
+  return { redelegations: [], pagination: undefined };
+}
+
+export const QueryRedelegationsResponse: MessageFns<
+  QueryRedelegationsResponse,
+  "virtengine.delegation.v1.QueryRedelegationsResponse"
+> = {
+  $type: "virtengine.delegation.v1.QueryRedelegationsResponse" as const,
+
+  encode(message: QueryRedelegationsResponse, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    for (const v of message.redelegations) {
+      Redelegation.encode(v!, writer.uint32(10).fork()).join();
+    }
+    if (message.pagination !== undefined) {
+      PageResponse.encode(message.pagination, writer.uint32(18).fork()).join();
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): QueryRedelegationsResponse {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseQueryRedelegationsResponse();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.redelegations.push(Redelegation.decode(reader, reader.uint32()));
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.pagination = PageResponse.decode(reader, reader.uint32());
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): QueryRedelegationsResponse {
+    return {
+      redelegations: globalThis.Array.isArray(object?.redelegations)
+        ? object.redelegations.map((e: any) => Redelegation.fromJSON(e))
+        : [],
+      pagination: isSet(object.pagination) ? PageResponse.fromJSON(object.pagination) : undefined,
+    };
+  },
+
+  toJSON(message: QueryRedelegationsResponse): unknown {
+    const obj: any = {};
+    if (message.redelegations?.length) {
+      obj.redelegations = message.redelegations.map((e) => Redelegation.toJSON(e));
+    }
+    if (message.pagination !== undefined) {
+      obj.pagination = PageResponse.toJSON(message.pagination);
+    }
+    return obj;
+  },
+  fromPartial(object: DeepPartial<QueryRedelegationsResponse>): QueryRedelegationsResponse {
+    const message = createBaseQueryRedelegationsResponse();
+    message.redelegations = object.redelegations?.map((e) => Redelegation.fromPartial(e)) || [];
+    message.pagination = (object.pagination !== undefined && object.pagination !== null)
+      ? PageResponse.fromPartial(object.pagination)
+      : undefined;
+    return message;
+  },
+};
+
+function createBaseQueryHistoricalRewardsRequest(): QueryHistoricalRewardsRequest {
+  return {
+    delegatorAddress: "",
+    validatorAddress: "",
+    startHeight: Long.ZERO,
+    endHeight: Long.ZERO,
+    pagination: undefined,
+  };
+}
+
+export const QueryHistoricalRewardsRequest: MessageFns<
+  QueryHistoricalRewardsRequest,
+  "virtengine.delegation.v1.QueryHistoricalRewardsRequest"
+> = {
+  $type: "virtengine.delegation.v1.QueryHistoricalRewardsRequest" as const,
+
+  encode(message: QueryHistoricalRewardsRequest, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.delegatorAddress !== "") {
+      writer.uint32(10).string(message.delegatorAddress);
+    }
+    if (message.validatorAddress !== "") {
+      writer.uint32(18).string(message.validatorAddress);
+    }
+    if (!message.startHeight.equals(Long.ZERO)) {
+      writer.uint32(24).int64(message.startHeight.toString());
+    }
+    if (!message.endHeight.equals(Long.ZERO)) {
+      writer.uint32(32).int64(message.endHeight.toString());
+    }
+    if (message.pagination !== undefined) {
+      PageRequest.encode(message.pagination, writer.uint32(42).fork()).join();
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): QueryHistoricalRewardsRequest {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseQueryHistoricalRewardsRequest();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.delegatorAddress = reader.string();
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.validatorAddress = reader.string();
+          continue;
+        }
+        case 3: {
+          if (tag !== 24) {
+            break;
+          }
+
+          message.startHeight = Long.fromString(reader.int64().toString());
+          continue;
+        }
+        case 4: {
+          if (tag !== 32) {
+            break;
+          }
+
+          message.endHeight = Long.fromString(reader.int64().toString());
+          continue;
+        }
+        case 5: {
+          if (tag !== 42) {
+            break;
+          }
+
+          message.pagination = PageRequest.decode(reader, reader.uint32());
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): QueryHistoricalRewardsRequest {
+    return {
+      delegatorAddress: isSet(object.delegator_address) ? globalThis.String(object.delegator_address) : "",
+      validatorAddress: isSet(object.validator_address) ? globalThis.String(object.validator_address) : "",
+      startHeight: isSet(object.start_height) ? Long.fromValue(object.start_height) : Long.ZERO,
+      endHeight: isSet(object.end_height) ? Long.fromValue(object.end_height) : Long.ZERO,
+      pagination: isSet(object.pagination) ? PageRequest.fromJSON(object.pagination) : undefined,
+    };
+  },
+
+  toJSON(message: QueryHistoricalRewardsRequest): unknown {
+    const obj: any = {};
+    if (message.delegatorAddress !== "") {
+      obj.delegator_address = message.delegatorAddress;
+    }
+    if (message.validatorAddress !== "") {
+      obj.validator_address = message.validatorAddress;
+    }
+    if (!message.startHeight.equals(Long.ZERO)) {
+      obj.start_height = (message.startHeight || Long.ZERO).toString();
+    }
+    if (!message.endHeight.equals(Long.ZERO)) {
+      obj.end_height = (message.endHeight || Long.ZERO).toString();
+    }
+    if (message.pagination !== undefined) {
+      obj.pagination = PageRequest.toJSON(message.pagination);
+    }
+    return obj;
+  },
+  fromPartial(object: DeepPartial<QueryHistoricalRewardsRequest>): QueryHistoricalRewardsRequest {
+    const message = createBaseQueryHistoricalRewardsRequest();
+    message.delegatorAddress = object.delegatorAddress ?? "";
+    message.validatorAddress = object.validatorAddress ?? "";
+    message.startHeight = (object.startHeight !== undefined && object.startHeight !== null)
+      ? Long.fromValue(object.startHeight)
+      : Long.ZERO;
+    message.endHeight = (object.endHeight !== undefined && object.endHeight !== null)
+      ? Long.fromValue(object.endHeight)
+      : Long.ZERO;
+    message.pagination = (object.pagination !== undefined && object.pagination !== null)
+      ? PageRequest.fromPartial(object.pagination)
+      : undefined;
+    return message;
+  },
+};
+
+function createBaseQueryHistoricalRewardsResponse(): QueryHistoricalRewardsResponse {
+  return { rewards: [], totalReward: "", pagination: undefined };
+}
+
+export const QueryHistoricalRewardsResponse: MessageFns<
+  QueryHistoricalRewardsResponse,
+  "virtengine.delegation.v1.QueryHistoricalRewardsResponse"
+> = {
+  $type: "virtengine.delegation.v1.QueryHistoricalRewardsResponse" as const,
+
+  encode(message: QueryHistoricalRewardsResponse, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    for (const v of message.rewards) {
+      DelegatorReward.encode(v!, writer.uint32(10).fork()).join();
+    }
+    if (message.totalReward !== "") {
+      writer.uint32(18).string(message.totalReward);
+    }
+    if (message.pagination !== undefined) {
+      PageResponse.encode(message.pagination, writer.uint32(26).fork()).join();
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): QueryHistoricalRewardsResponse {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseQueryHistoricalRewardsResponse();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.rewards.push(DelegatorReward.decode(reader, reader.uint32()));
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.totalReward = reader.string();
+          continue;
+        }
+        case 3: {
+          if (tag !== 26) {
+            break;
+          }
+
+          message.pagination = PageResponse.decode(reader, reader.uint32());
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): QueryHistoricalRewardsResponse {
+    return {
+      rewards: globalThis.Array.isArray(object?.rewards)
+        ? object.rewards.map((e: any) => DelegatorReward.fromJSON(e))
+        : [],
+      totalReward: isSet(object.total_reward) ? globalThis.String(object.total_reward) : "",
+      pagination: isSet(object.pagination) ? PageResponse.fromJSON(object.pagination) : undefined,
+    };
+  },
+
+  toJSON(message: QueryHistoricalRewardsResponse): unknown {
+    const obj: any = {};
+    if (message.rewards?.length) {
+      obj.rewards = message.rewards.map((e) => DelegatorReward.toJSON(e));
+    }
+    if (message.totalReward !== "") {
+      obj.total_reward = message.totalReward;
+    }
+    if (message.pagination !== undefined) {
+      obj.pagination = PageResponse.toJSON(message.pagination);
+    }
+    return obj;
+  },
+  fromPartial(object: DeepPartial<QueryHistoricalRewardsResponse>): QueryHistoricalRewardsResponse {
+    const message = createBaseQueryHistoricalRewardsResponse();
+    message.rewards = object.rewards?.map((e) => DelegatorReward.fromPartial(e)) || [];
+    message.totalReward = object.totalReward ?? "";
+    message.pagination = (object.pagination !== undefined && object.pagination !== null)
+      ? PageResponse.fromPartial(object.pagination)
+      : undefined;
+    return message;
+  },
+};
+
+function createBaseQuerySlashingEventsRequest(): QuerySlashingEventsRequest {
+  return { delegatorAddress: "", pagination: undefined };
+}
+
+export const QuerySlashingEventsRequest: MessageFns<
+  QuerySlashingEventsRequest,
+  "virtengine.delegation.v1.QuerySlashingEventsRequest"
+> = {
+  $type: "virtengine.delegation.v1.QuerySlashingEventsRequest" as const,
+
+  encode(message: QuerySlashingEventsRequest, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.delegatorAddress !== "") {
+      writer.uint32(10).string(message.delegatorAddress);
+    }
+    if (message.pagination !== undefined) {
+      PageRequest.encode(message.pagination, writer.uint32(18).fork()).join();
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): QuerySlashingEventsRequest {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseQuerySlashingEventsRequest();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.delegatorAddress = reader.string();
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.pagination = PageRequest.decode(reader, reader.uint32());
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): QuerySlashingEventsRequest {
+    return {
+      delegatorAddress: isSet(object.delegator_address) ? globalThis.String(object.delegator_address) : "",
+      pagination: isSet(object.pagination) ? PageRequest.fromJSON(object.pagination) : undefined,
+    };
+  },
+
+  toJSON(message: QuerySlashingEventsRequest): unknown {
+    const obj: any = {};
+    if (message.delegatorAddress !== "") {
+      obj.delegator_address = message.delegatorAddress;
+    }
+    if (message.pagination !== undefined) {
+      obj.pagination = PageRequest.toJSON(message.pagination);
+    }
+    return obj;
+  },
+  fromPartial(object: DeepPartial<QuerySlashingEventsRequest>): QuerySlashingEventsRequest {
+    const message = createBaseQuerySlashingEventsRequest();
+    message.delegatorAddress = object.delegatorAddress ?? "";
+    message.pagination = (object.pagination !== undefined && object.pagination !== null)
+      ? PageRequest.fromPartial(object.pagination)
+      : undefined;
+    return message;
+  },
+};
+
+function createBaseQuerySlashingEventsResponse(): QuerySlashingEventsResponse {
+  return { events: [], pagination: undefined };
+}
+
+export const QuerySlashingEventsResponse: MessageFns<
+  QuerySlashingEventsResponse,
+  "virtengine.delegation.v1.QuerySlashingEventsResponse"
+> = {
+  $type: "virtengine.delegation.v1.QuerySlashingEventsResponse" as const,
+
+  encode(message: QuerySlashingEventsResponse, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    for (const v of message.events) {
+      DelegatorSlashingEvent.encode(v!, writer.uint32(10).fork()).join();
+    }
+    if (message.pagination !== undefined) {
+      PageResponse.encode(message.pagination, writer.uint32(18).fork()).join();
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): QuerySlashingEventsResponse {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseQuerySlashingEventsResponse();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.events.push(DelegatorSlashingEvent.decode(reader, reader.uint32()));
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.pagination = PageResponse.decode(reader, reader.uint32());
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): QuerySlashingEventsResponse {
+    return {
+      events: globalThis.Array.isArray(object?.events)
+        ? object.events.map((e: any) => DelegatorSlashingEvent.fromJSON(e))
+        : [],
+      pagination: isSet(object.pagination) ? PageResponse.fromJSON(object.pagination) : undefined,
+    };
+  },
+
+  toJSON(message: QuerySlashingEventsResponse): unknown {
+    const obj: any = {};
+    if (message.events?.length) {
+      obj.events = message.events.map((e) => DelegatorSlashingEvent.toJSON(e));
+    }
+    if (message.pagination !== undefined) {
+      obj.pagination = PageResponse.toJSON(message.pagination);
+    }
+    return obj;
+  },
+  fromPartial(object: DeepPartial<QuerySlashingEventsResponse>): QuerySlashingEventsResponse {
+    const message = createBaseQuerySlashingEventsResponse();
+    message.events = object.events?.map((e) => DelegatorSlashingEvent.fromPartial(e)) || [];
+    message.pagination = (object.pagination !== undefined && object.pagination !== null)
+      ? PageResponse.fromPartial(object.pagination)
+      : undefined;
     return message;
   },
 };

@@ -291,7 +291,7 @@ func TestHardwareCapabilities_GetRecommendedPlatform(t *testing.T) {
 			expected: PlatformSimulated,
 		},
 		{
-			name: "SGX with FLC and DCAP is preferred",
+			name: "SEV-SNP is preferred over SGX when both are available",
 			caps: HardwareCapabilities{
 				SGX: SGXCapabilities{
 					Available:     true,
@@ -300,7 +300,7 @@ func TestHardwareCapabilities_GetRecommendedPlatform(t *testing.T) {
 				},
 				SEVSNP: SEVSNPCapabilities{Available: true},
 			},
-			expected: PlatformSGX,
+			expected: PlatformSEVSNP,
 		},
 		{
 			name: "SEV-SNP preferred when SGX lacks FLC",

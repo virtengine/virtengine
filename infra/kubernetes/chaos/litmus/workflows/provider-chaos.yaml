@@ -23,7 +23,7 @@ spec:
         - name: chaos-namespace
           value: virtengine
         - name: app-label
-          value: app.kubernetes.io/component=provider-daemon
+          value: app.kubernetes.io/component=provider
         - name: chaos-duration
           value: "180"
     templates:
@@ -59,7 +59,7 @@ spec:
 
       - name: health-check
         container:
-          image: curlimages/curl:latest
+          image: curlimages/curl@sha256:9b7242c3b31d66e5b1b9768386f89d72289013ac70505d2a0f8f19efdf5f3d8c
           command: ["/bin/sh", "-c"]
           args:
             - |
@@ -73,7 +73,7 @@ spec:
 
       - name: pod-crash
         container:
-          image: litmuschaos/litmus-checker:latest
+          image: litmuschaos/litmus-checker@sha256:35f5389a0aa55c5438bcb47942d158305758a5584319f2ab99e1af375256f8a7
           command: ["/bin/sh", "-c"]
           args:
             - |
@@ -89,7 +89,7 @@ spec:
                 appinfo:
                   appns: {{workflow.parameters.chaos-namespace}}
                   applabel: "{{workflow.parameters.app-label}}"
-                  appkind: deployment
+                  appkind: statefulset
                 chaosServiceAccount: litmus-admin
                 experiments:
                   - name: pod-delete
@@ -107,7 +107,7 @@ spec:
 
       - name: network-latency
         container:
-          image: litmuschaos/litmus-checker:latest
+          image: litmuschaos/litmus-checker@sha256:35f5389a0aa55c5438bcb47942d158305758a5584319f2ab99e1af375256f8a7
           command: ["/bin/sh", "-c"]
           args:
             - |
@@ -123,7 +123,7 @@ spec:
                 appinfo:
                   appns: {{workflow.parameters.chaos-namespace}}
                   applabel: "{{workflow.parameters.app-label}}"
-                  appkind: deployment
+                  appkind: statefulset
                 chaosServiceAccount: litmus-admin
                 experiments:
                   - name: pod-network-latency
@@ -143,7 +143,7 @@ spec:
 
       - name: memory-stress
         container:
-          image: litmuschaos/litmus-checker:latest
+          image: litmuschaos/litmus-checker@sha256:35f5389a0aa55c5438bcb47942d158305758a5584319f2ab99e1af375256f8a7
           command: ["/bin/sh", "-c"]
           args:
             - |
@@ -159,7 +159,7 @@ spec:
                 appinfo:
                   appns: {{workflow.parameters.chaos-namespace}}
                   applabel: "{{workflow.parameters.app-label}}"
-                  appkind: deployment
+                  appkind: statefulset
                 chaosServiceAccount: litmus-admin
                 experiments:
                   - name: pod-memory-hog

@@ -84,6 +84,9 @@ type BlobMetadata struct {
 
 	// Tags are optional public metadata tags
 	Tags map[string]string `json:"tags,omitempty"`
+
+	// AuditOperationID binds a committed mutation to its durable audit intent.
+	AuditOperationID string `json:"audit_operation_id,omitempty"`
 }
 
 // EncryptedBlob represents a stored encrypted blob with metadata
@@ -123,6 +126,9 @@ type UploadRequest struct {
 
 	// Recipients are optional additional recipients for the envelope
 	Recipients []Recipient
+
+	// AuditOperationID is assigned by Vault before a mutation.
+	AuditOperationID string
 }
 
 // RetrieveRequest is a request to retrieve and decrypt a blob

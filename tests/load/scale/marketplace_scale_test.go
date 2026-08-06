@@ -407,24 +407,27 @@ func populateMarketplace(orderCount, bidsPerOrder, providersCount int) *Marketpl
 
 	// Generate orders with bids
 	workers := runtime.NumCPU()
-	ordersPerWorker := orderCount / workers
 
 	var wg sync.WaitGroup
 	ordersChan := make(chan *MockOrder, orderCount)
 
 	// Create orders
 	for w := 0; w < workers; w++ {
+		start, end := workerRange(orderCount, workers, w)
+		if start >= end {
+			continue
+		}
 		wg.Add(1)
-		go func(_ int, count int) {
+		go func(start, end int) {
 			defer wg.Done()
-			for i := 0; i < count; i++ {
+			for i := start; i < end; i++ {
 				owner := generateRandomAddress()
 				specs := generateOrderSpecs()
 				price := int64(100 + randomInt(9900))
 				order := store.CreateOrder(owner, specs, price)
 				ordersChan <- order
 			}
-		}(w*ordersPerWorker, ordersPerWorker)
+		}(start, end)
 	}
 
 	go func() {
@@ -587,13 +590,9 @@ func BenchmarkProviderActiveLeaseCheck(b *testing.B) {
 
 // TestMarketplaceScaleBaseline tests marketplace at 100k orders
 func TestMarketplaceScaleBaseline(t *testing.T) {
-	if testing.Short() {
-		t.Skip("Skipping marketplace scale test in short mode")
-	}
-
-	scale := 10000 // 10k for CI
-	bidsPerOrder := 20
-	providersCount := 200
+	scale := shortScaleInt(2000, 10000) // 10k for CI
+	bidsPerOrder := shortScaleInt(8, 20)
+	providersCount := shortScaleInt(50, 200)
 
 	t.Logf("=== Marketplace Scale Baseline Test ===")
 	t.Logf("Orders: %d, BidsPerOrder: %d, Providers: %d", scale, bidsPerOrder, providersCount)
@@ -684,20 +683,18 @@ func TestMarketplaceScaleBaseline(t *testing.T) {
 
 // TestConcurrentMarketplaceOperations tests concurrent marketplace operations
 func TestConcurrentMarketplaceOperations(t *testing.T) {
-	if testing.Short() {
-		t.Skip("Skipping concurrent marketplace test in short mode")
-	}
+	initialOrders := shortScaleInt(1000, 5000)
+	store := populateMarketplace(initialOrders, shortScaleInt(5, 10), shortScaleInt(25, 100))
 
-	store := populateMarketplace(5000, 10, 100)
-
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	duration := shortScaleDuration(3*time.Second, 10*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), duration)
 	defer cancel()
 
 	var wg sync.WaitGroup
 	var ordersCreated, bidsSubmitted, ordersMatched atomic.Int64
 
 	// Order creators
-	for i := 0; i < 10; i++ {
+	for i := 0; i < shortScaleInt(4, 10); i++ {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
@@ -714,7 +711,7 @@ func TestConcurrentMarketplaceOperations(t *testing.T) {
 	}
 
 	// Bid submitters
-	for i := 0; i < 20; i++ {
+	for i := 0; i < shortScaleInt(8, 20); i++ {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
@@ -723,7 +720,7 @@ func TestConcurrentMarketplaceOperations(t *testing.T) {
 				case <-ctx.Done():
 					return
 				default:
-					orderID := safeUint64FromIntValue(randomInt(10000) + 1)
+					orderID := safeUint64FromIntValue(randomInt(initialOrders) + 1)
 					if _, err := store.SubmitBid(orderID, generateRandomAddress(), 500); err == nil {
 						bidsSubmitted.Add(1)
 					}
@@ -733,7 +730,7 @@ func TestConcurrentMarketplaceOperations(t *testing.T) {
 	}
 
 	// Order matchers
-	for i := 0; i < 5; i++ {
+	for i := 0; i < shortScaleInt(2, 5); i++ {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
@@ -742,7 +739,7 @@ func TestConcurrentMarketplaceOperations(t *testing.T) {
 				case <-ctx.Done():
 					return
 				default:
-					orderID := safeUint64FromIntValue(randomInt(10000) + 1)
+					orderID := safeUint64FromIntValue(randomInt(initialOrders) + 1)
 					if _, err := store.MatchOrder(orderID); err == nil {
 						ordersMatched.Add(1)
 					}
@@ -754,9 +751,9 @@ func TestConcurrentMarketplaceOperations(t *testing.T) {
 	wg.Wait()
 
 	t.Logf("=== Concurrent Marketplace Operations ===")
-	t.Logf("Orders created: %d (%.0f/sec)", ordersCreated.Load(), float64(ordersCreated.Load())/10)
-	t.Logf("Bids submitted: %d (%.0f/sec)", bidsSubmitted.Load(), float64(bidsSubmitted.Load())/10)
-	t.Logf("Orders matched: %d (%.0f/sec)", ordersMatched.Load(), float64(ordersMatched.Load())/10)
+	t.Logf("Orders created: %d (%.0f/sec)", ordersCreated.Load(), float64(ordersCreated.Load())/duration.Seconds())
+	t.Logf("Bids submitted: %d (%.0f/sec)", bidsSubmitted.Load(), float64(bidsSubmitted.Load())/duration.Seconds())
+	t.Logf("Orders matched: %d (%.0f/sec)", ordersMatched.Load(), float64(ordersMatched.Load())/duration.Seconds())
 
 	orders, bids, leases, _, _, _ := store.GetStats()
 	t.Logf("Final state - Orders: %d, Bids: %d, Leases: %d", orders, bids, leases)
@@ -764,21 +761,17 @@ func TestConcurrentMarketplaceOperations(t *testing.T) {
 
 // TestMarketplaceOrderLifecycle tests complete order lifecycle at scale
 func TestMarketplaceOrderLifecycle(t *testing.T) {
-	if testing.Short() {
-		t.Skip("Skipping lifecycle test in short mode")
-	}
-
 	store := NewMarketplaceStore()
 
 	// Generate providers
-	const numProviders = 50
+	numProviders := shortScaleInt(12, 50)
 	providers := make([][20]byte, numProviders)
 	for i := range providers {
 		providers[i] = generateRandomAddress()
 	}
 
 	// Run lifecycle iterations
-	const iterations = 1000
+	iterations := shortScaleInt(120, 1000)
 	lifecycleTimes := make([]time.Duration, iterations)
 
 	for i := 0; i < iterations; i++ {

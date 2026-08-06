@@ -1,0 +1,21 @@
+T2-07 retained validation evidence
+Implementation SHA: 5b54095ab4a360c659ec62c4d470573d50e1b108
+Node: v24.12.0
+
+COMMAND: C:\Users\pavil\AppData\Local\Temp\virtengine-node-v24.12.0\npm.cmd --prefix C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t2\lib\portal test
+EXIT: 0
+RESULT: passed
+DETAIL: 18 files, 466 tests passed; isolated action gate 35 tests passed
+
+COMMAND: C:\Users\pavil\AppData\Local\Temp\virtengine-node-v24.12.0\npm.cmd --prefix C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t2\lib\portal run type-check
+EXIT: 0
+RESULT: passed
+
+COMMAND: git -C C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t2 diff --check
+EXIT: 0
+RESULT: passed
+
+NON-CLAIMS:
+- The action gate is intentionally not exported from lib/portal root or src/chat/index.ts and is not registered in ChatAgent, ChatPanel, or production tool factories.
+- This isolated prototype does not complete Task 91B or enable production natural-language actions.
+- Task 91A policy registry, production model/tool inventory, durable nonce store, governed preview signer, red-team certification, and human handoff remain prerequisites.

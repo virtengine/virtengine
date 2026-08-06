@@ -1,63 +1,43 @@
-# Proto Generation Note
+# Reproducible Protobuf and Contract Generation
 
-## Issue
-The protobuf generation pipeline (`buf generate`) is not generating Go code for the new domain verification messages added to `sdk/proto/node/virtengine/provider/v1beta4/msg.proto` and events in `event.proto`.
+VirtEngine has one supported contract source graph: `sdk/proto/node` and `sdk/proto/provider`, resolved by `sdk/buf.yaml` and the commit/digest-pinned `sdk/buf.lock`.
 
-## New Messages Added
-- `MsgRequestDomainVerification` / `MsgRequestDomainVerificationResponse`
-- `MsgConfirmDomainVerification` / `MsgConfirmDomainVerificationResponse` 
-- `MsgRevokeDomainVerification` / `MsgRevokeDomainVerificationResponse`
-- `VerificationMethod` enum
+## Supported commands
 
-## New Events Added
-- `EventProviderDomainVerificationRequested`
-- `EventProviderDomainVerificationConfirmed`
-- `EventProviderDomainVerificationRevoked`
+- `./scripts/proto-generate.sh all` — build the pinned Linux image and regenerate every supported output.
+- `./scripts/proto-generate.sh go|descriptor|openapi|ts|inventory` — regenerate one output class.
+- `./scripts/verify-proto-generation.sh` — regenerate twice and require byte-identical checked-in artifacts.
+- `./scripts/verify-modules.sh` — verify every workspace/tool module, required checksums, and SDK vendor synchronization.
+- `VE_VERIFY_EMPTY_CACHE=1 ./scripts/verify-modules.sh` — additionally download all module graphs into an empty temporary cache.
+- `./scripts/proto-generate-wsl.sh <mode>` — native Linux/WSL equivalent used only when Docker is unavailable. It builds Go plugins from the isolated tool module and downloads Node only after checking the pinned SHA-256.
 
-## To Complete Implementation
+Do not invoke `buf generate` directly and do not use host-discovered plugins for release artifacts.
 
-1. **Regenerate Protobuf Files:**
-   ```bash
-   cd sdk
-   buf generate proto/node --template buf.gen.gogo.yaml
-   ```
-   
-   Expected output files:
-   - `sdk/go/node/provider/v1beta4/msg.pb.go` (should contain new message structs)
-   - `sdk/go/node/provider/v1beta4/event.pb.go` (should contain new event structs)
+## Pinned environment
 
-2. **After successful generation, the following files have placeholder implementations that need the generated types:**
-   - `sdk/go/node/provider/v1beta4/msgs.go` - Has ValidateBasic implementations ready
-   - `x/provider/handler/server.go` - Has handler methods ready
-   - `x/provider/keeper/domain_verification.go` - Has keeper methods ready
-   - `sdk/go/cli/provider_tx.go` - Has CLI commands ready
+`sdk/generation/toolchain.json` is the machine-readable tool manifest. `sdk/generation/Dockerfile` pins its base image by digest and verifies downloaded protoc/Node archives by SHA-256. Go generators are built from `sdk/generation/go.mod` and `go.sum`. TypeScript dependencies are installed with `npm ci` from `sdk/ts/package-lock.json`.
 
-## Current Status
+The first online run fills explicit caches. A subsequent run may operate from those caches. Generation never mutates application `go.mod` or `go.sum`; dependency updates require a separate reviewed change. Python and Rust protobuf SDKs are not declared release outputs and fail closed instead of silently producing stale clients.
 
-All implementation logic is complete, but waiting on protobuf generation to create the actual message/event type definitions. The logic has been written to use these types once they're generated.
+## Checked-in outputs
 
-## What Works Now
+- Go messages/services: `sdk/go/node/**/*.pb.go`
+- Go REST gateways: `sdk/go/node/**/*.pb.gw.go`
+- Descriptor set and digest: `sdk/artifacts/proto/virtengine.binpb*`
+- Module/service/route/output inventory: `sdk/artifacts/proto/inventory.json*`
+- Protobuf-derived OpenAPI: `api/openapi/virtengine-proto.swagger.json`
+- TypeScript contracts: `sdk/ts/src/generated/**`
 
-- Keeper logic for domain verification (request, confirm, revoke)
-- Handler wiring for new messages 
-- CLI commands structure
-- Tests (will need generated types to run)
+`api/openapi/portal_api.yaml` remains the manual provider portal API because it represents non-protobuf HTTP services. `api/openapi/virtengine-api.yaml` remains curated product documentation; blockchain operations are authoritative and drift-checked in the generated Swagger document.
 
-## What Needs Proto Generation
+## Compatibility and migrations
 
-- Message type definitions
-- Event type definitions  
-- gRPC service definitions
+Before changing a field type/number, enum numeric value, persisted message, genesis shape, type URL, service/method name, or HTTP route:
 
-## Alternative if buf continues having issues
+1. add/update a binary or JSON fixture under `tests/compatibility`;
+2. run Buf breaking detection against the release descriptor baseline;
+3. preserve existing field numbers and type URLs, or ship an approved deterministic migration;
+4. regenerate all outputs and compile Go and TypeScript consumers;
+5. run live gRPC/REST gateway parity tests.
 
-Use protoc directly:
-```bash
-protoc \
-  --gocosmos_out=. \
-  --grpc-gateway_out=. \
-  -I sdk/proto/node \
-  -I ~/.buf/cache \
-  sdk/proto/node/virtengine/provider/v1beta4/msg.proto \
-  sdk/proto/node/virtengine/provider/v1beta4/event.proto
-```
+Task 84A's `MsgSubmitConsensusVerification` and vote-extension messages are generated from `sdk/proto/node/virtengine/veid/v1/tx.proto`; their field numbers must not be edited manually.

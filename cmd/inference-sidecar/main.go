@@ -10,6 +10,9 @@ package main
 
 import (
 	"context"
+	"crypto/tls"
+	"crypto/x509"
+	"encoding/json"
 	"flag"
 	"fmt"
 	"net"
@@ -20,6 +23,7 @@ import (
 	"time"
 
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/health"
 	"google.golang.org/grpc/health/grpc_health_v1"
 	"google.golang.org/grpc/reflection"
@@ -42,9 +46,10 @@ var (
 var (
 	grpcAddr      = flag.String("grpc-addr", ":50051", "gRPC server address")
 	metricsAddr   = flag.String("metrics-addr", ":9090", "Prometheus metrics address")
-	modelPath     = flag.String("model-path", "models/trust_score", "Path to TensorFlow SavedModel")
-	modelVersion  = flag.String("model-version", "v1.0.0", "Expected model version")
-	expectedHash  = flag.String("expected-hash", "", "Expected SHA256 hash of model weights")
+	modelPath     = flag.String("model-path", "models/trust_score/current/model", "Path to TensorFlow SavedModel")
+	modelVersion  = flag.String("model-version", "", "Expected model version; defaults to release_manifest.json when unset")
+	expectedHash  = flag.String("expected-hash", "", "Expected SHA256 hash of model weights; defaults to release_manifest.json when unset")
+	manifestPath  = flag.String("manifest-path", "", "Path to release_manifest.json; defaults to a sibling of --model-path")
 	randomSeed    = flag.Int64("random-seed", 42, "Random seed for deterministic execution")
 	forceCPU      = flag.Bool("force-cpu", true, "Force CPU-only execution")
 	maxMemoryMB   = flag.Int("max-memory-mb", 512, "Maximum memory usage in MB")
@@ -57,7 +62,11 @@ var (
 	servingTO     = flag.Duration("serving-timeout", 5*time.Second, "TensorFlow Serving request timeout")
 	servingHealth = flag.String("serving-health-path", "", "Optional TensorFlow Serving health path override")
 	servingFail   = flag.String("serving-fallback-url", "", "Fallback TensorFlow Serving base URL")
-	allowStub     = flag.Bool("allow-fallback-to-stub", false, "Allow fallback to local stub inference on serving failure")
+	allowStub     = flag.Bool("allow-fallback-to-stub", false, "Deprecated: stub fallback is forbidden by the inference sidecar")
+	tlsCertFile   = flag.String("tls-cert-file", "", "PEM server certificate for gRPC mTLS; required with --tls-key-file")
+	tlsKeyFile    = flag.String("tls-key-file", "", "PEM server key for gRPC mTLS; required with --tls-cert-file")
+	tlsClientCA   = flag.String("tls-client-ca-file", "", "PEM client CA bundle required when --tls-require-client-cert is true")
+	tlsRequireMTL = flag.Bool("tls-require-client-cert", false, "Require and verify a client certificate for every gRPC connection")
 )
 
 func main() {
@@ -69,6 +78,10 @@ func run() int {
 
 	// Setup logging
 	log := setupLogger(*logLevel)
+	if *allowStub {
+		log.Error("Local stub inference fallback is forbidden", "flag", "allow-fallback-to-stub")
+		return 1
+	}
 
 	log.Info("Starting inference sidecar",
 		"version", Version,
@@ -102,22 +115,41 @@ func run() int {
 		HealthPath:    *servingHealth,
 	}
 
-	server, err := NewInferenceSidecarServer(config, servingConfig, log)
+	server, err := NewInferenceSidecarServer(config, servingConfig, *manifestPath, log)
 	if err != nil {
 		log.Error("Failed to create inference server", "error", err)
 		return 1
 	}
 	defer server.Close()
 
+	if readiness := server.Readiness(); readiness != nil && !readiness.Ready() {
+		log.Warn("Inference sidecar started not ready",
+			"verification_state", readiness.State,
+			"manifest_path", readiness.ManifestPath,
+			"path", readiness.FailurePath,
+			"error", readiness.FailureReason,
+		)
+	}
+
 	// Start metrics server
-	go startMetricsServer(*metricsAddr, log)
+	go startMetricsServer(*metricsAddr, server, log)
 
 	// Start gRPC server
-	grpcServer := grpc.NewServer(
-		grpc.MaxRecvMsgSize(16*1024*1024), // 16MB max message size
-		grpc.MaxSendMsgSize(16*1024*1024),
+	grpcOptions := []grpc.ServerOption{
+		grpc.MaxRecvMsgSize(16 * 1024 * 1024), // 16MB max message size
+		grpc.MaxSendMsgSize(16 * 1024 * 1024),
 		grpc.StatsHandler(observability.GRPCServerStatsHandler()),
-	)
+	}
+	if *tlsCertFile != "" || *tlsKeyFile != "" || *tlsClientCA != "" || *tlsRequireMTL {
+		tlsConfig, err := loadServerTLSConfig(*tlsCertFile, *tlsKeyFile, *tlsClientCA, *tlsRequireMTL)
+		if err != nil {
+			log.Error("Invalid gRPC TLS configuration", "error", err)
+			return 1
+		}
+		grpcOptions = append(grpcOptions, grpc.Creds(credentials.NewTLS(tlsConfig)))
+		log.Info("gRPC mTLS enabled", "require_client_certificate", *tlsRequireMTL)
+	}
+	grpcServer := grpc.NewServer(grpcOptions...)
 
 	// Register services
 	inferencepb.RegisterInferenceServiceServer(grpcServer, server)
@@ -125,7 +157,11 @@ func run() int {
 	// Register health service
 	healthServer := health.NewServer()
 	grpc_health_v1.RegisterHealthServer(grpcServer, healthServer)
-	healthServer.SetServingStatus(inferencepb.ServiceName, grpc_health_v1.HealthCheckResponse_SERVING)
+	healthStatus := grpc_health_v1.HealthCheckResponse_SERVING
+	if readiness := server.Readiness(); readiness == nil || !readiness.Ready() {
+		healthStatus = grpc_health_v1.HealthCheckResponse_NOT_SERVING
+	}
+	healthServer.SetServingStatus(inferencepb.ServiceName, healthStatus)
 
 	// Enable reflection for debugging if requested
 	if *enableReflect {
@@ -168,24 +204,105 @@ func run() int {
 	return 0
 }
 
-func startMetricsServer(addr string, log Logger) {
+// loadServerTLSConfig validates the complete server-side mTLS contract before
+// opening a listener. It deliberately rejects partial TLS configuration: an
+// identity-scoring sidecar must not silently downgrade to plaintext when a
+// workload is misconfigured.
+func loadServerTLSConfig(certFile, keyFile, clientCAFile string, requireClientCert bool) (*tls.Config, error) {
+	if certFile == "" || keyFile == "" {
+		return nil, fmt.Errorf("tls-cert-file and tls-key-file must both be set when TLS is enabled")
+	}
+	certificate, err := tls.LoadX509KeyPair(certFile, keyFile)
+	if err != nil {
+		return nil, fmt.Errorf("load server certificate: %w", err)
+	}
+
+	config := &tls.Config{
+		Certificates: []tls.Certificate{certificate},
+		MinVersion:   tls.VersionTLS13,
+	}
+	if !requireClientCert {
+		if clientCAFile != "" {
+			return nil, fmt.Errorf("tls-client-ca-file requires tls-require-client-cert=true")
+		}
+		return config, nil
+	}
+	if clientCAFile == "" {
+		return nil, fmt.Errorf("tls-client-ca-file is required when tls-require-client-cert=true")
+	}
+	clientCAPEM, err := os.ReadFile(clientCAFile)
+	if err != nil {
+		return nil, fmt.Errorf("read client CA bundle: %w", err)
+	}
+	clientCAs := x509.NewCertPool()
+	if !clientCAs.AppendCertsFromPEM(clientCAPEM) {
+		return nil, fmt.Errorf("client CA bundle contains no certificates")
+	}
+	config.ClientAuth = tls.RequireAndVerifyClientCert
+	config.ClientCAs = clientCAs
+	return config, nil
+}
+
+func startMetricsServer(addr string, server *InferenceSidecarServer, log Logger) {
 	mux := http.NewServeMux()
 	mux.Handle("/metrics", promhttp.Handler())
 	mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte("OK"))
+		statusCode, payload := readinessHTTPResponse(server.Readiness())
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(statusCode)
+		_, _ = w.Write(payload)
 	})
 
-	server := &http.Server{
+	httpServer := &http.Server{
 		Addr:              addr,
 		Handler:           mux,
 		ReadHeaderTimeout: 10 * time.Second,
 	}
 
 	log.Info("Metrics server listening", "addr", addr)
-	if err := server.ListenAndServe(); err != nil {
+	if err := httpServer.ListenAndServe(); err != nil {
 		log.Error("Metrics server error", "error", err)
 	}
+}
+
+type readinessStatus struct {
+	Ready        bool   `json:"ready"`
+	State        string `json:"state"`
+	Message      string `json:"message,omitempty"`
+	ManifestPath string `json:"manifest_path,omitempty"`
+	Path         string `json:"path,omitempty"`
+	ModelVersion string `json:"model_version,omitempty"`
+	ModelHash    string `json:"model_hash,omitempty"`
+}
+
+func readinessHTTPResponse(readiness *verificationResult) (int, []byte) {
+	status := readinessStatus{
+		Ready: false,
+		State: "verification_unavailable",
+	}
+
+	if readiness == nil {
+		status.Message = "model verification status unavailable"
+	} else {
+		status.State = string(readiness.State)
+		status.ManifestPath = readiness.ManifestPath
+		status.Path = readiness.FailurePath
+		status.ModelVersion = readiness.Version
+		status.ModelHash = readiness.ModelHash
+		status.Message = readiness.StatusMessage()
+		status.Ready = readiness.Ready()
+	}
+
+	statusCode := http.StatusServiceUnavailable
+	if status.Ready {
+		statusCode = http.StatusOK
+	}
+
+	payload, err := json.Marshal(status)
+	if err != nil {
+		return http.StatusServiceUnavailable, []byte(`{"ready":false,"state":"bad_manifest","message":"failed to encode readiness payload"}`)
+	}
+	return statusCode, payload
 }
 
 // Logger is a simple logging interface

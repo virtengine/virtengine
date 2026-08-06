@@ -23,9 +23,17 @@ interface DashboardWidgetProps {
   widget: DashboardWidgetType;
   isEditing: boolean;
   onRemove: () => void;
+  removeDisabled?: boolean;
+  removePending?: boolean;
 }
 
-export function DashboardWidget({ widget, isEditing, onRemove }: DashboardWidgetProps) {
+export function DashboardWidget({
+  widget,
+  isEditing,
+  onRemove,
+  removeDisabled = false,
+  removePending = false,
+}: DashboardWidgetProps) {
   const summary = useMetricsStore((s) => s.summary);
   const deploymentMetrics = useMetricsStore((s) => s.deploymentMetrics);
   const timeRange = useMetricsStore((s) => s.selectedTimeRange);
@@ -117,6 +125,10 @@ export function DashboardWidget({ widget, isEditing, onRemove }: DashboardWidget
           variant="destructive"
           className="absolute -right-2 -top-2 z-10"
           onClick={onRemove}
+          disabled={removeDisabled || removePending}
+          aria-label={`Remove widget ${widget.title}`}
+          title={`Remove widget ${widget.title}`}
+          aria-busy={removePending}
         >
           <X className="h-3 w-3" />
         </Button>

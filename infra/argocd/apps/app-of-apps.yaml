@@ -10,7 +10,7 @@ metadata:
 spec:
   project: virtengine
   source:
-    repoURL: https://github.com/virtengine-network/virtengine.git
+    repoURL: https://github.com/virtengine/virtengine.git
     targetRevision: HEAD
     path: infra/argocd/applicationsets
   destination:

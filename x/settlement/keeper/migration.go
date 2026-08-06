@@ -99,3 +99,26 @@ func (k Keeper) MigrateEncryptedPayloads(ctx sdk.Context) error {
 
 	return migrateErr
 }
+
+// MigrateUsageAuthentication marks every pre-84B record as legacy/unverified,
+// then activates the version-1 authenticated metering gate. Historical records
+// remain queryable but cannot newly trigger billing, rewards, or escrow effects.
+func (k Keeper) MigrateUsageAuthentication(ctx sdk.Context) error {
+	var migrateErr error
+	k.WithUsageRecords(ctx, func(usage types.UsageRecord) bool {
+		usage.SignatureVersion = 0
+		usage.SignatureVerified = false
+		usage.AuthenticationStatus = types.UsageAuthenticationStatusLegacy
+		usage.LegacyUnverified = true
+		usage.UsageDigest = nil
+		if err := k.SetUsageRecord(ctx, usage); err != nil {
+			migrateErr = err
+			return true
+		}
+		return false
+	})
+	if migrateErr != nil {
+		return migrateErr
+	}
+	return k.ActivateUsageAuthentication(ctx)
+}

@@ -7,6 +7,8 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/require"
 )
 
 func TestHPCBatchSettlementConfig_Validate(t *testing.T) {
@@ -361,9 +363,7 @@ func TestNewHPCBatchSettlementPipeline(t *testing.T) {
 
 	pipeline := NewHPCBatchSettlementPipeline(config, reporter, signer)
 
-	if pipeline == nil {
-		t.Fatal("NewHPCBatchSettlementPipeline returned nil")
-	}
+	require.NotNil(t, pipeline)
 
 	if pipeline.config.BatchSize != config.BatchSize {
 		t.Error("Config not set correctly")
@@ -950,9 +950,7 @@ func TestCreateSettlementRecordFromUsage(t *testing.T) {
 
 	record := CreateSettlementRecordFromUsage(usage)
 
-	if record == nil {
-		t.Fatal("expected non-nil record")
-	}
+	require.NotNil(t, record)
 
 	if record.JobID != usage.JobID {
 		t.Errorf("expected JobID=%s, got %s", usage.JobID, record.JobID)

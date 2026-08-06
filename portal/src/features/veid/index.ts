@@ -38,7 +38,16 @@ export {
 
 // Hooks
 export { useVeidWizard } from './hooks/useVeidWizard';
-export type { UseVeidWizardReturn } from './hooks/useVeidWizard';
+export type {
+  UseVeidWizardOptions,
+  UseVeidWizardReturn,
+  VeidSubmissionInput,
+  VeidSubmissionTransport,
+  VeidTransactionRequest,
+  VeidTransactionResult,
+  VeidUploadReceipt,
+  VeidUploadRequest,
+} from './hooks/useVeidWizard';
 
 export { useVerificationStatus } from './hooks/useVerificationStatus';
 export type { UseVerificationStatusReturn } from './hooks/useVerificationStatus';

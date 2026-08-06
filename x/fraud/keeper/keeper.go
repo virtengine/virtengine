@@ -19,6 +19,8 @@ import (
 
 	"github.com/virtengine/virtengine/x/fraud/types"
 	rolestypes "github.com/virtengine/virtengine/x/roles/types"
+	settlementkeeper "github.com/virtengine/virtengine/x/settlement/keeper"
+	settlementtypes "github.com/virtengine/virtengine/x/settlement/types"
 )
 
 // IKeeper defines the interface for the Fraud keeper
@@ -30,6 +32,7 @@ type IKeeper interface {
 	GetFraudReportsByReporter(ctx sdk.Context, reporterAddr string) []types.FraudReport
 	GetFraudReportsByReportedParty(ctx sdk.Context, reportedAddr string) []types.FraudReport
 	GetFraudReportsByStatus(ctx sdk.Context, status types.FraudReportStatus) []types.FraudReport
+	WithFraudReports(ctx sdk.Context, fn func(types.FraudReport) bool)
 
 	// Moderator Queue
 	AddToModeratorQueue(ctx sdk.Context, entry types.ModeratorQueueEntry) error
@@ -66,7 +69,6 @@ type IKeeper interface {
 	SetParams(ctx sdk.Context, params types.Params) error
 
 	// Iterators
-	WithFraudReports(ctx sdk.Context, fn func(types.FraudReport) bool)
 	WithAuditLogs(ctx sdk.Context, fn func(types.FraudAuditLog) bool)
 	WithModeratorQueue(ctx sdk.Context, fn func(types.ModeratorQueueEntry) bool)
 
@@ -95,6 +97,14 @@ type Keeper struct {
 	rolesKeeper    RolesKeeper
 	providerKeeper ProviderKeeper
 	authority      string
+	financialCases FinancialCaseKeeper
+}
+
+type FinancialCaseKeeper interface {
+	OpenFinancialCase(ctx sdk.Context, request settlementkeeper.FinancialCaseOpenRequest) (*settlementtypes.FinancialCase, *settlementtypes.FinancialClaim, bool, error)
+	EscalateFinancialCase(ctx sdk.Context, caseID, actor string, reasonHash []byte) error
+	GetFinancialCase(ctx sdk.Context, caseID string) (settlementtypes.FinancialCase, bool)
+	IsFinancialCasesActive(ctx sdk.Context) bool
 }
 
 // NewKeeper creates and returns an instance for Fraud keeper
@@ -112,6 +122,10 @@ func NewKeeper(
 		providerKeeper: providerKeeper,
 		authority:      authority,
 	}
+}
+
+func (k *Keeper) SetFinancialCaseKeeper(financialCases FinancialCaseKeeper) {
+	k.financialCases = financialCases
 }
 
 // Codec returns keeper codec
@@ -247,6 +261,7 @@ func (k Keeper) SubmitFraudReport(ctx sdk.Context, report *types.FraudReport) er
 		report.ID = fmt.Sprintf("fraud-report-%d", seq)
 		k.SetNextFraudReportSequence(ctx, seq+1)
 	}
+	report.ContentHash = report.ComputeContentHash()
 
 	if err := report.Validate(); err != nil {
 		return err
@@ -624,6 +639,9 @@ func (k Keeper) UpdateReportStatus(ctx sdk.Context, reportID string, newStatus t
 	if !found {
 		return types.ErrReportNotFound
 	}
+	if (newStatus == types.FraudReportStatusResolved || newStatus == types.FraudReportStatusRejected) && k.hasActiveCanonicalFinancialCase(ctx, report) {
+		return settlementtypes.ErrLegacyFinancialMutationFenced.Wrap("canonical financial case remains active")
+	}
 
 	// Verify actor is moderator
 	actor, err := sdk.AccAddressFromBech32(actorAddr)
@@ -676,6 +694,9 @@ func (k Keeper) ResolveFraudReport(ctx sdk.Context, reportID string, resolution 
 	report, found := k.GetFraudReport(ctx, reportID)
 	if !found {
 		return types.ErrReportNotFound
+	}
+	if k.hasActiveCanonicalFinancialCase(ctx, report) {
+		return settlementtypes.ErrLegacyFinancialMutationFenced.Wrap("canonical financial case remains active")
 	}
 
 	// Verify moderator role
@@ -737,6 +758,9 @@ func (k Keeper) RejectFraudReport(ctx sdk.Context, reportID, notes, moderatorAdd
 	report, found := k.GetFraudReport(ctx, reportID)
 	if !found {
 		return types.ErrReportNotFound
+	}
+	if k.hasActiveCanonicalFinancialCase(ctx, report) {
+		return settlementtypes.ErrLegacyFinancialMutationFenced.Wrap("canonical financial case remains active")
 	}
 
 	// Verify moderator role
@@ -850,11 +874,18 @@ func (k Keeper) EscalateFraudReport(ctx sdk.Context, reportID, reason, moderator
 
 	k.Logger(ctx).Info("fraud report escalated",
 		"report_id", reportID,
-		"reason", reason,
 		"moderator", moderatorAddr,
 	)
 
 	return nil
+}
+
+func (k Keeper) hasActiveCanonicalFinancialCase(ctx sdk.Context, report types.FraudReport) bool {
+	if report.FinancialCaseID == "" || k.financialCases == nil || !k.financialCases.IsFinancialCasesActive(ctx) {
+		return false
+	}
+	financialCase, found := k.financialCases.GetFinancialCase(ctx, report.FinancialCaseID)
+	return !found || settlementtypes.IsActiveFinancialCaseStatus(financialCase.Status)
 }
 
 // ============================================================================

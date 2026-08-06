@@ -1,0 +1,43 @@
+T2-X22 retained validation evidence
+Implementation SHA: a30606b23d61575dd0a4f97be8a394596f44b553
+Node: v20.19.1
+
+COMMAND: C:\Windows\System32\cmd.exe /d /c "cd /d C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t2\portal && node_modules\.bin\vitest.CMD run src\app\api\notification-preferences\route.test.ts src\components\notifications\__tests__\NotificationPreferences.test.tsx --reporter=dot --maxWorkers=1 --no-color"
+EXIT: 0
+RESULT: passed
+DETAIL: 2 files, 43 tests passed.
+
+COMMAND: C:\Windows\System32\cmd.exe /d /c "cd /d C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t2\portal && node_modules\.bin\vitest.CMD run --reporter=dot --maxWorkers=1 --no-color"
+EXIT: 0
+RESULT: passed
+DETAIL: 88 files, 739 tests passed in 150.36s; no warnings, failures, or skips.
+
+COMMAND: C:\Windows\System32\cmd.exe /d /c "cd /d C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t2\portal && node_modules\.bin\tsc.CMD --noEmit --incremental false"
+EXIT: 0
+RESULT: passed
+DETAIL: Full portal TypeScript completed with no diagnostics.
+
+COMMAND: C:\Windows\System32\cmd.exe /d /c "cd /d C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t2\portal && node_modules\.bin\prettier.CMD --check src\app\api\notification-preferences\workflow.ts src\app\api\notification-preferences\route.ts src\app\api\notification-preferences\route.test.ts src\components\notifications\NotificationPreferences.tsx src\components\notifications\__tests__\NotificationPreferences.test.tsx"
+EXIT: 0
+RESULT: passed
+DETAIL: Prettier 3.8.1 checked the exact five X22 implementation files.
+
+COMMAND: C:\Windows\System32\cmd.exe /d /c "cd /d C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t2\portal && node_modules\.bin\eslint.CMD src\app\api\notification-preferences\workflow.ts src\app\api\notification-preferences\route.ts src\app\api\notification-preferences\route.test.ts src\components\notifications\NotificationPreferences.tsx src\components\notifications\__tests__\NotificationPreferences.test.tsx"
+EXIT: 0
+RESULT: passed
+DETAIL: ESLint 8.57.1 reported no findings; it emitted the repository's TypeScript 5.9.3 parser-support notice.
+
+BEHAVIOR:
+- Notification preference GET/PUT no longer trust client-supplied identity or write process-global demo state.
+- Handlers derive account identity only from an injected server session resolver and require an injected durable persistence adapter.
+- Production has neither dependency wired, so requests fail closed instead of claiming persistence.
+- PUT accepts settings only, validates an exact canonical schema, and rejects supplied userAddress or additional keys.
+- Save requests bind canonical immutable settings and server identity to a SHA-256 digest reused as the idempotency key.
+- Success requires an exact committed receipt, canonical operation ID, digest/idempotency echo, exact subject, and exact saved settings.
+- Request, receipt, preference, and channel getters are snapshot once; aliases are copied and frozen.
+- The panel validates GET/PUT responses, strips identity from PUT, prevents duplicate/stale saves, aborts on unmount, disables edits while pending, and reports load/save failure without false success.
+- Locale changes do not restart loading, abort saves, retain stale locks, or render later failure in an obsolete locale.
+
+NON-CLAIMS:
+- No production server session resolver or durable notification preference adapter is wired; the endpoint remains unavailable by default.
+- No notification delivery service, database persistence, cross-device synchronization, or live authenticated session was certified.

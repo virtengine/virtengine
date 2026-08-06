@@ -1,0 +1,32 @@
+T2-X03 retained validation evidence
+Implementation SHA: cc7103aacbd4ac287c4ceb8872fcd06a1d408602
+Node: v24.12.0
+
+COMMAND: C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t2\portal\node_modules\.bin\vitest.CMD run tests\unit\orders\useOrderWizardSubmission.test.ts --reporter=dot
+EXIT: 0
+RESULT: passed
+DETAIL: 1 file, 13 tests passed
+
+COMMAND: C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t2\portal\node_modules\.bin\eslint.CMD C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t2\portal\src --ext .ts,.tsx --max-warnings 0
+EXIT: 0
+RESULT: passed
+NOTE: Existing unsupported TypeScript parser-version warning only.
+
+COMMAND: C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t2\portal\node_modules\.bin\tsc.CMD --noEmit -p C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t2\portal\tsconfig.json
+EXIT: 0
+RESULT: passed
+
+COMMAND: C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t2\portal\node_modules\.bin\vitest.CMD run --reporter=dot
+EXIT: 0
+RESULT: passed
+DETAIL: 75 files, 541 tests passed
+
+BEHAVIOR:
+- Order wizard has no synthetic/default submitter and returns typed feature_unavailable until an authoritative adapter/projector is injected.
+- Confirmation and onComplete occur only for code 0, nonempty authoritative order ID/tx hash, positive block height, committed status, and exact request/digest binding.
+- Timeout, duplicate submission, adapter rejection, malformed result, and state drift never reach confirmation.
+- Request digest is reused as a stable idempotency key.
+
+NON-CLAIMS:
+- Production generated SDK/mutation adapter wiring remains T4-owned and unavailable.
+- No live chain order was submitted or certified.

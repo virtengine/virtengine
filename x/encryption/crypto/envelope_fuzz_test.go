@@ -55,8 +55,8 @@ func FuzzCreateEnvelope(f *testing.F) {
 			t.Fatal("envelope is nil")
 		}
 
-		if envelope.Version != types.EnvelopeVersion {
-			t.Errorf("unexpected version: got %d, want %d", envelope.Version, types.EnvelopeVersion)
+		if envelope.Version != types.EnvelopeVersionV2 {
+			t.Errorf("unexpected version: got %d, want %d", envelope.Version, types.EnvelopeVersionV2)
 		}
 
 		if envelope.AlgorithmID != types.AlgorithmX25519XSalsa20Poly1305 {

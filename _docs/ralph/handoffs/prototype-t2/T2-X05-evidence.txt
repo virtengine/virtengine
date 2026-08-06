@@ -1,0 +1,33 @@
+T2-X05 retained validation evidence
+Implementation SHA: 74f7236822bc18deedab2db1f0f3ba2ab0d08c10
+Node: v24.12.0
+
+COMMAND: C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t2\portal\node_modules\.bin\vitest.CMD run src\lib\api\__tests__\chain.test.ts src\lib\__tests__\order-creation.test.ts src\stores\__tests__\orderStore.test.ts tests\unit\wallet\useWalletTransaction.test.ts --reporter=dot
+EXIT: 0
+RESULT: passed
+DETAIL: 4 files, 18 tests passed; committed signer 10 tests passed
+
+COMMAND: C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t2\portal\node_modules\.bin\eslint.CMD C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t2\portal\src --ext .ts,.tsx --max-warnings 0
+EXIT: 0
+RESULT: passed
+NOTE: Existing unsupported TypeScript parser-version warning only.
+
+COMMAND: C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t2\portal\node_modules\.bin\tsc.CMD --noEmit -p C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t2\portal\tsconfig.json
+EXIT: 0
+RESULT: passed
+
+COMMAND: C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t2\portal\node_modules\.bin\vitest.CMD run --reporter=dot
+EXIT: 0
+RESULT: passed
+DETAIL: 574 tests passed (implementation subagent complete run)
+
+BEHAVIOR:
+- Amino mutation calls return only after canonical tx lookup proves matching hash, explicit code 0 and positive committed block height.
+- Missing codes never default to zero; malformed, rejected, timed-out or mismatched transactions fail typed.
+- Polling never rebroadcasts.
+- Marketplace order confirmation requires an order-created event from the exact committed transaction; latest-order timestamp inference was removed.
+- Committed height propagates through wallet and VEID mutation results.
+
+NON-CLAIMS:
+- Sync broadcast remains submission-only; success derives from canonical commit observation.
+- No live chain transaction or external node route was certified.

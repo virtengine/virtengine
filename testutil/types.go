@@ -53,7 +53,11 @@ func NewTestNetworkFixture(opts ...network.TestnetFixtureOption) network.TestFix
 	)
 
 	appCtr := func(val network.ValidatorI) servertypes.Application {
-		return app.NewApp(
+		appOptions := servertypes.AppOptions(simtestutil.NewAppOptionsWithFlagHome(val.GetCtx().Config.RootDir))
+		if options := val.GetAppOptions(); options != nil {
+			appOptions = options
+		}
+		validatorApp := app.NewApp(
 			val.GetCtx().Logger,
 			dbm.NewMemDB(),
 			nil,
@@ -61,11 +65,15 @@ func NewTestNetworkFixture(opts ...network.TestnetFixtureOption) network.TestFix
 			0,
 			make(map[int64]bool),
 			cfgOpts.EncCfg,
-			simtestutil.NewAppOptionsWithFlagHome(val.GetCtx().Config.RootDir),
+			appOptions,
 			bam.SetPruning(pruningtypes.NewPruningOptionsFromString(val.GetAppConfig().Pruning)),
 			bam.SetMinGasPrices(val.GetAppConfig().MinGasPrices),
 			bam.SetChainID(val.GetCtx().Viper.GetString(cflags.FlagChainID)),
 		)
+		if cfgOpts.WrapApplication != nil {
+			return cfgOpts.WrapApplication(val, validatorApp)
+		}
+		return validatorApp
 	}
 
 	genesisState := app.NewDefaultGenesisState(tapp.AppCodec())

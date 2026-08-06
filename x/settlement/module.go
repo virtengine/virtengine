@@ -122,6 +122,22 @@ func (am AppModule) RegisterInvariants(ir sdk.InvariantRegistry) {
 func (am AppModule) RegisterServices(cfg module.Configurator) {
 	settlementv1.RegisterMsgServer(cfg.MsgServer(), keeper.NewMsgServerImpl(am.keeper))
 	settlementv1.RegisterQueryServer(cfg.QueryServer(), keeper.GRPCQuerier{IKeeper: am.keeper})
+	if err := cfg.RegisterMigration(types.ModuleName, 1, func(ctx sdk.Context) error {
+		return am.keeper.MigrateUsageAuthentication(ctx)
+	}); err != nil {
+		panic(fmt.Sprintf("failed to register settlement 1->2 migration: %v", err))
+	}
+	if err := cfg.RegisterMigration(types.ModuleName, 2, func(ctx sdk.Context) error {
+		return am.keeper.RebuildFinancialCaseState(ctx)
+	}); err != nil {
+		panic(fmt.Sprintf("failed to register settlement 2->3 migration: %v", err))
+	}
+	if err := cfg.RegisterMigration(types.ModuleName, 3, func(ctx sdk.Context) error {
+		_, err := am.keeper.MigrateFiatConversions(ctx)
+		return err
+	}); err != nil {
+		panic(fmt.Sprintf("failed to register settlement 3->4 migration: %v", err))
+	}
 }
 
 // InitGenesis performs genesis initialization for the settlement module.
@@ -144,7 +160,7 @@ func (am AppModule) ExportGenesis(ctx sdk.Context, cdc codec.JSONCodec) json.Raw
 }
 
 // ConsensusVersion implements AppModule/ConsensusVersion.
-func (AppModule) ConsensusVersion() uint64 { return 1 }
+func (AppModule) ConsensusVersion() uint64 { return 4 }
 
 // IsOnePerModuleType implements the depinject.OnePerModuleType interface.
 func (am AppModule) IsOnePerModuleType() {
@@ -185,6 +201,11 @@ func BeginBlocker(ctx sdk.Context, k keeper.IKeeper) error {
 
 // EndBlocker performs end block operations for the settlement module
 func EndBlocker(ctx sdk.Context, k keeper.IKeeper) error {
+	if k.IsFinancialCasesActive(ctx) {
+		if _, err := k.ProcessFinancialCaseTimeouts(ctx); err != nil {
+			return err
+		}
+	}
 	// Auto-settle orders at the end of each block
 	if err := k.AutoSettle(ctx); err != nil {
 		return err
@@ -195,16 +216,13 @@ func EndBlocker(ctx sdk.Context, k keeper.IKeeper) error {
 		return err
 	}
 
-	// Resume asynchronous payout work queues.
+	// Process deterministic on-chain payout transfers. External DEX/off-ramp
+	// work is intentionally not polled from EndBlock.
 	if err := k.ProcessPendingPayouts(ctx); err != nil {
 		return err
 	}
 	if err := k.RetryFailedPayouts(ctx); err != nil {
 		return err
 	}
-	if err := k.ProcessInFlightFiatConversions(ctx); err != nil {
-		return err
-	}
-
 	return nil
 }

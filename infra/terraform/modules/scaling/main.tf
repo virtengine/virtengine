@@ -42,36 +42,19 @@ variable "regions" {
     validators        = number # Number of validators
     enable_state_sync = bool   # Enable state sync provider
     vpc_cidr          = string # VPC CIDR block
+    lb_dns_name       = string # Regional load balancer DNS name
+    lb_zone_id        = string # Regional load balancer hosted zone ID
   }))
+  default = {}
 
-  default = {
-    "us-east-1" = {
-      role              = "primary"
-      priority          = 1
-      full_nodes        = 4
-      provider_daemons  = 4
-      validators        = 2
-      enable_state_sync = true
-      vpc_cidr          = "10.0.0.0/16"
-    }
-    "eu-west-1" = {
-      role              = "secondary"
-      priority          = 2
-      full_nodes        = 3
-      provider_daemons  = 2
-      validators        = 2
-      enable_state_sync = true
-      vpc_cidr          = "10.1.0.0/16"
-    }
-    "ap-south-1" = {
-      role              = "tertiary"
-      priority          = 3
-      full_nodes        = 2
-      provider_daemons  = 1
-      validators        = 1
-      enable_state_sync = true
-      vpc_cidr          = "10.2.0.0/16"
-    }
+  validation {
+    condition = length(var.regions) > 0 && alltrue([
+      for region, config in var.regions :
+      trimspace(region) != "" &&
+      trimspace(config.lb_dns_name) != "" &&
+      trimspace(config.lb_zone_id) != ""
+    ])
+    error_message = "regions must include a real load balancer DNS name and hosted zone ID for every region."
   }
 }
 
@@ -272,8 +255,8 @@ resource "aws_route53_record" "rpc_regional" {
   }
 
   alias {
-    name                   = "placeholder.elb.${each.key}.amazonaws.com" # Replace with actual ALB
-    zone_id                = "Z35SXDOTRQ7X7K"                            # Placeholder - use actual zone ID
+    name                   = each.value.lb_dns_name
+    zone_id                = each.value.lb_zone_id
     evaluate_target_health = true
   }
 
@@ -295,8 +278,8 @@ resource "aws_route53_record" "rpc_geo" {
   }
 
   alias {
-    name                   = "placeholder.elb.${each.key}.amazonaws.com"
-    zone_id                = "Z35SXDOTRQ7X7K"
+    name                   = each.value.lb_dns_name
+    zone_id                = each.value.lb_zone_id
     evaluate_target_health = true
   }
 

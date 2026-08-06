@@ -153,4 +153,56 @@ var (
 
 	// ErrRateUnavailable is returned when settlement rates cannot be locked
 	ErrRateUnavailable = errorsmod.Register(ModuleName, 1548, "settlement rate unavailable")
+
+	// ErrExternalIOForbidden is returned when keeper execution would cross the
+	// deterministic on-chain input boundary.
+	ErrExternalIOForbidden = errorsmod.Register(ModuleName, 1549, "external I/O forbidden in consensus execution")
+
+	// ErrUsageAuthenticationRequired rejects pre-84B or incomplete proofs.
+	ErrUsageAuthenticationRequired = errorsmod.Register(ModuleName, 1550, "authenticated usage proof required")
+
+	// ErrProviderSigningKeyNotFound rejects unknown or mismatched key epochs.
+	ErrProviderSigningKeyNotFound = errorsmod.Register(ModuleName, 1551, "provider signing key not found")
+
+	// ErrProviderSigningKeyInactive rejects preactivation, retired, or revoked keys.
+	ErrProviderSigningKeyInactive = errorsmod.Register(ModuleName, 1552, "provider signing key inactive")
+
+	// ErrUsageReplayConflict rejects one replay key bound to different bytes.
+	ErrUsageReplayConflict = errorsmod.Register(ModuleName, 1553, "conflicting usage replay key")
+
+	// ErrUsageSequenceGap rejects gaps and regressions in a metering stream.
+	ErrUsageSequenceGap = errorsmod.Register(ModuleName, 1554, "usage stream sequence gap or regression")
+
+	// ErrUsageProofExpired rejects stale or excessively future-dated proofs.
+	ErrUsageProofExpired = errorsmod.Register(ModuleName, 1555, "usage proof outside allowed height or time bounds")
+
+	// ErrUsagePeriodOverlap rejects overlapping metric periods in one stream.
+	ErrUsagePeriodOverlap = errorsmod.Register(ModuleName, 1556, "usage period overlaps prior period")
+
+	// ErrUsagePricingVersion rejects unavailable pricing/formula/model versions.
+	ErrUsagePricingVersion = errorsmod.Register(ModuleName, 1557, "usage pricing or formula version unavailable")
+
+	// ErrCustomerKeyUnsupported rejects absent, multisig, or unknown account keys.
+	ErrCustomerKeyUnsupported = errorsmod.Register(ModuleName, 1558, "customer account key algorithm unsupported")
+
+	ErrFinancialCaseNotFound             = errorsmod.Register(ModuleName, 1559, "financial case not found")
+	ErrInvalidFinancialCase              = errorsmod.Register(ModuleName, 1560, "invalid financial case")
+	ErrFinancialCaseIdempotencyConflict  = errorsmod.Register(ModuleName, 1561, "financial case idempotency conflict")
+	ErrFinancialCaseTransition           = errorsmod.Register(ModuleName, 1562, "invalid financial case transition")
+	ErrFinancialCaseDeadline             = errorsmod.Register(ModuleName, 1563, "financial case deadline exceeded")
+	ErrFinancialCaseAuthorization        = errorsmod.Register(ModuleName, 1564, "financial case authorization failed")
+	ErrFinancialCaseResolverConflict     = errorsmod.Register(ModuleName, 1565, "financial case resolver conflict")
+	ErrFinancialCaseConservation         = errorsmod.Register(ModuleName, 1566, "financial case allocation does not conserve exposure")
+	ErrFinancialCaseHold                 = errorsmod.Register(ModuleName, 1567, "financial case hold invariant failed")
+	ErrFinancialCaseEffect               = errorsmod.Register(ModuleName, 1568, "financial case effect application failed")
+	ErrFinancialCasePrivacy              = errorsmod.Register(ModuleName, 1569, "financial case evidence reference rejected")
+	ErrFinancialCaseMalformedState       = errorsmod.Register(ModuleName, 1570, "malformed financial case state")
+	ErrLegacyFinancialMutationFenced     = errorsmod.Register(ModuleName, 1571, "legacy financial mutation fenced by canonical case activation")
+	ErrFinancialCasesNotActive           = errorsmod.Register(ModuleName, 1572, "canonical financial cases are not active")
+	ErrFiatConversionIdempotencyConflict = errorsmod.Register(ModuleName, 1573, "fiat conversion idempotency conflict")
+	ErrFiatObservationReplayConflict     = errorsmod.Register(ModuleName, 1574, "fiat conversion observation replay conflict")
+	ErrFiatObservationSequence           = errorsmod.Register(ModuleName, 1575, "fiat conversion observation sequence invalid")
+	ErrFiatObservationEvidence           = errorsmod.Register(ModuleName, 1576, "fiat conversion observation evidence invalid")
+	ErrFiatProfileCommitment             = errorsmod.Register(ModuleName, 1577, "fiat conversion profile commitment mismatch")
+	ErrFiatConversionQuarantined         = errorsmod.Register(ModuleName, 1578, "fiat conversion requires operator reconciliation")
 )

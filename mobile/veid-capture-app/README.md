@@ -34,7 +34,7 @@ npm test
 
 ## Notes
 
-- Native ML modules are pluggable. The default adapters fall back to mock services
-  when native modules are not present.
-- Encryption, biometric hardware capture, and device attestation are implemented as stubs
-  with clear extension points for the production mobile SDK.
+- Native camera, biometric, attestation, encryption, and signing modules are pluggable.
+- Production paths fail closed when a native provider, device, permission, or capture binding
+  is unavailable. Mock providers and insecure fixtures require explicit injection or configuration
+  for tests and development.

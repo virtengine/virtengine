@@ -29,7 +29,7 @@ Welcome to the VirtEngine API documentation. This comprehensive guide covers all
 | **Audit** | Audit logging and queries | [Reference](./reference/audit.md) |
 | **Roles** | Role-based access control | [Reference](./reference/roles.md) |
 | **Staking** | Staking and delegation | [Reference](./reference/staking.md) |
-| **HPC** | High-performance computing | [Reference](./reference/hpc.md) |
+| **HPC** | High-performance computing and workload template queries | [Reference](./reference/hpc.md) |
 | **Enclave** | TEE/Enclave management | [Reference](./reference/enclave.md) |
 | **Take** | Network take rate configuration | [Reference](./reference/take.md) |
 | **Oracle** | Price oracle for resources | [Reference](./reference/oracle.md) |
@@ -95,11 +95,18 @@ VirtEngine APIs support multiple transport protocols:
 
 ### REST/HTTP (gRPC-Gateway)
 
-All gRPC services are exposed via REST endpoints through gRPC-Gateway.
+Only services with generated gateway handlers are exposed as REST endpoints through
+gRPC-Gateway in the current build.
 
 ```bash
 curl https://api.virtengine.com/virtengine/market/v2beta1/orders/list
 ```
+
+The following services boot on gRPC without generated HTTP gateway handlers and are
+therefore documented as gRPC-only surfaces in this release:
+
+- `virtengine.marketplace.v1.Query`
+- `virtengine.hpc.v1.WorkloadTemplateQuery`
 
 ### gRPC
 
@@ -107,6 +114,13 @@ Native gRPC for high-performance clients:
 
 ```bash
 grpcurl -plaintext localhost:9090 virtengine.market.v2beta1.Query/Orders
+```
+
+Additional booting gRPC services in this build:
+
+```bash
+grpcurl -plaintext localhost:9090 list | grep marketplace
+grpcurl -plaintext localhost:9090 list | grep WorkloadTemplateQuery
 ```
 
 ### WebSocket
@@ -208,6 +222,24 @@ grpcurl -d '{"filters":{"state":"open"}}' \
   virtengine.market.v2beta1.Query/Orders
 ```
 
+### Quote a Marketplace Offering
+
+```bash
+grpcurl -plaintext \
+  -d '{"offering_id":"virtengine1provider.../7","resource_units":{"cpu":8,"ram":32768},"quantity":2}' \
+  localhost:9090 \
+  virtengine.marketplace.v1.Query/OfferingPrice
+```
+
+### Search HPC Workload Templates
+
+```bash
+grpcurl -plaintext \
+  -d '{"query":"gpu","pagination":{"limit":10}}' \
+  localhost:9090 \
+  virtengine.hpc.v1.WorkloadTemplateQuery/SearchWorkloadTemplates
+```
+
 ### Query Identity
 
 ```bash
@@ -296,6 +328,6 @@ See [CONTRIBUTING.md](../../CONTRIBUTING.md) for guidelines.
 
 ---
 
-**Last updated**: February 2026
+**Last updated**: April 2026
 
 **API Version**: v1.0.0

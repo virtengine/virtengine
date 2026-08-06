@@ -2,37 +2,43 @@
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 
-namespace: virtengine-staging
+namespace: virtengine
 
 resources:
   - ../../base
 
-namePrefix: staging-
-
-commonLabels:
-  environment: staging
+labels:
+  - pairs:
+      environment: staging
+    includeSelectors: true
 
 patches:
-  # Staging replicas
   - target:
-      kind: Deployment
+      kind: StatefulSet
+      name: virtengine-validator
+    patch: |
+      - op: replace
+        path: /spec/replicas
+        value: 1
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/requests/cpu
+        value: "1000m"
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/requests/memory
+        value: "4Gi"
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/limits/cpu
+        value: "3000m"
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/limits/memory
+        value: "8Gi"
+  - target:
+      kind: StatefulSet
       name: virtengine-node
     patch: |
       - op: replace
         path: /spec/replicas
         value: 3
-  - target:
-      kind: Deployment
-      name: provider-daemon
-    patch: |
-      - op: replace
-        path: /spec/replicas
-        value: 2
-  # Moderate resources
-  - target:
-      kind: Deployment
-      name: virtengine-node
-    patch: |
       - op: replace
         path: /spec/template/spec/containers/0/resources/requests/cpu
         value: "1000m"
@@ -45,17 +51,109 @@ patches:
       - op: replace
         path: /spec/template/spec/containers/0/resources/limits/memory
         value: "6Gi"
-
-configMapGenerator:
-  - name: virtengine-config
-    behavior: merge
-    literals:
-      - CHAIN_ID=virtengine-staging-1
-      - LOG_LEVEL=info
-      - API_SWAGGER=false
-
-images:
-  - name: virtengine/virtengine-node
-    newTag: staging
-  - name: virtengine/provider-daemon
-    newTag: staging
+  - target:
+      kind: StatefulSet
+      name: provider-daemon
+    patch: |
+      - op: replace
+        path: /spec/replicas
+        value: 2
+  - target:
+      kind: ExternalSecret
+      name: validator-signer-identity
+    patch: |
+      apiVersion: external-secrets.io/v1beta1
+      kind: ExternalSecret
+      metadata:
+        name: validator-signer-identity
+      spec:
+        data:
+          - secretKey: validator-address
+            remoteRef:
+              key: secret/virtengine/staging/validator-signer
+              property: validator-address
+          - secretKey: validator-key-fingerprint
+            remoteRef:
+              key: secret/virtengine/staging/validator-signer
+              property: validator-key-fingerprint
+          - secretKey: signer-endpoint
+            remoteRef:
+              key: secret/virtengine/staging/validator-signer
+              property: signer-endpoint
+          - secretKey: signer-epoch
+            remoteRef:
+              key: secret/virtengine/staging/validator-signer
+              property: signer-epoch
+          - secretKey: signer-fencing-token
+            remoteRef:
+              key: secret/virtengine/staging/validator-signer
+              property: signer-fencing-token
+          - secretKey: tmkms-config-sha256
+            remoteRef:
+              key: secret/virtengine/staging/validator-signer
+              property: tmkms-config-sha256
+          - secretKey: signer-cert-sha256
+            remoteRef:
+              key: secret/virtengine/staging/validator-signer
+              property: signer-cert-sha256
+  - target:
+      kind: ExternalSecret
+      name: provider-daemon-secrets
+    patch: |
+      apiVersion: external-secrets.io/v1beta1
+      kind: ExternalSecret
+      metadata:
+        name: provider-daemon-secrets
+      spec:
+        data:
+          - secretKey: provider-address
+            remoteRef:
+              key: secret/virtengine/staging/provider-daemon
+              property: provider-address
+          - secretKey: provider-key-fingerprint
+            remoteRef:
+              key: secret/virtengine/staging/provider-daemon
+              property: provider-key-fingerprint
+          - secretKey: provider-key-passphrase
+            remoteRef:
+              key: secret/virtengine/staging/provider-daemon
+              property: provider-key-passphrase
+          - secretKey: provider-key-backup-passphrase
+            remoteRef:
+              key: secret/virtengine/staging/provider-daemon
+              property: provider-key-backup-passphrase
+          - secretKey: waldur-chain-keyring-passphrase
+            remoteRef:
+              key: secret/virtengine/staging/provider-daemon
+              property: waldur-chain-keyring-passphrase
+          - secretKey: portal-auth-secret
+            remoteRef:
+              key: secret/virtengine/staging/provider-daemon
+              property: portal-auth-secret
+  - target:
+      kind: ExternalSecret
+      name: database-credentials
+    patch: |
+      - op: replace
+        path: /spec/dataFrom/0/extract/key
+        value: secret/virtengine/staging/database
+  - target:
+      kind: ConfigMap
+      name: virtengine-config
+    patch: |
+      - op: replace
+        path: /data/CHAIN_ID
+        value: virtengine-staging-1
+      - op: replace
+        path: /data/LOG_LEVEL
+        value: info
+      - op: replace
+        path: /data/API_SWAGGER
+        value: "false"
+  - target:
+      kind: ConfigMap
+      name: provider-daemon-config
+    patch: |
+      - op: replace
+        path: /data/CHAIN_ID
+        value: virtengine-staging-1

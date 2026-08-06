@@ -48,6 +48,50 @@ export interface QueryPaymentsResponse {
   pagination: PageResponse | undefined;
 }
 
+/** QueryInvoiceRequest is request type for the Query/Invoice RPC method. */
+export interface QueryInvoiceRequest {
+  invoiceId: string;
+}
+
+/** QueryInvoiceResponse is response type for the Query/Invoice RPC method. */
+export interface QueryInvoiceResponse {
+  invoiceJson: string;
+}
+
+/** QueryInvoicesByProviderRequest is request type for the Query/InvoicesByProvider RPC method. */
+export interface QueryInvoicesByProviderRequest {
+  provider: string;
+  pagination: PageRequest | undefined;
+}
+
+/** QueryInvoicesByProviderResponse is response type for the Query/InvoicesByProvider RPC method. */
+export interface QueryInvoicesByProviderResponse {
+  invoicesJson: string[];
+  pagination: PageResponse | undefined;
+}
+
+/** QueryInvoicesByCustomerRequest is request type for the Query/InvoicesByCustomer RPC method. */
+export interface QueryInvoicesByCustomerRequest {
+  customer: string;
+  pagination: PageRequest | undefined;
+}
+
+/** QueryInvoicesByCustomerResponse is response type for the Query/InvoicesByCustomer RPC method. */
+export interface QueryInvoicesByCustomerResponse {
+  invoicesJson: string[];
+  pagination: PageResponse | undefined;
+}
+
+/** QueryInvoiceLedgerRequest is request type for the Query/InvoiceLedger RPC method. */
+export interface QueryInvoiceLedgerRequest {
+  invoiceId: string;
+}
+
+/** QueryInvoiceLedgerResponse is response type for the Query/InvoiceLedger RPC method. */
+export interface QueryInvoiceLedgerResponse {
+  entriesJson: string[];
+}
+
 function createBaseQueryAccountsRequest(): QueryAccountsRequest {
   return { state: "", xid: "", pagination: undefined };
 }
@@ -380,6 +424,560 @@ export const QueryPaymentsResponse: MessageFns<QueryPaymentsResponse, "virtengin
     message.pagination = (object.pagination !== undefined && object.pagination !== null)
       ? PageResponse.fromPartial(object.pagination)
       : undefined;
+    return message;
+  },
+};
+
+function createBaseQueryInvoiceRequest(): QueryInvoiceRequest {
+  return { invoiceId: "" };
+}
+
+export const QueryInvoiceRequest: MessageFns<QueryInvoiceRequest, "virtengine.escrow.v1.QueryInvoiceRequest"> = {
+  $type: "virtengine.escrow.v1.QueryInvoiceRequest" as const,
+
+  encode(message: QueryInvoiceRequest, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.invoiceId !== "") {
+      writer.uint32(10).string(message.invoiceId);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): QueryInvoiceRequest {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseQueryInvoiceRequest();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.invoiceId = reader.string();
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): QueryInvoiceRequest {
+    return { invoiceId: isSet(object.invoice_id) ? globalThis.String(object.invoice_id) : "" };
+  },
+
+  toJSON(message: QueryInvoiceRequest): unknown {
+    const obj: any = {};
+    if (message.invoiceId !== "") {
+      obj.invoice_id = message.invoiceId;
+    }
+    return obj;
+  },
+  fromPartial(object: DeepPartial<QueryInvoiceRequest>): QueryInvoiceRequest {
+    const message = createBaseQueryInvoiceRequest();
+    message.invoiceId = object.invoiceId ?? "";
+    return message;
+  },
+};
+
+function createBaseQueryInvoiceResponse(): QueryInvoiceResponse {
+  return { invoiceJson: "" };
+}
+
+export const QueryInvoiceResponse: MessageFns<QueryInvoiceResponse, "virtengine.escrow.v1.QueryInvoiceResponse"> = {
+  $type: "virtengine.escrow.v1.QueryInvoiceResponse" as const,
+
+  encode(message: QueryInvoiceResponse, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.invoiceJson !== "") {
+      writer.uint32(10).string(message.invoiceJson);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): QueryInvoiceResponse {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseQueryInvoiceResponse();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.invoiceJson = reader.string();
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): QueryInvoiceResponse {
+    return { invoiceJson: isSet(object.invoice_json) ? globalThis.String(object.invoice_json) : "" };
+  },
+
+  toJSON(message: QueryInvoiceResponse): unknown {
+    const obj: any = {};
+    if (message.invoiceJson !== "") {
+      obj.invoice_json = message.invoiceJson;
+    }
+    return obj;
+  },
+  fromPartial(object: DeepPartial<QueryInvoiceResponse>): QueryInvoiceResponse {
+    const message = createBaseQueryInvoiceResponse();
+    message.invoiceJson = object.invoiceJson ?? "";
+    return message;
+  },
+};
+
+function createBaseQueryInvoicesByProviderRequest(): QueryInvoicesByProviderRequest {
+  return { provider: "", pagination: undefined };
+}
+
+export const QueryInvoicesByProviderRequest: MessageFns<
+  QueryInvoicesByProviderRequest,
+  "virtengine.escrow.v1.QueryInvoicesByProviderRequest"
+> = {
+  $type: "virtengine.escrow.v1.QueryInvoicesByProviderRequest" as const,
+
+  encode(message: QueryInvoicesByProviderRequest, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.provider !== "") {
+      writer.uint32(10).string(message.provider);
+    }
+    if (message.pagination !== undefined) {
+      PageRequest.encode(message.pagination, writer.uint32(18).fork()).join();
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): QueryInvoicesByProviderRequest {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseQueryInvoicesByProviderRequest();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.provider = reader.string();
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.pagination = PageRequest.decode(reader, reader.uint32());
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): QueryInvoicesByProviderRequest {
+    return {
+      provider: isSet(object.provider) ? globalThis.String(object.provider) : "",
+      pagination: isSet(object.pagination) ? PageRequest.fromJSON(object.pagination) : undefined,
+    };
+  },
+
+  toJSON(message: QueryInvoicesByProviderRequest): unknown {
+    const obj: any = {};
+    if (message.provider !== "") {
+      obj.provider = message.provider;
+    }
+    if (message.pagination !== undefined) {
+      obj.pagination = PageRequest.toJSON(message.pagination);
+    }
+    return obj;
+  },
+  fromPartial(object: DeepPartial<QueryInvoicesByProviderRequest>): QueryInvoicesByProviderRequest {
+    const message = createBaseQueryInvoicesByProviderRequest();
+    message.provider = object.provider ?? "";
+    message.pagination = (object.pagination !== undefined && object.pagination !== null)
+      ? PageRequest.fromPartial(object.pagination)
+      : undefined;
+    return message;
+  },
+};
+
+function createBaseQueryInvoicesByProviderResponse(): QueryInvoicesByProviderResponse {
+  return { invoicesJson: [], pagination: undefined };
+}
+
+export const QueryInvoicesByProviderResponse: MessageFns<
+  QueryInvoicesByProviderResponse,
+  "virtengine.escrow.v1.QueryInvoicesByProviderResponse"
+> = {
+  $type: "virtengine.escrow.v1.QueryInvoicesByProviderResponse" as const,
+
+  encode(message: QueryInvoicesByProviderResponse, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    for (const v of message.invoicesJson) {
+      writer.uint32(10).string(v!);
+    }
+    if (message.pagination !== undefined) {
+      PageResponse.encode(message.pagination, writer.uint32(18).fork()).join();
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): QueryInvoicesByProviderResponse {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseQueryInvoicesByProviderResponse();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.invoicesJson.push(reader.string());
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.pagination = PageResponse.decode(reader, reader.uint32());
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): QueryInvoicesByProviderResponse {
+    return {
+      invoicesJson: globalThis.Array.isArray(object?.invoices_json)
+        ? object.invoices_json.map((e: any) => globalThis.String(e))
+        : [],
+      pagination: isSet(object.pagination) ? PageResponse.fromJSON(object.pagination) : undefined,
+    };
+  },
+
+  toJSON(message: QueryInvoicesByProviderResponse): unknown {
+    const obj: any = {};
+    if (message.invoicesJson?.length) {
+      obj.invoices_json = message.invoicesJson;
+    }
+    if (message.pagination !== undefined) {
+      obj.pagination = PageResponse.toJSON(message.pagination);
+    }
+    return obj;
+  },
+  fromPartial(object: DeepPartial<QueryInvoicesByProviderResponse>): QueryInvoicesByProviderResponse {
+    const message = createBaseQueryInvoicesByProviderResponse();
+    message.invoicesJson = object.invoicesJson?.map((e) => e) || [];
+    message.pagination = (object.pagination !== undefined && object.pagination !== null)
+      ? PageResponse.fromPartial(object.pagination)
+      : undefined;
+    return message;
+  },
+};
+
+function createBaseQueryInvoicesByCustomerRequest(): QueryInvoicesByCustomerRequest {
+  return { customer: "", pagination: undefined };
+}
+
+export const QueryInvoicesByCustomerRequest: MessageFns<
+  QueryInvoicesByCustomerRequest,
+  "virtengine.escrow.v1.QueryInvoicesByCustomerRequest"
+> = {
+  $type: "virtengine.escrow.v1.QueryInvoicesByCustomerRequest" as const,
+
+  encode(message: QueryInvoicesByCustomerRequest, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.customer !== "") {
+      writer.uint32(10).string(message.customer);
+    }
+    if (message.pagination !== undefined) {
+      PageRequest.encode(message.pagination, writer.uint32(18).fork()).join();
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): QueryInvoicesByCustomerRequest {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseQueryInvoicesByCustomerRequest();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.customer = reader.string();
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.pagination = PageRequest.decode(reader, reader.uint32());
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): QueryInvoicesByCustomerRequest {
+    return {
+      customer: isSet(object.customer) ? globalThis.String(object.customer) : "",
+      pagination: isSet(object.pagination) ? PageRequest.fromJSON(object.pagination) : undefined,
+    };
+  },
+
+  toJSON(message: QueryInvoicesByCustomerRequest): unknown {
+    const obj: any = {};
+    if (message.customer !== "") {
+      obj.customer = message.customer;
+    }
+    if (message.pagination !== undefined) {
+      obj.pagination = PageRequest.toJSON(message.pagination);
+    }
+    return obj;
+  },
+  fromPartial(object: DeepPartial<QueryInvoicesByCustomerRequest>): QueryInvoicesByCustomerRequest {
+    const message = createBaseQueryInvoicesByCustomerRequest();
+    message.customer = object.customer ?? "";
+    message.pagination = (object.pagination !== undefined && object.pagination !== null)
+      ? PageRequest.fromPartial(object.pagination)
+      : undefined;
+    return message;
+  },
+};
+
+function createBaseQueryInvoicesByCustomerResponse(): QueryInvoicesByCustomerResponse {
+  return { invoicesJson: [], pagination: undefined };
+}
+
+export const QueryInvoicesByCustomerResponse: MessageFns<
+  QueryInvoicesByCustomerResponse,
+  "virtengine.escrow.v1.QueryInvoicesByCustomerResponse"
+> = {
+  $type: "virtengine.escrow.v1.QueryInvoicesByCustomerResponse" as const,
+
+  encode(message: QueryInvoicesByCustomerResponse, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    for (const v of message.invoicesJson) {
+      writer.uint32(10).string(v!);
+    }
+    if (message.pagination !== undefined) {
+      PageResponse.encode(message.pagination, writer.uint32(18).fork()).join();
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): QueryInvoicesByCustomerResponse {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseQueryInvoicesByCustomerResponse();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.invoicesJson.push(reader.string());
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.pagination = PageResponse.decode(reader, reader.uint32());
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): QueryInvoicesByCustomerResponse {
+    return {
+      invoicesJson: globalThis.Array.isArray(object?.invoices_json)
+        ? object.invoices_json.map((e: any) => globalThis.String(e))
+        : [],
+      pagination: isSet(object.pagination) ? PageResponse.fromJSON(object.pagination) : undefined,
+    };
+  },
+
+  toJSON(message: QueryInvoicesByCustomerResponse): unknown {
+    const obj: any = {};
+    if (message.invoicesJson?.length) {
+      obj.invoices_json = message.invoicesJson;
+    }
+    if (message.pagination !== undefined) {
+      obj.pagination = PageResponse.toJSON(message.pagination);
+    }
+    return obj;
+  },
+  fromPartial(object: DeepPartial<QueryInvoicesByCustomerResponse>): QueryInvoicesByCustomerResponse {
+    const message = createBaseQueryInvoicesByCustomerResponse();
+    message.invoicesJson = object.invoicesJson?.map((e) => e) || [];
+    message.pagination = (object.pagination !== undefined && object.pagination !== null)
+      ? PageResponse.fromPartial(object.pagination)
+      : undefined;
+    return message;
+  },
+};
+
+function createBaseQueryInvoiceLedgerRequest(): QueryInvoiceLedgerRequest {
+  return { invoiceId: "" };
+}
+
+export const QueryInvoiceLedgerRequest: MessageFns<
+  QueryInvoiceLedgerRequest,
+  "virtengine.escrow.v1.QueryInvoiceLedgerRequest"
+> = {
+  $type: "virtengine.escrow.v1.QueryInvoiceLedgerRequest" as const,
+
+  encode(message: QueryInvoiceLedgerRequest, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.invoiceId !== "") {
+      writer.uint32(10).string(message.invoiceId);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): QueryInvoiceLedgerRequest {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseQueryInvoiceLedgerRequest();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.invoiceId = reader.string();
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): QueryInvoiceLedgerRequest {
+    return { invoiceId: isSet(object.invoice_id) ? globalThis.String(object.invoice_id) : "" };
+  },
+
+  toJSON(message: QueryInvoiceLedgerRequest): unknown {
+    const obj: any = {};
+    if (message.invoiceId !== "") {
+      obj.invoice_id = message.invoiceId;
+    }
+    return obj;
+  },
+  fromPartial(object: DeepPartial<QueryInvoiceLedgerRequest>): QueryInvoiceLedgerRequest {
+    const message = createBaseQueryInvoiceLedgerRequest();
+    message.invoiceId = object.invoiceId ?? "";
+    return message;
+  },
+};
+
+function createBaseQueryInvoiceLedgerResponse(): QueryInvoiceLedgerResponse {
+  return { entriesJson: [] };
+}
+
+export const QueryInvoiceLedgerResponse: MessageFns<
+  QueryInvoiceLedgerResponse,
+  "virtengine.escrow.v1.QueryInvoiceLedgerResponse"
+> = {
+  $type: "virtengine.escrow.v1.QueryInvoiceLedgerResponse" as const,
+
+  encode(message: QueryInvoiceLedgerResponse, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    for (const v of message.entriesJson) {
+      writer.uint32(10).string(v!);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): QueryInvoiceLedgerResponse {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseQueryInvoiceLedgerResponse();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.entriesJson.push(reader.string());
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): QueryInvoiceLedgerResponse {
+    return {
+      entriesJson: globalThis.Array.isArray(object?.entries_json)
+        ? object.entries_json.map((e: any) => globalThis.String(e))
+        : [],
+    };
+  },
+
+  toJSON(message: QueryInvoiceLedgerResponse): unknown {
+    const obj: any = {};
+    if (message.entriesJson?.length) {
+      obj.entries_json = message.entriesJson;
+    }
+    return obj;
+  },
+  fromPartial(object: DeepPartial<QueryInvoiceLedgerResponse>): QueryInvoiceLedgerResponse {
+    const message = createBaseQueryInvoiceLedgerResponse();
+    message.entriesJson = object.entriesJson?.map((e) => e) || [];
     return message;
   },
 };

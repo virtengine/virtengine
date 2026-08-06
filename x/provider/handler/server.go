@@ -159,6 +159,50 @@ func (ms msgServer) DeleteProvider(goCtx context.Context, msg *types.MsgDeletePr
 	return &types.MsgDeleteProviderResponse{}, nil
 }
 
+func (ms msgServer) SetProviderSigningKey(goCtx context.Context, msg *types.MsgSetProviderSigningKey) (*types.MsgSetProviderSigningKeyResponse, error) {
+	ctx := sdk.UnwrapSDKContext(goCtx)
+	if err := msg.ValidateBasic(); err != nil {
+		return nil, err
+	}
+	owner, _ := sdk.AccAddressFromBech32(msg.Owner)
+	if err := ms.provider.SetProviderPublicKey(ctx, owner, msg.PublicKey, msg.KeyType); err != nil {
+		return nil, err
+	}
+	record, found := ms.provider.GetProviderPublicKeyRecord(ctx, owner)
+	if !found {
+		return nil, ErrInternal.Wrap("provider signing key was not persisted")
+	}
+	return &types.MsgSetProviderSigningKeyResponse{KeyId: record.KeyID, Epoch: record.Epoch, ActivatedAtHeight: record.ActivatedAtHeight}, nil
+}
+
+func (ms msgServer) RotateProviderSigningKey(goCtx context.Context, msg *types.MsgRotateProviderSigningKey) (*types.MsgRotateProviderSigningKeyResponse, error) {
+	ctx := sdk.UnwrapSDKContext(goCtx)
+	if err := msg.ValidateBasic(); err != nil {
+		return nil, err
+	}
+	owner, _ := sdk.AccAddressFromBech32(msg.Owner)
+	if err := ms.provider.RotateProviderPublicKey(ctx, owner, msg.NewPublicKey, msg.NewKeyType, msg.RotationProof); err != nil {
+		return nil, err
+	}
+	record, found := ms.provider.GetProviderPublicKeyRecord(ctx, owner)
+	if !found {
+		return nil, ErrInternal.Wrap("rotated provider signing key was not persisted")
+	}
+	return &types.MsgRotateProviderSigningKeyResponse{KeyId: record.KeyID, Epoch: record.Epoch, ActivatedAtHeight: record.ActivatedAtHeight}, nil
+}
+
+func (ms msgServer) RevokeProviderSigningKey(goCtx context.Context, msg *types.MsgRevokeProviderSigningKey) (*types.MsgRevokeProviderSigningKeyResponse, error) {
+	ctx := sdk.UnwrapSDKContext(goCtx)
+	if err := msg.ValidateBasic(); err != nil {
+		return nil, err
+	}
+	owner, _ := sdk.AccAddressFromBech32(msg.Owner)
+	if err := ms.provider.RevokeProviderSigningKey(ctx, owner, msg.KeyId); err != nil {
+		return nil, err
+	}
+	return &types.MsgRevokeProviderSigningKeyResponse{RevokedAtHeight: ctx.BlockHeight()}, nil
+}
+
 func (ms msgServer) GenerateDomainVerificationToken(goCtx context.Context, msg *types.MsgGenerateDomainVerificationToken) (*types.MsgGenerateDomainVerificationTokenResponse, error) {
 	ctx := sdk.UnwrapSDKContext(goCtx)
 

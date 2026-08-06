@@ -13,7 +13,6 @@ import type { OrderCreateResult, PriceBreakdown, ResourceConfig } from '@/featur
 import { formatTokenAmount, durationToHours } from '@/features/orders';
 import { txLink } from '@/lib/explorer';
 import { useTranslation } from 'react-i18next';
-import { formatDate } from '@/lib/utils';
 
 interface OrderConfirmationProps {
   orderResult: OrderCreateResult;
@@ -34,12 +33,6 @@ export function OrderConfirmation({
 }: OrderConfirmationProps) {
   const { t } = useTranslation();
   const totalHours = durationToHours(resources.duration, resources.durationUnit);
-  const statusColor =
-    orderResult.status === 'matched'
-      ? 'bg-green-500'
-      : orderResult.status === 'pending'
-        ? 'bg-yellow-500'
-        : 'bg-red-500';
 
   return (
     <div className="space-y-6">
@@ -95,23 +88,15 @@ export function OrderConfirmation({
             </div>
             <div className="flex items-center justify-between text-sm">
               <span className="text-muted-foreground">{t('Status')}</span>
-              <Badge className={`${statusColor} text-white`}>{t(orderResult.status)}</Badge>
+              <Badge className="bg-green-500 text-white">{t(orderResult.status)}</Badge>
             </div>
             <div className="flex items-center justify-between text-sm">
               <span className="text-muted-foreground">{t('Offering')}</span>
               <span className="font-medium">{offeringName}</span>
             </div>
             <div className="flex items-center justify-between text-sm">
-              <span className="text-muted-foreground">{t('Created At')}</span>
-              <span className="font-medium">
-                {formatDate(orderResult.createdAt, {
-                  year: 'numeric',
-                  month: 'short',
-                  day: 'numeric',
-                  hour: '2-digit',
-                  minute: '2-digit',
-                })}
-              </span>
+              <span className="text-muted-foreground">{t('Block Height')}</span>
+              <span className="font-medium">{orderResult.blockHeight}</span>
             </div>
           </div>
         </CardContent>

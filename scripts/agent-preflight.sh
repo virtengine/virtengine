@@ -34,10 +34,8 @@ if $HAS_GO || $HAS_GOMOD; then
     echo "--- Go checks ---"
 
     if $HAS_GOMOD; then
-        echo "  go mod tidy..."
-        go mod tidy 2>&1 || { echo "FAIL: go mod tidy"; ERRORS=$((ERRORS+1)); }
-        echo "  go mod vendor..."
-        go mod vendor 2>&1 || { echo "FAIL: go mod vendor"; ERRORS=$((ERRORS+1)); }
+        echo "  module/workspace/vendor policy..."
+        ./scripts/verify-modules.sh 2>&1 || { echo "FAIL: module verification"; ERRORS=$((ERRORS+1)); }
     fi
 
     # Get changed Go packages

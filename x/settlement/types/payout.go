@@ -132,6 +132,17 @@ type PayoutRecord struct {
 	// TxHash is the on-chain transaction hash when completed
 	TxHash string `json:"tx_hash,omitempty"`
 
+	// ExternalFinalityHash is the exact authenticated external payout digest.
+	// It must never be represented as TxHash.
+	ExternalFinalityHash []byte `json:"external_finality_hash,omitempty"`
+
+	// ValueMovementApplied is true only after NetAmount has been moved out of
+	// the spendable settlement module account through a deterministic bank effect.
+	ValueMovementApplied bool `json:"value_movement_applied,omitempty"`
+
+	// ValueMovementEffectHash binds the completed payout to its exact accounting effect.
+	ValueMovementEffectHash []byte `json:"value_movement_effect_hash,omitempty"`
+
 	// CreatedAt is when the payout was created
 	CreatedAt time.Time `json:"created_at"`
 
@@ -220,7 +231,18 @@ func (p *PayoutRecord) Validate() error {
 	if !IsValidPayoutState(p.State) {
 		return ErrInvalidPayout.Wrapf("invalid state: %s", p.State)
 	}
-
+	if len(p.ExternalFinalityHash) != 0 && len(p.ExternalFinalityHash) != 32 {
+		return ErrInvalidPayout.Wrap("external_finality_hash must be SHA-256")
+	}
+	if len(p.ExternalFinalityHash) != 0 && p.TxHash != "" {
+		return ErrInvalidPayout.Wrap("external and on-chain payout evidence are mutually exclusive")
+	}
+	if p.ValueMovementApplied != (len(p.ValueMovementEffectHash) == 32) {
+		return ErrInvalidPayout.Wrap("value movement flag and effect hash must be set together")
+	}
+	if p.ValueMovementApplied && p.State != PayoutStateCompleted {
+		return ErrInvalidPayout.Wrap("value movement can only be applied to completed payout")
+	}
 	return nil
 }
 

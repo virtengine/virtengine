@@ -33,15 +33,17 @@ type (
 	Params       = types.Params
 
 	// Message types
-	MsgCreateEscrow     = types.MsgCreateEscrow
-	MsgActivateEscrow   = types.MsgActivateEscrow
-	MsgReleaseEscrow    = types.MsgReleaseEscrow
-	MsgRefundEscrow     = types.MsgRefundEscrow
-	MsgDisputeEscrow    = types.MsgDisputeEscrow
-	MsgSettleOrder      = types.MsgSettleOrder
-	MsgRecordUsage      = types.MsgRecordUsage
-	MsgAcknowledgeUsage = types.MsgAcknowledgeUsage
-	MsgClaimRewards     = types.MsgClaimRewards
+	MsgCreateEscrow                    = types.MsgCreateEscrow
+	MsgActivateEscrow                  = types.MsgActivateEscrow
+	MsgReleaseEscrow                   = types.MsgReleaseEscrow
+	MsgRefundEscrow                    = types.MsgRefundEscrow
+	MsgDisputeEscrow                   = types.MsgDisputeEscrow
+	MsgSettleOrder                     = types.MsgSettleOrder
+	MsgRecordUsage                     = types.MsgRecordUsage
+	MsgAcknowledgeUsage                = types.MsgAcknowledgeUsage
+	MsgClaimRewards                    = types.MsgClaimRewards
+	MsgRecordFiatConversionObservation = types.MsgRecordFiatConversionObservation
+	MsgUpdateParams                    = types.MsgUpdateParams
 
 	// Query types
 	QueryEscrowRequest               = types.QueryEscrowRequest

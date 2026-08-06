@@ -511,11 +511,7 @@ func BenchmarkPartitionCreateHeal(b *testing.B) {
 
 // TestNetworkPartitionRecovery tests partition recovery behavior
 func TestNetworkPartitionRecovery(t *testing.T) {
-	if testing.Short() {
-		t.Skip("Skipping partition recovery test in short mode")
-	}
-
-	nodeCount := 50
+	nodeCount := shortScaleInt(12, 50)
 
 	t.Logf("=== Network Partition Recovery Test ===")
 	t.Logf("Nodes: %d", nodeCount)
@@ -605,11 +601,7 @@ func TestNetworkPartitionRecovery(t *testing.T) {
 
 // TestMajorityMinorityBehavior tests how majority/minority partitions behave
 func TestMajorityMinorityBehavior(t *testing.T) {
-	if testing.Short() {
-		t.Skip("Skipping majority/minority test in short mode")
-	}
-
-	nodeCount := 100
+	nodeCount := shortScaleInt(18, 100)
 	t.Logf("=== Majority/Minority Partition Behavior ===")
 
 	net := NewMockNetwork(nodeCount)
@@ -626,7 +618,7 @@ func TestMajorityMinorityBehavior(t *testing.T) {
 	t.Logf("Minority: %d nodes (%.0f%%)", len(minorityNodes), float64(len(minorityNodes))/float64(nodeCount)*100)
 
 	// Simulate consensus - only majority should make progress
-	const rounds = 20
+	rounds := shortScaleInt(8, 20)
 	majorityHeights := make([]int64, rounds)
 
 	for r := 0; r < rounds; r++ {
@@ -666,19 +658,15 @@ func TestMajorityMinorityBehavior(t *testing.T) {
 
 // TestPartitionDurations tests various partition durations
 func TestPartitionDurations(t *testing.T) {
-	if testing.Short() {
-		t.Skip("Skipping partition duration test in short mode")
-	}
-
 	durations := []time.Duration{
-		100 * time.Millisecond,
-		500 * time.Millisecond,
-		1 * time.Second,
+		shortScaleDuration(50*time.Millisecond, 100*time.Millisecond),
+		shortScaleDuration(100*time.Millisecond, 500*time.Millisecond),
+		shortScaleDuration(200*time.Millisecond, time.Second),
 	}
 
 	for _, duration := range durations {
 		t.Run(fmt.Sprintf("duration_%v", duration), func(t *testing.T) {
-			net := NewMockNetwork(30)
+			net := NewMockNetwork(shortScaleInt(12, 30))
 			net.Start()
 			defer net.Stop()
 
@@ -715,12 +703,8 @@ func TestPartitionDurations(t *testing.T) {
 
 // TestChaosPartitioning tests random partition scenarios
 func TestChaosPartitioning(t *testing.T) {
-	if testing.Short() {
-		t.Skip("Skipping chaos partitioning test in short mode")
-	}
-
-	nodeCount := 50
-	iterations := 10
+	nodeCount := shortScaleInt(15, 50)
+	iterations := shortScaleInt(3, 10)
 
 	t.Logf("=== Chaos Partitioning Test ===")
 	t.Logf("Nodes: %d, Iterations: %d", nodeCount, iterations)
@@ -771,11 +755,7 @@ func TestChaosPartitioning(t *testing.T) {
 
 // TestStateReconciliation tests state reconciliation after partition
 func TestStateReconciliation(t *testing.T) {
-	if testing.Short() {
-		t.Skip("Skipping state reconciliation test in short mode")
-	}
-
-	nodeCount := 30
+	nodeCount := shortScaleInt(12, 30)
 	t.Logf("=== State Reconciliation Test ===")
 
 	net := NewMockNetwork(nodeCount)

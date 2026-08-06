@@ -9,7 +9,6 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/google/uuid"
 	client "github.com/waldur/go-client"
 )
 
@@ -85,15 +84,24 @@ func (s *SLURMClient) ListSLURMAllocations(ctx context.Context, params ListSLURM
 		apiParams := &client.SlurmAllocationsListParams{}
 
 		if params.ServiceSettingsUUID != "" {
-			u := uuid.MustParse(params.ServiceSettingsUUID)
+			u, err := parseUUIDParam("service settings UUID", params.ServiceSettingsUUID)
+			if err != nil {
+				return err
+			}
 			apiParams.ServiceSettingsUuid = &u
 		}
 		if params.ProjectUUID != "" {
-			u := uuid.MustParse(params.ProjectUUID)
+			u, err := parseUUIDParam("project UUID", params.ProjectUUID)
+			if err != nil {
+				return err
+			}
 			apiParams.ProjectUuid = &u
 		}
 		if params.CustomerUUID != "" {
-			u := uuid.MustParse(params.CustomerUUID)
+			u, err := parseUUIDParam("customer UUID", params.CustomerUUID)
+			if err != nil {
+				return err
+			}
 			apiParams.CustomerUuid = &u
 		}
 		if params.Name != "" {
@@ -141,7 +149,10 @@ func (s *SLURMClient) GetSLURMAllocation(ctx context.Context, allocationUUID str
 	var allocation *SLURMAllocation
 
 	err := s.client.doWithRetry(ctx, func() error {
-		uuidType := uuid.MustParse(allocationUUID)
+		uuidType, err := parseUUIDParam("allocation UUID", allocationUUID)
+		if err != nil {
+			return err
+		}
 		resp, err := s.client.api.SlurmAllocationsRetrieveWithResponse(ctx, uuidType, nil)
 		if err != nil {
 			return err
@@ -166,7 +177,10 @@ func (s *SLURMClient) GetSLURMAllocation(ctx context.Context, allocationUUID str
 // DeleteSLURMAllocation deletes a SLURM allocation
 func (s *SLURMClient) DeleteSLURMAllocation(ctx context.Context, allocationUUID string) error {
 	return s.client.doWithRetry(ctx, func() error {
-		uuidType := uuid.MustParse(allocationUUID)
+		uuidType, err := parseUUIDParam("allocation UUID", allocationUUID)
+		if err != nil {
+			return err
+		}
 		resp, err := s.client.api.SlurmAllocationsDestroyWithResponse(ctx, uuidType)
 		if err != nil {
 			return err
@@ -183,7 +197,10 @@ func (s *SLURMClient) DeleteSLURMAllocation(ctx context.Context, allocationUUID 
 // SetSLURMAllocationLimits sets resource limits on a SLURM allocation
 func (s *SLURMClient) SetSLURMAllocationLimits(ctx context.Context, allocationUUID string, cpuLimit, gpuLimit, ramLimit int64) error {
 	return s.client.doWithRetry(ctx, func() error {
-		uuidType := uuid.MustParse(allocationUUID)
+		uuidType, err := parseUUIDParam("allocation UUID", allocationUUID)
+		if err != nil {
+			return err
+		}
 		body := client.SlurmAllocationsSetLimitsJSONRequestBody{
 			CpuLimit: int(cpuLimit),
 			GpuLimit: int(gpuLimit),
@@ -217,7 +234,10 @@ func (s *SLURMClient) ListSLURMAssociations(ctx context.Context, params ListSLUR
 		apiParams := &client.SlurmAssociationsListParams{}
 
 		if params.AllocationUUID != "" {
-			u := uuid.MustParse(params.AllocationUUID)
+			u, err := parseUUIDParam("allocation UUID", params.AllocationUUID)
+			if err != nil {
+				return err
+			}
 			apiParams.AllocationUuid = &u
 		}
 		if params.Page > 0 {
@@ -313,7 +333,10 @@ func (s *SLURMClient) GetSLURMJob(ctx context.Context, jobUUID string) (*SLURMJo
 	var job *SLURMJob
 
 	err := s.client.doWithRetry(ctx, func() error {
-		uuidType := uuid.MustParse(jobUUID)
+		uuidType, err := parseUUIDParam("job UUID", jobUUID)
+		if err != nil {
+			return err
+		}
 		resp, err := s.client.api.SlurmJobsRetrieveWithResponse(ctx, uuidType, nil)
 		if err != nil {
 			return err
@@ -338,7 +361,10 @@ func (s *SLURMClient) GetSLURMJob(ctx context.Context, jobUUID string) (*SLURMJo
 // DeleteSLURMJob cancels/deletes a SLURM job
 func (s *SLURMClient) DeleteSLURMJob(ctx context.Context, jobUUID string) error {
 	return s.client.doWithRetry(ctx, func() error {
-		uuidType := uuid.MustParse(jobUUID)
+		uuidType, err := parseUUIDParam("job UUID", jobUUID)
+		if err != nil {
+			return err
+		}
 		resp, err := s.client.api.SlurmJobsDestroyWithResponse(ctx, uuidType)
 		if err != nil {
 			return err

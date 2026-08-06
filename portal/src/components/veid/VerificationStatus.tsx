@@ -21,6 +21,8 @@ interface VerificationStatusProps {
   onStartVerification?: () => void;
   /** Callback to retry verification */
   onRetryVerification?: () => void;
+  /** Reason capture actions are unavailable */
+  captureUnavailableReason?: string;
   /** Show compact view */
   compact?: boolean;
   className?: string;
@@ -29,6 +31,7 @@ interface VerificationStatusProps {
 export function VerificationStatus({
   onStartVerification,
   onRetryVerification,
+  captureUnavailableReason,
   compact = false,
   className,
 }: VerificationStatusProps) {
@@ -239,14 +242,30 @@ export function VerificationStatus({
         )}
 
         {/* Action buttons */}
+        {captureUnavailableReason && (
+          <Alert variant="destructive">
+            <AlertTitle>Verification unavailable</AlertTitle>
+            <AlertDescription>{captureUnavailableReason}</AlertDescription>
+          </Alert>
+        )}
         {displayStatus.status === 'unknown' && onStartVerification && (
-          <Button size="lg" className="w-full" onClick={onStartVerification}>
+          <Button
+            size="lg"
+            className="w-full"
+            onClick={onStartVerification}
+            disabled={Boolean(captureUnavailableReason)}
+          >
             Start Verification
           </Button>
         )}
         {(displayStatus.status === 'rejected' || displayStatus.status === 'expired') &&
           onRetryVerification && (
-            <Button size="lg" className="w-full" onClick={onRetryVerification}>
+            <Button
+              size="lg"
+              className="w-full"
+              onClick={onRetryVerification}
+              disabled={Boolean(captureUnavailableReason)}
+            >
               {displayStatus.status === 'expired' ? 'Re-Verify Identity' : 'Try Again'}
             </Button>
           )}

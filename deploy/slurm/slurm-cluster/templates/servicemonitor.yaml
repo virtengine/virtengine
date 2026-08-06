@@ -35,7 +35,7 @@ spec:
 apiVersion: monitoring.coreos.com/v1
 kind: ServiceMonitor
 metadata:
-  name: {{ include "slurm-cluster.fullname" . }}-compute
+  name: {{ include "slurm-cluster.resourceName" (list . "compute" 0) }}
   namespace: {{ .Values.metrics.serviceMonitor.namespace | default .Release.Namespace }}
   labels:
     {{- include "slurm-cluster.labels" . | nindent 4 }}
@@ -70,7 +70,7 @@ spec:
 apiVersion: monitoring.coreos.com/v1
 kind: ServiceMonitor
 metadata:
-  name: {{ include "slurm-cluster.fullname" . }}-node-agent
+  name: {{ include "slurm-cluster.resourceName" (list . "node-agent" 0) }}
   namespace: {{ .Values.metrics.serviceMonitor.namespace | default .Release.Namespace }}
   labels:
     {{- include "slurm-cluster.labels" . | nindent 4 }}

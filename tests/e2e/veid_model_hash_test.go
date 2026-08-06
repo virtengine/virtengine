@@ -14,6 +14,8 @@
 package e2e
 
 import (
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -41,10 +43,6 @@ type ModelHashE2ETestSuite struct {
 }
 
 func TestModelHashE2E(t *testing.T) {
-	if testing.Short() {
-		t.Skip("Skipping E2E tests in short mode")
-	}
-
 	suite.Run(t, new(ModelHashE2ETestSuite))
 }
 
@@ -65,6 +63,16 @@ func (s *ModelHashE2ETestSuite) SetupSuite() {
 	s.keeper = s.app.Keepers.VirtEngine.VEID
 }
 
+func (s *ModelHashE2ETestSuite) registerAndActivateModel(modelInfo *veidtypes.MLModelInfo) {
+	s.T().Helper()
+
+	err := s.keeper.RegisterModel(s.ctx, modelInfo)
+	require.NoError(s.T(), err)
+
+	err = s.keeper.ActivatePendingModel(s.ctx, modelInfo.ModelType, modelInfo.ModelID)
+	require.NoError(s.T(), err)
+}
+
 // TestModelRegistrationAndQuery tests the end-to-end model registration flow.
 func (s *ModelHashE2ETestSuite) TestModelRegistrationAndQuery() {
 	ctx := s.ctx
@@ -81,8 +89,7 @@ func (s *ModelHashE2ETestSuite) TestModelRegistrationAndQuery() {
 		RegisteredBy: registrar.String(),
 	}
 
-	err := s.keeper.RegisterModel(ctx, modelInfo)
-	require.NoError(s.T(), err)
+	s.registerAndActivateModel(modelInfo)
 
 	// Query the registered model
 	resp, err := s.keeper.QueryModelVersion(ctx, &veidtypes.QueryModelVersionRequest{
@@ -110,7 +117,7 @@ func (s *ModelHashE2ETestSuite) TestActiveModelsQuery() {
 	}
 
 	for _, m := range models {
-		err := s.keeper.RegisterModel(ctx, &veidtypes.MLModelInfo{
+		s.registerAndActivateModel(&veidtypes.MLModelInfo{
 			ModelID:      m.id,
 			Name:         string(m.modelType) + " model",
 			Version:      "1.0.0",
@@ -118,7 +125,6 @@ func (s *ModelHashE2ETestSuite) TestActiveModelsQuery() {
 			SHA256Hash:   m.hash,
 			RegisteredBy: registrar.String(),
 		})
-		require.NoError(s.T(), err)
 	}
 
 	// Query all active models
@@ -134,9 +140,13 @@ func (s *ModelHashE2ETestSuite) TestHashMismatchRejection() {
 	ctx := s.ctx
 	registrar := sdktestutil.AccAddress(s.T())
 
-	approvedHash := "aaaa000000000000000000000000000000000000000000000000000000000000"
+	approvedModelDir := s.T().TempDir()
+	require.NoError(s.T(), os.WriteFile(filepath.Join(approvedModelDir, "saved_model.pb"), []byte("approved-model"), 0o600))
 
-	err := s.keeper.RegisterModel(ctx, &veidtypes.MLModelInfo{
+	approvedHash, err := s.keeper.ComputeLocalModelHash(ctx, approvedModelDir)
+	require.NoError(s.T(), err)
+
+	s.registerAndActivateModel(&veidtypes.MLModelInfo{
 		ModelID:      "trust-v1.0.0",
 		Name:         "Trust Score Model",
 		Version:      "1.0.0",
@@ -144,15 +154,16 @@ func (s *ModelHashE2ETestSuite) TestHashMismatchRejection() {
 		SHA256Hash:   approvedHash,
 		RegisteredBy: registrar.String(),
 	})
-	require.NoError(s.T(), err)
 
 	// Validate with correct hash should succeed
-	err = s.keeper.ValidateModelForScoring(ctx, string(veidtypes.ModelTypeTrustScore), approvedHash)
+	err = s.keeper.ValidateModelForScoring(ctx, string(veidtypes.ModelTypeTrustScore), approvedModelDir)
 	require.NoError(s.T(), err)
 
 	// Validate with wrong hash should fail
-	wrongHash := "bbbb000000000000000000000000000000000000000000000000000000000000"
-	err = s.keeper.ValidateModelForScoring(ctx, string(veidtypes.ModelTypeTrustScore), wrongHash)
+	wrongModelDir := s.T().TempDir()
+	require.NoError(s.T(), os.WriteFile(filepath.Join(wrongModelDir, "saved_model.pb"), []byte("wrong-model"), 0o600))
+
+	err = s.keeper.ValidateModelForScoring(ctx, string(veidtypes.ModelTypeTrustScore), wrongModelDir)
 	require.Error(s.T(), err)
 }
 

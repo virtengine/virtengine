@@ -16,12 +16,16 @@ import (
 type InMemoryStore struct {
 	mu      sync.RWMutex
 	records map[string][]Notification
+	timeNow func() time.Time
 }
 
 // NewInMemoryStore creates a new in-memory notification store.
 func NewInMemoryStore() *InMemoryStore {
 	return &InMemoryStore{
 		records: make(map[string][]Notification),
+		timeNow: func() time.Time {
+			return time.Now().UTC()
+		},
 	}
 }
 
@@ -30,7 +34,26 @@ func (s *InMemoryStore) Add(_ context.Context, notif Notification) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	s.records[notif.UserAddress] = append(s.records[notif.UserAddress], notif)
+	cloned := cloneNotification(notif)
+	if cloned.CreatedAt.IsZero() {
+		cloned.CreatedAt = s.timeNow()
+	}
+	if cloned.ID != "" {
+		for i, existing := range s.records[cloned.UserAddress] {
+			if existing.ID != cloned.ID {
+				continue
+			}
+			if cloned.ReadAt == nil {
+				cloned.ReadAt = cloneTimePtr(existing.ReadAt)
+			}
+			if cloned.CreatedAt.IsZero() {
+				cloned.CreatedAt = existing.CreatedAt
+			}
+			s.records[cloned.UserAddress][i] = cloned
+			return nil
+		}
+	}
+	s.records[cloned.UserAddress] = append(s.records[cloned.UserAddress], cloned)
 	return nil
 }
 
@@ -44,12 +67,12 @@ func (s *InMemoryStore) List(_ context.Context, userAddr string, opts ListOption
 		return records[i].CreatedAt.After(records[j].CreatedAt)
 	})
 
-	filtered := records[:0]
+	filtered := make([]Notification, 0, len(records))
 	for _, notif := range records {
 		if opts.UnreadOnly && notif.ReadAt != nil {
 			continue
 		}
-		filtered = append(filtered, notif)
+		filtered = append(filtered, cloneNotification(notif))
 	}
 
 	if opts.Limit > 0 && len(filtered) > opts.Limit {
@@ -68,11 +91,11 @@ func (s *InMemoryStore) MarkRead(_ context.Context, userAddr string, ids []strin
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	now := time.Now().UTC()
+	now := s.timeNow()
 	for i, notif := range s.records[userAddr] {
 		for _, id := range ids {
 			if notif.ID == id {
-				notif.ReadAt = &now
+				notif.ReadAt = cloneTimePtr(&now)
 				s.records[userAddr][i] = notif
 				break
 			}

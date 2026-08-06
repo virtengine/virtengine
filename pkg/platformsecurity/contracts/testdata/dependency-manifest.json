@@ -1,0 +1,24 @@
+{
+  "version": "virtengine.platformsecurity.dependencies/v1",
+  "t4_integration_baseline_sha": "9635513da5e3813e4d30839e0ee22b15f16e3911",
+  "dependencies": [
+    {"source_thread":"T1","contract_id":"evidence-envelope","version":"v1","digest":"","status":"unavailable","blocker":"T1 has not published a committed evidence-envelope digest","consumers":["89A","89B","89C","89D","91A"]},
+    {"source_thread":"T1","contract_id":"runtime-policy","version":"v1","digest":"","status":"unavailable","blocker":"T1 has not published a committed runtime-policy digest","consumers":["89A","89D","90A","91A"]},
+    {"source_thread":"T1","contract_id":"workload-binding","version":"v1","digest":"","status":"unavailable","blocker":"T1 has not published a committed workload-binding digest","consumers":["89D","90A"]},
+    {"source_thread":"T1","contract_id":"recovery-evidence","version":"v1","digest":"","status":"unavailable","blocker":"T1 has not published a committed recovery-evidence digest","consumers":["89A","89B","89C","91A"]},
+    {"source_thread":"T3","contract_id":"durable-intent","version":"v1","digest":"","status":"unavailable","blocker":"T3 has not published a committed durable-intent digest","consumers":["89A","89B","89C","89D","90A","91A"]},
+    {"source_thread":"T3","contract_id":"ibc-terminal","version":"v1","digest":"","status":"unavailable","blocker":"T3 has not published a committed IBC terminal-state digest","consumers":["89C","89D","91A"]},
+    {"source_thread":"T3","contract_id":"reconciliation","version":"v1","digest":"","status":"unavailable","blocker":"T3 has not published a committed reconciliation digest","consumers":["89B","89C","90A","91A"]},
+    {"source_thread":"T4","contract_id":"exact-integration-sha","version":"v1","digest":"9635513da5e3813e4d30839e0ee22b15f16e3911","status":"fixture_only","blocker":"Pinned integration baseline is not a claim about current T4 HEAD","consumers":["89A","89B","89C","89D","90A","91A"]},
+    {"source_thread":"T4","contract_id":"integration-control","version":"virtengine.prototype.integration-control/v1","digest":"7fade5003634c3310ae16807adfc44674e7ae85bd791392aa9c7adff1b5b8405","status":"fixture_only","blocker":"Control artifact has not been accepted at the pinned integration baseline","consumers":["89A","89B","89C","89D","90A","91A"]},
+    {"source_thread":"T4","contract_id":"migration-inventory","version":"virtengine.task-88a.migration-inventory/v1","digest":"a78e32dad73854308ca736a7fc390c035902ee8db8e91117693fb416ad9e145f","status":"fixture_only","blocker":"Migration inventory is dependency_blocked and baseline-only","consumers":["89A","89B","89C","89D","90A","91A"]}
+  ],
+  "capabilities": [
+    {"task_id":"89A","profile_state":"fixture_only","registration":false,"advertisement":false,"readiness":false,"mutation":false},
+    {"task_id":"89B","profile_state":"fixture_only","registration":false,"advertisement":false,"readiness":false,"mutation":false},
+    {"task_id":"89C","profile_state":"fixture_only","registration":false,"advertisement":false,"readiness":false,"mutation":false},
+    {"task_id":"89D","profile_state":"fixture_only","registration":false,"advertisement":false,"readiness":false,"mutation":false},
+    {"task_id":"90A","profile_state":"fixture_only","registration":false,"advertisement":false,"readiness":false,"mutation":false},
+    {"task_id":"91A","profile_state":"fixture_only","registration":false,"advertisement":false,"readiness":false,"mutation":false}
+  ]
+}

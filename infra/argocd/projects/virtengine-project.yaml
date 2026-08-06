@@ -11,7 +11,7 @@ spec:
 
   # Source repositories
   sourceRepos:
-    - https://github.com/virtengine-network/virtengine.git
+    - https://github.com/virtengine/virtengine.git
     - https://github.com/virtengine-network/virtengine-helm.git
     - https://charts.bitnami.com/bitnami
     - https://argoproj.github.io/argo-helm

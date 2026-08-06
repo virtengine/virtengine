@@ -3,6 +3,7 @@ package keeper
 import (
 	"encoding/json"
 	"fmt"
+	"sort"
 	"time"
 
 	sdkmath "cosmossdk.io/math"
@@ -43,7 +44,7 @@ func requirementsToStore(r *types.MarketVEIDRequirements) *marketRequirementsSto
 		RequiredScopes:          make([]string, len(r.RequiredScopes)),
 		RequiredLevels:          make(map[string]string),
 		AllowDelegation:         r.AllowDelegation,
-		MaxDelegationAgeSecs:    int64(r.MaxDelegationAge.Seconds()),
+		MaxDelegationAgeSecs:    int64(r.MaxDelegationAge / time.Second),
 		RequireActiveIdentity:   r.RequireActiveIdentity,
 		RequireUnlockedIdentity: r.RequireUnlockedIdentity,
 		CreatedAt:               r.CreatedAt.Unix(),
@@ -412,6 +413,9 @@ func (k Keeper) checkParticipantEligibility(ctx sdk.Context, address sdk.AccAddr
 		for s := range scopeMap {
 			requiredScopes = append(requiredScopes, s)
 		}
+		sort.Slice(requiredScopes, func(i, j int) bool {
+			return requiredScopes[i] < requiredScopes[j]
+		})
 
 		// Check domain verification for providers if required
 		if requirements.ProviderRequirements.RequireDomainVerification {

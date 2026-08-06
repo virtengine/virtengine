@@ -7,9 +7,16 @@ package email
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"net/mail"
 	"net/url"
+	"strings"
 )
+
+var ErrSenderNotConfigured = errors.New("email sender not configured")
+var ErrRecipientRequired = errors.New("email recipient required")
+var ErrFromAddressRequired = errors.New("email sender address required")
 
 // Sender delivers email messages.
 type Sender interface {
@@ -59,22 +66,53 @@ func (s *Service) Render(name TemplateName, data any) (RenderedEmail, error) {
 
 // SendTemplate renders and sends a templated email.
 func (s *Service) SendTemplate(ctx context.Context, to string, unsubscribeToken string, name TemplateName, data any) error {
+	if s.sender == nil {
+		return ErrSenderNotConfigured
+	}
+	recipient, err := validateMailbox(to, ErrRecipientRequired)
+	if err != nil {
+		return err
+	}
+	from, err := validateMailbox(s.defaultFrom, ErrFromAddressRequired)
+	if err != nil {
+		return err
+	}
 	rendered, err := s.Render(name, data)
 	if err != nil {
 		return err
 	}
+	rendered.Subject = sanitizeHeaderValue(rendered.Subject)
+	if rendered.Subject == "" {
+		return fmt.Errorf("email subject is empty")
+	}
 	message := EmailMessage{
-		To:      to,
-		From:    s.defaultFrom,
+		To:      recipient,
+		From:    from,
 		Subject: rendered.Subject,
 		HTML:    rendered.HTML,
 		Text:    rendered.Text,
-		Headers: map[string]string{
-			"List-Unsubscribe": fmt.Sprintf("<%s>", s.BuildUnsubscribeURL(unsubscribeToken)),
-		},
 	}
-	if s.sender == nil {
-		return nil
+	if unsubscribeURL := s.BuildUnsubscribeURL(unsubscribeToken); unsubscribeURL != "" {
+		message.Headers = map[string]string{
+			"List-Unsubscribe": fmt.Sprintf("<%s>", unsubscribeURL),
+		}
 	}
 	return s.sender.Send(ctx, message)
+}
+
+func sanitizeHeaderValue(value string) string {
+	value = strings.ReplaceAll(value, "\r", " ")
+	value = strings.ReplaceAll(value, "\n", " ")
+	return strings.Join(strings.Fields(value), " ")
+}
+
+func validateMailbox(value string, emptyErr error) (string, error) {
+	value = sanitizeHeaderValue(value)
+	if value == "" {
+		return "", emptyErr
+	}
+	if _, err := mail.ParseAddress(value); err != nil {
+		return "", fmt.Errorf("invalid email address %q: %w", value, err)
+	}
+	return value, nil
 }

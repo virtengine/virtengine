@@ -90,20 +90,17 @@ sudo sh get-docker.sh
 sudo usermod -aG docker $USER
 ```
 
-### Windows (WSL2)
+### Windows
 
-VirtEngine development requires WSL2 on Windows:
+Native Windows builds and unit tests are supported with PowerShell and Go `1.25.8`:
 
 ```powershell
-# Enable WSL2 (run as Administrator)
-wsl --install -d Ubuntu-22.04
-
-# Restart and open Ubuntu terminal
+$env:CGO_ENABLED = "0"
+go build -mod=readonly -o .\bin\virtengine.exe .\cmd\virtengine
+go test -mod=readonly -short -count=1 ./...
 ```
 
-Then follow the Linux setup instructions inside WSL2.
-
-> **Important**: Run all development commands from within WSL2. Ensure Docker Desktop is configured to use the WSL2 backend.
+For the complete Docker localnet, run `pwsh .\scripts\localnet.ps1 start`. Docker Desktop still needs a Linux-container virtualization backend (WSL2 or Hyper-V), but the VirtEngine host workflow itself does not require WSL. See `_docs/onboarding/windows/SETUP-WINDOWS.md` for the complete Windows workflow.
 
 ---
 

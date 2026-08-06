@@ -15,17 +15,18 @@ import (
 
 func ModuleAccountPerms() map[string][]string {
 	return map[string][]string{
-		authtypes.FeeCollectorName:     nil,
-		emodule.ModuleName:             nil,
-		distrtypes.ModuleName:          nil,
-		minttypes.ModuleName:           {authtypes.Minter},
-		stakingtypes.BondedPoolName:    {authtypes.Burner, authtypes.Staking},
-		stakingtypes.NotBondedPoolName: {authtypes.Burner, authtypes.Staking},
-		govtypes.ModuleName:            {authtypes.Burner},
-		ibctransfertypes.ModuleName:    {authtypes.Minter, authtypes.Burner},
-		delegationtypes.ModuleName:     nil,
-		virtstaking.ModuleName:         {authtypes.Minter}, // virt_staking needs Minter for epoch rewards
-		settlementtypes.ModuleName:     nil,
+		authtypes.FeeCollectorName:                       nil,
+		emodule.ModuleName:                               nil,
+		distrtypes.ModuleName:                            nil,
+		minttypes.ModuleName:                             {authtypes.Minter},
+		stakingtypes.BondedPoolName:                      {authtypes.Burner, authtypes.Staking},
+		stakingtypes.NotBondedPoolName:                   {authtypes.Burner, authtypes.Staking},
+		govtypes.ModuleName:                              {authtypes.Burner},
+		ibctransfertypes.ModuleName:                      {authtypes.Minter, authtypes.Burner},
+		delegationtypes.ModuleName:                       nil,
+		virtstaking.ModuleName:                           {authtypes.Minter}, // virt_staking needs Minter for epoch rewards
+		settlementtypes.ModuleName:                       nil,
+		settlementtypes.FiatConversionCustodyAccountName: nil,
 	}
 }
 

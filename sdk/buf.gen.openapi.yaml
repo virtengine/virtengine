@@ -1,0 +1,15 @@
+version: v2
+clean: true
+managed:
+  enabled: false
+plugins:
+  - local: /go/bin/protoc-gen-swagger
+    out: .generation/openapi/fragments
+    strategy: directory
+    opt:
+      - logtostderr=true
+      - fqn_for_swagger_name=true
+      - simple_operation_ids=false
+inputs:
+  - directory: proto/node
+  - directory: proto/provider

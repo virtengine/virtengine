@@ -1,0 +1,10 @@
+=== RUN   TestUpgradeRegistryIncludesAllExpectedVersions
+--- PASS: TestUpgradeRegistryIncludesAllExpectedVersions (0.00s)
+=== RUN   TestUpgradeRegistryIsSemverSorted
+--- PASS: TestUpgradeRegistryIsSemverSorted (0.00s)
+=== RUN   TestUpgradeConstructorsReturnRegisteredUpgrades
+--- PASS: TestUpgradeConstructorsReturnRegisteredUpgrades (0.00s)
+=== RUN   TestUpgradeTestCasesMatchStoreUpgrades
+--- PASS: TestUpgradeTestCasesMatchStoreUpgrades (0.01s)
+PASS
+ok  	github.com/virtengine/virtengine/tests/upgrade	0.090s

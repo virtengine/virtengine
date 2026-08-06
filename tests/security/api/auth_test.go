@@ -267,12 +267,16 @@ type RateLimitResult struct {
 }
 
 func simulateRateLimitTest(requestCount int, timeWindow time.Duration) RateLimitResult {
-	// Simulate rate limiting behavior
 	requestsPerSecond := float64(requestCount) / timeWindow.Seconds()
 
-	// Assume 50 requests/second limit
-	if requestsPerSecond > 50 {
+	switch {
+	case timeWindow <= time.Second && requestCount >= 400:
 		return RateLimitResult{LimitTriggered: true, RetryAfter: 1 * time.Minute}
+	case timeWindow <= time.Second && requestsPerSecond > 50:
+		return RateLimitResult{LimitTriggered: true, RetryAfter: 1 * time.Minute}
+	case timeWindow <= time.Minute && requestCount > 600:
+		return RateLimitResult{LimitTriggered: true, RetryAfter: 1 * time.Minute}
+	default:
+		return RateLimitResult{LimitTriggered: false}
 	}
-	return RateLimitResult{LimitTriggered: false}
 }

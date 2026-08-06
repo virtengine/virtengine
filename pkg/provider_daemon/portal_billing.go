@@ -20,7 +20,7 @@ func (s *PortalAPIServer) handleListInvoices(w http.ResponseWriter, r *http.Requ
 
 	invoices, nextCursor, err := s.chainQuery.ListInvoices(r.Context(), principal, status, limit, cursor)
 	if err != nil {
-		writeJSONError(w, http.StatusInternalServerError, err.Error())
+		writePortalError(w, err)
 		return
 	}
 
@@ -44,7 +44,7 @@ func (s *PortalAPIServer) handleGetInvoice(w http.ResponseWriter, r *http.Reques
 			writeJSONError(w, http.StatusNotFound, "invoice not found")
 			return
 		}
-		writeJSONError(w, http.StatusInternalServerError, err.Error())
+		writePortalError(w, err)
 		return
 	}
 
@@ -60,7 +60,7 @@ func (s *PortalAPIServer) handleGetUsage(w http.ResponseWriter, r *http.Request)
 
 	summary, err := s.chainQuery.GetUsageSummary(r.Context(), principal)
 	if err != nil {
-		writeJSONError(w, http.StatusInternalServerError, err.Error())
+		writePortalError(w, err)
 		return
 	}
 
@@ -88,7 +88,7 @@ func (s *PortalAPIServer) handleGetUsageHistory(w http.ResponseWriter, r *http.R
 
 	history, err := s.chainQuery.GetUsageHistory(r.Context(), principal, start, end, interval)
 	if err != nil {
-		writeJSONError(w, http.StatusInternalServerError, err.Error())
+		writePortalError(w, err)
 		return
 	}
 

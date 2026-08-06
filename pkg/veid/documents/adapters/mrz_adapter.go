@@ -3,6 +3,7 @@ package adapters
 import (
 	"context"
 	"image"
+	"sort"
 	"strings"
 	"time"
 
@@ -36,6 +37,7 @@ func (a *MRZAdapter) SupportedCountries() []documents.CountryCode {
 	for code := range a.countries {
 		countries = append(countries, code)
 	}
+	sort.Slice(countries, func(i, j int) bool { return countries[i] < countries[j] })
 	return countries
 }
 
@@ -56,31 +58,35 @@ func (a *MRZAdapter) Extract(ctx context.Context, img image.Image) (*documents.D
 }
 
 func (a *MRZAdapter) ExtractWithMRZ(ctx context.Context, img image.Image, mrzValue string) (*documents.DocumentData, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	parsed, err := mrz.Parse(mrzValue)
 	if err != nil {
 		return nil, err
 	}
 
 	docType := mapDocumentType(parsed.DocumentType)
+	if !a.CanProcess(docType, documents.CountryCode(parsed.IssuingCountry)) {
+		return nil, documents.ErrNoAdapter
+	}
 
 	data := &documents.DocumentData{
-		GivenNames:        parsed.GivenNames,
-		Surname:           parsed.Surname,
-		DateOfBirth:       parsed.DateOfBirth,
-		Sex:               parsed.Sex,
-		Nationality:       documents.CountryCode(parsed.Nationality),
-		DocumentType:      docType,
-		DocumentNumber:    parsed.DocumentNumber,
-		IssuingCountry:    documents.CountryCode(parsed.IssuingCountry),
-		ExpiryDate:        parsed.ExpiryDate,
-		MRZData:           parsed,
-		OverallConfidence: 0.92,
-		FieldConfidences: map[string]float64{
-			"name":            0.95,
-			"document_number": 0.94,
-			"date_of_birth":   0.93,
-			"expiry_date":     0.93,
-		},
+		GivenNames:     parsed.GivenNames,
+		Surname:        parsed.Surname,
+		DateOfBirth:    parsed.DateOfBirth,
+		Sex:            parsed.Sex,
+		Nationality:    documents.CountryCode(parsed.Nationality),
+		DocumentType:   docType,
+		DocumentNumber: parsed.DocumentNumber,
+		IssuingCountry: documents.CountryCode(parsed.IssuingCountry),
+		ExpiryDate:     parsed.ExpiryDate,
+		MRZData:        parsed,
+		// MRZ parsing provides deterministic check-digit validity, not calibrated
+		// OCR/model confidence. Consumers must use MRZData.IsValid and must not
+		// treat parser heuristics as a biometric or document-quality score.
+		OverallConfidence: 0,
+		FieldConfidences:  nil,
 	}
 
 	return data, nil
@@ -92,6 +98,9 @@ func (a *MRZAdapter) Validate(data *documents.DocumentData) ([]documents.Validat
 	}
 
 	var errs []documents.ValidationError
+	if !a.CanProcess(data.DocumentType, data.IssuingCountry) {
+		errs = append(errs, documents.ValidationError{Field: "document", Message: "document type or issuing country is unsupported by MRZ adapter"})
+	}
 	if strings.TrimSpace(data.Surname) == "" {
 		errs = append(errs, documents.ValidationError{Field: "surname", Message: "missing surname"})
 	}
@@ -106,11 +115,29 @@ func (a *MRZAdapter) Validate(data *documents.DocumentData) ([]documents.Validat
 	}
 	if data.ExpiryDate.IsZero() {
 		errs = append(errs, documents.ValidationError{Field: "expiry_date", Message: "missing expiry date"})
-	} else if data.ExpiryDate.Before(time.Now().AddDate(0, 0, -1)) {
+	} else if data.ExpiryDate.Before(time.Now().UTC().Truncate(24 * time.Hour)) {
 		errs = append(errs, documents.ValidationError{Field: "expiry_date", Message: "document expired"})
+	}
+	if data.Sex != "" && data.Sex != "M" && data.Sex != "F" && data.Sex != "X" {
+		errs = append(errs, documents.ValidationError{Field: "sex", Message: "invalid sex marker"})
 	}
 	if data.MRZData != nil && !data.MRZData.IsValid {
 		errs = append(errs, documents.ValidationError{Field: "mrz", Message: "mrz check digits failed"})
+	}
+	if data.MRZData != nil {
+		parsed := data.MRZData
+		if data.DocumentNumber != parsed.DocumentNumber {
+			errs = append(errs, documents.ValidationError{Field: "document_number", Message: "does not match MRZ"})
+		}
+		if data.IssuingCountry != documents.CountryCode(parsed.IssuingCountry) {
+			errs = append(errs, documents.ValidationError{Field: "issuing_country", Message: "does not match MRZ"})
+		}
+		if data.Nationality != documents.CountryCode(parsed.Nationality) {
+			errs = append(errs, documents.ValidationError{Field: "nationality", Message: "does not match MRZ"})
+		}
+		if !data.DateOfBirth.Equal(parsed.DateOfBirth) || !data.ExpiryDate.Equal(parsed.ExpiryDate) {
+			errs = append(errs, documents.ValidationError{Field: "dates", Message: "do not match MRZ"})
+		}
 	}
 
 	if len(errs) > 0 {

@@ -1,0 +1,43 @@
+T2-X14 raw validation summary
+Implementation SHA: 9d210092ee880ed8dd97e5a2dbb39197fca5fd2c
+
+[node]
+COMMAND: node --version
+OUTPUT: v20.19.1
+EXIT: 0
+
+[focused-vitest]
+COMMAND: lib\portal\node_modules\.bin\vitest.CMD run __tests__/hpc/use-hpc-queries.test.tsx __tests__/hpc/job-submission-form.test.tsx __tests__/hpc/use-hpc-mutations.test.tsx --reporter=dot
+OUTPUT: Test Files 3 passed (3)
+OUTPUT: Tests 24 passed (24)
+OUTPUT: Duration 5.78s (transform 1.68s, setup 0ms, import 2.78s, tests 1.01s, environment 7.55s)
+EXIT: 0
+
+[full-vitest]
+COMMAND: lib\portal\node_modules\.bin\vitest.CMD run --reporter=dot --maxWorkers=1
+OUTPUT: Test Files 36 passed (36)
+OUTPUT: Tests 738 passed (738)
+OUTPUT: Duration 117.85s (transform 5.44s, setup 0ms, import 28.59s, tests 2.72s, environment 63.15s)
+STDERR: Two expected WalletSessionManager invalid reconnect metadata clearing messages.
+EXIT: 0
+
+[focused-typescript]
+COMMAND: portal\node_modules\.bin\tsc.CMD --noEmit --lib dom,dom.iterable,esnext --target ES2020 --module CommonJS --moduleResolution Node --esModuleInterop --skipLibCheck --jsx react-jsx lib\portal\components\hpc\hpc-query.ts lib\portal\components\hpc\hpc-mutation.ts lib\portal\hooks\useHPC.tsx
+OUTPUT: no diagnostics
+EXIT: 0
+
+[prettier-check]
+COMMAND: portal\node_modules\.bin\prettier.CMD --check <twelve declared X14 paths>
+OUTPUT: Checking formatting...
+OUTPUT: All matched files use Prettier code style!
+EXIT: 0
+
+[full-portal-typescript]
+COMMAND: portal\node_modules\.bin\tsc.CMD --noEmit -p portal\tsconfig.json
+OUTPUT: no diagnostics
+EXIT: 0
+
+[committed-diff-check]
+COMMAND: git show --check --format= 9d210092ee880ed8dd97e5a2dbb39197fca5fd2c -- <twelve declared X14 paths>
+OUTPUT: no diagnostics
+EXIT: 0

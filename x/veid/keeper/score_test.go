@@ -141,6 +141,24 @@ func (s *ScoreKeeperTestSuite) TestGetScoreNotFound() {
 	s.Require().Equal(types.AccountStatusUnknown, status)
 }
 
+func (s *ScoreKeeperTestSuite) TestGetScoreUsesBlockTimeForExpiry() {
+	expiresAt := s.ctx.BlockTime().Add(time.Hour)
+	err := s.keeper.SetScoreWithDetails(s.ctx, testScoreAddress1, 75, keeper.ScoreDetails{
+		Status:       types.AccountStatusVerified,
+		ModelVersion: "v1.0.0",
+		ExpiresAt:    &expiresAt,
+	})
+	s.Require().NoError(err)
+
+	_, status, found := s.keeper.GetScore(s.ctx.WithBlockTime(expiresAt), testScoreAddress1)
+	s.Require().True(found)
+	s.Require().Equal(types.AccountStatusVerified, status)
+
+	_, status, found = s.keeper.GetScore(s.ctx.WithBlockTime(expiresAt.Add(time.Second)), testScoreAddress1)
+	s.Require().True(found)
+	s.Require().Equal(types.AccountStatusExpired, status)
+}
+
 // ============================================================================
 // Score History Tests
 // ============================================================================

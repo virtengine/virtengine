@@ -61,10 +61,6 @@ type VEIDE2ETestSuite struct {
 
 // TestVEIDE2E runs the VEID E2E test suite.
 func TestVEIDE2E(t *testing.T) {
-	if testing.Short() {
-		t.Skip("Skipping E2E tests in short mode")
-	}
-
 	suite.Run(t, new(VEIDE2ETestSuite))
 }
 
@@ -344,7 +340,7 @@ func (s *VEIDE2ETestSuite) TestSMSVerificationFlow() {
 	expiresAt := FixedTimestampPlus(60 * 24 * 365)
 	smsRecord.MarkVerified(FixedTimestampPlus(1), &expiresAt, "virtengine1validator")
 	require.Equal(s.T(), veidtypes.SMSStatusVerified, smsRecord.Status)
-	require.True(s.T(), smsRecord.IsActive())
+	require.True(s.T(), smsRecord.IsActiveAt(FixedTimestampPlus(2)))
 
 	// Calculate SMS score contribution
 	weight := veidtypes.DefaultSMSScoringWeight()

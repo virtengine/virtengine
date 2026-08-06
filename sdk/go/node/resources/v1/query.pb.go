@@ -483,6 +483,538 @@ func (m *QueryAllocationsByProviderResponse) GetPagination() *query.PageResponse
 	return nil
 }
 
+type QueryReservationRequest struct {
+	ReservationId string `protobuf:"bytes,1,opt,name=reservation_id,json=reservationId,proto3" json:"reservation_id,omitempty"`
+}
+
+func (m *QueryReservationRequest) Reset()         { *m = QueryReservationRequest{} }
+func (m *QueryReservationRequest) String() string { return proto.CompactTextString(m) }
+func (*QueryReservationRequest) ProtoMessage()    {}
+func (*QueryReservationRequest) Descriptor() ([]byte, []int) {
+	return fileDescriptor_170828374c89c606, []int{9}
+}
+func (m *QueryReservationRequest) XXX_Unmarshal(b []byte) error {
+	return m.Unmarshal(b)
+}
+func (m *QueryReservationRequest) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	if deterministic {
+		return xxx_messageInfo_QueryReservationRequest.Marshal(b, m, deterministic)
+	} else {
+		b = b[:cap(b)]
+		n, err := m.MarshalToSizedBuffer(b)
+		if err != nil {
+			return nil, err
+		}
+		return b[:n], nil
+	}
+}
+func (m *QueryReservationRequest) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_QueryReservationRequest.Merge(m, src)
+}
+func (m *QueryReservationRequest) XXX_Size() int {
+	return m.Size()
+}
+func (m *QueryReservationRequest) XXX_DiscardUnknown() {
+	xxx_messageInfo_QueryReservationRequest.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_QueryReservationRequest proto.InternalMessageInfo
+
+func (m *QueryReservationRequest) GetReservationId() string {
+	if m != nil {
+		return m.ReservationId
+	}
+	return ""
+}
+
+type QueryReservationByOrderRequest struct {
+	OrderId string `protobuf:"bytes,1,opt,name=order_id,json=orderId,proto3" json:"order_id,omitempty"`
+}
+
+func (m *QueryReservationByOrderRequest) Reset()         { *m = QueryReservationByOrderRequest{} }
+func (m *QueryReservationByOrderRequest) String() string { return proto.CompactTextString(m) }
+func (*QueryReservationByOrderRequest) ProtoMessage()    {}
+func (*QueryReservationByOrderRequest) Descriptor() ([]byte, []int) {
+	return fileDescriptor_170828374c89c606, []int{10}
+}
+func (m *QueryReservationByOrderRequest) XXX_Unmarshal(b []byte) error {
+	return m.Unmarshal(b)
+}
+func (m *QueryReservationByOrderRequest) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	if deterministic {
+		return xxx_messageInfo_QueryReservationByOrderRequest.Marshal(b, m, deterministic)
+	} else {
+		b = b[:cap(b)]
+		n, err := m.MarshalToSizedBuffer(b)
+		if err != nil {
+			return nil, err
+		}
+		return b[:n], nil
+	}
+}
+func (m *QueryReservationByOrderRequest) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_QueryReservationByOrderRequest.Merge(m, src)
+}
+func (m *QueryReservationByOrderRequest) XXX_Size() int {
+	return m.Size()
+}
+func (m *QueryReservationByOrderRequest) XXX_DiscardUnknown() {
+	xxx_messageInfo_QueryReservationByOrderRequest.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_QueryReservationByOrderRequest proto.InternalMessageInfo
+
+func (m *QueryReservationByOrderRequest) GetOrderId() string {
+	if m != nil {
+		return m.OrderId
+	}
+	return ""
+}
+
+type QueryReservationByBidRequest struct {
+	BidId string `protobuf:"bytes,1,opt,name=bid_id,json=bidId,proto3" json:"bid_id,omitempty"`
+}
+
+func (m *QueryReservationByBidRequest) Reset()         { *m = QueryReservationByBidRequest{} }
+func (m *QueryReservationByBidRequest) String() string { return proto.CompactTextString(m) }
+func (*QueryReservationByBidRequest) ProtoMessage()    {}
+func (*QueryReservationByBidRequest) Descriptor() ([]byte, []int) {
+	return fileDescriptor_170828374c89c606, []int{11}
+}
+func (m *QueryReservationByBidRequest) XXX_Unmarshal(b []byte) error {
+	return m.Unmarshal(b)
+}
+func (m *QueryReservationByBidRequest) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	if deterministic {
+		return xxx_messageInfo_QueryReservationByBidRequest.Marshal(b, m, deterministic)
+	} else {
+		b = b[:cap(b)]
+		n, err := m.MarshalToSizedBuffer(b)
+		if err != nil {
+			return nil, err
+		}
+		return b[:n], nil
+	}
+}
+func (m *QueryReservationByBidRequest) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_QueryReservationByBidRequest.Merge(m, src)
+}
+func (m *QueryReservationByBidRequest) XXX_Size() int {
+	return m.Size()
+}
+func (m *QueryReservationByBidRequest) XXX_DiscardUnknown() {
+	xxx_messageInfo_QueryReservationByBidRequest.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_QueryReservationByBidRequest proto.InternalMessageInfo
+
+func (m *QueryReservationByBidRequest) GetBidId() string {
+	if m != nil {
+		return m.BidId
+	}
+	return ""
+}
+
+type QueryReservationByLeaseRequest struct {
+	LeaseId string `protobuf:"bytes,1,opt,name=lease_id,json=leaseId,proto3" json:"lease_id,omitempty"`
+}
+
+func (m *QueryReservationByLeaseRequest) Reset()         { *m = QueryReservationByLeaseRequest{} }
+func (m *QueryReservationByLeaseRequest) String() string { return proto.CompactTextString(m) }
+func (*QueryReservationByLeaseRequest) ProtoMessage()    {}
+func (*QueryReservationByLeaseRequest) Descriptor() ([]byte, []int) {
+	return fileDescriptor_170828374c89c606, []int{12}
+}
+func (m *QueryReservationByLeaseRequest) XXX_Unmarshal(b []byte) error {
+	return m.Unmarshal(b)
+}
+func (m *QueryReservationByLeaseRequest) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	if deterministic {
+		return xxx_messageInfo_QueryReservationByLeaseRequest.Marshal(b, m, deterministic)
+	} else {
+		b = b[:cap(b)]
+		n, err := m.MarshalToSizedBuffer(b)
+		if err != nil {
+			return nil, err
+		}
+		return b[:n], nil
+	}
+}
+func (m *QueryReservationByLeaseRequest) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_QueryReservationByLeaseRequest.Merge(m, src)
+}
+func (m *QueryReservationByLeaseRequest) XXX_Size() int {
+	return m.Size()
+}
+func (m *QueryReservationByLeaseRequest) XXX_DiscardUnknown() {
+	xxx_messageInfo_QueryReservationByLeaseRequest.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_QueryReservationByLeaseRequest proto.InternalMessageInfo
+
+func (m *QueryReservationByLeaseRequest) GetLeaseId() string {
+	if m != nil {
+		return m.LeaseId
+	}
+	return ""
+}
+
+type QueryReservationByJobRequest struct {
+	JobId string `protobuf:"bytes,1,opt,name=job_id,json=jobId,proto3" json:"job_id,omitempty"`
+}
+
+func (m *QueryReservationByJobRequest) Reset()         { *m = QueryReservationByJobRequest{} }
+func (m *QueryReservationByJobRequest) String() string { return proto.CompactTextString(m) }
+func (*QueryReservationByJobRequest) ProtoMessage()    {}
+func (*QueryReservationByJobRequest) Descriptor() ([]byte, []int) {
+	return fileDescriptor_170828374c89c606, []int{13}
+}
+func (m *QueryReservationByJobRequest) XXX_Unmarshal(b []byte) error {
+	return m.Unmarshal(b)
+}
+func (m *QueryReservationByJobRequest) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	if deterministic {
+		return xxx_messageInfo_QueryReservationByJobRequest.Marshal(b, m, deterministic)
+	} else {
+		b = b[:cap(b)]
+		n, err := m.MarshalToSizedBuffer(b)
+		if err != nil {
+			return nil, err
+		}
+		return b[:n], nil
+	}
+}
+func (m *QueryReservationByJobRequest) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_QueryReservationByJobRequest.Merge(m, src)
+}
+func (m *QueryReservationByJobRequest) XXX_Size() int {
+	return m.Size()
+}
+func (m *QueryReservationByJobRequest) XXX_DiscardUnknown() {
+	xxx_messageInfo_QueryReservationByJobRequest.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_QueryReservationByJobRequest proto.InternalMessageInfo
+
+func (m *QueryReservationByJobRequest) GetJobId() string {
+	if m != nil {
+		return m.JobId
+	}
+	return ""
+}
+
+type QueryReservationByConsumerRequest struct {
+	ConsumerType string `protobuf:"bytes,1,opt,name=consumer_type,json=consumerType,proto3" json:"consumer_type,omitempty"`
+	ConsumerId   string `protobuf:"bytes,2,opt,name=consumer_id,json=consumerId,proto3" json:"consumer_id,omitempty"`
+}
+
+func (m *QueryReservationByConsumerRequest) Reset()         { *m = QueryReservationByConsumerRequest{} }
+func (m *QueryReservationByConsumerRequest) String() string { return proto.CompactTextString(m) }
+func (*QueryReservationByConsumerRequest) ProtoMessage()    {}
+func (*QueryReservationByConsumerRequest) Descriptor() ([]byte, []int) {
+	return fileDescriptor_170828374c89c606, []int{14}
+}
+func (m *QueryReservationByConsumerRequest) XXX_Unmarshal(b []byte) error {
+	return m.Unmarshal(b)
+}
+func (m *QueryReservationByConsumerRequest) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	if deterministic {
+		return xxx_messageInfo_QueryReservationByConsumerRequest.Marshal(b, m, deterministic)
+	} else {
+		b = b[:cap(b)]
+		n, err := m.MarshalToSizedBuffer(b)
+		if err != nil {
+			return nil, err
+		}
+		return b[:n], nil
+	}
+}
+func (m *QueryReservationByConsumerRequest) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_QueryReservationByConsumerRequest.Merge(m, src)
+}
+func (m *QueryReservationByConsumerRequest) XXX_Size() int {
+	return m.Size()
+}
+func (m *QueryReservationByConsumerRequest) XXX_DiscardUnknown() {
+	xxx_messageInfo_QueryReservationByConsumerRequest.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_QueryReservationByConsumerRequest proto.InternalMessageInfo
+
+func (m *QueryReservationByConsumerRequest) GetConsumerType() string {
+	if m != nil {
+		return m.ConsumerType
+	}
+	return ""
+}
+
+func (m *QueryReservationByConsumerRequest) GetConsumerId() string {
+	if m != nil {
+		return m.ConsumerId
+	}
+	return ""
+}
+
+type QueryReservationsByProviderRequest struct {
+	ProviderAddress string             `protobuf:"bytes,1,opt,name=provider_address,json=providerAddress,proto3" json:"provider_address,omitempty"`
+	Pagination      *query.PageRequest `protobuf:"bytes,2,opt,name=pagination,proto3" json:"pagination,omitempty"`
+}
+
+func (m *QueryReservationsByProviderRequest) Reset()         { *m = QueryReservationsByProviderRequest{} }
+func (m *QueryReservationsByProviderRequest) String() string { return proto.CompactTextString(m) }
+func (*QueryReservationsByProviderRequest) ProtoMessage()    {}
+func (*QueryReservationsByProviderRequest) Descriptor() ([]byte, []int) {
+	return fileDescriptor_170828374c89c606, []int{15}
+}
+func (m *QueryReservationsByProviderRequest) XXX_Unmarshal(b []byte) error {
+	return m.Unmarshal(b)
+}
+func (m *QueryReservationsByProviderRequest) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	if deterministic {
+		return xxx_messageInfo_QueryReservationsByProviderRequest.Marshal(b, m, deterministic)
+	} else {
+		b = b[:cap(b)]
+		n, err := m.MarshalToSizedBuffer(b)
+		if err != nil {
+			return nil, err
+		}
+		return b[:n], nil
+	}
+}
+func (m *QueryReservationsByProviderRequest) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_QueryReservationsByProviderRequest.Merge(m, src)
+}
+func (m *QueryReservationsByProviderRequest) XXX_Size() int {
+	return m.Size()
+}
+func (m *QueryReservationsByProviderRequest) XXX_DiscardUnknown() {
+	xxx_messageInfo_QueryReservationsByProviderRequest.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_QueryReservationsByProviderRequest proto.InternalMessageInfo
+
+func (m *QueryReservationsByProviderRequest) GetProviderAddress() string {
+	if m != nil {
+		return m.ProviderAddress
+	}
+	return ""
+}
+
+func (m *QueryReservationsByProviderRequest) GetPagination() *query.PageRequest {
+	if m != nil {
+		return m.Pagination
+	}
+	return nil
+}
+
+type QueryReservationResponse struct {
+	Reservation Reservation `protobuf:"bytes,1,opt,name=reservation,proto3" json:"reservation"`
+}
+
+func (m *QueryReservationResponse) Reset()         { *m = QueryReservationResponse{} }
+func (m *QueryReservationResponse) String() string { return proto.CompactTextString(m) }
+func (*QueryReservationResponse) ProtoMessage()    {}
+func (*QueryReservationResponse) Descriptor() ([]byte, []int) {
+	return fileDescriptor_170828374c89c606, []int{16}
+}
+func (m *QueryReservationResponse) XXX_Unmarshal(b []byte) error {
+	return m.Unmarshal(b)
+}
+func (m *QueryReservationResponse) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	if deterministic {
+		return xxx_messageInfo_QueryReservationResponse.Marshal(b, m, deterministic)
+	} else {
+		b = b[:cap(b)]
+		n, err := m.MarshalToSizedBuffer(b)
+		if err != nil {
+			return nil, err
+		}
+		return b[:n], nil
+	}
+}
+func (m *QueryReservationResponse) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_QueryReservationResponse.Merge(m, src)
+}
+func (m *QueryReservationResponse) XXX_Size() int {
+	return m.Size()
+}
+func (m *QueryReservationResponse) XXX_DiscardUnknown() {
+	xxx_messageInfo_QueryReservationResponse.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_QueryReservationResponse proto.InternalMessageInfo
+
+func (m *QueryReservationResponse) GetReservation() Reservation {
+	if m != nil {
+		return m.Reservation
+	}
+	return Reservation{}
+}
+
+type QueryReservationsResponse struct {
+	Reservations []Reservation       `protobuf:"bytes,1,rep,name=reservations,proto3" json:"reservations"`
+	Pagination   *query.PageResponse `protobuf:"bytes,2,opt,name=pagination,proto3" json:"pagination,omitempty"`
+}
+
+func (m *QueryReservationsResponse) Reset()         { *m = QueryReservationsResponse{} }
+func (m *QueryReservationsResponse) String() string { return proto.CompactTextString(m) }
+func (*QueryReservationsResponse) ProtoMessage()    {}
+func (*QueryReservationsResponse) Descriptor() ([]byte, []int) {
+	return fileDescriptor_170828374c89c606, []int{17}
+}
+func (m *QueryReservationsResponse) XXX_Unmarshal(b []byte) error {
+	return m.Unmarshal(b)
+}
+func (m *QueryReservationsResponse) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	if deterministic {
+		return xxx_messageInfo_QueryReservationsResponse.Marshal(b, m, deterministic)
+	} else {
+		b = b[:cap(b)]
+		n, err := m.MarshalToSizedBuffer(b)
+		if err != nil {
+			return nil, err
+		}
+		return b[:n], nil
+	}
+}
+func (m *QueryReservationsResponse) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_QueryReservationsResponse.Merge(m, src)
+}
+func (m *QueryReservationsResponse) XXX_Size() int {
+	return m.Size()
+}
+func (m *QueryReservationsResponse) XXX_DiscardUnknown() {
+	xxx_messageInfo_QueryReservationsResponse.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_QueryReservationsResponse proto.InternalMessageInfo
+
+func (m *QueryReservationsResponse) GetReservations() []Reservation {
+	if m != nil {
+		return m.Reservations
+	}
+	return nil
+}
+
+func (m *QueryReservationsResponse) GetPagination() *query.PageResponse {
+	if m != nil {
+		return m.Pagination
+	}
+	return nil
+}
+
+type QueryReservationLineageRequest struct {
+	ReservationId string             `protobuf:"bytes,1,opt,name=reservation_id,json=reservationId,proto3" json:"reservation_id,omitempty"`
+	Pagination    *query.PageRequest `protobuf:"bytes,2,opt,name=pagination,proto3" json:"pagination,omitempty"`
+}
+
+func (m *QueryReservationLineageRequest) Reset()         { *m = QueryReservationLineageRequest{} }
+func (m *QueryReservationLineageRequest) String() string { return proto.CompactTextString(m) }
+func (*QueryReservationLineageRequest) ProtoMessage()    {}
+func (*QueryReservationLineageRequest) Descriptor() ([]byte, []int) {
+	return fileDescriptor_170828374c89c606, []int{18}
+}
+func (m *QueryReservationLineageRequest) XXX_Unmarshal(b []byte) error {
+	return m.Unmarshal(b)
+}
+func (m *QueryReservationLineageRequest) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	if deterministic {
+		return xxx_messageInfo_QueryReservationLineageRequest.Marshal(b, m, deterministic)
+	} else {
+		b = b[:cap(b)]
+		n, err := m.MarshalToSizedBuffer(b)
+		if err != nil {
+			return nil, err
+		}
+		return b[:n], nil
+	}
+}
+func (m *QueryReservationLineageRequest) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_QueryReservationLineageRequest.Merge(m, src)
+}
+func (m *QueryReservationLineageRequest) XXX_Size() int {
+	return m.Size()
+}
+func (m *QueryReservationLineageRequest) XXX_DiscardUnknown() {
+	xxx_messageInfo_QueryReservationLineageRequest.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_QueryReservationLineageRequest proto.InternalMessageInfo
+
+func (m *QueryReservationLineageRequest) GetReservationId() string {
+	if m != nil {
+		return m.ReservationId
+	}
+	return ""
+}
+
+func (m *QueryReservationLineageRequest) GetPagination() *query.PageRequest {
+	if m != nil {
+		return m.Pagination
+	}
+	return nil
+}
+
+type QueryReservationLineageResponse struct {
+	Reservation Reservation         `protobuf:"bytes,1,opt,name=reservation,proto3" json:"reservation"`
+	Events      []ReservationEvent  `protobuf:"bytes,2,rep,name=events,proto3" json:"events"`
+	Pagination  *query.PageResponse `protobuf:"bytes,3,opt,name=pagination,proto3" json:"pagination,omitempty"`
+}
+
+func (m *QueryReservationLineageResponse) Reset()         { *m = QueryReservationLineageResponse{} }
+func (m *QueryReservationLineageResponse) String() string { return proto.CompactTextString(m) }
+func (*QueryReservationLineageResponse) ProtoMessage()    {}
+func (*QueryReservationLineageResponse) Descriptor() ([]byte, []int) {
+	return fileDescriptor_170828374c89c606, []int{19}
+}
+func (m *QueryReservationLineageResponse) XXX_Unmarshal(b []byte) error {
+	return m.Unmarshal(b)
+}
+func (m *QueryReservationLineageResponse) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	if deterministic {
+		return xxx_messageInfo_QueryReservationLineageResponse.Marshal(b, m, deterministic)
+	} else {
+		b = b[:cap(b)]
+		n, err := m.MarshalToSizedBuffer(b)
+		if err != nil {
+			return nil, err
+		}
+		return b[:n], nil
+	}
+}
+func (m *QueryReservationLineageResponse) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_QueryReservationLineageResponse.Merge(m, src)
+}
+func (m *QueryReservationLineageResponse) XXX_Size() int {
+	return m.Size()
+}
+func (m *QueryReservationLineageResponse) XXX_DiscardUnknown() {
+	xxx_messageInfo_QueryReservationLineageResponse.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_QueryReservationLineageResponse proto.InternalMessageInfo
+
+func (m *QueryReservationLineageResponse) GetReservation() Reservation {
+	if m != nil {
+		return m.Reservation
+	}
+	return Reservation{}
+}
+
+func (m *QueryReservationLineageResponse) GetEvents() []ReservationEvent {
+	if m != nil {
+		return m.Events
+	}
+	return nil
+}
+
+func (m *QueryReservationLineageResponse) GetPagination() *query.PageResponse {
+	if m != nil {
+		return m.Pagination
+	}
+	return nil
+}
+
 type QueryParamsRequest struct {
 }
 
@@ -490,7 +1022,7 @@ func (m *QueryParamsRequest) Reset()         { *m = QueryParamsRequest{} }
 func (m *QueryParamsRequest) String() string { return proto.CompactTextString(m) }
 func (*QueryParamsRequest) ProtoMessage()    {}
 func (*QueryParamsRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_170828374c89c606, []int{9}
+	return fileDescriptor_170828374c89c606, []int{20}
 }
 func (m *QueryParamsRequest) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -527,7 +1059,7 @@ func (m *QueryParamsResponse) Reset()         { *m = QueryParamsResponse{} }
 func (m *QueryParamsResponse) String() string { return proto.CompactTextString(m) }
 func (*QueryParamsResponse) ProtoMessage()    {}
 func (*QueryParamsResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_170828374c89c606, []int{10}
+	return fileDescriptor_170828374c89c606, []int{21}
 }
 func (m *QueryParamsResponse) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -573,6 +1105,17 @@ func init() {
 	proto.RegisterType((*QueryAllocationHistoryResponse)(nil), "virtengine.resources.v1.QueryAllocationHistoryResponse")
 	proto.RegisterType((*QueryAllocationsByProviderRequest)(nil), "virtengine.resources.v1.QueryAllocationsByProviderRequest")
 	proto.RegisterType((*QueryAllocationsByProviderResponse)(nil), "virtengine.resources.v1.QueryAllocationsByProviderResponse")
+	proto.RegisterType((*QueryReservationRequest)(nil), "virtengine.resources.v1.QueryReservationRequest")
+	proto.RegisterType((*QueryReservationByOrderRequest)(nil), "virtengine.resources.v1.QueryReservationByOrderRequest")
+	proto.RegisterType((*QueryReservationByBidRequest)(nil), "virtengine.resources.v1.QueryReservationByBidRequest")
+	proto.RegisterType((*QueryReservationByLeaseRequest)(nil), "virtengine.resources.v1.QueryReservationByLeaseRequest")
+	proto.RegisterType((*QueryReservationByJobRequest)(nil), "virtengine.resources.v1.QueryReservationByJobRequest")
+	proto.RegisterType((*QueryReservationByConsumerRequest)(nil), "virtengine.resources.v1.QueryReservationByConsumerRequest")
+	proto.RegisterType((*QueryReservationsByProviderRequest)(nil), "virtengine.resources.v1.QueryReservationsByProviderRequest")
+	proto.RegisterType((*QueryReservationResponse)(nil), "virtengine.resources.v1.QueryReservationResponse")
+	proto.RegisterType((*QueryReservationsResponse)(nil), "virtengine.resources.v1.QueryReservationsResponse")
+	proto.RegisterType((*QueryReservationLineageRequest)(nil), "virtengine.resources.v1.QueryReservationLineageRequest")
+	proto.RegisterType((*QueryReservationLineageResponse)(nil), "virtengine.resources.v1.QueryReservationLineageResponse")
 	proto.RegisterType((*QueryParamsRequest)(nil), "virtengine.resources.v1.QueryParamsRequest")
 	proto.RegisterType((*QueryParamsResponse)(nil), "virtengine.resources.v1.QueryParamsResponse")
 }
@@ -582,67 +1125,98 @@ func init() {
 }
 
 var fileDescriptor_170828374c89c606 = []byte{
-	// 955 bytes of a gzipped FileDescriptorProto
-	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0xc4, 0x57, 0x4f, 0x6f, 0x1b, 0x45,
-	0x14, 0xcf, 0x1a, 0x35, 0x55, 0xa6, 0x2d, 0xb4, 0x83, 0x21, 0xa9, 0x05, 0x9e, 0x66, 0x50, 0x49,
-	0xff, 0x65, 0x87, 0xb4, 0x82, 0x42, 0x23, 0x24, 0xba, 0x08, 0xd1, 0x5e, 0x50, 0xd8, 0x5e, 0x10,
-	0x97, 0x68, 0xec, 0x1d, 0x6d, 0x46, 0xd8, 0x3b, 0xee, 0xce, 0xda, 0xc2, 0xaa, 0x7a, 0xe1, 0x8c,
-	0x0a, 0x12, 0x12, 0x5f, 0x81, 0x0b, 0x47, 0xe0, 0x33, 0x94, 0x5b, 0x05, 0x17, 0xc4, 0x61, 0x85,
-	0x12, 0xc4, 0xc1, 0x47, 0x5f, 0x91, 0x10, 0xf2, 0xce, 0x5b, 0xcf, 0xda, 0xee, 0x26, 0x4e, 0x11,
-	0xf2, 0xcd, 0xf3, 0xfe, 0xfe, 0x7e, 0x6f, 0xde, 0x7b, 0xb3, 0x46, 0xaf, 0xf5, 0x64, 0x9c, 0x88,
-	0x28, 0x94, 0x91, 0x60, 0xb1, 0xd0, 0xaa, 0x1b, 0x37, 0x85, 0x66, 0xbd, 0x2d, 0x76, 0xbf, 0x2b,
-	0xe2, 0xbe, 0xdb, 0x89, 0x55, 0xa2, 0xf0, 0xaa, 0x35, 0x72, 0xc7, 0x46, 0x6e, 0x6f, 0xab, 0x56,
-	0x0d, 0x55, 0xa8, 0x32, 0x1b, 0x36, 0xfa, 0x65, 0xcc, 0x6b, 0xaf, 0x84, 0x4a, 0x85, 0x2d, 0xc1,
-	0x78, 0x47, 0x32, 0x1e, 0x45, 0x2a, 0xe1, 0x89, 0x54, 0x91, 0x06, 0xed, 0xf9, 0xa6, 0xd2, 0x6d,
-	0xa5, 0x77, 0x8d, 0x9b, 0x39, 0x80, 0xea, 0x8a, 0x39, 0xb1, 0x06, 0xd7, 0xc2, 0x00, 0x60, 0xbd,
-	0xad, 0x86, 0x48, 0xf8, 0x16, 0xeb, 0xf0, 0x50, 0x46, 0x59, 0x1c, 0xb0, 0x2d, 0x05, 0x9e, 0xf4,
-	0x3b, 0x02, 0x02, 0xd2, 0x7f, 0x1c, 0x54, 0xff, 0x78, 0x14, 0xe7, 0x76, 0x8f, 0xcb, 0x16, 0x6f,
-	0xb4, 0x84, 0x9f, 0x9b, 0xfa, 0xe2, 0x7e, 0x57, 0xe8, 0x04, 0x0b, 0x74, 0x32, 0x36, 0x3f, 0xd7,
-	0x9c, 0x0b, 0xce, 0xa5, 0x53, 0xd7, 0x2f, 0xb9, 0x25, 0x6c, 0xdd, 0xdc, 0x17, 0x5c, 0xbd, 0xf5,
-	0xc7, 0x29, 0x59, 0x1a, 0xa4, 0x24, 0x0f, 0x30, 0x4c, 0xc9, 0xf3, 0x7d, 0xde, 0x6e, 0xdd, 0xa2,
-	0x20, 0xa0, 0x7e, 0xae, 0xc2, 0x5d, 0x84, 0x2c, 0x85, 0xb5, 0x4a, 0x96, 0xe9, 0x75, 0x17, 0xd8,
-	0x8f, 0xf8, 0xba, 0xa6, 0xe0, 0xc0, 0xd7, 0xdd, 0xe1, 0xe1, 0x38, 0xcf, 0xe6, 0x20, 0x25, 0x55,
-	0xeb, 0x7d, 0x4d, 0xb5, 0x65, 0x22, 0xda, 0x9d, 0xa4, 0x3f, 0x4c, 0xc9, 0x39, 0x93, 0xd0, 0x6a,
-	0xa9, 0x5f, 0x48, 0x44, 0x7f, 0x74, 0xd0, 0xb9, 0x19, 0xee, 0x58, 0xa1, 0x15, 0x19, 0xf5, 0x44,
-	0x94, 0xa8, 0xb8, 0x0f, 0xac, 0xaf, 0x1c, 0xc9, 0xfa, 0x6e, 0xee, 0xe1, 0x5d, 0x04, 0xde, 0x36,
-	0xc8, 0x30, 0x25, 0x67, 0x0d, 0x90, 0xb1, 0x88, 0xfa, 0x56, 0x8d, 0x19, 0x3a, 0xa1, 0x9b, 0x2a,
-	0x16, 0x19, 0xf1, 0x15, 0xef, 0xfc, 0x20, 0x25, 0x46, 0x30, 0x4c, 0xc9, 0x69, 0xe3, 0x98, 0x1d,
-	0xa9, 0x6f, 0xc4, 0xf4, 0x51, 0x05, 0x91, 0xd2, 0x8b, 0xd3, 0x1d, 0x15, 0x69, 0x81, 0x35, 0x42,
-	0x4d, 0x1e, 0x05, 0x32, 0xe0, 0x89, 0xd0, 0x6b, 0xce, 0x85, 0xe7, 0x0e, 0xa5, 0x31, 0x13, 0xc8,
-	0xdb, 0x00, 0x1a, 0x85, 0x28, 0xb6, 0xa0, 0x56, 0x46, 0xfd, 0x82, 0x01, 0xee, 0x3d, 0xe5, 0x1e,
-	0x37, 0x8e, 0xbc, 0x47, 0x83, 0xf8, 0xbf, 0x5c, 0xe4, 0x1e, 0x7a, 0xd9, 0xd4, 0xa3, 0xd5, 0x52,
-	0xcd, 0x4c, 0x94, 0x37, 0xf0, 0x47, 0xe8, 0x0c, 0x1f, 0x0b, 0x77, 0x65, 0x90, 0x5d, 0xe8, 0x8a,
-	0x77, 0x79, 0x90, 0x92, 0x49, 0xc5, 0x30, 0x25, 0x55, 0x93, 0x64, 0x42, 0x4c, 0xfd, 0xd3, 0xf6,
-	0x7c, 0x37, 0xa0, 0x5f, 0x39, 0x68, 0x75, 0x26, 0x15, 0x94, 0x3c, 0x41, 0xc8, 0xda, 0x42, 0xe7,
-	0x5c, 0x3d, 0xb2, 0x73, 0x6c, 0x20, 0x5b, 0x73, 0x1b, 0xc6, 0x72, 0xb7, 0x32, 0xea, 0x17, 0x0c,
-	0xe8, 0x5f, 0x0e, 0x7a, 0x75, 0x0a, 0xd1, 0x1d, 0xa9, 0x47, 0x8d, 0xf5, 0x3f, 0xd5, 0x60, 0x51,
-	0xd3, 0xfa, 0xf7, 0x78, 0x5d, 0xcd, 0x12, 0x85, 0x1b, 0xe0, 0x68, 0x59, 0x8c, 0xa6, 0x2a, 0x6f,
-	0xf8, 0xf2, 0x6d, 0x65, 0x63, 0x7c, 0x30, 0x72, 0xf0, 0x08, 0x94, 0x1e, 0xfc, 0x87, 0x29, 0x39,
-	0x63, 0xd0, 0x98, 0x33, 0xf5, 0x41, 0xb1, 0xb0, 0x16, 0x7f, 0x54, 0x41, 0xeb, 0x53, 0xec, 0xb5,
-	0xd7, 0xdf, 0x89, 0x55, 0x4f, 0x06, 0x22, 0xce, 0xaf, 0x3a, 0x46, 0x67, 0x3b, 0x20, 0xda, 0xe5,
-	0x41, 0x10, 0x0b, 0xad, 0xe1, 0xb6, 0x3f, 0x1c, 0xa4, 0x64, 0x46, 0x37, 0x4c, 0xc9, 0x2a, 0xa4,
-	0x9d, 0xd2, 0xd0, 0x5f, 0x7e, 0xd8, 0xac, 0x02, 0xab, 0xdb, 0x46, 0x74, 0x2f, 0x89, 0x65, 0x14,
-	0xfa, 0x2f, 0xe4, 0xa6, 0x20, 0x5e, 0x54, 0x3b, 0x7c, 0x5b, 0x41, 0xf4, 0xb0, 0x82, 0x40, 0x4b,
-	0x7c, 0x8e, 0x4e, 0xd9, 0xe6, 0xcd, 0xfb, 0xe2, 0x58, 0x53, 0x79, 0x19, 0x5a, 0xa3, 0x18, 0x67,
-	0x98, 0x12, 0x3c, 0x3d, 0x29, 0x9a, 0xfa, 0x45, 0x93, 0x85, 0x75, 0x4a, 0x15, 0xe1, 0xac, 0x2e,
-	0x3b, 0x3c, 0xe6, 0xed, 0xfc, 0x25, 0xa7, 0x0a, 0xbd, 0x38, 0x21, 0x85, 0xf2, 0x7c, 0x82, 0x96,
-	0x3b, 0x99, 0x04, 0xf6, 0x15, 0x29, 0xad, 0x8c, 0x71, 0xb4, 0x83, 0x62, 0xdc, 0xec, 0xa0, 0x98,
-	0x33, 0xf5, 0x41, 0x71, 0xfd, 0xbb, 0x93, 0xe8, 0x44, 0x96, 0x11, 0xff, 0xe4, 0x20, 0x3c, 0xfb,
-	0x52, 0xe1, 0x9b, 0xa5, 0xa9, 0x0e, 0xff, 0x28, 0xa9, 0xbd, 0x7d, 0x7c, 0x47, 0xc3, 0x96, 0x6e,
-	0x7e, 0xf1, 0xeb, 0x9f, 0xdf, 0x54, 0x36, 0xf0, 0x45, 0x56, 0xf6, 0x7d, 0xc4, 0x8d, 0xb3, 0x6c,
-	0xc9, 0xa4, 0x8f, 0xbf, 0x77, 0x10, 0xb2, 0x8d, 0x80, 0xd9, 0x11, 0x79, 0xa7, 0x1f, 0x9f, 0xda,
-	0x1b, 0xf3, 0x3b, 0x00, 0xc0, 0xed, 0x0c, 0xe0, 0x9b, 0xf8, 0x46, 0x39, 0xc0, 0xb1, 0x13, 0x7b,
-	0x30, 0xb1, 0xa5, 0x1f, 0xe2, 0x9f, 0x47, 0x9f, 0x33, 0xd3, 0xbb, 0x11, 0xbf, 0x35, 0x2f, 0x88,
-	0xc9, 0x57, 0xa3, 0x76, 0xf3, 0xd8, 0x7e, 0xc0, 0xe1, 0xfd, 0x8c, 0xc3, 0xbb, 0x78, 0xfb, 0x19,
-	0x38, 0xb0, 0x3d, 0x40, 0xfd, 0xbb, 0x83, 0x5e, 0x7a, 0xea, 0x60, 0xe3, 0x5b, 0xf3, 0xe2, 0x9a,
-	0x5d, 0x8f, 0xb5, 0xed, 0x67, 0xf2, 0x05, 0x5e, 0x77, 0x32, 0x5e, 0x1e, 0x7e, 0x6f, 0x0e, 0x5e,
-	0x9a, 0xe5, 0x5b, 0x92, 0x3d, 0x98, 0x5e, 0xad, 0x0f, 0xf1, 0x97, 0x0e, 0x5a, 0x36, 0xe3, 0x84,
-	0xaf, 0x1e, 0x8e, 0x68, 0x62, 0x86, 0x6b, 0xd7, 0xe6, 0x33, 0x06, 0xbc, 0x1b, 0x19, 0xde, 0x75,
-	0x4c, 0x4a, 0xf1, 0x9a, 0x49, 0xf5, 0xee, 0x3d, 0xde, 0xaf, 0x3b, 0x4f, 0xf6, 0xeb, 0xce, 0x1f,
-	0xfb, 0x75, 0xe7, 0xeb, 0x83, 0xfa, 0xd2, 0x93, 0x83, 0xfa, 0xd2, 0x6f, 0x07, 0xf5, 0xa5, 0x4f,
-	0xdf, 0x09, 0x65, 0xb2, 0xd7, 0x6d, 0xb8, 0x4d, 0xd5, 0x2e, 0x06, 0x29, 0xfc, 0xd4, 0xc1, 0x67,
-	0x2c, 0x54, 0x2c, 0x52, 0xc1, 0x64, 0xec, 0xc6, 0x72, 0xf6, 0x1f, 0xe3, 0xc6, 0xbf, 0x01, 0x00,
-	0x00, 0xff, 0xff, 0xb2, 0x18, 0xbf, 0x66, 0x43, 0x0d, 0x00, 0x00,
+	// 1451 bytes of a gzipped FileDescriptorProto
+	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0xc4, 0x58, 0xcf, 0x6f, 0x13, 0xc7,
+	0x17, 0xcf, 0x86, 0x2f, 0xe1, 0xcb, 0x24, 0xa1, 0x30, 0x04, 0x48, 0x2c, 0xea, 0x85, 0xa1, 0x34,
+	0xfc, 0xf4, 0x34, 0xa0, 0x94, 0x42, 0x84, 0x0a, 0x8e, 0x28, 0x98, 0x52, 0x4a, 0x97, 0x1e, 0xaa,
+	0x5e, 0xa2, 0x5d, 0xef, 0xc8, 0x2c, 0xb5, 0x77, 0xcc, 0xee, 0xc6, 0xaa, 0x65, 0xf9, 0xd0, 0x9e,
+	0x2b, 0xa8, 0x54, 0xa9, 0x7f, 0x45, 0x2f, 0x48, 0xb4, 0x3d, 0xf6, 0x4a, 0x2f, 0x15, 0x6a, 0x7b,
+	0xe8, 0x0f, 0x69, 0x55, 0x91, 0xaa, 0x87, 0x1c, 0x7d, 0xad, 0x54, 0x55, 0x9e, 0x99, 0xdd, 0xd9,
+	0xf5, 0x7a, 0xed, 0xb5, 0x69, 0x94, 0x9b, 0xe7, 0xcd, 0xfb, 0xf5, 0x79, 0xf3, 0xde, 0xcc, 0x67,
+	0x0d, 0x8e, 0x35, 0x2c, 0xc7, 0x23, 0x76, 0xc5, 0xb2, 0x09, 0x76, 0x88, 0x4b, 0xd7, 0x9d, 0x32,
+	0x71, 0x71, 0x63, 0x09, 0x3f, 0x58, 0x27, 0x4e, 0xb3, 0x50, 0x77, 0xa8, 0x47, 0xe1, 0x21, 0xa9,
+	0x54, 0x08, 0x95, 0x0a, 0x8d, 0xa5, 0xdc, 0x5c, 0x85, 0x56, 0x28, 0xd3, 0xc1, 0xdd, 0x5f, 0x5c,
+	0x3d, 0x77, 0xb8, 0x42, 0x69, 0xa5, 0x4a, 0xb0, 0x5e, 0xb7, 0xb0, 0x6e, 0xdb, 0xd4, 0xd3, 0x3d,
+	0x8b, 0xda, 0xae, 0xd8, 0x5d, 0x28, 0x53, 0xb7, 0x46, 0xdd, 0x35, 0x6e, 0xc6, 0x17, 0x62, 0xeb,
+	0x14, 0x5f, 0x61, 0x43, 0x77, 0x09, 0x4f, 0x00, 0x37, 0x96, 0x0c, 0xe2, 0xe9, 0x4b, 0xb8, 0xae,
+	0x57, 0x2c, 0x9b, 0xf9, 0x11, 0xba, 0xa9, 0x89, 0x7b, 0xcd, 0x3a, 0x11, 0x0e, 0xd1, 0x3f, 0x0a,
+	0xc8, 0xbf, 0xd7, 0xf5, 0x73, 0xb5, 0xa1, 0x5b, 0x55, 0xdd, 0xa8, 0x12, 0x2d, 0x50, 0xd5, 0xc8,
+	0x83, 0x75, 0xe2, 0x7a, 0x90, 0x80, 0x5d, 0x0e, 0xff, 0x39, 0xaf, 0x1c, 0x51, 0x4e, 0x4c, 0x9f,
+	0x3b, 0x51, 0x48, 0x41, 0x5b, 0x08, 0x6c, 0x85, 0x69, 0xf1, 0xe8, 0x53, 0x5f, 0x9d, 0xd8, 0xf4,
+	0xd5, 0xc0, 0x41, 0xc7, 0x57, 0xf7, 0x34, 0xf5, 0x5a, 0xf5, 0x12, 0x12, 0x02, 0xa4, 0x05, 0x5b,
+	0x70, 0x1d, 0x00, 0x09, 0x61, 0x7e, 0x92, 0x45, 0x7a, 0xb5, 0x20, 0xd0, 0x77, 0xf1, 0x16, 0x78,
+	0xc1, 0x05, 0xde, 0xc2, 0x1d, 0xbd, 0x12, 0xc6, 0x39, 0xbb, 0xe9, 0xab, 0x73, 0xd2, 0xfa, 0x0c,
+	0xad, 0x59, 0x1e, 0xa9, 0xd5, 0xbd, 0x66, 0xc7, 0x57, 0xf7, 0xf1, 0x80, 0x72, 0x17, 0x69, 0x91,
+	0x40, 0xe8, 0x6b, 0x05, 0xec, 0x4b, 0x60, 0x87, 0x14, 0xec, 0xb6, 0xec, 0x06, 0xb1, 0x3d, 0xea,
+	0x34, 0x05, 0xea, 0x53, 0x43, 0x51, 0x97, 0x02, 0x8b, 0xe2, 0x71, 0x81, 0x5b, 0x3a, 0xe9, 0xf8,
+	0xea, 0x5e, 0x9e, 0x48, 0x28, 0x42, 0x9a, 0xdc, 0x86, 0x18, 0xec, 0x74, 0xcb, 0xd4, 0x21, 0x0c,
+	0xf8, 0xee, 0xe2, 0xc2, 0xa6, 0xaf, 0x72, 0x41, 0xc7, 0x57, 0x67, 0xb8, 0x21, 0x5b, 0x22, 0x8d,
+	0x8b, 0xd1, 0xc3, 0x49, 0xa0, 0xa6, 0x1e, 0x9c, 0x5b, 0xa7, 0xb6, 0x4b, 0xa0, 0x0b, 0x40, 0x59,
+	0xb7, 0x4d, 0xcb, 0xd4, 0x3d, 0xe2, 0xce, 0x2b, 0x47, 0x76, 0x0c, 0x84, 0x91, 0x70, 0x54, 0x5c,
+	0x14, 0x30, 0x22, 0x5e, 0x64, 0x41, 0xa5, 0x0c, 0x69, 0x11, 0x05, 0xd8, 0xe8, 0x73, 0x8e, 0x8b,
+	0x43, 0xcf, 0x91, 0x67, 0xfc, 0x22, 0x07, 0x79, 0x0f, 0x1c, 0xe4, 0xf5, 0xa8, 0x56, 0x69, 0x99,
+	0x89, 0x82, 0x06, 0xbe, 0x0d, 0x66, 0xf5, 0x50, 0xb8, 0x66, 0x99, 0xec, 0x40, 0x77, 0x17, 0x4f,
+	0x6e, 0xfa, 0x6a, 0x7c, 0xa3, 0xe3, 0xab, 0x73, 0x3c, 0x48, 0x4c, 0x8c, 0xb4, 0x19, 0xb9, 0x2e,
+	0x99, 0xe8, 0x91, 0x02, 0x0e, 0x25, 0x42, 0x89, 0x92, 0x7b, 0x00, 0x48, 0x5d, 0xd1, 0x39, 0xa7,
+	0x87, 0x76, 0x8e, 0x74, 0x24, 0x6b, 0x2e, 0xdd, 0x48, 0xec, 0x52, 0x86, 0xb4, 0x88, 0x02, 0xfa,
+	0x4b, 0x01, 0x2f, 0xf7, 0x64, 0x74, 0xc3, 0x72, 0xbb, 0x8d, 0xb5, 0x45, 0x35, 0xd8, 0xae, 0x69,
+	0xfd, 0x3b, 0xbc, 0xae, 0x92, 0x40, 0xc5, 0x09, 0xe8, 0x60, 0x8a, 0x74, 0xa7, 0x2a, 0x68, 0xf8,
+	0xf4, 0xdb, 0x4a, 0xfa, 0xb8, 0xd6, 0x35, 0x28, 0xaa, 0xa2, 0xf4, 0xc2, 0xbe, 0xe3, 0xab, 0xb3,
+	0x3c, 0x1b, 0xbe, 0x46, 0x9a, 0xd8, 0xd8, 0xb6, 0x16, 0x7f, 0x38, 0x09, 0x8e, 0xf6, 0xa0, 0x77,
+	0x8b, 0xcd, 0x3b, 0x0e, 0x6d, 0x58, 0x26, 0x71, 0x82, 0xa3, 0x76, 0xc0, 0xde, 0xba, 0x10, 0xad,
+	0xe9, 0xa6, 0xe9, 0x10, 0xd7, 0x15, 0xa7, 0x7d, 0x7d, 0xd3, 0x57, 0x13, 0x7b, 0x1d, 0x5f, 0x3d,
+	0x24, 0xc2, 0xf6, 0xec, 0xa0, 0x1f, 0x9f, 0x9c, 0x9d, 0x13, 0xa8, 0xae, 0x72, 0xd1, 0x5d, 0xcf,
+	0xb1, 0xec, 0x8a, 0xf6, 0x52, 0xa0, 0x2a, 0xc4, 0xdb, 0xd5, 0x0e, 0x5f, 0x4e, 0x02, 0x34, 0xa8,
+	0x20, 0xa2, 0x25, 0x3e, 0x06, 0xd3, 0xb2, 0x79, 0x83, 0xbe, 0x18, 0x69, 0x2a, 0x4f, 0x8a, 0xd6,
+	0x88, 0xfa, 0xe9, 0xf8, 0x2a, 0xec, 0x9d, 0x14, 0x17, 0x69, 0x51, 0x95, 0x6d, 0xeb, 0x94, 0x2b,
+	0xe2, 0x86, 0xd2, 0x88, 0x4b, 0x9c, 0x46, 0xec, 0x36, 0x3c, 0x0e, 0xf6, 0x38, 0x52, 0x1a, 0x5e,
+	0x05, 0xda, 0x6c, 0x44, 0x5a, 0x32, 0xd1, 0x8a, 0x18, 0xb4, 0x88, 0x87, 0x62, 0xf3, 0x5d, 0x27,
+	0xd2, 0x67, 0x0b, 0xe0, 0xff, 0xb4, 0xbb, 0x96, 0x2e, 0x76, 0xb1, 0x75, 0xc9, 0x44, 0xcb, 0xe0,
+	0x70, 0xd2, 0xb8, 0x68, 0x99, 0x81, 0xe9, 0x01, 0x30, 0x65, 0x58, 0xa6, 0x34, 0xdc, 0x69, 0x58,
+	0x66, 0x5a, 0xcc, 0x5b, 0x44, 0x77, 0x49, 0x24, 0x66, 0xb5, 0xbb, 0x8e, 0xc4, 0x64, 0xeb, 0xb4,
+	0x98, 0x37, 0xa9, 0x11, 0x89, 0x79, 0x9f, 0x1a, 0x91, 0x98, 0xf7, 0xa9, 0x51, 0x32, 0x91, 0x25,
+	0x46, 0x2a, 0x66, 0xb6, 0x4a, 0x6d, 0x77, 0xbd, 0x26, 0xa1, 0x1e, 0x03, 0xb3, 0x65, 0x21, 0x5a,
+	0xeb, 0xb2, 0x27, 0xe1, 0x62, 0x26, 0x10, 0xbe, 0xdf, 0xac, 0x13, 0xa8, 0x82, 0xe9, 0x50, 0xc9,
+	0x32, 0xf9, 0x43, 0xae, 0x81, 0x40, 0x54, 0x32, 0xd1, 0x63, 0x45, 0x74, 0x6b, 0x24, 0x56, 0x9f,
+	0xf9, 0x5d, 0x4d, 0x9d, 0xdf, 0xf9, 0xec, 0x03, 0xf9, 0xd6, 0xf8, 0x03, 0xd9, 0xf3, 0xaa, 0xce,
+	0x27, 0x1b, 0x49, 0x8c, 0xd5, 0x2d, 0x30, 0x1d, 0xe9, 0x19, 0xf1, 0xd8, 0xbd, 0x32, 0x68, 0xac,
+	0xc2, 0x0a, 0xff, 0xaf, 0x3b, 0x4f, 0x5a, 0xd4, 0x1c, 0x3d, 0x51, 0xc0, 0x42, 0xa2, 0x3a, 0x61,
+	0xac, 0xdb, 0x60, 0x26, 0xa2, 0x1c, 0xcc, 0xf0, 0x28, 0xc1, 0x62, 0xf6, 0xf0, 0xfa, 0x0b, 0x0c,
+	0x66, 0xac, 0x40, 0x8f, 0x94, 0x64, 0xd3, 0xde, 0xb2, 0x6c, 0x22, 0xeb, 0x99, 0x71, 0xe2, 0xfe,
+	0xb3, 0x23, 0xfb, 0x24, 0x60, 0x86, 0xfd, 0x32, 0xda, 0x8a, 0xa3, 0x83, 0xd7, 0xc3, 0x27, 0x77,
+	0x92, 0x1d, 0xcb, 0xc9, 0x2c, 0x8e, 0xf8, 0x9b, 0xcb, 0xbd, 0x05, 0x0f, 0x6b, 0xfc, 0x54, 0x76,
+	0x8c, 0x7f, 0x2a, 0x73, 0x00, 0xb2, 0x12, 0xdc, 0xd1, 0x1d, 0xbd, 0x16, 0x7c, 0xc9, 0x20, 0x0a,
+	0xf6, 0xc7, 0xa4, 0xa2, 0x18, 0x1f, 0x80, 0xa9, 0x3a, 0x93, 0x88, 0x3a, 0xa8, 0xa9, 0xe9, 0x73,
+	0x43, 0x49, 0x14, 0xb8, 0x99, 0x24, 0x0a, 0x7c, 0x8d, 0x34, 0xb1, 0x71, 0xee, 0xd7, 0xfd, 0x60,
+	0x27, 0x8b, 0x08, 0xbf, 0x51, 0x00, 0x4c, 0x32, 0x75, 0x78, 0x21, 0x35, 0xd4, 0xe0, 0x8f, 0xb2,
+	0xdc, 0x1b, 0xa3, 0x1b, 0x72, 0xb4, 0xe8, 0xec, 0xa7, 0x3f, 0xfd, 0xf9, 0xc5, 0xe4, 0x22, 0x3c,
+	0x8e, 0xd3, 0xbe, 0x0f, 0x75, 0x6e, 0x6c, 0x55, 0x2d, 0xaf, 0x09, 0xbf, 0x52, 0x00, 0x90, 0x0f,
+	0x21, 0xc4, 0x43, 0xe2, 0xf6, 0x92, 0xef, 0xdc, 0x6b, 0xd9, 0x0d, 0x44, 0x82, 0x2b, 0x2c, 0xc1,
+	0x65, 0x78, 0x3e, 0x3d, 0xc1, 0xd0, 0x08, 0xb7, 0x62, 0x2c, 0xb5, 0x0d, 0xbf, 0xef, 0x7e, 0xce,
+	0xf5, 0x72, 0x43, 0xf8, 0x7a, 0xd6, 0x24, 0xe2, 0xac, 0x39, 0x77, 0x61, 0x64, 0x3b, 0x81, 0x61,
+	0x95, 0x61, 0xb8, 0x0c, 0x57, 0xc6, 0xc0, 0x80, 0xef, 0x89, 0xac, 0x7f, 0x53, 0xc0, 0x81, 0xbe,
+	0xc4, 0x06, 0x5e, 0xca, 0x9a, 0x57, 0xf2, 0x79, 0xc9, 0xad, 0x8c, 0x65, 0x2b, 0x70, 0xdd, 0x60,
+	0xb8, 0x8a, 0xf0, 0x4a, 0x06, 0x5c, 0x2e, 0x0e, 0x1e, 0x25, 0xdc, 0xea, 0x7d, 0xd0, 0xda, 0xf0,
+	0xb1, 0x02, 0xa6, 0x23, 0xb7, 0x01, 0x1c, 0xd2, 0x27, 0x49, 0x22, 0x93, 0x5b, 0x1a, 0xc1, 0x42,
+	0xa4, 0x7f, 0x99, 0xa5, 0x7f, 0x01, 0x2e, 0xa7, 0xa6, 0x1f, 0xb9, 0xd6, 0x70, 0x2b, 0x7e, 0x6b,
+	0xb7, 0xe1, 0x77, 0x0a, 0x80, 0x49, 0x3e, 0x34, 0x6c, 0x88, 0x53, 0x19, 0xd4, 0xd6, 0x23, 0x60,
+	0x7c, 0x0c, 0xb7, 0x02, 0x9a, 0xd6, 0x86, 0xdf, 0x2a, 0x60, 0x6f, 0x2f, 0x29, 0x83, 0xcb, 0x23,
+	0xe4, 0x2f, 0x49, 0xdc, 0x38, 0xd9, 0x5f, 0x64, 0xd9, 0x9f, 0x87, 0x4b, 0x99, 0xb2, 0x37, 0x2c,
+	0x13, 0xb7, 0x38, 0x4f, 0xec, 0x53, 0x7b, 0xc6, 0x0b, 0x47, 0xaa, 0x7d, 0x94, 0x49, 0x6e, 0x7d,
+	0xed, 0x19, 0x2f, 0xc5, 0xad, 0x80, 0xae, 0xf6, 0xa9, 0xfd, 0x4d, 0x6a, 0x8c, 0x54, 0x7b, 0x49,
+	0x66, 0xb7, 0xbe, 0xf6, 0xf7, 0xa9, 0x81, 0x5b, 0x9c, 0x2f, 0xb7, 0xe1, 0xef, 0x0a, 0x38, 0xd0,
+	0x97, 0x1f, 0x0f, 0xbb, 0x88, 0x06, 0x91, 0xea, 0x71, 0x30, 0xdc, 0x65, 0x18, 0xde, 0x81, 0x6f,
+	0x67, 0xc2, 0x10, 0x50, 0x6f, 0xdc, 0x8a, 0x91, 0xf7, 0x76, 0x64, 0xdd, 0x45, 0xf7, 0xb3, 0x02,
+	0x0e, 0xf6, 0x67, 0xe4, 0x70, 0x25, 0x73, 0x8a, 0x7d, 0x2e, 0xda, 0x73, 0xd9, 0x8d, 0x43, 0x80,
+	0x25, 0x06, 0x70, 0x15, 0x5e, 0xcd, 0x02, 0x70, 0xf0, 0x05, 0xfb, 0x43, 0x7c, 0x60, 0x04, 0x03,
+	0x1c, 0x61, 0x60, 0xe2, 0x2c, 0x76, 0x18, 0xe3, 0x48, 0x27, 0x9b, 0xe8, 0x1a, 0x03, 0xf5, 0x26,
+	0xbc, 0x3c, 0xd6, 0xad, 0x8b, 0xab, 0x22, 0xf3, 0xcf, 0x14, 0x30, 0xc5, 0x09, 0x18, 0x3c, 0x3d,
+	0x38, 0x97, 0x18, 0xeb, 0xcb, 0x9d, 0xc9, 0xa6, 0x2c, 0x92, 0x5d, 0x64, 0xc9, 0x1e, 0x85, 0x6a,
+	0x6a, 0xb2, 0x9c, 0xdb, 0x15, 0xef, 0x3e, 0x7d, 0x9e, 0x57, 0x9e, 0x3d, 0xcf, 0x2b, 0x7f, 0x3c,
+	0xcf, 0x2b, 0x9f, 0x6f, 0xe4, 0x27, 0x9e, 0x6d, 0xe4, 0x27, 0x7e, 0xd9, 0xc8, 0x4f, 0x7c, 0x78,
+	0xb1, 0x62, 0x79, 0xf7, 0xd6, 0x8d, 0x42, 0x99, 0xd6, 0xa2, 0x4e, 0x22, 0x3f, 0x5d, 0xf3, 0x23,
+	0x5c, 0xa1, 0xd8, 0xa6, 0x66, 0xdc, 0xb7, 0x31, 0xc5, 0xfe, 0x95, 0x3f, 0xff, 0x6f, 0x00, 0x00,
+	0x00, 0xff, 0xff, 0x94, 0x6f, 0x0d, 0x91, 0x75, 0x18, 0x00, 0x00,
 }
 
 // Reference imports to suppress errors if they are not otherwise used.
@@ -665,6 +1239,14 @@ type QueryClient interface {
 	AllocationHistory(ctx context.Context, in *QueryAllocationHistoryRequest, opts ...grpc.CallOption) (*QueryAllocationHistoryResponse, error)
 	// AllocationsByProvider returns allocations for a provider.
 	AllocationsByProvider(ctx context.Context, in *QueryAllocationsByProviderRequest, opts ...grpc.CallOption) (*QueryAllocationsByProviderResponse, error)
+	Reservation(ctx context.Context, in *QueryReservationRequest, opts ...grpc.CallOption) (*QueryReservationResponse, error)
+	ReservationByOrder(ctx context.Context, in *QueryReservationByOrderRequest, opts ...grpc.CallOption) (*QueryReservationResponse, error)
+	ReservationByBid(ctx context.Context, in *QueryReservationByBidRequest, opts ...grpc.CallOption) (*QueryReservationResponse, error)
+	ReservationByLease(ctx context.Context, in *QueryReservationByLeaseRequest, opts ...grpc.CallOption) (*QueryReservationResponse, error)
+	ReservationByJob(ctx context.Context, in *QueryReservationByJobRequest, opts ...grpc.CallOption) (*QueryReservationResponse, error)
+	ReservationByConsumer(ctx context.Context, in *QueryReservationByConsumerRequest, opts ...grpc.CallOption) (*QueryReservationResponse, error)
+	ReservationsByProvider(ctx context.Context, in *QueryReservationsByProviderRequest, opts ...grpc.CallOption) (*QueryReservationsResponse, error)
+	ReservationLineage(ctx context.Context, in *QueryReservationLineageRequest, opts ...grpc.CallOption) (*QueryReservationLineageResponse, error)
 	// Params returns module parameters.
 	Params(ctx context.Context, in *QueryParamsRequest, opts ...grpc.CallOption) (*QueryParamsResponse, error)
 }
@@ -713,6 +1295,78 @@ func (c *queryClient) AllocationsByProvider(ctx context.Context, in *QueryAlloca
 	return out, nil
 }
 
+func (c *queryClient) Reservation(ctx context.Context, in *QueryReservationRequest, opts ...grpc.CallOption) (*QueryReservationResponse, error) {
+	out := new(QueryReservationResponse)
+	err := c.cc.Invoke(ctx, "/virtengine.resources.v1.Query/Reservation", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *queryClient) ReservationByOrder(ctx context.Context, in *QueryReservationByOrderRequest, opts ...grpc.CallOption) (*QueryReservationResponse, error) {
+	out := new(QueryReservationResponse)
+	err := c.cc.Invoke(ctx, "/virtengine.resources.v1.Query/ReservationByOrder", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *queryClient) ReservationByBid(ctx context.Context, in *QueryReservationByBidRequest, opts ...grpc.CallOption) (*QueryReservationResponse, error) {
+	out := new(QueryReservationResponse)
+	err := c.cc.Invoke(ctx, "/virtengine.resources.v1.Query/ReservationByBid", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *queryClient) ReservationByLease(ctx context.Context, in *QueryReservationByLeaseRequest, opts ...grpc.CallOption) (*QueryReservationResponse, error) {
+	out := new(QueryReservationResponse)
+	err := c.cc.Invoke(ctx, "/virtengine.resources.v1.Query/ReservationByLease", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *queryClient) ReservationByJob(ctx context.Context, in *QueryReservationByJobRequest, opts ...grpc.CallOption) (*QueryReservationResponse, error) {
+	out := new(QueryReservationResponse)
+	err := c.cc.Invoke(ctx, "/virtengine.resources.v1.Query/ReservationByJob", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *queryClient) ReservationByConsumer(ctx context.Context, in *QueryReservationByConsumerRequest, opts ...grpc.CallOption) (*QueryReservationResponse, error) {
+	out := new(QueryReservationResponse)
+	err := c.cc.Invoke(ctx, "/virtengine.resources.v1.Query/ReservationByConsumer", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *queryClient) ReservationsByProvider(ctx context.Context, in *QueryReservationsByProviderRequest, opts ...grpc.CallOption) (*QueryReservationsResponse, error) {
+	out := new(QueryReservationsResponse)
+	err := c.cc.Invoke(ctx, "/virtengine.resources.v1.Query/ReservationsByProvider", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *queryClient) ReservationLineage(ctx context.Context, in *QueryReservationLineageRequest, opts ...grpc.CallOption) (*QueryReservationLineageResponse, error) {
+	out := new(QueryReservationLineageResponse)
+	err := c.cc.Invoke(ctx, "/virtengine.resources.v1.Query/ReservationLineage", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *queryClient) Params(ctx context.Context, in *QueryParamsRequest, opts ...grpc.CallOption) (*QueryParamsResponse, error) {
 	out := new(QueryParamsResponse)
 	err := c.cc.Invoke(ctx, "/virtengine.resources.v1.Query/Params", in, out, opts...)
@@ -732,6 +1386,14 @@ type QueryServer interface {
 	AllocationHistory(context.Context, *QueryAllocationHistoryRequest) (*QueryAllocationHistoryResponse, error)
 	// AllocationsByProvider returns allocations for a provider.
 	AllocationsByProvider(context.Context, *QueryAllocationsByProviderRequest) (*QueryAllocationsByProviderResponse, error)
+	Reservation(context.Context, *QueryReservationRequest) (*QueryReservationResponse, error)
+	ReservationByOrder(context.Context, *QueryReservationByOrderRequest) (*QueryReservationResponse, error)
+	ReservationByBid(context.Context, *QueryReservationByBidRequest) (*QueryReservationResponse, error)
+	ReservationByLease(context.Context, *QueryReservationByLeaseRequest) (*QueryReservationResponse, error)
+	ReservationByJob(context.Context, *QueryReservationByJobRequest) (*QueryReservationResponse, error)
+	ReservationByConsumer(context.Context, *QueryReservationByConsumerRequest) (*QueryReservationResponse, error)
+	ReservationsByProvider(context.Context, *QueryReservationsByProviderRequest) (*QueryReservationsResponse, error)
+	ReservationLineage(context.Context, *QueryReservationLineageRequest) (*QueryReservationLineageResponse, error)
 	// Params returns module parameters.
 	Params(context.Context, *QueryParamsRequest) (*QueryParamsResponse, error)
 }
@@ -751,6 +1413,30 @@ func (*UnimplementedQueryServer) AllocationHistory(ctx context.Context, req *Que
 }
 func (*UnimplementedQueryServer) AllocationsByProvider(ctx context.Context, req *QueryAllocationsByProviderRequest) (*QueryAllocationsByProviderResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method AllocationsByProvider not implemented")
+}
+func (*UnimplementedQueryServer) Reservation(ctx context.Context, req *QueryReservationRequest) (*QueryReservationResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method Reservation not implemented")
+}
+func (*UnimplementedQueryServer) ReservationByOrder(ctx context.Context, req *QueryReservationByOrderRequest) (*QueryReservationResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ReservationByOrder not implemented")
+}
+func (*UnimplementedQueryServer) ReservationByBid(ctx context.Context, req *QueryReservationByBidRequest) (*QueryReservationResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ReservationByBid not implemented")
+}
+func (*UnimplementedQueryServer) ReservationByLease(ctx context.Context, req *QueryReservationByLeaseRequest) (*QueryReservationResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ReservationByLease not implemented")
+}
+func (*UnimplementedQueryServer) ReservationByJob(ctx context.Context, req *QueryReservationByJobRequest) (*QueryReservationResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ReservationByJob not implemented")
+}
+func (*UnimplementedQueryServer) ReservationByConsumer(ctx context.Context, req *QueryReservationByConsumerRequest) (*QueryReservationResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ReservationByConsumer not implemented")
+}
+func (*UnimplementedQueryServer) ReservationsByProvider(ctx context.Context, req *QueryReservationsByProviderRequest) (*QueryReservationsResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ReservationsByProvider not implemented")
+}
+func (*UnimplementedQueryServer) ReservationLineage(ctx context.Context, req *QueryReservationLineageRequest) (*QueryReservationLineageResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ReservationLineage not implemented")
 }
 func (*UnimplementedQueryServer) Params(ctx context.Context, req *QueryParamsRequest) (*QueryParamsResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method Params not implemented")
@@ -832,6 +1518,150 @@ func _Query_AllocationsByProvider_Handler(srv interface{}, ctx context.Context, 
 	return interceptor(ctx, in, info, handler)
 }
 
+func _Query_Reservation_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(QueryReservationRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(QueryServer).Reservation(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/virtengine.resources.v1.Query/Reservation",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(QueryServer).Reservation(ctx, req.(*QueryReservationRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Query_ReservationByOrder_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(QueryReservationByOrderRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(QueryServer).ReservationByOrder(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/virtengine.resources.v1.Query/ReservationByOrder",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(QueryServer).ReservationByOrder(ctx, req.(*QueryReservationByOrderRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Query_ReservationByBid_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(QueryReservationByBidRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(QueryServer).ReservationByBid(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/virtengine.resources.v1.Query/ReservationByBid",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(QueryServer).ReservationByBid(ctx, req.(*QueryReservationByBidRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Query_ReservationByLease_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(QueryReservationByLeaseRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(QueryServer).ReservationByLease(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/virtengine.resources.v1.Query/ReservationByLease",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(QueryServer).ReservationByLease(ctx, req.(*QueryReservationByLeaseRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Query_ReservationByJob_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(QueryReservationByJobRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(QueryServer).ReservationByJob(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/virtengine.resources.v1.Query/ReservationByJob",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(QueryServer).ReservationByJob(ctx, req.(*QueryReservationByJobRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Query_ReservationByConsumer_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(QueryReservationByConsumerRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(QueryServer).ReservationByConsumer(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/virtengine.resources.v1.Query/ReservationByConsumer",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(QueryServer).ReservationByConsumer(ctx, req.(*QueryReservationByConsumerRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Query_ReservationsByProvider_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(QueryReservationsByProviderRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(QueryServer).ReservationsByProvider(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/virtengine.resources.v1.Query/ReservationsByProvider",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(QueryServer).ReservationsByProvider(ctx, req.(*QueryReservationsByProviderRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Query_ReservationLineage_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(QueryReservationLineageRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(QueryServer).ReservationLineage(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/virtengine.resources.v1.Query/ReservationLineage",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(QueryServer).ReservationLineage(ctx, req.(*QueryReservationLineageRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _Query_Params_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(QueryParamsRequest)
 	if err := dec(in); err != nil {
@@ -870,6 +1700,38 @@ var _Query_serviceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "AllocationsByProvider",
 			Handler:    _Query_AllocationsByProvider_Handler,
+		},
+		{
+			MethodName: "Reservation",
+			Handler:    _Query_Reservation_Handler,
+		},
+		{
+			MethodName: "ReservationByOrder",
+			Handler:    _Query_ReservationByOrder_Handler,
+		},
+		{
+			MethodName: "ReservationByBid",
+			Handler:    _Query_ReservationByBid_Handler,
+		},
+		{
+			MethodName: "ReservationByLease",
+			Handler:    _Query_ReservationByLease_Handler,
+		},
+		{
+			MethodName: "ReservationByJob",
+			Handler:    _Query_ReservationByJob_Handler,
+		},
+		{
+			MethodName: "ReservationByConsumer",
+			Handler:    _Query_ReservationByConsumer_Handler,
+		},
+		{
+			MethodName: "ReservationsByProvider",
+			Handler:    _Query_ReservationsByProvider_Handler,
+		},
+		{
+			MethodName: "ReservationLineage",
+			Handler:    _Query_ReservationLineage_Handler,
 		},
 		{
 			MethodName: "Params",
@@ -1259,6 +2121,418 @@ func (m *QueryAllocationsByProviderResponse) MarshalToSizedBuffer(dAtA []byte) (
 	return len(dAtA) - i, nil
 }
 
+func (m *QueryReservationRequest) Marshal() (dAtA []byte, err error) {
+	size := m.Size()
+	dAtA = make([]byte, size)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
+	if err != nil {
+		return nil, err
+	}
+	return dAtA[:n], nil
+}
+
+func (m *QueryReservationRequest) MarshalTo(dAtA []byte) (int, error) {
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *QueryReservationRequest) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
+	_ = i
+	var l int
+	_ = l
+	if len(m.ReservationId) > 0 {
+		i -= len(m.ReservationId)
+		copy(dAtA[i:], m.ReservationId)
+		i = encodeVarintQuery(dAtA, i, uint64(len(m.ReservationId)))
+		i--
+		dAtA[i] = 0xa
+	}
+	return len(dAtA) - i, nil
+}
+
+func (m *QueryReservationByOrderRequest) Marshal() (dAtA []byte, err error) {
+	size := m.Size()
+	dAtA = make([]byte, size)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
+	if err != nil {
+		return nil, err
+	}
+	return dAtA[:n], nil
+}
+
+func (m *QueryReservationByOrderRequest) MarshalTo(dAtA []byte) (int, error) {
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *QueryReservationByOrderRequest) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
+	_ = i
+	var l int
+	_ = l
+	if len(m.OrderId) > 0 {
+		i -= len(m.OrderId)
+		copy(dAtA[i:], m.OrderId)
+		i = encodeVarintQuery(dAtA, i, uint64(len(m.OrderId)))
+		i--
+		dAtA[i] = 0xa
+	}
+	return len(dAtA) - i, nil
+}
+
+func (m *QueryReservationByBidRequest) Marshal() (dAtA []byte, err error) {
+	size := m.Size()
+	dAtA = make([]byte, size)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
+	if err != nil {
+		return nil, err
+	}
+	return dAtA[:n], nil
+}
+
+func (m *QueryReservationByBidRequest) MarshalTo(dAtA []byte) (int, error) {
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *QueryReservationByBidRequest) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
+	_ = i
+	var l int
+	_ = l
+	if len(m.BidId) > 0 {
+		i -= len(m.BidId)
+		copy(dAtA[i:], m.BidId)
+		i = encodeVarintQuery(dAtA, i, uint64(len(m.BidId)))
+		i--
+		dAtA[i] = 0xa
+	}
+	return len(dAtA) - i, nil
+}
+
+func (m *QueryReservationByLeaseRequest) Marshal() (dAtA []byte, err error) {
+	size := m.Size()
+	dAtA = make([]byte, size)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
+	if err != nil {
+		return nil, err
+	}
+	return dAtA[:n], nil
+}
+
+func (m *QueryReservationByLeaseRequest) MarshalTo(dAtA []byte) (int, error) {
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *QueryReservationByLeaseRequest) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
+	_ = i
+	var l int
+	_ = l
+	if len(m.LeaseId) > 0 {
+		i -= len(m.LeaseId)
+		copy(dAtA[i:], m.LeaseId)
+		i = encodeVarintQuery(dAtA, i, uint64(len(m.LeaseId)))
+		i--
+		dAtA[i] = 0xa
+	}
+	return len(dAtA) - i, nil
+}
+
+func (m *QueryReservationByJobRequest) Marshal() (dAtA []byte, err error) {
+	size := m.Size()
+	dAtA = make([]byte, size)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
+	if err != nil {
+		return nil, err
+	}
+	return dAtA[:n], nil
+}
+
+func (m *QueryReservationByJobRequest) MarshalTo(dAtA []byte) (int, error) {
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *QueryReservationByJobRequest) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
+	_ = i
+	var l int
+	_ = l
+	if len(m.JobId) > 0 {
+		i -= len(m.JobId)
+		copy(dAtA[i:], m.JobId)
+		i = encodeVarintQuery(dAtA, i, uint64(len(m.JobId)))
+		i--
+		dAtA[i] = 0xa
+	}
+	return len(dAtA) - i, nil
+}
+
+func (m *QueryReservationByConsumerRequest) Marshal() (dAtA []byte, err error) {
+	size := m.Size()
+	dAtA = make([]byte, size)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
+	if err != nil {
+		return nil, err
+	}
+	return dAtA[:n], nil
+}
+
+func (m *QueryReservationByConsumerRequest) MarshalTo(dAtA []byte) (int, error) {
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *QueryReservationByConsumerRequest) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
+	_ = i
+	var l int
+	_ = l
+	if len(m.ConsumerId) > 0 {
+		i -= len(m.ConsumerId)
+		copy(dAtA[i:], m.ConsumerId)
+		i = encodeVarintQuery(dAtA, i, uint64(len(m.ConsumerId)))
+		i--
+		dAtA[i] = 0x12
+	}
+	if len(m.ConsumerType) > 0 {
+		i -= len(m.ConsumerType)
+		copy(dAtA[i:], m.ConsumerType)
+		i = encodeVarintQuery(dAtA, i, uint64(len(m.ConsumerType)))
+		i--
+		dAtA[i] = 0xa
+	}
+	return len(dAtA) - i, nil
+}
+
+func (m *QueryReservationsByProviderRequest) Marshal() (dAtA []byte, err error) {
+	size := m.Size()
+	dAtA = make([]byte, size)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
+	if err != nil {
+		return nil, err
+	}
+	return dAtA[:n], nil
+}
+
+func (m *QueryReservationsByProviderRequest) MarshalTo(dAtA []byte) (int, error) {
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *QueryReservationsByProviderRequest) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
+	_ = i
+	var l int
+	_ = l
+	if m.Pagination != nil {
+		{
+			size, err := m.Pagination.MarshalToSizedBuffer(dAtA[:i])
+			if err != nil {
+				return 0, err
+			}
+			i -= size
+			i = encodeVarintQuery(dAtA, i, uint64(size))
+		}
+		i--
+		dAtA[i] = 0x12
+	}
+	if len(m.ProviderAddress) > 0 {
+		i -= len(m.ProviderAddress)
+		copy(dAtA[i:], m.ProviderAddress)
+		i = encodeVarintQuery(dAtA, i, uint64(len(m.ProviderAddress)))
+		i--
+		dAtA[i] = 0xa
+	}
+	return len(dAtA) - i, nil
+}
+
+func (m *QueryReservationResponse) Marshal() (dAtA []byte, err error) {
+	size := m.Size()
+	dAtA = make([]byte, size)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
+	if err != nil {
+		return nil, err
+	}
+	return dAtA[:n], nil
+}
+
+func (m *QueryReservationResponse) MarshalTo(dAtA []byte) (int, error) {
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *QueryReservationResponse) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
+	_ = i
+	var l int
+	_ = l
+	{
+		size, err := m.Reservation.MarshalToSizedBuffer(dAtA[:i])
+		if err != nil {
+			return 0, err
+		}
+		i -= size
+		i = encodeVarintQuery(dAtA, i, uint64(size))
+	}
+	i--
+	dAtA[i] = 0xa
+	return len(dAtA) - i, nil
+}
+
+func (m *QueryReservationsResponse) Marshal() (dAtA []byte, err error) {
+	size := m.Size()
+	dAtA = make([]byte, size)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
+	if err != nil {
+		return nil, err
+	}
+	return dAtA[:n], nil
+}
+
+func (m *QueryReservationsResponse) MarshalTo(dAtA []byte) (int, error) {
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *QueryReservationsResponse) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
+	_ = i
+	var l int
+	_ = l
+	if m.Pagination != nil {
+		{
+			size, err := m.Pagination.MarshalToSizedBuffer(dAtA[:i])
+			if err != nil {
+				return 0, err
+			}
+			i -= size
+			i = encodeVarintQuery(dAtA, i, uint64(size))
+		}
+		i--
+		dAtA[i] = 0x12
+	}
+	if len(m.Reservations) > 0 {
+		for iNdEx := len(m.Reservations) - 1; iNdEx >= 0; iNdEx-- {
+			{
+				size, err := m.Reservations[iNdEx].MarshalToSizedBuffer(dAtA[:i])
+				if err != nil {
+					return 0, err
+				}
+				i -= size
+				i = encodeVarintQuery(dAtA, i, uint64(size))
+			}
+			i--
+			dAtA[i] = 0xa
+		}
+	}
+	return len(dAtA) - i, nil
+}
+
+func (m *QueryReservationLineageRequest) Marshal() (dAtA []byte, err error) {
+	size := m.Size()
+	dAtA = make([]byte, size)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
+	if err != nil {
+		return nil, err
+	}
+	return dAtA[:n], nil
+}
+
+func (m *QueryReservationLineageRequest) MarshalTo(dAtA []byte) (int, error) {
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *QueryReservationLineageRequest) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
+	_ = i
+	var l int
+	_ = l
+	if m.Pagination != nil {
+		{
+			size, err := m.Pagination.MarshalToSizedBuffer(dAtA[:i])
+			if err != nil {
+				return 0, err
+			}
+			i -= size
+			i = encodeVarintQuery(dAtA, i, uint64(size))
+		}
+		i--
+		dAtA[i] = 0x12
+	}
+	if len(m.ReservationId) > 0 {
+		i -= len(m.ReservationId)
+		copy(dAtA[i:], m.ReservationId)
+		i = encodeVarintQuery(dAtA, i, uint64(len(m.ReservationId)))
+		i--
+		dAtA[i] = 0xa
+	}
+	return len(dAtA) - i, nil
+}
+
+func (m *QueryReservationLineageResponse) Marshal() (dAtA []byte, err error) {
+	size := m.Size()
+	dAtA = make([]byte, size)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
+	if err != nil {
+		return nil, err
+	}
+	return dAtA[:n], nil
+}
+
+func (m *QueryReservationLineageResponse) MarshalTo(dAtA []byte) (int, error) {
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *QueryReservationLineageResponse) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
+	_ = i
+	var l int
+	_ = l
+	if m.Pagination != nil {
+		{
+			size, err := m.Pagination.MarshalToSizedBuffer(dAtA[:i])
+			if err != nil {
+				return 0, err
+			}
+			i -= size
+			i = encodeVarintQuery(dAtA, i, uint64(size))
+		}
+		i--
+		dAtA[i] = 0x1a
+	}
+	if len(m.Events) > 0 {
+		for iNdEx := len(m.Events) - 1; iNdEx >= 0; iNdEx-- {
+			{
+				size, err := m.Events[iNdEx].MarshalToSizedBuffer(dAtA[:i])
+				if err != nil {
+					return 0, err
+				}
+				i -= size
+				i = encodeVarintQuery(dAtA, i, uint64(size))
+			}
+			i--
+			dAtA[i] = 0x12
+		}
+	}
+	{
+		size, err := m.Reservation.MarshalToSizedBuffer(dAtA[:i])
+		if err != nil {
+			return 0, err
+		}
+		i -= size
+		i = encodeVarintQuery(dAtA, i, uint64(size))
+	}
+	i--
+	dAtA[i] = 0xa
+	return len(dAtA) - i, nil
+}
+
 func (m *QueryParamsRequest) Marshal() (dAtA []byte, err error) {
 	size := m.Size()
 	dAtA = make([]byte, size)
@@ -1460,6 +2734,173 @@ func (m *QueryAllocationsByProviderResponse) Size() (n int) {
 	_ = l
 	if len(m.Allocations) > 0 {
 		for _, e := range m.Allocations {
+			l = e.Size()
+			n += 1 + l + sovQuery(uint64(l))
+		}
+	}
+	if m.Pagination != nil {
+		l = m.Pagination.Size()
+		n += 1 + l + sovQuery(uint64(l))
+	}
+	return n
+}
+
+func (m *QueryReservationRequest) Size() (n int) {
+	if m == nil {
+		return 0
+	}
+	var l int
+	_ = l
+	l = len(m.ReservationId)
+	if l > 0 {
+		n += 1 + l + sovQuery(uint64(l))
+	}
+	return n
+}
+
+func (m *QueryReservationByOrderRequest) Size() (n int) {
+	if m == nil {
+		return 0
+	}
+	var l int
+	_ = l
+	l = len(m.OrderId)
+	if l > 0 {
+		n += 1 + l + sovQuery(uint64(l))
+	}
+	return n
+}
+
+func (m *QueryReservationByBidRequest) Size() (n int) {
+	if m == nil {
+		return 0
+	}
+	var l int
+	_ = l
+	l = len(m.BidId)
+	if l > 0 {
+		n += 1 + l + sovQuery(uint64(l))
+	}
+	return n
+}
+
+func (m *QueryReservationByLeaseRequest) Size() (n int) {
+	if m == nil {
+		return 0
+	}
+	var l int
+	_ = l
+	l = len(m.LeaseId)
+	if l > 0 {
+		n += 1 + l + sovQuery(uint64(l))
+	}
+	return n
+}
+
+func (m *QueryReservationByJobRequest) Size() (n int) {
+	if m == nil {
+		return 0
+	}
+	var l int
+	_ = l
+	l = len(m.JobId)
+	if l > 0 {
+		n += 1 + l + sovQuery(uint64(l))
+	}
+	return n
+}
+
+func (m *QueryReservationByConsumerRequest) Size() (n int) {
+	if m == nil {
+		return 0
+	}
+	var l int
+	_ = l
+	l = len(m.ConsumerType)
+	if l > 0 {
+		n += 1 + l + sovQuery(uint64(l))
+	}
+	l = len(m.ConsumerId)
+	if l > 0 {
+		n += 1 + l + sovQuery(uint64(l))
+	}
+	return n
+}
+
+func (m *QueryReservationsByProviderRequest) Size() (n int) {
+	if m == nil {
+		return 0
+	}
+	var l int
+	_ = l
+	l = len(m.ProviderAddress)
+	if l > 0 {
+		n += 1 + l + sovQuery(uint64(l))
+	}
+	if m.Pagination != nil {
+		l = m.Pagination.Size()
+		n += 1 + l + sovQuery(uint64(l))
+	}
+	return n
+}
+
+func (m *QueryReservationResponse) Size() (n int) {
+	if m == nil {
+		return 0
+	}
+	var l int
+	_ = l
+	l = m.Reservation.Size()
+	n += 1 + l + sovQuery(uint64(l))
+	return n
+}
+
+func (m *QueryReservationsResponse) Size() (n int) {
+	if m == nil {
+		return 0
+	}
+	var l int
+	_ = l
+	if len(m.Reservations) > 0 {
+		for _, e := range m.Reservations {
+			l = e.Size()
+			n += 1 + l + sovQuery(uint64(l))
+		}
+	}
+	if m.Pagination != nil {
+		l = m.Pagination.Size()
+		n += 1 + l + sovQuery(uint64(l))
+	}
+	return n
+}
+
+func (m *QueryReservationLineageRequest) Size() (n int) {
+	if m == nil {
+		return 0
+	}
+	var l int
+	_ = l
+	l = len(m.ReservationId)
+	if l > 0 {
+		n += 1 + l + sovQuery(uint64(l))
+	}
+	if m.Pagination != nil {
+		l = m.Pagination.Size()
+		n += 1 + l + sovQuery(uint64(l))
+	}
+	return n
+}
+
+func (m *QueryReservationLineageResponse) Size() (n int) {
+	if m == nil {
+		return 0
+	}
+	var l int
+	_ = l
+	l = m.Reservation.Size()
+	n += 1 + l + sovQuery(uint64(l))
+	if len(m.Events) > 0 {
+		for _, e := range m.Events {
 			l = e.Size()
 			n += 1 + l + sovQuery(uint64(l))
 		}
@@ -2436,6 +3877,1122 @@ func (m *QueryAllocationsByProviderResponse) Unmarshal(dAtA []byte) error {
 			}
 			iNdEx = postIndex
 		case 2:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Pagination", wireType)
+			}
+			var msglen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowQuery
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				msglen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if msglen < 0 {
+				return ErrInvalidLengthQuery
+			}
+			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLengthQuery
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			if m.Pagination == nil {
+				m.Pagination = &query.PageResponse{}
+			}
+			if err := m.Pagination.Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
+				return err
+			}
+			iNdEx = postIndex
+		default:
+			iNdEx = preIndex
+			skippy, err := skipQuery(dAtA[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if (skippy < 0) || (iNdEx+skippy) < 0 {
+				return ErrInvalidLengthQuery
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			iNdEx += skippy
+		}
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
+func (m *QueryReservationRequest) Unmarshal(dAtA []byte) error {
+	l := len(dAtA)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return ErrIntOverflowQuery
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := dAtA[iNdEx]
+			iNdEx++
+			wire |= uint64(b&0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: QueryReservationRequest: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: QueryReservationRequest: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
+		case 1:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field ReservationId", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowQuery
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLengthQuery
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthQuery
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.ReservationId = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
+		default:
+			iNdEx = preIndex
+			skippy, err := skipQuery(dAtA[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if (skippy < 0) || (iNdEx+skippy) < 0 {
+				return ErrInvalidLengthQuery
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			iNdEx += skippy
+		}
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
+func (m *QueryReservationByOrderRequest) Unmarshal(dAtA []byte) error {
+	l := len(dAtA)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return ErrIntOverflowQuery
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := dAtA[iNdEx]
+			iNdEx++
+			wire |= uint64(b&0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: QueryReservationByOrderRequest: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: QueryReservationByOrderRequest: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
+		case 1:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field OrderId", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowQuery
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLengthQuery
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthQuery
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.OrderId = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
+		default:
+			iNdEx = preIndex
+			skippy, err := skipQuery(dAtA[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if (skippy < 0) || (iNdEx+skippy) < 0 {
+				return ErrInvalidLengthQuery
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			iNdEx += skippy
+		}
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
+func (m *QueryReservationByBidRequest) Unmarshal(dAtA []byte) error {
+	l := len(dAtA)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return ErrIntOverflowQuery
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := dAtA[iNdEx]
+			iNdEx++
+			wire |= uint64(b&0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: QueryReservationByBidRequest: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: QueryReservationByBidRequest: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
+		case 1:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field BidId", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowQuery
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLengthQuery
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthQuery
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.BidId = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
+		default:
+			iNdEx = preIndex
+			skippy, err := skipQuery(dAtA[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if (skippy < 0) || (iNdEx+skippy) < 0 {
+				return ErrInvalidLengthQuery
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			iNdEx += skippy
+		}
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
+func (m *QueryReservationByLeaseRequest) Unmarshal(dAtA []byte) error {
+	l := len(dAtA)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return ErrIntOverflowQuery
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := dAtA[iNdEx]
+			iNdEx++
+			wire |= uint64(b&0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: QueryReservationByLeaseRequest: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: QueryReservationByLeaseRequest: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
+		case 1:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field LeaseId", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowQuery
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLengthQuery
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthQuery
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.LeaseId = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
+		default:
+			iNdEx = preIndex
+			skippy, err := skipQuery(dAtA[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if (skippy < 0) || (iNdEx+skippy) < 0 {
+				return ErrInvalidLengthQuery
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			iNdEx += skippy
+		}
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
+func (m *QueryReservationByJobRequest) Unmarshal(dAtA []byte) error {
+	l := len(dAtA)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return ErrIntOverflowQuery
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := dAtA[iNdEx]
+			iNdEx++
+			wire |= uint64(b&0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: QueryReservationByJobRequest: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: QueryReservationByJobRequest: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
+		case 1:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field JobId", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowQuery
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLengthQuery
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthQuery
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.JobId = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
+		default:
+			iNdEx = preIndex
+			skippy, err := skipQuery(dAtA[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if (skippy < 0) || (iNdEx+skippy) < 0 {
+				return ErrInvalidLengthQuery
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			iNdEx += skippy
+		}
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
+func (m *QueryReservationByConsumerRequest) Unmarshal(dAtA []byte) error {
+	l := len(dAtA)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return ErrIntOverflowQuery
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := dAtA[iNdEx]
+			iNdEx++
+			wire |= uint64(b&0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: QueryReservationByConsumerRequest: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: QueryReservationByConsumerRequest: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
+		case 1:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field ConsumerType", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowQuery
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLengthQuery
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthQuery
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.ConsumerType = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
+		case 2:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field ConsumerId", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowQuery
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLengthQuery
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthQuery
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.ConsumerId = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
+		default:
+			iNdEx = preIndex
+			skippy, err := skipQuery(dAtA[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if (skippy < 0) || (iNdEx+skippy) < 0 {
+				return ErrInvalidLengthQuery
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			iNdEx += skippy
+		}
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
+func (m *QueryReservationsByProviderRequest) Unmarshal(dAtA []byte) error {
+	l := len(dAtA)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return ErrIntOverflowQuery
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := dAtA[iNdEx]
+			iNdEx++
+			wire |= uint64(b&0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: QueryReservationsByProviderRequest: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: QueryReservationsByProviderRequest: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
+		case 1:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field ProviderAddress", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowQuery
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLengthQuery
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthQuery
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.ProviderAddress = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
+		case 2:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Pagination", wireType)
+			}
+			var msglen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowQuery
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				msglen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if msglen < 0 {
+				return ErrInvalidLengthQuery
+			}
+			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLengthQuery
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			if m.Pagination == nil {
+				m.Pagination = &query.PageRequest{}
+			}
+			if err := m.Pagination.Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
+				return err
+			}
+			iNdEx = postIndex
+		default:
+			iNdEx = preIndex
+			skippy, err := skipQuery(dAtA[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if (skippy < 0) || (iNdEx+skippy) < 0 {
+				return ErrInvalidLengthQuery
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			iNdEx += skippy
+		}
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
+func (m *QueryReservationResponse) Unmarshal(dAtA []byte) error {
+	l := len(dAtA)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return ErrIntOverflowQuery
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := dAtA[iNdEx]
+			iNdEx++
+			wire |= uint64(b&0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: QueryReservationResponse: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: QueryReservationResponse: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
+		case 1:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Reservation", wireType)
+			}
+			var msglen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowQuery
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				msglen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if msglen < 0 {
+				return ErrInvalidLengthQuery
+			}
+			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLengthQuery
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			if err := m.Reservation.Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
+				return err
+			}
+			iNdEx = postIndex
+		default:
+			iNdEx = preIndex
+			skippy, err := skipQuery(dAtA[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if (skippy < 0) || (iNdEx+skippy) < 0 {
+				return ErrInvalidLengthQuery
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			iNdEx += skippy
+		}
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
+func (m *QueryReservationsResponse) Unmarshal(dAtA []byte) error {
+	l := len(dAtA)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return ErrIntOverflowQuery
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := dAtA[iNdEx]
+			iNdEx++
+			wire |= uint64(b&0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: QueryReservationsResponse: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: QueryReservationsResponse: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
+		case 1:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Reservations", wireType)
+			}
+			var msglen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowQuery
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				msglen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if msglen < 0 {
+				return ErrInvalidLengthQuery
+			}
+			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLengthQuery
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.Reservations = append(m.Reservations, Reservation{})
+			if err := m.Reservations[len(m.Reservations)-1].Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
+				return err
+			}
+			iNdEx = postIndex
+		case 2:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Pagination", wireType)
+			}
+			var msglen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowQuery
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				msglen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if msglen < 0 {
+				return ErrInvalidLengthQuery
+			}
+			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLengthQuery
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			if m.Pagination == nil {
+				m.Pagination = &query.PageResponse{}
+			}
+			if err := m.Pagination.Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
+				return err
+			}
+			iNdEx = postIndex
+		default:
+			iNdEx = preIndex
+			skippy, err := skipQuery(dAtA[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if (skippy < 0) || (iNdEx+skippy) < 0 {
+				return ErrInvalidLengthQuery
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			iNdEx += skippy
+		}
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
+func (m *QueryReservationLineageRequest) Unmarshal(dAtA []byte) error {
+	l := len(dAtA)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return ErrIntOverflowQuery
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := dAtA[iNdEx]
+			iNdEx++
+			wire |= uint64(b&0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: QueryReservationLineageRequest: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: QueryReservationLineageRequest: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
+		case 1:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field ReservationId", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowQuery
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLengthQuery
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthQuery
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.ReservationId = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
+		case 2:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Pagination", wireType)
+			}
+			var msglen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowQuery
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				msglen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if msglen < 0 {
+				return ErrInvalidLengthQuery
+			}
+			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLengthQuery
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			if m.Pagination == nil {
+				m.Pagination = &query.PageRequest{}
+			}
+			if err := m.Pagination.Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
+				return err
+			}
+			iNdEx = postIndex
+		default:
+			iNdEx = preIndex
+			skippy, err := skipQuery(dAtA[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if (skippy < 0) || (iNdEx+skippy) < 0 {
+				return ErrInvalidLengthQuery
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			iNdEx += skippy
+		}
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
+func (m *QueryReservationLineageResponse) Unmarshal(dAtA []byte) error {
+	l := len(dAtA)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return ErrIntOverflowQuery
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := dAtA[iNdEx]
+			iNdEx++
+			wire |= uint64(b&0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: QueryReservationLineageResponse: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: QueryReservationLineageResponse: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
+		case 1:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Reservation", wireType)
+			}
+			var msglen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowQuery
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				msglen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if msglen < 0 {
+				return ErrInvalidLengthQuery
+			}
+			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLengthQuery
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			if err := m.Reservation.Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
+				return err
+			}
+			iNdEx = postIndex
+		case 2:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Events", wireType)
+			}
+			var msglen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowQuery
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				msglen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if msglen < 0 {
+				return ErrInvalidLengthQuery
+			}
+			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLengthQuery
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.Events = append(m.Events, ReservationEvent{})
+			if err := m.Events[len(m.Events)-1].Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
+				return err
+			}
+			iNdEx = postIndex
+		case 3:
 			if wireType != 2 {
 				return fmt.Errorf("proto: wrong wireType = %d for field Pagination", wireType)
 			}

@@ -19,13 +19,13 @@ import (
 // HandlerOptions extends the SDK's AnteHandler options
 type HandlerOptions struct {
 	ante.HandlerOptions
-	CDC             codec.BinaryCodec
-	GovKeeper       *govkeeper.Keeper
-	MFAGatingKeeper *mfakeeper.Keeper
-	VEIDKeeper      *veidkeeper.Keeper
-	RolesKeeper     *roleskeeper.Keeper
-	RateLimitParams apptypes.RateLimitParams
-	Logger          log.Logger
+	CDC              codec.BinaryCodec
+	GovKeeper        *govkeeper.Keeper
+	MFAGatingKeeper  *mfakeeper.Keeper
+	VEIDKeeper       *veidkeeper.Keeper
+	RolesKeeper      *roleskeeper.Keeper
+	RateLimitParams  apptypes.RateLimitParams
+	Logger           log.Logger
 	GasPricingKeeper *gaspricing.Keeper
 }
 
@@ -84,8 +84,7 @@ func NewAnteHandler(options HandlerOptions) (sdk.AnteHandler, error) {
 		rateLimitLogger = log.NewNopLogger()
 	}
 
-	anteDecorators := []sdk.AnteDecorator{
-		ante.NewSetUpContextDecorator(),                         // outermost AnteDecorator. SetUpContext must be called first
+	ordinaryDecorators := []sdk.AnteDecorator{
 		NewRateLimitDecorator(rateLimitParams, rateLimitLogger), // Rate limiting early to block spam before expensive ops
 		ante.NewValidateBasicDecorator(),
 		NewAdaptiveGasPriceDecorator(*options.GasPricingKeeper),
@@ -102,5 +101,26 @@ func NewAnteHandler(options HandlerOptions) (sdk.AnteHandler, error) {
 		ante.NewIncrementSequenceDecorator(options.AccountKeeper),
 	}
 
-	return sdk.ChainAnteDecorators(anteDecorators...), nil
+	ordinaryAnte := sdk.ChainAnteDecorators(ordinaryDecorators...)
+	router := sdk.AnteHandler(func(ctx sdk.Context, tx sdk.Tx, simulate bool) (sdk.Context, error) {
+		isSystem, invalid := classifySystemTransaction(tx)
+		if invalid {
+			return ctx, sdkerrors.ErrUnauthorized.Wrap(errInvalidSystemTransaction.Error())
+		}
+		if isSystem {
+			return ctx, nil
+		}
+		return ordinaryAnte(ctx, tx, simulate)
+	})
+	return sdk.ChainAnteDecorators(
+		ante.NewSetUpContextDecorator(),
+		NewSystemTxDecorator(),
+		anteTerminal{handler: router},
+	), nil
+}
+
+type anteTerminal struct{ handler sdk.AnteHandler }
+
+func (d anteTerminal) AnteHandle(ctx sdk.Context, tx sdk.Tx, simulate bool, _ sdk.AnteHandler) (sdk.Context, error) {
+	return d.handler(ctx, tx, simulate)
 }

@@ -31,6 +31,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"os"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -387,9 +388,11 @@ var _ EnclaveService = (*SGXEnclaveServiceImpl)(nil)
 // NewSGXEnclaveServiceImpl creates a new SGX enclave service implementation
 //
 // Security: Keys are generated inside the enclave and sealed to MRENCLAVE.
-// Private keys never leave the enclave boundary.
+// Private keys never leave the enclave boundary. The default constructor stays
+// in simulation mode; production callers must opt into hardware explicitly via
+// NewSGXEnclaveServiceImplWithMode or the enclave factory.
 func NewSGXEnclaveServiceImpl(config SGXEnclaveConfig) (*SGXEnclaveServiceImpl, error) {
-	return NewSGXEnclaveServiceImplWithMode(config, HardwareModeAuto)
+	return NewSGXEnclaveServiceImplWithMode(config, HardwareModeSimulate)
 }
 
 // NewSGXEnclaveServiceImplWithMode creates a new SGX enclave service with explicit hardware mode
@@ -415,6 +418,7 @@ func NewSGXEnclaveServiceImplWithMode(config SGXEnclaveConfig, mode HardwareMode
 		backend := NewSGXHardwareBackend()
 		if backend.IsAvailable() {
 			if err := backend.Initialize(); err == nil {
+				backend.enclavePath = config.EnclavePath
 				svc.hardwareBackend = backend
 				fmt.Println("INFO: SGX hardware backend initialized successfully")
 			} else if mode == HardwareModeRequire {
@@ -450,10 +454,17 @@ func (s *SGXEnclaveServiceImpl) Initialize(config RuntimeConfig) error {
 	s.runtimeConfig = config
 	s.startTime = time.Now()
 
-	// Create enclave and establish measurements
-	// In real SGX: sgx_create_enclave() followed by measurement verification
-	if err := s.simulateEnclaveCreation(); err != nil {
-		return fmt.Errorf("failed to create enclave: %w", err)
+	if s.hardwareBackend != nil {
+		if err := s.initializeHardwareEnclaveLocked(); err != nil {
+			s.lastError = err.Error()
+			return fmt.Errorf("failed to initialize hardware SGX enclave: %w", err)
+		}
+	} else {
+		// Create enclave and establish measurements
+		// In real SGX: sgx_create_enclave() followed by measurement verification
+		if err := s.simulateEnclaveCreation(); err != nil {
+			return fmt.Errorf("failed to create enclave: %w", err)
+		}
 	}
 
 	// Generate keys INSIDE the enclave boundary
@@ -498,6 +509,15 @@ func (s *SGXEnclaveServiceImpl) Score(ctx context.Context, request *ScoringReque
 	}
 
 	startTime := time.Now()
+
+	if s.hardwareBackend != nil {
+		err := unsupportedHardwareOperation(AttestationTypeSGX, "score",
+			"SGX ECALL scoring runtime is not implemented for hardware-selected execution")
+		s.mu.Lock()
+		s.lastError = err.Error()
+		s.mu.Unlock()
+		return nil, err
+	}
 
 	// Create plaintext guard to ensure no plaintext escapes enclave boundary
 	guard := NewPlaintextGuard()
@@ -567,8 +587,8 @@ func (s *SGXEnclaveServiceImpl) GetSigningPubKey() ([]byte, error) {
 
 // GenerateAttestation generates a DCAP attestation quote
 func (s *SGXEnclaveServiceImpl) GenerateAttestation(reportData []byte) ([]byte, error) {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
+	s.mu.Lock()
+	defer s.mu.Unlock()
 
 	if !s.initialized {
 		return nil, ErrEnclaveNotInitialized
@@ -583,10 +603,9 @@ func (s *SGXEnclaveServiceImpl) GenerateAttestation(reportData []byte) ([]byte, 
 		quote, err := s.hardwareBackend.GetAttestation(reportData)
 		if err != nil {
 			s.lastError = fmt.Sprintf("hardware attestation failed: %v", err)
-			// Fall back to simulation
-		} else {
-			return quote, nil
+			return nil, err
 		}
+		return quote, nil
 	}
 
 	// TODO: Real SGX implementation would:
@@ -724,8 +743,10 @@ func (s *SGXEnclaveServiceImpl) GenerateDCAPReport(targetInfo []byte, reportData
 		return nil, ErrEnclaveNotInitialized
 	}
 
-	// TODO: Real SGX implementation would call EREPORT instruction
-	// This generates a report that can be verified by the QE
+	if s.hardwareBackend != nil {
+		return nil, unsupportedHardwareOperation(AttestationTypeSGX, "generate DCAP report",
+			"SGX EREPORT flow is not wired for hardware-selected execution")
+	}
 
 	report := s.simulateSGXReport(targetInfo, reportData)
 	return report, nil
@@ -733,8 +754,8 @@ func (s *SGXEnclaveServiceImpl) GenerateDCAPReport(targetInfo []byte, reportData
 
 // SealData seals data to the enclave measurement
 func (s *SGXEnclaveServiceImpl) SealData(plaintext []byte, aad []byte) ([]byte, error) {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
+	s.mu.Lock()
+	defer s.mu.Unlock()
 
 	if !s.initialized {
 		return nil, ErrEnclaveNotInitialized
@@ -745,10 +766,9 @@ func (s *SGXEnclaveServiceImpl) SealData(plaintext []byte, aad []byte) ([]byte, 
 		sealed, err := s.hardwareBackend.Seal(plaintext)
 		if err != nil {
 			s.lastError = fmt.Sprintf("hardware seal failed: %v", err)
-			// Fall back to simulation
-		} else {
-			return sealed, nil
+			return nil, err
 		}
+		return sealed, nil
 	}
 
 	// TODO: Real SGX implementation would call sgx_seal_data()
@@ -764,8 +784,8 @@ func (s *SGXEnclaveServiceImpl) SealData(plaintext []byte, aad []byte) ([]byte, 
 
 // UnsealData unseals data previously sealed by this enclave
 func (s *SGXEnclaveServiceImpl) UnsealData(sealed []byte) ([]byte, []byte, error) {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
+	s.mu.Lock()
+	defer s.mu.Unlock()
 
 	if !s.initialized {
 		return nil, nil, ErrEnclaveNotInitialized
@@ -776,10 +796,9 @@ func (s *SGXEnclaveServiceImpl) UnsealData(sealed []byte) ([]byte, []byte, error
 		plaintext, err := s.hardwareBackend.Unseal(sealed)
 		if err != nil {
 			s.lastError = fmt.Sprintf("hardware unseal failed: %v", err)
-			// Fall back to simulation
-		} else {
-			return plaintext, nil, nil
+			return nil, nil, err
 		}
+		return plaintext, nil, nil
 	}
 
 	// TODO: Real SGX implementation would call sgx_unseal_data()
@@ -795,14 +814,11 @@ func (s *SGXEnclaveServiceImpl) UnsealData(sealed []byte) ([]byte, []byte, error
 
 // VerifyMeasurement checks if a measurement is in the allowlist
 func (s *SGXEnclaveServiceImpl) VerifyMeasurement(mrEnclave []byte) bool {
-	// TODO: In production, check against on-chain governance allowlist
-	// For POC, accept any non-zero measurement
-
 	if len(mrEnclave) != SGXMREnclaveSize {
 		return false
 	}
 
-	// Check if all zeros (invalid)
+	// Reject zeroed measurements outright.
 	allZero := true
 	for _, b := range mrEnclave {
 		if b != 0 {
@@ -810,8 +826,27 @@ func (s *SGXEnclaveServiceImpl) VerifyMeasurement(mrEnclave []byte) bool {
 			break
 		}
 	}
+	if allZero {
+		return false
+	}
 
-	return !allZero
+	// The local enclave should always trust its own measured identity.
+	if bytesEqual(mrEnclave, s.mrEnclave[:]) {
+		return true
+	}
+
+	// When a governed allowlist is configured, require the measurement to be present.
+	allowlistPath := os.Getenv(EnvTEEMeasurementAllowlist)
+	if allowlistPath == "" {
+		return false
+	}
+
+	allowlist := NewMeasurementAllowlist()
+	if err := allowlist.LoadFromJSON(allowlistPath); err != nil {
+		return false
+	}
+
+	return allowlist.IsTrusted(AttestationTypeSGX, mrEnclave)
 }
 
 // =============================================================================
@@ -835,6 +870,21 @@ func (s *SGXEnclaveServiceImpl) generateEnclaveKeysInternal() error {
 	}
 
 	s.keyMaterial = km
+	return nil
+}
+
+func (s *SGXEnclaveServiceImpl) initializeHardwareEnclaveLocked() error {
+	if s.hardwareBackend == nil || !s.hardwareBackend.initialized {
+		return ErrHardwareNotInitialized
+	}
+
+	s.hardwareBackend.enclavePath = s.config.EnclavePath
+	if err := s.hardwareBackend.loader.Load(s.config.EnclavePath, s.config.Debug); err != nil {
+		return err
+	}
+
+	s.mrEnclave = s.hardwareBackend.loader.GetMeasurement()
+	s.mrSigner = s.hardwareBackend.loader.GetSignerID()
 	return nil
 }
 

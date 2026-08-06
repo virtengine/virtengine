@@ -1,0 +1,98 @@
+import { QueryAllocationHistoryRequest, QueryAllocationHistoryResponse, QueryAllocationRequest, QueryAllocationResponse, QueryAllocationsByProviderRequest, QueryAllocationsByProviderResponse, QueryAvailableResourcesRequest, QueryAvailableResourcesResponse, QueryParamsRequest, QueryParamsResponse, QueryReservationByBidRequest, QueryReservationByConsumerRequest, QueryReservationByJobRequest, QueryReservationByLeaseRequest, QueryReservationByOrderRequest, QueryReservationLineageRequest, QueryReservationLineageResponse, QueryReservationRequest, QueryReservationResponse, QueryReservationsByProviderRequest, QueryReservationsResponse } from "./query.ts";
+
+export const Query = {
+  typeName: "virtengine.resources.v1.Query",
+  methods: {
+    availableResources: {
+      name: "AvailableResources",
+      httpPath: "/virtengine/resources/v1/availability",
+      input: QueryAvailableResourcesRequest,
+      output: QueryAvailableResourcesResponse,
+      get parent() { return Query; },
+    },
+    allocation: {
+      name: "Allocation",
+      httpPath: "/virtengine/resources/v1/allocation/{allocation_id}",
+      input: QueryAllocationRequest,
+      output: QueryAllocationResponse,
+      get parent() { return Query; },
+    },
+    allocationHistory: {
+      name: "AllocationHistory",
+      httpPath: "/virtengine/resources/v1/allocation/{allocation_id}/history",
+      input: QueryAllocationHistoryRequest,
+      output: QueryAllocationHistoryResponse,
+      get parent() { return Query; },
+    },
+    allocationsByProvider: {
+      name: "AllocationsByProvider",
+      httpPath: "/virtengine/resources/v1/allocations/provider/{provider_address}",
+      input: QueryAllocationsByProviderRequest,
+      output: QueryAllocationsByProviderResponse,
+      get parent() { return Query; },
+    },
+    reservation: {
+      name: "Reservation",
+      httpPath: "/virtengine/resources/v1/reservation/{reservation_id}",
+      input: QueryReservationRequest,
+      output: QueryReservationResponse,
+      get parent() { return Query; },
+    },
+    reservationByOrder: {
+      name: "ReservationByOrder",
+      httpPath: "/virtengine/resources/v1/reservation/order/{order_id}",
+      input: QueryReservationByOrderRequest,
+      output: QueryReservationResponse,
+      get parent() { return Query; },
+    },
+    reservationByBid: {
+      name: "ReservationByBid",
+      httpPath: "/virtengine/resources/v1/reservation/bid/{bid_id}",
+      input: QueryReservationByBidRequest,
+      output: QueryReservationResponse,
+      get parent() { return Query; },
+    },
+    reservationByLease: {
+      name: "ReservationByLease",
+      httpPath: "/virtengine/resources/v1/reservation/lease/{lease_id}",
+      input: QueryReservationByLeaseRequest,
+      output: QueryReservationResponse,
+      get parent() { return Query; },
+    },
+    reservationByJob: {
+      name: "ReservationByJob",
+      httpPath: "/virtengine/resources/v1/reservation/job/{job_id}",
+      input: QueryReservationByJobRequest,
+      output: QueryReservationResponse,
+      get parent() { return Query; },
+    },
+    reservationByConsumer: {
+      name: "ReservationByConsumer",
+      httpPath: "/virtengine/resources/v1/reservation/consumer/{consumer_type}/{consumer_id}",
+      input: QueryReservationByConsumerRequest,
+      output: QueryReservationResponse,
+      get parent() { return Query; },
+    },
+    reservationsByProvider: {
+      name: "ReservationsByProvider",
+      httpPath: "/virtengine/resources/v1/reservations/provider/{provider_address}",
+      input: QueryReservationsByProviderRequest,
+      output: QueryReservationsResponse,
+      get parent() { return Query; },
+    },
+    reservationLineage: {
+      name: "ReservationLineage",
+      httpPath: "/virtengine/resources/v1/reservation/{reservation_id}/lineage",
+      input: QueryReservationLineageRequest,
+      output: QueryReservationLineageResponse,
+      get parent() { return Query; },
+    },
+    params: {
+      name: "Params",
+      httpPath: "/virtengine/resources/v1/params",
+      input: QueryParamsRequest,
+      output: QueryParamsResponse,
+      get parent() { return Query; },
+    },
+  },
+} as const;

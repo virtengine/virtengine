@@ -104,8 +104,6 @@ def compute_model_hash(model_path: str) -> str:
         if filepath.is_file() and filepath.name not in (
             "export_metadata.json", "MODEL_HASH.txt", "manifest.json",
         ):
-            rel_path = filepath.relative_to(model_dir)
-            hasher.update(str(rel_path).encode())
             with open(filepath, "rb") as f:
                 for chunk in iter(lambda: f.read(8192), b""):
                     hasher.update(chunk)
@@ -219,18 +217,18 @@ def train_ci_model(
     logger.info("Model hash: %s", model_hash)
 
     # Step 8: Write MODEL_HASH.txt
-    hash_content = f"""# VirtEngine Trust Score Model Hash
-# Generated: {datetime.utcnow().isoformat()}Z
-# Version: {version}
-# Pipeline: CI synthetic training
-#
-# Algorithm: SHA-256
-# Scope: All model files (saved_model.pb, variables/*)
-
-SHA256={model_hash}
-VERSION={version}
-TIMESTAMP={datetime.utcnow().isoformat()}Z
-"""
+    hash_content = "\n".join(
+        [
+            "# VirtEngine Trust Score Model Hash",
+            "# Deterministic release artifact for the SavedModel runtime bundle.",
+            "# Pipeline: CI synthetic training",
+            "# Algorithm: SHA-256",
+            "# Scope: model directory files excluding generated manifest metadata",
+            f"SHA256={model_hash}",
+            f"VERSION={version}",
+            "",
+        ]
+    )
     hash_path = output_path / "MODEL_HASH.txt"
     with open(hash_path, "w") as f:
         f.write(hash_content)

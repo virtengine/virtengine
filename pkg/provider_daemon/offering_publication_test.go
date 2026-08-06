@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/require"
 	"github.com/virtengine/virtengine/x/market/types/marketplace"
 )
 
@@ -83,9 +84,7 @@ func TestOfferingPublicationState_BasicOperations(t *testing.T) {
 	state.SetPublication(pub)
 
 	retrieved := state.GetPublication("uuid-1")
-	if retrieved == nil {
-		t.Fatal("expected to retrieve publication")
-	}
+	require.NotNil(t, retrieved)
 	if retrieved.Name != "Test Offering" {
 		t.Errorf("expected name 'Test Offering', got %s", retrieved.Name)
 	}
@@ -291,9 +290,7 @@ func TestOfferingPublicationService_GetOffering(t *testing.T) {
 
 	// Get existing
 	offering := svc.GetOffering("uuid-1")
-	if offering == nil {
-		t.Fatal("expected to find offering")
-	}
+	require.NotNil(t, offering)
 	if offering.Name != "Test Offering" {
 		t.Errorf("expected name 'Test Offering', got %s", offering.Name)
 	}

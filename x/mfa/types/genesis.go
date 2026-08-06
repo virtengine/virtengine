@@ -47,6 +47,22 @@ type TrustedDevice struct {
 	LastUsedAt int64 `json:"last_used_at"`
 }
 
+func (d TrustedDevice) Validate() error {
+	if d.AccountAddress == "" {
+		return ErrInvalidAddress.Wrap("trusted device account address cannot be empty")
+	}
+	if err := d.DeviceInfo.ValidateStored(); err != nil {
+		return ErrInvalidEnrollment.Wrapf("invalid trusted device info: %v", err)
+	}
+	if d.AddedAt == 0 {
+		return ErrInvalidEnrollment.Wrap("trusted device added_at cannot be zero")
+	}
+	if d.LastUsedAt != 0 && d.LastUsedAt < d.AddedAt {
+		return ErrInvalidEnrollment.Wrap("trusted device last_used_at cannot be before added_at")
+	}
+	return nil
+}
+
 // Params defines the parameters for the mfa module
 type Params struct {
 	// DefaultSessionDuration is the default MFA session duration in seconds
@@ -117,9 +133,22 @@ func (gs GenesisState) Validate() error {
 		return err
 	}
 
+	policyAccounts := make(map[string]struct{}, len(gs.MFAPolicies))
+	enrollmentKeys := make(map[string]struct{}, len(gs.FactorEnrollments))
+	configTypes := make(map[SensitiveTransactionType]struct{}, len(gs.SensitiveTxConfigs))
+	trustedDevices := make(map[string]struct{}, len(gs.TrustedDevices))
+	activeFactorsByAccount := make(map[string]map[FactorType]struct{})
+
 	// Validate MFA policies
 	for i, policy := range gs.MFAPolicies {
 		if err := policy.Validate(); err != nil {
+			return ErrInvalidPolicy.Wrapf("invalid policy[%d]: %v", i, err)
+		}
+		if _, ok := policyAccounts[policy.AccountAddress]; ok {
+			return ErrInvalidPolicy.Wrapf("duplicate policy for account %s", policy.AccountAddress)
+		}
+		policyAccounts[policy.AccountAddress] = struct{}{}
+		if err := ValidatePolicyAllowedFactors(gs.Params, &policy); err != nil {
 			return ErrInvalidPolicy.Wrapf("invalid policy[%d]: %v", i, err)
 		}
 	}
@@ -129,12 +158,59 @@ func (gs GenesisState) Validate() error {
 		if err := enrollment.Validate(); err != nil {
 			return ErrInvalidEnrollment.Wrapf("invalid enrollment[%d]: %v", i, err)
 		}
+		key := fmt.Sprintf("%s/%d/%s", enrollment.AccountAddress, enrollment.FactorType, enrollment.FactorID)
+		if _, ok := enrollmentKeys[key]; ok {
+			return ErrInvalidEnrollment.Wrapf("duplicate enrollment[%d]: %s", i, key)
+		}
+		enrollmentKeys[key] = struct{}{}
+		if !gs.Params.IsFactorTypeAllowed(enrollment.FactorType) {
+			return ErrInvalidEnrollment.Wrapf("enrollment[%d] uses disallowed factor type %s", i, enrollment.FactorType.String())
+		}
+		if enrollment.Status == EnrollmentStatusActive {
+			if _, ok := activeFactorsByAccount[enrollment.AccountAddress]; !ok {
+				activeFactorsByAccount[enrollment.AccountAddress] = make(map[FactorType]struct{})
+			}
+			activeFactorsByAccount[enrollment.AccountAddress][enrollment.FactorType] = struct{}{}
+		}
 	}
 
 	// Validate sensitive tx configs
 	for i, config := range gs.SensitiveTxConfigs {
 		if err := config.Validate(); err != nil {
 			return ErrInvalidSensitiveTxConfig.Wrapf("invalid config[%d]: %v", i, err)
+		}
+		if _, ok := configTypes[config.TransactionType]; ok {
+			return ErrInvalidSensitiveTxConfig.Wrapf("duplicate config for transaction type %s", config.TransactionType.String())
+		}
+		configTypes[config.TransactionType] = struct{}{}
+		if err := ValidateConfigAllowedFactors(gs.Params, &config); err != nil {
+			return ErrInvalidSensitiveTxConfig.Wrapf("invalid config[%d]: %v", i, err)
+		}
+	}
+
+	for i, device := range gs.TrustedDevices {
+		if err := device.Validate(); err != nil {
+			return ErrInvalidEnrollment.Wrapf("invalid trusted_device[%d]: %v", i, err)
+		}
+		key := fmt.Sprintf("%s/%s", device.AccountAddress, device.DeviceInfo.Fingerprint)
+		if _, ok := trustedDevices[key]; ok {
+			return ErrInvalidEnrollment.Wrapf("duplicate trusted_device[%d]: %s", i, key)
+		}
+		trustedDevices[key] = struct{}{}
+	}
+
+	if gs.Params.RequireAtLeastOneFactor {
+		for i, policy := range gs.MFAPolicies {
+			if !policy.Enabled {
+				continue
+			}
+			activeFactors := activeFactorsByAccount[policy.AccountAddress]
+			if len(activeFactors) == 0 {
+				return ErrInvalidPolicy.Wrapf("policy[%d] enabled without active factor enrollments", i)
+			}
+			if !AnyCombinationSatisfied(policy.RequiredFactors, activeFactors) {
+				return ErrInvalidPolicy.Wrapf("policy[%d] has no satisfiable required factor combination", i)
+			}
 		}
 	}
 
@@ -167,11 +243,24 @@ func (p Params) Validate() error {
 		return ErrInvalidPolicy.Wrap("trusted_device_ttl must be positive")
 	}
 
+	if p.MinVEIDScoreForMFA > maxVEIDScore {
+		return ErrInvalidPolicy.Wrapf("min_veid_score_for_mfa cannot exceed %d", maxVEIDScore)
+	}
+
+	if len(p.AllowedFactorTypes) == 0 {
+		return ErrInvalidFactorType.Wrap("allowed_factor_types cannot be empty")
+	}
+
 	// Validate allowed factor types
+	seen := make(map[FactorType]struct{}, len(p.AllowedFactorTypes))
 	for _, ft := range p.AllowedFactorTypes {
 		if !ft.IsValid() {
 			return ErrInvalidFactorType.Wrapf("invalid allowed factor type: %d", ft)
 		}
+		if _, ok := seen[ft]; ok {
+			return ErrInvalidFactorType.Wrapf("duplicate allowed factor type: %s", ft.String())
+		}
+		seen[ft] = struct{}{}
 	}
 
 	return nil
@@ -181,6 +270,64 @@ func (p Params) Validate() error {
 func (p Params) IsFactorTypeAllowed(ft FactorType) bool {
 	for _, allowed := range p.AllowedFactorTypes {
 		if allowed == ft {
+			return true
+		}
+	}
+	return false
+}
+
+func ValidatePolicyAllowedFactors(params Params, policy *MFAPolicy) error {
+	for _, combo := range policy.RequiredFactors {
+		if err := validateAllowedFactors(params, combo.Factors); err != nil {
+			return err
+		}
+	}
+	for _, combo := range policy.RecoveryFactors {
+		if err := validateAllowedFactors(params, combo.Factors); err != nil {
+			return err
+		}
+	}
+	for _, combo := range policy.KeyRotationFactors {
+		if err := validateAllowedFactors(params, combo.Factors); err != nil {
+			return err
+		}
+	}
+	if policy.TrustedDeviceRule != nil && policy.TrustedDeviceRule.ReducedFactors != nil {
+		if err := validateAllowedFactors(params, policy.TrustedDeviceRule.ReducedFactors.Factors); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func ValidateConfigAllowedFactors(params Params, config *SensitiveTxConfig) error {
+	for _, combo := range config.RequiredFactorCombinations {
+		if err := validateAllowedFactors(params, combo.Factors); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func validateAllowedFactors(params Params, factors []FactorType) error {
+	for _, ft := range factors {
+		if !params.IsFactorTypeAllowed(ft) {
+			return ErrInvalidFactorType.Wrapf("factor type %s is not allowed by params", ft.String())
+		}
+	}
+	return nil
+}
+
+func AnyCombinationSatisfied(combinations []FactorCombination, activeFactors map[FactorType]struct{}) bool {
+	for _, combo := range combinations {
+		matched := true
+		for _, ft := range combo.Factors {
+			if _, ok := activeFactors[ft]; !ok {
+				matched = false
+				break
+			}
+		}
+		if matched {
 			return true
 		}
 	}

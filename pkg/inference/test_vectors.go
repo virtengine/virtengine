@@ -641,33 +641,31 @@ func buildFullFeatureVector(input TestVectorInput) []float32 {
 	}
 	copy(features[:faceLen], input.FaceEmbedding[:faceLen])
 
-	// Add document quality features
-	offset := FaceEmbeddingDim
-	features[offset] = input.DocQualityFeatures.Sharpness
-	features[offset+1] = input.DocQualityFeatures.Brightness
-	features[offset+2] = input.DocQualityFeatures.Contrast
-	features[offset+3] = input.DocQualityFeatures.NoiseLevel
-	features[offset+4] = input.DocQualityFeatures.BlurScore
+	features[FaceConfidenceOffset] = input.FaceConfidence
+
+	// Add document quality features.
+	features[DocQualityOffset] = input.DocQualityScore
+	features[DocQualityOffset+1] = input.DocQualityFeatures.Sharpness
+	features[DocQualityOffset+2] = input.DocQualityFeatures.Brightness
+	features[DocQualityOffset+3] = input.DocQualityFeatures.Contrast
+	features[DocQualityOffset+4] = 1 - input.DocQualityFeatures.NoiseLevel
+	features[DocQualityOffset+5] = 1 - input.DocQualityFeatures.BlurScore
 
 	// Add OCR features
-	offset += DocQualityDim
 	for i, field := range OCRFieldNames {
 		if i >= 5 {
 			break
 		}
-		features[offset+i*2] = input.OCRConfidences[field]
+		features[OCROffset+i*2] = input.OCRConfidences[field]
 		if input.OCRFieldValidation[field] {
-			features[offset+i*2+1] = 1.0
+			features[OCROffset+i*2+1] = 1.0
 		} else {
-			features[offset+i*2+1] = 0.0
+			features[OCROffset+i*2+1] = 0.0
 		}
 	}
 
 	// Add metadata features
-	offset += OCRFieldsDim
-	features[offset] = input.FaceConfidence
-	features[offset+1] = input.DocQualityScore
-	features[offset+2] = float32(input.ScopeCount)
+	features[MetadataOffset] = min(float32(input.ScopeCount)/10, 1)
 	// Remaining metadata features are zeros (padding)
 
 	return features

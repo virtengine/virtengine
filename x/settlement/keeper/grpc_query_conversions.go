@@ -86,14 +86,48 @@ func toProtoUsageRecord(usage types.UsageRecord) settlementv1.UsageRecord {
 		PeriodEnd:            unixTimestamp(usage.PeriodEnd),
 		UnitPrice:            usage.UnitPrice,
 		TotalCost:            usage.TotalCost,
-		ProviderSignature:    usage.ProviderSignature,
+		ProviderSignature:    nil,
 		CustomerAcknowledged: usage.CustomerAcknowledged,
-		CustomerSignature:    usage.CustomerSignature,
+		CustomerSignature:    nil,
 		Settled:              usage.Settled,
 		SettlementId:         usage.SettlementID,
 		SubmittedAt:          unixTimestamp(usage.SubmittedAt),
 		BlockHeight:          usage.BlockHeight,
 		Metadata:             usage.Metadata,
+		AllocationId:         usage.AllocationID,
+		ChainId:              usage.ChainID,
+		RawMetrics: &settlementv1.RawUsageMetrics{
+			CpuMilliSeconds:    usage.Metrics.CPUMilliSeconds,
+			MemoryByteSeconds:  usage.Metrics.MemoryByteSeconds,
+			StorageByteSeconds: usage.Metrics.StorageByteSeconds,
+			NetworkBytesIn:     usage.Metrics.NetworkBytesIn,
+			NetworkBytesOut:    usage.Metrics.NetworkBytesOut,
+			GpuSeconds:         usage.Metrics.GPUSeconds,
+		},
+		PricingVersion:              usage.PricingVersion,
+		FormulaVersion:              usage.FormulaVersion,
+		ModelVersion:                usage.ModelVersion,
+		StreamSequence:              usage.Sequence,
+		Nonce:                       nil,
+		IdempotencyKey:              nil,
+		ProviderKeyEpoch:            usage.ProviderKeyEpoch,
+		ProviderKeyId:               usage.ProviderKeyID,
+		IssuedAtHeight:              usage.IssuedAtHeight,
+		ExpiresAtHeight:             usage.ExpiresAtHeight,
+		IssuedAtUnix:                usage.IssuedAtUnix,
+		ExpiresAtUnix:               usage.ExpiresAtUnix,
+		SignatureVersion:            usage.SignatureVersion,
+		UsageDigest:                 usage.UsageDigest,
+		SignatureVerified:           usage.SignatureVerified,
+		AuthenticationStatus:        usage.AuthenticationStatus,
+		LegacyUnverified:            usage.LegacyUnverified,
+		CustomerAckReplayKey:        nil,
+		CustomerAckIssuedAtHeight:   usage.CustomerAckIssuedAtHeight,
+		CustomerAckExpiresAtHeight:  usage.CustomerAckExpiresAtHeight,
+		CustomerAckIssuedAtUnix:     usage.CustomerAckIssuedAtUnix,
+		CustomerAckExpiresAtUnix:    usage.CustomerAckExpiresAtUnix,
+		CustomerAckSignatureVersion: usage.CustomerAckSignatureVersion,
+		SignatureMaterialRedacted:   true,
 	}
 }
 
@@ -206,74 +240,164 @@ func toProtoRewardEntries(entries []types.RewardEntry) []settlementv1.RewardEntr
 
 func toProtoPayoutRecord(payout types.PayoutRecord) settlementv1.PayoutRecord {
 	return settlementv1.PayoutRecord{
-		PayoutId:           payout.PayoutID,
-		FiatConversionId:   payout.FiatConversionID,
-		InvoiceId:          payout.InvoiceID,
-		SettlementId:       payout.SettlementID,
-		EscrowId:           payout.EscrowID,
-		OrderId:            payout.OrderID,
-		LeaseId:            payout.LeaseID,
-		Provider:           payout.Provider,
-		Customer:           payout.Customer,
-		GrossAmount:        payout.GrossAmount,
-		PlatformFee:        payout.PlatformFee,
-		ValidatorFee:       payout.ValidatorFee,
-		HoldbackAmount:     payout.HoldbackAmount,
-		NetAmount:          payout.NetAmount,
-		State:              string(payout.State),
-		DisputeId:          payout.DisputeID,
-		HoldReason:         payout.HoldReason,
-		IdempotencyKey:     payout.IdempotencyKey,
-		ExecutionAttempts:  payout.ExecutionAttempts,
-		LastAttemptAt:      unixTimestampPtr(payout.LastAttemptAt),
-		LastError:          payout.LastError,
-		LastErrorRetryable: payout.LastErrorRetryable,
-		TxHash:             payout.TxHash,
-		CreatedAt:          unixTimestamp(payout.CreatedAt),
-		ProcessedAt:        unixTimestampPtr(payout.ProcessedAt),
-		CompletedAt:        unixTimestampPtr(payout.CompletedAt),
-		BlockHeight:        payout.BlockHeight,
+		PayoutId:                payout.PayoutID,
+		FiatConversionId:        payout.FiatConversionID,
+		InvoiceId:               payout.InvoiceID,
+		SettlementId:            payout.SettlementID,
+		EscrowId:                payout.EscrowID,
+		OrderId:                 payout.OrderID,
+		LeaseId:                 payout.LeaseID,
+		Provider:                payout.Provider,
+		Customer:                payout.Customer,
+		GrossAmount:             payout.GrossAmount,
+		PlatformFee:             payout.PlatformFee,
+		ValidatorFee:            payout.ValidatorFee,
+		HoldbackAmount:          payout.HoldbackAmount,
+		NetAmount:               payout.NetAmount,
+		State:                   string(payout.State),
+		DisputeId:               payout.DisputeID,
+		HoldReason:              payout.HoldReason,
+		IdempotencyKey:          payout.IdempotencyKey,
+		ExecutionAttempts:       payout.ExecutionAttempts,
+		LastAttemptAt:           unixTimestampPtr(payout.LastAttemptAt),
+		LastError:               payout.LastError,
+		LastErrorRetryable:      payout.LastErrorRetryable,
+		TxHash:                  payout.TxHash,
+		CreatedAt:               unixTimestamp(payout.CreatedAt),
+		ProcessedAt:             unixTimestampPtr(payout.ProcessedAt),
+		CompletedAt:             unixTimestampPtr(payout.CompletedAt),
+		BlockHeight:             payout.BlockHeight,
+		ExternalFinalityHash:    append([]byte(nil), payout.ExternalFinalityHash...),
+		ValueMovementApplied:    payout.ValueMovementApplied,
+		ValueMovementEffectHash: append([]byte(nil), payout.ValueMovementEffectHash...),
 	}
 }
 
 func toProtoParams(params types.Params) settlementv1.Params {
 	return settlementv1.Params{
-		PlatformFeeRate:                   params.PlatformFeeRate,
-		ValidatorFeeRate:                  params.ValidatorFeeRate,
-		MinEscrowDuration:                 params.MinEscrowDuration,
-		MaxEscrowDuration:                 params.MaxEscrowDuration,
-		SettlementPeriod:                  params.SettlementPeriod,
-		RewardClaimExpiry:                 params.RewardClaimExpiry,
-		MinSettlementAmount:               params.MinSettlementAmount,
-		UsageGracePeriod:                  params.UsageGracePeriod,
-		StakingRewardEpochLength:          params.StakingRewardEpochLength,
-		VerificationRewardAmount:          params.VerificationRewardAmount,
-		PayoutHoldbackRate:                params.PayoutHoldbackRate,
-		MaxPayoutRetries:                  params.MaxPayoutRetries,
-		DisputeWindowDuration:             params.DisputeWindowDuration,
-		UsageRewardRateBps:                params.UsageRewardRateBps,
-		UsageRewardCpuMultiplierBps:       params.UsageRewardCPUMultiplierBps,
-		UsageRewardMemoryMultiplierBps:    params.UsageRewardMemoryMultiplierBps,
-		UsageRewardStorageMultiplierBps:   params.UsageRewardStorageMultiplierBps,
-		UsageRewardGpuMultiplierBps:       params.UsageRewardGPUMultiplierBps,
-		UsageRewardNetworkMultiplierBps:   params.UsageRewardNetworkMultiplierBps,
-		UsageRewardSlaOntimeMultiplierBps: params.UsageRewardSLAOnTimeMultiplierBps,
-		UsageRewardSlaLateMultiplierBps:   params.UsageRewardSLALateMultiplierBps,
-		UsageRewardAckMultiplierBps:       params.UsageRewardAcknowledgedMultiplierBps,
-		UsageRewardUnackMultiplierBps:     params.UsageRewardUnacknowledgedMultiplierBps,
-		FiatConversionEnabled:             params.FiatConversionEnabled,
-		FiatConversionMinAmount:           params.FiatConversionMinAmount,
-		FiatConversionMaxAmount:           params.FiatConversionMaxAmount,
-		FiatConversionDailyLimit:          params.FiatConversionDailyLimit,
-		FiatConversionStableDenom:         params.FiatConversionStableDenom,
-		FiatConversionStableSymbol:        params.FiatConversionStableSymbol,
-		FiatConversionStableDecimals:      params.FiatConversionStableDecimals,
-		FiatConversionDefaultFiat:         params.FiatConversionDefaultFiat,
-		FiatConversionDefaultMethod:       params.FiatConversionDefaultMethod,
-		FiatConversionMaxSlippage:         params.FiatConversionMaxSlippage,
-		FiatConversionRiskScoreThreshold:  params.FiatConversionRiskScoreThreshold,
-		FiatConversionMinComplianceStatus: params.FiatConversionMinComplianceStatus,
+		PlatformFeeRate:                            params.PlatformFeeRate,
+		ValidatorFeeRate:                           params.ValidatorFeeRate,
+		MinEscrowDuration:                          params.MinEscrowDuration,
+		MaxEscrowDuration:                          params.MaxEscrowDuration,
+		SettlementPeriod:                           params.SettlementPeriod,
+		RewardClaimExpiry:                          params.RewardClaimExpiry,
+		MinSettlementAmount:                        params.MinSettlementAmount,
+		UsageGracePeriod:                           params.UsageGracePeriod,
+		StakingRewardEpochLength:                   params.StakingRewardEpochLength,
+		VerificationRewardAmount:                   params.VerificationRewardAmount,
+		PayoutHoldbackRate:                         params.PayoutHoldbackRate,
+		MaxPayoutRetries:                           params.MaxPayoutRetries,
+		DisputeWindowDuration:                      params.DisputeWindowDuration,
+		UsageRewardRateBps:                         params.UsageRewardRateBps,
+		UsageRewardCpuMultiplierBps:                params.UsageRewardCPUMultiplierBps,
+		UsageRewardMemoryMultiplierBps:             params.UsageRewardMemoryMultiplierBps,
+		UsageRewardStorageMultiplierBps:            params.UsageRewardStorageMultiplierBps,
+		UsageRewardGpuMultiplierBps:                params.UsageRewardGPUMultiplierBps,
+		UsageRewardNetworkMultiplierBps:            params.UsageRewardNetworkMultiplierBps,
+		UsageRewardSlaOntimeMultiplierBps:          params.UsageRewardSLAOnTimeMultiplierBps,
+		UsageRewardSlaLateMultiplierBps:            params.UsageRewardSLALateMultiplierBps,
+		UsageRewardAckMultiplierBps:                params.UsageRewardAcknowledgedMultiplierBps,
+		UsageRewardUnackMultiplierBps:              params.UsageRewardUnacknowledgedMultiplierBps,
+		FiatConversionEnabled:                      params.FiatConversionEnabled,
+		FiatConversionMinAmount:                    params.FiatConversionMinAmount,
+		FiatConversionMaxAmount:                    params.FiatConversionMaxAmount,
+		FiatConversionDailyLimit:                   params.FiatConversionDailyLimit,
+		FiatConversionStableDenom:                  params.FiatConversionStableDenom,
+		FiatConversionStableSymbol:                 params.FiatConversionStableSymbol,
+		FiatConversionStableDecimals:               params.FiatConversionStableDecimals,
+		FiatConversionDefaultFiat:                  params.FiatConversionDefaultFiat,
+		FiatConversionDefaultMethod:                params.FiatConversionDefaultMethod,
+		FiatConversionMaxSlippage:                  params.FiatConversionMaxSlippage,
+		FiatConversionRiskScoreThreshold:           params.FiatConversionRiskScoreThreshold,
+		FiatConversionMinComplianceStatus:          params.FiatConversionMinComplianceStatus,
+		FinancialCaseFilingWindowSeconds:           params.FinancialCaseFilingWindowSeconds,
+		FinancialCaseEvidenceWindowSeconds:         params.FinancialCaseEvidenceWindowSeconds,
+		FinancialCaseReviewWindowSeconds:           params.FinancialCaseReviewWindowSeconds,
+		FinancialCaseAppealWindowSeconds:           params.FinancialCaseAppealWindowSeconds,
+		FinancialCaseEscalationWindowSeconds:       params.FinancialCaseEscalationWindowSeconds,
+		FinancialCaseFilingWindowBlocks:            params.FinancialCaseFilingWindowBlocks,
+		FinancialCaseEvidenceWindowBlocks:          params.FinancialCaseEvidenceWindowBlocks,
+		FinancialCaseReviewWindowBlocks:            params.FinancialCaseReviewWindowBlocks,
+		FinancialCaseAppealWindowBlocks:            params.FinancialCaseAppealWindowBlocks,
+		FinancialCaseEscalationWindowBlocks:        params.FinancialCaseEscalationWindowBlocks,
+		FinancialCaseMaxClaims:                     params.FinancialCaseMaxClaims,
+		FinancialCaseMaxAppeals:                    params.FinancialCaseMaxAppeals,
+		FinancialCaseMaxEvidenceReferenceBytes:     params.FinancialCaseMaxEvidenceReferenceBytes,
+		FinancialCaseTimeoutBatchLimit:             params.FinancialCaseTimeoutBatchLimit,
+		FiatConversionDexProfileId:                 params.FiatConversionDEXProfileID,
+		FiatConversionDexProfileDigest:             append([]byte(nil), params.FiatConversionDEXProfileDigest...),
+		FiatConversionDexProfileState:              params.FiatConversionDEXProfileState,
+		FiatConversionPayoutProfileId:              params.FiatConversionPayoutProfileID,
+		FiatConversionPayoutProfileDigest:          append([]byte(nil), params.FiatConversionPayoutProfileDigest...),
+		FiatConversionPayoutProfileState:           params.FiatConversionPayoutProfileState,
+		FiatConversionMinSwapFinalityConfirmations: params.FiatConversionMinSwapFinalityConfirmations,
+		FiatConversionObservationMaxPastSeconds:    params.FiatConversionObservationMaxPastSeconds,
+		FiatConversionObservationMaxFutureSeconds:  params.FiatConversionObservationMaxFutureSeconds,
+		FiatConversionMaxObservations:              params.FiatConversionMaxObservations,
 	}
+}
+
+func paramsFromProto(params settlementv1.Params, current types.Params) types.Params {
+	current.PlatformFeeRate = params.PlatformFeeRate
+	current.ValidatorFeeRate = params.ValidatorFeeRate
+	current.MinEscrowDuration = params.MinEscrowDuration
+	current.MaxEscrowDuration = params.MaxEscrowDuration
+	current.SettlementPeriod = params.SettlementPeriod
+	current.RewardClaimExpiry = params.RewardClaimExpiry
+	current.MinSettlementAmount = params.MinSettlementAmount
+	current.UsageGracePeriod = params.UsageGracePeriod
+	current.StakingRewardEpochLength = params.StakingRewardEpochLength
+	current.VerificationRewardAmount = params.VerificationRewardAmount
+	current.PayoutHoldbackRate = params.PayoutHoldbackRate
+	current.MaxPayoutRetries = params.MaxPayoutRetries
+	current.DisputeWindowDuration = params.DisputeWindowDuration
+	current.UsageRewardRateBps = params.UsageRewardRateBps
+	current.UsageRewardCPUMultiplierBps = params.UsageRewardCpuMultiplierBps
+	current.UsageRewardMemoryMultiplierBps = params.UsageRewardMemoryMultiplierBps
+	current.UsageRewardStorageMultiplierBps = params.UsageRewardStorageMultiplierBps
+	current.UsageRewardGPUMultiplierBps = params.UsageRewardGpuMultiplierBps
+	current.UsageRewardNetworkMultiplierBps = params.UsageRewardNetworkMultiplierBps
+	current.UsageRewardSLAOnTimeMultiplierBps = params.UsageRewardSlaOntimeMultiplierBps
+	current.UsageRewardSLALateMultiplierBps = params.UsageRewardSlaLateMultiplierBps
+	current.UsageRewardAcknowledgedMultiplierBps = params.UsageRewardAckMultiplierBps
+	current.UsageRewardUnacknowledgedMultiplierBps = params.UsageRewardUnackMultiplierBps
+	current.FiatConversionEnabled = params.FiatConversionEnabled
+	current.FiatConversionMinAmount = params.FiatConversionMinAmount
+	current.FiatConversionMaxAmount = params.FiatConversionMaxAmount
+	current.FiatConversionDailyLimit = params.FiatConversionDailyLimit
+	current.FiatConversionStableDenom = params.FiatConversionStableDenom
+	current.FiatConversionStableSymbol = params.FiatConversionStableSymbol
+	current.FiatConversionStableDecimals = params.FiatConversionStableDecimals
+	current.FiatConversionDefaultFiat = params.FiatConversionDefaultFiat
+	current.FiatConversionDefaultMethod = params.FiatConversionDefaultMethod
+	current.FiatConversionMaxSlippage = params.FiatConversionMaxSlippage
+	current.FiatConversionRiskScoreThreshold = params.FiatConversionRiskScoreThreshold
+	current.FiatConversionMinComplianceStatus = params.FiatConversionMinComplianceStatus
+	current.FinancialCaseFilingWindowSeconds = params.FinancialCaseFilingWindowSeconds
+	current.FinancialCaseEvidenceWindowSeconds = params.FinancialCaseEvidenceWindowSeconds
+	current.FinancialCaseReviewWindowSeconds = params.FinancialCaseReviewWindowSeconds
+	current.FinancialCaseAppealWindowSeconds = params.FinancialCaseAppealWindowSeconds
+	current.FinancialCaseEscalationWindowSeconds = params.FinancialCaseEscalationWindowSeconds
+	current.FinancialCaseFilingWindowBlocks = params.FinancialCaseFilingWindowBlocks
+	current.FinancialCaseEvidenceWindowBlocks = params.FinancialCaseEvidenceWindowBlocks
+	current.FinancialCaseReviewWindowBlocks = params.FinancialCaseReviewWindowBlocks
+	current.FinancialCaseAppealWindowBlocks = params.FinancialCaseAppealWindowBlocks
+	current.FinancialCaseEscalationWindowBlocks = params.FinancialCaseEscalationWindowBlocks
+	current.FinancialCaseMaxClaims = params.FinancialCaseMaxClaims
+	current.FinancialCaseMaxAppeals = params.FinancialCaseMaxAppeals
+	current.FinancialCaseMaxEvidenceReferenceBytes = params.FinancialCaseMaxEvidenceReferenceBytes
+	current.FinancialCaseTimeoutBatchLimit = params.FinancialCaseTimeoutBatchLimit
+	current.FiatConversionDEXProfileID = params.FiatConversionDexProfileId
+	current.FiatConversionDEXProfileDigest = append([]byte(nil), params.FiatConversionDexProfileDigest...)
+	current.FiatConversionDEXProfileState = params.FiatConversionDexProfileState
+	current.FiatConversionPayoutProfileID = params.FiatConversionPayoutProfileId
+	current.FiatConversionPayoutProfileDigest = append([]byte(nil), params.FiatConversionPayoutProfileDigest...)
+	current.FiatConversionPayoutProfileState = params.FiatConversionPayoutProfileState
+	current.FiatConversionMinSwapFinalityConfirmations = params.FiatConversionMinSwapFinalityConfirmations
+	current.FiatConversionObservationMaxPastSeconds = params.FiatConversionObservationMaxPastSeconds
+	current.FiatConversionObservationMaxFutureSeconds = params.FiatConversionObservationMaxFutureSeconds
+	current.FiatConversionMaxObservations = params.FiatConversionMaxObservations
+	return current
 }
 
 func toProtoFiatConversionRecord(record types.FiatConversionRecord) settlementv1.FiatConversionRecord {
@@ -282,53 +406,100 @@ func toProtoFiatConversionRecord(record types.FiatConversionRecord) settlementv1
 		encryptedRef = record.EncryptedPayload.EnvelopeRef
 	}
 	return settlementv1.FiatConversionRecord{
-		ConversionId:        record.ConversionID,
-		InvoiceId:           record.InvoiceID,
-		SettlementId:        record.SettlementID,
-		PayoutId:            record.PayoutID,
-		EscrowId:            record.EscrowID,
-		OrderId:             record.OrderID,
-		LeaseId:             record.LeaseID,
-		Provider:            record.Provider,
-		Customer:            record.Customer,
-		RequestedBy:         record.RequestedBy,
-		RequestedAt:         unixTimestamp(record.RequestedAt),
-		UpdatedAt:           unixTimestamp(record.UpdatedAt),
-		State:               string(record.State),
-		CryptoToken:         toProtoTokenSpec(record.CryptoToken),
-		StableToken:         toProtoTokenSpec(record.StableToken),
-		CryptoAmount:        record.CryptoAmount,
-		StableAmount:        record.StableAmount,
-		FiatCurrency:        record.FiatCurrency,
-		FiatAmount:          record.FiatAmount,
-		PaymentMethod:       record.PaymentMethod,
-		DestinationRef:      encryptedRef,
-		DestinationHash:     record.DestinationHash,
-		DestinationRegion:   record.DestinationRegion,
-		SlippageTolerance:   record.SlippageTolerance,
-		DexAdapter:          record.DexAdapter,
-		SwapQuoteId:         record.SwapQuoteID,
-		SwapTxHash:          record.SwapTxHash,
-		SwapStatus:          record.SwapStatus,
-		OffRampProvider:     record.OffRampProvider,
-		OffRampQuoteId:      record.OffRampQuoteID,
-		OffRampId:           record.OffRampID,
-		OffRampStatus:       record.OffRampStatus,
-		OffRampReference:    record.OffRampReference,
-		ComplianceStatus:    record.ComplianceStatus,
-		ComplianceRiskScore: record.ComplianceRiskScore,
-		ComplianceCheckedAt: record.ComplianceCheckedAt,
-		FailureReason:       record.FailureReason,
-		IdempotencyKey:      record.IdempotencyKey,
-		SwapAttempts:        record.SwapAttempts,
-		OffRampAttempts:     record.OffRampAttempts,
-		PayoutAttempts:      record.PayoutAttempts,
-		LastErrorAt:         record.LastErrorAt,
-		LastError:           record.LastError,
-		LastErrorRetryable:  record.LastErrorRetryable,
-		TransitionHistory:   toProtoFiatConversionStateTransitions(record.TransitionHistory),
-		AuditTrail:          toProtoFiatConversionAuditEntries(record.AuditTrail),
+		ConversionId:              record.ConversionID,
+		InvoiceId:                 record.InvoiceID,
+		SettlementId:              record.SettlementID,
+		PayoutId:                  record.PayoutID,
+		EscrowId:                  record.EscrowID,
+		OrderId:                   record.OrderID,
+		LeaseId:                   record.LeaseID,
+		Provider:                  record.Provider,
+		Customer:                  record.Customer,
+		RequestedBy:               record.RequestedBy,
+		RequestedAt:               unixTimestamp(record.RequestedAt),
+		UpdatedAt:                 unixTimestamp(record.UpdatedAt),
+		State:                     string(record.State),
+		CryptoToken:               toProtoTokenSpec(record.CryptoToken),
+		StableToken:               toProtoTokenSpec(record.StableToken),
+		CryptoAmount:              record.CryptoAmount,
+		StableAmount:              record.StableAmount,
+		FiatCurrency:              record.FiatCurrency,
+		FiatAmount:                record.FiatAmount,
+		PaymentMethod:             record.PaymentMethod,
+		DestinationRef:            encryptedRef,
+		DestinationHash:           record.DestinationHash,
+		DestinationRegion:         record.DestinationRegion,
+		SlippageTolerance:         record.SlippageTolerance,
+		SlippageToleranceExact:    record.SlippageToleranceExact,
+		DexAdapter:                record.DexAdapter,
+		SwapQuoteId:               record.SwapQuoteID,
+		SwapTxHash:                record.SwapTxHash,
+		SwapStatus:                record.SwapStatus,
+		OffRampProvider:           record.OffRampProvider,
+		OffRampQuoteId:            record.OffRampQuoteID,
+		OffRampId:                 record.OffRampID,
+		OffRampStatus:             record.OffRampStatus,
+		OffRampReference:          record.OffRampReference,
+		ComplianceStatus:          record.ComplianceStatus,
+		ComplianceRiskScore:       record.ComplianceRiskScore,
+		ComplianceCheckedAt:       record.ComplianceCheckedAt,
+		FailureReason:             record.FailureReason,
+		IdempotencyKey:            record.IdempotencyKey,
+		SwapAttempts:              record.SwapAttempts,
+		OffRampAttempts:           record.OffRampAttempts,
+		PayoutAttempts:            record.PayoutAttempts,
+		LastErrorAt:               record.LastErrorAt,
+		LastError:                 record.LastError,
+		LastErrorRetryable:        record.LastErrorRetryable,
+		TransitionHistory:         toProtoFiatConversionStateTransitions(record.TransitionHistory),
+		AuditTrail:                toProtoFiatConversionAuditEntries(record.AuditTrail),
+		ProtocolVersion:           record.ProtocolVersion,
+		ObservationSequence:       record.ObservationSequence,
+		LastObservationDigest:     append([]byte(nil), record.LastObservationDigest...),
+		Observations:              toProtoFiatConversionObservations(record.Observations),
+		DexProfileId:              record.DEXProfileID,
+		DexProfileDigest:          append([]byte(nil), record.DEXProfileDigest...),
+		PayoutProfileId:           record.PayoutProfileID,
+		PayoutProfileDigest:       append([]byte(nil), record.PayoutProfileDigest...),
+		QuoteDigest:               append([]byte(nil), record.QuoteDigest...),
+		QuoteExpiry:               record.QuoteExpiry,
+		MinimumStableOutput:       record.MinimumStableOutput,
+		SwapHeight:                record.SwapHeight,
+		SwapBlockHash:             append([]byte(nil), record.SwapBlockHash...),
+		SwapFinalityConfirmations: record.SwapFinalityConfirmations,
+		SwapFinalityHash:          append([]byte(nil), record.SwapFinalityHash...),
+		PayoutFinalityHash:        append([]byte(nil), record.PayoutFinalityHash...),
+		ComplianceDecisionHash:    append([]byte(nil), record.ComplianceDecisionHash...),
+		PrivacySafeReferenceHash:  append([]byte(nil), record.PrivacySafeReferenceHash...),
+		EvidenceHash:              append([]byte(nil), record.EvidenceHash...),
+		RequestDigest:             append([]byte(nil), record.RequestDigest...),
+		DailyBucket:               record.DailyBucket,
+		LegacyQuarantined:         record.LegacyQuarantined,
+		QuarantineReason:          record.QuarantineReason,
+		TerminalPolicy:            record.TerminalPolicy,
+		ValueMovementApplied:      record.ValueMovementApplied,
+		CustodySinkAmount:         record.CustodySinkAmount,
+		CustodySinkEffectHash:     append([]byte(nil), record.CustodySinkEffectHash...),
+		DailyQuotaReserved:        record.DailyQuotaReserved,
 	}
+}
+
+func toProtoFiatConversionObservations(entries []types.FiatConversionObservation) []settlementv1.FiatConversionObservation {
+	if len(entries) == 0 {
+		return nil
+	}
+	result := make([]settlementv1.FiatConversionObservation, 0, len(entries))
+	for _, entry := range entries {
+		result = append(result, settlementv1.FiatConversionObservation{
+			Sequence: entry.Sequence, IdempotencyKey: append([]byte(nil), entry.IdempotencyKey...),
+			Stage: entry.Stage, Status: entry.Status, ObservedAt: entry.ObservedAt,
+			RecordedAt: entry.RecordedAt, RecordedHeight: entry.RecordedHeight,
+			EvidenceHash:      append([]byte(nil), entry.EvidenceHash...),
+			ObservationDigest: append([]byte(nil), entry.ObservationDigest...),
+			LineageDigest:     append([]byte(nil), entry.LineageDigest...), FailureCode: entry.FailureCode,
+		})
+	}
+	return result
 }
 
 func toProtoFiatConversionStateTransitions(entries []types.FiatConversionStateTransition) []settlementv1.FiatConversionStateTransition {
@@ -375,20 +546,21 @@ func toProtoFiatPayoutPreference(pref types.FiatPayoutPreference) settlementv1.F
 		encryptedRef = pref.EncryptedPayload.EnvelopeRef
 	}
 	return settlementv1.FiatPayoutPreference{
-		Provider:          pref.Provider,
-		Enabled:           pref.Enabled,
-		FiatCurrency:      pref.FiatCurrency,
-		PaymentMethod:     pref.PaymentMethod,
-		DestinationRef:    encryptedRef,
-		DestinationHash:   pref.DestinationHash,
-		DestinationRegion: pref.DestinationRegion,
-		PreferredDex:      pref.PreferredDEX,
-		PreferredOffRamp:  pref.PreferredOffRamp,
-		SlippageTolerance: pref.SlippageTolerance,
-		CryptoToken:       toProtoTokenSpec(pref.CryptoToken),
-		StableToken:       toProtoTokenSpec(pref.StableToken),
-		CreatedAt:         unixTimestamp(pref.CreatedAt),
-		UpdatedAt:         unixTimestamp(pref.UpdatedAt),
+		Provider:               pref.Provider,
+		Enabled:                pref.Enabled,
+		FiatCurrency:           pref.FiatCurrency,
+		PaymentMethod:          pref.PaymentMethod,
+		DestinationRef:         encryptedRef,
+		DestinationHash:        pref.DestinationHash,
+		DestinationRegion:      pref.DestinationRegion,
+		PreferredDex:           pref.PreferredDEX,
+		PreferredOffRamp:       pref.PreferredOffRamp,
+		SlippageTolerance:      pref.SlippageTolerance,
+		SlippageToleranceExact: pref.SlippageToleranceExact,
+		CryptoToken:            toProtoTokenSpec(pref.CryptoToken),
+		StableToken:            toProtoTokenSpec(pref.StableToken),
+		CreatedAt:              unixTimestamp(pref.CreatedAt),
+		UpdatedAt:              unixTimestamp(pref.UpdatedAt),
 	}
 }
 

@@ -274,18 +274,22 @@ func (m *KeyBackupManager) CreateBackup(passphrase string) (*KeyBackup, error) {
 			},
 		}
 
-		// Note: In real implementation, would access private key securely
-		// This is a placeholder for the actual implementation
-		entry.PublicKey, _ = hex.DecodeString(fullKey.PublicKey)
+		entry.PublicKey, err = hex.DecodeString(fullKey.PublicKey)
+		if err != nil {
+			return nil, fmt.Errorf("failed to decode public key for %s: %w", key.KeyID, err)
+		}
+		entry.PrivateKey = cloneSecretBytes(fullKey.privateKey)
 
 		backupData.Keys = append(backupData.Keys, entry)
 	}
+	defer scrubBackupEntries(backupData.Keys)
 
 	// Serialize backup data
 	plaintext, err := json.Marshal(backupData)
 	if err != nil {
 		return nil, fmt.Errorf("failed to serialize backup data: %w", err)
 	}
+	defer zeroSecretBytes(plaintext)
 
 	// Compute checksum before encryption
 	checksum := sha256.Sum256(plaintext)
@@ -381,6 +385,7 @@ func (m *KeyBackupManager) RestoreBackup(backup *KeyBackup, passphrase string) (
 	if err := json.Unmarshal(plaintext, &backupData); err != nil {
 		return nil, fmt.Errorf("failed to deserialize backup data: %w", err)
 	}
+	defer scrubBackupEntries(backupData.Keys)
 
 	result := &RestoreResult{
 		TotalKeys:    len(backupData.Keys),
@@ -399,17 +404,21 @@ func (m *KeyBackupManager) RestoreBackup(backup *KeyBackup, passphrase string) (
 			continue
 		}
 
-		// Import key (simplified - would need actual private key data)
-		if keyEntry.PrivateKey != nil {
-			_, err := m.keyManager.ImportKey(
-				keyEntry.Metadata["provider_address"],
-				keyEntry.PrivateKey,
-				keyEntry.Algorithm,
-			)
-			if err != nil {
-				result.Errors[keyEntry.Label] = err.Error()
-				continue
-			}
+		if len(keyEntry.PrivateKey) == 0 {
+			result.Errors[keyEntry.Label] = "backup entry missing private key"
+			continue
+		}
+
+		keyMaterial := cloneSecretBytes(keyEntry.PrivateKey)
+		_, err = m.keyManager.ImportKey(
+			keyEntry.Metadata["provider_address"],
+			keyMaterial,
+			keyEntry.Algorithm,
+		)
+		zeroSecretBytes(keyMaterial)
+		if err != nil {
+			result.Errors[keyEntry.Label] = err.Error()
+			continue
 		}
 
 		result.RestoredKeys = append(result.RestoredKeys, keyEntry.Label)
@@ -545,6 +554,28 @@ func extractKeyLabels(entries []BackupKeyEntry) []string {
 		labels = append(labels, entry.Label)
 	}
 	return labels
+}
+
+func cloneSecretBytes(src []byte) []byte {
+	if len(src) == 0 {
+		return nil
+	}
+	dst := make([]byte, len(src))
+	copy(dst, src)
+	return dst
+}
+
+func zeroSecretBytes(buf []byte) {
+	for i := range buf {
+		buf[i] = 0
+	}
+}
+
+func scrubBackupEntries(entries []BackupKeyEntry) {
+	for i := range entries {
+		zeroSecretBytes(entries[i].PrivateKey)
+		zeroSecretBytes(entries[i].PublicKey)
+	}
 }
 
 // RecoveryShare represents a single share for Shamir secret sharing recovery

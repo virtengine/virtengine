@@ -6,6 +6,8 @@
 package keeper
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"strconv"
@@ -18,6 +20,7 @@ import (
 	sdk "github.com/cosmos/cosmos-sdk/types"
 
 	"github.com/virtengine/virtengine/x/review/types"
+	settlementtypes "github.com/virtengine/virtengine/x/settlement/types"
 )
 
 // IKeeper defines the interface for the Review keeper
@@ -82,11 +85,17 @@ type RolesKeeper interface {
 
 // Keeper implements the Review module keeper
 type Keeper struct {
-	skey         storetypes.StoreKey
-	cdc          codec.BinaryCodec
-	marketKeeper MarketKeeper
-	rolesKeeper  RolesKeeper
-	authority    string
+	skey           storetypes.StoreKey
+	cdc            codec.BinaryCodec
+	marketKeeper   MarketKeeper
+	rolesKeeper    RolesKeeper
+	authority      string
+	financialCases FinancialCaseKeeper
+}
+
+type FinancialCaseKeeper interface {
+	GetFinancialCaseBySubject(ctx sdk.Context, subject settlementtypes.FinancialSubject) (settlementtypes.FinancialCase, bool)
+	AddFinancialClaim(ctx sdk.Context, caseID string, claim settlementtypes.FinancialClaim) (*settlementtypes.FinancialCase, *settlementtypes.FinancialClaim, bool, error)
 }
 
 // NewKeeper creates and returns an instance for Review keeper
@@ -104,6 +113,10 @@ func NewKeeper(
 		rolesKeeper:  rolesKeeper,
 		authority:    authority,
 	}
+}
+
+func (k *Keeper) SetFinancialCaseKeeper(financialCases FinancialCaseKeeper) {
+	k.financialCases = financialCases
 }
 
 // Codec returns keeper codec
@@ -231,6 +244,15 @@ func (k Keeper) VerifyOrderCompleted(ctx sdk.Context, orderID, customerAddr, pro
 
 // SubmitReview submits a new review for a provider
 func (k Keeper) SubmitReview(ctx sdk.Context, review *types.Review) error {
+	cacheCtx, write := ctx.CacheContext()
+	if err := k.submitReview(cacheCtx, review); err != nil {
+		return err
+	}
+	write()
+	return nil
+}
+
+func (k Keeper) submitReview(ctx sdk.Context, review *types.Review) error {
 	params := k.GetParams(ctx)
 
 	// Validate review
@@ -269,6 +291,20 @@ func (k Keeper) SubmitReview(ctx sdk.Context, review *types.Review) error {
 	// Store the review
 	if err := k.SetReview(ctx, *review); err != nil {
 		return err
+	}
+	if k.financialCases != nil {
+		subject := settlementtypes.FinancialSubject{Type: settlementtypes.FinancialSubjectTypeOrder, PrimaryId: review.OrderRef.OrderID, OrderId: review.OrderRef.OrderID}
+		if financialCase, found := k.financialCases.GetFinancialCaseBySubject(ctx, subject); found && settlementtypes.IsActiveFinancialCaseStatus(financialCase.Status) {
+			hash, err := hex.DecodeString(review.ContentHash)
+			if err != nil || len(hash) != sha256.Size {
+				return fmt.Errorf("invalid review content hash: %w", err)
+			}
+			idempotency := []byte("review/financial-case/" + review.ID.String())
+			_, _, _, err = k.financialCases.AddFinancialClaim(ctx, financialCase.CaseId, settlementtypes.FinancialClaim{ClaimType: settlementtypes.FinancialClaimTypeReview, Claimant: review.ReviewerAddress, SourceModule: "review", SourceReference: review.ID.String(), EvidenceHash: hash, EncryptedReference: "review://content-hash/" + review.ContentHash, IdempotencyKey: idempotency, Recommendation: fmt.Sprintf("rating:%d", review.Rating)})
+			if err != nil {
+				return err
+			}
+		}
 	}
 
 	// Update provider aggregation

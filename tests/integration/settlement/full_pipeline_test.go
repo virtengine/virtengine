@@ -17,26 +17,26 @@ import (
 	"time"
 
 	sdkmath "cosmossdk.io/math"
+	"github.com/cosmos/cosmos-sdk/crypto/keys/ed25519"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
 
-	escrowid "github.com/virtengine/virtengine/sdk/go/node/escrow/id/v1"
-	etypes "github.com/virtengine/virtengine/sdk/go/node/escrow/types/v1"
-	"github.com/virtengine/virtengine/testutil"
+	"github.com/virtengine/virtengine/testutil/state"
 	escrowkeeper "github.com/virtengine/virtengine/x/escrow/keeper"
 	"github.com/virtengine/virtengine/x/escrow/types/billing"
 	settlementtypes "github.com/virtengine/virtengine/x/settlement/types"
 )
 
-// FullPipelineTestSuite tests the complete settlement pipeline
 type FullPipelineTestSuite struct {
 	suite.Suite
-	ctx          sdk.Context
-	escrowKeeper escrowkeeper.Keeper
-	provider     sdk.AccAddress
-	customer     sdk.AccAddress
-	currency     string
+	testSuite     *state.TestSuite
+	ctx           sdk.Context
+	invoiceKeeper escrowkeeper.InvoiceKeeper
+	provider      sdk.AccAddress
+	customer      sdk.AccAddress
+	currency      string
+	usage         *authenticatedUsageFixture
 }
 
 func TestFullPipelineTestSuite(t *testing.T) {
@@ -44,528 +44,322 @@ func TestFullPipelineTestSuite(t *testing.T) {
 }
 
 func (suite *FullPipelineTestSuite) SetupTest() {
-	suite.ctx, suite.escrowKeeper = testutil.SetupEscrowKeeper(suite.T())
-	suite.provider = testutil.AccAddress(suite.T())
-	suite.customer = testutil.AccAddress(suite.T())
-	suite.currency = "uakt"
+	suite.testSuite = state.SetupTestSuiteWithoutModuleServices(suite.T())
+	suite.ctx = suite.testSuite.Context()
+	suite.invoiceKeeper = requireInvoiceKeeper(suite.T(), suite.testSuite.App().Keepers.VirtEngine.Escrow)
+	suite.provider = sdk.AccAddress(ed25519.GenPrivKey().PubKey().Address())
+	suite.customer = sdk.AccAddress(ed25519.GenPrivKey().PubKey().Address())
+	suite.currency = "uve"
+	suite.usage = newAuthenticatedUsageFixture(suite.T(), suite.testSuite, suite.provider)
+
+	fundAccount(suite.T(), suite.testSuite, suite.customer, sdk.NewCoins(sdk.NewCoin(suite.currency, sdkmath.NewInt(500000))))
 }
 
-// TestUsageToInvoiceToPayout tests the happy path: usage → invoice → payout
 func (suite *FullPipelineTestSuite) TestUsageToInvoiceToPayout() {
 	t := suite.T()
 	ctx := suite.ctx
 
-	// Setup: Create escrow account and fund it
-	escrowAccountID := suite.createAndFundEscrow(100000) // 100k uakt
+	orderID := "order-pipeline-001"
 	leaseID := "lease-pipeline-001"
-	paymentID := escrowid.MakePaymentID(escrowAccountID, 1)
+	initialEscrow := int64(100000)
+	escrowID := suite.createAndActivateEscrow(ctx, orderID, leaseID, initialEscrow, 72*time.Hour)
+	providerBalanceBefore := suite.testSuite.App().Keepers.Cosmos.Bank.GetBalance(ctx, suite.provider, suite.currency)
 
-	// Create payment stream
-	ratePerBlock := sdk.NewDecCoinFromDec(suite.currency, sdkmath.LegacyNewDec(100))
-	err := suite.escrowKeeper.PaymentCreate(ctx, paymentID, suite.provider, ratePerBlock)
-	require.NoError(t, err)
-
-	// Step 1: Generate usage records for 24 hours
-	usageRecords := suite.generateUsageRecords(leaseID, 24)
-	totalUsage := int64(0)
-	for _, record := range usageRecords {
-		totalUsage += record.TotalAmount.AmountOf(suite.currency).Int64()
-	}
-	t.Logf("Generated %d usage records, total: %d %s", len(usageRecords), totalUsage, suite.currency)
-
-	// Step 2: Create invoice from usage records
-	invoice := suite.createInvoiceFromUsage(leaseID, usageRecords)
-	require.Equal(t, totalUsage, invoice.TotalAmount.AmountOf(suite.currency).Int64())
-	t.Logf("Invoice created: %s for %s", invoice.InvoiceID, invoice.TotalAmount.String())
-
-	// Step 3: Calculate settlement with platform fee
-	platformFeeRate := sdkmath.LegacyMustNewDecFromStr("0.01") // 1%
-	platformFee := sdk.NewCoins(sdk.NewCoin(suite.currency,
-		sdkmath.LegacyNewDec(totalUsage).Mul(platformFeeRate).TruncateInt()))
-	providerNet := invoice.TotalAmount.Sub(platformFee...)
-
-	settlement := &settlementtypes.SettlementRecord{
-		RecordID:    fmt.Sprintf("settlement-%s", invoice.InvoiceID),
-		LeaseID:     leaseID,
-		InvoiceID:   invoice.InvoiceID,
-		Provider:    suite.provider.String(),
-		Customer:    suite.customer.String(),
-		Amount:      invoice.TotalAmount,
-		PlatformFee: platformFee,
-		ProviderNet: providerNet,
-		Status:      settlementtypes.SettlementStatusCompleted,
-		SettledAt:   ctx.BlockTime(),
-		CreatedAt:   ctx.BlockTime(),
+	usageIDs := []string{
+		suite.recordUsage(ctx, orderID, leaseID, "cpu", 384, 38400, ctx.BlockTime().Add(-24*time.Hour), ctx.BlockTime()),
+		suite.recordUsage(ctx, orderID, leaseID, "memory", 1536, 9600, ctx.BlockTime().Add(-24*time.Hour), ctx.BlockTime()),
+		suite.recordUsage(ctx, orderID, leaseID, "storage", 24, 2000, ctx.BlockTime().Add(-24*time.Hour), ctx.BlockTime()),
 	}
 
-	t.Logf("Settlement calculated:")
-	t.Logf("  Total: %s", settlement.Amount.String())
-	t.Logf("  Platform fee (1%%): %s", settlement.PlatformFee.String())
-	t.Logf("  Provider net (99%%): %s", settlement.ProviderNet.String())
-
-	// Step 4: Verify escrow balance would cover settlement
-	escrowAccount, err := suite.escrowKeeper.GetAccount(ctx, escrowAccountID)
+	keeper := &suite.testSuite.App().Keepers.VirtEngine.Settlement
+	settlement, err := keeper.SettleOrder(ctx, orderID, usageIDs, false)
 	require.NoError(t, err)
-	escrowBalance := escrowAccount.Balance.AmountOf(suite.currency).Int64()
-	require.GreaterOrEqual(t, escrowBalance, totalUsage, "escrow should have sufficient balance")
+	require.NotNil(t, settlement)
 
-	// Step 5: Execute payout (simulated - actual payout would debit escrow)
-	// In production, this would:
-	// - Debit escrow account
-	// - Transfer to provider
-	// - Transfer platform fee to fee pool
-	t.Log("✓ Payout verified - escrow has sufficient balance")
+	payout, found := keeper.GetPayoutBySettlement(ctx, settlement.SettlementID)
+	require.True(t, found)
+	require.Equal(t, settlementtypes.PayoutStateCompleted, payout.State)
 
-	// Verify invariant: settlement totals match escrow debits
-	suite.verifySettlementInvariant(settlement, escrowBalance)
+	invoice, err := suite.invoiceKeeper.GetInvoice(ctx, payout.InvoiceID)
+	require.NoError(t, err)
+	require.Equal(t, billing.InvoiceStatusPaid, invoice.Status)
+	require.Equal(t, orderID, invoice.OrderID)
+	require.Equal(t, leaseID, invoice.LeaseID)
+	require.True(t, invoice.Total.Equal(settlement.TotalAmount))
+	require.Equal(t, settlement.SettlementID, invoice.SettlementID)
+
+	ledgerEntries, err := suite.invoiceKeeper.GetInvoiceLedgerEntries(ctx, invoice.InvoiceID)
+	require.NoError(t, err)
+	require.NotEmpty(t, ledgerEntries)
+
+	ledgerChain, err := suite.invoiceKeeper.GetInvoiceLedgerChain(ctx, invoice.InvoiceID)
+	require.NoError(t, err)
+	require.NoError(t, ledgerChain.Validate())
+
+	providerBalanceAfter := suite.testSuite.App().Keepers.Cosmos.Bank.GetBalance(ctx, suite.provider, suite.currency)
+	require.Equal(t, providerBalanceBefore.Amount.Add(payout.NetAmount.AmountOf(suite.currency)), providerBalanceAfter.Amount)
+
+	treasury := keeper.GetTreasuryBalance(ctx)
+	require.True(t, treasury.Equal(payout.PlatformFee.Add(payout.ValidatorFee...)))
+
+	escrow, found := keeper.GetEscrow(ctx, escrowID)
+	require.True(t, found)
+	require.Equal(t, sdkmath.NewInt(initialEscrow).Sub(settlement.TotalAmount.AmountOf(suite.currency)), escrow.Balance.AmountOf(suite.currency))
+
+	suite.verifySettlementInvariant(t, settlement)
 }
 
-// TestDisputeResolutionAdjustedPayout tests dispute → resolution → adjusted payout flow
 func (suite *FullPipelineTestSuite) TestDisputeResolutionAdjustedPayout() {
 	t := suite.T()
 	ctx := suite.ctx
 
-	escrowAccountID := suite.createAndFundEscrow(100000)
-	leaseID := "lease-dispute-001"
+	keeper := &suite.testSuite.App().Keepers.VirtEngine.Settlement
+	configureFiatTestParams(t, suite.testSuite)
+	keeper.SetComplianceKeeper(suite.testSuite.App().Keepers.VirtEngine.VEID)
 
-	// Step 1: Create invoice
-	usageRecords := suite.generateUsageRecords(leaseID, 24)
-	invoice := suite.createInvoiceFromUsage(leaseID, usageRecords)
-	originalAmount := invoice.TotalAmount.AmountOf(suite.currency).Int64()
-	t.Logf("Original invoice: %s", invoice.TotalAmount.String())
+	params := keeper.GetParams(ctx)
+	params.PayoutHoldbackRate = "0.20"
+	require.NoError(t, keeper.SetParams(ctx, params))
 
-	// Step 2: Customer disputes 30% of charges
-	dispute := &settlementtypes.Dispute{
-		DisputeID: "dispute-001",
-		InvoiceID: invoice.InvoiceID,
-		LeaseID:   leaseID,
-		Initiator: suite.customer.String(),
-		DisputedAmount: sdk.NewCoins(sdk.NewCoin(suite.currency,
-			sdkmath.NewInt(originalAmount*30/100))),
-		Reason:    "Service degradation during 30% of billing period",
-		Status:    settlementtypes.DisputeStatusPending,
-		CreatedAt: ctx.BlockTime(),
-	}
-	t.Logf("Dispute filed: %s", dispute.DisputedAmount.String())
+	seedComplianceRecord(t, suite.testSuite, suite.provider)
+	require.NoError(t, keeper.SetFiatPayoutPreference(
+		ctx,
+		makeFiatPayoutPreference(t, suite.testSuite, ctx.BlockTime(), suite.provider, suite.currency, "acct-adjustment"),
+	))
 
-	// Step 3: Dispute resolution (e.g., by governance or arbiter)
-	// Resolution: Award 20% reduction to customer (partial acceptance of dispute)
-	adjustmentRate := sdkmath.LegacyMustNewDecFromStr("0.20") // 20% reduction
-	adjustedAmount := sdkmath.LegacyNewDec(originalAmount).Mul(
-		sdkmath.LegacyOneDec().Sub(adjustmentRate)).TruncateInt()
+	orderID := "order-dispute-adjusted"
+	leaseID := "lease-dispute-adjusted"
+	escrowID := suite.createAndActivateEscrow(ctx, orderID, leaseID, 1000, 72*time.Hour)
+	customerBalanceBeforeResolution := suite.testSuite.App().Keepers.Cosmos.Bank.GetBalance(ctx, suite.customer, suite.currency)
+	usageID := suite.recordUsage(ctx, orderID, leaseID, "compute", 1, 1000, ctx.BlockTime().Add(-time.Hour), ctx.BlockTime())
 
-	dispute.Status = settlementtypes.DisputeStatusResolved
-	dispute.ResolvedAt = ctx.BlockTime().Add(7 * 24 * time.Hour)
-	dispute.Resolution = "Partial service degradation confirmed, 20% adjustment granted"
-	t.Logf("Dispute resolved: 20%% adjustment granted")
+	settlement, err := keeper.SettleOrder(ctx, orderID, []string{usageID}, false)
+	require.NoError(t, err)
 
-	// Step 4: Calculate adjusted settlement
-	adjustedInvoiceAmount := sdk.NewCoins(sdk.NewCoin(suite.currency, adjustedAmount))
-	platformFeeRate := sdkmath.LegacyMustNewDecFromStr("0.01")
-	platformFee := sdk.NewCoins(sdk.NewCoin(suite.currency,
-		sdkmath.LegacyNewDec(adjustedAmount.Int64()).Mul(platformFeeRate).TruncateInt()))
-	providerNet := adjustedInvoiceAmount.Sub(platformFee...)
+	payout, found := keeper.GetPayoutBySettlement(ctx, settlement.SettlementID)
+	require.True(t, found)
+	require.Equal(t, settlementtypes.PayoutStatePending, payout.State)
+	require.False(t, payout.HoldbackAmount.IsZero())
 
-	adjustedSettlement := &settlementtypes.SettlementRecord{
-		RecordID:    fmt.Sprintf("settlement-adjusted-%s", invoice.InvoiceID),
-		LeaseID:     leaseID,
-		InvoiceID:   invoice.InvoiceID,
-		Provider:    suite.provider.String(),
-		Customer:    suite.customer.String(),
-		Amount:      adjustedInvoiceAmount,
-		PlatformFee: platformFee,
-		ProviderNet: providerNet,
-		Status:      settlementtypes.SettlementStatusCompleted,
-		DisputeID:   dispute.DisputeID,
-		Adjustment:  sdk.NewCoins(sdk.NewCoin(suite.currency, sdkmath.NewInt(originalAmount-adjustedAmount.Int64()))),
-		SettledAt:   ctx.BlockTime(),
-		CreatedAt:   ctx.BlockTime(),
+	openErr := keeper.OnDisputeOpened(ctx, payout.InvoiceID, "dispute-adjusted-1", "service degradation")
+	held, found := keeper.GetPayout(ctx, payout.PayoutID)
+	require.True(t, found)
+	if openErr == nil {
+		require.Equal(t, settlementtypes.PayoutStateHeld, held.State)
+		require.ErrorIs(t, keeper.OnDisputeResolved(ctx, payout.InvoiceID, billing.DisputeResolutionPartialRefund), settlementtypes.ErrLegacyFinancialMutationFenced)
+	} else {
+		require.ErrorIs(t, openErr, settlementtypes.ErrLegacyFinancialMutationFenced)
+		require.Equal(t, settlementtypes.PayoutStatePending, held.State)
 	}
 
-	t.Logf("Adjusted settlement:")
-	t.Logf("  Original: %d %s", originalAmount, suite.currency)
-	t.Logf("  Adjustment: -%s", adjustedSettlement.Adjustment.String())
-	t.Logf("  Final: %s", adjustedSettlement.Amount.String())
-	t.Logf("  Provider net: %s", adjustedSettlement.ProviderNet.String())
+	conversion, found := keeper.GetFiatConversionBySettlement(ctx, settlement.SettlementID)
+	require.True(t, found)
+	require.Contains(t, []settlementtypes.FiatConversionState{settlementtypes.FiatConversionStateCreated, settlementtypes.FiatConversionStateCancelled}, conversion.State)
 
-	// Verify adjusted amounts are correct
-	require.Equal(t, adjustedAmount.Int64(), adjustedSettlement.Amount.AmountOf(suite.currency).Int64())
-	require.Equal(t, originalAmount-adjustedAmount.Int64(),
-		adjustedSettlement.Adjustment.AmountOf(suite.currency).Int64())
+	customerBalanceAfterResolution := suite.testSuite.App().Keepers.Cosmos.Bank.GetBalance(ctx, suite.customer, suite.currency)
+	require.Equal(t, customerBalanceBeforeResolution.Amount, customerBalanceAfterResolution.Amount)
+	require.True(t, keeper.GetTreasuryBalance(ctx).IsZero())
 
-	t.Log("✓ Dispute resolution and adjusted payout calculated correctly")
+	ledger := keeper.GetPayoutLedgerEntries(ctx, payout.PayoutID)
+	require.NotEmpty(t, ledger)
+
+	escrow, found := keeper.GetEscrow(ctx, escrowID)
+	require.True(t, found)
+	require.Equal(t, sdkmath.ZeroInt(), escrow.Balance.AmountOf(suite.currency))
 }
 
-// TestPartialRefund tests partial refund with escrow balance adjustments
 func (suite *FullPipelineTestSuite) TestPartialRefund() {
 	t := suite.T()
 	ctx := suite.ctx
 
-	initialBalance := int64(100000) // 100k uakt
-	escrowAccountID := suite.createAndFundEscrow(initialBalance)
+	initialBalance := int64(100000)
+	orderID := "order-refund-001"
 	leaseID := "lease-refund-001"
+	escrowID := suite.createAndActivateEscrow(ctx, orderID, leaseID, initialBalance, 72*time.Hour)
+	customerBalanceBefore := suite.testSuite.App().Keepers.Cosmos.Bank.GetBalance(ctx, suite.customer, suite.currency)
+	usageID := suite.recordUsage(ctx, orderID, leaseID, "compute", 12, 24000, ctx.BlockTime().Add(-12*time.Hour), ctx.BlockTime())
 
-	// Usage records for only 12 hours (half of expected 24 hours)
-	usageRecords := suite.generateUsageRecords(leaseID, 12)
-	invoice := suite.createInvoiceFromUsage(leaseID, usageRecords)
-	actualUsage := invoice.TotalAmount.AmountOf(suite.currency).Int64()
+	keeper := &suite.testSuite.App().Keepers.VirtEngine.Settlement
+	_, err := keeper.SettleOrder(ctx, orderID, []string{usageID}, false)
+	require.NoError(t, err)
 
-	t.Logf("Lease terminated early:")
-	t.Logf("  Initial escrow: %d %s", initialBalance, suite.currency)
-	t.Logf("  Actual usage: %s", invoice.TotalAmount.String())
+	escrowBeforeRefund, found := keeper.GetEscrow(ctx, escrowID)
+	require.True(t, found)
+	refundAmount := escrowBeforeRefund.Balance.AmountOf(suite.currency)
+	require.True(t, refundAmount.IsPositive())
 
-	// Calculate refund
-	refundAmount := initialBalance - actualUsage
-	require.Greater(t, refundAmount, int64(0), "should have refund amount")
+	require.NoError(t, keeper.RefundEscrow(ctx, escrowID, "lease terminated early"))
 
-	t.Logf("  Refund due: %d %s", refundAmount, suite.currency)
+	refundedEscrow, found := keeper.GetEscrow(ctx, escrowID)
+	require.True(t, found)
+	require.Equal(t, settlementtypes.EscrowStateRefunded, refundedEscrow.State)
+	require.Equal(t, sdkmath.ZeroInt(), refundedEscrow.Balance.AmountOf(suite.currency))
 
-	// Create settlement with refund
-	platformFeeRate := sdkmath.LegacyMustNewDecFromStr("0.01")
-	platformFee := sdk.NewCoins(sdk.NewCoin(suite.currency,
-		sdkmath.LegacyNewDec(actualUsage).Mul(platformFeeRate).TruncateInt()))
-	providerNet := invoice.TotalAmount.Sub(platformFee...)
+	customerBalanceAfter := suite.testSuite.App().Keepers.Cosmos.Bank.GetBalance(ctx, suite.customer, suite.currency)
+	require.Equal(t, customerBalanceBefore.Amount.Add(refundAmount), customerBalanceAfter.Amount)
 
-	settlement := &settlementtypes.SettlementRecord{
-		RecordID:     fmt.Sprintf("settlement-refund-%s", invoice.InvoiceID),
-		LeaseID:      leaseID,
-		InvoiceID:    invoice.InvoiceID,
-		Provider:     suite.provider.String(),
-		Customer:     suite.customer.String(),
-		Amount:       invoice.TotalAmount,
-		PlatformFee:  platformFee,
-		ProviderNet:  providerNet,
-		RefundAmount: sdk.NewCoins(sdk.NewCoin(suite.currency, sdkmath.NewInt(refundAmount))),
-		Status:       settlementtypes.SettlementStatusCompleted,
-		SettledAt:    ctx.BlockTime(),
-		CreatedAt:    ctx.BlockTime(),
-	}
-
-	t.Logf("Settlement with refund:")
-	t.Logf("  Usage charge: %s", settlement.Amount.String())
-	t.Logf("  Platform fee: %s", settlement.PlatformFee.String())
-	t.Logf("  Provider net: %s", settlement.ProviderNet.String())
-	t.Logf("  Customer refund: %s", settlement.RefundAmount.String())
-
-	// Verify balance math
-	totalSettled := actualUsage + refundAmount
-	require.Equal(t, initialBalance, totalSettled, "settlement + refund should equal initial escrow")
-
-	t.Log("✓ Partial refund calculated correctly")
+	settlements := keeper.GetSettlementsByOrder(ctx, orderID)
+	require.Len(t, settlements, 2)
+	require.Equal(t, refundAmount.Int64(), settlements[1].TotalAmount.AmountOf(suite.currency).Int64())
 }
 
-// TestMultiOrderSettlementBatch tests batch processing of settlements
 func (suite *FullPipelineTestSuite) TestMultiOrderSettlementBatch() {
 	t := suite.T()
 	ctx := suite.ctx
 
-	numLeases := 5
-	settlements := make([]*settlementtypes.SettlementRecord, numLeases)
-	totalPlatformFees := int64(0)
-	totalProviderPayments := int64(0)
+	const numOrders = 4
+	providerBalanceBefore := suite.testSuite.App().Keepers.Cosmos.Bank.GetBalance(ctx, suite.provider, suite.currency)
+	totalGross := sdkmath.ZeroInt()
+	totalNet := sdkmath.ZeroInt()
+	totalFees := sdkmath.ZeroInt()
 
-	for i := 0; i < numLeases; i++ {
+	keeper := &suite.testSuite.App().Keepers.VirtEngine.Settlement
+	for i := 0; i < numOrders; i++ {
+		orderID := fmt.Sprintf("order-batch-%03d", i+1)
 		leaseID := fmt.Sprintf("lease-batch-%03d", i+1)
-		escrowAccountID := suite.createAndFundEscrow(50000)
+		usageCost := int64(7000 + (i * 2500))
 
-		// Varying usage amounts
-		hoursUsed := 6 + i*3 // 6, 9, 12, 15, 18 hours
-		usageRecords := suite.generateUsageRecords(leaseID, hoursUsed)
-		invoice := suite.createInvoiceFromUsage(leaseID, usageRecords)
+		suite.createAndActivateEscrow(ctx, orderID, leaseID, 50000, 72*time.Hour)
+		usageID := suite.recordUsage(ctx, orderID, leaseID, "compute", uint64(6+i*2), usageCost, ctx.BlockTime().Add(-time.Duration(6+i*2)*time.Hour), ctx.BlockTime())
 
-		totalAmount := invoice.TotalAmount.AmountOf(suite.currency).Int64()
-		platformFeeRate := sdkmath.LegacyMustNewDecFromStr("0.01")
-		platformFee := sdk.NewCoins(sdk.NewCoin(suite.currency,
-			sdkmath.LegacyNewDec(totalAmount).Mul(platformFeeRate).TruncateInt()))
-		providerNet := invoice.TotalAmount.Sub(platformFee...)
-
-		settlements[i] = &settlementtypes.SettlementRecord{
-			RecordID:    fmt.Sprintf("settlement-batch-%03d", i+1),
-			LeaseID:     leaseID,
-			InvoiceID:   invoice.InvoiceID,
-			Provider:    suite.provider.String(),
-			Customer:    suite.customer.String(),
-			Amount:      invoice.TotalAmount,
-			PlatformFee: platformFee,
-			ProviderNet: providerNet,
-			Status:      settlementtypes.SettlementStatusCompleted,
-			SettledAt:   ctx.BlockTime(),
-			CreatedAt:   ctx.BlockTime(),
-		}
-
-		totalPlatformFees += platformFee.AmountOf(suite.currency).Int64()
-		totalProviderPayments += providerNet.AmountOf(suite.currency).Int64()
-
-		// Verify escrow account balance
-		escrowAccount, err := suite.escrowKeeper.GetAccount(ctx, escrowAccountID)
+		settlement, err := keeper.SettleOrder(ctx, orderID, []string{usageID}, false)
 		require.NoError(t, err)
-		require.GreaterOrEqual(t, escrowAccount.Balance.AmountOf(suite.currency).Int64(), totalAmount)
+
+		payout, found := keeper.GetPayoutBySettlement(ctx, settlement.SettlementID)
+		require.True(t, found)
+		require.Equal(t, settlementtypes.PayoutStateCompleted, payout.State)
+
+		totalGross = totalGross.Add(settlement.TotalAmount.AmountOf(suite.currency))
+		totalNet = totalNet.Add(payout.NetAmount.AmountOf(suite.currency))
+		totalFees = totalFees.Add(payout.PlatformFee.AmountOf(suite.currency)).Add(payout.ValidatorFee.AmountOf(suite.currency))
 	}
 
-	t.Logf("Batch settlement processed:")
-	t.Logf("  Leases: %d", numLeases)
-	t.Logf("  Total platform fees: %d %s", totalPlatformFees, suite.currency)
-	t.Logf("  Total provider payments: %d %s", totalProviderPayments, suite.currency)
-	t.Logf("  Average per lease: %d %s", (totalPlatformFees+totalProviderPayments)/int64(numLeases), suite.currency)
+	providerBalanceAfter := suite.testSuite.App().Keepers.Cosmos.Bank.GetBalance(ctx, suite.provider, suite.currency)
+	require.Equal(t, providerBalanceBefore.Amount.Add(totalNet), providerBalanceAfter.Amount)
 
-	// Verify batch totals
-	for i, settlement := range settlements {
-		require.NotNil(t, settlement)
-		require.Equal(t, settlementtypes.SettlementStatusCompleted, settlement.Status)
-		t.Logf("  [%d] %s: %s", i+1, settlement.LeaseID, settlement.Amount.String())
-	}
-
-	t.Log("✓ Batch settlement processed successfully")
+	treasury := keeper.GetTreasuryBalance(ctx)
+	require.Equal(t, totalFees, treasury.AmountOf(suite.currency))
+	require.True(t, totalGross.Equal(totalNet.Add(totalFees)))
 }
 
-// TestEscrowExpiryAutoSettlement tests automatic settlement via EndBlocker when escrow expires
 func (suite *FullPipelineTestSuite) TestEscrowExpiryAutoSettlement() {
 	t := suite.T()
 	ctx := suite.ctx
 
-	// Create escrow with short expiry
-	escrowAccountID := suite.createAndFundEscrowWithExpiry(50000, 1*time.Hour)
+	keeper := &suite.testSuite.App().Keepers.VirtEngine.Settlement
+	params := keeper.GetParams(ctx)
+	params.SettlementPeriod = 3600
+	require.NoError(t, keeper.SetParams(ctx, params))
+
+	orderID := "order-expiry-001"
 	leaseID := "lease-expiry-001"
+	escrowID := suite.createAndActivateEscrow(ctx, orderID, leaseID, 50000, 4*time.Hour)
+	usageID := suite.recordUsage(ctx, orderID, leaseID, "compute", 12, 12000, ctx.BlockTime().Add(-2*time.Hour), ctx.BlockTime())
 
-	// Generate usage
-	usageRecords := suite.generateUsageRecords(leaseID, 12)
-	invoice := suite.createInvoiceFromUsage(leaseID, usageRecords)
+	beforeExpiry := ctx.WithBlockTime(ctx.BlockTime().Add(2 * time.Hour))
+	require.NoError(t, keeper.AutoSettle(beforeExpiry))
 
-	t.Logf("Escrow created with 1 hour expiry")
-	t.Logf("Usage generated: %s", invoice.TotalAmount.String())
+	settlements := keeper.GetSettlementsByOrder(beforeExpiry, orderID)
+	require.Len(t, settlements, 1)
+	require.Contains(t, settlements[0].UsageRecordIDs, usageID)
 
-	// Advance time past expiry
-	ctx = ctx.WithBlockTime(ctx.BlockTime().Add(2 * time.Hour))
+	afterExpiry := beforeExpiry.WithBlockTime(beforeExpiry.BlockTime().Add(3 * time.Hour))
+	require.NoError(t, keeper.ProcessExpiredEscrows(afterExpiry))
 
-	// In production, EndBlocker would:
-	// 1. Detect expired escrow
-	// 2. Calculate outstanding settlements
-	// 3. Auto-settle if usage records exist
-	// 4. Refund remaining balance to customer
-
-	totalAmount := invoice.TotalAmount.AmountOf(suite.currency).Int64()
-	platformFeeRate := sdkmath.LegacyMustNewDecFromStr("0.01")
-	platformFee := sdk.NewCoins(sdk.NewCoin(suite.currency,
-		sdkmath.LegacyNewDec(totalAmount).Mul(platformFeeRate).TruncateInt()))
-	providerNet := invoice.TotalAmount.Sub(platformFee...)
-
-	autoSettlement := &settlementtypes.SettlementRecord{
-		RecordID:    fmt.Sprintf("settlement-auto-%s", invoice.InvoiceID),
-		LeaseID:     leaseID,
-		InvoiceID:   invoice.InvoiceID,
-		Provider:    suite.provider.String(),
-		Customer:    suite.customer.String(),
-		Amount:      invoice.TotalAmount,
-		PlatformFee: platformFee,
-		ProviderNet: providerNet,
-		Status:      settlementtypes.SettlementStatusCompleted,
-		AutoSettled: true,
-		SettledAt:   ctx.BlockTime(),
-		CreatedAt:   ctx.BlockTime(),
-	}
-
-	t.Logf("Auto-settlement triggered by expiry:")
-	t.Logf("  Amount: %s", autoSettlement.Amount.String())
-	t.Logf("  Provider net: %s", autoSettlement.ProviderNet.String())
-	t.Logf("  Platform fee: %s", autoSettlement.PlatformFee.String())
-
-	require.True(t, autoSettlement.AutoSettled, "should be marked as auto-settled")
-	t.Log("✓ Escrow expiry auto-settlement works correctly")
+	escrow, found := keeper.GetEscrow(afterExpiry, escrowID)
+	require.True(t, found)
+	require.Equal(t, settlementtypes.EscrowStateExpired, escrow.State)
+	require.Equal(t, sdkmath.ZeroInt(), escrow.Balance.AmountOf(suite.currency))
 }
 
-// TestSettlementEscrowInvariant tests the critical invariant: settlement totals = escrow debits
 func (suite *FullPipelineTestSuite) TestSettlementEscrowInvariant() {
 	t := suite.T()
 	ctx := suite.ctx
 
 	initialBalance := int64(100000)
-	escrowAccountID := suite.createAndFundEscrow(initialBalance)
+	orderID := "order-invariant-001"
 	leaseID := "lease-invariant-001"
+	escrowID := suite.createAndActivateEscrow(ctx, orderID, leaseID, initialBalance, 72*time.Hour)
 
-	// Generate multiple settlements over time
-	settlements := make([]*settlementtypes.SettlementRecord, 3)
-	totalSettled := int64(0)
+	keeper := &suite.testSuite.App().Keepers.VirtEngine.Settlement
+	firstUsage := suite.recordUsage(ctx, orderID, leaseID, "cpu", 8, 20000, ctx.BlockTime().Add(-2*time.Hour), ctx.BlockTime().Add(-time.Hour))
+	firstSettlement, err := keeper.SettleOrder(ctx, orderID, []string{firstUsage}, false)
+	require.NoError(t, err)
 
-	for i := 0; i < 3; i++ {
-		usageRecords := suite.generateUsageRecords(leaseID, 8)
-		invoice := suite.createInvoiceFromUsage(leaseID, usageRecords)
-		invoice.InvoiceID = fmt.Sprintf("invoice-invariant-%03d", i+1)
+	secondUsage := suite.recordUsage(ctx, orderID, leaseID, "gpu", 4, 15000, ctx.BlockTime().Add(-time.Hour), ctx.BlockTime())
+	secondSettlement, err := keeper.SettleOrder(ctx, orderID, []string{secondUsage}, false)
+	require.NoError(t, err)
 
-		totalAmount := invoice.TotalAmount.AmountOf(suite.currency).Int64()
-		platformFeeRate := sdkmath.LegacyMustNewDecFromStr("0.01")
-		platformFee := sdk.NewCoins(sdk.NewCoin(suite.currency,
-			sdkmath.LegacyNewDec(totalAmount).Mul(platformFeeRate).TruncateInt()))
-		providerNet := invoice.TotalAmount.Sub(platformFee...)
+	escrow, found := keeper.GetEscrow(ctx, escrowID)
+	require.True(t, found)
+	refundAmount := escrow.Balance.AmountOf(suite.currency)
+	require.True(t, refundAmount.IsPositive())
 
-		settlements[i] = &settlementtypes.SettlementRecord{
-			RecordID:    fmt.Sprintf("settlement-invariant-%03d", i+1),
-			LeaseID:     leaseID,
-			InvoiceID:   invoice.InvoiceID,
-			Provider:    suite.provider.String(),
-			Customer:    suite.customer.String(),
-			Amount:      invoice.TotalAmount,
-			PlatformFee: platformFee,
-			ProviderNet: providerNet,
-			Status:      settlementtypes.SettlementStatusCompleted,
-			SettledAt:   ctx.BlockTime().Add(time.Duration(i) * 8 * time.Hour),
-			CreatedAt:   ctx.BlockTime().Add(time.Duration(i) * 8 * time.Hour),
-		}
+	require.NoError(t, keeper.RefundEscrow(ctx, escrowID, "invariant refund"))
 
-		totalSettled += totalAmount
+	settlements := keeper.GetSettlementsByOrder(ctx, orderID)
+	require.Len(t, settlements, 3)
+
+	total := sdkmath.ZeroInt()
+	for _, settlement := range settlements {
+		total = total.Add(settlement.TotalAmount.AmountOf(suite.currency))
 	}
 
-	t.Logf("Generated %d settlements, total: %d %s", len(settlements), totalSettled, suite.currency)
-
-	// Verify invariant: sum of settlements should not exceed initial escrow balance
-	require.LessOrEqual(t, totalSettled, initialBalance,
-		"total settlements should not exceed initial escrow balance")
-
-	// Get current escrow balance
-	escrowAccount, err := suite.escrowKeeper.GetAccount(ctx, escrowAccountID)
-	require.NoError(t, err)
-	remainingBalance := escrowAccount.Balance.AmountOf(suite.currency).Int64()
-
-	// Verify: initial balance = total settled + remaining balance
-	require.Equal(t, initialBalance, totalSettled+remainingBalance,
-		"initial balance should equal sum of settlements and remaining balance")
-
-	t.Logf("Invariant verified:")
-	t.Logf("  Initial escrow: %d %s", initialBalance, suite.currency)
-	t.Logf("  Total settled: %d %s", totalSettled, suite.currency)
-	t.Logf("  Remaining: %d %s", remainingBalance, suite.currency)
-	t.Logf("  Sum: %d %s", totalSettled+remainingBalance, suite.currency)
-
-	t.Log("✓ Settlement-escrow invariant holds")
+	require.Equal(t, sdkmath.NewInt(initialBalance), total)
+	suite.verifySettlementInvariant(t, firstSettlement)
+	suite.verifySettlementInvariant(t, secondSettlement)
+	require.Equal(t, refundAmount.Int64(), settlements[2].TotalAmount.AmountOf(suite.currency).Int64())
 }
 
-// Helper methods
-
-func (suite *FullPipelineTestSuite) createAndFundEscrow(amount int64) escrowid.Account {
-	return suite.createAndFundEscrowWithExpiry(amount, 30*24*time.Hour) // 30 days default
-}
-
-func (suite *FullPipelineTestSuite) createAndFundEscrowWithExpiry(amount int64, expiry time.Duration) escrowid.Account {
+func (suite *FullPipelineTestSuite) createAndActivateEscrow(ctx sdk.Context, orderID, leaseID string, amount int64, expiry time.Duration) string {
 	t := suite.T()
-	ctx := suite.ctx
 
-	escrowAccountID := escrowid.MakeAccountID(
-		escrowid.ScopeDeployment,
+	escrowID, err := suite.testSuite.App().Keepers.VirtEngine.Settlement.CreateEscrow(
+		ctx,
+		orderID,
 		suite.customer,
+		sdk.NewCoins(sdk.NewCoin(suite.currency, sdkmath.NewInt(amount))),
+		expiry,
+		nil,
 	)
-
-	depositAmount := sdk.NewCoins(sdk.NewCoin(suite.currency, sdkmath.NewInt(amount)))
-	depositor := etypes.Depositor{
-		Depositor: suite.customer,
-		Amount:    depositAmount,
-	}
-
-	err := suite.escrowKeeper.AccountCreate(ctx, escrowAccountID, suite.customer, []etypes.Depositor{depositor})
 	require.NoError(t, err)
+	require.NoError(t, suite.testSuite.App().Keepers.VirtEngine.Settlement.ActivateEscrow(ctx, escrowID, leaseID, suite.provider))
 
-	return escrowAccountID
+	return escrowID
 }
 
-func (suite *FullPipelineTestSuite) generateUsageRecords(leaseID string, hours int) []*billing.UsageRecord {
-	ctx := suite.ctx
-	records := make([]*billing.UsageRecord, 3) // CPU, Memory, Storage
-
-	// CPU usage
-	records[0] = &billing.UsageRecord{
-		RecordID:     fmt.Sprintf("usage-%s-cpu", leaseID),
-		LeaseID:      leaseID,
-		Provider:     suite.provider.String(),
-		Customer:     suite.customer.String(),
-		StartTime:    ctx.BlockTime().Add(-time.Duration(hours) * time.Hour),
-		EndTime:      ctx.BlockTime(),
-		ResourceType: billing.UsageTypeCPU,
-		UsageAmount:  sdkmath.LegacyNewDec(int64(16 * hours)),             // 16 CPUs
-		UnitPrice:    sdk.NewDecCoin(suite.currency, sdkmath.NewInt(100)), // 100 uakt per cpu-hour
-		TotalAmount:  sdk.NewCoins(sdk.NewCoin(suite.currency, sdkmath.NewInt(int64(1600*hours)))),
-		Status:       billing.UsageRecordStatusVerified,
-		BlockHeight:  ctx.BlockHeight(),
-		CreatedAt:    ctx.BlockTime(),
-		UpdatedAt:    ctx.BlockTime(),
-	}
-
-	// Memory usage
-	records[1] = &billing.UsageRecord{
-		RecordID:     fmt.Sprintf("usage-%s-memory", leaseID),
-		LeaseID:      leaseID,
-		Provider:     suite.provider.String(),
-		Customer:     suite.customer.String(),
-		StartTime:    ctx.BlockTime().Add(-time.Duration(hours) * time.Hour),
-		EndTime:      ctx.BlockTime(),
-		ResourceType: billing.UsageTypeMemory,
-		UsageAmount:  sdkmath.LegacyNewDec(int64(64 * hours)),            // 64 GB
-		UnitPrice:    sdk.NewDecCoin(suite.currency, sdkmath.NewInt(50)), // 50 uakt per gb-hour
-		TotalAmount:  sdk.NewCoins(sdk.NewCoin(suite.currency, sdkmath.NewInt(int64(3200*hours)))),
-		Status:       billing.UsageRecordStatusVerified,
-		BlockHeight:  ctx.BlockHeight(),
-		CreatedAt:    ctx.BlockTime(),
-		UpdatedAt:    ctx.BlockTime(),
-	}
-
-	// Storage usage
-	records[2] = &billing.UsageRecord{
-		RecordID:     fmt.Sprintf("usage-%s-storage", leaseID),
-		LeaseID:      leaseID,
-		Provider:     suite.provider.String(),
-		Customer:     suite.customer.String(),
-		StartTime:    ctx.BlockTime().Add(-time.Duration(hours) * time.Hour),
-		EndTime:      ctx.BlockTime(),
-		ResourceType: billing.UsageTypeStorage,
-		UsageAmount:  sdkmath.LegacyNewDec(int64(500 * hours)),           // 500 GB
-		UnitPrice:    sdk.NewDecCoin(suite.currency, sdkmath.NewInt(10)), // 10 uakt per gb-hour
-		TotalAmount:  sdk.NewCoins(sdk.NewCoin(suite.currency, sdkmath.NewInt(int64(5000*hours)))),
-		Status:       billing.UsageRecordStatusVerified,
-		BlockHeight:  ctx.BlockHeight(),
-		CreatedAt:    ctx.BlockTime(),
-		UpdatedAt:    ctx.BlockTime(),
-	}
-
-	return records
-}
-
-func (suite *FullPipelineTestSuite) createInvoiceFromUsage(leaseID string, usageRecords []*billing.UsageRecord) *settlementtypes.Invoice {
-	ctx := suite.ctx
-
-	// Sum up all usage amounts
-	totalAmount := sdk.NewCoins()
-	usageRecordIDs := make([]string, len(usageRecords))
-
-	for i, record := range usageRecords {
-		totalAmount = totalAmount.Add(record.TotalAmount...)
-		usageRecordIDs[i] = record.RecordID
-	}
-
-	invoice := &settlementtypes.Invoice{
-		InvoiceID:    fmt.Sprintf("invoice-%s", leaseID),
-		LeaseID:      leaseID,
-		Provider:     suite.provider.String(),
-		Customer:     suite.customer.String(),
-		PeriodStart:  usageRecords[0].StartTime,
-		PeriodEnd:    usageRecords[0].EndTime,
-		TotalAmount:  totalAmount,
-		Status:       settlementtypes.InvoiceStatusPending,
-		UsageRecords: usageRecordIDs,
-		CreatedAt:    ctx.BlockTime(),
-	}
-
-	return invoice
-}
-
-func (suite *FullPipelineTestSuite) verifySettlementInvariant(settlement *settlementtypes.SettlementRecord, escrowBalance int64) {
+func (suite *FullPipelineTestSuite) recordUsage(
+	ctx sdk.Context,
+	orderID string,
+	leaseID string,
+	usageType string,
+	usageUnits uint64,
+	totalCost int64,
+	periodStart time.Time,
+	periodEnd time.Time,
+) string {
 	t := suite.T()
 
-	totalSettled := settlement.Amount.AmountOf(suite.currency).Int64()
-	require.LessOrEqual(t, totalSettled, escrowBalance,
-		"settlement amount should not exceed escrow balance")
+	record := suite.usage.newUsage(
+		t, ctx, orderID, leaseID, suite.provider, suite.customer,
+		usageType, usageUnits, totalCost, periodStart, periodEnd,
+	)
+	require.NoError(t, suite.testSuite.App().Keepers.VirtEngine.Settlement.RecordUsage(ctx, record))
+	require.True(t, record.IsAuthenticated())
 
-	// Verify platform fee + provider net = total amount
-	platformFee := settlement.PlatformFee.AmountOf(suite.currency).Int64()
-	providerNet := settlement.ProviderNet.AmountOf(suite.currency).Int64()
-	require.Equal(t, totalSettled, platformFee+providerNet,
-		"platform fee + provider net should equal total settlement amount")
+	return record.UsageID
+}
 
-	t.Log("✓ Settlement invariant verified")
+func (suite *FullPipelineTestSuite) verifySettlementInvariant(t *testing.T, settlement *settlementtypes.SettlementRecord) {
+	t.Helper()
+
+	require.True(
+		t,
+		settlement.ProviderShare.Add(settlement.PlatformFee...).Add(settlement.ValidatorFee...).Equal(settlement.TotalAmount),
+		"expected settlement split %s + %s + %s to equal %s",
+		settlement.ProviderShare.String(),
+		settlement.PlatformFee.String(),
+		settlement.ValidatorFee.String(),
+		settlement.TotalAmount.String(),
+	)
 }

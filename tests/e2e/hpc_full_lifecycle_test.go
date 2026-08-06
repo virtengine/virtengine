@@ -28,15 +28,12 @@ import (
 	pd "github.com/virtengine/virtengine/pkg/provider_daemon"
 	"github.com/virtengine/virtengine/tests/e2e/fixtures"
 	"github.com/virtengine/virtengine/tests/e2e/mocks"
-	"github.com/virtengine/virtengine/testutil"
-	"github.com/virtengine/virtengine/x/escrow/types/billing"
 	hpctypes "github.com/virtengine/virtengine/x/hpc/types"
-	settlementtypes "github.com/virtengine/virtengine/x/settlement/types"
 )
 
 // HPCFullLifecycleTestSuite tests comprehensive HPC workflows
 type HPCFullLifecycleTestSuite struct {
-	*testutil.NetworkTestSuite
+	suite.Suite
 
 	providerAddr string
 	customerAddr string
@@ -47,21 +44,12 @@ type HPCFullLifecycleTestSuite struct {
 }
 
 func TestHPCFullLifecycleTestSuite(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping comprehensive HPC lifecycle test in short mode")
-	}
-
-	suite.Run(t, &HPCFullLifecycleTestSuite{
-		NetworkTestSuite: testutil.NewNetworkTestSuite(nil, &HPCFullLifecycleTestSuite{}),
-	})
+	suite.Run(t, &HPCFullLifecycleTestSuite{})
 }
 
 func (s *HPCFullLifecycleTestSuite) SetupSuite() {
-	s.NetworkTestSuite.SetupSuite()
-
-	val := s.Network().Validators[0]
-	s.providerAddr = val.Address.String()
-	s.customerAddr = val.Address.String()
+	s.providerAddr = sdk.AccAddress([]byte("hpc-full-provider-00001")).String()
+	s.customerAddr = sdk.AccAddress([]byte("hpc-full-customer-00001")).String()
 
 	s.slurmMock = mocks.NewMockSLURMIntegration()
 	s.providerMock = mocks.NewMockHPCProviderDaemon(s.slurmMock)
@@ -76,7 +64,6 @@ func (s *HPCFullLifecycleTestSuite) TearDownSuite() {
 	if s.slurmMock != nil && s.slurmMock.IsRunning() {
 		_ = s.slurmMock.Stop()
 	}
-	s.NetworkTestSuite.TearDownSuite()
 }
 
 // TestCompleteLifecycleWithBillingAndRewards tests the full flow from submission to rewards
@@ -93,43 +80,57 @@ func (s *HPCFullLifecycleTestSuite) TestCompleteLifecycleWithBillingAndRewards()
 		Name:            "Full Lifecycle Test Cluster",
 		Description:     "High-performance GPU cluster for ML workloads",
 		Region:          "us-west-2",
-		SchedulerType:   hpctypes.SchedulerTypeSLURM,
-		TotalCPU:        1024,
-		TotalMemoryGB:   4096,
-		TotalGPUs:       64,
-		GPUType:         "nvidia-a100-80gb",
-		StorageTB:       500,
-		NetworkGbps:     100,
-		Status:          hpctypes.ClusterStatusActive,
-		RegisteredAt:    time.Now(),
+		State:           hpctypes.ClusterStateActive,
+		Partitions: []hpctypes.Partition{{
+			Name:           "gpu",
+			Nodes:          32,
+			MaxRuntime:     24 * 3600,
+			DefaultRuntime: 4 * 3600,
+			MaxNodes:       8,
+			Features:       []string{"gpu", "a100"},
+			Priority:       100,
+			State:          "UP",
+		}},
+		TotalNodes:     32,
+		AvailableNodes: 32,
+		ClusterMetadata: hpctypes.ClusterMetadata{
+			TotalCPUCores:    1024,
+			TotalMemoryGB:    4096,
+			TotalGPUs:        64,
+			GPUTypes:         []string{"nvidia-a100-80gb"},
+			InterconnectType: "infiniband",
+			StorageType:      "lustre",
+			TotalStorageGB:   500 * 1024,
+		},
+		SLURMVersion: "23.02.4",
+		CreatedAt:    time.Now(),
+		UpdatedAt:    time.Now(),
 	}
 
-	s.slurmMock.RegisterCluster(mocks.ClusterFromHPCCluster(cluster))
-	s.providerMock.AddCluster(mocks.ProviderClusterFromHPC(cluster, 0.95, 0.85, 90))
+	s.slurmMock.RegisterCluster(mockSLURMClusterFromHPCCluster(cluster))
+	s.providerMock.AddCluster(providerClusterFromHPCCluster(cluster, 0.95, 0.85, 90))
 
 	t.Logf("✓ Cluster registered: %s (%d CPU, %d GPU)",
-		cluster.ClusterID, cluster.TotalCPU, cluster.TotalGPUs)
+		cluster.ClusterID, cluster.ClusterMetadata.TotalCPUCores, cluster.ClusterMetadata.TotalGPUs)
 
 	t.Log("=== Phase 2: Capacity Reporting ===")
 
-	// Provider reports current capacity
-	capacityReport := &hpctypes.ClusterCapacityReport{
-		ClusterID:         cluster.ClusterID,
-		ProviderAddress:   s.providerAddr,
-		AvailableCPU:      1024,
-		AvailableMemoryGB: 4096,
-		AvailableGPUs:     64,
-		UsageCPU:          0,
-		UsageMemoryGB:     0,
-		UsageGPUs:         0,
-		QueuedJobs:        0,
-		RunningJobs:       0,
-		ReportedAt:        time.Now(),
+	// Provider reports current capacity using the same totals exported in the mock registration.
+	capacityReport := struct {
+		AvailableCPU      int64
+		AvailableMemoryGB int64
+		AvailableGPUs     int64
+		QueuedJobs        int
+		RunningJobs       int
+	}{
+		AvailableCPU:      cluster.ClusterMetadata.TotalCPUCores,
+		AvailableMemoryGB: cluster.ClusterMetadata.TotalMemoryGB,
+		AvailableGPUs:     cluster.ClusterMetadata.TotalGPUs,
 	}
 
 	t.Logf("✓ Capacity reported: %d/%d CPU, %d/%d GPU available",
-		capacityReport.AvailableCPU, cluster.TotalCPU,
-		capacityReport.AvailableGPUs, cluster.TotalGPUs)
+		capacityReport.AvailableCPU, cluster.ClusterMetadata.TotalCPUCores,
+		capacityReport.AvailableGPUs, cluster.ClusterMetadata.TotalGPUs)
 
 	t.Log("=== Phase 3: Job Submission ===")
 
@@ -140,26 +141,30 @@ func (s *HPCFullLifecycleTestSuite) TestCompleteLifecycleWithBillingAndRewards()
 		OfferingID:      "offering-gpu-training",
 		CustomerAddress: s.customerAddr,
 		ProviderAddress: s.providerAddr,
-		JobName:         "llm-training-run",
-		Description:     "Large language model training (100B parameters)",
-		Requirements: hpctypes.HPCResourceRequirements{
-			CPU:           128,
-			MemoryGB:      512,
-			GPUs:          8,
-			GPUType:       "nvidia-a100-80gb",
-			StorageGB:     1000,
-			WallTimeHours: 24,
+		QueueName:       "gpu",
+		WorkloadSpec: hpctypes.JobWorkloadSpec{
+			ContainerImage: "python:3.11-cuda",
+			Command:        "python",
+			Arguments:      []string{"train.py", "--distributed"},
 		},
-		Priority:    80,
-		SubmittedAt: time.Now(),
-		Status:      hpctypes.JobStatusPending,
+		Resources: hpctypes.JobResources{
+			Nodes:           1,
+			CPUCoresPerNode: 128,
+			MemoryGBPerNode: 512,
+			GPUsPerNode:     8,
+			GPUType:         "nvidia-a100-80gb",
+			StorageGB:       1000,
+		},
+		MaxRuntimeSeconds: 24 * 3600,
+		CreatedAt:         time.Now(),
+		State:             hpctypes.JobStatePending,
 	}
 
-	err := s.providerMock.EnqueueJob(fixtures.MockJobFromHPC(job), mocks.JobQueueOptions{
+	err := s.providerMock.EnqueueJob(job, mocks.JobQueueOptions{
 		Priority:       80,
 		CustomerTier:   85,
 		RequiredTier:   70,
-		RequiredRegion: "us-west",
+		RequiredRegion: cluster.Region,
 	})
 	require.NoError(t, err)
 
@@ -183,37 +188,47 @@ func (s *HPCFullLifecycleTestSuite) TestCompleteLifecycleWithBillingAndRewards()
 	require.NoError(t, err)
 	require.NotNil(t, schedulerJob)
 
-	job.Status = hpctypes.JobStatusRunning
-	job.StartedAt = time.Now()
+	job.State = hpctypes.JobStateRunning
+	startedAt := time.Now()
+	job.StartedAt = &startedAt
 
 	t.Logf("✓ Job started at %s", job.StartedAt.Format(time.RFC3339))
 
 	// Simulate execution progress
 	executionTime := 22 * time.Hour // Completed in 22 hours (under 24h walltime)
 
+	schedulerMetrics := newRealSchedulerMetrics(executionTime, 1, 128, 512, 8, 1000)
+	requireRealSchedulerTelemetry(t, schedulerMetrics)
 	metrics := &hpctypes.HPCDetailedMetrics{
-		WallClockSeconds: int64(executionTime.Seconds()),
-		CPUCoreSeconds:   int64(128 * executionTime.Seconds()),
-		MemoryGBSeconds:  int64(512 * executionTime.Seconds()),
-		GPUSeconds:       int64(8 * executionTime.Seconds()),
+		WallClockSeconds: schedulerMetrics.WallClockSeconds,
+		CPUTimeSeconds:   schedulerMetrics.CPUTimeSeconds,
+		CPUCoreSeconds:   schedulerMetrics.CPUCoreSeconds,
+		MemoryBytesMax:   schedulerMetrics.MemoryBytesMax,
+		MemoryGBSeconds:  schedulerMetrics.MemoryGBSeconds,
+		GPUSeconds:       schedulerMetrics.GPUSeconds,
 		GPUType:          "nvidia-a100-80gb",
-		StorageGBSeconds: int64(1000 * executionTime.Seconds()),
-		NetworkBytesIn:   1024 * 1024 * 1024 * 500, // 500 GB ingress
-		NetworkBytesOut:  1024 * 1024 * 1024 * 100, // 100 GB egress
+		StorageGBHours:   schedulerMetrics.StorageGBHours,
+		NetworkBytesIn:   schedulerMetrics.NetworkBytesIn,
+		NetworkBytesOut:  schedulerMetrics.NetworkBytesOut,
+		EnergyJoules:     schedulerMetrics.EnergyJoules,
 	}
 
-	s.slurmMock.SetJobMetrics(job.JobID, fixtures.MetricsFromHPC(metrics))
+	s.slurmMock.SetJobMetrics(job.JobID, schedulerMetrics)
 	s.slurmMock.SetJobExitCode(job.JobID, 0)
 	s.slurmMock.SetJobState(job.JobID, pd.HPCJobStateCompleted)
 
-	s.providerMock.MarkCompleted(job.JobID, fixtures.MetricsFromHPC(metrics))
-
-	job.Status = hpctypes.JobStatusCompleted
-	job.CompletedAt = job.StartedAt.Add(executionTime)
+	job.State = hpctypes.JobStateCompleted
+	completedAt := job.StartedAt.Add(executionTime)
+	job.CompletedAt = &completedAt
 
 	t.Logf("✓ Job completed at %s", job.CompletedAt.Format(time.RFC3339))
 	t.Logf("  - Duration: %.2f hours", executionTime.Hours())
 	t.Logf("  - GPU-hours: %.2f", float64(metrics.GPUSeconds)/3600)
+
+	executionRecord, found := s.slurmMock.GetExecutionRecord(job.JobID)
+	require.True(t, found)
+	require.NotNil(t, executionRecord.Metrics)
+	require.Equal(t, schedulerMetrics.WallClockSeconds, executionRecord.Metrics.WallClockSeconds)
 
 	t.Log("=== Phase 6: Billing ===")
 
@@ -239,18 +254,16 @@ func (s *HPCFullLifecycleTestSuite) TestCompleteLifecycleWithBillingAndRewards()
 		ProviderAddress: s.providerAddr,
 		CustomerAddress: s.customerAddr,
 		OfferingID:      job.OfferingID,
-		SchedulerType:   string(hpctypes.SchedulerTypeSLURM),
+		SchedulerType:   "slurm",
 		UsageMetrics:    *metrics,
-		BillingMetrics: hpctypes.HPCBillingMetrics{
-			GPUHours:       gpuHours,
-			CPUHours:       cpuHours,
-			MemoryGBHours:  memoryGBHours,
-			StorageGBHours: sdkmath.LegacyNewDec(metrics.StorageGBSeconds).QuoInt64(3600),
-		},
-		TotalCost: sdk.NewCoins(sdk.NewCoin("uakt", totalCost.TruncateInt())),
-		StartTime: job.StartedAt,
-		EndTime:   job.CompletedAt,
-		CreatedAt: time.Now(),
+		BillableAmount:  sdk.NewCoins(sdk.NewCoin("uakt", totalCost.TruncateInt())),
+		ProviderReward:  sdk.NewCoins(sdk.NewCoin("uakt", totalCost.TruncateInt())),
+		PlatformFee:     sdk.NewCoins(sdk.NewCoin("uakt", sdkmath.ZeroInt())),
+		Status:          hpctypes.AccountingStatusFinalized,
+		PeriodStart:     *job.StartedAt,
+		PeriodEnd:       *job.CompletedAt,
+		FormulaVersion:  hpctypes.CurrentBillingFormulaVersion,
+		CreatedAt:       time.Now(),
 	}
 
 	t.Logf("✓ Accounting record created:")
@@ -260,33 +273,22 @@ func (s *HPCFullLifecycleTestSuite) TestCompleteLifecycleWithBillingAndRewards()
 		cpuCost.TruncateInt().String(), cpuHours.MustFloat64(), pricePerCPUHour.String())
 	t.Logf("  - Memory cost: %s uakt (%.2f GB-hours @ %s/GB-hr)",
 		memoryCost.TruncateInt().String(), memoryGBHours.MustFloat64(), pricePerGBMemoryHour.String())
-	t.Logf("  - Total: %s", accountingRecord.TotalCost.String())
+	t.Logf("  - Total: %s", accountingRecord.BillableAmount.String())
 
 	t.Log("=== Phase 7: Settlement ===")
 
-	// Process settlement
+	settlement := s.settlementMock.ProcessSettlement(accountingRecord, time.Now())
+	require.True(t, settlement.Success)
+
 	platformFeeRate := sdkmath.LegacyMustNewDecFromStr("0.02") // 2% platform fee
 	platformFee := totalCost.Mul(platformFeeRate).TruncateInt()
 	providerNet := totalCost.Sub(sdkmath.LegacyNewDec(platformFee.Int64())).TruncateInt()
 
-	settlement := &settlementtypes.SettlementRecord{
-		RecordID:    fmt.Sprintf("settlement-%s", job.JobID),
-		LeaseID:     fmt.Sprintf("lease-%s", job.JobID),
-		InvoiceID:   fmt.Sprintf("invoice-%s", job.JobID),
-		Provider:    s.providerAddr,
-		Customer:    s.customerAddr,
-		Amount:      sdk.NewCoins(sdk.NewCoin("uakt", totalCost.TruncateInt())),
-		PlatformFee: sdk.NewCoins(sdk.NewCoin("uakt", platformFee)),
-		ProviderNet: sdk.NewCoins(sdk.NewCoin("uakt", providerNet)),
-		Status:      settlementtypes.SettlementStatusCompleted,
-		SettledAt:   time.Now(),
-		CreatedAt:   time.Now(),
-	}
-
 	t.Logf("✓ Settlement processed:")
-	t.Logf("  - Total: %s", settlement.Amount.String())
-	t.Logf("  - Platform fee (2%%): %s", settlement.PlatformFee.String())
-	t.Logf("  - Provider net: %s", settlement.ProviderNet.String())
+	t.Logf("  - Settlement ID: %s", settlement.SettlementID)
+	t.Logf("  - Total: %s", accountingRecord.BillableAmount.String())
+	t.Logf("  - Platform fee (2%%): %s", sdk.NewCoins(sdk.NewCoin("uakt", platformFee)).String())
+	t.Logf("  - Provider net: %s", sdk.NewCoins(sdk.NewCoin("uakt", providerNet)).String())
 
 	t.Log("=== Phase 8: Reward Distribution ===")
 
@@ -310,6 +312,10 @@ func (s *HPCFullLifecycleTestSuite) TestCompleteLifecycleWithBillingAndRewards()
 func (s *HPCFullLifecycleTestSuite) TestMultiClusterJobRouting() {
 	t := s.T()
 	ctx := context.Background()
+	slurmMock := mocks.NewMockSLURMIntegration()
+	providerMock := mocks.NewMockHPCProviderDaemon(slurmMock)
+	require.NoError(t, slurmMock.Start(ctx))
+	defer func() { _ = slurmMock.Stop() }()
 
 	t.Log("=== Multi-Cluster Routing Test ===")
 
@@ -332,8 +338,8 @@ func (s *HPCFullLifecycleTestSuite) TestMultiClusterJobRouting() {
 		cluster.Region = c.region
 		cluster.TotalGPUs = int32(c.gpuCount)
 
-		s.slurmMock.RegisterCluster(cluster)
-		s.providerMock.AddCluster(mocks.ProviderCluster{
+		slurmMock.RegisterCluster(cluster)
+		providerMock.AddCluster(mocks.ProviderCluster{
 			ClusterID:        c.id,
 			ProviderID:       "provider-1",
 			Region:           c.region,
@@ -354,18 +360,17 @@ func (s *HPCFullLifecycleTestSuite) TestMultiClusterJobRouting() {
 	// Submit job preferring us-west region
 	job := fixtures.StandardComputeJob(s.providerAddr, s.customerAddr)
 	job.JobID = "job-routing-001"
-	job.PreferredRegion = "us-west"
 
-	err := s.providerMock.EnqueueJob(job, mocks.JobQueueOptions{
+	err := providerMock.EnqueueJob(job, mocks.JobQueueOptions{
 		Priority:       85,
 		CustomerTier:   85,
 		RequiredTier:   70,
-		RequiredRegion: "us-west",
+		RequiredRegion: "us-west-2",
 	})
 	require.NoError(t, err)
 
 	// Schedule - should select us-west cluster due to region preference
-	decision, err := s.providerMock.ScheduleNext(ctx)
+	decision, err := providerMock.ScheduleNext(ctx)
 	require.NoError(t, err)
 	require.Equal(t, "cluster-us-west", decision.SelectedClusterID)
 
@@ -382,7 +387,7 @@ func (s *HPCFullLifecycleTestSuite) TestJobCancellationWithPartialBilling() {
 
 	cluster := mocks.DefaultTestCluster()
 	s.slurmMock.RegisterCluster(cluster)
-	s.providerMock.AddCluster(mocks.ProviderClusterFromTestCluster(cluster))
+	s.providerMock.AddCluster(providerClusterFromSLURMCluster(cluster))
 
 	// Submit and start job
 	job := fixtures.StandardComputeJob(s.providerAddr, s.customerAddr)
@@ -405,15 +410,19 @@ func (s *HPCFullLifecycleTestSuite) TestJobCancellationWithPartialBilling() {
 
 	// Simulate partial execution (2 hours out of 4)
 	partialExecutionTime := 2 * time.Hour
-	partialMetrics := fixtures.StandardJobMetrics(int64(partialExecutionTime.Seconds()))
+	partialMetrics := newRealSchedulerMetrics(partialExecutionTime, 1, 8, 16, 0, 40)
+	requireRealSchedulerTelemetry(t, partialMetrics)
 
 	s.slurmMock.SetJobMetrics(job.JobID, partialMetrics)
 
 	// Cancel job
 	s.slurmMock.SetJobState(job.JobID, pd.HPCJobStateCancelled)
-	s.providerMock.MarkCancelled(job.JobID, "customer requested cancellation")
 
 	t.Log("✓ Job cancelled after 2 hours")
+
+	status, err := s.slurmMock.GetJobStatus(ctx, job.JobID)
+	require.NoError(t, err)
+	require.Equal(t, pd.HPCJobStateCancelled, status.State)
 
 	// Calculate partial billing
 	totalEstimatedCost := sdkmath.LegacyNewDec(10000)        // Full job would be 10k uakt
@@ -440,12 +449,12 @@ func (s *HPCFullLifecycleTestSuite) TestProviderPenaltiesForSLABreach() {
 
 	cluster := mocks.DefaultTestCluster()
 	s.slurmMock.RegisterCluster(cluster)
-	s.providerMock.AddCluster(mocks.ProviderClusterFromTestCluster(cluster))
+	s.providerMock.AddCluster(providerClusterFromSLURMCluster(cluster))
 
 	// Submit job with 4-hour SLA
 	job := fixtures.StandardComputeJob(s.providerAddr, s.customerAddr)
 	job.JobID = "job-sla-breach-001"
-	job.MaxWallTimeSeconds = 4 * 3600 // 4-hour SLA
+	job.MaxRuntimeSeconds = 4 * 3600 // 4-hour SLA
 
 	err := s.providerMock.EnqueueJob(job, mocks.JobQueueOptions{
 		Priority:     90,
@@ -464,15 +473,18 @@ func (s *HPCFullLifecycleTestSuite) TestProviderPenaltiesForSLABreach() {
 
 	// Simulate job exceeding SLA (runs for 6 hours)
 	actualExecutionTime := 6 * time.Hour
-	metrics := fixtures.StandardJobMetrics(int64(actualExecutionTime.Seconds()))
+	metrics := newRealSchedulerMetrics(actualExecutionTime, 1, 8, 16, 0, 40)
+	requireRealSchedulerTelemetry(t, metrics)
 
 	s.slurmMock.SetJobMetrics(job.JobID, metrics)
 	s.slurmMock.SetJobExitCode(job.JobID, 0)
 	s.slurmMock.SetJobState(job.JobID, pd.HPCJobStateCompleted)
 
-	s.providerMock.MarkCompleted(job.JobID, metrics)
-
 	t.Logf("✓ Job completed in %.2f hours (exceeded 4-hour SLA)", actualExecutionTime.Hours())
+
+	status, err := s.slurmMock.GetJobStatus(ctx, job.JobID)
+	require.NoError(t, err)
+	require.Equal(t, pd.HPCJobStateCompleted, status.State)
 
 	// Calculate SLA breach penalty
 	baseCharge := sdkmath.LegacyNewDec(15000) // 15k uakt
@@ -500,79 +512,166 @@ func (s *HPCFullLifecycleTestSuite) TestProviderPenaltiesForSLABreach() {
 	t.Log("✓ SLA breach penalty test passed")
 }
 
-// TestSLURMWorkloadTemplateValidation tests SLURM workload template processing
+// TestSLURMWorkloadTemplateValidation tests workload template validation for SLURM-backed jobs.
 func (s *HPCFullLifecycleTestSuite) TestSLURMWorkloadTemplateValidation() {
 	t := s.T()
 
 	t.Log("=== SLURM Template Validation Test ===")
 
-	// Valid SLURM template
-	validTemplate := &hpctypes.SLURMWorkloadTemplate{
+	validTemplate := &hpctypes.WorkloadTemplate{
 		TemplateID:  "slurm-ml-training-v1",
 		Name:        "ML Training Template",
+		Version:     "1.0.0",
 		Description: "Standard template for ML training jobs",
-		SBatchScript: `#!/bin/bash
-#SBATCH --job-name=ml-training
-#SBATCH --nodes=2
-#SBATCH --ntasks-per-node=8
-#SBATCH --gres=gpu:8
-#SBATCH --time=24:00:00
-#SBATCH --partition=gpu
-
-module load cuda/11.8
-python train.py --distributed
-`,
-		RequiredModules: []string{"cuda/11.8", "python/3.10"},
-		ResourceLimits: hpctypes.HPCResourceRequirements{
-			CPU:           16,
-			MemoryGB:      128,
-			GPUs:          8,
-			GPUType:       "nvidia-a100",
-			WallTimeHours: 24,
+		Type:        hpctypes.WorkloadTypeGPU,
+		Runtime: hpctypes.WorkloadRuntime{
+			RuntimeType:       "apptainer",
+			ContainerImage:    "python:3.11-cuda",
+			RequiredModules:   []string{"cuda/11.8", "python/3.10"},
+			MPIImplementation: "openmpi",
 		},
-		ValidatedAt: time.Now(),
-		Active:      true,
+		Resources: hpctypes.WorkloadResourceSpec{
+			MinNodes:               1,
+			MaxNodes:               8,
+			DefaultNodes:           2,
+			MinCPUsPerNode:         8,
+			MaxCPUsPerNode:         128,
+			DefaultCPUsPerNode:     16,
+			MinMemoryMBPerNode:     16384,
+			MaxMemoryMBPerNode:     524288,
+			DefaultMemoryMBPerNode: 131072,
+			MinGPUsPerNode:         1,
+			MaxGPUsPerNode:         8,
+			DefaultGPUsPerNode:     4,
+			MinRuntimeMinutes:      30,
+			MaxRuntimeMinutes:      24 * 60,
+			DefaultRuntimeMinutes:  6 * 60,
+			NetworkRequired:        true,
+		},
+		Security: hpctypes.WorkloadSecuritySpec{
+			SandboxLevel:       "basic",
+			AllowNetworkAccess: true,
+		},
+		Entrypoint: hpctypes.WorkloadEntrypoint{
+			Command:     "python",
+			DefaultArgs: []string{"train.py", "--distributed"},
+			UseMPIRun:   true,
+		},
+		Publisher:      s.providerAddr,
+		ApprovalStatus: hpctypes.WorkloadApprovalApproved,
+		CreatedAt:      time.Now(),
+		UpdatedAt:      time.Now(),
+		Tags:           []string{"slurm", "gpu", "training"},
 	}
 
-	// Validate template
-	require.NotEmpty(t, validTemplate.SBatchScript)
-	require.Contains(t, validTemplate.SBatchScript, "#SBATCH")
-	require.Contains(t, validTemplate.SBatchScript, "--gres=gpu")
-	require.Greater(t, validTemplate.ResourceLimits.GPUs, int32(0))
+	require.NoError(t, validTemplate.Validate())
+	require.NotEmpty(t, validTemplate.Runtime.ContainerImage)
+	require.True(t, validTemplate.Resources.DefaultGPUsPerNode > 0)
+	require.True(t, validTemplate.Entrypoint.UseMPIRun)
+	require.Contains(t, validTemplate.Tags, "slurm")
 
 	t.Log("✓ Valid SLURM template accepted")
 
 	// Invalid template (missing required SBATCH directives)
-	invalidTemplate := &hpctypes.SLURMWorkloadTemplate{
+	invalidTemplate := &hpctypes.WorkloadTemplate{
 		TemplateID: "slurm-invalid-v1",
-		SBatchScript: `#!/bin/bash
-python train.py
-`,
+		Version:    "1.0.0",
+		Type:       hpctypes.WorkloadTypeGPU,
+		Runtime: hpctypes.WorkloadRuntime{
+			RuntimeType: "apptainer",
+		},
+		Resources: hpctypes.WorkloadResourceSpec{
+			MinNodes:               1,
+			MaxNodes:               2,
+			DefaultNodes:           1,
+			MinCPUsPerNode:         1,
+			MaxCPUsPerNode:         4,
+			DefaultCPUsPerNode:     4,
+			MinMemoryMBPerNode:     1024,
+			MaxMemoryMBPerNode:     4096,
+			DefaultMemoryMBPerNode: 2048,
+			MinRuntimeMinutes:      1,
+			MaxRuntimeMinutes:      120,
+			DefaultRuntimeMinutes:  30,
+		},
+		Entrypoint: hpctypes.WorkloadEntrypoint{},
 	}
 
 	// Validation should fail
-	require.NotContains(t, invalidTemplate.SBatchScript, "#SBATCH")
+	require.Error(t, invalidTemplate.Validate())
+	require.Empty(t, invalidTemplate.Entrypoint.Command)
 	t.Log("✓ Invalid template correctly rejected")
 
 	t.Log("✓ SLURM template validation test passed")
 }
 
-// BillingMockSettlementProcessor mocks settlement processing
-type BillingMockSettlementProcessor struct {
-	settlements []settlementtypes.SettlementRecord
-}
+func mockSLURMClusterFromHPCCluster(cluster *hpctypes.HPCCluster) *mocks.SLURMCluster {
+	partitions := make([]mocks.SLURMPartition, 0, len(cluster.Partitions))
+	for _, partition := range cluster.Partitions {
+		partitions = append(partitions, mocks.SLURMPartition{
+			Name:         partition.Name,
+			Nodes:        partition.Nodes,
+			MaxRuntime:   partition.MaxRuntime,
+			MaxNodes:     partition.MaxNodes,
+			Features:     partition.Features,
+			Priority:     partition.Priority,
+			State:        partition.State,
+			AvailableGPU: int32(cluster.ClusterMetadata.TotalGPUs),
+			AvailableCPU: int32(cluster.ClusterMetadata.TotalCPUCores),
+		})
+	}
 
-func NewBillingMockSettlementProcessor() *BillingMockSettlementProcessor {
-	return &BillingMockSettlementProcessor{
-		settlements: make([]settlementtypes.SettlementRecord, 0),
+	return &mocks.SLURMCluster{
+		ClusterID:     cluster.ClusterID,
+		Name:          cluster.Name,
+		Region:        cluster.Region,
+		SLURMVersion:  cluster.SLURMVersion,
+		Partitions:    partitions,
+		TotalNodes:    cluster.TotalNodes,
+		TotalCPU:      int32(cluster.ClusterMetadata.TotalCPUCores),
+		TotalMemoryGB: cluster.ClusterMetadata.TotalMemoryGB,
+		TotalGPUs:     int32(cluster.ClusterMetadata.TotalGPUs),
 	}
 }
 
-func (p *BillingMockSettlementProcessor) ProcessSettlement(settlement settlementtypes.SettlementRecord) error {
-	p.settlements = append(p.settlements, settlement)
-	return nil
+func providerClusterFromHPCCluster(cluster *hpctypes.HPCCluster, latency, price float64, identityTier int32) mocks.ProviderCluster {
+	gpuType := ""
+	if len(cluster.ClusterMetadata.GPUTypes) > 0 {
+		gpuType = cluster.ClusterMetadata.GPUTypes[0]
+	}
+
+	return mocks.ProviderCluster{
+		ClusterID:        cluster.ClusterID,
+		ProviderID:       cluster.ProviderAddress,
+		Region:           cluster.Region,
+		AvailableCPU:     int32(cluster.ClusterMetadata.TotalCPUCores),
+		AvailableMemory:  cluster.ClusterMetadata.TotalMemoryGB,
+		AvailableGPUs:    int32(cluster.ClusterMetadata.TotalGPUs),
+		GPUType:          gpuType,
+		LatencyScore:     latency,
+		PriceScore:       price,
+		IdentityTier:     identityTier,
+		SupportsGPUTypes: append([]string(nil), cluster.ClusterMetadata.GPUTypes...),
+	}
 }
 
-func (p *BillingMockSettlementProcessor) GetSettlements() []settlementtypes.SettlementRecord {
-	return p.settlements
+func providerClusterFromSLURMCluster(cluster *mocks.SLURMCluster) mocks.ProviderCluster {
+	supports := make([]string, 0, len(cluster.Partitions))
+	for _, partition := range cluster.Partitions {
+		supports = append(supports, partition.Features...)
+	}
+
+	return mocks.ProviderCluster{
+		ClusterID:        cluster.ClusterID,
+		ProviderID:       "provider-1",
+		Region:           cluster.Region,
+		AvailableCPU:     cluster.TotalCPU,
+		AvailableMemory:  cluster.TotalMemoryGB,
+		AvailableGPUs:    cluster.TotalGPUs,
+		GPUType:          "nvidia-a100",
+		LatencyScore:     0.90,
+		PriceScore:       0.80,
+		IdentityTier:     90,
+		SupportsGPUTypes: supports,
+	}
 }

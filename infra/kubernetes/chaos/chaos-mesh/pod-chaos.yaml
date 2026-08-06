@@ -57,7 +57,7 @@ spec:
     namespaces:
       - virtengine
     labelSelectors:
-      app.kubernetes.io/component: provider-daemon
+      app.kubernetes.io/component: provider
 
 ---
 # Container Kill: Kill specific container in pod
@@ -78,10 +78,10 @@ spec:
     labelSelectors:
       app.kubernetes.io/component: validator
   containerNames:
-    - virtengine
+    - virtengine-validator
 
 ---
-# Rolling Pod Failure: Sequential pod failures
+# Validator Pod Kill: repeatable single-validator failover drill
 apiVersion: chaos-mesh.org/v1alpha1
 kind: PodChaos
 metadata:
@@ -92,8 +92,7 @@ metadata:
     chaos.virtengine.com/scenario: rolling
 spec:
   action: pod-kill
-  mode: fixed-percent
-  value: "25"
+  mode: one
   selector:
     namespaces:
       - virtengine
@@ -101,15 +100,15 @@ spec:
       app.kubernetes.io/component: validator
 
 ---
-# Multi-validator Failure: Kill multiple validators
+# Sentry Pod Failure: Kill multiple sentry nodes without duplicating validator identity
 apiVersion: chaos-mesh.org/v1alpha1
 kind: PodChaos
 metadata:
-  name: multi-validator-failure
+  name: sentry-node-failure
   namespace: chaos-testing
   labels:
     chaos.virtengine.com/category: pod
-    chaos.virtengine.com/scenario: multi-failure
+    chaos.virtengine.com/scenario: sentry-failure
 spec:
   action: pod-kill
   mode: fixed
@@ -118,4 +117,4 @@ spec:
     namespaces:
       - virtengine
     labelSelectors:
-      app.kubernetes.io/component: validator
+      app.kubernetes.io/component: sentry

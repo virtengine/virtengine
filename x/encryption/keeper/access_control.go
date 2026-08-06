@@ -23,32 +23,19 @@ func (k Keeper) CheckEnvelopeAccess(ctx sdk.Context, envelope *types.EncryptedPa
 		return types.ErrUnauthorizedAccess.Wrap("requester address is required")
 	}
 
-	// Get requester's active key
-	requesterKey, found := k.GetActiveRecipientKey(ctx, requester)
-	if !found {
-		// Check if requester has any keys
-		allKeys := k.GetRecipientKeys(ctx, requester)
-		if len(allKeys) == 0 {
-			return types.ErrUnauthorizedAccess.Wrapf("requester %s has no registered keys", requester.String())
-		}
-
-		// Check if any of requester's keys are in the recipients list
-		for _, key := range allKeys {
-			if key.IsActive() && envelope.IsRecipient(key.KeyFingerprint) {
-				return nil // Access granted
-			}
-		}
-
-		return types.ErrUnauthorizedAccess.Wrapf("requester %s is not a recipient", requester.String())
+	allKeys := k.GetRecipientKeys(ctx, requester)
+	if len(allKeys) == 0 {
+		return types.ErrUnauthorizedAccess.Wrapf("requester %s has no registered keys", requester.String())
 	}
 
-	// Check if requester's active key is a recipient
-	if !envelope.IsRecipient(requesterKey.KeyFingerprint) {
-		return types.ErrUnauthorizedAccess.Wrapf("requester %s (key %s) is not a recipient",
-			requester.String(), requesterKey.KeyFingerprint)
+	blockTime := ctx.BlockTime().Unix()
+	for _, key := range allKeys {
+		if key.IsActive() && !key.IsExpiredAt(blockTime) && envelope.IsRecipient(key.KeyFingerprint) {
+			return nil
+		}
 	}
 
-	return nil
+	return types.ErrUnauthorizedAccess.Wrapf("requester %s is not a recipient", requester.String())
 }
 
 // CheckEnvelopeAccessByFingerprint verifies access using a specific key fingerprint.

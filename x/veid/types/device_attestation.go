@@ -1,7 +1,9 @@
 package types
 
 import (
+	"crypto/sha256"
 	"fmt"
+	"strings"
 	"time"
 )
 
@@ -78,6 +80,9 @@ func (r DeviceAttestationRecord) Validate() error {
 	if !IsValidDeviceAttestationProvider(r.Provider) {
 		return ErrInvalidScope.Wrapf("invalid device attestation provider: %s", r.Provider)
 	}
+	if !providerMatchesPlatform(r.Provider, r.Platform) {
+		return ErrInvalidScope.Wrapf("device attestation provider %s is incompatible with platform %s", r.Provider, r.Platform)
+	}
 	if r.Nonce == "" {
 		return ErrInvalidScope.Wrap("attestation nonce is required")
 	}
@@ -99,8 +104,33 @@ func (r DeviceAttestationRecord) Validate() error {
 	if r.AppID == "" {
 		return ErrInvalidScope.Wrap("app_id is required")
 	}
+	if r.Verified {
+		if r.IntegrityLevel == DeviceIntegrityUnknown || r.IntegrityLevel == DeviceIntegrityUnsupported {
+			return ErrInvalidScope.Wrap("verified device attestation requires a concrete integrity level")
+		}
+		if r.IntegrityLevel == DeviceIntegrityHardwareBacked && !r.HardwareBacked {
+			return ErrInvalidScope.Wrap("hardware-backed integrity requires hardware-backed attestation")
+		}
+		if len(r.PayloadHash) != sha256.Size {
+			return ErrInvalidScope.Wrap("verified device attestation payload hash must be SHA-256")
+		}
+		if vaultRef := strings.TrimSpace(r.VaultRef); vaultRef == "" || vaultRef != r.VaultRef {
+			return ErrInvalidScope.Wrap("verified device attestation vault reference is required")
+		}
+	}
 
 	return nil
+}
+
+func providerMatchesPlatform(provider DeviceAttestationProvider, platform DevicePlatform) bool {
+	switch platform {
+	case DevicePlatformAndroid:
+		return provider == DeviceAttestationProviderPlayIntegrity || provider == DeviceAttestationProviderSafetyNet
+	case DevicePlatformIOS:
+		return provider == DeviceAttestationProviderDeviceCheck || provider == DeviceAttestationProviderAppAttest
+	default:
+		return false
+	}
 }
 
 // IsValidDevicePlatform checks if a platform is supported.

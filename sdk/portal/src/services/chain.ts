@@ -1,18 +1,126 @@
 import { Registry, type OfflineSigner } from "@cosmjs/proto-signing";
-import { SigningStargateClient, StargateClient, type Coin } from "@cosmjs/stargate";
+import { SigningStargateClient, type Coin } from "@cosmjs/stargate";
 import type { AssetList, Chain } from "@chain-registry/types";
 
 import type { ChainStatus, VeidStatus } from "../types/chain";
 
-const defaultChainId = "virtengine-localnet-1";
-const defaultRpc = "http://localhost:26657";
-const defaultRest = "http://localhost:1317";
+type RuntimeEnv = Record<string, string | boolean | undefined>;
+
+export interface RuntimeConfig {
+  chainId: string;
+  rpc: string;
+  rest: string;
+  ws: string;
+  appUrl: string;
+  providerDaemonUrl: string;
+  walletConnectProjectId: string;
+  supportedWallets: string[];
+  chainLabel: string;
+}
+
+const MAINNET = {
+  chainId: "virtengine-1",
+  rpc: "https://rpc.virtengine.com",
+  rest: "https://api.virtengine.com",
+  ws: "wss://ws.virtengine.com",
+  label: "Mainnet ready",
+};
+
+const TESTNET = {
+  chainId: "virtengine-testnet-1",
+  rpc: "https://rpc.testnet.virtengine.com",
+  rest: "https://api.testnet.virtengine.com",
+  ws: "wss://ws.testnet.virtengine.com",
+  label: "Testnet ready",
+};
+
+const DEVNET = {
+  chainId: "virtengine-devnet-1",
+  rpc: "http://localhost:26657",
+  rest: "http://localhost:1317",
+  ws: "ws://localhost:26657/websocket",
+  label: "Devnet override",
+};
+
+const LOCALNET = {
+  chainId: "virtengine-localnet-1",
+  rpc: "http://localhost:26657",
+  rest: "http://localhost:1317",
+  ws: "ws://localhost:26657/websocket",
+  label: "Localnet override",
+};
+
+function getEnvValue(env: RuntimeEnv, ...keys: string[]): string | undefined {
+  for (const key of keys) {
+    const value = env[key];
+    if (typeof value === "string" && value.trim()) {
+      return value.trim();
+    }
+  }
+  return undefined;
+}
+
+function trimTrailingSlash(value: string): string {
+  return value.replace(/\/+$/, "");
+}
+
+function deriveNetworkDefaults(chainId: string) {
+  const normalized = chainId.toLowerCase();
+  if (normalized.includes("localnet")) return LOCALNET;
+  if (normalized.includes("devnet")) return DEVNET;
+  if (normalized.includes("testnet")) return TESTNET;
+  return MAINNET;
+}
+
+export function resolveRuntimeConfig(env: RuntimeEnv = import.meta.env): RuntimeConfig {
+  const requestedChainId =
+    getEnvValue(env, "VITE_CHAIN_ID", "NEXT_PUBLIC_CHAIN_ID") ?? MAINNET.chainId;
+  const defaults = deriveNetworkDefaults(requestedChainId);
+  const appUrl =
+    getEnvValue(env, "VITE_APP_URL", "NEXT_PUBLIC_APP_URL") ??
+    "https://portal.virtengine.com";
+  const providerDaemonUrl =
+    getEnvValue(env, "VITE_PROVIDER_DAEMON_URL", "NEXT_PUBLIC_PROVIDER_DAEMON_URL") ?? "";
+  const supportedWallets = (
+    getEnvValue(env, "VITE_SUPPORTED_WALLETS", "NEXT_PUBLIC_SUPPORTED_WALLETS") ??
+    "keplr,leap,cosmostation"
+  )
+    .split(",")
+    .map((wallet) => wallet.trim())
+    .filter(Boolean);
+
+  return {
+    chainId: requestedChainId,
+    rpc: trimTrailingSlash(
+      getEnvValue(env, "VITE_CHAIN_RPC", "NEXT_PUBLIC_CHAIN_RPC") ?? defaults.rpc
+    ),
+    rest: trimTrailingSlash(
+      getEnvValue(env, "VITE_CHAIN_REST", "NEXT_PUBLIC_CHAIN_REST") ?? defaults.rest
+    ),
+    ws: trimTrailingSlash(
+      getEnvValue(env, "VITE_CHAIN_WS", "NEXT_PUBLIC_CHAIN_WS") ?? defaults.ws
+    ),
+    appUrl: trimTrailingSlash(appUrl),
+    providerDaemonUrl: trimTrailingSlash(providerDaemonUrl),
+    walletConnectProjectId:
+      getEnvValue(
+        env,
+        "VITE_WALLET_CONNECT_PROJECT_ID",
+        "NEXT_PUBLIC_WALLET_CONNECT_PROJECT_ID"
+      ) ?? "",
+    supportedWallets,
+    chainLabel: defaults.label,
+  };
+}
+
+export const runtimeConfig = resolveRuntimeConfig();
 
 export const chainName = "virtengine";
 export const chainConfig = {
-  chainId: import.meta.env.VITE_CHAIN_ID ?? defaultChainId,
-  rpc: import.meta.env.VITE_CHAIN_RPC ?? defaultRpc,
-  rest: import.meta.env.VITE_CHAIN_REST ?? defaultRest,
+  chainId: runtimeConfig.chainId,
+  rpc: runtimeConfig.rpc,
+  rest: runtimeConfig.rest,
+  ws: runtimeConfig.ws,
 };
 
 export const virtengineChain: Chain = {
@@ -21,8 +129,8 @@ export const virtengineChain: Chain = {
   chain_type: "cosmos",
   pretty_name: "VirtEngine",
   status: "live",
-  network_type: "testnet",
-  bech32_prefix: "ve",
+  network_type: runtimeConfig.chainId.includes("testnet") ? "testnet" : "mainnet",
+  bech32_prefix: "virtengine",
   slip44: 118,
   fees: {
     fee_tokens: [
@@ -72,7 +180,7 @@ const jsonFetch = async <T>(url: string): Promise<T> => {
 };
 
 export const fetchChainStatus = async (): Promise<ChainStatus> => {
-  const rest = chainConfig.rest.replace(/\/$/, "");
+  const rest = chainConfig.rest;
   const [blockData, validatorsData] = await Promise.all([
     jsonFetch<{ block?: { header?: { chain_id?: string; height?: string } } }>(
       `${rest}/cosmos/base/tendermint/v1beta1/blocks/latest`
@@ -93,8 +201,18 @@ export const fetchChainStatus = async (): Promise<ChainStatus> => {
 };
 
 export const fetchBalances = async (address: string): Promise<readonly Coin[]> => {
-  const client = await StargateClient.connect(chainConfig.rpc);
-  return client.getAllBalances(address);
+  if (!address.trim()) {
+    return [];
+  }
+
+  const payload = await jsonFetch<{ balances?: Array<{ denom?: string; amount?: string }> }>(
+    `${chainConfig.rest}/cosmos/bank/v1beta1/balances/${address}`
+  );
+
+  return (payload.balances ?? []).map((coin) => ({
+    denom: coin.denom ?? "",
+    amount: coin.amount ?? "0",
+  }));
 };
 
 export const createSigningClient = async (signer: OfflineSigner) => {
@@ -105,7 +223,7 @@ export const createSigningClient = async (signer: OfflineSigner) => {
 };
 
 export const fetchVeidStatus = async (address: string): Promise<VeidStatus> => {
-  const rest = chainConfig.rest.replace(/\/$/, "");
+  const rest = chainConfig.rest;
   const endpoints = [
     `${rest}/virtengine/veid/v1/identity_record/${address}`,
     `${rest}/virtengine/veid/v1/identity-record/${address}`,

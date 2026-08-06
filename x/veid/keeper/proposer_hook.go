@@ -2,7 +2,6 @@ package keeper
 
 import (
 	"encoding/hex"
-	"time"
 
 	sdk "github.com/cosmos/cosmos-sdk/types"
 
@@ -63,63 +62,15 @@ func (k Keeper) BeginBlocker(ctx sdk.Context) error {
 		return nil
 	}
 
-	// Check if we have a key provider
-	if proposerHookConfig.KeyProviderFactory == nil {
-		k.Logger(ctx).Debug("no key provider configured for verification")
-		return nil
-	}
-
-	// Create key provider
-	keyProvider, err := proposerHookConfig.KeyProviderFactory()
-	if err != nil {
-		k.Logger(ctx).Error("failed to create key provider", "error", err)
-		return nil // Don't halt chain on key provider error
-	}
-	defer func() {
-		if keyProvider != nil {
-			_ = keyProvider.Close()
-		}
-	}()
-
-	// Process pending verifications
-	results := k.ProcessPendingVerifications(ctx, keyProvider)
-
-	if len(results) > 0 {
-		k.Logger(ctx).Info("processed verification requests in BeginBlocker",
-			"count", len(results),
-			"block_height", ctx.BlockHeight(),
-		)
-
-		// Log summary
-		var success, partial, failed, errors int
-		for _, r := range results {
-			switch r.Status {
-			case "success":
-				success++
-			case "partial":
-				partial++
-			case "failed":
-				failed++
-			case "error":
-				errors++
-			}
-		}
-
-		k.Logger(ctx).Info("verification results summary",
-			"success", success,
-			"partial", partial,
-			"failed", failed,
-			"errors", errors,
-		)
-	}
-
+	k.Logger(ctx).Debug("BeginBlocker verification processing disabled; signed receipt staging occurs in vote extensions",
+		"block_height", ctx.BlockHeight(),
+	)
 	return nil
 }
 
 // EndBlocker is called at the end of every block
 // Used for cleanup and timeout handling
 func (k Keeper) EndBlocker(ctx sdk.Context) error {
-	// Handle any expired/timed out requests
 	k.handleExpiredRequests(ctx)
 	return nil
 }
@@ -169,33 +120,8 @@ func (k Keeper) handleExpiredRequests(ctx sdk.Context) {
 				"request_id", request.RequestID,
 				"blocks_waiting", blocksWaiting,
 			)
-
-			// Mark as failed due to timeout
-			request.SetFailed("expired after max wait time")
-			_ = k.setVerificationRequest(ctx, &request)
-			k.removeFromPendingQueue(ctx, &request)
-
-			// Create failure result
-			result := NewExpiredVerificationResult(&request, ctx.BlockTime(), ctx.BlockHeight())
-			_ = k.StoreVerificationResult(ctx, result)
 		}
 	}
-}
-
-// NewExpiredVerificationResult creates a verification result for an expired request
-func NewExpiredVerificationResult(
-	request *types.VerificationRequest,
-	now time.Time,
-	blockHeight int64,
-) *types.VerificationResult {
-	result := types.NewVerificationResult(
-		request.RequestID,
-		request.AccountAddress,
-		now,
-		blockHeight,
-	)
-	result.SetError(types.ReasonCodeMaxRetriesExceeded, "request expired after max wait time")
-	return result
 }
 
 // ============================================================================

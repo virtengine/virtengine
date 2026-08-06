@@ -1,6 +1,8 @@
 package keeper
 
 import (
+	"fmt"
+	"math"
 	"time"
 
 	sdkmath "cosmossdk.io/math"
@@ -11,6 +13,19 @@ import (
 
 // SettleOrder settles an order based on usage records
 func (k Keeper) SettleOrder(ctx sdk.Context, orderID string, usageRecordIDs []string, isFinal bool) (*types.SettlementRecord, error) {
+	cacheCtx, write := ctx.CacheContext()
+	settlement, err := k.settleOrder(cacheCtx, orderID, usageRecordIDs, isFinal)
+	if err != nil {
+		return nil, err
+	}
+	write()
+	return settlement, nil
+}
+
+func (k Keeper) settleOrder(ctx sdk.Context, orderID string, usageRecordIDs []string, isFinal bool) (*types.SettlementRecord, error) {
+	if caseID, held := k.HasActiveFinancialCase(ctx, "order", orderID); held {
+		return nil, types.ErrDisputeActive.Wrapf("order held by canonical case %s", caseID)
+	}
 	// Get the escrow for this order
 	escrow, found := k.GetEscrowByOrder(ctx, orderID)
 	if !found {
@@ -34,7 +49,12 @@ func (k Keeper) SettleOrder(ctx sdk.Context, orderID string, usageRecordIDs []st
 	var usageRecords []types.UsageRecord
 	if len(usageRecordIDs) > 0 {
 		// Use specified usage records
+		seenUsageIDs := make(map[string]struct{}, len(usageRecordIDs))
 		for _, id := range usageRecordIDs {
+			if _, duplicate := seenUsageIDs[id]; duplicate {
+				return nil, types.ErrUsageReplayConflict.Wrapf("duplicate usage record %s in settlement request", id)
+			}
+			seenUsageIDs[id] = struct{}{}
 			usage, found := k.GetUsageRecord(ctx, id)
 			if !found {
 				return nil, types.ErrUsageRecordNotFound.Wrapf("usage record %s not found", id)
@@ -45,11 +65,17 @@ func (k Keeper) SettleOrder(ctx sdk.Context, orderID string, usageRecordIDs []st
 			if usage.OrderID != orderID {
 				return nil, types.ErrInvalidUsageRecord.Wrapf("usage record %s belongs to different order", id)
 			}
+			if k.IsUsageAuthenticationActive(ctx) && !usage.IsAuthenticated() {
+				return nil, types.ErrUsageAuthenticationRequired.Wrapf("usage record %s is legacy or unverified", id)
+			}
 			usageRecords = append(usageRecords, usage)
 		}
 	} else {
 		// Get all unsettled usage records
 		usageRecords = k.GetUnsettledUsageRecords(ctx, orderID)
+	}
+	if k.IsUsageAuthenticationActive(ctx) && len(usageRecords) == 0 {
+		return nil, types.ErrUsageAuthenticationRequired.Wrap("at least one authenticated usage record is required for settlement")
 	}
 
 	// Calculate total cost from usage records
@@ -59,6 +85,9 @@ func (k Keeper) SettleOrder(ctx sdk.Context, orderID string, usageRecordIDs []st
 
 	for i, usage := range usageRecords {
 		totalCost = totalCost.Add(usage.TotalCost...)
+		if usage.UsageUnits > math.MaxUint64-totalUsageUnits {
+			return nil, types.ErrInvalidSettlement.Wrap("total usage units overflow")
+		}
 		totalUsageUnits += usage.UsageUnits
 
 		if i == 0 {
@@ -196,7 +225,7 @@ func (k Keeper) SettleOrder(ctx sdk.Context, orderID string, usageRecordIDs []st
 	for _, usage := range usageRecords {
 		usage.MarkSettled(settlementID)
 		if err := k.SetUsageRecord(ctx, usage); err != nil {
-			k.Logger(ctx).Error("failed to mark usage as settled", "error", err, "usage_id", usage.UsageID)
+			return nil, err
 		}
 	}
 
@@ -227,14 +256,17 @@ func (k Keeper) SettleOrder(ctx sdk.Context, orderID string, usageRecordIDs []st
 			return nil, err
 		}
 
+		payout, err := k.ExecutePayout(ctx, invoiceID, settlement.SettlementID)
+		if err != nil {
+			return nil, err
+		}
 		if pref, ok := k.GetFiatPayoutPreference(ctx, settlement.Provider); ok && pref.Enabled {
+			if payout.State != types.PayoutStatePending {
+				return nil, types.ErrPayoutHeld.Wrap("fiat preference requires pending payout hold")
+			}
 			if _, err := k.createConversionFromPreference(ctx, *settlement, invoiceID, pref); err != nil {
 				return nil, err
 			}
-		}
-
-		if _, err := k.ExecutePayout(ctx, invoiceID, settlement.SettlementID); err != nil {
-			return nil, err
 		}
 	}
 
@@ -244,23 +276,23 @@ func (k Keeper) SettleOrder(ctx sdk.Context, orderID string, usageRecordIDs []st
 		}
 	}
 
-	// Emit event
-	err = ctx.EventManager().EmitTypedEvent(&types.EventOrderSettled{
-		SettlementID:   settlementID,
-		OrderID:        orderID,
-		EscrowID:       escrow.EscrowID,
-		Provider:       escrow.Recipient,
-		Customer:       escrow.Depositor,
-		TotalAmount:    settlementAmount.String(),
-		ProviderShare:  providerShare.String(),
-		PlatformFee:    platformFee.String(),
-		SettlementType: string(settlementType),
-		IsFinal:        isFinal,
-		SettledAt:      ctx.BlockTime().Unix(),
-	})
-	if err != nil {
-		k.Logger(ctx).Error("failed to emit order settled event", "error", err)
-	}
+	// These settlement events are handwritten compatibility types rather than
+	// generated protobuf messages. Emit their stable ABCI names directly so the
+	// event cannot be silently lost through an unregistered typed-event codec.
+	ctx.EventManager().EmitEvent(sdk.NewEvent(
+		types.EventTypeOrderSettled,
+		sdk.NewAttribute(types.AttributeKeySettlementID, settlementID),
+		sdk.NewAttribute(types.AttributeKeyOrderID, orderID),
+		sdk.NewAttribute(types.AttributeKeyEscrowID, escrow.EscrowID),
+		sdk.NewAttribute(types.AttributeKeyProvider, escrow.Recipient),
+		sdk.NewAttribute(types.AttributeKeyCustomer, escrow.Depositor),
+		sdk.NewAttribute(types.AttributeKeyAmount, settlementAmount.String()),
+		sdk.NewAttribute(types.AttributeKeyProviderShare, providerShare.String()),
+		sdk.NewAttribute(types.AttributeKeyPlatformFee, platformFee.String()),
+		sdk.NewAttribute(types.AttributeKeySettlementType, string(settlementType)),
+		sdk.NewAttribute(types.AttributeKeyIsFinal, fmt.Sprintf("%t", isFinal)),
+		sdk.NewAttribute(types.AttributeKeyTimestamp, fmt.Sprintf("%d", ctx.BlockTime().Unix())),
+	))
 
 	k.Logger(ctx).Info("order settled",
 		"settlement_id", settlementID,
@@ -275,24 +307,73 @@ func (k Keeper) SettleOrder(ctx sdk.Context, orderID string, usageRecordIDs []st
 
 // RecordUsage records a usage record from a provider
 func (k Keeper) RecordUsage(ctx sdk.Context, record *types.UsageRecord) error {
-	// Generate usage ID if not already set
+	cacheCtx, write := ctx.CacheContext()
+	if err := k.recordUsage(cacheCtx, record); err != nil {
+		return err
+	}
+	write()
+	return nil
+}
+
+func (k Keeper) recordUsage(ctx sdk.Context, record *types.UsageRecord) error {
+	if record == nil {
+		return types.ErrInvalidUsageRecord.Wrap("usage record cannot be nil")
+	}
+
+	// Calculate total cost exactly from signed unit price and units. A caller-
+	// supplied TotalCost is never an independent financial input.
+	if record.UnitPrice.Denom != "" && !record.UnitPrice.IsNegative() {
+		quantity := sdkmath.LegacyNewDecFromInt(sdkmath.NewIntFromUint64(record.UsageUnits))
+		total := record.UnitPrice.Amount.Mul(quantity).TruncateInt()
+		expected := sdk.NewCoins()
+		if total.IsPositive() {
+			expected = sdk.NewCoins(sdk.NewCoin(record.UnitPrice.Denom, total))
+		}
+		if record.SignatureVersion == types.SignatureVersionV1 && !record.TotalCost.IsZero() && !record.TotalCost.Equal(expected) {
+			return types.ErrInvalidUsageRecord.Wrap("total_cost does not match signed units and unit price")
+		}
+		record.TotalCost = expected
+	}
+
+	authenticationActive := k.IsUsageAuthenticationActive(ctx)
+	var streamID, usageDigest []byte
+	if record.SignatureVersion == types.SignatureVersionV1 {
+		digest, stream, duplicateID, duplicate, err := k.verifyAuthenticatedUsage(ctx, record)
+		if err != nil {
+			return err
+		}
+		if duplicate {
+			existing, found := k.GetUsageRecord(ctx, duplicateID)
+			if !found {
+				return types.ErrUsageReplayConflict.Wrap("replay index references missing usage record")
+			}
+			*record = existing
+			record.ExactDuplicate = true
+			return nil
+		}
+		usageDigest = digest
+		streamID = stream
+		record.UsageDigest = append([]byte(nil), digest...)
+		record.SignatureVerified = true
+		record.AuthenticationStatus = types.UsageAuthenticationStatusVerified
+		record.LegacyUnverified = false
+	} else {
+		if authenticationActive {
+			return types.ErrUsageAuthenticationRequired.Wrap("version-1 provider proof required")
+		}
+		record.SignatureVerified = false
+		record.AuthenticationStatus = types.UsageAuthenticationStatusLegacy
+		record.LegacyUnverified = true
+	}
+
+	// Generate the usage ID only after proof and replay checks. Exact retries do
+	// not consume the module sequence.
 	if record.UsageID == "" {
 		seq := k.incrementUsageSequence(ctx)
 		record.UsageID = generateIDWithTimestamp("usage", seq, ctx.BlockTime().Unix())
 	}
 	record.SubmittedAt = ctx.BlockTime()
 	record.BlockHeight = ctx.BlockHeight()
-
-	// Populate total cost if missing, based on unit price and usage units.
-	if record.TotalCost.IsZero() && record.UnitPrice.Denom != "" && !record.UnitPrice.IsNegative() {
-		quantity := sdkmath.LegacyNewDecFromInt(sdkmath.NewIntFromUint64(record.UsageUnits))
-		total := record.UnitPrice.Amount.Mul(quantity).TruncateInt()
-		if total.IsPositive() {
-			record.TotalCost = sdk.NewCoins(sdk.NewCoin(record.UnitPrice.Denom, total))
-		} else {
-			record.TotalCost = sdk.NewCoins()
-		}
-	}
 
 	// Validate the record
 	if err := record.Validate(); err != nil {
@@ -314,13 +395,25 @@ func (k Keeper) RecordUsage(ctx sdk.Context, record *types.UsageRecord) error {
 		return types.ErrUnauthorized.Wrap("provider does not match escrow recipient")
 	}
 
-	// Save usage record
-	if err := k.SetUsageRecord(ctx, *record); err != nil {
+	// Save the initial authenticated record directly after the complete proof,
+	// replay, escrow, and lineage checks above. Subsequent updates must pass the
+	// immutable-state guard in SetUsageRecord.
+	if record.IsAuthenticated() {
+		if err := k.insertAuthenticatedUsageRecord(ctx, *record); err != nil {
+			return err
+		}
+	} else if err := k.SetUsageRecord(ctx, *record); err != nil {
 		return err
 	}
 
 	if err := k.recordBillingUsage(ctx, *record); err != nil {
 		return err
+	}
+
+	if record.IsAuthenticated() {
+		if err := k.commitUsageReplay(ctx, *record, streamID, usageDigest); err != nil {
+			return err
+		}
 	}
 
 	// Check if usage condition should be satisfied
@@ -329,20 +422,17 @@ func (k Keeper) RecordUsage(ctx sdk.Context, record *types.UsageRecord) error {
 		k.Logger(ctx).Debug("failed to check usage condition", "error", err)
 	}
 
-	// Emit event
-	err := ctx.EventManager().EmitTypedEvent(&types.EventUsageRecorded{
-		UsageID:    record.UsageID,
-		OrderID:    record.OrderID,
-		LeaseID:    record.LeaseID,
-		Provider:   record.Provider,
-		UsageUnits: record.UsageUnits,
-		UsageType:  record.UsageType,
-		TotalCost:  record.TotalCost.String(),
-		RecordedAt: ctx.BlockTime().Unix(),
-	})
-	if err != nil {
-		k.Logger(ctx).Error("failed to emit usage recorded event", "error", err)
-	}
+	ctx.EventManager().EmitEvent(sdk.NewEvent(
+		types.EventTypeUsageRecorded,
+		sdk.NewAttribute(types.AttributeKeyUsageID, record.UsageID),
+		sdk.NewAttribute(types.AttributeKeyOrderID, record.OrderID),
+		sdk.NewAttribute(types.AttributeKeyLeaseID, record.LeaseID),
+		sdk.NewAttribute(types.AttributeKeyProvider, record.Provider),
+		sdk.NewAttribute(types.AttributeKeyUsageUnits, fmt.Sprintf("%d", record.UsageUnits)),
+		sdk.NewAttribute(types.AttributeKeyUsageType, record.UsageType),
+		sdk.NewAttribute(types.AttributeKeyAmount, record.TotalCost.String()),
+		sdk.NewAttribute(types.AttributeKeyTimestamp, fmt.Sprintf("%d", ctx.BlockTime().Unix())),
+	))
 
 	k.Logger(ctx).Info("usage recorded",
 		"usage_id", record.UsageID,
@@ -355,6 +445,18 @@ func (k Keeper) RecordUsage(ctx sdk.Context, record *types.UsageRecord) error {
 
 // AcknowledgeUsage records a customer's acknowledgment of a usage record
 func (k Keeper) AcknowledgeUsage(ctx sdk.Context, usageID string, customerSignature []byte) error {
+	cacheCtx, write := ctx.CacheContext()
+	if err := k.acknowledgeUsageLegacy(cacheCtx, usageID, customerSignature); err != nil {
+		return err
+	}
+	write()
+	return nil
+}
+
+func (k Keeper) acknowledgeUsageLegacy(ctx sdk.Context, usageID string, customerSignature []byte) error {
+	if k.IsUsageAuthenticationActive(ctx) {
+		return types.ErrUsageAuthenticationRequired.Wrap("versioned customer acknowledgment proof required")
+	}
 	usage, found := k.GetUsageRecord(ctx, usageID)
 	if !found {
 		return types.ErrUsageRecordNotFound.Wrapf("usage record %s not found", usageID)
@@ -384,6 +486,12 @@ func (k Keeper) calculateTotalUsage(ctx sdk.Context, orderID string) uint64 {
 	usages := k.GetUsageRecordsByOrder(ctx, orderID)
 	var total uint64
 	for _, usage := range usages {
+		if k.IsUsageAuthenticationActive(ctx) && !usage.IsAuthenticated() {
+			continue
+		}
+		if usage.UsageUnits > math.MaxUint64-total {
+			return math.MaxUint64
+		}
 		total += usage.UsageUnits
 	}
 	return total
@@ -398,6 +506,9 @@ func (k Keeper) AutoSettle(ctx sdk.Context) error {
 	}
 
 	k.WithEscrowsByState(ctx, types.EscrowStateActive, func(escrow types.EscrowAccount) bool {
+		if _, held := k.HasActiveFinancialCase(ctx, "order", escrow.OrderID); held {
+			return false
+		}
 		// Check if due for settlement
 		var lastSettlement time.Time
 		settlements := k.GetSettlementsByOrder(ctx, escrow.OrderID)

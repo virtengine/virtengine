@@ -1,0 +1,33 @@
+T2-X17 raw validation summary
+Implementation SHA: e0218b5cb3fb57f861f28ac93ee94b3f43d8288b
+Node: v20.19.1
+
+[focused-vitest]
+OUTPUT: Test Files 2 passed (2)
+OUTPUT: Tests 25 passed (25)
+OUTPUT: no warnings
+EXIT: 0
+
+[full-vitest]
+OUTPUT: Test Files 85 passed (85)
+OUTPUT: Tests 659 passed (659)
+OUTPUT: Duration 147.47s
+OUTPUT: no unhandled errors
+EXIT: 0
+
+[typescript]
+OUTPUT: no diagnostics
+EXIT: 0
+
+[eslint]
+OUTPUT: no diagnostics
+EXIT: 0
+
+[prettier]
+OUTPUT: seven-file formatting pass succeeded
+EXIT: 0
+
+[committed-diff-check]
+COMMAND: git -C C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t2 show --check --format= e0218b5cb3fb57f861f28ac93ee94b3f43d8288b -- portal/src/app/api/consent/data.ts portal/src/app/api/consent/deletion/route.ts portal/src/app/api/consent/deletion/route.test.ts portal/src/app/api/consent/deletion/workflow.ts portal/src/app/api/consent/requests/route.ts portal/src/components/consent/DataExportStatus.tsx portal/src/components/consent/__tests__/DataDeletionRequest.test.tsx
+OUTPUT: no diagnostics
+EXIT: 0

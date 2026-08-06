@@ -5,7 +5,6 @@ import type {
   ConsentSettingsResponse,
   ConsentPurpose,
   DataExportRequest,
-  DeletionRequest,
 } from '@/types/consent';
 
 const DEFAULT_SUBJECT = 'virtengine1demo';
@@ -28,7 +27,7 @@ const consentRecords = new Map<string, ConsentRecord[]>([
         consentVersion,
         grantedAt: new Date(now.getTime() - 10 * 24 * 60 * 60 * 1000).toISOString(),
         consentHash: hashString('biometric-processing'),
-        signatureHash: hashString('sig-biometric'),
+        acknowledgementHash: hashString('demo-biometric-acknowledgement'),
       },
       {
         id: 'consent-retention-001',
@@ -40,7 +39,7 @@ const consentRecords = new Map<string, ConsentRecord[]>([
         consentVersion,
         grantedAt: new Date(now.getTime() - 8 * 24 * 60 * 60 * 1000).toISOString(),
         consentHash: hashString('retention'),
-        signatureHash: hashString('sig-retention'),
+        acknowledgementHash: hashString('demo-retention-acknowledgement'),
       },
       {
         id: 'consent-marketing-001',
@@ -53,7 +52,7 @@ const consentRecords = new Map<string, ConsentRecord[]>([
         grantedAt: new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000).toISOString(),
         withdrawnAt: new Date(now.getTime() - 2 * 24 * 60 * 60 * 1000).toISOString(),
         consentHash: hashString('marketing'),
-        signatureHash: hashString('sig-marketing'),
+        acknowledgementHash: hashString('demo-marketing-acknowledgement'),
       },
     ],
   ],
@@ -71,8 +70,8 @@ const consentEvents = new Map<string, ConsentEvent[]>([
         purpose: 'biometric_processing',
         eventType: 'granted',
         occurredAt: new Date(now.getTime() - 10 * 24 * 60 * 60 * 1000).toISOString(),
-        blockHeight: 182032,
-        details: 'Initial biometric consent granted',
+        source: 'local',
+        details: 'Demo fixture: initial biometric consent granted locally',
       },
       {
         id: 'event-002',
@@ -82,8 +81,8 @@ const consentEvents = new Map<string, ConsentEvent[]>([
         purpose: 'data_retention',
         eventType: 'granted',
         occurredAt: new Date(now.getTime() - 8 * 24 * 60 * 60 * 1000).toISOString(),
-        blockHeight: 182112,
-        details: 'Retention consent granted',
+        source: 'local',
+        details: 'Demo fixture: retention consent granted locally',
       },
       {
         id: 'event-003',
@@ -93,15 +92,14 @@ const consentEvents = new Map<string, ConsentEvent[]>([
         purpose: 'marketing',
         eventType: 'revoked',
         occurredAt: new Date(now.getTime() - 2 * 24 * 60 * 60 * 1000).toISOString(),
-        blockHeight: 182900,
-        details: 'Marketing consent withdrawn',
+        source: 'local',
+        details: 'Demo fixture: marketing consent withdrawn locally',
       },
     ],
   ],
 ]);
 
 let exportRequests: DataExportRequest[] = [];
-let deletionRequests: DeletionRequest[] = [];
 
 export function getConsentSettings(dataSubject: string): ConsentSettingsResponse {
   const subject = dataSubject || DEFAULT_SUBJECT;
@@ -126,7 +124,7 @@ export function grantConsent(params: {
   scopeId: string;
   purpose: ConsentPurpose;
   consentText: string;
-  signature: string;
+  acknowledgement: string;
 }): ConsentRecord {
   const subject = params.dataSubject || DEFAULT_SUBJECT;
   const consents = consentRecords.get(subject) ?? [];
@@ -145,7 +143,7 @@ export function grantConsent(params: {
     consentVersion,
     grantedAt: now,
     consentHash: hashString(params.consentText),
-    signatureHash: hashString(params.signature),
+    acknowledgementHash: hashString(params.acknowledgement),
   };
 
   const next = consents.filter((consent) => consent.scopeId !== params.scopeId).concat(record);
@@ -159,7 +157,7 @@ export function grantConsent(params: {
     purpose: params.purpose,
     eventType: 'granted',
     occurredAt: now,
-    blockHeight: randomHeight(),
+    source: 'local',
     details: 'Consent granted via privacy center',
   });
 
@@ -197,7 +195,7 @@ export function withdrawConsent(params: {
       purpose: record.purpose,
       eventType: 'revoked',
       occurredAt: now,
-      blockHeight: randomHeight(),
+      source: 'local',
       details: 'Consent withdrawn via privacy center',
     });
   }
@@ -217,21 +215,10 @@ export function requestExport(dataSubject: string, format: 'json' | 'csv'): Data
   return req;
 }
 
-export function requestDeletion(dataSubject: string): DeletionRequest {
-  const req: DeletionRequest = {
-    id: `deletion-${Date.now()}`,
-    dataSubject,
-    requestedAt: new Date().toISOString(),
-    status: 'pending',
-  };
-  deletionRequests = [req, ...deletionRequests];
-  return req;
-}
-
 export function listRequests(dataSubject: string) {
   return {
     exports: exportRequests.filter((req) => req.dataSubject === dataSubject),
-    deletions: deletionRequests.filter((req) => req.dataSubject === dataSubject),
+    deletions: [],
   };
 }
 
@@ -242,8 +229,4 @@ function appendEvent(subject: string, event: ConsentEvent) {
 
 function hashString(value: string) {
   return crypto.createHash('sha256').update(value).digest('hex');
-}
-
-function randomHeight() {
-  return 182000 + Math.floor(Math.random() * 1200);
 }

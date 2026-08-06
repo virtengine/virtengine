@@ -1,4 +1,5 @@
 import { useChainStatus } from "../hooks/useChainStatus";
+import { runtimeConfig } from "../services/chain";
 
 export const ChainStatusCard = () => {
   const { data, isLoading, isError } = useChainStatus();
@@ -10,7 +11,8 @@ export const ChainStatusCard = () => {
         <p className="mt-3 text-sm text-slate-400">Loading latest block...</p>
       ) : isError || !data ? (
         <p className="mt-3 text-sm text-rose-300">
-          Unable to load chain status. Verify REST endpoint.
+          Unable to load chain status from {runtimeConfig.rest}. Verify the staging or local chain
+          endpoints configured for this SDK.
         </p>
       ) : (
         <div className="mt-4 grid gap-4 md:grid-cols-3">

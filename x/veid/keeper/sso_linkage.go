@@ -273,6 +273,14 @@ func (k Keeper) IterateSSOLinkages(ctx sdk.Context, fn func(linkage *types.SSOLi
 
 // SetSSONonceRecord stores an SSO nonce record.
 func (k Keeper) SetSSONonceRecord(ctx sdk.Context, record *types.SSONonceRecord) {
+	if record == nil {
+		return
+	}
+	if err := record.Validate(); err != nil {
+		k.Logger(ctx).Error("failed to validate SSO nonce record", "error", err)
+		return
+	}
+
 	store := ctx.KVStore(k.skey)
 	key := k.ssoNonceKey(record.NonceHash)
 
@@ -310,22 +318,36 @@ func (k Keeper) GetSSONonceRecord(ctx sdk.Context, nonceHash string) (*types.SSO
 
 // IsSSONonceUsed checks if an SSO nonce has been used.
 func (k Keeper) IsSSONonceUsed(ctx sdk.Context, nonceHash string) bool {
-	store := ctx.KVStore(k.skey)
-	key := k.ssoNonceKey(nonceHash)
-	return store.Has(key)
+	record, found := k.GetSSONonceRecord(ctx, nonceHash)
+	if !found {
+		return false
+	}
+	if record.CanBePruned(ctx.BlockTime()) {
+		k.deleteSSONonceRecord(ctx, record)
+		return false
+	}
+	return true
 }
 
 // setSSONonceByAccount sets the nonce index by account.
 func (k Keeper) setSSONonceByAccount(ctx sdk.Context, account, nonceHash string) {
 	store := ctx.KVStore(k.skey)
-	key := append(append(types.PrefixSSONonceByAccount, []byte(account)...), []byte(nonceHash)...)
+	key := make([]byte, 0, len(types.PrefixSSONonceByAccount)+len(account)+1+len(nonceHash))
+	key = append(key, types.PrefixSSONonceByAccount...)
+	key = append(key, []byte(account)...)
+	key = append(key, byte('/'))
+	key = append(key, []byte(nonceHash)...)
 	store.Set(key, []byte{1})
 }
 
 // setSSONonceByProvider sets the nonce index by provider.
 func (k Keeper) setSSONonceByProvider(ctx sdk.Context, provider types.SSOProviderType, nonceHash string) {
 	store := ctx.KVStore(k.skey)
-	key := append(append(types.PrefixSSONonceByProvider, []byte(provider)...), []byte(nonceHash)...)
+	key := make([]byte, 0, len(types.PrefixSSONonceByProvider)+len(provider)+1+len(nonceHash))
+	key = append(key, types.PrefixSSONonceByProvider...)
+	key = append(key, []byte(provider)...)
+	key = append(key, byte('/'))
+	key = append(key, []byte(nonceHash)...)
 	store.Set(key, []byte{1})
 }
 
@@ -375,10 +397,18 @@ func (k Keeper) deleteSSONonceRecord(ctx sdk.Context, record *types.SSONonceReco
 	store.Delete(k.ssoNonceKey(record.NonceHash))
 
 	// Delete indexes
-	accountKey := append(append(types.PrefixSSONonceByAccount, []byte(record.AccountAddress)...), []byte(record.NonceHash)...)
+	accountKey := make([]byte, 0, len(types.PrefixSSONonceByAccount)+len(record.AccountAddress)+1+len(record.NonceHash))
+	accountKey = append(accountKey, types.PrefixSSONonceByAccount...)
+	accountKey = append(accountKey, []byte(record.AccountAddress)...)
+	accountKey = append(accountKey, byte('/'))
+	accountKey = append(accountKey, []byte(record.NonceHash)...)
 	store.Delete(accountKey)
 
-	providerKey := append(append(types.PrefixSSONonceByProvider, []byte(record.Provider)...), []byte(record.NonceHash)...)
+	providerKey := make([]byte, 0, len(types.PrefixSSONonceByProvider)+len(record.Provider)+1+len(record.NonceHash))
+	providerKey = append(providerKey, types.PrefixSSONonceByProvider...)
+	providerKey = append(providerKey, []byte(record.Provider)...)
+	providerKey = append(providerKey, byte('/'))
+	providerKey = append(providerKey, []byte(record.NonceHash)...)
 	store.Delete(providerKey)
 
 	expiryBytes := sdk.FormatTimeBytes(record.ExpiresAt)

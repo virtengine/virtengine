@@ -9,11 +9,12 @@ import (
 type SetupGenesisFn func(cdc codec.Codec) GenesisState
 
 type setupAppOptions struct {
-	encCfg    sdkutil.EncodingConfig
-	home      string
-	chainID   string
-	checkTx   bool
-	genesisFn SetupGenesisFn
+	encCfg                        sdkutil.EncodingConfig
+	home                          string
+	chainID                       string
+	checkTx                       bool
+	skipModuleServiceRegistration bool
+	genesisFn                     SetupGenesisFn
 }
 
 type SetupAppOption func(*setupAppOptions)
@@ -36,6 +37,12 @@ func WithChainID(val string) SetupAppOption {
 func WithCheckTx(val bool) SetupAppOption {
 	return func(t *setupAppOptions) {
 		t.checkTx = val
+	}
+}
+
+func WithSkipModuleServiceRegistration(val bool) SetupAppOption {
+	return func(t *setupAppOptions) {
+		t.skipModuleServiceRegistration = val
 	}
 }
 

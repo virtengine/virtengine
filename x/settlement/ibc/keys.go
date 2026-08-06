@@ -16,12 +16,23 @@ var (
 	PrefixRateLimitRelayer = []byte{0x74}
 	PrefixRateLimitConfig  = []byte{0x75}
 	PrefixHandshake        = []byte{0x76}
+	PrefixTerminalPacket   = []byte{0x77}
 )
 
 // PendingPacketKey returns the store key for pending packet data.
 func PendingPacketKey(channelID string, sequence uint64) []byte {
 	key := make([]byte, 0, len(PrefixPendingPacket)+len(channelID)+1+8)
 	key = append(key, PrefixPendingPacket...)
+	key = append(key, []byte(channelID)...)
+	key = append(key, byte('/'))
+	key = appendUint64(key, sequence)
+	return key
+}
+
+// TerminalPacketKey returns the store key for a packet's terminal marker.
+func TerminalPacketKey(channelID string, sequence uint64) []byte {
+	key := make([]byte, 0, len(PrefixTerminalPacket)+len(channelID)+1+8)
+	key = append(key, PrefixTerminalPacket...)
 	key = append(key, []byte(channelID)...)
 	key = append(key, byte('/'))
 	key = appendUint64(key, sequence)

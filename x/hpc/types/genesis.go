@@ -206,6 +206,9 @@ func (gs *GenesisState) Validate() error {
 		if err := job.Validate(); err != nil {
 			return ErrInvalidJob.Wrapf("invalid job at index %d: %s", i, err.Error())
 		}
+		if (job.State == JobStateQueued || job.State == JobStateRunning) && job.ReservationID == "" {
+			return ErrInvalidJob.Wrapf("executable job at index %d has no authoritative reservation", i)
+		}
 	}
 
 	// Validate job accountings

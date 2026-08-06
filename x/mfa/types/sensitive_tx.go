@@ -1,5 +1,7 @@
 package types
 
+import "math/big"
+
 import (
 	"fmt"
 )
@@ -280,14 +282,31 @@ func (c *SensitiveTxConfig) Validate() error {
 		return ErrInvalidSensitiveTxType.Wrapf("invalid transaction type: %d", c.TransactionType)
 	}
 
-	for i, fc := range c.RequiredFactorCombinations {
-		if err := fc.Validate(); err != nil {
-			return ErrInvalidSensitiveTxConfig.Wrapf("invalid factor combination[%d]: %v", i, err)
-		}
+	if c.Enabled && len(c.RequiredFactorCombinations) == 0 {
+		return ErrInvalidSensitiveTxConfig.Wrap("enabled config must define at least one required factor combination")
+	}
+
+	if err := validateFactorCombinations(c.RequiredFactorCombinations, "required_factor_combinations", ErrInvalidSensitiveTxConfig); err != nil {
+		return err
 	}
 
 	if c.SessionDuration < 0 {
 		return ErrInvalidSensitiveTxConfig.Wrap("session_duration cannot be negative")
+	}
+
+	if c.CooldownPeriod < 0 {
+		return ErrInvalidSensitiveTxConfig.Wrap("cooldown_period cannot be negative")
+	}
+
+	if c.MinVEIDScore > maxVEIDScore {
+		return ErrInvalidSensitiveTxConfig.Wrapf("min_veid_score cannot exceed %d", maxVEIDScore)
+	}
+
+	if c.ValueThreshold != "" {
+		value, ok := new(big.Rat).SetString(c.ValueThreshold)
+		if !ok || value.Sign() <= 0 {
+			return ErrInvalidSensitiveTxConfig.Wrap("value_threshold must be a positive numeric value")
+		}
 	}
 
 	return nil

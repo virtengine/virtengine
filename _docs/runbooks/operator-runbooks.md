@@ -147,7 +147,13 @@ systemctl status provider-daemon
 curl -sf http://localhost:9091/metrics | head
 ```
 
-### 2.2 Log and Error Review
+### 2.2 Supported adapter paths
+- Kubernetes container workloads
+- SLURM-on-Kubernetes bootstrap and lifecycle
+
+The production runbook assumes these are the supported provider-daemon operations paths. Legacy cloud-specific adapter packages are not treated as the live launch path.
+
+### 2.3 Log and Error Review
 ```bash
 journalctl -u provider-daemon -n 200 --no-pager
 ```
@@ -157,11 +163,22 @@ journalctl -u provider-daemon -n 200 --no-pager
 - `usage_submit_failed`: verify chain RPC and keyring
 - `workload_health_failed`: check orchestration adapter
 
-### 2.3 Configuration Drift
+### 2.4 Startup and reconcile verification
+- Confirm the daemon starts without dry-run or non-production adapter configuration.
+- For Kubernetes workloads:
+  - verify the expected workload namespace exists
+  - verify Deployments and Services are created in that namespace
+  - verify pod readiness transitions the workload to `running`
+- For SLURM-on-Kubernetes:
+  - verify controller, database, and compute StatefulSets are present
+  - verify `scontrol ping` succeeds from the controller pod
+  - verify `sinfo` output matches the compute replica count the cluster advertises
+
+### 2.5 Configuration Drift
 - Store `~/.provider-daemon/config.yaml` in a secured config repo.
 - Use immutable config changes (update, restart, verify).
 
-### 2.4 Key Rotation
+### 2.6 Key Rotation
 - Rotate encryption key quarterly.
 - Register new recipient key on-chain before switching.
 
@@ -174,18 +191,48 @@ virtengine tx encryption register-recipient-key \
   --from provider
 ```
 
-### 2.5 Usage Reporting
+### 2.7 Usage Reporting
 - Ensure reports submitted hourly (default). 
 - Monitor backlog size and retry counts.
 
-### 2.6 Rolling Restart
+### 2.8 Kubernetes workload failure and cleanup
+**Signals**: workload status flips to `failed`, pods terminate unexpectedly, namespace remains present but service is unavailable.
+
+**Immediate actions**
+1. Inspect pod and container failure messages in the workload namespace.
+2. Confirm the failure is a workload or cluster issue, not a stale lifecycle request.
+3. Fix the failing workload input or the Kubernetes resource issue.
+
+**Recovery**
+1. Rerun provisioning or redeploy so the provider daemon re-applies the failed workload.
+2. Verify pod readiness returns the workload to `running`.
+3. If cleanup is required, terminate only after the workload is back on a valid lifecycle path.
+
+**Important boundary**
+- Direct termination from the Kubernetes adapter's `failed` state is intentionally rejected. Recovery must happen before cleanup.
+
+### 2.9 SLURM-on-Kubernetes bootstrap and reconcile failures
+**Signals**: controller or database StatefulSet not ready, compute replicas below target, `scontrol ping` fails, cluster state degrades.
+
+**Immediate actions**
+1. Check `kubectl -n <namespace> get statefulset` for controller, `slurmdbd`, and compute readiness.
+2. Run `kubectl -n <namespace> exec <release>-controller-0 -- scontrol ping`.
+3. Run `kubectl -n <namespace> exec <release>-controller-0 -- sinfo -N -h -o "%n %t"` to inspect node states.
+
+**Recovery**
+1. Restore controller readiness first. Reconcile does not force node changes while the controller is down.
+2. Restore database readiness and compute pods.
+3. If nodes remain `down` while compute pods are ready, rerun reconcile so the provider daemon can resume them.
+4. If bootstrap failed with `rollback_on_failure=true`, confirm the Helm release was removed before retrying.
+
+### 2.10 Rolling Restart
 ```bash
 sudo systemctl restart provider-daemon
 sleep 5
 systemctl is-active provider-daemon
 ```
 
-### 2.7 Scaling and Failover
+### 2.11 Scaling and Failover
 - Active/standby per region.
 - Stateful data (keyring, cache) replicated to standby.
 - Ensure standby uses a distinct node ID and metrics labels.

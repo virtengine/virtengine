@@ -223,12 +223,18 @@ func (r *DomainVerificationRecord) Validate() error {
 	return nil
 }
 
-// IsActive returns true if the verification is currently valid
+// IsActive is a wall-clock convenience for off-chain callers. Consensus code
+// must call IsActiveAt with ctx.BlockTime().
 func (r *DomainVerificationRecord) IsActive() bool {
+	return r.IsActiveAt(time.Now())
+}
+
+// IsActiveAt returns true if the verification is valid at the provided time.
+func (r *DomainVerificationRecord) IsActiveAt(now time.Time) bool {
 	if r.Status != DomainStatusVerified {
 		return false
 	}
-	if r.ExpiresAt != nil && time.Now().After(*r.ExpiresAt) {
+	if r.ExpiresAt != nil && now.After(*r.ExpiresAt) {
 		return false
 	}
 	return true
@@ -441,7 +447,7 @@ func DefaultDomainScoringWeight() DomainScoringWeight {
 
 // CalculateDomainScore calculates the score contribution for a domain verification
 func CalculateDomainScore(record *DomainVerificationRecord, weight DomainScoringWeight, now time.Time) uint32 {
-	if !record.IsActive() {
+	if !record.IsActiveAt(now) {
 		return 0
 	}
 

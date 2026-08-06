@@ -2,9 +2,12 @@ package keeper
 
 import (
 	"context"
+	"encoding/binary"
+	"math"
 	"time"
 
 	sdk "github.com/cosmos/cosmos-sdk/types"
+	"github.com/cosmos/cosmos-sdk/types/query"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
@@ -162,6 +165,30 @@ func (q GRPCQuerier) UsageRecordsByOrder(ctx context.Context, req *settlementv1.
 	}
 
 	return &settlementv1.QueryUsageRecordsByOrderResponse{UsageRecords: resp}, nil
+}
+
+// UsageStreamState returns the authoritative committed stream cursor.
+func (q GRPCQuerier) UsageStreamState(ctx context.Context, req *settlementv1.QueryUsageStreamStateRequest) (*settlementv1.QueryUsageStreamStateResponse, error) {
+	if req == nil {
+		return nil, status.Error(codes.InvalidArgument, "empty request")
+	}
+	if _, err := sdk.AccAddressFromBech32(req.Provider); err != nil {
+		return nil, status.Error(codes.InvalidArgument, "invalid provider address")
+	}
+	if req.OrderId == "" || req.LeaseId == "" {
+		return nil, status.Error(codes.InvalidArgument, "order_id and lease_id are required")
+	}
+
+	sdkCtx := sdk.UnwrapSDKContext(ctx)
+	sequence, usageID, digest, err := q.GetUsageStreamState(sdkCtx, req.Provider, req.AllocationId, req.OrderId, req.LeaseId)
+	if err != nil {
+		return nil, status.Error(codes.InvalidArgument, err.Error())
+	}
+	return &settlementv1.QueryUsageStreamStateResponse{
+		LastSequence:    sequence,
+		LastUsageId:     usageID,
+		LastUsageDigest: digest,
+	}, nil
 }
 
 // UsageSummary returns usage summary for an order/provider and period.
@@ -379,4 +406,115 @@ func (q GRPCQuerier) FiatPayoutPreference(ctx context.Context, req *settlementv1
 
 	protoPref := toProtoFiatPayoutPreference(pref)
 	return &settlementv1.QueryFiatPayoutPreferenceResponse{Preference: &protoPref}, nil
+}
+
+func (q GRPCQuerier) FinancialCase(ctx context.Context, req *settlementv1.QueryFinancialCaseRequest) (*settlementv1.QueryFinancialCaseResponse, error) {
+	if req == nil || req.CaseId == "" {
+		return nil, status.Error(codes.InvalidArgument, "case_id required")
+	}
+	financialCase, found := q.GetFinancialCase(sdk.UnwrapSDKContext(ctx), req.CaseId)
+	if !found {
+		return &settlementv1.QueryFinancialCaseResponse{}, nil
+	}
+	return &settlementv1.QueryFinancialCaseResponse{FinancialCase: &financialCase}, nil
+}
+
+func (q GRPCQuerier) FinancialCaseBySubject(ctx context.Context, req *settlementv1.QueryFinancialCaseBySubjectRequest) (*settlementv1.QueryFinancialCaseBySubjectResponse, error) {
+	if req == nil {
+		return nil, status.Error(codes.InvalidArgument, "request required")
+	}
+	financialCase, found := q.GetFinancialCaseBySubject(sdk.UnwrapSDKContext(ctx), req.Subject)
+	if !found {
+		return &settlementv1.QueryFinancialCaseBySubjectResponse{}, nil
+	}
+	return &settlementv1.QueryFinancialCaseBySubjectResponse{FinancialCase: &financialCase}, nil
+}
+
+func (q GRPCQuerier) FinancialCasesByOrder(ctx context.Context, req *settlementv1.QueryFinancialCasesRequest) (*settlementv1.QueryFinancialCasesResponse, error) {
+	return q.financialCases(ctx, "order", req)
+}
+func (q GRPCQuerier) FinancialCasesByInvoice(ctx context.Context, req *settlementv1.QueryFinancialCasesRequest) (*settlementv1.QueryFinancialCasesResponse, error) {
+	return q.financialCases(ctx, "invoice", req)
+}
+func (q GRPCQuerier) FinancialCasesByUsage(ctx context.Context, req *settlementv1.QueryFinancialCasesRequest) (*settlementv1.QueryFinancialCasesResponse, error) {
+	return q.financialCases(ctx, "usage", req)
+}
+func (q GRPCQuerier) FinancialCasesByJob(ctx context.Context, req *settlementv1.QueryFinancialCasesRequest) (*settlementv1.QueryFinancialCasesResponse, error) {
+	return q.financialCases(ctx, "job", req)
+}
+func (q GRPCQuerier) FinancialCasesByEscrow(ctx context.Context, req *settlementv1.QueryFinancialCasesRequest) (*settlementv1.QueryFinancialCasesResponse, error) {
+	return q.financialCases(ctx, "escrow", req)
+}
+func (q GRPCQuerier) FinancialCasesByStatus(ctx context.Context, req *settlementv1.QueryFinancialCasesRequest) (*settlementv1.QueryFinancialCasesResponse, error) {
+	return q.financialCases(ctx, "status", req)
+}
+func (q GRPCQuerier) FinancialCasesByParty(ctx context.Context, req *settlementv1.QueryFinancialCasesRequest) (*settlementv1.QueryFinancialCasesResponse, error) {
+	return q.financialCases(ctx, "party", req)
+}
+
+func (q GRPCQuerier) financialCases(ctx context.Context, kind string, req *settlementv1.QueryFinancialCasesRequest) (*settlementv1.QueryFinancialCasesResponse, error) {
+	if req == nil || req.Key == "" {
+		return nil, status.Error(codes.InvalidArgument, "key required")
+	}
+	all, err := q.FinancialCasesByIndex(sdk.UnwrapSDKContext(ctx), kind, req.Key)
+	if err != nil {
+		return nil, status.Error(codes.Internal, err.Error())
+	}
+	start, end, page := financialPageBounds(len(all), req.Pagination)
+	return &settlementv1.QueryFinancialCasesResponse{FinancialCases: all[start:end], Pagination: page}, nil
+}
+
+func (q GRPCQuerier) FinancialCaseLineage(ctx context.Context, req *settlementv1.QueryFinancialCaseLineageRequest) (*settlementv1.QueryFinancialCaseLineageResponse, error) {
+	if req == nil || req.CaseId == "" {
+		return nil, status.Error(codes.InvalidArgument, "case_id required")
+	}
+	financialCase, found := q.GetFinancialCase(sdk.UnwrapSDKContext(ctx), req.CaseId)
+	if !found {
+		return &settlementv1.QueryFinancialCaseLineageResponse{}, nil
+	}
+	start, end, page := financialPageBounds(len(financialCase.Transitions), req.Pagination)
+	return &settlementv1.QueryFinancialCaseLineageResponse{Transitions: financialCase.Transitions[start:end], Claims: financialCase.Claims, Effects: financialCase.Effects, Pagination: page}, nil
+}
+
+func financialPageBounds(length int, request *query.PageRequest) (int, int, *query.PageResponse) {
+	total := financialPageLength(length)
+	if request == nil {
+		return 0, length, &query.PageResponse{Total: total}
+	}
+	offset := request.Offset
+	if offset > total {
+		offset = total
+	}
+	limit := request.Limit
+	if limit == 0 || limit > 100 {
+		limit = 100
+	}
+	end := total
+	if limit <= math.MaxUint64-offset {
+		end = offset + limit
+	}
+	if end > total {
+		end = total
+	}
+	page := &query.PageResponse{Total: total}
+	if end < total {
+		page.NextKey = make([]byte, 8)
+		binary.BigEndian.PutUint64(page.NextKey, end)
+	}
+	return financialPageIndex(offset), financialPageIndex(end), page
+}
+
+func financialPageLength(length int) uint64 {
+	if length <= 0 {
+		return 0
+	}
+	return uint64(length)
+}
+
+func financialPageIndex(value uint64) int {
+	maxInt := uint64(^uint(0) >> 1)
+	if value > maxInt {
+		return int(^uint(0) >> 1)
+	}
+	return int(value)
 }

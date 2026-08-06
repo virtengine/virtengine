@@ -36,6 +36,7 @@ func (s *KeeperTestSuite) TestSettleOrder() {
 	}
 	err = s.keeper.RecordUsage(s.ctx, usage)
 	s.Require().NoError(err)
+	s.Require().Equal(1, countSettlementEvents(s.ctx.EventManager().Events(), types.EventTypeUsageRecorded))
 
 	// Settle the order
 	settlement, err := s.keeper.SettleOrder(s.ctx, "order-settle", []string{"usage-1"}, false)
@@ -43,6 +44,8 @@ func (s *KeeperTestSuite) TestSettleOrder() {
 	s.Require().NotNil(settlement)
 	s.Require().Equal("order-settle", settlement.OrderID)
 	s.Require().Equal(types.SettlementTypeUsageBased, settlement.SettlementType)
+	s.Require().Equal(1, countSettlementEvents(s.ctx.EventManager().Events(), types.EventTypeOrderSettled))
+	s.Require().Equal(1, countSettlementEvents(s.ctx.EventManager().Events(), types.EventTypeRewardsDistributed))
 
 	// Verify usage is marked as settled
 	updatedUsage, found := s.keeper.GetUsageRecord(s.ctx, "usage-1")
@@ -65,6 +68,16 @@ func (s *KeeperTestSuite) TestSettleOrder() {
 		}
 	}
 	s.Require().True(foundUsageRewards, "expected usage rewards distribution")
+}
+
+func countSettlementEvents(events sdk.Events, eventType string) int {
+	count := 0
+	for _, event := range events {
+		if event.Type == eventType {
+			count++
+		}
+	}
+	return count
 }
 
 func (s *KeeperTestSuite) TestFinalSettlement() {

@@ -13,14 +13,14 @@ import type { DeepPartial, DeepSimplify } from "../encoding/typeEncodingHelpers.
 
 
 export const serviceLoader= createServiceLoader([
-  () => import("./protos/msg_akash.ts").then(m => m.Msg),
-  () => import("./protos/query_akash.ts").then(m => m.Query)
+  () => import("./protos/msg_virtengine.ts").then(m => m.Msg),
+  () => import("./protos/query_virtengine.ts").then(m => m.Query)
 ] as const);
 export function createSDK(queryTransport: Transport, txTransport: Transport, options?: SDKOptions) {
   const getClient = createClientFactory<CallOptions>(queryTransport, options?.clientOptions);
   const getMsgClient = createClientFactory<TxCallOptions>(txTransport, options?.clientOptions);
   return {
-    akash: {
+    virtengine: {
       test: {
         functional: {
           send: withMetadata(async function send(input: DeepSimplify<msg.SendRequest>, options?: TxCallOptions) {
@@ -51,7 +51,7 @@ exports[`protoc-sdk-objec plugin generates SDK object from proto files 2`] = `
 "import { SendRequest, SendResponse } from "./msg.ts";
 
 export const Msg = {
-  typeName: "akash.test.functional.Msg",
+  typeName: "virtengine.test.functional.Msg",
   methods: {
     send: {
       name: "Send",
@@ -68,7 +68,7 @@ exports[`protoc-sdk-objec plugin generates SDK object from proto files 3`] = `
 "import { GetBlockByHeightRequest, GetBlockByHeightResponse, GetBlockRequest, GetBlockResponse } from "./query.ts";
 
 export const Query = {
-  typeName: "akash.test.functional.Query",
+  typeName: "virtengine.test.functional.Query",
   methods: {
     getBlock: {
       name: "GetBlock",

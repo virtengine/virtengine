@@ -1,0 +1,48 @@
+T2-X19 retained validation evidence
+Implementation SHA: 65d21f19afeff95862a88eb543d4fa99e80d06ef
+Node: v20.19.1
+
+COMMAND: C:\Windows\System32\cmd.exe /d /c "cd /d C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t2\lib\portal && node_modules\.bin\vitest.CMD run __tests__/organization/use-organization-mutations.test.tsx --reporter=dot --maxWorkers=1"
+EXIT: 0
+RESULT: passed
+DETAIL: 1 file, 17 tests passed; no warnings or unhandled errors
+
+COMMAND: C:\Windows\System32\cmd.exe /d /c "cd /d C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t2\lib\portal && node_modules\.bin\vitest.CMD run --reporter=dot --maxWorkers=1"
+EXIT: 0
+RESULT: passed
+DETAIL: 39 files, 773 tests passed in 46.73s; expected WalletSessionManager reconnect-metadata stderr only
+
+COMMAND: C:\Windows\System32\cmd.exe /d /c "cd /d C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t2\portal && node_modules\.bin\vitest.CMD run --reporter=dot --maxWorkers=1"
+EXIT: 0
+RESULT: passed
+DETAIL: 85 files, 659 tests passed in 160.68s
+
+COMMAND: C:\Windows\System32\cmd.exe /d /c "cd /d C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t2\lib\portal && node_modules\.bin\tsc.CMD -p tsconfig.chain.json --noEmit --incremental false"
+EXIT: 0
+RESULT: passed
+DETAIL: Full lib/portal chain TypeScript completed with no diagnostics.
+
+COMMAND: C:\Windows\System32\cmd.exe /d /c "cd /d C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t2\portal && node_modules\.bin\tsc.CMD --noEmit --incremental false"
+EXIT: 0
+RESULT: passed
+DETAIL: Full portal TypeScript completed with no diagnostics.
+
+COMMAND: C:\Windows\System32\cmd.exe /d /c "cd /d C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t2\portal && node_modules\.bin\prettier.CMD --check -- ..\lib\portal\components\organization\organization-mutation.ts ..\lib\portal\hooks\useOrganization.tsx ..\lib\portal\__tests__\organization\use-organization-mutations.test.tsx ..\lib\portal\components\PortalProvider.tsx ..\lib\portal\types\config.ts ..\lib\portal\index.ts ..\lib\portal\index.d.ts src\lib\portal-adapter.ts"
+EXIT: 0
+RESULT: passed
+DETAIL: Prettier 3.8.1 checked the exact eight X19 implementation files.
+
+BEHAVIOR:
+- Organization create/invite/remove/role-update/leave no longer use simulation as success or fabricate local identities.
+- Mutations default unavailable unless an adapter is bound exactly to active chain and account.
+- Requests are identity-normalized, recursively frozen, deterministically key-sorted, SHA-256 digested, and digest-bound for idempotency.
+- Completion requires exact committed code 0 evidence, transaction hash, positive height, operation ID, request/action/digest echo, and authoritative organization/member projections.
+- Mutations serialize per normalized organization, abort on authority change/unmount, and reject retained or non-cooperative late callbacks.
+- Create upserts authoritative IDs; member operations replace only matching detail state; leave removes exact organization and clears selected/detail state.
+- Organization/list/detail/billing queries are chain/account/request-generation bound and cannot overwrite newer authority state.
+- Committed organizations/members strictly validate canonical timestamps and optional metadata before frozen projection.
+- Production PortalProvider mounts OrganizationProvider with exact query/account/chain context and withholds mismatched mutation adapters.
+
+NON-CLAIMS:
+- No production organization mutation adapter is wired by this checkpoint; writes default unavailable.
+- No live x/group transaction, chain endpoint, organization billing backend, or external authorization was certified.

@@ -11,6 +11,8 @@ resources:
   - stress-chaos.yaml
   - time-chaos.yaml
 
-commonLabels:
-  app.kubernetes.io/part-of: virtengine
-  app.kubernetes.io/component: chaos-testing
+labels:
+  - pairs:
+      app.kubernetes.io/part-of: virtengine
+      app.kubernetes.io/component: chaos-testing
+    includeSelectors: true

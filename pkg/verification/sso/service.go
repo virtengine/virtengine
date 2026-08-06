@@ -5,6 +5,7 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
+	stderrors "errors"
 	"fmt"
 	"strings"
 	"sync"
@@ -290,6 +291,15 @@ func (s *DefaultService) CompleteVerification(ctx context.Context, req *Complete
 			return NewCompleteError("saml_verification_failed", err.Error()), nil
 		}
 
+		if err := s.verifyChallengeLinkageSignature(ctx, challenge, req.LinkageSignature); err != nil {
+			s.updateChallengeStatus(req.ChallengeID, ChallengeStatusFailed)
+			s.logAudit(ctx, audit.EventTypeSecurityAlert, challenge.AccountAddress, "linkage_signature_verification_failed", map[string]interface{}{
+				"challenge_id": req.ChallengeID,
+				"error":        err.Error(),
+			})
+			return NewCompleteError("invalid_linkage_signature", err.Error()), nil
+		}
+
 		attestation, err := s.createEduGAINAttestation(ctx, challenge, assertion, req.LinkageSignature)
 		if err != nil {
 			s.updateChallengeStatus(req.ChallengeID, ChallengeStatusFailed)
@@ -353,8 +363,14 @@ func (s *DefaultService) CompleteVerification(ctx context.Context, req *Complete
 		return NewCompleteError("token_verification_failed", err.Error()), nil
 	}
 
-	// TODO: Verify linkage signature (requires crypto key verification)
-	// For now, we just check that a signature was provided
+	if err := s.verifyChallengeLinkageSignature(ctx, challenge, req.LinkageSignature); err != nil {
+		s.updateChallengeStatus(req.ChallengeID, ChallengeStatusFailed)
+		s.logAudit(ctx, audit.EventTypeSecurityAlert, challenge.AccountAddress, "linkage_signature_verification_failed", map[string]interface{}{
+			"challenge_id": req.ChallengeID,
+			"error":        err.Error(),
+		})
+		return NewCompleteError("invalid_linkage_signature", err.Error()), nil
+	}
 
 	// Create attestation
 	attestation, err := s.createAttestation(ctx, challenge, claims, req.LinkageSignature)
@@ -441,6 +457,15 @@ func (s *DefaultService) ExchangeCodeAndComplete(ctx context.Context, req *CodeE
 			return NewCompleteError("saml_verification_failed", err.Error()), nil
 		}
 
+		if err := s.verifyChallengeLinkageSignature(ctx, challenge, req.LinkageSignature); err != nil {
+			s.updateChallengeStatus(req.ChallengeID, ChallengeStatusFailed)
+			s.logAudit(ctx, audit.EventTypeSecurityAlert, challenge.AccountAddress, "linkage_signature_verification_failed", map[string]interface{}{
+				"challenge_id": req.ChallengeID,
+				"error":        err.Error(),
+			})
+			return NewCompleteError("invalid_linkage_signature", err.Error()), nil
+		}
+
 		attestation, err := s.createEduGAINAttestation(ctx, challenge, assertion, req.LinkageSignature)
 		if err != nil {
 			s.updateChallengeStatus(req.ChallengeID, ChallengeStatusFailed)
@@ -495,6 +520,15 @@ func (s *DefaultService) ExchangeCodeAndComplete(ctx context.Context, req *CodeE
 	if err != nil {
 		s.updateChallengeStatus(req.ChallengeID, ChallengeStatusFailed)
 		return NewCompleteError("code_exchange_failed", err.Error()), nil
+	}
+
+	if err := s.verifyChallengeLinkageSignature(ctx, challenge, req.LinkageSignature); err != nil {
+		s.updateChallengeStatus(req.ChallengeID, ChallengeStatusFailed)
+		s.logAudit(ctx, audit.EventTypeSecurityAlert, challenge.AccountAddress, "linkage_signature_verification_failed", map[string]interface{}{
+			"challenge_id": req.ChallengeID,
+			"error":        err.Error(),
+		})
+		return NewCompleteError("invalid_linkage_signature", err.Error()), nil
 	}
 
 	// Create attestation from verified claims
@@ -722,8 +756,45 @@ func (s *DefaultService) RevokeVerification(ctx context.Context, req *RevokeRequ
 		return err
 	}
 
-	// TODO: Implement revocation logic with on-chain submission
-	// For now, just log the revocation request
+	if s.chainClient == nil {
+		return ErrChainClientNotConfigured
+	}
+
+	linkage, err := s.chainClient.QuerySSOLinkage(ctx, LinkageQuery{
+		LinkageID:      req.LinkageID,
+		AccountAddress: req.AccountAddress,
+	})
+	if err != nil {
+		if stderrors.Is(err, ErrLinkageNotFound) {
+			return err
+		}
+		return fmt.Errorf("%w: %v", ErrRevocationFailed, err)
+	}
+	if linkage == nil {
+		return ErrLinkageNotFound
+	}
+	if linkage.Status == veidtypes.SSOStatusRevoked {
+		return nil
+	}
+
+	msg := &veidtypes.MsgRevokeSSOLinkage{
+		AccountAddress: req.AccountAddress,
+		LinkageID:      req.LinkageID,
+		Reason:         req.Reason,
+		Signature:      req.Signature,
+	}
+	if err := msg.ValidateBasic(); err != nil {
+		return fmt.Errorf("%w: %v", ErrRevocationFailed, err)
+	}
+
+	if err := s.chainClient.RevokeSSOLinkage(ctx, msg); err != nil {
+		s.logAudit(ctx, audit.EventTypeVerificationFailed, req.AccountAddress, "revoke_verification", map[string]interface{}{
+			"linkage_id": req.LinkageID,
+			"reason":     req.Reason,
+			"error":      err.Error(),
+		})
+		return fmt.Errorf("%w: %v", ErrRevocationFailed, err)
+	}
 
 	s.logAudit(ctx, audit.EventTypeKeyRevoked, req.AccountAddress, "revoke_verification", map[string]interface{}{
 		"linkage_id": req.LinkageID,
@@ -735,8 +806,25 @@ func (s *DefaultService) RevokeVerification(ctx context.Context, req *RevokeRequ
 
 // GetLinkageStatus returns the status of an SSO linkage.
 func (s *DefaultService) GetLinkageStatus(ctx context.Context, accountAddress string) (*LinkageStatus, error) {
-	// TODO: Query on-chain linkage status
-	// For now, return not found
+	if s.chainClient == nil {
+		return nil, ErrChainClientNotConfigured
+	}
+
+	for _, provider := range veidtypes.AllSSOProviderTypes() {
+		linkage, err := s.chainClient.QuerySSOLinkage(ctx, LinkageQuery{
+			AccountAddress: accountAddress,
+			Provider:       provider,
+		})
+		if err != nil {
+			if stderrors.Is(err, ErrLinkageNotFound) {
+				continue
+			}
+			return nil, err
+		}
+		if linkage != nil {
+			return linkageStatusFromRecord(accountAddress, linkage), nil
+		}
+	}
 
 	return &LinkageStatus{
 		Exists:         false,

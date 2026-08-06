@@ -1,6 +1,8 @@
-import { BaseClient, type ClientOptions } from "./BaseClient.ts";
-import type { ChainNodeSDK, ClientTxResult, ListOptions } from "./types.ts";
-import { toPageRequest, withTxResult } from "./types.ts";
+import type {
+  MsgCancelJob,
+  MsgRegisterCluster,
+  MsgSubmitJob,
+} from "../generated/protos/virtengine/hpc/v1/tx.ts";
 import type {
   ClusterState,
   HPCCluster,
@@ -8,12 +10,10 @@ import type {
   HPCOffering,
   JobState,
 } from "../generated/protos/virtengine/hpc/v1/types.ts";
-import type {
-  MsgCancelJob,
-  MsgRegisterCluster,
-  MsgSubmitJob,
-} from "../generated/protos/virtengine/hpc/v1/tx.ts";
 import type { TxCallOptions } from "../sdk/transport/types.ts";
+import { BaseClient, type ClientOptions } from "./BaseClient.ts";
+import type { ChainNodeSDK, ClientTxResult, ListOptions } from "./types.ts";
+import { toPageRequest, withTxResult } from "./types.ts";
 
 export interface HPCClientDeps {
   sdk: ChainNodeSDK;

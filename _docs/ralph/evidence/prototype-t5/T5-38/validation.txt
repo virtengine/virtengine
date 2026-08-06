@@ -1,0 +1,44 @@
+T5-38 recipient key lifetime access boundary
+Payload: c300cd26b2358146335561f47ee06576120fcd97
+Branch: ve/prototype-t5-platform
+Platform: windows/amd64
+Toolchains: go version go1.25.8 windows/amd64; gcc.exe (MinGW-W64 x86_64-ucrt-posix-seh, built by Brecht Sanders, r3) 16.1.0; git version 2.51.2.windows.1
+
+Epoch ancestry:
+- Frozen baseline: 79391a3df86d85522b92e0400c6904971ecbe65d
+- Planning SHA: 1436723bd78980aa0388dbe9fcfa24dda939c54a
+- Intake epoch/base: 1 / 5587c384f634552c3a2dd7181ca49cafa4da1984
+- Payload head: c300cd26b2358146335561f47ee06576120fcd97
+- 75 commits and 170 complete all-parent changed paths.
+- 146 owned paths and 24 inherited integration/T4 paths.
+
+Recipient key authorization:
+- Envelope access evaluates every key owned by the requester, rather than only the active encryption key.
+- Revoked keys and keys expired at or before block time cannot authorize decryption.
+- Deprecated non-expired predecessor keys remain usable for envelopes during key rotation.
+- Expiry is enforced before EndBlock lifecycle processing.
+
+Command: C:\Users\pavil\AppData\Local\VirtEngine\toolchains\go1.25.8\go\bin\go.exe -C C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t5 test -count=1 ./x/encryption/keeper ./x/encryption/types
+Output: passed
+Exit code: 0
+
+Command: C:\Users\pavil\AppData\Local\VirtEngine\toolchains\go1.25.8\go\bin\go.exe -C C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t5 vet ./x/encryption/keeper ./x/encryption/types
+Output: no diagnostics
+Exit code: 0
+
+Process environment: CGO_ENABLED=1; CC=C:\Users\pavil\AppData\Local\Microsoft\WinGet\Packages\BrechtSanders.WinLibs.POSIX.UCRT_Microsoft.Winget.Source_8wekyb3d8bbwe\mingw64\bin\gcc.exe
+Command: C:\Users\pavil\AppData\Local\VirtEngine\toolchains\go1.25.8\go\bin\go.exe -C C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t5 test -race -count=1 ./x/encryption/keeper -run '^TestCheckEnvelopeAccessRejectsUnusableFallbackKeys$'
+Output: passed; no race detector diagnostics
+Exit code: 0
+
+Audit: final exact-worktree blocker/high review reported no findings.
+
+Blockers:
+- The same 24 inherited integration/T4 paths have no active T5 lease; checkpoint remains untagged and not intake eligible.
+- T4-owned migrations/wiring and external production erasure dependencies remain open.
+- generated_hashes is {}; migrations is [].
+
+Validation:
+- Schema/integration validation: passed.
+- Exact 75-commit/170-path inventory: Git and handoff match with zero differences.
+- Documentation diff checks: passed with no errors.

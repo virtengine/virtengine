@@ -371,6 +371,9 @@ export interface FraudReport {
   contentHash: string;
   /** RelatedOrderIDs are order IDs related to this fraud report */
   relatedOrderIds: string[];
+  /** FinancialCaseID links financially relevant reports to settlement authority. */
+  financialCaseId: string;
+  financialCaseStatus: string;
 }
 
 /** FraudAuditLog represents an audit log entry for a fraud report */
@@ -633,6 +636,8 @@ function createBaseFraudReport(): FraudReport {
     blockHeight: Long.ZERO,
     contentHash: "",
     relatedOrderIds: [],
+    financialCaseId: "",
+    financialCaseStatus: "",
   };
 }
 
@@ -687,6 +692,12 @@ export const FraudReport: MessageFns<FraudReport, "virtengine.fraud.v1.FraudRepo
     }
     for (const v of message.relatedOrderIds) {
       writer.uint32(130).string(v!);
+    }
+    if (message.financialCaseId !== "") {
+      writer.uint32(138).string(message.financialCaseId);
+    }
+    if (message.financialCaseStatus !== "") {
+      writer.uint32(146).string(message.financialCaseStatus);
     }
     return writer;
   },
@@ -826,6 +837,22 @@ export const FraudReport: MessageFns<FraudReport, "virtengine.fraud.v1.FraudRepo
           message.relatedOrderIds.push(reader.string());
           continue;
         }
+        case 17: {
+          if (tag !== 138) {
+            break;
+          }
+
+          message.financialCaseId = reader.string();
+          continue;
+        }
+        case 18: {
+          if (tag !== 146) {
+            break;
+          }
+
+          message.financialCaseStatus = reader.string();
+          continue;
+        }
       }
       if ((tag & 7) === 4 || tag === 0) {
         break;
@@ -857,6 +884,8 @@ export const FraudReport: MessageFns<FraudReport, "virtengine.fraud.v1.FraudRepo
       relatedOrderIds: globalThis.Array.isArray(object?.related_order_ids)
         ? object.related_order_ids.map((e: any) => globalThis.String(e))
         : [],
+      financialCaseId: isSet(object.financial_case_id) ? globalThis.String(object.financial_case_id) : "",
+      financialCaseStatus: isSet(object.financial_case_status) ? globalThis.String(object.financial_case_status) : "",
     };
   },
 
@@ -910,6 +939,12 @@ export const FraudReport: MessageFns<FraudReport, "virtengine.fraud.v1.FraudRepo
     if (message.relatedOrderIds?.length) {
       obj.related_order_ids = message.relatedOrderIds;
     }
+    if (message.financialCaseId !== "") {
+      obj.financial_case_id = message.financialCaseId;
+    }
+    if (message.financialCaseStatus !== "") {
+      obj.financial_case_status = message.financialCaseStatus;
+    }
     return obj;
   },
   fromPartial(object: DeepPartial<FraudReport>): FraudReport {
@@ -932,6 +967,8 @@ export const FraudReport: MessageFns<FraudReport, "virtengine.fraud.v1.FraudRepo
       : Long.ZERO;
     message.contentHash = object.contentHash ?? "";
     message.relatedOrderIds = object.relatedOrderIds?.map((e) => e) || [];
+    message.financialCaseId = object.financialCaseId ?? "";
+    message.financialCaseStatus = object.financialCaseStatus ?? "";
     return message;
   },
 };

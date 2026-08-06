@@ -4,10 +4,14 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
+	"math"
 	"time"
 
 	sdkmath "cosmossdk.io/math"
 	sdk "github.com/cosmos/cosmos-sdk/types"
+
+	settlementv1 "github.com/virtengine/virtengine/sdk/go/node/settlement/v1"
+	encryptiontypes "github.com/virtengine/virtengine/x/encryption/types"
 )
 
 // FiatConversionState represents the state of a fiat conversion.
@@ -58,6 +62,7 @@ var fiatConversionTransitions = map[FiatConversionState]map[FiatConversionState]
 		FiatConversionStateCancelled:     {},
 	},
 	FiatConversionStatePayoutPending: {
+		FiatConversionStatePayoutPending:   {},
 		FiatConversionStatePayoutSubmitted: {},
 		FiatConversionStateFailed:          {},
 		FiatConversionStateCancelled:       {},
@@ -143,43 +148,48 @@ func (t TokenSpec) Validate() error {
 
 // FiatPayoutPreference configures provider fiat conversion preferences.
 type FiatPayoutPreference struct {
-	Provider          string                      `json:"provider"`
-	Enabled           bool                        `json:"enabled"`
-	FiatCurrency      string                      `json:"fiat_currency"`
-	PaymentMethod     string                      `json:"payment_method,omitempty"`
-	DestinationRef    string                      `json:"destination_ref,omitempty"`
-	DestinationHash   string                      `json:"destination_hash"`
-	DestinationRegion string                      `json:"destination_region,omitempty"`
-	PreferredDEX      string                      `json:"preferred_dex,omitempty"`
-	PreferredOffRamp  string                      `json:"preferred_off_ramp,omitempty"`
-	SlippageTolerance float64                     `json:"slippage_tolerance"`
-	CryptoToken       TokenSpec                   `json:"crypto_token"`
-	StableToken       TokenSpec                   `json:"stable_token"`
-	EncryptedPayload  *EncryptedSettlementPayload `json:"encrypted_payload,omitempty"`
-	CreatedAt         time.Time                   `json:"created_at"`
-	UpdatedAt         time.Time                   `json:"updated_at"`
+	Provider          string  `json:"provider"`
+	Enabled           bool    `json:"enabled"`
+	FiatCurrency      string  `json:"fiat_currency"`
+	PaymentMethod     string  `json:"payment_method,omitempty"`
+	DestinationRef    string  `json:"destination_ref,omitempty"`
+	DestinationHash   string  `json:"destination_hash"`
+	DestinationRegion string  `json:"destination_region,omitempty"`
+	PreferredDEX      string  `json:"preferred_dex,omitempty"`
+	PreferredOffRamp  string  `json:"preferred_off_ramp,omitempty"`
+	SlippageTolerance float64 `json:"slippage_tolerance"`
+	// SlippageToleranceExact is the canonical consensus/off-chain decision
+	// value. SlippageTolerance is retained only for legacy API compatibility.
+	SlippageToleranceExact string                      `json:"slippage_tolerance_exact,omitempty"`
+	CryptoToken            TokenSpec                   `json:"crypto_token"`
+	StableToken            TokenSpec                   `json:"stable_token"`
+	EncryptedPayload       *EncryptedSettlementPayload `json:"encrypted_payload,omitempty"`
+	CreatedAt              time.Time                   `json:"created_at"`
+	UpdatedAt              time.Time                   `json:"updated_at"`
 }
 
 // FiatConversionRequest captures a conversion request.
 type FiatConversionRequest struct {
-	InvoiceID         string                      `json:"invoice_id,omitempty"`
-	SettlementID      string                      `json:"settlement_id,omitempty"`
-	PayoutID          string                      `json:"payout_id,omitempty"`
-	Provider          string                      `json:"provider"`
-	Customer          string                      `json:"customer"`
-	RequestedBy       string                      `json:"requested_by"`
-	CryptoAmount      sdk.Coin                    `json:"crypto_amount"`
-	FiatCurrency      string                      `json:"fiat_currency"`
-	PaymentMethod     string                      `json:"payment_method,omitempty"`
-	Destination       string                      `json:"destination,omitempty"`
-	DestinationHash   string                      `json:"destination_hash,omitempty"`
-	DestinationRegion string                      `json:"destination_region,omitempty"`
-	PreferredDEX      string                      `json:"preferred_dex,omitempty"`
-	PreferredOffRamp  string                      `json:"preferred_off_ramp,omitempty"`
-	SlippageTolerance float64                     `json:"slippage_tolerance"`
-	CryptoToken       TokenSpec                   `json:"crypto_token"`
-	StableToken       TokenSpec                   `json:"stable_token"`
-	EncryptedPayload  *EncryptedSettlementPayload `json:"encrypted_payload,omitempty"`
+	InvoiceID         string   `json:"invoice_id,omitempty"`
+	SettlementID      string   `json:"settlement_id,omitempty"`
+	PayoutID          string   `json:"payout_id,omitempty"`
+	Provider          string   `json:"provider"`
+	Customer          string   `json:"customer"`
+	RequestedBy       string   `json:"requested_by"`
+	CryptoAmount      sdk.Coin `json:"crypto_amount"`
+	FiatCurrency      string   `json:"fiat_currency"`
+	PaymentMethod     string   `json:"payment_method,omitempty"`
+	Destination       string   `json:"destination,omitempty"`
+	DestinationHash   string   `json:"destination_hash,omitempty"`
+	DestinationRegion string   `json:"destination_region,omitempty"`
+	PreferredDEX      string   `json:"preferred_dex,omitempty"`
+	PreferredOffRamp  string   `json:"preferred_off_ramp,omitempty"`
+	SlippageTolerance float64  `json:"slippage_tolerance"`
+	// SlippageToleranceExact is required for authenticated protocol records.
+	SlippageToleranceExact string                      `json:"slippage_tolerance_exact,omitempty"`
+	CryptoToken            TokenSpec                   `json:"crypto_token"`
+	StableToken            TokenSpec                   `json:"stable_token"`
+	EncryptedPayload       *EncryptedSettlementPayload `json:"encrypted_payload,omitempty"`
 }
 
 // FiatConversionAuditEntry is an audit log entry for conversions.
@@ -203,53 +213,98 @@ type FiatConversionStateTransition struct {
 
 // FiatConversionRecord stores conversion details.
 type FiatConversionRecord struct {
-	ConversionID        string                          `json:"conversion_id"`
-	InvoiceID           string                          `json:"invoice_id,omitempty"`
-	SettlementID        string                          `json:"settlement_id,omitempty"`
-	PayoutID            string                          `json:"payout_id,omitempty"`
-	EscrowID            string                          `json:"escrow_id,omitempty"`
-	OrderID             string                          `json:"order_id,omitempty"`
-	LeaseID             string                          `json:"lease_id,omitempty"`
-	Provider            string                          `json:"provider"`
-	Customer            string                          `json:"customer"`
-	RequestedBy         string                          `json:"requested_by"`
-	RequestedAt         time.Time                       `json:"requested_at"`
-	UpdatedAt           time.Time                       `json:"updated_at"`
-	State               FiatConversionState             `json:"state"`
-	CryptoToken         TokenSpec                       `json:"crypto_token"`
-	StableToken         TokenSpec                       `json:"stable_token"`
-	CryptoAmount        sdk.Coin                        `json:"crypto_amount"`
-	StableAmount        sdk.Coin                        `json:"stable_amount"`
-	FiatCurrency        string                          `json:"fiat_currency"`
-	FiatAmount          string                          `json:"fiat_amount"`
-	IdempotencyKey      string                          `json:"idempotency_key"`
-	PaymentMethod       string                          `json:"payment_method,omitempty"`
-	DestinationRef      string                          `json:"destination_ref,omitempty"`
-	DestinationHash     string                          `json:"destination_hash"`
-	DestinationRegion   string                          `json:"destination_region,omitempty"`
-	SlippageTolerance   float64                         `json:"slippage_tolerance"`
-	SwapAttempts        uint32                          `json:"swap_attempts"`
-	OffRampAttempts     uint32                          `json:"off_ramp_attempts"`
-	PayoutAttempts      uint32                          `json:"payout_attempts"`
-	DexAdapter          string                          `json:"dex_adapter,omitempty"`
-	SwapQuoteID         string                          `json:"swap_quote_id,omitempty"`
-	SwapTxHash          string                          `json:"swap_tx_hash,omitempty"`
-	SwapStatus          string                          `json:"swap_status,omitempty"`
-	OffRampProvider     string                          `json:"off_ramp_provider,omitempty"`
-	OffRampQuoteID      string                          `json:"off_ramp_quote_id,omitempty"`
-	OffRampID           string                          `json:"off_ramp_id,omitempty"`
-	OffRampStatus       string                          `json:"off_ramp_status,omitempty"`
-	OffRampReference    string                          `json:"off_ramp_reference,omitempty"`
-	ComplianceStatus    string                          `json:"compliance_status,omitempty"`
-	ComplianceRiskScore int32                           `json:"compliance_risk_score,omitempty"`
-	ComplianceCheckedAt int64                           `json:"compliance_checked_at,omitempty"`
-	FailureReason       string                          `json:"failure_reason,omitempty"`
-	LastErrorAt         int64                           `json:"last_error_at,omitempty"`
-	LastError           string                          `json:"last_error,omitempty"`
-	LastErrorRetryable  bool                            `json:"last_error_retryable,omitempty"`
-	AuditTrail          []FiatConversionAuditEntry      `json:"audit_trail,omitempty"`
-	TransitionHistory   []FiatConversionStateTransition `json:"transition_history,omitempty"`
-	EncryptedPayload    *EncryptedSettlementPayload     `json:"encrypted_payload,omitempty"`
+	ConversionID              string                          `json:"conversion_id"`
+	InvoiceID                 string                          `json:"invoice_id,omitempty"`
+	SettlementID              string                          `json:"settlement_id,omitempty"`
+	PayoutID                  string                          `json:"payout_id,omitempty"`
+	EscrowID                  string                          `json:"escrow_id,omitempty"`
+	OrderID                   string                          `json:"order_id,omitempty"`
+	LeaseID                   string                          `json:"lease_id,omitempty"`
+	Provider                  string                          `json:"provider"`
+	Customer                  string                          `json:"customer"`
+	RequestedBy               string                          `json:"requested_by"`
+	RequestedAt               time.Time                       `json:"requested_at"`
+	UpdatedAt                 time.Time                       `json:"updated_at"`
+	State                     FiatConversionState             `json:"state"`
+	CryptoToken               TokenSpec                       `json:"crypto_token"`
+	StableToken               TokenSpec                       `json:"stable_token"`
+	CryptoAmount              sdk.Coin                        `json:"crypto_amount"`
+	StableAmount              sdk.Coin                        `json:"stable_amount"`
+	FiatCurrency              string                          `json:"fiat_currency"`
+	FiatAmount                string                          `json:"fiat_amount"`
+	IdempotencyKey            string                          `json:"idempotency_key"`
+	PaymentMethod             string                          `json:"payment_method,omitempty"`
+	DestinationRef            string                          `json:"destination_ref,omitempty"`
+	DestinationHash           string                          `json:"destination_hash"`
+	DestinationRegion         string                          `json:"destination_region,omitempty"`
+	SlippageTolerance         float64                         `json:"slippage_tolerance"`
+	SlippageToleranceExact    string                          `json:"slippage_tolerance_exact,omitempty"`
+	SwapAttempts              uint32                          `json:"swap_attempts"`
+	OffRampAttempts           uint32                          `json:"off_ramp_attempts"`
+	PayoutAttempts            uint32                          `json:"payout_attempts"`
+	DexAdapter                string                          `json:"dex_adapter,omitempty"`
+	SwapQuoteID               string                          `json:"swap_quote_id,omitempty"`
+	SwapTxHash                string                          `json:"swap_tx_hash,omitempty"`
+	SwapStatus                string                          `json:"swap_status,omitempty"`
+	OffRampProvider           string                          `json:"off_ramp_provider,omitempty"`
+	OffRampQuoteID            string                          `json:"off_ramp_quote_id,omitempty"`
+	OffRampID                 string                          `json:"off_ramp_id,omitempty"`
+	OffRampStatus             string                          `json:"off_ramp_status,omitempty"`
+	OffRampReference          string                          `json:"off_ramp_reference,omitempty"`
+	ComplianceStatus          string                          `json:"compliance_status,omitempty"`
+	ComplianceRiskScore       int32                           `json:"compliance_risk_score,omitempty"`
+	ComplianceCheckedAt       int64                           `json:"compliance_checked_at,omitempty"`
+	FailureReason             string                          `json:"failure_reason,omitempty"`
+	LastErrorAt               int64                           `json:"last_error_at,omitempty"`
+	LastError                 string                          `json:"last_error,omitempty"`
+	LastErrorRetryable        bool                            `json:"last_error_retryable,omitempty"`
+	AuditTrail                []FiatConversionAuditEntry      `json:"audit_trail,omitempty"`
+	TransitionHistory         []FiatConversionStateTransition `json:"transition_history,omitempty"`
+	EncryptedPayload          *EncryptedSettlementPayload     `json:"encrypted_payload,omitempty"`
+	ProtocolVersion           uint32                          `json:"protocol_version"`
+	ObservationSequence       uint64                          `json:"observation_sequence"`
+	LastObservationDigest     []byte                          `json:"last_observation_digest,omitempty"`
+	Observations              []FiatConversionObservation     `json:"observations,omitempty"`
+	DEXProfileID              string                          `json:"dex_profile_id,omitempty"`
+	DEXProfileDigest          []byte                          `json:"dex_profile_digest,omitempty"`
+	PayoutProfileID           string                          `json:"payout_profile_id,omitempty"`
+	PayoutProfileDigest       []byte                          `json:"payout_profile_digest,omitempty"`
+	QuoteDigest               []byte                          `json:"quote_digest,omitempty"`
+	QuoteExpiry               int64                           `json:"quote_expiry,omitempty"`
+	MinimumStableOutput       sdk.Coin                        `json:"minimum_stable_output"`
+	SwapHeight                int64                           `json:"swap_height,omitempty"`
+	SwapBlockHash             []byte                          `json:"swap_block_hash,omitempty"`
+	SwapFinalityConfirmations uint32                          `json:"swap_finality_confirmations,omitempty"`
+	SwapFinalityHash          []byte                          `json:"swap_finality_hash,omitempty"`
+	PayoutFinalityHash        []byte                          `json:"payout_finality_hash,omitempty"`
+	ComplianceDecisionHash    []byte                          `json:"compliance_decision_hash,omitempty"`
+	PrivacySafeReferenceHash  []byte                          `json:"privacy_safe_reference_hash,omitempty"`
+	EvidenceHash              []byte                          `json:"evidence_hash,omitempty"`
+	RequestDigest             []byte                          `json:"request_digest,omitempty"`
+	DailyBucket               string                          `json:"daily_bucket,omitempty"`
+	LegacyQuarantined         bool                            `json:"legacy_quarantined,omitempty"`
+	QuarantineReason          string                          `json:"quarantine_reason,omitempty"`
+	TerminalPolicy            string                          `json:"terminal_policy,omitempty"`
+	ValueMovementApplied      bool                            `json:"value_movement_applied,omitempty"`
+	CustodySinkAmount         sdk.Coin                        `json:"custody_sink_amount"`
+	CustodySinkEffectHash     []byte                          `json:"custody_sink_effect_hash,omitempty"`
+	DailyQuotaReserved        bool                            `json:"daily_quota_reserved,omitempty"`
+}
+
+// FiatConversionObservation is a generated-schema-compatible, bounded audit
+// node for one provider-signed external observation.
+type FiatConversionObservation struct {
+	Sequence          uint64                                      `json:"sequence"`
+	IdempotencyKey    []byte                                      `json:"idempotency_key"`
+	Stage             settlementv1.FiatConversionObservationStage `json:"stage"`
+	Status            string                                      `json:"status"`
+	ObservedAt        int64                                       `json:"observed_at"`
+	RecordedAt        int64                                       `json:"recorded_at"`
+	RecordedHeight    int64                                       `json:"recorded_height"`
+	EvidenceHash      []byte                                      `json:"evidence_hash"`
+	ObservationDigest []byte                                      `json:"observation_digest"`
+	LineageDigest     []byte                                      `json:"lineage_digest"`
+	FailureCode       string                                      `json:"failure_code,omitempty"`
 }
 
 // Validate validates the conversion record.
@@ -279,8 +334,13 @@ func (r *FiatConversionRecord) Validate() error {
 	if r.FiatCurrency == "" {
 		return ErrInvalidParams.Wrap("fiat_currency required")
 	}
-	if r.SlippageTolerance < 0 || r.SlippageTolerance > 1 {
-		return ErrInvalidParams.Wrap("slippage_tolerance must be between 0 and 1")
+	if _, err := ValidateExactSlippage(r.SlippageToleranceExact, r.SlippageTolerance, r.ProtocolVersion > 0); err != nil {
+		return err
+	}
+	if len(r.IdempotencyKey) > 256 || len(r.InvoiceID) > 128 || len(r.SettlementID) > 128 || len(r.PayoutID) > 128 ||
+		len(r.FiatCurrency) > 16 || len(r.PaymentMethod) > 64 || len(r.DestinationHash) > 128 || len(r.DestinationRegion) > 64 ||
+		len(r.DEXProfileID) > 128 || len(r.PayoutProfileID) > 128 || len(r.Observations) > 64 || len(r.AuditTrail) > 128 || len(r.TransitionHistory) > 128 {
+		return ErrInvalidParams.Wrap("fiat conversion field exceeds protocol bound")
 	}
 	if err := r.CryptoToken.Validate(); err != nil {
 		return err
@@ -300,6 +360,13 @@ func (r *FiatConversionRecord) Validate() error {
 		if r.EncryptedPayload == nil || r.DestinationRef != r.EncryptedPayload.EnvelopeRef {
 			return ErrInvalidParams.Wrap("plaintext conversion fields are not allowed")
 		}
+	}
+	if r.ValueMovementApplied {
+		if !r.CustodySinkAmount.IsValid() || !r.CustodySinkAmount.IsPositive() || !r.CustodySinkAmount.IsEqual(r.CryptoAmount) || len(r.CustodySinkEffectHash) != 32 {
+			return ErrInvalidSettlement.Wrap("fiat custody sink effect is invalid")
+		}
+	} else if (!r.CustodySinkAmount.IsNil() && !r.CustodySinkAmount.IsZero()) || len(r.CustodySinkEffectHash) != 0 {
+		return ErrInvalidSettlement.Wrap("unapplied fiat custody sink fields must be empty")
 	}
 	return nil
 }
@@ -325,32 +392,33 @@ func NewFiatConversionRecord(id string, request FiatConversionRequest, payout sd
 	}
 
 	return &FiatConversionRecord{
-		ConversionID:      id,
-		InvoiceID:         request.InvoiceID,
-		SettlementID:      request.SettlementID,
-		PayoutID:          request.PayoutID,
-		Provider:          request.Provider,
-		Customer:          request.Customer,
-		RequestedBy:       request.RequestedBy,
-		RequestedAt:       now,
-		UpdatedAt:         now,
-		State:             FiatConversionStateCreated,
-		CryptoToken:       request.CryptoToken,
-		StableToken:       request.StableToken,
-		CryptoAmount:      payout,
-		StableAmount:      sdk.NewCoin(request.StableToken.Denom, sdkmath.ZeroInt()),
-		FiatCurrency:      request.FiatCurrency,
-		IdempotencyKey:    defaultFiatConversionIdempotencyKey(request.InvoiceID, request.SettlementID, request.PayoutID, request.Provider),
-		PaymentMethod:     request.PaymentMethod,
-		DestinationRef:    encryptedRef,
-		DestinationHash:   destinationHash,
-		DestinationRegion: request.DestinationRegion,
-		SlippageTolerance: request.SlippageTolerance,
-		DexAdapter:        request.PreferredDEX,
-		OffRampProvider:   request.PreferredOffRamp,
-		AuditTrail:        []FiatConversionAuditEntry{},
-		TransitionHistory: []FiatConversionStateTransition{},
-		EncryptedPayload:  request.EncryptedPayload,
+		ConversionID:           id,
+		InvoiceID:              request.InvoiceID,
+		SettlementID:           request.SettlementID,
+		PayoutID:               request.PayoutID,
+		Provider:               request.Provider,
+		Customer:               request.Customer,
+		RequestedBy:            request.RequestedBy,
+		RequestedAt:            now,
+		UpdatedAt:              now,
+		State:                  FiatConversionStateCreated,
+		CryptoToken:            request.CryptoToken,
+		StableToken:            request.StableToken,
+		CryptoAmount:           payout,
+		StableAmount:           sdk.NewCoin(request.StableToken.Denom, sdkmath.ZeroInt()),
+		FiatCurrency:           request.FiatCurrency,
+		IdempotencyKey:         defaultFiatConversionIdempotencyKey(request.InvoiceID, request.SettlementID, request.PayoutID, request.Provider),
+		PaymentMethod:          request.PaymentMethod,
+		DestinationRef:         encryptedRef,
+		DestinationHash:        destinationHash,
+		DestinationRegion:      request.DestinationRegion,
+		SlippageTolerance:      request.SlippageTolerance,
+		SlippageToleranceExact: request.CanonicalSlippageTolerance(),
+		DexAdapter:             request.PreferredDEX,
+		OffRampProvider:        request.PreferredOffRamp,
+		AuditTrail:             []FiatConversionAuditEntry{},
+		TransitionHistory:      []FiatConversionStateTransition{},
+		EncryptedPayload:       cloneEncryptedSettlementPayload(request.EncryptedPayload),
 	}
 }
 
@@ -370,7 +438,7 @@ func (r *FiatConversionRecord) AddAuditEntry(action, actor, reason string, metad
 		Actor:     actor,
 		Reason:    reason,
 		Timestamp: ts.Unix(),
-		Metadata:  metadata,
+		Metadata:  cloneStringMap(metadata),
 	})
 	r.UpdatedAt = ts
 }
@@ -401,7 +469,7 @@ func (r *FiatConversionRecord) TransitionTo(next FiatConversionState, event stri
 		Event:     event,
 		Reason:    reason,
 		Timestamp: ts.Unix(),
-		Metadata:  metadata,
+		Metadata:  cloneStringMap(metadata),
 	})
 	auditMeta := map[string]string{
 		"from":  string(current),
@@ -556,8 +624,8 @@ func (p *FiatPayoutPreference) Validate() error {
 		if err := p.StableToken.Validate(); err != nil {
 			return err
 		}
-		if p.SlippageTolerance < 0 || p.SlippageTolerance > 1 {
-			return ErrInvalidParams.Wrap("slippage_tolerance must be between 0 and 1")
+		if _, err := ValidateExactSlippage(p.SlippageToleranceExact, p.SlippageTolerance, false); err != nil {
+			return err
 		}
 	}
 	if p.DestinationRef != "" {
@@ -600,13 +668,91 @@ func (r *FiatConversionRequest) Validate() error {
 	if err := r.StableToken.Validate(); err != nil {
 		return err
 	}
-	if r.SlippageTolerance < 0 || r.SlippageTolerance > 1 {
-		return ErrInvalidParams.Wrap("slippage_tolerance must be between 0 and 1")
+	if _, err := ValidateExactSlippage(r.SlippageToleranceExact, r.SlippageTolerance, false); err != nil {
+		return err
 	}
 	if r.Destination != "" {
 		return ErrInvalidParams.Wrap("plaintext conversion fields are not allowed")
 	}
 	return nil
+}
+
+// CanonicalSlippageTolerance returns a deterministic decimal representation.
+// New callers should set SlippageToleranceExact; the float fallback only
+// canonicalizes legacy in-process inputs before they become committed state.
+func (r FiatConversionRequest) CanonicalSlippageTolerance() string {
+	if r.SlippageToleranceExact != "" {
+		return r.SlippageToleranceExact
+	}
+	if math.IsNaN(r.SlippageTolerance) || math.IsInf(r.SlippageTolerance, 0) {
+		return ""
+	}
+	return fmt.Sprintf("%.18f", r.SlippageTolerance)
+}
+
+// ValidateExactSlippage validates the exact canonical decimal and returns it.
+func ValidateExactSlippage(exact string, legacy float64, requireExact bool) (string, error) {
+	if math.IsNaN(legacy) || math.IsInf(legacy, 0) {
+		return "", ErrInvalidParams.Wrap("slippage_tolerance must be finite")
+	}
+	if exact == "" {
+		if requireExact {
+			return "", ErrInvalidParams.Wrap("slippage_tolerance_exact required")
+		}
+		exact = fmt.Sprintf("%.18f", legacy)
+	}
+	if len(exact) > 64 {
+		return "", ErrInvalidParams.Wrap("slippage_tolerance_exact exceeds maximum length")
+	}
+	value, err := sdkmath.LegacyNewDecFromStr(exact)
+	if err != nil || value.IsNegative() || value.GT(sdkmath.LegacyOneDec()) {
+		return "", ErrInvalidParams.Wrap("slippage_tolerance_exact must be between 0 and 1")
+	}
+	return exact, nil
+}
+
+func cloneStringMap(source map[string]string) map[string]string {
+	if len(source) == 0 {
+		return nil
+	}
+	result := make(map[string]string, len(source))
+	for key, value := range source {
+		result[key] = value
+	}
+	return result
+}
+
+func cloneEncryptedSettlementPayload(source *EncryptedSettlementPayload) *EncryptedSettlementPayload {
+	if source == nil {
+		return nil
+	}
+	copyPayload := *source
+	copyPayload.EnvelopeHash = append([]byte(nil), source.EnvelopeHash...)
+	if source.Envelope != nil {
+		copyEnvelope := *source.Envelope
+		copyEnvelope.RecipientKeyIDs = append([]string(nil), source.Envelope.RecipientKeyIDs...)
+		copyEnvelope.RecipientPublicKeys = cloneByteSlices(source.Envelope.RecipientPublicKeys)
+		copyEnvelope.EncryptedKeys = cloneByteSlices(source.Envelope.EncryptedKeys)
+		copyEnvelope.WrappedKeys = append([]encryptiontypes.WrappedKeyEntry(nil), source.Envelope.WrappedKeys...)
+		copyEnvelope.Nonce = append([]byte(nil), source.Envelope.Nonce...)
+		copyEnvelope.Ciphertext = append([]byte(nil), source.Envelope.Ciphertext...)
+		copyEnvelope.SenderSignature = append([]byte(nil), source.Envelope.SenderSignature...)
+		copyEnvelope.SenderPubKey = append([]byte(nil), source.Envelope.SenderPubKey...)
+		copyEnvelope.Metadata = cloneStringMap(source.Envelope.Metadata)
+		copyPayload.Envelope = &copyEnvelope
+	}
+	return &copyPayload
+}
+
+func cloneByteSlices(source [][]byte) [][]byte {
+	if source == nil {
+		return nil
+	}
+	result := make([][]byte, len(source))
+	for index := range source {
+		result[index] = append([]byte(nil), source[index]...)
+	}
+	return result
 }
 
 // FormatComplianceSnapshot formats compliance summary.

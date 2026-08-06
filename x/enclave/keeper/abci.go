@@ -25,6 +25,10 @@ func (k Keeper) BeginBlocker(ctx sdk.Context) {
 	if ctx.BlockHeight()%1000 == 0 {
 		k.CleanupOldRegistrationCounts(ctx)
 	}
+
+	if ctx.BlockHeight()%1000 == 0 {
+		k.CleanupExpiredNonces(ctx)
+	}
 }
 
 // processExpiredKeyRotations automatically completes key rotations that have

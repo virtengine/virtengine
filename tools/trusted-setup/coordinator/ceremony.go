@@ -15,6 +15,7 @@ import (
 	"github.com/consensys/gnark/frontend"
 	"github.com/consensys/gnark/frontend/cs/r1cs"
 
+	"github.com/virtengine/virtengine/tools/trusted-setup/participant"
 	"github.com/virtengine/virtengine/tools/trusted-setup/transcript"
 	zkcircuits "github.com/virtengine/virtengine/x/veid/zk/circuits"
 )
@@ -26,6 +27,21 @@ const (
 
 func InitCeremony(state State, circuitName string, minContributors int, beacon string, notes []string) (*Config, error) {
 	if err := state.EnsureDirs(); err != nil {
+		return nil, err
+	}
+	if existingCfg, err := state.LoadConfig(); err == nil {
+		existingTranscript, transcriptErr := loadTranscript(state)
+		if transcriptErr != nil {
+			return nil, fmt.Errorf("load existing transcript: %w", transcriptErr)
+		}
+		if existingCfg.CircuitName != circuitName || existingCfg.MinContributors != minContributors || existingCfg.Beacon != beacon {
+			return nil, fmt.Errorf("ceremony workspace already initialized with different config")
+		}
+		if existingTranscript.CeremonyID != existingCfg.CeremonyID {
+			return nil, fmt.Errorf("existing transcript ceremony_id mismatch")
+		}
+		return existingCfg, nil
+	} else if !os.IsNotExist(err) {
 		return nil, err
 	}
 
@@ -61,16 +77,17 @@ func InitCeremony(state State, circuitName string, minContributors int, beacon s
 	}
 	phase1Hash := transcript.HashBytes(phase1Bytes)
 
-	if err := os.WriteFile(filepath.Join(state.Phase1Dir(), phase1InitialFile), phase1Bytes, 0o600); err != nil {
+	if err := writeFileAtomic(filepath.Join(state.Phase1Dir(), phase1InitialFile), phase1Bytes); err != nil {
 		return nil, fmt.Errorf("write phase1 initial: %w", err)
 	}
-	if err := os.WriteFile(filepath.Join(state.Phase2Dir(), "r1cs.bin"), r1csBytes, 0o600); err != nil {
+	if err := writeFileAtomic(filepath.Join(state.Phase2Dir(), "r1cs.bin"), r1csBytes); err != nil {
 		return nil, fmt.Errorf("write r1cs: %w", err)
 	}
 
 	circuitHash := r1csHash
+	now := state.Now()
 	cfg := &Config{
-		CeremonyID:      fmt.Sprintf("veid-%d", time.Now().Unix()),
+		CeremonyID:      fmt.Sprintf("veid-%d", now.Unix()),
 		CircuitName:     circuitName,
 		CircuitHash:     circuitHash,
 		Curve:           ecc.BN254.String(),
@@ -78,7 +95,7 @@ func InitCeremony(state State, circuitName string, minContributors int, beacon s
 		Beacon:          beacon,
 		DomainSize:      domainSize,
 		R1CSHash:        r1csHash,
-		CreatedAt:       time.Now().UTC().Format(time.RFC3339),
+		CreatedAt:       now.Format(time.RFC3339),
 		Notes:           notes,
 	}
 	if err := state.SaveConfig(cfg); err != nil {
@@ -86,6 +103,7 @@ func InitCeremony(state State, circuitName string, minContributors int, beacon s
 	}
 
 	tr := transcript.New(cfg.CeremonyID, circuitName, circuitHash, cfg.Curve, domainSize, r1csHash)
+	tr.CreatedAt = now.Format(time.RFC3339)
 	tr.Notes = notes
 	tr.Phase1.InitialHash = phase1Hash
 	data, err := tr.Marshal()
@@ -125,7 +143,7 @@ func StartPhase2(state State) error {
 	if err != nil {
 		return fmt.Errorf("serialize commons: %w", err)
 	}
-	if err := os.WriteFile(filepath.Join(state.Phase1Dir(), "commons.bin"), commonsBytes, 0o600); err != nil {
+	if err := writeFileAtomic(filepath.Join(state.Phase1Dir(), "commons.bin"), commonsBytes); err != nil {
 		return fmt.Errorf("write commons: %w", err)
 	}
 
@@ -148,7 +166,18 @@ func StartPhase2(state State) error {
 	if err != nil {
 		return fmt.Errorf("serialize phase2: %w", err)
 	}
-	if err := os.WriteFile(filepath.Join(state.Phase2Dir(), phase2InitialFile), phase2Bytes, 0o600); err != nil {
+	phase2InitialPath := filepath.Join(state.Phase2Dir(), phase2InitialFile)
+	if existingBytes, readErr := os.ReadFile(phase2InitialPath); readErr == nil {
+		existingHash := transcript.HashBytes(existingBytes)
+		newHash := transcript.HashBytes(phase2Bytes)
+		if existingHash == newHash && tr.Phase2.InitialHash == newHash {
+			return nil
+		}
+		return fmt.Errorf("phase2 already initialized with different state")
+	} else if !os.IsNotExist(readErr) {
+		return readErr
+	}
+	if err := writeFileAtomic(phase2InitialPath, phase2Bytes); err != nil {
 		return fmt.Errorf("write phase2 initial: %w", err)
 	}
 	tr.Phase2.InitialHash = transcript.HashBytes(phase2Bytes)
@@ -161,8 +190,21 @@ func AcceptPhase1Contribution(state State, payload []byte, meta ContributionMeta
 	if err != nil {
 		return err
 	}
+	if err := validateContributionMeta(meta, transcript.Phase1); err != nil {
+		return err
+	}
+	payloadHash := transcript.HashBytes(payload)
+	if lastRecord := latestContribution(tr.Phase1.Contributions); lastRecord != nil &&
+		lastRecord.OutputHash == payloadHash &&
+		lastRecord.ParticipantID == meta.ParticipantID &&
+		lastRecord.Signature == meta.Signature {
+		return nil
+	}
 	prev, prevBytes, err := loadLatestPhase1(state)
 	if err != nil {
+		return err
+	}
+	if err := verifyMetaAgainstPayload(meta, transcript.Phase1, prevBytes, payload); err != nil {
 		return err
 	}
 
@@ -177,9 +219,10 @@ func AcceptPhase1Contribution(state State, payload []byte, meta ContributionMeta
 	index := len(tr.Phase1.Contributions) + 1
 	filename := fmt.Sprintf("contrib-%04d.bin", index)
 	outPath := filepath.Join(state.Phase1Dir(), filename)
-	if err := os.WriteFile(outPath, payload, 0o600); err != nil {
+	if err := writeFileAtomic(outPath, payload); err != nil {
 		return fmt.Errorf("write contribution: %w", err)
 	}
+	now := state.Now()
 
 	record := transcript.ContributionRecord{
 		ID:             fmt.Sprintf("%s-%s-%d", tr.CeremonyID, transcript.Phase1, index),
@@ -189,9 +232,9 @@ func AcceptPhase1Contribution(state State, payload []byte, meta ContributionMeta
 		Signature:      meta.Signature,
 		Attestation:    meta.Attestation,
 		InputHash:      transcript.HashBytes(prevBytes),
-		OutputHash:     transcript.HashBytes(payload),
-		ContributionAt: time.Now().UTC(),
-		VerifiedAt:     time.Now().UTC(),
+		OutputHash:     payloadHash,
+		ContributionAt: now,
+		VerifiedAt:     now,
 		File:           filepath.Base(outPath),
 	}
 	tr.AddContribution(record)
@@ -209,8 +252,21 @@ func AcceptPhase2Contribution(state State, payload []byte, meta ContributionMeta
 	if err != nil {
 		return err
 	}
+	if err := validateContributionMeta(meta, transcript.Phase2); err != nil {
+		return err
+	}
+	payloadHash := transcript.HashBytes(payload)
+	if lastRecord := latestContribution(tr.Phase2.Contributions); lastRecord != nil &&
+		lastRecord.OutputHash == payloadHash &&
+		lastRecord.ParticipantID == meta.ParticipantID &&
+		lastRecord.Signature == meta.Signature {
+		return nil
+	}
 	prev, prevBytes, err := loadLatestPhase2(state)
 	if err != nil {
+		return err
+	}
+	if err := verifyMetaAgainstPayload(meta, transcript.Phase2, prevBytes, payload); err != nil {
 		return err
 	}
 
@@ -225,9 +281,10 @@ func AcceptPhase2Contribution(state State, payload []byte, meta ContributionMeta
 	index := len(tr.Phase2.Contributions) + 1
 	filename := fmt.Sprintf("contrib-%04d.bin", index)
 	outPath := filepath.Join(state.Phase2Dir(), filename)
-	if err := os.WriteFile(outPath, payload, 0o600); err != nil {
+	if err := writeFileAtomic(outPath, payload); err != nil {
 		return fmt.Errorf("write contribution: %w", err)
 	}
+	now := state.Now()
 
 	record := transcript.ContributionRecord{
 		ID:             fmt.Sprintf("%s-%s-%d", tr.CeremonyID, transcript.Phase2, index),
@@ -237,9 +294,9 @@ func AcceptPhase2Contribution(state State, payload []byte, meta ContributionMeta
 		Signature:      meta.Signature,
 		Attestation:    meta.Attestation,
 		InputHash:      transcript.HashBytes(prevBytes),
-		OutputHash:     transcript.HashBytes(payload),
-		ContributionAt: time.Now().UTC(),
-		VerifiedAt:     time.Now().UTC(),
+		OutputHash:     payloadHash,
+		ContributionAt: now,
+		VerifiedAt:     now,
 		File:           filepath.Base(outPath),
 	}
 	tr.AddContribution(record)
@@ -289,10 +346,23 @@ func Finalize(state State, parametersVersion string) (*groth16.ProvingKey, *grot
 	if err != nil {
 		return nil, nil, fmt.Errorf("serialize verifying key: %w", err)
 	}
-	if err := os.WriteFile(filepath.Join(state.Phase2Dir(), "proving_key.bin"), pkBytes, 0o600); err != nil {
+	provingKeyPath := filepath.Join(state.Phase2Dir(), "proving_key.bin")
+	verifyingKeyPath := filepath.Join(state.Phase2Dir(), "verifying_key.bin")
+	if existingPK, readErr := os.ReadFile(provingKeyPath); readErr == nil {
+		existingVK, vkErr := os.ReadFile(verifyingKeyPath)
+		if vkErr != nil {
+			return nil, nil, vkErr
+		}
+		if transcript.HashBytes(existingPK) == transcript.HashBytes(pkBytes) && transcript.HashBytes(existingVK) == transcript.HashBytes(vkBytes) && tr.Final.ProvingKeyHash != "" && tr.Final.VerifyingKeyHash != "" {
+			return &pk, &vk, nil
+		}
+	} else if !os.IsNotExist(readErr) {
+		return nil, nil, readErr
+	}
+	if err := writeFileAtomic(provingKeyPath, pkBytes); err != nil {
 		return nil, nil, err
 	}
-	if err := os.WriteFile(filepath.Join(state.Phase2Dir(), "verifying_key.bin"), vkBytes, 0o600); err != nil {
+	if err := writeFileAtomic(verifyingKeyPath, vkBytes); err != nil {
 		return nil, nil, err
 	}
 
@@ -307,7 +377,7 @@ func Finalize(state State, parametersVersion string) (*groth16.ProvingKey, *grot
 	tr.Final.ProvingKeyHash = transcript.HashBytes(pkBytes)
 	tr.Final.VerifyingKeyHash = transcript.HashBytes(vkBytes)
 	tr.Final.Beacon = cfg.Beacon
-	tr.Final.CompletedAt = time.Now().UTC().Format(time.RFC3339)
+	tr.Final.CompletedAt = state.Now().Format(time.RFC3339)
 	tr.Final.ParametersVersion = parametersVersion
 
 	if err := saveTranscript(state, tr); err != nil {
@@ -381,4 +451,47 @@ func decodeBeacon(beacon string) []byte {
 		return []byte(beacon)
 	}
 	return data
+}
+
+func latestContribution(records []transcript.ContributionRecord) *transcript.ContributionRecord {
+	if len(records) == 0 {
+		return nil
+	}
+	return &records[len(records)-1]
+}
+
+func validateContributionMeta(meta ContributionMeta, phase string) error {
+	if meta.ParticipantID == "" {
+		return fmt.Errorf("%s contribution missing participant_id", phase)
+	}
+	if meta.PublicKey == "" {
+		return fmt.Errorf("%s contribution missing public_key", phase)
+	}
+	if meta.Signature == "" {
+		return fmt.Errorf("%s contribution missing signature", phase)
+	}
+	return nil
+}
+
+func verifyMetaAgainstPayload(meta ContributionMeta, phase string, inputPayload, outputPayload []byte) error {
+	inputHash := transcript.HashBytes(inputPayload)
+	outputHash := transcript.HashBytes(outputPayload)
+	if meta.InputHash != "" && meta.InputHash != inputHash {
+		return fmt.Errorf("%s contribution input hash mismatch: %s != %s", phase, meta.InputHash, inputHash)
+	}
+	if meta.OutputHash != "" && meta.OutputHash != outputHash {
+		return fmt.Errorf("%s contribution output hash mismatch: %s != %s", phase, meta.OutputHash, outputHash)
+	}
+	if err := participant.VerifyContributionSignature(
+		phase,
+		meta.ParticipantID,
+		meta.PublicKey,
+		meta.Attestation,
+		meta.Signature,
+		inputPayload,
+		outputPayload,
+	); err != nil {
+		return fmt.Errorf("verify %s contribution signature: %w", phase, err)
+	}
+	return nil
 }

@@ -238,6 +238,38 @@ func NewBenchmarkDaemon(config BenchmarkDaemonConfig, client ChainClient, runner
 	}, nil
 }
 
+// RunLocalBenchmark executes a benchmark suite once without starting the daemon
+// scheduler or attempting chain submission.
+func RunLocalBenchmark(ctx context.Context, config BenchmarkDaemonConfig, runner BenchmarkRunner) (*BenchmarkResult, error) {
+	if err := config.Validate(); err != nil {
+		return nil, err
+	}
+	if runner == nil {
+		return nil, fmt.Errorf("%w: benchmark runner is required", ErrInvalidConfig)
+	}
+
+	startTime := time.Now()
+	result := &BenchmarkResult{
+		ReportID:  generateReportID(config.ProviderAddress, startTime),
+		Timestamp: startTime,
+	}
+
+	metrics, err := runner.RunBenchmarks(ctx, config)
+	if err != nil {
+		result.Success = false
+		result.Error = err.Error()
+		result.Duration = time.Since(startTime)
+		return result, err
+	}
+
+	result.Metrics = metrics
+	result.SummaryScore = computeSummaryScore(metrics)
+	result.Success = true
+	result.Duration = time.Since(startTime)
+
+	return result, nil
+}
+
 // Start starts the benchmark daemon
 func (d *BenchmarkDaemon) Start(ctx context.Context) error {
 	d.runningMu.Lock()

@@ -1,10 +1,13 @@
 package types
 
 import (
+	"bytes"
 	"fmt"
 
 	sdkmath "cosmossdk.io/math"
 	sdk "github.com/cosmos/cosmos-sdk/types"
+
+	settlementv1 "github.com/virtengine/virtengine/sdk/go/node/settlement/v1"
 )
 
 // GenesisState is the genesis state for the settlement module
@@ -29,6 +32,9 @@ type GenesisState struct {
 
 	// PayoutRecords are the initial payout records
 	PayoutRecords []PayoutRecord `json:"payout_records"`
+	// TreasuryRecords and TreasuryBalance preserve retained payout accounting.
+	TreasuryRecords []TreasuryRecord `json:"treasury_records"`
+	TreasuryBalance sdk.Coins        `json:"treasury_balance"`
 
 	// FiatConversionRecords are the initial fiat conversion records
 	FiatConversionRecords []FiatConversionRecord `json:"fiat_conversion_records"`
@@ -53,6 +59,20 @@ type GenesisState struct {
 
 	// FiatConversionSequence is the next fiat conversion sequence number
 	FiatConversionSequence uint64 `json:"fiat_conversion_sequence"`
+
+	// UsageAuthenticationActive enables Task 84B on fresh chains. Old genesis
+	// documents omit this field and remain migration inputs rather than being
+	// retroactively authenticated.
+	UsageAuthenticationActive bool `json:"usage_authentication_active"`
+
+	// FinancialCases are canonical Task 84D financial dispute aggregates.
+	FinancialCases []FinancialCase `json:"financial_cases"`
+	// FinancialCasesActive enables v1.7.0 non-owner mutation fencing on fresh chains.
+	FinancialCasesActive bool `json:"financial_cases_active"`
+
+	// FiatConversionCustodyBalance is the exact bank balance expected in the
+	// governed fiat custody sink at genesis import/export.
+	FiatConversionCustodyBalance sdk.Coins `json:"fiat_conversion_custody_balance"`
 }
 
 // Params defines the parameters for the settlement module
@@ -185,26 +205,64 @@ type Params struct {
 
 	// OracleDeviationWindowSeconds defines the alert evaluation window in seconds
 	OracleDeviationWindowSeconds uint64 `json:"oracle_deviation_window_seconds"`
+
+	FinancialCaseFilingWindowSeconds       uint64 `json:"financial_case_filing_window_seconds"`
+	FinancialCaseEvidenceWindowSeconds     uint64 `json:"financial_case_evidence_window_seconds"`
+	FinancialCaseReviewWindowSeconds       uint64 `json:"financial_case_review_window_seconds"`
+	FinancialCaseAppealWindowSeconds       uint64 `json:"financial_case_appeal_window_seconds"`
+	FinancialCaseEscalationWindowSeconds   uint64 `json:"financial_case_escalation_window_seconds"`
+	FinancialCaseFilingWindowBlocks        int64  `json:"financial_case_filing_window_blocks"`
+	FinancialCaseEvidenceWindowBlocks      int64  `json:"financial_case_evidence_window_blocks"`
+	FinancialCaseReviewWindowBlocks        int64  `json:"financial_case_review_window_blocks"`
+	FinancialCaseAppealWindowBlocks        int64  `json:"financial_case_appeal_window_blocks"`
+	FinancialCaseEscalationWindowBlocks    int64  `json:"financial_case_escalation_window_blocks"`
+	FinancialCaseMaxClaims                 uint32 `json:"financial_case_max_claims"`
+	FinancialCaseMaxAppeals                uint32 `json:"financial_case_max_appeals"`
+	FinancialCaseMaxEvidenceReferenceBytes uint32 `json:"financial_case_max_evidence_reference_bytes"`
+	FinancialCaseTimeoutBatchLimit         uint32 `json:"financial_case_timeout_batch_limit"`
+
+	// FiatConversionDEXProfileID and digest commit the exact production DEX
+	// route profile selected by governance.
+	FiatConversionDEXProfileID     string                                  `json:"fiat_conversion_dex_profile_id"`
+	FiatConversionDEXProfileDigest []byte                                  `json:"fiat_conversion_dex_profile_digest"`
+	FiatConversionDEXProfileState  settlementv1.FiatConversionProfileState `json:"fiat_conversion_dex_profile_state"`
+	// FiatConversionPayoutProfileID and digest commit the exact production
+	// payout corridor profile selected by governance.
+	FiatConversionPayoutProfileID     string                                  `json:"fiat_conversion_payout_profile_id"`
+	FiatConversionPayoutProfileDigest []byte                                  `json:"fiat_conversion_payout_profile_digest"`
+	FiatConversionPayoutProfileState  settlementv1.FiatConversionProfileState `json:"fiat_conversion_payout_profile_state"`
+	// FiatConversionMinSwapFinalityConfirmations is external-chain finality
+	// evidence required before stable output can be accepted.
+	FiatConversionMinSwapFinalityConfirmations uint32 `json:"fiat_conversion_min_swap_finality_confirmations"`
+	FiatConversionObservationMaxPastSeconds    uint64 `json:"fiat_conversion_observation_max_past_seconds"`
+	FiatConversionObservationMaxFutureSeconds  uint64 `json:"fiat_conversion_observation_max_future_seconds"`
+	FiatConversionMaxObservations              uint32 `json:"fiat_conversion_max_observations"`
 }
 
 // DefaultGenesisState returns the default genesis state
 func DefaultGenesisState() *GenesisState {
 	return &GenesisState{
-		Params:                 DefaultParams(),
-		EscrowAccounts:         []EscrowAccount{},
-		SettlementRecords:      []SettlementRecord{},
-		RewardDistributions:    []RewardDistribution{},
-		UsageRecords:           []UsageRecord{},
-		ClaimableRewards:       []ClaimableRewards{},
-		PayoutRecords:          []PayoutRecord{},
-		FiatConversionRecords:  []FiatConversionRecord{},
-		FiatPayoutPreferences:  []FiatPayoutPreference{},
-		EscrowSequence:         1,
-		SettlementSequence:     1,
-		DistributionSequence:   1,
-		UsageSequence:          1,
-		PayoutSequence:         1,
-		FiatConversionSequence: 1,
+		Params:                       DefaultParams(),
+		EscrowAccounts:               []EscrowAccount{},
+		SettlementRecords:            []SettlementRecord{},
+		RewardDistributions:          []RewardDistribution{},
+		UsageRecords:                 []UsageRecord{},
+		ClaimableRewards:             []ClaimableRewards{},
+		PayoutRecords:                []PayoutRecord{},
+		TreasuryRecords:              []TreasuryRecord{},
+		TreasuryBalance:              sdk.NewCoins(),
+		FiatConversionRecords:        []FiatConversionRecord{},
+		FiatPayoutPreferences:        []FiatPayoutPreference{},
+		EscrowSequence:               1,
+		SettlementSequence:           1,
+		DistributionSequence:         1,
+		UsageSequence:                1,
+		PayoutSequence:               1,
+		FiatConversionSequence:       1,
+		UsageAuthenticationActive:    true,
+		FinancialCases:               []FinancialCase{},
+		FinancialCasesActive:         true,
+		FiatConversionCustodyBalance: sdk.NewCoins(),
 	}
 }
 
@@ -253,11 +311,32 @@ func DefaultParams() Params {
 			{ID: "chainlink-ibc", Type: OracleSourceTypeChainlinkIBC, Enabled: true, Priority: 3},
 			{ID: "manual", Type: OracleSourceTypeManual, Enabled: true, Priority: 100},
 		},
-		OracleStalenessThresholdSeconds: 300,
-		OracleMinSources:                3,
-		OracleManualPrices:              []ManualPriceOverride{},
-		OracleDeviationThresholdBps:     500,
-		OracleDeviationWindowSeconds:    60,
+		OracleStalenessThresholdSeconds:        300,
+		OracleMinSources:                       3,
+		OracleManualPrices:                     []ManualPriceOverride{},
+		OracleDeviationThresholdBps:            500,
+		OracleDeviationWindowSeconds:           60,
+		FinancialCaseFilingWindowSeconds:       604800,
+		FinancialCaseEvidenceWindowSeconds:     604800,
+		FinancialCaseReviewWindowSeconds:       604800,
+		FinancialCaseAppealWindowSeconds:       86400,
+		FinancialCaseEscalationWindowSeconds:   2592000,
+		FinancialCaseFilingWindowBlocks:        120960,
+		FinancialCaseEvidenceWindowBlocks:      120960,
+		FinancialCaseReviewWindowBlocks:        120960,
+		FinancialCaseAppealWindowBlocks:        17280,
+		FinancialCaseEscalationWindowBlocks:    518400,
+		FinancialCaseMaxClaims:                 32,
+		FinancialCaseMaxAppeals:                1,
+		FinancialCaseMaxEvidenceReferenceBytes: 512,
+		FinancialCaseTimeoutBatchLimit:         100,
+		// No external route/corridor is certified by local engineering work.
+		FiatConversionDEXProfileState:              settlementv1.FiatConversionProfileState_FIAT_CONVERSION_PROFILE_STATE_ENGINEERING_COMPLETE_EXTERNAL_BLOCKED,
+		FiatConversionPayoutProfileState:           settlementv1.FiatConversionProfileState_FIAT_CONVERSION_PROFILE_STATE_ENGINEERING_COMPLETE_EXTERNAL_BLOCKED,
+		FiatConversionMinSwapFinalityConfirmations: 2,
+		FiatConversionObservationMaxPastSeconds:    3600,
+		FiatConversionObservationMaxFutureSeconds:  30,
+		FiatConversionMaxObservations:              16,
 	}
 }
 
@@ -313,30 +392,187 @@ func (gs GenesisState) Validate() error {
 			return ErrUsageRecordExists.Wrapf("duplicate usage_id: %s", usage.UsageID)
 		}
 		seenUsage[usage.UsageID] = true
+		if gs.UsageAuthenticationActive && !usage.IsAuthenticated() {
+			return ErrUsageAuthenticationRequired.Wrapf("genesis usage %s is not authenticated", usage.UsageID)
+		}
 	}
 
 	// Validate payout records
-	seenPayouts := make(map[string]bool)
+	seenPayouts := make(map[string]PayoutRecord)
 	for _, payout := range gs.PayoutRecords {
 		if err := payout.Validate(); err != nil {
 			return err
 		}
-		if seenPayouts[payout.PayoutID] {
+		if _, exists := seenPayouts[payout.PayoutID]; exists {
 			return ErrPayoutExists.Wrapf("duplicate payout_id: %s", payout.PayoutID)
 		}
-		seenPayouts[payout.PayoutID] = true
+		seenPayouts[payout.PayoutID] = payout
+	}
+	if !gs.TreasuryBalance.IsValid() {
+		return ErrInvalidSettlement.Wrap("treasury balance is invalid")
+	}
+	treasuryByPayout, err := validateGenesisTreasuryAccounting(gs.TreasuryRecords, gs.TreasuryBalance, seenPayouts)
+	if err != nil {
+		return err
+	}
+
+	seenCases := make(map[string]bool)
+	seenActiveAliases := make(map[string]string)
+	conversionsByID := make(map[string]FiatConversionRecord, len(gs.FiatConversionRecords))
+	for _, conversion := range gs.FiatConversionRecords {
+		conversionsByID[conversion.ConversionID] = conversion
+	}
+	for i, financialCase := range gs.FinancialCases {
+		if financialCase.CaseId == "" || seenCases[financialCase.CaseId] {
+			return ErrInvalidFinancialCase.Wrapf("duplicate or empty financial case at %d", i)
+		}
+		seenCases[financialCase.CaseId] = true
+		if !financialCase.Exposure.OriginalHeld.IsValid() || financialCase.Exposure.OriginalHeld.IsZero() {
+			return ErrInvalidFinancialCase.Wrapf("financial case %s has invalid exposure", financialCase.CaseId)
+		}
+		if _, err := sdk.AccAddressFromBech32(financialCase.Provider); err != nil {
+			return ErrInvalidFinancialCase.Wrapf("financial case %s has invalid provider", financialCase.CaseId)
+		}
+		if _, err := sdk.AccAddressFromBech32(financialCase.Customer); err != nil || financialCase.Provider == financialCase.Customer {
+			return ErrInvalidFinancialCase.Wrapf("financial case %s has invalid customer", financialCase.CaseId)
+		}
+		if IsActiveFinancialCaseStatus(financialCase.Status) && financialCase.ActiveHoldCount == 0 {
+			return ErrFinancialCaseHold.Wrapf("financial case %s has no hold", financialCase.CaseId)
+		}
+		if IsTerminalFinancialCaseStatus(financialCase.Status) && financialCase.ActiveHoldCount != 0 {
+			return ErrFinancialCaseHold.Wrapf("terminal financial case %s retains hold", financialCase.CaseId)
+		}
+		if financialCase.Exposure.PayoutId != "" {
+			found := false
+			for _, payout := range gs.PayoutRecords {
+				if payout.PayoutID == financialCase.Exposure.PayoutId {
+					found = true
+					incidentOnly := false
+					if payout.FiatConversionID != "" {
+						conversion, conversionFound := conversionsByID[payout.FiatConversionID]
+						incidentOnly = conversionFound && conversion.PayoutID == payout.PayoutID && fiatConversionGenesisIrreversible(conversion)
+					}
+					if IsActiveFinancialCaseStatus(financialCase.Status) && !incidentOnly && (payout.State != PayoutStateHeld || payout.DisputeID != financialCase.CaseId) {
+						return ErrFinancialCaseHold.Wrapf("financial case %s payout hold is inconsistent", financialCase.CaseId)
+					}
+					break
+				}
+			}
+			if !found {
+				return ErrFinancialCaseHold.Wrapf("financial case %s payout is missing", financialCase.CaseId)
+			}
+		}
+		if financialCase.Exposure.EscrowId != "" {
+			found := false
+			for _, escrow := range gs.EscrowAccounts {
+				if escrow.EscrowID == financialCase.Exposure.EscrowId {
+					found = true
+					if IsActiveFinancialCaseStatus(financialCase.Status) && escrow.State != EscrowStateDisputed {
+						return ErrFinancialCaseHold.Wrapf("financial case %s escrow hold is inconsistent", financialCase.CaseId)
+					}
+					break
+				}
+			}
+			if !found {
+				return ErrFinancialCaseHold.Wrapf("financial case %s escrow is missing", financialCase.CaseId)
+			}
+		}
+		if IsActiveFinancialCaseStatus(financialCase.Status) {
+			aliases := []string{fmt.Sprintf("subject:%d/%s", financialCase.Subject.Type, financialCase.Subject.PrimaryId)}
+			for _, alias := range []struct{ kind, value string }{
+				{"order", financialCase.Subject.OrderId}, {"invoice", financialCase.Subject.InvoiceId},
+				{"usage", financialCase.Subject.UsageId}, {"job", financialCase.Subject.HpcJobId},
+				{"settlement", financialCase.Subject.SettlementId}, {"escrow", financialCase.Exposure.EscrowId},
+				{"reservation", financialCase.Subject.ReservationId}, {"lease", financialCase.Subject.LeaseId},
+			} {
+				if alias.value != "" {
+					aliases = append(aliases, alias.kind+":"+alias.value)
+				}
+			}
+			for _, alias := range aliases {
+				if owner, exists := seenActiveAliases[alias]; exists && owner != financialCase.CaseId {
+					return ErrInvalidFinancialCase.Wrapf("active alias %s has cases %s and %s", alias, owner, financialCase.CaseId)
+				}
+				seenActiveAliases[alias] = financialCase.CaseId
+			}
+		}
 	}
 
 	// Validate fiat conversion records
 	seenConversions := make(map[string]bool)
+	expectedCustody := sdk.NewCoins()
 	for _, conversion := range gs.FiatConversionRecords {
 		if err := conversion.Validate(); err != nil {
 			return err
+		}
+		if conversion.ProtocolVersion == 0 || (conversion.ProtocolVersion > 0 && len(conversion.RequestDigest) != 32) {
+			return ErrFiatConversionQuarantined.Wrapf("conversion %s is not protocol-migrated", conversion.ConversionID)
+		}
+		if !conversion.LegacyQuarantined && conversion.PayoutID == "" {
+			return ErrInvalidPayout.Wrapf("conversion %s has no payout hold", conversion.ConversionID)
 		}
 		if seenConversions[conversion.ConversionID] {
 			return ErrInvalidSettlement.Wrapf("duplicate conversion_id: %s", conversion.ConversionID)
 		}
 		seenConversions[conversion.ConversionID] = true
+		if conversion.ValueMovementApplied && !conversion.LegacyQuarantined {
+			expectedCustody = expectedCustody.Add(conversion.CustodySinkAmount)
+		}
+		if conversion.PayoutID != "" {
+			linked := false
+			for _, payout := range gs.PayoutRecords {
+				if payout.PayoutID == conversion.PayoutID {
+					linked = payout.FiatConversionID == conversion.ConversionID && payout.Provider == conversion.Provider && payout.Customer == conversion.Customer &&
+						payout.InvoiceID == conversion.InvoiceID && payout.SettlementID == conversion.SettlementID && len(payout.NetAmount) == 1 && payout.NetAmount[0].IsEqual(conversion.CryptoAmount)
+					if linked && conversion.State == FiatConversionStatePayoutCompleted && !conversion.LegacyQuarantined {
+						linked = conversion.ValueMovementApplied && payout.ValueMovementApplied && conversion.CustodySinkAmount.IsEqual(conversion.CryptoAmount) &&
+							len(conversion.CustodySinkEffectHash) == 32 && bytes.Equal(conversion.CustodySinkEffectHash, payout.ValueMovementEffectHash)
+					}
+					break
+				}
+			}
+			if !linked {
+				return ErrInvalidPayout.Wrapf("conversion %s payout linkage mismatch", conversion.ConversionID)
+			}
+			if conversion.State == FiatConversionStatePayoutCompleted && !conversion.LegacyQuarantined {
+				var payout PayoutRecord
+				for _, candidate := range gs.PayoutRecords {
+					if candidate.PayoutID == conversion.PayoutID {
+						payout = candidate
+						break
+					}
+				}
+				retained := payout.PlatformFee.Add(payout.ValidatorFee...).Add(payout.HoldbackAmount...)
+				if !sdk.NewCoins(conversion.CustodySinkAmount).Add(retained...).Equal(payout.GrossAmount) {
+					return ErrInvalidSettlement.Wrapf("conversion %s custody plus retained components do not equal gross exposure", conversion.ConversionID)
+				}
+				for _, expected := range []struct {
+					recordType TreasuryRecordType
+					amount     sdk.Coins
+				}{
+					{TreasuryRecordPlatformFee, payout.PlatformFee},
+					{TreasuryRecordValidatorFee, payout.ValidatorFee},
+					{TreasuryRecordHoldback, payout.HoldbackAmount},
+				} {
+					records := treasuryByPayout[payout.PayoutID][expected.recordType]
+					if expected.amount.IsZero() {
+						if len(records) != 0 {
+							return ErrInvalidSettlement.Wrapf("conversion %s zero retained component has treasury entry", conversion.ConversionID)
+						}
+						continue
+					}
+					if len(records) != 1 || !records[0].Amount.Equal(expected.amount) {
+						return ErrInvalidSettlement.Wrapf("conversion %s retained treasury component missing, duplicated, or mismatched", conversion.ConversionID)
+					}
+					if records[0].RecordID != "payout/"+payout.PayoutID+"/"+expected.recordType.String() {
+						return ErrInvalidSettlement.Wrapf("conversion %s retained treasury component has noncanonical record id", conversion.ConversionID)
+					}
+				}
+			}
+		}
+	}
+	if !gs.FiatConversionCustodyBalance.Equal(expectedCustody) {
+		return ErrInvalidSettlement.Wrapf("fiat custody balance mismatch: expected %s got %s", expectedCustody, gs.FiatConversionCustodyBalance)
 	}
 
 	// Validate fiat payout preferences
@@ -354,8 +590,69 @@ func (gs GenesisState) Validate() error {
 	return nil
 }
 
+func fiatConversionGenesisIrreversible(conversion FiatConversionRecord) bool {
+	switch conversion.State {
+	case FiatConversionStateSwapSubmitted, FiatConversionStateSwapSettled, FiatConversionStateOffRampPending,
+		FiatConversionStatePayoutPending, FiatConversionStatePayoutSubmitted, FiatConversionStatePayoutCompleted:
+		return true
+	default:
+		return conversion.SwapTxHash != "" || conversion.OffRampID != "" || conversion.ValueMovementApplied
+	}
+}
+
+func validateGenesisTreasuryAccounting(records []TreasuryRecord, balance sdk.Coins, payouts map[string]PayoutRecord) (map[string]map[TreasuryRecordType][]TreasuryRecord, error) {
+	credits := sdk.NewCoins()
+	debits := sdk.NewCoins()
+	seen := make(map[string]bool, len(records))
+	byPayout := make(map[string]map[TreasuryRecordType][]TreasuryRecord)
+	for _, record := range records {
+		if record.RecordID == "" || record.PayoutID == "" || record.SettlementID == "" || !record.Amount.IsValid() || record.Amount.IsZero() || !record.BalanceAfter.IsValid() {
+			return nil, ErrInvalidSettlement.Wrap("invalid treasury genesis record")
+		}
+		if seen[record.RecordID] {
+			return nil, ErrInvalidSettlement.Wrapf("duplicate treasury record_id: %s", record.RecordID)
+		}
+		seen[record.RecordID] = true
+		payout, found := payouts[record.PayoutID]
+		if !found {
+			return nil, ErrInvalidSettlement.Wrapf("treasury record %s references missing payout", record.RecordID)
+		}
+		if payout.SettlementID != record.SettlementID {
+			return nil, ErrInvalidSettlement.Wrapf("treasury record %s has invalid settlement linkage", record.RecordID)
+		}
+		switch record.RecordType {
+		case TreasuryRecordPlatformFee, TreasuryRecordValidatorFee, TreasuryRecordHoldback:
+			credits = credits.Add(record.Amount...)
+		case TreasuryRecordRefund, TreasuryRecordWithdrawal:
+			debits = debits.Add(record.Amount...)
+		default:
+			return nil, ErrInvalidSettlement.Wrapf("treasury record %s has unknown type", record.RecordID)
+		}
+		if byPayout[record.PayoutID] == nil {
+			byPayout[record.PayoutID] = make(map[TreasuryRecordType][]TreasuryRecord)
+		}
+		byPayout[record.PayoutID][record.RecordType] = append(byPayout[record.PayoutID][record.RecordType], record)
+	}
+	if !credits.IsAllGTE(debits) {
+		return nil, ErrInvalidSettlement.Wrap("treasury genesis accounting underflow")
+	}
+	expected := credits.Sub(debits...)
+	if !expected.Equal(balance) {
+		return nil, ErrInvalidSettlement.Wrapf("treasury balance mismatch: expected %s got %s", expected, balance)
+	}
+	return byPayout, nil
+}
+
 // Validate validates the parameters
 func (p Params) Validate() error {
+	if p.FinancialCaseMaxClaims > 256 || p.FinancialCaseMaxAppeals > 8 || p.FinancialCaseMaxEvidenceReferenceBytes > 4096 || p.FinancialCaseTimeoutBatchLimit > 1000 {
+		return ErrInvalidParams.Wrap("financial case limits exceed protocol maximum")
+	}
+	for _, blocks := range []int64{p.FinancialCaseFilingWindowBlocks, p.FinancialCaseEvidenceWindowBlocks, p.FinancialCaseReviewWindowBlocks, p.FinancialCaseAppealWindowBlocks, p.FinancialCaseEscalationWindowBlocks} {
+		if blocks < 0 {
+			return ErrInvalidParams.Wrap("financial case block windows cannot be negative")
+		}
+	}
 	// Validate fee rates are between 0 and 1
 	// We'll do basic validation here; more sophisticated parsing would be needed in production
 	if p.PlatformFeeRate != "" {
@@ -427,6 +724,15 @@ func (p Params) Validate() error {
 	}
 
 	if p.FiatConversionEnabled {
+		if err := validateCertifiedFiatProfile(p.FiatConversionDEXProfileID, p.FiatConversionDEXProfileDigest, p.FiatConversionDEXProfileState, "dex"); err != nil {
+			return err
+		}
+		if err := validateCertifiedFiatProfile(p.FiatConversionPayoutProfileID, p.FiatConversionPayoutProfileDigest, p.FiatConversionPayoutProfileState, "payout"); err != nil {
+			return err
+		}
+		if p.FiatConversionMinSwapFinalityConfirmations == 0 {
+			return ErrInvalidParams.Wrap("fiat conversion swap finality confirmations must be positive")
+		}
 		if p.FiatConversionStableDenom == "" || p.FiatConversionStableSymbol == "" {
 			return ErrInvalidParams.Wrap("fiat conversion stable token must be configured")
 		}
@@ -478,6 +784,15 @@ func (p Params) Validate() error {
 			return ErrInvalidParams.Wrap("fiat_conversion_min_compliance_status required")
 		}
 	}
+	if !validFiatProfileState(p.FiatConversionDEXProfileState) || !validFiatProfileState(p.FiatConversionPayoutProfileState) {
+		return ErrInvalidParams.Wrap("invalid fiat conversion profile state")
+	}
+	if p.FiatConversionObservationMaxPastSeconds == 0 || p.FiatConversionObservationMaxFutureSeconds > 300 {
+		return ErrInvalidParams.Wrap("invalid fiat conversion observation time bounds")
+	}
+	if p.FiatConversionMaxObservations == 0 || p.FiatConversionMaxObservations > 64 {
+		return ErrInvalidParams.Wrap("fiat conversion max observations must be between 1 and 64")
+	}
 
 	if p.FiatConversionSpreadBps > 10000 {
 		return ErrInvalidParams.Wrap("fiat_conversion_spread_bps cannot exceed 10000")
@@ -523,6 +838,32 @@ func (p Params) Validate() error {
 		}
 	}
 
+	return nil
+}
+
+func validFiatProfileState(state settlementv1.FiatConversionProfileState) bool {
+	switch state {
+	case settlementv1.FiatConversionProfileState_FIAT_CONVERSION_PROFILE_STATE_UNSUPPORTED,
+		settlementv1.FiatConversionProfileState_FIAT_CONVERSION_PROFILE_STATE_ENGINEERING_INCOMPLETE,
+		settlementv1.FiatConversionProfileState_FIAT_CONVERSION_PROFILE_STATE_ENGINEERING_COMPLETE_EXTERNAL_BLOCKED,
+		settlementv1.FiatConversionProfileState_FIAT_CONVERSION_PROFILE_STATE_CERTIFIED_ENABLED,
+		settlementv1.FiatConversionProfileState_FIAT_CONVERSION_PROFILE_STATE_PAUSED:
+		return true
+	default:
+		return false
+	}
+}
+
+func validateCertifiedFiatProfile(id string, digest []byte, state settlementv1.FiatConversionProfileState, kind string) error {
+	if state != settlementv1.FiatConversionProfileState_FIAT_CONVERSION_PROFILE_STATE_CERTIFIED_ENABLED {
+		return ErrInvalidParams.Wrapf("fiat conversion %s profile is not certified_enabled", kind)
+	}
+	if id == "" || len(id) > 128 {
+		return ErrInvalidParams.Wrapf("fiat conversion %s profile id is invalid", kind)
+	}
+	if len(digest) != 32 {
+		return ErrInvalidParams.Wrapf("fiat conversion %s profile digest must be SHA-256", kind)
+	}
 	return nil
 }
 

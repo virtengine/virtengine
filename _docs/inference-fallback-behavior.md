@@ -24,6 +24,8 @@ The system selects an ML scorer in the following order:
    - Used when TensorFlow is disabled or unavailable
    - Provides deterministic scores based on feature values
    - Safe for consensus but not production accuracy
+   - The sidecar escape hatch `--allow-fallback-to-stub` is for local dev/test only
+   - A runtime backend value of `local_stub` in staging or production is an incident, not a tolerated steady state
 
 ## Environment Variables
 
@@ -48,6 +50,10 @@ The system falls back to StubMLScorer when:
 3. **Initialization failure**: TensorFlow session creation fails
 4. **Sidecar unavailable**: gRPC connection to sidecar fails
 5. **Health check failure**: Scorer reports unhealthy
+
+Production policy:
+- Production and staging deployment assets must not enable `--allow-fallback-to-stub`
+- CI validates deployment, build, workflow, and public-doc surfaces to keep the fallback disabled outside dev/test
 
 ## Consensus Safety
 

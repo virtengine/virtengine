@@ -11,6 +11,7 @@ import (
 	sdk "github.com/cosmos/cosmos-sdk/types"
 
 	"github.com/virtengine/virtengine/x/hpc/types"
+	settlementtypes "github.com/virtengine/virtengine/x/settlement/types"
 )
 
 // ============================================================================
@@ -32,6 +33,15 @@ func (k Keeper) CreateJobAccounting(ctx sdk.Context, accounting *types.JobAccoun
 
 // FinalizeJobAccounting finalizes job accounting and triggers reward distribution
 func (k Keeper) FinalizeJobAccounting(ctx sdk.Context, jobID string) error {
+	cacheCtx, write := ctx.CacheContext()
+	if err := k.finalizeJobAccounting(cacheCtx, jobID); err != nil {
+		return err
+	}
+	write()
+	return nil
+}
+
+func (k Keeper) finalizeJobAccounting(ctx sdk.Context, jobID string) error {
 	accounting, exists := k.GetJobAccounting(ctx, jobID)
 	if !exists {
 		return types.ErrJobAccountingNotFound
@@ -59,8 +69,7 @@ func (k Keeper) FinalizeJobAccounting(ctx sdk.Context, jobID string) error {
 	if job.State == types.JobStateCompleted {
 		_, err := k.DistributeJobRewards(ctx, jobID)
 		if err != nil {
-			k.Logger(ctx).Error("failed to distribute job rewards", "jobID", jobID, "error", err)
-			// Don't fail the finalization, just log the error
+			return types.ErrInvalidReward.Wrapf("failed to distribute job rewards: %v", err)
 		}
 	}
 
@@ -100,6 +109,21 @@ func (k Keeper) SetJobAccounting(ctx sdk.Context, accounting types.JobAccounting
 // DistributeJobRewards distributes rewards for a completed HPC job
 // Uses deterministic fixed-point arithmetic for on-chain calculations
 func (k Keeper) DistributeJobRewards(ctx sdk.Context, jobID string) (*types.HPCRewardRecord, error) {
+	cacheCtx, write := ctx.CacheContext()
+	reward, err := k.distributeJobRewards(cacheCtx, jobID)
+	if err != nil {
+		return nil, err
+	}
+	write()
+	return reward, nil
+}
+
+func (k Keeper) distributeJobRewards(ctx sdk.Context, jobID string) (*types.HPCRewardRecord, error) {
+	if k.settlementKeeper != nil {
+		if financialCase := k.canonicalCaseForJob(ctx, jobID); financialCase != "" {
+			return nil, types.ErrInvalidReward.Wrap("canonical financial case " + financialCase + " holds rewards")
+		}
+	}
 	job, exists := k.GetJob(ctx, jobID)
 	if !exists {
 		return nil, types.ErrJobNotFound
@@ -227,18 +251,28 @@ func (k Keeper) DistributeJobRewards(ctx sdk.Context, jobID string) (*types.HPCR
 	for _, recipient := range recipients {
 		recipientAddr, err := sdk.AccAddressFromBech32(recipient.Address)
 		if err != nil {
-			k.Logger(ctx).Error("invalid recipient address", "address", recipient.Address, "error", err)
-			continue
+			return nil, types.ErrInvalidReward.Wrapf("invalid recipient address %s", recipient.Address)
 		}
 
 		// Transfer from module to recipient
 		if err := k.bankKeeper.SendCoinsFromModuleToAccount(ctx, types.ModuleName, recipientAddr, recipient.Amount); err != nil {
-			k.Logger(ctx).Error("failed to transfer reward", "recipient", recipient.Address, "amount", recipient.Amount, "error", err)
-			// Continue with other recipients
+			return nil, types.ErrInvalidReward.Wrapf("reward transfer failed for %s: %v", recipient.Address, err)
 		}
 	}
 
 	return reward, nil
+}
+
+func (k Keeper) canonicalCaseForJob(ctx sdk.Context, jobID string) string {
+	if k.settlementKeeper == nil {
+		return ""
+	}
+	subject := settlementtypes.FinancialSubject{Type: settlementtypes.FinancialSubjectTypeHPCJob, PrimaryId: jobID, HpcJobId: jobID}
+	financialCase, found := k.settlementKeeper.GetFinancialCaseBySubject(ctx, subject)
+	if found && settlementtypes.IsActiveFinancialCaseStatus(financialCase.Status) {
+		return financialCase.CaseId
+	}
+	return ""
 }
 
 // GetHPCReward retrieves an HPC reward by ID
@@ -382,6 +416,17 @@ func (k Keeper) SetDispute(ctx sdk.Context, dispute types.HPCDispute) error {
 	}
 	store.Set(types.GetDisputeKey(dispute.DisputeID), bz)
 	return nil
+}
+
+func (k Keeper) GetDisputesByFinancialCase(ctx sdk.Context, caseID string) []types.HPCDispute {
+	result := make([]types.HPCDispute, 0)
+	k.WithDisputes(ctx, func(dispute types.HPCDispute) bool {
+		if dispute.FinancialCaseID == caseID {
+			result = append(result, dispute)
+		}
+		return false
+	})
+	return result
 }
 
 // WithDisputes iterates over all disputes

@@ -1,9 +1,10 @@
 package keeper
 
 import (
-	"crypto/ed25519"
+	"bytes"
 	"crypto/sha256"
 	"encoding/binary"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"time"
@@ -30,17 +31,17 @@ func (k Keeper) ProcessHeartbeat(ctx sdk.Context, msg types.MsgEnclaveHeartbeat)
 	}
 
 	// Check if enclave identity is active
-	if identity.Status != types.EnclaveIdentityStatusActive {
+	if identity.Status != types.EnclaveIdentityStatusActive && identity.Status != types.EnclaveIdentityStatusRotating {
 		return nil, fmt.Errorf("enclave identity is not active: %s", identity.Status)
-	}
-
-	// Validate heartbeat timestamp
-	if err := k.ValidateHeartbeatTimestamp(ctx, msg.Timestamp); err != nil {
-		return nil, err
 	}
 
 	// Check for replay attacks using nonce
 	if err := k.ValidateHeartbeatNonce(ctx, validatorAddr, msg.Nonce); err != nil {
+		return nil, err
+	}
+
+	// Validate heartbeat timestamp
+	if err := k.ValidateHeartbeatTimestamp(ctx, validatorAddr, msg.Timestamp); err != nil {
 		return nil, err
 	}
 
@@ -122,17 +123,26 @@ func (k Keeper) ProcessHeartbeat(ctx sdk.Context, msg types.MsgEnclaveHeartbeat)
 }
 
 // ValidateHeartbeatTimestamp validates the heartbeat timestamp
-func (k Keeper) ValidateHeartbeatTimestamp(ctx sdk.Context, timestamp time.Time) error {
+func (k Keeper) ValidateHeartbeatTimestamp(ctx sdk.Context, validatorAddr sdk.AccAddress, timestamp time.Time) error {
 	currentTime := ctx.BlockTime()
 
 	// Check if timestamp is too far in the past (more than 5 minutes)
 	if currentTime.Sub(timestamp) > 5*time.Minute {
-		return fmt.Errorf("heartbeat timestamp too old: %v", timestamp)
+		return types.ErrInvalidHeartbeat.Wrapf("heartbeat timestamp too old: %v", timestamp)
 	}
 
 	// Check if timestamp is in the future (allow 1 minute clock drift)
 	if timestamp.Sub(currentTime) > 1*time.Minute {
-		return fmt.Errorf("heartbeat timestamp in the future: %v", timestamp)
+		return types.ErrInvalidHeartbeat.Wrapf("heartbeat timestamp in the future: %v", timestamp)
+	}
+
+	health, exists := k.GetEnclaveHealthStatus(ctx, validatorAddr)
+	if exists && !health.LastHeartbeat.IsZero() && !timestamp.After(health.LastHeartbeat) {
+		return types.ErrInvalidHeartbeat.Wrapf(
+			"heartbeat timestamp must be newer than last accepted heartbeat: got %s, last %s",
+			timestamp.UTC().Format(time.RFC3339Nano),
+			health.LastHeartbeat.UTC().Format(time.RFC3339Nano),
+		)
 	}
 
 	return nil
@@ -141,10 +151,18 @@ func (k Keeper) ValidateHeartbeatTimestamp(ctx sdk.Context, timestamp time.Time)
 // ValidateHeartbeatNonce checks if the nonce has been used before
 func (k Keeper) ValidateHeartbeatNonce(ctx sdk.Context, validatorAddr sdk.AccAddress, nonce uint64) error {
 	store := ctx.KVStore(k.StoreKey())
-	nonceKey := k.heartbeatNonceKey(validatorAddr, nonce)
+	nonceKey := types.HeartbeatNonceKey(validatorAddr, nonce)
 
 	if store.Has(nonceKey) {
-		return types.ErrHeartbeatReplay
+		return types.ErrHeartbeatReplay.Wrapf("nonce %d already used", nonce)
+	}
+
+	lastNonce := store.Get(types.HeartbeatLastNonceKey(validatorAddr))
+	if len(lastNonce) == 8 {
+		highestAccepted := binary.BigEndian.Uint64(lastNonce)
+		if nonce <= highestAccepted {
+			return types.ErrHeartbeatReplay.Wrapf("nonce %d is not greater than last accepted nonce %d", nonce, highestAccepted)
+		}
 	}
 
 	return nil
@@ -153,7 +171,7 @@ func (k Keeper) ValidateHeartbeatNonce(ctx sdk.Context, validatorAddr sdk.AccAdd
 // StoreHeartbeatNonce stores a used nonce
 func (k Keeper) StoreHeartbeatNonce(ctx sdk.Context, validatorAddr sdk.AccAddress, nonce uint64) error {
 	store := ctx.KVStore(k.StoreKey())
-	nonceKey := k.heartbeatNonceKey(validatorAddr, nonce)
+	nonceKey := types.HeartbeatNonceKey(validatorAddr, nonce)
 
 	// Store nonce with expiry timestamp (keep for 24 hours)
 	expiryTime := ctx.BlockTime().Add(24 * time.Hour)
@@ -163,73 +181,39 @@ func (k Keeper) StoreHeartbeatNonce(ctx sdk.Context, validatorAddr sdk.AccAddres
 	}
 
 	store.Set(nonceKey, bz)
+	lastNonce := make([]byte, 8)
+	binary.BigEndian.PutUint64(lastNonce, nonce)
+	store.Set(types.HeartbeatLastNonceKey(validatorAddr), lastNonce)
 	return nil
-}
-
-// heartbeatNonceKey creates a store key for heartbeat nonces
-func (k Keeper) heartbeatNonceKey(validatorAddr sdk.AccAddress, nonce uint64) []byte {
-	// Use a separate prefix for nonces
-	prefix := []byte{0x09} // New prefix for heartbeat nonces
-	key := make([]byte, 0, len(prefix)+len(validatorAddr)+8)
-	key = append(key, prefix...)
-	key = append(key, validatorAddr.Bytes()...)
-
-	// Append nonce as big-endian bytes
-	nonceBytes := make([]byte, 8)
-	binary.BigEndian.PutUint64(nonceBytes, nonce)
-	key = append(key, nonceBytes...)
-
-	return key
 }
 
 // VerifyHeartbeatSignature verifies the signature on a heartbeat message
 func (k Keeper) VerifyHeartbeatSignature(ctx sdk.Context, identity types.EnclaveIdentity, msg types.MsgEnclaveHeartbeat) error {
-	// Create the message to verify
-	heartbeatData := struct {
-		ValidatorAddress string
-		Timestamp        time.Time
-		Nonce            uint64
-	}{
-		ValidatorAddress: msg.ValidatorAddress,
-		Timestamp:        msg.Timestamp,
-		Nonce:            msg.Nonce,
-	}
-
-	// Serialize to JSON
-	dataBytes, err := json.Marshal(heartbeatData)
+	payload, err := heartbeatSigningPayload(msg)
 	if err != nil {
-		return fmt.Errorf("failed to marshal heartbeat data: %w", err)
+		return types.ErrHeartbeatSignatureInvalid.Wrapf("failed to build heartbeat signing payload: %v", err)
 	}
 
-	// Hash the data
-	hash := sha256.Sum256(dataBytes)
-
-	// Verify signature using the enclave's signing public key
-	// NOTE: This is a placeholder - actual signature verification would use
-	// the appropriate cryptographic library based on the signature scheme
-	if err := k.verifySignature(identity.SigningPubKey, hash[:], msg.Signature); err != nil {
-		return types.ErrHeartbeatSignatureInvalid
+	validatorAddr, err := sdk.AccAddressFromBech32(identity.ValidatorAddress)
+	if err != nil {
+		return types.ErrHeartbeatSignatureInvalid.Wrapf("invalid validator address: %v", err)
 	}
 
-	return nil
-}
-
-// verifySignature verifies a signature using ed25519
-func (k Keeper) verifySignature(pubKey []byte, message []byte, signature []byte) error {
-	// Validate input lengths
-	if len(pubKey) != ed25519.PublicKeySize {
-		return fmt.Errorf("invalid public key length: expected %d, got %d", ed25519.PublicKeySize, len(pubKey))
-	}
-	if len(signature) != ed25519.SignatureSize {
-		return fmt.Errorf("invalid signature length: expected %d, got %d", ed25519.SignatureSize, len(signature))
-	}
-	if len(message) == 0 {
-		return fmt.Errorf("empty message")
+	validKeys, staleKeys := k.heartbeatSigningKeys(ctx, validatorAddr, identity)
+	for _, pubKey := range validKeys {
+		if err := verifySigningKeySignature(pubKey, payload, msg.Signature); err == nil {
+			return nil
+		}
 	}
 
-	// Verify the signature using ed25519
-	if !ed25519.Verify(pubKey, message, signature) {
-		return fmt.Errorf("signature verification failed")
+	for _, pubKey := range staleKeys {
+		if err := verifySigningKeySignature(pubKey, payload, msg.Signature); err == nil {
+			return types.ErrHeartbeatSignatureInvalid.Wrap("stale rotation signing key")
+		}
+	}
+
+	if err := verifySigningKeySignature(identity.SigningPubKey, payload, msg.Signature); err != nil {
+		return types.ErrHeartbeatSignatureInvalid.Wrap(err.Error())
 	}
 
 	return nil
@@ -348,7 +332,7 @@ func (k Keeper) verifyNitroHeartbeatAttestation(ctx sdk.Context, identity types.
 // CleanupExpiredNonces removes expired heartbeat nonces
 func (k Keeper) CleanupExpiredNonces(ctx sdk.Context) {
 	store := ctx.KVStore(k.StoreKey())
-	prefix := []byte{0x09} // Heartbeat nonce prefix
+	prefix := types.HeartbeatNoncePrefixKey()
 	iterator := storetypes.KVStorePrefixIterator(store, prefix)
 	defer iterator.Close()
 
@@ -376,4 +360,57 @@ func (k Keeper) CleanupExpiredNonces(ctx sdk.Context) {
 	if len(keysToDelete) > 0 {
 		ctx.Logger().Debug("cleaned up expired heartbeat nonces", "count", len(keysToDelete))
 	}
+}
+
+type heartbeatSigningData struct {
+	ValidatorAddress    string `json:"validator_address"`
+	TimestampUnixNano   int64  `json:"timestamp_unix_nano"`
+	Nonce               uint64 `json:"nonce"`
+	AttestationProofSHA string `json:"attestation_proof_sha256"`
+}
+
+func heartbeatSigningPayload(msg types.MsgEnclaveHeartbeat) ([]byte, error) {
+	attestationHash := sha256.Sum256(msg.AttestationProof)
+	dataBytes, err := json.Marshal(heartbeatSigningData{
+		ValidatorAddress:    msg.ValidatorAddress,
+		TimestampUnixNano:   msg.Timestamp.UTC().UnixNano(),
+		Nonce:               msg.Nonce,
+		AttestationProofSHA: hex.EncodeToString(attestationHash[:]),
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	hash := sha256.Sum256(dataBytes)
+	return hash[:], nil
+}
+
+func (k Keeper) heartbeatSigningKeys(ctx sdk.Context, validatorAddr sdk.AccAddress, identity types.EnclaveIdentity) (validKeys [][]byte, staleKeys [][]byte) {
+	addUnique := func(dst [][]byte, candidate []byte) [][]byte {
+		if len(candidate) == 0 {
+			return dst
+		}
+		for _, existing := range dst {
+			if bytes.Equal(existing, candidate) {
+				return dst
+			}
+		}
+		return append(dst, bytes.Clone(candidate))
+	}
+
+	validKeys = addUnique(validKeys, identity.SigningPubKey)
+
+	latestRotation, exists := k.getLatestStoredKeyRotation(ctx, validatorAddr)
+	if !exists {
+		return validKeys, staleKeys
+	}
+
+	if latestRotation.Status == types.KeyRotationStatusActive && types.IsInOverlapPeriod(&latestRotation.KeyRotationRecord, ctx.BlockHeight()) {
+		validKeys = addUnique(validKeys, latestRotation.OldSigningPubKey)
+		validKeys = addUnique(validKeys, latestRotation.NewSigningPubKey)
+		return validKeys, staleKeys
+	}
+
+	staleKeys = addUnique(staleKeys, latestRotation.OldSigningPubKey)
+	return validKeys, staleKeys
 }

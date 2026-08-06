@@ -2,23 +2,29 @@ package provider_daemon
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	sdkmath "cosmossdk.io/math"
 	rpchttp "github.com/cometbft/cometbft/rpc/client/http"
 	sdktypes "github.com/cosmos/cosmos-sdk/types"
 	"github.com/cosmos/cosmos-sdk/types/query"
+	authtypes "github.com/cosmos/cosmos-sdk/x/auth/types"
 	"github.com/virtengine/virtengine/pkg/observability"
 	"github.com/virtengine/virtengine/pkg/security"
 	hpcv1 "github.com/virtengine/virtengine/sdk/go/node/hpc/v1"
 	marketv1 "github.com/virtengine/virtengine/sdk/go/node/market/v1"
 	marketv1beta5 "github.com/virtengine/virtengine/sdk/go/node/market/v1beta5"
+	providerv1beta4 "github.com/virtengine/virtengine/sdk/go/node/provider/v1beta4"
 	resourcesv1 "github.com/virtengine/virtengine/sdk/go/node/resources/v1"
+	settlementv1 "github.com/virtengine/virtengine/sdk/go/node/settlement/v1"
 	depositv1 "github.com/virtengine/virtengine/sdk/go/node/types/deposit/v1"
 	hpctypes "github.com/virtengine/virtengine/x/hpc/types"
+	providerkeeper "github.com/virtengine/virtengine/x/provider/keeper"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 )
@@ -38,9 +44,113 @@ type RPCChainClientConfig struct {
 
 // rpcChainClient implements ChainClient using gRPC
 type rpcChainClient struct {
-	config    RPCChainClientConfig
-	grpcConn  *grpc.ClientConn
-	rpcClient *rpchttp.HTTP
+	mu                sync.RWMutex
+	config            RPCChainClientConfig
+	grpcConn          *grpc.ClientConn
+	rpcClient         *rpchttp.HTTP
+	mutationSubmitter *ProviderMutationSubmitter
+	mutationGuard     func(context.Context) error
+	hpcQuery          providerHPCQueryClient
+	resourcesQuery    providerResourcesQueryClient
+	providerQuery     providerv1beta4.QueryClient
+	settlementQuery   settlementv1.QueryClient
+	authQuery         authtypes.QueryClient
+	storeQuery        providerStoreQueryClient
+}
+
+// SetMutationGuard installs the HA fencing check applied before provider
+// producers read or mutate chain state. Standby replicas therefore cannot bid,
+// report resources, update domains, or initiate any other write workflow.
+func (c *rpcChainClient) SetMutationGuard(guard func(context.Context) error) {
+	c.mu.Lock()
+	c.mutationGuard = guard
+	c.mu.Unlock()
+}
+
+func (c *rpcChainClient) ensureMutationAllowed(ctx context.Context) error {
+	c.mu.RLock()
+	guard := c.mutationGuard
+	c.mu.RUnlock()
+	if guard == nil {
+		return nil
+	}
+	return guard(ctx)
+}
+
+// SetMutationSubmitter installs the only production provider mutation path.
+// It must be started and ready before mutation-producing services are started.
+func (c *rpcChainClient) SetMutationSubmitter(submitter *ProviderMutationSubmitter) {
+	c.mu.Lock()
+	c.mutationSubmitter = submitter
+	c.mu.Unlock()
+}
+
+// MutationReadiness exposes typed readiness for daemon health checks.
+func (c *rpcChainClient) MutationReadiness(ctx context.Context) ProviderMutationReadiness {
+	if c == nil {
+		return ProviderMutationReadiness{Reason: "provider mutation submitter unavailable"}
+	}
+	c.mu.RLock()
+	submitter := c.mutationSubmitter
+	c.mu.RUnlock()
+	if submitter == nil {
+		return ProviderMutationReadiness{Reason: "provider mutation submitter unavailable"}
+	}
+	return submitter.Readiness(ctx)
+}
+
+func (c *rpcChainClient) ProviderStoreQueryClient() providerStoreQueryClient {
+	if c == nil {
+		return nil
+	}
+	return c.storeQuery
+}
+
+func (c *rpcChainClient) submitMutation(ctx context.Context, kind ProviderMutationKind, msg sdktypes.Msg) error {
+	if msg == nil {
+		return fmt.Errorf("mutation message is required")
+	}
+	if c == nil {
+		return ErrProviderMutationUnavailable
+	}
+	if err := c.ensureMutationAllowed(ctx); err != nil {
+		return err
+	}
+	c.mu.RLock()
+	submitter := c.mutationSubmitter
+	c.mu.RUnlock()
+	if submitter == nil {
+		return &ProviderMutationError{
+			Op:             "submit",
+			Classification: MutationClassUnavailable,
+			Retryable:      true,
+			Err:            ErrProviderMutationUnavailable,
+		}
+	}
+	_, err := submitter.Submit(ctx, kind, msg)
+	return err
+}
+
+func (c *rpcChainClient) QueryDomainVerificationRecord(ctx context.Context, providerAddr sdktypes.AccAddress) (*providerkeeper.DomainVerificationRecord, error) {
+	if c == nil || c.storeQuery == nil {
+		return nil, ErrProviderMutationUnavailable
+	}
+	value, err := queryProviderStoreValue(ctx, c.storeQuery, c.config.RequestTimeout, providerkeeper.DomainVerificationKey(providerAddr))
+	if err != nil {
+		return nil, err
+	}
+	if len(value) == 0 {
+		return nil, nil
+	}
+	var record providerkeeper.DomainVerificationRecord
+	if err := json.Unmarshal(value, &record); err != nil {
+		return nil, fmt.Errorf("decode domain verification record: %w", err)
+	}
+	return &record, nil
+}
+
+func (c *rpcChainClient) ConfirmDomainVerification(ctx context.Context, providerAddr sdktypes.AccAddress, proof string) error {
+	return c.submitMutation(ctx, MutationProviderConfirmDomain, providerv1beta4.NewMsgConfirmDomainVerification(providerAddr, proof))
 }
 
 // newRPCChainClient creates a new RPC-based chain client
@@ -64,6 +174,11 @@ func newRPCChainClient(config RPCChainClientConfig) (*rpcChainClient, error) {
 			return nil, fmt.Errorf("failed to connect to gRPC endpoint: %w", err)
 		}
 		client.grpcConn = conn
+		client.hpcQuery = hpcv1.NewQueryClient(conn)
+		client.resourcesQuery = resourcesv1.NewQueryClient(conn)
+		client.providerQuery = providerv1beta4.NewQueryClient(conn)
+		client.settlementQuery = settlementv1.NewQueryClient(conn)
+		client.authQuery = authtypes.NewQueryClient(conn)
 	}
 
 	if config.NodeURI != "" {
@@ -72,14 +187,108 @@ func newRPCChainClient(config RPCChainClientConfig) (*rpcChainClient, error) {
 			return nil, fmt.Errorf("failed to create comet rpc client: %w", err)
 		}
 		client.rpcClient = rpcClient
+		client.storeQuery = rpcClient
 	}
 
 	return client, nil
 }
 
+// ResolveUsageStreamState derives the committed last sequence by querying
+// stored authenticated usage and matching the collision-safe stream identity.
+func (c *rpcChainClient) ResolveUsageStreamState(ctx context.Context, provider, allocationID, orderID, leaseID string) (OnChainUsageStreamState, error) {
+	if c.settlementQuery == nil {
+		return OnChainUsageStreamState{}, fmt.Errorf("settlement query client not configured")
+	}
+	response, err := c.settlementQuery.UsageStreamState(ctx, &settlementv1.QueryUsageStreamStateRequest{
+		Provider:     provider,
+		AllocationId: allocationID,
+		OrderId:      orderID,
+		LeaseId:      leaseID,
+	})
+	if err != nil {
+		return OnChainUsageStreamState{}, fmt.Errorf("query usage stream state: %w", err)
+	}
+	return OnChainUsageStreamState{LastSequence: response.LastSequence}, nil
+}
+
+// ResolveAccountSequence returns the committed Cosmos transaction signer state.
+func (c *rpcChainClient) ResolveAccountSequence(ctx context.Context, address string) (uint64, uint64, error) {
+	if c.authQuery == nil {
+		return 0, 0, fmt.Errorf("auth query client not configured")
+	}
+	response, err := c.authQuery.AccountInfo(ctx, &authtypes.QueryAccountInfoRequest{Address: address})
+	if err != nil {
+		return 0, 0, fmt.Errorf("query account info: %w", err)
+	}
+	if response.Info == nil {
+		return 0, 0, fmt.Errorf("account info unavailable")
+	}
+	return response.Info.AccountNumber, response.Info.Sequence, nil
+}
+
+// ResolveProviderSigningState resolves the highest currently valid signing
+// epoch against the latest committed CometBFT height and time.
+func (c *rpcChainClient) ResolveProviderSigningState(ctx context.Context, providerAddress string) (ActiveProviderKeyBinding, error) {
+	if c.providerQuery == nil || c.rpcClient == nil {
+		return ActiveProviderKeyBinding{}, fmt.Errorf("provider signing-state query requires both gRPC and Comet RPC")
+	}
+	status, err := c.rpcClient.Status(ctx)
+	if err != nil {
+		return ActiveProviderKeyBinding{}, fmt.Errorf("query committed chain status: %w", err)
+	}
+	height := status.SyncInfo.LatestBlockHeight
+	blockTime := status.SyncInfo.LatestBlockTime.UTC()
+	response, err := c.providerQuery.ProviderSigningKeyEpochs(ctx, &providerv1beta4.QueryProviderSigningKeyEpochsRequest{Owner: providerAddress})
+	if err != nil {
+		return ActiveProviderKeyBinding{}, fmt.Errorf("query provider signing-key epochs: %w", err)
+	}
+	var selected *providerv1beta4.ProviderSigningKeyRecord
+	for i := range response.Keys {
+		record := &response.Keys[i]
+		if height < record.ActivatedAtHeight || (record.ActivatedAtUnix > 0 && blockTime.Unix() < record.ActivatedAtUnix) ||
+			(record.ExpiresAtHeight > 0 && height > record.ExpiresAtHeight) || (record.ExpiresAtUnix > 0 && blockTime.Unix() > record.ExpiresAtUnix) ||
+			(record.RetiredAtHeight > 0 && height > record.RetiredAtHeight) || (record.RetiredAtUnix > 0 && blockTime.Unix() > record.RetiredAtUnix) ||
+			(record.RevokedAtHeight > 0 && height >= record.RevokedAtHeight) || (record.RevokedAtUnix > 0 && blockTime.Unix() >= record.RevokedAtUnix) {
+			continue
+		}
+		if record.KeyType != providerv1beta4.PublicKeyTypeEd25519 && record.KeyType != providerv1beta4.PublicKeyTypeSecp256k1 {
+			continue
+		}
+		if selected == nil || record.Epoch > selected.Epoch {
+			copyRecord := *record
+			selected = &copyRecord
+		}
+	}
+	if selected == nil {
+		return ActiveProviderKeyBinding{}, fmt.Errorf("no active governed provider signing-key epoch")
+	}
+	return ActiveProviderKeyBinding{
+		ProviderAddress: providerAddress,
+		KeyID:           selected.KeyId,
+		Epoch:           selected.Epoch,
+		PublicKey:       append([]byte(nil), selected.PublicKey...),
+		Algorithm:       selected.KeyType,
+		BlockHeight:     height,
+		BlockTime:       blockTime,
+	}, nil
+}
+
 // NewRPCChainClient creates a new RPC-based chain client
 func NewRPCChainClient(config RPCChainClientConfig) (ChainClient, error) {
 	return newRPCChainClient(config)
+}
+
+// NewProviderRPCChainClient exposes the concrete production client for
+// components that require both provider operations and authenticated metering
+// state resolution.
+func NewProviderRPCChainClient(config RPCChainClientConfig) (*rpcChainClient, error) {
+	return newRPCChainClient(config)
+}
+
+// CometRPCClient returns the configured Comet client for signed transaction
+// broadcasting. Callers must not stop it independently of Close().
+func (c *rpcChainClient) CometRPCClient() *rpchttp.HTTP {
+	return c.rpcClient
 }
 
 // NewHPCChainClient creates a new chain client for HPC integrations.
@@ -89,25 +298,51 @@ func NewHPCChainClient(config RPCChainClientConfig) (HPCChainClient, error) {
 
 // GetProviderConfig retrieves the provider's on-chain configuration
 func (c *rpcChainClient) GetProviderConfig(ctx context.Context, address string) (*ProviderConfig, error) {
-	// TODO: Implement actual gRPC query to market module
-	// For now return a default config to allow startup
-	return &ProviderConfig{
-		ProviderAddress: address,
-		Pricing: PricingConfig{
-			CPUPricePerCore:   "0.01",
-			MemoryPricePerGB:  "0.005",
-			StoragePricePerGB: "0.001",
-			NetworkPricePerGB: "0.001",
-			GPUPricePerHour:   "0.50",
-		},
-		Capacity:           CapacityConfig{},
-		SupportedOfferings: []string{"compute", "storage", "gpu"},
-		Regions:            []string{"us-west-1", "us-east-1", "eu-west-1"},
-		Attributes:         map[string]string{},
-		Active:             true,
-		LastUpdated:        time.Now(),
-		Version:            1,
-	}, nil
+	address = strings.TrimSpace(address)
+	if address == "" {
+		return nil, fmt.Errorf("provider address is required")
+	}
+
+	hpcClient, err := c.providerHPCQuery()
+	if err != nil {
+		return nil, err
+	}
+
+	clusters, err := c.queryProviderClusters(ctx, hpcClient, address)
+	if err != nil {
+		return nil, fmt.Errorf("query provider clusters: %w", err)
+	}
+	offerings, err := c.queryProviderOfferings(ctx, hpcClient, address, clusters)
+	if err != nil {
+		return nil, fmt.Errorf("query provider offerings: %w", err)
+	}
+
+	resourcesClient, err := c.providerResourcesQuery()
+	if err != nil {
+		return nil, err
+	}
+	allocations, err := c.queryProviderAllocations(ctx, resourcesClient, address)
+	if err != nil {
+		return nil, fmt.Errorf("query provider allocations: %w", err)
+	}
+
+	var params *hpctypes.Params
+	storeClient, err := c.providerStoreQuery()
+	if err == nil {
+		params, err = c.queryHPCParams(ctx, storeClient)
+		if err != nil {
+			return nil, fmt.Errorf("query hpc params: %w", err)
+		}
+	} else if c.rpcClient != nil {
+		return nil, err
+	}
+
+	config, err := buildProviderConfigFromChainState(address, params, clusters, offerings, allocations)
+	if err != nil {
+		return nil, fmt.Errorf("build provider config: %w", err)
+	}
+
+	return config, nil
 }
 
 // GetOpenOrders retrieves open orders that match provider capabilities
@@ -156,10 +391,6 @@ func (c *rpcChainClient) GetOpenOrders(ctx context.Context, offeringTypes []stri
 
 // PlaceBid places a bid on an order
 func (c *rpcChainClient) PlaceBid(ctx context.Context, bid *Bid, signature *Signature) error {
-	if c.grpcConn == nil {
-		return fmt.Errorf("grpc endpoint not configured")
-	}
-
 	if bid == nil {
 		return fmt.Errorf("bid cannot be nil")
 	}
@@ -194,20 +425,18 @@ func (c *rpcChainClient) PlaceBid(ctx context.Context, bid *Bid, signature *Sign
 			sdkmath.LegacyNewDecFromInt(priceAmount),
 		),
 		Deposit: depositv1.Deposit{
-			Amount: sdktypes.NewInt64Coin(bid.Currency, 0), // No deposit required for bids
+			Amount:  sdktypes.NewInt64Coin(bid.Currency, 0), // No deposit amount required for bids.
+			Sources: depositv1.Sources{depositv1.SourceBalance},
 		},
-		ResourcesOffer: marketv1beta5.ResourcesOffer{}, // TODO: Extract from bid
+		ResourcesOffer: bid.ResourcesOffer.Dup(),
 	}
-
-	// Send via Msg client
-	msgClient := marketv1beta5.NewMsgClient(c.grpcConn)
 
 	reqCtx, cancel := context.WithTimeout(ctx, c.config.RequestTimeout)
 	defer cancel()
 
-	_, err = msgClient.CreateBid(reqCtx, msg)
+	err = c.submitMutation(reqCtx, MutationMarketCreateBid, msg)
 	if err != nil {
-		return fmt.Errorf("failed to create bid: %w", err)
+		return fmt.Errorf("enqueue create bid: %w", err)
 	}
 
 	return nil
@@ -305,17 +534,13 @@ func (c *rpcChainClient) SubscribeToJobCancellations(ctx context.Context, cluste
 	}
 }
 
-// ReportJobStatus reports job status to chain (best-effort).
+// ReportJobStatus durably submits a job status mutation.
 func (c *rpcChainClient) ReportJobStatus(ctx context.Context, report *HPCStatusReport) error {
 	if report == nil {
-		return nil
-	}
-	if c.grpcConn == nil {
-		return nil
+		return fmt.Errorf("job status report is required")
 	}
 
-	msgClient := hpcv1.NewMsgClient(c.grpcConn)
-	_, err := msgClient.ReportJobStatus(ctx, &hpcv1.MsgReportJobStatus{
+	return c.submitMutation(ctx, MutationHPCReportJobStatus, &hpcv1.MsgReportJobStatus{
 		ProviderAddress: report.ProviderAddress,
 		JobId:           report.VirtEngineJobID,
 		SlurmJobId:      report.SchedulerJobID,
@@ -326,21 +551,14 @@ func (c *rpcChainClient) ReportJobStatus(ctx context.Context, report *HPCStatusR
 		Signature:       report.Signature,
 		SignedTimestamp: report.Timestamp.Unix(),
 	})
-	return err
 }
 
 // SubmitResourceHeartbeat submits a provider resource heartbeat.
 func (c *rpcChainClient) SubmitResourceHeartbeat(ctx context.Context, heartbeat *resourcesv1.MsgProviderHeartbeat) error {
 	if heartbeat == nil {
-		return nil
+		return fmt.Errorf("resource heartbeat is required")
 	}
-	if c.grpcConn == nil {
-		return nil
-	}
-
-	msgClient := resourcesv1.NewMsgClient(c.grpcConn)
-	_, err := msgClient.ProviderHeartbeat(ctx, heartbeat)
-	return err
+	return c.submitMutation(ctx, MutationResourcesHeartbeat, heartbeat)
 }
 
 // GetProviderAllocations queries allocations for a provider.
@@ -348,80 +566,76 @@ func (c *rpcChainClient) GetProviderAllocations(ctx context.Context, provider st
 	if provider == "" {
 		return nil, nil
 	}
-	if c.grpcConn == nil {
-		return nil, fmt.Errorf("grpc endpoint not configured")
-	}
-	client := resourcesv1.NewQueryClient(c.grpcConn)
-	resp, err := client.AllocationsByProvider(ctx, &resourcesv1.QueryAllocationsByProviderRequest{ProviderAddress: provider, Pagination: &query.PageRequest{Limit: defaultHPCPollPageLimit}})
+	client, err := c.providerResourcesQuery()
 	if err != nil {
 		return nil, err
 	}
-	return resp.Allocations, nil
+	allocations, err := c.queryProviderAllocations(ctx, client, provider)
+	if err != nil {
+		return nil, fmt.Errorf("query provider allocations: %w", err)
+	}
+	return allocations, nil
 }
 
-// SubmitNodeMetadata submits node metadata updates to chain (best-effort).
+// GetProviderReservations queries authoritative reservations for a provider.
+func (c *rpcChainClient) GetProviderReservations(ctx context.Context, provider string) ([]resourcesv1.Reservation, error) {
+	if provider == "" {
+		return nil, nil
+	}
+	client, err := c.providerResourcesQuery()
+	if err != nil {
+		return nil, err
+	}
+	reservations, err := c.queryProviderReservations(ctx, client, provider)
+	if err != nil {
+		return nil, fmt.Errorf("query provider reservations: %w", err)
+	}
+	return reservations, nil
+}
+
+// SubmitNodeMetadata durably submits node metadata updates.
 func (c *rpcChainClient) SubmitNodeMetadata(ctx context.Context, msg *hpcv1.MsgUpdateNodeMetadata) error {
 	if msg == nil {
-		return nil
+		return fmt.Errorf("node metadata is required")
 	}
-	if c.grpcConn == nil {
-		return nil
-	}
-
-	msgClient := hpcv1.NewMsgClient(c.grpcConn)
-	_, err := msgClient.UpdateNodeMetadata(ctx, msg)
-	return err
+	return c.submitMutation(ctx, MutationHPCUpdateNodeMetadata, msg)
 }
 
 // ReportJobAccounting reports job accounting to chain
 func (c *rpcChainClient) ReportJobAccounting(ctx context.Context, jobID string, metrics *HPCSchedulerMetrics) error {
-	if c.grpcConn == nil {
-		return nil // Silently skip if not connected
-	}
-
 	if metrics == nil {
-		return nil
+		return fmt.Errorf("job accounting metrics are required")
+	}
+	if strings.TrimSpace(jobID) == "" {
+		return fmt.Errorf("job ID is required")
 	}
 
-	// Convert metrics to proto format and submit via HPC module
 	protoMetrics := metricsToProto(metrics)
-	msgClient := hpcv1.NewMsgClient(c.grpcConn)
-
 	reqCtx, cancel := context.WithTimeout(ctx, c.config.RequestTimeout)
 	defer cancel()
 
-	// Submit as a job status update with accounting metrics
-	_, err := msgClient.ReportJobStatus(reqCtx, &hpcv1.MsgReportJobStatus{
-		ProviderAddress: "", // Will be set by KeyManager/TxBuilder
+	return c.submitMutation(reqCtx, MutationHPCReportJobStatus, &hpcv1.MsgReportJobStatus{
+		ProviderAddress: c.mutationProviderAddress(),
 		JobId:           jobID,
 		SlurmJobId:      "",
 		State:           hpcv1.JobStateRunning,
 		StatusMessage:   "Accounting update",
 		ExitCode:        0,
 		UsageMetrics:    protoMetrics,
+		SignedTimestamp: time.Now().UTC().Unix(),
 	})
-
-	return err
 }
 
 // SubmitAccountingRecord submits an accounting record
 func (c *rpcChainClient) SubmitAccountingRecord(ctx context.Context, record *hpctypes.HPCAccountingRecord) error {
-	if c.grpcConn == nil {
-		return nil // Silently skip if not connected
-	}
-
 	if record == nil {
-		return nil
+		return fmt.Errorf("accounting record is required")
 	}
-
-	// Convert record metrics to proto format
-	msgClient := hpcv1.NewMsgClient(c.grpcConn)
 
 	reqCtx, cancel := context.WithTimeout(ctx, c.config.RequestTimeout)
 	defer cancel()
 
-	// Submit via job status with usage metrics from record
-	_, err := msgClient.ReportJobStatus(reqCtx, &hpcv1.MsgReportJobStatus{
+	return c.submitMutation(reqCtx, MutationHPCReportJobStatus, &hpcv1.MsgReportJobStatus{
 		ProviderAddress: record.ProviderAddress,
 		JobId:           record.JobID,
 		SlurmJobId:      record.SchedulerJobID,
@@ -438,28 +652,20 @@ func (c *rpcChainClient) SubmitAccountingRecord(ctx context.Context, record *hpc
 			WallClockSeconds: record.UsageMetrics.WallClockSeconds,
 			NodesUsed:        record.UsageMetrics.NodesUsed,
 		},
+		SignedTimestamp: record.CreatedAt.UTC().Unix(),
 	})
-
-	return err
 }
 
 // SubmitUsageSnapshot submits a usage snapshot
 func (c *rpcChainClient) SubmitUsageSnapshot(ctx context.Context, snapshot *hpctypes.HPCUsageSnapshot) error {
-	if c.grpcConn == nil {
-		return nil // Silently skip if not connected
-	}
-
 	if snapshot == nil {
-		return nil
+		return fmt.Errorf("usage snapshot is required")
 	}
-
-	// Submit snapshot via HPC module
-	msgClient := hpcv1.NewMsgClient(c.grpcConn)
 
 	reqCtx, cancel := context.WithTimeout(ctx, c.config.RequestTimeout)
 	defer cancel()
 
-	_, err := msgClient.ReportJobStatus(reqCtx, &hpcv1.MsgReportJobStatus{
+	return c.submitMutation(reqCtx, MutationHPCReportJobStatus, &hpcv1.MsgReportJobStatus{
 		ProviderAddress: snapshot.ProviderAddress,
 		JobId:           snapshot.JobID,
 		SlurmJobId:      snapshot.SchedulerJobID,
@@ -476,17 +682,49 @@ func (c *rpcChainClient) SubmitUsageSnapshot(ctx context.Context, snapshot *hpct
 			WallClockSeconds: snapshot.Metrics.WallClockSeconds,
 			NodesUsed:        snapshot.Metrics.NodesUsed,
 		},
+		SignedTimestamp: snapshot.SnapshotTime.UTC().Unix(),
 	})
-
-	return err
 }
 
-// GetBillingRules returns billing rules from on-chain params
-func (c *rpcChainClient) GetBillingRules(ctx context.Context, clusterID string) (*hpctypes.HPCBillingRules, error) {
-	// For now, just return default billing rules
-	// TODO: Query on-chain params when billing rules query is implemented
-	rules := hpctypes.DefaultHPCBillingRules("uvirt")
-	return &rules, nil
+func (c *rpcChainClient) mutationProviderAddress() string {
+	if c == nil || c.mutationSubmitter == nil {
+		return ""
+	}
+	return c.mutationSubmitter.cfg.ProviderAddress
+}
+
+// GetBillingRules returns billing rules from on-chain state.
+func (c *rpcChainClient) GetBillingRules(ctx context.Context, providerAddr string) (*hpctypes.HPCBillingRules, error) {
+	providerAddr = strings.TrimSpace(providerAddr)
+	if providerAddr == "" {
+		return nil, fmt.Errorf("provider address is required")
+	}
+
+	storeClient, err := c.providerStoreQuery()
+	if err != nil {
+		return nil, err
+	}
+
+	rules, exists, err := c.queryProviderBillingRules(ctx, storeClient, providerAddr)
+	if err != nil {
+		return nil, err
+	}
+	if exists {
+		return rules, nil
+	}
+
+	params, err := c.queryHPCParams(ctx, storeClient)
+	if err != nil {
+		return nil, err
+	}
+
+	defaultDenom := "uvirt"
+	if params != nil && strings.TrimSpace(params.DefaultDenom) != "" {
+		defaultDenom = strings.TrimSpace(params.DefaultDenom)
+	}
+
+	fallback := hpctypes.DefaultHPCBillingRules(defaultDenom)
+	return &fallback, nil
 }
 
 // GetCurrentBlockHeight returns the current block height if possible.
@@ -724,19 +962,18 @@ func dataReferencesFromProto(references []hpcv1.DataReference) []hpctypes.DataRe
 
 // orderFromProto converts a proto Order to daemon Order struct
 func orderFromProto(protoOrder marketv1beta5.Order) Order {
+	requirements, region := orderRequirementsFromSpec(protoOrder.Spec)
+	price := protoOrder.Price()
 	return Order{
 		OrderID:         protoOrder.ID.String(),
 		CustomerAddress: protoOrder.ID.Owner,
-		OfferingType:    "compute", // Default, could be enhanced based on order spec
-		Requirements: ResourceRequirements{
-			CPUCores:  0, // TODO: Extract from order spec
-			MemoryGB:  0,
-			StorageGB: 0,
-		},
-		Region:    "",  // TODO: Extract from order spec attributes
-		MaxPrice:  "0", // TODO: Extract from order spec
-		Currency:  "uvirt",
-		CreatedAt: time.Unix(protoOrder.CreatedAt, 0),
+		OfferingType:    inferOrderOfferingType(requirements),
+		Requirements:    requirements,
+		ResourcesOffer:  marketv1beta5.ResourceOfferFromRU(protoOrder.Spec.Resources),
+		Region:          region,
+		MaxPrice:        price.Amount.String(),
+		Currency:        price.Denom,
+		CreatedAt:       time.Unix(protoOrder.CreatedAt, 0),
 	}
 }
 
@@ -748,6 +985,7 @@ func bidFromProto(protoBid *marketv1beta5.Bid) Bid {
 		ProviderAddress: protoBid.ID.Provider,
 		Price:           protoBid.Price.Amount.String(),
 		Currency:        protoBid.Price.Denom,
+		ResourcesOffer:  protoBid.ResourcesOffer.Dup(),
 		CreatedAt:       time.Unix(protoBid.CreatedAt, 0),
 		State:           protoBid.State.String(),
 	}

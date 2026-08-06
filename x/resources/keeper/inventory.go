@@ -3,6 +3,7 @@ package keeper
 import (
 	"encoding/json"
 	"fmt"
+	"strings"
 
 	"cosmossdk.io/store/prefix"
 	sdk "github.com/cosmos/cosmos-sdk/types"
@@ -12,6 +13,21 @@ import (
 
 // SetInventory stores a resource inventory snapshot.
 func (k Keeper) SetInventory(ctx sdk.Context, inventory types.ResourceInventory) error {
+	if inventory.InventoryId == "" || inventory.ProviderAddress == "" || inventory.ResourceClass == types.ResourceClassUnspecified {
+		return types.ErrInvalidRequest.Wrap("inventory identity is incomplete")
+	}
+	if len(inventory.InventoryId) > maxReservationIdentifierLength || len(inventory.ProviderAddress) > maxReservationIdentifierLength || strings.ContainsRune(inventory.InventoryId, '\x00') || strings.ContainsRune(inventory.ProviderAddress, '\x00') {
+		return types.ErrInvalidRequest.Wrap("inventory identity is too long or contains NUL")
+	}
+	if err := validateCapacity(inventory.Total, true); err != nil {
+		return err
+	}
+	if err := validateCapacity(inventory.Available, true); err != nil {
+		return err
+	}
+	if !capacitySatisfies(inventory.Total, inventory.Available) {
+		return types.ErrCapacityInvariant.Wrap("available exceeds declared total")
+	}
 	store := ctx.KVStore(k.skey)
 	key := types.InventoryKey(inventory.ProviderAddress, inventory.ResourceClass, inventory.InventoryId)
 	bz, err := json.Marshal(inventory)
@@ -76,7 +92,22 @@ func (k Keeper) UpdateInventoryFromHeartbeat(ctx sdk.Context, msg *types.MsgProv
 	}
 
 	inventory.Total = msg.Total
-	inventory.Available = msg.Available
+	if k.IsCanonicalReservationsActive(ctx) {
+		reserved, err := k.reservedCapacityForInventory(ctx, msg.ProviderAddress, msg.ResourceClass, inventoryID)
+		if err != nil {
+			return nil, err
+		}
+		available, err := subtractCapacityChecked(msg.Total, reserved)
+		if err != nil {
+			return nil, types.ErrCapacityInvariant.Wrap("heartbeat total below committed reservations")
+		}
+		if !capacityEqual(msg.Available, available) {
+			return nil, types.ErrCapacityInvariant.Wrap("heartbeat available conflicts with committed reservations")
+		}
+		inventory.Available = available
+	} else {
+		inventory.Available = msg.Available
+	}
 	inventory.Locality = msg.Locality
 	inventory.HeartbeatSequence = msg.Sequence
 	inventory.LastHeartbeat = now
@@ -91,18 +122,36 @@ func (k Keeper) UpdateInventoryFromHeartbeat(ctx sdk.Context, msg *types.MsgProv
 }
 
 // PruneStaleInventories marks inventories stale based on heartbeat timeout.
-func (k Keeper) PruneStaleInventories(ctx sdk.Context) {
+func (k Keeper) PruneStaleInventories(ctx sdk.Context) error {
+	cacheCtx, write := ctx.CacheContext()
+	if err := k.pruneStaleInventories(cacheCtx); err != nil {
+		return err
+	}
+	write()
+	return nil
+}
+
+func (k Keeper) pruneStaleInventories(ctx sdk.Context) error {
 	params := k.GetParams(ctx)
 	cutoff := ctx.BlockTime().Add(-secondsToDuration(params.HeartbeatTimeoutSeconds))
+	var pruneErr error
 
 	k.WithInventories(ctx, func(inv types.ResourceInventory) bool {
 		if inv.LastHeartbeat.Before(cutoff) {
 			inv.Active = false
 			inv.UpdatedAt = ctx.BlockTime()
 			if err := k.SetInventory(ctx, inv); err != nil {
-				k.Logger(ctx).Error("failed to mark stale inventory", "provider", inv.ProviderAddress, "error", err)
+				pruneErr = err
+				return true
+			}
+			if k.IsCanonicalReservationsActive(ctx) {
+				if err := k.handleInventoryUnavailable(ctx, inv, "provider_heartbeat_expired"); err != nil {
+					pruneErr = err
+					return true
+				}
 			}
 		}
 		return false
 	})
+	return pruneErr
 }

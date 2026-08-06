@@ -1,0 +1,40 @@
+{
+  "schema_version": "virtengine.t1-contract-set/v1",
+  "contract_set_id": "t1-09-integrated-contracts",
+  "checkpoint": "T1-09",
+  "status": "fixture_only",
+  "contracts": [
+    {"id":"evidence-envelope-v1","implementation":"x/veid/types/evidence_envelope.go","test":"x/veid/types/evidence_envelope_test.go","selector":"TestEvidenceEnvelopeGoldenCanonicalBytesAndDigests","outputs":{"digest":"ea1fa8ff1c2c97e503f04db317878d1e62adb9e401fe04a7365072fb630e59a7","replay":"147fd4d08b4368bd8544876d9143bf828c2cbd26fc9bd54b54f1d9223891f17f","nonce":"9e74dd8c4900c56011c5e197cb428a8b3f9b389755ef289c2d18d33f436fda40"}},
+    {"id":"receipt-producer-v1","implementation":"pkg/inference/receipt_producer.go","test":"pkg/inference/receipt_producer_test.go","selector":"TestReceiptProducerDeterministicInProcessVector","outputs":{"digest":"1612825d75caee35c4b030d158bd2769dca0973fc399d9fde2e528b82b06847d"}},
+    {"id":"workload-binding-v1","implementation":"pkg/enclave_runtime/workload_binding.go","test":"pkg/enclave_runtime/workload_binding_test.go","selector":"TestWorkloadBindingGoldenCanonicalAndChallenge","outputs":{"challenge":"932708fe86626e775cd71aa75ad12c82e131e997303b9482b10484a55534d257"}},
+    {"id":"runtime-policy-v1","implementation":"x/veid/keeper/runtime_policy.go","test":"x/veid/keeper/runtime_policy_test.go","selector":"TestRuntimePolicyRegistryLifecycleCompatibility","outputs":{"eligible_state":"active","version":"1"}},
+    {"id":"credential-decision-envelope-v1","implementation":"x/veid/types/credential_decision_envelope.go","test":"x/veid/types/credential_decision_envelope_test.go","selector":"TestCredentialDecisionEnvelopeGolden","outputs":{"digest":"7382399e4a2adfd5548521cccc1efe69f44dd313c033e793fb6708c48fe2f3ee"}}
+  ],
+  "store_reservations": [
+    {"id":"evidence-envelope-v1","hex":"e8","status":"reserved_not_implemented"},
+    {"id":"receipt-producer-v1","hex":"e9","status":"reserved_not_implemented"},
+    {"id":"workload-binding-v1","hex":"ea","status":"reserved_not_implemented"},
+    {"id":"runtime-policy-v1","hex":"eb","status":"reserved_not_implemented"},
+    {"id":"credential-decision-envelope-v1","hex":"ec","status":"reserved_not_implemented"}
+  ],
+  "protobuf_requests": [
+    {"name":"virtengine.veid.v1.EvidenceEnvelopeV1","status":"requested_not_implemented"},
+    {"name":"virtengine.veid.v1.InferenceReceiptV1","status":"requested_not_implemented"},
+    {"name":"virtengine.veid.v1.RuntimePolicyV1","status":"requested_not_implemented"},
+    {"name":"virtengine.veid.v1.CredentialDecisionEnvelopeV1","status":"requested_not_implemented"},
+    {"name":"virtengine.enclave.v1.WorkloadBindingV1","status":"requested_not_implemented"}
+  ],
+  "handoffs": [
+    {"thread":"T2","responsibility":"consume typed decision and evidence digests without inferring claims"},
+    {"thread":"T4","responsibility":"own store/protobuf activation, migrations, generation, app wiring, and intake"},
+    {"thread":"T5","responsibility":"own signer provisioning, collateral, replay persistence, and hardware enforcement"}
+  ],
+  "external_non_claims": [
+    "no real-hardware certification",
+    "no current collateral certification",
+    "no durable replay persistence certification",
+    "no protobuf or store migration activation",
+    "no credential issuance signing revocation or presentation",
+    "no production readiness or GA claim"
+  ]
+}

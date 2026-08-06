@@ -7,6 +7,8 @@ import (
 	"path/filepath"
 	"testing"
 	"time"
+
+	nitroatt "github.com/virtengine/virtengine/pkg/enclave_runtime/nitro"
 )
 
 func TestSGXVerification(t *testing.T) {
@@ -275,13 +277,34 @@ func TestSEVSNPVerification(t *testing.T) {
 			t.Error("expected TCB version to be extracted")
 		}
 	})
+
+	t.Run("strict policy rejects reports without full VCEK-backed evidence", func(t *testing.T) {
+		report := CreateTestSEVSNPReport(trustedMeasurement, false, nil)
+
+		policy := DefaultVerificationPolicy()
+		policy.RequireNonce = false
+		result, err := verifier.Verify(report, nil, policy)
+		if err != nil {
+			t.Fatalf("verification failed with error: %v", err)
+		}
+
+		if result.Valid {
+			t.Error("expected strict policy to reject incomplete SEV-SNP attestation")
+		}
+
+		if len(result.Errors) == 0 {
+			t.Fatal("expected strict verification errors")
+		}
+		if !containsSubstring(result.Errors[0], "SNP verification failed") {
+			t.Errorf("expected strict SNP verification failure, got: %v", result.Errors)
+		}
+	})
 }
 
 func TestNitroVerification(t *testing.T) {
 	allowlist := NewMeasurementAllowlist()
 
-	// Add trusted PCR values - must match what CreateTestNitroDocument produces
-	// The measurement extraction includes the nonce area in our test document
+	// Add trusted PCR values that will be embedded in the simulated COSE/CBOR document.
 	trustedPCRs := make([]byte, 48)
 	for i := range trustedPCRs {
 		trustedPCRs[i] = byte(i)
@@ -290,12 +313,16 @@ func TestNitroVerification(t *testing.T) {
 	verifier := NewNitroVerifier(allowlist)
 
 	t.Run("valid document", func(t *testing.T) {
-		// Create document without nonce first to get clean measurement
 		doc := CreateTestNitroDocument(trustedPCRs, nil)
 
-		// Add the actual extracted measurement to the allowlist
-		// The measurement is extracted from offset 32 with length 48
-		actualMeasurement := doc[nitroPCROffset : nitroPCROffset+nitroPCRLength]
+		parsedDoc, parseErr := nitroatt.ParseDocument(doc)
+		if parseErr != nil {
+			t.Fatalf("failed to parse test Nitro document: %v", parseErr)
+		}
+		actualMeasurement, ok := parsedDoc.Payload.PCRs[nitroatt.PCRIndexEIF]
+		if !ok {
+			t.Fatal("test Nitro document is missing PCR0")
+		}
 		if err := allowlist.AddMeasurement(AttestationTypeNitro, actualMeasurement, "test PCRs"); err != nil {
 			t.Fatalf("failed to add measurement: %v", err)
 		}
@@ -316,6 +343,32 @@ func TestNitroVerification(t *testing.T) {
 
 		if result.DebugMode {
 			t.Error("Nitro should not report debug mode in production")
+		}
+	})
+
+	t.Run("strict policy rejects simulated document", func(t *testing.T) {
+		doc := CreateTestNitroDocument(trustedPCRs, nil)
+
+		policy := DefaultVerificationPolicy()
+		policy.RequireNonce = false
+		result, err := verifier.Verify(doc, nil, policy)
+		if err != nil {
+			t.Fatalf("verification failed with error: %v", err)
+		}
+
+		if result.Valid {
+			t.Error("expected strict policy to reject simulated Nitro evidence")
+		}
+
+		hasSimulationError := false
+		for _, verificationErr := range result.Errors {
+			if containsSubstring(verificationErr, "simulated attestation not allowed") {
+				hasSimulationError = true
+				break
+			}
+		}
+		if !hasSimulationError {
+			t.Errorf("expected simulated-document rejection, got: %v", result.Errors)
 		}
 	})
 

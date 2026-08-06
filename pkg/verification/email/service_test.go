@@ -3,6 +3,7 @@ package email
 
 import (
 	"context"
+	"encoding/base64"
 	"testing"
 	"time"
 
@@ -29,6 +30,7 @@ func newTestConfig() Config {
 	config.FromAddress = "noreply@test.virtengine.com"
 	config.FromName = "Test VirtEngine"
 	config.BaseURL = "https://test.virtengine.com"
+	config.DestinationEncryptionKey = base64.StdEncoding.EncodeToString([]byte("0123456789abcdef0123456789abcdef"))
 	return config
 }
 
@@ -390,6 +392,11 @@ func TestService_InitiateVerification(t *testing.T) {
 	sentEmails := mockProvider.GetSentEmails()
 	assert.Len(t, sentEmails, 1)
 	assert.Equal(t, "test@example.com", sentEmails[0].To)
+
+	challenge, err := service.GetChallenge(ctx, resp.ChallengeID)
+	require.NoError(t, err)
+	assert.NotEmpty(t, challenge.EncryptedEmail)
+	assert.NotEqual(t, "test@example.com", challenge.EncryptedEmail)
 }
 
 func TestService_InitiateVerification_MagicLink(t *testing.T) {
@@ -546,6 +553,37 @@ func TestService_VerifyChallenge_Expired(t *testing.T) {
 	})
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "expired")
+}
+
+func TestService_ResendVerification_SendsEmail(t *testing.T) {
+	service, mockProvider := newTestService(t)
+	defer service.Close()
+
+	ctx := context.Background()
+	initResp, err := service.InitiateVerification(ctx, &InitiateRequest{
+		AccountAddress: "virtengine1testaddr",
+		Email:          "test@example.com",
+		Method:         MethodOTP,
+	})
+	require.NoError(t, err)
+
+	resp, err := service.ResendVerification(ctx, &ResendRequest{
+		ChallengeID:    initResp.ChallengeID,
+		AccountAddress: "virtengine1testaddr",
+	})
+	require.NoError(t, err)
+
+	assert.True(t, resp.Success)
+	assert.Equal(t, uint32(2), resp.ResendsRemaining)
+
+	sentEmails := mockProvider.GetSentEmails()
+	require.Len(t, sentEmails, 2)
+	assert.Equal(t, "test@example.com", sentEmails[1].To)
+
+	challenge, err := service.GetChallenge(ctx, initResp.ChallengeID)
+	require.NoError(t, err)
+	assert.Equal(t, uint32(1), challenge.ResendCount)
+	assert.NotNil(t, challenge.LastResendAt)
 }
 
 func TestService_CancelChallenge(t *testing.T) {

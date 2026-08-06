@@ -14,6 +14,7 @@ import (
 	"github.com/cosmos/cosmos-sdk/types/query"
 
 	"github.com/virtengine/virtengine/x/escrow/types/billing"
+	settlementtypes "github.com/virtengine/virtengine/x/settlement/types"
 )
 
 // PayoutKeeper defines the interface for payout management
@@ -104,6 +105,9 @@ func (pk *payoutKeeper) CalculateProviderPayout(ctx sdk.Context, settlementID st
 
 // CreatePayout creates a new payout record
 func (pk *payoutKeeper) CreatePayout(ctx sdk.Context, settlementID string, provider string) (*billing.PayoutRecord, error) {
+	if pk.k.canonicalFinancialCases != nil && pk.k.canonicalFinancialCases.IsFinancialCasesActive(ctx) {
+		return nil, settlementtypes.ErrLegacyFinancialMutationFenced
+	}
 	store := ctx.KVStore(pk.k.skey)
 
 	// Calculate payout amounts
@@ -148,6 +152,9 @@ func (pk *payoutKeeper) CreatePayout(ctx sdk.Context, settlementID string, provi
 
 // ExecutePayout executes a pending payout
 func (pk *payoutKeeper) ExecutePayout(ctx sdk.Context, payoutID string) error {
+	if pk.k.canonicalFinancialCases != nil && pk.k.canonicalFinancialCases.IsFinancialCasesActive(ctx) {
+		return settlementtypes.ErrLegacyFinancialMutationFenced
+	}
 	store := ctx.KVStore(pk.k.skey)
 
 	// Get payout
@@ -271,6 +278,9 @@ func (pk *payoutKeeper) GetPayoutsByStatus(
 
 // GetPendingPayouts retrieves all pending payouts
 func (pk *payoutKeeper) GetPendingPayouts(ctx sdk.Context) ([]*billing.PayoutRecord, error) {
+	if pk.k.canonicalFinancialCases != nil && pk.k.canonicalFinancialCases.IsFinancialCasesActive(ctx) {
+		return nil, settlementtypes.ErrLegacyFinancialMutationFenced
+	}
 	store := ctx.KVStore(pk.k.skey)
 	prefix := billing.BuildPayoutRecordByStatusPrefix(billing.PayoutStatusPending)
 
@@ -292,6 +302,9 @@ func (pk *payoutKeeper) GetPendingPayouts(ctx sdk.Context) ([]*billing.PayoutRec
 
 // ProcessBatchPayouts processes multiple payouts in batch
 func (pk *payoutKeeper) ProcessBatchPayouts(ctx sdk.Context, payoutIDs []string) ([]string, []error) {
+	if pk.k.canonicalFinancialCases != nil && pk.k.canonicalFinancialCases.IsFinancialCasesActive(ctx) {
+		return nil, []error{settlementtypes.ErrLegacyFinancialMutationFenced}
+	}
 	successIDs := make([]string, 0, len(payoutIDs))
 	errors := make([]error, 0)
 
@@ -339,6 +352,9 @@ func (pk *payoutKeeper) GetPayoutSummary(
 
 // CancelPayout cancels a pending payout
 func (pk *payoutKeeper) CancelPayout(ctx sdk.Context, payoutID string, reason string) error {
+	if pk.k.canonicalFinancialCases != nil && pk.k.canonicalFinancialCases.IsFinancialCasesActive(ctx) {
+		return settlementtypes.ErrLegacyFinancialMutationFenced
+	}
 	store := ctx.KVStore(pk.k.skey)
 
 	payout, err := pk.GetPayout(ctx, payoutID)
@@ -360,6 +376,9 @@ func (pk *payoutKeeper) CancelPayout(ctx sdk.Context, payoutID string, reason st
 
 // RefundPayout refunds a completed payout
 func (pk *payoutKeeper) RefundPayout(ctx sdk.Context, payoutID string, amount sdk.Coins, reason string) error {
+	if pk.k.canonicalFinancialCases != nil && pk.k.canonicalFinancialCases.IsFinancialCasesActive(ctx) {
+		return settlementtypes.ErrLegacyFinancialMutationFenced
+	}
 	store := ctx.KVStore(pk.k.skey)
 
 	payout, err := pk.GetPayout(ctx, payoutID)

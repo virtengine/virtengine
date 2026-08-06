@@ -16,7 +16,9 @@ package e2e
 
 import (
 	"bytes"
+	"encoding/json"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
@@ -57,17 +59,17 @@ type VEIDOnboardingTestSuite struct {
 
 // TestVEIDOnboarding runs the VEID onboarding E2E test suite.
 func TestVEIDOnboarding(t *testing.T) {
-	if testing.Short() {
-		t.Skip("Skipping E2E tests in short mode")
-	}
-
 	suite.Run(t, new(VEIDOnboardingTestSuite))
 }
 
 // SetupSuite runs once before all tests in the suite.
 func (s *VEIDOnboardingTestSuite) SetupSuite() {
 	s.testClient = NewVEIDTestClient()
+}
 
+// SetupTest creates a fresh app/context for each test so salts, rate limits,
+// and block progression do not leak across cases.
+func (s *VEIDOnboardingTestSuite) SetupTest() {
 	s.app = app.Setup(
 		app.WithChainID("virtengine-onboarding-e2e"),
 		app.WithGenesis(func(cdc codec.Codec) app.GenesisState {
@@ -135,8 +137,7 @@ func (s *VEIDOnboardingTestSuite) TestFullOnboardingToMarketplaceOrder() {
 	t.Logf("Step 2: Uploaded encrypted selfie scope: %s", resp.ScopeId)
 
 	// Verify identity record was created
-	s.app.Commit()
-	ctx = s.app.NewContext(false).
+	ctx = ctx.
 		WithBlockHeight(2).
 		WithBlockTime(FixedTimestampPlus(1))
 
@@ -150,8 +151,7 @@ func (s *VEIDOnboardingTestSuite) TestFullOnboardingToMarketplaceOrder() {
 	initialScore := uint32(25)
 	require.NoError(t, s.app.Keepers.VirtEngine.VEID.UpdateScore(ctx, customer, initialScore, TestModelVersion))
 
-	s.app.Commit()
-	ctx = s.app.NewContext(false).
+	ctx = ctx.
 		WithBlockHeight(3).
 		WithBlockTime(FixedTimestampPlus(2))
 
@@ -249,8 +249,7 @@ func (s *VEIDOnboardingTestSuite) TestFullOnboardingToMarketplaceOrder() {
 	verifiedScore := uint32(82)
 	require.NoError(t, s.app.Keepers.VirtEngine.VEID.UpdateScore(ctx, customer, verifiedScore, TestModelVersion))
 
-	s.app.Commit()
-	ctx = s.app.NewContext(false).
+	ctx = ctx.
 		WithBlockHeight(4).
 		WithBlockTime(FixedTimestampPlus(3))
 
@@ -332,8 +331,7 @@ func (s *VEIDOnboardingTestSuite) TestEncryptedScopeHandling() {
 	require.Equal(t, scopeFixture.ScopeID, resp.ScopeId)
 
 	// Verify scope was stored with encryption metadata
-	s.app.Commit()
-	ctx = s.app.NewContext(false).
+	ctx = ctx.
 		WithBlockHeight(2).
 		WithBlockTime(FixedTimestampPlus(1))
 
@@ -374,8 +372,7 @@ func (s *VEIDOnboardingTestSuite) TestMLScoringIntegration() {
 	for i, tc := range testScores {
 		require.NoError(t, s.app.Keepers.VirtEngine.VEID.UpdateScore(ctx, customer, tc.score, TestModelVersion))
 
-		s.app.Commit()
-		ctx = s.app.NewContext(false).
+		ctx = ctx.
 			WithBlockHeight(int64(i + 2)).
 			WithBlockTime(FixedTimestampPlus(i + 1))
 
@@ -414,8 +411,7 @@ func (s *VEIDOnboardingTestSuite) TestTierTransitions() {
 		require.NoError(t, s.app.Keepers.VirtEngine.VEID.UpdateScore(
 			ctx, customer, transition.ExpectedScore, transition.ScoringModel))
 
-		s.app.Commit()
-		ctx = s.app.NewContext(false).
+		ctx = ctx.
 			WithBlockHeight(int64(i + 2)).
 			WithBlockTime(FixedTimestampPlus(i + 1))
 
@@ -446,8 +442,7 @@ func (s *VEIDOnboardingTestSuite) TestOrderGatingByTier() {
 	require.NoError(t, err)
 	require.NoError(t, s.app.Keepers.VirtEngine.VEID.UpdateScore(ctx, customer, 30, TestModelVersion))
 
-	s.app.Commit()
-	ctx = s.app.NewContext(false).
+	ctx = ctx.
 		WithBlockHeight(2).
 		WithBlockTime(FixedTimestampPlus(1))
 
@@ -494,8 +489,7 @@ func (s *VEIDOnboardingTestSuite) TestOrderGatingByTier() {
 	// Upgrade to verified tier
 	require.NoError(t, s.app.Keepers.VirtEngine.VEID.UpdateScore(ctx, customer, 85, TestModelVersion))
 
-	s.app.Commit()
-	ctx = s.app.NewContext(false).
+	ctx = ctx.
 		WithBlockHeight(3).
 		WithBlockTime(FixedTimestampPlus(2))
 
@@ -570,13 +564,20 @@ func (s *VEIDOnboardingTestSuite) TestMultipleScopeTypes() {
 		require.Equal(t, tc.fixture.ScopeID, resp.ScopeId)
 
 		t.Logf("  Uploaded %s scope: %s ✓", tc.scopeType, resp.ScopeId)
+
+		// Uploads are subject to a per-account cooldown, so advance to the next
+		// eligible block before attempting the next scope type.
+		if i < len(scopeTypes)-1 {
+			ctx = ctx.
+				WithBlockHeight(ctx.BlockHeight() + keeper.AccountCooldownBlocks).
+				WithBlockTime(ctx.BlockTime().Add(time.Duration(keeper.AccountCooldownBlocks) * time.Minute))
+		}
 	}
 
 	// Verify all scopes are recorded
-	s.app.Commit()
-	ctx = s.app.NewContext(false).
-		WithBlockHeight(2).
-		WithBlockTime(FixedTimestampPlus(1))
+	ctx = ctx.
+		WithBlockHeight(ctx.BlockHeight() + 1).
+		WithBlockTime(ctx.BlockTime().Add(time.Minute))
 
 	record, found := s.app.Keepers.VirtEngine.VEID.GetIdentityRecord(ctx, customer)
 	require.True(t, found)
@@ -621,8 +622,7 @@ func (s *VEIDOnboardingTestSuite) TestOnboardingFlowCICompatible() {
 			require.NoError(t, s.app.Keepers.VirtEngine.VEID.UpdateScore(
 				ctx, customer, stage.score, TestModelVersion))
 
-			s.app.Commit()
-			ctx = s.app.NewContext(false).
+			ctx = ctx.
 				WithBlockHeight(int64(i + 2)).
 				WithBlockTime(FixedTimestampPlus(i + 1))
 		}
@@ -648,11 +648,11 @@ func genesisWithVEIDApprovedClientOnboarding(t *testing.T, cdc codec.Codec, clie
 	genesis := app.GenesisStateWithValSet(cdc)
 
 	var veidGenesis veidtypes.GenesisState
-	require.NoError(t, cdc.UnmarshalJSON(genesis[veidtypes.ModuleName], &veidGenesis))
+	require.NoError(t, json.Unmarshal(genesis[veidtypes.ModuleName], &veidGenesis))
 
 	veidGenesis.ApprovedClients = append(veidGenesis.ApprovedClients, client.ToApprovedClient())
 
-	veidGenesisBz, err := cdc.MarshalJSON(&veidGenesis)
+	veidGenesisBz, err := json.Marshal(&veidGenesis)
 	require.NoError(t, err)
 	genesis[veidtypes.ModuleName] = veidGenesisBz
 

@@ -8,12 +8,12 @@ tools:
 > `agent/runSubagent` is not exposed in current GitHub Copilot Chat sessions.
 > Use `search/searchSubagent` for repository exploration tasks.
 
-Use `scripts/bosun/ve-kanban.ps1` to manage the backlog directly via the HTTP API. Do **NOT** use MCP vibe-kanban tools. Tasks should be detailed and thorough - all tasks should be tasks that involve lots of changes (minimum of 2-10k lines of code changes). Tasks should be prioritized into task execution order & parallel execution where possible. For e.g. 1A-1D would be 4 tasks that are triggered in parallel and before tasks 2A-2X which would be sequential tasks to be triggered after 1A-1D are complete.
+Use the `bosun task` CLI to manage the backlog directly. Tasks should be detailed and thorough - all tasks should be tasks that involve lots of changes (minimum of 2-10k lines of code changes). Tasks should be prioritized into task execution order & parallel execution where possible. For e.g. 1A-1D would be 4 tasks that are triggered in parallel and before tasks 2A-2X which would be sequential tasks to be triggered after 1A-1D are complete.
 
-When creating tasks, use the direct CLI wrapper:
+When creating tasks, use the CLI:
 
-```powershell
-pwsh scripts/bosun/ve-kanban.ps1 create --title "<title>" --description "<markdown>" --status todo
+```bash
+bosun task create --title "<title>" --priority high --tags "<tags>"
 ```
 
 ---
@@ -106,7 +106,6 @@ Before creating any task, verify:
 - [ ] A senior engineer would need 2-3+ hours to complete this
 - [ ] The task does NOT match any prohibited anti-pattern above
 - [ ] I have checked existing backlog AND done tasks for duplicates/overlap
-- [ ] I have checked `_docs/KANBAN_SPLIT_TRACKER.md` for secondary kanban duplicates
 - [ ] The description includes Goal, Scope (with line estimates), Acceptance Criteria, Testing commands, Estimated Effort, and Dependencies
 - [ ] Each scope section references specific files, functions, or line numbers I actually read
 
@@ -129,7 +128,7 @@ Before creating a task, search existing backlog (todo + done + cancelled) for:
   - Identify specific stub/placeholder/TODO patterns in the code
   - Report exact file paths and line numbers for gaps found
   - Distinguish between "file exists" and "file has real implementation"
-- Aggregate outputs into one plan: normalize titles, merge overlaps, and dedupe against existing kanban tasks plus any tasks created in the last 24h (use vibe-kanban/list_tasks and created_at timestamps). Also check \_docs/KANBAN_SPLIT_TRACKER.md to avoid secondary-kanban duplicates.
+- Aggregate outputs into one plan: normalize titles, merge overlaps, and dedupe against existing kanban tasks plus any tasks created in the last 24h (use `bosun task list --json` and `created_at` timestamps).
 - Sequence dependencies explicitly (e.g., 32A-32D parallel, 33A+ sequential). Include "Depends on:" lines in each task description when needed.
 - Create tasks with priority tags: include "Priority: P0|P1|P2" and "Tags: <labels>" in the description, and prefix title with "[P0]" for critical items.
 - **Title prefix must include size tag**: `[xl]` for all tasks (since all tasks must be substantial). Include priority: `[xl] [P0]` or `[xl] [P1]`.
@@ -171,7 +170,7 @@ Your analysis should be thorough, you should go through the changes that have be
 
 Tasks added to the backlog should be documented into the progress.md with the status of the task (e.g. planned, completed) so that it can be tracked into the functionality of the project.
 
-Your goal is NOT to implement any code, only create a thorough plan for tasks that need to be completed - and these tasks should be properly added to the backlog of vibe-kanban through MCP Tool calling, you should not duplicate any previously used sequences (for e.g. if currently the latest backlog tasks are 7A-7D then you should add tasks from 8A onwards unless the new task needs to be completed before the other backlog tasks due to priorities or dependancies)
+Your goal is NOT to implement any code, only create a thorough plan for tasks that need to be completed - and these tasks should be properly added to the backlog via `bosun task create`, you should not duplicate any previously used sequences (for e.g. if currently the latest backlog tasks are 7A-7D then you should add tasks from 8A onwards unless the new task needs to be completed before the other backlog tasks due to priorities or dependancies)
 
 You should always assume progress.md is OUTDATED and a new analysis should be done of the project to determine what progress if any has happened since the last analysis.
 

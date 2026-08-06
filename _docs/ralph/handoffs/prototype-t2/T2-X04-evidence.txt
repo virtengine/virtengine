@@ -1,0 +1,37 @@
+T2-X04 retained validation evidence
+Implementation SHA: 5d6ce82e96491b0536c713a7ea0ae31b5977a2d4
+Node: v24.12.0
+
+COMMAND: C:\Users\pavil\AppData\Local\Temp\virtengine-node-v24.12.0\npm.cmd --prefix C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t2\lib\portal test
+EXIT: 0
+RESULT: passed
+DETAIL: 26 files, 677 tests passed; provider API 30 and multi-provider action 4 tests passed
+
+COMMAND: C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t2\node_modules\.bin\tsc.CMD -p C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t2\lib\portal\tsconfig.chain.json --noEmit
+EXIT: 0
+RESULT: passed
+
+COMMAND: C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t2\portal\node_modules\.bin\eslint.CMD C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t2\portal\src --ext .ts,.tsx --max-warnings 0
+EXIT: 0
+RESULT: passed
+NOTE: Existing unsupported TypeScript parser-version warning only.
+
+COMMAND: C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t2\portal\node_modules\.bin\tsc.CMD --noEmit -p C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t2\portal\tsconfig.json
+EXIT: 0
+RESULT: passed
+
+COMMAND: C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t2\portal\node_modules\.bin\vitest.CMD run --reporter=dot
+EXIT: 0
+RESULT: passed
+DETAIL: 76 files, 560 tests passed; deployment store 14 and UI helper 6 tests passed
+
+BEHAVIOR:
+- Legacy `{success,message}` provider action responses are typed feature_unavailable.
+- Every provider action requires an authoritative operation receipt bound to action, deployment, provider, state, version and revision.
+- Optional chain transaction evidence is omitted unless an injected validator confirms it.
+- UI success requires refreshed deployment state to match the receipt and uses provider operation language, not fabricated signed transaction claims.
+- Action POSTs are not retried and duplicate concurrent operations are rejected.
+
+NON-CLAIMS:
+- Existing provider deployments must add receipt capability v1 before actions become available.
+- No live provider operation or chain transaction was certified.

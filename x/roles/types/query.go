@@ -2,8 +2,6 @@ package types
 
 import (
 	"context"
-
-	"github.com/cosmos/gogoproto/grpc"
 )
 
 // QueryAccountRolesRequest is the request for QueryAccountRoles
@@ -38,6 +36,7 @@ type QueryAccountStateRequest struct {
 // QueryAccountStateResponse is the response for QueryAccountState
 type QueryAccountStateResponse struct {
 	AccountState AccountStateRecord `json:"account_state"`
+	Found        bool               `json:"found"`
 }
 
 // QueryGenesisAccountsRequest is the request for QueryGenesisAccounts
@@ -59,11 +58,25 @@ type QueryParamsResponse struct {
 	Params Params `json:"params"`
 }
 
+// QueryHasRoleRequest is the request for QueryHasRole.
+type QueryHasRoleRequest struct {
+	Address string `json:"address"`
+	Role    string `json:"role"`
+}
+
+// QueryHasRoleResponse is the response for QueryHasRole.
+type QueryHasRoleResponse struct {
+	HasRole    bool            `json:"has_role"`
+	Assignment *RoleAssignment `json:"assignment,omitempty"`
+}
+
 // PageRequest is a simple pagination request
 type PageRequest struct {
-	Key    []byte `json:"key,omitempty"`
-	Offset uint64 `json:"offset,omitempty"`
-	Limit  uint64 `json:"limit,omitempty"`
+	Key        []byte `json:"key,omitempty"`
+	Offset     uint64 `json:"offset,omitempty"`
+	Limit      uint64 `json:"limit,omitempty"`
+	CountTotal bool   `json:"count_total,omitempty"`
+	Reverse    bool   `json:"reverse,omitempty"`
 }
 
 // PageResponse is a simple pagination response
@@ -79,41 +92,5 @@ type QueryServer interface {
 	AccountState(ctx context.Context, req *QueryAccountStateRequest) (*QueryAccountStateResponse, error)
 	GenesisAccounts(ctx context.Context, req *QueryGenesisAccountsRequest) (*QueryGenesisAccountsResponse, error)
 	Params(ctx context.Context, req *QueryParamsRequest) (*QueryParamsResponse, error)
-}
-
-// _Query_serviceDesc is the grpc.ServiceDesc for Query service.
-//
-//nolint:unused // Reserved for future gRPC registration
-var _Query_serviceDesc = struct {
-	ServiceName string
-	HandlerType interface{}
-	Methods     []struct {
-		MethodName string
-		Handler    interface{}
-	}
-	Streams  []struct{}
-	Metadata interface{}
-}{
-	ServiceName: "virtengine.roles.v1.Query",
-	HandlerType: (*QueryServer)(nil),
-	Methods: []struct {
-		MethodName string
-		Handler    interface{}
-	}{
-		{MethodName: "AccountRoles", Handler: nil},
-		{MethodName: "RoleMembers", Handler: nil},
-		{MethodName: "AccountState", Handler: nil},
-		{MethodName: "GenesisAccounts", Handler: nil},
-		{MethodName: "Params", Handler: nil},
-	},
-	Streams:  []struct{}{},
-	Metadata: "virtengine/roles/v1/query.proto",
-}
-
-// RegisterQueryServer registers the QueryServer
-// This is a stub implementation until proper protobuf generation is set up.
-func RegisterQueryServer(s grpc.Server, impl QueryServer) {
-	// Registration is a no-op for now since we don't have proper protobuf generated code
-	_ = s
-	_ = impl
+	HasRole(ctx context.Context, req *QueryHasRoleRequest) (*QueryHasRoleResponse, error)
 }

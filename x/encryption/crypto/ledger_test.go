@@ -1039,3 +1039,44 @@ func TestLedgerWallet_MultiAccountDerivation(t *testing.T) {
 
 	assert.Len(t, accounts, 9) // 3 accounts * 3 indices
 }
+
+func TestLedgerBIP44Path(t *testing.T) {
+	path, err := ledgerBIP44Path("m/44'/118'/7'/0/3")
+	require.NoError(t, err)
+	assert.Equal(t, []uint32{
+		44 + bip32HardenedOffset,
+		118 + bip32HardenedOffset,
+		7 + bip32HardenedOffset,
+		0,
+		3,
+	}, path)
+}
+
+func TestMapLedgerError(t *testing.T) {
+	testCases := []struct {
+		name string
+		err  error
+		want error
+	}{
+		{name: "not connected", err: errors.New("ledger-cosmos: couldn't find ledger device"), want: ErrLedgerNotConnected},
+		{name: "app not open", err: errors.New("CLA not supported"), want: ErrLedgerAppNotOpen},
+		{name: "rejected", err: errors.New("user rejected on device"), want: ErrLedgerUserRejected},
+		{name: "locked", err: errors.New("device locked"), want: ErrLedgerDeviceLocked},
+		{name: "timeout", err: errors.New("transport timeout"), want: ErrLedgerTimeout},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			assert.ErrorIs(t, mapLedgerError(tc.err), tc.want)
+		})
+	}
+}
+
+func TestLedgerHelpers_FormatDeviceMetadata(t *testing.T) {
+	assert.Equal(t, LedgerNanoX, ledgerDeviceTypeFromProduct("Ledger Nano X"))
+	assert.Equal(t, LedgerNanoSPlus, ledgerDeviceTypeFromProduct("Ledger Nano S Plus"))
+	assert.Equal(t, LedgerNanoS, ledgerDeviceTypeFromProduct("Ledger Nano S"))
+	assert.Equal(t, LedgerUnknown, ledgerDeviceTypeFromProduct("mystery device"))
+	assert.Equal(t, "2.1", formatLedgerRelease(0x0201))
+	assert.Equal(t, "", formatLedgerRelease(0))
+}

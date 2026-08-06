@@ -135,6 +135,8 @@ When to add vs modify
 | --- | --- | --- | --- |
 | scripts/agent-preflight.ps1 | Pre-flight checks before push (Go/Portal). | pwsh scripts/agent-preflight.ps1 | PowerShell 7+, go, pnpm (optional) |
 | scripts/agent-preflight.sh | Bash pre-flight checks before push. | ./scripts/agent-preflight.sh | bash, go, pnpm (optional) |
+| scripts/task85b-preflight.ps1 | Full Task 85B DEX/off-ramp release gate, including generation, docs hashes, SDK, upgrade, integration and race checks. | pwsh scripts/task85b-preflight.ps1 | PowerShell 7+, Go, Node/npm, WSL or Docker, golangci-lint |
+| scripts/task85c-preflight.ps1 | Task 85C encrypted-key, distributed-fencing, canonical-render, policy, docs, lint, build and race gate. | pwsh scripts/task85c-preflight.ps1 | PowerShell 7+, Go, Node, kubectl, WSL, golangci-lint |
 | scripts/archive-completed-tasks.ps1 | Archive done VK tasks into _docs/ralph. | pwsh scripts/archive-completed-tasks.ps1 -DryRun | PowerShell, VK CLI wrapper (ve-kanban) |
 | scripts/_check-parse.ps1 | Parse ve-orchestrator.ps1 and report errors. | pwsh scripts/_check-parse.ps1 | PowerShell 7+ |
 | scripts/_check-ps1-syntax.ps1 | Syntax check PS1 files (defaults to bosun). | pwsh scripts/_check-ps1-syntax.ps1 -Path scripts/bosun/ve-orchestrator.ps1 | PowerShell 7+ |
@@ -159,6 +161,7 @@ When to add vs modify
 | scripts/init-chain.sh | Init local chain and start node. | ./scripts/init-chain.sh [chain-id] [genesis-account] | virtengine, jq |
 | scripts/seed-test-identities.sh | Patch genesis with test VEID identities. | ./scripts/seed-test-identities.sh | virtengine, jq |
 | scripts/localnet.sh | Docker-based localnet orchestration. | ./scripts/localnet.sh start | docker, docker compose, curl |
+| scripts/localnet.ps1 | Native Windows Docker localnet orchestration. | pwsh scripts/localnet.ps1 start | PowerShell 7+, Docker Desktop, Docker Compose V2 |
 | scripts/state-sync-bootstrap.sh | Configure state sync on node. | ./scripts/state-sync-bootstrap.sh --rpc-servers ... | jq, curl/wget |
 
 ### API + ML utilities
@@ -166,6 +169,10 @@ When to add vs modify
 | Script | Purpose | Usage | Dependencies |
 | --- | --- | --- | --- |
 | scripts/generate-api-types.sh | Generate TS/Go API types + docs. | ./scripts/generate-api-types.sh | node+npx, go, oapi-codegen |
+| scripts/proto-generate.sh | Regenerate all protobuf contracts in the pinned Linux image. | ./scripts/proto-generate.sh all | Docker |
+| scripts/proto-generate-wsl.sh | Native Linux/WSL equivalent for a Docker-unavailable host. | ./scripts/proto-generate-wsl.sh all | Go 1.25.5, curl, tar |
+| scripts/verify-proto-generation.sh | Prove two-run generated artifact byte identity. | ./scripts/verify-proto-generation.sh | Docker, sha256sum |
+| scripts/verify-modules.sh | Verify workspace sums, empty-cache downloads, and vendor sync. | VE_VERIFY_EMPTY_CACHE=1 ./scripts/verify-modules.sh | Go 1.25.5 |
 | scripts/compute_model_hash.sh | Hash ML weights (bash). | ./scripts/compute_model_hash.sh ml/.. | sha256sum |
 | scripts/compute_model_hash.go | Hash ML weights (Go). | go run scripts/compute_model_hash.go -dir ... | go |
 | scripts/test_inference_conformance.sh | Go/Python inference parity tests. | ./scripts/test_inference_conformance.sh | go, python3 |
@@ -179,7 +186,7 @@ When to add vs modify
 | scripts/compliance/collect-soc2-evidence.sh | Collect SOC2 evidence bundle. | ./scripts/compliance/collect-soc2-evidence.sh | bash, git, go (opt) |
 | scripts/compliance/soc2-evidence-manifest.yaml | Manifest for SOC2 collection. | Read by collector. | N/A |
 | scripts/dr/backup-chain-state.sh | Backup chain state to disk/S3. | ./scripts/dr/backup-chain-state.sh --snapshot-only | virtengine, jq, aws |
-| scripts/dr/backup-provider-state.sh | Backup provider daemon state. | ./scripts/dr/backup-provider-state.sh | tar, jq, aws |
+| scripts/dr/backup-provider-state.sh | Backup/restore provider config, encrypted identity, queue, sequence, reconciliation and fencing state. | ./scripts/dr/backup-provider-state.sh | tar, jq, openssl, aws (optional) |
 | scripts/dr/backup-keys.sh | Backup validator/provider keys; optional Shamir. | ./scripts/dr/backup-keys.sh --type validator | openssl, aws, jq |
 | scripts/dr/dr-test.sh | DR validation suite + optional Slack. | ./scripts/dr/dr-test.sh --report --notify | jq, aws, curl |
 | scripts/dr/README.md | DR playbook and scheduling examples. | Readme only. | N/A |
@@ -209,7 +216,7 @@ When to add vs modify
 | Script | Purpose | Usage | Dependencies |
 | --- | --- | --- | --- |
 | scripts/smoke-test.sh | Regional smoke test (k8s + RPC). | ./scripts/smoke-test.sh us-east-1 | kubectl, curl |
-| scripts/ci/backup-restore-smoke-test.sh | CI smoke test for DR backup/restore. | ./scripts/ci/backup-restore-smoke-test.sh | bash, openssl, jq |
+| scripts/ci/backup-restore-smoke-test.sh | CI chain and provider identity/queue/sequence/fencing/reconciliation restore drill. | ./scripts/ci/backup-restore-smoke-test.sh | bash, openssl, jq |
 | scripts/verify-cross-region.sh | Cross-region connectivity checks. | ./scripts/verify-cross-region.sh | kubectl, aws, curl |
 | scripts/verify-db-replication.sh | CockroachDB multi-region checks. | ./scripts/verify-db-replication.sh | kubectl, aws |
 | scripts/update-global-lb.sh | Route53 weighted record mgmt. | ./scripts/update-global-lb.sh status | aws |
@@ -290,6 +297,20 @@ Note: run PowerShell scripts with pwsh (PowerShell 7+) unless stated.
 - Permissions: local git; executes go, pnpm if needed.
 - Errors: exits non-zero on failed checks; otherwise 0.
 - Example: pwsh scripts/agent-preflight.ps1
+
+For Task 85B paths, agent preflight runs `scripts/task85b-preflight.ps1` in full mode. `VE_HOOK_TASK85B_QUICK=1` and `VE_HOOK_TASK85B_SKIP_RACE=1` are explicit diagnostic-only reductions and are not release evidence.
+
+### scripts/task85b-preflight.ps1
+- Purpose: Run the mandatory full Task 85B Go, app custody, tagged integration, upgrade registry/worker, protobuf inventory/drift/hash, documentation consistency, TypeScript SDK, lint, build and WSL race gates.
+- Parameters: `-Quick` and `-SkipRace` are explicit diagnostic-only reductions; a run using either is not a release pass.
+- Errors: Fails closed when required tooling or an applicable full-mode gate is unavailable.
+- Example: pwsh scripts/task85b-preflight.ps1
+
+### scripts/task85c-preflight.ps1
+- Purpose: Run the Task 85C local engineering acceptance gate for provider key persistence, Kubernetes/file lease fencing and failover, provider restart continuity, manifest convergence/policy, docs, lint, build and race tests.
+- Parameters: `-SkipRace` is an explicit diagnostic-only reduction and is not full local acceptance evidence.
+- Errors: Fails closed when required tooling or any full-mode gate is unavailable.
+- Example: pwsh scripts/task85c-preflight.ps1
 
 ### scripts/_check-parse.ps1
 - Purpose: Parse scripts/bosun/ve-orchestrator.ps1 and print errors.

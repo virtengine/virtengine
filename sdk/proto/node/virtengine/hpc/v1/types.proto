@@ -341,6 +341,11 @@ message HPCJob {
   google.protobuf.Timestamp started_at = 22 [(gogoproto.stdtime) = true, (gogoproto.jsontag) = "started_at,omitempty", (gogoproto.moretags) = "yaml:\"started_at\""];
   google.protobuf.Timestamp completed_at = 23 [(gogoproto.stdtime) = true, (gogoproto.jsontag) = "completed_at,omitempty", (gogoproto.moretags) = "yaml:\"completed_at\""];
   int64 block_height = 24 [(gogoproto.jsontag) = "block_height", (gogoproto.moretags) = "yaml:\"block_height\""];
+  string reservation_id = 25 [(gogoproto.jsontag) = "reservation_id,omitempty", (gogoproto.moretags) = "yaml:\"reservation_id\""];
+  string allocation_id = 26 [(gogoproto.jsontag) = "allocation_id,omitempty", (gogoproto.moretags) = "yaml:\"allocation_id\""];
+  string market_order_id = 27 [(gogoproto.jsontag) = "market_order_id,omitempty", (gogoproto.moretags) = "yaml:\"market_order_id\""];
+  string market_bid_id = 28 [(gogoproto.jsontag) = "market_bid_id,omitempty", (gogoproto.moretags) = "yaml:\"market_bid_id\""];
+  string market_lease_id = 29 [(gogoproto.jsontag) = "market_lease_id,omitempty", (gogoproto.moretags) = "yaml:\"market_lease_id\""];
 }
 
 // NodeReward represents a reward for a specific node
@@ -644,6 +649,8 @@ message HPCDispute {
   google.protobuf.Timestamp created_at = 11 [(gogoproto.nullable) = false, (gogoproto.stdtime) = true, (gogoproto.jsontag) = "created_at", (gogoproto.moretags) = "yaml:\"created_at\""];
   google.protobuf.Timestamp resolved_at = 12 [(gogoproto.stdtime) = true, (gogoproto.jsontag) = "resolved_at,omitempty", (gogoproto.moretags) = "yaml:\"resolved_at\""];
   int64 block_height = 13 [(gogoproto.jsontag) = "block_height", (gogoproto.moretags) = "yaml:\"block_height\""];
+  string financial_case_id = 14 [(gogoproto.jsontag) = "financial_case_id,omitempty", (gogoproto.moretags) = "yaml:\"financial_case_id\""];
+  string financial_case_status = 15 [(gogoproto.jsontag) = "financial_case_status,omitempty", (gogoproto.moretags) = "yaml:\"financial_case_status\""];
 }
 
 // Params defines the parameters for the HPC module

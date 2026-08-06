@@ -1,4 +1,4 @@
-import { QueryActiveModelsRequest, QueryActiveModelsResponse, QueryAppealParamsRequest, QueryAppealParamsResponse, QueryAppealRequest, QueryAppealResponse, QueryAppealsByScopeRequest, QueryAppealsByScopeResponse, QueryAppealsRequest, QueryAppealsResponse, QueryApprovedClientsRequest, QueryApprovedClientsResponse, QueryBorderlineParamsRequest, QueryBorderlineParamsResponse, QueryComplianceParamsRequest, QueryComplianceParamsResponse, QueryComplianceProviderRequest, QueryComplianceProviderResponse, QueryComplianceProvidersRequest, QueryComplianceProvidersResponse, QueryComplianceStatusRequest, QueryComplianceStatusResponse, QueryConsentSettingsRequest, QueryConsentSettingsResponse, QueryDerivedFeatureHashesRequest, QueryDerivedFeatureHashesResponse, QueryDerivedFeaturesRequest, QueryDerivedFeaturesResponse, QueryIdentityRecordRequest, QueryIdentityRecordResponse, QueryIdentityRequest, QueryIdentityResponse, QueryIdentityScoreRequest, QueryIdentityScoreResponse, QueryIdentityStatusRequest, QueryIdentityStatusResponse, QueryIdentityWalletRequest, QueryIdentityWalletResponse, QueryModelHistoryRequest, QueryModelHistoryResponse, QueryModelParamsRequest, QueryModelParamsResponse, QueryModelVersionRequest, QueryModelVersionResponse, QueryParamsRequest, QueryParamsResponse, QueryScopeRequest, QueryScopeResponse, QueryScopesByTypeRequest, QueryScopesByTypeResponse, QueryScopesRequest, QueryScopesResponse, QueryValidatorModelSyncRequest, QueryValidatorModelSyncResponse, QueryVerificationHistoryRequest, QueryVerificationHistoryResponse, QueryWalletScopesRequest, QueryWalletScopesResponse } from "./query.ts";
+import { QueryActiveModelsRequest, QueryActiveModelsResponse, QueryAppealParamsRequest, QueryAppealParamsResponse, QueryAppealRequest, QueryAppealResponse, QueryAppealsByScopeRequest, QueryAppealsByScopeResponse, QueryAppealsRequest, QueryAppealsResponse, QueryApprovedClientsRequest, QueryApprovedClientsResponse, QueryBorderlineParamsRequest, QueryBorderlineParamsResponse, QueryComplianceParamsRequest, QueryComplianceParamsResponse, QueryComplianceProviderRequest, QueryComplianceProviderResponse, QueryComplianceProvidersRequest, QueryComplianceProvidersResponse, QueryComplianceStatusRequest, QueryComplianceStatusResponse, QueryConsentSettingsRequest, QueryConsentSettingsResponse, QueryDerivedFeatureHashesRequest, QueryDerivedFeatureHashesResponse, QueryDerivedFeaturesRequest, QueryDerivedFeaturesResponse, QueryEmailVerificationRequest, QueryEmailVerificationResponse, QueryIdentityRecordRequest, QueryIdentityRecordResponse, QueryIdentityRequest, QueryIdentityResponse, QueryIdentityScoreRequest, QueryIdentityScoreResponse, QueryIdentityStatusRequest, QueryIdentityStatusResponse, QueryIdentityWalletRequest, QueryIdentityWalletResponse, QueryModelHistoryRequest, QueryModelHistoryResponse, QueryModelParamsRequest, QueryModelParamsResponse, QueryModelVersionRequest, QueryModelVersionResponse, QueryParamsRequest, QueryParamsResponse, QueryScopeRequest, QueryScopeResponse, QueryScopesByTypeRequest, QueryScopesByTypeResponse, QueryScopesRequest, QueryScopesResponse, QuerySMSVerificationRequest, QuerySMSVerificationResponse, QuerySocialMediaScopeRequest, QuerySocialMediaScopeResponse, QuerySocialMediaScopesRequest, QuerySocialMediaScopesResponse, QuerySSOLinkageRequest, QuerySSOLinkageResponse, QueryValidatorModelSyncRequest, QueryValidatorModelSyncResponse, QueryVerificationHistoryRequest, QueryVerificationHistoryResponse, QueryWalletScopesRequest, QueryWalletScopesResponse } from "./query.ts";
 
 export const Query = {
   typeName: "virtengine.veid.v1.Query",
@@ -106,6 +106,41 @@ export const Query = {
       httpPath: "/virtengine/veid/v1/params",
       input: QueryParamsRequest,
       output: QueryParamsResponse,
+      get parent() { return Query; },
+    },
+    sSOLinkage: {
+      name: "SSOLinkage",
+      httpPath: "/virtengine/veid/v1/sso/linkage/{linkage_id}",
+      input: QuerySSOLinkageRequest,
+      output: QuerySSOLinkageResponse,
+      get parent() { return Query; },
+    },
+    emailVerification: {
+      name: "EmailVerification",
+      httpPath: "/virtengine/veid/v1/email/{verification_id}",
+      input: QueryEmailVerificationRequest,
+      output: QueryEmailVerificationResponse,
+      get parent() { return Query; },
+    },
+    sMSVerification: {
+      name: "SMSVerification",
+      httpPath: "/virtengine/veid/v1/sms/{verification_id}",
+      input: QuerySMSVerificationRequest,
+      output: QuerySMSVerificationResponse,
+      get parent() { return Query; },
+    },
+    socialMediaScope: {
+      name: "SocialMediaScope",
+      httpPath: "/virtengine/veid/v1/social/{scope_id}",
+      input: QuerySocialMediaScopeRequest,
+      output: QuerySocialMediaScopeResponse,
+      get parent() { return Query; },
+    },
+    socialMediaScopes: {
+      name: "SocialMediaScopes",
+      httpPath: "/virtengine/veid/v1/social/account/{account_address}",
+      input: QuerySocialMediaScopesRequest,
+      output: QuerySocialMediaScopesResponse,
       get parent() { return Query; },
     },
     borderlineParams: {

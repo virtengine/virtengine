@@ -13,6 +13,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 
@@ -37,9 +38,8 @@ func NewACHAdapter(config ACHConfig) (*ACHAdapter, error) {
 		return nil, ErrProviderNotConfigured
 	}
 
-	baseURL := "https://api.stripe.com/v1"
-	if config.Environment == "sandbox" {
-		// Stripe uses the same URL for test mode, just with test API keys
+	baseURL := strings.TrimRight(config.BaseURL, "/")
+	if baseURL == "" {
 		baseURL = "https://api.stripe.com/v1"
 	}
 
@@ -438,7 +438,7 @@ func (a *ACHAdapter) GetSettlementReport(ctx context.Context, req SettlementRepo
 
 func mapStripeOutboundStatus(status string) PayoutStatus {
 	switch status {
-	case "processing":
+	case string(PayoutStatusProcessing):
 		return PayoutStatusProcessing
 	case "posted":
 		return PayoutStatusSucceeded
@@ -492,23 +492,32 @@ type stripeErrorResponse struct {
 // Alternative: Direct ACH Adapter (for Plaid or other providers)
 // ============================================================================
 
-// DirectACHAdapter provides direct ACH integration without Stripe.
-// This is a placeholder for future implementation with providers like Plaid or Dwolla.
+// DirectACHAdapter provides generic direct ACH integration for non-Stripe providers.
 type DirectACHAdapter struct {
 	config     ACHConfig
 	httpClient *http.Client
+	baseURL    string
 }
 
 // NewDirectACHAdapter creates a new direct ACH adapter.
 func NewDirectACHAdapter(config ACHConfig) (*DirectACHAdapter, error) {
+	baseURL := strings.TrimRight(config.BaseURL, "/")
+	if strings.TrimSpace(config.SecretKey) == "" || baseURL == "" {
+		return nil, ErrProviderNotConfigured
+	}
+
 	return &DirectACHAdapter{
 		config:     config,
 		httpClient: security.NewSecureHTTPClient(security.WithTimeout(30 * time.Second)),
+		baseURL:    baseURL,
 	}, nil
 }
 
 // Name returns the provider name.
 func (a *DirectACHAdapter) Name() string {
+	if provider := normalizedACHProvider(a.config.Provider); provider != "" {
+		return "Direct ACH (" + provider + ")"
+	}
 	return "Direct ACH"
 }
 
@@ -519,7 +528,8 @@ func (a *DirectACHAdapter) Type() ProviderType {
 
 // IsHealthy checks if the provider is operational.
 func (a *DirectACHAdapter) IsHealthy(ctx context.Context) bool {
-	return true // Placeholder
+	_, statusCode, err := a.doRequest(ctx, http.MethodGet, "/health", nil, "", nil)
+	return err == nil && (statusCode == http.StatusOK || statusCode == http.StatusNoContent)
 }
 
 // Close releases resources.
@@ -529,33 +539,233 @@ func (a *DirectACHAdapter) Close() error {
 
 // CreatePayout creates an ACH payout.
 func (a *DirectACHAdapter) CreatePayout(ctx context.Context, intent *PayoutIntent) error {
-	// Placeholder for direct ACH implementation
-	return fmt.Errorf("direct ACH not implemented - use Stripe Treasury adapter")
+	if intent.Destination.BankAccount == nil {
+		return ErrInvalidPayoutDestination
+	}
+
+	reqBody := directACHPayoutRequest{
+		PayoutID:        intent.ID,
+		IdempotencyKey:  intent.IdempotencyKey,
+		SourceAccountID: strings.TrimSpace(a.config.SourceAccountID),
+		Amount:          intent.FiatAmount.Value,
+		Currency:        strings.ToLower(string(intent.FiatAmount.Currency)),
+		Description:     intent.Description,
+		SameDay:         a.config.EnableSameDayACH,
+		Destination: directACHBankAccount{
+			AccountHolderName: intent.Destination.BankAccount.AccountHolderName,
+			AccountHolderType: intent.Destination.BankAccount.AccountHolderType,
+			RoutingNumber:     intent.Destination.BankAccount.RoutingNumber,
+			AccountNumber:     intent.Destination.BankAccount.AccountNumber,
+			AccountType:       intent.Destination.BankAccount.AccountType,
+			BankName:          intent.Destination.BankAccount.BankName,
+			Country:           intent.Destination.BankAccount.Country,
+		},
+		Metadata: intent.Metadata,
+	}
+
+	respBody, _, err := a.doRequest(ctx, http.MethodPost, "/payouts", reqBody, intent.IdempotencyKey, nil)
+	if err != nil {
+		return err
+	}
+
+	var payoutResp directACHPayoutResponse
+	if err := json.Unmarshal(respBody, &payoutResp); err != nil {
+		return fmt.Errorf("failed to decode direct ACH payout response: %w", err)
+	}
+	if strings.TrimSpace(payoutResp.ID) == "" {
+		return fmt.Errorf("direct ACH payout response missing provider payout ID")
+	}
+
+	intent.ProviderPayoutID = payoutResp.ID
+	intent.ProviderBatchID = payoutResp.BatchID
+	intent.Status = mapDirectACHStatus(payoutResp.Status)
+	intent.FailureCode = payoutResp.FailureCode
+	intent.FailureMessage = payoutResp.FailureMessage
+	intent.UpdatedAt = time.Now()
+	intent.AddAuditEntry("payout_created", "direct_ach_adapter", fmt.Sprintf("provider_payout_id=%s", payoutResp.ID))
+	return nil
 }
 
 // GetPayoutStatus retrieves the status of an ACH payout.
 func (a *DirectACHAdapter) GetPayoutStatus(ctx context.Context, providerPayoutID string) (PayoutStatus, error) {
-	return "", fmt.Errorf("direct ACH not implemented")
+	respBody, statusCode, err := a.doRequest(ctx, http.MethodGet, "/payouts/"+providerPayoutID, nil, "", nil)
+	if err != nil {
+		if statusCode == http.StatusNotFound {
+			return "", ErrPayoutNotFound
+		}
+		return "", err
+	}
+
+	var payoutResp directACHPayoutResponse
+	if err := json.Unmarshal(respBody, &payoutResp); err != nil {
+		return "", fmt.Errorf("failed to decode direct ACH payout status response: %w", err)
+	}
+	return mapDirectACHStatus(payoutResp.Status), nil
 }
 
 // CancelPayout cancels a pending ACH payout.
 func (a *DirectACHAdapter) CancelPayout(ctx context.Context, providerPayoutID string) error {
-	return fmt.Errorf("direct ACH not implemented")
+	_, statusCode, err := a.doRequest(ctx, http.MethodPost, "/payouts/"+providerPayoutID+"/cancel", nil, "", nil)
+	if err != nil {
+		switch statusCode {
+		case http.StatusNotFound:
+			return ErrPayoutNotFound
+		case http.StatusBadRequest, http.StatusConflict:
+			return ErrPayoutAlreadyProcessed
+		default:
+			return err
+		}
+	}
+	return nil
 }
 
 // ValidateWebhook verifies a webhook signature.
 func (a *DirectACHAdapter) ValidateWebhook(payload []byte, signature string) error {
+	if a.config.WebhookSecret == "" {
+		return nil
+	}
+
+	normalized := strings.TrimSpace(signature)
+	normalized = strings.TrimPrefix(normalized, "sha256=")
+	if normalized == "" {
+		return ErrWebhookSignatureInvalid
+	}
+
+	mac := hmac.New(sha256.New, []byte(a.config.WebhookSecret))
+	mac.Write(payload)
+	expectedSig := hex.EncodeToString(mac.Sum(nil))
+	if !hmac.Equal([]byte(strings.ToLower(normalized)), []byte(expectedSig)) {
+		return ErrWebhookSignatureInvalid
+	}
 	return nil
 }
 
 // ParseWebhookEvent parses a webhook event.
 func (a *DirectACHAdapter) ParseWebhookEvent(payload []byte) (*WebhookEvent, error) {
-	return nil, fmt.Errorf("direct ACH not implemented")
+	var event directACHWebhookEnvelope
+	if err := json.Unmarshal(payload, &event); err != nil {
+		return nil, fmt.Errorf("failed to parse direct ACH webhook event: %w", err)
+	}
+
+	timestamp := directACHTimestamp(event.Timestamp, event.CreatedAt)
+	if event.Created > 0 {
+		timestamp = time.Unix(event.Created, 0)
+	}
+	if timestamp.IsZero() {
+		timestamp = time.Now()
+	}
+
+	webhookEvent := &WebhookEvent{
+		ID:               event.ID,
+		Provider:         ProviderACH,
+		PayoutID:         event.Data.PayoutID,
+		ProviderPayoutID: firstNonEmpty(event.Data.ProviderPayoutID, event.Data.ID),
+		Status:           mapDirectACHStatus(event.Data.Status),
+		FailureCode:      event.Data.FailureCode,
+		FailureMessage:   event.Data.FailureMessage,
+		Payload:          payload,
+		Timestamp:        timestamp,
+		ReceivedAt:       time.Now(),
+	}
+
+	if webhookEvent.PayoutID == "" && event.Data.Metadata != nil {
+		webhookEvent.PayoutID = event.Data.Metadata["payout_id"]
+	}
+
+	eventType := strings.ToLower(strings.TrimSpace(event.Type))
+	switch eventType {
+	case "payout.completed", "payout.succeeded":
+		webhookEvent.Type = WebhookPayoutCompleted
+		webhookEvent.Status = PayoutStatusSucceeded
+	case "payout.failed":
+		webhookEvent.Type = WebhookPayoutFailed
+		webhookEvent.Status = PayoutStatusFailed
+	case "payout.returned", "payout.reversed":
+		webhookEvent.Type = WebhookPayoutReturned
+		webhookEvent.Status = PayoutStatusReversed
+	case "payout.processing", "payout.pending":
+		webhookEvent.Type = WebhookPayoutPending
+		if webhookEvent.Status == "" {
+			webhookEvent.Status = PayoutStatusProcessing
+		}
+	case "payout.canceled", "payout.cancelled":
+		webhookEvent.Type = WebhookPayoutFailed
+		webhookEvent.Status = PayoutStatusCanceled
+	default:
+		webhookEvent.Type = WebhookEventType(event.Type)
+		if webhookEvent.Status == "" {
+			webhookEvent.Status = PayoutStatusPending
+		}
+	}
+
+	return webhookEvent, nil
 }
 
 // GetSettlementReport retrieves a settlement report.
 func (a *DirectACHAdapter) GetSettlementReport(ctx context.Context, req SettlementReportRequest) (*SettlementReport, error) {
-	return nil, fmt.Errorf("direct ACH not implemented")
+	startTime, err := time.Parse("2006-01-02", req.StartDate)
+	if err != nil {
+		return nil, fmt.Errorf("invalid start date: %w", err)
+	}
+	endTime, err := time.Parse("2006-01-02", req.EndDate)
+	if err != nil {
+		return nil, fmt.Errorf("invalid end date: %w", err)
+	}
+	if endTime.Before(startTime) {
+		return nil, fmt.Errorf("end date must not be before start date")
+	}
+
+	query := url.Values{}
+	query.Set("start_date", req.StartDate)
+	query.Set("end_date", req.EndDate)
+	if strings.TrimSpace(req.Format) != "" {
+		query.Set("format", req.Format)
+	}
+
+	respBody, _, err := a.doRequest(ctx, http.MethodGet, "/settlements", nil, "", query)
+	if err != nil {
+		return nil, err
+	}
+
+	var settlementResp directACHSettlementReportResponse
+	if err := json.Unmarshal(respBody, &settlementResp); err != nil {
+		return nil, fmt.Errorf("failed to decode direct ACH settlement report: %w", err)
+	}
+
+	report := &SettlementReport{
+		ReportID:     firstNonEmpty(settlementResp.ReportID, settlementResp.ID, fmt.Sprintf("direct_ach_%s_%s", req.StartDate, req.EndDate)),
+		Provider:     ProviderACH,
+		StartDate:    firstNonEmpty(settlementResp.StartDate, req.StartDate),
+		EndDate:      firstNonEmpty(settlementResp.EndDate, req.EndDate),
+		TotalPayouts: settlementResp.TotalPayouts,
+		TotalAmount:  settlementResp.TotalAmount,
+		TotalFees:    settlementResp.TotalFees,
+		GeneratedAt:  firstNonEmpty(settlementResp.GeneratedAt, time.Now().Format(time.RFC3339)),
+		Transactions: make([]SettlementTransaction, 0, len(settlementResp.Transactions)),
+	}
+
+	for _, tx := range settlementResp.Transactions {
+		report.Transactions = append(report.Transactions, SettlementTransaction{
+			TransactionID: tx.TransactionID,
+			PayoutID:      tx.PayoutID,
+			Amount:        tx.Amount,
+			Fee:           tx.Fee,
+			Status:        string(mapDirectACHStatus(tx.Status)),
+			ProcessedAt:   firstNonEmpty(tx.ProcessedAt, time.Now().Format(time.RFC3339)),
+		})
+		if report.TotalAmount == 0 {
+			report.TotalAmount += tx.Amount
+		}
+		if report.TotalFees == 0 {
+			report.TotalFees += tx.Fee
+		}
+	}
+
+	if report.TotalPayouts == 0 {
+		report.TotalPayouts = len(report.Transactions)
+	}
+
+	return report, nil
 }
 
 // Ensure adapters implement Provider interface
@@ -563,6 +773,169 @@ var (
 	_ Provider = (*ACHAdapter)(nil)
 	_ Provider = (*DirectACHAdapter)(nil)
 )
+
+type directACHPayoutRequest struct {
+	PayoutID        string               `json:"payout_id"`
+	IdempotencyKey  string               `json:"idempotency_key,omitempty"`
+	SourceAccountID string               `json:"source_account_id,omitempty"`
+	Amount          int64                `json:"amount"`
+	Currency        string               `json:"currency"`
+	Description     string               `json:"description,omitempty"`
+	SameDay         bool                 `json:"same_day"`
+	Destination     directACHBankAccount `json:"destination"`
+	Metadata        map[string]string    `json:"metadata,omitempty"`
+}
+
+type directACHBankAccount struct {
+	AccountHolderName string `json:"account_holder_name"`
+	AccountHolderType string `json:"account_holder_type"`
+	RoutingNumber     string `json:"routing_number"`
+	AccountNumber     string `json:"account_number"`
+	AccountType       string `json:"account_type"`
+	BankName          string `json:"bank_name,omitempty"`
+	Country           string `json:"country"`
+}
+
+type directACHPayoutResponse struct {
+	ID             string `json:"id"`
+	BatchID        string `json:"batch_id,omitempty"`
+	Status         string `json:"status"`
+	FailureCode    string `json:"failure_code,omitempty"`
+	FailureMessage string `json:"failure_message,omitempty"`
+}
+
+type directACHWebhookEnvelope struct {
+	ID        string               `json:"id"`
+	Type      string               `json:"type"`
+	Timestamp string               `json:"timestamp,omitempty"`
+	CreatedAt string               `json:"created_at,omitempty"`
+	Created   int64                `json:"created,omitempty"`
+	Data      directACHWebhookData `json:"data"`
+}
+
+type directACHWebhookData struct {
+	ID               string            `json:"id,omitempty"`
+	PayoutID         string            `json:"payout_id,omitempty"`
+	ProviderPayoutID string            `json:"provider_payout_id,omitempty"`
+	Status           string            `json:"status,omitempty"`
+	FailureCode      string            `json:"failure_code,omitempty"`
+	FailureMessage   string            `json:"failure_message,omitempty"`
+	Metadata         map[string]string `json:"metadata,omitempty"`
+}
+
+type directACHSettlementReportResponse struct {
+	ID           string                           `json:"id,omitempty"`
+	ReportID     string                           `json:"report_id,omitempty"`
+	StartDate    string                           `json:"start_date,omitempty"`
+	EndDate      string                           `json:"end_date,omitempty"`
+	TotalPayouts int                              `json:"total_payouts,omitempty"`
+	TotalAmount  int64                            `json:"total_amount,omitempty"`
+	TotalFees    int64                            `json:"total_fees,omitempty"`
+	GeneratedAt  string                           `json:"generated_at,omitempty"`
+	Transactions []directACHSettlementTransaction `json:"transactions,omitempty"`
+}
+
+type directACHSettlementTransaction struct {
+	TransactionID string `json:"transaction_id"`
+	PayoutID      string `json:"payout_id,omitempty"`
+	Amount        int64  `json:"amount"`
+	Fee           int64  `json:"fee,omitempty"`
+	Status        string `json:"status"`
+	ProcessedAt   string `json:"processed_at,omitempty"`
+}
+
+func (a *DirectACHAdapter) doRequest(ctx context.Context, method string, path string, payload any, idempotencyKey string, query url.Values) ([]byte, int, error) {
+	requestURL := a.baseURL + path
+	if len(query) > 0 {
+		requestURL += "?" + query.Encode()
+	}
+
+	var body io.Reader
+	if payload != nil {
+		data, err := json.Marshal(payload)
+		if err != nil {
+			return nil, 0, fmt.Errorf("failed to marshal direct ACH payload: %w", err)
+		}
+		body = bytes.NewReader(data)
+	}
+
+	req, err := http.NewRequestWithContext(ctx, method, requestURL, body)
+	if err != nil {
+		return nil, 0, fmt.Errorf("failed to create direct ACH request: %w", err)
+	}
+
+	req.Header.Set("Authorization", "Bearer "+a.config.SecretKey)
+	req.Header.Set("Accept", "application/json")
+	if payload != nil {
+		req.Header.Set("Content-Type", "application/json")
+	}
+	if strings.TrimSpace(idempotencyKey) != "" {
+		req.Header.Set("Idempotency-Key", idempotencyKey)
+	}
+
+	resp, err := a.httpClient.Do(req)
+	if err != nil {
+		return nil, 0, fmt.Errorf("direct ACH request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, resp.StatusCode, fmt.Errorf("failed to read direct ACH response: %w", err)
+	}
+
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return respBody, resp.StatusCode, fmt.Errorf("direct ACH request failed with status %d: %s", resp.StatusCode, string(respBody))
+	}
+
+	return respBody, resp.StatusCode, nil
+}
+
+func mapDirectACHStatus(status string) PayoutStatus {
+	switch strings.ToLower(strings.TrimSpace(status)) {
+	case "processing", "submitted", "queued":
+		return PayoutStatusProcessing
+	case "succeeded", directACHStatusCompleted, "posted", "settled":
+		return PayoutStatusSucceeded
+	case statusFailed, string(AMLStatusRejected):
+		return PayoutStatusFailed
+	case "canceled", "cancelled":
+		return PayoutStatusCanceled
+	case "returned", "reversed":
+		return PayoutStatusReversed
+	case "approved":
+		return PayoutStatusApproved
+	default:
+		return PayoutStatusPending
+	}
+}
+
+const directACHStatusCompleted = "completed"
+
+func directACHTimestamp(candidates ...string) time.Time {
+	for _, candidate := range candidates {
+		candidate = strings.TrimSpace(candidate)
+		if candidate == "" {
+			continue
+		}
+		for _, layout := range []string{time.RFC3339Nano, time.RFC3339} {
+			parsed, err := time.Parse(layout, candidate)
+			if err == nil {
+				return parsed
+			}
+		}
+	}
+	return time.Time{}
+}
+
+func firstNonEmpty(values ...string) string {
+	for _, value := range values {
+		if strings.TrimSpace(value) != "" {
+			return value
+		}
+	}
+	return ""
+}
 
 // ============================================================================
 // ACH Return Codes
@@ -631,9 +1004,3 @@ func (c ACHReturnCode) Description() string {
 		return "Unknown Return Code"
 	}
 }
-
-// ============================================================================
-// Unused import prevention
-// ============================================================================
-
-var _ = bytes.Buffer{} // Keep bytes import for potential use

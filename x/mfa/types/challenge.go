@@ -362,6 +362,40 @@ type AuthorizationSession struct {
 	DeviceFingerprint string `json:"device_fingerprint,omitempty"`
 }
 
+func (s *AuthorizationSession) Validate() error {
+	if s.AccountAddress == "" {
+		return ErrInvalidAddress.Wrap("account_address cannot be empty")
+	}
+	if !s.TransactionType.IsValid() {
+		return ErrInvalidSensitiveTxType.Wrapf("invalid transaction type: %d", s.TransactionType)
+	}
+	if len(s.VerifiedFactors) == 0 {
+		return ErrInvalidProof.Wrap("verified_factors cannot be empty")
+	}
+	if s.CreatedAt == 0 {
+		return ErrSessionExpired.Wrap("created_at cannot be zero")
+	}
+	if s.ExpiresAt <= s.CreatedAt {
+		return ErrSessionExpired.Wrap("expires_at must be after created_at")
+	}
+	if s.UsedAt > 0 && s.UsedAt < s.CreatedAt {
+		return ErrSessionExpired.Wrap("used_at cannot be before created_at")
+	}
+
+	seen := make(map[FactorType]struct{}, len(s.VerifiedFactors))
+	for _, ft := range s.VerifiedFactors {
+		if !ft.IsValid() {
+			return ErrInvalidFactorType.Wrapf("invalid verified factor type: %d", ft)
+		}
+		if _, ok := seen[ft]; ok {
+			return ErrInvalidProof.Wrapf("duplicate verified factor: %s", ft.String())
+		}
+		seen[ft] = struct{}{}
+	}
+
+	return nil
+}
+
 // IsValid returns true if the session is valid for use
 func (s *AuthorizationSession) IsValid(now time.Time) bool {
 	if now.Unix() > s.ExpiresAt {

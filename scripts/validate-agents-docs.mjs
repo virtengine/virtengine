@@ -18,6 +18,7 @@ const requiredSections = [
 
 const ignoreDirs = new Set([
   ".git",
+  ".bosun",
   "node_modules",
   ".cache",
   "dist",

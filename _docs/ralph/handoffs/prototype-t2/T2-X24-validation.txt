@@ -1,0 +1,35 @@
+T2-X24 raw validation summary
+Implementation SHA: c805573911620632d1b045140be760d3cee28ca4
+Node: v20.19.1
+
+[focused-vitest]
+OUTPUT: Test Files 3 passed (3)
+OUTPUT: Tests 77 passed (77)
+OUTPUT: no warnings
+EXIT: 0
+
+[full-portal-vitest]
+OUTPUT: Test Files 91 passed (91)
+OUTPUT: Tests 818 passed (818)
+OUTPUT: Duration 154.14s
+OUTPUT: no warnings
+EXIT: 0
+
+[typecheck]
+OUTPUT: full portal check completed with no diagnostics
+EXIT: 0
+
+[prettier]
+COMMAND: C:\Windows\System32\cmd.exe /d /c "cd /d C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t2\portal && node_modules\.bin\prettier.CMD --check src\features\mfa\store.ts src\features\mfa\useMFAGate.ts tests\unit\mfa\store.test.ts tests\unit\mfa\useMFAGate.test.tsx src\components\billing\BillingDashboard.tsx tests\unit\billing\BillingDashboard.test.tsx src\app\provider\offerings\page.tsx src\components\account\DelegationSection.tsx"
+OUTPUT: exact eight-file formatting completed
+EXIT: 0
+
+[eslint]
+COMMAND: C:\Windows\System32\cmd.exe /d /c "cd /d C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t2\portal && node_modules\.bin\eslint.CMD src\features\mfa\store.ts src\features\mfa\useMFAGate.ts tests\unit\mfa\store.test.ts tests\unit\mfa\useMFAGate.test.tsx src\components\billing\BillingDashboard.tsx tests\unit\billing\BillingDashboard.test.tsx src\app\provider\offerings\page.tsx src\components\account\DelegationSection.tsx"
+OUTPUT: no lint findings; TypeScript parser-support notice only
+EXIT: 0
+
+[committed-diff-check]
+COMMAND: git -C C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t2 show --check --format= c805573911620632d1b045140be760d3cee28ca4 -- portal/src/features/mfa/store.ts portal/src/features/mfa/useMFAGate.ts portal/tests/unit/mfa/store.test.ts portal/tests/unit/mfa/useMFAGate.test.tsx portal/src/components/billing/BillingDashboard.tsx portal/tests/unit/billing/BillingDashboard.test.tsx portal/src/app/provider/offerings/page.tsx portal/src/components/account/DelegationSection.tsx
+OUTPUT: no diagnostics
+EXIT: 0

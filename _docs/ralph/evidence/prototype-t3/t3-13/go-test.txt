@@ -1,0 +1,26 @@
+command: C:\Users\pavil\AppData\Local\VirtEngine\toolchains\go1.25.8\go\bin\go.exe -C C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t3 test -v -count=1 ./pkg/reviewops
+exit_code: 0
+tool: go version go1.25.8 windows/amd64
+
+=== RUN   TestOperationalMetricsDefaultIsUnavailableAndOmitsValues
+--- PASS: TestOperationalMetricsDefaultIsUnavailableAndOmitsValues (0.00s)
+=== RUN   TestOperationalMetricsBoundedContract
+--- PASS: TestOperationalMetricsBoundedContract (0.00s)
+=== RUN   TestOperationalMetricsRejectsContradictionsBeforeMutationAndDoesNotLeak
+--- PASS: TestOperationalMetricsRejectsContradictionsBeforeMutationAndDoesNotLeak (0.00s)
+=== RUN   TestOperationalMetricsSubgroupPrivacyAndAvailability
+--- PASS: TestOperationalMetricsSubgroupPrivacyAndAvailability (0.00s)
+=== RUN   TestOperationalMetricsDuplicateRegistrationSharesSnapshot
+--- PASS: TestOperationalMetricsDuplicateRegistrationSharesSnapshot (0.00s)
+=== RUN   TestOperationalMetricsRejectsConflictingRegistration
+--- PASS: TestOperationalMetricsRejectsConflictingRegistration (0.00s)
+=== RUN   TestOperationalMetricsClonesInputAndSupportsConcurrentGather
+--- PASS: TestOperationalMetricsClonesInputAndSupportsConcurrentGather (0.04s)
+=== RUN   TestOperationalMetricsFailsClosedWhenSnapshotBecomesStale
+--- PASS: TestOperationalMetricsFailsClosedWhenSnapshotBecomesStale (0.00s)
+=== RUN   TestOperationalMetricsTaxonomyDigestIsImmutable
+--- PASS: TestOperationalMetricsTaxonomyDigestIsImmutable (0.00s)
+=== RUN   TestOperationalMetricsRejectsRegressingAndConflictingSnapshots
+--- PASS: TestOperationalMetricsRejectsRegressingAndConflictingSnapshots (0.00s)
+PASS
+ok      github.com/virtengine/virtengine/pkg/reviewops  3.391s

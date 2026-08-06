@@ -2,6 +2,7 @@ package provider_daemon
 
 import (
 	"context"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"path/filepath"
@@ -16,7 +17,48 @@ import (
 	settlementv1 "github.com/virtengine/virtengine/sdk/go/node/settlement/v1"
 	"github.com/virtengine/virtengine/sdk/go/sdkutil"
 	"github.com/virtengine/virtengine/x/settlement"
+	settlementtypes "github.com/virtengine/virtengine/x/settlement/types"
 )
+
+const (
+	testSubmitterProviderAddress = "provider-1"
+	testSubmitterChainID         = "virtengine-test"
+)
+
+type testSigningStateResolver struct{ binding ActiveProviderKeyBinding }
+
+func (r testSigningStateResolver) ResolveProviderSigningState(context.Context, string) (ActiveProviderKeyBinding, error) {
+	return r.binding, nil
+}
+
+type testUsageStateResolver struct {
+	states map[string]OnChainUsageStreamState
+}
+
+func (r testUsageStateResolver) ResolveUsageStreamState(_ context.Context, provider, allocationID, orderID, leaseID string) (OnChainUsageStreamState, error) {
+	streamID, err := settlementtypes.UsageStreamID(provider, allocationID, orderID, leaseID)
+	if err != nil {
+		return OnChainUsageStreamState{}, err
+	}
+	return r.states[hex.EncodeToString(streamID)], nil
+}
+
+func testSigningResolver(t *testing.T, km *KeyManager) ProviderSigningStateResolver {
+	t.Helper()
+	key, err := km.GetActiveKey()
+	require.NoError(t, err)
+	publicKey, err := hex.DecodeString(key.PublicKey)
+	require.NoError(t, err)
+	return testSigningStateResolver{binding: ActiveProviderKeyBinding{
+		ProviderAddress: key.ProviderAddress,
+		KeyID:           key.KeyID,
+		Epoch:           1,
+		PublicKey:       publicKey,
+		Algorithm:       key.Algorithm,
+		BlockHeight:     100,
+		BlockTime:       time.Now().UTC(),
+	}}
+}
 
 type mockSubmitterClient struct {
 	mu             sync.Mutex
@@ -90,7 +132,7 @@ func newTestKeyManager(t *testing.T) *KeyManager {
 	})
 	require.NoError(t, err)
 	require.NoError(t, km.Unlock(""))
-	_, err = km.GenerateKey("provider-1")
+	_, err = km.GenerateKey(testSubmitterProviderAddress)
 	require.NoError(t, err)
 	return km
 }
@@ -98,28 +140,45 @@ func newTestKeyManager(t *testing.T) *KeyManager {
 func newTestReport() *ChainUsageReport {
 	now := time.Now()
 	return &ChainUsageReport{
-		OrderID:     "order-1",
-		LeaseID:     "lease-1",
-		UsageUnits:  10,
-		UsageType:   "cpu",
-		PeriodStart: now.Add(-time.Hour),
-		PeriodEnd:   now,
-		UnitPrice:   sdk.NewDecCoinFromDec("uvirt", sdkmath.LegacyNewDec(1)),
-		Signature:   []byte("sig"),
+		OrderID:         "order-1",
+		LeaseID:         "lease-1",
+		CustomerAddress: "customer-1",
+		UsageUnits:      10,
+		UsageType:       "cpu",
+		PeriodStart:     now.Add(-time.Hour),
+		PeriodEnd:       now,
+		UnitPrice:       sdk.NewDecCoinFromDec("uvirt", sdkmath.LegacyNewDec(1)),
+		RawMetrics:      ResourceMetrics{CPUMilliSeconds: 36_000_000},
 	}
 }
 
 func reportToUsageMsg(report *ChainUsageReport) *MsgRecordUsageWrapper {
 	return &MsgRecordUsageWrapper{
-		Sender:      "provider-1",
-		OrderID:     report.OrderID,
-		LeaseID:     report.LeaseID,
-		UsageUnits:  report.UsageUnits,
-		UsageType:   report.UsageType,
-		PeriodStart: report.PeriodStart.Unix(),
-		PeriodEnd:   report.PeriodEnd.Unix(),
-		UnitPrice:   report.UnitPrice,
-		Signature:   report.Signature,
+		Sender:           testSubmitterProviderAddress,
+		OrderID:          report.OrderID,
+		LeaseID:          report.LeaseID,
+		UsageUnits:       report.UsageUnits,
+		UsageType:        report.UsageType,
+		PeriodStart:      report.PeriodStart.Unix(),
+		PeriodEnd:        report.PeriodEnd.Unix(),
+		UnitPrice:        report.UnitPrice,
+		Signature:        report.Signature,
+		AllocationID:     report.AllocationID,
+		ChainID:          report.ChainID,
+		RawMetrics:       report.RawMetrics,
+		PricingVersion:   report.PricingVersion,
+		FormulaVersion:   report.FormulaVersion,
+		ModelVersion:     report.ModelVersion,
+		StreamSequence:   report.StreamSequence,
+		Nonce:            report.Nonce,
+		IdempotencyKey:   report.IdempotencyKey,
+		ProviderKeyEpoch: report.ProviderKeyEpoch,
+		ProviderKeyID:    report.ProviderKeyID,
+		IssuedAtHeight:   report.IssuedAtHeight,
+		ExpiresAtHeight:  report.ExpiresAtHeight,
+		IssuedAtUnix:     report.IssuedAtUnix,
+		ExpiresAtUnix:    report.ExpiresAtUnix,
+		SignatureVersion: report.SignatureVersion,
 	}
 }
 
@@ -127,17 +186,23 @@ func newSubmitterWithClient(t *testing.T, client ChainSubmitterClient, cfgOverri
 	t.Helper()
 	cfg := DefaultChainSubmitterConfig()
 	cfg.Enabled = true
-	cfg.ProviderAddress = "provider-1"
-	cfg.ChainID = "virtengine-test"
+	cfg.ProviderAddress = testSubmitterProviderAddress
+	cfg.ChainID = testSubmitterChainID
 	cfg.ChainClient = client
+	cfg.AllowTestLegacyChainClient = true
 	cfg.CometRPC = ""
 	cfg.RetryBackoff = 0
 	cfg.QueueStatePath = filepath.Join(t.TempDir(), "queue-state.json")
 	if cfgOverrides != nil {
 		cfgOverrides(&cfg)
 	}
-	submitter, err := NewChainUsageSubmitter(cfg, newTestKeyManager(t), nil)
+	km := newTestKeyManager(t)
+	if cfg.ProviderSigningState == nil {
+		cfg.ProviderSigningState = testSigningResolver(t, km)
+	}
+	submitter, err := NewChainUsageSubmitter(cfg, km, nil)
 	require.NoError(t, err)
+	t.Cleanup(submitter.Stop)
 	return submitter
 }
 
@@ -150,9 +215,12 @@ func TestChainSubmitterInitialization(t *testing.T) {
 	require.Error(t, err)
 
 	mockClient := newMockSubmitterClient(0)
-	cfg.ProviderAddress = "provider-1"
+	cfg.ProviderAddress = testSubmitterProviderAddress
 	cfg.CometRPC = ""
 	cfg.ChainClient = mockClient
+	_, err = NewChainUsageSubmitter(cfg, newTestKeyManager(t), nil)
+	require.ErrorIs(t, err, ErrProviderMutationUnavailable)
+	cfg.AllowTestLegacyChainClient = true
 	submitter, err := NewChainUsageSubmitter(cfg, newTestKeyManager(t), nil)
 	require.NoError(t, err)
 	require.NotNil(t, submitter.chainClient)
@@ -174,7 +242,7 @@ func TestChainSubmitterSignsAndBroadcasts(t *testing.T) {
 	var env txEnvelope
 	require.NoError(t, json.Unmarshal(mockClient.LastTx(), &env))
 	assert.Equal(t, uint64(150000), env.GasLimit)
-	assert.Equal(t, "virtengine-test", env.ChainID)
+	assert.Equal(t, testSubmitterChainID, env.ChainID)
 }
 
 func TestChainSubmitterBatchQueuesPerReport(t *testing.T) {
@@ -294,25 +362,35 @@ func TestChainSubmitterConcurrentSubmissionSafety(t *testing.T) {
 func TestTransactionBuilderBuildUsageReportTx(t *testing.T) {
 	km := newTestKeyManager(t)
 	builder := NewTransactionBuilder(ChainSubmitterConfig{
-		ProviderAddress: "provider-1",
+		ProviderAddress: testSubmitterProviderAddress,
 	}, km)
 	report := newTestReport()
-	txBytes, err := builder.BuildUsageReportTx(report, SigningData{ChainID: "virtengine-test", Sequence: 3})
+	txBytes, err := builder.BuildUsageReportTx(report, SigningData{ChainID: testSubmitterChainID, Sequence: 3})
 	require.NoError(t, err)
 	var tx map[string]interface{}
 	require.NoError(t, json.Unmarshal(txBytes, &tx))
-	assert.Equal(t, "virtengine-test", tx["chain_id"])
+	assert.Equal(t, testSubmitterChainID, tx["chain_id"])
 }
 
 func TestSignatureVerifierAndHash(t *testing.T) {
+	submitter := newSubmitterWithClient(t, newMockSubmitterClient(100000), nil)
 	verifier := NewSignatureVerifier()
 	report := newTestReport()
-	report.Signature = []byte("sig")
+	require.NoError(t, submitter.prepareAuthenticatedUsageReport(context.Background(), report))
+	key, err := submitter.keyManager.GetActiveKey()
+	require.NoError(t, err)
+	publicKey, err := hex.DecodeString(key.PublicKey)
+	require.NoError(t, err)
 
-	verifier.AddTrustedProvider("provider-1", []byte("pub"))
-	ok, err := verifier.VerifyUsageReport(report, "provider-1")
+	verifier.AddTrustedProvider(testSubmitterProviderAddress, publicKey)
+	ok, err := verifier.VerifyUsageReport(report, testSubmitterProviderAddress)
 	require.NoError(t, err)
 	assert.True(t, ok)
+	report.RawMetrics.CPUMilliSeconds += 3_600_000
+	report.UsageUnits++
+	ok, err = verifier.VerifyUsageReport(report, testSubmitterProviderAddress)
+	require.NoError(t, err)
+	assert.False(t, ok)
 
 	hash := UsageReportHashHex(report)
 	assert.NotEmpty(t, hash)
@@ -323,22 +401,26 @@ func TestChainSubmitterQueuePersistenceAcrossRestart(t *testing.T) {
 	queuePath := filepath.Join(t.TempDir(), "queue-state.json")
 	cfg := DefaultChainSubmitterConfig()
 	cfg.Enabled = true
-	cfg.ProviderAddress = "provider-1"
-	cfg.ChainID = "virtengine-test"
+	cfg.ProviderAddress = testSubmitterProviderAddress
+	cfg.ChainID = testSubmitterChainID
 	cfg.CometRPC = ""
 	cfg.QueueStatePath = queuePath
 	cfg.ChainClient = newMockSubmitterClient(100000)
+	cfg.AllowTestLegacyChainClient = true
 
 	submitter1, err := NewChainUsageSubmitter(cfg, newTestKeyManager(t), nil)
 	require.NoError(t, err)
 	item, existed, err := submitter1.enqueueMessage(queueItemKindUsage, reportToUsageMsg(report))
 	require.NoError(t, err)
 	require.False(t, existed)
+	submitter1.Stop()
 
 	mockClient := newMockSubmitterClient(100000)
 	cfg.ChainClient = mockClient
+	cfg.AllowTestLegacyChainClient = true
 	submitter2, err := NewChainUsageSubmitter(cfg, newTestKeyManager(t), nil)
 	require.NoError(t, err)
+	t.Cleanup(submitter2.Stop)
 	require.NoError(t, submitter2.processQueueItem(context.Background(), item.IdempotencyKey, false))
 
 	broadcastCalls, _ := mockClient.Calls()
@@ -346,6 +428,132 @@ func TestChainSubmitterQueuePersistenceAcrossRestart(t *testing.T) {
 	require.Contains(t, submitter2.queueState.Items, item.IdempotencyKey)
 	assert.Equal(t, queueItemStatusBroadcasted, submitter2.queueState.Items[item.IdempotencyKey].Status)
 	assert.NotEmpty(t, submitter2.queueState.Items[item.IdempotencyKey].BroadcastTxHash)
+}
+
+func TestAuthenticatedUsageProofAllocationPersistsAcrossRestart(t *testing.T) {
+	queuePath := filepath.Join(t.TempDir(), "queue-state.json")
+	original := newTestReport()
+	km1 := newTestKeyManager(t)
+	active1, err := km1.GetActiveKey()
+	require.NoError(t, err)
+	privateKey := append([]byte(nil), active1.privateKey...)
+
+	cfg := DefaultChainSubmitterConfig()
+	cfg.Enabled = true
+	cfg.ProviderAddress = testSubmitterProviderAddress
+	cfg.ChainID = testSubmitterChainID
+	cfg.ChainClient = newMockSubmitterClient(100000)
+	cfg.AllowTestLegacyChainClient = true
+	cfg.QueueStatePath = queuePath
+	cfg.ProviderSigningState = testSigningResolver(t, km1)
+	submitter1, err := NewChainUsageSubmitter(cfg, km1, nil)
+	require.NoError(t, err)
+	first := *original
+	require.NoError(t, submitter1.prepareAuthenticatedUsageReport(context.Background(), &first))
+	submitter1.Stop()
+
+	km2, err := NewKeyManager(KeyManagerConfig{StorageType: KeyStorageTypeMemory, DefaultAlgorithm: string(HSMKeyTypeEd25519)})
+	require.NoError(t, err)
+	require.NoError(t, km2.Unlock(""))
+	_, err = km2.ImportKey(testSubmitterProviderAddress, privateKey, string(HSMKeyTypeEd25519))
+	require.NoError(t, err)
+	cfg.ProviderSigningState = testSigningResolver(t, km2)
+	submitter2, err := NewChainUsageSubmitter(cfg, km2, nil)
+	require.NoError(t, err)
+	t.Cleanup(submitter2.Stop)
+	second := *original
+	require.NoError(t, submitter2.prepareAuthenticatedUsageReport(context.Background(), &second))
+	require.Equal(t, first.StreamSequence, second.StreamSequence)
+	require.Equal(t, first.Nonce, second.Nonce)
+	require.Equal(t, first.IdempotencyKey, second.IdempotencyKey)
+	require.Equal(t, first.Signature, second.Signature)
+}
+
+func TestAuthenticatedUsageFailedPreparationDoesNotConsumeSequence(t *testing.T) {
+	submitter := newSubmitterWithClient(t, newMockSubmitterClient(100000), nil)
+	first := newTestReport()
+	first.UnitPrice = sdk.NewDecCoinFromDec("uvirt", sdkmath.LegacyZeroDec())
+	require.Error(t, submitter.prepareAuthenticatedUsageReport(context.Background(), first))
+
+	second := newTestReport()
+	require.NoError(t, submitter.prepareAuthenticatedUsageReport(context.Background(), second))
+	require.Equal(t, uint64(1), second.StreamSequence)
+}
+
+func TestAuthenticatedUsageReconcilesSequenceFromChain(t *testing.T) {
+	submitter := newSubmitterWithClient(t, newMockSubmitterClient(100000), nil)
+	report := newTestReport()
+	streamID, err := settlementtypes.UsageStreamID(testSubmitterProviderAddress, report.AllocationID, report.OrderID, report.LeaseID)
+	require.NoError(t, err)
+	submitter.cfg.UsageStreamState = testUsageStateResolver{states: map[string]OnChainUsageStreamState{
+		hex.EncodeToString(streamID): {LastSequence: 7},
+	}}
+
+	require.NoError(t, submitter.prepareAuthenticatedUsageReport(context.Background(), report))
+	require.Equal(t, uint64(8), report.StreamSequence)
+}
+
+func TestAuthenticatedUsageRefreshesExpiredUnbroadcastProof(t *testing.T) {
+	queuePath := filepath.Join(t.TempDir(), "queue-state.json")
+	km := newTestKeyManager(t)
+	resolver := testSigningResolver(t, km).(testSigningStateResolver)
+	resolver.binding.BlockTime = time.Now().UTC()
+	cfg := DefaultChainSubmitterConfig()
+	cfg.ProviderAddress = testSubmitterProviderAddress
+	cfg.ChainID = testSubmitterChainID
+	cfg.ChainClient = newMockSubmitterClient(100000)
+	cfg.AllowTestLegacyChainClient = true
+	cfg.QueueStatePath = queuePath
+	cfg.ProviderSigningState = resolver
+	submitter, err := NewChainUsageSubmitter(cfg, km, nil)
+	require.NoError(t, err)
+	t.Cleanup(submitter.Stop)
+
+	report := newTestReport()
+	require.NoError(t, submitter.prepareAuthenticatedUsageReport(context.Background(), report))
+	oldExpiry := report.ExpiresAtHeight
+
+	resolver.binding.BlockHeight = oldExpiry + 1
+	resolver.binding.BlockTime = resolver.binding.BlockTime.Add(time.Minute)
+	submitter.cfg.ProviderSigningState = resolver
+	refreshed := newTestReport()
+	refreshed.PeriodStart = report.PeriodStart
+	refreshed.PeriodEnd = report.PeriodEnd
+	require.NoError(t, submitter.prepareAuthenticatedUsageReport(context.Background(), refreshed))
+	require.Equal(t, report.StreamSequence, refreshed.StreamSequence)
+	require.Greater(t, refreshed.ExpiresAtHeight, oldExpiry)
+	require.NotEqual(t, report.Signature, refreshed.Signature)
+}
+
+func TestChainSubmitterSharedQueueInstancesDoNotOverwrite(t *testing.T) {
+	queuePath := filepath.Join(t.TempDir(), "queue-state.json")
+	newSharedSubmitter := func() (*ChainUsageSubmitterImpl, error) {
+		cfg := DefaultChainSubmitterConfig()
+		cfg.ProviderAddress = testSubmitterProviderAddress
+		cfg.ChainID = testSubmitterChainID
+		cfg.ChainClient = newMockSubmitterClient(100000)
+		cfg.AllowTestLegacyChainClient = true
+		cfg.QueueStatePath = queuePath
+		km := newTestKeyManager(t)
+		cfg.ProviderSigningState = testSigningResolver(t, km)
+		return NewChainUsageSubmitter(cfg, km, nil)
+	}
+
+	first, err := newSharedSubmitter()
+	require.NoError(t, err)
+	t.Cleanup(first.Stop)
+	second, err := newSharedSubmitter()
+	require.Nil(t, second)
+	require.ErrorContains(t, err, "already owned")
+}
+
+func TestAuthenticatedUsageRefusesLocalKeyMismatch(t *testing.T) {
+	submitter := newSubmitterWithClient(t, newMockSubmitterClient(100000), nil)
+	resolver := submitter.cfg.ProviderSigningState.(testSigningStateResolver)
+	resolver.binding.KeyID = "ed25519:wrong"
+	submitter.cfg.ProviderSigningState = resolver
+	err := submitter.submitSingleReport(context.Background(), newTestReport())
+	require.ErrorIs(t, err, ErrProviderKeyMismatch)
 }
 
 func TestChainSubmitterDuplicateDeliveryProtection(t *testing.T) {

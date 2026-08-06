@@ -1,6 +1,7 @@
 package types
 
 import (
+	"crypto/sha256"
 	"fmt"
 	"time"
 )
@@ -99,6 +100,26 @@ type VerificationRequest struct {
 
 	// Metadata contains additional request-specific data
 	Metadata map[string]string `json:"metadata,omitempty"`
+
+	// InferenceProfileSnapshot is the immutable production inference profile
+	// captured when the request is created. It is internal JSON state only; it
+	// intentionally does not change protobuf/API contracts.
+	InferenceProfileSnapshot *InferenceProfileSnapshot `json:"inference_profile_snapshot,omitempty"`
+}
+
+// InferenceProfileSnapshot captures the exact committed inference profile a
+// verification request was issued under. Receipts for the request must match
+// this snapshot, and vote-extension staging additionally requires the same
+// profile to still be the single active bundle commitment.
+type InferenceProfileSnapshot struct {
+	PipelineVersion         string `json:"pipeline_version"`
+	RuntimeImageDigest      []byte `json:"runtime_image_digest"`
+	RuntimeDigest           []byte `json:"runtime_digest"`
+	ModelManifestDigest     []byte `json:"model_manifest_digest"`
+	ModelDigest             []byte `json:"model_digest"`
+	DeterminismConfigDigest []byte `json:"determinism_config_digest"`
+	FeatureSchemaDigest     []byte `json:"feature_schema_digest"`
+	ActivationHeight        int64  `json:"activation_height"`
 }
 
 // NewVerificationRequest creates a new verification request
@@ -148,7 +169,111 @@ func (r *VerificationRequest) Validate() error {
 		return ErrInvalidVerificationRequest.Wrapf("invalid status: %s", r.Status)
 	}
 
+	if r.InferenceProfileSnapshot != nil {
+		if err := r.InferenceProfileSnapshot.Validate(); err != nil {
+			return err
+		}
+	}
+
 	return nil
+}
+
+// SetInferenceProfileSnapshot stores a defensive copy of a validated profile
+// snapshot on the request.
+func (r *VerificationRequest) SetInferenceProfileSnapshot(snapshot *InferenceProfileSnapshot) error {
+	if snapshot == nil {
+		return ErrInvalidVerificationRequest.Wrap("inference profile snapshot is required")
+	}
+	if err := snapshot.Validate(); err != nil {
+		return err
+	}
+	copied := snapshot.DeepCopy()
+	if err := copied.Validate(); err != nil {
+		return err
+	}
+	r.InferenceProfileSnapshot = copied
+	return nil
+}
+
+// SetInferenceProfileSnapshotForTest explicitly backfills legacy direct test
+// fixtures. Production request creation must use SetInferenceProfileSnapshot
+// from committed active profile state instead of implicit current-state repair.
+func (r *VerificationRequest) SetInferenceProfileSnapshotForTest(snapshot *InferenceProfileSnapshot) error {
+	return r.SetInferenceProfileSnapshot(snapshot)
+}
+
+// RequireInferenceProfileSnapshot returns a defensive copy of the required
+// profile snapshot for production receipt validation.
+func (r *VerificationRequest) RequireInferenceProfileSnapshot() (*InferenceProfileSnapshot, error) {
+	if r == nil || r.InferenceProfileSnapshot == nil {
+		return nil, ErrInvalidVerificationRequest.Wrap("inference profile snapshot is required")
+	}
+	copied := r.InferenceProfileSnapshot.DeepCopy()
+	if err := copied.Validate(); err != nil {
+		return nil, err
+	}
+	return copied, nil
+}
+
+// DeepCopy returns a snapshot copy with independent digest storage.
+func (s *InferenceProfileSnapshot) DeepCopy() *InferenceProfileSnapshot {
+	if s == nil {
+		return nil
+	}
+	return &InferenceProfileSnapshot{
+		PipelineVersion:         s.PipelineVersion,
+		RuntimeImageDigest:      append([]byte(nil), s.RuntimeImageDigest...),
+		RuntimeDigest:           append([]byte(nil), s.RuntimeDigest...),
+		ModelManifestDigest:     append([]byte(nil), s.ModelManifestDigest...),
+		ModelDigest:             append([]byte(nil), s.ModelDigest...),
+		DeterminismConfigDigest: append([]byte(nil), s.DeterminismConfigDigest...),
+		FeatureSchemaDigest:     append([]byte(nil), s.FeatureSchemaDigest...),
+		ActivationHeight:        s.ActivationHeight,
+	}
+}
+
+// Validate rejects missing, malformed, or aliased digest fields and invalid
+// activation metadata. RuntimeImageDigest and RuntimeDigest may have identical
+// contents because the current receipt semantics commit both runtime fields to
+// the same image hash, but they must not share mutable backing storage.
+func (s *InferenceProfileSnapshot) Validate() error {
+	if s == nil {
+		return ErrInvalidVerificationRequest.Wrap("inference profile snapshot is required")
+	}
+	if s.PipelineVersion == "" {
+		return ErrInvalidVerificationRequest.Wrap("inference profile pipeline_version is required")
+	}
+	if s.ActivationHeight <= 0 {
+		return ErrInvalidVerificationRequest.Wrap("inference profile activation_height must be positive")
+	}
+	digests := []struct {
+		name  string
+		value []byte
+	}{
+		{"runtime_image_digest", s.RuntimeImageDigest},
+		{"runtime_digest", s.RuntimeDigest},
+		{"model_manifest_digest", s.ModelManifestDigest},
+		{"model_digest", s.ModelDigest},
+		{"determinism_config_digest", s.DeterminismConfigDigest},
+		{"feature_schema_digest", s.FeatureSchemaDigest},
+	}
+	for _, digest := range digests {
+		if len(digest.value) != sha256.Size {
+			return ErrInvalidVerificationRequest.Wrapf("inference profile %s must be SHA-256", digest.name)
+		}
+	}
+	for i := range digests {
+		for j := i + 1; j < len(digests); j++ {
+			if digestSlicesAlias(digests[i].value, digests[j].value) {
+				return ErrInvalidVerificationRequest.Wrap("inference profile digest fields must not alias")
+			}
+		}
+	}
+	return nil
+}
+
+func digestSlicesAlias(a, b []byte) bool {
+	return len(a) > 0 && len(b) > 0 && &a[0] == &b[0]
 }
 
 // IsRetryable checks if the request can be retried

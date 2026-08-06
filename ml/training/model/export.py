@@ -241,34 +241,17 @@ class ModelExporter:
     
     def compute_model_hash(self, model_path: str, frozen_graph_path: Optional[str] = None) -> str:
         """
-        Compute SHA256 hash of model weights.
-        
+        Compute SHA256 hash of the runtime SavedModel directory.
+
         Args:
             model_path: Path to SavedModel directory
-            frozen_graph_path: Optional frozen graph path for deterministic hashing
-            
+            frozen_graph_path: Optional frozen graph path (captured separately)
+
         Returns:
             SHA256 hash string
         """
-        if not TF_AVAILABLE:
-            return ""
-        
-        try:
-            if frozen_graph_path and os.path.exists(frozen_graph_path):
-                return self._hash_file(frozen_graph_path)
-            
-            # Load the saved model and hash variable weights
-            loaded_model = tf.saved_model.load(model_path)
-            variables = loaded_model.variables
-            all_weights = [var.numpy().tobytes() for var in variables]
-            combined = b"".join(all_weights)
-            return hashlib.sha256(combined).hexdigest()
-            
-        except Exception as e:
-            logger.warning(f"Could not compute model hash: {e}")
-            
-            # Fallback: hash the files
-            return self._hash_directory(model_path)
+        _ = frozen_graph_path
+        return self._hash_directory(model_path)
     
     def _hash_directory(self, dir_path: str) -> str:
         """Hash all files in a directory."""

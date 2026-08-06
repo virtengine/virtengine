@@ -1,11 +1,9 @@
 import { describe, expect, it } from "@jest/globals";
-import { exec } from "child_process";
 import { access, constants as fsConst, readFile, rmdir } from "fs/promises";
 import { tmpdir } from "os";
 import { join as joinPath } from "path";
-import { promisify } from "util";
 
-const execAsync = promisify(exec);
+import { runBufGenerate } from "../helpers/runBufGenerate.ts";
 
 describe("protoc-gen-customtype-patches plugin", () => {
   const config = {
@@ -13,12 +11,17 @@ describe("protoc-gen-customtype-patches plugin", () => {
     clean: true,
     plugins: [
       {
-        local: "ts/script/protoc-gen-customtype-patches.ts",
+        local: [
+          "node",
+          "--experimental-strip-types",
+          "--no-warnings",
+          "ts/script/protoc-gen-customtype-patches.ts",
+        ],
         strategy: "all",
         out: ".",
         opt: [
           "target=ts",
-          "import_extension=ts"
+          "import_extension=ts",
         ],
       },
     ],
@@ -27,24 +30,21 @@ describe("protoc-gen-customtype-patches plugin", () => {
   it("generates `Set` instance with all the types that have reference to fields with custom type option", async () => {
     const outputDir = joinPath(tmpdir(), `ts-bufplugin-${process.pid.toString()}`);
     const protoDir = "./ts/test/functional/proto";
-    const command = [
-      `buf generate`,
-      `--config '${JSON.stringify({
-        version: "v2",
-        modules: [
-          { path: "go/vendor/github.com/cosmos/gogoproto" },
-          { path: "./ts/test/functional/proto" },
-        ],
-      })}'`,
-      `--template '${JSON.stringify(config)}'`,
-      `-o '${outputDir}'`,
-      `--path ${protoDir}/customtype.proto`,
-      protoDir,
-    ].join(" ");
 
     try {
-      await execAsync(command, {
+      await runBufGenerate({
+        config: {
+          version: "v2",
+          modules: [
+            { path: "go/vendor/github.com/cosmos/gogoproto" },
+            { path: protoDir },
+          ],
+        },
+        template: config,
         cwd: joinPath(__dirname, "..", "..", ".."),
+        outputDir,
+        paths: [`${protoDir}/customtype.proto`],
+        inputs: [protoDir],
         env: {
           ...process.env,
           BUF_PLUGIN_CUSTOMTYPE_TYPES_PATCHES_OUTPUT_FILE: "customPatches.ts",

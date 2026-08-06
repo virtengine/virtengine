@@ -21,6 +21,9 @@ import {
   ScopeType,
   scopeTypeFromJSON,
   scopeTypeToJSON,
+  SocialMediaProvider,
+  socialMediaProviderFromJSON,
+  socialMediaProviderToJSON,
   VerificationStatus,
   verificationStatusFromJSON,
   verificationStatusToJSON,
@@ -64,6 +67,129 @@ export interface MsgUploadScopeResponse {
   status: VerificationStatus;
   /** UploadedAt is when the scope was uploaded (Unix timestamp) */
   uploadedAt: Long;
+}
+
+/** MsgSubmitSSOVerificationProof submits an SSO verification proof. */
+export interface MsgSubmitSSOVerificationProof {
+  accountAddress: string;
+  linkageId: string;
+  attestationData: Uint8Array;
+  evidenceHash: string;
+  evidenceStorageBackend: string;
+  evidenceStorageRef: string;
+  evidenceMetadata: { [key: string]: string };
+}
+
+export interface MsgSubmitSSOVerificationProof_EvidenceMetadataEntry {
+  key: string;
+  value: string;
+}
+
+/** MsgSubmitSSOVerificationProofResponse is the response for SSO proof submission. */
+export interface MsgSubmitSSOVerificationProofResponse {
+  linkageId: string;
+  status: string;
+  scoreContribution: number;
+  verifiedAt: Long;
+}
+
+/** MsgSubmitEmailVerificationProof submits an email OTP verification proof. */
+export interface MsgSubmitEmailVerificationProof {
+  accountAddress: string;
+  verificationId: string;
+  emailHash: string;
+  domainHash: string;
+  nonce: string;
+  isOrganizational: boolean;
+  attestationData: Uint8Array;
+  accountSignature: Uint8Array;
+  verifiedAt: Long;
+  expiresAt: Long;
+  evidenceHash: string;
+  evidenceStorageBackend: string;
+  evidenceStorageRef: string;
+  evidenceMetadata: { [key: string]: string };
+}
+
+export interface MsgSubmitEmailVerificationProof_EvidenceMetadataEntry {
+  key: string;
+  value: string;
+}
+
+/** MsgSubmitEmailVerificationProofResponse is the response for email proof submission. */
+export interface MsgSubmitEmailVerificationProofResponse {
+  verificationId: string;
+  status: string;
+  scoreContribution: number;
+  verifiedAt: Long;
+}
+
+/** MsgSubmitSMSVerificationProof submits an SMS OTP verification proof. */
+export interface MsgSubmitSMSVerificationProof {
+  accountAddress: string;
+  verificationId: string;
+  phoneHash: string;
+  phoneHashSalt: string;
+  countryCodeHash: string;
+  carrierType: string;
+  isVoip: boolean;
+  validatorAddress: string;
+  attestationData: Uint8Array;
+  accountSignature: Uint8Array;
+  verifiedAt: Long;
+  expiresAt: Long;
+  evidenceHash: string;
+  evidenceStorageBackend: string;
+  evidenceStorageRef: string;
+  evidenceMetadata: { [key: string]: string };
+}
+
+export interface MsgSubmitSMSVerificationProof_EvidenceMetadataEntry {
+  key: string;
+  value: string;
+}
+
+/** MsgSubmitSMSVerificationProofResponse is the response for SMS proof submission. */
+export interface MsgSubmitSMSVerificationProofResponse {
+  verificationId: string;
+  status: string;
+  scoreContribution: number;
+  verifiedAt: Long;
+}
+
+/** MsgSubmitSocialMediaScope submits a social media profile scope. */
+export interface MsgSubmitSocialMediaScope {
+  accountAddress: string;
+  scopeId: string;
+  provider: SocialMediaProvider;
+  profileNameHash: string;
+  emailHash: string;
+  usernameHash: string;
+  orgHash: string;
+  accountCreatedAt: Long;
+  accountAgeDays: number;
+  isVerified: boolean;
+  friendCountRange: string;
+  attestationData: Uint8Array;
+  accountSignature: Uint8Array;
+  encryptedPayload: EncryptedPayloadEnvelope | undefined;
+  evidenceHash: string;
+  evidenceStorageBackend: string;
+  evidenceStorageRef: string;
+  evidenceMetadata: { [key: string]: string };
+}
+
+export interface MsgSubmitSocialMediaScope_EvidenceMetadataEntry {
+  key: string;
+  value: string;
+}
+
+/** MsgSubmitSocialMediaScopeResponse is the response for social media scope submission. */
+export interface MsgSubmitSocialMediaScopeResponse {
+  scopeId: string;
+  status: string;
+  scoreContribution: number;
+  verifiedAt: Long;
 }
 
 /** MsgRevokeScope is the message for revoking an identity scope */
@@ -154,6 +280,72 @@ export interface MsgUpdateScoreResponse {
   newTier: IdentityTier;
   /** UpdatedAt is when the score was updated (Unix timestamp) */
   updatedAt: Long;
+}
+
+/**
+ * VEIDVoteExtension is the canonical versioned payload signed by CometBFT.
+ * Carrier v1 is currently unreleased; receipt_digest is part of its initial
+ * wire contract and therefore does not require a compatibility transition.
+ */
+export interface VEIDVoteExtension {
+  version: number;
+  chainId: string;
+  height: Long;
+  blockHash: Uint8Array;
+  pipelineVersion: string;
+  runtimeHash: Uint8Array;
+  modelHash: Uint8Array;
+  results: VEIDVoteExtensionResult[];
+}
+
+/** VEIDVoteExtensionResult commits one validator-controlled pre-consensus result. */
+export interface VEIDVoteExtensionResult {
+  requestId: string;
+  accountAddress: string;
+  score: number;
+  status: string;
+  modelVersion: string;
+  inputHash: Uint8Array;
+  resultHash: Uint8Array;
+  reasonCodes: string[];
+  receiptDigest: Uint8Array;
+}
+
+/** VEIDConsensusAggregate is deterministically reconstructed from signed votes. */
+export interface VEIDConsensusAggregate {
+  version: number;
+  chainId: string;
+  height: Long;
+  pipelineVersion: string;
+  runtimeHash: Uint8Array;
+  modelHash: Uint8Array;
+  totalVotingPower: Long;
+  quorumVotingPower: Long;
+  results: VEIDConsensusResult[];
+}
+
+/** VEIDConsensusResult is one result that reached the strict voting-power quorum. */
+export interface VEIDConsensusResult {
+  result: VEIDVoteExtensionResult | undefined;
+  votingPower: Long;
+}
+
+/**
+ * MsgSubmitConsensusVerification is the canonical SDK-native system message.
+ * The complete signed ExtendedCommitInfo is carried as canonical protobuf bytes
+ * and revalidated by proposal processing before this message can execute.
+ */
+export interface MsgSubmitConsensusVerification {
+  version: number;
+  chainId: string;
+  height: Long;
+  extendedCommit: Uint8Array;
+  aggregate: VEIDConsensusAggregate | undefined;
+}
+
+/** MsgSubmitConsensusVerificationResponse reports the consumed result count. */
+export interface MsgSubmitConsensusVerificationResponse {
+  appliedResults: number;
 }
 
 /** MsgCreateIdentityWallet is the message for creating an identity wallet */
@@ -696,6 +888,2037 @@ export const MsgUploadScopeResponse: MessageFns<MsgUploadScopeResponse, "virteng
     message.status = object.status ?? 0;
     message.uploadedAt = (object.uploadedAt !== undefined && object.uploadedAt !== null)
       ? Long.fromValue(object.uploadedAt)
+      : Long.ZERO;
+    return message;
+  },
+};
+
+function createBaseMsgSubmitSSOVerificationProof(): MsgSubmitSSOVerificationProof {
+  return {
+    accountAddress: "",
+    linkageId: "",
+    attestationData: new Uint8Array(0),
+    evidenceHash: "",
+    evidenceStorageBackend: "",
+    evidenceStorageRef: "",
+    evidenceMetadata: {},
+  };
+}
+
+export const MsgSubmitSSOVerificationProof: MessageFns<
+  MsgSubmitSSOVerificationProof,
+  "virtengine.veid.v1.MsgSubmitSSOVerificationProof"
+> = {
+  $type: "virtengine.veid.v1.MsgSubmitSSOVerificationProof" as const,
+
+  encode(message: MsgSubmitSSOVerificationProof, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.accountAddress !== "") {
+      writer.uint32(10).string(message.accountAddress);
+    }
+    if (message.linkageId !== "") {
+      writer.uint32(18).string(message.linkageId);
+    }
+    if (message.attestationData.length !== 0) {
+      writer.uint32(26).bytes(message.attestationData);
+    }
+    if (message.evidenceHash !== "") {
+      writer.uint32(34).string(message.evidenceHash);
+    }
+    if (message.evidenceStorageBackend !== "") {
+      writer.uint32(42).string(message.evidenceStorageBackend);
+    }
+    if (message.evidenceStorageRef !== "") {
+      writer.uint32(50).string(message.evidenceStorageRef);
+    }
+    Object.entries(message.evidenceMetadata).forEach(([key, value]) => {
+      MsgSubmitSSOVerificationProof_EvidenceMetadataEntry.encode({ key: key as any, value }, writer.uint32(58).fork())
+        .join();
+    });
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): MsgSubmitSSOVerificationProof {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseMsgSubmitSSOVerificationProof();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.accountAddress = reader.string();
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.linkageId = reader.string();
+          continue;
+        }
+        case 3: {
+          if (tag !== 26) {
+            break;
+          }
+
+          message.attestationData = reader.bytes();
+          continue;
+        }
+        case 4: {
+          if (tag !== 34) {
+            break;
+          }
+
+          message.evidenceHash = reader.string();
+          continue;
+        }
+        case 5: {
+          if (tag !== 42) {
+            break;
+          }
+
+          message.evidenceStorageBackend = reader.string();
+          continue;
+        }
+        case 6: {
+          if (tag !== 50) {
+            break;
+          }
+
+          message.evidenceStorageRef = reader.string();
+          continue;
+        }
+        case 7: {
+          if (tag !== 58) {
+            break;
+          }
+
+          const entry7 = MsgSubmitSSOVerificationProof_EvidenceMetadataEntry.decode(reader, reader.uint32());
+          if (entry7.value !== undefined) {
+            message.evidenceMetadata[entry7.key] = entry7.value;
+          }
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): MsgSubmitSSOVerificationProof {
+    return {
+      accountAddress: isSet(object.account_address) ? globalThis.String(object.account_address) : "",
+      linkageId: isSet(object.linkage_id) ? globalThis.String(object.linkage_id) : "",
+      attestationData: isSet(object.attestation_data) ? bytesFromBase64(object.attestation_data) : new Uint8Array(0),
+      evidenceHash: isSet(object.evidence_hash) ? globalThis.String(object.evidence_hash) : "",
+      evidenceStorageBackend: isSet(object.evidence_storage_backend)
+        ? globalThis.String(object.evidence_storage_backend)
+        : "",
+      evidenceStorageRef: isSet(object.evidence_storage_ref) ? globalThis.String(object.evidence_storage_ref) : "",
+      evidenceMetadata: isObject(object.evidence_metadata)
+        ? Object.entries(object.evidence_metadata).reduce<{ [key: string]: string }>((acc, [key, value]) => {
+          acc[key] = String(value);
+          return acc;
+        }, {})
+        : {},
+    };
+  },
+
+  toJSON(message: MsgSubmitSSOVerificationProof): unknown {
+    const obj: any = {};
+    if (message.accountAddress !== "") {
+      obj.account_address = message.accountAddress;
+    }
+    if (message.linkageId !== "") {
+      obj.linkage_id = message.linkageId;
+    }
+    if (message.attestationData.length !== 0) {
+      obj.attestation_data = base64FromBytes(message.attestationData);
+    }
+    if (message.evidenceHash !== "") {
+      obj.evidence_hash = message.evidenceHash;
+    }
+    if (message.evidenceStorageBackend !== "") {
+      obj.evidence_storage_backend = message.evidenceStorageBackend;
+    }
+    if (message.evidenceStorageRef !== "") {
+      obj.evidence_storage_ref = message.evidenceStorageRef;
+    }
+    if (message.evidenceMetadata) {
+      const entries = Object.entries(message.evidenceMetadata);
+      if (entries.length > 0) {
+        obj.evidence_metadata = {};
+        entries.forEach(([k, v]) => {
+          obj.evidence_metadata[k] = v;
+        });
+      }
+    }
+    return obj;
+  },
+  fromPartial(object: DeepPartial<MsgSubmitSSOVerificationProof>): MsgSubmitSSOVerificationProof {
+    const message = createBaseMsgSubmitSSOVerificationProof();
+    message.accountAddress = object.accountAddress ?? "";
+    message.linkageId = object.linkageId ?? "";
+    message.attestationData = object.attestationData ?? new Uint8Array(0);
+    message.evidenceHash = object.evidenceHash ?? "";
+    message.evidenceStorageBackend = object.evidenceStorageBackend ?? "";
+    message.evidenceStorageRef = object.evidenceStorageRef ?? "";
+    message.evidenceMetadata = Object.entries(object.evidenceMetadata ?? {}).reduce<{ [key: string]: string }>(
+      (acc, [key, value]) => {
+        if (value !== undefined) {
+          acc[key] = globalThis.String(value);
+        }
+        return acc;
+      },
+      {},
+    );
+    return message;
+  },
+};
+
+function createBaseMsgSubmitSSOVerificationProof_EvidenceMetadataEntry(): MsgSubmitSSOVerificationProof_EvidenceMetadataEntry {
+  return { key: "", value: "" };
+}
+
+export const MsgSubmitSSOVerificationProof_EvidenceMetadataEntry: MessageFns<
+  MsgSubmitSSOVerificationProof_EvidenceMetadataEntry,
+  "virtengine.veid.v1.MsgSubmitSSOVerificationProof.EvidenceMetadataEntry"
+> = {
+  $type: "virtengine.veid.v1.MsgSubmitSSOVerificationProof.EvidenceMetadataEntry" as const,
+
+  encode(
+    message: MsgSubmitSSOVerificationProof_EvidenceMetadataEntry,
+    writer: BinaryWriter = new BinaryWriter(),
+  ): BinaryWriter {
+    if (message.key !== "") {
+      writer.uint32(10).string(message.key);
+    }
+    if (message.value !== "") {
+      writer.uint32(18).string(message.value);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): MsgSubmitSSOVerificationProof_EvidenceMetadataEntry {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseMsgSubmitSSOVerificationProof_EvidenceMetadataEntry();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.key = reader.string();
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.value = reader.string();
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): MsgSubmitSSOVerificationProof_EvidenceMetadataEntry {
+    return {
+      key: isSet(object.key) ? globalThis.String(object.key) : "",
+      value: isSet(object.value) ? globalThis.String(object.value) : "",
+    };
+  },
+
+  toJSON(message: MsgSubmitSSOVerificationProof_EvidenceMetadataEntry): unknown {
+    const obj: any = {};
+    if (message.key !== "") {
+      obj.key = message.key;
+    }
+    if (message.value !== "") {
+      obj.value = message.value;
+    }
+    return obj;
+  },
+
+  create(
+    base?: DeepPartial<MsgSubmitSSOVerificationProof_EvidenceMetadataEntry>,
+  ): MsgSubmitSSOVerificationProof_EvidenceMetadataEntry {
+    return MsgSubmitSSOVerificationProof_EvidenceMetadataEntry.fromPartial(base ?? {});
+  },
+  fromPartial(
+    object: DeepPartial<MsgSubmitSSOVerificationProof_EvidenceMetadataEntry>,
+  ): MsgSubmitSSOVerificationProof_EvidenceMetadataEntry {
+    const message = createBaseMsgSubmitSSOVerificationProof_EvidenceMetadataEntry();
+    message.key = object.key ?? "";
+    message.value = object.value ?? "";
+    return message;
+  },
+};
+
+function createBaseMsgSubmitSSOVerificationProofResponse(): MsgSubmitSSOVerificationProofResponse {
+  return { linkageId: "", status: "", scoreContribution: 0, verifiedAt: Long.ZERO };
+}
+
+export const MsgSubmitSSOVerificationProofResponse: MessageFns<
+  MsgSubmitSSOVerificationProofResponse,
+  "virtengine.veid.v1.MsgSubmitSSOVerificationProofResponse"
+> = {
+  $type: "virtengine.veid.v1.MsgSubmitSSOVerificationProofResponse" as const,
+
+  encode(message: MsgSubmitSSOVerificationProofResponse, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.linkageId !== "") {
+      writer.uint32(10).string(message.linkageId);
+    }
+    if (message.status !== "") {
+      writer.uint32(18).string(message.status);
+    }
+    if (message.scoreContribution !== 0) {
+      writer.uint32(24).uint32(message.scoreContribution);
+    }
+    if (!message.verifiedAt.equals(Long.ZERO)) {
+      writer.uint32(32).int64(message.verifiedAt.toString());
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): MsgSubmitSSOVerificationProofResponse {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseMsgSubmitSSOVerificationProofResponse();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.linkageId = reader.string();
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.status = reader.string();
+          continue;
+        }
+        case 3: {
+          if (tag !== 24) {
+            break;
+          }
+
+          message.scoreContribution = reader.uint32();
+          continue;
+        }
+        case 4: {
+          if (tag !== 32) {
+            break;
+          }
+
+          message.verifiedAt = Long.fromString(reader.int64().toString());
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): MsgSubmitSSOVerificationProofResponse {
+    return {
+      linkageId: isSet(object.linkage_id) ? globalThis.String(object.linkage_id) : "",
+      status: isSet(object.status) ? globalThis.String(object.status) : "",
+      scoreContribution: isSet(object.score_contribution) ? globalThis.Number(object.score_contribution) : 0,
+      verifiedAt: isSet(object.verified_at) ? Long.fromValue(object.verified_at) : Long.ZERO,
+    };
+  },
+
+  toJSON(message: MsgSubmitSSOVerificationProofResponse): unknown {
+    const obj: any = {};
+    if (message.linkageId !== "") {
+      obj.linkage_id = message.linkageId;
+    }
+    if (message.status !== "") {
+      obj.status = message.status;
+    }
+    if (message.scoreContribution !== 0) {
+      obj.score_contribution = Math.round(message.scoreContribution);
+    }
+    if (!message.verifiedAt.equals(Long.ZERO)) {
+      obj.verified_at = (message.verifiedAt || Long.ZERO).toString();
+    }
+    return obj;
+  },
+  fromPartial(object: DeepPartial<MsgSubmitSSOVerificationProofResponse>): MsgSubmitSSOVerificationProofResponse {
+    const message = createBaseMsgSubmitSSOVerificationProofResponse();
+    message.linkageId = object.linkageId ?? "";
+    message.status = object.status ?? "";
+    message.scoreContribution = object.scoreContribution ?? 0;
+    message.verifiedAt = (object.verifiedAt !== undefined && object.verifiedAt !== null)
+      ? Long.fromValue(object.verifiedAt)
+      : Long.ZERO;
+    return message;
+  },
+};
+
+function createBaseMsgSubmitEmailVerificationProof(): MsgSubmitEmailVerificationProof {
+  return {
+    accountAddress: "",
+    verificationId: "",
+    emailHash: "",
+    domainHash: "",
+    nonce: "",
+    isOrganizational: false,
+    attestationData: new Uint8Array(0),
+    accountSignature: new Uint8Array(0),
+    verifiedAt: Long.ZERO,
+    expiresAt: Long.ZERO,
+    evidenceHash: "",
+    evidenceStorageBackend: "",
+    evidenceStorageRef: "",
+    evidenceMetadata: {},
+  };
+}
+
+export const MsgSubmitEmailVerificationProof: MessageFns<
+  MsgSubmitEmailVerificationProof,
+  "virtengine.veid.v1.MsgSubmitEmailVerificationProof"
+> = {
+  $type: "virtengine.veid.v1.MsgSubmitEmailVerificationProof" as const,
+
+  encode(message: MsgSubmitEmailVerificationProof, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.accountAddress !== "") {
+      writer.uint32(10).string(message.accountAddress);
+    }
+    if (message.verificationId !== "") {
+      writer.uint32(18).string(message.verificationId);
+    }
+    if (message.emailHash !== "") {
+      writer.uint32(26).string(message.emailHash);
+    }
+    if (message.domainHash !== "") {
+      writer.uint32(34).string(message.domainHash);
+    }
+    if (message.nonce !== "") {
+      writer.uint32(42).string(message.nonce);
+    }
+    if (message.isOrganizational !== false) {
+      writer.uint32(48).bool(message.isOrganizational);
+    }
+    if (message.attestationData.length !== 0) {
+      writer.uint32(58).bytes(message.attestationData);
+    }
+    if (message.accountSignature.length !== 0) {
+      writer.uint32(66).bytes(message.accountSignature);
+    }
+    if (!message.verifiedAt.equals(Long.ZERO)) {
+      writer.uint32(72).int64(message.verifiedAt.toString());
+    }
+    if (!message.expiresAt.equals(Long.ZERO)) {
+      writer.uint32(80).int64(message.expiresAt.toString());
+    }
+    if (message.evidenceHash !== "") {
+      writer.uint32(90).string(message.evidenceHash);
+    }
+    if (message.evidenceStorageBackend !== "") {
+      writer.uint32(98).string(message.evidenceStorageBackend);
+    }
+    if (message.evidenceStorageRef !== "") {
+      writer.uint32(106).string(message.evidenceStorageRef);
+    }
+    Object.entries(message.evidenceMetadata).forEach(([key, value]) => {
+      MsgSubmitEmailVerificationProof_EvidenceMetadataEntry.encode(
+        { key: key as any, value },
+        writer.uint32(114).fork(),
+      ).join();
+    });
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): MsgSubmitEmailVerificationProof {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseMsgSubmitEmailVerificationProof();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.accountAddress = reader.string();
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.verificationId = reader.string();
+          continue;
+        }
+        case 3: {
+          if (tag !== 26) {
+            break;
+          }
+
+          message.emailHash = reader.string();
+          continue;
+        }
+        case 4: {
+          if (tag !== 34) {
+            break;
+          }
+
+          message.domainHash = reader.string();
+          continue;
+        }
+        case 5: {
+          if (tag !== 42) {
+            break;
+          }
+
+          message.nonce = reader.string();
+          continue;
+        }
+        case 6: {
+          if (tag !== 48) {
+            break;
+          }
+
+          message.isOrganizational = reader.bool();
+          continue;
+        }
+        case 7: {
+          if (tag !== 58) {
+            break;
+          }
+
+          message.attestationData = reader.bytes();
+          continue;
+        }
+        case 8: {
+          if (tag !== 66) {
+            break;
+          }
+
+          message.accountSignature = reader.bytes();
+          continue;
+        }
+        case 9: {
+          if (tag !== 72) {
+            break;
+          }
+
+          message.verifiedAt = Long.fromString(reader.int64().toString());
+          continue;
+        }
+        case 10: {
+          if (tag !== 80) {
+            break;
+          }
+
+          message.expiresAt = Long.fromString(reader.int64().toString());
+          continue;
+        }
+        case 11: {
+          if (tag !== 90) {
+            break;
+          }
+
+          message.evidenceHash = reader.string();
+          continue;
+        }
+        case 12: {
+          if (tag !== 98) {
+            break;
+          }
+
+          message.evidenceStorageBackend = reader.string();
+          continue;
+        }
+        case 13: {
+          if (tag !== 106) {
+            break;
+          }
+
+          message.evidenceStorageRef = reader.string();
+          continue;
+        }
+        case 14: {
+          if (tag !== 114) {
+            break;
+          }
+
+          const entry14 = MsgSubmitEmailVerificationProof_EvidenceMetadataEntry.decode(reader, reader.uint32());
+          if (entry14.value !== undefined) {
+            message.evidenceMetadata[entry14.key] = entry14.value;
+          }
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): MsgSubmitEmailVerificationProof {
+    return {
+      accountAddress: isSet(object.account_address) ? globalThis.String(object.account_address) : "",
+      verificationId: isSet(object.verification_id) ? globalThis.String(object.verification_id) : "",
+      emailHash: isSet(object.email_hash) ? globalThis.String(object.email_hash) : "",
+      domainHash: isSet(object.domain_hash) ? globalThis.String(object.domain_hash) : "",
+      nonce: isSet(object.nonce) ? globalThis.String(object.nonce) : "",
+      isOrganizational: isSet(object.is_organizational) ? globalThis.Boolean(object.is_organizational) : false,
+      attestationData: isSet(object.attestation_data) ? bytesFromBase64(object.attestation_data) : new Uint8Array(0),
+      accountSignature: isSet(object.account_signature) ? bytesFromBase64(object.account_signature) : new Uint8Array(0),
+      verifiedAt: isSet(object.verified_at) ? Long.fromValue(object.verified_at) : Long.ZERO,
+      expiresAt: isSet(object.expires_at) ? Long.fromValue(object.expires_at) : Long.ZERO,
+      evidenceHash: isSet(object.evidence_hash) ? globalThis.String(object.evidence_hash) : "",
+      evidenceStorageBackend: isSet(object.evidence_storage_backend)
+        ? globalThis.String(object.evidence_storage_backend)
+        : "",
+      evidenceStorageRef: isSet(object.evidence_storage_ref) ? globalThis.String(object.evidence_storage_ref) : "",
+      evidenceMetadata: isObject(object.evidence_metadata)
+        ? Object.entries(object.evidence_metadata).reduce<{ [key: string]: string }>((acc, [key, value]) => {
+          acc[key] = String(value);
+          return acc;
+        }, {})
+        : {},
+    };
+  },
+
+  toJSON(message: MsgSubmitEmailVerificationProof): unknown {
+    const obj: any = {};
+    if (message.accountAddress !== "") {
+      obj.account_address = message.accountAddress;
+    }
+    if (message.verificationId !== "") {
+      obj.verification_id = message.verificationId;
+    }
+    if (message.emailHash !== "") {
+      obj.email_hash = message.emailHash;
+    }
+    if (message.domainHash !== "") {
+      obj.domain_hash = message.domainHash;
+    }
+    if (message.nonce !== "") {
+      obj.nonce = message.nonce;
+    }
+    if (message.isOrganizational !== false) {
+      obj.is_organizational = message.isOrganizational;
+    }
+    if (message.attestationData.length !== 0) {
+      obj.attestation_data = base64FromBytes(message.attestationData);
+    }
+    if (message.accountSignature.length !== 0) {
+      obj.account_signature = base64FromBytes(message.accountSignature);
+    }
+    if (!message.verifiedAt.equals(Long.ZERO)) {
+      obj.verified_at = (message.verifiedAt || Long.ZERO).toString();
+    }
+    if (!message.expiresAt.equals(Long.ZERO)) {
+      obj.expires_at = (message.expiresAt || Long.ZERO).toString();
+    }
+    if (message.evidenceHash !== "") {
+      obj.evidence_hash = message.evidenceHash;
+    }
+    if (message.evidenceStorageBackend !== "") {
+      obj.evidence_storage_backend = message.evidenceStorageBackend;
+    }
+    if (message.evidenceStorageRef !== "") {
+      obj.evidence_storage_ref = message.evidenceStorageRef;
+    }
+    if (message.evidenceMetadata) {
+      const entries = Object.entries(message.evidenceMetadata);
+      if (entries.length > 0) {
+        obj.evidence_metadata = {};
+        entries.forEach(([k, v]) => {
+          obj.evidence_metadata[k] = v;
+        });
+      }
+    }
+    return obj;
+  },
+  fromPartial(object: DeepPartial<MsgSubmitEmailVerificationProof>): MsgSubmitEmailVerificationProof {
+    const message = createBaseMsgSubmitEmailVerificationProof();
+    message.accountAddress = object.accountAddress ?? "";
+    message.verificationId = object.verificationId ?? "";
+    message.emailHash = object.emailHash ?? "";
+    message.domainHash = object.domainHash ?? "";
+    message.nonce = object.nonce ?? "";
+    message.isOrganizational = object.isOrganizational ?? false;
+    message.attestationData = object.attestationData ?? new Uint8Array(0);
+    message.accountSignature = object.accountSignature ?? new Uint8Array(0);
+    message.verifiedAt = (object.verifiedAt !== undefined && object.verifiedAt !== null)
+      ? Long.fromValue(object.verifiedAt)
+      : Long.ZERO;
+    message.expiresAt = (object.expiresAt !== undefined && object.expiresAt !== null)
+      ? Long.fromValue(object.expiresAt)
+      : Long.ZERO;
+    message.evidenceHash = object.evidenceHash ?? "";
+    message.evidenceStorageBackend = object.evidenceStorageBackend ?? "";
+    message.evidenceStorageRef = object.evidenceStorageRef ?? "";
+    message.evidenceMetadata = Object.entries(object.evidenceMetadata ?? {}).reduce<{ [key: string]: string }>(
+      (acc, [key, value]) => {
+        if (value !== undefined) {
+          acc[key] = globalThis.String(value);
+        }
+        return acc;
+      },
+      {},
+    );
+    return message;
+  },
+};
+
+function createBaseMsgSubmitEmailVerificationProof_EvidenceMetadataEntry(): MsgSubmitEmailVerificationProof_EvidenceMetadataEntry {
+  return { key: "", value: "" };
+}
+
+export const MsgSubmitEmailVerificationProof_EvidenceMetadataEntry: MessageFns<
+  MsgSubmitEmailVerificationProof_EvidenceMetadataEntry,
+  "virtengine.veid.v1.MsgSubmitEmailVerificationProof.EvidenceMetadataEntry"
+> = {
+  $type: "virtengine.veid.v1.MsgSubmitEmailVerificationProof.EvidenceMetadataEntry" as const,
+
+  encode(
+    message: MsgSubmitEmailVerificationProof_EvidenceMetadataEntry,
+    writer: BinaryWriter = new BinaryWriter(),
+  ): BinaryWriter {
+    if (message.key !== "") {
+      writer.uint32(10).string(message.key);
+    }
+    if (message.value !== "") {
+      writer.uint32(18).string(message.value);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): MsgSubmitEmailVerificationProof_EvidenceMetadataEntry {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseMsgSubmitEmailVerificationProof_EvidenceMetadataEntry();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.key = reader.string();
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.value = reader.string();
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): MsgSubmitEmailVerificationProof_EvidenceMetadataEntry {
+    return {
+      key: isSet(object.key) ? globalThis.String(object.key) : "",
+      value: isSet(object.value) ? globalThis.String(object.value) : "",
+    };
+  },
+
+  toJSON(message: MsgSubmitEmailVerificationProof_EvidenceMetadataEntry): unknown {
+    const obj: any = {};
+    if (message.key !== "") {
+      obj.key = message.key;
+    }
+    if (message.value !== "") {
+      obj.value = message.value;
+    }
+    return obj;
+  },
+
+  create(
+    base?: DeepPartial<MsgSubmitEmailVerificationProof_EvidenceMetadataEntry>,
+  ): MsgSubmitEmailVerificationProof_EvidenceMetadataEntry {
+    return MsgSubmitEmailVerificationProof_EvidenceMetadataEntry.fromPartial(base ?? {});
+  },
+  fromPartial(
+    object: DeepPartial<MsgSubmitEmailVerificationProof_EvidenceMetadataEntry>,
+  ): MsgSubmitEmailVerificationProof_EvidenceMetadataEntry {
+    const message = createBaseMsgSubmitEmailVerificationProof_EvidenceMetadataEntry();
+    message.key = object.key ?? "";
+    message.value = object.value ?? "";
+    return message;
+  },
+};
+
+function createBaseMsgSubmitEmailVerificationProofResponse(): MsgSubmitEmailVerificationProofResponse {
+  return { verificationId: "", status: "", scoreContribution: 0, verifiedAt: Long.ZERO };
+}
+
+export const MsgSubmitEmailVerificationProofResponse: MessageFns<
+  MsgSubmitEmailVerificationProofResponse,
+  "virtengine.veid.v1.MsgSubmitEmailVerificationProofResponse"
+> = {
+  $type: "virtengine.veid.v1.MsgSubmitEmailVerificationProofResponse" as const,
+
+  encode(message: MsgSubmitEmailVerificationProofResponse, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.verificationId !== "") {
+      writer.uint32(10).string(message.verificationId);
+    }
+    if (message.status !== "") {
+      writer.uint32(18).string(message.status);
+    }
+    if (message.scoreContribution !== 0) {
+      writer.uint32(24).uint32(message.scoreContribution);
+    }
+    if (!message.verifiedAt.equals(Long.ZERO)) {
+      writer.uint32(32).int64(message.verifiedAt.toString());
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): MsgSubmitEmailVerificationProofResponse {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseMsgSubmitEmailVerificationProofResponse();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.verificationId = reader.string();
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.status = reader.string();
+          continue;
+        }
+        case 3: {
+          if (tag !== 24) {
+            break;
+          }
+
+          message.scoreContribution = reader.uint32();
+          continue;
+        }
+        case 4: {
+          if (tag !== 32) {
+            break;
+          }
+
+          message.verifiedAt = Long.fromString(reader.int64().toString());
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): MsgSubmitEmailVerificationProofResponse {
+    return {
+      verificationId: isSet(object.verification_id) ? globalThis.String(object.verification_id) : "",
+      status: isSet(object.status) ? globalThis.String(object.status) : "",
+      scoreContribution: isSet(object.score_contribution) ? globalThis.Number(object.score_contribution) : 0,
+      verifiedAt: isSet(object.verified_at) ? Long.fromValue(object.verified_at) : Long.ZERO,
+    };
+  },
+
+  toJSON(message: MsgSubmitEmailVerificationProofResponse): unknown {
+    const obj: any = {};
+    if (message.verificationId !== "") {
+      obj.verification_id = message.verificationId;
+    }
+    if (message.status !== "") {
+      obj.status = message.status;
+    }
+    if (message.scoreContribution !== 0) {
+      obj.score_contribution = Math.round(message.scoreContribution);
+    }
+    if (!message.verifiedAt.equals(Long.ZERO)) {
+      obj.verified_at = (message.verifiedAt || Long.ZERO).toString();
+    }
+    return obj;
+  },
+  fromPartial(object: DeepPartial<MsgSubmitEmailVerificationProofResponse>): MsgSubmitEmailVerificationProofResponse {
+    const message = createBaseMsgSubmitEmailVerificationProofResponse();
+    message.verificationId = object.verificationId ?? "";
+    message.status = object.status ?? "";
+    message.scoreContribution = object.scoreContribution ?? 0;
+    message.verifiedAt = (object.verifiedAt !== undefined && object.verifiedAt !== null)
+      ? Long.fromValue(object.verifiedAt)
+      : Long.ZERO;
+    return message;
+  },
+};
+
+function createBaseMsgSubmitSMSVerificationProof(): MsgSubmitSMSVerificationProof {
+  return {
+    accountAddress: "",
+    verificationId: "",
+    phoneHash: "",
+    phoneHashSalt: "",
+    countryCodeHash: "",
+    carrierType: "",
+    isVoip: false,
+    validatorAddress: "",
+    attestationData: new Uint8Array(0),
+    accountSignature: new Uint8Array(0),
+    verifiedAt: Long.ZERO,
+    expiresAt: Long.ZERO,
+    evidenceHash: "",
+    evidenceStorageBackend: "",
+    evidenceStorageRef: "",
+    evidenceMetadata: {},
+  };
+}
+
+export const MsgSubmitSMSVerificationProof: MessageFns<
+  MsgSubmitSMSVerificationProof,
+  "virtengine.veid.v1.MsgSubmitSMSVerificationProof"
+> = {
+  $type: "virtengine.veid.v1.MsgSubmitSMSVerificationProof" as const,
+
+  encode(message: MsgSubmitSMSVerificationProof, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.accountAddress !== "") {
+      writer.uint32(10).string(message.accountAddress);
+    }
+    if (message.verificationId !== "") {
+      writer.uint32(18).string(message.verificationId);
+    }
+    if (message.phoneHash !== "") {
+      writer.uint32(26).string(message.phoneHash);
+    }
+    if (message.phoneHashSalt !== "") {
+      writer.uint32(34).string(message.phoneHashSalt);
+    }
+    if (message.countryCodeHash !== "") {
+      writer.uint32(42).string(message.countryCodeHash);
+    }
+    if (message.carrierType !== "") {
+      writer.uint32(50).string(message.carrierType);
+    }
+    if (message.isVoip !== false) {
+      writer.uint32(56).bool(message.isVoip);
+    }
+    if (message.validatorAddress !== "") {
+      writer.uint32(66).string(message.validatorAddress);
+    }
+    if (message.attestationData.length !== 0) {
+      writer.uint32(74).bytes(message.attestationData);
+    }
+    if (message.accountSignature.length !== 0) {
+      writer.uint32(82).bytes(message.accountSignature);
+    }
+    if (!message.verifiedAt.equals(Long.ZERO)) {
+      writer.uint32(88).int64(message.verifiedAt.toString());
+    }
+    if (!message.expiresAt.equals(Long.ZERO)) {
+      writer.uint32(96).int64(message.expiresAt.toString());
+    }
+    if (message.evidenceHash !== "") {
+      writer.uint32(106).string(message.evidenceHash);
+    }
+    if (message.evidenceStorageBackend !== "") {
+      writer.uint32(114).string(message.evidenceStorageBackend);
+    }
+    if (message.evidenceStorageRef !== "") {
+      writer.uint32(122).string(message.evidenceStorageRef);
+    }
+    Object.entries(message.evidenceMetadata).forEach(([key, value]) => {
+      MsgSubmitSMSVerificationProof_EvidenceMetadataEntry.encode({ key: key as any, value }, writer.uint32(130).fork())
+        .join();
+    });
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): MsgSubmitSMSVerificationProof {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseMsgSubmitSMSVerificationProof();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.accountAddress = reader.string();
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.verificationId = reader.string();
+          continue;
+        }
+        case 3: {
+          if (tag !== 26) {
+            break;
+          }
+
+          message.phoneHash = reader.string();
+          continue;
+        }
+        case 4: {
+          if (tag !== 34) {
+            break;
+          }
+
+          message.phoneHashSalt = reader.string();
+          continue;
+        }
+        case 5: {
+          if (tag !== 42) {
+            break;
+          }
+
+          message.countryCodeHash = reader.string();
+          continue;
+        }
+        case 6: {
+          if (tag !== 50) {
+            break;
+          }
+
+          message.carrierType = reader.string();
+          continue;
+        }
+        case 7: {
+          if (tag !== 56) {
+            break;
+          }
+
+          message.isVoip = reader.bool();
+          continue;
+        }
+        case 8: {
+          if (tag !== 66) {
+            break;
+          }
+
+          message.validatorAddress = reader.string();
+          continue;
+        }
+        case 9: {
+          if (tag !== 74) {
+            break;
+          }
+
+          message.attestationData = reader.bytes();
+          continue;
+        }
+        case 10: {
+          if (tag !== 82) {
+            break;
+          }
+
+          message.accountSignature = reader.bytes();
+          continue;
+        }
+        case 11: {
+          if (tag !== 88) {
+            break;
+          }
+
+          message.verifiedAt = Long.fromString(reader.int64().toString());
+          continue;
+        }
+        case 12: {
+          if (tag !== 96) {
+            break;
+          }
+
+          message.expiresAt = Long.fromString(reader.int64().toString());
+          continue;
+        }
+        case 13: {
+          if (tag !== 106) {
+            break;
+          }
+
+          message.evidenceHash = reader.string();
+          continue;
+        }
+        case 14: {
+          if (tag !== 114) {
+            break;
+          }
+
+          message.evidenceStorageBackend = reader.string();
+          continue;
+        }
+        case 15: {
+          if (tag !== 122) {
+            break;
+          }
+
+          message.evidenceStorageRef = reader.string();
+          continue;
+        }
+        case 16: {
+          if (tag !== 130) {
+            break;
+          }
+
+          const entry16 = MsgSubmitSMSVerificationProof_EvidenceMetadataEntry.decode(reader, reader.uint32());
+          if (entry16.value !== undefined) {
+            message.evidenceMetadata[entry16.key] = entry16.value;
+          }
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): MsgSubmitSMSVerificationProof {
+    return {
+      accountAddress: isSet(object.account_address) ? globalThis.String(object.account_address) : "",
+      verificationId: isSet(object.verification_id) ? globalThis.String(object.verification_id) : "",
+      phoneHash: isSet(object.phone_hash) ? globalThis.String(object.phone_hash) : "",
+      phoneHashSalt: isSet(object.phone_hash_salt) ? globalThis.String(object.phone_hash_salt) : "",
+      countryCodeHash: isSet(object.country_code_hash) ? globalThis.String(object.country_code_hash) : "",
+      carrierType: isSet(object.carrier_type) ? globalThis.String(object.carrier_type) : "",
+      isVoip: isSet(object.is_voip) ? globalThis.Boolean(object.is_voip) : false,
+      validatorAddress: isSet(object.validator_address) ? globalThis.String(object.validator_address) : "",
+      attestationData: isSet(object.attestation_data) ? bytesFromBase64(object.attestation_data) : new Uint8Array(0),
+      accountSignature: isSet(object.account_signature) ? bytesFromBase64(object.account_signature) : new Uint8Array(0),
+      verifiedAt: isSet(object.verified_at) ? Long.fromValue(object.verified_at) : Long.ZERO,
+      expiresAt: isSet(object.expires_at) ? Long.fromValue(object.expires_at) : Long.ZERO,
+      evidenceHash: isSet(object.evidence_hash) ? globalThis.String(object.evidence_hash) : "",
+      evidenceStorageBackend: isSet(object.evidence_storage_backend)
+        ? globalThis.String(object.evidence_storage_backend)
+        : "",
+      evidenceStorageRef: isSet(object.evidence_storage_ref) ? globalThis.String(object.evidence_storage_ref) : "",
+      evidenceMetadata: isObject(object.evidence_metadata)
+        ? Object.entries(object.evidence_metadata).reduce<{ [key: string]: string }>((acc, [key, value]) => {
+          acc[key] = String(value);
+          return acc;
+        }, {})
+        : {},
+    };
+  },
+
+  toJSON(message: MsgSubmitSMSVerificationProof): unknown {
+    const obj: any = {};
+    if (message.accountAddress !== "") {
+      obj.account_address = message.accountAddress;
+    }
+    if (message.verificationId !== "") {
+      obj.verification_id = message.verificationId;
+    }
+    if (message.phoneHash !== "") {
+      obj.phone_hash = message.phoneHash;
+    }
+    if (message.phoneHashSalt !== "") {
+      obj.phone_hash_salt = message.phoneHashSalt;
+    }
+    if (message.countryCodeHash !== "") {
+      obj.country_code_hash = message.countryCodeHash;
+    }
+    if (message.carrierType !== "") {
+      obj.carrier_type = message.carrierType;
+    }
+    if (message.isVoip !== false) {
+      obj.is_voip = message.isVoip;
+    }
+    if (message.validatorAddress !== "") {
+      obj.validator_address = message.validatorAddress;
+    }
+    if (message.attestationData.length !== 0) {
+      obj.attestation_data = base64FromBytes(message.attestationData);
+    }
+    if (message.accountSignature.length !== 0) {
+      obj.account_signature = base64FromBytes(message.accountSignature);
+    }
+    if (!message.verifiedAt.equals(Long.ZERO)) {
+      obj.verified_at = (message.verifiedAt || Long.ZERO).toString();
+    }
+    if (!message.expiresAt.equals(Long.ZERO)) {
+      obj.expires_at = (message.expiresAt || Long.ZERO).toString();
+    }
+    if (message.evidenceHash !== "") {
+      obj.evidence_hash = message.evidenceHash;
+    }
+    if (message.evidenceStorageBackend !== "") {
+      obj.evidence_storage_backend = message.evidenceStorageBackend;
+    }
+    if (message.evidenceStorageRef !== "") {
+      obj.evidence_storage_ref = message.evidenceStorageRef;
+    }
+    if (message.evidenceMetadata) {
+      const entries = Object.entries(message.evidenceMetadata);
+      if (entries.length > 0) {
+        obj.evidence_metadata = {};
+        entries.forEach(([k, v]) => {
+          obj.evidence_metadata[k] = v;
+        });
+      }
+    }
+    return obj;
+  },
+  fromPartial(object: DeepPartial<MsgSubmitSMSVerificationProof>): MsgSubmitSMSVerificationProof {
+    const message = createBaseMsgSubmitSMSVerificationProof();
+    message.accountAddress = object.accountAddress ?? "";
+    message.verificationId = object.verificationId ?? "";
+    message.phoneHash = object.phoneHash ?? "";
+    message.phoneHashSalt = object.phoneHashSalt ?? "";
+    message.countryCodeHash = object.countryCodeHash ?? "";
+    message.carrierType = object.carrierType ?? "";
+    message.isVoip = object.isVoip ?? false;
+    message.validatorAddress = object.validatorAddress ?? "";
+    message.attestationData = object.attestationData ?? new Uint8Array(0);
+    message.accountSignature = object.accountSignature ?? new Uint8Array(0);
+    message.verifiedAt = (object.verifiedAt !== undefined && object.verifiedAt !== null)
+      ? Long.fromValue(object.verifiedAt)
+      : Long.ZERO;
+    message.expiresAt = (object.expiresAt !== undefined && object.expiresAt !== null)
+      ? Long.fromValue(object.expiresAt)
+      : Long.ZERO;
+    message.evidenceHash = object.evidenceHash ?? "";
+    message.evidenceStorageBackend = object.evidenceStorageBackend ?? "";
+    message.evidenceStorageRef = object.evidenceStorageRef ?? "";
+    message.evidenceMetadata = Object.entries(object.evidenceMetadata ?? {}).reduce<{ [key: string]: string }>(
+      (acc, [key, value]) => {
+        if (value !== undefined) {
+          acc[key] = globalThis.String(value);
+        }
+        return acc;
+      },
+      {},
+    );
+    return message;
+  },
+};
+
+function createBaseMsgSubmitSMSVerificationProof_EvidenceMetadataEntry(): MsgSubmitSMSVerificationProof_EvidenceMetadataEntry {
+  return { key: "", value: "" };
+}
+
+export const MsgSubmitSMSVerificationProof_EvidenceMetadataEntry: MessageFns<
+  MsgSubmitSMSVerificationProof_EvidenceMetadataEntry,
+  "virtengine.veid.v1.MsgSubmitSMSVerificationProof.EvidenceMetadataEntry"
+> = {
+  $type: "virtengine.veid.v1.MsgSubmitSMSVerificationProof.EvidenceMetadataEntry" as const,
+
+  encode(
+    message: MsgSubmitSMSVerificationProof_EvidenceMetadataEntry,
+    writer: BinaryWriter = new BinaryWriter(),
+  ): BinaryWriter {
+    if (message.key !== "") {
+      writer.uint32(10).string(message.key);
+    }
+    if (message.value !== "") {
+      writer.uint32(18).string(message.value);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): MsgSubmitSMSVerificationProof_EvidenceMetadataEntry {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseMsgSubmitSMSVerificationProof_EvidenceMetadataEntry();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.key = reader.string();
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.value = reader.string();
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): MsgSubmitSMSVerificationProof_EvidenceMetadataEntry {
+    return {
+      key: isSet(object.key) ? globalThis.String(object.key) : "",
+      value: isSet(object.value) ? globalThis.String(object.value) : "",
+    };
+  },
+
+  toJSON(message: MsgSubmitSMSVerificationProof_EvidenceMetadataEntry): unknown {
+    const obj: any = {};
+    if (message.key !== "") {
+      obj.key = message.key;
+    }
+    if (message.value !== "") {
+      obj.value = message.value;
+    }
+    return obj;
+  },
+
+  create(
+    base?: DeepPartial<MsgSubmitSMSVerificationProof_EvidenceMetadataEntry>,
+  ): MsgSubmitSMSVerificationProof_EvidenceMetadataEntry {
+    return MsgSubmitSMSVerificationProof_EvidenceMetadataEntry.fromPartial(base ?? {});
+  },
+  fromPartial(
+    object: DeepPartial<MsgSubmitSMSVerificationProof_EvidenceMetadataEntry>,
+  ): MsgSubmitSMSVerificationProof_EvidenceMetadataEntry {
+    const message = createBaseMsgSubmitSMSVerificationProof_EvidenceMetadataEntry();
+    message.key = object.key ?? "";
+    message.value = object.value ?? "";
+    return message;
+  },
+};
+
+function createBaseMsgSubmitSMSVerificationProofResponse(): MsgSubmitSMSVerificationProofResponse {
+  return { verificationId: "", status: "", scoreContribution: 0, verifiedAt: Long.ZERO };
+}
+
+export const MsgSubmitSMSVerificationProofResponse: MessageFns<
+  MsgSubmitSMSVerificationProofResponse,
+  "virtengine.veid.v1.MsgSubmitSMSVerificationProofResponse"
+> = {
+  $type: "virtengine.veid.v1.MsgSubmitSMSVerificationProofResponse" as const,
+
+  encode(message: MsgSubmitSMSVerificationProofResponse, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.verificationId !== "") {
+      writer.uint32(10).string(message.verificationId);
+    }
+    if (message.status !== "") {
+      writer.uint32(18).string(message.status);
+    }
+    if (message.scoreContribution !== 0) {
+      writer.uint32(24).uint32(message.scoreContribution);
+    }
+    if (!message.verifiedAt.equals(Long.ZERO)) {
+      writer.uint32(32).int64(message.verifiedAt.toString());
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): MsgSubmitSMSVerificationProofResponse {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseMsgSubmitSMSVerificationProofResponse();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.verificationId = reader.string();
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.status = reader.string();
+          continue;
+        }
+        case 3: {
+          if (tag !== 24) {
+            break;
+          }
+
+          message.scoreContribution = reader.uint32();
+          continue;
+        }
+        case 4: {
+          if (tag !== 32) {
+            break;
+          }
+
+          message.verifiedAt = Long.fromString(reader.int64().toString());
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): MsgSubmitSMSVerificationProofResponse {
+    return {
+      verificationId: isSet(object.verification_id) ? globalThis.String(object.verification_id) : "",
+      status: isSet(object.status) ? globalThis.String(object.status) : "",
+      scoreContribution: isSet(object.score_contribution) ? globalThis.Number(object.score_contribution) : 0,
+      verifiedAt: isSet(object.verified_at) ? Long.fromValue(object.verified_at) : Long.ZERO,
+    };
+  },
+
+  toJSON(message: MsgSubmitSMSVerificationProofResponse): unknown {
+    const obj: any = {};
+    if (message.verificationId !== "") {
+      obj.verification_id = message.verificationId;
+    }
+    if (message.status !== "") {
+      obj.status = message.status;
+    }
+    if (message.scoreContribution !== 0) {
+      obj.score_contribution = Math.round(message.scoreContribution);
+    }
+    if (!message.verifiedAt.equals(Long.ZERO)) {
+      obj.verified_at = (message.verifiedAt || Long.ZERO).toString();
+    }
+    return obj;
+  },
+  fromPartial(object: DeepPartial<MsgSubmitSMSVerificationProofResponse>): MsgSubmitSMSVerificationProofResponse {
+    const message = createBaseMsgSubmitSMSVerificationProofResponse();
+    message.verificationId = object.verificationId ?? "";
+    message.status = object.status ?? "";
+    message.scoreContribution = object.scoreContribution ?? 0;
+    message.verifiedAt = (object.verifiedAt !== undefined && object.verifiedAt !== null)
+      ? Long.fromValue(object.verifiedAt)
+      : Long.ZERO;
+    return message;
+  },
+};
+
+function createBaseMsgSubmitSocialMediaScope(): MsgSubmitSocialMediaScope {
+  return {
+    accountAddress: "",
+    scopeId: "",
+    provider: 0,
+    profileNameHash: "",
+    emailHash: "",
+    usernameHash: "",
+    orgHash: "",
+    accountCreatedAt: Long.ZERO,
+    accountAgeDays: 0,
+    isVerified: false,
+    friendCountRange: "",
+    attestationData: new Uint8Array(0),
+    accountSignature: new Uint8Array(0),
+    encryptedPayload: undefined,
+    evidenceHash: "",
+    evidenceStorageBackend: "",
+    evidenceStorageRef: "",
+    evidenceMetadata: {},
+  };
+}
+
+export const MsgSubmitSocialMediaScope: MessageFns<
+  MsgSubmitSocialMediaScope,
+  "virtengine.veid.v1.MsgSubmitSocialMediaScope"
+> = {
+  $type: "virtengine.veid.v1.MsgSubmitSocialMediaScope" as const,
+
+  encode(message: MsgSubmitSocialMediaScope, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.accountAddress !== "") {
+      writer.uint32(10).string(message.accountAddress);
+    }
+    if (message.scopeId !== "") {
+      writer.uint32(18).string(message.scopeId);
+    }
+    if (message.provider !== 0) {
+      writer.uint32(24).int32(message.provider);
+    }
+    if (message.profileNameHash !== "") {
+      writer.uint32(34).string(message.profileNameHash);
+    }
+    if (message.emailHash !== "") {
+      writer.uint32(42).string(message.emailHash);
+    }
+    if (message.usernameHash !== "") {
+      writer.uint32(50).string(message.usernameHash);
+    }
+    if (message.orgHash !== "") {
+      writer.uint32(58).string(message.orgHash);
+    }
+    if (!message.accountCreatedAt.equals(Long.ZERO)) {
+      writer.uint32(64).int64(message.accountCreatedAt.toString());
+    }
+    if (message.accountAgeDays !== 0) {
+      writer.uint32(72).uint32(message.accountAgeDays);
+    }
+    if (message.isVerified !== false) {
+      writer.uint32(80).bool(message.isVerified);
+    }
+    if (message.friendCountRange !== "") {
+      writer.uint32(90).string(message.friendCountRange);
+    }
+    if (message.attestationData.length !== 0) {
+      writer.uint32(98).bytes(message.attestationData);
+    }
+    if (message.accountSignature.length !== 0) {
+      writer.uint32(106).bytes(message.accountSignature);
+    }
+    if (message.encryptedPayload !== undefined) {
+      EncryptedPayloadEnvelope.encode(message.encryptedPayload, writer.uint32(114).fork()).join();
+    }
+    if (message.evidenceHash !== "") {
+      writer.uint32(122).string(message.evidenceHash);
+    }
+    if (message.evidenceStorageBackend !== "") {
+      writer.uint32(130).string(message.evidenceStorageBackend);
+    }
+    if (message.evidenceStorageRef !== "") {
+      writer.uint32(138).string(message.evidenceStorageRef);
+    }
+    Object.entries(message.evidenceMetadata).forEach(([key, value]) => {
+      MsgSubmitSocialMediaScope_EvidenceMetadataEntry.encode({ key: key as any, value }, writer.uint32(146).fork())
+        .join();
+    });
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): MsgSubmitSocialMediaScope {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseMsgSubmitSocialMediaScope();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.accountAddress = reader.string();
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.scopeId = reader.string();
+          continue;
+        }
+        case 3: {
+          if (tag !== 24) {
+            break;
+          }
+
+          message.provider = reader.int32() as any;
+          continue;
+        }
+        case 4: {
+          if (tag !== 34) {
+            break;
+          }
+
+          message.profileNameHash = reader.string();
+          continue;
+        }
+        case 5: {
+          if (tag !== 42) {
+            break;
+          }
+
+          message.emailHash = reader.string();
+          continue;
+        }
+        case 6: {
+          if (tag !== 50) {
+            break;
+          }
+
+          message.usernameHash = reader.string();
+          continue;
+        }
+        case 7: {
+          if (tag !== 58) {
+            break;
+          }
+
+          message.orgHash = reader.string();
+          continue;
+        }
+        case 8: {
+          if (tag !== 64) {
+            break;
+          }
+
+          message.accountCreatedAt = Long.fromString(reader.int64().toString());
+          continue;
+        }
+        case 9: {
+          if (tag !== 72) {
+            break;
+          }
+
+          message.accountAgeDays = reader.uint32();
+          continue;
+        }
+        case 10: {
+          if (tag !== 80) {
+            break;
+          }
+
+          message.isVerified = reader.bool();
+          continue;
+        }
+        case 11: {
+          if (tag !== 90) {
+            break;
+          }
+
+          message.friendCountRange = reader.string();
+          continue;
+        }
+        case 12: {
+          if (tag !== 98) {
+            break;
+          }
+
+          message.attestationData = reader.bytes();
+          continue;
+        }
+        case 13: {
+          if (tag !== 106) {
+            break;
+          }
+
+          message.accountSignature = reader.bytes();
+          continue;
+        }
+        case 14: {
+          if (tag !== 114) {
+            break;
+          }
+
+          message.encryptedPayload = EncryptedPayloadEnvelope.decode(reader, reader.uint32());
+          continue;
+        }
+        case 15: {
+          if (tag !== 122) {
+            break;
+          }
+
+          message.evidenceHash = reader.string();
+          continue;
+        }
+        case 16: {
+          if (tag !== 130) {
+            break;
+          }
+
+          message.evidenceStorageBackend = reader.string();
+          continue;
+        }
+        case 17: {
+          if (tag !== 138) {
+            break;
+          }
+
+          message.evidenceStorageRef = reader.string();
+          continue;
+        }
+        case 18: {
+          if (tag !== 146) {
+            break;
+          }
+
+          const entry18 = MsgSubmitSocialMediaScope_EvidenceMetadataEntry.decode(reader, reader.uint32());
+          if (entry18.value !== undefined) {
+            message.evidenceMetadata[entry18.key] = entry18.value;
+          }
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): MsgSubmitSocialMediaScope {
+    return {
+      accountAddress: isSet(object.account_address) ? globalThis.String(object.account_address) : "",
+      scopeId: isSet(object.scope_id) ? globalThis.String(object.scope_id) : "",
+      provider: isSet(object.provider) ? socialMediaProviderFromJSON(object.provider) : 0,
+      profileNameHash: isSet(object.profile_name_hash) ? globalThis.String(object.profile_name_hash) : "",
+      emailHash: isSet(object.email_hash) ? globalThis.String(object.email_hash) : "",
+      usernameHash: isSet(object.username_hash) ? globalThis.String(object.username_hash) : "",
+      orgHash: isSet(object.org_hash) ? globalThis.String(object.org_hash) : "",
+      accountCreatedAt: isSet(object.account_created_at) ? Long.fromValue(object.account_created_at) : Long.ZERO,
+      accountAgeDays: isSet(object.account_age_days) ? globalThis.Number(object.account_age_days) : 0,
+      isVerified: isSet(object.is_verified) ? globalThis.Boolean(object.is_verified) : false,
+      friendCountRange: isSet(object.friend_count_range) ? globalThis.String(object.friend_count_range) : "",
+      attestationData: isSet(object.attestation_data) ? bytesFromBase64(object.attestation_data) : new Uint8Array(0),
+      accountSignature: isSet(object.account_signature) ? bytesFromBase64(object.account_signature) : new Uint8Array(0),
+      encryptedPayload: isSet(object.encrypted_payload)
+        ? EncryptedPayloadEnvelope.fromJSON(object.encrypted_payload)
+        : undefined,
+      evidenceHash: isSet(object.evidence_hash) ? globalThis.String(object.evidence_hash) : "",
+      evidenceStorageBackend: isSet(object.evidence_storage_backend)
+        ? globalThis.String(object.evidence_storage_backend)
+        : "",
+      evidenceStorageRef: isSet(object.evidence_storage_ref) ? globalThis.String(object.evidence_storage_ref) : "",
+      evidenceMetadata: isObject(object.evidence_metadata)
+        ? Object.entries(object.evidence_metadata).reduce<{ [key: string]: string }>((acc, [key, value]) => {
+          acc[key] = String(value);
+          return acc;
+        }, {})
+        : {},
+    };
+  },
+
+  toJSON(message: MsgSubmitSocialMediaScope): unknown {
+    const obj: any = {};
+    if (message.accountAddress !== "") {
+      obj.account_address = message.accountAddress;
+    }
+    if (message.scopeId !== "") {
+      obj.scope_id = message.scopeId;
+    }
+    if (message.provider !== 0) {
+      obj.provider = socialMediaProviderToJSON(message.provider);
+    }
+    if (message.profileNameHash !== "") {
+      obj.profile_name_hash = message.profileNameHash;
+    }
+    if (message.emailHash !== "") {
+      obj.email_hash = message.emailHash;
+    }
+    if (message.usernameHash !== "") {
+      obj.username_hash = message.usernameHash;
+    }
+    if (message.orgHash !== "") {
+      obj.org_hash = message.orgHash;
+    }
+    if (!message.accountCreatedAt.equals(Long.ZERO)) {
+      obj.account_created_at = (message.accountCreatedAt || Long.ZERO).toString();
+    }
+    if (message.accountAgeDays !== 0) {
+      obj.account_age_days = Math.round(message.accountAgeDays);
+    }
+    if (message.isVerified !== false) {
+      obj.is_verified = message.isVerified;
+    }
+    if (message.friendCountRange !== "") {
+      obj.friend_count_range = message.friendCountRange;
+    }
+    if (message.attestationData.length !== 0) {
+      obj.attestation_data = base64FromBytes(message.attestationData);
+    }
+    if (message.accountSignature.length !== 0) {
+      obj.account_signature = base64FromBytes(message.accountSignature);
+    }
+    if (message.encryptedPayload !== undefined) {
+      obj.encrypted_payload = EncryptedPayloadEnvelope.toJSON(message.encryptedPayload);
+    }
+    if (message.evidenceHash !== "") {
+      obj.evidence_hash = message.evidenceHash;
+    }
+    if (message.evidenceStorageBackend !== "") {
+      obj.evidence_storage_backend = message.evidenceStorageBackend;
+    }
+    if (message.evidenceStorageRef !== "") {
+      obj.evidence_storage_ref = message.evidenceStorageRef;
+    }
+    if (message.evidenceMetadata) {
+      const entries = Object.entries(message.evidenceMetadata);
+      if (entries.length > 0) {
+        obj.evidence_metadata = {};
+        entries.forEach(([k, v]) => {
+          obj.evidence_metadata[k] = v;
+        });
+      }
+    }
+    return obj;
+  },
+  fromPartial(object: DeepPartial<MsgSubmitSocialMediaScope>): MsgSubmitSocialMediaScope {
+    const message = createBaseMsgSubmitSocialMediaScope();
+    message.accountAddress = object.accountAddress ?? "";
+    message.scopeId = object.scopeId ?? "";
+    message.provider = object.provider ?? 0;
+    message.profileNameHash = object.profileNameHash ?? "";
+    message.emailHash = object.emailHash ?? "";
+    message.usernameHash = object.usernameHash ?? "";
+    message.orgHash = object.orgHash ?? "";
+    message.accountCreatedAt = (object.accountCreatedAt !== undefined && object.accountCreatedAt !== null)
+      ? Long.fromValue(object.accountCreatedAt)
+      : Long.ZERO;
+    message.accountAgeDays = object.accountAgeDays ?? 0;
+    message.isVerified = object.isVerified ?? false;
+    message.friendCountRange = object.friendCountRange ?? "";
+    message.attestationData = object.attestationData ?? new Uint8Array(0);
+    message.accountSignature = object.accountSignature ?? new Uint8Array(0);
+    message.encryptedPayload = (object.encryptedPayload !== undefined && object.encryptedPayload !== null)
+      ? EncryptedPayloadEnvelope.fromPartial(object.encryptedPayload)
+      : undefined;
+    message.evidenceHash = object.evidenceHash ?? "";
+    message.evidenceStorageBackend = object.evidenceStorageBackend ?? "";
+    message.evidenceStorageRef = object.evidenceStorageRef ?? "";
+    message.evidenceMetadata = Object.entries(object.evidenceMetadata ?? {}).reduce<{ [key: string]: string }>(
+      (acc, [key, value]) => {
+        if (value !== undefined) {
+          acc[key] = globalThis.String(value);
+        }
+        return acc;
+      },
+      {},
+    );
+    return message;
+  },
+};
+
+function createBaseMsgSubmitSocialMediaScope_EvidenceMetadataEntry(): MsgSubmitSocialMediaScope_EvidenceMetadataEntry {
+  return { key: "", value: "" };
+}
+
+export const MsgSubmitSocialMediaScope_EvidenceMetadataEntry: MessageFns<
+  MsgSubmitSocialMediaScope_EvidenceMetadataEntry,
+  "virtengine.veid.v1.MsgSubmitSocialMediaScope.EvidenceMetadataEntry"
+> = {
+  $type: "virtengine.veid.v1.MsgSubmitSocialMediaScope.EvidenceMetadataEntry" as const,
+
+  encode(
+    message: MsgSubmitSocialMediaScope_EvidenceMetadataEntry,
+    writer: BinaryWriter = new BinaryWriter(),
+  ): BinaryWriter {
+    if (message.key !== "") {
+      writer.uint32(10).string(message.key);
+    }
+    if (message.value !== "") {
+      writer.uint32(18).string(message.value);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): MsgSubmitSocialMediaScope_EvidenceMetadataEntry {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseMsgSubmitSocialMediaScope_EvidenceMetadataEntry();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.key = reader.string();
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.value = reader.string();
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): MsgSubmitSocialMediaScope_EvidenceMetadataEntry {
+    return {
+      key: isSet(object.key) ? globalThis.String(object.key) : "",
+      value: isSet(object.value) ? globalThis.String(object.value) : "",
+    };
+  },
+
+  toJSON(message: MsgSubmitSocialMediaScope_EvidenceMetadataEntry): unknown {
+    const obj: any = {};
+    if (message.key !== "") {
+      obj.key = message.key;
+    }
+    if (message.value !== "") {
+      obj.value = message.value;
+    }
+    return obj;
+  },
+
+  create(
+    base?: DeepPartial<MsgSubmitSocialMediaScope_EvidenceMetadataEntry>,
+  ): MsgSubmitSocialMediaScope_EvidenceMetadataEntry {
+    return MsgSubmitSocialMediaScope_EvidenceMetadataEntry.fromPartial(base ?? {});
+  },
+  fromPartial(
+    object: DeepPartial<MsgSubmitSocialMediaScope_EvidenceMetadataEntry>,
+  ): MsgSubmitSocialMediaScope_EvidenceMetadataEntry {
+    const message = createBaseMsgSubmitSocialMediaScope_EvidenceMetadataEntry();
+    message.key = object.key ?? "";
+    message.value = object.value ?? "";
+    return message;
+  },
+};
+
+function createBaseMsgSubmitSocialMediaScopeResponse(): MsgSubmitSocialMediaScopeResponse {
+  return { scopeId: "", status: "", scoreContribution: 0, verifiedAt: Long.ZERO };
+}
+
+export const MsgSubmitSocialMediaScopeResponse: MessageFns<
+  MsgSubmitSocialMediaScopeResponse,
+  "virtengine.veid.v1.MsgSubmitSocialMediaScopeResponse"
+> = {
+  $type: "virtengine.veid.v1.MsgSubmitSocialMediaScopeResponse" as const,
+
+  encode(message: MsgSubmitSocialMediaScopeResponse, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.scopeId !== "") {
+      writer.uint32(10).string(message.scopeId);
+    }
+    if (message.status !== "") {
+      writer.uint32(18).string(message.status);
+    }
+    if (message.scoreContribution !== 0) {
+      writer.uint32(24).uint32(message.scoreContribution);
+    }
+    if (!message.verifiedAt.equals(Long.ZERO)) {
+      writer.uint32(32).int64(message.verifiedAt.toString());
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): MsgSubmitSocialMediaScopeResponse {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseMsgSubmitSocialMediaScopeResponse();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.scopeId = reader.string();
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.status = reader.string();
+          continue;
+        }
+        case 3: {
+          if (tag !== 24) {
+            break;
+          }
+
+          message.scoreContribution = reader.uint32();
+          continue;
+        }
+        case 4: {
+          if (tag !== 32) {
+            break;
+          }
+
+          message.verifiedAt = Long.fromString(reader.int64().toString());
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): MsgSubmitSocialMediaScopeResponse {
+    return {
+      scopeId: isSet(object.scope_id) ? globalThis.String(object.scope_id) : "",
+      status: isSet(object.status) ? globalThis.String(object.status) : "",
+      scoreContribution: isSet(object.score_contribution) ? globalThis.Number(object.score_contribution) : 0,
+      verifiedAt: isSet(object.verified_at) ? Long.fromValue(object.verified_at) : Long.ZERO,
+    };
+  },
+
+  toJSON(message: MsgSubmitSocialMediaScopeResponse): unknown {
+    const obj: any = {};
+    if (message.scopeId !== "") {
+      obj.scope_id = message.scopeId;
+    }
+    if (message.status !== "") {
+      obj.status = message.status;
+    }
+    if (message.scoreContribution !== 0) {
+      obj.score_contribution = Math.round(message.scoreContribution);
+    }
+    if (!message.verifiedAt.equals(Long.ZERO)) {
+      obj.verified_at = (message.verifiedAt || Long.ZERO).toString();
+    }
+    return obj;
+  },
+  fromPartial(object: DeepPartial<MsgSubmitSocialMediaScopeResponse>): MsgSubmitSocialMediaScopeResponse {
+    const message = createBaseMsgSubmitSocialMediaScopeResponse();
+    message.scopeId = object.scopeId ?? "";
+    message.status = object.status ?? "";
+    message.scoreContribution = object.scoreContribution ?? 0;
+    message.verifiedAt = (object.verifiedAt !== undefined && object.verifiedAt !== null)
+      ? Long.fromValue(object.verifiedAt)
       : Long.ZERO;
     return message;
   },
@@ -1514,6 +3737,860 @@ export const MsgUpdateScoreResponse: MessageFns<MsgUpdateScoreResponse, "virteng
     message.updatedAt = (object.updatedAt !== undefined && object.updatedAt !== null)
       ? Long.fromValue(object.updatedAt)
       : Long.ZERO;
+    return message;
+  },
+};
+
+function createBaseVEIDVoteExtension(): VEIDVoteExtension {
+  return {
+    version: 0,
+    chainId: "",
+    height: Long.ZERO,
+    blockHash: new Uint8Array(0),
+    pipelineVersion: "",
+    runtimeHash: new Uint8Array(0),
+    modelHash: new Uint8Array(0),
+    results: [],
+  };
+}
+
+export const VEIDVoteExtension: MessageFns<VEIDVoteExtension, "virtengine.veid.v1.VEIDVoteExtension"> = {
+  $type: "virtengine.veid.v1.VEIDVoteExtension" as const,
+
+  encode(message: VEIDVoteExtension, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.version !== 0) {
+      writer.uint32(8).uint32(message.version);
+    }
+    if (message.chainId !== "") {
+      writer.uint32(18).string(message.chainId);
+    }
+    if (!message.height.equals(Long.ZERO)) {
+      writer.uint32(24).int64(message.height.toString());
+    }
+    if (message.blockHash.length !== 0) {
+      writer.uint32(34).bytes(message.blockHash);
+    }
+    if (message.pipelineVersion !== "") {
+      writer.uint32(42).string(message.pipelineVersion);
+    }
+    if (message.runtimeHash.length !== 0) {
+      writer.uint32(50).bytes(message.runtimeHash);
+    }
+    if (message.modelHash.length !== 0) {
+      writer.uint32(58).bytes(message.modelHash);
+    }
+    for (const v of message.results) {
+      VEIDVoteExtensionResult.encode(v!, writer.uint32(66).fork()).join();
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): VEIDVoteExtension {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseVEIDVoteExtension();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 8) {
+            break;
+          }
+
+          message.version = reader.uint32();
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.chainId = reader.string();
+          continue;
+        }
+        case 3: {
+          if (tag !== 24) {
+            break;
+          }
+
+          message.height = Long.fromString(reader.int64().toString());
+          continue;
+        }
+        case 4: {
+          if (tag !== 34) {
+            break;
+          }
+
+          message.blockHash = reader.bytes();
+          continue;
+        }
+        case 5: {
+          if (tag !== 42) {
+            break;
+          }
+
+          message.pipelineVersion = reader.string();
+          continue;
+        }
+        case 6: {
+          if (tag !== 50) {
+            break;
+          }
+
+          message.runtimeHash = reader.bytes();
+          continue;
+        }
+        case 7: {
+          if (tag !== 58) {
+            break;
+          }
+
+          message.modelHash = reader.bytes();
+          continue;
+        }
+        case 8: {
+          if (tag !== 66) {
+            break;
+          }
+
+          message.results.push(VEIDVoteExtensionResult.decode(reader, reader.uint32()));
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): VEIDVoteExtension {
+    return {
+      version: isSet(object.version) ? globalThis.Number(object.version) : 0,
+      chainId: isSet(object.chain_id) ? globalThis.String(object.chain_id) : "",
+      height: isSet(object.height) ? Long.fromValue(object.height) : Long.ZERO,
+      blockHash: isSet(object.block_hash) ? bytesFromBase64(object.block_hash) : new Uint8Array(0),
+      pipelineVersion: isSet(object.pipeline_version) ? globalThis.String(object.pipeline_version) : "",
+      runtimeHash: isSet(object.runtime_hash) ? bytesFromBase64(object.runtime_hash) : new Uint8Array(0),
+      modelHash: isSet(object.model_hash) ? bytesFromBase64(object.model_hash) : new Uint8Array(0),
+      results: globalThis.Array.isArray(object?.results)
+        ? object.results.map((e: any) => VEIDVoteExtensionResult.fromJSON(e))
+        : [],
+    };
+  },
+
+  toJSON(message: VEIDVoteExtension): unknown {
+    const obj: any = {};
+    if (message.version !== 0) {
+      obj.version = Math.round(message.version);
+    }
+    if (message.chainId !== "") {
+      obj.chain_id = message.chainId;
+    }
+    if (!message.height.equals(Long.ZERO)) {
+      obj.height = (message.height || Long.ZERO).toString();
+    }
+    if (message.blockHash.length !== 0) {
+      obj.block_hash = base64FromBytes(message.blockHash);
+    }
+    if (message.pipelineVersion !== "") {
+      obj.pipeline_version = message.pipelineVersion;
+    }
+    if (message.runtimeHash.length !== 0) {
+      obj.runtime_hash = base64FromBytes(message.runtimeHash);
+    }
+    if (message.modelHash.length !== 0) {
+      obj.model_hash = base64FromBytes(message.modelHash);
+    }
+    if (message.results?.length) {
+      obj.results = message.results.map((e) => VEIDVoteExtensionResult.toJSON(e));
+    }
+    return obj;
+  },
+  fromPartial(object: DeepPartial<VEIDVoteExtension>): VEIDVoteExtension {
+    const message = createBaseVEIDVoteExtension();
+    message.version = object.version ?? 0;
+    message.chainId = object.chainId ?? "";
+    message.height = (object.height !== undefined && object.height !== null)
+      ? Long.fromValue(object.height)
+      : Long.ZERO;
+    message.blockHash = object.blockHash ?? new Uint8Array(0);
+    message.pipelineVersion = object.pipelineVersion ?? "";
+    message.runtimeHash = object.runtimeHash ?? new Uint8Array(0);
+    message.modelHash = object.modelHash ?? new Uint8Array(0);
+    message.results = object.results?.map((e) => VEIDVoteExtensionResult.fromPartial(e)) || [];
+    return message;
+  },
+};
+
+function createBaseVEIDVoteExtensionResult(): VEIDVoteExtensionResult {
+  return {
+    requestId: "",
+    accountAddress: "",
+    score: 0,
+    status: "",
+    modelVersion: "",
+    inputHash: new Uint8Array(0),
+    resultHash: new Uint8Array(0),
+    reasonCodes: [],
+    receiptDigest: new Uint8Array(0),
+  };
+}
+
+export const VEIDVoteExtensionResult: MessageFns<
+  VEIDVoteExtensionResult,
+  "virtengine.veid.v1.VEIDVoteExtensionResult"
+> = {
+  $type: "virtengine.veid.v1.VEIDVoteExtensionResult" as const,
+
+  encode(message: VEIDVoteExtensionResult, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.requestId !== "") {
+      writer.uint32(10).string(message.requestId);
+    }
+    if (message.accountAddress !== "") {
+      writer.uint32(18).string(message.accountAddress);
+    }
+    if (message.score !== 0) {
+      writer.uint32(24).uint32(message.score);
+    }
+    if (message.status !== "") {
+      writer.uint32(34).string(message.status);
+    }
+    if (message.modelVersion !== "") {
+      writer.uint32(42).string(message.modelVersion);
+    }
+    if (message.inputHash.length !== 0) {
+      writer.uint32(50).bytes(message.inputHash);
+    }
+    if (message.resultHash.length !== 0) {
+      writer.uint32(58).bytes(message.resultHash);
+    }
+    for (const v of message.reasonCodes) {
+      writer.uint32(66).string(v!);
+    }
+    if (message.receiptDigest.length !== 0) {
+      writer.uint32(74).bytes(message.receiptDigest);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): VEIDVoteExtensionResult {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseVEIDVoteExtensionResult();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.requestId = reader.string();
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.accountAddress = reader.string();
+          continue;
+        }
+        case 3: {
+          if (tag !== 24) {
+            break;
+          }
+
+          message.score = reader.uint32();
+          continue;
+        }
+        case 4: {
+          if (tag !== 34) {
+            break;
+          }
+
+          message.status = reader.string();
+          continue;
+        }
+        case 5: {
+          if (tag !== 42) {
+            break;
+          }
+
+          message.modelVersion = reader.string();
+          continue;
+        }
+        case 6: {
+          if (tag !== 50) {
+            break;
+          }
+
+          message.inputHash = reader.bytes();
+          continue;
+        }
+        case 7: {
+          if (tag !== 58) {
+            break;
+          }
+
+          message.resultHash = reader.bytes();
+          continue;
+        }
+        case 8: {
+          if (tag !== 66) {
+            break;
+          }
+
+          message.reasonCodes.push(reader.string());
+          continue;
+        }
+        case 9: {
+          if (tag !== 74) {
+            break;
+          }
+
+          message.receiptDigest = reader.bytes();
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): VEIDVoteExtensionResult {
+    return {
+      requestId: isSet(object.request_id) ? globalThis.String(object.request_id) : "",
+      accountAddress: isSet(object.account_address) ? globalThis.String(object.account_address) : "",
+      score: isSet(object.score) ? globalThis.Number(object.score) : 0,
+      status: isSet(object.status) ? globalThis.String(object.status) : "",
+      modelVersion: isSet(object.model_version) ? globalThis.String(object.model_version) : "",
+      inputHash: isSet(object.input_hash) ? bytesFromBase64(object.input_hash) : new Uint8Array(0),
+      resultHash: isSet(object.result_hash) ? bytesFromBase64(object.result_hash) : new Uint8Array(0),
+      reasonCodes: globalThis.Array.isArray(object?.reason_codes)
+        ? object.reason_codes.map((e: any) => globalThis.String(e))
+        : [],
+      receiptDigest: isSet(object.receipt_digest) ? bytesFromBase64(object.receipt_digest) : new Uint8Array(0),
+    };
+  },
+
+  toJSON(message: VEIDVoteExtensionResult): unknown {
+    const obj: any = {};
+    if (message.requestId !== "") {
+      obj.request_id = message.requestId;
+    }
+    if (message.accountAddress !== "") {
+      obj.account_address = message.accountAddress;
+    }
+    if (message.score !== 0) {
+      obj.score = Math.round(message.score);
+    }
+    if (message.status !== "") {
+      obj.status = message.status;
+    }
+    if (message.modelVersion !== "") {
+      obj.model_version = message.modelVersion;
+    }
+    if (message.inputHash.length !== 0) {
+      obj.input_hash = base64FromBytes(message.inputHash);
+    }
+    if (message.resultHash.length !== 0) {
+      obj.result_hash = base64FromBytes(message.resultHash);
+    }
+    if (message.reasonCodes?.length) {
+      obj.reason_codes = message.reasonCodes;
+    }
+    if (message.receiptDigest.length !== 0) {
+      obj.receipt_digest = base64FromBytes(message.receiptDigest);
+    }
+    return obj;
+  },
+  fromPartial(object: DeepPartial<VEIDVoteExtensionResult>): VEIDVoteExtensionResult {
+    const message = createBaseVEIDVoteExtensionResult();
+    message.requestId = object.requestId ?? "";
+    message.accountAddress = object.accountAddress ?? "";
+    message.score = object.score ?? 0;
+    message.status = object.status ?? "";
+    message.modelVersion = object.modelVersion ?? "";
+    message.inputHash = object.inputHash ?? new Uint8Array(0);
+    message.resultHash = object.resultHash ?? new Uint8Array(0);
+    message.reasonCodes = object.reasonCodes?.map((e) => e) || [];
+    message.receiptDigest = object.receiptDigest ?? new Uint8Array(0);
+    return message;
+  },
+};
+
+function createBaseVEIDConsensusAggregate(): VEIDConsensusAggregate {
+  return {
+    version: 0,
+    chainId: "",
+    height: Long.ZERO,
+    pipelineVersion: "",
+    runtimeHash: new Uint8Array(0),
+    modelHash: new Uint8Array(0),
+    totalVotingPower: Long.ZERO,
+    quorumVotingPower: Long.ZERO,
+    results: [],
+  };
+}
+
+export const VEIDConsensusAggregate: MessageFns<VEIDConsensusAggregate, "virtengine.veid.v1.VEIDConsensusAggregate"> = {
+  $type: "virtengine.veid.v1.VEIDConsensusAggregate" as const,
+
+  encode(message: VEIDConsensusAggregate, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.version !== 0) {
+      writer.uint32(8).uint32(message.version);
+    }
+    if (message.chainId !== "") {
+      writer.uint32(18).string(message.chainId);
+    }
+    if (!message.height.equals(Long.ZERO)) {
+      writer.uint32(24).int64(message.height.toString());
+    }
+    if (message.pipelineVersion !== "") {
+      writer.uint32(34).string(message.pipelineVersion);
+    }
+    if (message.runtimeHash.length !== 0) {
+      writer.uint32(42).bytes(message.runtimeHash);
+    }
+    if (message.modelHash.length !== 0) {
+      writer.uint32(50).bytes(message.modelHash);
+    }
+    if (!message.totalVotingPower.equals(Long.ZERO)) {
+      writer.uint32(56).int64(message.totalVotingPower.toString());
+    }
+    if (!message.quorumVotingPower.equals(Long.ZERO)) {
+      writer.uint32(64).int64(message.quorumVotingPower.toString());
+    }
+    for (const v of message.results) {
+      VEIDConsensusResult.encode(v!, writer.uint32(74).fork()).join();
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): VEIDConsensusAggregate {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseVEIDConsensusAggregate();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 8) {
+            break;
+          }
+
+          message.version = reader.uint32();
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.chainId = reader.string();
+          continue;
+        }
+        case 3: {
+          if (tag !== 24) {
+            break;
+          }
+
+          message.height = Long.fromString(reader.int64().toString());
+          continue;
+        }
+        case 4: {
+          if (tag !== 34) {
+            break;
+          }
+
+          message.pipelineVersion = reader.string();
+          continue;
+        }
+        case 5: {
+          if (tag !== 42) {
+            break;
+          }
+
+          message.runtimeHash = reader.bytes();
+          continue;
+        }
+        case 6: {
+          if (tag !== 50) {
+            break;
+          }
+
+          message.modelHash = reader.bytes();
+          continue;
+        }
+        case 7: {
+          if (tag !== 56) {
+            break;
+          }
+
+          message.totalVotingPower = Long.fromString(reader.int64().toString());
+          continue;
+        }
+        case 8: {
+          if (tag !== 64) {
+            break;
+          }
+
+          message.quorumVotingPower = Long.fromString(reader.int64().toString());
+          continue;
+        }
+        case 9: {
+          if (tag !== 74) {
+            break;
+          }
+
+          message.results.push(VEIDConsensusResult.decode(reader, reader.uint32()));
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): VEIDConsensusAggregate {
+    return {
+      version: isSet(object.version) ? globalThis.Number(object.version) : 0,
+      chainId: isSet(object.chain_id) ? globalThis.String(object.chain_id) : "",
+      height: isSet(object.height) ? Long.fromValue(object.height) : Long.ZERO,
+      pipelineVersion: isSet(object.pipeline_version) ? globalThis.String(object.pipeline_version) : "",
+      runtimeHash: isSet(object.runtime_hash) ? bytesFromBase64(object.runtime_hash) : new Uint8Array(0),
+      modelHash: isSet(object.model_hash) ? bytesFromBase64(object.model_hash) : new Uint8Array(0),
+      totalVotingPower: isSet(object.total_voting_power) ? Long.fromValue(object.total_voting_power) : Long.ZERO,
+      quorumVotingPower: isSet(object.quorum_voting_power) ? Long.fromValue(object.quorum_voting_power) : Long.ZERO,
+      results: globalThis.Array.isArray(object?.results)
+        ? object.results.map((e: any) => VEIDConsensusResult.fromJSON(e))
+        : [],
+    };
+  },
+
+  toJSON(message: VEIDConsensusAggregate): unknown {
+    const obj: any = {};
+    if (message.version !== 0) {
+      obj.version = Math.round(message.version);
+    }
+    if (message.chainId !== "") {
+      obj.chain_id = message.chainId;
+    }
+    if (!message.height.equals(Long.ZERO)) {
+      obj.height = (message.height || Long.ZERO).toString();
+    }
+    if (message.pipelineVersion !== "") {
+      obj.pipeline_version = message.pipelineVersion;
+    }
+    if (message.runtimeHash.length !== 0) {
+      obj.runtime_hash = base64FromBytes(message.runtimeHash);
+    }
+    if (message.modelHash.length !== 0) {
+      obj.model_hash = base64FromBytes(message.modelHash);
+    }
+    if (!message.totalVotingPower.equals(Long.ZERO)) {
+      obj.total_voting_power = (message.totalVotingPower || Long.ZERO).toString();
+    }
+    if (!message.quorumVotingPower.equals(Long.ZERO)) {
+      obj.quorum_voting_power = (message.quorumVotingPower || Long.ZERO).toString();
+    }
+    if (message.results?.length) {
+      obj.results = message.results.map((e) => VEIDConsensusResult.toJSON(e));
+    }
+    return obj;
+  },
+  fromPartial(object: DeepPartial<VEIDConsensusAggregate>): VEIDConsensusAggregate {
+    const message = createBaseVEIDConsensusAggregate();
+    message.version = object.version ?? 0;
+    message.chainId = object.chainId ?? "";
+    message.height = (object.height !== undefined && object.height !== null)
+      ? Long.fromValue(object.height)
+      : Long.ZERO;
+    message.pipelineVersion = object.pipelineVersion ?? "";
+    message.runtimeHash = object.runtimeHash ?? new Uint8Array(0);
+    message.modelHash = object.modelHash ?? new Uint8Array(0);
+    message.totalVotingPower = (object.totalVotingPower !== undefined && object.totalVotingPower !== null)
+      ? Long.fromValue(object.totalVotingPower)
+      : Long.ZERO;
+    message.quorumVotingPower = (object.quorumVotingPower !== undefined && object.quorumVotingPower !== null)
+      ? Long.fromValue(object.quorumVotingPower)
+      : Long.ZERO;
+    message.results = object.results?.map((e) => VEIDConsensusResult.fromPartial(e)) || [];
+    return message;
+  },
+};
+
+function createBaseVEIDConsensusResult(): VEIDConsensusResult {
+  return { result: undefined, votingPower: Long.ZERO };
+}
+
+export const VEIDConsensusResult: MessageFns<VEIDConsensusResult, "virtengine.veid.v1.VEIDConsensusResult"> = {
+  $type: "virtengine.veid.v1.VEIDConsensusResult" as const,
+
+  encode(message: VEIDConsensusResult, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.result !== undefined) {
+      VEIDVoteExtensionResult.encode(message.result, writer.uint32(10).fork()).join();
+    }
+    if (!message.votingPower.equals(Long.ZERO)) {
+      writer.uint32(16).int64(message.votingPower.toString());
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): VEIDConsensusResult {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseVEIDConsensusResult();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.result = VEIDVoteExtensionResult.decode(reader, reader.uint32());
+          continue;
+        }
+        case 2: {
+          if (tag !== 16) {
+            break;
+          }
+
+          message.votingPower = Long.fromString(reader.int64().toString());
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): VEIDConsensusResult {
+    return {
+      result: isSet(object.result) ? VEIDVoteExtensionResult.fromJSON(object.result) : undefined,
+      votingPower: isSet(object.voting_power) ? Long.fromValue(object.voting_power) : Long.ZERO,
+    };
+  },
+
+  toJSON(message: VEIDConsensusResult): unknown {
+    const obj: any = {};
+    if (message.result !== undefined) {
+      obj.result = VEIDVoteExtensionResult.toJSON(message.result);
+    }
+    if (!message.votingPower.equals(Long.ZERO)) {
+      obj.voting_power = (message.votingPower || Long.ZERO).toString();
+    }
+    return obj;
+  },
+  fromPartial(object: DeepPartial<VEIDConsensusResult>): VEIDConsensusResult {
+    const message = createBaseVEIDConsensusResult();
+    message.result = (object.result !== undefined && object.result !== null)
+      ? VEIDVoteExtensionResult.fromPartial(object.result)
+      : undefined;
+    message.votingPower = (object.votingPower !== undefined && object.votingPower !== null)
+      ? Long.fromValue(object.votingPower)
+      : Long.ZERO;
+    return message;
+  },
+};
+
+function createBaseMsgSubmitConsensusVerification(): MsgSubmitConsensusVerification {
+  return { version: 0, chainId: "", height: Long.ZERO, extendedCommit: new Uint8Array(0), aggregate: undefined };
+}
+
+export const MsgSubmitConsensusVerification: MessageFns<
+  MsgSubmitConsensusVerification,
+  "virtengine.veid.v1.MsgSubmitConsensusVerification"
+> = {
+  $type: "virtengine.veid.v1.MsgSubmitConsensusVerification" as const,
+
+  encode(message: MsgSubmitConsensusVerification, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.version !== 0) {
+      writer.uint32(8).uint32(message.version);
+    }
+    if (message.chainId !== "") {
+      writer.uint32(18).string(message.chainId);
+    }
+    if (!message.height.equals(Long.ZERO)) {
+      writer.uint32(24).int64(message.height.toString());
+    }
+    if (message.extendedCommit.length !== 0) {
+      writer.uint32(34).bytes(message.extendedCommit);
+    }
+    if (message.aggregate !== undefined) {
+      VEIDConsensusAggregate.encode(message.aggregate, writer.uint32(42).fork()).join();
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): MsgSubmitConsensusVerification {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseMsgSubmitConsensusVerification();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 8) {
+            break;
+          }
+
+          message.version = reader.uint32();
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.chainId = reader.string();
+          continue;
+        }
+        case 3: {
+          if (tag !== 24) {
+            break;
+          }
+
+          message.height = Long.fromString(reader.int64().toString());
+          continue;
+        }
+        case 4: {
+          if (tag !== 34) {
+            break;
+          }
+
+          message.extendedCommit = reader.bytes();
+          continue;
+        }
+        case 5: {
+          if (tag !== 42) {
+            break;
+          }
+
+          message.aggregate = VEIDConsensusAggregate.decode(reader, reader.uint32());
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): MsgSubmitConsensusVerification {
+    return {
+      version: isSet(object.version) ? globalThis.Number(object.version) : 0,
+      chainId: isSet(object.chain_id) ? globalThis.String(object.chain_id) : "",
+      height: isSet(object.height) ? Long.fromValue(object.height) : Long.ZERO,
+      extendedCommit: isSet(object.extended_commit) ? bytesFromBase64(object.extended_commit) : new Uint8Array(0),
+      aggregate: isSet(object.aggregate) ? VEIDConsensusAggregate.fromJSON(object.aggregate) : undefined,
+    };
+  },
+
+  toJSON(message: MsgSubmitConsensusVerification): unknown {
+    const obj: any = {};
+    if (message.version !== 0) {
+      obj.version = Math.round(message.version);
+    }
+    if (message.chainId !== "") {
+      obj.chain_id = message.chainId;
+    }
+    if (!message.height.equals(Long.ZERO)) {
+      obj.height = (message.height || Long.ZERO).toString();
+    }
+    if (message.extendedCommit.length !== 0) {
+      obj.extended_commit = base64FromBytes(message.extendedCommit);
+    }
+    if (message.aggregate !== undefined) {
+      obj.aggregate = VEIDConsensusAggregate.toJSON(message.aggregate);
+    }
+    return obj;
+  },
+  fromPartial(object: DeepPartial<MsgSubmitConsensusVerification>): MsgSubmitConsensusVerification {
+    const message = createBaseMsgSubmitConsensusVerification();
+    message.version = object.version ?? 0;
+    message.chainId = object.chainId ?? "";
+    message.height = (object.height !== undefined && object.height !== null)
+      ? Long.fromValue(object.height)
+      : Long.ZERO;
+    message.extendedCommit = object.extendedCommit ?? new Uint8Array(0);
+    message.aggregate = (object.aggregate !== undefined && object.aggregate !== null)
+      ? VEIDConsensusAggregate.fromPartial(object.aggregate)
+      : undefined;
+    return message;
+  },
+};
+
+function createBaseMsgSubmitConsensusVerificationResponse(): MsgSubmitConsensusVerificationResponse {
+  return { appliedResults: 0 };
+}
+
+export const MsgSubmitConsensusVerificationResponse: MessageFns<
+  MsgSubmitConsensusVerificationResponse,
+  "virtengine.veid.v1.MsgSubmitConsensusVerificationResponse"
+> = {
+  $type: "virtengine.veid.v1.MsgSubmitConsensusVerificationResponse" as const,
+
+  encode(message: MsgSubmitConsensusVerificationResponse, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.appliedResults !== 0) {
+      writer.uint32(8).uint32(message.appliedResults);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): MsgSubmitConsensusVerificationResponse {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseMsgSubmitConsensusVerificationResponse();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 8) {
+            break;
+          }
+
+          message.appliedResults = reader.uint32();
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): MsgSubmitConsensusVerificationResponse {
+    return { appliedResults: isSet(object.applied_results) ? globalThis.Number(object.applied_results) : 0 };
+  },
+
+  toJSON(message: MsgSubmitConsensusVerificationResponse): unknown {
+    const obj: any = {};
+    if (message.appliedResults !== 0) {
+      obj.applied_results = Math.round(message.appliedResults);
+    }
+    return obj;
+  },
+  fromPartial(object: DeepPartial<MsgSubmitConsensusVerificationResponse>): MsgSubmitConsensusVerificationResponse {
+    const message = createBaseMsgSubmitConsensusVerificationResponse();
+    message.appliedResults = object.appliedResults ?? 0;
     return message;
   },
 };
@@ -2996,6 +6073,11 @@ export const MsgUpdateDerivedFeatures_DocFieldHashesEntry: MessageFns<
     return obj;
   },
 
+  create(
+    base?: DeepPartial<MsgUpdateDerivedFeatures_DocFieldHashesEntry>,
+  ): MsgUpdateDerivedFeatures_DocFieldHashesEntry {
+    return MsgUpdateDerivedFeatures_DocFieldHashesEntry.fromPartial(base ?? {});
+  },
   fromPartial(
     object: DeepPartial<MsgUpdateDerivedFeatures_DocFieldHashesEntry>,
   ): MsgUpdateDerivedFeatures_DocFieldHashesEntry {

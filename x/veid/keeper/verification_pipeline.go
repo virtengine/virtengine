@@ -5,8 +5,9 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"time"
+	"strings"
 
+	errorsmod "cosmossdk.io/errors"
 	storetypes "cosmossdk.io/store/types"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 
@@ -77,6 +78,11 @@ func (k Keeper) CreateVerificationRequest(
 	// Generate request ID
 	requestID := k.generateRequestID(ctx, accountAddress, scopeIDs)
 
+	profileSnapshot, err := k.activeInferenceProfileSnapshot(ctx)
+	if err != nil {
+		return nil, err
+	}
+
 	// Create the request
 	request := types.NewVerificationRequest(
 		requestID,
@@ -85,6 +91,9 @@ func (k Keeper) CreateVerificationRequest(
 		ctx.BlockTime(),
 		ctx.BlockHeight(),
 	)
+	if err := request.SetInferenceProfileSnapshot(profileSnapshot); err != nil {
+		return nil, err
+	}
 
 	// Store the request
 	if err := k.setVerificationRequest(ctx, request); err != nil {
@@ -295,118 +304,18 @@ func (k Keeper) ProcessVerificationRequest(
 	request *types.VerificationRequest,
 	keyProvider ValidatorKeyProvider,
 ) *types.VerificationResult {
-	startTime := time.Now()
-
-	// Initialize result
+	if request == nil {
+		result := types.NewVerificationResult("", "", ctx.BlockTime(), ctx.BlockHeight())
+		result.SetError(types.ReasonCodeMLInferenceError, "verification request is required")
+		return result
+	}
 	result := types.NewVerificationResult(
 		request.RequestID,
 		request.AccountAddress,
 		ctx.BlockTime(),
 		ctx.BlockHeight(),
 	)
-
-	// Parse account address
-	addr, err := sdk.AccAddressFromBech32(request.AccountAddress)
-	if err != nil {
-		result.SetError(types.ReasonCodeInvalidPayload, err.Error())
-		return result
-	}
-
-	// Update request status to in progress
-	request.SetInProgress(ctx.BlockTime())
-	if err := k.setVerificationRequest(ctx, request); err != nil {
-		k.Logger(ctx).Error("failed to update request status", "error", err)
-	}
-
-	// Step 1: Decrypt scopes
-	decryptedScopes, scopeResults, err := k.DecryptScopesForVerification(
-		ctx, addr, request.ScopeIDs, keyProvider)
-	if err != nil {
-		result.SetError(types.ReasonCodeDecryptError, err.Error())
-		k.finalizeRequest(ctx, request, result)
-		return result
-	}
-
-	// Step 2: Validate decrypted payloads
-	validDecrypted := make([]DecryptedScope, 0, len(decryptedScopes))
-	for i, ds := range decryptedScopes {
-		valid, reason := k.ValidateDecryptedPayload(ctx, ds)
-		if valid {
-			validDecrypted = append(validDecrypted, ds)
-		} else {
-			scopeResults[i].SetFailure(types.ReasonCodeInvalidPayload)
-			scopeResults[i].Details = reason
-		}
-	}
-
-	// Step 3: Check if we have enough valid scopes
-	if len(validDecrypted) == 0 {
-		result.SetFailed(types.ReasonCodeInsufficientScopes)
-		for _, sr := range scopeResults {
-			result.AddScopeResult(sr)
-		}
-		k.finalizeRequest(ctx, request, result)
-		return result
-	}
-
-	// Step 4: Compute identity score using ML
-	score, modelVersion, reasonCodes, inputHash, err := k.ComputeIdentityScore(
-		ctx, request.AccountAddress, validDecrypted, scopeResults)
-	if err != nil {
-		result.SetError(types.ReasonCodeMLInferenceError, err.Error())
-		k.finalizeRequest(ctx, request, result)
-		return result
-	}
-
-	// Step 4b: Process evidence pipeline (document + biometric)
-	assessment, evidenceErr := k.ProcessEvidencePipeline(ctx, addr, request.RequestID, validDecrypted, keyProvider)
-	if evidenceErr != nil {
-		k.Logger(ctx).Error("evidence pipeline failed", "error", evidenceErr)
-		result.Metadata["evidence_error"] = evidenceErr.Error()
-	} else if assessment != nil {
-		result.Metadata["evidence_confidence"] = fmt.Sprintf("%d", assessment.OverallConfidence)
-		result.Metadata["evidence_provenance_hash"] = hex.EncodeToString(assessment.ProvenanceHash)
-		if adjusted, applied := applyEvidenceConfidence(score, assessment.OverallConfidence); applied {
-			score = adjusted
-		}
-		if shouldFlagLowEvidenceConfidence(assessment.OverallConfidence) {
-			reasonCodes = append(reasonCodes, types.ReasonCodeLowConfidence)
-		}
-	}
-
-	// Step 5: Build final result
-	result.Score = score
-	result.ModelVersion = modelVersion
-	result.InputHash = inputHash
-	result.ProcessingDuration = time.Since(startTime).Milliseconds()
-
-	// Add scope results
-	for _, sr := range scopeResults {
-		result.AddScopeResult(sr)
-	}
-
-	// Determine overall status
-	result.DetermineStatus()
-
-	// Override reason codes with ML reason codes if available
-	if len(reasonCodes) > 0 {
-		result.ReasonCodes = reasonCodes
-	}
-
-	// Step 6: Update on-chain state
-	k.applyVerificationResult(ctx, addr, result)
-
-	// Finalize request
-	k.finalizeRequest(ctx, request, result)
-
-	k.Logger(ctx).Info("verification request processed",
-		"request_id", request.RequestID,
-		"account", request.AccountAddress,
-		"score", result.Score,
-		"status", result.Status,
-		"duration_ms", result.ProcessingDuration,
-	)
-
+	result.SetError(types.ReasonCodeMLInferenceError, "direct verification processing is disabled; signed inference receipt staging is required")
 	return result
 }
 
@@ -414,11 +323,21 @@ func (k Keeper) ProcessVerificationRequest(
 func (k Keeper) applyVerificationResult(
 	ctx sdk.Context,
 	addr sdk.AccAddress,
+	request *types.VerificationRequest,
 	result *types.VerificationResult,
-) {
+) error {
+	if ctx.ExecMode() != sdk.ExecModeFinalize {
+		return types.ErrUnauthorized.Wrap("verification results may only be applied during FinalizeBlock")
+	}
+	if k.consensusSystemTxAuthorizer == nil || !k.consensusSystemTxAuthorizer(ctx) {
+		return types.ErrUnauthorized.Wrap("verification result application requires authorized consensus system transaction")
+	}
 	// Update identity score
 	if result.Status == types.VerificationResultStatusSuccess ||
 		result.Status == types.VerificationResultStatusPartial {
+		if err := k.enforceVerificationArtifactState(ctx, request, result); err != nil {
+			return err
+		}
 
 		// Determine account status based on score
 		var accountStatus types.AccountStatus
@@ -436,7 +355,7 @@ func (k Keeper) applyVerificationResult(
 		}
 
 		if err := k.SetScoreWithDetails(ctx, addr.String(), result.Score, details); err != nil {
-			k.Logger(ctx).Error("failed to set score", "error", err)
+			return err
 		}
 
 		// Update scope verification statuses
@@ -450,7 +369,136 @@ func (k Keeper) applyVerificationResult(
 				)
 			}
 		}
+
+		if k.issuancePolicyKeeper != nil {
+			verifierID := result.ModelVersion
+			activeVerifier, hasActiveVerifier, err := k.getActiveVerifierInfo(ctx)
+			if err != nil {
+				return err
+			}
+			if hasActiveVerifier && activeVerifier.VerifierID != "" {
+				verifierID = activeVerifier.VerifierID
+			}
+
+			recordedUnits, err := k.issuancePolicyKeeper.RecordVerifiedProof(
+				ctx,
+				request.RequestID,
+				addr.String(),
+				verifierID,
+				result.ModelVersion,
+				result.Score,
+			)
+			if err != nil {
+				k.Logger(ctx).Error("failed to record issuance proof", "request_id", request.RequestID, "error", err)
+			} else {
+				result.Metadata["issuance_recorded_units"] = fmt.Sprintf("%d", recordedUnits)
+			}
+		}
 	}
+
+	return nil
+}
+
+func (k Keeper) enforceVerificationArtifactState(
+	ctx sdk.Context,
+	request *types.VerificationRequest,
+	result *types.VerificationResult,
+) error {
+	activeVerifier, hasActiveVerifier, err := k.getActiveVerifierInfo(ctx)
+	if err != nil {
+		return err
+	}
+	if hasActiveVerifier {
+		result.Metadata["active_verifier_id"] = activeVerifier.VerifierID
+		result.Metadata["active_verifier_spec_version"] = activeVerifier.SpecVersion
+		if activeVerifier.ActivationHeight > 0 && request.RequestedBlock < activeVerifier.ActivationHeight {
+			return types.ErrPipelineVersionMismatch.Wrapf(
+				"active verifier %s is not authorized until height %d",
+				activeVerifier.VerifierID,
+				activeVerifier.ActivationHeight,
+			)
+		}
+		if !versionsMatch(activeVerifier.SpecVersion, result.ModelVersion) {
+			return types.ErrPipelineVersionMismatch.Wrapf(
+				"active verifier %s expects %s, got %s",
+				activeVerifier.VerifierID,
+				activeVerifier.SpecVersion,
+				result.ModelVersion,
+			)
+		}
+	}
+
+	activePV, err := k.GetActivePipelineVersion(ctx)
+	if err != nil {
+		if hasActiveVerifier {
+			return types.ErrUnauthorized.Wrap("missing active pipeline artifact state for verifier enforcement")
+		}
+		return err
+	}
+
+	manifest, err := k.ensurePipelineVersionUsable(ctx, activePV)
+	if err != nil {
+		return err
+	}
+
+	result.Metadata["pipeline_version"] = activePV.Version
+	result.Metadata["pipeline_image_hash"] = activePV.ImageHash
+	result.Metadata["pipeline_manifest_hash"] = manifest.ManifestHash
+
+	if !versionsMatch(activePV.Version, result.ModelVersion) {
+		return types.ErrPipelineVersionMismatch.Wrapf(
+			"active pipeline expects %s, got %s",
+			activePV.Version,
+			result.ModelVersion,
+		)
+	}
+
+	if hasActiveVerifier && activeVerifier.WeightsSHA256 != "" &&
+		!hashesMatch(activeVerifier.WeightsSHA256, manifest.ManifestHash) &&
+		!hashesMatch(activeVerifier.WeightsSHA256, activePV.ImageHash) {
+		return types.ErrUnauthorized.Wrapf(
+			"active verifier %s expects artifact %s but pipeline publishes manifest %s and image %s",
+			activeVerifier.VerifierID,
+			activeVerifier.WeightsSHA256,
+			manifest.ManifestHash,
+			activePV.ImageHash,
+		)
+	}
+
+	return nil
+}
+
+func (k Keeper) rejectVerificationResult(result *types.VerificationResult, err error) {
+	result.Metadata["verification_rejection"] = err.Error()
+
+	switch {
+	case errorsmod.IsOf(err, types.ErrUnauthorized):
+		result.SetFailed(types.ReasonCodeUnauthorizedArtifactState)
+	case errorsmod.IsOf(err, types.ErrPipelineVersionMismatch),
+		errorsmod.IsOf(err, types.ErrNoPipelineVersionActive),
+		errorsmod.IsOf(err, types.ErrModelManifestMismatch):
+		result.SetFailed(types.ReasonCodeStaleArtifactState)
+	default:
+		result.SetError(types.ReasonCodeMLInferenceError, err.Error())
+	}
+}
+
+func hashesMatch(expected, actual string) bool {
+	return normalizeHashString(expected) == normalizeHashString(actual)
+}
+
+func normalizeHashString(value string) string {
+	normalized := strings.ToLower(strings.TrimSpace(value))
+	return strings.TrimPrefix(normalized, "sha256:")
+}
+
+func resultHasReasonCode(result *types.VerificationResult, code types.ReasonCode) bool {
+	for _, reasonCode := range result.ReasonCodes {
+		if reasonCode == code {
+			return true
+		}
+	}
+	return false
 }
 
 // finalizeRequest completes the verification request lifecycle
@@ -459,12 +507,23 @@ func (k Keeper) finalizeRequest(
 	request *types.VerificationRequest,
 	result *types.VerificationResult,
 ) {
+	if ctx.ExecMode() != sdk.ExecModeFinalize ||
+		k.consensusSystemTxAuthorizer == nil ||
+		!k.consensusSystemTxAuthorizer(ctx) {
+		k.Logger(ctx).Error("refusing to finalize verification outside authorized consensus system transaction")
+		return
+	}
 	// Update request status based on result
 	switch result.Status {
 	case types.VerificationResultStatusSuccess, types.VerificationResultStatusPartial:
 		request.SetCompleted()
 	case types.VerificationResultStatusFailed:
-		request.SetFailed(fmt.Sprintf("%v", result.ReasonCodes))
+		if resultHasReasonCode(result, types.ReasonCodeStaleArtifactState) ||
+			resultHasReasonCode(result, types.ReasonCodeUnauthorizedArtifactState) {
+			request.SetRejected(fmt.Sprintf("%v", result.ReasonCodes))
+		} else {
+			request.SetFailed(fmt.Sprintf("%v", result.ReasonCodes))
+		}
 	case types.VerificationResultStatusError:
 		// Check if we should retry
 		config := DefaultVerificationPipelineConfig()
@@ -510,10 +569,12 @@ func (k Keeper) ProcessPendingVerifications(
 	ctx sdk.Context,
 	keyProvider ValidatorKeyProvider,
 ) []types.VerificationResult {
-	config := DefaultVerificationPipelineConfig()
-	startTime := time.Now()
 	results := make([]types.VerificationResult, 0)
+	if ctx.ExecMode() != sdk.ExecModeVoteExtension {
+		return results
+	}
 
+	config := DefaultVerificationPipelineConfig()
 	// Get pending requests
 	requests := k.GetPendingRequests(ctx, config.MaxRequestsPerBlock)
 	if len(requests) == 0 {
@@ -525,23 +586,10 @@ func (k Keeper) ProcessPendingVerifications(
 		"block_height", ctx.BlockHeight(),
 	)
 
-	for _, request := range requests {
-		// Check if we've exceeded block time budget
-		elapsed := time.Since(startTime).Milliseconds()
-		if elapsed >= config.MaxVerificationTimePerBlock {
-			k.Logger(ctx).Warn("verification time budget exceeded",
-				"elapsed_ms", elapsed,
-				"processed", len(results),
-				"remaining", len(requests)-len(results),
-			)
-			break
-		}
-
-		// Process the request
-		result := k.ProcessVerificationRequest(ctx, &request, keyProvider)
-		results = append(results, *result)
-	}
-
+	k.Logger(ctx).Debug("pending verification requests require signed inference receipts for staging",
+		"count", len(requests),
+		"block_height", ctx.BlockHeight(),
+	)
 	return results
 }
 
@@ -550,27 +598,23 @@ func (k Keeper) HandleVerificationTimeout(
 	ctx sdk.Context,
 	request *types.VerificationRequest,
 ) *types.VerificationResult {
-	config := DefaultVerificationPipelineConfig()
-
+	if request != nil {
+		k.Logger(ctx).Warn("verification request timeout left pending for consensus handling",
+			"request_id", request.RequestID,
+			"block_height", ctx.BlockHeight(),
+		)
+	}
+	if request == nil {
+		result := types.NewVerificationResult("invalid-timeout-request", "invalid-timeout-account", ctx.BlockTime(), ctx.BlockHeight())
+		result.SetError(types.ReasonCodeTimeout, "verification timeout processing requires a request")
+		return result
+	}
 	result := types.NewVerificationResult(
 		request.RequestID,
 		request.AccountAddress,
 		ctx.BlockTime(),
 		ctx.BlockHeight(),
 	)
-	result.SetError(types.ReasonCodeTimeout, "verification timed out")
-
-	// Check if we should retry
-	if request.IsRetryable(config.MaxRetries) {
-		request.IncrementRetry(ctx.BlockTime())
-		request.SetTimeout()
-		k.addToPendingQueue(ctx, request)
-	} else {
-		request.SetFailed("timeout after max retries")
-	}
-
-	_ = k.setVerificationRequest(ctx, request)
-	_ = k.StoreVerificationResult(ctx, result)
-
+	result.SetError(types.ReasonCodeTimeout, "verification timeout requires consensus-system-transaction agreement")
 	return result
 }

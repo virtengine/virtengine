@@ -1,5 +1,5 @@
 import type { CapturePayload, CaptureSession, DocumentType } from "./captureModels";
-import { createDeviceAttestation } from "./deviceAttestation";
+import { createDeviceAttestation, type DeviceAttestationProviderAdapter } from "./deviceAttestation";
 import { encryptPayload } from "./encryption";
 import { createId } from "../utils/id";
 import { hashString } from "../utils/hash";
@@ -13,10 +13,16 @@ export function initializeCaptureSession(documentType: DocumentType): CaptureSes
   };
 }
 
-export function finalizeCaptureSession(session: CaptureSession, appVersion: string): CaptureSession {
+export function finalizeCaptureSession(
+  session: CaptureSession,
+  appVersion: string,
+  attestationProvider?: DeviceAttestationProviderAdapter
+): CaptureSession {
   return {
     ...session,
-    deviceAttestation: session.deviceAttestation ?? createDeviceAttestation(appVersion)
+    deviceAttestation:
+      session.deviceAttestation ??
+      createDeviceAttestation(appVersion, "com.virtengine.veid", attestationProvider)
   };
 }
 

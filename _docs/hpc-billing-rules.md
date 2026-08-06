@@ -186,32 +186,32 @@ type HPCRewardRecord struct {
 
 ### States
 
-1. **Pending** - Initial state after creation
-2. **Finalized** - Metrics locked, ready for settlement
-3. **Disputed** - Under dispute investigation
-4. **Settled** - Successfully settled with escrow
-5. **Corrected** - Modified after dispute resolution
+1. **pending** - Initial state after creation
+2. **finalized** - Metrics locked, ready for settlement
+3. **disputed** - Under dispute investigation
+4. **settled** - Successfully settled with escrow
+5. **corrected** - Modified after dispute resolution
 
 ### State Transitions
 
 ```
                     ┌──────────────┐
-                    │   Pending    │
+                    │   pending    │
                     └──────┬───────┘
                            │ finalize()
                            ▼
                     ┌──────────────┐
-        ┌───────────│  Finalized   │───────────┐
+        ┌───────────│  finalized   │───────────┐
         │           └──────────────┘           │
         │ dispute()                     settle()│
         ▼                                       ▼
 ┌──────────────┐                        ┌──────────────┐
-│   Disputed   │                        │   Settled    │
+│   disputed   │                        │   settled    │
 └──────┬───────┘                        └──────────────┘
        │ resolve()
        ▼
 ┌──────────────┐
-│  Corrected   │
+│  corrected   │
 └──────────────┘
 ```
 
@@ -357,6 +357,33 @@ For special cases:
 - Submit `MsgSettleAccountingRecord` transaction
 - Requires appropriate authority
 
+### Finance Reconciliation Evidence
+
+When an HPC settlement pays a provider through the fiat off-ramp path, finance sign-off must link the scheduler-side job evidence to the settlement-side payout evidence. The minimum auditable chain is:
+
+```text
+job_id -> usage record -> invoice_id -> settlement_id -> payout_id -> conversion_id -> off_ramp_id
+```
+
+The required approval artifact is the `finance-evidence=` JSON emitted by:
+
+- `TestFiatConversionPipelineSuccess`
+- `TestFiatConversionReconciliation`
+
+Finance must archive the fields defined in [Finance Reconciliation Runbook](runbooks/finance-reconciliation-runbook.md), with special attention to:
+
+- `invoice_id`, `settlement_id`, and `payout_id` for the billing chain
+- `conversion_id`, `off_ramp_quote_id`, `off_ramp_id`, and `off_ramp_reference` for the provider transfer
+- `treasury_balance` and `expected_treasury_balance` for fee reconciliation
+- `payout_ledger_entry_types` and `conversion_audit_actions` for the audit trail
+
+HPC finance operations must not approve payout completion from scheduler data alone. A settlement is operationally complete only when the off-ramp evidence packet shows:
+
+- payout state `completed`
+- conversion state `payout_completed`
+- matching bridge and provider references
+- treasury balance equal to platform plus validator fee accrual for the payout
+
 ## Integration with Escrow
 
 ### Invoice Generation
@@ -370,7 +397,7 @@ invoice := billing.Invoice{
     ProviderAddress: record.ProviderAddress,
     LineItems:       generateLineItems(record),
     TotalAmount:     record.BillableAmount,
-    Status:          billing.InvoiceStatusPending,
+    Status:          billing.InvoiceStatus("pending"),
 }
 ```
 
@@ -458,8 +485,9 @@ GetJobSnapshots(ctx, jobID) ([]HPCUsageSnapshot, error)
 
 // Reconciliation
 CreateReconciliationRecord(ctx, record) error
-GetPendingReconciliations(ctx) ([]HPCReconciliationRecord, error)
 ```
+
+Keeper implementations also expose a queue lookup for outstanding reconciliation work items so operators can review unsettled comparisons before payout release.
 
 ### Provider Daemon Services
 
@@ -480,7 +508,7 @@ ReconcileJob(ctx, jobID) ([]ReconciliationDiscrepancy, error)
 
 ### Common Issues
 
-1. **Settlement stuck in Pending**
+1. **Settlement stuck in pending**
    - Check `AccountingFinalizationDelaySec` hasn't elapsed
    - Verify job completion was properly signaled
 

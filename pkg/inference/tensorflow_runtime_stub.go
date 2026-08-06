@@ -1,7 +1,7 @@
 // Copyright 2024-2026 VirtEngine Authors
 // SPDX-License-Identifier: Apache-2.0
 //
-// ML Runtime Stub - Fallback implementation when ML runtime is not available
+// ML Runtime Stub - Explicit non-production fallback when ML runtime is not available
 // VE-205: ML inference integration in Cosmos module
 
 //go:build !mlruntime
@@ -28,13 +28,13 @@ import (
 
 // TensorFlowRuntime is a stub implementation when the ML runtime is not
 // available. It provides the same interface but uses a deterministic
-// fallback scoring algorithm.
+// stub scoring algorithm when explicitly enabled.
 //
-// This allows the codebase to compile and run without ML framework dependencies,
-// which is useful for:
+// This allows the codebase to compile without ML framework dependencies.
+// Execution is blocked unless AllowFallbackToStub is explicitly set, which is
+// useful for:
 //   - Development and testing without ML dependencies
-//   - Environments where the inference sidecar is not available
-//   - CI/CD pipelines that don't need real inference
+//   - CI/CD pipelines that intentionally exercise non-production stub flows
 type TensorFlowRuntime struct {
 	// Configuration
 	config      TFRuntimeConfig
@@ -97,6 +97,10 @@ type TFRuntimeConfig struct {
 
 	// HealthCheckInterval is the interval between health checks
 	HealthCheckInterval time.Duration
+
+	// AllowFallbackToStub enables this stub runtime for explicit
+	// non-production development and tests.
+	AllowFallbackToStub bool
 }
 
 // DefaultTFRuntimeConfig returns the default runtime configuration
@@ -116,6 +120,7 @@ func DefaultTFRuntimeConfig() TFRuntimeConfig {
 		EnableDeterministicOps: true,
 		LogLevel:               2,
 		HealthCheckInterval:    30 * time.Second,
+		AllowFallbackToStub:    false,
 	}
 }
 
@@ -145,6 +150,9 @@ func (r *TensorFlowRuntime) Initialize() error {
 
 	if r.isInit.Load() {
 		return nil
+	}
+	if !r.config.AllowFallbackToStub {
+		return simulatedInferenceDisabledError("TensorFlow runtime stub")
 	}
 
 	// Validate configuration
@@ -178,9 +186,9 @@ func (r *TensorFlowRuntime) Initialize() error {
 	r.isHealthy.Store(true)
 	r.lastHealth.Store(time.Now().UnixNano())
 
-	r.logger.Printf("TensorFlow runtime (STUB) initialized: model=%s, hash=%s",
+	r.logger.Printf("TensorFlow runtime (stub opt-in) initialized: model=%s, hash=%s",
 		filepath.Base(r.config.ModelPath), r.modelHash[:16])
-	r.logger.Printf("WARNING: Using stub implementation - build with 'tensorflow' tag for real inference")
+	r.logger.Printf("WARNING: Using stub runtime because AllowFallbackToStub=true")
 
 	return nil
 }
@@ -189,9 +197,7 @@ func (r *TensorFlowRuntime) Initialize() error {
 // Inference (Stub)
 // ============================================================================
 
-// Run executes stub inference on the given features.
-// This provides deterministic output based on feature values,
-// simulating what a real model would produce.
+// Run executes deterministic non-production stub inference.
 func (r *TensorFlowRuntime) Run(features []float32) ([]float32, error) {
 	if !r.isInit.Load() {
 		return nil, fmt.Errorf("runtime not initialized")
@@ -233,8 +239,8 @@ func (r *TensorFlowRuntime) stubInference(features []float32) []float32 {
 		count++
 	}
 
-	// Weight document quality (indices 512-516)
-	docOffset := FaceEmbeddingDim
+	// Weight document quality.
+	docOffset := DocQualityOffset
 	if docOffset+DocQualityDim <= len(features) {
 		for i := 0; i < DocQualityDim; i++ {
 			sum += features[docOffset+i] * 1.5
@@ -242,8 +248,8 @@ func (r *TensorFlowRuntime) stubInference(features []float32) []float32 {
 		}
 	}
 
-	// Weight OCR features (indices 517-526)
-	ocrOffset := FaceEmbeddingDim + DocQualityDim
+	// Weight OCR features.
+	ocrOffset := OCROffset
 	if ocrOffset+OCRFieldsDim <= len(features) {
 		for i := 0; i < OCRFieldsDim; i++ {
 			sum += features[ocrOffset+i]

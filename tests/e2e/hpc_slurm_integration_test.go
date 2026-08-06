@@ -13,6 +13,7 @@ package e2e
 
 import (
 	"context"
+	"os"
 	"testing"
 	"time"
 
@@ -23,6 +24,7 @@ import (
 	"github.com/virtengine/virtengine/tests/e2e/fixtures"
 	"github.com/virtengine/virtengine/tests/e2e/mocks"
 	"github.com/virtengine/virtengine/testutil"
+	networktest "github.com/virtengine/virtengine/testutil/network"
 	hpctypes "github.com/virtengine/virtengine/x/hpc/types"
 )
 
@@ -50,11 +52,16 @@ type HPCSLURMIntegrationE2ETestSuite struct {
 	// Tracking
 	submittedJobs   []string
 	lifecycleEvents []pd.HPCJobLifecycleEvent
+	credentialDir   string
 }
 
 func TestHPCSLURMIntegration(t *testing.T) {
+	cfg := networktest.DefaultConfig(testutil.NewTestNetworkFixture)
+	cfg.NumValidators = 1
+	cfg.CleanupDir = false
+
 	suite.Run(t, &HPCSLURMIntegrationE2ETestSuite{
-		NetworkTestSuite: testutil.NewNetworkTestSuite(nil, &HPCSLURMIntegrationE2ETestSuite{}),
+		NetworkTestSuite: testutil.NewNetworkTestSuite(&cfg, &HPCSLURMIntegrationE2ETestSuite{}),
 	})
 }
 
@@ -72,6 +79,9 @@ func (s *HPCSLURMIntegrationE2ETestSuite) SetupSuite() {
 	s.credManager = NewMockCredentialManager()
 	s.submittedJobs = make([]string, 0)
 	s.lifecycleEvents = make([]pd.HPCJobLifecycleEvent, 0)
+	credentialDir, err := os.MkdirTemp("", "virtengine-hpc-creds-*")
+	s.Require().NoError(err)
+	s.credentialDir = credentialDir
 
 	// Create test cluster and offering
 	clusterConfig := fixtures.DefaultTestClusterConfig()
@@ -86,6 +96,9 @@ func (s *HPCSLURMIntegrationE2ETestSuite) SetupSuite() {
 func (s *HPCSLURMIntegrationE2ETestSuite) TearDownSuite() {
 	if s.hpcProvider != nil && s.hpcProvider.IsRunning() {
 		_ = s.hpcProvider.Stop()
+	}
+	if s.credentialDir != "" {
+		_ = os.RemoveAll(s.credentialDir)
 	}
 	s.NetworkTestSuite.TearDownSuite()
 }
@@ -109,7 +122,16 @@ func (s *HPCSLURMIntegrationE2ETestSuite) Test01_HPCProviderInitialization() {
 		config := s.createTestProviderConfig()
 
 		// Create the HPC provider
-		provider, err := pd.NewHPCProvider(config, s.chainReporter, s.auditLogger)
+		provider, err := pd.NewHPCProviderWithDeps(
+			config,
+			s.chainReporter,
+			s.auditLogger,
+			&pd.HPCProviderDeps{
+				BackendClients: &pd.HPCBackendClients{
+					SLURMClient: slurm_adapter.NewMockSLURMClient(),
+				},
+			},
+		)
 		s.Require().NoError(err)
 		s.NotNil(provider)
 
@@ -337,56 +359,48 @@ func (s *HPCSLURMIntegrationE2ETestSuite) Test99_Shutdown() {
 // =============================================================================
 
 func (s *HPCSLURMIntegrationE2ETestSuite) createTestProviderConfig() pd.HPCProviderConfig {
-	return pd.HPCProviderConfig{
-		HPC: pd.HPCConfig{
-			Enabled:         true,
-			SchedulerType:   pd.HPCSchedulerTypeSLURM,
-			ClusterID:       "e2e-test-cluster",
-			ProviderAddress: s.providerAddr,
-			SLURM: slurm_adapter.SLURMConfig{
-				ClusterName:       "e2e-slurm",
-				ControllerHost:    "localhost",
-				ControllerPort:    6817,
-				AuthMethod:        "munge",
-				DefaultPartition:  "default",
-				JobPollInterval:   5 * time.Second,
-				ConnectionTimeout: 10 * time.Second,
-				MaxRetries:        3,
-			},
-			JobService: pd.HPCJobServiceConfig{
-				JobPollInterval:     5 * time.Second,
-				JobTimeoutDefault:   1 * time.Hour,
-				MaxConcurrentJobs:   100,
-				EnableStateRecovery: false,
-			},
-			UsageReporting: pd.HPCUsageReportingConfig{
-				Enabled:        true,
-				ReportInterval: 10 * time.Second,
-				BatchSize:      10,
-				RetryOnFailure: true,
-			},
-			Audit: pd.HPCAuditConfig{
-				Enabled:           true,
-				LogJobEvents:      true,
-				LogSecurityEvents: true,
-				LogUsageReports:   true,
-			},
-		},
-		Chain: pd.HPCChainSubscriberConfig{
-			Enabled:                true,
-			SubscriptionBufferSize: 100,
-			ReconnectInterval:      5 * time.Second,
-			MaxReconnectAttempts:   0,
-		},
-		Settlement: pd.HPCSettlementConfig{
-			Enabled:           true,
-			BatchSize:         10,
-			BatchInterval:     5 * time.Second,
-			MaxRetries:        3,
-			RetryBackoff:      time.Second,
-			MaxPendingRecords: 1000,
-		},
+	config := pd.DefaultHPCProviderConfig()
+	config.HPC.Enabled = true
+	config.HPC.SchedulerType = pd.HPCSchedulerTypeSLURM
+	config.HPC.ClusterID = "e2e-test-cluster"
+	config.HPC.ProviderAddress = s.providerAddr
+	config.HPC.SLURM = slurm_adapter.SLURMConfig{
+		ClusterName:       "e2e-slurm",
+		ControllerHost:    "localhost",
+		ControllerPort:    6817,
+		AuthMethod:        "munge",
+		DefaultPartition:  "default",
+		JobPollInterval:   5 * time.Second,
+		ConnectionTimeout: 10 * time.Second,
+		MaxRetries:        3,
 	}
+	config.HPC.JobService.JobPollInterval = 5 * time.Second
+	config.HPC.JobService.JobTimeoutDefault = time.Hour
+	config.HPC.JobService.MaxConcurrentJobs = 100
+	config.HPC.JobService.EnableStateRecovery = false
+	config.HPC.UsageReporting.Enabled = true
+	config.HPC.UsageReporting.ReportInterval = time.Minute
+	config.HPC.UsageReporting.BatchSize = 10
+	config.HPC.UsageReporting.RetryOnFailure = true
+	config.HPC.Routing.Enabled = false
+	config.HPC.Audit.Enabled = true
+	config.HPC.Audit.LogJobEvents = true
+	config.HPC.Audit.LogSecurityEvents = true
+	config.HPC.Audit.LogUsageReports = true
+	config.Chain.Enabled = true
+	config.Chain.SubscriptionBufferSize = 100
+	config.Chain.ReconnectInterval = 5 * time.Second
+	config.Chain.MaxReconnectAttempts = 0
+	config.Settlement.Enabled = true
+	config.Settlement.BatchSize = 10
+	config.Settlement.BatchInterval = 5 * time.Second
+	config.Settlement.MaxRetries = 3
+	config.Settlement.RetryBackoff = time.Second
+	config.Settlement.MaxPendingRecords = 1000
+	config.Credentials.Manager.StorageDir = s.credentialDir
+	config.Credentials.Manager.AllowUnencrypted = true
+	config.Credentials.RequireEncryption = false
+	return config
 }
 
 func (s *HPCSLURMIntegrationE2ETestSuite) createTestJob(jobID string) *hpctypes.HPCJob {

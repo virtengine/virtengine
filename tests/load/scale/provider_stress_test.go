@@ -533,13 +533,9 @@ func BenchmarkConcurrentBidding(b *testing.B) {
 
 // TestProviderStressBaseline tests provider operations at 1k scale
 func TestProviderStressBaseline(t *testing.T) {
-	if testing.Short() {
-		t.Skip("Skipping provider stress test in short mode")
-	}
-
-	providerCount := 100 // 100 for CI, use 1000 for full test
-	eventRate := 50      // 50 events/sec
-	testDuration := 10 * time.Second
+	providerCount := shortScaleInt(25, 100) // 100 for CI, use 1000 for full test
+	eventRate := shortScaleInt(20, 50)      // 50 events/sec
+	testDuration := shortScaleDuration(3*time.Second, 10*time.Second)
 
 	t.Logf("=== Provider Stress Baseline Test ===")
 	t.Logf("Providers: %d, Event rate: %d/sec, Duration: %v", providerCount, eventRate, testDuration)
@@ -576,7 +572,8 @@ func TestProviderStressBaseline(t *testing.T) {
 	t.Logf("Average bid latency: %v", avgLatency)
 
 	// Assertions
-	require.Greater(t, bidsPerSecond, baseline.MinBidsPerSecond/10,
+	minBidsPerSecond := baseline.MinBidsPerSecond * float64(providerCount) / float64(baseline.ProviderCount)
+	require.Greater(t, bidsPerSecond, minBidsPerSecond,
 		"Bids per second should meet scaled threshold")
 	require.Less(t, droppedEvents, int64(baseline.MaxEventBacklog),
 		"Dropped events should be minimal")
@@ -584,13 +581,9 @@ func TestProviderStressBaseline(t *testing.T) {
 
 // TestConnectionPoolStress tests connection pool under stress
 func TestConnectionPoolStress(t *testing.T) {
-	if testing.Short() {
-		t.Skip("Skipping connection pool stress test in short mode")
-	}
-
-	poolSize := 50
-	workerCount := 200
-	duration := 5 * time.Second
+	poolSize := shortScaleInt(12, 50)
+	workerCount := shortScaleInt(40, 200)
+	duration := shortScaleDuration(2*time.Second, 5*time.Second)
 
 	t.Logf("=== Connection Pool Stress Test ===")
 	t.Logf("Pool size: %d, Workers: %d, Duration: %v", poolSize, workerCount, duration)
@@ -643,12 +636,8 @@ func TestConnectionPoolStress(t *testing.T) {
 
 // TestProviderConcurrentBidding tests many providers bidding concurrently
 func TestProviderConcurrentBidding(t *testing.T) {
-	if testing.Short() {
-		t.Skip("Skipping concurrent bidding test in short mode")
-	}
-
-	providerCount := 50
-	ordersToProcess := 1000
+	providerCount := shortScaleInt(10, 50)
+	ordersToProcess := shortScaleInt(200, 1000)
 
 	t.Logf("=== Provider Concurrent Bidding Test ===")
 	t.Logf("Providers: %d, Orders: %d", providerCount, ordersToProcess)
@@ -661,21 +650,25 @@ func TestProviderConcurrentBidding(t *testing.T) {
 	start := time.Now()
 
 	var wg sync.WaitGroup
-	ordersPerWorker := ordersToProcess / runtime.NumCPU()
+	workers := runtime.NumCPU()
 
-	for w := 0; w < runtime.NumCPU(); w++ {
+	for w := 0; w < workers; w++ {
+		startOrder, endOrder := workerRange(ordersToProcess, workers, w)
+		if startOrder >= endOrder {
+			continue
+		}
 		wg.Add(1)
-		go func(_ int, startOrder int) {
+		go func(startOrder, endOrder int) {
 			defer wg.Done()
-			for i := 0; i < ordersPerWorker; i++ {
+			for i := startOrder; i < endOrder; i++ {
 				event := &ProviderEvent{
 					Type:      "order_created",
-					OrderID:   safeUint64FromIntValue(startOrder + i),
+					OrderID:   safeUint64FromIntValue(i),
 					Timestamp: time.Now(),
 				}
 				pool.BroadcastEvent(event)
 			}
-		}(w, w*ordersPerWorker)
+		}(startOrder, endOrder)
 	}
 
 	wg.Wait()
@@ -699,19 +692,16 @@ func TestProviderConcurrentBidding(t *testing.T) {
 
 // TestProviderBackpressure tests provider backpressure handling
 func TestProviderBackpressure(t *testing.T) {
-	if testing.Short() {
-		t.Skip("Skipping backpressure test in short mode")
-	}
-
 	// Create a provider with limited queue
 	provider := NewMockProvider(0)
-	provider.eventQueue = make(chan *ProviderEvent, 100) // Small queue
-	provider.BidDelay = 50 * time.Millisecond            // Slow processing
+	queueSize := shortScaleInt(40, 100)
+	provider.eventQueue = make(chan *ProviderEvent, queueSize) // Small queue
+	provider.BidDelay = 50 * time.Millisecond                  // Slow processing
 	provider.Start()
 	defer provider.Stop()
 
 	// Flood with events
-	const eventCount = 1000
+	eventCount := shortScaleInt(200, 1000)
 	var accepted, rejected int
 
 	start := time.Now()
@@ -730,7 +720,7 @@ func TestProviderBackpressure(t *testing.T) {
 	floodTime := time.Since(start)
 
 	// Wait for processing
-	time.Sleep(time.Second)
+	time.Sleep(shortScaleDuration(500*time.Millisecond, time.Second))
 
 	total, failed, _ := provider.GetStats()
 
@@ -742,18 +732,14 @@ func TestProviderBackpressure(t *testing.T) {
 	// Backpressure should cause some rejections but also accept queue capacity
 	require.Greater(t, rejected, 0, "Should reject some events under pressure")
 	require.Greater(t, accepted, 0, "Should accept at least queue capacity")
-	require.LessOrEqual(t, accepted, 100+10, "Accepted should be near queue capacity")
+	require.LessOrEqual(t, accepted, queueSize+10, "Accepted should be near queue capacity")
 }
 
 // TestProviderResourceContention tests resource contention under load
 func TestProviderResourceContention(t *testing.T) {
-	if testing.Short() {
-		t.Skip("Skipping resource contention test in short mode")
-	}
-
-	providerCount := 20
-	sharedResourceCount := 5
-	testDuration := 5 * time.Second
+	providerCount := shortScaleInt(8, 20)
+	sharedResourceCount := shortScaleInt(2, 5)
+	testDuration := shortScaleDuration(2*time.Second, 5*time.Second)
 
 	t.Logf("=== Provider Resource Contention Test ===")
 	t.Logf("Providers: %d, Shared resources: %d", providerCount, sharedResourceCount)

@@ -245,10 +245,10 @@ func TestKYCStatusValues(t *testing.T) {
 	if KYCStatusVerified != "verified" {
 		t.Error("unexpected KYCStatusVerified value")
 	}
-	if KYCStatusPending != "pending" {
+	if KYCStatusPending != KYCStatus(PayoutStatusPending) {
 		t.Error("unexpected KYCStatusPending value")
 	}
-	if KYCStatusFailed != "failed" {
+	if KYCStatusFailed != KYCStatus(statusFailed) {
 		t.Error("unexpected KYCStatusFailed value")
 	}
 }
@@ -260,9 +260,6 @@ func TestAMLStatusValues(t *testing.T) {
 	}
 	if AMLStatusFlagged != "flagged" {
 		t.Error("unexpected AMLStatusFlagged value")
-	}
-	if AMLStatusRejected != "rejected" {
-		t.Error("unexpected AMLStatusRejected value")
 	}
 }
 

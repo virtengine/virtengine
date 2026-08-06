@@ -1,21 +1,35 @@
-# Market Module API Reference
+# Market and Marketplace API Reference
 
-The Market module manages the decentralized marketplace for compute resources including orders, bids, and leases.
+VirtEngine currently exposes two related but distinct market surfaces:
 
-## Overview
+- `x/market` legacy REST and gRPC order, bid, and lease APIs.
+- `x/marketplace` gRPC query APIs for offering price calculation and allocation lookup.
 
-The Market module enables:
-- Order creation and management
-- Bid submission and acceptance
-- Lease lifecycle management
-- Escrow integration for payments
-- Provider-tenant matching
+This page keeps those surfaces separate so the docs only claim transport routes that
+the current binary actually serves.
 
-## Base URL
+## Transport Summary
 
-```
+| Surface | Module | Boot Status | HTTP gateway | Primary docs |
+|---------|--------|-------------|--------------|--------------|
+| Market orders, bids, leases | `x/market` | Booting | Yes | OpenAPI `paths` and this page |
+| Marketplace pricing and allocations | `x/marketplace` | Booting | No generated gateway handlers in this build | gRPC-only section below |
+
+## Market REST Base URL
+
+```text
 /virtengine/market/v2beta1
 ```
+
+## Marketplace gRPC Service
+
+```text
+virtengine.marketplace.v1.Query
+```
+
+The marketplace query service is registered on the gRPC server at boot. Its
+gateway registration path is present, but the generated HTTP handlers are not
+emitted in this build, so these methods are not exposed as REST paths.
 
 ## Authentication Requirements
 
@@ -26,557 +40,177 @@ The Market module enables:
 | Bid operations | Provider certificate |
 | Lease management | Wallet signature |
 
----
-
-## Query Endpoints
+## Legacy Market REST Endpoints
 
 ### List Orders
-
-Queries orders with filters.
 
 ```http
 GET /virtengine/market/v2beta1/orders/list
 ```
 
-**Parameters:**
-
-| Name | In | Type | Required | Description |
-|------|------|------|----------|-------------|
-| `filters.owner` | query | string | No | Filter by owner address |
-| `filters.state` | query | string | No | Filter by state (`open`, `active`, `closed`) |
-| `filters.dseq` | query | string | No | Filter by deployment sequence |
-| `pagination.limit` | query | integer | No | Max results (default: 100) |
-| `pagination.key` | query | string | No | Pagination key |
-
-**Response:**
-
-```json
-{
-  "orders": [
-    {
-      "order_id": {
-        "owner": "virtengine1abc...",
-        "dseq": "12345",
-        "gseq": 1,
-        "oseq": 1
-      },
-      "state": "open",
-      "spec": {
-        "name": "web-service",
-        "requirements": {
-          "cpu": { "units": 1000 },
-          "memory": { "size": "512Mi" },
-          "storage": [{ "size": "1Gi" }]
-        }
-      },
-      "created_at": "2024-01-01T00:00:00Z"
-    }
-  ],
-  "pagination": {
-    "next_key": "base64...",
-    "total": "100"
-  }
-}
-```
-
-**Example:**
-
-```bash
-# List all open orders
-curl "https://api.virtengine.com/virtengine/market/v2beta1/orders/list?filters.state=open"
-
-# List orders by owner
-curl "https://api.virtengine.com/virtengine/market/v2beta1/orders/list?filters.owner=virtengine1abc..."
-```
-
----
-
-### Get Order
-
-Queries details of a specific order.
-
-```http
-GET /virtengine/market/v2beta1/orders/info
-```
-
-**Parameters:**
-
-| Name | In | Type | Required | Description |
-|------|------|------|----------|-------------|
-| `id.owner` | query | string | Yes | Owner address |
-| `id.dseq` | query | string | Yes | Deployment sequence |
-| `id.gseq` | query | integer | Yes | Group sequence |
-| `id.oseq` | query | integer | Yes | Order sequence |
-
-**Response:**
-
-```json
-{
-  "order": {
-    "order_id": {
-      "owner": "virtengine1abc...",
-      "dseq": "12345",
-      "gseq": 1,
-      "oseq": 1
-    },
-    "state": "open",
-    "spec": {
-      "name": "web-service",
-      "requirements": {
-        "cpu": { "units": 1000 },
-        "memory": { "size": "512Mi" },
-        "storage": [{ "size": "1Gi" }]
-      },
-      "resources": [
-        {
-          "resources": {
-            "cpu": { "units": 1000 },
-            "memory": { "size": "512Mi" }
-          },
-          "count": 1,
-          "price": { "denom": "uvirt", "amount": "1000" }
-        }
-      ]
-    },
-    "created_at": "2024-01-01T00:00:00Z"
-  }
-}
-```
-
-**Example:**
-
-```bash
-curl "https://api.virtengine.com/virtengine/market/v2beta1/orders/info?id.owner=virtengine1abc...&id.dseq=12345&id.gseq=1&id.oseq=1"
-```
-
----
+Filters orders by owner or state.
 
 ### List Bids
-
-Queries bids with filters.
 
 ```http
 GET /virtengine/market/v2beta1/bids/list
 ```
 
-**Parameters:**
-
-| Name | In | Type | Required | Description |
-|------|------|------|----------|-------------|
-| `filters.owner` | query | string | No | Filter by order owner |
-| `filters.dseq` | query | string | No | Filter by deployment sequence |
-| `filters.provider` | query | string | No | Filter by provider address |
-| `filters.state` | query | string | No | Filter by state |
-| `pagination.limit` | query | integer | No | Max results |
-
-**Response:**
-
-```json
-{
-  "bids": [
-    {
-      "bid_id": {
-        "owner": "virtengine1abc...",
-        "dseq": "12345",
-        "gseq": 1,
-        "oseq": 1,
-        "provider": "virtengine1provider..."
-      },
-      "state": "open",
-      "price": {
-        "denom": "uvirt",
-        "amount": "950"
-      },
-      "created_at": "2024-01-01T00:01:00Z"
-    }
-  ],
-  "pagination": {
-    "next_key": "base64...",
-    "total": "5"
-  }
-}
-```
-
----
-
-### Get Bid
-
-Queries details of a specific bid.
-
-```http
-GET /virtengine/market/v2beta1/bids/info
-```
-
-**Parameters:**
-
-| Name | In | Type | Required | Description |
-|------|------|------|----------|-------------|
-| `id.owner` | query | string | Yes | Order owner address |
-| `id.dseq` | query | string | Yes | Deployment sequence |
-| `id.gseq` | query | integer | Yes | Group sequence |
-| `id.oseq` | query | integer | Yes | Order sequence |
-| `id.provider` | query | string | Yes | Provider address |
-
----
+Filters bids by order owner, deployment sequence, provider, or state.
 
 ### List Leases
-
-Queries leases with filters.
 
 ```http
 GET /virtengine/market/v2beta1/leases/list
 ```
 
-**Parameters:**
+Filters leases by owner, provider, or state.
 
-| Name | In | Type | Required | Description |
-|------|------|------|----------|-------------|
-| `filters.owner` | query | string | No | Filter by owner |
-| `filters.provider` | query | string | No | Filter by provider |
-| `filters.state` | query | string | No | Filter by state (`active`, `closed`, `insufficient_funds`) |
-| `pagination.limit` | query | integer | No | Max results |
-
-**Response:**
-
-```json
-{
-  "leases": [
-    {
-      "lease_id": {
-        "owner": "virtengine1abc...",
-        "dseq": "12345",
-        "gseq": 1,
-        "oseq": 1,
-        "provider": "virtengine1provider..."
-      },
-      "state": "active",
-      "price": {
-        "denom": "uvirt",
-        "amount": "950"
-      },
-      "escrow_payment": {
-        "account_id": "escrow_123",
-        "payment_id": "pay_456",
-        "balance": { "denom": "uvirt", "amount": "10000" },
-        "withdrawn": { "denom": "uvirt", "amount": "500" }
-      },
-      "created_at": "2024-01-01T00:02:00Z"
-    }
-  ],
-  "pagination": {
-    "next_key": "base64...",
-    "total": "10"
-  }
-}
-```
-
----
-
-### Get Lease
-
-Queries details of a specific lease.
-
-```http
-GET /virtengine/market/v2beta1/leases/info
-```
-
-**Parameters:**
-
-| Name | In | Type | Required | Description |
-|------|------|------|----------|-------------|
-| `id.owner` | query | string | Yes | Owner address |
-| `id.dseq` | query | string | Yes | Deployment sequence |
-| `id.gseq` | query | integer | Yes | Group sequence |
-| `id.oseq` | query | integer | Yes | Order sequence |
-| `id.provider` | query | string | Yes | Provider address |
-
----
-
-### Get Parameters
-
-Queries the module parameters.
-
-```http
-GET /virtengine/market/v2beta1/params
-```
-
-**Response:**
-
-```json
-{
-  "params": {
-    "bid_min_deposit": { "denom": "uvirt", "amount": "500000" },
-    "order_max_bids": 20,
-    "bid_duration": "86400s",
-    "order_min_duration": "3600s"
-  }
-}
-```
-
----
-
-## Transaction Messages
-
-### Create Bid
-
-Creates a bid on an open order (provider only).
-
-```protobuf
-message MsgCreateBid {
-  OrderID order_id = 1;
-  string provider = 2;
-  cosmos.base.v1beta1.DecCoin price = 3;
-  cosmos.base.v1beta1.Coin deposit = 4;
-}
-```
-
-**Example (CLI):**
+### Example
 
 ```bash
-virtengine tx market create-bid \
-  --owner=virtengine1abc... \
-  --dseq=12345 \
-  --gseq=1 \
-  --oseq=1 \
-  --price=950uvirt \
-  --deposit=500000uvirt \
-  --from provider-key \
-  --chain-id virtengine-1
+curl "https://api.virtengine.com/virtengine/market/v2beta1/orders/list?filters.state=open"
 ```
 
-**Example (Go):**
+## Marketplace gRPC Query Methods
 
-```go
-msg := &market.MsgCreateBid{
-    OrderId: market.OrderID{
-        Owner: ownerAddr,
-        Dseq:  12345,
-        Gseq:  1,
-        Oseq:  1,
-    },
-    Provider: providerAddr,
-    Price:    sdk.NewDecCoin("uvirt", sdk.NewInt(950)),
-    Deposit:  sdk.NewCoin("uvirt", sdk.NewInt(500000)),
-}
+### OfferingPrice
+
+Calculates the price quote for an on-chain offering.
+
+```text
+grpc: virtengine.marketplace.v1.Query/OfferingPrice
 ```
 
----
+**Request fields**
 
-### Close Bid
+| Field | Type | Required | Notes |
+|------|------|----------|-------|
+| `offering_id` | string | Yes | Provider/sequence offering identifier |
+| `resource_units` | `map[string]uint64` | No | Overrides keyed by resource type such as `cpu`, `ram`, `storage`, `gpu`, `network` |
+| `quantity` | uint32 | No | Defaults to `1` when `0` or omitted |
 
-Closes an open bid.
+**Response fields**
 
-```protobuf
-message MsgCloseBid {
-  BidID bid_id = 1;
-}
-```
+| Field | Type | Notes |
+|------|------|-------|
+| `total` | `Coin` | Final quoted amount |
 
----
+**Errors**
 
-### Create Lease
+| gRPC status | Module code | Condition |
+|------------|-------------|-----------|
+| `INVALID_ARGUMENT` | n/a | Empty request, missing `offering_id`, malformed offering ID, or invalid pricing inputs |
+| `NOT_FOUND` | `marketplace:2200` | Offering not found |
+| `INVALID_ARGUMENT` | `marketplace:2239` | Price calculation rejected the supplied resource units |
 
-Creates a lease from an accepted bid (called internally when bid is accepted).
-
-```protobuf
-message MsgCreateLease {
-  BidID bid_id = 1;
-}
-```
-
----
-
-### Withdraw Lease
-
-Withdraws accumulated payment from a lease (provider only).
-
-```protobuf
-message MsgWithdrawLease {
-  LeaseID lease_id = 1;
-}
-```
-
-**Example (CLI):**
+**Example**
 
 ```bash
-virtengine tx market withdraw-lease \
-  --owner=virtengine1abc... \
-  --dseq=12345 \
-  --gseq=1 \
-  --oseq=1 \
-  --provider=virtengine1provider... \
-  --from provider-key \
-  --chain-id virtengine-1
+grpcurl -plaintext \
+  -d '{"offering_id":"virtengine1provider.../7","resource_units":{"cpu":8,"ram":32768},"quantity":2}' \
+  localhost:9090 \
+  virtengine.marketplace.v1.Query/OfferingPrice
 ```
 
----
+### AllocationsByCustomer
 
-### Close Lease
+Returns allocation summaries for a customer address.
 
-Closes an active lease.
-
-```protobuf
-message MsgCloseLease {
-  LeaseID lease_id = 1;
-}
+```text
+grpc: virtengine.marketplace.v1.Query/AllocationsByCustomer
 ```
 
----
+**Request fields**
 
-## Order States
+| Field | Type | Required |
+|------|------|----------|
+| `customer_address` | string | Yes |
+| `pagination.offset` | uint64 | No |
+| `pagination.limit` | uint64 | No |
 
-| State | Description |
-|-------|-------------|
-| `open` | Order is accepting bids |
-| `active` | Order has an active lease |
-| `closed` | Order is closed |
+**Response fields**
 
-## Bid States
+Each allocation entry contains:
 
-| State | Description |
-|-------|-------------|
-| `open` | Bid is pending acceptance |
-| `active` | Bid was accepted, lease created |
-| `lost` | Bid was not selected |
-| `closed` | Bid was closed/withdrawn |
+- `allocation_id`
+- `order_id`
+- `offering_id`
+- `provider_address`
+- `customer_address`
+- `state`
+- `accepted_price`
+- `created_at`
+- `updated_at`
+- `terminated_at`
+- `state_reason`
 
-## Lease States
+**Errors**
 
-| State | Description |
-|-------|-------------|
-| `active` | Lease is active, workloads running |
-| `insufficient_funds` | Escrow balance depleted |
-| `closed` | Lease terminated |
+| gRPC status | Module code | Condition |
+|------------|-------------|-----------|
+| `INVALID_ARGUMENT` | n/a | Empty request or missing `customer_address` |
 
----
-
-## Error Codes
-
-| Code | Message | Category | Action |
-|------|---------|----------|--------|
-| market:1400 | Invalid order | validation | Fix order parameters |
-| market:1401 | Order not found | not_found | Verify order ID |
-| market:1402 | Order already exists | conflict | Use existing order |
-| market:1410 | Invalid bid | validation | Fix bid parameters |
-| market:1411 | Bid not found | not_found | Verify bid ID |
-| market:1420 | Invalid lease | validation | Fix lease parameters |
-| market:1421 | Lease not found | not_found | Verify lease ID |
-| market:1430 | Unauthorized | unauthorized | Check permissions |
-| market:1440 | Insufficient deposit | validation | Increase deposit |
-
----
-
-## Code Examples
-
-### Go: Query Orders
-
-```go
-package main
-
-import (
-    "context"
-    "fmt"
-    
-    market "github.com/virtengine/virtengine/sdk/go/node/market/v2beta1"
-    "google.golang.org/grpc"
-)
-
-func main() {
-    conn, _ := grpc.Dial("api.virtengine.com:9090", grpc.WithInsecure())
-    defer conn.Close()
-    
-    client := market.NewQueryClient(conn)
-    
-    // Query open orders
-    resp, err := client.Orders(context.Background(), &market.QueryOrdersRequest{
-        Filters: market.OrderFilters{
-            State: "open",
-        },
-    })
-    if err != nil {
-        panic(err)
-    }
-    
-    fmt.Printf("Found %d open orders\n", len(resp.Orders))
-    for _, order := range resp.Orders {
-        fmt.Printf("  Order: %s/%d\n", order.OrderId.Owner, order.OrderId.Dseq)
-    }
-}
-```
-
-### TypeScript: Create Bid
-
-```typescript
-import { VirtEngineClient } from '@virtengine/sdk';
-
-const client = new VirtEngineClient({
-  rpcEndpoint: 'https://api.virtengine.com',
-  wallet: providerWallet,
-});
-
-// Create bid on order
-const result = await client.market.createBid({
-  orderId: {
-    owner: 'virtengine1abc...',
-    dseq: '12345',
-    gseq: 1,
-    oseq: 1,
-  },
-  price: { denom: 'uvirt', amount: '950' },
-  deposit: { denom: 'uvirt', amount: '500000' },
-});
-
-console.log('Bid created:', result.bidId);
-```
-
-### cURL: List Leases
+**Example**
 
 ```bash
-# List all active leases for a provider
-curl "https://api.virtengine.com/virtengine/market/v2beta1/leases/list?filters.provider=virtengine1provider...&filters.state=active"
+grpcurl -plaintext \
+  -d '{"customer_address":"virtengine1customer...","pagination":{"limit":25}}' \
+  localhost:9090 \
+  virtengine.marketplace.v1.Query/AllocationsByCustomer
 ```
 
----
+### AllocationsByProvider
 
-## Marketplace Flow
+Returns allocation summaries for a provider address.
 
-```
-┌──────────┐     ┌──────────┐     ┌──────────┐     ┌──────────┐
-│  Tenant  │     │  Market  │     │ Provider │     │  Escrow  │
-└────┬─────┘     └────┬─────┘     └────┬─────┘     └────┬─────┘
-     │                │                │                │
-     │ 1. Create      │                │                │
-     │   Deployment   │                │                │
-     │───────────────>│                │                │
-     │                │                │                │
-     │                │ 2. Order       │                │
-     │                │   Created      │                │
-     │                │───────────────>│                │
-     │                │                │                │
-     │                │ 3. Submit Bid  │                │
-     │                │<───────────────│                │
-     │                │                │                │
-     │ 4. Accept Bid  │                │                │
-     │───────────────>│                │                │
-     │                │                │                │
-     │                │ 5. Create      │                │
-     │                │   Lease        │                │
-     │                │───────────────>│                │
-     │                │                │                │
-     │                │ 6. Create      │                │
-     │                │   Escrow       │                │
-     │                │────────────────────────────────>│
-     │                │                │                │
-     │                │                │ 7. Deploy      │
-     │                │                │   Workloads    │
-     │                │                │                │
+```text
+grpc: virtengine.marketplace.v1.Query/AllocationsByProvider
 ```
 
----
+**Request fields**
+
+| Field | Type | Required |
+|------|------|----------|
+| `provider_address` | string | Yes |
+| `pagination.offset` | uint64 | No |
+| `pagination.limit` | uint64 | No |
+
+**Errors**
+
+| gRPC status | Module code | Condition |
+|------------|-------------|-----------|
+| `INVALID_ARGUMENT` | n/a | Empty request or missing `provider_address` |
+
+**Example**
+
+```bash
+grpcurl -plaintext \
+  -d '{"provider_address":"virtengine1provider...","pagination":{"limit":25}}' \
+  localhost:9090 \
+  virtengine.marketplace.v1.Query/AllocationsByProvider
+```
+
+## State and Error Notes
+
+### Allocation State
+
+`state` in the marketplace allocation response is the raw
+`virtengine.marketplace.v1.AllocationState` gRPC enum value.
+
+### Error Handling
+
+The marketplace query service mixes plain gRPC status failures with module
+sentinel errors:
+
+- Request-shape failures return standard gRPC `INVALID_ARGUMENT`.
+- Missing offerings return `marketplace:2200`.
+- Invalid pricing calculations return `marketplace:2239`.
+
+See [Error Handling](../ERROR_HANDLING.md) for the shared error model.
 
 ## See Also
 
-- [Deployment Module](./deployment.md) - Deployment management
-- [Escrow Module](./escrow.md) - Payment escrow
-- [Provider Module](./provider.md) - Provider registration
-- [Provider Daemon](./provider-daemon.md) - Provider services
+- [HPC API Reference](./hpc.md) - Workload template query surface used by HPC placement flows
+- [Escrow Module](./escrow.md) - Payment escrow and settlement context
+- [Provider Module](./provider.md) - Provider lifecycle and discovery

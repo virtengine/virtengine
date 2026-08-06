@@ -1,0 +1,75 @@
+T5-33 derived feature validator authorization
+Payload: 270a030ecc76f1a38429eb4fb14f0612b36f567e
+Branch: ve/prototype-t5-platform
+Platform: windows/amd64
+Toolchains: go version go1.25.8 windows/amd64; gcc.exe (MinGW-W64 x86_64-ucrt-posix-seh, built by Brecht Sanders, r3) 16.1.0; git version 2.51.2.windows.1
+
+Epoch ancestry:
+- Frozen baseline: 79391a3df86d85522b92e0400c6904971ecbe65d
+- Planning SHA: 1436723bd78980aa0388dbe9fcfa24dda939c54a
+- Intake epoch: 1
+- Intake base: 5587c384f634552c3a2dd7181ca49cafa4da1984
+- Prior accepted payload: null
+- Payload head: 270a030ecc76f1a38429eb4fb14f0612b36f567e
+- Next checkpoint: null
+- Payload descends from the intake base.
+- git rev-list --reverse --topo-order reports exactly 64 commits from the intake base to the payload.
+- Complete all-parent changed-path accounting reports exactly 163 paths, including integration-history parent diffs.
+- Honest T5 ownership covers 139 of 163 complete changed paths and leaves exactly 24 inherited integration/T4 paths uncovered.
+
+Derived feature validator authorization:
+- MsgUpdateDerivedFeatures parses the sender and then requires Keeper.IsValidator before target parsing, update construction, or wallet mutation.
+- Nil staking, non-validator, unbonding, and unbonded senders receive ErrValidatorOnly without derived-feature mutation.
+- A bonded validator can update derived features, and the persisted ComputedBy provenance is the validator account address.
+
+Process environment:
+- VEID_ZK_PARAMS_DIR=C:\Users\pavil\AppData\Local\Temp\virtengine-t5-zk-params-lf
+- External directory exists.
+- params_metadata.json: 3397 bytes, 0 CR bytes, SHA-256 a4e05914f7a3b5cc5914a535ee6c6ea61ebcffbbafcce9a824394c0397766462
+
+Command: C:\Users\pavil\AppData\Local\VirtEngine\toolchains\go1.25.8\go\bin\go.exe -C C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t5 test -count=1 ./x/veid/keeper -run 'TestMsgServerTestSuite/TestMsgUpdateDerivedFeatures_RequiresBondedValidator$'
+Output: ok github.com/virtengine/virtengine/x/veid/keeper 0.632s
+Wall time: 121.260s
+Exit code: 0
+
+Command: C:\Users\pavil\AppData\Local\VirtEngine\toolchains\go1.25.8\go\bin\go.exe -C C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t5 test -count=1 ./x/veid/keeper ./x/veid/types
+Output:
+- ok github.com/virtengine/virtengine/x/veid/keeper 83.027s
+- ok github.com/virtengine/virtengine/x/veid/types 0.893s
+Wall time: 134.037s
+Exit code: 0
+
+Command: C:\Users\pavil\AppData\Local\VirtEngine\toolchains\go1.25.8\go\bin\go.exe -C C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t5 vet ./x/veid/keeper ./x/veid/types
+Output: no diagnostics
+Wall time: 128.989s
+Exit code: 0
+
+Process environment:
+- VEID_ZK_PARAMS_DIR=C:\Users\pavil\AppData\Local\Temp\virtengine-t5-zk-params-lf
+- CGO_ENABLED=1
+- CC=C:\Users\pavil\AppData\Local\Microsoft\WinGet\Packages\BrechtSanders.WinLibs.POSIX.UCRT_Microsoft.Winget.Source_8wekyb3d8bbwe\mingw64\bin\gcc.exe
+Command: C:\Users\pavil\AppData\Local\VirtEngine\toolchains\go1.25.8\go\bin\go.exe -C C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t5 test -race -count=1 ./x/veid/keeper -run 'TestMsgServerTestSuite/TestMsgUpdateDerivedFeatures_RequiresBondedValidator$'
+Output: ok github.com/virtengine/virtengine/x/veid/keeper 2.715s; no race detector diagnostics
+Wall time: 59.270s
+Exit code: 0
+
+Audit:
+- No blocker or high-severity findings.
+- Payload commit diff --check passed with no errors.
+
+Ownership and blockers:
+- Honest T5 owned_paths claim only T5 evidence/handoff paths and T5-owned data-vault, fundauth, organization-contract, platform-security, provider-daemon contract, encryption, MFA, privileged-role, and VEID surfaces.
+- The same 24 inherited integration/T4 paths have no active T5 generated-file lease, so this checkpoint remains untagged and not intake eligible.
+- T4 must register the prerequisite VEID evidence reference migration and then separately register the signed evidence payload cutover using D4 children 05 through 08.
+- T4 must mount and wire the persistent FundAuthorization store and keeper.
+- Production erasure remains external: it requires durable transactional erasure storage, production storage-deletion and KMS-destruction adapters, independent receipt signers and key resolver, consent, hold, backup, and finalization authorities, and authenticated restore-manifest authority.
+- generated_hashes is {} because T5-33 changes no generated artifact.
+- migrations is [] because T4 registration is absent.
+
+Validation:
+- Strict JSON parse, schema-v2 shape, and integration-control validation: passed.
+- Epoch range validation: 64 exact commits and 163 exact complete changed paths from 5587c384f634552c3a2dd7181ca49cafa4da1984 through 270a030ecc76f1a38429eb4fb14f0612b36f567e.
+- Ownership validation: 139 covered paths and 24 uncovered inherited integration/T4 paths.
+- Git all-parent inventory and handoff files_changed target 163 paths with zero differences after this handoff update.
+- Tests/evidence/blockers: 4/1/4.
+- git diff --check for T5-33 evidence and handoff: passed with no errors.

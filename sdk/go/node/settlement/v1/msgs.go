@@ -2,6 +2,8 @@
 package v1
 
 import (
+	"strings"
+
 	sdk "github.com/cosmos/cosmos-sdk/types"
 )
 
@@ -182,6 +184,13 @@ func (msg *MsgRecordUsage) ValidateBasic() error {
 	if len(msg.Signature) == 0 {
 		return ErrInvalidSignature.Wrap("signature cannot be empty")
 	}
+	if msg.SignatureVersion != 0 {
+		if msg.SignatureVersion != 1 || msg.ChainId == "" || msg.PricingVersion == 0 || msg.FormulaVersion == 0 || msg.ModelVersion == 0 ||
+			msg.StreamSequence == 0 || len(msg.Nonce) != 32 || len(msg.IdempotencyKey) != 32 ||
+			msg.ProviderKeyEpoch == 0 || msg.ProviderKeyId == "" {
+			return ErrInvalidUsageRecord.Wrap("incomplete versioned usage proof")
+		}
+	}
 
 	return nil
 }
@@ -205,6 +214,11 @@ func (msg *MsgAcknowledgeUsage) ValidateBasic() error {
 	if len(msg.Signature) == 0 {
 		return ErrInvalidSignature.Wrap("signature cannot be empty")
 	}
+	if msg.SignatureVersion != 0 {
+		if msg.SignatureVersion != 1 || len(msg.UsageDigest) != 32 || len(msg.ReplayKey) != 32 {
+			return ErrInvalidSignature.Wrap("incomplete versioned acknowledgment proof")
+		}
+	}
 
 	return nil
 }
@@ -227,5 +241,87 @@ func (msg *MsgClaimRewards) ValidateBasic() error {
 
 func (msg *MsgClaimRewards) GetSigners() []sdk.AccAddress {
 	addr, _ := sdk.AccAddressFromBech32(msg.Sender)
+	return []sdk.AccAddress{addr}
+}
+
+// ValidateBasic validates the bounded, privacy-safe observation envelope.
+func (msg *MsgRecordFiatConversionObservation) ValidateBasic() error {
+	if _, err := sdk.AccAddressFromBech32(msg.Sender); err != nil {
+		return ErrInvalidAddress.Wrap("invalid sender address")
+	}
+	if msg.ConversionId == "" || len(msg.ConversionId) > 128 || msg.ObservationSequence == 0 {
+		return ErrInvalidSettlement.Wrap("conversion id and positive observation sequence required")
+	}
+	if len(msg.IdempotencyKey) != 32 || msg.Stage == FiatConversionObservationStage_FIAT_CONVERSION_OBSERVATION_STAGE_UNSPECIFIED {
+		return ErrInvalidSettlement.Wrap("versioned observation stage and 32-byte idempotency key required")
+	}
+	for _, value := range []string{msg.DexProfileId, msg.PayoutProfileId} {
+		if value == "" || len(value) > 128 {
+			return ErrInvalidSettlement.Wrap("bounded profile ids required")
+		}
+	}
+	if len(msg.DexProfileDigest) != 32 || len(msg.PayoutProfileDigest) != 32 || len(msg.EvidenceHash) != 32 {
+		return ErrInvalidSettlement.Wrap("profile and evidence digests must be SHA-256")
+	}
+	if len(msg.ComplianceDecisionHash) != 32 {
+		return ErrInvalidSettlement.Wrap("compliance decision digest must be SHA-256")
+	}
+	for _, value := range []string{msg.SwapTxHash, msg.OffRampQuoteId, msg.OffRampPayoutId, msg.Status, msg.FiatAmount, msg.FailureCode} {
+		if len(value) > 128 || strings.ContainsAny(value, "\r\n\x00") {
+			return ErrInvalidSettlement.Wrap("observation identifier is not bounded")
+		}
+	}
+	if msg.ObservedAt <= 0 {
+		return ErrInvalidSettlement.Wrap("observed_at must be positive")
+	}
+	switch msg.Stage {
+	case FiatConversionObservationStage_FIAT_CONVERSION_OBSERVATION_STAGE_QUOTE_ACCEPTED:
+		if len(msg.QuoteDigest) != 32 || msg.QuoteExpiry <= 0 || !msg.MinimumStableOutput.IsValid() || !msg.MinimumStableOutput.IsPositive() {
+			return ErrInvalidSettlement.Wrap("quote acceptance evidence incomplete")
+		}
+	case FiatConversionObservationStage_FIAT_CONVERSION_OBSERVATION_STAGE_SWAP_SUBMITTED:
+		if msg.SwapTxHash == "" || len(msg.QuoteDigest) != 32 {
+			return ErrInvalidSettlement.Wrap("swap submission evidence incomplete")
+		}
+	case FiatConversionObservationStage_FIAT_CONVERSION_OBSERVATION_STAGE_SWAP_FINALIZED:
+		if msg.SwapTxHash == "" || len(msg.QuoteDigest) != 32 || !msg.MinimumStableOutput.IsValid() || !msg.MinimumStableOutput.IsPositive() ||
+			msg.SwapHeight <= 0 || len(msg.SwapBlockHash) != 32 || len(msg.SwapFinalityHash) != 32 || !msg.StableAmount.IsValid() || !msg.StableAmount.IsPositive() {
+			return ErrInvalidSettlement.Wrap("swap finality evidence incomplete")
+		}
+	case FiatConversionObservationStage_FIAT_CONVERSION_OBSERVATION_STAGE_PAYOUT_QUOTED:
+		if msg.OffRampQuoteId == "" || len(msg.QuoteDigest) != 32 || msg.QuoteExpiry <= 0 {
+			return ErrInvalidSettlement.Wrap("payout quote evidence incomplete")
+		}
+	case FiatConversionObservationStage_FIAT_CONVERSION_OBSERVATION_STAGE_PAYOUT_SUBMITTED:
+		if msg.OffRampQuoteId == "" || msg.OffRampPayoutId == "" || len(msg.PrivacySafeReferenceHash) != 32 {
+			return ErrInvalidSettlement.Wrap("payout submission evidence incomplete")
+		}
+	case FiatConversionObservationStage_FIAT_CONVERSION_OBSERVATION_STAGE_PAYOUT_COMPLETED:
+		if msg.OffRampQuoteId == "" || msg.OffRampPayoutId == "" || len(msg.QuoteDigest) != 32 || len(msg.PrivacySafeReferenceHash) != 32 || len(msg.PayoutFinalityHash) != 32 || msg.FiatAmount == "" {
+			return ErrInvalidSettlement.Wrap("payout completion evidence incomplete")
+		}
+	case FiatConversionObservationStage_FIAT_CONVERSION_OBSERVATION_STAGE_FAILED,
+		FiatConversionObservationStage_FIAT_CONVERSION_OBSERVATION_STAGE_CANCELLED:
+		if msg.FailureCode == "" {
+			return ErrInvalidSettlement.Wrap("failure code required")
+		}
+	}
+	return nil
+}
+
+func (msg *MsgRecordFiatConversionObservation) GetSigners() []sdk.AccAddress {
+	addr, _ := sdk.AccAddressFromBech32(msg.Sender)
+	return []sdk.AccAddress{addr}
+}
+
+func (msg *MsgUpdateParams) ValidateBasic() error {
+	if _, err := sdk.AccAddressFromBech32(msg.Authority); err != nil {
+		return ErrInvalidAddress.Wrap("invalid authority address")
+	}
+	return nil
+}
+
+func (msg *MsgUpdateParams) GetSigners() []sdk.AccAddress {
+	addr, _ := sdk.AccAddressFromBech32(msg.Authority)
 	return []sdk.AccAddress{addr}
 }

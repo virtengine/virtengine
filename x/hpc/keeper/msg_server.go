@@ -5,12 +5,15 @@ package keeper
 
 import (
 	"context"
+	"crypto/sha256"
 	"fmt"
 
 	sdk "github.com/cosmos/cosmos-sdk/types"
 
 	hpcv1 "github.com/virtengine/virtengine/sdk/go/node/hpc/v1"
 	"github.com/virtengine/virtengine/x/hpc/types"
+	settlementkeeper "github.com/virtengine/virtengine/x/settlement/keeper"
+	settlementtypes "github.com/virtengine/virtengine/x/settlement/types"
 )
 
 type msgServer struct {
@@ -266,6 +269,16 @@ func (ms msgServer) UpdateOffering(goCtx context.Context, msg *types.MsgUpdateOf
 // SubmitJob handles submitting a new HPC job
 func (ms msgServer) SubmitJob(goCtx context.Context, msg *types.MsgSubmitJob) (*types.MsgSubmitJobResponse, error) {
 	ctx := sdk.UnwrapSDKContext(goCtx)
+	cacheCtx, write := ctx.CacheContext()
+	response, err := ms.submitJob(cacheCtx, msg)
+	if err != nil {
+		return nil, err
+	}
+	write()
+	return response, nil
+}
+
+func (ms msgServer) submitJob(ctx sdk.Context, msg *types.MsgSubmitJob) (*types.MsgSubmitJobResponse, error) {
 
 	// Validate submitter address
 	submitterAddr, err := sdk.AccAddressFromBech32(msg.CustomerAddress)
@@ -283,8 +296,7 @@ func (ms msgServer) SubmitJob(goCtx context.Context, msg *types.MsgSubmitJob) (*
 	}
 
 	// Generate job ID
-	seq := ms.keeper.GetNextJobSequence(ctx)
-	jobID := fmt.Sprintf("JOB-%d", seq)
+	jobID := ""
 	// Create the job
 	job := &types.HPCJob{
 		JobID:                   jobID,
@@ -301,12 +313,17 @@ func (ms msgServer) SubmitJob(goCtx context.Context, msg *types.MsgSubmitJob) (*
 		MaxRuntimeSeconds:       msg.MaxRuntimeSeconds,
 		AgreedPrice:             msg.MaxPrice,
 		State:                   types.JobStatePending,
+		ReservationID:           msg.ReservationId,
+		MarketOrderID:           msg.MarketOrderId,
+		MarketBidID:             msg.MarketBidId,
+		MarketLeaseID:           msg.MarketLeaseId,
 	}
 
 	// Submit the job
 	if err := ms.keeper.SubmitJob(ctx, job); err != nil {
 		return nil, err
 	}
+	jobID = job.JobID
 
 	// Try to schedule the job
 	if _, err := ms.keeper.ScheduleJob(ctx, job); err != nil {
@@ -319,7 +336,7 @@ func (ms msgServer) SubmitJob(goCtx context.Context, msg *types.MsgSubmitJob) (*
 		"offering_id", msg.OfferingId,
 	)
 
-	return &types.MsgSubmitJobResponse{JobId: jobID}, nil
+	return &types.MsgSubmitJobResponse{JobId: jobID, EscrowId: job.EscrowID, ReservationId: job.ReservationID}, nil
 }
 
 // CancelJob handles cancelling an HPC job
@@ -348,7 +365,16 @@ func (ms msgServer) CancelJob(goCtx context.Context, msg *types.MsgCancelJob) (*
 // ReportJobStatus handles provider reporting job status
 func (ms msgServer) ReportJobStatus(goCtx context.Context, msg *types.MsgReportJobStatus) (*types.MsgReportJobStatusResponse, error) {
 	ctx := sdk.UnwrapSDKContext(goCtx)
+	cacheCtx, write := ctx.CacheContext()
+	response, err := ms.reportJobStatus(cacheCtx, msg)
+	if err != nil {
+		return nil, err
+	}
+	write()
+	return response, nil
+}
 
+func (ms msgServer) reportJobStatus(ctx sdk.Context, msg *types.MsgReportJobStatus) (*types.MsgReportJobStatusResponse, error) {
 	// Validate reporter address
 	reporterAddr, err := sdk.AccAddressFromBech32(msg.ProviderAddress)
 	if err != nil {
@@ -376,7 +402,7 @@ func (ms msgServer) ReportJobStatus(goCtx context.Context, msg *types.MsgReportJ
 	// If job completed, distribute rewards
 	if jobState == types.JobStateCompleted || jobState == types.JobStateFailed {
 		if _, err := ms.keeper.DistributeJobRewards(ctx, msg.JobId); err != nil {
-			ms.keeper.Logger(ctx).Error("failed to distribute job rewards", "job_id", msg.JobId, "error", err)
+			return nil, types.ErrInvalidReward.Wrapf("failed to distribute job rewards for job %s: %v", msg.JobId, err)
 		}
 	}
 
@@ -451,6 +477,16 @@ func (ms msgServer) UpdateNodeMetadata(goCtx context.Context, msg *types.MsgUpda
 // FlagDispute handles flagging a dispute for an HPC job
 func (ms msgServer) FlagDispute(goCtx context.Context, msg *types.MsgFlagDispute) (*types.MsgFlagDisputeResponse, error) {
 	ctx := sdk.UnwrapSDKContext(goCtx)
+	cacheCtx, write := ctx.CacheContext()
+	response, err := ms.flagDispute(cacheCtx, msg)
+	if err != nil {
+		return nil, err
+	}
+	write()
+	return response, nil
+}
+
+func (ms msgServer) flagDispute(ctx sdk.Context, msg *types.MsgFlagDispute) (*types.MsgFlagDisputeResponse, error) {
 
 	// Validate sender address
 	senderAddr, err := sdk.AccAddressFromBech32(msg.DisputerAddress)
@@ -469,25 +505,60 @@ func (ms msgServer) FlagDispute(goCtx context.Context, msg *types.MsgFlagDispute
 		return nil, types.ErrUnauthorized.Wrap("sender must be customer or provider")
 	}
 
-	// Generate dispute ID
-	seq := ms.keeper.GetNextDisputeSequence(ctx)
-	disputeID := fmt.Sprintf("DSP-%d", seq)
-
-	// Create the dispute
-	dispute := &types.HPCDispute{
-		DisputeID:       disputeID,
-		JobID:           msg.JobId,
-		DisputerAddress: senderAddr.String(),
-		DisputeType:     msg.DisputeType,
-		Reason:          msg.Reason,
-		Evidence:        msg.Evidence,
-		Status:          types.DisputeStatusPending,
-		CreatedAt:       ctx.BlockTime(),
+	if ms.keeper.settlementKeeper == nil {
+		return nil, types.ErrInvalidDispute.Wrap("settlement financial case keeper is required")
 	}
-
-	if err := ms.keeper.FlagDispute(ctx, dispute); err != nil {
+	if !ms.keeper.settlementKeeper.IsFinancialCasesActive(ctx) {
+		dispute := &types.HPCDispute{
+			JobID: msg.JobId, DisputerAddress: senderAddr.String(), DisputeType: msg.DisputeType,
+			Reason: msg.Reason, Evidence: msg.Evidence, Status: types.DisputeStatusPending, CreatedAt: ctx.BlockTime(),
+		}
+		if err := ms.keeper.FlagDispute(ctx, dispute); err != nil {
+			return nil, err
+		}
+		return &types.MsgFlagDisputeResponse{DisputeId: dispute.DisputeID}, nil
+	}
+	evidenceHash := sha256.Sum256([]byte(msg.Evidence))
+	respondent := job.ProviderAddress
+	if senderAddr.String() == job.ProviderAddress {
+		respondent = job.CustomerAddress
+	}
+	idempotencyHash := sha256.Sum256([]byte("hpc/financial-case/v1\x00" + msg.JobId + "\x00" + msg.DisputerAddress + "\x00" + msg.DisputeType))
+	idempotency := idempotencyHash[:]
+	subject := settlementtypes.FinancialSubject{Type: settlementtypes.FinancialSubjectTypeHPCJob, PrimaryId: msg.JobId, HpcJobId: msg.JobId, OrderId: job.MarketOrderID, EscrowId: job.EscrowID, ReservationId: job.ReservationID, LeaseId: job.MarketLeaseID}
+	financialCase, claim, duplicate, err := ms.keeper.settlementKeeper.OpenFinancialCase(ctx, settlementkeeper.FinancialCaseOpenRequest{
+		Subject: subject, Claimant: senderAddr.String(), Respondent: respondent, IdempotencyKey: idempotency, TrustedAdapter: true,
+		Claim: settlementtypes.FinancialClaim{ClaimType: settlementtypes.FinancialClaimTypeHPC, Claimant: senderAddr.String(), SourceModule: "hpc", SourceReference: msg.JobId, EvidenceHash: evidenceHash[:], EncryptedReference: fmt.Sprintf("hpc://evidence/sha256/%x", evidenceHash[:]), IdempotencyKey: idempotency},
+	})
+	if err != nil {
 		return nil, err
 	}
+
+	// Create the compatibility projection; raw evidence is never copied.
+	dispute := &types.HPCDispute{
+		DisputeID:           claim.ClaimId,
+		JobID:               msg.JobId,
+		DisputerAddress:     senderAddr.String(),
+		DisputeType:         msg.DisputeType,
+		Reason:              msg.Reason,
+		Evidence:            fmt.Sprintf("sha256:%x", evidenceHash[:]),
+		Status:              types.DisputeStatusPending,
+		CreatedAt:           ctx.BlockTime(),
+		FinancialCaseID:     financialCase.CaseId,
+		FinancialCaseStatus: financialCase.Status.String(),
+	}
+
+	if !duplicate {
+		if err := ms.keeper.SetDispute(ctx, *dispute); err != nil {
+			return nil, err
+		}
+	} else {
+		existing := ms.keeper.GetDisputesByFinancialCase(ctx, financialCase.CaseId)
+		if len(existing) > 0 {
+			*dispute = existing[0]
+		}
+	}
+	disputeID := dispute.DisputeID
 
 	ms.keeper.Logger(ctx).Info("HPC dispute flagged",
 		"dispute_id", disputeID,
@@ -495,19 +566,52 @@ func (ms msgServer) FlagDispute(goCtx context.Context, msg *types.MsgFlagDispute
 		"sender", msg.DisputerAddress,
 	)
 
-	return &types.MsgFlagDisputeResponse{DisputeId: disputeID}, nil
+	return &types.MsgFlagDisputeResponse{DisputeId: disputeID, FinancialCaseId: financialCase.CaseId, FinancialCaseStatus: financialCase.Status.String()}, nil
 }
 
 // ResolveDispute handles resolving a dispute
 func (ms msgServer) ResolveDispute(goCtx context.Context, msg *types.MsgResolveDispute) (*types.MsgResolveDisputeResponse, error) {
 	ctx := sdk.UnwrapSDKContext(goCtx)
+	cacheCtx, write := ctx.CacheContext()
+	response, err := ms.resolveDispute(cacheCtx, msg)
+	if err != nil {
+		return nil, err
+	}
+	write()
+	return response, nil
+}
+
+func (ms msgServer) resolveDispute(ctx sdk.Context, msg *types.MsgResolveDispute) (*types.MsgResolveDisputeResponse, error) {
 
 	// Validate resolver address (must be module authority)
 	if msg.ResolverAddress != ms.keeper.GetAuthority() {
 		return nil, types.ErrUnauthorized.Wrapf("expected %s, got %s", ms.keeper.GetAuthority(), msg.ResolverAddress)
 	}
 
-	// Resolve the dispute
+	dispute, found := ms.keeper.GetDispute(ctx, msg.DisputeId)
+	if !found {
+		return nil, types.ErrDisputeNotFound
+	}
+	if dispute.FinancialCaseID != "" && ms.keeper.settlementKeeper == nil {
+		return nil, types.ErrInvalidDispute.Wrap("settlement financial case keeper is required")
+	}
+	if ms.keeper.settlementKeeper != nil && ms.keeper.settlementKeeper.IsFinancialCasesActive(ctx) && dispute.FinancialCaseID != "" {
+		reasonHash := sha256.Sum256([]byte(msg.Resolution))
+		if err := ms.keeper.settlementKeeper.EscalateFinancialCase(ctx, dispute.FinancialCaseID, msg.ResolverAddress, reasonHash[:]); err != nil {
+			return nil, err
+		}
+		financialCase, _ := ms.keeper.settlementKeeper.GetFinancialCase(ctx, dispute.FinancialCaseID)
+		dispute.Status = types.DisputeStatusUnderReview
+		dispute.Resolution = "canonical_resolution_requested"
+		dispute.ResolverAddress = msg.ResolverAddress
+		dispute.FinancialCaseStatus = financialCase.Status.String()
+		if err := ms.keeper.SetDispute(ctx, dispute); err != nil {
+			return nil, err
+		}
+		return &types.MsgResolveDisputeResponse{}, nil
+	}
+
+	// Pre-v1.7.0 compatibility path only.
 	resolverAddr, err := sdk.AccAddressFromBech32(msg.ResolverAddress)
 	if err != nil {
 		return nil, types.ErrUnauthorized.Wrap("invalid resolver address")

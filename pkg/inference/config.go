@@ -1,6 +1,7 @@
 package inference
 
 import (
+	"errors"
 	"fmt"
 	"regexp"
 	"strings"
@@ -47,6 +48,17 @@ type InferenceConfig struct {
 	// SidecarTLS enables TLS for sidecar connections
 	SidecarTLS bool
 
+	// SidecarTLSCAFile is the PEM bundle used to verify the sidecar server.
+	SidecarTLSCAFile string
+
+	// SidecarTLSCertFile and SidecarTLSKeyFile identify the client certificate
+	// presented to the sidecar when mutual TLS is enabled.
+	SidecarTLSCertFile string
+	SidecarTLSKeyFile  string
+
+	// SidecarTLSServerName is the certificate DNS name expected from the sidecar.
+	SidecarTLSServerName string
+
 	// Determinism Configuration
 	// Deterministic forces deterministic inference mode
 	Deterministic bool
@@ -72,14 +84,16 @@ type InferenceConfig struct {
 	FallbackConfidence float32
 
 	// Opt-in/Opt-out Configuration
-	// Enabled controls whether real inference is enabled (opt-in)
-	// When false, uses stub/simulated inference
+	// Enabled controls whether consensus-safe inference is enabled (opt-in)
+	// When false, callers should treat inference as unavailable unless a
+	// non-production stub path is explicitly allowed.
 	Enabled bool
 
 	// RequireHashVerification requires output hash verification (consensus mode)
 	RequireHashVerification bool
 
-	// AllowFallbackToStub allows fallback to stub scorer if real inference fails
+	// AllowFallbackToStub allows deterministic stub/simulated inference paths
+	// for local development and tests. This must remain disabled in production.
 	AllowFallbackToStub bool
 
 	// StrictDeterminism fails if determinism cannot be guaranteed
@@ -131,7 +145,7 @@ func DefaultInferenceConfig() InferenceConfig {
 		// Opt-in/Opt-out defaults
 		Enabled:                 false, // Disabled by default, opt-in
 		RequireHashVerification: true,
-		AllowFallbackToStub:     true,
+		AllowFallbackToStub:     false,
 		StrictDeterminism:       false,
 
 		// Logging defaults
@@ -139,6 +153,16 @@ func DefaultInferenceConfig() InferenceConfig {
 		LogInputHashes:      false,
 		LogOutputHashes:     false,
 	}
+}
+
+var ErrSimulatedInferenceDisabled = errors.New("simulated inference is disabled")
+
+func simulatedInferenceDisabledError(component string) error {
+	return fmt.Errorf(
+		"%w for %s; enable AllowFallbackToStub only for explicit non-production development or test flows",
+		ErrSimulatedInferenceDisabled,
+		component,
+	)
 }
 
 // Validate validates the inference configuration
@@ -160,6 +184,15 @@ func (c *InferenceConfig) Validate() error {
 		}
 	} else if c.ModelPath == "" {
 		return fmt.Errorf("model_path is required when not using sidecar")
+	}
+	if !c.SidecarTLS && (c.SidecarTLSCAFile != "" || c.SidecarTLSCertFile != "" || c.SidecarTLSKeyFile != "" || c.SidecarTLSServerName != "") {
+		return fmt.Errorf("sidecar TLS files or server name require sidecar_tls")
+	}
+	if c.SidecarTLS && !c.UseSidecar {
+		return fmt.Errorf("sidecar_tls requires use_sidecar")
+	}
+	if (c.SidecarTLSCertFile == "") != (c.SidecarTLSKeyFile == "") {
+		return fmt.Errorf("sidecar TLS client certificate and key must be configured together")
 	}
 
 	if c.Timeout <= 0 {
@@ -188,6 +221,29 @@ func (c *InferenceConfig) Validate() error {
 		}
 		if c.ExpectedHash == "" {
 			return fmt.Errorf("expected_hash must be set when deterministic mode is enabled")
+		}
+	}
+	if c.Enabled {
+		if !c.UseSidecar {
+			return fmt.Errorf("enabled inference requires a sidecar")
+		}
+		if c.AllowFallbackToStub {
+			return fmt.Errorf("enabled inference cannot allow fallback to stub")
+		}
+		if c.UseFallbackOnError {
+			return fmt.Errorf("enabled inference cannot return fallback scores")
+		}
+		if !c.RequireHashVerification {
+			return fmt.Errorf("enabled inference requires hash verification")
+		}
+		if !c.StrictDeterminism {
+			return fmt.Errorf("enabled inference requires strict determinism")
+		}
+		if !c.SidecarTLS {
+			return fmt.Errorf("enabled inference requires sidecar TLS")
+		}
+		if c.SidecarTLSCAFile == "" || c.SidecarTLSCertFile == "" || c.SidecarTLSKeyFile == "" || c.SidecarTLSServerName == "" {
+			return fmt.Errorf("enabled inference requires sidecar mTLS CA, client certificate, key, and server name")
 		}
 	}
 
@@ -240,7 +296,7 @@ func (c InferenceConfig) WithFallback(enabled bool, score uint32) InferenceConfi
 
 // IsRealInferenceEnabled returns true if real inference is enabled
 func (c InferenceConfig) IsRealInferenceEnabled() bool {
-	return c.Enabled && (c.UseSidecar || c.ModelPath != "")
+	return c.Enabled && c.UseSidecar && c.SidecarTLS && c.SidecarTLSCAFile != "" && c.SidecarTLSCertFile != "" && c.SidecarTLSKeyFile != "" && c.SidecarTLSServerName != "" && !c.AllowFallbackToStub && !c.UseFallbackOnError && c.RequireHashVerification && c.StrictDeterminism
 }
 
 // IsConsensusSafe returns true if the configuration is safe for consensus

@@ -599,7 +599,7 @@ cmd_test() {
     fi
 
     # Run tests
-    compose_cmd run --rm test-runner go test -v ./tests/integration/...
+    compose_cmd run --rm test-runner go test -count=1 -tags=e2e.integration -v ./tests/integration/...
 }
 
 cmd_shell() {

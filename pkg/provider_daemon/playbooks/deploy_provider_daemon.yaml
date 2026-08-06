@@ -178,7 +178,7 @@
 
           metrics:
             enabled: {{ metrics_enabled | default(true) | lower }}
-            port: {{ metrics_port | default(9100) }}
+            port: {{ metrics_port | default(9090) }}
 
           logging:
             level: "{{ log_level | default('info') }}"
@@ -248,7 +248,7 @@
     - name: Wait for provider daemon to start
       tags: [verify]
       wait_for:
-        port: "{{ metrics_port | default(9100) }}"
+        port: "{{ metrics_port | default(9090) }}"
         host: 127.0.0.1
         delay: 5
         timeout: 60
@@ -257,7 +257,7 @@
     - name: Verify provider daemon health
       tags: [verify]
       uri:
-        url: "http://127.0.0.1:{{ metrics_port | default(9100) }}/health"
+        url: "http://127.0.0.1:{{ metrics_port | default(9090) }}/health"
         method: GET
         return_content: true
         status_code: [200, 204]

@@ -323,6 +323,14 @@ func (a *eidasAdapter) baseURL() string {
 	}
 }
 
+// DigitalIDProvider reports that this legacy eIDAS document adapter is not a
+// complete OpenID4VP/VC or eIDAS wallet protocol implementation. Returning a
+// fail-closed provider prevents HTTP response mapping from being mistaken for
+// successful digital identity authorization.
+func (a *eidasAdapter) DigitalIDProvider() DigitalIDProvider {
+	return UnavailableDigitalIDProvider{ID: string(DataSourceEIDAS)}
+}
+
 // Verify performs eIDAS verification
 func (a *eidasAdapter) Verify(ctx context.Context, req *VerificationRequest) (*VerificationResponse, error) {
 	startTime := time.Now()

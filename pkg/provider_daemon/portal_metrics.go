@@ -20,7 +20,7 @@ func (s *PortalAPIServer) handleDeploymentMetrics(w http.ResponseWriter, r *http
 			writeJSONError(w, http.StatusNotFound, "deployment not found")
 			return
 		}
-		writeJSONError(w, http.StatusInternalServerError, err.Error())
+		writePortalError(w, err)
 		return
 	}
 
@@ -52,7 +52,7 @@ func (s *PortalAPIServer) handleDeploymentMetricsHistory(w http.ResponseWriter, 
 			writeJSONError(w, http.StatusNotFound, "deployment not found")
 			return
 		}
-		writeJSONError(w, http.StatusInternalServerError, err.Error())
+		writePortalError(w, err)
 		return
 	}
 
@@ -74,7 +74,7 @@ func (s *PortalAPIServer) handleAggregatedMetrics(w http.ResponseWriter, r *http
 
 	series, err := s.chainQuery.GetAggregatedMetrics(r.Context(), start, end, interval)
 	if err != nil {
-		writeJSONError(w, http.StatusInternalServerError, err.Error())
+		writePortalError(w, err)
 		return
 	}
 

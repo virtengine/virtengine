@@ -102,9 +102,14 @@ type ExtractionError struct {
 
 // NewFeatureExtractionMetadata creates a new metadata instance
 func NewFeatureExtractionMetadata(schemaVersion, accountAddress string, blockHeight int64) *FeatureExtractionMetadata {
+	return NewFeatureExtractionMetadataAt(schemaVersion, accountAddress, blockHeight, time.Now())
+}
+
+// NewFeatureExtractionMetadataAt creates metadata at an explicit deterministic time.
+func NewFeatureExtractionMetadataAt(schemaVersion, accountAddress string, blockHeight int64, at time.Time) *FeatureExtractionMetadata {
 	return &FeatureExtractionMetadata{
 		SchemaVersion:        schemaVersion,
-		ExtractionTimestamp:  time.Now().UTC(),
+		ExtractionTimestamp:  at.UTC(),
 		AccountAddress:       accountAddress,
 		BlockHeight:          blockHeight,
 		ModelsUsed:           make([]ModelUsageInfo, 0),

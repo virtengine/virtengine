@@ -1,0 +1,171 @@
+"use strict";
+
+const assert = require("assert").strict;
+const { createHash } = require("crypto");
+const { producerHandoffDeclaresContract, validateContainedProducerCommits, validateIntegrationControl, validateManifestEpochBinding, verifyAcceptedGeneratedProducer, verifyGenerationResult } = require("./validate-prototype-integration.cjs");
+
+const sha = "79391a3df86d85522b92e0400c6904971ecbe65d";
+
+function validFixture() {
+  return {
+    control: {
+      schema_version: "virtengine.prototype.integration-control/v1",
+      campaign: "three-day-prototype",
+      baseline: { frozen: true, sha },
+      integration: { thread: "T4", branch: "ve/prototype-integration" },
+      producers: [
+        { thread: "T1", branch: "ve/prototype-t1-identity" },
+        { thread: "T2", branch: "ve/prototype-t2-product" },
+        { thread: "T3", branch: "ve/prototype-t3-reliability" },
+        { thread: "T5", branch: "ve/prototype-t5-platform" },
+      ],
+      path_ownership: { integration_only: ["app/**"] },
+      dependency_ledger: { ready: ["T4-01", "T4-06B"] },
+      generated_file_lease: { state: "available", holder: null, paths: [] },
+    },
+    schema: {
+      $schema: "https://json-schema.org/draft/2020-12/schema",
+      additionalProperties: false,
+      required: ["campaign", "thread", "checkpoint", "branch", "frozen_baseline", "planning_sha", "intake_epoch", "intake_base_sha", "payload_head", "prior_accepted_payload", "tree_clean", "commits_since_prior_acceptance", "owned_paths", "files_changed", "tests", "generated_hashes", "migrations", "external_evidence", "known_failures", "blockers", "next_checkpoint"],
+      properties: { frozen_baseline: { const: sha }, tree_clean: { const: true }, commits_since_prior_acceptance: { minItems: 1 } },
+      $defs: { testResult: { additionalProperties: false, required: ["command", "exit_code", "result", "tool_versions", "artifact"], properties: { exit_code: { const: 0 }, result: { const: "passed" }, tool_versions: { minProperties: 1 } } } },
+    },
+    handoff: {
+      campaign: "three-day-prototype",
+      thread: "T4",
+      branch: "ve/prototype-integration",
+      start_head: sha,
+      end_head: sha,
+      origin_main: sha,
+      tree_clean: true,
+      expected_head: sha,
+      accepted_checkpoints: [],
+      rejected_checkpoints: [],
+    },
+    epoch: {
+      schema_version: "virtengine.prototype.intake-epoch/v2",
+      campaign: "three-day-prototype",
+      intake_epoch: 1,
+      base_tag: "checkpoint/prototype-integration/epoch-1-base",
+      base_sha: "5587c384f634552c3a2dd7181ca49cafa4da1984",
+      planning_sha: "1436723bd78980aa0388dbe9fcfa24dda939c54a",
+      status: "open",
+      opens_at: "2026-08-02T00:00:00Z",
+      announcement_cutoff: "2026-08-02T23:59:59Z",
+      producers: ["T1", "T2", "T3", "T5"].map((thread) => ({ thread, status: "unannounced", tag: null, decision: null })),
+    },
+  };
+}
+
+const tests = [
+  ["rejects producer commits not covered by accepted payloads", () => {
+    const ancestry = new Set([`producer:${sha}`, `${sha}:HEAD`]);
+    const isAncestor = (ancestor, descendant) => ancestry.has(`${ancestor}:${descendant}`);
+    assert.throws(() => validateContainedProducerCommits([{ thread: "T1", commit: "producer" }], [], isAncestor), /unaccepted T1 producer commit/);
+    assert.doesNotThrow(() => validateContainedProducerCommits([{ thread: "T1", commit: "producer" }], [{ thread: "T1", payload_head: sha }], isAncestor));
+    assert.throws(() => validateContainedProducerCommits([{ thread: "T1", commit: "producer" }], [{ thread: "T5", payload_head: sha }], isAncestor), /unaccepted T1 producer commit/);
+  }],
+  ["requires producer handoff ownership of generated proto sources", () => {
+    const contract = { owner_thread: "T1", producer: { payload_sha: sha }, proto_sources: ["sdk/proto/node/decision.proto"] };
+    assert.equal(producerHandoffDeclaresContract(contract, { thread: "T1", payload_head: sha, files_changed: ["sdk/proto/node/decision.proto"] }), true);
+    assert.equal(producerHandoffDeclaresContract(contract, { thread: "T1", payload_head: sha, files_changed: [] }), false);
+    assert.equal(producerHandoffDeclaresContract(contract, { thread: "T5", payload_head: sha, files_changed: ["sdk/proto/node/decision.proto"] }), false);
+  }],
+  ["binds generation results to current HEAD and dedicated evidence", () => {
+    const evidence = Buffer.from(`${JSON.stringify({ schema_version: "virtengine.prototype.generated-contract-evidence/v1", source_sha: sha, first_run_exit_code: 0, second_run_exit_code: 0, drift_clean: true })}\n`);
+    const result = { source_sha: sha, first_run_exit_code: 0, second_run_exit_code: 0, drift_clean: true, evidence_path: "_docs/ralph/prototype-integration/evidence/generated-contract-zero-drift.json", evidence_sha256: createHash("sha256").update(evidence).digest("hex") };
+    const options = { currentSha: sha, readEvidence: () => evidence };
+    assert.equal(verifyGenerationResult(result, options), true);
+    assert.equal(verifyGenerationResult({ ...result, source_sha: "a".repeat(40) }, options), false);
+    assert.equal(verifyGenerationResult({ ...result, evidence_path: "_docs/INDEX.md" }, options), false);
+    const unrelated = Buffer.from("{\"drift_clean\":true}\n");
+    assert.equal(verifyGenerationResult({ ...result, evidence_sha256: createHash("sha256").update(unrelated).digest("hex") }, { ...options, readEvidence: () => unrelated }), false);
+  }],
+  ["binds generated producers to accepted and observed tag targets", () => {
+    const tip = "b".repeat(40);
+    const tagObject = "d".repeat(40);
+    const contract = { owner_thread: "T1", producer: { tag: "checkpoint/prototype-t1/t1-18", payload_sha: sha }, proto_sources: ["sdk/proto/node/decision.proto"] };
+    const options = {
+      acceptedCheckpoints: [{ thread: "T1", tag: contract.producer.tag, payload_head: sha, tip }],
+      epoch: { producers: [{ thread: "T1", status: "accepted", tag: contract.producer.tag }] },
+      observation: { tags: [{ thread: "T1", tag: contract.producer.tag, tag_object: tagObject, target: tip }] },
+      resolveTag: () => ({ object: tagObject, target: tip }),
+      loadProducerHandoff: () => ({ thread: "T1", payload_head: sha, files_changed: contract.proto_sources }),
+      sourceExists: () => true,
+    };
+    assert.equal(verifyAcceptedGeneratedProducer(contract, options), true);
+    assert.equal(verifyAcceptedGeneratedProducer(contract, { ...options, resolveTag: () => ({ object: tagObject, target: "c".repeat(40) }) }), false);
+    assert.equal(verifyAcceptedGeneratedProducer(contract, { ...options, resolveTag: () => ({ object: "e".repeat(40), target: tip }) }), false);
+    assert.equal(verifyAcceptedGeneratedProducer(contract, { ...options, observation: { tags: [] } }), false);
+  }],
+  ["accepts the frozen T4 campaign controls", () => {
+    const fixture = validFixture();
+    assert.doesNotThrow(() => validateIntegrationControl(fixture.control, fixture.schema, fixture.handoff, fixture.epoch));
+  }],
+  ["rejects a producer branch that does not match its thread", () => {
+    const fixture = validFixture();
+    fixture.control.producers[0].branch = "ve/prototype-t2-product";
+    assert.throws(() => validateIntegrationControl(fixture.control, fixture.schema, fixture.handoff, fixture.epoch), /unexpected producer registration/);
+  }],
+  ["rejects a held lease represented as available", () => {
+    const fixture = validFixture();
+    fixture.control.generated_file_lease.holder = "T1";
+    assert.throws(() => validateIntegrationControl(fixture.control, fixture.schema, fixture.handoff, fixture.epoch));
+  }],
+  ["rejects a non-commit checkpoint boundary", () => {
+    const fixture = validFixture();
+    fixture.handoff.start_head = "HEAD";
+    assert.throws(() => validateIntegrationControl(fixture.control, fixture.schema, fixture.handoff, fixture.epoch), /start_head/);
+  }],
+  ["rejects an epoch with an unknown field", () => {
+    const fixture = validFixture();
+    fixture.epoch.accepted = [];
+    assert.throws(() => validateIntegrationControl(fixture.control, fixture.schema, fixture.handoff, fixture.epoch));
+  }],
+  ["accepts frozen and closed aggregate epoch states", () => {
+    for (const status of ["frozen", "closed"]) {
+      const fixture = validFixture();
+      fixture.epoch.status = status;
+      assert.doesNotThrow(() => validateIntegrationControl(fixture.control, fixture.schema, fixture.handoff, fixture.epoch));
+    }
+  }],
+  ["rejects an unknown aggregate epoch state", () => {
+    const fixture = validFixture();
+    fixture.epoch.status = "published";
+    assert.throws(() => validateIntegrationControl(fixture.control, fixture.schema, fixture.handoff, fixture.epoch), /epoch status/);
+  }],
+  ["accepts an explicitly frozen-out producer only after the epoch freezes", () => {
+    const fixture = validFixture();
+    fixture.epoch.status = "closed";
+    fixture.epoch.producers[0].decision = "frozen-out";
+    assert.doesNotThrow(() => validateIntegrationControl(fixture.control, fixture.schema, fixture.handoff, fixture.epoch));
+    fixture.epoch.status = "open";
+    assert.throws(() => validateIntegrationControl(fixture.control, fixture.schema, fixture.handoff, fixture.epoch), /cannot freeze out/);
+  }],
+  ["requires accepted epoch producers to match an accepted ledger tag and payload", () => {
+    const fixture = validFixture();
+    fixture.epoch.status = "closed";
+    fixture.epoch.producers[0] = { thread: "T1", status: "accepted", tag: "checkpoint/prototype-t1/t1-10", decision: "accepted" };
+    assert.throws(() => validateIntegrationControl(fixture.control, fixture.schema, fixture.handoff, fixture.epoch), /accepted ledger/);
+    fixture.handoff.accepted_checkpoints.push({ thread: "T1", checkpoint: "T1-10", tag: "checkpoint/prototype-t1/t1-10", tip: sha, payload_head: sha });
+    assert.doesNotThrow(() => validateIntegrationControl(fixture.control, fixture.schema, fixture.handoff, fixture.epoch));
+  }],
+  ["rejects status and decision disagreement", () => {
+    const fixture = validFixture();
+    fixture.epoch.status = "closed";
+    fixture.epoch.producers[0] = { thread: "T1", status: "rejected", tag: "checkpoint/prototype-t1/t1-10", decision: "accepted" };
+    assert.throws(() => validateIntegrationControl(fixture.control, fixture.schema, fixture.handoff, fixture.epoch), /decision=rejected/);
+  }],
+  ["requires the manifest to bind the current epoch", () => {
+    const epoch = { intake_epoch: 2 };
+    const manifest = { control_artifacts: [{ id: "intake_epoch", path: "_docs/ralph/prototype-integration/epochs/epoch-1.json" }] };
+    assert.throws(() => validateManifestEpochBinding(manifest, epoch), /does not bind current intake epoch 2/);
+    manifest.control_artifacts[0].path = "_docs/ralph/prototype-integration/epochs/epoch-2.json";
+    assert.doesNotThrow(() => validateManifestEpochBinding(manifest, epoch));
+  }],
+];
+
+for (const [name, run] of tests) {
+  run();
+  console.log(`ok - ${name}`);
+}

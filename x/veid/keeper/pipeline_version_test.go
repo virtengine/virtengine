@@ -194,6 +194,32 @@ func TestActivePipelineVersion(t *testing.T) {
 	}
 }
 
+func TestSetActivePipelineVersionRejectsNonActivatableState(t *testing.T) {
+	keeper, ctx := setupPipelineTestKeeper(t)
+
+	manifest := createTestModelManifest(t)
+	pv, err := keeper.RegisterPipelineVersion(
+		ctx,
+		versionOne,
+		"sha256:a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2",
+		"ghcr.io/virtengine/veid-pipeline:v1.0.0",
+		manifest,
+	)
+	if err != nil {
+		t.Fatalf("failed to register pipeline version: %v", err)
+	}
+
+	pv.Status = string(types.PipelineVersionStatusRetired)
+	if err := keeper.SetPipelineVersion(ctx, pv); err != nil {
+		t.Fatalf("failed to update pipeline version: %v", err)
+	}
+
+	err = keeper.SetActivePipelineVersion(ctx, versionOne)
+	if err == nil {
+		t.Fatal("expected activation to fail for retired pipeline version")
+	}
+}
+
 // TestPipelineVersionSuccession tests version succession
 func TestPipelineVersionSuccession(t *testing.T) {
 	keeper, ctx := setupPipelineTestKeeper(t)
@@ -325,6 +351,34 @@ func TestPipelineVersionVerification(t *testing.T) {
 	)
 	if err == nil {
 		t.Error("verification with wrong manifest hash should fail")
+	}
+}
+
+func TestVerifyPipelineVersionRejectsMissingStoredManifest(t *testing.T) {
+	keeper, ctx := setupPipelineTestKeeper(t)
+
+	manifest := createTestModelManifest(t)
+	pv, err := keeper.RegisterPipelineVersion(
+		ctx,
+		versionOne,
+		"sha256:a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2",
+		"ghcr.io/virtengine/veid-pipeline:v1.0.0",
+		manifest,
+	)
+	if err != nil {
+		t.Fatalf("failed to register: %v", err)
+	}
+
+	if err := keeper.ActivatePipelineVersion(ctx, versionOne); err != nil {
+		t.Fatalf("failed to activate: %v", err)
+	}
+
+	store := ctx.KVStore(keeper.StoreKey())
+	store.Delete(types.ModelManifestKey(manifest.ManifestHash))
+
+	err = keeper.VerifyPipelineVersion(ctx, versionOne, pv.ImageHash, manifest.ManifestHash)
+	if err == nil {
+		t.Fatal("expected verification to fail when stored manifest is missing")
 	}
 }
 

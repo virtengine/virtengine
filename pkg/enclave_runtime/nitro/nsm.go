@@ -875,18 +875,6 @@ func nsmErrorFromCode(code int) error {
 	}
 }
 
-// nsmIoctl performs an ioctl call to the NSM device
-//
-// This is a placeholder - the actual implementation uses syscall.Syscall
-// which requires platform-specific code.
-func nsmIoctl(fd *os.File, request, response []byte) (int, error) {
-	// In a real implementation, this would use:
-	// syscall.Syscall(syscall.SYS_IOCTL, fd.Fd(), NSMIocMsgSend, uintptr(unsafe.Pointer(&msg)))
-
-	// For now, return an error indicating real hardware is needed
-	return 0, errors.New("real NSM ioctl requires nitro_hardware build tag")
-}
-
 // =============================================================================
 // Thread-Safe Wrappers
 // =============================================================================
@@ -898,8 +886,13 @@ type NSMSession struct {
 
 // NewNSMSession creates a new NSM session
 func NewNSMSession() (*NSMSession, error) {
+	return NewNSMSessionWithMode(false)
+}
+
+// NewNSMSessionWithMode creates a new NSM session with explicit hardware requirements.
+func NewNSMSessionWithMode(requireHardware bool) (*NSMSession, error) {
 	device := NewNSMDevice()
-	if err := device.Open(); err != nil {
+	if err := device.OpenWithMode(requireHardware); err != nil {
 		return nil, err
 	}
 	return &NSMSession{device: device}, nil

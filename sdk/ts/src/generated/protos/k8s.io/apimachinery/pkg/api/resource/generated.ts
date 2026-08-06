@@ -4,7 +4,7 @@ import type { DeepPartial, MessageFns } from "../../../../../../../encoding/type
 // versions:
 //   protoc-gen-ts_proto  v2.7.7
 //   protoc               unknown
-// source: k8s.io/apimachinery/pkg/api/resource/generated.proto
+// source: k8s_io/apimachinery/pkg/api/resource/generated.proto
 
 /* eslint-disable */
 import { BinaryReader, BinaryWriter } from "@bufbuild/protobuf/wire";
@@ -80,6 +80,7 @@ import Long from "long";
  * +protobuf.options.(gogoproto.goproto_stringer)=false
  * +k8s:deepcopy-gen=true
  * +k8s:openapi-gen=true
+ * +k8s:openapi-model-package=io.k8s.apimachinery.pkg.api.resource
  */
 export interface Quantity {
   string?: string | undefined;
@@ -94,6 +95,7 @@ export interface Quantity {
  * +protobuf.options.marshal=false
  * +protobuf.options.(gogoproto.goproto_stringer)=false
  * +k8s:deepcopy-gen=true
+ * +k8s:openapi-model-package=io.k8s.apimachinery.pkg.api.resource
  */
 export interface QuantityValue {
   string?: string | undefined;
@@ -103,8 +105,8 @@ function createBaseQuantity(): Quantity {
   return { string: "" };
 }
 
-export const Quantity: MessageFns<Quantity, "k8s.io.apimachinery.pkg.api.resource.Quantity"> = {
-  $type: "k8s.io.apimachinery.pkg.api.resource.Quantity" as const,
+export const Quantity: MessageFns<Quantity, "k8s_io.apimachinery.pkg.api.resource.Quantity"> = {
+  $type: "k8s_io.apimachinery.pkg.api.resource.Quantity" as const,
 
   encode(message: Quantity, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
     if (message.string !== undefined && message.string !== "") {
@@ -159,8 +161,8 @@ function createBaseQuantityValue(): QuantityValue {
   return { string: "" };
 }
 
-export const QuantityValue: MessageFns<QuantityValue, "k8s.io.apimachinery.pkg.api.resource.QuantityValue"> = {
-  $type: "k8s.io.apimachinery.pkg.api.resource.QuantityValue" as const,
+export const QuantityValue: MessageFns<QuantityValue, "k8s_io.apimachinery.pkg.api.resource.QuantityValue"> = {
+  $type: "k8s_io.apimachinery.pkg.api.resource.QuantityValue" as const,
 
   encode(message: QuantityValue, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
     if (message.string !== undefined && message.string !== "") {

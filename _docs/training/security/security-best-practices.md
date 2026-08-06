@@ -3,7 +3,7 @@
 **Module Duration:** 8 hours  
 **Target Audience:** VirtEngine Operators, System Administrators, DevOps Engineers  
 **Prerequisites:** Basic understanding of Linux systems, networking fundamentals, VirtEngine architecture  
-**Last Updated:** 2024
+**Last Updated:** 2026-04-11
 
 ---
 
@@ -33,6 +33,23 @@ VirtEngine's security model is built on several critical foundations:
 - **Hardware/ledger support** for provider keys
 - **Zero-knowledge principles** - secrets never logged or stored in plaintext
 - **Memory safety** - vault passwords cleared from memory after use
+
+### Validated Evidence Paths
+
+Use these commands when this training material calls for proof, not just process:
+
+```bash
+go test -tags=security ./tests/security/...
+go test -tags='security,integration' ./tests/security/...
+go test -tags='security,e2e.integration' ./tests/security/...
+bash ./tests/security/scripts/reproduce_security_checks.sh full
+```
+
+For audit mapping and incident anchors, use:
+
+- `SECURITY.md`
+- `_docs/audits/security-audit-report-2026-02-06.md`
+- `_docs/training/security/security-incident-response.md`
 
 ---
 
@@ -1058,7 +1075,7 @@ groups:
 
 - [ ] All required compliance controls implemented
 - [ ] Documentation complete and current
-- [ ] Third-party security audit scheduled
+- [ ] Latest external audit evidence reviewed and reproduced locally
 - [ ] Penetration test completed
 - [ ] Vulnerability assessment completed
 ```
@@ -1452,6 +1469,6 @@ Upon completing this module, operators should:
 ---
 
 **Module Version:** 1.0  
-**Last Review:** 2024-01  
-**Next Review:** 2024-07  
+**Last Review:** 2026-04-11
+**Next Review:** 2026-07-11
 **Owner:** VirtEngine Security Team

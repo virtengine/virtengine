@@ -19,6 +19,9 @@ const (
 )
 
 func (k Keeper) processUsageReportCallback(ctx sdk.Context, callback *marketplace.WaldurCallback) error {
+	if k.IsCanonicalLifecycleActive(ctx) {
+		return marketplace.ErrLifecycleDeprecated
+	}
 	if callback.ChainEntityType != marketplace.SyncTypeAllocation {
 		return marketplace.ErrWaldurCallbackInvalid.Wrapf("unexpected entity type: %s", callback.ChainEntityType)
 	}

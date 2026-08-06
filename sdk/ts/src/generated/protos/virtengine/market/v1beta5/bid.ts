@@ -32,6 +32,7 @@ export interface Bid {
   createdAt: Long;
   /** ResourceOffer is a list of offers. */
   resourcesOffer: ResourceOffer[];
+  reservationId: string;
 }
 
 /** BidState is an enum which refers to state of bid. */
@@ -92,7 +93,7 @@ export function bid_StateToJSON(object: Bid_State): string {
 }
 
 function createBaseBid(): Bid {
-  return { id: undefined, state: 0, price: undefined, createdAt: Long.ZERO, resourcesOffer: [] };
+  return { id: undefined, state: 0, price: undefined, createdAt: Long.ZERO, resourcesOffer: [], reservationId: "" };
 }
 
 export const Bid: MessageFns<Bid, "virtengine.market.v1beta5.Bid"> = {
@@ -113,6 +114,9 @@ export const Bid: MessageFns<Bid, "virtengine.market.v1beta5.Bid"> = {
     }
     for (const v of message.resourcesOffer) {
       ResourceOffer.encode(v!, writer.uint32(42).fork()).join();
+    }
+    if (message.reservationId !== "") {
+      writer.uint32(50).string(message.reservationId);
     }
     return writer;
   },
@@ -164,6 +168,14 @@ export const Bid: MessageFns<Bid, "virtengine.market.v1beta5.Bid"> = {
           message.resourcesOffer.push(ResourceOffer.decode(reader, reader.uint32()));
           continue;
         }
+        case 6: {
+          if (tag !== 50) {
+            break;
+          }
+
+          message.reservationId = reader.string();
+          continue;
+        }
       }
       if ((tag & 7) === 4 || tag === 0) {
         break;
@@ -182,6 +194,7 @@ export const Bid: MessageFns<Bid, "virtengine.market.v1beta5.Bid"> = {
       resourcesOffer: globalThis.Array.isArray(object?.resources_offer)
         ? object.resources_offer.map((e: any) => ResourceOffer.fromJSON(e))
         : [],
+      reservationId: isSet(object.reservation_id) ? globalThis.String(object.reservation_id) : "",
     };
   },
 
@@ -202,6 +215,9 @@ export const Bid: MessageFns<Bid, "virtengine.market.v1beta5.Bid"> = {
     if (message.resourcesOffer?.length) {
       obj.resources_offer = message.resourcesOffer.map((e) => ResourceOffer.toJSON(e));
     }
+    if (message.reservationId !== "") {
+      obj.reservation_id = message.reservationId;
+    }
     return obj;
   },
   fromPartial(object: DeepPartial<Bid>): Bid {
@@ -215,6 +231,7 @@ export const Bid: MessageFns<Bid, "virtengine.market.v1beta5.Bid"> = {
       ? Long.fromValue(object.createdAt)
       : Long.ZERO;
     message.resourcesOffer = object.resourcesOffer?.map((e) => ResourceOffer.fromPartial(e)) || [];
+    message.reservationId = object.reservationId ?? "";
     return message;
   },
 };

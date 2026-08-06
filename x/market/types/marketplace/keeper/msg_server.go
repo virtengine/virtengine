@@ -235,6 +235,9 @@ func (ms msgServer) DeactivateOffering(goCtx context.Context, msg *marketplace.M
 
 func (ms msgServer) AcceptBid(goCtx context.Context, msg *marketplace.MsgAcceptBid) (*marketplace.MsgAcceptBidResponse, error) {
 	ctx := sdk.UnwrapSDKContext(goCtx)
+	if ms.keeper.IsCanonicalLifecycleActive(ctx) {
+		return nil, marketplace.ErrLifecycleDeprecated
+	}
 
 	if msg == nil {
 		return nil, marketplace.ErrUnauthorized.Wrap("empty message")
@@ -284,6 +287,9 @@ func (ms msgServer) AcceptBid(goCtx context.Context, msg *marketplace.MsgAcceptB
 
 func (ms msgServer) TerminateAllocation(goCtx context.Context, msg *marketplace.MsgTerminateAllocation) (*marketplace.MsgTerminateAllocationResponse, error) {
 	ctx := sdk.UnwrapSDKContext(goCtx)
+	if ms.keeper.IsCanonicalLifecycleActive(ctx) {
+		return nil, marketplace.ErrLifecycleDeprecated
+	}
 
 	if msg == nil {
 		return nil, marketplace.ErrUnauthorized.Wrap("empty message")
@@ -364,6 +370,9 @@ func (ms msgServer) TerminateAllocation(goCtx context.Context, msg *marketplace.
 
 func (ms msgServer) ResizeAllocation(goCtx context.Context, msg *marketplace.MsgResizeAllocation) (*marketplace.MsgResizeAllocationResponse, error) {
 	ctx := sdk.UnwrapSDKContext(goCtx)
+	if ms.keeper.IsCanonicalLifecycleActive(ctx) {
+		return nil, marketplace.ErrLifecycleDeprecated
+	}
 
 	if msg == nil {
 		return nil, marketplace.ErrUnauthorized.Wrap("empty message")
@@ -461,6 +470,9 @@ func (ms msgServer) ResizeAllocation(goCtx context.Context, msg *marketplace.Msg
 
 func (ms msgServer) PauseAllocation(goCtx context.Context, msg *marketplace.MsgPauseAllocation) (*marketplace.MsgPauseAllocationResponse, error) {
 	ctx := sdk.UnwrapSDKContext(goCtx)
+	if ms.keeper.IsCanonicalLifecycleActive(ctx) {
+		return nil, marketplace.ErrLifecycleDeprecated
+	}
 
 	if msg == nil {
 		return nil, marketplace.ErrUnauthorized.Wrap("empty message")
@@ -541,6 +553,9 @@ func (ms msgServer) PauseAllocation(goCtx context.Context, msg *marketplace.MsgP
 
 func (ms msgServer) WaldurCallback(goCtx context.Context, msg *marketplace.MsgWaldurCallback) (*marketplace.MsgWaldurCallbackResponse, error) {
 	ctx := sdk.UnwrapSDKContext(goCtx)
+	if ms.keeper.IsCanonicalLifecycleActive(ctx) {
+		return nil, marketplace.ErrLifecycleDeprecated
+	}
 
 	var callback marketplace.WaldurCallback
 	if msg.Payload != "" {

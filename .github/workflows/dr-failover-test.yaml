@@ -2,24 +2,60 @@ name: DR Failover Test
 
 on:
   workflow_dispatch:
+    inputs:
+      mode:
+        description: "Drill mode"
+        required: true
+        default: rehearsal
+        type: choice
+        options:
+          - rehearsal
+          - live
+      live_validation:
+        description: "Run live regional validation after the drill"
+        required: false
+        default: false
+        type: boolean
   schedule:
-    - cron: "0 6 * * 0"
+    - cron: '0 6 * * 0'
 
 concurrency:
   group: dr-failover-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: false
 
 jobs:
-  dr-failover:
-    name: DR Failover Test
+  preflight:
+    name: DR Preflight
     runs-on: ubuntu-latest
     permissions:
       contents: read
     env:
-      GO_VERSION: "1.25.5"
-      DR_WORK_DIR: ${{ runner.temp }}/dr-failover
-      SLACK_WEBHOOK_URL: ${{ secrets.DR_FAILOVER_SLACK_WEBHOOK }}
-      DISCORD_WEBHOOK_URL: ${{ secrets.DR_FAILOVER_DISCORD_WEBHOOK }}
+      GO_VERSION: '1.25.5'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+
+      - name: Validate drill scripts
+        run: |
+          bash -n infra/dr/run-failover-drill.sh
+          bash -n scripts/dr/init-failover-cluster.sh
+          bash -n scripts/dr/failover-test.sh
+
+  rehearsal:
+    name: DR Rehearsal
+    runs-on: ubuntu-latest
+    needs: preflight
+    permissions:
+      contents: read
+    env:
+      GO_VERSION: '1.25.5'
+      DR_OUTPUT_DIR: ${{ runner.temp }}/dr-rehearsal
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -31,26 +67,81 @@ jobs:
           cache: true
 
       - name: Build virtengine CLI
-        run: |
-          go build -o /usr/local/bin/virtengine ./cmd/virtengine
+        run: go build -o /usr/local/bin/virtengine ./cmd/virtengine
 
-      - name: Run DR failover test
+      - name: Run rehearsal drill
         run: |
-          chmod +x scripts/dr/init-failover-cluster.sh scripts/dr/failover-test.sh
-          scripts/dr/failover-test.sh 2>&1 | tee dr-failover-report.txt
+          chmod +x infra/dr/run-failover-drill.sh
+          infra/dr/run-failover-drill.sh --mode rehearsal --output-dir "$DR_OUTPUT_DIR"
 
-      - name: Upload DR failover report
+      - name: Upload rehearsal evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: dr-failover-report
-          path: dr-failover-report.txt
-          retention-days: 7
+          name: dr-rehearsal-evidence
+          path: |
+            ${{ runner.temp }}/dr-rehearsal/failover-drill.log
+            ${{ runner.temp }}/dr-rehearsal/failover-drill-summary.md
+            ${{ runner.temp }}/dr-rehearsal/failover-drill-evidence.json
+          retention-days: 14
 
-      - name: Notify on failure
-        if: failure()
+  live-drill:
+    name: DR Live Validation
+    runs-on: ubuntu-latest
+    needs: [preflight, rehearsal]
+    if: github.event_name == 'workflow_dispatch' && github.event.inputs.mode == 'live'
+    permissions:
+      contents: read
+    environment: dr-drill
+    env:
+      GO_VERSION: '1.25.5'
+      DR_OUTPUT_DIR: ${{ runner.temp }}/dr-live
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+
+      - name: Build virtengine CLI
+        run: go build -o /usr/local/bin/virtengine ./cmd/virtengine
+
+      - name: Run live drill
+        shell: bash
         run: |
-          message="DR failover test failed on ${GITHUB_SHA}."
+          chmod +x infra/dr/run-failover-drill.sh
+          extra_args=()
+          if [ "${{ github.event.inputs.live_validation }}" = "true" ]; then
+            extra_args+=(--live-validation)
+          fi
+          infra/dr/run-failover-drill.sh --mode live --output-dir "$DR_OUTPUT_DIR" "${extra_args[@]}"
+
+      - name: Upload live evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: dr-live-evidence
+          path: |
+            ${{ runner.temp }}/dr-live/failover-drill.log
+            ${{ runner.temp }}/dr-live/failover-drill-summary.md
+            ${{ runner.temp }}/dr-live/failover-drill-evidence.json
+          retention-days: 30
+
+  notify:
+    name: Notify on failure
+    runs-on: ubuntu-latest
+    needs: [rehearsal, live-drill]
+    if: failure()
+    steps:
+      - name: Notify
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.DR_FAILOVER_SLACK_WEBHOOK }}
+          DISCORD_WEBHOOK_URL: ${{ secrets.DR_FAILOVER_DISCORD_WEBHOOK }}
+        run: |
+          message="DR failover workflow failed on ${GITHUB_SHA}."
           payload="{\"text\":\"${message}\"}"
           if [ -n "$SLACK_WEBHOOK_URL" ]; then
             curl -s -X POST "$SLACK_WEBHOOK_URL" -H "Content-Type: application/json" -d "$payload"

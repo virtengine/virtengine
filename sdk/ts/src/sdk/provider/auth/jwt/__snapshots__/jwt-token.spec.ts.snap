@@ -1,0 +1,5 @@
+// Jest Snapshot v1, https://goo.gl/fbAQLP
+
+exports[`JWT Claims Validation ES256KADR36 - Valid Signature / short: ES256KADR36 - Valid Signature / short 1`] = `"rXm9UZlmWMtOblCxPQ23mo6JfdwsFgniy39r5wP6dTpBzjEFWjMy0CPDjZdRKm6iTLDXZy0HeiQLN3_d7CgWqg"`;
+
+exports[`JWT Claims Validation ES256KADR36 - Valid Signature/with scoped claims: ES256KADR36 - Valid Signature/with scoped claims 1`] = `"PjYzBShTwV0b_hrk3D9IS1ojqE6ypiPyNjEIXABCF28cWW_FFCwI6gtstIqWBKdwNnvZ3p0OQvw3LV43xLSkUw"`;

@@ -2,7 +2,9 @@ package keeper
 
 import (
 	"crypto/sha256"
+	"encoding/json"
 
+	storetypes "cosmossdk.io/store/types"
 	"github.com/cosmos/cosmos-sdk/crypto/keys/secp256k1"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 
@@ -151,8 +153,30 @@ func (k Keeper) UpdateScore(
 
 // storeVerificationEvent stores a verification event
 func (k Keeper) storeVerificationEvent(ctx sdk.Context, address sdk.AccAddress, event *types.VerificationEvent) {
-	// Events are stored for audit purposes
-	// For now, we emit as SDK events; persistent storage can be added if needed
+	if event == nil {
+		return
+	}
+	if err := event.Validate(); err != nil {
+		k.Logger(ctx).Error("failed to validate verification event", "error", err)
+		return
+	}
+
+	store := ctx.KVStore(k.skey)
+	timestamp := event.Timestamp.UTC().UnixNano()
+	key := types.VerificationHistoryKey(address.Bytes(), timestamp)
+	for store.Has(key) {
+		timestamp++
+		key = types.VerificationHistoryKey(address.Bytes(), timestamp)
+	}
+
+	bz, err := json.Marshal(event)
+	if err != nil {
+		k.Logger(ctx).Error("failed to marshal verification event", "error", err)
+		return
+	}
+
+	store.Set(key, bz)
+
 	_ = ctx.EventManager().EmitTypedEvent(&types.EventStatusUpdated{
 		AccountAddress:   address.String(),
 		ScopeID:          event.ScopeID,
@@ -166,9 +190,26 @@ func (k Keeper) storeVerificationEvent(ctx sdk.Context, address sdk.AccAddress, 
 
 // GetVerificationHistory returns the verification history for an account
 func (k Keeper) GetVerificationHistory(ctx sdk.Context, address sdk.AccAddress, limit uint32) []types.VerificationEvent {
-	// For now, verification history is event-based
-	// A persistent implementation would iterate over stored events
-	return []types.VerificationEvent{}
+	store := ctx.KVStore(k.skey)
+	prefix := types.VerificationHistoryPrefixKey(address.Bytes())
+	iterator := storetypes.KVStoreReversePrefixIterator(store, prefix)
+	defer iterator.Close()
+
+	history := make([]types.VerificationEvent, 0)
+	for ; iterator.Valid(); iterator.Next() {
+		if limit > 0 && safeUint32FromIntBiometric(len(history)) >= limit {
+			break
+		}
+
+		var event types.VerificationEvent
+		if err := json.Unmarshal(iterator.Value(), &event); err != nil {
+			k.Logger(ctx).Error("failed to unmarshal verification event", "error", err)
+			continue
+		}
+		history = append(history, event)
+	}
+
+	return history
 }
 
 // ============================================================================

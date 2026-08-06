@@ -116,10 +116,8 @@ func (s *KeeperTestSuite) oraclePriceAggregationMedianOutlier() {
 		{ID: "chainlink", Type: types.OracleSourceTypeChainlinkIBC, Enabled: true, Priority: 3},
 	}, 3, 300)
 
-	price, err := s.keeper.AggregatePrice(s.ctx, types.CurrencyPair{Base: "VRT", Quote: "USD"})
-	require.NoError(t, err)
-	expected := sdkmath.LegacyMustNewDecFromStr("1.10")
-	require.True(t, price.Rate.Equal(expected))
+	_, err := s.keeper.AggregatePrice(s.ctx, types.CurrencyPair{Base: "VRT", Quote: "USD"})
+	require.ErrorIs(t, err, types.ErrOracleInsufficientSources)
 }
 
 func (s *KeeperTestSuite) oraclePriceStalenessRejection() {
@@ -156,9 +154,8 @@ func (s *KeeperTestSuite) oracleFallbackChain() {
 		{ID: "chainlink", Type: types.OracleSourceTypeChainlinkIBC, Enabled: true, Priority: 3},
 	}, 2, 300)
 
-	price, err := s.keeper.AggregatePrice(s.ctx, types.CurrencyPair{Base: "VRT", Quote: "USD"})
-	require.NoError(t, err)
-	require.True(t, price.Rate.GT(sdkmath.LegacyZeroDec()))
+	_, err := s.keeper.AggregatePrice(s.ctx, types.CurrencyPair{Base: "VRT", Quote: "USD"})
+	require.ErrorIs(t, err, types.ErrOracleUnavailable)
 }
 
 func (s *KeeperTestSuite) oracleManualOverride() {

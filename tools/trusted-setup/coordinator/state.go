@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"time"
 )
 
 const (
@@ -15,6 +16,7 @@ const (
 
 type State struct {
 	BaseDir string
+	NowFunc func() time.Time
 }
 
 func (s State) ConfigPath() string {
@@ -42,6 +44,13 @@ func (s State) EnsureDirs() error {
 	return nil
 }
 
+func (s State) Now() time.Time {
+	if s.NowFunc != nil {
+		return s.NowFunc().UTC()
+	}
+	return time.Now().UTC()
+}
+
 func (s State) LoadConfig() (*Config, error) {
 	data, err := os.ReadFile(s.ConfigPath())
 	if err != nil {
@@ -59,7 +68,7 @@ func (s State) SaveConfig(cfg *Config) error {
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(s.ConfigPath(), data, 0o600)
+	return writeFileAtomic(s.ConfigPath(), data)
 }
 
 func (s State) LoadTranscript() ([]byte, error) {
@@ -67,7 +76,7 @@ func (s State) LoadTranscript() ([]byte, error) {
 }
 
 func (s State) SaveTranscript(data []byte) error {
-	return os.WriteFile(s.TranscriptPath(), data, 0o600)
+	return writeFileAtomic(s.TranscriptPath(), data)
 }
 
 func (s State) Phase1ContributionPaths() ([]string, error) {
@@ -101,4 +110,31 @@ func listContributionFiles(dir string) ([]string, error) {
 	}
 	sort.Strings(files)
 	return files, nil
+}
+
+func writeFileAtomic(path string, data []byte) error {
+	if err := os.MkdirAll(filepath.Dir(path), 0o750); err != nil {
+		return err
+	}
+	tmp, err := os.CreateTemp(filepath.Dir(path), ".tmp-*")
+	if err != nil {
+		return err
+	}
+	tmpPath := tmp.Name()
+	defer func() {
+		_ = os.Remove(tmpPath)
+	}()
+
+	if _, err := tmp.Write(data); err != nil {
+		_ = tmp.Close()
+		return err
+	}
+	if err := tmp.Chmod(0o600); err != nil {
+		_ = tmp.Close()
+		return err
+	}
+	if err := tmp.Close(); err != nil {
+		return err
+	}
+	return os.Rename(tmpPath, path)
 }

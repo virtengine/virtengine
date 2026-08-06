@@ -7,6 +7,7 @@ import { useWallet, useIdentity } from '@/lib/portal-adapter';
 import { IdentityRequirements } from '@/components/identity';
 import { formatCurrency, formatTokenAmount, truncateAddress } from '@/lib/utils';
 import { txLink } from '@/lib/explorer';
+import { submitCommittedOrder } from '@/lib/order-creation';
 import { formatPriceUSD, useOfferingStore } from '@/stores/offeringStore';
 import { useOrderStore } from '@/stores/orderStore';
 
@@ -160,16 +161,12 @@ export default function OrderCreateClient() {
     setStep('signing');
     setSignError(null);
     try {
-      const tx = await createOrder(
-        msgPreview,
-        wallet as unknown as Parameters<typeof createOrder>[1]
+      const tx = await submitCommittedOrder(
+        () => createOrder(msgPreview, wallet as unknown as Parameters<typeof createOrder>[1]),
+        () => fetchOrders(account.address)
       );
-      setTxHash(tx);
-      await fetchOrders(account.address);
-      const latest = [...useOrderStore.getState().orders].sort(
-        (a, b) => b.createdAt.getTime() - a.createdAt.getTime()
-      )[0];
-      setOrderId(latest?.id ?? null);
+      setTxHash(tx.txHash);
+      setOrderId(tx.orderId);
       setStep('confirmed');
     } catch (error) {
       setSignError(error instanceof Error ? error.message : 'Failed to submit order');
@@ -499,7 +496,9 @@ export default function OrderCreateClient() {
               <div className="mt-6 grid gap-4 sm:grid-cols-2">
                 <div className="rounded-lg border border-border bg-muted/40 p-4">
                   <p className="text-sm text-muted-foreground">Order ID</p>
-                  <p className="mt-1 font-mono text-sm">{orderId ?? 'Pending'}</p>
+                  <p className="mt-1 font-mono text-sm">
+                    {orderId ?? 'Awaiting chain API confirmation'}
+                  </p>
                 </div>
                 <div className="rounded-lg border border-border bg-muted/40 p-4">
                   <p className="text-sm text-muted-foreground">Transaction hash</p>

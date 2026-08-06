@@ -141,8 +141,9 @@ func (ms msgServer) CloseDeployment(goCtx context.Context, msg *types.MsgCloseDe
 
 func (ms msgServer) CloseGroup(goCtx context.Context, msg *types.MsgCloseGroup) (*types.MsgCloseGroupResponse, error) {
 	ctx := sdk.UnwrapSDKContext(goCtx)
+	cacheCtx, write := ctx.CacheContext()
 
-	group, found := ms.deployment.GetGroup(ctx, msg.ID)
+	group, found := ms.deployment.GetGroup(cacheCtx, msg.ID)
 	if !found {
 		return nil, v1.ErrGroupNotFound
 	}
@@ -154,19 +155,23 @@ func (ms msgServer) CloseGroup(goCtx context.Context, msg *types.MsgCloseGroup) 
 	}
 
 	// Update the Group's state
-	err = ms.deployment.OnCloseGroup(ctx, group, types.GroupClosed)
+	err = ms.deployment.OnCloseGroup(cacheCtx, group, types.GroupClosed)
 	if err != nil {
 		return nil, err
 	}
-	_ = ms.market.OnGroupClosed(ctx, group.ID)
+	if err := ms.market.OnGroupClosed(cacheCtx, group.ID); err != nil {
+		return nil, err
+	}
+	write()
 
 	return &types.MsgCloseGroupResponse{}, nil
 }
 
 func (ms msgServer) PauseGroup(goCtx context.Context, msg *types.MsgPauseGroup) (*types.MsgPauseGroupResponse, error) {
 	ctx := sdk.UnwrapSDKContext(goCtx)
+	cacheCtx, write := ctx.CacheContext()
 
-	group, found := ms.deployment.GetGroup(ctx, msg.ID)
+	group, found := ms.deployment.GetGroup(cacheCtx, msg.ID)
 	if !found {
 		return nil, v1.ErrGroupNotFound
 	}
@@ -178,11 +183,14 @@ func (ms msgServer) PauseGroup(goCtx context.Context, msg *types.MsgPauseGroup) 
 	}
 
 	// Update the Group's state
-	err = ms.deployment.OnPauseGroup(ctx, group)
+	err = ms.deployment.OnPauseGroup(cacheCtx, group)
 	if err != nil {
 		return nil, err
 	}
-	_ = ms.market.OnGroupClosed(ctx, group.ID)
+	if err := ms.market.OnGroupClosed(cacheCtx, group.ID); err != nil {
+		return nil, err
+	}
+	write()
 
 	return &types.MsgPauseGroupResponse{}, nil
 }

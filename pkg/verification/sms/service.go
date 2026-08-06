@@ -6,6 +6,7 @@ package sms
 import (
 	"context"
 	"crypto/rand"
+	"encoding/base64"
 	"encoding/hex"
 	"fmt"
 	"sync"
@@ -33,6 +34,7 @@ type DefaultService struct {
 	config          Config
 	provider        Provider
 	signer          signer.SignerService
+	chainIntegrator ChainIntegrator
 	auditor         audit.AuditLogger
 	rateLimiter     ratelimit.VerificationLimiter
 	antiFraud       AntiFraudEngine
@@ -61,6 +63,13 @@ func WithProvider(provider Provider) ServiceOption {
 func WithSigner(signerSvc signer.SignerService) ServiceOption {
 	return func(s *DefaultService) {
 		s.signer = signerSvc
+	}
+}
+
+// WithChainIntegrator sets the chain integrator used for on-chain proof submission.
+func WithChainIntegrator(integrator ChainIntegrator) ServiceOption {
+	return func(s *DefaultService) {
+		s.chainIntegrator = integrator
 	}
 }
 
@@ -131,6 +140,17 @@ func NewService(
 		s.provider = provider
 	}
 
+	if s.chainIntegrator == nil && config.ChainIntegration != nil {
+		if s.signer == nil {
+			return nil, errors.Wrap(ErrInvalidConfig, "chain integration requires a signer")
+		}
+		integrator, err := NewChainIntegrator(*config.ChainIntegration, logger)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create SMS chain integrator: %w", err)
+		}
+		s.chainIntegrator = integrator
+	}
+
 	// Create template manager
 	s.templateManager = NewTemplateManager(TemplateDefaults{
 		ProductName:    "VirtEngine",
@@ -155,6 +175,7 @@ func NewService(
 		Bool("velocity_checks", config.EnableVelocityChecks).
 		Bool("rate_limit_enabled", config.RateLimitEnabled).
 		Bool("audit_log_enabled", config.AuditLogEnabled).
+		Bool("chain_integration_enabled", s.chainIntegrator != nil).
 		Msg("SMS verification service initialized")
 
 	return s, nil
@@ -164,17 +185,20 @@ func NewService(
 func createSMSProvider(config Config, logger zerolog.Logger) (Provider, error) {
 	providerConfig, ok := config.ProviderConfigs[config.PrimaryProvider]
 	if !ok {
-		// Use mock provider for testing
-		logger.Warn().Str("provider", config.PrimaryProvider).Msg("provider config not found, using mock")
-		return NewMockProvider(logger), nil
+		return nil, errors.Wrapf(ErrInvalidConfig, "primary_provider %q requires a matching provider_configs entry", config.PrimaryProvider)
 	}
 
 	var primary Provider
 	var secondary Provider
 	var err error
 
-	// Create primary provider using existing factory
-	primary, err = NewProvider(config.PrimaryProvider, providerConfig, logger)
+	primaryProviderType := config.PrimaryProvider
+	if providerConfig.Type != "" {
+		primaryProviderType = providerConfig.Type
+	}
+
+	// Create primary provider using configured provider type
+	primary, err = NewProvider(primaryProviderType, providerConfig, logger)
 	if err != nil {
 		return nil, err
 	}
@@ -183,7 +207,12 @@ func createSMSProvider(config Config, logger zerolog.Logger) (Provider, error) {
 	if config.FailoverEnabled && config.SecondaryProvider != "" {
 		secondaryConfig, ok := config.ProviderConfigs[config.SecondaryProvider]
 		if ok {
-			secondary, err = NewProvider(config.SecondaryProvider, secondaryConfig, logger)
+			secondaryProviderType := config.SecondaryProvider
+			if secondaryConfig.Type != "" {
+				secondaryProviderType = secondaryConfig.Type
+			}
+
+			secondary, err = NewProvider(secondaryProviderType, secondaryConfig, logger)
 			if err != nil {
 				logger.Warn().Err(err).Str("provider", config.SecondaryProvider).Msg("failed to create secondary provider")
 			}
@@ -331,6 +360,7 @@ func (s *DefaultService) InitiateVerification(ctx context.Context, req *Initiate
 	// Create challenge
 	challenge, otp, err := NewSMSChallenge(ChallengeConfig{
 		ChallengeID:       challengeID,
+		VerificationID:    challengeID,
 		AccountAddress:    req.AccountAddress,
 		PhoneNumber:       phoneNumber, // Will be hashed internally
 		CountryCode:       countryCode,
@@ -458,20 +488,18 @@ func (s *DefaultService) VerifyChallenge(ctx context.Context, req *VerifyRequest
 
 	// Verify the OTP
 	success := challenge.VerifyOTP(req.OTP)
-	challenge.RecordAttempt(now, success)
 
 	// Record metrics
 	if s.metrics != nil {
 		s.metrics.RecordOTPAttempt(challenge.CountryCode, success)
 	}
 
-	// Update challenge in cache
-	if err := s.updateChallenge(ctx, challenge); err != nil {
-		s.logger.Error().Err(err).Msg("failed to update challenge")
-	}
-
 	// Handle verification result
 	if success {
+		if err := s.validateOnChainSubmissionRequest(req); err != nil {
+			return nil, err
+		}
+
 		// Create attestation
 		attestation, err := s.createAttestation(ctx, challenge)
 		if err != nil {
@@ -479,7 +507,38 @@ func (s *DefaultService) VerifyChallenge(ctx context.Context, req *VerifyRequest
 			if s.metrics != nil {
 				s.metrics.RecordAttestationFailed("signing_error")
 			}
-			// Still return success, attestation can be retried
+			if s.chainIntegrator != nil {
+				return nil, err
+			}
+		}
+
+		if attestation != nil && s.chainIntegrator != nil {
+			if err := s.submitVerificationOnChain(ctx, challenge, attestation, req, now); err != nil {
+				if s.metrics != nil {
+					s.metrics.RecordAttestationFailed("chain_submission")
+				}
+				if s.config.AuditLogEnabled && s.auditor != nil {
+					s.auditor.Log(ctx, audit.Event{
+						Type:      audit.EventTypeVerificationFailed,
+						Timestamp: now,
+						Actor:     req.AccountAddress,
+						Resource:  req.ChallengeID,
+						Action:    "submit_sms_proof_failed",
+						Details: map[string]interface{}{
+							"country_code": challenge.CountryCode,
+							"error":        err.Error(),
+						},
+					})
+				}
+				return nil, err
+			}
+		}
+
+		challenge.RecordAttempt(now, true)
+
+		// Update challenge in cache
+		if err := s.updateChallenge(ctx, challenge); err != nil {
+			s.logger.Error().Err(err).Msg("failed to update challenge")
 		}
 
 		// Record verification latency
@@ -519,6 +578,13 @@ func (s *DefaultService) VerifyChallenge(ctx context.Context, req *VerifyRequest
 			AttestationID:     attestationID,
 			RemainingAttempts: challenge.MaxAttempts - challenge.Attempts,
 		}, nil
+	}
+
+	challenge.RecordAttempt(now, false)
+
+	// Update challenge in cache
+	if err := s.updateChallenge(ctx, challenge); err != nil {
+		s.logger.Error().Err(err).Msg("failed to update challenge")
 	}
 
 	// Failed attempt
@@ -783,6 +849,7 @@ func (s *DefaultService) HealthCheck(ctx context.Context) (*HealthStatus, error)
 	}
 
 	status.Details["provider"] = s.provider.Name()
+	status.Details["chain_integration_enabled"] = s.chainIntegrator != nil
 
 	return status, nil
 }
@@ -837,6 +904,12 @@ func (s *DefaultService) Close() error {
 	if s.provider != nil {
 		if err := s.provider.Close(); err != nil {
 			s.logger.Error().Err(err).Msg("failed to close provider")
+		}
+	}
+
+	if s.chainIntegrator != nil {
+		if err := s.chainIntegrator.Close(); err != nil {
+			s.logger.Error().Err(err).Msg("failed to close chain integrator")
 		}
 	}
 
@@ -964,6 +1037,83 @@ func (s *DefaultService) updateChallenge(ctx context.Context, challenge *SMSChal
 	return s.cache.SetWithTTL(ctx, challenge.ChallengeID, challenge, ttl)
 }
 
+func (s *DefaultService) validateOnChainSubmissionRequest(req *VerifyRequest) error {
+	if s.chainIntegrator == nil {
+		return nil
+	}
+	if len(req.AccountSignature) == 0 {
+		return errors.Wrap(ErrInvalidRequest, "account_signature is required when chain integration is enabled")
+	}
+	if req.EvidenceStorageRef == "" {
+		return errors.Wrap(ErrInvalidRequest, "evidence_storage_ref is required when chain integration is enabled")
+	}
+	return nil
+}
+
+func (s *DefaultService) submitVerificationOnChain(
+	ctx context.Context,
+	challenge *SMSChallenge,
+	attestation *veidtypes.VerificationAttestation,
+	req *VerifyRequest,
+	verifiedAt time.Time,
+) error {
+	metadata := make(map[string]string, len(req.EvidenceMetadata)+8)
+	for key, value := range req.EvidenceMetadata {
+		metadata[key] = value
+	}
+
+	metadata["evidence_storage_ref"] = req.EvidenceStorageRef
+	if req.EvidenceStorageBackend != "" {
+		metadata["evidence_storage_backend"] = req.EvidenceStorageBackend
+	}
+	metadata["sms_verification_id"] = challenge.VerificationID
+	metadata["sms_challenge_id"] = challenge.ChallengeID
+	metadata["sms_phone_hash"] = challenge.OnChainPhoneHash
+	metadata["sms_phone_hash_salt"] = challenge.OnChainPhoneHashSalt
+	metadata["sms_country_code_hash"] = challenge.CountryCodeHash
+	metadata["sms_account_signature_b64"] = base64.StdEncoding.EncodeToString(req.AccountSignature)
+	metadata["attestation_id"] = attestation.ID
+	metadata["country_code"] = challenge.CountryCode
+	metadata["carrier_type"] = string(challenge.CarrierType)
+	metadata["is_voip"] = fmt.Sprintf("%t", challenge.IsVoIP)
+	metadata["risk_score"] = fmt.Sprintf("%d", challenge.RiskScore)
+
+	attestation.SetMetadata("evidence_storage_ref", req.EvidenceStorageRef)
+	if req.EvidenceStorageBackend != "" {
+		attestation.SetMetadata("evidence_storage_backend", req.EvidenceStorageBackend)
+	}
+	for key, value := range metadata {
+		attestation.SetMetadata(key, value)
+	}
+
+	resp, err := s.chainIntegrator.RecordVerification(ctx, RecordVerificationRequest{
+		AccountAddress:         challenge.AccountAddress,
+		ChallengeID:            challenge.ChallengeID,
+		VerificationID:         challenge.VerificationID,
+		PhoneHash:              challenge.OnChainPhoneHash,
+		PhoneHashSalt:          challenge.OnChainPhoneHashSalt,
+		CountryCodeHash:        challenge.CountryCodeHash,
+		CountryCode:            challenge.CountryCode,
+		CarrierType:            challenge.CarrierType,
+		IsVoIP:                 challenge.IsVoIP,
+		RiskScore:              challenge.RiskScore,
+		VerifiedAt:             verifiedAt,
+		ValidatorAddress:       attestation.Issuer.ValidatorAddress,
+		AccountSignature:       req.AccountSignature,
+		Attestation:            attestation,
+		EvidenceStorageRef:     req.EvidenceStorageRef,
+		EvidenceStorageBackend: req.EvidenceStorageBackend,
+		EvidenceMetadata:       metadata,
+	})
+	if err != nil {
+		return errors.Wrap(ErrServiceUnavailable, fmt.Sprintf("on-chain SMS submission failed: %v", err))
+	}
+	if resp != nil && resp.VerificationID != "" {
+		challenge.VerificationID = resp.VerificationID
+	}
+	return nil
+}
+
 // createAttestation creates a verification attestation for a verified phone
 func (s *DefaultService) createAttestation(ctx context.Context, challenge *SMSChallenge) (*veidtypes.VerificationAttestation, error) {
 	if s.signer == nil {
@@ -984,6 +1134,25 @@ func (s *DefaultService) createAttestation(ctx context.Context, challenge *SMSCh
 	subject := veidtypes.NewAttestationSubject(challenge.AccountAddress)
 	subject.RequestID = challenge.ChallengeID
 
+	activeKey, err := s.signer.GetActiveKey(ctx)
+	if err != nil {
+		return nil, errors.Wrap(ErrSigningFailed, fmt.Sprintf("failed to get active signer key: %v", err))
+	}
+	if activeKey == nil || len(activeKey.Fingerprint) < 16 {
+		return nil, errors.Wrap(ErrSigningFailed, "active signer key fingerprint is unavailable")
+	}
+
+	validatorAddress := ""
+	signerInfo, err := s.signer.GetSignerInfo(ctx)
+	if err != nil {
+		s.logger.Warn().Err(err).Msg("failed to get signer info, continuing with key-only issuer")
+	} else if signerInfo != nil {
+		validatorAddress = signerInfo.ValidatorAddress
+	}
+
+	issuer := veidtypes.NewAttestationIssuer(activeKey.Fingerprint, validatorAddress)
+	issuer.KeyID = activeKey.KeyID
+
 	// Calculate confidence based on risk factors
 	confidence := uint32(100)
 	if challenge.RiskScore > 0 {
@@ -995,7 +1164,7 @@ func (s *DefaultService) createAttestation(ctx context.Context, challenge *SMSCh
 
 	// Create attestation
 	attestation := veidtypes.NewVerificationAttestation(
-		veidtypes.AttestationIssuer{}, // Will be set by signer
+		issuer,
 		subject,
 		veidtypes.AttestationTypeSMSVerification,
 		nonceBytes,

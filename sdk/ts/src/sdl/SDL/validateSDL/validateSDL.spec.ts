@@ -3,7 +3,7 @@ import { merge } from "lodash";
 
 import type { DeepPartial } from "../../../encoding/typeEncodingHelpers.ts";
 import type { NetworkId } from "../../../network/index.ts";
-import { VE_DENOM, USDC_IBC_DENOMS } from "../../../network/index.ts";
+import { USDC_IBC_DENOMS, VE_DENOM } from "../../../network/index.ts";
 import { type SDLInput, validateSDL } from "./validateSDL.ts";
 
 describe(validateSDL.name, () => {

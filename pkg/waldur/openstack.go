@@ -9,7 +9,6 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/google/uuid"
 	client "github.com/waldur/go-client"
 )
 
@@ -91,15 +90,24 @@ func (o *OpenStackClient) ListOpenStackInstances(ctx context.Context, params Lis
 		apiParams := &client.OpenstackInstancesListParams{}
 
 		if params.ServiceSettingsUUID != "" {
-			u := uuid.MustParse(params.ServiceSettingsUUID)
+			u, err := parseUUIDParam("service settings UUID", params.ServiceSettingsUUID)
+			if err != nil {
+				return err
+			}
 			apiParams.ServiceSettingsUuid = &u
 		}
 		if params.ProjectUUID != "" {
-			u := uuid.MustParse(params.ProjectUUID)
+			u, err := parseUUIDParam("project UUID", params.ProjectUUID)
+			if err != nil {
+				return err
+			}
 			apiParams.ProjectUuid = &u
 		}
 		if params.CustomerUUID != "" {
-			u := uuid.MustParse(params.CustomerUUID)
+			u, err := parseUUIDParam("customer UUID", params.CustomerUUID)
+			if err != nil {
+				return err
+			}
 			apiParams.CustomerUuid = &u
 		}
 		if params.Name != "" {
@@ -147,7 +155,10 @@ func (o *OpenStackClient) GetOpenStackInstance(ctx context.Context, instanceUUID
 	var instance *OpenStackInstance
 
 	err := o.client.doWithRetry(ctx, func() error {
-		uuidType := uuid.MustParse(instanceUUID)
+		uuidType, err := parseUUIDParam("instance UUID", instanceUUID)
+		if err != nil {
+			return err
+		}
 		resp, err := o.client.api.OpenstackInstancesRetrieveWithResponse(ctx, uuidType, nil)
 		if err != nil {
 			return err
@@ -173,7 +184,10 @@ func (o *OpenStackClient) GetOpenStackInstance(ctx context.Context, instanceUUID
 // Note: Waldur uses unlink rather than direct destroy for OpenStack instances
 func (o *OpenStackClient) DeleteOpenStackInstance(ctx context.Context, instanceUUID string) error {
 	return o.client.doWithRetry(ctx, func() error {
-		uuidType := uuid.MustParse(instanceUUID)
+		uuidType, err := parseUUIDParam("instance UUID", instanceUUID)
+		if err != nil {
+			return err
+		}
 		resp, err := o.client.api.OpenstackInstancesUnlinkWithResponse(ctx, uuidType)
 		if err != nil {
 			return err
@@ -190,7 +204,10 @@ func (o *OpenStackClient) DeleteOpenStackInstance(ctx context.Context, instanceU
 // StartOpenStackInstance starts a stopped OpenStack instance
 func (o *OpenStackClient) StartOpenStackInstance(ctx context.Context, instanceUUID string) error {
 	return o.client.doWithRetry(ctx, func() error {
-		uuidType := uuid.MustParse(instanceUUID)
+		uuidType, err := parseUUIDParam("instance UUID", instanceUUID)
+		if err != nil {
+			return err
+		}
 		resp, err := o.client.api.OpenstackInstancesStartWithResponse(ctx, uuidType)
 		if err != nil {
 			return err
@@ -207,7 +224,10 @@ func (o *OpenStackClient) StartOpenStackInstance(ctx context.Context, instanceUU
 // StopOpenStackInstance stops a running OpenStack instance
 func (o *OpenStackClient) StopOpenStackInstance(ctx context.Context, instanceUUID string) error {
 	return o.client.doWithRetry(ctx, func() error {
-		uuidType := uuid.MustParse(instanceUUID)
+		uuidType, err := parseUUIDParam("instance UUID", instanceUUID)
+		if err != nil {
+			return err
+		}
 		resp, err := o.client.api.OpenstackInstancesStopWithResponse(ctx, uuidType)
 		if err != nil {
 			return err
@@ -224,7 +244,10 @@ func (o *OpenStackClient) StopOpenStackInstance(ctx context.Context, instanceUUI
 // RestartOpenStackInstance restarts an OpenStack instance
 func (o *OpenStackClient) RestartOpenStackInstance(ctx context.Context, instanceUUID string) error {
 	return o.client.doWithRetry(ctx, func() error {
-		uuidType := uuid.MustParse(instanceUUID)
+		uuidType, err := parseUUIDParam("instance UUID", instanceUUID)
+		if err != nil {
+			return err
+		}
 		resp, err := o.client.api.OpenstackInstancesRestartWithResponse(ctx, uuidType)
 		if err != nil {
 			return err
@@ -257,15 +280,24 @@ func (o *OpenStackClient) ListOpenStackVolumes(ctx context.Context, params ListO
 		apiParams := &client.OpenstackVolumesListParams{}
 
 		if params.ServiceSettingsUUID != "" {
-			u := uuid.MustParse(params.ServiceSettingsUUID)
+			u, err := parseUUIDParam("service settings UUID", params.ServiceSettingsUUID)
+			if err != nil {
+				return err
+			}
 			apiParams.ServiceSettingsUuid = &u
 		}
 		if params.ProjectUUID != "" {
-			u := uuid.MustParse(params.ProjectUUID)
+			u, err := parseUUIDParam("project UUID", params.ProjectUUID)
+			if err != nil {
+				return err
+			}
 			apiParams.ProjectUuid = &u
 		}
 		if params.CustomerUUID != "" {
-			u := uuid.MustParse(params.CustomerUUID)
+			u, err := parseUUIDParam("customer UUID", params.CustomerUUID)
+			if err != nil {
+				return err
+			}
 			apiParams.CustomerUuid = &u
 		}
 		if params.Name != "" {
@@ -310,7 +342,10 @@ func (o *OpenStackClient) GetOpenStackVolume(ctx context.Context, volumeUUID str
 	var volume *OpenStackVolume
 
 	err := o.client.doWithRetry(ctx, func() error {
-		uuidType := uuid.MustParse(volumeUUID)
+		uuidType, err := parseUUIDParam("volume UUID", volumeUUID)
+		if err != nil {
+			return err
+		}
 		resp, err := o.client.api.OpenstackVolumesRetrieveWithResponse(ctx, uuidType, nil)
 		if err != nil {
 			return err
@@ -336,7 +371,10 @@ func (o *OpenStackClient) GetOpenStackVolume(ctx context.Context, volumeUUID str
 // Note: Waldur uses unlink rather than direct destroy for OpenStack volumes
 func (o *OpenStackClient) DeleteOpenStackVolume(ctx context.Context, volumeUUID string) error {
 	return o.client.doWithRetry(ctx, func() error {
-		uuidType := uuid.MustParse(volumeUUID)
+		uuidType, err := parseUUIDParam("volume UUID", volumeUUID)
+		if err != nil {
+			return err
+		}
 		resp, err := o.client.api.OpenstackVolumesUnlinkWithResponse(ctx, uuidType)
 		if err != nil {
 			return err
@@ -369,15 +407,24 @@ func (o *OpenStackClient) ListOpenStackTenants(ctx context.Context, params ListO
 		apiParams := &client.OpenstackTenantsListParams{}
 
 		if params.ServiceSettingsUUID != "" {
-			u := uuid.MustParse(params.ServiceSettingsUUID)
+			u, err := parseUUIDParam("service settings UUID", params.ServiceSettingsUUID)
+			if err != nil {
+				return err
+			}
 			apiParams.ServiceSettingsUuid = &u
 		}
 		if params.ProjectUUID != "" {
-			u := uuid.MustParse(params.ProjectUUID)
+			u, err := parseUUIDParam("project UUID", params.ProjectUUID)
+			if err != nil {
+				return err
+			}
 			apiParams.ProjectUuid = &u
 		}
 		if params.CustomerUUID != "" {
-			u := uuid.MustParse(params.CustomerUUID)
+			u, err := parseUUIDParam("customer UUID", params.CustomerUUID)
+			if err != nil {
+				return err
+			}
 			apiParams.CustomerUuid = &u
 		}
 		if params.Name != "" {

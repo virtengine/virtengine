@@ -1,122 +1,20 @@
 package keeper
 
 import (
-	"encoding/json"
-	"fmt"
-	"time"
+	"bytes"
+	"encoding/hex"
+	"sort"
 
 	abci "github.com/cometbft/cometbft/abci/types"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 
+	veidv1 "github.com/virtengine/virtengine/sdk/go/node/veid/v1"
 	"github.com/virtengine/virtengine/x/veid/types"
 )
 
 // ============================================================================
 // Vote Extension Types
 // ============================================================================
-
-// VoteExtensionVersion is the current version of the vote extension format
-const VoteExtensionVersion = 1
-
-// VoteExtension contains the verification data included in vote extensions
-// This is used with ABCI++ (Cosmos SDK 0.50+) to include verification results in votes
-type VoteExtension struct {
-	// Version is the vote extension format version
-	Version uint8 `json:"version"`
-
-	// Height is the block height this extension is for
-	Height int64 `json:"height"`
-
-	// ValidatorAddress is the address of the validator creating this extension
-	ValidatorAddress string `json:"validator_address"`
-
-	// VerificationResults contains the verification results computed by this validator
-	VerificationResults []VoteExtensionResult `json:"verification_results,omitempty"`
-
-	// Timestamp is when this extension was created
-	Timestamp time.Time `json:"timestamp"`
-
-	// ModelVersion is the ML model version used by this validator
-	ModelVersion string `json:"model_version"`
-}
-
-// VoteExtensionResult is a compact representation of a verification result for vote extension
-type VoteExtensionResult struct {
-	// RequestID is the verification request ID
-	RequestID string `json:"request_id"`
-
-	// Score is the computed score
-	Score uint32 `json:"score"`
-
-	// Status is the verification status
-	Status types.VerificationResultStatus `json:"status"`
-
-	// InputHash is the SHA256 hash of inputs (truncated to 8 bytes for efficiency)
-	InputHash []byte `json:"input_hash"`
-
-	// ResultHash is the full result hash for verification
-	ResultHash []byte `json:"result_hash"`
-}
-
-// NewVoteExtension creates a new vote extension
-func NewVoteExtension(
-	height int64,
-	validatorAddress string,
-	modelVersion string,
-) *VoteExtension {
-	return NewVoteExtensionWithTime(height, validatorAddress, modelVersion, time.Unix(0, 0))
-}
-
-// NewVoteExtensionWithTime creates a new vote extension with a deterministic timestamp
-func NewVoteExtensionWithTime(
-	height int64,
-	validatorAddress string,
-	modelVersion string,
-	timestamp time.Time,
-) *VoteExtension {
-	return &VoteExtension{
-		Version:             VoteExtensionVersion,
-		Height:              height,
-		ValidatorAddress:    validatorAddress,
-		VerificationResults: make([]VoteExtensionResult, 0),
-		Timestamp:           timestamp.UTC(),
-		ModelVersion:        modelVersion,
-	}
-}
-
-// AddResult adds a verification result to the vote extension
-func (ve *VoteExtension) AddResult(result types.VerificationResult) {
-	// Compute result hash
-	resultHash := ComputeResultHash(result)
-
-	// Truncate input hash to 8 bytes for efficiency in vote extensions
-	inputHashTrunc := result.InputHash
-	if len(inputHashTrunc) > 8 {
-		inputHashTrunc = inputHashTrunc[:8]
-	}
-
-	ve.VerificationResults = append(ve.VerificationResults, VoteExtensionResult{
-		RequestID:  result.RequestID,
-		Score:      result.Score,
-		Status:     result.Status,
-		InputHash:  inputHashTrunc,
-		ResultHash: resultHash,
-	})
-}
-
-// Marshal serializes the vote extension to bytes
-func (ve *VoteExtension) Marshal() ([]byte, error) {
-	return json.Marshal(ve)
-}
-
-// UnmarshalVoteExtension deserializes bytes into a VoteExtension
-func UnmarshalVoteExtension(bz []byte) (*VoteExtension, error) {
-	var ve VoteExtension
-	if err := json.Unmarshal(bz, &ve); err != nil {
-		return nil, err
-	}
-	return &ve, nil
-}
 
 // ============================================================================
 // Vote Extension Handler
@@ -145,52 +43,51 @@ func NewVoteExtensionHandler(keeper *Keeper, keyProvider ValidatorKeyProvider) *
 func (k *Keeper) ExtendVote(
 	ctx sdk.Context,
 	req *abci.RequestExtendVote,
-	keyProvider ValidatorKeyProvider,
+	_ ValidatorKeyProvider,
 ) (*abci.ResponseExtendVote, error) {
-	k.Logger(ctx).Debug("extending vote with verification results",
-		"height", req.Height,
-	)
-
-	// Get the ML scorer model version
-	scorer := k.getMLScorer()
-	defer scorer.Close()
-	modelVersion := scorer.GetModelVersion()
-
-	// Get validator address
-	validatorAddr := ""
-	if keyProvider != nil {
-		validatorAddr = keyProvider.GetKeyFingerprint()
+	if req == nil || req.Height <= 0 || len(req.Hash) == 0 {
+		return nil, types.ErrInvalidVerificationResult.Wrap("invalid ExtendVote request")
 	}
-
-	// Create vote extension
-	extension := NewVoteExtensionWithTime(req.Height, validatorAddr, modelVersion, ctx.BlockTime())
-
-	// Get pending verification results for this block
-	// These are results that were computed during block processing
-	results := k.GetBlockVerificationResults(ctx, req.Height)
-
-	for _, result := range results {
-		extension.AddResult(result)
-	}
-
-	// Serialize the extension
-	extensionBytes, err := extension.Marshal()
+	expected, err := k.VoteExtensionCommitments(ctx)
 	if err != nil {
-		k.Logger(ctx).Error("failed to marshal vote extension",
-			"error", err,
-		)
-		return &abci.ResponseExtendVote{}, nil
+		return nil, err
 	}
+	expected.Height = req.Height
+	expected.BlockHash = bytes.Clone(req.Hash)
 
-	k.Logger(ctx).Info("vote extension created",
-		"height", req.Height,
-		"results_count", len(extension.VerificationResults),
-		"extension_size", len(extensionBytes),
-	)
-
-	return &abci.ResponseExtendVote{
-		VoteExtension: extensionBytes,
-	}, nil
+	results := []types.VerificationResult{}
+	if expected.PipelineVersion != noActivePipelineVersion {
+		results = k.ensureReceiptBuffer().snapshot(req.Height, ctx.BlockHeight())
+		if len(results) > MaxVoteExtensionResults {
+			return nil, types.ErrInvalidVerificationResult.Wrap("pre-consensus result limit exceeded")
+		}
+		sort.Slice(results, func(i, j int) bool { return results[i].RequestID < results[j].RequestID })
+	}
+	bundle := &veidv1.VEIDVoteExtension{
+		Version:         VoteExtensionVersion,
+		ChainId:         expected.ChainID,
+		Height:          req.Height,
+		BlockHash:       bytes.Clone(req.Hash),
+		PipelineVersion: expected.PipelineVersion,
+		RuntimeHash:     bytes.Clone(expected.RuntimeHash),
+		ModelHash:       bytes.Clone(expected.ModelHash),
+		Results:         make([]veidv1.VEIDVoteExtensionResult, 0, len(results)),
+	}
+	for _, result := range results {
+		extResult, err := verificationResultToVoteExtension(result, bundle.PipelineVersion, req.Height)
+		if err != nil {
+			return nil, err
+		}
+		bundle.Results = append(bundle.Results, extResult)
+	}
+	if err := ValidateVoteExtensionBundle(bundle, expected); err != nil {
+		return nil, err
+	}
+	bz, err := MarshalVoteExtensionBundle(bundle)
+	if err != nil {
+		return nil, err
+	}
+	return &abci.ResponseExtendVote{VoteExtension: bz}, nil
 }
 
 // VerifyVoteExtension is called to verify vote extensions from other validators
@@ -198,163 +95,111 @@ func (k *Keeper) ExtendVote(
 func (k *Keeper) VerifyVoteExtension(
 	ctx sdk.Context,
 	req *abci.RequestVerifyVoteExtension,
-	keyProvider ValidatorKeyProvider,
+	_ ValidatorKeyProvider,
 ) (*abci.ResponseVerifyVoteExtension, error) {
-	// Empty extension is valid (validator may not have verification data)
-	if len(req.VoteExtension) == 0 {
-		return &abci.ResponseVerifyVoteExtension{
-			Status: abci.ResponseVerifyVoteExtension_ACCEPT,
-		}, nil
+	response := &abci.ResponseVerifyVoteExtension{Status: abci.ResponseVerifyVoteExtension_REJECT}
+	if req == nil || req.Height <= 0 || len(req.Hash) == 0 || len(req.ValidatorAddress) == 0 {
+		return response, nil
 	}
-
-	// Parse the vote extension
-	extension, err := UnmarshalVoteExtension(req.VoteExtension)
+	bundle, err := UnmarshalVoteExtensionBundle(req.VoteExtension)
 	if err != nil {
-		k.Logger(ctx).Warn("failed to unmarshal vote extension",
-			"error", err,
-			"validator", fmt.Sprintf("%X", req.ValidatorAddress),
-		)
-		// Reject malformed extensions
-		return &abci.ResponseVerifyVoteExtension{
-			Status: abci.ResponseVerifyVoteExtension_REJECT,
-		}, nil
+		return response, nil
 	}
-
-	// Validate extension version
-	if extension.Version > VoteExtensionVersion {
-		k.Logger(ctx).Warn("unsupported vote extension version",
-			"version", extension.Version,
-			"supported", VoteExtensionVersion,
-		)
-		return &abci.ResponseVerifyVoteExtension{
-			Status: abci.ResponseVerifyVoteExtension_REJECT,
-		}, nil
+	expected, err := k.VoteExtensionCommitments(ctx)
+	if err != nil {
+		return response, nil
 	}
-
-	// Validate height matches
-	if extension.Height != req.Height {
-		k.Logger(ctx).Warn("vote extension height mismatch",
-			"extension_height", extension.Height,
-			"request_height", req.Height,
-		)
-		return &abci.ResponseVerifyVoteExtension{
-			Status: abci.ResponseVerifyVoteExtension_REJECT,
-		}, nil
+	expected.Height = req.Height
+	expected.BlockHash = req.Hash
+	if err := ValidateVoteExtensionBundle(bundle, expected); err != nil {
+		return response, nil
 	}
+	response.Status = abci.ResponseVerifyVoteExtension_ACCEPT
+	return response, nil
+}
 
-	// Verify each result in the extension
-	cv := k.GetConsensusVerifier(keyProvider, DefaultConsensusParams(), k.Logger(ctx))
-	localScorer := k.getMLScorer()
-	defer localScorer.Close()
+func verificationResultToVoteExtension(result types.VerificationResult, pipelineVersion string, height int64) (veidv1.VEIDVoteExtensionResult, error) {
+	if err := result.Validate(); err != nil {
+		return veidv1.VEIDVoteExtensionResult{}, err
+	}
+	if result.BlockHeight != height || !versionsMatch(result.ModelVersion, pipelineVersion) {
+		return veidv1.VEIDVoteExtensionResult{}, types.ErrInvalidVerificationResult.Wrap("result consensus binding mismatch")
+	}
+	receiptDigestHex := result.Metadata[types.VerificationResultMetadataReceiptDigest]
+	receiptDigest, err := hex.DecodeString(receiptDigestHex)
+	if err != nil || len(receiptDigest) != 32 {
+		return veidv1.VEIDVoteExtensionResult{}, types.ErrInvalidVerificationResult.Wrap("result receipt_digest is required")
+	}
+	reasonCodes := make([]string, len(result.ReasonCodes))
+	for i, reason := range result.ReasonCodes {
+		reasonCodes[i] = string(reason)
+	}
+	sort.Strings(reasonCodes)
+	reasonCodes = compactSortedStrings(reasonCodes)
+	extResult := veidv1.VEIDVoteExtensionResult{
+		RequestId:      result.RequestID,
+		AccountAddress: result.AccountAddress,
+		Score:          result.Score,
+		Status:         string(result.Status),
+		ModelVersion:   result.ModelVersion,
+		InputHash:      bytes.Clone(result.InputHash),
+		ReasonCodes:    reasonCodes,
+		ReceiptDigest:  receiptDigest,
+	}
+	extResult.ResultHash = ComputeVoteExtensionResultHash(extResult)
+	return extResult, nil
+}
 
-	for _, extResult := range extension.VerificationResults {
-		// Get our locally stored result for comparison
-		localResult, found := k.GetVerificationResult(ctx, extResult.RequestID)
-		if !found {
-			// If we don't have the result, we can't verify - accept with warning
-			k.Logger(ctx).Debug("verification result not found locally",
-				"request_id", extResult.RequestID,
-			)
+func compactSortedStrings(values []string) []string {
+	if len(values) < 2 {
+		return values
+	}
+	write := 1
+	for read := 1; read < len(values); read++ {
+		if values[read] == values[write-1] {
 			continue
 		}
-
-		// Compare scores within tolerance
-		comparison := cv.CompareResults(types.VerificationResult{
-			RequestID:    extResult.RequestID,
-			Score:        extResult.Score,
-			Status:       extResult.Status,
-			InputHash:    extResult.InputHash,
-			ModelVersion: extension.ModelVersion,
-		}, *localResult)
-
-		if !comparison.Match {
-			k.Logger(ctx).Warn("vote extension result mismatch",
-				"request_id", extResult.RequestID,
-				"ext_score", extResult.Score,
-				"local_score", localResult.Score,
-				"differences", comparison.Differences,
-			)
-			// Reject on mismatch
-			return &abci.ResponseVerifyVoteExtension{
-				Status: abci.ResponseVerifyVoteExtension_REJECT,
-			}, nil
-		}
+		values[write] = values[read]
+		write++
 	}
-
-	k.Logger(ctx).Debug("vote extension verified",
-		"height", req.Height,
-		"results_count", len(extension.VerificationResults),
-	)
-
-	return &abci.ResponseVerifyVoteExtension{
-		Status: abci.ResponseVerifyVoteExtension_ACCEPT,
-	}, nil
+	return values[:write]
 }
 
 // ============================================================================
 // Block Verification Results Storage
 // ============================================================================
 
-// blockVerificationResultsKey returns the store key for block verification results
-func blockVerificationResultsKey(height int64) []byte {
-	key := make([]byte, 0, len(types.PrefixVerificationHistory)+8)
-	key = append(key, types.PrefixVerificationHistory...)
-	key = append(key, []byte("/block/")...)
-	key = append(key, []byte{
-		byte(height >> 56),
-		byte(height >> 48),
-		byte(height >> 40),
-		byte(height >> 32),
-		byte(height >> 24),
-		byte(height >> 16),
-		byte(height >> 8),
-		byte(height),
-	}...)
-	return key
+// StoreBlockVerificationResult rejects direct result staging. Production
+// callers must use ProcessVerificationRequestWithReceipt so the full signed
+// receipt, committed runtime profile, and replay context are verified first.
+func (k *Keeper) StoreBlockVerificationResult(ctx sdk.Context, height int64, result types.VerificationResult) error {
+	return types.ErrUnauthorized.Wrap("direct pre-consensus result staging is disabled; use a verified inference receipt")
 }
 
-// StoreBlockVerificationResult stores a verification result for a specific block
-// This is used for vote extension creation
-func (k *Keeper) StoreBlockVerificationResult(ctx sdk.Context, height int64, result types.VerificationResult) error {
-	store := ctx.KVStore(k.skey)
-
-	// Get existing results for this block
-	results := k.GetBlockVerificationResults(ctx, height)
-	results = append(results, result)
-
-	bz, err := json.Marshal(results)
-	if err != nil {
+// storeVerifiedBlockVerificationResult stores a result after the caller has
+// verified its full signed inference receipt. It remains package-private so an
+// unauthenticated digest cannot be injected into the vote-extension carrier.
+func (k *Keeper) storeVerifiedBlockVerificationResult(ctx sdk.Context, height int64, result types.VerificationResult) error {
+	if ctx.ExecMode() != sdk.ExecModeVoteExtension {
+		return types.ErrUnauthorized.Wrap("pre-consensus results may only be staged during vote extension execution")
+	}
+	if height <= 0 || result.BlockHeight != height {
+		return types.ErrInvalidVerificationResult.Wrap("result height does not match carrier height")
+	}
+	if err := result.Validate(); err != nil {
 		return err
 	}
-
-	store.Set(blockVerificationResultsKey(height), bz)
-	return nil
+	return k.ensureReceiptBuffer().stageResult(height, result)
 }
 
 // GetBlockVerificationResults gets all verification results for a specific block height
 func (k *Keeper) GetBlockVerificationResults(ctx sdk.Context, height int64) []types.VerificationResult {
-	store := ctx.KVStore(k.skey)
-	bz := store.Get(blockVerificationResultsKey(height))
-	if bz == nil {
-		return []types.VerificationResult{}
-	}
-
-	var results []types.VerificationResult
-	if err := json.Unmarshal(bz, &results); err != nil {
-		k.Logger(ctx).Error("failed to unmarshal block verification results",
-			"height", height,
-			"error", err,
-		)
-		return []types.VerificationResult{}
-	}
-
-	return results
+	return k.ensureReceiptBuffer().snapshot(height, ctx.BlockHeight())
 }
 
 // ClearBlockVerificationResults clears verification results for a block (called after finalization)
 func (k *Keeper) ClearBlockVerificationResults(ctx sdk.Context, height int64) {
-	store := ctx.KVStore(k.skey)
-	store.Delete(blockVerificationResultsKey(height))
+	k.ensureReceiptBuffer().clearHeight(height)
 }
 
 // ============================================================================
@@ -364,38 +209,9 @@ func (k *Keeper) ClearBlockVerificationResults(ctx sdk.Context, height int64) {
 // PrepareProposalVerifications prepares verification results for block proposal
 // This is called during PrepareProposal by the block proposer
 func (k *Keeper) PrepareProposalVerifications(
-	ctx sdk.Context,
-	keyProvider ValidatorKeyProvider,
-	maxVerifications int,
+	_ sdk.Context,
+	_ ValidatorKeyProvider,
+	_ int,
 ) ([]types.VerificationResult, error) {
-	// Get pending verification requests
-	pendingRequests := k.GetPendingRequests(ctx, maxVerifications)
-	if len(pendingRequests) == 0 {
-		return nil, nil
-	}
-
-	results := make([]types.VerificationResult, 0, len(pendingRequests))
-
-	for _, request := range pendingRequests {
-		// Process the verification request
-		result := k.ProcessVerificationRequest(ctx, &request, keyProvider)
-		if result != nil {
-			results = append(results, *result)
-
-			// Store for vote extension
-			if err := k.StoreBlockVerificationResult(ctx, ctx.BlockHeight(), *result); err != nil {
-				k.Logger(ctx).Error("failed to store block verification result",
-					"request_id", request.RequestID,
-					"error", err,
-				)
-			}
-		}
-	}
-
-	k.Logger(ctx).Info("prepared verification results for proposal",
-		"count", len(results),
-		"block_height", ctx.BlockHeight(),
-	)
-
-	return results, nil
+	return nil, types.ErrInvalidVerificationResult.Wrap("VEID proposal verification is disabled while vote-extension carrier v0 is active")
 }

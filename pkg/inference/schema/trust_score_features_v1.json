@@ -1,0 +1,23 @@
+{
+  "schema_version": "virtengine.trust-score-features/v1",
+  "dtype": "float32",
+  "byte_order": "big-endian",
+  "total_dimensions": 768,
+  "segments": [
+    {"name": "selfie_embedding", "offset": 0, "dimensions": 512, "required": true, "transform": "l2_normalize"},
+    {"name": "face_confidence", "offset": 512, "dimensions": 1, "required": true},
+    {"name": "document_quality", "offset": 513, "dimensions": 1, "required": true},
+    {"name": "document_sharpness", "offset": 514, "dimensions": 1, "required": true},
+    {"name": "document_brightness", "offset": 515, "dimensions": 1, "required": true},
+    {"name": "document_contrast", "offset": 516, "dimensions": 1, "required": true},
+    {"name": "document_noise_quality", "offset": 517, "dimensions": 1, "required": true, "transform": "one_minus"},
+    {"name": "document_blur_quality", "offset": 518, "dimensions": 1, "required": true, "transform": "one_minus"},
+    {"name": "ocr_name", "offset": 519, "dimensions": 2, "required": true, "values": ["confidence", "validated"]},
+    {"name": "ocr_date_of_birth", "offset": 521, "dimensions": 2, "required": true, "values": ["confidence", "validated"]},
+    {"name": "ocr_document_number", "offset": 523, "dimensions": 2, "required": true, "values": ["confidence", "validated"]},
+    {"name": "ocr_expiry_date", "offset": 525, "dimensions": 2, "required": true, "values": ["confidence", "validated"]},
+    {"name": "ocr_nationality", "offset": 527, "dimensions": 2, "required": true, "values": ["confidence", "validated"]},
+    {"name": "metadata", "offset": 529, "dimensions": 16, "required": true, "values": ["scope_count", "scope_id_document", "scope_selfie", "scope_face_video", "scope_biometric", "scope_sso_metadata", "scope_email_proof", "scope_sms_proof", "scope_domain_verify", "block_height_mod_1000000", "reserved_0", "reserved_1", "reserved_2", "reserved_3", "reserved_4", "reserved_5"]},
+    {"name": "reserved", "offset": 545, "dimensions": 223, "required": false, "value": 0}
+  ]
+}

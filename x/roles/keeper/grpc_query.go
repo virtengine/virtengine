@@ -83,6 +83,7 @@ func (q GRPCQuerier) AccountState(c context.Context, req *types.QueryAccountStat
 
 	return &types.QueryAccountStateResponse{
 		AccountState: state,
+		Found:        found,
 	}, nil
 }
 
@@ -117,4 +118,36 @@ func (q GRPCQuerier) Params(c context.Context, req *types.QueryParamsRequest) (*
 	return &types.QueryParamsResponse{
 		Params: params,
 	}, nil
+}
+
+// HasRole checks whether an account currently has the requested role.
+func (q GRPCQuerier) HasRole(c context.Context, req *types.QueryHasRoleRequest) (*types.QueryHasRoleResponse, error) {
+	if req == nil {
+		return nil, status.Error(codes.InvalidArgument, errMsgEmptyRequest)
+	}
+
+	ctx := sdk.UnwrapSDKContext(c)
+
+	addr, err := sdk.AccAddressFromBech32(req.Address)
+	if err != nil {
+		return nil, types.ErrInvalidAddress.Wrap(err.Error())
+	}
+
+	role, err := types.RoleFromString(req.Role)
+	if err != nil {
+		return nil, types.ErrInvalidRole.Wrap(err.Error())
+	}
+
+	assignments := q.GetAccountRoles(ctx, addr)
+	for i := range assignments {
+		if assignments[i].Role == role {
+			assignment := assignments[i]
+			return &types.QueryHasRoleResponse{
+				HasRole:    true,
+				Assignment: &assignment,
+			}, nil
+		}
+	}
+
+	return &types.QueryHasRoleResponse{HasRole: false}, nil
 }

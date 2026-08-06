@@ -128,11 +128,32 @@ func (s *GenesisTestSuite) TestValidateGenesis_InvalidPolicy_EmptyAddress() {
 	s.Require().Contains(err.Error(), "address")
 }
 
-// Test: ValidateGenesis with duplicate enrollments
-// NOTE (TODO): Duplicate detection is not yet implemented in GenesisState.Validate()
-// This test documents the expected behavior for future implementation.
 func (s *GenesisTestSuite) TestValidateGenesis_DuplicateEnrollments() {
-	s.T().Skip("Duplicate enrollment detection not yet implemented in GenesisState.Validate()")
+	genesis := &types.GenesisState{
+		Params: types.DefaultParams(),
+		FactorEnrollments: []types.FactorEnrollment{
+			{
+				AccountAddress:   "cosmos1abcdefg",
+				FactorType:       types.FactorTypeTOTP,
+				FactorID:         "factor-1",
+				PublicIdentifier: []byte("totp-key"),
+				Status:           types.EnrollmentStatusActive,
+				EnrolledAt:       1000000,
+			},
+			{
+				AccountAddress:   "cosmos1abcdefg",
+				FactorType:       types.FactorTypeTOTP,
+				FactorID:         "factor-1",
+				PublicIdentifier: []byte("totp-key"),
+				Status:           types.EnrollmentStatusActive,
+				EnrolledAt:       1000001,
+			},
+		},
+	}
+
+	err := genesis.Validate()
+	s.Require().Error(err)
+	s.Require().Contains(err.Error(), "duplicate")
 }
 
 // Test: DefaultParams
@@ -158,9 +179,9 @@ func (s *GenesisTestSuite) TestParamsValidation_EmptyFactorTypes() {
 	params := types.DefaultParams()
 	params.AllowedFactorTypes = []types.FactorType{}
 
-	// Empty allowed factor types is valid - validation doesn't require them
 	err := params.Validate()
-	s.Require().NoError(err)
+	s.Require().Error(err)
+	s.Require().Contains(err.Error(), "allowed_factor_types")
 }
 
 // Test: Params validation - zero challenge expiry
@@ -354,10 +375,10 @@ func (s *GenesisTestSuite) TestMFAPolicyValidate() {
 			name: "invalid VEID threshold",
 			policy: types.MFAPolicy{
 				AccountAddress: "cosmos1abcdefg",
-				Enabled:        false, // Disabled so doesn't require factors
-				VEIDThreshold:  150,   // Over 100 - TODO: validation not implemented
+				Enabled:        false,
+				VEIDThreshold:  150,
 			},
-			expectError: false, // VEIDThreshold validation not implemented yet
+			expectError: true,
 		},
 	}
 
@@ -388,6 +409,7 @@ func (s *GenesisTestSuite) TestDeviceInfoFields() {
 				FirstSeenAt:    1000000,
 				LastSeenAt:     1000000,
 				TrustExpiresAt: 2000000,
+				TrustTokenHash: "hashed-token",
 			},
 			expectValid: true,
 		},
@@ -417,11 +439,11 @@ func (s *GenesisTestSuite) TestDeviceInfoFields() {
 
 	for _, tc := range tests {
 		s.Run(tc.name, func() {
-			// DeviceInfo doesn't have a Validate method, so we just check fields
 			if tc.expectValid {
-				s.Require().NotEmpty(tc.device.Fingerprint)
-				s.Require().Greater(tc.device.TrustExpiresAt, int64(0))
+				s.Require().NoError(tc.device.ValidateStored())
+				return
 			}
+			s.Require().Error(tc.device.ValidateStored())
 		})
 	}
 }
@@ -438,7 +460,10 @@ func (s *GenesisTestSuite) TestSensitiveTxConfigValidate() {
 			config: types.SensitiveTxConfig{
 				TransactionType: types.SensitiveTxLargeWithdrawal,
 				Enabled:         true,
-				Description:     "Large withdrawals require MFA",
+				RequiredFactorCombinations: []types.FactorCombination{
+					{Factors: []types.FactorType{types.FactorTypeTOTP}},
+				},
+				Description: "Large withdrawals require MFA",
 			},
 			expectError: false,
 		},
@@ -552,16 +577,25 @@ func (s *GenesisTestSuite) TestValidateGenesis_FullState() {
 			{
 				AccountAddress: "cosmos1abcdefg",
 				DeviceInfo: types.DeviceInfo{
-					Fingerprint: "device-fp",
-					UserAgent:   "Mozilla/5.0",
+					Fingerprint:    "device-fp",
+					UserAgent:      "Mozilla/5.0",
+					FirstSeenAt:    1000000,
+					LastSeenAt:     1000001,
+					TrustExpiresAt: 2000000,
+					TrustTokenHash: "hashed-token",
 				},
+				AddedAt:    1000000,
+				LastUsedAt: 1000001,
 			},
 		},
 		SensitiveTxConfigs: []types.SensitiveTxConfig{
 			{
 				TransactionType: types.SensitiveTxProviderRegistration,
 				Enabled:         true,
-				Description:     "Withdrawals require MFA",
+				RequiredFactorCombinations: []types.FactorCombination{
+					{Factors: []types.FactorType{types.FactorTypeTOTP}},
+				},
+				Description: "Withdrawals require MFA",
 			},
 		},
 	}

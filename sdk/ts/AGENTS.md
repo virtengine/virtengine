@@ -20,7 +20,7 @@
   - `sdk/ts/test/` — unit and functional tests.
 
 ## Core Concepts
-- Query vs tx: `createChainNodeSDK` builds gRPC query transport and optional tx transport, falling back to a noop transport when a signer is missing (`sdk/ts/src/sdk/chain/createChainNodeSDK.ts:17`).
+- Query vs tx: chain factories expose a capability controller with `disconnected`, `query-only`, `signing-ready`, and `MFA-authorized` states. Unsupported query or transaction calls reject with `ChainCapabilityError` instead of using an ambiguous noop transaction result (`sdk/ts/src/sdk/chain/ChainCapability.ts:4`).
 - Web vs node: `createChainNodeWebSDK` targets gRPC-gateway endpoints for browser usage (`sdk/ts/src/sdk/chain/createChainNodeWebSDK.ts:15`).
 - Provider SDK: `createProviderSDK` constructs provider-service clients with optional mTLS and retry interceptors (`sdk/ts/src/sdk/provider/createProviderSDK.ts:12`).
 
@@ -35,6 +35,7 @@ const sdk = createChainNodeSDK({
 });
 
 const identity = await sdk.virtengine.veid.v1.identity({ accountAddress: "..."} );
+console.log(sdk.capability.state); // "query-only"
 ```
 
 ### Web SDK (gRPC-gateway)
@@ -58,6 +59,7 @@ const providerSDK = createProviderSDK({
 
 ## Implementation Patterns
 - Add new API surfaces by updating generators under `sdk/ts/src/generated/` and re-export via `sdk/ts/src/index.ts:1`.
+- Never edit `sdk/ts/src/generated/` manually. Run `./scripts/proto-generate.sh ts`; dependencies are installed with `npm ci` from `sdk/ts/package-lock.json` inside the pinned Linux generator.
 - New SDK factories should live under `sdk/ts/src/sdk/` and be exported from `sdk/ts/src/sdk/index.ts:1`.
 - Keep retry and transport options wired through to avoid breaking existing integrations (`sdk/ts/src/sdk/provider/createProviderSDK.ts:12`).
 - Anti-patterns:
@@ -82,8 +84,9 @@ const providerSDK = createProviderSDK({
 ## Testing
 - Tests live in `sdk/ts/test/` (unit + functional).
 - Commands:
-  - `npm test` (runs Jest, `sdk/ts/package.json:41`).
-  - `npm run test:unit` and `npm run test:functional` for focused suites.
+  - `npm --prefix sdk/ts ci` installs the frozen dependency graph.
+  - `npm --prefix sdk/ts test` runs Jest.
+  - `npm --prefix sdk/ts run build` compiles and validates exports.
 
 ## Troubleshooting
 - SDK fails to connect in browser

@@ -1,12 +1,3 @@
-# SECURITY-9C: Supply Chain Security Workflow
-# Comprehensive supply chain security checks including:
-# - Dependency verification and pinning validation
-# - SBOM generation and attestation
-# - Artifact signing with Sigstore
-# - SLSA provenance generation
-# - Supply chain attack detection
-# - Third-party risk assessment
-
 name: Supply Chain Security
 
 on:
@@ -14,53 +5,174 @@ on:
     branches:
       - main
       - mainnet/main
+      - develop
     tags:
       - "v*"
   pull_request:
     branches:
       - main
       - mainnet/main
+      - develop
     paths:
       - "go.mod"
       - "go.sum"
+      - "go.work"
+      - "go.work.sum"
       - "vendor/**"
-      - "ml/requirements*.txt"
-      - "lib/portal/package*.json"
-      - "sdk/**/go.mod"
-      - "sdk/**/package*.json"
+      - "pnpm-lock.yaml"
+      - "pnpm-workspace.yaml"
+      - "portal/package.json"
+      - "lib/portal/package.json"
+      - "lib/admin/package.json"
+      - "lib/capture/package.json"
+      - "sdk/portal/package.json"
+      - "sdk/portal/pnpm-lock.yaml"
+      - "sdk/ts/package.json"
+      - "sdk/ts/package-lock.json"
+      - "ml/**/requirements*.txt"
+      - ".github/workflows/supply-chain.yaml"
+      - ".github/scripts/validate_security_policies.py"
+      - ".github/tests/test_security_policy*.py"
+      - ".gitleaks.toml"
+      - ".vulnerability-allowlist.yaml"
+      - "SUPPLY_CHAIN_SECURITY.md"
   schedule:
-    # Run weekly for continuous monitoring
     - cron: "0 4 * * 1"
   workflow_dispatch:
     inputs:
       full_audit:
-        description: "Run full supply chain audit"
+        description: Run the reproducibility check in addition to the standard supply-chain bar.
         required: false
-        default: false
+        default: true
         type: boolean
 
 concurrency:
   group: supply-chain-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+defaults:
+  run:
+    shell: bash
+
 env:
   GO_VERSION: "1.25.5"
-  COSIGN_EXPERIMENTAL: "1"
-  GOWORK: "off" # Disable workspace mode for vendor operations
+  PYTHON_VERSION: "3.11"
+  NODE_VERSION: "24"
+  PNPM_VERSION: "10.28.2"
+  COSIGN_VERSION: "v3.0.6"
+  SYFT_VERSION: "v1.42.4"
+  SLSA_VERIFIER_VERSION: "v2.7.1"
+  GOWORK: "off"
 
 permissions:
   contents: read
-  security-events: write
-  id-token: write # Required for keyless signing
-  packages: write # Required for container signing
-  attestations: write # Required for SLSA attestations
 
 jobs:
-  # ===========================================================================
-  # Dependency Verification
-  # ===========================================================================
+  policy-validation:
+    name: Policy Validation
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install validator dependencies
+        run: python -m pip install --disable-pip-version-check pyyaml==6.0.3
+
+      - name: Validate security policy files
+        run: |
+          python .github/scripts/validate_security_policies.py --files \
+            .github/workflows/security.yaml \
+            .github/workflows/supply-chain.yaml \
+            .github/workflows/license-compliance.yaml \
+            .github/workflows/pr-security-check.yaml \
+            .gitleaks.toml \
+            .vulnerability-allowlist.yaml \
+            SUPPLY_CHAIN_SECURITY.md
+
+      - name: Run policy validator tests
+        run: python -m unittest discover -s .github/tests -p "test_security_policy*.py"
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+
+      - name: Lint targeted workflows
+        run: |
+          go run github.com/rhysd/actionlint/cmd/actionlint@v1.7.12 \
+            .github/workflows/security.yaml \
+            .github/workflows/supply-chain.yaml \
+            .github/workflows/license-compliance.yaml \
+            .github/workflows/pr-security-check.yaml
+
   dependency-verification:
-    name: Verify Dependencies
+    name: Dependency Verification
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+          cache-dependency-path: |
+            pnpm-lock.yaml
+            sdk/portal/pnpm-lock.yaml
+
+      - name: Verify Go dependencies
+        run: |
+          go mod verify
+
+          cp go.mod go.mod.snapshot
+          cp go.sum go.sum.snapshot
+          go mod tidy
+          diff -u go.mod.snapshot go.mod
+          diff -u go.sum.snapshot go.sum
+          rm -f go.mod.snapshot go.sum.snapshot
+
+          go mod vendor
+          git diff --exit-code -- vendor
+
+      - name: Verify root pnpm workspace
+        run: |
+          test -f pnpm-lock.yaml
+          test -f pnpm-workspace.yaml
+          pnpm install --frozen-lockfile --ignore-scripts
+          git diff --exit-code -- pnpm-lock.yaml
+
+      - name: Verify sdk/portal lockfile
+        run: |
+          test -f sdk/portal/pnpm-lock.yaml
+          pnpm --dir sdk/portal install --frozen-lockfile --ignore-scripts
+          git diff --exit-code -- sdk/portal/pnpm-lock.yaml
+
+      - name: Verify sdk/ts lockfile
+        run: |
+          test -f sdk/ts/package-lock.json
+          npm --prefix sdk/ts ci --ignore-scripts
+          git diff --exit-code -- sdk/ts/package-lock.json
+
+  lockfile-integrity:
+    name: Lockfile Integrity
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -68,110 +180,42 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Set up Go
-        uses: actions/setup-go@v5
-        with:
-          go-version: ${{ env.GO_VERSION }}
-          cache: true
-
-      - name: Verify Go module checksums
+      - name: Verify required lockfiles exist
         run: |
-          echo "Verifying go.mod and go.sum..."
-          go mod verify
-          echo "✓ Module checksums verified"
+          test -f go.sum
+          test -f pnpm-lock.yaml
+          test -f sdk/portal/pnpm-lock.yaml
+          test -f sdk/ts/package-lock.json
 
-      - name: Check go.mod is tidy
-        run: |
-          cp go.mod go.mod.backup
-          cp go.sum go.sum.backup
-          go mod tidy
-          if ! diff -q go.mod go.mod.backup > /dev/null 2>&1; then
-            echo "::error::go.mod is not tidy - run 'go mod tidy'"
-            diff go.mod go.mod.backup || true
-            exit 1
-          fi
-          if ! diff -q go.sum go.sum.backup > /dev/null 2>&1; then
-            echo "::error::go.sum is not tidy - run 'go mod tidy'"
-            exit 1
-          fi
-          echo "✓ go.mod and go.sum are tidy"
-
-      - name: Check for version pinning
-        run: |
-          echo "Checking for unpinned dependencies..."
-          # Check for any dependencies using "latest" or version ranges
-          if grep -E "^\s+.*\s+(latest|>=|<=|>|<|~|\^)" go.mod | grep -v "^//"; then
-            echo "::warning::Found potentially unpinned dependencies"
-          else
-            echo "✓ All dependencies appear to be pinned"
-          fi
-
-      - name: Verify vendor directory
-        if: hashFiles('vendor/') != ''
-        continue-on-error: true
-        run: |
-          echo "Verifying vendor directory..."
-          go mod vendor
-          if ! git diff --quiet vendor/; then
-            echo "::warning::Vendor directory is out of sync"
-            git diff --stat vendor/
-          else
-            echo "✓ Vendor directory is in sync"
-          fi
-
-  # ===========================================================================
-  # Lockfile Integrity Check
-  # ===========================================================================
-  lockfile-integrity:
-    name: Lockfile Integrity
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Check Go lockfile (go.sum)
-        run: |
-          if [[ ! -f "go.sum" ]]; then
-            echo "::error::go.sum not found - dependencies not locked"
-            exit 1
-          fi
-          echo "✓ go.sum exists"
-
-          # Count entries
-          ENTRIES=$(wc -l < go.sum)
-          echo "go.sum contains $ENTRIES entries"
-
-      - name: Check npm lockfiles
-        continue-on-error: true
-        run: |
-          for dir in lib/portal sdk/js; do
-            if [[ -d "$dir" ]] && [[ -f "$dir/package.json" ]]; then
-              if [[ ! -f "$dir/package-lock.json" ]] && [[ ! -f "$dir/pnpm-lock.yaml" ]]; then
-                echo "::warning::$dir has package.json but no lockfile"
-              else
-                echo "✓ $dir has lockfile"
-              fi
-            fi
-          done
-
-      - name: Verify lockfile hasn't been tampered
+      - name: Check dependency diff discipline for pull requests
         if: github.event_name == 'pull_request'
         run: |
-          # Get list of changed files
-          CHANGED_FILES=$(git diff --name-only ${{ github.event.pull_request.base.sha }} ${{ github.sha }} || echo "")
+          base_ref="${{ github.base_ref }}"
+          git fetch origin "$base_ref" --depth=1
+          changed_files=$(git diff --name-only "origin/${base_ref}...HEAD")
 
-          # Check if lockfiles changed without corresponding source changes
-          if echo "$CHANGED_FILES" | grep -q "go.sum"; then
-            if ! echo "$CHANGED_FILES" | grep -q "go.mod"; then
-              echo "::warning::go.sum changed without go.mod changes - verify this is intentional"
+          require_pair() {
+            local lockfile="$1"
+            local manifest="$2"
+            if echo "$changed_files" | grep -qx "$lockfile"; then
+              if ! echo "$changed_files" | grep -qx "$manifest"; then
+                echo "::error::${lockfile} changed without ${manifest}"
+                exit 1
+              fi
+            fi
+          }
+
+          require_pair "go.sum" "go.mod"
+          require_pair "sdk/ts/package-lock.json" "sdk/ts/package.json"
+          require_pair "sdk/portal/pnpm-lock.yaml" "sdk/portal/package.json"
+
+          if echo "$changed_files" | grep -qx "pnpm-lock.yaml"; then
+            if ! echo "$changed_files" | grep -Eq '^(portal|lib/portal|lib/admin|lib/capture)/package\.json$|^pnpm-workspace\.yaml$'; then
+              echo "::error::pnpm-lock.yaml changed without a workspace manifest change"
+              exit 1
             fi
           fi
 
-          echo "✓ Lockfile integrity check passed"
-
-  # ===========================================================================
-  # Supply Chain Attack Detection
-  # ===========================================================================
   attack-detection:
     name: Supply Chain Attack Detection
     runs-on: ubuntu-latest
@@ -179,122 +223,23 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Check for dependency confusion
+      - name: Run attack-detection script
         run: |
-          echo "Checking for dependency confusion vulnerabilities..."
+          mkdir -p .cache/supply-chain
+          chmod +x scripts/supply-chain/detect-supply-chain-attacks.sh
+          scripts/supply-chain/detect-supply-chain-attacks.sh --all --json > .cache/supply-chain/attack-detection.json
 
-          # Look for internal-looking packages that might be vulnerable
-          INTERNAL_PATTERNS="internal|private|corp|company"
-
-          if grep -E "^\s+.*($INTERNAL_PATTERNS)" go.mod | grep -v "^//"; then
-            echo "::warning::Found packages with internal-looking names - verify these are from trusted sources"
-          else
-            echo "✓ No obvious dependency confusion risks detected"
-          fi
-
-      - name: Check for typosquatting
-        run: |
-          echo "Checking for typosquatting risks..."
-
-          # Known legitimate packages and common typosquats
-          TYPOSQUATS=(
-            "cosmoss-sdk"
-            "cosmos-skd"
-            "commetbft"
-            "comebtft"
-            "etehrs"
-            "testyfy"
-          )
-
-          for typo in "${TYPOSQUATS[@]}"; do
-            if grep -qi "$typo" go.mod go.sum 2>/dev/null; then
-              echo "::error::Potential typosquat detected: $typo"
-              exit 1
-            fi
-          done
-
-          echo "✓ No known typosquatting patterns detected"
-
-      - name: Verify package sources
-        run: |
-          echo "Verifying package sources..."
-
-          # Check for packages from non-standard domains
-          SUSPICIOUS=$(grep -E "^\s+[a-zA-Z]" go.mod | \
-            grep -vE "(github\.com|golang\.org|google\.golang\.org|gopkg\.in|k8s\.io|cosmossdk\.io)" | \
-            grep -v "//" || true)
-
-          if [[ -n "$SUSPICIOUS" ]]; then
-            echo "::warning::Packages from non-standard sources detected (verify legitimacy):"
-            echo "$SUSPICIOUS"
-          else
-            echo "✓ All packages from known sources"
-          fi
-
-  # ===========================================================================
-  # SBOM Generation
-  # ===========================================================================
-  sbom-generation:
-    name: Generate SBOM
-    runs-on: ubuntu-latest
-    outputs:
-      sbom-artifact: ${{ steps.upload.outputs.artifact-id }}
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Set up Go
-        uses: actions/setup-go@v5
-        with:
-          go-version: ${{ env.GO_VERSION }}
-          cache: true
-
-      - name: Install Syft
-        uses: anchore/sbom-action/download-syft@v0
-
-      - name: Generate CycloneDX SBOM
-        run: |
-          mkdir -p .cache/sbom
-          syft dir:. -o cyclonedx-json > .cache/sbom/sbom.cdx.json
-          echo "Generated CycloneDX SBOM"
-
-      - name: Generate SPDX SBOM
-        run: |
-          syft dir:. -o spdx-json > .cache/sbom/sbom.spdx.json
-          echo "Generated SPDX SBOM"
-
-      - name: Generate SBOM summary
-        run: |
-          echo "# SBOM Summary" > .cache/sbom/summary.md
-          echo "" >> .cache/sbom/summary.md
-          echo "Generated: $(date -u +"%Y-%m-%dT%H:%M:%SZ")" >> .cache/sbom/summary.md
-          echo "Commit: ${{ github.sha }}" >> .cache/sbom/summary.md
-          echo "" >> .cache/sbom/summary.md
-
-          PACKAGES=$(jq '.components | length' .cache/sbom/sbom.cdx.json)
-          echo "Total packages: $PACKAGES" >> .cache/sbom/summary.md
-
-      - name: Upload SBOM artifacts
-        id: upload
+      - name: Upload attack-detection report
         uses: actions/upload-artifact@v4
+        if: always()
         with:
-          name: sbom
-          path: .cache/sbom/
-          retention-days: 90
+          name: attack-detection-report
+          path: .cache/supply-chain/attack-detection.json
+          retention-days: 30
 
-      - name: Upload SBOM to Dependency Graph
-        uses: anchore/sbom-action/publish-sbom@v0
-        if: github.ref == 'refs/heads/main'
-        with:
-          sbom-artifact-match: ".*\\.cdx\\.json$"
-
-  # ===========================================================================
-  # Third-Party Risk Assessment (Non-blocking)
-  # ===========================================================================
   risk-assessment:
     name: Dependency Risk Assessment
     runs-on: ubuntu-latest
-    continue-on-error: true
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -307,92 +252,73 @@ jobs:
 
       - name: Run dependency risk assessment
         run: |
-          mkdir -p .cache
-          cd scripts/supply-chain
+          mkdir -p .cache/supply-chain
           set +e
-          go run assess-dependencies.go --json > ../../.cache/risk-assessment.json 2>/dev/null
-          json_status=$?
-          go run assess-dependencies.go
-          text_status=$?
+          go run ./scripts/supply-chain/assess-dependencies.go --report --json > .cache/supply-chain/risk-assessment.json
+          status=$?
           set -e
-          if [ "$json_status" -ne 0 ] || [ "$text_status" -ne 0 ]; then
-            echo "::warning::Dependency risk assessment reported issues"
+          if [ ! -s .cache/supply-chain/risk-assessment.json ]; then
+            echo "::error::Dependency risk assessment did not produce JSON output"
+            exit 1
           fi
 
-      - name: Check for high-risk dependencies
-        run: |
-          if [[ -f ".cache/risk-assessment.json" ]]; then
-            HIGH_RISK=$(jq '.packages[] | select(.risk_level == "high" or .risk_level == "critical") | .package' .cache/risk-assessment.json 2>/dev/null | head -5 || echo "")
-            
-            if [[ -n "$HIGH_RISK" ]]; then
-              echo "::warning::High-risk dependencies detected:"
-              echo "$HIGH_RISK"
-            fi
+          high_risk=$(jq -r '.high_risk_count' .cache/supply-chain/risk-assessment.json)
+          failing_packages=$(jq -r '.failing_packages' .cache/supply-chain/risk-assessment.json)
+          average_score=$(jq -r '.summary.average_score' .cache/supply-chain/risk-assessment.json)
+
+          echo "Average dependency score: ${average_score}"
+          echo "High risk packages: ${high_risk}"
+          echo "Failing packages: ${failing_packages}"
+
+          if [ "$status" -ne 0 ] || [ "$high_risk" -ne 0 ] || [ "$failing_packages" -ne 0 ]; then
+            echo "::error::Dependency risk assessment rejected the current dependency set"
+            exit 1
           fi
 
-      - name: Upload risk assessment
+      - name: Upload risk-assessment report
         uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: risk-assessment
-          path: .cache/risk-assessment.json
+          name: risk-assessment-report
+          path: .cache/supply-chain/risk-assessment.json
           retention-days: 30
 
-  # ===========================================================================
-  # Signed Release Artifacts (on tag push)
-  # ===========================================================================
-  sign-artifacts:
-    name: Sign Release Artifacts
+  sbom-generation:
+    name: SBOM Generation
     runs-on: ubuntu-latest
-    if: startsWith(github.ref, 'refs/tags/v')
-    needs:
-      - dependency-verification
-      - sbom-generation
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Install cosign
-        uses: sigstore/cosign-installer@v3
-
-      - name: Download SBOM artifacts
-        uses: actions/download-artifact@v4
-        with:
-          name: sbom
-          path: .cache/sbom/
-
-      - name: Sign SBOM with cosign
+      - name: Install Syft
         run: |
-          for sbom in .cache/sbom/*.json; do
-            if [[ -f "$sbom" ]]; then
-              echo "Signing $sbom..."
-              cosign sign-blob \
-                --yes \
-                --output-signature "${sbom}.sig" \
-                --output-certificate "${sbom}.sig.cert" \
-                "$sbom"
-            fi
-          done
+          curl -sSfL "https://github.com/anchore/syft/releases/download/${SYFT_VERSION}/syft_${SYFT_VERSION#v}_linux_amd64.tar.gz" | tar -xz
+          sudo install -m 0755 syft /usr/local/bin/syft
 
-      - name: Upload signed SBOMs
+      - name: Generate SBOM bundle
+        run: |
+          chmod +x scripts/supply-chain/generate-sbom.sh
+          scripts/supply-chain/generate-sbom.sh --format all --output .cache/supply-chain/sbom
+          sha256sum .cache/supply-chain/sbom/*.json > .cache/supply-chain/sbom/SHA256SUMS
+
+      - name: Upload SBOM bundle
         uses: actions/upload-artifact@v4
         with:
-          name: sbom-signed
-          path: |
-            .cache/sbom/*.json
-            .cache/sbom/*.sig
-            .cache/sbom/*.cert
+          name: supply-chain-sbom
+          path: .cache/supply-chain/sbom
           retention-days: 90
 
-  # ===========================================================================
-  # SLSA Provenance Generation
-  # ===========================================================================
-  provenance-build:
-    name: Prepare SLSA Subjects
+  build-release-subjects:
+    name: Build Release Subjects
     runs-on: ubuntu-latest
     if: startsWith(github.ref, 'refs/tags/v')
     needs:
+      - policy-validation
       - dependency-verification
+      - lockfile-integrity
+      - attack-detection
+      - risk-assessment
+      - sbom-generation
     outputs:
       base64-subjects: ${{ steps.subjects.outputs.base64-subjects }}
     steps:
@@ -405,22 +331,137 @@ jobs:
           go-version: ${{ env.GO_VERSION }}
           cache: true
 
-      - name: Build binary
-        run: |
-          mkdir -p dist
-          CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o dist/virtengine ./cmd/virtengine
-          sha256sum dist/virtengine > dist/virtengine.sha256
+      - name: Download SBOM bundle
+        uses: actions/download-artifact@v4
+        with:
+          name: supply-chain-sbom
+          path: release-subjects/sbom
 
-      - name: Prepare base64 subjects
+      - name: Build deterministic release binary
+        run: |
+          mkdir -p release-subjects rebuild
+          export SOURCE_DATE_EPOCH="$(git log -1 --pretty=%ct)"
+
+          CGO_ENABLED=0 go build -trimpath -buildvcs=false -ldflags="-s -w" -o release-subjects/virtengine ./cmd/virtengine
+          sha256sum release-subjects/virtengine > release-subjects/virtengine.sha256
+
+          go clean -cache
+          CGO_ENABLED=0 go build -trimpath -buildvcs=false -ldflags="-s -w" -o rebuild/virtengine ./cmd/virtengine
+          sha256sum rebuild/virtengine > rebuild/virtengine.sha256
+
+          diff -u release-subjects/virtengine.sha256 rebuild/virtengine.sha256
+
+      - name: Create provenance subjects
         id: subjects
         run: |
-          echo "base64-subjects=$(sha256sum dist/virtengine | base64 -w0)" >> "$GITHUB_OUTPUT"
+          {
+            sha256sum release-subjects/virtengine
+            sha256sum release-subjects/virtengine.sha256
+            find release-subjects/sbom -maxdepth 1 -type f -name '*.json' -print0 | sort -z | xargs -0 sha256sum
+          } > release-subjects/provenance-subjects.txt
+
+          echo "base64-subjects=$(base64 -w0 release-subjects/provenance-subjects.txt)" >> "$GITHUB_OUTPUT"
+
+      - name: Upload release subjects
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-subjects
+          path: release-subjects
+          retention-days: 90
+
+  sign-release-artifacts:
+    name: Sign Release Artifacts
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs:
+      - build-release-subjects
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: Download release subjects
+        uses: actions/download-artifact@v4
+        with:
+          name: release-subjects
+          path: release-subjects
+
+      - name: Install cosign
+        run: |
+          curl -sSfL "https://github.com/sigstore/cosign/releases/download/${COSIGN_VERSION}/cosign-linux-amd64" -o cosign
+          sudo install -m 0755 cosign /usr/local/bin/cosign
+
+      - name: Sign binary, checksum, and SBOM artifacts
+        run: |
+          shopt -s nullglob
+          artifacts=(
+            release-subjects/virtengine
+            release-subjects/virtengine.sha256
+            release-subjects/sbom/*.json
+          )
+          for artifact in "${artifacts[@]}"; do
+            cosign sign-blob \
+              --yes \
+              --output-signature "${artifact}.sig" \
+              --output-certificate "${artifact}.sig.cert" \
+              "$artifact"
+          done
+
+      - name: Upload signed artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-signatures
+          path: |
+            release-subjects/**/*.sig
+            release-subjects/**/*.sig.cert
+          retention-days: 90
+
+  verify-release-signatures:
+    name: Verify Release Signatures
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs:
+      - sign-release-artifacts
+    steps:
+      - name: Download release subjects
+        uses: actions/download-artifact@v4
+        with:
+          name: release-subjects
+          path: release-subjects
+
+      - name: Download release signatures
+        uses: actions/download-artifact@v4
+        with:
+          name: release-signatures
+          path: release-subjects
+
+      - name: Install cosign
+        run: |
+          curl -sSfL "https://github.com/sigstore/cosign/releases/download/${COSIGN_VERSION}/cosign-linux-amd64" -o cosign
+          sudo install -m 0755 cosign /usr/local/bin/cosign
+
+      - name: Verify signatures
+        run: |
+          shopt -s nullglob
+          expected_identity="https://github.com/${{ github.repository }}/.github/workflows/supply-chain.yaml@${{ github.ref }}"
+          artifacts=(
+            release-subjects/virtengine
+            release-subjects/virtengine.sha256
+            release-subjects/sbom/*.json
+          )
+          for artifact in "${artifacts[@]}"; do
+            cosign verify-blob \
+              --signature "${artifact}.sig" \
+              --certificate "${artifact}.sig.cert" \
+              --certificate-identity "$expected_identity" \
+              --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+              "$artifact"
+          done
 
   provenance:
     name: Generate SLSA Provenance
     if: startsWith(github.ref, 'refs/tags/v')
     needs:
-      - provenance-build
+      - build-release-subjects
     permissions:
       actions: read
       id-token: write
@@ -428,15 +469,62 @@ jobs:
       attestations: write
     uses: slsa-framework/slsa-github-generator/.github/workflows/generator_generic_slsa3.yml@v2.1.0
     with:
-      base64-subjects: ${{ needs.provenance-build.outputs.base64-subjects }}
+      base64-subjects: ${{ needs.build-release-subjects.outputs.base64-subjects }}
 
-  # ===========================================================================
-  # Reproducible Build Verification
-  # ===========================================================================
-  reproducible-build:
-    name: Verify Reproducible Build
+  verify-provenance:
+    name: Verify Provenance
     runs-on: ubuntu-latest
-    if: github.event.inputs.full_audit == 'true' || github.event_name == 'schedule'
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs:
+      - provenance
+      - build-release-subjects
+    steps:
+      - name: Download release subjects
+        uses: actions/download-artifact@v4
+        with:
+          name: release-subjects
+          path: release-subjects
+
+      - name: Download provenance artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ needs.provenance.outputs.provenance-name }}
+          path: provenance
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+
+      - name: Install slsa-verifier
+        run: go install github.com/slsa-framework/slsa-verifier/v2/cli/slsa-verifier@${{ env.SLSA_VERIFIER_VERSION }}
+
+      - name: Verify provenance subjects
+        run: |
+          provenance_path=$(find provenance -type f -name '*.intoto.jsonl' -print -quit)
+          if [ -z "$provenance_path" ]; then
+            echo "::error::Missing provenance artifact"
+            exit 1
+          fi
+
+          shopt -s nullglob
+          artifacts=(
+            release-subjects/virtengine
+            release-subjects/virtengine.sha256
+            release-subjects/sbom/*.json
+          )
+          for artifact in "${artifacts[@]}"; do
+            "$(go env GOPATH)/bin/slsa-verifier" verify-artifact \
+              --provenance-path "$provenance_path" \
+              --source-uri "github.com/${{ github.repository }}" \
+              "$artifact"
+          done
+
+  reproducible-build:
+    name: Reproducible Build Audit
+    runs-on: ubuntu-latest
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -445,78 +533,102 @@ jobs:
         uses: actions/setup-go@v5
         with:
           go-version: ${{ env.GO_VERSION }}
-          cache: false # Disable cache for reproducibility test
+          cache: false
 
-      - name: Build 1
+      - name: Verify reproducible build output
         run: |
-          CGO_ENABLED=0 go build -trimpath -buildvcs=false -o /tmp/build1/virtengine ./cmd/virtengine
-          sha256sum /tmp/build1/virtengine > /tmp/build1/checksum
+          mkdir -p /tmp/virtengine-build-a /tmp/virtengine-build-b
+          export SOURCE_DATE_EPOCH="$(git log -1 --pretty=%ct)"
 
-      - name: Clean and rebuild
-        run: |
+          CGO_ENABLED=0 go build -trimpath -buildvcs=false -ldflags="-s -w" -o /tmp/virtengine-build-a/virtengine ./cmd/virtengine
+          sha256sum /tmp/virtengine-build-a/virtengine > /tmp/virtengine-build-a/virtengine.sha256
+
           go clean -cache
-          rm -rf /tmp/go-build*
+          CGO_ENABLED=0 go build -trimpath -buildvcs=false -ldflags="-s -w" -o /tmp/virtengine-build-b/virtengine ./cmd/virtengine
+          sha256sum /tmp/virtengine-build-b/virtengine > /tmp/virtengine-build-b/virtengine.sha256
 
-          CGO_ENABLED=0 go build -trimpath -buildvcs=false -o /tmp/build2/virtengine ./cmd/virtengine
-          sha256sum /tmp/build2/virtengine > /tmp/build2/checksum
+          diff -u /tmp/virtengine-build-a/virtengine.sha256 /tmp/virtengine-build-b/virtengine.sha256
 
-      - name: Compare builds
-        run: |
-          HASH1=$(cat /tmp/build1/checksum | awk '{print $1}')
-          HASH2=$(cat /tmp/build2/checksum | awk '{print $1}')
-
-          echo "Build 1: $HASH1"
-          echo "Build 2: $HASH2"
-
-          if [[ "$HASH1" == "$HASH2" ]]; then
-            echo "✓ Builds are reproducible"
-          else
-            echo "::warning::Builds are not reproducible"
-            echo "This may be expected if CGO is enabled or build timestamps are included"
-          fi
-
-  # ===========================================================================
-  # Summary (Informational - does not block)
-  # ===========================================================================
   summary:
     name: Supply Chain Summary
     runs-on: ubuntu-latest
     needs:
+      - policy-validation
       - dependency-verification
       - lockfile-integrity
       - attack-detection
-      - sbom-generation
       - risk-assessment
+      - sbom-generation
+      - build-release-subjects
+      - sign-release-artifacts
+      - verify-release-signatures
+      - provenance
+      - verify-provenance
+      - reproducible-build
     if: always()
     steps:
-      - name: Generate summary
+      - name: Summarize supply-chain gates
         run: |
-          echo "# Supply Chain Security Summary" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "| Check | Status |" >> $GITHUB_STEP_SUMMARY
-          echo "|-------|--------|" >> $GITHUB_STEP_SUMMARY
-          echo "| Dependency Verification | ${{ needs.dependency-verification.result }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| Lockfile Integrity | ${{ needs.lockfile-integrity.result }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| Attack Detection | ${{ needs.attack-detection.result }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| SBOM Generation | ${{ needs.sbom-generation.result }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| Risk Assessment | ${{ needs.risk-assessment.result }} |" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "# Supply Chain Summary" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Gate | Status |" >> "$GITHUB_STEP_SUMMARY"
+          echo "|------|--------|" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Policy Validation | ${{ needs.policy-validation.result }} |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Dependency Verification | ${{ needs.dependency-verification.result }} |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Lockfile Integrity | ${{ needs.lockfile-integrity.result }} |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Attack Detection | ${{ needs.attack-detection.result }} |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Risk Assessment | ${{ needs.risk-assessment.result }} |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| SBOM Generation | ${{ needs.sbom-generation.result }} |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Reproducible Build Audit | ${{ needs.reproducible-build.result }} |" >> "$GITHUB_STEP_SUMMARY"
 
-          # Count critical failures
-          CRITICAL_FAILURES=0
-          if [[ "${{ needs.dependency-verification.result }}" == "failure" ]]; then
-            CRITICAL_FAILURES=$((CRITICAL_FAILURES + 1))
-          fi
-          if [[ "${{ needs.lockfile-integrity.result }}" == "failure" ]]; then
-            CRITICAL_FAILURES=$((CRITICAL_FAILURES + 1))
-          fi
-          if [[ "${{ needs.attack-detection.result }}" == "failure" ]]; then
-            CRITICAL_FAILURES=$((CRITICAL_FAILURES + 1))
+          if [[ "${{ startsWith(github.ref, 'refs/tags/v') }}" == "true" ]]; then
+            echo "| Build Release Subjects | ${{ needs.build-release-subjects.result }} |" >> "$GITHUB_STEP_SUMMARY"
+            echo "| Sign Release Artifacts | ${{ needs.sign-release-artifacts.result }} |" >> "$GITHUB_STEP_SUMMARY"
+            echo "| Verify Release Signatures | ${{ needs.verify-release-signatures.result }} |" >> "$GITHUB_STEP_SUMMARY"
+            echo "| Generate SLSA Provenance | ${{ needs.provenance.result }} |" >> "$GITHUB_STEP_SUMMARY"
+            echo "| Verify Provenance | ${{ needs.verify-provenance.result }} |" >> "$GITHUB_STEP_SUMMARY"
           fi
 
-          if [[ $CRITICAL_FAILURES -gt 0 ]]; then
-            echo "⚠️ $CRITICAL_FAILURES critical security check(s) failed" >> $GITHUB_STEP_SUMMARY
-            echo "::warning::Supply chain security checks have failures - review required"
-          else
-            echo "✅ All critical supply chain security checks passed" >> $GITHUB_STEP_SUMMARY
+      - name: Fail on supply-chain gate failure
+        run: |
+          FAILED=0
+          core_results=(
+            "${{ needs.policy-validation.result }}"
+            "${{ needs.dependency-verification.result }}"
+            "${{ needs.lockfile-integrity.result }}"
+            "${{ needs.attack-detection.result }}"
+            "${{ needs.risk-assessment.result }}"
+            "${{ needs.sbom-generation.result }}"
+          )
+
+          for result in "${core_results[@]}"; do
+            if [ "$result" = "failure" ] || [ "$result" = "cancelled" ]; then
+              FAILED=1
+            fi
+          done
+
+          if [[ "${{ startsWith(github.ref, 'refs/tags/v') }}" == "true" ]]; then
+            release_results=(
+              "${{ needs.build-release-subjects.result }}"
+              "${{ needs.sign-release-artifacts.result }}"
+              "${{ needs.verify-release-signatures.result }}"
+              "${{ needs.provenance.result }}"
+              "${{ needs.verify-provenance.result }}"
+            )
+            for result in "${release_results[@]}"; do
+              if [ "$result" = "failure" ] || [ "$result" = "cancelled" ] || [ "$result" = "skipped" ]; then
+                FAILED=1
+              fi
+            done
+          fi
+
+          if [[ "${{ github.event_name }}" == "schedule" || "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            if [ "${{ needs.reproducible-build.result }}" = "failure" ] || [ "${{ needs.reproducible-build.result }}" = "cancelled" ]; then
+              FAILED=1
+            fi
+          fi
+
+          if [ "$FAILED" -ne 0 ]; then
+            echo "::error::One or more required supply-chain gates failed"
+            exit 1
           fi

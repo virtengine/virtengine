@@ -17,7 +17,6 @@ import (
 
 	"github.com/virtengine/virtengine/pkg/security"
 
-	rpchttp "github.com/cometbft/cometbft/rpc/client/http"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 
 	"github.com/virtengine/virtengine/x/provider/keeper"
@@ -46,37 +45,64 @@ const (
 // DomainVerificationCheckerConfig configures the domain verification checker.
 type DomainVerificationCheckerConfig struct {
 	// Enabled enables the verification checker.
-	Enabled bool
+	Enabled bool `mapstructure:"enabled"`
 
 	// ProviderAddress is the provider's on-chain address.
-	ProviderAddress string
+	ProviderAddress string `mapstructure:"provider_address"`
 
 	// ChainID is the chain ID.
-	ChainID string
+	ChainID string `mapstructure:"chain_id"`
 
 	// CometRPC is the CometBFT RPC endpoint.
-	CometRPC string
+	CometRPC string `mapstructure:"comet_rpc"`
 
 	// GRPCEndpoint is the gRPC endpoint for queries.
-	GRPCEndpoint string
+	GRPCEndpoint string `mapstructure:"grpc_endpoint"`
+
+	// SignerKeyName is the Cosmos key name used to confirm verification on-chain.
+	SignerKeyName string `mapstructure:"signer_key_name"`
+
+	// SignerKeyringBackend is the keyring backend used for the signer key.
+	SignerKeyringBackend string `mapstructure:"signer_keyring_backend"`
+
+	// SignerKeyringDir is the keyring directory used for the signer key.
+	SignerKeyringDir string `mapstructure:"signer_keyring_dir"`
+
+	// SignerKeyringPassphrase is the passphrase used to unlock the signer keyring.
+	SignerKeyringPassphrase string `mapstructure:"signer_keyring_passphrase"` //nolint:gosec // configuration field name, not a credential value
+
+	// GasSetting configures gas simulation/fixed gas for confirmation transactions.
+	GasSetting GasSetting `mapstructure:"gas_setting"`
+
+	// GasPrices configures gas prices for confirmation transactions.
+	GasPrices string `mapstructure:"gas_prices"`
+
+	// Fees configures static fees for confirmation transactions.
+	Fees string `mapstructure:"fees"`
+
+	// GasAdjustment configures gas adjustment for simulated confirmation transactions.
+	GasAdjustment float64 `mapstructure:"gas_adjustment"`
+
+	// BroadcastTimeout configures the broadcast timeout for confirmation transactions.
+	BroadcastTimeout time.Duration `mapstructure:"broadcast_timeout"`
 
 	// CheckInterval is how often to poll for pending verifications.
-	CheckInterval time.Duration
+	CheckInterval time.Duration `mapstructure:"check_interval"`
 
 	// VerificationTimeout is the timeout for DNS/HTTP checks.
-	VerificationTimeout time.Duration
+	VerificationTimeout time.Duration `mapstructure:"verification_timeout"`
 
 	// MaxRetries is the maximum number of retry attempts.
-	MaxRetries int
+	MaxRetries int `mapstructure:"max_retries"`
 
 	// InitialBackoff is the initial backoff duration.
-	InitialBackoff time.Duration
+	InitialBackoff time.Duration `mapstructure:"initial_backoff"`
 
 	// MaxBackoff is the maximum backoff duration.
-	MaxBackoff time.Duration
+	MaxBackoff time.Duration `mapstructure:"max_backoff"`
 
 	// ExpiryCheckInterval is how often to check for expired verifications.
-	ExpiryCheckInterval time.Duration
+	ExpiryCheckInterval time.Duration `mapstructure:"expiry_check_interval"`
 
 	// DNSResolver is a custom DNS resolver (optional, for testing).
 	DNSResolver DNSResolver
@@ -123,11 +149,9 @@ type DomainVerificationChecker struct {
 	mu sync.RWMutex
 
 	cfg         DomainVerificationCheckerConfig
-	keyManager  *KeyManager
-	rpcClient   *rpchttp.HTTP
-	chainClient ChainClient
 	dnsResolver DNSResolver
 	httpClient  *http.Client
+	backend     domainVerificationChainBackend
 
 	// retryState tracks retry attempts and backoff for each domain
 	retryState map[string]*verificationRetryState
@@ -159,16 +183,10 @@ func NewDomainVerificationChecker(
 		return nil, fmt.Errorf("provider address is required")
 	}
 
-	if cfg.CometRPC == "" && chainClient == nil {
-		return nil, fmt.Errorf("comet RPC endpoint or chain client is required")
-	}
-
 	checker := &DomainVerificationChecker{
-		cfg:         cfg,
-		keyManager:  keyManager,
-		chainClient: chainClient,
-		retryState:  make(map[string]*verificationRetryState),
-		stopChan:    make(chan struct{}),
+		cfg:        cfg,
+		retryState: make(map[string]*verificationRetryState),
+		stopChan:   make(chan struct{}),
 	}
 
 	// Set up DNS resolver
@@ -187,25 +205,12 @@ func NewDomainVerificationChecker(
 		checker.httpClient = security.NewSecureHTTPClient(security.WithTimeout(cfg.VerificationTimeout))
 	}
 
-	// Set up RPC client if not using injected chain client
-	if chainClient == nil {
-		rpcClient, err := rpchttp.New(cfg.CometRPC, "/websocket")
-		if err != nil {
-			return nil, fmt.Errorf("failed to create rpc client: %w", err)
-		}
-		checker.rpcClient = rpcClient
+	if backend, ok := chainClient.(domainVerificationChainBackend); ok {
+		checker.backend = backend
+	}
 
-		// Create chain client
-		chainClientImpl, err := NewRPCChainClient(RPCChainClientConfig{
-			NodeURI:        cfg.CometRPC,
-			GRPCEndpoint:   cfg.GRPCEndpoint,
-			ChainID:        cfg.ChainID,
-			RequestTimeout: cfg.VerificationTimeout,
-		})
-		if err != nil {
-			return nil, fmt.Errorf("failed to create chain client: %w", err)
-		}
-		checker.chainClient = chainClientImpl
+	if checker.backend == nil {
+		return nil, fmt.Errorf("%w: domain verification requires generalized mutation backend", ErrProviderMutationUnavailable)
 	}
 
 	return checker, nil
@@ -302,9 +307,6 @@ func (c *DomainVerificationChecker) checkPendingVerifications(ctx context.Contex
 		return
 	}
 
-	// For now, we'll use the chain client interface
-	// In a real implementation, this would query the provider module via gRPC
-	// The keeper method GetDomainVerificationRecord would need to be exposed via gRPC
 	record, err := c.queryDomainVerificationRecord(ctx, providerAddr)
 	if err != nil {
 		log.Printf("[domain-verification] failed to query verification record: %v", err)
@@ -463,19 +465,22 @@ func (c *DomainVerificationChecker) verifyHTTPWellKnown(ctx context.Context, rec
 
 // submitConfirmation submits a MsgConfirmDomainVerification transaction.
 func (c *DomainVerificationChecker) submitConfirmation(
-	_ context.Context,
+	ctx context.Context,
 	record *keeper.DomainVerificationRecord,
 	proof string,
 ) {
 	log.Printf("[domain-verification] submitting confirmation for %s", record.Domain)
-	_ = proof
 
-	// TODO: Create and submit MsgConfirmDomainVerification transaction
-	// This requires:
-	// 1. Creating the message with owner and proof
-	// 2. Building and signing the transaction using keyManager
-	// 3. Broadcasting via RPC client
-	// For now, we log the success and clear retry state
+	providerAddr, err := sdk.AccAddressFromBech32(record.ProviderAddress)
+	if err != nil {
+		c.handleVerificationFailure(ctx, record, fmt.Errorf("invalid provider address: %w", err))
+		return
+	}
+
+	if err := c.backend.ConfirmDomainVerification(ctx, providerAddr, proof); err != nil {
+		c.handleVerificationFailure(ctx, record, fmt.Errorf("submit confirmation transaction: %w", err))
+		return
+	}
 
 	log.Printf("[domain-verification] confirmation submitted successfully for %s", record.Domain)
 
@@ -551,39 +556,6 @@ func (c *DomainVerificationChecker) checkExpiredVerifications(ctx context.Contex
 	}
 }
 
-// queryDomainVerificationRecord queries the chain for a domain verification record.
-// This is a placeholder - in production, this would use gRPC to query the provider module.
 func (c *DomainVerificationChecker) queryDomainVerificationRecord(ctx context.Context, providerAddr sdk.AccAddress) (*keeper.DomainVerificationRecord, error) {
-	// TODO: Implement actual gRPC query to provider module
-	// For now, return nil to indicate no pending verification
-	// In production, this would call:
-	// - Query provider module via gRPC
-	// - Call QueryDomainVerification RPC
-	// - Return the DomainVerificationRecord
-	return nil, nil
+	return c.backend.QueryDomainVerificationRecord(ctx, providerAddr)
 }
-
-// buildAndSignTx builds and signs a transaction.
-// TODO: Implement actual transaction building and signing logic
-//
-//nolint:unused // placeholder for future MsgConfirmDomainVerification implementation
-func (c *DomainVerificationChecker) buildAndSignTx(_ context.Context, _ interface{}) ([]byte, error) {
-	// This would use the key manager to sign the transaction
-	// For now, return an error as this is a placeholder
-	return nil, fmt.Errorf("transaction building not implemented yet - requires MsgConfirmDomainVerification proto generation")
-}
-
-// broadcastTx broadcasts a transaction to the chain.
-//
-//nolint:unused // placeholder for future transaction broadcasting implementation
-func (c *DomainVerificationChecker) broadcastTx(_ context.Context, _ []byte) error {
-	// TODO: Implement transaction broadcasting
-	// This would use the RPC client to broadcast the transaction
-	// For now, return an error
-	return fmt.Errorf("transaction broadcasting not implemented")
-}
-
-var (
-	_ = (*DomainVerificationChecker).buildAndSignTx
-	_ = (*DomainVerificationChecker).broadcastTx
-)

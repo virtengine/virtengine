@@ -3,7 +3,11 @@ package inference
 import (
 	"context"
 	"crypto/tls"
+	"crypto/x509"
 	"fmt"
+	"math"
+	"os"
+	"strings"
 	"sync"
 	"time"
 
@@ -80,7 +84,7 @@ func NewSidecarClient(config InferenceConfig) (*SidecarClient, error) {
 
 	client := &SidecarClient{
 		config:      config,
-		extractor:   NewFeatureExtractor(DefaultFeatureExtractorConfig()),
+		extractor:   NewFeatureExtractor(ProductionFeatureExtractorConfig()),
 		determinism: NewDeterminismController(config.RandomSeed, config.ForceCPU),
 		isConnected: false,
 		useTLS:      config.SidecarTLS,
@@ -107,9 +111,9 @@ func (sc *SidecarClient) connect() error {
 	var opts []grpc.DialOption
 
 	if sc.useTLS {
-		// Use TLS with system root CAs
-		tlsConfig := &tls.Config{
-			MinVersion: tls.VersionTLS12,
+		tlsConfig, err := sc.sidecarTLSConfig()
+		if err != nil {
+			return err
 		}
 		opts = append(opts, grpc.WithTransportCredentials(credentials.NewTLS(tlsConfig)))
 	} else {
@@ -134,10 +138,40 @@ func (sc *SidecarClient) connect() error {
 	return nil
 }
 
+func (sc *SidecarClient) sidecarTLSConfig() (*tls.Config, error) {
+	config := &tls.Config{
+		MinVersion: tls.VersionTLS13,
+		ServerName: sc.config.SidecarTLSServerName,
+	}
+	if sc.config.SidecarTLSCAFile != "" {
+		pem, err := os.ReadFile(sc.config.SidecarTLSCAFile)
+		if err != nil {
+			return nil, fmt.Errorf("read sidecar TLS CA: %w", err)
+		}
+		pool := x509.NewCertPool()
+		if !pool.AppendCertsFromPEM(pem) {
+			return nil, fmt.Errorf("sidecar TLS CA file contains no certificates")
+		}
+		config.RootCAs = pool
+	}
+	if sc.config.SidecarTLSCertFile != "" {
+		certificate, err := tls.LoadX509KeyPair(sc.config.SidecarTLSCertFile, sc.config.SidecarTLSKeyFile)
+		if err != nil {
+			return nil, fmt.Errorf("load sidecar TLS client certificate: %w", err)
+		}
+		config.Certificates = []tls.Certificate{certificate}
+	}
+	return config, nil
+}
+
 // refreshModelInfo fetches model version and hash from sidecar
 func (sc *SidecarClient) refreshModelInfo() error {
 	if sc.grpcClient == nil {
-		// Fallback for testing when no real connection
+		if !sc.config.AllowFallbackToStub {
+			return simulatedInferenceDisabledError("sidecar model info fallback")
+		}
+
+		// Explicit non-production fallback for tests without a live sidecar.
 		sc.modelVersion = sc.config.ModelVersion
 		sc.modelHash = sc.config.ExpectedHash
 		return nil
@@ -154,6 +188,10 @@ func (sc *SidecarClient) refreshModelInfo() error {
 	sc.modelVersion = resp.Version
 	sc.modelHash = resp.Hash
 	sc.lastHealthCheck = time.Now()
+
+	if sc.config.ModelVersion != "" && sc.modelVersion != sc.config.ModelVersion {
+		return fmt.Errorf("model version mismatch: expected %s, got %s", sc.config.ModelVersion, sc.modelVersion)
+	}
 
 	// Verify model hash matches expected if configured
 	if sc.config.ExpectedHash != "" && sc.modelHash != sc.config.ExpectedHash {
@@ -269,8 +307,10 @@ func (sc *SidecarClient) ComputeScoreWithContext(ctx context.Context, inputs *Sc
 
 // callSidecar makes the actual gRPC call to the inference sidecar
 func (sc *SidecarClient) callSidecar(ctx context.Context, features []float32, inputs *ScoreInputs) (*ScoreResult, error) {
-	// If no real gRPC client, fall back to simulated response
 	if sc.grpcClient == nil {
+		if !sc.config.AllowFallbackToStub {
+			return nil, simulatedInferenceDisabledError("sidecar inference fallback")
+		}
 		return sc.simulateSidecarResponse(features, inputs)
 	}
 
@@ -292,11 +332,8 @@ func (sc *SidecarClient) callSidecar(ctx context.Context, features []float32, in
 		return nil, fmt.Errorf("sidecar ComputeScore RPC failed: %w", err)
 	}
 
-	// Verify output hash if we computed one locally
-	localOutputHash := sc.determinism.ComputeOutputHash([]float32{resp.RawScore})
-	if resp.OutputHash != "" && localOutputHash != resp.OutputHash {
-		return nil, fmt.Errorf("output hash mismatch: local=%s, remote=%s",
-			localOutputHash, resp.OutputHash)
+	if err := sc.validateScoreResponse(resp, sc.determinism.ComputeFeatureHash(features)); err != nil {
+		return nil, err
 	}
 
 	// Convert response to ScoreResult
@@ -316,7 +353,80 @@ func (sc *SidecarClient) callSidecar(ctx context.Context, features []float32, in
 	return result, nil
 }
 
-// simulateSidecarResponse simulates sidecar response for testing
+func (sc *SidecarClient) validateScoreResponse(resp *inferencepb.ComputeScoreResponse, localFeatureHash string) error {
+	if resp == nil {
+		return fmt.Errorf("sidecar returned an empty response")
+	}
+	if resp.Score > 100 {
+		return fmt.Errorf("sidecar response score is out of range: %d", resp.Score)
+	}
+	if !isFiniteScore(resp.RawScore) || resp.RawScore < 0 || resp.RawScore > 100 {
+		return fmt.Errorf("sidecar response raw score is out of range")
+	}
+	if !isFiniteScore(resp.Confidence) || resp.Confidence < 0 || resp.Confidence > 1 {
+		return fmt.Errorf("sidecar response confidence is out of range")
+	}
+	if resp.ComputeTimeMs < 0 {
+		return fmt.Errorf("sidecar response compute time cannot be negative")
+	}
+	if len(resp.ReasonCodes) > 32 {
+		return fmt.Errorf("sidecar response has too many reason codes")
+	}
+	for _, code := range resp.ReasonCodes {
+		if code = strings.TrimSpace(code); code == "" || len(code) > 128 {
+			return fmt.Errorf("sidecar response has an invalid reason code")
+		}
+	}
+	if len(resp.FeatureContributions) > 64 {
+		return fmt.Errorf("sidecar response has too many feature contributions")
+	}
+	for name, value := range resp.FeatureContributions {
+		if strings.TrimSpace(name) == "" || len(name) > 128 || !isFiniteScore(value) {
+			return fmt.Errorf("sidecar response has an invalid feature contribution")
+		}
+	}
+	if sc.config.RequireHashVerification && resp.InputHash == "" {
+		return fmt.Errorf("sidecar response is missing input hash")
+	}
+	if resp.InputHash != "" && !isValidSHA256Hex(resp.InputHash) {
+		return fmt.Errorf("sidecar response input hash is invalid")
+	}
+	if resp.InputHash != "" && resp.InputHash != localFeatureHash {
+		return fmt.Errorf("input hash mismatch: local=%s, remote=%s", localFeatureHash, resp.InputHash)
+	}
+
+	localOutputHash := sc.determinism.ComputeOutputHash([]float32{resp.RawScore})
+	if sc.config.RequireHashVerification && resp.OutputHash == "" {
+		return fmt.Errorf("sidecar response is missing output hash")
+	}
+	if resp.OutputHash != "" && !isValidSHA256Hex(resp.OutputHash) {
+		return fmt.Errorf("sidecar response output hash is invalid")
+	}
+	if resp.OutputHash != "" && localOutputHash != resp.OutputHash {
+		return fmt.Errorf("output hash mismatch: local=%s, remote=%s", localOutputHash, resp.OutputHash)
+	}
+
+	if sc.config.RequireHashVerification && (resp.ModelVersion == "" || resp.ModelHash == "") {
+		return fmt.Errorf("sidecar response is missing model identity")
+	}
+	if resp.ModelVersion != "" && resp.ModelVersion != sc.modelVersion {
+		return fmt.Errorf("sidecar response model version mismatch: expected %s, got %s", sc.modelVersion, resp.ModelVersion)
+	}
+	if resp.ModelHash != "" && resp.ModelHash != sc.modelHash {
+		return fmt.Errorf("sidecar response model hash mismatch: expected %s, got %s", sc.modelHash, resp.ModelHash)
+	}
+	if resp.ModelHash != "" && !isValidSHA256Hex(resp.ModelHash) {
+		return fmt.Errorf("sidecar response model hash is invalid")
+	}
+	return nil
+}
+
+func isFiniteScore(value float32) bool {
+	return !math.IsNaN(float64(value)) && !math.IsInf(float64(value), 0)
+}
+
+// simulateSidecarResponse simulates sidecar response for explicitly enabled
+// non-production test flows.
 func (sc *SidecarClient) simulateSidecarResponse(features []float32, _ *ScoreInputs) (*ScoreResult, error) {
 	// Compute a deterministic score based on features
 	var sum float32
@@ -402,6 +512,9 @@ func (sc *SidecarClient) Close() error {
 // PerformHealthCheck performs a health check against the sidecar
 func (sc *SidecarClient) PerformHealthCheck(ctx context.Context) (*SidecarHealthStatus, error) {
 	if sc.grpcClient == nil {
+		if !sc.config.AllowFallbackToStub {
+			return nil, simulatedInferenceDisabledError("sidecar health fallback")
+		}
 		return &SidecarHealthStatus{
 			Healthy:      sc.isConnected,
 			ModelLoaded:  true,
@@ -442,6 +555,9 @@ type SidecarHealthStatus struct {
 // GetMetrics fetches metrics from the sidecar
 func (sc *SidecarClient) GetMetrics(ctx context.Context) (*SidecarMetrics, error) {
 	if sc.grpcClient == nil {
+		if !sc.config.AllowFallbackToStub {
+			return nil, simulatedInferenceDisabledError("sidecar metrics fallback")
+		}
 		return &SidecarMetrics{
 			TotalInferences:      sc.inferenceCount,
 			SuccessfulInferences: sc.inferenceCount - sc.errorCount,
@@ -487,6 +603,9 @@ type SidecarMetrics struct {
 // VerifyDeterminism runs a determinism verification check
 func (sc *SidecarClient) VerifyDeterminism(ctx context.Context, testVectorID string) (*DeterminismResult, error) {
 	if sc.grpcClient == nil {
+		if !sc.config.AllowFallbackToStub {
+			return nil, simulatedInferenceDisabledError("sidecar determinism fallback")
+		}
 		return &DeterminismResult{
 			Passed:       true,
 			TestVectorID: testVectorID,

@@ -19,6 +19,7 @@ import {
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Label } from '@/components/ui/Label';
+import { Alert, AlertDescription } from '@/components/ui/Alert';
 import {
   Select,
   SelectContent,
@@ -37,6 +38,9 @@ interface AlertConfigDialogProps {
 export function AlertConfigDialog({ open, onOpenChange }: AlertConfigDialogProps) {
   const createAlert = useMetricsStore((s) => s.createAlert);
   const deploymentMetrics = useMetricsStore((s) => s.deploymentMetrics);
+  const alertMutationPending = useMetricsStore((s) => s.alertMutationPending);
+  const alertMutationsAvailable = useMetricsStore((s) => s.alertMutationsAvailable);
+  const error = useMetricsStore((s) => s.error);
 
   const [name, setName] = useState('');
   const [metric, setMetric] = useState<AlertMetric>('cpu');
@@ -45,18 +49,27 @@ export function AlertConfigDialog({ open, onOpenChange }: AlertConfigDialogProps
   const [duration, setDuration] = useState('300');
   const [deploymentId, setDeploymentId] = useState<string>('');
 
-  function handleSubmit() {
+  const handleOpenChange = (nextOpen: boolean) => {
+    if (!nextOpen && alertMutationPending) return;
+    onOpenChange(nextOpen);
+  };
+
+  async function handleSubmit() {
     if (!name.trim()) return;
 
-    createAlert({
-      name: name.trim(),
-      metric,
-      condition,
-      threshold: Number(threshold),
-      duration: Number(duration),
-      deploymentId: deploymentId || undefined,
-      notificationChannels: ['email'],
-    });
+    try {
+      await createAlert({
+        name: name.trim(),
+        metric,
+        condition,
+        threshold: Number(threshold),
+        duration: Number(duration),
+        deploymentId: deploymentId || undefined,
+        notificationChannels: ['email'],
+      });
+    } catch {
+      return;
+    }
 
     setName('');
     setMetric('cpu');
@@ -68,12 +81,28 @@ export function AlertConfigDialog({ open, onOpenChange }: AlertConfigDialogProps
   }
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent className="max-w-md">
         <DialogHeader>
           <DialogTitle>Create Alert</DialogTitle>
           <DialogDescription>Set a threshold-based alert for resource metrics.</DialogDescription>
         </DialogHeader>
+
+        {!alertMutationsAvailable && (
+          <Alert variant="warning">
+            <AlertDescription>Alert persistence is unavailable.</AlertDescription>
+          </Alert>
+        )}
+        {error && (
+          <Alert variant="destructive">
+            <AlertDescription>{error}</AlertDescription>
+          </Alert>
+        )}
+        {alertMutationPending && (
+          <p role="status" aria-live="polite" className="text-sm text-muted-foreground">
+            Creating alert...
+          </p>
+        )}
 
         <div className="space-y-4 py-2">
           <div className="space-y-2">
@@ -161,10 +190,17 @@ export function AlertConfigDialog({ open, onOpenChange }: AlertConfigDialogProps
         </div>
 
         <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>
+          <Button
+            variant="outline"
+            disabled={alertMutationPending}
+            onClick={() => handleOpenChange(false)}
+          >
             Cancel
           </Button>
-          <Button onClick={handleSubmit} disabled={!name.trim()}>
+          <Button
+            onClick={() => void handleSubmit()}
+            disabled={!name.trim() || alertMutationPending || !alertMutationsAvailable}
+          >
             Create Alert
           </Button>
         </DialogFooter>

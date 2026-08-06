@@ -285,6 +285,10 @@ message FraudReport {
     (gogoproto.jsontag) = "related_order_ids,omitempty",
     (gogoproto.moretags) = "yaml:\"related_order_ids\""
   ];
+
+  // FinancialCaseID links financially relevant reports to settlement authority.
+  string financial_case_id = 17 [(gogoproto.jsontag) = "financial_case_id,omitempty", (gogoproto.moretags) = "yaml:\"financial_case_id\""];
+  string financial_case_status = 18 [(gogoproto.jsontag) = "financial_case_status,omitempty", (gogoproto.moretags) = "yaml:\"financial_case_status\""];
 }
 
 // FraudAuditLog represents an audit log entry for a fraud report

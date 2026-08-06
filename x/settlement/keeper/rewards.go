@@ -30,51 +30,61 @@ func (k Keeper) DistributeStakingRewards(ctx sdk.Context, epoch uint64) (*types.
 	existingDists := k.GetRewardsByEpoch(ctx, epoch)
 	for _, dist := range existingDists {
 		if dist.Source == types.RewardSourceStaking {
-			return nil, types.ErrInvalidEpoch.Wrapf("staking rewards already distributed for epoch %d", epoch)
+			return &dist, nil
 		}
 	}
 
-	// In a real implementation, you would:
-	// 1. Query the staking module for validator/delegator stakes
-	// 2. Calculate rewards based on stake weight
-	// 3. Pull rewards from a reward pool
-
-	// For now, we create a placeholder distribution with the module account as recipient
-	// This would be integrated with the distribution module in production
-
-	params := k.GetParams(ctx)
-	rewardPoolAddr := params.RewardPoolAddress
-	if rewardPoolAddr == "" {
-		rewardPoolAddr = authtypes.NewModuleAddress(authtypes.FeeCollectorName).String()
+	rewardPool, err := k.availableStakingRewardPool(ctx)
+	if err != nil {
+		return nil, err
 	}
 
-	if _, err := sdk.AccAddressFromBech32(rewardPoolAddr); err != nil {
-		return nil, types.ErrInvalidReward.Wrap("invalid reward pool address")
+	recipients, err := k.buildStakeRewardRecipients(ctx, epoch, rewardPool)
+	if err != nil {
+		return nil, err
 	}
 
 	// Generate distribution ID
 	seq := k.incrementDistributionSequence(ctx)
 	distributionID := generateIDWithTimestamp("staking", seq, ctx.BlockTime().Unix())
 
-	rewardRecipient := types.RewardRecipient{
-		Address: rewardPoolAddr,
-		Amount:  sdk.NewCoins(sdk.NewCoin("uve", sdkmath.NewInt(1))), // Minimum valid amount
-		Reason:  "staking rewards to reward pool",
-	}
-
 	dist := types.NewRewardDistribution(
 		distributionID,
 		epoch,
 		types.RewardSourceStaking,
-		[]types.RewardRecipient{rewardRecipient},
+		recipients,
 		ctx.BlockTime(),
 		ctx.BlockHeight(),
 	)
 
 	dist.Metadata = map[string]string{
-		"epoch":  strconv.FormatUint(epoch, 10),
-		"source": "staking",
+		"epoch":              strconv.FormatUint(epoch, 10),
+		"source":             "staking",
+		"validator_fee_pool": rewardPool.String(),
 	}
+	if rewardPool.IsAllGTE(dist.TotalRewards) {
+		remaining := rewardPool.Sub(dist.TotalRewards...)
+		if !remaining.IsZero() {
+			reserveAddr := k.GetParams(ctx).RewardPoolAddress
+			if reserveAddr == "" {
+				reserveAddr = authtypes.NewModuleAddress(authtypes.FeeCollectorName).String()
+			}
+			if _, addrErr := sdk.AccAddressFromBech32(reserveAddr); addrErr != nil {
+				return nil, types.ErrInvalidReward.Wrap("invalid staking reward reserve address")
+			}
+
+			dist.Recipients = append(dist.Recipients, types.RewardRecipient{
+				Address: reserveAddr,
+				Amount:  remaining,
+				Reason:  "staking_reward_reserve",
+			})
+			dist.TotalRewards = dist.TotalRewards.Add(remaining...)
+			dist.Metadata["reserve_rewards"] = remaining.String()
+			dist.Metadata["reserve_address"] = reserveAddr
+		}
+	}
+	dist.Metadata["distributed_rewards"] = dist.TotalRewards.String()
+	dist.Metadata["recipient_count"] = strconv.Itoa(len(dist.Recipients))
 
 	// Save distribution
 	if err := k.SetRewardDistribution(ctx, *dist); err != nil {
@@ -82,7 +92,7 @@ func (k Keeper) DistributeStakingRewards(ctx sdk.Context, epoch uint64) (*types.
 	}
 
 	// Emit event
-	err := ctx.EventManager().EmitTypedEvent(&types.EventRewardsDistributed{
+	err = ctx.EventManager().EmitTypedEvent(&types.EventRewardsDistributed{
 		DistributionID: distributionID,
 		EpochNumber:    epoch,
 		Source:         string(types.RewardSourceStaking),
@@ -131,8 +141,14 @@ func (k Keeper) DistributeProviderRewards(ctx sdk.Context, usageRecords []types.
 	}
 
 	recipients := make([]types.RewardRecipient, 0, len(providerRewards))
+	providers := make([]string, 0, len(providerRewards))
+	for provider := range providerRewards {
+		providers = append(providers, provider)
+	}
+	sort.Strings(providers)
 
-	for provider, rewards := range providerRewards {
+	for _, provider := range providers {
+		rewards := providerRewards[provider]
 		units := providerUsage[provider]
 		if rewards.IsZero() {
 			continue
@@ -284,7 +300,13 @@ func (k Keeper) distributeUsageRewardsWithMetadata(
 	)
 
 	if len(metadata) > 0 {
-		for key, value := range metadata {
+		keys := make([]string, 0, len(metadata))
+		for key := range metadata {
+			keys = append(keys, key)
+		}
+		sort.Strings(keys)
+		for _, key := range keys {
+			value := metadata[key]
 			dist.Metadata[key] = value
 		}
 	}
@@ -293,17 +315,15 @@ func (k Keeper) distributeUsageRewardsWithMetadata(
 		return nil, err
 	}
 
-	err := ctx.EventManager().EmitTypedEvent(&types.EventRewardsDistributed{
-		DistributionID: distributionID,
-		EpochNumber:    epoch,
-		Source:         string(types.RewardSourceUsage),
-		TotalRewards:   dist.TotalRewards.String(),
-		RecipientCount: safeUint32FromInt(len(recipients)),
-		DistributedAt:  ctx.BlockTime().Unix(),
-	})
-	if err != nil {
-		k.Logger(ctx).Error("failed to emit usage rewards distributed event", "error", err)
-	}
+	ctx.EventManager().EmitEvent(sdk.NewEvent(
+		types.EventTypeRewardsDistributed,
+		sdk.NewAttribute(types.AttributeKeyDistributionID, distributionID),
+		sdk.NewAttribute(types.AttributeKeyEpochNumber, fmt.Sprintf("%d", epoch)),
+		sdk.NewAttribute(types.AttributeKeyRewardSource, string(types.RewardSourceUsage)),
+		sdk.NewAttribute(types.AttributeKeyTotalRewards, dist.TotalRewards.String()),
+		sdk.NewAttribute(types.AttributeKeyRecipientCount, fmt.Sprintf("%d", safeUint32FromInt(len(recipients)))),
+		sdk.NewAttribute(types.AttributeKeyTimestamp, fmt.Sprintf("%d", ctx.BlockTime().Unix())),
+	))
 
 	k.Logger(ctx).Info("usage rewards distributed",
 		"distribution_id", distributionID,
@@ -515,6 +535,9 @@ func (k Keeper) DistributeVerificationRewards(ctx sdk.Context, verificationResul
 
 // ClaimRewards claims accumulated rewards for an address
 func (k Keeper) ClaimRewards(ctx sdk.Context, claimer sdk.AccAddress, source string) (sdk.Coins, error) {
+	if caseID, held := k.HasActiveFinancialCase(ctx, "party", claimer.String()); held {
+		return nil, types.ErrDisputeActive.Wrapf("rewards held by canonical case %s", caseID)
+	}
 	rewards, found := k.GetClaimableRewards(ctx, claimer)
 	if !found || rewards.TotalClaimable.IsZero() {
 		return sdk.Coins{}, types.ErrNoClaimableRewards.Wrapf("no claimable rewards for %s", claimer.String())

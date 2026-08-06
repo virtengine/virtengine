@@ -328,6 +328,18 @@ func NewWorkloadApprovalEvent(
 	actor string,
 	blockHeight int64,
 ) WorkloadApprovalEvent {
+	return NewWorkloadApprovalEventAt(eventType, templateID, version, prevStatus, newStatus, actor, blockHeight, time.Now())
+}
+
+// NewWorkloadApprovalEventAt creates an approval event at an explicit time.
+func NewWorkloadApprovalEventAt(
+	eventType string,
+	templateID, version string,
+	prevStatus, newStatus WorkloadApprovalStatus,
+	actor string,
+	blockHeight int64,
+	at time.Time,
+) WorkloadApprovalEvent {
 	return WorkloadApprovalEvent{
 		EventType:       eventType,
 		TemplateID:      templateID,
@@ -335,7 +347,7 @@ func NewWorkloadApprovalEvent(
 		PreviousStatus:  prevStatus,
 		NewStatus:       newStatus,
 		Actor:           actor,
-		Timestamp:       time.Now().UTC(),
+		Timestamp:       at.UTC(),
 		BlockHeight:     blockHeight,
 	}
 }

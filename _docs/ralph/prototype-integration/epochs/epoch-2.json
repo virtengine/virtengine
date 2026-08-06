@@ -1,0 +1,37 @@
+{
+  "schema_version": "virtengine.prototype.intake-epoch/v2",
+  "campaign": "three-day-prototype",
+  "intake_epoch": 2,
+  "base_tag": "checkpoint/prototype-integration/epoch-2-base",
+  "base_sha": "d252c7cee7eb88db5c4458e502f9a1bd5ae18bbd",
+  "planning_sha": "1436723bd78980aa0388dbe9fcfa24dda939c54a",
+  "status": "frozen",
+  "opens_at": "2026-08-03T00:30:00Z",
+  "announcement_cutoff": "2026-08-03T23:59:59Z",
+  "producers": [
+    {
+      "thread": "T1",
+      "status": "unannounced",
+      "tag": null,
+      "decision": "frozen-out"
+    },
+    {
+      "thread": "T2",
+      "status": "unannounced",
+      "tag": null,
+      "decision": "frozen-out"
+    },
+    {
+      "thread": "T3",
+      "status": "unannounced",
+      "tag": null,
+      "decision": "frozen-out"
+    },
+    {
+      "thread": "T5",
+      "status": "unannounced",
+      "tag": null,
+      "decision": "frozen-out"
+    }
+  ]
+}

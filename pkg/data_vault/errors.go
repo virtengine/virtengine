@@ -6,6 +6,10 @@ import (
 )
 
 var (
+	// ErrReconciliationRequired indicates that an irreversible mutation committed
+	// but its terminal durable record still needs reconciliation.
+	ErrReconciliationRequired = errors.New("vault reconciliation required")
+
 	// ErrBlobNotFound indicates the requested blob does not exist
 	ErrBlobNotFound = errors.New("blob not found")
 
@@ -39,6 +43,27 @@ var (
 	// ErrConsentRequired indicates access is missing required consent
 	ErrConsentRequired = errors.New("consent required")
 )
+
+// ReconciliationRequiredError preserves the committed operation identity.
+type ReconciliationRequiredError struct {
+	OperationID string
+	Operation   string
+	Cause       error
+}
+
+func (e *ReconciliationRequiredError) Error() string {
+	if e.Cause != nil {
+		return fmt.Sprintf("%s %s: %v: %v", e.Operation, e.OperationID, ErrReconciliationRequired, e.Cause)
+	}
+	return fmt.Sprintf("%s %s: %v", e.Operation, e.OperationID, ErrReconciliationRequired)
+}
+
+func (e *ReconciliationRequiredError) Unwrap() []error {
+	if e.Cause == nil {
+		return []error{ErrReconciliationRequired}
+	}
+	return []error{ErrReconciliationRequired, e.Cause}
+}
 
 // VaultError wraps an error with additional context
 type VaultError struct {

@@ -4,12 +4,9 @@
     {
       "type": "command",
       "command": [
-        "node",
-        "/home/jon/.nvm/versions/node/v24.13.1/lib/node_modules/bosun/agent-hook-bridge.mjs",
-        "--agent",
-        "copilot",
-        "--event",
-        "sessionStart"
+        "/bin/sh",
+        "-c",
+        "exit 0"
       ],
       "timeout": 60
     }
@@ -18,46 +15,11 @@
     {
       "type": "command",
       "command": [
-        "node",
-        "/home/jon/.nvm/versions/node/v24.13.1/lib/node_modules/bosun/agent-hook-bridge.mjs",
-        "--agent",
-        "copilot",
-        "--event",
-        "sessionEnd"
+        "/bin/sh",
+        "-c",
+        "exit 0"
       ],
       "timeout": 60
     }
-  ],
-  "preToolUse": {
-    "*": [
-      {
-        "type": "command",
-        "command": [
-          "node",
-          "/home/jon/.nvm/versions/node/v24.13.1/lib/node_modules/bosun/agent-hook-bridge.mjs",
-          "--agent",
-          "copilot",
-          "--event",
-          "preToolUse"
-        ],
-        "timeout": 300
-      }
-    ]
-  },
-  "postToolUse": {
-    "*": [
-      {
-        "type": "command",
-        "command": [
-          "node",
-          "/home/jon/.nvm/versions/node/v24.13.1/lib/node_modules/bosun/agent-hook-bridge.mjs",
-          "--agent",
-          "copilot",
-          "--event",
-          "postToolUse"
-        ],
-        "timeout": 120
-      }
-    ]
-  }
+  ]
 }

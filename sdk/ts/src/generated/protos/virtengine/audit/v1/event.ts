@@ -50,6 +50,50 @@ export interface EventTrustedAuditorDeleted {
   auditor: string;
 }
 
+/** EventAuditLogCreated defines an event for when an audit log entry is created. */
+export interface EventAuditLogCreated {
+  /** Log entry ID */
+  id: string;
+  /** Block height */
+  height: Long;
+  /** Actor address */
+  actor: string;
+  /** Module name */
+  module: string;
+  /** Action name */
+  action: string;
+  /** Resource ID */
+  resourceId: string;
+}
+
+/** EventExportJobCreated defines an event for when an export job is created. */
+export interface EventExportJobCreated {
+  /** Export job ID */
+  id: string;
+  /** Requester address */
+  requester: string;
+  /** Export format */
+  format: string;
+}
+
+/** EventExportJobCompleted defines an event for when an export job completes. */
+export interface EventExportJobCompleted {
+  /** Export job ID */
+  id: string;
+  /** Number of entries exported */
+  entryCount: Long;
+  /** File path */
+  filePath: string;
+}
+
+/** EventExportJobFailed defines an event for when an export job fails. */
+export interface EventExportJobFailed {
+  /** Export job ID */
+  id: string;
+  /** Error message */
+  error: string;
+}
+
 function createBaseEventTrustedAuditorCreated(): EventTrustedAuditorCreated {
   return { owner: "", auditor: "" };
 }
@@ -200,6 +244,405 @@ export const EventTrustedAuditorDeleted: MessageFns<
     const message = createBaseEventTrustedAuditorDeleted();
     message.owner = object.owner ?? "";
     message.auditor = object.auditor ?? "";
+    return message;
+  },
+};
+
+function createBaseEventAuditLogCreated(): EventAuditLogCreated {
+  return { id: "", height: Long.ZERO, actor: "", module: "", action: "", resourceId: "" };
+}
+
+export const EventAuditLogCreated: MessageFns<EventAuditLogCreated, "virtengine.audit.v1.EventAuditLogCreated"> = {
+  $type: "virtengine.audit.v1.EventAuditLogCreated" as const,
+
+  encode(message: EventAuditLogCreated, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.id !== "") {
+      writer.uint32(10).string(message.id);
+    }
+    if (!message.height.equals(Long.ZERO)) {
+      writer.uint32(16).int64(message.height.toString());
+    }
+    if (message.actor !== "") {
+      writer.uint32(26).string(message.actor);
+    }
+    if (message.module !== "") {
+      writer.uint32(34).string(message.module);
+    }
+    if (message.action !== "") {
+      writer.uint32(42).string(message.action);
+    }
+    if (message.resourceId !== "") {
+      writer.uint32(50).string(message.resourceId);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): EventAuditLogCreated {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseEventAuditLogCreated();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.id = reader.string();
+          continue;
+        }
+        case 2: {
+          if (tag !== 16) {
+            break;
+          }
+
+          message.height = Long.fromString(reader.int64().toString());
+          continue;
+        }
+        case 3: {
+          if (tag !== 26) {
+            break;
+          }
+
+          message.actor = reader.string();
+          continue;
+        }
+        case 4: {
+          if (tag !== 34) {
+            break;
+          }
+
+          message.module = reader.string();
+          continue;
+        }
+        case 5: {
+          if (tag !== 42) {
+            break;
+          }
+
+          message.action = reader.string();
+          continue;
+        }
+        case 6: {
+          if (tag !== 50) {
+            break;
+          }
+
+          message.resourceId = reader.string();
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): EventAuditLogCreated {
+    return {
+      id: isSet(object.id) ? globalThis.String(object.id) : "",
+      height: isSet(object.height) ? Long.fromValue(object.height) : Long.ZERO,
+      actor: isSet(object.actor) ? globalThis.String(object.actor) : "",
+      module: isSet(object.module) ? globalThis.String(object.module) : "",
+      action: isSet(object.action) ? globalThis.String(object.action) : "",
+      resourceId: isSet(object.resource_id) ? globalThis.String(object.resource_id) : "",
+    };
+  },
+
+  toJSON(message: EventAuditLogCreated): unknown {
+    const obj: any = {};
+    if (message.id !== "") {
+      obj.id = message.id;
+    }
+    if (!message.height.equals(Long.ZERO)) {
+      obj.height = (message.height || Long.ZERO).toString();
+    }
+    if (message.actor !== "") {
+      obj.actor = message.actor;
+    }
+    if (message.module !== "") {
+      obj.module = message.module;
+    }
+    if (message.action !== "") {
+      obj.action = message.action;
+    }
+    if (message.resourceId !== "") {
+      obj.resource_id = message.resourceId;
+    }
+    return obj;
+  },
+  fromPartial(object: DeepPartial<EventAuditLogCreated>): EventAuditLogCreated {
+    const message = createBaseEventAuditLogCreated();
+    message.id = object.id ?? "";
+    message.height = (object.height !== undefined && object.height !== null)
+      ? Long.fromValue(object.height)
+      : Long.ZERO;
+    message.actor = object.actor ?? "";
+    message.module = object.module ?? "";
+    message.action = object.action ?? "";
+    message.resourceId = object.resourceId ?? "";
+    return message;
+  },
+};
+
+function createBaseEventExportJobCreated(): EventExportJobCreated {
+  return { id: "", requester: "", format: "" };
+}
+
+export const EventExportJobCreated: MessageFns<EventExportJobCreated, "virtengine.audit.v1.EventExportJobCreated"> = {
+  $type: "virtengine.audit.v1.EventExportJobCreated" as const,
+
+  encode(message: EventExportJobCreated, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.id !== "") {
+      writer.uint32(10).string(message.id);
+    }
+    if (message.requester !== "") {
+      writer.uint32(18).string(message.requester);
+    }
+    if (message.format !== "") {
+      writer.uint32(26).string(message.format);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): EventExportJobCreated {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseEventExportJobCreated();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.id = reader.string();
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.requester = reader.string();
+          continue;
+        }
+        case 3: {
+          if (tag !== 26) {
+            break;
+          }
+
+          message.format = reader.string();
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): EventExportJobCreated {
+    return {
+      id: isSet(object.id) ? globalThis.String(object.id) : "",
+      requester: isSet(object.requester) ? globalThis.String(object.requester) : "",
+      format: isSet(object.format) ? globalThis.String(object.format) : "",
+    };
+  },
+
+  toJSON(message: EventExportJobCreated): unknown {
+    const obj: any = {};
+    if (message.id !== "") {
+      obj.id = message.id;
+    }
+    if (message.requester !== "") {
+      obj.requester = message.requester;
+    }
+    if (message.format !== "") {
+      obj.format = message.format;
+    }
+    return obj;
+  },
+  fromPartial(object: DeepPartial<EventExportJobCreated>): EventExportJobCreated {
+    const message = createBaseEventExportJobCreated();
+    message.id = object.id ?? "";
+    message.requester = object.requester ?? "";
+    message.format = object.format ?? "";
+    return message;
+  },
+};
+
+function createBaseEventExportJobCompleted(): EventExportJobCompleted {
+  return { id: "", entryCount: Long.ZERO, filePath: "" };
+}
+
+export const EventExportJobCompleted: MessageFns<
+  EventExportJobCompleted,
+  "virtengine.audit.v1.EventExportJobCompleted"
+> = {
+  $type: "virtengine.audit.v1.EventExportJobCompleted" as const,
+
+  encode(message: EventExportJobCompleted, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.id !== "") {
+      writer.uint32(10).string(message.id);
+    }
+    if (!message.entryCount.equals(Long.ZERO)) {
+      writer.uint32(16).int64(message.entryCount.toString());
+    }
+    if (message.filePath !== "") {
+      writer.uint32(26).string(message.filePath);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): EventExportJobCompleted {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseEventExportJobCompleted();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.id = reader.string();
+          continue;
+        }
+        case 2: {
+          if (tag !== 16) {
+            break;
+          }
+
+          message.entryCount = Long.fromString(reader.int64().toString());
+          continue;
+        }
+        case 3: {
+          if (tag !== 26) {
+            break;
+          }
+
+          message.filePath = reader.string();
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): EventExportJobCompleted {
+    return {
+      id: isSet(object.id) ? globalThis.String(object.id) : "",
+      entryCount: isSet(object.entry_count) ? Long.fromValue(object.entry_count) : Long.ZERO,
+      filePath: isSet(object.file_path) ? globalThis.String(object.file_path) : "",
+    };
+  },
+
+  toJSON(message: EventExportJobCompleted): unknown {
+    const obj: any = {};
+    if (message.id !== "") {
+      obj.id = message.id;
+    }
+    if (!message.entryCount.equals(Long.ZERO)) {
+      obj.entry_count = (message.entryCount || Long.ZERO).toString();
+    }
+    if (message.filePath !== "") {
+      obj.file_path = message.filePath;
+    }
+    return obj;
+  },
+  fromPartial(object: DeepPartial<EventExportJobCompleted>): EventExportJobCompleted {
+    const message = createBaseEventExportJobCompleted();
+    message.id = object.id ?? "";
+    message.entryCount = (object.entryCount !== undefined && object.entryCount !== null)
+      ? Long.fromValue(object.entryCount)
+      : Long.ZERO;
+    message.filePath = object.filePath ?? "";
+    return message;
+  },
+};
+
+function createBaseEventExportJobFailed(): EventExportJobFailed {
+  return { id: "", error: "" };
+}
+
+export const EventExportJobFailed: MessageFns<EventExportJobFailed, "virtengine.audit.v1.EventExportJobFailed"> = {
+  $type: "virtengine.audit.v1.EventExportJobFailed" as const,
+
+  encode(message: EventExportJobFailed, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.id !== "") {
+      writer.uint32(10).string(message.id);
+    }
+    if (message.error !== "") {
+      writer.uint32(18).string(message.error);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): EventExportJobFailed {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseEventExportJobFailed();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.id = reader.string();
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.error = reader.string();
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): EventExportJobFailed {
+    return {
+      id: isSet(object.id) ? globalThis.String(object.id) : "",
+      error: isSet(object.error) ? globalThis.String(object.error) : "",
+    };
+  },
+
+  toJSON(message: EventExportJobFailed): unknown {
+    const obj: any = {};
+    if (message.id !== "") {
+      obj.id = message.id;
+    }
+    if (message.error !== "") {
+      obj.error = message.error;
+    }
+    return obj;
+  },
+  fromPartial(object: DeepPartial<EventExportJobFailed>): EventExportJobFailed {
+    const message = createBaseEventExportJobFailed();
+    message.id = object.id ?? "";
+    message.error = object.error ?? "";
     return message;
   },
 };

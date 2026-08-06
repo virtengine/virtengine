@@ -109,6 +109,15 @@ type MOABConfig struct {
 	// Password is the authentication password
 	Password string `json:"-"` // Never log this
 
+	// SSHPrivateKeyPath is the path to the SSH private key file used for key auth.
+	SSHPrivateKeyPath string `json:"ssh_private_key_path,omitempty"`
+
+	// SSHPrivateKey is the raw SSH private key content used for key auth.
+	SSHPrivateKey string `json:"-"` // Never log this
+
+	// SSHPassphrase is the passphrase used to decrypt the SSH private key.
+	SSHPassphrase string `json:"-"` // Never log this
+
 	// DefaultQueue is the default job queue
 	DefaultQueue string `json:"default_queue"`
 

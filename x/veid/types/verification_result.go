@@ -2,6 +2,7 @@ package types
 
 import (
 	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"time"
 )
@@ -55,6 +56,18 @@ func IsValidVerificationResultStatus(status VerificationResultStatus) bool {
 type ReasonCode string
 
 const (
+	// VerificationResultMetadataReceiptDigest carries the signed inference receipt digest.
+	VerificationResultMetadataReceiptDigest = "receipt_digest"
+
+	// VerificationResultMetadataReceiptContextDigest carries the replay context digest.
+	VerificationResultMetadataReceiptContextDigest = "receipt_context_digest"
+
+	// VerificationResultMetadataRuntimeDigest carries the committed runtime digest.
+	VerificationResultMetadataRuntimeDigest = "runtime_digest"
+
+	// VerificationResultMetadataModelDigest carries the committed model digest.
+	VerificationResultMetadataModelDigest = "model_digest"
+
 	// ReasonCodeSuccess indicates successful verification
 	ReasonCodeSuccess ReasonCode = "SUCCESS"
 
@@ -108,6 +121,12 @@ const (
 
 	// ReasonCodeLowOCRConfidence indicates OCR extraction confidence is low
 	ReasonCodeLowOCRConfidence ReasonCode = "LOW_OCR_CONFIDENCE"
+
+	// ReasonCodeStaleArtifactState indicates the active verifier or pipeline state is stale.
+	ReasonCodeStaleArtifactState ReasonCode = "STALE_ARTIFACT_STATE"
+
+	// ReasonCodeUnauthorizedArtifactState indicates the model or artifact state is not authorized.
+	ReasonCodeUnauthorizedArtifactState ReasonCode = "UNAUTHORIZED_ARTIFACT_STATE"
 )
 
 // ============================================================================
@@ -265,6 +284,15 @@ func (r *VerificationResult) Validate() error {
 
 	if r.BlockHeight < 0 {
 		return ErrInvalidVerificationResult.Wrap("block_height cannot be negative")
+	}
+
+	if digest := r.Metadata[VerificationResultMetadataReceiptDigest]; digest != "" {
+		if len(digest) != sha256.Size*2 {
+			return ErrInvalidVerificationResult.Wrap("receipt_digest must be a 64-character SHA-256 hex digest")
+		}
+		if _, err := hex.DecodeString(digest); err != nil {
+			return ErrInvalidVerificationResult.Wrap("receipt_digest must be valid hex")
+		}
 	}
 
 	return nil

@@ -154,7 +154,7 @@ func (cm *HPCCredentialManager) Unlock(passphrase string) error {
 	cm.mu.Lock()
 	defer cm.mu.Unlock()
 
-	if passphrase == "" && !cm.config.AllowUnencrypted {
+	if passphrase == "" && !cm.config.AllowUnencrypted && cm.config.EncryptionKeyPath == "" {
 		return errors.New("passphrase required")
 	}
 

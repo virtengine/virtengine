@@ -404,7 +404,10 @@ func (k Keeper) UpdateClusterCapacity(ctx sdk.Context, clusterID string) error {
 
 // ProcessHeartbeat processes a heartbeat from a node agent
 func (k Keeper) ProcessHeartbeat(ctx sdk.Context, heartbeat *types.NodeHeartbeat, auth *types.HeartbeatAuth) (*types.HeartbeatResponse, error) {
-	if err := heartbeat.Validate(); err != nil {
+	if heartbeat == nil {
+		return nil, types.ErrInvalidHeartbeat.Wrap("heartbeat is required")
+	}
+	if err := heartbeat.ValidateAt(ctx.BlockTime()); err != nil {
 		return nil, err
 	}
 

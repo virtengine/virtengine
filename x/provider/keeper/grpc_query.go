@@ -71,3 +71,57 @@ func (k Querier) Provider(c context.Context, req *types.QueryProviderRequest) (*
 
 	return &types.QueryProviderResponse{Provider: provider}, nil
 }
+
+// ProviderSigningKey returns one exact provider key epoch.
+func (k Querier) ProviderSigningKey(c context.Context, req *types.QueryProviderSigningKeyRequest) (*types.QueryProviderSigningKeyResponse, error) {
+	if req == nil {
+		return nil, status.Error(codes.InvalidArgument, "empty request")
+	}
+	owner, err := sdk.AccAddressFromBech32(req.Owner)
+	if err != nil {
+		return nil, types.ErrInvalidAddress
+	}
+	ctx := sdk.UnwrapSDKContext(c)
+	record, found := k.GetProviderSigningKey(ctx, owner, req.KeyId, req.Epoch)
+	if !found {
+		return nil, types.ErrInvalidPublicKey.Wrap("provider signing key epoch not found")
+	}
+	return &types.QueryProviderSigningKeyResponse{Key: toProviderSigningKeyRecord(record)}, nil
+}
+
+// ProviderSigningKeyEpochs returns the immutable key history.
+func (k Querier) ProviderSigningKeyEpochs(c context.Context, req *types.QueryProviderSigningKeyEpochsRequest) (*types.QueryProviderSigningKeyEpochsResponse, error) {
+	if req == nil {
+		return nil, status.Error(codes.InvalidArgument, "empty request")
+	}
+	owner, err := sdk.AccAddressFromBech32(req.Owner)
+	if err != nil {
+		return nil, types.ErrInvalidAddress
+	}
+	ctx := sdk.UnwrapSDKContext(c)
+	records := k.GetProviderSigningKeyEpochs(ctx, owner)
+	keys := make([]types.ProviderSigningKeyRecord, 0, len(records))
+	for _, record := range records {
+		keys = append(keys, toProviderSigningKeyRecord(record))
+	}
+	return &types.QueryProviderSigningKeyEpochsResponse{Keys: keys}, nil
+}
+
+func toProviderSigningKeyRecord(record types.ProviderPublicKeyRecord) types.ProviderSigningKeyRecord {
+	return types.ProviderSigningKeyRecord{
+		PublicKey:         append([]byte(nil), record.PublicKey...),
+		KeyType:           record.KeyType,
+		KeyId:             record.KeyID,
+		Epoch:             record.Epoch,
+		ActivatedAtHeight: record.ActivatedAtHeight,
+		ActivatedAtUnix:   record.ActivatedAtUnix,
+		ExpiresAtHeight:   record.ExpiresAtHeight,
+		ExpiresAtUnix:     record.ExpiresAtUnix,
+		RetiredAtHeight:   record.RetiredAtHeight,
+		RetiredAtUnix:     record.RetiredAtUnix,
+		RevokedAtHeight:   record.RevokedAtHeight,
+		RevokedAtUnix:     record.RevokedAtUnix,
+		PreviousKeyId:     record.PreviousKeyID,
+		RotationCount:     record.RotationCount,
+	}
+}

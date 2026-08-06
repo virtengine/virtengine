@@ -9,9 +9,20 @@ import (
 
 // InitGenesis initializes the settlement module's state from a provided genesis state.
 func InitGenesis(ctx sdk.Context, k keeper.IKeeper, data *types.GenesisState) {
+	if !k.GetFiatConversionCustodyBalance(ctx).Equal(data.FiatConversionCustodyBalance) {
+		panic(types.ErrInvalidSettlement.Wrap("fiat custody module-account balance does not match genesis accounting"))
+	}
 	// Set module parameters
 	if err := k.SetParams(ctx, data.Params); err != nil {
 		panic(err)
+	}
+	if data.UsageAuthenticationActive {
+		if err := k.ActivateUsageAuthentication(ctx); err != nil {
+			panic(err)
+		}
+	}
+	if data.FinancialCasesActive {
+		k.ActivateFinancialCases(ctx)
 	}
 
 	// Import escrow accounts
@@ -53,6 +64,14 @@ func InitGenesis(ctx sdk.Context, k keeper.IKeeper, data *types.GenesisState) {
 		}
 	}
 
+	// Import payout records before financial cases so active case hold
+	// validation can resolve every referenced payout.
+	for _, payout := range data.PayoutRecords {
+		if err := k.SetPayout(ctx, payout); err != nil {
+			panic(err)
+		}
+	}
+
 	// Import fiat payout preferences
 	for _, pref := range data.FiatPayoutPreferences {
 		if err := k.SetFiatPayoutPreference(ctx, pref); err != nil {
@@ -62,13 +81,23 @@ func InitGenesis(ctx sdk.Context, k keeper.IKeeper, data *types.GenesisState) {
 
 	// Import fiat conversion records
 	for _, conversion := range data.FiatConversionRecords {
-		if err := k.SetFiatConversion(ctx, conversion); err != nil {
+		if err := k.ImportFiatConversion(ctx, conversion); err != nil {
+			panic(err)
+		}
+	}
+	if err := k.ImportTreasuryAccounting(ctx, data.TreasuryRecords, data.TreasuryBalance); err != nil {
+		panic(err)
+	}
+
+	for _, financialCase := range data.FinancialCases {
+		if err := k.SetFinancialCase(ctx, financialCase); err != nil {
 			panic(err)
 		}
 	}
 
-	// Set the next sequences from the highest existing IDs
-	var maxEscrowSeq, maxSettlementSeq, maxUsageSeq, maxDistributionSeq, maxFiatConversionSeq uint64
+	// Preserve explicit next sequences when supplied. Legacy documents omitted
+	// them or used zero, in which case derive a safe next value from stored IDs.
+	var maxEscrowSeq, maxSettlementSeq, maxUsageSeq, maxDistributionSeq, maxPayoutSeq, maxFiatConversionSeq uint64
 
 	for _, escrow := range data.EscrowAccounts {
 		seq := extractSequenceFromID(escrow.EscrowID)
@@ -98,6 +127,13 @@ func InitGenesis(ctx sdk.Context, k keeper.IKeeper, data *types.GenesisState) {
 		}
 	}
 
+	for _, payout := range data.PayoutRecords {
+		seq := extractSequenceFromID(payout.PayoutID)
+		if seq > maxPayoutSeq {
+			maxPayoutSeq = seq
+		}
+	}
+
 	for _, conversion := range data.FiatConversionRecords {
 		seq := extractSequenceFromID(conversion.ConversionID)
 		if seq > maxFiatConversionSeq {
@@ -105,22 +141,31 @@ func InitGenesis(ctx sdk.Context, k keeper.IKeeper, data *types.GenesisState) {
 		}
 	}
 
-	// Set sequences (they will be incremented before use)
-	if maxEscrowSeq > 0 {
-		k.SetNextEscrowSequence(ctx, maxEscrowSeq+1)
+	k.SetNextEscrowSequence(ctx, genesisNextSequence(data.EscrowSequence, maxEscrowSeq))
+	k.SetNextSettlementSequence(ctx, genesisNextSequence(data.SettlementSequence, maxSettlementSeq))
+	k.SetNextUsageSequence(ctx, genesisNextSequence(data.UsageSequence, maxUsageSeq))
+	k.SetNextDistributionSequence(ctx, genesisNextSequence(data.DistributionSequence, maxDistributionSeq))
+	k.SetNextPayoutSequence(ctx, genesisNextSequence(data.PayoutSequence, maxPayoutSeq))
+	k.SetNextFiatConversionSequence(ctx, genesisNextSequence(data.FiatConversionSequence, maxFiatConversionSeq))
+	if err := k.RebuildFinancialCaseState(ctx); err != nil {
+		panic(err)
 	}
-	if maxSettlementSeq > 0 {
-		k.SetNextSettlementSequence(ctx, maxSettlementSeq+1)
+	if needsFiatConversionMigration(data.FiatConversionRecords) {
+		if _, err := k.MigrateFiatConversions(ctx); err != nil {
+			panic(err)
+		}
+	} else if err := k.RebuildFiatConversionState(ctx); err != nil {
+		panic(err)
 	}
-	if maxUsageSeq > 0 {
-		k.SetNextUsageSequence(ctx, maxUsageSeq+1)
+}
+
+func needsFiatConversionMigration(records []types.FiatConversionRecord) bool {
+	for _, record := range records {
+		if record.ProtocolVersion == 0 {
+			return true
+		}
 	}
-	if maxDistributionSeq > 0 {
-		k.SetNextDistributionSequence(ctx, maxDistributionSeq+1)
-	}
-	if maxFiatConversionSeq > 0 {
-		k.SetNextFiatConversionSequence(ctx, maxFiatConversionSeq+1)
-	}
+	return false
 }
 
 // ExportGenesis returns the settlement module's genesis state.
@@ -168,6 +213,11 @@ func ExportGenesis(ctx sdk.Context, k keeper.IKeeper) *types.GenesisState {
 		conversions = append(conversions, conversion)
 		return false
 	})
+	var payouts []types.PayoutRecord
+	k.WithPayouts(ctx, func(payout types.PayoutRecord) bool {
+		payouts = append(payouts, payout)
+		return false
+	})
 
 	// Export fiat payout preferences
 	var preferences []types.FiatPayoutPreference
@@ -175,17 +225,52 @@ func ExportGenesis(ctx sdk.Context, k keeper.IKeeper) *types.GenesisState {
 		preferences = append(preferences, pref)
 		return false
 	})
+	var financialCases []types.FinancialCase
+	if err := k.WithFinancialCases(ctx, func(financialCase types.FinancialCase) bool {
+		financialCases = append(financialCases, financialCase)
+		return false
+	}); err != nil {
+		panic(err)
+	}
+	treasuryRecords, treasuryBalance, err := k.ExportTreasuryAccounting(ctx)
+	if err != nil {
+		panic(err)
+	}
 
 	return &types.GenesisState{
-		Params:                params,
-		EscrowAccounts:        escrows,
-		SettlementRecords:     settlements,
-		UsageRecords:          usageRecords,
-		RewardDistributions:   rewardDistributions,
-		ClaimableRewards:      claimableRewards,
-		FiatConversionRecords: conversions,
-		FiatPayoutPreferences: preferences,
+		Params:                       params,
+		EscrowAccounts:               escrows,
+		SettlementRecords:            settlements,
+		UsageRecords:                 usageRecords,
+		RewardDistributions:          rewardDistributions,
+		ClaimableRewards:             claimableRewards,
+		PayoutRecords:                payouts,
+		TreasuryRecords:              treasuryRecords,
+		TreasuryBalance:              treasuryBalance,
+		FiatConversionRecords:        conversions,
+		FiatPayoutPreferences:        preferences,
+		UsageAuthenticationActive:    k.IsUsageAuthenticationActive(ctx),
+		FinancialCases:               financialCases,
+		FinancialCasesActive:         k.IsFinancialCasesActive(ctx),
+		EscrowSequence:               k.GetEscrowSequence(ctx),
+		SettlementSequence:           k.GetSettlementSequence(ctx),
+		DistributionSequence:         k.GetDistributionSequence(ctx),
+		UsageSequence:                k.GetUsageSequence(ctx),
+		PayoutSequence:               k.GetPayoutSequence(ctx),
+		FiatConversionSequence:       k.GetFiatConversionSequence(ctx),
+		FiatConversionCustodyBalance: k.GetFiatConversionCustodyBalance(ctx),
 	}
+}
+
+func genesisNextSequence(explicit, maxID uint64) uint64 {
+	derived := uint64(1)
+	if maxID > 0 {
+		derived = maxID + 1
+	}
+	if explicit > derived {
+		return explicit
+	}
+	return derived
 }
 
 // extractSequenceFromID extracts the numeric sequence from an ID string

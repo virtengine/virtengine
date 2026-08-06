@@ -110,12 +110,35 @@ func (am AppModule) Name() string {
 // RegisterInvariants registers invariants.
 //
 //nolint:staticcheck
-func (am AppModule) RegisterInvariants(_ sdk.InvariantRegistry) {}
+func (am AppModule) RegisterInvariants(ir sdk.InvariantRegistry) {
+	ir.RegisterRoute(types.ModuleName, "reservation-capacity-conservation", ReservationCapacityInvariant(am.keeper))
+}
+
+// ReservationCapacityInvariant verifies capacity conservation and unique consumers.
+//
+//nolint:staticcheck // crisis invariant registration remains part of the app contract.
+func ReservationCapacityInvariant(k keeper.Keeper) sdk.Invariant {
+	return func(ctx sdk.Context) (string, bool) {
+		if err := k.ValidateCapacityConservation(ctx); err != nil {
+			return sdk.FormatInvariant(types.ModuleName, "reservation-capacity-conservation", err.Error()), true
+		}
+		return sdk.FormatInvariant(types.ModuleName, "reservation-capacity-conservation", "capacity conserved"), false
+	}
+}
 
 // RegisterServices registers module services.
 func (am AppModule) RegisterServices(cfg module.Configurator) {
 	types.RegisterMsgServer(cfg.MsgServer(), keeper.NewMsgServerImpl(am.keeper))
 	resourcesv1.RegisterQueryServer(cfg.QueryServer(), keeper.NewQuerier(am.keeper))
+	if err := cfg.RegisterMigration(types.ModuleName, 1, func(ctx sdk.Context) error {
+		_, err := am.keeper.MigrateReservations(ctx)
+		return err
+	}); err != nil {
+		panic(err)
+	}
+	if err := cfg.RegisterMigration(types.ModuleName, 2, func(ctx sdk.Context) error { return nil }); err != nil {
+		panic(fmt.Sprintf("failed to register resources 2->3 migration: %v", err))
+	}
 }
 
 // InitGenesis initializes genesis state.
@@ -138,7 +161,7 @@ func (am AppModule) ExportGenesis(ctx sdk.Context, cdc codec.JSONCodec) json.Raw
 }
 
 // ConsensusVersion implements AppModule/ConsensusVersion.
-func (AppModule) ConsensusVersion() uint64 { return 1 }
+func (AppModule) ConsensusVersion() uint64 { return 3 }
 
 // IsAppModule implements the appmodule.AppModule interface.
 func (AppModule) IsAppModule() {}
@@ -154,7 +177,10 @@ func (am AppModule) BeginBlock(ctx context.Context) error {
 // EndBlock runs on end block.
 func (am AppModule) EndBlock(ctx context.Context) error {
 	sdkCtx := sdk.UnwrapSDKContext(ctx)
-	am.keeper.PruneStaleInventories(sdkCtx)
+	if err := am.keeper.PruneStaleInventories(sdkCtx); err != nil {
+		return err
+	}
 	am.keeper.ExpirePendingAllocations(sdkCtx)
-	return nil
+	_, err := am.keeper.ExpireReservations(sdkCtx, 1000)
+	return err
 }

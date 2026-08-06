@@ -178,8 +178,11 @@ const (
 	// FaceEmbeddingDim is the dimension of face embedding vectors
 	FaceEmbeddingDim = 512
 
+	// FaceConfidenceDim is the dedicated face confidence scalar.
+	FaceConfidenceDim = 1
+
 	// DocQualityDim is the dimension of document quality features
-	DocQualityDim = 5
+	DocQualityDim = 6
 
 	// OCRFieldsDim is the dimension of OCR features
 	OCRFieldsDim = 10 // 5 fields * 2 (confidence + validation)
@@ -191,9 +194,16 @@ const (
 	// Must match ml/training/config.py:FeatureConfig.combined_feature_dim
 	TotalFeatureDim = 768
 
+	SelfieEmbeddingOffset = 0
+	FaceConfidenceOffset  = SelfieEmbeddingOffset + FaceEmbeddingDim
+	DocQualityOffset      = FaceConfidenceOffset + FaceConfidenceDim
+	OCROffset             = DocQualityOffset + DocQualityDim
+	MetadataOffset        = OCROffset + OCRFieldsDim
+	ReservedOffset        = MetadataOffset + MetadataDim
+
 	// PaddingDim fills the gap between component features and total dimension
-	// 768 - 512 - 5 - 10 - 16 = 225
-	PaddingDim = TotalFeatureDim - FaceEmbeddingDim - DocQualityDim - OCRFieldsDim - MetadataDim
+	// 768 - 512 - 1 - 6 - 10 - 16 = 223
+	PaddingDim = TotalFeatureDim - ReservedOffset
 )
 
 // OCR field names matching the training configuration

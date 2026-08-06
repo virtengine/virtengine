@@ -1,7 +1,10 @@
 package keeper
 
 import (
+	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"time"
 
@@ -167,6 +170,25 @@ func (ms msgServer) DisputeEscrow(goCtx context.Context, msg *types.MsgDisputeEs
 		return nil, types.ErrUnauthorized.Wrap("only parties to escrow can file dispute")
 	}
 
+	if ms.keeper.IsFinancialCasesActive(ctx) {
+		evidenceHash := sha256.Sum256([]byte(msg.Evidence))
+		respondent := escrow.Recipient
+		if sender.String() == escrow.Recipient {
+			respondent = escrow.Depositor
+		}
+		idempotencyHash := sha256.Sum256([]byte("settlement/escrow/financial-case/v1\x00" + msg.EscrowId + "\x00" + sender.String() + "\x00" + hex.EncodeToString(evidenceHash[:])))
+		idempotency := idempotencyHash[:]
+		_, _, _, err := ms.keeper.OpenFinancialCase(ctx, FinancialCaseOpenRequest{
+			Subject:  types.FinancialSubject{Type: types.FinancialSubjectTypeOrder, PrimaryId: escrow.OrderID, OrderId: escrow.OrderID, EscrowId: escrow.EscrowID, LeaseId: escrow.LeaseID},
+			Claimant: sender.String(), Respondent: respondent, IdempotencyKey: idempotency,
+			Claim: types.FinancialClaim{ClaimType: types.FinancialClaimTypeBilling, Claimant: sender.String(), SourceModule: "settlement", SourceReference: msg.EscrowId, EvidenceHash: evidenceHash[:], EncryptedReference: "settlement://escrow/" + msg.EscrowId + "/evidence-hash/" + hex.EncodeToString(evidenceHash[:]), IdempotencyKey: idempotency},
+		})
+		if err != nil {
+			return nil, err
+		}
+		return &types.MsgDisputeEscrowResponse{DisputedAt: ctx.BlockTime().Unix()}, nil
+	}
+
 	if err := ms.keeper.DisputeEscrow(ctx, msg.EscrowId, msg.Reason); err != nil {
 		return nil, err
 	}
@@ -248,15 +270,43 @@ func (ms msgServer) RecordUsage(goCtx context.Context, msg *types.MsgRecordUsage
 		ctx.BlockTime(),
 		ctx.BlockHeight(),
 	)
+	record.AllocationID = msg.AllocationId
+	record.ChainID = msg.ChainId
+	if msg.RawMetrics != nil {
+		record.Metrics = types.RawUsageMetrics{
+			CPUMilliSeconds:    msg.RawMetrics.CpuMilliSeconds,
+			MemoryByteSeconds:  msg.RawMetrics.MemoryByteSeconds,
+			StorageByteSeconds: msg.RawMetrics.StorageByteSeconds,
+			NetworkBytesIn:     msg.RawMetrics.NetworkBytesIn,
+			NetworkBytesOut:    msg.RawMetrics.NetworkBytesOut,
+			GPUSeconds:         msg.RawMetrics.GpuSeconds,
+		}
+	}
+	record.PricingVersion = msg.PricingVersion
+	record.FormulaVersion = msg.FormulaVersion
+	record.ModelVersion = msg.ModelVersion
+	record.Sequence = msg.StreamSequence
+	record.Nonce = append([]byte(nil), msg.Nonce...)
+	record.IdempotencyKey = append([]byte(nil), msg.IdempotencyKey...)
+	record.ProviderKeyEpoch = msg.ProviderKeyEpoch
+	record.ProviderKeyID = msg.ProviderKeyId
+	record.IssuedAtHeight = msg.IssuedAtHeight
+	record.ExpiresAtHeight = msg.ExpiresAtHeight
+	record.IssuedAtUnix = msg.IssuedAtUnix
+	record.ExpiresAtUnix = msg.ExpiresAtUnix
+	record.SignatureVersion = msg.SignatureVersion
 
 	if err := ms.keeper.RecordUsage(ctx, record); err != nil {
 		return nil, err
 	}
 
 	return &types.MsgRecordUsageResponse{
-		UsageId:    record.UsageID,
-		TotalCost:  record.TotalCost.String(),
-		RecordedAt: ctx.BlockTime().Unix(),
+		UsageId:              record.UsageID,
+		TotalCost:            record.TotalCost.String(),
+		RecordedAt:           ctx.BlockTime().Unix(),
+		UsageDigest:          append([]byte(nil), record.UsageDigest...),
+		AuthenticationStatus: record.AuthenticationStatus,
+		ExactDuplicate:       record.ExactDuplicate,
 	}, nil
 }
 
@@ -280,12 +330,31 @@ func (ms msgServer) AcknowledgeUsage(goCtx context.Context, msg *types.MsgAcknow
 		return nil, types.ErrUnauthorized.Wrap("only the customer can acknowledge usage")
 	}
 
-	if err := ms.keeper.AcknowledgeUsage(ctx, msg.UsageId, msg.Signature); err != nil {
+	if msg.SignatureVersion == 0 && !ms.keeper.IsUsageAuthenticationActive(ctx) {
+		if err := ms.keeper.AcknowledgeUsage(ctx, msg.UsageId, msg.Signature); err != nil {
+			return nil, err
+		}
+		return &types.MsgAcknowledgeUsageResponse{AcknowledgedAt: ctx.BlockTime().Unix()}, nil
+	}
+
+	exactDuplicate := usage.CustomerAcknowledged && bytes.Equal(usage.CustomerAckReplayKey, msg.ReplayKey)
+	proof := types.UsageAcknowledgmentProof{
+		Signature:        append([]byte(nil), msg.Signature...),
+		UsageDigest:      append([]byte(nil), msg.UsageDigest...),
+		ReplayKey:        append([]byte(nil), msg.ReplayKey...),
+		IssuedAtHeight:   msg.IssuedAtHeight,
+		ExpiresAtHeight:  msg.ExpiresAtHeight,
+		IssuedAtUnix:     msg.IssuedAtUnix,
+		ExpiresAtUnix:    msg.ExpiresAtUnix,
+		SignatureVersion: msg.SignatureVersion,
+	}
+	if err := ms.keeper.AcknowledgeUsageAuthenticated(ctx, msg.UsageId, proof); err != nil {
 		return nil, err
 	}
 
 	return &types.MsgAcknowledgeUsageResponse{
 		AcknowledgedAt: ctx.BlockTime().Unix(),
+		ExactDuplicate: exactDuplicate,
 	}, nil
 }
 
@@ -307,4 +376,106 @@ func (ms msgServer) ClaimRewards(goCtx context.Context, msg *types.MsgClaimRewar
 		ClaimedAmount: claimed.String(),
 		ClaimedAt:     ctx.BlockTime().Unix(),
 	}, nil
+}
+
+func (ms msgServer) OpenFinancialCase(goCtx context.Context, msg *types.MsgOpenFinancialCase) (*types.MsgOpenFinancialCaseResponse, error) {
+	ctx := sdk.UnwrapSDKContext(goCtx)
+	claim := types.FinancialClaim{ClaimType: msg.ClaimType, Claimant: msg.Sender, SourceModule: financialSourceSettlement, SourceReference: msg.SourceReference, EvidenceHash: append([]byte(nil), msg.EvidenceHash...), EncryptedReference: msg.EncryptedReference, IdempotencyKey: append([]byte(nil), msg.IdempotencyKey...)}
+	financialCase, added, duplicate, err := ms.keeper.OpenFinancialCase(ctx, FinancialCaseOpenRequest{Subject: msg.Subject, Claimant: msg.Sender, Respondent: msg.Respondent, Claim: claim, IdempotencyKey: msg.IdempotencyKey})
+	if err != nil {
+		return nil, err
+	}
+	return &types.MsgOpenFinancialCaseResponse{CaseId: financialCase.CaseId, ClaimId: added.ClaimId, ExactDuplicate: duplicate, Status: financialCase.Status}, nil
+}
+
+func (ms msgServer) AddFinancialClaim(goCtx context.Context, msg *types.MsgAddFinancialClaim) (*types.MsgAddFinancialClaimResponse, error) {
+	ctx := sdk.UnwrapSDKContext(goCtx)
+	claim := types.FinancialClaim{ClaimType: msg.ClaimType, Claimant: msg.Sender, SourceModule: financialSourceSettlement, SourceReference: msg.SourceReference, EvidenceHash: append([]byte(nil), msg.EvidenceHash...), EncryptedReference: msg.EncryptedReference, IdempotencyKey: append([]byte(nil), msg.IdempotencyKey...), Recommendation: msg.Recommendation}
+	financialCase, added, duplicate, err := ms.keeper.AddFinancialClaim(ctx, msg.CaseId, claim)
+	if err != nil {
+		return nil, err
+	}
+	return &types.MsgAddFinancialClaimResponse{CaseId: financialCase.CaseId, ClaimId: added.ClaimId, ExactDuplicate: duplicate, Status: financialCase.Status}, nil
+}
+
+func (ms msgServer) SubmitFinancialCaseForReview(goCtx context.Context, msg *types.MsgSubmitFinancialCaseForReview) (*types.MsgSubmitFinancialCaseForReviewResponse, error) {
+	ctx := sdk.UnwrapSDKContext(goCtx)
+	if err := ms.keeper.SubmitFinancialCaseForReview(ctx, msg.CaseId, msg.Sender); err != nil {
+		return nil, err
+	}
+	financialCase, _ := ms.keeper.GetFinancialCase(ctx, msg.CaseId)
+	return &types.MsgSubmitFinancialCaseForReviewResponse{Status: financialCase.Status}, nil
+}
+
+func (ms msgServer) EscalateFinancialCase(goCtx context.Context, msg *types.MsgEscalateFinancialCase) (*types.MsgEscalateFinancialCaseResponse, error) {
+	ctx := sdk.UnwrapSDKContext(goCtx)
+	if err := ms.keeper.EscalateFinancialCase(ctx, msg.CaseId, msg.Sender, msg.ReasonHash); err != nil {
+		return nil, err
+	}
+	financialCase, _ := ms.keeper.GetFinancialCase(ctx, msg.CaseId)
+	return &types.MsgEscalateFinancialCaseResponse{Status: financialCase.Status}, nil
+}
+
+func (ms msgServer) ResolveFinancialCase(goCtx context.Context, msg *types.MsgResolveFinancialCase) (*types.MsgResolveFinancialCaseResponse, error) {
+	ctx := sdk.UnwrapSDKContext(goCtx)
+	if err := ms.keeper.ResolveFinancialCase(ctx, msg.CaseId, msg.Resolver, msg.Allocation); err != nil {
+		return nil, err
+	}
+	financialCase, _ := ms.keeper.GetFinancialCase(ctx, msg.CaseId)
+	return &types.MsgResolveFinancialCaseResponse{Status: financialCase.Status, AppealDeadlineHeight: financialCase.AppealDeadlineHeight, AppealDeadlineTime: financialCase.AppealDeadlineTime}, nil
+}
+
+func (ms msgServer) AppealFinancialCase(goCtx context.Context, msg *types.MsgAppealFinancialCase) (*types.MsgAppealFinancialCaseResponse, error) {
+	ctx := sdk.UnwrapSDKContext(goCtx)
+	appeal, _, err := ms.keeper.AppealFinancialCase(ctx, msg.CaseId, msg.Appellant, msg.EvidenceHash, msg.EncryptedReference, msg.IdempotencyKey)
+	if err != nil {
+		return nil, err
+	}
+	financialCase, _ := ms.keeper.GetFinancialCase(ctx, msg.CaseId)
+	return &types.MsgAppealFinancialCaseResponse{AppealId: appeal.AppealId, Status: financialCase.Status}, nil
+}
+
+func (ms msgServer) CancelFinancialCase(goCtx context.Context, msg *types.MsgCancelFinancialCase) (*types.MsgCancelFinancialCaseResponse, error) {
+	ctx := sdk.UnwrapSDKContext(goCtx)
+	if err := ms.keeper.CancelFinancialCase(ctx, msg.CaseId, msg.Sender, msg.ReasonHash); err != nil {
+		return nil, err
+	}
+	financialCase, _ := ms.keeper.GetFinancialCase(ctx, msg.CaseId)
+	return &types.MsgCancelFinancialCaseResponse{Status: financialCase.Status}, nil
+}
+
+func (ms msgServer) FinalizeFinancialCase(goCtx context.Context, msg *types.MsgFinalizeFinancialCase) (*types.MsgFinalizeFinancialCaseResponse, error) {
+	ctx := sdk.UnwrapSDKContext(goCtx)
+	financialCase, err := ms.keeper.FinalizeFinancialCase(ctx, msg.CaseId, msg.Sender)
+	if err != nil {
+		return nil, err
+	}
+	return &types.MsgFinalizeFinancialCaseResponse{Status: financialCase.Status, Effects: financialCase.Effects}, nil
+}
+
+// RecordFiatConversionObservation records one provider-signed external result.
+func (ms msgServer) RecordFiatConversionObservation(goCtx context.Context, msg *types.MsgRecordFiatConversionObservation) (*types.MsgRecordFiatConversionObservationResponse, error) {
+	ctx := sdk.UnwrapSDKContext(goCtx)
+	result, err := ms.keeper.RecordFiatConversionObservation(ctx, msg)
+	if err != nil {
+		return nil, err
+	}
+	return &types.MsgRecordFiatConversionObservationResponse{
+		ConversionId: result.Conversion.ConversionID, ObservationSequence: result.Conversion.ObservationSequence,
+		Stage: msg.Stage, State: string(result.Conversion.State), ExactDuplicate: result.ExactDuplicate,
+		ObservationDigest: append([]byte(nil), result.ObservationDigest...),
+	}, nil
+}
+
+// UpdateParams applies a complete validated parameter set from x/gov only.
+func (ms msgServer) UpdateParams(goCtx context.Context, msg *types.MsgUpdateParams) (*types.MsgUpdateParamsResponse, error) {
+	ctx := sdk.UnwrapSDKContext(goCtx)
+	if msg.Authority != ms.keeper.GetAuthority() {
+		return nil, types.ErrUnauthorized.Wrap("invalid settlement parameter authority")
+	}
+	params := paramsFromProto(msg.Params, ms.keeper.GetParams(ctx))
+	if err := ms.keeper.SetParams(ctx, params); err != nil {
+		return nil, err
+	}
+	return &types.MsgUpdateParamsResponse{}, nil
 }

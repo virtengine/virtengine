@@ -4,208 +4,157 @@ package e2e
 
 import (
 	"context"
-	"errors"
 	"testing"
-	"time"
 
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	corev1 "k8s.io/api/core/v1"
 
-	pd "github.com/virtengine/virtengine/pkg/provider_daemon"
+	provider_daemon "github.com/virtengine/virtengine/pkg/provider_daemon"
 	"github.com/virtengine/virtengine/pkg/waldur"
+	"github.com/virtengine/virtengine/tests/integration/provider/providerharness"
 )
 
-type mockKubernetesClient struct {
-	namespaces      map[string]bool
-	deployments     map[string]*pd.K8sDeploymentSpec
-	services        map[string]*pd.K8sServiceSpec
-	secrets         map[string]map[string][]byte
-	pvcs            map[string]*pd.K8sPVCSpec
-	networkPolicies map[string]*pd.K8sNetworkPolicySpec
-	endpoints       map[string][]pd.WorkloadEndpoint
-	podStatuses     map[string][]pd.PodStatus
-	failOnCreate    bool
-}
-
-func newMockKubernetesClient() *mockKubernetesClient {
-	return &mockKubernetesClient{
-		namespaces:      make(map[string]bool),
-		deployments:     make(map[string]*pd.K8sDeploymentSpec),
-		services:        make(map[string]*pd.K8sServiceSpec),
-		secrets:         make(map[string]map[string][]byte),
-		pvcs:            make(map[string]*pd.K8sPVCSpec),
-		networkPolicies: make(map[string]*pd.K8sNetworkPolicySpec),
-		endpoints:       make(map[string][]pd.WorkloadEndpoint),
-		podStatuses:     make(map[string][]pd.PodStatus),
-	}
-}
-
-func (m *mockKubernetesClient) CreateNamespace(_ context.Context, name string, _ map[string]string) error {
-	if m.failOnCreate {
-		return errors.New("mock failure")
-	}
-	m.namespaces[name] = true
-	return nil
-}
-
-func (m *mockKubernetesClient) DeleteNamespace(_ context.Context, name string) error {
-	delete(m.namespaces, name)
-	return nil
-}
-
-func (m *mockKubernetesClient) CreateDeployment(_ context.Context, namespace string, spec *pd.K8sDeploymentSpec) error {
-	if m.failOnCreate {
-		return errors.New("mock failure")
-	}
-	m.deployments[namespace+"/"+spec.Name] = spec
-	return nil
-}
-
-func (m *mockKubernetesClient) UpdateDeployment(_ context.Context, namespace string, spec *pd.K8sDeploymentSpec) error {
-	key := namespace + "/" + spec.Name
-	if existing, ok := m.deployments[key]; ok {
-		existing.Replicas = spec.Replicas
-	}
-	return nil
-}
-
-func (m *mockKubernetesClient) DeleteDeployment(_ context.Context, namespace, name string) error {
-	delete(m.deployments, namespace+"/"+name)
-	return nil
-}
-
-func (m *mockKubernetesClient) CreateService(_ context.Context, namespace string, spec *pd.K8sServiceSpec) error {
-	if m.failOnCreate {
-		return errors.New("mock failure")
-	}
-	m.services[namespace+"/"+spec.Name] = spec
-	return nil
-}
-
-func (m *mockKubernetesClient) DeleteService(_ context.Context, namespace, name string) error {
-	delete(m.services, namespace+"/"+name)
-	return nil
-}
-
-func (m *mockKubernetesClient) CreateSecret(_ context.Context, namespace, name string, data map[string][]byte) error {
-	if m.failOnCreate {
-		return errors.New("mock failure")
-	}
-	m.secrets[namespace+"/"+name] = data
-	return nil
-}
-
-func (m *mockKubernetesClient) DeleteSecret(_ context.Context, namespace, name string) error {
-	delete(m.secrets, namespace+"/"+name)
-	return nil
-}
-
-func (m *mockKubernetesClient) CreatePVC(_ context.Context, namespace string, spec *pd.K8sPVCSpec) error {
-	if m.failOnCreate {
-		return errors.New("mock failure")
-	}
-	m.pvcs[namespace+"/"+spec.Name] = spec
-	return nil
-}
-
-func (m *mockKubernetesClient) DeletePVC(_ context.Context, namespace, name string) error {
-	delete(m.pvcs, namespace+"/"+name)
-	return nil
-}
-
-func (m *mockKubernetesClient) GetPodStatus(_ context.Context, namespace, deploymentName string) ([]pd.PodStatus, error) {
-	key := namespace + "/" + deploymentName
-	if status, ok := m.podStatuses[key]; ok {
-		return status, nil
-	}
-	return []pd.PodStatus{{Name: "pod", Phase: "Running", Ready: true, StartTime: time.Now()}}, nil
-}
-
-func (m *mockKubernetesClient) ApplyNetworkPolicy(_ context.Context, namespace string, spec *pd.K8sNetworkPolicySpec) error {
-	if m.failOnCreate {
-		return errors.New("mock failure")
-	}
-	m.networkPolicies[namespace+"/"+spec.Name] = spec
-	return nil
-}
-
-func (m *mockKubernetesClient) GetServiceEndpoints(_ context.Context, namespace, serviceName string) ([]pd.WorkloadEndpoint, error) {
-	key := namespace + "/" + serviceName
-	if endpoints, ok := m.endpoints[key]; ok {
-		return endpoints, nil
-	}
-	return []pd.WorkloadEndpoint{{Service: serviceName, Port: 8080, Protocol: "TCP", InternalAddress: "10.0.0.1"}}, nil
-}
-
-func TestKubernetesAdapterE2E(t *testing.T) {
+func TestKubernetesAdapterWaldurLifecycleE2E(t *testing.T) {
 	ctx := context.Background()
-	h := newWaldurHarness(t)
+	controlPlane := startE2EControlPlane(t)
+	harness := newWaldurHarness(t)
 
-	manifest := &pd.Manifest{
-		Version: pd.ManifestVersionV1,
+	manifest := &provider_daemon.Manifest{
+		Version: provider_daemon.ManifestVersionV1,
 		Name:    "k8s-e2e",
-		Services: []pd.ServiceSpec{
+		Services: []provider_daemon.ServiceSpec{
 			{
 				Name:  "api",
 				Type:  "container",
 				Image: "nginx",
 				Tag:   "latest",
-				Resources: pd.ResourceSpec{
+				Resources: provider_daemon.ResourceSpec{
 					CPU:    500,
 					Memory: 512 * 1024 * 1024,
-					GPU:    1,
 				},
-				Ports:   []pd.PortSpec{{Name: "http", ContainerPort: 8080, Expose: true}},
-				Volumes: []pd.VolumeMountSpec{{Name: "data", MountPath: "/data"}},
+				Ports:   []provider_daemon.PortSpec{{Name: "http", ContainerPort: 8080, Expose: true}},
+				Volumes: []provider_daemon.VolumeMountSpec{{Name: "data", MountPath: "/data"}},
 			},
 		},
-		Volumes: []pd.VolumeSpec{{Name: "data", Type: "persistent", Size: 10 * 1024 * 1024 * 1024}},
+		Volumes: []provider_daemon.VolumeSpec{{Name: "data", Type: "persistent", Size: 10 * 1024 * 1024 * 1024}},
 	}
 
-	order := h.createOrder(ctx, "k8s-order", map[string]interface{}{"backend": "k8s"})
-	resource := h.waitForResource(order.UUID)
+	order := harness.createOrder(ctx, "k8s-order", map[string]interface{}{"backend": "kubernetes"})
+	resource := harness.waitForResource(order.UUID)
 
-	statusCh := make(chan pd.WorkloadStatusUpdate, 10)
-	client := newMockKubernetesClient()
-	adapter := pd.NewKubernetesAdapter(pd.KubernetesAdapterConfig{
-		Client:           client,
+	statusCh := make(chan provider_daemon.WorkloadStatusUpdate, 16)
+	adapter := provider_daemon.NewKubernetesAdapter(provider_daemon.KubernetesAdapterConfig{
+		Client:           controlPlane.NewKubernetesClient(),
 		ProviderID:       "provider-e2e",
 		ResourcePrefix:   "e2e",
 		StatusUpdateChan: statusCh,
 	})
 
-	workload, err := adapter.Deploy(ctx, manifest, "deployment-1", "lease-1", pd.DeploymentOptions{})
+	workload, err := adapter.Deploy(ctx, manifest, "deployment-1", "lease-1", provider_daemon.DeploymentOptions{})
 	require.NoError(t, err)
-	require.Equal(t, pd.WorkloadStateRunning, workload.State)
+	require.Equal(t, provider_daemon.WorkloadStateDeploying, workload.State)
 
-	err = adapter.Pause(ctx, workload.ID)
+	exists, err := controlPlane.NamespaceExists(ctx, workload.Namespace)
 	require.NoError(t, err)
-	err = adapter.Resume(ctx, workload.ID)
+	require.True(t, exists)
+
+	require.NoError(t, controlPlane.ReplaceDeploymentPods(
+		ctx,
+		workload.Namespace,
+		"api",
+		corev1.PodRunning,
+		true,
+		"",
+		"running",
+		"",
+	))
+
+	readyStatus, err := adapter.GetStatus(ctx, workload.ID)
+	require.NoError(t, err)
+	require.Equal(t, provider_daemon.WorkloadStateRunning, readyStatus.State)
+	require.NotEmpty(t, readyStatus.Message)
+
+	harness.submitUsage(ctx, resource.UUID, workload.ID)
+	require.Greater(t, len(harness.mock.GetUsageRecords(resource.UUID)), 0)
+
+	require.NoError(t, adapter.Pause(ctx, workload.ID))
+	pausedStatus, err := adapter.GetStatus(ctx, workload.ID)
+	require.NoError(t, err)
+	require.Equal(t, provider_daemon.WorkloadStatePaused, pausedStatus.State)
+
+	_, err = harness.lifecycle.Stop(ctx, waldur.LifecycleRequest{ResourceUUID: resource.UUID})
+	require.NoError(t, err)
+	require.Equal(t, "Stopped", harness.mock.GetResource(resource.UUID).State)
+
+	_, err = harness.lifecycle.Start(ctx, waldur.LifecycleRequest{ResourceUUID: resource.UUID})
+	require.NoError(t, err)
+	require.Equal(t, "OK", harness.mock.GetResource(resource.UUID).State)
+
+	require.NoError(t, adapter.Resume(ctx, workload.ID))
+	require.NoError(t, controlPlane.ReplaceDeploymentPods(
+		ctx,
+		workload.Namespace,
+		"api",
+		corev1.PodRunning,
+		true,
+		"",
+		"running",
+		"",
+	))
+
+	resumedStatus, err := adapter.GetStatus(ctx, workload.ID)
+	require.NoError(t, err)
+	require.Equal(t, provider_daemon.WorkloadStateRunning, resumedStatus.State)
+
+	require.NoError(t, controlPlane.ReplaceDeploymentPods(
+		ctx,
+		workload.Namespace,
+		"api",
+		corev1.PodFailed,
+		false,
+		"readiness probe failed",
+		"terminated",
+		"panic: bootstrap error",
+	))
+
+	failedStatus, err := adapter.GetStatus(ctx, workload.ID)
+	require.NoError(t, err)
+	require.Equal(t, provider_daemon.WorkloadStateFailed, failedStatus.State)
+	require.Contains(t, failedStatus.Message, "panic: bootstrap error")
+
+	require.NoError(t, controlPlane.ReplaceDeploymentPods(
+		ctx,
+		workload.Namespace,
+		"api",
+		corev1.PodRunning,
+		true,
+		"",
+		"running",
+		"",
+	))
+
+	workload, err = adapter.Deploy(ctx, manifest, "deployment-1", "lease-1", provider_daemon.DeploymentOptions{})
 	require.NoError(t, err)
 
-	h.submitUsage(ctx, resource.UUID, workload.ID)
-	require.Greater(t, len(h.mock.GetUsageRecords(resource.UUID)), 0)
-
-	_, err = h.lifecycle.Stop(ctx, waldur.LifecycleRequest{ResourceUUID: resource.UUID})
+	recoveredStatus, err := adapter.GetStatus(ctx, workload.ID)
 	require.NoError(t, err)
-	assert.Equal(t, "Stopped", h.mock.GetResource(resource.UUID).State)
+	require.Equal(t, provider_daemon.WorkloadStateRunning, recoveredStatus.State)
 
-	_, err = h.lifecycle.Start(ctx, waldur.LifecycleRequest{ResourceUUID: resource.UUID})
+	require.NoError(t, adapter.Terminate(ctx, workload.ID))
+	require.NoError(t, controlPlane.WaitForNamespaceDeleted(ctx, workload.Namespace))
+
+	_, err = harness.lifecycle.Terminate(ctx, waldur.LifecycleRequest{ResourceUUID: resource.UUID})
 	require.NoError(t, err)
-	assert.Equal(t, "OK", h.mock.GetResource(resource.UUID).State)
+	require.Equal(t, "Terminated", harness.mock.GetResource(resource.UUID).State)
+}
 
-	err = adapter.Terminate(ctx, workload.ID)
+func startE2EControlPlane(t *testing.T) *providerharness.ControlPlane {
+	t.Helper()
+
+	controlPlane, err := providerharness.StartControlPlane()
 	require.NoError(t, err)
-	_, err = h.lifecycle.Terminate(ctx, waldur.LifecycleRequest{ResourceUUID: resource.UUID})
-	require.NoError(t, err)
-	assert.Equal(t, "Terminated", h.mock.GetResource(resource.UUID).State)
-
-	t.Run("DeploymentFailure", func(t *testing.T) {
-		failingClient := newMockKubernetesClient()
-		failingClient.failOnCreate = true
-		failAdapter := pd.NewKubernetesAdapter(pd.KubernetesAdapterConfig{Client: failingClient, ProviderID: "provider-e2e"})
-
-		_, err := failAdapter.Deploy(ctx, manifest, "deployment-fail", "lease-fail", pd.DeploymentOptions{})
-		require.Error(t, err)
+	t.Cleanup(func() {
+		require.NoError(t, controlPlane.Stop())
 	})
+	return controlPlane
 }

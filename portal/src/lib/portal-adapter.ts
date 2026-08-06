@@ -18,6 +18,26 @@ import type { WalletContextValue } from '../../../lib/portal';
 
 export { PortalProvider, usePortal } from '../../../lib/portal';
 export type { PortalProviderProps, PortalConfig, WalletContextValue } from '../../../lib/portal';
+export { useDeploymentShell, ProviderShellSessionError } from '../../../lib/portal';
+export type {
+  ProviderShellSessionCapability,
+  ShellEligibilityProjection,
+  UseDeploymentShellResult,
+} from '../../../lib/portal';
+export {
+  ProviderOfferingMutationError,
+  buildProviderOfferingMutationRequest,
+  digestProviderOfferingRequest,
+  requireProviderOfferingMutationAdapter,
+  validateCommittedProviderOfferingMutation,
+} from '../../../lib/portal';
+export type {
+  CommittedProviderOfferingMutation,
+  ProviderOfferingMutationAction,
+  ProviderOfferingMutationAdapter,
+  ProviderOfferingMutationContext,
+  ProviderOfferingMutationRequest,
+} from '../../../lib/portal';
 
 // ============================================================================
 // Chat Agent (VE-70D)
@@ -234,6 +254,12 @@ export type {
   OrderEvent,
   CheckoutRequest,
   CheckoutValidation,
+  CheckoutCommittedResult,
+  CheckoutMutationAdapter,
+  CheckoutMutationContext,
+  CheckoutMutationProjector,
+  CheckoutMutationRequest,
+  CheckoutMutationSubmission,
 } from '../../../lib/portal';
 
 export {
@@ -290,6 +316,22 @@ export type {
 // ============================================================================
 
 export { useProvider, ProviderProvider } from '../../../lib/portal';
+export {
+  ProviderDomainVerificationError,
+  normalizeProviderDomain,
+  requireProviderDomainVerifier,
+  validateProviderDomainChallenge,
+  validateProviderDomainVerification,
+} from '../../../lib/portal';
+export type {
+  ProviderDomainBinding,
+  ProviderDomainChallenge,
+  ProviderDomainVerificationEvidence,
+  ProviderDomainVerifier,
+  ProviderActions,
+  ProviderContextValue,
+  ProviderProviderProps,
+} from '../../../lib/portal';
 export type {
   ProviderState,
   ProviderProfile,
@@ -325,6 +367,9 @@ export {
   ProviderAPIError,
   LogStream,
   ShellConnection,
+  providerDeploymentActions,
+  ProviderDeploymentActionError,
+  validateProviderDeploymentActionReceipt,
   signRequest,
   MultiProviderClient,
   MultiProviderProvider,
@@ -346,8 +391,16 @@ export type {
   ServiceStatus,
   DeploymentListResponse,
   DeploymentAction,
-  ShellSessionResponse,
   ProviderAPIErrorDetails,
+  ProviderDeploymentAction,
+  ProviderDeploymentActionStatus,
+  ProviderDeploymentActionTxEvidence,
+  ProviderDeploymentActionReceipt,
+  ProviderDeploymentActionCapability,
+  ProviderDeploymentActionErrorCode,
+  ProviderDeploymentTxEvidenceValidator,
+  ProviderDeploymentActionValidationContext,
+  ProviderDeploymentActionReceiptValidator,
   SignedRequestHeaders,
   SignRequestOptions,
   ProviderRecord,
@@ -371,7 +424,33 @@ export type {
 // ============================================================================
 
 export { useHPC, HPCProvider } from '../../../lib/portal';
+export {
+  HPCQueryValidationError,
+  requireHPCQueryAdapter,
+  validateHPCJob,
+  validateHPCJobPriceQuote,
+  validateHPCQuoteRequest,
+  validateHPCJobs,
+  validateHPCWorkloadTemplates,
+} from '../../../lib/portal';
+export type { HPCQueryAdapter, HPCQueryEnvelope, HPCQuoteRequest } from '../../../lib/portal';
+export {
+  HPCClientUnavailableError,
+  HPCMutationNotCommittedError,
+  HPCOutputValidationError,
+  assertCommittedJobMutation,
+  assertValidSubmitJobParams,
+  requireHPCOutputAdapter,
+  requireHPCSigner,
+  validateHPCOutputReferences,
+  validateResolvedHPCOutput,
+} from '../../../lib/portal';
 export type {
+  CommittedJobMutation,
+  HPCClientCapability,
+  HPCOutputAdapter,
+  HPCSignerAdapter,
+  SubmitJobParams,
   HPCState,
   WorkloadTemplate,
   WorkloadCategory,
@@ -474,6 +553,20 @@ export type {
   OrganizationActions,
   OrganizationContextValue,
   OrganizationProviderProps,
+} from '../../../lib/portal';
+export {
+  OrganizationMutationError,
+  buildOrganizationMutationRequest,
+  digestOrganizationMutationRequest,
+  requireOrganizationMutationAdapter,
+  validateCommittedOrganizationMutation,
+} from '../../../lib/portal';
+export type {
+  CommittedOrganizationMutation,
+  OrganizationMutationAction,
+  OrganizationMutationAdapter,
+  OrganizationMutationContext,
+  OrganizationMutationRequest,
 } from '../../../lib/portal';
 
 export type {

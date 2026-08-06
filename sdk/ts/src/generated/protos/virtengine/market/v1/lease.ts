@@ -71,6 +71,8 @@ export interface Lease {
   /** ClosedOn is the block height at which the Lease was closed. */
   closedOn: Long;
   reason: LeaseClosedReason;
+  /** ReservationId links the lease to authoritative x/resources capacity. */
+  reservationId: string;
 }
 
 /** State is an enum which refers to state of lease. */
@@ -262,7 +264,15 @@ export const LeaseID: MessageFns<LeaseID, "virtengine.market.v1.LeaseID"> = {
 };
 
 function createBaseLease(): Lease {
-  return { id: undefined, state: 0, price: undefined, createdAt: Long.ZERO, closedOn: Long.ZERO, reason: 0 };
+  return {
+    id: undefined,
+    state: 0,
+    price: undefined,
+    createdAt: Long.ZERO,
+    closedOn: Long.ZERO,
+    reason: 0,
+    reservationId: "",
+  };
 }
 
 export const Lease: MessageFns<Lease, "virtengine.market.v1.Lease"> = {
@@ -286,6 +296,9 @@ export const Lease: MessageFns<Lease, "virtengine.market.v1.Lease"> = {
     }
     if (message.reason !== 0) {
       writer.uint32(48).int32(message.reason);
+    }
+    if (message.reservationId !== "") {
+      writer.uint32(58).string(message.reservationId);
     }
     return writer;
   },
@@ -345,6 +358,14 @@ export const Lease: MessageFns<Lease, "virtengine.market.v1.Lease"> = {
           message.reason = reader.int32() as any;
           continue;
         }
+        case 7: {
+          if (tag !== 58) {
+            break;
+          }
+
+          message.reservationId = reader.string();
+          continue;
+        }
       }
       if ((tag & 7) === 4 || tag === 0) {
         break;
@@ -362,6 +383,7 @@ export const Lease: MessageFns<Lease, "virtengine.market.v1.Lease"> = {
       createdAt: isSet(object.created_at) ? Long.fromValue(object.created_at) : Long.ZERO,
       closedOn: isSet(object.closed_on) ? Long.fromValue(object.closed_on) : Long.ZERO,
       reason: isSet(object.reason) ? leaseClosedReasonFromJSON(object.reason) : 0,
+      reservationId: isSet(object.reservation_id) ? globalThis.String(object.reservation_id) : "",
     };
   },
 
@@ -385,6 +407,9 @@ export const Lease: MessageFns<Lease, "virtengine.market.v1.Lease"> = {
     if (message.reason !== 0) {
       obj.reason = leaseClosedReasonToJSON(message.reason);
     }
+    if (message.reservationId !== "") {
+      obj.reservation_id = message.reservationId;
+    }
     return obj;
   },
   fromPartial(object: DeepPartial<Lease>): Lease {
@@ -401,6 +426,7 @@ export const Lease: MessageFns<Lease, "virtengine.market.v1.Lease"> = {
       ? Long.fromValue(object.closedOn)
       : Long.ZERO;
     message.reason = object.reason ?? 0;
+    message.reservationId = object.reservationId ?? "";
     return message;
   },
 };

@@ -101,6 +101,18 @@ all: build bins
 clean: cache-clean
 	rm -f $(BINS)
 
+.PHONY: proto-generate
+proto-generate:
+	./scripts/proto-generate.sh all
+
+.PHONY: proto-verify
+proto-verify:
+	./scripts/verify-proto-generation.sh
+
+.PHONY: modules-verify
+modules-verify:
+	./scripts/verify-modules.sh
+
 include make/releasing.mk
 include make/mod.mk
 include make/lint.mk

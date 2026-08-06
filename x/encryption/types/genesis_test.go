@@ -1,8 +1,11 @@
 package types
 
 import (
+	"bytes"
+	"strings"
 	"testing"
 
+	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -30,6 +33,8 @@ func TestDefaultParams(t *testing.T) {
 }
 
 func TestGenesisState_Validate(t *testing.T) {
+	addressA := sdk.AccAddress([]byte("genesis_address_one_")).String()
+	addressB := sdk.AccAddress([]byte("genesis_address_two_")).String()
 	tests := []struct {
 		name      string
 		state     GenesisState
@@ -45,9 +50,9 @@ func TestGenesisState_Validate(t *testing.T) {
 			state: GenesisState{
 				RecipientKeys: []encryptionv1.RecipientKeyRecord{
 					{
-						Address:        "cosmos1xyz...",
+						Address:        addressA,
 						PublicKey:      make([]byte, 32),
-						KeyFingerprint: "abc123",
+						KeyFingerprint: ComputeKeyFingerprint(make([]byte, 32)),
 						AlgorithmId:    AlgorithmX25519XSalsa20Poly1305,
 					},
 				},
@@ -60,20 +65,43 @@ func TestGenesisState_Validate(t *testing.T) {
 			state: GenesisState{
 				RecipientKeys: []encryptionv1.RecipientKeyRecord{
 					{
-						Address:        "cosmos1xyz...",
+						Address:        addressA,
 						PublicKey:      make([]byte, 32),
-						KeyFingerprint: "abc123",
+						KeyFingerprint: ComputeKeyFingerprint(make([]byte, 32)),
 						AlgorithmId:    AlgorithmX25519XSalsa20Poly1305,
 					},
 					{
-						Address:        "cosmos1abc...",
+						Address:        addressB,
 						PublicKey:      make([]byte, 32),
-						KeyFingerprint: "abc123", // Duplicate
+						KeyFingerprint: ComputeKeyFingerprint(make([]byte, 32)), // Duplicate
 						AlgorithmId:    AlgorithmX25519XSalsa20Poly1305,
 					},
 				},
 				Params: DefaultParams(),
 			},
+			expectErr: true,
+		},
+		{
+			name:      "fingerprint does not match public key",
+			state:     GenesisState{RecipientKeys: []encryptionv1.RecipientKeyRecord{{Address: addressA, PublicKey: make([]byte, 32), KeyFingerprint: ComputeKeyFingerprint(make([]byte, 31)), AlgorithmId: AlgorithmX25519XSalsa20Poly1305}}, Params: DefaultParams()},
+			expectErr: true,
+		},
+		{
+			name:      "invalid encoded address",
+			state:     GenesisState{RecipientKeys: []encryptionv1.RecipientKeyRecord{{Address: "not-an-address", PublicKey: make([]byte, 32), KeyFingerprint: ComputeKeyFingerprint(make([]byte, 32)), AlgorithmId: AlgorithmX25519XSalsa20Poly1305}}, Params: DefaultParams()},
+			expectErr: true,
+		},
+		{
+			name:      "noncanonical encoded address",
+			state:     GenesisState{RecipientKeys: []encryptionv1.RecipientKeyRecord{{Address: strings.ToUpper(addressA), PublicKey: make([]byte, 32), KeyFingerprint: ComputeKeyFingerprint(make([]byte, 32)), AlgorithmId: AlgorithmX25519XSalsa20Poly1305}}, Params: DefaultParams()},
+			expectErr: true,
+		},
+		{
+			name: "duplicate version for account",
+			state: GenesisState{RecipientKeys: []encryptionv1.RecipientKeyRecord{
+				{Address: addressA, PublicKey: make([]byte, 32), KeyFingerprint: ComputeKeyFingerprint(make([]byte, 32)), KeyVersion: 1, AlgorithmId: AlgorithmX25519XSalsa20Poly1305},
+				{Address: addressA, PublicKey: bytes.Repeat([]byte{1}, 32), KeyFingerprint: ComputeKeyFingerprint(bytes.Repeat([]byte{1}, 32)), KeyVersion: 1, AlgorithmId: AlgorithmX25519XSalsa20Poly1305},
+			}, Params: DefaultParams()},
 			expectErr: true,
 		},
 		{

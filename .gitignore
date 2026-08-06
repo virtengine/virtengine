@@ -7,6 +7,7 @@
 # dev artifacts
 /devdata
 pkg/provider_daemon/data/
+pkg/provider_daemon/.cache/
 
 # chain data
 *.tsd
@@ -95,3 +96,41 @@ vk-stderr.log
 scripts/bosun/logs/*
 /.codex-monitor/
 /.bosun/
+.pytest-tmp/b19smoke_czwm9xeg/curl.counter
+.pytest-tmp/b19smoke_czwm9xeg/bin/aws
+.pytest-tmp/b19smoke_czwm9xeg/bin/curl
+.pytest-tmp/b19smoke_czwm9xeg/bin/kubectl
+.pytest-tmp/b19smoke_imlxrt09/curl.counter
+.pytest-tmp/b19smoke_imlxrt09/bin/aws
+.pytest-tmp/b19smoke_imlxrt09/bin/curl
+.pytest-tmp/b19smoke_imlxrt09/bin/kubectl
+.pytest-tmp/test_smoke/test_regional_smoke_script_boo0/curl.counter
+.pytest-tmp/test_smoke/test_regional_smoke_script_boo0/kubeconfig.ready
+.pytest-tmp/test_smoke/test_regional_smoke_script_boo0/bin/aws
+.pytest-tmp/test_smoke/test_regional_smoke_script_boo0/bin/curl
+.pytest-tmp/test_smoke/test_regional_smoke_script_boo0/bin/kubectl
+.pytest-tmp/test_smoke/test_regional_smoke_script_fai0/curl.counter
+.pytest-tmp/test_smoke/test_regional_smoke_script_fai0/bin/aws
+.pytest-tmp/test_smoke/test_regional_smoke_script_fai0/bin/curl
+.pytest-tmp/test_smoke/test_regional_smoke_script_fai0/bin/kubectl
+.pytest-tmp/test_smoke/test_regional_smoke_script_pas0/curl.counter
+.pytest-tmp/test_smoke/test_regional_smoke_script_pas0/bin/aws
+.pytest-tmp/test_smoke/test_regional_smoke_script_pas0/bin/curl
+.pytest-tmp/test_smoke/test_regional_smoke_script_pas0/bin/kubectl
+artifacts/mainnet/ceremony-manifest.json
+artifacts/mainnet/ceremony-manifest.sha256
+artifacts/mainnet/genesis.json
+artifacts/mainnet/genesis.sha256
+artifacts/mainnet/gentx.sha256
+tests/security/reports/dependency_scan_20260410_184822.txt
+tests/security/reports/dependency_scan_20260410_185534.txt
+tests/security/reports/dependency_scan_20260410_185818.txt
+tests/security/reports/dependency_scan_20260410_190124.txt
+tests/security/reports/gitleaks_20260410_185818.json
+tests/security/reports/secret_scan_20260410_185435.txt
+tests/security/reports/secret_scan_20260410_185534.txt
+tests/security/reports/secret_scan_20260410_185818.txt
+tests/security/reports/static_analysis_20260410_184822.txt
+tests/security/reports/static_analysis_20260410_185435.txt
+tests/security/reports/static_analysis_20260410_185808.txt
+tests/security/reports/static_analysis_20260410_190111.txt

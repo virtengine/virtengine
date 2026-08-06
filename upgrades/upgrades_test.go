@@ -14,6 +14,11 @@ import (
 func TestUpgradesName(t *testing.T) {
 	upgrades := utypes.GetUpgradesList()
 	require.NotNil(t, upgrades)
+	require.Contains(t, upgrades, utypes.ConsensusAdmissionUpgradeName)
+	require.Contains(t, upgrades, utypes.AuthenticatedMeteringUpgradeName)
+	require.Contains(t, upgrades, utypes.CanonicalReservationsUpgradeName)
+	require.Contains(t, upgrades, utypes.CanonicalFinancialCasesUpgradeName)
+	require.Contains(t, upgrades, utypes.AuthenticatedFiatConversionsUpgradeName)
 
 	for name := range upgrades {
 		// NOTE this is the only exception to the upgrade name

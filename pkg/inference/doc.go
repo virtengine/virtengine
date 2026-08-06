@@ -3,25 +3,25 @@
 //
 // # Overview
 //
-// This package implements TensorFlow-Go inference integration for the VEID
+// This package implements deterministic inference integration for the VEID
 // module's identity verification pipeline. It provides:
 //
-//   - TensorFlow SavedModel loading and verification
+//   - Model bundle loading and verification
 //   - Feature extraction from identity verification inputs
 //   - Deterministic inference execution for blockchain consensus
-//   - Both embedded TensorFlow and gRPC sidecar modes
+//   - Production sidecar execution plus explicit non-production stub paths
 //
 // # Architecture
 //
 // The inference package supports two execution modes:
 //
-// 1. Embedded Mode: TensorFlow-Go runs directly in the node process
-//   - Advantages: Lower latency, simpler deployment
-//   - Disadvantages: Requires TensorFlow C library, larger binary
-//
-// 2. Sidecar Mode: Inference via gRPC to an external service
-//   - Advantages: Language-agnostic, can use GPU, memory isolation
+// 1. Production Mode: Inference via gRPC to an external sidecar service
+//   - Advantages: explicit deployable runtime, model isolation, consensus-safe
 //   - Disadvantages: Higher latency, additional deployment complexity
+//
+// 2. Non-production Stub Mode: deterministic simulated inference
+//   - Advantages: local development and tests without serving infrastructure
+//   - Disadvantages: not real inference, must be explicitly enabled
 //
 // Both modes ensure deterministic execution for blockchain consensus by:
 //   - Forcing CPU-only execution (GPUs can be non-deterministic)
@@ -31,12 +31,15 @@
 //
 // # Usage
 //
-// Basic usage with embedded TensorFlow:
+// Basic usage with production sidecar inference:
 //
 //	config := inference.DefaultInferenceConfig()
+//	config.Enabled = true
+//	config.UseSidecar = true
 //	config.ModelPath = "/path/to/saved_model"
+//	config.SidecarAddress = "localhost:50051"
 //
-//	scorer, err := inference.NewTensorFlowScorer(config)
+//	scorer, err := inference.NewScorer(config)
 //	if err != nil {
 //	    return err
 //	}
@@ -56,13 +59,13 @@
 //
 //	fmt.Printf("Score: %d, Confidence: %.2f\n", result.Score, result.Confidence)
 //
-// Using the sidecar client:
+// Using explicit non-production stub mode in tests:
 //
 //	config := inference.DefaultInferenceConfig()
-//	config.UseSidecar = true
-//	config.SidecarAddress = "localhost:50051"
+//	config.AllowFallbackToStub = true
+//	config.ModelPath = "/path/to/test/model"
 //
-//	scorer, err := inference.NewScorer(config)  // Returns sidecar client
+//	scorer, err := inference.NewTensorFlowScorer(config)
 //	// ... rest is identical
 //
 // # Feature Vector Format

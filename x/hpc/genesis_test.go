@@ -110,6 +110,7 @@ func (s *GenesisTestSuite) TestValidateGenesis_ValidJobs() {
 	genesis.Jobs = []types.HPCJob{
 		{
 			JobID:             "hpc-job-1",
+			ReservationID:     "reservation-hpc-job-1",
 			OfferingID:        "hpc-offering-1",
 			ClusterID:         "hpc-cluster-1",
 			ProviderAddress:   testProviderAddr,
@@ -640,6 +641,7 @@ func (s *GenesisTestSuite) TestValidateGenesis_CompleteState() {
 		Jobs: []types.HPCJob{
 			{
 				JobID:             "hpc-job-1",
+				ReservationID:     "reservation-hpc-job-1",
 				OfferingID:        "hpc-offering-1",
 				ClusterID:         "hpc-cluster-1",
 				ProviderAddress:   testProviderAddr,

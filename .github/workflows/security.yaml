@@ -1,23 +1,3 @@
-# INFRA-003: Comprehensive Security Scanning Workflow
-# Runs security analysis on code, dependencies, and containers
-#
-# NOTE: This runs on schedule and main branch pushes only.
-# For PR security checks, see pr-security-check.yaml (lighter weight)
-#
-# IMPORTANT: This workflow requires "Advanced" CodeQL setup mode.
-# If you see "CodeQL analyses from advanced configurations cannot be processed when
-# the default setup is enabled", disable default setup in:
-# Settings → Code security and analysis → Code scanning → Switch to advanced setup
-# See: _docs/operations/ci-troubleshooting.md for detailed instructions
-#
-# Features:
-#   - CodeQL SAST analysis for Go
-#   - Dependency vulnerability scanning (govulncheck, pip-audit, npm audit)
-#   - Container image scanning with Trivy
-#   - SBOM generation
-#   - Secret scanning verification
-#   - Security policy compliance
-
 name: Security
 
 on:
@@ -25,43 +5,85 @@ on:
     branches:
       - main
       - mainnet/main
+      - develop
   schedule:
-    # Run daily at 2:00 AM UTC for continuous security monitoring
     - cron: "0 2 * * *"
   workflow_dispatch:
-    inputs:
-      full_scan:
-        description: "Run full security scan including all optional checks"
-        required: false
-        default: "false"
-        type: boolean
 
 concurrency:
   group: security-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+defaults:
+  run:
+    shell: bash
+
 env:
   GO_VERSION: "1.25.5"
+  GOVULNCHECK_VERSION: "v1.1.4"
+  GOSEC_VERSION: "v2.25.0"
+  GITLEAKS_VERSION: "v8.30.1"
+  TRIVY_VERSION: "v0.69.3"
+  SYFT_VERSION: "v1.42.4"
+  PNPM_VERSION: "10.28.2"
+  NODE_VERSION: "24"
   PYTHON_VERSION: "3.11"
-  GOWORK: "off" # Disable workspace mode for vendor operations
-  NODE_VERSION: "20"
+  GOWORK: "off"
 
 permissions:
   contents: read
-  security-events: write
-  actions: read
 
 jobs:
-  # ===========================================================================
-  # CodeQL Analysis - Static Application Security Testing (SAST)
-  # ===========================================================================
+  policy-validation:
+    name: Policy Validation
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install validator dependencies
+        run: python -m pip install --disable-pip-version-check pyyaml==6.0.3
+
+      - name: Validate security policy files
+        run: |
+          python .github/scripts/validate_security_policies.py --files \
+            .github/workflows/security.yaml \
+            .github/workflows/supply-chain.yaml \
+            .github/workflows/license-compliance.yaml \
+            .github/workflows/pr-security-check.yaml \
+            .gitleaks.toml \
+            .vulnerability-allowlist.yaml \
+            SUPPLY_CHAIN_SECURITY.md
+
+      - name: Run policy validator tests
+        run: python -m unittest discover -s .github/tests -p "test_security_policy*.py"
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+
+      - name: Lint targeted workflows
+        run: |
+          go run github.com/rhysd/actionlint/cmd/actionlint@v1.7.12 \
+            .github/workflows/security.yaml \
+            .github/workflows/supply-chain.yaml \
+            .github/workflows/license-compliance.yaml \
+            .github/workflows/pr-security-check.yaml
+
   codeql-analysis:
     name: CodeQL SAST
     runs-on: ubuntu-latest
     permissions:
-      security-events: write
-      actions: read
       contents: read
+      actions: read
+      security-events: write
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -71,12 +93,11 @@ jobs:
         with:
           languages: go
           queries: +security-extended,security-and-quality
-          # Custom queries for blockchain-specific patterns
           config: |
             paths-ignore:
               - vendor
-              - '**/*.pb.go'
-              - '**/mocks/**'
+              - "**/*.pb.go"
+              - "**/mocks/**"
               - testutil
 
       - name: Set up Go
@@ -86,19 +107,13 @@ jobs:
           cache: true
 
       - name: Build for CodeQL
-        run: |
-          go mod tidy
-          go mod vendor
-          go build ./...
+        run: go build ./...
 
-      - name: Perform CodeQL Analysis
+      - name: Perform CodeQL analysis
         uses: github/codeql-action/analyze@v3
         with:
           category: "/language:go"
 
-  # ===========================================================================
-  # Go Vulnerability Scanning
-  # ===========================================================================
   go-vuln-scan:
     name: Go Vulnerability Scan
     runs-on: ubuntu-latest
@@ -113,19 +128,28 @@ jobs:
           cache: true
 
       - name: Install govulncheck
-        run: go install golang.org/x/vuln/cmd/govulncheck@latest
-
-      - name: Sync dependencies
-        run: |
-          go mod tidy
-          go mod vendor
+        run: go install golang.org/x/vuln/cmd/govulncheck@${{ env.GOVULNCHECK_VERSION }}
 
       - name: Run govulncheck
+        id: govulncheck
         run: |
-          govulncheck -format json ./... > govulncheck-report.json || true
+          set +e
+          govulncheck -format json ./... > govulncheck-report.json
+          json_status=$?
           govulncheck ./...
+          text_status=$?
+          set -e
+          if [ ! -s govulncheck-report.json ]; then
+            echo "::error::govulncheck did not produce a JSON report"
+            exit 1
+          fi
+          if [ "$json_status" -ne 0 ] || [ "$text_status" -ne 0 ]; then
+            echo "exit_code=1" >> "$GITHUB_OUTPUT"
+          else
+            echo "exit_code=0" >> "$GITHUB_OUTPUT"
+          fi
 
-      - name: Upload vulnerability report
+      - name: Upload govulncheck report
         uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -133,9 +157,12 @@ jobs:
           path: govulncheck-report.json
           retention-days: 30
 
-  # ===========================================================================
-  # Python Dependency Scanning
-  # ===========================================================================
+      - name: Fail on Go vulnerabilities
+        if: steps.govulncheck.outputs.exit_code != '0'
+        run: |
+          echo "::error::govulncheck reported vulnerabilities"
+          exit 1
+
   python-vuln-scan:
     name: Python Vulnerability Scan
     runs-on: ubuntu-latest
@@ -149,75 +176,152 @@ jobs:
           python-version: ${{ env.PYTHON_VERSION }}
 
       - name: Install pip-audit
-        run: pip install pip-audit safety
+        run: python -m pip install --disable-pip-version-check pip-audit==2.10.0
 
-      - name: Scan ML dependencies
+      - name: Audit Python requirement files
+        id: pip_audit
         run: |
-          if [ -f ml/requirements.txt ]; then
-            pip-audit -r ml/requirements.txt --format json > ml-audit.json || true
-            pip-audit -r ml/requirements.txt --strict || echo "ML dependencies have vulnerabilities"
+          mkdir -p security-reports/python
+          mapfile -t requirement_files < <(find . -type f \( -name "requirements.txt" -o -name "requirements-deterministic.txt" \) \
+            -not -path "./.venv/*" \
+            -not -path "./node_modules/*" | sort)
+          if [ "${#requirement_files[@]}" -eq 0 ]; then
+            echo "exit_code=0" >> "$GITHUB_OUTPUT"
+            exit 0
           fi
 
-      - name: Scan test dependencies
-        run: |
-          if [ -f tests/python/requirements.txt ]; then
-            pip-audit -r tests/python/requirements.txt --format json > tests-audit.json || true
-            pip-audit -r tests/python/requirements.txt || echo "Test dependencies have vulnerabilities"
-          fi
+          status=0
+          for requirement_file in "${requirement_files[@]}"; do
+            report_name=$(echo "${requirement_file#./}" | tr '/\\' '__')
+            report_path="security-reports/python/${report_name}.json"
+            set +e
+            pip-audit -r "$requirement_file" --format json -o "$report_path"
+            audit_status=$?
+            set -e
+            if [ ! -s "$report_path" ]; then
+              echo "::error::pip-audit did not produce a report for $requirement_file"
+              exit 1
+            fi
+            if [ "$audit_status" -ne 0 ]; then
+              status=1
+            fi
+          done
 
-      - name: Upload audit reports
+          echo "exit_code=$status" >> "$GITHUB_OUTPUT"
+
+      - name: Upload Python audit reports
         uses: actions/upload-artifact@v4
         if: always()
         with:
           name: python-audit-reports
-          path: "*-audit.json"
+          path: security-reports/python
           retention-days: 30
 
-  # ===========================================================================
-  # npm Dependency Scanning
-  # ===========================================================================
-  npm-vuln-scan:
-    name: npm Vulnerability Scan
+      - name: Fail on Python vulnerabilities
+        if: steps.pip_audit.outputs.exit_code != '0'
+        run: |
+          echo "::error::pip-audit reported vulnerabilities"
+          exit 1
+
+  node-vuln-scan:
+    name: JavaScript Vulnerability Scan
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+          cache-dependency-path: |
+            pnpm-lock.yaml
+            sdk/portal/pnpm-lock.yaml
 
-      - name: Audit portal dependencies
+      - name: Audit root pnpm workspace
+        id: root_pnpm_audit
         run: |
-          if [ -d lib/portal ] && [ -f lib/portal/package.json ]; then
-            cd lib/portal
-            npm audit --json > npm-audit.json || true
-            npm audit --audit-level=high || echo "npm dependencies have high/critical vulnerabilities"
+          mkdir -p security-reports/node
+          pnpm install --frozen-lockfile --ignore-scripts
+          set +e
+          pnpm audit --prod --audit-level=high --json > security-reports/node/root-workspace.json
+          audit_status=$?
+          set -e
+          if [ ! -s security-reports/node/root-workspace.json ]; then
+            echo "::error::pnpm audit did not produce a root workspace report"
+            exit 1
           fi
+          echo "exit_code=$audit_status" >> "$GITHUB_OUTPUT"
 
-      - name: Upload audit report
+      - name: Audit sdk/portal
+        id: sdk_portal_audit
+        run: |
+          pnpm --dir sdk/portal install --frozen-lockfile --ignore-scripts
+          set +e
+          pnpm --dir sdk/portal audit --prod --audit-level=high --json > security-reports/node/sdk-portal.json
+          audit_status=$?
+          set -e
+          if [ ! -s security-reports/node/sdk-portal.json ]; then
+            echo "::error::pnpm audit did not produce an sdk/portal report"
+            exit 1
+          fi
+          echo "exit_code=$audit_status" >> "$GITHUB_OUTPUT"
+
+      - name: Audit sdk/ts
+        id: sdk_ts_audit
+        run: |
+          npm --prefix sdk/ts ci --ignore-scripts
+          set +e
+          npm --prefix sdk/ts audit --audit-level=high --json > security-reports/node/sdk-ts.json
+          audit_status=$?
+          set -e
+          if [ ! -s security-reports/node/sdk-ts.json ]; then
+            echo "::error::npm audit did not produce an sdk/ts report"
+            exit 1
+          fi
+          echo "exit_code=$audit_status" >> "$GITHUB_OUTPUT"
+
+      - name: Upload JavaScript audit reports
         uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: npm-audit-report
-          path: lib/portal/npm-audit.json
+          name: node-audit-reports
+          path: security-reports/node
           retention-days: 30
 
-  # ===========================================================================
-  # Container Image Scanning
-  # ===========================================================================
+      - name: Fail on JavaScript vulnerabilities
+        if: |
+          steps.root_pnpm_audit.outputs.exit_code != '0' ||
+          steps.sdk_portal_audit.outputs.exit_code != '0' ||
+          steps.sdk_ts_audit.outputs.exit_code != '0'
+        run: |
+          echo "::error::JavaScript dependency audits reported vulnerabilities"
+          exit 1
+
   container-scan:
     name: Container Vulnerability Scan
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
     strategy:
       fail-fast: false
       matrix:
         image:
           - name: virtengine
             dockerfile: _build/Dockerfile.virtengine
+          - name: provider-daemon
+            dockerfile: _build/Dockerfile.provider-daemon
           - name: test-runner
             dockerfile: _build/Dockerfile.test
+          - name: veid-pipeline
+            dockerfile: _build/Dockerfile.veid-pipeline
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -225,67 +329,47 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
+      - name: Install Trivy
+        run: |
+          curl -sSfL "https://github.com/aquasecurity/trivy/releases/download/${TRIVY_VERSION}/trivy_${TRIVY_VERSION#v}_Linux-64bit.tar.gz" | tar -xz
+          sudo install -m 0755 trivy /usr/local/bin/trivy
+
       - name: Build image
         run: |
           docker buildx build \
             --load \
-            -f ${{ matrix.image.dockerfile }} \
-            -t ${{ matrix.image.name }}:scan \
+            -f "${{ matrix.image.dockerfile }}" \
+            -t "${{ matrix.image.name }}:scan" \
             .
 
-      - name: Run Trivy vulnerability scanner
-        uses: aquasecurity/trivy-action@0.28.0
-        with:
-          image-ref: "${{ matrix.image.name }}:scan"
-          format: "sarif"
-          output: "trivy-${{ matrix.image.name }}.sarif"
-          severity: "CRITICAL,HIGH,MEDIUM"
-          vuln-type: "os,library"
-
-      - name: Ensure Trivy SARIF exists
-        if: always()
+      - name: Generate Trivy SARIF report
         run: |
-          FILE="trivy-${{ matrix.image.name }}.sarif"
-          if [ ! -f "$FILE" ]; then
-            cat > "$FILE" <<'EOF'
-          {
-            "$schema": "https://json.schemastore.org/sarif-2.1.0.json",
-            "version": "2.1.0",
-            "runs": [
-              {
-                "tool": {
-                  "driver": {
-                    "name": "Trivy",
-                    "informationUri": "https://github.com/aquasecurity/trivy",
-                    "rules": []
-                  }
-                },
-                "results": []
-              }
-            ]
-          }
-          EOF
-          fi
+          trivy image \
+            --severity HIGH,CRITICAL \
+            --ignore-unfixed \
+            --scanners vuln \
+            --vuln-type os,library \
+            --format sarif \
+            --output "trivy-${{ matrix.image.name }}.sarif" \
+            "${{ matrix.image.name }}:scan"
 
-      - name: Upload Trivy scan results to GitHub Security
+      - name: Upload Trivy SARIF
         uses: github/codeql-action/upload-sarif@v3
         if: always()
         with:
-          sarif_file: "trivy-${{ matrix.image.name }}.sarif"
-          category: "trivy-${{ matrix.image.name }}"
+          sarif_file: trivy-${{ matrix.image.name }}.sarif
+          category: trivy-${{ matrix.image.name }}
 
-      - name: Run Trivy for table output (for logs)
-        uses: aquasecurity/trivy-action@0.28.0
-        with:
-          image-ref: "${{ matrix.image.name }}:scan"
-          format: "table"
-          severity: "CRITICAL,HIGH"
-          exit-code: "0"
-          ignore-unfixed: true
+      - name: Enforce Trivy policy
+        run: |
+          trivy image \
+            --severity HIGH,CRITICAL \
+            --ignore-unfixed \
+            --scanners vuln \
+            --vuln-type os,library \
+            --exit-code 1 \
+            "${{ matrix.image.name }}:scan"
 
-  # ===========================================================================
-  # SBOM Generation
-  # ===========================================================================
   sbom-generation:
     name: Generate SBOM
     runs-on: ubuntu-latest
@@ -293,38 +377,36 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Set up Go
-        uses: actions/setup-go@v5
-        with:
-          go-version: ${{ env.GO_VERSION }}
-          cache: true
+      - name: Install Syft
+        run: |
+          curl -sSfL "https://github.com/anchore/syft/releases/download/${SYFT_VERSION}/syft_${SYFT_VERSION#v}_linux_amd64.tar.gz" | tar -xz
+          sudo install -m 0755 syft /usr/local/bin/syft
 
-      - name: Generate Go SBOM with Syft
-        uses: anchore/sbom-action@v0
-        with:
-          path: .
-          format: spdx-json
-          output-file: sbom-go.spdx.json
+      - name: Generate SBOM bundle
+        run: |
+          chmod +x scripts/supply-chain/generate-sbom.sh
+          scripts/supply-chain/generate-sbom.sh --format all --output .cache/sbom
+          sha256sum .cache/sbom/*.json > .cache/sbom/SHA256SUMS
 
       - name: Upload SBOM artifact
         uses: actions/upload-artifact@v4
         with:
-          name: sbom
-          path: sbom-go.spdx.json
+          name: security-sbom
+          path: .cache/sbom
           retention-days: 90
 
-      - name: Upload SBOM to GitHub Dependency Graph
+      - name: Publish SPDX SBOM to the dependency graph
         uses: anchore/sbom-action/publish-sbom@v0
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/mainnet/main')
         with:
           sbom-artifact-match: ".*\\.spdx\\.json$"
 
-  # ===========================================================================
-  # Secret Scanning Verification
-  # ===========================================================================
   secret-scan:
     name: Secret Scanning
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -333,55 +415,45 @@ jobs:
 
       - name: Install gitleaks
         run: |
-          curl -sSfL https://github.com/gitleaks/gitleaks/releases/download/v8.18.4/gitleaks_8.18.4_linux_x64.tar.gz | tar -xz
-          sudo mv gitleaks /usr/local/bin/
+          curl -sSfL "https://github.com/gitleaks/gitleaks/releases/download/${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION#v}_linux_x64.tar.gz" | tar -xz
+          sudo install -m 0755 gitleaks /usr/local/bin/gitleaks
 
       - name: Run gitleaks
+        id: gitleaks
         run: |
-          # Use config file for allowlist
-          if [ -f .gitleaks.toml ]; then
-            gitleaks detect --source . --config .gitleaks.toml --verbose --redact --report-format sarif --report-path gitleaks.sarif
-          else
-            gitleaks detect --source . --verbose --redact --report-format sarif --report-path gitleaks.sarif
+          set +e
+          gitleaks dir . \
+            --config .gitleaks.toml \
+            --redact \
+            --report-format sarif \
+            --report-path gitleaks.sarif
+          status=$?
+          set -e
+          if [ ! -s gitleaks.sarif ]; then
+            echo "::error::gitleaks did not produce a SARIF report"
+            exit 1
           fi
+          echo "exit_code=$status" >> "$GITHUB_OUTPUT"
 
-      - name: Ensure gitleaks SARIF exists
-        if: always()
-        run: |
-          if [ ! -f gitleaks.sarif ]; then
-            cat > gitleaks.sarif <<'EOF'
-          {
-            "$schema": "https://json.schemastore.org/sarif-2.1.0.json",
-            "version": "2.1.0",
-            "runs": [
-              {
-                "tool": {
-                  "driver": {
-                    "name": "gitleaks",
-                    "informationUri": "https://github.com/gitleaks/gitleaks",
-                    "rules": []
-                  }
-                },
-                "results": []
-              }
-            ]
-          }
-          EOF
-          fi
-
-      - name: Upload gitleaks results
+      - name: Upload gitleaks SARIF
         uses: github/codeql-action/upload-sarif@v3
         if: always()
         with:
           sarif_file: gitleaks.sarif
-          category: "gitleaks"
+          category: gitleaks
 
-  # ===========================================================================
-  # gosec Security Scanner
-  # ===========================================================================
+      - name: Fail on secret findings
+        if: steps.gitleaks.outputs.exit_code != '0'
+        run: |
+          echo "::error::gitleaks detected secrets or secret-like material"
+          exit 1
+
   gosec-scan:
     name: gosec Security Scan
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -393,122 +465,98 @@ jobs:
           cache: true
 
       - name: Install gosec
-        run: go install github.com/securego/gosec/v2/cmd/gosec@latest
-
-      - name: Sync dependencies
-        run: |
-          go mod tidy
-          go mod vendor
+        run: go install github.com/securego/gosec/v2/cmd/gosec@${{ env.GOSEC_VERSION }}
 
       - name: Run gosec
+        id: gosec
         run: |
-          # Generate full scan
+          set +e
           gosec -fmt json -out gosec.json -exclude-generated -exclude-dir=vendor -exclude-dir=testutil ./...
-          
-          # Also generate SARIF for GitHub Security tab
+          json_status=$?
           gosec -fmt sarif -out gosec.sarif -exclude-generated -exclude-dir=vendor -exclude-dir=testutil ./...
-          
-          # Check severity if baseline exists
-          if [ -f .gosec-baseline.json ]; then
-            echo "Running gosec with baseline comparison..."
-            
-            # Count HIGH/CRITICAL severity issues
-            HIGH_CRITICAL=$(cat gosec.json | jq -r '[.Issues[]? | select(.severity == "HIGH" or .severity == "CRITICAL")] | length')
-            MEDIUM=$(cat gosec.json | jq -r '[.Issues[]? | select(.severity == "MEDIUM")] | length')
-            
-            echo "Found $HIGH_CRITICAL high/critical severity issues"
-            echo "Found $MEDIUM medium severity issues"
-            
-            if [ "$HIGH_CRITICAL" -gt 0 ]; then
-              echo "::error::Found $HIGH_CRITICAL high/critical severity issues"
-              cat gosec.json | jq -r '.Issues[]? | select(.severity == "HIGH" or .severity == "CRITICAL") | "::error file=\(.file),line=\(.line)::\(.details)"'
-              exit 1
-            fi
-            
-            if [ "$MEDIUM" -gt 0 ]; then
-              echo "::warning::Found $MEDIUM medium severity issues"
-              cat gosec.json | jq -r '.Issues[]? | select(.severity == "MEDIUM") | "::warning file=\(.file),line=\(.line)::\(.details)"'
-            fi
+          sarif_status=$?
+          set -e
+          if [ ! -s gosec.json ] || [ ! -s gosec.sarif ]; then
+            echo "::error::gosec did not produce both JSON and SARIF outputs"
+            exit 1
+          fi
+          if [ "$json_status" -ne 0 ] || [ "$sarif_status" -ne 0 ]; then
+            echo "exit_code=1" >> "$GITHUB_OUTPUT"
           else
-            # No baseline - just warn about findings
-            TOTAL=$(cat gosec.json | jq -r '.Issues | length')
-            if [ "$TOTAL" -gt 0 ]; then
-              echo "::warning::Found $TOTAL security issues (no baseline configured)"
-            fi
+            echo "exit_code=0" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Ensure gosec SARIF exists
-        if: always()
-        run: |
-          if [ ! -f gosec.sarif ]; then
-            cat > gosec.sarif <<'EOF'
-          {
-            "$schema": "https://json.schemastore.org/sarif-2.1.0.json",
-            "version": "2.1.0",
-            "runs": [
-              {
-                "tool": {
-                  "driver": {
-                    "name": "gosec",
-                    "informationUri": "https://github.com/securego/gosec",
-                    "rules": []
-                  }
-                },
-                "results": []
-              }
-            ]
-          }
-          EOF
-          fi
-
-      - name: Upload gosec results
+      - name: Upload gosec SARIF
         uses: github/codeql-action/upload-sarif@v3
         if: always()
         with:
           sarif_file: gosec.sarif
-          category: "gosec"
+          category: gosec
 
-  # ===========================================================================
-  # Security Summary
-  # ===========================================================================
+      - name: Upload gosec JSON report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: gosec-report
+          path: gosec.json
+          retention-days: 30
+
+      - name: Fail on gosec findings
+        if: steps.gosec.outputs.exit_code != '0'
+        run: |
+          echo "::error::gosec reported security findings"
+          exit 1
+
   security-summary:
     name: Security Summary
     runs-on: ubuntu-latest
     needs:
+      - policy-validation
       - codeql-analysis
       - go-vuln-scan
       - python-vuln-scan
-      - npm-vuln-scan
+      - node-vuln-scan
       - container-scan
+      - sbom-generation
       - secret-scan
       - gosec-scan
     if: always()
     steps:
-      - name: Download all artifacts
-        uses: actions/download-artifact@v4
-        with:
-          path: security-reports
-
-      - name: Security scan summary
+      - name: Summarize security gates
         run: |
-          echo "# Security Scan Summary" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "| Scan Type | Status |" >> $GITHUB_STEP_SUMMARY
-          echo "|-----------|--------|" >> $GITHUB_STEP_SUMMARY
-          echo "| CodeQL SAST | ${{ needs.codeql-analysis.result }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| Go Vulnerabilities | ${{ needs.go-vuln-scan.result }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| Python Vulnerabilities | ${{ needs.python-vuln-scan.result }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| npm Vulnerabilities | ${{ needs.npm-vuln-scan.result }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| Container Scan | ${{ needs.container-scan.result }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| Secret Scan | ${{ needs.secret-scan.result }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| gosec | ${{ needs.gosec-scan.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "# Security Summary" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Gate | Status |" >> "$GITHUB_STEP_SUMMARY"
+          echo "|------|--------|" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Policy Validation | ${{ needs.policy-validation.result }} |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| CodeQL | ${{ needs.codeql-analysis.result }} |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| govulncheck | ${{ needs.go-vuln-scan.result }} |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| pip-audit | ${{ needs.python-vuln-scan.result }} |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| JavaScript audits | ${{ needs.node-vuln-scan.result }} |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Container scan | ${{ needs.container-scan.result }} |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| SBOM generation | ${{ needs.sbom-generation.result }} |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| gitleaks | ${{ needs.secret-scan.result }} |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| gosec | ${{ needs.gosec-scan.result }} |" >> "$GITHUB_STEP_SUMMARY"
 
-      - name: Check for failures
-        if: |
-          needs.codeql-analysis.result == 'failure' ||
-          needs.go-vuln-scan.result == 'failure' ||
-          needs.container-scan.result == 'failure' ||
-          needs.secret-scan.result == 'failure'
+      - name: Fail if any security gate failed
         run: |
-          echo "::error::Security scans detected critical issues"
-          exit 1
+          FAILED=0
+          for result in \
+            "${{ needs.policy-validation.result }}" \
+            "${{ needs.codeql-analysis.result }}" \
+            "${{ needs.go-vuln-scan.result }}" \
+            "${{ needs.python-vuln-scan.result }}" \
+            "${{ needs.node-vuln-scan.result }}" \
+            "${{ needs.container-scan.result }}" \
+            "${{ needs.sbom-generation.result }}" \
+            "${{ needs.secret-scan.result }}" \
+            "${{ needs.gosec-scan.result }}"; do
+            if [ "$result" = "failure" ] || [ "$result" = "cancelled" ]; then
+              FAILED=1
+            fi
+          done
+
+          if [ "$FAILED" -ne 0 ]; then
+            echo "::error::One or more required security gates failed"
+            exit 1
+          fi

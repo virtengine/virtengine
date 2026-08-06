@@ -41,6 +41,7 @@ describe('customerDashboardStore', () => {
   it('loads allocations, stats, and billing from chain data', async () => {
     fetchPaginatedMock.mockImplementation((paths, key) => {
       if (key === 'leases') {
+        const now = new Date();
         return Promise.resolve({
           items: [
             {
@@ -55,8 +56,9 @@ describe('customerDashboardStore', () => {
               state: 'running',
               resources: { cpu: 2, memory: 4, storage: 10 },
               price: { amount: '5', denom: 'uve' },
-              created_at: '2024-01-01T00:00:00Z',
-              updated_at: '2024-01-02T00:00:00Z',
+              total_spent: '20',
+              created_at: now.toISOString(),
+              updated_at: now.toISOString(),
               offering_name: 'Compute',
             },
           ],
@@ -93,6 +95,8 @@ describe('customerDashboardStore', () => {
     expect(state.allocations).toHaveLength(1);
     expect(state.stats.totalOrders).toBe(1);
     expect(state.billing.currentPeriodCost).toBe(20);
+    expect(state.billing.outstandingBalance).toBe(20);
+    expect(state.escrowAccounts).toHaveLength(1);
     expect(state.allocations[0].providerName).toBe('Provider One');
   });
 });

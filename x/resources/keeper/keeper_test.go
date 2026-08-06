@@ -43,7 +43,17 @@ func setupKeeper(t *testing.T) (keeper.Keeper, sdk.Context) {
 	subspace := paramtypes.NewSubspace(cdc, legacyAmino, paramsKey, paramsTKey, types.ModuleName).WithKeyTable(types.ParamKeyTable())
 
 	k := keeper.NewKeeper(cdc, storeKey, subspace, testAuthority)
+	k.SetEligibilityKeeper(testEligibilityKeeper{})
 	require.NoError(t, k.SetParams(ctx, types.DefaultParams()))
 
 	return k, ctx
+}
+
+type testEligibilityKeeper struct{}
+
+func (testEligibilityKeeper) IsProviderEligible(sdk.Context, sdk.AccAddress) bool { return true }
+func (testEligibilityKeeper) HasCurrentBenchmark(sdk.Context, string) bool        { return true }
+func (testEligibilityKeeper) HasCurrentAttestation(sdk.Context, string) bool      { return true }
+func (testEligibilityKeeper) HasSufficientCollateral(sdk.Context, string, string) bool {
+	return true
 }

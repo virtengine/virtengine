@@ -94,7 +94,7 @@ func (k Keeper) CreateSelectiveDisclosureRequest(
 	)
 
 	// Create the request
-	request := types.NewSelectiveDisclosureRequest(
+	request := types.NewSelectiveDisclosureRequestAt(
 		requestID,
 		requesterAddress.String(),
 		subjectAddress.String(),
@@ -102,6 +102,7 @@ func (k Keeper) CreateSelectiveDisclosureRequest(
 		purpose,
 		validityDuration,
 		requestExpiry,
+		ctx.BlockTime(),
 	)
 	request.ClaimParameters = claimParameters
 	request.Nonce = nonce
@@ -223,12 +224,13 @@ func (k Keeper) GenerateSelectiveDisclosureProof(
 	}
 
 	// Create the proof
-	proof := types.NewSelectiveDisclosureProof(
+	proof := types.NewSelectiveDisclosureProofAt(
 		proofID,
 		subjectAddress.String(),
 		request.RequestedClaims,
 		scheme,
 		request.ValidityDuration,
+		ctx.BlockTime(),
 	)
 	proof.DisclosedClaims = disclosedClaims
 	proof.CommitmentHash = commitmentHash
@@ -402,7 +404,7 @@ func (k Keeper) CreateAgeProof(
 	)
 
 	// Create the age proof
-	proof := types.NewAgeProof(proofID, subjectAddress.String(), ageThreshold, validDuration)
+	proof := types.NewAgeProofAt(proofID, subjectAddress.String(), ageThreshold, validDuration, ctx.BlockTime())
 	proof.SatisfiesThreshold = satisfiesThreshold
 	proof.Nonce = nonce
 
@@ -504,7 +506,7 @@ func (k Keeper) CreateResidencyProof(
 	)
 
 	// Create the residency proof
-	proof := types.NewResidencyProof(proofID, subjectAddress.String(), countryCode, validDuration)
+	proof := types.NewResidencyProofAt(proofID, subjectAddress.String(), countryCode, validDuration, ctx.BlockTime())
 	proof.IsResident = isResident
 	proof.Nonce = nonce
 
@@ -608,7 +610,7 @@ func (k Keeper) CreateScoreThresholdProof(
 	)
 
 	// Create the score threshold proof
-	proof := types.NewScoreThresholdProof(proofID, subjectAddress.String(), scoreThreshold, validDuration)
+	proof := types.NewScoreThresholdProofAt(proofID, subjectAddress.String(), scoreThreshold, validDuration, ctx.BlockTime())
 	proof.ExceedsThreshold = exceedsThreshold
 	commitmentSalt, err := k.resolveRandomBytes(
 		ctx,

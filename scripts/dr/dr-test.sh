@@ -21,8 +21,11 @@ set -euo pipefail
 TEST_ENVIRONMENT="${TEST_ENVIRONMENT:-staging}"
 DR_BUCKET="${DR_BUCKET:-}"
 SLACK_WEBHOOK="${SLACK_WEBHOOK:-}"
-RESULTS_DIR="${RESULTS_DIR:-/var/log/dr-tests}"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
+RESULTS_DIR="${RESULTS_DIR:-${REPO_ROOT}/output/dr-tests}"
+BASE_DOMAIN="${BASE_DOMAIN:-virtengine.com}"
+REGION_LIST="${REGION_LIST:-us-east-1,eu-west-1,ap-southeast-1}"
 
 # Colors
 RED='\033[0;31m'
@@ -37,6 +40,7 @@ TOTAL_TESTS=0
 PASSED_TESTS=0
 FAILED_TESTS=0
 TEST_START_TIME=$(date +%s)
+IFS=',' read -r -a REGIONS <<< "$REGION_LIST"
 
 log_info() {
     echo -e "${GREEN}[$(date -u +%FT%TZ)] INFO:${NC} $*"
@@ -52,6 +56,16 @@ log_error() {
 
 log_test() {
     echo -e "${BLUE}[$(date -u +%FT%TZ)] TEST:${NC} $*"
+}
+
+require_command() {
+    local command_name="$1"
+    command -v "$command_name" >/dev/null 2>&1 || fail "required command not found: ${command_name}"
+}
+
+fail() {
+    log_error "$*"
+    exit 1
 }
 
 # Record test result
@@ -231,11 +245,11 @@ test_state_sync_endpoints() {
     local passed=true
     local details=""
     
-    local endpoints=(
-        "rpc-us-east.virtengine.network:26657"
-        "rpc-eu-west.virtengine.network:26657"
-        "rpc-ap-south.virtengine.network:26657"
-    )
+    local endpoints=()
+    local region
+    for region in "${REGIONS[@]}"; do
+        endpoints+=("rpc-${region}.${BASE_DOMAIN}:26657")
+    done
     
     local available=0
     local failed_endpoints=""
@@ -266,12 +280,12 @@ test_cross_region_connectivity() {
     local passed=true
     local details=""
     
-    local regions=("us-east" "eu-west" "ap-south")
     local connected=0
     
-    for region in "${regions[@]}"; do
+    local region
+    for region in "${REGIONS[@]}"; do
         # Check P2P connectivity
-        if timeout 10 curl -s "http://rpc-${region}.virtengine.network:26657/net_info" | \
+        if timeout 10 curl -s "http://rpc-${region}.${BASE_DOMAIN}:26657/net_info" | \
             jq -e '.result.n_peers | tonumber > 0' > /dev/null 2>&1; then
             ((connected++))
         fi
@@ -279,9 +293,9 @@ test_cross_region_connectivity() {
     
     if [ "$connected" -lt 2 ]; then
         passed=false
-        details="Only ${connected} of ${#regions[@]} regions connected"
+        details="Only ${connected} of ${#REGIONS[@]} regions connected"
     else
-        details="${connected} of ${#regions[@]} regions connected"
+        details="${connected} of ${#REGIONS[@]} regions connected"
     fi
     
     local duration=$(($(date +%s) - start))
@@ -296,12 +310,17 @@ test_dns_health() {
     local details=""
     
     local dns_records=(
-        "rpc.virtengine.network"
-        "api.virtengine.network"
+        "rpc.${BASE_DOMAIN}"
+        "api.${BASE_DOMAIN}"
     )
     
     for record in "${dns_records[@]}"; do
-        local ips=$(dig +short "$record" 2>/dev/null)
+        local ips=""
+        if command -v dig >/dev/null 2>&1; then
+            ips=$(dig +short "$record" 2>/dev/null)
+        elif command -v nslookup >/dev/null 2>&1; then
+            ips=$(nslookup "$record" 2>/dev/null | awk '/^Address: / { print $2 }')
+        fi
         if [ -z "$ips" ]; then
             passed=false
             details="${details}${record} failed to resolve; "
@@ -335,13 +354,14 @@ test_s3_access() {
         
         # Test write access
         local test_file="/tmp/dr_test_$$"
+        local test_key="${DR_BUCKET}/test/dr_test_$(date +%s).txt"
         echo "DR test $(date)" > "$test_file"
-        if ! aws s3 cp "$test_file" "${DR_BUCKET}/test/dr_test_$(date +%s).txt" --only-show-errors 2>/dev/null; then
+        if ! aws s3 cp "$test_file" "$test_key" --only-show-errors 2>/dev/null; then
             passed=false
             details="Cannot write to bucket ${DR_BUCKET}"
         else
             # Cleanup
-            aws s3 rm "${DR_BUCKET}/test/dr_test_$(date +%s).txt" --only-show-errors 2>/dev/null || true
+            aws s3 rm "$test_key" --only-show-errors 2>/dev/null || true
         fi
         rm -f "$test_file"
     fi
@@ -583,6 +603,8 @@ main() {
     local test_type="all"
     local generate_report=false
     local send_notification=false
+    require_command curl
+    require_command jq
     
     # Parse arguments
     while [[ $# -gt 0 ]]; do
@@ -608,7 +630,7 @@ main() {
                 echo ""
                 echo "Options:"
                 echo "  --test TEST       Run specific test (backup, restore, failover, connectivity, all)"
-                echo "  --environment     Environment (staging, production)"
+                echo "  --environment     Environment (dev, staging, prod)"
                 echo "  --report          Generate JSON report"
                 echo "  --notify          Send Slack notification"
                 echo "  --help            Show this help message"

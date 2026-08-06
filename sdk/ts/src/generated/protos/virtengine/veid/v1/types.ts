@@ -36,6 +36,8 @@ export enum ScopeType {
   SCOPE_TYPE_BIOMETRIC_HARDWARE = 10,
   /** SCOPE_TYPE_DEVICE_ATTESTATION - SCOPE_TYPE_DEVICE_ATTESTATION represents device integrity attestation payloads */
   SCOPE_TYPE_DEVICE_ATTESTATION = 11,
+  /** SCOPE_TYPE_SOCIAL_MEDIA - SCOPE_TYPE_SOCIAL_MEDIA represents social media profile scope metadata */
+  SCOPE_TYPE_SOCIAL_MEDIA = 12,
   UNRECOGNIZED = -1,
 }
 
@@ -77,6 +79,9 @@ export function scopeTypeFromJSON(object: any): ScopeType {
     case 11:
     case "SCOPE_TYPE_DEVICE_ATTESTATION":
       return ScopeType.SCOPE_TYPE_DEVICE_ATTESTATION;
+    case 12:
+    case "SCOPE_TYPE_SOCIAL_MEDIA":
+      return ScopeType.SCOPE_TYPE_SOCIAL_MEDIA;
     case -1:
     case "UNRECOGNIZED":
     default:
@@ -110,7 +115,59 @@ export function scopeTypeToJSON(object: ScopeType): string {
       return "SCOPE_TYPE_BIOMETRIC_HARDWARE";
     case ScopeType.SCOPE_TYPE_DEVICE_ATTESTATION:
       return "SCOPE_TYPE_DEVICE_ATTESTATION";
+    case ScopeType.SCOPE_TYPE_SOCIAL_MEDIA:
+      return "SCOPE_TYPE_SOCIAL_MEDIA";
     case ScopeType.UNRECOGNIZED:
+    default:
+      return "UNRECOGNIZED";
+  }
+}
+
+/** SocialMediaProvider represents supported social media providers */
+export enum SocialMediaProvider {
+  /** SOCIAL_MEDIA_PROVIDER_UNSPECIFIED - SOCIAL_MEDIA_PROVIDER_UNSPECIFIED represents an unspecified provider */
+  SOCIAL_MEDIA_PROVIDER_UNSPECIFIED = 0,
+  /** SOCIAL_MEDIA_PROVIDER_GOOGLE - SOCIAL_MEDIA_PROVIDER_GOOGLE represents Google social profile data */
+  SOCIAL_MEDIA_PROVIDER_GOOGLE = 1,
+  /** SOCIAL_MEDIA_PROVIDER_FACEBOOK - SOCIAL_MEDIA_PROVIDER_FACEBOOK represents Facebook social profile data */
+  SOCIAL_MEDIA_PROVIDER_FACEBOOK = 2,
+  /** SOCIAL_MEDIA_PROVIDER_MICROSOFT - SOCIAL_MEDIA_PROVIDER_MICROSOFT represents Microsoft social profile data */
+  SOCIAL_MEDIA_PROVIDER_MICROSOFT = 3,
+  UNRECOGNIZED = -1,
+}
+
+export function socialMediaProviderFromJSON(object: any): SocialMediaProvider {
+  switch (object) {
+    case 0:
+    case "SOCIAL_MEDIA_PROVIDER_UNSPECIFIED":
+      return SocialMediaProvider.SOCIAL_MEDIA_PROVIDER_UNSPECIFIED;
+    case 1:
+    case "SOCIAL_MEDIA_PROVIDER_GOOGLE":
+      return SocialMediaProvider.SOCIAL_MEDIA_PROVIDER_GOOGLE;
+    case 2:
+    case "SOCIAL_MEDIA_PROVIDER_FACEBOOK":
+      return SocialMediaProvider.SOCIAL_MEDIA_PROVIDER_FACEBOOK;
+    case 3:
+    case "SOCIAL_MEDIA_PROVIDER_MICROSOFT":
+      return SocialMediaProvider.SOCIAL_MEDIA_PROVIDER_MICROSOFT;
+    case -1:
+    case "UNRECOGNIZED":
+    default:
+      return SocialMediaProvider.UNRECOGNIZED;
+  }
+}
+
+export function socialMediaProviderToJSON(object: SocialMediaProvider): string {
+  switch (object) {
+    case SocialMediaProvider.SOCIAL_MEDIA_PROVIDER_UNSPECIFIED:
+      return "SOCIAL_MEDIA_PROVIDER_UNSPECIFIED";
+    case SocialMediaProvider.SOCIAL_MEDIA_PROVIDER_GOOGLE:
+      return "SOCIAL_MEDIA_PROVIDER_GOOGLE";
+    case SocialMediaProvider.SOCIAL_MEDIA_PROVIDER_FACEBOOK:
+      return "SOCIAL_MEDIA_PROVIDER_FACEBOOK";
+    case SocialMediaProvider.SOCIAL_MEDIA_PROVIDER_MICROSOFT:
+      return "SOCIAL_MEDIA_PROVIDER_MICROSOFT";
+    case SocialMediaProvider.UNRECOGNIZED:
     default:
       return "UNRECOGNIZED";
   }
@@ -833,6 +890,126 @@ export interface IdentityWallet_ScopeConsentsEntry {
 }
 
 export interface IdentityWallet_MetadataEntry {
+  key: string;
+  value: string;
+}
+
+/** SSOLinkageMetadata represents on-chain metadata for SSO linkage. */
+export interface SSOLinkageMetadata {
+  version: number;
+  linkageId: string;
+  provider: string;
+  issuer: string;
+  subjectHash: string;
+  nonce: string;
+  verifiedAt: Long;
+  expiresAt: Long;
+  accountSignature: Uint8Array;
+  status: string;
+  emailDomainHash: string;
+  orgIdHash: string;
+  evidenceHash: string;
+  evidenceStorageBackend: string;
+  evidenceStorageRef: string;
+  evidenceMetadata: { [key: string]: string };
+}
+
+export interface SSOLinkageMetadata_EvidenceMetadataEntry {
+  key: string;
+  value: string;
+}
+
+/** PhoneNumberHash represents a hashed phone number with salt. */
+export interface PhoneNumberHash {
+  hash: string;
+  salt: string;
+  countryCodeHash: string;
+  createdAt: Long;
+}
+
+/** EmailVerificationRecord represents on-chain email verification metadata. */
+export interface EmailVerificationRecord {
+  version: number;
+  verificationId: string;
+  accountAddress: string;
+  emailHash: string;
+  domainHash: string;
+  nonce: string;
+  nonceUsedAt: Long;
+  status: string;
+  verifiedAt: Long;
+  expiresAt: Long;
+  createdAt: Long;
+  updatedAt: Long;
+  accountSignature: Uint8Array;
+  isOrganizational: boolean;
+  verificationAttempts: number;
+  evidenceHash: string;
+  evidenceStorageBackend: string;
+  evidenceStorageRef: string;
+  evidenceMetadata: { [key: string]: string };
+}
+
+export interface EmailVerificationRecord_EvidenceMetadataEntry {
+  key: string;
+  value: string;
+}
+
+/** SMSVerificationRecord represents on-chain SMS verification metadata. */
+export interface SMSVerificationRecord {
+  version: number;
+  verificationId: string;
+  accountAddress: string;
+  phoneHash: PhoneNumberHash | undefined;
+  status: string;
+  verifiedAt: Long;
+  expiresAt: Long;
+  createdAt: Long;
+  updatedAt: Long;
+  verificationAttempts: number;
+  isVoip: boolean;
+  carrierType: string;
+  validatorAddress: string;
+  accountSignature: Uint8Array;
+  evidenceHash: string;
+  evidenceStorageBackend: string;
+  evidenceStorageRef: string;
+  evidenceMetadata: { [key: string]: string };
+}
+
+export interface SMSVerificationRecord_EvidenceMetadataEntry {
+  key: string;
+  value: string;
+}
+
+/**
+ * SocialMediaScope represents on-chain social media profile metadata.
+ * Only hashed PII is stored; full payloads are encrypted.
+ */
+export interface SocialMediaScope {
+  version: number;
+  scopeId: string;
+  accountAddress: string;
+  provider: SocialMediaProvider;
+  profileNameHash: string;
+  emailHash: string;
+  usernameHash: string;
+  orgHash: string;
+  accountCreatedAt: Long;
+  accountAgeDays: number;
+  isVerified: boolean;
+  friendCountRange: string;
+  status: string;
+  createdAt: Long;
+  updatedAt: Long;
+  encryptedPayload: EncryptedPayloadEnvelope | undefined;
+  evidenceHash: string;
+  evidenceStorageBackend: string;
+  evidenceStorageRef: string;
+  evidenceMetadata: { [key: string]: string };
+}
+
+export interface SocialMediaScope_EvidenceMetadataEntry {
   key: string;
   value: string;
 }
@@ -4325,6 +4502,1985 @@ export const IdentityWallet_MetadataEntry: MessageFns<
   },
   fromPartial(object: DeepPartial<IdentityWallet_MetadataEntry>): IdentityWallet_MetadataEntry {
     const message = createBaseIdentityWallet_MetadataEntry();
+    message.key = object.key ?? "";
+    message.value = object.value ?? "";
+    return message;
+  },
+};
+
+function createBaseSSOLinkageMetadata(): SSOLinkageMetadata {
+  return {
+    version: 0,
+    linkageId: "",
+    provider: "",
+    issuer: "",
+    subjectHash: "",
+    nonce: "",
+    verifiedAt: Long.ZERO,
+    expiresAt: Long.ZERO,
+    accountSignature: new Uint8Array(0),
+    status: "",
+    emailDomainHash: "",
+    orgIdHash: "",
+    evidenceHash: "",
+    evidenceStorageBackend: "",
+    evidenceStorageRef: "",
+    evidenceMetadata: {},
+  };
+}
+
+export const SSOLinkageMetadata: MessageFns<SSOLinkageMetadata, "virtengine.veid.v1.SSOLinkageMetadata"> = {
+  $type: "virtengine.veid.v1.SSOLinkageMetadata" as const,
+
+  encode(message: SSOLinkageMetadata, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.version !== 0) {
+      writer.uint32(8).uint32(message.version);
+    }
+    if (message.linkageId !== "") {
+      writer.uint32(18).string(message.linkageId);
+    }
+    if (message.provider !== "") {
+      writer.uint32(26).string(message.provider);
+    }
+    if (message.issuer !== "") {
+      writer.uint32(34).string(message.issuer);
+    }
+    if (message.subjectHash !== "") {
+      writer.uint32(42).string(message.subjectHash);
+    }
+    if (message.nonce !== "") {
+      writer.uint32(50).string(message.nonce);
+    }
+    if (!message.verifiedAt.equals(Long.ZERO)) {
+      writer.uint32(56).int64(message.verifiedAt.toString());
+    }
+    if (!message.expiresAt.equals(Long.ZERO)) {
+      writer.uint32(64).int64(message.expiresAt.toString());
+    }
+    if (message.accountSignature.length !== 0) {
+      writer.uint32(74).bytes(message.accountSignature);
+    }
+    if (message.status !== "") {
+      writer.uint32(82).string(message.status);
+    }
+    if (message.emailDomainHash !== "") {
+      writer.uint32(90).string(message.emailDomainHash);
+    }
+    if (message.orgIdHash !== "") {
+      writer.uint32(98).string(message.orgIdHash);
+    }
+    if (message.evidenceHash !== "") {
+      writer.uint32(106).string(message.evidenceHash);
+    }
+    if (message.evidenceStorageBackend !== "") {
+      writer.uint32(114).string(message.evidenceStorageBackend);
+    }
+    if (message.evidenceStorageRef !== "") {
+      writer.uint32(122).string(message.evidenceStorageRef);
+    }
+    Object.entries(message.evidenceMetadata).forEach(([key, value]) => {
+      SSOLinkageMetadata_EvidenceMetadataEntry.encode({ key: key as any, value }, writer.uint32(130).fork()).join();
+    });
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): SSOLinkageMetadata {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseSSOLinkageMetadata();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 8) {
+            break;
+          }
+
+          message.version = reader.uint32();
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.linkageId = reader.string();
+          continue;
+        }
+        case 3: {
+          if (tag !== 26) {
+            break;
+          }
+
+          message.provider = reader.string();
+          continue;
+        }
+        case 4: {
+          if (tag !== 34) {
+            break;
+          }
+
+          message.issuer = reader.string();
+          continue;
+        }
+        case 5: {
+          if (tag !== 42) {
+            break;
+          }
+
+          message.subjectHash = reader.string();
+          continue;
+        }
+        case 6: {
+          if (tag !== 50) {
+            break;
+          }
+
+          message.nonce = reader.string();
+          continue;
+        }
+        case 7: {
+          if (tag !== 56) {
+            break;
+          }
+
+          message.verifiedAt = Long.fromString(reader.int64().toString());
+          continue;
+        }
+        case 8: {
+          if (tag !== 64) {
+            break;
+          }
+
+          message.expiresAt = Long.fromString(reader.int64().toString());
+          continue;
+        }
+        case 9: {
+          if (tag !== 74) {
+            break;
+          }
+
+          message.accountSignature = reader.bytes();
+          continue;
+        }
+        case 10: {
+          if (tag !== 82) {
+            break;
+          }
+
+          message.status = reader.string();
+          continue;
+        }
+        case 11: {
+          if (tag !== 90) {
+            break;
+          }
+
+          message.emailDomainHash = reader.string();
+          continue;
+        }
+        case 12: {
+          if (tag !== 98) {
+            break;
+          }
+
+          message.orgIdHash = reader.string();
+          continue;
+        }
+        case 13: {
+          if (tag !== 106) {
+            break;
+          }
+
+          message.evidenceHash = reader.string();
+          continue;
+        }
+        case 14: {
+          if (tag !== 114) {
+            break;
+          }
+
+          message.evidenceStorageBackend = reader.string();
+          continue;
+        }
+        case 15: {
+          if (tag !== 122) {
+            break;
+          }
+
+          message.evidenceStorageRef = reader.string();
+          continue;
+        }
+        case 16: {
+          if (tag !== 130) {
+            break;
+          }
+
+          const entry16 = SSOLinkageMetadata_EvidenceMetadataEntry.decode(reader, reader.uint32());
+          if (entry16.value !== undefined) {
+            message.evidenceMetadata[entry16.key] = entry16.value;
+          }
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): SSOLinkageMetadata {
+    return {
+      version: isSet(object.version) ? globalThis.Number(object.version) : 0,
+      linkageId: isSet(object.linkage_id) ? globalThis.String(object.linkage_id) : "",
+      provider: isSet(object.provider) ? globalThis.String(object.provider) : "",
+      issuer: isSet(object.issuer) ? globalThis.String(object.issuer) : "",
+      subjectHash: isSet(object.subject_hash) ? globalThis.String(object.subject_hash) : "",
+      nonce: isSet(object.nonce) ? globalThis.String(object.nonce) : "",
+      verifiedAt: isSet(object.verified_at) ? Long.fromValue(object.verified_at) : Long.ZERO,
+      expiresAt: isSet(object.expires_at) ? Long.fromValue(object.expires_at) : Long.ZERO,
+      accountSignature: isSet(object.account_signature) ? bytesFromBase64(object.account_signature) : new Uint8Array(0),
+      status: isSet(object.status) ? globalThis.String(object.status) : "",
+      emailDomainHash: isSet(object.email_domain_hash) ? globalThis.String(object.email_domain_hash) : "",
+      orgIdHash: isSet(object.org_id_hash) ? globalThis.String(object.org_id_hash) : "",
+      evidenceHash: isSet(object.evidence_hash) ? globalThis.String(object.evidence_hash) : "",
+      evidenceStorageBackend: isSet(object.evidence_storage_backend)
+        ? globalThis.String(object.evidence_storage_backend)
+        : "",
+      evidenceStorageRef: isSet(object.evidence_storage_ref) ? globalThis.String(object.evidence_storage_ref) : "",
+      evidenceMetadata: isObject(object.evidence_metadata)
+        ? Object.entries(object.evidence_metadata).reduce<{ [key: string]: string }>((acc, [key, value]) => {
+          acc[key] = String(value);
+          return acc;
+        }, {})
+        : {},
+    };
+  },
+
+  toJSON(message: SSOLinkageMetadata): unknown {
+    const obj: any = {};
+    if (message.version !== 0) {
+      obj.version = Math.round(message.version);
+    }
+    if (message.linkageId !== "") {
+      obj.linkage_id = message.linkageId;
+    }
+    if (message.provider !== "") {
+      obj.provider = message.provider;
+    }
+    if (message.issuer !== "") {
+      obj.issuer = message.issuer;
+    }
+    if (message.subjectHash !== "") {
+      obj.subject_hash = message.subjectHash;
+    }
+    if (message.nonce !== "") {
+      obj.nonce = message.nonce;
+    }
+    if (!message.verifiedAt.equals(Long.ZERO)) {
+      obj.verified_at = (message.verifiedAt || Long.ZERO).toString();
+    }
+    if (!message.expiresAt.equals(Long.ZERO)) {
+      obj.expires_at = (message.expiresAt || Long.ZERO).toString();
+    }
+    if (message.accountSignature.length !== 0) {
+      obj.account_signature = base64FromBytes(message.accountSignature);
+    }
+    if (message.status !== "") {
+      obj.status = message.status;
+    }
+    if (message.emailDomainHash !== "") {
+      obj.email_domain_hash = message.emailDomainHash;
+    }
+    if (message.orgIdHash !== "") {
+      obj.org_id_hash = message.orgIdHash;
+    }
+    if (message.evidenceHash !== "") {
+      obj.evidence_hash = message.evidenceHash;
+    }
+    if (message.evidenceStorageBackend !== "") {
+      obj.evidence_storage_backend = message.evidenceStorageBackend;
+    }
+    if (message.evidenceStorageRef !== "") {
+      obj.evidence_storage_ref = message.evidenceStorageRef;
+    }
+    if (message.evidenceMetadata) {
+      const entries = Object.entries(message.evidenceMetadata);
+      if (entries.length > 0) {
+        obj.evidence_metadata = {};
+        entries.forEach(([k, v]) => {
+          obj.evidence_metadata[k] = v;
+        });
+      }
+    }
+    return obj;
+  },
+  fromPartial(object: DeepPartial<SSOLinkageMetadata>): SSOLinkageMetadata {
+    const message = createBaseSSOLinkageMetadata();
+    message.version = object.version ?? 0;
+    message.linkageId = object.linkageId ?? "";
+    message.provider = object.provider ?? "";
+    message.issuer = object.issuer ?? "";
+    message.subjectHash = object.subjectHash ?? "";
+    message.nonce = object.nonce ?? "";
+    message.verifiedAt = (object.verifiedAt !== undefined && object.verifiedAt !== null)
+      ? Long.fromValue(object.verifiedAt)
+      : Long.ZERO;
+    message.expiresAt = (object.expiresAt !== undefined && object.expiresAt !== null)
+      ? Long.fromValue(object.expiresAt)
+      : Long.ZERO;
+    message.accountSignature = object.accountSignature ?? new Uint8Array(0);
+    message.status = object.status ?? "";
+    message.emailDomainHash = object.emailDomainHash ?? "";
+    message.orgIdHash = object.orgIdHash ?? "";
+    message.evidenceHash = object.evidenceHash ?? "";
+    message.evidenceStorageBackend = object.evidenceStorageBackend ?? "";
+    message.evidenceStorageRef = object.evidenceStorageRef ?? "";
+    message.evidenceMetadata = Object.entries(object.evidenceMetadata ?? {}).reduce<{ [key: string]: string }>(
+      (acc, [key, value]) => {
+        if (value !== undefined) {
+          acc[key] = globalThis.String(value);
+        }
+        return acc;
+      },
+      {},
+    );
+    return message;
+  },
+};
+
+function createBaseSSOLinkageMetadata_EvidenceMetadataEntry(): SSOLinkageMetadata_EvidenceMetadataEntry {
+  return { key: "", value: "" };
+}
+
+export const SSOLinkageMetadata_EvidenceMetadataEntry: MessageFns<
+  SSOLinkageMetadata_EvidenceMetadataEntry,
+  "virtengine.veid.v1.SSOLinkageMetadata.EvidenceMetadataEntry"
+> = {
+  $type: "virtengine.veid.v1.SSOLinkageMetadata.EvidenceMetadataEntry" as const,
+
+  encode(message: SSOLinkageMetadata_EvidenceMetadataEntry, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.key !== "") {
+      writer.uint32(10).string(message.key);
+    }
+    if (message.value !== "") {
+      writer.uint32(18).string(message.value);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): SSOLinkageMetadata_EvidenceMetadataEntry {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseSSOLinkageMetadata_EvidenceMetadataEntry();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.key = reader.string();
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.value = reader.string();
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): SSOLinkageMetadata_EvidenceMetadataEntry {
+    return {
+      key: isSet(object.key) ? globalThis.String(object.key) : "",
+      value: isSet(object.value) ? globalThis.String(object.value) : "",
+    };
+  },
+
+  toJSON(message: SSOLinkageMetadata_EvidenceMetadataEntry): unknown {
+    const obj: any = {};
+    if (message.key !== "") {
+      obj.key = message.key;
+    }
+    if (message.value !== "") {
+      obj.value = message.value;
+    }
+    return obj;
+  },
+  fromPartial(object: DeepPartial<SSOLinkageMetadata_EvidenceMetadataEntry>): SSOLinkageMetadata_EvidenceMetadataEntry {
+    const message = createBaseSSOLinkageMetadata_EvidenceMetadataEntry();
+    message.key = object.key ?? "";
+    message.value = object.value ?? "";
+    return message;
+  },
+};
+
+function createBasePhoneNumberHash(): PhoneNumberHash {
+  return { hash: "", salt: "", countryCodeHash: "", createdAt: Long.ZERO };
+}
+
+export const PhoneNumberHash: MessageFns<PhoneNumberHash, "virtengine.veid.v1.PhoneNumberHash"> = {
+  $type: "virtengine.veid.v1.PhoneNumberHash" as const,
+
+  encode(message: PhoneNumberHash, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.hash !== "") {
+      writer.uint32(10).string(message.hash);
+    }
+    if (message.salt !== "") {
+      writer.uint32(18).string(message.salt);
+    }
+    if (message.countryCodeHash !== "") {
+      writer.uint32(26).string(message.countryCodeHash);
+    }
+    if (!message.createdAt.equals(Long.ZERO)) {
+      writer.uint32(32).int64(message.createdAt.toString());
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): PhoneNumberHash {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBasePhoneNumberHash();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.hash = reader.string();
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.salt = reader.string();
+          continue;
+        }
+        case 3: {
+          if (tag !== 26) {
+            break;
+          }
+
+          message.countryCodeHash = reader.string();
+          continue;
+        }
+        case 4: {
+          if (tag !== 32) {
+            break;
+          }
+
+          message.createdAt = Long.fromString(reader.int64().toString());
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): PhoneNumberHash {
+    return {
+      hash: isSet(object.hash) ? globalThis.String(object.hash) : "",
+      salt: isSet(object.salt) ? globalThis.String(object.salt) : "",
+      countryCodeHash: isSet(object.country_code_hash) ? globalThis.String(object.country_code_hash) : "",
+      createdAt: isSet(object.created_at) ? Long.fromValue(object.created_at) : Long.ZERO,
+    };
+  },
+
+  toJSON(message: PhoneNumberHash): unknown {
+    const obj: any = {};
+    if (message.hash !== "") {
+      obj.hash = message.hash;
+    }
+    if (message.salt !== "") {
+      obj.salt = message.salt;
+    }
+    if (message.countryCodeHash !== "") {
+      obj.country_code_hash = message.countryCodeHash;
+    }
+    if (!message.createdAt.equals(Long.ZERO)) {
+      obj.created_at = (message.createdAt || Long.ZERO).toString();
+    }
+    return obj;
+  },
+  fromPartial(object: DeepPartial<PhoneNumberHash>): PhoneNumberHash {
+    const message = createBasePhoneNumberHash();
+    message.hash = object.hash ?? "";
+    message.salt = object.salt ?? "";
+    message.countryCodeHash = object.countryCodeHash ?? "";
+    message.createdAt = (object.createdAt !== undefined && object.createdAt !== null)
+      ? Long.fromValue(object.createdAt)
+      : Long.ZERO;
+    return message;
+  },
+};
+
+function createBaseEmailVerificationRecord(): EmailVerificationRecord {
+  return {
+    version: 0,
+    verificationId: "",
+    accountAddress: "",
+    emailHash: "",
+    domainHash: "",
+    nonce: "",
+    nonceUsedAt: Long.ZERO,
+    status: "",
+    verifiedAt: Long.ZERO,
+    expiresAt: Long.ZERO,
+    createdAt: Long.ZERO,
+    updatedAt: Long.ZERO,
+    accountSignature: new Uint8Array(0),
+    isOrganizational: false,
+    verificationAttempts: 0,
+    evidenceHash: "",
+    evidenceStorageBackend: "",
+    evidenceStorageRef: "",
+    evidenceMetadata: {},
+  };
+}
+
+export const EmailVerificationRecord: MessageFns<
+  EmailVerificationRecord,
+  "virtengine.veid.v1.EmailVerificationRecord"
+> = {
+  $type: "virtengine.veid.v1.EmailVerificationRecord" as const,
+
+  encode(message: EmailVerificationRecord, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.version !== 0) {
+      writer.uint32(8).uint32(message.version);
+    }
+    if (message.verificationId !== "") {
+      writer.uint32(18).string(message.verificationId);
+    }
+    if (message.accountAddress !== "") {
+      writer.uint32(26).string(message.accountAddress);
+    }
+    if (message.emailHash !== "") {
+      writer.uint32(34).string(message.emailHash);
+    }
+    if (message.domainHash !== "") {
+      writer.uint32(42).string(message.domainHash);
+    }
+    if (message.nonce !== "") {
+      writer.uint32(50).string(message.nonce);
+    }
+    if (!message.nonceUsedAt.equals(Long.ZERO)) {
+      writer.uint32(56).int64(message.nonceUsedAt.toString());
+    }
+    if (message.status !== "") {
+      writer.uint32(66).string(message.status);
+    }
+    if (!message.verifiedAt.equals(Long.ZERO)) {
+      writer.uint32(72).int64(message.verifiedAt.toString());
+    }
+    if (!message.expiresAt.equals(Long.ZERO)) {
+      writer.uint32(80).int64(message.expiresAt.toString());
+    }
+    if (!message.createdAt.equals(Long.ZERO)) {
+      writer.uint32(88).int64(message.createdAt.toString());
+    }
+    if (!message.updatedAt.equals(Long.ZERO)) {
+      writer.uint32(96).int64(message.updatedAt.toString());
+    }
+    if (message.accountSignature.length !== 0) {
+      writer.uint32(106).bytes(message.accountSignature);
+    }
+    if (message.isOrganizational !== false) {
+      writer.uint32(112).bool(message.isOrganizational);
+    }
+    if (message.verificationAttempts !== 0) {
+      writer.uint32(120).uint32(message.verificationAttempts);
+    }
+    if (message.evidenceHash !== "") {
+      writer.uint32(130).string(message.evidenceHash);
+    }
+    if (message.evidenceStorageBackend !== "") {
+      writer.uint32(138).string(message.evidenceStorageBackend);
+    }
+    if (message.evidenceStorageRef !== "") {
+      writer.uint32(146).string(message.evidenceStorageRef);
+    }
+    Object.entries(message.evidenceMetadata).forEach(([key, value]) => {
+      EmailVerificationRecord_EvidenceMetadataEntry.encode({ key: key as any, value }, writer.uint32(154).fork())
+        .join();
+    });
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): EmailVerificationRecord {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseEmailVerificationRecord();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 8) {
+            break;
+          }
+
+          message.version = reader.uint32();
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.verificationId = reader.string();
+          continue;
+        }
+        case 3: {
+          if (tag !== 26) {
+            break;
+          }
+
+          message.accountAddress = reader.string();
+          continue;
+        }
+        case 4: {
+          if (tag !== 34) {
+            break;
+          }
+
+          message.emailHash = reader.string();
+          continue;
+        }
+        case 5: {
+          if (tag !== 42) {
+            break;
+          }
+
+          message.domainHash = reader.string();
+          continue;
+        }
+        case 6: {
+          if (tag !== 50) {
+            break;
+          }
+
+          message.nonce = reader.string();
+          continue;
+        }
+        case 7: {
+          if (tag !== 56) {
+            break;
+          }
+
+          message.nonceUsedAt = Long.fromString(reader.int64().toString());
+          continue;
+        }
+        case 8: {
+          if (tag !== 66) {
+            break;
+          }
+
+          message.status = reader.string();
+          continue;
+        }
+        case 9: {
+          if (tag !== 72) {
+            break;
+          }
+
+          message.verifiedAt = Long.fromString(reader.int64().toString());
+          continue;
+        }
+        case 10: {
+          if (tag !== 80) {
+            break;
+          }
+
+          message.expiresAt = Long.fromString(reader.int64().toString());
+          continue;
+        }
+        case 11: {
+          if (tag !== 88) {
+            break;
+          }
+
+          message.createdAt = Long.fromString(reader.int64().toString());
+          continue;
+        }
+        case 12: {
+          if (tag !== 96) {
+            break;
+          }
+
+          message.updatedAt = Long.fromString(reader.int64().toString());
+          continue;
+        }
+        case 13: {
+          if (tag !== 106) {
+            break;
+          }
+
+          message.accountSignature = reader.bytes();
+          continue;
+        }
+        case 14: {
+          if (tag !== 112) {
+            break;
+          }
+
+          message.isOrganizational = reader.bool();
+          continue;
+        }
+        case 15: {
+          if (tag !== 120) {
+            break;
+          }
+
+          message.verificationAttempts = reader.uint32();
+          continue;
+        }
+        case 16: {
+          if (tag !== 130) {
+            break;
+          }
+
+          message.evidenceHash = reader.string();
+          continue;
+        }
+        case 17: {
+          if (tag !== 138) {
+            break;
+          }
+
+          message.evidenceStorageBackend = reader.string();
+          continue;
+        }
+        case 18: {
+          if (tag !== 146) {
+            break;
+          }
+
+          message.evidenceStorageRef = reader.string();
+          continue;
+        }
+        case 19: {
+          if (tag !== 154) {
+            break;
+          }
+
+          const entry19 = EmailVerificationRecord_EvidenceMetadataEntry.decode(reader, reader.uint32());
+          if (entry19.value !== undefined) {
+            message.evidenceMetadata[entry19.key] = entry19.value;
+          }
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): EmailVerificationRecord {
+    return {
+      version: isSet(object.version) ? globalThis.Number(object.version) : 0,
+      verificationId: isSet(object.verification_id) ? globalThis.String(object.verification_id) : "",
+      accountAddress: isSet(object.account_address) ? globalThis.String(object.account_address) : "",
+      emailHash: isSet(object.email_hash) ? globalThis.String(object.email_hash) : "",
+      domainHash: isSet(object.domain_hash) ? globalThis.String(object.domain_hash) : "",
+      nonce: isSet(object.nonce) ? globalThis.String(object.nonce) : "",
+      nonceUsedAt: isSet(object.nonce_used_at) ? Long.fromValue(object.nonce_used_at) : Long.ZERO,
+      status: isSet(object.status) ? globalThis.String(object.status) : "",
+      verifiedAt: isSet(object.verified_at) ? Long.fromValue(object.verified_at) : Long.ZERO,
+      expiresAt: isSet(object.expires_at) ? Long.fromValue(object.expires_at) : Long.ZERO,
+      createdAt: isSet(object.created_at) ? Long.fromValue(object.created_at) : Long.ZERO,
+      updatedAt: isSet(object.updated_at) ? Long.fromValue(object.updated_at) : Long.ZERO,
+      accountSignature: isSet(object.account_signature) ? bytesFromBase64(object.account_signature) : new Uint8Array(0),
+      isOrganizational: isSet(object.is_organizational) ? globalThis.Boolean(object.is_organizational) : false,
+      verificationAttempts: isSet(object.verification_attempts) ? globalThis.Number(object.verification_attempts) : 0,
+      evidenceHash: isSet(object.evidence_hash) ? globalThis.String(object.evidence_hash) : "",
+      evidenceStorageBackend: isSet(object.evidence_storage_backend)
+        ? globalThis.String(object.evidence_storage_backend)
+        : "",
+      evidenceStorageRef: isSet(object.evidence_storage_ref) ? globalThis.String(object.evidence_storage_ref) : "",
+      evidenceMetadata: isObject(object.evidence_metadata)
+        ? Object.entries(object.evidence_metadata).reduce<{ [key: string]: string }>((acc, [key, value]) => {
+          acc[key] = String(value);
+          return acc;
+        }, {})
+        : {},
+    };
+  },
+
+  toJSON(message: EmailVerificationRecord): unknown {
+    const obj: any = {};
+    if (message.version !== 0) {
+      obj.version = Math.round(message.version);
+    }
+    if (message.verificationId !== "") {
+      obj.verification_id = message.verificationId;
+    }
+    if (message.accountAddress !== "") {
+      obj.account_address = message.accountAddress;
+    }
+    if (message.emailHash !== "") {
+      obj.email_hash = message.emailHash;
+    }
+    if (message.domainHash !== "") {
+      obj.domain_hash = message.domainHash;
+    }
+    if (message.nonce !== "") {
+      obj.nonce = message.nonce;
+    }
+    if (!message.nonceUsedAt.equals(Long.ZERO)) {
+      obj.nonce_used_at = (message.nonceUsedAt || Long.ZERO).toString();
+    }
+    if (message.status !== "") {
+      obj.status = message.status;
+    }
+    if (!message.verifiedAt.equals(Long.ZERO)) {
+      obj.verified_at = (message.verifiedAt || Long.ZERO).toString();
+    }
+    if (!message.expiresAt.equals(Long.ZERO)) {
+      obj.expires_at = (message.expiresAt || Long.ZERO).toString();
+    }
+    if (!message.createdAt.equals(Long.ZERO)) {
+      obj.created_at = (message.createdAt || Long.ZERO).toString();
+    }
+    if (!message.updatedAt.equals(Long.ZERO)) {
+      obj.updated_at = (message.updatedAt || Long.ZERO).toString();
+    }
+    if (message.accountSignature.length !== 0) {
+      obj.account_signature = base64FromBytes(message.accountSignature);
+    }
+    if (message.isOrganizational !== false) {
+      obj.is_organizational = message.isOrganizational;
+    }
+    if (message.verificationAttempts !== 0) {
+      obj.verification_attempts = Math.round(message.verificationAttempts);
+    }
+    if (message.evidenceHash !== "") {
+      obj.evidence_hash = message.evidenceHash;
+    }
+    if (message.evidenceStorageBackend !== "") {
+      obj.evidence_storage_backend = message.evidenceStorageBackend;
+    }
+    if (message.evidenceStorageRef !== "") {
+      obj.evidence_storage_ref = message.evidenceStorageRef;
+    }
+    if (message.evidenceMetadata) {
+      const entries = Object.entries(message.evidenceMetadata);
+      if (entries.length > 0) {
+        obj.evidence_metadata = {};
+        entries.forEach(([k, v]) => {
+          obj.evidence_metadata[k] = v;
+        });
+      }
+    }
+    return obj;
+  },
+  fromPartial(object: DeepPartial<EmailVerificationRecord>): EmailVerificationRecord {
+    const message = createBaseEmailVerificationRecord();
+    message.version = object.version ?? 0;
+    message.verificationId = object.verificationId ?? "";
+    message.accountAddress = object.accountAddress ?? "";
+    message.emailHash = object.emailHash ?? "";
+    message.domainHash = object.domainHash ?? "";
+    message.nonce = object.nonce ?? "";
+    message.nonceUsedAt = (object.nonceUsedAt !== undefined && object.nonceUsedAt !== null)
+      ? Long.fromValue(object.nonceUsedAt)
+      : Long.ZERO;
+    message.status = object.status ?? "";
+    message.verifiedAt = (object.verifiedAt !== undefined && object.verifiedAt !== null)
+      ? Long.fromValue(object.verifiedAt)
+      : Long.ZERO;
+    message.expiresAt = (object.expiresAt !== undefined && object.expiresAt !== null)
+      ? Long.fromValue(object.expiresAt)
+      : Long.ZERO;
+    message.createdAt = (object.createdAt !== undefined && object.createdAt !== null)
+      ? Long.fromValue(object.createdAt)
+      : Long.ZERO;
+    message.updatedAt = (object.updatedAt !== undefined && object.updatedAt !== null)
+      ? Long.fromValue(object.updatedAt)
+      : Long.ZERO;
+    message.accountSignature = object.accountSignature ?? new Uint8Array(0);
+    message.isOrganizational = object.isOrganizational ?? false;
+    message.verificationAttempts = object.verificationAttempts ?? 0;
+    message.evidenceHash = object.evidenceHash ?? "";
+    message.evidenceStorageBackend = object.evidenceStorageBackend ?? "";
+    message.evidenceStorageRef = object.evidenceStorageRef ?? "";
+    message.evidenceMetadata = Object.entries(object.evidenceMetadata ?? {}).reduce<{ [key: string]: string }>(
+      (acc, [key, value]) => {
+        if (value !== undefined) {
+          acc[key] = globalThis.String(value);
+        }
+        return acc;
+      },
+      {},
+    );
+    return message;
+  },
+};
+
+function createBaseEmailVerificationRecord_EvidenceMetadataEntry(): EmailVerificationRecord_EvidenceMetadataEntry {
+  return { key: "", value: "" };
+}
+
+export const EmailVerificationRecord_EvidenceMetadataEntry: MessageFns<
+  EmailVerificationRecord_EvidenceMetadataEntry,
+  "virtengine.veid.v1.EmailVerificationRecord.EvidenceMetadataEntry"
+> = {
+  $type: "virtengine.veid.v1.EmailVerificationRecord.EvidenceMetadataEntry" as const,
+
+  encode(
+    message: EmailVerificationRecord_EvidenceMetadataEntry,
+    writer: BinaryWriter = new BinaryWriter(),
+  ): BinaryWriter {
+    if (message.key !== "") {
+      writer.uint32(10).string(message.key);
+    }
+    if (message.value !== "") {
+      writer.uint32(18).string(message.value);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): EmailVerificationRecord_EvidenceMetadataEntry {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseEmailVerificationRecord_EvidenceMetadataEntry();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.key = reader.string();
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.value = reader.string();
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): EmailVerificationRecord_EvidenceMetadataEntry {
+    return {
+      key: isSet(object.key) ? globalThis.String(object.key) : "",
+      value: isSet(object.value) ? globalThis.String(object.value) : "",
+    };
+  },
+
+  toJSON(message: EmailVerificationRecord_EvidenceMetadataEntry): unknown {
+    const obj: any = {};
+    if (message.key !== "") {
+      obj.key = message.key;
+    }
+    if (message.value !== "") {
+      obj.value = message.value;
+    }
+    return obj;
+  },
+
+  create(
+    base?: DeepPartial<EmailVerificationRecord_EvidenceMetadataEntry>,
+  ): EmailVerificationRecord_EvidenceMetadataEntry {
+    return EmailVerificationRecord_EvidenceMetadataEntry.fromPartial(base ?? {});
+  },
+  fromPartial(
+    object: DeepPartial<EmailVerificationRecord_EvidenceMetadataEntry>,
+  ): EmailVerificationRecord_EvidenceMetadataEntry {
+    const message = createBaseEmailVerificationRecord_EvidenceMetadataEntry();
+    message.key = object.key ?? "";
+    message.value = object.value ?? "";
+    return message;
+  },
+};
+
+function createBaseSMSVerificationRecord(): SMSVerificationRecord {
+  return {
+    version: 0,
+    verificationId: "",
+    accountAddress: "",
+    phoneHash: undefined,
+    status: "",
+    verifiedAt: Long.ZERO,
+    expiresAt: Long.ZERO,
+    createdAt: Long.ZERO,
+    updatedAt: Long.ZERO,
+    verificationAttempts: 0,
+    isVoip: false,
+    carrierType: "",
+    validatorAddress: "",
+    accountSignature: new Uint8Array(0),
+    evidenceHash: "",
+    evidenceStorageBackend: "",
+    evidenceStorageRef: "",
+    evidenceMetadata: {},
+  };
+}
+
+export const SMSVerificationRecord: MessageFns<SMSVerificationRecord, "virtengine.veid.v1.SMSVerificationRecord"> = {
+  $type: "virtengine.veid.v1.SMSVerificationRecord" as const,
+
+  encode(message: SMSVerificationRecord, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.version !== 0) {
+      writer.uint32(8).uint32(message.version);
+    }
+    if (message.verificationId !== "") {
+      writer.uint32(18).string(message.verificationId);
+    }
+    if (message.accountAddress !== "") {
+      writer.uint32(26).string(message.accountAddress);
+    }
+    if (message.phoneHash !== undefined) {
+      PhoneNumberHash.encode(message.phoneHash, writer.uint32(34).fork()).join();
+    }
+    if (message.status !== "") {
+      writer.uint32(42).string(message.status);
+    }
+    if (!message.verifiedAt.equals(Long.ZERO)) {
+      writer.uint32(48).int64(message.verifiedAt.toString());
+    }
+    if (!message.expiresAt.equals(Long.ZERO)) {
+      writer.uint32(56).int64(message.expiresAt.toString());
+    }
+    if (!message.createdAt.equals(Long.ZERO)) {
+      writer.uint32(64).int64(message.createdAt.toString());
+    }
+    if (!message.updatedAt.equals(Long.ZERO)) {
+      writer.uint32(72).int64(message.updatedAt.toString());
+    }
+    if (message.verificationAttempts !== 0) {
+      writer.uint32(80).uint32(message.verificationAttempts);
+    }
+    if (message.isVoip !== false) {
+      writer.uint32(88).bool(message.isVoip);
+    }
+    if (message.carrierType !== "") {
+      writer.uint32(98).string(message.carrierType);
+    }
+    if (message.validatorAddress !== "") {
+      writer.uint32(106).string(message.validatorAddress);
+    }
+    if (message.accountSignature.length !== 0) {
+      writer.uint32(114).bytes(message.accountSignature);
+    }
+    if (message.evidenceHash !== "") {
+      writer.uint32(122).string(message.evidenceHash);
+    }
+    if (message.evidenceStorageBackend !== "") {
+      writer.uint32(130).string(message.evidenceStorageBackend);
+    }
+    if (message.evidenceStorageRef !== "") {
+      writer.uint32(138).string(message.evidenceStorageRef);
+    }
+    Object.entries(message.evidenceMetadata).forEach(([key, value]) => {
+      SMSVerificationRecord_EvidenceMetadataEntry.encode({ key: key as any, value }, writer.uint32(146).fork()).join();
+    });
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): SMSVerificationRecord {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseSMSVerificationRecord();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 8) {
+            break;
+          }
+
+          message.version = reader.uint32();
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.verificationId = reader.string();
+          continue;
+        }
+        case 3: {
+          if (tag !== 26) {
+            break;
+          }
+
+          message.accountAddress = reader.string();
+          continue;
+        }
+        case 4: {
+          if (tag !== 34) {
+            break;
+          }
+
+          message.phoneHash = PhoneNumberHash.decode(reader, reader.uint32());
+          continue;
+        }
+        case 5: {
+          if (tag !== 42) {
+            break;
+          }
+
+          message.status = reader.string();
+          continue;
+        }
+        case 6: {
+          if (tag !== 48) {
+            break;
+          }
+
+          message.verifiedAt = Long.fromString(reader.int64().toString());
+          continue;
+        }
+        case 7: {
+          if (tag !== 56) {
+            break;
+          }
+
+          message.expiresAt = Long.fromString(reader.int64().toString());
+          continue;
+        }
+        case 8: {
+          if (tag !== 64) {
+            break;
+          }
+
+          message.createdAt = Long.fromString(reader.int64().toString());
+          continue;
+        }
+        case 9: {
+          if (tag !== 72) {
+            break;
+          }
+
+          message.updatedAt = Long.fromString(reader.int64().toString());
+          continue;
+        }
+        case 10: {
+          if (tag !== 80) {
+            break;
+          }
+
+          message.verificationAttempts = reader.uint32();
+          continue;
+        }
+        case 11: {
+          if (tag !== 88) {
+            break;
+          }
+
+          message.isVoip = reader.bool();
+          continue;
+        }
+        case 12: {
+          if (tag !== 98) {
+            break;
+          }
+
+          message.carrierType = reader.string();
+          continue;
+        }
+        case 13: {
+          if (tag !== 106) {
+            break;
+          }
+
+          message.validatorAddress = reader.string();
+          continue;
+        }
+        case 14: {
+          if (tag !== 114) {
+            break;
+          }
+
+          message.accountSignature = reader.bytes();
+          continue;
+        }
+        case 15: {
+          if (tag !== 122) {
+            break;
+          }
+
+          message.evidenceHash = reader.string();
+          continue;
+        }
+        case 16: {
+          if (tag !== 130) {
+            break;
+          }
+
+          message.evidenceStorageBackend = reader.string();
+          continue;
+        }
+        case 17: {
+          if (tag !== 138) {
+            break;
+          }
+
+          message.evidenceStorageRef = reader.string();
+          continue;
+        }
+        case 18: {
+          if (tag !== 146) {
+            break;
+          }
+
+          const entry18 = SMSVerificationRecord_EvidenceMetadataEntry.decode(reader, reader.uint32());
+          if (entry18.value !== undefined) {
+            message.evidenceMetadata[entry18.key] = entry18.value;
+          }
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): SMSVerificationRecord {
+    return {
+      version: isSet(object.version) ? globalThis.Number(object.version) : 0,
+      verificationId: isSet(object.verification_id) ? globalThis.String(object.verification_id) : "",
+      accountAddress: isSet(object.account_address) ? globalThis.String(object.account_address) : "",
+      phoneHash: isSet(object.phone_hash) ? PhoneNumberHash.fromJSON(object.phone_hash) : undefined,
+      status: isSet(object.status) ? globalThis.String(object.status) : "",
+      verifiedAt: isSet(object.verified_at) ? Long.fromValue(object.verified_at) : Long.ZERO,
+      expiresAt: isSet(object.expires_at) ? Long.fromValue(object.expires_at) : Long.ZERO,
+      createdAt: isSet(object.created_at) ? Long.fromValue(object.created_at) : Long.ZERO,
+      updatedAt: isSet(object.updated_at) ? Long.fromValue(object.updated_at) : Long.ZERO,
+      verificationAttempts: isSet(object.verification_attempts) ? globalThis.Number(object.verification_attempts) : 0,
+      isVoip: isSet(object.is_voip) ? globalThis.Boolean(object.is_voip) : false,
+      carrierType: isSet(object.carrier_type) ? globalThis.String(object.carrier_type) : "",
+      validatorAddress: isSet(object.validator_address) ? globalThis.String(object.validator_address) : "",
+      accountSignature: isSet(object.account_signature) ? bytesFromBase64(object.account_signature) : new Uint8Array(0),
+      evidenceHash: isSet(object.evidence_hash) ? globalThis.String(object.evidence_hash) : "",
+      evidenceStorageBackend: isSet(object.evidence_storage_backend)
+        ? globalThis.String(object.evidence_storage_backend)
+        : "",
+      evidenceStorageRef: isSet(object.evidence_storage_ref) ? globalThis.String(object.evidence_storage_ref) : "",
+      evidenceMetadata: isObject(object.evidence_metadata)
+        ? Object.entries(object.evidence_metadata).reduce<{ [key: string]: string }>((acc, [key, value]) => {
+          acc[key] = String(value);
+          return acc;
+        }, {})
+        : {},
+    };
+  },
+
+  toJSON(message: SMSVerificationRecord): unknown {
+    const obj: any = {};
+    if (message.version !== 0) {
+      obj.version = Math.round(message.version);
+    }
+    if (message.verificationId !== "") {
+      obj.verification_id = message.verificationId;
+    }
+    if (message.accountAddress !== "") {
+      obj.account_address = message.accountAddress;
+    }
+    if (message.phoneHash !== undefined) {
+      obj.phone_hash = PhoneNumberHash.toJSON(message.phoneHash);
+    }
+    if (message.status !== "") {
+      obj.status = message.status;
+    }
+    if (!message.verifiedAt.equals(Long.ZERO)) {
+      obj.verified_at = (message.verifiedAt || Long.ZERO).toString();
+    }
+    if (!message.expiresAt.equals(Long.ZERO)) {
+      obj.expires_at = (message.expiresAt || Long.ZERO).toString();
+    }
+    if (!message.createdAt.equals(Long.ZERO)) {
+      obj.created_at = (message.createdAt || Long.ZERO).toString();
+    }
+    if (!message.updatedAt.equals(Long.ZERO)) {
+      obj.updated_at = (message.updatedAt || Long.ZERO).toString();
+    }
+    if (message.verificationAttempts !== 0) {
+      obj.verification_attempts = Math.round(message.verificationAttempts);
+    }
+    if (message.isVoip !== false) {
+      obj.is_voip = message.isVoip;
+    }
+    if (message.carrierType !== "") {
+      obj.carrier_type = message.carrierType;
+    }
+    if (message.validatorAddress !== "") {
+      obj.validator_address = message.validatorAddress;
+    }
+    if (message.accountSignature.length !== 0) {
+      obj.account_signature = base64FromBytes(message.accountSignature);
+    }
+    if (message.evidenceHash !== "") {
+      obj.evidence_hash = message.evidenceHash;
+    }
+    if (message.evidenceStorageBackend !== "") {
+      obj.evidence_storage_backend = message.evidenceStorageBackend;
+    }
+    if (message.evidenceStorageRef !== "") {
+      obj.evidence_storage_ref = message.evidenceStorageRef;
+    }
+    if (message.evidenceMetadata) {
+      const entries = Object.entries(message.evidenceMetadata);
+      if (entries.length > 0) {
+        obj.evidence_metadata = {};
+        entries.forEach(([k, v]) => {
+          obj.evidence_metadata[k] = v;
+        });
+      }
+    }
+    return obj;
+  },
+  fromPartial(object: DeepPartial<SMSVerificationRecord>): SMSVerificationRecord {
+    const message = createBaseSMSVerificationRecord();
+    message.version = object.version ?? 0;
+    message.verificationId = object.verificationId ?? "";
+    message.accountAddress = object.accountAddress ?? "";
+    message.phoneHash = (object.phoneHash !== undefined && object.phoneHash !== null)
+      ? PhoneNumberHash.fromPartial(object.phoneHash)
+      : undefined;
+    message.status = object.status ?? "";
+    message.verifiedAt = (object.verifiedAt !== undefined && object.verifiedAt !== null)
+      ? Long.fromValue(object.verifiedAt)
+      : Long.ZERO;
+    message.expiresAt = (object.expiresAt !== undefined && object.expiresAt !== null)
+      ? Long.fromValue(object.expiresAt)
+      : Long.ZERO;
+    message.createdAt = (object.createdAt !== undefined && object.createdAt !== null)
+      ? Long.fromValue(object.createdAt)
+      : Long.ZERO;
+    message.updatedAt = (object.updatedAt !== undefined && object.updatedAt !== null)
+      ? Long.fromValue(object.updatedAt)
+      : Long.ZERO;
+    message.verificationAttempts = object.verificationAttempts ?? 0;
+    message.isVoip = object.isVoip ?? false;
+    message.carrierType = object.carrierType ?? "";
+    message.validatorAddress = object.validatorAddress ?? "";
+    message.accountSignature = object.accountSignature ?? new Uint8Array(0);
+    message.evidenceHash = object.evidenceHash ?? "";
+    message.evidenceStorageBackend = object.evidenceStorageBackend ?? "";
+    message.evidenceStorageRef = object.evidenceStorageRef ?? "";
+    message.evidenceMetadata = Object.entries(object.evidenceMetadata ?? {}).reduce<{ [key: string]: string }>(
+      (acc, [key, value]) => {
+        if (value !== undefined) {
+          acc[key] = globalThis.String(value);
+        }
+        return acc;
+      },
+      {},
+    );
+    return message;
+  },
+};
+
+function createBaseSMSVerificationRecord_EvidenceMetadataEntry(): SMSVerificationRecord_EvidenceMetadataEntry {
+  return { key: "", value: "" };
+}
+
+export const SMSVerificationRecord_EvidenceMetadataEntry: MessageFns<
+  SMSVerificationRecord_EvidenceMetadataEntry,
+  "virtengine.veid.v1.SMSVerificationRecord.EvidenceMetadataEntry"
+> = {
+  $type: "virtengine.veid.v1.SMSVerificationRecord.EvidenceMetadataEntry" as const,
+
+  encode(
+    message: SMSVerificationRecord_EvidenceMetadataEntry,
+    writer: BinaryWriter = new BinaryWriter(),
+  ): BinaryWriter {
+    if (message.key !== "") {
+      writer.uint32(10).string(message.key);
+    }
+    if (message.value !== "") {
+      writer.uint32(18).string(message.value);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): SMSVerificationRecord_EvidenceMetadataEntry {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseSMSVerificationRecord_EvidenceMetadataEntry();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.key = reader.string();
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.value = reader.string();
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): SMSVerificationRecord_EvidenceMetadataEntry {
+    return {
+      key: isSet(object.key) ? globalThis.String(object.key) : "",
+      value: isSet(object.value) ? globalThis.String(object.value) : "",
+    };
+  },
+
+  toJSON(message: SMSVerificationRecord_EvidenceMetadataEntry): unknown {
+    const obj: any = {};
+    if (message.key !== "") {
+      obj.key = message.key;
+    }
+    if (message.value !== "") {
+      obj.value = message.value;
+    }
+    return obj;
+  },
+  fromPartial(
+    object: DeepPartial<SMSVerificationRecord_EvidenceMetadataEntry>,
+  ): SMSVerificationRecord_EvidenceMetadataEntry {
+    const message = createBaseSMSVerificationRecord_EvidenceMetadataEntry();
+    message.key = object.key ?? "";
+    message.value = object.value ?? "";
+    return message;
+  },
+};
+
+function createBaseSocialMediaScope(): SocialMediaScope {
+  return {
+    version: 0,
+    scopeId: "",
+    accountAddress: "",
+    provider: 0,
+    profileNameHash: "",
+    emailHash: "",
+    usernameHash: "",
+    orgHash: "",
+    accountCreatedAt: Long.ZERO,
+    accountAgeDays: 0,
+    isVerified: false,
+    friendCountRange: "",
+    status: "",
+    createdAt: Long.ZERO,
+    updatedAt: Long.ZERO,
+    encryptedPayload: undefined,
+    evidenceHash: "",
+    evidenceStorageBackend: "",
+    evidenceStorageRef: "",
+    evidenceMetadata: {},
+  };
+}
+
+export const SocialMediaScope: MessageFns<SocialMediaScope, "virtengine.veid.v1.SocialMediaScope"> = {
+  $type: "virtengine.veid.v1.SocialMediaScope" as const,
+
+  encode(message: SocialMediaScope, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.version !== 0) {
+      writer.uint32(8).uint32(message.version);
+    }
+    if (message.scopeId !== "") {
+      writer.uint32(18).string(message.scopeId);
+    }
+    if (message.accountAddress !== "") {
+      writer.uint32(26).string(message.accountAddress);
+    }
+    if (message.provider !== 0) {
+      writer.uint32(32).int32(message.provider);
+    }
+    if (message.profileNameHash !== "") {
+      writer.uint32(42).string(message.profileNameHash);
+    }
+    if (message.emailHash !== "") {
+      writer.uint32(50).string(message.emailHash);
+    }
+    if (message.usernameHash !== "") {
+      writer.uint32(58).string(message.usernameHash);
+    }
+    if (message.orgHash !== "") {
+      writer.uint32(66).string(message.orgHash);
+    }
+    if (!message.accountCreatedAt.equals(Long.ZERO)) {
+      writer.uint32(72).int64(message.accountCreatedAt.toString());
+    }
+    if (message.accountAgeDays !== 0) {
+      writer.uint32(80).uint32(message.accountAgeDays);
+    }
+    if (message.isVerified !== false) {
+      writer.uint32(88).bool(message.isVerified);
+    }
+    if (message.friendCountRange !== "") {
+      writer.uint32(98).string(message.friendCountRange);
+    }
+    if (message.status !== "") {
+      writer.uint32(106).string(message.status);
+    }
+    if (!message.createdAt.equals(Long.ZERO)) {
+      writer.uint32(112).int64(message.createdAt.toString());
+    }
+    if (!message.updatedAt.equals(Long.ZERO)) {
+      writer.uint32(120).int64(message.updatedAt.toString());
+    }
+    if (message.encryptedPayload !== undefined) {
+      EncryptedPayloadEnvelope.encode(message.encryptedPayload, writer.uint32(130).fork()).join();
+    }
+    if (message.evidenceHash !== "") {
+      writer.uint32(138).string(message.evidenceHash);
+    }
+    if (message.evidenceStorageBackend !== "") {
+      writer.uint32(146).string(message.evidenceStorageBackend);
+    }
+    if (message.evidenceStorageRef !== "") {
+      writer.uint32(154).string(message.evidenceStorageRef);
+    }
+    Object.entries(message.evidenceMetadata).forEach(([key, value]) => {
+      SocialMediaScope_EvidenceMetadataEntry.encode({ key: key as any, value }, writer.uint32(162).fork()).join();
+    });
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): SocialMediaScope {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseSocialMediaScope();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 8) {
+            break;
+          }
+
+          message.version = reader.uint32();
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.scopeId = reader.string();
+          continue;
+        }
+        case 3: {
+          if (tag !== 26) {
+            break;
+          }
+
+          message.accountAddress = reader.string();
+          continue;
+        }
+        case 4: {
+          if (tag !== 32) {
+            break;
+          }
+
+          message.provider = reader.int32() as any;
+          continue;
+        }
+        case 5: {
+          if (tag !== 42) {
+            break;
+          }
+
+          message.profileNameHash = reader.string();
+          continue;
+        }
+        case 6: {
+          if (tag !== 50) {
+            break;
+          }
+
+          message.emailHash = reader.string();
+          continue;
+        }
+        case 7: {
+          if (tag !== 58) {
+            break;
+          }
+
+          message.usernameHash = reader.string();
+          continue;
+        }
+        case 8: {
+          if (tag !== 66) {
+            break;
+          }
+
+          message.orgHash = reader.string();
+          continue;
+        }
+        case 9: {
+          if (tag !== 72) {
+            break;
+          }
+
+          message.accountCreatedAt = Long.fromString(reader.int64().toString());
+          continue;
+        }
+        case 10: {
+          if (tag !== 80) {
+            break;
+          }
+
+          message.accountAgeDays = reader.uint32();
+          continue;
+        }
+        case 11: {
+          if (tag !== 88) {
+            break;
+          }
+
+          message.isVerified = reader.bool();
+          continue;
+        }
+        case 12: {
+          if (tag !== 98) {
+            break;
+          }
+
+          message.friendCountRange = reader.string();
+          continue;
+        }
+        case 13: {
+          if (tag !== 106) {
+            break;
+          }
+
+          message.status = reader.string();
+          continue;
+        }
+        case 14: {
+          if (tag !== 112) {
+            break;
+          }
+
+          message.createdAt = Long.fromString(reader.int64().toString());
+          continue;
+        }
+        case 15: {
+          if (tag !== 120) {
+            break;
+          }
+
+          message.updatedAt = Long.fromString(reader.int64().toString());
+          continue;
+        }
+        case 16: {
+          if (tag !== 130) {
+            break;
+          }
+
+          message.encryptedPayload = EncryptedPayloadEnvelope.decode(reader, reader.uint32());
+          continue;
+        }
+        case 17: {
+          if (tag !== 138) {
+            break;
+          }
+
+          message.evidenceHash = reader.string();
+          continue;
+        }
+        case 18: {
+          if (tag !== 146) {
+            break;
+          }
+
+          message.evidenceStorageBackend = reader.string();
+          continue;
+        }
+        case 19: {
+          if (tag !== 154) {
+            break;
+          }
+
+          message.evidenceStorageRef = reader.string();
+          continue;
+        }
+        case 20: {
+          if (tag !== 162) {
+            break;
+          }
+
+          const entry20 = SocialMediaScope_EvidenceMetadataEntry.decode(reader, reader.uint32());
+          if (entry20.value !== undefined) {
+            message.evidenceMetadata[entry20.key] = entry20.value;
+          }
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): SocialMediaScope {
+    return {
+      version: isSet(object.version) ? globalThis.Number(object.version) : 0,
+      scopeId: isSet(object.scope_id) ? globalThis.String(object.scope_id) : "",
+      accountAddress: isSet(object.account_address) ? globalThis.String(object.account_address) : "",
+      provider: isSet(object.provider) ? socialMediaProviderFromJSON(object.provider) : 0,
+      profileNameHash: isSet(object.profile_name_hash) ? globalThis.String(object.profile_name_hash) : "",
+      emailHash: isSet(object.email_hash) ? globalThis.String(object.email_hash) : "",
+      usernameHash: isSet(object.username_hash) ? globalThis.String(object.username_hash) : "",
+      orgHash: isSet(object.org_hash) ? globalThis.String(object.org_hash) : "",
+      accountCreatedAt: isSet(object.account_created_at) ? Long.fromValue(object.account_created_at) : Long.ZERO,
+      accountAgeDays: isSet(object.account_age_days) ? globalThis.Number(object.account_age_days) : 0,
+      isVerified: isSet(object.is_verified) ? globalThis.Boolean(object.is_verified) : false,
+      friendCountRange: isSet(object.friend_count_range) ? globalThis.String(object.friend_count_range) : "",
+      status: isSet(object.status) ? globalThis.String(object.status) : "",
+      createdAt: isSet(object.created_at) ? Long.fromValue(object.created_at) : Long.ZERO,
+      updatedAt: isSet(object.updated_at) ? Long.fromValue(object.updated_at) : Long.ZERO,
+      encryptedPayload: isSet(object.encrypted_payload)
+        ? EncryptedPayloadEnvelope.fromJSON(object.encrypted_payload)
+        : undefined,
+      evidenceHash: isSet(object.evidence_hash) ? globalThis.String(object.evidence_hash) : "",
+      evidenceStorageBackend: isSet(object.evidence_storage_backend)
+        ? globalThis.String(object.evidence_storage_backend)
+        : "",
+      evidenceStorageRef: isSet(object.evidence_storage_ref) ? globalThis.String(object.evidence_storage_ref) : "",
+      evidenceMetadata: isObject(object.evidence_metadata)
+        ? Object.entries(object.evidence_metadata).reduce<{ [key: string]: string }>((acc, [key, value]) => {
+          acc[key] = String(value);
+          return acc;
+        }, {})
+        : {},
+    };
+  },
+
+  toJSON(message: SocialMediaScope): unknown {
+    const obj: any = {};
+    if (message.version !== 0) {
+      obj.version = Math.round(message.version);
+    }
+    if (message.scopeId !== "") {
+      obj.scope_id = message.scopeId;
+    }
+    if (message.accountAddress !== "") {
+      obj.account_address = message.accountAddress;
+    }
+    if (message.provider !== 0) {
+      obj.provider = socialMediaProviderToJSON(message.provider);
+    }
+    if (message.profileNameHash !== "") {
+      obj.profile_name_hash = message.profileNameHash;
+    }
+    if (message.emailHash !== "") {
+      obj.email_hash = message.emailHash;
+    }
+    if (message.usernameHash !== "") {
+      obj.username_hash = message.usernameHash;
+    }
+    if (message.orgHash !== "") {
+      obj.org_hash = message.orgHash;
+    }
+    if (!message.accountCreatedAt.equals(Long.ZERO)) {
+      obj.account_created_at = (message.accountCreatedAt || Long.ZERO).toString();
+    }
+    if (message.accountAgeDays !== 0) {
+      obj.account_age_days = Math.round(message.accountAgeDays);
+    }
+    if (message.isVerified !== false) {
+      obj.is_verified = message.isVerified;
+    }
+    if (message.friendCountRange !== "") {
+      obj.friend_count_range = message.friendCountRange;
+    }
+    if (message.status !== "") {
+      obj.status = message.status;
+    }
+    if (!message.createdAt.equals(Long.ZERO)) {
+      obj.created_at = (message.createdAt || Long.ZERO).toString();
+    }
+    if (!message.updatedAt.equals(Long.ZERO)) {
+      obj.updated_at = (message.updatedAt || Long.ZERO).toString();
+    }
+    if (message.encryptedPayload !== undefined) {
+      obj.encrypted_payload = EncryptedPayloadEnvelope.toJSON(message.encryptedPayload);
+    }
+    if (message.evidenceHash !== "") {
+      obj.evidence_hash = message.evidenceHash;
+    }
+    if (message.evidenceStorageBackend !== "") {
+      obj.evidence_storage_backend = message.evidenceStorageBackend;
+    }
+    if (message.evidenceStorageRef !== "") {
+      obj.evidence_storage_ref = message.evidenceStorageRef;
+    }
+    if (message.evidenceMetadata) {
+      const entries = Object.entries(message.evidenceMetadata);
+      if (entries.length > 0) {
+        obj.evidence_metadata = {};
+        entries.forEach(([k, v]) => {
+          obj.evidence_metadata[k] = v;
+        });
+      }
+    }
+    return obj;
+  },
+  fromPartial(object: DeepPartial<SocialMediaScope>): SocialMediaScope {
+    const message = createBaseSocialMediaScope();
+    message.version = object.version ?? 0;
+    message.scopeId = object.scopeId ?? "";
+    message.accountAddress = object.accountAddress ?? "";
+    message.provider = object.provider ?? 0;
+    message.profileNameHash = object.profileNameHash ?? "";
+    message.emailHash = object.emailHash ?? "";
+    message.usernameHash = object.usernameHash ?? "";
+    message.orgHash = object.orgHash ?? "";
+    message.accountCreatedAt = (object.accountCreatedAt !== undefined && object.accountCreatedAt !== null)
+      ? Long.fromValue(object.accountCreatedAt)
+      : Long.ZERO;
+    message.accountAgeDays = object.accountAgeDays ?? 0;
+    message.isVerified = object.isVerified ?? false;
+    message.friendCountRange = object.friendCountRange ?? "";
+    message.status = object.status ?? "";
+    message.createdAt = (object.createdAt !== undefined && object.createdAt !== null)
+      ? Long.fromValue(object.createdAt)
+      : Long.ZERO;
+    message.updatedAt = (object.updatedAt !== undefined && object.updatedAt !== null)
+      ? Long.fromValue(object.updatedAt)
+      : Long.ZERO;
+    message.encryptedPayload = (object.encryptedPayload !== undefined && object.encryptedPayload !== null)
+      ? EncryptedPayloadEnvelope.fromPartial(object.encryptedPayload)
+      : undefined;
+    message.evidenceHash = object.evidenceHash ?? "";
+    message.evidenceStorageBackend = object.evidenceStorageBackend ?? "";
+    message.evidenceStorageRef = object.evidenceStorageRef ?? "";
+    message.evidenceMetadata = Object.entries(object.evidenceMetadata ?? {}).reduce<{ [key: string]: string }>(
+      (acc, [key, value]) => {
+        if (value !== undefined) {
+          acc[key] = globalThis.String(value);
+        }
+        return acc;
+      },
+      {},
+    );
+    return message;
+  },
+};
+
+function createBaseSocialMediaScope_EvidenceMetadataEntry(): SocialMediaScope_EvidenceMetadataEntry {
+  return { key: "", value: "" };
+}
+
+export const SocialMediaScope_EvidenceMetadataEntry: MessageFns<
+  SocialMediaScope_EvidenceMetadataEntry,
+  "virtengine.veid.v1.SocialMediaScope.EvidenceMetadataEntry"
+> = {
+  $type: "virtengine.veid.v1.SocialMediaScope.EvidenceMetadataEntry" as const,
+
+  encode(message: SocialMediaScope_EvidenceMetadataEntry, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.key !== "") {
+      writer.uint32(10).string(message.key);
+    }
+    if (message.value !== "") {
+      writer.uint32(18).string(message.value);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): SocialMediaScope_EvidenceMetadataEntry {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseSocialMediaScope_EvidenceMetadataEntry();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.key = reader.string();
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.value = reader.string();
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): SocialMediaScope_EvidenceMetadataEntry {
+    return {
+      key: isSet(object.key) ? globalThis.String(object.key) : "",
+      value: isSet(object.value) ? globalThis.String(object.value) : "",
+    };
+  },
+
+  toJSON(message: SocialMediaScope_EvidenceMetadataEntry): unknown {
+    const obj: any = {};
+    if (message.key !== "") {
+      obj.key = message.key;
+    }
+    if (message.value !== "") {
+      obj.value = message.value;
+    }
+    return obj;
+  },
+  fromPartial(object: DeepPartial<SocialMediaScope_EvidenceMetadataEntry>): SocialMediaScope_EvidenceMetadataEntry {
+    const message = createBaseSocialMediaScope_EvidenceMetadataEntry();
     message.key = object.key ?? "";
     message.value = object.value ?? "";
     return message;

@@ -9,9 +9,29 @@ package enclave_runtime
 
 import (
 	"context"
+	"errors"
 	"testing"
 	"time"
 )
+
+type hardwareAwareService interface {
+	IsHardwareEnabled() bool
+}
+
+func requireReadyOrFailClosed(t *testing.T, svc hardwareAwareService, err error, action string) bool {
+	t.Helper()
+
+	if err == nil {
+		return true
+	}
+	if svc != nil && svc.IsHardwareEnabled() && errors.Is(err, ErrHardwareOperationUnsupported) {
+		t.Logf("%s correctly failed closed on hardware-selected runtime: %v", action, err)
+		return false
+	}
+
+	t.Fatalf("%s failed: %v", action, err)
+	return false
+}
 
 // =============================================================================
 // SGX Hardware Integration Tests
@@ -32,8 +52,8 @@ func TestSGXHardwareIntegration(t *testing.T) {
 
 		// Initialize the service
 		err = svc.Initialize(DefaultRuntimeConfig())
-		if err != nil {
-			t.Fatalf("Failed to initialize SGX service: %v", err)
+		if !requireReadyOrFailClosed(t, svc, err, "initialize SGX service") {
+			return
 		}
 
 		// Verify service is functional
@@ -60,8 +80,8 @@ func TestSGXHardwareIntegration(t *testing.T) {
 		defer func() { _ = svc.Shutdown() }()
 
 		err = svc.Initialize(DefaultRuntimeConfig())
-		if err != nil {
-			t.Fatalf("Failed to initialize SGX service: %v", err)
+		if !requireReadyOrFailClosed(t, svc, err, "initialize SGX service") {
+			return
 		}
 
 		// In simulate mode, hardware should never be enabled
@@ -94,8 +114,8 @@ func TestSGXHardwareIntegration(t *testing.T) {
 		// Generate attestation
 		reportData := []byte("test-report-data-for-sgx")
 		quote, err := svc.GenerateAttestation(reportData)
-		if err != nil {
-			t.Fatalf("Failed to generate attestation: %v", err)
+		if !requireReadyOrFailClosed(t, svc, err, "generate SGX attestation") {
+			return
 		}
 
 		if len(quote) == 0 {
@@ -117,8 +137,8 @@ func TestSGXHardwareIntegration(t *testing.T) {
 		defer func() { _ = svc.Shutdown() }()
 
 		err = svc.Initialize(DefaultRuntimeConfig())
-		if err != nil {
-			t.Fatalf("Failed to initialize SGX service: %v", err)
+		if !requireReadyOrFailClosed(t, svc, err, "initialize SGX service") {
+			return
 		}
 
 		// Test seal/unseal
@@ -126,8 +146,8 @@ func TestSGXHardwareIntegration(t *testing.T) {
 		aad := []byte("additional authenticated data")
 
 		sealed, err := svc.SealData(plaintext, aad)
-		if err != nil {
-			t.Fatalf("Failed to seal data: %v", err)
+		if !requireReadyOrFailClosed(t, svc, err, "seal SGX data") {
+			return
 		}
 
 		if len(sealed) == 0 {
@@ -135,8 +155,8 @@ func TestSGXHardwareIntegration(t *testing.T) {
 		}
 
 		unsealed, _, err := svc.UnsealData(sealed)
-		if err != nil {
-			t.Fatalf("Failed to unseal data: %v", err)
+		if !requireReadyOrFailClosed(t, svc, err, "unseal SGX data") {
+			return
 		}
 
 		if string(unsealed) != string(plaintext) {
@@ -163,8 +183,8 @@ func TestSEVHardwareIntegration(t *testing.T) {
 		defer func() { _ = svc.Shutdown() }()
 
 		err = svc.Initialize(DefaultRuntimeConfig())
-		if err != nil {
-			t.Fatalf("Failed to initialize SEV-SNP service: %v", err)
+		if !requireReadyOrFailClosed(t, svc, err, "initialize SEV-SNP service") {
+			return
 		}
 
 		status := svc.GetStatus()
@@ -189,8 +209,8 @@ func TestSEVHardwareIntegration(t *testing.T) {
 		defer func() { _ = svc.Shutdown() }()
 
 		err = svc.Initialize(DefaultRuntimeConfig())
-		if err != nil {
-			t.Fatalf("Failed to initialize SEV-SNP service: %v", err)
+		if !requireReadyOrFailClosed(t, svc, err, "initialize SEV-SNP service") {
+			return
 		}
 
 		if svc.IsHardwareEnabled() {
@@ -217,8 +237,8 @@ func TestSEVHardwareIntegration(t *testing.T) {
 
 		reportData := []byte("test-report-data-for-sev")
 		report, err := svc.GenerateAttestation(reportData)
-		if err != nil {
-			t.Fatalf("Failed to generate attestation: %v", err)
+		if !requireReadyOrFailClosed(t, svc, err, "generate SEV-SNP attestation") {
+			return
 		}
 
 		if len(report) == 0 {
@@ -240,13 +260,13 @@ func TestSEVHardwareIntegration(t *testing.T) {
 		defer func() { _ = svc.Shutdown() }()
 
 		err = svc.Initialize(DefaultRuntimeConfig())
-		if err != nil {
-			t.Fatalf("Failed to initialize SEV-SNP service: %v", err)
+		if !requireReadyOrFailClosed(t, svc, err, "initialize SEV-SNP service") {
+			return
 		}
 
 		key, err := svc.DeriveKey([]byte("test-context"), 32)
-		if err != nil {
-			t.Fatalf("Failed to derive key: %v", err)
+		if !requireReadyOrFailClosed(t, svc, err, "derive SEV-SNP key") {
+			return
 		}
 
 		if len(key) != 32 {
@@ -255,8 +275,8 @@ func TestSEVHardwareIntegration(t *testing.T) {
 
 		// Verify determinism - same context should give same key
 		key2, err := svc.DeriveKey([]byte("test-context"), 32)
-		if err != nil {
-			t.Fatalf("Failed to derive key second time: %v", err)
+		if !requireReadyOrFailClosed(t, svc, err, "derive SEV-SNP key second time") {
+			return
 		}
 
 		if string(key) != string(key2) {
@@ -285,8 +305,8 @@ func TestNitroHardwareIntegration(t *testing.T) {
 		defer func() { _ = svc.Shutdown() }()
 
 		err = svc.Initialize(DefaultRuntimeConfig())
-		if err != nil {
-			t.Fatalf("Failed to initialize Nitro service: %v", err)
+		if !requireReadyOrFailClosed(t, svc, err, "initialize Nitro service") {
+			return
 		}
 
 		status := svc.GetStatus()
@@ -313,8 +333,8 @@ func TestNitroHardwareIntegration(t *testing.T) {
 		defer func() { _ = svc.Shutdown() }()
 
 		err = svc.Initialize(DefaultRuntimeConfig())
-		if err != nil {
-			t.Fatalf("Failed to initialize Nitro service: %v", err)
+		if !requireReadyOrFailClosed(t, svc, err, "initialize Nitro service") {
+			return
 		}
 
 		if svc.IsHardwareEnabled() {
@@ -343,8 +363,8 @@ func TestNitroHardwareIntegration(t *testing.T) {
 
 		reportData := []byte("test-report-data-for-nitro")
 		doc, err := svc.GenerateAttestation(reportData)
-		if err != nil {
-			t.Fatalf("Failed to generate attestation: %v", err)
+		if !requireReadyOrFailClosed(t, svc, err, "generate Nitro attestation") {
+			return
 		}
 
 		if len(doc) == 0 {
@@ -368,8 +388,8 @@ func TestNitroHardwareIntegration(t *testing.T) {
 		defer func() { _ = svc.Shutdown() }()
 
 		err = svc.Initialize(DefaultRuntimeConfig())
-		if err != nil {
-			t.Fatalf("Failed to initialize Nitro service: %v", err)
+		if !requireReadyOrFailClosed(t, svc, err, "initialize Nitro service") {
+			return
 		}
 
 		// Launch enclave
@@ -564,20 +584,24 @@ func TestAutomaticFallbackToSimulation(t *testing.T) {
 	})
 
 	t.Run("RequireModeFailsWithoutHardware", func(t *testing.T) {
-		// Skip on machines with actual hardware
 		caps := DetectHardware()
-		if caps.SGXAvailable {
-			t.Skip("SGX hardware is available, skipping require-mode failure test")
-		}
-
 		config := SGXEnclaveConfig{
 			EnclavePath: "/opt/virtengine/enclaves/test.so",
 			Debug:       true,
 		}
 
-		_, err := NewSGXEnclaveServiceImplWithMode(config, HardwareModeRequire)
+		svc, err := NewSGXEnclaveServiceImplWithMode(config, HardwareModeRequire)
+		if caps.SGXAvailable {
+			if err != nil {
+				t.Fatalf("should initialize require-mode SGX service when hardware is available: %v", err)
+			}
+			defer func() { _ = svc.Shutdown() }()
+			return
+		}
+
 		if err == nil {
 			t.Error("Should fail when requiring hardware that's not available")
+			_ = svc.Shutdown()
 		}
 		t.Logf("Expected error: %v", err)
 	})

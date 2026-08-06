@@ -113,12 +113,12 @@ func (k Keeper) calculateBillingFromJobTiming(ctx sdk.Context, job *types.HPCJob
 	// Calculate metrics from job timing
 	var wallClock int64
 	if job.StartedAt != nil && job.CompletedAt != nil {
-		wallClock = int64(job.CompletedAt.Sub(*job.StartedAt).Seconds())
+		wallClock = int64(job.CompletedAt.Sub(*job.StartedAt) / time.Second)
 	}
 
 	var queueTime int64
 	if job.QueuedAt != nil && job.StartedAt != nil {
-		queueTime = int64(job.StartedAt.Sub(*job.QueuedAt).Seconds())
+		queueTime = int64(job.StartedAt.Sub(*job.QueuedAt) / time.Second)
 	}
 
 	// Estimate metrics from resource request
@@ -303,7 +303,7 @@ func (k Keeper) generateEscrowInvoiceForJob(ctx sdk.Context, job *types.HPCJob, 
 		BillingPeriod: billing.BillingPeriod{
 			StartTime:       record.PeriodStart,
 			EndTime:         record.PeriodEnd,
-			DurationSeconds: int64(record.PeriodEnd.Sub(record.PeriodStart).Seconds()),
+			DurationSeconds: int64(record.PeriodEnd.Sub(record.PeriodStart) / time.Second),
 			PeriodType:      billing.BillingPeriodTypeUsageBased,
 		},
 		Currency: config.DefaultCurrency,
@@ -323,9 +323,9 @@ func (k Keeper) generateEscrowInvoiceForJob(ctx sdk.Context, job *types.HPCJob, 
 		return "", err
 	}
 
-	applyHPCDiscounts(invoice, record.AppliedDiscounts, record.AppliedCaps)
+	applyHPCDiscounts(invoice, record.AppliedDiscounts, record.AppliedCaps, ctx.BlockTime())
 	recalculateInvoiceTotalsForBilling(invoice)
-	reconcileInvoiceTotalsForAmount(invoice, record.BillableAmount, "hpc billing adjustment")
+	reconcileInvoiceTotalsForAmount(invoice, record.BillableAmount, "hpc billing adjustment", ctx.BlockTime())
 	recalculateInvoiceTotalsForBilling(invoice)
 
 	invoice.InvoiceNumber = invoiceNumber
@@ -493,8 +493,8 @@ func (k Keeper) persistHPCUsageRecords(
 	return nil
 }
 
-func applyHPCDiscounts(inv *billing.Invoice, discounts []types.AppliedDiscount, caps []types.AppliedCap) {
-	now := time.Now().UTC()
+func applyHPCDiscounts(inv *billing.Invoice, discounts []types.AppliedDiscount, caps []types.AppliedCap, now time.Time) {
+	now = now.UTC()
 	for _, discount := range discounts {
 		applied := billing.AppliedDiscount{
 			DiscountID:  discount.DiscountID,
@@ -542,7 +542,8 @@ func mapHPCDiscountType(value string) billing.DiscountType {
 	}
 }
 
-func reconcileInvoiceTotalsForAmount(inv *billing.Invoice, target sdk.Coins, reason string) {
+func reconcileInvoiceTotalsForAmount(inv *billing.Invoice, target sdk.Coins, reason string, now time.Time) {
+	now = now.UTC()
 	targetDenoms := make(map[string]struct{}, len(target))
 	for _, coin := range target {
 		targetDenoms[coin.Denom] = struct{}{}
@@ -571,7 +572,7 @@ func reconcileInvoiceTotalsForAmount(inv *billing.Invoice, target sdk.Coins, rea
 			Type:        billing.DiscountTypeFixed,
 			Description: reason,
 			Amount:      sdk.NewCoins(sdk.NewCoin(coin.Denom, diff.Neg())),
-			AppliedAt:   time.Now().UTC(),
+			AppliedAt:   now,
 			AppliedBy:   "hpc",
 		})
 	}
@@ -591,7 +592,7 @@ func reconcileInvoiceTotalsForAmount(inv *billing.Invoice, target sdk.Coins, rea
 			Type:        billing.DiscountTypeFixed,
 			Description: reason,
 			Amount:      sdk.NewCoins(coin),
-			AppliedAt:   time.Now().UTC(),
+			AppliedAt:   now,
 			AppliedBy:   "hpc",
 		})
 	}

@@ -20,6 +20,14 @@ service Query {
   rpc Provider(QueryProviderRequest) returns (QueryProviderResponse) {
     option (google.api.http).get = "/virtengine/provider/v1beta4/providers/{owner}";
   }
+
+  rpc ProviderSigningKey(QueryProviderSigningKeyRequest) returns (QueryProviderSigningKeyResponse) {
+    option (google.api.http).get = "/virtengine/provider/v1beta4/providers/{owner}/signing-keys/{epoch}";
+  }
+
+  rpc ProviderSigningKeyEpochs(QueryProviderSigningKeyEpochsRequest) returns (QueryProviderSigningKeyEpochsResponse) {
+    option (google.api.http).get = "/virtengine/provider/v1beta4/providers/{owner}/signing-keys";
+  }
 }
 
 // QueryProvidersRequest is request type for the Query/Providers RPC method
@@ -56,4 +64,39 @@ message QueryProviderResponse {
   Provider provider = 1 [
     (gogoproto.nullable) = false
   ];
+}
+
+message ProviderSigningKeyRecord {
+  bytes public_key = 1;
+  string key_type = 2;
+  string key_id = 3;
+  uint64 epoch = 4;
+  int64 activated_at_height = 5;
+  int64 activated_at_unix = 6;
+  int64 expires_at_height = 7;
+  int64 expires_at_unix = 8;
+  int64 retired_at_height = 9;
+  int64 retired_at_unix = 10;
+  int64 revoked_at_height = 11;
+  int64 revoked_at_unix = 12;
+  string previous_key_id = 13;
+  uint32 rotation_count = 14;
+}
+
+message QueryProviderSigningKeyRequest {
+  string owner = 1;
+  string key_id = 2;
+  uint64 epoch = 3;
+}
+
+message QueryProviderSigningKeyResponse {
+  ProviderSigningKeyRecord key = 1 [(gogoproto.nullable) = false];
+}
+
+message QueryProviderSigningKeyEpochsRequest {
+  string owner = 1;
+}
+
+message QueryProviderSigningKeyEpochsResponse {
+  repeated ProviderSigningKeyRecord keys = 1 [(gogoproto.nullable) = false];
 }

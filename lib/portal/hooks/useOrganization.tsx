@@ -15,6 +15,7 @@ import {
   useEffect,
   useContext,
   useMemo,
+  useRef,
   createContext,
   createElement,
 } from "react";
@@ -28,6 +29,16 @@ import type {
   CreateOrganizationRequest,
   InviteMemberRequest,
 } from "../types/organization";
+import {
+  OrganizationMutationError,
+  buildOrganizationMutationRequest,
+  digestOrganizationMutationRequest,
+  requireOrganizationMutationAdapter,
+  validateCommittedOrganizationMutation,
+  type CommittedOrganizationMutation,
+  type OrganizationMutationAction,
+  type OrganizationMutationAdapter,
+} from "../components/organization/organization-mutation";
 
 // =============================================================================
 // State Types
@@ -141,13 +152,17 @@ function parseMember(raw: Record<string, unknown>): OrganizationMember {
 export interface OrganizationProviderProps {
   children: ReactNode;
   queryClient?: QueryClient;
+  chainId: string;
   accountAddress?: string | null;
+  mutationAdapter?: OrganizationMutationAdapter;
 }
 
 export function OrganizationProvider({
   children,
   queryClient,
+  chainId,
   accountAddress,
+  mutationAdapter,
 }: OrganizationProviderProps): JSX.Element {
   const [state, setState] = useState<OrganizationState>({
     isLoading: false,
@@ -164,11 +179,110 @@ export function OrganizationProvider({
     error: null,
   });
 
+  const queryGeneration = useRef(0);
+  const stateQueryGeneration = useRef(0);
+  const queryAuthority = useRef({ queryClient, chainId, accountAddress });
+  const organizationsRequest = useRef(0);
+  const detailRequest = useRef(0);
+  const billingRequest = useRef(0);
+  const detailOrganizationId = useRef<string | null>(null);
+  const queryResetPending = useRef(false);
+  if (
+    queryAuthority.current.queryClient !== queryClient ||
+    queryAuthority.current.chainId !== chainId ||
+    queryAuthority.current.accountAddress !== accountAddress
+  ) {
+    queryAuthority.current = { queryClient, chainId, accountAddress };
+    queryGeneration.current += 1;
+    organizationsRequest.current += 1;
+    detailRequest.current += 1;
+    billingRequest.current += 1;
+    detailOrganizationId.current = null;
+    queryResetPending.current = true;
+  }
+  const renderQueryGeneration = queryGeneration.current;
+  const effectiveState: OrganizationState =
+    stateQueryGeneration.current === renderQueryGeneration
+      ? state
+      : {
+          isLoading: false,
+          organizations: [],
+          selectedOrgId: null,
+          error: null,
+        };
+  const effectiveDetail: OrganizationDetailState =
+    stateQueryGeneration.current === renderQueryGeneration
+      ? detail
+      : {
+          isLoading: false,
+          organization: null,
+          members: [],
+          billing: null,
+          error: null,
+        };
+
+  useEffect(() => {
+    if (!queryResetPending.current) return;
+    queryResetPending.current = false;
+    stateQueryGeneration.current = renderQueryGeneration;
+    setState({
+      isLoading: false,
+      organizations: [],
+      selectedOrgId: null,
+      error: null,
+    });
+    setDetail({
+      isLoading: false,
+      organization: null,
+      members: [],
+      billing: null,
+      error: null,
+    });
+  }, [renderQueryGeneration]);
+
+  const mutationGeneration = useRef(0);
+  const mutationAuthority = useRef({
+    mutationAdapter,
+    chainId,
+    accountAddress,
+  });
+  const mutationsInFlight = useRef(new Set<string>());
+  const activeMutationControllers = useRef(new Map<string, AbortController>());
+  if (
+    mutationAuthority.current.mutationAdapter !== mutationAdapter ||
+    mutationAuthority.current.chainId !== chainId ||
+    mutationAuthority.current.accountAddress !== accountAddress
+  ) {
+    for (const controller of activeMutationControllers.current.values()) {
+      controller.abort();
+    }
+    activeMutationControllers.current.clear();
+    mutationsInFlight.current.clear();
+    mutationAuthority.current = { mutationAdapter, chainId, accountAddress };
+    mutationGeneration.current += 1;
+  }
+  const renderMutationGeneration = mutationGeneration.current;
+
+  useEffect(
+    () => () => {
+      mutationGeneration.current += 1;
+      for (const controller of activeMutationControllers.current.values()) {
+        controller.abort();
+      }
+      activeMutationControllers.current.clear();
+      mutationsInFlight.current.clear();
+    },
+    [],
+  );
+
   const fetchOrganizations = useCallback(async () => {
     if (!queryClient || !accountAddress) {
       setState((prev) => ({ ...prev, isLoading: false }));
       return;
     }
+
+    const generation = renderQueryGeneration;
+    const requestId = ++organizationsRequest.current;
 
     setState((prev) => ({ ...prev, isLoading: true, error: null }));
     try {
@@ -176,6 +290,12 @@ export function OrganizationProvider({
         groups: Record<string, unknown>[];
       }>("/cosmos/group/v1/groups_by_member", { address: accountAddress });
       const organizations = (result.groups ?? []).map(parseOrganization);
+      if (
+        generation !== queryGeneration.current ||
+        requestId !== organizationsRequest.current
+      ) {
+        return;
+      }
       setState((prev) => ({
         ...prev,
         isLoading: false,
@@ -183,6 +303,12 @@ export function OrganizationProvider({
         error: null,
       }));
     } catch (error) {
+      if (
+        generation !== queryGeneration.current ||
+        requestId !== organizationsRequest.current
+      ) {
+        return;
+      }
       setState((prev) => ({
         ...prev,
         isLoading: false,
@@ -192,64 +318,117 @@ export function OrganizationProvider({
             : "Failed to load organizations",
       }));
     }
-  }, [queryClient, accountAddress]);
+  }, [queryClient, accountAddress, renderQueryGeneration]);
 
   const selectOrganization = useCallback((orgId: string | null) => {
-    setState((prev) => ({ ...prev, selectedOrgId: orgId }));
+    const normalized = orgId?.trim() || null;
+    detailRequest.current += 1;
+    billingRequest.current += 1;
+    detailOrganizationId.current = normalized;
+    setState((prev) => ({ ...prev, selectedOrgId: normalized }));
+    setDetail({
+      isLoading: false,
+      organization: null,
+      members: [],
+      billing: null,
+      error: null,
+    });
   }, []);
+
+  const mutateOrganization = useCallback(
+    async (
+      action: OrganizationMutationAction,
+      input:
+        | CreateOrganizationRequest
+        | { organizationId: string; invitation: InviteMemberRequest }
+        | { organizationId: string; memberAddress: string }
+        | {
+            organizationId: string;
+            memberAddress: string;
+            role: OrganizationRole;
+          }
+        | { organizationId: string },
+      lockKey: string,
+    ): Promise<CommittedOrganizationMutation> => {
+      if (
+        !accountAddress ||
+        renderMutationGeneration !== mutationGeneration.current
+      ) {
+        throw new OrganizationMutationError("feature_unavailable");
+      }
+      const binding = { chainId, accountAddress };
+      const adapter = requireOrganizationMutationAdapter(
+        mutationAdapter,
+        binding,
+      );
+      const normalizedLockKey = lockKey === "create" ? lockKey : lockKey.trim();
+      if (mutationsInFlight.current.has(normalizedLockKey)) {
+        throw new OrganizationMutationError("submission_in_progress");
+      }
+      mutationsInFlight.current.add(normalizedLockKey);
+      try {
+        const request = buildOrganizationMutationRequest(
+          action,
+          binding,
+          input,
+        );
+        const requestDigest = await digestOrganizationMutationRequest(request);
+        if (
+          renderMutationGeneration !== mutationGeneration.current ||
+          mutationAuthority.current.mutationAdapter !== adapter
+        ) {
+          throw new OrganizationMutationError("request_changed");
+        }
+        const controller = new AbortController();
+        activeMutationControllers.current.set(normalizedLockKey, controller);
+        const rawResult = await adapter.mutateOrganization(request, {
+          requestDigest,
+          idempotencyKey: requestDigest,
+          signal: controller.signal,
+        });
+        if (
+          renderMutationGeneration !== mutationGeneration.current ||
+          mutationAuthority.current.mutationAdapter !== adapter
+        ) {
+          controller.abort();
+          throw new OrganizationMutationError("submission_cancelled");
+        }
+        return validateCommittedOrganizationMutation(
+          rawResult,
+          request,
+          requestDigest,
+        );
+      } finally {
+        if (renderMutationGeneration === mutationGeneration.current) {
+          mutationsInFlight.current.delete(normalizedLockKey);
+          activeMutationControllers.current.delete(normalizedLockKey);
+        }
+      }
+    },
+    [accountAddress, chainId, mutationAdapter, renderMutationGeneration],
+  );
 
   const createOrganization = useCallback(
     async (request: CreateOrganizationRequest): Promise<Organization> => {
-      if (!queryClient || !accountAddress) {
-        throw new Error("Wallet not connected");
+      const result = await mutateOrganization("create", request, "create");
+      if (result.action !== "create") {
+        throw new OrganizationMutationError("invalid_committed_result");
       }
-
-      const metadata = JSON.stringify({
-        name: request.name,
-        description: request.description,
-      });
-
-      const members = [
-        {
-          address: accountAddress,
-          weight: "1",
-          metadata: JSON.stringify({ role: "admin" }),
-        },
-        ...(request.initialMembers || []).map((m) => ({
-          address: m.address,
-          weight: m.role === "viewer" ? "0" : "1",
-          metadata: JSON.stringify({ role: m.role }),
-        })),
-      ];
-
-      const msg = {
-        typeUrl: "/cosmos.group.v1.MsgCreateGroup",
-        value: { admin: accountAddress, members, metadata },
-      };
-
-      // Placeholder: in production, this would sign and broadcast the tx
-      await queryClient.query("/cosmos/tx/v1beta1/simulate", {
-        tx_bytes: JSON.stringify(msg),
-      });
-
-      const org: Organization = {
-        id: `pending-${Date.now()}`,
-        name: request.name,
-        description: request.description,
-        admin: accountAddress,
-        totalWeight: String(members.length),
-        createdAt: new Date(),
-        metadata: { name: request.name, description: request.description },
-      };
-
       setState((prev) => ({
         ...prev,
-        organizations: [...prev.organizations, org],
+        organizations: prev.organizations.some(
+          (organization) => organization.id === result.organization.id,
+        )
+          ? prev.organizations.map((organization) =>
+              organization.id === result.organization.id
+                ? result.organization
+                : organization,
+            )
+          : [...prev.organizations, result.organization],
       }));
-
-      return org;
+      return result.organization;
     },
-    [queryClient, accountAddress],
+    [mutateOrganization],
   );
 
   const fetchOrganizationDetail = useCallback(
@@ -258,25 +437,46 @@ export function OrganizationProvider({
         return;
       }
 
+      const normalizedOrgId = orgId.trim();
+      const generation = renderQueryGeneration;
+      const requestId = ++detailRequest.current;
+      detailOrganizationId.current = normalizedOrgId;
+
       setDetail((prev) => ({ ...prev, isLoading: true, error: null }));
       try {
         const [infoResult, membersResult] = await Promise.all([
           queryClient.query<{ info: Record<string, unknown> }>(
-            `/cosmos/group/v1/group_info/${orgId}`,
+            `/cosmos/group/v1/group_info/${normalizedOrgId}`,
           ),
           queryClient.query<{ members: Record<string, unknown>[] }>(
-            `/cosmos/group/v1/group_members/${orgId}`,
+            `/cosmos/group/v1/group_members/${normalizedOrgId}`,
           ),
         ]);
 
+        if (
+          generation !== queryGeneration.current ||
+          requestId !== detailRequest.current ||
+          detailOrganizationId.current !== normalizedOrgId
+        ) {
+          return;
+        }
+        const organization = parseOrganization(infoResult.info);
+        if (organization.id !== normalizedOrgId) return;
         setDetail({
           isLoading: false,
-          organization: parseOrganization(infoResult.info),
+          organization,
           members: (membersResult.members ?? []).map(parseMember),
           billing: null,
           error: null,
         });
       } catch (error) {
+        if (
+          generation !== queryGeneration.current ||
+          requestId !== detailRequest.current ||
+          detailOrganizationId.current !== normalizedOrgId
+        ) {
+          return;
+        }
         setDetail((prev) => ({
           ...prev,
           isLoading: false,
@@ -287,142 +487,103 @@ export function OrganizationProvider({
         }));
       }
     },
-    [queryClient],
+    [queryClient, renderQueryGeneration],
   );
 
   const inviteMember = useCallback(
     async (orgId: string, request: InviteMemberRequest) => {
-      if (!queryClient || !accountAddress) {
-        throw new Error("Wallet not connected");
+      const result = await mutateOrganization(
+        "invite",
+        { organizationId: orgId, invitation: request },
+        orgId,
+      );
+      if (result.action !== "invite") {
+        throw new OrganizationMutationError("invalid_committed_result");
       }
-
-      const msg = {
-        typeUrl: "/cosmos.group.v1.MsgUpdateGroupMembers",
-        value: {
-          admin: accountAddress,
-          groupId: orgId,
-          memberUpdates: [
-            {
-              address: request.address,
-              weight: request.role === "viewer" ? "0" : "1",
-              metadata: JSON.stringify({ role: request.role }),
-            },
-          ],
-        },
-      };
-
-      // Placeholder: in production, this would sign and broadcast the tx
-      await queryClient.query("/cosmos/tx/v1beta1/simulate", {
-        tx_bytes: JSON.stringify(msg),
-      });
-
-      setDetail((prev) => ({
-        ...prev,
-        members: [
-          ...prev.members,
-          {
-            address: request.address,
-            weight: request.role === "viewer" ? "0" : "1",
-            role: request.role,
-            addedAt: new Date(),
-            metadata: {},
-          },
-        ],
-      }));
+      const normalizedOrgId = orgId.trim();
+      if (detailOrganizationId.current === null)
+        detailOrganizationId.current = normalizedOrgId;
+      if (detailOrganizationId.current === normalizedOrgId) {
+        setDetail((prev) => ({ ...prev, members: [...result.members] }));
+      }
     },
-    [queryClient, accountAddress],
+    [mutateOrganization],
   );
 
   const removeMember = useCallback(
     async (orgId: string, memberAddress: string) => {
-      if (!queryClient || !accountAddress) {
-        throw new Error("Wallet not connected");
+      const result = await mutateOrganization(
+        "remove",
+        { organizationId: orgId, memberAddress },
+        orgId,
+      );
+      if (result.action !== "remove") {
+        throw new OrganizationMutationError("invalid_committed_result");
       }
-
-      const msg = {
-        typeUrl: "/cosmos.group.v1.MsgUpdateGroupMembers",
-        value: {
-          admin: accountAddress,
-          groupId: orgId,
-          memberUpdates: [
-            { address: memberAddress, weight: "0", metadata: "" },
-          ],
-        },
-      };
-
-      // Placeholder: in production, this would sign and broadcast the tx
-      await queryClient.query("/cosmos/tx/v1beta1/simulate", {
-        tx_bytes: JSON.stringify(msg),
-      });
-
-      setDetail((prev) => ({
-        ...prev,
-        members: prev.members.filter((m) => m.address !== memberAddress),
-      }));
+      const normalizedOrgId = orgId.trim();
+      if (detailOrganizationId.current === null)
+        detailOrganizationId.current = normalizedOrgId;
+      if (detailOrganizationId.current === normalizedOrgId) {
+        setDetail((prev) => ({ ...prev, members: [...result.members] }));
+      }
     },
-    [queryClient, accountAddress],
+    [mutateOrganization],
   );
 
   const updateMemberRole = useCallback(
     async (orgId: string, memberAddress: string, role: OrganizationRole) => {
-      if (!queryClient || !accountAddress) {
-        throw new Error("Wallet not connected");
+      const result = await mutateOrganization(
+        "update_role",
+        { organizationId: orgId, memberAddress, role },
+        orgId,
+      );
+      if (result.action !== "update_role") {
+        throw new OrganizationMutationError("invalid_committed_result");
       }
-
-      const msg = {
-        typeUrl: "/cosmos.group.v1.MsgUpdateGroupMembers",
-        value: {
-          admin: accountAddress,
-          groupId: orgId,
-          memberUpdates: [
-            {
-              address: memberAddress,
-              weight: role === "viewer" ? "0" : "1",
-              metadata: JSON.stringify({ role }),
-            },
-          ],
-        },
-      };
-
-      // Placeholder: in production, this would sign and broadcast the tx
-      await queryClient.query("/cosmos/tx/v1beta1/simulate", {
-        tx_bytes: JSON.stringify(msg),
-      });
-
-      setDetail((prev) => ({
-        ...prev,
-        members: prev.members.map((m) =>
-          m.address === memberAddress
-            ? { ...m, role, weight: role === "viewer" ? "0" : "1" }
-            : m,
-        ),
-      }));
+      const normalizedOrgId = orgId.trim();
+      if (detailOrganizationId.current === null)
+        detailOrganizationId.current = normalizedOrgId;
+      if (detailOrganizationId.current === normalizedOrgId) {
+        setDetail((prev) => ({ ...prev, members: [...result.members] }));
+      }
     },
-    [queryClient, accountAddress],
+    [mutateOrganization],
   );
 
   const leaveOrganization = useCallback(
     async (orgId: string) => {
-      if (!queryClient || !accountAddress) {
-        throw new Error("Wallet not connected");
+      const result = await mutateOrganization(
+        "leave",
+        { organizationId: orgId },
+        orgId,
+      );
+      if (result.action !== "leave") {
+        throw new OrganizationMutationError("invalid_committed_result");
       }
-
-      const msg = {
-        typeUrl: "/cosmos.group.v1.MsgLeaveGroup",
-        value: { address: accountAddress, groupId: orgId },
-      };
-
-      // Placeholder: in production, this would sign and broadcast the tx
-      await queryClient.query("/cosmos/tx/v1beta1/simulate", {
-        tx_bytes: JSON.stringify(msg),
-      });
-
       setState((prev) => ({
         ...prev,
-        organizations: prev.organizations.filter((o) => o.id !== orgId),
+        organizations: prev.organizations.filter(
+          (organization) => organization.id !== result.organizationId,
+        ),
+        selectedOrgId:
+          prev.selectedOrgId === result.organizationId
+            ? null
+            : prev.selectedOrgId,
       }));
+      if (detailOrganizationId.current === result.organizationId) {
+        detailOrganizationId.current = null;
+        detailRequest.current += 1;
+        billingRequest.current += 1;
+        setDetail({
+          isLoading: false,
+          organization: null,
+          members: [],
+          billing: null,
+          error: null,
+        });
+      }
     },
-    [queryClient, accountAddress],
+    [mutateOrganization],
   );
 
   const fetchBilling = useCallback(
@@ -431,10 +592,21 @@ export function OrganizationProvider({
         return;
       }
 
+      const normalizedOrgId = orgId.trim();
+      const generation = renderQueryGeneration;
+      const requestId = ++billingRequest.current;
+
       try {
         const result = await queryClient.query<{
           billing: OrganizationBillingSummary;
-        }>(`/organizations/${orgId}/billing`);
+        }>(`/organizations/${normalizedOrgId}/billing`);
+        if (
+          generation !== queryGeneration.current ||
+          requestId !== billingRequest.current ||
+          detailOrganizationId.current !== normalizedOrgId
+        ) {
+          return;
+        }
         setDetail((prev) => ({
           ...prev,
           billing: result.billing ?? null,
@@ -443,7 +615,7 @@ export function OrganizationProvider({
         // Billing is optional; silently fail
       }
     },
-    [queryClient],
+    [queryClient, renderQueryGeneration],
   );
 
   useEffect(() => {
@@ -452,15 +624,19 @@ export function OrganizationProvider({
 
   const selectedOrganization = useMemo(() => {
     return (
-      state.organizations.find((o) => o.id === state.selectedOrgId) ?? null
+      effectiveState.organizations.find(
+        (o) => o.id === effectiveState.selectedOrgId,
+      ) ?? null
     );
-  }, [state.organizations, state.selectedOrgId]);
+  }, [effectiveState.organizations, effectiveState.selectedOrgId]);
 
   const currentUserRole = useMemo(() => {
-    if (!accountAddress || !detail.members.length) return null;
-    const member = detail.members.find((m) => m.address === accountAddress);
+    if (!accountAddress || !effectiveDetail.members.length) return null;
+    const member = effectiveDetail.members.find(
+      (m) => m.address === accountAddress,
+    );
     return member?.role ?? null;
-  }, [accountAddress, detail.members]);
+  }, [accountAddress, effectiveDetail.members]);
 
   const actions: OrganizationActions = useMemo(
     () => ({
@@ -489,13 +665,19 @@ export function OrganizationProvider({
 
   const contextValue = useMemo<OrganizationContextValue>(
     () => ({
-      state,
-      detail,
+      state: effectiveState,
+      detail: effectiveDetail,
       actions,
       selectedOrganization,
       currentUserRole,
     }),
-    [state, detail, actions, selectedOrganization, currentUserRole],
+    [
+      effectiveState,
+      effectiveDetail,
+      actions,
+      selectedOrganization,
+      currentUserRole,
+    ],
   );
 
   return createElement(

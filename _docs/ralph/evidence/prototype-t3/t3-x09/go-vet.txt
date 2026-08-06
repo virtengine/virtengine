@@ -1,0 +1,5 @@
+command: C:\Users\pavil\AppData\Local\VirtEngine\toolchains\go1.25.8\go\bin\go.exe -C C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t3 vet ./pkg/provider_daemon
+exit_code: 0
+tool: go version go1.25.8 windows/amd64
+
+(no output)

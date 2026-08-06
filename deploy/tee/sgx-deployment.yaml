@@ -1,5 +1,3 @@
-# VirtEngine TEE SGX Deployment
-# TEE-HW-001: Deploy Intel SGX hardware-backed enclave pods
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -9,9 +7,15 @@ metadata:
     app.kubernetes.io/name: tee-enclave
     app.kubernetes.io/component: enclave
     app.kubernetes.io/part-of: virtengine
+    app.kubernetes.io/version: "v1.0.0"
     virtengine.com/tee-platform: sgx
 spec:
   replicas: 2
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 1
+      maxSurge: 1
   selector:
     matchLabels:
       app.kubernetes.io/name: tee-enclave
@@ -24,12 +28,9 @@ spec:
         app.kubernetes.io/component: enclave
         app.kubernetes.io/part-of: virtengine
         virtengine.com/tee-platform: sgx
-      annotations:
-        prometheus.io/scrape: "true"
-        prometheus.io/port: "9090"
-        prometheus.io/path: "/metrics"
     spec:
       serviceAccountName: tee-enclave
+      terminationGracePeriodSeconds: 30
       securityContext:
         runAsNonRoot: true
         runAsUser: 1000
@@ -40,15 +41,15 @@ spec:
       nodeSelector:
         virtengine.com/tee-platform: sgx
         virtengine.com/enclave-ready: "true"
-      affinity:
-        podAntiAffinity:
-          preferredDuringSchedulingIgnoredDuringExecution:
-            - weight: 100
-              podAffinityTerm:
-                labelSelector:
-                  matchLabels:
-                    app.kubernetes.io/name: tee-enclave
-                topologyKey: kubernetes.io/hostname
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: DoNotSchedule
+          labelSelector:
+            matchLabels:
+              app.kubernetes.io/name: tee-enclave
+              app.kubernetes.io/component: enclave
+              virtengine.com/tee-platform: sgx
       tolerations:
         - key: virtengine.com/tee
           operator: Exists
@@ -57,9 +58,51 @@ spec:
           operator: Equal
           value: enclave
           effect: NoSchedule
+      initContainers:
+        - name: tee-secret-preflight
+          image: busybox:1.36.1
+          command:
+            - /bin/sh
+            - -ec
+            - |
+              test -s /var/run/virtengine/tee-secrets/attestation-client-cert.pem
+              test -s /var/run/virtengine/tee-secrets/attestation-client-key.pem
+              test -s /var/run/virtengine/tee-secrets/attestation-ca.pem
+              test -s /var/run/virtengine/tee-secrets/signer-public.pem
+              test -s /var/run/virtengine/tee-secrets/rotation-bundle.json
+              test -s /config/measurements.json
+              grep -Eq '"allowed_mrenclaves"[[:space:]]*:[[:space:]]*\[[[:space:]]*"[^"]+"' /config/measurements.json
+              grep -Eq '"allowed_mrsigners"[[:space:]]*:[[:space:]]*\[[[:space:]]*"[^"]+"' /config/measurements.json
+              ! grep -Eiq '[Pp][Ee][Nn][Dd][Ii][Nn][Gg]|[Tt][Bb][Dd]|placeh[o]lder|not published y[e]t' /config/measurements.json /var/run/virtengine/tee-secrets/rotation-bundle.json
+          volumeMounts:
+            - name: attestation-secrets
+              mountPath: /var/run/virtengine/tee-secrets
+              readOnly: true
+            - name: measurements
+              mountPath: /config/measurements.json
+              subPath: measurements.json
+              readOnly: true
+        - name: tee-hardware-preflight
+          image: busybox:1.36.1
+          command:
+            - /bin/sh
+            - -ec
+            - |
+              test -e /dev/sgx_enclave || test -e /dev/sgx/enclave
+              test -e /dev/sgx_provision || test -e /dev/sgx/provision
+          volumeMounts:
+            - name: dev-sgx
+              mountPath: /dev/sgx
+              readOnly: true
+            - name: dev-sgx-enclave
+              mountPath: /dev/sgx_enclave
+              readOnly: true
+            - name: dev-sgx-provision
+              mountPath: /dev/sgx_provision
+              readOnly: true
       containers:
         - name: enclave
-          image: virtengine/tee-enclave:0.1.0
+          image: virtengine/tee-enclave:v1.0.0
           imagePullPolicy: IfNotPresent
           args:
             - serve
@@ -67,17 +110,15 @@ spec:
           ports:
             - name: grpc
               containerPort: 8443
-              protocol: TCP
             - name: http
               containerPort: 8080
-              protocol: TCP
             - name: metrics
               containerPort: 9090
-              protocol: TCP
             - name: attestation
               containerPort: 8444
-              protocol: TCP
           env:
+            - name: VIRTENGINE_TEE_PLATFORM
+              value: sgx
             - name: VIRTENGINE_TEE_MODE
               valueFrom:
                 configMapKeyRef:
@@ -103,8 +144,31 @@ spec:
                 configMapKeyRef:
                   name: tee-enclave-config
                   key: VIRTENGINE_TEE_CERT_CACHE_PATH
+            - name: VIRTENGINE_TEE_MIN_TCB_VERSION
+              valueFrom:
+                configMapKeyRef:
+                  name: tee-enclave-config
+                  key: VIRTENGINE_TEE_MIN_TCB_VERSION
+            - name: VIRTENGINE_TEE_ATTESTATION_MAX_AGE_HOURS
+              valueFrom:
+                configMapKeyRef:
+                  name: tee-enclave-config
+                  key: VIRTENGINE_TEE_ATTESTATION_MAX_AGE_HOURS
+            - name: VIRTENGINE_TEE_ROTATION_BUNDLE_PATH
+              valueFrom:
+                configMapKeyRef:
+                  name: tee-enclave-config
+                  key: VIRTENGINE_TEE_ROTATION_BUNDLE_PATH
             - name: VIRTENGINE_TEE_MEASUREMENT_ALLOWLIST
               value: /config/measurements.json
+            - name: VIRTENGINE_TEE_ATTESTATION_CLIENT_CERT_FILE
+              value: /var/run/virtengine/tee-secrets/attestation-client-cert.pem
+            - name: VIRTENGINE_TEE_ATTESTATION_CLIENT_KEY_FILE
+              value: /var/run/virtengine/tee-secrets/attestation-client-key.pem
+            - name: VIRTENGINE_TEE_ATTESTATION_CA_FILE
+              value: /var/run/virtengine/tee-secrets/attestation-ca.pem
+            - name: VIRTENGINE_TEE_SIGNER_PUBLIC_KEY_FILE
+              value: /var/run/virtengine/tee-secrets/signer-public.pem
             - name: NODE_NAME
               valueFrom:
                 fieldRef:
@@ -113,41 +177,47 @@ spec:
               valueFrom:
                 fieldRef:
                   fieldPath: metadata.name
-            - name: POD_NAMESPACE
-              valueFrom:
-                fieldRef:
-                  fieldPath: metadata.namespace
           securityContext:
-            runAsNonRoot: true
-            runAsUser: 1000
             readOnlyRootFilesystem: true
             allowPrivilegeEscalation: false
             capabilities:
               drop:
                 - ALL
+          startupProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            periodSeconds: 5
+            timeoutSeconds: 5
+            failureThreshold: 24
           livenessProbe:
             httpGet:
               path: /healthz
               port: http
-            initialDelaySeconds: 30
-            periodSeconds: 10
+            periodSeconds: 15
             timeoutSeconds: 5
             failureThreshold: 3
           readinessProbe:
             httpGet:
               path: /readyz
               port: http
-            initialDelaySeconds: 10
-            periodSeconds: 5
+            periodSeconds: 10
             timeoutSeconds: 3
             failureThreshold: 3
+          lifecycle:
+            preStop:
+              exec:
+                command:
+                  - /bin/sh
+                  - -ec
+                  - sleep 15
           resources:
-            limits:
-              cpu: "2"
-              memory: "4Gi"
             requests:
               cpu: "500m"
               memory: "1Gi"
+            limits:
+              cpu: "2"
+              memory: "4Gi"
           volumeMounts:
             - name: config
               mountPath: /config
@@ -155,6 +225,9 @@ spec:
             - name: measurements
               mountPath: /config/measurements.json
               subPath: measurements.json
+              readOnly: true
+            - name: attestation-secrets
+              mountPath: /var/run/virtengine/tee-secrets
               readOnly: true
             - name: cert-cache
               mountPath: /var/cache/virtengine/tee-certs
@@ -174,8 +247,13 @@ spec:
           configMap:
             name: tee-enclave-config
         - name: measurements
-          configMap:
-            name: tee-measurement-allowlist
+          secret:
+            secretName: tee-measurement-allowlist
+            optional: false
+        - name: attestation-secrets
+          secret:
+            secretName: tee-attestation-material
+            optional: false
         - name: cert-cache
           emptyDir:
             sizeLimit: 100Mi

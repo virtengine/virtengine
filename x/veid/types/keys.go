@@ -773,6 +773,38 @@ var (
 	// PrefixEvidenceRecordByAccountType stores evidence IDs by account and type
 	// Key: PrefixEvidenceRecordByAccountType | account_address | evidence_type -> []evidence_id
 	PrefixEvidenceRecordByAccountType = []byte{0x9C}
+
+	// PrefixConsensusVerificationHeight stores the consumed system transaction
+	// digest by proposal height to prevent replay or duplicate consumption.
+	PrefixConsensusVerificationHeight = []byte{0xD0}
+
+	// PrefixConsensusVerificationAggregate stores the canonical aggregate bytes.
+	PrefixConsensusVerificationAggregate = []byte{0xD1}
+
+	// PrefixWebEvidenceReplay stores consumed authenticated web evidence contexts.
+	// Key: PrefixWebEvidenceReplay | full_context_digest -> attestation metadata digest
+	PrefixWebEvidenceReplay = []byte{0xD2}
+
+	// PrefixWebEvidenceReplayNonce globally locks an issuer key epoch and nonce to one context.
+	// Key: PrefixWebEvidenceReplayNonce | global_nonce_digest -> full_context_digest
+	PrefixWebEvidenceReplayNonce = []byte{0xD3}
+
+	// PrefixEvidenceObjectRef stores payload-free off-chain evidence references.
+	// It intentionally does not renumber the colliding legacy 0x9A/0x9B prefixes.
+	// Key: PrefixEvidenceObjectRef | kind | identifier -> JSON evidence reference or quarantine metadata
+	PrefixEvidenceObjectRef = []byte{0xD4}
+
+	// PrefixEvidenceMigrationConsumed stores the accepted manifest digest by upgrade ID.
+	PrefixEvidenceMigrationConsumed = []byte{0xD4, 0x01}
+
+	// PrefixEvidenceMigrationReport stores the deterministic report by upgrade ID.
+	PrefixEvidenceMigrationReport = []byte{0xD4, 0x02}
+
+	// KeyEvidenceMigrationLatest stores the latest accepted manifest digest.
+	KeyEvidenceMigrationLatest = []byte{0xD4, 0x03}
+
+	// PrefixEvidenceMigrationSignerEpoch stores the accepted epoch floor by signer key ID.
+	PrefixEvidenceMigrationSignerEpoch = []byte{0xD4, 0x04}
 )
 
 // IdentityRecordKey returns the store key for an identity record

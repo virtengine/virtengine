@@ -221,7 +221,19 @@ func NewSelectiveDisclosureProof(
 	scheme ProofScheme,
 	validDuration time.Duration,
 ) *SelectiveDisclosureProof {
-	now := time.Now().UTC()
+	return NewSelectiveDisclosureProofAt(proofID, subjectAddress, claimTypes, scheme, validDuration, time.Now())
+}
+
+// NewSelectiveDisclosureProofAt creates a proof at an explicit deterministic time.
+func NewSelectiveDisclosureProofAt(
+	proofID string,
+	subjectAddress string,
+	claimTypes []ClaimType,
+	scheme ProofScheme,
+	validDuration time.Duration,
+	at time.Time,
+) *SelectiveDisclosureProof {
+	now := at.UTC()
 	return &SelectiveDisclosureProof{
 		ProofID:         proofID,
 		SubjectAddress:  subjectAddress,
@@ -362,7 +374,21 @@ func NewSelectiveDisclosureRequest(
 	validityDuration time.Duration,
 	requestExpiry time.Duration,
 ) *SelectiveDisclosureRequest {
-	now := time.Now().UTC()
+	return NewSelectiveDisclosureRequestAt(requestID, requesterAddress, subjectAddress, requestedClaims, purpose, validityDuration, requestExpiry, time.Now())
+}
+
+// NewSelectiveDisclosureRequestAt creates a request at an explicit deterministic time.
+func NewSelectiveDisclosureRequestAt(
+	requestID string,
+	requesterAddress string,
+	subjectAddress string,
+	requestedClaims []ClaimType,
+	purpose string,
+	validityDuration time.Duration,
+	requestExpiry time.Duration,
+	at time.Time,
+) *SelectiveDisclosureRequest {
+	now := at.UTC()
 	return &SelectiveDisclosureRequest{
 		RequestID:        requestID,
 		RequesterAddress: requesterAddress,
@@ -468,7 +494,12 @@ func NewAgeProof(
 	ageThreshold uint32,
 	validDuration time.Duration,
 ) *AgeProof {
-	now := time.Now().UTC()
+	return NewAgeProofAt(proofID, subjectAddress, ageThreshold, validDuration, time.Now())
+}
+
+// NewAgeProofAt creates an age proof at an explicit deterministic time.
+func NewAgeProofAt(proofID string, subjectAddress string, ageThreshold uint32, validDuration time.Duration, at time.Time) *AgeProof {
+	now := at.UTC()
 	return &AgeProof{
 		ProofID:        proofID,
 		SubjectAddress: subjectAddress,
@@ -557,7 +588,12 @@ func NewResidencyProof(
 	countryCode string,
 	validDuration time.Duration,
 ) *ResidencyProof {
-	now := time.Now().UTC()
+	return NewResidencyProofAt(proofID, subjectAddress, countryCode, validDuration, time.Now())
+}
+
+// NewResidencyProofAt creates a residency proof at an explicit deterministic time.
+func NewResidencyProofAt(proofID string, subjectAddress string, countryCode string, validDuration time.Duration, at time.Time) *ResidencyProof {
+	now := at.UTC()
 	return &ResidencyProof{
 		ProofID:        proofID,
 		SubjectAddress: subjectAddress,
@@ -653,7 +689,12 @@ func NewScoreThresholdProof(
 	scoreThreshold uint32,
 	validDuration time.Duration,
 ) *ScoreThresholdProof {
-	now := time.Now().UTC()
+	return NewScoreThresholdProofAt(proofID, subjectAddress, scoreThreshold, validDuration, time.Now())
+}
+
+// NewScoreThresholdProofAt creates a score proof at an explicit deterministic time.
+func NewScoreThresholdProofAt(proofID string, subjectAddress string, scoreThreshold uint32, validDuration time.Duration, at time.Time) *ScoreThresholdProof {
+	now := at.UTC()
 	return &ScoreThresholdProof{
 		ProofID:        proofID,
 		SubjectAddress: subjectAddress,
@@ -733,10 +774,15 @@ type ProofVerificationResult struct {
 
 // NewProofVerificationResult creates a new proof verification result
 func NewProofVerificationResult(isValid bool, claimsVerified []ClaimType, verifierAddress string) *ProofVerificationResult {
+	return NewProofVerificationResultAt(isValid, claimsVerified, verifierAddress, time.Now())
+}
+
+// NewProofVerificationResultAt creates a verification result at an explicit deterministic time.
+func NewProofVerificationResultAt(isValid bool, claimsVerified []ClaimType, verifierAddress string, at time.Time) *ProofVerificationResult {
 	return &ProofVerificationResult{
 		IsValid:         isValid,
 		ClaimsVerified:  claimsVerified,
-		VerifiedAt:      time.Now().UTC(),
+		VerifiedAt:      at.UTC(),
 		VerifierAddress: verifierAddress,
 	}
 }

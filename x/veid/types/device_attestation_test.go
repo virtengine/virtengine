@@ -1,6 +1,7 @@
 package types
 
 import (
+	"crypto/sha256"
 	"testing"
 	"time"
 
@@ -8,6 +9,7 @@ import (
 )
 
 func TestDeviceAttestationRecordValidate(t *testing.T) {
+	payloadHash := sha256.Sum256([]byte("attestation-payload"))
 	valid := DeviceAttestationRecord{
 		AttestationID:  "attest-001",
 		Platform:       DevicePlatformAndroid,
@@ -22,6 +24,8 @@ func TestDeviceAttestationRecordValidate(t *testing.T) {
 		HardwareBacked: true,
 		Supported:      true,
 		Verified:       true,
+		PayloadHash:    payloadHash[:],
+		VaultRef:       "vault://attestations/attest-001",
 	}
 
 	require.NoError(t, valid.Validate())
@@ -29,6 +33,31 @@ func TestDeviceAttestationRecordValidate(t *testing.T) {
 	invalidProvider := valid
 	invalidProvider.Provider = DeviceAttestationProvider("invalid")
 	require.Error(t, invalidProvider.Validate())
+
+	incompatibleProvider := valid
+	incompatibleProvider.Platform = DevicePlatformIOS
+	require.ErrorContains(t, incompatibleProvider.Validate(), "incompatible")
+
+	missingPayloadHash := valid
+	missingPayloadHash.PayloadHash = nil
+	require.ErrorContains(t, missingPayloadHash.Validate(), "payload hash")
+
+	missingVaultRef := valid
+	missingVaultRef.VaultRef = ""
+	require.ErrorContains(t, missingVaultRef.Validate(), "vault reference")
+
+	whitespaceVaultRef := valid
+	whitespaceVaultRef.VaultRef = " vault://attestations/attest-001"
+	require.ErrorContains(t, whitespaceVaultRef.Validate(), "vault reference")
+
+	unknownIntegrity := valid
+	unknownIntegrity.IntegrityLevel = DeviceIntegrityUnknown
+	require.ErrorContains(t, unknownIntegrity.Validate(), "concrete integrity")
+
+	inconsistentHardware := valid
+	inconsistentHardware.IntegrityLevel = DeviceIntegrityHardwareBacked
+	inconsistentHardware.HardwareBacked = false
+	require.ErrorContains(t, inconsistentHardware.Validate(), "hardware-backed integrity")
 
 	unsupported := DeviceAttestationRecord{
 		AttestationID: "attest-unsupported",

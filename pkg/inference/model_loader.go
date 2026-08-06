@@ -492,13 +492,16 @@ func (m *TFModel) Run(features []float32) ([]float32, error) {
 	// output := result[0].Value().([][]float32)[0]
 	// return output, nil
 
-	// Placeholder: Return stub output for testing without TF library
-	// This will be replaced by actual TensorFlow inference
+	if !m.config.AllowFallbackToStub {
+		return nil, simulatedInferenceDisabledError("embedded model execution")
+	}
+
+	// Explicit non-production stub output for tests and local development.
 	return m.stubInference(features), nil
 }
 
-// stubInference provides a deterministic placeholder for testing
-// This will be replaced by actual TensorFlow inference
+// stubInference provides deterministic non-production output when
+// AllowFallbackToStub is explicitly enabled.
 func (m *TFModel) stubInference(features []float32) []float32 {
 	// Compute a deterministic "score" based on feature values
 	// This mimics the model's behavior for testing purposes
@@ -512,7 +515,7 @@ func (m *TFModel) stubInference(features []float32) []float32 {
 	}
 
 	// Add document quality contribution
-	docOffset := FaceEmbeddingDim
+	docOffset := DocQualityOffset
 	if docOffset+DocQualityDim <= len(features) {
 		for i := 0; i < DocQualityDim; i++ {
 			sum += features[docOffset+i] * 1.5
@@ -521,7 +524,7 @@ func (m *TFModel) stubInference(features []float32) []float32 {
 	}
 
 	// Add OCR contribution
-	ocrOffset := FaceEmbeddingDim + DocQualityDim
+	ocrOffset := OCROffset
 	if ocrOffset+OCRFieldsDim <= len(features) {
 		for i := 0; i < OCRFieldsDim; i++ {
 			sum += features[ocrOffset+i]

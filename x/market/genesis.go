@@ -19,6 +19,11 @@ func ValidateGenesis(data *v1beta5.GenesisState) error {
 	if err := data.Params.Validate(); err != nil {
 		return err
 	}
+	for _, lease := range data.Leases {
+		if lease.State == v1.LeaseActive && lease.ReservationId == "" {
+			return fmt.Errorf("active lease %s has no authoritative reservation", lease.ID.String())
+		}
+	}
 
 	return nil
 }

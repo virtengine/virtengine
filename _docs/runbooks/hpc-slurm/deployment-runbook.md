@@ -4,6 +4,12 @@
 
 This runbook covers the deployment, scaling, and recovery procedures for SLURM HPC clusters on Kubernetes using the VirtEngine provider daemon.
 
+## Readiness and Isolation Status
+
+This chart is a rootless prototype and is blocked for production or multi-tenant use. Its default SLURM profile uses `proctrack/linuxproc`, `task/affinity`, and `jobacct_gather/linux`; all SLURM cgroup constraints are explicitly disabled because ordinary non-privileged Kubernetes pods do not receive a delegated writable cgroup v2 subtree. Kubernetes pod requests and limits can bound a pod, but SLURM cannot enforce per-job CPU, memory, swap, or device isolation inside that pod. Do not claim tenant isolation from this profile.
+
+Least privilege remains unverified until a rendered deployment is validated and each digest-pinned image is independently confirmed to run with the declared identity. `securityIdentities.slurm` supplies one username and numeric UID/GID for slurmctld, slurmdbd, and slurmd because shared authentication and filesystems require consistent ownership; `munge`, `mariadb`, `nodeAgent`, and `utility` retain component-specific UID/GID values. A production profile requires a reviewed cgroup delegation mechanism or an equivalent independently validated isolation boundary; changing plugins or enabling `Constrain*` settings alone is not sufficient.
+
 ## Prerequisites
 
 - Kubernetes cluster (v1.25+) with:
@@ -14,6 +20,47 @@ This runbook covers the deployment, scaling, and recovery procedures for SLURM H
 - `kubectl` configured for target cluster
 - Provider daemon running with HPC module enabled
 
+### Stable Secret Prerequisites
+
+The chart never creates credentials. Before every install, provision the following Kubernetes Secrets in the release namespace from an approved secret manager or protected files. Do not place secret material in Helm values, command-line `--set` arguments, or source control.
+
+```bash
+kubectl create namespace slurm-prototype
+
+kubectl create secret generic slurm-prod-munge \
+  --namespace slurm-prototype \
+  --from-file=munge.key=/secure/path/munge.key
+
+kubectl create secret generic slurm-prod-database \
+  --namespace slurm-prototype \
+  --from-file=password=/secure/path/database-password
+
+kubectl create secret generic slurm-prod-mariadb \
+  --namespace slurm-prototype \
+  --from-file=root-password=/secure/path/mariadb-root-password
+
+kubectl create secret generic slurm-prod-node-agent-tls \
+  --namespace slurm-prototype \
+  --from-file=ca.crt=/secure/path/ca.crt \
+  --from-file=tls.crt=/secure/path/tls.crt \
+  --from-file=tls.key=/secure/path/tls.key
+```
+
+An External Secrets controller may materialize the same Secret names and keys. Wait for all four Kubernetes Secrets to exist before installing. The chart deliberately uses no cluster `lookup`: missing references fail rendering, and upgrades cannot rotate credentials accidentally.
+
+### Durable State Prerequisites
+
+The authoritative state paths are `/var/spool/slurm` in `slurmctld`, `/var/spool/slurm` in `slurmdbd`, and `/var/lib/mysql` in MariaDB. Each path is mounted from a PVC. Runtime sockets, logs, and temporary files may use `emptyDir`; an `emptyDir` must never be mounted over an authoritative path.
+
+By default, each StatefulSet creates a claim with `persistentVolumeClaimRetentionPolicy.whenDeleted=Retain` and `whenScaled=Retain`. The backing StorageClass and PV reclaim policy are separate controls and must also preserve data. Before install or upgrade, require `reclaimPolicy: Retain` or an approved storage lifecycle with equivalent independently verified protection:
+
+```bash
+kubectl get storageclass fast-ssd -o jsonpath='{.reclaimPolicy}{"\n"}'
+kubectl get pv -o custom-columns=NAME:.metadata.name,CLAIM:.spec.claimRef.name,RECLAIM:.spec.persistentVolumeReclaimPolicy
+```
+
+To bind retained claims created outside this release, set `controller.persistence.existingClaim`, `database.persistence.existingClaim`, and `mariadb.persistence.existingClaim`. A non-empty value suppresses that component's `volumeClaimTemplates` and requires that component to have exactly one replica. The chart's `persistence.accessMode` applies only to generated per-replica claims; it cannot describe or make an existing claim safe for shared writers. The operator owns existing-claim creation, access mode, encryption, snapshots, expansion, namespace placement, and deletion protection. HA replicas must use generated per-replica claims unless a future chart version implements and validates an application-level shared-state protocol.
+
 ## Deployment Procedures
 
 ### 1. Initial Cluster Deployment
@@ -21,19 +68,26 @@ This runbook covers the deployment, scaling, and recovery procedures for SLURM H
 #### Using Helm Directly
 
 ```bash
-# Create namespace
-kubectl create namespace slurm-prod
-
 # Add VirtEngine Helm repository (if using remote charts)
 helm repo add virtengine https://charts.virtengine.dev
 helm repo update
 
-# Deploy SLURM cluster
+# Deploy a non-tenant prototype rehearsal only
 helm install slurm-cluster deploy/slurm/slurm-cluster \
-  --namespace slurm-prod \
-  --set cluster.id=hpc-cluster-prod \
-  --set cluster.name="Production HPC Cluster" \
+  --namespace slurm-prototype \
+  --set cluster.id=hpc-cluster-prototype \
+  --set cluster.name="Prototype HPC Cluster" \
   --set cluster.providerAddress=virtengine1provider123 \
+  --set munge.existingSecret=slurm-prod-munge \
+  --set munge.secretKeyName=munge.key \
+  --set database.config.existingSecret=slurm-prod-database \
+  --set database.config.secretPasswordKey=password \
+  --set mariadb.existingSecret=slurm-prod-mariadb \
+  --set mariadb.secretRootPasswordKey=root-password \
+  --set nodeAgent.tls.existingSecret=slurm-prod-node-agent-tls \
+  --set nodeAgent.tls.caCertKey=ca.crt \
+  --set nodeAgent.tls.clientCertKey=tls.crt \
+  --set nodeAgent.tls.clientKeyKey=tls.key \
   --set compute.replicas=8 \
   --set controller.persistence.size=50Gi \
   --set database.persistence.size=100Gi \
@@ -45,14 +99,16 @@ helm install slurm-cluster deploy/slurm/slurm-cluster \
   --timeout 15m
 ```
 
+Default `helm template`, `helm install`, and `helm lint` fail until all enabled components have explicit Secret names and key mappings. For upgrades, use `--reuse-values` as shown below or provide the same references again; never replace them with inline values.
+
 #### Using Provider Daemon API
 
 ```bash
 # Deploy via provider daemon gRPC
 grpcurl -d '{
-  "cluster_id": "hpc-cluster-prod",
-  "cluster_name": "Production HPC Cluster",
-  "namespace": "slurm-prod",
+  "cluster_id": "hpc-cluster-prototype",
+  "cluster_name": "Prototype HPC Cluster",
+  "namespace": "slurm-prototype",
   "template": {
     "partitions": [
       {"name": "normal", "nodes": 8, "max_runtime_seconds": 86400, "state": "up"},
@@ -195,15 +251,40 @@ helm upgrade slurm-cluster deploy/slurm/slurm-cluster \
 
 ## Upgrade Procedures
 
+### Migrate Legacy Generated Secrets
+
+Releases installed before T4-07A generated credentials during rendering. Before
+the first upgrade, provision replacement Secrets and pass their names and keys
+explicitly. `--reuse-values` alone is rejected because legacy releases have no
+`existingSecret` values.
+
+```bash
+helm upgrade slurm-cluster deploy/slurm/slurm-cluster \
+  --namespace slurm-prod \
+  --reuse-values \
+  --set munge.existingSecret=slurm-prod-munge \
+  --set munge.secretKeyName=munge.key \
+  --set database.config.existingSecret=slurm-prod-database \
+  --set database.config.secretPasswordKey=password \
+  --set mariadb.existingSecret=slurm-prod-mariadb \
+  --set mariadb.secretRootPasswordKey=root-password \
+  --set nodeAgent.tls.existingSecret=slurm-prod-node-agent-tls \
+  --set nodeAgent.tls.caCertKey=ca.crt \
+  --set nodeAgent.tls.clientCertKey=tls.crt \
+  --set nodeAgent.tls.clientKeyKey=tls.key \
+  --wait
+```
+
+Verify every referenced Secret and key exists before invoking Helm. Do not
+reuse credentials generated by a previous chart render.
+
 ### Rolling Upgrade
 
 ```bash
 # 1. Check current version
 helm list -n slurm-prod
 
-# 2. Backup database
-kubectl exec -n slurm-prod slurm-cluster-mariadb-0 -- \
-  mysqldump -u root -p$MYSQL_ROOT_PASSWORD slurm_acct_db > slurm_backup_$(date +%Y%m%d).sql
+# 2. Complete the checksum-gated durable-state backup procedure below
 
 # 3. Drain nodes in batches
 for node in slurm-cluster-compute-{0..3}; do
@@ -230,6 +311,60 @@ kubectl exec -n slurm-prod slurm-cluster-controller-0 -c slurmctld -- \
 
 ## Recovery Procedures
 
+### Durable-State Backup
+
+This procedure requires an approved encrypted backup destination and a maintenance window. Do not use a container writable layer as the destination. Record the release revision, image digests, PVC/PV identities, StorageClass, reclaim policy, and backup timestamp with the bundle.
+
+1. Disable new submissions and wait for or administratively resolve active jobs.
+2. Capture a transaction-consistent MariaDB dump while MariaDB is healthy.
+3. Stop writers in dependency order: `slurmctld`, then `slurmdbd`, then MariaDB. Keep all three stopped until file copies or CSI snapshots finish.
+4. From approved one-shot backup Jobs or the storage snapshot/export system, archive the complete slurmctld PVC path `/var/spool/slurm`, the complete slurmdbd PVC path `/var/spool/slurm`, and the MariaDB dump. Do not archive only the `ctld/` subdirectory.
+5. Compute SHA-256 for every archive and write a signed or access-controlled manifest containing exactly `mariadb`, `slurmdbd`, and `slurmctld`, their hashes, source PVC UIDs, and restore order `mariadb, slurmdbd, slurmctld`.
+6. Verify each hash from the final backup destination before restarting MariaDB, slurmdbd, and slurmctld in that order.
+
+Example logical dump and local checksum commands are shown below. Redirect directly to the approved encrypted destination in production:
+
+```bash
+mkdir -m 0700 slurm-durable-backup
+kubectl exec -n slurm-prod slurm-cluster-mariadb-0 -c mariadb -- sh -ec \
+  'mariadb-dump --single-transaction --routines --events -uroot -p"$MYSQL_ROOT_PASSWORD" "$MYSQL_DATABASE"' \
+  > slurm-durable-backup/mariadb.sql
+
+# After the approved backup Jobs or snapshot exports produce these archives:
+sha256sum slurm-durable-backup/mariadb.sql \
+  slurm-durable-backup/slurmdbd.tar.gz \
+  slurm-durable-backup/slurmctld.tar.gz \
+  > slurm-durable-backup/SHA256SUMS
+sha256sum --check slurm-durable-backup/SHA256SUMS
+```
+
+### Fail-Closed Durable-State Restore
+
+Restore into three newly provisioned, empty PVCs. Never restore over an active release or reuse its claims, and never allow a partial checksum pass to start a component. Record the current Helm revision and the old MariaDB, slurmdbd, and slurmctld claim UIDs as one rollback set; retain them without mutation until the restored cluster has passed its observation window.
+
+1. Close submissions, scale `slurmctld`, `slurmdbd`, MariaDB, and compute to zero, and verify no pods, Jobs, or external consumers mount either the old claims or the new restore claims. Provision distinct new PVCs with the required capacity, encryption, StorageClass, `Retain` lifecycle, and deletion protection, but do not change the production release's claim bindings yet.
+2. Verify manifest authenticity, all three SHA-256 values, archive member types and paths, source PVC identity, expected release/image compatibility, and available capacity **before writing any new PVC**. Any mismatch aborts the entire restore and leaves both claim sets unchanged.
+3. For a physical MariaDB snapshot, restore it to the new MariaDB claim using the approved CSI/storage procedure. For a logical dump, start an isolated temporary MariaDB workload using the production digest-pinned image and credentials with only the new MariaDB claim mounted. It must have a unique Service, deny production `slurmdbd` access, and accept traffic only from the restore operator/Job. Stream the verified SQL to the database client over standard input; do **not** copy or redirect the SQL file into the PVC:
+
+   ```bash
+   kubectl exec -i -n slurm-prod slurm-mariadb-restore-0 -c mariadb -- sh -ec \
+     'exec mariadb -uroot -p"$MYSQL_ROOT_PASSWORD" "$MYSQL_DATABASE"' \
+     < slurm-durable-backup/mariadb.sql
+   ```
+
+4. While MariaDB remains isolated, run `mariadb-check --all-databases`, compare expected schemas and tables, verify recorded row counts and logical data checksums, and inspect logs. On any mismatch, stop the temporary workload and preserve the new claim for investigation. On success, perform a clean database shutdown and remove the temporary workload and Service before production can mount the claim.
+5. Using isolated one-shot restore Jobs, restore the complete slurmdbd and slurmctld `/var/spool/slurm` archives into their respective new claims. Verify ownership, modes, final file inventories, and checksums from the mounted destinations. Keep all production components stopped throughout this step.
+6. Perform one controlled cutover of the release configuration that binds all three new claims. Do not mix an old claim from one component with a new claim from another. Keep workloads held at zero by the approved maintenance/deployment gate while applying and recording the new release revision and claim UIDs.
+7. Start production MariaDB alone on the restored claim and repeat database health, schema, row-count, and checksum checks. Then start `slurmdbd` alone, require a healthy restored-database connection, clean logs, and expected accounting queries. Only then start `slurmctld` and require `scontrol ping`, `sacct`, job/node state, and scheduler-state checks to pass. Start compute nodes last and keep submissions closed until reconciliation completes.
+8. If cutover or any later startup check fails, stop every component, atomically roll the release configuration back to the recorded revision and all three old claim bindings as one set, and validate the old stack in the same dependency order before reopening submissions. Do not retry against, overwrite, or delete either claim set. Preserve failed new claims for investigation and retain old claims until the restored cluster passes the approved observation and backup checkpoints.
+
+The local fixture exercises archive checksums and ordering only; it is not Kubernetes, CSI, StorageClass, failover, or production restore evidence:
+
+```bash
+python scripts/hpc/slurm-durable-state-drill-test.py -v
+python scripts/hpc/slurm-durable-state-drill.py
+```
+
 ### Controller Recovery
 
 ```bash
@@ -244,9 +379,8 @@ kubectl exec -n slurm-prod slurm-cluster-controller-0 -c slurmctld -- \
 # 3. Force restart controller
 kubectl delete pod -n slurm-prod slurm-cluster-controller-0
 
-# 4. If state is corrupted, reconfigure from scratch
-kubectl exec -n slurm-prod slurm-cluster-controller-0 -c slurmctld -- \
-  scontrol reconfigure
+# 4. If state is corrupted, keep the controller stopped and use the
+# fail-closed durable-state restore procedure above. Reconfigure is not restore.
 ```
 
 ### Database Recovery
@@ -255,14 +389,8 @@ kubectl exec -n slurm-prod slurm-cluster-controller-0 -c slurmctld -- \
 # 1. Check database status
 kubectl get pod -n slurm-prod slurm-cluster-mariadb-0 -o wide
 
-# 2. If database is corrupted, restore from backup
-kubectl cp slurm_backup.sql slurm-prod/slurm-cluster-mariadb-0:/tmp/
-
-kubectl exec -n slurm-prod slurm-cluster-mariadb-0 -- \
-  mysql -u root -p$MYSQL_ROOT_PASSWORD slurm_acct_db < /tmp/slurm_backup.sql
-
-# 3. Restart slurmdbd
-kubectl delete pod -n slurm-prod slurm-cluster-slurmdbd-0
+# 2. If database state is corrupted, keep MariaDB, slurmdbd, and slurmctld
+# stopped and use the fail-closed durable-state restore procedure above.
 ```
 
 ### Node Recovery

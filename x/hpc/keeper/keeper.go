@@ -8,6 +8,7 @@ import (
 	"encoding/binary"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 
 	"cosmossdk.io/log"
@@ -15,6 +16,8 @@ import (
 	"github.com/cosmos/cosmos-sdk/codec"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 
+	marketv1 "github.com/virtengine/virtengine/sdk/go/node/market/v1"
+	resourcesv1 "github.com/virtengine/virtengine/sdk/go/node/resources/v1"
 	"github.com/virtengine/virtengine/x/hpc/types"
 )
 
@@ -74,6 +77,7 @@ type IKeeper interface {
 	ResolveDispute(ctx sdk.Context, disputeID string, status types.DisputeStatus, resolution string, resolverAddr sdk.AccAddress) error
 	GetDispute(ctx sdk.Context, disputeID string) (types.HPCDispute, bool)
 	SetDispute(ctx sdk.Context, dispute types.HPCDispute) error
+	GetDisputesByFinancialCase(ctx sdk.Context, caseID string) []types.HPCDispute
 
 	// Parameters
 	GetParams(ctx sdk.Context) types.Params
@@ -132,6 +136,22 @@ type Keeper struct {
 	billingKeeper    BillingKeeper
 	settlementKeeper SettlementKeeper
 	authority        string
+	resourcesKeeper  ResourcesKeeper
+	marketKeeper     MarketKeeper
+}
+
+type ResourcesKeeper interface {
+	IsCanonicalReservationsActive(ctx sdk.Context) bool
+	Reserve(ctx sdk.Context, request resourcesv1.ReservationRequest) (*resourcesv1.Reservation, error)
+	ActivateReservation(ctx sdk.Context, reservationID string, link resourcesv1.ReservationLink) (*resourcesv1.Reservation, error)
+	ReleaseReservation(ctx sdk.Context, reservationID, reason string) (*resourcesv1.Reservation, error)
+	QuarantineReservation(ctx sdk.Context, reservationID, reason string) (*resourcesv1.Reservation, error)
+	GetReservation(ctx sdk.Context, reservationID string) (resourcesv1.Reservation, bool)
+}
+
+type MarketKeeper interface {
+	GetLease(ctx sdk.Context, id marketv1.LeaseID) (marketv1.Lease, bool)
+	OnDisputeOpened(ctx sdk.Context, leaseID marketv1.LeaseID, reason string) error
 }
 
 // NewKeeper creates and returns an instance for HPC keeper
@@ -144,6 +164,13 @@ func NewKeeper(cdc codec.BinaryCodec, skey storetypes.StoreKey, bankKeeper BankK
 		settlementKeeper: nil,
 		authority:        authority,
 	}
+}
+
+func (k *Keeper) SetResourcesKeeper(resources ResourcesKeeper) { k.resourcesKeeper = resources }
+func (k *Keeper) SetMarketKeeper(market MarketKeeper)          { k.marketKeeper = market }
+
+func parseMarketLeaseID(value string) (marketv1.LeaseID, error) {
+	return marketv1.ParseLeasePath(strings.Split(value, "/"))
 }
 
 // Codec returns keeper codec
@@ -511,6 +538,17 @@ func (k Keeper) WithOfferings(ctx sdk.Context, fn func(types.HPCOffering) bool) 
 
 // SubmitJob submits a new HPC job
 func (k Keeper) SubmitJob(ctx sdk.Context, job *types.HPCJob) error {
+	cacheCtx, write := ctx.CacheContext()
+	staged := *job
+	if err := k.submitJob(cacheCtx, &staged); err != nil {
+		return err
+	}
+	write()
+	*job = staged
+	return nil
+}
+
+func (k Keeper) submitJob(ctx sdk.Context, job *types.HPCJob) error {
 	// Verify offering exists and is active
 	offering, exists := k.GetOffering(ctx, job.OfferingID)
 	if !exists {
@@ -549,12 +587,91 @@ func (k Keeper) SubmitJob(ctx sdk.Context, job *types.HPCJob) error {
 	if err := job.Validate(); err != nil {
 		return err
 	}
+	if k.resourcesKeeper == nil {
+		return types.ErrInvalidJob.Wrap("resources keeper is required")
+	}
+	if !k.resourcesKeeper.IsCanonicalReservationsActive(ctx) {
+		return types.ErrInvalidJob.Wrap("canonical reservations are not active")
+	}
+	hasMarketLineage := job.MarketOrderID != "" || job.MarketBidID != "" || job.MarketLeaseID != ""
+	if hasMarketLineage && (job.MarketOrderID == "" || job.MarketBidID == "" || job.MarketLeaseID == "" || job.ReservationID == "") {
+		return types.ErrInvalidJob.Wrap("market-backed jobs require order, bid, lease, and reservation IDs")
+	}
+	if !hasMarketLineage && job.ReservationID != "" {
+		return types.ErrInvalidJob.Wrap("standalone jobs cannot supply an existing reservation")
+	}
+	if job.ReservationID != "" {
+		if k.marketKeeper == nil {
+			return types.ErrInvalidJob.Wrap("market keeper is required for market-backed jobs")
+		}
+		leaseID, err := parseMarketLeaseID(job.MarketLeaseID)
+		if err != nil {
+			return types.ErrInvalidJob.Wrap("invalid market lease ID")
+		}
+		lease, found := k.marketKeeper.GetLease(ctx, leaseID)
+		if !found || lease.State != marketv1.LeaseActive || lease.ReservationId != job.ReservationID || lease.ID.String() != job.MarketLeaseID || lease.ID.OrderID().String() != job.MarketOrderID || lease.ID.Provider != job.ProviderAddress || lease.ID.Owner != job.CustomerAddress {
+			return types.ErrInvalidJob.Wrap("canonical market lease is missing, inactive, or lineage mismatched")
+		}
+		reservation, found := k.resourcesKeeper.GetReservation(ctx, job.ReservationID)
+		executable := reservation.State == resourcesv1.ReservationState_RESERVATION_STATE_ACTIVE || reservation.State == resourcesv1.ReservationState_RESERVATION_STATE_CONSUMED
+		if !found || !executable || reservation.ProviderAddress != job.ProviderAddress || reservation.RequesterAddress != job.CustomerAddress {
+			return types.ErrInvalidJob.Wrap("supplied reservation is not active or provider lineage mismatched")
+		}
+		if job.MarketLeaseID == "" || reservation.MarketLeaseId != job.MarketLeaseID ||
+			(job.MarketOrderID != "" && reservation.MarketOrderId != job.MarketOrderID) ||
+			(job.MarketBidID != "" && reservation.MarketBidId != job.MarketBidID) {
+			return types.ErrInvalidJob.Wrap("supplied reservation market lineage mismatched")
+		}
+		capacity, err := hpcResourceCapacity(job.Resources)
+		if err != nil {
+			return err
+		}
+		if !hpcCapacitySatisfies(reservation.Capacity, capacity) {
+			return types.ErrInvalidJob.Wrap("supplied reservation does not cover requested capacity")
+		}
+		job.AllocationID = reservation.ReservationId
+		return k.SetJob(ctx, *job)
+	}
+	capacity, err := hpcResourceCapacity(job.Resources)
+	if err != nil {
+		return err
+	}
+	request := resourcesv1.ReservationRequest{
+		IdempotencyKey: "hpc/job/" + job.JobID, RequestId: "hpc/job/" + job.JobID,
+		RequesterAddress: job.CustomerAddress, ProviderAddress: job.ProviderAddress,
+		ResourceClass: resourcesv1.ResourceClass_RESOURCE_CLASS_COMPUTE, Capacity: capacity,
+		ConsumerType: "hpc_job", ConsumerId: job.JobID, HpcJobId: job.JobID,
+		MarketOrderId: job.MarketOrderID, MarketBidId: job.MarketBidID, MarketLeaseId: job.MarketLeaseID,
+		EscrowId: job.EscrowID, Version: 1,
+	}
+	reservation, err := k.resourcesKeeper.Reserve(ctx, request)
+	if err != nil {
+		return err
+	}
+	active, err := k.resourcesKeeper.ActivateReservation(ctx, reservation.ReservationId, resourcesv1.ReservationLink{
+		ConsumerType: "hpc_job", ConsumerId: job.JobID, HpcJobId: job.JobID,
+		MarketOrderId: job.MarketOrderID, MarketBidId: job.MarketBidID, MarketLeaseId: job.MarketLeaseID, EscrowId: job.EscrowID,
+	})
+	if err != nil {
+		return err
+	}
+	job.ReservationID = active.ReservationId
+	job.AllocationID = active.ReservationId
 
 	return k.SetJob(ctx, *job)
 }
 
 // UpdateJobStatus updates job status
 func (k Keeper) UpdateJobStatus(ctx sdk.Context, jobID string, state types.JobState, statusMessage string, exitCode int32, metrics *types.HPCUsageMetrics) error {
+	cacheCtx, write := ctx.CacheContext()
+	if err := k.updateJobStatus(cacheCtx, jobID, state, statusMessage, exitCode, metrics); err != nil {
+		return err
+	}
+	write()
+	return nil
+}
+
+func (k Keeper) updateJobStatus(ctx sdk.Context, jobID string, state types.JobState, statusMessage string, exitCode int32, _ *types.HPCUsageMetrics) error {
 	job, exists := k.GetJob(ctx, jobID)
 	if !exists {
 		return types.ErrJobNotFound
@@ -563,6 +680,11 @@ func (k Keeper) UpdateJobStatus(ctx sdk.Context, jobID string, state types.JobSt
 	// Validate state transition
 	if !isValidJobStateTransition(job.State, state) {
 		return types.ErrInvalidJobState
+	}
+	if state == types.JobStateQueued || state == types.JobStateRunning {
+		if err := k.requireActiveJobReservation(ctx, job); err != nil {
+			return err
+		}
 	}
 
 	job.State = state
@@ -579,11 +701,27 @@ func (k Keeper) UpdateJobStatus(ctx sdk.Context, jobID string, state types.JobSt
 		job.CompletedAt = &now
 	}
 
+	if types.IsTerminalJobState(state) {
+		if k.resourcesKeeper != nil && job.MarketLeaseID == "" && job.ReservationID != "" {
+			if _, err := k.resourcesKeeper.ReleaseReservation(ctx, job.ReservationID, "hpc_job_"+string(state)); err != nil {
+				return err
+			}
+		}
+	}
 	return k.SetJob(ctx, job)
 }
 
 // CancelJob cancels a job
 func (k Keeper) CancelJob(ctx sdk.Context, jobID string, requesterAddr sdk.AccAddress) error {
+	cacheCtx, write := ctx.CacheContext()
+	if err := k.cancelJob(cacheCtx, jobID, requesterAddr); err != nil {
+		return err
+	}
+	write()
+	return nil
+}
+
+func (k Keeper) cancelJob(ctx sdk.Context, jobID string, requesterAddr sdk.AccAddress) error {
 	job, exists := k.GetJob(ctx, jobID)
 	if !exists {
 		return types.ErrJobNotFound
@@ -603,8 +741,73 @@ func (k Keeper) CancelJob(ctx sdk.Context, jobID string, requesterAddr sdk.AccAd
 	job.State = types.JobStateCancelled
 	job.StatusMessage = "Cancelled by user"
 	job.CompletedAt = &now
+	if k.resourcesKeeper != nil && job.MarketLeaseID == "" && job.ReservationID != "" {
+		if _, err := k.resourcesKeeper.ReleaseReservation(ctx, job.ReservationID, "hpc_job_cancelled"); err != nil {
+			return err
+		}
+	}
 
 	return k.SetJob(ctx, job)
+}
+
+func (k Keeper) requireActiveJobReservation(ctx sdk.Context, job types.HPCJob) error {
+	if k.resourcesKeeper == nil {
+		return nil
+	}
+	if !k.resourcesKeeper.IsCanonicalReservationsActive(ctx) {
+		return nil
+	}
+	if job.ReservationID == "" {
+		return types.ErrInvalidJob.Wrap("active reservation required")
+	}
+	reservation, found := k.resourcesKeeper.GetReservation(ctx, job.ReservationID)
+	consumerMatches := reservation.ConsumerType == "hpc_job" && reservation.ConsumerId == job.JobID
+	leaseMatches := job.MarketLeaseID != "" && reservation.MarketLeaseId == job.MarketLeaseID
+	executable := reservation.State == resourcesv1.ReservationState_RESERVATION_STATE_ACTIVE || reservation.State == resourcesv1.ReservationState_RESERVATION_STATE_CONSUMED
+	if !found || !executable || (!consumerMatches && !leaseMatches) || reservation.ProviderAddress != job.ProviderAddress || reservation.RequesterAddress != job.CustomerAddress {
+		return types.ErrInvalidJob.Wrap("reservation is not active or lineage mismatched")
+	}
+	capacity, err := hpcResourceCapacity(job.Resources)
+	if err != nil || !hpcCapacitySatisfies(reservation.Capacity, capacity) {
+		return types.ErrInvalidJob.Wrap("reservation capacity does not cover job")
+	}
+	return nil
+}
+
+func hpcResourceCapacity(resources types.JobResources) (resourcesv1.ResourceCapacity, error) {
+	if resources.Nodes <= 0 || resources.CPUCoresPerNode < 0 || resources.MemoryGBPerNode < 0 || resources.GPUsPerNode < 0 || resources.StorageGB < 0 {
+		return resourcesv1.ResourceCapacity{}, types.ErrInvalidJob.Wrap("negative or empty job resources")
+	}
+	if resources.GPUsPerNode > 0 && resources.GPUType == "" {
+		return resourcesv1.ResourceCapacity{}, types.ErrInvalidJob.Wrap("gpu_type required when GPUs are requested")
+	}
+	mul := func(a, b int32) (int64, error) {
+		value := int64(a) * int64(b)
+		if a != 0 && value/int64(a) != int64(b) {
+			return 0, types.ErrInvalidJob.Wrap("resource capacity overflow")
+		}
+		return value, nil
+	}
+	cpu, err := mul(resources.Nodes, resources.CPUCoresPerNode)
+	if err != nil {
+		return resourcesv1.ResourceCapacity{}, err
+	}
+	memory, err := mul(resources.Nodes, resources.MemoryGBPerNode)
+	if err != nil {
+		return resourcesv1.ResourceCapacity{}, err
+	}
+	gpus, err := mul(resources.Nodes, resources.GPUsPerNode)
+	if err != nil {
+		return resourcesv1.ResourceCapacity{}, err
+	}
+	return resourcesv1.ResourceCapacity{CpuCores: cpu, MemoryGb: memory, StorageGb: int64(resources.StorageGB), Gpus: gpus, GpuType: resources.GPUType}, nil
+}
+
+func hpcCapacitySatisfies(available, required resourcesv1.ResourceCapacity) bool {
+	if available.CpuCores < required.CpuCores || available.MemoryGb < required.MemoryGb || available.StorageGb < required.StorageGb || available.NetworkMbps < required.NetworkMbps || available.Gpus < required.Gpus {
+		return false
+	}
+	return required.GpuType == "" || required.GpuType == available.GpuType
 }
 
 // GetJob retrieves a job by ID
@@ -704,8 +907,18 @@ func isValidJobStateTransition(from, to types.JobState) bool {
 
 // ProcessExpiredJobs processes expired jobs
 func (k Keeper) ProcessExpiredJobs(ctx sdk.Context) error {
+	cacheCtx, write := ctx.CacheContext()
+	if err := k.processExpiredJobs(cacheCtx); err != nil {
+		return err
+	}
+	write()
+	return nil
+}
+
+func (k Keeper) processExpiredJobs(ctx sdk.Context) error {
 	params := k.GetParams(ctx)
 	maxDuration := time.Duration(params.MaxJobDurationSeconds) * time.Second
+	var processErr error
 
 	k.WithJobs(ctx, func(job types.HPCJob) bool {
 		if types.IsTerminalJobState(job.State) {
@@ -720,8 +933,15 @@ func (k Keeper) ProcessExpiredJobs(ctx sdk.Context) error {
 				job.State = types.JobStateTimeout
 				job.StatusMessage = "Job exceeded maximum runtime"
 				job.CompletedAt = &now
+				if k.resourcesKeeper != nil && job.MarketLeaseID == "" && job.ReservationID != "" {
+					if _, err := k.resourcesKeeper.ReleaseReservation(ctx, job.ReservationID, "hpc_job_timeout"); err != nil {
+						processErr = err
+						return true
+					}
+				}
 				if err := k.SetJob(ctx, job); err != nil {
-					k.Logger(ctx).Error("failed to set job", "error", err)
+					processErr = err
+					return true
 				}
 			}
 		}
@@ -729,7 +949,7 @@ func (k Keeper) ProcessExpiredJobs(ctx sdk.Context) error {
 		return false
 	})
 
-	return nil
+	return processErr
 }
 
 // CheckClusterHealth checks cluster health based on heartbeats

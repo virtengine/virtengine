@@ -59,9 +59,11 @@ describe('identityStore', () => {
     signMock.mockResolvedValue({
       txHash: 'txhash',
       code: 0,
+      blockHeight: 42,
       rawLog: '',
       gasUsed: 100,
       gasWanted: 200,
+      txResponse: {},
     });
 
     await useIdentityStore.getState().requestVerification('ve1owner', ['kyc'], wallet);

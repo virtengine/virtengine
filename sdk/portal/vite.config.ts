@@ -1,8 +1,10 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
+import wasm from "vite-plugin-wasm";
+import topLevelAwait from "vite-plugin-top-level-await";
 
 export default defineConfig({
-  plugins: [react()],
+  plugins: [react(), wasm(), topLevelAwait()],
   server: {
     host: true,
     port: 5173,
@@ -12,7 +14,7 @@ export default defineConfig({
     port: 5173,
   },
   build: {
-    chunkSizeWarningLimit: 8000,
+    chunkSizeWarningLimit: 9000,
     rollupOptions: {
       onwarn(warning, defaultHandler) {
         const suppressed = [

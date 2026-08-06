@@ -118,6 +118,9 @@ func (am AppModule) RegisterServices(cfg module.Configurator) {
 
 	// Register query server
 	types.RegisterQueryServer(cfg.QueryServer(), keeper.NewQueryServer(am.keeper))
+	if err := cfg.RegisterMigration(types.ModuleName, 1, func(ctx sdk.Context) error { return nil }); err != nil {
+		panic(err)
+	}
 }
 
 // RegisterInvariants registers module invariants
@@ -147,7 +150,7 @@ func (am AppModule) ExportGenesis(ctx sdk.Context, cdc codec.JSONCodec) json.Raw
 
 // ConsensusVersion returns the consensus version
 func (am AppModule) ConsensusVersion() uint64 {
-	return 1
+	return 2
 }
 
 // BeginBlock executes all ABCI BeginBlock logic

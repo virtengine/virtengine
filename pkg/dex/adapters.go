@@ -6,6 +6,9 @@ package dex
 import (
 	"context"
 	"fmt"
+	"strings"
+	"sync"
+	"sync/atomic"
 	"time"
 
 	sdkmath "cosmossdk.io/math"
@@ -17,22 +20,24 @@ type BaseAdapter struct {
 	adpType   string
 	chainID   string
 	cfg       AdapterConfig
-	healthy   bool
+	healthy   atomic.Bool
 	pools     map[string]LiquidityPool
 	pairCache map[string]TradingPair
+	cacheMu   sync.RWMutex
 }
 
 // NewBaseAdapter creates a new base adapter
 func NewBaseAdapter(cfg AdapterConfig) *BaseAdapter {
-	return &BaseAdapter{
+	adapter := &BaseAdapter{
 		name:      cfg.Name,
 		adpType:   cfg.Type,
 		chainID:   cfg.ChainID,
 		cfg:       cfg,
-		healthy:   true,
 		pools:     make(map[string]LiquidityPool),
 		pairCache: make(map[string]TradingPair),
 	}
+	adapter.healthy.Store(true)
+	return adapter
 }
 
 func (a *BaseAdapter) Name() string    { return a.name }
@@ -40,12 +45,18 @@ func (a *BaseAdapter) Type() string    { return a.adpType }
 func (a *BaseAdapter) ChainID() string { return a.chainID }
 
 func (a *BaseAdapter) IsHealthy(ctx context.Context) bool {
-	return a.healthy && a.cfg.Enabled
+	return a.healthy.Load() && a.cfg.Enabled
 }
 
 func (a *BaseAdapter) Close() error {
-	a.healthy = false
+	a.healthy.Store(false)
 	return nil
+}
+
+// TestOnlyDEXAdapter identifies deterministic placeholder adapters that a
+// production service must never register.
+type TestOnlyDEXAdapter interface {
+	IsTestOnlyDEXAdapter() bool
 }
 
 // ============================================================================
@@ -59,7 +70,8 @@ type UniswapV2Adapter struct {
 	routerAddress  string
 }
 
-// NewUniswapV2Adapter creates a new Uniswap V2 adapter
+// NewUniswapV2Adapter creates an explicit test-only placeholder adapter.
+// Production configuration must use CreateAdapter, which rejects it.
 func NewUniswapV2Adapter(cfg AdapterConfig) (*UniswapV2Adapter, error) {
 	factoryAddr, ok := cfg.ContractAddresses["factory"]
 	if !ok {
@@ -79,12 +91,16 @@ func NewUniswapV2Adapter(cfg AdapterConfig) (*UniswapV2Adapter, error) {
 
 func (a *UniswapV2Adapter) GetSupportedPairs(ctx context.Context) ([]TradingPair, error) {
 	// In production, this would query the factory contract for all pairs
+	a.cacheMu.RLock()
+	defer a.cacheMu.RUnlock()
 	pairs := make([]TradingPair, 0, len(a.pairCache))
 	for _, pair := range a.pairCache {
 		pairs = append(pairs, pair)
 	}
 	return pairs, nil
 }
+
+func (*UniswapV2Adapter) IsTestOnlyDEXAdapter() bool { return true }
 
 func (a *UniswapV2Adapter) GetPrice(ctx context.Context, baseSymbol, quoteSymbol string) (Price, error) {
 	// In production, this would query the pair contract reserves
@@ -102,6 +118,8 @@ func (a *UniswapV2Adapter) GetPrice(ctx context.Context, baseSymbol, quoteSymbol
 }
 
 func (a *UniswapV2Adapter) GetPool(ctx context.Context, poolID string) (LiquidityPool, error) {
+	a.cacheMu.RLock()
+	defer a.cacheMu.RUnlock()
 	pool, ok := a.pools[poolID]
 	if !ok {
 		return LiquidityPool{}, fmt.Errorf("pool %s not found", poolID)
@@ -110,6 +128,8 @@ func (a *UniswapV2Adapter) GetPool(ctx context.Context, poolID string) (Liquidit
 }
 
 func (a *UniswapV2Adapter) ListPools(ctx context.Context, query PoolQuery) ([]LiquidityPool, error) {
+	a.cacheMu.RLock()
+	defer a.cacheMu.RUnlock()
 	var result []LiquidityPool
 	for _, pool := range a.pools {
 		if matchesPoolQuery(pool, query) {
@@ -182,7 +202,9 @@ type OsmosisAdapter struct {
 	grpcEndpoint string
 }
 
-// NewOsmosisAdapter creates a new Osmosis adapter
+// NewOsmosisAdapter creates an explicit test-only placeholder adapter.
+// Production configuration must use CreateAdapter, which selects
+// RealOsmosisAdapter instead.
 func NewOsmosisAdapter(cfg AdapterConfig) (*OsmosisAdapter, error) {
 	return &OsmosisAdapter{
 		BaseAdapter:  NewBaseAdapter(cfg),
@@ -192,12 +214,16 @@ func NewOsmosisAdapter(cfg AdapterConfig) (*OsmosisAdapter, error) {
 
 func (a *OsmosisAdapter) GetSupportedPairs(ctx context.Context) ([]TradingPair, error) {
 	// In production, this would query Osmosis gamm module for pools
+	a.cacheMu.RLock()
+	defer a.cacheMu.RUnlock()
 	pairs := make([]TradingPair, 0, len(a.pairCache))
 	for _, pair := range a.pairCache {
 		pairs = append(pairs, pair)
 	}
 	return pairs, nil
 }
+
+func (*OsmosisAdapter) IsTestOnlyDEXAdapter() bool { return true }
 
 func (a *OsmosisAdapter) GetPrice(ctx context.Context, baseSymbol, quoteSymbol string) (Price, error) {
 	// In production, this would query pool spot price
@@ -214,6 +240,8 @@ func (a *OsmosisAdapter) GetPrice(ctx context.Context, baseSymbol, quoteSymbol s
 }
 
 func (a *OsmosisAdapter) GetPool(ctx context.Context, poolID string) (LiquidityPool, error) {
+	a.cacheMu.RLock()
+	defer a.cacheMu.RUnlock()
 	pool, ok := a.pools[poolID]
 	if !ok {
 		return LiquidityPool{}, fmt.Errorf("pool %s not found", poolID)
@@ -222,6 +250,8 @@ func (a *OsmosisAdapter) GetPool(ctx context.Context, poolID string) (LiquidityP
 }
 
 func (a *OsmosisAdapter) ListPools(ctx context.Context, query PoolQuery) ([]LiquidityPool, error) {
+	a.cacheMu.RLock()
+	defer a.cacheMu.RUnlock()
 	var result []LiquidityPool
 	for _, pool := range a.pools {
 		if matchesPoolQuery(pool, query) {
@@ -287,7 +317,8 @@ type CurveAdapter struct {
 	registryAddress string
 }
 
-// NewCurveAdapter creates a new Curve adapter
+// NewCurveAdapter creates an explicit test-only placeholder adapter.
+// Production configuration must use CreateAdapter, which rejects it.
 func NewCurveAdapter(cfg AdapterConfig) (*CurveAdapter, error) {
 	registryAddr, ok := cfg.ContractAddresses["registry"]
 	if !ok {
@@ -301,12 +332,16 @@ func NewCurveAdapter(cfg AdapterConfig) (*CurveAdapter, error) {
 }
 
 func (a *CurveAdapter) GetSupportedPairs(ctx context.Context) ([]TradingPair, error) {
+	a.cacheMu.RLock()
+	defer a.cacheMu.RUnlock()
 	pairs := make([]TradingPair, 0, len(a.pairCache))
 	for _, pair := range a.pairCache {
 		pairs = append(pairs, pair)
 	}
 	return pairs, nil
 }
+
+func (*CurveAdapter) IsTestOnlyDEXAdapter() bool { return true }
 
 func (a *CurveAdapter) GetPrice(ctx context.Context, baseSymbol, quoteSymbol string) (Price, error) {
 	return Price{
@@ -322,6 +357,8 @@ func (a *CurveAdapter) GetPrice(ctx context.Context, baseSymbol, quoteSymbol str
 }
 
 func (a *CurveAdapter) GetPool(ctx context.Context, poolID string) (LiquidityPool, error) {
+	a.cacheMu.RLock()
+	defer a.cacheMu.RUnlock()
 	pool, ok := a.pools[poolID]
 	if !ok {
 		return LiquidityPool{}, fmt.Errorf("pool %s not found", poolID)
@@ -330,6 +367,8 @@ func (a *CurveAdapter) GetPool(ctx context.Context, poolID string) (LiquidityPoo
 }
 
 func (a *CurveAdapter) ListPools(ctx context.Context, query PoolQuery) ([]LiquidityPool, error) {
+	a.cacheMu.RLock()
+	defer a.cacheMu.RUnlock()
 	var result []LiquidityPool
 	for _, pool := range a.pools {
 		if matchesPoolQuery(pool, query) {
@@ -418,11 +457,41 @@ func matchesPoolQuery(pool LiquidityPool, query PoolQuery) bool {
 func CreateAdapter(cfg AdapterConfig) (Adapter, error) {
 	switch cfg.Type {
 	case "uniswap_v2":
-		return NewUniswapV2Adapter(cfg)
+		return nil, fmt.Errorf("adapter type %q has no explicitly versioned production implementation", cfg.Type)
 	case "osmosis":
-		return NewOsmosisAdapter(cfg)
+		if cfg.RouteProfile == nil {
+			return nil, fmt.Errorf("osmosis route profile is required")
+		}
+		if cfg.ChainID != "" && cfg.ChainID != cfg.RouteProfile.ChainID {
+			return nil, ErrWrongChain
+		}
+		mode := RouteValidationRuntime
+		if cfg.EngineeringTestMode {
+			mode = RouteValidationEngineering
+		}
+		if err := cfg.RouteProfile.Validate(mode); err != nil {
+			return nil, err
+		}
+		osmosisCfg := DefaultOsmosisConfig()
+		osmosisCfg.Network = string(cfg.RouteProfile.Environment)
+		osmosisCfg.RESTEndpoint = cfg.RESTEndpoint
+		if osmosisCfg.RESTEndpoint == "" && (strings.HasPrefix(cfg.RPCEndpoint, "http://") || strings.HasPrefix(cfg.RPCEndpoint, "https://")) {
+			osmosisCfg.RESTEndpoint = cfg.RPCEndpoint
+		}
+		osmosisCfg.GRPCEndpoint = cfg.RPCEndpoint
+		osmosisCfg.Timeout = cfg.Timeout
+		osmosisCfg.RouteProfile = cfg.RouteProfile
+		osmosisCfg.ValidationMode = mode
+		osmosisCfg.PoolState = cfg.PoolState
+		osmosisCfg.ChainEvidence = cfg.ChainEvidence
+		osmosisCfg.Oracle = cfg.Oracle
+		osmosisCfg.ExecutionVerifier = cfg.ExecutionVerifier
+		osmosisCfg.RouteAuthorizer = cfg.RouteAuthorizer
+		osmosisCfg.HTTPClient = cfg.HTTPClient
+		osmosisCfg.Now = cfg.Now
+		return NewRealOsmosisAdapter(cfg, osmosisCfg)
 	case "curve":
-		return NewCurveAdapter(cfg)
+		return nil, fmt.Errorf("adapter type %q has no explicitly versioned production implementation", cfg.Type)
 	default:
 		return nil, fmt.Errorf("unsupported adapter type: %s", cfg.Type)
 	}

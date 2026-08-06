@@ -4,8 +4,10 @@ package dex
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"testing"
 	"time"
 
@@ -13,6 +15,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+const testPoolStateSourceID = "test-node"
 
 // TestOsmosisConfig tests configuration functions
 func TestOsmosisConfig(t *testing.T) {
@@ -49,7 +53,9 @@ func TestOsmosisConfig(t *testing.T) {
 
 // createTestAdapter creates an adapter with a mock server for testing
 func createTestAdapter(t *testing.T, handler http.Handler) (*RealOsmosisAdapter, *httptest.Server) {
+	t.Helper()
 	server := httptest.NewServer(handler)
+	now := time.Unix(1_700_000_000, 0).UTC()
 
 	adapterCfg := AdapterConfig{
 		Name:    "osmosis-test",
@@ -64,12 +70,98 @@ func createTestAdapter(t *testing.T, handler http.Handler) (*RealOsmosisAdapter,
 		PoolRefreshInterval: 1 * time.Minute,
 		Timeout:             30 * time.Second,
 		SlippageTolerance:   0.01,
+		RouteProfile:        testOsmosisProfile(),
+		ValidationMode:      RouteValidationEngineering,
+		PoolState:           newRESTBoundPoolStateProvider(server.URL, server.Client(), ChainObservation{ChainID: OsmosisChainIDMainnet, SourceID: testPoolStateSourceID, Height: 100, BlockHash: "AABB", ObservedAt: now}),
+		ChainEvidence:       staticChainEvidence{observation: ChainObservation{ChainID: OsmosisChainIDMainnet, SourceID: testPoolStateSourceID, Height: 100, BlockHash: "AABB", ObservedAt: now}},
+		Oracle:              staticOracle{price: sdkmath.LegacyOneDec()},
+		ExecutionVerifier:   staticExecutionVerifier{},
+		Now:                 func() time.Time { return now },
 	}
 
 	adapter, err := NewRealOsmosisAdapter(adapterCfg, osmosisConfig)
 	require.NoError(t, err)
 
 	return adapter, server
+}
+
+type staticChainEvidence struct{ observation ChainObservation }
+
+func (s staticChainEvidence) SourceID() string {
+	if s.observation.SourceID == "" {
+		return testPoolStateSourceID
+	}
+	return s.observation.SourceID
+}
+
+func (s staticChainEvidence) LatestObservation() (ChainObservation, error) {
+	observation := s.observation
+	if observation.SourceID == "" {
+		observation.SourceID = testPoolStateSourceID
+	}
+	return observation, nil
+}
+func (s staticChainEvidence) BlockHash(uint64) (string, error) { return s.observation.BlockHash, nil }
+
+type restBoundPoolStateProvider struct {
+	endpoint    string
+	client      *http.Client
+	observation ChainObservation
+}
+
+func newRESTBoundPoolStateProvider(endpoint string, client *http.Client, observation ChainObservation) *restBoundPoolStateProvider {
+	return &restBoundPoolStateProvider{endpoint: endpoint, client: client, observation: observation}
+}
+
+func (p *restBoundPoolStateProvider) PoolState(ctx context.Context, poolID string) (BoundOsmosisPoolResponse, error) {
+	return p.get(ctx, p.endpoint+"/osmosis/poolmanager/v1beta1/pools/"+poolID)
+}
+
+func (p *restBoundPoolStateProvider) PoolStates(ctx context.Context, limit int) (BoundOsmosisPoolResponse, error) {
+	return p.get(ctx, p.endpoint+"/osmosis/poolmanager/v1beta1/all-pools?pagination.limit="+strconv.Itoa(limit))
+}
+
+func (p *restBoundPoolStateProvider) get(ctx context.Context, endpoint string) (BoundOsmosisPoolResponse, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return BoundOsmosisPoolResponse{}, err
+	}
+	resp, err := p.client.Do(req)
+	if err != nil {
+		return BoundOsmosisPoolResponse{}, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return BoundOsmosisPoolResponse{}, fmt.Errorf("status %d", resp.StatusCode)
+	}
+	payload, err := readBoundedResponse(resp.Body)
+	if err != nil {
+		return BoundOsmosisPoolResponse{}, err
+	}
+	return BoundOsmosisPoolResponse{Payload: payload, ResponseHeight: p.observation.Height, ResponseBlockHash: p.observation.BlockHash, ResponseSourceID: p.observation.SourceID, Observation: p.observation}, nil
+}
+
+type staticOracle struct{ price sdkmath.LegacyDec }
+
+func (s staticOracle) Price(string, string, uint64) (sdkmath.LegacyDec, error) { return s.price, nil }
+
+type staticExecutionVerifier struct{}
+
+func (staticExecutionVerifier) VerifySignedExecution(context.Context, []byte, []byte) error {
+	return nil
+}
+
+func testOsmosisProfile() *DEXRouteProfile {
+	return &DEXRouteProfile{
+		ID: "osmosis-engineering-fixture", State: RouteEngineeringCompleteExternalBlocked,
+		Network: "osmosis", ChainID: OsmosisChainIDMainnet, Environment: EnvironmentDevelopment,
+		DEX: "osmosis", Version: OsmosisAdapterVersion, AllowedPoolIDs: []string{"1", "2"},
+		Tokens:         []RouteToken{{Symbol: "OSMO", Denom: "uosmo", Decimals: 6}, {Symbol: "ATOM", Denom: "uatom", Decimals: 6}, {Symbol: "USDC", Denom: "uusdc", Decimals: 6}},
+		FinalityBlocks: 2, MaxObservationAge: time.Minute, MaxHeightLag: 2, MaxHops: 2,
+		MinLiquidity: sdkmath.NewInt(1), MinReserve: sdkmath.NewInt(1), MaxAmount: sdkmath.NewInt(10_000_000_000),
+		MaxPriceImpact: sdkmath.LegacyMustNewDecFromStr("0.50"), MaxOracleDeviation: sdkmath.LegacyMustNewDecFromStr("0.99"),
+		QuoteTTL: time.Minute, CustodyMode: "test-signer", OracleSource: "deterministic-fixture", EngineeringTestOnly: true,
+	}
 }
 
 // TestNewRealOsmosisAdapter tests adapter creation
@@ -90,6 +182,13 @@ func TestNewRealOsmosisAdapter(t *testing.T) {
 		PoolRefreshInterval: 1 * time.Minute,
 		Timeout:             30 * time.Second,
 		SlippageTolerance:   0.01,
+		RouteProfile:        testOsmosisProfile(),
+		ValidationMode:      RouteValidationEngineering,
+		PoolState:           newRESTBoundPoolStateProvider("https://lcd.osmosis.zone", http.DefaultClient, ChainObservation{ChainID: OsmosisChainIDMainnet, SourceID: testPoolStateSourceID, Height: 100, BlockHash: "AABB", ObservedAt: time.Unix(1_700_000_000, 0).UTC()}),
+		ChainEvidence:       staticChainEvidence{observation: ChainObservation{ChainID: OsmosisChainIDMainnet, SourceID: testPoolStateSourceID, Height: 100, BlockHash: "AABB", ObservedAt: time.Unix(1_700_000_000, 0).UTC()}},
+		Oracle:              staticOracle{price: sdkmath.LegacyOneDec()},
+		ExecutionVerifier:   staticExecutionVerifier{},
+		Now:                 func() time.Time { return time.Unix(1_700_000_000, 0).UTC() },
 	}
 
 	adapter, err := NewRealOsmosisAdapter(adapterCfg, osmosisConfig)
@@ -109,7 +208,15 @@ func TestNewRealOsmosisAdapter_DefaultConfig(t *testing.T) {
 		Enabled: true,
 	}
 
-	adapter, err := NewRealOsmosisAdapter(adapterCfg, DefaultOsmosisConfig())
+	config := DefaultOsmosisConfig()
+	config.RouteProfile = testOsmosisProfile()
+	config.ValidationMode = RouteValidationEngineering
+	config.PoolState = newRESTBoundPoolStateProvider(config.GetRESTEndpoint(), http.DefaultClient, ChainObservation{ChainID: OsmosisChainIDMainnet, SourceID: testPoolStateSourceID, Height: 100, BlockHash: "AABB", ObservedAt: time.Unix(1_700_000_000, 0).UTC()})
+	config.ChainEvidence = staticChainEvidence{observation: ChainObservation{ChainID: OsmosisChainIDMainnet, SourceID: testPoolStateSourceID, Height: 100, BlockHash: "AABB", ObservedAt: time.Unix(1_700_000_000, 0).UTC()}}
+	config.Oracle = staticOracle{price: sdkmath.LegacyOneDec()}
+	config.ExecutionVerifier = staticExecutionVerifier{}
+	config.Now = func() time.Time { return time.Unix(1_700_000_000, 0).UTC() }
+	adapter, err := NewRealOsmosisAdapter(adapterCfg, config)
 	require.NoError(t, err)
 	assert.NotNil(t, adapter)
 	assert.Equal(t, "osmosis", adapter.Name())
@@ -283,11 +390,12 @@ func TestOsmosisAdapter_GetSwapQuote(t *testing.T) {
 	ctx := context.Background()
 
 	request := SwapRequest{
-		FromToken:         Token{Symbol: "OSMO", Denom: "uosmo", Decimals: 6, ChainID: "osmosis-1"},
-		ToToken:           Token{Symbol: "ATOM", Denom: "uatom", Decimals: 6, ChainID: "osmosis-1"},
-		Amount:            sdkmath.NewInt(1000000000),
-		Sender:            "osmo1sender...",
-		SlippageTolerance: 0.01,
+		FromToken:              Token{Symbol: "OSMO", Denom: "uosmo", Decimals: 6, ChainID: "osmosis-1"},
+		ToToken:                Token{Symbol: "ATOM", Denom: "uatom", Decimals: 6, ChainID: "osmosis-1"},
+		Amount:                 sdkmath.NewInt(1000000000),
+		Sender:                 "osmo1sender...",
+		SlippageTolerance:      0.01,
+		SlippageToleranceExact: sdkmath.LegacyMustNewDecFromStr("0.01"),
 	}
 
 	quote, err := adapter.GetSwapQuote(ctx, request)
@@ -412,7 +520,8 @@ func TestOsmosisAdapter_ContextCancellation(t *testing.T) {
 	assert.Error(t, err) // Should error due to context cancellation
 }
 
-// TestOsmosisAdapter_EstimateGas tests gas estimation
+// TestOsmosisAdapter_EstimateGasRejectsSyntheticEstimate verifies real swaps
+// require finalized unsigned transaction simulation.
 func TestOsmosisAdapter_EstimateGas(t *testing.T) {
 	t.Parallel()
 
@@ -441,7 +550,6 @@ func TestOsmosisAdapter_EstimateGas(t *testing.T) {
 
 	ctx := context.Background()
 
-	// Direct swap should use ~300k gas
 	request := SwapRequest{
 		FromToken: Token{Symbol: "OSMO", Denom: "uosmo"},
 		ToToken:   Token{Symbol: "ATOM", Denom: "uatom"},
@@ -449,19 +557,8 @@ func TestOsmosisAdapter_EstimateGas(t *testing.T) {
 	}
 
 	gas, err := adapter.EstimateGas(ctx, request)
-	require.NoError(t, err)
-	assert.Equal(t, uint64(300000), gas)
-
-	// Multi-hop swap should use more gas
-	request = SwapRequest{
-		FromToken: Token{Symbol: "FOO", Denom: "ufoo"},
-		ToToken:   Token{Symbol: "BAR", Denom: "ubar"},
-		Amount:    sdkmath.NewInt(1000000),
-	}
-
-	gas, err = adapter.EstimateGas(ctx, request)
-	require.NoError(t, err)
-	assert.Equal(t, uint64(500000), gas)
+	require.Error(t, err)
+	assert.Zero(t, gas)
 }
 
 // TestOsmosisAdapter_GetPoolReserves tests pool reserve retrieval
@@ -516,21 +613,29 @@ func TestTokenParsing(t *testing.T) {
 		PoolRefreshInterval: 1 * time.Minute,
 		Timeout:             30 * time.Second,
 		SlippageTolerance:   0.01,
+		RouteProfile:        testOsmosisProfile(),
+		ValidationMode:      RouteValidationEngineering,
+		PoolState:           newRESTBoundPoolStateProvider("https://lcd.osmosis.zone", http.DefaultClient, ChainObservation{ChainID: OsmosisChainIDMainnet, SourceID: testPoolStateSourceID, Height: 100, BlockHash: "AABB", ObservedAt: time.Unix(1_700_000_000, 0).UTC()}),
+		ChainEvidence:       staticChainEvidence{observation: ChainObservation{ChainID: OsmosisChainIDMainnet, SourceID: testPoolStateSourceID, Height: 100, BlockHash: "AABB", ObservedAt: time.Unix(1_700_000_000, 0).UTC()}},
+		Oracle:              staticOracle{price: sdkmath.LegacyOneDec()},
+		ExecutionVerifier:   staticExecutionVerifier{},
+		Now:                 func() time.Time { return time.Unix(1_700_000_000, 0).UTC() },
 	}
 
 	adapter, err := NewRealOsmosisAdapter(adapterCfg, osmosisConfig)
 	require.NoError(t, err)
 
 	tests := []struct {
-		denom          string
-		expectedSymbol string
-		expectedNative bool
+		denom            string
+		expectedSymbol   string
+		expectedNative   bool
+		expectedDecimals uint8
 	}{
-		{"uosmo", "OSMO", true},
-		{"uatom", "ATOM", true},
-		{"uusdc", "USDC", true},
-		{"ibc/27394FB092D2ECCD56123C74F36E4C1F926001CEADA9CA97EA622B25F41E5EB2", "IBC-27394F", false},
-		{"unknown", "unknown", true},
+		{"uosmo", "OSMO", true, 6},
+		{"uatom", "ATOM", true, 6},
+		{"uusdc", "USDC", true, 6},
+		{"ibc/27394FB092D2ECCD56123C74F36E4C1F926001CEADA9CA97EA622B25F41E5EB2", "IBC-27394F", false, 0},
+		{"unknown", "unknown", true, 0},
 	}
 
 	for _, tc := range tests {
@@ -540,7 +645,7 @@ func TestTokenParsing(t *testing.T) {
 			assert.Equal(t, tc.expectedSymbol, token.Symbol)
 			assert.Equal(t, tc.expectedNative, token.IsNative)
 			assert.Equal(t, tc.denom, token.Denom)
-			assert.Equal(t, uint8(6), token.Decimals)
+			assert.Equal(t, tc.expectedDecimals, token.Decimals)
 		})
 	}
 }

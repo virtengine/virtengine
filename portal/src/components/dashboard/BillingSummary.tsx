@@ -7,7 +7,7 @@
 
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
-import { formatCurrency } from '@/lib/utils';
+import { formatToken } from '@/components/escrow/utils';
 import type { BillingSummaryData } from '@/types/customer';
 import { useTranslation } from 'react-i18next';
 
@@ -29,7 +29,9 @@ export function BillingSummary({ billing }: BillingSummaryProps) {
         <div>
           <p className="text-sm text-muted-foreground">{t('Current period')}</p>
           <div className="flex items-baseline gap-2">
-            <span className="text-2xl font-bold">{formatCurrency(billing.currentPeriodCost)}</span>
+            <span className="text-2xl font-bold">
+              {formatToken(billing.currentPeriodCost, 'UVE')}
+            </span>
             <Badge variant={changeIsPositive ? 'destructive' : 'success'} size="sm">
               {changeIsPositive ? '+' : ''}
               {billing.changePercent.toFixed(1)}%
@@ -42,7 +44,7 @@ export function BillingSummary({ billing }: BillingSummaryProps) {
           <div className="flex items-center justify-between rounded-md bg-warning/10 px-3 py-2">
             <span className="text-sm font-medium">{t('Outstanding')}</span>
             <span className="text-sm font-semibold">
-              {formatCurrency(billing.outstandingBalance)}
+              {formatToken(billing.outstandingBalance, 'UVE')}
             </span>
           </div>
         )}
@@ -50,7 +52,7 @@ export function BillingSummary({ billing }: BillingSummaryProps) {
         {/* Lifetime */}
         <div className="flex items-center justify-between text-sm">
           <span className="text-muted-foreground">{t('Lifetime spend')}</span>
-          <span className="font-medium">{formatCurrency(billing.totalLifetimeSpend)}</span>
+          <span className="font-medium">{formatToken(billing.totalLifetimeSpend, 'UVE')}</span>
         </div>
 
         {/* By provider breakdown */}
@@ -62,7 +64,7 @@ export function BillingSummary({ billing }: BillingSummaryProps) {
             <div key={bp.providerName} className="flex items-center justify-between text-sm">
               <span className="text-muted-foreground">{bp.providerName}</span>
               <span>
-                {formatCurrency(bp.amount)}{' '}
+                {formatToken(bp.amount, 'UVE')}{' '}
                 <span className="text-xs text-muted-foreground">
                   {t('({{percentage}}%)', { percentage: bp.percentage })}
                 </span>
@@ -80,7 +82,7 @@ export function BillingSummary({ billing }: BillingSummaryProps) {
             <div key={h.period} className="flex items-center justify-between text-sm">
               <span className="text-muted-foreground">{h.period}</span>
               <span>
-                {formatCurrency(h.amount)}{' '}
+                {formatToken(h.amount, 'UVE')}{' '}
                 <span className="text-xs text-muted-foreground">
                   {t('({{count}} orders)', { count: h.orders })}
                 </span>

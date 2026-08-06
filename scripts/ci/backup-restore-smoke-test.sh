@@ -106,3 +106,49 @@ if ! grep -q "snapshot-one" "${NODE_HOME}/data/state.txt"; then
 fi
 
 echo "backup/restore smoke test passed"
+
+# Provider continuity drill: encrypted identity, queue/sequence/reconciliation,
+# and fencing state must round-trip without plaintext key material.
+PROVIDER_HOME="${TMP_DIR}/provider"
+PROVIDER_SNAPSHOT_DIR="${TMP_DIR}/provider-snapshots"
+PROVIDER_KEY_DIR="${PROVIDER_HOME}/keys"
+PROVIDER_HA_STATE_DIR="${PROVIDER_HOME}/ha"
+mkdir -p "${PROVIDER_HOME}/data" "${PROVIDER_HOME}/config" "$PROVIDER_KEY_DIR" "$PROVIDER_HA_STATE_DIR" "$PROVIDER_SNAPSHOT_DIR"
+cat > "${PROVIDER_KEY_DIR}/provider-keys.enc.json" << 'EOF'
+{"version":1,"kdf":"argon2id-v1","cipher":"aes-256-gcm","salt":"fixture","nonce":"fixture","ciphertext":"fixture","metadata_mac":"fixture"}
+EOF
+cat > "${PROVIDER_HA_STATE_DIR}/chain_usage_queue.json" << 'EOF'
+{"items":{"idem-1":{"status":"broadcasted"}},"usage_sequences":{"stream-1":42},"usage_proofs":{"stream-1/42":{"sequence":42}}}
+EOF
+cat > "${PROVIDER_HA_STATE_DIR}/chain_usage_queue.json.mutations" << 'EOF'
+{"schema_version":1,"items":{"mutation-1":{"state":"ambiguous","sequence":19,"lease_token":7,"reconciliation_state":"restart_reconciliation_required"}}}
+EOF
+cat > "${PROVIDER_HA_STATE_DIR}/fiat_conversion_state.json" << 'EOF'
+{"schema_version":1,"records":{"conversion-1":{"state":"payout_pending","observation_sequence":6}}}
+EOF
+cat > "${PROVIDER_HA_STATE_DIR}/fiat_conversion_repository.json" << 'EOF'
+{"schema_version":1,"webhook_events":{"event-1":{"status":"verified"}}}
+EOF
+cat > "${PROVIDER_HA_STATE_DIR}/submitter_lease.json" << 'EOF'
+{"schema_version":1,"next_token":7,"leases":{"provider-mutation:account":{"token":7}}}
+EOF
+echo "provider-state" > "${PROVIDER_HOME}/data/state.txt"
+echo "provider-config" > "${PROVIDER_HOME}/config/config.yaml"
+
+export PROVIDER_HOME PROVIDER_SNAPSHOT_DIR PROVIDER_KEY_DIR PROVIDER_HA_STATE_DIR
+provider_backup=$(${SCRIPT_DIR}/backup-provider-state.sh --backup | grep '^provider_state_' | tail -1)
+rm -rf "${PROVIDER_HOME}/data" "${PROVIDER_HOME}/config" "$PROVIDER_KEY_DIR" "$PROVIDER_HA_STATE_DIR"
+${SCRIPT_DIR}/backup-provider-state.sh --restore "$provider_backup" > /dev/null
+
+grep -q '"cipher":"aes-256-gcm"' "${PROVIDER_KEY_DIR}/provider-keys.enc.json"
+if grep -q '"private_key"' "${PROVIDER_KEY_DIR}/provider-keys.enc.json"; then
+  echo "provider restore exposed plaintext key material" >&2
+  exit 1
+fi
+grep -q '"stream-1":42' "${PROVIDER_HA_STATE_DIR}/chain_usage_queue.json"
+grep -q '"sequence":19' "${PROVIDER_HA_STATE_DIR}/chain_usage_queue.json.mutations"
+grep -q 'restart_reconciliation_required' "${PROVIDER_HA_STATE_DIR}/chain_usage_queue.json.mutations"
+grep -q '"observation_sequence":6' "${PROVIDER_HA_STATE_DIR}/fiat_conversion_state.json"
+grep -q '"next_token":7' "${PROVIDER_HA_STATE_DIR}/submitter_lease.json"
+
+echo "provider identity/queue/sequence/fencing/reconciliation restore smoke test passed"

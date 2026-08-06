@@ -1,213 +1,187 @@
-# Provider Daemon - Waldur Integration Design
+# Provider Daemon Waldur Integration
 
 ## Purpose
-Define the provider-daemon bridge between VirtEngine on-chain marketplace events and Waldur control-plane actions for provisioning, termination, and usage reporting. This doc is the authoritative integration design for decentralized operation.
+This document is the operator-facing source of truth for the VirtEngine to Waldur bridge implemented in `pkg/waldur/**` and consumed by provider-side workflows. It describes the exact onboarding, order, lifecycle, usage, settlement, and recovery semantics that the automated Waldur E2E package now verifies.
 
-## Design Principles
-- On-chain state is authoritative; off-chain executes intent.
-- Providers control provisioning; validators only verify signatures and state transitions.
-- Every off-chain action is signed and replay-protected.
-- All workflows are idempotent and resilient to retries.
+## Owned Code Paths
+- `pkg/waldur/client.go`
+- `pkg/waldur/marketplace.go`
+- `pkg/waldur/lifecycle.go`
+- `pkg/waldur/usage.go`
+- `pkg/waldur/usage_line_items.go`
+- `cmd/virtengine/cmd/waldur/**`
+- `tests/e2e/waldur/**`
 
-## Components
-- **VirtEngine chain**: source of truth for orders/allocations and settlement.
-- **Provider daemon**: consumes chain events and calls Waldur APIs.
-- **Waldur**: provider-operated control plane for cloud/HPC resources.
-- **Artifact store (IPFS/Waldur)**: encrypted config payloads referenced by `encrypted_config_ref`.
+## Bridge Contract
 
-## Event Flow Diagrams
+### Authentication and API base path
+- `BaseURL` may point at the Waldur site root or an API root.
+- The client negotiates `BaseURL`, `/api/`, and `/api/v1/` automatically before first use.
+- `Token` may already include `Token ` or `Bearer `.
+- `AuthScheme` is supported when the raw secret must be emitted as `Token <secret>` or `Bearer <secret>`.
+- Connection probes and `GET /users/me/` are the readiness gate for the client.
 
-### 1) Order -> Allocation -> Provision
+### Provider offering identity
+- Every provider offering published to Waldur must carry a stable `backend_id`.
+- `backend_id` is the authoritative bridge key for reconciliation.
+- The expected value is the VirtEngine provider-side offering identifier, for example `ve1providerabcd/compute-001`.
+- `GetOfferingByBackendID` fails closed:
+  - `ErrNotFound` when no offering matches.
+  - `ErrConflict` when more than one offering shares the same backend ID.
 
-```
-[Customer] --(MsgCreateOrder)--> [Chain]
-   |                                  |
-   |                       Event: OrderCreated
-   |                                  v
-   |                        [Provider Daemon]
-   |                                  |
-   |                        (Bid Decision)
-   |                                  v
-   |                         MsgCreateBid
-   |                                  v
-[Chain] --(Bid Accepted)--> Event: AllocationCreated
-   |                                  |
-   |                                  v
-   |                        [Provider Daemon]
-   |                         create Waldur order
-   |                                  |
-   |                         approve Waldur order
-   |                                  v
-   |                send Callback: provision_requested
-   v                                  v
-[Chain] <--- MsgWaldurCallback ---- [Provider Daemon]
-```
+### Order identity
+- VirtEngine order or allocation identifiers must be copied into Waldur order metadata.
+- The production bridge uses:
+  - `ve_order_id`
+  - `ve_customer_address`
+  - `ve_provider_address`
+  - region or placement attributes when relevant
+- After order creation, the provider must approve the order and set the Waldur backend ID to the canonical VirtEngine order or allocation identifier.
 
-### 2) Provisioning -> Active -> Usage
+## Provider Onboarding
 
-```
-[Provider Daemon] -- Waldur provision --> [Waldur]
-          |                                  |
-          |                         Resource provisioned
-          |                                  v
-          |                Callback: allocation_active
-          v                                  v
-        [Chain] <--- MsgWaldurCallback ---- [Provider Daemon]
-          |
-          |  periodic usage report
-          v
-       MsgUsageReport
-```
+### 1. Create the provider offering in Waldur
+- Use `MarketplaceClient.CreateOffering`.
+- Required inputs:
+  - `name`
+  - `customer_uuid`
+  - `type`
+  - `shared`
+  - `billable`
+- Recommended inputs:
+  - `backend_id`
+  - `description`
+  - `components`
+  - `attributes`
 
-### 3) Termination
+### 2. Verify backend reconciliation
+- Immediately query the offering back with `GetOfferingByBackendID`.
+- Treat duplicate matches as a release blocker, not an operator warning.
 
-```
-[Customer/Admin] -- MsgTerminate --> [Chain]
-   |                                   |
-   |                      Event: TerminateRequested
-   |                                   v
-   |                           [Provider Daemon]
-   |                             delete Waldur resource
-   |                                   v
-   |                Callback: allocation_terminated
-   v                                   v
-[Chain] <--- MsgWaldurCallback ---- [Provider Daemon]
-```
+### 3. Validate customer visibility
+- Use `ListOfferings` against `marketplace-public-offerings`.
+- Confirm the returned offering UUID matches the provider offering UUID.
 
-## Canonical State Mapping
+## Order and Resource Lifecycle
 
-| VirtEngine Allocation State | Waldur Resource State | Notes |
-|---|---|---|
-| pending | provisioning | Allocation created, provisioning queued |
-| provisioning | provisioning | In-progress |
-| active | provisioned | Resource ready |
-| terminating | terminating | Termination requested |
-| terminated | terminated | Resource removed |
-| failed | failed | Provisioning failed |
-| rejected | rejected | Provider rejected |
+### Customer order path
+1. Customer selects a public offering.
+2. VirtEngine creates a corresponding Waldur order with provider and allocation metadata.
+3. Provider approves the order with `ApproveOrderByProvider`.
+4. Provider sets the authoritative VirtEngine identifier with `SetOrderBackendID`.
+5. Waldur resource provisioning proceeds and the resulting resource carries:
+   - `offering_uuid`
+   - `project_uuid`
+   - `backend_id`
+   - provider-owned attributes such as IP addresses or adapter metadata
 
-Order mapping is derived from allocation state:
-- matched -> provisioning
-- provisioning -> active
-- pending_termination -> terminated
+### Resource control path
+- Resource lifecycle actions are executed through `LifecycleClient`:
+  - `Start`
+  - `Stop`
+  - `Restart`
+  - `Resize`
+  - `Terminate`
+- `ValidateLifecycleAction` is the preflight gate.
+- Invalid transitions, such as starting a terminated resource, are treated as hard errors.
 
-## Callback Schema (Provider -> Chain)
+### Expected resource states
+- `Creating`
+- `OK`
+- `Stopped`
+- `Paused`
+- `Updating`
+- `Terminating`
+- `Terminated`
+- `Erred`
 
-### Payload (JSON)
-```json
-{
-  "id": "wcb_allocation_abc123_8f4e2c1a",
-  "action_type": "provision|terminate|status_update|usage_report",
-  "waldur_id": "UUID",
-  "chain_entity_type": "allocation",
-  "chain_entity_id": "customer/1/1",
-  "payload": {
-    "state": "provisioning|active|failed|terminated",
-    "reason": "string",
-    "encrypted_config_ref": "ipfs://... or object://...",
-    "usage_period_start": "unix",
-    "usage_period_end": "unix",
-    "usage": { "cpu_hours": "123", "gpu_hours": "4", "ram_gb_hours": "512" }
-  },
-  "signer_id": "provider_addr_or_key_id",
-  "nonce": "unique_nonce",
-  "timestamp": "unix",
-  "expires_at": "unix",
-  "signature": "base64(ed25519(sig(payload)))"
-}
-```
+## Usage, Settlement, and Reconciliation
 
-### Signature Rules
-- Signature is over canonical bytes of: `id|action_type|waldur_id|chain_entity_type|chain_entity_id|nonce|timestamp|payload_hash`.
-- Verify against provider public key in `x/provider`.
-- Reject if nonce already used or expired.
+### Usage submission
+- Canonical usage should be derived from line items with `UsageReportFromLineItems` when the upstream system already has normalized cost inputs.
+- Direct reports may also be submitted with `SubmitUsageReport`.
+- Supported component names in the bridge path are:
+  - `cpu_hours`
+  - `gpu_hours`
+  - `ram_gb_hours`
+  - `storage_gb_hours`
+  - `network_gb`
 
-## Provider Daemon Responsibilities
-- Subscribe to chain events with checkpointing and idempotent replays.
-- Resolve allocation to provider-owned offering.
-- Invoke Waldur APIs using `pkg/waldur`:
-  - Create/approve order
-  - Provision or terminate resource
-  - Pull usage data
-- Emit signed callbacks to chain.
+### Required usage metadata
+- `backend_id`
+- provider identifier
+- allocation or order identifiers when available
+- optional currency or audit labels
 
-## Provider Attach Guide (Waldur)
-This describes how a provider attaches their own Waldur instance to VirtEngine.
+### Bulk usage behavior
+- `SubmitBulkUsage` is intentionally fail-open per resource and fail-closed per batch result.
+- Successful resource submissions are preserved.
+- Failed resources are returned in the error string and in per-resource response state with `state=failed`.
 
-### 1) Deploy Waldur per provider
-- Each provider runs its own Waldur control plane (VMs, OpenStack, SLURM, or cloud connectors).
-- This keeps provider resources isolated and avoids shared global state.
+### Settlement evidence
+- A valid settlement trail contains:
+  - Waldur offering UUID
+  - Waldur order UUID
+  - Waldur resource UUID
+  - VirtEngine backend ID
+  - submitted usage payload or canonical line items
+  - resulting invoice UUID and paid state when settlement is complete
 
-### 2) Create the Waldur marketplace objects
-- Create a **Customer** and a **Project** in Waldur (or use existing).
-- Create a **Marketplace Offering** per VirtEngine offering you want to sell.
-- Record the Waldur offering UUIDs and the project UUID.
+## Failure Handling
 
-### 3) Generate an API token
-- Create a Waldur user with appropriate provider permissions.
-- Generate a token; store it as `WALDUR_TOKEN`.
+### Hard failures
+- `ErrUnauthorized`: invalid token or wrong auth scheme.
+- `ErrForbidden`: token lacks provider permissions.
+- `ErrNotFound`: missing offering, order, or resource.
+- `ErrConflict`: duplicate backend ID reconciliation drift.
+- `ErrServerError`: Waldur-side 5xx failure.
 
-### 4) Map VirtEngine offerings to Waldur offerings
-Populate a map file:
-```
-config/waldur-offering-map.json
-{
-  "<provider_bech32>/1": "<waldur-offering-uuid>",
-  "<provider_bech32>/2": "<waldur-offering-uuid>"
-}
-```
-The key is the on-chain offering ID (`provider/sequence`).
+### Validation failures
+- Missing resource UUID.
+- Empty usage component list.
+- Negative, `NaN`, or infinite usage amounts.
+- usage period end before usage period start.
 
-### 5) Start provider-daemon with Waldur enabled
-Example CLI flags (use your endpoints):
-```
-provider-daemon start \
-  --chain-id virtengine-1 \
-  --node tcp://localhost:26657 \
-  --provider-key provider \
-  --waldur-enabled \
-  --waldur-base-url https://waldur.example.com/api \
-  --waldur-token $WALDUR_TOKEN \
-  --waldur-project-uuid <project-uuid> \
-  --waldur-offering-map config/waldur-offering-map.json \
-  --waldur-chain-submit \
-  --waldur-chain-key <chain-key-name> \
-  --waldur-chain-grpc localhost:9090
+### Retry expectations
+- Transport timeouts and 5xx responses are retryable inside the client.
+- 401, 403, 404, and conflict conditions are not retried automatically.
+- Operator recovery is:
+  1. fix the external state
+  2. rerun the exact bridge action
+  3. confirm reconciliation by backend ID, not by human-readable name
+
+## Operator Verification
+
+### Automated proof
+Run:
+
+```bash
+go test -tags e2e.integration ./tests/e2e/waldur/...
 ```
 
-### 6) Validate connectivity
-- Ensure `provider-daemon` logs “Waldur Bridge: started”.
-- Confirm Waldur health check passes at startup.
-- Submit a test order and verify a Waldur order is created and approved.
+The suite proves:
+- customer onboarding and auto-provisioned order flow
+- provider offering update and backend reconciliation
+- provider approval and backend ID persistence
+- lifecycle actions on verified resources
+- canonical usage-to-invoice settlement flow
+- duplicate backend conflict rejection
+- partial bulk usage failure reporting
+- recovery after a Waldur order creation failure
 
-### 7) Security and operational notes
-- Store Waldur tokens in a secret manager; do not commit to repo.
-- Run provider-daemon and Waldur in the same trust domain.
-- Rotate API tokens and chain keys regularly.
+### Manual spot checks
+1. Create a provider offering with a unique `backend_id`.
+2. Query it back by backend ID.
+3. Create a Waldur order for the offering.
+4. Approve the order and set its backend ID to the VirtEngine allocation or order ID.
+5. Submit usage for the resulting resource.
+6. Verify invoice creation and paid-state transition in Waldur.
 
-## Waldur API Operations (Go client wrapper)
-- Marketplace: list offerings, create order, approve order, terminate resource.
-- OpenStack/AWS/Azure: create/terminate resources depending on offering type.
-- SLURM: create allocation, manage associations, list jobs.
-
-## HPC / Supercomputer Integration
-- HPC offerings correspond to Waldur SLURM allocations.
-- Provider daemon creates SLURM allocation with CPU/GPU limits.
-- On-chain job submission maps to Waldur SLURM job create.
-- Usage is captured from Waldur/SLURM and posted to settlement module.
-
-## Idempotency and Reconciliation
-- All operations keyed by `allocation_id` and `waldur_id`.
-- Provider daemon must re-query Waldur state if callbacks fail.
-- Chain must tolerate duplicate callbacks (idempotent transitions).
-
-## Observability
-- Metrics: callback latency, Waldur API errors, retries, provisioning duration.
-- Logs include allocation ID, order ID, and Waldur UUID.
-
-## Security
-- Provider public key required for callbacks.
-- Nonce replay protection.
-- Strict state transition validation.
-- Encrypted config payloads only referenced; never decrypted on-chain.
-
+## Release Gate
+The Waldur bridge is not launch-ready unless all of the following are true:
+- every production offering has a unique `backend_id`
+- client auth and base URL settings resolve without manual path rewrites
+- provider order approval and backend reconciliation succeed
+- lifecycle actions operate only on verified resource UUIDs
+- usage batches surface partial failures explicitly
+- operator docs and training material match the passing E2E flow in `tests/e2e/waldur/**`

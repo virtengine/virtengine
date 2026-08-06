@@ -19,6 +19,9 @@ import {
   DisputeStatus,
   disputeStatusFromJSON,
   disputeStatusToJSON,
+  HealthStatus,
+  healthStatusFromJSON,
+  healthStatusToJSON,
   HPCPricing,
   HPCUsageMetrics,
   JobResources,
@@ -27,7 +30,15 @@ import {
   jobStateToJSON,
   JobWorkloadSpec,
   LatencyMeasurement,
+  NodeCapacity,
+  NodeHardware,
+  NodeHealth,
+  NodeLocality,
   NodeResources,
+  NodeState,
+  nodeStateFromJSON,
+  nodeStateToJSON,
+  NodeTopology,
   Params,
   Partition,
   PreconfiguredWorkload,
@@ -128,12 +139,17 @@ export interface MsgSubmitJob {
   encryptedOutputsPointer: string;
   maxRuntimeSeconds: Long;
   maxPrice: Coin[];
+  reservationId: string;
+  marketOrderId: string;
+  marketBidId: string;
+  marketLeaseId: string;
 }
 
 /** MsgSubmitJobResponse is the response for MsgSubmitJob */
 export interface MsgSubmitJobResponse {
   jobId: string;
   escrowId: string;
+  reservationId: string;
 }
 
 /** MsgCancelJob cancels an HPC job */
@@ -175,6 +191,17 @@ export interface MsgUpdateNodeMetadata {
   networkBandwidthMbps: Long;
   resources: NodeResources | undefined;
   active: boolean;
+  state: NodeState;
+  healthStatus: HealthStatus;
+  agentPubkey: string;
+  hardwareFingerprint: string;
+  agentVersion: string;
+  lastSequenceNumber: Long;
+  capacity: NodeCapacity | undefined;
+  health: NodeHealth | undefined;
+  hardware: NodeHardware | undefined;
+  topology: NodeTopology | undefined;
+  locality: NodeLocality | undefined;
 }
 
 /** MsgUpdateNodeMetadataResponse is the response for MsgUpdateNodeMetadata */
@@ -194,6 +221,8 @@ export interface MsgFlagDispute {
 /** MsgFlagDisputeResponse is the response for MsgFlagDispute */
 export interface MsgFlagDisputeResponse {
   disputeId: string;
+  financialCaseId: string;
+  financialCaseStatus: string;
 }
 
 /** MsgResolveDispute resolves a dispute (moderator only) */
@@ -1406,6 +1435,10 @@ function createBaseMsgSubmitJob(): MsgSubmitJob {
     encryptedOutputsPointer: "",
     maxRuntimeSeconds: Long.ZERO,
     maxPrice: [],
+    reservationId: "",
+    marketOrderId: "",
+    marketBidId: "",
+    marketLeaseId: "",
   };
 }
 
@@ -1442,6 +1475,18 @@ export const MsgSubmitJob: MessageFns<MsgSubmitJob, "virtengine.hpc.v1.MsgSubmit
     }
     for (const v of message.maxPrice) {
       Coin.encode(v!, writer.uint32(82).fork()).join();
+    }
+    if (message.reservationId !== "") {
+      writer.uint32(90).string(message.reservationId);
+    }
+    if (message.marketOrderId !== "") {
+      writer.uint32(98).string(message.marketOrderId);
+    }
+    if (message.marketBidId !== "") {
+      writer.uint32(106).string(message.marketBidId);
+    }
+    if (message.marketLeaseId !== "") {
+      writer.uint32(114).string(message.marketLeaseId);
     }
     return writer;
   },
@@ -1533,6 +1578,38 @@ export const MsgSubmitJob: MessageFns<MsgSubmitJob, "virtengine.hpc.v1.MsgSubmit
           message.maxPrice.push(Coin.decode(reader, reader.uint32()));
           continue;
         }
+        case 11: {
+          if (tag !== 90) {
+            break;
+          }
+
+          message.reservationId = reader.string();
+          continue;
+        }
+        case 12: {
+          if (tag !== 98) {
+            break;
+          }
+
+          message.marketOrderId = reader.string();
+          continue;
+        }
+        case 13: {
+          if (tag !== 106) {
+            break;
+          }
+
+          message.marketBidId = reader.string();
+          continue;
+        }
+        case 14: {
+          if (tag !== 114) {
+            break;
+          }
+
+          message.marketLeaseId = reader.string();
+          continue;
+        }
       }
       if ((tag & 7) === 4 || tag === 0) {
         break;
@@ -1560,6 +1637,10 @@ export const MsgSubmitJob: MessageFns<MsgSubmitJob, "virtengine.hpc.v1.MsgSubmit
         : "",
       maxRuntimeSeconds: isSet(object.max_runtime_seconds) ? Long.fromValue(object.max_runtime_seconds) : Long.ZERO,
       maxPrice: globalThis.Array.isArray(object?.max_price) ? object.max_price.map((e: any) => Coin.fromJSON(e)) : [],
+      reservationId: isSet(object.reservation_id) ? globalThis.String(object.reservation_id) : "",
+      marketOrderId: isSet(object.market_order_id) ? globalThis.String(object.market_order_id) : "",
+      marketBidId: isSet(object.market_bid_id) ? globalThis.String(object.market_bid_id) : "",
+      marketLeaseId: isSet(object.market_lease_id) ? globalThis.String(object.market_lease_id) : "",
     };
   },
 
@@ -1595,6 +1676,18 @@ export const MsgSubmitJob: MessageFns<MsgSubmitJob, "virtengine.hpc.v1.MsgSubmit
     if (message.maxPrice?.length) {
       obj.max_price = message.maxPrice.map((e) => Coin.toJSON(e));
     }
+    if (message.reservationId !== "") {
+      obj.reservation_id = message.reservationId;
+    }
+    if (message.marketOrderId !== "") {
+      obj.market_order_id = message.marketOrderId;
+    }
+    if (message.marketBidId !== "") {
+      obj.market_bid_id = message.marketBidId;
+    }
+    if (message.marketLeaseId !== "") {
+      obj.market_lease_id = message.marketLeaseId;
+    }
     return obj;
   },
   fromPartial(object: DeepPartial<MsgSubmitJob>): MsgSubmitJob {
@@ -1615,12 +1708,16 @@ export const MsgSubmitJob: MessageFns<MsgSubmitJob, "virtengine.hpc.v1.MsgSubmit
       ? Long.fromValue(object.maxRuntimeSeconds)
       : Long.ZERO;
     message.maxPrice = object.maxPrice?.map((e) => Coin.fromPartial(e)) || [];
+    message.reservationId = object.reservationId ?? "";
+    message.marketOrderId = object.marketOrderId ?? "";
+    message.marketBidId = object.marketBidId ?? "";
+    message.marketLeaseId = object.marketLeaseId ?? "";
     return message;
   },
 };
 
 function createBaseMsgSubmitJobResponse(): MsgSubmitJobResponse {
-  return { jobId: "", escrowId: "" };
+  return { jobId: "", escrowId: "", reservationId: "" };
 }
 
 export const MsgSubmitJobResponse: MessageFns<MsgSubmitJobResponse, "virtengine.hpc.v1.MsgSubmitJobResponse"> = {
@@ -1632,6 +1729,9 @@ export const MsgSubmitJobResponse: MessageFns<MsgSubmitJobResponse, "virtengine.
     }
     if (message.escrowId !== "") {
       writer.uint32(18).string(message.escrowId);
+    }
+    if (message.reservationId !== "") {
+      writer.uint32(26).string(message.reservationId);
     }
     return writer;
   },
@@ -1659,6 +1759,14 @@ export const MsgSubmitJobResponse: MessageFns<MsgSubmitJobResponse, "virtengine.
           message.escrowId = reader.string();
           continue;
         }
+        case 3: {
+          if (tag !== 26) {
+            break;
+          }
+
+          message.reservationId = reader.string();
+          continue;
+        }
       }
       if ((tag & 7) === 4 || tag === 0) {
         break;
@@ -1672,6 +1780,7 @@ export const MsgSubmitJobResponse: MessageFns<MsgSubmitJobResponse, "virtengine.
     return {
       jobId: isSet(object.job_id) ? globalThis.String(object.job_id) : "",
       escrowId: isSet(object.escrow_id) ? globalThis.String(object.escrow_id) : "",
+      reservationId: isSet(object.reservation_id) ? globalThis.String(object.reservation_id) : "",
     };
   },
 
@@ -1683,12 +1792,16 @@ export const MsgSubmitJobResponse: MessageFns<MsgSubmitJobResponse, "virtengine.
     if (message.escrowId !== "") {
       obj.escrow_id = message.escrowId;
     }
+    if (message.reservationId !== "") {
+      obj.reservation_id = message.reservationId;
+    }
     return obj;
   },
   fromPartial(object: DeepPartial<MsgSubmitJobResponse>): MsgSubmitJobResponse {
     const message = createBaseMsgSubmitJobResponse();
     message.jobId = object.jobId ?? "";
     message.escrowId = object.escrowId ?? "";
+    message.reservationId = object.reservationId ?? "";
     return message;
   },
 };
@@ -2079,6 +2192,17 @@ function createBaseMsgUpdateNodeMetadata(): MsgUpdateNodeMetadata {
     networkBandwidthMbps: Long.ZERO,
     resources: undefined,
     active: false,
+    state: 0,
+    healthStatus: 0,
+    agentPubkey: "",
+    hardwareFingerprint: "",
+    agentVersion: "",
+    lastSequenceNumber: Long.UZERO,
+    capacity: undefined,
+    health: undefined,
+    hardware: undefined,
+    topology: undefined,
+    locality: undefined,
   };
 }
 
@@ -2112,6 +2236,39 @@ export const MsgUpdateNodeMetadata: MessageFns<MsgUpdateNodeMetadata, "virtengin
     }
     if (message.active !== false) {
       writer.uint32(72).bool(message.active);
+    }
+    if (message.state !== 0) {
+      writer.uint32(80).int32(message.state);
+    }
+    if (message.healthStatus !== 0) {
+      writer.uint32(88).int32(message.healthStatus);
+    }
+    if (message.agentPubkey !== "") {
+      writer.uint32(98).string(message.agentPubkey);
+    }
+    if (message.hardwareFingerprint !== "") {
+      writer.uint32(106).string(message.hardwareFingerprint);
+    }
+    if (message.agentVersion !== "") {
+      writer.uint32(114).string(message.agentVersion);
+    }
+    if (!message.lastSequenceNumber.equals(Long.UZERO)) {
+      writer.uint32(120).uint64(message.lastSequenceNumber.toString());
+    }
+    if (message.capacity !== undefined) {
+      NodeCapacity.encode(message.capacity, writer.uint32(130).fork()).join();
+    }
+    if (message.health !== undefined) {
+      NodeHealth.encode(message.health, writer.uint32(138).fork()).join();
+    }
+    if (message.hardware !== undefined) {
+      NodeHardware.encode(message.hardware, writer.uint32(146).fork()).join();
+    }
+    if (message.topology !== undefined) {
+      NodeTopology.encode(message.topology, writer.uint32(154).fork()).join();
+    }
+    if (message.locality !== undefined) {
+      NodeLocality.encode(message.locality, writer.uint32(162).fork()).join();
     }
     return writer;
   },
@@ -2195,6 +2352,94 @@ export const MsgUpdateNodeMetadata: MessageFns<MsgUpdateNodeMetadata, "virtengin
           message.active = reader.bool();
           continue;
         }
+        case 10: {
+          if (tag !== 80) {
+            break;
+          }
+
+          message.state = reader.int32() as any;
+          continue;
+        }
+        case 11: {
+          if (tag !== 88) {
+            break;
+          }
+
+          message.healthStatus = reader.int32() as any;
+          continue;
+        }
+        case 12: {
+          if (tag !== 98) {
+            break;
+          }
+
+          message.agentPubkey = reader.string();
+          continue;
+        }
+        case 13: {
+          if (tag !== 106) {
+            break;
+          }
+
+          message.hardwareFingerprint = reader.string();
+          continue;
+        }
+        case 14: {
+          if (tag !== 114) {
+            break;
+          }
+
+          message.agentVersion = reader.string();
+          continue;
+        }
+        case 15: {
+          if (tag !== 120) {
+            break;
+          }
+
+          message.lastSequenceNumber = Long.fromString(reader.uint64().toString(), true);
+          continue;
+        }
+        case 16: {
+          if (tag !== 130) {
+            break;
+          }
+
+          message.capacity = NodeCapacity.decode(reader, reader.uint32());
+          continue;
+        }
+        case 17: {
+          if (tag !== 138) {
+            break;
+          }
+
+          message.health = NodeHealth.decode(reader, reader.uint32());
+          continue;
+        }
+        case 18: {
+          if (tag !== 146) {
+            break;
+          }
+
+          message.hardware = NodeHardware.decode(reader, reader.uint32());
+          continue;
+        }
+        case 19: {
+          if (tag !== 154) {
+            break;
+          }
+
+          message.topology = NodeTopology.decode(reader, reader.uint32());
+          continue;
+        }
+        case 20: {
+          if (tag !== 162) {
+            break;
+          }
+
+          message.locality = NodeLocality.decode(reader, reader.uint32());
+          continue;
+        }
       }
       if ((tag & 7) === 4 || tag === 0) {
         break;
@@ -2219,6 +2464,17 @@ export const MsgUpdateNodeMetadata: MessageFns<MsgUpdateNodeMetadata, "virtengin
         : Long.ZERO,
       resources: isSet(object.resources) ? NodeResources.fromJSON(object.resources) : undefined,
       active: isSet(object.active) ? globalThis.Boolean(object.active) : false,
+      state: isSet(object.state) ? nodeStateFromJSON(object.state) : 0,
+      healthStatus: isSet(object.health_status) ? healthStatusFromJSON(object.health_status) : 0,
+      agentPubkey: isSet(object.agent_pubkey) ? globalThis.String(object.agent_pubkey) : "",
+      hardwareFingerprint: isSet(object.hardware_fingerprint) ? globalThis.String(object.hardware_fingerprint) : "",
+      agentVersion: isSet(object.agent_version) ? globalThis.String(object.agent_version) : "",
+      lastSequenceNumber: isSet(object.last_sequence_number) ? Long.fromValue(object.last_sequence_number) : Long.UZERO,
+      capacity: isSet(object.capacity) ? NodeCapacity.fromJSON(object.capacity) : undefined,
+      health: isSet(object.health) ? NodeHealth.fromJSON(object.health) : undefined,
+      hardware: isSet(object.hardware) ? NodeHardware.fromJSON(object.hardware) : undefined,
+      topology: isSet(object.topology) ? NodeTopology.fromJSON(object.topology) : undefined,
+      locality: isSet(object.locality) ? NodeLocality.fromJSON(object.locality) : undefined,
     };
   },
 
@@ -2251,6 +2507,39 @@ export const MsgUpdateNodeMetadata: MessageFns<MsgUpdateNodeMetadata, "virtengin
     if (message.active !== false) {
       obj.active = message.active;
     }
+    if (message.state !== 0) {
+      obj.state = nodeStateToJSON(message.state);
+    }
+    if (message.healthStatus !== 0) {
+      obj.health_status = healthStatusToJSON(message.healthStatus);
+    }
+    if (message.agentPubkey !== "") {
+      obj.agent_pubkey = message.agentPubkey;
+    }
+    if (message.hardwareFingerprint !== "") {
+      obj.hardware_fingerprint = message.hardwareFingerprint;
+    }
+    if (message.agentVersion !== "") {
+      obj.agent_version = message.agentVersion;
+    }
+    if (!message.lastSequenceNumber.equals(Long.UZERO)) {
+      obj.last_sequence_number = (message.lastSequenceNumber || Long.UZERO).toString();
+    }
+    if (message.capacity !== undefined) {
+      obj.capacity = NodeCapacity.toJSON(message.capacity);
+    }
+    if (message.health !== undefined) {
+      obj.health = NodeHealth.toJSON(message.health);
+    }
+    if (message.hardware !== undefined) {
+      obj.hardware = NodeHardware.toJSON(message.hardware);
+    }
+    if (message.topology !== undefined) {
+      obj.topology = NodeTopology.toJSON(message.topology);
+    }
+    if (message.locality !== undefined) {
+      obj.locality = NodeLocality.toJSON(message.locality);
+    }
     return obj;
   },
   fromPartial(object: DeepPartial<MsgUpdateNodeMetadata>): MsgUpdateNodeMetadata {
@@ -2268,6 +2557,29 @@ export const MsgUpdateNodeMetadata: MessageFns<MsgUpdateNodeMetadata, "virtengin
       ? NodeResources.fromPartial(object.resources)
       : undefined;
     message.active = object.active ?? false;
+    message.state = object.state ?? 0;
+    message.healthStatus = object.healthStatus ?? 0;
+    message.agentPubkey = object.agentPubkey ?? "";
+    message.hardwareFingerprint = object.hardwareFingerprint ?? "";
+    message.agentVersion = object.agentVersion ?? "";
+    message.lastSequenceNumber = (object.lastSequenceNumber !== undefined && object.lastSequenceNumber !== null)
+      ? Long.fromValue(object.lastSequenceNumber)
+      : Long.UZERO;
+    message.capacity = (object.capacity !== undefined && object.capacity !== null)
+      ? NodeCapacity.fromPartial(object.capacity)
+      : undefined;
+    message.health = (object.health !== undefined && object.health !== null)
+      ? NodeHealth.fromPartial(object.health)
+      : undefined;
+    message.hardware = (object.hardware !== undefined && object.hardware !== null)
+      ? NodeHardware.fromPartial(object.hardware)
+      : undefined;
+    message.topology = (object.topology !== undefined && object.topology !== null)
+      ? NodeTopology.fromPartial(object.topology)
+      : undefined;
+    message.locality = (object.locality !== undefined && object.locality !== null)
+      ? NodeLocality.fromPartial(object.locality)
+      : undefined;
     return message;
   },
 };
@@ -2455,7 +2767,7 @@ export const MsgFlagDispute: MessageFns<MsgFlagDispute, "virtengine.hpc.v1.MsgFl
 };
 
 function createBaseMsgFlagDisputeResponse(): MsgFlagDisputeResponse {
-  return { disputeId: "" };
+  return { disputeId: "", financialCaseId: "", financialCaseStatus: "" };
 }
 
 export const MsgFlagDisputeResponse: MessageFns<MsgFlagDisputeResponse, "virtengine.hpc.v1.MsgFlagDisputeResponse"> = {
@@ -2464,6 +2776,12 @@ export const MsgFlagDisputeResponse: MessageFns<MsgFlagDisputeResponse, "virteng
   encode(message: MsgFlagDisputeResponse, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
     if (message.disputeId !== "") {
       writer.uint32(10).string(message.disputeId);
+    }
+    if (message.financialCaseId !== "") {
+      writer.uint32(18).string(message.financialCaseId);
+    }
+    if (message.financialCaseStatus !== "") {
+      writer.uint32(26).string(message.financialCaseStatus);
     }
     return writer;
   },
@@ -2483,6 +2801,22 @@ export const MsgFlagDisputeResponse: MessageFns<MsgFlagDisputeResponse, "virteng
           message.disputeId = reader.string();
           continue;
         }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.financialCaseId = reader.string();
+          continue;
+        }
+        case 3: {
+          if (tag !== 26) {
+            break;
+          }
+
+          message.financialCaseStatus = reader.string();
+          continue;
+        }
       }
       if ((tag & 7) === 4 || tag === 0) {
         break;
@@ -2493,7 +2827,11 @@ export const MsgFlagDisputeResponse: MessageFns<MsgFlagDisputeResponse, "virteng
   },
 
   fromJSON(object: any): MsgFlagDisputeResponse {
-    return { disputeId: isSet(object.dispute_id) ? globalThis.String(object.dispute_id) : "" };
+    return {
+      disputeId: isSet(object.dispute_id) ? globalThis.String(object.dispute_id) : "",
+      financialCaseId: isSet(object.financial_case_id) ? globalThis.String(object.financial_case_id) : "",
+      financialCaseStatus: isSet(object.financial_case_status) ? globalThis.String(object.financial_case_status) : "",
+    };
   },
 
   toJSON(message: MsgFlagDisputeResponse): unknown {
@@ -2501,11 +2839,19 @@ export const MsgFlagDisputeResponse: MessageFns<MsgFlagDisputeResponse, "virteng
     if (message.disputeId !== "") {
       obj.dispute_id = message.disputeId;
     }
+    if (message.financialCaseId !== "") {
+      obj.financial_case_id = message.financialCaseId;
+    }
+    if (message.financialCaseStatus !== "") {
+      obj.financial_case_status = message.financialCaseStatus;
+    }
     return obj;
   },
   fromPartial(object: DeepPartial<MsgFlagDisputeResponse>): MsgFlagDisputeResponse {
     const message = createBaseMsgFlagDisputeResponse();
     message.disputeId = object.disputeId ?? "";
+    message.financialCaseId = object.financialCaseId ?? "";
+    message.financialCaseStatus = object.financialCaseStatus ?? "";
     return message;
   },
 };

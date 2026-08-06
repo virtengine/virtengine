@@ -77,6 +77,9 @@ const (
 
 	// AttestationTypeCompositeIdentity for combined identity attestations
 	AttestationTypeCompositeIdentity AttestationType = "composite_identity"
+
+	// AttestationTypeInferenceReceipt for governed production inference receipts
+	AttestationTypeInferenceReceipt AttestationType = "inference_receipt"
 )
 
 // AllAttestationTypes returns all valid attestation types
@@ -94,6 +97,7 @@ func AllAttestationTypes() []AttestationType {
 		AttestationTypeBiometricHardware,
 		AttestationTypeDeviceIntegrity,
 		AttestationTypeCompositeIdentity,
+		AttestationTypeInferenceReceipt,
 	}
 }
 
@@ -134,6 +138,8 @@ func ScopeTypeFromAttestationType(t AttestationType) ScopeType {
 		return ScopeTypeDeviceAttestation
 	case AttestationTypeCompositeIdentity:
 		return ScopeTypeIDDocument // Default to ID document for composite
+	case AttestationTypeInferenceReceipt:
+		return ScopeTypeIDDocument
 	default:
 		return ScopeTypeIDDocument
 	}

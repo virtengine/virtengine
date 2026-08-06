@@ -13,19 +13,19 @@
   "type": "module",
   "exports": {
     ".": {
+      "types": "./dist/types/index.d.ts",
       "import": "./dist/esm/index.js",
-      "require": "./dist/cjs/index.cjs",
-      "types": "./dist/types/index.d.ts"
+      "require": "./dist/cjs/index.cjs"
     },
     "./private-types/*": {
+      "types": "./dist/types/generated/protos/index.*.d.ts",
       "import": "./dist/esm/generated/protos/index.*.js",
-      "require": "./dist/cjs/generated/protos/index.*.cjs",
-      "types": "./dist/types/generated/protos/index.*.d.ts"
+      "require": "./dist/cjs/generated/protos/index.*.cjs"
     },
     "./web": {
+      "types": "./dist/types/index.web.d.ts",
       "import": "./dist/esm/index.web.js",
-      "require": "./dist/cjs/index.web.cjs",
-      "types": "./dist/types/index.web.d.ts"
+      "require": "./dist/cjs/index.web.cjs"
     }
   },
   "files": [

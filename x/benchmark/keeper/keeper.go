@@ -351,15 +351,6 @@ func (k Keeper) computeReliabilityInputs(ctx sdk.Context, providerAddr string) t
 		}
 	}
 
-	// Default uptime values (would be populated from actual data in production)
-	inputs.TotalUptimeSeconds = 86400 * 30 // 30 days
-	inputs.TotalDowntimeSeconds = 0
-	inputs.MeanTimeBetweenFailures = 86400 * 30
-	inputs.ProvisioningAttempts = 100
-	inputs.ProvisioningSuccesses = 98
-	inputs.ProvisioningSuccessRate = 980000 // 98%
-	inputs.MeanTimeToProvision = 120        // 2 minutes
-
 	return inputs
 }
 

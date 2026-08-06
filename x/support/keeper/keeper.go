@@ -731,32 +731,6 @@ func (k Keeper) SetSupportResponseSequence(ctx sdk.Context, requestID string, se
 	store.Set(types.SupportResponseSequenceKey(requestID), bz)
 }
 
-// ProcessRetentionPolicies checks and applies retention policies.
-func (k Keeper) ProcessRetentionPolicies(ctx sdk.Context) (int, int) {
-	now := ctx.BlockTime()
-	archived := 0
-	purged := 0
-	k.WithSupportRequests(ctx, func(req types.SupportRequest) bool {
-		if req.RetentionPolicy != nil {
-			if !req.Archived && req.RetentionPolicy.ShouldArchive(now) {
-				_ = k.ArchiveSupportRequest(ctx, req.ID, "retention policy", "system")
-				archived++
-			}
-			if !req.Purged && req.RetentionPolicy.ShouldPurge(now) {
-				_ = k.PurgeSupportRequestPayload(ctx, req.ID, "retention policy", "system")
-				purged++
-			}
-		}
-		return false
-	})
-	return archived, purged
-}
-
-// enqueueRetention is a best-effort placeholder for future queueing.
-func (k Keeper) enqueueRetention(_ sdk.Context, _ *types.SupportRequest) {
-	// TODO: Add queueing when needed. Current implementation scans in ProcessRetentionPolicies.
-}
-
 // ========================================================================
 // Support Events
 // ========================================================================

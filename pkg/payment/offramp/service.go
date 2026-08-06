@@ -142,10 +142,11 @@ func NewService(cfg Config, opts ...ServiceOption) (Service, error) {
 	}
 
 	if cfg.ACHConfig.SecretKey != "" {
-		ach, err := NewACHAdapter(cfg.ACHConfig)
-		if err == nil {
-			svc.providers[ProviderACH] = ach
+		ach, err := newConfiguredACHProvider(cfg.ACHConfig)
+		if err != nil {
+			return nil, fmt.Errorf("failed to initialize ACH provider: %w", err)
 		}
+		svc.providers[ProviderACH] = ach
 	}
 
 	// Set default provider
@@ -181,7 +182,11 @@ func NewService(cfg Config, opts ...ServiceOption) (Service, error) {
 
 	// Initialize default AML screener if not provided
 	if svc.amlScreener == nil {
-		svc.amlScreener = NewDefaultAMLScreener(cfg.AMLConfig, NewMockAMLClient())
+		screener, err := newConfiguredAMLScreener(cfg.AMLConfig)
+		if err != nil {
+			return nil, fmt.Errorf("failed to initialize AML screener: %w", err)
+		}
+		svc.amlScreener = screener
 	}
 
 	// Initialize webhook handler
@@ -212,6 +217,25 @@ func NewService(cfg Config, opts ...ServiceOption) (Service, error) {
 	}
 
 	return svc, nil
+}
+
+func newConfiguredACHProvider(cfg ACHConfig) (Provider, error) {
+	if isDirectACHProvider(cfg.Provider) {
+		return NewDirectACHAdapter(cfg)
+	}
+	return NewACHAdapter(cfg)
+}
+
+func newConfiguredAMLScreener(cfg AMLConfig) (AMLScreener, error) {
+	if wantsExternalAMLProvider(cfg) {
+		client, err := NewHTTPAMLClient(cfg)
+		if err != nil {
+			return nil, err
+		}
+		return NewDefaultAMLScreener(cfg, client), nil
+	}
+
+	return NewDefaultAMLScreener(cfg, NewMockAMLClient()), nil
 }
 
 // ============================================================================

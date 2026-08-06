@@ -26,7 +26,7 @@ inputs = {
   cluster_name           = "virtengine-staging"
   kubernetes_version     = "1.29"
   endpoint_public_access = true
-  public_access_cidrs    = ["0.0.0.0/0"]  # Restrict based on VPN/bastion
+  public_access_cidrs    = ["10.0.0.0/8", "192.168.0.0/16"]
   
   # System nodes
   system_node_instance_types = ["t3.large"]

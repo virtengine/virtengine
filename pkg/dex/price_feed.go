@@ -179,9 +179,14 @@ func (p *priceFeedImpl) SubscribePrice(ctx context.Context, baseSymbol, quoteSym
 
 // RegisterSource registers a price data source
 func (p *priceFeedImpl) RegisterSource(source PriceSource) error {
+	if source == nil || source.Name() == "" {
+		return ErrProviderUnavailable
+	}
 	p.sourcesMu.Lock()
 	defer p.sourcesMu.Unlock()
-
+	if _, exists := p.sources[source.Name()]; exists {
+		return ErrProviderUnavailable
+	}
 	p.sources[source.Name()] = source
 	return nil
 }
@@ -326,6 +331,9 @@ func (p *priceFeedImpl) notifySubscribers(key string, price Price) {
 
 	for _, cb := range callbacks {
 		callback := cb // capture loop variable
+		if callback == nil {
+			continue
+		}
 		verrors.SafeGo("price-notify", func() {
 			callback(price)
 		})

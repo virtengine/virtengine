@@ -4,6 +4,9 @@
 package keeper_test
 
 import (
+	"crypto/ed25519"
+	"crypto/sha256"
+	"encoding/json"
 	"testing"
 	"time"
 
@@ -59,8 +62,9 @@ func (s *KeeperTestSuite) createContextWithStore(storeKey *storetypes.KVStoreKey
 	}
 
 	ctx := sdk.NewContext(stateStore, cmtproto.Header{
-		Time:   time.Now().UTC(),
-		Height: 100,
+		ChainID: "virtengine-test-1",
+		Time:    time.Date(2026, time.August, 1, 12, 0, 0, 0, time.UTC),
+		Height:  100,
 	}, false, log.NewNopLogger())
 	return ctx
 }
@@ -139,7 +143,10 @@ func (s *KeeperTestSuite) TestMFAPolicy() {
 		UpdatedAt: s.ctx.BlockTime().Unix(),
 	}
 
-	err := s.keeper.SetMFAPolicy(s.ctx, policy)
+	err := enrollActiveFactor(s.keeper, s.ctx, addr, types.FactorTypeTOTP, "policy-factor")
+	s.Require().NoError(err)
+
+	err = s.keeper.SetMFAPolicy(s.ctx, policy)
 	s.Require().NoError(err)
 
 	// Retrieve and verify
@@ -196,6 +203,342 @@ func (s *KeeperTestSuite) TestChallenge() {
 	// Verify deletion
 	_, found = s.keeper.GetChallenge(s.ctx, challengeID)
 	s.Require().False(found)
+}
+
+func (s *KeeperTestSuite) TestPublicOTPDispatchReceipts() {
+	address := sdk.AccAddress([]byte("otp_dispatch_test__"))
+	totpFactorID := "totp-verifier"
+	s.Require().NoError(enrollOTPVerifier(s.keeper, s.ctx, address, types.FactorTypeTOTP, totpFactorID))
+
+	totpChallenge, err := s.keeper.CreateTOTPChallenge(s.ctx, address, totpFactorID, types.SensitiveTxLargeWithdrawal)
+	s.Require().NoError(err)
+	s.Require().Len(totpChallenge.ChallengeData, 32)
+	s.Equal(types.SensitiveTxLargeWithdrawal, totpChallenge.TransactionType)
+
+	verified, err := s.keeper.VerifyMFAChallenge(s.ctx, totpChallenge.ChallengeID, otpResponse(totpChallenge, true))
+	s.Require().NoError(err)
+	s.True(verified)
+
+	for _, factorType := range []types.FactorType{types.FactorTypeSMS, types.FactorTypeEmail} {
+		s.Run(factorType.String(), func() {
+			factorID := factorType.String() + "-verifier"
+			s.Require().NoError(enrollOTPVerifier(s.keeper, s.ctx, address, factorType, factorID))
+
+			challenge, createErr := s.keeper.CreateOTPChallenge(
+				s.ctx,
+				address,
+				factorType,
+				factorID,
+				types.SensitiveTxLargeWithdrawal,
+				factorType.String(),
+				"delivery-1234",
+			)
+			s.Require().NoError(createErr)
+			s.Require().Len(challenge.ChallengeData, 32)
+			s.Require().NotNil(challenge.Metadata)
+			s.Require().NotNil(challenge.Metadata.OTPInfo)
+			s.Equal(factorType.String(), challenge.Metadata.OTPInfo.DeliveryMethod)
+
+			verified, verifyErr := s.keeper.VerifyMFAChallenge(s.ctx, challenge.ChallengeID, otpResponse(challenge, true))
+			s.Require().NoError(verifyErr)
+			s.True(verified)
+		})
+	}
+}
+
+func (s *KeeperTestSuite) TestOTPChallengeHelpersRequireExactActiveEnrollment() {
+	address := sdk.AccAddress([]byte("otp_helper_enroll__"))
+
+	_, err := s.keeper.CreateTOTPChallenge(s.ctx, address, "missing-totp", types.SensitiveTxKeyRotation)
+	s.Error(err)
+	_, err = s.keeper.CreateOTPChallenge(s.ctx, address, types.FactorTypeSMS, "missing-sms", types.SensitiveTxKeyRotation, "sms", "delivery-1")
+	s.Error(err)
+
+	s.Require().NoError(enrollActiveFactor(s.keeper, s.ctx, address, types.FactorTypeTOTP, "revoked-totp"))
+	s.Require().NoError(s.keeper.RevokeFactor(s.ctx, address, types.FactorTypeTOTP, "revoked-totp"))
+	_, err = s.keeper.CreateTOTPChallenge(s.ctx, address, "revoked-totp", types.SensitiveTxKeyRotation)
+	s.Error(err)
+
+	s.Require().NoError(enrollActiveFactor(s.keeper, s.ctx, address, types.FactorTypeEmail, "revoked-email"))
+	s.Require().NoError(s.keeper.RevokeFactor(s.ctx, address, types.FactorTypeEmail, "revoked-email"))
+	_, err = s.keeper.CreateOTPChallenge(s.ctx, address, types.FactorTypeEmail, "revoked-email", types.SensitiveTxKeyRotation, "email", "delivery-2")
+	s.Error(err)
+}
+
+func (s *KeeperTestSuite) TestOTPVerifierReceiptBindingMatrix() {
+	mutations := map[string]func(*keeper.OTPVerifierReceipt){
+		"version":         func(r *keeper.OTPVerifierReceipt) { r.Version++ },
+		"chain":           func(r *keeper.OTPVerifierReceipt) { r.ChainID = "other-chain" },
+		"account":         func(r *keeper.OTPVerifierReceipt) { r.AccountAddress = "other-account" },
+		"challenge":       func(r *keeper.OTPVerifierReceipt) { r.ChallengeID = "other-challenge" },
+		"factor type":     func(r *keeper.OTPVerifierReceipt) { r.FactorType = types.FactorTypeSMS },
+		"factor id":       func(r *keeper.OTPVerifierReceipt) { r.FactorID = "other-factor" },
+		"action":          func(r *keeper.OTPVerifierReceipt) { r.TransactionType = types.SensitiveTxKeyRotation },
+		"nonce":           func(r *keeper.OTPVerifierReceipt) { r.ChallengeNonce = "other-nonce" },
+		"digest":          func(r *keeper.OTPVerifierReceipt) { r.ChallengeDataDigest[0] ^= 0xff },
+		"issued before":   func(r *keeper.OTPVerifierReceipt) { r.IssuedAt-- },
+		"issued future":   func(r *keeper.OTPVerifierReceipt) { r.IssuedAt++ },
+		"expired":         func(r *keeper.OTPVerifierReceipt) { r.ExpiresAt = r.IssuedAt },
+		"challenge bound": func(r *keeper.OTPVerifierReceipt) { r.ExpiresAt++ },
+		"key epoch":       func(r *keeper.OTPVerifierReceipt) { r.VerifierKeyEpoch++ },
+		"receipt nonce":   func(r *keeper.OTPVerifierReceipt) { r.ReceiptNonce = "" },
+	}
+	for name, mutate := range mutations {
+		s.Run(name, func() {
+			addressSeed := sha256.Sum256([]byte("receipt-matrix-" + name))
+			address := sdk.AccAddress(addressSeed[:20])
+			factorID := "matrix-" + name
+			s.Require().NoError(enrollOTPVerifier(s.keeper, s.ctx, address, types.FactorTypeTOTP, factorID))
+			challenge, err := s.keeper.CreateTOTPChallenge(s.ctx, address, factorID, types.SensitiveTxLargeWithdrawal)
+			s.Require().NoError(err)
+			response := signedOTPResponse(challenge, mutate, false)
+			verified, err := s.keeper.VerifyMFAChallenge(s.ctx, challenge.ChallengeID, response)
+			s.False(verified)
+			s.Error(err)
+			assertChallengeAttempt(s.T(), s.keeper, s.ctx, challenge.ChallengeID, 1, types.ChallengeStatusPending)
+		})
+	}
+
+	s.Run("wrong verifier key", func() {
+		address := sdk.AccAddress([]byte("receipt_wrong_key__"))
+		factorID := "wrong-key"
+		s.Require().NoError(enrollOTPVerifier(s.keeper, s.ctx, address, types.FactorTypeTOTP, factorID))
+		challenge, err := s.keeper.CreateTOTPChallenge(s.ctx, address, factorID, types.SensitiveTxLargeWithdrawal)
+		s.Require().NoError(err)
+		verified, err := s.keeper.VerifyMFAChallenge(s.ctx, challenge.ChallengeID, signedOTPResponse(challenge, nil, true))
+		s.False(verified)
+		s.Error(err)
+	})
+
+	s.Run("delivery", func() {
+		address := sdk.AccAddress([]byte("receipt_delivery___"))
+		factorID := "delivery-factor"
+		s.Require().NoError(enrollOTPVerifier(s.keeper, s.ctx, address, types.FactorTypeSMS, factorID))
+		challenge, err := s.keeper.CreateOTPChallenge(s.ctx, address, types.FactorTypeSMS, factorID, types.SensitiveTxLargeWithdrawal, "sms", "delivery-7")
+		s.Require().NoError(err)
+		response := signedOTPResponse(challenge, func(r *keeper.OTPVerifierReceipt) { r.DeliveryID = "delivery-8" }, false)
+		verified, err := s.keeper.VerifyMFAChallenge(s.ctx, challenge.ChallengeID, response)
+		s.False(verified)
+		s.Error(err)
+	})
+}
+
+func (s *KeeperTestSuite) TestPublicOTPDispatchRejectsInvalidProofs() {
+	factorTypes := []types.FactorType{types.FactorTypeTOTP, types.FactorTypeSMS, types.FactorTypeEmail}
+	for _, factorType := range factorTypes {
+		s.Run(factorType.String(), func() {
+			address := sdk.AccAddress([]byte("negative_" + factorType.String()))
+			factorID := factorType.String() + "-factor"
+			s.Require().NoError(enrollOTPVerifier(s.keeper, s.ctx, address, factorType, factorID))
+
+			newChallenge := func(id string, data []byte) *types.Challenge {
+				challenge := &types.Challenge{
+					ChallengeID:    id + "-" + factorType.String(),
+					AccountAddress: address.String(),
+					FactorType:     factorType,
+					FactorID:       factorID,
+					Status:         types.ChallengeStatusPending,
+					ChallengeData:  data,
+					CreatedAt:      s.ctx.BlockTime().Unix(),
+					ExpiresAt:      s.ctx.BlockTime().Unix() + 300,
+					MaxAttempts:    3,
+					Nonce:          "fixed-nonce",
+				}
+				if factorType == types.FactorTypeSMS || factorType == types.FactorTypeEmail {
+					challenge.Metadata = &types.ChallengeMetadata{OTPInfo: &types.OTPChallengeInfo{
+						DeliveryMethod: factorType.String(), DeliveryDestinationMasked: "delivery-test",
+					}}
+				}
+				return challenge
+			}
+			challengeData := func() []byte {
+				return []byte("random challenge data, never OTP")
+			}
+
+			invalidResponse := newChallenge("invalid-response", challengeData())
+			s.Require().NoError(s.keeper.CreateChallenge(s.ctx, invalidResponse))
+			_, err := s.keeper.VerifyMFAChallenge(s.ctx, invalidResponse.ChallengeID, nil)
+			s.Error(err)
+			_, err = s.keeper.VerifyMFAChallenge(s.ctx, invalidResponse.ChallengeID, &types.ChallengeResponse{})
+			s.Error(err)
+			assertChallengeAttempt(s.T(), s.keeper, s.ctx, invalidResponse.ChallengeID, 2, types.ChallengeStatusPending)
+
+			malformed := newChallenge("malformed", challengeData())
+			s.Require().NoError(s.keeper.CreateChallenge(s.ctx, malformed))
+			_, err = s.keeper.VerifyMFAChallenge(s.ctx, malformed.ChallengeID, &types.ChallengeResponse{
+				ChallengeID:  malformed.ChallengeID,
+				FactorType:   factorType,
+				ResponseData: []byte("arbitrary nonempty response"),
+			})
+			s.Error(err)
+			assertChallengeAttempt(s.T(), s.keeper, s.ctx, malformed.ChallengeID, 1, types.ChallengeStatusPending)
+
+			binding := newChallenge("binding", challengeData())
+			s.Require().NoError(s.keeper.CreateChallenge(s.ctx, binding))
+			wrongChallenge := otpResponse(binding, true)
+			wrongChallenge.ChallengeID = "another-challenge"
+			_, err = s.keeper.VerifyMFAChallenge(s.ctx, binding.ChallengeID, wrongChallenge)
+			s.Error(err)
+			wrongFactor := otpResponse(binding, true)
+			wrongFactor.FactorType = types.FactorTypeFIDO2
+			_, err = s.keeper.VerifyMFAChallenge(s.ctx, binding.ChallengeID, wrongFactor)
+			s.Error(err)
+			assertChallengeAttempt(s.T(), s.keeper, s.ctx, binding.ChallengeID, 2, types.ChallengeStatusPending)
+
+			missingEnrollment := newChallenge("missing-enrollment", challengeData())
+			missingEnrollment.FactorID = "missing-factor"
+			s.Require().NoError(s.keeper.CreateChallenge(s.ctx, missingEnrollment))
+			_, err = s.keeper.VerifyMFAChallenge(s.ctx, missingEnrollment.ChallengeID, otpResponse(missingEnrollment, true))
+			s.Error(err)
+
+			inactive := newChallenge("inactive", challengeData())
+			s.Require().NoError(s.keeper.CreateChallenge(s.ctx, inactive))
+			s.Require().NoError(s.keeper.RevokeFactor(s.ctx, address, factorType, factorID))
+			_, err = s.keeper.VerifyMFAChallenge(s.ctx, inactive.ChallengeID, otpResponse(inactive, true))
+			s.Error(err)
+
+			activeFactorID := factorID + "-active"
+			s.Require().NoError(enrollOTPVerifier(s.keeper, s.ctx, address, factorType, activeFactorID))
+			emptyData := newChallenge("empty-data", nil)
+			emptyData.FactorID = activeFactorID
+			s.Require().NoError(s.keeper.CreateChallenge(s.ctx, emptyData))
+			_, err = s.keeper.VerifyMFAChallenge(s.ctx, emptyData.ChallengeID, otpResponse(emptyData, true))
+			s.NoError(err)
+
+			variableData := newChallenge("variable-data", make([]byte, sha256.Size+1))
+			variableData.FactorID = activeFactorID
+			s.Require().NoError(s.keeper.CreateChallenge(s.ctx, variableData))
+			_, err = s.keeper.VerifyMFAChallenge(s.ctx, variableData.ChallengeID, otpResponse(variableData, true))
+			s.NoError(err)
+
+			wrongSignature := newChallenge("wrong-signature", challengeData())
+			wrongSignature.FactorID = activeFactorID
+			s.Require().NoError(s.keeper.CreateChallenge(s.ctx, wrongSignature))
+			_, err = s.keeper.VerifyMFAChallenge(s.ctx, wrongSignature.ChallengeID, otpResponse(wrongSignature, false))
+			s.Error(err)
+			assertChallengeAttempt(s.T(), s.keeper, s.ctx, wrongSignature.ChallengeID, 1, types.ChallengeStatusPending)
+
+			expired := newChallenge("expired", challengeData())
+			expired.FactorID = activeFactorID
+			s.Require().NoError(s.keeper.CreateChallenge(s.ctx, expired))
+			expired.ExpiresAt = s.ctx.BlockTime().Unix() - 1
+			s.Require().NoError(s.keeper.UpdateChallenge(s.ctx, expired))
+			_, err = s.keeper.VerifyMFAChallenge(s.ctx, expired.ChallengeID, otpResponse(expired, true))
+			s.Error(err)
+			assertChallengeAttempt(s.T(), s.keeper, s.ctx, expired.ChallengeID, 0, types.ChallengeStatusExpired)
+
+			replay := newChallenge("replay", challengeData())
+			replay.FactorID = activeFactorID
+			s.Require().NoError(s.keeper.CreateChallenge(s.ctx, replay))
+			verified, err := s.keeper.VerifyMFAChallenge(s.ctx, replay.ChallengeID, otpResponse(replay, true))
+			s.Require().NoError(err)
+			s.True(verified)
+			_, err = s.keeper.VerifyMFAChallenge(s.ctx, replay.ChallengeID, otpResponse(replay, true))
+			s.Error(err)
+
+			locked := newChallenge("locked", challengeData())
+			locked.FactorID = activeFactorID
+			locked.MaxAttempts = 2
+			s.Require().NoError(s.keeper.CreateChallenge(s.ctx, locked))
+			for attempt := uint32(1); attempt <= locked.MaxAttempts; attempt++ {
+				_, err = s.keeper.VerifyMFAChallenge(s.ctx, locked.ChallengeID, otpResponse(locked, false))
+				s.Error(err)
+				expectedStatus := types.ChallengeStatusPending
+				if attempt == locked.MaxAttempts {
+					expectedStatus = types.ChallengeStatusFailed
+				}
+				assertChallengeAttempt(s.T(), s.keeper, s.ctx, locked.ChallengeID, attempt, expectedStatus)
+			}
+		})
+	}
+}
+
+func otpResponse(challenge *types.Challenge, validSignature bool) *types.ChallengeResponse {
+	return signedOTPResponse(challenge, nil, !validSignature)
+}
+
+func signedOTPResponse(
+	challenge *types.Challenge,
+	mutate func(*keeper.OTPVerifierReceipt),
+	wrongKey bool,
+) *types.ChallengeResponse {
+	digest := sha256.Sum256(challenge.ChallengeData)
+	receipt := keeper.OTPVerifierReceipt{
+		Version:             1,
+		ChainID:             "virtengine-test-1",
+		AccountAddress:      challenge.AccountAddress,
+		ChallengeID:         challenge.ChallengeID,
+		FactorType:          challenge.FactorType,
+		FactorID:            challenge.FactorID,
+		TransactionType:     challenge.TransactionType,
+		ChallengeNonce:      challenge.Nonce,
+		ChallengeDataDigest: digest[:],
+		IssuedAt:            challenge.CreatedAt,
+		ExpiresAt:           challenge.ExpiresAt,
+		VerifierKeyEpoch:    1,
+		ReceiptNonce:        "receipt-" + challenge.ChallengeID,
+	}
+	if challenge.Metadata != nil && challenge.Metadata.OTPInfo != nil {
+		receipt.DeliveryMethod = challenge.Metadata.OTPInfo.DeliveryMethod
+		receipt.DeliveryID = challenge.Metadata.OTPInfo.DeliveryDestinationMasked
+	}
+	if mutate != nil {
+		mutate(&receipt)
+	}
+	signBytes, err := receipt.SignBytes()
+	if err != nil {
+		panic(err)
+	}
+	_, privateKey := deterministicVerifierKey()
+	if wrongKey {
+		seed := sha256.Sum256([]byte("different-verifier-key"))
+		privateKey = ed25519.NewKeyFromSeed(seed[:])
+	}
+	receipt.Signature = ed25519.Sign(privateKey, signBytes)
+	responseData, err := json.Marshal(receipt)
+	if err != nil {
+		panic(err)
+	}
+	return &types.ChallengeResponse{
+		ChallengeID:  challenge.ChallengeID,
+		FactorType:   challenge.FactorType,
+		ResponseData: responseData,
+		Timestamp:    challenge.CreatedAt,
+	}
+}
+
+func deterministicVerifierKey() (ed25519.PublicKey, ed25519.PrivateKey) {
+	seed := sha256.Sum256([]byte("virtengine-mfa-otp-verifier-test-key"))
+	privateKey := ed25519.NewKeyFromSeed(seed[:])
+	return privateKey.Public().(ed25519.PublicKey), privateKey
+}
+
+func enrollOTPVerifier(k keeper.Keeper, ctx sdk.Context, address sdk.AccAddress, factorType types.FactorType, factorID string) error {
+	publicKey, _ := deterministicVerifierKey()
+	return k.EnrollFactor(ctx, &types.FactorEnrollment{
+		AccountAddress:   address.String(),
+		FactorType:       factorType,
+		FactorID:         factorID,
+		PublicIdentifier: publicKey,
+		Status:           types.EnrollmentStatusActive,
+		EnrolledAt:       ctx.BlockTime().Unix(),
+		VerifiedAt:       ctx.BlockTime().Unix(),
+	})
+}
+
+func assertChallengeAttempt(
+	t *testing.T,
+	k keeper.Keeper,
+	ctx sdk.Context,
+	challengeID string,
+	attempts uint32,
+	status types.ChallengeStatus,
+) {
+	t.Helper()
+	challenge, found := k.GetChallenge(ctx, challengeID)
+	require.True(t, found)
+	require.Equal(t, attempts, challenge.AttemptCount)
+	require.Equal(t, status, challenge.Status)
 }
 
 func (s *KeeperTestSuite) TestAuthorizationSession() {
@@ -320,7 +663,9 @@ func (s *KeeperTestSuite) TestParams() {
 func (s *KeeperTestSuite) TestGenesis() {
 	addr := sdk.AccAddress([]byte("genesis_test_addr__"))
 
-	// Set up some state
+	err := enrollActiveFactor(s.keeper, s.ctx, addr, types.FactorTypeTOTP, "genesis-active")
+	s.Require().NoError(err)
+
 	policy := &types.MFAPolicy{
 		AccountAddress: addr.String(),
 		Enabled:        true,
@@ -330,7 +675,7 @@ func (s *KeeperTestSuite) TestGenesis() {
 		CreatedAt: s.ctx.BlockTime().Unix(),
 		UpdatedAt: s.ctx.BlockTime().Unix(),
 	}
-	err := s.keeper.SetMFAPolicy(s.ctx, policy)
+	err = s.keeper.SetMFAPolicy(s.ctx, policy)
 	s.Require().NoError(err)
 
 	enrollment := &types.FactorEnrollment{
@@ -348,7 +693,7 @@ func (s *KeeperTestSuite) TestGenesis() {
 	gs := s.keeper.ExportGenesis(s.ctx)
 	s.Require().NotNil(gs)
 	s.Require().Len(gs.MFAPolicies, 1)
-	s.Require().Len(gs.FactorEnrollments, 1)
+	s.Require().Len(gs.FactorEnrollments, 2)
 
 	// Create new keeper with fresh store
 	interfaceRegistry := codectypes.NewInterfaceRegistry()
@@ -368,7 +713,7 @@ func (s *KeeperTestSuite) TestGenesis() {
 	s.Require().True(restoredPolicy.Enabled)
 
 	enrollments := newKeeper.GetFactorEnrollments(newCtx, addr)
-	s.Require().Len(enrollments, 1)
+	s.Require().Len(enrollments, 2)
 }
 
 // TestIsMFAEnabled tests the MFA enabled check logic
@@ -421,10 +766,10 @@ func TestIsMFAEnabled(t *testing.T) {
 	require.NoError(t, err)
 	require.False(t, enabled)
 
-	// Enable the policy
+	// Enabling before factors exist should fail closed
 	policy.Enabled = true
 	err = k.SetMFAPolicy(ctx, policy)
-	require.NoError(t, err)
+	require.Error(t, err)
 
 	// Still not enabled because no active factors
 	enabled, err = k.IsMFAEnabled(ctx, addr)
@@ -441,6 +786,9 @@ func TestIsMFAEnabled(t *testing.T) {
 		EnrolledAt:       ctx.BlockTime().Unix(),
 	}
 	err = k.EnrollFactor(ctx, enrollment)
+	require.NoError(t, err)
+
+	err = k.SetMFAPolicy(ctx, policy)
 	require.NoError(t, err)
 
 	// Now MFA should be enabled
@@ -513,6 +861,9 @@ func TestFactorCombinationValidation(t *testing.T) {
 		CreatedAt: ctx.BlockTime().Unix(),
 		UpdatedAt: ctx.BlockTime().Unix(),
 	}
+	require.NoError(t, enrollActiveFactor(k, ctx, addr, types.FactorTypeTOTP, "combo-totp"))
+	require.NoError(t, enrollActiveFactor(k, ctx, addr, types.FactorTypeFIDO2, "combo-fido2"))
+	require.NoError(t, enrollActiveFactor(k, ctx, addr, types.FactorTypeVEID, "combo-veid"))
 	err = k.SetMFAPolicy(ctx, policy)
 	require.NoError(t, err)
 
@@ -575,6 +926,8 @@ func TestTrustedDeviceReduction(t *testing.T) {
 		CreatedAt: ctx.BlockTime().Unix(),
 		UpdatedAt: ctx.BlockTime().Unix(),
 	}
+	require.NoError(t, enrollActiveFactor(k, ctx, addr, types.FactorTypeTOTP, "trusted-totp"))
+	require.NoError(t, enrollActiveFactor(k, ctx, addr, types.FactorTypeFIDO2, "trusted-fido2"))
 	err = k.SetMFAPolicy(ctx, policy)
 	require.NoError(t, err)
 

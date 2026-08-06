@@ -63,49 +63,55 @@ export function TransactionHistory({ transactions }: TransactionHistoryProps) {
         </div>
       </CardHeader>
       <CardContent className="p-0">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Type</TableHead>
-              <TableHead>Reference</TableHead>
-              <TableHead>Allocation</TableHead>
-              <TableHead className="text-right">Amount</TableHead>
-              <TableHead>Status</TableHead>
-              <TableHead className="text-right">Date</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {transactions.map((txn) => (
-              <TableRow key={txn.id}>
-                <TableCell>
-                  <Badge variant={TYPE_BADGE[txn.type]} size="sm">
-                    {txn.type}
-                  </Badge>
-                </TableCell>
-                <TableCell className="font-medium">{txn.reference}</TableCell>
-                <TableCell className="font-mono text-xs text-muted-foreground">
-                  {txn.allocation ?? '—'}
-                </TableCell>
-                <TableCell
-                  className={`text-right font-medium ${
-                    txn.direction === 'credit' ? 'text-success' : 'text-destructive'
-                  }`}
-                >
-                  {txn.direction === 'credit' ? '+' : '-'}
-                  {formatToken(txn.amount, txn.currency)}
-                </TableCell>
-                <TableCell>
-                  <Badge variant={STATUS_VARIANT[txn.status]} size="sm" dot>
-                    {txn.status}
-                  </Badge>
-                </TableCell>
-                <TableCell className="text-right text-sm text-muted-foreground">
-                  {formatDate(txn.occurredAt, { month: 'short', day: 'numeric' })}
-                </TableCell>
+        {transactions.length === 0 ? (
+          <div className="px-6 py-10 text-center text-sm text-muted-foreground">
+            No live escrow movements are available for this account yet.
+          </div>
+        ) : (
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Type</TableHead>
+                <TableHead>Reference</TableHead>
+                <TableHead>Allocation</TableHead>
+                <TableHead className="text-right">Amount</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead className="text-right">Date</TableHead>
               </TableRow>
-            ))}
-          </TableBody>
-        </Table>
+            </TableHeader>
+            <TableBody>
+              {transactions.map((txn) => (
+                <TableRow key={txn.id}>
+                  <TableCell>
+                    <Badge variant={TYPE_BADGE[txn.type]} size="sm">
+                      {txn.type}
+                    </Badge>
+                  </TableCell>
+                  <TableCell className="font-medium">{txn.reference}</TableCell>
+                  <TableCell className="font-mono text-xs text-muted-foreground">
+                    {txn.allocation ?? '—'}
+                  </TableCell>
+                  <TableCell
+                    className={`text-right font-medium ${
+                      txn.direction === 'credit' ? 'text-success' : 'text-destructive'
+                    }`}
+                  >
+                    {txn.direction === 'credit' ? '+' : '-'}
+                    {formatToken(txn.amount, txn.currency)}
+                  </TableCell>
+                  <TableCell>
+                    <Badge variant={STATUS_VARIANT[txn.status]} size="sm" dot>
+                      {txn.status}
+                    </Badge>
+                  </TableCell>
+                  <TableCell className="text-right text-sm text-muted-foreground">
+                    {formatDate(txn.occurredAt, { month: 'short', day: 'numeric' })}
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        )}
       </CardContent>
     </Card>
   );

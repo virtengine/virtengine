@@ -5,10 +5,12 @@ import (
 	"crypto/hmac"
 	"crypto/rand"
 	"crypto/sha256"
+	"encoding/binary"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"strconv"
 	"strings"
@@ -20,6 +22,8 @@ import (
 	"github.com/virtengine/virtengine/pkg/data_vault"
 	"github.com/virtengine/virtengine/pkg/observability"
 	portalauth "github.com/virtengine/virtengine/pkg/provider_daemon/auth"
+	"github.com/virtengine/virtengine/sdk/go/util/wsutil"
+	"k8s.io/client-go/tools/remotecommand"
 )
 
 const (
@@ -60,6 +64,29 @@ type PortalAPIServerConfig struct {
 	RateLimit               RateLimitConfig
 	VaultService            data_vault.VaultService
 	VaultMaxPayloadBytes    int64
+	WorkloadLogSource       WorkloadLogSource
+	WorkloadShellExecutor   WorkloadShellExecutor
+	Readiness               func(context.Context) ProviderMutationReadiness
+}
+
+type WorkloadLogSource interface {
+	TailLogs(ctx context.Context, deploymentID, container string, tail int) ([]LogEntry, error)
+	StreamLogs(ctx context.Context, deploymentID, container string, tail int) (<-chan LogEntry, func(), error)
+}
+
+type ShellExecutionRequest struct {
+	DeploymentID   string
+	Container      string
+	Session        *ShellSession
+	Stdin          io.Reader
+	Stdout         io.Writer
+	Stderr         io.Writer
+	TTY            bool
+	TerminalResize <-chan remotecommand.TerminalSize
+}
+
+type WorkloadShellExecutor interface {
+	OpenShell(ctx context.Context, req *ShellExecutionRequest) error
 }
 
 func DefaultPortalAPIServerConfig() PortalAPIServerConfig {
@@ -92,6 +119,9 @@ type PortalAPIServer struct {
 	authVerifier  *portalauth.Verifier
 	vault         data_vault.VaultService
 	lifecycleExec LifecycleExecutor
+	workloadLogs  WorkloadLogSource
+	shellExec     WorkloadShellExecutor
+	readiness     func(context.Context) ProviderMutationReadiness
 }
 
 func NewPortalAPIServer(cfg PortalAPIServerConfig) (*PortalAPIServer, error) {
@@ -118,7 +148,7 @@ func NewPortalAPIServer(cfg PortalAPIServerConfig) (*PortalAPIServer, error) {
 		cfg.LogStore = NewDeploymentLogStore()
 	}
 	if cfg.ChainQuery == nil {
-		cfg.ChainQuery = NoopChainQuery{}
+		cfg.ChainQuery = UnavailablePortalChainQuery{}
 	}
 	if cfg.WalletAuthNonceStore == nil {
 		cfg.WalletAuthNonceStore = portalauth.NewInMemoryNonceStore()
@@ -154,11 +184,17 @@ func NewPortalAPIServer(cfg PortalAPIServerConfig) (*PortalAPIServer, error) {
 	srv.vault = cfg.VaultService
 	srv.rateLimiter = NewPortalRateLimiter(cfg.RateLimit.RequestsPerMinute, time.Minute)
 	srv.lifecycleExec = cfg.LifecycleExecutor
+	srv.workloadLogs = cfg.WorkloadLogSource
+	srv.shellExec = cfg.WorkloadShellExecutor
+	srv.readiness = cfg.Readiness
 
 	return srv, nil
 }
 
 func (s *PortalAPIServer) Start(ctx context.Context) error {
+	if err := validatePortalChainQuery(s.chainQuery); err != nil {
+		return fmt.Errorf("portal chain query startup validation: %w", err)
+	}
 	router := mux.NewRouter()
 	s.setupRoutes(router)
 
@@ -178,6 +214,7 @@ func (s *PortalAPIServer) Start(ctx context.Context) error {
 
 func (s *PortalAPIServer) setupRoutes(router *mux.Router) {
 	router.HandleFunc("/health", s.handleHealth).Methods(http.MethodGet)
+	router.HandleFunc("/ready", s.handleReady).Methods(http.MethodGet)
 	router.HandleFunc("/deployments/{id}/logs", s.handleLogs).Methods(http.MethodGet)
 	router.HandleFunc("/deployments/{id}/shell/session", s.handleShellSession).Methods(http.MethodPost)
 	router.HandleFunc("/deployments/{id}/shell", s.handleShell).Methods(http.MethodGet)
@@ -186,6 +223,7 @@ func (s *PortalAPIServer) setupRoutes(router *mux.Router) {
 	api.Use(s.rateLimitMiddleware())
 
 	api.HandleFunc("/health", s.handleHealth).Methods(http.MethodGet)
+	api.HandleFunc("/ready", s.handleReady).Methods(http.MethodGet)
 	api.HandleFunc("/deployments/{deploymentId}/logs", s.handleLogs).Methods(http.MethodGet)
 	api.HandleFunc("/deployments/{deploymentId}/shell/session", s.handleShellSession).Methods(http.MethodPost)
 	api.HandleFunc("/deployments/{deploymentId}/shell", s.handleShell).Methods(http.MethodGet)
@@ -241,8 +279,32 @@ func (s *PortalAPIServer) handleHealth(w http.ResponseWriter, _ *http.Request) {
 	_, _ = w.Write([]byte("ok"))
 }
 
+func (s *PortalAPIServer) handleReady(w http.ResponseWriter, r *http.Request) {
+	if err := validatePortalChainQuery(s.chainQuery); err != nil {
+		writePortalError(w, err)
+		return
+	}
+	if s.readiness == nil {
+		http.Error(w, "readiness dependencies unavailable", http.StatusServiceUnavailable)
+		return
+	}
+	status := s.readiness(r.Context())
+	if !status.Ready {
+		http.Error(w, status.Reason, http.StatusServiceUnavailable)
+		return
+	}
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write([]byte("ready"))
+}
+
+// RouteCapability reports whether the configured query backend supports a portal route surface.
+func (s *PortalAPIServer) RouteCapability(capability PortalRouteCapability) error {
+	return portalQueryCapability(s.chainQuery, capability)
+}
+
 func (s *PortalAPIServer) handleLogs(w http.ResponseWriter, r *http.Request) {
 	deploymentID := deploymentIDFromVars(r)
+	containerName := strings.TrimSpace(r.URL.Query().Get("container"))
 
 	authCtx, authErr := s.authenticateRequest(r)
 	if authErr != nil {
@@ -257,6 +319,10 @@ func (s *PortalAPIServer) handleLogs(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if websocket.IsWebSocketUpgrade(r) {
+		if s.workloadLogs != nil {
+			s.handleWorkloadLogStreamWS(w, r, deploymentID, containerName, authCtx.Address)
+			return
+		}
 		s.handleLogStreamWS(w, r, deploymentID, authCtx.Address)
 		return
 	}
@@ -265,6 +331,14 @@ func (s *PortalAPIServer) handleLogs(w http.ResponseWriter, r *http.Request) {
 	levelFilter := strings.ToLower(strings.TrimSpace(r.URL.Query().Get("level")))
 	search := strings.ToLower(strings.TrimSpace(r.URL.Query().Get("search")))
 	lines := s.logStore.Tail(deploymentID, tail)
+	if s.workloadLogs != nil {
+		entries, err := s.workloadLogs.TailLogs(r.Context(), deploymentID, containerName, tail)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusServiceUnavailable)
+			return
+		}
+		lines = entries
+	}
 
 	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 	if r.URL.Query().Get("download") == "1" {
@@ -341,6 +415,88 @@ func (s *PortalAPIServer) handleLogStreamWS(w http.ResponseWriter, r *http.Reque
 	}
 }
 
+func (s *PortalAPIServer) handleWorkloadLogStreamWS(w http.ResponseWriter, r *http.Request, deploymentID, containerName, principal string) {
+	conn, err := s.upgrader.Upgrade(w, r, nil)
+	if err != nil {
+		return
+	}
+	defer conn.Close()
+
+	levelFilter := strings.ToLower(strings.TrimSpace(r.URL.Query().Get("level")))
+	search := strings.ToLower(strings.TrimSpace(r.URL.Query().Get("search")))
+	tail := parseIntQuery(r, "tail", 200)
+	follow := r.URL.Query().Get("follow") != "0"
+
+	_ = s.cfg.AuditLogger.Log(&AuditEvent{
+		Type:        AuditEventLogStreamStarted,
+		Operation:   "log_stream",
+		Success:     true,
+		PrincipalID: principal,
+		Details: map[string]interface{}{
+			"deployment_id": deploymentID,
+			"container":     containerName,
+		},
+	})
+
+	defer func() {
+		_ = s.cfg.AuditLogger.Log(&AuditEvent{
+			Type:        AuditEventLogStreamEnded,
+			Operation:   "log_stream",
+			Success:     true,
+			PrincipalID: principal,
+			Details: map[string]interface{}{
+				"deployment_id": deploymentID,
+				"container":     containerName,
+			},
+		})
+	}()
+
+	lines, err := s.workloadLogs.TailLogs(r.Context(), deploymentID, containerName, tail)
+	if err != nil {
+		_ = conn.WriteMessage(websocket.TextMessage, []byte("ERROR "+err.Error()))
+		return
+	}
+	for _, entry := range lines {
+		if !shouldSendLog(entry, levelFilter, search) {
+			continue
+		}
+		if err := conn.WriteMessage(websocket.TextMessage, []byte(formatLogEntry(entry))); err != nil {
+			return
+		}
+	}
+
+	if !follow {
+		return
+	}
+
+	ch, cancel, err := s.openWorkloadLogStream(r.Context(), deploymentID, containerName, tail)
+	if err != nil {
+		_ = conn.WriteMessage(websocket.TextMessage, []byte("ERROR "+err.Error()))
+		return
+	}
+	defer cancel()
+
+	for entry := range ch {
+		if !shouldSendLog(entry, levelFilter, search) {
+			continue
+		}
+		if err := conn.WriteMessage(websocket.TextMessage, []byte(formatLogEntry(entry))); err != nil {
+			return
+		}
+	}
+}
+
+func (s *PortalAPIServer) openWorkloadLogStream(
+	ctx context.Context,
+	deploymentID, containerName string,
+	tail int,
+) (<-chan LogEntry, func(), error) {
+	if s.workloadLogs == nil {
+		return nil, nil, errors.New("workload log backend unavailable")
+	}
+	return s.workloadLogs.StreamLogs(ctx, deploymentID, containerName, tail)
+}
+
 func (s *PortalAPIServer) handleShellSession(w http.ResponseWriter, r *http.Request) {
 	deploymentID := deploymentIDFromVars(r)
 	authCtx, authErr := s.authenticateRequest(r)
@@ -367,6 +523,11 @@ func (s *PortalAPIServer) handleShellSession(w http.ResponseWriter, r *http.Requ
 		Container string `json:"container"`
 	}
 	_ = json.NewDecoder(r.Body).Decode(&req)
+
+	if s.shellExec == nil {
+		http.Error(w, "shell backend unavailable", http.StatusServiceUnavailable)
+		return
+	}
 
 	session, err := s.shellSessions.Issue(deploymentID, authCtx.Address, req.Container, s.cfg.ShellSessionTTL)
 	if err != nil {
@@ -428,6 +589,10 @@ func (s *PortalAPIServer) handleShell(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "missing session token", http.StatusUnauthorized)
 		return
 	}
+	if s.shellExec == nil {
+		http.Error(w, "shell backend unavailable", http.StatusServiceUnavailable)
+		return
+	}
 
 	var session *ShellSession
 	if sessionToken != "" {
@@ -475,8 +640,99 @@ func (s *PortalAPIServer) handleShell(w http.ResponseWriter, r *http.Request) {
 			},
 		})
 	}()
+	if err := s.serveWorkloadShell(r.Context(), conn, deploymentID, r.URL.Query().Get("container"), session); err != nil {
+		writeShellMessage(conn, shellCodeStderr, []byte(err.Error()+"\r\n"))
+		writeShellResult(conn, 1, err.Error())
+	}
+}
 
-	writeShellMessage(conn, shellCodeStdout, []byte("Connected to VirtEngine shell.\r\n"))
+func (s *PortalAPIServer) serveWorkloadShell(
+	ctx context.Context,
+	conn *websocket.Conn,
+	deploymentID, container string,
+	session *ShellSession,
+) error {
+	if s.shellExec == nil {
+		return errors.New("shell backend unavailable")
+	}
+
+	shellCtx, cancel := context.WithCancel(ctx)
+	defer cancel()
+
+	stdinReader, stdinWriter := io.Pipe()
+	defer func() {
+		_ = stdinReader.Close()
+		_ = stdinWriter.Close()
+	}()
+
+	resizeCh := make(chan remotecommand.TerminalSize, 8)
+	defer close(resizeCh)
+
+	readErrCh := make(chan error, 1)
+	writeLock := &sync.Mutex{}
+	stdout := wsutil.NewWsWriterWrapper(conn, shellCodeStdout, writeLock)
+	stderr := wsutil.NewWsWriterWrapper(conn, shellCodeStderr, writeLock)
+
+	go func() {
+		defer func() {
+			_ = stdinWriter.Close()
+		}()
+		for {
+			msgType, data, err := conn.ReadMessage()
+			if err != nil {
+				select {
+				case readErrCh <- err:
+				default:
+				}
+				return
+			}
+			if msgType != websocket.BinaryMessage || len(data) == 0 {
+				continue
+			}
+
+			switch data[0] {
+			case shellCodeStdin:
+				if len(data) == 1 {
+					continue
+				}
+				if _, err := stdinWriter.Write(data[1:]); err != nil {
+					select {
+					case readErrCh <- err:
+					default:
+					}
+					return
+				}
+			case shellCodeResize:
+				size, err := decodeTerminalSize(data[1:])
+				if err != nil {
+					select {
+					case readErrCh <- err:
+					default:
+					}
+					return
+				}
+				select {
+				case resizeCh <- size:
+				case <-shellCtx.Done():
+					return
+				}
+			}
+		}
+	}()
+
+	execErrCh := make(chan error, 1)
+	go func() {
+		execErrCh <- s.shellExec.OpenShell(shellCtx, &ShellExecutionRequest{
+			DeploymentID:   deploymentID,
+			Container:      container,
+			Session:        session,
+			Stdin:          stdinReader,
+			Stdout:         stdout,
+			Stderr:         stderr,
+			TTY:            true,
+			TerminalResize: resizeCh,
+		})
+	}()
 
 	expired := make(chan struct{})
 	if session != nil {
@@ -486,7 +742,7 @@ func (s *PortalAPIServer) handleShell(w http.ResponseWriter, r *http.Request) {
 			select {
 			case <-timer.C:
 				close(expired)
-			case <-r.Context().Done():
+			case <-shellCtx.Done():
 			}
 		}()
 	}
@@ -494,35 +750,55 @@ func (s *PortalAPIServer) handleShell(w http.ResponseWriter, r *http.Request) {
 	for {
 		select {
 		case <-expired:
+			cancel()
 			_ = conn.WriteControl(
 				websocket.CloseMessage,
 				websocket.FormatCloseMessage(websocket.ClosePolicyViolation, "session expired"),
 				time.Now().Add(time.Second),
 			)
-			return
-		default:
-		}
-
-		msgType, data, err := conn.ReadMessage()
-		if err != nil {
-			return
-		}
-		if msgType != websocket.BinaryMessage || len(data) == 0 {
-			continue
-		}
-
-		switch data[0] {
-		case shellCodeStdin:
-			payload := data[1:]
-			if len(payload) == 0 {
-				continue
+			return nil
+		case err := <-readErrCh:
+			cancel()
+			if isExpectedWebsocketClose(err) || errors.Is(err, io.EOF) {
+				return nil
 			}
-			writeShellMessage(conn, shellCodeStdout, payload)
-		case shellCodeResize:
-			// Terminal resize, ignore for now.
-		default:
+			return err
+		case err := <-execErrCh:
+			cancel()
+			if err == nil {
+				writeShellResult(conn, 0, "")
+			}
+			return err
+		case <-shellCtx.Done():
+			if errors.Is(shellCtx.Err(), context.Canceled) {
+				return nil
+			}
+			return shellCtx.Err()
 		}
 	}
+}
+
+func decodeTerminalSize(payload []byte) (remotecommand.TerminalSize, error) {
+	if len(payload) < 4 {
+		return remotecommand.TerminalSize{}, errors.New("invalid terminal resize payload")
+	}
+	return remotecommand.TerminalSize{
+		Width:  binary.BigEndian.Uint16(payload[:2]),
+		Height: binary.BigEndian.Uint16(payload[2:4]),
+	}, nil
+}
+
+func isExpectedWebsocketClose(err error) bool {
+	if err == nil {
+		return false
+	}
+	return websocket.IsCloseError(
+		err,
+		websocket.CloseNormalClosure,
+		websocket.CloseGoingAway,
+		websocket.CloseNoStatusReceived,
+		websocket.CloseAbnormalClosure,
+	)
 }
 
 func (s *PortalAPIServer) authenticateRequest(r *http.Request) (portalauth.AuthContext, error) {
@@ -728,6 +1004,17 @@ func writeShellMessage(conn *websocket.Conn, messageType byte, payload []byte) {
 	buf[0] = messageType
 	copy(buf[1:], payload)
 	_ = conn.WriteMessage(websocket.BinaryMessage, buf)
+}
+
+func writeShellResult(conn *websocket.Conn, exitCode int, message string) {
+	payload, err := json.Marshal(map[string]interface{}{
+		"exit_code": exitCode,
+		"message":   message,
+	})
+	if err != nil {
+		return
+	}
+	writeShellMessage(conn, shellCodeResult, payload)
 }
 
 type LogEntry struct {

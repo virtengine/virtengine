@@ -30,6 +30,11 @@ service Msg {
   
   // UpdateScore updates the identity score (validator only)
   rpc UpdateScore(MsgUpdateScore) returns (MsgUpdateScoreResponse);
+
+  // SubmitConsensusVerification applies the canonical aggregate carried by the
+  // index-zero system transaction. It has no ordinary transaction signer and
+  // is admitted only by the application proposal/finalization boundary.
+  rpc SubmitConsensusVerification(MsgSubmitConsensusVerification) returns (MsgSubmitConsensusVerificationResponse);
   
   // CreateIdentityWallet creates an identity wallet
   rpc CreateIdentityWallet(MsgCreateIdentityWallet) returns (MsgCreateIdentityWalletResponse);
@@ -853,6 +858,68 @@ message MsgUpdateScoreResponse {
     (gogoproto.jsontag) = "updated_at",
     (gogoproto.moretags) = "yaml:\"updated_at\""
   ];
+}
+
+// VEIDVoteExtension is the canonical versioned payload signed by CometBFT.
+// Carrier v1 is currently unreleased; receipt_digest is part of its initial
+// wire contract and therefore does not require a compatibility transition.
+message VEIDVoteExtension {
+  uint32 version = 1;
+  string chain_id = 2;
+  int64 height = 3;
+  bytes block_hash = 4;
+  string pipeline_version = 5;
+  bytes runtime_hash = 6;
+  bytes model_hash = 7;
+  repeated VEIDVoteExtensionResult results = 8 [(gogoproto.nullable) = false];
+}
+
+// VEIDVoteExtensionResult commits one validator-controlled pre-consensus result.
+message VEIDVoteExtensionResult {
+  string request_id = 1;
+  string account_address = 2;
+  uint32 score = 3;
+  string status = 4;
+  string model_version = 5;
+  bytes input_hash = 6;
+  bytes result_hash = 7;
+  repeated string reason_codes = 8;
+  bytes receipt_digest = 9;
+}
+
+// VEIDConsensusAggregate is deterministically reconstructed from signed votes.
+message VEIDConsensusAggregate {
+  uint32 version = 1;
+  string chain_id = 2;
+  int64 height = 3;
+  string pipeline_version = 4;
+  bytes runtime_hash = 5;
+  bytes model_hash = 6;
+  int64 total_voting_power = 7;
+  int64 quorum_voting_power = 8;
+  repeated VEIDConsensusResult results = 9 [(gogoproto.nullable) = false];
+}
+
+// VEIDConsensusResult is one result that reached the strict voting-power quorum.
+message VEIDConsensusResult {
+  VEIDVoteExtensionResult result = 1 [(gogoproto.nullable) = false];
+  int64 voting_power = 2;
+}
+
+// MsgSubmitConsensusVerification is the canonical SDK-native system message.
+// The complete signed ExtendedCommitInfo is carried as canonical protobuf bytes
+// and revalidated by proposal processing before this message can execute.
+message MsgSubmitConsensusVerification {
+  uint32 version = 1;
+  string chain_id = 2;
+  int64 height = 3;
+  bytes extended_commit = 4;
+  VEIDConsensusAggregate aggregate = 5 [(gogoproto.nullable) = false];
+}
+
+// MsgSubmitConsensusVerificationResponse reports the consumed result count.
+message MsgSubmitConsensusVerificationResponse {
+  uint32 applied_results = 1;
 }
 
 // MsgCreateIdentityWallet is the message for creating an identity wallet

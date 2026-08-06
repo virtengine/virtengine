@@ -44,9 +44,10 @@ type HPCBackendHealth struct {
 
 // HPCBackendFactory manages the HPC scheduler backend lifecycle with factory methods
 type HPCBackendFactory struct {
-	config      HPCConfig
-	credManager *HPCCredentialManager
-	signer      HPCSchedulerSigner
+	config          HPCConfig
+	credManager     *HPCCredentialManager
+	signer          HPCSchedulerSigner
+	clientOverrides *HPCBackendClients
 
 	mu              sync.RWMutex
 	scheduler       HPCScheduler
@@ -63,33 +64,7 @@ type HPCBackendFactory struct {
 
 // NewHPCBackendFactory creates a new HPC backend factory
 func NewHPCBackendFactory(config HPCConfig, credManager *HPCCredentialManager, signer HPCSchedulerSigner) (*HPCBackendFactory, error) {
-	if err := config.Validate(); err != nil {
-		return nil, fmt.Errorf("invalid HPC config: %w", err)
-	}
-
-	if !config.Enabled {
-		return nil, errors.New("HPC is not enabled in configuration")
-	}
-
-	if signer == nil {
-		return nil, errors.New("signer is required")
-	}
-
-	factory := &HPCBackendFactory{
-		config:      config,
-		credManager: credManager,
-		signer:      signer,
-		callbacks:   make([]HPCJobLifecycleCallback, 0),
-	}
-
-	// Create the appropriate scheduler based on configuration
-	scheduler, err := factory.createScheduler()
-	if err != nil {
-		return nil, fmt.Errorf("failed to create scheduler: %w", err)
-	}
-	factory.scheduler = scheduler
-
-	return factory, nil
+	return newHPCBackendFactory(config, credManager, signer, nil)
 }
 
 // Start starts the HPC backend factory and underlying scheduler
@@ -332,83 +307,21 @@ func (f *HPCBackendFactory) createOODScheduler() (HPCScheduler, error) {
 //
 //nolint:unparam // Keep error return for future client implementations.
 func (f *HPCBackendFactory) createSLURMClient() (slurm_adapter.SLURMClient, error) {
-	// Get credentials if credential manager is available
-	var username, password, sshKeyPath string
-
-	if f.credManager != nil && !f.credManager.IsLocked() {
-		ctx := context.Background()
-		creds, err := f.credManager.GetCredentials(ctx, f.config.ClusterID, CredentialTypeSLURM)
-		if err == nil {
-			username = creds.Username
-			password = creds.Password
-			sshKeyPath = creds.SSHPrivateKeyPath
-		}
-		// If credentials not found, we'll fall back to mock client
-	}
-
-	// For now, use mock client for development/testing
-	// In production, would use SSH client with proper configuration
-	_ = username
-	_ = password
-	_ = sshKeyPath
-
-	// Use mock client for now - real implementation would use NewSSHSLURMClient
-	client := slurm_adapter.NewMockSLURMClient()
-	return client, nil
+	return f.createProductionSLURMClient()
 }
 
 // createMOABClient creates a MOAB client based on configuration
 //
 //nolint:unparam // Keep error return for future client implementations.
 func (f *HPCBackendFactory) createMOABClient() (moab_adapter.MOABClient, error) {
-	// Get credentials if available
-	var username, password string
-
-	if f.credManager != nil && !f.credManager.IsLocked() {
-		ctx := context.Background()
-		creds, err := f.credManager.GetCredentials(ctx, f.config.ClusterID, CredentialTypeMOAB)
-		if err == nil {
-			username = creds.Username
-			password = creds.Password
-		}
-	}
-
-	// For now, use mock client for development/testing
-	_ = username
-	_ = password
-
-	// Use mock client for now
-	client := moab_adapter.NewMockMOABClient()
-	return client, nil
+	return f.createProductionMOABClient()
 }
 
 // createOODClient creates an OOD client and auth provider based on configuration
 //
 //nolint:unparam // Keep error return for future client implementations.
 func (f *HPCBackendFactory) createOODClient() (ood_adapter.OODClient, ood_adapter.VEIDAuthProvider, error) {
-	// Get credentials if available
-	var username, password string
-
-	if f.credManager != nil && !f.credManager.IsLocked() {
-		ctx := context.Background()
-		creds, err := f.credManager.GetCredentials(ctx, f.config.ClusterID, CredentialTypeOOD)
-		if err == nil {
-			username = creds.Username
-			password = creds.Password
-		}
-	}
-
-	// For now, use mock client for development/testing
-	_ = username
-	_ = password
-
-	// Use mock client for now
-	client := ood_adapter.NewMockOODClient()
-
-	// Create auth provider (use mock for now)
-	authProvider := ood_adapter.NewMockVEIDAuthProvider()
-
-	return client, authProvider, nil
+	return f.createProductionOODClient()
 }
 
 // createSLURMSigner creates a signer compatible with the SLURM adapter
@@ -428,34 +341,7 @@ func (f *HPCBackendFactory) createOODSigner() ood_adapter.SessionSigner {
 
 // checkCredentialsValid checks if credentials are valid
 func (f *HPCBackendFactory) checkCredentialsValid() bool {
-	if f.credManager == nil {
-		// No credential manager, assume valid (using config-based creds)
-		return true
-	}
-
-	if f.credManager.IsLocked() {
-		return false
-	}
-
-	// Check credential health
-	ctx := context.Background()
-	var credType CredentialType
-	switch f.config.SchedulerType {
-	case HPCSchedulerTypeSLURM:
-		credType = CredentialTypeSLURM
-	case HPCSchedulerTypeMOAB:
-		credType = CredentialTypeMOAB
-	case HPCSchedulerTypeOOD:
-		credType = CredentialTypeOOD
-	}
-
-	creds, err := f.credManager.GetCredentials(ctx, f.config.ClusterID, credType)
-	if err != nil {
-		// No credentials stored, but config might have creds
-		return true
-	}
-
-	return !creds.IsExpired()
+	return f.runtimeCredentialsConfigured()
 }
 
 // =============================================================================

@@ -15,11 +15,13 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"strings"
 	"sync"
 	"time"
 )
 
 var ErrEncryptionKeyRequired = errors.New("notification token encryption key required")
+var ErrInvalidDeviceToken = errors.New("invalid notification device token")
 
 // TokenVault encrypts and decrypts device tokens at rest.
 type TokenVault struct {
@@ -93,9 +95,10 @@ type tokenRecord struct {
 
 // InMemoryDeviceTokenStore stores encrypted tokens in memory.
 type InMemoryDeviceTokenStore struct {
-	mu     sync.RWMutex
-	vault  *TokenVault
-	tokens map[string][]tokenRecord
+	mu      sync.RWMutex
+	vault   *TokenVault
+	tokens  map[string][]tokenRecord
+	timeNow func() time.Time
 }
 
 // NewInMemoryDeviceTokenStore creates a new device token store.
@@ -103,6 +106,9 @@ func NewInMemoryDeviceTokenStore(vault *TokenVault) *InMemoryDeviceTokenStore {
 	return &InMemoryDeviceTokenStore{
 		vault:  vault,
 		tokens: make(map[string][]tokenRecord),
+		timeNow: func() time.Time {
+			return time.Now().UTC()
+		},
 	}
 }
 
@@ -111,8 +117,10 @@ func (s *InMemoryDeviceTokenStore) Register(_ context.Context, device DeviceToke
 	if s.vault == nil {
 		return ErrEncryptionKeyRequired
 	}
-	if device.UserAddress == "" || device.Token == "" {
-		return errors.New("device token missing user address or token")
+	now := s.timeNow()
+	device, err := normalizeDeviceToken(device, now)
+	if err != nil {
+		return err
 	}
 
 	hash := sha256.Sum256([]byte(device.Token))
@@ -122,20 +130,21 @@ func (s *InMemoryDeviceTokenStore) Register(_ context.Context, device DeviceToke
 		return err
 	}
 
-	device.CreatedAt = device.CreatedAt.UTC()
-	if device.CreatedAt.IsZero() {
-		device.CreatedAt = time.Now().UTC()
-	}
-	device.LastSeenAt = time.Now().UTC()
-	device.Enabled = true
-
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
 	records := s.tokens[device.UserAddress]
 	for i, record := range records {
 		if record.tokenHash == tokenHash {
-			record.device = device
+			device.ID = firstNonEmpty(device.ID, record.device.ID)
+			device.CreatedAt = pickTime(device.CreatedAt, record.device.CreatedAt)
+			device.LastDeliveredAt = cloneTimePtr(record.device.LastDeliveredAt)
+			device.ConsecutiveFailures = 0
+			device.DisabledAt = nil
+			device.Enabled = true
+			device.LastFailureAt = cloneTimePtr(record.device.LastFailureAt)
+			device.LastFailureReason = record.device.LastFailureReason
+			record.device = cloneDeviceToken(device)
 			record.tokenCipher = ciphertext
 			record.tokenHash = tokenHash
 			records[i] = record
@@ -145,7 +154,7 @@ func (s *InMemoryDeviceTokenStore) Register(_ context.Context, device DeviceToke
 	}
 
 	s.tokens[device.UserAddress] = append(records, tokenRecord{
-		device:      device,
+		device:      cloneDeviceToken(device),
 		tokenCipher: ciphertext,
 		tokenHash:   tokenHash,
 	})
@@ -177,19 +186,122 @@ func (s *InMemoryDeviceTokenStore) Unregister(_ context.Context, userAddr, token
 
 // List returns device tokens for a user with decrypted values.
 func (s *InMemoryDeviceTokenStore) List(_ context.Context, userAddr string) ([]DeviceToken, error) {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
+	if s.vault == nil {
+		return nil, ErrEncryptionKeyRequired
+	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
 
 	records := s.tokens[userAddr]
 	devices := make([]DeviceToken, 0, len(records))
-	for _, record := range records {
+	for i, record := range records {
 		token, err := s.vault.Decrypt(record.tokenCipher)
 		if err != nil {
-			return nil, err
+			failedAt := s.timeNow()
+			record.device.Enabled = false
+			record.device.DisabledAt = cloneTimePtr(&failedAt)
+			record.device.LastFailureAt = cloneTimePtr(&failedAt)
+			record.device.LastFailureReason = "token decrypt failed"
+			record.device.ConsecutiveFailures++
+			records[i] = record
+			continue
 		}
-		device := record.device
+		device := cloneDeviceToken(record.device)
 		device.Token = token
 		devices = append(devices, device)
 	}
 	return devices, nil
+}
+
+// RecordDeliverySuccess updates delivery state for a device token.
+func (s *InMemoryDeviceTokenStore) RecordDeliverySuccess(_ context.Context, userAddr, token string, deliveredAt time.Time) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	s.updateRecordByToken(userAddr, token, func(device *DeviceToken) {
+		device.Enabled = true
+		device.DisabledAt = nil
+		device.LastDeliveredAt = cloneTimePtr(&deliveredAt)
+		device.LastSeenAt = deliveredAt.UTC()
+		device.ConsecutiveFailures = 0
+	})
+	return nil
+}
+
+// RecordDeliveryFailure updates failure state for a device token.
+func (s *InMemoryDeviceTokenStore) RecordDeliveryFailure(_ context.Context, userAddr, token, reason string, failedAt time.Time, disable bool) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	s.updateRecordByToken(userAddr, token, func(device *DeviceToken) {
+		device.LastFailureAt = cloneTimePtr(&failedAt)
+		device.LastFailureReason = strings.TrimSpace(reason)
+		device.ConsecutiveFailures++
+		if disable {
+			device.Enabled = false
+			device.DisabledAt = cloneTimePtr(&failedAt)
+		}
+	})
+	return nil
+}
+
+func (s *InMemoryDeviceTokenStore) updateRecordByToken(userAddr, token string, apply func(device *DeviceToken)) {
+	if userAddr == "" || token == "" {
+		return
+	}
+	hash := sha256.Sum256([]byte(token))
+	target := base64.StdEncoding.EncodeToString(hash[:])
+	records := s.tokens[userAddr]
+	for i, record := range records {
+		if record.tokenHash != target {
+			continue
+		}
+		device := cloneDeviceToken(record.device)
+		apply(&device)
+		record.device = device
+		records[i] = record
+		s.tokens[userAddr] = records
+		return
+	}
+}
+
+func normalizeDeviceToken(device DeviceToken, now time.Time) (DeviceToken, error) {
+	device.UserAddress = strings.TrimSpace(device.UserAddress)
+	device.Token = strings.TrimSpace(device.Token)
+	device.AppID = strings.TrimSpace(device.AppID)
+	device.Topic = strings.TrimSpace(device.Topic)
+	if device.UserAddress == "" || device.Token == "" {
+		return DeviceToken{}, fmt.Errorf("%w: missing user address or token", ErrInvalidDeviceToken)
+	}
+	switch device.Platform {
+	case PlatformIOS, PlatformAndroid:
+	default:
+		return DeviceToken{}, fmt.Errorf("%w: unsupported platform %q", ErrInvalidDeviceToken, device.Platform)
+	}
+	if device.CreatedAt.IsZero() {
+		device.CreatedAt = now.UTC()
+	} else {
+		device.CreatedAt = device.CreatedAt.UTC()
+	}
+	device.LastSeenAt = now.UTC()
+	device.Enabled = true
+	device.DisabledAt = nil
+	return device, nil
+}
+
+func firstNonEmpty(values ...string) string {
+	for _, value := range values {
+		if strings.TrimSpace(value) != "" {
+			return value
+		}
+	}
+	return ""
+}
+
+func pickTime(preferred, fallback time.Time) time.Time {
+	if !preferred.IsZero() {
+		return preferred.UTC()
+	}
+	return fallback.UTC()
 }

@@ -1,3 +1,4 @@
+import { ChainCapabilityError } from "../sdk/chain/ChainCapability.ts";
 import type { QueryCache } from "../utils/cache.ts";
 import { QueryError, VirtEngineSDKError } from "../utils/errors.ts";
 
@@ -41,7 +42,7 @@ export abstract class BaseClient {
    * Handle query errors and wrap them in QueryError
    */
   protected handleQueryError(error: unknown, method: string): never {
-    if (error instanceof VirtEngineSDKError) {
+    if (error instanceof VirtEngineSDKError || error instanceof ChainCapabilityError) {
       throw error;
     }
 

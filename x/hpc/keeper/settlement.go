@@ -6,7 +6,6 @@ package keeper
 import (
 	"fmt"
 	"math"
-	"strconv"
 	"time"
 
 	sdkmath "cosmossdk.io/math"
@@ -74,6 +73,19 @@ type SettlementResult struct {
 
 // ProcessJobSettlement processes settlement for a completed job
 func (k Keeper) ProcessJobSettlement(ctx sdk.Context, jobID string) (*SettlementResult, error) {
+	cacheCtx, write := ctx.CacheContext()
+	result, err := k.processJobSettlement(cacheCtx, jobID)
+	if err != nil {
+		return result, err
+	}
+	write()
+	return result, nil
+}
+
+func (k Keeper) processJobSettlement(ctx sdk.Context, jobID string) (*SettlementResult, error) {
+	if caseID := k.canonicalCaseForJob(ctx, jobID); caseID != "" {
+		return nil, types.ErrInvalidJobAccounting.Wrap("canonical financial case " + caseID + " holds settlement")
+	}
 	job, exists := k.GetJob(ctx, jobID)
 	if !exists {
 		return nil, types.ErrJobNotFound
@@ -153,8 +165,7 @@ func (k Keeper) ProcessJobSettlement(ctx sdk.Context, jobID string) (*Settlement
 
 	// Distribute rewards
 	if _, err := k.DistributeJobRewardsFromSettlement(ctx, jobID, record); err != nil {
-		k.Logger(ctx).Error("failed to distribute rewards", "job_id", jobID, "error", err)
-		// Continue - settlement succeeded even if reward distribution failed
+		return nil, types.ErrInvalidReward.Wrapf("failed to distribute settlement rewards: %v", err)
 	}
 
 	k.Logger(ctx).Info("settled HPC job",
@@ -181,28 +192,28 @@ func (k Keeper) executeSettlement(ctx sdk.Context, job *types.HPCJob, record *ty
 		return result, types.ErrInvalidJobAccounting.Wrap(result.Error)
 	}
 
-	orderID, escrow, found := k.resolveSettlementEscrow(ctx, job)
+	orderID, _, found := k.resolveSettlementEscrow(ctx, job)
 	if !found {
 		result.Success = false
 		result.Error = "settlement escrow not found"
 		return result, types.ErrInvalidJobAccounting.Wrap(result.Error)
 	}
 
-	usageRecords, err := k.buildSettlementUsageRecords(ctx, job, record, orderID, escrow)
-	if err != nil {
+	if len(record.SignedUsageRecords) == 0 {
 		result.Success = false
-		result.Error = fmt.Sprintf("failed to build settlement usage records: %v", err)
-		return result, err
+		result.Error = "authenticated provider usage is pending"
+		return result, types.ErrInvalidJobAccounting.Wrap(result.Error)
 	}
 
-	usageIDs := make([]string, 0, len(usageRecords))
-	for i := range usageRecords {
-		if err := k.settlementKeeper.RecordUsage(ctx, &usageRecords[i]); err != nil {
+	usageIDs := make([]string, 0, len(record.SignedUsageRecords))
+	for _, usageID := range record.SignedUsageRecords {
+		usage, found := k.settlementKeeper.GetUsageRecord(ctx, usageID)
+		if !found || !usage.IsAuthenticated() || usage.OrderID != orderID || usage.Provider != record.ProviderAddress || usage.Customer != record.CustomerAddress {
 			result.Success = false
-			result.Error = fmt.Sprintf("failed to record usage: %v", err)
-			return result, err
+			result.Error = fmt.Sprintf("authenticated usage %s is unavailable or has mismatched lineage", usageID)
+			return result, types.ErrInvalidJobAccounting.Wrap(result.Error)
 		}
-		usageIDs = append(usageIDs, usageRecords[i].UsageID)
+		usageIDs = append(usageIDs, usageID)
 	}
 
 	settlementRecord, err := k.settlementKeeper.SettleOrder(ctx, orderID, usageIDs, true)
@@ -264,126 +275,6 @@ func (k Keeper) resolveSettlementEscrow(ctx sdk.Context, job *types.HPCJob) (str
 	return orderID, settlementtypes.EscrowAccount{}, false
 }
 
-func (k Keeper) buildSettlementUsageRecords(
-	ctx sdk.Context,
-	job *types.HPCJob,
-	record *types.HPCAccountingRecord,
-	orderID string,
-	escrow settlementtypes.EscrowAccount,
-) ([]settlementtypes.UsageRecord, error) {
-	metrics := record.UsageMetrics
-	usageComponents := buildUsageComponents(metrics, record.BillableBreakdown)
-
-	targetCoin := selectBillableCoin(record.BillableAmount, usageComponents)
-	usageComponents = scaleComponentsToTarget(targetCoin, usageComponents)
-
-	baseMetadata := map[string]string{
-		"hpc_job_id":            job.JobID,
-		"hpc_cluster_id":        record.ClusterID,
-		"hpc_offering_id":       record.OfferingID,
-		"hpc_accounting_id":     record.RecordID,
-		"hpc_scheduler_type":    record.SchedulerType,
-		"hpc_formula_version":   record.FormulaVersion,
-		"hpc_job_state":         string(job.State),
-		"hpc_job_escrow_id":     job.EscrowID,
-		"hpc_cpu_core_seconds":  strconv.FormatInt(metrics.CPUCoreSeconds, 10),
-		"hpc_memory_gb_seconds": strconv.FormatInt(metrics.MemoryGBSeconds, 10),
-		"hpc_storage_gb_hours":  strconv.FormatInt(metrics.StorageGBHours, 10),
-		"hpc_network_bytes_in":  strconv.FormatInt(metrics.NetworkBytesIn, 10),
-		"hpc_network_bytes_out": strconv.FormatInt(metrics.NetworkBytesOut, 10),
-		"hpc_node_hours":        metrics.NodeHours.String(),
-		"hpc_gpu_seconds":       strconv.FormatInt(metrics.GPUSeconds, 10),
-		"hpc_gpu_type":          metrics.GPUType,
-	}
-
-	if escrow.EscrowID != "" {
-		baseMetadata["settlement_escrow_id"] = escrow.EscrowID
-	}
-	if escrow.LeaseID != "" {
-		baseMetadata["settlement_lease_id"] = escrow.LeaseID
-	}
-
-	if record.CalculationHash != "" {
-		baseMetadata["hpc_calculation_hash"] = record.CalculationHash
-	}
-
-	periodStart := record.PeriodStart
-	periodEnd := record.PeriodEnd
-	if periodEnd.Before(periodStart) {
-		periodEnd = periodStart
-	}
-
-	signature := []byte(record.CalculationHash)
-	if len(signature) == 0 {
-		signature = []byte(record.RecordID)
-	}
-
-	usageRecords := make([]settlementtypes.UsageRecord, 0, len(usageComponents))
-	for _, component := range usageComponents {
-		if component.cost.IsNil() || !component.cost.IsPositive() {
-			continue
-		}
-		usageUnits := component.units
-		if usageUnits == 0 {
-			usageUnits = 1
-		}
-
-		unitDivisor := clampInt64FromUint64(usageUnits)
-		unitPrice := sdk.NewDecCoinFromDec(
-			component.cost.Denom,
-			sdkmath.LegacyNewDecFromInt(component.cost.Amount).QuoInt64(unitDivisor),
-		)
-
-		metadata := copyStringMap(baseMetadata)
-		metadata["hpc_usage_type"] = component.usageType
-		metadata["hpc_usage_units"] = strconv.FormatUint(usageUnits, 10)
-
-		usageRecords = append(usageRecords, settlementtypes.UsageRecord{
-			UsageID:           "",
-			OrderID:           orderID,
-			LeaseID:           job.JobID,
-			Provider:          record.ProviderAddress,
-			Customer:          record.CustomerAddress,
-			UsageUnits:        usageUnits,
-			UsageType:         component.usageType,
-			PeriodStart:       periodStart,
-			PeriodEnd:         periodEnd,
-			UnitPrice:         unitPrice,
-			TotalCost:         sdk.NewCoins(component.cost),
-			ProviderSignature: signature,
-			SubmittedAt:       ctx.BlockTime(),
-			BlockHeight:       ctx.BlockHeight(),
-			Metadata:          metadata,
-		})
-	}
-
-	if len(usageRecords) == 0 && targetCoin.IsPositive() {
-		usageRecords = append(usageRecords, settlementtypes.UsageRecord{
-			UsageID:           "",
-			OrderID:           orderID,
-			LeaseID:           job.JobID,
-			Provider:          record.ProviderAddress,
-			Customer:          record.CustomerAddress,
-			UsageUnits:        1,
-			UsageType:         "fixed",
-			PeriodStart:       periodStart,
-			PeriodEnd:         periodEnd,
-			UnitPrice:         sdk.NewDecCoinFromCoin(targetCoin),
-			TotalCost:         sdk.NewCoins(targetCoin),
-			ProviderSignature: signature,
-			SubmittedAt:       ctx.BlockTime(),
-			BlockHeight:       ctx.BlockHeight(),
-			Metadata:          baseMetadata,
-		})
-	}
-
-	if len(usageRecords) == 0 {
-		return nil, types.ErrInvalidJobAccounting.Wrap("no billable usage to settle")
-	}
-
-	return usageRecords, nil
-}
-
 type usageComponent struct {
 	usageType string
 	units     uint64
@@ -402,10 +293,6 @@ func buildUsageComponents(metrics types.HPCDetailedMetrics, breakdown types.Bill
 	networkBytes := metrics.NetworkBytesIn + metrics.NetworkBytesOut
 	components = appendUsageComponent(components, "network_gb", usageUnitsFromBytes(networkBytes), breakdown.NetworkCost)
 
-	if breakdown.QueuePenalty.IsPositive() {
-		components = appendUsageComponent(components, "queue_penalty", 1, breakdown.QueuePenalty)
-	}
-
 	return components
 }
 
@@ -421,18 +308,6 @@ func appendUsageComponent(components []usageComponent, usageType string, units u
 		units:     units,
 		cost:      cost,
 	})
-}
-
-func selectBillableCoin(amount sdk.Coins, components []usageComponent) sdk.Coin {
-	if len(amount) > 0 {
-		return amount[0]
-	}
-	for _, component := range components {
-		if component.cost.IsPositive() {
-			return component.cost
-		}
-	}
-	return sdk.Coin{}
 }
 
 func scaleComponentsToTarget(target sdk.Coin, components []usageComponent) []usageComponent {
@@ -555,26 +430,11 @@ func clampUint64FromInt64(value int64) uint64 {
 	return uint64(value)
 }
 
-func clampInt64FromUint64(value uint64) int64 {
-	if value == 0 {
-		return 1
-	}
-	if value > math.MaxInt64 {
-		return math.MaxInt64
-	}
-	return int64(value)
-}
-
-func copyStringMap(in map[string]string) map[string]string {
-	out := make(map[string]string, len(in))
-	for k, v := range in {
-		out[k] = v
-	}
-	return out
-}
-
 // DistributeJobRewardsFromSettlement distributes rewards after settlement
 func (k Keeper) DistributeJobRewardsFromSettlement(ctx sdk.Context, jobID string, record *types.HPCAccountingRecord) (*types.HPCRewardRecord, error) {
+	if caseID := k.canonicalCaseForJob(ctx, jobID); caseID != "" {
+		return nil, types.ErrInvalidReward.Wrap("canonical financial case " + caseID + " holds rewards")
+	}
 	job, exists := k.GetJob(ctx, jobID)
 	if !exists {
 		return nil, types.ErrJobNotFound

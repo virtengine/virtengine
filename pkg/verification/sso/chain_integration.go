@@ -10,9 +10,27 @@ import (
 	veidtypes "github.com/virtengine/virtengine/x/veid/types"
 )
 
-// ChainClient defines the minimal interface for on-chain submissions.
+// WalletBinding contains the on-chain wallet binding material required to
+// verify detached account signatures before creating or revoking a linkage.
+type WalletBinding struct {
+	AccountAddress string
+	WalletID       string
+	BindingPubKey  []byte
+}
+
+// LinkageQuery scopes an SSO linkage lookup to an account, linkage ID, or provider.
+type LinkageQuery struct {
+	LinkageID      string
+	AccountAddress string
+	Provider       veidtypes.SSOProviderType
+}
+
+// ChainClient defines the on-chain interface required by the SSO service.
 type ChainClient interface {
 	SubmitSSOVerificationProof(ctx context.Context, msg *veidtypes.MsgSubmitSSOVerificationProof) error
+	GetWalletBinding(ctx context.Context, accountAddress string) (*WalletBinding, error)
+	RevokeSSOLinkage(ctx context.Context, msg *veidtypes.MsgRevokeSSOLinkage) error
+	QuerySSOLinkage(ctx context.Context, query LinkageQuery) (*veidtypes.SSOLinkageMetadata, error)
 }
 
 // SubmitSSOVerificationProof submits the SSO verification proof on-chain if a client is configured.

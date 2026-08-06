@@ -6,6 +6,7 @@ import (
 
 	sdk "github.com/cosmos/cosmos-sdk/types"
 
+	veidv1 "github.com/virtengine/virtengine/sdk/go/node/veid/v1"
 	encryptiontypes "github.com/virtengine/virtengine/x/encryption/types"
 	"github.com/virtengine/virtengine/x/veid/types"
 )
@@ -17,15 +18,19 @@ const (
 )
 
 type msgServer struct {
+	veidv1.UnimplementedMsgServer
 	keeper Keeper
 }
 
 // NewMsgServerImpl returns an implementation of the veid MsgServer interface
-func NewMsgServerImpl(k Keeper) types.MsgServer {
+func NewMsgServerImpl(k Keeper) veidv1.MsgServer {
 	return &msgServer{keeper: k}
 }
 
-var _ types.MsgServer = msgServer{}
+var (
+	_ types.MsgServer  = msgServer{}
+	_ veidv1.MsgServer = (*msgServer)(nil)
+)
 
 // UploadScope handles uploading a new identity scope
 func (ms msgServer) UploadScope(goCtx context.Context, msg *types.MsgUploadScope) (*types.MsgUploadScopeResponse, error) {
@@ -228,174 +233,14 @@ func (ms msgServer) RequestVerification(goCtx context.Context, msg *types.MsgReq
 
 // UpdateVerificationStatus handles validators updating verification status
 func (ms msgServer) UpdateVerificationStatus(goCtx context.Context, msg *types.MsgUpdateVerificationStatus) (*types.MsgUpdateVerificationStatusResponse, error) {
-	ctx := sdk.UnwrapSDKContext(goCtx)
-
-	sender, err := sdk.AccAddressFromBech32(msg.Sender)
-	if err != nil {
-		return nil, types.ErrInvalidAddress.Wrap(errMsgInvalidSenderAddr)
-	}
-
-	accountAddr, err := sdk.AccAddressFromBech32(msg.AccountAddress)
-	if err != nil {
-		return nil, types.ErrInvalidAddress.Wrap(errMsgInvalidAccountAddr)
-	}
-
-	// Validate that sender is a bonded validator
-	// Only validators can submit verification status updates
-	if !ms.keeper.IsValidator(ctx, sender) {
-		return nil, types.ErrUnauthorized.Wrap("only validators can submit verification updates")
-	}
-
-	// Security hardening: input size validation (22A-AC4)
-	limits := DefaultMsgInputLimits()
-	if err := ValidateMsgInputLimits(limits, map[string]int{
-		"scope_id": len(msg.ScopeId),
-		"reason":   len(msg.Reason),
-	}); err != nil {
-		return nil, err
-	}
-
-	// Get current scope for previous status
-	scope, found := ms.keeper.GetScope(ctx, accountAddr, msg.ScopeId)
-	if !found {
-		return nil, types.ErrScopeNotFound.Wrapf("scope %s not found", msg.ScopeId)
-	}
-	previousStatus := scope.Status
-
-	// Convert proto status to local type
-	localNewStatus := types.VerificationStatusFromProto(msg.NewStatus)
-
-	// Update verification status
-	err = ms.keeper.UpdateVerificationStatus(
-		ctx,
-		accountAddr,
-		msg.ScopeId,
-		localNewStatus,
-		msg.Reason,
-		sender.String(),
-	)
-	if err != nil {
-		return nil, err
-	}
-
-	// Emit appropriate event
-	switch msg.NewStatus {
-	case types.VerificationStatusPBVerified:
-		err = ctx.EventManager().EmitTypedEvent(&types.EventScopeVerified{
-			AccountAddress:   msg.AccountAddress,
-			ScopeID:          msg.ScopeId,
-			ScopeType:        string(scope.ScopeType),
-			ValidatorAddress: sender.String(),
-			VerifiedAt:       ctx.BlockTime().Unix(),
-		})
-	case types.VerificationStatusPBRejected:
-		err = ctx.EventManager().EmitTypedEvent(&types.EventScopeRejected{
-			AccountAddress:   msg.AccountAddress,
-			ScopeID:          msg.ScopeId,
-			ScopeType:        string(scope.ScopeType),
-			Reason:           msg.Reason,
-			ValidatorAddress: sender.String(),
-			RejectedAt:       ctx.BlockTime().Unix(),
-		})
-	}
-	if err != nil {
-		return nil, err
-	}
-
-	return &types.MsgUpdateVerificationStatusResponse{
-		ScopeId:        msg.ScopeId,
-		PreviousStatus: types.VerificationStatusToProto(previousStatus),
-		NewStatus:      msg.NewStatus,
-		UpdatedAt:      ctx.BlockTime().Unix(),
-	}, nil
+	_ = sdk.UnwrapSDKContext(goCtx)
+	return nil, types.ErrUnauthorized.Wrap("ordinary verification status transactions are disabled; use signed inference receipts and consensus finalization")
 }
 
 // UpdateScore handles validators updating identity score
 func (ms msgServer) UpdateScore(goCtx context.Context, msg *types.MsgUpdateScore) (*types.MsgUpdateScoreResponse, error) {
-	ctx := sdk.UnwrapSDKContext(goCtx)
-
-	sender, err := sdk.AccAddressFromBech32(msg.Sender)
-	if err != nil {
-		return nil, types.ErrInvalidAddress.Wrap(errMsgInvalidSenderAddr)
-	}
-
-	accountAddr, err := sdk.AccAddressFromBech32(msg.AccountAddress)
-	if err != nil {
-		return nil, types.ErrInvalidAddress.Wrap(errMsgInvalidAccountAddr)
-	}
-
-	// Validate that sender is a bonded validator
-	// Only validators can submit ML score updates
-	if !ms.keeper.IsValidator(ctx, sender) {
-		return nil, types.ErrUnauthorized.Wrap("only validators can submit ML score updates")
-	}
-
-	// Security hardening: score bounds validation (22A-AC4)
-	if msg.NewScore > 1000 {
-		return nil, types.ErrScoreOutOfRange.Wrapf(
-			"score must be 0-1000, got %d", msg.NewScore,
-		)
-	}
-
-	// Security hardening: rate limiting for score updates (22A-AC5)
-	if err := ms.keeper.CheckScoreUpdateRateLimit(ctx); err != nil {
-		return nil, err
-	}
-
-	// Get current record for previous values
-	record, found := ms.keeper.GetIdentityRecord(ctx, accountAddr)
-	if !found {
-		return nil, types.ErrIdentityRecordNotFound.Wrapf("identity record not found for %s", msg.AccountAddress)
-	}
-	previousScore := record.CurrentScore
-	previousTier := record.Tier
-
-	// Update score
-	err = ms.keeper.UpdateScore(ctx, accountAddr, msg.NewScore, msg.ScoreVersion)
-	if err != nil {
-		return nil, err
-	}
-
-	// Get updated record for new tier
-	updatedRecord, _ := ms.keeper.GetIdentityRecord(ctx, accountAddr)
-
-	// Emit legacy score updated event for backwards compatibility
-	err = ctx.EventManager().EmitTypedEvent(&types.EventScoreUpdated{
-		AccountAddress: msg.AccountAddress,
-		PreviousScore:  previousScore,
-		NewScore:       msg.NewScore,
-		ScoreVersion:   msg.ScoreVersion,
-		PreviousTier:   string(previousTier),
-		NewTier:        string(updatedRecord.Tier),
-		UpdatedAt:      ctx.BlockTime().Unix(),
-	})
-	if err != nil {
-		return nil, err
-	}
-
-	// Emit spec-defined tier changed event if tier actually changed
-	if previousTier != updatedRecord.Tier {
-		err = ctx.EventManager().EmitTypedEvent(&types.EventTierChanged{
-			Account:     msg.AccountAddress,
-			OldTier:     string(previousTier),
-			NewTier:     string(updatedRecord.Tier),
-			Score:       msg.NewScore,
-			BlockHeight: ctx.BlockHeight(),
-			Timestamp:   ctx.BlockTime().Unix(),
-		})
-		if err != nil {
-			return nil, err
-		}
-	}
-
-	return &types.MsgUpdateScoreResponse{
-		AccountAddress: msg.AccountAddress,
-		PreviousScore:  previousScore,
-		NewScore:       msg.NewScore,
-		PreviousTier:   types.IdentityTierToProto(previousTier),
-		NewTier:        types.IdentityTierToProto(updatedRecord.Tier),
-		UpdatedAt:      ctx.BlockTime().Unix(),
-	}, nil
+	_ = sdk.UnwrapSDKContext(goCtx)
+	return nil, types.ErrUnauthorized.Wrap("ordinary score update transactions are disabled; use signed inference receipts and consensus finalization")
 }
 
 // CreateIdentityWallet handles creating a new identity wallet
@@ -545,6 +390,9 @@ func (ms msgServer) UpdateDerivedFeatures(goCtx context.Context, msg *types.MsgU
 	sender, err := sdk.AccAddressFromBech32(msg.Sender)
 	if err != nil {
 		return nil, types.ErrInvalidAddress.Wrap(errMsgInvalidSenderAddr)
+	}
+	if !ms.keeper.IsValidator(ctx, sender) {
+		return nil, types.ErrValidatorOnly.Wrap("derived feature updates require a bonded validator")
 	}
 
 	accountAddr, err := sdk.AccAddressFromBech32(msg.AccountAddress)

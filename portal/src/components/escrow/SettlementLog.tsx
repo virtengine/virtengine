@@ -58,61 +58,68 @@ export function SettlementLog({ settlements }: SettlementLogProps) {
             <div>
               <CardTitle className="text-lg">Settlement Log</CardTitle>
               <p className="mt-1 text-sm text-muted-foreground">
-                {formatToken(totalSettled, 'VIRT')} settled in the last 24 hours
+                {formatToken(totalSettled, 'UVE')} settled from the latest chain-derived allocation
+                state
               </p>
             </div>
-            <Button variant="outline" size="sm">
-              View settlement calculations
+            <Button variant="outline" size="sm" disabled={settlements.length === 0}>
+              View chain-derived breakdown
             </Button>
           </div>
         </CardHeader>
         <CardContent className="p-0">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Allocation</TableHead>
-                <TableHead>Provider</TableHead>
-                <TableHead>Usage Summary</TableHead>
-                <TableHead className="text-right">Amount</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead className="text-right">Posted</TableHead>
-                <TableHead className="text-right">Details</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {settlements.map((settlement) => (
-                <TableRow key={settlement.id}>
-                  <TableCell className="font-mono text-xs text-muted-foreground">
-                    {settlement.allocation}
-                  </TableCell>
-                  <TableCell className="font-medium">{settlement.provider}</TableCell>
-                  <TableCell className="text-sm text-muted-foreground">
-                    {settlement.usageSummary}
-                  </TableCell>
-                  <TableCell className="text-right font-medium">
-                    {formatToken(settlement.amount, settlement.currency)}
-                  </TableCell>
-                  <TableCell>
-                    <Badge variant={STATUS_VARIANT[settlement.status]} size="sm" dot>
-                      {settlement.status}
-                    </Badge>
-                  </TableCell>
-                  <TableCell className="text-right text-sm text-muted-foreground">
-                    {formatDate(settlement.postedAt, { month: 'short', day: 'numeric' })}
-                  </TableCell>
-                  <TableCell className="text-right">
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => setActiveSettlement(settlement)}
-                    >
-                      View
-                    </Button>
-                  </TableCell>
+          {settlements.length === 0 ? (
+            <div className="px-6 py-10 text-center text-sm text-muted-foreground">
+              No live settlement entries are available for this account yet.
+            </div>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Allocation</TableHead>
+                  <TableHead>Provider</TableHead>
+                  <TableHead>Usage Summary</TableHead>
+                  <TableHead className="text-right">Amount</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead className="text-right">Posted</TableHead>
+                  <TableHead className="text-right">Details</TableHead>
                 </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+              </TableHeader>
+              <TableBody>
+                {settlements.map((settlement) => (
+                  <TableRow key={settlement.id}>
+                    <TableCell className="font-mono text-xs text-muted-foreground">
+                      {settlement.allocation}
+                    </TableCell>
+                    <TableCell className="font-medium">{settlement.provider}</TableCell>
+                    <TableCell className="text-sm text-muted-foreground">
+                      {settlement.usageSummary}
+                    </TableCell>
+                    <TableCell className="text-right font-medium">
+                      {formatToken(settlement.amount, settlement.currency)}
+                    </TableCell>
+                    <TableCell>
+                      <Badge variant={STATUS_VARIANT[settlement.status]} size="sm" dot>
+                        {settlement.status}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="text-right text-sm text-muted-foreground">
+                      {formatDate(settlement.postedAt, { month: 'short', day: 'numeric' })}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setActiveSettlement(settlement)}
+                      >
+                        View
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
         </CardContent>
       </Card>
 
@@ -151,7 +158,8 @@ export function SettlementLog({ settlements }: SettlementLogProps) {
                 </span>
               </div>
               <p className="mt-2 text-xs text-muted-foreground">
-                Calculations reflect usage metering and provider pricing for the allocation.
+                This breakdown is derived from the allocation usage and pricing fields currently
+                exposed by the live portal APIs.
               </p>
             </div>
             <DialogFooter>

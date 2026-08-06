@@ -1,0 +1,86 @@
+T5-21 signed evidence payload cutover validation
+Payload: 17fccaee5102f3fd2cbbbeb1d1dde3283f11bb6c
+Branch: ve/prototype-t5-platform
+Platform: windows/amd64
+Toolchains: go version go1.25.8 windows/amd64; GCC 16.1.0
+
+Epoch ancestry:
+- Frozen baseline: 79391a3df86d85522b92e0400c6904971ecbe65d
+- Planning SHA: 1436723bd78980aa0388dbe9fcfa24dda939c54a
+- Intake epoch: 1
+- Intake base: 5587c384f634552c3a2dd7181ca49cafa4da1984
+- Prior accepted payload: null
+- Payload head: 17fccaee5102f3fd2cbbbeb1d1dde3283f11bb6c
+- Payload descends from the intake base.
+- git rev-list --reverse --topo-order reports exactly 40 commits from the intake base to the payload.
+- T4 completeChangedPaths reports exactly 140 paths, including integration-history parent diffs.
+- Honest T5 ownership covers 116 of 140 completeChangedPaths and leaves exactly 24 inherited integration/T4 paths uncovered.
+
+Command: C:\Users\pavil\AppData\Local\VirtEngine\toolchains\go1.25.8\go\bin\go.exe -C C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t5 test -count=1 ./x/veid/keeper -run 'EvidencePayloadCutover'
+Output:
+- ok github.com/virtengine/virtengine/x/veid/keeper 0.371s
+Exit code: 0
+
+Command: C:\Users\pavil\AppData\Local\VirtEngine\toolchains\go1.25.8\go\bin\go.exe -C C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t5 vet ./x/veid/keeper
+Output: no diagnostics
+Exit code: 0
+
+Persistent-shell environment: CGO_ENABLED=1; CC=gcc; PATH includes the WinLibs POSIX UCRT GCC 16.1.0 bin directory.
+Command: $env:CGO_ENABLED='1'; $env:CC='gcc'; C:\Users\pavil\AppData\Local\VirtEngine\toolchains\go1.25.8\go\bin\go.exe -C C:\Users\pavil\Desktop\virtengine-gh\repos\virtengine-t5 test -race -count=1 ./x/veid/keeper -run 'EvidencePayloadCutover'
+Output:
+- ok github.com/virtengine/virtengine/x/veid/keeper 4.473s
+Exit code: 0
+
+Security properties validated:
+- The cutover requires a signed canonical manifest bound to chain, height, cutover ID, source snapshot, prerequisite evidence migration manifest, predecessor cutover manifest, signer identity, and signer key epoch.
+- The prerequisite and predecessor checks reject an absent or mismatched evidence-reference migration and an out-of-order cutover.
+- Per-signer key epochs are persisted and reject rollback; malformed epoch state is rejected.
+- Cutover bookkeeping uses the reserved D4 children 05 through 08 for consumed manifests, reports, latest cutover, and signer epochs.
+- The source snapshot binds every actionable source row and the identity, bytes, and classification of skipped shared-prefix EvidenceRecord rows.
+- The signed entry set must exactly match the actionable source rows; missing, extra, duplicate, altered-key, altered-row, action, and authority entries are rejected.
+- Cache-context execution makes source mutation and bookkeeping atomic; exact replay returns only a validated, payload-free stored report, while changed replay and corrupt reports are rejected.
+- Mapped legacy rows require exact EvidenceObjectRef authority and sanitize; quarantined malformed or ambiguous rows require exact quarantine authority and delete.
+- Legacy rows are never deleted. A stale legacy quarantine cannot authorize deletion after a later mapping, but the mapped row can be sanitized while preserving the historical quarantine.
+- Shared-prefix EvidenceRecord shapes are skipped and protected from deletion, including canonical, partial, old, extended, decision, and verified forms.
+- Sanitization uses a typed scalar allowlist, nulls encrypted_payload, and removes unknown, nested, payload, storage reference, backend, and metadata fields.
+- The cutover covers legacy PrefixScope 0x02 and classified shared-prefix 0x9A source rows without treating shared EvidenceRecord rows as cutover targets.
+- T5-21 does not claim module migration registration. T4 registration is still required.
+- An intermediate test caught overblocking of a valid mapped legacy row with stale quarantine; the implementation was corrected and the final focused, vet, and race gates are green.
+
+Inherited uncovered paths:
+- .gitattributes
+- _build/build-veid-pipeline.sh
+- _docs/INDEX.md
+- _docs/ralph/handoffs/prototype-integration/HANDOFF.yaml
+- _docs/ralph/prototype-integration/control.json
+- _docs/ralph/prototype-integration/migration-inventory.json
+- _docs/ralph/prototype-integration/migration-inventory.schema.json
+- _docs/ralph/prototype-integration/model-provenance.json
+- _docs/ralph/prototype-integration/model-provenance.schema.json
+- _docs/ralph/prototype-integration/producer-handoff.schema.json
+- cmd/inference-sidecar/manifest.go
+- cmd/inference-sidecar/manifest_test.go
+- ml/training/model/release_manifest.py
+- ml/training/tests/test_release_manifest.py
+- scripts/validate-migration-inventory.cjs
+- scripts/validate-migration-inventory.test.cjs
+- scripts/validate-model-provenance.cjs
+- scripts/validate-model-provenance.test.cjs
+- scripts/validate-prototype-integration.cjs
+- scripts/validate-prototype-integration.test.cjs
+- tests/upgrade/test_cases_test.go
+- upgrades/software/v1.6.0/upgrade.go
+- upgrades/software/v1.6.0/upgrade_handler_test.go
+- upgrades/software/v1.6.0/upgrade_retry_test.go
+
+Integration blockers:
+- T4 must register the prerequisite evidence reference migration, then separately register the signed evidence payload cutover using D4 children 05 through 08.
+- The 24 inherited integration/T4 paths have no active T5 generated-file lease, blocking an intake tag.
+- FundAuthorization application mounting and keeper wiring remain integration work.
+- Production external dependencies remain: durable transactional erasure storage, production storage-deletion and KMS-destruction adapters, independent receipt signers and key resolver, consent, hold, backup, and finalization authorities, and authenticated restore-manifest authority.
+- migrations is empty because the T4 registration is not present.
+- This checkpoint is untagged and not intake eligible.
+
+Command: git diff --check -- _docs/ralph/evidence/prototype-t5/T5-21/validation.txt _docs/ralph/handoffs/prototype-t5/HANDOFF.yaml
+Output: no errors
+Exit code: 0

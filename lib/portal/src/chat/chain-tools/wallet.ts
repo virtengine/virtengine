@@ -10,6 +10,7 @@ import type { ChatToolDefinition } from "../types";
 const checkBalanceDefinition: ChatToolDefinition = {
   name: "check-balance",
   description: "Check wallet balance for a denom.",
+  kind: "query",
   parameters: {
     type: "object",
     properties: {
@@ -21,6 +22,7 @@ const checkBalanceDefinition: ChatToolDefinition = {
 const transferDefinition: ChatToolDefinition = {
   name: "transfer-tokens",
   description: "Transfer tokens to another address.",
+  kind: "mutation",
   parameters: {
     type: "object",
     properties: {

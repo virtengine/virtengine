@@ -1,11 +1,11 @@
 package keeper
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
 	"strings"
-	"time"
 
 	sdkmath "cosmossdk.io/math"
 	storetypes "cosmossdk.io/store/types"
@@ -13,6 +13,7 @@ import (
 
 	"github.com/virtengine/virtengine/pkg/dex"
 	"github.com/virtengine/virtengine/pkg/payments/offramp"
+	settlementv1 "github.com/virtengine/virtengine/sdk/go/node/settlement/v1"
 	"github.com/virtengine/virtengine/x/settlement/types"
 	veidtypes "github.com/virtengine/virtengine/x/veid/types"
 )
@@ -28,6 +29,7 @@ type OffRampBridge interface {
 	GetQuote(ctx context.Context, req offramp.QuoteRequest) (offramp.Quote, error)
 	InitiatePayout(ctx context.Context, quote offramp.Quote, cryptoTxRef string, destination string, metadata map[string]string) (offramp.PayoutResult, error)
 	GetStatus(ctx context.Context, payoutID string) (offramp.PayoutResult, error)
+	FindPayoutByMetadata(ctx context.Context, provider string, metadata map[string]string) (offramp.PayoutResult, error)
 	Cancel(ctx context.Context, payoutID string) error
 }
 
@@ -50,6 +52,11 @@ func (k Keeper) incrementFiatConversionSequence(ctx sdk.Context) uint64 {
 	seq := k.getNextFiatConversionSequence(ctx)
 	k.setNextSequence(ctx, types.FiatConversionSequenceKey(), seq+1)
 	return seq
+}
+
+// GetFiatConversionSequence returns the next persisted conversion sequence for genesis export.
+func (k Keeper) GetFiatConversionSequence(ctx sdk.Context) uint64 {
+	return k.getNextFiatConversionSequence(ctx)
 }
 
 // SetNextFiatConversionSequence sets the next fiat conversion sequence.
@@ -141,6 +148,16 @@ func (k Keeper) WithFiatPayoutPreferences(ctx sdk.Context, fn func(types.FiatPay
 
 // SetFiatConversion saves a fiat conversion record.
 func (k Keeper) SetFiatConversion(ctx sdk.Context, conversion types.FiatConversionRecord) error {
+	return k.setFiatConversion(ctx, conversion, false)
+}
+
+// ImportFiatConversion restores a genesis/migration record after GenesisState
+// validation has established quarantine and payout-lineage invariants.
+func (k Keeper) ImportFiatConversion(ctx sdk.Context, conversion types.FiatConversionRecord) error {
+	return k.setFiatConversion(ctx, conversion, true)
+}
+
+func (k Keeper) setFiatConversion(ctx sdk.Context, conversion types.FiatConversionRecord, migration bool) error {
 	if conversion.EncryptedPayload != nil {
 		conversion.EncryptedPayload.EnsureEnvelopeHash()
 		if k.encryptionKeeper != nil && conversion.EncryptedPayload.Envelope != nil {
@@ -164,9 +181,31 @@ func (k Keeper) SetFiatConversion(ctx sdk.Context, conversion types.FiatConversi
 	}
 
 	store := ctx.KVStore(k.skey)
+	for _, binding := range []struct {
+		name, value string
+		key         []byte
+	}{
+		{"invoice", conversion.InvoiceID, types.FiatConversionByInvoiceKey(conversion.InvoiceID)},
+		{"settlement", conversion.SettlementID, types.FiatConversionBySettlementKey(conversion.SettlementID)},
+		{"payout", conversion.PayoutID, types.FiatConversionByPayoutKey(conversion.PayoutID)},
+		{"idempotency", conversion.IdempotencyKey, types.FiatConversionIdempotencyKey(conversion.IdempotencyKey)},
+	} {
+		if binding.value == "" {
+			continue
+		}
+		if owner := store.Get(binding.key); owner != nil && string(owner) != conversion.ConversionID {
+			return types.ErrFiatConversionIdempotencyConflict.Wrapf("%s index already belongs to conversion %s", binding.name, string(owner))
+		}
+	}
 
 	existing, found := k.GetFiatConversion(ctx, conversion.ConversionID)
 	if found {
+		if !migration && existing.ProtocolVersion > 0 && conversion.ProtocolVersion > 0 &&
+			(existing.Provider != conversion.Provider || existing.Customer != conversion.Customer ||
+				existing.InvoiceID != conversion.InvoiceID || existing.SettlementID != conversion.SettlementID ||
+				existing.IdempotencyKey != conversion.IdempotencyKey || !bytes.Equal(existing.RequestDigest, conversion.RequestDigest)) {
+			return types.ErrFiatConversionIdempotencyConflict.Wrap("immutable conversion binding changed")
+		}
 		if existing.State != conversion.State {
 			k.updateFiatConversionState(ctx, conversion, existing.State)
 		}
@@ -320,6 +359,16 @@ func (k Keeper) updateFiatConversionState(ctx sdk.Context, conversion types.Fiat
 
 // RequestFiatConversion creates a conversion record after compliance checks.
 func (k Keeper) RequestFiatConversion(ctx sdk.Context, request types.FiatConversionRequest) (*types.FiatConversionRecord, error) {
+	cacheCtx, write := ctx.CacheContext()
+	conversion, err := k.requestFiatConversion(cacheCtx, request)
+	if err != nil {
+		return nil, err
+	}
+	write()
+	return conversion, nil
+}
+
+func (k Keeper) requestFiatConversion(ctx sdk.Context, request types.FiatConversionRequest) (*types.FiatConversionRecord, error) {
 	if err := request.Validate(); err != nil {
 		return nil, err
 	}
@@ -340,52 +389,129 @@ func (k Keeper) RequestFiatConversion(ctx sdk.Context, request types.FiatConvers
 	if !params.FiatConversionEnabled {
 		return nil, types.ErrFiatConversionNotAllowed.Wrap("fiat conversion disabled")
 	}
-
-	idempotencyKey := fmt.Sprintf("fiatconv:%s:%s:%s:%s", request.InvoiceID, request.SettlementID, request.PayoutID, request.Provider)
-	if existing, found := k.getFiatConversionByIdempotencyKey(ctx, idempotencyKey); found {
-		return &existing, nil
+	certified := settlementv1.FiatConversionProfileState_FIAT_CONVERSION_PROFILE_STATE_CERTIFIED_ENABLED
+	if params.FiatConversionDEXProfileState != certified || params.FiatConversionPayoutProfileState != certified ||
+		len(params.FiatConversionDEXProfileDigest) != 32 || len(params.FiatConversionPayoutProfileDigest) != 32 {
+		return nil, types.ErrFiatProfileCommitment.Wrap("certified DEX and payout profile commitments required")
 	}
-
-	if request.InvoiceID != "" {
-		if existing, found := k.GetFiatConversionByInvoice(ctx, request.InvoiceID); found {
-			return &existing, nil
-		}
+	if request.RequestedBy != request.Provider {
+		return nil, types.ErrUnauthorized.Wrap("fiat conversion must be requested by provider")
 	}
-	if request.SettlementID != "" {
-		if existing, found := k.GetFiatConversionBySettlement(ctx, request.SettlementID); found {
-			return &existing, nil
-		}
+	request.PreferredDEX = params.FiatConversionDEXProfileID
+	request.PreferredOffRamp = params.FiatConversionPayoutProfileID
+	if request.StableToken.Denom != params.FiatConversionStableDenom || request.StableToken.Symbol != params.FiatConversionStableSymbol || uint32(request.StableToken.Decimals) != params.FiatConversionStableDecimals {
+		return nil, types.ErrInvalidAmount.Wrap("stable token differs from governed conversion token")
 	}
-	if request.PayoutID != "" {
-		if existing, found := k.GetFiatConversionByPayout(ctx, request.PayoutID); found {
-			return &existing, nil
-		}
-	}
-
-	if err := k.ensureFiatConversionDependencies(); err != nil {
+	request.SlippageToleranceExact = request.CanonicalSlippageTolerance()
+	var err error
+	request, err = k.bindFiatConversionPayout(ctx, request)
+	if err != nil {
 		return nil, err
 	}
+	if err := validateFiatConversionLimits(params, request.CryptoAmount.Amount); err != nil {
+		return nil, err
+	}
+	bucket := dailyFiatBucket(ctx.BlockTime())
+	dailyKey := types.FiatDailyTotalKey(request.Provider, bucket)
+	store := ctx.KVStore(k.skey)
+	dailyTotal, err := decodeDailyTotal(store.Get(dailyKey))
+	if err != nil {
+		return nil, err
+	}
+	dailyLimit, _ := sdkmath.NewIntFromString(params.FiatConversionDailyLimit)
+	if dailyLimit.IsPositive() && dailyTotal.Add(request.CryptoAmount.Amount).GT(dailyLimit) {
+		return nil, types.ErrFiatLimitExceeded.Wrap("provider daily conversion limit exceeded")
+	}
+	if err := k.validateFiatConversionLineage(ctx, request); err != nil {
+		return nil, err
+	}
+	for _, entry := range []struct{ kind, value string }{{"invoice", request.InvoiceID}, {"settlement", request.SettlementID}} {
+		if caseID, held := k.HasActiveFinancialCase(ctx, entry.kind, entry.value); held {
+			return nil, types.ErrDisputeActive.Wrapf("%s held by canonical case %s", entry.kind, caseID)
+		}
+	}
 
-	complianceStatus, complianceRisk, err := k.validateFiatConversionCompliance(ctx, request)
+	complianceStatus, complianceRisk, complianceDigest, err := k.validateFiatConversionComplianceDecision(ctx, request)
+	if err != nil {
+		return nil, err
+	}
+	requestDigest, err := canonicalFiatRequestDigest(request, params, complianceDigest)
 	if err != nil {
 		return nil, err
 	}
 
+	idempotencyKey := fmt.Sprintf("fiatconv:%s:%s:%s:%s", request.InvoiceID, request.SettlementID, request.PayoutID, request.Provider)
+	if existing, found := k.getFiatConversionByIdempotencyKey(ctx, idempotencyKey); found {
+		if bytes.Equal(existing.RequestDigest, requestDigest) {
+			return &existing, nil
+		}
+		return nil, types.ErrFiatConversionIdempotencyConflict
+	}
+
+	if request.InvoiceID != "" {
+		if existing, found := k.GetFiatConversionByInvoice(ctx, request.InvoiceID); found {
+			if bytes.Equal(existing.RequestDigest, requestDigest) {
+				return &existing, nil
+			}
+			return nil, types.ErrFiatConversionIdempotencyConflict.Wrap("invoice already bound to different conversion payload")
+		}
+	}
+	if request.SettlementID != "" {
+		if existing, found := k.GetFiatConversionBySettlement(ctx, request.SettlementID); found {
+			if bytes.Equal(existing.RequestDigest, requestDigest) {
+				return &existing, nil
+			}
+			return nil, types.ErrFiatConversionIdempotencyConflict.Wrap("settlement already bound to different conversion payload")
+		}
+	}
+	if request.PayoutID != "" {
+		if existing, found := k.GetFiatConversionByPayout(ctx, request.PayoutID); found {
+			if bytes.Equal(existing.RequestDigest, requestDigest) {
+				return &existing, nil
+			}
+			return nil, types.ErrFiatConversionIdempotencyConflict.Wrap("payout already bound to different conversion payload")
+		}
+	}
 	seq := k.incrementFiatConversionSequence(ctx)
 	conversionID := generateIDWithTimestamp("conv", seq, ctx.BlockTime().Unix())
 	conversion := types.NewFiatConversionRecord(conversionID, request, request.CryptoAmount, ctx.BlockTime())
+	settlement, _ := k.GetSettlement(ctx, request.SettlementID)
+	conversion.EscrowID = settlement.EscrowID
+	conversion.OrderID = settlement.OrderID
+	conversion.LeaseID = settlement.LeaseID
 	conversion.IdempotencyKey = idempotencyKey
 	conversion.ComplianceStatus = complianceStatus
 	conversion.ComplianceRiskScore = complianceRisk
 	conversion.ComplianceCheckedAt = ctx.BlockTime().Unix()
+	conversion.ProtocolVersion = fiatConversionProtocolVersion
+	conversion.DEXProfileID = params.FiatConversionDEXProfileID
+	conversion.DEXProfileDigest = append([]byte(nil), params.FiatConversionDEXProfileDigest...)
+	conversion.PayoutProfileID = params.FiatConversionPayoutProfileID
+	conversion.PayoutProfileDigest = append([]byte(nil), params.FiatConversionPayoutProfileDigest...)
+	conversion.ComplianceDecisionHash = append([]byte(nil), complianceDigest...)
+	conversion.RequestDigest = append([]byte(nil), requestDigest...)
+	conversion.DailyBucket = bucket
+	conversion.DailyQuotaReserved = true
+	conversion.DexAdapter = params.FiatConversionDEXProfileID
+	conversion.OffRampProvider = params.FiatConversionPayoutProfileID
 	conversion.AddAuditEntry("conversion_requested", request.RequestedBy, "", map[string]string{
 		"invoice_id":    request.InvoiceID,
 		"settlement_id": request.SettlementID,
 	}, ctx.BlockTime())
 
+	payout, found := k.GetPayout(ctx, request.PayoutID)
+	if !found || payout.State != types.PayoutStatePending || payout.FiatConversionID != "" {
+		return nil, types.ErrPayoutHeld.Wrap("pending payout was claimed before conversion commit")
+	}
+	payout.FiatConversionID = conversionID
+	if err := k.SetPayout(ctx, payout); err != nil {
+		return nil, err
+	}
 	if err := k.SetFiatConversion(ctx, *conversion); err != nil {
 		return nil, err
 	}
+	store.Set(types.FiatConversionRequestDigestKey(idempotencyKey), requestDigest)
+	store.Set(dailyKey, encodeDailyTotal(dailyTotal.Add(request.CryptoAmount.Amount)))
 
 	_ = ctx.EventManager().EmitTypedEvent(&types.EventFiatConversionRequested{
 		ConversionID:  conversionID,
@@ -400,147 +526,122 @@ func (k Keeper) RequestFiatConversion(ctx sdk.Context, request types.FiatConvers
 	return conversion, nil
 }
 
-// ReconcileFiatConversion refreshes conversion status from the off-ramp.
+func (k Keeper) bindFiatConversionPayout(ctx sdk.Context, request types.FiatConversionRequest) (types.FiatConversionRequest, error) {
+	if strings.TrimSpace(request.SettlementID) == "" {
+		return request, types.ErrInvalidSettlement.Wrap("settlement_id required for fiat conversion")
+	}
+	if request.PayoutID != "" {
+		return request, nil
+	}
+	if request.InvoiceID != "" {
+		if payout, found := k.GetPayoutByInvoice(ctx, request.InvoiceID); found {
+			request.PayoutID = payout.PayoutID
+			return request, nil
+		}
+	}
+	if payout, found := k.GetPayoutBySettlement(ctx, request.SettlementID); found {
+		request.PayoutID = payout.PayoutID
+		return request, nil
+	}
+	settlement, found := k.GetSettlement(ctx, request.SettlementID)
+	if !found {
+		return request, types.ErrSettlementNotFound.Wrapf("settlement %s not found", request.SettlementID)
+	}
+	holdback := k.calculateHoldbackAmount(ctx, settlement.TotalAmount)
+	sequence := k.incrementPayoutSequence(ctx)
+	payout := types.NewPayoutRecord(
+		generateIDWithTimestamp("payout", sequence, ctx.BlockTime().Unix()), request.InvoiceID, settlement.SettlementID,
+		settlement.EscrowID, settlement.OrderID, settlement.LeaseID, settlement.Provider, settlement.Customer,
+		settlement.TotalAmount, settlement.PlatformFee, settlement.ValidatorFee, holdback, ctx.BlockTime(), ctx.BlockHeight(),
+	)
+	if err := k.SetPayout(ctx, *payout); err != nil {
+		return request, err
+	}
+	k.savePayoutLedgerEntry(ctx, payout.PayoutID, types.PayoutLedgerEntryCreated, types.PayoutStatePending, types.PayoutStatePending, payout.NetAmount, "payout created and held for fiat conversion", "system")
+	request.PayoutID = payout.PayoutID
+	return request, nil
+}
+
+func (k Keeper) validateFiatConversionLineage(ctx sdk.Context, request types.FiatConversionRequest) error {
+	if request.SettlementID == "" {
+		return types.ErrInvalidSettlement.Wrap("settlement_id required for fiat conversion")
+	}
+	settlement, found := k.GetSettlement(ctx, request.SettlementID)
+	if !found {
+		return types.ErrSettlementNotFound.Wrapf("settlement %s not found", request.SettlementID)
+	}
+	if settlement.Provider != request.Provider || settlement.Customer != request.Customer {
+		return types.ErrUnauthorized.Wrap("settlement provider/customer lineage mismatch")
+	}
+	if request.PayoutID == "" {
+		return types.ErrPayoutNotFound.Wrap("payout_id required for fiat conversion")
+	}
+	payout, found := k.GetPayout(ctx, request.PayoutID)
+	if !found {
+		return types.ErrPayoutNotFound.Wrapf("payout %s not found", request.PayoutID)
+	}
+	if payout.State != types.PayoutStatePending {
+		return types.ErrPayoutHeld.Wrap("payout is not an unclaimed pending value hold")
+	}
+	if payout.FiatConversionID != "" {
+		claimed, found := k.GetFiatConversion(ctx, payout.FiatConversionID)
+		if !found || claimed.PayoutID != payout.PayoutID || claimed.InvoiceID != request.InvoiceID || claimed.SettlementID != request.SettlementID || claimed.Provider != request.Provider || claimed.Customer != request.Customer {
+			return types.ErrPayoutHeld.Wrap("payout is claimed by another fiat conversion")
+		}
+	}
+	if payout.SettlementID != request.SettlementID || payout.InvoiceID != request.InvoiceID || payout.Provider != request.Provider || payout.Customer != request.Customer ||
+		payout.EscrowID != settlement.EscrowID || payout.OrderID != settlement.OrderID || payout.LeaseID != settlement.LeaseID {
+		return types.ErrInvalidPayout.Wrap("payout lineage mismatch")
+	}
+	if len(payout.NetAmount) != 1 || !payout.NetAmount[0].IsEqual(request.CryptoAmount) {
+		return types.ErrInvalidAmount.Wrap("conversion amount must equal pending payout net amount")
+	}
+	return nil
+}
+
+func validateFiatConversionLimits(params types.Params, amount sdkmath.Int) error {
+	minimum, ok := sdkmath.NewIntFromString(params.FiatConversionMinAmount)
+	if !ok || amount.LT(minimum) {
+		return types.ErrFiatLimitExceeded.Wrap("conversion amount below minimum")
+	}
+	maximum, ok := sdkmath.NewIntFromString(params.FiatConversionMaxAmount)
+	if !ok || (maximum.IsPositive() && amount.GT(maximum)) {
+		return types.ErrFiatLimitExceeded.Wrap("conversion amount above maximum")
+	}
+	return nil
+}
+
+func (k Keeper) validateFiatConversionComplianceDecision(ctx sdk.Context, request types.FiatConversionRequest) (string, int32, []byte, error) {
+	status, risk, err := k.validateFiatConversionCompliance(ctx, request)
+	if err != nil {
+		return status, risk, nil, err
+	}
+	record, found := k.complianceKeeper.GetComplianceRecord(ctx, request.Provider)
+	if !found || record == nil {
+		return status, risk, nil, types.ErrComplianceRequired.Wrap("compliance record missing")
+	}
+	digest, err := complianceDecisionDigest(record)
+	if err != nil {
+		return status, risk, nil, types.ErrComplianceRequired.Wrap("compliance decision digest invalid")
+	}
+	return status, risk, digest, nil
+}
+
+// ReconcileFiatConversion rejects direct provider reconciliation. An off-chain
+// worker must submit an authenticated on-chain observation before state can
+// advance; carrier version 0 has no such message yet.
 func (k Keeper) ReconcileFiatConversion(ctx sdk.Context, conversionID string) (*types.FiatConversionRecord, error) {
 	conversion, found := k.GetFiatConversion(ctx, conversionID)
 	if !found {
 		return nil, types.ErrFiatConversionNotFound.Wrapf("conversion %s not found", conversionID)
 	}
-
-	if conversion.OffRampID == "" || k.offRampBridge == nil {
-		return &conversion, nil
-	}
-
-	status, err := k.offRampBridge.GetStatus(ctx, conversion.OffRampID)
-	if err != nil {
-		return &conversion, err
-	}
-
-	conversion.OffRampStatus = string(status.Status)
-	conversion.OffRampReference = status.Reference
-	conversion.AddAuditEntry("offramp_reconciled", "system", "", map[string]string{
-		"status": string(status.Status),
-	}, ctx.BlockTime())
-
-	switch status.Status {
-	case offramp.StatusCompleted:
-		if conversion.State != types.FiatConversionStatePayoutCompleted {
-			if err := conversion.MarkPayoutCompleted(ctx.BlockTime()); err != nil {
-				return nil, err
-			}
-		}
-	case offramp.StatusFailed:
-		if conversion.State != types.FiatConversionStateFailed {
-			if err := conversion.MarkFailedWithRetryability("off-ramp failed", false, ctx.BlockTime()); err != nil {
-				return nil, err
-			}
-		}
-	default:
-		// Provider may emit duplicate or intermediate callbacks. Preserve monotonic state.
-		if conversion.State == types.FiatConversionStatePayoutPending {
-			if err := conversion.MarkPayoutSubmitted(conversion.OffRampID, conversion.OffRampStatus, conversion.OffRampReference, ctx.BlockTime()); err != nil {
-				return nil, err
-			}
-		}
-	}
-
-	if err := k.SetFiatConversion(ctx, conversion); err != nil {
-		return nil, err
-	}
-
-	if conversion.PayoutID != "" {
-		payout, found := k.GetPayout(ctx, conversion.PayoutID)
-		if found {
-			if conversion.State == types.FiatConversionStatePayoutCompleted && payout.State != types.PayoutStateCompleted {
-				if err := k.finalizeFiatPayoutCompletion(ctx, &payout, &conversion); err != nil {
-					return nil, err
-				}
-			} else if conversion.State == types.FiatConversionStateFailed && payout.State != types.PayoutStateFailed {
-				oldState := payout.State
-				if err := payout.MarkFailedWithRetryability("fiat conversion failed", conversion.CanRetry(), ctx.BlockTime()); err != nil {
-					return nil, err
-				}
-				k.updatePayoutState(ctx, payout, oldState)
-				if err := k.SetPayout(ctx, payout); err != nil {
-					return nil, err
-				}
-			}
-		}
-	}
-
-	_ = ctx.EventManager().EmitTypedEvent(&types.EventFiatConversionReconciled{
-		ConversionID: conversion.ConversionID,
-		Provider:     conversion.Provider,
-		State:        string(conversion.State),
-		ReconciledAt: ctx.BlockTime().Unix(),
-	})
-
-	return &conversion, nil
+	return &conversion, ensureNoConsensusExternalIO()
 }
 
-// ProcessInFlightFiatConversions resumes persisted non-terminal conversion flows.
-// This is safe to run repeatedly: each side-effect boundary is guarded by persisted references.
+// ProcessInFlightFiatConversions intentionally leaves all non-terminal records
+// pending. It performs no callback and reports no false completion.
 func (k Keeper) ProcessInFlightFiatConversions(ctx sdk.Context) error {
-	inFlightStates := []types.FiatConversionState{
-		types.FiatConversionStateCreated,
-		types.FiatConversionStateSwapPending,
-		types.FiatConversionStateSwapSubmitted,
-		types.FiatConversionStateSwapSettled,
-		types.FiatConversionStateOffRampPending,
-		types.FiatConversionStatePayoutPending,
-		types.FiatConversionStatePayoutSubmitted,
-	}
-
-	seen := make(map[string]struct{})
-	for _, state := range inFlightStates {
-		k.WithFiatConversionsByState(ctx, state, func(record types.FiatConversionRecord) bool {
-			if _, exists := seen[record.ConversionID]; exists {
-				return false
-			}
-			seen[record.ConversionID] = struct{}{}
-
-			if record.State.IsTerminal() {
-				return false
-			}
-
-			if record.PayoutID == "" {
-				k.Logger(ctx).Error("skipping in-flight fiat conversion without payout reference",
-					"conversion_id", record.ConversionID,
-					"state", record.State,
-				)
-				return false
-			}
-
-			payout, found := k.GetPayout(ctx, record.PayoutID)
-			if !found {
-				k.Logger(ctx).Error("skipping in-flight fiat conversion with missing payout",
-					"conversion_id", record.ConversionID,
-					"payout_id", record.PayoutID,
-					"state", record.State,
-				)
-				return false
-			}
-
-			var err error
-			switch record.State {
-			case types.FiatConversionStatePayoutSubmitted:
-				_, err = k.ReconcileFiatConversion(ctx, record.ConversionID)
-			default:
-				err = k.executeFiatConversion(ctx, &payout, &record)
-			}
-
-			if err != nil {
-				k.Logger(ctx).Error("failed to resume in-flight fiat conversion",
-					"conversion_id", record.ConversionID,
-					"state", record.State,
-					"error", err,
-				)
-			}
-
-			return false
-		})
-	}
-
+	_ = ctx
 	return nil
 }
 
@@ -550,54 +651,44 @@ func (k Keeper) createConversionFromPreference(ctx sdk.Context, settlement types
 		return nil, nil
 	}
 
-	netAmount, err := k.calculateNetPayoutAmount(ctx, settlement)
-	if err != nil {
-		return nil, err
+	payout, found := k.GetPayoutBySettlement(ctx, settlement.SettlementID)
+	if !found || payout.State != types.PayoutStatePending {
+		return nil, types.ErrPayoutNotFound.Wrap("pending payout must be created before fiat conversion")
 	}
+	if len(payout.NetAmount) != 1 {
+		return nil, types.ErrInvalidAmount.Wrap("net payout must be single denom for fiat conversion")
+	}
+	netAmount := payout.NetAmount[0]
 	if netAmount.Denom != pref.CryptoToken.Denom {
 		return nil, types.ErrInvalidAmount.Wrap("payout denom does not match preference crypto token")
 	}
 
 	request := types.FiatConversionRequest{
-		InvoiceID:         invoiceID,
-		SettlementID:      settlement.SettlementID,
-		Provider:          settlement.Provider,
-		Customer:          settlement.Customer,
-		RequestedBy:       settlement.Provider,
-		CryptoAmount:      netAmount,
-		FiatCurrency:      pref.FiatCurrency,
-		PaymentMethod:     pref.PaymentMethod,
-		DestinationHash:   pref.DestinationHash,
-		DestinationRegion: pref.DestinationRegion,
-		PreferredDEX:      pref.PreferredDEX,
-		PreferredOffRamp:  pref.PreferredOffRamp,
-		SlippageTolerance: pref.SlippageTolerance,
-		CryptoToken:       pref.CryptoToken,
-		StableToken:       pref.StableToken,
-		EncryptedPayload:  pref.EncryptedPayload,
+		InvoiceID:              invoiceID,
+		SettlementID:           settlement.SettlementID,
+		PayoutID:               payout.PayoutID,
+		Provider:               settlement.Provider,
+		Customer:               settlement.Customer,
+		RequestedBy:            settlement.Provider,
+		CryptoAmount:           netAmount,
+		FiatCurrency:           pref.FiatCurrency,
+		PaymentMethod:          pref.PaymentMethod,
+		DestinationHash:        pref.DestinationHash,
+		DestinationRegion:      pref.DestinationRegion,
+		PreferredDEX:           pref.PreferredDEX,
+		PreferredOffRamp:       pref.PreferredOffRamp,
+		SlippageTolerance:      pref.SlippageTolerance,
+		SlippageToleranceExact: pref.SlippageToleranceExact,
+		CryptoToken:            pref.CryptoToken,
+		StableToken:            pref.StableToken,
+		EncryptedPayload:       pref.EncryptedPayload,
 	}
 
-	conversion, err := k.RequestFiatConversion(ctx, request)
-	if err != nil {
-		return nil, err
-	}
-	conversion.OrderID = settlement.OrderID
-	conversion.EscrowID = settlement.EscrowID
-	conversion.LeaseID = settlement.LeaseID
-	if err := k.SetFiatConversion(ctx, *conversion); err != nil {
-		return nil, err
-	}
-	return conversion, nil
+	return k.RequestFiatConversion(ctx, request)
 }
 
-func (k Keeper) ensureFiatConversionDependencies() error {
-	if k.dexSwap == nil {
-		return types.ErrDexUnavailable.Wrap("dex swap executor missing")
-	}
-	if k.offRampBridge == nil {
-		return types.ErrOffRampUnavailable.Wrap("off-ramp bridge missing")
-	}
-	return nil
+func ensureNoConsensusExternalIO() error {
+	return types.ErrExternalIOForbidden.Wrap("submit an authenticated on-chain observation from an off-chain worker")
 }
 
 func (k Keeper) validateFiatConversionCompliance(ctx sdk.Context, request types.FiatConversionRequest) (string, int32, error) {
@@ -649,357 +740,4 @@ func (k Keeper) validateFiatConversionCompliance(ctx sdk.Context, request types.
 	}
 
 	return record.Status.String(), record.RiskScore, nil
-}
-
-func (k Keeper) calculateNetPayoutAmount(ctx sdk.Context, settlement types.SettlementRecord) (sdk.Coin, error) {
-	holdback := k.calculateHoldbackAmount(ctx, settlement.TotalAmount)
-	netAmount := settlement.ProviderShare.Sub(holdback...)
-	if len(netAmount) != 1 {
-		return sdk.Coin{}, types.ErrInvalidAmount.Wrap("net payout must be single denom for fiat conversion")
-	}
-	return netAmount[0], nil
-}
-
-func (k Keeper) validateConversionLimits(ctx sdk.Context, provider string, amount sdkmath.Int) error {
-	params := k.GetParams(ctx)
-
-	minAmount, _ := sdkmath.NewIntFromString(params.FiatConversionMinAmount)
-	maxAmount, _ := sdkmath.NewIntFromString(params.FiatConversionMaxAmount)
-	dailyLimit, _ := sdkmath.NewIntFromString(params.FiatConversionDailyLimit)
-
-	if minAmount.IsPositive() && amount.LT(minAmount) {
-		return types.ErrFiatLimitExceeded.Wrap("amount below minimum")
-	}
-	if maxAmount.IsPositive() && amount.GT(maxAmount) {
-		return types.ErrFiatLimitExceeded.Wrap("amount exceeds maximum")
-	}
-
-	if dailyLimit.IsPositive() {
-		day := ctx.BlockTime().UTC().Format("20060102")
-		total := k.getFiatDailyTotal(ctx, provider, day)
-		if total.Add(amount).GT(dailyLimit) {
-			return types.ErrFiatLimitExceeded.Wrap("daily limit exceeded")
-		}
-	}
-	return nil
-}
-
-func (k Keeper) getFiatDailyTotal(ctx sdk.Context, provider string, day string) sdkmath.Int {
-	store := ctx.KVStore(k.skey)
-	bz := store.Get(types.FiatDailyTotalKey(provider, day))
-	if bz == nil {
-		return sdkmath.ZeroInt()
-	}
-	total, ok := sdkmath.NewIntFromString(string(bz))
-	if !ok {
-		return sdkmath.ZeroInt()
-	}
-	return total
-}
-
-func (k Keeper) setFiatDailyTotal(ctx sdk.Context, provider string, day string, total sdkmath.Int) {
-	store := ctx.KVStore(k.skey)
-	store.Set(types.FiatDailyTotalKey(provider, day), []byte(total.String()))
-}
-
-func tokenSpecToDexToken(spec types.TokenSpec) dex.Token {
-	return dex.Token{
-		Symbol:   spec.Symbol,
-		Denom:    spec.Denom,
-		Decimals: spec.Decimals,
-		ChainID:  spec.ChainID,
-	}
-}
-
-func swapQuoteOutputAmount(quote dex.SwapQuote) (sdkmath.Int, error) {
-	if len(quote.Route.Hops) == 0 {
-		return sdkmath.ZeroInt(), fmt.Errorf("swap quote missing route")
-	}
-	lastHop := quote.Route.Hops[len(quote.Route.Hops)-1]
-	return lastHop.AmountOut, nil
-}
-
-func (k Keeper) executeFiatConversion(ctx sdk.Context, payout *types.PayoutRecord, conversion *types.FiatConversionRecord) error {
-	if err := k.ensureFiatConversionDependencies(); err != nil {
-		return err
-	}
-	if conversion.IdempotencyKey == "" {
-		conversion.IdempotencyKey = conversion.DefaultIdempotencyKey()
-	}
-
-	if payout.State != types.PayoutStateProcessing {
-		oldState := payout.State
-		if err := payout.MarkProcessing(ctx.BlockTime()); err != nil {
-			return err
-		}
-		k.updatePayoutState(ctx, *payout, oldState)
-		if err := k.SetPayout(ctx, *payout); err != nil {
-			return err
-		}
-		k.savePayoutLedgerEntry(ctx, payout.PayoutID, types.PayoutLedgerEntryProcessing,
-			oldState, types.PayoutStateProcessing, sdk.NewCoins(), "fiat conversion processing", "system")
-	}
-
-	params := k.GetParams(ctx)
-	slippage := conversion.SlippageTolerance
-	if slippage <= 0 {
-		slippage = 0.01
-	}
-	if params.FiatConversionMaxSlippage != "" {
-		if maxSlippage, err := sdkmath.LegacyNewDecFromStr(params.FiatConversionMaxSlippage); err == nil {
-			if slippageDec, err := sdkmath.LegacyNewDecFromStr(fmt.Sprintf("%f", slippage)); err == nil {
-				if slippageDec.GT(maxSlippage) {
-					slippage, _ = maxSlippage.Float64()
-				}
-			}
-		}
-	}
-
-	// Execute swap only once. If swap tx hash already exists, retries resume from post-swap.
-	if conversion.SwapTxHash == "" {
-		if err := conversion.MarkSwapPending(ctx.BlockTime()); err != nil {
-			return err
-		}
-		conversion.AddAuditEntry("swap_pending", "system", "", nil, ctx.BlockTime())
-		if err := k.SetFiatConversion(ctx, *conversion); err != nil {
-			return err
-		}
-
-		swapReq := dex.SwapRequest{
-			FromToken:         tokenSpecToDexToken(conversion.CryptoToken),
-			ToToken:           tokenSpecToDexToken(conversion.StableToken),
-			Amount:            conversion.CryptoAmount.Amount,
-			Type:              dex.SwapTypeExactIn,
-			SlippageTolerance: slippage,
-			Deadline:          ctx.BlockTime().Add(2 * time.Minute),
-			Sender:            payout.Provider,
-			PreferredDEX:      conversion.DexAdapter,
-		}
-
-		swapQuote, err := k.dexSwap.GetQuote(ctx, swapReq)
-		if err != nil {
-			if markErr := conversion.MarkFailed(fmt.Sprintf("swap quote failed: %v", err), ctx.BlockTime()); markErr == nil {
-				_ = k.SetFiatConversion(ctx, *conversion)
-			}
-			return types.ErrFiatConversionFailed.Wrapf("swap quote failed: %s", err)
-		}
-		if !swapQuote.ExpiresAt.IsZero() && ctx.BlockTime().After(swapQuote.ExpiresAt) {
-			_ = conversion.MarkFailed("swap quote expired", ctx.BlockTime())
-			_ = k.SetFiatConversion(ctx, *conversion)
-			return types.ErrFiatConversionFailed.Wrap("swap quote expired")
-		}
-		expectedOut, err := swapQuoteOutputAmount(swapQuote)
-		if err != nil {
-			_ = conversion.MarkFailed(err.Error(), ctx.BlockTime())
-			_ = k.SetFiatConversion(ctx, *conversion)
-			return types.ErrFiatConversionFailed.Wrap(err.Error())
-		}
-		if !expectedOut.IsPositive() {
-			_ = conversion.MarkFailed("swap quote output must be positive", ctx.BlockTime())
-			_ = k.SetFiatConversion(ctx, *conversion)
-			return types.ErrFiatConversionFailed.Wrap("swap quote output must be positive")
-		}
-		if err := k.validateConversionLimits(ctx, conversion.Provider, expectedOut); err != nil {
-			_ = conversion.MarkFailed(err.Error(), ctx.BlockTime())
-			_ = k.SetFiatConversion(ctx, *conversion)
-			return err
-		}
-
-		if err := conversion.MarkSwapSubmitted(swapQuote.ID, ctx.BlockTime()); err != nil {
-			return err
-		}
-		conversion.AddAuditEntry("swap_submitted", "system", "", map[string]string{
-			"quote_id": swapQuote.ID,
-		}, ctx.BlockTime())
-		if err := k.SetFiatConversion(ctx, *conversion); err != nil {
-			return err
-		}
-
-		swapResult, err := k.dexSwap.ExecuteSwap(ctx, swapQuote, []byte("settlement"))
-		if err != nil {
-			_ = conversion.MarkFailed(fmt.Sprintf("swap execution failed: %v", err), ctx.BlockTime())
-			_ = k.SetFiatConversion(ctx, *conversion)
-			return types.ErrFiatConversionFailed.Wrapf("swap execution failed: %s", err)
-		}
-
-		if err := conversion.MarkSwapSettled(
-			swapResult.TxHash,
-			sdk.NewCoin(conversion.StableToken.Denom, swapResult.OutputAmount),
-			ctx.BlockTime(),
-		); err != nil {
-			return err
-		}
-		conversion.SwapStatus = "settled"
-		conversion.AddAuditEntry("swap_settled", "system", "", map[string]string{
-			"tx_hash": swapResult.TxHash,
-		}, ctx.BlockTime())
-		if err := k.SetFiatConversion(ctx, *conversion); err != nil {
-			return err
-		}
-	} else if conversion.State.CanTransitionTo(types.FiatConversionStateSwapSettled) {
-		if err := conversion.MarkSwapSettled(conversion.SwapTxHash, conversion.StableAmount, ctx.BlockTime()); err != nil {
-			return err
-		}
-		if err := k.SetFiatConversion(ctx, *conversion); err != nil {
-			return err
-		}
-	}
-
-	createdOffRampThisCall := false
-	if conversion.OffRampID == "" {
-		if conversion.State == types.FiatConversionStateSwapSettled {
-			if err := conversion.MarkOffRampPending(ctx.BlockTime()); err != nil {
-				return err
-			}
-			if err := k.SetFiatConversion(ctx, *conversion); err != nil {
-				return err
-			}
-		}
-		if conversion.State == types.FiatConversionStateOffRampPending || conversion.State == types.FiatConversionStateFailed {
-			if err := conversion.MarkPayoutPending(ctx.BlockTime()); err != nil {
-				return err
-			}
-			if err := k.SetFiatConversion(ctx, *conversion); err != nil {
-				return err
-			}
-		}
-
-		offQuote, err := k.offRampBridge.GetQuote(ctx, offramp.QuoteRequest{
-			CryptoSymbol:  conversion.StableToken.Symbol,
-			CryptoDenom:   conversion.StableToken.Denom,
-			CryptoAmount:  conversion.StableAmount.Amount,
-			FiatCurrency:  conversion.FiatCurrency,
-			PaymentMethod: conversion.PaymentMethod,
-			Sender:        payout.Provider,
-			Destination:   conversion.DestinationRef,
-		})
-		if err != nil {
-			_ = conversion.MarkFailed(fmt.Sprintf("off-ramp quote failed: %v", err), ctx.BlockTime())
-			_ = k.SetFiatConversion(ctx, *conversion)
-			return types.ErrFiatConversionFailed.Wrapf("off-ramp quote failed: %s", err)
-		}
-
-		offResult, err := k.offRampBridge.InitiatePayout(ctx, offQuote, conversion.SwapTxHash, conversion.DestinationRef, map[string]string{
-			"conversion_id": conversion.ConversionID,
-		})
-		if err != nil {
-			_ = conversion.MarkFailed(fmt.Sprintf("off-ramp initiation failed: %v", err), ctx.BlockTime())
-			_ = k.SetFiatConversion(ctx, *conversion)
-			return types.ErrFiatConversionFailed.Wrapf("off-ramp initiation failed: %s", err)
-		}
-
-		conversion.OffRampProvider = offResult.Provider
-		conversion.OffRampQuoteID = offResult.QuoteID
-		conversion.FiatAmount = offResult.FiatAmount.String()
-		if err := conversion.MarkPayoutSubmitted(offResult.ID, string(offResult.Status), offResult.Reference, ctx.BlockTime()); err != nil {
-			return err
-		}
-		createdOffRampThisCall = true
-		switch offResult.Status {
-		case offramp.StatusCompleted:
-			if err := conversion.MarkPayoutCompleted(ctx.BlockTime()); err != nil {
-				return err
-			}
-		case offramp.StatusFailed:
-			if err := conversion.MarkFailedWithRetryability("off-ramp failed", false, ctx.BlockTime()); err != nil {
-				return err
-			}
-		}
-		conversion.AddAuditEntry("offramp_payout_submitted", "system", "", map[string]string{
-			"offramp_id": offResult.ID,
-			"status":     string(offResult.Status),
-		}, ctx.BlockTime())
-		if err := k.SetFiatConversion(ctx, *conversion); err != nil {
-			return err
-		}
-	}
-
-	if conversion.OffRampID != "" && !createdOffRampThisCall {
-		status, err := k.offRampBridge.GetStatus(ctx, conversion.OffRampID)
-		if err == nil {
-			conversion.OffRampStatus = string(status.Status)
-			if status.Reference != "" {
-				conversion.OffRampReference = status.Reference
-			}
-			if !status.FiatAmount.IsNil() && status.FiatAmount.IsPositive() {
-				conversion.FiatAmount = status.FiatAmount.String()
-			}
-			if status.Status == offramp.StatusCompleted {
-				if err := conversion.MarkPayoutCompleted(ctx.BlockTime()); err != nil {
-					return err
-				}
-			} else if status.Status == offramp.StatusFailed {
-				if err := conversion.MarkFailedWithRetryability("off-ramp failed", false, ctx.BlockTime()); err != nil {
-					return err
-				}
-			}
-		}
-	}
-
-	if err := k.SetFiatConversion(ctx, *conversion); err != nil {
-		return err
-	}
-
-	if conversion.State == types.FiatConversionStatePayoutCompleted {
-		if err := k.finalizeFiatPayoutCompletion(ctx, payout, conversion); err != nil {
-			return err
-		}
-	} else if conversion.State == types.FiatConversionStateFailed && payout.State != types.PayoutStateFailed {
-		oldState := payout.State
-		_ = payout.MarkFailedWithRetryability("fiat conversion failed", conversion.CanRetry(), ctx.BlockTime())
-		k.updatePayoutState(ctx, *payout, oldState)
-		if err := k.SetPayout(ctx, *payout); err != nil {
-			return err
-		}
-		k.savePayoutLedgerEntry(ctx, payout.PayoutID, types.PayoutLedgerEntryFailed,
-			oldState, types.PayoutStateFailed, sdk.NewCoins(), "fiat conversion failed", "system")
-		_ = ctx.EventManager().EmitTypedEvent(&types.EventFiatConversionFailed{
-			ConversionID: conversion.ConversionID,
-			Provider:     conversion.Provider,
-			Reason:       conversion.FailureReason,
-			FailedAt:     ctx.BlockTime().Unix(),
-		})
-	}
-
-	return nil
-}
-
-func (k Keeper) finalizeFiatPayoutCompletion(ctx sdk.Context, payout *types.PayoutRecord, conversion *types.FiatConversionRecord) error {
-	if payout.State == types.PayoutStateCompleted {
-		return nil
-	}
-
-	oldState := payout.State
-	if err := payout.MarkCompleted(fmt.Sprintf("fiat-%s", conversion.ConversionID), ctx.BlockTime()); err != nil {
-		return err
-	}
-	k.updatePayoutState(ctx, *payout, oldState)
-	if err := k.SetPayout(ctx, *payout); err != nil {
-		return err
-	}
-	k.savePayoutLedgerEntry(ctx, payout.PayoutID, types.PayoutLedgerEntryCompleted,
-		oldState, types.PayoutStateCompleted, payout.NetAmount, "fiat conversion completed", "system")
-
-	k.recordTreasuryEntry(ctx, payout, types.TreasuryRecordPlatformFee, payout.PlatformFee)
-	k.recordTreasuryEntry(ctx, payout, types.TreasuryRecordValidatorFee, payout.ValidatorFee)
-	if !payout.HoldbackAmount.IsZero() {
-		k.recordTreasuryEntry(ctx, payout, types.TreasuryRecordHoldback, payout.HoldbackAmount)
-	}
-
-	day := ctx.BlockTime().UTC().Format("20060102")
-	total := k.getFiatDailyTotal(ctx, conversion.Provider, day)
-	totalToAdd := conversion.StableAmount.Amount
-	if totalToAdd.IsNil() || totalToAdd.IsNegative() {
-		totalToAdd = sdkmath.ZeroInt()
-	}
-	k.setFiatDailyTotal(ctx, conversion.Provider, day, total.Add(totalToAdd))
-
-	_ = ctx.EventManager().EmitTypedEvent(&types.EventFiatConversionCompleted{
-		ConversionID: conversion.ConversionID,
-		Provider:     conversion.Provider,
-		FiatCurrency: conversion.FiatCurrency,
-		FiatAmount:   conversion.FiatAmount,
-		CompletedAt:  ctx.BlockTime().Unix(),
-	})
-	return nil
 }

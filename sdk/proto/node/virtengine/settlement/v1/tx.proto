@@ -6,6 +6,7 @@ import "cosmos_proto/cosmos.proto";
 import "cosmos/msg/v1/msg.proto";
 import "amino/amino.proto";
 import "cosmos/base/v1beta1/coin.proto";
+import "virtengine/settlement/v1/query.proto";
 
 option go_package = "github.com/virtengine/virtengine/sdk/go/node/settlement/v1";
 
@@ -39,6 +40,30 @@ service Msg {
 
   // ClaimRewards claims accumulated rewards
   rpc ClaimRewards(MsgClaimRewards) returns (MsgClaimRewardsResponse);
+
+  // OpenFinancialCase atomically opens or merges a canonical financial case.
+  rpc OpenFinancialCase(MsgOpenFinancialCase) returns (MsgOpenFinancialCaseResponse);
+  // AddFinancialClaim adds a privacy-safe typed claim to an active case.
+  rpc AddFinancialClaim(MsgAddFinancialClaim) returns (MsgAddFinancialClaimResponse);
+  // SubmitFinancialCaseForReview closes evidence collection.
+  rpc SubmitFinancialCaseForReview(MsgSubmitFinancialCaseForReview) returns (MsgSubmitFinancialCaseForReviewResponse);
+  // EscalateFinancialCase escalates a case to governance/arbitration.
+  rpc EscalateFinancialCase(MsgEscalateFinancialCase) returns (MsgEscalateFinancialCaseResponse);
+  // ResolveFinancialCase records a conserved allocation pending appeal.
+  rpc ResolveFinancialCase(MsgResolveFinancialCase) returns (MsgResolveFinancialCaseResponse);
+  // AppealFinancialCase reopens review while all holds remain active.
+  rpc AppealFinancialCase(MsgAppealFinancialCase) returns (MsgAppealFinancialCaseResponse);
+  // CancelFinancialCase cancels an unreviewed case and restores its holds.
+  rpc CancelFinancialCase(MsgCancelFinancialCase) returns (MsgCancelFinancialCaseResponse);
+  // FinalizeFinancialCase applies the pending allocation exactly once.
+  rpc FinalizeFinancialCase(MsgFinalizeFinancialCase) returns (MsgFinalizeFinancialCaseResponse);
+
+  // RecordFiatConversionObservation records one authenticated, replay-safe
+  // observation produced by the provider's off-chain conversion orchestrator.
+  rpc RecordFiatConversionObservation(MsgRecordFiatConversionObservation) returns (MsgRecordFiatConversionObservationResponse);
+
+  // UpdateParams updates settlement parameters through the configured x/gov authority.
+  rpc UpdateParams(MsgUpdateParams) returns (MsgUpdateParamsResponse);
 }
 
 // MsgCreateEscrow creates a new escrow account
@@ -164,6 +189,22 @@ message MsgRecordUsage {
   int64 period_end = 7;
   cosmos.base.v1beta1.DecCoin unit_price = 8 [(gogoproto.nullable) = false];
   bytes signature = 9;
+  string allocation_id = 10;
+  string chain_id = 11;
+  RawUsageMetrics raw_metrics = 12;
+  uint32 pricing_version = 13;
+  uint32 formula_version = 14;
+  uint32 model_version = 15;
+  uint64 stream_sequence = 16;
+  bytes nonce = 17;
+  bytes idempotency_key = 18;
+  uint64 provider_key_epoch = 19;
+  string provider_key_id = 20;
+  int64 issued_at_height = 21;
+  int64 expires_at_height = 22;
+  int64 issued_at_unix = 23;
+  int64 expires_at_unix = 24;
+  uint32 signature_version = 25;
 }
 
 // MsgRecordUsageResponse is the response for MsgRecordUsage
@@ -171,6 +212,9 @@ message MsgRecordUsageResponse {
   string usage_id = 1;
   string total_cost = 2;
   int64 recorded_at = 3;
+  bytes usage_digest = 4;
+  string authentication_status = 5;
+  bool exact_duplicate = 6;
 }
 
 // MsgAcknowledgeUsage acknowledges a usage record
@@ -182,11 +226,19 @@ message MsgAcknowledgeUsage {
   string sender = 1 [(cosmos_proto.scalar) = "cosmos.AddressString"];
   string usage_id = 2;
   bytes signature = 3;
+  bytes usage_digest = 4;
+  bytes replay_key = 5;
+  int64 issued_at_height = 6;
+  int64 expires_at_height = 7;
+  int64 issued_at_unix = 8;
+  int64 expires_at_unix = 9;
+  uint32 signature_version = 10;
 }
 
 // MsgAcknowledgeUsageResponse is the response for MsgAcknowledgeUsage
 message MsgAcknowledgeUsageResponse {
   int64 acknowledged_at = 1;
+  bool exact_duplicate = 2;
 }
 
 // MsgClaimRewards claims accumulated rewards
@@ -204,3 +256,154 @@ message MsgClaimRewardsResponse {
   string claimed_amount = 1;
   int64 claimed_at = 2;
 }
+
+message MsgOpenFinancialCase {
+  option (gogoproto.equal) = false;
+  option (cosmos.msg.v1.signer) = "sender";
+  option (amino.name) = "settlement/MsgOpenFinancialCase";
+  string sender = 1 [(cosmos_proto.scalar) = "cosmos.AddressString"];
+  FinancialSubject subject = 2 [(gogoproto.nullable) = false];
+  FinancialClaimType claim_type = 3;
+  string respondent = 4 [(cosmos_proto.scalar) = "cosmos.AddressString"];
+  bytes evidence_hash = 5;
+  string encrypted_reference = 6;
+  bytes idempotency_key = 7;
+  string source_module = 8;
+  string source_reference = 9;
+}
+message MsgOpenFinancialCaseResponse { string case_id = 1; string claim_id = 2; bool exact_duplicate = 3; FinancialCaseStatus status = 4; }
+
+message MsgAddFinancialClaim {
+  option (gogoproto.equal) = false;
+  option (cosmos.msg.v1.signer) = "sender";
+  option (amino.name) = "settlement/MsgAddFinancialClaim";
+  string sender = 1 [(cosmos_proto.scalar) = "cosmos.AddressString"];
+  string case_id = 2;
+  FinancialClaimType claim_type = 3;
+  bytes evidence_hash = 4;
+  string encrypted_reference = 5;
+  bytes idempotency_key = 6;
+  string source_module = 7;
+  string source_reference = 8;
+  string recommendation = 9;
+}
+message MsgAddFinancialClaimResponse { string case_id = 1; string claim_id = 2; bool exact_duplicate = 3; FinancialCaseStatus status = 4; }
+
+message MsgSubmitFinancialCaseForReview {
+  option (gogoproto.equal) = false;
+  option (cosmos.msg.v1.signer) = "sender";
+  option (amino.name) = "settlement/MsgSubmitCaseReview";
+  string sender = 1 [(cosmos_proto.scalar) = "cosmos.AddressString"];
+  string case_id = 2;
+}
+message MsgSubmitFinancialCaseForReviewResponse { FinancialCaseStatus status = 1; }
+
+message MsgEscalateFinancialCase {
+  option (gogoproto.equal) = false;
+  option (cosmos.msg.v1.signer) = "sender";
+  option (amino.name) = "settlement/MsgEscalateCase";
+  string sender = 1 [(cosmos_proto.scalar) = "cosmos.AddressString"];
+  string case_id = 2;
+  bytes reason_hash = 3;
+}
+message MsgEscalateFinancialCaseResponse { FinancialCaseStatus status = 1; }
+
+message MsgResolveFinancialCase {
+  option (gogoproto.equal) = false;
+  option (cosmos.msg.v1.signer) = "resolver";
+  option (amino.name) = "settlement/MsgResolveCase";
+  string resolver = 1 [(cosmos_proto.scalar) = "cosmos.AddressString"];
+  string case_id = 2;
+  TerminalAllocation allocation = 3 [(gogoproto.nullable) = false];
+}
+message MsgResolveFinancialCaseResponse { FinancialCaseStatus status = 1; int64 appeal_deadline_height = 2; int64 appeal_deadline_time = 3; }
+
+message MsgAppealFinancialCase {
+  option (gogoproto.equal) = false;
+  option (cosmos.msg.v1.signer) = "appellant";
+  option (amino.name) = "settlement/MsgAppealCase";
+  string appellant = 1 [(cosmos_proto.scalar) = "cosmos.AddressString"];
+  string case_id = 2;
+  bytes evidence_hash = 3;
+  string encrypted_reference = 4;
+  bytes idempotency_key = 5;
+}
+message MsgAppealFinancialCaseResponse { string appeal_id = 1; FinancialCaseStatus status = 2; }
+
+message MsgCancelFinancialCase {
+  option (gogoproto.equal) = false;
+  option (cosmos.msg.v1.signer) = "sender";
+  option (amino.name) = "settlement/MsgCancelCase";
+  string sender = 1 [(cosmos_proto.scalar) = "cosmos.AddressString"];
+  string case_id = 2;
+  bytes reason_hash = 3;
+}
+message MsgCancelFinancialCaseResponse { FinancialCaseStatus status = 1; }
+
+message MsgFinalizeFinancialCase {
+  option (gogoproto.equal) = false;
+  option (cosmos.msg.v1.signer) = "sender";
+  option (amino.name) = "settlement/MsgFinalizeCase";
+  string sender = 1 [(cosmos_proto.scalar) = "cosmos.AddressString"];
+  string case_id = 2;
+}
+message MsgFinalizeFinancialCaseResponse { FinancialCaseStatus status = 1; repeated FinancialCaseEffect effects = 2 [(gogoproto.nullable) = false]; }
+
+// MsgRecordFiatConversionObservation reports privacy-safe external execution
+// evidence. It deliberately excludes destinations, beneficiaries, credentials,
+// contracts, secrets, and free-form evidence narratives.
+message MsgRecordFiatConversionObservation {
+  option (gogoproto.equal) = false;
+  option (cosmos.msg.v1.signer) = "sender";
+  option (amino.name) = "settlement/MsgFiatObservation";
+
+  string sender = 1 [(cosmos_proto.scalar) = "cosmos.AddressString"];
+  string conversion_id = 2;
+  uint64 observation_sequence = 3;
+  bytes idempotency_key = 4;
+  FiatConversionObservationStage stage = 5;
+  string dex_profile_id = 6;
+  bytes dex_profile_digest = 7;
+  string payout_profile_id = 8;
+  bytes payout_profile_digest = 9;
+  bytes quote_digest = 10;
+  int64 quote_expiry = 11;
+  cosmos.base.v1beta1.Coin minimum_stable_output = 12 [(gogoproto.nullable) = false];
+  string swap_tx_hash = 13;
+  int64 swap_height = 14;
+  bytes swap_block_hash = 15;
+  uint32 swap_finality_confirmations = 16;
+  bytes swap_finality_hash = 17;
+  cosmos.base.v1beta1.Coin stable_amount = 18 [(gogoproto.nullable) = false];
+  string off_ramp_quote_id = 19;
+  string off_ramp_payout_id = 20;
+  string status = 21;
+  // privacy_safe_reference_hash is required at payout submission and must be
+  // reproduced byte-for-byte by the payout completion observation.
+  bytes privacy_safe_reference_hash = 22;
+  string fiat_amount = 23;
+  bytes compliance_decision_hash = 24;
+  int64 observed_at = 25;
+  bytes evidence_hash = 26;
+  string failure_code = 27;
+  bytes payout_finality_hash = 28;
+}
+
+message MsgRecordFiatConversionObservationResponse {
+  string conversion_id = 1;
+  uint64 observation_sequence = 2;
+  FiatConversionObservationStage stage = 3;
+  string state = 4;
+  bool exact_duplicate = 5;
+  bytes observation_digest = 6;
+}
+
+message MsgUpdateParams {
+  option (gogoproto.equal) = false;
+  option (cosmos.msg.v1.signer) = "authority";
+  option (amino.name) = "settlement/MsgUpdateParams";
+  string authority = 1 [(cosmos_proto.scalar) = "cosmos.AddressString"];
+  Params params = 2 [(gogoproto.nullable) = false];
+}
+
+message MsgUpdateParamsResponse {}

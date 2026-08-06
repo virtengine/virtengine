@@ -169,12 +169,18 @@ func (s *IdentityScore) GetTier() int {
 	return ComputeTierFromScoreValue(s.Score, s.Status)
 }
 
-// IsExpired checks if the score has expired
+// IsExpired is a wall-clock convenience for off-chain callers. Consensus code
+// must call IsExpiredAt with ctx.BlockTime().
 func (s *IdentityScore) IsExpired() bool {
+	return s.IsExpiredAt(time.Now())
+}
+
+// IsExpiredAt checks expiry at an explicit deterministic time.
+func (s *IdentityScore) IsExpiredAt(now time.Time) bool {
 	if s.ExpiresAt == nil {
 		return false
 	}
-	return time.Now().After(*s.ExpiresAt)
+	return now.After(*s.ExpiresAt)
 }
 
 // IsAboveThreshold checks if the score is above a given threshold

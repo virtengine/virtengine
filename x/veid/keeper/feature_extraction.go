@@ -154,13 +154,12 @@ func (p *FeatureExtractionPipeline) ExtractFeatures(
 	blockHeight int64,
 	blockTime time.Time,
 ) (*RealExtractedFeatures, error) {
-	startTime := time.Now()
-
 	features := NewRealExtractedFeatures()
-	features.Metadata = types.NewFeatureExtractionMetadata(
+	features.Metadata = types.NewFeatureExtractionMetadataAt(
 		types.MLFeatureSchemaVersion,
 		accountAddress,
 		blockHeight,
+		blockTime,
 	)
 
 	var selfiePayload *ParsedMediaPayload
@@ -222,7 +221,7 @@ func (p *FeatureExtractionPipeline) ExtractFeatures(
 
 	// Compute feature hash for consensus
 	features.Metadata.ComputeFeatureHash(features.FaceEmbedding, features.DocQualityScore)
-	features.Metadata.ProcessingDurationMs = time.Since(startTime).Milliseconds()
+	features.Metadata.ProcessingDurationMs = 0
 
 	return features, nil
 }

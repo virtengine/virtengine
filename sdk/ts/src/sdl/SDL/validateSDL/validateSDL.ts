@@ -1,4 +1,4 @@
-import { VE_DENOM, type NetworkId, USDC_IBC_DENOMS } from "../../../network/index.ts";
+import { type NetworkId, USDC_IBC_DENOMS, VE_DENOM } from "../../../network/index.ts";
 import type { ErrorMessages, ValidationError, ValidationFunction } from "../../../utils/jsonSchemaValidation.ts";
 import { dirname, getErrorLocation, humanizeErrors } from "../../../utils/jsonSchemaValidation.ts";
 import { castArray, stringToBoolean } from "../utils.ts";

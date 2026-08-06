@@ -1,15 +1,71 @@
 {
-  "version": "dev",
-  "ceremony_hash": "",
-  "contributor_count": 1,
-  "contributors": [
-    "dev-setup"
+  "schema_version": "virtengine.veid.zkparams/v1",
+  "parameter_set_id": "veid-zkparams-mpc-20260410",
+  "generated_at": "2026-04-10T15:00:00Z",
+  "artifact_format": "virtengine.trusted_setup.artifact_manifest/v1",
+  "notes": [
+    "Generated from deterministic two-participant trusted setup exports for embedded VEID verifier startup validation."
   ],
-  "circuit_hashes": {
-    "age": "c0b7bf182f5235a4ecd4e72b2cb51d9f975b71e1be36832f4f90807f1d1ac303",
-    "residency": "2ffb8e2516e99bc550954302ee89a19cc1af0ef9c2b12fbe0b47043aa0aba1b5",
-    "score": "9b8d8bff308526001ce8a8ce6be170bdc3a8763c087892eb651c834b5b2f4f45"
-  },
-  "generated_at": "2026-02-07T16:32:06Z",
-  "notes": "dev setup (single-party)"
+  "circuits": {
+    "age": {
+      "circuit_name": "age-range",
+      "parameters_version": "veid-zkparams-mpc-20260410",
+      "ceremony_id": "veid-1775822400",
+      "artifact_manifest_hash": "d3b215a136bb43137d98b361ee4add7ea0463ddafe2565242591c0bb819aefb3",
+      "verification_report_hash": "7db18cf29551abdc0168dc16d909e28fe2daa8ab3f38e6e35ada30d8e9668a49",
+      "transcript_hash": "30e24d82d75687c88478de93e110ccc53b87b5ec3e75955b60bf68a35d5d1fd4",
+      "circuit_hash": "c0b7bf182f5235a4ecd4e72b2cb51d9f975b71e1be36832f4f90807f1d1ac303",
+      "verification_key_file": "age_vk.bin",
+      "verification_key_hash": "e428dc43068a3a4a8d1f3dc9f980e5f8ed0b83e255835852af28fdac810b9350",
+      "verification_key_size_bytes": 428,
+      "contributor_count": 2,
+      "contributors": [
+        "age-alice",
+        "age-bob"
+      ],
+      "coordinator_id": "veid-coordinator",
+      "coordinator_public_key": "lLDy2zHW2ziX+wdNbLJwePgCxWmlDwKBEXdBxEhz1ig=",
+      "beacon": "veid-age-beacon-20260410"
+    },
+    "residency": {
+      "circuit_name": "residency",
+      "parameters_version": "veid-zkparams-mpc-20260410",
+      "ceremony_id": "veid-1775826000",
+      "artifact_manifest_hash": "c9a5fa60f6c72f69bc9447f8f29aefb78d78608678baf3e077ec09321cf1a360",
+      "verification_report_hash": "1baa207fb2ab3cf58c25b628d5f910dc6c84850ed3aad9e9b6e31b52368dca42",
+      "transcript_hash": "8c413e01ce04ed5cf9773705da4c2f5fd9c12be9526ae00c0eb9e09ec93d59b0",
+      "circuit_hash": "2ffb8e2516e99bc550954302ee89a19cc1af0ef9c2b12fbe0b47043aa0aba1b5",
+      "verification_key_file": "residency_vk.bin",
+      "verification_key_hash": "a3ac0c8d730df659d1d490c936ec56dc75c06bc27eeb3985bc0b08aef3f07b1e",
+      "verification_key_size_bytes": 396,
+      "contributor_count": 2,
+      "contributors": [
+        "residency-alice",
+        "residency-bob"
+      ],
+      "coordinator_id": "veid-coordinator",
+      "coordinator_public_key": "lLDy2zHW2ziX+wdNbLJwePgCxWmlDwKBEXdBxEhz1ig=",
+      "beacon": "veid-residency-beacon-20260410"
+    },
+    "score": {
+      "circuit_name": "score-range",
+      "parameters_version": "veid-zkparams-mpc-20260410",
+      "ceremony_id": "veid-1775829600",
+      "artifact_manifest_hash": "5a892d181bf2b76bc42867734182095ab954f4e5a006a741204535027ca995ff",
+      "verification_report_hash": "9c269714200f12b68d9408bf24d0731816efad0bb163c0c490be21cff3eadb59",
+      "transcript_hash": "34407c910530dcf1925f2dfbef4add1876441fbf03d54541b0fbea83c1e7299d",
+      "circuit_hash": "9b8d8bff308526001ce8a8ce6be170bdc3a8763c087892eb651c834b5b2f4f45",
+      "verification_key_file": "score_vk.bin",
+      "verification_key_hash": "bfa56bc83902d9cefb82207dca93578638f78adc98c80e8b3063254b299cf34f",
+      "verification_key_size_bytes": 396,
+      "contributor_count": 2,
+      "contributors": [
+        "score-alice",
+        "score-bob"
+      ],
+      "coordinator_id": "veid-coordinator",
+      "coordinator_public_key": "lLDy2zHW2ziX+wdNbLJwePgCxWmlDwKBEXdBxEhz1ig=",
+      "beacon": "veid-score-beacon-20260410"
+    }
+  }
 }

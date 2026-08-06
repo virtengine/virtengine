@@ -75,7 +75,7 @@ func (k Keeper) applyWebScopeScore(
 	summary.SetResult(newScore, passed, inputHash)
 
 	if err := k.RecordScoringResult(ctx, accountAddr, summary); err != nil {
-		k.Logger(ctx).Error("failed to record web-scope scoring result", "error", err)
+		return err
 	}
 
 	// Update score store
@@ -111,7 +111,7 @@ func (k Keeper) applyWebScopeScore(
 			scopeIDs = append(scopeIDs, c.FeatureName)
 		}
 		if err := k.UpdateWalletScore(ctx, address, newScore, status, modelVersion, "", scopeIDs, "web-scope evidence update"); err != nil {
-			k.Logger(ctx).Error("failed to update wallet score for web-scope evidence", "error", err)
+			return err
 		}
 	}
 

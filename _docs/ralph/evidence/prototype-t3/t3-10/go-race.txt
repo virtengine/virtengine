@@ -1,0 +1,4 @@
+ok  	github.com/virtengine/virtengine/pkg/inference	2.274s
+ok  	github.com/virtengine/virtengine/pkg/uniquenessops	2.272s
+ok  	github.com/virtengine/virtengine/x/settlement/ibc	7.879s
+ok  	github.com/virtengine/virtengine/x/benchmark/types	1.318s

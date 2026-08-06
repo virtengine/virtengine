@@ -2,20 +2,33 @@
 package sms
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
+	"encoding/xml"
 	"fmt"
+	"io"
+	"net/http"
+	"net/url"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
 
+	"github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/aws-sdk-go/aws/credentials"
+	"github.com/aws/aws-sdk-go/aws/session"
+	v4 "github.com/aws/aws-sdk-go/aws/signer/v4"
 	"github.com/rs/zerolog"
 
 	"github.com/virtengine/virtengine/pkg/errors"
+	"github.com/virtengine/virtengine/pkg/security"
 )
 
 // Provider name constants
 const (
 	providerTwilio = "twilio"
+	providerSNS    = "sns"
 )
 
 // ============================================================================
@@ -603,107 +616,66 @@ var _ Provider = (*MockProvider)(nil)
 // Twilio Provider (Placeholder)
 // ============================================================================
 
+const (
+	awsSNSAPIVersion      = "2010-03-31"
+	defaultSMSTimeout     = 30 * time.Second
+	transactionalSMSType  = "Transactional"
+	awsSNSOriginationAttr = "AWS.MM.SMS.OriginationNumber"
+)
+
 // TwilioProvider implements Provider using Twilio
 type TwilioProvider struct {
-	config ProviderConfig
-	logger zerolog.Logger
+	gateway SMSGateway
 }
 
 // NewTwilioProvider creates a new Twilio provider
 func NewTwilioProvider(config ProviderConfig, logger zerolog.Logger) (*TwilioProvider, error) {
-	if config.AccountSID == "" {
-		return nil, errors.Wrap(ErrInvalidConfig, "account_sid is required for Twilio")
-	}
-	if config.AuthToken == "" {
-		return nil, errors.Wrap(ErrInvalidConfig, "auth_token is required for Twilio")
-	}
-	if config.FromNumber == "" && config.MessagingServiceSID == "" {
-		return nil, errors.Wrap(ErrInvalidConfig, "from_number or messaging_service_sid is required for Twilio")
+	gateway, err := NewTwilioGateway(config, logger)
+	if err != nil {
+		return nil, err
 	}
 
-	return &TwilioProvider{
-		config: config,
-		logger: logger.With().Str("provider", providerTwilio).Logger(),
-	}, nil
+	return &TwilioProvider{gateway: gateway}, nil
 }
 
 // Name returns the provider name
 func (p *TwilioProvider) Name() string {
-	return providerTwilio
+	return p.gateway.Name()
 }
 
 // Send sends an SMS using Twilio
 func (p *TwilioProvider) Send(ctx context.Context, msg *SMSMessage) (*SendResult, error) {
-	// TODO: Implement actual Twilio API call using Twilio Go SDK
-	p.logger.Info().
-		Str("to", MaskPhoneNumber(msg.To)).
-		Int("body_length", len(msg.Body)).
-		Msg("Twilio send called (placeholder)")
-
-	messageID := fmt.Sprintf("twilio-%d", time.Now().UnixNano())
-	return &SendResult{
-		Success:      true,
-		MessageID:    messageID,
-		Timestamp:    time.Now(),
-		Provider:     providerTwilio,
-		SegmentCount: (len(msg.Body) / 160) + 1,
-	}, nil
+	return p.gateway.Send(ctx, msg)
 }
 
 // LookupCarrier performs carrier lookup using Twilio Lookup API
 func (p *TwilioProvider) LookupCarrier(ctx context.Context, phoneNumber string) (*CarrierLookupResult, error) {
-	// TODO: Implement actual Twilio Lookup API call
-	p.logger.Info().
-		Str("phone", MaskPhoneNumber(phoneNumber)).
-		Msg("Twilio carrier lookup called (placeholder)")
-
-	return &CarrierLookupResult{
-		PhoneNumber:     phoneNumber,
-		CountryCode:     "US",
-		CarrierName:     "Unknown",
-		CarrierType:     CarrierTypeMobile,
-		IsVoIP:          false,
-		IsMobile:        true,
-		IsValid:         true,
-		RiskScore:       20,
-		LookupTimestamp: time.Now(),
-	}, nil
+	return p.gateway.LookupCarrier(ctx, phoneNumber)
 }
 
 // GetDeliveryStatus gets delivery status from Twilio
 func (p *TwilioProvider) GetDeliveryStatus(ctx context.Context, messageID string) (*DeliveryStatusResult, error) {
-	// TODO: Implement actual Twilio API call
-	return &DeliveryStatusResult{
-		MessageID: messageID,
-		Status:    DeliveryDelivered,
-		Timestamp: time.Now(),
-	}, nil
+	return p.gateway.GetDeliveryStatus(ctx, messageID)
 }
 
 // ParseWebhook parses a Twilio webhook
 func (p *TwilioProvider) ParseWebhook(ctx context.Context, payload []byte, signature string) ([]WebhookEvent, error) {
-	// TODO: Implement Twilio webhook parsing and validation
-	return []WebhookEvent{}, nil
+	return p.gateway.ParseWebhook(ctx, payload, signature)
 }
 
 // HealthCheck checks if Twilio is healthy
 func (p *TwilioProvider) HealthCheck(ctx context.Context) error {
-	// TODO: Implement actual health check
-	return nil
+	return p.gateway.HealthCheck(ctx)
 }
 
 // SupportedRegions returns Twilio's supported regions
 func (p *TwilioProvider) SupportedRegions() []string {
-	if len(p.config.SupportedRegions) > 0 {
-		return p.config.SupportedRegions
-	}
-	// Twilio supports most regions
-	return []string{"US", "CA", "GB", "AU", "DE", "FR", "IN", "JP", "BR", "MX"}
+	return p.gateway.SupportedRegions()
 }
 
 // Close closes the provider
 func (p *TwilioProvider) Close() error {
-	return nil
+	return p.gateway.Close()
 }
 
 // Ensure TwilioProvider implements Provider
@@ -715,8 +687,12 @@ var _ Provider = (*TwilioProvider)(nil)
 
 // SNSProvider implements Provider using AWS SNS
 type SNSProvider struct {
-	config ProviderConfig
-	logger zerolog.Logger
+	config      ProviderConfig
+	logger      zerolog.Logger
+	httpClient  *http.Client
+	endpoint    string
+	credentials *credentials.Credentials
+	signer      *v4.Signer
 }
 
 // NewSNSProvider creates a new AWS SNS provider
@@ -725,31 +701,77 @@ func NewSNSProvider(config ProviderConfig, logger zerolog.Logger) (*SNSProvider,
 		return nil, errors.Wrap(ErrInvalidConfig, "region is required for SNS")
 	}
 
+	httpClient := security.NewSecureHTTPClient(security.WithTimeout(defaultSMSTimeout))
+	accessKeyID, secretAccessKey := resolveSNSCredentials(config)
+	creds, signer, err := newAWSSMSSigner(config.Region, accessKeyID, secretAccessKey, httpClient)
+	if err != nil {
+		return nil, err
+	}
+
 	return &SNSProvider{
-		config: config,
-		logger: logger.With().Str("provider", "sns").Logger(),
+		config:      config,
+		logger:      logger.With().Str("provider", providerSNS).Logger(),
+		httpClient:  httpClient,
+		endpoint:    fmt.Sprintf("https://sns.%s.amazonaws.com/", config.Region),
+		credentials: creds,
+		signer:      signer,
 	}, nil
 }
 
 // Name returns the provider name
 func (p *SNSProvider) Name() string {
-	return "sns"
+	return providerSNS
 }
 
 // Send sends an SMS using AWS SNS
 func (p *SNSProvider) Send(ctx context.Context, msg *SMSMessage) (*SendResult, error) {
-	// TODO: Implement actual AWS SNS API call
+	form := url.Values{}
+	form.Set("Action", "Publish")
+	form.Set("Version", awsSNSAPIVersion)
+	form.Set("PhoneNumber", msg.To)
+	form.Set("Message", msg.Body)
+
+	attributeIndex := 1
+	addAttribute := func(name, value string) {
+		if strings.TrimSpace(value) == "" {
+			return
+		}
+		form.Set(fmt.Sprintf("MessageAttributes.entry.%d.Name", attributeIndex), name)
+		form.Set(fmt.Sprintf("MessageAttributes.entry.%d.Value.DataType", attributeIndex), "String")
+		form.Set(fmt.Sprintf("MessageAttributes.entry.%d.Value.StringValue", attributeIndex), value)
+		attributeIndex++
+	}
+
+	addAttribute("AWS.SNS.SMS.SMSType", transactionalSMSType)
+	addAttribute("AWS.SNS.SMS.SenderID", p.config.SenderID)
+	addAttribute(awsSNSOriginationAttr, p.config.FromNumber)
+	addAttribute("AWS.SNS.SMS.MaxPrice", firstNonEmptySMSString(msg.MaxPrice))
+
+	body, err := p.doSignedRequest(ctx, form)
+	if err != nil {
+		return nil, err
+	}
+
+	var response struct {
+		MessageID string `xml:"PublishResult>MessageId"`
+	}
+	if err := xml.Unmarshal(body, &response); err != nil {
+		return nil, errors.Wrapf(ErrProviderError, "failed to parse SNS response: %v", err)
+	}
+	if response.MessageID == "" {
+		return nil, errors.Wrap(ErrProviderError, "SNS response missing message id")
+	}
+
 	p.logger.Info().
 		Str("to", MaskPhoneNumber(msg.To)).
-		Int("body_length", len(msg.Body)).
-		Msg("SNS send called (placeholder)")
+		Str("message_id", response.MessageID).
+		Msg("SMS sent via SNS")
 
-	messageID := fmt.Sprintf("sns-%d", time.Now().UnixNano())
 	return &SendResult{
 		Success:      true,
-		MessageID:    messageID,
+		MessageID:    response.MessageID,
 		Timestamp:    time.Now(),
-		Provider:     "sns",
+		Provider:     providerSNS,
 		SegmentCount: 1,
 	}, nil
 }
@@ -761,22 +783,75 @@ func (p *SNSProvider) LookupCarrier(ctx context.Context, phoneNumber string) (*C
 
 // GetDeliveryStatus gets delivery status from SNS
 func (p *SNSProvider) GetDeliveryStatus(ctx context.Context, messageID string) (*DeliveryStatusResult, error) {
-	// TODO: Implement via CloudWatch logs
-	return &DeliveryStatusResult{
-		MessageID: messageID,
-		Status:    DeliveryDelivered,
-		Timestamp: time.Now(),
-	}, nil
+	return nil, errors.Wrap(ErrProviderError, "SNS delivery status is event-driven; use webhooks or cached status")
 }
 
 // ParseWebhook parses an SNS webhook (via Lambda/SQS)
 func (p *SNSProvider) ParseWebhook(ctx context.Context, payload []byte, signature string) ([]WebhookEvent, error) {
-	return []WebhookEvent{}, nil
+	type snsEnvelope struct {
+		Type    string `json:"Type"`
+		Message string `json:"Message"`
+	}
+
+	messageBytes := payload
+	var envelope snsEnvelope
+	if err := json.Unmarshal(payload, &envelope); err == nil && envelope.Message != "" {
+		messageBytes = []byte(envelope.Message)
+	}
+
+	var raw map[string]interface{}
+	if err := json.Unmarshal(messageBytes, &raw); err != nil {
+		return nil, errors.Wrapf(ErrWebhookInvalid, "failed to parse SNS webhook: %v", err)
+	}
+
+	status := strings.ToLower(firstNonEmptySMSString(asSMSString(raw["status"]), asSMSString(raw["deliveryStatus"]), asSMSString(raw["eventType"])))
+	messageID := firstNonEmptySMSString(
+		asSMSString(raw["messageId"]),
+		asSMSString(raw["messageID"]),
+	)
+	if delivery, ok := raw["delivery"].(map[string]interface{}); ok {
+		messageID = firstNonEmptySMSString(messageID, asSMSString(delivery["messageId"]))
+		status = firstNonEmptySMSString(status, strings.ToLower(asSMSString(delivery["status"])))
+	}
+
+	event := WebhookEvent{
+		MessageID: messageID,
+		Timestamp: time.Now().UTC(),
+		Provider:  providerSNS,
+		Raw:       raw,
+	}
+
+	switch status {
+	case "delivered", "success":
+		event.EventType = WebhookEventDelivered
+	case "sent", "published":
+		event.EventType = WebhookEventSent
+	case "failed":
+		event.EventType = WebhookEventFailed
+	case "undelivered":
+		event.EventType = WebhookEventUndelivered
+	default:
+		return nil, errors.Wrapf(ErrWebhookInvalid, "unsupported SNS delivery status: %s", status)
+	}
+
+	if errCode, ok := raw["errorCode"]; ok {
+		event.ErrorCode = asSMSString(errCode)
+	}
+	if errMessage, ok := raw["errorMessage"]; ok {
+		event.ErrorMessage = asSMSString(errMessage)
+	}
+
+	return []WebhookEvent{event}, nil
 }
 
 // HealthCheck checks if SNS is healthy
 func (p *SNSProvider) HealthCheck(ctx context.Context) error {
-	return nil
+	form := url.Values{}
+	form.Set("Action", "GetSMSAttributes")
+	form.Set("Version", awsSNSAPIVersion)
+	form.Set("attributes.member.1", "MonthlySpendLimit")
+	_, err := p.doSignedRequest(ctx, form)
+	return err
 }
 
 // SupportedRegions returns SNS's supported regions
@@ -795,15 +870,114 @@ func (p *SNSProvider) Close() error {
 // Ensure SNSProvider implements Provider
 var _ Provider = (*SNSProvider)(nil)
 
+func resolveSNSCredentials(config ProviderConfig) (string, string) {
+	accessKeyID := strings.TrimSpace(config.APIKey)
+	secretAccessKey := strings.TrimSpace(config.APISecret)
+	if secretAccessKey == "" {
+		secretAccessKey = strings.TrimSpace(config.AuthToken)
+	}
+	return accessKeyID, secretAccessKey
+}
+
+func newAWSSMSSigner(region, accessKeyID, secretAccessKey string, httpClient *http.Client) (*credentials.Credentials, *v4.Signer, error) {
+	cfg := aws.NewConfig().WithRegion(region).WithHTTPClient(httpClient)
+	switch {
+	case accessKeyID != "" && secretAccessKey != "":
+		cfg = cfg.WithCredentials(credentials.NewStaticCredentials(accessKeyID, secretAccessKey, ""))
+	case accessKeyID != "" || secretAccessKey != "":
+		return nil, nil, errors.Wrap(ErrInvalidConfig, "both access credentials are required for SNS")
+	}
+
+	sess, err := session.NewSession(cfg)
+	if err != nil {
+		return nil, nil, errors.Wrapf(ErrInvalidConfig, "failed to initialize AWS session: %v", err)
+	}
+
+	if sess.Config.Credentials == nil {
+		return nil, nil, errors.Wrap(ErrInvalidConfig, "AWS credentials are not configured")
+	}
+
+	return sess.Config.Credentials, v4.NewSigner(sess.Config.Credentials), nil
+}
+
+func (p *SNSProvider) doSignedRequest(ctx context.Context, form url.Values) ([]byte, error) {
+	payload := []byte(form.Encode())
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, p.endpoint, bytes.NewReader(payload))
+	if err != nil {
+		return nil, errors.Wrapf(ErrProviderError, "failed to create SNS request: %v", err)
+	}
+
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded; charset=utf-8")
+	if _, err := p.signer.Sign(req, bytes.NewReader(payload), "sns", p.config.Region, time.Now().UTC()); err != nil {
+		return nil, errors.Wrapf(ErrProviderError, "failed to sign SNS request: %v", err)
+	}
+
+	resp, err := p.httpClient.Do(req)
+	if err != nil {
+		return nil, errors.Wrapf(ErrProviderError, "SNS request failed: %v", err)
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, errors.Wrapf(ErrProviderError, "failed to read SNS response: %v", err)
+	}
+
+	if resp.StatusCode >= http.StatusMultipleChoices {
+		return nil, parseAWSProviderError("SNS", resp.StatusCode, body)
+	}
+
+	return body, nil
+}
+
+func parseAWSProviderError(provider string, statusCode int, body []byte) error {
+	var response struct {
+		Error struct {
+			Code    string `xml:"Code"`
+			Message string `xml:"Message"`
+		} `xml:"Error"`
+	}
+
+	if err := xml.Unmarshal(body, &response); err == nil && response.Error.Code != "" {
+		return errors.Wrapf(ErrDeliveryFailed, "%s API error (%d): %s: %s", provider, statusCode, response.Error.Code, response.Error.Message)
+	}
+
+	return errors.Wrapf(ErrDeliveryFailed, "%s API error (%d): %s", provider, statusCode, strings.TrimSpace(string(body)))
+}
+
+func asSMSString(value interface{}) string {
+	switch typed := value.(type) {
+	case string:
+		return typed
+	case json.Number:
+		return typed.String()
+	case float64:
+		return fmt.Sprintf("%.0f", typed)
+	default:
+		return ""
+	}
+}
+
+func firstNonEmptySMSString(values ...string) string {
+	for _, value := range values {
+		if strings.TrimSpace(value) != "" {
+			return value
+		}
+	}
+	return ""
+}
+
 // ============================================================================
 // Provider Factory
 // ============================================================================
 
 // NewProvider creates a new SMS provider based on configuration
 func NewProvider(providerType string, config ProviderConfig, logger zerolog.Logger) (Provider, error) {
-	switch providerType {
+	switch strings.ToLower(strings.TrimSpace(providerType)) {
 	case providerTwilio:
 		return NewTwilioProvider(config, logger)
+	case providerVonage, "nexmo":
+		return NewGateway(providerType, config, logger)
 	case "sns", "aws_sns":
 		return NewSNSProvider(config, logger)
 	case "mock":

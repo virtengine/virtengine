@@ -77,7 +77,12 @@ func (AppModuleBasic) ValidateGenesis(cdc codec.JSONCodec, _ client.TxEncodingCo
 
 // RegisterGRPCGatewayRoutes registers the gRPC Gateway routes for the HPC module.
 func (AppModuleBasic) RegisterGRPCGatewayRoutes(clientCtx client.Context, mux *runtime.ServeMux) {
-	// gRPC gateway routes will be registered here when proto definitions are added
+	if err := hpcv1.RegisterQueryHandlerClient(context.Background(), mux, hpcv1.NewQueryClient(clientCtx)); err != nil {
+		panic(fmt.Errorf("couldn't register hpc grpc routes: %s", err.Error()))
+	}
+	if err := types.RegisterQueryHandlerClient(context.Background(), mux, types.NewQueryClient(clientCtx)); err != nil {
+		panic(fmt.Errorf("couldn't register hpc workload template grpc routes: %s", err.Error()))
+	}
 }
 
 // GetTxCmd returns the root tx command for the HPC module.
@@ -118,6 +123,16 @@ func (am AppModule) RegisterInvariants(_ sdk.InvariantRegistry) {}
 func (am AppModule) RegisterServices(cfg module.Configurator) {
 	types.RegisterMsgServer(cfg.MsgServer(), keeper.NewMsgServerImpl(am.keeper))
 	hpcv1.RegisterQueryServer(cfg.QueryServer(), keeper.NewQuerier(am.keeper))
+	types.RegisterQueryServer(cfg.QueryServer(), keeper.NewQueryServerImpl(am.keeper))
+	if err := cfg.RegisterMigration(types.ModuleName, 1, func(ctx sdk.Context) error {
+		am.keeper.MigrateReservationLinks(ctx)
+		return nil
+	}); err != nil {
+		panic(err)
+	}
+	if err := cfg.RegisterMigration(types.ModuleName, 2, func(ctx sdk.Context) error { return nil }); err != nil {
+		panic(fmt.Sprintf("failed to register hpc 2->3 migration: %v", err))
+	}
 }
 
 // InitGenesis performs genesis initialization for the HPC module.
@@ -140,7 +155,7 @@ func (am AppModule) ExportGenesis(ctx sdk.Context, cdc codec.JSONCodec) json.Raw
 }
 
 // ConsensusVersion implements AppModule/ConsensusVersion.
-func (AppModule) ConsensusVersion() uint64 { return 1 }
+func (AppModule) ConsensusVersion() uint64 { return 3 }
 
 // BeginBlock returns the begin blocker for the HPC module.
 func (am AppModule) BeginBlock(ctx context.Context) error {

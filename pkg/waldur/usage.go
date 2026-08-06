@@ -7,7 +7,10 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"math"
 	"net/http"
+	"net/url"
+	"strings"
 	"time"
 )
 
@@ -92,6 +95,9 @@ func (u *UsageClient) SubmitUsageReport(ctx context.Context, report *ResourceUsa
 	if len(report.Components) == 0 {
 		return nil, fmt.Errorf("at least one component usage is required")
 	}
+	if report.PeriodEnd.Before(report.PeriodStart) {
+		return nil, fmt.Errorf("period end must not be before period start")
+	}
 
 	var response *UsageReportResponse
 
@@ -105,6 +111,12 @@ func (u *UsageClient) SubmitUsageReport(ctx context.Context, report *ResourceUsa
 		// Build component usages
 		usages := make(map[string]float64)
 		for _, component := range report.Components {
+			if component.Type == "" {
+				return fmt.Errorf("component type is required")
+			}
+			if math.IsNaN(component.Amount) || math.IsInf(component.Amount, 0) || component.Amount < 0 {
+				return fmt.Errorf("invalid usage amount for %s", component.Type)
+			}
 			usages[component.Type] = component.Amount
 		}
 		body["usages"] = usages
@@ -158,11 +170,12 @@ func (u *UsageClient) SubmitBulkUsage(ctx context.Context, reports []*ResourceUs
 	}
 
 	responses := make([]*UsageReportResponse, 0, len(reports))
+	failedResources := make([]string, 0)
 
 	for _, report := range reports {
 		resp, err := u.SubmitUsageReport(ctx, report)
 		if err != nil {
-			// Continue with other reports, log error
+			failedResources = append(failedResources, report.ResourceUUID)
 			responses = append(responses, &UsageReportResponse{
 				ResourceUUID: report.ResourceUUID,
 				State:        "failed",
@@ -170,6 +183,10 @@ func (u *UsageClient) SubmitBulkUsage(ctx context.Context, reports []*ResourceUs
 			continue
 		}
 		responses = append(responses, resp)
+	}
+
+	if len(failedResources) > 0 {
+		return responses, fmt.Errorf("failed to submit usage for resources: %s", strings.Join(failedResources, ", "))
 	}
 
 	return responses, nil
@@ -184,35 +201,15 @@ func (u *UsageClient) GetResourceUsage(ctx context.Context, resourceUUID string,
 	var records []UsageRecord
 
 	err := u.marketplace.client.doWithRetry(ctx, func() error {
-		path := fmt.Sprintf("/marketplace-resources/%s/usages/", resourceUUID)
-
-		// Add date filters if provided
-		queryParams := []string{}
+		query := url.Values{}
 		if periodStart != nil {
-			queryParams = append(queryParams, fmt.Sprintf("date_start=%s", periodStart.Format("2006-01-02")))
+			query.Set("date_start", periodStart.Format("2006-01-02"))
 		}
 		if periodEnd != nil {
-			queryParams = append(queryParams, fmt.Sprintf("date_end=%s", periodEnd.Format("2006-01-02")))
+			query.Set("date_end", periodEnd.Format("2006-01-02"))
 		}
-
-		if len(queryParams) > 0 {
-			path += "?" + joinQueryParams(queryParams)
-		}
-
-		respBody, statusCode, err := u.marketplace.client.doRequest(ctx, http.MethodGet, path, nil)
-		if err != nil {
-			return err
-		}
-
-		if statusCode != http.StatusOK {
-			return mapHTTPError(statusCode, respBody)
-		}
-
-		if err := json.Unmarshal(respBody, &records); err != nil {
-			return fmt.Errorf("unmarshal response: %w", err)
-		}
-
-		return nil
+		path := buildQueryPath(fmt.Sprintf("/marketplace-resources/%s/usages/", resourceUUID), query)
+		return u.marketplace.client.getPaginated(ctx, path, &records)
 	})
 
 	return records, err

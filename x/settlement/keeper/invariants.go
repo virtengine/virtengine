@@ -14,6 +14,51 @@ import (
 //nolint:staticcheck // sdk.InvariantRegistry is required by the module interface.
 func RegisterInvariants(ir sdk.InvariantRegistry, k IKeeper) {
 	ir.RegisterRoute(types.ModuleName, "escrow-settlement-reconciliation", EscrowSettlementReconciliationInvariant(k))
+	ir.RegisterRoute(types.ModuleName, "authenticated-usage-replay-indexes", AuthenticatedUsageReplayInvariant(k))
+	ir.RegisterRoute(types.ModuleName, "canonical-financial-cases", FinancialCaseInvariant(k))
+	ir.RegisterRoute(types.ModuleName, "authenticated-fiat-conversions", FiatConversionInvariant(k))
+}
+
+// FiatConversionInvariant detects malformed records, orphan/replay/index/daily
+// corruption, profile drift, and terminal payout contradictions.
+//
+//nolint:staticcheck // sdk.Invariant is required by the module interface.
+func FiatConversionInvariant(k IKeeper) sdk.Invariant {
+	return func(ctx sdk.Context) (string, bool) {
+		broken := k.ValidateFiatConversionInvariants(ctx)
+		if len(broken) > 0 {
+			return fmt.Sprintf("authenticated fiat conversions broken: %s", strings.Join(broken, "; ")), true
+		}
+		return "authenticated fiat conversions: ok", false
+	}
+}
+
+// FinancialCaseInvariant fails closed on malformed cases, orphan holds, broken
+// indexes, unconserved allocations, or incomplete terminal effects.
+//
+//nolint:staticcheck // sdk.Invariant is required by the module interface.
+func FinancialCaseInvariant(k IKeeper) sdk.Invariant {
+	return func(ctx sdk.Context) (string, bool) {
+		broken := k.ValidateFinancialCaseInvariants(ctx)
+		if len(broken) > 0 {
+			return fmt.Sprintf("canonical financial cases broken: %s", strings.Join(broken, "; ")), true
+		}
+		return "canonical financial cases: ok", false
+	}
+}
+
+// AuthenticatedUsageReplayInvariant ensures exact-once indexes remain bound to
+// the authenticated record that can trigger financial side effects.
+//
+//nolint:staticcheck // sdk.Invariant is required by the module interface.
+func AuthenticatedUsageReplayInvariant(k IKeeper) sdk.Invariant {
+	return func(ctx sdk.Context) (string, bool) {
+		broken := k.ValidateUsageReplayIndexes(ctx)
+		if len(broken) > 0 {
+			return fmt.Sprintf("authenticated usage replay indexes broken: %s", strings.Join(broken, "; ")), true
+		}
+		return "authenticated usage replay indexes: ok", false
+	}
 }
 
 // EscrowSettlementReconciliationInvariant ensures escrow debits equal settlement totals per order.

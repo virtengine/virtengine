@@ -154,6 +154,155 @@ export function jobStateToJSON(object: JobState): string {
   }
 }
 
+/** NodeState represents the state of a compute node */
+export enum NodeState {
+  /** NODE_STATE_UNSPECIFIED - NODE_STATE_UNSPECIFIED represents an unspecified node state */
+  NODE_STATE_UNSPECIFIED = 0,
+  /** NODE_STATE_UNKNOWN - NODE_STATE_UNKNOWN indicates unknown node state */
+  NODE_STATE_UNKNOWN = 1,
+  /** NODE_STATE_PENDING - NODE_STATE_PENDING indicates the node is pending registration */
+  NODE_STATE_PENDING = 2,
+  /** NODE_STATE_ACTIVE - NODE_STATE_ACTIVE indicates the node is active */
+  NODE_STATE_ACTIVE = 3,
+  /** NODE_STATE_STALE - NODE_STATE_STALE indicates the node has missed heartbeats */
+  NODE_STATE_STALE = 4,
+  /** NODE_STATE_DRAINING - NODE_STATE_DRAINING indicates the node is draining */
+  NODE_STATE_DRAINING = 5,
+  /** NODE_STATE_DRAINED - NODE_STATE_DRAINED indicates the node is drained */
+  NODE_STATE_DRAINED = 6,
+  /** NODE_STATE_OFFLINE - NODE_STATE_OFFLINE indicates the node is offline */
+  NODE_STATE_OFFLINE = 7,
+  /** NODE_STATE_DEREGISTERED - NODE_STATE_DEREGISTERED indicates the node is deregistered */
+  NODE_STATE_DEREGISTERED = 8,
+  UNRECOGNIZED = -1,
+}
+
+export function nodeStateFromJSON(object: any): NodeState {
+  switch (object) {
+    case 0:
+    case "NODE_STATE_UNSPECIFIED":
+      return NodeState.NODE_STATE_UNSPECIFIED;
+    case 1:
+    case "NODE_STATE_UNKNOWN":
+      return NodeState.NODE_STATE_UNKNOWN;
+    case 2:
+    case "NODE_STATE_PENDING":
+      return NodeState.NODE_STATE_PENDING;
+    case 3:
+    case "NODE_STATE_ACTIVE":
+      return NodeState.NODE_STATE_ACTIVE;
+    case 4:
+    case "NODE_STATE_STALE":
+      return NodeState.NODE_STATE_STALE;
+    case 5:
+    case "NODE_STATE_DRAINING":
+      return NodeState.NODE_STATE_DRAINING;
+    case 6:
+    case "NODE_STATE_DRAINED":
+      return NodeState.NODE_STATE_DRAINED;
+    case 7:
+    case "NODE_STATE_OFFLINE":
+      return NodeState.NODE_STATE_OFFLINE;
+    case 8:
+    case "NODE_STATE_DEREGISTERED":
+      return NodeState.NODE_STATE_DEREGISTERED;
+    case -1:
+    case "UNRECOGNIZED":
+    default:
+      return NodeState.UNRECOGNIZED;
+  }
+}
+
+export function nodeStateToJSON(object: NodeState): string {
+  switch (object) {
+    case NodeState.NODE_STATE_UNSPECIFIED:
+      return "NODE_STATE_UNSPECIFIED";
+    case NodeState.NODE_STATE_UNKNOWN:
+      return "NODE_STATE_UNKNOWN";
+    case NodeState.NODE_STATE_PENDING:
+      return "NODE_STATE_PENDING";
+    case NodeState.NODE_STATE_ACTIVE:
+      return "NODE_STATE_ACTIVE";
+    case NodeState.NODE_STATE_STALE:
+      return "NODE_STATE_STALE";
+    case NodeState.NODE_STATE_DRAINING:
+      return "NODE_STATE_DRAINING";
+    case NodeState.NODE_STATE_DRAINED:
+      return "NODE_STATE_DRAINED";
+    case NodeState.NODE_STATE_OFFLINE:
+      return "NODE_STATE_OFFLINE";
+    case NodeState.NODE_STATE_DEREGISTERED:
+      return "NODE_STATE_DEREGISTERED";
+    case NodeState.UNRECOGNIZED:
+    default:
+      return "UNRECOGNIZED";
+  }
+}
+
+/** HealthStatus represents the health status of a node */
+export enum HealthStatus {
+  /** HEALTH_STATUS_UNSPECIFIED - HEALTH_STATUS_UNSPECIFIED represents an unspecified health status */
+  HEALTH_STATUS_UNSPECIFIED = 0,
+  /** HEALTH_STATUS_HEALTHY - HEALTH_STATUS_HEALTHY indicates healthy */
+  HEALTH_STATUS_HEALTHY = 1,
+  /** HEALTH_STATUS_DEGRADED - HEALTH_STATUS_DEGRADED indicates degraded */
+  HEALTH_STATUS_DEGRADED = 2,
+  /** HEALTH_STATUS_UNHEALTHY - HEALTH_STATUS_UNHEALTHY indicates unhealthy */
+  HEALTH_STATUS_UNHEALTHY = 3,
+  /** HEALTH_STATUS_DRAINING - HEALTH_STATUS_DRAINING indicates draining */
+  HEALTH_STATUS_DRAINING = 4,
+  /** HEALTH_STATUS_OFFLINE - HEALTH_STATUS_OFFLINE indicates offline */
+  HEALTH_STATUS_OFFLINE = 5,
+  UNRECOGNIZED = -1,
+}
+
+export function healthStatusFromJSON(object: any): HealthStatus {
+  switch (object) {
+    case 0:
+    case "HEALTH_STATUS_UNSPECIFIED":
+      return HealthStatus.HEALTH_STATUS_UNSPECIFIED;
+    case 1:
+    case "HEALTH_STATUS_HEALTHY":
+      return HealthStatus.HEALTH_STATUS_HEALTHY;
+    case 2:
+    case "HEALTH_STATUS_DEGRADED":
+      return HealthStatus.HEALTH_STATUS_DEGRADED;
+    case 3:
+    case "HEALTH_STATUS_UNHEALTHY":
+      return HealthStatus.HEALTH_STATUS_UNHEALTHY;
+    case 4:
+    case "HEALTH_STATUS_DRAINING":
+      return HealthStatus.HEALTH_STATUS_DRAINING;
+    case 5:
+    case "HEALTH_STATUS_OFFLINE":
+      return HealthStatus.HEALTH_STATUS_OFFLINE;
+    case -1:
+    case "UNRECOGNIZED":
+    default:
+      return HealthStatus.UNRECOGNIZED;
+  }
+}
+
+export function healthStatusToJSON(object: HealthStatus): string {
+  switch (object) {
+    case HealthStatus.HEALTH_STATUS_UNSPECIFIED:
+      return "HEALTH_STATUS_UNSPECIFIED";
+    case HealthStatus.HEALTH_STATUS_HEALTHY:
+      return "HEALTH_STATUS_HEALTHY";
+    case HealthStatus.HEALTH_STATUS_DEGRADED:
+      return "HEALTH_STATUS_DEGRADED";
+    case HealthStatus.HEALTH_STATUS_UNHEALTHY:
+      return "HEALTH_STATUS_UNHEALTHY";
+    case HealthStatus.HEALTH_STATUS_DRAINING:
+      return "HEALTH_STATUS_DRAINING";
+    case HealthStatus.HEALTH_STATUS_OFFLINE:
+      return "HEALTH_STATUS_OFFLINE";
+    case HealthStatus.UNRECOGNIZED:
+    default:
+      return "UNRECOGNIZED";
+  }
+}
+
 /** HPCRewardSource indicates the source of HPC rewards */
 export enum HPCRewardSource {
   /** HPC_REWARD_SOURCE_UNSPECIFIED - HPC_REWARD_SOURCE_UNSPECIFIED represents an unspecified reward source */
@@ -431,6 +580,11 @@ export interface HPCJob {
   startedAt: Date | undefined;
   completedAt: Date | undefined;
   blockHeight: Long;
+  reservationId: string;
+  allocationId: string;
+  marketOrderId: string;
+  marketBidId: string;
+  marketLeaseId: string;
 }
 
 /** NodeReward represents a reward for a specific node */
@@ -478,6 +632,79 @@ export interface NodeResources {
   storageGb: number;
 }
 
+/** NodeCapacity contains node capacity information */
+export interface NodeCapacity {
+  cpuCoresTotal: number;
+  cpuCoresAvailable: number;
+  cpuCoresAllocated: number;
+  memoryGbTotal: number;
+  memoryGbAvailable: number;
+  memoryGbAllocated: number;
+  gpusTotal: number;
+  gpusAvailable: number;
+  gpusAllocated: number;
+  gpuType: string;
+  storageGbTotal: number;
+  storageGbAvailable: number;
+  storageGbAllocated: number;
+}
+
+/** NodeHealth contains node health information */
+export interface NodeHealth {
+  status: HealthStatus;
+  uptimeSeconds: Long;
+  loadAverage1m: string;
+  loadAverage5m: string;
+  loadAverage15m: string;
+  cpuUtilizationPercent: number;
+  memoryUtilizationPercent: number;
+  gpuUtilizationPercent: number;
+  gpuMemoryUtilizationPercent: number;
+  diskIoUtilizationPercent: number;
+  networkUtilizationPercent: number;
+  temperatureCelsius: number;
+  gpuTemperatureCelsius: number;
+  errorCount24h: number;
+  warningCount24h: number;
+  lastErrorMessage: string;
+  slurmState: string;
+}
+
+/** NodeHardware contains node hardware details */
+export interface NodeHardware {
+  cpuModel: string;
+  cpuVendor: string;
+  cpuArch: string;
+  sockets: number;
+  coresPerSocket: number;
+  threadsPerCore: number;
+  memoryType: string;
+  memorySpeedMhz: number;
+  gpuModel: string;
+  gpuMemoryGb: number;
+  storageType: string;
+  features: string[];
+}
+
+/** NodeTopology describes node topology */
+export interface NodeTopology {
+  numaNodes: number;
+  numaMemoryGb: number;
+  interconnect: string;
+  networkFabric: string;
+  topologyHint: string;
+}
+
+/** NodeLocality describes node locality */
+export interface NodeLocality {
+  region: string;
+  datacenter: string;
+  zone: string;
+  rack: string;
+  row: string;
+  position: string;
+}
+
 /** NodeMetadata contains metadata about a compute node */
 export interface NodeMetadata {
   nodeId: string;
@@ -494,6 +721,17 @@ export interface NodeMetadata {
   joinedAt: Date | undefined;
   updatedAt: Date | undefined;
   blockHeight: Long;
+  state: NodeState;
+  healthStatus: HealthStatus;
+  agentPubkey: string;
+  hardwareFingerprint: string;
+  agentVersion: string;
+  lastSequenceNumber: Long;
+  capacity: NodeCapacity | undefined;
+  health: NodeHealth | undefined;
+  hardware: NodeHardware | undefined;
+  topology: NodeTopology | undefined;
+  locality: NodeLocality | undefined;
 }
 
 /** ClusterCandidate represents a candidate cluster for scheduling */
@@ -507,6 +745,13 @@ export interface ClusterCandidate {
   combinedScore: string;
   eligible: boolean;
   ineligibilityReason: string;
+  priorityScore: string;
+  fairShareScore: string;
+  ageScore: string;
+  jobSizeScore: string;
+  partitionScore: string;
+  preemptionPossible: boolean;
+  quotaBurstUsed: boolean;
 }
 
 /** SchedulingDecision records the decision trail for job scheduling */
@@ -522,6 +767,38 @@ export interface SchedulingDecision {
   capacityScore: string;
   combinedScore: string;
   createdAt: Date | undefined;
+  blockHeight: Long;
+  priorityScore: string;
+  fairShareScore: string;
+  ageScore: string;
+  jobSizeScore: string;
+  partitionScore: string;
+  preemptionPlanned: boolean;
+  preemptedJobIds: string[];
+  backfillUsed: boolean;
+  backfillWindowSeconds: Long;
+  quotaBurstUsed: boolean;
+  quotaReason: string;
+}
+
+/** SchedulingMetrics captures aggregated scheduling metrics. */
+export interface SchedulingMetrics {
+  clusterId: string;
+  queueName: string;
+  totalDecisions: Long;
+  preemptionPlanned: Long;
+  backfillUsed: Long;
+  quotaBurstUsed: Long;
+  quotaDenied: Long;
+  avgLatencyScore: string;
+  avgCapacityScore: string;
+  avgCombinedScore: string;
+  avgPriorityScore: string;
+  avgFairShareScore: string;
+  avgAgeScore: string;
+  avgJobSizeScore: string;
+  avgPartitionScore: string;
+  lastDecisionAt: Date | undefined;
   blockHeight: Long;
 }
 
@@ -582,6 +859,8 @@ export interface HPCDispute {
   createdAt: Date | undefined;
   resolvedAt: Date | undefined;
   blockHeight: Long;
+  financialCaseId: string;
+  financialCaseStatus: string;
 }
 
 /** Params defines the parameters for the HPC module */
@@ -2857,6 +3136,11 @@ function createBaseHPCJob(): HPCJob {
     startedAt: undefined,
     completedAt: undefined,
     blockHeight: Long.ZERO,
+    reservationId: "",
+    allocationId: "",
+    marketOrderId: "",
+    marketBidId: "",
+    marketLeaseId: "",
   };
 }
 
@@ -2935,6 +3219,21 @@ export const HPCJob: MessageFns<HPCJob, "virtengine.hpc.v1.HPCJob"> = {
     }
     if (!message.blockHeight.equals(Long.ZERO)) {
       writer.uint32(192).int64(message.blockHeight.toString());
+    }
+    if (message.reservationId !== "") {
+      writer.uint32(202).string(message.reservationId);
+    }
+    if (message.allocationId !== "") {
+      writer.uint32(210).string(message.allocationId);
+    }
+    if (message.marketOrderId !== "") {
+      writer.uint32(218).string(message.marketOrderId);
+    }
+    if (message.marketBidId !== "") {
+      writer.uint32(226).string(message.marketBidId);
+    }
+    if (message.marketLeaseId !== "") {
+      writer.uint32(234).string(message.marketLeaseId);
     }
     return writer;
   },
@@ -3138,6 +3437,46 @@ export const HPCJob: MessageFns<HPCJob, "virtengine.hpc.v1.HPCJob"> = {
           message.blockHeight = Long.fromString(reader.int64().toString());
           continue;
         }
+        case 25: {
+          if (tag !== 202) {
+            break;
+          }
+
+          message.reservationId = reader.string();
+          continue;
+        }
+        case 26: {
+          if (tag !== 210) {
+            break;
+          }
+
+          message.allocationId = reader.string();
+          continue;
+        }
+        case 27: {
+          if (tag !== 218) {
+            break;
+          }
+
+          message.marketOrderId = reader.string();
+          continue;
+        }
+        case 28: {
+          if (tag !== 226) {
+            break;
+          }
+
+          message.marketBidId = reader.string();
+          continue;
+        }
+        case 29: {
+          if (tag !== 234) {
+            break;
+          }
+
+          message.marketLeaseId = reader.string();
+          continue;
+        }
       }
       if ((tag & 7) === 4 || tag === 0) {
         break;
@@ -3183,6 +3522,11 @@ export const HPCJob: MessageFns<HPCJob, "virtengine.hpc.v1.HPCJob"> = {
       startedAt: isSet(object.started_at) ? fromJsonTimestamp(object.started_at) : undefined,
       completedAt: isSet(object.completed_at) ? fromJsonTimestamp(object.completed_at) : undefined,
       blockHeight: isSet(object.block_height) ? Long.fromValue(object.block_height) : Long.ZERO,
+      reservationId: isSet(object.reservation_id) ? globalThis.String(object.reservation_id) : "",
+      allocationId: isSet(object.allocation_id) ? globalThis.String(object.allocation_id) : "",
+      marketOrderId: isSet(object.market_order_id) ? globalThis.String(object.market_order_id) : "",
+      marketBidId: isSet(object.market_bid_id) ? globalThis.String(object.market_bid_id) : "",
+      marketLeaseId: isSet(object.market_lease_id) ? globalThis.String(object.market_lease_id) : "",
     };
   },
 
@@ -3260,6 +3604,21 @@ export const HPCJob: MessageFns<HPCJob, "virtengine.hpc.v1.HPCJob"> = {
     if (!message.blockHeight.equals(Long.ZERO)) {
       obj.block_height = (message.blockHeight || Long.ZERO).toString();
     }
+    if (message.reservationId !== "") {
+      obj.reservation_id = message.reservationId;
+    }
+    if (message.allocationId !== "") {
+      obj.allocation_id = message.allocationId;
+    }
+    if (message.marketOrderId !== "") {
+      obj.market_order_id = message.marketOrderId;
+    }
+    if (message.marketBidId !== "") {
+      obj.market_bid_id = message.marketBidId;
+    }
+    if (message.marketLeaseId !== "") {
+      obj.market_lease_id = message.marketLeaseId;
+    }
     return obj;
   },
   fromPartial(object: DeepPartial<HPCJob>): HPCJob {
@@ -3296,6 +3655,11 @@ export const HPCJob: MessageFns<HPCJob, "virtengine.hpc.v1.HPCJob"> = {
     message.blockHeight = (object.blockHeight !== undefined && object.blockHeight !== null)
       ? Long.fromValue(object.blockHeight)
       : Long.ZERO;
+    message.reservationId = object.reservationId ?? "";
+    message.allocationId = object.allocationId ?? "";
+    message.marketOrderId = object.marketOrderId ?? "";
+    message.marketBidId = object.marketBidId ?? "";
+    message.marketLeaseId = object.marketLeaseId ?? "";
     return message;
   },
 };
@@ -3967,6 +4331,1125 @@ export const NodeResources: MessageFns<NodeResources, "virtengine.hpc.v1.NodeRes
   },
 };
 
+function createBaseNodeCapacity(): NodeCapacity {
+  return {
+    cpuCoresTotal: 0,
+    cpuCoresAvailable: 0,
+    cpuCoresAllocated: 0,
+    memoryGbTotal: 0,
+    memoryGbAvailable: 0,
+    memoryGbAllocated: 0,
+    gpusTotal: 0,
+    gpusAvailable: 0,
+    gpusAllocated: 0,
+    gpuType: "",
+    storageGbTotal: 0,
+    storageGbAvailable: 0,
+    storageGbAllocated: 0,
+  };
+}
+
+export const NodeCapacity: MessageFns<NodeCapacity, "virtengine.hpc.v1.NodeCapacity"> = {
+  $type: "virtengine.hpc.v1.NodeCapacity" as const,
+
+  encode(message: NodeCapacity, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.cpuCoresTotal !== 0) {
+      writer.uint32(8).int32(message.cpuCoresTotal);
+    }
+    if (message.cpuCoresAvailable !== 0) {
+      writer.uint32(16).int32(message.cpuCoresAvailable);
+    }
+    if (message.cpuCoresAllocated !== 0) {
+      writer.uint32(24).int32(message.cpuCoresAllocated);
+    }
+    if (message.memoryGbTotal !== 0) {
+      writer.uint32(32).int32(message.memoryGbTotal);
+    }
+    if (message.memoryGbAvailable !== 0) {
+      writer.uint32(40).int32(message.memoryGbAvailable);
+    }
+    if (message.memoryGbAllocated !== 0) {
+      writer.uint32(48).int32(message.memoryGbAllocated);
+    }
+    if (message.gpusTotal !== 0) {
+      writer.uint32(56).int32(message.gpusTotal);
+    }
+    if (message.gpusAvailable !== 0) {
+      writer.uint32(64).int32(message.gpusAvailable);
+    }
+    if (message.gpusAllocated !== 0) {
+      writer.uint32(72).int32(message.gpusAllocated);
+    }
+    if (message.gpuType !== "") {
+      writer.uint32(82).string(message.gpuType);
+    }
+    if (message.storageGbTotal !== 0) {
+      writer.uint32(88).int32(message.storageGbTotal);
+    }
+    if (message.storageGbAvailable !== 0) {
+      writer.uint32(96).int32(message.storageGbAvailable);
+    }
+    if (message.storageGbAllocated !== 0) {
+      writer.uint32(104).int32(message.storageGbAllocated);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): NodeCapacity {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseNodeCapacity();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 8) {
+            break;
+          }
+
+          message.cpuCoresTotal = reader.int32();
+          continue;
+        }
+        case 2: {
+          if (tag !== 16) {
+            break;
+          }
+
+          message.cpuCoresAvailable = reader.int32();
+          continue;
+        }
+        case 3: {
+          if (tag !== 24) {
+            break;
+          }
+
+          message.cpuCoresAllocated = reader.int32();
+          continue;
+        }
+        case 4: {
+          if (tag !== 32) {
+            break;
+          }
+
+          message.memoryGbTotal = reader.int32();
+          continue;
+        }
+        case 5: {
+          if (tag !== 40) {
+            break;
+          }
+
+          message.memoryGbAvailable = reader.int32();
+          continue;
+        }
+        case 6: {
+          if (tag !== 48) {
+            break;
+          }
+
+          message.memoryGbAllocated = reader.int32();
+          continue;
+        }
+        case 7: {
+          if (tag !== 56) {
+            break;
+          }
+
+          message.gpusTotal = reader.int32();
+          continue;
+        }
+        case 8: {
+          if (tag !== 64) {
+            break;
+          }
+
+          message.gpusAvailable = reader.int32();
+          continue;
+        }
+        case 9: {
+          if (tag !== 72) {
+            break;
+          }
+
+          message.gpusAllocated = reader.int32();
+          continue;
+        }
+        case 10: {
+          if (tag !== 82) {
+            break;
+          }
+
+          message.gpuType = reader.string();
+          continue;
+        }
+        case 11: {
+          if (tag !== 88) {
+            break;
+          }
+
+          message.storageGbTotal = reader.int32();
+          continue;
+        }
+        case 12: {
+          if (tag !== 96) {
+            break;
+          }
+
+          message.storageGbAvailable = reader.int32();
+          continue;
+        }
+        case 13: {
+          if (tag !== 104) {
+            break;
+          }
+
+          message.storageGbAllocated = reader.int32();
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): NodeCapacity {
+    return {
+      cpuCoresTotal: isSet(object.cpu_cores_total) ? globalThis.Number(object.cpu_cores_total) : 0,
+      cpuCoresAvailable: isSet(object.cpu_cores_available) ? globalThis.Number(object.cpu_cores_available) : 0,
+      cpuCoresAllocated: isSet(object.cpu_cores_allocated) ? globalThis.Number(object.cpu_cores_allocated) : 0,
+      memoryGbTotal: isSet(object.memory_gb_total) ? globalThis.Number(object.memory_gb_total) : 0,
+      memoryGbAvailable: isSet(object.memory_gb_available) ? globalThis.Number(object.memory_gb_available) : 0,
+      memoryGbAllocated: isSet(object.memory_gb_allocated) ? globalThis.Number(object.memory_gb_allocated) : 0,
+      gpusTotal: isSet(object.gpus_total) ? globalThis.Number(object.gpus_total) : 0,
+      gpusAvailable: isSet(object.gpus_available) ? globalThis.Number(object.gpus_available) : 0,
+      gpusAllocated: isSet(object.gpus_allocated) ? globalThis.Number(object.gpus_allocated) : 0,
+      gpuType: isSet(object.gpu_type) ? globalThis.String(object.gpu_type) : "",
+      storageGbTotal: isSet(object.storage_gb_total) ? globalThis.Number(object.storage_gb_total) : 0,
+      storageGbAvailable: isSet(object.storage_gb_available) ? globalThis.Number(object.storage_gb_available) : 0,
+      storageGbAllocated: isSet(object.storage_gb_allocated) ? globalThis.Number(object.storage_gb_allocated) : 0,
+    };
+  },
+
+  toJSON(message: NodeCapacity): unknown {
+    const obj: any = {};
+    if (message.cpuCoresTotal !== 0) {
+      obj.cpu_cores_total = Math.round(message.cpuCoresTotal);
+    }
+    if (message.cpuCoresAvailable !== 0) {
+      obj.cpu_cores_available = Math.round(message.cpuCoresAvailable);
+    }
+    if (message.cpuCoresAllocated !== 0) {
+      obj.cpu_cores_allocated = Math.round(message.cpuCoresAllocated);
+    }
+    if (message.memoryGbTotal !== 0) {
+      obj.memory_gb_total = Math.round(message.memoryGbTotal);
+    }
+    if (message.memoryGbAvailable !== 0) {
+      obj.memory_gb_available = Math.round(message.memoryGbAvailable);
+    }
+    if (message.memoryGbAllocated !== 0) {
+      obj.memory_gb_allocated = Math.round(message.memoryGbAllocated);
+    }
+    if (message.gpusTotal !== 0) {
+      obj.gpus_total = Math.round(message.gpusTotal);
+    }
+    if (message.gpusAvailable !== 0) {
+      obj.gpus_available = Math.round(message.gpusAvailable);
+    }
+    if (message.gpusAllocated !== 0) {
+      obj.gpus_allocated = Math.round(message.gpusAllocated);
+    }
+    if (message.gpuType !== "") {
+      obj.gpu_type = message.gpuType;
+    }
+    if (message.storageGbTotal !== 0) {
+      obj.storage_gb_total = Math.round(message.storageGbTotal);
+    }
+    if (message.storageGbAvailable !== 0) {
+      obj.storage_gb_available = Math.round(message.storageGbAvailable);
+    }
+    if (message.storageGbAllocated !== 0) {
+      obj.storage_gb_allocated = Math.round(message.storageGbAllocated);
+    }
+    return obj;
+  },
+  fromPartial(object: DeepPartial<NodeCapacity>): NodeCapacity {
+    const message = createBaseNodeCapacity();
+    message.cpuCoresTotal = object.cpuCoresTotal ?? 0;
+    message.cpuCoresAvailable = object.cpuCoresAvailable ?? 0;
+    message.cpuCoresAllocated = object.cpuCoresAllocated ?? 0;
+    message.memoryGbTotal = object.memoryGbTotal ?? 0;
+    message.memoryGbAvailable = object.memoryGbAvailable ?? 0;
+    message.memoryGbAllocated = object.memoryGbAllocated ?? 0;
+    message.gpusTotal = object.gpusTotal ?? 0;
+    message.gpusAvailable = object.gpusAvailable ?? 0;
+    message.gpusAllocated = object.gpusAllocated ?? 0;
+    message.gpuType = object.gpuType ?? "";
+    message.storageGbTotal = object.storageGbTotal ?? 0;
+    message.storageGbAvailable = object.storageGbAvailable ?? 0;
+    message.storageGbAllocated = object.storageGbAllocated ?? 0;
+    return message;
+  },
+};
+
+function createBaseNodeHealth(): NodeHealth {
+  return {
+    status: 0,
+    uptimeSeconds: Long.ZERO,
+    loadAverage1m: "",
+    loadAverage5m: "",
+    loadAverage15m: "",
+    cpuUtilizationPercent: 0,
+    memoryUtilizationPercent: 0,
+    gpuUtilizationPercent: 0,
+    gpuMemoryUtilizationPercent: 0,
+    diskIoUtilizationPercent: 0,
+    networkUtilizationPercent: 0,
+    temperatureCelsius: 0,
+    gpuTemperatureCelsius: 0,
+    errorCount24h: 0,
+    warningCount24h: 0,
+    lastErrorMessage: "",
+    slurmState: "",
+  };
+}
+
+export const NodeHealth: MessageFns<NodeHealth, "virtengine.hpc.v1.NodeHealth"> = {
+  $type: "virtengine.hpc.v1.NodeHealth" as const,
+
+  encode(message: NodeHealth, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.status !== 0) {
+      writer.uint32(8).int32(message.status);
+    }
+    if (!message.uptimeSeconds.equals(Long.ZERO)) {
+      writer.uint32(16).int64(message.uptimeSeconds.toString());
+    }
+    if (message.loadAverage1m !== "") {
+      writer.uint32(26).string(message.loadAverage1m);
+    }
+    if (message.loadAverage5m !== "") {
+      writer.uint32(34).string(message.loadAverage5m);
+    }
+    if (message.loadAverage15m !== "") {
+      writer.uint32(42).string(message.loadAverage15m);
+    }
+    if (message.cpuUtilizationPercent !== 0) {
+      writer.uint32(48).int32(message.cpuUtilizationPercent);
+    }
+    if (message.memoryUtilizationPercent !== 0) {
+      writer.uint32(56).int32(message.memoryUtilizationPercent);
+    }
+    if (message.gpuUtilizationPercent !== 0) {
+      writer.uint32(64).int32(message.gpuUtilizationPercent);
+    }
+    if (message.gpuMemoryUtilizationPercent !== 0) {
+      writer.uint32(72).int32(message.gpuMemoryUtilizationPercent);
+    }
+    if (message.diskIoUtilizationPercent !== 0) {
+      writer.uint32(80).int32(message.diskIoUtilizationPercent);
+    }
+    if (message.networkUtilizationPercent !== 0) {
+      writer.uint32(88).int32(message.networkUtilizationPercent);
+    }
+    if (message.temperatureCelsius !== 0) {
+      writer.uint32(96).int32(message.temperatureCelsius);
+    }
+    if (message.gpuTemperatureCelsius !== 0) {
+      writer.uint32(104).int32(message.gpuTemperatureCelsius);
+    }
+    if (message.errorCount24h !== 0) {
+      writer.uint32(112).int32(message.errorCount24h);
+    }
+    if (message.warningCount24h !== 0) {
+      writer.uint32(120).int32(message.warningCount24h);
+    }
+    if (message.lastErrorMessage !== "") {
+      writer.uint32(130).string(message.lastErrorMessage);
+    }
+    if (message.slurmState !== "") {
+      writer.uint32(138).string(message.slurmState);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): NodeHealth {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseNodeHealth();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 8) {
+            break;
+          }
+
+          message.status = reader.int32() as any;
+          continue;
+        }
+        case 2: {
+          if (tag !== 16) {
+            break;
+          }
+
+          message.uptimeSeconds = Long.fromString(reader.int64().toString());
+          continue;
+        }
+        case 3: {
+          if (tag !== 26) {
+            break;
+          }
+
+          message.loadAverage1m = reader.string();
+          continue;
+        }
+        case 4: {
+          if (tag !== 34) {
+            break;
+          }
+
+          message.loadAverage5m = reader.string();
+          continue;
+        }
+        case 5: {
+          if (tag !== 42) {
+            break;
+          }
+
+          message.loadAverage15m = reader.string();
+          continue;
+        }
+        case 6: {
+          if (tag !== 48) {
+            break;
+          }
+
+          message.cpuUtilizationPercent = reader.int32();
+          continue;
+        }
+        case 7: {
+          if (tag !== 56) {
+            break;
+          }
+
+          message.memoryUtilizationPercent = reader.int32();
+          continue;
+        }
+        case 8: {
+          if (tag !== 64) {
+            break;
+          }
+
+          message.gpuUtilizationPercent = reader.int32();
+          continue;
+        }
+        case 9: {
+          if (tag !== 72) {
+            break;
+          }
+
+          message.gpuMemoryUtilizationPercent = reader.int32();
+          continue;
+        }
+        case 10: {
+          if (tag !== 80) {
+            break;
+          }
+
+          message.diskIoUtilizationPercent = reader.int32();
+          continue;
+        }
+        case 11: {
+          if (tag !== 88) {
+            break;
+          }
+
+          message.networkUtilizationPercent = reader.int32();
+          continue;
+        }
+        case 12: {
+          if (tag !== 96) {
+            break;
+          }
+
+          message.temperatureCelsius = reader.int32();
+          continue;
+        }
+        case 13: {
+          if (tag !== 104) {
+            break;
+          }
+
+          message.gpuTemperatureCelsius = reader.int32();
+          continue;
+        }
+        case 14: {
+          if (tag !== 112) {
+            break;
+          }
+
+          message.errorCount24h = reader.int32();
+          continue;
+        }
+        case 15: {
+          if (tag !== 120) {
+            break;
+          }
+
+          message.warningCount24h = reader.int32();
+          continue;
+        }
+        case 16: {
+          if (tag !== 130) {
+            break;
+          }
+
+          message.lastErrorMessage = reader.string();
+          continue;
+        }
+        case 17: {
+          if (tag !== 138) {
+            break;
+          }
+
+          message.slurmState = reader.string();
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): NodeHealth {
+    return {
+      status: isSet(object.status) ? healthStatusFromJSON(object.status) : 0,
+      uptimeSeconds: isSet(object.uptime_seconds) ? Long.fromValue(object.uptime_seconds) : Long.ZERO,
+      loadAverage1m: isSet(object.load_average_1m) ? globalThis.String(object.load_average_1m) : "",
+      loadAverage5m: isSet(object.load_average_5m) ? globalThis.String(object.load_average_5m) : "",
+      loadAverage15m: isSet(object.load_average_15m) ? globalThis.String(object.load_average_15m) : "",
+      cpuUtilizationPercent: isSet(object.cpu_utilization_percent)
+        ? globalThis.Number(object.cpu_utilization_percent)
+        : 0,
+      memoryUtilizationPercent: isSet(object.memory_utilization_percent)
+        ? globalThis.Number(object.memory_utilization_percent)
+        : 0,
+      gpuUtilizationPercent: isSet(object.gpu_utilization_percent)
+        ? globalThis.Number(object.gpu_utilization_percent)
+        : 0,
+      gpuMemoryUtilizationPercent: isSet(object.gpu_memory_utilization_percent)
+        ? globalThis.Number(object.gpu_memory_utilization_percent)
+        : 0,
+      diskIoUtilizationPercent: isSet(object.disk_io_utilization_percent)
+        ? globalThis.Number(object.disk_io_utilization_percent)
+        : 0,
+      networkUtilizationPercent: isSet(object.network_utilization_percent)
+        ? globalThis.Number(object.network_utilization_percent)
+        : 0,
+      temperatureCelsius: isSet(object.temperature_celsius) ? globalThis.Number(object.temperature_celsius) : 0,
+      gpuTemperatureCelsius: isSet(object.gpu_temperature_celsius)
+        ? globalThis.Number(object.gpu_temperature_celsius)
+        : 0,
+      errorCount24h: isSet(object.error_count_24h) ? globalThis.Number(object.error_count_24h) : 0,
+      warningCount24h: isSet(object.warning_count_24h) ? globalThis.Number(object.warning_count_24h) : 0,
+      lastErrorMessage: isSet(object.last_error_message) ? globalThis.String(object.last_error_message) : "",
+      slurmState: isSet(object.slurm_state) ? globalThis.String(object.slurm_state) : "",
+    };
+  },
+
+  toJSON(message: NodeHealth): unknown {
+    const obj: any = {};
+    if (message.status !== 0) {
+      obj.status = healthStatusToJSON(message.status);
+    }
+    if (!message.uptimeSeconds.equals(Long.ZERO)) {
+      obj.uptime_seconds = (message.uptimeSeconds || Long.ZERO).toString();
+    }
+    if (message.loadAverage1m !== "") {
+      obj.load_average_1m = message.loadAverage1m;
+    }
+    if (message.loadAverage5m !== "") {
+      obj.load_average_5m = message.loadAverage5m;
+    }
+    if (message.loadAverage15m !== "") {
+      obj.load_average_15m = message.loadAverage15m;
+    }
+    if (message.cpuUtilizationPercent !== 0) {
+      obj.cpu_utilization_percent = Math.round(message.cpuUtilizationPercent);
+    }
+    if (message.memoryUtilizationPercent !== 0) {
+      obj.memory_utilization_percent = Math.round(message.memoryUtilizationPercent);
+    }
+    if (message.gpuUtilizationPercent !== 0) {
+      obj.gpu_utilization_percent = Math.round(message.gpuUtilizationPercent);
+    }
+    if (message.gpuMemoryUtilizationPercent !== 0) {
+      obj.gpu_memory_utilization_percent = Math.round(message.gpuMemoryUtilizationPercent);
+    }
+    if (message.diskIoUtilizationPercent !== 0) {
+      obj.disk_io_utilization_percent = Math.round(message.diskIoUtilizationPercent);
+    }
+    if (message.networkUtilizationPercent !== 0) {
+      obj.network_utilization_percent = Math.round(message.networkUtilizationPercent);
+    }
+    if (message.temperatureCelsius !== 0) {
+      obj.temperature_celsius = Math.round(message.temperatureCelsius);
+    }
+    if (message.gpuTemperatureCelsius !== 0) {
+      obj.gpu_temperature_celsius = Math.round(message.gpuTemperatureCelsius);
+    }
+    if (message.errorCount24h !== 0) {
+      obj.error_count_24h = Math.round(message.errorCount24h);
+    }
+    if (message.warningCount24h !== 0) {
+      obj.warning_count_24h = Math.round(message.warningCount24h);
+    }
+    if (message.lastErrorMessage !== "") {
+      obj.last_error_message = message.lastErrorMessage;
+    }
+    if (message.slurmState !== "") {
+      obj.slurm_state = message.slurmState;
+    }
+    return obj;
+  },
+  fromPartial(object: DeepPartial<NodeHealth>): NodeHealth {
+    const message = createBaseNodeHealth();
+    message.status = object.status ?? 0;
+    message.uptimeSeconds = (object.uptimeSeconds !== undefined && object.uptimeSeconds !== null)
+      ? Long.fromValue(object.uptimeSeconds)
+      : Long.ZERO;
+    message.loadAverage1m = object.loadAverage1m ?? "";
+    message.loadAverage5m = object.loadAverage5m ?? "";
+    message.loadAverage15m = object.loadAverage15m ?? "";
+    message.cpuUtilizationPercent = object.cpuUtilizationPercent ?? 0;
+    message.memoryUtilizationPercent = object.memoryUtilizationPercent ?? 0;
+    message.gpuUtilizationPercent = object.gpuUtilizationPercent ?? 0;
+    message.gpuMemoryUtilizationPercent = object.gpuMemoryUtilizationPercent ?? 0;
+    message.diskIoUtilizationPercent = object.diskIoUtilizationPercent ?? 0;
+    message.networkUtilizationPercent = object.networkUtilizationPercent ?? 0;
+    message.temperatureCelsius = object.temperatureCelsius ?? 0;
+    message.gpuTemperatureCelsius = object.gpuTemperatureCelsius ?? 0;
+    message.errorCount24h = object.errorCount24h ?? 0;
+    message.warningCount24h = object.warningCount24h ?? 0;
+    message.lastErrorMessage = object.lastErrorMessage ?? "";
+    message.slurmState = object.slurmState ?? "";
+    return message;
+  },
+};
+
+function createBaseNodeHardware(): NodeHardware {
+  return {
+    cpuModel: "",
+    cpuVendor: "",
+    cpuArch: "",
+    sockets: 0,
+    coresPerSocket: 0,
+    threadsPerCore: 0,
+    memoryType: "",
+    memorySpeedMhz: 0,
+    gpuModel: "",
+    gpuMemoryGb: 0,
+    storageType: "",
+    features: [],
+  };
+}
+
+export const NodeHardware: MessageFns<NodeHardware, "virtengine.hpc.v1.NodeHardware"> = {
+  $type: "virtengine.hpc.v1.NodeHardware" as const,
+
+  encode(message: NodeHardware, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.cpuModel !== "") {
+      writer.uint32(10).string(message.cpuModel);
+    }
+    if (message.cpuVendor !== "") {
+      writer.uint32(18).string(message.cpuVendor);
+    }
+    if (message.cpuArch !== "") {
+      writer.uint32(26).string(message.cpuArch);
+    }
+    if (message.sockets !== 0) {
+      writer.uint32(32).int32(message.sockets);
+    }
+    if (message.coresPerSocket !== 0) {
+      writer.uint32(40).int32(message.coresPerSocket);
+    }
+    if (message.threadsPerCore !== 0) {
+      writer.uint32(48).int32(message.threadsPerCore);
+    }
+    if (message.memoryType !== "") {
+      writer.uint32(58).string(message.memoryType);
+    }
+    if (message.memorySpeedMhz !== 0) {
+      writer.uint32(64).int32(message.memorySpeedMhz);
+    }
+    if (message.gpuModel !== "") {
+      writer.uint32(74).string(message.gpuModel);
+    }
+    if (message.gpuMemoryGb !== 0) {
+      writer.uint32(80).int32(message.gpuMemoryGb);
+    }
+    if (message.storageType !== "") {
+      writer.uint32(90).string(message.storageType);
+    }
+    for (const v of message.features) {
+      writer.uint32(98).string(v!);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): NodeHardware {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseNodeHardware();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.cpuModel = reader.string();
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.cpuVendor = reader.string();
+          continue;
+        }
+        case 3: {
+          if (tag !== 26) {
+            break;
+          }
+
+          message.cpuArch = reader.string();
+          continue;
+        }
+        case 4: {
+          if (tag !== 32) {
+            break;
+          }
+
+          message.sockets = reader.int32();
+          continue;
+        }
+        case 5: {
+          if (tag !== 40) {
+            break;
+          }
+
+          message.coresPerSocket = reader.int32();
+          continue;
+        }
+        case 6: {
+          if (tag !== 48) {
+            break;
+          }
+
+          message.threadsPerCore = reader.int32();
+          continue;
+        }
+        case 7: {
+          if (tag !== 58) {
+            break;
+          }
+
+          message.memoryType = reader.string();
+          continue;
+        }
+        case 8: {
+          if (tag !== 64) {
+            break;
+          }
+
+          message.memorySpeedMhz = reader.int32();
+          continue;
+        }
+        case 9: {
+          if (tag !== 74) {
+            break;
+          }
+
+          message.gpuModel = reader.string();
+          continue;
+        }
+        case 10: {
+          if (tag !== 80) {
+            break;
+          }
+
+          message.gpuMemoryGb = reader.int32();
+          continue;
+        }
+        case 11: {
+          if (tag !== 90) {
+            break;
+          }
+
+          message.storageType = reader.string();
+          continue;
+        }
+        case 12: {
+          if (tag !== 98) {
+            break;
+          }
+
+          message.features.push(reader.string());
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): NodeHardware {
+    return {
+      cpuModel: isSet(object.cpu_model) ? globalThis.String(object.cpu_model) : "",
+      cpuVendor: isSet(object.cpu_vendor) ? globalThis.String(object.cpu_vendor) : "",
+      cpuArch: isSet(object.cpu_arch) ? globalThis.String(object.cpu_arch) : "",
+      sockets: isSet(object.sockets) ? globalThis.Number(object.sockets) : 0,
+      coresPerSocket: isSet(object.cores_per_socket) ? globalThis.Number(object.cores_per_socket) : 0,
+      threadsPerCore: isSet(object.threads_per_core) ? globalThis.Number(object.threads_per_core) : 0,
+      memoryType: isSet(object.memory_type) ? globalThis.String(object.memory_type) : "",
+      memorySpeedMhz: isSet(object.memory_speed_mhz) ? globalThis.Number(object.memory_speed_mhz) : 0,
+      gpuModel: isSet(object.gpu_model) ? globalThis.String(object.gpu_model) : "",
+      gpuMemoryGb: isSet(object.gpu_memory_gb) ? globalThis.Number(object.gpu_memory_gb) : 0,
+      storageType: isSet(object.storage_type) ? globalThis.String(object.storage_type) : "",
+      features: globalThis.Array.isArray(object?.features) ? object.features.map((e: any) => globalThis.String(e)) : [],
+    };
+  },
+
+  toJSON(message: NodeHardware): unknown {
+    const obj: any = {};
+    if (message.cpuModel !== "") {
+      obj.cpu_model = message.cpuModel;
+    }
+    if (message.cpuVendor !== "") {
+      obj.cpu_vendor = message.cpuVendor;
+    }
+    if (message.cpuArch !== "") {
+      obj.cpu_arch = message.cpuArch;
+    }
+    if (message.sockets !== 0) {
+      obj.sockets = Math.round(message.sockets);
+    }
+    if (message.coresPerSocket !== 0) {
+      obj.cores_per_socket = Math.round(message.coresPerSocket);
+    }
+    if (message.threadsPerCore !== 0) {
+      obj.threads_per_core = Math.round(message.threadsPerCore);
+    }
+    if (message.memoryType !== "") {
+      obj.memory_type = message.memoryType;
+    }
+    if (message.memorySpeedMhz !== 0) {
+      obj.memory_speed_mhz = Math.round(message.memorySpeedMhz);
+    }
+    if (message.gpuModel !== "") {
+      obj.gpu_model = message.gpuModel;
+    }
+    if (message.gpuMemoryGb !== 0) {
+      obj.gpu_memory_gb = Math.round(message.gpuMemoryGb);
+    }
+    if (message.storageType !== "") {
+      obj.storage_type = message.storageType;
+    }
+    if (message.features?.length) {
+      obj.features = message.features;
+    }
+    return obj;
+  },
+  fromPartial(object: DeepPartial<NodeHardware>): NodeHardware {
+    const message = createBaseNodeHardware();
+    message.cpuModel = object.cpuModel ?? "";
+    message.cpuVendor = object.cpuVendor ?? "";
+    message.cpuArch = object.cpuArch ?? "";
+    message.sockets = object.sockets ?? 0;
+    message.coresPerSocket = object.coresPerSocket ?? 0;
+    message.threadsPerCore = object.threadsPerCore ?? 0;
+    message.memoryType = object.memoryType ?? "";
+    message.memorySpeedMhz = object.memorySpeedMhz ?? 0;
+    message.gpuModel = object.gpuModel ?? "";
+    message.gpuMemoryGb = object.gpuMemoryGb ?? 0;
+    message.storageType = object.storageType ?? "";
+    message.features = object.features?.map((e) => e) || [];
+    return message;
+  },
+};
+
+function createBaseNodeTopology(): NodeTopology {
+  return { numaNodes: 0, numaMemoryGb: 0, interconnect: "", networkFabric: "", topologyHint: "" };
+}
+
+export const NodeTopology: MessageFns<NodeTopology, "virtengine.hpc.v1.NodeTopology"> = {
+  $type: "virtengine.hpc.v1.NodeTopology" as const,
+
+  encode(message: NodeTopology, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.numaNodes !== 0) {
+      writer.uint32(8).int32(message.numaNodes);
+    }
+    if (message.numaMemoryGb !== 0) {
+      writer.uint32(16).int32(message.numaMemoryGb);
+    }
+    if (message.interconnect !== "") {
+      writer.uint32(26).string(message.interconnect);
+    }
+    if (message.networkFabric !== "") {
+      writer.uint32(34).string(message.networkFabric);
+    }
+    if (message.topologyHint !== "") {
+      writer.uint32(42).string(message.topologyHint);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): NodeTopology {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseNodeTopology();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 8) {
+            break;
+          }
+
+          message.numaNodes = reader.int32();
+          continue;
+        }
+        case 2: {
+          if (tag !== 16) {
+            break;
+          }
+
+          message.numaMemoryGb = reader.int32();
+          continue;
+        }
+        case 3: {
+          if (tag !== 26) {
+            break;
+          }
+
+          message.interconnect = reader.string();
+          continue;
+        }
+        case 4: {
+          if (tag !== 34) {
+            break;
+          }
+
+          message.networkFabric = reader.string();
+          continue;
+        }
+        case 5: {
+          if (tag !== 42) {
+            break;
+          }
+
+          message.topologyHint = reader.string();
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): NodeTopology {
+    return {
+      numaNodes: isSet(object.numa_nodes) ? globalThis.Number(object.numa_nodes) : 0,
+      numaMemoryGb: isSet(object.numa_memory_gb) ? globalThis.Number(object.numa_memory_gb) : 0,
+      interconnect: isSet(object.interconnect) ? globalThis.String(object.interconnect) : "",
+      networkFabric: isSet(object.network_fabric) ? globalThis.String(object.network_fabric) : "",
+      topologyHint: isSet(object.topology_hint) ? globalThis.String(object.topology_hint) : "",
+    };
+  },
+
+  toJSON(message: NodeTopology): unknown {
+    const obj: any = {};
+    if (message.numaNodes !== 0) {
+      obj.numa_nodes = Math.round(message.numaNodes);
+    }
+    if (message.numaMemoryGb !== 0) {
+      obj.numa_memory_gb = Math.round(message.numaMemoryGb);
+    }
+    if (message.interconnect !== "") {
+      obj.interconnect = message.interconnect;
+    }
+    if (message.networkFabric !== "") {
+      obj.network_fabric = message.networkFabric;
+    }
+    if (message.topologyHint !== "") {
+      obj.topology_hint = message.topologyHint;
+    }
+    return obj;
+  },
+  fromPartial(object: DeepPartial<NodeTopology>): NodeTopology {
+    const message = createBaseNodeTopology();
+    message.numaNodes = object.numaNodes ?? 0;
+    message.numaMemoryGb = object.numaMemoryGb ?? 0;
+    message.interconnect = object.interconnect ?? "";
+    message.networkFabric = object.networkFabric ?? "";
+    message.topologyHint = object.topologyHint ?? "";
+    return message;
+  },
+};
+
+function createBaseNodeLocality(): NodeLocality {
+  return { region: "", datacenter: "", zone: "", rack: "", row: "", position: "" };
+}
+
+export const NodeLocality: MessageFns<NodeLocality, "virtengine.hpc.v1.NodeLocality"> = {
+  $type: "virtengine.hpc.v1.NodeLocality" as const,
+
+  encode(message: NodeLocality, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.region !== "") {
+      writer.uint32(10).string(message.region);
+    }
+    if (message.datacenter !== "") {
+      writer.uint32(18).string(message.datacenter);
+    }
+    if (message.zone !== "") {
+      writer.uint32(26).string(message.zone);
+    }
+    if (message.rack !== "") {
+      writer.uint32(34).string(message.rack);
+    }
+    if (message.row !== "") {
+      writer.uint32(42).string(message.row);
+    }
+    if (message.position !== "") {
+      writer.uint32(50).string(message.position);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): NodeLocality {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseNodeLocality();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.region = reader.string();
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.datacenter = reader.string();
+          continue;
+        }
+        case 3: {
+          if (tag !== 26) {
+            break;
+          }
+
+          message.zone = reader.string();
+          continue;
+        }
+        case 4: {
+          if (tag !== 34) {
+            break;
+          }
+
+          message.rack = reader.string();
+          continue;
+        }
+        case 5: {
+          if (tag !== 42) {
+            break;
+          }
+
+          message.row = reader.string();
+          continue;
+        }
+        case 6: {
+          if (tag !== 50) {
+            break;
+          }
+
+          message.position = reader.string();
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): NodeLocality {
+    return {
+      region: isSet(object.region) ? globalThis.String(object.region) : "",
+      datacenter: isSet(object.datacenter) ? globalThis.String(object.datacenter) : "",
+      zone: isSet(object.zone) ? globalThis.String(object.zone) : "",
+      rack: isSet(object.rack) ? globalThis.String(object.rack) : "",
+      row: isSet(object.row) ? globalThis.String(object.row) : "",
+      position: isSet(object.position) ? globalThis.String(object.position) : "",
+    };
+  },
+
+  toJSON(message: NodeLocality): unknown {
+    const obj: any = {};
+    if (message.region !== "") {
+      obj.region = message.region;
+    }
+    if (message.datacenter !== "") {
+      obj.datacenter = message.datacenter;
+    }
+    if (message.zone !== "") {
+      obj.zone = message.zone;
+    }
+    if (message.rack !== "") {
+      obj.rack = message.rack;
+    }
+    if (message.row !== "") {
+      obj.row = message.row;
+    }
+    if (message.position !== "") {
+      obj.position = message.position;
+    }
+    return obj;
+  },
+  fromPartial(object: DeepPartial<NodeLocality>): NodeLocality {
+    const message = createBaseNodeLocality();
+    message.region = object.region ?? "";
+    message.datacenter = object.datacenter ?? "";
+    message.zone = object.zone ?? "";
+    message.rack = object.rack ?? "";
+    message.row = object.row ?? "";
+    message.position = object.position ?? "";
+    return message;
+  },
+};
+
 function createBaseNodeMetadata(): NodeMetadata {
   return {
     nodeId: "",
@@ -3983,6 +5466,17 @@ function createBaseNodeMetadata(): NodeMetadata {
     joinedAt: undefined,
     updatedAt: undefined,
     blockHeight: Long.ZERO,
+    state: 0,
+    healthStatus: 0,
+    agentPubkey: "",
+    hardwareFingerprint: "",
+    agentVersion: "",
+    lastSequenceNumber: Long.UZERO,
+    capacity: undefined,
+    health: undefined,
+    hardware: undefined,
+    topology: undefined,
+    locality: undefined,
   };
 }
 
@@ -4031,6 +5525,39 @@ export const NodeMetadata: MessageFns<NodeMetadata, "virtengine.hpc.v1.NodeMetad
     }
     if (!message.blockHeight.equals(Long.ZERO)) {
       writer.uint32(112).int64(message.blockHeight.toString());
+    }
+    if (message.state !== 0) {
+      writer.uint32(120).int32(message.state);
+    }
+    if (message.healthStatus !== 0) {
+      writer.uint32(128).int32(message.healthStatus);
+    }
+    if (message.agentPubkey !== "") {
+      writer.uint32(138).string(message.agentPubkey);
+    }
+    if (message.hardwareFingerprint !== "") {
+      writer.uint32(146).string(message.hardwareFingerprint);
+    }
+    if (message.agentVersion !== "") {
+      writer.uint32(154).string(message.agentVersion);
+    }
+    if (!message.lastSequenceNumber.equals(Long.UZERO)) {
+      writer.uint32(160).uint64(message.lastSequenceNumber.toString());
+    }
+    if (message.capacity !== undefined) {
+      NodeCapacity.encode(message.capacity, writer.uint32(170).fork()).join();
+    }
+    if (message.health !== undefined) {
+      NodeHealth.encode(message.health, writer.uint32(178).fork()).join();
+    }
+    if (message.hardware !== undefined) {
+      NodeHardware.encode(message.hardware, writer.uint32(186).fork()).join();
+    }
+    if (message.topology !== undefined) {
+      NodeTopology.encode(message.topology, writer.uint32(194).fork()).join();
+    }
+    if (message.locality !== undefined) {
+      NodeLocality.encode(message.locality, writer.uint32(202).fork()).join();
     }
     return writer;
   },
@@ -4154,6 +5681,94 @@ export const NodeMetadata: MessageFns<NodeMetadata, "virtengine.hpc.v1.NodeMetad
           message.blockHeight = Long.fromString(reader.int64().toString());
           continue;
         }
+        case 15: {
+          if (tag !== 120) {
+            break;
+          }
+
+          message.state = reader.int32() as any;
+          continue;
+        }
+        case 16: {
+          if (tag !== 128) {
+            break;
+          }
+
+          message.healthStatus = reader.int32() as any;
+          continue;
+        }
+        case 17: {
+          if (tag !== 138) {
+            break;
+          }
+
+          message.agentPubkey = reader.string();
+          continue;
+        }
+        case 18: {
+          if (tag !== 146) {
+            break;
+          }
+
+          message.hardwareFingerprint = reader.string();
+          continue;
+        }
+        case 19: {
+          if (tag !== 154) {
+            break;
+          }
+
+          message.agentVersion = reader.string();
+          continue;
+        }
+        case 20: {
+          if (tag !== 160) {
+            break;
+          }
+
+          message.lastSequenceNumber = Long.fromString(reader.uint64().toString(), true);
+          continue;
+        }
+        case 21: {
+          if (tag !== 170) {
+            break;
+          }
+
+          message.capacity = NodeCapacity.decode(reader, reader.uint32());
+          continue;
+        }
+        case 22: {
+          if (tag !== 178) {
+            break;
+          }
+
+          message.health = NodeHealth.decode(reader, reader.uint32());
+          continue;
+        }
+        case 23: {
+          if (tag !== 186) {
+            break;
+          }
+
+          message.hardware = NodeHardware.decode(reader, reader.uint32());
+          continue;
+        }
+        case 24: {
+          if (tag !== 194) {
+            break;
+          }
+
+          message.topology = NodeTopology.decode(reader, reader.uint32());
+          continue;
+        }
+        case 25: {
+          if (tag !== 202) {
+            break;
+          }
+
+          message.locality = NodeLocality.decode(reader, reader.uint32());
+          continue;
+        }
       }
       if ((tag & 7) === 4 || tag === 0) {
         break;
@@ -4183,6 +5798,17 @@ export const NodeMetadata: MessageFns<NodeMetadata, "virtengine.hpc.v1.NodeMetad
       joinedAt: isSet(object.joined_at) ? fromJsonTimestamp(object.joined_at) : undefined,
       updatedAt: isSet(object.updated_at) ? fromJsonTimestamp(object.updated_at) : undefined,
       blockHeight: isSet(object.block_height) ? Long.fromValue(object.block_height) : Long.ZERO,
+      state: isSet(object.state) ? nodeStateFromJSON(object.state) : 0,
+      healthStatus: isSet(object.health_status) ? healthStatusFromJSON(object.health_status) : 0,
+      agentPubkey: isSet(object.agent_pubkey) ? globalThis.String(object.agent_pubkey) : "",
+      hardwareFingerprint: isSet(object.hardware_fingerprint) ? globalThis.String(object.hardware_fingerprint) : "",
+      agentVersion: isSet(object.agent_version) ? globalThis.String(object.agent_version) : "",
+      lastSequenceNumber: isSet(object.last_sequence_number) ? Long.fromValue(object.last_sequence_number) : Long.UZERO,
+      capacity: isSet(object.capacity) ? NodeCapacity.fromJSON(object.capacity) : undefined,
+      health: isSet(object.health) ? NodeHealth.fromJSON(object.health) : undefined,
+      hardware: isSet(object.hardware) ? NodeHardware.fromJSON(object.hardware) : undefined,
+      topology: isSet(object.topology) ? NodeTopology.fromJSON(object.topology) : undefined,
+      locality: isSet(object.locality) ? NodeLocality.fromJSON(object.locality) : undefined,
     };
   },
 
@@ -4230,6 +5856,39 @@ export const NodeMetadata: MessageFns<NodeMetadata, "virtengine.hpc.v1.NodeMetad
     if (!message.blockHeight.equals(Long.ZERO)) {
       obj.block_height = (message.blockHeight || Long.ZERO).toString();
     }
+    if (message.state !== 0) {
+      obj.state = nodeStateToJSON(message.state);
+    }
+    if (message.healthStatus !== 0) {
+      obj.health_status = healthStatusToJSON(message.healthStatus);
+    }
+    if (message.agentPubkey !== "") {
+      obj.agent_pubkey = message.agentPubkey;
+    }
+    if (message.hardwareFingerprint !== "") {
+      obj.hardware_fingerprint = message.hardwareFingerprint;
+    }
+    if (message.agentVersion !== "") {
+      obj.agent_version = message.agentVersion;
+    }
+    if (!message.lastSequenceNumber.equals(Long.UZERO)) {
+      obj.last_sequence_number = (message.lastSequenceNumber || Long.UZERO).toString();
+    }
+    if (message.capacity !== undefined) {
+      obj.capacity = NodeCapacity.toJSON(message.capacity);
+    }
+    if (message.health !== undefined) {
+      obj.health = NodeHealth.toJSON(message.health);
+    }
+    if (message.hardware !== undefined) {
+      obj.hardware = NodeHardware.toJSON(message.hardware);
+    }
+    if (message.topology !== undefined) {
+      obj.topology = NodeTopology.toJSON(message.topology);
+    }
+    if (message.locality !== undefined) {
+      obj.locality = NodeLocality.toJSON(message.locality);
+    }
     return obj;
   },
   fromPartial(object: DeepPartial<NodeMetadata>): NodeMetadata {
@@ -4256,6 +5915,29 @@ export const NodeMetadata: MessageFns<NodeMetadata, "virtengine.hpc.v1.NodeMetad
     message.blockHeight = (object.blockHeight !== undefined && object.blockHeight !== null)
       ? Long.fromValue(object.blockHeight)
       : Long.ZERO;
+    message.state = object.state ?? 0;
+    message.healthStatus = object.healthStatus ?? 0;
+    message.agentPubkey = object.agentPubkey ?? "";
+    message.hardwareFingerprint = object.hardwareFingerprint ?? "";
+    message.agentVersion = object.agentVersion ?? "";
+    message.lastSequenceNumber = (object.lastSequenceNumber !== undefined && object.lastSequenceNumber !== null)
+      ? Long.fromValue(object.lastSequenceNumber)
+      : Long.UZERO;
+    message.capacity = (object.capacity !== undefined && object.capacity !== null)
+      ? NodeCapacity.fromPartial(object.capacity)
+      : undefined;
+    message.health = (object.health !== undefined && object.health !== null)
+      ? NodeHealth.fromPartial(object.health)
+      : undefined;
+    message.hardware = (object.hardware !== undefined && object.hardware !== null)
+      ? NodeHardware.fromPartial(object.hardware)
+      : undefined;
+    message.topology = (object.topology !== undefined && object.topology !== null)
+      ? NodeTopology.fromPartial(object.topology)
+      : undefined;
+    message.locality = (object.locality !== undefined && object.locality !== null)
+      ? NodeLocality.fromPartial(object.locality)
+      : undefined;
     return message;
   },
 };
@@ -4271,6 +5953,13 @@ function createBaseClusterCandidate(): ClusterCandidate {
     combinedScore: "",
     eligible: false,
     ineligibilityReason: "",
+    priorityScore: "",
+    fairShareScore: "",
+    ageScore: "",
+    jobSizeScore: "",
+    partitionScore: "",
+    preemptionPossible: false,
+    quotaBurstUsed: false,
   };
 }
 
@@ -4304,6 +5993,27 @@ export const ClusterCandidate: MessageFns<ClusterCandidate, "virtengine.hpc.v1.C
     }
     if (message.ineligibilityReason !== "") {
       writer.uint32(74).string(message.ineligibilityReason);
+    }
+    if (message.priorityScore !== "") {
+      writer.uint32(82).string(message.priorityScore);
+    }
+    if (message.fairShareScore !== "") {
+      writer.uint32(90).string(message.fairShareScore);
+    }
+    if (message.ageScore !== "") {
+      writer.uint32(98).string(message.ageScore);
+    }
+    if (message.jobSizeScore !== "") {
+      writer.uint32(106).string(message.jobSizeScore);
+    }
+    if (message.partitionScore !== "") {
+      writer.uint32(114).string(message.partitionScore);
+    }
+    if (message.preemptionPossible !== false) {
+      writer.uint32(120).bool(message.preemptionPossible);
+    }
+    if (message.quotaBurstUsed !== false) {
+      writer.uint32(128).bool(message.quotaBurstUsed);
     }
     return writer;
   },
@@ -4387,6 +6097,62 @@ export const ClusterCandidate: MessageFns<ClusterCandidate, "virtengine.hpc.v1.C
           message.ineligibilityReason = reader.string();
           continue;
         }
+        case 10: {
+          if (tag !== 82) {
+            break;
+          }
+
+          message.priorityScore = reader.string();
+          continue;
+        }
+        case 11: {
+          if (tag !== 90) {
+            break;
+          }
+
+          message.fairShareScore = reader.string();
+          continue;
+        }
+        case 12: {
+          if (tag !== 98) {
+            break;
+          }
+
+          message.ageScore = reader.string();
+          continue;
+        }
+        case 13: {
+          if (tag !== 106) {
+            break;
+          }
+
+          message.jobSizeScore = reader.string();
+          continue;
+        }
+        case 14: {
+          if (tag !== 114) {
+            break;
+          }
+
+          message.partitionScore = reader.string();
+          continue;
+        }
+        case 15: {
+          if (tag !== 120) {
+            break;
+          }
+
+          message.preemptionPossible = reader.bool();
+          continue;
+        }
+        case 16: {
+          if (tag !== 128) {
+            break;
+          }
+
+          message.quotaBurstUsed = reader.bool();
+          continue;
+        }
       }
       if ((tag & 7) === 4 || tag === 0) {
         break;
@@ -4407,6 +6173,13 @@ export const ClusterCandidate: MessageFns<ClusterCandidate, "virtengine.hpc.v1.C
       combinedScore: isSet(object.combined_score) ? globalThis.String(object.combined_score) : "",
       eligible: isSet(object.eligible) ? globalThis.Boolean(object.eligible) : false,
       ineligibilityReason: isSet(object.ineligibility_reason) ? globalThis.String(object.ineligibility_reason) : "",
+      priorityScore: isSet(object.priority_score) ? globalThis.String(object.priority_score) : "",
+      fairShareScore: isSet(object.fair_share_score) ? globalThis.String(object.fair_share_score) : "",
+      ageScore: isSet(object.age_score) ? globalThis.String(object.age_score) : "",
+      jobSizeScore: isSet(object.job_size_score) ? globalThis.String(object.job_size_score) : "",
+      partitionScore: isSet(object.partition_score) ? globalThis.String(object.partition_score) : "",
+      preemptionPossible: isSet(object.preemption_possible) ? globalThis.Boolean(object.preemption_possible) : false,
+      quotaBurstUsed: isSet(object.quota_burst_used) ? globalThis.Boolean(object.quota_burst_used) : false,
     };
   },
 
@@ -4439,6 +6212,27 @@ export const ClusterCandidate: MessageFns<ClusterCandidate, "virtengine.hpc.v1.C
     if (message.ineligibilityReason !== "") {
       obj.ineligibility_reason = message.ineligibilityReason;
     }
+    if (message.priorityScore !== "") {
+      obj.priority_score = message.priorityScore;
+    }
+    if (message.fairShareScore !== "") {
+      obj.fair_share_score = message.fairShareScore;
+    }
+    if (message.ageScore !== "") {
+      obj.age_score = message.ageScore;
+    }
+    if (message.jobSizeScore !== "") {
+      obj.job_size_score = message.jobSizeScore;
+    }
+    if (message.partitionScore !== "") {
+      obj.partition_score = message.partitionScore;
+    }
+    if (message.preemptionPossible !== false) {
+      obj.preemption_possible = message.preemptionPossible;
+    }
+    if (message.quotaBurstUsed !== false) {
+      obj.quota_burst_used = message.quotaBurstUsed;
+    }
     return obj;
   },
   fromPartial(object: DeepPartial<ClusterCandidate>): ClusterCandidate {
@@ -4454,6 +6248,13 @@ export const ClusterCandidate: MessageFns<ClusterCandidate, "virtengine.hpc.v1.C
     message.combinedScore = object.combinedScore ?? "";
     message.eligible = object.eligible ?? false;
     message.ineligibilityReason = object.ineligibilityReason ?? "";
+    message.priorityScore = object.priorityScore ?? "";
+    message.fairShareScore = object.fairShareScore ?? "";
+    message.ageScore = object.ageScore ?? "";
+    message.jobSizeScore = object.jobSizeScore ?? "";
+    message.partitionScore = object.partitionScore ?? "";
+    message.preemptionPossible = object.preemptionPossible ?? false;
+    message.quotaBurstUsed = object.quotaBurstUsed ?? false;
     return message;
   },
 };
@@ -4472,6 +6273,17 @@ function createBaseSchedulingDecision(): SchedulingDecision {
     combinedScore: "",
     createdAt: undefined,
     blockHeight: Long.ZERO,
+    priorityScore: "",
+    fairShareScore: "",
+    ageScore: "",
+    jobSizeScore: "",
+    partitionScore: "",
+    preemptionPlanned: false,
+    preemptedJobIds: [],
+    backfillUsed: false,
+    backfillWindowSeconds: Long.ZERO,
+    quotaBurstUsed: false,
+    quotaReason: "",
   };
 }
 
@@ -4514,6 +6326,39 @@ export const SchedulingDecision: MessageFns<SchedulingDecision, "virtengine.hpc.
     }
     if (!message.blockHeight.equals(Long.ZERO)) {
       writer.uint32(96).int64(message.blockHeight.toString());
+    }
+    if (message.priorityScore !== "") {
+      writer.uint32(106).string(message.priorityScore);
+    }
+    if (message.fairShareScore !== "") {
+      writer.uint32(114).string(message.fairShareScore);
+    }
+    if (message.ageScore !== "") {
+      writer.uint32(122).string(message.ageScore);
+    }
+    if (message.jobSizeScore !== "") {
+      writer.uint32(130).string(message.jobSizeScore);
+    }
+    if (message.partitionScore !== "") {
+      writer.uint32(138).string(message.partitionScore);
+    }
+    if (message.preemptionPlanned !== false) {
+      writer.uint32(144).bool(message.preemptionPlanned);
+    }
+    for (const v of message.preemptedJobIds) {
+      writer.uint32(154).string(v!);
+    }
+    if (message.backfillUsed !== false) {
+      writer.uint32(160).bool(message.backfillUsed);
+    }
+    if (!message.backfillWindowSeconds.equals(Long.ZERO)) {
+      writer.uint32(168).int64(message.backfillWindowSeconds.toString());
+    }
+    if (message.quotaBurstUsed !== false) {
+      writer.uint32(176).bool(message.quotaBurstUsed);
+    }
+    if (message.quotaReason !== "") {
+      writer.uint32(186).string(message.quotaReason);
     }
     return writer;
   },
@@ -4621,6 +6466,94 @@ export const SchedulingDecision: MessageFns<SchedulingDecision, "virtengine.hpc.
           message.blockHeight = Long.fromString(reader.int64().toString());
           continue;
         }
+        case 13: {
+          if (tag !== 106) {
+            break;
+          }
+
+          message.priorityScore = reader.string();
+          continue;
+        }
+        case 14: {
+          if (tag !== 114) {
+            break;
+          }
+
+          message.fairShareScore = reader.string();
+          continue;
+        }
+        case 15: {
+          if (tag !== 122) {
+            break;
+          }
+
+          message.ageScore = reader.string();
+          continue;
+        }
+        case 16: {
+          if (tag !== 130) {
+            break;
+          }
+
+          message.jobSizeScore = reader.string();
+          continue;
+        }
+        case 17: {
+          if (tag !== 138) {
+            break;
+          }
+
+          message.partitionScore = reader.string();
+          continue;
+        }
+        case 18: {
+          if (tag !== 144) {
+            break;
+          }
+
+          message.preemptionPlanned = reader.bool();
+          continue;
+        }
+        case 19: {
+          if (tag !== 154) {
+            break;
+          }
+
+          message.preemptedJobIds.push(reader.string());
+          continue;
+        }
+        case 20: {
+          if (tag !== 160) {
+            break;
+          }
+
+          message.backfillUsed = reader.bool();
+          continue;
+        }
+        case 21: {
+          if (tag !== 168) {
+            break;
+          }
+
+          message.backfillWindowSeconds = Long.fromString(reader.int64().toString());
+          continue;
+        }
+        case 22: {
+          if (tag !== 176) {
+            break;
+          }
+
+          message.quotaBurstUsed = reader.bool();
+          continue;
+        }
+        case 23: {
+          if (tag !== 186) {
+            break;
+          }
+
+          message.quotaReason = reader.string();
+          continue;
+        }
       }
       if ((tag & 7) === 4 || tag === 0) {
         break;
@@ -4646,6 +6579,21 @@ export const SchedulingDecision: MessageFns<SchedulingDecision, "virtengine.hpc.
       combinedScore: isSet(object.combined_score) ? globalThis.String(object.combined_score) : "",
       createdAt: isSet(object.created_at) ? fromJsonTimestamp(object.created_at) : undefined,
       blockHeight: isSet(object.block_height) ? Long.fromValue(object.block_height) : Long.ZERO,
+      priorityScore: isSet(object.priority_score) ? globalThis.String(object.priority_score) : "",
+      fairShareScore: isSet(object.fair_share_score) ? globalThis.String(object.fair_share_score) : "",
+      ageScore: isSet(object.age_score) ? globalThis.String(object.age_score) : "",
+      jobSizeScore: isSet(object.job_size_score) ? globalThis.String(object.job_size_score) : "",
+      partitionScore: isSet(object.partition_score) ? globalThis.String(object.partition_score) : "",
+      preemptionPlanned: isSet(object.preemption_planned) ? globalThis.Boolean(object.preemption_planned) : false,
+      preemptedJobIds: globalThis.Array.isArray(object?.preempted_job_ids)
+        ? object.preempted_job_ids.map((e: any) => globalThis.String(e))
+        : [],
+      backfillUsed: isSet(object.backfill_used) ? globalThis.Boolean(object.backfill_used) : false,
+      backfillWindowSeconds: isSet(object.backfill_window_seconds)
+        ? Long.fromValue(object.backfill_window_seconds)
+        : Long.ZERO,
+      quotaBurstUsed: isSet(object.quota_burst_used) ? globalThis.Boolean(object.quota_burst_used) : false,
+      quotaReason: isSet(object.quota_reason) ? globalThis.String(object.quota_reason) : "",
     };
   },
 
@@ -4687,6 +6635,39 @@ export const SchedulingDecision: MessageFns<SchedulingDecision, "virtengine.hpc.
     if (!message.blockHeight.equals(Long.ZERO)) {
       obj.block_height = (message.blockHeight || Long.ZERO).toString();
     }
+    if (message.priorityScore !== "") {
+      obj.priority_score = message.priorityScore;
+    }
+    if (message.fairShareScore !== "") {
+      obj.fair_share_score = message.fairShareScore;
+    }
+    if (message.ageScore !== "") {
+      obj.age_score = message.ageScore;
+    }
+    if (message.jobSizeScore !== "") {
+      obj.job_size_score = message.jobSizeScore;
+    }
+    if (message.partitionScore !== "") {
+      obj.partition_score = message.partitionScore;
+    }
+    if (message.preemptionPlanned !== false) {
+      obj.preemption_planned = message.preemptionPlanned;
+    }
+    if (message.preemptedJobIds?.length) {
+      obj.preempted_job_ids = message.preemptedJobIds;
+    }
+    if (message.backfillUsed !== false) {
+      obj.backfill_used = message.backfillUsed;
+    }
+    if (!message.backfillWindowSeconds.equals(Long.ZERO)) {
+      obj.backfill_window_seconds = (message.backfillWindowSeconds || Long.ZERO).toString();
+    }
+    if (message.quotaBurstUsed !== false) {
+      obj.quota_burst_used = message.quotaBurstUsed;
+    }
+    if (message.quotaReason !== "") {
+      obj.quota_reason = message.quotaReason;
+    }
     return obj;
   },
   fromPartial(object: DeepPartial<SchedulingDecision>): SchedulingDecision {
@@ -4702,6 +6683,364 @@ export const SchedulingDecision: MessageFns<SchedulingDecision, "virtengine.hpc.
     message.capacityScore = object.capacityScore ?? "";
     message.combinedScore = object.combinedScore ?? "";
     message.createdAt = object.createdAt ?? undefined;
+    message.blockHeight = (object.blockHeight !== undefined && object.blockHeight !== null)
+      ? Long.fromValue(object.blockHeight)
+      : Long.ZERO;
+    message.priorityScore = object.priorityScore ?? "";
+    message.fairShareScore = object.fairShareScore ?? "";
+    message.ageScore = object.ageScore ?? "";
+    message.jobSizeScore = object.jobSizeScore ?? "";
+    message.partitionScore = object.partitionScore ?? "";
+    message.preemptionPlanned = object.preemptionPlanned ?? false;
+    message.preemptedJobIds = object.preemptedJobIds?.map((e) => e) || [];
+    message.backfillUsed = object.backfillUsed ?? false;
+    message.backfillWindowSeconds =
+      (object.backfillWindowSeconds !== undefined && object.backfillWindowSeconds !== null)
+        ? Long.fromValue(object.backfillWindowSeconds)
+        : Long.ZERO;
+    message.quotaBurstUsed = object.quotaBurstUsed ?? false;
+    message.quotaReason = object.quotaReason ?? "";
+    return message;
+  },
+};
+
+function createBaseSchedulingMetrics(): SchedulingMetrics {
+  return {
+    clusterId: "",
+    queueName: "",
+    totalDecisions: Long.UZERO,
+    preemptionPlanned: Long.UZERO,
+    backfillUsed: Long.UZERO,
+    quotaBurstUsed: Long.UZERO,
+    quotaDenied: Long.UZERO,
+    avgLatencyScore: "",
+    avgCapacityScore: "",
+    avgCombinedScore: "",
+    avgPriorityScore: "",
+    avgFairShareScore: "",
+    avgAgeScore: "",
+    avgJobSizeScore: "",
+    avgPartitionScore: "",
+    lastDecisionAt: undefined,
+    blockHeight: Long.ZERO,
+  };
+}
+
+export const SchedulingMetrics: MessageFns<SchedulingMetrics, "virtengine.hpc.v1.SchedulingMetrics"> = {
+  $type: "virtengine.hpc.v1.SchedulingMetrics" as const,
+
+  encode(message: SchedulingMetrics, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.clusterId !== "") {
+      writer.uint32(10).string(message.clusterId);
+    }
+    if (message.queueName !== "") {
+      writer.uint32(18).string(message.queueName);
+    }
+    if (!message.totalDecisions.equals(Long.UZERO)) {
+      writer.uint32(24).uint64(message.totalDecisions.toString());
+    }
+    if (!message.preemptionPlanned.equals(Long.UZERO)) {
+      writer.uint32(32).uint64(message.preemptionPlanned.toString());
+    }
+    if (!message.backfillUsed.equals(Long.UZERO)) {
+      writer.uint32(40).uint64(message.backfillUsed.toString());
+    }
+    if (!message.quotaBurstUsed.equals(Long.UZERO)) {
+      writer.uint32(48).uint64(message.quotaBurstUsed.toString());
+    }
+    if (!message.quotaDenied.equals(Long.UZERO)) {
+      writer.uint32(56).uint64(message.quotaDenied.toString());
+    }
+    if (message.avgLatencyScore !== "") {
+      writer.uint32(66).string(message.avgLatencyScore);
+    }
+    if (message.avgCapacityScore !== "") {
+      writer.uint32(74).string(message.avgCapacityScore);
+    }
+    if (message.avgCombinedScore !== "") {
+      writer.uint32(82).string(message.avgCombinedScore);
+    }
+    if (message.avgPriorityScore !== "") {
+      writer.uint32(90).string(message.avgPriorityScore);
+    }
+    if (message.avgFairShareScore !== "") {
+      writer.uint32(98).string(message.avgFairShareScore);
+    }
+    if (message.avgAgeScore !== "") {
+      writer.uint32(106).string(message.avgAgeScore);
+    }
+    if (message.avgJobSizeScore !== "") {
+      writer.uint32(114).string(message.avgJobSizeScore);
+    }
+    if (message.avgPartitionScore !== "") {
+      writer.uint32(122).string(message.avgPartitionScore);
+    }
+    if (message.lastDecisionAt !== undefined) {
+      Timestamp.encode(toTimestamp(message.lastDecisionAt), writer.uint32(130).fork()).join();
+    }
+    if (!message.blockHeight.equals(Long.ZERO)) {
+      writer.uint32(136).int64(message.blockHeight.toString());
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): SchedulingMetrics {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseSchedulingMetrics();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.clusterId = reader.string();
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.queueName = reader.string();
+          continue;
+        }
+        case 3: {
+          if (tag !== 24) {
+            break;
+          }
+
+          message.totalDecisions = Long.fromString(reader.uint64().toString(), true);
+          continue;
+        }
+        case 4: {
+          if (tag !== 32) {
+            break;
+          }
+
+          message.preemptionPlanned = Long.fromString(reader.uint64().toString(), true);
+          continue;
+        }
+        case 5: {
+          if (tag !== 40) {
+            break;
+          }
+
+          message.backfillUsed = Long.fromString(reader.uint64().toString(), true);
+          continue;
+        }
+        case 6: {
+          if (tag !== 48) {
+            break;
+          }
+
+          message.quotaBurstUsed = Long.fromString(reader.uint64().toString(), true);
+          continue;
+        }
+        case 7: {
+          if (tag !== 56) {
+            break;
+          }
+
+          message.quotaDenied = Long.fromString(reader.uint64().toString(), true);
+          continue;
+        }
+        case 8: {
+          if (tag !== 66) {
+            break;
+          }
+
+          message.avgLatencyScore = reader.string();
+          continue;
+        }
+        case 9: {
+          if (tag !== 74) {
+            break;
+          }
+
+          message.avgCapacityScore = reader.string();
+          continue;
+        }
+        case 10: {
+          if (tag !== 82) {
+            break;
+          }
+
+          message.avgCombinedScore = reader.string();
+          continue;
+        }
+        case 11: {
+          if (tag !== 90) {
+            break;
+          }
+
+          message.avgPriorityScore = reader.string();
+          continue;
+        }
+        case 12: {
+          if (tag !== 98) {
+            break;
+          }
+
+          message.avgFairShareScore = reader.string();
+          continue;
+        }
+        case 13: {
+          if (tag !== 106) {
+            break;
+          }
+
+          message.avgAgeScore = reader.string();
+          continue;
+        }
+        case 14: {
+          if (tag !== 114) {
+            break;
+          }
+
+          message.avgJobSizeScore = reader.string();
+          continue;
+        }
+        case 15: {
+          if (tag !== 122) {
+            break;
+          }
+
+          message.avgPartitionScore = reader.string();
+          continue;
+        }
+        case 16: {
+          if (tag !== 130) {
+            break;
+          }
+
+          message.lastDecisionAt = fromTimestamp(Timestamp.decode(reader, reader.uint32()));
+          continue;
+        }
+        case 17: {
+          if (tag !== 136) {
+            break;
+          }
+
+          message.blockHeight = Long.fromString(reader.int64().toString());
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): SchedulingMetrics {
+    return {
+      clusterId: isSet(object.cluster_id) ? globalThis.String(object.cluster_id) : "",
+      queueName: isSet(object.queue_name) ? globalThis.String(object.queue_name) : "",
+      totalDecisions: isSet(object.total_decisions) ? Long.fromValue(object.total_decisions) : Long.UZERO,
+      preemptionPlanned: isSet(object.preemption_planned) ? Long.fromValue(object.preemption_planned) : Long.UZERO,
+      backfillUsed: isSet(object.backfill_used) ? Long.fromValue(object.backfill_used) : Long.UZERO,
+      quotaBurstUsed: isSet(object.quota_burst_used) ? Long.fromValue(object.quota_burst_used) : Long.UZERO,
+      quotaDenied: isSet(object.quota_denied) ? Long.fromValue(object.quota_denied) : Long.UZERO,
+      avgLatencyScore: isSet(object.avg_latency_score) ? globalThis.String(object.avg_latency_score) : "",
+      avgCapacityScore: isSet(object.avg_capacity_score) ? globalThis.String(object.avg_capacity_score) : "",
+      avgCombinedScore: isSet(object.avg_combined_score) ? globalThis.String(object.avg_combined_score) : "",
+      avgPriorityScore: isSet(object.avg_priority_score) ? globalThis.String(object.avg_priority_score) : "",
+      avgFairShareScore: isSet(object.avg_fair_share_score) ? globalThis.String(object.avg_fair_share_score) : "",
+      avgAgeScore: isSet(object.avg_age_score) ? globalThis.String(object.avg_age_score) : "",
+      avgJobSizeScore: isSet(object.avg_job_size_score) ? globalThis.String(object.avg_job_size_score) : "",
+      avgPartitionScore: isSet(object.avg_partition_score) ? globalThis.String(object.avg_partition_score) : "",
+      lastDecisionAt: isSet(object.last_decision_at) ? fromJsonTimestamp(object.last_decision_at) : undefined,
+      blockHeight: isSet(object.block_height) ? Long.fromValue(object.block_height) : Long.ZERO,
+    };
+  },
+
+  toJSON(message: SchedulingMetrics): unknown {
+    const obj: any = {};
+    if (message.clusterId !== "") {
+      obj.cluster_id = message.clusterId;
+    }
+    if (message.queueName !== "") {
+      obj.queue_name = message.queueName;
+    }
+    if (!message.totalDecisions.equals(Long.UZERO)) {
+      obj.total_decisions = (message.totalDecisions || Long.UZERO).toString();
+    }
+    if (!message.preemptionPlanned.equals(Long.UZERO)) {
+      obj.preemption_planned = (message.preemptionPlanned || Long.UZERO).toString();
+    }
+    if (!message.backfillUsed.equals(Long.UZERO)) {
+      obj.backfill_used = (message.backfillUsed || Long.UZERO).toString();
+    }
+    if (!message.quotaBurstUsed.equals(Long.UZERO)) {
+      obj.quota_burst_used = (message.quotaBurstUsed || Long.UZERO).toString();
+    }
+    if (!message.quotaDenied.equals(Long.UZERO)) {
+      obj.quota_denied = (message.quotaDenied || Long.UZERO).toString();
+    }
+    if (message.avgLatencyScore !== "") {
+      obj.avg_latency_score = message.avgLatencyScore;
+    }
+    if (message.avgCapacityScore !== "") {
+      obj.avg_capacity_score = message.avgCapacityScore;
+    }
+    if (message.avgCombinedScore !== "") {
+      obj.avg_combined_score = message.avgCombinedScore;
+    }
+    if (message.avgPriorityScore !== "") {
+      obj.avg_priority_score = message.avgPriorityScore;
+    }
+    if (message.avgFairShareScore !== "") {
+      obj.avg_fair_share_score = message.avgFairShareScore;
+    }
+    if (message.avgAgeScore !== "") {
+      obj.avg_age_score = message.avgAgeScore;
+    }
+    if (message.avgJobSizeScore !== "") {
+      obj.avg_job_size_score = message.avgJobSizeScore;
+    }
+    if (message.avgPartitionScore !== "") {
+      obj.avg_partition_score = message.avgPartitionScore;
+    }
+    if (message.lastDecisionAt !== undefined) {
+      obj.last_decision_at = message.lastDecisionAt.toISOString();
+    }
+    if (!message.blockHeight.equals(Long.ZERO)) {
+      obj.block_height = (message.blockHeight || Long.ZERO).toString();
+    }
+    return obj;
+  },
+  fromPartial(object: DeepPartial<SchedulingMetrics>): SchedulingMetrics {
+    const message = createBaseSchedulingMetrics();
+    message.clusterId = object.clusterId ?? "";
+    message.queueName = object.queueName ?? "";
+    message.totalDecisions = (object.totalDecisions !== undefined && object.totalDecisions !== null)
+      ? Long.fromValue(object.totalDecisions)
+      : Long.UZERO;
+    message.preemptionPlanned = (object.preemptionPlanned !== undefined && object.preemptionPlanned !== null)
+      ? Long.fromValue(object.preemptionPlanned)
+      : Long.UZERO;
+    message.backfillUsed = (object.backfillUsed !== undefined && object.backfillUsed !== null)
+      ? Long.fromValue(object.backfillUsed)
+      : Long.UZERO;
+    message.quotaBurstUsed = (object.quotaBurstUsed !== undefined && object.quotaBurstUsed !== null)
+      ? Long.fromValue(object.quotaBurstUsed)
+      : Long.UZERO;
+    message.quotaDenied = (object.quotaDenied !== undefined && object.quotaDenied !== null)
+      ? Long.fromValue(object.quotaDenied)
+      : Long.UZERO;
+    message.avgLatencyScore = object.avgLatencyScore ?? "";
+    message.avgCapacityScore = object.avgCapacityScore ?? "";
+    message.avgCombinedScore = object.avgCombinedScore ?? "";
+    message.avgPriorityScore = object.avgPriorityScore ?? "";
+    message.avgFairShareScore = object.avgFairShareScore ?? "";
+    message.avgAgeScore = object.avgAgeScore ?? "";
+    message.avgJobSizeScore = object.avgJobSizeScore ?? "";
+    message.avgPartitionScore = object.avgPartitionScore ?? "";
+    message.lastDecisionAt = object.lastDecisionAt ?? undefined;
     message.blockHeight = (object.blockHeight !== undefined && object.blockHeight !== null)
       ? Long.fromValue(object.blockHeight)
       : Long.ZERO;
@@ -5391,6 +7730,8 @@ function createBaseHPCDispute(): HPCDispute {
     createdAt: undefined,
     resolvedAt: undefined,
     blockHeight: Long.ZERO,
+    financialCaseId: "",
+    financialCaseStatus: "",
   };
 }
 
@@ -5436,6 +7777,12 @@ export const HPCDispute: MessageFns<HPCDispute, "virtengine.hpc.v1.HPCDispute"> 
     }
     if (!message.blockHeight.equals(Long.ZERO)) {
       writer.uint32(104).int64(message.blockHeight.toString());
+    }
+    if (message.financialCaseId !== "") {
+      writer.uint32(114).string(message.financialCaseId);
+    }
+    if (message.financialCaseStatus !== "") {
+      writer.uint32(122).string(message.financialCaseStatus);
     }
     return writer;
   },
@@ -5551,6 +7898,22 @@ export const HPCDispute: MessageFns<HPCDispute, "virtengine.hpc.v1.HPCDispute"> 
           message.blockHeight = Long.fromString(reader.int64().toString());
           continue;
         }
+        case 14: {
+          if (tag !== 114) {
+            break;
+          }
+
+          message.financialCaseId = reader.string();
+          continue;
+        }
+        case 15: {
+          if (tag !== 122) {
+            break;
+          }
+
+          message.financialCaseStatus = reader.string();
+          continue;
+        }
       }
       if ((tag & 7) === 4 || tag === 0) {
         break;
@@ -5575,6 +7938,8 @@ export const HPCDispute: MessageFns<HPCDispute, "virtengine.hpc.v1.HPCDispute"> 
       createdAt: isSet(object.created_at) ? fromJsonTimestamp(object.created_at) : undefined,
       resolvedAt: isSet(object.resolved_at) ? fromJsonTimestamp(object.resolved_at) : undefined,
       blockHeight: isSet(object.block_height) ? Long.fromValue(object.block_height) : Long.ZERO,
+      financialCaseId: isSet(object.financial_case_id) ? globalThis.String(object.financial_case_id) : "",
+      financialCaseStatus: isSet(object.financial_case_status) ? globalThis.String(object.financial_case_status) : "",
     };
   },
 
@@ -5619,6 +7984,12 @@ export const HPCDispute: MessageFns<HPCDispute, "virtengine.hpc.v1.HPCDispute"> 
     if (!message.blockHeight.equals(Long.ZERO)) {
       obj.block_height = (message.blockHeight || Long.ZERO).toString();
     }
+    if (message.financialCaseId !== "") {
+      obj.financial_case_id = message.financialCaseId;
+    }
+    if (message.financialCaseStatus !== "") {
+      obj.financial_case_status = message.financialCaseStatus;
+    }
     return obj;
   },
   fromPartial(object: DeepPartial<HPCDispute>): HPCDispute {
@@ -5638,6 +8009,8 @@ export const HPCDispute: MessageFns<HPCDispute, "virtengine.hpc.v1.HPCDispute"> 
     message.blockHeight = (object.blockHeight !== undefined && object.blockHeight !== null)
       ? Long.fromValue(object.blockHeight)
       : Long.ZERO;
+    message.financialCaseId = object.financialCaseId ?? "";
+    message.financialCaseStatus = object.financialCaseStatus ?? "";
     return message;
   },
 };

@@ -11,11 +11,11 @@ data:
   # Chain configuration
   CHAIN_ID: "virtengine-1"
   MONIKER: "virtengine-node"
-  
+
   # Logging
   LOG_LEVEL: "info"
   LOG_FORMAT: "json"
-  
+
   # Network
   P2P_PORT: "26656"
   RPC_PORT: "26657"
@@ -23,22 +23,22 @@ data:
   GRPC_PORT: "9090"
   GRPC_WEB_PORT: "9091"
   PROMETHEUS_PORT: "26660"
-  
+
   # State sync (disabled by default)
   STATE_SYNC_ENABLE: "false"
-  
+
   # Pruning
   PRUNING: "default"
   PRUNING_KEEP_RECENT: "100"
   PRUNING_INTERVAL: "10"
-  
+
   # Indexer
   INDEXER: "kv"
-  
+
   # API settings
   API_ENABLE: "true"
   API_SWAGGER: "false"
-  
+
   # Telemetry
   TELEMETRY_ENABLED: "true"
   TELEMETRY_SERVICE_NAME: "virtengine-node"
@@ -53,26 +53,43 @@ metadata:
     app.kubernetes.io/name: provider-daemon
     app.kubernetes.io/component: config
 data:
-  # Node connection
+  # Chain connection
+  CHAIN_ID: "virtengine-1"
   VIRTENGINE_NODE_URL: "http://virtengine-node:26657"
   VIRTENGINE_GRPC_URL: "virtengine-node:9090"
-  
+
   # Provider settings
   PROVIDER_HOST: "0.0.0.0"
   PROVIDER_PORT: "8443"
   PROVIDER_GRPC_PORT: "8444"
-  METRICS_PORT: "9100"
-  
+  METRICS_PORT: "9090"
+
+  # Durable provider state
+  PROVIDER_KEY_DIR: "/var/lib/virtengine/provider/keys"
+  PROVIDER_KEY_BACKUP_FILE: "/var/lib/virtengine/provider-backups/provider-keys.enc.json"
+  PROVIDER_HA_STATE_DIR: "/var/lib/virtengine/provider-ha"
+  PROVIDER_CHAIN_USAGE_QUEUE_FILE: "/var/lib/virtengine/provider-ha/chain_usage_queue.json"
+  PROVIDER_WALDUR_STATE_FILE: "/var/lib/virtengine/provider-ha/waldur_bridge_state.json"
+  PROVIDER_WALDUR_CHECKPOINT_FILE: "/var/lib/virtengine/provider-ha/marketplace_checkpoint.json"
+  PROVIDER_WALDUR_ORDER_STATE_FILE: "/var/lib/virtengine/provider-ha/waldur_order_state.json"
+  PROVIDER_WALDUR_ORDER_CHECKPOINT_FILE: "/var/lib/virtengine/provider-ha/waldur_order_checkpoint.json"
+  PROVIDER_WALDUR_LIFECYCLE_QUEUE_PATH: "/var/lib/virtengine/provider-ha/lifecycle_queue"
+  PROVIDER_PROVISIONING_STATE_FILE: "/var/lib/virtengine/provider-ha/provisioning_state.json"
+  PROVIDER_PROVISIONING_CHECKPOINT_FILE: "/var/lib/virtengine/provider-ha/provisioning_checkpoint.json"
+  PROVIDER_PORTAL_AUDIT_LOG_FILE: "/var/log/virtengine/provider/portal_audit.log"
+  PROVIDER_FIAT_CONVERSION_STATE_FILE: "/var/lib/virtengine/provider-ha/fiat_conversion_state.json"
+  PROVIDER_FIAT_CONVERSION_REPOSITORY_FILE: "/var/lib/virtengine/provider-ha/fiat_conversion_repository.json"
+
   # Logging
   LOG_LEVEL: "info"
   LOG_FORMAT: "json"
-  
+
   # Bid engine
   BID_PRICE_CPU_SCALE: "1.0"
   BID_PRICE_MEMORY_SCALE: "1.0"
   BID_PRICE_STORAGE_SCALE: "1.0"
   BID_PRICE_ENDPOINT_SCALE: "1.0"
-  
+
   # Kubernetes adapter
   KUBE_NAMESPACE_PREFIX: "lease-"
   KUBE_RESOURCE_LIMITS_ENABLED: "true"

@@ -166,6 +166,28 @@
   {
     "path": [
       "app_state",
+      "distribution",
+      "fee_pool",
+      "community_pool",
+      0,
+      "denom"
+    ],
+    "value": "uve"
+  },
+  {
+    "path": [
+      "app_state",
+      "distribution",
+      "fee_pool",
+      "community_pool",
+      0,
+      "amount"
+    ],
+    "value": "200000000000.000000000000000000"
+  },
+  {
+    "path": [
+      "app_state",
       "gov",
       "params",
       "max_deposit_period"
@@ -475,7 +497,7 @@
       "allowed_algorithms",
       0
     ],
-    "value": "X25519-XSalsa20-Poly1305"
+    "value": "X25519-XSALSA20-POLY1305"
   },
   {
     "path": [

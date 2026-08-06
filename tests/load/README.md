@@ -35,7 +35,7 @@ tests/load/
 ### Scenario A: Identity Scope Upload Burst
 Tests the identity verification pipeline under high load.
 - Burst of identity scope uploads
-- Pending → finalized scoring transitions
+- Submission → finalized scoring transitions
 - Chain stability under load
 
 ### Scenario B: Marketplace Order Burst
@@ -133,6 +133,9 @@ go test -v ./tests/load/scale/... -run TestValidatorScaleBaseline
 
 # Run degradation analysis
 go test -v ./tests/load/scale/... -run TestComprehensiveDegradationReport
+
+# Run deterministic contract-backed scenarios without a live chain
+go run ./tests/load/cmd/loadtest --scenario settlement --endpoint mock://local --duration 30s
 ```
 
 ## Performance Baselines

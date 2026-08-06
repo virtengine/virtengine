@@ -19,6 +19,7 @@ import {
   NodeMetadata,
   Params,
   SchedulingDecision,
+  SchedulingMetrics,
 } from "./types.ts";
 
 /** GenesisState defines the hpc module's genesis state */
@@ -43,6 +44,8 @@ export interface GenesisState {
   hpcRewards: HPCRewardRecord[];
   /** Disputes are the dispute records */
   disputes: HPCDispute[];
+  /** SchedulingMetrics are aggregated scheduling metrics */
+  schedulingMetrics: SchedulingMetrics[];
   /** ClusterSequence is the next cluster sequence */
   clusterSequence: Long;
   /** OfferingSequence is the next offering sequence */
@@ -66,6 +69,7 @@ function createBaseGenesisState(): GenesisState {
     schedulingDecisions: [],
     hpcRewards: [],
     disputes: [],
+    schedulingMetrics: [],
     clusterSequence: Long.UZERO,
     offeringSequence: Long.UZERO,
     jobSequence: Long.UZERO,
@@ -104,6 +108,9 @@ export const GenesisState: MessageFns<GenesisState, "virtengine.hpc.v1.GenesisSt
     }
     for (const v of message.disputes) {
       HPCDispute.encode(v!, writer.uint32(74).fork()).join();
+    }
+    for (const v of message.schedulingMetrics) {
+      SchedulingMetrics.encode(v!, writer.uint32(122).fork()).join();
     }
     if (!message.clusterSequence.equals(Long.UZERO)) {
       writer.uint32(80).uint64(message.clusterSequence.toString());
@@ -202,6 +209,14 @@ export const GenesisState: MessageFns<GenesisState, "virtengine.hpc.v1.GenesisSt
           message.disputes.push(HPCDispute.decode(reader, reader.uint32()));
           continue;
         }
+        case 15: {
+          if (tag !== 122) {
+            break;
+          }
+
+          message.schedulingMetrics.push(SchedulingMetrics.decode(reader, reader.uint32()));
+          continue;
+        }
         case 10: {
           if (tag !== 80) {
             break;
@@ -276,6 +291,9 @@ export const GenesisState: MessageFns<GenesisState, "virtengine.hpc.v1.GenesisSt
       disputes: globalThis.Array.isArray(object?.disputes)
         ? object.disputes.map((e: any) => HPCDispute.fromJSON(e))
         : [],
+      schedulingMetrics: globalThis.Array.isArray(object?.scheduling_metrics)
+        ? object.scheduling_metrics.map((e: any) => SchedulingMetrics.fromJSON(e))
+        : [],
       clusterSequence: isSet(object.cluster_sequence) ? Long.fromValue(object.cluster_sequence) : Long.UZERO,
       offeringSequence: isSet(object.offering_sequence) ? Long.fromValue(object.offering_sequence) : Long.UZERO,
       jobSequence: isSet(object.job_sequence) ? Long.fromValue(object.job_sequence) : Long.UZERO,
@@ -313,6 +331,9 @@ export const GenesisState: MessageFns<GenesisState, "virtengine.hpc.v1.GenesisSt
     if (message.disputes?.length) {
       obj.disputes = message.disputes.map((e) => HPCDispute.toJSON(e));
     }
+    if (message.schedulingMetrics?.length) {
+      obj.scheduling_metrics = message.schedulingMetrics.map((e) => SchedulingMetrics.toJSON(e));
+    }
     if (!message.clusterSequence.equals(Long.UZERO)) {
       obj.cluster_sequence = (message.clusterSequence || Long.UZERO).toString();
     }
@@ -343,6 +364,7 @@ export const GenesisState: MessageFns<GenesisState, "virtengine.hpc.v1.GenesisSt
     message.schedulingDecisions = object.schedulingDecisions?.map((e) => SchedulingDecision.fromPartial(e)) || [];
     message.hpcRewards = object.hpcRewards?.map((e) => HPCRewardRecord.fromPartial(e)) || [];
     message.disputes = object.disputes?.map((e) => HPCDispute.fromPartial(e)) || [];
+    message.schedulingMetrics = object.schedulingMetrics?.map((e) => SchedulingMetrics.fromPartial(e)) || [];
     message.clusterSequence = (object.clusterSequence !== undefined && object.clusterSequence !== null)
       ? Long.fromValue(object.clusterSequence)
       : Long.UZERO;

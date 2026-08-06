@@ -1,10 +1,10 @@
-import { BaseClient, type ClientOptions } from "./BaseClient.ts";
-import type { ChainNodeSDK, ClientTxResult, ListOptions } from "./types.ts";
-import { toPageRequest, withTxResult } from "./types.ts";
 import type { Account } from "../generated/protos/virtengine/escrow/types/v1/account.ts";
 import type { Payment } from "../generated/protos/virtengine/escrow/types/v1/payment.ts";
 import type { MsgAccountDeposit } from "../generated/protos/virtengine/escrow/v1/msg.ts";
 import type { TxCallOptions } from "../sdk/transport/types.ts";
+import { BaseClient, type ClientOptions } from "./BaseClient.ts";
+import type { ChainNodeSDK, ClientTxResult, ListOptions } from "./types.ts";
+import { toPageRequest, withTxResult } from "./types.ts";
 
 export interface EscrowClientDeps {
   sdk: ChainNodeSDK;

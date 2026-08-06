@@ -1,6 +1,8 @@
 package app
 
 import (
+	"sort"
+
 	evidencetypes "cosmossdk.io/x/evidence/types"
 	"cosmossdk.io/x/feegrant"
 	upgradetypes "cosmossdk.io/x/upgrade/types"
@@ -44,6 +46,8 @@ import (
 	fraudtypes "github.com/virtengine/virtengine/x/fraud/types"
 	"github.com/virtengine/virtengine/x/hpc"
 	hpctypes "github.com/virtengine/virtengine/x/hpc/types"
+	"github.com/virtengine/virtengine/x/issuancepolicy"
+	issuancepolicytypes "github.com/virtengine/virtengine/x/issuancepolicy/types"
 	"github.com/virtengine/virtengine/x/market"
 	marketplacetypes "github.com/virtengine/virtengine/x/market/types/marketplace"
 	"github.com/virtengine/virtengine/x/marketplace"
@@ -67,6 +71,8 @@ import (
 	"github.com/virtengine/virtengine/x/take"
 	"github.com/virtengine/virtengine/x/veid"
 	veidtypes "github.com/virtengine/virtengine/x/veid/types"
+	"github.com/virtengine/virtengine/x/veidregistry"
+	veidregistrytypes "github.com/virtengine/virtengine/x/veidregistry/types"
 )
 
 func virtengineModuleBasics() []module.AppModuleBasic {
@@ -83,6 +89,8 @@ func virtengineModuleBasics() []module.AppModuleBasic {
 		encryption.AppModuleBasic{},
 		roles.AppModuleBasic{},
 		support.AppModuleBasic{},
+		veidregistry.AppModuleBasic{},
+		issuancepolicy.AppModuleBasic{},
 		veid.AppModuleBasic{},
 		mfa.AppModuleBasic{},
 		config.AppModuleBasic{},
@@ -137,6 +145,8 @@ func OrderInitGenesis(_ []string) []string {
 		encryptiontypes.ModuleName,
 		rolestypes.ModuleName,
 		supporttypes.ModuleName,
+		veidregistrytypes.ModuleName,
+		issuancepolicytypes.ModuleName,
 		veidtypes.ModuleName,
 		mfatypes.ModuleName,
 		configtypes.ModuleName,
@@ -153,4 +163,36 @@ func OrderInitGenesis(_ []string) []string {
 		oracletypes.ModuleName,
 		genutiltypes.ModuleName,
 	}
+}
+
+// OrderMigrations returns a complete deterministic migration order. Task 84C
+// depends on resources reconciling and activating its authoritative capacity
+// store before market/HPC lineage scans and before mktplace write activation.
+func OrderMigrations(moduleNames []string) []string {
+	priority := map[string]int{
+		resourcestypes.ModuleName:   0,
+		market.ModuleName:           1,
+		hpctypes.ModuleName:         2,
+		marketplacetypes.ModuleName: 3,
+	}
+	ordered := append([]string(nil), moduleNames...)
+	sort.Slice(ordered, func(i, j int) bool {
+		iPriority, iTask84C := priority[ordered[i]]
+		jPriority, jTask84C := priority[ordered[j]]
+		switch {
+		case iTask84C && jTask84C:
+			return iPriority < jPriority
+		case iTask84C:
+			return true
+		case jTask84C:
+			return false
+		case ordered[i] == authtypes.ModuleName:
+			return false
+		case ordered[j] == authtypes.ModuleName:
+			return true
+		default:
+			return ordered[i] < ordered[j]
+		}
+	})
+	return ordered
 }

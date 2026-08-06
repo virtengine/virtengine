@@ -2,17 +2,15 @@ package keeper
 
 import (
 	"bytes"
-	"crypto/ed25519"
 	"encoding/hex"
 	"encoding/json"
+	"fmt"
 
 	"cosmossdk.io/log"
 	"cosmossdk.io/math"
 	storetypes "cosmossdk.io/store/types"
 	"github.com/cosmos/cosmos-sdk/codec"
 	sdk "github.com/cosmos/cosmos-sdk/types"
-	"github.com/ethereum/go-ethereum/crypto"
-
 	"github.com/virtengine/virtengine/x/enclave/types"
 )
 
@@ -339,13 +337,11 @@ func (k Keeper) InitiateKeyRotation(ctx sdk.Context, rotation *types.KeyRotation
 
 	rotation.Status = types.KeyRotationStatusActive
 	rotation.InitiatedAt = ctx.BlockTime()
-
-	store := ctx.KVStore(k.skey)
-	bz, err := json.Marshal(rotation)
-	if err != nil {
+	if err := k.setStoredKeyRotation(ctx, validatorAddr, storedKeyRotationRecord{
+		KeyRotationRecord: *rotation,
+	}); err != nil {
 		return err
 	}
-	store.Set(types.KeyRotationKey(validatorAddr, rotation.Epoch), bz)
 
 	// Update identity status
 	identity, exists := k.GetEnclaveIdentity(ctx, validatorAddr)
@@ -379,13 +375,14 @@ func (k Keeper) CompleteKeyRotation(ctx sdk.Context, validatorAddr sdk.AccAddres
 	now := ctx.BlockTime()
 	rotation.Status = types.KeyRotationStatusCompleted
 	rotation.CompletedAt = &now
-
-	store := ctx.KVStore(k.skey)
-	bz, err := json.Marshal(rotation)
+	storedRotation, err := k.getStoredKeyRotation(ctx, validatorAddr, rotation.Epoch)
 	if err != nil {
 		return err
 	}
-	store.Set(types.KeyRotationKey(validatorAddr, rotation.Epoch), bz)
+	storedRotation.KeyRotationRecord = *rotation
+	if err := k.setStoredKeyRotation(ctx, validatorAddr, storedRotation); err != nil {
+		return err
+	}
 
 	// Update identity status back to active
 	identity, exists := k.GetEnclaveIdentity(ctx, validatorAddr)
@@ -430,6 +427,17 @@ func (k Keeper) GetActiveKeyRotation(ctx sdk.Context, validatorAddr sdk.AccAddre
 	}
 
 	return nil, false
+}
+
+// StoreRotationSigningKeys persists the signer material needed for overlap and stale-key enforcement.
+func (k Keeper) StoreRotationSigningKeys(ctx sdk.Context, validatorAddr sdk.AccAddress, epoch uint64, oldSigningPubKey, newSigningPubKey []byte) error {
+	storedRotation, err := k.getStoredKeyRotation(ctx, validatorAddr, epoch)
+	if err != nil {
+		return err
+	}
+	storedRotation.OldSigningPubKey = bytes.Clone(oldSigningPubKey)
+	storedRotation.NewSigningPubKey = bytes.Clone(newSigningPubKey)
+	return k.setStoredKeyRotation(ctx, validatorAddr, storedRotation)
 }
 
 // ============================================================================
@@ -748,61 +756,61 @@ func (k Keeper) VerifyEnclaveSignature(ctx sdk.Context, result *types.AttestedSc
 
 	// Verify signature over SHA-256 hash of canonical payload
 	payload := types.SigningPayload(result)
-	signature := result.EnclaveSignature
-
-	switch len(identity.SigningPubKey) {
-	case ed25519.PublicKeySize:
-		// Ed25519 signature verification
-		if len(signature) != ed25519.SignatureSize {
-			return types.ErrEnclaveSignatureInvalid.Wrapf(
-				"invalid ed25519 signature length: expected %d, got %d",
-				ed25519.SignatureSize, len(signature),
-			)
-		}
-		if !ed25519.Verify(identity.SigningPubKey, payload, signature) {
-			return types.ErrEnclaveSignatureInvalid.Wrap("ed25519 signature verification failed")
-		}
-
-	case Secp256k1UncompressedPubKeySize:
-		// secp256k1 signature verification
-		pubKey, err := crypto.UnmarshalPubkey(identity.SigningPubKey)
-		if err != nil {
-			return types.ErrEnclaveSignatureInvalid.Wrapf("invalid secp256k1 public key: %v", err)
-		}
-
-		// Enforce canonical 64-byte signature format (no recovery ID)
-		// This prevents signature malleability from different signature representations
-		if len(signature) != Secp256k1SignatureSize {
-			return types.ErrEnclaveSignatureInvalid.Wrapf(
-				"invalid secp256k1 signature length: expected %d (canonical R||S format), got %d",
-				Secp256k1SignatureSize, len(signature),
-			)
-		}
-
-		// Enforce low-S normalization to prevent signature malleability
-		// secp256k1 signatures have two valid S values (S and N-S); we require the lower one
-		// The S value is in the second 32 bytes of the signature
-		if signature[32]&0x80 != 0 {
-			return types.ErrEnclaveSignatureInvalid.Wrap(
-				"secp256k1 signature S-value must be in low form (less than curve order / 2) to prevent malleability",
-			)
-		}
-
-		// Verify the signature
-		// crypto.VerifySignature expects the public key without the 0x04 prefix
-		uncompressed := crypto.FromECDSAPub(pubKey)
-		if !crypto.VerifySignature(uncompressed[1:], payload, signature) {
-			return types.ErrEnclaveSignatureInvalid.Wrap("secp256k1 signature verification failed")
-		}
-
-	default:
-		return types.ErrEnclaveSignatureInvalid.Wrapf(
-			"unsupported signing public key length: %d (expected %d for Ed25519 or %d for secp256k1)",
-			len(identity.SigningPubKey), ed25519.PublicKeySize, Secp256k1UncompressedPubKeySize,
-		)
+	if err := verifySigningKeySignature(identity.SigningPubKey, payload, result.EnclaveSignature); err != nil {
+		return types.ErrEnclaveSignatureInvalid.Wrap(err.Error())
 	}
 
 	return nil
+}
+
+type storedKeyRotationRecord struct {
+	types.KeyRotationRecord
+	OldSigningPubKey []byte `json:"old_signing_pub_key,omitempty"`
+	NewSigningPubKey []byte `json:"new_signing_pub_key,omitempty"`
+}
+
+func (k Keeper) getStoredKeyRotation(ctx sdk.Context, validatorAddr sdk.AccAddress, epoch uint64) (storedKeyRotationRecord, error) {
+	store := ctx.KVStore(k.skey)
+	bz := store.Get(types.KeyRotationKey(validatorAddr, epoch))
+	if bz == nil {
+		return storedKeyRotationRecord{}, types.ErrNoActiveRotation
+	}
+
+	var storedRotation storedKeyRotationRecord
+	if err := json.Unmarshal(bz, &storedRotation); err != nil {
+		return storedKeyRotationRecord{}, fmt.Errorf("failed to unmarshal key rotation record: %w", err)
+	}
+
+	return storedRotation, nil
+}
+
+func (k Keeper) setStoredKeyRotation(ctx sdk.Context, validatorAddr sdk.AccAddress, rotation storedKeyRotationRecord) error {
+	store := ctx.KVStore(k.skey)
+	bz, err := json.Marshal(rotation)
+	if err != nil {
+		return fmt.Errorf("failed to marshal key rotation record: %w", err)
+	}
+	store.Set(types.KeyRotationKey(validatorAddr, rotation.Epoch), bz)
+	return nil
+}
+
+func (k Keeper) getLatestStoredKeyRotation(ctx sdk.Context, validatorAddr sdk.AccAddress) (storedKeyRotationRecord, bool) {
+	store := ctx.KVStore(k.skey)
+	prefix := make([]byte, 0, len(types.PrefixKeyRotation)+len(validatorAddr))
+	prefix = append(prefix, types.PrefixKeyRotation...)
+	prefix = append(prefix, validatorAddr...)
+	iterator := store.ReverseIterator(prefix, storetypes.PrefixEndBytes(prefix))
+	defer iterator.Close()
+
+	for ; iterator.Valid(); iterator.Next() {
+		var rotation storedKeyRotationRecord
+		if err := json.Unmarshal(iterator.Value(), &rotation); err != nil {
+			continue
+		}
+		return rotation, true
+	}
+
+	return storedKeyRotationRecord{}, false
 }
 
 // ============================================================================

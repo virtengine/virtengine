@@ -58,6 +58,7 @@ func RegisterInterfaces(registry cdctypes.InterfaceRegistry) {
 		&veidv1.MsgRequestVerification{},
 		&veidv1.MsgUpdateVerificationStatus{},
 		&veidv1.MsgUpdateScore{},
+		&veidv1.MsgSubmitConsensusVerification{},
 		&veidv1.MsgSubmitSSOVerificationProof{},
 		&veidv1.MsgSubmitEmailVerificationProof{},
 		&veidv1.MsgSubmitSMSVerificationProof{},

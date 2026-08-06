@@ -1,10 +1,10 @@
-go 1.25.5
+go 1.25.8
 
 use (
 	.
-	./infra/tests
-	./infra/terraform/tests
 	./infra/dr/tests
+	./infra/terraform/tests
+	./infra/tests
 	./sdk/go
 	./sdk/specs
 )

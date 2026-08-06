@@ -113,7 +113,7 @@ spec:
     namespaces:
       - virtengine
     labelSelectors:
-      app.kubernetes.io/component: provider-daemon
+      app.kubernetes.io/component: provider
   direction: both
   duration: "120s"
 

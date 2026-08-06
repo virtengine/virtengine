@@ -30,3 +30,8 @@ func ProviderPublicKeyPrefix() []byte {
 func DomainVerificationPrefix() []byte {
 	return []byte{0x03}
 }
+
+// ProviderSigningKeyEpochPrefix returns the immutable signing-key history prefix.
+func ProviderSigningKeyEpochPrefix() []byte {
+	return []byte{0x04}
+}

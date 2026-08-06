@@ -3,7 +3,7 @@ export type AccessScope = "send-manifest" | "get-manifest" | "logs" | "shell" | 
 export interface JwtTokenPayload {
   /** Version of the JWT specification (currently fixed at v1). */
   version: "v1";
-  /** VirtEngine address of the lease(s) owner, e.g., virt1abcd... (44 characters) */
+  /** VirtEngine address of the lease(s) owner, e.g., virtengine1abcd... (49 characters) */
   iss: string;
   /** Token issuance timestamp as Unix time (seconds since 1970-01-01T00:00:00Z). Should be <= exp and >= nbf. */
   iat: number;
@@ -41,7 +41,7 @@ export interface JWTHeader {
 export type LeasePermission = FullAccessPermission | ScopedAccessPermission | GranularAccessPermission;
 
 interface BaseLeasePermission {
-  /** Provider address, e.g., virt1xyz... (44 characters). */
+  /** Provider address, e.g., virtengine1xyz... (49 characters). */
   provider: string;
 }
 

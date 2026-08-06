@@ -34,6 +34,16 @@ func RegisterLegacyAminoCodec(cdc *codec.LegacyAmino) {
 
 	// Reward messages
 	legacy.RegisterAminoMsg(cdc, &MsgClaimRewards{}, "settlement/MsgClaimRewards")
+	legacy.RegisterAminoMsg(cdc, &MsgOpenFinancialCase{}, "settlement/MsgOpenFinancialCase")
+	legacy.RegisterAminoMsg(cdc, &MsgAddFinancialClaim{}, "settlement/MsgAddFinancialClaim")
+	legacy.RegisterAminoMsg(cdc, &MsgSubmitFinancialCaseForReview{}, "settlement/MsgSubmitCaseReview")
+	legacy.RegisterAminoMsg(cdc, &MsgEscalateFinancialCase{}, "settlement/MsgEscalateCase")
+	legacy.RegisterAminoMsg(cdc, &MsgResolveFinancialCase{}, "settlement/MsgResolveCase")
+	legacy.RegisterAminoMsg(cdc, &MsgAppealFinancialCase{}, "settlement/MsgAppealCase")
+	legacy.RegisterAminoMsg(cdc, &MsgCancelFinancialCase{}, "settlement/MsgCancelCase")
+	legacy.RegisterAminoMsg(cdc, &MsgFinalizeFinancialCase{}, "settlement/MsgFinalizeCase")
+	legacy.RegisterAminoMsg(cdc, &MsgRecordFiatConversionObservation{}, "settlement/MsgFiatObservation")
+	legacy.RegisterAminoMsg(cdc, &MsgUpdateParams{}, "settlement/MsgUpdateParams")
 }
 
 // RegisterInterfaces registers the interfaces types with the interface registry.
@@ -51,6 +61,16 @@ func RegisterInterfaces(registry cdctypes.InterfaceRegistry) {
 		&MsgAcknowledgeUsage{},
 		// Reward messages
 		&MsgClaimRewards{},
+		&MsgOpenFinancialCase{},
+		&MsgAddFinancialClaim{},
+		&MsgSubmitFinancialCaseForReview{},
+		&MsgEscalateFinancialCase{},
+		&MsgResolveFinancialCase{},
+		&MsgAppealFinancialCase{},
+		&MsgCancelFinancialCase{},
+		&MsgFinalizeFinancialCase{},
+		&MsgRecordFiatConversionObservation{},
+		&MsgUpdateParams{},
 	)
 	msgservice.RegisterMsgServiceDesc(registry, &settlementv1.Msg_serviceDesc)
 }

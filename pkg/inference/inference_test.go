@@ -40,6 +40,10 @@ func TestDefaultInferenceConfig(t *testing.T) {
 	if config.ExpectedInputDim != TotalFeatureDim {
 		t.Errorf("expected input dim %d, got %d", TotalFeatureDim, config.ExpectedInputDim)
 	}
+
+	if config.AllowFallbackToStub {
+		t.Error("expected simulated inference fallback to be disabled by default")
+	}
 }
 
 func TestConfigValidation(t *testing.T) {
@@ -129,6 +133,72 @@ func TestConfigValidation(t *testing.T) {
 			modifyFunc: func(c *InferenceConfig) {
 				c.FallbackScore = 150
 				c.ExpectedHash = strings.Repeat("a", 64)
+			},
+			expectError: true,
+		},
+		{
+			name: "enabled inference requires sidecar",
+			modifyFunc: func(c *InferenceConfig) {
+				c.Enabled = true
+				c.ExpectedHash = strings.Repeat("a", 64)
+			},
+			expectError: true,
+		},
+		{
+			name: "enabled inference rejects score fallback",
+			modifyFunc: func(c *InferenceConfig) {
+				c.Enabled = true
+				c.UseSidecar = true
+				c.SidecarAddress = testSidecarAddress
+				c.ExpectedHash = strings.Repeat("a", 64)
+				c.StrictDeterminism = true
+			},
+			expectError: true,
+		},
+		{
+			name: "strict enabled sidecar config",
+			modifyFunc: func(c *InferenceConfig) {
+				c.Enabled = true
+				c.UseSidecar = true
+				c.SidecarAddress = testSidecarAddress
+				c.ExpectedHash = strings.Repeat("a", 64)
+				c.UseFallbackOnError = false
+				c.StrictDeterminism = true
+				c.SidecarTLS = true
+				c.SidecarTLSCAFile = "test-ca.pem"
+				c.SidecarTLSCertFile = "test-cert.pem"
+				c.SidecarTLSKeyFile = "test-key.pem"
+				c.SidecarTLSServerName = "veid-inference.test"
+			},
+			expectError: false,
+		},
+		{
+			name: "enabled inference requires mTLS identity",
+			modifyFunc: func(c *InferenceConfig) {
+				c.Enabled = true
+				c.UseSidecar = true
+				c.SidecarAddress = testSidecarAddress
+				c.ExpectedHash = strings.Repeat("a", 64)
+				c.UseFallbackOnError = false
+				c.StrictDeterminism = true
+				c.SidecarTLS = true
+			},
+			expectError: true,
+		},
+		{
+			name: "sidecar client certificate requires key",
+			modifyFunc: func(c *InferenceConfig) {
+				c.ExpectedHash = strings.Repeat("a", 64)
+				c.SidecarTLS = true
+				c.SidecarTLSCertFile = "test-cert.pem"
+			},
+			expectError: true,
+		},
+		{
+			name: "sidecar TLS requires sidecar mode",
+			modifyFunc: func(c *InferenceConfig) {
+				c.ExpectedHash = strings.Repeat("a", 64)
+				c.SidecarTLS = true
 			},
 			expectError: true,
 		},
@@ -448,6 +518,7 @@ func TestModelLoaderWithTempModel(t *testing.T) {
 
 	config := DefaultInferenceConfig()
 	config.ModelPath = modelDir
+	config.AllowFallbackToStub = true
 	setExpectedHashForModel(t, &config, modelDir)
 
 	loader := NewModelLoader(config)
@@ -491,6 +562,7 @@ func TestModelHashComputation(t *testing.T) {
 
 	config := DefaultInferenceConfig()
 	config.ModelPath = modelDir
+	config.AllowFallbackToStub = true
 	setExpectedHashForModel(t, &config, modelDir)
 
 	loader := NewModelLoader(config)
@@ -547,6 +619,7 @@ func TestModelLoaderRejectsNonDeterministicOps(t *testing.T) {
 
 	config := DefaultInferenceConfig()
 	config.ModelPath = modelDir
+	config.AllowFallbackToStub = true
 	setExpectedHashForModel(t, &config, modelDir)
 
 	loader := NewModelLoader(config)
@@ -583,6 +656,7 @@ func TestModelLoaderAcceptsDeterministicOps(t *testing.T) {
 
 	config := DefaultInferenceConfig()
 	config.ModelPath = modelDir
+	config.AllowFallbackToStub = true
 	setExpectedHashForModel(t, &config, modelDir)
 
 	loader := NewModelLoader(config)
@@ -614,6 +688,7 @@ func TestScorerWithValidInputs(t *testing.T) {
 
 	config := DefaultInferenceConfig()
 	config.ModelPath = modelDir
+	config.AllowFallbackToStub = true
 	setExpectedHashForModel(t, &config, modelDir)
 
 	scorer, err := NewTensorFlowScorer(config)
@@ -673,6 +748,7 @@ func TestScorerWithInvalidInputs(t *testing.T) {
 
 	config := DefaultInferenceConfig()
 	config.ModelPath = modelDir
+	config.AllowFallbackToStub = true
 	setExpectedHashForModel(t, &config, modelDir)
 
 	scorer, err := NewTensorFlowScorer(config)
@@ -713,6 +789,7 @@ func TestScorerTimeout(t *testing.T) {
 	config := DefaultInferenceConfig()
 	config.ModelPath = modelDir
 	config.Timeout = 1 * time.Nanosecond // Very short timeout
+	config.AllowFallbackToStub = true
 	setExpectedHashForModel(t, &config, modelDir)
 
 	scorer, err := NewTensorFlowScorer(config)
@@ -767,6 +844,7 @@ func TestScorerDeterministicOutputs(t *testing.T) {
 	config := DefaultInferenceConfig()
 	config.ModelPath = modelDir
 	config.Deterministic = true
+	config.AllowFallbackToStub = true
 	setExpectedHashForModel(t, &config, modelDir)
 
 	scorer, err := NewTensorFlowScorer(config)
@@ -821,6 +899,7 @@ func TestScorerStats(t *testing.T) {
 
 	config := DefaultInferenceConfig()
 	config.ModelPath = modelDir
+	config.AllowFallbackToStub = true
 	setExpectedHashForModel(t, &config, modelDir)
 
 	scorer, err := NewTensorFlowScorer(config)
@@ -927,6 +1006,7 @@ func TestNewScorer(t *testing.T) {
 
 	config := DefaultInferenceConfig()
 	config.ModelPath = modelDir
+	config.AllowFallbackToStub = true
 	setExpectedHashForModel(t, &config, modelDir)
 
 	scorer, err := NewScorer(config)
@@ -1063,6 +1143,7 @@ func BenchmarkInference(b *testing.B) {
 
 	config := DefaultInferenceConfig()
 	config.ModelPath = modelDir
+	config.AllowFallbackToStub = true
 	setExpectedHashForModel(b, &config, modelDir)
 
 	scorer, err := NewTensorFlowScorer(config)

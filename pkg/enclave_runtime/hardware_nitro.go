@@ -15,21 +15,23 @@
 package enclave_runtime
 
 import (
-	"bytes"
 	"context"
 	"crypto/rand"
 	"crypto/sha256"
 	"crypto/sha512"
 	"encoding/binary"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"strings"
 	"sync"
 	"time"
 
+	nitroatt "github.com/virtengine/virtengine/pkg/enclave_runtime/nitro"
 	"github.com/virtengine/virtengine/pkg/security"
 	"golang.org/x/crypto/hkdf"
 )
@@ -51,6 +53,7 @@ const (
 	VsockCIDAny    = 0xFFFFFFFF // VMADDR_CID_ANY
 	VsockCIDHost   = 2          // Host CID
 	VsockCIDParent = 3          // Parent instance CID
+	NitroVsockPath = "/dev/vsock"
 
 	// NSM ioctl commands
 	NSM_IOC_MSG_SEND = 0xC0187700
@@ -71,14 +74,15 @@ const (
 
 // NitroEnclaveInfo represents information about a running enclave
 type NitroEnclaveInfo struct {
-	EnclaveID    string `json:"EnclaveID"`
-	ProcessID    int    `json:"ProcessID"`
-	EnclaveCID   uint32 `json:"EnclaveCID"`
-	NumberOfCPUs int    `json:"NumberOfCPUs"`
-	CPUIDs       []int  `json:"CPUIDs"`
-	MemoryMiB    int64  `json:"MemoryMiB"`
-	State        string `json:"State"`
-	Flags        string `json:"Flags"`
+	EnclaveID    string            `json:"EnclaveID"`
+	ProcessID    int               `json:"ProcessID"`
+	EnclaveCID   uint32            `json:"EnclaveCID"`
+	NumberOfCPUs int               `json:"NumberOfCPUs"`
+	CPUIDs       []int             `json:"CPUIDs"`
+	MemoryMiB    int64             `json:"MemoryMiB"`
+	State        string            `json:"State"`
+	Flags        string            `json:"Flags"`
+	Measurements NitroMeasurements `json:"Measurements,omitempty"`
 }
 
 // NitroRunEnclaveOutput represents the output of run-enclave command
@@ -429,17 +433,25 @@ func (r *NitroCLIRunner) IsSimulated() bool {
 type NitroVsockClient struct {
 	mu sync.Mutex
 
-	cid       uint32
-	port      uint32
-	connected bool
-	simulated bool
+	cid             uint32
+	port            uint32
+	connected       bool
+	simulated       bool
+	requireHardware bool
+	conn            io.ReadWriteCloser
 }
 
 // NewNitroVsockClient creates a new vsock client
 func NewNitroVsockClient(cid, port uint32) *NitroVsockClient {
+	return NewNitroVsockClientWithMode(cid, port, false)
+}
+
+// NewNitroVsockClientWithMode creates a new vsock client with explicit hardware requirements.
+func NewNitroVsockClientWithMode(cid, port uint32, requireHardware bool) *NitroVsockClient {
 	return &NitroVsockClient{
-		cid:  cid,
-		port: port,
+		cid:             cid,
+		port:            port,
+		requireHardware: requireHardware,
 	}
 }
 
@@ -452,17 +464,33 @@ func (c *NitroVsockClient) Connect(ctx context.Context) error {
 		return nil
 	}
 
-	// TODO: Real implementation would:
-	// 1. Create AF_VSOCK socket: socket(AF_VSOCK, SOCK_STREAM, 0)
-	// 2. Connect to CID:port
-	//
-	// Example (requires cgo or syscall):
-	// fd, err := unix.Socket(unix.AF_VSOCK, unix.SOCK_STREAM, 0)
-	// addr := &unix.SockaddrVM{CID: c.cid, Port: c.port}
-	// err = unix.Connect(fd, addr)
+	_ = ctx
 
-	// For now, mark as simulated
-	c.simulated = true
+	exists, err := checkDeviceExists(NitroVsockPath)
+	if err != nil {
+		return unavailableHardwareOperation(AttestationTypeNitro, "connect vsock", NitroVsockPath, err)
+	}
+	if !exists {
+		if c.requireHardware {
+			return unavailableHardwareOperation(AttestationTypeNitro, "connect vsock", NitroVsockPath, ErrDeviceNotFound)
+		}
+		c.simulated = true
+		c.connected = true
+		return nil
+	}
+
+	conn, err := dialNitroVsock(ctx, c.cid, c.port)
+	if err != nil {
+		if c.requireHardware {
+			return unavailableHardwareOperation(AttestationTypeNitro, "connect vsock", NitroVsockPath, err)
+		}
+		c.simulated = true
+		c.connected = true
+		return nil
+	}
+
+	c.conn = conn
+	c.simulated = false
 	c.connected = true
 	return nil
 }
@@ -472,7 +500,14 @@ func (c *NitroVsockClient) Disconnect() error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
+	if c.conn != nil {
+		if err := c.conn.Close(); err != nil {
+			return err
+		}
+		c.conn = nil
+	}
 	c.connected = false
+	c.simulated = false
 	return nil
 }
 
@@ -490,8 +525,12 @@ func (c *NitroVsockClient) Send(data []byte) error {
 		return nil
 	}
 
-	// TODO: Real implementation would write to socket
-	return nil
+	if c.conn == nil {
+		return errors.New("vsock connection handle missing")
+	}
+
+	_, err := c.conn.Write(data)
+	return err
 }
 
 // Receive receives data from the enclave via vsock
@@ -508,8 +547,16 @@ func (c *NitroVsockClient) Receive(maxSize int) ([]byte, error) {
 		return []byte{}, nil
 	}
 
-	// TODO: Real implementation would read from socket
-	return nil, nil
+	if c.conn == nil {
+		return nil, errors.New("vsock connection handle missing")
+	}
+
+	buf := make([]byte, maxSize)
+	n, err := c.conn.Read(buf)
+	if err != nil && !errors.Is(err, io.EOF) {
+		return nil, err
+	}
+	return buf[:n], nil
 }
 
 // IsConnected returns true if connected
@@ -539,6 +586,7 @@ type NitroNSMClient struct {
 
 	devicePath string
 	fd         *os.File
+	session    *nitroatt.NSMSession
 	opened     bool
 	simulated  bool
 
@@ -557,6 +605,15 @@ func NewNitroNSMClient() *NitroNSMClient {
 
 // Open opens the NSM device
 func (c *NitroNSMClient) Open() error {
+	return c.openWithMode(false)
+}
+
+// OpenWithMode opens the NSM device with explicit hardware requirements.
+func (c *NitroNSMClient) OpenWithMode(requireHardware bool) error {
+	return c.openWithMode(requireHardware)
+}
+
+func (c *NitroNSMClient) openWithMode(requireHardware bool) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
@@ -566,24 +623,31 @@ func (c *NitroNSMClient) Open() error {
 
 	// Check if device exists
 	exists, err := checkDeviceExists(c.devicePath)
-	if err != nil || !exists {
-		// Fall back to simulation
-		c.simulated = true
-		c.opened = true
-		c.initSimulatedState()
-		return nil
-	}
-
-	// Try to open device
-	fd, err := os.OpenFile(c.devicePath, os.O_RDWR, 0)
 	if err != nil {
+		return unavailableHardwareOperation(AttestationTypeNitro, "open NSM", c.devicePath, err)
+	}
+	if !exists {
+		if requireHardware {
+			return unavailableHardwareOperation(AttestationTypeNitro, "open NSM", c.devicePath, ErrDeviceNotFound)
+		}
 		c.simulated = true
 		c.opened = true
 		c.initSimulatedState()
 		return nil
 	}
 
-	c.fd = fd
+	session, err := nitroatt.NewNSMSessionWithMode(true)
+	if err != nil {
+		if requireHardware {
+			return unavailableHardwareOperation(AttestationTypeNitro, "open NSM", c.devicePath, err)
+		}
+		c.simulated = true
+		c.opened = true
+		c.initSimulatedState()
+		return nil
+	}
+
+	c.session = session
 	c.opened = true
 	return nil
 }
@@ -619,8 +683,15 @@ func (c *NitroNSMClient) Close() error {
 		}
 		c.fd = nil
 	}
+	if c.session != nil {
+		if err := c.session.Close(); err != nil {
+			return err
+		}
+		c.session = nil
+	}
 
 	c.opened = false
+	c.simulated = false
 	return nil
 }
 
@@ -649,7 +720,7 @@ func (c *NitroNSMClient) GetAttestationDocument(userData, nonce, publicKey []byt
 	}
 
 	if c.simulated {
-		return c.getSimulatedAttestationDocument(userData, nonce, publicKey)
+		return c.getSimulatedAttestationDocument(userData, nonce, publicKey), nil
 	}
 
 	return c.getHardwareAttestationDocument(userData, nonce, publicKey)
@@ -657,21 +728,44 @@ func (c *NitroNSMClient) GetAttestationDocument(userData, nonce, publicKey []byt
 
 // getHardwareAttestationDocument gets a document from real NSM
 func (c *NitroNSMClient) getHardwareAttestationDocument(userData, nonce, publicKey []byte) (*NSMAttestationDocument, error) {
-	// TODO: Real implementation would:
-	// 1. Build NSM request (CBOR encoded)
-	// 2. Call ioctl(fd, NSM_IOC_MSG_SEND, &request)
-	// 3. Parse CBOR response into NitroAttestationDocument
-	//
-	// The request format is CBOR with fields:
-	// - "user_data": optional user data (max 1KB)
-	// - "nonce": optional nonce (max 64 bytes)
-	// - "public_key": optional public key
+	if c.session == nil {
+		return nil, unsupportedHardwareOperation(AttestationTypeNitro, "get attestation document",
+			"Nitro NSM session is not initialized")
+	}
 
-	return c.getSimulatedAttestationDocument(userData, nonce, publicKey)
+	raw, err := c.session.GetAttestation(userData, nonce, publicKey)
+	if err != nil {
+		return nil, unavailableHardwareOperation(AttestationTypeNitro, "get attestation document", c.devicePath, err)
+	}
+
+	parsed, err := nitroatt.ParseDocument(raw)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse Nitro attestation document: %w", err)
+	}
+
+	doc := &NSMAttestationDocument{
+		ModuleID:    parsed.Payload.ModuleID,
+		Timestamp:   parsed.Payload.Timestamp,
+		Digest:      parsed.Payload.Digest,
+		PCRs:        make(map[uint8][]byte, len(parsed.Payload.PCRs)),
+		Certificate: append([]byte(nil), parsed.Payload.Certificate...),
+		CABundle:    cloneByteSlices(parsed.Payload.CABundle),
+		PublicKey:   append([]byte(nil), parsed.Payload.PublicKey...),
+		UserData:    append([]byte(nil), parsed.Payload.UserData...),
+		Nonce:       append([]byte(nil), parsed.Payload.Nonce...),
+	}
+	for index, value := range parsed.Payload.PCRs {
+		if index < 0 || index > 255 {
+			continue
+		}
+		doc.PCRs[uint8(index)] = append([]byte(nil), value...)
+	}
+
+	return doc, nil
 }
 
 // getSimulatedAttestationDocument generates a simulated document
-func (c *NitroNSMClient) getSimulatedAttestationDocument(userData, nonce, publicKey []byte) (*NSMAttestationDocument, error) {
+func (c *NitroNSMClient) getSimulatedAttestationDocument(userData, nonce, publicKey []byte) *NSMAttestationDocument {
 	doc := &NSMAttestationDocument{
 		ModuleID: "i-simulated-enclave-module",
 		//nolint:gosec // G115: Unix timestamp is positive and fits in uint64
@@ -698,7 +792,7 @@ func (c *NitroNSMClient) getSimulatedAttestationDocument(userData, nonce, public
 		generateSimulatedCert("AWS-NITRO-INTERMEDIATE"),
 	}
 
-	return doc, nil
+	return doc
 }
 
 // DescribePCRs returns the current PCR values
@@ -719,8 +813,20 @@ func (c *NitroNSMClient) DescribePCRs() (map[uint8][]byte, error) {
 		return pcrs, nil
 	}
 
-	// TODO: Real implementation would call NSM describe
-	return nil, nil
+	if c.session == nil {
+		return nil, unsupportedHardwareOperation(AttestationTypeNitro, "describe PCRs",
+			"Nitro NSM session is not initialized")
+	}
+
+	pcrs := make(map[uint8][]byte, 16)
+	for i := 0; i < 16; i++ {
+		desc, err := c.session.DescribePCR(i)
+		if err != nil {
+			return nil, unavailableHardwareOperation(AttestationTypeNitro, "describe PCRs", c.devicePath, err)
+		}
+		pcrs[uint8(i)] = append([]byte(nil), desc.Value...) // #nosec G115 -- loop bound is 16
+	}
+	return pcrs, nil
 }
 
 // ExtendPCR extends a PCR with the given data
@@ -748,7 +854,14 @@ func (c *NitroNSMClient) ExtendPCR(index uint8, data []byte) error {
 		return nil
 	}
 
-	// TODO: Real implementation would call NSM extend
+	if c.session == nil {
+		return unsupportedHardwareOperation(AttestationTypeNitro, "extend PCR",
+			"Nitro NSM session is not initialized")
+	}
+
+	if err := c.session.ExtendPCR(int(index), data); err != nil {
+		return unavailableHardwareOperation(AttestationTypeNitro, "extend PCR", c.devicePath, err)
+	}
 	return nil
 }
 
@@ -770,7 +883,14 @@ func (c *NitroNSMClient) LockPCR(index uint8) error {
 		return nil
 	}
 
-	// TODO: Real implementation would call NSM lock
+	if c.session == nil {
+		return unsupportedHardwareOperation(AttestationTypeNitro, "lock PCR",
+			"Nitro NSM session is not initialized")
+	}
+
+	if err := c.session.LockPCR(int(index)); err != nil {
+		return unavailableHardwareOperation(AttestationTypeNitro, "lock PCR", c.devicePath, err)
+	}
 	return nil
 }
 
@@ -779,6 +899,13 @@ func (c *NitroNSMClient) IsSimulated() bool {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	return c.simulated
+}
+
+// HasHardwareSession returns true when a real NSM session is available.
+func (c *NitroNSMClient) HasHardwareSession() bool {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.opened && !c.simulated && c.session != nil
 }
 
 // =============================================================================
@@ -910,7 +1037,9 @@ type NitroHardwareBackend struct {
 	detector     *NitroHardwareDetector
 	cliRunner    *NitroCLIRunner
 	nsmClient    *NitroNSMClient
+	vsockClient  *NitroVsockClient
 	imageBuilder *NitroEnclaveImageBuilder
+	measurements NitroMeasurements
 
 	initialized  bool
 	enclaveID    string
@@ -953,12 +1082,21 @@ func (b *NitroHardwareBackend) Initialize() error {
 
 	// Create components
 	b.cliRunner = NewNitroCLIRunner(b.detector)
-	b.nsmClient = NewNitroNSMClient()
 	b.imageBuilder = NewNitroEnclaveImageBuilder(b.detector)
 
-	// Open NSM device
-	if err := b.nsmClient.Open(); err != nil {
-		return fmt.Errorf("failed to open NSM device: %w", err)
+	// Open NSM when available. When Nitro hardware is absent entirely, keep the
+	// backend in simulation mode so existing abstraction tests still work.
+	b.nsmClient = NewNitroNSMClient()
+	if b.detector.IsAvailable() {
+		if exists, _ := checkDeviceExists(NitroNSMDevPath); exists {
+			if err := b.nsmClient.OpenWithMode(true); err != nil {
+				return fmt.Errorf("failed to open NSM device: %w", err)
+			}
+		}
+	} else {
+		if err := b.nsmClient.Open(); err != nil {
+			return fmt.Errorf("failed to initialize simulated NSM client: %w", err)
+		}
 	}
 
 	// Generate simulated key for simulation mode
@@ -996,6 +1134,12 @@ func (b *NitroHardwareBackend) Shutdown() error {
 			return fmt.Errorf("failed to close NSM device: %w", err)
 		}
 	}
+	if b.vsockClient != nil {
+		if err := b.vsockClient.Disconnect(); err != nil {
+			return fmt.Errorf("failed to close vsock connection: %w", err)
+		}
+		b.vsockClient = nil
+	}
 
 	b.initialized = false
 	return nil
@@ -1010,26 +1154,25 @@ func (b *NitroHardwareBackend) GetAttestation(nonce []byte) ([]byte, error) {
 		return nil, ErrHardwareNotInitialized
 	}
 
-	// Get attestation document from NSM
-	doc, err := b.nsmClient.GetAttestationDocument(nil, nonce, nil)
+	if b.nsmClient != nil && b.nsmClient.IsSimulated() && !b.detector.IsAvailable() {
+		doc, err := b.nsmClient.GetAttestationDocument(nil, nonce, nil)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get simulated attestation document: %w", err)
+		}
+		return serializeNSMAttestationDocument(doc)
+	}
+
+	if b.nsmClient == nil || !b.nsmClient.HasHardwareSession() {
+		return nil, unsupportedHardwareOperation(AttestationTypeNitro, "get attestation",
+			"Nitro attestation requires an in-enclave NSM session")
+	}
+
+	raw, err := b.nsmClient.session.GetAttestation(nil, nonce, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get attestation document: %w", err)
 	}
 
-	// Serialize document (simplified)
-	var buf bytes.Buffer
-	buf.WriteString(doc.ModuleID)
-	buf.WriteByte(0)
-	_ = binary.Write(&buf, binary.LittleEndian, doc.Timestamp)
-	buf.Write(doc.Nonce)
-	for i := uint8(0); i < 16; i++ {
-		if pcr, ok := doc.PCRs[i]; ok {
-			buf.Write(pcr)
-		}
-	}
-	buf.Write(doc.Certificate)
-
-	return buf.Bytes(), nil
+	return raw, nil
 }
 
 // DeriveKey derives a key from the Nitro root of trust
@@ -1041,18 +1184,9 @@ func (b *NitroHardwareBackend) DeriveKey(context []byte, keySize int) ([]byte, e
 		return nil, ErrHardwareNotInitialized
 	}
 
-	// Get PCRs as key material
-	pcrs, err := b.nsmClient.DescribePCRs()
+	keyMaterial, err := b.getHardwareKeyMaterial()
 	if err != nil {
 		return nil, err
-	}
-
-	// Combine PCR0-2 as root key material
-	var keyMaterial []byte
-	for i := uint8(0); i <= 2; i++ {
-		if pcr, ok := pcrs[i]; ok {
-			keyMaterial = append(keyMaterial, pcr...)
-		}
 	}
 
 	// Derive key using HKDF
@@ -1194,12 +1328,15 @@ func (b *NitroHardwareBackend) RunAndConnect(ctx context.Context, config NitroHW
 		vsockPort = NitroDefaultVsockPort
 	}
 
-	client := NewNitroVsockClient(result.EnclaveCID, vsockPort)
+	client := NewNitroVsockClientWithMode(result.EnclaveCID, vsockPort, true)
 	if err := client.Connect(ctx); err != nil {
 		// Try to terminate enclave on connection failure
 		_ = b.cliRunner.TerminateEnclave(ctx, b.enclaveID)
 		return nil, fmt.Errorf("failed to connect via vsock: %w", err)
 	}
+
+	b.vsockClient = client
+	b.cacheNitroMeasurements(ctx)
 
 	return client, nil
 }
@@ -1209,4 +1346,111 @@ func (b *NitroHardwareBackend) GetEnclaveInfo() (string, uint32) {
 	b.mu.RLock()
 	defer b.mu.RUnlock()
 	return b.enclaveID, b.enclaveCID
+}
+
+// GetMeasurements returns the most recently observed Nitro measurements.
+func (b *NitroHardwareBackend) GetMeasurements() NitroMeasurements {
+	b.mu.RLock()
+	defer b.mu.RUnlock()
+	return b.measurements
+}
+
+func (b *NitroHardwareBackend) cacheNitroMeasurements(ctx context.Context) {
+	enclaves, err := b.cliRunner.DescribeEnclaves(ctx)
+	if err != nil {
+		return
+	}
+
+	for _, enclave := range enclaves {
+		if enclave.EnclaveID == b.enclaveID {
+			b.measurements = enclave.Measurements
+			return
+		}
+	}
+}
+
+func (b *NitroHardwareBackend) getHardwareKeyMaterial() ([]byte, error) {
+	if b.nsmClient != nil {
+		pcrs, err := b.nsmClient.DescribePCRs()
+		if err != nil {
+			if b.nsmClient.HasHardwareSession() {
+				return nil, err
+			}
+		} else {
+			var keyMaterial []byte
+			for i := uint8(0); i <= 2; i++ {
+				if pcr, ok := pcrs[i]; ok {
+					keyMaterial = append(keyMaterial, pcr...)
+				}
+			}
+			if len(keyMaterial) > 0 {
+				return keyMaterial, nil
+			}
+		}
+	}
+
+	if nitroMeasurementsReady(b.measurements) {
+		return nitroKeyMaterialFromMeasurements(b.measurements)
+	}
+
+	return nil, unsupportedHardwareOperation(AttestationTypeNitro, "derive key",
+		"Nitro PCR measurements are unavailable from NSM and nitro-cli")
+}
+
+func nitroMeasurementsReady(measurements NitroMeasurements) bool {
+	return measurements.PCR0 != "" && measurements.PCR1 != "" && measurements.PCR2 != ""
+}
+
+func nitroKeyMaterialFromMeasurements(measurements NitroMeasurements) ([]byte, error) {
+	var keyMaterial []byte
+	for _, encoded := range []string{measurements.PCR0, measurements.PCR1, measurements.PCR2} {
+		decoded, err := hex.DecodeString(strings.TrimSpace(encoded))
+		if err != nil {
+			return nil, fmt.Errorf("invalid Nitro measurement %q: %w", encoded, err)
+		}
+		keyMaterial = append(keyMaterial, decoded...)
+	}
+	return keyMaterial, nil
+}
+
+func cloneByteSlices(values [][]byte) [][]byte {
+	if len(values) == 0 {
+		return nil
+	}
+	cloned := make([][]byte, 0, len(values))
+	for _, value := range values {
+		cloned = append(cloned, append([]byte(nil), value...))
+	}
+	return cloned
+}
+
+func serializeNSMAttestationDocument(doc *NSMAttestationDocument) ([]byte, error) {
+	if doc == nil {
+		return nil, errors.New("nil Nitro attestation document")
+	}
+
+	payload := &nitroatt.DocumentPayload{
+		ModuleID:    doc.ModuleID,
+		Digest:      doc.Digest,
+		Timestamp:   doc.Timestamp,
+		PCRs:        make(map[int][]byte, len(doc.PCRs)),
+		Certificate: append([]byte(nil), doc.Certificate...),
+		CABundle:    cloneByteSlices(doc.CABundle),
+		PublicKey:   append([]byte(nil), doc.PublicKey...),
+		UserData:    append([]byte(nil), doc.UserData...),
+		Nonce:       append([]byte(nil), doc.Nonce...),
+	}
+	for index, value := range doc.PCRs {
+		payload.PCRs[int(index)] = append([]byte(nil), value...)
+	}
+
+	serialized, err := nitroatt.SerializeDocument(&nitroatt.AttestationDocument{
+		Protected: []byte{0xA1, 0x01, 0x38, 0x22},
+		Payload:   payload,
+		Signature: make([]byte, nitroatt.ES384SignatureSize),
+	})
+	if err != nil {
+		return nil, err
+	}
+	return serialized, nil
 }

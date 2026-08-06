@@ -75,10 +75,9 @@ func (AppModuleBasic) ValidateGenesis(cdc codec.JSONCodec, _ client.TxEncodingCo
 
 // RegisterGRPCGatewayRoutes registers the gRPC Gateway routes.
 func (AppModuleBasic) RegisterGRPCGatewayRoutes(clientCtx client.Context, mux *runtime.ServeMux) {
-	// TODO: RegisterQueryHandlerClient not generated for marketplace v1 - needs proto regeneration
-	// if err := marketplacev1.RegisterQueryHandlerClient(context.Background(), mux, marketplacev1.NewQueryClient(clientCtx)); err != nil {
-	// 	panic(fmt.Errorf("couldn't register marketplace grpc routes: %s", err.Error()))
-	// }
+	if err := marketplacev1.RegisterQueryHandlerClient(context.Background(), mux, marketplacev1.NewQueryClient(clientCtx)); err != nil {
+		panic(fmt.Errorf("couldn't register marketplace grpc routes: %s", err.Error()))
+	}
 }
 
 // GetTxCmd returns the root tx command for the module.
@@ -119,6 +118,12 @@ func (am AppModule) RegisterInvariants(_ sdk.InvariantRegistry) {}
 func (am AppModule) RegisterServices(cfg module.Configurator) {
 	marketplacetypes.RegisterMsgServer(cfg.MsgServer(), marketplacekeeper.NewMsgServerImpl(am.keeper))
 	marketplacev1.RegisterQueryServer(cfg.QueryServer(), marketplacekeeper.NewQueryServerImpl(am.keeper))
+	if err := cfg.RegisterMigration(marketplacetypes.ModuleName, 1, func(ctx sdk.Context) error {
+		am.keeper.ActivateCanonicalLifecycle(ctx)
+		return nil
+	}); err != nil {
+		panic(err)
+	}
 }
 
 // InitGenesis performs genesis initialization.
@@ -141,7 +146,7 @@ func (am AppModule) ExportGenesis(ctx sdk.Context, cdc codec.JSONCodec) json.Raw
 }
 
 // ConsensusVersion implements AppModule/ConsensusVersion.
-func (AppModule) ConsensusVersion() uint64 { return 1 }
+func (AppModule) ConsensusVersion() uint64 { return 2 }
 
 // IsOnePerModuleType implements depinject.OnePerModuleType.
 func (am AppModule) IsOnePerModuleType() {}

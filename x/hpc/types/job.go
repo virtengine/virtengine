@@ -128,6 +128,13 @@ type HPCJob struct {
 
 	// BlockHeight is when the job was recorded
 	BlockHeight int64 `json:"block_height"`
+
+	// ReservationID links to authoritative x/resources capacity.
+	ReservationID string `json:"reservation_id,omitempty"`
+	AllocationID  string `json:"allocation_id,omitempty"`
+	MarketOrderID string `json:"market_order_id,omitempty"`
+	MarketBidID   string `json:"market_bid_id,omitempty"`
+	MarketLeaseID string `json:"market_lease_id,omitempty"`
 }
 
 // JobWorkloadSpec defines the workload for an HPC job

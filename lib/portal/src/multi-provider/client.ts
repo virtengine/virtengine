@@ -1,5 +1,16 @@
 import { ProviderAPIClient } from "../provider-api/client";
 import type { Deployment, ResourceMetrics } from "../provider-api/types";
+import { ProviderDeploymentActionError } from "../provider-api/deployment-actions";
+import type {
+  ProviderDeploymentAction,
+  ProviderDeploymentActionCapability,
+  ProviderDeploymentActionReceipt,
+} from "../provider-api/deployment-actions";
+import type {
+  ProviderShellSessionCapability,
+  ShellEligibilityProjection,
+} from "../provider-api/shell-session";
+import { ProviderShellSessionError } from "../provider-api/shell-session";
 import type {
   AggregatedMetrics,
   DeploymentWithProvider,
@@ -96,6 +107,13 @@ export class MultiProviderClient {
   private readonly deploymentCacheTtlMs: number;
   private readonly requestTimeoutMs?: number;
   private readonly fetcher: typeof fetch;
+  private readonly deploymentActionCapability?: MultiProviderClientOptions["deploymentActionCapability"];
+  private readonly deploymentActionReceiptValidator?: MultiProviderClientOptions["deploymentActionReceiptValidator"];
+  private readonly deploymentTxEvidenceValidator?: MultiProviderClientOptions["deploymentTxEvidenceValidator"];
+  private readonly shellSessionCapability?: MultiProviderClientOptions["shellSessionCapability"];
+  private readonly deploymentActionReceiptProjector: NonNullable<
+    MultiProviderClientOptions["deploymentActionReceiptProjector"]
+  >;
   private providers = new Map<string, ProviderRecord>();
   private clients = new Map<string, ProviderAPIClient>();
   private deploymentProviderMap = new Map<string, string>();
@@ -112,6 +130,26 @@ export class MultiProviderClient {
     this.deploymentCacheTtlMs = options.deploymentCacheTtlMs ?? 60000;
     this.requestTimeoutMs = options.requestTimeoutMs;
     this.fetcher = options.fetcher ?? fetch;
+    this.deploymentActionCapability = options.deploymentActionCapability;
+    this.deploymentActionReceiptValidator =
+      options.deploymentActionReceiptValidator;
+    this.deploymentTxEvidenceValidator = options.deploymentTxEvidenceValidator;
+    this.shellSessionCapability = options.shellSessionCapability;
+    this.deploymentActionReceiptProjector =
+      options.deploymentActionReceiptProjector ??
+      ((receipt, context) => {
+        if (
+          receipt.action !== context.action ||
+          receipt.deploymentId !== context.deploymentId ||
+          receipt.providerId !== context.provider.address
+        ) {
+          throw new ProviderDeploymentActionError(
+            "receipt_mismatch",
+            "Provider action receipt does not match its resolved provider",
+          );
+        }
+        return receipt;
+      });
   }
 
   subscribe(listener: (providers: ProviderRecord[]) => void): () => void {
@@ -156,6 +194,13 @@ export class MultiProviderClient {
       endpoint: provider.endpoint,
       wallet: this.wallet,
       timeoutMs: this.requestTimeoutMs,
+      fetcher: this.fetcher,
+      providerId: provider.address,
+      deploymentActionCapability:
+        this.resolveDeploymentActionCapability(provider),
+      deploymentActionReceiptValidator: this.deploymentActionReceiptValidator,
+      deploymentTxEvidenceValidator: this.deploymentTxEvidenceValidator,
+      shellSessionCapability: this.resolveShellSessionCapability(provider),
     });
     this.clients.set(address, client);
     return client;
@@ -356,11 +401,14 @@ export class MultiProviderClient {
     return client.connectLogStream(deploymentId);
   }
 
-  async connectShell(
-    deploymentId: string,
-    sessionToken?: string,
-    container?: string,
-  ) {
+  async connectShell(eligibility?: ShellEligibilityProjection) {
+    if (!eligibility) {
+      throw new ProviderShellSessionError(
+        "eligibility_unavailable",
+        "Authoritative shell eligibility is unavailable",
+      );
+    }
+    const deploymentId = eligibility.deploymentId;
     const providerId = await this.resolveDeploymentProvider(deploymentId);
     if (!providerId) {
       throw new Error(`Unknown deployment: ${deploymentId}`);
@@ -370,11 +418,23 @@ export class MultiProviderClient {
     if (!client) {
       throw new Error(`No client for provider ${providerId}`);
     }
-
-    return client.connectShell(deploymentId, sessionToken, container);
+    if (providerId !== eligibility.providerId) {
+      throw new ProviderShellSessionError(
+        "receipt_mismatch",
+        "Shell eligibility does not match the resolved deployment provider",
+      );
+    }
+    const receipt = await client.createShellSession(eligibility);
+    return {
+      connection: client.connectShell(receipt),
+      expiresAt: receipt.expiresAt,
+    };
   }
 
-  async performAction(deploymentId: string, action: string): Promise<void> {
+  async performAction(
+    deploymentId: string,
+    action: ProviderDeploymentAction,
+  ): Promise<ProviderDeploymentActionReceipt> {
     const providerId = await this.resolveDeploymentProvider(deploymentId);
     if (!providerId) {
       throw new Error(`Unknown deployment: ${deploymentId}`);
@@ -385,7 +445,37 @@ export class MultiProviderClient {
       throw new Error(`No client for provider ${providerId}`);
     }
 
-    await client.performAction(deploymentId, action);
+    const receipt = await client.performAction(deploymentId, action);
+    const provider = this.providers.get(providerId);
+    if (!provider) {
+      throw new ProviderDeploymentActionError(
+        "receipt_mismatch",
+        `Resolved provider ${providerId} is no longer available`,
+      );
+    }
+    this.deploymentCache = null;
+    return this.deploymentActionReceiptProjector(receipt, {
+      action,
+      deploymentId,
+      provider,
+    });
+  }
+
+  private resolveDeploymentActionCapability(
+    provider: ProviderRecord,
+  ): ProviderDeploymentActionCapability | undefined {
+    return typeof this.deploymentActionCapability === "function"
+      ? this.deploymentActionCapability(provider)
+      : (this.deploymentActionCapability ??
+          provider.deploymentActionCapability);
+  }
+
+  private resolveShellSessionCapability(
+    provider: ProviderRecord,
+  ): ProviderShellSessionCapability | undefined {
+    return typeof this.shellSessionCapability === "function"
+      ? this.shellSessionCapability(provider)
+      : (this.shellSessionCapability ?? provider.shellSessionCapability);
   }
 
   private async resolveDeploymentProvider(
@@ -457,6 +547,29 @@ export class MultiProviderClient {
         const endpoint = normalizeEndpoint(hostUri);
         if (!endpoint) return null;
 
+        const receiptVersion = pickAttribute(attrs, [
+          "deployment_action_receipt_version",
+          "deployment-action-receipt-version",
+        ]);
+        const requiresChainSigning = pickAttribute(attrs, [
+          "deployment_action_requires_chain_signing",
+          "deployment-action-requires-chain-signing",
+        ]);
+        const shellReceiptVersion = pickAttribute(attrs, [
+          "shell_session_receipt_version",
+          "shell-session-receipt-version",
+        ]);
+        const shellTransport = pickAttribute(attrs, [
+          "shell_session_transport",
+          "shell-session-transport",
+        ]);
+        const shellMaxTtl = Number(
+          pickAttribute(attrs, [
+            "shell_session_max_ttl_seconds",
+            "shell-session-max-ttl-seconds",
+          ]),
+        );
+
         return {
           address: provider.owner,
           endpoint,
@@ -466,6 +579,25 @@ export class MultiProviderClient {
           status: "unknown" as ProviderStatus,
           attributes: attrs,
           lastUpdatedAt: new Date(),
+          deploymentActionCapability:
+            receiptVersion === "v1"
+              ? {
+                  receiptVersion: "v1" as const,
+                  requiresChainSigning: requiresChainSigning === "true",
+                }
+              : undefined,
+          shellSessionCapability:
+            shellReceiptVersion === "v1" &&
+            (shellTransport === "one_time_reference" ||
+              shellTransport === "server_url") &&
+            Number.isFinite(shellMaxTtl) &&
+            shellMaxTtl > 0
+              ? {
+                  receiptVersion: "v1" as const,
+                  transport: shellTransport,
+                  maxTtlSeconds: shellMaxTtl,
+                }
+              : undefined,
         };
       })
       .filter(Boolean) as ProviderRecord[];

@@ -4,7 +4,6 @@
 package provider_daemon
 
 import (
-	"bytes"
 	"context"
 	"crypto/ed25519"
 	"encoding/base64"
@@ -15,7 +14,6 @@ import (
 	"time"
 
 	"github.com/virtengine/virtengine/pkg/observability"
-	"github.com/virtengine/virtengine/pkg/security"
 	hpcv1 "github.com/virtengine/virtengine/sdk/go/node/hpc/v1"
 )
 
@@ -151,7 +149,6 @@ type HPCNodeAggregator struct {
 
 	chainReporter   HPCNodeChainReporter
 	checkpointStore *HPCNodeCheckpointStore
-	httpClient      *http.Client
 }
 
 // aggregatedNodeState tracks state for a node
@@ -381,6 +378,9 @@ func NewHPCNodeAggregator(config HPCNodeAggregatorConfig, keyManager *KeyManager
 	if config.StaleMissThreshold == 0 {
 		config.StaleMissThreshold = 5
 	}
+	if config.Enabled && config.ChainSubmitEnabled && config.ChainReporter == nil {
+		return nil, fmt.Errorf("%w: HPC node metadata chain reporter is required", ErrProviderMutationUnavailable)
+	}
 
 	checkpointStore := config.CheckpointStore
 	if checkpointStore == nil && config.CheckpointFile != "" {
@@ -399,7 +399,6 @@ func NewHPCNodeAggregator(config HPCNodeAggregatorConfig, keyManager *KeyManager
 		stopCh:          make(chan struct{}),
 		chainReporter:   config.ChainReporter,
 		checkpointStore: checkpointStore,
-		httpClient:      security.NewSecureHTTPClient(security.WithTimeout(30 * time.Second)),
 	}, nil
 }
 
@@ -949,34 +948,7 @@ func (a *HPCNodeAggregator) submitOnChain(ctx context.Context, msg *hpcv1.MsgUpd
 		return a.chainReporter.SubmitNodeMetadata(ctx, msg)
 	}
 
-	if a.config.ChainGRPC == "" {
-		fmt.Printf("[HPC-AGGREGATOR] Would submit: %s\n", msg.NodeId)
-		return nil
-	}
-
-	data, err := json.Marshal(msg)
-	if err != nil {
-		return err
-	}
-
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost,
-		fmt.Sprintf("http://%s/cosmos/tx/v1beta1/txs", a.config.ChainGRPC),
-		bytes.NewReader(data))
-	if err != nil {
-		return err
-	}
-
-	resp, err := a.httpClient.Do(req)
-	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode >= 400 {
-		return fmt.Errorf("chain submission failed: HTTP %d", resp.StatusCode)
-	}
-
-	return nil
+	return fmt.Errorf("%w: HPC node metadata chain reporter is required", ErrProviderMutationUnavailable)
 }
 
 func (a *HPCNodeAggregator) checkStaleNodes() {

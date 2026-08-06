@@ -1,7 +1,9 @@
 package keeper
 
 import (
+	"encoding/json"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 
@@ -78,6 +80,65 @@ func TestCheckEnvelopeAccess(t *testing.T) {
 		require.Error(t, err)
 		require.Contains(t, err.Error(), "requester address is required")
 	})
+}
+
+func TestCheckEnvelopeAccessRejectsUnusableFallbackKeys(t *testing.T) {
+	t.Run("expired before end block", func(t *testing.T) {
+		ctx, k := setupKeeper(t)
+		params := types.DefaultParams()
+		params.DefaultKeyTtlSeconds = 1
+		require.NoError(t, k.SetParams(ctx, params))
+		address := sdk.AccAddress([]byte("expired_recipient__"))
+		keyPair, err := crypto.GenerateKeyPair()
+		require.NoError(t, err)
+		fingerprint, err := k.RegisterRecipientKey(ctx, address, keyPair.PublicKey[:], types.DefaultAlgorithm(), "expired")
+		require.NoError(t, err)
+		envelope := types.NewEncryptedPayloadEnvelope()
+		envelope.RecipientKeyIDs = []string{fingerprint}
+
+		ctx = ctx.WithBlockTime(ctx.BlockTime().Add(2 * time.Second))
+		require.ErrorIs(t, k.CheckEnvelopeAccess(ctx, envelope, address), types.ErrUnauthorizedAccess)
+	})
+
+	t.Run("deprecated predecessor during rotation", func(t *testing.T) {
+		ctx, k := setupKeeper(t)
+		address := sdk.AccAddress([]byte("rotation_recipient__"))
+		oldKey, err := crypto.GenerateKeyPair()
+		require.NoError(t, err)
+		newKey, err := crypto.GenerateKeyPair()
+		require.NoError(t, err)
+		oldFingerprint, err := k.RegisterRecipientKey(ctx, address, oldKey.PublicKey[:], types.DefaultAlgorithm(), "old")
+		require.NoError(t, err)
+		_, err = k.RotateRecipientKey(ctx, address, oldFingerprint, newKey.PublicKey[:], types.DefaultAlgorithm(), "new", "rotation", 0)
+		require.NoError(t, err)
+		envelope := types.NewEncryptedPayloadEnvelope()
+		envelope.RecipientKeyIDs = []string{oldFingerprint}
+
+		require.NoError(t, k.CheckEnvelopeAccess(ctx, envelope, address))
+	})
+
+}
+
+func TestRecipientKeyFingerprintBindingFailsClosed(t *testing.T) {
+	ctx, k := setupKeeper(t)
+	address := sdk.AccAddress([]byte("corrupt_key_binding_"))
+	victimKey, err := crypto.GenerateKeyPair()
+	require.NoError(t, err)
+	attackerKey, err := crypto.GenerateKeyPair()
+	require.NoError(t, err)
+	fingerprint := types.ComputeKeyFingerprint(victimKey.PublicKey[:])
+	record := recipientKeyStore{Address: address.String(), PublicKey: attackerKey.PublicKey[:], KeyFingerprint: fingerprint, KeyVersion: 1, AlgorithmID: types.DefaultAlgorithm(), RegisteredAt: ctx.BlockTime().Unix()}
+	bz, err := json.Marshal(record)
+	require.NoError(t, err)
+	store := ctx.KVStore(k.skey)
+	store.Set(types.RecipientKeyKey(address.Bytes(), []byte(fingerprint)), bz)
+	store.Set(types.KeyByFingerprintKey([]byte(fingerprint)), address.Bytes())
+	envelope := types.NewEncryptedPayloadEnvelope()
+	envelope.RecipientKeyIDs = []string{fingerprint}
+
+	require.Panics(t, func() { k.CheckEnvelopeAccess(ctx, envelope, address) })
+	require.Panics(t, func() { k.WithRecipientKeys(ctx, func(types.RecipientKeyRecord) bool { return false }) })
+	require.Error(t, k.ImportRecipientKeyRecord(ctx, types.RecipientKeyRecord{Address: address.String(), PublicKey: attackerKey.PublicKey[:], KeyFingerprint: fingerprint, KeyVersion: 1, AlgorithmID: types.DefaultAlgorithm(), RegisteredAt: ctx.BlockTime().Unix()}))
 }
 
 func TestCheckEnvelopeAccessByFingerprint(t *testing.T) {

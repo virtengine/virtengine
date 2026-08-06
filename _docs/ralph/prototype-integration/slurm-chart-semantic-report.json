@@ -1,0 +1,13 @@
+{
+  "findings": [],
+  "invariants": {
+    "durable-state": "unverified",
+    "immutable-images": "passed",
+    "least-privilege": "unverified",
+    "replica-capacity-equality": "unverified",
+    "stable-secrets": "passed"
+  },
+  "mode": "diagnostic",
+  "passed": false,
+  "schema_version": "virtengine.slurm-semantic-validation/v1"
+}

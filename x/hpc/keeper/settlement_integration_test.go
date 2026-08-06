@@ -98,7 +98,7 @@ func (m *integrationBankKeeper) GetBalance(_ context.Context, addr sdk.AccAddres
 	return sdk.NewCoin(denom, coins.AmountOf(denom))
 }
 
-func TestHPCSettlementFlowsThroughSettlementModule(t *testing.T) {
+func TestHPCSettlementRequiresOffChainAuthenticatedUsage(t *testing.T) {
 	cfg := testutilmod.MakeTestEncodingConfig()
 	cdc := cfg.Codec
 
@@ -184,16 +184,13 @@ func TestHPCSettlementFlowsThroughSettlementModule(t *testing.T) {
 	require.NoError(t, hpcKeeper.CreateAccountingRecord(ctx, record))
 
 	result, err := hpcKeeper.ProcessJobSettlement(ctx, job.JobID)
-	require.NoError(t, err)
-	require.True(t, result.Success)
-	require.NotEmpty(t, result.SettlementID)
-
-	settlementRecord, found := settlementKeeper.GetSettlement(ctx, result.SettlementID)
-	require.True(t, found)
-	require.Equal(t, job.JobID, settlementRecord.OrderID)
-	require.False(t, settlementRecord.TotalAmount.IsZero())
+	require.Error(t, err)
+	require.False(t, result.Success)
+	require.Empty(t, result.SettlementID)
+	require.Contains(t, result.Error, "authenticated provider usage is pending")
+	require.Empty(t, settlementKeeper.GetSettlementsByOrder(ctx, job.JobID))
 
 	escrow, found := settlementKeeper.GetEscrow(ctx, escrowID)
 	require.True(t, found)
-	require.True(t, escrow.TotalSettled.IsAllGTE(settlementRecord.TotalAmount))
+	require.True(t, escrow.TotalSettled.IsZero())
 }

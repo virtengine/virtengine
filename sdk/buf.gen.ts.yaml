@@ -1,7 +1,8 @@
 ---
 version: v2
+clean: false
 plugins:
-  - local: ["node", "ts/node_modules/ts-proto/protoc-gen-ts_proto"]
+  - local: ["node", "/src/sdk/ts/node_modules/ts-proto/protoc-gen-ts_proto"]
     strategy: all
     out: ./ts/src/generated/protos
     include_imports: true

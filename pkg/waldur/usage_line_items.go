@@ -2,6 +2,8 @@ package waldur
 
 import (
 	"fmt"
+	"math"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -27,10 +29,13 @@ func LineItemsFromUsageReport(report *ResourceUsageReport, currency string) ([]*
 		currency = "uvirt"
 	}
 
-	metadata := report.Metadata
+	metadata := cloneStringMap(report.Metadata)
 
 	items := make([]*usage.LineItem, 0, len(report.Components))
 	for _, component := range report.Components {
+		if math.IsNaN(component.Amount) || math.IsInf(component.Amount, 0) || component.Amount < 0 {
+			return nil, fmt.Errorf("invalid component amount for %s", component.Type)
+		}
 		resourceType := resourceTypeFromComponent(component.Type)
 		unit := unitForResourceType(resourceType)
 		quantity := sdkmath.LegacyNewDecWithPrec(int64(component.Amount*1000000), 6)
@@ -77,6 +82,9 @@ func UsageReportFromLineItems(
 
 	components := make(map[string]float64)
 	for _, item := range lineItems {
+		if item == nil {
+			continue
+		}
 		componentType := componentTypeFromResource(item.ResourceType)
 		amount, err := strconv.ParseFloat(item.Quantity.String(), 64)
 		if err != nil {
@@ -92,6 +100,9 @@ func UsageReportFromLineItems(
 			Amount: amount,
 		})
 	}
+	sort.Slice(reportComponents, func(i, j int) bool {
+		return reportComponents[i].Type < reportComponents[j].Type
+	})
 
 	report := &ResourceUsageReport{
 		ResourceUUID: resourceUUID,
@@ -148,7 +159,7 @@ func unitForResourceType(resource usage.ResourceType) string {
 	case usage.ResourceMemory:
 		return "gb-hour"
 	case usage.ResourceStorage:
-		return "gb-month"
+		return "gb-hour"
 	case usage.ResourceGPU:
 		return "gpu-hour"
 	case usage.ResourceNetwork:

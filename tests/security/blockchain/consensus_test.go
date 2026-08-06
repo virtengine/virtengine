@@ -1,218 +1,200 @@
 //go:build security
 
-// Package blockchain contains security tests for blockchain-specific attack scenarios.
-// These tests verify the platform's resilience against consensus-layer attacks.
+// Package blockchain contains security tests for consensus-critical verification logic.
 package blockchain
 
 import (
-	"context"
+	"bytes"
+	"crypto/sha256"
+	"errors"
 	"testing"
-	"time"
+
+	"cosmossdk.io/log"
+	sdk "github.com/cosmos/cosmos-sdk/types"
+	"github.com/stretchr/testify/require"
+
+	veidkeeper "github.com/virtengine/virtengine/x/veid/keeper"
+	veidtypes "github.com/virtengine/virtengine/x/veid/types"
 )
 
-// TestBC001_ByzantineFaultTolerance tests consensus resilience to Byzantine validators.
-// Attack ID: BC-001 from PENETRATION_TESTING_PROGRAM.md
-// Objective: Test consensus safety with malicious validators sending conflicting votes.
-func TestBC001_ByzantineFaultTolerance(t *testing.T) {
-	if testing.Short() {
-		t.Skip("Skipping Byzantine fault tolerance test in short mode")
-	}
-
-	testCases := []struct {
-		name               string
-		byzantineNodes     int
-		totalNodes         int
-		attackType         string
-		expectSafetyHold   bool
-		expectLivenessHold bool
-	}{
-		{
-			name:               "single_byzantine_validator",
-			byzantineNodes:     1,
-			totalNodes:         4,
-			attackType:         "conflicting_votes",
-			expectSafetyHold:   true,
-			expectLivenessHold: true,
-		},
-		{
-			name:               "f_byzantine_validators",
-			byzantineNodes:     3,
-			totalNodes:         10,
-			attackType:         "equivocation",
-			expectSafetyHold:   true,
-			expectLivenessHold: true,
-		},
-		{
-			name:               "delayed_messages",
-			byzantineNodes:     2,
-			totalNodes:         7,
-			attackType:         "message_delay",
-			expectSafetyHold:   true,
-			expectLivenessHold: true,
-		},
-		{
-			name:               "out_of_order_votes",
-			byzantineNodes:     1,
-			totalNodes:         4,
-			attackType:         "vote_reordering",
-			expectSafetyHold:   true,
-			expectLivenessHold: true,
-		},
-	}
-
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			// Validate that f < n/3 for Byzantine fault tolerance
-			maxByzantine := (tc.totalNodes - 1) / 3
-			if tc.byzantineNodes > maxByzantine {
-				t.Logf("Skipping: %d Byzantine nodes exceeds BFT threshold of %d for %d total nodes",
-					tc.byzantineNodes, maxByzantine, tc.totalNodes)
-				return
-			}
-
-			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-			defer cancel()
-
-			result := simulateByzantineAttack(ctx, tc.totalNodes, tc.byzantineNodes, tc.attackType)
-
-			if result.SafetyViolation && tc.expectSafetyHold {
-				t.Errorf("Safety violation detected: %s", result.SafetyViolationDetails)
-			}
-
-			if !result.LivenessAchieved && tc.expectLivenessHold {
-				t.Errorf("Liveness not achieved: consensus stalled for %v", result.StallDuration)
-			}
-
-			if result.EvidenceSubmitted == 0 && tc.byzantineNodes > 0 {
-				t.Logf("Warning: No evidence submitted for %d Byzantine nodes (attack: %s)",
-					tc.byzantineNodes, tc.attackType)
-			}
-
-			t.Logf("Result: safety=%t, liveness=%t, evidence_count=%d",
-				!result.SafetyViolation, result.LivenessAchieved, result.EvidenceSubmitted)
-		})
-	}
+type consensusTestScorer struct {
+	version string
+	healthy bool
+	err     error
 }
 
-// TestBC002_ConsensusStallAttack tests chain liveness under validator coordination attacks.
-// Attack ID: BC-002 from PENETRATION_TESTING_PROGRAM.md
-// Objective: Halt chain progress through validator collusion.
-func TestBC002_ConsensusStallAttack(t *testing.T) {
-	if testing.Short() {
-		t.Skip("Skipping consensus stall test in short mode")
+func (s consensusTestScorer) Score(_ *veidkeeper.ScoringInput) (*veidkeeper.ScoringOutput, error) {
+	if s.err != nil {
+		return nil, s.err
 	}
-
-	testCases := []struct {
-		name              string
-		offlinePercentage float64
-		expectRecovery    bool
-		maxRecoveryTime   time.Duration
-		expectAlertFired  bool
-	}{
-		{
-			name:              "25_percent_offline",
-			offlinePercentage: 0.25,
-			expectRecovery:    true,
-			maxRecoveryTime:   30 * time.Second,
-			expectAlertFired:  true,
-		},
-		{
-			name:              "33_percent_offline",
-			offlinePercentage: 0.33,
-			expectRecovery:    true,
-			maxRecoveryTime:   60 * time.Second,
-			expectAlertFired:  true,
-		},
-		{
-			name:              "34_percent_offline",
-			offlinePercentage: 0.34,
-			expectRecovery:    false, // Chain should stall
-			maxRecoveryTime:   0,
-			expectAlertFired:  true,
-		},
-	}
-
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
-			defer cancel()
-
-			result := simulateValidatorOutage(ctx, tc.offlinePercentage)
-
-			if tc.expectRecovery && !result.ChainRecovered {
-				t.Errorf("Expected chain recovery but chain remained stalled")
-			}
-
-			if !tc.expectRecovery && result.ChainRecovered {
-				t.Errorf("Expected chain stall but chain recovered")
-			}
-
-			if tc.expectRecovery && result.RecoveryTime > tc.maxRecoveryTime {
-				t.Errorf("Recovery took %v, expected max %v", result.RecoveryTime, tc.maxRecoveryTime)
-			}
-
-			if tc.expectAlertFired && !result.AlertFired {
-				t.Errorf("Expected monitoring alert but none fired")
-			}
-
-			t.Logf("Result: recovered=%t, recovery_time=%v, alert_fired=%t",
-				result.ChainRecovered, result.RecoveryTime, result.AlertFired)
-		})
-	}
+	return &veidkeeper.ScoringOutput{
+		Score:        85,
+		ModelVersion: s.version,
+		ReasonCodes:  []veidtypes.ReasonCode{veidtypes.ReasonCodeSuccess},
+		InputHash:    []byte("computed-input-hash"),
+	}, nil
 }
 
-// ByzantineAttackResult holds results from Byzantine attack simulation.
-type ByzantineAttackResult struct {
-	SafetyViolation        bool
-	SafetyViolationDetails string
-	LivenessAchieved       bool
-	StallDuration          time.Duration
-	EvidenceSubmitted      int
-}
+func (s consensusTestScorer) GetModelVersion() string { return s.version }
+func (s consensusTestScorer) IsHealthy() bool         { return s.healthy }
+func (s consensusTestScorer) Close() error            { return nil }
 
-// ValidatorOutageResult holds results from validator outage simulation.
-type ValidatorOutageResult struct {
-	ChainRecovered bool
-	RecoveryTime   time.Duration
-	AlertFired     bool
-	StallDetected  bool
-}
+type consensusTestKeyProvider struct{}
 
-// simulateByzantineAttack simulates a Byzantine attack on the consensus layer.
-func simulateByzantineAttack(ctx context.Context, totalNodes, byzantineNodes int, attackType string) ByzantineAttackResult {
-	// In production, this would:
-	// 1. Spin up a testnet with the specified configuration
-	// 2. Configure Byzantine nodes to execute the attack type
-	// 3. Monitor for safety violations (conflicting finalized blocks)
-	// 4. Monitor for liveness (continued block production)
-	// 5. Check evidence module for misbehavior detection
+func (consensusTestKeyProvider) GetPrivateKey() ([]byte, error) { return []byte("validator-private-key"), nil }
+func (consensusTestKeyProvider) GetKeyFingerprint() string      { return "validator-fingerprint" }
+func (consensusTestKeyProvider) Close() error                   { return nil }
 
-	_ = ctx // Use context in production implementation
+func TestBC001_ConsensusVerifierRejectsDivergentResults(t *testing.T) {
+	params := veidkeeper.DefaultConsensusParams()
+	verifier := veidkeeper.NewConsensusVerifier(
+		nil,
+		consensusTestScorer{version: "model-v1", healthy: true},
+		consensusTestKeyProvider{},
+		params,
+		log.NewNopLogger(),
+	)
 
-	return ByzantineAttackResult{
-		SafetyViolation:   false,
-		LivenessAchieved:  true,
-		EvidenceSubmitted: byzantineNodes,
+	baseHash := sha256.Sum256([]byte("same-inputs"))
+	proposed := veidtypes.VerificationResult{
+		RequestID:    "req-100",
+		Score:        85,
+		Status:       veidtypes.VerificationResultStatusSuccess,
+		ModelVersion: "model-v1",
+		InputHash:    baseHash[:],
 	}
+
+	t.Run("exact_match_is_accepted", func(t *testing.T) {
+		computed := proposed
+		comparison := verifier.CompareResults(proposed, computed)
+
+		require.True(t, comparison.Match)
+		require.Empty(t, comparison.Differences)
+		require.Equal(t, int32(0), comparison.ScoreDifference)
+		require.True(t, comparison.ModelVersionMatch)
+		require.True(t, comparison.InputHashMatch)
+		require.True(t, comparison.StatusMatch)
+	})
+
+	t.Run("score_difference_breaks_consensus", func(t *testing.T) {
+		computed := proposed
+		computed.Score = 86
+
+		comparison := verifier.CompareResults(proposed, computed)
+
+		require.False(t, comparison.Match)
+		require.Equal(t, int32(1), comparison.ScoreDifference)
+		require.Contains(t, comparison.Differences[0], "score difference 1 exceeds tolerance 0")
+	})
+
+	t.Run("model_version_mismatch_breaks_consensus", func(t *testing.T) {
+		computed := proposed
+		computed.ModelVersion = "model-v2"
+
+		comparison := verifier.CompareResults(proposed, computed)
+
+		require.False(t, comparison.Match)
+		require.False(t, comparison.ModelVersionMatch)
+		require.Contains(t, comparison.Differences, "model version mismatch: proposed=model-v1, computed=model-v2")
+	})
+
+	t.Run("input_hash_mismatch_breaks_consensus", func(t *testing.T) {
+		computed := proposed
+		otherHash := sha256.Sum256([]byte("different-inputs"))
+		computed.InputHash = otherHash[:]
+
+		comparison := verifier.CompareResults(proposed, computed)
+
+		require.False(t, comparison.Match)
+		require.False(t, comparison.InputHashMatch)
+		require.Contains(t, comparison.Differences[0], "input hash mismatch")
+	})
+
+	t.Run("status_mismatch_breaks_consensus", func(t *testing.T) {
+		computed := proposed
+		computed.Status = veidtypes.VerificationResultStatusFailed
+
+		comparison := verifier.CompareResults(proposed, computed)
+
+		require.False(t, comparison.Match)
+		require.False(t, comparison.StatusMatch)
+		require.Contains(t, comparison.Differences[0], "status mismatch")
+	})
 }
 
-// simulateValidatorOutage simulates validators going offline.
-func simulateValidatorOutage(ctx context.Context, offlinePercentage float64) ValidatorOutageResult {
-	// In production, this would:
-	// 1. Spin up a testnet
-	// 2. Stop the specified percentage of validators
-	// 3. Monitor for chain stall detection
-	// 4. Monitor for recovery when validators come back online
-	// 5. Verify monitoring alerts fired appropriately
+func TestBC002_ConsensusVerifierValidatesLocalModelState(t *testing.T) {
+	verifier := veidkeeper.NewConsensusVerifier(
+		nil,
+		consensusTestScorer{version: "model-v1", healthy: true},
+		consensusTestKeyProvider{},
+		veidkeeper.DefaultConsensusParams(),
+		log.NewNopLogger(),
+	)
 
-	_ = ctx // Use context in production implementation
+	t.Run("matching_version_and_healthy_scorer_pass", func(t *testing.T) {
+		require.NoError(t, verifier.ValidateModelVersion(sdk.Context{}, "model-v1"))
+	})
 
-	willStall := offlinePercentage >= 0.34
+	t.Run("mismatched_model_version_is_rejected", func(t *testing.T) {
+		err := verifier.ValidateModelVersion(sdk.Context{}, "model-v2")
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "model version mismatch")
+	})
 
-	return ValidatorOutageResult{
-		ChainRecovered: !willStall,
-		RecoveryTime:   time.Duration(offlinePercentage*60) * time.Second,
-		AlertFired:     true,
-		StallDetected:  willStall,
+	t.Run("unhealthy_scorer_is_rejected", func(t *testing.T) {
+		unhealthy := veidkeeper.NewConsensusVerifier(
+			nil,
+			consensusTestScorer{version: "model-v1", healthy: false},
+			consensusTestKeyProvider{},
+			veidkeeper.DefaultConsensusParams(),
+			log.NewNopLogger(),
+		)
+
+		err := unhealthy.ValidateModelVersion(sdk.Context{}, "model-v1")
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "ML scorer is not healthy")
+	})
+
+	t.Run("scorer_errors_do_not_bypass_model_checks", func(t *testing.T) {
+		broken := veidkeeper.NewConsensusVerifier(
+			nil,
+			consensusTestScorer{version: "model-v1", healthy: true, err: errors.New("backend down")},
+			consensusTestKeyProvider{},
+			veidkeeper.DefaultConsensusParams(),
+			log.NewNopLogger(),
+		)
+
+		require.NoError(t, broken.ValidateModelVersion(sdk.Context{}, "model-v1"))
+	})
+}
+
+func TestBC002_ResultHashIsDeterministicAndFieldSensitive(t *testing.T) {
+	baseHash := sha256.Sum256([]byte("stable-input-hash"))
+	result := veidtypes.VerificationResult{
+		RequestID:      "req-200",
+		AccountAddress: "virtengine1auditsecurity0000000000000000000000",
+		Score:          91,
+		Status:         veidtypes.VerificationResultStatusSuccess,
+		ModelVersion:   "model-v1",
+		InputHash:      baseHash[:],
+		BlockHeight:    2048,
 	}
+
+	first := veidkeeper.ComputeResultHash(result)
+	second := veidkeeper.ComputeResultHash(result)
+
+	require.True(t, bytes.Equal(first, second), "same result must hash identically")
+
+	mutatedScore := result
+	mutatedScore.Score++
+	require.False(t, bytes.Equal(first, veidkeeper.ComputeResultHash(mutatedScore)))
+
+	mutatedHash := result
+	otherHash := sha256.Sum256([]byte("mutated-input-hash"))
+	mutatedHash.InputHash = otherHash[:]
+	require.False(t, bytes.Equal(first, veidkeeper.ComputeResultHash(mutatedHash)))
+
+	mutatedStatus := result
+	mutatedStatus.Status = veidtypes.VerificationResultStatusFailed
+	require.False(t, bytes.Equal(first, veidkeeper.ComputeResultHash(mutatedStatus)))
 }

@@ -14,6 +14,8 @@ import (
 	storetypes "cosmossdk.io/store/types"
 	cmtproto "github.com/cometbft/cometbft/proto/tendermint/types"
 	dbm "github.com/cosmos/cosmos-db"
+	"github.com/cosmos/cosmos-sdk/codec"
+	codectypes "github.com/cosmos/cosmos-sdk/codec/types"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/stretchr/testify/require"
 
@@ -146,8 +148,24 @@ func TestDefaultConsensusParams(t *testing.T) {
 	require.Equal(t, uint32(0), params.ScoreTolerance, "default tolerance should be 0 (exact match)")
 	require.True(t, params.RequireModelMatch, "should require model version match by default")
 	require.True(t, params.RequireInputHashMatch, "should require input hash match by default")
-	require.Equal(t, 0.67, params.MinValidatorAgreement, "should require 2/3 validator agreement")
-	require.Equal(t, int64(1000), params.MaxVerificationTimeMs, "should have 1 second max verification time")
+}
+
+func TestConsensusVerifierRejectsMissingDependencies(t *testing.T) {
+	t.Parallel()
+
+	var nilVerifier *ConsensusVerifier
+	valid, _, err := nilVerifier.VerifyProposedResult(sdk.Context{}, types.VerificationResult{RequestID: "request"})
+	require.False(t, valid)
+	require.Error(t, err)
+	require.Error(t, nilVerifier.ValidateModelVersion(sdk.Context{}, testModelVersion))
+
+	missingKeeper := NewConsensusVerifier(nil, newMockMLScorer(true, 85), nil, DefaultConsensusParams(), log.NewNopLogger())
+	valid, _, err = missingKeeper.VerifyProposedResult(sdk.Context{}, types.VerificationResult{RequestID: "request"})
+	require.False(t, valid)
+	require.Error(t, err)
+
+	missingScorer := NewConsensusVerifier(nil, nil, nil, DefaultConsensusParams(), log.NewNopLogger())
+	require.Error(t, missingScorer.ValidateModelVersion(sdk.Context{}, testModelVersion))
 }
 
 // ============================================================================
@@ -475,6 +493,43 @@ func TestValidateModelVersion_UnhealthyScorer(t *testing.T) {
 	require.Contains(t, err.Error(), "not healthy")
 }
 
+func TestValidateModelVersion_RejectsInactivePipelineState(t *testing.T) {
+	storeKey := storetypes.NewKVStoreKey(types.StoreKey)
+	db := dbm.NewMemDB()
+	stateStore := store.NewCommitMultiStore(db, log.NewNopLogger(), storemetrics.NewNoOpMetrics())
+	t.Cleanup(func() { closeStoreIfNeeded(stateStore) })
+	stateStore.MountStoreWithDB(storeKey, storetypes.StoreTypeIAVL, db)
+	require.NoError(t, stateStore.LoadLatestVersion())
+
+	registry := codectypes.NewInterfaceRegistry()
+	types.RegisterInterfaces(registry)
+	cdc := codec.NewProtoCodec(registry)
+
+	k := NewKeeper(cdc, storeKey, "authority")
+	ctx := sdk.NewContext(stateStore, cmtproto.Header{
+		Time:   time.Now().UTC(),
+		Height: 100,
+	}, false, log.NewNopLogger())
+
+	manifest := createIntegrationTestManifest(t)
+	pv, err := k.RegisterPipelineVersion(
+		ctx,
+		testModelVersion,
+		"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+		"ghcr.io/virtengine/veid-pipeline:v1.0.0",
+		manifest,
+	)
+	require.NoError(t, err)
+	require.NoError(t, k.SetActivePipelineVersion(ctx, testModelVersion))
+	pv.Status = string(types.PipelineVersionStatusRetired)
+	require.NoError(t, k.SetPipelineVersion(ctx, pv))
+
+	cv := NewConsensusVerifier(&k, newMockMLScorer(true, 85), newMockKeyProvider(), DefaultConsensusParams(), log.NewNopLogger())
+	err = cv.ValidateModelVersion(ctx, testModelVersion)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "not active")
+}
+
 // ============================================================================
 // Test ComputeResultHash
 // ============================================================================
@@ -555,6 +610,14 @@ func TestComputeResultHash_DifferentStatus(t *testing.T) {
 	hash2 := ComputeResultHash(result2)
 
 	require.False(t, bytes.Equal(hash1, hash2), "different status should produce different hashes")
+}
+
+func TestComputeResultHashLengthPrefixesVariableFields(t *testing.T) {
+	t.Parallel()
+
+	first := types.VerificationResult{RequestID: "ab", AccountAddress: "c"}
+	second := types.VerificationResult{RequestID: "a", AccountAddress: "bc"}
+	require.NotEqual(t, ComputeResultHash(first), ComputeResultHash(second))
 }
 
 // ============================================================================

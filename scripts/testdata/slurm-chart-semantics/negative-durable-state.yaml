@@ -1,0 +1,25 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: ephemeral-controller
+  labels:
+    app.kubernetes.io/component: controller
+spec:
+  template:
+    spec:
+      containers:
+        - name: slurmctld
+          image: ghcr.io/virtengine/slurm-controller@sha256:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff
+          securityContext:
+            privileged: false
+            runAsNonRoot: true
+            runAsUser: 1000
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: [ALL]
+          volumeMounts:
+            - name: state
+              mountPath: /var/spool/slurm
+      volumes:
+        - name: state
+          emptyDir: {}

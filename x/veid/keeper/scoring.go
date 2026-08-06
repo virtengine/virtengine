@@ -3,7 +3,9 @@ package keeper
 import (
 	"crypto/sha256"
 	"encoding/binary"
+	"fmt"
 	"os"
+	"strings"
 	"time"
 
 	sdk "github.com/cosmos/cosmos-sdk/types"
@@ -63,8 +65,10 @@ type TensorFlowScoringConfig struct {
 	ForceCPU bool
 }
 
-// DefaultMLScoringConfig returns default ML scoring configuration
-func DefaultMLScoringConfig() MLScoringConfig {
+// DefaultDevelopmentMLScoringConfig returns an off-chain development/test ML
+// scoring configuration. It may inspect local environment variables to make
+// developer fixtures convenient, but production keeper paths never call it.
+func DefaultDevelopmentMLScoringConfig() MLScoringConfig {
 	return MLScoringConfig{
 		ModelVersion:        "v1.0.0",
 		MinScopesForScoring: 1,
@@ -75,12 +79,20 @@ func DefaultMLScoringConfig() MLScoringConfig {
 		MaxInferenceTime: 2000, // 2 seconds
 		FallbackScore:    0,
 		UseTensorFlow:    isTensorFlowEnabled(),
-		TensorFlowConfig: DefaultTensorFlowScoringConfig(),
+		TensorFlowConfig: DefaultDevelopmentTensorFlowScoringConfig(),
 	}
 }
 
-// DefaultTensorFlowScoringConfig returns default TensorFlow configuration
-func DefaultTensorFlowScoringConfig() *TensorFlowScoringConfig {
+// DefaultMLScoringConfig is retained for compatibility with legacy tests and
+// tools. Deprecated: use DefaultDevelopmentMLScoringConfig and inject the scorer
+// explicitly; consensus-critical keeper behavior consumes signed receipts only.
+func DefaultMLScoringConfig() MLScoringConfig {
+	return DefaultDevelopmentMLScoringConfig()
+}
+
+// DefaultDevelopmentTensorFlowScoringConfig returns an off-chain development
+// TensorFlow configuration. It is not a production keeper default.
+func DefaultDevelopmentTensorFlowScoringConfig() *TensorFlowScoringConfig {
 	return &TensorFlowScoringConfig{
 		ModelPath:      getEnvOrDefault("VEID_INFERENCE_MODEL_PATH", "models/trust_score"),
 		ExpectedHash:   os.Getenv("VEID_INFERENCE_MODEL_HASH"),
@@ -89,6 +101,12 @@ func DefaultTensorFlowScoringConfig() *TensorFlowScoringConfig {
 		Deterministic:  true,
 		ForceCPU:       true,
 	}
+}
+
+// DefaultTensorFlowScoringConfig is retained for compatibility with legacy
+// tests and tools. Deprecated: use DefaultDevelopmentTensorFlowScoringConfig.
+func DefaultTensorFlowScoringConfig() *TensorFlowScoringConfig {
+	return DefaultDevelopmentTensorFlowScoringConfig()
 }
 
 // isTensorFlowEnabled checks if TensorFlow scoring is enabled
@@ -104,14 +122,26 @@ func isTensorFlowEnabled() bool {
 }
 
 // isRealInferenceReady checks if real inference runtime is available and healthy
-func isRealInferenceReady() bool {
-	// Check if model path exists
-	modelPath := getEnvOrDefault("VEID_INFERENCE_MODEL_PATH", "models/trust_score")
-	if _, err := os.Stat(modelPath); os.IsNotExist(err) {
-		return false
+func isRealInferenceReady(config *TensorFlowScoringConfig) error {
+	if config == nil {
+		return fmt.Errorf("tensorflow config is required")
 	}
-	// Additional checks can be added here for model hash verification, etc.
-	return true
+	if strings.TrimSpace(config.ModelPath) == "" {
+		return fmt.Errorf("model path is required")
+	}
+	if strings.Contains(strings.ToLower(config.ModelPath), "placeholder") {
+		return fmt.Errorf("model path %q contains a placeholder marker", config.ModelPath)
+	}
+	if strings.TrimSpace(config.ExpectedHash) == "" {
+		return fmt.Errorf("expected model hash is required")
+	}
+	if strings.Contains(strings.ToLower(config.ExpectedHash), "placeholder") {
+		return fmt.Errorf("expected model hash %q contains a placeholder marker", config.ExpectedHash)
+	}
+	if _, err := os.Stat(config.ModelPath); err != nil {
+		return fmt.Errorf("model path %q is not readable: %w", config.ModelPath, err)
+	}
+	return nil
 }
 
 // getEnvOrDefault returns the environment variable value or a default
@@ -245,6 +275,11 @@ type StubMLScorer struct {
 	config MLScoringConfig
 }
 
+type failClosedMLScorer struct {
+	version string
+	err     error
+}
+
 // NewStubMLScorer creates a new stub ML scorer
 func NewStubMLScorer(config MLScoringConfig) *StubMLScorer {
 	return &StubMLScorer{
@@ -255,8 +290,6 @@ func NewStubMLScorer(config MLScoringConfig) *StubMLScorer {
 // Score implements MLScorer.Score
 // Stub implementation returns deterministic scores based on scope types and counts
 func (s *StubMLScorer) Score(input *ScoringInput) (*ScoringOutput, error) {
-	startTime := time.Now()
-
 	output := &ScoringOutput{
 		Score:        0,
 		ModelVersion: s.config.ModelVersion,
@@ -269,7 +302,7 @@ func (s *StubMLScorer) Score(input *ScoringInput) (*ScoringOutput, error) {
 	// Check minimum scopes requirement
 	if len(input.DecryptedScopes) < s.config.MinScopesForScoring {
 		output.ReasonCodes = append(output.ReasonCodes, types.ReasonCodeInsufficientScopes)
-		output.ProcessingTime = time.Since(startTime).Milliseconds()
+		output.ProcessingTime = 0
 		return output, nil
 	}
 
@@ -322,7 +355,7 @@ func (s *StubMLScorer) Score(input *ScoringInput) (*ScoringOutput, error) {
 		output.ReasonCodes = append([]types.ReasonCode{types.ReasonCodeSuccess}, output.ReasonCodes...)
 	}
 
-	output.ProcessingTime = time.Since(startTime).Milliseconds()
+	output.ProcessingTime = 0
 	return output, nil
 }
 
@@ -430,6 +463,22 @@ func (s *StubMLScorer) Close() error {
 	return nil // Nothing to close
 }
 
+func (s *failClosedMLScorer) Score(_ *ScoringInput) (*ScoringOutput, error) {
+	return nil, s.err
+}
+
+func (s *failClosedMLScorer) GetModelVersion() string {
+	return s.version
+}
+
+func (s *failClosedMLScorer) IsHealthy() bool {
+	return false
+}
+
+func (s *failClosedMLScorer) Close() error {
+	return nil
+}
+
 // ============================================================================
 // Keeper Scoring Methods
 // ============================================================================
@@ -453,11 +502,6 @@ func (k Keeper) ComputeIdentityScore(
 
 	// Get or create ML scorer
 	scorer := k.getMLScorer()
-	defer func() {
-		if scorer != nil {
-			_ = scorer.Close()
-		}
-	}()
 
 	// Check if scorer is healthy
 	if !scorer.IsHealthy() {
@@ -483,40 +527,17 @@ func (k Keeper) ComputeIdentityScore(
 	return output.Score, output.ModelVersion, output.ReasonCodes, output.InputHash, nil
 }
 
-// getMLScorer returns the ML scorer instance
-// Returns TensorFlow scorer when VEID_USE_TENSORFLOW=true, otherwise stub
-// Prefers sidecar mode when VEID_INFERENCE_USE_SIDECAR=true for consensus safety
-//
-// VE-205: This function implements a graceful fallback strategy:
-// 1. If TensorFlow is enabled and model is available -> use real inference
-// 2. If sidecar mode is configured -> use gRPC sidecar client
-// 3. If TensorFlow initialization fails -> fall back to stub
-// 4. Default -> use stub scorer for development/testing
+// getMLScorer returns only explicitly injected development/test scorers.
+// Production inference is consumed through signed receipts staged before
+// consensus; keeper defaults must never select consensus behavior from env.
 func (k Keeper) getMLScorer() MLScorer {
-	config := DefaultMLScoringConfig()
-
-	// Use TensorFlow scorer if enabled (VE-205)
-	// Sidecar mode is preferred for production as it provides better isolation
-	// and determinism guarantees across validators
-	if config.UseTensorFlow && config.TensorFlowConfig != nil {
-		// Verify model is available before attempting to create scorer
-		if !isRealInferenceReady() {
-			// Model not available, fall back to stub
-			// This allows validators to operate during model deployment
-			return NewStubMLScorer(config)
-		}
-
-		scorer, err := k.createTensorFlowScorer(config)
-		if err != nil {
-			// Fall back to stub on TensorFlow initialization error
-			// This ensures consensus continues even if inference setup fails
-			// Log the error for observability
-			return NewStubMLScorer(config)
-		}
-		return scorer
+	if k.developmentMLScorer != nil {
+		return k.developmentMLScorer.scorerOrFailClosed()
 	}
-
-	return NewStubMLScorer(config)
+	return &failClosedMLScorer{
+		version: "",
+		err:     types.ErrMLInferenceFailed.Wrap("no production inference scorer is configured; use signed receipts"),
+	}
 }
 
 // createTensorFlowScorer creates a TensorFlow-based scorer
@@ -538,7 +559,7 @@ func (k Keeper) createTensorFlowScorer(config MLScoringConfig) (MLScorer, error)
 		ForceCPU:           tfConfig.ForceCPU,
 		RandomSeed:         42,
 		ExpectedInputDim:   inference.TotalFeatureDim,
-		UseFallbackOnError: true,
+		UseFallbackOnError: false,
 		FallbackScore:      config.FallbackScore,
 	}
 
@@ -576,8 +597,6 @@ type TensorFlowScorerAdapter struct {
 
 // Score implements MLScorer.Score using TensorFlow inference
 func (a *TensorFlowScorerAdapter) Score(input *ScoringInput) (*ScoringOutput, error) {
-	startTime := time.Now()
-
 	// Use the feature extraction pipeline to extract real features
 	features, err := a.featurePipeline.ExtractFeatures(
 		input.DecryptedScopes,
@@ -615,7 +634,7 @@ func (a *TensorFlowScorerAdapter) Score(input *ScoringInput) (*ScoringOutput, er
 		ReasonCodes:    a.convertReasonCodes(result.ReasonCodes),
 		ScopeScores:    make(map[string]uint32),
 		Confidence:     float64(result.Confidence),
-		ProcessingTime: time.Since(startTime).Milliseconds(),
+		ProcessingTime: 0,
 		InputHash:      []byte(result.InputHash),
 	}
 
