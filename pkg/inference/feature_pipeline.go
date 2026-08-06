@@ -3,8 +3,11 @@ package inference
 import (
 	"context"
 	"crypto/sha256"
+	"encoding/binary"
 	"encoding/hex"
 	"fmt"
+	"sort"
+	"strings"
 	"sync"
 	"time"
 )
@@ -64,6 +67,10 @@ type PipelineConfig struct {
 
 	// SanitizeOutputs sanitizes all feature outputs
 	SanitizeOutputs bool
+
+	// RequireCompleteInput requires a fully bound capture set before extraction.
+	// Production pipelines require a selfie, ID document, and liveness video.
+	RequireCompleteInput bool
 }
 
 // DefaultPipelineConfig returns sensible defaults
@@ -90,6 +97,7 @@ func ProductionPipelineConfig() PipelineConfig {
 	config.LivenessConfig.StrictMode = true
 	config.FeatureConfig = ProductionFeatureExtractorConfig()
 	config.ContinueOnPartialFailure = false
+	config.RequireCompleteInput = true
 	return config
 }
 
@@ -217,6 +225,17 @@ func NewFeaturePipelineWithClients(
 
 // Extract runs the complete feature extraction pipeline
 func (p *FeaturePipeline) Extract(ctx context.Context, input *PipelineInput) (*PipelineOutput, error) {
+	if ctx == nil {
+		return nil, fmt.Errorf("pipeline context is required")
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	if err := p.validatePipelineInput(input); err != nil {
+		return nil, err
+	}
+	input = clonePipelineInput(input)
+
 	startTime := time.Now()
 
 	p.mu.Lock()
@@ -318,6 +337,89 @@ func (p *FeaturePipeline) Extract(ctx context.Context, input *PipelineInput) (*P
 	}
 
 	return output, nil
+}
+
+const (
+	maxPipelineScopes         = 10
+	maxScopeDataBytes         = 25 << 20
+	maxScopeMetadataEntries   = 32
+	maxPipelineIdentityLength = 256
+)
+
+func (p *FeaturePipeline) validatePipelineInput(input *PipelineInput) error {
+	if input == nil {
+		return fmt.Errorf("pipeline input is required")
+	}
+	if len(input.Scopes) > maxPipelineScopes {
+		return fmt.Errorf("pipeline scope count exceeds %d", maxPipelineScopes)
+	}
+	if len(input.AccountAddress) > maxPipelineIdentityLength || len(input.RequestID) > maxPipelineIdentityLength || len(input.ValidatorAddress) > maxPipelineIdentityLength {
+		return fmt.Errorf("pipeline identity field exceeds maximum length")
+	}
+	if input.BlockHeight < 0 {
+		return fmt.Errorf("pipeline block height cannot be negative")
+	}
+	if p.config.RequireCompleteInput {
+		if strings.TrimSpace(input.AccountAddress) == "" || strings.TrimSpace(input.RequestID) == "" || strings.TrimSpace(input.ValidatorAddress) == "" || input.BlockTime.IsZero() {
+			return fmt.Errorf("complete pipeline input requires account, request, validator, and block time")
+		}
+	}
+
+	seenIDs := make(map[string]struct{}, len(input.Scopes))
+	seenTypes := make(map[string]bool, 3)
+	for _, scope := range input.Scopes {
+		if scope.ScopeID == "" || len(scope.ScopeID) > maxPipelineIdentityLength {
+			return fmt.Errorf("pipeline scope ID is required and must be bounded")
+		}
+		if _, exists := seenIDs[scope.ScopeID]; exists {
+			return fmt.Errorf("duplicate pipeline scope ID: %s", scope.ScopeID)
+		}
+		seenIDs[scope.ScopeID] = struct{}{}
+		if !isSupportedPipelineScopeType(scope.ScopeType) {
+			return fmt.Errorf("unsupported pipeline scope type: %s", scope.ScopeType)
+		}
+		if len(scope.Data) == 0 || len(scope.Data) > maxScopeDataBytes {
+			return fmt.Errorf("pipeline scope %s data is required and must be bounded", scope.ScopeID)
+		}
+		if len(scope.Metadata) > maxScopeMetadataEntries {
+			return fmt.Errorf("pipeline scope %s has too much metadata", scope.ScopeID)
+		}
+		for key, value := range scope.Metadata {
+			if strings.TrimSpace(key) == "" || len(key) > maxPipelineIdentityLength || len(value) > maxPipelineIdentityLength {
+				return fmt.Errorf("pipeline scope %s has invalid metadata", scope.ScopeID)
+			}
+		}
+		seenTypes[scope.ScopeType] = true
+	}
+	if p.config.RequireCompleteInput && (!seenTypes["selfie"] || !seenTypes["id_document"] || !seenTypes["face_video"]) {
+		return fmt.Errorf("complete pipeline input requires selfie, id_document, and face_video scopes")
+	}
+	return nil
+}
+
+func isSupportedPipelineScopeType(scopeType string) bool {
+	switch scopeType {
+	case "selfie", "id_document", "face_video", "biometric":
+		return true
+	default:
+		return false
+	}
+}
+
+func clonePipelineInput(input *PipelineInput) *PipelineInput {
+	cloned := *input
+	cloned.Scopes = make([]ScopeData, len(input.Scopes))
+	for i, scope := range input.Scopes {
+		cloned.Scopes[i] = scope
+		cloned.Scopes[i].Data = append([]byte(nil), scope.Data...)
+		if scope.Metadata != nil {
+			cloned.Scopes[i].Metadata = make(map[string]string, len(scope.Metadata))
+			for key, value := range scope.Metadata {
+				cloned.Scopes[i].Metadata[key] = value
+			}
+		}
+	}
+	return &cloned
 }
 
 // categorizeScopes separates scopes by type
@@ -673,19 +775,35 @@ func (p *FeaturePipeline) sanitizeOutput(output *PipelineOutput) {
 // computeInputHash computes a hash of the pipeline inputs
 func (p *FeaturePipeline) computeInputHash(input *PipelineInput) string {
 	h := sha256.New()
-
-	// Hash account and metadata
-	h.Write([]byte(input.AccountAddress))
-	fmt.Fprintf(h, "|%d|%s|", input.BlockHeight, input.RequestID)
-
-	// Hash scope data
+	writePipelineHashField(h, []byte("VEID_FEATURE_PIPELINE_INPUT_V1"))
+	writePipelineHashField(h, []byte(input.AccountAddress))
+	writePipelineHashField(h, []byte(fmt.Sprintf("%d", input.BlockHeight)))
+	writePipelineHashField(h, []byte(fmt.Sprintf("%d", input.BlockTime.UTC().UnixNano())))
+	writePipelineHashField(h, []byte(input.RequestID))
+	writePipelineHashField(h, []byte(input.ValidatorAddress))
 	for _, scope := range input.Scopes {
-		h.Write([]byte(scope.ScopeID))
-		h.Write([]byte(scope.ScopeType))
-		h.Write(scope.Data)
+		writePipelineHashField(h, []byte(scope.ScopeID))
+		writePipelineHashField(h, []byte(scope.ScopeType))
+		writePipelineHashField(h, scope.Data)
+		keys := make([]string, 0, len(scope.Metadata))
+		for key := range scope.Metadata {
+			keys = append(keys, key)
+		}
+		sort.Strings(keys)
+		for _, key := range keys {
+			writePipelineHashField(h, []byte(key))
+			writePipelineHashField(h, []byte(scope.Metadata[key]))
+		}
 	}
 
 	return hex.EncodeToString(h.Sum(nil))
+}
+
+func writePipelineHashField(h interface{ Write([]byte) (int, error) }, value []byte) {
+	var length [8]byte
+	binary.BigEndian.PutUint64(length[:], uint64(len(value)))
+	_, _ = h.Write(length[:])
+	_, _ = h.Write(value)
 }
 
 // computeFeatureHash computes a hash of the feature vector
