@@ -60,6 +60,10 @@ type AttestationVerifier interface {
 
 // BuildDeviceAttestationRecord converts a verification result to an on-chain record.
 func BuildDeviceAttestationRecord(result AttestationResult, vaultRef string, payloadHash []byte) veidtypes.DeviceAttestationRecord {
+	metadata := make(map[string]string, len(result.Metadata))
+	for key, value := range result.Metadata {
+		metadata[key] = value
+	}
 	return veidtypes.DeviceAttestationRecord{
 		AttestationID:  result.AttestedAt.Format("20060102T150405Z") + ":" + result.DeviceModel,
 		Platform:       result.Platform,
@@ -75,8 +79,8 @@ func BuildDeviceAttestationRecord(result AttestationResult, vaultRef string, pay
 		Supported:      result.Status != AttestationStatusUnsupported,
 		Verified:       result.Verified,
 		FailureReason:  result.FailureReason,
-		PayloadHash:    payloadHash,
+		PayloadHash:    append([]byte(nil), payloadHash...),
 		VaultRef:       vaultRef,
-		Metadata:       result.Metadata,
+		Metadata:       metadata,
 	}
 }

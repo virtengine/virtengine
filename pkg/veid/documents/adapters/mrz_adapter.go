@@ -67,6 +67,9 @@ func (a *MRZAdapter) ExtractWithMRZ(ctx context.Context, img image.Image, mrzVal
 	}
 
 	docType := mapDocumentType(parsed.DocumentType)
+	if !a.CanProcess(docType, documents.CountryCode(parsed.IssuingCountry)) {
+		return nil, documents.ErrNoAdapter
+	}
 
 	data := &documents.DocumentData{
 		GivenNames:     parsed.GivenNames,
@@ -112,8 +115,11 @@ func (a *MRZAdapter) Validate(data *documents.DocumentData) ([]documents.Validat
 	}
 	if data.ExpiryDate.IsZero() {
 		errs = append(errs, documents.ValidationError{Field: "expiry_date", Message: "missing expiry date"})
-	} else if data.ExpiryDate.Before(time.Now().AddDate(0, 0, -1)) {
+	} else if data.ExpiryDate.Before(time.Now().UTC().Truncate(24 * time.Hour)) {
 		errs = append(errs, documents.ValidationError{Field: "expiry_date", Message: "document expired"})
+	}
+	if data.Sex != "" && data.Sex != "M" && data.Sex != "F" && data.Sex != "X" {
+		errs = append(errs, documents.ValidationError{Field: "sex", Message: "invalid sex marker"})
 	}
 	if data.MRZData != nil && !data.MRZData.IsValid {
 		errs = append(errs, documents.ValidationError{Field: "mrz", Message: "mrz check digits failed"})
