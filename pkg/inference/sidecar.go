@@ -5,7 +5,9 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"fmt"
+	"math"
 	"os"
+	"strings"
 	"sync"
 	"time"
 
@@ -355,8 +357,39 @@ func (sc *SidecarClient) validateScoreResponse(resp *inferencepb.ComputeScoreRes
 	if resp == nil {
 		return fmt.Errorf("sidecar returned an empty response")
 	}
+	if resp.Score > 100 {
+		return fmt.Errorf("sidecar response score is out of range: %d", resp.Score)
+	}
+	if !isFiniteScore(resp.RawScore) || resp.RawScore < 0 || resp.RawScore > 100 {
+		return fmt.Errorf("sidecar response raw score is out of range")
+	}
+	if !isFiniteScore(resp.Confidence) || resp.Confidence < 0 || resp.Confidence > 1 {
+		return fmt.Errorf("sidecar response confidence is out of range")
+	}
+	if resp.ComputeTimeMs < 0 {
+		return fmt.Errorf("sidecar response compute time cannot be negative")
+	}
+	if len(resp.ReasonCodes) > 32 {
+		return fmt.Errorf("sidecar response has too many reason codes")
+	}
+	for _, code := range resp.ReasonCodes {
+		if code = strings.TrimSpace(code); code == "" || len(code) > 128 {
+			return fmt.Errorf("sidecar response has an invalid reason code")
+		}
+	}
+	if len(resp.FeatureContributions) > 64 {
+		return fmt.Errorf("sidecar response has too many feature contributions")
+	}
+	for name, value := range resp.FeatureContributions {
+		if strings.TrimSpace(name) == "" || len(name) > 128 || !isFiniteScore(value) {
+			return fmt.Errorf("sidecar response has an invalid feature contribution")
+		}
+	}
 	if sc.config.RequireHashVerification && resp.InputHash == "" {
 		return fmt.Errorf("sidecar response is missing input hash")
+	}
+	if resp.InputHash != "" && !isValidSHA256Hex(resp.InputHash) {
+		return fmt.Errorf("sidecar response input hash is invalid")
 	}
 	if resp.InputHash != "" && resp.InputHash != localFeatureHash {
 		return fmt.Errorf("input hash mismatch: local=%s, remote=%s", localFeatureHash, resp.InputHash)
@@ -365,6 +398,9 @@ func (sc *SidecarClient) validateScoreResponse(resp *inferencepb.ComputeScoreRes
 	localOutputHash := sc.determinism.ComputeOutputHash([]float32{resp.RawScore})
 	if sc.config.RequireHashVerification && resp.OutputHash == "" {
 		return fmt.Errorf("sidecar response is missing output hash")
+	}
+	if resp.OutputHash != "" && !isValidSHA256Hex(resp.OutputHash) {
+		return fmt.Errorf("sidecar response output hash is invalid")
 	}
 	if resp.OutputHash != "" && localOutputHash != resp.OutputHash {
 		return fmt.Errorf("output hash mismatch: local=%s, remote=%s", localOutputHash, resp.OutputHash)
@@ -379,7 +415,14 @@ func (sc *SidecarClient) validateScoreResponse(resp *inferencepb.ComputeScoreRes
 	if resp.ModelHash != "" && resp.ModelHash != sc.modelHash {
 		return fmt.Errorf("sidecar response model hash mismatch: expected %s, got %s", sc.modelHash, resp.ModelHash)
 	}
+	if resp.ModelHash != "" && !isValidSHA256Hex(resp.ModelHash) {
+		return fmt.Errorf("sidecar response model hash is invalid")
+	}
 	return nil
+}
+
+func isFiniteScore(value float32) bool {
+	return !math.IsNaN(float64(value)) && !math.IsInf(float64(value), 0)
 }
 
 // simulateSidecarResponse simulates sidecar response for explicitly enabled

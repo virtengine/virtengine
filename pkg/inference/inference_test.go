@@ -194,6 +194,14 @@ func TestConfigValidation(t *testing.T) {
 			},
 			expectError: true,
 		},
+		{
+			name: "sidecar TLS requires sidecar mode",
+			modifyFunc: func(c *InferenceConfig) {
+				c.ExpectedHash = strings.Repeat("a", 64)
+				c.SidecarTLS = true
+			},
+			expectError: true,
+		},
 	}
 
 	for _, tt := range tests {

@@ -188,6 +188,9 @@ func (c *InferenceConfig) Validate() error {
 	if !c.SidecarTLS && (c.SidecarTLSCAFile != "" || c.SidecarTLSCertFile != "" || c.SidecarTLSKeyFile != "" || c.SidecarTLSServerName != "") {
 		return fmt.Errorf("sidecar TLS files or server name require sidecar_tls")
 	}
+	if c.SidecarTLS && !c.UseSidecar {
+		return fmt.Errorf("sidecar_tls requires use_sidecar")
+	}
 	if (c.SidecarTLSCertFile == "") != (c.SidecarTLSKeyFile == "") {
 		return fmt.Errorf("sidecar TLS client certificate and key must be configured together")
 	}
