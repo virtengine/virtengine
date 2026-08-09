@@ -3,7 +3,7 @@
 
 # Deep Learning / U-Net
 tensorflow==2.20.0
-keras==3.13.2
+keras==3.15.0
 
 # Image Processing
 opencv-python==4.8.1.78
