@@ -1,16 +1,27 @@
 # Mainnet Launch Packet (Evidence + Hashes)
 
+> **Historical baseline:** This packet was assembled for the April 2026
+> MainNet window, which did not proceed. It must be rebuilt with January 2027
+> TestNet exit evidence and fresh approvals before the March 2027 MainNet
+> launch. See `network-launch-schedule.md`.
+>
+> **Integrity note:** The manifest hashes below are the values recorded when
+> the April 2026 packet closed. Supersession notices added to the historical
+> Markdown records are intentionally not represented by those old hashes. The
+> 2027 launch packets must generate a new manifest and new hashes; this packet
+> must not be reused as a current integrity manifest.
+
 Last updated: 2026-04-11
 Owner: Release Management (Ops)
 
 ## Purpose
 Centralized evidence bundle for mainnet launch approval. All checked-in
-artifacts must be stored with SHA-256 hashes for immutability. This packet now
+artifacts must be stored with SHA-256 hashes for immutability. At the time this
+packet was closed, it
 closes the execution-evidence gap, records the approved canonical allocation
-set, and archives the final checked-in mainnet genesis publication bundle. The
-current repository posture is `GO` for the scheduled 2026-04-18 UTC launch
-window, but not a claim that the network is already live before that window
-opens.
+set, and archives the checked-in MainNet genesis publication bundle. It
+recorded `GO` for the scheduled 2026-04-18 UTC launch window, but that window
+did not proceed and the record is not current launch authority.
 
 ## Evidence manifest
 
@@ -86,7 +97,7 @@ Record the hash outputs in the Evidence manifest table.
 - Store all evidence artifacts in the release evidence archive (immutable
   storage)
 - Update the launch runbook to reference this packet
-- The checked-in repository posture is `GO` for the scheduled 2026-04-18 UTC
-  launch window and the 2026-04-19 UTC backup window
-- Public documentation should still describe the network as scheduled /
-  approved rather than already live until the approved window begins
+- The packet historically recorded `GO` for the scheduled 2026-04-18 UTC
+  launch window and the 2026-04-19 UTC backup window; neither window proceeded
+- Current public documentation must use the January 2027 TestNet and March
+  2027 MainNet schedule in `network-launch-schedule.md`

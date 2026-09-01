@@ -4,14 +4,14 @@ This document describes the compatibility posture that can be supported by check
 
 ## Current Support Posture
 
-As of `2026-04-11`:
+As of `2026-09-01`:
 
 - the repository contains active development on `main`;
-- launch-readiness materials for mainnet exist in-repo;
-- the checked-in mainnet decision is `GO` for the scheduled 2026-04-18 UTC launch window;
-- no public stable mainnet support window or end-of-life calendar is approved in repository evidence.
+- **TestNet is planned for the January 2027 launch window**;
+- **MainNet is planned for the March 2027 launch window**, after TestNet exit criteria and a fresh go/no-go approval;
+- no public stable MainNet support window or end-of-life calendar is approved in repository evidence.
 
-Because of that, VirtEngine still does **not** publish an `N-2` support policy or a guaranteed production maintenance window for older minor releases, even though the scheduled launch window is now approved in repository evidence.
+Because of that, VirtEngine still does **not** publish an `N-2` support policy or a guaranteed production maintenance window for older minor releases. TestNet is a pre-production proving environment and does not create a MainNet compatibility or support commitment.
 
 ## What Is Currently Safe To Rely On
 
@@ -50,7 +50,7 @@ Until the project records an approved public release and support policy, the com
 
 ## Clients and Operators
 
-For the current pre-mainnet posture:
+For the current pre-MainNet posture:
 
 - use matching binaries and SDKs from the same validated release tag where possible;
 - treat mixed-version environments as supported only when the relevant compatibility and upgrade tests cover them;
@@ -86,7 +86,8 @@ When deciding whether a release or environment combination is supported, use the
 
 This document does not promise:
 
-- that the network is already live before the approved launch window begins;
+- that TestNet or MainNet is live before the relevant launch is officially confirmed;
+- that a successful TestNet launch automatically approves or promotes a release to MainNet;
 - an `N-2` maintenance policy;
 - automatic protocol negotiation behavior beyond what the live server and generated API surface implement;
 - support for arbitrary cross-version client and server mixes.
@@ -96,4 +97,5 @@ This document does not promise:
 - [README.md](../README.md)
 - [RELEASE.md](../RELEASE.md)
 - [VERIFICATION.md](../VERIFICATION.md)
+- [NETWORK_LAUNCH_SCHEDULE.md](NETWORK_LAUNCH_SCHEDULE.md)
 - [_docs/version-control.md](../_docs/version-control.md)

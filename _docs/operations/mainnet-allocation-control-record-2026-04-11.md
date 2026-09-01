@@ -1,5 +1,10 @@
 # Mainnet Allocation Control Record - 2026-04-11
 
+> **Historical record:** The April 2026 MainNet window did not proceed. The
+> current plan is TestNet in January 2027 and MainNet in March 2027. This record
+> is baseline evidence only; see `network-launch-schedule.md` for current launch
+> authority.
+
 Last updated: 2026-04-11
 Owner: Release Management (Ops)
 
@@ -61,7 +66,9 @@ final checked-in VirtEngine mainnet genesis bundle.
 - `output/mainnet-launch/2026-04-11/mainnet-genesis-ceremony.log`
 
 ## Approval outcome
-- The canonical allocation set is approved for the scheduled mainnet launch
-  window on 2026-04-18 UTC.
+- At the time of this record, the canonical allocation set was approved for
+  the scheduled MainNet launch window on 2026-04-18 UTC. That window did not
+  proceed, and the allocation set must be re-verified for the March 2027
+  MainNet launch package.
 - The checked-in `config/mainnet/genesis-allocations.json` file is the
   authoritative repository input for final genesis publication.

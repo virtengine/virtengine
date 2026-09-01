@@ -4,17 +4,19 @@ This document describes the public verification posture of the VirtEngine reposi
 
 ## Current Status
 
-As of `2026-04-11`:
+As of `2026-09-01`:
 
 - the repository contains extensive CI, security, release, smoke, and DR automation;
-- launch-readiness evidence for mainnet is checked in under `_docs/operations/` and `config/mainnet/`;
-- the checked-in mainnet decision record is `GO` for the scheduled 2026-04-18 UTC launch window, with the final canonical allocation record and genesis publication bundle archived in-repo.
+- **TestNet is planned for the January 2027 launch window** to produce public, multi-operator pre-production evidence;
+- **MainNet is planned for the March 2027 launch window**, contingent on TestNet exit criteria and a fresh production go/no-go approval;
+- April 2026 MainNet readiness material remains archived under `_docs/operations/` and `config/mainnet/`, but the windows did not proceed and those records are not current launch authority.
 
 Accordingly, the current verification posture is:
 
 - development and release-candidate validation: available;
 - production-grade automation evidence: present in many tracks and workflows;
-- approved public mainnet launch verification: complete for the scheduled launch window, while public network availability remains future-dated until the window begins.
+- TestNet launch verification: to be refreshed and completed for the January 2027 window;
+- MainNet launch verification: not complete until TestNet evidence is accepted, launch-blocking findings are closed and re-tested, final artifacts are verified, and a fresh `GO` decision is recorded for March 2027.
 
 ## Primary Verification Gates
 
@@ -44,24 +46,26 @@ Compatibility and upgrade behavior are validated through [`.github/workflows/com
 
 The repository also contains [`.github/workflows/smoke-test.yaml`](.github/workflows/smoke-test.yaml), [`.github/workflows/staging-e2e.yaml`](.github/workflows/staging-e2e.yaml), [`.github/workflows/infrastructure.yaml`](.github/workflows/infrastructure.yaml), and [`.github/workflows/dr-failover-test.yaml`](.github/workflows/dr-failover-test.yaml) to validate deployability, rollout behavior, and failover procedures. Those workflows are part of the evidence chain for any environment being described as production-ready.
 
-## Mainnet Verification Posture
+## Network Launch Verification Posture
 
-Mainnet verification is intentionally fail-closed.
+Launch verification is intentionally fail-closed and environment-specific.
 
-The checked-in evidence currently shows:
+For **TestNet**, the January 2027 launch package must validate public
+multi-operator consensus, validator and provider onboarding, VEID, marketplace
+and settlement flows, upgrades, rollback, backup/restore, monitoring, and
+incident response. TestNet may be reset, its tokens have no production value,
+and its state is not guaranteed to migrate to MainNet.
 
-- a quorum-backed launch review record and named approver set archived in repository evidence;
-- approved launch and freeze windows checked in;
-- completed VEID, provider, finance, backup/restore, and communications evidence;
-- an approved canonical allocation control record;
-- a final checked-in genesis publication bundle with current hashes;
-- a final launch state of `GO` for the scheduled 2026-04-18 UTC window.
+For **MainNet**, the March 2027 launch package must additionally show that
+TestNet exit criteria passed, every launch-blocking finding was closed and
+re-tested, canonical genesis and production artifacts were finalized and
+verified, and release management recorded a fresh `GO` decision. TestNet
+success does not automatically authorize MainNet.
 
-As a result, the repository should currently be described as:
-
-- launch-approved for the scheduled mainnet window;
-- backed by checked-in final genesis publication evidence;
-- not yet making a claim that the network is already live before the approved launch window executes.
+The separation reserves February for observation, remediation, repeated
+validation, security and operational review, release freeze, and final
+validator coordination. See
+[docs/NETWORK_LAUNCH_SCHEDULE.md](docs/NETWORK_LAUNCH_SCHEDULE.md).
 
 ## How To Evaluate A Target Release
 
@@ -85,5 +89,6 @@ This document does not claim:
 
 - [README.md](README.md)
 - [RELEASE.md](RELEASE.md)
+- [docs/NETWORK_LAUNCH_SCHEDULE.md](docs/NETWORK_LAUNCH_SCHEDULE.md)
 - [docs/COMPATIBILITY.md](docs/COMPATIBILITY.md)
-- [_docs/operations/mainnet-go-no-go-decision.md](_docs/operations/mainnet-go-no-go-decision.md)
+- [_docs/operations/network-launch-schedule.md](_docs/operations/network-launch-schedule.md)

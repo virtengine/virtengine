@@ -65,6 +65,7 @@ This index lists internal-only documentation. Do not add internal docs outside `
 - `_docs/operations/mainnet-launch-control-record-2026-04-11.md`
 - `_docs/operations/mainnet-launch-packet.md`
 - `_docs/operations/mainnet-launch-readiness-checklist.md`
+- `_docs/operations/network-launch-schedule.md`
 - `_docs/operations/mainnet-provider-hpc-e2e-report-2026-04-11.md`
 - `_docs/operations/mainnet-veid-e2e-report-2026-04-11.md`
 - `_docs/operations/monitoring.md`

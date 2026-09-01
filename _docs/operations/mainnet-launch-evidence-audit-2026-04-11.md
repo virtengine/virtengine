@@ -1,5 +1,10 @@
 # Mainnet Launch Evidence Audit - 2026-04-11
 
+> **Historical record:** This audit describes the April 2026 evidence state;
+> that MainNet window did not proceed. It does not approve the current TestNet
+> January 2027 or MainNet March 2027 windows. See
+> `network-launch-schedule.md`.
+
 Last updated: 2026-04-11
 Audit timestamp (UTC): 2026-04-11 08:28 UTC
 Owner: Release Management (Ops)
@@ -51,10 +56,10 @@ after the 2026-04-11 rehearsal bundle.
 - `output/mainnet-launch/2026-04-11/mainnet-genesis-ceremony.log`
 - `output/mainnet-launch/2026-04-11/prelaunch-checklist-pass.log`
 
-## Current repository posture
+## Repository posture recorded on 2026-04-11
 - The launch packet now contains repository-backed evidence for execution
   readiness, canonical allocations, and the final genesis publication bundle.
-- The correct checked-in launch posture is `GO` for the scheduled 2026-04-18
-  UTC window, with the backup window on 2026-04-19 UTC.
+- The posture recorded at the time was `GO` for the scheduled 2026-04-18 UTC
+  window, with the backup window on 2026-04-19 UTC. Neither window proceeded.
 - This audit does not claim the network is already live; it confirms only that
-  the repository evidence required for the scheduled launch window is complete.
+  the repository evidence required for that historical window was complete.

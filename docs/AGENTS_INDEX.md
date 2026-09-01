@@ -62,5 +62,6 @@ flowchart TD
 ### CI/CD Quick Links
 - **CI/CD Guide**: [.github/AGENTS.md](../.github/AGENTS.md) (line 1)
 - **Release Process**: [RELEASE.md](../RELEASE.md) (line 1) - Branching strategy, versioning, automation
+- **Network Launch Schedule**: [docs/NETWORK_LAUNCH_SCHEDULE.md](NETWORK_LAUNCH_SCHEDULE.md) (line 1) - TestNet/MainNet windows, environment boundary, and promotion criteria
 - **Troubleshooting**: [ci-troubleshooting.md](../_docs/operations/ci-troubleshooting.md) (line 1) - Common workflow issues
 - **Workflow Files**: [.github/workflows/](../.github/workflows/) - 32+ GitHub Actions workflows

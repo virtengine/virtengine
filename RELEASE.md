@@ -4,17 +4,23 @@ This document describes the current release process for VirtEngine as it exists 
 
 ## Current Public Release State
 
-As of `2026-04-11`:
+As of `2026-09-01`:
 
 - the repository contains release automation, upgrade tests, and network-tag helper scripts;
-- mainnet launch preparation artifacts exist under `config/mainnet/` and `_docs/operations/`;
-- the checked-in mainnet decision record is `HOLD`: execution evidence and named approvals are checked in, but no public document should describe a mainnet general-availability line as approved or live until signed allocation addresses are inserted and the final genesis bundle is published.
+- **TestNet is planned for the January 2027 launch window** as the public pre-production validation network;
+- **MainNet is planned for the March 2027 launch window** as the production network;
+- the April 2026 MainNet windows did not proceed, and their dated decision and evidence records are historical rather than current launch authority;
+- neither 2027 launch has a confirmed UTC start date or final launch approval yet.
 
 Operationally, that means:
 
 - a tag can still be built and published through the release workflow;
 - operators must not infer that every published tag is approved for mainnet production use;
-- production approval requires the launch packet, readiness checklist, and go/no-go package to move to an explicit approved state.
+- January TestNet is used to collect multi-operator consensus, integration, security, upgrade, recovery, and operational evidence;
+- February is the remediation, re-test, release-freeze, and promotion-review interval;
+- March MainNet production approval requires the TestNet exit criteria, refreshed launch packet, readiness checklist, final artifacts, and a fresh explicit `GO` decision.
+
+See [docs/NETWORK_LAUNCH_SCHEDULE.md](docs/NETWORK_LAUNCH_SCHEDULE.md) for the environment boundary and promotion criteria.
 
 ## Branching and Source of Truth
 

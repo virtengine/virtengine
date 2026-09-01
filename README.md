@@ -20,10 +20,12 @@ To become a contributor, please see the guide on [contributing](CONTRIBUTING.md)
 This repository currently ships active development from `main`.
 
 - The release automation and version helper scripts remain in place for tagged releases.
-- Mainnet launch preparation artifacts are checked in under `config/mainnet/` and `_docs/operations/`.
-- The checked-in mainnet decision is `GO` as of `2026-04-11` for the scheduled launch windows on `2026-04-18` and `2026-04-19` UTC: the final canonical allocations and genesis publication bundle are checked in, but the network should not be described as already live before the approved window begins.
+- **TestNet is planned for the January 2027 launch window.** It is the public pre-production phase for multi-operator validation and may be reset.
+- **MainNet is planned for the March 2027 launch window.** It is the production launch and requires the TestNet exit criteria plus a fresh go/no-go approval.
+- The launches are separated so January TestNet evidence can be observed, remediated, and re-tested during February before production artifacts and approvals are finalized for March.
+- Neither TestNet nor MainNet should be described as live until its launch is officially confirmed. The April 2026 MainNet windows did not proceed and remain historical evidence only.
 
-See [RELEASE.md](RELEASE.md), [VERIFICATION.md](VERIFICATION.md), and [_docs/operations/mainnet-go-no-go-decision.md](_docs/operations/mainnet-go-no-go-decision.md) for the current release and launch posture.
+See [docs/NETWORK_LAUNCH_SCHEDULE.md](docs/NETWORK_LAUNCH_SCHEDULE.md), [RELEASE.md](RELEASE.md), [VERIFICATION.md](VERIFICATION.md), and [_docs/operations/network-launch-schedule.md](_docs/operations/network-launch-schedule.md) for the current release and launch posture.
 
 ## VirtEngine Suite
 

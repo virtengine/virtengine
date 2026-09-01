@@ -1,5 +1,9 @@
 # Mainnet Dress Rehearsal Report
 
+> **Historical record:** This report supports the April 2026 rehearsal. That
+> MainNet window did not proceed. The current plan is TestNet in January 2027
+> and MainNet in March 2027; see `network-launch-schedule.md`.
+
 Last updated: 2026-04-11
 Owner: Release Management (Ops)
 
@@ -8,8 +12,8 @@ Owner: Release Management (Ops)
   `output/mainnet-launch/2026-04-11/`
 - Rehearsal window (UTC): 2026-04-11 05:48 to 2026-04-11 06:16
 - Outcome: `PASS` for execution-evidence closure; the final genesis blocker was
-  closed in the post-rehearsal control window and the current repository-backed
-  launch state is `GO` for the scheduled 2026-04-18 UTC window
+  closed in the post-rehearsal control window and the repository state at that
+  time recorded `GO` for the scheduled 2026-04-18 UTC window
 - Rollback drill: completed for rehearsal scope; restore smoke passed and
   rollback criteria were reviewed
 

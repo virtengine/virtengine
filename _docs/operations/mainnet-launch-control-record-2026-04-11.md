@@ -1,5 +1,10 @@
 # Mainnet Launch Control Record - 2026-04-11
 
+> **Historical record:** The approved April 2026 window did not proceed and
+> this control record does not authorize a 2027 launch. The current plan is
+> TestNet in January 2027 and MainNet in March 2027; see
+> `network-launch-schedule.md`.
+
 Last updated: 2026-04-11
 Owner: Release Management (Ops)
 
@@ -103,7 +108,7 @@ repository-backed mainnet rehearsal and final genesis publication review.
   - `_docs/training/modules/security-fundamentals.md`
   - `_docs/training/security/security-incident-response.md`
 
-## Current launch basis
+## Launch basis recorded on 2026-04-11
 - Execution-evidence gaps are closed.
 - Named launch approvers, launch windows, freeze windows, dress rehearsal,
   finance evidence, backup/restore evidence, the comms packet, and the final
@@ -111,8 +116,8 @@ repository-backed mainnet rehearsal and final genesis publication review.
 - `config/mainnet/genesis-allocations.json` is now `READY` with approved
   canonical treasury, community-pool, team-vesting, and validator
   self-delegation addresses.
-- The current repository-backed launch posture is `GO` for the scheduled
+- The repository-backed launch posture recorded at the time was `GO` for the scheduled
   primary launch window on 2026-04-18 UTC and the backup window on
-  2026-04-19 UTC.
-- Public mainnet availability should still be described as scheduled rather
-  than already live until the approved launch window begins.
+  2026-04-19 UTC. Neither window proceeded.
+- Current public availability and launch messaging is governed by
+  `network-launch-schedule.md`.

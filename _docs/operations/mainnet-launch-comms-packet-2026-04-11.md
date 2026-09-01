@@ -1,5 +1,10 @@
 # Mainnet Launch Communications Packet - 2026-04-11
 
+> **Historical record — do not publish these drafts:** The April 2026 MainNet
+> window did not proceed. Current public messaging must state TestNet in
+> January 2027 and MainNet in March 2027, subject to separate confirmation. See
+> `network-launch-schedule.md`.
+
 Last updated: 2026-04-11
 Owner: Product Lead
 

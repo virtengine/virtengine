@@ -1,5 +1,10 @@
 # Mainnet Launch Readiness Checklist
 
+> **Historical baseline:** This checklist was completed for the April 2026
+> MainNet window, which did not proceed. It must be refreshed after the January
+> 2027 TestNet phase before the March 2027 MainNet go/no-go review. See
+> `network-launch-schedule.md`.
+
 Last updated: 2026-04-11
 Owner: Release Management (Ops)
 

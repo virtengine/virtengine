@@ -1,14 +1,14 @@
 # Mainnet Go/No-Go Decision Record
 
-Last updated: 2026-08-03
+Last updated: 2026-09-01
 Owner: Release Management (Ops)
 
-> **Status update (2026-08-03):** The launch window originally approved below
-> (2026-04-18 / 2026-04-19 UTC) did not proceed as scheduled. The decision
-> remains `GO`, rescheduled to the **January 2027** launch window
-> (2027-01-01 through 2027-01-31 UTC). See "Update — 2026-08-03" at the end of
-> this record. The network must not be described as live before the new
-> approved window begins.
+> **Current status (2026-09-01):** The MainNet window originally approved below
+> (2026-04-18 / 2026-04-19 UTC) did not proceed. The current two-stage plan is
+> **TestNet in January 2027** followed by **MainNet in March 2027**. The April
+> 2026 `GO` is historical and does not authorize either 2027 activation. A
+> fresh environment-specific go/no-go decision is required before each launch.
+> See `_docs/operations/network-launch-schedule.md`.
 
 ## Meeting details
 - Meeting date/time (UTC): 2026-04-11 08:18 to 2026-04-11 08:28
@@ -77,19 +77,31 @@ Owner: Release Management (Ops)
 | Rebuild final mainnet genesis bundle and publish current hashes | Ops Lead | 2026-04-11 | Closed - completed 2026-04-11 |
 | Re-run `scripts/mainnet/prelaunch-checklist.sh` after final genesis publication and record the control-window result | Release Manager | 2026-04-11 | Closed - completed 2026-04-11 |
 
-## Update — 2026-08-03: Launch window rescheduled
+## Update — 2026-08-03: Superseded reschedule
 
-- Decision: `GO` (reaffirmed), launch window rescheduled
+- At that time, the prior `GO` was reaffirmed and MainNet was provisionally
+  rescheduled to January 2027
 - The approved 2026-04-18 / 2026-04-19 UTC window did not proceed as scheduled
-- New launch window: **January 2027** (2027-01-01 through 2027-01-31 UTC);
-  exact launch date within the window to be confirmed closer to launch
+- That January MainNet plan was superseded on 2026-09-01 by the two-stage
+  TestNet/MainNet schedule below
 - Prior sign-offs, checklist evidence, and the published genesis bundle remain
-  valid as a baseline; a follow-up go/no-go confirmation is required ahead of
-  the new window to re-verify freeze-window and rollback-criteria readiness
-- Public launch messaging must continue to state "scheduled for approved UTC
-  window" and must not describe the network as live until the new window
-  begins
+  historical baseline evidence only; they are not current launch approval
+
+## Update — 2026-09-01: Two-stage launch plan
+
+- TestNet launch window: **January 2027**
+- MainNet launch window: **March 2027**
+- February is reserved for TestNet observation, remediation, re-tests,
+  evidence closure, production release freeze, and final launch coordination
+- TestNet is a resettable pre-production environment with no guarantee that
+  its state or balances will migrate to MainNet
+- MainNet is the persistent production environment and requires successful
+  TestNet exit evidence, final artifact verification, and a new explicit `GO`
+- Exact UTC dates and times remain to be confirmed through the formal launch
+  process
 
 | Action | Owner | Due date | Status |
 | --- | --- | --- | --- |
-| Confirm exact launch date within the January 2027 window and re-run the prelaunch checklist ahead of it | Release Manager | 2026-12-31 | Open |
+| Approve the exact January TestNet date and refresh the TestNet launch packet | Release Manager | Before TestNet activation | Open |
+| Record TestNet exit evidence and close or re-test every launch-blocking finding | Release Manager | Before MainNet go/no-go | Open |
+| Approve the exact March MainNet date and record a fresh MainNet go/no-go decision | Release Manager | Before MainNet activation | Open |
