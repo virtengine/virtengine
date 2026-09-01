@@ -1,6 +1,6 @@
 # Network Launch Schedule and Promotion Gate
 
-Last updated: 2026-09-01  
+Last updated: 2026-09-01
 Owner: Release Management (Ops)
 
 ## Current schedule
