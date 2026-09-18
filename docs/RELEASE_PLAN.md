@@ -4,6 +4,13 @@ Status: **PLAN (not executed)**. Nothing in this document authorizes a tag, a pu
 or a deletion. Every step that cuts a tag or publishes a release requires explicit
 human approval.
 
+**Update 2026-09-19 — the pre-tag fix pass has landed** (branch `wt/t_c69f37a6`, commit
+`fix(ci): repair the pre-tag release pipeline defects`). Defects 1, 2, 4, 5, 6, 7 and 9 are
+fixed, Defect 8 is decided and implemented, and Defect 3 still needs human approval.
+Section 5 carries the per-defect status; section 10 carries the updated blockers. The
+changelog generator now runs green end to end in CI (`workflow_dispatch` dry run
+`35356251383`, conclusion `success`). **Nothing was tagged, published or deleted.**
+
 Owner: release-captain
 Date: 2026-09-18
 Audience: project-steward, secops, test-guard, docs-scribe, and the human who approves
@@ -171,7 +178,72 @@ publishes release notes or artifacts does not, today, in this repository.**
 
 ## 5. Defects (evidence, fix, owner)
 
-### Defect 1 — GoReleaser publishes to the wrong repository (release-captain, blocker)
+**Status column added 2026-09-19 by the fix pass (branch `wt/t_c69f37a6`; the pre-tag fixes
+landed as commit "fix(ci): repair the pre-tag release pipeline defects"). No tag, release or
+publication was created. Where a status says FIXED, the command that proved it is named in
+the notes below.**
+
+| # | Defect | Status 2026-09-19 |
+|---|--------|-------------------|
+| 1 | GoReleaser publishes to `virtengine/node` | FIXED — `project_name`/`release.github.name` = `virtengine` (both configs) |
+| 2 | `changelog.yaml` calls `git-chglog` with no `--config` | FIXED — `--config` + semver tag filter; pin aligned to 0.15.1; `workflow_dispatch` dry run green |
+| 3 | Phantom 2021 draft release (empty `tag_name`) | OPEN — deleting a release record requires human approval |
+| 4 | Default `RELEASE_TAG` is a `checkpoint/*` tag | FIXED — defaults to newest `v*` semver tag; `release-tag-check` fails loudly |
+| 5 | Release notes cannot be previewed before the tag exists | FIXED — `--next-tag` mode + `make gen-changelog-preview` |
+| 6 | The release ships no SBOM/signature extras | FIXED — publish generates + signs them and hard-fails when empty |
+| 7 | Three writers to the same release notes | FIXED — GoReleaser is the single writer (decision implemented) |
+| 8 | The publish path has no runner | DECIDED — both jobs repointed to `ubuntu-latest`; revert when runners are registered |
+| 9 | Local verification cannot validate CI signatures | FIXED — identity regexp accepts workflow-URL and email; certificates standardised on `.pem` |
+| 10 | Security gates red (12/13) | OPEN — owner `secops` |
+| 11 | CI red on `main` | OPEN — owner `test-guard` |
+| 12 | devcache paths on a Windows host | OPEN — low priority, documented |
+
+### Fix-pass evidence (2026-09-19)
+
+- **changelog.yaml `workflow_dispatch` dry run** (D2/D5 end-to-end): run `35356251383` on `wt/t_c69f37a6` — conclusion **success** (https://github.com/virtengine/virtengine/actions/runs/35356251383). Dispatched as `version=v0.3.0` (a tag that does not exist), `dry_run=true`.
+- **D1** `.goreleaser.yaml` and `.goreleaser-test-bins.yaml` both carried
+  `project_name: node`; `release.github.name` was `node`. Now `virtengine`. The
+  `{{ .ProjectName }}` consumers (SBOM document template, docker image labels) follow.
+  `checksum.name_template` was already `virtengine_{{ .Version }}_checksums.txt`.
+- **D2** The workflow now passes `--config .chglog/config.yaml` and
+  `--tag-filter-pattern` on both calls, generates the version notes through
+  `script/genchangelog.sh` (one generator), and pins git-chglog `0.15.1` to match
+  `make/init.mk:101`. `workflow_dispatch` dry run: see below.
+- **D4** `RELEASE_TAG ?=` now resolves the newest `v*` semver tag
+  (`git tag --list "v[0-9]*" --sort=-v:refname`), with a `v0.0.0` fallback when none
+  exists. `make release-tag-check` rejects a non-semver value. Reproduced:
+  `make gen-changelog` → exit 0 with real notes (was exit 1 + 0-byte file);
+  `make release-tag-check RELEASE_TAG=checkpoint/stable-virtengine-beta/consolidated-v2`
+  → exit 1 with an explanatory message.
+- **D5** `script/genchangelog.sh [--next-tag] <tag> <out>` plus
+  `make gen-changelog-preview`. Measured locally for the not-yet-cut `v0.3.0`:
+  3084 lines of notes, exit 0. Without `--next-tag` the script still refuses a
+  non-existent tag (`ERROR commits corresponding to "v0.3.0" was not found`, exit 1),
+  so existing-tag behaviour is unchanged.
+- **D6** The `publish` job now installs syft/cosign, runs `make sbom`, signs every
+  `.cache/sbom/*.json` with cosign keyless (`.sig` + `.pem`), and fails the step when
+  that produces no documents. The GoReleaser `extra_files` certificate glob moved
+  `*.cert` → `*.pem` so it matches what the producers actually write. Empty-glob
+  behaviour: **silent omission** (measured, above).
+- **D7** `ci.yaml` `generate_release_notes: false`; `changelog.yaml`'s
+  `action-gh-release` body step removed (its notes are still uploaded as a workflow
+  artifact). GoReleaser with `--release-notes=.cache/changelog.md` and
+  `mode: replace` is now the only writer of the release body.
+- **D8** Re-verified before the change: `gh api
+  repos/virtengine/virtengine/actions/runners` → `total_count: 0`. Both
+  `test-network-upgrade-on-release` and `publish` now run on `ubuntu-latest`
+  (docker/buildx comes from the existing QEMU/Buildx steps). If dedicated runners are
+  registered later, restore the `[self-hosted, …]` labels.
+- **D9** `CERTIFICATE_IDENTITY_REGEXP` now accepts both
+  `…@virtengine.com` (locally signed) and
+  `https://github.com/<owner>/<repo>/.github/workflows/<workflow>@<ref>` (CI keyless).
+  Verified against four identities: both CI workflow URLs match, `release@virtengine.com`
+  matches, `attacker@notvirtengine.com` and an unrelated URL do not. Certificate files
+  are `.pem` everywhere (goreleaser, `make sign-artifact`, `generate-sbom.sh`,
+  `supply-chain.yaml`).
+
+
+### Defect 1 — GoReleaser publishes to the wrong repository (release-captain, blocker) — **FIXED 2026-09-19**
 
 `.goreleaser.yaml:3` declares `project_name: node`, and `.goreleaser.yaml:192-195`:
 
@@ -193,7 +265,7 @@ to create the release on `virtengine/node` — a repository that does not exist.
 `virtengine_{{ .Version }}_checksums.txt`, the SBOM template is `sbom_{{ .ProjectName }}_…`,
 and image labels use `{{ .ProjectName }}`, so this changes observable artifact naming.
 
-### Defect 2 — `changelog.yaml` invokes `git-chglog` without a config (release-captain, blocker)
+### Defect 2 — `changelog.yaml` invokes `git-chglog` without a config (release-captain, blocker) — **FIXED 2026-09-19**
 
 `changelog.yaml:69` runs `git-chglog --output CHANGELOG.md` and `changelog.yaml:72` runs
 `git-chglog ${{ version }}`. Neither passes `--config`. git-chglog's built-in default is
@@ -214,7 +286,7 @@ Also bump the pinned `GIT_CHGLOG_VERSION 0.15.4` (`changelog.yaml:33`) into agre
 `make/init.mk:101` (`v0.15.1`) — two different generators producing the same artifact is
 drift by construction.
 
-### Defect 3 — Phantom 2021 draft release (release-captain)
+### Defect 3 — Phantom 2021 draft release (release-captain) — **OPEN (needs human approval to delete)**
 
 Release id `51014212`: `name: "0.1.0"`, `tag_name: ""`, `draft: true`, `published_at:
 null`, created 2021-10-08. An empty `tag_name` means it can never be published; it exists
@@ -224,7 +296,7 @@ only to mislead anyone reading the releases page.
 draft, or repurpose it for the real first tag at tag time. Do not leave it implying an
 imminent release.
 
-### Defect 4 — the default `RELEASE_TAG` is not a release tag (release-captain, blocker)
+### Defect 4 — the default `RELEASE_TAG` is not a release tag (release-captain, blocker) — **FIXED 2026-09-19**
 
 `make/init.mk:129`: `RELEASE_TAG ?= $(shell git describe --tags --abbrev=0 …)`. On this
 repository the newest tag is `checkpoint/stable-virtengine-beta/consolidated-v2` (31 of
@@ -249,7 +321,7 @@ requirement.
 with a non-zero exit and a message when `RELEASE_TAG` is not a validated semver tag
 (`./script/semver.sh validate`).
 
-### Defect 5 — release notes cannot be previewed before the tag exists (release-captain)
+### Defect 5 — release notes cannot be previewed before the tag exists (release-captain) — **FIXED 2026-09-19**
 
 git-chglog only knows tags that exist. `genchangelog.sh` therefore cannot generate the
 notes for a tag that has not been cut yet — verified: it errors and leaves a 0-byte file,
@@ -273,22 +345,27 @@ $ git-chglog --config .chglog/config.yaml --next-tag v0.3.0   # no filter patter
 Note the third result: without a `--tag-filter-pattern`, the compare range anchors on a
 `checkpoint/*` tag. Filtering is not cosmetic here.
 
-### Defect 6 — the release ships no SBOM/signature extras (release-captain)
+### Defect 6 — the release ships no SBOM/signature extras (release-captain) — **FIXED 2026-09-19 (empty-glob behaviour now measured)**
 
 `.goreleaser.yaml:199-202` attaches `.cache/sbom/*.json|*.sig|*.cert` as `extra_files`.
 `release.yaml`'s `publish` job runs only `make release`; it never runs `make sbom` or
 `make sign-artifact`, and a fresh checkout has no `.cache/sbom`. So the SBOMs and cosign
 signatures that the security/supply-chain workflows produce are **not** the ones attached
 to the GitHub release — the glob evaluates against an empty directory.
-Whether GoReleaser tolerates a glob that matches nothing or aborts is **UNVERIFIED**
-(no Docker here); either outcome is a defect: silent omission, or a hard failure on the
-first tag.
+Whether GoReleaser tolerates a glob that matches nothing or aborts was **UNVERIFIED**
+in this assessment (no Docker here). **Measured 2026-09-19:** it silently omits. A
+wildcard pattern whose static prefix is missing returns `(empty, nil)` from
+`fileglob.Glob` (v1.4.1, called by GoReleaser's `internal/extrafiles.Find`), so the
+release would publish with no SBOM and no signatures and report success. Reproduced
+with a 5-case harness against the real library; only a wildcard-free literal path that
+is missing returns an error. The fix below therefore adds an explicit emptiness guard
+rather than relying on GoReleaser to notice.
 
 **Fix:** decide one producer for release-time SBOMs/signatures and wire it into the
 `publish` job before `make release` (e.g. `make sbom`), then dry-run with
 `GORELEASER_RELEASE=false`. Verify the empty-glob behaviour at the same time.
 
-### Defect 7 — three writers to the same release notes (release-captain)
+### Defect 7 — three writers to the same release notes (release-captain) — **FIXED 2026-09-19 (decision implemented)**
 
 `ci.yaml:1123` sets `generate_release_notes: true`; `changelog.yaml:144-149` overwrites
 the body with `RELEASE_NOTES.md` (`append_body: false`); `make release` passes
@@ -303,7 +380,7 @@ single source of truth for release notes. Follow-ups: disable `generate_release_
 `CHANGELOG.md` + the PR) rather than a competing writer. This is reversible — it is
 workflow configuration, not a history rewrite.
 
-### Defect 8 — the publish path has no runner (release-captain / project-steward, blocker)
+### Defect 8 — the publish path has no runner (release-captain / project-steward, blocker) — **DECIDED 2026-09-19 (repointed to GitHub-hosted)**
 
 `release.yaml:144-148` requires `[self-hosted, core-e2e]`; `release.yaml:90-94` requires
 `[self-hosted, gh-runner-test]`. The API reports **0 registered runners** for this
@@ -314,7 +391,7 @@ repository. Both jobs will queue indefinitely; `notify-homebrew` can never be re
 or repoint `publish` at a GitHub-hosted runner with docker/buildx. Verify with a
 `workflow_dispatch` dry run **before** the first tag.
 
-### Defect 9 — local signature verification cannot verify CI-signed artifacts (release-captain)
+### Defect 9 — local signature verification cannot verify CI-signed artifacts (release-captain) — **FIXED 2026-09-19**
 
 `make/supply-chain.mk:100-105` verifies with
 `--certificate-identity-regexp ".*@virtengine.com"`, but `supply-chain.yaml:445` signs
@@ -328,7 +405,7 @@ cannot validate what CI produces. Naming also diverges: `make sign-artifact` wri
 (or accept `--certificate-identity-regexp 'https://github.com/virtengine/virtengine/.github/workflows/.*'`)
 and standardise the certificate filename.
 
-### Defect 10 — the security gates are red (secops, blocker)
+### Defect 10 — the security gates are red (secops, blocker) — **OPEN (owner: secops)**
 
 Latest `security.yaml` run `35318730864` (2026-09-18, scheduled): **12 of 13 jobs fail**.
 
@@ -344,7 +421,7 @@ the count is corrected here.)
 **Fix:** owned by secops (`make vuln-check`, `make supply-chain-audit`, `gosec ./...`).
 Release-captain owns the dependency: no tag while this is red.
 
-### Defect 11 — CI is red on `main` (test-guard, blocker)
+### Defect 11 — CI is red on `main` (test-guard, blocker) — **OPEN (owner: test-guard)**
 
 Run `33473526555` (2026-09-01, push to `main`) failed these jobs:
 `Lint`, `Go Vet`, `Go Tests`, `Integration Tests`, `Windows Native Build and Unit Tests`,
@@ -353,7 +430,7 @@ that chain, so a tag push today yields no draft, no checksums, no release.
 
 **Fix:** owned by test-guard (green baseline). Release-captain owns the dependency.
 
-### Defect 12 — devcache paths on a Windows host (release-captain, low)
+### Defect 12 — devcache paths on a Windows host (release-captain, low) — **OPEN (low, documented)**
 
 Without direnv, `VE_DEVCACHE*` are unset (`make/init.mk` has a Windows fallback for
 `VE_ROOT`, none for the devcache family), so `make gen-changelog` runs
@@ -439,7 +516,8 @@ From `.goreleaser.yaml` (and `.github/workflows/supply-chain.yaml` for provenanc
   `latest`/`stable`, plus multi-arch manifests) — note `docker_manifests` always publishes
   a `:latest` tag, including for a testnet/rc tag, which is worth a deliberate decision;
 - cosign keyless signatures (`sign-blob`) and per-archive CycloneDX SBOMs
-  (`sboms:` via syft) attached by GoReleaser, **subject to Defect 6**;
+  (`sboms:` via syft) attached by GoReleaser — the release-time extras (Defect 6) are now
+  produced by the `publish` job itself;
 - SBOM bundle + signature verification + SLSA provenance from `supply-chain.yaml`;
 - release notes from `git-chglog` (`make gen-changelog` → `--release-notes`).
 
@@ -456,16 +534,29 @@ parentheses.
 
 1. **(secops)** Green `security.yaml` on `main` — currently 12/13 red (Defect 10).
 2. **(test-guard)** Green `ci.yaml` on `main` — currently 7 jobs red (Defect 11).
-3. **(release-captain)** Fix Defect 1 (GoReleaser release target) — one small PR, plus a
-   naming review.
-4. **(release-captain)** Fix Defect 4 (semver-only default `RELEASE_TAG`) and Defect 5
-   (`--next-tag` preview mode) so notes are reviewable **before** the tag exists.
-5. **(release-captain)** Fix Defect 2 (`--config .chglog/config.yaml` + version pin) so
-   `changelog.yaml` can run at all.
-6. **(release-captain)** Decide and wire Defect 6 (release-time SBOM/signature extras) and
-   Defect 7 (single notes writer; disable the competing writers).
-7. **(release-captain / project-steward)** Register or repoint the runners (Defect 8) and
-   prove it with a dispatch dry run.
+3. **(release-captain)** ~~Fix Defect 1 (GoReleaser release target) — one small PR, plus a
+   naming review.~~ **DONE 2026-09-19** — `project_name`/`release.github.name` = `virtengine`
+   in `.goreleaser.yaml` and `.goreleaser-test-bins.yaml`; `{{ .ProjectName }}` consumers
+   follow. Not executed: a GoReleaser run (no Docker/goreleaser on this host, and a
+   pre-tag run has no tag to release).
+4. **(release-captain)** ~~Fix Defect 4 (semver-only default `RELEASE_TAG`) and Defect 5
+   (`--next-tag` preview mode) so notes are reviewable **before** the tag exists.~~
+   **DONE 2026-09-19** — default is the newest `v*` semver tag, `release-tag-check` fails
+   loudly on a non-semver value, and `--next-tag` preview mode exists
+   (`make gen-changelog-preview`).
+5. **(release-captain)** ~~Fix Defect 2 (`--config .chglog/config.yaml` + version pin) so
+   `changelog.yaml` can run at all.~~ **DONE 2026-09-19** — dry run `35356251383`
+   (`workflow_dispatch`, `version=v0.3.0`, `dry_run=true`) → **success**.
+6. **(release-captain)** ~~Decide and wire Defect 6 (release-time SBOM/signature extras) and
+   Defect 7 (single notes writer; disable the competing writers).~~ **DONE 2026-09-19** —
+   the publish job generates and signs the SBOM extras and fails if it produces none;
+   GoReleaser is the only release-body writer. Unverified remaining: the GoReleaser
+   `extra_files` attachment itself needs a real publish run.
+7. **(release-captain / project-steward)** ~~Register or repoint the runners (Defect 8) and
+   prove it with a dispatch dry run.~~ **DECIDED + IMPLEMENTED 2026-09-19** — no runners
+   exist, so both release jobs were repointed to `ubuntu-latest`; a dispatch dry run of
+   `changelog.yaml` (GitHub-hosted) is green. The publish job itself still cannot be
+   exercised before a tag exists.
 8. **(release-captain)** Curate the notes: `git-chglog … --next-tag v0.3.0` preview,
    extend `title_maps`, and confirm the entry count/ordering is acceptable for a release.
 9. **(human)** Approve the version string and the tag commit.
@@ -485,19 +576,19 @@ Steps 3–7 are PR-sized, independently reviewable, and none of them touch histo
 
 ## 10. Blockers and dependencies
 
-| Blocker | Owner | Status (2026-09-18) |
+| Blocker | Owner | Status (2026-09-19) |
 |---|---|---|
-| `security.yaml` 12/13 red | secops | open (Defect 10) |
-| `ci.yaml` red on `main` (7 jobs) | test-guard | open (Defect 11) |
-| GoReleaser release target `virtengine/node` | release-captain | open (Defect 1) |
-| `changelog.yaml` missing `--config` | release-captain | open (Defect 2) |
-| Phantom 2021 draft release | release-captain (+human approval to delete) | open (Defect 3) |
-| Non-semver default `RELEASE_TAG` | release-captain | open (Defect 4) |
-| No pre-tag notes preview | release-captain | open (Defect 5) |
-| SBOM/signature extras never attached | release-captain | open (Defect 6) |
-| Three competing notes writers | release-captain | decided, fix pending (Defect 7) |
-| 0 self-hosted runners (`core-e2e`, `gh-runner-test`) | release-captain / project-steward | open (Defect 8) |
-| Local `verify-signature` identity mismatch | release-captain | open (Defect 9) |
+| `security.yaml` 12/13 red | secops | **open** (Defect 10) |
+| `ci.yaml` red on `main` (7 jobs) | test-guard | **open** (Defect 11) |
+| GoReleaser release target `virtengine/node` | release-captain | **fixed** (Defect 1) |
+| `changelog.yaml` missing `--config` | release-captain | **fixed** — dry run green (Defect 2) |
+| Phantom 2021 draft release | release-captain (+human approval to delete) | **open — needs approval** (Defect 3) |
+| Non-semver default `RELEASE_TAG` | release-captain | **fixed** (Defect 4) |
+| No pre-tag notes preview | release-captain | **fixed** (Defect 5) |
+| SBOM/signature extras never attached | release-captain | **fixed** (Defect 6) |
+| Three competing notes writers | release-captain | **fixed** (Defect 7) |
+| 0 self-hosted runners (`core-e2e`, `gh-runner-test`) | release-captain / project-steward | **decided:** jobs repointed to GitHub-hosted; revisit if runners are registered (Defect 8) |
+| Local `verify-signature` identity mismatch | release-captain | **fixed** (Defect 9) |
 
 Explicitly **not** a blocker: the changelog generator itself. Given a real tag it works —
 `make gen-changelog RELEASE_TAG=v0.1.0` completed and wrote `.cache/changelog.md`.
