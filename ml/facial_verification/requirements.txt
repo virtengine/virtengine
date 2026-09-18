@@ -15,7 +15,7 @@ opencv-python==4.8.1.78
 Pillow==12.2.0
 
 # Numerical Computing
-numpy==1.26.3
+numpy==1.26.4
 scipy==1.11.1
 
 # Testing

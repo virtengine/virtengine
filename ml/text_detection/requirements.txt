@@ -2,21 +2,30 @@
 # Pin exact versions for deterministic builds
 
 # Deep Learning Framework
-# The +cpu local version is only published on the PyTorch index, not PyPI; without
-# this line `torch==2.12.1+cpu` is unresolvable. Mirrors requirements-deterministic.txt.
+# torch/torchvision are CPU-only wheels served from the PyTorch index; they are
+# paired by release (torch 2.12 <-> torchvision 0.27).
 --extra-index-url https://download.pytorch.org/whl/cpu
 torch==2.12.1+cpu
-torchvision==0.23.0
+torchvision==0.27.1+cpu
 
-# CRAFT Text Detector
-craft-text-detector==0.4.3
+# CRAFT text detector
+# The CRAFT implementation is vendored at third_party/craft_text_detector/
+# (upstream craft-text-detector 0.4.3, MIT). It is NOT declared as a PyPI
+# dependency: 0.4.3 pins opencv-python<4.5.4.62 and every release of that
+# archived project carries the same cap, while opencv-python has no cp311 wheel
+# below 4.6.0.66 -- so no version could ever resolve on Python 3.11, which is
+# what stopped pip-audit from producing a report for this file. See
+# third_party/craft_text_detector/README.md for the provenance and patches.
+#
+# gdown fetches the CRAFT weights on first use (as upstream did).
+gdown==6.4.0
 
 # Image Processing
 opencv-python==4.8.1.78
 Pillow==12.3.0
 
 # Numerical Computing
-numpy==1.24.3
+numpy==1.26.4
 scipy==1.11.1
 
 # Testing
