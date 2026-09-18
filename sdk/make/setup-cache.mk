@@ -143,21 +143,13 @@ $(GIT_CHGLOG_VERSION_FILE): $(VIRTENGINE_DEVCACHE)
 	touch $@
 $(GIT_CHGLOG): $(GIT_CHGLOG_VERSION_FILE)
 
-$(MOCKERY_VERSION_FILE): $(VIRTENGINE_DEVCACHE)
-	@echo "installing mockery $(MOCKERY_VERSION) ..."
-	rm -f $(MOCKERY)
-	(cd $(GO_ROOT); GOBIN=$(VIRTENGINE_DEVCACHE_BIN) go install -ldflags '-s -w -X github.com/vektra/mockery/v2/pkg/config.SemVer=$(MOCKERY_VERSION)' github.com/vektra/mockery/v2@v$(MOCKERY_VERSION))
-	rm -rf "$(dir $@)"
-	mkdir -p "$(dir $@)"
-	touch $@
-$(MOCKERY): $(MOCKERY_VERSION_FILE)
-
-# A module path carrying a major (`.../golangci-lint/v<N>`) derives that major from
-# $(SEMVER), which sdk/Makefile defaults to the SDK's own script/semver.sh when the
-# environment (i.e. direnv) does not supply it. A SEMVER that exists but does not
-# resolve -- a stale path, a script that is not runnable -- still yields an empty
-# major, and `go install` would then fail on a malformed module path
-# (github.com/golangci/golangci-lint/v/cmd/...) that names neither SEMVER nor the
+# A module path carrying a major (`github.com/vektra/mockery/v<N>`,
+# `.../golangci-lint/v<N>`) derives that major from $(SEMVER), which sdk/Makefile
+# defaults to the SDK's own script/semver.sh when the environment (i.e. direnv) does
+# not supply it. A SEMVER that exists but does not resolve -- a stale path, a script
+# that is not runnable -- still yields an empty major, and `go install` would then
+# fail on a malformed module path (github.com/vektra/mockery/v@vX.Y.Z,
+# github.com/golangci/golangci-lint/v/cmd/...) that names neither SEMVER nor the
 # tool. Check it in the recipe instead, before `rm -f` can remove a working binary.
 # Recipe-time, never a parse-time $(error): sdk/Makefile includes this file for every
 # target, so a parse-time error would break unrelated targets.
@@ -165,6 +157,18 @@ $(MOCKERY): $(MOCKERY_VERSION_FILE)
 define require-module-major
 case "$(2)" in ''|*[!0-9]*) echo "ERROR: $(1): could not resolve the module major from SEMVER='$(SEMVER)' (got '$(2)'). Check that script/semver.sh exists and is runnable." >&2; exit 2;; esac
 endef
+
+MOCKERY_MAJOR=$(shell $(SEMVER) get major $(MOCKERY_VERSION))
+
+$(MOCKERY_VERSION_FILE): $(VIRTENGINE_DEVCACHE)
+	@$(call require-module-major,mockery,$(MOCKERY_MAJOR))
+	@echo "installing mockery $(MOCKERY_VERSION) ..."
+	rm -f $(MOCKERY)
+	(cd $(GO_ROOT); GOBIN=$(VIRTENGINE_DEVCACHE_BIN) go install -ldflags '-s -w -X github.com/vektra/mockery/v$(MOCKERY_MAJOR)/pkg/config.SemVer=$(MOCKERY_VERSION)' github.com/vektra/mockery/v$(MOCKERY_MAJOR)@v$(MOCKERY_VERSION))
+	rm -rf "$(dir $@)"
+	mkdir -p "$(dir $@)"
+	touch $@
+$(MOCKERY): $(MOCKERY_VERSION_FILE)
 
 GOLANGCI_LINT_MAJOR=$(shell $(SEMVER) get major $(GOLANGCI_LINT_VERSION))
 
