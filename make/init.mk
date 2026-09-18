@@ -41,6 +41,17 @@ ifndef ROOT_DIR
 ROOT_DIR := $(VE_ROOT)
 endif
 
+# SEMVER is exported by .envrc:72 for direnv shells, but nothing else defines it:
+# a shell that only carries the devcache env (CI's non-direnv fallback in
+# .github/actions/setup-ubuntu, or a hand-exported VE_DEVCACHE as
+# _docs/development-environment.md instructs) leaves it empty. make/setup-cache.mk
+# then derives an empty major for mockery/golangci-lint and hands `go install` a
+# malformed module path (github.com/vektra/mockery/v@v3.5.0) that surfaces as a Go
+# module error, not as a missing-env diagnostic. Same fallback shape as VE_ROOT above.
+ifndef SEMVER
+SEMVER := $(ROOT_DIR)/script/semver.sh
+endif
+
 ifeq (, $(GOTOOLCHAIN))
 ifeq ($(OS),Windows_NT)
 GOTOOLCHAIN := auto
