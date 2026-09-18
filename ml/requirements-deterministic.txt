@@ -38,7 +38,9 @@ grpcio==1.60.0
 grpcio-tools==1.60.0
 
 # Protobuf
-protobuf==5.29.6
+# Must stay <5: tensorflow-cpu 2.15.0 requires protobuf<5, and grpcio/grpcio-tools
+# 1.60.0 require protobuf>=4.21.6,<5. protobuf 5.x made this manifest unsatisfiable.
+protobuf==4.25.3
 
 # Scipy for numerical operations
 scipy==1.12.0

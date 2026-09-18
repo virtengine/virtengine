@@ -2,6 +2,9 @@
 # Pin exact versions for deterministic builds
 
 # Deep Learning Framework
+# The +cpu local version is only published on the PyTorch index, not PyPI; without
+# this line `torch==2.12.1+cpu` is unresolvable. Mirrors requirements-deterministic.txt.
+--extra-index-url https://download.pytorch.org/whl/cpu
 torch==2.12.1+cpu
 torchvision==0.23.0
 
