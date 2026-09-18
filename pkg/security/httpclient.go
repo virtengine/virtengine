@@ -164,7 +164,8 @@ func NewHTTPClientFromConfig(config HTTPClientConfig) *http.Client {
 
 	// Create TLS config with secure defaults
 	tlsConfig := &tls.Config{
-		MinVersion:         minTLSVersion,
+		MinVersion: minTLSVersion,
+		// #nosec G402 -- InsecureSkipVerify is an explicit opt-in configuration field; every production constructor leaves it false and NewDevHTTPClient exists for the documented dev/test case
 		InsecureSkipVerify: config.InsecureSkipVerify, //nolint:gosec // G402: Configurable for dev/test
 	}
 

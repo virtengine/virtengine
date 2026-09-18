@@ -615,7 +615,7 @@ func loadEIDASConfigFromEnv(_ AdapterConfig) (EIDASConfig, bool, error) {
 
 	if eidasConfig.AuditEnabled {
 		log.Printf("[eIDAS] Loaded configuration for SP %s (%s) in %s environment",
-			eidasConfig.ServiceProviderID, eidasConfig.ServiceProviderCountry, eidasConfig.Environment)
+			sanitizeLogValue(eidasConfig.ServiceProviderID), sanitizeLogValue(eidasConfig.ServiceProviderCountry), sanitizeLogValue(eidasConfig.Environment))
 	}
 
 	return eidasConfig, true, nil

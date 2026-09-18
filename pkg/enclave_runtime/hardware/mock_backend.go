@@ -243,8 +243,8 @@ func (b *MockBackend) generateMockAttestation(nonce []byte) []byte {
 
 	// Header: magic bytes + version + platform
 	attestation = append(attestation, []byte("MOCK")...)
-	attestation = append(attestation, 0x01) // Version 1
-	attestation = append(attestation, byte(b.platform))
+	attestation = append(attestation, 0x01)             // Version 1
+	attestation = append(attestation, byte(b.platform)) // #nosec G115 -- b.platform is a small enum whose values fit in a byte
 
 	// Timestamp (8 bytes)
 	ts := make([]byte, 8)
@@ -378,7 +378,8 @@ func (b *MockBackend) Seal(plaintext []byte) ([]byte, error) {
 		// Create authenticated sealed blob
 		// Format: version(1) + platform(1) + nonce(12) + ciphertext + mac(32)
 		sealed = make([]byte, 0, 1+1+12+len(ciphertext)+32)
-		sealed = append(sealed, 0x01)             // Version
+		sealed = append(sealed, 0x01) // Version
+		// #nosec G115 -- b.platform is a small enum whose values fit in a byte
 		sealed = append(sealed, byte(b.platform)) // Platform
 		sealed = append(sealed, nonce...)
 		sealed = append(sealed, ciphertext...)

@@ -27,6 +27,11 @@ type PayPalAdapter struct {
 	config     PayPalConfig
 	httpClient *http.Client
 
+	// baseURL is the validated PayPal API base URL. It is resolved and verified
+	// once at construction so request building never has to trust a raw config
+	// value (gosec G704).
+	baseURL string
+
 	// OAuth token management
 	tokenMu     sync.RWMutex
 	accessToken string
@@ -41,8 +46,16 @@ func NewPayPalAdapter(config PayPalConfig) (Gateway, error) {
 		return nil, ErrGatewayNotConfigured
 	}
 
+	// Validate the destination before any call is made: the base URL carries the
+	// OAuth credentials, so it must not be attacker-controllable.
+	baseURL, err := ValidateGatewayBaseURL(config.GetBaseURL())
+	if err != nil {
+		return nil, err
+	}
+
 	return &PayPalAdapter{
 		config:     config,
+		baseURL:    baseURL,
 		httpClient: security.NewSecureHTTPClient(security.WithTimeout(30 * time.Second)),
 	}, nil
 }
@@ -325,7 +338,8 @@ func (a *PayPalAdapter) ValidateWebhook(payload []byte, signature string) error 
 		return fmt.Errorf("failed to encode PayPal webhook verification: %w", err)
 	}
 
-	req, err := http.NewRequestWithContext(context.Background(), http.MethodPost, a.config.GetBaseURL()+"/v1/notifications/verify-webhook-signature", bytes.NewReader(body))
+	//nolint:gosec // G704: a.baseURL validated by ValidateGatewayBaseURL at construction
+	req, err := http.NewRequestWithContext(context.Background(), http.MethodPost, a.baseURL+"/v1/notifications/verify-webhook-signature", bytes.NewReader(body)) // #nosec G704 -- a.baseURL is validated by ValidateGatewayBaseURL in NewPayPalAdapter; scheme/host/credentials are checked and covered by TestNewPayPalAdapterRejectsHostileBaseURL
 	if err != nil {
 		return fmt.Errorf("failed to create PayPal webhook verification request: %w", err)
 	}
@@ -333,7 +347,8 @@ func (a *PayPalAdapter) ValidateWebhook(payload []byte, signature string) error 
 	req.Header.Set("Authorization", "Bearer "+accessToken)
 	req.Header.Set("Content-Type", "application/json")
 
-	resp, err := a.httpClient.Do(req)
+	//nolint:gosec // G704: request target is the validated a.baseURL
+	resp, err := a.httpClient.Do(req) // #nosec G704 -- request target is a.baseURL, validated in NewPayPalAdapter (see ValidateGatewayBaseURL)
 	if err != nil {
 		return fmt.Errorf("webhook verification failed: %w", err)
 	}
@@ -416,7 +431,8 @@ func (a *PayPalAdapter) getAccessToken(ctx context.Context) (string, error) {
 	}
 
 	data := "grant_type=client_credentials"
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, a.config.GetBaseURL()+"/v1/oauth2/token", strings.NewReader(data))
+	//nolint:gosec // G704: a.baseURL validated by ValidateGatewayBaseURL at construction
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, a.baseURL+"/v1/oauth2/token", strings.NewReader(data)) // #nosec G704 -- a.baseURL is validated by ValidateGatewayBaseURL in NewPayPalAdapter; scheme/host/credentials are checked and covered by TestNewPayPalAdapterRejectsHostileBaseURL
 	if err != nil {
 		return "", fmt.Errorf("failed to create PayPal token request: %w", err)
 	}
@@ -424,7 +440,8 @@ func (a *PayPalAdapter) getAccessToken(ctx context.Context) (string, error) {
 	req.SetBasicAuth(a.config.ClientID, a.config.ClientSecret)
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 
-	resp, err := a.httpClient.Do(req)
+	//nolint:gosec // G704: request target is the validated a.baseURL
+	resp, err := a.httpClient.Do(req) // #nosec G704 -- request target is a.baseURL, validated in NewPayPalAdapter (see ValidateGatewayBaseURL)
 	if err != nil {
 		return "", fmt.Errorf("PayPal token request failed: %w", err)
 	}
@@ -469,7 +486,7 @@ func (a *PayPalAdapter) doRequest(ctx context.Context, method, path string, body
 		payload = bytes.NewReader(raw)
 	}
 
-	req, err := http.NewRequestWithContext(ctx, method, a.config.GetBaseURL()+path, payload)
+	req, err := http.NewRequestWithContext(ctx, method, a.baseURL+path, payload)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create PayPal request: %w", err)
 	}

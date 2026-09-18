@@ -183,7 +183,7 @@ func getDependencies() []struct{ Package, Version string } {
 		os.Exit(1)
 	}
 
-	file, err := os.Open(goModPath)
+	file, err := os.Open(goModPath) // #nosec G304 -- the path is supplied by the operator on the command line; the tool runs with the operator's own privileges
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error opening go.mod: %v\n", err)
 		os.Exit(1)

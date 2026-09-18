@@ -360,16 +360,16 @@ func (p *CoinGeckoProvider) GetPrices(ctx context.Context, pairs []AssetPair) (m
 		}
 
 		if resp.StatusCode != http.StatusOK {
-			resp.Body.Close()
+			_ = resp.Body.Close()
 			continue
 		}
 
 		var result map[string]map[string]interface{}
 		if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-			resp.Body.Close()
+			_ = resp.Body.Close()
 			continue
 		}
-		resp.Body.Close()
+		_ = resp.Body.Close()
 
 		for coinID, data := range result {
 			if priceVal, ok := data[quote]; ok {

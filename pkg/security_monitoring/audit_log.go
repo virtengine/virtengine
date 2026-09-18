@@ -104,7 +104,7 @@ func NewAuditLog(logPath string, logger zerolog.Logger) (*AuditLog, error) {
 	// Open log file if path provided
 	if logPath != "" {
 		var err error
-		audit.logFile, err = os.OpenFile(logPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0600)
+		audit.logFile, err = os.OpenFile(logPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0600) // #nosec G304 -- the path is the operator-configured audit log location
 		if err != nil {
 			return nil, err
 		}

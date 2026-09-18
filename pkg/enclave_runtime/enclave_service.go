@@ -191,7 +191,7 @@ func (r *ScoringResult) IsSuccess() bool {
 func (r *ScoringResult) SigningPayload() []byte {
 	h := sha256.New()
 	h.Write([]byte(r.RequestID))
-	h.Write([]byte{byte(r.Score >> 24), byte(r.Score >> 16), byte(r.Score >> 8), byte(r.Score)})
+	h.Write([]byte{byte(r.Score >> 24), byte(r.Score >> 16), byte(r.Score >> 8), byte(r.Score)}) // #nosec G115 -- each shift extracts one byte of a uint32 score written in big-endian order
 	h.Write([]byte(r.Status))
 	h.Write(r.ModelVersionHash)
 	h.Write(r.InputHash)
@@ -496,8 +496,8 @@ func (s *SimulatedEnclaveService) RotateKeys() error {
 	}
 
 	s.epoch++
-	s.encryptionPubKey = generateSimulatedKey("encryption_" + hex.EncodeToString([]byte{byte(s.epoch)}))
-	s.signingPubKey = generateSimulatedKey("signing_" + hex.EncodeToString([]byte{byte(s.epoch)}))
+	s.encryptionPubKey = generateSimulatedKey("encryption_" + hex.EncodeToString([]byte{byte(s.epoch)})) // #nosec G115 -- epoch is a small counter and only its low byte is used in the simulated key label
+	s.signingPubKey = generateSimulatedKey("signing_" + hex.EncodeToString([]byte{byte(s.epoch)}))       // #nosec G115 -- epoch is a small counter and only its low byte is used in the simulated key label
 
 	return nil
 }

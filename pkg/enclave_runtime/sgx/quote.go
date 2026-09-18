@@ -574,6 +574,7 @@ func (g *QuoteGenerator) generateSimulatedSignature(quote *Quote) error {
 
 	// Calculate signature length
 	// 64 (ISV sig) + 64 (att key) + 384 (QE report) + 64 (QE sig) + 2 (auth size) + len(auth) + 2 (cert type) + 4 (cert size) + len(cert)
+	// #nosec G115 -- the signature length is the sum of fixed-size SGX structures and bounded by the quote buffer (< 2^32)
 	quote.SignatureLength = uint32(64 + 64 + 384 + 64 + 2 + len(quote.SignatureData.QEAuthenticationData) + 2 + 4 + len(quote.SignatureData.CertificationData)) //nolint:gosec // length won't exceed uint32
 
 	return nil
@@ -752,6 +753,7 @@ func serializeSignatureData(sig *QuoteSignatureData) []byte {
 
 	// QE authentication data size and data
 	authSizeBytes := make([]byte, 2)
+	// #nosec G115 -- the QE authentication data is bounded by the quote buffer (< 65536)
 	binary.LittleEndian.PutUint16(authSizeBytes, uint16(len(sig.QEAuthenticationData))) //nolint:gosec // auth data length won't exceed uint16
 	buf.Write(authSizeBytes)
 	buf.Write(sig.QEAuthenticationData)
@@ -763,6 +765,7 @@ func serializeSignatureData(sig *QuoteSignatureData) []byte {
 
 	// Certification data size and data
 	certSizeBytes := make([]byte, 4)
+	// #nosec G115 -- the certification data is bounded by the quote buffer (< 2^32)
 	binary.LittleEndian.PutUint32(certSizeBytes, uint32(len(sig.CertificationData))) //nolint:gosec // cert data length won't exceed uint32
 	buf.Write(certSizeBytes)
 	buf.Write(sig.CertificationData)

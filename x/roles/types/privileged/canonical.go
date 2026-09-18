@@ -13,7 +13,7 @@ func writeString(output *bytes.Buffer, value string) error {
 	if len(value) > int(^uint32(0)) {
 		return fmt.Errorf("canonical string exceeds uint32 length")
 	}
-	if err := binary.Write(output, binary.BigEndian, uint32(len(value))); err != nil {
+	if err := binary.Write(output, binary.BigEndian, uint32(len(value))); err != nil { /* #nosec G115 -- the encoded value is a short in-memory buffer, bounded far below 2^32 */ //nolint:gosec
 		return err
 	}
 	_, err := output.WriteString(value)

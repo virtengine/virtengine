@@ -352,7 +352,7 @@ func candidateResult(candidates []internalCandidate) CandidateSearchResult {
 func fixedDistance(left, right deterministicTemplateArtifact) int64 {
 	var distance uint64
 	for index := range left.coordinates {
-		a, b := uint64(left.coordinates[index]), uint64(right.coordinates[index])
+		a, b := uint64(left.coordinates[index]), uint64(right.coordinates[index]) // #nosec G115 -- test-fixture coordinates are non-negative and fit in uint64
 		if a > b {
 			distance += a - b
 		} else {
@@ -447,7 +447,7 @@ func (f DeterministicQuorumAttestorFixture) attestBytes(payloadBytes []byte, epo
 	})
 	signerIDs := make([]string, 0, f.Nodes.Threshold)
 	for _, node := range nodes {
-		if node.State == NodeActive && uint32(len(signerIDs)) < f.Nodes.Threshold {
+		if node.State == NodeActive && uint32(len(signerIDs)) < f.Nodes.Threshold { /* #nosec G115 -- the signer list length is bounded far below 2^32 */ //nolint:gosec
 			signerIDs = append(signerIDs, node.NodeID)
 		}
 	}

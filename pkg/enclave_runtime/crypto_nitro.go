@@ -234,7 +234,7 @@ func (p *CBORParser) readByteString() ([]byte, error) {
 	}
 
 	//nolint:gosec // G115: CBOR byte string length is validated during parsing
-	return p.readBytes(int(length))
+	return p.readBytes(int(length)) // #nosec G115 -- value originates from a non-negative quantity (height, timestamp, duration or counter) that always fits the target width
 }
 
 // readTextString reads a CBOR text string.
@@ -255,7 +255,7 @@ func (p *CBORParser) readTextString() (string, error) {
 	}
 
 	//nolint:gosec // G115: CBOR text string length is validated during parsing
-	data, err := p.readBytes(int(length))
+	data, err := p.readBytes(int(length)) // #nosec G115 -- value originates from a non-negative quantity (height, timestamp, duration or counter) that always fits the target width
 	if err != nil {
 		return "", err
 	}
@@ -281,7 +281,7 @@ func (p *CBORParser) readArrayHeader() (int, error) {
 	}
 
 	//nolint:gosec // G115: CBOR array length validated during parsing
-	return int(length), nil
+	return int(length), nil // #nosec G115 -- value originates from a non-negative quantity (height, timestamp, duration or counter) that always fits the target width
 }
 
 // readMapHeader reads a CBOR map header and returns the number of pairs.
@@ -302,7 +302,7 @@ func (p *CBORParser) readMapHeader() (int, error) {
 	}
 
 	//nolint:gosec // G115: CBOR map length validated during parsing
-	return int(length), nil
+	return int(length), nil // #nosec G115 -- value originates from a non-negative quantity (height, timestamp, duration or counter) that always fits the target width
 }
 
 // readTag reads a CBOR tag.
@@ -523,7 +523,7 @@ func (p *NitroAttestationParser) parsePCRs(parser *CBORParser, doc *CryptoNitroA
 		}
 
 		//nolint:gosec // G115: PCR index validated in range 0-15
-		doc.PCRs[int(index)] = value
+		doc.PCRs[int(index)] = value // #nosec G115 -- value originates from a non-negative quantity (height, timestamp, duration or counter) that always fits the target width
 	}
 
 	return nil
@@ -562,7 +562,7 @@ func (d *CryptoNitroAttestationDocument) GetPCR(index int) ([]byte, bool) {
 // GetTimestampTime converts the timestamp to time.Time.
 func (d *CryptoNitroAttestationDocument) GetTimestampTime() time.Time {
 	//nolint:gosec // G115: Timestamp is milliseconds since epoch, safe for int64
-	return time.UnixMilli(int64(d.Timestamp))
+	return time.UnixMilli(int64(d.Timestamp)) // #nosec G115 -- value originates from a non-negative quantity (height, timestamp, duration or counter) that always fits the target width
 }
 
 // =============================================================================
@@ -704,7 +704,7 @@ func (v *COSESign1Verifier) buildSigStructure(protectedHeader, externalAAD, payl
 	buf = append(buf, 0x84)
 
 	// Context string "Signature1"
-	buf = append(buf, byte(0x60+len(context)))
+	buf = append(buf, byte(0x60+len(context))) // #nosec G115 -- context is the fixed COSE context string 'Signature1' (10 bytes), so 0x60+len(context) is < 256
 	buf = append(buf, context...)
 
 	// Protected header (byte string)
@@ -729,10 +729,10 @@ func (v *COSESign1Verifier) appendByteString(buf, data []byte) []byte {
 		buf = append(buf, 0x58, byte(length))
 	case length < 65536:
 		buf = append(buf, 0x59)
-		buf = append(buf, byte(length>>8), byte(length))
+		buf = append(buf, byte(length>>8), byte(length)) // #nosec G115 -- CBOR 2-byte length form, selected by the switch only when length < 65536, so the shifted bytes fit
 	default:
 		buf = append(buf, 0x5A)
-		buf = append(buf, byte(length>>24), byte(length>>16), byte(length>>8), byte(length))
+		buf = append(buf, byte(length>>24), byte(length>>16), byte(length>>8), byte(length)) // #nosec G115 -- CBOR 4-byte length form for an in-memory buffer: lengths are bounded far below 2^32, so the shifted bytes fit
 	}
 	buf = append(buf, data...)
 	return buf
@@ -1122,8 +1122,8 @@ func createTestPayload(pcr0 []byte, nonce []byte, userData []byte) []byte {
 	buf.WriteByte(0xA1) // map(1)
 	buf.WriteByte(0x00) // uint(0) - PCR index
 	if len(pcr0) > 0 {
-		buf.WriteByte(byte(0x58)) // bstr with 1-byte length
-		buf.WriteByte(byte(len(pcr0)))
+		buf.WriteByte(byte(0x58))      // bstr with 1-byte length
+		buf.WriteByte(byte(len(pcr0))) // #nosec G115 -- short-form CBOR length written for a fixed-size PCR value (< 24 bytes)
 		buf.Write(pcr0)
 	} else {
 		// Default PCR0 (48 bytes of zeros)
@@ -1136,6 +1136,7 @@ func createTestPayload(pcr0 []byte, nonce []byte, userData []byte) []byte {
 	if len(nonce) > 0 {
 		buf.WriteByte(0x65) // text(5)
 		buf.WriteString("nonce")
+		// #nosec G115 -- short-form CBOR length written for a fixed-size nonce (< 24 bytes)
 		buf.WriteByte(byte(0x40 + len(nonce))) // bstr
 		buf.Write(nonce)
 	}
@@ -1144,6 +1145,7 @@ func createTestPayload(pcr0 []byte, nonce []byte, userData []byte) []byte {
 	if len(userData) > 0 {
 		buf.WriteByte(0x69) // text(9)
 		buf.WriteString("user_data")
+		// #nosec G115 -- short-form CBOR length written for a fixed-size user-data value (< 24 bytes)
 		buf.WriteByte(byte(0x40 + len(userData))) // bstr
 		buf.Write(userData)
 	}
@@ -1161,10 +1163,10 @@ func appendCBORByteString(buf, data []byte) []byte {
 		buf = append(buf, 0x58, byte(length))
 	case length < 65536:
 		buf = append(buf, 0x59)
-		buf = append(buf, byte(length>>8), byte(length))
+		buf = append(buf, byte(length>>8), byte(length)) // #nosec G115 -- CBOR 2-byte length form, selected by the enclosing switch only when length < 65536
 	default:
 		buf = append(buf, 0x5A)
-		buf = append(buf, byte(length>>24), byte(length>>16), byte(length>>8), byte(length))
+		buf = append(buf, byte(length>>24), byte(length>>16), byte(length>>8), byte(length)) // #nosec G115 -- CBOR 4-byte length form for an in-memory buffer: lengths are bounded far below 2^32
 	}
 	return append(buf, data...)
 }

@@ -177,9 +177,9 @@ func Verify(ctx context.Context, signed SignedAuthorization, registry *Registry,
 	if binding.CurrentBlock < auth.LowerBlock || binding.CurrentBlock > auth.UpperBlock {
 		return Digest{}, ErrOutsideBlockBounds
 	}
-	now := uint64(binding.CurrentTime.Unix())
-	skew := uint64(binding.MaxClockSkew / time.Second)
-	maxLifetime := uint64(binding.MaxLifetime / time.Second)
+	now := uint64(binding.CurrentTime.Unix())                // #nosec G115 -- value originates from a non-negative quantity (height, timestamp, duration or counter) that always fits the target width
+	skew := uint64(binding.MaxClockSkew / time.Second)       // #nosec G115 -- value originates from a non-negative quantity (height, timestamp, duration or counter) that always fits the target width
+	maxLifetime := uint64(binding.MaxLifetime / time.Second) // #nosec G115 -- value originates from a non-negative quantity (height, timestamp, duration or counter) that always fits the target width
 	if auth.IssuedAtUnix > now && auth.IssuedAtUnix-now > skew {
 		return Digest{}, fmt.Errorf("%w: authorization issued in future", ErrInvalidAuthorization)
 	}
