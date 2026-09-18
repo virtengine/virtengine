@@ -61,9 +61,22 @@ $(GIT_CHGLOG_VERSION_FILE): | $(VE_DEVCACHE)
 	touch $@
 $(GIT_CHGLOG): $(GIT_CHGLOG_VERSION_FILE)
 
+# A module path carrying a major (`github.com/vektra/mockery/v3`, `.../golangci-lint/v2`)
+# derives that major from the tool version via $(SEMVER), which make/init.mk defaults
+# when the environment (i.e. direnv) does not supply it. A SEMVER that exists but does
+# not resolve -- a stale path exported by hand, a script that is not runnable -- still
+# yields an empty major, and `go install` would then fail on a malformed module path
+# (github.com/vektra/mockery/v@v3.5.0) that names neither SEMVER nor the tool. Check it
+# here instead, before the recipe's `rm -f` can remove a working binary.
+# $(1) = tool name, $(2) = derived major.
+define require-module-major
+case "$(2)" in ''|*[!0-9]*) echo "ERROR: $(1): could not resolve the module major from SEMVER='$(SEMVER)' (got '$(2)'). Check that script/semver.sh exists and is runnable." >&2; exit 2;; esac
+endef
+
 MOCKERY_MAJOR=$(shell $(SEMVER) get major $(MOCKERY_VERSION))
 $(MOCKERY_VERSION_FILE): | $(VE_DEVCACHE)
 	$(DEVACHE_GUARD)
+	@$(call require-module-major,mockery,$(MOCKERY_MAJOR))
 	@echo "installing mockery $(MOCKERY_VERSION) ..."
 	rm -f $(MOCKERY)
 	GOBIN=$(VE_DEVCACHE_BIN) go install -ldflags '-s -w -X github.com/vektra/mockery/v$(MOCKERY_MAJOR)/pkg/config.SemVer=$(MOCKERY_VERSION)' github.com/vektra/mockery/v$(MOCKERY_MAJOR)@v$(MOCKERY_VERSION)
@@ -75,6 +88,7 @@ $(MOCKERY): $(MOCKERY_VERSION_FILE)
 GOLANGCI_LINT_MAJOR=$(shell $(SEMVER) get major $(GOLANGCI_LINT_VERSION))
 $(GOLANGCI_LINT_VERSION_FILE): | $(VE_DEVCACHE)
 	$(DEVACHE_GUARD)
+	@$(call require-module-major,golangci-lint,$(GOLANGCI_LINT_MAJOR))
 	@echo "installing golangci-lint $(GOLANGCI_LINT_VERSION) ..."
 	rm -f $(GOLANGCI_LINT)
 	GOBIN=$(VE_DEVCACHE_BIN) go install github.com/golangci/golangci-lint/v$(GOLANGCI_LINT_MAJOR)/cmd/golangci-lint@$(GOLANGCI_LINT_VERSION)
