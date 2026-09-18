@@ -52,22 +52,25 @@ The quickest way to explore the project is to build from source and use the depl
 
 # Installing
 
-The repository includes GoReleaser, Homebrew, and install-script paths for tagged releases. Before using those artifacts in production, confirm:
+**No release has been published yet, so there is no downloadable artifact to install.**
+The GoReleaser, Homebrew, and install-script paths referenced by earlier revisions of this
+file are not currently functional:
+
+- `virtengine/homebrew-tap` does not exist, so `brew tap virtengine/tap` cannot succeed.
+- `install.sh` resolves its download base from `OWNER="virtengine-network"` and
+  `REPO="node"` (`install.sh:351-352`). Neither repository exists, so the script cannot
+  fetch a binary.
+- `.goreleaser.yaml` publishes to `github.owner: virtengine` / `github.name: node`
+  (`.goreleaser.yaml:194-195`), a repository that does not exist either.
+- The release list contains a single entry, `0.1.0`, which is still a draft (2021-10-08).
+
+Build from source instead — see [Building from Source](#building-from-source).
+
+When a release is eventually published, confirm before using it in production:
 
 1. The release tag you intend to install has actually been published.
 2. The target network has an approved launch or upgrade decision.
 3. The verification and support posture in [VERIFICATION.md](VERIFICATION.md) and [docs/COMPATIBILITY.md](docs/COMPATIBILITY.md) matches your intended deployment.
-
-Example installation commands for an already-published tag:
-
-```sh
-brew tap virtengine/tap
-brew install virtengine
-```
-
-```sh
-curl -sSfL https://raw.githubusercontent.com/virtengine/virtengine/main/install.sh | sh
-```
 
 ## Development environment
 

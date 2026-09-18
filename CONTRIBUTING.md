@@ -64,8 +64,8 @@ VirtEngine uses [gitleaks](https://github.com/gitleaks/gitleaks) to prevent hard
 The pre-commit hook is automatically created when you clone the repository. If you need to set it up manually:
 
 ```bash
-# Gitleaks is installed to .cache/bin during make setup-cache
-make setup-cache
+# Gitleaks is installed to .cache/bin during make cache
+make cache
 
 # The pre-commit hook is at .git/hooks/pre-commit
 # It runs automatically on git commit

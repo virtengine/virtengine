@@ -797,7 +797,7 @@ cat > ./logs/sim3-fix.txt << 'EOF'
    # Rolling restart of validators
 
 5. Verify fix:
-   - Run test suite: make test-inference
+   - Run test suite: go test ./pkg/inference/...
    - Check sample scores return to normal range
 EOF
 
