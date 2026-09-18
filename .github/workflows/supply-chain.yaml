@@ -402,7 +402,7 @@ jobs:
             cosign sign-blob \
               --yes \
               --output-signature "${artifact}.sig" \
-              --output-certificate "${artifact}.sig.cert" \
+              --output-certificate "${artifact}.pem" \
               "$artifact"
           done
 
@@ -412,7 +412,7 @@ jobs:
           name: release-signatures
           path: |
             release-subjects/**/*.sig
-            release-subjects/**/*.sig.cert
+            release-subjects/**/*.pem
           retention-days: 90
 
   verify-release-signatures:
@@ -442,6 +442,9 @@ jobs:
       - name: Verify signatures
         run: |
           shopt -s nullglob
+          # Exact keyless identity of the job that signed these artifacts. The Makefile
+          # target (make verify-signature) accepts the same workflow-URL shape via a
+          # regexp, plus email identities for locally signed artifacts.
           expected_identity="https://github.com/${{ github.repository }}/.github/workflows/supply-chain.yaml@${{ github.ref }}"
           artifacts=(
             release-subjects/virtengine
@@ -451,7 +454,7 @@ jobs:
           for artifact in "${artifacts[@]}"; do
             cosign verify-blob \
               --signature "${artifact}.sig" \
-              --certificate "${artifact}.sig.cert" \
+              --certificate "${artifact}.pem" \
               --certificate-identity "$expected_identity" \
               --certificate-oidc-issuer https://token.actions.githubusercontent.com \
               "$artifact"
