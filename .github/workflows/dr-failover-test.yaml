@@ -30,7 +30,7 @@ jobs:
     permissions:
       contents: read
     env:
-      GO_VERSION: '1.25.5'
+      GO_VERSION: '1.26.8'
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -54,7 +54,7 @@ jobs:
     permissions:
       contents: read
     env:
-      GO_VERSION: '1.25.5'
+      GO_VERSION: '1.26.8'
       DR_OUTPUT_DIR: ${{ runner.temp }}/dr-rehearsal
     steps:
       - name: Checkout
@@ -94,7 +94,7 @@ jobs:
       contents: read
     environment: dr-drill
     env:
-      GO_VERSION: '1.25.5'
+      GO_VERSION: '1.26.8'
       DR_OUTPUT_DIR: ${{ runner.temp }}/dr-live
     steps:
       - name: Checkout
