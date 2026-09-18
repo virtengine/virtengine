@@ -23,7 +23,7 @@ permissions:
   contents: read
 
 env:
-  GO_VERSION: "1.25.5"
+  GO_VERSION: "1.25.14"
   GO_TEST_TIMEOUT_UNIT: "30m"
   TF_DETERMINISTIC_OPS: "1"
   TF_CUDNN_DETERMINISTIC: "1"

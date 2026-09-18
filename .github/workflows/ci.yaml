@@ -53,7 +53,7 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  GO_VERSION: "1.25.5"
+  GO_VERSION: "1.25.14"
   GOLANGCI_LINT_VERSION: "v2.4.0"
   NODE_VERSION: "20"
   PNPM_VERSION: "10.28.2"
@@ -160,7 +160,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: "1.25.8"
+          go-version: "1.25.14"
           cache: true
 
       - name: Download dependencies
