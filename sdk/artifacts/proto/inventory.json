@@ -11,7 +11,7 @@
     {
       "path": "go.mod",
       "module": "github.com/virtengine/virtengine",
-      "go": "1.25.8",
+      "go": "1.26.8",
       "workspace": true,
       "hasGoSum": true,
       "vendorPolicy": "not-checked-in",
@@ -26,7 +26,7 @@
           "old": "github.com/bytedance/sonic",
           "oldVersion": "",
           "new": "github.com/bytedance/sonic",
-          "version": "v1.14.1"
+          "version": "v1.15.4"
         },
         {
           "old": "github.com/cometbft/cometbft",
@@ -111,7 +111,7 @@
     {
       "path": "infra/dr/tests/go.mod",
       "module": "github.com/virtengine/virtengine/infra/dr/tests",
-      "go": "1.22",
+      "go": "1.26.8",
       "workspace": true,
       "hasGoSum": true,
       "vendorPolicy": "not-checked-in",
@@ -120,7 +120,7 @@
     {
       "path": "infra/terraform/tests/go.mod",
       "module": "github.com/virtengine-network/virtengine/infra/terraform/tests",
-      "go": "1.24.0",
+      "go": "1.26.8",
       "workspace": true,
       "hasGoSum": true,
       "vendorPolicy": "not-checked-in",
@@ -129,7 +129,7 @@
     {
       "path": "infra/tests/go.mod",
       "module": "github.com/virtengine/virtengine/infra/tests",
-      "go": "1.24.0",
+      "go": "1.26.8",
       "workspace": true,
       "hasGoSum": true,
       "vendorPolicy": "not-checked-in",
@@ -138,7 +138,7 @@
     {
       "path": "sdk/generation/go.mod",
       "module": "github.com/virtengine/virtengine/sdk/generation/tools",
-      "go": "1.25.5",
+      "go": "1.26.8",
       "workspace": false,
       "hasGoSum": true,
       "vendorPolicy": "not-checked-in",
@@ -154,11 +154,17 @@
     {
       "path": "sdk/go/go.mod",
       "module": "github.com/virtengine/virtengine/sdk/go",
-      "go": "1.25.5",
+      "go": "1.26.8",
       "workspace": true,
       "hasGoSum": true,
       "vendorPolicy": "generated-and-ignored",
       "replaces": [
+        {
+          "old": "github.com/bytedance/sonic",
+          "oldVersion": "",
+          "new": "github.com/bytedance/sonic",
+          "version": "v1.15.4"
+        },
         {
           "old": "github.com/cometbft/cometbft",
           "oldVersion": "",
@@ -200,7 +206,7 @@
     {
       "path": "sdk/specs/go.mod",
       "module": "github.com/virtengine/virtengine/sdk/specs",
-      "go": "1.25.5",
+      "go": "1.26.8",
       "workspace": true,
       "hasGoSum": false,
       "vendorPolicy": "not-checked-in",
@@ -8028,7 +8034,7 @@
   "summaries": {
     "modules": 6,
     "toolModules": 1,
-    "replaces": 22,
+    "replaces": 23,
     "goMessages": 228,
     "gateways": 28,
     "gatewayStubs": 0,

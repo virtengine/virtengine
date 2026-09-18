@@ -137,7 +137,7 @@ The localnet provides a complete local development environment with all VirtEngi
 ### Prerequisites
 
 - Docker and Docker Compose installed
-- Go 1.25.5+ (matches go.mod)
+- Go 1.26.8+ (matches go.mod)
 - Bash shell (WSL2 on Windows, native on Linux/macOS)
 
 ### Quick Start

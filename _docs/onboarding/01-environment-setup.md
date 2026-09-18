@@ -92,7 +92,7 @@ sudo usermod -aG docker $USER
 
 ### Windows
 
-Native Windows builds and unit tests are supported with PowerShell and Go `1.25.8`:
+Native Windows builds and unit tests are supported with PowerShell and Go `1.26.8`:
 
 ```powershell
 $env:CGO_ENABLED = "0"

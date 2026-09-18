@@ -2,7 +2,7 @@
 
 ## Quick Start
 
-VirtEngine supports native Windows builds and unit tests from PowerShell. Install Go `1.25.8`, then run:
+VirtEngine supports native Windows builds and unit tests from PowerShell. Install Go `1.26.8`, then run:
 
 ```powershell
 $env:CGO_ENABLED = "0"
@@ -22,7 +22,7 @@ Use `scripts/localnet.ps1` with Docker Desktop to run the complete local environ
 
 2. **Go Programming Language**
    - Download: https://go.dev/dl/
-   - Required version: **1.25.8**
+   - Required version: **1.26.8**
    - Ensure Go is in your PATH
 
 3. **Node.js and npm**
@@ -117,7 +117,7 @@ pwsh .\scripts\localnet.ps1 stop
 
 ### Issue: `go: command not found`
 
-**Solution:** Install Go `1.25.8`, then open a new PowerShell window so its installation directory is added to `PATH`.
+**Solution:** Install Go `1.26.8`, then open a new PowerShell window so its installation directory is added to `PATH`.
 
 ### Issue: `.envrc` errors about missing tools
 

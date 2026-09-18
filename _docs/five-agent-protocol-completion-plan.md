@@ -149,7 +149,7 @@ Checkpoint: T1-03
 Handoff-From: <full-parent-sha>
 ```
 
-All Go checkpoint commands use the repository-pinned Go `1.25.8` toolchain.
+All Go checkpoint commands use the repository-pinned Go `1.26.8` toolchain.
 Every handoff records its absolute executable path or an unambiguous versioned
 tool name and the exact `go version` output. A checkpoint validated with a
 different Go version is diagnostic only and cannot be tagged or integrated.

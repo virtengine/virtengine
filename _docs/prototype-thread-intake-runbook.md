@@ -277,7 +277,7 @@ and remote publication tag must remain absent.
 
 ## Toolchains
 
-Go checkpoints use the repository-pinned Go `1.25.8` executable and record
+Go checkpoints use the repository-pinned Go `1.26.8` executable and record
 literal `go version` output. Node checkpoints use Node 20 or the repository
 declared version and record `node --version`. When the shared terminal corrupts
 input or PATH resolution is unreliable, use isolated tasks and absolute

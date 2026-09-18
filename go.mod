@@ -1,6 +1,6 @@
 module github.com/virtengine/virtengine
 
-go 1.25.8
+go 1.26.8
 
 require (
 	cosmossdk.io/api v0.9.2
@@ -73,7 +73,7 @@ require (
 	go.opentelemetry.io/otel/sdk v1.45.0
 	go.opentelemetry.io/otel/trace v1.45.0
 	go.step.sm/crypto v0.76.0
-	golang.org/x/crypto v0.55.0
+	golang.org/x/crypto v0.56.0
 	golang.org/x/mod v0.38.0
 	golang.org/x/oauth2 v0.36.0
 	golang.org/x/sync v0.22.0
@@ -100,7 +100,7 @@ replace (
 	// Once v0.62.0 is released, pin to that version
 	github.com/CosmWasm/wasmd => github.com/CosmWasm/wasmd v0.61.7-0.20260126125754-5cc330bcf3d3
 
-	github.com/bytedance/sonic => github.com/bytedance/sonic v1.14.1
+	github.com/bytedance/sonic => github.com/bytedance/sonic v1.15.4
 
 	// VirtEngine forks of Cosmos SDK dependencies
 	// These forks are synced from akash-network forks with virtengine-specific branding
@@ -171,7 +171,7 @@ require (
 	github.com/aokoli/goutils v1.0.1 // indirect
 	github.com/apapsch/go-jsonmerge/v2 v2.0.0 // indirect
 	github.com/aws/aws-sdk-go-v2 v1.41.4 // indirect
-	github.com/aws/aws-sdk-go-v2/aws/protocol/eventstream v1.7.7 // indirect
+	github.com/aws/aws-sdk-go-v2/aws/protocol/eventstream v1.7.8 // indirect
 	github.com/aws/aws-sdk-go-v2/config v1.32.12 // indirect
 	github.com/aws/aws-sdk-go-v2/credentials v1.19.12 // indirect
 	github.com/aws/aws-sdk-go-v2/feature/ec2/imds v1.18.20 // indirect
@@ -197,7 +197,7 @@ require (
 	github.com/blang/semver/v4 v4.0.0 // indirect
 	github.com/bytedance/gopkg v0.1.3 // indirect
 	github.com/bytedance/sonic v1.14.0 // indirect
-	github.com/bytedance/sonic/loader v0.3.0 // indirect
+	github.com/bytedance/sonic/loader v0.5.2 // indirect
 	github.com/cenkalti/backoff/v4 v4.3.0 // indirect
 	github.com/cenkalti/backoff/v5 v5.0.3 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect

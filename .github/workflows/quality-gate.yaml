@@ -24,7 +24,7 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  GO_VERSION: "1.25.5"
+  GO_VERSION: "1.26.8"
   GOSEC_VERSION: "v2.25.0"
   GOWORK: "off"
   GO_TEST_TIMEOUT_UNIT: "30m"
@@ -106,7 +106,7 @@ jobs:
       - name: Run golangci-lint (PR diff)
         uses: golangci/golangci-lint-action@v8
         with:
-          version: v2.4.0
+          version: v2.13.2
           args: --timeout=10m --new-from-rev=origin/${{ github.base_ref || 'main' }}
 
   vet:
