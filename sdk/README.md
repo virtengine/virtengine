@@ -79,6 +79,9 @@ Documentation in swagger format combining both node and provider packages can be
 
 ### How to run protobuf codegen
 
+All `make` commands in this section run from the `sdk/` directory. The targets are defined in
+`sdk/Makefile`; they are not available from the repository root.
+
 If there is a need to run regenerate protobuf (in case of API or documentation changes):
 
 1. Install [direnv](https://direnv.net) and hook it to the [shell](https://direnv.net/docs/hook.html)
@@ -106,7 +109,9 @@ If there is a need to run regenerate protobuf (in case of API or documentation c
    make proto-gen
    ```
 
-   - to run codegen for specific language use `make proto-gen-<lang>`. For example
+   - to run codegen for a specific module use `make proto-gen-<module>`, where `<module>` is
+     one of `go`, `ts`, or `doc` (the three that `make proto-gen` runs by default), plus
+     `rust` and `pulsar`. For example
 
    ```shell
    make proto-gen-go
