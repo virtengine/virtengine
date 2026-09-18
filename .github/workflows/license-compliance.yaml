@@ -64,7 +64,7 @@ defaults:
     shell: bash
 
 env:
-  GO_VERSION: "1.25.5"
+  GO_VERSION: "1.25.14"
   NODE_VERSION: "24"
   PNPM_VERSION: "10.28.2"
   PYTHON_VERSION: "3.11"
@@ -286,7 +286,9 @@ jobs:
           fi
 
           for requirement_file in "${requirement_files[@]}"; do
-            slug=$(echo "${requirement_file#./}" | tr '/\\' '__')
+            slug="${requirement_file#./}"
+            slug="${slug//\//__}"
+            slug="${slug//\\/__}"
             venv_path=".cache/license-venvs/${slug}"
             python -m venv "$venv_path"
             source "${venv_path}/bin/activate"
@@ -330,8 +332,9 @@ jobs:
 
       - name: Install Syft
         run: |
-          curl -sSfL "https://github.com/anchore/syft/releases/download/${SYFT_VERSION}/syft_${SYFT_VERSION#v}_linux_amd64.tar.gz" | tar -xz
-          sudo install -m 0755 syft /usr/local/bin/syft
+          TOOL_DIR="$(mktemp -d)"
+          curl -sSfL "https://github.com/anchore/syft/releases/download/${SYFT_VERSION}/syft_${SYFT_VERSION#v}_linux_amd64.tar.gz" | tar -xz -C "$TOOL_DIR"
+          sudo install -m 0755 "$TOOL_DIR/syft" /usr/local/bin/syft
 
       - name: Generate SPDX SBOM
         run: |
@@ -359,18 +362,20 @@ jobs:
     steps:
       - name: Summarize license gates
         run: |
-          echo "# License Compliance Summary" >> "$GITHUB_STEP_SUMMARY"
-          echo "" >> "$GITHUB_STEP_SUMMARY"
-          echo "| Gate | Status |" >> "$GITHUB_STEP_SUMMARY"
-          echo "|------|--------|" >> "$GITHUB_STEP_SUMMARY"
-          echo "| Policy Validation | ${{ needs.policy-validation.result }} |" >> "$GITHUB_STEP_SUMMARY"
-          echo "| Go Licenses | ${{ needs.go-licenses.result }} |" >> "$GITHUB_STEP_SUMMARY"
-          echo "| JavaScript Licenses | ${{ needs.javascript-licenses.result }} |" >> "$GITHUB_STEP_SUMMARY"
-          echo "| Python Licenses | ${{ needs.python-licenses.result }} |" >> "$GITHUB_STEP_SUMMARY"
-          echo "| SPDX SBOM | ${{ needs.spdx-sbom.result }} |" >> "$GITHUB_STEP_SUMMARY"
-          echo "" >> "$GITHUB_STEP_SUMMARY"
-          echo "Allowed families: MIT, Apache-2.0, BSD, ISC, MPL-2.0, Unlicense, CC0-1.0" >> "$GITHUB_STEP_SUMMARY"
-          echo "Blocked families: GPL, AGPL, LGPL, SSPL, BUSL" >> "$GITHUB_STEP_SUMMARY"
+          {
+            echo "# License Compliance Summary"
+            echo ""
+            echo "| Gate | Status |"
+            echo "|------|--------|"
+            echo "| Policy Validation | ${{ needs.policy-validation.result }} |"
+            echo "| Go Licenses | ${{ needs.go-licenses.result }} |"
+            echo "| JavaScript Licenses | ${{ needs.javascript-licenses.result }} |"
+            echo "| Python Licenses | ${{ needs.python-licenses.result }} |"
+            echo "| SPDX SBOM | ${{ needs.spdx-sbom.result }} |"
+            echo ""
+            echo "Allowed families: MIT, Apache-2.0, BSD, ISC, MPL-2.0, Unlicense, CC0-1.0"
+            echo "Blocked families: GPL, AGPL, LGPL, SSPL, BUSL"
+          } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Fail on license gate failure
         run: |

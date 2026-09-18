@@ -49,7 +49,7 @@ jobs:
     permissions:
       contents: read
     env:
-      GO_VERSION: "1.25.5"
+      GO_VERSION: "1.25.14"
       GO_TEST_TIMEOUT_E2E: "45m"
       STAGING_E2E_TEST_PATTERN: ${{ inputs.test_pattern || github.event.inputs.test_pattern || 'TestFullLifecycleE2E|TestFullLifecycleWithFailures|TestIdentityOrderProvisionPayoutE2E' }}
     steps:
