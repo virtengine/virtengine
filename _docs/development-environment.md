@@ -78,7 +78,7 @@ make tools   # installs every tool declared in make/init.mk into .cache/bin
 make cache   # creates the .cache directory structure only
 ```
 
-`make tools` installs only what is missing: on a fully provisioned cache it reports `Nothing to be done for 'tools'`.
+`make tools` is driven by the version markers under `.cache/versions/`, so it installs only the tools that are missing or whose recorded version changed, and reports `Nothing to be done for 'tools'` once every marker is current.
 
 `VE_DEVCACHE` is normally supplied by direnv (`direnv allow`). Where it is empty the cache targets refuse to run instead of writing to a root-relative path:
 
