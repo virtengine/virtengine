@@ -139,7 +139,7 @@ const (
 	FlagWaldurBaseURL = "waldur-base-url"
 
 	// FlagWaldurToken is Waldur API token
-	FlagWaldurToken = "waldur-token" //nolint:gosec // #nosec G101: CLI flag name, not a credential
+	FlagWaldurToken = "waldur-token" /* #nosec G101 -- #nosec G101: CLI flag name, not a credential */ //nolint:gosec
 
 	// FlagWaldurProjectUUID is Waldur project UUID
 	FlagWaldurProjectUUID = "waldur-project-uuid"
@@ -235,7 +235,7 @@ const (
 	FlagWaldurChainKeyringDir = "waldur-chain-keyring-dir"
 
 	// FlagWaldurChainKeyringPassphrase is the keyring passphrase for on-chain callbacks
-	FlagWaldurChainKeyringPassphrase = "waldur-chain-keyring-passphrase" //nolint:gosec // #nosec G101: CLI flag name, not a credential
+	FlagWaldurChainKeyringPassphrase = "waldur-chain-keyring-passphrase" /* #nosec G101 -- #nosec G101: CLI flag name, not a credential */ //nolint:gosec
 
 	// FlagWaldurChainGRPC is the gRPC endpoint for on-chain callbacks
 	FlagWaldurChainGRPC = "waldur-chain-grpc"
@@ -333,7 +333,7 @@ const (
 	// Support service desk flags
 	FlagSupportEnabled             = "support-enabled"
 	FlagSupportWaldurBaseURL       = "support-waldur-base-url"
-	FlagSupportWaldurToken         = "support-waldur-token" //nolint:gosec // #nosec G101: CLI flag name, not a credential
+	FlagSupportWaldurToken         = "support-waldur-token" /* #nosec G101 -- #nosec G101: CLI flag name, not a credential */ //nolint:gosec
 	FlagSupportWaldurOrgUUID       = "support-waldur-org-uuid"
 	FlagSupportWaldurProjectUUID   = "support-waldur-project-uuid"
 	FlagSupportWebhookSecret       = "support-webhook-secret" //nolint:gosec // #nosec G101: webhook secret flag name, not a credential
@@ -2030,7 +2030,7 @@ func providerKeyPassphrase(storageType provider_daemon.KeyStorageType, path stri
 	if strings.TrimSpace(path) == "" {
 		return nil, fmt.Errorf("file key storage requires --%s from a mounted secret", FlagProviderKeyPassphraseFile)
 	}
-	value, err := os.ReadFile(path)
+	value, err := os.ReadFile(path) // #nosec G304 -- path is a local path parameter supplied by this function's own caller (a CLI argument, loader parameter or configured state file) and is not derived from a network peer or chain message; opening the caller-nominated file is the purpose of this call
 	if err != nil {
 		return nil, fmt.Errorf("read provider key passphrase file: %w", err)
 	}
@@ -2126,7 +2126,7 @@ func validateManifestCmd() *cobra.Command {
 			filePath := args[0]
 
 			//nolint:gosec // G304: filePath is a user-provided CLI argument for manifest validation
-			data, err := os.ReadFile(filePath)
+			data, err := os.ReadFile(filePath) // #nosec G304 -- filePath is a local path parameter supplied by this function's own caller (a CLI argument, loader parameter or configured state file) and is not derived from a network peer or chain message; opening the caller-nominated file is the purpose of this call
 			if err != nil {
 				return fmt.Errorf("failed to read manifest: %w", err)
 			}
@@ -2192,7 +2192,7 @@ func loadOfferingMap(path string) (map[string]string, error) {
 	if path == "" {
 		return map[string]string{}, nil
 	}
-	data, err := os.ReadFile(path)
+	data, err := os.ReadFile(path) // #nosec G304 -- path is a local path parameter supplied by this function's own caller (a CLI argument, loader parameter or configured state file) and is not derived from a network peer or chain message; opening the caller-nominated file is the purpose of this call
 	if err != nil {
 		return nil, err
 	}

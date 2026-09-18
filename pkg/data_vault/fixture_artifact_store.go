@@ -731,7 +731,7 @@ func fixtureArtifactPathLock(path string) *sync.Mutex {
 }
 
 func readFixtureArtifactIndex(path string) (uint64, fixtureArtifactIndex, error) {
-	encoded, err := os.ReadFile(path)
+	encoded, err := os.ReadFile(path) // #nosec G304 -- path is a local path parameter supplied by this function's own caller (a CLI argument, loader parameter or configured state file) and is not derived from a network peer or chain message; opening the caller-nominated file is the purpose of this call
 	if err != nil {
 		return 0, fixtureArtifactIndex{}, err
 	}
@@ -781,7 +781,7 @@ func safeFixtureRef(value string) (string, error) {
 }
 
 func writeExclusiveOrVerify(path string, data []byte) error {
-	existing, err := os.ReadFile(path)
+	existing, err := os.ReadFile(path) // #nosec G304 -- path is a local path parameter supplied by this function's own caller (a CLI argument, loader parameter or configured state file) and is not derived from a network peer or chain message; opening the caller-nominated file is the purpose of this call
 	if err == nil {
 		if !equalBytes(existing, data) {
 			return errors.New("content address collision")
@@ -811,15 +811,15 @@ func atomicWriteFixtureFile(path string, data []byte, mode os.FileMode) error {
 	name := temp.Name()
 	defer os.Remove(name)
 	if err := temp.Chmod(mode); err != nil {
-		temp.Close()
+		_ = temp.Close()
 		return err
 	}
 	if _, err := temp.Write(data); err != nil {
-		temp.Close()
+		_ = temp.Close()
 		return err
 	}
 	if err := temp.Sync(); err != nil {
-		temp.Close()
+		_ = temp.Close()
 		return err
 	}
 	if err := temp.Close(); err != nil {

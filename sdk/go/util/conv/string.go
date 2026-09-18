@@ -16,7 +16,7 @@ func StrToBytes(s string) []byte {
 // Returned bytes must be treated as read-only and must not outlive the source string.
 // Prefer StrToBytes for safety unless a hot path requires zero-copy conversion.
 func UnsafeStrToBytes(s string) []byte {
-	return unsafe.Slice(unsafe.StringData(s), len(s)) //nolint:gosec // G103: zero-copy conversion; slice aliases string data and must remain read-only for the string's lifetime.
+	return unsafe.Slice(unsafe.StringData(s), len(s)) /* #nosec G103 -- zero-copy conversion; slice aliases string data and must remain read-only for the string's lifetime. */ //nolint:gosec
 }
 
 // UnsafeBytesToStr is meant to make a zero allocation conversion from []byte -> string.
@@ -26,7 +26,7 @@ func UnsafeBytesToStr(b []byte) string {
 	if len(b) == 0 {
 		return ""
 	}
-	return unsafe.String(unsafe.SliceData(b), len(b)) //nolint:gosec // G103: zero-copy conversion; caller must not mutate b while the string is in use.
+	return unsafe.String(unsafe.SliceData(b), len(b)) /* #nosec G103 -- zero-copy conversion; caller must not mutate b while the string is in use. */ //nolint:gosec
 }
 
 // BytesToStr performs a safe copy from []byte to string.

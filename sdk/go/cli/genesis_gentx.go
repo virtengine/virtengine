@@ -260,7 +260,7 @@ func readUnsignedGenTxFile(clientCtx client.Context, r io.Reader) (sdk.Tx, error
 }
 
 func writeSignedGenTx(clientCtx client.Context, outputDocument string, tx sdk.Tx) error {
-	outputFile, err := os.OpenFile(outputDocument, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o644) //nolint: gosec
+	outputFile, err := os.OpenFile(outputDocument, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o644) /* #nosec G302,G304 -- outputDocument is a local path the operator passes on the command line, and 0644 is the conventional mode for a gentx document that other tooling must read; gosec prefers 0600 */ //nolint:gosec
 	if err != nil {
 		return err
 	}

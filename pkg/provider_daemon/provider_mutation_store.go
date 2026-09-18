@@ -214,7 +214,7 @@ func (s *FileProviderMutationStore) List(ctx context.Context) ([]*ProviderMutati
 
 func (s *FileProviderMutationStore) loadStateLocked() (providerMutationFileState, error) {
 	state := providerMutationFileState{SchemaVersion: providerMutationSchemaVersion, Items: make(map[string]*ProviderMutationEnvelope)}
-	data, readErr := os.ReadFile(s.path) // #nosec G304 -- constructor validates the state path.
+	data, readErr := os.ReadFile(s.path) // #nosec G304,G703 -- constructor validates the state path.
 	if errors.Is(readErr, os.ErrNotExist) {
 		return state, nil
 	}
@@ -238,7 +238,7 @@ func (s *FileProviderMutationStore) saveLocked() error {
 	if err != nil {
 		return fmt.Errorf("encode mutation queue: %w", err)
 	}
-	if err := os.MkdirAll(filepath.Dir(s.path), 0o700); err != nil {
+	if err := os.MkdirAll(filepath.Dir(s.path), 0o700); err != nil { // #nosec G703 -- the path is derived from the daemon's configured state file (a validated constructor argument or an os.CreateTemp name), not from remote input; the operation targets that file by design
 		return err
 	}
 	tmp, err := os.CreateTemp(filepath.Dir(s.path), ".provider-mutation-*.tmp")
@@ -246,7 +246,7 @@ func (s *FileProviderMutationStore) saveLocked() error {
 		return fmt.Errorf("create mutation queue temporary file: %w", err)
 	}
 	tmpPath := tmp.Name()
-	defer func() { _ = os.Remove(tmpPath) }()
+	defer func() { _ = os.Remove(tmpPath) }() // #nosec G703 -- the path is derived from the daemon's configured state file (a validated constructor argument or an os.CreateTemp name), not from remote input; the operation targets that file by design
 	if err := tmp.Chmod(0o600); err != nil {
 		_ = tmp.Close()
 		return err
@@ -265,7 +265,7 @@ func (s *FileProviderMutationStore) saveLocked() error {
 	if err := atomicReplaceFile(tmpPath, s.path); err != nil {
 		return fmt.Errorf("replace mutation queue: %w", err)
 	}
-	dir, err := os.Open(filepath.Dir(s.path)) // #nosec G304 -- constructor validates the state path.
+	dir, err := os.Open(filepath.Dir(s.path)) // #nosec G304,G703 -- constructor validates the state path.
 	if err == nil {
 		_ = dir.Sync()
 		_ = dir.Close()

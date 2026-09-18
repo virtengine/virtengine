@@ -296,9 +296,9 @@ func ComputeResultHash(result types.VerificationResult) []byte {
 	// Include score as 4 bytes (big-endian)
 	h.Write([]byte{
 		byte(result.Score >> 24),
-		byte(result.Score >> 16),
-		byte(result.Score >> 8),
-		byte(result.Score),
+		byte(result.Score >> 16), // #nosec G115 -- fixed-width big-endian encoding: byte(result.Score >> 16) writes a single byte of the shifted value by design and the written byte is never used arithmetically
+		byte(result.Score >> 8),  // #nosec G115 -- fixed-width big-endian encoding: byte(result.Score >> 8) writes a single byte of the shifted value by design and the written byte is never used arithmetically
+		byte(result.Score),       // #nosec G115 -- fixed-width big-endian encoding: byte(result.Score) writes the low byte into the buffer by design; the truncated value is not used arithmetically
 	})
 
 	writeResultHashField(h, []byte(result.Status))
@@ -307,14 +307,14 @@ func ComputeResultHash(result types.VerificationResult) []byte {
 
 	// Include block height as 8 bytes (big-endian)
 	h.Write([]byte{
-		byte(result.BlockHeight >> 56),
-		byte(result.BlockHeight >> 48),
-		byte(result.BlockHeight >> 40),
-		byte(result.BlockHeight >> 32),
-		byte(result.BlockHeight >> 24),
-		byte(result.BlockHeight >> 16),
-		byte(result.BlockHeight >> 8),
-		byte(result.BlockHeight),
+		byte(result.BlockHeight >> 56), // #nosec G115 -- fixed-width big-endian encoding: byte(result.BlockHeight >> 56) writes a single byte of the shifted value by design and the written byte is never used arithmetically
+		byte(result.BlockHeight >> 48), // #nosec G115 -- fixed-width big-endian encoding: byte(result.BlockHeight >> 48) writes a single byte of the shifted value by design and the written byte is never used arithmetically
+		byte(result.BlockHeight >> 40), // #nosec G115 -- fixed-width big-endian encoding: byte(result.BlockHeight >> 40) writes a single byte of the shifted value by design and the written byte is never used arithmetically
+		byte(result.BlockHeight >> 32), // #nosec G115 -- fixed-width big-endian encoding: byte(result.BlockHeight >> 32) writes a single byte of the shifted value by design and the written byte is never used arithmetically
+		byte(result.BlockHeight >> 24), // #nosec G115 -- fixed-width big-endian encoding: byte(result.BlockHeight >> 24) writes a single byte of the shifted value by design and the written byte is never used arithmetically
+		byte(result.BlockHeight >> 16), // #nosec G115 -- fixed-width big-endian encoding: byte(result.BlockHeight >> 16) writes a single byte of the shifted value by design and the written byte is never used arithmetically
+		byte(result.BlockHeight >> 8),  // #nosec G115 -- fixed-width big-endian encoding: byte(result.BlockHeight >> 8) writes a single byte of the shifted value by design and the written byte is never used arithmetically
+		byte(result.BlockHeight),       // #nosec G115 -- fixed-width big-endian encoding: byte(result.BlockHeight) writes the low byte into the buffer by design; the truncated value is not used arithmetically
 	})
 
 	return h.Sum(nil)

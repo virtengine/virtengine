@@ -138,7 +138,7 @@ type byteWriter interface{ Write([]byte) (int, error) }
 
 func writeFinancialField(w byteWriter, value []byte) {
 	var length [4]byte
-	binary.BigEndian.PutUint32(length[:], uint32(len(value))) //nolint:gosec // all fields are protocol bounded before hashing
+	binary.BigEndian.PutUint32(length[:], uint32(len(value))) /* #nosec G115 -- all fields are protocol bounded before hashing */ //nolint:gosec
 	_, _ = w.Write(length[:])
 	_, _ = w.Write(value)
 }
@@ -570,7 +570,7 @@ func (k Keeper) AppealFinancialCase(ctx sdk.Context, caseID, appellant string, e
 			for i := range financialCase.Appeals {
 				if financialCase.Appeals[i].AppealId == replay.AppealID {
 					result, duplicate = financialCase.Appeals[i], true
-					appealCount = uint32(len(financialCase.Appeals)) //nolint:gosec // appeal count is protocol bounded
+					appealCount = uint32(len(financialCase.Appeals)) /* #nosec G115 -- appeal count is protocol bounded */ //nolint:gosec
 					return nil
 				}
 			}
@@ -590,7 +590,7 @@ func (k Keeper) AppealFinancialCase(ctx sdk.Context, caseID, appellant string, e
 		if err := k.setFinancialAppealReplay(ctx, idempotency, caseID, appealID, payloadHash); err != nil {
 			return err
 		}
-		appealCount = uint32(len(financialCase.Appeals)) //nolint:gosec // appeal count is protocol bounded
+		appealCount = uint32(len(financialCase.Appeals)) /* #nosec G115 -- appeal count is protocol bounded */ //nolint:gosec
 		financialCase.TerminalAllocation = nil
 		params := k.GetParams(ctx)
 		financialCase.ReviewDeadlineHeight = addHeightBounded(ctx.BlockHeight(), params.FinancialCaseReviewWindowBlocks, defaultBlockWindow(params.FinancialCaseReviewWindowSeconds))
@@ -873,7 +873,7 @@ func (k Keeper) ValidateFinancialCaseInvariants(ctx sdk.Context) []string {
 				broken = append(broken, fmt.Sprintf("unexpected financial-case index %x", iter.Key()))
 			}
 		}
-		iter.Close()
+		_ = iter.Close()
 	}
 	subjectIter := storetypes.KVStorePrefixIterator(store, types.PrefixFinancialCaseBySubject)
 	for ; subjectIter.Valid(); subjectIter.Next() {
@@ -891,7 +891,7 @@ func (k Keeper) ValidateFinancialCaseInvariants(ctx sdk.Context) []string {
 			broken = append(broken, fmt.Sprintf("unexpected financial-case subject index %x", subjectIter.Key()))
 		}
 	}
-	subjectIter.Close()
+	_ = subjectIter.Close()
 	replayIter := storetypes.KVStorePrefixIterator(store, types.PrefixFinancialClaimIdempotency)
 	for ; replayIter.Valid(); replayIter.Next() {
 		var replay financialClaimReplay
@@ -915,7 +915,7 @@ func (k Keeper) ValidateFinancialCaseInvariants(ctx sdk.Context) []string {
 			broken = append(broken, fmt.Sprintf("claim replay mismatch %x", replayIter.Key()))
 		}
 	}
-	replayIter.Close()
+	_ = replayIter.Close()
 	appealReplayIter := storetypes.KVStorePrefixIterator(store, types.PrefixFinancialAppealIdempotency)
 	for ; appealReplayIter.Valid(); appealReplayIter.Next() {
 		var replay financialAppealReplay
@@ -941,7 +941,7 @@ func (k Keeper) ValidateFinancialCaseInvariants(ctx sdk.Context) []string {
 			appealBindingCounts[replay.CaseID+"\x00"+replay.AppealID]++
 		}
 	}
-	appealReplayIter.Close()
+	_ = appealReplayIter.Close()
 	if err := k.WithFinancialCases(ctx, func(financialCase types.FinancialCase) bool {
 		for _, appeal := range financialCase.Appeals {
 			if count := appealBindingCounts[financialCase.CaseId+"\x00"+appeal.AppealId]; count != 1 {
@@ -1117,7 +1117,7 @@ func (k Keeper) RebuildFinancialCaseState(ctx sdk.Context) error {
 		for ; iterator.Valid(); iterator.Next() {
 			keys = append(keys, append([]byte(nil), iterator.Key()...))
 		}
-		iterator.Close()
+		_ = iterator.Close()
 		for _, key := range keys {
 			store.Delete(key)
 		}

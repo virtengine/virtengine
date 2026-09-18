@@ -630,7 +630,7 @@ func UsageStreamStateKey(streamID []byte) []byte {
 // UsagePeriodStateKey returns the per-metric period continuity key.
 func UsagePeriodStateKey(streamID []byte, usageType string) []byte {
 	key := append(append([]byte{}, PrefixUsagePeriodState...), streamID...)
-	key = appendUint32(key, uint32(len(usageType))) //nolint:gosec // usage types are protocol-bounded to 2 KiB
+	key = appendUint32(key, uint32(len(usageType))) /* #nosec G115 -- usage types are protocol-bounded to 2 KiB */ //nolint:gosec
 	return append(key, []byte(usageType)...)
 }
 
@@ -647,14 +647,14 @@ func UsageAuthenticationActivationKey() []byte {
 // appendUint64 appends a uint64 to a byte slice in big-endian order
 func appendUint64(bz []byte, n uint64) []byte {
 	for i := 7; i >= 0; i-- {
-		bz = append(bz, byte(n>>(i*8)))
+		bz = append(bz, byte(n>>(i*8))) // #nosec G115 -- fixed-width big-endian encoding: bz = append(bz, byte(n>>(i*8))) writes a single byte of the shifted value by design and the written byte is never used arithmetically
 	}
 	return bz
 }
 
 func appendUint32(bz []byte, n uint32) []byte {
 	for i := 3; i >= 0; i-- {
-		bz = append(bz, byte(n>>(i*8)))
+		bz = append(bz, byte(n>>(i*8))) // #nosec G115 -- fixed-width big-endian encoding: bz = append(bz, byte(n>>(i*8))) writes a single byte of the shifted value by design and the written byte is never used arithmetically
 	}
 	return bz
 }

@@ -354,7 +354,7 @@ func int64ToInt32(value int64) (int32, bool) {
 		return 0, false
 	}
 	//nolint:gosec // range checked above
-	return int32(value), true
+	return int32(value), true // #nosec G115 -- int32(value) is a bounded value; the conversion cannot overflow on the inputs this site accepts
 }
 
 // ToEd25519PublicKey converts to Go's ed25519.PublicKey

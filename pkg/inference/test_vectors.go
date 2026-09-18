@@ -512,7 +512,7 @@ func generateDeterministicEmbedding(dim int, seed int64, scale float32) []float3
 	)
 
 	//nolint:gosec // G115: seed is a positive test value used for deterministic embedding generation
-	state := uint64(seed)
+	state := uint64(seed) // #nosec G115 -- uint64(seed) is a non-negative counter/height bounded well below 2^63
 	for i := 0; i < dim; i++ {
 		state = (a*state + c) % m
 		// Normalize to [-scale, scale]
@@ -525,7 +525,7 @@ func generateDeterministicEmbedding(dim int, seed int64, scale float32) []float3
 
 // LoadTestVectorsFromFile loads test vectors from a JSON file
 func LoadTestVectorsFromFile(path string) ([]TestVectorEntry, error) {
-	data, err := os.ReadFile(path)
+	data, err := os.ReadFile(path) // #nosec G304 -- path is a local path parameter supplied by this function's own caller (a CLI argument, loader parameter or configured state file) and is not derived from a network peer or chain message; opening the caller-nominated file is the purpose of this call
 	if err != nil {
 		return nil, err
 	}
@@ -542,7 +542,7 @@ func LoadTestVectorsFromFile(path string) ([]TestVectorEntry, error) {
 func SaveTestVectorsToFile(vectors []TestVectorEntry, path string) error {
 	// Ensure directory exists
 	dir := filepath.Dir(path)
-	if err := os.MkdirAll(dir, 0755); err != nil {
+	if err := os.MkdirAll(dir, 0750); err != nil {
 		return err
 	}
 

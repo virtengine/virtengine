@@ -862,7 +862,7 @@ func (k Keeper) calculateModelSyncProgress(ctx sdk.Context, progress *types.Netw
 				}
 			}
 		}
-		iter.Close()
+		_ = iter.Close()
 
 		progress.ModelSyncStatus[modelID] = float64(syncedCount) / float64(progress.TotalValidators) * 100.0
 	}

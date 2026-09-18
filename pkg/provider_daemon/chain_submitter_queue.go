@@ -18,11 +18,11 @@ type txSubmissionQueuePathLock struct {
 }
 
 func claimTxSubmissionQueuePath(path string) (*txSubmissionQueuePathLock, error) {
-	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil { // #nosec G703 -- the path is derived from the daemon's configured state file (a validated constructor argument or an os.CreateTemp name), not from remote input; the operation targets that file by design
 		return nil, fmt.Errorf("create queue state dir: %w", err)
 	}
 	lockPath := path + ".lock"
-	file, err := os.OpenFile(lockPath, os.O_CREATE|os.O_RDWR, 0o600) // #nosec G304 -- path validated by queue constructor
+	file, err := os.OpenFile(lockPath, os.O_CREATE|os.O_RDWR, 0o600) // #nosec G304,G703 -- path validated by queue constructor
 	if err != nil {
 		return nil, fmt.Errorf("open queue state lock: %w", err)
 	}

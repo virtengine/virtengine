@@ -13,6 +13,7 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -390,15 +391,39 @@ func (s *LinkVerificationService) HTTPHandler() http.Handler {
 		w.Header().Set("Content-Type", "application/json")
 		if err != nil {
 			w.WriteHeader(http.StatusBadRequest)
-			fmt.Fprintf(w, `{"success":false,"error":"%s","message":"%s"}`,
-				resp.ErrorCode, resp.ErrorMessage)
+			writeJSONResponse(w, struct {
+				Success bool   `json:"success"`
+				Error   string `json:"error"`
+				Message string `json:"message"`
+			}{false, resp.ErrorCode, resp.ErrorMessage})
 			return
 		}
 
 		w.WriteHeader(http.StatusOK)
-		fmt.Fprintf(w, `{"success":true,"verified":true,"attestation_id":"%s"}`,
-			resp.AttestationID)
+		writeJSONResponse(w, struct {
+			Success       bool   `json:"success"`
+			Verified      bool   `json:"verified"`
+			AttestationID string `json:"attestation_id"`
+		}{true, true, resp.AttestationID})
 	})
+}
+
+// writeJSONResponse encodes payload as the response body with encoding/json.
+//
+// The response body is deliberately produced by the JSON encoder rather than by
+// interpolating values into a JSON string literal: ErrorCode, ErrorMessage and
+// AttestationID are derived from request data and from a downstream verification
+// service, so a value containing a quote, backslash or control character would
+// otherwise let a caller inject arbitrary JSON fields and corrupt the body.
+func writeJSONResponse(w http.ResponseWriter, payload any) {
+	data, err := json.Marshal(payload)
+	if err != nil {
+		// Only reachable if a future payload type cannot be encoded; the status
+		// line is already written, so fail with a fixed, safe body.
+		http.Error(w, `{"success":false,"error":"RESPONSE_ENCODE_ERROR"}`, http.StatusInternalServerError)
+		return
+	}
+	_, _ = w.Write(data)
 }
 
 // getClientIP extracts the client IP from the request.

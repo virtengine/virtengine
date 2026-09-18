@@ -284,7 +284,7 @@ func collectLegacyEvidenceRows(ctx sdk.Context, k Keeper) ([]legacyEvidenceRow, 
 				rows = append(rows, row)
 			}
 		}
-		iterator.Close()
+		_ = iterator.Close()
 	}
 	sort.Slice(rows, func(i, j int) bool {
 		if rows[i].sourceKind != rows[j].sourceKind {

@@ -4,6 +4,8 @@
 package keeper
 
 import (
+	"strconv"
+
 	sdk "github.com/cosmos/cosmos-sdk/types"
 
 	types "github.com/virtengine/virtengine/sdk/go/node/oracle/v1"
@@ -55,7 +57,11 @@ func ExportGenesis(ctx sdk.Context, keeper IKeeper) *types.GenesisState {
 	seenPairs := make(map[string]bool)
 
 	for _, priceData := range prices {
-		key := priceData.ID.Denom + "/" + priceData.ID.BaseDenom + "/" + string(rune(priceData.ID.Source))
+		// The source is a uint32 index, not a code point: converting it with
+		// string(rune(...)) mapped every source >= 2^31 onto U+FFFD, so distinct
+		// sources collided in seenPairs and their price entries were dropped from
+		// the exported genesis. Format it as a decimal number instead.
+		key := priceData.ID.Denom + "/" + priceData.ID.BaseDenom + "/" + strconv.FormatUint(uint64(priceData.ID.Source), 10)
 		if !seenPairs[key] {
 			seenPairs[key] = true
 			latestHeight = append(latestHeight, types.PriceDataID{

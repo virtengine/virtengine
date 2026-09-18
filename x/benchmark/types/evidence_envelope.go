@@ -128,7 +128,7 @@ func CanonicalReliabilitySignBytes(envelope CanonicalReliabilityEnvelopeV1) ([]b
 	writeReliabilityInt64(&out, envelope.IssuedAtUnix)
 	writeReliabilityInt64(&out, envelope.ExpiresAtUnix)
 	writeReliabilityUint32(&out, envelope.FreshnessPolicyVersion)
-	writeReliabilityUint32(&out, uint32(len(envelope.Sources))) //nolint:gosec // bounded by required source set
+	writeReliabilityUint32(&out, uint32(len(envelope.Sources))) /* #nosec G115 -- bounded by required source set */ //nolint:gosec
 	for _, source := range envelope.Sources {
 		writeReliabilityString(&out, string(source.Kind))
 		writeReliabilityBytes(&out, source.Digest)
@@ -316,7 +316,7 @@ func writeReliabilityString(out *bytes.Buffer, value string) {
 	writeReliabilityBytes(out, []byte(value))
 }
 func writeReliabilityBytes(out *bytes.Buffer, value []byte) {
-	writeReliabilityUint32(out, uint32(len(value))) //nolint:gosec // validation bounds all fields
+	writeReliabilityUint32(out, uint32(len(value))) /* #nosec G115 -- validation bounds all fields */ //nolint:gosec
 	out.Write(value)
 }
 func writeReliabilityUint32(out *bytes.Buffer, value uint32) {

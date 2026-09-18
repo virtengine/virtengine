@@ -218,13 +218,13 @@ func (e *MultiRecipientEnvelope) SigningPayload() []byte {
 	h := sha256.New()
 
 	// Include version
-	h.Write([]byte{byte(e.Version >> 24), byte(e.Version >> 16), byte(e.Version >> 8), byte(e.Version)})
+	h.Write([]byte{byte(e.Version >> 24), byte(e.Version >> 16), byte(e.Version >> 8), byte(e.Version)}) // #nosec G115 -- fixed-width big-endian encoding: byte(e.Version >> 24) writes a single byte of the shifted value by design and the written byte is never used arithmetically
 
 	// Include algorithm
 	h.Write([]byte(e.AlgorithmID))
 
 	// Include algorithm version
-	h.Write([]byte{byte(e.AlgorithmVersion >> 24), byte(e.AlgorithmVersion >> 16), byte(e.AlgorithmVersion >> 8), byte(e.AlgorithmVersion)})
+	h.Write([]byte{byte(e.AlgorithmVersion >> 24), byte(e.AlgorithmVersion >> 16), byte(e.AlgorithmVersion >> 8), byte(e.AlgorithmVersion)}) // #nosec G115 -- fixed-width big-endian encoding: byte(e.AlgorithmVersion >> 24) writes a single byte of the shifted value by design and the written byte is never used arithmetically
 
 	// Include recipient mode
 	h.Write([]byte(e.RecipientMode))

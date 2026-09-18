@@ -3,6 +3,7 @@ package servicedesk
 import (
 	"context"
 	"encoding/json"
+	"strconv"
 	"sync"
 	"time"
 
@@ -224,7 +225,7 @@ func (a *AuditLogger) generateID() string {
 	seq := a.seq
 	a.mu.Unlock()
 
-	return time.Now().Format("20060102150405") + "-" + string(rune(seq))
+	return time.Now().Format("20060102150405") + "-" + strconv.FormatInt(seq, 10)
 }
 
 // logEntry logs the entry to the configured logger

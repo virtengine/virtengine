@@ -523,7 +523,7 @@ func (k IBCKeeper) handleEscrowDeposit(ctx sdk.Context, _ channeltypes.Packet, d
 		return EscrowDepositAck{}, err
 	}
 
-	expiresIn := time.Duration(deposit.ExpiresInSeconds) * time.Second //nolint:gosec // bounded by params
+	expiresIn := time.Duration(deposit.ExpiresInSeconds) * time.Second /* #nosec G115 -- bounded by params */ //nolint:gosec
 	escrowID, err := k.settlementKeeper.CreateEscrow(ctx, deposit.OrderID, depositor, deposit.Amount, expiresIn, deposit.Conditions)
 	if err != nil {
 		return EscrowDepositAck{}, err
