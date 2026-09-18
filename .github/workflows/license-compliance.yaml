@@ -286,7 +286,8 @@ jobs:
           fi
 
           for requirement_file in "${requirement_files[@]}"; do
-            slug=$(echo "${requirement_file#./}" | tr '/\\' '__')
+            # Backslash first so the single-quoted literal does not end with a backslash (SC1003).
+            slug=$(echo "${requirement_file#./}" | tr '\\/' '__')
             venv_path=".cache/license-venvs/${slug}"
             python -m venv "$venv_path"
             source "${venv_path}/bin/activate"
@@ -359,18 +360,20 @@ jobs:
     steps:
       - name: Summarize license gates
         run: |
-          echo "# License Compliance Summary" >> "$GITHUB_STEP_SUMMARY"
-          echo "" >> "$GITHUB_STEP_SUMMARY"
-          echo "| Gate | Status |" >> "$GITHUB_STEP_SUMMARY"
-          echo "|------|--------|" >> "$GITHUB_STEP_SUMMARY"
-          echo "| Policy Validation | ${{ needs.policy-validation.result }} |" >> "$GITHUB_STEP_SUMMARY"
-          echo "| Go Licenses | ${{ needs.go-licenses.result }} |" >> "$GITHUB_STEP_SUMMARY"
-          echo "| JavaScript Licenses | ${{ needs.javascript-licenses.result }} |" >> "$GITHUB_STEP_SUMMARY"
-          echo "| Python Licenses | ${{ needs.python-licenses.result }} |" >> "$GITHUB_STEP_SUMMARY"
-          echo "| SPDX SBOM | ${{ needs.spdx-sbom.result }} |" >> "$GITHUB_STEP_SUMMARY"
-          echo "" >> "$GITHUB_STEP_SUMMARY"
-          echo "Allowed families: MIT, Apache-2.0, BSD, ISC, MPL-2.0, Unlicense, CC0-1.0" >> "$GITHUB_STEP_SUMMARY"
-          echo "Blocked families: GPL, AGPL, LGPL, SSPL, BUSL" >> "$GITHUB_STEP_SUMMARY"
+          {
+            echo "# License Compliance Summary"
+            echo ""
+            echo "| Gate | Status |"
+            echo "|------|--------|"
+            echo "| Policy Validation | ${{ needs.policy-validation.result }} |"
+            echo "| Go Licenses | ${{ needs.go-licenses.result }} |"
+            echo "| JavaScript Licenses | ${{ needs.javascript-licenses.result }} |"
+            echo "| Python Licenses | ${{ needs.python-licenses.result }} |"
+            echo "| SPDX SBOM | ${{ needs.spdx-sbom.result }} |"
+            echo ""
+            echo "Allowed families: MIT, Apache-2.0, BSD, ISC, MPL-2.0, Unlicense, CC0-1.0"
+            echo "Blocked families: GPL, AGPL, LGPL, SSPL, BUSL"
+          } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Fail on license gate failure
         run: |

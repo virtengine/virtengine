@@ -369,12 +369,14 @@ jobs:
     steps:
       - name: Summarize PR security gates
         run: |
-          echo "# PR Security Summary" >> "$GITHUB_STEP_SUMMARY"
-          echo "" >> "$GITHUB_STEP_SUMMARY"
-          echo "| Gate | Status | Required |" >> "$GITHUB_STEP_SUMMARY"
-          echo "|------|--------|----------|" >> "$GITHUB_STEP_SUMMARY"
-          echo "| Policy Validation | ${{ needs.policy-validation.result }} | Yes |" >> "$GITHUB_STEP_SUMMARY"
-          echo "| Secret Scanning | ${{ needs.gitleaks-scan.result }} | Yes |" >> "$GITHUB_STEP_SUMMARY"
+          {
+            echo "# PR Security Summary"
+            echo ""
+            echo "| Gate | Status | Required |"
+            echo "|------|--------|----------|"
+            echo "| Policy Validation | ${{ needs.policy-validation.result }} | Yes |"
+            echo "| Secret Scanning | ${{ needs.gitleaks-scan.result }} | Yes |"
+          } >> "$GITHUB_STEP_SUMMARY"
 
           if [ "${{ needs.analyze-changes.outputs.go_changed }}" = "true" ]; then
             echo "| Go Security Scan | ${{ needs.go-security.result }} | Yes |" >> "$GITHUB_STEP_SUMMARY"

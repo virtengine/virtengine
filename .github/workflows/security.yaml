@@ -192,7 +192,8 @@ jobs:
 
           status=0
           for requirement_file in "${requirement_files[@]}"; do
-            report_name=$(echo "${requirement_file#./}" | tr '/\\' '__')
+            # Backslash first so the single-quoted literal does not end with a backslash (SC1003).
+            report_name=$(echo "${requirement_file#./}" | tr '\\/' '__')
             report_path="security-reports/python/${report_name}.json"
             set +e
             pip-audit -r "$requirement_file" --format json -o "$report_path"
@@ -524,19 +525,21 @@ jobs:
     steps:
       - name: Summarize security gates
         run: |
-          echo "# Security Summary" >> "$GITHUB_STEP_SUMMARY"
-          echo "" >> "$GITHUB_STEP_SUMMARY"
-          echo "| Gate | Status |" >> "$GITHUB_STEP_SUMMARY"
-          echo "|------|--------|" >> "$GITHUB_STEP_SUMMARY"
-          echo "| Policy Validation | ${{ needs.policy-validation.result }} |" >> "$GITHUB_STEP_SUMMARY"
-          echo "| CodeQL | ${{ needs.codeql-analysis.result }} |" >> "$GITHUB_STEP_SUMMARY"
-          echo "| govulncheck | ${{ needs.go-vuln-scan.result }} |" >> "$GITHUB_STEP_SUMMARY"
-          echo "| pip-audit | ${{ needs.python-vuln-scan.result }} |" >> "$GITHUB_STEP_SUMMARY"
-          echo "| JavaScript audits | ${{ needs.node-vuln-scan.result }} |" >> "$GITHUB_STEP_SUMMARY"
-          echo "| Container scan | ${{ needs.container-scan.result }} |" >> "$GITHUB_STEP_SUMMARY"
-          echo "| SBOM generation | ${{ needs.sbom-generation.result }} |" >> "$GITHUB_STEP_SUMMARY"
-          echo "| gitleaks | ${{ needs.secret-scan.result }} |" >> "$GITHUB_STEP_SUMMARY"
-          echo "| gosec | ${{ needs.gosec-scan.result }} |" >> "$GITHUB_STEP_SUMMARY"
+          {
+            echo "# Security Summary"
+            echo ""
+            echo "| Gate | Status |"
+            echo "|------|--------|"
+            echo "| Policy Validation | ${{ needs.policy-validation.result }} |"
+            echo "| CodeQL | ${{ needs.codeql-analysis.result }} |"
+            echo "| govulncheck | ${{ needs.go-vuln-scan.result }} |"
+            echo "| pip-audit | ${{ needs.python-vuln-scan.result }} |"
+            echo "| JavaScript audits | ${{ needs.node-vuln-scan.result }} |"
+            echo "| Container scan | ${{ needs.container-scan.result }} |"
+            echo "| SBOM generation | ${{ needs.sbom-generation.result }} |"
+            echo "| gitleaks | ${{ needs.secret-scan.result }} |"
+            echo "| gosec | ${{ needs.gosec-scan.result }} |"
+          } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Fail if any security gate failed
         run: |

@@ -340,7 +340,8 @@ jobs:
       - name: Build deterministic release binary
         run: |
           mkdir -p release-subjects rebuild
-          export SOURCE_DATE_EPOCH="$(git log -1 --pretty=%ct)"
+          SOURCE_DATE_EPOCH="$(git log -1 --pretty=%ct)"
+          export SOURCE_DATE_EPOCH
 
           CGO_ENABLED=0 go build -trimpath -buildvcs=false -ldflags="-s -w" -o release-subjects/virtengine ./cmd/virtengine
           sha256sum release-subjects/virtengine > release-subjects/virtengine.sha256
@@ -538,7 +539,8 @@ jobs:
       - name: Verify reproducible build output
         run: |
           mkdir -p /tmp/virtengine-build-a /tmp/virtengine-build-b
-          export SOURCE_DATE_EPOCH="$(git log -1 --pretty=%ct)"
+          SOURCE_DATE_EPOCH="$(git log -1 --pretty=%ct)"
+          export SOURCE_DATE_EPOCH
 
           CGO_ENABLED=0 go build -trimpath -buildvcs=false -ldflags="-s -w" -o /tmp/virtengine-build-a/virtengine ./cmd/virtengine
           sha256sum /tmp/virtengine-build-a/virtengine > /tmp/virtengine-build-a/virtengine.sha256
@@ -569,24 +571,28 @@ jobs:
     steps:
       - name: Summarize supply-chain gates
         run: |
-          echo "# Supply Chain Summary" >> "$GITHUB_STEP_SUMMARY"
-          echo "" >> "$GITHUB_STEP_SUMMARY"
-          echo "| Gate | Status |" >> "$GITHUB_STEP_SUMMARY"
-          echo "|------|--------|" >> "$GITHUB_STEP_SUMMARY"
-          echo "| Policy Validation | ${{ needs.policy-validation.result }} |" >> "$GITHUB_STEP_SUMMARY"
-          echo "| Dependency Verification | ${{ needs.dependency-verification.result }} |" >> "$GITHUB_STEP_SUMMARY"
-          echo "| Lockfile Integrity | ${{ needs.lockfile-integrity.result }} |" >> "$GITHUB_STEP_SUMMARY"
-          echo "| Attack Detection | ${{ needs.attack-detection.result }} |" >> "$GITHUB_STEP_SUMMARY"
-          echo "| Risk Assessment | ${{ needs.risk-assessment.result }} |" >> "$GITHUB_STEP_SUMMARY"
-          echo "| SBOM Generation | ${{ needs.sbom-generation.result }} |" >> "$GITHUB_STEP_SUMMARY"
-          echo "| Reproducible Build Audit | ${{ needs.reproducible-build.result }} |" >> "$GITHUB_STEP_SUMMARY"
+          {
+            echo "# Supply Chain Summary"
+            echo ""
+            echo "| Gate | Status |"
+            echo "|------|--------|"
+            echo "| Policy Validation | ${{ needs.policy-validation.result }} |"
+            echo "| Dependency Verification | ${{ needs.dependency-verification.result }} |"
+            echo "| Lockfile Integrity | ${{ needs.lockfile-integrity.result }} |"
+            echo "| Attack Detection | ${{ needs.attack-detection.result }} |"
+            echo "| Risk Assessment | ${{ needs.risk-assessment.result }} |"
+            echo "| SBOM Generation | ${{ needs.sbom-generation.result }} |"
+            echo "| Reproducible Build Audit | ${{ needs.reproducible-build.result }} |"
+          } >> "$GITHUB_STEP_SUMMARY"
 
           if [[ "${{ startsWith(github.ref, 'refs/tags/v') }}" == "true" ]]; then
-            echo "| Build Release Subjects | ${{ needs.build-release-subjects.result }} |" >> "$GITHUB_STEP_SUMMARY"
-            echo "| Sign Release Artifacts | ${{ needs.sign-release-artifacts.result }} |" >> "$GITHUB_STEP_SUMMARY"
-            echo "| Verify Release Signatures | ${{ needs.verify-release-signatures.result }} |" >> "$GITHUB_STEP_SUMMARY"
-            echo "| Generate SLSA Provenance | ${{ needs.provenance.result }} |" >> "$GITHUB_STEP_SUMMARY"
-            echo "| Verify Provenance | ${{ needs.verify-provenance.result }} |" >> "$GITHUB_STEP_SUMMARY"
+            {
+              echo "| Build Release Subjects | ${{ needs.build-release-subjects.result }} |"
+              echo "| Sign Release Artifacts | ${{ needs.sign-release-artifacts.result }} |"
+              echo "| Verify Release Signatures | ${{ needs.verify-release-signatures.result }} |"
+              echo "| Generate SLSA Provenance | ${{ needs.provenance.result }} |"
+              echo "| Verify Provenance | ${{ needs.verify-provenance.result }} |"
+            } >> "$GITHUB_STEP_SUMMARY"
           fi
 
       - name: Fail on supply-chain gate failure
