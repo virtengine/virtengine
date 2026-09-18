@@ -269,48 +269,77 @@ jobs:
             pnpm-lock.yaml
             sdk/portal/pnpm-lock.yaml
 
+      - name: Test the audit gate
+        run: |
+          # `pnpm audit --json` exits 1 when ANY advisory is present, regardless of
+          # --audit-level, so a gate that reads that exit code cannot express the
+          # threshold its own flags document. scripts/ci/audit-gate.mjs evaluates the
+          # severity counts out of the report instead. Keep its negative cases green:
+          node --test scripts/ci/audit-gate.test.mjs > audit-gate-tests.log 2>&1
+          cat audit-gate-tests.log
+          # A test run that discovers no tests also exits 0, so assert a positive count.
+          count=$(grep -oE 'tests[[:space:]]+[0-9]+' audit-gate-tests.log | head -1 | grep -oE '[0-9]+')
+          if [ -z "${count:-}" ] || [ "$count" -eq 0 ]; then
+            echo "::error::audit-gate tests did not run"
+            exit 1
+          fi
+          echo "audit-gate self-tests ran: $count"
+
       - name: Audit root pnpm workspace
         id: root_pnpm_audit
         run: |
           mkdir -p security-reports/node
           pnpm install --frozen-lockfile --ignore-scripts
+          # The audit's own exit code is deliberately not read; the gate below reads the
+          # report it writes, and fails closed if that report is missing or unparseable.
           set +e
           pnpm audit --prod --audit-level=high --json > security-reports/node/root-workspace.json
-          audit_status=$?
           set -e
-          if [ ! -s security-reports/node/root-workspace.json ]; then
-            echo "::error::pnpm audit did not produce a root workspace report"
-            exit 1
-          fi
-          echo "exit_code=$audit_status" >> "$GITHUB_OUTPUT"
+          set +e
+          AUDIT_GATE_LABEL="root pnpm workspace" \
+            node scripts/ci/audit-gate.mjs security-reports/node/root-workspace.json high
+          gate_status=$?
+          set -e
+          echo "exit_code=$gate_status" >> "$GITHUB_OUTPUT"
 
       - name: Audit sdk/portal
         id: sdk_portal_audit
         run: |
-          pnpm --dir sdk/portal install --frozen-lockfile --ignore-scripts
+          # --ignore-workspace is REQUIRED here. sdk/portal is a standalone pnpm project,
+          # and without this flag pnpm walks up to the repo-root pnpm-workspace.yaml and
+          # installs/audits the ROOT workspace instead — so this step used to report the
+          # root workspace's dependency graph (417 deps, paths like `portal>next`) and
+          # never scanned sdk/portal at all. portal-ci.yaml already passes this flag for
+          # the same command; this job had omitted it.
+          pnpm --ignore-workspace --dir sdk/portal install --frozen-lockfile --ignore-scripts
           set +e
-          pnpm --dir sdk/portal audit --prod --audit-level=high --json > security-reports/node/sdk-portal.json
-          audit_status=$?
+          pnpm --ignore-workspace --dir sdk/portal audit --prod --audit-level=high --json \
+            > security-reports/node/sdk-portal.json
           set -e
-          if [ ! -s security-reports/node/sdk-portal.json ]; then
-            echo "::error::pnpm audit did not produce an sdk/portal report"
-            exit 1
-          fi
-          echo "exit_code=$audit_status" >> "$GITHUB_OUTPUT"
+          set +e
+          AUDIT_GATE_LABEL="sdk/portal" \
+            node scripts/ci/audit-gate.mjs security-reports/node/sdk-portal.json high
+          gate_status=$?
+          set -e
+          echo "exit_code=$gate_status" >> "$GITHUB_OUTPUT"
 
       - name: Audit sdk/ts
         id: sdk_ts_audit
         run: |
+          # Deliberately NOT --prod, unlike the two pnpm scans above: sdk/ts is a library
+          # whose devDependencies are the build/test toolchain, and auditing them keeps
+          # that toolchain covered. The threshold is the same (`high`), so this job's
+          # acceptance bar is consistent across all three workspaces.
           npm --prefix sdk/ts ci --ignore-scripts
           set +e
           npm --prefix sdk/ts audit --audit-level=high --json > security-reports/node/sdk-ts.json
-          audit_status=$?
           set -e
-          if [ ! -s security-reports/node/sdk-ts.json ]; then
-            echo "::error::npm audit did not produce an sdk/ts report"
-            exit 1
-          fi
-          echo "exit_code=$audit_status" >> "$GITHUB_OUTPUT"
+          set +e
+          AUDIT_GATE_LABEL="sdk/ts" \
+            node scripts/ci/audit-gate.mjs security-reports/node/sdk-ts.json high
+          gate_status=$?
+          set -e
+          echo "exit_code=$gate_status" >> "$GITHUB_OUTPUT"
 
       - name: Upload JavaScript audit reports
         uses: actions/upload-artifact@v4
@@ -326,7 +355,7 @@ jobs:
           steps.sdk_portal_audit.outputs.exit_code != '0' ||
           steps.sdk_ts_audit.outputs.exit_code != '0'
         run: |
-          echo "::error::JavaScript dependency audits reported vulnerabilities"
+          echo "::error::JavaScript dependency audits reported high or critical advisories"
           exit 1
 
   container-scan:
