@@ -273,9 +273,6 @@ jobs:
         with:
           python-version: ${{ env.PYTHON_VERSION }}
 
-      - name: Install pip-licenses
-        run: python -m pip install --disable-pip-version-check pip-licenses==${{ env.PIP_LICENSES_VERSION }}
-
       - name: Generate Python license inventories
         run: |
           mkdir -p license-reports/python .cache/license-venvs
@@ -291,9 +288,22 @@ jobs:
             python -m venv "$venv_path"
             source "${venv_path}/bin/activate"
             python -m pip install --disable-pip-version-check --quiet -r "$requirement_file"
+            python -m pip install --disable-pip-version-check --quiet pip-licenses==${{ env.PIP_LICENSES_VERSION }}
             python -m piplicenses --format=json > "license-reports/python/${slug}.json"
             deactivate
           done
+
+          # Fail loudly if any inventory is empty or missing
+          has_empty=0
+          for f in license-reports/python/*.json; do
+            if [ ! -s "$f" ]; then
+              echo "::error::Empty or missing license report: $f"
+              has_empty=1
+            fi
+          done
+          if [ "$has_empty" -ne 0 ]; then
+            exit 1
+          fi
 
       - name: Enforce Python license policy
         run: |
