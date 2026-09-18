@@ -60,7 +60,15 @@
       "@keplr-wallet/simple-fetch": "0.13.8",
       "@keplr-wallet/types": "0.13.8",
       "@keplr-wallet/unit": "0.13.8",
-      "tiny-secp256k1": "2.2.4"
+      "tiny-secp256k1": "2.2.4",
+      "h3": "^1.15.11",
+      "defu": "^6.1.7",
+      "lodash": "^4.18.1",
+      "ws": "^7.5.13",
+      "picomatch@^2": "^2.3.2",
+      "protobufjs": "^7.6.3",
+      "bn.js": "^5.2.3",
+      "uuid": "^11.1.1"
     }
   }
 }
