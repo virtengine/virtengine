@@ -331,8 +331,12 @@ jobs:
 
       - name: Install Trivy
         run: |
-          curl -sSfL "https://github.com/aquasecurity/trivy/releases/download/${TRIVY_VERSION}/trivy_${TRIVY_VERSION#v}_Linux-64bit.tar.gz" | tar -xz
-          sudo install -m 0755 trivy /usr/local/bin/trivy
+          # Keep the checkout clean: the release tarball ships its own
+          # documentation and license files, which must not land in the tree
+          # that the container scan and SBOM jobs read.
+          tmpdir="$(mktemp -d)"
+          curl -sSfL "https://github.com/aquasecurity/trivy/releases/download/${TRIVY_VERSION}/trivy_${TRIVY_VERSION#v}_Linux-64bit.tar.gz" | tar -xz -C "$tmpdir"
+          sudo install -m 0755 "$tmpdir/trivy" /usr/local/bin/trivy
 
       - name: Build image
         run: |
@@ -379,8 +383,12 @@ jobs:
 
       - name: Install Syft
         run: |
-          curl -sSfL "https://github.com/anchore/syft/releases/download/${SYFT_VERSION}/syft_${SYFT_VERSION#v}_linux_amd64.tar.gz" | tar -xz
-          sudo install -m 0755 syft /usr/local/bin/syft
+          # Keep the checkout clean: the release tarball ships its own
+          # documentation and license files, which must not land in the tree
+          # that the container scan and SBOM jobs read.
+          tmpdir="$(mktemp -d)"
+          curl -sSfL "https://github.com/anchore/syft/releases/download/${SYFT_VERSION}/syft_${SYFT_VERSION#v}_linux_amd64.tar.gz" | tar -xz -C "$tmpdir"
+          sudo install -m 0755 "$tmpdir/syft" /usr/local/bin/syft
 
       - name: Generate SBOM bundle
         run: |
@@ -415,8 +423,10 @@ jobs:
 
       - name: Install gitleaks
         run: |
-          curl -sSfL "https://github.com/gitleaks/gitleaks/releases/download/${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION#v}_linux_x64.tar.gz" | tar -xz
-          sudo install -m 0755 gitleaks /usr/local/bin/gitleaks
+          GITLEAKS_TMP="$(mktemp -d)"
+          curl -sSfL "https://github.com/gitleaks/gitleaks/releases/download/${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION#v}_linux_x64.tar.gz" | tar -xz -C "$GITLEAKS_TMP"
+          sudo install -m 0755 "$GITLEAKS_TMP/gitleaks" /usr/local/bin/gitleaks
+          rm -rf "$GITLEAKS_TMP"
 
       - name: Run gitleaks
         id: gitleaks

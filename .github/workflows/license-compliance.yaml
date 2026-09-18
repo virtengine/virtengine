@@ -330,8 +330,12 @@ jobs:
 
       - name: Install Syft
         run: |
-          curl -sSfL "https://github.com/anchore/syft/releases/download/${SYFT_VERSION}/syft_${SYFT_VERSION#v}_linux_amd64.tar.gz" | tar -xz
-          sudo install -m 0755 syft /usr/local/bin/syft
+          # Keep the checkout clean: the release tarball ships its own
+          # documentation and license files, which must not land in the tree
+          # that the license inventory is built from.
+          tmpdir="$(mktemp -d)"
+          curl -sSfL "https://github.com/anchore/syft/releases/download/${SYFT_VERSION}/syft_${SYFT_VERSION#v}_linux_amd64.tar.gz" | tar -xz -C "$tmpdir"
+          sudo install -m 0755 "$tmpdir/syft" /usr/local/bin/syft
 
       - name: Generate SPDX SBOM
         run: |

@@ -264,8 +264,10 @@ jobs:
 
       - name: Install gitleaks
         run: |
-          curl -sSfL "https://github.com/gitleaks/gitleaks/releases/download/${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION#v}_linux_x64.tar.gz" | tar -xz
-          sudo install -m 0755 gitleaks /usr/local/bin/gitleaks
+          GITLEAKS_TMP="$(mktemp -d)"
+          curl -sSfL "https://github.com/gitleaks/gitleaks/releases/download/${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION#v}_linux_x64.tar.gz" | tar -xz -C "$GITLEAKS_TMP"
+          sudo install -m 0755 "$GITLEAKS_TMP/gitleaks" /usr/local/bin/gitleaks
+          rm -rf "$GITLEAKS_TMP"
 
       - name: Fetch base branch
         run: git fetch origin "${{ github.base_ref }}" --depth=1
