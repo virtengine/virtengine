@@ -68,46 +68,70 @@ prefix = [
 
 ## Cache
 
-Build environment will create `.cache` directory in the root of source-tree. We use it to install specific versions of temporary build tools. Refer to `make/setup-cache.mk` for exact list.
+Build environment will create `.cache` directory in the root of source-tree. We use it to install specific versions of temporary build tools. Refer to `make/init.mk` (the tool inventory) and `make/setup-cache.mk` (the install rules) for the exact list.
 It is possible to set custom path to `.cache` with `VE_DEVCACHE` environment variable.
 
+Install every declared tool at once with `make tools`, or create the directory structure alone with `make cache`:
+
+```shell
+make tools   # installs every tool declared in make/init.mk into .cache/bin
+make cache   # creates the .cache directory structure only
+```
+
+`make tools` installs only what is missing: on a fully provisioned cache it reports `Nothing to be done for 'tools'`.
+
+`VE_DEVCACHE` is normally supplied by direnv (`direnv allow`). Where it is empty the cache targets refuse to run instead of writing to a root-relative path:
+
+```shell
+$ make cache
+<path to sources>/make/setup-cache.mk:27: *** VE_DEVCACHE is empty - run "direnv allow" or export VE_DEVCACHE.  Stop.
+$ echo $?
+2
+```
+
+The same guard covers `make cache-clean` (`make/setup-cache.mk:27`), `make tools` (`make/setup-cache.mk:50`) and every target that depends on a cached tool, e.g. `make lint-go` (`make/setup-cache.mk:72`).
+
 All tools are referred as `makefile targets` and set as dependencies thus installed (to `.cache/bin`) only upon necessity.
-For example `protoc` installed only when `proto-gen` target called.
+For example `golangci-lint` is installed only when a target that depends on it runs — `make lint-go` (`make/lint.mk:16`).
 
 The structure of the dir:
 
 ```shell
-./cache
-    bin/ # build tools
-    run/ # work directories for _run examples (provider-services
-    versions/ # versions of installed build tools (make targets use them to detect change of version of build tool and install new version if changed)
+.cache/
+    bin/        # build tools ("Build tools executables" in make/init.mk)
+    include/    # created by `make cache`; nothing in this tree writes to it
+    run/        # work directories for _run examples (provider-services)
+    run/bin/    # binaries those examples need, e.g. $(COSMOVISOR_DEBUG) (make/init.mk:124)
+    versions/   # one marker file per tool and version: versions/<tool>/<version>
+                # targets depend on the marker to detect a version change and reinstall
 ```
 
 ### Add new tool
 
-We will use `modevendor` as an example.
+We will use `modvendor` as an example.
 All variables must be capital case.
 
-Following are added to `make/init.mk`
+Tool variables are added to `make/init.mk`; installation rules are added to `make/setup-cache.mk`.
 
-1. Add version variable as `<NAME>_VERSION ?= <version>` to the "# ==== Build tools versions ====" section
+1. Add version variable as `<NAME>_VERSION ?= <version>` to the `# ==== Build tools versions ====` section
    ```makefile
    MODVENDOR_VERSION                  ?= v0.3.0
    ```
-2. Add variable tracking version file `<NAME>_VERSION_FILE := $(VE_DEVCACHE_VERSIONS)/<tool>/$(<TOOL>)` to the `# ==== Build tools version tracking ====` section
+2. Add variable tracking version file `<NAME>_VERSION_FILE := $(VE_DEVCACHE_VERSIONS)/<tool>/$(<TOOL>_VERSION)` to the `# ==== Build tools version tracking ====` section
    ```makefile
-   MODVENDOR_VERSION_FILE             := $(VE_DEVCACHE_VERSIONS)/modvendor/$(MODVENDOR)
+   MODVENDOR_VERSION_FILE             := $(VE_DEVCACHE_VERSIONS)/modvendor/$(MODVENDOR_VERSION)
    ```
-3. Add variable referencing executable to the `# ==== Build tools executables ====` section
+3. Add variable referencing executable `<NAME> := $(VE_DEVCACHE_BIN)/<tool>` to the `# ==== Build tools executables ====` section
 
    ```makefile
-   MODVENDOR                          := $(VE_DEVCACHE_VERSIONS)/bin/modvendor
+   MODVENDOR                          := $(VE_DEVCACHE_BIN)/modvendor
    ```
 
-4. Add installation rules. Following template is used followed by the example
+4. Add installation rules to `make/setup-cache.mk`. Following template is used followed by the example
 
    ```makefile
    $(<TOOL>_VERSION_FILE): $(VE_DEVCACHE)
+   	$(DEVACHE_GUARD)     # abort with the "VE_DEVCACHE is empty" hint when the cache is not configured
    	@echo "installing <tool> $(<TOOL>_VERSION) ..."
    	rm -f $(<TOOL>)      # remove current binary if exists
    	# installation procedure depends on distribution type. Check make/setup-cache.mk for various examples
@@ -117,10 +141,9 @@ Following are added to `make/init.mk`
    $(<TOOL>): $(<TOOL>_VERSION_FILE)
    ```
 
-   Following are added to `make/setup-cache.mk`
-
    ```makefile
    $(MODVENDOR_VERSION_FILE): $(VE_DEVCACHE)
+   	$(DEVACHE_GUARD)
    	@echo "installing modvendor $(MODVENDOR_VERSION) ..."
    	rm -f $(MODVENDOR)
    	GOBIN=$(VE_DEVCACHE_BIN) $(GO) install github.com/goware/modvendor@$(MODVENDOR_VERSION)
@@ -128,6 +151,12 @@ Following are added to `make/init.mk`
    	mkdir -p "$(dir $@)"
    	touch $@
    $(MODVENDOR): $(MODVENDOR_VERSION_FILE)
+   ```
+
+5. Add `<MODVENDOR>` to the `tools` target so `make tools` installs it as well
+
+   ```makefile
+   tools: $(GIT_CHGLOG) $(MOCKERY) $(GOLANGCI_LINT) $(STATIK) $(COSMOVISOR) $(GITLEAKS) $(MODVENDOR)
    ```
 
 ## Local Development Network (Localnet)
