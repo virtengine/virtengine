@@ -61,15 +61,32 @@ VirtEngine uses [gitleaks](https://github.com/gitleaks/gitleaks) to prevent hard
 
 **Setup:**
 
-The pre-commit hook is automatically created when you clone the repository. If you need to set it up manually:
+Git hooks are not created by `git clone` — a fresh clone contains only `.sample` files in
+`.git/hooks/`. The hooks are installed the first time direnv loads this directory
+(`.envrc:146-151` sets `core.hooksPath` to `.githooks`), or manually:
 
 ```bash
-# Gitleaks is installed to .cache/bin during make setup-cache
-make setup-cache
-
-# The pre-commit hook is at .git/hooks/pre-commit
-# It runs automatically on git commit
+make setup-hooks
 ```
+
+`make setup-hooks` only points git at `.githooks/` (`make/hooks.mk:11-13`). The pre-commit
+hook itself lives at `.githooks/pre-commit` and runs automatically on `git commit`.
+
+**Installing gitleaks:**
+
+The hook looks for the scanner in two places, in this order (`.githooks/pre-commit:283-287`):
+
+1. `$VE_DEVCACHE_BIN/gitleaks` — that is `.cache/bin/gitleaks` once direnv has exported the dev cache
+2. `gitleaks` anywhere on your `PATH`
+
+If neither exists the hook prints a warning and **skips** the secret scan rather than failing
+(`.githooks/pre-commit:297-300`), so a missing binary fails open. Install gitleaks yourself so
+that it is on `PATH`.
+
+`make cache` does **not** install gitleaks. It only creates the `.cache` directory tree
+(`make/setup-cache.mk:1-9`), and there is no `make setup-cache` target. A dev-cache download
+rule for gitleaks does exist (`make/setup-cache.mk:58-74`) but nothing depends on it, so no
+`make` target installs the binary today.
 
 **How it works:**
 
@@ -79,9 +96,9 @@ make setup-cache
 
 **If gitleaks detects a secret:**
 
-```
-❌ COMMIT BLOCKED: Potential secrets detected
-```
+gitleaks exits non-zero and `set -euo pipefail` (`.githooks/pre-commit:17`) aborts the hook
+before the commit object is created. The output you see is gitleaks' own findings report;
+the hook does not print a separate "COMMIT BLOCKED" banner.
 
 1. **Remove the secret** from the staged file
 2. **Use environment variables** instead: `os.Getenv("API_KEY")`
@@ -104,10 +121,17 @@ Only use `--no-verify` if you're absolutely certain there are no secrets and the
 
 **Running manually:**
 
-```bash
-# Scan staged changes (same as pre-commit hook)
-.cache/bin/gitleaks protect --staged --verbose
+The pre-commit hook runs the equivalent of the following, using the binary it resolved above
+(`.cache/bin/gitleaks` when direnv is active):
 
+```bash
+.cache/bin/gitleaks protect --staged --verbose --redact --config .gitleaks.toml
+```
+
+<!-- UNVERIFIED: the two commands below were not executed while this section was audited —
+     gitleaks is not installed in the audit environment. -->
+
+```bash
 # Scan entire repository history
 .cache/bin/gitleaks detect --verbose
 
