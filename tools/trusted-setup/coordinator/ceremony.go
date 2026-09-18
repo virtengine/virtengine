@@ -167,7 +167,7 @@ func StartPhase2(state State) error {
 		return fmt.Errorf("serialize phase2: %w", err)
 	}
 	phase2InitialPath := filepath.Join(state.Phase2Dir(), phase2InitialFile)
-	if existingBytes, readErr := os.ReadFile(phase2InitialPath); readErr == nil {
+	if existingBytes, readErr := os.ReadFile(phase2InitialPath); readErr == nil { // #nosec G304 -- the path is composed from the ceremony state directory (given once by the operator on the command line) plus fixed file names, so remote input cannot influence it
 		existingHash := transcript.HashBytes(existingBytes)
 		newHash := transcript.HashBytes(phase2Bytes)
 		if existingHash == newHash && tr.Phase2.InitialHash == newHash {
@@ -348,8 +348,8 @@ func Finalize(state State, parametersVersion string) (*groth16.ProvingKey, *grot
 	}
 	provingKeyPath := filepath.Join(state.Phase2Dir(), "proving_key.bin")
 	verifyingKeyPath := filepath.Join(state.Phase2Dir(), "verifying_key.bin")
-	if existingPK, readErr := os.ReadFile(provingKeyPath); readErr == nil {
-		existingVK, vkErr := os.ReadFile(verifyingKeyPath)
+	if existingPK, readErr := os.ReadFile(provingKeyPath); readErr == nil { // #nosec G304 -- the path is composed from the ceremony state directory (given once by the operator on the command line) plus fixed file names, so remote input cannot influence it
+		existingVK, vkErr := os.ReadFile(verifyingKeyPath) // #nosec G304 -- the path is composed from the ceremony state directory (given once by the operator on the command line) plus fixed file names, so remote input cannot influence it
 		if vkErr != nil {
 			return nil, nil, vkErr
 		}

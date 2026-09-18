@@ -226,7 +226,7 @@ func (s *FileReconciliationJobStore) BeginAttempt(ctx context.Context, jobID str
 		if _, ok := projection.Jobs[jobID]; !ok {
 			return ErrReconciliationJobNotFound
 		}
-		attempt = ReconciliationAttempt{JobID: jobID, Number: uint32(len(projection.Attempts[jobID]) + 1), StartedAt: s.now()} //nolint:gosec // attempts are bounded by durable storage capacity
+		attempt = ReconciliationAttempt{JobID: jobID, Number: uint32(len(projection.Attempts[jobID]) + 1), StartedAt: s.now()} /* #nosec G115 -- attempts are bounded by durable storage capacity */ //nolint:gosec
 		return appendReconciliationEvent(state, ReconciliationEvent{Type: ReconciliationEventAttemptStarted, RecordedAt: s.now(), Attempt: &attempt})
 	})
 	return attempt, err
@@ -249,7 +249,7 @@ func (s *FileReconciliationJobStore) FailAttempt(ctx context.Context, jobID stri
 			return ErrReconciliationConflict
 		}
 		if _, completed := projection.Results[jobID]; completed ||
-			attemptNumber != uint32(len(projection.Attempts[jobID])) { //nolint:gosec // bounded by event capacity.
+			attemptNumber != uint32(len(projection.Attempts[jobID])) { /* #nosec G115 -- bounded by event capacity. */ //nolint:gosec
 			return ErrReconciliationConflict
 		}
 		attempt.FinishedAt, attempt.Outcome, attempt.Classification = s.now(), "failed", classification
@@ -274,7 +274,7 @@ func (s *FileReconciliationJobStore) CompleteAttempt(ctx context.Context, result
 		if !exists || validateReconciliationResultJobBinding(result, job) != nil {
 			return ErrReconciliationConflict
 		}
-		if result.AttemptNumber != uint32(len(projection.Attempts[result.JobID])) { //nolint:gosec // bounded by event capacity.
+		if result.AttemptNumber != uint32(len(projection.Attempts[result.JobID])) { /* #nosec G115 -- bounded by event capacity. */ //nolint:gosec
 			return ErrReconciliationConflict
 		}
 		if !attempt.FinishedAt.IsZero() && attempt.Outcome != "completed" {
@@ -582,14 +582,14 @@ func projectReconciliationState(state reconciliationStoreState) (ReconciliationP
 			if _, completed := projection.Results[event.Attempt.JobID]; completed {
 				return projection, errors.New("reconciliation attempt started after completion")
 			}
-			if _, exists := projection.Jobs[event.Attempt.JobID]; !exists || event.Attempt.Number != uint32(len(projection.Attempts[event.Attempt.JobID])+1) { //nolint:gosec // bounded by event count
+			if _, exists := projection.Jobs[event.Attempt.JobID]; !exists || event.Attempt.Number != uint32(len(projection.Attempts[event.Attempt.JobID])+1) { /* #nosec G115 -- bounded by event count */ //nolint:gosec
 				return projection, errors.New("invalid reconciliation attempt sequence")
 			}
 			projection.Attempts[event.Attempt.JobID] = append(projection.Attempts[event.Attempt.JobID], *event.Attempt)
 		case ReconciliationEventAttemptFailed:
 			attempt, err := findReconciliationAttempt(projection, event.Attempt.JobID, event.Attempt.Number)
 			if err != nil || !attempt.FinishedAt.IsZero() ||
-				event.Attempt.Number != uint32(len(projection.Attempts[event.Attempt.JobID])) { //nolint:gosec // bounded by event count.
+				event.Attempt.Number != uint32(len(projection.Attempts[event.Attempt.JobID])) { /* #nosec G115 -- bounded by event count. */ //nolint:gosec
 				return projection, errors.New("invalid failed reconciliation attempt")
 			}
 			projection.Attempts[event.Attempt.JobID][event.Attempt.Number-1] = *event.Attempt
@@ -607,7 +607,7 @@ func projectReconciliationState(state reconciliationStoreState) (ReconciliationP
 				return projection, err
 			}
 			attempt, err := findReconciliationAttempt(projection, event.Result.JobID, event.Result.AttemptNumber)
-			if err != nil || !attempt.FinishedAt.IsZero() || event.Result.AttemptNumber != uint32(len(projection.Attempts[event.Result.JobID])) { //nolint:gosec // bounded by event count.
+			if err != nil || !attempt.FinishedAt.IsZero() || event.Result.AttemptNumber != uint32(len(projection.Attempts[event.Result.JobID])) { /* #nosec G115 -- bounded by event count. */ //nolint:gosec
 				return projection, errors.New("reconciliation result references invalid attempt")
 			}
 			attempt.FinishedAt, attempt.Outcome = event.Result.CompletedAt, "completed"

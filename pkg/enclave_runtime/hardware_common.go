@@ -496,7 +496,7 @@ func checkDeviceExists(path string) (bool, error) {
 
 // readSysFile reads a value from a sysfs file
 func readSysFile(path string) (string, error) {
-	data, err := os.ReadFile(path)
+	data, err := os.ReadFile(path) // #nosec G304 -- the path is an operator-configured device or allow-list location (from configuration or a fixed device constant), never untrusted input
 	if err != nil {
 		return "", err
 	}

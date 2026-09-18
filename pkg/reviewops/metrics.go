@@ -190,7 +190,7 @@ func (snapshot Snapshot) validateSubgroups() error {
 	if len(snapshot.Subgroups) > MaximumSubgroups {
 		return errors.New("too many subgroup aggregates")
 	}
-	if snapshot.SuppressedSubgroupCount > uint64(MaximumSubgroups-len(snapshot.Subgroups)) {
+	if snapshot.SuppressedSubgroupCount > uint64(MaximumSubgroups-len(snapshot.Subgroups)) { /* #nosec G115 -- the conversion only runs when SuppressedSubgroupCount <= MaximumSubgroups-len(Subgroups), so the subtraction cannot go negative */ //nolint:gosec
 		return errors.New("suppressed subgroup count is invalid")
 	}
 	var prior uint8

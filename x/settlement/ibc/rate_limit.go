@@ -81,7 +81,7 @@ func (k IBCKeeper) CheckRateLimit(ctx sdk.Context, relayer sdk.AccAddress, packe
 		return nil
 	}
 
-	height := uint64(ctx.BlockHeight()) //nolint:gosec // block height is non-negative
+	height := uint64(ctx.BlockHeight()) /* #nosec G115 -- block height is non-negative */ //nolint:gosec
 	store := ctx.KVStore(k.storeKey)
 
 	totalKey := RateLimitKey(height, packetType)
@@ -122,7 +122,7 @@ func (k IBCKeeper) CleanupRateLimitData(ctx sdk.Context) {
 				continue
 			}
 
-			height := int64(readUint64(key[len(prefix) : len(prefix)+8])) //nolint:gosec // stored heights fit in int64
+			height := int64(readUint64(key[len(prefix) : len(prefix)+8])) /* #nosec G115 -- stored heights fit in int64 */ //nolint:gosec
 			if height <= cutoff {
 				store.Delete(key)
 			}

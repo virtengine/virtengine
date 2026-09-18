@@ -6,6 +6,8 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"io"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"sync"
@@ -269,7 +271,7 @@ func (b *FilesystemArchiveBackend) GetArchived(ctx context.Context, archiveID st
 
 	// Read archive data
 	archivePath := b.getArchivePath(archiveID)
-	data, err := os.ReadFile(archivePath)
+	data, err := os.ReadFile(archivePath) // #nosec G304 -- the path is built from the backend's configured directory plus a hex archive ID, so it cannot traverse
 	if err != nil {
 		return nil, fmt.Errorf("failed to read archive data: %w", err)
 	}
@@ -366,20 +368,17 @@ func (b *FilesystemArchiveBackend) ListArchives(ctx context.Context, owner strin
 
 	var archives []*ArchiveMetadata
 
-	// Walk metadata directory
-	err := filepath.Walk(b.metadataDir, func(path string, info os.FileInfo, err error) error {
-		if err != nil {
-			return err
-		}
-		if info.IsDir() {
+	// Walk metadata directory through an os.Root handle (gosec G122).
+	err := b.walkMetadataDir(func(root *os.Root, rel string, d fs.DirEntry) error {
+		if d.IsDir() {
 			return nil
 		}
-		if filepath.Ext(path) != extJSON {
+		if filepath.Ext(rel) != extJSON {
 			return nil
 		}
 
 		// Read metadata
-		data, err := os.ReadFile(path)
+		data, err := readFileInRoot(root, rel)
 		if err != nil {
 			return nil // Skip on error
 		}
@@ -436,20 +435,17 @@ func (b *FilesystemArchiveBackend) PurgeExpiredArchives(ctx context.Context, cur
 	now := time.Unix(currentTime, 0)
 	purged := 0
 
-	// Walk metadata directory
-	err := filepath.Walk(b.metadataDir, func(path string, info os.FileInfo, err error) error {
-		if err != nil {
-			return err
-		}
-		if info.IsDir() {
+	// Walk metadata directory through an os.Root handle (gosec G122).
+	err := b.walkMetadataDir(func(root *os.Root, rel string, d fs.DirEntry) error {
+		if d.IsDir() {
 			return nil
 		}
-		if filepath.Ext(path) != extJSON {
+		if filepath.Ext(rel) != extJSON {
 			return nil
 		}
 
 		// Read metadata
-		data, err := os.ReadFile(path)
+		data, err := readFileInRoot(root, rel)
 		if err != nil {
 			return nil // Skip on error
 		}
@@ -465,8 +461,8 @@ func (b *FilesystemArchiveBackend) PurgeExpiredArchives(ctx context.Context, cur
 			archivePath := b.getArchivePath(metadata.ArchiveID)
 			_ = os.Remove(archivePath)
 
-			// Delete metadata
-			_ = os.Remove(path)
+			// Delete metadata (root-relative removal, cannot escape metadataDir)
+			_ = root.Remove(rel)
 
 			purged++
 		}
@@ -494,7 +490,7 @@ func (b *FilesystemArchiveBackend) VerifyArchiveIntegrity(ctx context.Context, a
 
 	// Read archive data
 	archivePath := b.getArchivePath(archiveID)
-	data, err := os.ReadFile(archivePath)
+	data, err := os.ReadFile(archivePath) // #nosec G304 -- the path is built from the backend's configured directory plus a hex archive ID, so it cannot traverse
 	if err != nil {
 		return fmt.Errorf("failed to read archive data: %w", err)
 	}
@@ -522,20 +518,17 @@ func (b *FilesystemArchiveBackend) GetArchiveMetrics(ctx context.Context) (*Arch
 		BackendStatus:    make(map[string]string),
 	}
 
-	// Walk metadata directory
-	err := filepath.Walk(b.metadataDir, func(path string, info os.FileInfo, err error) error {
-		if err != nil {
-			return err
-		}
-		if info.IsDir() {
+	// Walk metadata directory through an os.Root handle (gosec G122).
+	err := b.walkMetadataDir(func(root *os.Root, rel string, d fs.DirEntry) error {
+		if d.IsDir() {
 			return nil
 		}
-		if filepath.Ext(path) != extJSON {
+		if filepath.Ext(rel) != extJSON {
 			return nil
 		}
 
 		// Read metadata
-		data, err := os.ReadFile(path)
+		data, err := readFileInRoot(root, rel)
 		if err != nil {
 			return nil // Skip on error
 		}
@@ -611,7 +604,7 @@ func (b *FilesystemArchiveBackend) getMetadataPath(archiveID string) string {
 
 func (b *FilesystemArchiveBackend) readMetadata(archiveID string) (*ArchiveMetadata, error) {
 	metadataPath := b.getMetadataPath(archiveID)
-	data, err := os.ReadFile(metadataPath)
+	data, err := os.ReadFile(metadataPath) // #nosec G304 -- the path is built from the backend's configured directory plus a hex archive ID, so it cannot traverse
 	if err != nil {
 		if os.IsNotExist(err) {
 			return nil, ErrNotFound.Wrapf("archive not found: %s", archiveID)
@@ -652,4 +645,40 @@ func generateArchiveID(contentAddr *ContentAddress, owner string) string {
 	data := fmt.Sprintf("%s:%s", contentAddr.HashHex(), owner)
 	hash := sha256.Sum256([]byte(data))
 	return hex.EncodeToString(hash[:])
+}
+
+// walkMetadataDir walks the metadata directory through an os.Root handle and
+// calls fn for every entry it finds (the directory itself arrives first with a
+// relative path of ".").
+//
+// filepath.Walk hands back a path that must then be opened with a separate
+// syscall, leaving a symlink-swap TOCTOU window between the walk and the
+// following filesystem operation (gosec G122). os.Root confines every path
+// resolution to metadataDir and refuses to traverse outside it, so an attacker
+// who swaps an entry for a symlink cannot redirect a read or a delete.
+func (b *FilesystemArchiveBackend) walkMetadataDir(fn func(root *os.Root, rel string, d fs.DirEntry) error) error {
+	root, err := os.OpenRoot(b.metadataDir)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = root.Close() }()
+
+	return fs.WalkDir(root.FS(), ".", func(rel string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		return fn(root, rel, d)
+	})
+}
+
+// readFileInRoot reads a file by root-relative path without ever escaping the
+// root it was opened against.
+func readFileInRoot(root *os.Root, rel string) ([]byte, error) {
+	f, err := root.Open(rel)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = f.Close() }()
+
+	return io.ReadAll(f)
 }

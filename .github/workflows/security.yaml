@@ -467,20 +467,61 @@ jobs:
       - name: Install gosec
         run: go install github.com/securego/gosec/v2/cmd/gosec@${{ env.GOSEC_VERSION }}
 
+      # gosec resolves packages through golang.org/x/tools/go/packages, which runs
+      # the go command with the default -mod=readonly. When a module is not tidy the
+      # loader refuses with "updates to go.mod needed" and gosec discards every
+      # affected package without logging anything: analyzer.go does
+      # `if pkg.Name == "" { continue }` before it has a chance to record an error,
+      # so the JSON report's "Golang errors" stays empty and the job still exits 0.
+      # That is how this gate came to analyse 582 of the repository's 3367 Go files
+      # while reporting success. Fail here, with the go tool's own message, instead.
+      - name: Assert every scanned module resolves under -mod=readonly
+        run: |
+          set -euo pipefail
+          failed=0
+          for module in . sdk/go sdk/specs; do
+            log="/tmp/golist-$(echo "$module" | tr '/' '-').log"
+            if ! (cd "$module" && GOWORK=off go list ./... > /dev/null 2>"$log"); then
+              echo "::error::module '$module' does not resolve, so gosec would silently skip its packages"
+              cat "$log"
+              failed=1
+            fi
+          done
+          if [ "$failed" -ne 0 ]; then
+            echo "::error::run 'go mod tidy' in each module listed above and commit go.mod/go.sum"
+            exit 1
+          fi
+
       - name: Run gosec
         id: gosec
         run: |
           set +e
-          gosec -fmt json -out gosec.json -exclude-generated -exclude-dir=vendor -exclude-dir=testutil ./...
-          json_status=$?
-          gosec -fmt sarif -out gosec.sarif -exclude-generated -exclude-dir=vendor -exclude-dir=testutil ./...
-          sarif_status=$?
+          status=0
+          # Each module is scanned explicitly. `gosec ./...` from the repository root
+          # only reaches packages of the root module; the nested sdk/go and sdk/specs
+          # modules were not analysed by any gate before this change. sdk/generation
+          # and the infra/*/tests modules are deliberately out of scope: they contain
+          # no non-test Go files (verified by the coverage assertion below).
+          run_gosec() {
+            module="$1"
+            slug="$2"
+            for format in json sarif; do
+              if ! (cd "$module" && gosec -fmt "$format" -out "$GITHUB_WORKSPACE/gosec-${slug}.${format}" \
+                      -exclude-generated -exclude-dir=vendor -exclude-dir=testutil ./...) \
+                      >> "/tmp/gosec-${slug}.log" 2>&1; then
+                status=1
+              fi
+              if [ ! -s "$GITHUB_WORKSPACE/gosec-${slug}.${format}" ]; then
+                echo "::error::gosec did not produce a $format report for module '$module'"
+                status=1
+              fi
+            done
+          }
+          run_gosec . root
+          run_gosec sdk/go sdk-go
+          run_gosec sdk/specs sdk-specs
           set -e
-          if [ ! -s gosec.json ] || [ ! -s gosec.sarif ]; then
-            echo "::error::gosec did not produce both JSON and SARIF outputs"
-            exit 1
-          fi
-          if [ "$json_status" -ne 0 ] || [ "$sarif_status" -ne 0 ]; then
+          if [ "$status" -ne 0 ]; then
             echo "exit_code=1" >> "$GITHUB_OUTPUT"
           else
             echo "exit_code=0" >> "$GITHUB_OUTPUT"
@@ -490,16 +531,43 @@ jobs:
         uses: github/codeql-action/upload-sarif@v3
         if: always()
         with:
-          sarif_file: gosec.sarif
+          sarif_file: gosec-root.sarif
           category: gosec
 
-      - name: Upload gosec JSON report
+      - name: Upload gosec SARIF (sdk/go)
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: gosec-sdk-go.sarif
+          category: gosec-sdk-go
+
+      - name: Upload gosec SARIF (sdk/specs)
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: gosec-sdk-specs.sarif
+          category: gosec-sdk-specs
+
+      - name: Upload gosec JSON reports
         uses: actions/upload-artifact@v4
         if: always()
         with:
           name: gosec-report
-          path: gosec.json
+          path: gosec-*.json
           retention-days: 30
+
+      # A partial scan must never look like a clean one. This reconstructs the
+      # expected package set with the go tool and fails if gosec analysed fewer
+      # packages than the module contains, naming each package it skipped.
+      - name: Assert gosec analysed every package
+        run: |
+          set -euo pipefail
+          python3 .github/scripts/check_gosec_coverage.py --log /tmp/gosec-root.log \
+            --module-dir . --exclude-dir vendor --exclude-dir testutil
+          python3 .github/scripts/check_gosec_coverage.py --log /tmp/gosec-sdk-go.log \
+            --module-dir sdk/go --exclude-dir vendor --exclude-dir testutil
+          python3 .github/scripts/check_gosec_coverage.py --log /tmp/gosec-sdk-specs.log \
+            --module-dir sdk/specs --exclude-dir vendor --exclude-dir testutil
 
       - name: Fail on gosec findings
         if: steps.gosec.outputs.exit_code != '0'

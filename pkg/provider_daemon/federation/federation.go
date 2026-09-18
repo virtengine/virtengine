@@ -228,16 +228,16 @@ func (document DiscoveryDocument) CanonicalBytes() ([]byte, error) {
 	encoder.text(document.ProviderID)
 	encoder.text(document.ServiceID)
 	encoder.uint64(document.Revision)
-	encoder.uint32(uint32(len(capabilities)))
+	encoder.uint32(uint32(len(capabilities))) // #nosec G115 -- the capability list length is bounded far below 2^32
 	for _, capability := range capabilities {
 		encoder.text(capability)
 	}
-	encoder.uint32(uint32(len(endpoints)))
+	encoder.uint32(uint32(len(endpoints))) // #nosec G115 -- the endpoint list length is bounded far below 2^32
 	for _, endpoint := range endpoints {
 		encoder.text(endpoint.Name)
 		encoder.text(endpoint.URL)
 	}
-	encoder.uint32(uint32(len(epochs)))
+	encoder.uint32(uint32(len(epochs))) // #nosec G115 -- the epoch list length is bounded far below 2^32
 	for _, epoch := range epochs {
 		encoder.uint64(epoch.Epoch)
 		encoder.data(epoch.PublicKey)
@@ -615,7 +615,7 @@ func (encoder *canonicalEncoder) int64(value int64) {
 }
 func (encoder *canonicalEncoder) fixed(value []byte) { _, _ = encoder.buffer.Write(value) }
 func (encoder *canonicalEncoder) data(value []byte) {
-	encoder.uint32(uint32(len(value)))
+	encoder.uint32(uint32(len(value))) // #nosec G115 -- the value length is an in-memory buffer size, bounded far below 2^32
 	encoder.fixed(value)
 }
 func (encoder *canonicalEncoder) text(value string) { encoder.data([]byte(value)) }

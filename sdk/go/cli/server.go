@@ -484,7 +484,7 @@ func startTelemetry(cfg serverconfig.Config) (*telemetry.Metrics, error) {
 // NOTE: We expect the caller to handle graceful shutdown and signal handling.
 func wrapCPUProfile(sctx *sdksrv.Context, callbackFn func() error) error {
 	if cpuProfile := sctx.Viper.GetString(cflags.FlagCPUProfile); cpuProfile != "" {
-		f, err := os.Create(cpuProfile) //nolint: gosec
+		f, err := os.Create(cpuProfile) /* #nosec G304 -- cpuProfile is a local path parameter supplied by this function's own caller (a CLI argument, loader parameter or configured state file) and is not derived from a network peer or chain message; opening the caller-nominated file is the purpose of this call */ //nolint:gosec
 		if err != nil {
 			return err
 		}

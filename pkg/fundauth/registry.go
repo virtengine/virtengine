@@ -90,10 +90,10 @@ func NewRegistry(descriptors []SourceDescriptor) (*Registry, error) {
 	var writer canonicalWriter
 	_, _ = writer.WriteString("VE-FUND-SOURCE-REGISTRY\x00")
 	_ = writer.WriteByte(1)
-	_ = writer.WriteByte(byte(len(registry.descriptors) >> 24))
-	_ = writer.WriteByte(byte(len(registry.descriptors) >> 16))
-	_ = writer.WriteByte(byte(len(registry.descriptors) >> 8))
-	_ = writer.WriteByte(byte(len(registry.descriptors)))
+	_ = writer.WriteByte(byte(len(registry.descriptors) >> 24)) // #nosec G115 -- len(registry.descriptors) is bounded by the math.MaxUint32 guard above; this extracts one byte of the 4-byte length
+	_ = writer.WriteByte(byte(len(registry.descriptors) >> 16)) // #nosec G115 -- len(registry.descriptors) is bounded by the math.MaxUint32 guard above; this extracts one byte of the 4-byte length
+	_ = writer.WriteByte(byte(len(registry.descriptors) >> 8))  // #nosec G115 -- len(registry.descriptors) is bounded by the math.MaxUint32 guard above; this extracts one byte of the 4-byte length
+	_ = writer.WriteByte(byte(len(registry.descriptors)))       // #nosec G115 -- len(registry.descriptors) is bounded by the math.MaxUint32 guard above; this extracts one byte of the 4-byte length
 	for _, descriptor := range registry.descriptors {
 		if descriptor.SourceID == "" || !descriptor.Phase.valid() || !descriptor.Effect.valid() || !descriptor.Status.valid() || !descriptor.RequireAuthorization || descriptor.ProductionBypass {
 			return nil, fmt.Errorf("invalid descriptor %q", descriptor.SourceID)
@@ -147,11 +147,11 @@ func NewRegistry(descriptors []SourceDescriptor) (*Registry, error) {
 		} else {
 			_ = writer.WriteByte(0)
 		}
-		_ = writer.WriteByte(byte(len(descriptor.RequiredPartyRoles)))
+		_ = writer.WriteByte(byte(len(descriptor.RequiredPartyRoles))) // #nosec G115 -- the role slice length is bounded by the fixed role set, which has fewer than 256 members
 		for _, role := range descriptor.RequiredPartyRoles {
 			_ = writer.WriteByte(byte(role))
 		}
-		_ = writer.WriteByte(byte(len(descriptor.PossessionPartyRoles)))
+		_ = writer.WriteByte(byte(len(descriptor.PossessionPartyRoles))) // #nosec G115 -- the role slice length is bounded by the fixed role set, which has fewer than 256 members
 		for _, role := range descriptor.PossessionPartyRoles {
 			_ = writer.WriteByte(byte(role))
 		}

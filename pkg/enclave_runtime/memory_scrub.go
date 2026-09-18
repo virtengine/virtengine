@@ -52,9 +52,11 @@ func ScrubFixedSize[T any](data *T) {
 	if size > maxInt {
 		return
 	}
+	// #nosec G103 -- audited in-place zeroing of a fixed-size value: the byte view is bounded by unsafe.Sizeof of the same value and the length is validated before the int conversion
 	ptr := unsafe.Pointer(data) //nolint:gosec // G103: convert fixed-size value to byte view for in-place zeroing within validated bounds.
 
 	// Zero the memory
+	// #nosec G103 -- audited in-place zeroing of a fixed-size value: the byte view is bounded by unsafe.Sizeof of the same value and the length is validated before the int conversion
 	bytes := unsafe.Slice((*byte)(ptr), int(size)) //nolint:gosec // G103: bounded byte slice over fixed-size value; length validated before int conversion.
 	for i := range bytes {
 		bytes[i] = 0

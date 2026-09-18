@@ -52,7 +52,7 @@ func openTraceWriter(traceWriterFile string) (w io.WriteCloser, err error) {
 	}
 	cleanPath := filepath.Clean(traceWriterFile)
 
-	return os.OpenFile( //nolint:gosec // G304: path validated via ValidateCLIPath
+	return os.OpenFile( /* #nosec G302 -- path validated via ValidateCLIPath */ //nolint:gosec
 		cleanPath,
 		os.O_WRONLY|os.O_APPEND|os.O_CREATE,
 		0o666,

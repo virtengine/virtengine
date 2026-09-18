@@ -9,6 +9,7 @@ package metrics
 import (
 	"context"
 	"net/http"
+	"strconv"
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -619,14 +620,19 @@ func (c *Collector) ServeHTTP(ctx context.Context) error {
 	mux.Handle(c.config.HTTPPath, c.Handler())
 
 	server := &http.Server{
-		Addr:              ":" + string(rune(c.config.HTTPPort)),
+		Addr:              ":" + strconv.Itoa(c.config.HTTPPort),
 		Handler:           mux,
 		ReadHeaderTimeout: 10 * time.Second,
 	}
 
-	go func() {
+	// Shut the server down once the caller's context is cancelled. The shutdown
+	// is bounded by an explicit timeout because ctx is already cancelled at that
+	// point and cannot be used to bound the drain.
+	go func() { // #nosec G118 -- the server context is already cancelled when this goroutine runs, so the shutdown drain is deliberately bounded by its own explicit timeout
 		<-ctx.Done()
-		_ = server.Shutdown(context.Background())
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		_ = server.Shutdown(shutdownCtx)
 	}()
 
 	return server.ListenAndServe()

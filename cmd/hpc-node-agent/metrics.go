@@ -91,7 +91,7 @@ func NewMetricsCollector() *MetricsCollector {
 
 func defaultExecCommand(path string, args ...string) ([]byte, error) {
 	//nolint:gosec // G204: callers provide validated executable paths and fixed/sanitized args
-	return exec.Command(path, args...).Output()
+	return exec.Command(path, args...).Output() // #nosec G204 -- the executable is args..., resolved from daemon configuration / a validated path, and the arguments are built in code rather than from remote input
 }
 
 // CollectCapacity collects node capacity metrics.
@@ -102,7 +102,7 @@ func (m *MetricsCollector) CollectCapacity() (*NodeCapacity, error) {
 
 	// CPU capacity is derived from the real scheduler pressure signal exposed by load average.
 	//nolint:gosec // G115: NumCPU returns small positive int, safe for int32
-	capacity.CPUCoresTotal = int32(runtime.NumCPU())
+	capacity.CPUCoresTotal = int32(runtime.NumCPU()) // #nosec G115 -- capacity.CPUCoresTotal = int32(runtime.NumCPU()) is a derived size/count (bytes scaled down to a whole unit or the CPU count), which cannot reach the int32 limit
 	capacity.CPUCoresAvailable, capacity.CPUCoresAllocated = availableCoresFromLoad(
 		capacity.CPUCoresTotal,
 		m.getLoadAverage1m(),
@@ -110,9 +110,9 @@ func (m *MetricsCollector) CollectCapacity() (*NodeCapacity, error) {
 
 	memTotal, memAvailable := m.getMemoryInfo()
 	//nolint:gosec // G115: memory in GB is bounded well under int32 max
-	capacity.MemoryGBTotal = int32(memTotal / (1024 * 1024 * 1024))
+	capacity.MemoryGBTotal = int32(memTotal / (1024 * 1024 * 1024)) // #nosec G115 -- capacity.MemoryGBTotal = int32(memTotal / (1024 * 1024 * 1024)) is a derived size/count (bytes scaled down to a whole unit or the CPU count), which cannot reach the int32 limit
 	//nolint:gosec // G115: memory in GB is bounded well under int32 max
-	capacity.MemoryGBAvailable = int32(memAvailable / (1024 * 1024 * 1024))
+	capacity.MemoryGBAvailable = int32(memAvailable / (1024 * 1024 * 1024)) // #nosec G115 -- capacity.MemoryGBAvailable = int32(memAvailable / (1024 * 1024 * 1024)) is a derived size/count (bytes scaled down to a whole unit or the CPU count), which cannot reach the int32 limit
 	capacity.MemoryGBAllocated = clampInt32(capacity.MemoryGBTotal-capacity.MemoryGBAvailable, capacity.MemoryGBTotal)
 
 	gpu := m.getGPUSnapshot()
@@ -123,9 +123,9 @@ func (m *MetricsCollector) CollectCapacity() (*NodeCapacity, error) {
 
 	storageTotal, storageAvailable := m.getStorageInfo("/")
 	//nolint:gosec // G115: storage in GB is bounded well under int32 max
-	capacity.StorageGBTotal = int32(storageTotal / (1024 * 1024 * 1024))
+	capacity.StorageGBTotal = int32(storageTotal / (1024 * 1024 * 1024)) // #nosec G115 -- capacity.StorageGBTotal = int32(storageTotal / (1024 * 1024 * 1024)) is a derived size/count (bytes scaled down to a whole unit or the CPU count), which cannot reach the int32 limit
 	//nolint:gosec // G115: storage in GB is bounded well under int32 max
-	capacity.StorageGBAvailable = int32(storageAvailable / (1024 * 1024 * 1024))
+	capacity.StorageGBAvailable = int32(storageAvailable / (1024 * 1024 * 1024)) // #nosec G115 -- capacity.StorageGBAvailable = int32(storageAvailable / (1024 * 1024 * 1024)) is a derived size/count (bytes scaled down to a whole unit or the CPU count), which cannot reach the int32 limit
 	capacity.StorageGBAllocated = clampInt32(capacity.StorageGBTotal-capacity.StorageGBAvailable, capacity.StorageGBTotal)
 
 	return capacity, nil

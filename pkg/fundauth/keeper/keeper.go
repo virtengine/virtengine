@@ -153,7 +153,7 @@ func authorizationKey(accountID string, nonceDigest fundauth.Digest) []byte {
 }
 
 func appendLengthPrefixed(dst, value []byte) []byte {
-	dst = binary.BigEndian.AppendUint32(dst, uint32(len(value)))
+	dst = binary.BigEndian.AppendUint32(dst, uint32(len(value))) // #nosec G115 -- value is a slice length or element count: non-negative and bounded far below 2^32
 	return append(dst, value...)
 }
 

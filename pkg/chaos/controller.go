@@ -605,6 +605,19 @@ func (c *Controller) Execute(ctx context.Context, exp *ExperimentSpec) (*Experim
 	c.experiments[exp.ID] = exp
 	c.mu.Unlock()
 
+	// Always release the per-experiment context and its cancel func once the
+	// run returns, including the normal completion path (gosec G118). cancel()
+	// is idempotent, so a concurrent Cancel() is unaffected, and the per-run
+	// channel maps are cleaned up to avoid unbounded growth over many runs.
+	defer func() {
+		cancel()
+		c.mu.Lock()
+		delete(c.cancelFuncs, exp.ID)
+		delete(c.pauseChans, exp.ID)
+		delete(c.resumeChans, exp.ID)
+		c.mu.Unlock()
+	}()
+
 	c.logger.Info("executing experiment",
 		LogField{Key: "experiment_id", Value: exp.ID},
 		LogField{Key: "experiment_name", Value: exp.Name},

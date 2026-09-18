@@ -751,7 +751,7 @@ func (s *offRampService) Close() error {
 
 	// Close providers
 	for _, provider := range s.providers {
-		provider.Close()
+		_ = provider.Close()
 	}
 
 	if s.priceFeed != nil {

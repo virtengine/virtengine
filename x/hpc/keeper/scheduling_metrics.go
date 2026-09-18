@@ -140,7 +140,7 @@ func updateAverageFixed(prev string, count uint64, value int64) string {
 		return formatFixedPoint(value)
 	}
 	prevVal := parseFixedPoint(prev)
-	countInt := int64(count) //nolint:gosec // count is bounded by metrics history and safe for averaging.
+	countInt := int64(count) /* #nosec G115 -- count is bounded by metrics history and safe for averaging. */ //nolint:gosec
 	newVal := (prevVal*countInt + value) / (countInt + 1)
 	return formatFixedPoint(newVal)
 }

@@ -11,7 +11,7 @@ import (
 
 // LoadVerifyingKey loads a verifying key from disk for off-chain tooling.
 func LoadVerifyingKey(path string) (groth16.VerifyingKey, error) {
-	data, err := os.ReadFile(path)
+	data, err := os.ReadFile(path) // #nosec G304 -- the path is the operator-configured VEID ZK params directory joined with fixed file names
 	if err != nil {
 		return nil, fmt.Errorf("read verifying key: %w", err)
 	}
@@ -26,7 +26,7 @@ func LoadVerifyingKey(path string) (groth16.VerifyingKey, error) {
 
 // LoadProvingKey loads a proving key from disk for off-chain tooling.
 func LoadProvingKey(path string) (groth16.ProvingKey, error) {
-	data, err := os.ReadFile(path)
+	data, err := os.ReadFile(path) // #nosec G304 -- the path is the operator-configured VEID ZK params directory joined with fixed file names
 	if err != nil {
 		return nil, fmt.Errorf("read proving key: %w", err)
 	}

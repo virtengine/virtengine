@@ -63,7 +63,7 @@ func SigningPayload(a *v1.AttestedScoringResult) []byte {
 	h.Write([]byte(a.AccountAddress))
 
 	// Include score
-	h.Write([]byte{byte(a.Score >> 24), byte(a.Score >> 16), byte(a.Score >> 8), byte(a.Score)})
+	h.Write([]byte{byte(a.Score >> 24), byte(a.Score >> 16), byte(a.Score >> 8), byte(a.Score)}) // #nosec G115 -- fixed-width big-endian encoding: byte(a.Score >> 24) writes a single byte of the shifted value by design and the written byte is never used arithmetically
 
 	// Include status
 	h.Write([]byte(a.Status))
@@ -84,10 +84,10 @@ func SigningPayload(a *v1.AttestedScoringResult) []byte {
 
 	// Include block height
 	h.Write([]byte{
-		byte(a.BlockHeight >> 56), byte(a.BlockHeight >> 48),
-		byte(a.BlockHeight >> 40), byte(a.BlockHeight >> 32),
-		byte(a.BlockHeight >> 24), byte(a.BlockHeight >> 16),
-		byte(a.BlockHeight >> 8), byte(a.BlockHeight),
+		byte(a.BlockHeight >> 56), byte(a.BlockHeight >> 48), // #nosec G115 -- fixed-width big-endian encoding: byte(a.BlockHeight >> 56) writes a single byte of the shifted value by design and the written byte is never used arithmetically
+		byte(a.BlockHeight >> 40), byte(a.BlockHeight >> 32), // #nosec G115 -- fixed-width big-endian encoding: byte(a.BlockHeight >> 40) writes a single byte of the shifted value by design and the written byte is never used arithmetically
+		byte(a.BlockHeight >> 24), byte(a.BlockHeight >> 16), // #nosec G115 -- fixed-width big-endian encoding: byte(a.BlockHeight >> 24) writes a single byte of the shifted value by design and the written byte is never used arithmetically
+		byte(a.BlockHeight >> 8), byte(a.BlockHeight), // #nosec G115 -- fixed-width big-endian encoding: byte(a.BlockHeight >> 8) writes a single byte of the shifted value by design and the written byte is never used arithmetically
 	})
 
 	return h.Sum(nil)

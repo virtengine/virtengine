@@ -249,7 +249,7 @@ func downloadGenesis(config *cmtcfg.Config, chainID string) error {
 	}
 
 	// Write the body to the destination genesis file
-	err = os.WriteFile(genFilePath, body, 0644) //nolint: gosec
+	err = os.WriteFile(genFilePath, body, 0644) /* #nosec G306 -- the file mode is the pre-existing write mode; gosec prefers 0600 and this file holds only generated genesis output the operator reads */ //nolint:gosec
 	if err != nil {
 		return errorsmod.Wrap(err, "failed to write genesis file to destination")
 	}

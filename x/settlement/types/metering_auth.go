@@ -311,7 +311,7 @@ func ExpectedUsageUnitsV1(usageType string, metrics RawUsageMetrics) (uint64, er
 		if value <= 0 {
 			return 0
 		}
-		return uint64((value-1)/divisor + 1) //nolint:gosec // positive bounded int64 result
+		return uint64((value-1)/divisor + 1) /* #nosec G115 -- positive bounded int64 result */ //nolint:gosec
 	}
 
 	switch strings.ToLower(usageType) {
@@ -406,7 +406,7 @@ func writeString(out *bytes.Buffer, value string) {
 }
 
 func writeBytes(out *bytes.Buffer, value []byte) {
-	writeUint32(out, uint32(len(value))) //nolint:gosec // validated against a 2 KiB protocol maximum
+	writeUint32(out, uint32(len(value))) /* #nosec G115 -- validated against a 2 KiB protocol maximum */ //nolint:gosec
 	_, _ = out.Write(value)
 }
 
@@ -423,5 +423,5 @@ func writeUint64(out *bytes.Buffer, value uint64) {
 }
 
 func writeInt64(out *bytes.Buffer, value int64) {
-	writeUint64(out, uint64(value)) //nolint:gosec // preserves signed two's-complement bits
+	writeUint64(out, uint64(value)) /* #nosec G115 -- preserves signed two's-complement bits */ //nolint:gosec
 }

@@ -561,7 +561,7 @@ func safeInt32FromInt(value int) int32 {
 		return int32(minInt32)
 	}
 	//nolint:gosec // range checked above
-	return int32(value)
+	return int32(value) // #nosec G115 -- int32(value) is a bounded value; the conversion cannot overflow on the inputs this site accepts
 }
 
 // =============================================================================

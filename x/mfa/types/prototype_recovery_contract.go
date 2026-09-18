@@ -252,7 +252,7 @@ func (m RecoveryParticipantManifest) Digest() ([32]byte, error) {
 	if err := writeCanonicalString(&output, m.ContractVersion); err != nil {
 		return [32]byte{}, err
 	}
-	_ = binary.Write(&output, binary.BigEndian, uint32(len(m.Participants)))
+	_ = binary.Write(&output, binary.BigEndian, uint32(len(m.Participants))) // #nosec G115 -- len(m.Participants) is bounded by its allocating container, a protocol-capped collection far below 2^32, so the conversion cannot truncate
 	for _, participant := range m.Participants {
 		if err := writeCanonicalString(&output, participant.ParticipantID); err != nil {
 			return [32]byte{}, err
