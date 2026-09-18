@@ -22,6 +22,11 @@ concurrency:
   group: release-${{ inputs.release_tag }}
   cancel-in-progress: false
 
+env:
+  # Keep these in lockstep with .github/workflows/supply-chain.yaml.
+  COSIGN_VERSION: "v3.0.6"
+  SYFT_VERSION: "v1.42.4"
+
 permissions:
   contents: read
 
@@ -89,9 +94,12 @@ jobs:
 
   test-network-upgrade-on-release:
     name: Network Upgrade Gate
-    runs-on:
-      - self-hosted
-      - gh-runner-test
+    # No self-hosted runners are registered for this repository
+    # (gh api repos/virtengine/virtengine/actions/runners -> total_count: 0), so a job
+    # pinned to [self-hosted, gh-runner-test] queues forever and the release can never
+    # run. GitHub-hosted is used instead; revert to the self-hosted labels once runners
+    # are registered. Tracked with project-steward (release plan defect D8).
+    runs-on: ubuntu-latest
     needs:
       - validate-release-context
       - compatibility
@@ -143,9 +151,10 @@ jobs:
 
   publish:
     name: Publish Release
-    runs-on:
-      - self-hosted
-      - core-e2e
+    # See the note on test-network-upgrade-on-release: [self-hosted, core-e2e] has no
+    # runners, so publish used to queue forever. GitHub-hosted ubuntu-latest provides
+    # docker + buildx (Set up QEMU / Set up Docker Buildx below).
+    runs-on: ubuntu-latest
     needs:
       - validate-release-context
       - compatibility
@@ -188,6 +197,51 @@ jobs:
           registry: ghcr.io
           username: ${{ github.repository_owner }}
           password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Install Syft and Cosign
+        run: |
+          curl -sSfL "https://github.com/anchore/syft/releases/download/${SYFT_VERSION}/syft_${SYFT_VERSION#v}_linux_amd64.tar.gz" | tar -xz
+          sudo install -m 0755 syft /usr/local/bin/syft
+          curl -sSfL "https://github.com/sigstore/cosign/releases/download/${COSIGN_VERSION}/cosign-linux-amd64" -o cosign
+          sudo install -m 0755 cosign /usr/local/bin/cosign
+          syft --version
+          cosign version
+
+      - name: Generate and sign release SBOM extras
+        run: |
+          # .goreleaser.yaml attaches .cache/sbom/*.json, *.sig and *.pem to the release
+          # (release.extra_files). Nothing else populates that directory: supply-chain.yaml
+          # writes to .cache/supply-chain/sbom on a different runner, so its output can
+          # never reach GoReleaser here.
+          #
+          # MEASURED: a wildcard extra_files glob that matches nothing does NOT abort
+          # GoReleaser - fileglob.Glob returns (empty, nil) for a dynamic pattern whose
+          # static prefix is missing, so the release would silently publish with no SBOM
+          # and no signatures (verified against goreleaser/fileglob v1.4.1, which is what
+          # internal/extrafiles.Find calls). The explicit guard below turns that silent
+          # omission into a hard failure.
+          rm -rf .cache/sbom
+          make sbom
+
+          shopt -s nullglob
+          sboms=(.cache/sbom/*.json)
+          if [ "${#sboms[@]}" -eq 0 ]; then
+            echo "::error::make sbom produced no documents in .cache/sbom - GoReleaser would silently attach nothing"
+            exit 1
+          fi
+
+          # Keyless signing with the workflow OIDC identity: the certificate identity is
+          # https://github.com/<repo>/.github/workflows/release.yaml@<ref>, which is what
+          # make verify-signature now accepts.
+          for sbom in "${sboms[@]}"; do
+            cosign sign-blob --yes \
+              --output-signature "${sbom}.sig" \
+              --output-certificate "${sbom}.pem" \
+              "$sbom"
+          done
+
+          echo "SBOM extras staged for GoReleaser:"
+          ls -l .cache/sbom
 
       - name: Make and publish
         run: |
