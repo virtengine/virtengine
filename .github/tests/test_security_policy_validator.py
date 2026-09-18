@@ -4,6 +4,7 @@ import importlib.util
 import sys
 import tempfile
 import unittest
+from datetime import date, timedelta
 from pathlib import Path
 
 
@@ -147,6 +148,81 @@ audit_log:
 
         self.assertTrue(any("stale placeholder text" in error for error in errors))
         self.assertTrue(any("expired" in error or "exceeds the maximum allowlist age" in error for error in errors))
+
+    def allowlist_with_exception(self, reviewed: date, expires: date) -> Path:
+        """Build an allowlist whose only entry spans exactly reviewed..expires.
+
+        Dates are computed relative to today by the caller so the suite cannot rot, and the
+        placeholder-triggering literals are deliberately avoided so the expiry and age rules
+        are the only rules that can fire.
+        """
+        return self.write_file(
+            ".vulnerability-allowlist.yaml",
+            f"""
+version: 2
+policy:
+  block_on: [CRITICAL, HIGH]
+  max_allowlist_age_days: 30
+  require_issue_reference: true
+  require_compensating_controls: true
+  active_exception_count: 1
+exceptions:
+  go:
+    - id: GO-2026-4740
+      package: github.com/shamaton/msgpack/v2
+      reason: DoS with no patched release; decode path unreachable from shipped binaries
+      reviewed_by: secops
+      reviewed_date: "{reviewed.isoformat()}"
+      expires: "{expires.isoformat()}"
+      references:
+        - https://pkg.go.dev/vuln/GO-2026-4740
+      compensating_controls:
+        - no VirtEngine code imports the affected package
+  python: []
+  npm: []
+  containers: []
+audit_log:
+  - date: "{reviewed.isoformat()}"
+    actor: secops
+    action: reviewed
+    note: expiry coverage fixture
+""".strip(),
+        )
+
+    def test_expiry_branch_fires_in_isolation(self) -> None:
+        """A lapsed entry must be reported even when the age rule is satisfied.
+
+        Regression guard: the pre-existing expired-entry test also carried placeholder text and
+        a span over `max_allowlist_age_days`, so it passed via the *age* rule alone — deleting
+        the `expires < today` branch outright left the suite fully green.
+        """
+        today = date.today()
+        allowlist = self.allowlist_with_exception(reviewed=today - timedelta(days=16), expires=today - timedelta(days=1))
+
+        errors = self.validator.validate_allowlist(allowlist)
+
+        self.assertTrue(any("is expired" in error for error in errors), errors)
+        self.assertFalse(any("exceeds the maximum allowlist age" in error for error in errors), errors)
+
+    def test_age_branch_fires_in_isolation(self) -> None:
+        """An over-long time-box must be reported even when the entry is not yet expired."""
+        today = date.today()
+        allowlist = self.allowlist_with_exception(reviewed=today, expires=today + timedelta(days=31))
+
+        errors = self.validator.validate_allowlist(allowlist)
+
+        self.assertTrue(any("exceeds the maximum allowlist age" in error for error in errors), errors)
+        self.assertFalse(any("is expired" in error for error in errors), errors)
+
+    def test_exception_at_exactly_max_age_is_accepted(self) -> None:
+        """The 30-day boundary itself must stay valid, so reviews are not forced shorter."""
+        today = date.today()
+        allowlist = self.allowlist_with_exception(reviewed=today, expires=today + timedelta(days=30))
+
+        errors = self.validator.validate_allowlist(allowlist)
+
+        self.assertFalse(any("is expired" in error for error in errors), errors)
+        self.assertFalse(any("exceeds the maximum allowlist age" in error for error in errors), errors)
 
     def test_doc_rejects_stale_claims(self) -> None:
         document = self.write_file(
