@@ -23,7 +23,7 @@ jobs:
     environment: load-test
     timeout-minutes: 60
     env:
-      GO_VERSION: "1.25.5"
+      GO_VERSION: "1.26.8"
     
     steps:
       - uses: actions/checkout@v4
