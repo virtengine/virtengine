@@ -230,7 +230,7 @@ job. Two consequences:
   lets gosec load those packages will surface them all at once.
 
 That second point is out of scope for this change and is tracked as a separate
-work item. **Both points are closed as of 2026-09-19: see sections 9 and 10**. **Both points are closed as of 2026-09-19: see sections 9 and 10**.
+work item. **Both points are closed as of 2026-09-19: see sections 9 and 10**. **Both points are closed as of 2026-09-19: see sections 9 and 10**. **Both points are closed as of 2026-09-19: see sections 9 and 10**. **Both points are closed as of 2026-09-19: see sections 9 and 10**.
 
 ## 8. Appendix - every finding, its bucket and its disposition
 
@@ -581,23 +581,25 @@ is now closed in two steps:
 2. **The findings it was hiding are gone.** This section records the remediation of the
    **484** findings that the honest gate surfaced: **456** in the root module and
    **28** in `sdk/go` (a module no gate had ever scanned). `sdk/specs` is clean.
+   A further **8** findings only exist on the CI runner's operating system — see
+   section 9.8 — bringing the total remediated to **492**.
 
 ### 9.1 Buckets
 
 | Bucket | Findings | Meaning |
 | --- | --- | --- |
 | exploitable | 28 | Untrusted input reaches a dangerous operation. Fixed in code with a test. |
-| hygiene | 142 | Real but low-impact hardening. Fixed in code where cheap, justified otherwise. |
-| scanner-noise | 314 | Provably safe at each site. Per-line justified annotation. |
-| **total** | **484** | |
+| hygiene | 144 | Real but low-impact hardening. Fixed in code where cheap, justified otherwise. |
+| scanner-noise | 320 | Provably safe at each site. Per-line justified annotation. |
+| **total** | **492** | |
 
 ### 9.2 Per-rule disposition
 
 | Rule | Bucket | Findings | Disposition |
 | --- | --- | --- | --- |
-| G115 | scanner-noise | 307 | fixed in code: 2, annotated: 305 |
+| G115 | scanner-noise | 313 | fixed in code: 2, annotated: 311 |
 | G104 | hygiene | 49 | fixed in code: 49 |
-| G304 | hygiene | 44 | annotated: 44 |
+| G304 | hygiene | 46 | annotated: 46 |
 | G101 | hygiene | 26 | annotated: 26 |
 | G703 | exploitable | 17 | annotated: 17 |
 | G706 | exploitable | 8 | fixed in code: 8 |
@@ -613,7 +615,7 @@ is now closed in two steps:
 | G402 | hygiene | 1 | annotated: 1 |
 | G704 | exploitable | 1 | annotated: 1 |
 | G306 | hygiene | 1 | annotated: 1 |
-| **total** | | **484** | fixed in code: 69, annotated: 415 |
+| **total** | | **492** | fixed in code: 69, annotated: 423 |
 
 ### 9.3 The exploitable bucket
 
@@ -695,7 +697,9 @@ is why a comment on the line immediately above a statement also works.
 ### 9.6 Verification evidence
 
 All of the following was run locally against this change with gosec v2.25.0 (the
-version pinned by `security.yaml`), `GOWORK=off`, and the CI's flags
+version pinned by `security.yaml`), `GOWORK=off`, `GOOS=linux GOARCH=amd64` — **the CI
+runner's own platform**, which matters because gosec parses `//go:build !windows`
+files there and does not here — and the CI's flags
 (`-exclude-generated -exclude-dir=vendor -exclude-dir=testutil`):
 
 | Module | Packages | Files analysed | Findings | `Golang errors` | Coverage assertion |
@@ -735,6 +739,27 @@ silently discarded `sdk/go/cli`, `sdk/go/node/client` and `sdk/go/provider/clien
 the same silent-skip failure mode as section 7, one module down. The parent-module
 `replace` (and the matching `go-module-policy.json` entry) is required for the
 `sdk/go` half of this remediation to be verifiable at all, and is included here.
+
+### 9.8 Platform-conditional findings
+
+The 484-finding inventory this work started from was measured on Windows, and gosec
+does not parse `//go:build !windows` files there. The CI runner is Linux, where it
+does. Re-running the identical scan with `GOOS=linux GOARCH=amd64` surfaces **8 more**
+findings that the inventory therefore did not contain, all in the `!windows` half of
+the two file-locking helpers and the queue-state lock:
+
+| File | Rule | Findings |
+| --- | --- | --- |
+| `pkg/data_vault/file_lock_unix.go` | G115 (2), G304 (1) | 3 |
+| `pkg/data_vault/keys/file_lock_unix.go` | G115 (2), G304 (1) | 3 |
+| `pkg/provider_daemon/chain_submitter_queue_lock_unix.go` | G115 (2) | 2 |
+
+They are annotated in the same way (see the last rows of the appendix): the G115 sites
+convert `file.Fd()` — an OS file descriptor, a small non-negative index — to the `int`
+that `unix.Flock` takes, and the G304 sites open the state file supplied by the calling
+component. This is the same lesson as section 7 at a smaller scale: **a scan is only
+as complete as the platform it runs on**, which is why the verification below is run
+with the CI's own `GOOS`/`GOARCH` rather than the authoring machine's.
 
 ## 10. Appendix B - the newly visible findings, bucket and disposition
 
@@ -1228,3 +1253,11 @@ Location is in the pre-change revision (`ce645f38`).
 | 482 | G103 | scanner-noise | `sdk/go/util/conv/string.go:29` | annotated | zero-copy conversion; caller must not mutate b while the string is in use. |
 | 483 | G103 | scanner-noise | `sdk/go/util/conv/string.go:19` | annotated | zero-copy conversion; caller must not mutate b while the string is in use. |
 | 484 | G103 | scanner-noise | `sdk/go/util/conv/string.go:19` | annotated | zero-copy conversion; caller must not mutate b while the string is in use. |
+| 485 | G115 | scanner-noise | `pkg/data_vault/file_lock_unix.go:17` | annotated | `//go:build !windows` file, so this finding exists only on the Linux CI runner. `int(file.Fd())` is an OS file descriptor (a small non-negative index far below 2^31) passed to `unix.Flock`, which takes an int; the G304 path is the state file supplied by this function's own caller |
+| 486 | G115 | scanner-noise | `pkg/data_vault/file_lock_unix.go:31` | annotated | `//go:build !windows` file, so this finding exists only on the Linux CI runner. `int(file.Fd())` is an OS file descriptor (a small non-negative index far below 2^31) passed to `unix.Flock`, which takes an int; the G304 path is the state file supplied by this function's own caller |
+| 487 | G304 | hygiene | `pkg/data_vault/file_lock_unix.go:13` | annotated | `//go:build !windows` file, so this finding exists only on the Linux CI runner. `int(file.Fd())` is an OS file descriptor (a small non-negative index far below 2^31) passed to `unix.Flock`, which takes an int; the G304 path is the state file supplied by this function's own caller |
+| 488 | G115 | scanner-noise | `pkg/data_vault/keys/file_lock_unix.go:17` | annotated | `//go:build !windows` file, so this finding exists only on the Linux CI runner. `int(file.Fd())` is an OS file descriptor (a small non-negative index far below 2^31) passed to `unix.Flock`, which takes an int; the G304 path is the state file supplied by this function's own caller |
+| 489 | G115 | scanner-noise | `pkg/data_vault/keys/file_lock_unix.go:31` | annotated | `//go:build !windows` file, so this finding exists only on the Linux CI runner. `int(file.Fd())` is an OS file descriptor (a small non-negative index far below 2^31) passed to `unix.Flock`, which takes an int; the G304 path is the state file supplied by this function's own caller |
+| 490 | G304 | hygiene | `pkg/data_vault/keys/file_lock_unix.go:13` | annotated | `//go:build !windows` file, so this finding exists only on the Linux CI runner. `int(file.Fd())` is an OS file descriptor (a small non-negative index far below 2^31) passed to `unix.Flock`, which takes an int; the G304 path is the state file supplied by this function's own caller |
+| 491 | G115 | scanner-noise | `pkg/provider_daemon/chain_submitter_queue_lock_unix.go:12` | annotated | `//go:build !windows` file, so this finding exists only on the Linux CI runner. `int(file.Fd())` is an OS file descriptor (a small non-negative index far below 2^31) passed to `unix.Flock`, which takes an int; the G304 path is the state file supplied by this function's own caller |
+| 492 | G115 | scanner-noise | `pkg/provider_daemon/chain_submitter_queue_lock_unix.go:16` | annotated | `//go:build !windows` file, so this finding exists only on the Linux CI runner. `int(file.Fd())` is an OS file descriptor (a small non-negative index far below 2^31) passed to `unix.Flock`, which takes an int; the G304 path is the state file supplied by this function's own caller |
