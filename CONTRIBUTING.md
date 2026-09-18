@@ -61,15 +61,41 @@ VirtEngine uses [gitleaks](https://github.com/gitleaks/gitleaks) to prevent hard
 
 **Setup:**
 
-The pre-commit hook is automatically created when you clone the repository. If you need to set it up manually:
+Git hooks are not created by `git clone` — a fresh clone contains only `.sample` files in
+`.git/hooks/`. The hooks are installed the first time direnv loads this directory
+(`.envrc:146-151` sets `core.hooksPath` to `.githooks`), or manually:
 
 ```bash
-# Gitleaks is installed to .cache/bin during make setup-cache
-make setup-cache
-
-# The pre-commit hook is at .git/hooks/pre-commit
-# It runs automatically on git commit
+make setup-hooks
 ```
+
+`make setup-hooks` only points git at `.githooks/` (`make/hooks.mk:11-13`). The pre-commit
+hook itself lives at `.githooks/pre-commit` and runs automatically on `git commit`.
+
+**Installing gitleaks:**
+
+The hook looks for the scanner in two places, in this order (`.githooks/pre-commit:283-287`):
+
+1. `$VE_DEVCACHE_BIN/gitleaks` — that is `.cache/bin/gitleaks` once direnv has exported the dev cache
+2. `gitleaks` anywhere on your `PATH`
+
+If neither exists the hook prints a warning and **skips** the secret scan rather than failing
+(`.githooks/pre-commit:297-300`), so a missing binary fails open. Install it with:
+
+```bash
+make tools
+```
+
+`make tools` (`make/setup-cache.mk:127-128`) installs every build tool declared in
+`make/init.mk` — git-chglog, mockery, golangci-lint, statik, cosmovisor and gitleaks — into
+`.cache/bin`, which direnv adds to `PATH` (`.envrc:103`). It needs `VE_DEVCACHE`: in a bare
+shell it fails loudly with `VE_DEVCACHE is empty - run "direnv allow" or export VE_DEVCACHE`
+(`make/setup-cache.mk:22-27`). It is idempotent — a second run reports
+`Nothing to be done for 'tools'`.
+
+Neither `make cache` nor `make setup-cache` installs gitleaks. `make cache` only creates the
+`.cache` directory tree (`make/setup-cache.mk:37-47`); `make setup-cache` is not a make target
+at all (`make: *** No rule to make target 'setup-cache'.  Stop.`).
 
 **How it works:**
 
@@ -79,9 +105,9 @@ make setup-cache
 
 **If gitleaks detects a secret:**
 
-```
-❌ COMMIT BLOCKED: Potential secrets detected
-```
+gitleaks exits non-zero and `set -euo pipefail` (`.githooks/pre-commit:17`) aborts the hook
+before the commit object is created. The output you see is gitleaks' own findings report;
+the hook does not print a separate "COMMIT BLOCKED" banner.
 
 1. **Remove the secret** from the staged file
 2. **Use environment variables** instead: `os.Getenv("API_KEY")`
@@ -104,16 +130,31 @@ Only use `--no-verify` if you're absolutely certain there are no secrets and the
 
 **Running manually:**
 
+The hook runs exactly this, using the binary it resolved above (`.cache/bin/gitleaks` when
+direnv is active) — `.githooks/pre-commit:292`:
+
 ```bash
-# Scan staged changes (same as pre-commit hook)
-.cache/bin/gitleaks protect --staged --verbose
-
-# Scan entire repository history
-.cache/bin/gitleaks detect --verbose
-
-# Scan specific files
-.cache/bin/gitleaks detect --source=path/to/file.go
+.cache/bin/gitleaks protect --staged --verbose --redact --config .gitleaks.toml
 ```
+
+`protect` and `detect` still work in gitleaks 8.22.1, but they are no longer listed in
+`gitleaks help`; the current spellings are `git` and `dir`. Verified equivalents:
+
+```bash
+# Scan staged changes (same result as the hook command above)
+.cache/bin/gitleaks git --staged --verbose --redact --config .gitleaks.toml
+
+# Scan the whole commit history
+.cache/bin/gitleaks git --verbose --redact
+
+# Scan one file or directory
+.cache/bin/gitleaks dir path/to/file.go --verbose --redact
+```
+
+`gitleaks detect --source=path/to/file.go` does not work in 8.22.1 — `--source` expects a
+repository path, so it fails with `fatal: cannot change to 'path/to/file.go'`. Use `dir` for a
+single file. A full-history scan exits non-zero when the history contains findings, which this
+repository's does; the pre-commit hook only scans staged changes and is unaffected.
 
 **Common patterns gitleaks detects:**
 
