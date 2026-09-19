@@ -127,6 +127,18 @@ type IKeeper interface {
 	StoreKey() storetypes.StoreKey
 	ActivateCanonicalLifecycle(ctx sdk.Context)
 	IsCanonicalLifecycleActive(ctx sdk.Context) bool
+
+	// ADR-010: deterministic resolution and Waldur supply
+	ResolveOpenOrders(ctx sdk.Context) (int, error)
+	UnifiedCatalog(ctx sdk.Context, filter CatalogFilter) []marketplace.Offering
+	SetWaldurSource(ctx sdk.Context, source *marketplace.WaldurSource) error
+	GetWaldurSource(ctx sdk.Context, instanceID string) (*marketplace.WaldurSource, bool)
+	IngestWaldurOffering(ctx sdk.Context, imp *marketplace.WaldurOfferingImport, attestation *marketplace.WaldurOfferingAttestation) (marketplace.IngestResult, error)
+	EnqueueWaldurCommand(ctx sdk.Context, command *marketplace.WaldurCommand) error
+	GetWaldurCommand(ctx sdk.Context, id string) (*marketplace.WaldurCommand, bool)
+	AckWaldurCommand(ctx sdk.Context, id string) error
+	WithWaldurSources(ctx sdk.Context, fn func(marketplace.WaldurSource) bool)
+	WithWaldurCommands(ctx sdk.Context, fn func(marketplace.WaldurCommand) bool)
 }
 
 // Keeper implements the marketplace keeper
@@ -141,6 +153,9 @@ type Keeper struct {
 	veidKeeper     VEIDKeeper
 	mfaKeeper      MFAKeeper
 	providerKeeper ProviderKeeper
+
+	// capacityKeeper optionally reserves physical capacity during resolution.
+	capacityKeeper CapacityKeeper
 }
 
 // NewKeeper creates a new marketplace keeper
@@ -456,6 +471,11 @@ func (k Keeper) UpdateOrder(ctx sdk.Context, order *marketplace.Order) error {
 	if k.IsCanonicalLifecycleActive(ctx) {
 		return marketplace.ErrLifecycleDeprecated
 	}
+	return k.updateOrder(ctx, order)
+}
+
+// updateOrder updates an order without the canonical-lifecycle write fence.
+func (k Keeper) updateOrder(ctx sdk.Context, order *marketplace.Order) error {
 	if err := order.Validate(); err != nil {
 		return err
 	}
@@ -469,6 +489,25 @@ func (k Keeper) UpdateOrder(ctx sdk.Context, order *marketplace.Order) error {
 
 	order.UpdatedAt = ctx.BlockTime().UTC()
 	bz, err := json.Marshal(order)
+	if err != nil {
+		return err
+	}
+	store.Set(key, bz)
+	return nil
+}
+
+// putBid writes a marketplace bid without the canonical-lifecycle write fence.
+func (k Keeper) putBid(ctx sdk.Context, bid *marketplace.MarketplaceBid) error {
+	if err := bid.ID.Validate(); err != nil {
+		return err
+	}
+	store := ctx.KVStore(k.skey)
+	key := marketplace.BidKey(bid.ID)
+	if !store.Has(key) {
+		return marketplace.ErrBidNotFound
+	}
+	bid.UpdatedAt = ctx.BlockTime().UTC()
+	bz, err := json.Marshal(bid)
 	if err != nil {
 		return err
 	}
@@ -695,6 +734,12 @@ func (k Keeper) CreateAllocation(ctx sdk.Context, allocation *marketplace.Alloca
 	if k.IsCanonicalLifecycleActive(ctx) {
 		return marketplace.ErrLifecycleDeprecated
 	}
+	return k.createAllocation(ctx, allocation)
+}
+
+// createAllocation creates an allocation without the canonical-lifecycle write
+// fence. It is used by the deterministic resolution engine, which is canonical.
+func (k Keeper) createAllocation(ctx sdk.Context, allocation *marketplace.Allocation) error {
 	if err := allocation.Validate(); err != nil {
 		return err
 	}

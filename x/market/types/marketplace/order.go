@@ -123,7 +123,7 @@ func (s OrderState) CanTransitionTo(next OrderState) bool {
 	// Define valid state transitions
 	transitions := map[OrderState][]OrderState{
 		OrderStatePendingPayment:     {OrderStateOpen, OrderStateCancelled},
-		OrderStateOpen:               {OrderStateMatched, OrderStateCancelled},
+		OrderStateOpen:               {OrderStateMatched, OrderStateCancelled, OrderStateFailed},
 		OrderStateMatched:            {OrderStateProvisioning, OrderStateFailed, OrderStateCancelled},
 		OrderStateProvisioning:       {OrderStateActive, OrderStateFailed},
 		OrderStateActive:             {OrderStateSuspended, OrderStatePendingTermination},
@@ -241,6 +241,16 @@ type Order struct {
 	// OfferingID is the offering this order is for
 	OfferingID OfferingID `json:"offering_id"`
 
+	// AcquisitionMode selects direct purchase or bidding. Empty is treated as
+	// direct for backwards compatibility.
+	AcquisitionMode AcquisitionMode `json:"acquisition_mode,omitempty"`
+
+	// Selector is the deterministic supply predicate for selector-based orders.
+	Selector *OfferSelector `json:"selector,omitempty"`
+
+	// MatchingDeadline is when a bid order is resolved by the engine.
+	MatchingDeadline *time.Time `json:"matching_deadline,omitempty"`
+
 	// State is the current order state
 	State OrderState `json:"state"`
 
@@ -323,7 +333,24 @@ func (o *Order) Validate() error {
 	}
 
 	if err := o.OfferingID.Validate(); err != nil {
-		return fmt.Errorf("invalid offering ID: %w", err)
+		// Offering-scoped orders require an offering; selector-based orders do not.
+		if o.Selector == nil {
+			return fmt.Errorf("invalid offering ID: %w", err)
+		}
+	}
+
+	if o.AcquisitionMode != "" && !o.AcquisitionMode.IsValid() {
+		return fmt.Errorf("invalid acquisition mode: %s", o.AcquisitionMode)
+	}
+
+	if o.Selector != nil {
+		if err := o.Selector.Validate(); err != nil {
+			return fmt.Errorf("invalid selector: %w", err)
+		}
+	}
+
+	if o.AcquisitionMode == AcquisitionModeBid && o.MatchingDeadline == nil {
+		return fmt.Errorf("bid orders require a matching deadline")
 	}
 
 	if !o.State.IsValid() {
@@ -371,6 +398,33 @@ func (o *Order) CanAcceptBidAt(now time.Time) error {
 	}
 
 	return nil
+}
+
+// EffectiveAcquisitionMode returns the concrete acquisition mode, treating the
+// zero value as direct.
+func (o *Order) EffectiveAcquisitionMode() AcquisitionMode {
+	if o == nil || o.AcquisitionMode == "" {
+		return AcquisitionModeDirect
+	}
+	return o.AcquisitionMode
+}
+
+// HasOffering returns true when the order is bound to a specific offering.
+func (o *Order) HasOffering() bool {
+	return o != nil && o.OfferingID.ProviderAddress != "" && o.OfferingID.Sequence != 0
+}
+
+// IsBidOrder returns true when the order is resolved through bidding.
+func (o *Order) IsBidOrder() bool {
+	return o.EffectiveAcquisitionMode() == AcquisitionModeBid
+}
+
+// BidWindowClosed returns true when a bid order's matching deadline has passed.
+func (o *Order) BidWindowClosed(now time.Time) bool {
+	if !o.IsBidOrder() || o.MatchingDeadline == nil {
+		return false
+	}
+	return !now.Before(*o.MatchingDeadline)
 }
 
 // SetState transitions the order to a new state

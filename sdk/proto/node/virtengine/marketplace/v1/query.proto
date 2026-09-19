@@ -7,6 +7,7 @@ import "cosmos_proto/cosmos.proto";
 import "google/api/annotations.proto";
 import "gogoproto/gogo.proto";
 import "google/protobuf/timestamp.proto";
+import "virtengine/marketplace/v1/types.proto";
 
 option go_package = "github.com/virtengine/virtengine/sdk/go/node/marketplace/v1";
 
@@ -25,6 +26,16 @@ service Query {
   // AllocationsByProvider returns allocations for a provider.
   rpc AllocationsByProvider(QueryAllocationsByProviderRequest) returns (QueryAllocationsResponse) {
     option (google.api.http).get = "/virtengine/marketplace/v1/allocations/provider/{provider_address}";
+  }
+
+  // Catalog returns active, browsable offerings across supply sources.
+  rpc Catalog(QueryCatalogRequest) returns (QueryCatalogResponse) {
+    option (google.api.http).get = "/virtengine/marketplace/v1/catalog";
+  }
+
+  // WaldurCommands lists durable commands for off-chain Waldur adapters.
+  rpc WaldurCommands(QueryWaldurCommandsRequest) returns (QueryWaldurCommandsResponse) {
+    option (google.api.http).get = "/virtengine/marketplace/v1/waldur-commands";
   }
 }
 
@@ -100,5 +111,63 @@ message QueryAllocationsByProviderRequest {
 // QueryAllocationsResponse is the response for allocations queries.
 message QueryAllocationsResponse {
   repeated Allocation allocations = 1 [(gogoproto.nullable) = false, (gogoproto.jsontag) = "allocations", (gogoproto.moretags) = "yaml:\"allocations\""];
+  cosmos.base.query.v1beta1.PageResponse pagination = 2 [(gogoproto.jsontag) = "pagination,omitempty", (gogoproto.moretags) = "yaml:\"pagination\""];
+}
+
+// QueryCatalogRequest is the request for the unified catalogue.
+message QueryCatalogRequest {
+  // Category filter (empty means any).
+  string category = 1 [(gogoproto.jsontag) = "category,omitempty", (gogoproto.moretags) = "yaml:\"category\""];
+  // Region filter (empty means any).
+  repeated string regions = 2 [(gogoproto.jsontag) = "regions,omitempty", (gogoproto.moretags) = "yaml:\"regions\""];
+  // Backend allow-list (empty means any).
+  repeated string backends = 3 [(gogoproto.jsontag) = "backends,omitempty", (gogoproto.moretags) = "yaml:\"backends\""];
+  // Include unlisted offerings.
+  bool include_unlisted = 4 [(gogoproto.jsontag) = "include_unlisted", (gogoproto.moretags) = "yaml:\"include_unlisted\""];
+  // Source filter ("native", "waldur", empty means any).
+  string source = 5 [(gogoproto.jsontag) = "source,omitempty", (gogoproto.moretags) = "yaml:\"source\""];
+  // Pagination.
+  cosmos.base.query.v1beta1.PageRequest pagination = 6 [(gogoproto.jsontag) = "pagination,omitempty", (gogoproto.moretags) = "yaml:\"pagination\""];
+}
+
+// QueryCatalogResponse is the response for the catalogue query.
+message QueryCatalogResponse {
+  // Active, browsable offerings in deterministic order.
+  repeated Offering offerings = 1 [(gogoproto.nullable) = false, (gogoproto.jsontag) = "offerings", (gogoproto.moretags) = "yaml:\"offerings\""];
+  // Pagination.
+  cosmos.base.query.v1beta1.PageResponse pagination = 2 [(gogoproto.jsontag) = "pagination,omitempty", (gogoproto.moretags) = "yaml:\"pagination\""];
+}
+
+// WaldurCommandSummary describes a durable command for an off-chain adapter.
+message WaldurCommandSummary {
+  // Command identifier.
+  string id = 1 [(gogoproto.jsontag) = "id", (gogoproto.moretags) = "yaml:\"id\""];
+  // Command kind.
+  string kind = 2 [(gogoproto.jsontag) = "kind", (gogoproto.moretags) = "yaml:\"kind\""];
+  // Target Waldur instance.
+  string instance_id = 3 [(gogoproto.jsontag) = "instance_id", (gogoproto.moretags) = "yaml:\"instance_id\""];
+  // On-chain entity ID.
+  string chain_entity_id = 4 [(gogoproto.jsontag) = "chain_entity_id,omitempty", (gogoproto.moretags) = "yaml:\"chain_entity_id\""];
+  // Whether the command was acknowledged.
+  bool acked = 5 [(gogoproto.jsontag) = "acked", (gogoproto.moretags) = "yaml:\"acked\""];
+  // Creation timestamp.
+  google.protobuf.Timestamp created_at = 6 [(gogoproto.nullable) = false, (gogoproto.stdtime) = true, (gogoproto.jsontag) = "created_at", (gogoproto.moretags) = "yaml:\"created_at\""];
+}
+
+// QueryWaldurCommandsRequest is the request for durable Waldur commands.
+message QueryWaldurCommandsRequest {
+  // Waldur instance filter (empty means any).
+  string instance_id = 1 [(gogoproto.jsontag) = "instance_id,omitempty", (gogoproto.moretags) = "yaml:\"instance_id\""];
+  // Only return unacknowledged commands.
+  bool pending_only = 2 [(gogoproto.jsontag) = "pending_only", (gogoproto.moretags) = "yaml:\"pending_only\""];
+  // Pagination.
+  cosmos.base.query.v1beta1.PageRequest pagination = 3 [(gogoproto.jsontag) = "pagination,omitempty", (gogoproto.moretags) = "yaml:\"pagination\""];
+}
+
+// QueryWaldurCommandsResponse is the response for durable Waldur commands.
+message QueryWaldurCommandsResponse {
+  // Durable commands in ID order.
+  repeated WaldurCommandSummary commands = 1 [(gogoproto.nullable) = false, (gogoproto.jsontag) = "commands", (gogoproto.moretags) = "yaml:\"commands\""];
+  // Pagination.
   cosmos.base.query.v1beta1.PageResponse pagination = 2 [(gogoproto.jsontag) = "pagination,omitempty", (gogoproto.moretags) = "yaml:\"pagination\""];
 }
