@@ -1573,6 +1573,20 @@ export function createSDK(queryTransport: Transport, txTransport: Transport, opt
             return getClient(service).allocationsByProvider(input, options);
           }, { path: [34, 2] }),
           /**
+           * getCatalog returns active, browsable offerings across supply sources.
+           */
+          getCatalog: withMetadata(async function getCatalog(input: DeepPartial<virtengine_marketplace_v1_query.QueryCatalogRequest>, options?: CallOptions) {
+            const service = await serviceLoader.loadAt(34);
+            return getClient(service).catalog(input, options);
+          }, { path: [34, 3] }),
+          /**
+           * getWaldurCommands lists durable commands for off-chain Waldur adapters.
+           */
+          getWaldurCommands: withMetadata(async function getWaldurCommands(input: DeepPartial<virtengine_marketplace_v1_query.QueryWaldurCommandsRequest>, options?: CallOptions) {
+            const service = await serviceLoader.loadAt(34);
+            return getClient(service).waldurCommands(input, options);
+          }, { path: [34, 4] }),
+          /**
            * createOffering creates a new marketplace offering
            */
           createOffering: withMetadata(async function createOffering(input: DeepSimplify<virtengine_marketplace_v1_tx.MsgCreateOffering>, options?: TxCallOptions) {
@@ -1627,7 +1641,56 @@ export function createSDK(queryTransport: Transport, txTransport: Transport, opt
           waldurCallback: withMetadata(async function waldurCallback(input: DeepSimplify<virtengine_marketplace_v1_tx.MsgWaldurCallback>, options?: TxCallOptions) {
             const service = await serviceLoader.loadAt(35);
             return getMsgClient(service).waldurCallback(input, options);
-          }, { path: [35, 7] })
+          }, { path: [35, 7] }),
+          /**
+           * createOrder opens a demand order for automatic or manual resolution
+           */
+          createOrder: withMetadata(async function createOrder(input: DeepSimplify<virtengine_marketplace_v1_tx.MsgCreateOrder>, options?: TxCallOptions) {
+            const service = await serviceLoader.loadAt(35);
+            return getMsgClient(service).createOrder(input, options);
+          }, { path: [35, 8] }),
+          /**
+           * placeBid places a provider bid on a bid-mode order
+           */
+          placeBid: withMetadata(async function placeBid(input: DeepSimplify<virtengine_marketplace_v1_tx.MsgPlaceBid>, options?: TxCallOptions) {
+            const service = await serviceLoader.loadAt(35);
+            return getMsgClient(service).placeBid(input, options);
+          }, { path: [35, 9] }),
+          /**
+           * withdrawBid withdraws an open provider bid
+           */
+          withdrawBid: withMetadata(async function withdrawBid(input: DeepSimplify<virtengine_marketplace_v1_tx.MsgWithdrawBid>, options?: TxCallOptions) {
+            const service = await serviceLoader.loadAt(35);
+            return getMsgClient(service).withdrawBid(input, options);
+          }, { path: [35, 10] }),
+          /**
+           * registerWaldurSource registers a trusted Waldur instance (authority-gated)
+           */
+          registerWaldurSource: withMetadata(async function registerWaldurSource(input: DeepSimplify<virtengine_marketplace_v1_tx.MsgRegisterWaldurSource>, options?: TxCallOptions) {
+            const service = await serviceLoader.loadAt(35);
+            return getMsgClient(service).registerWaldurSource(input, options);
+          }, { path: [35, 11] }),
+          /**
+           * ingestWaldurOffering ingests a signed Waldur offering snapshot
+           */
+          ingestWaldurOffering: withMetadata(async function ingestWaldurOffering(input: DeepSimplify<virtengine_marketplace_v1_tx.MsgIngestWaldurOffering>, options?: TxCallOptions) {
+            const service = await serviceLoader.loadAt(35);
+            return getMsgClient(service).ingestWaldurOffering(input, options);
+          }, { path: [35, 12] }),
+          /**
+           * setOfferingVisibility updates an offering's visibility
+           */
+          setOfferingVisibility: withMetadata(async function setOfferingVisibility(input: DeepSimplify<virtengine_marketplace_v1_tx.MsgSetOfferingVisibility>, options?: TxCallOptions) {
+            const service = await serviceLoader.loadAt(35);
+            return getMsgClient(service).setOfferingVisibility(input, options);
+          }, { path: [35, 13] }),
+          /**
+           * ackWaldurCommand acknowledges a durable Waldur command
+           */
+          ackWaldurCommand: withMetadata(async function ackWaldurCommand(input: DeepSimplify<virtengine_marketplace_v1_tx.MsgAckWaldurCommand>, options?: TxCallOptions) {
+            const service = await serviceLoader.loadAt(35);
+            return getMsgClient(service).ackWaldurCommand(input, options);
+          }, { path: [35, 14] })
         }
       },
       mfa: {

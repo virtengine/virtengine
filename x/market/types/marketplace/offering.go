@@ -378,6 +378,25 @@ type Offering struct {
 	// Regions are supported regions
 	Regions []string `json:"regions,omitempty"`
 
+	// Source identifies the supply origin (native or waldur).
+	Source OfferingSource `json:"source,omitempty"`
+
+	// Visibility controls unified-catalog exposure.
+	Visibility OfferingVisibility `json:"visibility,omitempty"`
+
+	// Waldur links the listing to a Waldur offering when Source is waldur.
+	Waldur *WaldurOfferingRef `json:"waldur,omitempty"`
+
+	// AcquisitionModes lists the supported acquisition modes. When empty, direct
+	// is supported and bid is supported when AllowBidding is set.
+	AcquisitionModes []AcquisitionMode `json:"acquisition_modes,omitempty"`
+
+	// BackendType is the provider execution backend (kubernetes, slurm, ...).
+	BackendType string `json:"backend_type,omitempty"`
+
+	// MeteringProfile names the metering component profile (Waldur-compatible).
+	MeteringProfile string `json:"metering_profile,omitempty"`
+
 	// CreatedAt is the creation timestamp
 	CreatedAt time.Time `json:"created_at"`
 
@@ -478,6 +497,32 @@ func (o *Offering) Validate() error {
 		}
 		if !o.MinBid.Amount.IsPositive() {
 			return fmt.Errorf("min bid must be positive")
+		}
+	}
+
+	if !o.Source.IsValid() {
+		return fmt.Errorf("invalid offering source: %s", o.Source)
+	}
+
+	if !o.Visibility.IsValid() {
+		return fmt.Errorf("invalid offering visibility: %s", o.Visibility)
+	}
+
+	if o.Source.Effective() == OfferingSourceWaldur {
+		if o.Waldur == nil {
+			return fmt.Errorf("waldur source requires a waldur reference")
+		}
+	}
+
+	if o.Waldur != nil {
+		if err := o.Waldur.Validate(); err != nil {
+			return fmt.Errorf("invalid waldur reference: %w", err)
+		}
+	}
+
+	for _, mode := range o.AcquisitionModes {
+		if !mode.IsValid() {
+			return fmt.Errorf("invalid acquisition mode: %s", mode)
 		}
 	}
 

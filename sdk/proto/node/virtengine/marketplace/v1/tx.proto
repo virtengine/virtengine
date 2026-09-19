@@ -4,12 +4,18 @@ package virtengine.marketplace.v1;
 import "gogoproto/gogo.proto";
 import "cosmos_proto/cosmos.proto";
 import "cosmos/msg/v1/msg.proto";
+import "cosmos/base/v1beta1/coin.proto";
+import "google/protobuf/timestamp.proto";
 import "amino/amino.proto";
 import "virtengine/marketplace/v1/types.proto";
 
 option go_package = "github.com/virtengine/virtengine/sdk/go/node/marketplace/v1";
 
 // Msg defines the marketplace Msg service
+//
+// ADR-010 additions (CreateOrder, PlaceBid, WithdrawBid, RegisterWaldurSource,
+// IngestWaldurOffering, SetOfferingVisibility, AckWaldurCommand) require
+// regeneration via scripts/proto-generate.sh before use.
 service Msg {
   option (cosmos.msg.v1.service) = true;
 
@@ -36,6 +42,27 @@ service Msg {
 
   // WaldurCallback handles callbacks from Waldur integration
   rpc WaldurCallback(MsgWaldurCallback) returns (MsgWaldurCallbackResponse);
+
+  // CreateOrder opens a demand order for automatic or manual resolution
+  rpc CreateOrder(MsgCreateOrder) returns (MsgCreateOrderResponse);
+
+  // PlaceBid places a provider bid on a bid-mode order
+  rpc PlaceBid(MsgPlaceBid) returns (MsgPlaceBidResponse);
+
+  // WithdrawBid withdraws an open provider bid
+  rpc WithdrawBid(MsgWithdrawBid) returns (MsgWithdrawBidResponse);
+
+  // RegisterWaldurSource registers a trusted Waldur instance (authority-gated)
+  rpc RegisterWaldurSource(MsgRegisterWaldurSource) returns (MsgRegisterWaldurSourceResponse);
+
+  // IngestWaldurOffering ingests a signed Waldur offering snapshot
+  rpc IngestWaldurOffering(MsgIngestWaldurOffering) returns (MsgIngestWaldurOfferingResponse);
+
+  // SetOfferingVisibility updates an offering's visibility
+  rpc SetOfferingVisibility(MsgSetOfferingVisibility) returns (MsgSetOfferingVisibilityResponse);
+
+  // AckWaldurCommand acknowledges a durable Waldur command
+  rpc AckWaldurCommand(MsgAckWaldurCommand) returns (MsgAckWaldurCommandResponse);
 }
 
 // MsgCreateOffering creates a new marketplace offering
@@ -161,3 +188,201 @@ message MsgWaldurCallback {
 
 // MsgWaldurCallbackResponse is the response for MsgWaldurCallback
 message MsgWaldurCallbackResponse {}
+
+// MsgCreateOrder opens a demand order for automatic or manual resolution
+message MsgCreateOrder {
+  option (gogoproto.equal) = false;
+  option (cosmos.msg.v1.signer) = "customer";
+  option (amino.name) = "marketplace/MsgCreateOrder";
+
+  // Customer submitting the order.
+  string customer = 1 [(cosmos_proto.scalar) = "cosmos.AddressString", (gogoproto.jsontag) = "customer", (gogoproto.moretags) = "yaml:\"customer\""];
+  // Optional bound offering (provider/sequence). Empty for selector orders.
+  string offering_id = 2 [(gogoproto.jsontag) = "offering_id,omitempty", (gogoproto.moretags) = "yaml:\"offering_id\""];
+  // Acquisition mode: "direct" or "bid".
+  string acquisition_mode = 3 [(gogoproto.jsontag) = "acquisition_mode", (gogoproto.moretags) = "yaml:\"acquisition_mode\""];
+  // Selector category for unbound orders.
+  string category = 4 [(gogoproto.jsontag) = "category,omitempty", (gogoproto.moretags) = "yaml:\"category\""];
+  // Selector regions.
+  repeated string regions = 5 [(gogoproto.jsontag) = "regions,omitempty", (gogoproto.moretags) = "yaml:\"regions\""];
+  // Selector minimum specs (spec key -> minimum value).
+  map<string, uint64> min_specs = 6 [(gogoproto.jsontag) = "min_specs,omitempty", (gogoproto.moretags) = "yaml:\"min_specs\""];
+  // Selector maximum total price.
+  cosmos.base.v1beta1.Coin max_price = 7 [(gogoproto.jsontag) = "max_price,omitempty", (gogoproto.moretags) = "yaml:\"max_price\""];
+  // Selector identity requirement flag.
+  bool identity_required = 8 [(gogoproto.jsontag) = "identity_required", (gogoproto.moretags) = "yaml:\"identity_required\""];
+  // Selector backend allow-list.
+  repeated string backends = 9 [(gogoproto.jsontag) = "backends,omitempty", (gogoproto.moretags) = "yaml:\"backends\""];
+  // Requested quantity.
+  uint32 requested_quantity = 10 [(gogoproto.jsontag) = "requested_quantity", (gogoproto.moretags) = "yaml:\"requested_quantity\""];
+  // Requested resource units keyed by resource type.
+  map<string, uint64> resource_units = 11 [(gogoproto.jsontag) = "resource_units,omitempty", (gogoproto.moretags) = "yaml:\"resource_units\""];
+  // Maximum acceptable total price in base units.
+  uint64 max_bid_price = 12 [(gogoproto.jsontag) = "max_bid_price", (gogoproto.moretags) = "yaml:\"max_bid_price\""];
+  // Matching deadline for bid-mode orders.
+  google.protobuf.Timestamp matching_deadline = 13 [(gogoproto.stdtime) = true, (gogoproto.jsontag) = "matching_deadline,omitempty", (gogoproto.moretags) = "yaml:\"matching_deadline\""];
+  // Requested region.
+  string region = 14 [(gogoproto.jsontag) = "region,omitempty", (gogoproto.moretags) = "yaml:\"region\""];
+}
+
+// MsgCreateOrderResponse is the response for MsgCreateOrder
+message MsgCreateOrderResponse {
+  // On-chain order ID string (customer/sequence).
+  string order_id = 1 [(gogoproto.jsontag) = "order_id", (gogoproto.moretags) = "yaml:\"order_id\""];
+}
+
+// MsgPlaceBid places a provider bid on a bid-mode order
+message MsgPlaceBid {
+  option (gogoproto.equal) = false;
+  option (cosmos.msg.v1.signer) = "provider";
+  option (amino.name) = "marketplace/MsgPlaceBid";
+
+  // Provider placing the bid.
+  string provider = 1 [(cosmos_proto.scalar) = "cosmos.AddressString", (gogoproto.jsontag) = "provider", (gogoproto.moretags) = "yaml:\"provider\""];
+  // Target order ID string (customer/sequence).
+  string order_id = 2 [(gogoproto.jsontag) = "order_id", (gogoproto.moretags) = "yaml:\"order_id\""];
+  // Total bid price in base units.
+  uint64 price = 3 [(gogoproto.jsontag) = "price", (gogoproto.moretags) = "yaml:\"price\""];
+}
+
+// MsgPlaceBidResponse is the response for MsgPlaceBid
+message MsgPlaceBidResponse {
+  // On-chain bid ID string.
+  string bid_id = 1 [(gogoproto.jsontag) = "bid_id", (gogoproto.moretags) = "yaml:\"bid_id\""];
+}
+
+// MsgWithdrawBid withdraws an open provider bid
+message MsgWithdrawBid {
+  option (gogoproto.equal) = false;
+  option (cosmos.msg.v1.signer) = "provider";
+  option (amino.name) = "marketplace/MsgWithdrawBid";
+
+  // Provider withdrawing the bid.
+  string provider = 1 [(cosmos_proto.scalar) = "cosmos.AddressString", (gogoproto.jsontag) = "provider", (gogoproto.moretags) = "yaml:\"provider\""];
+  // Bid ID string.
+  string bid_id = 2 [(gogoproto.jsontag) = "bid_id", (gogoproto.moretags) = "yaml:\"bid_id\""];
+}
+
+// MsgWithdrawBidResponse is the response for MsgWithdrawBid
+message MsgWithdrawBidResponse {}
+
+// MsgRegisterWaldurSource registers a trusted Waldur instance
+message MsgRegisterWaldurSource {
+  option (gogoproto.equal) = false;
+  option (cosmos.msg.v1.signer) = "authority";
+  option (amino.name) = "marketplace/MsgRegisterWaldurSource";
+
+  // Governance authority address.
+  string authority = 1 [(cosmos_proto.scalar) = "cosmos.AddressString", (gogoproto.jsontag) = "authority", (gogoproto.moretags) = "yaml:\"authority\""];
+  // Waldur instance identifier.
+  string instance_id = 2 [(gogoproto.jsontag) = "instance_id", (gogoproto.moretags) = "yaml:\"instance_id\""];
+  // Waldur API base URL (informational).
+  string base_url = 3 [(gogoproto.jsontag) = "base_url,omitempty", (gogoproto.moretags) = "yaml:\"base_url\""];
+  // Hex-encoded ed25519 public key used to sign snapshots.
+  string public_key = 4 [(gogoproto.jsontag) = "public_key", (gogoproto.moretags) = "yaml:\"public_key\""];
+  // Number of relayers required for shared listings.
+  uint32 relayer_quorum = 5 [(gogoproto.jsontag) = "relayer_quorum", (gogoproto.moretags) = "yaml:\"relayer_quorum\""];
+}
+
+// MsgRegisterWaldurSourceResponse is the response for MsgRegisterWaldurSource
+message MsgRegisterWaldurSourceResponse {}
+
+// WaldurPricingComponent mirrors a Waldur pricing component for ingestion
+message WaldurPricingComponent {
+  // Component type (usage, fixed, one_time).
+  string type = 1 [(gogoproto.jsontag) = "type", (gogoproto.moretags) = "yaml:\"type\""];
+  // Component name.
+  string name = 2 [(gogoproto.jsontag) = "name", (gogoproto.moretags) = "yaml:\"name\""];
+  // Unit of measurement.
+  string measured_unit = 3 [(gogoproto.jsontag) = "measured_unit,omitempty", (gogoproto.moretags) = "yaml:\"measured_unit\""];
+  // How billing is calculated.
+  string billing_type = 4 [(gogoproto.jsontag) = "billing_type,omitempty", (gogoproto.moretags) = "yaml:\"billing_type\""];
+  // Price per unit as a decimal string.
+  string price = 5 [(gogoproto.jsontag) = "price", (gogoproto.moretags) = "yaml:\"price\""];
+}
+
+// WaldurOfferingSnapshot carries a canonical Waldur offering snapshot
+message WaldurOfferingSnapshot {
+  // Waldur offering UUID.
+  string uuid = 1 [(gogoproto.jsontag) = "uuid", (gogoproto.moretags) = "yaml:\"uuid\""];
+  // Source Waldur instance identifier.
+  string instance_id = 2 [(gogoproto.jsontag) = "instance_id", (gogoproto.moretags) = "yaml:\"instance_id\""];
+  // Offering name.
+  string name = 3 [(gogoproto.jsontag) = "name", (gogoproto.moretags) = "yaml:\"name\""];
+  // Offering description.
+  string description = 4 [(gogoproto.jsontag) = "description,omitempty", (gogoproto.moretags) = "yaml:\"description\""];
+  // Waldur offering type.
+  string type = 5 [(gogoproto.jsontag) = "type", (gogoproto.moretags) = "yaml:\"type\""];
+  // Waldur state (Active, Paused, Archived).
+  string state = 6 [(gogoproto.jsontag) = "state", (gogoproto.moretags) = "yaml:\"state\""];
+  // Waldur category UUID.
+  string category_uuid = 7 [(gogoproto.jsontag) = "category_uuid,omitempty", (gogoproto.moretags) = "yaml:\"category_uuid\""];
+  // Waldur customer UUID (provider organization).
+  string customer_uuid = 8 [(gogoproto.jsontag) = "customer_uuid", (gogoproto.moretags) = "yaml:\"customer_uuid\""];
+  // Whether the offering is publicly visible.
+  bool shared = 9 [(gogoproto.jsontag) = "shared", (gogoproto.moretags) = "yaml:\"shared\""];
+  // Whether the offering is billable.
+  bool billable = 10 [(gogoproto.jsontag) = "billable", (gogoproto.moretags) = "yaml:\"billable\""];
+  // Flattened string attributes (numeric values encoded as strings).
+  map<string, string> attributes = 11 [(gogoproto.jsontag) = "attributes,omitempty", (gogoproto.moretags) = "yaml:\"attributes\""];
+  // Pricing components.
+  repeated WaldurPricingComponent components = 12 [(gogoproto.nullable) = false, (gogoproto.jsontag) = "components,omitempty", (gogoproto.moretags) = "yaml:\"components\""];
+  // Monotonic Waldur revision.
+  uint64 snapshot_height = 13 [(gogoproto.jsontag) = "snapshot_height", (gogoproto.moretags) = "yaml:\"snapshot_height\""];
+}
+
+// MsgIngestWaldurOffering ingests a signed Waldur offering snapshot
+message MsgIngestWaldurOffering {
+  option (gogoproto.equal) = false;
+  option (cosmos.msg.v1.signer) = "relayer";
+  option (amino.name) = "marketplace/MsgIngestWaldurOffering";
+
+  // Relayer submitting the snapshot.
+  string relayer = 1 [(cosmos_proto.scalar) = "cosmos.AddressString", (gogoproto.jsontag) = "relayer", (gogoproto.moretags) = "yaml:\"relayer\""];
+  // Canonical offering snapshot.
+  WaldurOfferingSnapshot snapshot = 2 [(gogoproto.jsontag) = "snapshot", (gogoproto.moretags) = "yaml:\"snapshot\""];
+  // Hex-encoded ed25519 signature over the attestation digest.
+  string signature = 3 [(gogoproto.jsontag) = "signature", (gogoproto.moretags) = "yaml:\"signature\""];
+}
+
+// MsgIngestWaldurOfferingResponse is the response for MsgIngestWaldurOffering
+message MsgIngestWaldurOfferingResponse {
+  // On-chain offering ID string.
+  string offering_id = 1 [(gogoproto.jsontag) = "offering_id", (gogoproto.moretags) = "yaml:\"offering_id\""];
+  // Ingestion action performed (create, update, deprecate, skip).
+  string action = 2 [(gogoproto.jsontag) = "action", (gogoproto.moretags) = "yaml:\"action\""];
+  // Snapshot checksum.
+  string checksum = 3 [(gogoproto.jsontag) = "checksum", (gogoproto.moretags) = "yaml:\"checksum\""];
+}
+
+// MsgSetOfferingVisibility updates an offering's visibility
+message MsgSetOfferingVisibility {
+  option (gogoproto.equal) = false;
+  option (cosmos.msg.v1.signer) = "provider";
+  option (amino.name) = "marketplace/MsgSetOfferingVisibility";
+
+  // Provider owning the offering.
+  string provider = 1 [(cosmos_proto.scalar) = "cosmos.AddressString", (gogoproto.jsontag) = "provider", (gogoproto.moretags) = "yaml:\"provider\""];
+  // Offering ID string (provider/sequence).
+  string offering_id = 2 [(gogoproto.jsontag) = "offering_id", (gogoproto.moretags) = "yaml:\"offering_id\""];
+  // Visibility: "public", "unlisted", or "private".
+  string visibility = 3 [(gogoproto.jsontag) = "visibility", (gogoproto.moretags) = "yaml:\"visibility\""];
+}
+
+// MsgSetOfferingVisibilityResponse is the response for MsgSetOfferingVisibility
+message MsgSetOfferingVisibilityResponse {}
+
+// MsgAckWaldurCommand acknowledges a durable Waldur command
+message MsgAckWaldurCommand {
+  option (gogoproto.equal) = false;
+  option (cosmos.msg.v1.signer) = "sender";
+  option (amino.name) = "marketplace/MsgAckWaldurCommand";
+
+  // Adapter acknowledging the command.
+  string sender = 1 [(cosmos_proto.scalar) = "cosmos.AddressString", (gogoproto.jsontag) = "sender", (gogoproto.moretags) = "yaml:\"sender\""];
+  // Command ID.
+  string command_id = 2 [(gogoproto.jsontag) = "command_id", (gogoproto.moretags) = "yaml:\"command_id\""];
+}
+
+// MsgAckWaldurCommandResponse is the response for MsgAckWaldurCommand
+message MsgAckWaldurCommandResponse {}

@@ -231,6 +231,23 @@ type Params struct {
 	// and compute orders (MARKET-HW-SAFEGUARD-1). It defines the protocol
 	// default milestone schedule and per-listing override rules.
 	MilestonePolicy MilestonePolicy `json:"milestone_policy"`
+
+	// ADR-010: Deterministic resolution engine parameters.
+
+	// EnableAutoResolution enables the resolution engine during EndBlock.
+	EnableAutoResolution bool `json:"enable_auto_resolution"`
+
+	// DefaultMatchingWindowBlocks is the default bidding window in blocks.
+	DefaultMatchingWindowBlocks int64 `json:"default_matching_window_blocks"`
+
+	// AllowPartialFill permits resolving an order across multiple candidates.
+	AllowPartialFill bool `json:"allow_partial_fill"`
+
+	// PreferNativeSupply breaks exact price ties in favour of native listings.
+	PreferNativeSupply bool `json:"prefer_native_supply"`
+
+	// DefaultMatchingDenom is used when an order has no pricing denomination.
+	DefaultMatchingDenom string `json:"default_matching_denom"`
 }
 
 // DefaultParams returns default parameters
@@ -254,6 +271,12 @@ func DefaultParams() Params {
 		SafeguardParams:          DefaultSafeguardParams(),
 		MarketMetricsParams:      DefaultMarketMetricsParams(),
 		MilestonePolicy:          DefaultMilestonePolicy(),
+		// ADR-010: deterministic resolution defaults (disabled until migrated).
+		EnableAutoResolution:        false,
+		DefaultMatchingWindowBlocks: 100,
+		AllowPartialFill:            false,
+		PreferNativeSupply:          true,
+		DefaultMatchingDenom:        "uvirt",
 	}
 }
 
@@ -293,6 +316,9 @@ func (p Params) Validate() error {
 	if err := p.MilestonePolicy.Validate(); err != nil {
 		return fmt.Errorf("invalid milestone_policy: %w", err)
 	}
+	if p.EnableAutoResolution && p.DefaultMatchingWindowBlocks <= 0 {
+		return fmt.Errorf("default_matching_window_blocks must be positive when auto resolution is enabled")
+	}
 	return nil
 }
 
@@ -326,6 +352,10 @@ type GenesisState struct {
 	// for a new chain. It defaults to false when absent so historical genesis
 	// documents remain importable for replay and upgrade fixtures.
 	CanonicalLifecycleActive bool `json:"canonical_lifecycle_active,omitempty"`
+
+	// WaldurSources are the registered trusted Waldur instances whose signed
+	// snapshots may be ingested.
+	WaldurSources []WaldurSource `json:"waldur_sources,omitempty"`
 }
 
 // DefaultGenesisState returns the default genesis state
@@ -340,6 +370,7 @@ func DefaultGenesisState() *GenesisState {
 		MFAConfigs:               DefaultMFAActionConfigs(),
 		EventSequence:            0,
 		CanonicalLifecycleActive: true,
+		WaldurSources:            make([]WaldurSource, 0),
 	}
 }
 
@@ -403,6 +434,17 @@ func (gs *GenesisState) Validate() error {
 			return fmt.Errorf("duplicate bid ID: %s", bid.ID.String())
 		}
 		bidIDs[bid.ID.String()] = true
+	}
+
+	sourceIDs := make(map[string]bool)
+	for _, source := range gs.WaldurSources {
+		if err := source.Validate(); err != nil {
+			return fmt.Errorf("invalid waldur source %s: %w", source.InstanceID, err)
+		}
+		if sourceIDs[source.InstanceID] {
+			return fmt.Errorf("duplicate waldur source: %s", source.InstanceID)
+		}
+		sourceIDs[source.InstanceID] = true
 	}
 
 	return nil
