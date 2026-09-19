@@ -1,6 +1,6 @@
 module github.com/virtengine/virtengine/sdk/generation/tools
 
-go 1.25.5
+go 1.26.8
 
 require (
 	github.com/bufbuild/buf v1.47.2
