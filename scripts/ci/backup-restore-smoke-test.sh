@@ -136,7 +136,15 @@ echo "provider-state" > "${PROVIDER_HOME}/data/state.txt"
 echo "provider-config" > "${PROVIDER_HOME}/config/config.yaml"
 
 export PROVIDER_HOME PROVIDER_SNAPSHOT_DIR PROVIDER_KEY_DIR PROVIDER_HA_STATE_DIR
-provider_backup=$(${SCRIPT_DIR}/backup-provider-state.sh --backup | grep '^provider_state_' | tail -1)
+# NOTE: keep backup stderr on failure. The provider backup prints log lines to
+# stdout, so an empty grep result means the backup itself failed -- fail here
+# with the captured log instead of an opaque pipefail abort.
+provider_backup=$(${SCRIPT_DIR}/backup-provider-state.sh --backup 2>"${TMP_DIR}/provider-backup.stderr" | grep '^provider_state_' | tail -1 || true)
+if [ -z "${provider_backup:-}" ]; then
+    echo "provider backup produced no backup name; backup log:" >&2
+    cat "${TMP_DIR}/provider-backup.stderr" >&2 || true
+    exit 1
+fi
 rm -rf "${PROVIDER_HOME}/data" "${PROVIDER_HOME}/config" "$PROVIDER_KEY_DIR" "$PROVIDER_HA_STATE_DIR"
 ${SCRIPT_DIR}/backup-provider-state.sh --restore "$provider_backup" > /dev/null
 

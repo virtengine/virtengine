@@ -77,6 +77,12 @@ jobs:
             .github/workflows/license-compliance.yaml \
             .github/workflows/pr-security-check.yaml
 
+      - name: Verify container base images are digest-pinned
+        run: |
+          chmod +x scripts/supply-chain/verify-pinned-images.sh
+          scripts/supply-chain/verify-pinned-images.sh --self-test
+          scripts/supply-chain/verify-pinned-images.sh
+
   codeql-analysis:
     name: CodeQL SAST
     runs-on: ubuntu-latest
