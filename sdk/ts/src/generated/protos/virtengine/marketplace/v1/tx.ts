@@ -251,6 +251,10 @@ export interface WaldurOfferingSnapshot {
   components: WaldurPricingComponent[];
   /** Monotonic Waldur revision. */
   snapshotHeight: Long;
+  /** Waldur creation timestamp (unix seconds). Part of the signed checksum. */
+  created: Long;
+  /** Waldur modification timestamp (unix seconds). Part of the signed checksum. */
+  modified: Long;
 }
 
 export interface WaldurOfferingSnapshot_AttributesEntry {
@@ -2636,6 +2640,8 @@ function createBaseWaldurOfferingSnapshot(): WaldurOfferingSnapshot {
     attributes: {},
     components: [],
     snapshotHeight: Long.UZERO,
+    created: Long.ZERO,
+    modified: Long.ZERO,
   };
 }
 
@@ -2684,6 +2690,12 @@ export const WaldurOfferingSnapshot: MessageFns<
     }
     if (!message.snapshotHeight.equals(Long.UZERO)) {
       writer.uint32(104).uint64(message.snapshotHeight.toString());
+    }
+    if (!message.created.equals(Long.ZERO)) {
+      writer.uint32(112).int64(message.created.toString());
+    }
+    if (!message.modified.equals(Long.ZERO)) {
+      writer.uint32(120).int64(message.modified.toString());
     }
     return writer;
   },
@@ -2802,6 +2814,22 @@ export const WaldurOfferingSnapshot: MessageFns<
           message.snapshotHeight = Long.fromString(reader.uint64().toString(), true);
           continue;
         }
+        case 14: {
+          if (tag !== 112) {
+            break;
+          }
+
+          message.created = Long.fromString(reader.int64().toString());
+          continue;
+        }
+        case 15: {
+          if (tag !== 120) {
+            break;
+          }
+
+          message.modified = Long.fromString(reader.int64().toString());
+          continue;
+        }
       }
       if ((tag & 7) === 4 || tag === 0) {
         break;
@@ -2833,6 +2861,8 @@ export const WaldurOfferingSnapshot: MessageFns<
         ? object.components.map((e: any) => WaldurPricingComponent.fromJSON(e))
         : [],
       snapshotHeight: isSet(object.snapshot_height) ? Long.fromValue(object.snapshot_height) : Long.UZERO,
+      created: isSet(object.created) ? Long.fromValue(object.created) : Long.ZERO,
+      modified: isSet(object.modified) ? Long.fromValue(object.modified) : Long.ZERO,
     };
   },
 
@@ -2883,6 +2913,12 @@ export const WaldurOfferingSnapshot: MessageFns<
     if (!message.snapshotHeight.equals(Long.UZERO)) {
       obj.snapshot_height = (message.snapshotHeight || Long.UZERO).toString();
     }
+    if (!message.created.equals(Long.ZERO)) {
+      obj.created = (message.created || Long.ZERO).toString();
+    }
+    if (!message.modified.equals(Long.ZERO)) {
+      obj.modified = (message.modified || Long.ZERO).toString();
+    }
     return obj;
   },
   fromPartial(object: DeepPartial<WaldurOfferingSnapshot>): WaldurOfferingSnapshot {
@@ -2910,6 +2946,12 @@ export const WaldurOfferingSnapshot: MessageFns<
     message.snapshotHeight = (object.snapshotHeight !== undefined && object.snapshotHeight !== null)
       ? Long.fromValue(object.snapshotHeight)
       : Long.UZERO;
+    message.created = (object.created !== undefined && object.created !== null)
+      ? Long.fromValue(object.created)
+      : Long.ZERO;
+    message.modified = (object.modified !== undefined && object.modified !== null)
+      ? Long.fromValue(object.modified)
+      : Long.ZERO;
     return message;
   },
 };

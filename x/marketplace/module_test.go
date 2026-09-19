@@ -50,7 +50,13 @@ func TestRegisterServicesRegistersMarketplaceQueryServer(t *testing.T) {
 	services := server.GetServiceInfo()
 	queryService, ok := services["virtengine.marketplace.v1.Query"]
 	require.True(t, ok, "marketplace query service must be registered")
-	require.Len(t, queryService.Methods, 3)
+	require.Len(t, queryService.Methods, 5)
+	names := make([]string, 0, len(queryService.Methods))
+	for _, method := range queryService.Methods {
+		names = append(names, method.Name)
+	}
+	require.Contains(t, names, "Catalog")
+	require.Contains(t, names, "WaldurCommands")
 }
 
 func TestRegisterGRPCGatewayRoutesDoesNotPanic(t *testing.T) {

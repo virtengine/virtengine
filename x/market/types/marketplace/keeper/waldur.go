@@ -167,8 +167,12 @@ func (k Keeper) IngestWaldurOffering(
 
 	cfg := marketplace.DefaultIngestConfig()
 	// Provider resolution is handled explicitly below so ingestion does not
-	// depend on an off-chain customer->provider map being configured.
+	// depend on an off-chain customer->provider map being configured. The
+	// on-chain parameter map is merged in when operators configure it.
 	cfg.RequireProviderRegistration = false
+	for customerUUID, providerAddress := range k.GetParams(ctx).WaldurIngestCustomerProviders {
+		cfg.CustomerProviderMap[customerUUID] = providerAddress
+	}
 	validation := imp.Validate(cfg)
 	if !validation.Valid {
 		return result, marketplace.ErrWaldurCallbackInvalid.Wrap(strings.Join(validation.Errors, "; "))

@@ -329,6 +329,10 @@ message WaldurOfferingSnapshot {
   repeated WaldurPricingComponent components = 12 [(gogoproto.nullable) = false, (gogoproto.jsontag) = "components,omitempty", (gogoproto.moretags) = "yaml:\"components\""];
   // Monotonic Waldur revision.
   uint64 snapshot_height = 13 [(gogoproto.jsontag) = "snapshot_height", (gogoproto.moretags) = "yaml:\"snapshot_height\""];
+  // Waldur creation timestamp (unix seconds). Part of the signed checksum.
+  int64 created = 14 [(gogoproto.jsontag) = "created", (gogoproto.moretags) = "yaml:\"created\""];
+  // Waldur modification timestamp (unix seconds). Part of the signed checksum.
+  int64 modified = 15 [(gogoproto.jsontag) = "modified", (gogoproto.moretags) = "yaml:\"modified\""];
 }
 
 // MsgIngestWaldurOffering ingests a signed Waldur offering snapshot
