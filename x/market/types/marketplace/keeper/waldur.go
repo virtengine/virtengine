@@ -198,7 +198,7 @@ func (k Keeper) IngestWaldurOffering(
 	}
 
 	now := ctx.BlockTime().UTC()
-	sequence := nextOfferingSequence(ctx, k, providerAddress)
+	sequence := nextOfferingSequence(ctx, &k, providerAddress)
 	offering := imp.ToOfferingAt(providerAddress, sequence, cfg, now)
 
 	if _, exists := k.GetOffering(ctx, offering.ID); exists {
