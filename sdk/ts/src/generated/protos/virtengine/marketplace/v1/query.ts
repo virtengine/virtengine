@@ -197,7 +197,13 @@ export interface WaldurCommandSummary {
   /** Whether the command was acknowledged. */
   acked: boolean;
   /** Creation timestamp. */
-  createdAt: Date | undefined;
+  createdAt:
+    | Date
+    | undefined;
+  /** Target Waldur offering UUID. */
+  waldurOfferingUuid: string;
+  /** Canonical VirtEngine identifier for reconciliation. */
+  backendId: string;
 }
 
 /** QueryWaldurCommandsRequest is the request for durable Waldur commands. */
@@ -1171,7 +1177,16 @@ export const QueryCatalogResponse: MessageFns<QueryCatalogResponse, "virtengine.
   };
 
 function createBaseWaldurCommandSummary(): WaldurCommandSummary {
-  return { id: "", kind: "", instanceId: "", chainEntityId: "", acked: false, createdAt: undefined };
+  return {
+    id: "",
+    kind: "",
+    instanceId: "",
+    chainEntityId: "",
+    acked: false,
+    createdAt: undefined,
+    waldurOfferingUuid: "",
+    backendId: "",
+  };
 }
 
 export const WaldurCommandSummary: MessageFns<WaldurCommandSummary, "virtengine.marketplace.v1.WaldurCommandSummary"> =
@@ -1196,6 +1211,12 @@ export const WaldurCommandSummary: MessageFns<WaldurCommandSummary, "virtengine.
       }
       if (message.createdAt !== undefined) {
         Timestamp.encode(toTimestamp(message.createdAt), writer.uint32(50).fork()).join();
+      }
+      if (message.waldurOfferingUuid !== "") {
+        writer.uint32(58).string(message.waldurOfferingUuid);
+      }
+      if (message.backendId !== "") {
+        writer.uint32(66).string(message.backendId);
       }
       return writer;
     },
@@ -1255,6 +1276,22 @@ export const WaldurCommandSummary: MessageFns<WaldurCommandSummary, "virtengine.
             message.createdAt = fromTimestamp(Timestamp.decode(reader, reader.uint32()));
             continue;
           }
+          case 7: {
+            if (tag !== 58) {
+              break;
+            }
+
+            message.waldurOfferingUuid = reader.string();
+            continue;
+          }
+          case 8: {
+            if (tag !== 66) {
+              break;
+            }
+
+            message.backendId = reader.string();
+            continue;
+          }
         }
         if ((tag & 7) === 4 || tag === 0) {
           break;
@@ -1272,6 +1309,8 @@ export const WaldurCommandSummary: MessageFns<WaldurCommandSummary, "virtengine.
         chainEntityId: isSet(object.chain_entity_id) ? globalThis.String(object.chain_entity_id) : "",
         acked: isSet(object.acked) ? globalThis.Boolean(object.acked) : false,
         createdAt: isSet(object.created_at) ? fromJsonTimestamp(object.created_at) : undefined,
+        waldurOfferingUuid: isSet(object.waldur_offering_uuid) ? globalThis.String(object.waldur_offering_uuid) : "",
+        backendId: isSet(object.backend_id) ? globalThis.String(object.backend_id) : "",
       };
     },
 
@@ -1295,6 +1334,12 @@ export const WaldurCommandSummary: MessageFns<WaldurCommandSummary, "virtengine.
       if (message.createdAt !== undefined) {
         obj.created_at = message.createdAt.toISOString();
       }
+      if (message.waldurOfferingUuid !== "") {
+        obj.waldur_offering_uuid = message.waldurOfferingUuid;
+      }
+      if (message.backendId !== "") {
+        obj.backend_id = message.backendId;
+      }
       return obj;
     },
     fromPartial(object: DeepPartial<WaldurCommandSummary>): WaldurCommandSummary {
@@ -1305,6 +1350,8 @@ export const WaldurCommandSummary: MessageFns<WaldurCommandSummary, "virtengine.
       message.chainEntityId = object.chainEntityId ?? "";
       message.acked = object.acked ?? false;
       message.createdAt = object.createdAt ?? undefined;
+      message.waldurOfferingUuid = object.waldurOfferingUuid ?? "";
+      message.backendId = object.backendId ?? "";
       return message;
     },
   };

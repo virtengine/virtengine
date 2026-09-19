@@ -207,12 +207,14 @@ func (qs queryServer) WaldurCommands(
 	result := make([]marketplacev1.WaldurCommandSummary, 0, end-start)
 	for _, command := range commands[start:end] {
 		result = append(result, marketplacev1.WaldurCommandSummary{
-			Id:            command.ID,
-			Kind:          string(command.Kind),
-			InstanceId:    command.InstanceID,
-			ChainEntityId: command.ChainEntityID,
-			Acked:         command.Acked,
-			CreatedAt:     command.CreatedAt,
+			Id:                 command.ID,
+			Kind:               string(command.Kind),
+			InstanceId:         command.InstanceID,
+			ChainEntityId:      command.ChainEntityID,
+			Acked:              command.Acked,
+			CreatedAt:          command.CreatedAt,
+			WaldurOfferingUuid: command.WaldurOfferingUUID,
+			BackendId:          command.BackendID,
 		})
 	}
 

@@ -152,6 +152,10 @@ message WaldurCommandSummary {
   bool acked = 5 [(gogoproto.jsontag) = "acked", (gogoproto.moretags) = "yaml:\"acked\""];
   // Creation timestamp.
   google.protobuf.Timestamp created_at = 6 [(gogoproto.nullable) = false, (gogoproto.stdtime) = true, (gogoproto.jsontag) = "created_at", (gogoproto.moretags) = "yaml:\"created_at\""];
+  // Target Waldur offering UUID.
+  string waldur_offering_uuid = 7 [(gogoproto.jsontag) = "waldur_offering_uuid,omitempty", (gogoproto.moretags) = "yaml:\"waldur_offering_uuid\""];
+  // Canonical VirtEngine identifier for reconciliation.
+  string backend_id = 8 [(gogoproto.jsontag) = "backend_id,omitempty", (gogoproto.moretags) = "yaml:\"backend_id\""];
 }
 
 // QueryWaldurCommandsRequest is the request for durable Waldur commands.

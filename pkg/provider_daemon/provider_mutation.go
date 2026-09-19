@@ -79,6 +79,13 @@ const (
 	MutationProviderRotateKey         ProviderMutationKind = "provider.rotate_signing_key"
 	MutationProviderRevokeKey         ProviderMutationKind = "provider.revoke_signing_key"
 	MutationMarketplaceCallback       ProviderMutationKind = "marketplace.waldur_callback"
+	MutationMarketplaceCreateOrder    ProviderMutationKind = "marketplace.create_order"
+	MutationMarketplacePlaceBid       ProviderMutationKind = "marketplace.place_bid"
+	MutationMarketplaceWithdrawBid    ProviderMutationKind = "marketplace.withdraw_bid"
+	MutationMarketplaceRegisterSource ProviderMutationKind = "marketplace.register_waldur_source"
+	MutationMarketplaceIngestOffering ProviderMutationKind = "marketplace.ingest_waldur_offering"
+	MutationMarketplaceSetVisibility  ProviderMutationKind = "marketplace.set_offering_visibility"
+	MutationMarketplaceAckCommand     ProviderMutationKind = "marketplace.ack_waldur_command"
 	MutationSupportUpdateRequest      ProviderMutationKind = "support.update_request"
 	MutationSupportAddResponse        ProviderMutationKind = "support.add_response"
 	MutationSupportRegisterExternal   ProviderMutationKind = "support.register_external"
@@ -488,6 +495,30 @@ func (r *ProviderMutationRegistry) registerDefaults() {
 	}, func(m *providerv1beta4.MsgRevokeProviderSigningKey) string { return m.Owner }, func(m *providerv1beta4.MsgRevokeProviderSigningKey) string { return m.Owner + "|" + m.KeyId }))
 	r.register(registration(MutationMarketplaceCallback, &marketplacev1.MsgWaldurCallback{}, func() *marketplacev1.MsgWaldurCallback { return &marketplacev1.MsgWaldurCallback{} }, func(m *marketplacev1.MsgWaldurCallback) string { return m.Sender }, func(m *marketplacev1.MsgWaldurCallback) string {
 		return strings.Join([]string{m.ResourceId, m.CallbackType, m.Status}, "|")
+	}))
+	r.register(registration(MutationMarketplaceCreateOrder, &marketplacev1.MsgCreateOrder{}, func() *marketplacev1.MsgCreateOrder { return &marketplacev1.MsgCreateOrder{} }, func(m *marketplacev1.MsgCreateOrder) string { return m.Customer }, func(m *marketplacev1.MsgCreateOrder) string {
+		return strings.Join([]string{m.Customer, m.OfferingId, m.AcquisitionMode}, "|")
+	}))
+	r.register(registration(MutationMarketplacePlaceBid, &marketplacev1.MsgPlaceBid{}, func() *marketplacev1.MsgPlaceBid { return &marketplacev1.MsgPlaceBid{} }, func(m *marketplacev1.MsgPlaceBid) string { return m.Provider }, func(m *marketplacev1.MsgPlaceBid) string {
+		return strings.Join([]string{m.Provider, m.OrderId}, "|")
+	}))
+	r.register(registration(MutationMarketplaceWithdrawBid, &marketplacev1.MsgWithdrawBid{}, func() *marketplacev1.MsgWithdrawBid { return &marketplacev1.MsgWithdrawBid{} }, func(m *marketplacev1.MsgWithdrawBid) string { return m.Provider }, func(m *marketplacev1.MsgWithdrawBid) string {
+		return strings.Join([]string{m.Provider, m.BidId}, "|")
+	}))
+	r.register(registration(MutationMarketplaceRegisterSource, &marketplacev1.MsgRegisterWaldurSource{}, func() *marketplacev1.MsgRegisterWaldurSource { return &marketplacev1.MsgRegisterWaldurSource{} }, func(m *marketplacev1.MsgRegisterWaldurSource) string { return m.Authority }, func(m *marketplacev1.MsgRegisterWaldurSource) string {
+		return m.InstanceId
+	}))
+	r.register(registration(MutationMarketplaceIngestOffering, &marketplacev1.MsgIngestWaldurOffering{}, func() *marketplacev1.MsgIngestWaldurOffering { return &marketplacev1.MsgIngestWaldurOffering{} }, func(m *marketplacev1.MsgIngestWaldurOffering) string { return m.Relayer }, func(m *marketplacev1.MsgIngestWaldurOffering) string {
+		if m.Snapshot == nil {
+			return m.Relayer
+		}
+		return strings.Join([]string{m.Snapshot.InstanceId, m.Snapshot.Uuid, fmt.Sprintf("%d", m.Snapshot.SnapshotHeight)}, "|")
+	}))
+	r.register(registration(MutationMarketplaceSetVisibility, &marketplacev1.MsgSetOfferingVisibility{}, func() *marketplacev1.MsgSetOfferingVisibility { return &marketplacev1.MsgSetOfferingVisibility{} }, func(m *marketplacev1.MsgSetOfferingVisibility) string { return m.Provider }, func(m *marketplacev1.MsgSetOfferingVisibility) string {
+		return strings.Join([]string{m.Provider, m.OfferingId, m.Visibility}, "|")
+	}))
+	r.register(registration(MutationMarketplaceAckCommand, &marketplacev1.MsgAckWaldurCommand{}, func() *marketplacev1.MsgAckWaldurCommand { return &marketplacev1.MsgAckWaldurCommand{} }, func(m *marketplacev1.MsgAckWaldurCommand) string { return m.Sender }, func(m *marketplacev1.MsgAckWaldurCommand) string {
+		return strings.Join([]string{m.Sender, m.CommandId}, "|")
 	}))
 	r.register(registration(MutationSupportUpdateRequest, &supportv1.MsgUpdateSupportRequest{}, func() *supportv1.MsgUpdateSupportRequest { return &supportv1.MsgUpdateSupportRequest{} }, func(m *supportv1.MsgUpdateSupportRequest) string { return m.Sender }, func(m *supportv1.MsgUpdateSupportRequest) string {
 		return m.TicketId + "|" + m.Status + "|" + m.AssignedAgent
