@@ -6,6 +6,9 @@ package marketplace
 
 import (
 	"fmt"
+	"strings"
+
+	sdk "github.com/cosmos/cosmos-sdk/types"
 )
 
 // ModuleName is the module name
@@ -233,6 +236,10 @@ type Params struct {
 
 	// DefaultMatchingDenom is used when an order has no pricing denomination.
 	DefaultMatchingDenom string `json:"default_matching_denom"`
+
+	// WaldurIngestCustomerProviders maps Waldur customer UUIDs to provider
+	// addresses for offering ingestion.
+	WaldurIngestCustomerProviders map[string]string `json:"waldur_ingest_customer_providers,omitempty"`
 }
 
 // DefaultParams returns default parameters
@@ -256,11 +263,12 @@ func DefaultParams() Params {
 		SafeguardParams:          DefaultSafeguardParams(),
 		MarketMetricsParams:      DefaultMarketMetricsParams(),
 		// ADR-010: deterministic resolution defaults (disabled until migrated).
-		EnableAutoResolution:        false,
-		DefaultMatchingWindowBlocks: 100,
-		AllowPartialFill:            false,
-		PreferNativeSupply:          true,
-		DefaultMatchingDenom:        "uvirt",
+		EnableAutoResolution:          false,
+		DefaultMatchingWindowBlocks:   100,
+		AllowPartialFill:              false,
+		PreferNativeSupply:            true,
+		DefaultMatchingDenom:          "uvirt",
+		WaldurIngestCustomerProviders: map[string]string{},
 	}
 }
 
@@ -299,6 +307,14 @@ func (p Params) Validate() error {
 	}
 	if p.EnableAutoResolution && p.DefaultMatchingWindowBlocks <= 0 {
 		return fmt.Errorf("default_matching_window_blocks must be positive when auto resolution is enabled")
+	}
+	for customerUUID, providerAddress := range p.WaldurIngestCustomerProviders {
+		if strings.TrimSpace(customerUUID) == "" {
+			return fmt.Errorf("waldur ingest customer UUID cannot be empty")
+		}
+		if _, err := sdk.AccAddressFromBech32(providerAddress); err != nil {
+			return fmt.Errorf("invalid waldur ingest provider address for %s: %w", customerUUID, err)
+		}
 	}
 	return nil
 }

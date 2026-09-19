@@ -7902,6 +7902,11 @@
           },
           "type": "array"
         },
+        "created": {
+          "description": "Waldur creation timestamp (unix seconds). Part of the signed checksum.",
+          "format": "int64",
+          "type": "string"
+        },
         "customer_uuid": {
           "description": "Waldur customer UUID (provider organization).",
           "type": "string"
@@ -7912,6 +7917,11 @@
         },
         "instance_id": {
           "description": "Source Waldur instance identifier.",
+          "type": "string"
+        },
+        "modified": {
+          "description": "Waldur modification timestamp (unix seconds). Part of the signed checksum.",
+          "format": "int64",
           "type": "string"
         },
         "name": {
