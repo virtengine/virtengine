@@ -7823,6 +7823,10 @@
           "description": "Whether the command was acknowledged.",
           "type": "boolean"
         },
+        "backend_id": {
+          "description": "Canonical VirtEngine identifier for reconciliation.",
+          "type": "string"
+        },
         "chain_entity_id": {
           "description": "On-chain entity ID.",
           "type": "string"
@@ -7842,6 +7846,10 @@
         },
         "kind": {
           "description": "Command kind.",
+          "type": "string"
+        },
+        "waldur_offering_uuid": {
+          "description": "Target Waldur offering UUID.",
           "type": "string"
         }
       },

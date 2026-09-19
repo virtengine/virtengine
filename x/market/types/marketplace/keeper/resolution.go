@@ -100,10 +100,12 @@ func (k Keeper) resolveOrder(ctx sdk.Context, order *marketplace.Order, params m
 	var totalAccepted uint64
 	var firstProvider string
 
-	for i, match := range result.Matches {
+	sequence := uint64(0)
+	for _, match := range result.Matches {
+		sequence++
 		allocationID := marketplace.AllocationID{
 			OrderID:  order.ID,
-			Sequence: uint64(i + 1),
+			Sequence: sequence,
 		}
 		bidID := marketplace.BidID{}
 		if match.Kind == marketplace.CandidateKindBid && match.BidID != nil {
@@ -240,6 +242,8 @@ func (k Keeper) buildResolutionCandidates(
 			CapacityFit:     1,
 			Sequence:        offering.ID.Sequence,
 			Source:          offering.Source,
+			GPUType:         gpuTypeFromSpecs(offering.Specifications),
+			ResourceClass:   resourceClassFromCategory(offering.Category),
 		})
 	}
 
@@ -294,6 +298,29 @@ func (k Keeper) matchingDenomFor(ctx sdk.Context, order *marketplace.Order, para
 		return params.DefaultMatchingDenom
 	}
 	return "uvirt"
+}
+
+// gpuTypeFromSpecs extracts an accelerator type hint from specifications.
+func gpuTypeFromSpecs(specs map[string]string) string {
+	for _, key := range []string{"vm.gpu_type", "gpu_type", "container.gpu_type"} {
+		if value := specs[key]; value != "" {
+			return value
+		}
+	}
+	return ""
+}
+
+// resourceClassFromCategory maps an offering category to a coarse capacity
+// class understood by x/resources.
+func resourceClassFromCategory(category marketplace.OfferingCategory) string {
+	switch category {
+	case marketplace.OfferingCategoryStorage:
+		return "storage"
+	case marketplace.OfferingCategoryNetwork:
+		return "network"
+	default:
+		return "compute"
+	}
 }
 
 // enqueueWaldurLeaseCommand emits a durable Waldur order-creation command when a

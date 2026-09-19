@@ -78,6 +78,12 @@ type Candidate struct {
 
 	// Source identifies the supply origin for tie-breaking.
 	Source OfferingSource `json:"source"`
+
+	// GPUType carries the accelerator type when the candidate offers GPUs.
+	GPUType string `json:"gpu_type,omitempty"`
+
+	// ResourceClass is the coarse capacity class (compute, storage, network).
+	ResourceClass string `json:"resource_class,omitempty"`
 }
 
 // Validate validates a candidate.

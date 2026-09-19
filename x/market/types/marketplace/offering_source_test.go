@@ -30,7 +30,7 @@ func TestAdmitsOrderBasic(t *testing.T) {
 }
 
 func TestAdmitsOrderAcquisitionModes(t *testing.T) {
-	offering := activeOffering("ve1p", 1)
+	offering := activeOffering("ve1q", 2)
 	offering.AcquisitionModes = []AcquisitionMode{AcquisitionModeBid}
 	require.False(t, offering.AdmitsOrder(AcquisitionModeDirect, nil))
 	require.True(t, offering.AdmitsOrder(AcquisitionModeBid, nil))
@@ -52,7 +52,7 @@ func TestAdmitsOrderSelector(t *testing.T) {
 }
 
 func TestAdmitsOrderBackend(t *testing.T) {
-	offering := activeOffering("ve1p", 1)
+	offering := activeOffering("ve1r", 3)
 	offering.BackendType = BackendKubernetes
 	require.True(t, (&OfferSelector{Backends: []string{BackendKubernetes}}).Matches(offering))
 	require.False(t, (&OfferSelector{Backends: []string{BackendSLURM}}).Matches(offering))

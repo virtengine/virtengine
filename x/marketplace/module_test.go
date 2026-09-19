@@ -44,7 +44,7 @@ func TestRegisterServicesRegistersMarketplaceQueryServer(t *testing.T) {
 	server := grpc.NewServer()
 	cfg := module.NewConfigurator(nil, server, server)
 
-	am := NewAppModule(nil, marketplacekeeper.Keeper{})
+	am := NewAppModule(nil, &marketplacekeeper.Keeper{})
 	am.RegisterServices(cfg)
 
 	services := server.GetServiceInfo()

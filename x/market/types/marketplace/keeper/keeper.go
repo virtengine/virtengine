@@ -129,6 +129,10 @@ type IKeeper interface {
 	ActivateCanonicalLifecycle(ctx sdk.Context)
 	IsCanonicalLifecycleActive(ctx sdk.Context) bool
 
+	// SetCapacityKeeper wires the optional capacity keeper used by the
+	// resolution engine. It must be called during app construction.
+	SetCapacityKeeper(CapacityKeeper)
+
 	// ADR-010: deterministic resolution and Waldur supply
 	ResolveOpenOrders(ctx sdk.Context) (int, error)
 	UnifiedCatalog(ctx sdk.Context, filter CatalogFilter) []marketplace.Offering

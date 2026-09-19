@@ -19,6 +19,7 @@ func TestUpgradesName(t *testing.T) {
 	require.Contains(t, upgrades, utypes.CanonicalReservationsUpgradeName)
 	require.Contains(t, upgrades, utypes.CanonicalFinancialCasesUpgradeName)
 	require.Contains(t, upgrades, utypes.AuthenticatedFiatConversionsUpgradeName)
+	require.Contains(t, upgrades, utypes.UnifiedMarketResolutionUpgradeName)
 
 	for name := range upgrades {
 		// NOTE this is the only exception to the upgrade name

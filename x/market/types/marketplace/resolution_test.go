@@ -41,9 +41,9 @@ func bidCandidate(t *testing.T, provider string, seq uint64, price int64, capaci
 
 func TestRankCandidatesByPrice(t *testing.T) {
 	candidates := []Candidate{
-		listingCandidate(t, "ve1b", 1, 300, 10, 50, 1, OfferingSourceNative),
+		listingCandidate(t, "ve1b", 1, 300, 10, 50, 3, OfferingSourceNative),
 		listingCandidate(t, "ve1a", 2, 100, 10, 50, 1, OfferingSourceNative),
-		listingCandidate(t, "ve1c", 3, 200, 10, 50, 1, OfferingSourceNative),
+		listingCandidate(t, "ve1c", 3, 200, 10, 50, 2, OfferingSourceNative),
 	}
 
 	ranked := RankCandidates(candidates, DefaultResolutionPolicy())

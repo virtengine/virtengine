@@ -1,13 +1,13 @@
 package keeper
 
 import (
+	"context"
 	"crypto/ed25519"
 	"crypto/rand"
 	"encoding/hex"
 	"testing"
 	"time"
 
-	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/stretchr/testify/require"
 
 	marketplacev1 "github.com/virtengine/virtengine/sdk/go/node/marketplace/v1"
@@ -19,7 +19,7 @@ func TestMsgCreateOrderDirect(t *testing.T) {
 	customer := providerAddr(12)
 	k, ctx := setupResolutionKeeper(t, provider)
 	ms := NewMsgServerImpl(k)
-	goCtx := sdk.WrapSDKContext(ctx)
+	goCtx := context.Context(ctx)
 
 	offering := fixedOffering(provider, 1, 200)
 	require.NoError(t, k.CreateOffering(ctx, &offering))
@@ -44,7 +44,7 @@ func TestMsgCreateOrderSelectorBid(t *testing.T) {
 	customer := providerAddr(13)
 	k, ctx := setupResolutionKeeper(t)
 	ms := NewMsgServerImpl(k)
-	goCtx := sdk.WrapSDKContext(ctx)
+	goCtx := context.Context(ctx)
 
 	res, err := ms.CreateOrder(goCtx, &marketplace.MsgCreateOrder{
 		Customer:          customer,
@@ -69,7 +69,7 @@ func TestMsgPlaceAndWithdrawBid(t *testing.T) {
 	customer := providerAddr(15)
 	k, ctx := setupResolutionKeeper(t, provider)
 	ms := NewMsgServerImpl(k)
-	goCtx := sdk.WrapSDKContext(ctx)
+	goCtx := context.Context(ctx)
 
 	orderRes, err := ms.CreateOrder(goCtx, &marketplace.MsgCreateOrder{
 		Customer:          customer,
@@ -100,7 +100,7 @@ func TestMsgPlaceAndWithdrawBid(t *testing.T) {
 func TestMsgRegisterWaldurSourceAuthority(t *testing.T) {
 	k, ctx := setupResolutionKeeper(t)
 	ms := NewMsgServerImpl(k)
-	goCtx := sdk.WrapSDKContext(ctx)
+	goCtx := context.Context(ctx)
 
 	pub, _, err := ed25519.GenerateKey(rand.Reader)
 	require.NoError(t, err)
@@ -127,7 +127,7 @@ func TestMsgIngestWaldurOfferingEndToEnd(t *testing.T) {
 	provider := providerAddr(16)
 	k, ctx := setupResolutionKeeper(t, provider)
 	ms := NewMsgServerImpl(k)
-	goCtx := sdk.WrapSDKContext(ctx)
+	goCtx := context.Context(ctx)
 
 	pub, priv, err := ed25519.GenerateKey(rand.Reader)
 	require.NoError(t, err)
@@ -176,7 +176,7 @@ func TestMsgSetOfferingVisibilityAndCatalogQuery(t *testing.T) {
 	k, ctx := setupResolutionKeeper(t, provider)
 	ms := NewMsgServerImpl(k)
 	qs := NewQueryServerImpl(k)
-	goCtx := sdk.WrapSDKContext(ctx)
+	goCtx := context.Context(ctx)
 
 	offering := fixedOffering(provider, 1, 100)
 	require.NoError(t, k.CreateOffering(ctx, &offering))
@@ -225,7 +225,7 @@ func TestQueryWaldurCommands(t *testing.T) {
 	require.NoError(t, err)
 
 	qs := NewQueryServerImpl(k)
-	goCtx := sdk.WrapSDKContext(ctx)
+	goCtx := context.Context(ctx)
 	res, err := qs.WaldurCommands(goCtx, &marketplacev1.QueryWaldurCommandsRequest{InstanceId: "waldur-eu", PendingOnly: true})
 	require.NoError(t, err)
 	require.Len(t, res.Commands, 1)
