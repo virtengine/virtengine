@@ -296,7 +296,7 @@ if [ "${VE_HOOK_SKIP_SECRET_SCAN:-}" != "1" ]; then
         hook_pass "[pre-commit] gitleaks scan passed"
     else
         hook_warn "[pre-commit] gitleaks not available. Skipping secret scan."
-        hook_warn "            Run 'make setup-cache' to install gitleaks to .cache/bin."
+        hook_warn "            Run 'make tools' to install gitleaks to .cache/bin."
     fi
 fi
 
