@@ -115,7 +115,7 @@ git clone https://github.com/virtengine/virtengine.git
 cd virtengine
 
 # Step 2: Install dependencies
-make setup
+make deps-install
 
 # Step 3: Build the virtengine binary
 make virtengine

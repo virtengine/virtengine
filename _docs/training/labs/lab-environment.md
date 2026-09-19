@@ -221,8 +221,8 @@ ls -la
 #### Step 2: Review Build Configuration
 
 ```bash
-# Check Makefile targets
-make help
+# List available make targets (the root Makefile defines no `help` target)
+grep -hE '^[a-zA-Z0-9_.-]+:' Makefile make/*.mk | sed 's/:.*//' | sort -u
 
 # View cache directory setup
 cat make/setup-cache.mk | head -50
