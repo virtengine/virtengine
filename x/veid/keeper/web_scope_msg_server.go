@@ -6,6 +6,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"sort"
 	"strconv"
 	"time"
 
@@ -810,7 +811,14 @@ func webEvidenceStorageMatches(
 	if len(storedMetadata) != len(msgMetadata) {
 		return false
 	}
-	for key, storedValue := range storedMetadata {
+	// Sort keys so the metadata comparison and its short-circuit order are deterministic.
+	storedKeys := make([]string, 0, len(storedMetadata))
+	for key := range storedMetadata {
+		storedKeys = append(storedKeys, key)
+	}
+	sort.Strings(storedKeys)
+	for _, key := range storedKeys {
+		storedValue := storedMetadata[key]
 		if msgValue, ok := msgMetadata[key]; !ok || msgValue != storedValue {
 			return false
 		}

@@ -52,6 +52,7 @@ var defaultAllowlist = []allowance{
 	{Rule: ruleMapIteration, Path: "x/veid/keeper/privacy_proofs.go", Function: "deterministicClaimsString", Reason: "keys are collected and sorted before canonical string construction"},
 	{Rule: ruleMapIteration, Path: "x/veid/keeper/model_version.go", Function: "ReportValidatorModelVersions", Reason: "iteration only computes order-independent mismatch membership; persisted map JSON keys are canonicalized"},
 	{Rule: ruleFilesystem, Path: "x/veid/keeper/model_hash_governance.go", Function: "ComputeLocalModelHash", Reason: "off-chain startup/operator compatibility helper; no production keeper call site"},
+	{Rule: ruleFilesystem, Path: "x/veid/keeper/scoring.go", Function: "DefaultDevelopmentTensorFlowScoringConfig", Reason: "off-chain development-only scorer configuration; no production keeper call site, no state transition depends on host env"},
 	{Rule: ruleFilesystem, Path: "x/veid/keeper/scoring.go", Function: "DefaultTensorFlowScoringConfig", Reason: "off-chain scorer construction compatibility; active vote-extension carrier emits no evidence"},
 	{Rule: ruleFilesystem, Path: "x/veid/keeper/scoring.go", Function: "isTensorFlowEnabled", Reason: "off-chain scorer construction compatibility; active vote-extension carrier emits no evidence"},
 	{Rule: ruleFilesystem, Path: "x/veid/keeper/scoring.go", Function: "isRealInferenceReady", Reason: "off-chain scorer readiness compatibility; active vote-extension carrier emits no evidence"},
