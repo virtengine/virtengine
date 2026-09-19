@@ -19,7 +19,7 @@ defaults:
     shell: bash
 
 env:
-  GO_VERSION: "1.25.5"
+  GO_VERSION: "1.25.14"
   GOVULNCHECK_VERSION: "v1.1.4"
   GOSEC_VERSION: "v2.25.0"
   GITLEAKS_VERSION: "v8.30.1"
@@ -105,6 +105,11 @@ jobs:
         with:
           go-version: ${{ env.GO_VERSION }}
           cache: true
+
+      - name: Install build dependencies for cgo packages
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends libudev-dev
 
       - name: Build for CodeQL
         run: go build ./...
@@ -192,7 +197,9 @@ jobs:
 
           status=0
           for requirement_file in "${requirement_files[@]}"; do
-            report_name=$(echo "${requirement_file#./}" | tr '/\\' '__')
+            report_name="${requirement_file#./}"
+            report_name="${report_name//\//__}"
+            report_name="${report_name//\\/__}"
             report_path="security-reports/python/${report_name}.json"
             set +e
             pip-audit -r "$requirement_file" --format json -o "$report_path"
@@ -331,8 +338,9 @@ jobs:
 
       - name: Install Trivy
         run: |
-          curl -sSfL "https://github.com/aquasecurity/trivy/releases/download/${TRIVY_VERSION}/trivy_${TRIVY_VERSION#v}_Linux-64bit.tar.gz" | tar -xz
-          sudo install -m 0755 trivy /usr/local/bin/trivy
+          TOOL_DIR="$(mktemp -d)"
+          curl -sSfL "https://github.com/aquasecurity/trivy/releases/download/${TRIVY_VERSION}/trivy_${TRIVY_VERSION#v}_Linux-64bit.tar.gz" | tar -xz -C "$TOOL_DIR"
+          sudo install -m 0755 "$TOOL_DIR/trivy" /usr/local/bin/trivy
 
       - name: Build image
         run: |
@@ -379,8 +387,9 @@ jobs:
 
       - name: Install Syft
         run: |
-          curl -sSfL "https://github.com/anchore/syft/releases/download/${SYFT_VERSION}/syft_${SYFT_VERSION#v}_linux_amd64.tar.gz" | tar -xz
-          sudo install -m 0755 syft /usr/local/bin/syft
+          TOOL_DIR="$(mktemp -d)"
+          curl -sSfL "https://github.com/anchore/syft/releases/download/${SYFT_VERSION}/syft_${SYFT_VERSION#v}_linux_amd64.tar.gz" | tar -xz -C "$TOOL_DIR"
+          sudo install -m 0755 "$TOOL_DIR/syft" /usr/local/bin/syft
 
       - name: Generate SBOM bundle
         run: |
@@ -415,8 +424,9 @@ jobs:
 
       - name: Install gitleaks
         run: |
-          curl -sSfL "https://github.com/gitleaks/gitleaks/releases/download/${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION#v}_linux_x64.tar.gz" | tar -xz
-          sudo install -m 0755 gitleaks /usr/local/bin/gitleaks
+          TOOL_DIR="$(mktemp -d)"
+          curl -sSfL "https://github.com/gitleaks/gitleaks/releases/download/${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION#v}_linux_x64.tar.gz" | tar -xz -C "$TOOL_DIR"
+          sudo install -m 0755 "$TOOL_DIR/gitleaks" /usr/local/bin/gitleaks
 
       - name: Run gitleaks
         id: gitleaks
@@ -524,19 +534,21 @@ jobs:
     steps:
       - name: Summarize security gates
         run: |
-          echo "# Security Summary" >> "$GITHUB_STEP_SUMMARY"
-          echo "" >> "$GITHUB_STEP_SUMMARY"
-          echo "| Gate | Status |" >> "$GITHUB_STEP_SUMMARY"
-          echo "|------|--------|" >> "$GITHUB_STEP_SUMMARY"
-          echo "| Policy Validation | ${{ needs.policy-validation.result }} |" >> "$GITHUB_STEP_SUMMARY"
-          echo "| CodeQL | ${{ needs.codeql-analysis.result }} |" >> "$GITHUB_STEP_SUMMARY"
-          echo "| govulncheck | ${{ needs.go-vuln-scan.result }} |" >> "$GITHUB_STEP_SUMMARY"
-          echo "| pip-audit | ${{ needs.python-vuln-scan.result }} |" >> "$GITHUB_STEP_SUMMARY"
-          echo "| JavaScript audits | ${{ needs.node-vuln-scan.result }} |" >> "$GITHUB_STEP_SUMMARY"
-          echo "| Container scan | ${{ needs.container-scan.result }} |" >> "$GITHUB_STEP_SUMMARY"
-          echo "| SBOM generation | ${{ needs.sbom-generation.result }} |" >> "$GITHUB_STEP_SUMMARY"
-          echo "| gitleaks | ${{ needs.secret-scan.result }} |" >> "$GITHUB_STEP_SUMMARY"
-          echo "| gosec | ${{ needs.gosec-scan.result }} |" >> "$GITHUB_STEP_SUMMARY"
+          {
+            echo "# Security Summary"
+            echo ""
+            echo "| Gate | Status |"
+            echo "|------|--------|"
+            echo "| Policy Validation | ${{ needs.policy-validation.result }} |"
+            echo "| CodeQL | ${{ needs.codeql-analysis.result }} |"
+            echo "| govulncheck | ${{ needs.go-vuln-scan.result }} |"
+            echo "| pip-audit | ${{ needs.python-vuln-scan.result }} |"
+            echo "| JavaScript audits | ${{ needs.node-vuln-scan.result }} |"
+            echo "| Container scan | ${{ needs.container-scan.result }} |"
+            echo "| SBOM generation | ${{ needs.sbom-generation.result }} |"
+            echo "| gitleaks | ${{ needs.secret-scan.result }} |"
+            echo "| gosec | ${{ needs.gosec-scan.result }} |"
+          } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Fail if any security gate failed
         run: |

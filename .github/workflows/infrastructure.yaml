@@ -185,9 +185,10 @@ jobs:
       - name: Install kubeval
         run: |
           KUBEVAL_VERSION=0.16.1
-          curl -sSL -o kubeval.tar.gz https://github.com/instrumenta/kubeval/releases/download/v${KUBEVAL_VERSION}/kubeval-linux-amd64.tar.gz
-          tar -xzf kubeval.tar.gz
-          sudo mv kubeval /usr/local/bin/kubeval
+          KUBEVAL_DIR="$(mktemp -d)"
+          curl -sSL -o "$KUBEVAL_DIR/kubeval.tar.gz" https://github.com/instrumenta/kubeval/releases/download/v${KUBEVAL_VERSION}/kubeval-linux-amd64.tar.gz
+          tar -xzf "$KUBEVAL_DIR/kubeval.tar.gz" -C "$KUBEVAL_DIR"
+          sudo install -m 0755 "$KUBEVAL_DIR/kubeval" /usr/local/bin/kubeval
 
       - name: Lint Kubernetes manifests
         shell: bash

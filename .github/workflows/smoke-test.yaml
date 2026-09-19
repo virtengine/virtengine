@@ -72,7 +72,7 @@ jobs:
       SLACK_WEBHOOK_URL: ${{ secrets.VE_SMOKE_SLACK_WEBHOOK }}
       DISCORD_WEBHOOK_URL: ${{ secrets.VE_SMOKE_DISCORD_WEBHOOK }}
       TARGET_ENV: ${{ inputs.environment || github.event.inputs.environment || 'staging' }}
-      GO_VERSION: "1.25.5"
+      GO_VERSION: "1.25.14"
       NODE_VERSION: "20"
       PNPM_VERSION: "10.28.2"
     steps:

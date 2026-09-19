@@ -20,7 +20,7 @@ defaults:
     shell: bash
 
 env:
-  GO_VERSION: "1.25.5"
+  GO_VERSION: "1.25.14"
   GOVULNCHECK_VERSION: "v1.1.4"
   GOSEC_VERSION: "v2.25.0"
   GITLEAKS_VERSION: "v8.30.1"
@@ -150,6 +150,11 @@ jobs:
           go install golang.org/x/vuln/cmd/govulncheck@${{ env.GOVULNCHECK_VERSION }}
           go install github.com/securego/gosec/v2/cmd/gosec@${{ env.GOSEC_VERSION }}
 
+      - name: Install build dependencies for cgo packages
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends libudev-dev
+
       - name: Fetch base branch
         run: git fetch origin "${{ github.base_ref }}" --depth=1
 
@@ -264,8 +269,9 @@ jobs:
 
       - name: Install gitleaks
         run: |
-          curl -sSfL "https://github.com/gitleaks/gitleaks/releases/download/${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION#v}_linux_x64.tar.gz" | tar -xz
-          sudo install -m 0755 gitleaks /usr/local/bin/gitleaks
+          TOOL_DIR="$(mktemp -d)"
+          curl -sSfL "https://github.com/gitleaks/gitleaks/releases/download/${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION#v}_linux_x64.tar.gz" | tar -xz -C "$TOOL_DIR"
+          sudo install -m 0755 "$TOOL_DIR/gitleaks" /usr/local/bin/gitleaks
 
       - name: Fetch base branch
         run: git fetch origin "${{ github.base_ref }}" --depth=1
@@ -369,30 +375,32 @@ jobs:
     steps:
       - name: Summarize PR security gates
         run: |
-          echo "# PR Security Summary" >> "$GITHUB_STEP_SUMMARY"
-          echo "" >> "$GITHUB_STEP_SUMMARY"
-          echo "| Gate | Status | Required |" >> "$GITHUB_STEP_SUMMARY"
-          echo "|------|--------|----------|" >> "$GITHUB_STEP_SUMMARY"
-          echo "| Policy Validation | ${{ needs.policy-validation.result }} | Yes |" >> "$GITHUB_STEP_SUMMARY"
-          echo "| Secret Scanning | ${{ needs.gitleaks-scan.result }} | Yes |" >> "$GITHUB_STEP_SUMMARY"
+          {
+            echo "# PR Security Summary"
+            echo ""
+            echo "| Gate | Status | Required |"
+            echo "|------|--------|----------|"
+            echo "| Policy Validation | ${{ needs.policy-validation.result }} | Yes |"
+            echo "| Secret Scanning | ${{ needs.gitleaks-scan.result }} | Yes |"
 
-          if [ "${{ needs.analyze-changes.outputs.go_changed }}" = "true" ]; then
-            echo "| Go Security Scan | ${{ needs.go-security.result }} | Yes |" >> "$GITHUB_STEP_SUMMARY"
-          else
-            echo "| Go Security Scan | skipped | No |" >> "$GITHUB_STEP_SUMMARY"
-          fi
+            if [ "${{ needs.analyze-changes.outputs.go_changed }}" = "true" ]; then
+              echo "| Go Security Scan | ${{ needs.go-security.result }} | Yes |"
+            else
+              echo "| Go Security Scan | skipped | No |"
+            fi
 
-          if [ "${{ needs.analyze-changes.outputs.deps_changed }}" = "true" ]; then
-            echo "| Dependency Review | ${{ needs.dependency-review.result }} | Yes |" >> "$GITHUB_STEP_SUMMARY"
-          else
-            echo "| Dependency Review | skipped | No |" >> "$GITHUB_STEP_SUMMARY"
-          fi
+            if [ "${{ needs.analyze-changes.outputs.deps_changed }}" = "true" ]; then
+              echo "| Dependency Review | ${{ needs.dependency-review.result }} | Yes |"
+            else
+              echo "| Dependency Review | skipped | No |"
+            fi
 
-          if [ "${{ needs.analyze-changes.outputs.security_relevant }}" = "true" ]; then
-            echo "| Security Lint | ${{ needs.security-lint.result }} | Yes |" >> "$GITHUB_STEP_SUMMARY"
-          else
-            echo "| Security Lint | skipped | No |" >> "$GITHUB_STEP_SUMMARY"
-          fi
+            if [ "${{ needs.analyze-changes.outputs.security_relevant }}" = "true" ]; then
+              echo "| Security Lint | ${{ needs.security-lint.result }} | Yes |"
+            else
+              echo "| Security Lint | skipped | No |"
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Fail on required PR security failure
         run: |
