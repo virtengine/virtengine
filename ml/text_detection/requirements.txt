@@ -2,8 +2,9 @@
 # Pin exact versions for deterministic builds
 
 # Deep Learning Framework
+--extra-index-url https://download.pytorch.org/whl/cpu
 torch==2.12.1+cpu
-torchvision==0.23.0
+torchvision==0.27.1+cpu
 
 # CRAFT Text Detector
 craft-text-detector==0.4.3
@@ -13,7 +14,7 @@ opencv-python==4.8.1.78
 Pillow==12.3.0
 
 # Numerical Computing
-numpy==1.24.3
+numpy==1.26.4
 scipy==1.11.1
 
 # Testing

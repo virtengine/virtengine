@@ -24,7 +24,7 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  GO_VERSION: "1.25.5"
+  GO_VERSION: "1.25.14"
   GOSEC_VERSION: "v2.25.0"
   GOWORK: "off"
   GO_TEST_TIMEOUT_UNIT: "30m"
@@ -301,8 +301,9 @@ jobs:
 
       - name: Install gitleaks
         run: |
-          curl -sSfL https://github.com/gitleaks/gitleaks/releases/download/v8.18.4/gitleaks_8.18.4_linux_x64.tar.gz | tar -xz
-          sudo mv gitleaks /usr/local/bin/
+          TOOL_DIR="$(mktemp -d)"
+          curl -sSfL https://github.com/gitleaks/gitleaks/releases/download/v8.18.4/gitleaks_8.18.4_linux_x64.tar.gz | tar -xz -C "$TOOL_DIR"
+          sudo install -m 0755 "$TOOL_DIR/gitleaks" /usr/local/bin/gitleaks
 
       - name: Fetch base ref for diff scanning
         run: git fetch origin "${{ github.base_ref || 'main' }}" --depth=1
