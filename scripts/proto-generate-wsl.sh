@@ -11,7 +11,7 @@ protoc_root="${VE_PROTO_PROTOC_ROOT:-$repo/.cache/proto-generation/protoc-29.1}"
 mode="${1:-all}"
 
 export GOWORK=off
-export GOTOOLCHAIN=go1.25.5
+export GOTOOLCHAIN=go1.26.8
 export GOBIN="$bin"
 export VE_PROTO_NODE_BIN="$node_root/bin"
 export PATH="$bin:$VE_PROTO_NODE_BIN:$protoc_root/bin:$PATH"

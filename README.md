@@ -73,7 +73,7 @@ curl -sSfL https://raw.githubusercontent.com/virtengine/virtengine/main/install.
 
 [This doc](_docs/development-environment.md) guides through setting up a local development environment.
 
-VirtEngine is developed against [Go 1.25.5](https://go.dev/). Building requires a working Go installation, a properly set `GOPATH`, and `$GOPATH/bin` present in `$PATH`. It is also required to have a C/C++ compiler installed (`gcc` or `clang`) as there are C dependencies in use (`libusb`, `libhid`).
+VirtEngine is developed against [Go 1.26.8](https://go.dev/). Building requires a working Go installation, a properly set `GOPATH`, and `$GOPATH/bin` present in `$PATH`. It is also required to have a C/C++ compiler installed (`gcc` or `clang`) as there are C dependencies in use (`libusb`, `libhid`).
 
 VirtEngine build processes and examples are heavily tied to the `Makefile`.
 
