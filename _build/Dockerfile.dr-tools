@@ -27,6 +27,13 @@
 # ---------------------------------------------------------------------------
 FROM golang:1.25.14-alpine AS build
 
+# Kept in sync with GO_VERSION in .github/workflows/dr-tools-image.yaml, which
+# passes it as --build-arg. The default matches the golang image tag above and
+# every other VirtEngine build workflow.
+ARG GO_VERSION=1.25.14
+RUN test "$(go version)" = "go version go${GO_VERSION} linux/amd64" \
+      || { echo "toolchain mismatch: want ${GO_VERSION}, got $(go version)"; exit 1; }
+
 RUN apk add --no-cache ca-certificates git
 
 WORKDIR /src
