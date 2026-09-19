@@ -1,0 +1,289 @@
+# VirtEngine DR tools image build/publish
+#
+# Closes the gap found in t_46de26f7: infra/kubernetes/dr/backup-cronjobs.yaml
+# pins ghcr.io/virtengine/dr-tools by digest, but no Dockerfile existed and no
+# workflow ever built or published it, so all three DR CronJobs were
+# permanently ImagePullBackOff.
+#
+# Flow
+#   1. build    — always builds _build/Dockerfile.dr-tools; on main/dispatch also
+#                 pushes it to ghcr.io/virtengine/dr-tools with provenance.
+#   2. verify   — pulls the image back by the digest that was just published and
+#                 checks the CronJob command paths exist and are executable.
+#                 This is the "successful pull proven" evidence for the pin.
+#   3. pin      — re-pins infra/kubernetes/dr/backup-cronjobs.yaml to the real
+#                 digest via an automated PR (never a direct commit to main).
+#
+# The workflow is intentionally self-tightening: while the dr-tools repository
+# does not exist yet, the pin check reports bootstrap-not-performed and passes;
+# once the image is published it enforces that the pinned digest resolves, so
+# the manifest can never silently drift back to a phantom digest.
+
+name: DR Tools Image
+
+permissions:
+  contents: read
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - '_build/Dockerfile.dr-tools'
+      - 'scripts/dr/**'
+      - 'cmd/virtengine/**'
+      - 'go.mod'
+      - 'go.sum'
+      - 'sdk/go/**'
+      - 'sdk/specs/**'
+      - 'infra/kubernetes/dr/backup-cronjobs.yaml'
+      - '.github/workflows/dr-tools-image.yaml'
+  pull_request:
+    branches:
+      - main
+    paths:
+      - '_build/Dockerfile.dr-tools'
+      - 'scripts/dr/**'
+      - 'cmd/virtengine/**'
+      - 'go.mod'
+      - 'go.sum'
+      - 'sdk/go/**'
+      - 'sdk/specs/**'
+      - 'infra/kubernetes/dr/backup-cronjobs.yaml'
+      - '.github/workflows/dr-tools-image.yaml'
+  workflow_dispatch:
+    inputs:
+      publish:
+        description: 'Publish the image and open the digest re-pin PR'
+        required: true
+        type: boolean
+        default: true
+
+env:
+  GO_VERSION: '1.25.8'
+  IMAGE: ghcr.io/virtengine/dr-tools
+  CRONJOB_MANIFEST: infra/kubernetes/dr/backup-cronjobs.yaml
+
+concurrency:
+  group: dr-tools-image-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Build dr-tools
+    runs-on: ubuntu-latest
+    outputs:
+      digest: ${{ steps.push.outputs.digest }}
+      image: ${{ env.IMAGE }}
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Determine publish mode
+        id: mode
+        run: |
+          set -euo pipefail
+          if [[ "${GITHUB_EVENT_NAME}" == "push" && "${GITHUB_REF}" == "refs/heads/main" ]]; then
+            echo "publish=true" >> "$GITHUB_OUTPUT"
+          elif [[ "${GITHUB_EVENT_NAME}" == "workflow_dispatch" && "${{ inputs.publish }}" == "true" ]]; then
+            echo "publish=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "publish=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Log in to GHCR
+        if: steps.mode.outputs.publish == 'true'
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build (validation only)
+        if: steps.mode.outputs.publish != 'true'
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: _build/Dockerfile.dr-tools
+          push: false
+          tags: dr-tools:ci
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Build and push
+        id: push
+        if: steps.mode.outputs.publish == 'true'
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: _build/Dockerfile.dr-tools
+          push: true
+          tags: |
+            ${{ env.IMAGE }}:${{ github.sha }}
+            ${{ env.IMAGE }}:main
+          provenance: true
+          sbom: true
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  verify:
+    name: Prove pull and command paths
+    runs-on: ubuntu-latest
+    needs: [build]
+    permissions:
+      contents: read
+      packages: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Pull the published digest
+        run: |
+          set -euo pipefail
+          echo "pulling ${{ needs.build.outputs.image }}@${{ needs.build.outputs.digest }}"
+          docker pull "${{ needs.build.outputs.image }}@${{ needs.build.outputs.digest }}"
+
+      - name: Assert the CronJob command paths execute
+        run: |
+          set -euo pipefail
+          IMG="${{ needs.build.outputs.image }}@${{ needs.build.outputs.digest }}"
+
+          # The CronJob securityContext is uid/gid 1000 and readOnlyRootFilesystem.
+          uid="$(docker run --rm --entrypoint id "$IMG" -u)"
+          test "$uid" = "1000"
+          echo "runs as uid $uid"
+
+          # Tools the scripts require must all be present.
+          for tool in bash jq curl openssl aws virtengine; do
+            docker run --rm --entrypoint /bin/sh "$IMG" -c "command -v $tool >/dev/null" \
+              || { echo "MISSING required tool: $tool"; exit 1; }
+          done
+
+          # Every command: path in the CronJob manifest must exist and be executable.
+          # Modes are pinned in the Dockerfile, so this asserts the image's own contract.
+          mapfile -t entrypoints < <(grep -oE 'command: \["/scripts/dr/[^"]+"' "$CRONJOB_MANIFEST" \
+            | sed 's/.*"\(.*\)"/\1/' | sort -u)
+          test "${#entrypoints[@]}" -ge 3 || { echo "expected >=3 dr entrypoints, got ${#entrypoints[@]}"; exit 1; }
+          for ep in "${entrypoints[@]}"; do
+            docker run --rm --entrypoint /bin/sh "$IMG" -c "test -x '$ep'" \
+              || { echo "NOT EXECUTABLE in image: $ep"; exit 1; }
+            echo "executable: $ep"
+          done
+
+  pin:
+    name: Re-pin digest in the CronJob manifest
+    runs-on: ubuntu-latest
+    needs: [build, verify]
+    if: needs.build.outputs.digest != ''
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Re-pin the digest
+        run: |
+          set -euo pipefail
+          IMAGE="${{ needs.build.outputs.image }}"
+          DIGEST="${{ needs.build.outputs.digest }}"
+          python3 - "$CRONJOB_MANIFEST" "$IMAGE" "$DIGEST" <<'PY'
+          import re, sys
+          path, image, digest = sys.argv[1], sys.argv[2], sys.argv[3]
+          src = open(path, encoding="utf-8").read()
+          pat = re.compile(r"(image:\s*)" + re.escape(image) + r"@sha256:[a-f0-9]{64}")
+          new, n = pat.subn(r"\g<1>" + image + "@" + digest, src)
+          if n == 0:
+              sys.exit(f"no pinned reference to {image} found in {path}")
+          open(path, "w", encoding="utf-8", newline="\n").write(new)
+          print(f"re-pinned {n} reference(s) to {digest}")
+          PY
+
+      - name: Validate the manifest still satisfies policy
+        run: node scripts/task85c-validate-kubernetes.mjs
+
+      - name: Open re-pin PR
+        uses: peter-evans/create-pull-request@v6
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          commit-message: "fix(dr): re-pin dr-tools to published digest ${{ needs.build.outputs.digest }}"
+          title: "fix(dr): re-pin dr-tools image to its published digest"
+          body: |
+            ## DR tools image digest re-pin
+
+            The `dr-tools` image was built and published by the
+            **DR Tools Image** workflow.
+
+            - Image: `${{ needs.build.outputs.image }}`
+            - Digest: `${{ needs.build.outputs.digest }}`
+            - Verified: the image was pulled back by digest and every
+              `command:` path in `infra/kubernetes/dr/backup-cronjobs.yaml`
+              was confirmed present and executable inside it.
+
+            This PR updates the pinned digest in
+            `infra/kubernetes/dr/backup-cronjobs.yaml`. Merging it is what makes
+            the DR CronJobs pullable.
+
+            ---
+            *Automatically generated by the DR Tools Image workflow.*
+          branch: dr-tools/repin-${{ github.sha }}
+          base: main
+          labels: |
+            dr
+            automated
+
+  verify-pin:
+    name: Verify the committed pin resolves
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Check the pinned digest resolves
+        run: |
+          set -euo pipefail
+          PINNED="$(grep -oE 'ghcr\.io/virtengine/dr-tools@sha256:[a-f0-9]{64}' "$CRONJOB_MANIFEST" | head -n1)"
+          test -n "$PINNED" || { echo "no dr-tools pin found"; exit 1; }
+
+          if docker pull "$PINNED"; then
+            echo "pinned digest resolves: $PINNED"
+            exit 0
+          fi
+
+          # Not yet published. Distinguish "the repo does not exist at all"
+          # (bootstrap pending) from "the repo exists but this digest is gone"
+          # (a real, actionable drift that must fail).
+          if docker manifest inspect "ghcr.io/virtengine/dr-tools:main" >/dev/null 2>&1; then
+            echo "dr-tools is published but the pinned digest does not resolve:"
+            echo "  $PINNED"
+            echo "The pin has drifted. Merge the re-pin PR from the build job."
+            exit 1
+          fi
+
+          echo "::warning::ghcr.io/virtengine/dr-tools has not been published yet."
+          echo "The DR CronJobs cannot pull until the DR Tools Image workflow runs"
+          echo "(push to main, or workflow_dispatch with publish=true) and its"
+          echo "re-pin PR is merged. Tracked by t_46de26f7."

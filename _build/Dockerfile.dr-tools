@@ -1,0 +1,101 @@
+# VirtEngine DR tools image — ghcr.io/virtengine/dr-tools
+#
+# Purpose
+# -------
+# Runtime image for the DR backup/validation CronJobs defined in
+# infra/kubernetes/dr/backup-cronjobs.yaml. Those pods execute the repo-owned
+# scripts under scripts/dr/ *directly*:
+#
+#     command: ["/scripts/dr/backup-chain-state.sh"]
+#     command: ["/scripts/dr/backup-provider-state.sh"]
+#     command: ["/scripts/dr/dr-test.sh", "--report", "--notify"]
+#
+# and mount NO volume at /scripts. This image is therefore the sole supplier of
+# both the scripts and the toolchain they depend on.
+#
+# Runtime contract (must stay in sync with the CronJob pod securityContext)
+# ------------------------------------------------------------------------
+#   * runs as uid/gid 1000  (runAsUser 1000, runAsGroup 1000, runAsNonRoot true)
+#   * scripts must be readable and executable => modes are set explicitly below
+#     so execution never depends on build-context file modes
+#   * readOnlyRootFilesystem: true, allowPrivilegeEscalation: false, all
+#     capabilities dropped => the image needs no root at runtime and writes
+#     only under /tmp (the CronJobs mount an emptyDir there), so HOME=/tmp
+
+# ---------------------------------------------------------------------------
+# Stage 1: build the virtengine CLI used by the backup/validation scripts
+# ---------------------------------------------------------------------------
+FROM golang:1.25.14-alpine AS build
+
+RUN apk add --no-cache ca-certificates git
+
+WORKDIR /src
+COPY go.mod go.sum ./
+COPY sdk/go/go.mod sdk/go/go.sum sdk/go/
+COPY sdk/specs/go.mod sdk/specs/
+RUN go mod download
+
+COPY . .
+
+ARG TARGETOS=linux
+ARG TARGETARCH=amd64
+ENV CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH}
+
+RUN go build -trimpath -buildvcs=false -ldflags "-s -w" -o /out/virtengine ./cmd/virtengine
+
+# ---------------------------------------------------------------------------
+# Stage 2: runtime
+# ---------------------------------------------------------------------------
+FROM alpine:3.20
+
+LABEL org.opencontainers.image.source="https://github.com/virtengine/virtengine" \
+      org.opencontainers.image.title="virtengine-dr-tools" \
+      org.opencontainers.image.description="Disaster-recovery backup and validation tooling for VirtEngine validator and provider state"
+
+# Toolchain required by scripts/dr/*.sh — each entry is used by a CronJob path:
+#   bash      all three entrypoints are #!/bin/bash scripts
+#   jq        snapshot/report metadata generation and parsing
+#   curl      EC2 region metadata lookup, endpoint health checks, alert webhooks
+#   openssl   snapshot manifest signing and verification
+#   aws-cli   S3 upload/download/verify and Secrets Manager passphrase lookup
+#   coreutils sha256sum / mktemp / date used for checksums and object naming
+#   tar,gzip  snapshot archive creation and extraction
+RUN apk add --no-cache \
+      bash \
+      jq \
+      curl \
+      openssl \
+      aws-cli \
+      coreutils \
+      tar \
+      gzip \
+      ca-certificates && \
+    addgroup -g 1000 -S dr-tools && \
+    adduser -u 1000 -S -G dr-tools -h /tmp dr-tools
+
+COPY --from=build /out/virtengine /usr/local/bin/virtengine
+
+# Repo-owned DR scripts. Copied as a tree so fixtures (used by the failover
+# drill) travel with them; no volume supplies /scripts at runtime.
+COPY scripts/dr/ /scripts/dr/
+
+# Pin the executable modes explicitly. The CronJob exec form
+# (command: ["/scripts/dr/x.sh"]) requires the exec bit, and relying on
+# COPY inheriting the build-context mode makes the image's runnability depend
+# on how the checkout was created. Setting it here is deterministic and makes
+# the committed mode fix defence-in-depth rather than a load-bearing
+# assumption.
+RUN chmod 0755 \
+      /scripts/dr/backup-chain-state.sh \
+      /scripts/dr/backup-provider-state.sh \
+      /scripts/dr/dr-test.sh \
+      /scripts/dr/init-failover-cluster.sh \
+      /scripts/dr/backup-keys.sh \
+      /scripts/dr/failover-test.sh && \
+    chmod 0644 /scripts/dr/README.md /scripts/dr/fixtures/dr-test-accounts.json
+
+# readOnlyRootFilesystem is true in every CronJob; /tmp is the mounted emptyDir.
+ENV HOME=/tmp
+WORKDIR /tmp
+
+USER 1000:1000
