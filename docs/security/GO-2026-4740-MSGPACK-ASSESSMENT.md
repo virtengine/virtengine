@@ -7,10 +7,12 @@
 single `{introduced: "0"}` range with no `fixed` event.
 **Assessed on:** `main` @ `63349afe071bbba878ccd36a5c8e096117e970e4`, 2026-09-19
 **Toolchain:** Go 1.25.8, `govulncheck v1.1.4`
-**Verdict:** the vulnerable decode path is **not reachable from any shipped binary** in this repo.
-Time-boxed residual risk accepted; tracked in
+**Verdict:** govulncheck reports the package **reachable at init (linkage) granularity**; the
+vulnerable decode function is on **no reachable call path** from any shipped binary, and no fixed
+version exists upstream. Dated governance record with time-boxed residual risk; tracked in
 [issue #872](https://github.com/virtengine/virtengine/issues/872) and
-`.vulnerability-allowlist.yaml`.
+`.vulnerability-allowlist.yaml`. This record does not clear, suppress, or gate-route-around the
+`Go Vulnerability Scan` finding — that job does not consume the allowlist.
 
 ---
 
@@ -47,7 +49,7 @@ github.com/shamaton/msgpack/v2
 
 Both `go.mod` files declare it `// indirect`.
 
-## 3. Why it is unreachable
+## 3. Why the decode function is on no reachable call path (package itself stays init-reachable)
 
 ### 3.1 No VirtEngine-owned code imports it
 
@@ -124,8 +126,10 @@ expiry under the repository's existing policy (`max_allowlist_age_days: 30`,
 
 Compensating controls:
 
-1. The vulnerable decode path has no call site in the shipped dependency graph (proved with
-   `go list -deps ./...`); the owner package `wasmd/x/wasm/keeper` is absent.
+1. The vulnerable decode function has no reachable call path in the shipped dependency graph
+   (proved with `go list -deps ./...`); the owner package `wasmd/x/wasm/keeper` is absent.
+   The msgpack package itself remains init-reachable via linkage — this control narrows the
+   blast radius, it does not remove the finding.
 2. VirtEngine does not mount the CosmWasm module or instantiate a VM, so no wasm contract input —
    the only realistic source of hostile msgpack — is processed.
 3. The one remaining call site consumes in-process, trusted bytes from libwasmvm.
