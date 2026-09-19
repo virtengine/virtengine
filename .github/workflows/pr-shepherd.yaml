@@ -1,0 +1,55 @@
+---
+name: pr-shepherd
+on:
+  schedule:
+    - cron: "0 6 * * *"
+  workflow_dispatch:
+
+permissions:
+  pull-requests: write
+  issues: write
+
+jobs:
+  shepherd:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Shepherd PR review queue
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          gh pr list --state open --limit 200 \
+            --json number,createdAt,author,isDraft,mergeable,reviewDecision \
+            > /tmp/prs.json
+          COUNT=$(jq 'length' /tmp/prs.json)
+          echo "open_prs=$COUNT" >> "$GITHUB_STEP_SUMMARY"
+          CONFLICTING=$(jq -r '.[] | select(.mergeable=="CONFLICTING") | .number' /tmp/prs.json)
+          NCONFLICT=$(echo "$CONFLICTING" | grep -c . || true)
+          echo "conflicting=$NCONFLICT" >> "$GITHUB_STEP_SUMMARY"
+          NOW=$(date +%s)
+          for N in $(jq -r '.[].number' /tmp/prs.json); do
+            CREATED=$(jq -r ".[] | select(.number==$N) | .createdAt" /tmp/prs.json)
+            AUTHOR=$(jq -r ".[] | select(.number==$N) | .author.login" /tmp/prs.json)
+            MERGEABLE=$(jq -r ".[] | select(.number==$N) | .mergeable" /tmp/prs.json)
+            AGE=$(( (NOW - $(date -d "$CREATED" +%s)) / 86400 ))
+            if [ "$AGE" -ge 10 ]; then
+              gh pr edit "$N" --add-label "stale" 2>/dev/null || true
+              gh pr comment "$N" --body "Shepherd: this PR is ${AGE}d old. Please review or rebase." 2>/dev/null || true
+            fi
+            if [ "$MERGEABLE" = "CONFLICTING" ]; then
+              gh pr comment "$N" --body "Shepherd: this PR is CONFLICTING with main. Please rebase." 2>/dev/null || true
+            fi
+            if [ "$AUTHOR" = "jaeko44" ]; then
+              gh pr edit "$N" --add-reviewer "livenson" 2>/dev/null || true
+            else
+              gh pr edit "$N" --add-reviewer "jaeko44" 2>/dev/null || true
+            fi
+          done
+          if [ "$COUNT" -ge 30 ]; then
+            echo "ALERT: PR queue depth $COUNT >= 30 — review lane needs owner attention." >> "$GITHUB_STEP_SUMMARY"
+            gh issue create --title "PR queue depth $COUNT >= 30" \
+              --body "Shepherd alert: $COUNT open PRs, $NCONFLICT conflicting. See run $GITHUB_RUN_ID." \
+              --label "priority:high" 2>/dev/null || true
+            exit 1
+          fi
