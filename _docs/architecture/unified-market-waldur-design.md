@@ -463,8 +463,7 @@ Phased, each phase independently shippable:
 
 ## 13. Implementation status
 
-The deterministic core of this design is implemented in Go without protobuf
-changes and is covered by unit tests.
+All five phases are implemented (PR #899), tested, and wired end to end.
 
 ### Landed
 
@@ -478,45 +477,26 @@ changes and is covered by unit tests.
 | Resolver keeper + capacity interface | `x/market/types/marketplace/keeper/resolution.go` |
 | Source registry, signed ingest, command queue, unified catalog | `x/market/types/marketplace/keeper/waldur.go` |
 | EndBlock resolution wiring (param-gated) | `x/marketplace/module.go` |
-| Resolution parameters | `x/market/types/marketplace/genesis.go` |
+| Resolution parameters + ingest provider map | `x/market/types/marketplace/genesis.go` |
 | Genesis persistence of registered Waldur sources | `x/market/types/marketplace/genesis.go`, `x/marketplace/genesis.go` |
-| Protobuf contract for new messages/queries (CSR: generation pending) | `sdk/proto/node/virtengine/marketplace/v1/{tx,query,types}.proto` |
-
-The `.proto` contract additions are validated with `buf lint` and a full
-`buf build` descriptor, but the checked-in generated Go has not been
-regenerated in this environment (pinned Docker image required).
+| Protobuf contract for new messages/queries | `sdk/proto/node/virtengine/marketplace/v1/{tx,query,types}.proto` |
+| Msg/Query handlers, codec registration, converters, canonical writers | `keeper/msg_server.go`, `keeper/query_server.go`, `keeper/convert.go`, `x/market/types/marketplace/msgs.go`, `codec.go` |
+| Regenerated Go/TS/OpenAPI marketplace contracts | `sdk/go/node/marketplace/v1/*`, `sdk/ts/src/generated/**`, `api/openapi/virtengine-proto.swagger.json` |
+| x/resources capacity adapter + app wiring | `app/types/marketplace_capacity.go`, `app/types/app.go` |
+| Provider-daemon snapshot ingest + command poller + mutation kinds + CLI flags | `pkg/provider_daemon/waldur_snapshot_ingest.go`, `waldur_command_poller.go`, `provider_mutation.go`, `cmd/provider-daemon/main.go` |
+| `v1.9.0` governance upgrade enabling auto-resolution | `upgrades/software/v1.9.0/`, `upgrades/types/types.go` |
 
 Behaviour is disabled by default: `Params.EnableAutoResolution` is `false`, so
-`EndBlock` is a no-op until a chain upgrade sets the parameter.
+`EndBlock` is a no-op until the `v1.9.0` governance upgrade sets the parameter
+under its preconditions (canonical reservations active, canonical fence active,
+no live legacy records).
 
-### Deferred (code-generation and wiring)
+### Remaining (operator/CI steps, not code gaps)
 
-The `.proto` contract for the new surface is authored and validated (`buf lint`
-plus a full descriptor build pass), but the pinned generation step has not been
-run here. The remaining work, in order:
-
-1. Run `scripts/proto-generate.sh go` (pinned Docker image) or
-   `scripts/proto-generate-wsl.sh go` to regenerate `virtengine.marketplace.v1`.
-   This generates: `MsgCreateOrder`, `MsgPlaceBid`/`MsgWithdrawBid`,
-   `MsgRegisterWaldurSource`, `MsgIngestWaldurOffering`,
-   `MsgSetOfferingVisibility`, `MsgAckWaldurCommand`; queries `Catalog` and
-   `WaldurCommands`; and the `Offering`/`WaldurOfferingRef`/snapshot fields.
-2. Implement the new `MsgServer` methods in
-   `x/market/types/marketplace/keeper/msg_server.go` on top of the existing
-   resolver, ingest, source-registry, and command methods, and extend
-   `offeringFromProto` in `keeper/convert.go` for the new offering fields.
-3. Implement the new `QueryServer` methods in `keeper/query_server.go` on top
-   of `UnifiedCatalog` and `WithWaldurCommands`.
-4. Provider-daemon wiring: construct `WaldurIngestWorker` and
-   `OfferingPublicationService`, submit signed ingestions, and consume the
-   command queue.
-5. A chain-upgrade migration that enables `EnableAutoResolution` under
-   governance after capacity wiring to `x/resources` is verified.
-
-### Wiring `x/resources`
-
-`keeper.Keeper.SetCapacityKeeper` accepts a `CapacityKeeper` implementation.
-Until it is wired to `x/resources` in `app/types/app.go`, the resolver creates
-allocations without an authoritative reservation. Wiring it is required before
-enabling `EnableAutoResolution` on a live network.
+1. Run the pinned Docker/WSL codegen in CI to confirm the locally generated
+   contracts.
+2. Deploy a Waldur-side (or operator-held) snapshot signer and register its key
+   via `MsgRegisterWaldurSource`.
+3. Submit the `v1.9.0` governance proposal after the mainnet readiness checks
+   in `_docs/operations/`.
 
