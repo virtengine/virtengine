@@ -160,28 +160,27 @@ snapshots is required for a single unified catalog.
 
 ## Implementation status
 
-Landed (consensus Go, no protobuf changes required):
+Landed (PR #899):
 
-- Offering supply model: `Source`, `Visibility`, `Waldur`, `AcquisitionModes`,
-  `BackendType`, `MeteringProfile`; selector/admission predicates.
-  (`x/market/types/marketplace/offering_source.go`, `offering.go`)
-- Order acquisition model: `AcquisitionMode`, `Selector`, `MatchingDeadline`,
-  plus bid-window helpers. (`x/market/types/marketplace/order.go`)
-- Deterministic resolution engine: ranking and selection with all-or-nothing and
-  partial-fill policies. (`x/market/types/marketplace/resolution.go`)
-- Keeper resolver + EndBlock wiring, gated by `Params.EnableAutoResolution`.
-  (`keeper/resolution.go`, `x/marketplace/module.go`)
-- Waldur source registry, signed offering ingest with replay protection, and the
-  durable Waldur command queue. (`keeper/waldur.go`,
-  `x/market/types/marketplace/waldur_command.go`)
-- Unified catalog browse API. (`keeper/waldur.go` `UnifiedCatalog`)
-- Tests for the engine, ingest, resolution, catalog, and commands.
+- Deterministic resolution engine, supply model, order acquisition model,
+  Waldur commands/sources/attestations, EndBlock wiring, resolution params,
+  genesis persistence (`x/market/types/marketplace`, `x/marketplace`).
+- Msg/Query surface with handlers, codec registration, converters, canonical
+  writers (`MsgCreateOrder`, `MsgPlaceBid`, `MsgWithdrawBid`,
+  `MsgRegisterWaldurSource`, `MsgIngestWaldurOffering`,
+  `MsgSetOfferingVisibility`, `MsgAckWaldurCommand`, `Catalog`,
+  `WaldurCommands`).
+- Regenerated Go/TS/OpenAPI marketplace contracts (byte-identical for all
+  unaffected packages).
+- x/resources capacity adapter with app wiring; provider-daemon snapshot
+  ingest submitter, Waldur command poller, mutation kinds, CLI flags
+  (default off); `v1.9.0` governance upgrade enabling auto-resolution under
+  preconditions.
+- Public docs: `concepts/acquisition-pathways` plus aligned pages.
 
-Deferred (requires protobuf regeneration, which is Docker/WSL-gated in this
-repository; the `.proto` contract is authored and validated with `buf lint`
-and a full descriptor build):
+Remaining (operator/CI steps, not code gaps):
 
-- Generated Go for the new messages/queries, Msg/Query server method
-  implementations, and converter updates.
-- Wiring the provider-daemon Waldur ingest worker and offering publication
-  service to submit the new signed ingestions and consume the command queue.
+- Run the pinned Docker/WSL codegen in CI to confirm the locally generated
+  contracts; deploy a Waldur-side (or operator-held) snapshot signer and
+  register its key; submit the `v1.9.0` governance proposal after the
+  mainnet readiness checks in `_docs/operations/`.
