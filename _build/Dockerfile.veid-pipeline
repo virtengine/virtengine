@@ -157,7 +157,7 @@ RUN set -e; \
       if [ -e "$lib" ]; then cp --parents "$lib" /runtime-libs; fi; \
     done
 
-FROM gcr.io/distroless/python3-debian12 AS final
+FROM gcr.io/distroless/python3-debian12@sha256:2fdb05402a2cf21cf78fdb3ba4c5db167241e9e498140f5bf689d7efb773731f AS final
 
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1

@@ -63,12 +63,19 @@ log_error() {
 }
 
 get_region() {
+    # NOTE: the metadata endpoint is untrusted input. On non-AWS hosts (other
+    # clouds, CI runners) it may answer with an error body instead of failing,
+    # so the response MUST be validated -- interpolating it raw into JSON
+    # metadata breaks backup verification (jq parse errors, red DR smoke test).
     local region
-    region=$(curl -s --connect-timeout 2 http://169.254.169.254/latest/meta-data/placement/region 2>/dev/null || true)
-    if [ -z "$region" ]; then
-        region=$(hostname | cut -d'-' -f1-2 2>/dev/null || echo "unknown")
+    region=$(curl -s --connect-timeout 2 --max-time 5 http://169.254.169.254/latest/meta-data/placement/region 2>/dev/null | head -n 1 | tr -d '\r' || true)
+    if ! printf '%s' "$region" | grep -Eq '^[A-Za-z0-9._-]{1,64}$'; then
+        region=$(hostname 2>/dev/null | cut -d'-' -f1-2 | head -n 1 | tr -d '\r' || echo "unknown")
     fi
-    echo "$region"
+    if ! printf '%s' "$region" | grep -Eq '^[A-Za-z0-9._-]{1,64}$'; then
+        region="unknown"
+    fi
+    printf '%s\n' "$region"
 }
 
 notify_webhook() {
@@ -87,18 +94,15 @@ notify_webhook() {
     fi
 
     local payload
-    payload=$(cat << EOF
-{
-  "event": "${event}",
-  "status": "${status}",
-  "message": "${message}",
-  "backup": "${backup_name}",
-  "timestamp": "$(date -u +%FT%TZ)",
-  "host": "$(hostname)",
-  "region": "$(get_region)"
-}
-EOF
-)
+    payload=$(jq -n \
+        --arg event "${event}" \
+        --arg status "${status}" \
+        --arg message "${message}" \
+        --arg backup "${backup_name}" \
+        --arg timestamp "$(date -u +%FT%TZ)" \
+        --arg host "$(hostname)" \
+        --arg region "$(get_region)" \
+        '{event: $event, status: $status, message: $message, backup: $backup, timestamp: $timestamp, host: $host, region: $region}')
 
     curl -s -X POST "$ALERT_WEBHOOK" \
         -H "Content-Type: application/json" \
@@ -149,7 +153,10 @@ add_signature_metadata() {
     key_fingerprint=$(get_signing_fingerprint "$SNAPSHOT_SIGNING_KEY")
 
     if [ -f "${PROVIDER_SNAPSHOT_DIR}/${backup_name}_metadata.json" ]; then
-        jq ".signature = {\"file\": \"${backup_name}.sig\", \"algorithm\": \"${SNAPSHOT_SIGNATURE_ALG}\", \"key_fingerprint\": \"${key_fingerprint}\"}" \
+        jq --arg file "${backup_name}.sig" \
+            --arg algorithm "${SNAPSHOT_SIGNATURE_ALG}" \
+            --arg key_fingerprint "${key_fingerprint}" \
+            '.signature = {file: $file, algorithm: $algorithm, key_fingerprint: $key_fingerprint}' \
             "${PROVIDER_SNAPSHOT_DIR}/${backup_name}_metadata.json" > "${PROVIDER_SNAPSHOT_DIR}/${backup_name}_metadata.json.tmp"
         mv "${PROVIDER_SNAPSHOT_DIR}/${backup_name}_metadata.json.tmp" "${PROVIDER_SNAPSHOT_DIR}/${backup_name}_metadata.json"
     fi
@@ -284,20 +291,21 @@ create_backup() {
 
     tar -czf "${PROVIDER_SNAPSHOT_DIR}/${backup_name}.tar.gz" -C "$tmp_dir" .
 
-    cat > "${PROVIDER_SNAPSHOT_DIR}/${backup_name}_metadata.json" << EOF
-{
-  "backup_name": "${backup_name}",
-  "timestamp": "$(date -u +%FT%TZ)",
-  "provider_home": "${PROVIDER_HOME}",
-  "state_dir": "${state_dir}",
-  "config_dir": "${config_dir}",
-    "key_store": "${key_store}",
-    "ha_state_dir": "${PROVIDER_HA_STATE_DIR}",
-    "continuity_files": "${continuity_files%,}",
-  "hostname": "$(hostname)",
-  "region": "$(get_region)"
-}
-EOF
+    # Metadata values are injected via jq --arg so untrusted bytes (hostname,
+    # region, paths) can never break the JSON document.
+    jq -n \
+        --arg backup_name "${backup_name}" \
+        --arg timestamp "$(date -u +%FT%TZ)" \
+        --arg provider_home "${PROVIDER_HOME}" \
+        --arg state_dir "${state_dir}" \
+        --arg config_dir "${config_dir}" \
+        --arg key_store "${key_store}" \
+        --arg ha_state_dir "${PROVIDER_HA_STATE_DIR}" \
+        --arg continuity_files "${continuity_files%,}" \
+        --arg hostname "$(hostname)" \
+        --arg region "$(get_region)" \
+        '{backup_name: $backup_name, timestamp: $timestamp, provider_home: $provider_home, state_dir: $state_dir, config_dir: $config_dir, key_store: $key_store, ha_state_dir: $ha_state_dir, continuity_files: $continuity_files, hostname: $hostname, region: $region}' \
+        > "${PROVIDER_SNAPSHOT_DIR}/${backup_name}_metadata.json"
 
     add_signature_metadata "$backup_name"
 

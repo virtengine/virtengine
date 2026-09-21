@@ -1,4 +1,4 @@
-FROM golang:1.25.14-alpine AS build
+FROM golang:1.25.14-alpine@sha256:1ae0735f00daffa3aaf1363a5184c0d2dc55c78e3db4ec70241cdac97bf84b59 AS build
 
 RUN apk add --no-cache ca-certificates git
 
@@ -16,7 +16,7 @@ ENV CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH}
 
 RUN go build -trimpath -buildvcs=false -ldflags "-s -w" -o /out/provider-daemon ./cmd/provider-daemon
 
-FROM alpine:3.24
+FROM alpine:3.24@sha256:294b683cb724975bec92580e1e685676bd4b50bda910ddb8c51d4cabeaec77e6
 
 RUN apk upgrade --no-cache && apk add --no-cache bash ca-certificates curl && \
     addgroup -S virtengine && \
