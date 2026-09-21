@@ -135,16 +135,29 @@ warn_private() { # repo ref code
 
 echo "probing anonymous pullability (control: ${CONTROL_REPO}@${CONTROL_REF:0:19}...)"
 
-read -r control_code control_len <<<"$(probe "$CONTROL_REPO" "$CONTROL_REF")"
+# The control is retried before it is declared broken. It is a network call to a
+# registry that this job does not own, and the failure mode is fail-closed (the
+# self-test below exits 1), so a single transient blip would red the gate for a
+# reason that has nothing to do with the DR image. Three attempts absorbs that
+# without weakening the conclusion: if the control genuinely cannot resolve, the
+# result is still INCONCLUSIVE and nothing is certified.
+control_code=''
+control_len=''
+for attempt in 1 2 3; do
+  read -r control_code control_len <<<"$(probe "$CONTROL_REPO" "$CONTROL_REF")"
+  [[ "$control_code" == "200" ]] && break
+  echo "control attempt ${attempt}/3 -> HTTP ${control_code}"
+  [[ "$attempt" -lt 3 ]] && sleep 5
+done
 echo "control ${CONTROL_REPO} -> HTTP ${control_code} (token_len=${control_len})"
 
 if [[ "$control_code" != "200" ]]; then
-  echo "::warning::probe INCONCLUSIVE: the known-public control returned ${control_code}."
+  echo "::error::probe INCONCLUSIVE: the known-public control returned ${control_code} on 3/3 attempts."
   echo "The probe itself is not working (token exchange, egress policy or the"
   echo "control manifest moved), so the subject result below cannot be trusted."
   echo "No conclusion is drawn about ${subject_repo}@${subject_ref}."
-  [[ "$self_test" == "1" ]] && { echo "SELF-TEST FAILED: control did not return 200"; exit 1; }
-  exit 0
+  echo "Failing closed: an unverifiable pullability check must not report success."
+  exit 1
 fi
 echo "ok    control resolved anonymously -> the probe's 200 path is live"
 
