@@ -77,6 +77,13 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      - name: Install system dependencies
+        # github.com/zondax/hid (via go.mod replace) carries `#cgo pkg-config: libudev`;
+        # without libudev-dev the whole module cannot be type-checked and
+        # golangci-lint fails with exit code 3 (linter never ran). Not on the
+        # ubuntu-latest runner image, so install it explicitly.
+        run: sudo apt-get update && sudo apt-get install -y libudev-dev
+
       - name: Fetch base ref for lint diff
         run: |
           # For PRs, use base_ref; for pushes, use main
@@ -131,6 +138,11 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+
+      - name: Install system dependencies
+        # Same libudev requirement as the lint job: `go vet ./...` compiles the
+        # whole module with CGO enabled (go test -race needs cgo too).
+        run: sudo apt-get update && sudo apt-get install -y libudev-dev
 
       - name: Set up Go
         uses: actions/setup-go@v5
@@ -240,6 +252,17 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          # pkg/platformsecurity/contracts asserts provenance against the real
+          # git object DB (PersistedSchemaPayloadHead must exist and
+          # PersistedSchemaEpochBase must be its ancestor); a depth-1 checkout
+          # does not contain those objects, so this job needs full history.
+          fetch-depth: 0
+
+      - name: Install system dependencies
+        # Same libudev requirement as vet: `go test -race` requires cgo, and
+        # the hid/libusb binding needs libudev at build time.
+        run: sudo apt-get update && sudo apt-get install -y libudev-dev
 
       - name: Detect Go-relevant changes
         id: detect
@@ -584,6 +607,11 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+
+      - name: Install system dependencies
+        # Same libudev requirement as vet/test-go: the integration packages
+        # compile the whole module (cgo), all [build failed] without it.
+        run: sudo apt-get update && sudo apt-get install -y libudev-dev
 
       - name: Set up Go
         uses: actions/setup-go@v5
