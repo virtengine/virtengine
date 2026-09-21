@@ -10,7 +10,7 @@ torchvision==0.27.1+cpu
 craft-text-detector==0.4.3
 
 # Image Processing
-opencv-python==4.8.1.78
+opencv-python==4.5.4.60
 Pillow==12.3.0
 
 # Numerical Computing
