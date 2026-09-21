@@ -58,6 +58,14 @@ deps-vendor: ## Vendor all dependencies (uses deps-tidy from mod.mk)
 	@go mod vendor
 	@echo "✓ Dependencies vendored"
 
+.PHONY: supply-chain-pin-check
+supply-chain-pin-check: ## Verify container base images are digest-pinned
+	@echo "Verifying container base images are digest-pinned..."
+	@chmod +x ./scripts/supply-chain/verify-pinned-images.sh 2>/dev/null || true
+	@./scripts/supply-chain/verify-pinned-images.sh --self-test
+	@./scripts/supply-chain/verify-pinned-images.sh
+	@echo "✓ All base images pinned"
+
 .PHONY: deps-update-check
 deps-update-check: ## Check for available dependency updates
 	@echo "Checking for dependency updates..."
@@ -112,6 +120,7 @@ help-supply-chain: ## Show supply chain security targets
 	@echo ""
 	@echo "  Verification:"
 	@echo "    supply-chain-verify   - Verify dependency integrity"
+	@echo "    supply-chain-pin-check - Verify base images digest-pinned"
 	@echo "    supply-chain-detect   - Detect supply chain attacks"
 	@echo "    supply-chain-risk     - Assess dependency risk"
 	@echo "    supply-chain-audit    - Full security audit"
