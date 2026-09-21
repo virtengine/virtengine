@@ -15,3 +15,20 @@ onlyBuiltDependencies:
   - msw
   - sharp
   - unrs-resolver
+
+# SECURITY (node-vuln-scan gate): pin transitive deps past audited HIGH advisories.
+# next 15.5.24 still pins postcss 8.4.31 and resolves sharp 0.34.5; the
+# @walletconnect/unstorage chain pins h3/defu/picomatch/ws below fixed versions.
+# All pins are same-major, minimal upgrades carrying upstream CVE fixes.
+overrides:
+  postcss: ^8.5.28
+  nanoid: ^3.3.19
+  sharp: ^0.35.4
+  h3: ^1.15.11
+  defu: ^6.1.7
+  picomatch: ^2.3.2
+  ws: ^7.5.13
+  browserslist: ^4.29.0
+  baseline-browser-mapping: ^2.11.25
+  postcss-selector-parser: ^6.1.4
+  "@babel/core": ^7.29.7
