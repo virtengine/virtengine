@@ -86,20 +86,20 @@ COPY --from=build /out/virtengine /usr/local/bin/virtengine
 # drill) travel with them; no volume supplies /scripts at runtime.
 COPY scripts/dr/ /scripts/dr/
 
-# Pin the executable modes explicitly. The CronJob exec form
-# (command: ["/scripts/dr/x.sh"]) requires the exec bit, and relying on
-# COPY inheriting the build-context mode makes the image's runnability depend
-# on how the checkout was created. Setting it here is deterministic and makes
-# the committed mode fix defence-in-depth rather than a load-bearing
-# assumption.
-RUN chmod 0755 \
-      /scripts/dr/backup-chain-state.sh \
-      /scripts/dr/backup-provider-state.sh \
-      /scripts/dr/dr-test.sh \
-      /scripts/dr/init-failover-cluster.sh \
-      /scripts/dr/backup-keys.sh \
-      /scripts/dr/failover-test.sh && \
-    chmod 0644 /scripts/dr/README.md /scripts/dr/fixtures/dr-test-accounts.json
+# Pin the modes of EVERY path under /scripts/dr. The CronJob exec form
+# (command: ["/scripts/dr/x.sh"]) requires the exec bit, and relying on COPY
+# inheriting the build-context mode makes the image's runnability depend on how
+# the checkout was created (on a Windows checkout with core.filemode=false the
+# copied mode is not the committed one at all). Setting it here is
+# deterministic, and it covers the whole tree rather than a hand-maintained list
+# so a newly added script cannot silently inherit a context-derived mode.
+#   dirs  -> 0755 (traversable)
+#   *.sh  -> 0755 (directly executable by the CronJobs)
+#   other -> 0644 (read-only data: README, fixtures, compose file)
+RUN set -eux; \
+    find /scripts/dr -type d -exec chmod 0755 {} \; ; \
+    find /scripts/dr -type f -name '*.sh' -exec chmod 0755 {} \; ; \
+    find /scripts/dr -type f ! -name '*.sh' -exec chmod 0644 {} \;
 
 # readOnlyRootFilesystem is true in every CronJob; /tmp is the mounted emptyDir.
 ENV HOME=/tmp

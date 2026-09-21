@@ -356,8 +356,12 @@ jobs:
           set -euo pipefail
           PINNED="$(grep -oE 'ghcr\.io/virtengine/dr-tools@sha256:[a-f0-9]{64}' "$CRONJOB_MANIFEST" | head -n1)"
 
+          # Tolerate a non-JSON body (a 403 page, an empty response): this probe
+          # is advisory, and an unhandled JSONDecodeError would dump a traceback
+          # and mask the warning that actually matters. Kept on one line so the
+          # YAML block scalar's indentation is preserved.
           TOKEN="$(curl -fsS 'https://ghcr.io/token?service=ghcr.io&scope=repository:virtengine/dr-tools:pull' \
-            | python3 -c 'import json,sys; print(json.load(sys.stdin).get("token",""))' || true)"
+            | python3 -c 'import json,sys; d=sys.stdin.read().strip(); print(json.loads(d).get("token","") if d.startswith("{") else "")' 2>/dev/null || true)"
           if [[ -z "$TOKEN" ]]; then
             echo "::warning::anonymous token for virtengine/dr-tools was denied."
             echo "The DR CronJob pods mount no imagePullSecrets, so they will stay in"

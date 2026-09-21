@@ -132,11 +132,32 @@ if in_image 'for f in /scripts/dr/*.sh; do bash -n "$f" || exit 1; done'; then
 else
   record FAIL "all /scripts/dr/*.sh pass bash -n"
 fi
-cr="$(in_image 'grep -lU $'"'"'\r'"'"' /scripts/dr/*.sh 2>/dev/null | wc -l' 2>/dev/null || echo "")"
+# The detector is self-tested first. The image's /bin/sh is busybox, and busybox
+# grep has no -U option: it exits 2 with a usage error and writes nothing, so a
+# naive `grep -lU <CR> ... | wc -l` returns 0 and reports "no CR bytes" for a
+# file that is full of them. Asserting the detector against a known-CRLF and a
+# known-LF file means a toolchain change cannot make this check silently vacuous.
+# shellcheck disable=SC2016  # $(printf "\r") must stay unexpanded: it runs inside the container
+detector="$(in_image '
+  printf "x\r\n" > /tmp/.cr-self
+  printf "x\n"   > /tmp/.lf-self
+  if grep -q "$(printf "\r")" /tmp/.cr-self && ! grep -q "$(printf "\r")" /tmp/.lf-self; then
+    echo yes
+  else
+    echo no
+  fi
+  rm -f /tmp/.cr-self /tmp/.lf-self' 2>/dev/null || echo no)"
+if [[ "$detector" == "yes" ]]; then
+  record ok "CR detector self-test (flags a CRLF file, clears an LF file)"
+else
+  record FAIL "CR detector self-test (flags a CRLF file, clears an LF file)"
+fi
+# shellcheck disable=SC2016  # $f must stay unexpanded: it is evaluated inside the container
+cr="$(in_image 'n=0; for f in /scripts/dr/*.sh; do grep -q "$(printf "\r")" "$f" && n=$((n+1)); done; echo "$n"' 2>/dev/null || echo unknown)"
 if [[ "$cr" == "0" ]]; then
   record ok "no CR bytes in /scripts/dr/*.sh"
 else
-  record FAIL "no CR bytes in /scripts/dr/*.sh (found in $cr file(s))"
+  record FAIL "no CR bytes in /scripts/dr/*.sh (found in ${cr} file(s))"
 fi
 
 echo
