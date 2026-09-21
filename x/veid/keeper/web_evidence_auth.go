@@ -370,16 +370,18 @@ func webEvidenceGlobalNonceDigest(evidence types.WebEvidenceContext, key *types.
 }
 
 func webEvidenceMetadataDigest(metadata map[string]string) (string, error) {
+	keys := make([]string, 0, len(metadata))
+	for key := range metadata {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
 	fields := make([]types.WebEvidenceField, 0, len(metadata))
-	for key, value := range metadata {
+	for _, key := range keys {
 		if key == "" {
 			return "", types.ErrInvalidAttestation.Wrap("web evidence metadata key is required")
 		}
-		fields = append(fields, types.WebEvidenceField{Name: key, Value: value})
+		fields = append(fields, types.WebEvidenceField{Name: key, Value: metadata[key]})
 	}
-	sort.Slice(fields, func(i, j int) bool {
-		return fields[i].Name < fields[j].Name
-	})
 	env := struct {
 		Domain  string                   `json:"domain"`
 		Version string                   `json:"version"`

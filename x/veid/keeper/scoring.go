@@ -95,8 +95,8 @@ func DefaultMLScoringConfig() MLScoringConfig {
 func DefaultDevelopmentTensorFlowScoringConfig() *TensorFlowScoringConfig {
 	return &TensorFlowScoringConfig{
 		ModelPath:      getEnvOrDefault("VEID_INFERENCE_MODEL_PATH", "models/trust_score"),
-		ExpectedHash:   os.Getenv("VEID_INFERENCE_MODEL_HASH"),
-		UseSidecar:     os.Getenv("VEID_INFERENCE_USE_SIDECAR") == envTrueValue,
+		ExpectedHash:   getEnvOrDefault("VEID_INFERENCE_MODEL_HASH", ""),
+		UseSidecar:     getEnvOrDefault("VEID_INFERENCE_USE_SIDECAR", "") == envTrueValue,
 		SidecarAddress: getEnvOrDefault("VEID_INFERENCE_SIDECAR_ADDR", "localhost:50051"),
 		Deterministic:  true,
 		ForceCPU:       true,
