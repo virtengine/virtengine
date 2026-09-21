@@ -7,10 +7,14 @@ torch==2.12.1+cpu
 torchvision==0.27.1+cpu
 
 # CRAFT Text Detector
-craft-text-detector==0.4.3
+# NOTE: craft-text-detector 0.4.3 is NOT declared as a PyPI dependency because
+# it pins opencv-python<4.5.4.62 which has no Python 3.11 wheels (first 3.11
+# wheel is opencv-python 4.6.0.66). The CRAFT implementation is vendored at
+# third_party/craft_text_detector/ in feature branches and should be synced here.
+# See: https://github.com/virtengine/virtengine/issues/XXX
 
 # Image Processing
-opencv-python==4.5.4.60
+opencv-python==4.8.1.78
 Pillow==12.3.0
 
 # Numerical Computing
