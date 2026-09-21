@@ -63,6 +63,9 @@ jobs:
       - name: Run policy validator tests
         run: python -m unittest discover -s .github/tests -p "test_security_policy*.py"
 
+      - name: Run govulncheck verdict regression tests
+        run: bash .github/tests/test_govulncheck_verdict.sh
+
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
@@ -144,14 +147,18 @@ jobs:
           govulncheck ./...
           text_status=$?
           set -e
-          if [ ! -s govulncheck-report.json ]; then
-            echo "::error::govulncheck did not produce a JSON report"
+          # Classify the run before reporting anything. A config-only report
+          # (package loading failed) must never be reported as a vulnerability
+          # finding, and a scanner failure must never be reported as a clean
+          # scan. Regression cases: .github/tests/test_govulncheck_verdict.sh
+          out="$(bash .github/scripts/govulncheck_verdict.sh \
+            govulncheck-report.json "$json_status" "$text_status" 2>&1)"
+          echo "$out"
+          verdict="$(printf '%s\n' "$out" | sed -n 's/^verdict=//p')"
+          echo "verdict=$verdict" >> "$GITHUB_OUTPUT"
+          if [ "$verdict" = "error" ]; then
+            echo "::error::govulncheck could not complete - this is a scanner error, not a vulnerability finding"
             exit 1
-          fi
-          if [ "$json_status" -ne 0 ] || [ "$text_status" -ne 0 ]; then
-            echo "exit_code=1" >> "$GITHUB_OUTPUT"
-          else
-            echo "exit_code=0" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Upload govulncheck report
@@ -163,9 +170,9 @@ jobs:
           retention-days: 30
 
       - name: Fail on Go vulnerabilities
-        if: steps.govulncheck.outputs.exit_code != '0'
+        if: steps.govulncheck.outputs.verdict == 'vulns'
         run: |
-          echo "::error::govulncheck reported vulnerabilities"
+          echo "::error::govulncheck reported reachable vulnerabilities"
           exit 1
 
   python-vuln-scan:
