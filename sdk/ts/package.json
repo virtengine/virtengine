@@ -93,7 +93,7 @@
     "lodash": "^4.17.23",
     "sort-json": "^2.0.1",
     "sort-package-json": "^3.0.0",
-    "ts-jest": "^29.4.12",
+    "ts-jest": "^29.2.6",
     "ts-jest-resolver": "^2.0.1",
     "ts-node": "^10.9.2",
     "ts-proto": "^2.7.7",
