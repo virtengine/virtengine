@@ -82,18 +82,15 @@ notify_webhook() {
     fi
 
     local payload
-    payload=$(cat << EOF
-{
-  "event": "${event}",
-  "status": "${status}",
-  "message": "${message}",
-  "snapshot": "${snapshot_name}",
-  "timestamp": "$(date -u +%FT%TZ)",
-  "host": "$(hostname)",
-  "region": "$(get_region)"
-}
-EOF
-)
+    payload=$(jq -n \
+        --arg event "${event}" \
+        --arg status "${status}" \
+        --arg message "${message}" \
+        --arg snapshot "${snapshot_name}" \
+        --arg timestamp "$(date -u +%FT%TZ)" \
+        --arg host "$(hostname)" \
+        --arg region "$(get_region)" \
+        '{event: $event, status: $status, message: $message, snapshot: $snapshot, timestamp: $timestamp, host: $host, region: $region}')
 
     curl -s -X POST "$ALERT_WEBHOOK" \
         -H "Content-Type: application/json" \
@@ -111,17 +108,25 @@ get_current_app_hash() {
     "$VIRTENGINE_CMD" status 2>&1 | jq -r '.sync_info.latest_app_hash' || echo ""
 }
 
-# Determine region from hostname or metadata
+# Determine region from hostname or metadata.
+# NOTE: the metadata endpoint is untrusted input. On non-AWS hosts (other
+# clouds, CI runners) it may answer with an error body instead of failing, so
+# the response MUST be validated -- interpolating it raw into JSON metadata
+# breaks backup verification (jq parse errors, red DR smoke test).
 get_region() {
-    # Try AWS metadata
-    local region=$(curl -s --connect-timeout 2 http://169.254.169.254/latest/meta-data/placement/region 2>/dev/null || true)
-    
-    if [ -z "$region" ]; then
+    local region
+    region=$(curl -s --connect-timeout 2 --max-time 5 http://169.254.169.254/latest/meta-data/placement/region 2>/dev/null | head -n 1 | tr -d '\r' || true)
+
+    if ! printf '%s' "$region" | grep -Eq '^[A-Za-z0-9._-]{1,64}$'; then
         # Fall back to hostname convention: us-east-validator-0
-        region=$(hostname | cut -d'-' -f1-2 2>/dev/null || echo "unknown")
+        region=$(hostname 2>/dev/null | cut -d'-' -f1-2 | head -n 1 | tr -d '\r' || echo "unknown")
     fi
-    
-    echo "$region"
+
+    if ! printf '%s' "$region" | grep -Eq '^[A-Za-z0-9._-]{1,64}$'; then
+        region="unknown"
+    fi
+
+    printf '%s\n' "$region"
 }
 
 # Create snapshot directory if it doesn't exist
@@ -169,7 +174,10 @@ add_signature_metadata() {
     key_fingerprint=$(get_signing_fingerprint "$SNAPSHOT_SIGNING_KEY")
 
     if [ -f "${SNAPSHOT_DIR}/${snapshot_name}_metadata.json" ]; then
-        jq ".signature = {\"file\": \"${snapshot_name}.sig\", \"algorithm\": \"${SNAPSHOT_SIGNATURE_ALG}\", \"key_fingerprint\": \"${key_fingerprint}\"}" \
+        jq --arg file "${snapshot_name}.sig" \
+            --arg algorithm "${SNAPSHOT_SIGNATURE_ALG}" \
+            --arg key_fingerprint "${key_fingerprint}" \
+            '.signature = {file: $file, algorithm: $algorithm, key_fingerprint: $key_fingerprint}' \
             "${SNAPSHOT_DIR}/${snapshot_name}_metadata.json" > "${SNAPSHOT_DIR}/${snapshot_name}_metadata.json.tmp"
         mv "${SNAPSHOT_DIR}/${snapshot_name}_metadata.json.tmp" "${SNAPSHOT_DIR}/${snapshot_name}_metadata.json"
     fi
@@ -280,19 +288,21 @@ create_snapshot() {
         --exclude="wasm/wasm/cache" \
         data/
     
-    # Generate metadata
-    cat > "${SNAPSHOT_DIR}/${snapshot_name}_metadata.json" << EOF
-{
-    "snapshot_name": "${snapshot_name}",
-    "height": ${height},
-    "app_hash": "${app_hash}",
-    "timestamp": "$(date -u +%FT%TZ)",
-    "node_home": "${NODE_HOME}",
-    "region": "$(get_region)",
-    "hostname": "$(hostname)",
-    "chain_id": "$("$VIRTENGINE_CMD" status 2>/dev/null | jq -r '.node_info.network' 2>/dev/null || echo 'unknown')"
-}
-EOF
+    # Generate metadata. Values are injected via jq --arg so untrusted bytes
+    # (hostname, region, chain id) can never break the JSON document.
+    local chain_id
+    chain_id=$("$VIRTENGINE_CMD" status 2>/dev/null | jq -r '.node_info.network' 2>/dev/null || echo 'unknown')
+    jq -n \
+        --arg snapshot_name "${snapshot_name}" \
+        --arg height "${height}" \
+        --arg app_hash "${app_hash}" \
+        --arg timestamp "$(date -u +%FT%TZ)" \
+        --arg node_home "${NODE_HOME}" \
+        --arg region "$(get_region)" \
+        --arg hostname "$(hostname)" \
+        --arg chain_id "${chain_id}" \
+        '{snapshot_name: $snapshot_name, height: ($height | tonumber? // $height), app_hash: $app_hash, timestamp: $timestamp, node_home: $node_home, region: $region, hostname: $hostname, chain_id: $chain_id}' \
+        > "${SNAPSHOT_DIR}/${snapshot_name}_metadata.json"
     
     add_signature_metadata "$snapshot_name"
 
