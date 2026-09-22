@@ -144,7 +144,7 @@ func EvidenceLineageDigest(evidence EvidenceBinding) []byte {
 	writeField(h, evidence.DeviceAttestation.PayloadHash)
 	writeField(h, []byte(strings.ToLower(evidence.DeviceAttestation.VaultRef)))
 	var timestamp [8]byte
-	binary.BigEndian.PutUint64(timestamp[:], uint64(evidence.GovernmentVerificationTime.UTC().Unix()))
+	binary.BigEndian.PutUint64(timestamp[:], uint64(evidence.GovernmentVerificationTime.UTC().Unix())) //nolint:gosec // G115: non-negative duration/timestamp after bounds validation
 	writeField(h, timestamp[:])
 	return h.Sum(nil)
 }

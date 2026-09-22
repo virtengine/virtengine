@@ -191,7 +191,7 @@ func encodeRecoveryActionEvidence(encoder *canonicalEncoder, actions RecoveryAct
 	if len(evidence) != len(names) {
 		return errors.New("every recovery action requires completion evidence")
 	}
-	encoder.u32(uint32(len(evidence)))
+	encoder.u32(uint32(len(evidence))) //nolint:gosec // G115: length is non-negative and bounded by explicit validation above
 	for index, value := range evidence {
 		if value.Action != names[index] || !validDigest(value.EvidenceDigest) {
 			return errors.New("recovery action evidence is incomplete or noncanonical")
@@ -373,7 +373,7 @@ func ValidateIncidentAudit(entries []IncidentAuditEntry, incidentDigest string) 
 	}
 	previous := digest(nil)
 	for index, entry := range entries {
-		if entry.Sequence != uint64(index+1) || entry.IncidentDigest != incidentDigest || entry.PreviousDigest != previous ||
+		if entry.Sequence != uint64(index+1) || entry.IncidentDigest != incidentDigest || entry.PreviousDigest != previous || //nolint:gosec // G115: validated non-negative counter; bounded by construction
 			entry.State != states[index] || entry.Action != actions[index] || index > 0 && entry.Coordinate <= entries[index-1].Coordinate {
 			return "", errors.New("incident audit chain is discontinuous")
 		}

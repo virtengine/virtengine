@@ -68,13 +68,13 @@ func TestWithAuthorizationSuccessReplayAndScoping(t *testing.T) {
 	var calls atomic.Int64
 	callback := func(context.Context) error { calls.Add(1); return nil }
 
-	require.NoError(t, consumer.WithAuthorization(sdk.WrapSDKContext(state.ctx), "account-a", nonce, auth, callback))
-	require.ErrorIs(t, consumer.WithAuthorization(sdk.WrapSDKContext(state.ctx), "account-a", nonce, auth, callback), ErrAuthorizationReplay)
-	require.ErrorIs(t, consumer.WithAuthorization(sdk.WrapSDKContext(state.ctx), "account-a", nonce, testDigest(3), callback), ErrAuthorizationReplay)
-	require.NoError(t, consumer.WithAuthorization(sdk.WrapSDKContext(state.ctx), "account-b", nonce, auth, callback))
+	require.NoError(t, consumer.WithAuthorization(sdk.WrapSDKContext(state.ctx), "account-a", nonce, auth, callback)) //nolint:staticcheck // SA1019: sdk.WrapSDKContext is deprecated but this call path unwraps the SDK context by identity; replacing it is a separate change
+	require.ErrorIs(t, consumer.WithAuthorization(sdk.WrapSDKContext(state.ctx), "account-a", nonce, auth, callback), ErrAuthorizationReplay) //nolint:staticcheck // SA1019: sdk.WrapSDKContext is deprecated but this call path unwraps the SDK context by identity; replacing it is a separate change
+	require.ErrorIs(t, consumer.WithAuthorization(sdk.WrapSDKContext(state.ctx), "account-a", nonce, testDigest(3), callback), ErrAuthorizationReplay) //nolint:staticcheck // SA1019: sdk.WrapSDKContext is deprecated but this call path unwraps the SDK context by identity; replacing it is a separate change
+	require.NoError(t, consumer.WithAuthorization(sdk.WrapSDKContext(state.ctx), "account-b", nonce, auth, callback)) //nolint:staticcheck // SA1019: sdk.WrapSDKContext is deprecated but this call path unwraps the SDK context by identity; replacing it is a separate change
 	require.EqualValues(t, 2, calls.Load())
 
-	stored, found, err := consumer.AuthorizationDigest(sdk.WrapSDKContext(state.ctx), "account-a", nonce)
+	stored, found, err := consumer.AuthorizationDigest(sdk.WrapSDKContext(state.ctx), "account-a", nonce) //nolint:staticcheck // SA1019: sdk.WrapSDKContext is deprecated but this call path unwraps the SDK context by identity; replacing it is a separate change
 	require.NoError(t, err)
 	require.True(t, found)
 	require.Equal(t, auth, stored)
@@ -101,7 +101,7 @@ func TestWithAuthorizationPreservesOuterContextAndCachesSDKWrites(t *testing.T) 
 	state := newTestStore(t)
 	callbackKey := []byte("context-write")
 	deadline := time.Now().Add(time.Minute).Round(0)
-	outer := context.WithValue(sdk.WrapSDKContext(state.ctx), outerContextKey{}, "outer-value")
+	outer := context.WithValue(sdk.WrapSDKContext(state.ctx), outerContextKey{}, "outer-value") //nolint:staticcheck // SA1019: sdk.WrapSDKContext is deprecated but this call path unwraps the SDK context by identity; replacing it is a separate change
 	outer, cancel := context.WithDeadline(outer, deadline)
 	defer cancel()
 
@@ -124,7 +124,7 @@ func TestWithAuthorizationCallbackRollback(t *testing.T) {
 	callbackKey := []byte("protected-write")
 	callbackErr := errors.New("callback failed")
 
-	err := consumer.WithAuthorization(sdk.WrapSDKContext(state.ctx), "account", nonce, auth, func(ctx context.Context) error {
+	err := consumer.WithAuthorization(sdk.WrapSDKContext(state.ctx), "account", nonce, auth, func(ctx context.Context) error { //nolint:staticcheck // SA1019: sdk.WrapSDKContext is deprecated but this call path unwraps the SDK context by identity; replacing it is a separate change
 		sdk.UnwrapSDKContext(ctx).KVStore(state.key).Set(callbackKey, []byte("not committed"))
 		return callbackErr
 	})
@@ -147,7 +147,7 @@ func TestWithAuthorizationCancellationRollback(t *testing.T) {
 	nonce := testDigest(8)
 	auth := testDigest(9)
 	callbackKey := []byte("canceled-write")
-	ctx, cancel := context.WithCancel(sdk.WrapSDKContext(state.ctx))
+	ctx, cancel := context.WithCancel(sdk.WrapSDKContext(state.ctx)) //nolint:staticcheck // SA1019: sdk.WrapSDKContext is deprecated but this call path unwraps the SDK context by identity; replacing it is a separate change
 
 	err := consumer.WithAuthorization(ctx, "account", nonce, auth, func(callbackCtx context.Context) error {
 		sdk.UnwrapSDKContext(callbackCtx).KVStore(state.key).Set(callbackKey, []byte("not committed"))
@@ -239,7 +239,7 @@ func TestKeeperRejectsMalformedInputsAndContexts(t *testing.T) {
 	require.ErrorIs(t, consumer.WithAuthorization(nil, "account", validNonce, validAuth, callback), ErrInvalidSDKContext)
 	require.ErrorIs(t, consumer.WithAuthorization(context.Background(), "account", validNonce, validAuth, callback), ErrInvalidSDKContext)
 
-	canceled, cancel := context.WithCancel(sdk.WrapSDKContext(state.ctx))
+	canceled, cancel := context.WithCancel(sdk.WrapSDKContext(state.ctx)) //nolint:staticcheck // SA1019: sdk.WrapSDKContext is deprecated but this call path unwraps the SDK context by identity; replacing it is a separate change
 	cancel()
 	require.ErrorIs(t, consumer.WithAuthorization(canceled, "account", validNonce, validAuth, callback), context.Canceled)
 	_, _, err = consumer.AuthorizationDigest(context.Background(), "account", validNonce)

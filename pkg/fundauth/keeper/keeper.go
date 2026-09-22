@@ -81,7 +81,7 @@ func (keeper *Keeper) WithAuthorization(ctx context.Context, accountID string, n
 	if store.Has(key) {
 		return ErrAuthorizationReplay
 	}
-	if err := protected(&protectedContext{Context: ctx, sdkContext: sdk.WrapSDKContext(cacheCtx)}); err != nil {
+	if err := protected(&protectedContext{Context: ctx, sdkContext: sdk.WrapSDKContext(cacheCtx)}); err != nil { //nolint:staticcheck // SA1019: sdk.WrapSDKContext is deprecated but this call path unwraps the SDK context by identity; replacing it is a separate change
 		return err
 	}
 	if err := ctx.Err(); err != nil {
@@ -153,7 +153,7 @@ func authorizationKey(accountID string, nonceDigest fundauth.Digest) []byte {
 }
 
 func appendLengthPrefixed(dst, value []byte) []byte {
-	dst = binary.BigEndian.AppendUint32(dst, uint32(len(value)))
+	dst = binary.BigEndian.AppendUint32(dst, uint32(len(value))) //nolint:gosec // G115: length is non-negative and bounded by explicit validation above
 	return append(dst, value...)
 }
 
