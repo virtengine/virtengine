@@ -34,12 +34,31 @@ func shortPath(t *testing.T, long string) string {
 	return syscall.UTF16ToString(buffer[:written])
 }
 
-func TestLongPathExpandsShortNames(t *testing.T) {
-	base, err := os.MkdirTemp("", "pathnorm-shortname-")
+// longTempRoot returns the long-name spelling of a freshly created temp
+// directory, and fails the test if the volume cannot supply one.
+//
+// Normalising the root first matters: on hosts whose %TEMP% is itself handed
+// out in 8.3 form (GitHub's windows-latest runners give
+// C:\Users\RUNNER~1\AppData\Local\Temp) the raw MkdirTemp base already carries a
+// tilde, and building the "long" operand from it would demand that LongPath
+// *preserve* that tilde - which is the opposite of what it is for.
+func longTempRoot(t *testing.T, pattern string) string {
+	t.Helper()
+	base, err := os.MkdirTemp("", pattern)
 	if err != nil {
 		t.Fatalf("MkdirTemp: %v", err)
 	}
 	t.Cleanup(func() { _ = os.RemoveAll(base) })
+
+	long, err := LongPath(base)
+	if err != nil {
+		t.Fatalf("LongPath(%q): %v", base, err)
+	}
+	return long
+}
+
+func TestLongPathExpandsShortNames(t *testing.T) {
+	base := longTempRoot(t, "pathnorm-shortname-")
 
 	long := filepath.Join(base, "long-component-name", "nested")
 	if err := os.MkdirAll(long, 0o700); err != nil {
@@ -63,19 +82,24 @@ func TestLongPathExpandsShortNames(t *testing.T) {
 	}
 }
 
+// TestLongPathIsIdempotentOnLongPaths pins the property the guard actually
+// relies on: re-normalising an already-normalised path is a no-op. Asserting
+// "LongPath(x) == x" instead would be wrong on any host whose temp root is
+// itself a short name, because the first call is then *supposed* to change it.
 func TestLongPathIsIdempotentOnLongPaths(t *testing.T) {
-	base, err := os.MkdirTemp("", "pathnorm-idempotent-")
-	if err != nil {
-		t.Fatalf("MkdirTemp: %v", err)
-	}
-	t.Cleanup(func() { _ = os.RemoveAll(base) })
+	base := longTempRoot(t, "pathnorm-idempotent-")
 
-	got, err := LongPath(base)
+	once, err := LongPath(base)
 	if err != nil {
 		t.Fatalf("LongPath(%q): %v", base, err)
 	}
-	if !strings.EqualFold(filepath.Clean(got), filepath.Clean(base)) {
-		t.Fatalf("LongPath(%q) = %q, want the input unchanged", base, got)
+	twice, err := LongPath(once)
+	if err != nil {
+		t.Fatalf("LongPath(%q): %v", once, err)
+	}
+	if !strings.EqualFold(filepath.Clean(once), filepath.Clean(twice)) {
+		t.Fatalf("LongPath is not idempotent: LongPath(%q) = %q but LongPath(%q) = %q",
+			base, once, once, twice)
 	}
 }
 
