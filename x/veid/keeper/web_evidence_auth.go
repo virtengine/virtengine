@@ -371,7 +371,13 @@ func webEvidenceGlobalNonceDigest(evidence types.WebEvidenceContext, key *types.
 
 func webEvidenceMetadataDigest(metadata map[string]string) (string, error) {
 	fields := make([]types.WebEvidenceField, 0, len(metadata))
-	for key, value := range metadata {
+	var keys []string
+	for k := range metadata {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	for _, key := range keys {
+		value := metadata[key]
 		if key == "" {
 			return "", types.ErrInvalidAttestation.Wrap("web evidence metadata key is required")
 		}

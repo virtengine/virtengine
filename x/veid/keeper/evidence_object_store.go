@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"sort"
 	"strings"
 
 	sdk "github.com/cosmos/cosmos-sdk/types"
@@ -86,12 +87,18 @@ func validatePayloadFreeEvidenceJSON(bz []byte) error {
 	if err := json.Unmarshal(bz, &value); err != nil {
 		return fmt.Errorf("decode evidence reference JSON: %w", err)
 	}
-	for _, forbidden := range []string{
-		"backend_uri", "backend_ref", "ciphertext", "wrapped_key", "nonce", "opening",
-		"raw_evidence", "biometric_template", "issuer_subject", "subject_id", "plaintext_identifier",
-	} {
-		for key := range value {
-			if strings.Contains(strings.ToLower(key), forbidden) {
+	var keys []string
+	for k := range value {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	for _, key := range keys {
+		lowerKey := strings.ToLower(key)
+		for _, forbidden := range []string{
+			"backend_uri", "backend_ref", "ciphertext", "wrapped_key", "nonce", "opening",
+			"raw_evidence", "biometric_template", "issuer_subject", "subject_id", "plaintext_identifier",
+		} {
+			if strings.Contains(lowerKey, forbidden) {
 				return errors.New("evidence reference contains forbidden field " + key)
 			}
 		}

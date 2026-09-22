@@ -434,7 +434,12 @@ func validateEvidencePayloadCutoverDeleteSource(sourceKind string, value []byte)
 		"confidence": {}, "provenance_hash": {}, "decision_reason": {},
 		"verified_at": {}, "verifier_key_id": {}, "override": {},
 	}
-	for field := range fields {
+	var keys []string
+	for k := range fields {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	for _, field := range keys {
 		if _, exists := evidenceFields[strings.ToLower(field)]; exists {
 			return errors.New("social scope delete source looks evidence-record-like")
 		}
