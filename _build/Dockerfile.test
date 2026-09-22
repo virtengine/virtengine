@@ -1,4 +1,4 @@
-FROM golang:1.25.14-alpine@sha256:1ae0735f00daffa3aaf1363a5184c0d2dc55c78e3db4ec70241cdac97bf84b59 AS build
+FROM golang:1.25.14-alpine@sha256:78c9e40f10516d7070156948a1747347cc5093022f06deeff3c9decd5faa3af7 AS build
 
 RUN apk add --no-cache ca-certificates git make bash gcc musl-dev linux-headers
 
@@ -13,7 +13,7 @@ COPY . .
 ENV CGO_ENABLED=0
 RUN go build -trimpath -buildvcs=false -ldflags "-s -w" -o /out/virtengine ./cmd/virtengine
 
-FROM golang:1.25.14-alpine@sha256:1ae0735f00daffa3aaf1363a5184c0d2dc55c78e3db4ec70241cdac97bf84b59
+FROM golang:1.25.14-alpine@sha256:78c9e40f10516d7070156948a1747347cc5093022f06deeff3c9decd5faa3af7
 
 RUN apk add --no-cache ca-certificates bash curl jq && \
     addgroup -S virtengine && \
