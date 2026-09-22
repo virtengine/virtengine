@@ -296,18 +296,7 @@ func validateEvidenceEnvelopeHex(value, name string) error {
 }
 
 func (e EvidenceEnvelopeV1) core() evidenceEnvelopeV1Core {
-	return evidenceEnvelopeV1Core{
-		Domain: e.Domain, Version: e.Version, ChainID: e.ChainID, AccountAddress: e.AccountAddress,
-		AccountBindingKeyFingerprint: e.AccountBindingKeyFingerprint, AccountBindingKeyAlgorithm: e.AccountBindingKeyAlgorithm,
-		ScopeID: e.ScopeID, EvidenceType: e.EvidenceType, EvidenceID: e.EvidenceID, Action: e.Action,
-		IntendedVerifier: e.IntendedVerifier, PayloadDigest: e.PayloadDigest, SourceContextDigest: e.SourceContextDigest,
-		StorageCommitmentDigest: e.StorageCommitmentDigest,
-		IssuerID:                e.IssuerID, IssuerKeyID: e.IssuerKeyID, IssuerKeySequence: e.IssuerKeySequence,
-		IssuerKeyFingerprint: e.IssuerKeyFingerprint, IssuerKeyAlgorithm: e.IssuerKeyAlgorithm,
-		PolicyVersion: e.PolicyVersion, SchemaVersion: e.SchemaVersion, ModelVersion: e.ModelVersion,
-		Nonce: e.Nonce, Challenge: e.Challenge, IssuedAtUnix: e.IssuedAtUnix, ExpiresAtUnix: e.ExpiresAtUnix,
-		IssuedHeight: e.IssuedHeight, ExpiresHeight: e.ExpiresHeight,
-	}
+	return evidenceEnvelopeV1Core(e)
 }
 
 func (e EvidenceEnvelopeV1) signBytes(domain string) ([]byte, error) {

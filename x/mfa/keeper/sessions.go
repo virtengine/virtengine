@@ -54,7 +54,7 @@ func (k Keeper) hasValidAuthSessionWithDevice(ctx sdk.Context, address sdk.AccAd
 		if session.DeviceFingerprint != "" && session.DeviceFingerprint != deviceFingerprint {
 			continue
 		}
-		if !k.sessionFactorsSatisfyPolicy(ctx, address, action, session.VerifiedFactors, deviceFingerprint) {
+		if !k.sessionFactorsSatisfyPolicy(ctx, address, action, session.VerifiedFactors) {
 			continue
 		}
 
@@ -100,7 +100,7 @@ func (k Keeper) consumeAuthSessionWithDevice(ctx sdk.Context, address sdk.AccAdd
 			deviceMismatch = true
 			continue
 		}
-		if !k.sessionFactorsSatisfyPolicy(ctx, address, action, session.VerifiedFactors, deviceFingerprint) {
+		if !k.sessionFactorsSatisfyPolicy(ctx, address, action, session.VerifiedFactors) {
 			insufficientFactors = true
 			continue
 		}
@@ -132,7 +132,10 @@ func (k Keeper) consumeAuthSessionWithDevice(ctx sdk.Context, address sdk.AccAdd
 	return types.ErrSessionNotFound.Wrapf("no valid authorization session found for action %s", action.String())
 }
 
-func (k Keeper) sessionFactorsSatisfyPolicy(ctx sdk.Context, address sdk.AccAddress, action types.SensitiveTransactionType, verifiedFactors []types.FactorType, deviceFingerprint string) bool {
+// sessionFactorsSatisfyPolicy reports whether the session's verified factors satisfy the
+// MFA policy for the action. Device binding is enforced by each caller before this call,
+// so the device fingerprint is deliberately not a parameter here.
+func (k Keeper) sessionFactorsSatisfyPolicy(ctx sdk.Context, address sdk.AccAddress, action types.SensitiveTransactionType, verifiedFactors []types.FactorType) bool {
 	_, required, combinations := NewMFAGatingHooks(k).RequiresMFA(ctx, address, action)
 	if !required {
 		return true
@@ -289,7 +292,7 @@ func (k Keeper) ValidateSessionForTransaction(
 	if session.DeviceFingerprint != "" && session.DeviceFingerprint != deviceFingerprint {
 		return types.ErrDeviceMismatch.Wrap("device fingerprint does not match session")
 	}
-	if !k.sessionFactorsSatisfyPolicy(ctx, address, action, session.VerifiedFactors, deviceFingerprint) {
+	if !k.sessionFactorsSatisfyPolicy(ctx, address, action, session.VerifiedFactors) {
 		return types.ErrInsufficientFactors.Wrap("verified factors do not satisfy policy requirements")
 	}
 

@@ -59,7 +59,7 @@ func NewSettlementIBCMetrics(registerer prometheus.Registerer) (*SettlementIBCMe
 	if added {
 		registered = append(registered, outcomes)
 	}
-	failures, added, err := registerIBCCollector(registerer, prometheus.NewCounterVec(prometheus.CounterOpts{
+	failures, _, err := registerIBCCollector(registerer, prometheus.NewCounterVec(prometheus.CounterOpts{
 		Namespace: "virtengine", Subsystem: "settlement_ibc", Name: "compensation_failures_total",
 		Help: "Failed compensation stages by bounded packet type, stage, and reason.",
 	}, []string{"packet_type", "stage", "reason"}))

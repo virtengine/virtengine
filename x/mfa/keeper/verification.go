@@ -1165,7 +1165,7 @@ func (k Keeper) CreateTOTPChallenge(
 	factorID string,
 	transactionType types.SensitiveTransactionType,
 ) (*types.Challenge, error) {
-	if _, err := k.requireOTPVerifierEnrollment(ctx, address, types.FactorTypeTOTP, factorID); err != nil {
+	if err := k.requireOTPVerifierEnrollment(ctx, address, types.FactorTypeTOTP, factorID); err != nil {
 		return nil, err
 	}
 
@@ -1205,7 +1205,7 @@ func (k Keeper) CreateOTPChallenge(
 	if deliveryMethod == "" || deliveryID == "" {
 		return nil, types.ErrInvalidChallenge.Wrap("OTP delivery method and ID are required")
 	}
-	if _, err := k.requireOTPVerifierEnrollment(ctx, address, factorType, factorID); err != nil {
+	if err := k.requireOTPVerifierEnrollment(ctx, address, factorType, factorID); err != nil {
 		return nil, err
 	}
 
@@ -1273,15 +1273,15 @@ func (k Keeper) requireOTPVerifierEnrollment(
 	address sdk.AccAddress,
 	factorType types.FactorType,
 	factorID string,
-) (*types.FactorEnrollment, error) {
+) error {
 	enrollment, err := k.requireActiveEnrollment(ctx, address, factorType, factorID)
 	if err != nil {
-		return nil, err
+		return err
 	}
 	if len(enrollment.PublicIdentifier) != ed25519.PublicKeySize {
-		return nil, types.ErrInvalidEnrollment.Wrap("OTP verifier public key must be 32-byte Ed25519 key")
+		return types.ErrInvalidEnrollment.Wrap("OTP verifier public key must be 32-byte Ed25519 key")
 	}
-	return enrollment, nil
+	return nil
 }
 
 // CreateVEIDChallenge creates a new VEID score threshold challenge

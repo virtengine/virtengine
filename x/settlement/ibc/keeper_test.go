@@ -26,6 +26,12 @@ import (
 	settlementtypes "github.com/virtengine/virtengine/x/settlement/types"
 )
 
+// Lifecycle hook stage names shared across the IBC settlement tests.
+const (
+	lifecycleStageFinalize   = "finalize"
+	lifecycleStageCompensate = "compensate"
+)
+
 type mockSettlementKeeper struct {
 	nextEscrowID int
 	escrows      map[string]settlementtypes.EscrowAccount
@@ -205,25 +211,25 @@ func (h *testLifecycleHooks) PrepareTransfer(ctx sdk.Context, packet SettlementP
 }
 
 func (h *testLifecycleHooks) FinalizeTransfer(ctx sdk.Context, _ PendingPacket, _ TransferTransition) error {
-	if h.failAt == "finalize" {
+	if h.failAt == lifecycleStageFinalize {
 		return fmt.Errorf("injected finalize failure")
 	}
 	ledger := h.getLedger(ctx)
 	ledger.Committed += ledger.Held
 	ledger.Held = 0
-	ledger.Calls = append(ledger.Calls, "finalize")
+	ledger.Calls = append(ledger.Calls, lifecycleStageFinalize)
 	h.setLedger(ctx, ledger)
 	return nil
 }
 
 func (h *testLifecycleHooks) CompensateTransfer(ctx sdk.Context, _ PendingPacket, _ TransferTransition) error {
-	if h.failAt == "compensate" {
+	if h.failAt == lifecycleStageCompensate {
 		return fmt.Errorf("injected compensate failure")
 	}
 	ledger := h.getLedger(ctx)
 	ledger.Refunded += ledger.Held
 	ledger.Held = 0
-	ledger.Calls = append(ledger.Calls, "compensate")
+	ledger.Calls = append(ledger.Calls, lifecycleStageCompensate)
 	h.setLedger(ctx, ledger)
 	return nil
 }
@@ -364,9 +370,9 @@ func TestIBCKeeperTerminalCallbacks(t *testing.T) {
 	}{
 		{name: "exact acknowledgement retry", first: "success", second: "success", wantState: TransferStateFinalized},
 		{name: "conflicting acknowledgement", first: "success", second: "ack", secondAck: NewErrorAcknowledgement(fmt.Errorf("rejected")), wantErr: ErrTerminalConflict, wantState: TransferStateFinalized},
-		{name: "late acknowledgement after timeout", first: "timeout", second: "success", wantErr: ErrTerminalConflict, wantState: TransferStateCompensated, wantReason: CompensationReasonTimeout},
-		{name: "reordered timeout after acknowledgement", first: "success", second: "timeout", wantErr: ErrTerminalConflict, wantState: TransferStateFinalized},
-		{name: "duplicate timeout", first: "timeout", second: "timeout", wantState: TransferStateCompensated, wantReason: CompensationReasonTimeout},
+		{name: "late acknowledgement after timeout", first: string(CompensationReasonTimeout), second: "success", wantErr: ErrTerminalConflict, wantState: TransferStateCompensated, wantReason: CompensationReasonTimeout},
+		{name: "reordered timeout after acknowledgement", first: "success", second: string(CompensationReasonTimeout), wantErr: ErrTerminalConflict, wantState: TransferStateFinalized},
+		{name: "duplicate timeout", first: string(CompensationReasonTimeout), second: string(CompensationReasonTimeout), wantState: TransferStateCompensated, wantReason: CompensationReasonTimeout},
 	}
 
 	for _, test := range tests {
@@ -385,7 +391,7 @@ func TestIBCKeeperTerminalCallbacks(t *testing.T) {
 					return env.keeper.OnAcknowledgementPacket(env.ctx, packet, successAck.GetBytes(), relayer)
 				case "ack":
 					return env.keeper.OnAcknowledgementPacket(env.ctx, packet, ack.GetBytes(), relayer)
-				case "timeout":
+				case string(CompensationReasonTimeout):
 					return env.keeper.OnTimeoutPacket(env.ctx, packet, relayer)
 				default:
 					t.Fatalf("unknown callback kind %q", kind)
@@ -426,10 +432,10 @@ func TestIBCKeeperAtomicTransitionRollbackAndRetry(t *testing.T) {
 		wantCommitted int64
 		wantRefunded  int64
 	}{
-		{name: "finalize custody failure", callback: "success", failAt: "finalize", wantCommitted: 1000},
-		{name: "compensation custody failure", callback: "timeout", failAt: "compensate", wantRefunded: 1000},
+		{name: "finalize custody failure", callback: "success", failAt: lifecycleStageFinalize, wantCommitted: 1000},
+		{name: "compensation custody failure", callback: string(CompensationReasonTimeout), failAt: lifecycleStageCompensate, wantRefunded: 1000},
 		{name: "accounting failure", callback: "success", failAt: "accounting", wantCommitted: 1000},
-		{name: "audit failure", callback: "timeout", failAt: "audit", wantRefunded: 1000},
+		{name: "audit failure", callback: string(CompensationReasonTimeout), failAt: "audit", wantRefunded: 1000},
 	}
 
 	for _, test := range tests {
@@ -441,7 +447,7 @@ func TestIBCKeeperAtomicTransitionRollbackAndRetry(t *testing.T) {
 			relayer := sdk.AccAddress([]byte("relayer_addr________"))
 			ack := NewResultAcknowledgement(EscrowDepositAck{EscrowID: "escrow-1", Status: "created"})
 			runCallback := func() error {
-				if test.callback == "timeout" {
+				if test.callback == string(CompensationReasonTimeout) {
 					return env.keeper.OnTimeoutPacket(env.ctx, packet, relayer)
 				}
 				return env.keeper.OnAcknowledgementPacket(env.ctx, packet, ack.GetBytes(), relayer)
@@ -467,7 +473,7 @@ func TestIBCKeeperAtomicTransitionRollbackAndRetry(t *testing.T) {
 			require.False(t, found)
 			_, found = env.keeper.getTerminalMarker(env.ctx, "channel-0", sequence)
 			require.True(t, found)
-			if test.callback == "timeout" {
+			if test.callback == string(CompensationReasonTimeout) {
 				require.NotNil(t, store.Get(TimeoutPacketKey("channel-0", sequence)))
 				require.Nil(t, store.Get(AckPacketKey("channel-0", sequence)))
 			} else {
@@ -478,9 +484,9 @@ func TestIBCKeeperAtomicTransitionRollbackAndRetry(t *testing.T) {
 			require.Equal(t, int64(1000), ledger.Available+ledger.Held+ledger.Committed+ledger.Refunded)
 			require.Equal(t, test.wantCommitted, ledger.Committed)
 			require.Equal(t, test.wantRefunded, ledger.Refunded)
-			custodyCall := "finalize"
-			if test.callback == "timeout" {
-				custodyCall = "compensate"
+			custodyCall := lifecycleStageFinalize
+			if test.callback == string(CompensationReasonTimeout) {
+				custodyCall = lifecycleStageCompensate
 			}
 			require.Equal(t, []string{"prepare", custodyCall, "accounting", "audit"}, ledger.Calls)
 		})
@@ -709,7 +715,7 @@ func TestIBCKeeperRejectsSemanticallyCorruptTerminalMarker(t *testing.T) {
 	_, found = env.keeper.getPendingPacket(env.ctx, "channel-0", sequence)
 	require.True(t, found)
 	require.Nil(t, env.ctx.KVStore(env.storeKey).Get(AckPacketKey("channel-0", sequence)))
-	require.NotContains(t, env.lifecycle.getLedger(env.ctx).Calls, "finalize")
+	require.NotContains(t, env.lifecycle.getLedger(env.ctx).Calls, lifecycleStageFinalize)
 }
 
 func TestIBCModuleRejectsAndRetainsMalformedHandshakeRecord(t *testing.T) {

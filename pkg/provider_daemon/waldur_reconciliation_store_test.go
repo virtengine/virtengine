@@ -157,7 +157,7 @@ func TestFileReconciliationJobStoreRejectsResultAllocationMismatch(t *testing.T)
 	attempt, err := store.BeginAttempt(ctx, job.ID)
 	require.NoError(t, err)
 	result := testDurableReconciliationResult(job, attempt.Number)
-	result.Result.AllocationID = "other-allocation"
+	result.Result.AllocationID = testOtherAllocationID
 	result.ResultDigest, err = canonicalReconciliationResultDigest(result.Result)
 	require.NoError(t, err)
 	cursor := ReconciliationCursor{StreamID: "waldur/default", JobID: job.ID, ResultDigest: result.ResultDigest}
@@ -426,7 +426,7 @@ func TestFileReconciliationJobStoreSharedReplicasRespectCapacity(t *testing.T) {
 	first.maxEvents, second.maxEvents = 1, 1
 	firstJob := testReconciliationJob()
 	secondJob := firstJob
-	secondJob.ID, secondJob.AllocationID, secondJob.ResourceUUID = "job-2", "allocation-2", "resource-2"
+	secondJob.ID, secondJob.AllocationID, secondJob.ResourceUUID = testSecondJobID, "allocation-2", "resource-2"
 	type result struct{ err error }
 	results := make(chan result, 2)
 	for _, candidate := range []struct {
@@ -473,6 +473,13 @@ func testReconciliationJob() ReconciliationJob {
 		PeriodStart: now.Add(-time.Hour), PeriodEnd: now, CreatedAt: now,
 	}
 }
+
+// Identifiers used by the shared reconciliation test fixtures to construct a
+// second, distinct job and allocation.
+const (
+	testSecondJobID       = "job-2"
+	testOtherAllocationID = "other-allocation"
+)
 
 func testDurableReconciliationResult(job ReconciliationJob, attempt uint32) DurableReconciliationResult {
 	result := ReconciliationResult{

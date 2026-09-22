@@ -261,7 +261,7 @@ func Validate(profile CloudProfile, graph DesiredResourceGraph) error {
 		used.StorageGiB += resource.Budget.StorageGiB
 		used.CostMinorUnits += resource.Budget.CostMinorUnits
 	}
-	if uint32(len(resources)) > profile.Quotas.Resources || used.VCPUs > profile.Quotas.VCPUs || used.MemoryMiB > profile.Quotas.MemoryMiB || used.StorageGiB > profile.Quotas.StorageGiB {
+	if uint64(len(resources)) > uint64(profile.Quotas.Resources) || used.VCPUs > profile.Quotas.VCPUs || used.MemoryMiB > profile.Quotas.MemoryMiB || used.StorageGiB > profile.Quotas.StorageGiB {
 		return errors.New("resource graph exceeds profile quota")
 	}
 	if used.CostMinorUnits > profile.CostCeiling.MinorUnits {

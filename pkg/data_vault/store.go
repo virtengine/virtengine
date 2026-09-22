@@ -196,7 +196,9 @@ func (s *EncryptedBlobStore) Store(ctx context.Context, req *UploadRequest) (*En
 
 	var putResp *artifact_store.PutResponse
 	if transactional, ok := s.backend.(blobTransactionBackend); ok {
-		putResp, err = transactional.PutVaultBlob(ctx, putReq, blobID, metadataFactory)
+		// The transactional backend invokes metadataFactory internally, so its
+		// response is not read here; only the non-transactional path needs it.
+		_, err = transactional.PutVaultBlob(ctx, putReq, blobID, metadataFactory)
 	} else {
 		putResp, err = s.backend.Put(ctx, putReq)
 		if err == nil {

@@ -179,12 +179,18 @@ func TestErasureCoordinatorExactRetryAndConcurrentDuplicate(t *testing.T) {
 	if len(dependencies.storage.receipts) != 1 || len(dependencies.kms.receipts) != 1 {
 		t.Fatal("concurrent duplicate performed more than one exact adapter operation")
 	}
-	first, _ := json.Marshal(dependencies.storage.receipts[request.StorageOperationID])
+	first, err := json.Marshal(dependencies.storage.receipts[request.StorageOperationID])
+	if err != nil {
+		t.Fatal(err)
+	}
 	operation, err := coordinator.Erase(context.Background(), request)
 	if err != nil || operation.State != ErasureResolved {
 		t.Fatal("terminal exact retry did not return the same result")
 	}
-	second, _ := json.Marshal(dependencies.storage.receipts[request.StorageOperationID])
+	second, err := json.Marshal(dependencies.storage.receipts[request.StorageOperationID])
+	if err != nil {
+		t.Fatal(err)
+	}
 	if !bytes.Equal(first, second) {
 		t.Fatal("exact retry changed receipt bytes")
 	}
@@ -331,9 +337,11 @@ func TestDeletionReceiptRejectsWrongErasureFenceClaims(t *testing.T) {
 		t.Fatal(err)
 	}
 	mutations := map[string]func(*contracts.DeletionReceipt){
-		"request digest":    func(receipt *contracts.DeletionReceipt) { receipt.RequestDigest = fixtureDigest("wrong request") },
-		"backup generation": func(receipt *contracts.DeletionReceipt) { receipt.BackupGenerationDigest = fixtureDigest("wrong backup") },
-		"erasure epoch":     func(receipt *contracts.DeletionReceipt) { receipt.ErasureEpoch++ },
+		"request digest": func(receipt *contracts.DeletionReceipt) { receipt.RequestDigest = fixtureDigest("wrong request") },
+		"backup generation": func(receipt *contracts.DeletionReceipt) {
+			receipt.BackupGenerationDigest = fixtureDigest("wrong backup")
+		},
+		"erasure epoch": func(receipt *contracts.DeletionReceipt) { receipt.ErasureEpoch++ },
 	}
 	for name, mutate := range mutations {
 		t.Run(name, func(t *testing.T) {
@@ -343,7 +351,7 @@ func TestDeletionReceiptRejectsWrongErasureFenceClaims(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			resolution := fixtureResolution(request, NewMemoryErasureOperationStore())
+			resolution := fixtureResolution(request)
 			resolution.ApplyResolved = func(contracts.EvidenceObjectRef) error { return nil }
 			store := NewMemoryErasureOperationStore()
 			store.SetFixtureResolvedApply(func(contracts.EvidenceObjectRef) error { return nil })
@@ -355,7 +363,7 @@ func TestDeletionReceiptRejectsWrongErasureFenceClaims(t *testing.T) {
 			}
 		})
 	}
-	resolution := fixtureResolution(request, NewMemoryErasureOperationStore())
+	resolution := fixtureResolution(request)
 	resolution.ObjectCommitment = fixtureDigest("wrong resolution object")
 	if result, err := contracts.ResolveDeletion(request.Target, resolution, []contracts.DeletionReceipt{storage, kms}, dependencies.resolver); err == nil || result.State != contracts.RetentionDeletionUnresolved {
 		t.Fatal("resolution context with mismatched target claims resolved deletion")
@@ -451,7 +459,7 @@ func (f *erasureFixture) coordinator(t *testing.T, store ErasureOperationStore, 
 	return coordinator
 }
 
-func fixtureResolution(request ErasureRequest, store ErasureOperationStore) contracts.DeletionResolutionContext {
+func fixtureResolution(request ErasureRequest) contracts.DeletionResolutionContext {
 	return contracts.DeletionResolutionContext{
 		AuthorizationDigest: request.AuthorizationDigest, PolicyDigest: request.PolicyDigest, ProfileDigest: request.ProfileDigest,
 		RequestDigest: request.RequestDigest, ConsentDecisionDigest: request.ConsentDecisionDigest, ConsentPolicyDigest: request.ConsentPolicyDigest,

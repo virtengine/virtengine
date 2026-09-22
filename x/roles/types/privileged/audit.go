@@ -102,8 +102,9 @@ func VerifyAuditChain(entries []PrivilegedAuditEntry, checkpoints []AuditCheckpo
 		checkpointBySequence[checkpoint.Sequence] = checkpoint
 	}
 	var previous [32]byte
-	for index, entry := range entries {
-		expectedSequence := uint64(index + 1)
+	expectedSequence := uint64(0)
+	for _, entry := range entries {
+		expectedSequence++
 		if entry.Sequence != expectedSequence {
 			return fmt.Errorf("audit sequence gap or reorder at %d", expectedSequence)
 		}

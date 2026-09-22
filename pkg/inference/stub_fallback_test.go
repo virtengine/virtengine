@@ -24,7 +24,7 @@ func TestIsRealInferenceEnabledRequiresSidecar(t *testing.T) {
 	config.StrictDeterminism = true
 	config.SidecarTLS = true
 	config.SidecarTLSCAFile = "test-ca.pem"
-	config.SidecarTLSCertFile = "test-cert.pem"
+	config.SidecarTLSCertFile = testSidecarTLSCertFile
 	config.SidecarTLSKeyFile = "test-key.pem"
 	config.SidecarTLSServerName = "veid-inference.test"
 	if !config.IsRealInferenceEnabled() {

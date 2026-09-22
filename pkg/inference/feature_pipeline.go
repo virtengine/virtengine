@@ -16,6 +16,9 @@ import (
 // Feature Pipeline
 // ============================================================================
 
+// unknownDocumentType labels an OCR scope whose manifest declared no document type.
+const unknownDocumentType = "unknown"
+
 // FeaturePipeline orchestrates all feature extraction components to build
 // the complete feature vector for ML inference.
 //
@@ -588,7 +591,7 @@ func (p *FeaturePipeline) extractOCRFromScopes(
 	for _, scope := range scopes {
 		docType := scope.Metadata["document_type"]
 		if docType == "" {
-			docType = "unknown"
+			docType = unknownDocumentType
 		}
 
 		result, err := p.ocrExtractor.Extract(ctx, scope.Data, docType)

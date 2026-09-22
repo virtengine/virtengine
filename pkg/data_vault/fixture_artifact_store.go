@@ -352,7 +352,11 @@ func (s *FixtureFileArtifactStore) recoverErasureStorage() error {
 			delete(s.index.LegalHolds, target.BackendRef)
 			delete(s.index.BlobMetadata, target.BlobID)
 		}
-		tombstone.StorageReceipt = fixtureStorageReceipt(tombstone.ID, tombstone.Targets)
+		storageReceipt, err := fixtureStorageReceipt(tombstone.ID, tombstone.Targets)
+		if err != nil {
+			return err
+		}
+		tombstone.StorageReceipt = storageReceipt
 		tombstone.State = FixtureErasureStorageDeleted
 		tombstone.UpdatedAt = time.Now().UTC()
 		changed = true
@@ -828,7 +832,7 @@ func atomicWriteFixtureFile(path string, data []byte, mode os.FileMode) error {
 	if err := os.Rename(name, path); err != nil {
 		return err
 	}
-	if runtime.GOOS == "windows" {
+	if runtime.GOOS == goosWindows {
 		return nil
 	}
 	directory, err := os.Open(filepath.Dir(path))
