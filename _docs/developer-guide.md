@@ -51,7 +51,7 @@ cd virtengine
 make build
 
 # Run localnet
-make localnet-start
+./scripts/localnet.sh start
 
 # Run tests
 make test
@@ -468,7 +468,7 @@ docker compose down
 
 ```bash
 # Terminal 1: Start chain
-make localnet-start
+./scripts/localnet.sh start
 
 # Terminal 2: Start provider daemon
 ./cmd/provider-daemon/provider-daemon start \
