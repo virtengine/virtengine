@@ -158,7 +158,7 @@ make lint-go
 make generate
 
 # Clean cache
-make clean-cache
+make cache-clean
 
 # Start localnet (requires Docker)
 ./scripts/localnet.sh start

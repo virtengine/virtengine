@@ -114,8 +114,9 @@ VirtEngine is a Cosmos SDK v0.53.x-based blockchain for decentralized cloud comp
 git clone https://github.com/virtengine/virtengine.git
 cd virtengine
 
-# Step 2: Install dependencies
-make setup
+# Step 2: Install dependencies and setup environment
+make cache
+make setup-hooks
 
 # Step 3: Build the virtengine binary
 make virtengine
