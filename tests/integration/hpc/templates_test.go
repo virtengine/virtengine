@@ -22,6 +22,12 @@ func setupTemplateIntegrationHarness(t *testing.T, baseTime time.Time) (sdk.Cont
 	ctx, keeper, _ := setupIntegrationKeeper(t)
 	ctx = ctx.WithBlockTime(baseTime).WithBlockHeight(1)
 
+	// Production always wires a resources keeper (app/types/app.go), and the
+	// keeper rejects job submission when none is set. The template suite submits
+	// a job, so install the stub here rather than in setupIntegrationKeeper —
+	// the job-lifecycle suite depends on that harness staying reservation-free.
+	keeper.SetResourcesKeeper(newTemplateReservationStub())
+
 	return ctx, keeper, keeper.GetAuthority()
 }
 
