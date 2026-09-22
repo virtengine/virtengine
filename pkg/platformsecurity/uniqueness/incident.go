@@ -131,11 +131,10 @@ func ValidateBiometricIncidentRecoveryApproval(previous, next BiometricIncident,
 }
 
 func (incident BiometricIncident) CanonicalBytesWithoutState() ([]byte, error) {
-	state := incident.State
+	// incident is a value-receiver copy, so overriding State here is local to
+	// this call and needs no restoration before returning.
 	incident.State = IncidentDetected
-	value, err := incident.CanonicalBytes()
-	incident.State = state
-	return value, err
+	return incident.CanonicalBytes()
 }
 
 type RecoveryActions struct {

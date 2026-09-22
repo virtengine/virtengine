@@ -139,11 +139,11 @@ func matchRuntimePolicyProjection(policy RuntimePolicyV1, projection ActiveVerif
 	if err != nil {
 		return rejectRuntimePolicy(policy, RuntimePolicyStateMalformed, "model manifest commitment is malformed", types.ErrModelManifestMismatch.Wrap(err.Error()))
 	}
-	_, err = decodeOptionalRuntimeCommitment(projection.WeightsSHA256)
+	err = decodeOptionalRuntimeCommitment(projection.WeightsSHA256)
 	if err != nil {
 		return rejectRuntimePolicy(policy, RuntimePolicyStateMalformed, "weights commitment is malformed", types.ErrModelManifestMismatch.Wrap(err.Error()))
 	}
-	_, err = decodeOptionalRuntimeCommitment(projection.TestVectorsSHA256)
+	err = decodeOptionalRuntimeCommitment(projection.TestVectorsSHA256)
 	if err != nil {
 		return rejectRuntimePolicy(policy, RuntimePolicyStateMalformed, "test-vector commitment is malformed", types.ErrModelManifestMismatch.Wrap(err.Error()))
 	}
@@ -158,11 +158,12 @@ func matchRuntimePolicyProjection(policy RuntimePolicyV1, projection ActiveVerif
 	return cloneRuntimePolicy(policy), nil
 }
 
-func decodeOptionalRuntimeCommitment(value string) ([]byte, error) {
+func decodeOptionalRuntimeCommitment(value string) error {
 	if value == "" {
-		return nil, nil
+		return nil
 	}
-	return decodeSHA256Commitment(value)
+	_, err := decodeSHA256Commitment(value)
+	return err
 }
 
 func rejectRuntimePolicy(policy RuntimePolicyV1, state RuntimePolicyState, reason string, cause error) (RuntimePolicyV1, error) {

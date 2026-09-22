@@ -8,6 +8,10 @@ import (
 	"sort"
 )
 
+// msgMultiSendTypeURL is the bank MsgMultiSend route shared by the registry
+// and its conformance tests.
+const msgMultiSendTypeURL = "/cosmos.bank.v1beta1.MsgMultiSend"
+
 var ErrUnknownSource = errors.New("unknown fund authorization source")
 
 type Phase uint8
@@ -212,7 +216,7 @@ func internal(sourceID string, effect Effect) SourceDescriptor {
 }
 
 var defaultDescriptors = []SourceDescriptor{
-	route("/cosmos.bank.v1beta1.MsgMultiSend", PhaseImmediate, EffectTransfer),
+	route(msgMultiSendTypeURL, PhaseImmediate, EffectTransfer),
 	route("/cosmos.bank.v1beta1.MsgSend", PhaseImmediate, EffectTransfer),
 	route("/cosmos.distribution.v1beta1.MsgCommunityPoolSpend", PhaseDeferred, EffectTreasury),
 	route("/cosmos.distribution.v1beta1.MsgFundCommunityPool", PhaseImmediate, EffectTreasury),

@@ -18,7 +18,6 @@ import (
 
 const (
 	evidenceConfidenceThreshold uint32 = 7000
-	evidenceLowConfidenceCutoff uint32 = 5000
 )
 
 // EvidenceAssessment summarizes evidence confidence and provenance for scoring.
@@ -309,9 +308,4 @@ func applyEvidenceConfidence(score uint32, confidence uint32) (uint32, bool) {
 		return math.MaxUint32, true
 	}
 	return uint32(adjusted64), true
-}
-
-// shouldFlagLowEvidenceConfidence returns true if confidence is below cutoff.
-func shouldFlagLowEvidenceConfidence(confidence uint32) bool {
-	return confidence > 0 && confidence < evidenceLowConfidenceCutoff
 }

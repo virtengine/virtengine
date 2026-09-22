@@ -68,10 +68,10 @@ func TestWithAuthorizationSuccessReplayAndScoping(t *testing.T) {
 	var calls atomic.Int64
 	callback := func(context.Context) error { calls.Add(1); return nil }
 
-	require.NoError(t, consumer.WithAuthorization(sdk.WrapSDKContext(state.ctx), "account-a", nonce, auth, callback)) //nolint:staticcheck // SA1019: sdk.WrapSDKContext is deprecated but this call path unwraps the SDK context by identity; replacing it is a separate change
-	require.ErrorIs(t, consumer.WithAuthorization(sdk.WrapSDKContext(state.ctx), "account-a", nonce, auth, callback), ErrAuthorizationReplay) //nolint:staticcheck // SA1019: sdk.WrapSDKContext is deprecated but this call path unwraps the SDK context by identity; replacing it is a separate change
+	require.NoError(t, consumer.WithAuthorization(sdk.WrapSDKContext(state.ctx), "account-a", nonce, auth, callback))                                  //nolint:staticcheck // SA1019: sdk.WrapSDKContext is deprecated but this call path unwraps the SDK context by identity; replacing it is a separate change
+	require.ErrorIs(t, consumer.WithAuthorization(sdk.WrapSDKContext(state.ctx), "account-a", nonce, auth, callback), ErrAuthorizationReplay)          //nolint:staticcheck // SA1019: sdk.WrapSDKContext is deprecated but this call path unwraps the SDK context by identity; replacing it is a separate change
 	require.ErrorIs(t, consumer.WithAuthorization(sdk.WrapSDKContext(state.ctx), "account-a", nonce, testDigest(3), callback), ErrAuthorizationReplay) //nolint:staticcheck // SA1019: sdk.WrapSDKContext is deprecated but this call path unwraps the SDK context by identity; replacing it is a separate change
-	require.NoError(t, consumer.WithAuthorization(sdk.WrapSDKContext(state.ctx), "account-b", nonce, auth, callback)) //nolint:staticcheck // SA1019: sdk.WrapSDKContext is deprecated but this call path unwraps the SDK context by identity; replacing it is a separate change
+	require.NoError(t, consumer.WithAuthorization(sdk.WrapSDKContext(state.ctx), "account-b", nonce, auth, callback))                                  //nolint:staticcheck // SA1019: sdk.WrapSDKContext is deprecated but this call path unwraps the SDK context by identity; replacing it is a separate change
 	require.EqualValues(t, 2, calls.Load())
 
 	stored, found, err := consumer.AuthorizationDigest(sdk.WrapSDKContext(state.ctx), "account-a", nonce) //nolint:staticcheck // SA1019: sdk.WrapSDKContext is deprecated but this call path unwraps the SDK context by identity; replacing it is a separate change
@@ -236,7 +236,7 @@ func TestKeeperRejectsMalformedInputsAndContexts(t *testing.T) {
 	require.ErrorIs(t, consumer.WithAuthorization(state.ctx, "account", fundauth.Digest{}, validAuth, callback), ErrInvalidInput)
 	require.ErrorIs(t, consumer.WithAuthorization(state.ctx, "account", validNonce, fundauth.Digest{}, callback), ErrInvalidInput)
 	require.ErrorIs(t, consumer.WithAuthorization(state.ctx, "account", validNonce, validAuth, nil), ErrInvalidInput)
-	require.ErrorIs(t, consumer.WithAuthorization(nil, "account", validNonce, validAuth, callback), ErrInvalidSDKContext)
+	require.ErrorIs(t, consumer.WithAuthorization(context.TODO(), "account", validNonce, validAuth, callback), ErrInvalidSDKContext)
 	require.ErrorIs(t, consumer.WithAuthorization(context.Background(), "account", validNonce, validAuth, callback), ErrInvalidSDKContext)
 
 	canceled, cancel := context.WithCancel(sdk.WrapSDKContext(state.ctx)) //nolint:staticcheck // SA1019: sdk.WrapSDKContext is deprecated but this call path unwraps the SDK context by identity; replacing it is a separate change
