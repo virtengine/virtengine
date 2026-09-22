@@ -44,7 +44,7 @@ func TestEvidencePayloadCutoverSanitizesMappedScope(t *testing.T) {
 	if err := json.Unmarshal(stored, &fields); err != nil {
 		t.Fatal(err)
 	}
-	if string(fields["encrypted_payload"]) != "null" || string(fields["scope_type"]) != `"document"` || string(fields["status"]) != `"pending"` || bytes.Contains(stored, []byte("legacy-secret")) {
+	if string(fields["encrypted_payload"]) != jsonNullLiteral || string(fields["scope_type"]) != `"document"` || string(fields["status"]) != `"pending"` || bytes.Contains(stored, []byte("legacy-secret")) {
 		t.Fatalf("row was not safely sanitized: %s", stored)
 	}
 	for _, removed := range []string{"unknown", "evidence_storage_backend", "evidence_storage_ref", "evidence_metadata"} {
@@ -118,7 +118,7 @@ func TestEvidencePayloadCutoverSharedPrefixAndMixedActions(t *testing.T) {
 		t.Fatal("cutover changed shared evidence record or retained deleted source")
 	}
 	var social map[string]json.RawMessage
-	if json.Unmarshal(store.Get(socialKey), &social) != nil || string(social["encrypted_payload"]) != "null" || string(social["status"]) != `"verified"` {
+	if json.Unmarshal(store.Get(socialKey), &social) != nil || string(social["encrypted_payload"]) != jsonNullLiteral || string(social["status"]) != `"verified"` {
 		t.Fatalf("social row was not safely sanitized: %s", store.Get(socialKey))
 	}
 	if _, found := social["keep"]; found {
@@ -391,7 +391,7 @@ func TestEvidencePayloadCutoverMapsStaleLegacyQuarantineBeforeSanitize(t *testin
 		t.Fatalf("mapped row with exact stale quarantine was not sanitized: %+v %v", report, err)
 	}
 	var sanitized map[string]json.RawMessage
-	if json.Unmarshal(store.Get(key), &sanitized) != nil || string(sanitized["encrypted_payload"]) != "null" || !bytes.Equal(store.Get(quarantineKey), quarantine) {
+	if json.Unmarshal(store.Get(key), &sanitized) != nil || string(sanitized["encrypted_payload"]) != jsonNullLiteral || !bytes.Equal(store.Get(quarantineKey), quarantine) {
 		t.Fatalf("sanitize did not retain source metadata and historical quarantine: %s", store.Get(key))
 	}
 }
