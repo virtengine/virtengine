@@ -368,6 +368,7 @@ jobs:
           trivy image \
             --severity HIGH,CRITICAL \
             --ignore-unfixed \
+            --ignorefile .trivyignore \
             --scanners vuln \
             --vuln-type os,library \
             --format sarif \
@@ -386,6 +387,7 @@ jobs:
           trivy image \
             --severity HIGH,CRITICAL \
             --ignore-unfixed \
+            --ignorefile .trivyignore \
             --scanners vuln \
             --vuln-type os,library \
             --exit-code 1 \
