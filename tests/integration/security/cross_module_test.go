@@ -12,16 +12,15 @@
 package security_test
 
 import (
+	"bytes"
 	"testing"
 	"time"
 
-	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
 
 	"github.com/virtengine/virtengine/tests/e2e/helpers"
 	encryptiontypes "github.com/virtengine/virtengine/x/encryption/types"
-	"github.com/virtengine/virtengine/x/market/types/marketplace"
 	mfatypes "github.com/virtengine/virtengine/x/mfa/types"
 	rolestypes "github.com/virtengine/virtengine/x/roles/types"
 	veidtypes "github.com/virtengine/virtengine/x/veid/types"
@@ -162,9 +161,9 @@ func (suite *CrossModuleSecurityTestSuite) TestMFAGatingForSensitiveTransactions
 		// Attempt large withdrawal without MFA session
 		// This would typically be enforced by ante handler or module hook
 
-		// Check if user has active MFA session
-		sessions := app.Keepers.VirtEngine.MFA.GetActiveSessions(ctx, user)
-		require.Empty(t, sessions, "user should not have active MFA session")
+		// Check if user has valid MFA session
+		sessions := app.Keepers.VirtEngine.MFA.GetValidSessionsForAccount(ctx, user)
+		require.Empty(t, sessions, "user should not have valid MFA session")
 
 		// In production, withdrawal would be blocked by ante handler
 		// For testing, we verify the check would fail
@@ -177,31 +176,26 @@ func (suite *CrossModuleSecurityTestSuite) TestMFAGatingForSensitiveTransactions
 	t.Run("AllowLargeWithdrawalWithMFA", func(t *testing.T) {
 		// Enroll TOTP factor
 		enrollment := &mfatypes.FactorEnrollment{
-			Address:    user.String(),
-			FactorType: mfatypes.FactorTypeTOTP,
-			FactorID:   "totp-security-001",
-			Secret:     []byte("encrypted-secret"),
-			Label:      "Security Test TOTP",
-			Status:     mfatypes.FactorStatusActive,
-			EnrolledAt: ctx.BlockTime(),
+			AccountAddress: user.String(),
+			FactorType:     mfatypes.FactorTypeTOTP,
+			FactorID:       "totp-security-001",
+			Label:          "Security Test TOTP",
+			Status:         mfatypes.EnrollmentStatusActive,
+			EnrolledAt:     ctx.BlockTime().Unix(),
 		}
 		require.NoError(t, app.Keepers.VirtEngine.MFA.EnrollFactor(ctx, enrollment))
 
-		// Create MFA session
-		session := &mfatypes.MFASession{
-			SessionID:     "mfa-session-security-001",
-			Address:       user.String(),
-			FactorType:    mfatypes.FactorTypeTOTP,
-			FactorID:      "totp-security-001",
-			CreatedAt:     ctx.BlockTime(),
-			ExpiresAt:     ctx.BlockTime().Add(30 * time.Minute),
-			Authenticated: true,
-		}
-		require.NoError(t, app.Keepers.VirtEngine.MFA.CreateSession(ctx, session))
+		// Create MFA auth session for the large withdrawal
+		session, err := app.Keepers.VirtEngine.MFA.CreateAuthSessionForAction(
+			ctx, user, mfatypes.SensitiveTxLargeWithdrawal,
+			[]mfatypes.FactorType{mfatypes.FactorTypeTOTP}, "",
+		)
+		require.NoError(t, err)
+		require.NotNil(t, session)
 
 		// Verify MFA session exists
-		sessions := app.Keepers.VirtEngine.MFA.GetActiveSessions(ctx, user)
-		require.NotEmpty(t, sessions, "user should have active MFA session")
+		sessions := app.Keepers.VirtEngine.MFA.GetValidSessionsForAccount(ctx, user)
+		require.NotEmpty(t, sessions, "user should have valid MFA session")
 
 		hasMFA := len(sessions) > 0
 		require.True(t, hasMFA, "MFA requirement satisfied")
@@ -210,18 +204,13 @@ func (suite *CrossModuleSecurityTestSuite) TestMFAGatingForSensitiveTransactions
 	})
 
 	t.Run("BlockAfterMFASessionExpiry", func(t *testing.T) {
-		// Advance time past session expiry
-		ctx = ctx.WithBlockTime(ctx.BlockTime().Add(60 * time.Minute))
+		// Advance time well past any configured session duration
+		// (SensitiveTxLargeWithdrawal defaults to 15m)
+		ctx = ctx.WithBlockTime(ctx.BlockTime().Add(2 * time.Hour))
 
-		// Session should be expired
-		sessions := app.Keepers.VirtEngine.MFA.GetActiveSessions(ctx, user)
-		activeSessionCount := 0
-		for _, s := range sessions {
-			if ctx.BlockTime().Before(s.ExpiresAt) {
-				activeSessionCount++
-			}
-		}
-		require.Equal(t, 0, activeSessionCount, "no active sessions should remain")
+		// No valid session should remain
+		sessions := app.Keepers.VirtEngine.MFA.GetValidSessionsForAccount(ctx, user)
+		require.Empty(t, sessions, "no valid sessions should remain")
 
 		t.Log("✓ Operations correctly blocked after MFA session expiry")
 	})
@@ -241,13 +230,13 @@ func (suite *CrossModuleSecurityTestSuite) TestRoleEnforcementAcrossModules() {
 
 	// Assign roles
 	require.NoError(t, app.Keepers.VirtEngine.Roles.AssignRole(
-		ctx, admin, rolestypes.RoleAdmin, admin))
+		ctx, admin, rolestypes.RoleAdministrator, admin))
 	require.NoError(t, app.Keepers.VirtEngine.Roles.AssignRole(
 		ctx, moderator, rolestypes.RoleModerator, admin))
 
 	t.Run("BlockNonAdminFromAdminOperations", func(t *testing.T) {
 		// Regular user should not be able to perform admin operations
-		hasAdminRole := app.Keepers.VirtEngine.Roles.HasRole(ctx, regularUser, rolestypes.RoleAdmin)
+		hasAdminRole := app.Keepers.VirtEngine.Roles.HasRole(ctx, regularUser, rolestypes.RoleAdministrator)
 		require.False(t, hasAdminRole, "regular user should not have admin role")
 
 		// Attempting admin operation would be blocked
@@ -256,7 +245,7 @@ func (suite *CrossModuleSecurityTestSuite) TestRoleEnforcementAcrossModules() {
 
 	t.Run("AllowAdminOperations", func(t *testing.T) {
 		// Admin should be able to perform admin operations
-		hasAdminRole := app.Keepers.VirtEngine.Roles.HasRole(ctx, admin, rolestypes.RoleAdmin)
+		hasAdminRole := app.Keepers.VirtEngine.Roles.HasRole(ctx, admin, rolestypes.RoleAdministrator)
 		require.True(t, hasAdminRole, "admin should have admin role")
 
 		t.Log("✓ Admin allowed to perform admin operations")
@@ -265,7 +254,7 @@ func (suite *CrossModuleSecurityTestSuite) TestRoleEnforcementAcrossModules() {
 	t.Run("AllowModeratorForModeratorOperations", func(t *testing.T) {
 		// Moderator should have moderator role but not admin
 		hasModeratorRole := app.Keepers.VirtEngine.Roles.HasRole(ctx, moderator, rolestypes.RoleModerator)
-		hasAdminRole := app.Keepers.VirtEngine.Roles.HasRole(ctx, moderator, rolestypes.RoleAdmin)
+		hasAdminRole := app.Keepers.VirtEngine.Roles.HasRole(ctx, moderator, rolestypes.RoleAdministrator)
 
 		require.True(t, hasModeratorRole, "moderator should have moderator role")
 		require.False(t, hasAdminRole, "moderator should not have admin role")
@@ -299,12 +288,23 @@ func (suite *CrossModuleSecurityTestSuite) TestEncryptionEnforcementAcrossModule
 
 	provider := helpers.CreateTestAccount(t)
 
-	// Register provider's encryption key
-	providerPublicKey := []byte("provider-public-key-for-testing-32b")
+	// Register provider's encryption key (X25519 public keys are exactly 32 bytes)
+	providerPublicKey := bytes.Repeat([]byte{0x42}, 32)
 	keyFingerprint, err := app.Keepers.VirtEngine.Encryption.RegisterRecipientKey(
-		ctx, provider, providerPublicKey, "X25519-XSalsa20-Poly1305", "Provider Test Key")
+		ctx, provider, providerPublicKey, encryptiontypes.DefaultAlgorithm(), "Provider Test Key")
 	require.NoError(t, err)
 	require.NotEmpty(t, keyFingerprint)
+
+	// newTestEnvelope builds a structurally valid envelope addressed to fingerprint
+	newTestEnvelope := func(fingerprint string) *encryptiontypes.EncryptedPayloadEnvelope {
+		envelope := encryptiontypes.NewEncryptedPayloadEnvelope()
+		envelope.RecipientKeyIDs = []string{fingerprint}
+		envelope.Nonce = bytes.Repeat([]byte{0x24}, 24)
+		envelope.Ciphertext = []byte("encrypted-data-ciphertext")
+		envelope.SenderPubKey = bytes.Repeat([]byte{0x13}, 32)
+		envelope.SenderSignature = []byte("test-signature")
+		return envelope
+	}
 
 	t.Run("RejectUnencryptedMarketplacePayload", func(t *testing.T) {
 		// Attempt to create order with unencrypted sensitive data
@@ -330,12 +330,7 @@ func (suite *CrossModuleSecurityTestSuite) TestEncryptionEnforcementAcrossModule
 
 	t.Run("AcceptEncryptedMarketplacePayload", func(t *testing.T) {
 		// Create properly encrypted metadata
-		envelope := &encryptiontypes.EncryptionEnvelope{
-			RecipientFingerprint: keyFingerprint,
-			Algorithm:            "X25519-XSalsa20-Poly1305",
-			Ciphertext:           []byte("encrypted-data-ciphertext"),
-			Nonce:                []byte("24-byte-nonce-here-123456"),
-		}
+		envelope := newTestEnvelope(keyFingerprint)
 
 		// Validate envelope
 		err := app.Keepers.VirtEngine.Encryption.ValidateEnvelope(ctx, envelope)
@@ -356,17 +351,12 @@ func (suite *CrossModuleSecurityTestSuite) TestEncryptionEnforcementAcrossModule
 		// Verify key is revoked
 		key, found := app.Keepers.VirtEngine.Encryption.GetRecipientKeyByFingerprint(ctx, keyFingerprint)
 		require.True(t, found)
-		require.True(t, key.Revoked, "key should be marked as revoked")
+		require.False(t, key.IsActive(), "key should be marked as revoked")
 
-		// Envelope using revoked key should be rejected
-		envelope := &encryptiontypes.EncryptionEnvelope{
-			RecipientFingerprint: keyFingerprint,
-			Algorithm:            "X25519-XSalsa20-Poly1305",
-			Ciphertext:           []byte("encrypted-data"),
-			Nonce:                []byte("24-byte-nonce-here-123456"),
-		}
+		// Envelope using revoked key should be rejected by recipient validation
+		envelope := newTestEnvelope(keyFingerprint)
 
-		err = app.Keepers.VirtEngine.Encryption.ValidateEnvelope(ctx, envelope)
+		_, err = app.Keepers.VirtEngine.Encryption.ValidateEnvelopeRecipients(ctx, envelope)
 		require.Error(t, err, "validation should fail for revoked key")
 
 		t.Log("✓ Payload correctly rejected for revoked encryption key")
@@ -377,18 +367,13 @@ func (suite *CrossModuleSecurityTestSuite) TestEncryptionEnforcementAcrossModule
 		// Only support agent's key can decrypt
 
 		supportAgent := helpers.CreateTestAccount(t)
-		agentPublicKey := []byte("support-agent-public-key-32byte")
+		agentPublicKey := bytes.Repeat([]byte{0x43}, 32)
 		agentKeyFingerprint, err := app.Keepers.VirtEngine.Encryption.RegisterRecipientKey(
-			ctx, supportAgent, agentPublicKey, "X25519-XSalsa20-Poly1305", "Support Agent Key")
+			ctx, supportAgent, agentPublicKey, encryptiontypes.DefaultAlgorithm(), "Support Agent Key")
 		require.NoError(t, err)
 
 		// Create encrypted support ticket
-		ticketEnvelope := &encryptiontypes.EncryptionEnvelope{
-			RecipientFingerprint: agentKeyFingerprint,
-			Algorithm:            "X25519-XSalsa20-Poly1305",
-			Ciphertext:           []byte("encrypted-support-ticket-data"),
-			Nonce:                []byte("24-byte-nonce-support-12345"),
-		}
+		ticketEnvelope := newTestEnvelope(agentKeyFingerprint)
 
 		err = app.Keepers.VirtEngine.Encryption.ValidateEnvelope(ctx, ticketEnvelope)
 		require.NoError(t, err, "support ticket envelope should be valid")
@@ -396,7 +381,7 @@ func (suite *CrossModuleSecurityTestSuite) TestEncryptionEnforcementAcrossModule
 		// Only support agent can decrypt
 		agentKey, found := app.Keepers.VirtEngine.Encryption.GetActiveRecipientKey(ctx, supportAgent)
 		require.True(t, found)
-		require.Equal(t, agentKeyFingerprint, agentKey.Fingerprint)
+		require.Equal(t, agentKeyFingerprint, agentKey.KeyFingerprint)
 
 		t.Log("✓ Support ticket encryption correctly enforced")
 	})
@@ -430,11 +415,11 @@ func (suite *CrossModuleSecurityTestSuite) TestProviderVerificationRequirements(
 		providerRecord, found := app.Keepers.VirtEngine.VEID.GetIdentityRecord(ctx, unverifiedProvider)
 		if found {
 			domainScopes := app.Keepers.VirtEngine.VEID.GetScopesByType(
-				ctx, unverifiedProvider, veidtypes.ScopeTypeDomainVerification)
+				ctx, unverifiedProvider, veidtypes.ScopeTypeDomainVerify)
 
 			hasVerifiedDomain := false
 			for _, scope := range domainScopes {
-				if scope.VerificationStatus == veidtypes.VerificationStatusVerified {
+				if scope.Status == veidtypes.VerificationStatusVerified {
 					hasVerifiedDomain = true
 					break
 				}
@@ -458,11 +443,11 @@ func (suite *CrossModuleSecurityTestSuite) TestProviderVerificationRequirements(
 
 		// Verify domain is verified
 		domainScopes := app.Keepers.VirtEngine.VEID.GetScopesByType(
-			ctx, verifiedProvider, veidtypes.ScopeTypeDomainVerification)
+			ctx, verifiedProvider, veidtypes.ScopeTypeDomainVerify)
 
 		hasVerifiedDomain := false
 		for _, scope := range domainScopes {
-			if scope.VerificationStatus == veidtypes.VerificationStatusVerified {
+			if scope.Status == veidtypes.VerificationStatusVerified {
 				hasVerifiedDomain = true
 				break
 			}
@@ -526,33 +511,28 @@ func (suite *CrossModuleSecurityTestSuite) TestCrossModuleAuthorizationChain() {
 		require.NoError(t, app.Keepers.VirtEngine.VEID.SetScore(
 			ctx, user.String(), 85, helpers.TestModelVersion))
 
-		score, found := app.Keepers.VirtEngine.VEID.GetScore(ctx, user.String())
+		scoreVal, _, found := app.Keepers.VirtEngine.VEID.GetScore(ctx, user.String())
 		require.True(t, found)
-		require.GreaterOrEqual(t, score.Score, int32(80), "VEID check ✓")
+		require.GreaterOrEqual(t, scoreVal, uint32(80), "VEID check ✓")
 
 		// Step 2: MFA enrollment and session
 		enrollment := &mfatypes.FactorEnrollment{
-			Address:    user.String(),
-			FactorType: mfatypes.FactorTypeTOTP,
-			FactorID:   "totp-chain-001",
-			Secret:     []byte("encrypted-secret"),
-			Status:     mfatypes.FactorStatusActive,
-			EnrolledAt: ctx.BlockTime(),
+			AccountAddress: user.String(),
+			FactorType:     mfatypes.FactorTypeTOTP,
+			FactorID:       "totp-chain-001",
+			Label:          "Chain Test TOTP",
+			Status:         mfatypes.EnrollmentStatusActive,
+			EnrolledAt:     ctx.BlockTime().Unix(),
 		}
 		require.NoError(t, app.Keepers.VirtEngine.MFA.EnrollFactor(ctx, enrollment))
 
-		session := &mfatypes.MFASession{
-			SessionID:     "mfa-session-chain-001",
-			Address:       user.String(),
-			FactorType:    mfatypes.FactorTypeTOTP,
-			FactorID:      "totp-chain-001",
-			CreatedAt:     ctx.BlockTime(),
-			ExpiresAt:     ctx.BlockTime().Add(30 * time.Minute),
-			Authenticated: true,
-		}
-		require.NoError(t, app.Keepers.VirtEngine.MFA.CreateSession(ctx, session))
+		_, err := app.Keepers.VirtEngine.MFA.CreateAuthSessionForAction(
+			ctx, user, mfatypes.SensitiveTxHighValueOrder,
+			[]mfatypes.FactorType{mfatypes.FactorTypeTOTP}, "",
+		)
+		require.NoError(t, err)
 
-		sessions := app.Keepers.VirtEngine.MFA.GetActiveSessions(ctx, user)
+		sessions := app.Keepers.VirtEngine.MFA.GetValidSessionsForAccount(ctx, user)
 		require.NotEmpty(t, sessions, "MFA check ✓")
 
 		// Step 3: Account state check
@@ -574,10 +554,10 @@ func (suite *CrossModuleSecurityTestSuite) TestCrossModuleAuthorizationChain() {
 			"provider verified for chain test", validator.String()))
 
 		domainScopes := app.Keepers.VirtEngine.VEID.GetScopesByType(
-			ctx, provider, veidtypes.ScopeTypeDomainVerification)
+			ctx, provider, veidtypes.ScopeTypeDomainVerify)
 		hasVerifiedDomain := false
 		for _, scope := range domainScopes {
-			if scope.VerificationStatus == veidtypes.VerificationStatusVerified {
+			if scope.Status == veidtypes.VerificationStatusVerified {
 				hasVerifiedDomain = true
 				break
 			}
