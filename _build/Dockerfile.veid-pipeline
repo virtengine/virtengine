@@ -80,30 +80,14 @@ FROM python-deps AS models
 
 WORKDIR /app/models
 
-# Create model directories
-RUN mkdir -p deepface craft unet tesseract identity_scorer
-
-# Model weight hashes are verified during download
-# These hashes MUST match what's recorded on-chain in the ModelManifest
-
-# DeepFace FaceNet512 model
-# Hash: sha256:a1b2c3d4e5f6... (example - actual hash computed at build time)
-COPY ml/models/deepface_facenet512.h5 deepface/facenet512.h5
-
-# CRAFT text detection model
-# Hash: sha256:b2c3d4e5f6a1... (example)
-COPY ml/models/craft_mlt_25k.pth craft/craft_mlt_25k.pth
-
-# U-Net face extraction model
-# Hash: sha256:c3d4e5f6a1b2... (example)
-COPY ml/models/unet_face_extraction.h5 unet/face_extraction.h5
-
-# Identity scorer model
-# Hash: sha256:d4e5f6a1b2c3... (example)
-COPY ml/models/identity_scorer_v1.h5 identity_scorer/model.h5
-
-# Model configuration files
-COPY ml/models/model_config.json models/config.json
+# Create model directories, then record why the image ships code only.
+# Model weights are NOT baked into the image: they are produced by
+# ml/training (see models/trust_score) and validated by
+# _build/build-veid-pipeline.sh, then mounted at /app/models at deploy time.
+# (Previously this stage COPYd ml/models/*.h5/*.pth/*.json, which were never
+# committed, so the image never built.)
+RUN mkdir -p deepface craft unet tesseract identity_scorer \
+    && printf '{\n  "schema": "veid.models.config/v1",\n  "note": "code-only image: weights mounted at /app/models at deploy time; validate with python3 -m ml.pipeline_runner --mode=check",\n  "pipeline_version": "1.0.0"\n}\n' > config.json
 
 # =============================================================================
 # Stage 4: Application Code
@@ -124,8 +108,10 @@ COPY ml/training/ ml/training/
 COPY ml/pipeline_runner.py ml/pipeline_runner.py
 COPY ml/__init__.py ml/__init__.py
 
-# Copy inference sidecar
-COPY pkg/inference/sidecar/ pkg/inference/sidecar/
+# Copy inference gRPC contract. (The Go sidecar client,
+# pkg/inference/sidecar.go, is not part of this Python image; the
+# previously referenced pkg/inference/sidecar/ directory never existed.)
+COPY pkg/inference/proto/inference.proto pkg/inference/proto/inference.proto
 
 # =============================================================================
 # Stage 5: Final Image
