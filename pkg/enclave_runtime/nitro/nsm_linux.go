@@ -56,5 +56,5 @@ func nsmIoctl(fd *os.File, request, response []byte) (int, error) {
 	if errno != 0 {
 		return 0, errno
 	}
-	return int(raw.Response.Len), nil
+	return int(raw.Response.Len), nil //nolint:gosec // G115: device-reported response length is bounded by the fixed NSM buffer
 }
