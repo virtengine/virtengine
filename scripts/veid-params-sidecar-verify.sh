@@ -43,6 +43,22 @@ fi
 
 cd "$repo"
 
+# Fail closed. A repo that git cannot resolve must never look like a pass: the
+# whole point of this check is that a bad digest cannot reach the default branch
+# unnoticed, so "could not enumerate" is an error, not a green result.
+if ! git rev-parse --git-dir >/dev/null 2>&1; then
+  echo "error: git cannot resolve the repository at $repo" >&2
+  echo "       (linked worktrees checked out into a different OS/filesystem than" >&2
+  echo "        the one git recorded are not readable; run this from a native" >&2
+  echo "        checkout, or pass its path as the first argument)" >&2
+  exit 2
+fi
+
+if ! git rev-parse --verify HEAD >/dev/null 2>&1; then
+  echo "error: $repo has no HEAD commit to verify against" >&2
+  exit 2
+fi
+
 checked=0
 failures=0
 # Artifacts skipped by an explicit, reviewed decision (path<TAB>reason).
