@@ -16,7 +16,7 @@ import (
 )
 
 func TestEvidencePayloadCutoverSanitizesMappedScope(t *testing.T) {
-	k, ctx, _ := newEvidenceMigrationKeeper(t)
+	k, ctx := newEvidenceMigrationKeeper(t)
 	payload := json.RawMessage(`{"ciphertext":"legacy-secret","nonce":"legacy-nonce"}`)
 	row := mustJSON(t, map[string]any{
 		"scope_id": "scope-a", "scope_type": "document", "status": "pending", "encrypted_payload": payload,
@@ -81,7 +81,7 @@ func TestEvidencePayloadCutoverCanonicalEntryOrdering(t *testing.T) {
 }
 
 func TestEvidencePayloadCutoverSharedPrefixAndMixedActions(t *testing.T) {
-	k, ctx, _ := newEvidenceMigrationKeeper(t)
+	k, ctx := newEvidenceMigrationKeeper(t)
 	store := ctx.KVStore(k.skey)
 	evidenceKey := append(append([]byte(nil), types.PrefixEvidenceRecord...), []byte("evidence")...)
 	evidenceRecord := []byte(`{"evidence_id":"ev","evidence_type":"document","account_address":"account","scope_id":"scope","content_hash":"hash","envelope_hash":"hash","status":"pending"}`)
@@ -137,7 +137,7 @@ func TestEvidencePayloadCutoverSharedPrefixAndMixedActions(t *testing.T) {
 }
 
 func TestEvidencePayloadCutoverDeletesQuarantinedRows(t *testing.T) {
-	k, ctx, _ := newEvidenceMigrationKeeper(t)
+	k, ctx := newEvidenceMigrationKeeper(t)
 	store := ctx.KVStore(k.skey)
 	malformedKey := types.ScopeKey([]byte("b"), "ambiguous")
 	ambiguousKey := append(append([]byte(nil), types.PrefixSocialMediaScope...), []byte("ambiguous")...)
@@ -171,7 +171,7 @@ func TestEvidencePayloadCutoverDeletesQuarantinedRows(t *testing.T) {
 }
 
 func TestEvidencePayloadCutoverRejectsMalformedScopeDelete(t *testing.T) {
-	k, ctx, _ := newEvidenceMigrationKeeper(t)
+	k, ctx := newEvidenceMigrationKeeper(t)
 	store := ctx.KVStore(k.skey)
 	key := types.ScopeKey([]byte("account"), "malformed")
 	source := []byte("malformed-payload")
@@ -199,7 +199,7 @@ func TestEvidencePayloadCutoverRejectsManifestAttacks(t *testing.T) {
 		resolver migrationResolver
 	}
 	newFixture := func(t *testing.T) fixture {
-		k, ctx, _ := newEvidenceMigrationKeeper(t)
+		k, ctx := newEvidenceMigrationKeeper(t)
 		payload := json.RawMessage(`{"ciphertext":"attack-target"}`)
 		key := types.ScopeKey([]byte("a"), "target")
 		ctx.KVStore(k.skey).Set(key, mustJSON(t, map[string]any{"scope_id": "target", "encrypted_payload": payload}))
@@ -264,7 +264,7 @@ func TestEvidencePayloadCutoverRejectsManifestAttacks(t *testing.T) {
 }
 
 func TestEvidencePayloadCutoverRejectsEntrySetErrors(t *testing.T) {
-	k, ctx, _ := newEvidenceMigrationKeeper(t)
+	k, ctx := newEvidenceMigrationKeeper(t)
 	key := types.ScopeKey([]byte("a"), "broken")
 	ctx.KVStore(k.skey).Set(key, []byte("broken"))
 	migration, resolver := signedManifest(t, k, ctx, nil)
@@ -289,7 +289,7 @@ func TestEvidencePayloadCutoverRejectsEntrySetErrors(t *testing.T) {
 
 func TestEvidencePayloadCutoverRejectsWrongAuthorityClass(t *testing.T) {
 	t.Run("mapped-delete", func(t *testing.T) {
-		k, ctx, _ := newEvidenceMigrationKeeper(t)
+		k, ctx := newEvidenceMigrationKeeper(t)
 		payload := json.RawMessage(`{"ciphertext":"mapped"}`)
 		key := types.ScopeKey([]byte("a"), "mapped")
 		ctx.KVStore(k.skey).Set(key, mustJSON(t, map[string]any{"scope_id": "mapped", "encrypted_payload": payload}))
@@ -306,7 +306,7 @@ func TestEvidencePayloadCutoverRejectsWrongAuthorityClass(t *testing.T) {
 		}
 	})
 	t.Run("quarantined-sanitize", func(t *testing.T) {
-		k, ctx, _ := newEvidenceMigrationKeeper(t)
+		k, ctx := newEvidenceMigrationKeeper(t)
 		key := types.ScopeKey([]byte("a"), "broken")
 		ctx.KVStore(k.skey).Set(key, []byte("broken"))
 		migration, resolver := signedManifest(t, k, ctx, nil)
@@ -326,7 +326,7 @@ func TestEvidencePayloadCutoverRejectsWrongAuthorityClass(t *testing.T) {
 }
 
 func TestEvidencePayloadCutoverRollsBackLateConflict(t *testing.T) {
-	k, ctx, _ := newEvidenceMigrationKeeper(t)
+	k, ctx := newEvidenceMigrationKeeper(t)
 	store := ctx.KVStore(k.skey)
 	payload := json.RawMessage(`{"ciphertext":"must-rollback"}`)
 	firstKey := types.ScopeKey([]byte("a"), "mapped")
@@ -352,7 +352,7 @@ func TestEvidencePayloadCutoverRollsBackLateConflict(t *testing.T) {
 }
 
 func TestEvidencePayloadCutoverMapsStaleLegacyQuarantineBeforeSanitize(t *testing.T) {
-	k, ctx, _ := newEvidenceMigrationKeeper(t)
+	k, ctx := newEvidenceMigrationKeeper(t)
 	store := ctx.KVStore(k.skey)
 	payload := json.RawMessage(`{"ciphertext":"mapped-later"}`)
 	key := types.ScopeKey([]byte("account"), "mapped-later")
@@ -407,7 +407,7 @@ func TestEvidencePayloadCutoverRejectsSharedPrefixEvidenceShapes(t *testing.T) {
 	}
 	for name, source := range shapes {
 		t.Run(name, func(t *testing.T) {
-			k, ctx, _ := newEvidenceMigrationKeeper(t)
+			k, ctx := newEvidenceMigrationKeeper(t)
 			store := ctx.KVStore(k.skey)
 			key := append(append([]byte(nil), types.PrefixSocialMediaScope...), []byte(name)...)
 			store.Set(key, source)
@@ -434,7 +434,7 @@ func TestEvidencePayloadCutoverRejectsSharedPrefixEvidenceShapes(t *testing.T) {
 }
 
 func TestEvidencePayloadCutoverRejectsNestedDataInAllowedFields(t *testing.T) {
-	k, ctx, _ := newEvidenceMigrationKeeper(t)
+	k, ctx := newEvidenceMigrationKeeper(t)
 	payload := json.RawMessage(`{"ciphertext":"nested"}`)
 	key := types.ScopeKey([]byte("account"), "nested")
 	source := []byte(`{"scope_id":{"ciphertext":"hidden"},"scope_type":"document","encrypted_payload":{"ciphertext":"nested"}}`)
@@ -462,7 +462,7 @@ func TestEvidencePayloadCutoverRejectsNestedDataInAllowedFields(t *testing.T) {
 }
 
 func TestEvidencePayloadCutoverSnapshotBindsSkippedRecordIdentity(t *testing.T) {
-	k, ctx, _ := newEvidenceMigrationKeeper(t)
+	k, ctx := newEvidenceMigrationKeeper(t)
 	store := ctx.KVStore(k.skey)
 	firstKey := append(append([]byte(nil), types.PrefixEvidenceRecord...), []byte("first")...)
 	secondKey := append(append([]byte(nil), types.PrefixEvidenceRecord...), []byte("second")...)
@@ -486,7 +486,7 @@ func TestEvidencePayloadCutoverSnapshotBindsSkippedRecordIdentity(t *testing.T) 
 }
 
 func TestEvidencePayloadCutoverRejectsMalformedSignerEpochState(t *testing.T) {
-	k, ctx, _ := newEvidenceMigrationKeeper(t)
+	k, ctx := newEvidenceMigrationKeeper(t)
 	payload := json.RawMessage(`{"ciphertext":"epoch"}`)
 	key := types.ScopeKey([]byte("account"), "epoch")
 	ctx.KVStore(k.skey).Set(key, mustJSON(t, map[string]any{"scope_id": "epoch", "encrypted_payload": payload}))
@@ -522,7 +522,7 @@ func TestEvidencePayloadCutoverRejectsCorruptReplayReport(t *testing.T) {
 	}
 	for name, corrupt := range corruptions {
 		t.Run(name, func(t *testing.T) {
-			k, ctx, _ := newEvidenceMigrationKeeper(t)
+			k, ctx := newEvidenceMigrationKeeper(t)
 			store := ctx.KVStore(k.skey)
 			key := types.ScopeKey([]byte("account"), "replay")
 			store.Set(key, []byte(`{"record_id":"replay","encrypted_payload":{}}`))
