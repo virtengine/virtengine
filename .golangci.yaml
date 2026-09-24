@@ -18,39 +18,31 @@ linters:
     - unused
   # Note: gofmt is a formatter, not a linter. Auto-formatting is handled by
   # pre-commit hook. golangci-lint only runs actual linters (not formatters).
-  settings:
-    gocritic:
-      disabled-checks:
-        - ifElseChain
-        - singleCaseSwitch
-    gosec:
-      severity: medium
-      confidence: medium
-      excludes:
-        - G104
-        - G304
-  exclusions:
-    generated: lax
-    presets:
-      - comments
-      - common-false-positives
-      - legacy
-      - std-error-handling
-    rules:
-      - path: (.+)\.go$
-        text: comment on exported (method|function|type|const|var)
-      - path: _config\.go$
-        text: G101
-        linters:
-          - gosec
-      - path: (.+)/simulation/.+\.go$
-        text: G101
-        linters:
-          - gosec
-    paths:
-      - third_party$
-      - builtin$
-      - examples$
-      - vendor/
+settings:
+  gocritic:
+    disabled-checks:
+      - ifElseChain
+      - singleCaseSwitch
+  gosec:
+    severity: medium
+    confidence: medium
+    excludes:
+      - G104
+      - G304
+issues:
+  exclude-rules:
+    - path: vendor/
+      linters:
+        - all
+    - path: (.+)\.go$
+      text: comment on exported (method|function|type|const|var)
+    - path: _config\.go$
+      text: G101
+      linters:
+        - gosec
+    - path: (.+)/simulation/.+\.go$
+      text: G101
+      linters:
+        - gosec
 # Formatting handled by pre-commit hook (.git/hooks/pre-commit)
 # golangci-lint only checks non-auto-fixable issues
