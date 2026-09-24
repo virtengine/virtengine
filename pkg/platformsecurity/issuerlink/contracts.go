@@ -534,8 +534,8 @@ func (r IssuerLinkRecord) commitment() (string, error) {
 	e.text(r.PredecessorNullifierCommitment)
 	e.text(r.RotationRequestDigest)
 	e.text(string(r.Status))
-	e.u64(uint64(r.CreatedAtUnix))
-	e.u64(uint64(r.UpdatedAtUnix))
+	e.u64(uint64(r.CreatedAtUnix)) //nolint:gosec // G115: non-negative duration/timestamp after bounds validation
+	e.u64(uint64(r.UpdatedAtUnix)) //nolint:gosec // G115: non-negative duration/timestamp after bounds validation
 	e.u64(r.CreatedAtCoordinate)
 	e.u64(r.UpdatedAtCoordinate)
 	e.u64(r.CooldownUntilCoordinate)

@@ -689,7 +689,7 @@ func (h *WaldurCallbackHandler) createChainCallback(lc *marketplace.LifecycleCal
 	if lc.Success {
 		callback.Payload["event_type"] = string(HPCJobStateCompleted)
 	} else {
-		callback.Payload["event_type"] = "failed"
+		callback.Payload["event_type"] = string(HPCJobStateFailed)
 	}
 	callback.Payload["success"] = fmt.Sprintf("%t", lc.Success)
 	callback.Payload["result_state"] = lc.ResultState.String()
@@ -739,7 +739,7 @@ func mapWaldurStateToAllocationState(state string) marketplace.AllocationState {
 		return marketplace.AllocationStateProvisioning
 	case "terminating", "Terminating", "deleting":
 		return marketplace.AllocationStateTerminating
-	case "erred", "Erred", "error", "failed":
+	case "erred", "Erred", "error", string(HPCJobStateFailed):
 		return marketplace.AllocationStateFailed
 	default:
 		return marketplace.AllocationStateActive

@@ -540,8 +540,15 @@ func (k Keeper) getMLScorer() MLScorer {
 	}
 }
 
-// createTensorFlowScorer creates a TensorFlow-based scorer
+// createTensorFlowScorer creates a TensorFlow-based scorer.
+//
+// Retained deliberately: scoring_static_test.go asserts that no consensus
+// entry point may select a scorer from configuration, so this constructor is
+// reachable only via explicit injection and has no keeper-internal caller.
+//
 // Supports both embedded TensorFlow and sidecar modes
+//
+//nolint:unused // retained injectable scorer path; asserted unwired by scoring_static_test.go
 func (k Keeper) createTensorFlowScorer(config MLScoringConfig) (MLScorer, error) {
 	tfConfig := config.TensorFlowConfig
 
@@ -588,10 +595,12 @@ func (k Keeper) createTensorFlowScorer(config MLScoringConfig) (MLScorer, error)
 	}, nil
 }
 
-// TensorFlowScorerAdapter adapts the inference.Scorer to MLScorer interface
+// TensorFlowScorerAdapter adapts the inference.Scorer to MLScorer interface.
+//
+//nolint:unused // only instantiated by the retained injectable scorer path
 type TensorFlowScorerAdapter struct {
 	scorer          inference.Scorer
-	config          MLScoringConfig
+	config          MLScoringConfig //nolint:unused // retained alongside the injectable scorer path
 	featurePipeline *FeatureExtractionPipeline
 }
 

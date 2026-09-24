@@ -47,16 +47,19 @@ func testFixtureSecurity() FixtureSecurityOptions {
 	return FixtureSecurityOptions{UnsafeWindowsDevelopment: true}
 }
 
+// fixtureProfile is the fixture-only profile every helper in this file runs under.
+const fixtureProfile = "fixture"
+
 func newTestArtifactStore(root, profile string, anchor RevisionAnchor) (*FixtureFileArtifactStore, error) {
 	return NewFixtureFileArtifactStoreWithSecurity(root, profile, testFixtureSecurity(), anchor)
 }
 
-func newTestAuditStore(path, profile string, anchor RevisionAnchor) (*FixtureFileAuditStore, error) {
-	return NewFixtureFileAuditStoreWithSecurity(path, profile, testFixtureSecurity(), anchor)
+func newTestAuditStore(path string, anchor RevisionAnchor) (*FixtureFileAuditStore, error) {
+	return NewFixtureFileAuditStoreWithSecurity(path, fixtureProfile, testFixtureSecurity(), anchor)
 }
 
-func newTestKeyPersistence(path string, wrappingKey []byte, profile string, anchor RevisionAnchor) (*keys.FixtureFilePersistence, error) {
-	return keys.NewFixtureFilePersistenceWithSecurity(path, wrappingKey, profile, testFixtureSecurity(), anchor)
+func newTestKeyPersistence(path string, wrappingKey []byte, anchor RevisionAnchor) (*keys.FixtureFilePersistence, error) {
+	return keys.NewFixtureFilePersistenceWithSecurity(path, wrappingKey, fixtureProfile, testFixtureSecurity(), anchor)
 }
 
 func TestFixtureVaultRestartRotationAndCryptoErasure(t *testing.T) {
@@ -67,7 +70,7 @@ func TestFixtureVaultRestartRotationAndCryptoErasure(t *testing.T) {
 	wrappingKey := []byte("0123456789abcdef0123456789abcdef")
 	anchor := NewProcessRevisionAnchor()
 
-	persistence, err := newTestKeyPersistence(keyPath, wrappingKey, "fixture", anchor)
+	persistence, err := newTestKeyPersistence(keyPath, wrappingKey, anchor)
 	require.NoError(t, err)
 	keyManager, err := keys.NewUninitializedPersistentKeyManager(persistence)
 	require.NoError(t, err)
@@ -85,7 +88,7 @@ func TestFixtureVaultRestartRotationAndCryptoErasure(t *testing.T) {
 	originalBackendRef := blob.Metadata.BackendRef
 	require.NoError(t, store.Close())
 
-	reloadedPersistence, err := newTestKeyPersistence(keyPath, wrappingKey, "fixture", anchor)
+	reloadedPersistence, err := newTestKeyPersistence(keyPath, wrappingKey, anchor)
 	require.NoError(t, err)
 	reloadedKeys, err := keys.NewPersistentKeyManager(reloadedPersistence)
 	require.NoError(t, err)
@@ -107,7 +110,7 @@ func TestFixtureVaultRestartRotationAndCryptoErasure(t *testing.T) {
 	require.NoError(t, vault.RotateKeys(ctx, ScopeSupport, "owner", ""))
 	require.NoError(t, vault.Close())
 
-	afterRotationPersistence, err := newTestKeyPersistence(keyPath, wrappingKey, "fixture", anchor)
+	afterRotationPersistence, err := newTestKeyPersistence(keyPath, wrappingKey, anchor)
 	require.NoError(t, err)
 	afterRotationKeys, err := keys.NewPersistentKeyManager(afterRotationPersistence)
 	require.NoError(t, err)
@@ -138,7 +141,9 @@ func TestFixtureVaultRestartRotationAndCryptoErasure(t *testing.T) {
 	erasureVerifier.allow(authorization)
 	omitted := authorization
 	omitted.BlobIDs = omitted.BlobIDs[:1]
-	omitted.Digest = fixtureAuthorizationDigest(omitted)
+	omittedDigest, err := fixtureAuthorizationDigest(omitted)
+	require.NoError(t, err)
+	omitted.Digest = omittedDigest
 	erasureVerifier.allow(omitted)
 	_, err = coordinator.Erase(ctx, omitted)
 	require.ErrorContains(t, err, "omitted affected blob")
@@ -163,7 +168,7 @@ func TestFixtureVaultRestartRotationAndCryptoErasure(t *testing.T) {
 	require.ErrorIs(t, err, ErrBlobNotFound)
 	require.NoError(t, afterRotationStore.Close())
 
-	destroyedPersistence, err := newTestKeyPersistence(keyPath, wrappingKey, "fixture", anchor)
+	destroyedPersistence, err := newTestKeyPersistence(keyPath, wrappingKey, anchor)
 	require.NoError(t, err)
 	destroyedKeys, err := keys.NewPersistentKeyManager(destroyedPersistence)
 	require.NoError(t, err)
@@ -189,7 +194,7 @@ func TestFixtureErasureCoordinatorResumesAfterStorageDeletionRestart(t *testing.
 	artifactPath := filepath.Join(root, "artifacts")
 	wrappingKey := []byte("0123456789abcdef0123456789abcdef")
 	anchor := NewProcessRevisionAnchor()
-	persistence, err := newTestKeyPersistence(keyPath, wrappingKey, "fixture", anchor)
+	persistence, err := newTestKeyPersistence(keyPath, wrappingKey, anchor)
 	require.NoError(t, err)
 	keyManager, err := keys.NewUninitializedPersistentKeyManager(persistence)
 	require.NoError(t, err)
@@ -221,7 +226,7 @@ func TestFixtureErasureCoordinatorResumesAfterStorageDeletionRestart(t *testing.
 	require.Equal(t, FixtureErasureStorageDeleted, backend.index.ErasureIntents[authorization.Digest].State)
 	require.NoError(t, store.Close())
 
-	restartedPersistence, err := newTestKeyPersistence(keyPath, wrappingKey, "fixture", anchor)
+	restartedPersistence, err := newTestKeyPersistence(keyPath, wrappingKey, anchor)
 	require.NoError(t, err)
 	restartedKeys, err := keys.NewPersistentKeyManager(restartedPersistence)
 	require.NoError(t, err)
@@ -246,7 +251,7 @@ func TestFixtureErasureCheckpointFailureNeverRestoresLiveMetadata(t *testing.T) 
 	artifactPath := filepath.Join(root, "artifacts")
 	wrappingKey := []byte("0123456789abcdef0123456789abcdef")
 	anchor := NewProcessRevisionAnchor()
-	persistence, err := newTestKeyPersistence(keyPath, wrappingKey, "fixture", anchor)
+	persistence, err := newTestKeyPersistence(keyPath, wrappingKey, anchor)
 	require.NoError(t, err)
 	keyManager, err := keys.NewUninitializedPersistentKeyManager(persistence)
 	require.NoError(t, err)
@@ -272,7 +277,7 @@ func TestFixtureErasureCheckpointFailureNeverRestoresLiveMetadata(t *testing.T) 
 	require.NoError(t, err)
 	require.NoError(t, store.Close())
 
-	restartedPersistence, err := newTestKeyPersistence(keyPath, wrappingKey, "fixture", anchor)
+	restartedPersistence, err := newTestKeyPersistence(keyPath, wrappingKey, anchor)
 	require.NoError(t, err)
 	restartedKeys, err := keys.NewPersistentKeyManager(restartedPersistence)
 	require.NoError(t, err)
@@ -444,9 +449,9 @@ func TestFixtureBlobDeleteJournalRecoversAfterBytesBeforeMetadata(t *testing.T) 
 func TestFixtureAuditStoreRestartContinuesChain(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "audit.state")
 	anchor := NewProcessRevisionAnchor()
-	store, err := newTestAuditStore(path, "fixture", anchor)
+	store, err := newTestAuditStore(path, anchor)
 	require.NoError(t, err)
-	_, err = newTestAuditStore(path, "fixture", anchor)
+	_, err = newTestAuditStore(path, anchor)
 	require.ErrorIs(t, err, errFixtureStoreInUse)
 	logger := NewAuditLogger(DefaultAuditLogConfig(), store)
 	require.NoError(t, logger.LogEvent(context.Background(), &AuditEvent{EventType: "upload", Requester: "owner"}))
@@ -455,7 +460,7 @@ func TestFixtureAuditStoreRestartContinuesChain(t *testing.T) {
 	require.Len(t, first, 1)
 	require.NoError(t, store.Close())
 
-	restored, err := newTestAuditStore(path, "fixture", anchor)
+	restored, err := newTestAuditStore(path, anchor)
 	require.NoError(t, err)
 	restoredLogger := NewAuditLogger(DefaultAuditLogConfig(), restored)
 	require.NoError(t, restoredLogger.LogEvent(context.Background(), &AuditEvent{EventType: "read", Requester: "owner"}))
@@ -469,7 +474,7 @@ func TestFixtureAuditStoreRestartContinuesChain(t *testing.T) {
 func TestFixtureAuditStoreRejectsRechecksummedChainTamper(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "audit.state")
 	anchor := NewProcessRevisionAnchor()
-	store, err := newTestAuditStore(path, "fixture", anchor)
+	store, err := newTestAuditStore(path, anchor)
 	require.NoError(t, err)
 	logger := NewAuditLogger(DefaultAuditLogConfig(), store)
 	require.NoError(t, logger.LogEvent(context.Background(), &AuditEvent{EventType: "upload", Requester: "owner"}))
@@ -490,7 +495,7 @@ func TestFixtureAuditStoreRejectsRechecksummedChainTamper(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, os.WriteFile(path, encoded, 0o600))
 
-	_, err = newTestAuditStore(path, "fixture", anchor)
+	_, err = newTestAuditStore(path, anchor)
 	require.ErrorContains(t, err, "hash mismatch")
 }
 
@@ -519,7 +524,7 @@ func TestFixtureArtifactAndAuditStoresRejectOlderValidReplay(t *testing.T) {
 
 	auditPath := filepath.Join(root, "audit.state")
 	auditAnchor := NewProcessRevisionAnchor()
-	audit, err := newTestAuditStore(auditPath, "fixture", auditAnchor)
+	audit, err := newTestAuditStore(auditPath, auditAnchor)
 	require.NoError(t, err)
 	logger := NewAuditLogger(DefaultAuditLogConfig(), audit)
 	require.NoError(t, logger.LogEvent(ctx, &AuditEvent{EventType: "first", Requester: "owner"}))
@@ -528,6 +533,6 @@ func TestFixtureArtifactAndAuditStoresRejectOlderValidReplay(t *testing.T) {
 	require.NoError(t, logger.LogEvent(ctx, &AuditEvent{EventType: "second", Requester: "owner"}))
 	require.NoError(t, audit.Close())
 	require.NoError(t, os.WriteFile(auditPath, olderAudit, 0o600))
-	_, err = newTestAuditStore(auditPath, "fixture", auditAnchor)
+	_, err = newTestAuditStore(auditPath, auditAnchor)
 	require.ErrorIs(t, err, ErrRevisionRollback)
 }

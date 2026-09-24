@@ -48,7 +48,7 @@ func (fs FailureStrategy) String() string {
 	case FailureStrategyReject:
 		return "reject"
 	default:
-		return "unknown"
+		return string(FailureTypeUnknown)
 	}
 }
 

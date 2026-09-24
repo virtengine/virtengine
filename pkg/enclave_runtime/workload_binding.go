@@ -182,7 +182,7 @@ func isLowerSHA256Hex(value string) bool {
 		return false
 	}
 	for _, character := range []byte(value) {
-		if !((character >= '0' && character <= '9') || (character >= 'a' && character <= 'f')) {
+		if (character < '0' || character > '9') && (character < 'a' || character > 'f') {
 			return false
 		}
 	}
@@ -194,7 +194,7 @@ func decodeMeasurementValue(value string) ([]byte, error) {
 		return nil, fmt.Errorf("invalid measurement value hex")
 	}
 	for _, character := range []byte(value) {
-		if !((character >= '0' && character <= '9') || (character >= 'a' && character <= 'f')) {
+		if (character < '0' || character > '9') && (character < 'a' || character > 'f') {
 			return nil, fmt.Errorf("invalid measurement value hex")
 		}
 	}

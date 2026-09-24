@@ -64,7 +64,7 @@ func (r DigitalIDAuthorizationRequest) Validate(now time.Time) error {
 		}
 	}
 	redirect, err := url.ParseRequestURI(r.RedirectURI)
-	if err != nil || redirect.Scheme != "https" || redirect.Host == "" || redirect.Fragment != "" {
+	if err != nil || redirect.Scheme != schemeHTTPS || redirect.Host == "" || redirect.Fragment != "" {
 		return fmt.Errorf("digital ID redirect URI must be an absolute HTTPS URI without a fragment")
 	}
 	if r.CodeChallengeMethod != PKCEMethodS256 {

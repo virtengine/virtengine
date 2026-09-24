@@ -90,8 +90,8 @@ func sevGuestIoctl(fd *os.File, request uintptr, reqPtr, respPtr unsafe.Pointer)
 		return os.NewSyscallError("ioctl", errno)
 	}
 	if ioctlReq.ExitInfo2 != 0 {
-		fwErr := uint32(ioctlReq.ExitInfo2)
-		vmmErr := uint32(ioctlReq.ExitInfo2 >> 32)
+		fwErr := uint32(ioctlReq.ExitInfo2)        //nolint:gosec // G115: low half of the packed 64-bit ExitInfo2
+		vmmErr := uint32(ioctlReq.ExitInfo2 >> 32) //nolint:gosec // G115: high half of the packed 64-bit ExitInfo2
 		return fmt.Errorf("snp guest request failed: fw_error=%d vmm_error=%d", fwErr, vmmErr)
 	}
 

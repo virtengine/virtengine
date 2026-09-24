@@ -11,6 +11,9 @@ import (
 
 var errFixtureStoreInUse = errors.New("fixture store is already open by another process or instance")
 
+// goosWindows is the runtime.GOOS value for Windows hosts.
+const goosWindows = "windows"
+
 func rejectFixtureSymlink(path string) error {
 	abs, err := filepath.Abs(path)
 	if err != nil {
@@ -22,7 +25,7 @@ func rejectFixtureSymlink(path string) error {
 			if info.Mode()&os.ModeSymlink != 0 {
 				return fmt.Errorf("fixture path ancestor must not be a symlink: %s", current)
 			}
-			if runtime.GOOS == "windows" {
+			if runtime.GOOS == goosWindows {
 				resolved, resolveErr := filepath.EvalSymlinks(current)
 				if resolveErr != nil {
 					return resolveErr
@@ -47,7 +50,7 @@ func enforceFixturePathSecurity(path string, directory bool, options FixtureSecu
 	if err := rejectFixtureSymlink(path); err != nil {
 		return err
 	}
-	if runtime.GOOS == "windows" {
+	if runtime.GOOS == goosWindows {
 		if !options.UnsafeWindowsDevelopment {
 			return errors.New("fixture filesystem cannot enforce safe Windows ACLs; UnsafeWindowsDevelopment is required")
 		}

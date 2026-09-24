@@ -38,7 +38,7 @@ func TestIBCKeeperRandomizedTerminalReplayConservation(t *testing.T) {
 		trace := make([]byte, 1+rng.Intn(32))
 		_, err := rng.Read(trace)
 		require.NoError(t, err)
-		runTerminalReplayCase(t, trace, uint16(rng.Intn(1<<16)), uint8(rng.Intn(5)), caseIndex)
+		runTerminalReplayCase(t, trace, uint16(rng.Intn(1<<16)), uint8(rng.Intn(5)), caseIndex) //nolint:gosec // rng.Intn(1<<16) is bounded to [0, 65535], which fits uint16
 	}
 }
 

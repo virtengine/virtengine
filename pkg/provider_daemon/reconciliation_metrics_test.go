@@ -82,7 +82,7 @@ func TestReconciliationMetricsRejectsInvalidProjectionBeforePublication(t *testi
 
 	projection = validMetricProjection()
 	result = projection.Results[testReconciliationJob().ID]
-	result.Result.AllocationID = "other-allocation"
+	result.Result.AllocationID = testOtherAllocationID
 	projection.Results[result.JobID] = result
 	require.EqualError(t, metrics.ObserveProjection(projection), "invalid reconciliation metrics result")
 
@@ -130,7 +130,7 @@ func TestReconciliationIntentRejectsUnboundedSeverity(t *testing.T) {
 	intent.Severity = "allocation-12345"
 	require.ErrorContains(t, validateReconciliationIntent(intent, result), "severity")
 	intent = testReconciliationIntent(result)
-	intent.AllocationID = "other-allocation"
+	intent.AllocationID = testOtherAllocationID
 	require.ErrorContains(t, validateReconciliationIntent(intent, result), "invalid reconciliation action intent")
 }
 
@@ -146,8 +146,8 @@ func validMetricProjection() *ReconciliationProjection {
 	intent := testReconciliationIntent(result)
 	return &ReconciliationProjection{
 		Jobs: map[string]ReconciliationJob{
-			job.ID:  job,
-			"job-2": {ID: "job-2"},
+			job.ID:          job,
+			testSecondJobID: {ID: testSecondJobID},
 		},
 		Results: map[string]DurableReconciliationResult{job.ID: result},
 		Intents: map[string]ReconciliationActionIntent{intent.ID: intent},

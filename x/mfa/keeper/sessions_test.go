@@ -597,7 +597,8 @@ func TestPersistedAuthorizationSessionCorruptionFailsClosed(t *testing.T) {
 				keeper.GetAuthorizationSession(ctx, sessionID)
 			})
 			require.Panics(t, func() {
-				keeper.ValidateSessionForTransaction(ctx, sessionID, sdk.AccAddress([]byte("account")), types.SensitiveTxKeyRotation, "")
+				// The call is expected to panic before returning, so there is no error value to assert on.
+				_ = keeper.ValidateSessionForTransaction(ctx, sessionID, sdk.AccAddress([]byte("account")), types.SensitiveTxKeyRotation, "")
 			})
 		})
 	}

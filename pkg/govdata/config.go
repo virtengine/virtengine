@@ -13,6 +13,12 @@ import (
 // Configuration
 // ============================================================================
 
+// URL scheme names accepted for adapter endpoints.
+const (
+	schemeHTTP  = "http"
+	schemeHTTPS = "https"
+)
+
 // Config holds the configuration for the government data service
 type Config struct {
 	// Enabled indicates if government data integration is enabled
@@ -356,7 +362,7 @@ func (c *AdapterConfig) Validate() error {
 		if err != nil || parsed.Scheme == "" || parsed.Host == "" {
 			return errors.New("endpoint must be an absolute URL")
 		}
-		if parsed.Scheme != "http" && parsed.Scheme != "https" {
+		if parsed.Scheme != schemeHTTP && parsed.Scheme != schemeHTTPS {
 			return errors.New("endpoint must use http or https")
 		}
 	}
@@ -365,7 +371,7 @@ func (c *AdapterConfig) Validate() error {
 		if err != nil || parsed.Scheme == "" || parsed.Host == "" {
 			return errors.New("health_check_endpoint must be an absolute URL")
 		}
-		if parsed.Scheme != "http" && parsed.Scheme != "https" {
+		if parsed.Scheme != schemeHTTP && parsed.Scheme != schemeHTTPS {
 			return errors.New("health_check_endpoint must use http or https")
 		}
 	}

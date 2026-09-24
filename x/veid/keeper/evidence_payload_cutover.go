@@ -238,7 +238,7 @@ func (k Keeper) CutoverEvidencePayloads(ctx sdk.Context, manifest EvidencePayloa
 		switch row.sourceKind {
 		case "scope":
 			report.ScopeSources++
-		case "social_scope":
+		case sourceKindSocialScope:
 			report.SocialScopeSources++
 		default:
 			return EvidencePayloadCutoverReport{}, errors.New("unsupported evidence payload cutover source kind")
@@ -276,11 +276,11 @@ func applyEvidencePayloadCutoverEntry(ctx sdk.Context, k Keeper, row legacyEvide
 	quarantineBytes := store.Get(quarantineKey)
 	switch entry.Action {
 	case EvidencePayloadCutoverActionSanitize:
-		if row.classification != "legacy" || entry.ObjectCommitment == "" {
+		if row.classification != classificationLegacy || entry.ObjectCommitment == "" {
 			return errors.New("sanitize requires a mapped legacy row")
 		}
 		if quarantineBytes != nil {
-			if err := validateEvidencePayloadCutoverQuarantine(quarantineBytes, row, entry, "legacy"); err != nil {
+			if err := validateEvidencePayloadCutoverQuarantine(quarantineBytes, row, entry, classificationLegacy); err != nil {
 				return fmt.Errorf("sanitize quarantine mismatch: %w", err)
 			}
 		}
@@ -299,7 +299,7 @@ func applyEvidencePayloadCutoverEntry(ctx sdk.Context, k Keeper, row legacyEvide
 		store.Set(row.key, sanitized)
 		return nil
 	case EvidencePayloadCutoverActionDelete:
-		if row.classification == "legacy" {
+		if row.classification == classificationLegacy {
 			return errors.New("legacy rows cannot be deleted without persisted reverse mapping authority")
 		}
 		if entry.ObjectCommitment != "" || quarantineBytes == nil || evidencePayloadCutoverDigest(quarantineBytes) != entry.AuthorityRecordDigest {
@@ -324,7 +324,7 @@ func sanitizeLegacyEvidenceRow(sourceKind string, value []byte) ([]byte, error) 
 		return nil, errors.New("decode legacy evidence row for sanitization")
 	}
 	payload, found := fields["encrypted_payload"]
-	if !found || len(payload) == 0 || string(payload) == "null" {
+	if !found || len(payload) == 0 || string(payload) == jsonNullLiteral {
 		return nil, errors.New("legacy evidence row has no payload to sanitize")
 	}
 	allowed, found := evidencePayloadCutoverSanitizeFields[sourceKind]
@@ -340,7 +340,7 @@ func sanitizeLegacyEvidenceRow(sourceKind string, value []byte) ([]byte, error) 
 			safeFields[key] = value
 		}
 	}
-	safeFields["encrypted_payload"] = json.RawMessage("null")
+	safeFields["encrypted_payload"] = json.RawMessage(jsonNullLiteral)
 	sanitized, err := json.Marshal(safeFields)
 	if err != nil {
 		return nil, fmt.Errorf("marshal sanitized legacy evidence row: %w", err)
@@ -368,7 +368,7 @@ var evidencePayloadCutoverSanitizeFields = map[string]map[string]evidencePayload
 		"verified_at": cutoverOptionalString, "expires_at": cutoverOptionalString,
 		"revoked": cutoverBoolean, "version": cutoverUnsigned,
 	},
-	"social_scope": {
+	sourceKindSocialScope: {
 		"version": cutoverUnsigned, "scope_id": cutoverString, "account_address": cutoverString,
 		"provider": cutoverString, "profile_name_hash": cutoverString, "email_hash": cutoverString,
 		"username_hash": cutoverString, "org_hash": cutoverString, "account_created_at": cutoverOptionalString,
@@ -380,7 +380,7 @@ var evidencePayloadCutoverSanitizeFields = map[string]map[string]evidencePayload
 func validateEvidencePayloadCutoverField(name string, kind evidencePayloadCutoverFieldKind, raw json.RawMessage) error {
 	switch kind {
 	case cutoverString, cutoverOptionalString:
-		if kind == cutoverOptionalString && string(raw) == "null" {
+		if kind == cutoverOptionalString && string(raw) == jsonNullLiteral {
 			return nil
 		}
 		var value string
@@ -422,10 +422,10 @@ func validateEvidencePayloadCutoverDeleteSource(sourceKind string, value []byte)
 		return errors.New("delete source must be a JSON object")
 	}
 	payload, found := fields["encrypted_payload"]
-	if !found || len(payload) == 0 || string(payload) == "null" {
+	if !found || len(payload) == 0 || string(payload) == jsonNullLiteral {
 		return errors.New("delete source must contain a non-null encrypted payload marker")
 	}
-	if sourceKind != "social_scope" {
+	if sourceKind != sourceKindSocialScope {
 		return nil
 	}
 	evidenceFields := map[string]struct{}{
@@ -495,7 +495,7 @@ func bytesContains(value, fragment []byte) bool {
 }
 
 func validateEvidencePayloadCutoverEntry(entry EvidencePayloadCutoverEntry) error {
-	if entry.SourceKind != "scope" && entry.SourceKind != "social_scope" {
+	if entry.SourceKind != "scope" && entry.SourceKind != sourceKindSocialScope {
 		return errors.New("invalid evidence payload cutover source kind")
 	}
 	if err := validateSHA256Digest(entry.SourceKeyDigest, "source key digest"); err != nil {
@@ -538,15 +538,15 @@ func collectEvidencePayloadCutoverRows(ctx sdk.Context, k Keeper) ([]legacyEvide
 	for _, source := range []struct {
 		kind   string
 		prefix []byte
-	}{{"scope", types.PrefixScope}, {"social_scope", types.PrefixSocialMediaScope}} {
+	}{{"scope", types.PrefixScope}, {sourceKindSocialScope, types.PrefixSocialMediaScope}} {
 		iterator := storetypes.KVStorePrefixIterator(store, source.prefix)
 		for ; iterator.Valid(); iterator.Next() {
 			row, classification := classifyLegacyEvidenceRow(source.kind, iterator.Key(), iterator.Value())
-			if classification == "evidence_record" {
+			if classification == classificationEvidenceRecord {
 				skipped = append(skipped, evidencePayloadCutoverSkippedRecord{sourceKind: source.kind, keyDigest: evidencePayloadCutoverSourceKeyDigest(source.kind, iterator.Key()), rowDigest: evidencePayloadCutoverDigest(iterator.Value()), classification: classification})
 				continue
 			}
-			if classification != "none" {
+			if classification != classificationNone {
 				rows = append(rows, row)
 			}
 		}
