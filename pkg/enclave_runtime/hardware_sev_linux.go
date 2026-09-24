@@ -59,7 +59,7 @@ func requestSEVHardwareReport(fd *os.File, userData [64]byte, vmpl uint32) ([]by
 
 func requestSEVDerivedKey(fd *os.File, rootKey int, guestFieldSelect uint64, vmpl uint32) ([]byte, error) {
 	req := linuxSNPDerivedKeyRequest{
-		RootKeySelect:    uint32(rootKey),
+		RootKeySelect:    uint32(rootKey), //nolint:gosec // rootKey is a validated enum (KeyRootVCEK=0 or KeyRootVMRK=1)
 		GuestFieldSelect: guestFieldSelect,
 		VMPL:             vmpl,
 	}
