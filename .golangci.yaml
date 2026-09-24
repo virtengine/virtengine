@@ -51,6 +51,6 @@ linters:
       - third_party$
       - builtin$
       - examples$
-      - vendor$
+      - vendor/
 # Formatting handled by pre-commit hook (.git/hooks/pre-commit)
 # golangci-lint only checks non-auto-fixable issues
