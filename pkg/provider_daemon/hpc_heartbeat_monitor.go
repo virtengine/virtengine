@@ -79,6 +79,17 @@ type HPCHeartbeatMonitor struct {
 	stopCh  chan struct{}
 	wg      sync.WaitGroup
 
+	// pendingAlerts holds alerts raised while m.nodesMu is held. They are
+	// drained by takePendingAlertsLocked and dispatched by dispatchAlerts once
+	// m.nodesMu has been released, so the AlertHandler never runs under the
+	// state lock. Guarded by m.nodesMu.
+	pendingAlerts []HeartbeatAlert
+
+	// alertMu serializes AlertHandler invocations so a handler is never called
+	// concurrently, preserving the ordering guarantee the lock previously gave.
+	// It is never held at the same time as m.nodesMu.
+	alertMu sync.Mutex
+
 	// Metrics
 	totalNodes   int
 	healthyNodes int
@@ -113,8 +124,20 @@ func (m *HPCHeartbeatMonitor) Stop() {
 // RecordHeartbeat records a heartbeat for a node
 func (m *HPCHeartbeatMonitor) RecordHeartbeat(nodeID, clusterID string, sequence uint64) {
 	m.nodesMu.Lock()
-	defer m.nodesMu.Unlock()
+	m.recordHeartbeatLocked(nodeID, clusterID, sequence)
+	m.nodesMu.Unlock()
 
+	// Alerts queued while the state lock was held are dispatched only now.
+	// The AlertHandler must never run under m.nodesMu: any handler that reads
+	// monitor state would otherwise self-deadlock (Go mutexes are not
+	// reentrant).
+	m.dispatchPendingAlerts()
+}
+
+// recordHeartbeatLocked updates heartbeat state. It must be called with
+// m.nodesMu held and must not invoke the AlertHandler directly — it queues
+// alerts via raiseAlertLocked for the caller to dispatch after unlocking.
+func (m *HPCHeartbeatMonitor) recordHeartbeatLocked(nodeID, clusterID string, sequence uint64) {
 	now := time.Now()
 	state, exists := m.nodes[nodeID]
 
@@ -144,7 +167,7 @@ func (m *HPCHeartbeatMonitor) RecordHeartbeat(nodeID, clusterID string, sequence
 		// Check for sequence gap
 		if sequence > state.LastSequence+1 {
 			gap := sequence - state.LastSequence - 1
-			m.raiseAlert(HeartbeatAlert{
+			m.raiseAlertLocked(HeartbeatAlert{
 				NodeID:      nodeID,
 				ClusterID:   clusterID,
 				AlertType:   "sequence_gap",
@@ -158,7 +181,7 @@ func (m *HPCHeartbeatMonitor) RecordHeartbeat(nodeID, clusterID string, sequence
 		// Calculate anomaly score based on interval variance
 		state.AnomalyScore = m.calculateAnomalyScore(state.IntervalHistory, interval)
 		if state.AnomalyScore > 3.0 {
-			m.raiseAlert(HeartbeatAlert{
+			m.raiseAlertLocked(HeartbeatAlert{
 				NodeID:    nodeID,
 				ClusterID: clusterID,
 				AlertType: "anomaly",
@@ -177,7 +200,7 @@ func (m *HPCHeartbeatMonitor) RecordHeartbeat(nodeID, clusterID string, sequence
 	// Check if recovering from stale/offline
 	if state.Status != statusHealthy {
 		state.RecoveryCount++
-		m.raiseAlert(HeartbeatAlert{
+		m.raiseAlertLocked(HeartbeatAlert{
 			NodeID:    nodeID,
 			ClusterID: clusterID,
 			AlertType: "recovered",
@@ -252,7 +275,6 @@ func (m *HPCHeartbeatMonitor) monitorLoop(ctx context.Context) {
 
 func (m *HPCHeartbeatMonitor) checkAllNodes() {
 	m.nodesMu.Lock()
-	defer m.nodesMu.Unlock()
 
 	now := time.Now()
 	healthy, stale, offline := 0, 0, 0
@@ -307,14 +329,18 @@ func (m *HPCHeartbeatMonitor) checkAllNodes() {
 	m.staleNodes = stale
 	m.offlineNodes = offline
 	m.metricsMu.Unlock()
+
+	m.nodesMu.Unlock()
+
+	// Dispatch queued alerts only once the state lock has been released: a
+	// handler that reads monitor state would otherwise self-deadlock.
+	m.dispatchPendingAlerts()
 }
 
-func (m *HPCHeartbeatMonitor) raiseAlert(alert HeartbeatAlert) {
-	m.nodesMu.Lock()
-	defer m.nodesMu.Unlock()
-	m.raiseAlertLocked(alert)
-}
-
+// raiseAlertLocked queues an alert for dispatch after m.nodesMu is released.
+// It must be called with m.nodesMu held. It deliberately does NOT invoke
+// m.config.AlertHandler — the handler is arbitrary user code and calling it
+// while holding m.nodesMu deadlocks any handler that touches monitor state.
 func (m *HPCHeartbeatMonitor) raiseAlertLocked(alert HeartbeatAlert) {
 	state, exists := m.nodes[alert.NodeID]
 	if exists {
@@ -330,8 +356,54 @@ func (m *HPCHeartbeatMonitor) raiseAlertLocked(alert HeartbeatAlert) {
 	m.alertsRaised++
 	m.metricsMu.Unlock()
 
-	if m.config.AlertHandler != nil {
-		m.config.AlertHandler(alert)
+	m.pendingAlerts = append(m.pendingAlerts, alert)
+}
+
+// takePendingAlertsLocked removes and returns the queued alerts.
+// Must be called with m.nodesMu held.
+func (m *HPCHeartbeatMonitor) takePendingAlertsLocked() []HeartbeatAlert {
+	if len(m.pendingAlerts) == 0 {
+		return nil
+	}
+	pending := m.pendingAlerts
+	m.pendingAlerts = nil
+	return pending
+}
+
+// dispatchPendingAlerts drains queued alerts and invokes the AlertHandler with
+// no monitor lock held. alertMu serializes invocations so handlers are never
+// called concurrently, matching the mutual exclusion the state lock used to
+// provide. alertMu is never held at the same time as m.nodesMu.
+//
+// The AlertHandler must not call back into this monitor synchronously: doing so
+// would re-enter dispatchPendingAlerts and deadlock on alertMu. That
+// restriction already applied before this queuing scheme — a re-entrant handler
+// previously deadlocked on m.nodesMu instead.
+func (m *HPCHeartbeatMonitor) dispatchPendingAlerts() {
+	m.alertMu.Lock()
+	defer m.alertMu.Unlock()
+
+	handler := m.config.AlertHandler
+	if handler == nil {
+		// Nothing to deliver. Drop queued alerts (never call a nil handler).
+		m.nodesMu.Lock()
+		m.takePendingAlertsLocked()
+		m.nodesMu.Unlock()
+		return
+	}
+
+	for {
+		m.nodesMu.Lock()
+		pending := m.takePendingAlertsLocked()
+		m.nodesMu.Unlock()
+
+		if len(pending) == 0 {
+			return
+		}
+
+		for _, alert := range pending {
+			handler(alert)
+		}
 	}
 }
 
