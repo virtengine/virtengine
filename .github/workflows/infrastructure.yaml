@@ -157,10 +157,10 @@ jobs:
               '    token    = "ci"' \
               '    insecure = true' \
               '  }' \
-              '}' > .ci-providers.tf
+              '}' > ci-providers.tf
             terraform init -backend=false -input=false
             terraform validate
-            rm -f .ci-providers.tf
+            rm -f ci-providers.tf
             cd - >/dev/null
           done
 
