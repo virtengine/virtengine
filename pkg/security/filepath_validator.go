@@ -120,17 +120,16 @@ func (v *PathValidator) ValidatePath(path string) error {
 	if len(v.allowedDirs) > 0 {
 		allowed := false
 		for _, dir := range v.allowedDirs {
-			absDir, err := filepath.Abs(dir)
-			if err != nil {
+			absDir, ok := canonicalDir(dir)
+			if !ok {
 				continue
 			}
-			// Normalize the directory path with separator
-			absDir = filepath.Clean(absDir) + string(filepath.Separator)
-			absPathNorm := filepath.Clean(absPath)
+			absPathNorm := normalizeForCompare(filepath.Clean(absPath))
 
-			// Check if the path is exactly the allowed dir or starts with it
-			if absPathNorm == filepath.Clean(absDir[:len(absDir)-1]) ||
-				strings.HasPrefix(absPathNorm+string(filepath.Separator), absDir) {
+			// Check if the path is exactly the allowed dir or is nested inside it.
+			// Containment is decided with filepath.Rel so a path that merely shares
+			// a name prefix ("/data-secret" vs "/data") cannot pass.
+			if pathWithinDir(absPathNorm, absDir) {
 				allowed = true
 				break
 			}
