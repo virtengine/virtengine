@@ -22,7 +22,8 @@ virtengine/
 │   ├── SECURITY_ARCHITECTURE.md      # Overall security architecture
 │   ├── COMPLIANCE_MATRIX.md          # GDPR, SOC2, ISO27001 mappings
 │   ├── ENCRYPTION.md                 # Encryption at rest/in transit
-│   └── SECURITY_INCIDENT_RESPONSE.md # Security-specific IR plan
+│   ├── SECURITY_INCIDENT_RESPONSE.md # Security-specific IR plan
+│   └── GO-2026-4740-MSGPACK-ASSESSMENT.md # Reachability assessment for an unfixable advisory
 │
 ├── _docs/                            # Internal technical documentation
 │   ├── threat-model.md               # STRIDE threat analysis
@@ -116,6 +117,7 @@ virtengine/
 |----------|-------------|----------|----------|
 | **Penetration Testing Program** | Pentest scope, methodology | Security | [PENETRATION_TESTING_PROGRAM.md](../../PENETRATION_TESTING_PROGRAM.md) |
 | **Package Security Audit** | Dependency security | Security, Dev | [PKG_SECURITY_AUDIT.md](../../PKG_SECURITY_AUDIT.md) |
+| **Dependency Advisory Assessments** | Reachability analysis for advisories with no upstream fix | Security, Dev | [GO-2026-4740-MSGPACK-ASSESSMENT.md](GO-2026-4740-MSGPACK-ASSESSMENT.md) |
 | **Frontend Security Audit** | Web security | Security | [docs/FRONTEND_SECURITY_AUDIT.md](../FRONTEND_SECURITY_AUDIT.md) |
 
 ### 7. Business Continuity
