@@ -1148,7 +1148,11 @@ jobs:
             artifacts/checksums.txt
           draft: true
           prerelease: ${{ contains(github.ref, '-rc') || contains(github.ref, '-beta') || contains(github.ref, '-alpha') }}
-          generate_release_notes: true
+          # Release bodies have exactly one writer: release.yaml's publish job runs
+          # GoReleaser with --release-notes=.cache/changelog.md and release.mode=replace,
+          # and script/genchangelog.sh (make gen-changelog) is the single notes generator.
+          # GitHub's own note generation is a competing writer, so it stays off here.
+          generate_release_notes: false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
