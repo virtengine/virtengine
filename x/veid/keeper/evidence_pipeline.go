@@ -18,7 +18,6 @@ import (
 
 const (
 	evidenceConfidenceThreshold uint32 = 7000
-	evidenceLowConfidenceCutoff uint32 = 5000
 )
 
 // EvidenceAssessment summarizes evidence confidence and provenance for scoring.
@@ -40,6 +39,10 @@ func (k Keeper) ProcessEvidencePipeline(
 	if len(decryptedScopes) == 0 {
 		return &EvidenceAssessment{}, nil
 	}
+
+	// Raw document/biometric bytes must not linger in validator memory beyond
+	// this flow: wipe every decrypted plaintext once processing completes.
+	defer wipeDecryptedScopes(decryptedScopes)
 
 	pipeline := NewFeatureExtractionPipeline(DefaultFeatureExtractionConfig())
 	features, err := pipeline.ExtractFeatures(decryptedScopes, address.String(), ctx.BlockHeight(), ctx.BlockTime())
@@ -309,9 +312,4 @@ func applyEvidenceConfidence(score uint32, confidence uint32) (uint32, bool) {
 		return math.MaxUint32, true
 	}
 	return uint32(adjusted64), true
-}
-
-// shouldFlagLowEvidenceConfidence returns true if confidence is below cutoff.
-func shouldFlagLowEvidenceConfidence(confidence uint32) bool {
-	return confidence > 0 && confidence < evidenceLowConfidenceCutoff
 }

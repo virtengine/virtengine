@@ -203,7 +203,8 @@ func assertPersistedSchemaPayloadObjects(t *testing.T, inventory PersistedSchema
 
 func assertGitCommand(t *testing.T, repoRoot string, args ...string) {
 	t.Helper()
-	command := exec.Command("git", append([]string{"-C", repoRoot}, args...)...)
+	// G204: args are test-authored literals; repoRoot comes from the test fixture path.
+	command := exec.Command("git", append([]string{"-C", repoRoot}, args...)...) //nolint:gosec // G204
 	if output, err := command.CombinedOutput(); err != nil {
 		t.Fatalf("git %s failed: %v: %s", strings.Join(args, " "), err, output)
 	}
@@ -211,7 +212,8 @@ func assertGitCommand(t *testing.T, repoRoot string, args ...string) {
 
 func gitCommandOutput(t *testing.T, repoRoot string, args ...string) string {
 	t.Helper()
-	command := exec.Command("git", append([]string{"-C", repoRoot}, args...)...)
+	// G204: args are test-authored literals; repoRoot comes from the test fixture path.
+	command := exec.Command("git", append([]string{"-C", repoRoot}, args...)...) //nolint:gosec // G204
 	output, err := command.CombinedOutput()
 	if err != nil {
 		t.Fatalf("git %s failed: %v: %s", strings.Join(args, " "), err, output)
@@ -312,7 +314,7 @@ func TestPersistedSchemaNonPersistentSurfaceSetFailsClosed(t *testing.T) {
 
 func TestPersistedSchemaConsensusOwnershipIsExactAndProductionOwned(t *testing.T) {
 	inventory := loadPersistedSchemaFixture(t)
-	var consensus []string
+	consensus := make([]string, 0, len(inventory.Entries))
 	for _, entry := range inventory.Entries {
 		if entry.StorageClass != StorageConsensus {
 			continue

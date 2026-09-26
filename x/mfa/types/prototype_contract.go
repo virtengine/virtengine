@@ -224,10 +224,11 @@ func (c CanonicalFactorChallenge) ValidateAndConsume(
 }
 
 func writeCanonicalString(output *bytes.Buffer, value string) error {
-	if len(value) > int(^uint32(0)) {
+	length := len(value)
+	if length > int(^uint32(0)) {
 		return fmt.Errorf("canonical string exceeds uint32 length")
 	}
-	if err := binary.Write(output, binary.BigEndian, uint32(len(value))); err != nil { // #nosec G115 -- len(value) is bounded by its allocating container, a protocol-capped collection far below 2^32, so the conversion cannot truncate
+	if err := binary.Write(output, binary.BigEndian, uint32(length)); err != nil {
 		return err
 	}
 	_, err := output.WriteString(value)

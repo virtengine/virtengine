@@ -230,7 +230,7 @@ func (m RecoveryParticipantManifest) Validate() error {
 		if participant.ParticipantID == "" || participant.ParticipantVersion != RecoveryParticipantContractVersion {
 			return fmt.Errorf("unknown recovery participant version for %q", participant.ParticipantID)
 		}
-		if participant.Order != uint32(index) || participant.ReadBound == 0 || participant.WriteBound == 0 {
+		if int(participant.Order) != index || participant.ReadBound == 0 || participant.WriteBound == 0 {
 			return fmt.Errorf("recovery participant order or bounds are invalid")
 		}
 		if participant.ConservationDigest == ([32]byte{}) || participant.ExpectedPostDigest == ([32]byte{}) {
@@ -252,7 +252,11 @@ func (m RecoveryParticipantManifest) Digest() ([32]byte, error) {
 	if err := writeCanonicalString(&output, m.ContractVersion); err != nil {
 		return [32]byte{}, err
 	}
-	_ = binary.Write(&output, binary.BigEndian, uint32(len(m.Participants))) // #nosec G115 -- len(m.Participants) is bounded by its allocating container, a protocol-capped collection far below 2^32, so the conversion cannot truncate
+	participantCount := len(m.Participants)
+	if participantCount > int(^uint32(0)) {
+		return [32]byte{}, fmt.Errorf("recovery participant count exceeds uint32 length")
+	}
+	_ = binary.Write(&output, binary.BigEndian, uint32(participantCount))
 	for _, participant := range m.Participants {
 		if err := writeCanonicalString(&output, participant.ParticipantID); err != nil {
 			return [32]byte{}, err

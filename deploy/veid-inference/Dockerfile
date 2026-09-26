@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1.7
 # The deployed image is always referenced by digest in Kubernetes. Builders
 # should pass a digest-pinned Go base via GO_BUILDER_IMAGE in release CI.
-ARG GO_BUILDER_IMAGE=golang:1.25.8-alpine
+ARG GO_BUILDER_IMAGE=golang:1.26.8-alpine
 FROM ${GO_BUILDER_IMAGE} AS build
 
 RUN apk add --no-cache ca-certificates git

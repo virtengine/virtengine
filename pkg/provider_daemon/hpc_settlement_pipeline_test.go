@@ -283,7 +283,7 @@ func TestHPCSettlementRecord_Hash(t *testing.T) {
 	}
 
 	record3 := &HPCSettlementRecord{
-		JobID:           "job-2",
+		JobID:           testSecondJobID,
 		ClusterID:       "cluster-1",
 		ProviderAddress: "ve1provider",
 		CustomerAddress: "ve1customer",

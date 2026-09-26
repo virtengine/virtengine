@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"strings"
 
-	errorsmod "cosmossdk.io/errors"
 	storetypes "cosmossdk.io/store/types"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 
@@ -468,21 +467,6 @@ func (k Keeper) enforceVerificationArtifactState(
 	return nil
 }
 
-func (k Keeper) rejectVerificationResult(result *types.VerificationResult, err error) {
-	result.Metadata["verification_rejection"] = err.Error()
-
-	switch {
-	case errorsmod.IsOf(err, types.ErrUnauthorized):
-		result.SetFailed(types.ReasonCodeUnauthorizedArtifactState)
-	case errorsmod.IsOf(err, types.ErrPipelineVersionMismatch),
-		errorsmod.IsOf(err, types.ErrNoPipelineVersionActive),
-		errorsmod.IsOf(err, types.ErrModelManifestMismatch):
-		result.SetFailed(types.ReasonCodeStaleArtifactState)
-	default:
-		result.SetError(types.ReasonCodeMLInferenceError, err.Error())
-	}
-}
-
 func hashesMatch(expected, actual string) bool {
 	return normalizeHashString(expected) == normalizeHashString(actual)
 }
@@ -490,77 +474,6 @@ func hashesMatch(expected, actual string) bool {
 func normalizeHashString(value string) string {
 	normalized := strings.ToLower(strings.TrimSpace(value))
 	return strings.TrimPrefix(normalized, "sha256:")
-}
-
-func resultHasReasonCode(result *types.VerificationResult, code types.ReasonCode) bool {
-	for _, reasonCode := range result.ReasonCodes {
-		if reasonCode == code {
-			return true
-		}
-	}
-	return false
-}
-
-// finalizeRequest completes the verification request lifecycle
-func (k Keeper) finalizeRequest(
-	ctx sdk.Context,
-	request *types.VerificationRequest,
-	result *types.VerificationResult,
-) {
-	if ctx.ExecMode() != sdk.ExecModeFinalize ||
-		k.consensusSystemTxAuthorizer == nil ||
-		!k.consensusSystemTxAuthorizer(ctx) {
-		k.Logger(ctx).Error("refusing to finalize verification outside authorized consensus system transaction")
-		return
-	}
-	// Update request status based on result
-	switch result.Status {
-	case types.VerificationResultStatusSuccess, types.VerificationResultStatusPartial:
-		request.SetCompleted()
-	case types.VerificationResultStatusFailed:
-		if resultHasReasonCode(result, types.ReasonCodeStaleArtifactState) ||
-			resultHasReasonCode(result, types.ReasonCodeUnauthorizedArtifactState) {
-			request.SetRejected(fmt.Sprintf("%v", result.ReasonCodes))
-		} else {
-			request.SetFailed(fmt.Sprintf("%v", result.ReasonCodes))
-		}
-	case types.VerificationResultStatusError:
-		// Check if we should retry
-		config := DefaultVerificationPipelineConfig()
-		if request.IsRetryable(config.MaxRetries) {
-			request.IncrementRetry(ctx.BlockTime())
-			request.Status = types.RequestStatusPending
-			// Re-add to pending queue for retry
-			k.addToPendingQueue(ctx, request)
-		} else {
-			request.SetFailed("max retries exceeded")
-			request.Metadata["final_error"] = fmt.Sprintf("%v", result.ReasonCodes)
-		}
-	}
-
-	// Store updated request
-	if err := k.setVerificationRequest(ctx, request); err != nil {
-		k.Logger(ctx).Error("failed to finalize request", "error", err)
-	}
-
-	// Remove from pending queue if completed
-	if types.IsFinalRequestStatus(request.Status) {
-		k.removeFromPendingQueue(ctx, request)
-	}
-
-	// Store result
-	if err := k.StoreVerificationResult(ctx, result); err != nil {
-		k.Logger(ctx).Error("failed to store result", "error", err)
-	}
-
-	// Emit events
-	_ = ctx.EventManager().EmitTypedEvent(&types.EventVerificationCompleted{
-		RequestID:      request.RequestID,
-		AccountAddress: request.AccountAddress,
-		Score:          result.Score,
-		Status:         string(result.Status),
-		BlockHeight:    result.BlockHeight,
-	})
 }
 
 // ProcessPendingVerifications processes all pending verification requests

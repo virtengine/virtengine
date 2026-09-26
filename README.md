@@ -5,6 +5,27 @@
 
 VirtEngine is a secure, transparent, and decentralized cloud computing marketplace that connects those who need computing resources (tenants) with those that have computing capacity to lease (providers).
 
+## How the marketplace works
+
+There are two ways to acquire capacity, and they share the same on-chain
+settlement rails:
+
+- **Browse and buy** a public listing at its published price (immediate
+  resolution).
+- **Open an order** and let providers bid; a deterministic engine resolves the
+  best eligible offer when the bidding window closes.
+
+Providers supply capacity by publishing fixed-price listings (natively or via
+Waldur), by bidding on open orders, or by offering HPC queues. Kubernetes,
+OpenStack/VMware/AWS/Azure, and SLURM/MOAB/Open OnDemand are fulfilment
+backends, not separate marketplaces.
+
+Waldur provides the off-chain marketplace, metering, and administration plane;
+the deterministic commercial state lives on-chain. See
+[docs/acquisition-pathways.md](docs/acquisition-pathways.md) and the
+[docs site](https://docs.virtengine.com/concepts/acquisition-pathways/) for the
+full picture.
+
 # Roadmap and contributing
 
 VirtEngine is written in Golang and is Apache 2.0 licensed. Contributions are welcome whether that means providing feedback, testing existing and new features, or hacking on the source.
@@ -58,7 +79,10 @@ The repository includes GoReleaser, Homebrew, and install-script paths for tagge
 2. The target network has an approved launch or upgrade decision.
 3. The verification and support posture in [VERIFICATION.md](VERIFICATION.md) and [docs/COMPATIBILITY.md](docs/COMPATIBILITY.md) matches your intended deployment.
 
-Example installation commands for an already-published tag:
+No release tags have been published yet (the only tag is `v0.1.0`, a 2021
+draft), so there is currently nothing to install: `virtengine/tap` does not
+exist and `install.sh` has no release artifacts to download. The commands
+below are the intended shape once tagged releases ship — do not run them yet.
 
 ```sh
 brew tap virtengine/tap
@@ -73,11 +97,15 @@ curl -sSfL https://raw.githubusercontent.com/virtengine/virtengine/main/install.
 
 [This doc](_docs/development-environment.md) guides through setting up a local development environment.
 
-VirtEngine is developed against [Go 1.25.5](https://go.dev/). Building requires a working Go installation, a properly set `GOPATH`, and `$GOPATH/bin` present in `$PATH`. It is also required to have a C/C++ compiler installed (`gcc` or `clang`) as there are C dependencies in use (`libusb`, `libhid`).
+VirtEngine is developed against [Go 1.26.8](https://go.dev/). Building requires a working Go installation, a properly set `GOPATH`, and `$GOPATH/bin` present in `$PATH`. It is also required to have a C/C++ compiler installed (`gcc` or `clang`) as there are C dependencies in use (`libusb`, `libhid`).
 
 VirtEngine build processes and examples are heavily tied to the `Makefile`.
 
 ## Building from Source
+
+Builds require the direnv environment (`direnv allow` in the repo root, which
+sets `VIRTENGINE`, `VE_DEVCACHE`, and related vars). Without it, `make
+virtengine` silently does nothing (`Nothing to be done for 'virtengine'`).
 
 The command below compiles the `virtengine` executable and writes it into `.cache/bin`.
 

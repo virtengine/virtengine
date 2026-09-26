@@ -820,11 +820,11 @@ func (p *SettlementPipeline) severityFromVariance(variance float64) string {
 
 	switch {
 	case absVariance > 100:
-		return "critical"
+		return anomalySeverityCritical
 	case absVariance > 75:
-		return "high"
+		return anomalySeverityHigh
 	case absVariance > 50:
-		return "medium"
+		return anomalySeverityMedium
 	default:
 		return "low"
 	}

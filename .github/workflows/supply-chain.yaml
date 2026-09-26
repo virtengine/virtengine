@@ -55,7 +55,7 @@ defaults:
     shell: bash
 
 env:
-  GO_VERSION: "1.25.5"
+  GO_VERSION: "1.26.8"
   PYTHON_VERSION: "3.11"
   NODE_VERSION: "24"
   PNPM_VERSION: "10.28.2"
@@ -73,10 +73,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: ${{ env.PYTHON_VERSION }}
 
@@ -98,7 +98,7 @@ jobs:
         run: python -m unittest discover -s .github/tests -p "test_security_policy*.py"
 
       - name: Set up Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v6
         with:
           go-version: ${{ env.GO_VERSION }}
           cache: true
@@ -116,21 +116,21 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Set up Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v6
         with:
           go-version: ${{ env.GO_VERSION }}
           cache: true
 
       - name: Set up pnpm
-        uses: pnpm/action-setup@v4
+        uses: pnpm/action-setup@v5
         with:
           version: ${{ env.PNPM_VERSION }}
 
       - name: Set up Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: pnpm
@@ -176,7 +176,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           fetch-depth: 0
 
@@ -221,7 +221,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Run attack-detection script
         run: |
@@ -230,7 +230,7 @@ jobs:
           scripts/supply-chain/detect-supply-chain-attacks.sh --all --json > .cache/supply-chain/attack-detection.json
 
       - name: Upload attack-detection report
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         if: always()
         with:
           name: attack-detection-report
@@ -242,10 +242,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Set up Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v6
         with:
           go-version: ${{ env.GO_VERSION }}
           cache: true
@@ -276,7 +276,7 @@ jobs:
           fi
 
       - name: Upload risk-assessment report
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         if: always()
         with:
           name: risk-assessment-report
@@ -288,12 +288,13 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Install Syft
         run: |
-          curl -sSfL "https://github.com/anchore/syft/releases/download/${SYFT_VERSION}/syft_${SYFT_VERSION#v}_linux_amd64.tar.gz" | tar -xz
-          sudo install -m 0755 syft /usr/local/bin/syft
+          TOOL_DIR="$(mktemp -d)"
+          curl -sSfL "https://github.com/anchore/syft/releases/download/${SYFT_VERSION}/syft_${SYFT_VERSION#v}_linux_amd64.tar.gz" | tar -xz -C "$TOOL_DIR"
+          sudo install -m 0755 "$TOOL_DIR/syft" /usr/local/bin/syft
 
       - name: Generate SBOM bundle
         run: |
@@ -302,7 +303,7 @@ jobs:
           sha256sum .cache/supply-chain/sbom/*.json > .cache/supply-chain/sbom/SHA256SUMS
 
       - name: Upload SBOM bundle
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: supply-chain-sbom
           path: .cache/supply-chain/sbom
@@ -323,16 +324,16 @@ jobs:
       base64-subjects: ${{ steps.subjects.outputs.base64-subjects }}
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Set up Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v6
         with:
           go-version: ${{ env.GO_VERSION }}
           cache: true
 
       - name: Download SBOM bundle
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           name: supply-chain-sbom
           path: release-subjects/sbom
@@ -340,7 +341,8 @@ jobs:
       - name: Build deterministic release binary
         run: |
           mkdir -p release-subjects rebuild
-          export SOURCE_DATE_EPOCH="$(git log -1 --pretty=%ct)"
+          SOURCE_DATE_EPOCH="$(git log -1 --pretty=%ct)"
+          export SOURCE_DATE_EPOCH
 
           CGO_ENABLED=0 go build -trimpath -buildvcs=false -ldflags="-s -w" -o release-subjects/virtengine ./cmd/virtengine
           sha256sum release-subjects/virtengine > release-subjects/virtengine.sha256
@@ -363,7 +365,7 @@ jobs:
           echo "base64-subjects=$(base64 -w0 release-subjects/provenance-subjects.txt)" >> "$GITHUB_OUTPUT"
 
       - name: Upload release subjects
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: release-subjects
           path: release-subjects
@@ -380,7 +382,7 @@ jobs:
       id-token: write
     steps:
       - name: Download release subjects
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           name: release-subjects
           path: release-subjects
@@ -402,17 +404,17 @@ jobs:
             cosign sign-blob \
               --yes \
               --output-signature "${artifact}.sig" \
-              --output-certificate "${artifact}.sig.cert" \
+              --output-certificate "${artifact}.pem" \
               "$artifact"
           done
 
       - name: Upload signed artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: release-signatures
           path: |
             release-subjects/**/*.sig
-            release-subjects/**/*.sig.cert
+            release-subjects/**/*.pem
           retention-days: 90
 
   verify-release-signatures:
@@ -423,13 +425,13 @@ jobs:
       - sign-release-artifacts
     steps:
       - name: Download release subjects
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           name: release-subjects
           path: release-subjects
 
       - name: Download release signatures
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           name: release-signatures
           path: release-subjects
@@ -442,6 +444,9 @@ jobs:
       - name: Verify signatures
         run: |
           shopt -s nullglob
+          # Exact keyless identity of the job that signed these artifacts. The Makefile
+          # target (make verify-signature) accepts the same workflow-URL shape via a
+          # regexp, plus email identities for locally signed artifacts.
           expected_identity="https://github.com/${{ github.repository }}/.github/workflows/supply-chain.yaml@${{ github.ref }}"
           artifacts=(
             release-subjects/virtengine
@@ -451,7 +456,7 @@ jobs:
           for artifact in "${artifacts[@]}"; do
             cosign verify-blob \
               --signature "${artifact}.sig" \
-              --certificate "${artifact}.sig.cert" \
+              --certificate "${artifact}.pem" \
               --certificate-identity "$expected_identity" \
               --certificate-oidc-issuer https://token.actions.githubusercontent.com \
               "$artifact"
@@ -480,19 +485,19 @@ jobs:
       - build-release-subjects
     steps:
       - name: Download release subjects
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           name: release-subjects
           path: release-subjects
 
       - name: Download provenance artifact
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           name: ${{ needs.provenance.outputs.provenance-name }}
           path: provenance
 
       - name: Set up Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v6
         with:
           go-version: ${{ env.GO_VERSION }}
           cache: true
@@ -527,10 +532,10 @@ jobs:
     if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Set up Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v6
         with:
           go-version: ${{ env.GO_VERSION }}
           cache: false
@@ -538,7 +543,8 @@ jobs:
       - name: Verify reproducible build output
         run: |
           mkdir -p /tmp/virtengine-build-a /tmp/virtengine-build-b
-          export SOURCE_DATE_EPOCH="$(git log -1 --pretty=%ct)"
+          SOURCE_DATE_EPOCH="$(git log -1 --pretty=%ct)"
+          export SOURCE_DATE_EPOCH
 
           CGO_ENABLED=0 go build -trimpath -buildvcs=false -ldflags="-s -w" -o /tmp/virtengine-build-a/virtengine ./cmd/virtengine
           sha256sum /tmp/virtengine-build-a/virtengine > /tmp/virtengine-build-a/virtengine.sha256
@@ -569,25 +575,27 @@ jobs:
     steps:
       - name: Summarize supply-chain gates
         run: |
-          echo "# Supply Chain Summary" >> "$GITHUB_STEP_SUMMARY"
-          echo "" >> "$GITHUB_STEP_SUMMARY"
-          echo "| Gate | Status |" >> "$GITHUB_STEP_SUMMARY"
-          echo "|------|--------|" >> "$GITHUB_STEP_SUMMARY"
-          echo "| Policy Validation | ${{ needs.policy-validation.result }} |" >> "$GITHUB_STEP_SUMMARY"
-          echo "| Dependency Verification | ${{ needs.dependency-verification.result }} |" >> "$GITHUB_STEP_SUMMARY"
-          echo "| Lockfile Integrity | ${{ needs.lockfile-integrity.result }} |" >> "$GITHUB_STEP_SUMMARY"
-          echo "| Attack Detection | ${{ needs.attack-detection.result }} |" >> "$GITHUB_STEP_SUMMARY"
-          echo "| Risk Assessment | ${{ needs.risk-assessment.result }} |" >> "$GITHUB_STEP_SUMMARY"
-          echo "| SBOM Generation | ${{ needs.sbom-generation.result }} |" >> "$GITHUB_STEP_SUMMARY"
-          echo "| Reproducible Build Audit | ${{ needs.reproducible-build.result }} |" >> "$GITHUB_STEP_SUMMARY"
+          {
+            echo "# Supply Chain Summary"
+            echo ""
+            echo "| Gate | Status |"
+            echo "|------|--------|"
+            echo "| Policy Validation | ${{ needs.policy-validation.result }} |"
+            echo "| Dependency Verification | ${{ needs.dependency-verification.result }} |"
+            echo "| Lockfile Integrity | ${{ needs.lockfile-integrity.result }} |"
+            echo "| Attack Detection | ${{ needs.attack-detection.result }} |"
+            echo "| Risk Assessment | ${{ needs.risk-assessment.result }} |"
+            echo "| SBOM Generation | ${{ needs.sbom-generation.result }} |"
+            echo "| Reproducible Build Audit | ${{ needs.reproducible-build.result }} |"
 
-          if [[ "${{ startsWith(github.ref, 'refs/tags/v') }}" == "true" ]]; then
-            echo "| Build Release Subjects | ${{ needs.build-release-subjects.result }} |" >> "$GITHUB_STEP_SUMMARY"
-            echo "| Sign Release Artifacts | ${{ needs.sign-release-artifacts.result }} |" >> "$GITHUB_STEP_SUMMARY"
-            echo "| Verify Release Signatures | ${{ needs.verify-release-signatures.result }} |" >> "$GITHUB_STEP_SUMMARY"
-            echo "| Generate SLSA Provenance | ${{ needs.provenance.result }} |" >> "$GITHUB_STEP_SUMMARY"
-            echo "| Verify Provenance | ${{ needs.verify-provenance.result }} |" >> "$GITHUB_STEP_SUMMARY"
-          fi
+            if [[ "${{ startsWith(github.ref, 'refs/tags/v') }}" == "true" ]]; then
+              echo "| Build Release Subjects | ${{ needs.build-release-subjects.result }} |"
+              echo "| Sign Release Artifacts | ${{ needs.sign-release-artifacts.result }} |"
+              echo "| Verify Release Signatures | ${{ needs.verify-release-signatures.result }} |"
+              echo "| Generate SLSA Provenance | ${{ needs.provenance.result }} |"
+              echo "| Verify Provenance | ${{ needs.verify-provenance.result }} |"
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Fail on supply-chain gate failure
         run: |

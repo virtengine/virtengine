@@ -11,8 +11,11 @@ import (
 	"github.com/virtengine/virtengine/pkg/data_vault/contracts"
 )
 
-func newTestFixturePersistence(path string, wrappingKey []byte, profile string, anchor contracts.RevisionAnchor) (*FixtureFilePersistence, error) {
-	return NewFixtureFilePersistenceWithSecurity(path, wrappingKey, profile, contracts.FixtureSecurityOptions{
+// fixtureProfile is the fixture-only profile every helper in this file runs under.
+const fixtureProfile = "fixture"
+
+func newTestFixturePersistence(path string, wrappingKey []byte, anchor contracts.RevisionAnchor) (*FixtureFilePersistence, error) {
+	return NewFixtureFilePersistenceWithSecurity(path, wrappingKey, fixtureProfile, contracts.FixtureSecurityOptions{
 		UnsafeWindowsDevelopment: true,
 	}, anchor)
 }
@@ -21,18 +24,18 @@ func TestPersistentKeyManagerRestartRotationAndStaleWriter(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "keys.state")
 	wrappingKey := []byte("0123456789abcdef0123456789abcdef")
 	anchor := contracts.NewProcessRevisionAnchor()
-	persistence, err := newTestFixturePersistence(path, wrappingKey, "fixture", anchor)
+	persistence, err := newTestFixturePersistence(path, wrappingKey, anchor)
 	require.NoError(t, err)
 	manager, err := NewUninitializedPersistentKeyManager(persistence)
 	require.NoError(t, err)
 	require.NoError(t, manager.Initialize())
 	original, err := manager.GetActiveKey(ScopeSupport)
 	require.NoError(t, err)
-	_, err = newTestFixturePersistence(path, wrappingKey, "fixture", anchor)
+	_, err = newTestFixturePersistence(path, wrappingKey, anchor)
 	require.ErrorIs(t, err, errFixtureKeyStateInUse)
 	require.NoError(t, manager.Close())
 
-	reloadedPersistence, err := newTestFixturePersistence(path, wrappingKey, "fixture", anchor)
+	reloadedPersistence, err := newTestFixturePersistence(path, wrappingKey, anchor)
 	require.NoError(t, err)
 	reloaded, err := NewPersistentKeyManager(reloadedPersistence)
 	require.NoError(t, err)
@@ -47,7 +50,7 @@ func TestPersistentKeyManagerRestartRotationAndStaleWriter(t *testing.T) {
 	require.NoError(t, reloaded.RotateKey(ScopeSupport, time.Hour))
 	require.NoError(t, reloaded.Close())
 
-	afterRotationPersistence, err := newTestFixturePersistence(path, wrappingKey, "fixture", anchor)
+	afterRotationPersistence, err := newTestFixturePersistence(path, wrappingKey, anchor)
 	require.NoError(t, err)
 	afterRotation, err := NewPersistentKeyManager(afterRotationPersistence)
 	require.NoError(t, err)
@@ -173,7 +176,7 @@ func TestPersistentKeyManagerDoesNotExposeMutationBeforeCASCompletes(t *testing.
 }
 
 func TestPersistentKeyManagerLoadDoesNotRegenerate(t *testing.T) {
-	persistence, err := newTestFixturePersistence(filepath.Join(t.TempDir(), "missing"), make([]byte, 32), "fixture", contracts.NewProcessRevisionAnchor())
+	persistence, err := newTestFixturePersistence(filepath.Join(t.TempDir(), "missing"), make([]byte, 32), contracts.NewProcessRevisionAnchor())
 	require.NoError(t, err)
 	defer persistence.Close()
 	_, err = NewPersistentKeyManager(persistence)
@@ -190,7 +193,7 @@ func TestFixtureFilePersistenceRejectsSymlinkTarget(t *testing.T) {
 	if err := os.Symlink(target, link); err != nil {
 		t.Skipf("symlink unavailable: %v", err)
 	}
-	_, err := newTestFixturePersistence(link, make([]byte, 32), "fixture", contracts.NewProcessRevisionAnchor())
+	_, err := newTestFixturePersistence(link, make([]byte, 32), contracts.NewProcessRevisionAnchor())
 	require.Error(t, err)
 	require.False(t, errors.Is(err, ErrStateNotFound))
 }
@@ -199,7 +202,7 @@ func TestFixtureFilePersistenceRejectsOlderValidStateReplay(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "keys.state")
 	wrappingKey := []byte("0123456789abcdef0123456789abcdef")
 	anchor := contracts.NewProcessRevisionAnchor()
-	persistence, err := newTestFixturePersistence(path, wrappingKey, "fixture", anchor)
+	persistence, err := newTestFixturePersistence(path, wrappingKey, anchor)
 	require.NoError(t, err)
 	manager, err := NewUninitializedPersistentKeyManager(persistence)
 	require.NoError(t, err)
@@ -209,6 +212,6 @@ func TestFixtureFilePersistenceRejectsOlderValidStateReplay(t *testing.T) {
 	require.NoError(t, manager.RotateKey(ScopeSupport, time.Hour))
 	require.NoError(t, manager.Close())
 	require.NoError(t, os.WriteFile(path, older, 0o600))
-	_, err = newTestFixturePersistence(path, wrappingKey, "fixture", anchor)
+	_, err = newTestFixturePersistence(path, wrappingKey, anchor)
 	require.ErrorIs(t, err, contracts.ErrRevisionRollback)
 }

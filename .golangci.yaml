@@ -30,13 +30,10 @@ linters:
         - G104
         - G304
   exclusions:
-    generated: lax
-    presets:
-      - comments
-      - common-false-positives
-      - legacy
-      - std-error-handling
     rules:
+      - path: vendor/
+        linters:
+          - all
       - path: (.+)\.go$
         text: comment on exported (method|function|type|const|var)
       - path: _config\.go$
@@ -47,9 +44,5 @@ linters:
         text: G101
         linters:
           - gosec
-    paths:
-      - third_party$
-      - builtin$
-      - examples$
 # Formatting handled by pre-commit hook (.git/hooks/pre-commit)
 # golangci-lint only checks non-auto-fixable issues

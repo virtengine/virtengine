@@ -73,10 +73,10 @@ jobs:
       contents: read
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Setup Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: ${{ env.NODE_VERSION }}
 
@@ -94,7 +94,7 @@ jobs:
         run: node scripts/task85c-validate-kubernetes.mjs
 
       - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v3
+        uses: hashicorp/setup-terraform@v4
         with:
           terraform_version: ${{ env.TF_VERSION }}
 
@@ -113,54 +113,57 @@ jobs:
           for module in infra/terraform/modules/*/; do
             echo "Validating $module"
             cd "$module"
-            printf '%s\n' \
-              'provider "aws" {' \
-              '  region                      = "us-east-1"' \
-              '  skip_credentials_validation = true' \
-              '  skip_metadata_api_check     = true' \
-              '  skip_requesting_account_id  = true' \
-              '}' \
-              '' \
-              'provider "aws" {' \
-              '  alias                       = "primary"' \
-              '  region                      = "us-east-1"' \
-              '  skip_credentials_validation = true' \
-              '  skip_metadata_api_check     = true' \
-              '  skip_requesting_account_id  = true' \
-              '}' \
-              '' \
-              'provider "aws" {' \
-              '  alias                       = "secondary"' \
-              '  region                      = "us-west-2"' \
-              '  skip_credentials_validation = true' \
-              '  skip_metadata_api_check     = true' \
-              '  skip_requesting_account_id  = true' \
-              '}' \
-              '' \
-              'provider "aws" {' \
-              '  alias                       = "tertiary"' \
-              '  region                      = "us-west-1"' \
-              '  skip_credentials_validation = true' \
-              '  skip_metadata_api_check     = true' \
-              '  skip_requesting_account_id  = true' \
-              '}' \
-              '' \
-              'provider "kubernetes" {' \
-              '  host     = "https://127.0.0.1"' \
-              '  token    = "ci"' \
-              '  insecure = true' \
-              '}' \
-              '' \
-              'provider "helm" {' \
-              '  kubernetes {' \
-              '    host     = "https://127.0.0.1"' \
-              '    token    = "ci"' \
-              '    insecure = true' \
-              '  }' \
-              '}' > .ci-providers.tf
+            # Skip provider injection for multi-region module which has its own providers
+            if [ "$(basename "$module")" != "multi-region" ]; then
+              printf '%s\n' \
+                'provider "aws" {' \
+                '  region                      = "us-east-1"' \
+                '  skip_credentials_validation = true' \
+                '  skip_metadata_api_check     = true' \
+                '  skip_requesting_account_id  = true' \
+                '}' \
+                '' \
+                'provider "aws" {' \
+                '  alias                       = "primary"' \
+                '  region                      = "us-east-1"' \
+                '  skip_credentials_validation = true' \
+                '  skip_metadata_api_check     = true' \
+                '  skip_requesting_account_id  = true' \
+                '}' \
+                '' \
+                'provider "aws" {' \
+                '  alias                       = "secondary"' \
+                '  region                      = "us-west-2"' \
+                '  skip_credentials_validation = true' \
+                '  skip_metadata_api_check     = true' \
+                '  skip_requesting_account_id  = true' \
+                '}' \
+                '' \
+                'provider "aws" {' \
+                '  alias                       = "tertiary"' \
+                '  region                      = "us-west-1"' \
+                '  skip_credentials_validation = true' \
+                '  skip_metadata_api_check     = true' \
+                '  skip_requesting_account_id  = true' \
+                '}' \
+                '' \
+                'provider "kubernetes" {' \
+                '  host     = "https://127.0.0.1"' \
+                '  token    = "ci"' \
+                '  insecure = true' \
+                '}' \
+                '' \
+                'provider "helm" {' \
+                '  kubernetes {' \
+                '    host     = "https://127.0.0.1"' \
+                '    token    = "ci"' \
+                '    insecure = true' \
+                '  }' \
+                '}' > ci-providers.tf
+            fi
             terraform init -backend=false -input=false
             terraform validate
-            rm -f .ci-providers.tf
+            rm -f ci-providers.tf
             cd - >/dev/null
           done
 
@@ -185,9 +188,10 @@ jobs:
       - name: Install kubeval
         run: |
           KUBEVAL_VERSION=0.16.1
-          curl -sSL -o kubeval.tar.gz https://github.com/instrumenta/kubeval/releases/download/v${KUBEVAL_VERSION}/kubeval-linux-amd64.tar.gz
-          tar -xzf kubeval.tar.gz
-          sudo mv kubeval /usr/local/bin/kubeval
+          KUBEVAL_DIR="$(mktemp -d)"
+          curl -sSL -o "$KUBEVAL_DIR/kubeval.tar.gz" https://github.com/instrumenta/kubeval/releases/download/v${KUBEVAL_VERSION}/kubeval-linux-amd64.tar.gz
+          tar -xzf "$KUBEVAL_DIR/kubeval.tar.gz" -C "$KUBEVAL_DIR"
+          sudo install -m 0755 "$KUBEVAL_DIR/kubeval" /usr/local/bin/kubeval
 
       - name: Lint Kubernetes manifests
         shell: bash
@@ -212,7 +216,7 @@ jobs:
       security-events: write
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Run Checkov
         uses: bridgecrewio/checkov-action@v12
@@ -225,12 +229,15 @@ jobs:
 
       - name: Upload Checkov results
         if: always()
-        uses: github/codeql-action/upload-sarif@v3
+        uses: github/codeql-action/upload-sarif@v4
         with:
           sarif_file: checkov-results.sarif
 
       - name: Run Trivy on Kubernetes manifests
-        uses: aquasecurity/trivy-action@0.28.0
+        # NOTE: trivy-action pins aquasecurity/setup-trivy by hash; keep this
+        # version current because old setup-trivy tags are deleted upstream
+        # (v0.28.0 referenced v0.2.1, which no longer resolves).
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
           scan-type: config
           scan-ref: deploy/kubernetes
@@ -239,7 +246,7 @@ jobs:
 
       - name: Upload Trivy results
         if: always()
-        uses: github/codeql-action/upload-sarif@v3
+        uses: github/codeql-action/upload-sarif@v4
         with:
           sarif_file: trivy-k8s-results.sarif
 
@@ -253,10 +260,10 @@ jobs:
       id-token: write
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v3
+        uses: hashicorp/setup-terraform@v4
         with:
           terraform_version: ${{ env.TF_VERSION }}
 
@@ -281,7 +288,7 @@ jobs:
           infra/scripts/terraform-run.sh plan "infra/terraform/environments/${{ github.event.inputs.environment }}" "$RUNNER_TEMP/infra-plan"
 
       - name: Upload plan artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: infra-plan-${{ github.event.inputs.environment }}
           path: ${{ runner.temp }}/infra-plan
@@ -302,10 +309,10 @@ jobs:
       cancel-in-progress: false
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v3
+        uses: hashicorp/setup-terraform@v4
         with:
           terraform_version: ${{ env.TF_VERSION }}
 
@@ -325,7 +332,7 @@ jobs:
           mask-aws-account-id: true
 
       - name: Download reviewed plan
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           name: infra-plan-${{ github.event.inputs.environment }}
           path: ${{ runner.temp }}/infra-plan
@@ -345,10 +352,10 @@ jobs:
       id-token: write
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v3
+        uses: hashicorp/setup-terraform@v4
         with:
           terraform_version: ${{ env.TF_VERSION }}
 
@@ -383,7 +390,7 @@ jobs:
 
       - name: Upload drift report
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: infra-drift-${{ github.event.inputs.environment }}
           path: ${{ runner.temp }}/infra-drift
@@ -403,10 +410,10 @@ jobs:
         environment: [staging, prod]
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v3
+        uses: hashicorp/setup-terraform@v4
         with:
           terraform_version: ${{ env.TF_VERSION }}
 
@@ -441,7 +448,7 @@ jobs:
 
       - name: Upload drift report
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: infra-drift-${{ matrix.environment }}
           path: ${{ runner.temp }}/infra-drift-${{ matrix.environment }}

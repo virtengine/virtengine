@@ -58,6 +58,14 @@ deps-vendor: ## Vendor all dependencies (uses deps-tidy from mod.mk)
 	@go mod vendor
 	@echo "✓ Dependencies vendored"
 
+.PHONY: supply-chain-pin-check
+supply-chain-pin-check: ## Verify container base images are digest-pinned
+	@echo "Verifying container base images are digest-pinned..."
+	@chmod +x ./scripts/supply-chain/verify-pinned-images.sh 2>/dev/null || true
+	@./scripts/supply-chain/verify-pinned-images.sh --self-test
+	@./scripts/supply-chain/verify-pinned-images.sh
+	@echo "✓ All base images pinned"
+
 .PHONY: deps-update-check
 deps-update-check: ## Check for available dependency updates
 	@echo "Checking for dependency updates..."
@@ -90,6 +98,16 @@ endif
 		"$(ARTIFACT)"
 	@echo "✓ Signed: $(ARTIFACT).sig"
 
+# Cosign keyless signatures produced by CI carry a *workflow URL* identity, never an
+# email address:
+#   https://github.com/<owner>/<repo>/.github/workflows/<workflow>@<ref>
+# (see sign-release-artifacts in .github/workflows/supply-chain.yaml). The old
+# pattern --certificate-identity-regexp ".*@virtengine.com" therefore could not verify a
+# single artifact this project signs in CI. Accept both forms so locally signed
+# artifacts (email identity) stay verifiable too, and allow an override.
+CERTIFICATE_IDENTITY_REGEXP ?= '^(.*@virtengine\.com|https://github\.com/[^/]+/[^/]+/\.github/workflows/[^@]+@.+)$'
+CERTIFICATE_OIDC_ISSUER     ?= https://token.actions.githubusercontent.com
+
 .PHONY: verify-signature
 verify-signature: ## Verify an artifact signature (requires ARTIFACT env var)
 ifndef ARTIFACT
@@ -100,8 +118,8 @@ endif
 	@cosign verify-blob \
 		--signature "$(ARTIFACT).sig" \
 		--certificate "$(ARTIFACT).pem" \
-		--certificate-identity-regexp ".*@virtengine.com" \
-		--certificate-oidc-issuer https://token.actions.githubusercontent.com \
+		--certificate-identity-regexp $(CERTIFICATE_IDENTITY_REGEXP) \
+		--certificate-oidc-issuer $(CERTIFICATE_OIDC_ISSUER) \
 		"$(ARTIFACT)"
 	@echo "✓ Signature verified"
 
@@ -112,6 +130,7 @@ help-supply-chain: ## Show supply chain security targets
 	@echo ""
 	@echo "  Verification:"
 	@echo "    supply-chain-verify   - Verify dependency integrity"
+	@echo "    supply-chain-pin-check - Verify base images digest-pinned"
 	@echo "    supply-chain-detect   - Detect supply chain attacks"
 	@echo "    supply-chain-risk     - Assess dependency risk"
 	@echo "    supply-chain-audit    - Full security audit"

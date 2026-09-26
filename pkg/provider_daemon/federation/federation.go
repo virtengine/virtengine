@@ -9,6 +9,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"math"
 	"mime"
 	"net/url"
 	"path"
@@ -23,6 +24,9 @@ const (
 	serviceRecordDomain = "virtengine/federation/service-record/v1"
 	discoveryDomain     = "virtengine/federation/discovery-document/v1"
 	requestDomain       = "virtengine/federation/request/v1"
+	// httpsScheme is the only URL scheme accepted for federation endpoints and
+	// origins.
+	httpsScheme = "https"
 )
 
 type FixtureState string
@@ -73,7 +77,7 @@ func (record ServiceRecord) CanonicalBytes() ([]byte, error) {
 	encoder.fixed(record.DiscoveryDigest[:])
 	encoder.uint64(record.ActiveKeyEpoch)
 	encoder.text(string(record.State))
-	return encoder.bytes(), nil
+	return encoder.bytes()
 }
 
 type Endpoint struct {
@@ -173,7 +177,7 @@ func (document DiscoveryDocument) Validate() error {
 			return errors.New("endpoint name is required")
 		}
 		parsed, err := url.Parse(endpoint.URL)
-		if err != nil || parsed.Scheme != "https" || parsed.Host == "" || parsed.User != nil || parsed.RawQuery != "" || parsed.Fragment != "" {
+		if err != nil || parsed.Scheme != httpsScheme || parsed.Host == "" || parsed.User != nil || parsed.RawQuery != "" || parsed.Fragment != "" {
 			return errors.New("endpoint must be an absolute HTTPS URL without credentials, query, or fragment")
 		}
 		if _, exists := endpointNames[endpoint.Name]; exists {
@@ -228,16 +232,16 @@ func (document DiscoveryDocument) CanonicalBytes() ([]byte, error) {
 	encoder.text(document.ProviderID)
 	encoder.text(document.ServiceID)
 	encoder.uint64(document.Revision)
-	encoder.uint32(uint32(len(capabilities))) // #nosec G115 -- the capability list length is bounded far below 2^32
+	encoder.length(len(capabilities))
 	for _, capability := range capabilities {
 		encoder.text(capability)
 	}
-	encoder.uint32(uint32(len(endpoints))) // #nosec G115 -- the endpoint list length is bounded far below 2^32
+	encoder.length(len(endpoints))
 	for _, endpoint := range endpoints {
 		encoder.text(endpoint.Name)
 		encoder.text(endpoint.URL)
 	}
-	encoder.uint32(uint32(len(epochs))) // #nosec G115 -- the epoch list length is bounded far below 2^32
+	encoder.length(len(epochs))
 	for _, epoch := range epochs {
 		encoder.uint64(epoch.Epoch)
 		encoder.data(epoch.PublicKey)
@@ -248,7 +252,7 @@ func (document DiscoveryDocument) CanonicalBytes() ([]byte, error) {
 	encoder.int64(document.ExpiresAt.Unix())
 	encoder.fixed(document.PreviousDigest[:])
 	encoder.uint64(document.SigningKeyEpoch)
-	return encoder.bytes(), nil
+	return encoder.bytes()
 }
 
 func (document DiscoveryDocument) Digest() ([32]byte, error) {
@@ -370,7 +374,7 @@ func (profile ClientTrustProfile) ValidateOrigin(requestOrigin, endpointURL stri
 		return err
 	}
 	endpoint, err := url.Parse(endpointURL)
-	if err != nil || endpoint.Scheme != "https" || endpoint.Host == "" {
+	if err != nil || endpoint.Scheme != httpsScheme || endpoint.Host == "" {
 		return errors.New("invalid endpoint origin")
 	}
 	endpointOrigin := endpoint.Scheme + "://" + endpoint.Host
@@ -466,7 +470,7 @@ func (binding RequestBinding) CanonicalBytes() ([]byte, error) {
 	encoder.uint64(binding.SigningKeyEpoch)
 	encoder.fixed(binding.DiscoveryDigest[:])
 	encoder.text(binding.ChainID)
-	return encoder.bytes(), nil
+	return encoder.bytes()
 }
 
 func (binding RequestBinding) Digest() ([32]byte, error) {
@@ -596,7 +600,10 @@ func VerifyAndConsume(ctx context.Context, store AtomicNonceStore, policy RouteP
 	return store.WithNonce(ctx, scope, binding.Nonce, protected)
 }
 
-type canonicalEncoder struct{ buffer bytes.Buffer }
+type canonicalEncoder struct {
+	buffer bytes.Buffer
+	err    error
+}
 
 func newCanonicalEncoder(domain string) *canonicalEncoder {
 	encoder := &canonicalEncoder{}
@@ -614,12 +621,33 @@ func (encoder *canonicalEncoder) int64(value int64) {
 	_ = binary.Write(&encoder.buffer, binary.BigEndian, value)
 }
 func (encoder *canonicalEncoder) fixed(value []byte) { _, _ = encoder.buffer.Write(value) }
+
+// length encodes a collection or payload length as its uint32 big-endian prefix.
+// It records a sticky encoding error when the length cannot be represented,
+// which CanonicalBytes callers surface instead of silently truncating.
+func (encoder *canonicalEncoder) length(value int) {
+	if encoder.err != nil {
+		return
+	}
+	if value < 0 || value > math.MaxUint32 {
+		encoder.err = errors.New("canonical encoding length exceeds uint32 range")
+		return
+	}
+	encoder.uint32(uint32(value))
+}
+
 func (encoder *canonicalEncoder) data(value []byte) {
-	encoder.uint32(uint32(len(value))) // #nosec G115 -- the value length is an in-memory buffer size, bounded far below 2^32
+	encoder.length(len(value))
 	encoder.fixed(value)
 }
 func (encoder *canonicalEncoder) text(value string) { encoder.data([]byte(value)) }
-func (encoder *canonicalEncoder) bytes() []byte     { return slices.Clone(encoder.buffer.Bytes()) }
+
+func (encoder *canonicalEncoder) bytes() ([]byte, error) {
+	if encoder.err != nil {
+		return nil, encoder.err
+	}
+	return slices.Clone(encoder.buffer.Bytes()), nil
+}
 
 func requireVersion(version uint32) error {
 	if version != Version1 {
@@ -651,7 +679,7 @@ func compareUint64(a, b uint64) int {
 
 func validOrigin(raw string) bool {
 	parsed, err := url.Parse(raw)
-	return err == nil && parsed.Scheme == "https" && parsed.Host != "" && parsed.User == nil && parsed.Path == "" && parsed.RawQuery == "" && parsed.Fragment == "" && raw == parsed.Scheme+"://"+parsed.Host
+	return err == nil && parsed.Scheme == httpsScheme && parsed.Host != "" && parsed.User == nil && parsed.Path == "" && parsed.RawQuery == "" && parsed.Fragment == "" && raw == parsed.Scheme+"://"+parsed.Host
 }
 
 func normalizeTarget(target string) (string, string, error) {

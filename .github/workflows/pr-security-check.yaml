@@ -20,11 +20,11 @@ defaults:
     shell: bash
 
 env:
-  GO_VERSION: "1.25.5"
+  GO_VERSION: "1.26.8"
   GOVULNCHECK_VERSION: "v1.1.4"
   GOSEC_VERSION: "v2.25.0"
   GITLEAKS_VERSION: "v8.30.1"
-  GOLANGCI_LINT_VERSION: "v2.4.0"
+  GOLANGCI_LINT_VERSION: "v2.13.2"
   PYTHON_VERSION: "3.11"
   GOWORK: "off"
 
@@ -39,10 +39,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: ${{ env.PYTHON_VERSION }}
 
@@ -67,7 +67,7 @@ jobs:
         run: python -m unittest discover -s .github/tests -p "test_*policy*.py"
 
       - name: Set up Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v6
         with:
           go-version: ${{ env.GO_VERSION }}
           cache: true
@@ -89,11 +89,11 @@ jobs:
       security_relevant: ${{ steps.changes.outputs.security }}
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Analyze changed files
         id: changes
-        uses: dorny/paths-filter@v3
+        uses: dorny/paths-filter@v4
         with:
           filters: |
             go:
@@ -135,12 +135,12 @@ jobs:
       security-events: write
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           fetch-depth: 0
 
       - name: Set up Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v6
         with:
           go-version: ${{ env.GO_VERSION }}
           cache: true
@@ -150,8 +150,17 @@ jobs:
           go install golang.org/x/vuln/cmd/govulncheck@${{ env.GOVULNCHECK_VERSION }}
           go install github.com/securego/gosec/v2/cmd/gosec@${{ env.GOSEC_VERSION }}
 
+      - name: Install build dependencies for cgo packages
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends libudev-dev
+
       - name: Fetch base branch
-        run: git fetch origin "${{ github.base_ref }}" --depth=1
+        # Fetch the full base branch INTO the remote-tracking ref. The old
+        # `git fetch origin "<base>" --depth=1` only updated FETCH_HEAD, left a
+        # shallow boundary, and never moved origin/<base> — so every consumer
+        # of origin/<base> below read a stale or disjoint ref.
+        run: git fetch --no-tags origin "+refs/heads/${{ github.base_ref }}:refs/remotes/origin/${{ github.base_ref }}"
 
       - name: Run govulncheck
         id: govulncheck
@@ -162,14 +171,24 @@ jobs:
           govulncheck ./...
           text_status=$?
           set -e
-          if [ ! -s govulncheck-report.json ]; then
-            echo "::error::govulncheck did not produce a report"
-            exit 1
-          fi
-          if [ "$json_status" -ne 0 ] || [ "$text_status" -ne 0 ]; then
-            echo "exit_code=1" >> "$GITHUB_OUTPUT"
-          else
+          # Same classification as the scheduled gate: a config-only report means
+          # package loading failed and must not be reported as a finding, and a
+          # scanner failure must not be reported as a clean scan.
+          # Regression cases: .github/tests/test_govulncheck_verdict.sh
+          out="$(bash .github/scripts/govulncheck_verdict.sh \
+            govulncheck-report.json "$json_status" "$text_status" 2>&1)"
+          echo "$out"
+          verdict="$(printf '%s\n' "$out" | sed -n 's/^verdict=//p')"
+          # Keep the existing exit_code interface intact for the downstream
+          # "Fail on Go security findings" step; only a clean scan is 0.
+          if [ "$verdict" = "clean" ]; then
             echo "exit_code=0" >> "$GITHUB_OUTPUT"
+          else
+            echo "exit_code=1" >> "$GITHUB_OUTPUT"
+          fi
+          if [ "$verdict" = "error" ]; then
+            echo "::error::govulncheck could not complete - this is a scanner error, not a vulnerability finding"
+            exit 1
           fi
 
       - name: Run gosec on changed Go source files
@@ -225,14 +244,14 @@ jobs:
           fi
 
       - name: Upload gosec SARIF
-        uses: github/codeql-action/upload-sarif@v3
+        uses: github/codeql-action/upload-sarif@v4
         if: always()
         with:
           sarif_file: gosec.sarif
           category: gosec-pr
 
       - name: Upload Go security reports
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         if: always()
         with:
           name: pr-go-security-report
@@ -258,22 +277,43 @@ jobs:
       security-events: write
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           fetch-depth: 0
 
       - name: Install gitleaks
         run: |
-          curl -sSfL "https://github.com/gitleaks/gitleaks/releases/download/${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION#v}_linux_x64.tar.gz" | tar -xz
-          sudo install -m 0755 gitleaks /usr/local/bin/gitleaks
+          TOOL_DIR="$(mktemp -d)"
+          curl -sSfL "https://github.com/gitleaks/gitleaks/releases/download/${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION#v}_linux_x64.tar.gz" | tar -xz -C "$TOOL_DIR"
+          sudo install -m 0755 "$TOOL_DIR/gitleaks" /usr/local/bin/gitleaks
 
       - name: Fetch base branch
-        run: git fetch origin "${{ github.base_ref }}" --depth=1
+        # Fetch the full base branch INTO the remote-tracking ref. The old
+        # `git fetch origin "<base>" --depth=1` only updated FETCH_HEAD, left a
+        # shallow boundary, and never moved origin/<base> — so every consumer
+        # of origin/<base> below read a stale or disjoint ref.
+        run: git fetch --no-tags origin "+refs/heads/${{ github.base_ref }}:refs/remotes/origin/${{ github.base_ref }}"
 
       - name: Run gitleaks on the pull-request diff
         id: gitleaks
         run: |
-          base_sha=$(git merge-base "origin/${{ github.base_ref }}" HEAD)
+          # Resolve the scan range against the base branch fetched above. A
+          # shallow or disjoint base makes merge-base exit 1 with empty stdout;
+          # under the runner's `set -e` that used to kill this step here with
+          # no scan at all (then "Path does not exist: gitleaks.sarif"). Never
+          # let an empty base_sha through: fail loudly or fall back to the
+          # pull-request base SHA from the event payload.
+          base_sha=""
+          if base_sha=$(git merge-base "origin/${{ github.base_ref }}" HEAD 2>merge-base.err); then
+            echo "merge-base origin/${{ github.base_ref }} HEAD: ${base_sha}"
+          else
+            echo "::warning::git merge-base against origin/${{ github.base_ref }} failed; falling back to the pull-request base SHA"
+            if [ -s merge-base.err ]; then cat merge-base.err; fi
+            base_sha="${{ github.event.pull_request.base.sha }}"
+          fi
+          rm -f merge-base.err
+          [ -n "${base_sha}" ] || { echo "::error::could not determine base SHA for secret scan"; exit 1; }
+          git rev-parse --verify --quiet "${base_sha}^{commit}" >/dev/null || { echo "::error::base SHA ${base_sha} is not present locally"; exit 1; }
           set +e
           gitleaks git . \
             --config .gitleaks.toml \
@@ -290,7 +330,7 @@ jobs:
           echo "exit_code=$status" >> "$GITHUB_OUTPUT"
 
       - name: Upload gitleaks SARIF
-        uses: github/codeql-action/upload-sarif@v3
+        uses: github/codeql-action/upload-sarif@v4
         if: always()
         with:
           sarif_file: gitleaks.sarif
@@ -311,13 +351,17 @@ jobs:
     if: needs.analyze-changes.outputs.deps_changed == 'true'
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Review dependency changes
-        uses: actions/dependency-review-action@v4
+        uses: actions/dependency-review-action@v5
         with:
           fail-on-severity: high
-          allow-licenses: MIT,Apache-2.0,BSD-2-Clause,BSD-3-Clause,ISC,MPL-2.0,Unlicense,CC0-1.0
+          # MIT-CMU: Pillow >=12.3.0's SPDX identifier (permissive MIT variant).
+          # CC-BY-4.0: covers data-only packages (e.g. caniuse-lite).
+          # LGPL and LicenseRef-scancode riders stay blocked per
+          # SUPPLY_CHAIN_SECURITY.md and need a human exception (see task t_a0c63b78).
+          allow-licenses: MIT,MIT-CMU,Apache-2.0,BSD-2-Clause,BSD-3-Clause,ISC,MPL-2.0,Unlicense,CC0-1.0,CC-BY-4.0
 
   security-lint:
     name: Security Lint
@@ -328,19 +372,28 @@ jobs:
     if: needs.analyze-changes.outputs.security_relevant == 'true'
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Set up Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v6
         with:
           go-version: ${{ env.GO_VERSION }}
           cache: true
 
+      - name: Install build dependencies for cgo packages
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends libudev-dev
+
       - name: Fetch base branch
-        run: git fetch origin "${{ github.base_ref }}" --depth=1
+        # Fetch the full base branch INTO the remote-tracking ref. The old
+        # `git fetch origin "<base>" --depth=1` only updated FETCH_HEAD, left a
+        # shallow boundary, and never moved origin/<base> — so every consumer
+        # of origin/<base> below read a stale or disjoint ref.
+        run: git fetch --no-tags origin "+refs/heads/${{ github.base_ref }}:refs/remotes/origin/${{ github.base_ref }}"
 
       - name: Run security-focused golangci-lint
-        uses: golangci/golangci-lint-action@v8
+        uses: golangci/golangci-lint-action@v9
         with:
           version: ${{ env.GOLANGCI_LINT_VERSION }}
           args: >
@@ -369,30 +422,32 @@ jobs:
     steps:
       - name: Summarize PR security gates
         run: |
-          echo "# PR Security Summary" >> "$GITHUB_STEP_SUMMARY"
-          echo "" >> "$GITHUB_STEP_SUMMARY"
-          echo "| Gate | Status | Required |" >> "$GITHUB_STEP_SUMMARY"
-          echo "|------|--------|----------|" >> "$GITHUB_STEP_SUMMARY"
-          echo "| Policy Validation | ${{ needs.policy-validation.result }} | Yes |" >> "$GITHUB_STEP_SUMMARY"
-          echo "| Secret Scanning | ${{ needs.gitleaks-scan.result }} | Yes |" >> "$GITHUB_STEP_SUMMARY"
+          {
+            echo "# PR Security Summary"
+            echo ""
+            echo "| Gate | Status | Required |"
+            echo "|------|--------|----------|"
+            echo "| Policy Validation | ${{ needs.policy-validation.result }} | Yes |"
+            echo "| Secret Scanning | ${{ needs.gitleaks-scan.result }} | Yes |"
 
-          if [ "${{ needs.analyze-changes.outputs.go_changed }}" = "true" ]; then
-            echo "| Go Security Scan | ${{ needs.go-security.result }} | Yes |" >> "$GITHUB_STEP_SUMMARY"
-          else
-            echo "| Go Security Scan | skipped | No |" >> "$GITHUB_STEP_SUMMARY"
-          fi
+            if [ "${{ needs.analyze-changes.outputs.go_changed }}" = "true" ]; then
+              echo "| Go Security Scan | ${{ needs.go-security.result }} | Yes |"
+            else
+              echo "| Go Security Scan | skipped | No |"
+            fi
 
-          if [ "${{ needs.analyze-changes.outputs.deps_changed }}" = "true" ]; then
-            echo "| Dependency Review | ${{ needs.dependency-review.result }} | Yes |" >> "$GITHUB_STEP_SUMMARY"
-          else
-            echo "| Dependency Review | skipped | No |" >> "$GITHUB_STEP_SUMMARY"
-          fi
+            if [ "${{ needs.analyze-changes.outputs.deps_changed }}" = "true" ]; then
+              echo "| Dependency Review | ${{ needs.dependency-review.result }} | Yes |"
+            else
+              echo "| Dependency Review | skipped | No |"
+            fi
 
-          if [ "${{ needs.analyze-changes.outputs.security_relevant }}" = "true" ]; then
-            echo "| Security Lint | ${{ needs.security-lint.result }} | Yes |" >> "$GITHUB_STEP_SUMMARY"
-          else
-            echo "| Security Lint | skipped | No |" >> "$GITHUB_STEP_SUMMARY"
-          fi
+            if [ "${{ needs.analyze-changes.outputs.security_relevant }}" = "true" ]; then
+              echo "| Security Lint | ${{ needs.security-lint.result }} | Yes |"
+            else
+              echo "| Security Lint | skipped | No |"
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Fail on required PR security failure
         run: |

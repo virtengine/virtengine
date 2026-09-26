@@ -1,6 +1,6 @@
 module github.com/virtengine/virtengine
 
-go 1.25.8
+go 1.26.8
 
 require (
 	cosmossdk.io/api v0.9.2
@@ -73,8 +73,8 @@ require (
 	go.opentelemetry.io/otel/sdk v1.45.0
 	go.opentelemetry.io/otel/trace v1.45.0
 	go.step.sm/crypto v0.76.0
-	golang.org/x/crypto v0.55.0
-	golang.org/x/mod v0.38.0
+	golang.org/x/crypto v0.56.0
+	golang.org/x/mod v0.40.0
 	golang.org/x/oauth2 v0.36.0
 	golang.org/x/sync v0.22.0
 	golang.org/x/sys v0.47.0
@@ -100,21 +100,30 @@ replace (
 	// Once v0.62.0 is released, pin to that version
 	github.com/CosmWasm/wasmd => github.com/CosmWasm/wasmd v0.61.7-0.20260126125754-5cc330bcf3d3
 
-	github.com/bytedance/sonic => github.com/bytedance/sonic v1.14.1
+	// sonic v1.14.x cannot compile under Go >= 1.26 (runtime map-iterator layout
+	// moved): v1.15.0 is the first release carrying internal/rt/gotype_go126.go.
+	github.com/bytedance/sonic => github.com/bytedance/sonic v1.15.4
 
 	// VirtEngine forks of Cosmos SDK dependencies
 	// These forks are synced from akash-network forks with virtengine-specific branding
 	// See: https://github.com/virtengine/cosmos-sdk (virtengine/release/v0.53.x branch)
 	github.com/cometbft/cometbft => github.com/virtengine/cometbft v0.38.21-virtengine.1
 
-	github.com/cosmos/cosmos-sdk => github.com/virtengine/cosmos-sdk v0.53.4-virtengine.1
+	github.com/cosmos/cosmos-sdk => github.com/virtengine/cosmos-sdk v0.53.4-virtengine.2
 
 	github.com/cosmos/gogoproto => github.com/virtengine/gogoproto v1.7.0-virtengine.1
 
-	// virtengine/ledger-go is a mono-repo that provides both:
-	// - zondax/ledger-go (root module, tag v0.16.0-virtengine)
-	// - cosmos/ledger-cosmos-go (cosmos/ subdir, tag cosmos/v0.16.0-virtengine)
-	github.com/cosmos/ledger-cosmos-go => github.com/virtengine/ledger-go/cosmos v0.16.0-virtengine
+	// akash-network/ledger-go is the mono-repo these ledger forks were synced from
+	// (see the "VirtEngine forks of Cosmos SDK dependencies" note above); it provides both:
+	// - zondax/ledger-go (root module, tag v0.16.0)
+	// - cosmos/ledger-cosmos-go (cosmos/ subdir, tag cosmos/v0.16.0)
+	//
+	// SECURITY: the previous target, github.com/virtengine/ledger-go, was deleted (404).
+	// Its tag v0.16.0-virtengine was a re-tag of akash-network/ledger-go commit
+	// 367cd2152dc6237b5d6a8d7224697c825e4b352a - verified byte-identical (sha256) across
+	// every file of both modules, with identical go.mod. This is a provenance fix only:
+	// no ledger/signing code changes.
+	github.com/cosmos/ledger-cosmos-go => github.com/akash-network/ledger-go/cosmos v0.16.0
 
 	// Use regen gogoproto fork
 	// To be replaced by cosmos/gogoproto in future versions
@@ -131,8 +140,9 @@ replace (
 
 	github.com/zondax/hid => github.com/troian/hid v0.14.0
 
-	// zondax/ledger-go replacement from virtengine/ledger-go mono-repo
-	github.com/zondax/ledger-go => github.com/virtengine/ledger-go v0.16.0-virtengine
+	// zondax/ledger-go replacement from the akash-network/ledger-go mono-repo
+	// (was virtengine/ledger-go, which was deleted - see the ledger-cosmos-go note above)
+	github.com/zondax/ledger-go => github.com/akash-network/ledger-go v0.16.0
 
 	// stick with compatible version or x/exp in v0.47.x line
 	golang.org/x/exp => golang.org/x/exp v0.0.0-20230711153332-06a737ee72cb
@@ -166,24 +176,25 @@ require (
 	github.com/MicahParks/keyfunc v1.9.0 // indirect
 	github.com/Microsoft/go-winio v0.6.2 // indirect
 	github.com/ProjectZKM/Ziren/crates/go-runtime/zkvm_runtime v0.0.0-20251001021608-1fe7b43fc4d6 // indirect
+	github.com/ProtonMail/go-crypto v1.4.1 // indirect
 	github.com/PuerkitoBio/purell v1.1.1 // indirect
 	github.com/PuerkitoBio/urlesc v0.0.0-20170810143723-de5bf2ad4578 // indirect
 	github.com/aokoli/goutils v1.0.1 // indirect
 	github.com/apapsch/go-jsonmerge/v2 v2.0.0 // indirect
-	github.com/aws/aws-sdk-go-v2 v1.41.4 // indirect
+	github.com/aws/aws-sdk-go-v2 v1.41.5 // indirect
 	github.com/aws/aws-sdk-go-v2/aws/protocol/eventstream v1.7.8 // indirect
 	github.com/aws/aws-sdk-go-v2/config v1.32.12 // indirect
 	github.com/aws/aws-sdk-go-v2/credentials v1.19.12 // indirect
 	github.com/aws/aws-sdk-go-v2/feature/ec2/imds v1.18.20 // indirect
-	github.com/aws/aws-sdk-go-v2/internal/configsources v1.4.20 // indirect
-	github.com/aws/aws-sdk-go-v2/internal/endpoints/v2 v2.7.20 // indirect
+	github.com/aws/aws-sdk-go-v2/internal/configsources v1.4.21 // indirect
+	github.com/aws/aws-sdk-go-v2/internal/endpoints/v2 v2.7.21 // indirect
 	github.com/aws/aws-sdk-go-v2/internal/ini v1.8.6 // indirect
-	github.com/aws/aws-sdk-go-v2/internal/v4a v1.4.21 // indirect
+	github.com/aws/aws-sdk-go-v2/internal/v4a v1.4.22 // indirect
 	github.com/aws/aws-sdk-go-v2/service/internal/accept-encoding v1.13.7 // indirect
-	github.com/aws/aws-sdk-go-v2/service/internal/checksum v1.9.12 // indirect
-	github.com/aws/aws-sdk-go-v2/service/internal/presigned-url v1.13.20 // indirect
-	github.com/aws/aws-sdk-go-v2/service/internal/s3shared v1.19.20 // indirect
-	github.com/aws/aws-sdk-go-v2/service/s3 v1.97.1 // indirect
+	github.com/aws/aws-sdk-go-v2/service/internal/checksum v1.9.13 // indirect
+	github.com/aws/aws-sdk-go-v2/service/internal/presigned-url v1.13.21 // indirect
+	github.com/aws/aws-sdk-go-v2/service/internal/s3shared v1.19.21 // indirect
+	github.com/aws/aws-sdk-go-v2/service/s3 v1.97.3 // indirect
 	github.com/aws/aws-sdk-go-v2/service/signin v1.0.8 // indirect
 	github.com/aws/aws-sdk-go-v2/service/sso v1.30.13 // indirect
 	github.com/aws/aws-sdk-go-v2/service/ssooidc v1.35.17 // indirect
@@ -196,8 +207,8 @@ require (
 	github.com/bits-and-blooms/bitset v1.24.0 // indirect
 	github.com/blang/semver/v4 v4.0.0 // indirect
 	github.com/bytedance/gopkg v0.1.3 // indirect
-	github.com/bytedance/sonic v1.14.0 // indirect
-	github.com/bytedance/sonic/loader v0.3.0 // indirect
+	github.com/bytedance/sonic v1.15.4 // indirect
+	github.com/bytedance/sonic/loader v0.5.2 // indirect
 	github.com/cenkalti/backoff/v4 v4.3.0 // indirect
 	github.com/cenkalti/backoff/v5 v5.0.3 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
@@ -317,7 +328,7 @@ require (
 	github.com/minio/sha256-simd v1.0.0 // indirect
 	github.com/mitchellh/go-homedir v1.1.0 // indirect
 	github.com/mitchellh/mapstructure v1.5.0 // indirect
-	github.com/moby/spdystream v0.5.0 // indirect
+	github.com/moby/spdystream v0.5.1 // indirect
 	github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect
 	github.com/modern-go/reflect2 v1.0.3-0.20250322232337-35a7c28c31ee // indirect
 	github.com/mr-tron/base58 v1.2.0 // indirect

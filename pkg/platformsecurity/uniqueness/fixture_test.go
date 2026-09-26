@@ -151,7 +151,10 @@ func TestCandidateBoundaryIsOpaqueAndDeterministic(t *testing.T) {
 	if clear.PossibleMatch || clear.CandidateCount != 0 || clear.ReviewState != CandidateClear {
 		t.Fatalf("unexpected clear result: %#v", clear)
 	}
-	encoded, _ := json.Marshal(result)
+	encoded, err := json.Marshal(result)
+	if err != nil {
+		t.Fatalf("marshal candidate result: %v", err)
+	}
 	lower := strings.ToLower(string(encoded))
 	if strings.Contains(lower, "record-a") || strings.Contains(lower, "distance") || strings.Contains(lower, digestFixture("record-a")) {
 		t.Fatal("candidate result leaked fixture internals")

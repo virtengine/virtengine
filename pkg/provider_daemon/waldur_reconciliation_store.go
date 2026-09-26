@@ -21,7 +21,7 @@ import (
 
 const (
 	reconciliationStoreSchemaVersion uint32 = 1
-	reconciliationStoreMaxEvents            = 100_000
+	reconciliationStoreMaxEvents     int    = 100_000
 )
 
 var (
@@ -289,7 +289,10 @@ func (s *FileReconciliationJobStore) CompleteAttempt(ctx context.Context, result
 		if cursor.JobID != result.JobID || cursor.ResultDigest != result.ResultDigest || cursor.StreamID == "" {
 			return errors.New("cursor must reference the completed result")
 		}
-		candidate := cloneReconciliationState(*state)
+		candidate, err := cloneReconciliationState(*state)
+		if err != nil {
+			return err
+		}
 		if err := appendReconciliationEvent(&candidate, ReconciliationEvent{Type: ReconciliationEventResultRecorded, RecordedAt: s.now(), Result: &result}); err != nil {
 			return err
 		}
@@ -363,7 +366,10 @@ func (s *FileReconciliationJobStore) update(ctx context.Context, mutate func(*re
 	if err != nil {
 		return err
 	}
-	before := cloneReconciliationState(state)
+	before, err := cloneReconciliationState(state)
+	if err != nil {
+		return err
+	}
 	if err := mutate(&state); err != nil {
 		return err
 	}
@@ -786,7 +792,7 @@ func validateReconciliationIntent(intent ReconciliationActionIntent, result Dura
 	if intent.Kind != "alert_discrepancy" && intent.Kind != "auto_correct" {
 		return errors.New("unsupported reconciliation action intent")
 	}
-	if intent.Severity != "critical" && intent.Severity != "warning" && intent.Severity != "high" && intent.Severity != "info" {
+	if intent.Severity != reconcileSeverityCritical && intent.Severity != "warning" && intent.Severity != "high" && intent.Severity != "info" {
 		return errors.New("unsupported reconciliation action intent severity")
 	}
 	return nil
@@ -874,11 +880,16 @@ func reconciliationIntentSeverity(result ReconciliationResult) string {
 	}
 }
 
-func cloneReconciliationState(state reconciliationStoreState) reconciliationStoreState {
-	data, _ := json.Marshal(state)
+func cloneReconciliationState(state reconciliationStoreState) (reconciliationStoreState, error) {
+	data, err := json.Marshal(state)
+	if err != nil {
+		return reconciliationStoreState{}, err
+	}
 	var clone reconciliationStoreState
-	_ = json.Unmarshal(data, &clone)
-	return clone
+	if err := json.Unmarshal(data, &clone); err != nil {
+		return reconciliationStoreState{}, err
+	}
+	return clone, nil
 }
 
 var _ ReconciliationJobStore = (*FileReconciliationJobStore)(nil)

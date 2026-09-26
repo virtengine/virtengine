@@ -36,7 +36,7 @@ on:
         default: ''
 
 env:
-  GO_VERSION: "1.25.8"
+  GO_VERSION: "1.26.8"
   PYTHON_VERSION: "3.11"
   GOWORK: "off"  # Disable workspace mode for vendor operations
   TF_VERSION: "2.15.0"
@@ -55,7 +55,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Install system dependencies
         run: |
@@ -63,7 +63,7 @@ jobs:
           sudo apt-get install -y tesseract-ocr libtesseract-dev
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: ${{ env.PYTHON_VERSION }}
           cache: 'pip'
@@ -129,10 +129,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Set up Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v6
         with:
           go-version: ${{ env.GO_VERSION }}
           cache: true
@@ -150,8 +150,10 @@ jobs:
           command -v go
           go version | grep -F "go${{ env.GO_VERSION }}"
           go test -json -count=1 -run '^(TestCanonicalFeatureParityFixture|TestInferenceReceiptParityFixture)$' ./pkg/inference | tee parity-go.json
-          grep -q '"Action":"pass","Test":"TestCanonicalFeatureParityFixture"' parity-go.json
-          grep -q '"Action":"pass","Test":"TestInferenceReceiptParityFixture"' parity-go.json
+          # NOTE: go test -json emits "Action" before "Package" before "Test"
+          # on pass lines, so match Test and Action as separate filters.
+          grep '"Test":"TestCanonicalFeatureParityFixture"' parity-go.json | grep -q '"Action":"pass"'
+          grep '"Test":"TestInferenceReceiptParityFixture"' parity-go.json | grep -q '"Action":"pass"'
 
       - name: Run inference package tests
         run: |
@@ -171,10 +173,10 @@ jobs:
     if: github.event_name == 'workflow_dispatch' || github.ref == 'refs/heads/main'
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: ${{ env.PYTHON_VERSION }}
 
@@ -272,10 +274,10 @@ jobs:
     if: github.event_name == 'workflow_dispatch' || github.ref == 'refs/heads/main'
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: ${{ env.PYTHON_VERSION }}
 
@@ -363,10 +365,10 @@ jobs:
     if: github.event_name == 'workflow_dispatch' || github.ref == 'refs/heads/main'
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Set up Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v6
         with:
           go-version: ${{ env.GO_VERSION }}
           cache: true

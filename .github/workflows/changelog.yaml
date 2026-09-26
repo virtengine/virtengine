@@ -30,7 +30,12 @@ permissions:
   pull-requests: write
 
 env:
-  GIT_CHGLOG_VERSION: "0.15.4"
+  # Keep this in lockstep with GIT_CHGLOG_VERSION in make/init.mk (currently v0.15.1).
+  GIT_CHGLOG_VERSION: "0.15.1"
+  # Semver-only tag filter. This repository carries ~31 checkpoint/* automation tags
+  # against a single release tag; without a filter git-chglog anchors its compare ranges
+  # on a checkpoint tag and produces nonsense.
+  GIT_CHGLOG_SEMVER_FILTER: '^[v|V]?(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-[0-9A-Za-z.-]+)?(\+[0-9A-Za-z.-]+)?$'
 
 jobs:
   # ===========================================================================
@@ -41,7 +46,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           fetch-depth: 0
           token: ${{ secrets.GITHUB_TOKEN }}
@@ -59,17 +64,37 @@ jobs:
 
       - name: Install git-chglog
         run: |
-          curl -sSL "https://github.com/git-chglog/git-chglog/releases/download/v${GIT_CHGLOG_VERSION}/git-chglog_${GIT_CHGLOG_VERSION}_linux_amd64.tar.gz" | tar -xz
-          sudo mv git-chglog /usr/local/bin/
+          TOOL_DIR="$(mktemp -d)"
+          curl -sSL "https://github.com/git-chglog/git-chglog/releases/download/v${GIT_CHGLOG_VERSION}/git-chglog_${GIT_CHGLOG_VERSION}_linux_amd64.tar.gz" | tar -xz -C "$TOOL_DIR"
+          sudo install -m 0755 "$TOOL_DIR/git-chglog" /usr/local/bin/git-chglog
           git-chglog --version
 
       - name: Generate changelog
         run: |
-          # Generate full changelog
-          git-chglog --output CHANGELOG.md
+          VERSION="${{ steps.version.outputs.version }}"
+          chmod +x ./script/genchangelog.sh
 
-          # Generate release notes for this version only
-          git-chglog ${{ steps.version.outputs.version }} > RELEASE_NOTES.md
+          # Full changelog across every semver tag.
+          git-chglog --config .chglog/config.yaml \
+            --tag-filter-pattern "$GIT_CHGLOG_SEMVER_FILTER" \
+            --output CHANGELOG.md
+
+          # Release notes for this version only, produced by the same generator the Makefile
+          # release path uses (make gen-changelog / script/genchangelog.sh) so there is one
+          # notes implementation. For a tag that does not exist yet, preview mode
+          # (--next-tag) is the only thing that works:
+          #   ERROR commits corresponding to "vX.Y.Z" was not found
+          if git rev-parse -q --verify "refs/tags/${VERSION}" >/dev/null 2>&1; then
+            ./script/genchangelog.sh "${VERSION}" RELEASE_NOTES.md
+          else
+            echo "Tag ${VERSION} is not in this repository - generating notes in --next-tag preview mode"
+            ./script/genchangelog.sh --next-tag "${VERSION}" RELEASE_NOTES.md
+          fi
+
+          if [ ! -s RELEASE_NOTES.md ]; then
+            echo "::error::Release notes are empty for ${VERSION}"
+            exit 1
+          fi
 
           echo "=== Generated Changelog Preview ==="
           head -100 CHANGELOG.md
@@ -96,7 +121,7 @@ jobs:
           echo "summary=$SUMMARY" >> $GITHUB_OUTPUT
 
       - name: Upload changelog artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: changelog
           path: |
@@ -115,7 +140,7 @@ jobs:
 
       - name: Create changelog PR
         if: steps.changes.outputs.changed == 'true' && (inputs.dry_run != true)
-        uses: peter-evans/create-pull-request@v6
+        uses: peter-evans/create-pull-request@v8
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           commit-message: "docs: update changelog for ${{ steps.version.outputs.version }}"
@@ -141,14 +166,12 @@ jobs:
             automated
           delete-branch: true
 
-      - name: Update release notes
-        if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
-        uses: softprops/action-gh-release@v2
-        with:
-          body_path: RELEASE_NOTES.md
-          append_body: false
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      # NOTE: this workflow intentionally does NOT write the GitHub release body.
+      # Release bodies have exactly one writer: release.yaml's publish job, which runs
+      # GoReleaser with --release-notes=.cache/changelog.md and release.mode=replace.
+      # A softprops/action-gh-release body_path step used to live here and raced that
+      # writer, so whichever workflow finished last won. RELEASE_NOTES.md is published as
+      # a workflow artefact above instead; nothing here mutates the release.
 
   # ===========================================================================
   # Validate Conventional Commits
@@ -159,7 +182,7 @@ jobs:
     if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           fetch-depth: 0
 
@@ -211,12 +234,12 @@ jobs:
     needs: generate-changelog
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           fetch-depth: 0
 
       - name: Download changelog
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           name: changelog
           path: .

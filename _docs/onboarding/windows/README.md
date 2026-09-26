@@ -41,7 +41,7 @@ This setup process created the following files to help you configure the VirtEng
 
 ❌ **Missing (Required):**
 
-- Go 1.21.0+ (programming language for VirtEngine)
+- Go 1.26.8+ (programming language for VirtEngine)
 - GNU Make 4+ (build system)
 - direnv 2.32+ (environment management)
 - jq (JSON processor)

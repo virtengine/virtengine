@@ -132,7 +132,7 @@ func VerifyOpenID4VP(
 	}
 
 	claims := openID4VPClaims{}
-	parser := jwt.NewParser(jwt.WithValidMethods([]string{jwt.SigningMethodRS256.Alg(), jwt.SigningMethodES256.Alg(), jwt.SigningMethodEdDSA.Alg()}), jwt.WithIssuer(config.Issuer), jwt.WithAudience(request.ClientID), jwt.WithExpirationRequired(), jwt.WithIssuedAt(), jwt.WithLeeway(config.Leeway), jwt.WithTimeFunc(func() time.Time { return now.UTC() }))
+	parser := jwt.NewParser(jwt.WithValidMethods([]string{jwt.SigningMethodRS256.Alg(), jwt.SigningMethodES256.Alg(), jwt.SigningMethodEdDSA.Alg()}), jwt.WithIssuer(config.Issuer), jwt.WithAudience(request.ClientID), jwt.WithExpirationRequired(), jwt.WithIssuedAt(), jwt.WithLeeway(config.Leeway), jwt.WithTimeFunc(now.UTC))
 	_, err := parser.ParseWithClaims(response.VPToken, &claims, func(token *jwt.Token) (interface{}, error) {
 		kid, _ := token.Header["kid"].(string)
 		if strings.TrimSpace(kid) == "" {
@@ -164,7 +164,7 @@ func VerifyOpenID4VP(
 	if claims.IssuedAt == nil || claims.ExpiresAt == nil {
 		return DigitalIDIdentity{}, fmt.Errorf("%w: token issue and expiry times are required", ErrOpenID4VPVerification)
 	}
-	identity := DigitalIDIdentity{ProviderID: config.ProviderID, Subject: claims.Subject, Assurance: level, Claims: verifiedClaims, IssuedAt: claims.IssuedAt.Time.UTC(), ExpiresAt: claims.ExpiresAt.Time.UTC(), Status: credentialStatus}
+	identity := DigitalIDIdentity{ProviderID: config.ProviderID, Subject: claims.Subject, Assurance: level, Claims: verifiedClaims, IssuedAt: claims.IssuedAt.UTC(), ExpiresAt: claims.ExpiresAt.UTC(), Status: credentialStatus}
 	if err := ValidateIdentity(request, identity, now); err != nil {
 		return DigitalIDIdentity{}, fmt.Errorf("%w: %v", ErrOpenID4VPVerification, err)
 	}

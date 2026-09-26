@@ -98,7 +98,7 @@ func auditFixture(t *testing.T, incidentDigest string) []IncidentAuditEntry {
 	entries := make([]IncidentAuditEntry, 0, len(states))
 	previous := digest(nil)
 	for index := range states {
-		entry := IncidentAuditEntry{Version: Version1, IncidentDigest: incidentDigest, Sequence: uint64(index + 1), PreviousDigest: previous,
+		entry := IncidentAuditEntry{Version: Version1, IncidentDigest: incidentDigest, Sequence: uint64(index + 1), PreviousDigest: previous, //nolint:gosec // G115: validated non-negative counter; bounded by construction
 			State: states[index], Action: actions[index], ActorCommitment: digestFixture("incident actor"),
 			EvidenceDigest: digestFixture(actions[index] + " evidence"), Coordinate: coordinates[index]}
 		var err error

@@ -27,7 +27,7 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  NODE_VERSION: "20"
+  NODE_VERSION: "22"
   PNPM_VERSION: "10.28.2"
 
 jobs:
@@ -36,27 +36,27 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Setup pnpm
-        uses: pnpm/action-setup@v2
+        uses: pnpm/action-setup@v5
         with:
           version: ${{ env.PNPM_VERSION }}
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: "pnpm"
           cache-dependency-path: pnpm-lock.yaml
 
       - name: Setup Pages
-        uses: actions/configure-pages@v5
+        uses: actions/configure-pages@v6
         with:
           static_site_generator: next
 
       - name: Restore cache
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: portal/.next/cache
           key: ${{ runner.os }}-nextjs-${{ hashFiles('pnpm-lock.yaml') }}-${{ hashFiles('portal/**/*.[jt]s', 'portal/**/*.[jt]sx') }}
@@ -75,7 +75,7 @@ jobs:
           NEXT_PUBLIC_CHAIN_REST: https://api.testnet.virtengine.com
 
       - name: Upload artifact
-        uses: actions/upload-pages-artifact@v3
+        uses: actions/upload-pages-artifact@v4
         with:
           path: portal/out
 
@@ -88,7 +88,7 @@ jobs:
     steps:
       - name: Deploy to GitHub Pages
         id: deployment
-        uses: actions/deploy-pages@v4
+        uses: actions/deploy-pages@v5
       - name: Write deployment summary
         if: steps.deployment.outputs.page_url != ''
         run: |
@@ -106,7 +106,7 @@ jobs:
       pull-requests: write
     steps:
       - name: Comment on PR
-        uses: actions/github-script@v7
+        uses: actions/github-script@v8
         with:
           script: |
             const body = `## 🚀 Portal Build Complete

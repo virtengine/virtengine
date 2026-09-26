@@ -83,7 +83,7 @@ func (f *DeterministicTemplateFixture) Transform(_ context.Context, profile Canc
 	output := mac.Sum(nil)
 	artifact := deterministicTemplateArtifact{commitment: digest(output)}
 	for index := range artifact.coordinates {
-		artifact.coordinates[index] = int64(binary.BigEndian.Uint64(output[index*8:(index+1)*8]) & 0x7fffffffffffffff)
+		artifact.coordinates[index] = int64(binary.BigEndian.Uint64(output[index*8:(index+1)*8]) & 0x7fffffffffffffff) //nolint:gosec // G115: bounded template coordinate/value; high bit cleared on decode
 	}
 	return artifact, nil
 }
@@ -336,7 +336,7 @@ func candidateResult(candidates []internalCandidate) CandidateSearchResult {
 	if count > int(MaxCandidateCount) {
 		count = int(MaxCandidateCount)
 	}
-	e.u32(uint32(count))
+	e.u32(uint32(count)) //nolint:gosec // G115: length is non-negative and bounded by explicit validation above
 	for _, candidate := range candidates[:count] {
 		e.text(candidate.recordDigest)
 		e.i64(candidate.distance)
@@ -346,7 +346,7 @@ func candidateResult(candidates []internalCandidate) CandidateSearchResult {
 	if count > 0 {
 		state = CandidateReviewRequired
 	}
-	return CandidateSearchResult{PossibleMatch: count > 0, ReviewState: state, CandidateCount: uint32(count), CandidateSetCommitment: commitment, AdjudicationReference: digest([]byte("virtengine.uniqueness.adjudication/v1\x00" + commitment))}
+	return CandidateSearchResult{PossibleMatch: count > 0, ReviewState: state, CandidateCount: uint32(count), CandidateSetCommitment: commitment, AdjudicationReference: digest([]byte("virtengine.uniqueness.adjudication/v1\x00" + commitment))} //nolint:gosec // G115: length is non-negative and bounded by explicit validation above
 }
 
 func fixedDistance(left, right deterministicTemplateArtifact) int64 {
@@ -362,7 +362,7 @@ func fixedDistance(left, right deterministicTemplateArtifact) int64 {
 			return int64(^uint64(0) >> 1)
 		}
 	}
-	return int64(distance)
+	return int64(distance) //nolint:gosec // G115: bounded template coordinate/value; high bit cleared on decode
 }
 
 func cmpInt64(left, right int64) int {

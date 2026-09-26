@@ -97,8 +97,21 @@ var (
 	// ErrWaldurNonceReplayed indicates nonce was replayed
 	ErrWaldurNonceReplayed = errors.Register("marketplace", 2228, "Waldur callback nonce already processed")
 
-	// ErrWaldurSignatureInvalid indicates invalid Waldur signature
+	// ErrWaldurSignatureInvalid indicates invalid Waldur callback signature
 	ErrWaldurSignatureInvalid = errors.Register("marketplace", 2229, "invalid Waldur callback signature")
+
+	// ErrAttestationRequired indicates a hardware/compute listing is missing the
+	// capacity/ownership attestation required by params (MARKET-HW-SAFEGUARD-1)
+	ErrAttestationRequired = errors.Register("marketplace", 2246, "capacity or ownership attestation required")
+
+	// ErrMilestoneNotFound indicates the referenced milestone is not on the order
+	ErrMilestoneNotFound = errors.Register("marketplace", 2247, "milestone not found")
+
+	// ErrMilestoneHeld indicates the milestone is held by an open dispute
+	ErrMilestoneHeld = errors.Register("marketplace", 2248, "milestone held by dispute")
+
+	// ErrDisputeNotFound indicates the milestone dispute was not found
+	ErrDisputeNotFound = errors.Register("marketplace", 2249, "milestone dispute not found")
 
 	// ErrUnauthorized indicates unauthorized access
 	ErrUnauthorized = errors.Register("marketplace", 2230, "unauthorized")

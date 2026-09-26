@@ -374,10 +374,7 @@ func (k Keeper) GetActiveVerifierInfoStrict(ctx sdk.Context) (veidkeeper.ActiveV
 }
 
 func isCanonicalSHA256Commitment(value string) bool {
-	normalized := value
-	if strings.HasPrefix(normalized, "sha256:") {
-		normalized = normalized[len("sha256:"):]
-	}
+	normalized := strings.TrimPrefix(value, "sha256:")
 	if len(normalized) != 64 {
 		return false
 	}

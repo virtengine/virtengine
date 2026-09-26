@@ -117,11 +117,11 @@ func TestEvidenceEnvelopeValidationFailures(t *testing.T) {
 		{"model untrimmed", func(e *EvidenceEnvelopeV1) { e.ModelVersion = " model-3" }},
 		{"model too long", func(e *EvidenceEnvelopeV1) { e.ModelVersion = strings.Repeat("m", EvidenceEnvelopeMaxString+1) }},
 		{"evidence type zero", func(e *EvidenceEnvelopeV1) { e.EvidenceType = "" }},
-		{"evidence type unknown", func(e *EvidenceEnvelopeV1) { e.EvidenceType = "unknown" }},
+		{"evidence type unknown", func(e *EvidenceEnvelopeV1) { e.EvidenceType = unknownStatusLabel }},
 		{"account algorithm zero", func(e *EvidenceEnvelopeV1) { e.AccountBindingKeyAlgorithm = "" }},
-		{"account algorithm unknown", func(e *EvidenceEnvelopeV1) { e.AccountBindingKeyAlgorithm = "unknown" }},
+		{"account algorithm unknown", func(e *EvidenceEnvelopeV1) { e.AccountBindingKeyAlgorithm = unknownStatusLabel }},
 		{"issuer algorithm zero", func(e *EvidenceEnvelopeV1) { e.IssuerKeyAlgorithm = "" }},
-		{"issuer algorithm unknown", func(e *EvidenceEnvelopeV1) { e.IssuerKeyAlgorithm = "unknown" }},
+		{"issuer algorithm unknown", func(e *EvidenceEnvelopeV1) { e.IssuerKeyAlgorithm = unknownStatusLabel }},
 		{"account fingerprint empty", func(e *EvidenceEnvelopeV1) { e.AccountBindingKeyFingerprint = "" }},
 		{"account fingerprint uppercase", func(e *EvidenceEnvelopeV1) { e.AccountBindingKeyFingerprint = strings.Repeat("A", 64) }},
 		{"issuer fingerprint malformed", func(e *EvidenceEnvelopeV1) { e.IssuerKeyFingerprint = strings.Repeat("z", 64) }},
@@ -463,7 +463,6 @@ func TestEvidenceEnvelopeWebEvidenceAdapterCommitsSignedSourceMetadata(t *testin
 		{"service metadata hash", func(c *WebEvidenceContext) { c.ServiceMetadataHash = strings.Repeat("9", 64) }},
 	}
 	for index := range web.CallerFields {
-		index := index
 		mutations = append(mutations,
 			struct {
 				name   string

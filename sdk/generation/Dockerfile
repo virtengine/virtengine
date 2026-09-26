@@ -1,5 +1,5 @@
 # syntax=docker/dockerfile:1.7
-FROM golang:1.25.5-bookworm@sha256:d9132cce84391efab786495288756d60e1da215b1f94e87860aeefc3d4c45b6d
+FROM golang:1.26.8-bookworm@sha256:9fdc884aacc3bec89b20ffc69f4bb369c78210e3e4f600387b5128b12c199f81
 
 ARG TARGETARCH
 ARG PROTOC_VERSION=29.1
@@ -22,7 +22,7 @@ RUN case "${TARGETARCH}" in \
       "https://github.com/protocolbuffers/protobuf/releases/download/v${PROTOC_VERSION}/protoc-${PROTOC_VERSION}-linux-${protoc_arch}.zip" \
       --output /tmp/protoc.zip \
     && echo "${protoc_sha}  /tmp/protoc.zip" | sha256sum --check --strict \
-    && unzip -q /tmp/protoc.zip -d /usr/local bin/protoc include \
+    && unzip -q /tmp/protoc.zip -d /usr/local bin/protoc 'include/*' \
     && rm /tmp/protoc.zip \
     && curl --fail --location --silent --show-error \
       "https://nodejs.org/dist/v${NODE_VERSION}/node-v${NODE_VERSION}-linux-${node_arch}.tar.xz" \

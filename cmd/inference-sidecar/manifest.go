@@ -26,13 +26,20 @@ const (
 	verificationStateStaleManifest   verificationState = "stale_manifest"
 )
 
+// Artifact and profile names shared by the model bundle manifest and its
+// provenance record.
+const (
+	modelProvenanceArtifact = "model_provenance.json"
+	profileFixtureOnly      = "fixture_only"
+)
+
 var placeholderPattern = regexp.MustCompile(`(?i)(placeholder|pending|tbd|not published yet|<path>|sha256:placeholder)`)
 
 var requiredManifestArtifacts = []string{
 	"MODEL_HASH.txt",
 	"export_metadata.json",
 	"manifest.json",
-	"model_provenance.json",
+	modelProvenanceArtifact,
 	"model_frozen.pb",
 	filepath.ToSlash(filepath.Join("model", "saved_model.pb")),
 }
@@ -474,7 +481,7 @@ func verifyModelBundleForProfile(modelPath, manifestPath, expectedVersion, expec
 	if err != nil {
 		return nil, err
 	}
-	if normalizedProvenancePath != "model_provenance.json" {
+	if normalizedProvenancePath != modelProvenanceArtifact {
 		return nil, &verificationError{
 			State: verificationStateBadManifest,
 			Path:  manifestPath,
@@ -522,8 +529,8 @@ func verifyModelBundleForProfile(modelPath, manifestPath, expectedVersion, expec
 			Path:  absProvenancePath,
 			Err:   fmt.Errorf("production manifest requires production_approved provenance status, got %q", provenance.Status),
 		}
-	case "fixture_only":
-		if provenance.Status == "fixture_only" || provenance.Status == "production_approved" {
+	case profileFixtureOnly:
+		if provenance.Status == profileFixtureOnly || provenance.Status == "production_approved" {
 			break
 		}
 		return nil, &verificationError{

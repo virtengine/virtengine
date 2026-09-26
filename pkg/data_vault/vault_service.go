@@ -99,7 +99,7 @@ func (v *Vault) Upload(ctx context.Context, req *UploadRequest) (*EncryptedBlob,
 		OrgID:     req.OrgID,
 	}); err != nil {
 		v.recordAccess(AccessActionUpload, req.Scope, req.Owner, false, err)
-		_ = v.logAudit(ctx, req.Scope, "", req.Owner, req.OrgID, AccessActionUpload, false, err, nil)
+		v.logAuditBestEffort(ctx, req.Scope, "", req.Owner, req.OrgID, AccessActionUpload, false, err, nil)
 		return nil, err
 	}
 
@@ -147,7 +147,7 @@ func (v *Vault) Retrieve(ctx context.Context, req *RetrieveRequest) ([]byte, *Bl
 	metadata, err := v.store.GetMetadata(req.ID)
 	if err != nil {
 		v.recordAccess(AccessActionRead, "", req.Requester, false, err)
-		_ = v.logAudit(ctx, "", req.ID, req.Requester, req.OrgID, AccessActionRead, false, err, requestMetadata(req))
+		v.logAuditBestEffort(ctx, "", req.ID, req.Requester, req.OrgID, AccessActionRead, false, err, requestMetadata(req))
 		return nil, nil, err
 	}
 
@@ -163,7 +163,7 @@ func (v *Vault) Retrieve(ctx context.Context, req *RetrieveRequest) ([]byte, *Bl
 		if v.anomalyDetector != nil {
 			v.anomalyDetector.RecordFailure(req.Requester)
 		}
-		_ = v.logAudit(ctx, metadata.Scope, req.ID, req.Requester, req.OrgID, AccessActionRead, false, err, requestMetadata(req))
+		v.logAuditBestEffort(ctx, metadata.Scope, req.ID, req.Requester, req.OrgID, AccessActionRead, false, err, requestMetadata(req))
 		return nil, nil, err
 	}
 
@@ -179,13 +179,13 @@ func (v *Vault) Retrieve(ctx context.Context, req *RetrieveRequest) ([]byte, *Bl
 		})
 		if err != nil {
 			v.recordAccess(AccessActionRead, metadata.Scope, req.Requester, false, err)
-			_ = v.logAudit(ctx, metadata.Scope, req.ID, req.Requester, req.OrgID, AccessActionRead, false, err, requestMetadata(req))
+			v.logAuditBestEffort(ctx, metadata.Scope, req.ID, req.Requester, req.OrgID, AccessActionRead, false, err, requestMetadata(req))
 			return nil, nil, err
 		}
 		if !consentOK {
 			err := NewVaultError("Retrieve", ErrConsentRequired, "consent required")
 			v.recordAccess(AccessActionRead, metadata.Scope, req.Requester, false, err)
-			_ = v.logAudit(ctx, metadata.Scope, req.ID, req.Requester, req.OrgID, AccessActionRead, false, err, requestMetadata(req))
+			v.logAuditBestEffort(ctx, metadata.Scope, req.ID, req.Requester, req.OrgID, AccessActionRead, false, err, requestMetadata(req))
 			return nil, nil, err
 		}
 	}
@@ -193,7 +193,7 @@ func (v *Vault) Retrieve(ctx context.Context, req *RetrieveRequest) ([]byte, *Bl
 	data, meta, err := v.store.Retrieve(ctx, req.ID)
 	if err != nil {
 		v.recordAccess(AccessActionRead, metadata.Scope, req.Requester, false, err)
-		_ = v.logAudit(ctx, metadata.Scope, req.ID, req.Requester, req.OrgID, AccessActionRead, false, err, requestMetadata(req))
+		v.logAuditBestEffort(ctx, metadata.Scope, req.ID, req.Requester, req.OrgID, AccessActionRead, false, err, requestMetadata(req))
 		return nil, nil, err
 	}
 
@@ -223,7 +223,7 @@ func (v *Vault) GetMetadata(ctx context.Context, id BlobID, requester string, or
 	metadata, err := v.store.GetMetadata(id)
 	if err != nil {
 		v.recordAccess(AccessActionMetadata, "", requester, false, err)
-		_ = v.logAudit(ctx, "", id, requester, orgID, AccessActionMetadata, false, err, nil)
+		v.logAuditBestEffort(ctx, "", id, requester, orgID, AccessActionMetadata, false, err, nil)
 		return nil, err
 	}
 
@@ -236,12 +236,12 @@ func (v *Vault) GetMetadata(ctx context.Context, id BlobID, requester string, or
 		ResourceOrgID: metadata.OrgID,
 	}); err != nil {
 		v.recordAccess(AccessActionMetadata, metadata.Scope, requester, false, err)
-		_ = v.logAudit(ctx, metadata.Scope, id, requester, orgID, AccessActionMetadata, false, err, nil)
+		v.logAuditBestEffort(ctx, metadata.Scope, id, requester, orgID, AccessActionMetadata, false, err, nil)
 		return nil, err
 	}
 
 	v.recordAccess(AccessActionMetadata, metadata.Scope, requester, true, nil)
-	_ = v.logAudit(ctx, metadata.Scope, id, requester, orgID, AccessActionMetadata, true, nil, nil)
+	v.logAuditBestEffort(ctx, metadata.Scope, id, requester, orgID, AccessActionMetadata, true, nil, nil)
 	return metadata, nil
 }
 
@@ -253,7 +253,7 @@ func (v *Vault) Delete(ctx context.Context, id BlobID, requester string) error {
 	metadata, err := v.store.GetMetadata(id)
 	if err != nil {
 		v.recordAccess(AccessActionDelete, "", requester, false, err)
-		_ = v.logAudit(ctx, "", id, requester, "", AccessActionDelete, false, err, nil)
+		v.logAuditBestEffort(ctx, "", id, requester, "", AccessActionDelete, false, err, nil)
 		return err
 	}
 
@@ -266,7 +266,7 @@ func (v *Vault) Delete(ctx context.Context, id BlobID, requester string) error {
 		ResourceOrgID: metadata.OrgID,
 	}); err != nil {
 		v.recordAccess(AccessActionDelete, metadata.Scope, requester, false, err)
-		_ = v.logAudit(ctx, metadata.Scope, id, requester, metadata.OrgID, AccessActionDelete, false, err, nil)
+		v.logAuditBestEffort(ctx, metadata.Scope, id, requester, metadata.OrgID, AccessActionDelete, false, err, nil)
 		return err
 	}
 
@@ -314,7 +314,7 @@ func (v *Vault) RotateKeys(ctx context.Context, scope Scope, requester, orgID st
 			metadata = make(map[string]string)
 		}
 		metadata["resource_org_id"] = resourceOrgID
-		_ = v.logAudit(ctx, scope, blobID, requester, orgID, AccessActionRotate, false, failure, metadata)
+		v.logAuditBestEffort(ctx, scope, blobID, requester, orgID, AccessActionRotate, false, failure, metadata)
 	}
 
 	metadata, err := v.store.ListByScope(scope)
@@ -390,7 +390,7 @@ func (v *Vault) RotateKeys(ctx context.Context, scope Scope, requester, orgID st
 			return NewVaultError("RotateKeys", reencryptErr, "re-encryption failed")
 		}
 		v.recordAccess(AccessActionRotate, scope, requester, true, nil)
-		_ = v.logAudit(ctx, scope, meta.ID, requester, orgID, AccessActionRotate, true, nil, map[string]string{
+		v.logAuditBestEffort(ctx, scope, meta.ID, requester, orgID, AccessActionRotate, true, nil, map[string]string{
 			"old_key_id":      oldKey.ID,
 			"new_key_id":      newKey.ID,
 			"resource_org_id": meta.OrgID,
@@ -406,7 +406,7 @@ func (v *Vault) RotateKeys(ctx context.Context, scope Scope, requester, orgID st
 	}
 	if len(nonNilMetadata) == 0 {
 		v.recordAccess(AccessActionRotate, scope, requester, true, nil)
-		_ = v.logAudit(ctx, scope, "", requester, orgID, AccessActionRotate, true, nil, map[string]string{
+		v.logAuditBestEffort(ctx, scope, "", requester, orgID, AccessActionRotate, true, nil, map[string]string{
 			"old_key_id":      oldKey.ID,
 			"new_key_id":      newKey.ID,
 			"resource_org_id": orgID,
@@ -605,6 +605,14 @@ func (v *Vault) logAudit(ctx context.Context, scope Scope, blobID BlobID, reques
 		return logErr
 	}
 	return nil
+}
+
+// logAuditBestEffort records an audit event on a path that already carries a
+// primary failure. Append failures are already counted by the audit-failure
+// metric inside logAudit, and they must not replace the error the caller
+// observes, so the returned error is deliberately not propagated.
+func (v *Vault) logAuditBestEffort(ctx context.Context, scope Scope, blobID BlobID, requester, orgID string, action AccessAction, success bool, err error, metadata map[string]string) {
+	_ = v.logAudit(ctx, scope, blobID, requester, orgID, action, success, err, metadata)
 }
 
 func (v *Vault) beginMutationAudit(ctx context.Context, scope Scope, blobID BlobID, requester, orgID string, action AccessAction) (string, error) {

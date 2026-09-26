@@ -2,7 +2,6 @@ package privileged
 
 import (
 	"bytes"
-	"crypto/sha256"
 	"encoding/binary"
 	"fmt"
 	"sort"
@@ -10,10 +9,11 @@ import (
 )
 
 func writeString(output *bytes.Buffer, value string) error {
-	if len(value) > int(^uint32(0)) {
+	length := len(value)
+	if length > int(^uint32(0)) {
 		return fmt.Errorf("canonical string exceeds uint32 length")
 	}
-	if err := binary.Write(output, binary.BigEndian, uint32(len(value))); err != nil { /* #nosec G115 -- the encoded value is a short in-memory buffer, bounded far below 2^32 */ //nolint:gosec
+	if err := binary.Write(output, binary.BigEndian, uint32(length)); err != nil {
 		return err
 	}
 	_, err := output.WriteString(value)
@@ -26,19 +26,6 @@ func writeUint64(output *bytes.Buffer, value uint64) {
 
 func writeInt64(output *bytes.Buffer, value int64) {
 	_ = binary.Write(output, binary.BigEndian, value)
-}
-
-func digestStrings(domain string, values ...string) ([32]byte, error) {
-	var output bytes.Buffer
-	if err := writeString(&output, domain); err != nil {
-		return [32]byte{}, err
-	}
-	for _, value := range values {
-		if err := writeString(&output, value); err != nil {
-			return [32]byte{}, err
-		}
-	}
-	return sha256.Sum256(output.Bytes()), nil
 }
 
 func invalidExactValue(value string) bool {

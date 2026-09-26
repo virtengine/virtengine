@@ -1,6 +1,6 @@
 import crypto from 'crypto';
 import { describe, expect, it, vi } from 'vitest';
-import { createNotificationPreferenceHandlers } from './route';
+import { createNotificationPreferenceHandlers } from './handlers';
 import type {
   NotificationPreferencePersistenceAdapter,
   NotificationPreferenceSaveRequest,

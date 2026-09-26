@@ -81,7 +81,7 @@ func (keeper *Keeper) WithAuthorization(ctx context.Context, accountID string, n
 	if store.Has(key) {
 		return ErrAuthorizationReplay
 	}
-	if err := protected(&protectedContext{Context: ctx, sdkContext: sdk.WrapSDKContext(cacheCtx)}); err != nil {
+	if err := protected(&protectedContext{Context: ctx, sdkContext: sdk.WrapSDKContext(cacheCtx)}); err != nil { //nolint:staticcheck // SA1019: sdk.WrapSDKContext is deprecated but this call path unwraps the SDK context by identity; replacing it is a separate change
 		return err
 	}
 	if err := ctx.Err(); err != nil {

@@ -17,11 +17,11 @@ func TestVerifyBindsPossessionContextAndAllFields(t *testing.T) {
 	mutations := map[string]func(*FundAuthorization){
 		"chain":       func(auth *FundAuthorization) { auth.ChainID += "-wrong" },
 		"account":     func(auth *FundAuthorization) { auth.AccountID += "-wrong" },
-		"source":      func(auth *FundAuthorization) { auth.SourceID = "/cosmos.bank.v1beta1.MsgMultiSend" },
-		"type":        func(auth *FundAuthorization) { auth.TypeURL = "/cosmos.bank.v1beta1.MsgMultiSend" },
+		"source":      func(auth *FundAuthorization) { auth.SourceID = msgMultiSendTypeURL },
+		"type":        func(auth *FundAuthorization) { auth.TypeURL = msgMultiSendTypeURL },
 		"message":     func(auth *FundAuthorization) { auth.MessageDigestHex = testDigest("wrong-message") },
 		"amount":      func(auth *FundAuthorization) { auth.Amounts[0].MinorUnits = "99" },
-		"party":       func(auth *FundAuthorization) { auth.Parties[1].AccountID = "account:mallory" },
+		"party":       func(auth *FundAuthorization) { auth.Parties[1].AccountID = malloryAccountID },
 		"case":        func(auth *FundAuthorization) { auth.CaseDigestHex = testDigest("wrong-case") },
 		"order":       func(auth *FundAuthorization) { auth.OrderDigestHex = testDigest("wrong-order") },
 		"MFA":         func(auth *FundAuthorization) { auth.MFADigestHex = testDigest("wrong-mfa") },
@@ -68,12 +68,12 @@ func TestVerifyRejectsSubstitutionEpochBoundsAndExpiry(t *testing.T) {
 	opts := verifyOptions(signed.Authorization)
 
 	confused := signed
-	confused.Authorization.SourceID = "/cosmos.bank.v1beta1.MsgMultiSend"
+	confused.Authorization.SourceID = msgMultiSendTypeURL
 	if _, err := Verify(context.Background(), confused, DefaultRegistry(), resolver, opts); err == nil {
 		t.Fatal("same-message source/type confusion accepted")
 	}
 	unknown := signed
-	unknown.Authorization.SourceID, unknown.Authorization.TypeURL = "/unknown", "/unknown"
+	unknown.Authorization.SourceID, unknown.Authorization.TypeURL = unknownSourceID, unknownSourceID
 	if _, err := Verify(context.Background(), unknown, DefaultRegistry(), resolver, opts); err == nil {
 		t.Fatal("unknown route accepted")
 	}

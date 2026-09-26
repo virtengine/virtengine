@@ -88,10 +88,18 @@ record_result() {
     fi
 }
 
-# Get region from hostname or metadata
+# Get region from hostname or metadata (response validated: non-AWS hosts may
+# answer the metadata endpoint with an error body instead of failing)
 get_region() {
-    curl -s --connect-timeout 2 http://169.254.169.254/latest/meta-data/placement/region 2>/dev/null || \
-        hostname | cut -d'-' -f1-2 2>/dev/null || echo "unknown"
+    local region
+    region=$(curl -s --connect-timeout 2 --max-time 5 http://169.254.169.254/latest/meta-data/placement/region 2>/dev/null | head -n 1 | tr -d '\r' || true)
+    if ! printf '%s' "$region" | grep -Eq '^[A-Za-z0-9._-]{1,64}$'; then
+        region=$(hostname 2>/dev/null | cut -d'-' -f1-2 | head -n 1 | tr -d '\r' || echo "unknown")
+    fi
+    if ! printf '%s' "$region" | grep -Eq '^[A-Za-z0-9._-]{1,64}$'; then
+        region="unknown"
+    fi
+    printf '%s\n' "$region"
 }
 
 # Test 1: Backup Integrity

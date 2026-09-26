@@ -150,14 +150,14 @@ type ErasureResolutionTransaction interface {
 }
 
 type ErasureCoordinator struct {
-	store   ErasureOperationStore
-	storage StorageDeletionAdapter
-	kms     KMSDestructionAdapter
-	holds   HoldReader
-	consent ConsentDecisionReader
-	backups BackupFence
+	store    ErasureOperationStore
+	storage  StorageDeletionAdapter
+	kms      KMSDestructionAdapter
+	holds    HoldReader
+	consent  ConsentDecisionReader
+	backups  BackupFence
 	finalize ErasureFinalizationFence
-	keys    contracts.DeletionReceiptKeyResolver
+	keys     contracts.DeletionReceiptKeyResolver
 }
 
 // NewErasureCoordinator wires contracts only. Production remains unavailable
@@ -333,7 +333,7 @@ func (c *ErasureCoordinator) acquireFinalization(ctx context.Context, op Erasure
 
 func (c *ErasureCoordinator) persist(ctx context.Context, op *ErasureOperation, event string) error {
 	op.Revision++
-	op.Journal = append(op.Journal, ErasureJournalEntry{Sequence: uint64(len(op.Journal) + 1), State: op.State, Event: event})
+	op.Journal = append(op.Journal, ErasureJournalEntry{Sequence: uint64(len(op.Journal) + 1), State: op.State, Event: event}) //nolint:gosec // G115: journal length is a bounded small count, never negative
 	return c.store.Update(ctx, *op)
 }
 
@@ -442,7 +442,7 @@ func (c operationReplayConsumer) ConsumeDeletionReceipts(storage, kms contracts.
 		operation.State = ErasureResolved
 		operation.Resolved = &resolved
 		operation.Revision++
-		operation.Journal = append(operation.Journal, ErasureJournalEntry{Sequence: uint64(len(operation.Journal) + 1), State: ErasureResolved, Event: "resolution_and_replay_committed"})
+		operation.Journal = append(operation.Journal, ErasureJournalEntry{Sequence: uint64(len(operation.Journal) + 1), State: ErasureResolved, Event: "resolution_and_replay_committed"}) //nolint:gosec // G115: journal length is a bounded small count, never negative
 		return nil
 	})
 }
@@ -512,7 +512,10 @@ func (a *FixtureDeletionAdapter) execute(ctx context.Context, claims ErasureClai
 	if a.Kind != kind || a.Signer == nil {
 		return contracts.DeletionReceipt{}, errors.New("fixture deletion adapter authority mismatch")
 	}
-	digest, _ := json.Marshal(claims)
+	digest, err := json.Marshal(claims)
+	if err != nil {
+		return contracts.DeletionReceipt{}, err
+	}
 	requestHash := sha256.Sum256(digest)
 	requestDigest := hex.EncodeToString(requestHash[:])
 	if previous, found := a.requests[claims.OperationID]; found {
@@ -602,11 +605,19 @@ func (s *MemoryErasureOperationStore) Begin(_ context.Context, request ErasureRe
 		if existing.RequestDigest != request.RequestDigest {
 			return ErasureOperation{}, ErrErasureConflict
 		}
-		return cloneErasureOperation(existing), nil
+		clone, err := cloneErasureOperation(existing)
+		if err != nil {
+			return ErasureOperation{}, err
+		}
+		return clone, nil
 	}
 	op := ErasureOperation{Request: request, RequestDigest: request.RequestDigest, State: ErasureIntent, Revision: 1,
 		Journal: []ErasureJournalEntry{{Sequence: 1, State: ErasureIntent, Event: "intent_persisted"}}}
-	s.operations[request.OperationID] = cloneErasureOperation(op)
+	clone, err := cloneErasureOperation(op)
+	if err != nil {
+		return ErasureOperation{}, err
+	}
+	s.operations[request.OperationID] = clone
 	return op, nil
 }
 
@@ -617,7 +628,11 @@ func (s *MemoryErasureOperationStore) Load(_ context.Context, operationID string
 	if !found {
 		return ErasureOperation{}, errors.New("erasure operation not found")
 	}
-	return cloneErasureOperation(op), nil
+	clone, err := cloneErasureOperation(op)
+	if err != nil {
+		return ErasureOperation{}, err
+	}
+	return clone, nil
 }
 
 func (s *MemoryErasureOperationStore) Update(_ context.Context, operation ErasureOperation) error {
@@ -630,7 +645,11 @@ func (s *MemoryErasureOperationStore) Update(_ context.Context, operation Erasur
 	if operation.Revision != current.Revision+1 {
 		return errors.New("stale erasure operation revision")
 	}
-	s.operations[operation.Request.OperationID] = cloneErasureOperation(operation)
+	clone, err := cloneErasureOperation(operation)
+	if err != nil {
+		return err
+	}
+	s.operations[operation.Request.OperationID] = clone
 	return nil
 }
 
@@ -640,7 +659,11 @@ func (s *MemoryErasureOperationStore) ListUnresolved(_ context.Context) ([]Erasu
 	result := make([]ErasureOperation, 0)
 	for _, operation := range s.operations {
 		if operation.State != ErasureResolved {
-			result = append(result, cloneErasureOperation(operation))
+			clone, err := cloneErasureOperation(operation)
+			if err != nil {
+				return nil, err
+			}
+			result = append(result, clone)
 		}
 	}
 	return result, nil
@@ -683,7 +706,10 @@ func (s *MemoryErasureOperationStore) Resolve(_ context.Context, operationID, re
 	if s.apply == nil {
 		return errors.New("fixture resolved-state transaction callback is not configured")
 	}
-	candidate := cloneErasureOperation(operation)
+	candidate, err := cloneErasureOperation(operation)
+	if err != nil {
+		return err
+	}
 	transaction := memoryErasureResolutionTransaction{apply: s.apply}
 	if err := apply(transaction, &candidate); err != nil {
 		return err
@@ -701,9 +727,14 @@ func (t memoryErasureResolutionTransaction) ApplyResolved(ref contracts.Evidence
 	return t.apply(ref)
 }
 
-func cloneErasureOperation(operation ErasureOperation) ErasureOperation {
-	encoded, _ := json.Marshal(operation)
+func cloneErasureOperation(operation ErasureOperation) (ErasureOperation, error) {
+	encoded, err := json.Marshal(operation)
+	if err != nil {
+		return ErasureOperation{}, err
+	}
 	var clone ErasureOperation
-	_ = json.Unmarshal(encoded, &clone)
-	return clone
+	if err := json.Unmarshal(encoded, &clone); err != nil {
+		return ErasureOperation{}, err
+	}
+	return clone, nil
 }

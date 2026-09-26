@@ -142,7 +142,7 @@ func signedReliabilityEnvelope(t *testing.T) (CanonicalReliabilityEnvelopeV1, ed
 	for index, kind := range requiredReliabilitySources {
 		sources = append(sources, ReliabilitySourceCommitment{
 			Kind: kind, Digest: digest(string(kind)), WindowStartUnix: 1_699_999_000,
-			WindowEndUnix: 1_700_000_000, ObservedThrough: 1_700_000_000 + int64(index), RecordCount: uint64(index + 1),
+			WindowEndUnix: 1_700_000_000, ObservedThrough: 1_700_000_000 + int64(index), RecordCount: uint64(index + 1), //nolint:gosec // G115: validated non-negative counter; bounded by construction
 		})
 	}
 	envelope := CanonicalReliabilityEnvelopeV1{

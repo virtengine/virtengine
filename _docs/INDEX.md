@@ -27,6 +27,7 @@ This index lists internal-only documentation. Do not add internal docs outside `
 - `_docs/architecture/ADR-002-hybrid-decentralized-portal-architecture.md`
 - `_docs/architecture/hybrid-portal-implementation-plan.md`
 - `_docs/architecture/waldur-market-mapping-spec.md`
+- `_docs/architecture/unified-market-waldur-design.md`
 - `_docs/adr/ADR-001-portal-architecture.md`
 - `_docs/adr/ADR-004-veid-governed-verifier.md`
 - `_docs/adr/ADR-005-consensus-determinism.md`
@@ -34,6 +35,7 @@ This index lists internal-only documentation. Do not add internal docs outside `
 - `_docs/adr/ADR-007-canonical-market-reservations.md`
 - `_docs/adr/ADR-008-canonical-financial-cases.md`
 - `_docs/adr/ADR-009-canonical-kubernetes-rendering-and-identity.md`
+- `_docs/adr/ADR-010-unified-market-resolution-and-waldur-supply.md`
 - `_docs/adr/adr-001-network-upgrades.md`
 - `_docs/adr/adr-002-manifest-v2beta2.md`
 - `_docs/adr/adr-003-technical-debt-refactoring.md`

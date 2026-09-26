@@ -11,7 +11,7 @@
     {
       "path": "go.mod",
       "module": "github.com/virtengine/virtengine",
-      "go": "1.25.8",
+      "go": "1.26.8",
       "workspace": true,
       "hasGoSum": true,
       "vendorPolicy": "not-checked-in",
@@ -26,7 +26,7 @@
           "old": "github.com/bytedance/sonic",
           "oldVersion": "",
           "new": "github.com/bytedance/sonic",
-          "version": "v1.14.1"
+          "version": "v1.15.4"
         },
         {
           "old": "github.com/cometbft/cometbft",
@@ -38,7 +38,7 @@
           "old": "github.com/cosmos/cosmos-sdk",
           "oldVersion": "",
           "new": "github.com/virtengine/cosmos-sdk",
-          "version": "v0.53.4-virtengine.1"
+          "version": "v0.53.4-virtengine.2"
         },
         {
           "old": "github.com/cosmos/gogoproto",
@@ -49,8 +49,8 @@
         {
           "old": "github.com/cosmos/ledger-cosmos-go",
           "oldVersion": "",
-          "new": "github.com/virtengine/ledger-go/cosmos",
-          "version": "v0.16.0-virtengine"
+          "new": "github.com/akash-network/ledger-go/cosmos",
+          "version": "v0.16.0"
         },
         {
           "old": "github.com/CosmWasm/wasmd",
@@ -91,8 +91,8 @@
         {
           "old": "github.com/zondax/ledger-go",
           "oldVersion": "",
-          "new": "github.com/virtengine/ledger-go",
-          "version": "v0.16.0-virtengine"
+          "new": "github.com/akash-network/ledger-go",
+          "version": "v0.16.0"
         },
         {
           "old": "golang.org/x/exp",
@@ -111,7 +111,7 @@
     {
       "path": "infra/dr/tests/go.mod",
       "module": "github.com/virtengine/virtengine/infra/dr/tests",
-      "go": "1.25.0",
+      "go": "1.26.8",
       "workspace": true,
       "hasGoSum": true,
       "vendorPolicy": "not-checked-in",
@@ -120,7 +120,7 @@
     {
       "path": "infra/terraform/tests/go.mod",
       "module": "github.com/virtengine-network/virtengine/infra/terraform/tests",
-      "go": "1.25.8",
+      "go": "1.26.8",
       "workspace": true,
       "hasGoSum": true,
       "vendorPolicy": "not-checked-in",
@@ -129,7 +129,7 @@
     {
       "path": "infra/tests/go.mod",
       "module": "github.com/virtengine/virtengine/infra/tests",
-      "go": "1.25.8",
+      "go": "1.26.8",
       "workspace": true,
       "hasGoSum": true,
       "vendorPolicy": "not-checked-in",
@@ -138,7 +138,7 @@
     {
       "path": "sdk/generation/go.mod",
       "module": "github.com/virtengine/virtengine/sdk/generation/tools",
-      "go": "1.25.5",
+      "go": "1.26.8",
       "workspace": false,
       "hasGoSum": true,
       "vendorPolicy": "not-checked-in",
@@ -154,11 +154,17 @@
     {
       "path": "sdk/go/go.mod",
       "module": "github.com/virtengine/virtengine/sdk/go",
-      "go": "1.25.8",
+      "go": "1.26.8",
       "workspace": true,
       "hasGoSum": true,
       "vendorPolicy": "generated-and-ignored",
       "replaces": [
+        {
+          "old": "github.com/bytedance/sonic",
+          "oldVersion": "",
+          "new": "github.com/bytedance/sonic",
+          "version": "v1.15.4"
+        },
         {
           "old": "github.com/cometbft/cometbft",
           "oldVersion": "",
@@ -169,7 +175,7 @@
           "old": "github.com/cosmos/cosmos-sdk",
           "oldVersion": "",
           "new": "github.com/virtengine/cosmos-sdk",
-          "version": "v0.53.4-virtengine.1"
+          "version": "v0.53.4-virtengine.2"
         },
         {
           "old": "github.com/cosmos/gogoproto",
@@ -206,7 +212,7 @@
     {
       "path": "sdk/specs/go.mod",
       "module": "github.com/virtengine/virtengine/sdk/specs",
-      "go": "1.25.5",
+      "go": "1.26.8",
       "workspace": true,
       "hasGoSum": false,
       "vendorPolicy": "not-checked-in",
@@ -219,8 +225,8 @@
       "services": 65,
       "queryServices": 32,
       "msgServices": 29,
-      "methods": 438,
-      "httpBindings": 234
+      "methods": 447,
+      "httpBindings": 236
     },
     "files": [
       {
@@ -3658,6 +3664,34 @@
                     "path": "/virtengine/marketplace/v1/allocations/provider/{provider_address}"
                   }
                 ]
+              },
+              {
+                "name": "Catalog",
+                "fullName": "virtengine.marketplace.v1.Query.Catalog",
+                "grpcPath": "/virtengine.marketplace.v1.Query/Catalog",
+                "requestType": "virtengine.marketplace.v1.QueryCatalogRequest",
+                "responseType": "virtengine.marketplace.v1.QueryCatalogResponse",
+                "http": [
+                  {
+                    "body": "",
+                    "method": "GET",
+                    "path": "/virtengine/marketplace/v1/catalog"
+                  }
+                ]
+              },
+              {
+                "name": "WaldurCommands",
+                "fullName": "virtengine.marketplace.v1.Query.WaldurCommands",
+                "grpcPath": "/virtengine.marketplace.v1.Query/WaldurCommands",
+                "requestType": "virtengine.marketplace.v1.QueryWaldurCommandsRequest",
+                "responseType": "virtengine.marketplace.v1.QueryWaldurCommandsResponse",
+                "http": [
+                  {
+                    "body": "",
+                    "method": "GET",
+                    "path": "/virtengine/marketplace/v1/waldur-commands"
+                  }
+                ]
               }
             ]
           }
@@ -3735,6 +3769,62 @@
                 "grpcPath": "/virtengine.marketplace.v1.Msg/WaldurCallback",
                 "requestType": "virtengine.marketplace.v1.MsgWaldurCallback",
                 "responseType": "virtengine.marketplace.v1.MsgWaldurCallbackResponse",
+                "http": []
+              },
+              {
+                "name": "CreateOrder",
+                "fullName": "virtengine.marketplace.v1.Msg.CreateOrder",
+                "grpcPath": "/virtengine.marketplace.v1.Msg/CreateOrder",
+                "requestType": "virtengine.marketplace.v1.MsgCreateOrder",
+                "responseType": "virtengine.marketplace.v1.MsgCreateOrderResponse",
+                "http": []
+              },
+              {
+                "name": "PlaceBid",
+                "fullName": "virtengine.marketplace.v1.Msg.PlaceBid",
+                "grpcPath": "/virtengine.marketplace.v1.Msg/PlaceBid",
+                "requestType": "virtengine.marketplace.v1.MsgPlaceBid",
+                "responseType": "virtengine.marketplace.v1.MsgPlaceBidResponse",
+                "http": []
+              },
+              {
+                "name": "WithdrawBid",
+                "fullName": "virtengine.marketplace.v1.Msg.WithdrawBid",
+                "grpcPath": "/virtengine.marketplace.v1.Msg/WithdrawBid",
+                "requestType": "virtengine.marketplace.v1.MsgWithdrawBid",
+                "responseType": "virtengine.marketplace.v1.MsgWithdrawBidResponse",
+                "http": []
+              },
+              {
+                "name": "RegisterWaldurSource",
+                "fullName": "virtengine.marketplace.v1.Msg.RegisterWaldurSource",
+                "grpcPath": "/virtengine.marketplace.v1.Msg/RegisterWaldurSource",
+                "requestType": "virtengine.marketplace.v1.MsgRegisterWaldurSource",
+                "responseType": "virtengine.marketplace.v1.MsgRegisterWaldurSourceResponse",
+                "http": []
+              },
+              {
+                "name": "IngestWaldurOffering",
+                "fullName": "virtengine.marketplace.v1.Msg.IngestWaldurOffering",
+                "grpcPath": "/virtengine.marketplace.v1.Msg/IngestWaldurOffering",
+                "requestType": "virtengine.marketplace.v1.MsgIngestWaldurOffering",
+                "responseType": "virtengine.marketplace.v1.MsgIngestWaldurOfferingResponse",
+                "http": []
+              },
+              {
+                "name": "SetOfferingVisibility",
+                "fullName": "virtengine.marketplace.v1.Msg.SetOfferingVisibility",
+                "grpcPath": "/virtengine.marketplace.v1.Msg/SetOfferingVisibility",
+                "requestType": "virtengine.marketplace.v1.MsgSetOfferingVisibility",
+                "responseType": "virtengine.marketplace.v1.MsgSetOfferingVisibilityResponse",
+                "http": []
+              },
+              {
+                "name": "AckWaldurCommand",
+                "fullName": "virtengine.marketplace.v1.Msg.AckWaldurCommand",
+                "grpcPath": "/virtengine.marketplace.v1.Msg/AckWaldurCommand",
+                "requestType": "virtengine.marketplace.v1.MsgAckWaldurCommand",
+                "responseType": "virtengine.marketplace.v1.MsgAckWaldurCommandResponse",
                 "http": []
               }
             ]
@@ -8034,7 +8124,7 @@
   "summaries": {
     "modules": 6,
     "toolModules": 1,
-    "replaces": 23,
+    "replaces": 24,
     "goMessages": 228,
     "gateways": 28,
     "gatewayStubs": 0,

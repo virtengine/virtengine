@@ -250,6 +250,10 @@ sudo apt-get install -y gramine
 gramine-sgx-gen-private-key enclave-key.pem
 
 # Build enclave
+# UNVERIFIED: this repository has no `SGX` make variable and no `sgx` target
+# (checked `Makefile` and `make/*.mk`), so `make SGX=1` runs the default target
+# and does not build an enclave. The enclave build path this guide assumes is
+# not implemented here — verify the toolchain before relying on this step.
 make SGX=1 SGX_SIGN_KEY=enclave-key.pem
 
 # Output: veid_scoring.manifest.sgx, veid_scoring.sig
@@ -1405,6 +1409,8 @@ virtengine tx gov submit-proposal remove-enclave-measurement \
 gramine-sgx-gen-private-key new-enclave-key.pem
 
 # Build enclave with new key
+# UNVERIFIED: no `SGX` make variable / `sgx` target exists in this repository
+# (see `Makefile`, `make/*.mk`) — `make SGX=1` does not build an enclave here.
 make SGX=1 SGX_SIGN_KEY=new-enclave-key.pem
 
 # Register new measurement BEFORE deploying

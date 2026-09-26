@@ -136,7 +136,7 @@ func TestRecipientKeyFingerprintBindingFailsClosed(t *testing.T) {
 	envelope := types.NewEncryptedPayloadEnvelope()
 	envelope.RecipientKeyIDs = []string{fingerprint}
 
-	require.Panics(t, func() { k.CheckEnvelopeAccess(ctx, envelope, address) })
+	require.Panics(t, func() { require.NoError(t, k.CheckEnvelopeAccess(ctx, envelope, address)) })
 	require.Panics(t, func() { k.WithRecipientKeys(ctx, func(types.RecipientKeyRecord) bool { return false }) })
 	require.Error(t, k.ImportRecipientKeyRecord(ctx, types.RecipientKeyRecord{Address: address.String(), PublicKey: attackerKey.PublicKey[:], KeyFingerprint: fingerprint, KeyVersion: 1, AlgorithmID: types.DefaultAlgorithm(), RegisteredAt: ctx.BlockTime().Unix()}))
 }

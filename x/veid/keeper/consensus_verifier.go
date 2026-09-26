@@ -238,14 +238,6 @@ func (cv *ConsensusVerifier) ValidateModelVersion(
 	return nil
 }
 
-// getValidatorAddress returns this validator's address
-func (cv *ConsensusVerifier) getValidatorAddress() string {
-	if cv.keyProvider == nil {
-		return ""
-	}
-	return cv.keyProvider.GetKeyFingerprint()
-}
-
 // ============================================================================
 // Keeper Methods for Consensus Verification
 // ============================================================================

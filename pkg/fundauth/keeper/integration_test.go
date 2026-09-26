@@ -40,7 +40,7 @@ func TestVerifyPolicyAndConsumeIntegration(t *testing.T) {
 	stores.MountStoreWithDB(storeKey, storetypes.StoreTypeIAVL, database)
 	require.NoError(t, stores.LoadLatestVersion())
 	sdkCtx := sdk.NewContext(stores, tmproto.Header{Height: 150, Time: time.Unix(1_800_000_000, 0)}, false, log.NewNopLogger())
-	ctx := sdk.WrapSDKContext(sdkCtx)
+	ctx := sdk.WrapSDKContext(sdkCtx) //nolint:staticcheck // SA1019: sdk.WrapSDKContext is deprecated but this call path unwraps the SDK context by identity; replacing it is a separate change
 	consumer, err := fundauthkeeper.NewKeeper(storeKey)
 	require.NoError(t, err)
 

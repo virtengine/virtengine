@@ -30,13 +30,13 @@ jobs:
     permissions:
       contents: read
     env:
-      GO_VERSION: '1.25.5'
+      GO_VERSION: '1.26.8'
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Set up Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v6
         with:
           go-version: ${{ env.GO_VERSION }}
           cache: true
@@ -54,14 +54,13 @@ jobs:
     permissions:
       contents: read
     env:
-      GO_VERSION: '1.25.5'
-      DR_OUTPUT_DIR: ${{ runner.temp }}/dr-rehearsal
+      GO_VERSION: '1.26.8'
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Set up Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v6
         with:
           go-version: ${{ env.GO_VERSION }}
           cache: true
@@ -70,13 +69,15 @@ jobs:
         run: go build -o /usr/local/bin/virtengine ./cmd/virtengine
 
       - name: Run rehearsal drill
+        env:
+          DR_OUTPUT_DIR: ${{ runner.temp }}/dr-rehearsal
         run: |
           chmod +x infra/dr/run-failover-drill.sh
           infra/dr/run-failover-drill.sh --mode rehearsal --output-dir "$DR_OUTPUT_DIR"
 
       - name: Upload rehearsal evidence
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: dr-rehearsal-evidence
           path: |
@@ -94,14 +95,13 @@ jobs:
       contents: read
     environment: dr-drill
     env:
-      GO_VERSION: '1.25.5'
-      DR_OUTPUT_DIR: ${{ runner.temp }}/dr-live
+      GO_VERSION: '1.26.8'
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Set up Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v6
         with:
           go-version: ${{ env.GO_VERSION }}
           cache: true
@@ -110,6 +110,8 @@ jobs:
         run: go build -o /usr/local/bin/virtengine ./cmd/virtengine
 
       - name: Run live drill
+        env:
+          DR_OUTPUT_DIR: ${{ runner.temp }}/dr-live
         shell: bash
         run: |
           chmod +x infra/dr/run-failover-drill.sh
@@ -121,7 +123,7 @@ jobs:
 
       - name: Upload live evidence
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: dr-live-evidence
           path: |

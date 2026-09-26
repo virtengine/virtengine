@@ -17,6 +17,18 @@ import (
 	"github.com/virtengine/virtengine/x/veid/types"
 )
 
+// Evidence classification and source-kind labels shared by the migration
+// and payload-cutover paths, plus the JSON null literal those paths compare
+// raw payloads against.
+const (
+	classificationLegacy         = "legacy"
+	classificationAmbiguous      = "ambiguous"
+	classificationEvidenceRecord = "evidence_record"
+	classificationNone           = "none"
+	sourceKindSocialScope        = "social_scope"
+	jsonNullLiteral              = "null"
+)
+
 const (
 	EvidenceMigrationManifestVersion uint32 = 1
 	EvidenceMigrationGenesisMarker          = "genesis"
@@ -215,13 +227,13 @@ func (k Keeper) MigrateEvidenceObjects(ctx sdk.Context, manifest EvidenceMigrati
 	cacheCtx, commit := ctx.CacheContext()
 	report := EvidenceMigrationReport{Scanned: uint64(len(rows)), EvidenceRecordRowsSkipped: evidenceRowsSkipped}
 	for _, row := range rows {
-		if row.classification != "legacy" {
+		if row.classification != classificationLegacy {
 			if err := setEvidenceMigrationQuarantine(cacheCtx, k, row); err != nil {
 				return EvidenceMigrationReport{}, err
 			}
 			report.Quarantined++
 			report.LegacyRowsPendingCutover++
-			if row.classification == "ambiguous" {
+			if row.classification == classificationAmbiguous {
 				report.Ambiguous++
 			}
 			continue
@@ -272,15 +284,15 @@ func collectLegacyEvidenceRows(ctx sdk.Context, k Keeper) ([]legacyEvidenceRow, 
 	for _, source := range []struct {
 		kind   string
 		prefix []byte
-	}{{"scope", types.PrefixScope}, {"social_scope", types.PrefixSocialMediaScope}} {
+	}{{"scope", types.PrefixScope}, {sourceKindSocialScope, types.PrefixSocialMediaScope}} {
 		iterator := storetypes.KVStorePrefixIterator(store, source.prefix)
 		for ; iterator.Valid(); iterator.Next() {
 			row, classification := classifyLegacyEvidenceRow(source.kind, iterator.Key(), iterator.Value())
-			if classification == "evidence_record" {
+			if classification == classificationEvidenceRecord {
 				evidenceRowsSkipped++
 				continue
 			}
-			if classification != "none" {
+			if classification != classificationNone {
 				rows = append(rows, row)
 			}
 		}
@@ -338,19 +350,19 @@ func classifyLegacyEvidenceRow(sourceKind string, key, value []byte) (legacyEvid
 	}
 	evidenceRecord := hasJSONFields(fields, "evidence_id", "evidence_type", "account_address", "scope_id", "content_hash", "envelope_hash", "status")
 	legacyScope := hasJSONFields(fields, "scope_id", "encrypted_payload")
-	if sourceKind == "social_scope" {
+	if sourceKind == sourceKindSocialScope {
 		socialScope := hasJSONFields(fields, "version", "scope_id", "account_address", "provider", "encrypted_payload")
 		switch {
 		case evidenceRecord && socialScope:
-			row.classification = "ambiguous"
+			row.classification = classificationAmbiguous
 			row.envelopeHash = row.rowDigest
 			return row, row.classification
 		case evidenceRecord:
-			return row, "evidence_record"
+			return row, classificationEvidenceRecord
 		case socialScope:
 			legacyScope = true
 		default:
-			row.classification = "ambiguous"
+			row.classification = classificationAmbiguous
 			row.envelopeHash = row.rowDigest
 			return row, row.classification
 		}
@@ -361,11 +373,11 @@ func classifyLegacyEvidenceRow(sourceKind string, key, value []byte) (legacyEvid
 		return row, row.classification
 	}
 	payload := fields["encrypted_payload"]
-	if len(payload) == 0 || string(payload) == "null" {
-		return row, "none"
+	if len(payload) == 0 || string(payload) == jsonNullLiteral {
+		return row, classificationNone
 	}
 	payloadHash := sha256.Sum256(payload)
-	row.classification = "legacy"
+	row.classification = classificationLegacy
 	row.envelopeHash = hex.EncodeToString(payloadHash[:])
 	return row, row.classification
 }

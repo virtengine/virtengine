@@ -90,7 +90,7 @@ func TestCredentialDecisionEnvelopeValidation(t *testing.T) {
 		}},
 		{"consent missing", func(e *CredentialDecisionEnvelopeV1) { e.ConsentPurposeReferenceDigest = "" }},
 		{"expiry", func(e *CredentialDecisionEnvelopeV1) { e.ExpiresAtUnix = 0 }},
-		{"status", func(e *CredentialDecisionEnvelopeV1) { e.Status = "unknown" }},
+		{"status", func(e *CredentialDecisionEnvelopeV1) { e.Status = unknownStatusLabel }},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {

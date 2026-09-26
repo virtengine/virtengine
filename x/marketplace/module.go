@@ -160,9 +160,13 @@ func (am AppModule) BeginBlock(ctx context.Context) error {
 	return nil
 }
 
-// EndBlock is a no-op for the marketplace module.
+// EndBlock runs the deterministic resolution engine. It is a no-op unless the
+// EnableAutoResolution parameter is set.
 func (am AppModule) EndBlock(ctx context.Context) error {
-	_ = ctx
+	sdkCtx := sdk.UnwrapSDKContext(ctx)
+	if _, err := am.keeper.ResolveOpenOrders(sdkCtx); err != nil {
+		return err
+	}
 	return nil
 }
 

@@ -8,6 +8,8 @@ import (
 	"time"
 )
 
+const malloryAccountID = "account:mallory"
+
 func TestVerifyRequiresCompleteTransactionBinding(t *testing.T) {
 	signed, resolver, _ := signedFixture(t)
 	binding := verifyOptions(signed.Authorization)
@@ -50,7 +52,7 @@ func TestVerifyComparesEveryAmountPartyAndPolicyClaim(t *testing.T) {
 		"extra amount": func(value *TransactionBinding) {
 			value.Amounts = append(value.Amounts, Amount{Denom: "zzz", MinorUnits: "1"})
 		},
-		"party account": func(value *TransactionBinding) { value.Parties[1].AccountID = "account:mallory" },
+		"party account": func(value *TransactionBinding) { value.Parties[1].AccountID = malloryAccountID },
 		"party role":    func(value *TransactionBinding) { value.Parties[1].Role = PartyRolePayee },
 		"missing party": func(value *TransactionBinding) { value.Parties = value.Parties[:1] },
 		"extra party": func(value *TransactionBinding) {
@@ -84,7 +86,7 @@ func TestVerifyEnforcesDescriptorAndEvidenceModes(t *testing.T) {
 			auth.Parties = append(auth.Parties, PartyBinding{Role: PartyRoleOwner, AccountID: auth.AccountID})
 		},
 		"account wrong role": func(auth *FundAuthorization) {
-			auth.Parties[0].AccountID = "account:mallory"
+			auth.Parties[0].AccountID = malloryAccountID
 			auth.Parties[1].AccountID = auth.AccountID
 		},
 		"MFA required empty":         func(auth *FundAuthorization) { auth.MFADigestHex = "" },
