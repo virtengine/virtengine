@@ -93,10 +93,22 @@ func (v *PathValidator) ValidatePath(path string) error {
 	}
 
 	// A symlink at the leaf must be resolved explicitly, even when its target
-	// does not exist. resolveExistingPrefix cannot be used here: for a broken
-	// link it would walk up to the parent, drop the link entirely, and hand back
-	// the link's own name — accepting a path that actually points outside the
-	// allowed directories.
+	// does not exist. resolveExistingPrefix cannot be used here directly: for a
+	// broken link it would walk up to the parent, drop the link entirely, and
+	// hand back the link's own name — accepting a path that actually points
+	// outside the allowed directories.
+	//
+	// The resolved target must then be canonicalized again. A single Readlink
+	// hop is not enough: a relative target such as "dirlink/secret.txt" is
+	// still textually inside the allowed directory even when "dirlink" is
+	// itself a symlink out of it, and the same applies to a chain of links.
+	// Re-running resolveExistingPrefix on the target collapses the whole
+	// chain; a non-existent tail cannot introduce an escape, since there is
+	// nothing there to follow.
+	//
+	// Any os.Lstat error other than a successful symlink hit falls through to
+	// the branch below, which rejects it (resolveExistingPrefix propagates
+	// non-IsNotExist errors and ValidatePath turns them into ErrInvalidPath).
 	if info, err := os.Lstat(absPath); err == nil && info.Mode()&os.ModeSymlink != 0 {
 		linkTarget, err := os.Readlink(absPath)
 		if err != nil {
@@ -105,7 +117,10 @@ func (v *PathValidator) ValidatePath(path string) error {
 		if !filepath.IsAbs(linkTarget) {
 			linkTarget = filepath.Join(filepath.Dir(absPath), linkTarget)
 		}
-		absPath = filepath.Clean(linkTarget)
+		absPath, err = resolveExistingPrefix(filepath.Clean(linkTarget))
+		if err != nil {
+			return fmt.Errorf("%w: %s", ErrInvalidPath, path)
+		}
 	} else {
 		// Resolve symlinks and short names for the containment check. This must
 		// work for paths that do not exist yet, because the common pattern is
