@@ -24,6 +24,10 @@ permissions:
 
 env:
   GO_VERSION: "1.26.8"
+  # Must match ci.yaml's PYTHON_VERSION. The ml manifests are shared with
+  # ci.yaml / security.yaml / license-compliance.yaml / ml-model-verify.yaml,
+  # which all resolve them on 3.11; keras==3.15.0 requires Python >=3.11.
+  PYTHON_VERSION: "3.11"
   GO_TEST_TIMEOUT_UNIT: "30m"
   TF_DETERMINISTIC_OPS: "1"
   TF_CUDNN_DETERMINISTIC: "1"
@@ -176,7 +180,7 @@ jobs:
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
-          python-version: "3.10"
+          python-version: ${{ env.PYTHON_VERSION }}
           cache: "pip"
 
       - name: Install deterministic dependencies
