@@ -192,7 +192,7 @@ nfpms:
 release:
   github:
     owner: virtengine
-    name: node
+    name: virtengine
   prerelease: auto
   mode: replace
   draft: false
