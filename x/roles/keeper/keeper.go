@@ -37,8 +37,11 @@ type IKeeper interface {
 	CanModifyAccountState(ctx sdk.Context, sender sdk.AccAddress) bool
 
 	// Sanctions
+	//
+	// ConfirmSanction takes reviewedUntil because confirming an emergency hold
+	// converts it into a reviewed sanction whose duration the reviewer sets.
 	ImposeSanction(ctx sdk.Context, proposal types.Sanction, imposedBy sdk.AccAddress) (types.Sanction, error)
-	ConfirmSanction(ctx sdk.Context, sanctionID string, reviewer sdk.AccAddress) (types.Sanction, error)
+	ConfirmSanction(ctx sdk.Context, sanctionID string, reviewer sdk.AccAddress, reviewedUntil int64) (types.Sanction, error)
 	RevokeSanction(ctx sdk.Context, sanctionID string, actor sdk.AccAddress, reason string) (types.Sanction, error)
 	OpenAppeal(ctx sdk.Context, sanctionID string, appellant sdk.AccAddress, justification string) (types.Sanction, error)
 	ResolveAppeal(ctx sdk.Context, appealID string, reviewer sdk.AccAddress, grant bool, notes string) (types.Sanction, error)
@@ -65,6 +68,13 @@ type IKeeper interface {
 	Codec() codec.BinaryCodec
 	StoreKey() storetypes.StoreKey
 }
+
+// Compile-time proof that the concrete Keeper still satisfies the interface the
+// module advertises. Without this assertion, an interface/implementation
+// signature drift (such as ConfirmSanction gaining a parameter) stays latent:
+// the build stays green because nothing consumes IKeeper, and the first
+// consumer that wires to it breaks at compile time.
+var _ IKeeper = Keeper{}
 
 // Keeper of the roles store
 type Keeper struct {
