@@ -63,7 +63,7 @@ func (k Keeper) DeletePendingResolution(ctx sdk.Context, reportID string) {
 func (k Keeper) WithPendingResolutions(ctx sdk.Context, fn func(types.PendingResolution) bool) {
 	store := ctx.KVStore(k.skey)
 	iter := storetypes.KVStorePrefixIterator(store, PendingResolutionPrefix)
-	defer iter.Close()
+	defer func() { _ = iter.Close() }()
 
 	for ; iter.Valid(); iter.Next() {
 		var pending types.PendingResolution

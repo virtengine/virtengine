@@ -29,6 +29,17 @@ const (
 	DefaultEmergencyHoldSeconds int64 = 24 * 60 * 60
 )
 
+// Canonical wire names shared by the sanction enums. Several enums each carry
+// an "unspecified" zero value and the scope/status enums both carry "active",
+// so the literals are named once here rather than repeated per enum map.
+const (
+	// SanctionNameUnspecified is the canonical name of every enum's zero value.
+	SanctionNameUnspecified = "unspecified"
+
+	// SanctionNameActive is the canonical name of the active status.
+	SanctionNameActive = "active"
+)
+
 // SanctionScope is the breadth of a sanction's effects.
 //
 // Scope is recorded, not enforced here: limiting a dispute to an order rather
@@ -55,7 +66,7 @@ const (
 
 // SanctionScopeNames maps sanction scopes to human-readable names.
 var SanctionScopeNames = map[SanctionScope]string{
-	SanctionScopeUnspecified:       "unspecified",
+	SanctionScopeUnspecified:       SanctionNameUnspecified,
 	SanctionScopeAccount:           "account",
 	SanctionScopeOrder:             "order",
 	SanctionScopeListing:           "listing",
@@ -97,7 +108,7 @@ var sanctionScopeNamesOrdered = []struct {
 	scope SanctionScope
 	name  string
 }{
-	{SanctionScopeUnspecified, "unspecified"},
+	{SanctionScopeUnspecified, SanctionNameUnspecified},
 	{SanctionScopeAccount, "account"},
 	{SanctionScopeOrder, "order"},
 	{SanctionScopeListing, "listing"},
@@ -139,7 +150,7 @@ const (
 
 // SanctionKindNames maps sanction kinds to human-readable names.
 var SanctionKindNames = map[SanctionKind]string{
-	SanctionKindUnspecified:   "unspecified",
+	SanctionKindUnspecified:   SanctionNameUnspecified,
 	SanctionKindWarning:       "warning",
 	SanctionKindEmergencyHold: "emergency_hold",
 	SanctionKindSuspension:    "suspension",
@@ -204,7 +215,7 @@ var sanctionKindNamesOrdered = []struct {
 	kind SanctionKind
 	name string
 }{
-	{SanctionKindUnspecified, "unspecified"},
+	{SanctionKindUnspecified, SanctionNameUnspecified},
 	{SanctionKindWarning, "warning"},
 	{SanctionKindEmergencyHold, "emergency_hold"},
 	{SanctionKindSuspension, "suspension"},
@@ -256,7 +267,7 @@ const (
 
 // SanctionReasonNames maps reason codes to human-readable names.
 var SanctionReasonNames = map[SanctionReasonCode]string{
-	SanctionReasonUnspecified:      "unspecified",
+	SanctionReasonUnspecified:      SanctionNameUnspecified,
 	SanctionReasonFraudConfirmed:   "fraud_confirmed",
 	SanctionReasonFraudSuspected:   "fraud_suspected",
 	SanctionReasonPaymentFraud:     "payment_fraud",
@@ -336,8 +347,8 @@ const (
 
 // SanctionStatusNames maps sanction statuses to human-readable names.
 var SanctionStatusNames = map[SanctionStatus]string{
-	SanctionStatusUnspecified:   "unspecified",
-	SanctionStatusActive:        "active",
+	SanctionStatusUnspecified:   SanctionNameUnspecified,
+	SanctionStatusActive:        SanctionNameActive,
 	SanctionStatusPendingReview: "pending_review",
 	SanctionStatusExpired:       "expired",
 	SanctionStatusRevoked:       "revoked",

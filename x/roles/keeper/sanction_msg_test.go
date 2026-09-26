@@ -218,7 +218,7 @@ func TestMsgServer_ImposeSanctionRejectsUnknownEnumStrings(t *testing.T) {
 	f, ms := newMsgServerFixture(t)
 
 	for _, tc := range []struct {
-		name                              string
+		name                               string
 		scope, kind, reason, justification string
 	}{
 		{"unknown scope", "planet", types.SanctionKindWarning.String(), types.SanctionReasonFraudConfirmed.String(), testJustification},
