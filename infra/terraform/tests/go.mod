@@ -1,4 +1,4 @@
-module github.com/virtengine-network/virtengine/infra/terraform/tests
+module github.com/virtengine/virtengine/infra/terraform/tests
 
 go 1.26.8
 

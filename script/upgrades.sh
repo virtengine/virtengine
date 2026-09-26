@@ -33,13 +33,24 @@ WORKDIR=${UTEST_WORKDIR:=}
 UPGRADE_FROM=${UTEST_UPGRADE_FROM:=}
 UPGRADE_TO=${UTEST_UPGRADE_TO:=}
 CONFIG_FILE=${UTEST_CONFIG_FILE:=}
-CHAIN_METADATA_URL=https://raw.githubusercontent.com/virtengine-network/net/master/mainnet/meta.json
+# No default chain metadata URL: the previous default
+# (https://raw.githubusercontent.com/virtengine-network/net/master/mainnet/meta.json)
+# pointed at a virtengine-network repository that no longer resolves. Supply one
+# with --chain-meta=<url>; with none set the genesis download is skipped.
+CHAIN_METADATA_URL=
 SNAPSHOT_URL=https://snapshots.VirtEngine.network/virtengine-1/latest
 STATE_CONFIG=
 MAX_VALIDATORS=1
 
 short_opts=h
 long_opts=help/workdir:/ufrom:/uto:/gbv:/config:/chain-meta:/snapshot-url:/state-config:/max-validators: # those who take an arg END with :
+
+# getopts below consumes --help/-h, which would leave the command dispatch with an
+# empty $1 and report "unknown command". Handle help before parsing options.
+if [[ "${1:-}" == "--help" || "${1:-}" == "-h" ]]; then
+	echo -e "$USAGE"
+	exit 0
+fi
 
 while getopts ":$short_opts-:" o; do
 	case $o in
@@ -128,8 +139,14 @@ while getopts ":$short_opts-:" o; do
 done
 shift "$((OPTIND - 1))"
 
-CHAIN_METADATA=$(curl -s "${CHAIN_METADATA_URL}")
-GENESIS_URL="$(echo "$CHAIN_METADATA" | jq -r '.codebase.genesis.genesis_url? // .genesis?')"
+GENESIS_URL=
+if [[ -n "${CHAIN_METADATA_URL}" ]]; then
+	CHAIN_METADATA=$(curl -s --fail --location "${CHAIN_METADATA_URL}") || {
+		echoerr "unable to fetch chain metadata from ${CHAIN_METADATA_URL}"
+		exit 1
+	}
+	GENESIS_URL="$(echo "$CHAIN_METADATA" | jq -r '.codebase.genesis.genesis_url? // .genesis? // empty')"
+fi
 
 # Stack-based trap management
 trap_add() {
@@ -764,7 +781,9 @@ case "$1" in
 		curr_ref=$1
 		snapshot_source="sandbox"
 
-		is_valid=$($semver validate "$curr_ref")
+		# `set -e` would abort here when semver.sh exits non-zero for an
+		# unrecognised ref; the is_valid check below is what decides the branch.
+		is_valid=$($semver validate "$curr_ref" || true)
 
 		if [[ $is_valid == "valid" ]]; then
 			build=$($semver get build "$curr_ref")
@@ -806,7 +825,9 @@ case "$1" in
 		upgrade_name=$(find "${upgrades_dir}" -mindepth 1 -maxdepth 1 -type d | awk -F/ '{print $NF}' | sort -r | head -n 1)
 
 		# shellcheck disable=SC2086
-		is_valid=$($semver validate $upgrade_name)
+		# See the note in the snapshot-source branch: semver.sh exits non-zero on
+		# an invalid ref, and the explicit check below is what decides the branch.
+		is_valid=$($semver validate $upgrade_name || true)
 		if [[ $is_valid != "valid" ]]; then
 			echoerr "upgrade name \"$upgrade_name\" does not comply with semver spec"
 			exit 1
