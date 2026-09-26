@@ -73,10 +73,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: ${{ env.PYTHON_VERSION }}
 
@@ -98,7 +98,7 @@ jobs:
         run: python -m unittest discover -s .github/tests -p "test_security_policy*.py"
 
       - name: Set up Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v6
         with:
           go-version: ${{ env.GO_VERSION }}
           cache: true
@@ -116,21 +116,21 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Set up Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v6
         with:
           go-version: ${{ env.GO_VERSION }}
           cache: true
 
       - name: Set up pnpm
-        uses: pnpm/action-setup@v4
+        uses: pnpm/action-setup@v5
         with:
           version: ${{ env.PNPM_VERSION }}
 
       - name: Set up Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: pnpm
@@ -176,7 +176,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           fetch-depth: 0
 
@@ -221,7 +221,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Run attack-detection script
         run: |
@@ -230,7 +230,7 @@ jobs:
           scripts/supply-chain/detect-supply-chain-attacks.sh --all --json > .cache/supply-chain/attack-detection.json
 
       - name: Upload attack-detection report
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         if: always()
         with:
           name: attack-detection-report
@@ -242,10 +242,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Set up Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v6
         with:
           go-version: ${{ env.GO_VERSION }}
           cache: true
@@ -276,7 +276,7 @@ jobs:
           fi
 
       - name: Upload risk-assessment report
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         if: always()
         with:
           name: risk-assessment-report
@@ -288,7 +288,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Install Syft
         run: |
@@ -303,7 +303,7 @@ jobs:
           sha256sum .cache/supply-chain/sbom/*.json > .cache/supply-chain/sbom/SHA256SUMS
 
       - name: Upload SBOM bundle
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: supply-chain-sbom
           path: .cache/supply-chain/sbom
@@ -324,16 +324,16 @@ jobs:
       base64-subjects: ${{ steps.subjects.outputs.base64-subjects }}
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Set up Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v6
         with:
           go-version: ${{ env.GO_VERSION }}
           cache: true
 
       - name: Download SBOM bundle
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           name: supply-chain-sbom
           path: release-subjects/sbom
@@ -365,7 +365,7 @@ jobs:
           echo "base64-subjects=$(base64 -w0 release-subjects/provenance-subjects.txt)" >> "$GITHUB_OUTPUT"
 
       - name: Upload release subjects
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: release-subjects
           path: release-subjects
@@ -382,7 +382,7 @@ jobs:
       id-token: write
     steps:
       - name: Download release subjects
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           name: release-subjects
           path: release-subjects
@@ -409,7 +409,7 @@ jobs:
           done
 
       - name: Upload signed artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: release-signatures
           path: |
@@ -425,13 +425,13 @@ jobs:
       - sign-release-artifacts
     steps:
       - name: Download release subjects
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           name: release-subjects
           path: release-subjects
 
       - name: Download release signatures
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           name: release-signatures
           path: release-subjects
@@ -485,19 +485,19 @@ jobs:
       - build-release-subjects
     steps:
       - name: Download release subjects
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           name: release-subjects
           path: release-subjects
 
       - name: Download provenance artifact
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           name: ${{ needs.provenance.outputs.provenance-name }}
           path: provenance
 
       - name: Set up Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v6
         with:
           go-version: ${{ env.GO_VERSION }}
           cache: true
@@ -532,10 +532,10 @@ jobs:
     if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Set up Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v6
         with:
           go-version: ${{ env.GO_VERSION }}
           cache: false
