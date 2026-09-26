@@ -5,6 +5,10 @@ import (
 	"time"
 )
 
+// testAccountAddress is the account identifier the safeguard tests key their
+// fixtures on.
+const testAccountAddress = "acct"
+
 // TestMaxScopeFor_DecisionMap pins the eligibility map: which signals may reach how far.
 // A dispute and a failed identity check must be capped at the order/escrow/listing they
 // are actually about; only detected manipulation may reach account scope.
@@ -142,7 +146,7 @@ func TestAssessSeriousAbuse(t *testing.T) {
 		out := make([]ViolationRecord, 0, violations)
 		for i := 0; i < violations; i++ {
 			out = append(out, ViolationRecord{
-				Address:     "acct",
+				Address:     testAccountAddress,
 				Type:        mt,
 				Severity:    severity,
 				DetectedAt:  now,
@@ -229,10 +233,10 @@ func TestApplyAccountWideSanction_Gate(t *testing.T) {
 	now := time.Unix(1700000000, 0).UTC()
 
 	// Build an account that genuinely meets the serious-abuse criteria.
-	abusive := NewAccountSafeguardState("acct")
+	abusive := NewAccountSafeguardState(testAccountAddress)
 	for i := 0; i < 3; i++ {
 		abusive.RecordViolation(ViolationRecord{
-			Address:    "acct",
+			Address:    testAccountAddress,
 			Type:       ManipulationTypeSybilAttack,
 			Severity:   10,
 			DetectedAt: now,
@@ -240,7 +244,7 @@ func TestApplyAccountWideSanction_Gate(t *testing.T) {
 	}
 
 	t.Run("nil sanction is refused and mutates nothing", func(t *testing.T) {
-		s := NewAccountSafeguardState("acct")
+		s := NewAccountSafeguardState(testAccountAddress)
 		_, err := s.ApplyAccountWideSanction(nil, config, now)
 		if err == nil {
 			t.Error("expected nil sanction to be refused")
@@ -251,7 +255,7 @@ func TestApplyAccountWideSanction_Gate(t *testing.T) {
 	})
 
 	t.Run("criteria-failing sanction is refused and mutates nothing", func(t *testing.T) {
-		s := NewAccountSafeguardState("acct")
+		s := NewAccountSafeguardState(testAccountAddress)
 		sanction := validSanction()
 		sanction.Assessment.CriteriaMet = false
 		_, err := s.ApplyAccountWideSanction(&sanction, config, now)
@@ -264,7 +268,7 @@ func TestApplyAccountWideSanction_Gate(t *testing.T) {
 	})
 
 	t.Run("unreviewed sanction is refused and mutates nothing", func(t *testing.T) {
-		s := NewAccountSafeguardState("acct")
+		s := NewAccountSafeguardState(testAccountAddress)
 		sanction := validSanction()
 		sanction.ReviewedBy = ""
 		_, err := s.ApplyAccountWideSanction(&sanction, config, now)
@@ -312,10 +316,10 @@ func TestApplyAccountWideSanction_Gate(t *testing.T) {
 	t.Run("suspension path is time-bounded", func(t *testing.T) {
 		// With the default ban threshold (20) the same reviewed sanction produces a
 		// time-bounded suspension rather than a permanent ban.
-		s := NewAccountSafeguardState("acct")
+		s := NewAccountSafeguardState(testAccountAddress)
 		for i := 0; i < 3; i++ {
 			s.RecordViolation(ViolationRecord{
-				Address: "acct", Type: ManipulationTypeSybilAttack, Severity: 10, DetectedAt: now,
+				Address: testAccountAddress, Type: ManipulationTypeSybilAttack, Severity: 10, DetectedAt: now,
 			}, config)
 		}
 
@@ -342,12 +346,12 @@ func TestApplyAccountWideSanction_Gate(t *testing.T) {
 func TestRecordViolationDoesNotSuspendAccount(t *testing.T) {
 	config := DefaultPenaltyConfig()
 	now := time.Unix(1700000000, 0).UTC()
-	s := NewAccountSafeguardState("acct")
+	s := NewAccountSafeguardState(testAccountAddress)
 
 	var lastAction PenaltyAction
 	for i := 0; i < 50; i++ {
 		lastAction = s.RecordViolation(ViolationRecord{
-			Address:    "acct",
+			Address:    testAccountAddress,
 			Type:       ManipulationTypeSybilAttack,
 			Severity:   10,
 			DetectedAt: now,

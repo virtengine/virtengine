@@ -24,6 +24,15 @@ const (
 	// i.e. the same metadata map with keys sorted ascending by name. If this
 	// constant changes, the on-chain metadata digest domain or canonical form
 	// changed and that is a state-breaking decision, not a refactor.
+
+	// Field keys and values of the metadata fixtures above, named once so
+	// goconst's three-occurrence threshold stays satisfied.
+	webEvidenceKeyA                   = "a_key"
+	webEvidenceKeyM                   = "m_key"
+	webEvidenceKeyZ                   = "z_key"
+	webEvidenceValueFirst             = "first"
+	webEvidenceValueMid               = "middle"
+	webEvidenceValueLast              = "last"
 	webEvidenceMetadataDigestPinValue = "5882e75c41d3830a70f4b5f71e928ab6e1a93023c8321b5dc753f023a2c6529a"
 )
 
@@ -31,9 +40,9 @@ const (
 // sorted order.
 func pinnedMetadata() map[string]string {
 	return map[string]string{
-		"z_key": "last",
-		"a_key": "first",
-		"m_key": "middle",
+		webEvidenceKeyZ: webEvidenceValueLast,
+		webEvidenceKeyA: webEvidenceValueFirst,
+		webEvidenceKeyM: webEvidenceValueMid,
 	}
 }
 
@@ -75,9 +84,9 @@ func TestWebEvidenceMetadataDigestStableAcrossIterations(t *testing.T) {
 		// Rebuild the map fresh each iteration so insertion order and the
 		// runtime's map seed vary.
 		rebuilt := map[string]string{}
-		rebuilt["z_key"] = "last"
-		rebuilt["a_key"] = "first"
-		rebuilt["m_key"] = "middle"
+		rebuilt[webEvidenceKeyZ] = webEvidenceValueLast
+		rebuilt[webEvidenceKeyA] = webEvidenceValueFirst
+		rebuilt[webEvidenceKeyM] = webEvidenceValueMid
 
 		digest, err := webEvidenceMetadataDigest(rebuilt)
 		if err != nil {
@@ -124,14 +133,14 @@ func TestWebEvidenceMetadataDigestRejectsEmptyKey(t *testing.T) {
 // of the (randomised) order in which they are traversed, and any difference in
 // keys or values fails.
 func TestWebEvidenceStorageMatchesIsOrderIndependent(t *testing.T) {
-	stored := map[string]string{"z_key": "last", "a_key": "first", "m_key": "middle"}
+	stored := map[string]string{webEvidenceKeyZ: webEvidenceValueLast, webEvidenceKeyA: webEvidenceValueFirst, webEvidenceKeyM: webEvidenceValueMid}
 
 	const iterations = 256
 	for i := 0; i < iterations; i++ {
 		msg := map[string]string{}
-		msg["m_key"] = "middle"
-		msg["z_key"] = "last"
-		msg["a_key"] = "first"
+		msg[webEvidenceKeyM] = webEvidenceValueMid
+		msg[webEvidenceKeyZ] = webEvidenceValueLast
+		msg[webEvidenceKeyA] = webEvidenceValueFirst
 		if !webEvidenceStorageMatches("backend", "ref", stored, "backend", "ref", msg) {
 			t.Fatalf("iteration %d: equal metadata maps did not match", i)
 		}
@@ -141,10 +150,10 @@ func TestWebEvidenceStorageMatchesIsOrderIndependent(t *testing.T) {
 		name string
 		msg  map[string]string
 	}{
-		{"differing value", map[string]string{"z_key": "last", "a_key": "CHANGED", "m_key": "middle"}},
-		{"missing key", map[string]string{"z_key": "last", "a_key": "first"}},
-		{"extra key", map[string]string{"z_key": "last", "a_key": "first", "m_key": "middle", "extra": "x"}},
-		{"renamed key", map[string]string{"z_key": "last", "a_key": "first", "m_other": "middle"}},
+		{"differing value", map[string]string{webEvidenceKeyZ: webEvidenceValueLast, webEvidenceKeyA: "CHANGED", webEvidenceKeyM: webEvidenceValueMid}},
+		{"missing key", map[string]string{webEvidenceKeyZ: webEvidenceValueLast, webEvidenceKeyA: webEvidenceValueFirst}},
+		{"extra key", map[string]string{webEvidenceKeyZ: webEvidenceValueLast, webEvidenceKeyA: webEvidenceValueFirst, webEvidenceKeyM: webEvidenceValueMid, "extra": "x"}},
+		{"renamed key", map[string]string{webEvidenceKeyZ: webEvidenceValueLast, webEvidenceKeyA: webEvidenceValueFirst, "m_other": webEvidenceValueMid}},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

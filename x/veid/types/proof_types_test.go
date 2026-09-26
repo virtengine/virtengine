@@ -7,6 +7,16 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+// Claim keys for the order-independence test below. The country and score
+// claims reuse the exported attribute keys so the fixture cannot drift from
+// the identifiers the keeper actually records.
+const (
+	claimKeyAgeOver = "age_over"
+	claimKeyZLast   = "z_last"
+	claimKeyAFirst  = "a_first"
+	claimKeyNested  = "nested"
+)
+
 // These tests exercise the ZK proof primitives in proof_types.go: Pedersen
 // commitments, Schnorr knowledge proofs, range proofs, set membership proofs
 // and their wire encodings.
@@ -74,12 +84,12 @@ func TestCommitScalarDeterministicAndBinding(t *testing.T) {
 func TestHashClaimsToScalarOrderIndependence(t *testing.T) {
 	nested := map[string]interface{}{"a": 1, "b": 2}
 	claims := map[string]interface{}{
-		"age_over": 18,
-		"country":  "AU",
-		"score":    720,
-		"z_last":   "x",
-		"a_first":  true,
-		"nested":   nested,
+		claimKeyAgeOver:     18,
+		AttributeKeyCountry: "AU",
+		AttributeKeyScore:   720,
+		claimKeyZLast:       "x",
+		claimKeyAFirst:      true,
+		claimKeyNested:      nested,
 	}
 
 	baseline := HashClaimsToScalar(claims)
@@ -92,7 +102,7 @@ func TestHashClaimsToScalarOrderIndependence(t *testing.T) {
 	}
 
 	reordered := make(map[string]interface{}, len(claims))
-	for _, k := range []string{"z_last", "score", "nested", "country", "a_first", "age_over"} {
+	for _, k := range []string{claimKeyZLast, AttributeKeyScore, claimKeyNested, AttributeKeyCountry, claimKeyAFirst, claimKeyAgeOver} {
 		reordered[k] = claims[k]
 	}
 	fromReordered := HashClaimsToScalar(reordered)
@@ -100,12 +110,12 @@ func TestHashClaimsToScalarOrderIndependence(t *testing.T) {
 		"insertion order must not change the digest")
 
 	changed := map[string]interface{}{
-		"age_over": 21,
-		"country":  "AU",
-		"score":    720,
-		"z_last":   "x",
-		"a_first":  true,
-		"nested":   nested,
+		claimKeyAgeOver:     21,
+		AttributeKeyCountry: "AU",
+		AttributeKeyScore:   720,
+		claimKeyZLast:       "x",
+		claimKeyAFirst:      true,
+		claimKeyNested:      nested,
 	}
 	fromChanged := HashClaimsToScalar(changed)
 	require.False(t, fromChanged.Equal(&baseline),

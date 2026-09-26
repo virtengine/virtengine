@@ -11,11 +11,17 @@ import (
 	"github.com/virtengine/virtengine/x/veid/types"
 )
 
+// Shared scope identifiers for the VEID keeper test fixtures.
+const (
+	testScopeID1 = "scope-1"
+	testScopeID2 = "scope-2"
+)
+
 // PRIVACY/VEID audit: raw document/biometric plaintext must not linger in
 // validator memory once a pipeline flow completes.
 func TestDecryptedScopeWipe(t *testing.T) {
 	raw := []byte("fake-raw-document-bytes-for-wipe-test")
-	scope := NewDecryptedScope("scope-1", types.ScopeTypeIDDocument, raw)
+	scope := NewDecryptedScope(testScopeID1, types.ScopeTypeIDDocument, raw)
 	require.NotNil(t, scope.Plaintext)
 	require.NotEmpty(t, scope.ContentHash)
 
@@ -28,7 +34,7 @@ func TestDecryptedScopeWipe(t *testing.T) {
 		require.Zero(t, b, "backing byte %d not zeroed", i)
 	}
 	// Identifiers and content hash survive the wipe for audit/consensus use.
-	require.Equal(t, "scope-1", scope.ScopeID)
+	require.Equal(t, testScopeID1, scope.ScopeID)
 	require.NotEmpty(t, scope.ContentHash)
 
 	// Nil-safe.
@@ -99,7 +105,7 @@ func TestEndBlockerEnforcesRetentionSchedules(t *testing.T) {
 		EmbeddingHash:   hash,
 		ModelVersion:    "test-model",
 		Dimension:       128,
-		SourceScopeID:   "scope-1",
+		SourceScopeID:   testScopeID1,
 		CreatedAt:       now.Add(-2 * time.Hour),
 		BlockHeight:     ctx.BlockHeight(),
 		ComputedBy:      "test-validator",
@@ -145,7 +151,7 @@ func TestEndBlockerSkipsSweepOffCadence(t *testing.T) {
 		EmbeddingHash:   bytes.Repeat([]byte{0xCD}, 32),
 		ModelVersion:    "test-model",
 		Dimension:       128,
-		SourceScopeID:   "scope-2",
+		SourceScopeID:   testScopeID2,
 		CreatedAt:       now.Add(-2 * time.Hour),
 		BlockHeight:     ctx.BlockHeight(),
 		ComputedBy:      "test-validator",

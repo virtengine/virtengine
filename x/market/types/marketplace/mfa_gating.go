@@ -61,7 +61,7 @@ const (
 
 // MarketplaceActionTypeNames maps action types to human-readable names
 var MarketplaceActionTypeNames = map[MarketplaceActionType]string{
-	ActionUnspecified:         "unspecified",
+	ActionUnspecified:         unspecifiedName,
 	ActionPlaceOrder:          "place_order",
 	ActionModifyOrder:         "modify_order",
 	ActionCancelOrder:         "cancel_order",

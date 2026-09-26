@@ -40,7 +40,7 @@ const (
 
 // OfferingStateNames maps offering states to human-readable names
 var OfferingStateNames = map[OfferingState]string{
-	OfferingStateUnspecified: "unspecified",
+	OfferingStateUnspecified: unspecifiedName,
 	OfferingStateActive:      "active",
 	OfferingStatePaused:      "paused",
 	OfferingStateSuspended:   "suspended",

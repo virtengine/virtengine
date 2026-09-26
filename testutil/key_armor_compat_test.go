@@ -27,6 +27,21 @@ import (
 // therefore not stable between runs) while the replacement sorts them. Decoding
 // is order-insensitive, so artifacts written by the old encoder still load.
 
+// keyArmorHeaderVersion is the armored-header version emitted by the SDK
+// keyring export path this fixture pins.
+const keyArmorHeaderVersion = "0.0.1"
+
+// keyArmorSignatureAlgo is the public-key algorithm the armored header
+// records for the fixture keys above.
+const keyArmorSignatureAlgo = "secp256k1"
+
+// keyArmorHeaderVersionField and keyArmorHeaderTypeField are the two
+// armored-header field names the fixtures key on.
+const (
+	keyArmorHeaderVersionField = "version"
+	keyArmorHeaderTypeField    = "type"
+)
+
 // legacyArmoredPubKey is a fixture in the shape the retired encoder produced,
 // with header lines in a non-sorted order. Decoding must not depend on order.
 const legacyArmoredPubKey = `-----BEGIN TENDERMINT PUBLIC KEY-----
@@ -55,7 +70,7 @@ func TestLegacyKeyArmorStillDecodes(t *testing.T) {
 	blockType, header, data, err := cosmoscrypto.DecodeArmor(legacyArmoredPubKey)
 	require.NoError(t, err)
 	require.Equal(t, "TENDERMINT PUBLIC KEY", blockType)
-	require.Equal(t, map[string]string{"version": "0.0.1", "type": "secp256k1"}, header)
+	require.Equal(t, map[string]string{keyArmorHeaderVersionField: keyArmorHeaderVersion, keyArmorHeaderTypeField: keyArmorSignatureAlgo}, header)
 	require.Equal(t, []byte("golden-body"), data)
 
 	bz, algo, err := cosmoscrypto.UnarmorPubKeyBytes(legacyArmoredPubKey)
@@ -69,12 +84,12 @@ func TestLegacyKeyArmorStillDecodes(t *testing.T) {
 func TestKeyArmorWireFormatIsStable(t *testing.T) {
 	require.Equal(t, armoredPubKeyGolden,
 		cosmoscrypto.EncodeArmor("TENDERMINT PUBLIC KEY",
-			map[string]string{"type": "secp256k1", "version": "0.0.1"},
+			map[string]string{keyArmorHeaderTypeField: keyArmorSignatureAlgo, keyArmorHeaderVersionField: keyArmorHeaderVersion},
 			[]byte("golden-body")))
 
 	// Encoding must also be deterministic: the retired encoder ranged over the
 	// header map without sorting, so repeated calls could differ.
-	headers := map[string]string{"type": "secp256k1", "version": "0.0.1", "kdf": "argon2"}
+	headers := map[string]string{keyArmorHeaderTypeField: keyArmorSignatureAlgo, keyArmorHeaderVersionField: keyArmorHeaderVersion, "kdf": "argon2"}
 	first := cosmoscrypto.EncodeArmor("TENDERMINT PRIVATE KEY", headers, []byte("body"))
 	for i := 0; i < 100; i++ {
 		require.Equal(t, first,
@@ -140,12 +155,12 @@ func TestKeyArmorRoundTripAcrossLineWrapBoundaries(t *testing.T) {
 			body[i] = byte(i % 251)
 		}
 
-		armored := cosmoscrypto.EncodeArmor("MINT TEST", map[string]string{"type": "Info"}, body)
+		armored := cosmoscrypto.EncodeArmor("MINT TEST", map[string]string{keyArmorHeaderTypeField: "Info"}, body)
 
 		blockType, header, got, err := cosmoscrypto.DecodeArmor(armored)
 		require.NoError(t, err, "n=%d", n)
 		require.Equal(t, "MINT TEST", blockType, "n=%d", n)
-		require.Equal(t, map[string]string{"type": "Info"}, header, "n=%d", n)
+		require.Equal(t, map[string]string{keyArmorHeaderTypeField: "Info"}, header, "n=%d", n)
 		require.Equal(t, body, got, "n=%d", n)
 	}
 }

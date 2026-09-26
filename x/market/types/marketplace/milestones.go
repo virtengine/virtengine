@@ -149,7 +149,7 @@ func (s MilestoneSet) Validate() error {
 		return fmt.Errorf("milestone shares must sum to %d basis points, got %d", BpsDenominator, total)
 	}
 
-	for i := uint32(1); i <= uint32(len(s)); i++ {
+	for i := uint32(1); i <= uint32(len(s)); i++ { //nolint:gosec // G115: len(s) is bounded by the milestone count validated above
 		if !seenSeq[i] {
 			return fmt.Errorf("milestone sequence %d is missing; sequences must be contiguous from 1", i)
 		}
