@@ -47,6 +47,16 @@ type IKeeper interface {
 	RejectFraudReport(ctx sdk.Context, reportID, notes, moderatorAddr string) error
 	EscalateFraudReport(ctx sdk.Context, reportID, reason, moderatorAddr string) error
 
+	// Pending resolutions (co-signature required for suspension/termination)
+	ProposeResolution(ctx sdk.Context, reportID string, resolution types.ResolutionType, notes string, moderatorAddr string) (types.PendingResolution, error)
+	ConfirmResolution(ctx sdk.Context, reportID string, reviewerAddr string) (types.ResolutionType, error)
+	GetPendingResolution(ctx sdk.Context, reportID string) (types.PendingResolution, bool)
+	SetPendingResolution(ctx sdk.Context, pending types.PendingResolution) error
+	DeletePendingResolution(ctx sdk.Context, reportID string)
+	WithPendingResolutions(ctx sdk.Context, fn func(types.PendingResolution) bool)
+	ExpirePendingResolutions(ctx sdk.Context) ([]types.PendingResolution, error)
+	ProcessPendingResolutionExpiry(ctx sdk.Context) error
+
 	// Audit Logging
 	CreateAuditLog(ctx sdk.Context, log *types.FraudAuditLog) error
 	GetAuditLog(ctx sdk.Context, logID string) (types.FraudAuditLog, bool)
@@ -703,8 +713,28 @@ func (k Keeper) UpdateReportStatus(ctx sdk.Context, reportID string, newStatus t
 	return nil
 }
 
-// ResolveFraudReport resolves a fraud report
+// ResolveFraudReport resolves a fraud report.
+//
+// Resolutions that strip an account's access network-wide (suspension and
+// termination) are refused here on purpose: they may not be driven by one
+// moderator. Those go through ProposeResolution and take effect only via
+// ConfirmResolution, by a second, distinct moderator.
 func (k Keeper) ResolveFraudReport(ctx sdk.Context, reportID string, resolution types.ResolutionType, notes string, moderatorAddr string) error {
+	if resolution.RequiresSecondReviewer() {
+		return types.ErrSecondReviewerRequired.Wrapf(
+			"resolution %s must be proposed and confirmed by two distinct moderators", resolution)
+	}
+	return k.applyResolution(ctx, reportID, resolution, notes, moderatorAddr)
+}
+
+// applyResolution applies a resolution to a report.
+//
+// It performs no second-reviewer check of its own: callers are responsible for
+// having established that the actor is entitled to apply this resolution. It is
+// the shared body behind the single-moderator path (ResolveFraudReport, for
+// resolutions that need no co-signature) and the two-moderator path
+// (ConfirmResolution, after the distinct reviewer has been verified).
+func (k Keeper) applyResolution(ctx sdk.Context, reportID string, resolution types.ResolutionType, notes string, moderatorAddr string) error {
 	report, found := k.GetFraudReport(ctx, reportID)
 	if !found {
 		return types.ErrReportNotFound

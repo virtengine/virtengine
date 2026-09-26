@@ -34,6 +34,18 @@ var (
 
 	// PrefixParams is the prefix for module parameters
 	PrefixParams = []byte{0x05}
+
+	// PrefixSanction is the prefix for sanction records
+	// Key: PrefixSanction | sanction ID -> Sanction
+	PrefixSanction = []byte{0x06}
+
+	// PrefixSubjectSanction is the prefix for the subject -> sanction index
+	// Key: PrefixSubjectSanction | subject | sanction ID -> []byte{1}
+	PrefixSubjectSanction = []byte{0x07}
+
+	// PrefixSanctionSequence is the prefix for the sanction ID sequence
+	// Key: PrefixSanctionSequence -> big-endian uint64
+	PrefixSanctionSequence = []byte{0x08}
 )
 
 // RoleAssignmentKey returns the store key for a role assignment
@@ -89,4 +101,29 @@ func GenesisAccountKey(address []byte) []byte {
 // ParamsKey returns the store key for module parameters
 func ParamsKey() []byte {
 	return PrefixParams
+}
+
+// SanctionKey returns the store key for a sanction record
+func SanctionKey(sanctionID string) []byte {
+	key := make([]byte, 0, len(PrefixSanction)+len(sanctionID))
+	key = append(key, PrefixSanction...)
+	key = append(key, []byte(sanctionID)...)
+	return key
+}
+
+// SubjectSanctionPrefixKey returns the store key prefix for all sanction
+// records belonging to a subject
+func SubjectSanctionPrefixKey(subject string) []byte {
+	key := make([]byte, 0, len(PrefixSubjectSanction)+len(subject)+1)
+	key = append(key, PrefixSubjectSanction...)
+	key = append(key, []byte(subject)...)
+	key = append(key, '/')
+	return key
+}
+
+// SubjectSanctionKey returns the index key linking a subject to a sanction
+func SubjectSanctionKey(subject, sanctionID string) []byte {
+	key := SubjectSanctionPrefixKey(subject)
+	key = append(key, []byte(sanctionID)...)
+	return key
 }

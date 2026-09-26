@@ -123,4 +123,24 @@ var (
 	// wire SetMarketKeeper". The check fails closed: an unverifiable claim never
 	// grants standing.
 	ErrOrderVerificationUnavailable = errors.Register(ModuleName, 3023, "order-standing verification unavailable: market keeper is not wired")
+
+	// ErrSecondReviewerRequired is returned when a suspension or termination
+	// resolution is attempted without a distinct second reviewer
+	//
+	// Codes 3023-3026 are taken on develop (order-standing verification and the
+	// response flow), so the co-signature errors start at 3027. Error codes are
+	// part of the consensus-visible error identity and must not be reused.
+	ErrSecondReviewerRequired = errors.Register(ModuleName, 3027, "suspension and termination resolutions require a distinct second reviewer")
+
+	// ErrSecondReviewerMustDiffer is returned when the confirming reviewer is
+	// the same identity that proposed the resolution
+	ErrSecondReviewerMustDiffer = errors.Register(ModuleName, 3028, "second reviewer must be a distinct identity from the proposing moderator")
+
+	// ErrResolutionNotPending is returned when confirming a resolution that has
+	// no pending co-signature request
+	ErrResolutionNotPending = errors.Register(ModuleName, 3029, "no pending resolution awaiting review")
+
+	// ErrPendingResolutionExpired is returned when a pending resolution lapses
+	// before it is reviewed
+	ErrPendingResolutionExpired = errors.Register(ModuleName, 3030, "pending resolution expired before review")
 )

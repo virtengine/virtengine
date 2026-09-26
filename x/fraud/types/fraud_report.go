@@ -213,6 +213,19 @@ func (r ResolutionType) IsValid() bool {
 	return r >= ResolutionTypeWarning && r <= ResolutionTypeNoAction
 }
 
+// RequiresSecondReviewer reports whether this resolution may not be applied by
+// a single moderator. Suspension and termination remove an account's access
+// network-wide, so a second, distinct moderator-or-above identity must confirm
+// them before they take effect.
+func (r ResolutionType) RequiresSecondReviewer() bool {
+	return r == ResolutionTypeSuspension || r == ResolutionTypeTermination
+}
+
+// IsImmediate reports whether this resolution may be applied by one moderator.
+func (r ResolutionType) IsImmediate() bool {
+	return r.IsValid() && !r.RequiresSecondReviewer()
+}
+
 // EncryptedEvidence holds encrypted evidence for a fraud report
 type EncryptedEvidence struct {
 	// AlgorithmID identifies the encryption algorithm used
@@ -718,20 +731,35 @@ const (
 	// AuditActionResponded indicates the reported party or the reporter filed a
 	// response/rebuttal against a report
 	AuditActionResponded AuditAction = 9
+
+	// AuditActionResolutionProposed indicates a suspension/termination was
+	// proposed and is awaiting a distinct second reviewer
+	AuditActionResolutionProposed AuditAction = 10
+
+	// AuditActionResolutionConfirmed indicates a second, distinct reviewer
+	// confirmed a pending suspension/termination
+	AuditActionResolutionConfirmed AuditAction = 11
+
+	// AuditActionResolutionLapsed indicates a pending resolution expired
+	// before it was reviewed
+	AuditActionResolutionLapsed AuditAction = 12
 )
 
 // AuditActionNames maps audit actions to human-readable names
 var AuditActionNames = map[AuditAction]string{
-	AuditActionUnspecified:    "unspecified",
-	AuditActionSubmitted:      "submitted",
-	AuditActionAssigned:       "assigned",
-	AuditActionStatusChanged:  "status_changed",
-	AuditActionEvidenceViewed: "evidence_viewed",
-	AuditActionResolved:       "resolved",
-	AuditActionRejected:       "rejected",
-	AuditActionEscalated:      "escalated",
-	AuditActionCommentAdded:   "comment_added",
-	AuditActionResponded:      "responded",
+	AuditActionUnspecified:         "unspecified",
+	AuditActionSubmitted:           "submitted",
+	AuditActionAssigned:            "assigned",
+	AuditActionStatusChanged:       "status_changed",
+	AuditActionEvidenceViewed:      "evidence_viewed",
+	AuditActionResolved:            "resolved",
+	AuditActionRejected:            "rejected",
+	AuditActionEscalated:           "escalated",
+	AuditActionCommentAdded:        "comment_added",
+	AuditActionResponded:           "responded",
+	AuditActionResolutionProposed:  "resolution_proposed",
+	AuditActionResolutionConfirmed: "resolution_confirmed",
+	AuditActionResolutionLapsed:    "resolution_lapsed",
 }
 
 // String returns the string representation of an AuditAction
@@ -744,7 +772,7 @@ func (a AuditAction) String() string {
 
 // IsValid returns true if the action is valid
 func (a AuditAction) IsValid() bool {
-	return a >= AuditActionSubmitted && a <= AuditActionResponded
+	return a >= AuditActionSubmitted && a <= AuditActionResolutionLapsed
 }
 
 // FraudAuditLog represents an audit log entry for a fraud report

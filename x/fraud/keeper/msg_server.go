@@ -290,6 +290,25 @@ func (ms *msgServer) resolveFraudReport(ctx sdk.Context, msg *types.MsgResolveFr
 		}
 	}
 	// Resolve the fraud/reputation projection only; settlement remains financial authority.
+	//
+	// Suspensions and terminations strip an account's access network-wide, so a
+	// single moderator may not apply them. On this message they are recorded as
+	// a proposal awaiting a distinct second reviewer (see ConfirmResolution)
+	// rather than applied.
+	if resolution.RequiresSecondReviewer() {
+		pending, err := ms.keeper.ProposeResolution(ctx, msg.ReportId, resolution, msg.Notes, msg.Moderator)
+		if err != nil {
+			return nil, err
+		}
+		ms.keeper.Logger(ctx).Info("resolution proposed pending second review via message",
+			"report_id", msg.ReportId,
+			"moderator", msg.Moderator,
+			"resolution", resolution.String(),
+			"expires_at", pending.ExpiresAt,
+		)
+		return &types.MsgResolveFraudReportResponse{}, nil
+	}
+
 	if err := ms.keeper.ResolveFraudReport(ctx, msg.ReportId, resolution, msg.Notes, msg.Moderator); err != nil {
 		return nil, err
 	}

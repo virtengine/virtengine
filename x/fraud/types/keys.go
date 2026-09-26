@@ -66,6 +66,13 @@ var (
 	// ReporterActivityPrefix indexes a reporter's submission heights for the
 	// per-reporter rate limit (block-height based, host-clock independent).
 	ReporterActivityPrefix = []byte{0x0a}
+
+	// PendingResolutionPrefix is the prefix for co-signed resolution requests
+	// (suspension/termination awaiting a distinct second reviewer).
+	//
+	// 0x0b: 0x00-0x0a are taken by the prefixes above, and a store prefix
+	// collision would corrupt unrelated records on an existing chain.
+	PendingResolutionPrefix = []byte{0x0b}
 )
 
 // GetFraudReportKey returns the key for a fraud report
@@ -136,4 +143,9 @@ func GetReporterActivityKey(reporter string, height int64, reportID string) []by
 // GetReporterActivityPrefix returns the prefix for all of a reporter's submissions
 func GetReporterActivityPrefix(reporter string) []byte {
 	return append(ReporterActivityPrefix, []byte(reporter+"/")...)
+}
+
+// GetPendingResolutionKey returns the key for a report's pending resolution
+func GetPendingResolutionKey(reportID string) []byte {
+	return append(PendingResolutionPrefix, []byte(reportID)...)
 }

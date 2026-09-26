@@ -31,6 +31,18 @@ const (
 
 	// EventTypeFraudResponseSubmitted is emitted when a response/rebuttal is filed
 	EventTypeFraudResponseSubmitted = "fraud_response_submitted"
+
+	// EventTypeResolutionProposed is emitted when a suspension/termination
+	// resolution is proposed and awaits a distinct second reviewer
+	EventTypeResolutionProposed = "resolution_proposed"
+
+	// EventTypeResolutionConfirmed is emitted when a second, distinct reviewer
+	// confirms a pending suspension/termination
+	EventTypeResolutionConfirmed = "resolution_confirmed"
+
+	// EventTypeResolutionLapsed is emitted when a pending resolution expires
+	// before review
+	EventTypeResolutionLapsed = "resolution_lapsed"
 )
 
 // Attribute keys for fraud events
@@ -91,4 +103,9 @@ const (
 
 	// AttributeKeyResponseCount is the number of responses on a report
 	AttributeKeyResponseCount = "response_count"
+	// AttributeKeySecondReviewer is the distinct confirming reviewer
+	AttributeKeySecondReviewer = "second_reviewer"
+
+	// AttributeKeyExpiresAt is the block time a pending resolution lapses
+	AttributeKeyExpiresAt = "expires_at"
 )
