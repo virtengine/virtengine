@@ -37,8 +37,15 @@ def _git(repo: Path, *args: str) -> None:
     )
 
 
-def build_fake_repo(root: Path, modules: dict[str, bool]) -> Path:
-    """Create a minimal git repo with `modules` mapped to has_license."""
+PROSE = "# sdk/go\n\nGo client for the VirtEngine node API.\n"
+
+
+def build_fake_repo(root: Path, modules: dict[str, object]) -> Path:
+    """Create a minimal git repo with `modules` mapped to its license fixture.
+
+    True writes a real Apache-2.0 LICENSE, "readme" writes a prose README.md
+    carrying no license text, and False leaves the module root without either.
+    """
     repo = root / "repo"
     (repo / "scripts" / "supply-chain").mkdir(parents=True)
     shutil.copy2(GATE_PATH, repo / "scripts" / "supply-chain" / GATE_PATH.name)
@@ -61,13 +68,15 @@ def build_fake_repo(root: Path, modules: dict[str, bool]) -> Path:
         encoding="utf-8",
     )
 
-    for module, has_license in modules.items():
+    for module, fixture in modules.items():
         (repo / module).mkdir(parents=True, exist_ok=True)
         (repo / module / "go.mod").write_text(
             f"module example.com/{module.replace('/', '-')}\n\ngo 1.26.8\n", encoding="utf-8"
         )
-        if has_license:
+        if fixture is True:
             (repo / module / "LICENSE").write_text(APACHE, encoding="utf-8")
+        elif fixture == "readme":
+            (repo / module / "README.md").write_text(PROSE, encoding="utf-8")
 
     _git(repo, "init", "-q")
     _git(repo, "add", "-A")
@@ -100,14 +109,64 @@ class GoModuleLicenseGateTests(unittest.TestCase):
             result = self.run_gate(repo)
         self.assertEqual(result.returncode, 0, result.stderr)
 
+    def test_nested_module_with_only_a_prose_readme_fails(self) -> None:
+        """go-licenses needs the file's CONTENT to classify, not just its name.
+
+        README matches go-licenses' candidate regexp, but a prose README
+        classifies as no license, so every package in such a module reports
+        "Failed to find license". A name-only gate would pass here: false green.
+        """
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = build_fake_repo(Path(tmp), {"sdk/newmod": "readme"})
+            result = self.run_gate(repo)
+        self.assertNotEqual(result.returncode, 0, result.stdout)
+        self.assertIn("sdk/newmod", result.stderr)
+        self.assertIn("README.md", result.stderr)
+        self.assertIn("no recognisable license text", result.stderr)
+
     def test_alternate_license_filenames_are_accepted(self) -> None:
-        """go-licenses matches LICENSE/COPYING/NOTICE, not just LICENSE."""
+        """go-licenses matches LICENSE/COPYING/NOTICE names, not just LICENSE."""
         with tempfile.TemporaryDirectory() as tmp:
             repo = build_fake_repo(Path(tmp), {"sdk/go": False})
             (repo / "sdk" / "go" / "COPYING").write_text(APACHE, encoding="utf-8")
             _git(repo, "add", "-A")
             result = self.run_gate(repo)
         self.assertEqual(result.returncode, 0, result.stderr)
+
+    def test_license_file_named_notice_is_accepted_when_it_carries_license_text(
+        self,
+    ) -> None:
+        """A NOTICE holding real license text satisfies go-licenses and the gate."""
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = build_fake_repo(Path(tmp), {"sdk/go": False})
+            (repo / "sdk" / "go" / "NOTICE").write_text(
+                "This product is licensed under the Apache License, Version 2.0.\n",
+                encoding="utf-8",
+            )
+            _git(repo, "add", "-A")
+            result = self.run_gate(repo)
+        self.assertEqual(result.returncode, 0, result.stderr)
+
+    def test_spdx_identifer_file_is_accepted(self) -> None:
+        """An SPDX-tagged file is classifiable even without full license text."""
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = build_fake_repo(Path(tmp), {"sdk/go": False})
+            (repo / "sdk" / "go" / "LICENSE").write_text(
+                "// SPDX-License-Identifier: Apache-2.0\n", encoding="utf-8"
+            )
+            _git(repo, "add", "-A")
+            result = self.run_gate(repo)
+        self.assertEqual(result.returncode, 0, result.stderr)
+
+    def test_license_named_directory_is_not_accepted(self) -> None:
+        """A directory called LICENSE is not a license file."""
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = build_fake_repo(Path(tmp), {"sdk/go": False})
+            (repo / "sdk" / "go" / "LICENSE").mkdir()
+            _git(repo, "add", "-A")
+            result = self.run_gate(repo)
+        self.assertNotEqual(result.returncode, 0, result.stdout)
+        self.assertIn("sdk/go", result.stderr)
 
     def test_every_tracked_module_in_this_repo_has_a_license(self) -> None:
         """Guard the real tree, not just the synthetic fixture."""
