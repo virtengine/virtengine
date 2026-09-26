@@ -11,9 +11,9 @@ import (
 
 const (
 	CredentialDecisionEnvelopeVersion      = uint32(1)
-	CredentialDecisionEnvelopeDomain       = "VEID_CREDENTIAL_DECISION_ENVELOPE_V1"
-	CredentialDecisionEnvelopeSignDomain   = "VEID_CREDENTIAL_DECISION_SIGN_V1"
-	CredentialDecisionEnvelopeDigestDomain = "VEID_CREDENTIAL_DECISION_DIGEST_V1"
+	CredentialDecisionEnvelopeDomain       = "VEID_CREDENTIAL_DECISION_ENVELOPE_V1" // #nosec G101 -- a domain-separation/tag LABEL used for hashing, deliberately public
+	CredentialDecisionEnvelopeSignDomain   = "VEID_CREDENTIAL_DECISION_SIGN_V1"     // #nosec G101 -- a domain-separation/tag LABEL used for hashing, deliberately public
+	CredentialDecisionEnvelopeDigestDomain = "VEID_CREDENTIAL_DECISION_DIGEST_V1"   // #nosec G101 -- a domain-separation/tag LABEL used for hashing, deliberately public
 	CredentialDecisionMaxDigests           = 32
 	CredentialDecisionMaxString            = 128
 )

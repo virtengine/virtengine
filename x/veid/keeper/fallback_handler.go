@@ -87,7 +87,7 @@ func (k Keeper) HandleBorderlineFallbackCompleted(
 		minFactorsRequired = 1 // Default to at least 1 factor
 	}
 	//nolint:gosec // slice length is non-negative
-	if uint32(len(factorsSatisfied)) < minFactorsRequired {
+	if uint32(len(factorsSatisfied)) < minFactorsRequired { // #nosec G115 -- len(factorsSatisfied) is bounded by its allocating container, a protocol-capped collection far below 2^32, so the conversion cannot truncate
 		return types.ErrMFAChallengeNotSatisfied.Wrapf(
 			"need at least %d factors, got %d",
 			minFactorsRequired,

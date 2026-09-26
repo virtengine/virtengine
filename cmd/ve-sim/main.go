@@ -322,7 +322,7 @@ func resolveConfig(scenario, path string) (core.Config, error) {
 }
 
 func loadConfig(path string) (core.Config, error) {
-	file, err := os.Open(path)
+	file, err := os.Open(path) // #nosec G304 -- the path is supplied by the operator on the command line; the tool runs with the operator's own privileges
 	if err != nil {
 		return core.Config{}, err
 	}
@@ -343,7 +343,7 @@ func loadConfig(path string) (core.Config, error) {
 }
 
 func writeJSON(path string, v interface{}) error {
-	file, err := os.Create(path)
+	file, err := os.Create(path) // #nosec G304 -- the path is supplied by the operator on the command line; the tool runs with the operator's own privileges
 	if err != nil {
 		return err
 	}
@@ -355,7 +355,7 @@ func writeJSON(path string, v interface{}) error {
 }
 
 func readJSON(path string, v interface{}) error {
-	file, err := os.Open(path)
+	file, err := os.Open(path) // #nosec G304 -- the path is supplied by the operator on the command line; the tool runs with the operator's own privileges
 	if err != nil {
 		return err
 	}

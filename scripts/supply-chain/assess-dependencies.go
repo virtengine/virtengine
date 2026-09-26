@@ -115,6 +115,28 @@ var (
 		// Kubernetes - High Trust
 		{Pattern: "k8s.io/", TrustLevel: "high", BaseScore: 9.0, Notes: "Kubernetes packages"},
 
+		// Kubernetes SIGs - High Trust (stale-list hygiene: controller-runtime
+		// and friends are first-party k8s libraries, not unknown packages)
+		{Pattern: "sigs.k8s.io/", TrustLevel: "high", BaseScore: 9.0, Notes: "Kubernetes SIG libraries"},
+
+		// Observability - High Trust (CNCF project; pulled in via OTel SDK/OTLP exporters)
+		{Pattern: "go.opentelemetry.io/", TrustLevel: "high", BaseScore: 9.0, Notes: "OpenTelemetry Go SDK (CNCF)"},
+
+		// Uber Go utilities - High Trust (zap, multierr, atomic, mock)
+		{Pattern: "go.uber.org/", TrustLevel: "high", BaseScore: 9.0, Notes: "Uber Go libraries"},
+
+		// Docker test helpers - High Trust
+		{Pattern: "gotest.tools", TrustLevel: "high", BaseScore: 8.5, Notes: "Docker test helpers"},
+
+		// gopkg.in versioned packages - High Trust (e.g. yaml.v3)
+		{Pattern: "gopkg.in/", TrustLevel: "high", BaseScore: 9.0, Notes: "gopkg.in versioned Go packages"},
+
+		// Firebase Admin SDK - High Trust (Google)
+		{Pattern: "firebase.google.com/go", TrustLevel: "high", BaseScore: 8.5, Notes: "Firebase Admin Go SDK (Google)"},
+
+		// Smallstep crypto - High Trust (widely used ACME/PKI libraries)
+		{Pattern: "go.step.sm/", TrustLevel: "high", BaseScore: 8.5, Notes: "Smallstep crypto libraries"},
+
 		// Ethereum - Medium-High Trust
 		{Pattern: "github.com/ethereum/go-ethereum", TrustLevel: "high", BaseScore: 8.5, Notes: "Go Ethereum"},
 
@@ -183,7 +205,7 @@ func getDependencies() []struct{ Package, Version string } {
 		os.Exit(1)
 	}
 
-	file, err := os.Open(goModPath)
+	file, err := os.Open(goModPath) // #nosec G304 -- the path is supplied by the operator on the command line; the tool runs with the operator's own privileges
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error opening go.mod: %v\n", err)
 		os.Exit(1)

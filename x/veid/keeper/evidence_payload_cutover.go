@@ -434,7 +434,12 @@ func validateEvidencePayloadCutoverDeleteSource(sourceKind string, value []byte)
 		"confidence": {}, "provenance_hash": {}, "decision_reason": {},
 		"verified_at": {}, "verifier_key_id": {}, "override": {},
 	}
+	sortedFields := make([]string, 0, len(fields))
 	for field := range fields {
+		sortedFields = append(sortedFields, field)
+	}
+	sort.Strings(sortedFields)
+	for _, field := range sortedFields {
 		if _, exists := evidenceFields[strings.ToLower(field)]; exists {
 			return errors.New("social scope delete source looks evidence-record-like")
 		}
@@ -550,7 +555,7 @@ func collectEvidencePayloadCutoverRows(ctx sdk.Context, k Keeper) ([]legacyEvide
 				rows = append(rows, row)
 			}
 		}
-		iterator.Close()
+		_ = iterator.Close()
 	}
 	sort.Slice(rows, func(i, j int) bool {
 		if rows[i].sourceKind != rows[j].sourceKind {

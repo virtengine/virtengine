@@ -165,7 +165,7 @@ func NewHTTPClientFromConfig(config HTTPClientConfig) *http.Client {
 	// Create TLS config with secure defaults
 	tlsConfig := &tls.Config{
 		MinVersion:         minTLSVersion,
-		InsecureSkipVerify: config.InsecureSkipVerify, //nolint:gosec // G402: Configurable for dev/test
+		InsecureSkipVerify: config.InsecureSkipVerify, // #nosec G402 -- explicit opt-in config field, false in DefaultHTTPClientConfig; NewDevHTTPClient covers the documented dev/test case
 	}
 
 	// Create transport with timeouts

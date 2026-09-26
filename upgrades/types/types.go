@@ -29,6 +29,10 @@ const CanonicalFinancialCasesUpgradeName = "v1.7.0"
 // AuthenticatedFiatConversionsUpgradeName activates Task 85B observations.
 const AuthenticatedFiatConversionsUpgradeName = "v1.8.0"
 
+// UnifiedMarketResolutionUpgradeName enables ADR-010 deterministic market
+// resolution once the canonical lifecycle and reservations are active.
+const UnifiedMarketResolutionUpgradeName = "v1.9.0"
+
 var (
 	upgrades      = map[string]UpgradeInitFn{}
 	heightPatches = map[int64]IHeightPatch{}

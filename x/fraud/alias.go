@@ -107,7 +107,15 @@ var (
 	NewFraudReport          = types.NewFraudReport
 	NewFraudAuditLog        = types.NewFraudAuditLog
 	NewModeratorQueueEntry  = types.NewModeratorQueueEntry
+	NewFraudResponse        = types.NewFraudResponse
 	FraudCategoryFromString = types.FraudCategoryFromString
+)
+
+// Response-related type aliases
+type (
+	FraudResponse          = types.FraudResponse
+	FraudRespondentRole    = types.FraudRespondentRole
+	MsgSubmitFraudResponse = types.MsgSubmitFraudResponse
 )
 
 // Error aliases
@@ -131,4 +139,11 @@ var (
 	ErrDescriptionTooShort    = types.ErrDescriptionTooShort
 	ErrMissingEvidence        = types.ErrMissingEvidence
 	ErrInvalidResolutionNotes = types.ErrInvalidResolutionNotes
+	ErrMissingOrderReference  = types.ErrMissingOrderReference
+	ErrDuplicateReport        = types.ErrDuplicateReport
+	ErrReporterRateLimited    = types.ErrReporterRateLimited
+	ErrResponseNotFound       = types.ErrResponseNotFound
+	ErrInvalidResponse        = types.ErrInvalidResponse
+	ErrUnauthorizedRespondent = types.ErrUnauthorizedRespondent
+	ErrReportNotPending       = types.ErrReportNotPending
 )

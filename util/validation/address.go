@@ -41,7 +41,7 @@ func EncodeWithLengthPrefix(bz []byte) ([]byte, error) {
 		return nil, fmt.Errorf("length-prefixed address too long")
 	}
 
-	return append([]byte{byte(len(bz))}, bz...), nil
+	return append([]byte{byte(len(bz))}, bz...), nil // #nosec G115 -- the guard immediately above rejects len(bz) > 255, so the byte conversion cannot truncate
 }
 
 func MustEncodeWithLengthPrefix(bz []byte) []byte {

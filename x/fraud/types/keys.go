@@ -3,6 +3,10 @@
 // VE-912: Fraud reporting flow - Store keys and prefixes
 package types
 
+import (
+	"encoding/binary"
+)
+
 const (
 	// ModuleName is the name of the fraud module
 	ModuleName = "fraud"
@@ -45,6 +49,30 @@ var (
 
 	// SequenceKeyAuditLog is the sequence key for audit logs
 	SequenceKeyAuditLog = []byte{0x21}
+
+	// SequenceKeyFraudResponse is the sequence key for fraud responses
+	SequenceKeyFraudResponse = []byte{0x22}
+
+	// DedupIndexPrefix indexes a report's submission fingerprint per reporter so
+	// an identical resubmission is rejected instead of creating a second queue entry.
+	DedupIndexPrefix = []byte{0x07}
+
+	// ResponsePrefix is the prefix for fraud response records
+	ResponsePrefix = []byte{0x08}
+
+	// ReportResponseIndexPrefix indexes responses by their parent report
+	ReportResponseIndexPrefix = []byte{0x09}
+
+	// ReporterActivityPrefix indexes a reporter's submission heights for the
+	// per-reporter rate limit (block-height based, host-clock independent).
+	ReporterActivityPrefix = []byte{0x0a}
+
+	// PendingResolutionPrefix is the prefix for co-signed resolution requests
+	// (suspension/termination awaiting a distinct second reviewer).
+	//
+	// 0x0b: 0x00-0x0a are taken by the prefixes above, and a store prefix
+	// collision would corrupt unrelated records on an existing chain.
+	PendingResolutionPrefix = []byte{0x0b}
 )
 
 // GetFraudReportKey returns the key for a fraud report
@@ -79,5 +107,45 @@ func GetAuditLogKey(logID string) []byte {
 
 // GetReportAuditLogsKey returns the prefix for audit logs of a specific report
 func GetReportAuditLogsKey(reportID string) []byte {
-	return append(AuditLogPrefix, append([]byte(reportID), '/')...)
+	return append(AuditLogPrefix, []byte(reportID+"/")...)
+}
+
+// GetDedupIndexKey returns the dedup index key for a reporter + submission fingerprint
+func GetDedupIndexKey(reporter, fingerprint string) []byte {
+	return append(DedupIndexPrefix, []byte(reporter+"/"+fingerprint)...)
+}
+
+// GetResponseKey returns the key for a fraud response record
+func GetResponseKey(responseID string) []byte {
+	return append(ResponsePrefix, []byte(responseID)...)
+}
+
+// GetReportResponsesKey returns the prefix for responses belonging to a report
+func GetReportResponsesKey(reportID string) []byte {
+	return append(ReportResponseIndexPrefix, []byte(reportID+"/")...)
+}
+
+// GetReportResponseKey returns the index key for one response of a report
+func GetReportResponseKey(reportID, responseID string) []byte {
+	return append(GetReportResponsesKey(reportID), []byte(responseID)...)
+}
+
+// GetReporterActivityKey returns the activity index key for a reporter submission
+func GetReporterActivityKey(reporter string, height int64, reportID string) []byte {
+	heightBytes := make([]byte, 8)
+	// Safe conversion: height is always non-negative in SDK context.
+	binary.BigEndian.PutUint64(heightBytes, uint64(height)) /* #nosec G115 -- uint64(height) is a non-negative block height bounded well below 2^63 */ //nolint:gosec
+	key := append(ReporterActivityPrefix, []byte(reporter+"/")...)
+	key = append(key, heightBytes...)
+	return append(key, []byte("/"+reportID)...)
+}
+
+// GetReporterActivityPrefix returns the prefix for all of a reporter's submissions
+func GetReporterActivityPrefix(reporter string) []byte {
+	return append(ReporterActivityPrefix, []byte(reporter+"/")...)
+}
+
+// GetPendingResolutionKey returns the key for a report's pending resolution
+func GetPendingResolutionKey(reportID string) []byte {
+	return append(PendingResolutionPrefix, []byte(reportID)...)
 }

@@ -160,9 +160,13 @@ func (am AppModule) BeginBlock(ctx context.Context) error {
 }
 
 // EndBlock executes all ABCI EndBlock logic
+//
+// It lapses any suspension or termination proposal whose review window has
+// closed. An unreviewed proposal therefore never takes effect, and no operator
+// action is required to discard it.
 func (am AppModule) EndBlock(ctx context.Context) error {
-	// EndBlock logic here - could include auto-escalation of stale reports
-	return nil
+	sdkCtx := sdk.UnwrapSDKContext(ctx)
+	return am.keeper.ProcessPendingResolutionExpiry(sdkCtx)
 }
 
 // IsOnePerModuleType implements the depinject.OnePerModuleType interface.

@@ -67,6 +67,14 @@ func InitGenesis(ctx sdk.Context, k marketplacekeeper.IKeeper, gs *marketplacety
 		panic(err)
 	}
 	store.Set(marketplacetypes.EventSequenceKey(), bz)
+
+	for _, source := range gs.WaldurSources {
+		src := source
+		if err := k.SetWaldurSource(ctx, &src); err != nil {
+			panic(err)
+		}
+	}
+
 	if gs.CanonicalLifecycleActive {
 		k.ActivateCanonicalLifecycle(ctx)
 	}
@@ -111,5 +119,10 @@ func ExportGenesis(ctx sdk.Context, k marketplacekeeper.IKeeper) *marketplacetyp
 
 	genesis.EventSequence = k.GetEventSequence(ctx)
 	genesis.CanonicalLifecycleActive = k.IsCanonicalLifecycleActive(ctx)
+
+	k.WithWaldurSources(ctx, func(source marketplacetypes.WaldurSource) bool {
+		genesis.WaldurSources = append(genesis.WaldurSources, source)
+		return false
+	})
 	return genesis
 }

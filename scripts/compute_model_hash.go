@@ -141,7 +141,7 @@ func computeHash(dir string) (string, int, error) {
 
 // hashFile computes SHA256 of a single file.
 func hashFile(path string) (string, error) {
-	f, err := os.Open(path)
+	f, err := os.Open(path) // #nosec G304 -- the path is supplied by the operator on the command line; the tool runs with the operator's own privileges
 	if err != nil {
 		return "", err
 	}
@@ -177,7 +177,7 @@ func readVersion(dir string) string {
 		filepath.Join(dir, "version.txt"),
 		filepath.Join(dir, "..", "version.txt"),
 	} {
-		data, err := os.ReadFile(path)
+		data, err := os.ReadFile(path) // #nosec G304 -- the path is supplied by the operator on the command line; the tool runs with the operator's own privileges
 		if err == nil {
 			return strings.TrimSpace(string(data))
 		}

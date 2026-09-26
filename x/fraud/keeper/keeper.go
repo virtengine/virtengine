@@ -47,6 +47,16 @@ type IKeeper interface {
 	RejectFraudReport(ctx sdk.Context, reportID, notes, moderatorAddr string) error
 	EscalateFraudReport(ctx sdk.Context, reportID, reason, moderatorAddr string) error
 
+	// Pending resolutions (co-signature required for suspension/termination)
+	ProposeResolution(ctx sdk.Context, reportID string, resolution types.ResolutionType, notes string, moderatorAddr string) (types.PendingResolution, error)
+	ConfirmResolution(ctx sdk.Context, reportID string, reviewerAddr string) (types.ResolutionType, error)
+	GetPendingResolution(ctx sdk.Context, reportID string) (types.PendingResolution, bool)
+	SetPendingResolution(ctx sdk.Context, pending types.PendingResolution) error
+	DeletePendingResolution(ctx sdk.Context, reportID string)
+	WithPendingResolutions(ctx sdk.Context, fn func(types.PendingResolution) bool)
+	ExpirePendingResolutions(ctx sdk.Context) ([]types.PendingResolution, error)
+	ProcessPendingResolutionExpiry(ctx sdk.Context) error
+
 	// Audit Logging
 	CreateAuditLog(ctx sdk.Context, log *types.FraudAuditLog) error
 	GetAuditLog(ctx sdk.Context, logID string) (types.FraudAuditLog, bool)
@@ -92,12 +102,13 @@ type ProviderKeeper interface {
 
 // Keeper implements the Fraud module keeper
 type Keeper struct {
-	skey           storetypes.StoreKey
-	cdc            codec.BinaryCodec
-	rolesKeeper    RolesKeeper
-	providerKeeper ProviderKeeper
-	authority      string
-	financialCases FinancialCaseKeeper
+	skey            storetypes.StoreKey
+	cdc             codec.BinaryCodec
+	rolesKeeper     RolesKeeper
+	providerKeeper  ProviderKeeper
+	authority       string
+	financialCases  FinancialCaseKeeper
+	marketKeeper    MarketKeeper
 }
 
 type FinancialCaseKeeper interface {
@@ -254,6 +265,10 @@ func (k Keeper) IsAdmin(ctx sdk.Context, addr sdk.AccAddress) bool {
 // ============================================================================
 
 // SubmitFraudReport submits a new fraud report
+//
+// Reporter standing, de-duplication and the per-reporter rate limit are all
+// enforced here so they hold regardless of which entry point (msg server, CLI,
+// genesis import) calls into the keeper.
 func (k Keeper) SubmitFraudReport(ctx sdk.Context, report *types.FraudReport) error {
 	// Assign sequence ID if not set (before validation)
 	if report.ID == "" {
@@ -267,19 +282,28 @@ func (k Keeper) SubmitFraudReport(ctx sdk.Context, report *types.FraudReport) er
 		return err
 	}
 
-	// Check reporter is a provider
-	reporterAddr, err := sdk.AccAddressFromBech32(report.Reporter)
-	if err != nil {
-		return types.ErrInvalidReporter.Wrap(err.Error())
+	// Reporter standing: providers keep their unconditional right; every other
+	// affected party must anchor the report to an order they are party to, or
+	// declare an explicit no-order basis justified in encrypted evidence.
+	if err := k.authorizeReportReporter(ctx, *report); err != nil {
+		return err
 	}
-	if !k.IsProvider(ctx, reporterAddr) {
-		return types.ErrUnauthorizedReporter
+
+	// Spam control: reject an identical resubmission before it can create a
+	// second moderator-queue entry, and cap the per-reporter submission rate.
+	fingerprint := report.ComputeSubmissionFingerprint()
+	if err := k.checkDuplicateReport(ctx, *report, fingerprint); err != nil {
+		return err
+	}
+	if err := k.checkReporterRateLimit(ctx, report.Reporter); err != nil {
+		return err
 	}
 
 	// Store the report
 	if err := k.SetFraudReport(ctx, *report); err != nil {
 		return err
 	}
+	k.recordReportFingerprint(ctx, *report, fingerprint)
 
 	// Add to moderator queue
 	priority := k.calculatePriority(report.Category)
@@ -689,8 +713,28 @@ func (k Keeper) UpdateReportStatus(ctx sdk.Context, reportID string, newStatus t
 	return nil
 }
 
-// ResolveFraudReport resolves a fraud report
+// ResolveFraudReport resolves a fraud report.
+//
+// Resolutions that strip an account's access network-wide (suspension and
+// termination) are refused here on purpose: they may not be driven by one
+// moderator. Those go through ProposeResolution and take effect only via
+// ConfirmResolution, by a second, distinct moderator.
 func (k Keeper) ResolveFraudReport(ctx sdk.Context, reportID string, resolution types.ResolutionType, notes string, moderatorAddr string) error {
+	if resolution.RequiresSecondReviewer() {
+		return types.ErrSecondReviewerRequired.Wrapf(
+			"resolution %s must be proposed and confirmed by two distinct moderators", resolution)
+	}
+	return k.applyResolution(ctx, reportID, resolution, notes, moderatorAddr)
+}
+
+// applyResolution applies a resolution to a report.
+//
+// It performs no second-reviewer check of its own: callers are responsible for
+// having established that the actor is entitled to apply this resolution. It is
+// the shared body behind the single-moderator path (ResolveFraudReport, for
+// resolutions that need no co-signature) and the two-moderator path
+// (ConfirmResolution, after the distinct reviewer has been verified).
+func (k Keeper) applyResolution(ctx sdk.Context, reportID string, resolution types.ResolutionType, notes string, moderatorAddr string) error {
 	report, found := k.GetFraudReport(ctx, reportID)
 	if !found {
 		return types.ErrReportNotFound

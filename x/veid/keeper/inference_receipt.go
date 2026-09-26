@@ -91,6 +91,9 @@ func (k Keeper) ProcessVerificationRequestWithReceipt(
 	if err != nil {
 		return nil, err
 	}
+	// Raw document/biometric bytes must not linger in validator memory beyond
+	// this flow: wipe every decrypted plaintext once staging completes.
+	defer wipeDecryptedScopes(decryptedScopes)
 	validDecrypted := make([]DecryptedScope, 0, len(decryptedScopes))
 	for i, ds := range decryptedScopes {
 		valid, reason := k.ValidateDecryptedPayload(ctx, ds)

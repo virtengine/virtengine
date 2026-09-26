@@ -334,6 +334,9 @@ func (c Config) Validate() error {
 		if c.PayPalConfig.ClientID == "" || c.PayPalConfig.ClientSecret == "" {
 			return ErrGatewayNotConfigured
 		}
+		if _, err := ValidateGatewayBaseURL(c.PayPalConfig.GetBaseURL()); err != nil {
+			return err
+		}
 	case GatewayACH:
 		if c.ACHConfig.SecretKey == "" {
 			return ErrGatewayNotConfigured

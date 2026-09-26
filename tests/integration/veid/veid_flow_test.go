@@ -38,13 +38,17 @@ func TestVEIDRegistrationVerificationAuthorizationFlow(t *testing.T) {
 		requireEventsEmitted(t, ctx.EventManager().Events())
 		ctx = advanceContext(env.app, ctx, 1, time.Minute)
 
-		_, err = env.msgServer.UpdateVerificationStatus(ctx, &veidtypes.MsgUpdateVerificationStatus{
-			Sender:         env.validator.String(),
-			AccountAddress: customer.String(),
-			ScopeId:        scopeID,
-			NewStatus:      veidtypes.VerificationStatusPBVerified,
-			Reason:         "integration verification",
-		})
+		// Ordinary verification-status transactions are disabled on the msg
+		// server (see msgServer.UpdateVerificationStatus); the sanctioned path
+		// is the keeper, which is what consensus finalization drives.
+		err = env.app.Keepers.VirtEngine.VEID.UpdateVerificationStatus(
+			ctx,
+			customer,
+			scopeID,
+			veidtypes.VerificationStatusVerified,
+			"integration verification",
+			env.validator.String(),
+		)
 		require.NoError(t, err)
 		requireEventsEmitted(t, ctx.EventManager().Events())
 		ctx = advanceContext(env.app, ctx, 1, time.Minute)
@@ -73,14 +77,9 @@ func TestVEIDRegistrationVerificationAuthorizationFlow(t *testing.T) {
 	require.Equal(t, fixture.ExpectedInputHex, hex.EncodeToString(inputHash))
 	require.Contains(t, reasonCodes, veidtypes.ReasonCodeSuccess)
 
-	tierMsg := veidtypes.NewMsgUpdateScore(
-		env.validator.String(),
-		customer.String(),
-		computedScore,
-		modelVersion,
-	)
-	_, err = env.msgServer.UpdateScore(ctx, tierMsg)
-	require.NoError(t, err)
+	// Ordinary score-update transactions are disabled on the msg server; the
+	// sanctioned path is the keeper, driven by consensus finalization.
+	require.NoError(t, env.app.Keepers.VirtEngine.VEID.UpdateScore(ctx, customer, computedScore, modelVersion))
 	requireEventsEmitted(t, ctx.EventManager().Events())
 
 	ctx = advanceContext(env.app, ctx, 1, time.Minute)
@@ -106,10 +105,13 @@ func TestVEIDRegistrationVerificationAuthorizationFlow(t *testing.T) {
 	}
 	require.NoError(t, env.app.Keepers.VirtEngine.MFA.SetSensitiveTxConfig(ctx, &config))
 
+	// Email challenges must come from a real OTP verifier enrollment: the
+	// keeper requires a 32-byte Ed25519 public key for the factor.
+	verifierPub, _ := deterministicOTPVerifierKey()
 	enrollResp, err := mfaMsgServer.EnrollFactor(ctx, &mfatypes.MsgEnrollFactor{
 		Sender:           customer.String(),
 		FactorType:       mfatypes.FactorTypeEmail,
-		PublicIdentifier: []byte("customer@example.com"),
+		PublicIdentifier: verifierPub,
 		Label:            "primary-email",
 	})
 	require.NoError(t, err)
@@ -139,24 +141,24 @@ func TestVEIDRegistrationVerificationAuthorizationFlow(t *testing.T) {
 		RequestedAt:       ctx.BlockTime().Unix(),
 	}
 
-	challengeResp, err := mfaMsgServer.CreateChallenge(ctx, &mfatypes.MsgCreateChallenge{
-		Sender:          customer.String(),
-		FactorType:      mfatypes.FactorTypeEmail,
-		TransactionType: mfatypes.SensitiveTxHighValueOrder,
-		ClientInfo:      clientInfo,
-	})
+	challenge, err := env.app.Keepers.VirtEngine.MFA.CreateOTPChallenge(
+		ctx,
+		customer,
+		mfatypes.FactorTypeEmail,
+		enrollResp.FactorID,
+		mfatypes.SensitiveTxHighValueOrder,
+		mfatypes.FactorTypeEmail.String(),
+		"delivery-1",
+	)
 	require.NoError(t, err)
+
+	challengeResponse := signedOTPChallengeResponse(t, ctx, challenge)
+	challengeResponse.ClientInfo = clientInfo
 
 	verifyResp, err := mfaMsgServer.VerifyChallenge(ctx, &mfatypes.MsgVerifyChallenge{
 		Sender:      customer.String(),
-		ChallengeID: challengeResp.ChallengeID,
-		Response: &mfatypes.ChallengeResponse{
-			ChallengeID:  challengeResp.ChallengeID,
-			FactorType:   mfatypes.FactorTypeEmail,
-			ResponseData: []byte("verified"),
-			ClientInfo:   clientInfo,
-			Timestamp:    ctx.BlockTime().Unix(),
-		},
+		ChallengeID: challenge.ChallengeID,
+		Response:    challengeResponse,
 	})
 	require.NoError(t, err)
 	require.True(t, verifyResp.Verified)
@@ -188,18 +190,14 @@ func TestVEIDAuthorizationFailsOnInsufficientScore(t *testing.T) {
 	uploadScope(t, ctx, env.msgServer, env.client, customer, "scope-low-score", veidtypes.ScopeTypeSelfie)
 	ctx = advanceContext(env.app, ctx, 1, time.Minute)
 
-	_, err := env.msgServer.UpdateScore(ctx, veidtypes.NewMsgUpdateScore(
-		env.validator.String(),
-		customer.String(),
-		40,
-		"fixture-low-score",
-	))
-	require.NoError(t, err)
+	// Ordinary score-update transactions are disabled on the msg server; the
+	// sanctioned path is the keeper, driven by consensus finalization.
+	require.NoError(t, env.app.Keepers.VirtEngine.VEID.UpdateScore(ctx, customer, 40, "fixture-low-score"))
 	ctx = advanceContext(env.app, ctx, 1, time.Minute)
 
 	mfaMsgServer := mfakeeper.NewMsgServerWithContext(env.app.Keepers.VirtEngine.MFA)
 
-	_, err = mfaMsgServer.EnrollFactor(ctx, &mfatypes.MsgEnrollFactor{
+	_, err := mfaMsgServer.EnrollFactor(ctx, &mfatypes.MsgEnrollFactor{
 		Sender:     customer.String(),
 		FactorType: mfatypes.FactorTypeVEID,
 		Label:      "veid-score",
@@ -230,16 +228,20 @@ func TestVEIDAuthorizationFailsOnInsufficientScore(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	_, err = mfaMsgServer.VerifyChallenge(ctx, &mfatypes.MsgVerifyChallenge{
-		Sender:      customer.String(),
-		ChallengeID: challengeResp.ChallengeID,
-		Response: &mfatypes.ChallengeResponse{
+	// The msg server converts a failed verification into (Verified:false, nil),
+	// so the VEID-threshold rejection is asserted against the keeper, which is
+	// where the policy check actually lives.
+	verified, err := env.app.Keepers.VirtEngine.MFA.VerifyMFAChallenge(
+		ctx,
+		challengeResp.ChallengeID,
+		&mfatypes.ChallengeResponse{
 			ChallengeID:  challengeResp.ChallengeID,
 			FactorType:   mfatypes.FactorTypeVEID,
 			ResponseData: []byte("score-check"),
 			Timestamp:    ctx.BlockTime().Unix(),
 		},
-	})
+	)
+	require.False(t, verified)
 	require.Error(t, err)
 	require.ErrorIs(t, err, mfatypes.ErrVEIDScoreInsufficient)
 }
@@ -249,16 +251,14 @@ func TestVEIDAuthorizationFailsOnExpiredSession(t *testing.T) {
 	ctx := env.ctx
 	customer := newTestAccount(t)
 
-	mfaMsgServer := mfakeeper.NewMsgServerWithContext(env.app.Keepers.VirtEngine.MFA)
-	mfaHooks := mfakeeper.NewMFAGatingHooks(env.app.Keepers.VirtEngine.MFA)
+	mfaKeeper := env.app.Keepers.VirtEngine.MFA
+	mfaMsgServer := mfakeeper.NewMsgServerWithContext(mfaKeeper)
+	mfaHooks := mfakeeper.NewMFAGatingHooks(mfaKeeper)
 
-	_, err := mfaMsgServer.EnrollFactor(ctx, &mfatypes.MsgEnrollFactor{
-		Sender:           customer.String(),
-		FactorType:       mfatypes.FactorTypeEmail,
-		PublicIdentifier: []byte("customer@example.com"),
-		Label:            "primary-email",
-	})
-	require.NoError(t, err)
+	// The MFA msg server refuses to mint email challenges, so enroll a real
+	// Ed25519 OTP verifier and mint the challenge through the keeper helper.
+	const emailFactorID = "primary-email"
+	enrollOTPVerifier(t, ctx, mfaKeeper, customer, mfatypes.FactorTypeEmail, emailFactorID)
 
 	shortPolicy := mfatypes.MFAPolicy{
 		AccountAddress: customer.String(),
@@ -268,7 +268,7 @@ func TestVEIDAuthorizationFailsOnExpiredSession(t *testing.T) {
 		SessionDuration: 2,
 		Enabled:         true,
 	}
-	_, err = mfaMsgServer.SetMFAPolicy(ctx, &mfatypes.MsgSetMFAPolicy{
+	_, err := mfaMsgServer.SetMFAPolicy(ctx, &mfatypes.MsgSetMFAPolicy{
 		Sender: customer.String(),
 		Policy: shortPolicy,
 	})
@@ -279,26 +279,27 @@ func TestVEIDAuthorizationFailsOnExpiredSession(t *testing.T) {
 		RequestedAt:       ctx.BlockTime().Unix(),
 	}
 
-	challengeResp, err := mfaMsgServer.CreateChallenge(ctx, &mfatypes.MsgCreateChallenge{
-		Sender:          customer.String(),
-		FactorType:      mfatypes.FactorTypeEmail,
-		TransactionType: mfatypes.SensitiveTxHighValueOrder,
-		ClientInfo:      clientInfo,
-	})
+	challenge, err := mfaKeeper.CreateOTPChallenge(
+		ctx,
+		customer,
+		mfatypes.FactorTypeEmail,
+		emailFactorID,
+		mfatypes.SensitiveTxHighValueOrder,
+		mfatypes.FactorTypeEmail.String(),
+		"delivery-expired",
+	)
 	require.NoError(t, err)
+
+	response := signedOTPChallengeResponse(t, ctx, challenge)
+	response.ClientInfo = clientInfo
 
 	verifyResp, err := mfaMsgServer.VerifyChallenge(ctx, &mfatypes.MsgVerifyChallenge{
 		Sender:      customer.String(),
-		ChallengeID: challengeResp.ChallengeID,
-		Response: &mfatypes.ChallengeResponse{
-			ChallengeID:  challengeResp.ChallengeID,
-			FactorType:   mfatypes.FactorTypeEmail,
-			ResponseData: []byte("verified"),
-			ClientInfo:   clientInfo,
-			Timestamp:    ctx.BlockTime().Unix(),
-		},
+		ChallengeID: challenge.ChallengeID,
+		Response:    response,
 	})
 	require.NoError(t, err)
+	require.True(t, verifyResp.Verified)
 
 	proof := &mfatypes.MFAProof{
 		SessionID:       verifyResp.SessionID,

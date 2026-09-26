@@ -72,15 +72,15 @@ jobs:
       SLACK_WEBHOOK_URL: ${{ secrets.VE_SMOKE_SLACK_WEBHOOK }}
       DISCORD_WEBHOOK_URL: ${{ secrets.VE_SMOKE_DISCORD_WEBHOOK }}
       TARGET_ENV: ${{ inputs.environment || github.event.inputs.environment || 'staging' }}
-      GO_VERSION: "1.25.14"
+      GO_VERSION: "1.26.8"
       NODE_VERSION: "20"
       PNPM_VERSION: "10.28.2"
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Set up Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v6
         with:
           go-version: ${{ env.GO_VERSION }}
           cache: true
@@ -99,12 +99,12 @@ jobs:
           scripts/ci/post-deploy-smoke-test.sh 2>&1 | tee smoke-backend-output.txt
 
       - name: Setup pnpm
-        uses: pnpm/action-setup@v2
+        uses: pnpm/action-setup@v5
         with:
           version: ${{ env.PNPM_VERSION }}
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: "pnpm"
@@ -124,7 +124,7 @@ jobs:
 
       - name: Upload smoke artifacts
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: smoke-artifacts-${{ env.TARGET_ENV }}
           path: |

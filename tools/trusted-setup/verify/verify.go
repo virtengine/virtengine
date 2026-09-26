@@ -128,7 +128,7 @@ func verifyPhase1(tr *transcript.Transcript, paths []string) (bool, error) {
 	prevBytes := initialBytes
 
 	for idx, path := range paths[1:] {
-		data, err := os.ReadFile(path)
+		data, err := os.ReadFile(path) // #nosec G304 -- the path is composed from the ceremony state directory (given once by the operator on the command line) plus fixed file names, so remote input cannot influence it
 		if err != nil {
 			return false, fmt.Errorf("read phase1 contribution: %w", err)
 		}
@@ -207,7 +207,7 @@ func verifyPhase2(state coordinator.State, cfg *coordinator.Config, tr *transcri
 
 	contribs := make([]*mpcsetup.Phase2, 0, len(paths)-1)
 	for idx, path := range paths[1:] {
-		data, err := os.ReadFile(path)
+		data, err := os.ReadFile(path) // #nosec G304 -- the path is composed from the ceremony state directory (given once by the operator on the command line) plus fixed file names, so remote input cannot influence it
 		if err != nil {
 			return false, "", "", fmt.Errorf("read phase2 contribution: %w", err)
 		}
@@ -290,7 +290,7 @@ func verifyPhase2(state coordinator.State, cfg *coordinator.Config, tr *transcri
 
 func loadR1CS(state coordinator.State) (*cs.R1CS, error) {
 	path := filepath.Join(state.Phase2Dir(), "r1cs.bin")
-	data, err := os.ReadFile(path)
+	data, err := os.ReadFile(path) // #nosec G304 -- the path is composed from the ceremony state directory (given once by the operator on the command line) plus fixed file names, so remote input cannot influence it
 	if err != nil {
 		return nil, err
 	}
@@ -303,7 +303,7 @@ func loadR1CS(state coordinator.State) (*cs.R1CS, error) {
 
 func loadCommons(state coordinator.State) (*mpcsetup.SrsCommons, error) {
 	path := filepath.Join(state.Phase1Dir(), "commons.bin")
-	data, err := os.ReadFile(path)
+	data, err := os.ReadFile(path) // #nosec G304 -- the path is composed from the ceremony state directory (given once by the operator on the command line) plus fixed file names, so remote input cannot influence it
 	if err != nil {
 		return nil, err
 	}

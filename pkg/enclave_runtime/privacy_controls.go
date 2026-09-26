@@ -2,6 +2,7 @@ package enclave_runtime
 
 import (
 	"regexp"
+	"strconv"
 	"strings"
 )
 
@@ -142,7 +143,7 @@ func SanitizeForLogging(input interface{}) string {
 	switch v := input.(type) {
 	case []byte:
 		if len(v) > 32 {
-			return "[BINARY_DATA_" + string(rune(len(v))) + "_BYTES]"
+			return "[BINARY_DATA_" + strconv.Itoa(len(v)) + "_BYTES]"
 		}
 		return "[BINARY_DATA]"
 	case string:

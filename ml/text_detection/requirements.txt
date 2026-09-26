@@ -3,15 +3,25 @@
 
 # Deep Learning Framework
 --extra-index-url https://download.pytorch.org/whl/cpu
-torch==2.12.1+cpu
-torchvision==0.27.1+cpu
+# NOTE: 2.12.1 -> 2.13.0 (torch and torchvision move as a pair) for
+# python-vuln-scan: torch<=2.12 caps setuptools<82, which conflicts with the
+# setuptools>=83 pin required by PYSEC-2026-3447 (see the setuptools pin below).
+# torchvision 0.28.0+cpu is the release paired with torch 2.13.0. Same pairing
+# and same reasoning as ml/requirements-deterministic.txt.
+torch==2.13.0+cpu
+torchvision==0.28.0+cpu
 
-# CRAFT Text Detector
-# NOTE: craft-text-detector 0.4.3 is NOT declared as a PyPI dependency because
-# it pins opencv-python<4.5.4.62 which has no Python 3.11 wheels (first 3.11
-# wheel is opencv-python 4.6.0.66). The CRAFT implementation is vendored at
-# third_party/craft_text_detector/ in feature branches and should be synced here.
-# See: https://github.com/virtengine/virtengine/issues/XXX
+# CRAFT text detector
+# The CRAFT implementation is vendored at third_party/craft_text_detector/
+# (upstream craft-text-detector 0.4.3, MIT). It is NOT declared as a PyPI
+# dependency: 0.4.3 pins opencv-python<4.5.4.62 and every release of that
+# archived project carries the same cap, while opencv-python has no cp311 wheel
+# below 4.6.0.66 -- so no version could ever resolve on Python 3.11, which is
+# what stopped pip-audit from producing a report for this file. See
+# third_party/craft_text_detector/README.md for the provenance and patches.
+#
+# gdown fetches the CRAFT weights on first use (as upstream did).
+gdown==6.4.0
 
 # Image Processing
 opencv-python==4.8.1.78
@@ -22,7 +32,7 @@ numpy==1.26.4
 scipy==1.11.1
 
 # Testing
-pytest==7.4.0
+pytest==9.0.3
 pytest-cov==4.1.0
 pytest-xdist==3.3.1
 
@@ -31,3 +41,7 @@ mypy==1.4.1
 
 # Utilities
 tqdm==4.66.3
+
+# setuptools (transitive, pinned directly: resolved 81.0.0 has PYSEC-2026-3447,
+# fix >=83.0.0)
+setuptools==83.0.0

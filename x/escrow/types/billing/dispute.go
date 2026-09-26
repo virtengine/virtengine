@@ -244,7 +244,7 @@ func (w *DisputeWindow) Escalate(
 	}
 
 	//nolint:gosec // G115: escalation path length is bounded by practical dispute workflow limits
-	stepNumber := uint32(len(w.EscalationPath) + 1)
+	stepNumber := uint32(len(w.EscalationPath) + 1) // #nosec G115 -- the escalation path length is a small configuration list, bounded far below 2^32
 	w.EscalationPath = append(w.EscalationPath, EscalationStep{
 		StepNumber:       stepNumber,
 		Description:      description,

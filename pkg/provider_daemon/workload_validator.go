@@ -295,7 +295,7 @@ func ApplyResourceDefaults(job *hpctypes.HPCJob, template *hpctypes.WorkloadTemp
 
 	if job.Resources.MemoryGBPerNode == 0 {
 		//nolint:gosec // DefaultMemoryMBPerNode is always non-negative
-		job.Resources.MemoryGBPerNode = int32(r.DefaultMemoryMBPerNode / 1024)
+		job.Resources.MemoryGBPerNode = int32(r.DefaultMemoryMBPerNode / 1024) // #nosec G115 -- int32(r.DefaultMemoryMBPerNode / 1024) is a derived size/count (bytes scaled down to a whole unit or the CPU count), which cannot reach the int32 limit
 	}
 
 	if job.Resources.GPUsPerNode == 0 && r.DefaultGPUsPerNode > 0 {

@@ -230,7 +230,7 @@ func loadServerTLSConfig(certFile, keyFile, clientCAFile string, requireClientCe
 	if clientCAFile == "" {
 		return nil, fmt.Errorf("tls-client-ca-file is required when tls-require-client-cert=true")
 	}
-	clientCAPEM, err := os.ReadFile(clientCAFile)
+	clientCAPEM, err := os.ReadFile(clientCAFile) // #nosec G304 -- clientCAFile is a local path parameter supplied by this function's own caller (a CLI argument, loader parameter or configured state file) and is not derived from a network peer or chain message; opening the caller-nominated file is the purpose of this call
 	if err != nil {
 		return nil, fmt.Errorf("read client CA bundle: %w", err)
 	}

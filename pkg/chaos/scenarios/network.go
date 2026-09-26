@@ -359,7 +359,7 @@ func NewIsolatedNode(nodes []string, isolatedIdx int) *PartitionScenario {
 		isolatedIdx = 0
 	}
 
-	isolated := []string{nodes[isolatedIdx]}
+	isolated := []string{nodes[isolatedIdx]} // #nosec G602 -- nodes[isolatedIdx] cannot be out of range: isolatedIdx is clamped to [0, len(nodes)) immediately above
 	remaining := make([]string, 0, len(nodes)-1)
 	for i, node := range nodes {
 		if i != isolatedIdx {

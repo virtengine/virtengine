@@ -132,7 +132,7 @@ Example:
 			if err != nil {
 				return err
 			}
-			ciphertext, err := os.ReadFile(payloadFile)
+			ciphertext, err := os.ReadFile(payloadFile) // #nosec G304 -- payloadFile is a local path parameter supplied by this function's own caller (a CLI argument, loader parameter or configured state file) and is not derived from a network peer or chain message; opening the caller-nominated file is the purpose of this call
 			if err != nil {
 				return fmt.Errorf("failed to read encrypted payload file: %w", err)
 			}

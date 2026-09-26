@@ -176,7 +176,7 @@ func (s *paymentService) IsHealthy(ctx context.Context) bool {
 func (s *paymentService) Close() error {
 	// Close price feed aggregator if initialized
 	if s.priceFeed != nil {
-		s.priceFeed.Close()
+		_ = s.priceFeed.Close()
 	}
 	return s.gateway.Close()
 }

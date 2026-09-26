@@ -29,6 +29,7 @@ func GetTxCmd() *cobra.Command {
 
 	cmd.AddCommand(
 		CmdSubmitFraudReport(),
+		CmdSubmitFraudResponse(),
 		CmdAssignModerator(),
 		CmdUpdateReportStatus(),
 		CmdResolveFraudReport(),
@@ -94,6 +95,63 @@ $ %s tx fraud submit-report ve1reportedparty fake_identity "Suspected identity f
 	cmd.Flags().String(flagEvidence, "", "JSON evidence payload or @path to JSON file")
 	cmd.Flags().String(flagEvidenceFile, "", "Path to JSON file with evidence array")
 	cmd.Flags().StringSlice(flagRelatedOrderIDs, nil, "Comma-separated related order IDs")
+	flags.AddTxFlagsToCmd(cmd)
+	return cmd
+}
+
+// CmdSubmitFraudResponse files a response/rebuttal against an existing report.
+//
+// This is the entry point for the reported party (or the reporter) to answer a
+// report; the on-chain keeper derives the respondent role from the report itself.
+func CmdSubmitFraudResponse() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "submit-response [report-id]",
+		Short: "File a response/rebuttal against an existing fraud report",
+		Args:  cobra.ExactArgs(1),
+		Long: strings.TrimSpace(
+			fmt.Sprintf(`File an encrypted response/rebuttal against a fraud report.
+
+Only the reported party of the report, or the original reporter, may respond, and
+only while the report is still pending moderator action. Evidence must be supplied
+as JSON (array or object) via --%s or --%s.
+
+Example:
+$ %s tx fraud submit-response fraud-report-1 \
+  --%s @rebuttal.json --statement-hash <sha256-of-plaintext> --from reportedparty
+`, flagEvidence, flagEvidenceFile, version.AppName, flagEvidence),
+		),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			clientCtx, err := client.GetClientTxContext(cmd)
+			if err != nil {
+				return err
+			}
+
+			evidenceJSON, _ := cmd.Flags().GetString(flagEvidence)
+			evidenceFile, _ := cmd.Flags().GetString(flagEvidenceFile)
+			evidence, err := readEvidenceFromFlags(evidenceJSON, evidenceFile)
+			if err != nil {
+				return err
+			}
+
+			statementHash, err := cmd.Flags().GetString(flagStatementHash)
+			if err != nil {
+				return err
+			}
+
+			msg := &types.MsgSubmitFraudResponse{
+				ReportId:      args[0],
+				Respondent:    clientCtx.GetFromAddress().String(),
+				Evidence:      evidence,
+				StatementHash: statementHash,
+			}
+
+			return tx.GenerateOrBroadcastTxCLI(clientCtx, cmd.Flags(), msg)
+		},
+	}
+
+	cmd.Flags().String(flagEvidence, "", "JSON evidence payload or @path to JSON file")
+	cmd.Flags().String(flagEvidenceFile, "", "Path to JSON file with evidence array")
+	cmd.Flags().String(flagStatementHash, "", "SHA256 of the plaintext statement (integrity only)")
 	flags.AddTxFlagsToCmd(cmd)
 	return cmd
 }

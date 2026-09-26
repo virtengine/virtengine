@@ -113,36 +113,66 @@ func TestMsgRevokeRole(t *testing.T) {
 	require.False(t, k.HasRole(ctx, targetAddr, types.RoleCustomer))
 }
 
-func TestMsgSetAccountState(t *testing.T) {
+// TestMsgSetAccountStateRejectsPunitiveStates asserts that the bare
+// administrative message can no longer reach Suspended or Terminated.
+//
+// This message carries no scope, reason code, duration, notice or second
+// party, so a genesis/administrator account reaching Suspended through it would
+// be exactly the single-actor, permanent, account-wide lockout the sanction
+// model exists to prevent. Reaching those states now requires a sanction record
+// with a distinct second reviewer.
+func TestMsgSetAccountStateRejectsPunitiveStates(t *testing.T) {
 	ctx, k, msgServer := setupMsgServer(t)
 
 	genesisAddr := sdk.AccAddress([]byte("genesis_addr_1234567"))
 	targetAddr := sdk.AccAddress([]byte("target_addr_12345678"))
 
-	// Add genesis account
-	err := k.AddGenesisAccount(ctx, genesisAddr)
-	require.NoError(t, err)
+	require.NoError(t, k.AddGenesisAccount(ctx, genesisAddr))
+	require.NoError(t, k.SetAccountState(ctx, targetAddr, types.AccountStateActive, "initial", genesisAddr))
 
-	// Set initial state to active
-	err = k.SetAccountState(ctx, targetAddr, types.AccountStateActive, "initial", genesisAddr)
-	require.NoError(t, err)
+	for _, state := range []types.AccountState{types.AccountStateSuspended, types.AccountStateTerminated} {
+		t.Run(state.String(), func(t *testing.T) {
+			_, err := msgServer.SetAccountState(ctx, &types.MsgSetAccountState{
+				Sender:  genesisAddr.String(),
+				Address: targetAddr.String(),
+				State:   state.String(),
+				Reason:  "administrative action",
+			})
+			require.ErrorIs(t, err, types.ErrSanctionRequired)
 
-	// Suspend the account
-	msg := &types.MsgSetAccountState{
+			// The refusal must be total: state is untouched, not merely unreported.
+			stored, found := k.GetAccountState(ctx, targetAddr)
+			require.True(t, found)
+			require.Equal(t, types.AccountStateActive, stored.State)
+		})
+	}
+}
+
+// TestMsgSetAccountStateAllowsReactivation is the other half of the contract:
+// the safe direction stays open, so an operator can still restore an account
+// through this message without fabricating a sanction.
+func TestMsgSetAccountStateAllowsReactivation(t *testing.T) {
+	ctx, k, msgServer := setupMsgServer(t)
+
+	genesisAddr := sdk.AccAddress([]byte("genesis_addr_1234567"))
+	targetAddr := sdk.AccAddress([]byte("target_addr_12345678"))
+
+	require.NoError(t, k.AddGenesisAccount(ctx, genesisAddr))
+	// Set the punitive state through the keeper, as a sanction projection would.
+	require.NoError(t, k.SetAccountState(ctx, targetAddr, types.AccountStateSuspended, "sanction", genesisAddr))
+
+	resp, err := msgServer.SetAccountState(ctx, &types.MsgSetAccountState{
 		Sender:  genesisAddr.String(),
 		Address: targetAddr.String(),
-		State:   types.AccountStateSuspended.String(),
-		Reason:  "test suspension",
-	}
-
-	resp, err := msgServer.SetAccountState(ctx, msg)
+		State:   types.AccountStateActive.String(),
+		Reason:  "reinstated",
+	})
 	require.NoError(t, err)
 	require.NotNil(t, resp)
 
-	// Verify state is changed
 	state, found := k.GetAccountState(ctx, targetAddr)
 	require.True(t, found)
-	require.Equal(t, types.AccountStateSuspended, state.State)
+	require.Equal(t, types.AccountStateActive, state.State)
 }
 
 func TestMsgSetAccountStateCannotSuspendSelf(t *testing.T) {

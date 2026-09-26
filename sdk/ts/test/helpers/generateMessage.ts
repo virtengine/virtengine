@@ -81,7 +81,7 @@ function generateScalar(field: Field, scalarType: ScalarType) {
     case ScalarType.DOUBLE:
       return faker.number.float({ min: -1000000, max: 1000000 });
     case ScalarType.BOOL:
-      return faker.datatype.boolean();
+      return Math.random() < 0.5;
     default:
       throw new Error(`Unknown scalar type: ${field.scalarType}`);
   }
@@ -105,7 +105,7 @@ function guessFakeValue(field: Field): unknown {
   if (lowerName.includes("country")) return faker.location.country();
   if (lowerName.includes("date")) return faker.date.past().toISOString();
   if (lowerName.includes("id")) return faker.string.uuid();
-  if (lowerName.includes("username")) return faker.internet.userName();
+  if (lowerName.includes("username")) return faker.internet.username();
   if (lowerName.includes("password")) return faker.internet.password();
   if (lowerName.includes("avatar")) return faker.image.avatar();
   if (lowerName.includes("denom")) return "uve";

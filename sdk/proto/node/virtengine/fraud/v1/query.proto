@@ -46,6 +46,11 @@ service Query {
   rpc ModeratorQueue(QueryModeratorQueueRequest) returns (QueryModeratorQueueResponse) {
     option (google.api.http).get = "/virtengine/fraud/v1/moderator/queue";
   }
+
+  // FraudResponses returns the responses/rebuttals filed against a report
+  rpc FraudResponses(QueryFraudResponsesRequest) returns (QueryFraudResponsesResponse) {
+    option (google.api.http).get = "/virtengine/fraud/v1/reports/{report_id}/responses";
+  }
 }
 
 // QueryParamsRequest is the request for Params query
@@ -182,6 +187,31 @@ message QueryAuditLogResponse {
     (gogoproto.nullable) = false,
     (gogoproto.jsontag) = "audit_logs",
     (gogoproto.moretags) = "yaml:\"audit_logs\""
+  ];
+
+  // Pagination defines the pagination response
+  cosmos.base.query.v1beta1.PageResponse pagination = 2;
+}
+
+// QueryFraudResponsesRequest is the request for FraudResponses query
+message QueryFraudResponsesRequest {
+  // ReportID is the fraud report ID whose responses are being queried
+  string report_id = 1 [
+    (gogoproto.jsontag) = "report_id",
+    (gogoproto.moretags) = "yaml:\"report_id\""
+  ];
+
+  // Pagination defines pagination options
+  cosmos.base.query.v1beta1.PageRequest pagination = 2;
+}
+
+// QueryFraudResponsesResponse is the response for FraudResponses query
+message QueryFraudResponsesResponse {
+  // Responses are the responses/rebuttals filed against the report
+  repeated FraudResponse responses = 1 [
+    (gogoproto.nullable) = false,
+    (gogoproto.jsontag) = "responses",
+    (gogoproto.moretags) = "yaml:\"responses\""
   ];
 
   // Pagination defines the pagination response

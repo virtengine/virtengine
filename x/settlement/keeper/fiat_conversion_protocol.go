@@ -559,7 +559,7 @@ func canonicalFiatRequestDigest(request types.FiatConversionRequest, params type
 
 func writeCanonicalFiatBytes(hash interface{ Write([]byte) (int, error) }, value []byte) {
 	var length [4]byte
-	binary.BigEndian.PutUint32(length[:], uint32(len(value))) //nolint:gosec // all fields are protocol-bounded well below uint32
+	binary.BigEndian.PutUint32(length[:], uint32(len(value))) /* #nosec G115 -- all fields are protocol-bounded well below uint32 */ //nolint:gosec
 	_, _ = hash.Write(length[:])
 	_, _ = hash.Write(value)
 }

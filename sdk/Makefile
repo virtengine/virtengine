@@ -67,6 +67,16 @@ PROTOC_GEN_SWAGGER_VERSION      := $(PROTOC_GEN_GRPC_GATEWAY_VERSION)
 MODVENDOR_VERSION               ?= v0.5.0
 MOCKERY_VERSION                 ?= 2.52.2
 GOLANGCI_LINT_VERSION           ?= v2.3.0
+# SEMVER is exported by sdk/.envrc:35 (as the SDK's own script/semver.sh) for direnv
+# shells, but nothing defaults it for a non-direnv invocation -- a shell that exports
+# the devcache env by hand, or CI's non-direnv fallback. sdk/make/setup-cache.mk
+# derives golangci-lint's module major from it, so an empty SEMVER plans
+# github.com/golangci/golangci-lint/v$(empty)/cmd/golangci-lint@v2.3.0: a malformed
+# module path that fails inside `go install` rather than as a missing-env diagnostic.
+# The SDK's devcache is re-derived per project (sdk/.env:4 -> ${VIRTENGINE_ROOT}/.cache,
+# sdk/.envrc:1 VIRTENGINE_ROOT=$(pwd)), not inherited from the root shell, so the fix
+# belongs here as a default rather than as a guard. Mirrors root make/init.mk (PR #879).
+SEMVER                          ?= $(VIRTENGINE_ROOT)/script/semver.sh
 SEMVER_VERSION                  ?= v1.3.0
 
 BUF_VERSION_FILE                     := $(VIRTENGINE_DEVCACHE_VERSIONS)/buf/$(BUF_VERSION)
@@ -102,7 +112,12 @@ GIT_CHGLOG                       := $(VIRTENGINE_DEVCACHE_BIN)/git-chglog
 SWAGGER_COMBINE                  := $(VIRTENGINE_DEVCACHE_NODE_BIN)/swagger-combine
 MOCKERY                          := $(VIRTENGINE_DEVCACHE_BIN)/mockery
 GOLANGCI_LINT                    := $(VIRTENGINE_DEVCACHE_BIN)/golangci-lint
-SEMVER                           := $(VIRTENGINE_DEVCACHE_BIN)/semver
+# SEMVER is the semver *script* (the SDK's script/semver.sh, see the ?= default above);
+# the binary this project installs gets its own name so the two cannot shadow each
+# other. The previous `SEMVER := $(VIRTENGINE_DEVCACHE_BIN)/semver` here silently
+# overrode the script that sdk/.envrc exports, which made the golangci-lint major
+# derivation shell out to a binary that does not exist on a fresh cache.
+SEMVER_BIN                       := $(VIRTENGINE_DEVCACHE_BIN)/semver
 
 GOLANGCI_LINT_RUN                := $(GOLANGCI_LINT) run
 GOLINT                           := $(GOLANGCI_LINT_RUN) ./... --disable-all --timeout=5m --enable

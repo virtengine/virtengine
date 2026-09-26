@@ -40,6 +40,29 @@ func NewDecryptedScope(scopeID string, scopeType types.ScopeType, plaintext []by
 	}
 }
 
+// Wipe securely zeroes the decrypted plaintext held in memory while preserving
+// the scope identifiers and content hash needed for audit and consensus.
+// Callers must invoke Wipe (or wipeDecryptedScopes) once pipeline processing
+// has finished so raw document/biometric bytes do not linger in validator
+// memory beyond the verification flow.
+func (s *DecryptedScope) Wipe() {
+	if s == nil {
+		return
+	}
+	for i := range s.Plaintext {
+		s.Plaintext[i] = 0
+	}
+	s.Plaintext = nil
+}
+
+// wipeDecryptedScopes zeroes the plaintext of every scope in the slice.
+// The content hashes and identifiers are preserved.
+func wipeDecryptedScopes(scopes []DecryptedScope) {
+	for i := range scopes {
+		scopes[i].Wipe()
+	}
+}
+
 // ============================================================================
 // Decryption Configuration
 // ============================================================================

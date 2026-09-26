@@ -574,6 +574,26 @@ func cloneCompromiseEvidence(evidence *CompromiseEvidence) *CompromiseEvidence {
 	return &cloned
 }
 
+// deepCopy returns an independent copy of the event. Getters must return copies:
+// dispatchAlertAsync appends to ResponseActions from a background goroutine while
+// callers may still be reading a previously returned event.
+func (e *CompromiseEvent) deepCopy() *CompromiseEvent {
+	if e == nil {
+		return nil
+	}
+	cloned := *e
+	cloned.Evidence = cloneCompromiseEvidence(e.Evidence)
+	if e.AcknowledgedAt != nil {
+		acknowledgedAt := *e.AcknowledgedAt
+		cloned.AcknowledgedAt = &acknowledgedAt
+	}
+	if e.ResponseActions != nil {
+		cloned.ResponseActions = make([]ResponseAction, len(e.ResponseActions))
+		copy(cloned.ResponseActions, e.ResponseActions)
+	}
+	return &cloned
+}
+
 // GetEvents retrieves all compromise events
 func (d *CompromiseDetector) GetEvents() []*CompromiseEvent {
 	d.mu.RLock()
@@ -581,7 +601,7 @@ func (d *CompromiseDetector) GetEvents() []*CompromiseEvent {
 
 	events := make([]*CompromiseEvent, 0, len(d.events))
 	for _, event := range d.events {
-		events = append(events, event)
+		events = append(events, event.deepCopy())
 	}
 	return events
 }
@@ -594,7 +614,7 @@ func (d *CompromiseDetector) GetEventsByKey(keyID string) []*CompromiseEvent {
 	events := make([]*CompromiseEvent, 0)
 	for _, event := range d.events {
 		if event.KeyID == keyID {
-			events = append(events, event)
+			events = append(events, event.deepCopy())
 		}
 	}
 	return events
@@ -608,7 +628,7 @@ func (d *CompromiseDetector) GetEventsBySeverity(severity CompromiseSeverity) []
 	events := make([]*CompromiseEvent, 0)
 	for _, event := range d.events {
 		if event.Severity == severity {
-			events = append(events, event)
+			events = append(events, event.deepCopy())
 		}
 	}
 	return events

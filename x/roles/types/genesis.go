@@ -13,6 +13,19 @@ type GenesisState struct {
 	// AccountStates are the initial account states
 	AccountStates []AccountStateRecord `json:"account_states"`
 
+	// Sanctions are the initial sanction records.
+	//
+	// These are exported and re-imported so an export/import round-trip does
+	// not silently reactivate every sanctioned account: the account state is a
+	// projection of the in-force sanctions, so dropping the sanctions while
+	// keeping the projection would strand the account in a state that nothing
+	// can ever lift.
+	Sanctions []Sanction `json:"sanctions"`
+
+	// SanctionSequence is the next sanction ID sequence value, so re-import does
+	// not reissue sanction IDs that already exist in the exported set.
+	SanctionSequence uint64 `json:"sanction_sequence"`
+
 	// Params are the module parameters
 	Params Params `json:"params"`
 }
@@ -29,10 +42,12 @@ type Params struct {
 // DefaultGenesisState returns the default genesis state
 func DefaultGenesisState() *GenesisState {
 	return &GenesisState{
-		GenesisAccounts: []string{},
-		RoleAssignments: []RoleAssignment{},
-		AccountStates:   []AccountStateRecord{},
-		Params:          DefaultParams(),
+		GenesisAccounts:  []string{},
+		RoleAssignments:  []RoleAssignment{},
+		AccountStates:    []AccountStateRecord{},
+		Sanctions:        []Sanction{},
+		SanctionSequence: 0,
+		Params:           DefaultParams(),
 	}
 }
 
@@ -67,6 +82,19 @@ func (gs GenesisState) Validate() error {
 		if err := as.Validate(); err != nil {
 			return err
 		}
+	}
+
+	// Validate sanctions, rejecting duplicate IDs so a re-import cannot make two
+	// records contend for the same store key.
+	seenSanctions := make(map[string]bool)
+	for _, s := range gs.Sanctions {
+		if err := s.Validate(); err != nil {
+			return err
+		}
+		if seenSanctions[s.ID] {
+			return ErrInvalidSanction.Wrapf("duplicate sanction: %s", s.ID)
+		}
+		seenSanctions[s.ID] = true
 	}
 
 	// Validate params

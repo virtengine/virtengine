@@ -40,7 +40,7 @@ const (
 
 // OfferingStateNames maps offering states to human-readable names
 var OfferingStateNames = map[OfferingState]string{
-	OfferingStateUnspecified: "unspecified",
+	OfferingStateUnspecified: unspecifiedName,
 	OfferingStateActive:      "active",
 	OfferingStatePaused:      "paused",
 	OfferingStateSuspended:   "suspended",
@@ -348,6 +348,18 @@ type Offering struct {
 	// IdentityRequirement defines identity verification requirements
 	IdentityRequirement IdentityRequirement `json:"identity_requirement"`
 
+	// Attestation is the capacity/ownership evidence attached to this listing.
+	// Only a hash of the source document is stored (MARKET-HW-SAFEGUARD-1).
+	Attestation *OfferingAttestation `json:"attestation,omitempty"`
+
+	// MilestoneOverride optionally overrides the protocol default milestone
+	// schedule for orders against this listing. Empty means "use params default".
+	MilestoneOverride MilestoneSet `json:"milestone_override,omitempty"`
+
+	// ListingTerms are the human-readable delivery/performance terms shown to a
+	// buyer before they commit funds.
+	ListingTerms string `json:"listing_terms,omitempty"`
+
 	// RequireMFAForOrders indicates if MFA is required for placing orders
 	RequireMFAForOrders bool `json:"require_mfa_for_orders"`
 
@@ -365,6 +377,25 @@ type Offering struct {
 
 	// Regions are supported regions
 	Regions []string `json:"regions,omitempty"`
+
+	// Source identifies the supply origin (native or waldur).
+	Source OfferingSource `json:"source,omitempty"`
+
+	// Visibility controls unified-catalog exposure.
+	Visibility OfferingVisibility `json:"visibility,omitempty"`
+
+	// Waldur links the listing to a Waldur offering when Source is waldur.
+	Waldur *WaldurOfferingRef `json:"waldur,omitempty"`
+
+	// AcquisitionModes lists the supported acquisition modes. When empty, direct
+	// is supported and bid is supported when AllowBidding is set.
+	AcquisitionModes []AcquisitionMode `json:"acquisition_modes,omitempty"`
+
+	// BackendType is the provider execution backend (kubernetes, slurm, ...).
+	BackendType string `json:"backend_type,omitempty"`
+
+	// MeteringProfile names the metering component profile (Waldur-compatible).
+	MeteringProfile string `json:"metering_profile,omitempty"`
 
 	// CreatedAt is the creation timestamp
 	CreatedAt time.Time `json:"created_at"`
@@ -442,6 +473,18 @@ func (o *Offering) Validate() error {
 		return fmt.Errorf("invalid identity requirement: %w", err)
 	}
 
+	if o.Attestation != nil {
+		if err := o.Attestation.Validate(); err != nil {
+			return fmt.Errorf("invalid attestation: %w", err)
+		}
+	}
+
+	if len(o.MilestoneOverride) > 0 {
+		if err := o.MilestoneOverride.Validate(); err != nil {
+			return fmt.Errorf("invalid milestone override: %w", err)
+		}
+	}
+
 	if o.EncryptedSecrets != nil {
 		if err := o.EncryptedSecrets.Validate(); err != nil {
 			return fmt.Errorf("invalid encrypted secrets: %w", err)
@@ -454,6 +497,32 @@ func (o *Offering) Validate() error {
 		}
 		if !o.MinBid.Amount.IsPositive() {
 			return fmt.Errorf("min bid must be positive")
+		}
+	}
+
+	if !o.Source.IsValid() {
+		return fmt.Errorf("invalid offering source: %s", o.Source)
+	}
+
+	if !o.Visibility.IsValid() {
+		return fmt.Errorf("invalid offering visibility: %s", o.Visibility)
+	}
+
+	if o.Source.Effective() == OfferingSourceWaldur {
+		if o.Waldur == nil {
+			return fmt.Errorf("waldur source requires a waldur reference")
+		}
+	}
+
+	if o.Waldur != nil {
+		if err := o.Waldur.Validate(); err != nil {
+			return fmt.Errorf("invalid waldur reference: %w", err)
+		}
+	}
+
+	for _, mode := range o.AcquisitionModes {
+		if !mode.IsValid() {
+			return fmt.Errorf("invalid acquisition mode: %s", mode)
 		}
 	}
 

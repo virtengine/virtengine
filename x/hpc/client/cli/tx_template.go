@@ -88,7 +88,7 @@ Example template JSON:
 
 			// Read template from file
 			templateFile := args[0]
-			templateJSON, err := os.ReadFile(templateFile)
+			templateJSON, err := os.ReadFile(templateFile) // #nosec G304 -- templateFile is a local path parameter supplied by this function's own caller (a CLI argument, loader parameter or configured state file) and is not derived from a network peer or chain message; opening the caller-nominated file is the purpose of this call
 			if err != nil {
 				return fmt.Errorf("failed to read template file: %w", err)
 			}
@@ -147,7 +147,7 @@ Only the publisher can update their templates.`,
 
 			// Read template from file
 			templateFile := args[1]
-			templateJSON, err := os.ReadFile(templateFile)
+			templateJSON, err := os.ReadFile(templateFile) // #nosec G304 -- templateFile is a local path parameter supplied by this function's own caller (a CLI argument, loader parameter or configured state file) and is not derived from a network peer or chain message; opening the caller-nominated file is the purpose of this call
 			if err != nil {
 				return fmt.Errorf("failed to read template file: %w", err)
 			}

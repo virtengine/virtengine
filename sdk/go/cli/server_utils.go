@@ -32,7 +32,7 @@ func openTraceWriter(traceWriterFile string) (w io.WriteCloser, err error) {
 	if traceWriterFile == "" {
 		return
 	}
-	return os.OpenFile( //nolint: gosec
+	return os.OpenFile( /* #nosec G304 -- //nolint: gosec is a local path parameter supplied by this function's own caller (a CLI argument, loader parameter or configured state file) and is not derived from a network peer or chain message; opening the caller-nominated file is the purpose of this call */ //nolint:gosec
 		traceWriterFile,
 		os.O_WRONLY|os.O_APPEND|os.O_CREATE,
 		0o600,

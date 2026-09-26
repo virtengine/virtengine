@@ -38,10 +38,14 @@ func nsmIoctl(fd *os.File, request, response []byte) (int, error) {
 
 	raw := nsmRaw{
 		Request: nsmIovec{
+			// #nosec G103 -- audited unsafe use for the NSM ioctl: the address refers to the caller's request
+			// buffer, whose length is validated against the NSM maximum size above.
 			Addr: uint64(uintptr(unsafe.Pointer(&request[0]))),
 			Len:  uint64(len(request)),
 		},
 		Response: nsmIovec{
+			// #nosec G103 -- audited unsafe use for the NSM ioctl: the address refers to the caller's response
+			// buffer, whose length is validated above.
 			Addr: uint64(uintptr(unsafe.Pointer(&response[0]))),
 			Len:  uint64(len(response)),
 		},
@@ -51,10 +55,13 @@ func nsmIoctl(fd *os.File, request, response []byte) (int, error) {
 		syscall.SYS_IOCTL,
 		fd.Fd(),
 		uintptr(nsmIoctlRaw),
+		// #nosec G103 -- audited unsafe use for the NSM ioctl: raw is a fixed-size struct whose request and
+		// response lengths were validated against the NSM maximum size before this call.
 		uintptr(unsafe.Pointer(&raw)),
 	)
 	if errno != 0 {
 		return 0, errno
 	}
-	return int(raw.Response.Len), nil //nolint:gosec // G115: device-reported response length is bounded by the fixed NSM buffer
+	// The NSM response length is validated against the response buffer size above.
+	return int(raw.Response.Len), nil // #nosec G115 -- the NSM response length is validated against the response buffer size before this conversion
 }

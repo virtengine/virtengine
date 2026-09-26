@@ -41,18 +41,23 @@ ENV OPENBLAS_NUM_THREADS=1
 ENV NUMEXPR_NUM_THREADS=1
 ENV CUDA_VISIBLE_DEVICES=-1
 
-# Install system dependencies with exact versions
+# Install system dependencies with exact versions.
+# NOTE (2026-09-22): pins track Debian bookworm point releases; when a
+# point release supersedes a pin, apt fails with "Version X was not found"
+# (previously libgomp1 12.2.0-14, libglib2.0-0 +deb12u2). Refresh pins from
+# http://deb.debian.org/debian/dists/bookworm/main/binary-amd64/Packages.gz
+# (bookworm-security carries none of these; bookworm main is authoritative).
 RUN apt-get update && apt-get install -y --no-install-recommends \
     # Tesseract OCR with exact version
     tesseract-ocr=5.3.0-2 \
     tesseract-ocr-eng=1:4.1.0-2 \
     # Image processing libraries
-    libglib2.0-0=2.74.6-2+deb12u2 \
+    libglib2.0-0=2.74.6-2+deb12u9 \
     libsm6=2:1.2.3-1 \
     libxext6=2:1.3.4-1+b1 \
     libxrender1=1:0.9.10-1.1 \
     libgl1=1.6.0-1 \
-    libgomp1=12.2.0-14 \
+    libgomp1=12.2.0-14+deb12u1 \
     # Cleanup
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
@@ -80,30 +85,14 @@ FROM python-deps AS models
 
 WORKDIR /app/models
 
-# Create model directories
-RUN mkdir -p deepface craft unet tesseract identity_scorer
-
-# Model weight hashes are verified during download
-# These hashes MUST match what's recorded on-chain in the ModelManifest
-
-# DeepFace FaceNet512 model
-# Hash: sha256:a1b2c3d4e5f6... (example - actual hash computed at build time)
-COPY ml/models/deepface_facenet512.h5 deepface/facenet512.h5
-
-# CRAFT text detection model
-# Hash: sha256:b2c3d4e5f6a1... (example)
-COPY ml/models/craft_mlt_25k.pth craft/craft_mlt_25k.pth
-
-# U-Net face extraction model
-# Hash: sha256:c3d4e5f6a1b2... (example)
-COPY ml/models/unet_face_extraction.h5 unet/face_extraction.h5
-
-# Identity scorer model
-# Hash: sha256:d4e5f6a1b2c3... (example)
-COPY ml/models/identity_scorer_v1.h5 identity_scorer/model.h5
-
-# Model configuration files
-COPY ml/models/model_config.json models/config.json
+# Create model directories, then record why the image ships code only.
+# Model weights are NOT baked into the image: they are produced by
+# ml/training (see models/trust_score) and validated by
+# _build/build-veid-pipeline.sh, then mounted at /app/models at deploy time.
+# (Previously this stage COPYd ml/models/*.h5/*.pth/*.json, which were never
+# committed, so the image never built.)
+RUN mkdir -p deepface craft unet tesseract identity_scorer \
+    && printf '{\n  "schema": "veid.models.config/v1",\n  "note": "code-only image: weights mounted at /app/models at deploy time; validate with python3 -m ml.pipeline_runner --mode=check",\n  "pipeline_version": "1.0.0"\n}\n' > config.json
 
 # =============================================================================
 # Stage 4: Application Code
@@ -124,53 +113,122 @@ COPY ml/training/ ml/training/
 COPY ml/pipeline_runner.py ml/pipeline_runner.py
 COPY ml/__init__.py ml/__init__.py
 
-# Copy inference sidecar
-COPY pkg/inference/sidecar/ pkg/inference/sidecar/
+# Copy inference gRPC contract. (The Go sidecar client,
+# pkg/inference/sidecar.go, is not part of this Python image; the
+# previously referenced pkg/inference/sidecar/ directory never existed.)
+COPY pkg/inference/proto/inference.proto pkg/inference/proto/inference.proto
 
 # =============================================================================
 # Stage 5: Final Image
 # =============================================================================
-FROM base AS runtime-deps
+# =============================================================================
+# Stage 5: Final Image — patchable Debian base (NOT distroless)
+# =============================================================================
+# 2026-09-27 (test-guard t_cf61c696): the previous final stage was
+# gcr.io/distroless/python3-debian12. Its OS packages (libssl3, libexpat1,
+# libpython3.11, krb5) carried 19 HIGH CVEs with fixes available upstream, but
+# distroless published no newer digest, so no digest bump could clear the
+# Container Vulnerability Scan gate — and the image could never be patched
+# in-repo either (distroless ships no apt toolchain). Worse, the old
+# runtime-deps overlay copied 2024-vintage .so files over distroless's own
+# libraries with no dpkg metadata, so Trivy was blind to them. This stage is
+# therefore a current python:3.11-slim-bookworm digest plus `apt-get upgrade`
+# (same pattern as Dockerfile.virtengine's `apk upgrade`): the dpkg database
+# Trivy scans is one this repo owns and patches, and the libssl3/libexpat1
+# the app loads are the same upgraded files Trivy reports on.
+FROM python:3.11-slim-bookworm@sha256:a36c24f9cbdf4fd0f52d67f0823eeac19c2028c637cecc392d97f980d4fec56b AS final
 
-RUN set -e; \
-    mkdir -p /runtime-libs; \
-    ldd /usr/bin/tesseract | awk '{print $3}' | grep -E '^/' | xargs -r -I '{}' cp --parents '{}' /runtime-libs; \
-    ldd /usr/bin/python3 | awk '{print $3}' | grep -E '^/' | xargs -r -I '{}' cp --parents '{}' /runtime-libs; \
-    for lib in \
-      /usr/lib/x86_64-linux-gnu/libglib-2.0.so.* \
-      /usr/lib/x86_64-linux-gnu/libSM.so.* \
-      /usr/lib/x86_64-linux-gnu/libXext.so.* \
-      /usr/lib/x86_64-linux-gnu/libXrender.so.* \
-      /usr/lib/x86_64-linux-gnu/libGL.so.* \
-      /usr/lib/x86_64-linux-gnu/libgomp.so.* \
-      /usr/lib/x86_64-linux-gnu/libpng16.so.* \
-      /usr/lib/x86_64-linux-gnu/libjpeg.so.* \
-      /usr/lib/x86_64-linux-gnu/libtiff.so.* \
-      /usr/lib/x86_64-linux-gnu/libwebp.so.* \
-      /usr/lib/x86_64-linux-gnu/libopenjp2.so.* \
-      /usr/lib/x86_64-linux-gnu/libicui18n.so.* \
-      /usr/lib/x86_64-linux-gnu/libicuuc.so.* \
-      /usr/lib/x86_64-linux-gnu/libicudata.so.* \
-      /usr/lib/x86_64-linux-gnu/libstdc++.so.* \
-      /usr/lib/x86_64-linux-gnu/libgcc_s.so.*; \
-    do \
-      if [ -e "$lib" ]; then cp --parents "$lib" /runtime-libs; fi; \
-    done
-
-FROM gcr.io/distroless/python3-debian12@sha256:2fdb05402a2cf21cf78fdb3ba4c5db167241e9e498140f5bf689d7efb773731f AS final
+# Determinism settings — MUST mirror Stage 1. ENV does not cross FROM
+# boundaries, so these are repeated here: the old distroless final stage
+# never carried them, which failed both _build/build-veid-pipeline.sh
+# verify_image (printenv TF_DETERMINISTIC_OPS / CUDA_VISIBLE_DEVICES) and the
+# REQUIRED_DETERMINISM_ENV gate in ml/pipeline_runner.py at sidecar startup.
+ENV TF_DETERMINISTIC_OPS=1
+ENV TF_CUDNN_DETERMINISTIC=1
+ENV TF_USE_CUDNN_AUTOTUNE=0
+ENV TF_ENABLE_ONEDNN_OPTS=0
+ENV TF_CPP_MIN_LOG_LEVEL=2
+ENV TF_FORCE_GPU_ALLOW_GROWTH=false
+ENV TF_XLA_FLAGS="--tf_xla_auto_jit=-1"
+ENV PYTHONHASHSEED=42
+ENV OMP_NUM_THREADS=1
+ENV MKL_NUM_THREADS=1
+ENV OPENBLAS_NUM_THREADS=1
+ENV NUMEXPR_NUM_THREADS=1
+ENV CUDA_VISIBLE_DEVICES=-1
 
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
 ENV HOME=/app
 
+# Patch the OS layer we ship, then install the OCR/OpenCV runtime libraries
+# the pipeline needs (same set the old runtime-deps stage harvested from
+# `base`, now installed fresh so versions match the dpkg database Trivy
+# scans). Installs are intentionally unpinned: `upgrade` already moves every
+# package to its latest bookworm revision, and a pin here would fight it
+# (apt would DOWNGRADE to the pin). Reproducibility comes from the base
+# digest pin above plus the single published image digest validators run —
+# same tradeoff as Dockerfile.virtengine's `apk upgrade`.
+RUN apt-get update && apt-get upgrade -y --no-install-recommends \
+    && apt-get install -y --no-install-recommends \
+    tesseract-ocr \
+    tesseract-ocr-eng \
+    libglib2.0-0 \
+    libsm6 \
+    libxext6 \
+    libxrender1 \
+    libgl1 \
+    libgomp1 \
+    libpng16-16 \
+    libjpeg62-turbo \
+    libtiff6 \
+    libwebp7 \
+    libopenjp2-7 \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/* \
+    && groupadd -r nonroot --gid 65532 \
+    && useradd -r -u 65532 -g nonroot -d /app -s /usr/sbin/nologin nonroot \
+    && mkdir -p /app && chown nonroot:nonroot /app
+
 WORKDIR /app
 
-COPY --from=runtime-deps /runtime-libs/ /
-COPY --from=base /usr/bin/tesseract /usr/bin/tesseract
-COPY --from=base /usr/share/tesseract-ocr /usr/share/tesseract-ocr
+# Purge the base image's preinstalled installer toolchain before overlaying
+# ours. COPY merges directory trees file-by-file, and setuptools' vendored
+# dist-info names changed across releases (dot: jaraco.context-5.3.0 vs
+# underscore: jaraco_context-6.1.0), so a stale METADATA file from the base's
+# own setuptools survives next to ours and Trivy flags it as a live finding.
+# Observed 2026-09-27: ghost setuptools/_vendor/jaraco.context-5.3.0 flagged
+# CVE-2026-23949 while every installed copy (top-level and vendored) was
+# already 6.1.0. Nothing at runtime needs pip/setuptools/wheel (ENTRYPOINT is
+# `python3 -m`, HEALTHCHECK is `python3 -c`), so wiping them also shrinks the
+# production attack surface. pkg_resources is deliberately left as-is.
+RUN rm -rf /usr/local/lib/python3.11/site-packages/setuptools* \
+           /usr/local/lib/python3.11/site-packages/_distutils_hack \
+           /usr/local/lib/python3.11/site-packages/pip \
+           /usr/local/lib/python3.11/site-packages/pip-* \
+           /usr/local/lib/python3.11/site-packages/wheel \
+           /usr/local/lib/python3.11/site-packages/wheel-*
+
+# Only the pip site-packages and the app code travel forward. Deliberately NOT
+# /usr/local/bin or /usr/local/lib/python3.11 from python-deps: those are
+# CPython 3.11.7 (Jan 2024) with the same class of fixed-upstream CVEs, but
+# outside any dpkg database Trivy scans — copying them would reintroduce the
+# exact invisible-staleness this change removes. The final stage's own
+# interpreter (same 3.11 minor, ABI-compatible) runs the carried
+# site-packages; ENTRYPOINT resolves to its /usr/local/bin/python3.
 COPY --from=python-deps /usr/local/lib/python3.11/site-packages /usr/local/lib/python3.11/site-packages
-COPY --from=python-deps /usr/local/bin /usr/local/bin
 COPY --from=app --chown=nonroot:nonroot /app /app
+
+# Fail closed on layer-merge ghosts: refuse to ship if any jaraco.context
+# metadata older than the pinned 6.1.0 exists anywhere under site-packages
+# (top-level dist-info or setuptools/_vendor). This is the build-time proof
+# for the Security gate's Total line.
+RUN set -e; \
+    if find /usr/local/lib/python3.11/site-packages -maxdepth 4 \( -name 'jaraco.context-5*' -o -name 'jaraco_context-5*' \) | grep -q .; then \
+      echo 'ERROR: stale jaraco.context 5.x metadata present; refusing image'; \
+      find /usr/local/lib/python3.11/site-packages -maxdepth 4 -name 'jaraco*'; \
+      exit 1; \
+    fi
 
 USER nonroot
 

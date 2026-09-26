@@ -24,7 +24,7 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  GO_VERSION: "1.25.14"
+  GO_VERSION: "1.26.8"
   GOSEC_VERSION: "v2.25.0"
   GOWORK: "off"
   GO_TEST_TIMEOUT_UNIT: "30m"
@@ -47,10 +47,10 @@ jobs:
       economics_changed: ${{ steps.changes.outputs.economics }}
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Analyze file changes
-        uses: dorny/paths-filter@v3
+        uses: dorny/paths-filter@v4
         id: changes
         with:
           filters: |
@@ -86,13 +86,13 @@ jobs:
     needs: analyze-changes
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Fetch base ref for lint diff
         run: git fetch origin "${{ github.base_ref || 'main' }}" --depth=1
 
       - name: Set up Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v6
         with:
           go-version: ${{ env.GO_VERSION }}
           cache: true
@@ -100,13 +100,18 @@ jobs:
       - name: Download dependencies
         run: go mod download
 
+      - name: Install build dependencies for cgo packages
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends libudev-dev
+
       - name: Enforce consensus determinism policy
         run: go run ./scripts/consensusdeterminism -root .
 
       - name: Run golangci-lint (PR diff)
-        uses: golangci/golangci-lint-action@v8
+        uses: golangci/golangci-lint-action@v9
         with:
-          version: v2.4.0
+          version: v2.13.2
           args: --timeout=10m --new-from-rev=origin/${{ github.base_ref || 'main' }}
 
   vet:
@@ -116,16 +121,21 @@ jobs:
     timeout-minutes: 20
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Set up Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v6
         with:
           go-version: ${{ env.GO_VERSION }}
           cache: true
 
       - name: Download dependencies
         run: go mod download
+
+      - name: Install build dependencies for cgo packages
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends libudev-dev
 
       - name: Run go vet
         env:
@@ -138,16 +148,21 @@ jobs:
     needs: [lint, vet]
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Set up Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v6
         with:
           go-version: ${{ env.GO_VERSION }}
           cache: true
 
       - name: Download dependencies
         run: go mod download
+
+      - name: Install build dependencies for cgo packages
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends libudev-dev
 
       - name: Build binaries
         run: go build -mod=readonly -v ./cmd/...
@@ -158,16 +173,21 @@ jobs:
     needs: [lint, vet]
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Set up Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v6
         with:
           go-version: ${{ env.GO_VERSION }}
           cache: true
 
       - name: Download dependencies
         run: go mod download
+
+      - name: Install build dependencies for cgo packages
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends libudev-dev
 
       - name: Run core tests
         run: |
@@ -190,10 +210,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Set up Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: "20"
 
@@ -207,10 +227,10 @@ jobs:
     if: needs.analyze-changes.outputs.economics_changed == 'true'
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Set up Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v6
         with:
           go-version: ${{ env.GO_VERSION }}
           cache: true
@@ -230,10 +250,10 @@ jobs:
     if: needs.analyze-changes.outputs.go_changed == 'true'
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Set up Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v6
         with:
           go-version: ${{ env.GO_VERSION }}
           cache: true
@@ -242,6 +262,11 @@ jobs:
         run: |
           go install github.com/securego/gosec/v2/cmd/gosec@${{ env.GOSEC_VERSION }}
           echo "$(go env GOPATH)/bin" >> "${GITHUB_PATH}"
+
+      - name: Install build dependencies for cgo packages
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends libudev-dev
 
       - name: Sync dependencies
         run: |
@@ -295,7 +320,7 @@ jobs:
     needs: analyze-changes
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           fetch-depth: 0
 
@@ -306,11 +331,32 @@ jobs:
           sudo install -m 0755 "$TOOL_DIR/gitleaks" /usr/local/bin/gitleaks
 
       - name: Fetch base ref for diff scanning
-        run: git fetch origin "${{ github.base_ref || 'main' }}" --depth=1
+        # Fetch the full base branch INTO the remote-tracking ref. The old
+        # `git fetch origin "<base>" --depth=1` only updated FETCH_HEAD, left a
+        # shallow boundary, and never moved the origin/<base> ref the next step
+        # reads — so merge-base found no common ancestor and the step died here
+        # under `set -e` with no scan at all.
+        run: git fetch --no-tags origin "+refs/heads/${{ github.base_ref || 'main' }}:refs/remotes/origin/${{ github.base_ref || 'main' }}"
 
       - name: Run gitleaks on PR diff
         run: |
-          base_sha=$(git merge-base origin/${{ github.base_ref || 'main' }} HEAD)
+          # Never let an empty base_sha through silently: fail loudly, or fall
+          # back to the pull-request base SHA (PR events) / base tip (push).
+          base_sha=""
+          if base_sha=$(git merge-base "origin/${{ github.base_ref || 'main' }}" HEAD 2>merge-base.err); then
+            echo "merge-base: ${base_sha}"
+          elif [ -n "${{ github.event.pull_request.base.sha }}" ]; then
+            echo "::warning::git merge-base failed; falling back to the pull-request base SHA"
+            if [ -s merge-base.err ]; then cat merge-base.err; fi
+            base_sha="${{ github.event.pull_request.base.sha }}"
+          else
+            echo "::warning::git merge-base failed; falling back to the base branch tip"
+            if [ -s merge-base.err ]; then cat merge-base.err; fi
+            base_sha=$(git rev-parse "origin/${{ github.base_ref || 'main' }}")
+          fi
+          rm -f merge-base.err
+          [ -n "${base_sha}" ] || { echo "::error::could not determine base SHA for secret scan"; exit 1; }
+          git rev-parse --verify --quiet "${base_sha}^{commit}" >/dev/null || { echo "::error::base SHA ${base_sha} is not present locally"; exit 1; }
           if [ -f .gitleaks.toml ]; then
             gitleaks detect --source . --config .gitleaks.toml --log-opts "${base_sha}..HEAD" --verbose --redact
           else
@@ -342,15 +388,15 @@ jobs:
     if: needs.analyze-changes.outputs.portal_changed == 'true'
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Setup pnpm
-        uses: pnpm/action-setup@v2
+        uses: pnpm/action-setup@v5
         with:
           version: ${{ env.PNPM_VERSION }}
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: "pnpm"
@@ -371,15 +417,15 @@ jobs:
     if: needs.analyze-changes.outputs.portal_changed == 'true'
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Setup pnpm
-        uses: pnpm/action-setup@v2
+        uses: pnpm/action-setup@v5
         with:
           version: ${{ env.PNPM_VERSION }}
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: "pnpm"
@@ -398,15 +444,15 @@ jobs:
     if: needs.analyze-changes.outputs.portal_changed == 'true'
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Setup pnpm
-        uses: pnpm/action-setup@v2
+        uses: pnpm/action-setup@v5
         with:
           version: ${{ env.PNPM_VERSION }}
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: "pnpm"

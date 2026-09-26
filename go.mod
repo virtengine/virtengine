@@ -1,6 +1,6 @@
 module github.com/virtengine/virtengine
 
-go 1.25.8
+go 1.26.8
 
 require (
 	cosmossdk.io/api v0.9.2
@@ -73,7 +73,7 @@ require (
 	go.opentelemetry.io/otel/sdk v1.45.0
 	go.opentelemetry.io/otel/trace v1.45.0
 	go.step.sm/crypto v0.76.0
-	golang.org/x/crypto v0.55.0
+	golang.org/x/crypto v0.56.0
 	golang.org/x/mod v0.40.0
 	golang.org/x/oauth2 v0.36.0
 	golang.org/x/sync v0.22.0
@@ -100,6 +100,8 @@ replace (
 	// Once v0.62.0 is released, pin to that version
 	github.com/CosmWasm/wasmd => github.com/CosmWasm/wasmd v0.61.7-0.20260126125754-5cc330bcf3d3
 
+	// sonic v1.14.x cannot compile under Go >= 1.26 (runtime map-iterator layout
+	// moved): v1.15.0 is the first release carrying internal/rt/gotype_go126.go.
 	github.com/bytedance/sonic => github.com/bytedance/sonic v1.15.4
 
 	// VirtEngine forks of Cosmos SDK dependencies
@@ -107,14 +109,21 @@ replace (
 	// See: https://github.com/virtengine/cosmos-sdk (virtengine/release/v0.53.x branch)
 	github.com/cometbft/cometbft => github.com/virtengine/cometbft v0.38.21-virtengine.1
 
-	github.com/cosmos/cosmos-sdk => github.com/virtengine/cosmos-sdk v0.53.4-virtengine.1
+	github.com/cosmos/cosmos-sdk => github.com/virtengine/cosmos-sdk v0.53.4-virtengine.2
 
 	github.com/cosmos/gogoproto => github.com/virtengine/gogoproto v1.7.0-virtengine.1
 
-	// virtengine/ledger-go is a mono-repo that provides both:
-	// - zondax/ledger-go (root module, tag v0.16.0-virtengine)
-	// - cosmos/ledger-cosmos-go (cosmos/ subdir, tag cosmos/v0.16.0-virtengine)
-	github.com/cosmos/ledger-cosmos-go => github.com/virtengine/ledger-go/cosmos v0.16.0-virtengine
+	// akash-network/ledger-go is the mono-repo these ledger forks were synced from
+	// (see the "VirtEngine forks of Cosmos SDK dependencies" note above); it provides both:
+	// - zondax/ledger-go (root module, tag v0.16.0)
+	// - cosmos/ledger-cosmos-go (cosmos/ subdir, tag cosmos/v0.16.0)
+	//
+	// SECURITY: the previous target, github.com/virtengine/ledger-go, was deleted (404).
+	// Its tag v0.16.0-virtengine was a re-tag of akash-network/ledger-go commit
+	// 367cd2152dc6237b5d6a8d7224697c825e4b352a - verified byte-identical (sha256) across
+	// every file of both modules, with identical go.mod. This is a provenance fix only:
+	// no ledger/signing code changes.
+	github.com/cosmos/ledger-cosmos-go => github.com/akash-network/ledger-go/cosmos v0.16.0
 
 	// Use regen gogoproto fork
 	// To be replaced by cosmos/gogoproto in future versions
@@ -131,8 +140,9 @@ replace (
 
 	github.com/zondax/hid => github.com/troian/hid v0.14.0
 
-	// zondax/ledger-go replacement from virtengine/ledger-go mono-repo
-	github.com/zondax/ledger-go => github.com/virtengine/ledger-go v0.16.0-virtengine
+	// zondax/ledger-go replacement from the akash-network/ledger-go mono-repo
+	// (was virtengine/ledger-go, which was deleted - see the ledger-cosmos-go note above)
+	github.com/zondax/ledger-go => github.com/akash-network/ledger-go v0.16.0
 
 	// stick with compatible version or x/exp in v0.47.x line
 	golang.org/x/exp => golang.org/x/exp v0.0.0-20230711153332-06a737ee72cb
@@ -166,6 +176,7 @@ require (
 	github.com/MicahParks/keyfunc v1.9.0 // indirect
 	github.com/Microsoft/go-winio v0.6.2 // indirect
 	github.com/ProjectZKM/Ziren/crates/go-runtime/zkvm_runtime v0.0.0-20251001021608-1fe7b43fc4d6 // indirect
+	github.com/ProtonMail/go-crypto v1.4.1 // indirect
 	github.com/PuerkitoBio/purell v1.1.1 // indirect
 	github.com/PuerkitoBio/urlesc v0.0.0-20170810143723-de5bf2ad4578 // indirect
 	github.com/aokoli/goutils v1.0.1 // indirect

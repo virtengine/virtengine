@@ -190,7 +190,7 @@ func encodeRecoveryActionEvidence(encoder *canonicalEncoder, actions RecoveryAct
 	if len(evidence) != len(names) {
 		return errors.New("every recovery action requires completion evidence")
 	}
-	encoder.u32(uint32(len(evidence))) //nolint:gosec // G115: length is non-negative and bounded by explicit validation above
+	encoder.u32(uint32(len(evidence))) // #nosec G115 -- the evidence list length is bounded far below 2^32
 	for index, value := range evidence {
 		if value.Action != names[index] || !validDigest(value.EvidenceDigest) {
 			return errors.New("recovery action evidence is incomplete or noncanonical")

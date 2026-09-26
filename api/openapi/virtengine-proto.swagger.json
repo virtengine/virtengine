@@ -7424,6 +7424,10 @@
       "title": "MsgAcceptBidResponse is the response for MsgAcceptBid",
       "type": "object"
     },
+    "virtengine.marketplace.v1.MsgAckWaldurCommandResponse": {
+      "title": "MsgAckWaldurCommandResponse is the response for MsgAckWaldurCommand",
+      "type": "object"
+    },
     "virtengine.marketplace.v1.MsgCreateOfferingResponse": {
       "properties": {
         "offering_id": {
@@ -7433,16 +7437,62 @@
       "title": "MsgCreateOfferingResponse is the response for MsgCreateOffering",
       "type": "object"
     },
+    "virtengine.marketplace.v1.MsgCreateOrderResponse": {
+      "properties": {
+        "order_id": {
+          "description": "On-chain order ID string (customer/sequence).",
+          "type": "string"
+        }
+      },
+      "title": "MsgCreateOrderResponse is the response for MsgCreateOrder",
+      "type": "object"
+    },
     "virtengine.marketplace.v1.MsgDeactivateOfferingResponse": {
       "title": "MsgDeactivateOfferingResponse is the response for MsgDeactivateOffering",
+      "type": "object"
+    },
+    "virtengine.marketplace.v1.MsgIngestWaldurOfferingResponse": {
+      "properties": {
+        "action": {
+          "description": "Ingestion action performed (create, update, deprecate, skip).",
+          "type": "string"
+        },
+        "checksum": {
+          "description": "Snapshot checksum.",
+          "type": "string"
+        },
+        "offering_id": {
+          "description": "On-chain offering ID string.",
+          "type": "string"
+        }
+      },
+      "title": "MsgIngestWaldurOfferingResponse is the response for MsgIngestWaldurOffering",
       "type": "object"
     },
     "virtengine.marketplace.v1.MsgPauseAllocationResponse": {
       "title": "MsgPauseAllocationResponse is the response for MsgPauseAllocation",
       "type": "object"
     },
+    "virtengine.marketplace.v1.MsgPlaceBidResponse": {
+      "properties": {
+        "bid_id": {
+          "description": "On-chain bid ID string.",
+          "type": "string"
+        }
+      },
+      "title": "MsgPlaceBidResponse is the response for MsgPlaceBid",
+      "type": "object"
+    },
+    "virtengine.marketplace.v1.MsgRegisterWaldurSourceResponse": {
+      "title": "MsgRegisterWaldurSourceResponse is the response for MsgRegisterWaldurSource",
+      "type": "object"
+    },
     "virtengine.marketplace.v1.MsgResizeAllocationResponse": {
       "title": "MsgResizeAllocationResponse is the response for MsgResizeAllocation",
+      "type": "object"
+    },
+    "virtengine.marketplace.v1.MsgSetOfferingVisibilityResponse": {
+      "title": "MsgSetOfferingVisibilityResponse is the response for MsgSetOfferingVisibility",
       "type": "object"
     },
     "virtengine.marketplace.v1.MsgTerminateAllocationResponse": {
@@ -7457,8 +7507,19 @@
       "title": "MsgWaldurCallbackResponse is the response for MsgWaldurCallback",
       "type": "object"
     },
+    "virtengine.marketplace.v1.MsgWithdrawBidResponse": {
+      "title": "MsgWithdrawBidResponse is the response for MsgWithdrawBid",
+      "type": "object"
+    },
     "virtengine.marketplace.v1.Offering": {
       "properties": {
+        "acquisition_modes": {
+          "description": "Supported acquisition modes (\"direct\", \"bid\").",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
         "activated_at": {
           "format": "date-time",
           "type": "string"
@@ -7469,6 +7530,10 @@
         },
         "allow_bidding": {
           "type": "boolean"
+        },
+        "backend_type": {
+          "description": "Provider execution backend.",
+          "type": "string"
         },
         "category": {
           "$ref": "#/definitions/virtengine.marketplace.v1.OfferingCategory"
@@ -7492,6 +7557,10 @@
         "max_concurrent_orders": {
           "format": "int64",
           "type": "integer"
+        },
+        "metering_profile": {
+          "description": "Metering component profile.",
+          "type": "string"
         },
         "min_bid": {
           "$ref": "#/definitions/cosmos.base.v1beta1.Coin"
@@ -7523,6 +7592,10 @@
         "require_mfa_for_orders": {
           "type": "boolean"
         },
+        "source": {
+          "description": "Supply origin: \"native\" or \"waldur\" (empty means native).",
+          "type": "string"
+        },
         "specifications": {
           "additionalProperties": {
             "type": "string"
@@ -7552,6 +7625,14 @@
         },
         "version": {
           "type": "string"
+        },
+        "visibility": {
+          "description": "Catalogue visibility: \"public\", \"unlisted\", or \"private\".",
+          "type": "string"
+        },
+        "waldur": {
+          "$ref": "#/definitions/virtengine.marketplace.v1.WaldurOfferingRef",
+          "description": "Waldur source reference (set when source is \"waldur\")."
         }
       },
       "title": "Offering represents a marketplace offering from a provider",
@@ -7678,12 +7759,46 @@
       },
       "type": "object"
     },
+    "virtengine.marketplace.v1.QueryCatalogResponse": {
+      "description": "QueryCatalogResponse is the response for the catalogue query.",
+      "properties": {
+        "offerings": {
+          "description": "Active, browsable offerings in deterministic order.",
+          "items": {
+            "$ref": "#/definitions/virtengine.marketplace.v1.Offering"
+          },
+          "type": "array"
+        },
+        "pagination": {
+          "$ref": "#/definitions/cosmos.base.query.v1beta1.PageResponse",
+          "description": "Pagination."
+        }
+      },
+      "type": "object"
+    },
     "virtengine.marketplace.v1.QueryOfferingPriceResponse": {
       "description": "QueryOfferingPriceResponse is response type for the Query/OfferingPrice RPC method.",
       "properties": {
         "total": {
           "$ref": "#/definitions/cosmos.base.v1beta1.Coin",
           "description": "Total calculated price."
+        }
+      },
+      "type": "object"
+    },
+    "virtengine.marketplace.v1.QueryWaldurCommandsResponse": {
+      "description": "QueryWaldurCommandsResponse is the response for durable Waldur commands.",
+      "properties": {
+        "commands": {
+          "description": "Durable commands in ID order.",
+          "items": {
+            "$ref": "#/definitions/virtengine.marketplace.v1.WaldurCommandSummary"
+          },
+          "type": "array"
+        },
+        "pagination": {
+          "$ref": "#/definitions/cosmos.base.query.v1beta1.PageResponse",
+          "description": "Pagination."
         }
       },
       "type": "object"
@@ -7699,6 +7814,177 @@
         }
       },
       "title": "ResourceUnit represents a resource type and its unit quantity for resizing",
+      "type": "object"
+    },
+    "virtengine.marketplace.v1.WaldurCommandSummary": {
+      "description": "WaldurCommandSummary describes a durable command for an off-chain adapter.",
+      "properties": {
+        "acked": {
+          "description": "Whether the command was acknowledged.",
+          "type": "boolean"
+        },
+        "backend_id": {
+          "description": "Canonical VirtEngine identifier for reconciliation.",
+          "type": "string"
+        },
+        "chain_entity_id": {
+          "description": "On-chain entity ID.",
+          "type": "string"
+        },
+        "created_at": {
+          "description": "Creation timestamp.",
+          "format": "date-time",
+          "type": "string"
+        },
+        "id": {
+          "description": "Command identifier.",
+          "type": "string"
+        },
+        "instance_id": {
+          "description": "Target Waldur instance.",
+          "type": "string"
+        },
+        "kind": {
+          "description": "Command kind.",
+          "type": "string"
+        },
+        "waldur_offering_uuid": {
+          "description": "Target Waldur offering UUID.",
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "virtengine.marketplace.v1.WaldurOfferingRef": {
+      "properties": {
+        "backend_type": {
+          "description": "Backend type.",
+          "type": "string"
+        },
+        "customer_uuid": {
+          "description": "Waldur customer UUID (provider organization).",
+          "type": "string"
+        },
+        "instance_id": {
+          "description": "Waldur instance identifier.",
+          "type": "string"
+        },
+        "offering_uuid": {
+          "description": "Waldur offering UUID.",
+          "type": "string"
+        },
+        "snapshot_hash": {
+          "description": "Snapshot hash.",
+          "type": "string"
+        },
+        "snapshot_height": {
+          "description": "Monotonic Waldur revision.",
+          "format": "uint64",
+          "type": "string"
+        }
+      },
+      "title": "WaldurOfferingRef links an on-chain offering to its Waldur source",
+      "type": "object"
+    },
+    "virtengine.marketplace.v1.WaldurOfferingSnapshot": {
+      "properties": {
+        "attributes": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "description": "Flattened string attributes (numeric values encoded as strings).",
+          "type": "object"
+        },
+        "billable": {
+          "description": "Whether the offering is billable.",
+          "type": "boolean"
+        },
+        "category_uuid": {
+          "description": "Waldur category UUID.",
+          "type": "string"
+        },
+        "components": {
+          "description": "Pricing components.",
+          "items": {
+            "$ref": "#/definitions/virtengine.marketplace.v1.WaldurPricingComponent"
+          },
+          "type": "array"
+        },
+        "created": {
+          "description": "Waldur creation timestamp (unix seconds). Part of the signed checksum.",
+          "format": "int64",
+          "type": "string"
+        },
+        "customer_uuid": {
+          "description": "Waldur customer UUID (provider organization).",
+          "type": "string"
+        },
+        "description": {
+          "description": "Offering description.",
+          "type": "string"
+        },
+        "instance_id": {
+          "description": "Source Waldur instance identifier.",
+          "type": "string"
+        },
+        "modified": {
+          "description": "Waldur modification timestamp (unix seconds). Part of the signed checksum.",
+          "format": "int64",
+          "type": "string"
+        },
+        "name": {
+          "description": "Offering name.",
+          "type": "string"
+        },
+        "shared": {
+          "description": "Whether the offering is publicly visible.",
+          "type": "boolean"
+        },
+        "snapshot_height": {
+          "description": "Monotonic Waldur revision.",
+          "format": "uint64",
+          "type": "string"
+        },
+        "state": {
+          "description": "Waldur state (Active, Paused, Archived).",
+          "type": "string"
+        },
+        "type": {
+          "description": "Waldur offering type.",
+          "type": "string"
+        },
+        "uuid": {
+          "description": "Waldur offering UUID.",
+          "type": "string"
+        }
+      },
+      "title": "WaldurOfferingSnapshot carries a canonical Waldur offering snapshot",
+      "type": "object"
+    },
+    "virtengine.marketplace.v1.WaldurPricingComponent": {
+      "properties": {
+        "billing_type": {
+          "description": "How billing is calculated.",
+          "type": "string"
+        },
+        "measured_unit": {
+          "description": "Unit of measurement.",
+          "type": "string"
+        },
+        "name": {
+          "description": "Component name.",
+          "type": "string"
+        },
+        "price": {
+          "description": "Price per unit as a decimal string.",
+          "type": "string"
+        },
+        "type": {
+          "description": "Component type (usage, fixed, one_time).",
+          "type": "string"
+        }
+      },
+      "title": "WaldurPricingComponent mirrors a Waldur pricing component for ingestion",
       "type": "object"
     },
     "virtengine.mfa.v1.AuthorizationSession": {
@@ -23068,6 +23354,114 @@
         "x-virtengine-proto-source": "virtengine/marketplace/v1/query.proto"
       }
     },
+    "/virtengine/marketplace/v1/catalog": {
+      "get": {
+        "operationId": "virtengine.marketplace.v1.Query_Catalog",
+        "parameters": [
+          {
+            "description": "Category filter (empty means any).",
+            "in": "query",
+            "name": "category",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "collectionFormat": "multi",
+            "description": "Region filter (empty means any).",
+            "in": "query",
+            "items": {
+              "type": "string"
+            },
+            "name": "regions",
+            "required": false,
+            "type": "array"
+          },
+          {
+            "collectionFormat": "multi",
+            "description": "Backend allow-list (empty means any).",
+            "in": "query",
+            "items": {
+              "type": "string"
+            },
+            "name": "backends",
+            "required": false,
+            "type": "array"
+          },
+          {
+            "description": "Include unlisted offerings.",
+            "in": "query",
+            "name": "include_unlisted",
+            "required": false,
+            "type": "boolean"
+          },
+          {
+            "description": "Source filter (\"native\", \"waldur\", empty means any).",
+            "in": "query",
+            "name": "source",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "description": "key is a value returned in PageResponse.next_key to begin\nquerying the next page most efficiently. Only one of offset or key\nshould be set.",
+            "format": "byte",
+            "in": "query",
+            "name": "pagination.key",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "description": "offset is a numeric offset that can be used when key is unavailable.\nIt is less efficient than using key. Only one of offset or key should\nbe set.",
+            "format": "uint64",
+            "in": "query",
+            "name": "pagination.offset",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "description": "limit is the total number of results to be returned in the result page.\nIf left empty it will default to a value to be set by each app.",
+            "format": "uint64",
+            "in": "query",
+            "name": "pagination.limit",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "description": "count_total is set to true  to indicate that the result set should include\na count of the total number of items available for pagination in UIs.\ncount_total is only respected when offset is used. It is ignored when key\nis set.",
+            "in": "query",
+            "name": "pagination.count_total",
+            "required": false,
+            "type": "boolean"
+          },
+          {
+            "description": "reverse is set to true if results are to be returned in the descending order.",
+            "in": "query",
+            "name": "pagination.reverse",
+            "required": false,
+            "type": "boolean"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/virtengine.marketplace.v1.QueryCatalogResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/grpc.gateway.runtime.Error"
+            }
+          }
+        },
+        "summary": "Catalog returns active, browsable offerings across supply sources.",
+        "tags": [
+          "Query"
+        ],
+        "x-virtengine-proto-fragment": "virtengine/marketplace/v1/query.swagger.json",
+        "x-virtengine-proto-source": "virtengine/marketplace/v1/query.proto"
+      }
+    },
     "/virtengine/marketplace/v1/offerings/{offering_id}/price": {
       "get": {
         "operationId": "virtengine.marketplace.v1.Query_OfferingPrice",
@@ -23103,6 +23497,85 @@
           }
         },
         "summary": "OfferingPrice calculates pricing for a specific offering.",
+        "tags": [
+          "Query"
+        ],
+        "x-virtengine-proto-fragment": "virtengine/marketplace/v1/query.swagger.json",
+        "x-virtengine-proto-source": "virtengine/marketplace/v1/query.proto"
+      }
+    },
+    "/virtengine/marketplace/v1/waldur-commands": {
+      "get": {
+        "operationId": "virtengine.marketplace.v1.Query_WaldurCommands",
+        "parameters": [
+          {
+            "description": "Waldur instance filter (empty means any).",
+            "in": "query",
+            "name": "instance_id",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "description": "Only return unacknowledged commands.",
+            "in": "query",
+            "name": "pending_only",
+            "required": false,
+            "type": "boolean"
+          },
+          {
+            "description": "key is a value returned in PageResponse.next_key to begin\nquerying the next page most efficiently. Only one of offset or key\nshould be set.",
+            "format": "byte",
+            "in": "query",
+            "name": "pagination.key",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "description": "offset is a numeric offset that can be used when key is unavailable.\nIt is less efficient than using key. Only one of offset or key should\nbe set.",
+            "format": "uint64",
+            "in": "query",
+            "name": "pagination.offset",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "description": "limit is the total number of results to be returned in the result page.\nIf left empty it will default to a value to be set by each app.",
+            "format": "uint64",
+            "in": "query",
+            "name": "pagination.limit",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "description": "count_total is set to true  to indicate that the result set should include\na count of the total number of items available for pagination in UIs.\ncount_total is only respected when offset is used. It is ignored when key\nis set.",
+            "in": "query",
+            "name": "pagination.count_total",
+            "required": false,
+            "type": "boolean"
+          },
+          {
+            "description": "reverse is set to true if results are to be returned in the descending order.",
+            "in": "query",
+            "name": "pagination.reverse",
+            "required": false,
+            "type": "boolean"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/virtengine.marketplace.v1.QueryWaldurCommandsResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/grpc.gateway.runtime.Error"
+            }
+          }
+        },
+        "summary": "WaldurCommands lists durable commands for off-chain Waldur adapters.",
         "tags": [
           "Query"
         ],
