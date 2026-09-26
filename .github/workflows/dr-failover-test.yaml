@@ -55,7 +55,6 @@ jobs:
       contents: read
     env:
       GO_VERSION: '1.26.8'
-      DR_OUTPUT_DIR: ${{ runner.temp }}/dr-rehearsal
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -70,6 +69,8 @@ jobs:
         run: go build -o /usr/local/bin/virtengine ./cmd/virtengine
 
       - name: Run rehearsal drill
+        env:
+          DR_OUTPUT_DIR: ${{ runner.temp }}/dr-rehearsal
         run: |
           chmod +x infra/dr/run-failover-drill.sh
           infra/dr/run-failover-drill.sh --mode rehearsal --output-dir "$DR_OUTPUT_DIR"
@@ -95,7 +96,6 @@ jobs:
     environment: dr-drill
     env:
       GO_VERSION: '1.26.8'
-      DR_OUTPUT_DIR: ${{ runner.temp }}/dr-live
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -110,6 +110,8 @@ jobs:
         run: go build -o /usr/local/bin/virtengine ./cmd/virtengine
 
       - name: Run live drill
+        env:
+          DR_OUTPUT_DIR: ${{ runner.temp }}/dr-live
         shell: bash
         run: |
           chmod +x infra/dr/run-failover-drill.sh
