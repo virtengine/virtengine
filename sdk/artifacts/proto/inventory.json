@@ -225,8 +225,8 @@
       "services": 65,
       "queryServices": 32,
       "msgServices": 29,
-      "methods": 438,
-      "httpBindings": 234
+      "methods": 447,
+      "httpBindings": 236
     },
     "files": [
       {
@@ -3664,6 +3664,34 @@
                     "path": "/virtengine/marketplace/v1/allocations/provider/{provider_address}"
                   }
                 ]
+              },
+              {
+                "name": "Catalog",
+                "fullName": "virtengine.marketplace.v1.Query.Catalog",
+                "grpcPath": "/virtengine.marketplace.v1.Query/Catalog",
+                "requestType": "virtengine.marketplace.v1.QueryCatalogRequest",
+                "responseType": "virtengine.marketplace.v1.QueryCatalogResponse",
+                "http": [
+                  {
+                    "body": "",
+                    "method": "GET",
+                    "path": "/virtengine/marketplace/v1/catalog"
+                  }
+                ]
+              },
+              {
+                "name": "WaldurCommands",
+                "fullName": "virtengine.marketplace.v1.Query.WaldurCommands",
+                "grpcPath": "/virtengine.marketplace.v1.Query/WaldurCommands",
+                "requestType": "virtengine.marketplace.v1.QueryWaldurCommandsRequest",
+                "responseType": "virtengine.marketplace.v1.QueryWaldurCommandsResponse",
+                "http": [
+                  {
+                    "body": "",
+                    "method": "GET",
+                    "path": "/virtengine/marketplace/v1/waldur-commands"
+                  }
+                ]
               }
             ]
           }
@@ -3741,6 +3769,62 @@
                 "grpcPath": "/virtengine.marketplace.v1.Msg/WaldurCallback",
                 "requestType": "virtengine.marketplace.v1.MsgWaldurCallback",
                 "responseType": "virtengine.marketplace.v1.MsgWaldurCallbackResponse",
+                "http": []
+              },
+              {
+                "name": "CreateOrder",
+                "fullName": "virtengine.marketplace.v1.Msg.CreateOrder",
+                "grpcPath": "/virtengine.marketplace.v1.Msg/CreateOrder",
+                "requestType": "virtengine.marketplace.v1.MsgCreateOrder",
+                "responseType": "virtengine.marketplace.v1.MsgCreateOrderResponse",
+                "http": []
+              },
+              {
+                "name": "PlaceBid",
+                "fullName": "virtengine.marketplace.v1.Msg.PlaceBid",
+                "grpcPath": "/virtengine.marketplace.v1.Msg/PlaceBid",
+                "requestType": "virtengine.marketplace.v1.MsgPlaceBid",
+                "responseType": "virtengine.marketplace.v1.MsgPlaceBidResponse",
+                "http": []
+              },
+              {
+                "name": "WithdrawBid",
+                "fullName": "virtengine.marketplace.v1.Msg.WithdrawBid",
+                "grpcPath": "/virtengine.marketplace.v1.Msg/WithdrawBid",
+                "requestType": "virtengine.marketplace.v1.MsgWithdrawBid",
+                "responseType": "virtengine.marketplace.v1.MsgWithdrawBidResponse",
+                "http": []
+              },
+              {
+                "name": "RegisterWaldurSource",
+                "fullName": "virtengine.marketplace.v1.Msg.RegisterWaldurSource",
+                "grpcPath": "/virtengine.marketplace.v1.Msg/RegisterWaldurSource",
+                "requestType": "virtengine.marketplace.v1.MsgRegisterWaldurSource",
+                "responseType": "virtengine.marketplace.v1.MsgRegisterWaldurSourceResponse",
+                "http": []
+              },
+              {
+                "name": "IngestWaldurOffering",
+                "fullName": "virtengine.marketplace.v1.Msg.IngestWaldurOffering",
+                "grpcPath": "/virtengine.marketplace.v1.Msg/IngestWaldurOffering",
+                "requestType": "virtengine.marketplace.v1.MsgIngestWaldurOffering",
+                "responseType": "virtengine.marketplace.v1.MsgIngestWaldurOfferingResponse",
+                "http": []
+              },
+              {
+                "name": "SetOfferingVisibility",
+                "fullName": "virtengine.marketplace.v1.Msg.SetOfferingVisibility",
+                "grpcPath": "/virtengine.marketplace.v1.Msg/SetOfferingVisibility",
+                "requestType": "virtengine.marketplace.v1.MsgSetOfferingVisibility",
+                "responseType": "virtengine.marketplace.v1.MsgSetOfferingVisibilityResponse",
+                "http": []
+              },
+              {
+                "name": "AckWaldurCommand",
+                "fullName": "virtengine.marketplace.v1.Msg.AckWaldurCommand",
+                "grpcPath": "/virtengine.marketplace.v1.Msg/AckWaldurCommand",
+                "requestType": "virtengine.marketplace.v1.MsgAckWaldurCommand",
+                "responseType": "virtengine.marketplace.v1.MsgAckWaldurCommandResponse",
                 "http": []
               }
             ]
