@@ -44,6 +44,10 @@ type (
 	MsgUpdateParams = fraudv1.MsgUpdateParams
 	// MsgUpdateParamsResponse is the generated proto response type
 	MsgUpdateParamsResponse = fraudv1.MsgUpdateParamsResponse
+	// MsgSubmitFraudResponse is the generated proto type for filing a response
+	MsgSubmitFraudResponse = fraudv1.MsgSubmitFraudResponse
+	// MsgSubmitFraudResponseResponse is the generated proto response type
+	MsgSubmitFraudResponseResponse = fraudv1.MsgSubmitFraudResponseResponse
 )
 
 // =============================================================================
@@ -79,6 +83,10 @@ type (
 	QueryModeratorQueueRequest = fraudv1.QueryModeratorQueueRequest
 	// QueryModeratorQueueResponse is the generated proto response type
 	QueryModeratorQueueResponse = fraudv1.QueryModeratorQueueResponse
+	// QueryFraudResponsesRequest is the generated proto type for report responses
+	QueryFraudResponsesRequest = fraudv1.QueryFraudResponsesRequest
+	// QueryFraudResponsesResponse is the generated proto response type
+	QueryFraudResponsesResponse = fraudv1.QueryFraudResponsesResponse
 )
 
 // =============================================================================
@@ -98,6 +106,8 @@ type (
 	ParamsPB = fraudv1.Params
 	// GenesisStatePB is the generated proto type for genesis state
 	GenesisStatePB = fraudv1.GenesisState
+	// FraudResponsePB is the generated proto type for fraud report responses
+	FraudResponsePB = fraudv1.FraudResponse
 )
 
 // =============================================================================
@@ -113,6 +123,15 @@ type (
 	ResolutionTypePB = fraudv1.ResolutionType
 	// AuditActionPB is the generated proto enum for audit actions
 	AuditActionPB = fraudv1.AuditAction
+	// FraudRespondentRolePB is the generated proto enum for respondent roles
+	FraudRespondentRolePB = fraudv1.FraudRespondentRole
+)
+
+// Proto enum value constants - FraudRespondentRole
+const (
+	FraudRespondentRolePBUnspecified   = fraudv1.FraudRespondentRoleUnspecified
+	FraudRespondentRolePBReportedParty = fraudv1.FraudRespondentRoleReportedParty
+	FraudRespondentRolePBReporter      = fraudv1.FraudRespondentRoleReporter
 )
 
 // Proto enum value constants - FraudReportStatus
@@ -244,6 +263,27 @@ func ResolutionTypeFromProto(r ResolutionTypePB) ResolutionType {
 	}
 	//nolint:gosec // range checked above
 	return ResolutionType(uint8(r))
+}
+
+// =============================================================================
+// Type Conversion Functions - FraudRespondentRole
+// =============================================================================
+
+// FraudRespondentRoleToProto converts local FraudRespondentRole to proto enum
+func FraudRespondentRoleToProto(r FraudRespondentRole) FraudRespondentRolePB {
+	return FraudRespondentRolePB(r)
+}
+
+// FraudRespondentRoleFromProto converts proto enum to local FraudRespondentRole
+func FraudRespondentRoleFromProto(r FraudRespondentRolePB) FraudRespondentRole {
+	if r < FraudRespondentRolePBUnspecified || r > FraudRespondentRolePBReporter {
+		return FraudRespondentRoleUnspecified
+	}
+	if r > FraudRespondentRolePB(^uint8(0)) {
+		return FraudRespondentRoleUnspecified
+	}
+	//nolint:gosec // range checked above
+	return FraudRespondentRole(uint8(r))
 }
 
 // =============================================================================
@@ -468,6 +508,54 @@ func ModeratorQueueEntryFromProto(pb *ModeratorQueueEntryPB) *ModeratorQueueEntr
 }
 
 // =============================================================================
+// Type Conversion Functions - FraudResponse
+// =============================================================================
+
+// FraudResponseToProto converts local FraudResponse to proto FraudResponse
+func FraudResponseToProto(r *FraudResponse) *FraudResponsePB {
+	if r == nil {
+		return nil
+	}
+	evidence := make([]EncryptedEvidencePB, len(r.Evidence))
+	for i, e := range r.Evidence {
+		evidence[i] = EncryptedEvidenceToProto(&e)
+	}
+	return &FraudResponsePB{
+		Id:            r.ID,
+		ReportId:      r.ReportID,
+		Respondent:    r.Respondent,
+		Role:          FraudRespondentRoleToProto(r.Role),
+		Evidence:      evidence,
+		StatementHash: r.StatementHash,
+		ContentHash:   r.ContentHash,
+		SubmittedAt:   r.SubmittedAt,
+		BlockHeight:   r.BlockHeight,
+	}
+}
+
+// FraudResponseFromProto converts proto FraudResponse to local FraudResponse
+func FraudResponseFromProto(pb *FraudResponsePB) *FraudResponse {
+	if pb == nil {
+		return nil
+	}
+	evidence := make([]EncryptedEvidence, len(pb.Evidence))
+	for i, e := range pb.Evidence {
+		evidence[i] = EncryptedEvidenceFromProto(&e)
+	}
+	return &FraudResponse{
+		ID:            pb.Id,
+		ReportID:      pb.ReportId,
+		Respondent:    pb.Respondent,
+		Role:          FraudRespondentRoleFromProto(pb.Role),
+		Evidence:      evidence,
+		StatementHash: pb.StatementHash,
+		ContentHash:   pb.ContentHash,
+		SubmittedAt:   pb.SubmittedAt,
+		BlockHeight:   pb.BlockHeight,
+	}
+}
+
+// =============================================================================
 // Type Conversion Functions - Params
 // =============================================================================
 
@@ -529,6 +617,8 @@ func ParamsToProto(p *Params) *ParamsPB {
 		EscalationThresholdDays: safeInt32FromInt(escalation),
 		ReportRetentionDays:     safeInt32FromInt(reportRetention),
 		AuditLogRetentionDays:   safeInt32FromInt(auditRetention),
+		MaxReportsPerWindow:     safeInt32FromInt(p.MaxReportsPerWindow),
+		ReportWindowBlocks:      safeInt32FromInt(p.ReportWindowBlocks),
 	}
 }
 
@@ -546,6 +636,8 @@ func ParamsFromProto(pb *ParamsPB) *Params {
 		EscalationThresholdDays: int(pb.EscalationThresholdDays),
 		ReportRetentionDays:     int(pb.ReportRetentionDays),
 		AuditLogRetentionDays:   int(pb.AuditLogRetentionDays),
+		MaxReportsPerWindow:     int(pb.MaxReportsPerWindow),
+		ReportWindowBlocks:      int(pb.ReportWindowBlocks),
 	}
 }
 
@@ -577,6 +669,7 @@ type msgServerAdapter struct {
 // This mirrors the proto MsgServer but uses local types for convenience.
 type MsgServerImpl interface {
 	SubmitFraudReport(ctx context.Context, msg *MsgSubmitFraudReport) (*MsgSubmitFraudReportResponse, error)
+	SubmitFraudResponse(ctx context.Context, msg *MsgSubmitFraudResponse) (*MsgSubmitFraudResponseResponse, error)
 	AssignModerator(ctx context.Context, msg *MsgAssignModerator) (*MsgAssignModeratorResponse, error)
 	UpdateReportStatus(ctx context.Context, msg *MsgUpdateReportStatus) (*MsgUpdateReportStatusResponse, error)
 	ResolveFraudReport(ctx context.Context, msg *MsgResolveFraudReport) (*MsgResolveFraudReportResponse, error)
@@ -593,6 +686,10 @@ func NewMsgServerAdapter(impl MsgServerImpl) fraudv1.MsgServer {
 
 func (a *msgServerAdapter) SubmitFraudReport(ctx context.Context, req *fraudv1.MsgSubmitFraudReport) (*fraudv1.MsgSubmitFraudReportResponse, error) {
 	return a.impl.SubmitFraudReport(ctx, req)
+}
+
+func (a *msgServerAdapter) SubmitFraudResponse(ctx context.Context, req *fraudv1.MsgSubmitFraudResponse) (*fraudv1.MsgSubmitFraudResponseResponse, error) {
+	return a.impl.SubmitFraudResponse(ctx, req)
 }
 
 func (a *msgServerAdapter) AssignModerator(ctx context.Context, req *fraudv1.MsgAssignModerator) (*fraudv1.MsgAssignModeratorResponse, error) {
@@ -637,6 +734,7 @@ type QueryServerImpl interface {
 	FraudReportsByReportedParty(ctx context.Context, req *QueryFraudReportsByReportedPartyRequest) (*QueryFraudReportsByReportedPartyResponse, error)
 	AuditLog(ctx context.Context, req *QueryAuditLogRequest) (*QueryAuditLogResponse, error)
 	ModeratorQueue(ctx context.Context, req *QueryModeratorQueueRequest) (*QueryModeratorQueueResponse, error)
+	FraudResponses(ctx context.Context, req *QueryFraudResponsesRequest) (*QueryFraudResponsesResponse, error)
 }
 
 // NewQueryServerAdapter creates a new adapter that wraps a QueryServerImpl
@@ -671,6 +769,10 @@ func (a *queryServerAdapter) AuditLog(ctx context.Context, req *fraudv1.QueryAud
 
 func (a *queryServerAdapter) ModeratorQueue(ctx context.Context, req *fraudv1.QueryModeratorQueueRequest) (*fraudv1.QueryModeratorQueueResponse, error) {
 	return a.impl.ModeratorQueue(ctx, req)
+}
+
+func (a *queryServerAdapter) FraudResponses(ctx context.Context, req *fraudv1.QueryFraudResponsesRequest) (*fraudv1.QueryFraudResponsesResponse, error) {
+	return a.impl.FraudResponses(ctx, req)
 }
 
 // =============================================================================

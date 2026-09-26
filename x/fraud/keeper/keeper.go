@@ -92,12 +92,13 @@ type ProviderKeeper interface {
 
 // Keeper implements the Fraud module keeper
 type Keeper struct {
-	skey           storetypes.StoreKey
-	cdc            codec.BinaryCodec
-	rolesKeeper    RolesKeeper
-	providerKeeper ProviderKeeper
-	authority      string
-	financialCases FinancialCaseKeeper
+	skey            storetypes.StoreKey
+	cdc             codec.BinaryCodec
+	rolesKeeper     RolesKeeper
+	providerKeeper  ProviderKeeper
+	authority       string
+	financialCases  FinancialCaseKeeper
+	marketKeeper    MarketKeeper
 }
 
 type FinancialCaseKeeper interface {
@@ -254,6 +255,10 @@ func (k Keeper) IsAdmin(ctx sdk.Context, addr sdk.AccAddress) bool {
 // ============================================================================
 
 // SubmitFraudReport submits a new fraud report
+//
+// Reporter standing, de-duplication and the per-reporter rate limit are all
+// enforced here so they hold regardless of which entry point (msg server, CLI,
+// genesis import) calls into the keeper.
 func (k Keeper) SubmitFraudReport(ctx sdk.Context, report *types.FraudReport) error {
 	// Assign sequence ID if not set (before validation)
 	if report.ID == "" {
@@ -267,19 +272,28 @@ func (k Keeper) SubmitFraudReport(ctx sdk.Context, report *types.FraudReport) er
 		return err
 	}
 
-	// Check reporter is a provider
-	reporterAddr, err := sdk.AccAddressFromBech32(report.Reporter)
-	if err != nil {
-		return types.ErrInvalidReporter.Wrap(err.Error())
+	// Reporter standing: providers keep their unconditional right; every other
+	// affected party must anchor the report to an order they are party to, or
+	// declare an explicit no-order basis justified in encrypted evidence.
+	if err := k.authorizeReportReporter(ctx, *report); err != nil {
+		return err
 	}
-	if !k.IsProvider(ctx, reporterAddr) {
-		return types.ErrUnauthorizedReporter
+
+	// Spam control: reject an identical resubmission before it can create a
+	// second moderator-queue entry, and cap the per-reporter submission rate.
+	fingerprint := report.ComputeSubmissionFingerprint()
+	if err := k.checkDuplicateReport(ctx, *report, fingerprint); err != nil {
+		return err
+	}
+	if err := k.checkReporterRateLimit(ctx, report.Reporter); err != nil {
+		return err
 	}
 
 	// Store the report
 	if err := k.SetFraudReport(ctx, *report); err != nil {
 		return err
 	}
+	k.recordReportFingerprint(ctx, *report, fingerprint)
 
 	// Add to moderator queue
 	priority := k.calculatePriority(report.Category)

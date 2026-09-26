@@ -58,4 +58,18 @@ message Params {
     (gogoproto.jsontag) = "audit_log_retention_days",
     (gogoproto.moretags) = "yaml:\"audit_log_retention_days\""
   ];
+
+  // MaxReportsPerWindow caps how many fraud reports a single reporter may submit
+  // within ReportWindowBlocks (spam control).
+  int32 max_reports_per_window = 9 [
+    (gogoproto.jsontag) = "max_reports_per_window",
+    (gogoproto.moretags) = "yaml:\"max_reports_per_window\""
+  ];
+
+  // ReportWindowBlocks is the block-height window used for the per-reporter
+  // submission limit. Block height (not wall clock) keeps the check deterministic.
+  int32 report_window_blocks = 10 [
+    (gogoproto.jsontag) = "report_window_blocks",
+    (gogoproto.moretags) = "yaml:\"report_window_blocks\""
+  ];
 }

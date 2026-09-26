@@ -83,4 +83,33 @@ var (
 
 	// ErrInvalidAuthority is returned when the authority address is invalid
 	ErrInvalidAuthority = errors.Register(ModuleName, 3022, "invalid authority address")
+
+	// ErrMissingOrderReference is returned when a non-provider reporter submits a
+	// report without any order or resource reference. Every affected participant
+	// must anchor their report to the transaction they were party to, so a
+	// moderator can verify standing without trusting the reporter's narrative.
+	ErrMissingOrderReference = errors.Register(ModuleName, 3008, "report requires an order or resource reference")
+
+	// ErrDuplicateReport is returned when a reporter resubmits a byte-identical
+	// report. The original report stays in the moderator queue; the duplicate
+	// never creates a second queue entry (spam control).
+	ErrDuplicateReport = errors.Register(ModuleName, 3009, "duplicate fraud report")
+
+	// ErrReporterRateLimited is returned when a reporter exceeds the per-window
+	// submission limit (spam control).
+	ErrReporterRateLimited = errors.Register(ModuleName, 3010, "reporter submission rate limit exceeded")
+
+	// ErrResponseNotFound is returned when a fraud response record is not found
+	ErrResponseNotFound = errors.Register(ModuleName, 3013, "fraud response not found")
+
+	// ErrInvalidResponse is returned when a fraud response record is malformed
+	ErrInvalidResponse = errors.Register(ModuleName, 3014, "invalid fraud response")
+
+	// ErrUnauthorizedRespondent is returned when a party that is neither the
+	// reported party nor the original reporter tries to file a response
+	ErrUnauthorizedRespondent = errors.Register(ModuleName, 3015, "unauthorized: only the reported party or the reporter may respond")
+
+	// ErrReportNotPending is returned when a response is filed against a report
+	// that is already in a terminal state
+	ErrReportNotPending = errors.Register(ModuleName, 3016, "fraud report is not pending")
 )

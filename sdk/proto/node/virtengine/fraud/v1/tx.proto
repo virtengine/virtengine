@@ -17,6 +17,9 @@ service Msg {
   // SubmitFraudReport submits a new fraud report
   rpc SubmitFraudReport(MsgSubmitFraudReport) returns (MsgSubmitFraudReportResponse);
 
+  // SubmitFraudResponse files a rebuttal/response against an existing fraud report
+  rpc SubmitFraudResponse(MsgSubmitFraudResponse) returns (MsgSubmitFraudResponseResponse);
+
   // AssignModerator assigns a moderator to a fraud report
   rpc AssignModerator(MsgAssignModerator) returns (MsgAssignModeratorResponse);
 
@@ -80,6 +83,14 @@ message MsgSubmitFraudReport {
     (gogoproto.jsontag) = "related_order_ids,omitempty",
     (gogoproto.moretags) = "yaml:\"related_order_ids\""
   ];
+
+  // NoOrderAvailable asserts there is genuinely no order/resource to reference.
+  // Tenants and other non-provider reporters must supply an order reference or
+  // set this flag; the justification itself belongs in encrypted evidence.
+  bool no_order_available = 7 [
+    (gogoproto.jsontag) = "no_order_available,omitempty",
+    (gogoproto.moretags) = "yaml:\"no_order_available\""
+  ];
 }
 
 // MsgSubmitFraudReportResponse is the response for MsgSubmitFraudReport
@@ -88,6 +99,50 @@ message MsgSubmitFraudReportResponse {
   string report_id = 1 [
     (gogoproto.jsontag) = "report_id",
     (gogoproto.moretags) = "yaml:\"report_id\""
+  ];
+}
+
+// MsgSubmitFraudResponse files a response/rebuttal against a fraud report.
+// Either the reported party or the original reporter may respond; the actual
+// statement travels in encrypted evidence, never in a public free-text field.
+message MsgSubmitFraudResponse {
+  option (gogoproto.equal) = false;
+  option (cosmos.msg.v1.signer) = "respondent";
+  option (amino.name) = "fraud/MsgSubmitFraudResponse";
+
+  // Respondent is the address filing the response
+  string respondent = 1 [
+    (cosmos_proto.scalar) = "cosmos.AddressString",
+    (gogoproto.jsontag) = "respondent",
+    (gogoproto.moretags) = "yaml:\"respondent\""
+  ];
+
+  // ReportID is the fraud report being responded to
+  string report_id = 2 [
+    (gogoproto.jsontag) = "report_id",
+    (gogoproto.moretags) = "yaml:\"report_id\""
+  ];
+
+  // Evidence holds the encrypted response content for the moderator recipients
+  repeated EncryptedEvidence evidence = 3 [
+    (gogoproto.nullable) = false,
+    (gogoproto.jsontag) = "evidence",
+    (gogoproto.moretags) = "yaml:\"evidence\""
+  ];
+
+  // StatementHash is SHA256 of the plaintext statement, for integrity only
+  string statement_hash = 4 [
+    (gogoproto.jsontag) = "statement_hash",
+    (gogoproto.moretags) = "yaml:\"statement_hash\""
+  ];
+}
+
+// MsgSubmitFraudResponseResponse is the response for MsgSubmitFraudResponse
+message MsgSubmitFraudResponseResponse {
+  // ResponseID is the unique identifier for the stored response
+  string response_id = 1 [
+    (gogoproto.jsontag) = "response_id",
+    (gogoproto.moretags) = "yaml:\"response_id\""
   ];
 }
 

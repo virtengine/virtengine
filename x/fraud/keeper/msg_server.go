@@ -51,8 +51,13 @@ func (ms *msgServer) submitFraudReport(ctx sdk.Context, msg *types.MsgSubmitFrau
 	if err != nil {
 		return nil, types.ErrInvalidReporter.Wrap(errMsgInvalidReporterAddr)
 	}
-	if !ms.keeper.IsProvider(ctx, reporterAddr) {
-		return nil, types.ErrUnauthorizedReporter
+
+	// Reporter standing (provider, or an affected party with a documented order
+	// basis) is enforced in the keeper so every entry point shares it. Surface
+	// the provider-only rejection early with the historical error for callers.
+	if !ms.keeper.IsProvider(ctx, reporterAddr) && len(msg.RelatedOrderIds) == 0 && !msg.NoOrderAvailable {
+		return nil, types.ErrMissingOrderReference.Wrap(
+			"non-provider reports require a related order/resource reference, or an explicit no-order-available basis with justification in encrypted evidence")
 	}
 
 	evidence := make([]types.EncryptedEvidence, len(msg.Evidence))
@@ -63,7 +68,8 @@ func (ms *msgServer) submitFraudReport(ctx sdk.Context, msg *types.MsgSubmitFrau
 		Reporter: msg.Reporter, ReportedParty: msg.ReportedParty,
 		Category: types.FraudCategoryFromProto(msg.Category), Description: msg.Description,
 		Evidence: evidence, RelatedOrderIDs: msg.RelatedOrderIds,
-		Status: types.FraudReportStatusSubmitted, SubmittedAt: ctx.BlockTime(), UpdatedAt: ctx.BlockTime(), BlockHeight: ctx.BlockHeight(),
+		NoOrderAvailable: msg.NoOrderAvailable,
+		Status:           types.FraudReportStatusSubmitted, SubmittedAt: ctx.BlockTime(), UpdatedAt: ctx.BlockTime(), BlockHeight: ctx.BlockHeight(),
 	}
 	if err := ms.keeper.SubmitFraudReport(ctx, report); err != nil {
 		return nil, err
@@ -90,6 +96,54 @@ func (ms *msgServer) submitFraudReport(ctx sdk.Context, msg *types.MsgSubmitFrau
 
 	ms.keeper.Logger(ctx).Info("fraud report submitted via message", "report_id", report.ID, "reporter", msg.Reporter, "reported_party", msg.ReportedParty, "category", msg.Category.String())
 	return &types.MsgSubmitFraudReportResponse{ReportId: report.ID}, nil
+}
+
+// SubmitFraudResponse handles filing a response/rebuttal against a report
+func (ms *msgServer) SubmitFraudResponse(goCtx context.Context, msg *types.MsgSubmitFraudResponse) (*types.MsgSubmitFraudResponseResponse, error) {
+	ctx := sdk.UnwrapSDKContext(goCtx)
+	cacheCtx, write := ctx.CacheContext()
+	response, err := ms.submitFraudResponse(cacheCtx, msg)
+	if err != nil {
+		return nil, err
+	}
+	write()
+	return response, nil
+}
+
+func (ms *msgServer) submitFraudResponse(ctx sdk.Context, msg *types.MsgSubmitFraudResponse) (*types.MsgSubmitFraudResponseResponse, error) {
+	// Validate respondent address
+	if _, err := sdk.AccAddressFromBech32(msg.Respondent); err != nil {
+		return nil, types.ErrUnauthorizedRespondent.Wrap("invalid respondent address")
+	}
+
+	evidence := make([]types.EncryptedEvidence, len(msg.Evidence))
+	for i, item := range msg.Evidence {
+		evidence[i] = types.EncryptedEvidenceFromProto(&item)
+	}
+
+	response := &types.FraudResponse{
+		ReportID:      msg.ReportId,
+		Respondent:    msg.Respondent,
+		Evidence:      evidence,
+		StatementHash: msg.StatementHash,
+		SubmittedAt:   ctx.BlockTime(),
+		BlockHeight:   ctx.BlockHeight(),
+	}
+
+	// The keeper derives the respondent role from the report and rejects
+	// anyone who is neither the reported party nor the reporter.
+	if err := ms.keeper.SubmitFraudResponse(ctx, response); err != nil {
+		return nil, err
+	}
+
+	ms.keeper.Logger(ctx).Info("fraud response submitted via message",
+		"report_id", response.ReportID,
+		"response_id", response.ID,
+		"respondent", response.Respondent,
+		"role", response.Role.String(),
+	)
+
+	return &types.MsgSubmitFraudResponseResponse{ResponseId: response.ID}, nil
 }
 
 // AssignModerator handles assigning a moderator to a fraud report
