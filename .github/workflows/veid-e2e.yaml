@@ -140,7 +140,7 @@ jobs:
             ./pkg/inference/...
 
       - name: Upload coverage
-        uses: codecov/codecov-action@v5
+        uses: codecov/codecov-action@v6
         if: always()
         with:
           files: ./coverage-veid.txt,./coverage-inference.txt

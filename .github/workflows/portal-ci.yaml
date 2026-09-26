@@ -124,7 +124,7 @@ jobs:
         run: pnpm -C portal test --coverage
 
       - name: Upload coverage
-        uses: codecov/codecov-action@v5
+        uses: codecov/codecov-action@v6
         with:
           files: portal/coverage/coverage-final.json
           flags: portal
