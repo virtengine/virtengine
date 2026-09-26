@@ -36,6 +36,7 @@ This index lists internal-only documentation. Do not add internal docs outside `
 - `_docs/adr/ADR-008-canonical-financial-cases.md`
 - `_docs/adr/ADR-009-canonical-kubernetes-rendering-and-identity.md`
 - `_docs/adr/ADR-010-unified-market-resolution-and-waldur-supply.md`
+- `_docs/adr/ADR-011-vesc-veid-scoping.md`
 - `_docs/adr/adr-001-network-upgrades.md`
 - `_docs/adr/adr-002-manifest-v2beta2.md`
 - `_docs/adr/adr-003-technical-debt-refactoring.md`
