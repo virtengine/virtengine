@@ -299,15 +299,15 @@ func atomicWriteFile(path string, data []byte, mode os.FileMode) error {
 	tempName := temp.Name()
 	defer os.Remove(tempName)
 	if err := temp.Chmod(mode); err != nil {
-		temp.Close()
+		_ = temp.Close()
 		return err
 	}
 	if _, err := temp.Write(data); err != nil {
-		temp.Close()
+		_ = temp.Close()
 		return err
 	}
 	if err := temp.Sync(); err != nil {
-		temp.Close()
+		_ = temp.Close()
 		return err
 	}
 	if err := temp.Close(); err != nil {
@@ -319,7 +319,7 @@ func atomicWriteFile(path string, data []byte, mode os.FileMode) error {
 	if runtime.GOOS == goosWindows {
 		return nil
 	}
-	directory, err := os.Open(dir)
+	directory, err := os.Open(dir) // #nosec G304 -- dir is a local path parameter supplied by this function's own caller (a CLI argument, loader parameter or configured state file) and is not derived from a network peer or chain message; opening the caller-nominated file is the purpose of this call
 	if err != nil {
 		return err
 	}

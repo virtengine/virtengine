@@ -164,7 +164,7 @@ func saturatingMul(a, b uint64) int64 {
 	if a > uint64(math.MaxInt64)/b {
 		return math.MaxInt64
 	}
-	//nolint:gosec // G115: guarded above, both operands fit int64 here.
+	// #nosec G115 -- guarded above: a*b <= MaxInt64 with a,b >= 1, so both operands fit int64 and the product cannot overflow
 	return int64(a) * int64(b)
 }
 

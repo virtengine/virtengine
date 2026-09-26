@@ -195,7 +195,7 @@ type ChunkManifest struct {
 // NewChunkManifest creates a new chunk manifest
 func NewChunkManifest(totalSize, chunkSize uint64) *ChunkManifest {
 	//nolint:gosec // G115: chunkCount is bounded by reasonable file sizes
-	chunkCount := uint32((totalSize + chunkSize - 1) / chunkSize)
+	chunkCount := uint32((totalSize + chunkSize - 1) / chunkSize) // #nosec G115 -- value is a slice length or element count: non-negative and bounded far below 2^32
 	return &ChunkManifest{
 		Version:    ChunkManifestVersion,
 		TotalSize:  totalSize,
@@ -209,11 +209,11 @@ func NewChunkManifest(totalSize, chunkSize uint64) *ChunkManifest {
 // AddChunk adds a chunk to the manifest
 func (m *ChunkManifest) AddChunk(chunk ChunkInfo) error {
 	//nolint:gosec // G115: len(m.Chunks) bounded by m.ChunkCount
-	if uint32(len(m.Chunks)) >= m.ChunkCount {
+	if uint32(len(m.Chunks)) >= m.ChunkCount { // #nosec G115 -- len(m.Chunks) is bounded by m.ChunkCount, itself derived from a uint32 manifest size
 		return ErrInvalidChunkManifest.Wrap("cannot add more chunks than declared count")
 	}
 	//nolint:gosec // G115: len(m.Chunks) bounded by m.ChunkCount
-	if chunk.Index != uint32(len(m.Chunks)) {
+	if chunk.Index != uint32(len(m.Chunks)) { // #nosec G115 -- len(m.Chunks) is bounded by m.ChunkCount, itself derived from a uint32 manifest size
 		return ErrInvalidChunkManifest.Wrapf("expected chunk index %d, got %d", len(m.Chunks), chunk.Index)
 	}
 	m.Chunks = append(m.Chunks, chunk)
@@ -270,13 +270,13 @@ func (m *ChunkManifest) Serialize() []byte {
 
 // appendUint32 appends a uint32 to a byte slice in big-endian format
 func appendUint32(buf []byte, v uint32) []byte {
-	return append(buf, byte(v>>24), byte(v>>16), byte(v>>8), byte(v))
+	return append(buf, byte(v>>24), byte(v>>16), byte(v>>8), byte(v)) // #nosec G115 -- fixed-width big-endian encoding: only the low 8 bits are written by design and the truncated value is never used arithmetically
 }
 
 // appendUint64 appends a uint64 to a byte slice in big-endian format
 func appendUint64(buf []byte, v uint64) []byte {
-	return append(buf, byte(v>>56), byte(v>>48), byte(v>>40), byte(v>>32),
-		byte(v>>24), byte(v>>16), byte(v>>8), byte(v))
+	return append(buf, byte(v>>56), byte(v>>48), byte(v>>40), byte(v>>32), // #nosec G115 -- fixed-width big-endian encoding: only the low 8 bits are written by design and the truncated value is never used arithmetically
+		byte(v>>24), byte(v>>16), byte(v>>8), byte(v)) // #nosec G115 -- fixed-width big-endian encoding: only the low 8 bits are written by design and the truncated value is never used arithmetically
 }
 
 func safeUint32FromInt(value int) uint32 {
@@ -307,7 +307,7 @@ func (m *ChunkManifest) Validate() error {
 		return ErrInvalidChunkManifest.Wrap("chunk_count cannot be zero")
 	}
 	//nolint:gosec // G115: len(m.Chunks) bounded by m.ChunkCount
-	if uint32(len(m.Chunks)) != m.ChunkCount {
+	if uint32(len(m.Chunks)) != m.ChunkCount { // #nosec G115 -- len(m.Chunks) is bounded by m.ChunkCount, itself derived from a uint32 manifest size
 		return ErrInvalidChunkManifest.Wrapf("chunk count mismatch: got %d, want %d", len(m.Chunks), m.ChunkCount)
 	}
 	if len(m.RootHash) != 32 {

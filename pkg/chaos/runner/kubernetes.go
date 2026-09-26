@@ -498,7 +498,7 @@ func (r *KubernetesRunner) applyManifest(ctx context.Context, manifest string) e
 
 	// Execute with validated path and arguments
 	//nolint:gosec // G204: Executable path and arguments validated by security package
-	cmd := exec.CommandContext(ctx, r.kubectlPath, args...)
+	cmd := exec.CommandContext(ctx, r.kubectlPath, args...) // #nosec G204 -- the executable is resolved with security.ResolveAndValidateExecutable and the arguments are validated by security.KubectlArgs before execution
 	cmd.Stdin = strings.NewReader(manifest)
 	output, err := cmd.CombinedOutput()
 	if err != nil {
@@ -522,7 +522,7 @@ func (r *KubernetesRunner) deleteResource(ctx context.Context, name string) erro
 
 		// Execute with validated path and arguments
 		//nolint:gosec // G204: Executable path and arguments validated by security package
-		cmd := exec.CommandContext(ctx, r.kubectlPath, args...)
+		cmd := exec.CommandContext(ctx, r.kubectlPath, args...) // #nosec G204 -- the executable is resolved with security.ResolveAndValidateExecutable and the arguments are validated by security.KubectlArgs before execution
 		if _, err := cmd.CombinedOutput(); err != nil {
 			// Log but continue
 			if r.logger != nil {
@@ -548,7 +548,7 @@ func (r *KubernetesRunner) getResourceStatus(ctx context.Context, name string) (
 
 		// Execute with validated path and arguments
 		//nolint:gosec // G204: Executable path and arguments validated by security package
-		cmd := exec.CommandContext(ctx, r.kubectlPath, args...)
+		cmd := exec.CommandContext(ctx, r.kubectlPath, args...) // #nosec G204 -- the executable is resolved with security.ResolveAndValidateExecutable and the arguments are validated by security.KubectlArgs before execution
 		output, err := cmd.Output()
 		if err == nil && len(output) > 0 {
 			return string(output), nil

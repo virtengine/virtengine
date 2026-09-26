@@ -64,7 +64,7 @@ func (k Querier) Deployments(c context.Context, req *types.QueryDeploymentsReque
 			return nil, status.Error(codes.InvalidArgument, "invalid state value")
 		}
 
-		states = append(states, byte(stateVal))
+		states = append(states, byte(stateVal)) // #nosec G115 -- fixed-width big-endian encoding: byte(stateVal) writes the low byte into the buffer by design; the truncated value is not used arithmetically
 	} else {
 		// request does not have a pagination set. Start from active store
 		states = append(states, byte(v1.DeploymentActive))

@@ -51,7 +51,7 @@ func loadLatestPhase1(state State) (*mpcsetup.Phase1, []byte, error) {
 		return nil, nil, fmt.Errorf("no phase1 contributions found")
 	}
 	latest := paths[len(paths)-1]
-	data, err := os.ReadFile(latest)
+	data, err := os.ReadFile(latest) // #nosec G304 -- the path is composed from the ceremony state directory (given once by the operator on the command line) plus fixed file names, so remote input cannot influence it
 	if err != nil {
 		return nil, nil, err
 	}
@@ -71,7 +71,7 @@ func loadLatestPhase2(state State) (*mpcsetup.Phase2, []byte, error) {
 		return nil, nil, fmt.Errorf("no phase2 contributions found")
 	}
 	latest := paths[len(paths)-1]
-	data, err := os.ReadFile(latest)
+	data, err := os.ReadFile(latest) // #nosec G304 -- the path is composed from the ceremony state directory (given once by the operator on the command line) plus fixed file names, so remote input cannot influence it
 	if err != nil {
 		return nil, nil, err
 	}
@@ -92,7 +92,7 @@ func loadPhase1Contributions(state State) ([]*mpcsetup.Phase1, []string, error) 
 	}
 	contribs := make([]*mpcsetup.Phase1, 0, len(paths)-1)
 	for _, path := range paths[1:] {
-		data, err := os.ReadFile(path)
+		data, err := os.ReadFile(path) // #nosec G304 -- the path is composed from the ceremony state directory (given once by the operator on the command line) plus fixed file names, so remote input cannot influence it
 		if err != nil {
 			return nil, nil, err
 		}
@@ -115,7 +115,7 @@ func loadPhase2Contributions(state State) ([]*mpcsetup.Phase2, []string, error) 
 	}
 	contribs := make([]*mpcsetup.Phase2, 0, len(paths)-1)
 	for _, path := range paths[1:] {
-		data, err := os.ReadFile(path)
+		data, err := os.ReadFile(path) // #nosec G304 -- the path is composed from the ceremony state directory (given once by the operator on the command line) plus fixed file names, so remote input cannot influence it
 		if err != nil {
 			return nil, nil, err
 		}
@@ -130,7 +130,7 @@ func loadPhase2Contributions(state State) ([]*mpcsetup.Phase2, []string, error) 
 
 func loadR1CS(state State) (*cs.R1CS, error) {
 	path := filepath.Join(state.Phase2Dir(), "r1cs.bin")
-	data, err := os.ReadFile(path)
+	data, err := os.ReadFile(path) // #nosec G304 -- the path is composed from the ceremony state directory (given once by the operator on the command line) plus fixed file names, so remote input cannot influence it
 	if err != nil {
 		return nil, err
 	}
@@ -143,7 +143,7 @@ func loadR1CS(state State) (*cs.R1CS, error) {
 
 func loadCommons(state State) (*mpcsetup.SrsCommons, error) {
 	path := filepath.Join(state.Phase1Dir(), "commons.bin")
-	data, err := os.ReadFile(path)
+	data, err := os.ReadFile(path) // #nosec G304 -- the path is composed from the ceremony state directory (given once by the operator on the command line) plus fixed file names, so remote input cannot influence it
 	if err != nil {
 		return nil, err
 	}

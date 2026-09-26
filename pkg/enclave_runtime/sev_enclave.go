@@ -824,7 +824,7 @@ func (s *SEVSNPEnclaveServiceImpl) simulateCVMScoring(request *ScoringRequest) *
 func (s *SEVSNPEnclaveServiceImpl) computeSigningPayload(requestID string, score uint32, status string, inputHash []byte) []byte {
 	h := sha256.New()
 	h.Write([]byte(requestID))
-	h.Write([]byte{byte(score >> 24), byte(score >> 16), byte(score >> 8), byte(score)})
+	h.Write([]byte{byte(score >> 24), byte(score >> 16), byte(score >> 8), byte(score)}) // #nosec G115 -- each shift extracts one byte of a uint32 score written in big-endian order
 	h.Write([]byte(status))
 	h.Write(inputHash)
 	h.Write(s.launchDigest[:])

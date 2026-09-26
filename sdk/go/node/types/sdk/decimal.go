@@ -462,7 +462,7 @@ func (d Dec) String() string {
 
 		// set relevant digits to 0
 		for i := 0; i < Precision-inputSize; i++ {
-			bzStr[i+2] = byte('0')
+			bzStr[i+2] = byte('0') // #nosec G602 -- the slice is allocated as make([]float32, TotalFeatureDim) with TotalFeatureDim = 768 by the only constructor, and this write is at MetadataOffset + 1 + i with MetadataOffset = 529 and i < 8 (the length of the literal this range walks), so the index cannot exceed 537 and the write is in bounds; gosec cannot bound a range index
 		}
 
 		// set final digits

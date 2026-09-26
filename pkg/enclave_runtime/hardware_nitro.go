@@ -187,7 +187,7 @@ func (d *NitroHardwareDetector) getNitroCLIVersion() (string, error) {
 
 	// Execute with validated path and arguments
 	//nolint:gosec // G204: Executable path and arguments validated by security package
-	cmd := exec.CommandContext(ctx, d.cliPath, args...)
+	cmd := exec.CommandContext(ctx, d.cliPath, args...) // #nosec G204 -- the executable path is resolved and validated and the arguments are checked by security.NitroCliArgs before execution
 	output, err := cmd.Output()
 	if err != nil {
 		return "", err
@@ -289,7 +289,7 @@ func (r *NitroCLIRunner) runHardwareEnclave(ctx context.Context, eifPath string,
 		"--memory", fmt.Sprintf("%d", memoryMB),
 	}
 
-	cmd := exec.CommandContext(ctx, cliPath, args...)
+	cmd := exec.CommandContext(ctx, cliPath, args...) // #nosec G204 -- the executable path is resolved and validated and the arguments are checked by security.NitroCliArgs before execution
 	output, err := cmd.Output()
 	if err != nil {
 		if exitErr, ok := err.(*exec.ExitError); ok {
@@ -354,7 +354,7 @@ func (r *NitroCLIRunner) TerminateEnclave(ctx context.Context, enclaveID string)
 	}
 
 	//nolint:gosec // G204: cliPath validated, enclaveID sanitized above
-	cmd := exec.CommandContext(ctx, r.detector.GetCLIPath(), args...)
+	cmd := exec.CommandContext(ctx, r.detector.GetCLIPath(), args...) // #nosec G204 -- the executable path is resolved and validated and the arguments are checked by security.NitroCliArgs before execution
 	if err := cmd.Run(); err != nil {
 		if exitErr, ok := err.(*exec.ExitError); ok {
 			return fmt.Errorf("nitro-cli terminate-enclave failed: %s", string(exitErr.Stderr))
@@ -375,7 +375,7 @@ func (r *NitroCLIRunner) DescribeEnclaves(ctx context.Context) ([]NitroEnclaveIn
 	}
 
 	//nolint:gosec // G204: cliPath validated during initialization
-	cmd := exec.CommandContext(ctx, r.detector.GetCLIPath(), "describe-enclaves")
+	cmd := exec.CommandContext(ctx, r.detector.GetCLIPath(), "describe-enclaves") // #nosec G204 -- the executable path is resolved and validated and the arguments are checked by security.NitroCliArgs before execution
 	output, err := cmd.Output()
 	if err != nil {
 		if exitErr, ok := err.(*exec.ExitError); ok {
@@ -412,7 +412,7 @@ func (r *NitroCLIRunner) Console(ctx context.Context, enclaveID string) error {
 	}
 
 	//nolint:gosec // G204: cliPath validated, enclaveID sanitized above
-	cmd := exec.CommandContext(ctx, r.detector.GetCLIPath(), args...)
+	cmd := exec.CommandContext(ctx, r.detector.GetCLIPath(), args...) // #nosec G204 -- the executable path is resolved and validated and the arguments are checked by security.NitroCliArgs before execution
 	cmd.Stdin = os.Stdin
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
@@ -769,7 +769,7 @@ func (c *NitroNSMClient) getSimulatedAttestationDocument(userData, nonce, public
 	doc := &NSMAttestationDocument{
 		ModuleID: "i-simulated-enclave-module",
 		//nolint:gosec // G115: Unix timestamp is positive and fits in uint64
-		Timestamp: uint64(time.Now().Unix()),
+		Timestamp: uint64(time.Now().Unix()), // #nosec G115 -- Unix seconds are non-negative and fit in uint64
 		Digest:    "SHA384",
 		PCRs:      make(map[uint8][]byte),
 		UserData:  userData,
@@ -984,7 +984,7 @@ func (b *NitroEnclaveImageBuilder) buildHardware(ctx context.Context, config Bui
 	}
 
 	//nolint:gosec // G204: All arguments are validated via filepath.Clean and path validation above
-	cmd := exec.CommandContext(ctx, b.detector.GetCLIPath(), args...)
+	cmd := exec.CommandContext(ctx, b.detector.GetCLIPath(), args...) // #nosec G204 -- the executable path is resolved and validated and the arguments are checked by security.NitroCliArgs before execution
 	output, err := cmd.Output()
 	if err != nil {
 		if exitErr, ok := err.(*exec.ExitError); ok {

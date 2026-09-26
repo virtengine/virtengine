@@ -94,6 +94,7 @@ This index lists internal-only documentation. Do not add internal docs outside `
 - `_docs/security/bug-bounty.md`
 - `_docs/security/crypto-policy.md`
 - `_docs/security/crypto-review-checklist.md`
+- `_docs/security/gosec-triage.md`
 - `_docs/security/vendor-risk.md`
 
 ## Audit

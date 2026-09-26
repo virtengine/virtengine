@@ -121,7 +121,7 @@ func NewInvoiceLedgerRecord(inv *Invoice, artifactCID string, blockHeight int64,
 		AmountPaid:    inv.AmountPaid,
 		AmountDue:     inv.AmountDue,
 		//nolint:gosec // G115: line items count is bounded by practical invoice limits
-		LineItemCount:      uint32(len(inv.LineItems)),
+		LineItemCount:      uint32(len(inv.LineItems)), // #nosec G115 -- the line item count is bounded far below 2^32
 		BillingPeriodStart: inv.BillingPeriod.StartTime,
 		BillingPeriodEnd:   inv.BillingPeriod.EndTime,
 		DueDate:            inv.DueDate,
@@ -623,13 +623,13 @@ func BuildInvoiceLedgerEntrySeqKey(invoiceID string, seqNum uint64) []byte {
 	// Use fixed-width 8-byte encoding for proper ordering
 	seqBytes := make([]byte, 8)
 	seqBytes[0] = byte(seqNum >> 56)
-	seqBytes[1] = byte(seqNum >> 48)
-	seqBytes[2] = byte(seqNum >> 40)
-	seqBytes[3] = byte(seqNum >> 32)
-	seqBytes[4] = byte(seqNum >> 24)
-	seqBytes[5] = byte(seqNum >> 16)
-	seqBytes[6] = byte(seqNum >> 8)
-	seqBytes[7] = byte(seqNum)
+	seqBytes[1] = byte(seqNum >> 48) // #nosec G115 -- fixed-width big-endian encoding: only the low 8 bits are written by design and the truncated value is never used arithmetically
+	seqBytes[2] = byte(seqNum >> 40) // #nosec G115 -- fixed-width big-endian encoding: only the low 8 bits are written by design and the truncated value is never used arithmetically
+	seqBytes[3] = byte(seqNum >> 32) // #nosec G115 -- fixed-width big-endian encoding: only the low 8 bits are written by design and the truncated value is never used arithmetically
+	seqBytes[4] = byte(seqNum >> 24) // #nosec G115 -- fixed-width big-endian encoding: only the low 8 bits are written by design and the truncated value is never used arithmetically
+	seqBytes[5] = byte(seqNum >> 16) // #nosec G115 -- fixed-width big-endian encoding: only the low 8 bits are written by design and the truncated value is never used arithmetically
+	seqBytes[6] = byte(seqNum >> 8)  // #nosec G115 -- fixed-width big-endian encoding: only the low 8 bits are written by design and the truncated value is never used arithmetically
+	seqBytes[7] = byte(seqNum)       // #nosec G115 -- fixed-width big-endian encoding: only the low 8 bits are written by design and the truncated value is never used arithmetically
 	return append(key, seqBytes...)
 }
 

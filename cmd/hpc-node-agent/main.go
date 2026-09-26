@@ -254,7 +254,7 @@ func initCmd() *cobra.Command {
 				PublicKey:  base64.StdEncoding.EncodeToString(publicKey),
 			}
 
-			data, err := json.MarshalIndent(keyData, "", "  ")
+			data, err := json.MarshalIndent(keyData, "", "  ") // #nosec G117 -- the marshalled value is the key file's own contents written to a 0600 file by this function and is never logged or returned to a caller
 			if err != nil {
 				return fmt.Errorf("failed to marshal key: %w", err)
 			}
@@ -602,7 +602,7 @@ func createAgentFromConfig() (*Agent, error) {
 
 func loadOrGenerateKey(keyFile string) (ed25519.PrivateKey, ed25519.PublicKey, error) {
 	// Try to load existing key
-	if data, err := os.ReadFile(keyFile); err == nil {
+	if data, err := os.ReadFile(keyFile); err == nil { // #nosec G304 -- keyFile is a local path parameter supplied by this function's own caller (a CLI argument, loader parameter or configured state file) and is not derived from a network peer or chain message; opening the caller-nominated file is the purpose of this call
 		var keyData struct {
 			PrivateKey string `json:"private_key"`
 			PublicKey  string `json:"public_key"`
@@ -639,7 +639,7 @@ func loadOrGenerateKey(keyFile string) (ed25519.PrivateKey, ed25519.PublicKey, e
 		PublicKey:  base64.StdEncoding.EncodeToString(publicKey),
 	}
 
-	data, err := json.MarshalIndent(keyData, "", "  ")
+	data, err := json.MarshalIndent(keyData, "", "  ") // #nosec G117 -- the marshalled value is the key file's own contents written to a 0600 file by this function and is never logged or returned to a caller
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to marshal key: %w", err)
 	}

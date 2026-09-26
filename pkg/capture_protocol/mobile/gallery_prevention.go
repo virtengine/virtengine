@@ -205,20 +205,20 @@ func (p *CaptureOriginProof) ComputeProofHash() []byte {
 
 	// Timestamps
 	tb := make([]byte, 8)
-	//nolint:gosec // G115: UnixNano timestamp safe for uint64
+	// #nosec G115 -- device capture timestamps are post-epoch, so UnixNano is non-negative and fits uint64
 	binary.BigEndian.PutUint64(tb, uint64(p.CaptureTimestamp.UnixNano()))
 	h.Write(tb)
-	//nolint:gosec // G115: UnixNano timestamp safe for uint64
+	// #nosec G115 -- device capture timestamps are post-epoch, so UnixNano is non-negative and fits uint64
 	binary.BigEndian.PutUint64(tb, uint64(p.SystemTimestamp.UnixNano()))
 	h.Write(tb)
 	//nolint:gosec // G115: MonotonicTimestamp is positive
-	binary.BigEndian.PutUint64(tb, uint64(p.MonotonicTimestamp))
+	binary.BigEndian.PutUint64(tb, uint64(p.MonotonicTimestamp)) // #nosec G115 -- the monotonic timestamp is a non-negative counter
 	h.Write(tb)
 
 	// Session and frame
 	h.Write([]byte(p.CameraSessionID))
 	//nolint:gosec // G115: FrameNumber is positive int
-	binary.BigEndian.PutUint64(tb, uint64(p.FrameNumber))
+	binary.BigEndian.PutUint64(tb, uint64(p.FrameNumber)) // #nosec G115 -- the frame number is a non-negative counter
 	h.Write(tb)
 
 	// Device

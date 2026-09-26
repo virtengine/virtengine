@@ -76,7 +76,7 @@ func (s artifactSource) description() string {
 func (s artifactSource) readFile(name string) ([]byte, error) {
 	if s.dir != "" {
 		path := filepath.Join(s.dir, name)
-		data, err := os.ReadFile(path)
+		data, err := os.ReadFile(path) // #nosec G304 -- the path is the operator-configured VEID ZK params directory joined with fixed file names
 		if err != nil {
 			return nil, fmt.Errorf("read %s from %s: %w", name, s.description(), err)
 		}

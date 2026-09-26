@@ -154,7 +154,7 @@ func (b *ProductionSEVBackend) Initialize() error {
 
 	// Ensure certificate cache directory exists
 	if b.config.CertCachePath != "" {
-		if err := os.MkdirAll(b.config.CertCachePath, 0755); err != nil {
+		if err := os.MkdirAll(b.config.CertCachePath, 0o750); err != nil {
 			fmt.Printf("Warning: could not create cert cache directory: %v\n", err)
 		}
 	}
@@ -379,7 +379,7 @@ func (b *ProductionSEVBackend) fetchCertificate(url string, certType string) ([]
 	// Check cache first
 	if b.config.CertCachePath != "" {
 		cacheFile := fmt.Sprintf("%s/%s_%x.pem", b.config.CertCachePath, certType, sha512.Sum512_256([]byte(url)))
-		if cached, err := os.ReadFile(cacheFile); err == nil {
+		if cached, err := os.ReadFile(cacheFile); err == nil { // #nosec G304 -- the path is an operator-configured device or allow-list location (from configuration or a fixed device constant), never untrusted input
 			return cached, nil
 		}
 	}
@@ -411,8 +411,8 @@ func (b *ProductionSEVBackend) fetchCertificate(url string, certType string) ([]
 	// Cache the certificate
 	if b.config.CertCachePath != "" {
 		cacheFile := fmt.Sprintf("%s/%s_%x.pem", b.config.CertCachePath, certType, sha512.Sum512_256([]byte(url)))
-		//nolint:gosec // G306: certificate cache file, 0644 permissions acceptable
-		_ = os.WriteFile(cacheFile, cert, 0644)
+		// Certificate cache is written with owner-only permissions (gosec G306).
+		_ = os.WriteFile(cacheFile, cert, 0o600)
 	}
 
 	return cert, nil

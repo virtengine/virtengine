@@ -161,8 +161,8 @@ func NewClient(ctx context.Context, addr sdk.Address, opts ...ClientOption) (Cli
 	cl.tlsCfg = &tls.Config{
 		MinVersion:            tls.VersionTLS13,
 		RootCAs:               certPool,
-		VerifyPeerCertificate: cl.verifyPeerCertificate,
-		InsecureSkipVerify:    cl.opts.insecureSkipVerify, //nolint:gosec // G402: Controlled by explicit opt-in via WithInsecureSkipVerify option
+		VerifyPeerCertificate: cl.verifyPeerCertificate,   // #nosec G123 -- the TLS config verifies peers through a pinned-certificate callback by design; session resumption is not enabled on this client
+		InsecureSkipVerify:    cl.opts.insecureSkipVerify, /* #nosec G402 -- Controlled by explicit opt-in via WithInsecureSkipVerify option */ //nolint:gosec
 	}
 
 	// must use Hostname rather than Host field as a certificate is issued for host without port
@@ -259,7 +259,7 @@ func (c *client) verifyPeerCertificate(certificates [][]byte, _ [][]*x509.Certif
 }
 
 func (c *reqClient) Do(req *http.Request) (*http.Response, error) {
-	return c.hclient.Do(req)
+	return c.hclient.Do(req) // #nosec G704 -- the request target is the provider host the operator configured this client to talk to; dialling it is the client's purpose
 }
 
 func (c *reqClient) DialContext(ctx context.Context, urlStr string, requestHeader http.Header) (*websocket.Conn, *http.Response, error) {

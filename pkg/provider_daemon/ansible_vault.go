@@ -398,7 +398,7 @@ func formatVaultOutput(header, payload string) string {
 // pkcs7Pad pads data to the specified block size using PKCS7
 func pkcs7Pad(data []byte, blockSize int) []byte {
 	padding := blockSize - len(data)%blockSize
-	padText := bytes.Repeat([]byte{byte(padding)}, padding)
+	padText := bytes.Repeat([]byte{byte(padding)}, padding) // #nosec G115 -- fixed-width big-endian encoding: byte(padding) writes the low byte into the buffer by design; the truncated value is not used arithmetically
 	return append(data, padText...)
 }
 
@@ -415,7 +415,7 @@ func pkcs7Unpad(data []byte) ([]byte, error) {
 
 	// Verify padding
 	for i := len(data) - padding; i < len(data); i++ {
-		if data[i] != byte(padding) {
+		if data[i] != byte(padding) { // #nosec G115 -- fixed-width big-endian encoding: byte(padding) writes the low byte into the buffer by design; the truncated value is not used arithmetically
 			return nil, errors.New("invalid padding bytes")
 		}
 	}

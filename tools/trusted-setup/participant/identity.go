@@ -25,7 +25,7 @@ func LoadOrCreateIdentity(path string, id string) (*Identity, error) {
 		return nil, err
 	}
 	if _, err := os.Stat(path); err == nil {
-		data, err := os.ReadFile(path)
+		data, err := os.ReadFile(path) // #nosec G304 -- the path is composed from the ceremony state directory (given once by the operator on the command line) plus fixed file names, so remote input cannot influence it
 		if err != nil {
 			return nil, err
 		}
@@ -63,7 +63,7 @@ func NewDeterministicIdentity(id, seedMaterial string) *Identity {
 }
 
 func (i *Identity) Save(path string) error {
-	data, err := json.MarshalIndent(i, "", "  ")
+	data, err := json.MarshalIndent(i, "", "  ") // #nosec G117 -- the trusted-setup participant identity file intentionally persists the ed25519 private key so a ceremony can be resumed; the file is written with 0o600 permissions to an operator-chosen path
 	if err != nil {
 		return err
 	}

@@ -552,8 +552,9 @@ func (s *SLURMIntegrationService) submitJobForLeaseInternal(ctx context.Context,
 		Timestamp: time.Now(),
 	})
 
-	// Report initial status on-chain
-	go s.reportJobStatus(context.Background(), schedulerJob)
+	// Report initial status on-chain. The caller's context is propagated so the
+	// report is cancelled with the submission that produced it.
+	go s.reportJobStatus(ctx, schedulerJob)
 
 	return schedulerJob, nil
 }

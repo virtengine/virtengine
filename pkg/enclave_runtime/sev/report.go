@@ -224,15 +224,15 @@ func (t TCBVersion) ToUint64() uint64 {
 func ParseTCBVersion(raw uint64) TCBVersion {
 	//nolint:gosec // intentional narrowing: extracting individual bytes from 64-bit value
 	return TCBVersion{
-		BootLoader: uint8(raw),
-		TEE:        uint8(raw >> 8),
+		BootLoader: uint8(raw),      // #nosec G115 -- each shift extracts one byte of the packed SEV-SNP platform-info bitfield; truncation is the encoding
+		TEE:        uint8(raw >> 8), // #nosec G115 -- each shift extracts one byte of the packed SEV-SNP platform-info bitfield; truncation is the encoding
 		Reserved: [4]uint8{
-			uint8(raw >> 16),
-			uint8(raw >> 24),
-			uint8(raw >> 32),
-			uint8(raw >> 40),
+			uint8(raw >> 16), // #nosec G115 -- each shift extracts one byte of the packed SEV-SNP platform-info bitfield; truncation is the encoding
+			uint8(raw >> 24), // #nosec G115 -- each shift extracts one byte of the packed SEV-SNP platform-info bitfield; truncation is the encoding
+			uint8(raw >> 32), // #nosec G115 -- each shift extracts one byte of the packed SEV-SNP platform-info bitfield; truncation is the encoding
+			uint8(raw >> 40), // #nosec G115 -- each shift extracts one byte of the packed SEV-SNP platform-info bitfield; truncation is the encoding
 		},
-		SNP:       uint8(raw >> 48),
+		SNP:       uint8(raw >> 48), // #nosec G115 -- each shift extracts one byte of the packed SEV-SNP platform-info bitfield; truncation is the encoding
 		Microcode: uint8(raw >> 56),
 	}
 }

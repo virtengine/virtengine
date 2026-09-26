@@ -76,7 +76,7 @@ func AcceptPhaseBundle(state State, phase, bundleDir string) error {
 		return fmt.Errorf("response phase mismatch: expected %s got %s", phase, response.Phase)
 	}
 
-	payload, err := os.ReadFile(payloadPath)
+	payload, err := os.ReadFile(payloadPath) // #nosec G304 -- the path is composed from the ceremony state directory (given once by the operator on the command line) plus fixed file names, so remote input cannot influence it
 	if err != nil {
 		return err
 	}
