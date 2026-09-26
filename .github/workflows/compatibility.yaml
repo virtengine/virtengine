@@ -68,11 +68,14 @@ jobs:
           fi
 
           echo "Checking for breaking changes against ${base_ref}"
-          # Exclude the Go module vendor tree: since the cosmos-sdk bump it
-          # contains both cosmos/gogoproto and gogo/protobuf copies of
-          # gogo.proto, which define the same symbols and break the build.
-          # Vendor protos are third-party and out of scope for this check.
-          buf breaking --against ".git#ref=${base_ref}" --exclude-path vendor
+          # Run through the sdk module: sdk/buf.yaml is the repo's only buf
+          # config and is where the proto module layout and the BSR deps live.
+          # At the repo root there is no config, so buf built the whole tree
+          # as a single module with an empty dependency list and the 224 files
+          # importing gogoproto/gogo.proto could not resolve (exit 100 on
+          # every run). subdir=sdk reads sdk/buf.yaml on both sides of the
+          # comparison, so the repo-root vendor tree is out of scope already.
+          buf breaking sdk --against ".git#ref=${base_ref},subdir=sdk"
 
   compatibility-tests:
     name: Compatibility Tests
