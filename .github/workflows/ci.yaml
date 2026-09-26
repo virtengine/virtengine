@@ -168,6 +168,12 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v5
+        with:
+          # Same reason as the test-go job: pkg/platformsecurity/contracts asserts
+          # provenance against the real git object DB (PersistedSchemaPayloadHead
+          # must exist and PersistedSchemaEpochBase must be its ancestor), and a
+          # depth-1 checkout does not contain those objects.
+          fetch-depth: 0
 
       - name: Set up Go
         uses: actions/setup-go@v6

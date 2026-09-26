@@ -1,14 +1,72 @@
 package slurm_adapter
 
 import (
+	"crypto/ed25519"
+	"crypto/rand"
+	"os"
+	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"golang.org/x/crypto/ssh"
 )
 
 // VE-2020: SSH SLURM Client tests
+
+// withTempKnownHosts writes a throwaway known_hosts file containing a real
+// ed25519 host key, generated in-process so the known_hosts parser is genuinely
+// exercised and the fixture can never go stale or be syntactically invalid.
+//
+// The client fails closed on a missing known_hosts file, and the default path
+// is the operator's real ~/.ssh/known_hosts. Constructing a client in a test
+// must not depend on that file existing on whichever machine or CI runner is
+// executing the suite, so every construction test points KnownHostsPath at this
+// temp file instead. This keeps the real verification path under test.
+func withTempKnownHosts(t *testing.T) string {
+	t.Helper()
+	_, publicKey, err := ed25519.GenerateKey(rand.Reader)
+	require.NoError(t, err)
+	sshPublicKey, err := ssh.NewPublicKey(publicKey.Public())
+	require.NoError(t, err)
+	line := "localhost " + strings.TrimSpace(string(ssh.MarshalAuthorizedKey(sshPublicKey))) + "\n"
+
+	path := filepath.Join(t.TempDir(), "known_hosts")
+	require.NoError(t, os.WriteFile(path, []byte(line), 0o600))
+	return path
+}
+
+// sshTestConfig returns an SSHConfig that constructs successfully without
+// depending on the ambient home directory.
+func sshTestConfig(t *testing.T) SSHConfig {
+	t.Helper()
+	return SSHConfig{
+		Host:           "localhost",
+		Port:           22,
+		User:           "testuser",
+		Password:       "testpass",
+		KnownHostsPath: withTempKnownHosts(t),
+	}
+}
+
+// TestNewSSHSLURMClient_MissingKnownHostsFailsClosed pins the fail-closed
+// default: with no known_hosts available the constructor must refuse rather
+// than silently skip host key verification.
+func TestNewSSHSLURMClient_MissingKnownHostsFailsClosed(t *testing.T) {
+	config := SSHConfig{
+		Host:           "localhost",
+		Port:           22,
+		User:           "testuser",
+		Password:       "testpass",
+		KnownHostsPath: filepath.Join(t.TempDir(), "absent_known_hosts"),
+	}
+
+	_, err := NewSSHSLURMClient(config, "cluster1", "default")
+	require.Error(t, err)
+	assert.ErrorIs(t, err, ErrHostKeyVerification)
+}
 
 func TestDefaultSSHConfig(t *testing.T) {
 	config := DefaultSSHConfig()
@@ -36,13 +94,8 @@ func TestNewSSHSLURMClient_NoAuth(t *testing.T) {
 }
 
 func TestNewSSHSLURMClient_WithPassword(t *testing.T) {
-	config := SSHConfig{
-		Host:     "localhost",
-		Port:     22,
-		User:     "testuser",
-		Password: "testpass",
-		Timeout:  5 * time.Second,
-	}
+	config := sshTestConfig(t)
+	config.Timeout = 5 * time.Second
 
 	client, err := NewSSHSLURMClient(config, "cluster1", "default")
 	require.NoError(t, err)
@@ -67,14 +120,9 @@ func TestNewSSHSLURMClient_WithInvalidKey(t *testing.T) {
 }
 
 func TestNewSSHSLURMClient_WithPoolSize(t *testing.T) {
-	config := SSHConfig{
-		Host:            "localhost",
-		Port:            22,
-		User:            "testuser",
-		Password:        "testpass",
-		PoolSize:        10,
-		PoolIdleTimeout: 10 * time.Minute,
-	}
+	config := sshTestConfig(t)
+	config.PoolSize = 10
+	config.PoolIdleTimeout = 10 * time.Minute
 
 	client, err := NewSSHSLURMClient(config, "cluster1", "default")
 	require.NoError(t, err)
@@ -86,12 +134,7 @@ func TestNewSSHSLURMClient_WithPoolSize(t *testing.T) {
 }
 
 func TestSSHSLURMClient_GenerateBatchScript_ViaFromJobSpec(t *testing.T) {
-	config := SSHConfig{
-		Host:     "localhost",
-		Port:     22,
-		User:     "testuser",
-		Password: "testpass",
-	}
+	config := sshTestConfig(t)
 
 	client, err := NewSSHSLURMClient(config, "cluster1", "compute")
 	require.NoError(t, err)
@@ -317,12 +360,7 @@ func TestIsNumeric(t *testing.T) {
 }
 
 func TestSSHSLURMClient_IsConnected_NotConnected(t *testing.T) {
-	config := SSHConfig{
-		Host:     "localhost",
-		Port:     22,
-		User:     "testuser",
-		Password: "testpass",
-	}
+	config := sshTestConfig(t)
 
 	client, err := NewSSHSLURMClient(config, "cluster1", "default")
 	require.NoError(t, err)
