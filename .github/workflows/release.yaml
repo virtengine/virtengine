@@ -115,7 +115,7 @@ jobs:
           sudo rm -rf ./.??* || true
 
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           ref: refs/tags/${{ needs.validate-release-context.outputs.release_tag }}
 
@@ -143,7 +143,7 @@ jobs:
 
       - name: Upload validator logs
         if: always() && steps.test.outcome != 'skipped'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: release-upgrade-logs
           path: |
@@ -175,7 +175,7 @@ jobs:
           sudo rm -rf ./.??* || true
 
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           ref: refs/tags/${{ needs.validate-release-context.outputs.release_tag }}
 
@@ -183,16 +183,16 @@ jobs:
         uses: ./.github/actions/setup-ubuntu
 
       - name: Set up QEMU
-        uses: docker/setup-qemu-action@v3
+        uses: docker/setup-qemu-action@v4
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@v4
 
       - name: Set release version into env variable
         run: echo "RELEASE_TAG=${{ needs.validate-release-context.outputs.release_tag }}" >> "${GITHUB_ENV}"
 
       - name: Login to GHCR
-        uses: docker/login-action@v3
+        uses: docker/login-action@v4
         with:
           registry: ghcr.io
           username: ${{ github.repository_owner }}
@@ -272,7 +272,7 @@ jobs:
 
       - name: Checkout code
         if: steps.token_check.outputs.has_token == 'true'
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           fetch-depth: 0
           ref: refs/tags/${{ needs.validate-release-context.outputs.release_tag }}

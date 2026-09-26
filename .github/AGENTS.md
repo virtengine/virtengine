@@ -160,14 +160,14 @@ Inventory and docs live in `.github/workflows/` with release details in `RELEASE
 
 ### Caching
 
-- **Go**: `actions/cache@v4` with `~/go/pkg/mod` and `~/.cache/go-build` keys
-- **Node**: `pnpm/action-setup@v2` with built-in store caching
-- **Python**: `actions/setup-python@v5` with `pip` cache
+- **Go**: `actions/cache@v5` with `~/go/pkg/mod` and `~/.cache/go-build` keys
+- **Node**: `pnpm/action-setup@v5` with built-in store caching
+- **Python**: `actions/setup-python@v6` with `pip` cache
 
 ### Coverage Gates
 
 - **Go**: 80% coverage threshold (`ci.yaml`) via `go test -coverprofile`; PRs that do not touch Go-related files short-circuit the `Go Tests` job with a skip notice so non-Go changes do not fail on unrelated repo-wide Go test or coverage baselines.
-- Coverage reports uploaded to Codecov with `codecov/codecov-action@v4`, with PR security advisory summaries in `pr-security-check.yaml`
+- Coverage reports uploaded to Codecov with `codecov/codecov-action@v5`, with PR security advisory summaries in `pr-security-check.yaml`
 
 ### Test Timeouts
 
@@ -200,7 +200,7 @@ Inventory and docs live in `.github/workflows/` with release details in `RELEASE
 **Jobs:\*\*
 
 1. `build`: pnpm install + build portal static site
-2. `deploy`: Upload to GitHub Pages via `actions/deploy-pages@v4`
+2. `deploy`: Upload to GitHub Pages via `actions/deploy-pages@v5`
 3. `preview-comment`: Comment on PRs with preview URL
 
 **Artifacts:** Pages deployment to `https://virtengine.github.io/virtengine`
@@ -475,7 +475,7 @@ gh run view <run-id> --log-failed  # failed jobs only
 
 ```yaml
 # Bust cache by updating key
-- uses: actions/cache@v4
+- uses: actions/cache@v5
   with:
     key: go-${{ runner.os }}-${{ hashFiles('go.sum') }}-v2 # increment v2 → v3
 ```

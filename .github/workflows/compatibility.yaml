@@ -41,7 +41,7 @@ jobs:
     name: Proto Breaking Checks
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           fetch-depth: 0
 
@@ -81,7 +81,7 @@ jobs:
     name: Compatibility Tests
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Setup environment
         uses: ./.github/actions/setup-ubuntu
@@ -96,7 +96,7 @@ jobs:
 
       - name: Upload test results
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: compatibility-test-results
           path: |
@@ -108,7 +108,7 @@ jobs:
     name: API Version Check
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           fetch-depth: 0
 
@@ -151,7 +151,7 @@ jobs:
     name: Deprecation Compliance
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Setup environment
         uses: ./.github/actions/setup-ubuntu
@@ -176,7 +176,7 @@ jobs:
     name: Version Matrix Validation
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Setup environment
         uses: ./.github/actions/setup-ubuntu
@@ -217,7 +217,7 @@ jobs:
       - deprecation-compliance
       - version-matrix-validation
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Setup environment
         uses: ./.github/actions/setup-ubuntu
@@ -252,7 +252,7 @@ jobs:
           EOF
 
       - name: Upload compatibility report
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: compatibility-report
           path: compatibility-report.md
