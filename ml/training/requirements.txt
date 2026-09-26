@@ -5,7 +5,7 @@ tensorflow>=2.20.0,<3.0.0
 numpy>=1.24.0,<2.0.0
 
 # Image processing
-Pillow>=12.2.0
+Pillow>=12.3.0
 scipy>=1.10.0
 
 # Data handling
@@ -13,7 +13,7 @@ PyYAML>=6.0
 pandas>=2.0.0
 
 # Testing
-pytest>=7.0.0
+pytest>=9.0.3
 pytest-cov>=4.0.0
 
 # Utilities
