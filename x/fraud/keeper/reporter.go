@@ -20,6 +20,7 @@ import (
 	"encoding/binary"
 	"encoding/json"
 	"fmt"
+	"math"
 	"strings"
 
 	storetypes "cosmossdk.io/store/types"
@@ -162,8 +163,15 @@ func (k Keeper) checkReporterRateLimit(ctx sdk.Context, reporter string) error {
 		if len(rest) < 8 {
 			continue
 		}
-		//nolint:gosec // height is a non-negative block height
-		submittedAt := int64(binary.BigEndian.Uint64(rest[:8]))
+		rawHeight := binary.BigEndian.Uint64(rest[:8])
+		if rawHeight > math.MaxInt64 {
+			// This keeper only writes non-negative block heights, so a key
+			// with the high bit set did not come from here; reclaim it
+			// instead of wrapping it into a negative height.
+			stale = append(stale, append([]byte(nil), key...))
+			continue
+		}
+		submittedAt := int64(rawHeight) /* #nosec G115 -- range-checked against math.MaxInt64 above */ //nolint:gosec
 		switch {
 		case submittedAt > height:
 			// Defensive: a future height can never come from this keeper, but if it

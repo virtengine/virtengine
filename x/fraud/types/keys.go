@@ -126,7 +126,8 @@ func GetReportResponseKey(reportID, responseID string) []byte {
 // GetReporterActivityKey returns the activity index key for a reporter submission
 func GetReporterActivityKey(reporter string, height int64, reportID string) []byte {
 	heightBytes := make([]byte, 8)
-	binary.BigEndian.PutUint64(heightBytes, uint64(height))
+	// Safe conversion: height is always non-negative in SDK context.
+	binary.BigEndian.PutUint64(heightBytes, uint64(height)) /* #nosec G115 -- uint64(height) is a non-negative block height bounded well below 2^63 */ //nolint:gosec
 	key := append(ReporterActivityPrefix, []byte(reporter+"/")...)
 	key = append(key, heightBytes...)
 	return append(key, []byte("/"+reportID)...)

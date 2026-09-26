@@ -8,6 +8,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"math"
 	"testing"
 
 	sdk "github.com/cosmos/cosmos-sdk/types"
@@ -256,6 +257,41 @@ func TestKeeper_RateLimit_StaleEntriesPruned(t *testing.T) {
 
 	if store.Get(key) != nil {
 		t.Error("activity entry older than the window should have been pruned")
+	}
+}
+
+// TestKeeper_RateLimit_HighBitHeightKeyPruned proves a crafted activity key
+// whose height bytes exceed math.MaxInt64 is reclaimed as stale instead of
+// wrapping into a negative height or counting against the window.
+func TestKeeper_RateLimit_HighBitHeightKeyPruned(t *testing.T) {
+	k, ctx, _, _ := setupKeeper(t)
+
+	reporter := sdk.AccAddress("cosmos1reporter______").String()
+
+	params := types.DefaultParams()
+	params.MaxReportsPerWindow = 5
+	params.ReportWindowBlocks = 10
+	if err := k.SetParams(ctx, params); err != nil {
+		t.Fatalf("SetParams failed: %v", err)
+	}
+
+	// Plant a key with the high height bit set. GetReporterActivityKey cannot
+	// produce it because block heights are non-negative, so it simulates a
+	// crafted store entry.
+	key := types.GetReporterActivityKey(reporter, 0, "crafted-report")
+	prefix := types.GetReporterActivityPrefix(reporter)
+	rest := key[len(prefix):]
+	var bigHeight [8]byte
+	binary.BigEndian.PutUint64(bigHeight[:], math.MaxUint64)
+	copy(rest[:8], bigHeight[:])
+	store := ctx.KVStore(k.skey)
+	store.Set(key, []byte("crafted-report"))
+
+	if err := k.checkReporterRateLimit(ctx, reporter); err != nil {
+		t.Fatalf("crafted high-bit key must not trip the limiter: %v", err)
+	}
+	if store.Get(key) != nil {
+		t.Error("high-bit activity key should have been pruned as stale")
 	}
 }
 
