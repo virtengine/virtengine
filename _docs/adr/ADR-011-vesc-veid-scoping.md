@@ -70,8 +70,8 @@ The appeal and recovery path for a user who cannot satisfy the condition is:
 
 ## Non-goals
 
-This proposal is not a marketplace-wide requirement; marketplace listings keep per-offer opt-in. No marketplace listing gains, loses, or inherits a
-VEID condition because of anything decided here.
+This proposal is not a marketplace-wide requirement; marketplace listings keep per-offer opt-in.
+No marketplace listing gains, loses, or inherits a VEID condition because of anything decided here.
 
 The operator's rule from the assessment of 2026-09-26 governs all future work
 under this record, quoted in full and verbatim:
