@@ -113,6 +113,14 @@ func setupKeeper(t testing.TB) (Keeper, sdk.Context, *MockRolesKeeper, *MockProv
 
 	k := NewKeeper(cdc, storeKey, mockRoles, mockProvider, "authority")
 
+	// Wire a market keeper by default, mirroring app wiring. The fraud keeper
+	// now FAILS CLOSED when no market keeper is set (order standing cannot be
+	// verified), so leaving it nil here would make every order-linked report in
+	// the suite fail for the wrong reason. Tests that care about order standing
+	// replace this with their own mock via SetMarketKeeper; tests that must
+	// exercise the unwired path call SetMarketKeeper(nil) explicitly.
+	k.SetMarketKeeper(newMockMarketKeeper())
+
 	ctx := sdk.NewContext(stateStore, cmtproto.Header{
 		Height: 100,
 		Time:   time.Now(),

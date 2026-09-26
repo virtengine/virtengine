@@ -112,4 +112,15 @@ var (
 	// ErrReportNotPending is returned when a response is filed against a report
 	// that is already in a terminal state
 	ErrReportNotPending = errors.Register(ModuleName, 3016, "fraud report is not pending")
+
+	// ErrOrderVerificationUnavailable is returned when a non-provider report cites
+	// an order but the fraud keeper has no market keeper wired, so reporter
+	// standing cannot be verified.
+	//
+	// This is a node-configuration fault, not a reporter fault, and is kept
+	// distinct from ErrUnauthorizedReporter/ErrMissingOrderReference so operators
+	// can tell "the reporter has no standing" apart from "this binary forgot to
+	// wire SetMarketKeeper". The check fails closed: an unverifiable claim never
+	// grants standing.
+	ErrOrderVerificationUnavailable = errors.Register(ModuleName, 3023, "order-standing verification unavailable: market keeper is not wired")
 )
