@@ -38,22 +38,32 @@ type MarketKeeper interface {
 }
 
 // SetMarketKeeper wires the market keeper used for order-standing checks.
-// It is optional: without it, non-provider reporters must still supply an order
-// reference or an explicit no-order basis, but the party check is skipped.
+//
+// It is required for order-linked reporting: a non-provider reporter's standing
+// is established by being a party to a real order, and that can only be checked
+// against the market module. If this is never called, order-linked reports from
+// non-providers are refused with ErrOrderVerificationUnavailable rather than
+// being taken on trust (see IsPartyToOrder).
 func (k *Keeper) SetMarketKeeper(marketKeeper MarketKeeper) {
 	k.marketKeeper = marketKeeper
 }
 
 // IsPartyToOrder reports whether addr is the customer or the provider of the
 // given order. Only orders that actually exist can confer standing.
+//
+// It fails closed. If no market keeper is wired, standing cannot be verified, so
+// the order reference is refused outright rather than being accepted as an
+// unverified claim: an unverifiable claim must never confer standing, because
+// that would let any address cite any order ID and be treated as a party to it.
+// Callers see the failure as found=false and should surface
+// ErrOrderVerificationUnavailable rather than a "no such order" message.
 func (k Keeper) IsPartyToOrder(ctx sdk.Context, orderID, addr string) (found bool, isParty bool) {
 	if orderID == "" || addr == "" {
 		return false, false
 	}
 	if k.marketKeeper == nil {
-		// Without a market keeper we cannot verify standing; the order reference
-		// is accepted as a claim but confers no verified standing.
-		return true, true
+		// Unwired market keeper: we cannot verify standing. Refuse.
+		return false, false
 	}
 	if _, ok := k.marketKeeper.GetOrderByID(ctx, orderID); !ok {
 		return false, false
@@ -95,6 +105,15 @@ func (k Keeper) authorizeReportReporter(ctx sdk.Context, report types.FraudRepor
 	}
 
 	// With at least one order reference the reporter must be a party to it.
+	//
+	// If the market keeper is unwired, order standing cannot be verified at all.
+	// Report that as its own configuration fault rather than as a per-order
+	// "does not exist", which would send operators hunting a reporter problem
+	// that does not exist.
+	if k.marketKeeper == nil {
+		return types.ErrOrderVerificationUnavailable.Wrap(
+			"cannot verify order standing: fraud keeper has no market keeper wired")
+	}
 	for _, orderID := range report.RelatedOrderIDs {
 		orderID = strings.TrimSpace(orderID)
 		if orderID == "" {
@@ -225,13 +244,18 @@ func (k Keeper) SetNextFraudResponseSequence(ctx sdk.Context, seq uint64) {
 // moderator action. The response is linked to its report so it appears in the
 // same moderator-queue entry as the report.
 func (k Keeper) SubmitFraudResponse(ctx sdk.Context, response *types.FraudResponse) error {
-	if response.ID == "" {
-		seq := k.GetNextFraudResponseSequence(ctx)
-		response.ID = fmt.Sprintf("%s/response-%d", response.ReportID, seq)
-		k.SetNextFraudResponseSequence(ctx, seq+1)
-	}
-	response.ContentHash = response.ComputeContentHash()
-
+	// All rejection checks run BEFORE the response ID is minted.
+	//
+	// Minting writes the fraud-response sequence, which is consensus-critical
+	// state. If the ID were assigned first, every rejected response would still
+	// consume a sequence number. The msgServer currently contains that because it
+	// wraps this call in a CacheContext and only commits on success, but nothing
+	// in the keeper enforces it: a direct keeper caller would silently burn
+	// sequences. Minting only once the response is known-acceptable makes the
+	// keeper correct on its own, and makes the write unconditional afterwards.
+	//
+	// Note the ordering constraint: Validate requires a non-empty ID, and
+	// ComputeContentHash includes the ID, so minting must still precede both.
 	report, found := k.GetFraudReport(ctx, response.ReportID)
 	if !found {
 		return types.ErrReportNotFound
@@ -256,6 +280,13 @@ func (k Keeper) SubmitFraudResponse(ctx sdk.Context, response *types.FraudRespon
 			"address %s is neither the reported party nor the reporter of %s",
 			response.Respondent, report.ID)
 	}
+
+	if response.ID == "" {
+		seq := k.GetNextFraudResponseSequence(ctx)
+		response.ID = fmt.Sprintf("%s/response-%d", response.ReportID, seq)
+		k.SetNextFraudResponseSequence(ctx, seq+1)
+	}
+	response.ContentHash = response.ComputeContentHash()
 
 	if err := response.Validate(); err != nil {
 		return err

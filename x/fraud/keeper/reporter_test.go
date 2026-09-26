@@ -156,6 +156,65 @@ func TestKeeper_OpenReporting_NoOrderAvailableBasis(t *testing.T) {
 	}
 }
 
+// TestKeeper_OpenReporting_UnwiredMarketKeeperFailsClosed is the regression test
+// for the fail-open defect: when no market keeper is wired, a non-provider must
+// NOT be able to cite an arbitrary order ID and be granted standing.
+//
+// Previously IsPartyToOrder returned (found=true, isParty=true) when the market
+// keeper was nil, which meant a misconfigured node silently accepted any order
+// claim from any address. It must now refuse, with an error that names the
+// configuration fault rather than blaming the reporter.
+func TestKeeper_OpenReporting_UnwiredMarketKeeperFailsClosed(t *testing.T) {
+	k, ctx, _, _ := setupKeeper(t)
+	k.SetMarketKeeper(nil) // simulate a binary that forgot to wire the market keeper
+
+	tenant := sdk.AccAddress("cosmos1tenant________").String()
+	provider := sdk.AccAddress("cosmos1provider______").String()
+
+	// The order does not even exist, yet the unwired keeper must not grant
+	// standing on the strength of the citation alone.
+	report := newReport(ctx, tenant, provider, testFraudDescription, []string{"order-does-not-exist"}, false)
+	err := k.SubmitFraudReport(ctx, report)
+	if err == nil {
+		t.Fatal("unwired market keeper must NOT grant order standing to a non-provider")
+	}
+	if !errors.Is(err, types.ErrOrderVerificationUnavailable) {
+		t.Errorf("error = %v, want ErrOrderVerificationUnavailable", err)
+	}
+
+	// The rejected report must not be persisted.
+	if _, found := k.GetFraudReport(ctx, report.ID); found {
+		t.Error("report rejected for unverifiable standing must not be persisted")
+	}
+
+	// IsPartyToOrder itself must report the order as not found rather than
+	// as a verified party.
+	found, isParty := k.IsPartyToOrder(ctx, "order-does-not-exist", tenant)
+	if found || isParty {
+		t.Errorf("IsPartyToOrder = (%v, %v), want (false, false) when unwired", found, isParty)
+	}
+}
+
+// TestKeeper_OpenReporting_ProviderUnaffectedByUnwiredMarketKeeper proves the
+// fail-closed change did not weaken provider reporting: providers keep their
+// unconditional reporting right and need no order citation at all.
+func TestKeeper_OpenReporting_ProviderUnaffectedByUnwiredMarketKeeper(t *testing.T) {
+	k, ctx, _, mockProvider := setupKeeper(t)
+	k.SetMarketKeeper(nil)
+
+	reporter := sdk.AccAddress("cosmos1reporter______").String()
+	reported := sdk.AccAddress("cosmos1reported______").String()
+	mockProvider.SetProvider(reporter)
+
+	report := newReport(ctx, reporter, reported, testFraudDescription, nil, false)
+	if err := k.SubmitFraudReport(ctx, report); err != nil {
+		t.Fatalf("provider reporting must not depend on the market keeper, got: %v", err)
+	}
+	if _, found := k.GetFraudReport(ctx, report.ID); !found {
+		t.Error("provider report was not persisted")
+	}
+}
+
 // TestKeeper_Dedup_IdenticalResubmissionRejected proves an identical repeat from the
 // same reporter is rejected and does not create a second queue entry.
 func TestKeeper_Dedup_IdenticalResubmissionRejected(t *testing.T) {
@@ -372,12 +431,20 @@ func TestKeeper_Response_TerminalReportRejected(t *testing.T) {
 
 	late := types.NewFraudResponse("", report.ID, reported, types.FraudRespondentRoleReportedParty,
 		createValidEvidence(), "sha256-late", ctx.BlockHeight(), ctx.BlockTime())
+	seqBefore := k.GetNextFraudResponseSequence(ctx)
 	err := k.SubmitFraudResponse(ctx, late)
 	if err == nil {
 		t.Fatal("a rejected report must not accept new responses")
 	}
 	if !errors.Is(err, types.ErrReportNotPending) {
 		t.Errorf("error = %v, want ErrReportNotPending", err)
+	}
+	// A rejected response must not consume a response sequence number.
+	if seqAfter := k.GetNextFraudResponseSequence(ctx); seqAfter != seqBefore {
+		t.Errorf("response sequence advanced on a rejected response: %d -> %d", seqBefore, seqAfter)
+	}
+	if late.ID != "" {
+		t.Errorf("rejected response was assigned an ID %q; minting must happen only after acceptance", late.ID)
 	}
 }
 
@@ -430,13 +497,60 @@ func TestKeeper_Response_RejectedResponseDoesNotCount(t *testing.T) {
 	}
 
 	stranger := sdk.AccAddress("cosmos1stranger______").String()
-	if err := k.SubmitFraudResponse(ctx, types.NewFraudResponse("", report.ID, stranger,
-		types.FraudRespondentRoleReportedParty, createValidEvidence(), "sha256", ctx.BlockHeight(), ctx.BlockTime())); err == nil {
+	seqBefore := k.GetNextFraudResponseSequence(ctx)
+	rejected := types.NewFraudResponse("", report.ID, stranger,
+		types.FraudRespondentRoleReportedParty, createValidEvidence(), "sha256", ctx.BlockHeight(), ctx.BlockTime())
+	if err := k.SubmitFraudResponse(ctx, rejected); err == nil {
 		t.Fatal("expected rejection")
 	}
 
 	stored, _ := k.GetFraudReport(ctx, report.ID)
 	if stored.ResponseCount != 0 {
 		t.Errorf("ResponseCount = %d after a rejected response, want 0", stored.ResponseCount)
+	}
+	// The public counter is only half the story: the response sequence is
+	// consensus-critical state, so a rejected response must not advance it
+	// either. The msgServer's CacheContext hides this, so assert it at the
+	// keeper level where it actually lives.
+	if seqAfter := k.GetNextFraudResponseSequence(ctx); seqAfter != seqBefore {
+		t.Errorf("response sequence advanced on a rejected response: %d -> %d", seqBefore, seqAfter)
+	}
+	if rejected.ID != "" {
+		t.Errorf("rejected response was assigned an ID %q; minting must happen only after acceptance", rejected.ID)
+	}
+}
+
+// TestKeeper_Response_AcceptedResponseMintsExactlyOneSequence proves the fix did
+// not break the happy path: an accepted response still mits its ID from the
+// sequence and advances it by exactly one.
+func TestKeeper_Response_AcceptedResponseMintsExactlyOneSequence(t *testing.T) {
+	k, ctx, _, mockProvider := setupKeeper(t)
+
+	reporter := sdk.AccAddress("cosmos1reporter______").String()
+	reported := sdk.AccAddress("cosmos1reported______").String()
+	mockProvider.SetProvider(reporter)
+
+	report := newReport(ctx, reporter, reported, testFraudDescription, nil, false)
+	if err := k.SubmitFraudReport(ctx, report); err != nil {
+		t.Fatalf("submit failed: %v", err)
+	}
+
+	seqBefore := k.GetNextFraudResponseSequence(ctx)
+	accepted := types.NewFraudResponse("", report.ID, reported,
+		types.FraudRespondentRoleReportedParty, createValidEvidence(), "sha256-ok", ctx.BlockHeight(), ctx.BlockTime())
+	if err := k.SubmitFraudResponse(ctx, accepted); err != nil {
+		t.Fatalf("accepted response failed: %v", err)
+	}
+
+	if want := fmt.Sprintf("%s/response-%d", report.ID, seqBefore); accepted.ID != want {
+		t.Errorf("response ID = %q, want %q", accepted.ID, want)
+	}
+	if seqAfter := k.GetNextFraudResponseSequence(ctx); seqAfter != seqBefore+1 {
+		t.Errorf("sequence = %d, want %d (advanced exactly once)", seqAfter, seqBefore+1)
+	}
+	// The content hash must cover the minted ID, so it is recomputed after
+	// minting rather than left at the empty-ID value from the constructor.
+	if accepted.ContentHash != accepted.ComputeContentHash() {
+		t.Error("ContentHash was not recomputed after the ID was minted")
 	}
 }
