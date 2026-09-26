@@ -192,6 +192,23 @@ RUN apt-get update && apt-get upgrade -y --no-install-recommends \
 
 WORKDIR /app
 
+# Purge the base image's preinstalled installer toolchain before overlaying
+# ours. COPY merges directory trees file-by-file, and setuptools' vendored
+# dist-info names changed across releases (dot: jaraco.context-5.3.0 vs
+# underscore: jaraco_context-6.1.0), so a stale METADATA file from the base's
+# own setuptools survives next to ours and Trivy flags it as a live finding.
+# Observed 2026-09-27: ghost setuptools/_vendor/jaraco.context-5.3.0 flagged
+# CVE-2026-23949 while every installed copy (top-level and vendored) was
+# already 6.1.0. Nothing at runtime needs pip/setuptools/wheel (ENTRYPOINT is
+# `python3 -m`, HEALTHCHECK is `python3 -c`), so wiping them also shrinks the
+# production attack surface. pkg_resources is deliberately left as-is.
+RUN rm -rf /usr/local/lib/python3.11/site-packages/setuptools* \
+           /usr/local/lib/python3.11/site-packages/_distutils_hack \
+           /usr/local/lib/python3.11/site-packages/pip \
+           /usr/local/lib/python3.11/site-packages/pip-* \
+           /usr/local/lib/python3.11/site-packages/wheel \
+           /usr/local/lib/python3.11/site-packages/wheel-*
+
 # Only the pip site-packages and the app code travel forward. Deliberately NOT
 # /usr/local/bin or /usr/local/lib/python3.11 from python-deps: those are
 # CPython 3.11.7 (Jan 2024) with the same class of fixed-upstream CVEs, but
@@ -201,6 +218,17 @@ WORKDIR /app
 # site-packages; ENTRYPOINT resolves to its /usr/local/bin/python3.
 COPY --from=python-deps /usr/local/lib/python3.11/site-packages /usr/local/lib/python3.11/site-packages
 COPY --from=app --chown=nonroot:nonroot /app /app
+
+# Fail closed on layer-merge ghosts: refuse to ship if any jaraco.context
+# metadata older than the pinned 6.1.0 exists anywhere under site-packages
+# (top-level dist-info or setuptools/_vendor). This is the build-time proof
+# for the Security gate's Total line.
+RUN set -e; \
+    if find /usr/local/lib/python3.11/site-packages -maxdepth 4 \( -name 'jaraco.context-5*' -o -name 'jaraco_context-5*' \) | grep -q .; then \
+      echo 'ERROR: stale jaraco.context 5.x metadata present; refusing image'; \
+      find /usr/local/lib/python3.11/site-packages -maxdepth 4 -name 'jaraco*'; \
+      exit 1; \
+    fi
 
 USER nonroot
 
