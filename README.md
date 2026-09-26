@@ -58,7 +58,10 @@ The repository includes GoReleaser, Homebrew, and install-script paths for tagge
 2. The target network has an approved launch or upgrade decision.
 3. The verification and support posture in [VERIFICATION.md](VERIFICATION.md) and [docs/COMPATIBILITY.md](docs/COMPATIBILITY.md) matches your intended deployment.
 
-Example installation commands for an already-published tag:
+No release tags have been published yet (the only tag is `v0.1.0`, a 2021
+draft), so there is currently nothing to install: `virtengine/tap` does not
+exist and `install.sh` has no release artifacts to download. The commands
+below are the intended shape once tagged releases ship — do not run them yet.
 
 ```sh
 brew tap virtengine/tap
@@ -78,6 +81,10 @@ VirtEngine is developed against [Go 1.25.5](https://go.dev/). Building requires 
 VirtEngine build processes and examples are heavily tied to the `Makefile`.
 
 ## Building from Source
+
+Builds require the direnv environment (`direnv allow` in the repo root, which
+sets `VIRTENGINE`, `VE_DEVCACHE`, and related vars). Without it, `make
+virtengine` silently does nothing (`Nothing to be done for 'virtengine'`).
 
 The command below compiles the `virtengine` executable and writes it into `.cache/bin`.
 
