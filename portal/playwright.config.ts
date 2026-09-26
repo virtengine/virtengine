@@ -38,7 +38,11 @@ export default defineConfig({
     },
   ],
   webServer: {
-    command: 'pnpm dev -- --port 3000',
+    // Args after the script name are forwarded verbatim by pnpm, so a literal
+    // `--` here reaches `next dev` and makes it treat `--port` as the project
+    // directory ("Invalid project directory provided, no such directory:
+    // <root>/--port", exit 1), which is what reddened Portal CI / E2E Tests.
+    command: 'pnpm dev --port 3000',
     url: 'http://localhost:3000',
     reuseExistingServer: !process.env.CI,
     timeout: 120 * 1000,
