@@ -356,7 +356,14 @@ func (k Keeper) RevokeSanction(
 	if !k.IsModerator(ctx, actor) {
 		return types.Sanction{}, types.ErrUnauthorized
 	}
-	if !sanction.Status.InForce() && sanction.Status != types.SanctionStatusActive {
+	// Revocable means "currently restricting the subject", which is the record
+	// predicate Sanction.InForce, not the bare status predicate. They differ
+	// exactly where it matters most: a pending emergency hold IS in force (that
+	// is its purpose) while its status is pending_review. Guarding on the status
+	// instead would make a mistaken emergency hold impossible to lift for its
+	// whole window, which is the single-handed 72h lockout this model exists to
+	// prevent.
+	if !sanction.InForce() {
 		return types.Sanction{}, types.ErrInvalidSanctionTransition.Wrapf(
 			"cannot revoke a sanction in status %s", sanction.Status)
 	}

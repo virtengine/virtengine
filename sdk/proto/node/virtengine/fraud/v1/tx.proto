@@ -29,6 +29,10 @@ service Msg {
   // ResolveFraudReport resolves a fraud report with action
   rpc ResolveFraudReport(MsgResolveFraudReport) returns (MsgResolveFraudReportResponse);
 
+  // ConfirmFraudResolution applies a proposed suspension or termination as the
+  // second, distinct reviewer
+  rpc ConfirmFraudResolution(MsgConfirmFraudResolution) returns (MsgConfirmFraudResolutionResponse);
+
   // RejectFraudReport rejects a fraud report
   rpc RejectFraudReport(MsgRejectFraudReport) returns (MsgRejectFraudReportResponse);
 
@@ -244,7 +248,64 @@ message MsgResolveFraudReport {
 }
 
 // MsgResolveFraudReportResponse is the response for MsgResolveFraudReport
-message MsgResolveFraudReportResponse {}
+//
+// A suspension or termination is not applied by the proposing message: it is
+// recorded pending review. `requires_second_reviewer` and `pending` tell the
+// caller that the report is unresolved and that a distinct second reviewer must
+// confirm via MsgConfirmFraudResolution before anything takes effect.
+message MsgResolveFraudReportResponse {
+  // RequiresSecondReviewer reports that this resolution can never be applied
+  // by a single moderator
+  bool requires_second_reviewer = 1 [
+    (gogoproto.jsontag) = "requires_second_reviewer",
+    (gogoproto.moretags) = "yaml:\"requires_second_reviewer\""
+  ];
+
+  // Pending reports that a proposal was recorded awaiting a second reviewer
+  bool pending = 2 [
+    (gogoproto.jsontag) = "pending",
+    (gogoproto.moretags) = "yaml:\"pending\""
+  ];
+
+  // PendingExpiresAt is the Unix time the proposal lapses if unreviewed
+  int64 pending_expires_at = 3 [
+    (gogoproto.jsontag) = "pending_expires_at",
+    (gogoproto.moretags) = "yaml:\"pending_expires_at\""
+  ];
+}
+
+// MsgConfirmFraudResolution applies a proposed suspension or termination.
+//
+// This is the only path by which a suspension or termination driven from a
+// fraud report takes effect. The signer must be a moderator-or-above identity
+// distinct from the proposer, and the proposal must be within its review window.
+message MsgConfirmFraudResolution {
+  option (gogoproto.equal) = false;
+  option (cosmos.msg.v1.signer) = "reviewer";
+  option (amino.name) = "fraud/MsgConfirmFraudResolution";
+
+  // Reviewer is the second, distinct moderator confirming the resolution
+  string reviewer = 1 [
+    (cosmos_proto.scalar) = "cosmos.AddressString",
+    (gogoproto.jsontag) = "reviewer",
+    (gogoproto.moretags) = "yaml:\"reviewer\""
+  ];
+
+  // ReportID is the report whose proposal is being confirmed
+  string report_id = 2 [
+    (gogoproto.jsontag) = "report_id",
+    (gogoproto.moretags) = "yaml:\"report_id\""
+  ];
+}
+
+// MsgConfirmFraudResolutionResponse is the response for MsgConfirmFraudResolution
+message MsgConfirmFraudResolutionResponse {
+  // Resolution is the resolution that was applied
+  ResolutionType resolution = 1 [
+    (gogoproto.jsontag) = "resolution",
+    (gogoproto.moretags) = "yaml:\"resolution\""
+  ];
+}
 
 // MsgRejectFraudReport defines the message for rejecting a fraud report
 message MsgRejectFraudReport {

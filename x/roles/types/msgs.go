@@ -1,6 +1,8 @@
 package types
 
 import (
+	"strings"
+
 	sdk "github.com/cosmos/cosmos-sdk/types"
 
 	mfatypes "github.com/virtengine/virtengine/x/mfa/types"
@@ -17,6 +19,12 @@ const (
 	TypeMsgRevokeRole      = "revoke_role"
 	TypeMsgSetAccountState = "set_account_state"
 	TypeMsgNominateAdmin   = "nominate_admin"
+
+	TypeMsgImposeSanction        = "impose_sanction"
+	TypeMsgConfirmSanction       = "confirm_sanction"
+	TypeMsgRevokeSanction        = "revoke_sanction"
+	TypeMsgOpenSanctionAppeal    = "open_sanction_appeal"
+	TypeMsgResolveSanctionAppeal = "resolve_sanction_appeal"
 )
 
 var (
@@ -25,6 +33,11 @@ var (
 	_ sdk.Msg = &MsgSetAccountState{}
 	_ sdk.Msg = &MsgNominateAdmin{}
 	_ sdk.Msg = &MsgUpdateParams{}
+	_ sdk.Msg = &MsgImposeSanction{}
+	_ sdk.Msg = &MsgConfirmSanction{}
+	_ sdk.Msg = &MsgRevokeSanction{}
+	_ sdk.Msg = &MsgOpenSanctionAppeal{}
+	_ sdk.Msg = &MsgResolveSanctionAppeal{}
 )
 
 // MsgAssignRole is the message for assigning a role to an account
@@ -291,3 +304,294 @@ type MsgNominateAdminResponse struct{}
 
 // MsgUpdateParamsResponse is the response for MsgUpdateParams
 type MsgUpdateParamsResponse struct{}
+
+// ============================================================================
+// Sanction messages
+//
+// These mirror the generated rolesv1 types field-for-field, following the same
+// pattern as the messages above. They are the on-chain entry points to the
+// sanction state machine: without them the keeper's ImposeSanction,
+// ConfirmSanction, RevokeSanction, OpenAppeal and ResolveAppeal would be
+// unreachable and no account could be sanctioned at all.
+// ============================================================================
+
+// MsgImposeSanction records a scoped, time-limited sanction against an account.
+//
+// A suspension or termination it proposes takes effect only after a second,
+// distinct moderator confirms it (MsgConfirmSanction). An emergency hold binds
+// immediately but expires unless confirmed within its window.
+type MsgImposeSanction struct {
+	Sender          string `json:"sender"`
+	Subject         string `json:"subject"`
+	Scope           string `json:"scope"`
+	ScopeRef        string `json:"scope_ref,omitempty"`
+	Kind            string `json:"kind"`
+	ReasonCode      string `json:"reason_code"`
+	Justification   string `json:"justification"`
+	Notice          string `json:"notice,omitempty"`
+	DurationSeconds int64  `json:"duration_seconds,omitempty"`
+}
+
+// NewMsgImposeSanction creates a new MsgImposeSanction
+func NewMsgImposeSanction(
+	sender, subject, scope, scopeRef, kind, reasonCode, justification, notice string,
+	durationSeconds int64,
+) *MsgImposeSanction {
+	return &MsgImposeSanction{
+		Sender:          sender,
+		Subject:         subject,
+		Scope:           scope,
+		ScopeRef:        scopeRef,
+		Kind:            kind,
+		ReasonCode:      reasonCode,
+		Justification:   justification,
+		Notice:          notice,
+		DurationSeconds: durationSeconds,
+	}
+}
+
+// Route returns the route for the message
+func (msg MsgImposeSanction) Route() string { return RouterKey }
+
+// Type returns the type for the message
+func (msg MsgImposeSanction) Type() string { return TypeMsgImposeSanction }
+
+// ValidateBasic validates the message
+func (msg MsgImposeSanction) ValidateBasic() error {
+	if _, err := sdk.AccAddressFromBech32(msg.Sender); err != nil {
+		return ErrInvalidAddress.Wrap(errMsgInvalidSenderAddress)
+	}
+	if _, err := sdk.AccAddressFromBech32(msg.Subject); err != nil {
+		return ErrInvalidAddress.Wrap(errMsgInvalidTargetAddress)
+	}
+	if _, err := SanctionScopeFromString(msg.Scope); err != nil {
+		return ErrInvalidSanctionScope.Wrap(err.Error())
+	}
+	if _, err := SanctionKindFromString(msg.Kind); err != nil {
+		return ErrInvalidSanctionKind.Wrap(err.Error())
+	}
+	if _, err := SanctionReasonCodeFromString(msg.ReasonCode); err != nil {
+		return ErrInvalidSanctionReason.Wrap(err.Error())
+	}
+	// A negative duration is meaningless and would produce an expiry in the past.
+	if msg.DurationSeconds < 0 {
+		return ErrInvalidSanction.Wrap("duration_seconds must not be negative")
+	}
+	return nil
+}
+
+// GetSigners returns the signers for the message
+func (msg MsgImposeSanction) GetSigners() []sdk.AccAddress {
+	signer, _ := sdk.AccAddressFromBech32(msg.Sender)
+	return []sdk.AccAddress{signer}
+}
+
+// GetSignBytes returns the sign bytes for the message
+func (msg MsgImposeSanction) GetSignBytes() []byte {
+	bz := ModuleCdc.MustMarshalJSON(&msg)
+	return sdk.MustSortJSON(bz)
+}
+
+// MsgImposeSanctionResponse is the response for MsgImposeSanction
+type MsgImposeSanctionResponse struct {
+	SanctionID string `json:"sanction_id"`
+	Status     string `json:"status"`
+}
+
+// MsgConfirmSanction applies a pending sanction as its second, distinct reviewer
+type MsgConfirmSanction struct {
+	Reviewer      string `json:"reviewer"`
+	SanctionID    string `json:"sanction_id"`
+	ReviewedUntil int64  `json:"reviewed_until,omitempty"`
+}
+
+// NewMsgConfirmSanction creates a new MsgConfirmSanction
+func NewMsgConfirmSanction(reviewer, sanctionID string, reviewedUntil int64) *MsgConfirmSanction {
+	return &MsgConfirmSanction{
+		Reviewer:      reviewer,
+		SanctionID:    sanctionID,
+		ReviewedUntil: reviewedUntil,
+	}
+}
+
+// Route returns the route for the message
+func (msg MsgConfirmSanction) Route() string { return RouterKey }
+
+// Type returns the type for the message
+func (msg MsgConfirmSanction) Type() string { return TypeMsgConfirmSanction }
+
+// ValidateBasic validates the message
+func (msg MsgConfirmSanction) ValidateBasic() error {
+	if _, err := sdk.AccAddressFromBech32(msg.Reviewer); err != nil {
+		return ErrInvalidAddress.Wrap(errMsgInvalidSenderAddress)
+	}
+	if strings.TrimSpace(msg.SanctionID) == "" {
+		return ErrInvalidSanction.Wrap("sanction_id is required")
+	}
+	return nil
+}
+
+// GetSigners returns the signers for the message
+func (msg MsgConfirmSanction) GetSigners() []sdk.AccAddress {
+	signer, _ := sdk.AccAddressFromBech32(msg.Reviewer)
+	return []sdk.AccAddress{signer}
+}
+
+// GetSignBytes returns the sign bytes for the message
+func (msg MsgConfirmSanction) GetSignBytes() []byte {
+	bz := ModuleCdc.MustMarshalJSON(&msg)
+	return sdk.MustSortJSON(bz)
+}
+
+// MsgConfirmSanctionResponse is the response for MsgConfirmSanction
+type MsgConfirmSanctionResponse struct{}
+
+// MsgRevokeSanction clears an in-force or pending sanction.
+//
+// Revocation is de-escalation, so it needs only one moderator-or-above actor.
+type MsgRevokeSanction struct {
+	Sender     string `json:"sender"`
+	SanctionID string `json:"sanction_id"`
+	Reason     string `json:"reason"`
+}
+
+// NewMsgRevokeSanction creates a new MsgRevokeSanction
+func NewMsgRevokeSanction(sender, sanctionID, reason string) *MsgRevokeSanction {
+	return &MsgRevokeSanction{
+		Sender:     sender,
+		SanctionID: sanctionID,
+		Reason:     reason,
+	}
+}
+
+// Route returns the route for the message
+func (msg MsgRevokeSanction) Route() string { return RouterKey }
+
+// Type returns the type for the message
+func (msg MsgRevokeSanction) Type() string { return TypeMsgRevokeSanction }
+
+// ValidateBasic validates the message
+func (msg MsgRevokeSanction) ValidateBasic() error {
+	if _, err := sdk.AccAddressFromBech32(msg.Sender); err != nil {
+		return ErrInvalidAddress.Wrap(errMsgInvalidSenderAddress)
+	}
+	if strings.TrimSpace(msg.SanctionID) == "" {
+		return ErrInvalidSanction.Wrap("sanction_id is required")
+	}
+	return nil
+}
+
+// GetSigners returns the signers for the message
+func (msg MsgRevokeSanction) GetSigners() []sdk.AccAddress {
+	signer, _ := sdk.AccAddressFromBech32(msg.Sender)
+	return []sdk.AccAddress{signer}
+}
+
+// GetSignBytes returns the sign bytes for the message
+func (msg MsgRevokeSanction) GetSignBytes() []byte {
+	bz := ModuleCdc.MustMarshalJSON(&msg)
+	return sdk.MustSortJSON(bz)
+}
+
+// MsgRevokeSanctionResponse is the response for MsgRevokeSanction
+type MsgRevokeSanctionResponse struct{}
+
+// MsgOpenSanctionAppeal opens an appeal against an in-force sanction
+type MsgOpenSanctionAppeal struct {
+	Subject       string `json:"subject"`
+	SanctionID    string `json:"sanction_id"`
+	Justification string `json:"justification"`
+}
+
+// NewMsgOpenSanctionAppeal creates a new MsgOpenSanctionAppeal
+func NewMsgOpenSanctionAppeal(subject, sanctionID, justification string) *MsgOpenSanctionAppeal {
+	return &MsgOpenSanctionAppeal{
+		Subject:       subject,
+		SanctionID:    sanctionID,
+		Justification: justification,
+	}
+}
+
+// Route returns the route for the message
+func (msg MsgOpenSanctionAppeal) Route() string { return RouterKey }
+
+// Type returns the type for the message
+func (msg MsgOpenSanctionAppeal) Type() string { return TypeMsgOpenSanctionAppeal }
+
+// ValidateBasic validates the message
+func (msg MsgOpenSanctionAppeal) ValidateBasic() error {
+	if _, err := sdk.AccAddressFromBech32(msg.Subject); err != nil {
+		return ErrInvalidAddress.Wrap(errMsgInvalidSenderAddress)
+	}
+	if strings.TrimSpace(msg.SanctionID) == "" {
+		return ErrInvalidSanction.Wrap("sanction_id is required")
+	}
+	return nil
+}
+
+// GetSigners returns the signers for the message
+func (msg MsgOpenSanctionAppeal) GetSigners() []sdk.AccAddress {
+	signer, _ := sdk.AccAddressFromBech32(msg.Subject)
+	return []sdk.AccAddress{signer}
+}
+
+// GetSignBytes returns the sign bytes for the message
+func (msg MsgOpenSanctionAppeal) GetSignBytes() []byte {
+	bz := ModuleCdc.MustMarshalJSON(&msg)
+	return sdk.MustSortJSON(bz)
+}
+
+// MsgOpenSanctionAppealResponse is the response for MsgOpenSanctionAppeal
+type MsgOpenSanctionAppealResponse struct {
+	AppealID string `json:"appeal_id"`
+}
+
+// MsgResolveSanctionAppeal resolves an open appeal
+type MsgResolveSanctionAppeal struct {
+	Reviewer string `json:"reviewer"`
+	AppealID string `json:"appeal_id"`
+	Grant    bool   `json:"grant"`
+	Notes    string `json:"notes"`
+}
+
+// NewMsgResolveSanctionAppeal creates a new MsgResolveSanctionAppeal
+func NewMsgResolveSanctionAppeal(reviewer, appealID string, grant bool, notes string) *MsgResolveSanctionAppeal {
+	return &MsgResolveSanctionAppeal{
+		Reviewer: reviewer,
+		AppealID: appealID,
+		Grant:    grant,
+		Notes:    notes,
+	}
+}
+
+// Route returns the route for the message
+func (msg MsgResolveSanctionAppeal) Route() string { return RouterKey }
+
+// Type returns the type for the message
+func (msg MsgResolveSanctionAppeal) Type() string { return TypeMsgResolveSanctionAppeal }
+
+// ValidateBasic validates the message
+func (msg MsgResolveSanctionAppeal) ValidateBasic() error {
+	if _, err := sdk.AccAddressFromBech32(msg.Reviewer); err != nil {
+		return ErrInvalidAddress.Wrap(errMsgInvalidSenderAddress)
+	}
+	if strings.TrimSpace(msg.AppealID) == "" {
+		return ErrInvalidSanction.Wrap("appeal_id is required")
+	}
+	return nil
+}
+
+// GetSigners returns the signers for the message
+func (msg MsgResolveSanctionAppeal) GetSigners() []sdk.AccAddress {
+	signer, _ := sdk.AccAddressFromBech32(msg.Reviewer)
+	return []sdk.AccAddress{signer}
+}
+
+// GetSignBytes returns the sign bytes for the message
+func (msg MsgResolveSanctionAppeal) GetSignBytes() []byte {
+	bz := ModuleCdc.MustMarshalJSON(&msg)
+	return sdk.MustSortJSON(bz)
+}
+
+// MsgResolveSanctionAppealResponse is the response for MsgResolveSanctionAppeal
+type MsgResolveSanctionAppealResponse struct{}
