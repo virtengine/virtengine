@@ -92,28 +92,32 @@ func (v *PathValidator) ValidatePath(path string) error {
 		return fmt.Errorf("cannot resolve path: %w", err)
 	}
 
-	// Resolve symlinks for existing paths so we can enforce allowed directories.
-	if info, err := os.Lstat(absPath); err == nil {
-		if info.Mode()&os.ModeSymlink != 0 {
-			linkTarget, err := os.Readlink(absPath)
-			if err != nil {
-				return fmt.Errorf("%w: %s", ErrInvalidPath, path)
-			}
-			if !filepath.IsAbs(linkTarget) {
-				linkTarget = filepath.Join(filepath.Dir(absPath), linkTarget)
-			}
-			resolved, err := filepath.Abs(filepath.Clean(linkTarget))
-			if err != nil {
-				return fmt.Errorf("%w: %s", ErrInvalidPath, path)
-			}
-			absPath = resolved
-		}
-
-		realPath, err := filepath.EvalSymlinks(absPath)
+	// A symlink at the leaf must be resolved explicitly, even when its target
+	// does not exist. resolveExistingPrefix cannot be used here: for a broken
+	// link it would walk up to the parent, drop the link entirely, and hand back
+	// the link's own name — accepting a path that actually points outside the
+	// allowed directories.
+	if info, err := os.Lstat(absPath); err == nil && info.Mode()&os.ModeSymlink != 0 {
+		linkTarget, err := os.Readlink(absPath)
 		if err != nil {
 			return fmt.Errorf("%w: %s", ErrInvalidPath, path)
 		}
-		absPath = realPath
+		if !filepath.IsAbs(linkTarget) {
+			linkTarget = filepath.Join(filepath.Dir(absPath), linkTarget)
+		}
+		absPath = filepath.Clean(linkTarget)
+	} else {
+		// Resolve symlinks and short names for the containment check. This must
+		// work for paths that do not exist yet, because the common pattern is
+		// to validate a destination before writing it (see WriteSecureFile and
+		// SafeWriteStateFile). Resolving only the deepest existing ancestor and
+		// re-appending the remainder keeps 8.3 short components expanded on
+		// both sides of the comparison. A non-existent tail cannot introduce a
+		// symlink escape, since there is nothing there to follow.
+		absPath, err = resolveExistingPrefix(absPath)
+		if err != nil {
+			return fmt.Errorf("%w: %s", ErrInvalidPath, path)
+		}
 	}
 
 	// Check if path is within allowed directories
