@@ -523,23 +523,30 @@ func (s *AccountSafeguardState) CanTrade(now time.Time) error {
 	return nil
 }
 
-// RecordViolation records a violation and returns the penalty action
+// RecordViolation records a violation and returns the recommended penalty action.
+//
+// MARKET-SCOPED-ELIGIBILITY: this method intentionally does NOT set IsSuspended or
+// IsBanned. A raw violation counter is not independently established serious abuse: it
+// has no criteria and no review, and letting it switch off the account globally is
+// exactly the failure mode the scope rule forbids. Recording is order/listing-scoped and
+// the returned action is a *recommendation* capped at trading-level penalties.
+//
+// When the count crosses the suspension/ban thresholds this returns PenaltyActionSuspension
+// or PenaltyActionBan to signal that account-wide enforcement is *warranted*, but applying
+// it still requires the reviewed path: AssessAbuse must meet the documented criteria and
+// ApplyAccountWideSanction must carry a named reviewer. See eligibility_scope.go.
 func (s *AccountSafeguardState) RecordViolation(violation ViolationRecord, config PenaltyConfig) PenaltyAction {
 	s.Violations = append(s.Violations, violation)
 	s.ViolationCount++
 	s.TrustScore = s.calculateTrustScore()
 	s.LastUpdated = violation.DetectedAt
 
-	// Determine penalty action
+	// Recommend an action. Only trading-level penalties are self-applying; anything that
+	// would reach account scope is returned as a recommendation for the reviewed path.
 	switch {
 	case s.ViolationCount >= config.BanThreshold:
-		s.IsBanned = true
-		s.BannedAt = &violation.DetectedAt
 		return PenaltyActionBan
 	case s.ViolationCount >= config.SuspensionThreshold:
-		s.IsSuspended = true
-		endTime := violation.DetectedAt.Add(time.Duration(config.SuspensionDurationBlocks*6) * time.Second)
-		s.SuspendedUntil = &endTime
 		return PenaltyActionSuspension
 	case s.ViolationCount >= config.CooldownThreshold:
 		endTime := violation.DetectedAt.Add(time.Duration(config.CooldownDurationBlocks*6) * time.Second)
@@ -552,6 +559,53 @@ func (s *AccountSafeguardState) RecordViolation(violation ViolationRecord, confi
 	default:
 		return PenaltyActionNone
 	}
+}
+
+// AssessAbuse evaluates this account's recorded violations against the serious-abuse
+// criteria. This is the only sanctioned way to decide that an account-wide effect is
+// justified, and its verdict is recorded on the resulting sanction for audit.
+func (s *AccountSafeguardState) AssessAbuse(criteria SeriousAbuseCriteria) AbuseAssessment {
+	return AssessSeriousAbuse(s.Violations, criteria)
+}
+
+// ApplyAccountWideSanction applies an account-wide effect (suspension or ban).
+//
+// This is the single gate through which global account state may be reached from
+// marketplace violation data. It refuses to act unless the sanction is present, its
+// assessment met the documented serious-abuse criteria, and a named reviewer authorized
+// it. An unreviewed or criteria-failing sanction is rejected and no state is mutated.
+func (s *AccountSafeguardState) ApplyAccountWideSanction(
+	sanction *AccountWideSanction,
+	config PenaltyConfig,
+	now time.Time,
+) (PenaltyAction, error) {
+	if err := sanction.Validate(); err != nil {
+		return PenaltyActionNone, err
+	}
+
+	// The criteria must be met; Validate already asserts this, re-checked here so the
+	// enforcement point is self-evidently correct without relying on Validate's contract.
+	if !sanction.Assessment.CriteriaMet {
+		return PenaltyActionNone, fmt.Errorf(
+			"refusing account-wide effect: serious-abuse criteria not met")
+	}
+
+	action := PenaltyActionSuspension
+	switch {
+	case s.ViolationCount >= config.BanThreshold:
+		s.IsBanned = true
+		bannedAt := now
+		s.BannedAt = &bannedAt
+		action = PenaltyActionBan
+	default:
+		s.IsSuspended = true
+		endTime := now.Add(time.Duration(config.SuspensionDurationBlocks*6) * time.Second)
+		s.SuspendedUntil = &endTime
+	}
+
+	s.TrustScore = s.calculateTrustScore()
+	s.LastUpdated = now
+	return action, nil
 }
 
 // calculateTrustScore calculates trust score based on violations
