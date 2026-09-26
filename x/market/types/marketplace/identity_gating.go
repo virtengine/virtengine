@@ -27,6 +27,9 @@ const (
 	// GatingCheckMFAEnabled checks if MFA is enabled
 	GatingCheckMFAEnabled GatingCheckType = "mfa_enabled"
 
+	// GatingCheckIdentityUnlocked checks that the identity is not locked
+	GatingCheckIdentityUnlocked GatingCheckType = "identity_unlocked"
+
 	// GatingCheckProviderIdentity checks provider identity requirements
 	GatingCheckProviderIdentity GatingCheckType = "provider_identity"
 )
@@ -144,6 +147,10 @@ type CustomerIdentityInfo struct {
 
 	// Tier is the calculated identity tier
 	Tier int `json:"tier"`
+
+	// Locked indicates the customer's identity is currently locked/revoked.
+	// Listings that opt into RequireUnlockedIdentity gate on this.
+	Locked bool `json:"locked"`
 }
 
 // ProviderIdentitySettings holds provider-level identity requirements
@@ -210,6 +217,12 @@ func (c *IdentityGatingChecker) Check() *IdentityGatingError {
 func (c *IdentityGatingChecker) checkOfferingRequirements(gatingErr *IdentityGatingError) {
 	req := c.offering.IdentityRequirement
 
+	// A listing that declares nothing gates nobody. This is the opt-in default:
+	// no market-wide or global identity gate exists.
+	if req.IsZero() {
+		return
+	}
+
 	// Check identity score
 	if c.customerInfo.Score < req.MinScore {
 		reason := NewGatingFailureReason(
@@ -222,6 +235,22 @@ func (c *IdentityGatingChecker) checkOfferingRequirements(gatingErr *IdentityGat
 			"Upload a valid government-issued ID document",
 			"Complete facial verification",
 		).WithDocumentation("/docs/identity-verification")
+
+		gatingErr.AddReason(reason)
+	}
+
+	// Check locked identity. Only listings that explicitly ask for an unlocked
+	// identity are affected; this is never a global requirement.
+	if req.RequireUnlockedIdentity && c.customerInfo.Locked {
+		reason := NewGatingFailureReason(
+			GatingCheckIdentityUnlocked,
+			"unlocked",
+			"locked",
+			"This offering requires an unlocked identity",
+		).WithSteps(
+			"Contact support to resolve the lock reason",
+			"Submit an appeal if you believe the lock is in error",
+		).WithDocumentation("/docs/identity-appeals")
 
 		gatingErr.AddReason(reason)
 	}

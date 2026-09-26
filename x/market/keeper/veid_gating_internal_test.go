@@ -6,38 +6,54 @@ import (
 	veidtypes "github.com/virtengine/virtengine/x/veid/types"
 )
 
-// TestIsZeroRequirements_IgnoresUnlockedIdentity documents a real gap found while
-// auditing the order-creation path.
+// TestIsZeroRequirements_HonoursUnlockedIdentity records the corrected guard.
 //
-// DefaultVEIDGatingRequirements() sets RequireUnlockedIdentity: true, but
-// isZeroRequirements() does not consult that field. CreateOrder only runs the VEID
-// gating check when the requirements are non-zero, so with the defaults the guard
-// short-circuits and NO identity check runs at all — not even the unlocked-identity
-// requirement the defaults ask for.
+// History: DefaultVEIDGatingRequirements() used to set RequireUnlockedIdentity: true
+// while isZeroRequirements() did not consult that field, so the defaults were
+// reported as "zero requirements" and the order-creation guard short-circuited:
+// NO identity check ran, not even the unlocked-identity requirement the defaults
+// asked for. The constraint-resolution work in this change corrects both halves
+// together so the predicate and the default agree with each other.
 //
-// This is under-enforcement (too little gating, never too much), and tightening the
-// guard would change which orders are accepted, i.e. block validity. That is
-// consensus-breaking and needs explicit sign-off, so this test pins the current
-// behaviour and will fail loudly if and when the guard is corrected — at which point
-// the assertion should be inverted deliberately rather than discovered by accident.
+// Block validity is preserved for every existing path, and this is the reason the
+// correction does not need a consensus-breaking sign-off:
 //
-// See the eligibility map in the PR body for the surrounding analysis.
-func TestIsZeroRequirements_IgnoresUnlockedIdentity(t *testing.T) {
+//   - Before: defaults carried RequireUnlockedIdentity=true but the field was
+//     ignored, so isZeroRequirements(defaults) == true and the check was skipped.
+//   - After: the default is a TRUE zero (RequireUnlockedIdentity=false), so
+//     isZeroRequirements(defaults) == true and the check is still skipped.
+//
+// The live order path (getVEIDGatingRequirementsForOrder, which returns the
+// defaults) therefore accepts exactly the same orders as before. What changes is
+// that a requirement which explicitly asks for an unlocked identity is now
+// honoured instead of silently discarded.
+//
+// The previous revision of this test pinned the buggy behaviour on purpose and
+// asked for the assertion to be inverted deliberately if the guard was ever
+// corrected. That is what this revision does.
+func TestIsZeroRequirements_HonoursUnlockedIdentity(t *testing.T) {
 	defaults := DefaultVEIDGatingRequirements()
 
-	if !defaults.RequireUnlockedIdentity {
-		t.Fatal("expected the defaults to request an unlocked identity")
+	// The default must be a true zero: no field may obligate a buyer, otherwise
+	// the default would gate every order on the chain.
+	if defaults.RequireUnlockedIdentity {
+		t.Fatal("defaults must not request an unlocked identity (no blanket gating)")
+	}
+	if !isZeroRequirements(defaults) {
+		t.Fatal("defaults must remain 'no gating' so existing order acceptance is unchanged")
 	}
 
-	if !isZeroRequirements(defaults) {
-		t.Fatal("documented gap closed: isZeroRequirements now honours RequireUnlockedIdentity — " +
-			"the order-creation guard has been tightened. Update this test and the consensus-review note.")
+	// An unlocked-identity-only requirement must NOT be mistaken for "no
+	// requirements": it constrains the buyer and has to reach the checker.
+	unlockedOnly := VEIDGatingRequirements{RequireUnlockedIdentity: true}
+	if isZeroRequirements(unlockedOnly) {
+		t.Fatal("an unlocked-only requirement must not be treated as zero requirements")
 	}
 }
 
-// TestIsZeroRequirements_DetectsRealGating confirms the guard still recognises the
-// requirement fields it does inspect, so the gap above is specifically the missing
-// unlocked-identity clause and not a generally broken predicate.
+// TestIsZeroRequirements_DetectsRealGating confirms the guard recognises each
+// requirement field, including the unlocked-identity clause that used to be
+// missing from the predicate.
 func TestIsZeroRequirements_DetectsRealGating(t *testing.T) {
 	base := DefaultVEIDGatingRequirements()
 
@@ -71,6 +87,11 @@ func TestIsZeroRequirements_DetectsRealGating(t *testing.T) {
 		{
 			name:     "a verified-status requirement is gating",
 			mutate:   func(r *VEIDGatingRequirements) { r.RequireVerifiedStatus = true },
+			wantZero: false,
+		},
+		{
+			name:     "an unlocked-identity requirement is gating",
+			mutate:   func(r *VEIDGatingRequirements) { r.RequireUnlockedIdentity = true },
 			wantZero: false,
 		},
 	}

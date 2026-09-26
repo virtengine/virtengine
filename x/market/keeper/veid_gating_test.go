@@ -34,9 +34,31 @@ func TestCheckVEIDGating_DefaultRequirements(t *testing.T) {
 
 	require.Equal(t, uint32(0), requirements.MinCustomerScore)
 	require.Equal(t, veidtypes.TierUnverified, requirements.MinCustomerTier)
-	require.True(t, requirements.RequireUnlockedIdentity)
 	require.False(t, requirements.RequireVerifiedStatus)
 	require.Nil(t, requirements.RequiredScopes)
+
+	// The default is a TRUE zero: no field may obligate a buyer. In particular
+	// RequireUnlockedIdentity must be false, otherwise the default would gate
+	// every order on the chain.
+	require.False(t, requirements.RequireUnlockedIdentity)
+	require.True(t, requirements.IsZero(), "default requirements must be zero (no gating)")
+}
+
+// TestIsZeroRequirements_UnlockedOnly proves the bug fixed in VEID gating: a
+// requirement that only demands an unlocked identity is NOT "zero requirements".
+func TestIsZeroRequirements_TreatsUnlockedOnlyAsNonZero(t *testing.T) {
+	// Exported via IsZero, which isZeroRequirements delegates to.
+	unlockedOnly := keeper.VEIDGatingRequirements{RequireUnlockedIdentity: true}
+	require.False(t, unlockedOnly.IsZero(), "unlocked-only requirement must not be treated as zero")
+
+	// Every other single field must also count as non-zero.
+	require.False(t, keeper.VEIDGatingRequirements{MinCustomerScore: 1}.IsZero())
+	require.False(t, keeper.VEIDGatingRequirements{MinCustomerTier: veidtypes.TierBasic}.IsZero())
+	require.False(t, keeper.VEIDGatingRequirements{RequireVerifiedStatus: true}.IsZero())
+	require.False(t, keeper.VEIDGatingRequirements{RequiredScopes: []veidtypes.ScopeType{veidtypes.ScopeTypeEmailProof}}.IsZero())
+
+	// And the true zero is zero.
+	require.True(t, keeper.DefaultVEIDGatingRequirements().IsZero())
 }
 
 func TestVEIDGatingResult_Structure(t *testing.T) {
