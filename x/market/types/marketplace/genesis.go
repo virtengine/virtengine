@@ -69,6 +69,10 @@ var (
 
 	// CanonicalLifecycleActivationKeyPrefix gates Task 84C owner enforcement.
 	CanonicalLifecycleActivationKeyPrefix = []byte{0x11}
+
+	// MilestoneDisputeKeyPrefix is the prefix for order-linked milestone disputes
+	// (MARKET-HW-SAFEGUARD-1).
+	MilestoneDisputeKeyPrefix = []byte{0x12}
 )
 
 // Key construction functions
@@ -118,7 +122,13 @@ func ParamsKey() []byte {
 	return ParamsKeyPrefix
 }
 
+// CanonicalLifecycleActivationKey returns the key for the canonical lifecycle fence
 func CanonicalLifecycleActivationKey() []byte { return CanonicalLifecycleActivationKeyPrefix }
+
+// MilestoneDisputeKey returns the key for an order-linked milestone dispute
+func MilestoneDisputeKey(disputeID string) []byte {
+	return append(MilestoneDisputeKeyPrefix, []byte(disputeID)...)
+}
 
 // SyncRecordKey returns the key for a sync record
 func SyncRecordKey(entityType WaldurSyncType, entityID string) []byte {
@@ -216,6 +226,11 @@ type Params struct {
 
 	// MarketMetricsParams are the market metrics parameters
 	MarketMetricsParams MarketMetricsParams `json:"market_metrics_params"`
+
+	// MilestonePolicy is the staged, escrow-backed payment policy for hardware
+	// and compute orders (MARKET-HW-SAFEGUARD-1). It defines the protocol
+	// default milestone schedule and per-listing override rules.
+	MilestonePolicy MilestonePolicy `json:"milestone_policy"`
 }
 
 // DefaultParams returns default parameters
@@ -238,6 +253,7 @@ func DefaultParams() Params {
 		PriceDiscoveryParams:     DefaultPriceDiscoveryParams(),
 		SafeguardParams:          DefaultSafeguardParams(),
 		MarketMetricsParams:      DefaultMarketMetricsParams(),
+		MilestonePolicy:          DefaultMilestonePolicy(),
 	}
 }
 
@@ -273,6 +289,9 @@ func (p Params) Validate() error {
 	}
 	if err := p.MarketMetricsParams.Validate(); err != nil {
 		return fmt.Errorf("invalid market_metrics_params: %w", err)
+	}
+	if err := p.MilestonePolicy.Validate(); err != nil {
+		return fmt.Errorf("invalid milestone_policy: %w", err)
 	}
 	return nil
 }

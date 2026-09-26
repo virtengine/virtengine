@@ -253,6 +253,18 @@ type Order struct {
 	// GatingResult contains the identity/MFA gating check results
 	GatingResult *OrderGatingResult `json:"gating_result,omitempty"`
 
+	// VEIDSignal is the advisory VEID fraud signal recorded at order time. It is
+	// an input to risk decisions, never a pass/fail guarantee, and settlement
+	// must not branch on it alone (MARKET-HW-SAFEGUARD-1).
+	VEIDSignal *VEIDFraudSignal `json:"veid_signal,omitempty"`
+
+	// Milestones is the staged, escrow-backed release schedule for this order,
+	// resolved from params with any per-listing override applied.
+	Milestones MilestoneSet `json:"milestones,omitempty"`
+
+	// Escrow-backed milestones may be individually held; see MilestoneState.
+	MilestoneStates []MilestoneState `json:"milestone_states,omitempty"`
+
 	// Region is the requested region
 	Region string `json:"region,omitempty"`
 
@@ -349,6 +361,24 @@ func (o *Order) Validate() error {
 	if o.EncryptedConfig != nil {
 		if err := o.EncryptedConfig.Validate(); err != nil {
 			return fmt.Errorf("invalid encrypted configuration: %w", err)
+		}
+	}
+
+	if o.VEIDSignal != nil {
+		if err := o.VEIDSignal.Validate(); err != nil {
+			return fmt.Errorf("invalid veid signal: %w", err)
+		}
+	}
+
+	if len(o.Milestones) > 0 {
+		if err := o.Milestones.Validate(); err != nil {
+			return fmt.Errorf("invalid milestone schedule: %w", err)
+		}
+	}
+
+	for i := range o.MilestoneStates {
+		if err := o.MilestoneStates[i].Validate(); err != nil {
+			return fmt.Errorf("invalid milestone state: %w", err)
 		}
 	}
 

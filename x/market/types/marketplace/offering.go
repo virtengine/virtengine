@@ -348,6 +348,18 @@ type Offering struct {
 	// IdentityRequirement defines identity verification requirements
 	IdentityRequirement IdentityRequirement `json:"identity_requirement"`
 
+	// Attestation is the capacity/ownership evidence attached to this listing.
+	// Only a hash of the source document is stored (MARKET-HW-SAFEGUARD-1).
+	Attestation *OfferingAttestation `json:"attestation,omitempty"`
+
+	// MilestoneOverride optionally overrides the protocol default milestone
+	// schedule for orders against this listing. Empty means "use params default".
+	MilestoneOverride MilestoneSet `json:"milestone_override,omitempty"`
+
+	// ListingTerms are the human-readable delivery/performance terms shown to a
+	// buyer before they commit funds.
+	ListingTerms string `json:"listing_terms,omitempty"`
+
 	// RequireMFAForOrders indicates if MFA is required for placing orders
 	RequireMFAForOrders bool `json:"require_mfa_for_orders"`
 
@@ -440,6 +452,18 @@ func (o *Offering) Validate() error {
 
 	if err := o.IdentityRequirement.Validate(); err != nil {
 		return fmt.Errorf("invalid identity requirement: %w", err)
+	}
+
+	if o.Attestation != nil {
+		if err := o.Attestation.Validate(); err != nil {
+			return fmt.Errorf("invalid attestation: %w", err)
+		}
+	}
+
+	if len(o.MilestoneOverride) > 0 {
+		if err := o.MilestoneOverride.Validate(); err != nil {
+			return fmt.Errorf("invalid milestone override: %w", err)
+		}
 	}
 
 	if o.EncryptedSecrets != nil {

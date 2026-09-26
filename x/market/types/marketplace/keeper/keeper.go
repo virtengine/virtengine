@@ -141,6 +141,11 @@ type Keeper struct {
 	veidKeeper     VEIDKeeper
 	mfaKeeper      MFAKeeper
 	providerKeeper ProviderKeeper
+
+	// milestoneEscrow is the narrow escrow boundary for staged milestone release
+	// (MARKET-HW-SAFEGUARD-1). Optional: when nil, milestone state advances
+	// without moving funds, which keeps read-only/legacy wiring working.
+	milestoneEscrow MilestoneEscrowKeeper
 }
 
 // NewKeeper creates a new marketplace keeper
