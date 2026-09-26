@@ -2,13 +2,27 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { execFileSync } from "node:child_process";
-import { readFile } from "node:fs/promises";
+import { readdir, readFile } from "node:fs/promises";
 import { dirname, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 const policyPath = resolve(repositoryRoot, process.argv[2] ?? "scripts/supply-chain/go-module-policy.json");
 const policy = JSON.parse(await readFile(policyPath, "utf8"));
+
+// go-licenses resolves a package's license by walking up from the package
+// directory and stopping at the enclosing module root (licenses.Find's rootDir).
+// A nested module therefore has to carry its own LICENSE: the repository-root
+// and parent-directory LICENSE files are outside that walk, and every package
+// in the module is reported as "Failed to find license". Guard that invariant
+// here so adding a nested Go module cannot silently break the Go License Check.
+const licenseRegexp = /^((UN)?LICEN(S|C)E|COPYING|README|NOTICE).*$/i;
+const trackedGoModules = execFileSync("git", ["ls-files", "**/go.mod", "go.mod"], {
+  cwd: repositoryRoot,
+  encoding: "utf8",
+})
+  .split("\n")
+  .filter(Boolean);
 
 function normalizePath(path) {
   return path.split(sep).join("/");
@@ -38,6 +52,20 @@ for (const [modulePath, allowedEntries] of Object.entries(policy.replaces)) {
   const allowed = [...allowedEntries].sort();
   if (JSON.stringify(actual) !== JSON.stringify(allowed)) {
     failures.push(`${modulePath}: replace directives differ from the reviewed allowlist\nexpected: ${allowed.join("\n  ")}\nactual: ${actual.join("\n  ")}`);
+  }
+}
+
+// Every Go module root must expose a license file go-licenses can classify.
+// A nested module without one makes the whole Go License Check report
+// "Failed to find license" for each of its packages.
+for (const goModPath of trackedGoModules) {
+  const moduleDir = dirname(goModPath);
+  const entries = await readdir(resolve(repositoryRoot, moduleDir));
+  if (!entries.some((entry) => licenseRegexp.test(entry))) {
+    failures.push(
+      `${moduleDir}: Go module root has no license file matching ${licenseRegexp} (checked: ${entries.length} entries). ` +
+        "go-licenses stops its upward walk at the module root, so a nested module needs its own LICENSE file.",
+    );
   }
 }
 
