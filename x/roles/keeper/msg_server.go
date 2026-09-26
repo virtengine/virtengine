@@ -155,6 +155,24 @@ func (ms msgServer) SetAccountState(goCtx context.Context, msg *types.MsgSetAcco
 		return nil, types.ErrCannotModifyGenesisAccount.Wrap("only genesis accounts can modify other genesis accounts")
 	}
 
+	// Punitive states are reachable only through a sanction record.
+	//
+	// This message carries a bare reason string and no scope, duration, notice
+	// or second party, so allowing it to reach Suspended or Terminated would
+	// leave a single-administrator, permanent, account-wide lockout intact
+	// alongside the sanction model and make that model advisory. Reactivation
+	// to Active is still permitted here, because restoring access is the safe
+	// direction and the reviewed revoke path is not the only way back.
+	//
+	// Genesis is unaffected: it calls the keeper directly, and a chain importing
+	// a genesis snapshot must be able to restore an account's recorded state
+	// without inventing a sanction history.
+	if state == types.AccountStateSuspended || state == types.AccountStateTerminated {
+		return nil, types.ErrSanctionRequired.Wrapf(
+			"refusing to set %s via MsgSetAccountState for %s; impose a sanction instead",
+			state, target)
+	}
+
 	// Set the account state
 	if err := ms.keeper.SetAccountState(ctx, target, state, msg.Reason, sender); err != nil {
 		return nil, err
