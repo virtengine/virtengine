@@ -132,7 +132,12 @@ const (
 	PriceComponentNetwork PriceComponentResourceType = "network"
 )
 
-// IdentityRequirement defines the identity verification requirements for an offering
+// IdentityRequirement defines the identity verification requirements for an offering.
+//
+// This is the per-listing opt-in: every field defaults to "no requirement", so an
+// offering that declares nothing gates nobody. The record is persisted with the
+// offering (JSON-encoded state), and is the single source of truth for the
+// identity check performed when a buyer opens an order.
 type IdentityRequirement struct {
 	// MinScore is the minimum VEID identity score required (0-100)
 	MinScore uint32 `json:"min_score"`
@@ -148,17 +153,43 @@ type IdentityRequirement struct {
 
 	// RequireMFA indicates if MFA must be enabled for orders
 	RequireMFA bool `json:"require_mfa"`
+
+	// RequireUnlockedIdentity requires the buyer's identity to not be locked.
+	//
+	// omitempty keeps offerings that do not opt in byte-identical to the
+	// pre-existing state encoding, so this addition causes no state churn for
+	// listings that declare nothing.
+	RequireUnlockedIdentity bool `json:"require_unlocked_identity,omitempty"`
 }
 
-// DefaultIdentityRequirement returns the default identity requirement
+// DefaultIdentityRequirement returns the default identity requirement, which
+// imposes nothing. A listing must opt in explicitly.
 func DefaultIdentityRequirement() IdentityRequirement {
 	return IdentityRequirement{
-		MinScore:              0,
-		RequiredStatus:        "",
-		RequireVerifiedEmail:  false,
-		RequireVerifiedDomain: false,
-		RequireMFA:            false,
+		MinScore:                0,
+		RequiredStatus:          "",
+		RequireVerifiedEmail:    false,
+		RequireVerifiedDomain:   false,
+		RequireMFA:              false,
+		RequireUnlockedIdentity: false,
 	}
+}
+
+// IsZero reports whether the listing imposes no identity obligation at all.
+//
+// RequireUnlockedIdentity participates: a requirement that only demands an
+// unlocked identity still constrains the buyer, and must never be mistaken for
+// "no requirements".
+func (r *IdentityRequirement) IsZero() bool {
+	if r == nil {
+		return true
+	}
+	return r.MinScore == 0 &&
+		r.RequiredStatus == "" &&
+		!r.RequireVerifiedEmail &&
+		!r.RequireVerifiedDomain &&
+		!r.RequireMFA &&
+		!r.RequireUnlockedIdentity
 }
 
 // Validate validates the identity requirement
@@ -169,8 +200,16 @@ func (r *IdentityRequirement) Validate() error {
 	return nil
 }
 
-// IsSatisfiedBy checks if an account meets the identity requirements
+// IsSatisfiedBy checks if an account meets the identity requirements.
+// It is the advisory, buyer-side helper and assumes an unlocked identity.
 func (r *IdentityRequirement) IsSatisfiedBy(score uint32, status string, emailVerified, domainVerified, mfaEnabled bool) bool {
+	return r.IsSatisfiedByIdentity(score, status, emailVerified, domainVerified, mfaEnabled, false)
+}
+
+// IsSatisfiedByIdentity checks the full requirement set, including the
+// locked-identity requirement. locked reports whether the buyer's identity is
+// currently locked.
+func (r *IdentityRequirement) IsSatisfiedByIdentity(score uint32, status string, emailVerified, domainVerified, mfaEnabled, locked bool) bool {
 	if score < r.MinScore {
 		return false
 	}
@@ -184,6 +223,9 @@ func (r *IdentityRequirement) IsSatisfiedBy(score uint32, status string, emailVe
 		return false
 	}
 	if r.RequireMFA && !mfaEnabled {
+		return false
+	}
+	if r.RequireUnlockedIdentity && locked {
 		return false
 	}
 	return true
