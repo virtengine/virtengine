@@ -50,13 +50,13 @@ const (
 )
 
 type equivalenceCase struct {
-	Name         string `json:"name"`
-	Note         string `json:"note"`
-	PubKey       string `json:"pubKey"`
-	Payload      string `json:"payload"`
-	Sig          string `json:"sig"`
-	OldAccept    bool   `json:"oldAccept"`
-	OldErrCategry string `json:"oldErrCategory"`
+	Name           string `json:"name"`
+	Note           string `json:"note"`
+	PubKey         string `json:"pubKey"`
+	Payload        string `json:"payload"`
+	Sig            string `json:"sig"`
+	OldAccept      bool   `json:"oldAccept"`
+	OldErrCategory string `json:"oldErrCategory"`
 }
 
 type equivalenceCorpus struct {
@@ -184,9 +184,9 @@ func TestSignatureVerifierEquivalence(t *testing.T) {
 				t.Fatalf("accept/reject divergence from go-ethereum (%s): old=%v new=%v err=%v\nnote: %s",
 					corpus.BuildPath, tc.OldAccept, gotAccept, err, tc.Note)
 			}
-			if got := classify(err); !reasonIsAcceptable(tc.Name, tc.OldErrCategry, got) {
+			if got := classify(err); !reasonIsAcceptable(tc.Name, tc.OldErrCategory, got) {
 				t.Fatalf("rejection-reason divergence from go-ethereum (%s): recorded=%q new=%q allowed=%v\nnote: %s",
-					corpus.BuildPath, tc.OldErrCategry, got, deliberateReasonChanges[tc.Name], tc.Note)
+					corpus.BuildPath, tc.OldErrCategory, got, deliberateReasonChanges[tc.Name], tc.Note)
 			}
 		})
 	}
@@ -468,4 +468,3 @@ func isValidSecp256k1(pubKey, payload, sig []byte) bool {
 	}
 	return decred_ecdsa.NewSignature(&r, &s).Verify(payload, key)
 }
-
