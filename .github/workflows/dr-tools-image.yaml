@@ -97,7 +97,7 @@ env:
   # Matches every other VirtEngine workflow and the golang base image tag in
   # _build/Dockerfile.dr-tools; passed to the build as --build-arg GO_VERSION so
   # the toolchain cannot drift between this file and the Dockerfile.
-  GO_VERSION: '1.25.14'
+  GO_VERSION: '1.26.8'
   IMAGE: ghcr.io/virtengine/dr-tools
   CRONJOB_MANIFEST: infra/kubernetes/dr/backup-cronjobs.yaml
   # Same pinned kubectl as infrastructure.yaml, which is what
