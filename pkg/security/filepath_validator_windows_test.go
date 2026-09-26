@@ -62,6 +62,18 @@ func TestPathValidatorAcceptsShortFormBaseDir(t *testing.T) {
 	if _, err := validator.ValidateAndClean(file); err != nil {
 		t.Errorf("ValidateAndClean(long form) with 8.3 base dir = %v, want nil", err)
 	}
+
+	// A destination that does not exist yet must validate too. This is the
+	// shape WriteSecureFile and SafeWriteStateFile use, and it was the second
+	// half of the CI failure: the candidate kept its short form because nothing
+	// existed to resolve, while the base dir had been expanded.
+	notYet := filepath.Join(long, "subdir", "future.json")
+	if _, err := os.Lstat(notYet); !os.IsNotExist(err) {
+		t.Fatalf("expected %s to not exist", notYet)
+	}
+	if err := validator.ValidatePath(notYet); err != nil {
+		t.Errorf("ValidatePath(not-yet-created) with 8.3 base dir = %v, want nil", err)
+	}
 }
 
 // TestPathValidatorRejectsSiblingWithSharedPrefix guards the security property

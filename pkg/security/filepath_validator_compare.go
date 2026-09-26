@@ -1,9 +1,48 @@
 package security
 
 import (
+	"os"
 	"path/filepath"
 	"strings"
 )
+
+// resolveExistingPrefix canonicalizes the deepest existing ancestor of path
+// with filepath.EvalSymlinks and re-appends the components that do not exist
+// yet, so both a to-be-created file and its allowed base directory end up in the
+// same canonical form.
+//
+// This matters on Windows, where EvalSymlinks expands 8.3 short components
+// (C:\Users\RUNNER~1\... becomes C:\Users\runneradmin\...). If only the existing
+// portion were resolved, a destination validated before it is written would keep
+// its short form and fail the containment check against an expanded base dir.
+func resolveExistingPrefix(path string) (string, error) {
+	remainder := ""
+	current := path
+	for {
+		resolved, err := filepath.EvalSymlinks(current)
+		if err == nil {
+			if remainder == "" {
+				return resolved, nil
+			}
+			return filepath.Join(resolved, remainder), nil
+		}
+		if !os.IsNotExist(err) {
+			return "", err
+		}
+		parent := filepath.Dir(current)
+		if parent == current {
+			// Reached the volume root without finding anything that exists.
+			return path, nil
+		}
+		base := filepath.Base(current)
+		if remainder == "" {
+			remainder = base
+		} else {
+			remainder = filepath.Join(base, remainder)
+		}
+		current = parent
+	}
+}
 
 // canonicalDir resolves dir to an absolute, symlink-free, comparison-safe form.
 // It returns false when dir cannot be resolved to a usable absolute path.
