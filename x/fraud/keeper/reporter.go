@@ -168,7 +168,7 @@ func (k Keeper) checkReporterRateLimit(ctx sdk.Context, reporter string) error {
 	store := ctx.KVStore(k.skey)
 
 	iter := storetypes.KVStorePrefixIterator(store, types.GetReporterActivityPrefix(reporter))
-	defer iter.Close()
+	defer func() { _ = iter.Close() }()
 
 	used := 0
 	// Collect expired entries and delete them after iteration: mutating the store
@@ -392,7 +392,7 @@ func (k Keeper) GetFraudResponses(ctx sdk.Context, reportID string) []types.Frau
 func (k Keeper) WithFraudResponses(ctx sdk.Context, reportID string, fn func(types.FraudResponse) bool) {
 	store := ctx.KVStore(k.skey)
 	iter := storetypes.KVStorePrefixIterator(store, types.GetReportResponsesKey(reportID))
-	defer iter.Close()
+	defer func() { _ = iter.Close() }()
 
 	for ; iter.Valid(); iter.Next() {
 		responseID := string(iter.Value())
