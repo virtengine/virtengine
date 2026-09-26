@@ -114,6 +114,7 @@ require (
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/bgentry/go-netrc v0.0.0-20140422174119-9fd32a8b3d3d // indirect
 	github.com/bgentry/speakeasy v0.2.0 // indirect
+	github.com/bits-and-blooms/bitset v1.24.0 // indirect
 	github.com/bytedance/sonic v1.14.0 // indirect
 	github.com/bytedance/sonic/loader v0.3.0 // indirect
 	github.com/cenkalti/backoff/v4 v4.3.0 // indirect
@@ -128,6 +129,7 @@ require (
 	github.com/cockroachdb/redact v1.1.6 // indirect
 	github.com/cockroachdb/tokenbucket v0.0.0-20230807174530-cc333fc44b06 // indirect
 	github.com/cometbft/cometbft-db v1.0.4 // indirect
+	github.com/consensys/gnark-crypto v0.19.2 // indirect
 	github.com/cosmos/btcutil v1.0.5 // indirect
 	github.com/cosmos/gogogateway v1.2.0 // indirect
 	github.com/cosmos/iavl v1.2.6 // indirect
@@ -289,5 +291,10 @@ replace (
 	github.com/cosmos/cosmos-sdk => github.com/virtengine/cosmos-sdk v0.53.4-virtengine.2
 	github.com/cosmos/gogoproto => github.com/virtengine/gogoproto v1.7.0-virtengine.1
 	github.com/gogo/protobuf => github.com/regen-network/protobuf v1.3.3-alpha.regen.1
+	// Build against the local parent tree. The published pseudo-version above predates
+	// pkg/security's HTTP client and x/encryption/types.RotateKey, so resolving the parent
+	// from the proxy breaks this module under GOWORK=off (verify-modules.sh, standalone builds).
+	// Mirrors the root module's sdk/go replace so both directions resolve to the same tree.
+	github.com/virtengine/virtengine => ../..
 	github.com/virtengine/virtengine/sdk/specs => ../specs
 )
