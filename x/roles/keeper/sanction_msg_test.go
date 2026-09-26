@@ -129,7 +129,6 @@ func TestMsgServer_SecondDistinctReviewerActivatesTheSanction(t *testing.T) {
 // moderator able to suspend an account for the full 72h window with no way out.
 func TestMsgServer_PendingEmergencyHoldCanBeRevokedByAnyModerator(t *testing.T) {
 	f, ms := newMsgServerFixture(t)
-	now := f.ctx.BlockTime().Unix()
 
 	resp, err := ms.ImposeSanction(asGoCtx(f.ctx), types.NewMsgImposeSanction(
 		f.modA.String(), f.target.String(),
@@ -157,9 +156,6 @@ func TestMsgServer_PendingEmergencyHoldCanBeRevokedByAnyModerator(t *testing.T) 
 	require.Equal(t, types.AccountStateActive, f.k.EffectiveAccountState(f.ctx, f.target),
 		"revoking a mistaken hold must restore the account immediately")
 
-	// An expired hold is not in force, so it is no longer revocable: the record
-	// is already terminal and the account is Active either way.
-	_ = now
 }
 
 func TestMsgServer_AppealRoundTripRestoresAccountThroughReview(t *testing.T) {

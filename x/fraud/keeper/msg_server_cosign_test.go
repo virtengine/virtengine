@@ -5,6 +5,7 @@ import (
 	"github.com/stretchr/testify/mock"
 
 	"github.com/virtengine/virtengine/x/fraud/types"
+	rolestypes "github.com/virtengine/virtengine/x/roles/types"
 )
 
 // t_9169400a: A suspension or termination arriving on the wire must not lock an
@@ -246,4 +247,60 @@ func (s *MsgServerTestSuite) TestResolveFraudReport_WarningStillAppliesImmediate
 	// No co-signature is required for it.
 	_, found = s.keeper.GetPendingResolution(s.ctx, reportID)
 	s.Require().False(found, "a warning must not require a second reviewer")
+}
+
+// TestConfirmedFraudResolutionDoesNotImposeAnAccountSanction pins a
+// pre-existing scope boundary so it is a deliberate, visible property rather
+// than an accident waiting to be "fixed" by someone who assumes the modules are
+// joined up.
+//
+// A confirmed fraud resolution marks the *report* resolved and records the
+// resolution on it. It has never imposed an x/roles sanction or changed an
+// account's state: applyResolution (x/fraud/keeper/keeper.go) writes only the
+// report, the queue removal and the audit entry, and it did not do otherwise
+// before the sanction model landed either. Account-level consequences are
+// imposed through x/roles MsgImposeSanction/MsgConfirmSanction.
+//
+// This test asserts the current wiring, NOT that it is desirable: a moderator
+// who resolves a fraud report with "suspension" sanctions nobody. Joining the
+// two is a product decision (and a scope-expanding one) that this card did not
+// make.
+func (s *MsgServerTestSuite) TestConfirmedFraudResolutionDoesNotImposeAnAccountSanction() {
+	reporterAddr := sdk.AccAddress([]byte("reporter-scope-boundary"))
+	moderatorAddr := sdk.AccAddress([]byte("moderator-scope-one"))
+	secondAddr := sdk.AccAddress([]byte("moderator-scope-two"))
+
+	reportID := s.submitReportForCoSign(reporterAddr, "cosmos1scoped")
+	s.rolesKeeper.On("IsModerator", mock.Anything, moderatorAddr).Return(true)
+	s.rolesKeeper.On("IsModerator", mock.Anything, secondAddr).Return(true)
+
+	_, err := s.msgServer.ResolveFraudReport(s.ctx, &types.MsgResolveFraudReport{
+		ReportId:   reportID,
+		Moderator:  moderatorAddr.String(),
+		Resolution: types.ResolutionTypePBSuspension,
+		Notes:      "Suspending pending second review",
+	})
+	s.Require().NoError(err)
+
+	_, err = s.msgServer.ConfirmFraudResolution(s.ctx, &types.MsgConfirmFraudResolution{
+		ReportId: reportID,
+		Reviewer: secondAddr.String(),
+	})
+	s.Require().NoError(err)
+
+	// The report is resolved, but x/fraud asked x/roles for nothing. The
+	// structural proof is that RolesKeeper exposes no sanction-imposing method
+	// at all (x/fraud/keeper/keeper.go:92): only HasRole, IsModerator and
+	// IsAdmin. A mock-based "AssertNotCalled" here would be vacuous, because a
+	// method the interface does not declare cannot be called on the mock either.
+	var _ interface {
+		HasRole(sdk.Context, sdk.AccAddress, rolestypes.Role) bool
+		IsModerator(sdk.Context, sdk.AccAddress) bool
+		IsAdmin(sdk.Context, sdk.AccAddress) bool
+	} = s.rolesKeeper
+
+	resolved, found := s.keeper.GetFraudReport(s.ctx, reportID)
+	s.Require().True(found)
+	s.Require().Equal(types.FraudReportStatusResolved, resolved.Status,
+		"the report itself is resolved; the account is untouched")
 }
