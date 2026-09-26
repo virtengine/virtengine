@@ -10,6 +10,53 @@ terraform {
       source  = "hashicorp/aws"
       version = "~> 5.0"
     }
+    kubernetes = {
+      source  = "hashicorp/kubernetes"
+      version = "~> 2.25"
+    }
+    helm = {
+      source  = "hashicorp/helm"
+      version = "~> 2.12"
+    }
+  }
+}
+
+# Provider configurations for multi-region deployment
+provider "aws" {
+  alias                       = "primary"
+  region                      = var.primary_region
+  skip_credentials_validation = true
+  skip_metadata_api_check     = true
+  skip_requesting_account_id  = true
+}
+
+provider "aws" {
+  alias                       = "secondary"
+  region                      = var.secondary_region
+  skip_credentials_validation = true
+  skip_metadata_api_check     = true
+  skip_requesting_account_id  = true
+}
+
+provider "aws" {
+  alias                       = "tertiary"
+  region                      = var.tertiary_region
+  skip_credentials_validation = true
+  skip_metadata_api_check     = true
+  skip_requesting_account_id  = true
+}
+
+provider "kubernetes" {
+  host     = "https://127.0.0.1"
+  token    = "ci"
+  insecure = true
+}
+
+provider "helm" {
+  kubernetes {
+    host     = "https://127.0.0.1"
+    token    = "ci"
+    insecure = true
   }
 }
 
