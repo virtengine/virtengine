@@ -113,10 +113,17 @@ replace (
 
 	github.com/cosmos/gogoproto => github.com/virtengine/gogoproto v1.7.0-virtengine.1
 
-	// virtengine/ledger-go is a mono-repo that provides both:
-	// - zondax/ledger-go (root module, tag v0.16.0-virtengine)
-	// - cosmos/ledger-cosmos-go (cosmos/ subdir, tag cosmos/v0.16.0-virtengine)
-	github.com/cosmos/ledger-cosmos-go => github.com/virtengine/ledger-go/cosmos v0.16.0-virtengine
+	// akash-network/ledger-go is the mono-repo these ledger forks were synced from
+	// (see the "VirtEngine forks of Cosmos SDK dependencies" note above); it provides both:
+	// - zondax/ledger-go (root module, tag v0.16.0)
+	// - cosmos/ledger-cosmos-go (cosmos/ subdir, tag cosmos/v0.16.0)
+	//
+	// SECURITY: the previous target, github.com/virtengine/ledger-go, was deleted (404).
+	// Its tag v0.16.0-virtengine was a re-tag of akash-network/ledger-go commit
+	// 367cd2152dc6237b5d6a8d7224697c825e4b352a - verified byte-identical (sha256) across
+	// every file of both modules, with identical go.mod. This is a provenance fix only:
+	// no ledger/signing code changes.
+	github.com/cosmos/ledger-cosmos-go => github.com/akash-network/ledger-go/cosmos v0.16.0
 
 	// Use regen gogoproto fork
 	// To be replaced by cosmos/gogoproto in future versions
@@ -133,8 +140,9 @@ replace (
 
 	github.com/zondax/hid => github.com/troian/hid v0.14.0
 
-	// zondax/ledger-go replacement from virtengine/ledger-go mono-repo
-	github.com/zondax/ledger-go => github.com/virtengine/ledger-go v0.16.0-virtengine
+	// zondax/ledger-go replacement from the akash-network/ledger-go mono-repo
+	// (was virtengine/ledger-go, which was deleted - see the ledger-cosmos-go note above)
+	github.com/zondax/ledger-go => github.com/akash-network/ledger-go v0.16.0
 
 	// stick with compatible version or x/exp in v0.47.x line
 	golang.org/x/exp => golang.org/x/exp v0.0.0-20230711153332-06a737ee72cb
