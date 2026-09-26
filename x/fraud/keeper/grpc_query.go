@@ -6,6 +6,7 @@ package keeper
 
 import (
 	"context"
+	"sort"
 
 	sdk "github.com/cosmos/cosmos-sdk/types"
 
@@ -179,5 +180,33 @@ func (q *queryServer) ModeratorQueue(ctx context.Context, req *types.QueryModera
 
 	return &types.QueryModeratorQueueResponse{
 		QueueEntries: protoEntries,
+	}, nil
+}
+
+// FraudResponses returns the responses/rebuttals filed against a report
+func (q *queryServer) FraudResponses(ctx context.Context, req *types.QueryFraudResponsesRequest) (*types.QueryFraudResponsesResponse, error) {
+	sdkCtx := sdk.UnwrapSDKContext(ctx)
+
+	if req == nil || req.ReportId == "" {
+		return nil, types.ErrInvalidResponse.Wrap("report_id is required")
+	}
+	if _, found := q.GetFraudReport(sdkCtx, req.ReportId); !found {
+		return nil, types.ErrReportNotFound
+	}
+
+	localResponses := q.GetFraudResponses(sdkCtx, req.ReportId)
+
+	// Sort by sequence-preserving ID for a deterministic, stable response order.
+	sort.Slice(localResponses, func(i, j int) bool {
+		return localResponses[i].ID < localResponses[j].ID
+	})
+
+	protoResponses := make([]types.FraudResponsePB, len(localResponses))
+	for i, r := range localResponses {
+		protoResponses[i] = *types.FraudResponseToProto(&r)
+	}
+
+	return &types.QueryFraudResponsesResponse{
+		Responses: protoResponses,
 	}, nil
 }

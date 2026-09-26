@@ -9,6 +9,9 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
+	"sort"
+	"strconv"
+	"strings"
 	"time"
 )
 
@@ -291,12 +294,28 @@ func (id FraudReportID) Validate() error {
 	return nil
 }
 
-// FraudReport represents a fraud report submitted by a provider
+// FraudReport represents a fraud report submitted by an affected party.
+//
+// PUBLIC / PRIVATE SPLIT (Constitution 39.1-39.2, 40.2):
+// Report state is public chain state. The following fields are PUBLIC BY DESIGN
+// and are the ONLY fields callers may populate with non-sensitive data:
+//
+//	ID, Reporter, ReportedParty, Category, Status, AssignedModerator,
+//	Resolution, SubmittedAt, UpdatedAt, ResolvedAt, BlockHeight, ContentHash,
+//	RelatedOrderIDs, FinancialCaseID, FinancialCaseStatus, ResponseCount,
+//	NoOrderAvailable
+//
+// Description and ResolutionNotes are plain string fields that are NOT encrypted:
+// they are PUBLIC and permanently linkable to the reporter's address. Do not put
+// personal data, contact details, medical/identity documents, or narrative
+// evidence in them. Put descriptive content in Evidence (EncryptedEvidence),
+// which is encrypted to the moderator recipients. Description is retained only
+// as a short, non-identifying statement of the category of harm.
 type FraudReport struct {
 	// ID is the unique identifier for this report
 	ID string `json:"id"`
 
-	// Reporter is the provider address who submitted the report
+	// Reporter is the address that submitted the report
 	Reporter string `json:"reporter"`
 
 	// ReportedParty is the address of the party being reported
@@ -306,6 +325,10 @@ type FraudReport struct {
 	Category FraudCategory `json:"category"`
 
 	// Description is the detailed description of the fraud
+	//
+	// PUBLIC BY DESIGN: this field is stored unencrypted on chain and is
+	// permanently linkable to the reporter. Keep it to a short, non-identifying
+	// statement. Put sensitive detail in Evidence.
 	Description string `json:"description"`
 
 	// Evidence contains the encrypted evidence attachments
@@ -321,6 +344,9 @@ type FraudReport struct {
 	Resolution ResolutionType `json:"resolution,omitempty"`
 
 	// ResolutionNotes are notes provided by the moderator upon resolution
+	//
+	// PUBLIC BY DESIGN: stored unencrypted on chain. Notes must not contain
+	// personal data or evidence detail; reference the report ID instead.
 	ResolutionNotes string `json:"resolution_notes,omitempty"`
 
 	// SubmittedAt is when the report was submitted
@@ -343,6 +369,15 @@ type FraudReport struct {
 
 	FinancialCaseID     string `json:"financial_case_id,omitempty"`
 	FinancialCaseStatus string `json:"financial_case_status,omitempty"`
+
+	// ResponseCount is the number of responses/rebuttals filed against this report.
+	// PUBLIC BY DESIGN: a counter, it carries no free text.
+	ResponseCount uint32 `json:"response_count,omitempty"`
+
+	// NoOrderAvailable records that the reporter asserted there is genuinely no
+	// order or resource to reference. PUBLIC BY DESIGN: a boolean only; the
+	// justification lives in EncryptedEvidence so it never reaches public state.
+	NoOrderAvailable bool `json:"no_order_available,omitempty"`
 }
 
 // NewFraudReport creates a new fraud report
@@ -476,6 +511,179 @@ func (r *FraudReport) Reject(notes string, rejectedAt time.Time) error {
 	return nil
 }
 
+// ComputeSubmissionFingerprint computes a stable fingerprint of a submission,
+// excluding the (newly assigned) report ID. Two submissions with the same
+// reporter, parties, category, description and evidence set produce the same
+// fingerprint, which is what de-duplication keys on so an identical repeat
+// report does not create a second moderator-queue entry.
+func (r *FraudReport) ComputeSubmissionFingerprint() string {
+	parts := []string{
+		r.Reporter,
+		r.ReportedParty,
+		strconv.FormatUint(uint64(r.Category), 10),
+		r.Description,
+	}
+	ordered := make([]string, 0, len(r.RelatedOrderIDs))
+	ordered = append(ordered, r.RelatedOrderIDs...)
+	sort.Strings(ordered)
+	parts = append(parts, ordered...)
+
+	hashes := make([]string, 0, len(r.Evidence))
+	for _, ev := range r.Evidence {
+		hashes = append(hashes, ev.EvidenceHash, ev.ComputeCiphertextHash())
+	}
+	sort.Strings(hashes)
+	parts = append(parts, hashes...)
+
+	hash := sha256.Sum256([]byte(strings.Join(parts, "|")))
+	return hex.EncodeToString(hash[:])
+}
+
+// FraudRespondentRole represents which side of a report filed a response.
+//
+// It is a local type (like FraudCategory and ResolutionType) so that validation
+// and String helpers can be defined on it; fraudv1.FraudRespondentRole is the
+// wire type and conversions live in proto_types.go.
+type FraudRespondentRole uint8
+
+const (
+	// FraudRespondentRoleUnspecified represents an unspecified respondent role
+	FraudRespondentRoleUnspecified FraudRespondentRole = 0
+
+	// FraudRespondentRoleReportedParty indicates the party the report was filed against
+	FraudRespondentRoleReportedParty FraudRespondentRole = 1
+
+	// FraudRespondentRoleReporter indicates the original reporter
+	FraudRespondentRoleReporter FraudRespondentRole = 2
+)
+
+// FraudResponse is a response/rebuttal filed against a fraud report.
+//
+// PUBLIC / PRIVATE SPLIT: every field here is integrity metadata. The
+// respondent's actual statement is NOT a public field; it travels in Evidence
+// (EncryptedEvidence) addressed to the moderator recipients. StatementHash is
+// only a digest of the plaintext, so a moderator can confirm the statement they
+// decrypt matches what was committed.
+type FraudResponse struct {
+	// ID is the unique identifier for this response
+	ID string `json:"id"`
+
+	// ReportID is the report this response is filed against
+	ReportID string `json:"report_id"`
+
+	// Respondent is the address filing the response
+	Respondent string `json:"respondent"`
+
+	// Role identifies which side of the report the respondent represents
+	Role FraudRespondentRole `json:"role"`
+
+	// Evidence holds the encrypted response content for the moderator recipients
+	Evidence []EncryptedEvidence `json:"evidence"`
+
+	// StatementHash is SHA256 of the plaintext statement, for integrity only
+	StatementHash string `json:"statement_hash"`
+
+	// ContentHash is SHA256 over the immutable response fields for integrity
+	ContentHash string `json:"content_hash"`
+
+	// SubmittedAt is when the response was filed
+	SubmittedAt time.Time `json:"submitted_at"`
+
+	// BlockHeight is the block height when the response was filed
+	BlockHeight int64 `json:"block_height"`
+}
+
+// NewFraudResponse creates a new response record
+func NewFraudResponse(
+	id string,
+	reportID string,
+	respondent string,
+	role FraudRespondentRole,
+	evidence []EncryptedEvidence,
+	statementHash string,
+	blockHeight int64,
+	submittedAt time.Time,
+) *FraudResponse {
+	response := &FraudResponse{
+		ID:            id,
+		ReportID:      reportID,
+		Respondent:    respondent,
+		Role:          role,
+		Evidence:      evidence,
+		StatementHash: statementHash,
+		SubmittedAt:   submittedAt,
+		BlockHeight:   blockHeight,
+	}
+	response.ContentHash = response.ComputeContentHash()
+	return response
+}
+
+// Validate validates the response record
+func (r *FraudResponse) Validate() error {
+	if r.ID == "" {
+		return ErrInvalidResponse.Wrap("response ID is required")
+	}
+	if r.ReportID == "" {
+		return ErrInvalidResponse.Wrap("report ID is required")
+	}
+	if r.Respondent == "" {
+		return ErrUnauthorizedRespondent.Wrap("respondent address is required")
+	}
+	if !r.Role.IsValid() {
+		return ErrInvalidResponse.Wrap("respondent role must be specified")
+	}
+	if len(r.Evidence) == 0 {
+		return ErrMissingEvidence
+	}
+	for i, ev := range r.Evidence {
+		if err := ev.Validate(); err != nil {
+			return ErrInvalidEvidence.Wrapf("evidence %d: %v", i, err)
+		}
+	}
+	if r.StatementHash == "" {
+		return ErrInvalidResponse.Wrap("statement hash is required")
+	}
+	if r.SubmittedAt.IsZero() {
+		return ErrInvalidResponse.Wrap("submitted_at is required")
+	}
+	return nil
+}
+
+// ComputeContentHash computes a hash over the immutable response fields
+func (r *FraudResponse) ComputeContentHash() string {
+	content := fmt.Sprintf("%s|%s|%s|%d|%s|%s",
+		r.ID,
+		r.ReportID,
+		r.Respondent,
+		r.Role,
+		r.StatementHash,
+		r.SubmittedAt.Format(time.RFC3339Nano),
+	)
+	hash := sha256.Sum256([]byte(content))
+	return hex.EncodeToString(hash[:])
+}
+
+// FraudRespondentRoleNames maps respondent roles to human-readable names
+var FraudRespondentRoleNames = map[FraudRespondentRole]string{
+	FraudRespondentRoleUnspecified:   "unspecified",
+	FraudRespondentRoleReportedParty: "reported_party",
+	FraudRespondentRoleReporter:      "reporter",
+}
+
+// String returns the human-readable name of a respondent role
+func (r FraudRespondentRole) String() string {
+	if name, ok := FraudRespondentRoleNames[r]; ok {
+		return name
+	}
+	return fmt.Sprintf("unknown(%d)", r)
+}
+
+// IsValid returns true when the respondent role is one a response may be filed
+// with. Unspecified is rejected: a response must state which side it represents.
+func (r FraudRespondentRole) IsValid() bool {
+	return r == FraudRespondentRoleReportedParty || r == FraudRespondentRoleReporter
+}
+
 // AuditAction represents the type of action recorded in the audit log
 type AuditAction uint8
 
@@ -506,6 +714,10 @@ const (
 
 	// AuditActionCommentAdded indicates a comment was added
 	AuditActionCommentAdded AuditAction = 8
+
+	// AuditActionResponded indicates the reported party or the reporter filed a
+	// response/rebuttal against a report
+	AuditActionResponded AuditAction = 9
 )
 
 // AuditActionNames maps audit actions to human-readable names
@@ -519,6 +731,7 @@ var AuditActionNames = map[AuditAction]string{
 	AuditActionRejected:       "rejected",
 	AuditActionEscalated:      "escalated",
 	AuditActionCommentAdded:   "comment_added",
+	AuditActionResponded:      "responded",
 }
 
 // String returns the string representation of an AuditAction
@@ -531,7 +744,7 @@ func (a AuditAction) String() string {
 
 // IsValid returns true if the action is valid
 func (a AuditAction) IsValid() bool {
-	return a >= AuditActionSubmitted && a <= AuditActionCommentAdded
+	return a >= AuditActionSubmitted && a <= AuditActionResponded
 }
 
 // FraudAuditLog represents an audit log entry for a fraud report
@@ -628,6 +841,10 @@ type ModeratorQueueEntry struct {
 
 	// AssignedTo is the moderator assigned (empty if unassigned)
 	AssignedTo string `json:"assigned_to,omitempty"`
+
+	// ResponseCount is how many responses/rebuttals are attached to the report,
+	// so a moderator sees the rebuttal alongside the report in the queue
+	ResponseCount uint32 `json:"response_count,omitempty"`
 }
 
 // NewModeratorQueueEntry creates a new queue entry

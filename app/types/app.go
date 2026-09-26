@@ -655,6 +655,11 @@ func (app *App) InitNormalKeepers(
 	)
 	app.Keepers.VirtEngine.Fraud.SetFinancialCaseKeeper(app.Keepers.VirtEngine.Settlement)
 
+	// Wire the market keeper so non-provider (tenant) reports can be verified
+	// against the order they cite. Without it, order standing cannot be checked
+	// and every claim is taken on trust.
+	app.Keepers.VirtEngine.Fraud.SetMarketKeeper(app.Keepers.VirtEngine.Market)
+
 	app.Keepers.VirtEngine.Review = reviewkeeper.NewKeeper(
 		cdc,
 		app.keys[reviewtypes.StoreKey],

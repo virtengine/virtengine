@@ -29,6 +29,7 @@ func init() {
 // on the provided LegacyAmino codec. These types are used for Amino JSON serialization.
 func RegisterLegacyAminoCodec(cdc *codec.LegacyAmino) {
 	legacy.RegisterAminoMsg(cdc, &fraudv1.MsgSubmitFraudReport{}, "fraud/MsgSubmitFraudReport")
+	legacy.RegisterAminoMsg(cdc, &fraudv1.MsgSubmitFraudResponse{}, "fraud/MsgSubmitFraudResponse")
 	legacy.RegisterAminoMsg(cdc, &fraudv1.MsgAssignModerator{}, "fraud/MsgAssignModerator")
 	legacy.RegisterAminoMsg(cdc, &fraudv1.MsgUpdateReportStatus{}, "fraud/MsgUpdateReportStatus")
 	legacy.RegisterAminoMsg(cdc, &fraudv1.MsgResolveFraudReport{}, "fraud/MsgResolveFraudReport")
@@ -41,6 +42,7 @@ func RegisterLegacyAminoCodec(cdc *codec.LegacyAmino) {
 func RegisterInterfaces(registry cdctypes.InterfaceRegistry) {
 	registry.RegisterImplementations((*sdk.Msg)(nil),
 		&fraudv1.MsgSubmitFraudReport{},
+		&fraudv1.MsgSubmitFraudResponse{},
 		&fraudv1.MsgAssignModerator{},
 		&fraudv1.MsgUpdateReportStatus{},
 		&fraudv1.MsgResolveFraudReport{},

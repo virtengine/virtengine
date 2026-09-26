@@ -28,6 +28,9 @@ const (
 
 	// EventTypeModeratorQueueUpdated is emitted when the moderator queue changes
 	EventTypeModeratorQueueUpdated = "moderator_queue_updated"
+
+	// EventTypeFraudResponseSubmitted is emitted when a response/rebuttal is filed
+	EventTypeFraudResponseSubmitted = "fraud_response_submitted"
 )
 
 // Attribute keys for fraud events
@@ -76,4 +79,16 @@ const (
 
 	// AttributeKeyQueuePosition is the position in moderator queue
 	AttributeKeyQueuePosition = "queue_position"
+
+	// AttributeKeyResponseID is the fraud response ID attribute
+	AttributeKeyResponseID = "response_id"
+
+	// AttributeKeyRespondent is the responding address attribute
+	AttributeKeyRespondent = "respondent"
+
+	// AttributeKeyRespondentRole is the respondent role attribute
+	AttributeKeyRespondentRole = "respondent_role"
+
+	// AttributeKeyResponseCount is the number of responses on a report
+	AttributeKeyResponseCount = "response_count"
 )
