@@ -37,6 +37,10 @@ This index lists internal-only documentation. Do not add internal docs outside `
 - `_docs/adr/ADR-009-canonical-kubernetes-rendering-and-identity.md`
 - `_docs/adr/ADR-010-unified-market-resolution-and-waldur-supply.md`
 - `_docs/adr/ADR-011-vesc-veid-scoping.md`
+  - Reviewer guard: any future PR introducing a VESC VEID condition must keep it
+    strictly inside VESC scope and preserve the doc's non-goal statement
+    (not a marketplace-wide requirement; marketplace listings keep per-offer opt-in).
+    Do not add a code path that gates the marketplace on VESC — read the doc before approving.
 - `_docs/adr/adr-001-network-upgrades.md`
 - `_docs/adr/adr-002-manifest-v2beta2.md`
 - `_docs/adr/adr-003-technical-debt-refactoring.md`
