@@ -262,15 +262,26 @@ func TestKeeper_RateLimit_StaleEntriesPruned(t *testing.T) {
 
 // TestKeeper_RateLimit_HighBitHeightKeyPruned proves a crafted activity key
 // whose height bytes exceed math.MaxInt64 is reclaimed as stale instead of
-// wrapping into a negative height or counting against the window.
+// wrapping into a negative height and counting against the window.
+//
+// The scenario is deliberately adversarial to the guard: the reporting window is
+// set WIDER than the current block height so the window's lower bound is
+// negative (height 100 - window 1000 = -900). A MaxUint64 height bytes wraps to
+// int64(-1), which is greater than that negative lower bound, so without the
+// math.MaxInt64 range check the forged key is counted as in-window usage. With
+// MaxReportsPerWindow = 1, that single forged key is enough to make the limiter
+// reject a legitimate submission — so this test fails outright if the range
+// check is removed (verified by mutating reporter.go to skip the guard).
 func TestKeeper_RateLimit_HighBitHeightKeyPruned(t *testing.T) {
 	k, ctx, _, _ := setupKeeper(t)
 
 	reporter := sdk.AccAddress("cosmos1reporter______").String()
 
+	// window (1000) > ctx.BlockHeight() (100) => lowerBound == -900, so any
+	// wrapped-negative height would look like in-window usage.
 	params := types.DefaultParams()
-	params.MaxReportsPerWindow = 5
-	params.ReportWindowBlocks = 10
+	params.MaxReportsPerWindow = 1
+	params.ReportWindowBlocks = 1000
 	if err := k.SetParams(ctx, params); err != nil {
 		t.Fatalf("SetParams failed: %v", err)
 	}
@@ -287,11 +298,23 @@ func TestKeeper_RateLimit_HighBitHeightKeyPruned(t *testing.T) {
 	store := ctx.KVStore(k.skey)
 	store.Set(key, []byte("crafted-report"))
 
+	// The forged key must not be counted as usage: with MaxReportsPerWindow == 1
+	// a single counted entry would rate-limit the caller.
 	if err := k.checkReporterRateLimit(ctx, reporter); err != nil {
-		t.Fatalf("crafted high-bit key must not trip the limiter: %v", err)
+		t.Fatalf("crafted high-bit key must not count toward the window: %v", err)
 	}
+	// ...and it must be reclaimed rather than left in the prefix forever.
 	if store.Get(key) != nil {
 		t.Error("high-bit activity key should have been pruned as stale")
+	}
+
+	// The limiter must still work: one genuine in-window entry now counts, so
+	// the forged key really was excluded from the tally rather than the whole
+	// sweep being skipped.
+	realKey := types.GetReporterActivityKey(reporter, ctx.BlockHeight(), "real-report")
+	store.Set(realKey, []byte("real-report"))
+	if err := k.checkReporterRateLimit(ctx, reporter); err == nil {
+		t.Error("expected the limiter to reject once one genuine entry is in the window")
 	}
 }
 
