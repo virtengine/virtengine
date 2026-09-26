@@ -68,11 +68,45 @@ func (k Keeper) BeginBlocker(ctx sdk.Context) error {
 	return nil
 }
 
+// retentionSweepIntervalBlocks throttles the retention/erasure sweep so the
+// full-store scans in CleanupExpiredArtifacts/CleanupExpiredEnvelopes and the
+// overdue-erasure pass do not run on every block.
+const retentionSweepIntervalBlocks int64 = 100
+
 // EndBlocker is called at the end of every block
 // Used for cleanup and timeout handling
 func (k Keeper) EndBlocker(ctx sdk.Context) error {
 	k.handleExpiredRequests(ctx)
+	k.enforceRetentionSchedules(ctx)
 	return nil
+}
+
+// enforceRetentionSchedules runs the data-lifecycle retention sweep on a
+// throttled cadence. Without this call the expiry indexes maintained by
+// SetRetentionPolicy, the envelope DeleteOnExpiry flags, and the GDPR overdue
+// erasure queue would never be acted on: the deletion primitives exist but
+// nothing schedules them. This is what makes the retention periods stated in
+// PRIVACY_POLICY.md (biometric templates, identity documents, erasure
+// requests) enforceable rather than merely documented.
+func (k Keeper) enforceRetentionSchedules(ctx sdk.Context) {
+	if retentionSweepIntervalBlocks <= 0 {
+		return
+	}
+	if ctx.BlockHeight()%retentionSweepIntervalBlocks != 0 {
+		return
+	}
+	if cleaned := k.CleanupExpiredArtifacts(ctx); cleaned > 0 {
+		k.Logger(ctx).Info("veid retention sweep cleaned expired artifacts",
+			"cleaned", cleaned,
+			"block_height", ctx.BlockHeight(),
+		)
+	}
+	if processed := k.ProcessOverdueErasureRequests(ctx); processed > 0 {
+		k.Logger(ctx).Info("veid retention sweep processed overdue erasure requests",
+			"processed", processed,
+			"block_height", ctx.BlockHeight(),
+		)
+	}
 }
 
 // isBlockProposer checks if the current node is the block proposer
