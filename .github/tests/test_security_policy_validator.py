@@ -240,6 +240,71 @@ _Last updated: 2024_
 
         self.assertGreaterEqual(len(errors), 3)
 
+    def license_compliance_workflow(self, pip_licenses_step: str) -> Path:
+        """A license-compliance.yaml that satisfies every requirement except the pip-licenses pin."""
+        return self.write_file(
+            "license-compliance.yaml",
+            """
+name: License Compliance
+defaults:
+  run:
+    shell: bash
+permissions:
+  contents: read
+jobs:
+  policy-validation:
+    runs-on: ubuntu-latest
+    steps:
+      - run: python .github/scripts/validate_security_policies.py
+      - run: python -m unittest discover -s .github/tests -p "test_security_policy*.py"
+      - run: go run github.com/rhysd/actionlint/cmd/actionlint@v1.7.12 .github/workflows/license-compliance.yaml
+  go-licenses:
+    runs-on: ubuntu-latest
+    steps:
+      - run: go run github.com/google/go-licenses@${{ env.GO_LICENSES_VERSION }} csv ./... > licenses.csv
+  javascript-licenses:
+    runs-on: ubuntu-latest
+    steps:
+      - run: npx license-checker-rseidelsohn@${{ env.LICENSE_CHECKER_VERSION }} --json
+  python-licenses:
+    runs-on: ubuntu-latest
+    steps:
+      - @@PIP_LICENSES_STEP@@
+  spdx-sbom:
+    runs-on: ubuntu-latest
+    steps:
+      - run: scripts/supply-chain/generate-sbom.sh --format spdx
+  license-summary:
+    runs-on: ubuntu-latest
+""".replace("@@PIP_LICENSES_STEP@@", pip_licenses_step).strip(),
+        )
+
+    def test_pip_licenses_pin_accepts_expression_and_shell_forms(self) -> None:
+        """#888 installs the pinned scanner inside a venv, where the shell form of the same
+        workflow-level pin is correct. The policy guards the *pin*, not the spelling, so both
+        forms must validate - the earlier snippet-only check produced a false red on develop."""
+        workflows = {
+            "expression": self.license_compliance_workflow(
+                'run: python -m pip install --quiet "pip-licenses==${{ env.PIP_LICENSES_VERSION }}"'
+            ),
+            "shell": self.license_compliance_workflow(
+                'run: python -m pip install --quiet "pip-licenses==${PIP_LICENSES_VERSION}"'
+            ),
+        }
+
+        for form, workflow in workflows.items():
+            with self.subTest(form=form):
+                errors = self.validator.validate_workflow(workflow)
+                self.assertFalse([error for error in errors if "pip-licenses" in error], errors)
+
+    def test_unpinned_pip_licenses_install_is_rejected(self) -> None:
+        """Accepting both spellings must not accept an unpinned scanner."""
+        workflow = self.license_compliance_workflow("run: python -m pip install --quiet pip-licenses")
+
+        errors = self.validator.validate_workflow(workflow)
+
+        self.assertTrue(any("pip-licenses" in error for error in errors), errors)
+
 
 if __name__ == "__main__":
     unittest.main()
