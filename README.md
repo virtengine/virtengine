@@ -5,6 +5,27 @@
 
 VirtEngine is a secure, transparent, and decentralized cloud computing marketplace that connects those who need computing resources (tenants) with those that have computing capacity to lease (providers).
 
+## How the marketplace works
+
+There are two ways to acquire capacity, and they share the same on-chain
+settlement rails:
+
+- **Browse and buy** a public listing at its published price (immediate
+  resolution).
+- **Open an order** and let providers bid; a deterministic engine resolves the
+  best eligible offer when the bidding window closes.
+
+Providers supply capacity by publishing fixed-price listings (natively or via
+Waldur), by bidding on open orders, or by offering HPC queues. Kubernetes,
+OpenStack/VMware/AWS/Azure, and SLURM/MOAB/Open OnDemand are fulfilment
+backends, not separate marketplaces.
+
+Waldur provides the off-chain marketplace, metering, and administration plane;
+the deterministic commercial state lives on-chain. See
+[docs/acquisition-pathways.md](docs/acquisition-pathways.md) and the
+[docs site](https://docs.virtengine.com/concepts/acquisition-pathways/) for the
+full picture.
+
 # Roadmap and contributing
 
 VirtEngine is written in Golang and is Apache 2.0 licensed. Contributions are welcome whether that means providing feedback, testing existing and new features, or hacking on the source.

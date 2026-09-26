@@ -269,6 +269,22 @@ export interface EncryptedProviderSecrets {
   recipientKeyIds: string[];
 }
 
+/** WaldurOfferingRef links an on-chain offering to its Waldur source */
+export interface WaldurOfferingRef {
+  /** Waldur instance identifier. */
+  instanceId: string;
+  /** Waldur offering UUID. */
+  offeringUuid: string;
+  /** Waldur customer UUID (provider organization). */
+  customerUuid: string;
+  /** Backend type. */
+  backendType: string;
+  /** Snapshot hash. */
+  snapshotHash: string;
+  /** Monotonic Waldur revision. */
+  snapshotHeight: Long;
+}
+
 /** Offering represents a marketplace offering from a provider */
 export interface Offering {
   id: OfferingID | undefined;
@@ -294,7 +310,23 @@ export interface Offering {
   activeOrderCount: Long;
   prices: PriceComponent[];
   allowBidding: boolean;
-  minBid: Coin | undefined;
+  minBid:
+    | Coin
+    | undefined;
+  /** Supply origin: "native" or "waldur" (empty means native). */
+  source: string;
+  /** Catalogue visibility: "public", "unlisted", or "private". */
+  visibility: string;
+  /** Waldur source reference (set when source is "waldur"). */
+  waldur:
+    | WaldurOfferingRef
+    | undefined;
+  /** Supported acquisition modes ("direct", "bid"). */
+  acquisitionModes: string[];
+  /** Provider execution backend. */
+  backendType: string;
+  /** Metering component profile. */
+  meteringProfile: string;
 }
 
 export interface Offering_PublicMetadataEntry {
@@ -943,6 +975,153 @@ export const EncryptedProviderSecrets: MessageFns<
   },
 };
 
+function createBaseWaldurOfferingRef(): WaldurOfferingRef {
+  return {
+    instanceId: "",
+    offeringUuid: "",
+    customerUuid: "",
+    backendType: "",
+    snapshotHash: "",
+    snapshotHeight: Long.UZERO,
+  };
+}
+
+export const WaldurOfferingRef: MessageFns<WaldurOfferingRef, "virtengine.marketplace.v1.WaldurOfferingRef"> = {
+  $type: "virtengine.marketplace.v1.WaldurOfferingRef" as const,
+
+  encode(message: WaldurOfferingRef, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.instanceId !== "") {
+      writer.uint32(10).string(message.instanceId);
+    }
+    if (message.offeringUuid !== "") {
+      writer.uint32(18).string(message.offeringUuid);
+    }
+    if (message.customerUuid !== "") {
+      writer.uint32(26).string(message.customerUuid);
+    }
+    if (message.backendType !== "") {
+      writer.uint32(34).string(message.backendType);
+    }
+    if (message.snapshotHash !== "") {
+      writer.uint32(42).string(message.snapshotHash);
+    }
+    if (!message.snapshotHeight.equals(Long.UZERO)) {
+      writer.uint32(48).uint64(message.snapshotHeight.toString());
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): WaldurOfferingRef {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseWaldurOfferingRef();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.instanceId = reader.string();
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.offeringUuid = reader.string();
+          continue;
+        }
+        case 3: {
+          if (tag !== 26) {
+            break;
+          }
+
+          message.customerUuid = reader.string();
+          continue;
+        }
+        case 4: {
+          if (tag !== 34) {
+            break;
+          }
+
+          message.backendType = reader.string();
+          continue;
+        }
+        case 5: {
+          if (tag !== 42) {
+            break;
+          }
+
+          message.snapshotHash = reader.string();
+          continue;
+        }
+        case 6: {
+          if (tag !== 48) {
+            break;
+          }
+
+          message.snapshotHeight = Long.fromString(reader.uint64().toString(), true);
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): WaldurOfferingRef {
+    return {
+      instanceId: isSet(object.instance_id) ? globalThis.String(object.instance_id) : "",
+      offeringUuid: isSet(object.offering_uuid) ? globalThis.String(object.offering_uuid) : "",
+      customerUuid: isSet(object.customer_uuid) ? globalThis.String(object.customer_uuid) : "",
+      backendType: isSet(object.backend_type) ? globalThis.String(object.backend_type) : "",
+      snapshotHash: isSet(object.snapshot_hash) ? globalThis.String(object.snapshot_hash) : "",
+      snapshotHeight: isSet(object.snapshot_height) ? Long.fromValue(object.snapshot_height) : Long.UZERO,
+    };
+  },
+
+  toJSON(message: WaldurOfferingRef): unknown {
+    const obj: any = {};
+    if (message.instanceId !== "") {
+      obj.instance_id = message.instanceId;
+    }
+    if (message.offeringUuid !== "") {
+      obj.offering_uuid = message.offeringUuid;
+    }
+    if (message.customerUuid !== "") {
+      obj.customer_uuid = message.customerUuid;
+    }
+    if (message.backendType !== "") {
+      obj.backend_type = message.backendType;
+    }
+    if (message.snapshotHash !== "") {
+      obj.snapshot_hash = message.snapshotHash;
+    }
+    if (!message.snapshotHeight.equals(Long.UZERO)) {
+      obj.snapshot_height = (message.snapshotHeight || Long.UZERO).toString();
+    }
+    return obj;
+  },
+  fromPartial(object: DeepPartial<WaldurOfferingRef>): WaldurOfferingRef {
+    const message = createBaseWaldurOfferingRef();
+    message.instanceId = object.instanceId ?? "";
+    message.offeringUuid = object.offeringUuid ?? "";
+    message.customerUuid = object.customerUuid ?? "";
+    message.backendType = object.backendType ?? "";
+    message.snapshotHash = object.snapshotHash ?? "";
+    message.snapshotHeight = (object.snapshotHeight !== undefined && object.snapshotHeight !== null)
+      ? Long.fromValue(object.snapshotHeight)
+      : Long.UZERO;
+    return message;
+  },
+};
+
 function createBaseOffering(): Offering {
   return {
     id: undefined,
@@ -969,6 +1148,12 @@ function createBaseOffering(): Offering {
     prices: [],
     allowBidding: false,
     minBid: undefined,
+    source: "",
+    visibility: "",
+    waldur: undefined,
+    acquisitionModes: [],
+    backendType: "",
+    meteringProfile: "",
   };
 }
 
@@ -1047,6 +1232,24 @@ export const Offering: MessageFns<Offering, "virtengine.marketplace.v1.Offering"
     }
     if (message.minBid !== undefined) {
       Coin.encode(message.minBid, writer.uint32(194).fork()).join();
+    }
+    if (message.source !== "") {
+      writer.uint32(202).string(message.source);
+    }
+    if (message.visibility !== "") {
+      writer.uint32(210).string(message.visibility);
+    }
+    if (message.waldur !== undefined) {
+      WaldurOfferingRef.encode(message.waldur, writer.uint32(218).fork()).join();
+    }
+    for (const v of message.acquisitionModes) {
+      writer.uint32(226).string(v!);
+    }
+    if (message.backendType !== "") {
+      writer.uint32(234).string(message.backendType);
+    }
+    if (message.meteringProfile !== "") {
+      writer.uint32(242).string(message.meteringProfile);
     }
     return writer;
   },
@@ -1256,6 +1459,54 @@ export const Offering: MessageFns<Offering, "virtengine.marketplace.v1.Offering"
           message.minBid = Coin.decode(reader, reader.uint32());
           continue;
         }
+        case 25: {
+          if (tag !== 202) {
+            break;
+          }
+
+          message.source = reader.string();
+          continue;
+        }
+        case 26: {
+          if (tag !== 210) {
+            break;
+          }
+
+          message.visibility = reader.string();
+          continue;
+        }
+        case 27: {
+          if (tag !== 218) {
+            break;
+          }
+
+          message.waldur = WaldurOfferingRef.decode(reader, reader.uint32());
+          continue;
+        }
+        case 28: {
+          if (tag !== 226) {
+            break;
+          }
+
+          message.acquisitionModes.push(reader.string());
+          continue;
+        }
+        case 29: {
+          if (tag !== 234) {
+            break;
+          }
+
+          message.backendType = reader.string();
+          continue;
+        }
+        case 30: {
+          if (tag !== 242) {
+            break;
+          }
+
+          message.meteringProfile = reader.string();
+          continue;
+        }
       }
       if ((tag & 7) === 4 || tag === 0) {
         break;
@@ -1309,6 +1560,14 @@ export const Offering: MessageFns<Offering, "virtengine.marketplace.v1.Offering"
       prices: globalThis.Array.isArray(object?.prices) ? object.prices.map((e: any) => PriceComponent.fromJSON(e)) : [],
       allowBidding: isSet(object.allow_bidding) ? globalThis.Boolean(object.allow_bidding) : false,
       minBid: isSet(object.min_bid) ? Coin.fromJSON(object.min_bid) : undefined,
+      source: isSet(object.source) ? globalThis.String(object.source) : "",
+      visibility: isSet(object.visibility) ? globalThis.String(object.visibility) : "",
+      waldur: isSet(object.waldur) ? WaldurOfferingRef.fromJSON(object.waldur) : undefined,
+      acquisitionModes: globalThis.Array.isArray(object?.acquisition_modes)
+        ? object.acquisition_modes.map((e: any) => globalThis.String(e))
+        : [],
+      backendType: isSet(object.backend_type) ? globalThis.String(object.backend_type) : "",
+      meteringProfile: isSet(object.metering_profile) ? globalThis.String(object.metering_profile) : "",
     };
   },
 
@@ -1398,6 +1657,24 @@ export const Offering: MessageFns<Offering, "virtengine.marketplace.v1.Offering"
     if (message.minBid !== undefined) {
       obj.min_bid = Coin.toJSON(message.minBid);
     }
+    if (message.source !== "") {
+      obj.source = message.source;
+    }
+    if (message.visibility !== "") {
+      obj.visibility = message.visibility;
+    }
+    if (message.waldur !== undefined) {
+      obj.waldur = WaldurOfferingRef.toJSON(message.waldur);
+    }
+    if (message.acquisitionModes?.length) {
+      obj.acquisition_modes = message.acquisitionModes;
+    }
+    if (message.backendType !== "") {
+      obj.backend_type = message.backendType;
+    }
+    if (message.meteringProfile !== "") {
+      obj.metering_profile = message.meteringProfile;
+    }
     return obj;
   },
   fromPartial(object: DeepPartial<Offering>): Offering {
@@ -1454,6 +1731,14 @@ export const Offering: MessageFns<Offering, "virtengine.marketplace.v1.Offering"
     message.minBid = (object.minBid !== undefined && object.minBid !== null)
       ? Coin.fromPartial(object.minBid)
       : undefined;
+    message.source = object.source ?? "";
+    message.visibility = object.visibility ?? "";
+    message.waldur = (object.waldur !== undefined && object.waldur !== null)
+      ? WaldurOfferingRef.fromPartial(object.waldur)
+      : undefined;
+    message.acquisitionModes = object.acquisitionModes?.map((e) => e) || [];
+    message.backendType = object.backendType ?? "";
+    message.meteringProfile = object.meteringProfile ?? "";
     return message;
   },
 };

@@ -125,8 +125,32 @@ type IKeeper interface {
 	// Codec and store
 	Codec() codec.BinaryCodec
 	StoreKey() storetypes.StoreKey
+	GetAuthority() string
 	ActivateCanonicalLifecycle(ctx sdk.Context)
 	IsCanonicalLifecycleActive(ctx sdk.Context) bool
+
+	// SetCapacityKeeper wires the optional capacity keeper used by the
+	// resolution engine. It must be called during app construction.
+	SetCapacityKeeper(CapacityKeeper)
+
+	// ADR-010: deterministic resolution and Waldur supply
+	ResolveOpenOrders(ctx sdk.Context) (int, error)
+	UnifiedCatalog(ctx sdk.Context, filter CatalogFilter) []marketplace.Offering
+	SetWaldurSource(ctx sdk.Context, source *marketplace.WaldurSource) error
+	GetWaldurSource(ctx sdk.Context, instanceID string) (*marketplace.WaldurSource, bool)
+	IngestWaldurOffering(ctx sdk.Context, imp *marketplace.WaldurOfferingImport, attestation *marketplace.WaldurOfferingAttestation) (marketplace.IngestResult, error)
+	EnqueueWaldurCommand(ctx sdk.Context, command *marketplace.WaldurCommand) error
+	GetWaldurCommand(ctx sdk.Context, id string) (*marketplace.WaldurCommand, bool)
+	AckWaldurCommand(ctx sdk.Context, id string) error
+	WithWaldurSources(ctx sdk.Context, fn func(marketplace.WaldurSource) bool)
+	WithWaldurCommands(ctx sdk.Context, fn func(marketplace.WaldurCommand) bool)
+
+	// Canonical demand writers backing the ADR-010 messages. They bypass the
+	// legacy write fence because the resolution engine owns them.
+	createOrder(ctx sdk.Context, order *marketplace.Order) error
+	createBid(ctx sdk.Context, bid *marketplace.MarketplaceBid) error
+	updateOrder(ctx sdk.Context, order *marketplace.Order) error
+	putBid(ctx sdk.Context, bid *marketplace.MarketplaceBid) error
 }
 
 // Keeper implements the marketplace keeper
@@ -146,6 +170,9 @@ type Keeper struct {
 	// (MARKET-HW-SAFEGUARD-1). Optional: when nil, milestone state advances
 	// without moving funds, which keeps read-only/legacy wiring working.
 	milestoneEscrow MilestoneEscrowKeeper
+
+	// capacityKeeper optionally reserves physical capacity during resolution.
+	capacityKeeper CapacityKeeper
 }
 
 // NewKeeper creates a new marketplace keeper
@@ -360,19 +387,30 @@ func (k Keeper) CreateOrder(ctx sdk.Context, order *marketplace.Order) error {
 	if k.IsCanonicalLifecycleActive(ctx) {
 		return marketplace.ErrLifecycleDeprecated
 	}
+	return k.createOrder(ctx, order)
+}
+
+// createOrder creates an order without the canonical-lifecycle write fence.
+// It backs the canonical demand messages, which the resolution engine owns.
+func (k Keeper) createOrder(ctx sdk.Context, order *marketplace.Order) error {
 	if err := order.Validate(); err != nil {
 		return err
 	}
 
-	// Get the offering
-	offering, found := k.GetOffering(ctx, order.OfferingID)
-	if !found {
-		return marketplace.ErrOfferingNotFound
-	}
+	// Selector-based orders are not bound to a single offering; offering
+	// checks only apply to offering-bound orders.
+	var offering *marketplace.Offering
+	if order.HasOffering() {
+		found, ok := k.GetOffering(ctx, order.OfferingID)
+		if !ok {
+			return marketplace.ErrOfferingNotFound
+		}
+		offering = found
 
-	// Check if offering can accept orders
-	if err := offering.CanAcceptOrder(); err != nil {
-		return err
+		// Check if offering can accept orders
+		if err := offering.CanAcceptOrder(); err != nil {
+			return err
+		}
 	}
 
 	// Parse customer address
@@ -383,30 +421,40 @@ func (k Keeper) CreateOrder(ctx sdk.Context, order *marketplace.Order) error {
 
 	params := k.GetParams(ctx)
 
-	// VE-301: Identity gating check
+	// VE-301: Identity gating check. Offering-bound orders are gated by the
+	// offering; selector-based orders fall back to the platform default.
 	if params.EnableIdentityGating {
-		if err := k.CheckIdentityGating(ctx, offering, customerAddr); err != nil {
-			return err
+		if offering != nil {
+			if err := k.CheckIdentityGating(ctx, offering, customerAddr); err != nil {
+				return err
+			}
+		} else if params.DefaultIdentityScoreRequired > 0 && k.veidKeeper != nil {
+			if score, ok := k.veidKeeper.GetIdentityScore(ctx, customerAddr); !ok || score < params.DefaultIdentityScoreRequired {
+				return marketplace.ErrInsufficientIdentityScore.Wrapf("requires score %d", params.DefaultIdentityScoreRequired)
+			}
 		}
 	}
 
-	// Validate order pricing against offering price components
-	quote, err := marketplace.CalculateOfferingPrice(offering, order.ResourceUnits, order.RequestedQuantity)
-	if err != nil {
-		return marketplace.ErrPricingInvalid.Wrap(err.Error())
-	}
-	if !quote.Total.Amount.IsUint64() {
-		return marketplace.ErrPricingInvalid.Wrap("calculated price overflow")
-	}
-	if quote.Total.Amount.Uint64() > order.MaxBidPrice {
-		return marketplace.ErrPricingInvalid.Wrapf("max bid price %d below required %d", order.MaxBidPrice, quote.Total.Amount.Uint64())
-	}
-	if offering.AllowBidding && offering.MinBid.IsValid() && offering.MinBid.Amount.IsPositive() {
-		if offering.MinBid.Denom != quote.Total.Denom {
-			return marketplace.ErrPricingInvalid.Wrap("min bid denom mismatch")
+	// Validate order pricing against offering price components. Selector-based
+	// orders are priced at resolution time against matched supply.
+	if offering != nil {
+		quote, err := marketplace.CalculateOfferingPrice(offering, order.ResourceUnits, order.RequestedQuantity)
+		if err != nil {
+			return marketplace.ErrPricingInvalid.Wrap(err.Error())
 		}
-		if offering.MinBid.Amount.GT(sdkmath.NewIntFromUint64(order.MaxBidPrice)) {
-			return marketplace.ErrPricingInvalid.Wrap("max bid price below offering minimum bid")
+		if !quote.Total.Amount.IsUint64() {
+			return marketplace.ErrPricingInvalid.Wrap("calculated price overflow")
+		}
+		if quote.Total.Amount.Uint64() > order.MaxBidPrice {
+			return marketplace.ErrPricingInvalid.Wrapf("max bid price %d below required %d", order.MaxBidPrice, quote.Total.Amount.Uint64())
+		}
+		if offering.AllowBidding && offering.MinBid.IsValid() && offering.MinBid.Amount.IsPositive() {
+			if offering.MinBid.Denom != quote.Total.Denom {
+				return marketplace.ErrPricingInvalid.Wrap("min bid denom mismatch")
+			}
+			if offering.MinBid.Amount.GT(sdkmath.NewIntFromUint64(order.MaxBidPrice)) {
+				return marketplace.ErrPricingInvalid.Wrap("max bid price below offering minimum bid")
+			}
 		}
 	}
 
@@ -425,12 +473,14 @@ func (k Keeper) CreateOrder(ctx sdk.Context, order *marketplace.Order) error {
 	store.Set(key, bz)
 
 	// Update offering order count
-	offering.TotalOrderCount++
-	if order.State.IsActive() {
-		offering.ActiveOrderCount++
-	}
-	if err := k.UpdateOffering(ctx, offering); err != nil {
-		return err
+	if offering != nil {
+		offering.TotalOrderCount++
+		if order.State.IsActive() {
+			offering.ActiveOrderCount++
+		}
+		if err := k.UpdateOffering(ctx, offering); err != nil {
+			return err
+		}
 	}
 
 	// Emit event
@@ -461,6 +511,11 @@ func (k Keeper) UpdateOrder(ctx sdk.Context, order *marketplace.Order) error {
 	if k.IsCanonicalLifecycleActive(ctx) {
 		return marketplace.ErrLifecycleDeprecated
 	}
+	return k.updateOrder(ctx, order)
+}
+
+// updateOrder updates an order without the canonical-lifecycle write fence.
+func (k Keeper) updateOrder(ctx sdk.Context, order *marketplace.Order) error {
 	if err := order.Validate(); err != nil {
 		return err
 	}
@@ -474,6 +529,25 @@ func (k Keeper) UpdateOrder(ctx sdk.Context, order *marketplace.Order) error {
 
 	order.UpdatedAt = ctx.BlockTime().UTC()
 	bz, err := json.Marshal(order)
+	if err != nil {
+		return err
+	}
+	store.Set(key, bz)
+	return nil
+}
+
+// putBid writes a marketplace bid without the canonical-lifecycle write fence.
+func (k Keeper) putBid(ctx sdk.Context, bid *marketplace.MarketplaceBid) error {
+	if err := bid.ID.Validate(); err != nil {
+		return err
+	}
+	store := ctx.KVStore(k.skey)
+	key := marketplace.BidKey(bid.ID)
+	if !store.Has(key) {
+		return marketplace.ErrBidNotFound
+	}
+	bid.UpdatedAt = ctx.BlockTime().UTC()
+	bz, err := json.Marshal(bid)
 	if err != nil {
 		return err
 	}
@@ -531,6 +605,12 @@ func (k Keeper) CreateBid(ctx sdk.Context, bid *marketplace.MarketplaceBid) erro
 	if k.IsCanonicalLifecycleActive(ctx) {
 		return marketplace.ErrLifecycleDeprecated
 	}
+	return k.createBid(ctx, bid)
+}
+
+// createBid creates a bid without the canonical-lifecycle write fence. It
+// backs the canonical demand messages, which the resolution engine owns.
+func (k Keeper) createBid(ctx sdk.Context, bid *marketplace.MarketplaceBid) error {
 	if err := bid.ID.Validate(); err != nil {
 		return err
 	}
@@ -700,6 +780,12 @@ func (k Keeper) CreateAllocation(ctx sdk.Context, allocation *marketplace.Alloca
 	if k.IsCanonicalLifecycleActive(ctx) {
 		return marketplace.ErrLifecycleDeprecated
 	}
+	return k.createAllocation(ctx, allocation)
+}
+
+// createAllocation creates an allocation without the canonical-lifecycle write
+// fence. It is used by the deterministic resolution engine, which is canonical.
+func (k Keeper) createAllocation(ctx sdk.Context, allocation *marketplace.Allocation) error {
 	if err := allocation.Validate(); err != nil {
 		return err
 	}

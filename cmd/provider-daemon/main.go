@@ -255,6 +255,24 @@ const (
 	// FlagWaldurChainBroadcastTimeout is the broadcast timeout for on-chain callbacks
 	FlagWaldurChainBroadcastTimeout = "waldur-chain-broadcast-timeout"
 
+	// FlagWaldurSnapshotIngestEnabled submits Waldur offerings as signed snapshots
+	FlagWaldurSnapshotIngestEnabled = "waldur-snapshot-ingest-enabled"
+
+	// FlagWaldurSnapshotInstanceID is the Waldur instance ID for snapshots
+	FlagWaldurSnapshotInstanceID = "waldur-snapshot-instance-id"
+
+	// FlagWaldurSnapshotSigningKey is the hex ed25519 snapshot signing key (or file: path)
+	FlagWaldurSnapshotSigningKey = "waldur-snapshot-signing-key" //nolint:gosec // #nosec G101: CLI flag name, not a credential
+
+	// FlagWaldurIngestStateFile is the path for Waldur ingest worker state
+	FlagWaldurIngestStateFile = "waldur-ingest-state-file"
+
+	// FlagWaldurCommandPollerEnabled executes durable Waldur commands from chain
+	FlagWaldurCommandPollerEnabled = "waldur-command-poller-enabled"
+
+	// FlagWaldurCommandPollInterval is the command poll interval
+	FlagWaldurCommandPollInterval = "waldur-command-poll-interval"
+
 	// FlagMarketplaceEventQuery is the marketplace event query
 	FlagMarketplaceEventQuery = "marketplace-event-query"
 
@@ -467,6 +485,12 @@ func init() {
 	rootCmd.PersistentFlags().String(FlagWaldurChainFees, "", "Fees for on-chain callback submissions")
 	rootCmd.PersistentFlags().Float64(FlagWaldurChainGasAdjustment, 1.2, "Gas adjustment for on-chain callback submissions")
 	rootCmd.PersistentFlags().Duration(FlagWaldurChainBroadcastTimeout, 30*time.Second, "Broadcast timeout for on-chain callback submissions")
+	rootCmd.PersistentFlags().Bool(FlagWaldurSnapshotIngestEnabled, false, "Submit Waldur offerings as signed snapshots via MsgIngestWaldurOffering")
+	rootCmd.PersistentFlags().String(FlagWaldurSnapshotInstanceID, "", "Waldur instance ID for snapshot ingestion")
+	rootCmd.PersistentFlags().String(FlagWaldurSnapshotSigningKey, "", "Hex ed25519 snapshot signing key (or file: path)")
+	rootCmd.PersistentFlags().String(FlagWaldurIngestStateFile, "data/waldur_ingest_state.json", "Waldur ingest worker state file path")
+	rootCmd.PersistentFlags().Bool(FlagWaldurCommandPollerEnabled, false, "Execute durable Waldur commands from chain")
+	rootCmd.PersistentFlags().Duration(FlagWaldurCommandPollInterval, 30*time.Second, "Waldur command poll interval")
 	rootCmd.PersistentFlags().String(FlagMarketplaceEventQuery, "", "Marketplace event query for CometBFT subscription")
 	rootCmd.PersistentFlags().String(FlagCometWS, "/websocket", "CometBFT websocket endpoint path")
 
@@ -609,6 +633,12 @@ func init() {
 	_ = viper.BindPFlag(FlagWaldurChainFees, rootCmd.PersistentFlags().Lookup(FlagWaldurChainFees))
 	_ = viper.BindPFlag(FlagWaldurChainGasAdjustment, rootCmd.PersistentFlags().Lookup(FlagWaldurChainGasAdjustment))
 	_ = viper.BindPFlag(FlagWaldurChainBroadcastTimeout, rootCmd.PersistentFlags().Lookup(FlagWaldurChainBroadcastTimeout))
+	_ = viper.BindPFlag(FlagWaldurSnapshotIngestEnabled, rootCmd.PersistentFlags().Lookup(FlagWaldurSnapshotIngestEnabled))
+	_ = viper.BindPFlag(FlagWaldurSnapshotInstanceID, rootCmd.PersistentFlags().Lookup(FlagWaldurSnapshotInstanceID))
+	_ = viper.BindPFlag(FlagWaldurSnapshotSigningKey, rootCmd.PersistentFlags().Lookup(FlagWaldurSnapshotSigningKey))
+	_ = viper.BindPFlag(FlagWaldurIngestStateFile, rootCmd.PersistentFlags().Lookup(FlagWaldurIngestStateFile))
+	_ = viper.BindPFlag(FlagWaldurCommandPollerEnabled, rootCmd.PersistentFlags().Lookup(FlagWaldurCommandPollerEnabled))
+	_ = viper.BindPFlag(FlagWaldurCommandPollInterval, rootCmd.PersistentFlags().Lookup(FlagWaldurCommandPollInterval))
 	_ = viper.BindPFlag(FlagMarketplaceEventQuery, rootCmd.PersistentFlags().Lookup(FlagMarketplaceEventQuery))
 	_ = viper.BindPFlag(FlagCometWS, rootCmd.PersistentFlags().Lookup(FlagCometWS))
 
@@ -1613,6 +1643,75 @@ func runStart(cmd *cobra.Command, args []string) error {
 				return fmt.Errorf("failed to start waldur reconciler: %w", err)
 			}
 			fmt.Println("  Waldur Reconciler: started")
+		}
+
+		// ADR-010 canonical snapshot ingest and command execution (default off).
+		if viper.GetBool(FlagWaldurSnapshotIngestEnabled) || viper.GetBool(FlagWaldurCommandPollerEnabled) {
+			if mutationSubmitter == nil {
+				return fmt.Errorf("waldur canonical paths require the provider mutation submitter")
+			}
+			snapshotKey, err := provider_daemon.LoadSnapshotSignerKey(viper.GetString(FlagWaldurSnapshotSigningKey))
+			if err != nil {
+				return fmt.Errorf("failed to load waldur snapshot signing key: %w", err)
+			}
+			snapshotSubmitter, err := provider_daemon.NewChainSnapshotSubmitter(mutationSubmitter, providerAddress, snapshotKey)
+			if err != nil {
+				return fmt.Errorf("failed to create snapshot submitter: %w", err)
+			}
+			fmt.Println("  Waldur Snapshot Submitter: ready")
+
+			if viper.GetBool(FlagWaldurSnapshotIngestEnabled) {
+				ingestCfg := provider_daemon.DefaultWaldurIngestWorkerConfig()
+				ingestCfg.Enabled = true
+				ingestCfg.ProviderAddress = providerAddress
+				ingestCfg.WaldurCustomerUUID = viper.GetString(FlagWaldurCustomerUUID)
+				ingestCfg.WaldurInstanceID = viper.GetString(FlagWaldurSnapshotInstanceID)
+				ingestCfg.UseSnapshotIngest = true
+				ingestCfg.StateFilePath = viper.GetString(FlagWaldurIngestStateFile)
+				ingestWorker, err := provider_daemon.NewWaldurIngestWorker(ingestCfg, waldurMarketplaceClient, nil)
+				if err != nil {
+					return fmt.Errorf("failed to create waldur ingest worker: %w", err)
+				}
+				ingestWorker.SetSnapshotSubmitter(snapshotSubmitter)
+				if err := ingestWorker.Start(ctx); err != nil {
+					return fmt.Errorf("failed to start waldur ingest worker: %w", err)
+				}
+				fmt.Println("  Waldur Snapshot Ingest Worker: started")
+			}
+
+			if viper.GetBool(FlagWaldurCommandPollerEnabled) {
+				queryClient := productionChainClient.MarketplaceQueryClient()
+				if queryClient == nil {
+					return fmt.Errorf("waldur command poller requires chain gRPC")
+				}
+				querier, err := provider_daemon.NewChainWaldurCommandQuerier(queryClient)
+				if err != nil {
+					return fmt.Errorf("failed to create command querier: %w", err)
+				}
+				executor, err := provider_daemon.NewMarketplaceOrderExecutor(waldurMarketplaceClient, viper.GetString(FlagWaldurProjectUUID))
+				if err != nil {
+					return fmt.Errorf("failed to create command executor: %w", err)
+				}
+				acker, err := provider_daemon.NewChainWaldurCommandAcker(mutationSubmitter, providerAddress)
+				if err != nil {
+					return fmt.Errorf("failed to create command acker: %w", err)
+				}
+				pollerCfg := provider_daemon.DefaultWaldurCommandPollerConfig()
+				pollerCfg.Enabled = true
+				pollerCfg.InstanceID = viper.GetString(FlagWaldurSnapshotInstanceID)
+				pollerCfg.ProjectUUID = viper.GetString(FlagWaldurProjectUUID)
+				if interval := viper.GetDuration(FlagWaldurCommandPollInterval); interval > 0 {
+					pollerCfg.PollIntervalSeconds = int64(interval.Seconds())
+				}
+				poller, err := provider_daemon.NewWaldurCommandPoller(pollerCfg, querier, executor, acker)
+				if err != nil {
+					return fmt.Errorf("failed to create waldur command poller: %w", err)
+				}
+				if err := poller.Start(ctx); err != nil {
+					return fmt.Errorf("failed to start waldur command poller: %w", err)
+				}
+				fmt.Println("  Waldur Command Poller: started")
+			}
 		}
 	}
 
