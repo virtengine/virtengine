@@ -225,8 +225,8 @@
       "services": 65,
       "queryServices": 32,
       "msgServices": 29,
-      "methods": 447,
-      "httpBindings": 236
+      "methods": 455,
+      "httpBindings": 237
     },
     "files": [
       {
@@ -2562,6 +2562,20 @@
                     "path": "/virtengine/fraud/v1/moderator/queue"
                   }
                 ]
+              },
+              {
+                "name": "FraudResponses",
+                "fullName": "virtengine.fraud.v1.Query.FraudResponses",
+                "grpcPath": "/virtengine.fraud.v1.Query/FraudResponses",
+                "requestType": "virtengine.fraud.v1.QueryFraudResponsesRequest",
+                "responseType": "virtengine.fraud.v1.QueryFraudResponsesResponse",
+                "http": [
+                  {
+                    "body": "",
+                    "method": "GET",
+                    "path": "/virtengine/fraud/v1/reports/{report_id}/responses"
+                  }
+                ]
               }
             ]
           }
@@ -2586,6 +2600,14 @@
                 "http": []
               },
               {
+                "name": "SubmitFraudResponse",
+                "fullName": "virtengine.fraud.v1.Msg.SubmitFraudResponse",
+                "grpcPath": "/virtengine.fraud.v1.Msg/SubmitFraudResponse",
+                "requestType": "virtengine.fraud.v1.MsgSubmitFraudResponse",
+                "responseType": "virtengine.fraud.v1.MsgSubmitFraudResponseResponse",
+                "http": []
+              },
+              {
                 "name": "AssignModerator",
                 "fullName": "virtengine.fraud.v1.Msg.AssignModerator",
                 "grpcPath": "/virtengine.fraud.v1.Msg/AssignModerator",
@@ -2607,6 +2629,14 @@
                 "grpcPath": "/virtengine.fraud.v1.Msg/ResolveFraudReport",
                 "requestType": "virtengine.fraud.v1.MsgResolveFraudReport",
                 "responseType": "virtengine.fraud.v1.MsgResolveFraudReportResponse",
+                "http": []
+              },
+              {
+                "name": "ConfirmFraudResolution",
+                "fullName": "virtengine.fraud.v1.Msg.ConfirmFraudResolution",
+                "grpcPath": "/virtengine.fraud.v1.Msg/ConfirmFraudResolution",
+                "requestType": "virtengine.fraud.v1.MsgConfirmFraudResolution",
+                "responseType": "virtengine.fraud.v1.MsgConfirmFraudResolutionResponse",
                 "http": []
               },
               {
@@ -5007,6 +5037,46 @@
                 "grpcPath": "/virtengine.roles.v1.Msg/UpdateParams",
                 "requestType": "virtengine.roles.v1.MsgUpdateParams",
                 "responseType": "virtengine.roles.v1.MsgUpdateParamsResponse",
+                "http": []
+              },
+              {
+                "name": "ImposeSanction",
+                "fullName": "virtengine.roles.v1.Msg.ImposeSanction",
+                "grpcPath": "/virtengine.roles.v1.Msg/ImposeSanction",
+                "requestType": "virtengine.roles.v1.MsgImposeSanction",
+                "responseType": "virtengine.roles.v1.MsgImposeSanctionResponse",
+                "http": []
+              },
+              {
+                "name": "ConfirmSanction",
+                "fullName": "virtengine.roles.v1.Msg.ConfirmSanction",
+                "grpcPath": "/virtengine.roles.v1.Msg/ConfirmSanction",
+                "requestType": "virtengine.roles.v1.MsgConfirmSanction",
+                "responseType": "virtengine.roles.v1.MsgConfirmSanctionResponse",
+                "http": []
+              },
+              {
+                "name": "RevokeSanction",
+                "fullName": "virtengine.roles.v1.Msg.RevokeSanction",
+                "grpcPath": "/virtengine.roles.v1.Msg/RevokeSanction",
+                "requestType": "virtengine.roles.v1.MsgRevokeSanction",
+                "responseType": "virtengine.roles.v1.MsgRevokeSanctionResponse",
+                "http": []
+              },
+              {
+                "name": "OpenSanctionAppeal",
+                "fullName": "virtengine.roles.v1.Msg.OpenSanctionAppeal",
+                "grpcPath": "/virtengine.roles.v1.Msg/OpenSanctionAppeal",
+                "requestType": "virtengine.roles.v1.MsgOpenSanctionAppeal",
+                "responseType": "virtengine.roles.v1.MsgOpenSanctionAppealResponse",
+                "http": []
+              },
+              {
+                "name": "ResolveSanctionAppeal",
+                "fullName": "virtengine.roles.v1.Msg.ResolveSanctionAppeal",
+                "grpcPath": "/virtengine.roles.v1.Msg/ResolveSanctionAppeal",
+                "requestType": "virtengine.roles.v1.MsgResolveSanctionAppeal",
+                "responseType": "virtengine.roles.v1.MsgResolveSanctionAppealResponse",
                 "http": []
               }
             ]

@@ -293,8 +293,10 @@ func (ms *msgServer) resolveFraudReport(ctx sdk.Context, msg *types.MsgResolveFr
 	//
 	// Suspensions and terminations strip an account's access network-wide, so a
 	// single moderator may not apply them. On this message they are recorded as
-	// a proposal awaiting a distinct second reviewer (see ConfirmResolution)
-	// rather than applied.
+	// a proposal awaiting a distinct second reviewer, and the response says so
+	// explicitly (RequiresSecondReviewer/Pending) rather than reporting a bare
+	// success. A second, distinct moderator-or-above applies it with
+	// MsgConfirmFraudResolution, which reaches ConfirmResolution.
 	if resolution.RequiresSecondReviewer() {
 		pending, err := ms.keeper.ProposeResolution(ctx, msg.ReportId, resolution, msg.Notes, msg.Moderator)
 		if err != nil {
@@ -306,7 +308,11 @@ func (ms *msgServer) resolveFraudReport(ctx sdk.Context, msg *types.MsgResolveFr
 			"resolution", resolution.String(),
 			"expires_at", pending.ExpiresAt,
 		)
-		return &types.MsgResolveFraudReportResponse{}, nil
+		return &types.MsgResolveFraudReportResponse{
+			RequiresSecondReviewer: true,
+			Pending:                true,
+			PendingExpiresAt:       pending.ExpiresAt,
+		}, nil
 	}
 
 	if err := ms.keeper.ResolveFraudReport(ctx, msg.ReportId, resolution, msg.Notes, msg.Moderator); err != nil {
@@ -330,6 +336,46 @@ func (ms *msgServer) resolveFraudReport(ctx sdk.Context, msg *types.MsgResolveFr
 	)
 
 	return &types.MsgResolveFraudReportResponse{}, nil
+}
+
+// ConfirmFraudResolution applies a proposed suspension or termination as the
+// second, distinct reviewer.
+//
+// This is the only path by which a suspension or termination driven from a
+// fraud report takes effect. Without it, MsgResolveFraudReport's proposal would
+// be a silent no-op: the report would be left untouched and the proposal would
+// lapse unreviewed, while the proposer was told the transaction had succeeded.
+func (ms *msgServer) ConfirmFraudResolution(goCtx context.Context, msg *types.MsgConfirmFraudResolution) (*types.MsgConfirmFraudResolutionResponse, error) {
+	ctx := sdk.UnwrapSDKContext(goCtx)
+	// The whole confirm-or-lapse decision runs in a cache context so a failure
+	// (unauthorized reviewer, self-confirmation, lapsed window) leaves no partial
+	// state behind.
+	cacheCtx, write := ctx.CacheContext()
+	response, err := ms.confirmFraudResolution(cacheCtx, msg)
+	if err != nil {
+		return nil, err
+	}
+	write()
+	return response, nil
+}
+
+func (ms *msgServer) confirmFraudResolution(ctx sdk.Context, msg *types.MsgConfirmFraudResolution) (*types.MsgConfirmFraudResolutionResponse, error) {
+	if _, err := sdk.AccAddressFromBech32(msg.Reviewer); err != nil {
+		return nil, types.ErrUnauthorizedModerator.Wrap(errMsgInvalidModeratorAddr)
+	}
+
+	// ConfirmResolution enforces moderator-or-above, that the reviewer differs
+	// from the proposer, and that the review window is still open. A lapsed
+	// proposal is deleted and recorded by the keeper, and the error propagates so
+	// the cache context discards it; the EndBlocker lapse is the durable record.
+	resolution, err := ms.keeper.ConfirmResolution(ctx, msg.ReportId, msg.Reviewer)
+	if err != nil {
+		return nil, err
+	}
+
+	return &types.MsgConfirmFraudResolutionResponse{
+		Resolution: types.ResolutionTypeToProto(resolution),
+	}, nil
 }
 
 // RejectFraudReport handles rejecting a fraud report

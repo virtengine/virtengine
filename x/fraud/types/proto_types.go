@@ -32,6 +32,11 @@ type (
 	MsgResolveFraudReport = fraudv1.MsgResolveFraudReport
 	// MsgResolveFraudReportResponse is the generated proto response type
 	MsgResolveFraudReportResponse = fraudv1.MsgResolveFraudReportResponse
+	// MsgConfirmFraudResolution is the generated proto type for co-signing a
+	// proposed suspension or termination
+	MsgConfirmFraudResolution = fraudv1.MsgConfirmFraudResolution
+	// MsgConfirmFraudResolutionResponse is the generated proto response type
+	MsgConfirmFraudResolutionResponse = fraudv1.MsgConfirmFraudResolutionResponse
 	// MsgRejectFraudReport is the generated proto type for rejecting fraud reports
 	MsgRejectFraudReport = fraudv1.MsgRejectFraudReport
 	// MsgRejectFraudReportResponse is the generated proto response type
@@ -673,6 +678,7 @@ type MsgServerImpl interface {
 	AssignModerator(ctx context.Context, msg *MsgAssignModerator) (*MsgAssignModeratorResponse, error)
 	UpdateReportStatus(ctx context.Context, msg *MsgUpdateReportStatus) (*MsgUpdateReportStatusResponse, error)
 	ResolveFraudReport(ctx context.Context, msg *MsgResolveFraudReport) (*MsgResolveFraudReportResponse, error)
+	ConfirmFraudResolution(ctx context.Context, msg *MsgConfirmFraudResolution) (*MsgConfirmFraudResolutionResponse, error)
 	RejectFraudReport(ctx context.Context, msg *MsgRejectFraudReport) (*MsgRejectFraudReportResponse, error)
 	EscalateFraudReport(ctx context.Context, msg *MsgEscalateFraudReport) (*MsgEscalateFraudReportResponse, error)
 	UpdateParams(ctx context.Context, msg *MsgUpdateParams) (*MsgUpdateParamsResponse, error)
@@ -702,6 +708,10 @@ func (a *msgServerAdapter) UpdateReportStatus(ctx context.Context, req *fraudv1.
 
 func (a *msgServerAdapter) ResolveFraudReport(ctx context.Context, req *fraudv1.MsgResolveFraudReport) (*fraudv1.MsgResolveFraudReportResponse, error) {
 	return a.impl.ResolveFraudReport(ctx, req)
+}
+
+func (a *msgServerAdapter) ConfirmFraudResolution(ctx context.Context, req *fraudv1.MsgConfirmFraudResolution) (*fraudv1.MsgConfirmFraudResolutionResponse, error) {
+	return a.impl.ConfirmFraudResolution(ctx, req)
 }
 
 func (a *msgServerAdapter) RejectFraudReport(ctx context.Context, req *fraudv1.MsgRejectFraudReport) (*fraudv1.MsgRejectFraudReportResponse, error) {
