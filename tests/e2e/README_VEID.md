@@ -25,7 +25,7 @@ The VEID E2E test suite validates:
 
 1. **Go 1.22+** installed
 2. **CGO enabled** (for crypto dependencies)
-3. Build dependencies installed: `make deps`
+3. Build dependencies installed: `make deps-install`
 
 ### Run All VEID E2E Tests
 
@@ -61,10 +61,10 @@ go test -v -tags="e2e.integration" ./tests/e2e/... -run "TestVEIDE2E/Test.*Rejec
 ```bash
 # All integration tests
 make test-integration
-
-# VEID-specific (if added to Makefile)
-make test-veid-e2e
 ```
+
+VEID-specific runs use the `go test -tags="e2e.integration"` commands above
+(there is no dedicated `test-veid-e2e` make target).
 
 ## Test Structure
 

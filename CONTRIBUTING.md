@@ -43,7 +43,7 @@ If needed, we backport a commit from main to a release branch (excluding consens
 
 #### Testing
 
-Tests can be executed by running `make test` at the top level of the Cosmos SDK repository.
+Tests can be executed by running `make test` at the top level of the VirtEngine repository.
 
 Please follow style guide on [this blog post](https://blog.alexellis.io/golang-writing-unit-tests/) from [The Go Programming Language](https://www.amazon.co.uk/Programming-Language-Addison-Wesley-Professional-Computing/dp/0134190440)
 

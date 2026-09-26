@@ -92,7 +92,9 @@ If there is a need to run regenerate protobuf (in case of API or documentation c
    direnv allow
    ```
 
-3. Run codegen. This will
+3. Run codegen from the `sdk/` directory (these targets are defined in
+   `sdk/make/codegen.mk` and `sdk/make/mod.mk`, not in the root Makefile).
+   This will
    - Install all required tools into local cache
    - Make sure you setup vendor
 
@@ -106,7 +108,9 @@ If there is a need to run regenerate protobuf (in case of API or documentation c
    make proto-gen
    ```
 
-   - to run codegen for specific language use `make proto-gen-<lang>`. For example
+   - to run codegen for a specific module use `make proto-gen-<module>`,
+     where `<module>` is one of `go`, `ts`, `doc`, `rust`, or `pulsar`
+     (see `sdk/make/codegen.mk`). For example
 
    ```shell
    make proto-gen-go
