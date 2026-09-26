@@ -231,7 +231,10 @@ jobs:
           sarif_file: checkov-results.sarif
 
       - name: Run Trivy on Kubernetes manifests
-        uses: aquasecurity/trivy-action@v0.28.0
+        # NOTE: trivy-action pins aquasecurity/setup-trivy by hash; keep this
+        # version current because old setup-trivy tags are deleted upstream
+        # (v0.28.0 referenced v0.2.1, which no longer resolves).
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
           scan-type: config
           scan-ref: deploy/kubernetes

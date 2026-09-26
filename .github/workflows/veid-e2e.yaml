@@ -39,6 +39,11 @@ jobs:
           cache: true
           cache-dependency-path: go.sum
 
+      - name: Install build dependencies for cgo packages
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends libudev-dev
+
       - name: Cache build artifacts
         uses: actions/cache@v4
         with:
@@ -113,6 +118,11 @@ jobs:
           cache: true
           cache-dependency-path: go.sum
 
+      - name: Install build dependencies for cgo packages
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends libudev-dev
+
       - name: Run VEID module tests
         run: |
           go test -v -timeout 10m \
@@ -136,6 +146,10 @@ jobs:
           files: ./coverage-veid.txt,./coverage-inference.txt
           flags: veid
           name: veid-coverage
+          token: ${{ secrets.CODECOV_TOKEN }}
+          # Coverage upload must never fail the gate: tests already passed or
+          # failed on their own merit before this step runs.
+          fail_ci_if_error: false
 
   veid-determinism:
     name: VEID Determinism Tests

@@ -68,7 +68,11 @@ jobs:
           fi
 
           echo "Checking for breaking changes against ${base_ref}"
-          buf breaking --against ".git#ref=${base_ref}"
+          # Exclude the Go module vendor tree: since the cosmos-sdk bump it
+          # contains both cosmos/gogoproto and gogo/protobuf copies of
+          # gogo.proto, which define the same symbols and break the build.
+          # Vendor protos are third-party and out of scope for this check.
+          buf breaking --against ".git#ref=${base_ref}" --exclude-path vendor
 
   compatibility-tests:
     name: Compatibility Tests

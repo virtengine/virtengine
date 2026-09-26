@@ -333,7 +333,11 @@ jobs:
         uses: actions/dependency-review-action@v4
         with:
           fail-on-severity: high
-          allow-licenses: MIT,Apache-2.0,BSD-2-Clause,BSD-3-Clause,ISC,MPL-2.0,Unlicense,CC0-1.0
+          # MIT-CMU: Pillow >=12.3.0's SPDX identifier (permissive MIT variant).
+          # CC-BY-4.0: covers data-only packages (e.g. caniuse-lite).
+          # LGPL and LicenseRef-scancode riders stay blocked per
+          # SUPPLY_CHAIN_SECURITY.md and need a human exception (see task t_a0c63b78).
+          allow-licenses: MIT,MIT-CMU,Apache-2.0,BSD-2-Clause,BSD-3-Clause,ISC,MPL-2.0,Unlicense,CC0-1.0,CC-BY-4.0
 
   security-lint:
     name: Security Lint
@@ -351,6 +355,11 @@ jobs:
         with:
           go-version: ${{ env.GO_VERSION }}
           cache: true
+
+      - name: Install build dependencies for cgo packages
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends libudev-dev
 
       - name: Fetch base branch
         run: git fetch origin "${{ github.base_ref }}" --depth=1

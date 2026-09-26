@@ -497,6 +497,11 @@ jobs:
       - name: Install gosec
         run: go install github.com/securego/gosec/v2/cmd/gosec@${{ env.GOSEC_VERSION }}
 
+      # Same libudev requirement as go-vuln-scan: gosec type-checks the hid
+      # chain (zondax/hid carries `#cgo pkg-config: libudev`).
+      - name: Install build dependencies for cgo packages
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends libudev-dev
+
       # gosec resolves packages through golang.org/x/tools/go/packages, which runs
       # the go command with the default -mod=readonly. When a module is not tidy the
       # loader refuses with "updates to go.mod needed" and gosec discards every

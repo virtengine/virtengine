@@ -140,8 +140,9 @@ jobs:
       - name: Generate Go license inventory
         run: |
           mkdir -p license-reports/go
-          "$(go env GOPATH)/bin/go-licenses" report ./... --template='{{range .}}{{.Name}},{{.LicenseName}},{{.LicenseURL}}
-          {{end}}' > license-reports/go/licenses.csv
+          # go-licenses --template takes a template FILE, not an inline string.
+          printf '%s\n' '{{range .}}{{.Name}},{{.LicenseName}},{{.LicenseURL}}' '{{end}}' > "${RUNNER_TEMP:-/tmp}/go-licenses.csv.tpl"
+          "$(go env GOPATH)/bin/go-licenses" report ./... --template="${RUNNER_TEMP:-/tmp}/go-licenses.csv.tpl" > license-reports/go/licenses.csv
           test -s license-reports/go/licenses.csv
 
       - name: Enforce Go license policy
@@ -293,6 +294,9 @@ jobs:
             python -m venv "$venv_path"
             source "${venv_path}/bin/activate"
             python -m pip install --disable-pip-version-check --quiet -r "$requirement_file"
+            # The fresh venv does not inherit the outer environment's
+            # pip-licenses install, so install the pinned scanner here.
+            python -m pip install --disable-pip-version-check --quiet "pip-licenses==${PIP_LICENSES_VERSION}"
             python -m piplicenses --format=json > "license-reports/python/${slug}.json"
             deactivate
           done
