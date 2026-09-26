@@ -30,8 +30,10 @@ func newMsgServerFixture(t *testing.T) (sanctionFixture, types.MsgServer) {
 	return f, keeper.NewMsgServerImpl(f.k)
 }
 
-// asGoCtx converts an sdk.Context into the context.Context the MsgServer takes.
-func asGoCtx(ctx sdk.Context) context.Context { return sdk.WrapSDKContext(ctx) }
+// asGoCtx passes the context through to the MsgServer. sdk.Context already
+// implements context.Context, so no wrapping is needed (WrapSDKContext is
+// deprecated).
+func asGoCtx(ctx sdk.Context) context.Context { return ctx }
 
 func TestMsgServer_ImposeSanctionIsRecordedPendingAndDoesNotBind(t *testing.T) {
 	f, ms := newMsgServerFixture(t)
