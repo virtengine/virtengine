@@ -119,7 +119,7 @@
     },
     {
       "path": "infra/terraform/tests/go.mod",
-      "module": "github.com/virtengine-network/virtengine/infra/terraform/tests",
+      "module": "github.com/virtengine/virtengine/infra/terraform/tests",
       "go": "1.26.8",
       "workspace": true,
       "hasGoSum": true,
@@ -225,8 +225,8 @@
       "services": 65,
       "queryServices": 32,
       "msgServices": 29,
-      "methods": 447,
-      "httpBindings": 236
+      "methods": 449,
+      "httpBindings": 237
     },
     "files": [
       {
@@ -2562,6 +2562,20 @@
                     "path": "/virtengine/fraud/v1/moderator/queue"
                   }
                 ]
+              },
+              {
+                "name": "FraudResponses",
+                "fullName": "virtengine.fraud.v1.Query.FraudResponses",
+                "grpcPath": "/virtengine.fraud.v1.Query/FraudResponses",
+                "requestType": "virtengine.fraud.v1.QueryFraudResponsesRequest",
+                "responseType": "virtengine.fraud.v1.QueryFraudResponsesResponse",
+                "http": [
+                  {
+                    "body": "",
+                    "method": "GET",
+                    "path": "/virtengine/fraud/v1/reports/{report_id}/responses"
+                  }
+                ]
               }
             ]
           }
@@ -2583,6 +2597,14 @@
                 "grpcPath": "/virtengine.fraud.v1.Msg/SubmitFraudReport",
                 "requestType": "virtengine.fraud.v1.MsgSubmitFraudReport",
                 "responseType": "virtengine.fraud.v1.MsgSubmitFraudReportResponse",
+                "http": []
+              },
+              {
+                "name": "SubmitFraudResponse",
+                "fullName": "virtengine.fraud.v1.Msg.SubmitFraudResponse",
+                "grpcPath": "/virtengine.fraud.v1.Msg/SubmitFraudResponse",
+                "requestType": "virtengine.fraud.v1.MsgSubmitFraudResponse",
+                "responseType": "virtengine.fraud.v1.MsgSubmitFraudResponseResponse",
                 "http": []
               },
               {

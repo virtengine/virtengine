@@ -12,7 +12,12 @@ spec:
   # Source repositories
   sourceRepos:
     - https://github.com/virtengine/virtengine.git
-    - https://github.com/virtengine-network/virtengine-helm.git
+    # https://github.com/virtengine-network/virtengine-helm.git
+    #   Retired: the virtengine-network org no longer resolves and no
+    #   virtengine/virtengine-helm repository exists, so this sourceRepo could
+    #   never be fetched. No Application in infra/argocd references it (all
+    #   repoURLs resolve to virtengine/virtengine or public chart repos).
+    #   Re-add the correct URL when an in-tree Helm chart repository exists.
     - https://charts.bitnami.com/bitnami
     - https://argoproj.github.io/argo-helm
     - https://charts.external-secrets.io
