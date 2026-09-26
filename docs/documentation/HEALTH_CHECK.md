@@ -257,7 +257,7 @@ Remove-Item -Recurse -Force $env:VIRTENGINE_HOME -ErrorAction SilentlyContinue
 - **Token Denomination:** Using `uve` (micro-VE) for testing
 - **Chain ID:** `virtengine-test-1` for local testing
 - **SDK Version:** Cosmos SDK v0.53.x with CometBFT v0.38.x
-- **Go Version:** Requires Go 1.25+ (check with `go version`)
+- **Go Version:** Requires Go 1.26.8+ (check with `go version`)
 
 ---
 
