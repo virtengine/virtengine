@@ -136,14 +136,22 @@ func (c *FixtureErasureCoordinator) PrepareAuthorization(scope Scope, keyID, obj
 		ObjectRef: objectRef, BlobIDs: blobIDs, Scope: scope, KeyID: keyID,
 		ArtifactRevision: c.artifacts.revision, KeyRevision: c.keys.Revision(),
 	}
-	authorization.Digest = fixtureAuthorizationDigest(authorization)
+	digest, err := fixtureAuthorizationDigest(authorization)
+	if err != nil {
+		return FixtureErasureAuthorization{}, err
+	}
+	authorization.Digest = digest
 	return authorization, nil
 }
 
 // Erase validates durable holds and resumes the bound erasure intent to completion.
 func (c *FixtureErasureCoordinator) Erase(ctx context.Context, authorization FixtureErasureAuthorization) (contracts.DestructionReceipt, error) {
 	_ = ctx
-	if authorization.Digest == "" || authorization.Digest != fixtureAuthorizationDigest(authorization) {
+	expectedDigest, err := fixtureAuthorizationDigest(authorization)
+	if err != nil {
+		return contracts.DestructionReceipt{}, err
+	}
+	if authorization.Digest == "" || authorization.Digest != expectedDigest {
 		return contracts.DestructionReceipt{}, errors.New("fixture erasure authorization digest mismatch")
 	}
 	if err := c.verifier.VerifyFixtureErasureAuthorization(ctx, authorization); err != nil {
@@ -243,7 +251,11 @@ func (c *FixtureErasureCoordinator) resumeStorageDeletion(tombstoneID string) er
 		delete(c.artifacts.index.LegalHolds, target.BackendRef)
 		delete(c.artifacts.index.BlobMetadata, target.BlobID)
 	}
-	tombstone.StorageReceipt = fixtureStorageReceipt(tombstone.ID, tombstone.Targets)
+	storageReceipt, err := fixtureStorageReceipt(tombstone.ID, tombstone.Targets)
+	if err != nil {
+		return err
+	}
+	tombstone.StorageReceipt = storageReceipt
 	tombstone.State = FixtureErasureStorageDeleted
 	tombstone.UpdatedAt = time.Now().UTC()
 	if err := c.artifacts.persist(); err != nil {
@@ -310,20 +322,26 @@ func (c *FixtureErasureCoordinator) complete(tombstoneID string) (contracts.Dest
 	return tombstone.KeyReceipt, nil
 }
 
-func fixtureAuthorizationDigest(authorization FixtureErasureAuthorization) string {
+func fixtureAuthorizationDigest(authorization FixtureErasureAuthorization) (string, error) {
 	copy := authorization
 	copy.Digest = ""
 	copy.BlobIDs = append([]BlobID(nil), authorization.BlobIDs...)
 	sort.Slice(copy.BlobIDs, func(i, j int) bool { return copy.BlobIDs[i] < copy.BlobIDs[j] })
-	encoded, _ := json.Marshal(copy)
+	encoded, err := json.Marshal(copy)
+	if err != nil {
+		return "", err
+	}
 	digest := sha256.Sum256(encoded)
-	return hex.EncodeToString(digest[:])
+	return hex.EncodeToString(digest[:]), nil
 }
 
-func fixtureStorageReceipt(tombstoneID string, targets []FixtureErasureTarget) string {
-	receiptPayload, _ := json.Marshal(targets)
+func fixtureStorageReceipt(tombstoneID string, targets []FixtureErasureTarget) (string, error) {
+	receiptPayload, err := json.Marshal(targets)
+	if err != nil {
+		return "", err
+	}
 	receiptDigest := sha256.Sum256(append([]byte("fixture-storage-deleted:"+tombstoneID+":"), receiptPayload...))
-	return hex.EncodeToString(receiptDigest[:])
+	return hex.EncodeToString(receiptDigest[:]), nil
 }
 
 func cloneFixtureErasureTombstone(tombstone *FixtureErasureTombstone) *FixtureErasureTombstone {

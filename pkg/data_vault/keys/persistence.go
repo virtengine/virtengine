@@ -22,6 +22,9 @@ import (
 
 const fixtureStateVersion uint32 = 1
 
+// goosWindows is the runtime.GOOS value for Windows hosts.
+const goosWindows = "windows"
+
 var (
 	ErrStateNotFound        = errors.New("key state not found")
 	ErrStaleRevision        = errors.New("stale key state revision")
@@ -312,7 +315,7 @@ func atomicWriteFile(path string, data []byte, mode os.FileMode) error {
 	if err := os.Rename(tempName, path); err != nil {
 		return err
 	}
-	if runtime.GOOS == "windows" {
+	if runtime.GOOS == goosWindows {
 		return nil
 	}
 	directory, err := os.Open(dir)
@@ -334,7 +337,7 @@ func rejectSymlinkTarget(path string) error {
 			if info.Mode()&os.ModeSymlink != 0 {
 				return fmt.Errorf("fixture path ancestor must not be a symlink: %s", current)
 			}
-			if runtime.GOOS == "windows" {
+			if runtime.GOOS == goosWindows {
 				resolved, resolveErr := filepath.EvalSymlinks(current)
 				if resolveErr != nil {
 					return resolveErr
@@ -359,7 +362,7 @@ func enforceKeyPathSecurity(path string, directory bool, options contracts.Fixtu
 	if err := rejectSymlinkTarget(path); err != nil {
 		return err
 	}
-	if runtime.GOOS == "windows" {
+	if runtime.GOOS == goosWindows {
 		if !options.UnsafeWindowsDevelopment {
 			return errors.New("fixture key custody cannot enforce safe Windows ACLs; UnsafeWindowsDevelopment is required")
 		}

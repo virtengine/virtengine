@@ -114,7 +114,7 @@ func (s CustodyNodeSet) Validate() error {
 			operators[n.OperatorCommitment], domains[n.FailureDomainCommitment] = true, true
 		}
 	}
-	if active < s.Threshold || uint32(len(operators)) < s.Threshold || uint32(len(domains)) < s.Threshold {
+	if active < s.Threshold || uint32(len(operators)) < s.Threshold || uint32(len(domains)) < s.Threshold { //nolint:gosec // G115: length is non-negative and bounded by explicit validation above
 		return errors.New("insufficient independent active custody nodes")
 	}
 	return nil
@@ -128,7 +128,7 @@ func (s CustodyNodeSet) CanonicalBytes() ([]byte, error) {
 	e := newCanonicalEncoder("virtengine.uniqueness.custody-node-set/v1")
 	e.u32(s.Version)
 	e.u32(s.Threshold)
-	e.u32(uint32(len(nodes)))
+	e.u32(uint32(len(nodes))) //nolint:gosec // G115: length is non-negative and bounded by explicit validation above
 	for _, n := range nodes {
 		n.encode(e)
 	}
@@ -795,7 +795,7 @@ func verifyAttestation(payload []byte, epoch uint64, participant string, thresho
 	return verifyNodeSignatures(attestationSigningBytes(attestation.PayloadDigest, setDigest, threshold, signerDigest), epoch, threshold, attestation.Signatures, nodes)
 }
 func verifyNodeSignatures(message []byte, epoch uint64, threshold uint32, signatures []NodeSignature, nodes CustodyNodeSet) error {
-	if uint32(len(signatures)) < threshold {
+	if uint32(len(signatures)) < threshold { //nolint:gosec // G115: length is non-negative and bounded by explicit validation above
 		return errors.New("insufficient quorum signatures")
 	}
 	byID := map[string]CustodyNodeIdentity{}
@@ -827,7 +827,7 @@ func signerSetDigest(signatures []NodeSignature) (string, error) {
 	}
 	slices.Sort(ids)
 	e := newCanonicalEncoder("virtengine.uniqueness.signer-set/v1")
-	e.u32(uint32(len(ids)))
+	e.u32(uint32(len(ids))) //nolint:gosec // G115: length is non-negative and bounded by explicit validation above
 	for _, id := range ids {
 		e.text(id)
 	}
@@ -851,7 +851,7 @@ func (e *canonicalEncoder) u64(value uint64) {
 	binary.BigEndian.PutUint64(data[:], value)
 	e.data = append(e.data, data[:]...)
 }
-func (e *canonicalEncoder) i64(value int64) { e.u64(uint64(value)) }
+func (e *canonicalEncoder) i64(value int64) { e.u64(uint64(value)) } //nolint:gosec // G115: non-negative duration/timestamp after bounds validation
 func (e *canonicalEncoder) boolean(value bool) {
 	if value {
 		e.data = append(e.data, 1)

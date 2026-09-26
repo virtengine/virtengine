@@ -34,6 +34,9 @@ const (
 	SyncStatusError
 )
 
+// unknownStatusLabel is the shared fallback label for unrecognized enum status values.
+const unknownStatusLabel = "unknown"
+
 // String returns the string representation of the sync status
 func (s SyncStatus) String() string {
 	switch s {
@@ -46,7 +49,7 @@ func (s SyncStatus) String() string {
 	case SyncStatusError:
 		return "error"
 	default:
-		return "unknown"
+		return unknownStatusLabel
 	}
 }
 
@@ -109,7 +112,7 @@ func (s SyncRequestStatus) String() string {
 	case SyncRequestStatusExpired:
 		return "expired"
 	default:
-		return "unknown"
+		return unknownStatusLabel
 	}
 }
 

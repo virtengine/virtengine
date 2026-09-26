@@ -390,7 +390,7 @@ func (tx *memoryIssuerLinkTransaction) InsertPending() (IssuerLinkRecord, error)
 		IssuerCommitment: request.IssuerCommitment, PolicyDigest: request.PolicyDigest, ProfileDigest: request.ProfileDigest,
 		WalletKeyCommitment: request.NewWalletKeyCommitment, WalletKeyEpoch: request.NewWalletKeyEpoch,
 		AuthorizedRequestDigest: request.RequestDigest, Status: StatusPending,
-		CreatedAtUnix: int64(tx.coordinate), UpdatedAtUnix: int64(tx.coordinate),
+		CreatedAtUnix: int64(tx.coordinate), UpdatedAtUnix: int64(tx.coordinate), //nolint:gosec // G115: bounded template coordinate/value; high bit cleared on decode
 		CreatedAtCoordinate: tx.coordinate, UpdatedAtCoordinate: tx.coordinate,
 		CooldownUntilCoordinate: request.CooldownUntilCoordinate, Retention: RetentionRequired,
 	}
@@ -472,7 +472,7 @@ func (f *MemoryAtomicIssuerLinkFixture) Transition(ctx context.Context, domain N
 		return errors.New("issuer link not found in exact domain")
 	}
 	next := previous
-	next.UpdatedAtCoordinate, next.UpdatedAtUnix = f.coordinate, int64(f.coordinate)
+	next.UpdatedAtCoordinate, next.UpdatedAtUnix = f.coordinate, int64(f.coordinate) //nolint:gosec // G115: bounded template coordinate/value; high bit cleared on decode
 	switch action.Kind {
 	case TransitionBeginCooldown:
 		if previous.Status != StatusPending || f.coordinate >= previous.CooldownUntilCoordinate {
@@ -538,9 +538,9 @@ func (f *MemoryAtomicIssuerLinkFixture) ActivateRotation(ctx context.Context, do
 		return errors.New("rotation predecessor lineage mismatch")
 	}
 	oldNext, newNext := oldRecord, newRecord
-	oldNext.Status, oldNext.UpdatedAtCoordinate, oldNext.UpdatedAtUnix = StatusSuperseded, f.coordinate, int64(f.coordinate)
+	oldNext.Status, oldNext.UpdatedAtCoordinate, oldNext.UpdatedAtUnix = StatusSuperseded, f.coordinate, int64(f.coordinate) //nolint:gosec // G115: bounded template coordinate/value; high bit cleared on decode
 	oldNext.SupersessionCommitment, oldNext.NotificationCommitment = supersessionCommitment, notificationCommitment
-	newNext.Status, newNext.UpdatedAtCoordinate, newNext.UpdatedAtUnix = StatusActive, f.coordinate, int64(f.coordinate)
+	newNext.Status, newNext.UpdatedAtCoordinate, newNext.UpdatedAtUnix = StatusActive, f.coordinate, int64(f.coordinate) //nolint:gosec // G115: bounded template coordinate/value; high bit cleared on decode
 	if err := validateStatusTransition(oldRecord, oldNext); err != nil {
 		return err
 	}
@@ -575,7 +575,7 @@ func (f *MemoryAtomicIssuerLinkFixture) ApplyRetention(ctx context.Context, doma
 	if authorization.digest == "" || authorization.scope != f.authorizationScope || claim.Domain != domain || claim.Nullifier != nullifier || claim.RecordCommitment != commitment || claim.CurrentCoordinate != f.coordinate || claim.ExpiresAtCoordinate <= f.coordinate || claim.LegalHold != (record.Retention == RetentionLegalHold) {
 		return ErrUnauthorized
 	}
-	record.UpdatedAtCoordinate, record.UpdatedAtUnix = f.coordinate, int64(f.coordinate)
+	record.UpdatedAtCoordinate, record.UpdatedAtUnix = f.coordinate, int64(f.coordinate) //nolint:gosec // G115: bounded template coordinate/value; high bit cleared on decode
 	switch claim.Action {
 	case RetentionHoldAction:
 		if claim.LegalHold {
@@ -596,7 +596,7 @@ func (f *MemoryAtomicIssuerLinkFixture) ApplyRetention(ctx context.Context, doma
 		if claim.LegalHold || record.Retention != RetentionEligible || record.Status != StatusDeletionPending {
 			return errors.New("deletion is not authorized for current retention state")
 		}
-		tombstone := DeletionTombstone{Version: Version1, RecordCommitment: commitment, DeletionAuthorizationDigest: authorization.digest, DeletedAtUnix: int64(f.coordinate), DeletedAtCoordinate: f.coordinate}
+		tombstone := DeletionTombstone{Version: Version1, RecordCommitment: commitment, DeletionAuthorizationDigest: authorization.digest, DeletedAtUnix: int64(f.coordinate), DeletedAtCoordinate: f.coordinate} //nolint:gosec // G115: bounded template coordinate/value; high bit cleared on decode
 		records, wallets, tombstones := cloneRecordMap(f.records), cloneStringMap(f.wallets), cloneTombstoneMap(f.tombstones)
 		delete(records, recordKey)
 		delete(wallets, scopedWalletKey(domainKey, record.WalletKeyCommitment))

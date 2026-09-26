@@ -32,6 +32,7 @@
       "github.com/cosmos/cosmos-sdk => github.com/virtengine/cosmos-sdk v0.53.4-virtengine.1",
       "github.com/cosmos/gogoproto => github.com/virtengine/gogoproto v1.7.0-virtengine.1",
       "github.com/gogo/protobuf => github.com/regen-network/protobuf v1.3.3-alpha.regen.1",
+      "github.com/virtengine/virtengine => ../..",
       "github.com/virtengine/virtengine/sdk/specs => ../specs"
     ]
   }

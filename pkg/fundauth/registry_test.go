@@ -6,9 +6,11 @@ import (
 	"testing"
 )
 
+const unknownSourceID = "/unknown"
+
 func TestDefaultRegistryPinned(t *testing.T) {
 	want := []string{
-		"/cosmos.bank.v1beta1.MsgMultiSend", "/cosmos.bank.v1beta1.MsgSend",
+		msgMultiSendTypeURL, "/cosmos.bank.v1beta1.MsgSend",
 		"/cosmos.distribution.v1beta1.MsgCommunityPoolSpend", "/cosmos.distribution.v1beta1.MsgFundCommunityPool",
 		"/cosmos.distribution.v1beta1.MsgWithdrawDelegatorReward", "/cosmos.distribution.v1beta1.MsgWithdrawValidatorCommission",
 		"/virtengine.bme.v1.MsgBurnACT", "/virtengine.bme.v1.MsgBurnMint", "/virtengine.bme.v1.MsgMintACT",
@@ -79,10 +81,10 @@ func TestRegistryRejectsInvalidAndUnknownSources(t *testing.T) {
 			}
 		})
 	}
-	if _, err := DefaultRegistry().Lookup("/unknown", "/unknown"); err == nil {
+	if _, err := DefaultRegistry().Lookup(unknownSourceID, unknownSourceID); err == nil {
 		t.Fatal("unknown source accepted")
 	}
-	if _, err := DefaultRegistry().Lookup("/cosmos.bank.v1beta1.MsgSend", "/cosmos.bank.v1beta1.MsgMultiSend"); err == nil {
+	if _, err := DefaultRegistry().Lookup("/cosmos.bank.v1beta1.MsgSend", msgMultiSendTypeURL); err == nil {
 		t.Fatal("source/type alias accepted")
 	}
 	createBid, err := DefaultRegistry().Lookup("/virtengine.market.v1beta5.MsgCreateBid", "/virtengine.market.v1beta5.MsgCreateBid")
@@ -97,7 +99,7 @@ func TestRegistryRejectsInvalidAndUnknownSources(t *testing.T) {
 	}
 	copyOfDescriptors := DefaultRegistry().Descriptors()
 	copyOfDescriptors[0].SourceID = "corrupted"
-	if _, err := DefaultRegistry().Lookup("/cosmos.bank.v1beta1.MsgMultiSend", "/cosmos.bank.v1beta1.MsgMultiSend"); err != nil {
+	if _, err := DefaultRegistry().Lookup(msgMultiSendTypeURL, msgMultiSendTypeURL); err != nil {
 		t.Fatal("descriptor accessor mutated registry")
 	}
 }

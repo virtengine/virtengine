@@ -19,6 +19,10 @@ import (
 	inferencepb "github.com/virtengine/virtengine/pkg/inference/proto"
 )
 
+// digestHexLength is the length of a hex-encoded SHA-256 digest used by the
+// model bundle fixtures in this file.
+const digestHexLength = 64
+
 type noopLogger struct{}
 
 func (noopLogger) Debug(string, ...interface{}) {}
@@ -72,7 +76,7 @@ func TestVerifyModelBundleRejectsStaleManifest(t *testing.T) {
 	modelDir, manifestPath := createReleaseBundle(t)
 
 	payload := mustReadJSON(t, manifestPath)
-	payload["model"].(map[string]any)["runtime_hash"] = stringsOfLength(64, "a")
+	payload["model"].(map[string]any)["runtime_hash"] = strings.Repeat("a", digestHexLength)
 	writeJSON(t, manifestPath, payload)
 
 	_, err := verifyModelBundle(modelDir, manifestPath, releaseBundleVersion, "")
@@ -268,7 +272,7 @@ func TestVerifyModelBundleRejectsMissingProvenanceArtifact(t *testing.T) {
 	filtered := make([]any, 0, len(artifacts)-1)
 	for _, artifact := range artifacts {
 		record := artifact.(map[string]any)
-		if record["path"] != "model_provenance.json" {
+		if record["path"] != modelProvenanceArtifact {
 			filtered = append(filtered, record)
 		}
 	}
@@ -282,7 +286,7 @@ func TestVerifyModelBundleRejectsMissingProvenanceArtifact(t *testing.T) {
 func TestVerifyModelBundleRejectsProvenanceDigestMismatch(t *testing.T) {
 	modelDir, manifestPath := createReleaseBundle(t)
 	payload := mustReadJSON(t, manifestPath)
-	payload["provenance"].(map[string]any)["sha256"] = stringsOfLength(64, "a")
+	payload["provenance"].(map[string]any)["sha256"] = strings.Repeat("a", digestHexLength)
 	writeJSON(t, manifestPath, payload)
 
 	_, err := verifyModelBundle(modelDir, manifestPath, releaseBundleVersion, "")
@@ -371,7 +375,7 @@ func TestVerifyModelBundleFixtureOnlyProvenanceStatuses(t *testing.T) {
 		t.Run(test.status, func(t *testing.T) {
 			modelDir, manifestPath := createReleaseBundle(t)
 			payload := mustReadJSON(t, manifestPath)
-			payload["profile"] = "fixture_only"
+			payload["profile"] = profileFixtureOnly
 			writeJSON(t, manifestPath, payload)
 			rewriteProvenance(t, manifestPath, map[string]any{"schema_version": "virtengine.model-provenance/v1", "status": test.status})
 			_, err := verifyModelBundleForProfile(modelDir, manifestPath, releaseBundleVersion, "", "fixture_only")
@@ -472,7 +476,7 @@ func TestNewInferenceSidecarServerReportsStaleManifestState(t *testing.T) {
 	modelDir, manifestPath := createReleaseBundle(t)
 
 	payload := mustReadJSON(t, manifestPath)
-	payload["model"].(map[string]any)["runtime_hash"] = stringsOfLength(64, "a")
+	payload["model"].(map[string]any)["runtime_hash"] = strings.Repeat("a", digestHexLength)
 	writeJSON(t, manifestPath, payload)
 
 	config := inference.InferenceConfig{
@@ -688,7 +692,7 @@ func createReleaseBundle(t *testing.T) (string, string) {
 
 func writeSignedEvaluationEvidence(t *testing.T, versionDir, modelHash string) (string, map[string]any) {
 	t.Helper()
-	digest := stringsOfLength(64, "a")
+	digest := strings.Repeat("a", digestHexLength)
 	metrics := map[string]any{}
 	thresholds := map[string]any{}
 	for _, name := range requiredEvaluationMetricNames {
@@ -782,7 +786,7 @@ func rebindProvenanceArtifact(t *testing.T, manifestPath string) {
 	payload["provenance"].(map[string]any)["sha256"] = provenanceHash
 	for _, artifact := range payload["artifacts"].([]any) {
 		record := artifact.(map[string]any)
-		if record["path"] == "model_provenance.json" {
+		if record["path"] == modelProvenanceArtifact {
 			record["sha256"] = provenanceHash
 			record["size_bytes"] = provenanceInfo.Size()
 			writeJSON(t, manifestPath, payload)
@@ -845,12 +849,4 @@ func mustComputeHash(t *testing.T, path string) string {
 		t.Fatalf("hash %s: %v", path, err)
 	}
 	return hash
-}
-
-func stringsOfLength(length int, char string) string {
-	result := ""
-	for len(result) < length {
-		result += char
-	}
-	return result[:length]
 }

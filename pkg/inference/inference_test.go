@@ -11,7 +11,8 @@ import (
 
 // Test constants
 const (
-	testSidecarAddress = "localhost:50051"
+	testSidecarAddress     = "localhost:50051"
+	testSidecarTLSCertFile = "test-cert.pem"
 )
 
 // ============================================================================
@@ -166,7 +167,7 @@ func TestConfigValidation(t *testing.T) {
 				c.StrictDeterminism = true
 				c.SidecarTLS = true
 				c.SidecarTLSCAFile = "test-ca.pem"
-				c.SidecarTLSCertFile = "test-cert.pem"
+				c.SidecarTLSCertFile = testSidecarTLSCertFile
 				c.SidecarTLSKeyFile = "test-key.pem"
 				c.SidecarTLSServerName = "veid-inference.test"
 			},
@@ -190,7 +191,7 @@ func TestConfigValidation(t *testing.T) {
 			modifyFunc: func(c *InferenceConfig) {
 				c.ExpectedHash = strings.Repeat("a", 64)
 				c.SidecarTLS = true
-				c.SidecarTLSCertFile = "test-cert.pem"
+				c.SidecarTLSCertFile = testSidecarTLSCertFile
 			},
 			expectError: true,
 		},

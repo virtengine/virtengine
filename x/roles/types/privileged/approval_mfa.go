@@ -215,7 +215,7 @@ func (e MFAEvidence) Validate(requirement MFARequirement, now int64) error {
 		e.ChallengeDigest == ([32]byte{}) || e.ActionDigest != requirement.ActionDigest {
 		return fmt.Errorf("MFA evidence epochs, challenge, and exact action are required")
 	}
-	if uint32(len(e.ProofDigests)) < requirement.MinimumProofs {
+	if uint64(len(e.ProofDigests)) < uint64(requirement.MinimumProofs) {
 		return fmt.Errorf("MFA evidence has insufficient proofs")
 	}
 	seenProofs := make(map[[32]byte]struct{}, len(e.ProofDigests))

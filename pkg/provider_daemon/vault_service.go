@@ -12,6 +12,14 @@ import (
 	"github.com/virtengine/virtengine/pkg/data_vault/keys"
 )
 
+const (
+	// vaultBackendMemory selects the in-memory artifact store backend.
+	vaultBackendMemory = "memory"
+	// developmentName is the environment/profile name that permits
+	// non-production vault backends.
+	developmentName = "development"
+)
+
 // VaultServiceConfig configures the data vault service.
 type VaultServiceConfig struct {
 	Enabled                  bool
@@ -136,7 +144,7 @@ func createVaultBackend(cfg VaultServiceConfig) (artifact_store.ArtifactStore, e
 			return nil, errors.New("external vault backend is required")
 		}
 		return cfg.ArtifactBackend, nil
-	case "memory":
+	case vaultBackendMemory:
 		return artifact_store.NewMemoryBackend(), nil
 	case "fixture-filesystem":
 		return data_vault.NewFixtureFileArtifactStoreWithSecurity(cfg.ArtifactPath, cfg.Profile, data_vault.FixtureSecurityOptions{
@@ -148,7 +156,7 @@ func createVaultBackend(cfg VaultServiceConfig) (artifact_store.ArtifactStore, e
 }
 
 func createVaultKeyManager(cfg VaultServiceConfig) (keys.VaultKeyManager, error) {
-	if cfg.Backend == "memory" {
+	if cfg.Backend == vaultBackendMemory {
 		manager := keys.NewKeyManager()
 		if err := manager.Initialize(); err != nil {
 			return nil, fmt.Errorf("init development vault keys: %w", err)
@@ -217,14 +225,14 @@ func validateVaultServiceConfig(cfg VaultServiceConfig) error {
 		}
 		return nil
 	}
-	if cfg.Backend == "memory" {
-		if cfg.Environment != "development" || cfg.Profile != "development" || !cfg.DevelopmentOnly {
+	if cfg.Backend == vaultBackendMemory {
+		if cfg.Environment != developmentName || cfg.Profile != developmentName || !cfg.DevelopmentOnly {
 			return errors.New("memory vault requires explicit development environment, development profile, and DevelopmentOnly")
 		}
 		return nil
 	}
 	if cfg.Backend == "fixture-filesystem" {
-		if cfg.Profile != "fixture" && cfg.Profile != "development" {
+		if cfg.Profile != "fixture" && cfg.Profile != developmentName {
 			return errors.New("fixture filesystem vault requires fixture or development profile")
 		}
 		if cfg.ArtifactPath == "" || (cfg.KeyPersistence == nil && (cfg.KeyStatePath == "" || len(cfg.FixtureWrappingKey) != 32)) {

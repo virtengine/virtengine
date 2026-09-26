@@ -509,37 +509,6 @@ func (k IBCKeeper) OnTimeoutPacket(
 	return nil
 }
 
-func (k IBCKeeper) handleEscrowDeposit(ctx sdk.Context, _ channeltypes.Packet, deposit EscrowDepositPacket) (EscrowDepositAck, error) {
-	if err := deposit.Validate(); err != nil {
-		return EscrowDepositAck{}, err
-	}
-
-	if existing, found := k.settlementKeeper.GetEscrowByOrder(ctx, deposit.OrderID); found {
-		return EscrowDepositAck{EscrowID: existing.EscrowID, OrderID: deposit.OrderID, Status: "already_exists"}, nil
-	}
-
-	depositor, err := sdk.AccAddressFromBech32(deposit.Depositor)
-	if err != nil {
-		return EscrowDepositAck{}, err
-	}
-
-	expiresIn := time.Duration(deposit.ExpiresInSeconds) * time.Second //nolint:gosec // bounded by params
-	escrowID, err := k.settlementKeeper.CreateEscrow(ctx, deposit.OrderID, depositor, deposit.Amount, expiresIn, deposit.Conditions)
-	if err != nil {
-		return EscrowDepositAck{}, err
-	}
-
-	ctx.EventManager().EmitEvent(
-		sdk.NewEvent(
-			EventTypeEscrowCreated,
-			sdk.NewAttribute(AttributeKeyEscrowID, escrowID),
-			sdk.NewAttribute(AttributeKeyOrderID, deposit.OrderID),
-		),
-	)
-
-	return EscrowDepositAck{EscrowID: escrowID, OrderID: deposit.OrderID, Status: "created"}, nil
-}
-
 func (k IBCKeeper) handleEscrowRelease(ctx sdk.Context, _ channeltypes.Packet, release EscrowReleasePacket) (EscrowReleaseAck, error) {
 	if err := release.Validate(); err != nil {
 		return EscrowReleaseAck{}, err

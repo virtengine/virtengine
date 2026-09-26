@@ -31,7 +31,7 @@ func TestVerifyInferenceReceiptSignerPolicyCommitmentsAndReplay(t *testing.T) {
 	keeper, ctx, stateStore := setupInferenceReceiptKeeper(t)
 	t.Cleanup(func() { closeStoreIfNeeded(stateStore) })
 	pub, priv := deterministicInferenceReceiptKey(t, "valid")
-	key := registerInferenceSigner(t, keeper, ctx, pub, "did:virtengine:inference", 1)
+	key := registerInferenceSigner(t, keeper, ctx, pub, "did:virtengine:inference")
 
 	request := types.NewVerificationRequest("request-1", sdk.AccAddress(testHash(0x44)[:20]).String(), []string{"scope-a"}, ctx.BlockTime(), ctx.BlockHeight()-1)
 	expectations := testInferenceReceiptExpectations()
@@ -102,7 +102,7 @@ func TestVerifyInferenceReceiptRejectsEveryCommitmentMismatchWithoutMutation(t *
 			keeper, ctx, stateStore := setupInferenceReceiptKeeper(t)
 			t.Cleanup(func() { closeStoreIfNeeded(stateStore) })
 			pub, priv := deterministicInferenceReceiptKey(t, tc.name)
-			key := registerInferenceSigner(t, keeper, ctx, pub, "did:virtengine:inference:"+tc.name, 1)
+			key := registerInferenceSigner(t, keeper, ctx, pub, "did:virtengine:inference:"+tc.name)
 			request := types.NewVerificationRequest("request-1", sdk.AccAddress(testHash(0x44)[:20]).String(), []string{"scope-a"}, ctx.BlockTime(), ctx.BlockHeight()-1)
 			expectations := testInferenceReceiptExpectations()
 			receipt := testKeeperInferenceReceipt(t, ctx, request, key, expectations, priv)
@@ -163,7 +163,7 @@ func TestVerifyInferenceReceiptRejectsBoundaryAndFreshnessWithoutMutation(t *tes
 			keeper, ctx, stateStore := setupInferenceReceiptKeeper(t)
 			t.Cleanup(func() { closeStoreIfNeeded(stateStore) })
 			pub, priv := deterministicInferenceReceiptKey(t, tc.name)
-			key := registerInferenceSigner(t, keeper, ctx, pub, "did:virtengine:inference:"+tc.name, 1)
+			key := registerInferenceSigner(t, keeper, ctx, pub, "did:virtengine:inference:"+tc.name)
 			request := types.NewVerificationRequest("request-1", sdk.AccAddress(testHash(0x44)[:20]).String(), []string{"scope-a"}, ctx.BlockTime(), ctx.BlockHeight()-1)
 			expectations := testInferenceReceiptExpectations()
 			receipt := testKeeperInferenceReceipt(t, ctx, request, key, expectations, priv)
@@ -229,7 +229,7 @@ func TestVerifyInferenceReceiptRejectsSignerLifecycleAndPolicy(t *testing.T) {
 			keeper, ctx, stateStore := setupInferenceReceiptKeeper(t)
 			t.Cleanup(func() { closeStoreIfNeeded(stateStore) })
 			pub, priv := deterministicInferenceReceiptKey(t, tc.name)
-			key := registerInferenceSigner(t, keeper, ctx, pub, "did:virtengine:inference:"+tc.name, 1)
+			key := registerInferenceSigner(t, keeper, ctx, pub, "did:virtengine:inference:"+tc.name)
 			tc.mutate(key, ctx.BlockTime())
 			forceInferenceSignerForTest(t, keeper, ctx, key)
 
@@ -299,7 +299,7 @@ func TestVerifyInferenceReceiptSignerCurrentLifecycleAndRotation(t *testing.T) {
 			keeper, ctx, stateStore := setupInferenceReceiptKeeper(t)
 			t.Cleanup(func() { closeStoreIfNeeded(stateStore) })
 			pub, priv := deterministicInferenceReceiptKey(t, tc.name)
-			key := registerInferenceSigner(t, keeper, ctx, pub, "did:virtengine:inference:"+tc.name, 1)
+			key := registerInferenceSigner(t, keeper, ctx, pub, "did:virtengine:inference:"+tc.name)
 			request := types.NewVerificationRequest("request-1", sdk.AccAddress(testHash(0x44)[:20]).String(), []string{"scope-a"}, ctx.BlockTime(), ctx.BlockHeight()-1)
 			expectations := testInferenceReceiptExpectations()
 			receipt := testKeeperInferenceReceipt(t, ctx, request, key, expectations, priv)
@@ -316,7 +316,7 @@ func TestVerifyInferenceReceiptSignerCurrentLifecycleAndRotation(t *testing.T) {
 		keeper, ctx, stateStore := setupInferenceReceiptKeeper(t)
 		t.Cleanup(func() { closeStoreIfNeeded(stateStore) })
 		pub, priv := deterministicInferenceReceiptKey(t, "rotating")
-		key := registerInferenceSigner(t, keeper, ctx, pub, "did:virtengine:inference:rotating", 1)
+		key := registerInferenceSigner(t, keeper, ctx, pub, "did:virtengine:inference:rotating")
 		require.NoError(t, key.StartRotation("successor"))
 		forceInferenceSignerForTest(t, keeper, ctx, key)
 		request := types.NewVerificationRequest("request-1", sdk.AccAddress(testHash(0x44)[:20]).String(), []string{"scope-a"}, ctx.BlockTime(), ctx.BlockHeight()-1)
@@ -331,7 +331,7 @@ func TestInferenceReceiptReplayNotRecordedBeforeFailure(t *testing.T) {
 	keeper, ctx, stateStore := setupInferenceReceiptKeeper(t)
 	t.Cleanup(func() { closeStoreIfNeeded(stateStore) })
 	pub, priv := deterministicInferenceReceiptKey(t, "bad-signature")
-	key := registerInferenceSigner(t, keeper, ctx, pub, "did:virtengine:inference", 1)
+	key := registerInferenceSigner(t, keeper, ctx, pub, "did:virtengine:inference")
 	request := types.NewVerificationRequest("request-1", sdk.AccAddress(testHash(0x44)[:20]).String(), []string{"scope-a"}, ctx.BlockTime(), ctx.BlockHeight()-1)
 	expectations := testInferenceReceiptExpectations()
 	receipt := testKeeperInferenceReceipt(t, ctx, request, key, expectations, priv)
@@ -346,7 +346,7 @@ func TestReceiptScopeSemanticsDoNotUpgradeFailedScopes(t *testing.T) {
 	keeper, ctx, stateStore := setupInferenceReceiptKeeper(t)
 	t.Cleanup(func() { closeStoreIfNeeded(stateStore) })
 	pub, priv := deterministicInferenceReceiptKey(t, "scope-semantics")
-	key := registerInferenceSigner(t, keeper, ctx, pub, "did:virtengine:inference:scope-semantics", 1)
+	key := registerInferenceSigner(t, keeper, ctx, pub, "did:virtengine:inference:scope-semantics")
 	request := types.NewVerificationRequest("request-1", sdk.AccAddress(testHash(0x44)[:20]).String(), []string{"scope-a"}, ctx.BlockTime(), ctx.BlockHeight()-1)
 	expectations := testInferenceReceiptExpectations()
 	receipt := testKeeperInferenceReceipt(t, ctx, request, key, expectations, priv)
@@ -394,7 +394,7 @@ func TestCreateVerificationRequestFailsWithoutActiveProfileNoMutation(t *testing
 	params.RequireClientSignature = false
 	params.RequireUserSignature = false
 	require.NoError(t, keeper.SetParams(ctx, params))
-	account, _, _ := setupAccountWithEncryptedScope(t, keeper, ctx)
+	account, _ := setupAccountWithEncryptedScope(t, keeper, ctx)
 
 	_, err := keeper.CreateVerificationRequest(ctx, account.String(), []string{"scope-a"})
 	require.ErrorIs(t, err, types.ErrNoPipelineVersionActive)
@@ -425,7 +425,7 @@ func TestCreateVerificationRequestPersistsExactProfileSnapshot(t *testing.T) {
 	params.RequireUserSignature = false
 	require.NoError(t, keeper.SetParams(ctx, params))
 	registerActiveInferencePipeline(t, keeper, ctx)
-	account, _, _ := setupAccountWithEncryptedScope(t, keeper, ctx)
+	account, _ := setupAccountWithEncryptedScope(t, keeper, ctx)
 	t.Setenv("VEID_USE_TENSORFLOW", "true")
 	t.Setenv("VEID_INFERENCE_MODEL_HASH", "sha256:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff")
 
@@ -459,7 +459,7 @@ func TestProcessVerificationRequestWithReceiptStagesOnlyInVoteExtension(t *testi
 	require.NoError(t, keeper.SetParams(ctx, params))
 	registerActiveInferencePipeline(t, keeper, ctx)
 	pub, priv := deterministicInferenceReceiptKey(t, "process")
-	key := registerInferenceSigner(t, keeper, ctx, pub, "did:virtengine:inference:process", 1)
+	key := registerInferenceSigner(t, keeper, ctx, pub, "did:virtengine:inference:process")
 
 	account := sdk.AccAddress(testHash(0x44)[:20])
 	_, err := keeper.CreateIdentityRecord(ctx, account)
@@ -1014,9 +1014,9 @@ func deterministicInferenceReceiptKey(t *testing.T, label string) (ed25519.Publi
 	return pub, priv
 }
 
-func registerInferenceSigner(t *testing.T, keeper Keeper, ctx sdk.Context, pub ed25519.PublicKey, signerID string, sequence uint64) *types.SignerKeyInfo {
+func registerInferenceSigner(t *testing.T, keeper Keeper, ctx sdk.Context, pub ed25519.PublicKey, signerID string) *types.SignerKeyInfo {
 	t.Helper()
-	key := types.NewSignerKeyInfo(signerID, pub, types.ProofTypeEd25519, sequence, ctx.BlockTime().Add(-time.Hour))
+	key := types.NewSignerKeyInfo(signerID, pub, types.ProofTypeEd25519, 1, ctx.BlockTime().Add(-time.Hour))
 	require.NoError(t, key.Activate(ctx.BlockTime().Add(-time.Minute), ctx.BlockTime().Add(time.Hour)))
 	key.Metadata[types.SignerKeyMetadataEvidenceTypes] = string(types.AttestationTypeInferenceReceipt)
 	key.Metadata[types.SignerKeyMetadataActivationHeight] = "1"
@@ -1057,7 +1057,7 @@ func setupAccountWithEncryptedScope(
 	t *testing.T,
 	keeper Keeper,
 	ctx sdk.Context,
-) (sdk.AccAddress, ValidatorKeyProvider, *encryptioncrypto.KeyPair) {
+) (sdk.AccAddress, ValidatorKeyProvider) {
 	t.Helper()
 	account := sdk.AccAddress(testHash(0x44)[:20])
 	_, err := keeper.CreateIdentityRecord(ctx, account)
@@ -1081,7 +1081,7 @@ func setupAccountWithEncryptedScope(
 	)
 	scope := types.NewIdentityScope("scope-a", types.ScopeTypeIDDocument, *envelope, *metadata, ctx.BlockTime())
 	require.NoError(t, keeper.UploadScope(ctx, account, scope))
-	return account, NewInMemoryKeyProvider(recipient), recipient
+	return account, NewInMemoryKeyProvider(recipient)
 }
 
 func backfillRequestInferenceProfileForTest(t *testing.T, keeper Keeper, ctx sdk.Context, request *types.VerificationRequest) {
@@ -1106,8 +1106,8 @@ func setupReceiptBackedRequest(
 ) (sdk.AccAddress, *types.VerificationRequest, ValidatorKeyProvider, *types.SignerKeyInfo, ed25519.PrivateKey) {
 	t.Helper()
 	pub, priv := deterministicInferenceReceiptKey(t, label)
-	key := registerInferenceSigner(t, keeper, ctx, pub, "did:virtengine:inference:"+label, 1)
-	account, keyProvider, _ := setupAccountWithEncryptedScope(t, keeper, ctx)
+	key := registerInferenceSigner(t, keeper, ctx, pub, "did:virtengine:inference:"+label)
+	account, keyProvider := setupAccountWithEncryptedScope(t, keeper, ctx)
 
 	request := types.NewVerificationRequest("request-"+label, account.String(), []string{"scope-a"}, ctx.BlockTime(), ctx.BlockHeight())
 	backfillRequestInferenceProfileForTest(t, keeper, ctx, request)

@@ -190,6 +190,12 @@
           "version": "v1.3.3-alpha.regen.1"
         },
         {
+          "old": "github.com/virtengine/virtengine",
+          "oldVersion": "",
+          "new": "../..",
+          "version": ""
+        },
+        {
           "old": "github.com/virtengine/virtengine/sdk/specs",
           "oldVersion": "",
           "new": "../specs",
@@ -8028,7 +8034,7 @@
   "summaries": {
     "modules": 6,
     "toolModules": 1,
-    "replaces": 22,
+    "replaces": 23,
     "goMessages": 228,
     "gateways": 28,
     "gatewayStubs": 0,

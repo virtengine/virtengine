@@ -23,6 +23,10 @@ import (
 	"github.com/virtengine/virtengine/x/encryption/types"
 )
 
+// metadataModeMultiRecipient marks an envelope as using the multi-recipient
+// wrapping mode in its metadata.
+const metadataModeMultiRecipient = "multi-recipient"
+
 // KeyPair contains independent X25519 encryption and Ed25519 signing keys.
 type KeyPair struct {
 	PublicKey         [32]byte
@@ -292,7 +296,7 @@ func CreateMultiRecipientEnvelopeWithRecipients(plaintext []byte, recipients []R
 	}
 
 	// Add metadata to indicate multi-recipient mode
-	envelope.Metadata["_mode"] = "multi-recipient"
+	envelope.Metadata["_mode"] = metadataModeMultiRecipient
 
 	// Generate signature
 	signature, err := signEnvelope(envelope, senderKeyPair.SigningPrivateKey[:])
@@ -352,7 +356,7 @@ func OpenEnvelope(envelope *types.EncryptedPayloadEnvelope, recipientPrivateKey 
 	copy(nonce[:], envelope.Nonce)
 
 	// Check if multi-recipient mode
-	if mode, ok := envelope.Metadata["_mode"]; ok && mode == "multi-recipient" {
+	if mode, ok := envelope.Metadata["_mode"]; ok && mode == metadataModeMultiRecipient {
 		return openMultiRecipientEnvelope(envelope, &privateKeyArr, &senderPubKeyArr)
 	}
 
@@ -475,7 +479,7 @@ func OpenUnauthenticatedLegacyEnvelopeV1(envelope *types.EncryptedPayloadEnvelop
 	var privateKey, senderPublicKey [32]byte
 	copy(privateKey[:], recipientPrivateKey)
 	copy(senderPublicKey[:], envelope.SenderPubKey)
-	if envelope.Metadata["_mode"] == "multi-recipient" {
+	if envelope.Metadata["_mode"] == metadataModeMultiRecipient {
 		return openUnauthenticatedLegacyMultiRecipientEnvelopeV1(envelope, &privateKey, &senderPublicKey)
 	}
 	var nonce [24]byte

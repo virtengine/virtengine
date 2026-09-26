@@ -8,6 +8,9 @@ import (
 	"testing"
 )
 
+// nextSuffix mutates a binding field to prove the digest is field-sensitive.
+const nextSuffix = "-next"
+
 const workloadBindingMeasurementHex = "616263"
 
 func validWorkloadBinding(t *testing.T, platform AttestationType) WorkloadBindingV1 {
@@ -169,7 +172,7 @@ func TestWorkloadBindingAllFieldTamperChangesChallenge(t *testing.T) {
 		mutate func(*WorkloadBindingV1)
 	}{
 		{"chain", func(b *WorkloadBindingV1) { b.ChainID = "chain-beta-8" }},
-		{"workload", func(b *WorkloadBindingV1) { b.WorkloadID += "-next" }},
+		{"workload", func(b *WorkloadBindingV1) { b.WorkloadID += nextSuffix }},
 		{"platform", func(b *WorkloadBindingV1) { b.Platform = AttestationTypeSEVSNP }},
 		{"measurement value and digest", func(b *WorkloadBindingV1) {
 			b.MeasurementValueHex = "10" + b.MeasurementValueHex[2:]
@@ -177,17 +180,17 @@ func TestWorkloadBindingAllFieldTamperChangesChallenge(t *testing.T) {
 			digest := sha256.Sum256(value)
 			b.MeasurementSHA256 = hex.EncodeToString(digest[:])
 		}},
-		{"signer key ID", func(b *WorkloadBindingV1) { b.ReceiptSignerKeyID += "-next" }},
+		{"signer key ID", func(b *WorkloadBindingV1) { b.ReceiptSignerKeyID += nextSuffix }},
 		{"signer fingerprint", func(b *WorkloadBindingV1) { b.ReceiptSignerFingerprint = strings.Repeat("7", 64) }},
 		{"model digest", func(b *WorkloadBindingV1) { b.ModelDigest = strings.Repeat("7", 64) }},
 		{"runtime digest", func(b *WorkloadBindingV1) { b.RuntimeDigest = strings.Repeat("7", 64) }},
 		{"nonce", func(b *WorkloadBindingV1) { b.Nonce = strings.Repeat("7", 64) }},
-		{"profile ID", func(b *WorkloadBindingV1) { b.ProfileID += "-next" }},
+		{"profile ID", func(b *WorkloadBindingV1) { b.ProfileID += nextSuffix }},
 		{"profile digest", func(b *WorkloadBindingV1) { b.ProfileDigest = strings.Repeat("7", 64) }},
 		{"activation", func(b *WorkloadBindingV1) { b.ActivationHeight++ }},
 		{"expiry", func(b *WorkloadBindingV1) { b.ExpiryHeight++ }},
-		{"collateral kind", func(b *WorkloadBindingV1) { b.Collateral.Kind += "-next" }},
-		{"collateral opaque ID", func(b *WorkloadBindingV1) { b.Collateral.OpaqueID += "-next" }},
+		{"collateral kind", func(b *WorkloadBindingV1) { b.Collateral.Kind += nextSuffix }},
+		{"collateral opaque ID", func(b *WorkloadBindingV1) { b.Collateral.OpaqueID += nextSuffix }},
 		{"collateral digest", func(b *WorkloadBindingV1) { b.Collateral.SHA256Digest = strings.Repeat("7", 64) }},
 	}
 	for _, mutation := range mutations {

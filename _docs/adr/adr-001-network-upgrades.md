@@ -192,4 +192,4 @@ func migrateDeploymentGroup(fromBz []byte, cdc codec.BinaryCodec) codec.ProtoMar
    ```shell
    UPGRADE_TO=<upgrade name> make test
    ```
-4. To reset test `make test-reset`
+4. To reset test `make test-reset` (run from `tests/upgrade` directory)

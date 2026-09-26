@@ -8,6 +8,10 @@ import (
 	inferencepb "github.com/virtengine/virtengine/pkg/inference/proto"
 )
 
+// invalidHashFixture is a syntactically invalid hash used to exercise
+// sidecar response validation.
+const invalidHashFixture = "invalid"
+
 func TestSidecarClientValidatesScoreResponseBinding(t *testing.T) {
 	config := DefaultInferenceConfig()
 	config.UseSidecar = true
@@ -60,13 +64,13 @@ func TestSidecarClientValidatesScoreResponseBinding(t *testing.T) {
 		"raw score is not finite": func(response *inferencepb.ComputeScoreResponse) { response.RawScore = float32(math.NaN()) },
 		"confidence out of range": func(response *inferencepb.ComputeScoreResponse) { response.Confidence = 1.1 },
 		"invalid input hash syntax": func(response *inferencepb.ComputeScoreResponse) {
-			response.InputHash = "invalid"
+			response.InputHash = invalidHashFixture
 		},
 		"invalid output hash syntax": func(response *inferencepb.ComputeScoreResponse) {
-			response.OutputHash = "invalid"
+			response.OutputHash = invalidHashFixture
 		},
 		"invalid model hash syntax": func(response *inferencepb.ComputeScoreResponse) {
-			response.ModelHash = "invalid"
+			response.ModelHash = invalidHashFixture
 		},
 		"negative compute time": func(response *inferencepb.ComputeScoreResponse) { response.ComputeTimeMs = -1 },
 		"invalid contribution": func(response *inferencepb.ComputeScoreResponse) {

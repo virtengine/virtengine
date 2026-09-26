@@ -222,7 +222,7 @@ ls -la
 
 ```bash
 # Check Makefile targets
-make help
+make -qp 2>/dev/null | grep -E '^[a-zA-Z0-9_-]+:' | grep -v '^\\.' | sort -u
 
 # View cache directory setup
 cat make/setup-cache.mk | head -50

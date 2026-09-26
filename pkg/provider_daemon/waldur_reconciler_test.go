@@ -526,7 +526,7 @@ func TestWaldurReconcilerDurableSettlementEligibilityRequiresCoveringMatchedResu
 	otherRecord.Metrics.CPUMilliSeconds++
 	require.ErrorIs(t, reconciler.DurableSettlementEligibility(&otherRecord), ErrSettlementReconciliationHold)
 	otherRecord = *record
-	otherRecord.AllocationID = "other-allocation"
+	otherRecord.AllocationID = testOtherAllocationID
 	require.ErrorIs(t, reconciler.DurableSettlementEligibility(&otherRecord), ErrSettlementReconciliationHold)
 	otherRecord = *record
 	otherRecord.StartTime = otherRecord.StartTime.Add(time.Second)
@@ -549,7 +549,7 @@ func TestWaldurReconcilerDurableSettlementEligibilityRequiresCoveringMatchedResu
 func TestWaldurReconcilerDurableSettlementEligibilityRejectsAuthorityTie(t *testing.T) {
 	job := testReconciliationJob()
 	otherJob := job
-	otherJob.ID = "job-2"
+	otherJob.ID = testSecondJobID
 	matched := testDurableReconciliationResult(job, 1)
 	matched.Result.State = ReconciliationStateMatched
 	matched.Result.ReasonCode = ReconciliationReasonExactMatch
@@ -571,7 +571,7 @@ func TestWaldurReconcilerDurableSettlementEligibilityRejectsAuthorityTie(t *test
 func TestWaldurReconcilerDurableSettlementEligibilityRejectsRecordDigestTie(t *testing.T) {
 	job := testReconciliationJob()
 	otherJob := job
-	otherJob.ID = "job-2"
+	otherJob.ID = testSecondJobID
 	record := &UsageRecord{ID: "usage-1", AllocationID: job.AllocationID, StartTime: job.PeriodStart, EndTime: job.PeriodEnd}
 	first := testDurableReconciliationResult(job, 1)
 	first.Result.State, first.Result.ReasonCode, first.Result.Score = ReconciliationStateMatched, ReconciliationReasonExactMatch, 100

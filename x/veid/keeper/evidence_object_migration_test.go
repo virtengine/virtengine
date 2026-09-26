@@ -38,7 +38,7 @@ func (r migrationResolver) ResolveEvidenceMigrationKey(keyID string, keyEpoch ui
 }
 
 func TestEvidenceObjectStoreIsPayloadFree(t *testing.T) {
-	k, ctx, _ := newEvidenceMigrationKeeper(t)
+	k, ctx := newEvidenceMigrationKeeper(t)
 	ref := migrationTestRef(t, contracts.CommitmentDomainDocument)
 	if err := k.SetEvidenceObjectRef(ctx, ref); err != nil {
 		t.Fatal(err)
@@ -56,7 +56,7 @@ func TestEvidenceObjectStoreIsPayloadFree(t *testing.T) {
 }
 
 func TestEvidenceObjectStoreEnforcesRetentionTransitions(t *testing.T) {
-	k, ctx, _ := newEvidenceMigrationKeeper(t)
+	k, ctx := newEvidenceMigrationKeeper(t)
 	ref := migrationTestRef(t, contracts.CommitmentDomainDocument)
 	if err := k.SetEvidenceObjectRef(ctx, ref); err != nil {
 		t.Fatal(err)
@@ -107,7 +107,7 @@ func TestEvidenceObjectStoreEnforcesRetentionTransitions(t *testing.T) {
 }
 
 func TestEvidenceObjectMigrationDeterministicIdempotentAndTruthful(t *testing.T) {
-	k, ctx, _ := newEvidenceMigrationKeeper(t)
+	k, ctx := newEvidenceMigrationKeeper(t)
 	legacyPayload := json.RawMessage(`{"ciphertext":"legacy-secret","nonce":"legacy-nonce"}`)
 	legacyRow := mustJSON(t, struct {
 		ScopeID          string          `json:"scope_id"`
@@ -143,7 +143,7 @@ func TestEvidenceObjectMigrationDeterministicIdempotentAndTruthful(t *testing.T)
 }
 
 func TestEvidenceObjectMigrationQuarantinesMissingMappingWithoutSecrets(t *testing.T) {
-	k, ctx, _ := newEvidenceMigrationKeeper(t)
+	k, ctx := newEvidenceMigrationKeeper(t)
 	payload := json.RawMessage(`{"ciphertext":"must-remain-legacy"}`)
 	row := mustJSON(t, struct {
 		Version          uint32          `json:"version"`
@@ -173,7 +173,7 @@ func TestEvidenceObjectMigrationQuarantinesMissingMappingWithoutSecrets(t *testi
 }
 
 func TestEvidenceObjectMigrationQuarantinesMalformedAndAmbiguousRows(t *testing.T) {
-	k, ctx, _ := newEvidenceMigrationKeeper(t)
+	k, ctx := newEvidenceMigrationKeeper(t)
 	payload := json.RawMessage(`{"ciphertext":"valid"}`)
 	validRow := mustJSON(t, struct {
 		ScopeID          string          `json:"scope_id"`
@@ -193,7 +193,7 @@ func TestEvidenceObjectMigrationQuarantinesMalformedAndAmbiguousRows(t *testing.
 }
 
 func TestEvidenceObjectMigrationRejectsContextAndReplayChanges(t *testing.T) {
-	k, ctx, _ := newEvidenceMigrationKeeper(t)
+	k, ctx := newEvidenceMigrationKeeper(t)
 	manifest, resolver := signedManifest(t, k, ctx, nil)
 	for name, mutate := range map[string]func(*EvidenceMigrationManifest){
 		"chain":    func(value *EvidenceMigrationManifest) { value.ChainID = "wrong-chain" },
@@ -236,7 +236,7 @@ func TestEvidenceObjectMigrationRejectsContextAndReplayChanges(t *testing.T) {
 }
 
 func TestEvidenceObjectMigrationRejectsMalformedSignerEpochState(t *testing.T) {
-	k, ctx, _ := newEvidenceMigrationKeeper(t)
+	k, ctx := newEvidenceMigrationKeeper(t)
 	manifest, resolver := signedManifest(t, k, ctx, nil)
 	epochKey := evidenceMigrationUpgradeKey(types.PrefixEvidenceMigrationSignerEpoch, manifest.SignerKeyID)
 	ctx.KVStore(k.skey).Set(epochKey, []byte{1, 2, 3})
@@ -252,7 +252,7 @@ func TestEvidenceObjectMigrationRejectsMalformedSignerEpochState(t *testing.T) {
 }
 
 func TestEvidenceObjectMigrationDistinguishesSharedPrefixRows(t *testing.T) {
-	k, ctx, _ := newEvidenceMigrationKeeper(t)
+	k, ctx := newEvidenceMigrationKeeper(t)
 	store := ctx.KVStore(k.skey)
 	evidenceRecord := []byte(`{"evidence_id":"ev","evidence_type":"document","account_address":"account","scope_id":"scope","content_hash":"hash","envelope_hash":"hash","status":"pending"}`)
 	store.Set(append(append([]byte(nil), types.PrefixEvidenceRecord...), []byte("evidence")...), evidenceRecord)
@@ -273,7 +273,7 @@ func TestEvidenceObjectMigrationDistinguishesSharedPrefixRows(t *testing.T) {
 }
 
 func TestEvidenceObjectMigrationRollsBackWritesOnConflict(t *testing.T) {
-	k, ctx, _ := newEvidenceMigrationKeeper(t)
+	k, ctx := newEvidenceMigrationKeeper(t)
 	ctx.KVStore(k.skey).Set(types.ScopeKey([]byte("a"), "broken"), []byte("not-json"))
 	payload := json.RawMessage(`{"ciphertext":"valid"}`)
 	ctx.KVStore(k.skey).Set(types.ScopeKey([]byte("z"), "valid"), mustJSON(t, map[string]any{"scope_id": "valid", "encrypted_payload": payload}))
@@ -301,7 +301,7 @@ func TestEvidenceObjectMigrationRollsBackWritesOnConflict(t *testing.T) {
 	}
 }
 
-func newEvidenceMigrationKeeper(t *testing.T) (Keeper, sdk.Context, store.CommitMultiStore) {
+func newEvidenceMigrationKeeper(t *testing.T) (Keeper, sdk.Context) {
 	t.Helper()
 	registry := codectypes.NewInterfaceRegistry()
 	types.RegisterInterfaces(registry)
@@ -313,7 +313,7 @@ func newEvidenceMigrationKeeper(t *testing.T) (Keeper, sdk.Context, store.Commit
 		t.Fatal(err)
 	}
 	ctx := sdk.NewContext(stateStore, cmtproto.Header{ChainID: "chain-test", Time: time.Unix(100, 0).UTC(), Height: 10}, false, log.NewNopLogger())
-	return Keeper{cdc: codec.NewProtoCodec(registry), skey: storeKey, authority: "authority"}, ctx, stateStore
+	return Keeper{cdc: codec.NewProtoCodec(registry), skey: storeKey, authority: "authority"}, ctx
 }
 
 func migrationTestRef(t *testing.T, domain string) contracts.EvidenceObjectRef {

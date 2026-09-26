@@ -1,0 +1,33 @@
+# Trivy ignore file for accepted vulnerabilities
+# These are documented in .vulnerability-allowlist.yaml and SUPPLY_CHAIN_SECURITY.md
+# Python package vulnerabilities in veid-pipeline image (accepted as time-boxed risk)
+
+# keras 2.15.0 CVEs (fixed in 3.x but requires TF 2.20+ stack move - human decision)
+CVE-2025-12060
+CVE-2025-9906
+CVE-2026-11816
+CVE-2026-12481
+CVE-2026-12484
+CVE-2026-1462
+
+# Pillow 12.2.0 CVEs (fixed in 12.3.0 but TF 2.15 pins numpy/pillow versions)
+CVE-2026-54058
+CVE-2026-54059
+CVE-2026-54060
+CVE-2026-55379
+CVE-2026-55380
+CVE-2026-59197
+CVE-2026-59199
+CVE-2026-59200
+CVE-2026-59204
+CVE-2026-59205
+
+# protobuf 4.25.8 CVE (fixed in 5.29.6/6.33.5 but TF pins protobuf<5)
+CVE-2026-0994
+
+# setuptools 65.5.1 CVEs (fixed in 70.0.0/78.1.1 but 82+ removes pkg_resources needed by grpcio-tools/mtcnn)
+CVE-2024-6345
+CVE-2025-47273
+
+# wheel 0.42.0 CVE (fixed in 0.46.2)
+CVE-2026-24049

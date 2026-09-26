@@ -52,7 +52,7 @@ func TestValueSourceInventoryRejectsCoverageDrift(t *testing.T) {
 	base := loadInventoryFixture(t)
 	tests := map[string]func(*ValueSourceInventory){
 		"omitted":       func(value *ValueSourceInventory) { value.Sources = value.Sources[1:] },
-		"unknown":       func(value *ValueSourceInventory) { value.Sources[0].SourceID = "/unknown" },
+		"unknown":       func(value *ValueSourceInventory) { value.Sources[0].SourceID = unknownSourceID },
 		"duplicate":     func(value *ValueSourceInventory) { value.Sources[1] = value.Sources[0] },
 		"status":        func(value *ValueSourceInventory) { value.Sources[0].Status = "planned" },
 		"runtime claim": func(value *ValueSourceInventory) { value.RuntimeEnforcement = "wired" },
