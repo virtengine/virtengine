@@ -41,6 +41,10 @@ type allowance struct {
 	Reason   string
 }
 
+// scoringSrcPath is the VEID scoring source file the consensus-determinism
+// allowlist cites most often; naming it once keeps the entries in sync.
+const scoringSrcPath = "x/veid/keeper/scoring.go"
+
 var defaultAllowlist = []allowance{
 	{Rule: ruleMapIteration, Path: "x/audit/keeper/keeper.go", Function: "CreateOrUpdateProviderAttributes", Reason: "map entries are sorted by attribute key/value before protobuf persistence"},
 	{Rule: ruleMapIteration, Path: "x/audit/keeper/keeper.go", Function: "DeleteProviderAttributes", Reason: "map entries are sorted by attribute key before protobuf persistence"},
@@ -52,11 +56,11 @@ var defaultAllowlist = []allowance{
 	{Rule: ruleMapIteration, Path: "x/veid/keeper/privacy_proofs.go", Function: "deterministicClaimsString", Reason: "keys are collected and sorted before canonical string construction"},
 	{Rule: ruleMapIteration, Path: "x/veid/keeper/model_version.go", Function: "ReportValidatorModelVersions", Reason: "iteration only computes order-independent mismatch membership; persisted map JSON keys are canonicalized"},
 	{Rule: ruleFilesystem, Path: "x/veid/keeper/model_hash_governance.go", Function: "ComputeLocalModelHash", Reason: "off-chain startup/operator compatibility helper; no production keeper call site"},
-	{Rule: ruleFilesystem, Path: "x/veid/keeper/scoring.go", Function: "DefaultDevelopmentTensorFlowScoringConfig", Reason: "off-chain development-only scorer configuration; no production keeper call site, no state transition depends on host env"},
-	{Rule: ruleFilesystem, Path: "x/veid/keeper/scoring.go", Function: "DefaultTensorFlowScoringConfig", Reason: "off-chain scorer construction compatibility; active vote-extension carrier emits no evidence"},
-	{Rule: ruleFilesystem, Path: "x/veid/keeper/scoring.go", Function: "isTensorFlowEnabled", Reason: "off-chain scorer construction compatibility; active vote-extension carrier emits no evidence"},
-	{Rule: ruleFilesystem, Path: "x/veid/keeper/scoring.go", Function: "isRealInferenceReady", Reason: "off-chain scorer readiness compatibility; active vote-extension carrier emits no evidence"},
-	{Rule: ruleFilesystem, Path: "x/veid/keeper/scoring.go", Function: "getEnvOrDefault", Reason: "off-chain scorer configuration helper; active vote-extension carrier emits no evidence"},
+	{Rule: ruleFilesystem, Path: scoringSrcPath, Function: "DefaultDevelopmentTensorFlowScoringConfig", Reason: "off-chain development-only scorer configuration; no production keeper call site, no state transition depends on host env"},
+	{Rule: ruleFilesystem, Path: scoringSrcPath, Function: "DefaultTensorFlowScoringConfig", Reason: "off-chain scorer construction compatibility; active vote-extension carrier emits no evidence"},
+	{Rule: ruleFilesystem, Path: scoringSrcPath, Function: "isTensorFlowEnabled", Reason: "off-chain scorer construction compatibility; active vote-extension carrier emits no evidence"},
+	{Rule: ruleFilesystem, Path: scoringSrcPath, Function: "isRealInferenceReady", Reason: "off-chain scorer readiness compatibility; active vote-extension carrier emits no evidence"},
+	{Rule: ruleFilesystem, Path: scoringSrcPath, Function: "getEnvOrDefault", Reason: "off-chain scorer configuration helper; active vote-extension carrier emits no evidence"},
 	{Rule: ruleFilesystem, Path: "x/veid/keeper/zkproofs_circuits.go", Function: "NewZKProofSystem", Reason: "keeper construction reads optional proving-key location; no state transition branches on host availability"},
 	{Rule: ruleRandomness, Path: "x/veid/keeper/biometric_hash.go", Function: "GenerateTemplateSalt", Reason: "off-chain cryptographic salt helper; no production consensus caller"},
 	{Rule: ruleFloatingDecision, Path: "x/veid/keeper/biometric_hash.go", Function: "MatchTemplateHash", Reason: "source-compatible off-chain biometric comparison helper; no production consensus caller"},
@@ -65,7 +69,7 @@ var defaultAllowlist = []allowance{
 	{Rule: ruleFloatingDecision, Path: "x/veid/keeper/evidence_pipeline.go", Function: "floatToBasisPoints", Reason: "carrier version 0 emits no evidence; future activation must replace this compatibility converter with fixed point"},
 	{Rule: ruleFloatingDecision, Path: "x/veid/keeper/feature_extraction.go", Function: "extractLivenessFeatures", Reason: "inactive local ML compatibility pipeline; carrier version 0 never executes or commits its output"},
 	{Rule: ruleFloatingDecision, Path: "x/veid/keeper/feature_extraction.go", Function: "generateDeterministicEmbedding", Reason: "inactive local ML compatibility pipeline; carrier version 0 never executes or commits its output"},
-	{Rule: ruleFloatingDecision, Path: "x/veid/keeper/scoring.go", Function: "computeConfidence", Reason: "inactive stub ML compatibility scorer; carrier version 0 never executes or commits its output"},
+	{Rule: ruleFloatingDecision, Path: scoringSrcPath, Function: "computeConfidence", Reason: "inactive stub ML compatibility scorer; carrier version 0 never executes or commits its output"},
 }
 
 var externalMethodNames = map[string]struct{}{

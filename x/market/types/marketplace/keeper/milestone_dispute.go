@@ -48,7 +48,7 @@ func (k Keeper) GetMilestoneDispute(ctx sdk.Context, disputeID string) (*marketp
 func (k Keeper) WithMilestoneDisputes(ctx sdk.Context, fn func(marketplace.MilestoneDispute) bool) {
 	store := ctx.KVStore(k.skey)
 	iter := storetypes.KVStorePrefixIterator(store, marketplace.MilestoneDisputeKeyPrefix)
-	defer iter.Close()
+	defer func() { _ = iter.Close() }()
 
 	for ; iter.Valid(); iter.Next() {
 		var dispute marketplace.MilestoneDispute

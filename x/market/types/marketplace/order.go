@@ -54,7 +54,7 @@ const (
 
 // OrderStateNames maps order states to human-readable names
 var OrderStateNames = map[OrderState]string{
-	OrderStateUnspecified:        "unspecified",
+	OrderStateUnspecified:        unspecifiedName,
 	OrderStatePendingPayment:     "pending_payment",
 	OrderStateOpen:               "open",
 	OrderStateMatched:            "matched",

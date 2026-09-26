@@ -55,9 +55,14 @@ const (
 	EffectScopeAccount EffectScope = 4
 )
 
+// unspecifiedName is the human-readable name every "unspecified" enum
+// member in this package renders as; naming it once keeps the spellings
+// in sync.
+const unspecifiedName = "unspecified"
+
 // EffectScopeNames maps scopes to human-readable names.
 var EffectScopeNames = map[EffectScope]string{
-	EffectScopeUnspecified: "unspecified",
+	EffectScopeUnspecified: unspecifiedName,
 	EffectScopeOrder:       "order",
 	EffectScopeEscrow:      "escrow",
 	EffectScopeListing:     "listing",
@@ -124,7 +129,7 @@ const (
 
 // EligibilityTriggerNames maps triggers to human-readable names.
 var EligibilityTriggerNames = map[EligibilityTrigger]string{
-	TriggerUnspecified:                  "unspecified",
+	TriggerUnspecified:                  unspecifiedName,
 	TriggerOrderDisputeOpened:           "order_dispute_opened",
 	TriggerOrderDisputeResolved:         "order_dispute_resolved",
 	TriggerVEIDCheckFailed:              "veid_check_failed",
@@ -323,7 +328,7 @@ func AssessSeriousAbuse(violations []ViolationRecord, criteria SeriousAbuseCrite
 		}
 	}
 
-	assessment.DistinctTypes = uint32(len(distinct))
+	assessment.DistinctTypes = uint32(len(distinct)) //nolint:gosec // G115: len(distinct) is bounded by the violation-type cardinality
 
 	if assessment.QualifyingViolations < criteria.MinQualifyingViolations {
 		assessment.Reasons = append(assessment.Reasons, fmt.Sprintf(

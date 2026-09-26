@@ -12,6 +12,9 @@ import (
 	"github.com/virtengine/virtengine/x/market/types/marketplace"
 )
 
+// testDenom is the native denom the milestone settlement fixtures price in.
+const testDenom = "uve"
+
 // mockMilestoneEscrow records each milestone release/refund so the tests can
 // assert that funds move exactly once, for exactly the right amount.
 type mockMilestoneEscrow struct {
@@ -59,7 +62,7 @@ func newHardwareFixture(t *testing.T) (*Keeper, sdk.Context, *mockMilestoneEscro
 		marketplace.OfferingID{ProviderAddress: provider, Sequence: 1},
 		"bare-metal-gpu",
 		marketplace.OfferingCategoryGPU,
-		marketplace.PricingInfo{Model: marketplace.PricingModelFixed, BasePrice: 1, Currency: "uve"},
+		marketplace.PricingInfo{Model: marketplace.PricingModelFixed, BasePrice: 1, Currency: testDenom},
 		ctx.BlockTime(),
 	)
 	offering.ListingTerms = "Delivery within 14 days; capacity verifiable on demand."
@@ -87,7 +90,7 @@ func newHardwareFixture(t *testing.T) (*Keeper, sdk.Context, *mockMilestoneEscro
 
 // orderTotal is the escrow total used across these tests.
 func orderTotal() sdk.Coins {
-	return sdk.NewCoins(sdk.NewCoin("uve", sdkmath.NewInt(1_000_000)))
+	return sdk.NewCoins(sdk.NewCoin(testDenom, sdkmath.NewInt(1_000_000)))
 }
 
 // DONE WHEN 1: params define the default milestone set, and a test order moves
@@ -121,7 +124,7 @@ func TestOrderMovesThroughTwoMilestonesWithEscrowReleaseAtEach(t *testing.T) {
 
 	require.Len(t, mock.released, 1)
 	require.Equal(t, "capacity_verified", mock.released[0].milestoneID)
-	require.Equal(t, sdk.NewCoins(sdk.NewCoin("uve", sdkmath.NewInt(250_000))), mock.released[0].amount)
+	require.Equal(t, sdk.NewCoins(sdk.NewCoin(testDenom, sdkmath.NewInt(250_000))), mock.released[0].amount)
 
 	// Milestone 2: delivery attested -> remainder (750000uve).
 	decision, err = k.ReleaseOrderMilestone(ctx, orderID, "delivery_attested", marketplace.MilestoneEvidence{Satisfied: true})
@@ -130,7 +133,7 @@ func TestOrderMovesThroughTwoMilestonesWithEscrowReleaseAtEach(t *testing.T) {
 
 	require.Len(t, mock.released, 2)
 	require.Equal(t, "delivery_attested", mock.released[1].milestoneID)
-	require.Equal(t, sdk.NewCoins(sdk.NewCoin("uve", sdkmath.NewInt(750_000))), mock.released[1].amount)
+	require.Equal(t, sdk.NewCoins(sdk.NewCoin(testDenom, sdkmath.NewInt(750_000))), mock.released[1].amount)
 
 	// The two releases sum to exactly the escrow total: nothing created or lost.
 	total := mock.released[0].amount.Add(mock.released[1].amount...)
@@ -154,7 +157,7 @@ func TestMilestoneSplitIsExactAndConservesValue(t *testing.T) {
 	require.NoError(t, set.Validate())
 
 	for _, amount := range []int64{1, 3, 7, 99, 1_000_001} {
-		total := sdk.NewCoins(sdk.NewCoin("uve", sdkmath.NewInt(amount)))
+		total := sdk.NewCoins(sdk.NewCoin(testDenom, sdkmath.NewInt(amount)))
 		parts := set.Total(total)
 
 		require.Len(t, parts, 2)
@@ -248,7 +251,7 @@ func TestHardwareListingWithoutAttestationIsRefused(t *testing.T) {
 		marketplace.OfferingID{ProviderAddress: sdk.AccAddress(bytes.Repeat([]byte{7}, 20)).String(), Sequence: 2},
 		"unattested-gpu",
 		marketplace.OfferingCategoryGPU,
-		marketplace.PricingInfo{Model: marketplace.PricingModelFixed, BasePrice: 1, Currency: "uve"},
+		marketplace.PricingInfo{Model: marketplace.PricingModelFixed, BasePrice: 1, Currency: testDenom},
 		ctx.BlockTime(),
 	)
 	require.NoError(t, k.CreateOffering(ctx, bare))
@@ -302,7 +305,7 @@ func TestSingleMilestoneCanBeHeldWithoutResolvingWholeOrder(t *testing.T) {
 	require.NoError(t, k.ResolveOrderMilestoneDispute(ctx, "dispute-1", false, "refunded: spec mismatch"))
 	require.Len(t, mock.refunded, 1)
 	require.Equal(t, "delivery_attested", mock.refunded[0].milestoneID)
-	require.Equal(t, sdk.NewCoins(sdk.NewCoin("uve", sdkmath.NewInt(750_000))), mock.refunded[0].amount)
+	require.Equal(t, sdk.NewCoins(sdk.NewCoin(testDenom, sdkmath.NewInt(750_000))), mock.refunded[0].amount)
 
 	summary, err = k.GetOrderMilestoneSummary(ctx, orderID)
 	require.NoError(t, err)

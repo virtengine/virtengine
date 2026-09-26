@@ -48,7 +48,7 @@ const (
 
 // AllocationStateNames maps allocation states to human-readable names
 var AllocationStateNames = map[AllocationState]string{
-	AllocationStateUnspecified:  "unspecified",
+	AllocationStateUnspecified:  unspecifiedName,
 	AllocationStatePending:      "pending",
 	AllocationStateAccepted:     "accepted",
 	AllocationStateProvisioning: "provisioning",
@@ -219,7 +219,7 @@ const (
 
 // BidStateNames maps bid states to human-readable names
 var BidStateNames = map[BidState]string{
-	BidStateUnspecified: "unspecified",
+	BidStateUnspecified: unspecifiedName,
 	BidStateOpen:        "open",
 	BidStateAccepted:    "accepted",
 	BidStateRejected:    "rejected",

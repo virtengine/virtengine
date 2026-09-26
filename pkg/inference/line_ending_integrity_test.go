@@ -18,8 +18,8 @@ import (
 // "Windows Native Build and Unit Tests" (ci.yaml) reddens with
 // `schema hash: got 7de2340d..., want 010cf22b...`. `.gitattributes` pins
 // `/pkg/inference/schema/*.json text eol=lf` precisely because git stores, and
-// go:embed embeds, the LF form. This mirrors the VEID ZK params precedent in
-// x/veid/zk/params/sidecar_integrity_test.go.
+// the go:embed directive carries, the LF form. This mirrors the VEID ZK params
+// precedent in x/veid/zk/params/sidecar_integrity_test.go.
 func TestEmbeddedFeatureSchemaKeepsLineEndingPolicy(t *testing.T) {
 	if len(canonicalFeatureSchemaJSON) == 0 {
 		t.Fatal("embedded canonical feature schema is empty")
