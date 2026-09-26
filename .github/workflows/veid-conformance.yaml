@@ -155,6 +155,11 @@ jobs:
                   match
                   for line in text.splitlines()
                   if "hash" in line.lower()
+                  # The evidence-file integrity hash covers the evidence JSON,
+                  # which embeds platform info and a timestamp, so it differs
+                  # on every platform and run by design. All other logged
+                  # hashes (input/output/config/golden) must match exactly.
+                  and "evidence file hash" not in line.lower()
                   for match in re.findall(r"[a-f0-9]{16,64}", line)
               })
               if not hashes:

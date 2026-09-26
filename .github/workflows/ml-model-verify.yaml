@@ -150,8 +150,10 @@ jobs:
           command -v go
           go version | grep -F "go${{ env.GO_VERSION }}"
           go test -json -count=1 -run '^(TestCanonicalFeatureParityFixture|TestInferenceReceiptParityFixture)$' ./pkg/inference | tee parity-go.json
-          grep -q '"Action":"pass","Test":"TestCanonicalFeatureParityFixture"' parity-go.json
-          grep -q '"Action":"pass","Test":"TestInferenceReceiptParityFixture"' parity-go.json
+          # NOTE: go test -json emits "Action" before "Package" before "Test"
+          # on pass lines, so match Test and Action as separate filters.
+          grep '"Test":"TestCanonicalFeatureParityFixture"' parity-go.json | grep -q '"Action":"pass"'
+          grep '"Test":"TestInferenceReceiptParityFixture"' parity-go.json | grep -q '"Action":"pass"'
 
       - name: Run inference package tests
         run: |

@@ -22,7 +22,7 @@ RUN case "${TARGETARCH}" in \
       "https://github.com/protocolbuffers/protobuf/releases/download/v${PROTOC_VERSION}/protoc-${PROTOC_VERSION}-linux-${protoc_arch}.zip" \
       --output /tmp/protoc.zip \
     && echo "${protoc_sha}  /tmp/protoc.zip" | sha256sum --check --strict \
-    && unzip -q /tmp/protoc.zip -d /usr/local bin/protoc include \
+    && unzip -q /tmp/protoc.zip -d /usr/local bin/protoc 'include/*' \
     && rm /tmp/protoc.zip \
     && curl --fail --location --silent --show-error \
       "https://nodejs.org/dist/v${NODE_VERSION}/node-v${NODE_VERSION}-linux-${node_arch}.tar.xz" \

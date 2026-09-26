@@ -62,8 +62,12 @@ jobs:
       - name: Run conformance suite
         shell: bash
         run: |
-          mkdir -p ./conformance-evidence
-          VEID_CONFORMANCE_EVIDENCE_DIR=./conformance-evidence go test -v -count=1 \
+          # NOTE: go test runs each package's binary with cwd set to the
+          # package directory, so a relative evidence dir would land under
+          # pkg/inference/. Use an absolute path under the workspace instead.
+          EVIDENCE_DIR="${GITHUB_WORKSPACE}/conformance-evidence"
+          mkdir -p "${EVIDENCE_DIR}"
+          VEID_CONFORMANCE_EVIDENCE_DIR="${EVIDENCE_DIR}" go test -v -count=1 \
             -timeout "${GO_TEST_TIMEOUT_UNIT}" \
             ./pkg/inference/... -run "TestMultiMachineConformanceSuite"
         timeout-minutes: 20
@@ -73,7 +77,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: conformance-evidence-${{ matrix.os }}
-          path: ./conformance-evidence/
+          path: ${{ github.workspace }}/conformance-evidence/
           retention-days: 30
           if-no-files-found: error
 
@@ -200,6 +204,35 @@ jobs:
             python3 test_determinism.py
           elif [ -d tests ]; then
             python3 -m pytest tests/ -k "determinism or determin" -v
+          elif [ -f conformance/generate_test_vectors.py ]; then
+            # No dedicated test entrypoint exists; prove Python-side
+            # determinism by generating the Go-conformance vectors twice and
+            # requiring identical vector hashes (generated_at varies by design).
+            python3 conformance/generate_test_vectors.py
+          python3 - <<'PY'
+          import json
+          import subprocess
+          import sys
+          from pathlib import Path
+          out = Path("conformance/test_vectors.json")
+          if not out.exists():
+              raise SystemExit("generate_test_vectors.py produced no test_vectors.json")
+          first = json.loads(out.read_text(encoding="utf-8"))
+          assert first.get("vector_count", 0) > 0, "no test vectors generated"
+          subprocess.run(
+              [sys.executable, "conformance/generate_test_vectors.py"],
+              check=True,
+              capture_output=True,
+          )
+          second = json.loads(out.read_text(encoding="utf-8"))
+          if first["vectors_hash"] != second["vectors_hash"]:
+              raise SystemExit(
+                  "nondeterministic test vectors: "
+                  f"{first['vectors_hash']} != {second['vectors_hash']}"
+              )
+          print(f"OK: deterministic vectors hash {first['vectors_hash'][:16]}... "
+                f"({first['vector_count']} vectors)")
+          PY
           else
             echo "::error::No Python determinism test entrypoint found in ml/"
             exit 1
