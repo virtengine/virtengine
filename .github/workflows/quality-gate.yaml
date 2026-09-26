@@ -347,11 +347,11 @@ jobs:
             echo "merge-base: ${base_sha}"
           elif [ -n "${{ github.event.pull_request.base.sha }}" ]; then
             echo "::warning::git merge-base failed; falling back to the pull-request base SHA"
-            cat merge-base.err || true
+            if [ -s merge-base.err ]; then cat merge-base.err; fi
             base_sha="${{ github.event.pull_request.base.sha }}"
           else
             echo "::warning::git merge-base failed; falling back to the base branch tip"
-            cat merge-base.err || true
+            if [ -s merge-base.err ]; then cat merge-base.err; fi
             base_sha=$(git rev-parse "origin/${{ github.base_ref || 'main' }}")
           fi
           rm -f merge-base.err

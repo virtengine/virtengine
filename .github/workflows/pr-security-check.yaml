@@ -308,7 +308,7 @@ jobs:
             echo "merge-base origin/${{ github.base_ref }} HEAD: ${base_sha}"
           else
             echo "::warning::git merge-base against origin/${{ github.base_ref }} failed; falling back to the pull-request base SHA"
-            cat merge-base.err || true
+            if [ -s merge-base.err ]; then cat merge-base.err; fi
             base_sha="${{ github.event.pull_request.base.sha }}"
           fi
           rm -f merge-base.err
