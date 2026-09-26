@@ -43,7 +43,7 @@ var recognizedNonTaxonomyEvidenceMechanismIDs = map[string]struct{}{
 }
 
 var evidenceTrustInventory = []EvidenceTrustDescriptor{
-	{
+	{ // #nosec G101 -- audit-descriptor literals only; field names like ReplayKey/CredentialConsumer and prose values name concepts, no credential values are present
 		ID: "veid.facial_verification.v1", MechanismEvidenceClass: "ML facial comparison attestation",
 		AttestationTypes: []AttestationType{AttestationTypeFacialVerification}, ScopeTypes: []ScopeType{ScopeTypeSelfie},
 		HandlerIngress: "verification pipeline schema; no dedicated authenticated message ingress", IssuerSignerPolicy: "attestation schema carries a signer proof, but governed issuer resolution is not wired for this path", AccountAuthorizationPolicy: "subject address is structural only; no path-specific account authorization is enforced", ReplayPolicy: "nonce schema exists without a proven consume-before-mutation path", ReplayKey: "attestation nonce (not wired)", DeterministicTimeBoundPolicy: "issued/expires fields are structural; no consensus-time ingress check is proven", MutationPointStatusUpdate: "verification pipeline result; no authenticated path-specific mutation", ScoreContribution: "ScopeTypeWeight(selfie)=20 after verification", CredentialConsumer: "verification result to VEID credential issuance", TrustClassification: EvidenceTrustUntrustedSchemaOnly, FailClosedReason: "no governed issuer, account authorization, replay consumption, or deterministic ingress bound",

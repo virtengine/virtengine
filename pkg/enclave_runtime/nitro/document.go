@@ -547,7 +547,7 @@ func GetTimestamp(doc *AttestationDocument) time.Time {
 		return time.Time{}
 	}
 	// #nosec G115 -- CBOR timestamps are non-negative milliseconds and fit in int64
-	return time.UnixMilli(int64(doc.Payload.Timestamp)) //nolint:gosec // timestamp won't overflow int64 in practice
+	return time.UnixMilli(int64(doc.Payload.Timestamp)) // #nosec G115 -- timestamp won't overflow int64 in practice
 }
 
 // =============================================================================
@@ -656,7 +656,7 @@ func (r *cborReader) readLength(info int) (int, error) {
 			return 0, err
 		}
 		// #nosec G115 -- the CBOR length is bounded by the enclosing document length, which fits in int
-		return int(binary.BigEndian.Uint64(data)), nil //nolint:gosec // CBOR length won't exceed int in practice
+		return int(binary.BigEndian.Uint64(data)), nil // #nosec G115 -- CBOR length won't exceed int in practice
 	default:
 		return 0, ErrCBORDecodeError
 	}
@@ -754,7 +754,7 @@ func (r *cborReader) readUint64() (uint64, error) {
 		return 0, err
 	}
 	// #nosec G115 -- length is produced by readLength and is validated non-negative before this conversion
-	return uint64(length), nil //nolint:gosec // length is non-negative from readLength
+	return uint64(length), nil // #nosec G115 -- length is non-negative from readLength
 }
 
 func (r *cborReader) readInt() (int, error) {

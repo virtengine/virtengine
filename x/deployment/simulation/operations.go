@@ -99,8 +99,7 @@ func SimulateMsgCreateDeployment(ak govtypes.AccountKeeper, bk bankkeeper.Keeper
 
 		dID := v1.DeploymentID{
 			Owner: simAccount.Address.String(),
-			// #nosec G115 -- DSeq:  uint64(ctx.BlockHeight()), // nolint gosec is a non-negative counter/height bounded well below 2^63
-			DSeq: uint64(ctx.BlockHeight()), // nolint gosec
+			DSeq:  uint64(ctx.BlockHeight()), // #nosec G115 -- block height is a non-negative counter bounded well below 2^63
 		}
 
 		_, found := k.GetDeployment(ctx, dID)

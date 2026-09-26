@@ -867,7 +867,7 @@ func (a *AnsibleAdapter) writeTemporaryInventory(inventory *Inventory) (string, 
 	if err != nil {
 		return "", err
 	}
-	defer tmpFile.Close()
+	defer func() { _ = tmpFile.Close() }()
 
 	if _, err := tmpFile.WriteString(inventory.ToINI()); err != nil {
 		_ = os.Remove(tmpFile.Name())

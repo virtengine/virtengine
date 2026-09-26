@@ -205,10 +205,10 @@ func (p *CaptureOriginProof) ComputeProofHash() []byte {
 
 	// Timestamps
 	tb := make([]byte, 8)
-	//nolint:gosec // G115: UnixNano timestamp safe for uint64
+	// #nosec G115 -- device capture timestamps are post-epoch, so UnixNano is non-negative and fits uint64
 	binary.BigEndian.PutUint64(tb, uint64(p.CaptureTimestamp.UnixNano()))
 	h.Write(tb)
-	//nolint:gosec // G115: UnixNano timestamp safe for uint64
+	// #nosec G115 -- device capture timestamps are post-epoch, so UnixNano is non-negative and fits uint64
 	binary.BigEndian.PutUint64(tb, uint64(p.SystemTimestamp.UnixNano()))
 	h.Write(tb)
 	//nolint:gosec // G115: MonotonicTimestamp is positive

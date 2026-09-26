@@ -271,7 +271,7 @@ func (v *Verifier) VerifyDocument(doc *AttestationDocument) (*VerificationResult
 	// Extract basic info
 	result.ModuleID = doc.Payload.ModuleID
 	// #nosec G115 -- value originates from a non-negative quantity (height, timestamp, duration or counter) that always fits the target width
-	result.Timestamp = time.UnixMilli(int64(doc.Payload.Timestamp)) //nolint:gosec // timestamp won't overflow int64 in practice
+	result.Timestamp = time.UnixMilli(int64(doc.Payload.Timestamp)) // #nosec G115 -- timestamp won't overflow int64 in practice
 	result.UserData = doc.Payload.UserData
 	result.PublicKey = doc.Payload.PublicKey
 	result.PCRDigest = GetPCRDigest(doc.Payload.PCRs)
@@ -519,7 +519,7 @@ func (v *Verifier) verifyFreshness(doc *AttestationDocument, config *VerifierCon
 	}
 
 	// #nosec G115 -- value originates from a non-negative quantity (height, timestamp, duration or counter) that always fits the target width
-	docTime := time.UnixMilli(int64(doc.Payload.Timestamp)) //nolint:gosec // timestamp won't overflow int64 in practice
+	docTime := time.UnixMilli(int64(doc.Payload.Timestamp)) // #nosec G115 -- timestamp won't overflow int64 in practice
 	now := time.Now()
 
 	// Check if document is too old

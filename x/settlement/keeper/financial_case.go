@@ -759,7 +759,7 @@ func (k Keeper) HasActiveFinancialCase(ctx sdk.Context, kind, value string) (str
 		return "", false
 	}
 	iter := storetypes.KVStorePrefixIterator(ctx.KVStore(k.skey), types.FinancialCaseIndexPrefix(prefix, value))
-	defer iter.Close()
+	defer func() { _ = iter.Close() }()
 	for ; iter.Valid(); iter.Next() {
 		financialCase, found := k.GetFinancialCase(ctx, string(iter.Value()))
 		if !found {
@@ -778,7 +778,7 @@ func (k Keeper) FinancialCasesByIndex(ctx sdk.Context, kind, value string) ([]ty
 		return nil, types.ErrInvalidFinancialCase.Wrap("index kind and value required")
 	}
 	iter := storetypes.KVStorePrefixIterator(ctx.KVStore(k.skey), types.FinancialCaseIndexPrefix(prefix, value))
-	defer iter.Close()
+	defer func() { _ = iter.Close() }()
 	result := make([]types.FinancialCase, 0)
 	for ; iter.Valid(); iter.Next() {
 		financialCase, found := k.GetFinancialCase(ctx, string(iter.Value()))
@@ -792,7 +792,7 @@ func (k Keeper) FinancialCasesByIndex(ctx sdk.Context, kind, value string) ([]ty
 
 func (k Keeper) WithFinancialCases(ctx sdk.Context, fn func(types.FinancialCase) bool) error {
 	iter := storetypes.KVStorePrefixIterator(ctx.KVStore(k.skey), types.PrefixFinancialCase)
-	defer iter.Close()
+	defer func() { _ = iter.Close() }()
 	for ; iter.Valid(); iter.Next() {
 		var financialCase types.FinancialCase
 		if err := k.cdc.Unmarshal(iter.Value(), &financialCase); err != nil {

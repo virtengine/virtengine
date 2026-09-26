@@ -385,7 +385,7 @@ func (lc *LifecycleController) handleOperationFailure(op *marketplace.LifecycleO
 		}
 		lc.state.Metrics.PendingOperations++
 		log.Printf("[lifecycle-controller] operation %s will retry (attempt %d/%d, correlation_id=%s): %v",
-			sanitizeLogValue(op.ID), op.RetryCount, op.MaxRetries, sanitizeLogValue(op.IdempotencyKey), err)
+			sanitizeLogValue(op.ID), op.RetryCount, op.MaxRetries, sanitizeLogValue(op.IdempotencyKey), sanitizeLogValue(err.Error()))
 	} else {
 		// Handle rollback
 		switch op.RollbackPolicy {

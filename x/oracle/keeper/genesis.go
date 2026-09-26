@@ -61,7 +61,7 @@ func ExportGenesis(ctx sdk.Context, keeper IKeeper) *types.GenesisState {
 		// string(rune(...)) mapped every source >= 2^31 onto U+FFFD, so distinct
 		// sources collided in seenPairs and their price entries were dropped from
 		// the exported genesis. Format it as a decimal number instead.
-		key := priceData.ID.Denom + "/" + priceData.ID.BaseDenom + "/" + strconv.FormatUint(uint64(priceData.ID.Source), 10)
+		key := priceData.ID.Denom + "/" + priceData.ID.BaseDenom + "/" + strconv.FormatUint(uint64(priceData.ID.Source), 10) // #nosec G115 -- uint32 to uint64 is a lossless widening; the decimal formatting replaced the lossy string(rune()) conversion
 		if !seenPairs[key] {
 			seenPairs[key] = true
 			latestHeight = append(latestHeight, types.PriceDataID{

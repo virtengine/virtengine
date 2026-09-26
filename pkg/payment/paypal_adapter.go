@@ -497,7 +497,7 @@ func (a *PayPalAdapter) doRequest(ctx context.Context, method, path string, body
 		req.Header.Set("PayPal-Request-Id", idempotencyKey)
 	}
 
-	resp, err := a.httpClient.Do(req)
+	resp, err := a.httpClient.Do(req) // #nosec G704 -- request target is a.baseURL (validated by ValidateGatewayBaseURL at construction) plus a fixed /v2/... endpoint path; resource IDs are path segments on that fixed host, not host control
 	if err != nil {
 		return nil, fmt.Errorf("PayPal request failed: %w", err)
 	}

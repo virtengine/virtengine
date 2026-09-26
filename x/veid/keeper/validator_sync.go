@@ -324,7 +324,7 @@ func (k Keeper) GetOutOfSyncValidators(ctx sdk.Context) []*types.ValidatorModelS
 
 	store := ctx.KVStore(k.skey)
 	iter := storetypes.KVStorePrefixIterator(store, prefixValidatorSync)
-	defer iter.Close()
+	defer func() { _ = iter.Close() }()
 
 	for ; iter.Valid(); iter.Next() {
 		var ss validatorSyncStore
@@ -439,7 +439,7 @@ func (k Keeper) CheckSyncDeadline(ctx sdk.Context) []types.SyncDeadlineInfo {
 
 	store := ctx.KVStore(k.skey)
 	iter := storetypes.KVStorePrefixIterator(store, prefixValidatorSync)
-	defer iter.Close()
+	defer func() { _ = iter.Close() }()
 
 	now := ctx.BlockTime()
 
@@ -500,7 +500,7 @@ func (k Keeper) GetNetworkSyncProgress(ctx sdk.Context) *types.NetworkSyncProgre
 
 	store := ctx.KVStore(k.skey)
 	iter := storetypes.KVStorePrefixIterator(store, prefixValidatorSync)
-	defer iter.Close()
+	defer func() { _ = iter.Close() }()
 
 	now := ctx.BlockTime()
 
@@ -718,7 +718,7 @@ func (k Keeper) updateSyncRequestProgress(ctx sdk.Context, validatorAddr string,
 	// Find pending requests for this validator
 	prefix := syncRequestByValidatorPrefixKey(validatorAddr)
 	iter := storetypes.KVStorePrefixIterator(store, prefix)
-	defer iter.Close()
+	defer func() { _ = iter.Close() }()
 
 	for ; iter.Valid(); iter.Next() {
 		// Extract request ID from key
@@ -760,7 +760,7 @@ func (k Keeper) countValidatorSyncs(ctx sdk.Context) int {
 	count := 0
 	store := ctx.KVStore(k.skey)
 	iter := storetypes.KVStorePrefixIterator(store, prefixValidatorSync)
-	defer iter.Close()
+	defer func() { _ = iter.Close() }()
 
 	for ; iter.Valid(); iter.Next() {
 		count++
@@ -773,7 +773,7 @@ func (k Keeper) countValidatorSyncs(ctx sdk.Context) int {
 func (k Keeper) markValidatorsNeedSync(ctx sdk.Context, modelID string, deadline time.Time) {
 	store := ctx.KVStore(k.skey)
 	iter := storetypes.KVStorePrefixIterator(store, prefixValidatorSync)
-	defer iter.Close()
+	defer func() { _ = iter.Close() }()
 
 	now := ctx.BlockTime()
 
