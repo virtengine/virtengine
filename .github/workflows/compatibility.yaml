@@ -129,7 +129,9 @@ jobs:
             diff_base="${{ github.event.before || 'HEAD~1' }}"
           fi
 
-          mapfile -t changed_files < <(git diff --name-only "${diff_base}" HEAD -- '*/types/*.go' '*/keeper/*.go' 'api/**' || true)
+          # Exclude _test.go files: test helpers are not public API surface, and
+          # splitting/renaming a test function otherwise reads as a removal.
+          mapfile -t changed_files < <(git diff --name-only "${diff_base}" HEAD -- '*/types/*.go' '*/keeper/*.go' 'api/**' ':(exclude)*_test.go' || true)
           if [ "${#changed_files[@]}" -eq 0 ]; then
             echo "No API surface files changed"
             exit 0
