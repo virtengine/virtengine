@@ -57,6 +57,22 @@ function clickButton(container: HTMLElement, label: string): void {
   button.click();
 }
 
+// CheckoutFlow hashes the request with crypto.subtle.digest before it reaches
+// the adapter, so `await act()` (which only drains microtasks) can return while
+// the submission is still queued on the digest threadpool. A test that re-renders
+// straight after clicking therefore races the submission: the effect sees no
+// active submission to abort and the adapter is never called. Wait for the
+// adapter to actually be reached before asserting on its signal.
+async function waitForSubmission(adapter: CheckoutMutationAdapter): Promise<void> {
+  for (let attempt = 0; attempt < 200; attempt += 1) {
+    if (vi.mocked(adapter.submitOrder).mock.calls.length > 0) return;
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 5));
+    });
+  }
+  throw new Error('timed out waiting for the checkout submission to reach the adapter');
+}
+
 describe('CheckoutFlow', () => {
   let container: HTMLDivElement;
   let root: Root;
@@ -247,6 +263,7 @@ describe('CheckoutFlow', () => {
     await act(async () => clickButton(container, 'Continue'));
     await act(async () => clickButton(container, 'Place Order'));
     expect(container.textContent).toContain('Processing your order');
+    await waitForSubmission(adapter);
 
     await act(async () =>
       root.render(
@@ -289,6 +306,7 @@ describe('CheckoutFlow', () => {
     await act(async () => checkbox.click());
     await act(async () => clickButton(container, 'Continue'));
     await act(async () => clickButton(container, 'Place Order'));
+    await waitForSubmission(adapter);
 
     await act(async () =>
       root.render(
