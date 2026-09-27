@@ -52,10 +52,10 @@ type NetworkTestSuite struct {
 
 func NewNetworkTestSuite(cfg *network.Config, container interface{}) *NetworkTestSuite {
 	nts := &NetworkTestSuite{
-		Suite:        &suite.Suite{},
-		testIdx:      -1,
-		container:    container,
-		testTimeout:  DefaultTestTimeout,
+		Suite:       &suite.Suite{},
+		testIdx:     -1,
+		container:   container,
+		testTimeout: DefaultTestTimeout,
 	}
 	if cfg == nil {
 		nts.cfg = network.DefaultConfig(NewTestNetworkFixture)

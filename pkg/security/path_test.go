@@ -320,7 +320,7 @@ func TestSymlinkEscapeMatrix(t *testing.T) {
 	)
 
 	tests := []struct {
-		name    string
+		name string
 		// build creates the symlink named "link" in dir, relative to dir.
 		build func(t *testing.T, dir, outside string) string
 		want  bool // true => ValidatePath must reject
