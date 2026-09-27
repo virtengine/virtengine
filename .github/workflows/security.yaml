@@ -131,6 +131,7 @@ jobs:
   go-vuln-scan:
     name: Go Vulnerability Scan
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - name: Checkout repository
         uses: actions/checkout@v5
@@ -173,6 +174,20 @@ jobs:
             echo "::error::govulncheck could not complete - this is a scanner error, not a vulnerability finding"
             exit 1
           fi
+          # Filter findings against the vulnerability allowlist.
+          # If un-allowlisted findings remain, the filter exits 3 and we record that.
+          set +e
+          python .github/scripts/filter_allowlist.py govulncheck-report.json .vulnerability-allowlist.yaml
+          filter_status=$?
+          set -e
+          if [ $filter_status -eq 3 ]; then
+            echo "verdict_after_allowlist=vulns" >> "$GITHUB_OUTPUT"
+          elif [ $filter_status -eq 0 ]; then
+            echo "verdict_after_allowlist=clean" >> "$GITHUB_OUTPUT"
+          else
+            echo "::error::allowlist filter failed with exit code $filter_status"
+            exit 1
+          fi
 
       - name: Upload govulncheck report
         uses: actions/upload-artifact@v6
@@ -183,11 +198,13 @@ jobs:
           retention-days: 30
 
       - name: Fail on Go vulnerabilities
-        if: steps.govulncheck.outputs.verdict == 'vulns'
+        if: steps.govulncheck.outputs.verdict_after_allowlist == 'vulns'
         run: |
-          echo "::error::govulncheck reported reachable vulnerabilities"
+          echo "::error::govulncheck reported reachable vulnerabilities not covered by allowlist"
+          # Name the un-allowlisted advisories from the filter output (stderr).
+          # Re-run filter to get the advisory list for the error message.
+          python .github/scripts/filter_allowlist.py govulncheck-report.json .vulnerability-allowlist.yaml 2>&1 | grep 'Un-allowlisted advisories:' | sed 's/Un-allowlisted advisories: /  /'
           exit 1
-
   python-vuln-scan:
     name: Python Vulnerability Scan
     runs-on: ubuntu-latest
