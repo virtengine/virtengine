@@ -34,19 +34,25 @@ import (
 const mutationTestChainID = "chain"
 
 type mutationChainFake struct {
-	mu             sync.Mutex
-	accountNumber  uint64
-	sequence       uint64
-	height         int64
-	blockHash      string
-	estimatedGas   uint64
-	broadcastErrs  []error
-	broadcasts     [][]byte
-	confirmed      map[string]ProviderTxConfirmation
-	reconciled     ProviderMutationReconciliation
-	reconcileCalls int
-	confirmMissing bool
-	confirmMutator func(ProviderTxConfirmation) ProviderTxConfirmation
+	mu            sync.Mutex
+	accountNumber uint64
+	sequence      uint64
+	height        int64
+	blockHash     string
+	estimatedGas  uint64
+	broadcastErrs []error
+	// broadcastErrAlways fails every broadcast instead of the first. The
+	// positional broadcastErrs queue is consumed by whichever call arrives
+	// first, so a test that needs "this tx never broadcasts successfully"
+	// cannot use it: any earlier broadcast silently eats the error and the
+	// test passes for the wrong reason, or fails depending on timing.
+	broadcastErrAlways error
+	broadcasts         [][]byte
+	confirmed          map[string]ProviderTxConfirmation
+	reconciled         ProviderMutationReconciliation
+	reconcileCalls     int
+	confirmMissing     bool
+	confirmMutator     func(ProviderTxConfirmation) ProviderTxConfirmation
 }
 
 func newMutationChainFake() *mutationChainFake {
@@ -75,6 +81,9 @@ func (f *mutationChainFake) BroadcastTx(_ context.Context, tx []byte) (string, e
 	defer f.mu.Unlock()
 	f.broadcasts = append(f.broadcasts, append([]byte(nil), tx...))
 	hash := strings.ToUpper(hex.EncodeToString(tmtypes.Tx(tx).Hash()))
+	if f.broadcastErrAlways != nil {
+		return hash, f.broadcastErrAlways
+	}
 	if len(f.broadcastErrs) > 0 {
 		err := f.broadcastErrs[0]
 		f.broadcastErrs = f.broadcastErrs[1:]
@@ -550,7 +559,7 @@ func TestProviderMutationSubmitterLeaseLossDuringConfirmationFailsClosed(t *test
 
 func TestProviderMutationSubmitterDeadLettersTerminalFailure(t *testing.T) {
 	chain := newMutationChainFake()
-	chain.broadcastErrs = []error{errors.New("unauthorized signature")}
+	chain.broadcastErrAlways = errors.New("unauthorized signature")
 	submitter, _ := newMutationSubmitterForTest(t, chain, filepath.Join(t.TempDir(), "queue.json"))
 	result, err := submitter.Submit(context.Background(), MutationProviderDelete, &providerv1beta4.MsgDeleteProvider{Owner: submitter.cfg.ProviderAddress})
 	require.Error(t, err)
