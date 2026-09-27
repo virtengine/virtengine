@@ -59,12 +59,16 @@ def patch_gh(handler):
     `subprocess.run(check=True)` does. Returning it instead would make every
     failed call look like a success carrying empty stdout, and the whole harness
     would pass while testing nothing.
+
+    `**kwargs` is forwarded to the handler, not swallowed: the audit passes
+    `env=` on its anonymous read, and a handler that cannot see it cannot tell
+    an authenticated call from an anonymous one.
     """
     calls = []
 
     def fake_run(cmd, **kwargs):
         calls.append(" ".join(cmd) if isinstance(cmd, (list, tuple)) else str(cmd))
-        result = handler(cmd)
+        result = handler(cmd, **kwargs)
         if isinstance(result, BaseException):
             raise result
         return result
@@ -180,9 +184,60 @@ def main() -> int:
         )
     print(f"  {'FAIL' if not ok else 'ok  '} forbidden-is-not-a-404")
 
+    # --- a 403 on a PUBLIC manifest is retried ANONYMOUSLY ----------------
+    # This is the defect the fourth CI run exposed. The CI job passes the
+    # job's own `github.token`, which is not scoped to other repositories, so
+    # GitHub answers 403 "Resource not accessible by integration" for pins
+    # that are plainly public. The audit believed that verdict, called itself
+    # INCOMPLETE, and failed the build on a tree it had already proven clean
+    # on all 38 other pins. A public file needs no scope: the second call must
+    # carry NO token, and a hit there is a real read, not a fallback failure.
+    envs: list[object] = []
+    def handler6(cmd, **kw):
+        envs.append(kw.get("env"))
+        # The first (authenticated) call is refused; the anonymous retry works.
+        if kw.get("env") is None:
+            return fail(1, "HTTP 403: Resource not accessible by integration")
+        return FakeProc(0, out="aW5wdXRzOjpjb21wb3NpdGUK")
+
+    _, restore = patch_gh(handler6)
+    try:
+        mod._FETCH_CACHE.clear(); mod._READ_SEEN.clear(); mod._FETCH_ERRORS.clear()
+        content = mod._gh_contents("o/r", "action.yml", "v1")
+    finally:
+        restore()
+    if content != ("inputs::composite\n", ""):
+        failures.append(f"anon-fallback: expected an anonymous read to succeed, got {content!r}")
+    if len(envs) != 2 or envs[1] is None:
+        failures.append(f"anon-fallback: expected 2 calls (auth then anon), made {len(envs)}")
+    elif "GH_TOKEN" in (envs[1] or {}) or "GITHUB_TOKEN" in (envs[1] or {}):
+        failures.append("anon-fallback: the retry still carried a token")
+    anon_ok = content == ("inputs::composite\n", "")
+    print(f"  {'ok  ' if anon_ok else 'FAIL'} "
+          f"anon-fallback (auth 403 -> anon read, {len(envs)} calls)")
+
+    # --- a 403 that survives the anonymous read is still a real failure ---
+    def handler7(cmd, **kw):
+        return fail(1, "HTTP 403: Resource not accessible by integration")
+
+    _, restore = patch_gh(handler7)
+    try:
+        mod._FETCH_CACHE.clear(); mod._READ_SEEN.clear(); mod._FETCH_ERRORS.clear()
+        content = mod.fetch_action_yml("o/r", "v1")
+    finally:
+        restore()
+    ok = content == mod.TRANSIENT_FAILURE and mod._FETCH_ERRORS.get(("o/r", "v1", "manifest")) == "forbidden"
+    if not ok:
+        failures.append(
+            f"anon-fallback-hard-fail: expected TRANSIENT/forbidden when the "
+            f"anonymous read is refused too, got {content!r} "
+            f"class={mod._FETCH_ERRORS.get(('o/r', 'v1', 'manifest'))!r}"
+        )
+    print(f"  {'FAIL' if not ok else 'ok  '} anon-fallback-hard-fail")
+
     for f in failures:
         print("FAIL:", f)
-    total = 6
+    total = 8
     print(f"{total - len({f.split(':')[0] for f in failures})}/{total} checks passed")
     return 1 if failures else 0
 

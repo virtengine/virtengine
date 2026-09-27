@@ -29,6 +29,10 @@ import tempfile
 HERE = os.path.dirname(os.path.abspath(__file__))
 AUDIT_NAME = "audit_node_runtime.py"
 TEST_NAME = "test_audit_node_runtime.py"
+# The classifier's own unit checks. Mutation M5 lives here, so the harness has
+# to run this file too: a suite that only ran TEST_NAME would report M5 as
+# "mutation did not apply" forever and never notice it had grown a blind spot.
+ERRORCLASS_NAME = "test_audit_error_class.py"
 
 # Each mutation: (name, pattern, replacement, why it must be caught)
 MUTATIONS = [
@@ -60,6 +64,15 @@ MUTATIONS = [
         "per-pin 'API error' lines instead of one actionable refusal -- the "
         "exact symptom that shipped this job red on a clean tree",
     ),
+    (
+        "M5-anonymous-fallback-removed",
+        r'        err = _classify\(exc\)\n        if err != "forbidden":\n            return None, err',
+        '        return None, _classify(exc)',
+        "without the anonymous retry a 403 from a job token scoped to this one "
+        "repository is believed outright, so the audit calls itself INCOMPLETE "
+        "and reds the build on pins that are plainly public and readable -- the "
+        "exact failure that shipped this job red on a clean tree",
+    ),
 ]
 
 # The live file must be byte-identical after the run.
@@ -83,6 +96,7 @@ def build_tree() -> str:
     os.makedirs(scripts)
     shutil.copy(os.path.join(HERE, AUDIT_NAME), os.path.join(scripts, AUDIT_NAME))
     shutil.copy(os.path.join(HERE, TEST_NAME), os.path.join(scripts, TEST_NAME))
+    shutil.copy(os.path.join(HERE, ERRORCLASS_NAME), os.path.join(scripts, ERRORCLASS_NAME))
     shutil.copytree(
         os.path.join(HERE, "..", "workflows"), os.path.join(root, ".github", "workflows")
     )
@@ -90,13 +104,22 @@ def build_tree() -> str:
 
 
 def run_tests(root: str) -> tuple[int, str]:
-    proc = subprocess.run(
-        [sys.executable, os.path.join(root, ".github", "scripts", TEST_NAME)],
-        capture_output=True,
-        text=True,
-        timeout=900,
-    )
-    return proc.returncode, proc.stdout + proc.stderr
+    """Both suites must pass. Either one going red fails the run, so a mutant
+    is caught wherever its test happens to live and a broken baseline is
+    visible in the control rather than hidden behind the other file."""
+    combined = ""
+    code = 0
+    for name in (TEST_NAME, ERRORCLASS_NAME):
+        proc = subprocess.run(
+            [sys.executable, os.path.join(root, ".github", "scripts", name)],
+            capture_output=True,
+            text=True,
+            timeout=900,
+        )
+        combined += f"--- {name} (rc={proc.returncode})\n{proc.stdout}{proc.stderr}\n"
+        if proc.returncode != 0:
+            code = proc.returncode
+    return code, combined
 
 
 def main() -> int:
