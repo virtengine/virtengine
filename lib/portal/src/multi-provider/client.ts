@@ -129,7 +129,11 @@ export class MultiProviderClient {
     this.providerCacheTtlMs = options.providerCacheTtlMs ?? 300000;
     this.deploymentCacheTtlMs = options.deploymentCacheTtlMs ?? 60000;
     this.requestTimeoutMs = options.requestTimeoutMs;
-    this.fetcher = options.fetcher ?? fetch;
+    // Bind the global fetch to its realm. Storing it bare and calling it as
+    // `this.fetcher(...)` makes `this` the client instance, which throws
+    // "Illegal invocation" in browsers (Node tolerates it, so this only
+    // surfaced in the browser).
+    this.fetcher = options.fetcher ?? ((input, init) => fetch(input, init));
     this.deploymentActionCapability = options.deploymentActionCapability;
     this.deploymentActionReceiptValidator =
       options.deploymentActionReceiptValidator;

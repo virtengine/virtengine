@@ -9,6 +9,13 @@ export const mockProviders = {
       { key: 'reputation', value: '92' },
       { key: 'verified', value: 'true' },
       { key: 'region', value: 'us-west,eu-west' },
+      // Authoritative deployment-action receipts. Without these the provider
+      // client refuses every lifecycle action ("Provider does not declare
+      // authoritative deployment action receipts"), so terminate-allocation
+      // can never commit in the browser.
+      { key: 'host_uri', value: 'https://provider1.example' },
+      { key: 'deployment_action_receipt_version', value: 'v1' },
+      { key: 'deployment_action_requires_chain_signing', value: 'false' },
     ],
     info: { website: 'https://cloudcore.example' },
     created_at: '2025-10-10T00:00:00Z',
