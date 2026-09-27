@@ -280,7 +280,7 @@ func (p *MemoryProfiler) GetStats() *MemoryStats {
 	stats.GCCycles = last.NumGC - first.NumGC
 	if stats.GCCycles > 0 {
 		//nolint:gosec // G115: GCCycles is positive uint32
-		stats.AvgGCPause = time.Duration(stats.TotalGCPauses / uint64(stats.GCCycles))
+		stats.AvgGCPause = time.Duration(stats.TotalGCPauses / uint64(stats.GCCycles)) // #nosec G115 -- TotalGCPauses/GCCycles is a non-negative duration and fits in time.Duration
 	}
 	stats.Duration = last.Timestamp.Sub(first.Timestamp)
 
@@ -297,12 +297,12 @@ func (p *MemoryProfiler) ExportJSON(filename string) error {
 	}
 
 	dir := filepath.Dir(filename)
-	if err := os.MkdirAll(dir, 0755); err != nil {
+	if err := os.MkdirAll(dir, 0o750); err != nil {
 		return fmt.Errorf("failed to create directory: %w", err)
 	}
 
-	//nolint:gosec // G306: profile export file, 0644 permissions acceptable
-	if err := os.WriteFile(filename, data, 0644); err != nil {
+	// Profile exports are written with owner-only permissions (gosec G306).
+	if err := os.WriteFile(filename, data, 0o600); err != nil {
 		return fmt.Errorf("failed to write file: %w", err)
 	}
 
@@ -342,7 +342,7 @@ func (p *MemoryProfiler) DetectLeaks(threshold float64) *MemoryLeak {
 		EndHeap:   last.HeapAlloc,
 		Duration:  duration,
 		//nolint:gosec // G115: HeapObjects fits in int64
-		ObjectGrowth:    int64(last.HeapObjects) - int64(first.HeapObjects),
+		ObjectGrowth:    int64(last.HeapObjects) - int64(first.HeapObjects), // #nosec G115 -- HeapObjects is a non-negative runtime counter that fits in int64
 		GoroutineGrowth: last.Goroutines - first.Goroutines,
 	}
 
@@ -453,9 +453,9 @@ func (p *MemoryProfiler) CheckBudget(budget MemoryBudget) []BudgetViolation {
 		violations = append(violations, BudgetViolation{
 			Type: "goroutines",
 			//nolint:gosec // G115: Goroutine count is positive int
-			Current: uint64(latest.Goroutines),
+			Current: uint64(latest.Goroutines), // #nosec G115 -- Goroutine counts are small non-negative runtime values
 			//nolint:gosec // G115: MaxGoroutines is positive int
-			Limit:    uint64(budget.MaxGoroutines),
+			Limit:    uint64(budget.MaxGoroutines), // #nosec G115 -- the goroutine budget is a small non-negative count
 			Exceeded: true,
 		})
 	}

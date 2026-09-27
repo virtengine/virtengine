@@ -202,7 +202,7 @@ func (q GRPCQuerier) ApprovedClients(goCtx context.Context, req *types.QueryAppr
 		totalCount++
 		// Apply offset and limit
 		//nolint:gosec // slice length is non-negative
-		if totalCount > req.Offset && uint32(len(allClients)) < limit {
+		if totalCount > req.Offset && uint32(len(allClients)) < limit { // #nosec G115 -- len(allClients) is bounded by its allocating container, a protocol-capped collection far below 2^32, so the conversion cannot truncate
 			allClients = append(allClients, client)
 		}
 		return false

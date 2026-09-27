@@ -229,7 +229,11 @@ export function useOrderWizard({
       if (!currentRequest || (await digestOrderCreateRequest(currentRequest)) !== requestDigest) {
         throw new OrderSubmissionError('order_state_changed');
       }
-      const result = validateCommittedOrderResult(resultProjector(rawResult), request, requestDigest);
+      const result = validateCommittedOrderResult(
+        resultProjector(rawResult),
+        request,
+        requestDigest
+      );
       setState((prev) => ({
         ...prev,
         orderResult: result,

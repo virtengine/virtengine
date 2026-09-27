@@ -149,7 +149,7 @@ func (up *upgrade) initNewModuleGeneses(ctx sdk.Context) {
 		resources.InitGenesis(ctx, up.Keepers.VirtEngine.Resources, resourcestypes.DefaultGenesisState())
 	})
 	up.initIfEmpty(ctx, configtypes.StoreKey, func() {
-		config.InitGenesis(ctx, up.Keepers.VirtEngine.Config, configtypes.DefaultGenesisState())
+		_ = config.InitGenesis(ctx, up.Keepers.VirtEngine.Config, configtypes.DefaultGenesisState())
 	})
 	up.initIfEmpty(ctx, reviewtypes.StoreKey, func() {
 		review.InitGenesis(ctx, up.Keepers.VirtEngine.Review, reviewtypes.DefaultGenesisState())

@@ -80,8 +80,8 @@ sudo apt install -y \
     libhidapi-dev
 
 # Install Go (if not using a package manager)
-wget https://go.dev/dl/go1.22.0.linux-amd64.tar.gz
-sudo tar -C /usr/local -xzf go1.22.0.linux-amd64.tar.gz
+wget https://go.dev/dl/go1.26.8.linux-amd64.tar.gz
+sudo tar -C /usr/local -xzf go1.26.8.linux-amd64.tar.gz
 export PATH=$PATH:/usr/local/go/bin
 
 # Install Docker
@@ -326,7 +326,7 @@ Run these commands to verify your setup:
 ```bash
 # 1. Check Go version
 go version
-# Expected: go version go1.21+ ...
+# Expected: go version go1.26.8 ...
 
 # 2. Check Make version
 make --version

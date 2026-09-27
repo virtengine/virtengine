@@ -2,6 +2,12 @@
 
 Date: 2026-02-06
 
+## Policy update
+
+Initial supply is **0 tokens**. New tokens are issued only when unique human identities are verified, under the identity-allocation rules. There is **no fixed maximum supply and no hard cap**: issuance follows verified human participation and can continue as new identities are verified and the human population grows. Human population is the basis for issuance, not a fixed numerical token ceiling.
+
+This dated report describes legacy inflation-based simulations. Its results and recommendations do not validate the current supply policy; the model must be aligned and rerun before drawing conclusions about that policy.
+
 ## Executive Summary
 
 This report summarizes the results of the VirtEngine tokenomics simulation and validation framework
@@ -85,10 +91,7 @@ for stable security under moderate demand.
 
 ## Investor-Facing Summary
 
-VirtEngine tokenomics demonstrate strong long-term sustainability under baseline and bull
-conditions. The system remains resilient under stress, with identified mitigation strategies
-for extreme events. Overall, the network maintains healthy security margins while preserving
-reasonable inflation, indicating readiness for mainnet launch.
+The historical scenarios in this report do not establish sustainability or mainnet readiness for the current zero-initial-supply, uncapped identity-linked policy. Updated simulations and validation are required before making those claims.
 
 ## Appendix: Commands
 

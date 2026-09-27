@@ -330,11 +330,10 @@ func (k Keeper) getVEIDGatingRequirementsForOrder(_ sdk.Context) VEIDGatingRequi
 }
 
 // isZeroRequirements checks if the requirements are effectively empty (no gating).
+// RequireUnlockedIdentity is part of the check: a requirement that only asks for
+// an unlocked identity still gates the buyer and must not be skipped as "zero".
 func isZeroRequirements(req VEIDGatingRequirements) bool {
-	return req.MinCustomerScore == 0 &&
-		req.MinCustomerTier == 0 &&
-		len(req.RequiredScopes) == 0 &&
-		!req.RequireVerifiedStatus
+	return req.IsZero()
 }
 
 // CreateBid creates a bid for a order with given orderID, price for bid and provider

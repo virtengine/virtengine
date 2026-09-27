@@ -34,19 +34,25 @@ import (
 const mutationTestChainID = "chain"
 
 type mutationChainFake struct {
-	mu             sync.Mutex
-	accountNumber  uint64
-	sequence       uint64
-	height         int64
-	blockHash      string
-	estimatedGas   uint64
-	broadcastErrs  []error
-	broadcasts     [][]byte
-	confirmed      map[string]ProviderTxConfirmation
-	reconciled     ProviderMutationReconciliation
-	reconcileCalls int
-	confirmMissing bool
-	confirmMutator func(ProviderTxConfirmation) ProviderTxConfirmation
+	mu            sync.Mutex
+	accountNumber uint64
+	sequence      uint64
+	height        int64
+	blockHash     string
+	estimatedGas  uint64
+	broadcastErrs []error
+	// broadcastErrAlways fails every broadcast instead of the first. The
+	// positional broadcastErrs queue is consumed by whichever call arrives
+	// first, so a test that needs "this tx never broadcasts successfully"
+	// cannot use it: any earlier broadcast silently eats the error and the
+	// test passes for the wrong reason, or fails depending on timing.
+	broadcastErrAlways error
+	broadcasts         [][]byte
+	confirmed          map[string]ProviderTxConfirmation
+	reconciled         ProviderMutationReconciliation
+	reconcileCalls     int
+	confirmMissing     bool
+	confirmMutator     func(ProviderTxConfirmation) ProviderTxConfirmation
 }
 
 func newMutationChainFake() *mutationChainFake {
@@ -75,6 +81,9 @@ func (f *mutationChainFake) BroadcastTx(_ context.Context, tx []byte) (string, e
 	defer f.mu.Unlock()
 	f.broadcasts = append(f.broadcasts, append([]byte(nil), tx...))
 	hash := strings.ToUpper(hex.EncodeToString(tmtypes.Tx(tx).Hash()))
+	if f.broadcastErrAlways != nil {
+		return hash, f.broadcastErrAlways
+	}
 	if len(f.broadcastErrs) > 0 {
 		err := f.broadcastErrs[0]
 		f.broadcastErrs = f.broadcastErrs[1:]
@@ -174,6 +183,13 @@ func validRegistryMessages(address string) map[ProviderMutationKind]sdk.Msg {
 		MutationProviderRotateKey:         &providerv1beta4.MsgRotateProviderSigningKey{Owner: address, NewPublicKey: bytesOf(4, 32), NewKeyType: providerv1beta4.PublicKeyTypeEd25519, RotationProof: bytesOf(5, 64), SignatureVersion: providerv1beta4.ProviderKeyRotationSignatureVersionV1},
 		MutationProviderRevokeKey:         &providerv1beta4.MsgRevokeProviderSigningKey{Owner: address, KeyId: "key-1"},
 		MutationMarketplaceCallback:       &marketplacev1.MsgWaldurCallback{Sender: address, CallbackType: "update", ResourceId: "resource-1", Status: "done"},
+		MutationMarketplaceCreateOrder:    &marketplacev1.MsgCreateOrder{Customer: address, AcquisitionMode: "direct", RequestedQuantity: 1, MaxBidPrice: 100},
+		MutationMarketplacePlaceBid:       &marketplacev1.MsgPlaceBid{Provider: address, OrderId: "order-1", Price: 90},
+		MutationMarketplaceWithdrawBid:    &marketplacev1.MsgWithdrawBid{Provider: address, BidId: "bid-1"},
+		MutationMarketplaceRegisterSource: &marketplacev1.MsgRegisterWaldurSource{Authority: address, InstanceId: "waldur-1", PublicKey: "ab"},
+		MutationMarketplaceIngestOffering: &marketplacev1.MsgIngestWaldurOffering{Relayer: address, Snapshot: &marketplacev1.WaldurOfferingSnapshot{Uuid: "uuid-1", InstanceId: "waldur-1", Name: "offering", State: "Active", SnapshotHeight: 1}, Signature: "sig"},
+		MutationMarketplaceSetVisibility:  &marketplacev1.MsgSetOfferingVisibility{Provider: address, OfferingId: "offering-1", Visibility: "public"},
+		MutationMarketplaceAckCommand:     &marketplacev1.MsgAckWaldurCommand{Sender: address, CommandId: "cmd-1"},
 		MutationSupportUpdateRequest:      &supportv1.MsgUpdateSupportRequest{Sender: address, TicketId: "ticket-1", Status: "open"},
 		MutationSupportAddResponse:        &supportv1.MsgAddSupportResponse{Sender: address, TicketId: "ticket-1", Payload: supportv1.EncryptedSupportPayload{EnvelopeRef: "vault://response", EnvelopeHash: bytesOf(6, 32), PayloadSize: 1}},
 		MutationSupportRegisterExternal:   &supportv1.MsgRegisterExternalTicket{Sender: address, ResourceId: "ticket-1", ResourceType: "support_request", ExternalSystem: "waldur", ExternalTicketId: "ext-1"},
@@ -543,7 +559,7 @@ func TestProviderMutationSubmitterLeaseLossDuringConfirmationFailsClosed(t *test
 
 func TestProviderMutationSubmitterDeadLettersTerminalFailure(t *testing.T) {
 	chain := newMutationChainFake()
-	chain.broadcastErrs = []error{errors.New("unauthorized signature")}
+	chain.broadcastErrAlways = errors.New("unauthorized signature")
 	submitter, _ := newMutationSubmitterForTest(t, chain, filepath.Join(t.TempDir(), "queue.json"))
 	result, err := submitter.Submit(context.Background(), MutationProviderDelete, &providerv1beta4.MsgDeleteProvider{Owner: submitter.cfg.ProviderAddress})
 	require.Error(t, err)

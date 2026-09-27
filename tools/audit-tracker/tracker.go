@@ -75,7 +75,7 @@ type Tracker struct {
 func NewTracker(path string) (*Tracker, error) {
 	t := &Tracker{path: path}
 
-	data, err := os.ReadFile(path)
+	data, err := os.ReadFile(path) // #nosec G304 -- the path is supplied by the operator on the command line; the tool runs with the operator's own privileges
 	if err != nil {
 		if os.IsNotExist(err) {
 			return t, nil
@@ -213,5 +213,5 @@ func ensureDir(path string) error {
 	if dir == "." || dir == "" {
 		return nil
 	}
-	return os.MkdirAll(dir, 0755)
+	return os.MkdirAll(dir, 0o750)
 }

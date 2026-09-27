@@ -941,7 +941,7 @@ func claimTypeUint32(ct ClaimType) (uint32, error) {
 		return 0, fmt.Errorf("invalid claim type: %d", ct)
 	}
 	//nolint:gosec // safe: bounds checked above
-	return uint32(ct), nil
+	return uint32(ct), nil // #nosec G115 -- uint32(ct) is a bounded count/flag that fits uint32
 }
 
 func writeBytes(buf *bytes.Buffer, b []byte) error {

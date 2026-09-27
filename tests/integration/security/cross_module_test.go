@@ -60,7 +60,9 @@ func (suite *CrossModuleSecurityTestSuite) TestVEIDGatingForMarketplace() {
 		ctx = helpers.CommitAndAdvanceBlock(app, ctx)
 
 		// Attempt to create order - should fail
-		helpers.AttemptCreateOrder(t, app, ctx, unverifiedCustomer, offering, true)
+		// (gating driven directly: legacy CreateOrder writes are retired
+		// behind the Task 84C canonical fence)
+		helpers.RequireIdentityGatingBlocked(t, app, ctx, offering, unverifiedCustomer)
 
 		t.Log("✓ Order correctly blocked for unverified user")
 	})
@@ -81,7 +83,7 @@ func (suite *CrossModuleSecurityTestSuite) TestVEIDGatingForMarketplace() {
 		ctx = helpers.CommitAndAdvanceBlock(app, ctx)
 
 		// Attempt to create order - should fail due to low score
-		helpers.AttemptCreateOrder(t, app, ctx, lowScoreCustomer, offering, true)
+		helpers.RequireIdentityGatingBlocked(t, app, ctx, offering, lowScoreCustomer)
 
 		t.Log("✓ Order correctly blocked for user with insufficient score")
 	})
@@ -102,8 +104,10 @@ func (suite *CrossModuleSecurityTestSuite) TestVEIDGatingForMarketplace() {
 		ctx = helpers.CommitAndAdvanceBlock(app, ctx)
 
 		// Create order - should succeed
-		order := helpers.AttemptCreateOrder(t, app, ctx, qualifiedCustomer, offering, false)
-		require.NotEmpty(t, order.ID, "order should be created successfully")
+		// (gating driven directly: legacy CreateOrder writes are retired
+		// behind the Task 84C canonical fence, so a stored order can no
+		// longer be produced through that path)
+		helpers.RequireIdentityGatingPassed(t, app, ctx, offering, qualifiedCustomer)
 
 		t.Log("✓ Order allowed for qualified user")
 	})
@@ -124,8 +128,7 @@ func (suite *CrossModuleSecurityTestSuite) TestVEIDGatingForMarketplace() {
 		ctx = helpers.CommitAndAdvanceBlock(app, ctx)
 
 		// First order succeeds
-		order1 := helpers.AttemptCreateOrder(t, app, ctx, decayingCustomer, offering, false)
-		require.NotEmpty(t, order1.ID)
+		helpers.RequireIdentityGatingPassed(t, app, ctx, offering, decayingCustomer)
 
 		// Simulate score decay
 		require.NoError(t, app.Keepers.VirtEngine.VEID.SetScore(
@@ -134,7 +137,7 @@ func (suite *CrossModuleSecurityTestSuite) TestVEIDGatingForMarketplace() {
 		ctx = helpers.CommitAndAdvanceBlock(app, ctx)
 
 		// Second order should fail due to decayed score
-		helpers.AttemptCreateOrder(t, app, ctx, decayingCustomer, offering, true)
+		helpers.RequireIdentityGatingBlocked(t, app, ctx, offering, decayingCustomer)
 
 		t.Log("✓ Order correctly blocked after score decay")
 	})
@@ -436,6 +439,14 @@ func (suite *CrossModuleSecurityTestSuite) TestProviderVerificationRequirements(
 		providerDomainScope := "security-provider-domain"
 		helpers.UploadScope(t, msgServer, ctx, verifiedProvider, client,
 			helpers.DefaultDomainVerifyUploadParams(providerDomainScope))
+		// Verification follows pending -> in_progress -> verified: request
+		// verification first (same sanctioned path as the VEID keeper flow
+		// tests), then finalize via the keeper.
+		_, err := msgServer.RequestVerification(ctx, &veidtypes.MsgRequestVerification{
+			Sender:  verifiedProvider.String(),
+			ScopeId: providerDomainScope,
+		})
+		require.NoError(t, err)
 		require.NoError(t, app.Keepers.VirtEngine.VEID.UpdateVerificationStatus(
 			ctx, verifiedProvider, providerDomainScope,
 			veidtypes.VerificationStatusVerified,
@@ -515,6 +526,26 @@ func (suite *CrossModuleSecurityTestSuite) TestCrossModuleAuthorizationChain() {
 		require.True(t, found)
 		require.GreaterOrEqual(t, scoreVal, uint32(80), "VEID check ✓")
 
+		// The offering below requires a verified domain for the customer, so
+		// verify one for the user through the sanctioned
+		// pending -> in_progress -> verified path.
+		// Advance past the per-account upload cooldown (2 blocks) first:
+		// the selfie upload above counts as this account's last operation.
+		ctx = helpers.CommitAndAdvanceBlock(app, ctx)
+		ctx = helpers.CommitAndAdvanceBlock(app, ctx)
+		userDomain := "security-user-chain"
+		helpers.UploadScope(t, msgServer, ctx, user, client,
+			helpers.DefaultDomainVerifyUploadParams(userDomain))
+		_, err := msgServer.RequestVerification(ctx, &veidtypes.MsgRequestVerification{
+			Sender:  user.String(),
+			ScopeId: userDomain,
+		})
+		require.NoError(t, err)
+		require.NoError(t, app.Keepers.VirtEngine.VEID.UpdateVerificationStatus(
+			ctx, user, userDomain,
+			veidtypes.VerificationStatusVerified,
+			"user domain verified for chain test", validator.String()))
+
 		// Step 2: MFA enrollment and session
 		enrollment := &mfatypes.FactorEnrollment{
 			AccountAddress: user.String(),
@@ -526,7 +557,7 @@ func (suite *CrossModuleSecurityTestSuite) TestCrossModuleAuthorizationChain() {
 		}
 		require.NoError(t, app.Keepers.VirtEngine.MFA.EnrollFactor(ctx, enrollment))
 
-		_, err := app.Keepers.VirtEngine.MFA.CreateAuthSessionForAction(
+		_, err = app.Keepers.VirtEngine.MFA.CreateAuthSessionForAction(
 			ctx, user, mfatypes.SensitiveTxHighValueOrder,
 			[]mfatypes.FactorType{mfatypes.FactorTypeTOTP}, "",
 		)
@@ -548,6 +579,12 @@ func (suite *CrossModuleSecurityTestSuite) TestCrossModuleAuthorizationChain() {
 		providerDomain := "security-provider-chain"
 		helpers.UploadScope(t, msgServer, ctx, provider, client,
 			helpers.DefaultDomainVerifyUploadParams(providerDomain))
+		// Verification follows pending -> in_progress -> verified (see above).
+		_, err = msgServer.RequestVerification(ctx, &veidtypes.MsgRequestVerification{
+			Sender:  provider.String(),
+			ScopeId: providerDomain,
+		})
+		require.NoError(t, err)
 		require.NoError(t, app.Keepers.VirtEngine.VEID.UpdateVerificationStatus(
 			ctx, provider, providerDomain,
 			veidtypes.VerificationStatusVerified,
@@ -573,8 +610,9 @@ func (suite *CrossModuleSecurityTestSuite) TestCrossModuleAuthorizationChain() {
 		ctx = helpers.CommitAndAdvanceBlock(app, ctx)
 
 		// Order should succeed - all checks passed
-		order := helpers.AttemptCreateOrder(t, app, ctx, user, offering, false)
-		require.NotEmpty(t, order.ID)
+		// (gating driven directly: legacy CreateOrder writes are retired
+		// behind the Task 84C canonical fence)
+		helpers.RequireIdentityGatingPassed(t, app, ctx, offering, user)
 
 		t.Log("✓✓✓ Complete authorization chain verified successfully ✓✓✓")
 		t.Log("  - VEID score: 85 (required: 80) ✓")

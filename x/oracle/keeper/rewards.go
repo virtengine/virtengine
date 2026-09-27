@@ -36,8 +36,8 @@ func OracleRewardKey(oracleAddr sdk.AccAddress) []byte {
 func EpochRewardKey(epoch uint64) []byte {
 	key := make([]byte, 0, len(EpochRewardPrefix)+8)
 	key = append(key, EpochRewardPrefix...)
-	key = append(key, byte(epoch>>56), byte(epoch>>48), byte(epoch>>40), byte(epoch>>32))
-	key = append(key, byte(epoch>>24), byte(epoch>>16), byte(epoch>>8), byte(epoch))
+	key = append(key, byte(epoch>>56), byte(epoch>>48), byte(epoch>>40), byte(epoch>>32)) // #nosec G115 -- fixed-width big-endian encoding: byte(epoch>>56) writes a single byte of the shifted value by design and the written byte is never used arithmetically
+	key = append(key, byte(epoch>>24), byte(epoch>>16), byte(epoch>>8), byte(epoch))      // #nosec G115 -- fixed-width big-endian encoding: byte(epoch>>24) writes a single byte of the shifted value by design and the written byte is never used arithmetically
 	return key
 }
 
@@ -143,7 +143,7 @@ func (k *Keeper) DistributeRewards(ctx sdk.Context, epoch uint64) error {
 		Epoch:         epoch,
 		TotalRewards:  totalDistributed,
 		DistributedAt: ctx.BlockHeight(),
-		NumOracles:    uint32(min(numOracles, int(^uint32(0)))), //nolint:gosec // numOracles is bounded by len(sources)
+		NumOracles:    uint32(min(numOracles, int(^uint32(0)))), /* #nosec G115 -- numOracles is bounded by len(sources) */ //nolint:gosec
 	}
 	k.setEpochRewardInfo(ctx, epoch, epochInfo)
 

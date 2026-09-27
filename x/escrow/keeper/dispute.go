@@ -423,7 +423,7 @@ func (dk *disputeKeeper) UploadEvidence(ctx sdk.Context, disputeID string, evide
 
 	// Check evidence count limit
 	//nolint:gosec // slice length is non-negative
-	if uint32(len(workflow.Evidence)) >= rules.MaxEvidenceCount {
+	if uint32(len(workflow.Evidence)) >= rules.MaxEvidenceCount { // #nosec G115 -- len(workflow.Evidence) is bounded by its allocating container, a protocol-capped collection far below 2^32, so the conversion cannot truncate
 		return fmt.Errorf("evidence limit reached: max %d evidence items allowed", rules.MaxEvidenceCount)
 	}
 

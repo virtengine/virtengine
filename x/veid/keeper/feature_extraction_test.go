@@ -511,8 +511,8 @@ func TestFeatureExtraction_ToScoreInputs(t *testing.T) {
 	}
 
 	scopes := []DecryptedScope{
-		{ScopeID: "scope-1", ScopeType: types.ScopeTypeSelfie},
-		{ScopeID: "scope-2", ScopeType: types.ScopeTypeIDDocument},
+		{ScopeID: testScopeID1, ScopeType: types.ScopeTypeSelfie},
+		{ScopeID: testScopeID2, ScopeType: types.ScopeTypeIDDocument},
 	}
 
 	inputs := pipeline.ToScoreInputs(features, scopes, "cosmos1test", 12345, time.Now())

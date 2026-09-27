@@ -115,7 +115,24 @@ describe('useOrderWizard authoritative submission', () => {
         (_request: OrderCreateRequest, _context: OrderSubmissionContext) =>
           new Promise<unknown>(() => undefined)
       );
-      const { result, onComplete } = renderSubmission({ submitOrder });
+      // `digestOrderCreateRequest` awaits `crypto.subtle.digest`, whose
+      // resolution lands on an event-loop turn — the number of microtask
+      // `Promise.resolve()` ticks needed is not stable across the cold/warm
+      // digest path or machine load. Synchronise on the observable event (the
+      // adapter actually being invoked) instead of a guessed tick count, which
+      // is what made this test intermittently fail on CI with
+      // "Cannot read properties of undefined (reading '1')".
+      let markAdapterCalled!: () => void;
+      const adapterCalled = new Promise<void>((resolve) => {
+        markAdapterCalled = resolve;
+      });
+      const instrumentedSubmitOrder = vi.fn(
+        (request: OrderCreateRequest, context: OrderSubmissionContext) => {
+          markAdapterCalled();
+          return submitOrder(request, context);
+        }
+      );
+      const { result, onComplete } = renderSubmission({ submitOrder: instrumentedSubmitOrder });
       await advanceToEscrow(result);
 
       let submission!: Promise<void>;
@@ -123,10 +140,9 @@ describe('useOrderWizard authoritative submission', () => {
         submission = result.current.submitOrder();
       });
       await act(async () => {
-        await Promise.resolve();
-        await Promise.resolve();
+        await adapterCalled;
       });
-      const context = submitOrder.mock.calls[0][1];
+      const context = instrumentedSubmitOrder.mock.calls[0][1];
       await act(async () => {
         await vi.advanceTimersByTimeAsync(30_000);
         await submission;

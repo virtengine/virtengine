@@ -98,7 +98,7 @@ func RecipientKeyVersionKey(address []byte, version uint32) []byte {
 	key := make([]byte, 0, len(PrefixRecipientKeyVersion)+len(address)+4)
 	key = append(key, PrefixRecipientKeyVersion...)
 	key = append(key, address...)
-	key = append(key, byte(version>>24), byte(version>>16), byte(version>>8), byte(version))
+	key = append(key, byte(version>>24), byte(version>>16), byte(version>>8), byte(version)) // #nosec G115 -- fixed-width big-endian encoding: byte(version>>24) writes a single byte of the shifted value by design and the written byte is never used arithmetically
 	return key
 }
 
@@ -141,13 +141,13 @@ func ExpiryWarningKey(fingerprint []byte, warningWindowSeconds uint64) []byte {
 	key = append(key, fingerprint...)
 	key = append(key,
 		byte(warningWindowSeconds>>56),
-		byte(warningWindowSeconds>>48),
-		byte(warningWindowSeconds>>40),
-		byte(warningWindowSeconds>>32),
-		byte(warningWindowSeconds>>24),
-		byte(warningWindowSeconds>>16),
-		byte(warningWindowSeconds>>8),
-		byte(warningWindowSeconds),
+		byte(warningWindowSeconds>>48), // #nosec G115 -- fixed-width big-endian encoding: byte(warningWindowSeconds>>48) writes a single byte of the shifted value by design and the written byte is never used arithmetically
+		byte(warningWindowSeconds>>40), // #nosec G115 -- fixed-width big-endian encoding: byte(warningWindowSeconds>>40) writes a single byte of the shifted value by design and the written byte is never used arithmetically
+		byte(warningWindowSeconds>>32), // #nosec G115 -- fixed-width big-endian encoding: byte(warningWindowSeconds>>32) writes a single byte of the shifted value by design and the written byte is never used arithmetically
+		byte(warningWindowSeconds>>24), // #nosec G115 -- fixed-width big-endian encoding: byte(warningWindowSeconds>>24) writes a single byte of the shifted value by design and the written byte is never used arithmetically
+		byte(warningWindowSeconds>>16), // #nosec G115 -- fixed-width big-endian encoding: byte(warningWindowSeconds>>16) writes a single byte of the shifted value by design and the written byte is never used arithmetically
+		byte(warningWindowSeconds>>8),  // #nosec G115 -- fixed-width big-endian encoding: byte(warningWindowSeconds>>8) writes a single byte of the shifted value by design and the written byte is never used arithmetically
+		byte(warningWindowSeconds),     // #nosec G115 -- fixed-width big-endian encoding: byte(warningWindowSeconds) writes the low byte into the buffer by design; the truncated value is not used arithmetically
 	)
 	return key
 }

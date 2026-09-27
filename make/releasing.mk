@@ -115,12 +115,39 @@ docker-image:
 		--snapshot
 
 .PHONY: gen-changelog
-gen-changelog: $(GIT_CHGLOG)
-	@echo "generating changelog to .cache/changelog"
+gen-changelog: release-tag-check $(GIT_CHGLOG)
+	@echo "generating changelog for $(RELEASE_TAG) to .cache/changelog.md"
 	./script/genchangelog.sh "$(RELEASE_TAG)" .cache/changelog.md
 
+# Preview release notes for a tag that has not been created yet. Nothing is tagged and
+# nothing is published: git-chglog is told about the tag with --next-tag, which is the
+# only way to review notes before the tag exists (release plan defect D5).
+.PHONY: gen-changelog-preview
+gen-changelog-preview: release-tag-check $(GIT_CHGLOG)
+	@echo "previewing changelog for $(RELEASE_TAG) (tag need not exist)"
+	./script/genchangelog.sh --next-tag "$(RELEASE_TAG)" .cache/changelog.md
+
+# ---------------------------------------------------------------------------
+# RELEASE_TAG guard (release plan defect D4).
+#
+# The repository carries ~31 checkpoint/* automation tags against a single release tag
+# (v0.1.0). A non-semver RELEASE_TAG used to flow silently into the release path and
+# produce a 0-byte notes file with exit 1 from git-chglog. Fail loudly and early instead.
+# ---------------------------------------------------------------------------
+RELEASE_TAG_SEMVER_RE := ^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-[0-9A-Za-z.-]+)?(\+[0-9A-Za-z.-]+)?$$
+
+.PHONY: release-tag-check
+release-tag-check:
+	@printf '%s' "$(RELEASE_TAG)" | grep -Eq '$(RELEASE_TAG_SEMVER_RE)' || { \
+		echo "ERROR: RELEASE_TAG '$(RELEASE_TAG)' is not a semver release tag."; \
+		echo "       Expected v<major>.<minor>.<patch>[-prerelease][+build]."; \
+		echo "       checkpoint/* tags are automation checkpoints, not releases."; \
+		echo "       Pass the intended tag explicitly, e.g. make gen-changelog RELEASE_TAG=v0.3.0"; \
+		exit 1; \
+	}
+
 .PHONY: release
-release: gen-changelog
+release: release-tag-check gen-changelog
 	docker run \
 		--rm \
 		-e STABLE=$(IS_STABLE) \

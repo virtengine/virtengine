@@ -17,7 +17,7 @@ func TestOrderState_String(t *testing.T) {
 		state    OrderState
 		expected string
 	}{
-		{OrderStateUnspecified, "unspecified"},
+		{OrderStateUnspecified, unspecifiedName},
 		{OrderStatePendingPayment, "pending_payment"},
 		{OrderStateOpen, "open"},
 		{OrderStateMatched, "matched"},

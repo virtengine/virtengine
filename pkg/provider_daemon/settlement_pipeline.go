@@ -1017,24 +1017,24 @@ func (p *SettlementPipeline) calculateUsageUnits(record *UsageRecord) uint64 {
 	// Convert each resource type to normalized units
 	// CPU: 1 unit = 1 CPU-hour
 	//nolint:gosec // usage metrics should be non-negative
-	units += uint64(record.Metrics.CPUMilliSeconds / (1000 * 3600))
+	units += uint64(record.Metrics.CPUMilliSeconds / (1000 * 3600)) // #nosec G115 -- units += uint64(record.Metrics.CPUMilliSeconds / (1000 * 3600)) is a non-negative counter/height bounded well below 2^63
 
 	// Memory: 1 unit = 1 GB-hour
 	//nolint:gosec // usage metrics should be non-negative
-	units += uint64(record.Metrics.MemoryByteSeconds / (1024 * 1024 * 1024 * 3600))
+	units += uint64(record.Metrics.MemoryByteSeconds / (1024 * 1024 * 1024 * 3600)) // #nosec G115 -- units += uint64(record.Metrics.MemoryByteSeconds / (1024 * 1024 * 1024 * 3600)) is a non-negative counter/height bounded well below 2^63
 
 	// Storage: 1 unit = 1 GB-hour
 	//nolint:gosec // usage metrics should be non-negative
-	units += uint64(record.Metrics.StorageByteSeconds / (1024 * 1024 * 1024 * 3600))
+	units += uint64(record.Metrics.StorageByteSeconds / (1024 * 1024 * 1024 * 3600)) // #nosec G115 -- units += uint64(record.Metrics.StorageByteSeconds / (1024 * 1024 * 1024 * 3600)) is a non-negative counter/height bounded well below 2^63
 
 	// GPU: 1 unit = 1 GPU-hour
 	//nolint:gosec // usage metrics should be non-negative
-	units += uint64(record.Metrics.GPUSeconds / 3600)
+	units += uint64(record.Metrics.GPUSeconds / 3600) // #nosec G115 -- uint64(record.Metrics.GPUSeconds / 3600) is a non-negative counter/height bounded well below 2^63
 
 	// Network: 1 unit = 1 GB
 	networkBytes := record.Metrics.NetworkBytesIn + record.Metrics.NetworkBytesOut
 	//nolint:gosec // usage metrics should be non-negative
-	units += uint64(networkBytes / (1024 * 1024 * 1024))
+	units += uint64(networkBytes / (1024 * 1024 * 1024)) // #nosec G115 -- units += uint64(networkBytes / (1024 * 1024 * 1024)) is a non-negative counter/height bounded well below 2^63
 
 	if units == 0 {
 		units = 1 // Minimum 1 unit

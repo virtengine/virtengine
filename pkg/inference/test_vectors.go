@@ -499,6 +499,11 @@ var ConformanceTestVectors = []TestVectorEntry{
 // generateDeterministicEmbedding creates a deterministic embedding vector
 // for testing purposes. Uses a simple linear congruential generator.
 //
+// The generated values are consumed by the golden vectors, whose input hashes
+// are compared across CPU architectures by the VEID conformance workflow. The
+// arithmetic below is therefore written to be architecture-independent: see the
+// comment on the normalization step.
+//
 //nolint:unparam // dim is configurable for different model architectures
 func generateDeterministicEmbedding(dim int, seed int64, scale float32) []float32 {
 	embedding := make([]float32, dim)
@@ -512,12 +517,29 @@ func generateDeterministicEmbedding(dim int, seed int64, scale float32) []float3
 	)
 
 	//nolint:gosec // G115: seed is a positive test value used for deterministic embedding generation
-	state := uint64(seed)
+	state := uint64(seed) // #nosec G115 -- uint64(seed) is a non-negative counter/height bounded well below 2^63
 	for i := 0; i < dim; i++ {
 		state = (a*state + c) % m
-		// Normalize to [-scale, scale]
-		normalized := float32(state)/float32(m)*2*scale - scale
-		embedding[i] = normalized
+
+		// Normalize to [-scale, scale].
+		//
+		// The product is rounded in float64 and only then narrowed: the exact
+		// product of two float32 values needs at most 48 significand bits and is
+		// representable in float64 without rounding, so narrowing rounds exactly
+		// once - the same single rounding amd64's MULSS performs.
+		//
+		// Writing this as the float32 expression `base*scale - scale` instead
+		// lets the arm64 backend contract the multiply and subtract into a single
+		// FMADDS (one rounding), while amd64 emits MULSS followed by SUBSS (two
+		// roundings). That made the golden-vector input hashes differ between
+		// amd64 and arm64 and failed the cross-platform conformance verifier.
+		// Keeping the multiply out of a float32 a*b+c expression removes the
+		// contraction opportunity on every backend.
+		//
+		// TestGoldenVectorInputHashIsArchIndependent pins the resulting hashes.
+		base := float32(state) / float32(m) * 2
+		product := float32(float64(base) * float64(scale))
+		embedding[i] = product - scale
 	}
 
 	return embedding
@@ -525,7 +547,7 @@ func generateDeterministicEmbedding(dim int, seed int64, scale float32) []float3
 
 // LoadTestVectorsFromFile loads test vectors from a JSON file
 func LoadTestVectorsFromFile(path string) ([]TestVectorEntry, error) {
-	data, err := os.ReadFile(path)
+	data, err := os.ReadFile(path) // #nosec G304 -- path is a local path parameter supplied by this function's own caller (a CLI argument, loader parameter or configured state file) and is not derived from a network peer or chain message; opening the caller-nominated file is the purpose of this call
 	if err != nil {
 		return nil, err
 	}
@@ -542,7 +564,7 @@ func LoadTestVectorsFromFile(path string) ([]TestVectorEntry, error) {
 func SaveTestVectorsToFile(vectors []TestVectorEntry, path string) error {
 	// Ensure directory exists
 	dir := filepath.Dir(path)
-	if err := os.MkdirAll(dir, 0755); err != nil {
+	if err := os.MkdirAll(dir, 0750); err != nil {
 		return err
 	}
 

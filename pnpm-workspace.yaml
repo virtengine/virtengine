@@ -4,6 +4,40 @@ packages:
   - 'lib/admin'
   - 'portal'
 
+# pnpm reads `overrides` from the workspace root. This workspace has no root
+# package.json, so `pnpm-workspace.yaml` is the only effective location —
+# `pnpm.overrides` declared inside `portal/package.json` is NOT read by pnpm and
+# has no effect on the installed tree.
+#
+# These pin transitive-only advisories whose parents declare a range that
+# excludes the patched release, so no plain lockfile refresh can reach the fix.
+# Parent-scoped selectors are used where a blanket override would cross a major
+# line (ws 7 vs 8, picomatch 2 vs 4). Inventory: security-reports/ADVISORY_INVENTORY.md
+overrides:
+  # next pins sharp as an optional dependency; its own range already accepts
+  # ^0.35.3, so this only selects the fixed release inside Next's supported set.
+  sharp: '^0.35.4'
+  # GHSA-c2c7-rcm5-vvqj (ReDoS) — keyed on the vulnerable version line, so a new
+  # parent package cannot silently reintroduce the 2.x/4.x vulnerable release.
+  'picomatch@^2': '^2.3.2'
+  'picomatch@^4': '^4.0.4'
+  # GHSA-22cc-p3c6-wpvm (SSE injection, via unstorage) + its defu dependency
+  h3: '^1.15.11'
+  defu: '^6.1.7'
+  # GHSA-96hv-2xvq-fx4p — 7.x line only; the ws@8.x instances are already patched,
+  # so the override is keyed on the vulnerable major rather than on a parent.
+  'ws@^7': '^7.5.13'
+  # next pins postcss 8.4.31 exactly; GHSA-6g55-p6wh-862q / GHSA-r28c-9q8g-f849
+  postcss: '^8.5.28'
+  # GHSA-28wg-ghj8-5hjv / GHSA-2v37-7h3g-55p8 / GHSA-xwg4-73v4-xw9w
+  nanoid: '^3.3.19'
+  # GHSA-c83g-rgw3-j3cx / GHSA-73wf-gq98-2v4g
+  browserslist: '^4.29.0'
+  # GHSA-4x5r-pxfx-6jf8 — next>styled-jsx pins @babel/core 7.29.0
+  '@babel/core': '^7.29.6'
+  # GHSA-w9m9-85wc-3x92 — 6.x line (tailwindcss); the 7.1.1 instance is patched
+  'postcss-selector-parser@^6': '^6.1.4'
+
 allowBuilds:
   esbuild: true
   msw: true

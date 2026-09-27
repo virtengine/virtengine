@@ -40,7 +40,7 @@ const (
 
 // OfferingStateNames maps offering states to human-readable names
 var OfferingStateNames = map[OfferingState]string{
-	OfferingStateUnspecified: "unspecified",
+	OfferingStateUnspecified: unspecifiedName,
 	OfferingStateActive:      "active",
 	OfferingStatePaused:      "paused",
 	OfferingStateSuspended:   "suspended",
@@ -132,7 +132,12 @@ const (
 	PriceComponentNetwork PriceComponentResourceType = "network"
 )
 
-// IdentityRequirement defines the identity verification requirements for an offering
+// IdentityRequirement defines the identity verification requirements for an offering.
+//
+// This is the per-listing opt-in: every field defaults to "no requirement", so an
+// offering that declares nothing gates nobody. The record is persisted with the
+// offering (JSON-encoded state), and is the single source of truth for the
+// identity check performed when a buyer opens an order.
 type IdentityRequirement struct {
 	// MinScore is the minimum VEID identity score required (0-100)
 	MinScore uint32 `json:"min_score"`
@@ -148,17 +153,43 @@ type IdentityRequirement struct {
 
 	// RequireMFA indicates if MFA must be enabled for orders
 	RequireMFA bool `json:"require_mfa"`
+
+	// RequireUnlockedIdentity requires the buyer's identity to not be locked.
+	//
+	// omitempty keeps offerings that do not opt in byte-identical to the
+	// pre-existing state encoding, so this addition causes no state churn for
+	// listings that declare nothing.
+	RequireUnlockedIdentity bool `json:"require_unlocked_identity,omitempty"`
 }
 
-// DefaultIdentityRequirement returns the default identity requirement
+// DefaultIdentityRequirement returns the default identity requirement, which
+// imposes nothing. A listing must opt in explicitly.
 func DefaultIdentityRequirement() IdentityRequirement {
 	return IdentityRequirement{
-		MinScore:              0,
-		RequiredStatus:        "",
-		RequireVerifiedEmail:  false,
-		RequireVerifiedDomain: false,
-		RequireMFA:            false,
+		MinScore:                0,
+		RequiredStatus:          "",
+		RequireVerifiedEmail:    false,
+		RequireVerifiedDomain:   false,
+		RequireMFA:              false,
+		RequireUnlockedIdentity: false,
 	}
+}
+
+// IsZero reports whether the listing imposes no identity obligation at all.
+//
+// RequireUnlockedIdentity participates: a requirement that only demands an
+// unlocked identity still constrains the buyer, and must never be mistaken for
+// "no requirements".
+func (r *IdentityRequirement) IsZero() bool {
+	if r == nil {
+		return true
+	}
+	return r.MinScore == 0 &&
+		r.RequiredStatus == "" &&
+		!r.RequireVerifiedEmail &&
+		!r.RequireVerifiedDomain &&
+		!r.RequireMFA &&
+		!r.RequireUnlockedIdentity
 }
 
 // Validate validates the identity requirement
@@ -169,8 +200,16 @@ func (r *IdentityRequirement) Validate() error {
 	return nil
 }
 
-// IsSatisfiedBy checks if an account meets the identity requirements
+// IsSatisfiedBy checks if an account meets the identity requirements.
+// It is the advisory, buyer-side helper and assumes an unlocked identity.
 func (r *IdentityRequirement) IsSatisfiedBy(score uint32, status string, emailVerified, domainVerified, mfaEnabled bool) bool {
+	return r.IsSatisfiedByIdentity(score, status, emailVerified, domainVerified, mfaEnabled, false)
+}
+
+// IsSatisfiedByIdentity checks the full requirement set, including the
+// locked-identity requirement. locked reports whether the buyer's identity is
+// currently locked.
+func (r *IdentityRequirement) IsSatisfiedByIdentity(score uint32, status string, emailVerified, domainVerified, mfaEnabled, locked bool) bool {
 	if score < r.MinScore {
 		return false
 	}
@@ -184,6 +223,9 @@ func (r *IdentityRequirement) IsSatisfiedBy(score uint32, status string, emailVe
 		return false
 	}
 	if r.RequireMFA && !mfaEnabled {
+		return false
+	}
+	if r.RequireUnlockedIdentity && locked {
 		return false
 	}
 	return true
@@ -348,6 +390,18 @@ type Offering struct {
 	// IdentityRequirement defines identity verification requirements
 	IdentityRequirement IdentityRequirement `json:"identity_requirement"`
 
+	// Attestation is the capacity/ownership evidence attached to this listing.
+	// Only a hash of the source document is stored (MARKET-HW-SAFEGUARD-1).
+	Attestation *OfferingAttestation `json:"attestation,omitempty"`
+
+	// MilestoneOverride optionally overrides the protocol default milestone
+	// schedule for orders against this listing. Empty means "use params default".
+	MilestoneOverride MilestoneSet `json:"milestone_override,omitempty"`
+
+	// ListingTerms are the human-readable delivery/performance terms shown to a
+	// buyer before they commit funds.
+	ListingTerms string `json:"listing_terms,omitempty"`
+
 	// RequireMFAForOrders indicates if MFA is required for placing orders
 	RequireMFAForOrders bool `json:"require_mfa_for_orders"`
 
@@ -365,6 +419,25 @@ type Offering struct {
 
 	// Regions are supported regions
 	Regions []string `json:"regions,omitempty"`
+
+	// Source identifies the supply origin (native or waldur).
+	Source OfferingSource `json:"source,omitempty"`
+
+	// Visibility controls unified-catalog exposure.
+	Visibility OfferingVisibility `json:"visibility,omitempty"`
+
+	// Waldur links the listing to a Waldur offering when Source is waldur.
+	Waldur *WaldurOfferingRef `json:"waldur,omitempty"`
+
+	// AcquisitionModes lists the supported acquisition modes. When empty, direct
+	// is supported and bid is supported when AllowBidding is set.
+	AcquisitionModes []AcquisitionMode `json:"acquisition_modes,omitempty"`
+
+	// BackendType is the provider execution backend (kubernetes, slurm, ...).
+	BackendType string `json:"backend_type,omitempty"`
+
+	// MeteringProfile names the metering component profile (Waldur-compatible).
+	MeteringProfile string `json:"metering_profile,omitempty"`
 
 	// CreatedAt is the creation timestamp
 	CreatedAt time.Time `json:"created_at"`
@@ -442,6 +515,18 @@ func (o *Offering) Validate() error {
 		return fmt.Errorf("invalid identity requirement: %w", err)
 	}
 
+	if o.Attestation != nil {
+		if err := o.Attestation.Validate(); err != nil {
+			return fmt.Errorf("invalid attestation: %w", err)
+		}
+	}
+
+	if len(o.MilestoneOverride) > 0 {
+		if err := o.MilestoneOverride.Validate(); err != nil {
+			return fmt.Errorf("invalid milestone override: %w", err)
+		}
+	}
+
 	if o.EncryptedSecrets != nil {
 		if err := o.EncryptedSecrets.Validate(); err != nil {
 			return fmt.Errorf("invalid encrypted secrets: %w", err)
@@ -454,6 +539,32 @@ func (o *Offering) Validate() error {
 		}
 		if !o.MinBid.Amount.IsPositive() {
 			return fmt.Errorf("min bid must be positive")
+		}
+	}
+
+	if !o.Source.IsValid() {
+		return fmt.Errorf("invalid offering source: %s", o.Source)
+	}
+
+	if !o.Visibility.IsValid() {
+		return fmt.Errorf("invalid offering visibility: %s", o.Visibility)
+	}
+
+	if o.Source.Effective() == OfferingSourceWaldur {
+		if o.Waldur == nil {
+			return fmt.Errorf("waldur source requires a waldur reference")
+		}
+	}
+
+	if o.Waldur != nil {
+		if err := o.Waldur.Validate(); err != nil {
+			return fmt.Errorf("invalid waldur reference: %w", err)
+		}
+	}
+
+	for _, mode := range o.AcquisitionModes {
+		if !mode.IsValid() {
+			return fmt.Errorf("invalid acquisition mode: %s", mode)
 		}
 	}
 

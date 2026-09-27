@@ -198,7 +198,8 @@ export function validateCommittedOrderResult(
   request: OrderCreateRequest,
   requestDigest: string
 ): OrderCreateResult {
-  if (!value || typeof value !== 'object') throw new OrderSubmissionError('invalid_committed_result');
+  if (!value || typeof value !== 'object')
+    throw new OrderSubmissionError('invalid_committed_result');
 
   const result = value as Partial<OrderCreateResult>;
   let valid = false;

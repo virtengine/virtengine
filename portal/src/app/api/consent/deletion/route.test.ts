@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
-import { createDeletionPostHandler } from './route';
-import { createRequestsPostHandler } from '../requests/route';
+import { createDeletionPostHandler } from './handlers';
+import { createRequestsPostHandler } from '../requests/handlers';
 import {
   DeletionWorkflowError,
   listDeletionRequests,

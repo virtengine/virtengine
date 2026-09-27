@@ -1,0 +1,108 @@
+# VirtEngine DR tools image — ghcr.io/virtengine/dr-tools
+#
+# Purpose
+# -------
+# Runtime image for the DR backup/validation CronJobs defined in
+# infra/kubernetes/dr/backup-cronjobs.yaml. Those pods execute the repo-owned
+# scripts under scripts/dr/ *directly*:
+#
+#     command: ["/scripts/dr/backup-chain-state.sh"]
+#     command: ["/scripts/dr/backup-provider-state.sh"]
+#     command: ["/scripts/dr/dr-test.sh", "--report", "--notify"]
+#
+# and mount NO volume at /scripts. This image is therefore the sole supplier of
+# both the scripts and the toolchain they depend on.
+#
+# Runtime contract (must stay in sync with the CronJob pod securityContext)
+# ------------------------------------------------------------------------
+#   * runs as uid/gid 1000  (runAsUser 1000, runAsGroup 1000, runAsNonRoot true)
+#   * scripts must be readable and executable => modes are set explicitly below
+#     so execution never depends on build-context file modes
+#   * readOnlyRootFilesystem: true, allowPrivilegeEscalation: false, all
+#     capabilities dropped => the image needs no root at runtime and writes
+#     only under /tmp (the CronJobs mount an emptyDir there), so HOME=/tmp
+
+# ---------------------------------------------------------------------------
+# Stage 1: build the virtengine CLI used by the backup/validation scripts
+# ---------------------------------------------------------------------------
+FROM golang:1.26.8-alpine@sha256:8ac98ca534ac3f51e1f420a1dd2c15e74c75cfa0f23f3ad27eb5d7236c349a0c AS build
+
+# Kept in sync with GO_VERSION in .github/workflows/dr-tools-image.yaml, which
+# passes it as --build-arg. The default matches the golang image tag above and
+# every other VirtEngine build workflow.
+ARG GO_VERSION=1.26.8
+RUN test "$(go version)" = "go version go${GO_VERSION} linux/amd64" \
+      || { echo "toolchain mismatch: want ${GO_VERSION}, got $(go version)"; exit 1; }
+
+RUN apk add --no-cache ca-certificates git
+
+WORKDIR /src
+COPY go.mod go.sum ./
+COPY sdk/go/go.mod sdk/go/go.sum sdk/go/
+COPY sdk/specs/go.mod sdk/specs/
+RUN go mod download
+
+COPY . .
+
+ARG TARGETOS=linux
+ARG TARGETARCH=amd64
+ENV CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH}
+
+RUN go build -trimpath -buildvcs=false -ldflags "-s -w" -o /out/virtengine ./cmd/virtengine
+
+# ---------------------------------------------------------------------------
+# Stage 2: runtime
+# ---------------------------------------------------------------------------
+FROM alpine:3.24@sha256:294b683cb724975bec92580e1e685676bd4b50bda910ddb8c51d4cabeaec77e6
+
+LABEL org.opencontainers.image.source="https://github.com/virtengine/virtengine" \
+      org.opencontainers.image.title="virtengine-dr-tools" \
+      org.opencontainers.image.description="Disaster-recovery backup and validation tooling for VirtEngine validator and provider state"
+
+# Toolchain required by scripts/dr/*.sh — each entry is used by a CronJob path:
+#   bash      all three entrypoints are #!/bin/bash scripts
+#   jq        snapshot/report metadata generation and parsing
+#   curl      EC2 region metadata lookup, endpoint health checks, alert webhooks
+#   openssl   snapshot manifest signing and verification
+#   aws-cli   S3 upload/download/verify and Secrets Manager passphrase lookup
+#   coreutils sha256sum / mktemp / date used for checksums and object naming
+#   tar,gzip  snapshot archive creation and extraction
+RUN apk add --no-cache \
+      bash \
+      jq \
+      curl \
+      openssl \
+      aws-cli \
+      coreutils \
+      tar \
+      gzip \
+      ca-certificates && \
+    addgroup -g 1000 -S dr-tools && \
+    adduser -u 1000 -S -G dr-tools -h /tmp dr-tools
+
+COPY --from=build /out/virtengine /usr/local/bin/virtengine
+
+# Repo-owned DR scripts. Copied as a tree so fixtures (used by the failover
+# drill) travel with them; no volume supplies /scripts at runtime.
+COPY scripts/dr/ /scripts/dr/
+
+# Pin the modes of EVERY path under /scripts/dr. The CronJob exec form
+# (command: ["/scripts/dr/x.sh"]) requires the exec bit, and relying on COPY
+# inheriting the build-context mode makes the image's runnability depend on how
+# the checkout was created (on a Windows checkout with core.filemode=false the
+# copied mode is not the committed one at all). Setting it here is
+# deterministic, and it covers the whole tree rather than a hand-maintained list
+# so a newly added script cannot silently inherit a context-derived mode.
+#   dirs  -> 0755 (traversable)
+#   *.sh  -> 0755 (directly executable by the CronJobs)
+#   other -> 0644 (read-only data: README, fixtures, compose file)
+RUN set -eux; \
+    find /scripts/dr -type d -exec chmod 0755 {} \; ; \
+    find /scripts/dr -type f -name '*.sh' -exec chmod 0755 {} \; ; \
+    find /scripts/dr -type f ! -name '*.sh' -exec chmod 0644 {} \;
+
+# readOnlyRootFilesystem is true in every CronJob; /tmp is the mounted emptyDir.
+ENV HOME=/tmp
+WORKDIR /tmp
+
+USER 1000:1000

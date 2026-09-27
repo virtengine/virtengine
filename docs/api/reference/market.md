@@ -8,6 +8,12 @@ VirtEngine currently exposes two related but distinct market surfaces:
 This page keeps those surfaces separate so the docs only claim transport routes that
 the current binary actually serves.
 
+> **Conceptual overview.** For how these surfaces fit together — the two
+> acquisition styles (browse-and-buy vs. bidding), provider supply options, and
+> fulfilment backends — see
+> [Acquisition Pathways](https://docs.virtengine.com/concepts/acquisition-pathways/)
+> or the repository summary at [`docs/acquisition-pathways.md`](../acquisition-pathways.md).
+
 ## Transport Summary
 
 | Surface | Module | Boot Status | HTTP gateway | Primary docs |

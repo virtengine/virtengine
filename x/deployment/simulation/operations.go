@@ -28,10 +28,10 @@ import (
 
 // Simulation operation weights constants
 const (
-	OpWeightMsgCreateDeployment = "op_weight_msg_create_deployment" //nolint:gosec // #nosec G101: simulation weight key
-	OpWeightMsgUpdateDeployment = "op_weight_msg_update_deployment" //nolint:gosec // #nosec G101: simulation weight key
-	OpWeightMsgCloseDeployment  = "op_weight_msg_close_deployment"  //nolint:gosec // #nosec G101: simulation weight key
-	OpWeightMsgCloseGroup       = "op_weight_msg_close_group"       //nolint:gosec // #nosec G101: simulation weight key
+	OpWeightMsgCreateDeployment = "op_weight_msg_create_deployment" /* #nosec G101 -- #nosec G101: simulation weight key */ //nolint:gosec
+	OpWeightMsgUpdateDeployment = "op_weight_msg_update_deployment" /* #nosec G101 -- #nosec G101: simulation weight key */ //nolint:gosec
+	OpWeightMsgCloseDeployment  = "op_weight_msg_close_deployment"  /* #nosec G101 -- #nosec G101: simulation weight key */ //nolint:gosec
+	OpWeightMsgCloseGroup       = "op_weight_msg_close_group"       /* #nosec G101 -- #nosec G101: simulation weight key */ //nolint:gosec
 )
 
 // WeightedOperations returns all the operations from the module with their respective weights
@@ -99,7 +99,7 @@ func SimulateMsgCreateDeployment(ak govtypes.AccountKeeper, bk bankkeeper.Keeper
 
 		dID := v1.DeploymentID{
 			Owner: simAccount.Address.String(),
-			DSeq:  uint64(ctx.BlockHeight()), // nolint gosec
+			DSeq:  uint64(ctx.BlockHeight()), // #nosec G115 -- block height is a non-negative counter bounded well below 2^63
 		}
 
 		_, found := k.GetDeployment(ctx, dID)

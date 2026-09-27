@@ -80,6 +80,6 @@ test("repository inventory has exact Go module replaces and TypeScript proto par
   const inventory = JSON.parse(canonical);
 
   assert.equal(inventory.modules.some((module) => module.replaces.some((replacement) => replacement.old === "(")), false);
-  assert.equal(inventory.summaries.replaces, 22);
+  assert.equal(inventory.summaries.replaces, 23);
   assert.equal(inventory.generated.gatewayStubs.length, 0);
 });

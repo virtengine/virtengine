@@ -41,7 +41,7 @@ jobs:
     name: Proto Breaking Checks
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           fetch-depth: 0
 
@@ -68,13 +68,20 @@ jobs:
           fi
 
           echo "Checking for breaking changes against ${base_ref}"
-          buf breaking --against ".git#ref=${base_ref}"
+          # Run through the sdk module: sdk/buf.yaml is the repo's only buf
+          # config and is where the proto module layout and the BSR deps live.
+          # At the repo root there is no config, so buf built the whole tree
+          # as a single module with an empty dependency list and the 224 files
+          # importing gogoproto/gogo.proto could not resolve (exit 100 on
+          # every run). subdir=sdk reads sdk/buf.yaml on both sides of the
+          # comparison, so the repo-root vendor tree is out of scope already.
+          buf breaking sdk --against ".git#ref=${base_ref},subdir=sdk"
 
   compatibility-tests:
     name: Compatibility Tests
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Setup environment
         uses: ./.github/actions/setup-ubuntu
@@ -89,7 +96,7 @@ jobs:
 
       - name: Upload test results
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: compatibility-test-results
           path: |
@@ -101,7 +108,7 @@ jobs:
     name: API Version Check
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           fetch-depth: 0
 
@@ -122,7 +129,9 @@ jobs:
             diff_base="${{ github.event.before || 'HEAD~1' }}"
           fi
 
-          mapfile -t changed_files < <(git diff --name-only "${diff_base}" HEAD -- '*/types/*.go' '*/keeper/*.go' 'api/**' || true)
+          # Exclude _test.go files: test helpers are not public API surface, and
+          # splitting/renaming a test function otherwise reads as a removal.
+          mapfile -t changed_files < <(git diff --name-only "${diff_base}" HEAD -- '*/types/*.go' '*/keeper/*.go' 'api/**' ':(exclude)*_test.go' || true)
           if [ "${#changed_files[@]}" -eq 0 ]; then
             echo "No API surface files changed"
             exit 0
@@ -144,7 +153,7 @@ jobs:
     name: Deprecation Compliance
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Setup environment
         uses: ./.github/actions/setup-ubuntu
@@ -169,7 +178,7 @@ jobs:
     name: Version Matrix Validation
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Setup environment
         uses: ./.github/actions/setup-ubuntu
@@ -210,7 +219,7 @@ jobs:
       - deprecation-compliance
       - version-matrix-validation
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Setup environment
         uses: ./.github/actions/setup-ubuntu
@@ -245,7 +254,7 @@ jobs:
           EOF
 
       - name: Upload compatibility report
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: compatibility-report
           path: compatibility-report.md

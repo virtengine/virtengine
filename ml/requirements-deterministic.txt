@@ -8,7 +8,12 @@
 # pip-compile --generate-hashes requirements-deterministic.in
 
 # TensorFlow (CPU-only for determinism)
-tensorflow-cpu==2.15.0
+# NOTE: 2.15.0 -> 2.20.0 for python-vuln-scan: keras 2.15 (required by TF 2.15)
+# has unfixable advisories (fix train is keras 3.x only) and protobuf 4.25.8
+# has PYSEC-2026-1805 (fix >=5.29.6), which TF <2.20 caps out (<5.0.0dev).
+# TF 2.20 requires protobuf>=5.28.0 and keras>=3.10.0. Repo code uses
+# `from tensorflow import keras` (tf.keras), not standalone keras imports.
+tensorflow-cpu==2.20.0
 
 # DeepFace for facial verification
 deepface==0.0.79
@@ -20,25 +25,47 @@ opencv-python-headless==4.8.1.78
 numpy==1.26.3
 
 # Pillow for image handling
-Pillow==12.2.0
+Pillow==12.3.0
 
 # ONNX Runtime for CRAFT model (CPU-only)
 onnxruntime==1.16.3
 
 # PyTorch (CPU-only) for CRAFT text detection
 --extra-index-url https://download.pytorch.org/whl/cpu
-torch==2.12.1+cpu
+# NOTE: 2.12.1 -> 2.13.0 for python-vuln-scan: torch<=2.12 caps
+# setuptools<82, which conflicts with the setuptools>=83 pin (PYSEC-2026-3447).
+torch==2.13.0+cpu
 
 # Tesseract OCR Python bindings
 pytesseract==0.3.10
 
 # gRPC for sidecar communication
-grpcio==1.60.0
+# NOTE: 1.60.0 -> 1.71.2 (grpcio/grpcio-tools kept as a pair) for
+# python-vuln-scan: 1.60 caps protobuf<5.0dev, conflicting with the
+# protobuf==5.29.6 pin (PYSEC-2026-1805). 1.71.x is the newest line that
+# still accepts protobuf 5.x (>=5.26.1,<6.0dev).
+grpcio==1.71.2
 
-grpcio-tools==1.60.0
+grpcio-tools==1.71.2
 
 # Protobuf
-protobuf==4.25.8
+# NOTE: 4.25.8 -> 5.29.6 for PYSEC-2026-1805 (fix train 5.29.6/6.33.5;
+# 5.29.6 is the conservative choice). Requires tensorflow-cpu>=2.20 above.
+protobuf==5.29.6
+
+# Keras (transitive via tensorflow-cpu/deepface, pinned directly: pip-audit
+# flags the resolved set and 2.15.0 has advisories fixable only on 3.x)
+# NOTE: 3.15.0 satisfies TF 2.20's keras>=3.10.0 and clears PYSEC-2026-3629..
+# 3634/3856 (fix 3.12.3/3.15.0) and PYSEC-2026-1487/2324/2547.
+keras==3.15.0
+
+# setuptools (transitive, pinned directly: resolved 81.0.0 has PYSEC-2026-3447,
+# fix >=83.0.0)
+setuptools==83.0.0
+
+# jaraco.context (transitive via setuptools -> jaraco.text, pinned directly:
+# Security container-scan on veid-pipeline flags CVE-2026-23949 fixed in 6.1.0)
+jaraco.context==6.1.0
 
 # Scipy for numerical operations
 scipy==1.12.0
@@ -50,7 +77,9 @@ scikit-image==0.22.0
 mtcnn==0.1.1
 
 # Additional dependencies for reproducibility
-h5py==3.10.0
+# NOTE: 3.10.0 -> 3.16.0 for python-vuln-scan: tensorflow-cpu 2.20 requires
+# h5py>=3.11.0, and 3.16.0 is the current 3.x (same-major, minimal CVE surface).
+h5py==3.16.0
 
 tqdm==4.66.3
 

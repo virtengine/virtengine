@@ -24,9 +24,9 @@ import (
 
 // Simulation operation weights constants
 const (
-	OpWeightMsgCreateBid  = "op_weight_msg_create_bid"  //nolint:gosec // #nosec G101: simulation weight key
-	OpWeightMsgCloseBid   = "op_weight_msg_close_bid"   //nolint:gosec // #nosec G101: simulation weight key
-	OpWeightMsgCloseLease = "op_weight_msg_close_lease" //nolint:gosec // #nosec G101: simulation weight key
+	OpWeightMsgCreateBid  = "op_weight_msg_create_bid"  /* #nosec G101 -- #nosec G101: simulation weight key */ //nolint:gosec
+	OpWeightMsgCloseBid   = "op_weight_msg_close_bid"   /* #nosec G101 -- #nosec G101: simulation weight key */ //nolint:gosec
+	OpWeightMsgCloseLease = "op_weight_msg_close_lease" /* #nosec G101 -- #nosec G101: simulation weight key */ //nolint:gosec
 )
 
 // WeightedOperations returns all the operations from the module with their respective weights

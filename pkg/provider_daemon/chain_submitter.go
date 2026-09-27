@@ -238,6 +238,12 @@ func NewChainUsageSubmitter(
 	if err != nil {
 		return nil, fmt.Errorf("resolve queue state path: %w", err)
 	}
+	// Match the file-backed stores: reject a configured path containing traversal
+	// segments or a NUL byte, so every caller of claimTxSubmissionQueuePath hands
+	// it a path that has been checked the same way.
+	if err := validateStatePath(queuePath); err != nil {
+		return nil, fmt.Errorf("invalid chain submitter queue state path: %w", err)
+	}
 	queueLock, err := claimTxSubmissionQueuePath(queuePath)
 	if err != nil {
 		return nil, err

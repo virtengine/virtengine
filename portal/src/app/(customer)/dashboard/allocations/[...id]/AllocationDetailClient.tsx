@@ -39,7 +39,12 @@ function isTerminable(status: CustomerAllocationStatus): boolean {
 
 export default function AllocationDetailClient() {
   const params = useParams();
-  const id = params.id as string;
+  // Allocation ids are composite lease identifiers of the form
+  // `<owner>/<dseq>/<gseq>/<oseq>/<provider>`, so this route is a catch-all and
+  // the id has to be re-joined from its segments. A single-segment `[id]` route
+  // 404'd every allocation card in the dashboard.
+  const rawId = params.id;
+  const id = Array.isArray(rawId) ? rawId.join('/') : String(rawId ?? '');
 
   const { fetchDashboard, terminateAllocation, clearDashboard, isLoading, dashboardOwnerAddress } =
     useCustomerDashboardStore();

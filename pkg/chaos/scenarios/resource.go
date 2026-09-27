@@ -433,7 +433,7 @@ func (s *MemoryStressScenario) Build() (*Experiment, error) {
 		spec.GradualConfig = &GradualConfig{
 			StartValue: 0,
 			//nolint:gosec // G115: MemoryBytes/MB is bounded memory size
-			EndValue:      int(s.MemoryBytes / (1024 * 1024)),
+			EndValue:      int(s.MemoryBytes / (1024 * 1024)), // #nosec G115 -- MemoryBytes/1MiB is a non-negative count that fits in int
 			RampDuration:  s.Duration,
 			RatePerSecond: s.leakRateMBPerSec,
 		}
@@ -457,7 +457,7 @@ func (s *MemoryStressScenario) Build() (*Experiment, error) {
 func NewMemoryPressure(targets []string, memoryMB int, duration time.Duration) *MemoryStressScenario {
 	return &MemoryStressScenario{
 		//nolint:gosec // G115: memoryMB is positive user-provided value
-		MemoryBytes:    uint64(memoryMB) * 1024 * 1024,
+		MemoryBytes:    uint64(memoryMB) * 1024 * 1024, // #nosec G115 -- memoryMB is a non-negative MiB count
 		OOMKillEnabled: false,
 		Duration:       duration,
 		Targets:        targets,
@@ -482,7 +482,7 @@ func NewGradualMemoryLeak(targets []string, leakRateMBPerSec int, duration time.
 	totalMB := leakRateMBPerSec * int(duration.Seconds())
 	return &MemoryStressScenario{
 		//nolint:gosec // G115: totalMB is positive bounded value
-		MemoryBytes:      uint64(totalMB) * 1024 * 1024,
+		MemoryBytes:      uint64(totalMB) * 1024 * 1024, // #nosec G115 -- totalMB is a non-negative MiB count
 		OOMKillEnabled:   false,
 		Duration:         duration,
 		Targets:          targets,

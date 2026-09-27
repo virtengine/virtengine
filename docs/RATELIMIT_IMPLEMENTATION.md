@@ -65,7 +65,7 @@ The rate limiting system provides:
 ### Required
 
 - **Redis 6.0+**: For distributed rate limiting storage
-- **Go 1.25+**: VirtEngine build requirement
+- **Go 1.26.8+**: VirtEngine build requirement
 
 ### Optional
 

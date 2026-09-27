@@ -558,14 +558,42 @@ func TestViolationEscalation(t *testing.T) {
 		t.Errorf("first violation should be warning, got %s", actions[0])
 	}
 
-	// Should eventually reach ban
+	// Eventually the *recommended* action escalates to ban.
 	finalAction := actions[len(actions)-1]
 	if finalAction != PenaltyActionBan {
-		t.Errorf("expected ban after many violations, got %s", finalAction)
+		t.Errorf("expected ban to be recommended after many violations, got %s", finalAction)
 	}
 
-	if !state.IsBanned {
-		t.Error("state should be banned")
+	// MARKET-SCOPED-ELIGIBILITY: recording violations must NOT switch off the account.
+	// A counter is not independently established serious abuse, so no global account
+	// state may change here regardless of how high the count climbs.
+	if state.IsBanned {
+		t.Error("recording violations must not ban the account without criteria + review")
+	}
+	if state.IsSuspended {
+		t.Error("recording violations must not suspend the account without criteria + review")
+	}
+
+	// These violations are low severity (5) and of a type outside the account-wide
+	// allowlist, so they can never accumulate into an account-wide effect.
+	assessment := state.AssessAbuse(DefaultSeriousAbuseCriteria())
+	if assessment.CriteriaMet {
+		t.Error("low-severity spoofing violations must not establish serious abuse")
+	}
+
+	// Even armed with a sanction-shaped payload, enforcement is refused because the
+	// criteria were not met.
+	_, err := state.ApplyAccountWideSanction(&AccountWideSanction{
+		Assessment:   assessment,
+		ReviewedBy:   "reviewer",
+		ReviewReason: "attempted escalation",
+		CaseID:       "case-1",
+	}, config, now)
+	if err == nil {
+		t.Error("expected account-wide sanction to be refused without criteria")
+	}
+	if state.IsBanned || state.IsSuspended {
+		t.Error("refused sanction must not mutate account state")
 	}
 }
 
@@ -642,12 +670,40 @@ func TestSimulateWashTradingAttack(t *testing.T) {
 		t.Errorf("expected %d detections, got %d", totalAttempts, detectedCount)
 	}
 
-	// Attacker should be banned
-	if !state.IsBanned {
-		t.Error("attacker should be banned after wash trading attempts")
+	// MARKET-SCOPED-ELIGIBILITY: 100 detected wash-trading violations must NOT by
+	// themselves switch off the account. Detection is an accounting signal; it is not an
+	// account verdict, and enforcement requires criteria + review.
+	if state.IsBanned {
+		t.Error("detection must not ban the account without criteria + review")
+	}
+	if state.IsSuspended {
+		t.Error("detection must not suspend the account without criteria + review")
 	}
 
-	t.Logf("Wash trading attack: %d/%d detected, attacker banned: %v",
+	// The recorded activity IS serious abuse, so the criteria path is what authorizes an
+	// account-wide effect from here.
+	assessment := state.AssessAbuse(DefaultSeriousAbuseCriteria())
+	if !assessment.CriteriaMet {
+		t.Fatalf("expected serious-abuse criteria to be met, got reasons: %v", assessment.Reasons)
+	}
+
+	action, err := state.ApplyAccountWideSanction(&AccountWideSanction{
+		Assessment:   assessment,
+		ReviewedBy:   "moderator-1",
+		ReviewReason: "sustained self-dealing across 100 orders",
+		CaseID:       "case-wash-1",
+	}, penaltyConfig, now)
+	if err != nil {
+		t.Fatalf("expected reviewed sanction to be applied, got %v", err)
+	}
+	if action != PenaltyActionBan {
+		t.Errorf("expected ban action, got %s", action)
+	}
+	if !state.IsBanned {
+		t.Error("reviewed sanction meeting criteria should ban the account")
+	}
+
+	t.Logf("Wash trading attack: %d/%d detected, banned only after review: %v",
 		detectedCount, totalAttempts, state.IsBanned)
 }
 

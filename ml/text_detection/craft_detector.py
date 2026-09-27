@@ -12,6 +12,7 @@ text regions in document images. It handles:
 import os
 import logging
 import hashlib
+from collections.abc import Mapping
 from typing import Tuple, List, Optional, Any
 
 import numpy as np
@@ -94,7 +95,7 @@ class CRAFTDetector:
         """
         try:
             import torch
-            from craft_text_detector import Craft
+            from ml.text_detection.third_party.craft_text_detector import Craft
             
             # Determine device
             if self.config.device == DeviceType.CUDA and torch.cuda.is_available():
@@ -127,7 +128,8 @@ class CRAFTDetector:
             logger.error(f"Failed to import CRAFT dependencies: {e}")
             raise ImportError(
                 "CRAFT dependencies not installed. "
-                "Please install: pip install craft-text-detector torch torchvision"
+                "Install the text detection requirements: "
+                "pip install -r ml/text_detection/requirements.txt"
             ) from e
     
     def _compute_model_hash(self) -> str:
@@ -171,7 +173,9 @@ class CRAFTDetector:
             
         Returns:
             Tuple of (region_score_map, affinity_score_map)
-            Both are 2D float arrays with values 0.0 - 1.0
+            Both are 2D float arrays with values 0.0 - 1.0, shaped to match
+            the input image (H, W) so that bounding boxes derived from them
+            are already in input-image coordinates.
         """
         if image is None or image.size == 0:
             raise ValueError("Invalid input image")
@@ -187,18 +191,112 @@ class CRAFTDetector:
         # Run CRAFT detection
         prediction_result = self.model.detect_text(image)
         
-        # Extract score maps from prediction
-        if hasattr(prediction_result, 'heatmaps'):
-            heatmaps = prediction_result.heatmaps
-            region_scores = heatmaps.get('text_score_heatmap', np.zeros_like(image[:,:,0], dtype=np.float32))
-            affinity_scores = heatmaps.get('link_score_heatmap', np.zeros_like(image[:,:,0], dtype=np.float32))
-        else:
-            # Fallback: generate score maps from detection results
-            region_scores, affinity_scores = self._generate_score_maps_from_boxes(
-                image.shape[:2],
-                prediction_result
-            )
+        return self._extract_score_maps(image.shape[:2], prediction_result)
+
+    @staticmethod
+    def _prediction_field(prediction_result: Any, name: str) -> Any:
+        """
+        Read a field from a CRAFT prediction result.
         
+        ``craft_text_detector.Craft.detect_text`` returns a plain ``dict``, but
+        other/older backends expose attribute-style result objects. Support both.
+        """
+        if isinstance(prediction_result, Mapping):
+            return prediction_result.get(name)
+        return getattr(prediction_result, name, None)
+
+    # Container/key tuples accepted for the raw region and affinity score maps,
+    # in priority order. The first is the contract of the vendored CRAFT build
+    # (``third_party/craft_text_detector``); the second is the attribute/heatmap
+    # style result older backends and test doubles produce.
+    _SCORE_MAP_KEYS = (
+        ("score_maps", "text_score_map", "link_score_map"),
+        ("heatmaps", "text_score_heatmap", "link_score_heatmap"),
+    )
+
+    def _extract_score_maps(
+        self,
+        image_shape: Tuple[int, int],
+        prediction_result: Any,
+    ) -> Tuple[np.ndarray, np.ndarray]:
+        """
+        Extract raw region/affinity score maps from a CRAFT prediction result.
+
+        CRAFT produces its score maps at the network's native heatmap resolution
+        (half the resized inference canvas), so they are resampled here to the
+        input image size. That keeps the coordinates of the bounding boxes
+        derived from them in input-image space.
+
+        Only *scalar* (2-D) maps qualify. ``prediction_result["heatmaps"]`` from
+        the vendored build holds colourised ``uint8`` visualisations
+        (``cv2.applyColorMap`` output, shape ``(H, W, 3)``), which are rejected by
+        the dimensionality check and never treated as score maps.
+
+        Args:
+            image_shape: (height, width) of the input image
+            prediction_result: Result of ``Craft.detect_text``
+
+        Returns:
+            Tuple of (region_scores, affinity_scores) shaped (height, width)
+        """
+        for container_key, region_key, affinity_key in self._SCORE_MAP_KEYS:
+            container = self._prediction_field(prediction_result, container_key)
+            if not isinstance(container, Mapping):
+                continue
+
+            raw_region = container.get(region_key)
+            raw_affinity = container.get(affinity_key)
+            if raw_region is None or raw_affinity is None:
+                continue
+
+            try:
+                region_scores = np.asarray(raw_region, dtype=np.float32)
+                affinity_scores = np.asarray(raw_affinity, dtype=np.float32)
+            except (TypeError, ValueError):
+                continue
+
+            if region_scores.ndim != 2 or affinity_scores.ndim != 2:
+                # A colourised heatmap, not a thresholds-able score map.
+                continue
+
+            return self._resample_score_maps(
+                image_shape, region_scores, affinity_scores
+            )
+
+        # Backend exposes neither raw nor scalar maps: derive masks from boxes.
+        logger.debug(
+            "CRAFT result carried no scalar score maps; deriving masks from boxes"
+        )
+        return self._generate_score_maps_from_boxes(image_shape, prediction_result)
+
+    @staticmethod
+    def _resample_score_maps(
+        image_shape: Tuple[int, int],
+        region_scores: np.ndarray,
+        affinity_scores: np.ndarray,
+    ) -> Tuple[np.ndarray, np.ndarray]:
+        """Resample score maps to the input image size and clamp to 0.0 - 1.0."""
+        height, width = image_shape
+
+        if region_scores.shape != (height, width) or affinity_scores.shape != (
+            height,
+            width,
+        ):
+            import cv2
+
+            region_scores = cv2.resize(
+                region_scores, (width, height), interpolation=cv2.INTER_LINEAR
+            )
+            affinity_scores = cv2.resize(
+                affinity_scores, (width, height), interpolation=cv2.INTER_LINEAR
+            )
+
+        # Keep the documented 0.0 - 1.0 contract.
+        region_scores = np.clip(region_scores, 0.0, 1.0).astype(np.float32, copy=False)
+        affinity_scores = np.clip(affinity_scores, 0.0, 1.0).astype(
+            np.float32, copy=False
+        )
+
         return region_scores, affinity_scores
     
     def _generate_score_maps_from_boxes(
@@ -220,10 +318,10 @@ class CRAFTDetector:
         region_scores = np.zeros((height, width), dtype=np.float32)
         affinity_scores = np.zeros((height, width), dtype=np.float32)
         
-        # Get boxes from prediction
-        boxes = []
-        if hasattr(prediction_result, 'boxes'):
-            boxes = prediction_result.boxes
+        # Get boxes from prediction (handles both dict and attribute results)
+        boxes = self._prediction_field(prediction_result, "boxes")
+        if boxes is None or not isinstance(boxes, (list, tuple, np.ndarray)):
+            boxes = []
         
         # Fill region scores based on boxes
         for box in boxes:
@@ -379,7 +477,10 @@ class CRAFTDetector:
             if hasattr(self._model, 'unload_refinenet_model'):
                 self._model.unload_refinenet_model()
             self._model = None
-            self._model_hash = None
+
+        # The cached hash was derived from the unloaded weights, so it is stale
+        # whether or not a model had been loaded.
+        self._model_hash = None
         
         # Clear CUDA cache if available
         try:

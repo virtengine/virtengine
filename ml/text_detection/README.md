@@ -154,10 +154,24 @@ pytest ml/text_detection/tests/ --cov=ml/text_detection --cov-report=html
 
 ## Dependencies
 
-- PyTorch 2.0.1
-- craft-text-detector 0.4.3
-- OpenCV 4.8.0
-- NumPy 1.24.3
+Runtime pins live in [`requirements.txt`](requirements.txt):
+
+- PyTorch `2.12.1+cpu` / torchvision `0.27.1+cpu` (PyTorch CPU index)
+- OpenCV `4.8.1.78`
+- NumPy `1.26.3` / SciPy `1.11.1`
+- gdown `6.4.0` (fetches the CRAFT weights on first use)
+
+### CRAFT implementation
+
+CRAFT is vendored at [`third_party/craft_text_detector/`](third_party/craft_text_detector/)
+— upstream `craft-text-detector` 0.4.3 (MIT). It is not a PyPI dependency because
+that package cannot be installed on Python 3.11: it pins
+`opencv-python<4.5.4.62`, and no release of the archived project relaxes that cap,
+while OpenCV ships no cp311 wheel below `4.6.0.66`. Its `vgg16_bn` backbone also
+imports `torchvision.models.vgg.model_urls`, removed in torchvision 0.14.
+
+See [`third_party/craft_text_detector/README.md`](third_party/craft_text_detector/README.md)
+for provenance and the exact list of patches applied.
 
 ## Version History
 

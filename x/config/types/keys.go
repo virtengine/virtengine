@@ -97,13 +97,13 @@ func ClientAuditLogPrefixKey(clientID string) []byte {
 // encodeInt64 encodes an int64 as big-endian bytes for proper ordering
 func encodeInt64(n int64) []byte {
 	return []byte{
-		byte(n >> 56),
-		byte(n >> 48),
-		byte(n >> 40),
-		byte(n >> 32),
-		byte(n >> 24),
-		byte(n >> 16),
-		byte(n >> 8),
-		byte(n),
+		byte(n >> 56), // #nosec G115 -- fixed-width big-endian encoding: byte(n >> 56) writes a single byte of the shifted value by design and the written byte is never used arithmetically
+		byte(n >> 48), // #nosec G115 -- fixed-width big-endian encoding: byte(n >> 48) writes a single byte of the shifted value by design and the written byte is never used arithmetically
+		byte(n >> 40), // #nosec G115 -- fixed-width big-endian encoding: byte(n >> 40) writes a single byte of the shifted value by design and the written byte is never used arithmetically
+		byte(n >> 32), // #nosec G115 -- fixed-width big-endian encoding: byte(n >> 32) writes a single byte of the shifted value by design and the written byte is never used arithmetically
+		byte(n >> 24), // #nosec G115 -- fixed-width big-endian encoding: byte(n >> 24) writes a single byte of the shifted value by design and the written byte is never used arithmetically
+		byte(n >> 16), // #nosec G115 -- fixed-width big-endian encoding: byte(n >> 16) writes a single byte of the shifted value by design and the written byte is never used arithmetically
+		byte(n >> 8),  // #nosec G115 -- fixed-width big-endian encoding: byte(n >> 8) writes a single byte of the shifted value by design and the written byte is never used arithmetically
+		byte(n),       // #nosec G115 -- fixed-width big-endian encoding: byte(n) writes the low byte into the buffer by design; the truncated value is not used arithmetically
 	}
 }

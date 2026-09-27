@@ -47,6 +47,69 @@ Use the Makefile target for full end-to-end testing:
 make test-integration
 ```
 
+### Complete Test Target Reference (make)
+
+Every target below was confirmed with `make -n <target>` from the repo root; the source column
+cites the recipe that runs. Two variables shape most of them:
+
+- `TEST_MODULES` (`make/test-integration.mk:3`) — `$(shell $(GO) list ./... | grep -v '/mocks')`,
+  i.e. every package in the main module **except** those under a `/mocks` path. It is expanded
+  when make parses the file, so newly added packages are picked up automatically.
+- `BUILD_TAGS` (`Makefile:49`) — defaults to `osusergo,netgo,hidraw,ledger`.
+
+| Target | Source | What it actually runs |
+|--------|--------|-----------------------|
+| `make test` | `make/test-integration.mk:10` | `go test -v -timeout 600s $(TEST_MODULES)` — verbose, 10-minute timeout |
+| `make test-nocache` | `make/test-integration.mk:14` | `go test -count=1 $(TEST_MODULES)` — `-count=1` bypasses the Go test cache |
+| `make test-full` | `make/test-integration.mk:18` | `go test -v -tags=$(BUILD_TAGS) $(TEST_MODULES)` — adds the default build tags |
+| `make test-integration` | `make/test-integration.mk:22` | `go test -v -tags="e2e.integration" $(TEST_MODULES)` |
+| `make test-coverage` | `make/test-integration.mk:26` | `CGO_ENABLED=1 go test -tags=$(BUILD_TAGS) -coverprofile=coverage.txt -covermode=atomic -timeout=20m $(TEST_MODULES)` |
+| `make test-vet` | `make/test-integration.mk:33` | `go vet -mod=readonly ./...` |
+| `make test-compatibility` | `make/test-integration.mk:41` | `go test -v -tags="e2e.compatibility" ./tests/compatibility/...` **then** `go test -v ./pkg/compatibility/...` |
+| `make test-compatibility-full` | `make/test-integration.mk:47` | The same two suites, with `-coverprofile=coverage-compatibility.txt` and `-coverprofile=coverage-pkg-compatibility.txt` |
+| `make test-bins` | `make/releasing.mk:68` | `docker run ... goreleaser-cross` with `.goreleaser-test-bins.yaml`, `--snapshot --skip=publish,validate --clean` — a release dry-run build, not a Go test |
+
+Details that are easy to get wrong:
+
+- **`test-vet` is not a test run, and it is broader than the test targets.** It runs `go vet` over
+  `./...`, which includes the `/mocks` packages that `TEST_MODULES` deliberately excludes.
+- **`test-coverage` is the only target that forces `CGO_ENABLED=1`**, and the only one using
+  `-covermode=atomic`. It is genuinely slow — `-timeout=20m` is the intended budget, not a guard
+  against hangs.
+- **`test-compatibility` takes the `e2e.compatibility` tag on the first invocation only**; the
+  second (`./pkg/compatibility/...`) runs untagged.
+- **`make test-bins` needs Docker plus an image tag from the environment.**
+  `make/releasing.mk:4` builds the image reference as
+  `ghcr.io/goreleaser/goreleaser-cross:$(GOTOOLCHAIN_SEMVER)`. `GOTOOLCHAIN_SEMVER` is exported by
+  `.envrc` (from `script/tools.sh gotoolchain`) and is **not** set by the Makefile. In a shell
+  without direnv the tag expands to nothing, giving the invalid reference
+  `ghcr.io/goreleaser/goreleaser-cross:` — this fails before any build runs. With direnv active on
+  the current toolchain the tag resolves to `v1.25.8`.
+- `COVER_PACKAGES` (`make/test-integration.mk:1`) is defined but referenced by no target. It is
+  dead code; nothing reads it.
+
+### Simulation Tests (make)
+
+`make/test-simulation.mk` drives the Cosmos SDK application simulations under `./app`
+(`APP_DIR := ./app`, `Makefile:1`). All four share the same shape — `go test -mod=readonly ./app`
+with `-Enabled=true -NumBlocks=50 -BlockSize=100 -Commit=true`:
+
+| Target | Source | Simulation test | Notable flags |
+|--------|--------|-----------------|---------------|
+| `make test-sim-fullapp` | `make/test-simulation.mk:5` | `TestFullAppSimulation` | `-Seed=99 -Period=5 -timeout 10m` |
+| `make test-sim-import-export` | `make/test-simulation.mk:15` | `TestAppImportExport` | `-Seed=99 -Period=5 -timeout 10m` |
+| `make test-sim-after-import` | `make/test-simulation.mk:20` | `TestAppSimulationAfterImport` | `-Seed=99 -Period=5 -timeout 10m` |
+| `make test-sim-nondeterminism` | `make/test-simulation.mk:10` | `TestAppStateDeterminism` | `-Period=0 -timeout 24h` — **can take up to a day** |
+| `make test-sims` | `make/test-simulation.mk:25` | all four, in the order above | aggregator; has no recipe of its own |
+
+`test-sim-nondeterminism` is the outlier: `-Period=0` and a 24-hour `-timeout` because it hunts
+consensus non-determinism, which is deliberately slow. Do not expect the 10-minute turnaround of
+its siblings.
+
+Unlike the targets in `make/test-integration.mk`, these four are **not** declared `.PHONY`
+(`make/test-simulation.mk:5`). They work only because no file of the same name exists in the repo
+root; a stray file named e.g. `test-sims` would silently suppress the target.
+
 ## Upgrade Testing
 
 VirtEngine upgrade testing is split into unit checks and multi-validator e2e drills.
@@ -82,6 +145,12 @@ make -C tests/upgrade prepare-state
 make -C tests/upgrade test
 ```
 
+Both commands require `ROOT_DIR` to be exported: `tests/upgrade/Makefile:1` is
+`include $(ROOT_DIR)/make/init.mk`, evaluated before `make/init.mk` can default it. `ROOT_DIR` is
+supplied by `.env` (`ROOT_DIR=${VIRTENGINE_ROOT}`) via direnv. In a bare shell the command fails
+immediately with `Makefile:1: /make/init.mk: No such file or directory` — that is an unconfigured
+environment, not a broken target.
+
 ### Rollback Procedure Drill
 
 Simulate a failed upgrade and verify recovery:
@@ -112,9 +181,10 @@ Expected outcomes:
 - Nodes halt at upgrade height or fail fast during migration.
 - Logs capture the failing module/migration and the chain does not continue in a partially-migrated state.
 
-### Coverage
+## Coverage
 
-Generate coverage reports:
+Generate coverage reports. The Makefile form is `make test-coverage` (see the test target
+reference above); the raw `go test` equivalents are:
 
 ```bash
 # Basic coverage
@@ -128,7 +198,7 @@ go tool cover -html=coverage.out -o coverage.html
 go test -cover ./x/veid/...
 ```
 
-### Quick Test Commands
+## Quick Test Commands
 
 ```bash
 # Fast test run (no cache)
@@ -137,7 +207,7 @@ go test -count=1 ./x/...
 # With timeout
 go test -timeout 5m ./x/...
 
-# Summary output
+# Verbose run of every main-module package, 10-minute timeout
 make test
 ```
 

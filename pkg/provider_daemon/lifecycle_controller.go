@@ -267,11 +267,11 @@ func (lc *LifecycleController) ExecuteLifecycleAction(
 
 	// Emit on-chain lifecycle requested event when possible.
 	if lc.callbackSink != nil {
-		go func(operation *marketplace.LifecycleOperation, resourceUUID string) {
-			if err := lc.emitLifecycleRequestedCallback(context.Background(), operation, resourceUUID); err != nil {
+		go func(ctx context.Context, operation *marketplace.LifecycleOperation, resourceUUID string) {
+			if err := lc.emitLifecycleRequestedCallback(ctx, operation, resourceUUID); err != nil {
 				log.Printf("[lifecycle-controller] failed to emit lifecycle requested callback: %v", err)
 			}
-		}(op, waldurResourceUUID)
+		}(ctx, op, waldurResourceUUID)
 	}
 
 	// Execute asynchronously
@@ -365,7 +365,7 @@ func (lc *LifecycleController) executeOperation(ctx context.Context, op *marketp
 	_ = lc.saveState()
 
 	log.Printf("[lifecycle-controller] operation %s awaiting callback for allocation %s action %s correlation_id=%s",
-		op.ID, op.AllocationID, op.Action, op.IdempotencyKey)
+		sanitizeLogValue(op.ID), sanitizeLogValue(op.AllocationID), sanitizeLogValue(string(op.Action)), sanitizeLogValue(op.IdempotencyKey))
 }
 
 // handleOperationFailure handles a failed operation
@@ -385,7 +385,7 @@ func (lc *LifecycleController) handleOperationFailure(op *marketplace.LifecycleO
 		}
 		lc.state.Metrics.PendingOperations++
 		log.Printf("[lifecycle-controller] operation %s will retry (attempt %d/%d, correlation_id=%s): %v",
-			op.ID, op.RetryCount, op.MaxRetries, op.IdempotencyKey, err)
+			sanitizeLogValue(op.ID), op.RetryCount, op.MaxRetries, sanitizeLogValue(op.IdempotencyKey), sanitizeLogValue(err.Error()))
 	} else {
 		// Handle rollback
 		switch op.RollbackPolicy {
@@ -404,7 +404,7 @@ func (lc *LifecycleController) handleOperationFailure(op *marketplace.LifecycleO
 		lc.state.Metrics.ExecutingOperations--
 		op.UpdatedAt = time.Now().UTC()
 
-		log.Printf("[lifecycle-controller] operation %s failed (correlation_id=%s): %v", op.ID, op.IdempotencyKey, err)
+		log.Printf("[lifecycle-controller] operation %s failed (correlation_id=%s): %v", sanitizeLogValue(op.ID), sanitizeLogValue(op.IdempotencyKey), err)
 	}
 
 	// Audit log
@@ -800,16 +800,16 @@ func (lc *LifecycleController) saveState() error {
 	}
 
 	dir := filepath.Dir(lc.cfg.StateFilePath)
-	if err := os.MkdirAll(dir, 0o700); err != nil {
+	if err := os.MkdirAll(dir, 0o700); err != nil { // #nosec G703 -- the path is derived from the daemon's configured state file (a validated constructor argument or an os.CreateTemp name), not from remote input; the operation targets that file by design
 		return err
 	}
 
 	tmp := lc.cfg.StateFilePath + ".tmp"
-	if err := os.WriteFile(tmp, data, 0o600); err != nil {
+	if err := os.WriteFile(tmp, data, 0o600); err != nil { // #nosec G703 -- the path is derived from the daemon's configured state file (a validated constructor argument or an os.CreateTemp name), not from remote input; the operation targets that file by design
 		return err
 	}
 
-	return os.Rename(tmp, lc.cfg.StateFilePath)
+	return os.Rename(tmp, lc.cfg.StateFilePath) // #nosec G703 -- the path is derived from the daemon's configured state file (a validated constructor argument or an os.CreateTemp name), not from remote input; the operation targets that file by design
 }
 
 func ensureLifecycleControllerState(state *LifecycleControllerState) *LifecycleControllerState {

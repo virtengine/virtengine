@@ -4,1632 +4,1893 @@
  */
 
 export interface paths {
-  "/health": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
+    "/health": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Check provider health
+         * @description Returns health status for the provider portal API.
+         */
+        get: operations["getHealth"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
     };
-    /**
-     * Check provider health
-     * @description Returns health status for the provider portal API.
-     */
-    get: operations["getHealth"];
-    put?: never;
-    post?: never;
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/deployments": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
+    "/deployments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List deployments
+         * @description Returns deployments for the authenticated user.
+         */
+        get: operations["listDeployments"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
     };
-    /**
-     * List deployments
-     * @description Returns deployments for the authenticated user.
-     */
-    get: operations["listDeployments"];
-    put?: never;
-    post?: never;
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/deployments/{deploymentId}": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
+    "/deployments/{deploymentId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get deployment details */
+        get: operations["getDeployment"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
     };
-    /** Get deployment details */
-    get: operations["getDeployment"];
-    put?: never;
-    post?: never;
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/deployments/{deploymentId}/status": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
+    "/deployments/{deploymentId}/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get deployment status */
+        get: operations["getDeploymentStatus"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
     };
-    /** Get deployment status */
-    get: operations["getDeploymentStatus"];
-    put?: never;
-    post?: never;
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/deployments/{deploymentId}/logs": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
+    "/deployments/{deploymentId}/logs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get deployment logs
+         * @description Returns log lines for a deployment. If a WebSocket upgrade is requested, the
+         *     server streams log lines over a WebSocket connection.
+         *
+         *     WebSocket messages are text frames containing formatted log lines.
+         */
+        get: operations["getDeploymentLogs"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
     };
-    /**
-     * Get deployment logs
-     * @description Returns log lines for a deployment. If a WebSocket upgrade is requested, the
-     *     server streams log lines over a WebSocket connection.
-     *
-     *     WebSocket messages are text frames containing formatted log lines.
-     */
-    get: operations["getDeploymentLogs"];
-    put?: never;
-    post?: never;
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/deployments/{deploymentId}/shell/session": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
+    "/deployments/{deploymentId}/shell/session": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Create shell session token
+         * @description Issues a short-lived token for establishing a WebSocket shell session.
+         */
+        post: operations["createShellSession"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
     };
-    get?: never;
-    put?: never;
-    /**
-     * Create shell session token
-     * @description Issues a short-lived token for establishing a WebSocket shell session.
-     */
-    post: operations["createShellSession"];
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/deployments/{deploymentId}/shell": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
+    "/deployments/{deploymentId}/shell": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Connect to deployment shell
+         * @description WebSocket endpoint for interactive shell access. A session token can be
+         *     provided using the `token` query parameter.
+         *
+         *     Binary message frames use the first byte as a control code:
+         *
+         *     - 100: stdout
+         *     - 101: stderr
+         *     - 102: result
+         *     - 103: failure
+         *     - 104: stdin
+         *     - 105: resize
+         */
+        get: operations["connectShell"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
     };
-    /**
-     * Connect to deployment shell
-     * @description WebSocket endpoint for interactive shell access. A session token can be
-     *     provided using the `token` query parameter.
-     *
-     *     Binary message frames use the first byte as a control code:
-     *
-     *     - 100: stdout
-     *     - 101: stderr
-     *     - 102: result
-     *     - 103: failure
-     *     - 104: stdin
-     *     - 105: resize
-     */
-    get: operations["connectShell"];
-    put?: never;
-    post?: never;
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/deployments/{deploymentId}/metrics": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
+    "/deployments/{deploymentId}/metrics": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get deployment metrics */
+        get: operations["getDeploymentMetrics"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
     };
-    /** Get deployment metrics */
-    get: operations["getDeploymentMetrics"];
-    put?: never;
-    post?: never;
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/deployments/{deploymentId}/metrics/history": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
+    "/deployments/{deploymentId}/metrics/history": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get deployment metrics history */
+        get: operations["getDeploymentMetricsHistory"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
     };
-    /** Get deployment metrics history */
-    get: operations["getDeploymentMetricsHistory"];
-    put?: never;
-    post?: never;
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/deployments/{deploymentId}/events": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
+    "/deployments/{deploymentId}/events": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get deployment events */
+        get: operations["getDeploymentEvents"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
     };
-    /** Get deployment events */
-    get: operations["getDeploymentEvents"];
-    put?: never;
-    post?: never;
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/deployments/{deploymentId}/actions": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
+    "/deployments/{deploymentId}/actions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Perform deployment action */
+        post: operations["performDeploymentAction"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
     };
-    get?: never;
-    put?: never;
-    /** Perform deployment action */
-    post: operations["performDeploymentAction"];
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/metrics/aggregate": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
+    "/metrics/aggregate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get aggregated metrics */
+        get: operations["getAggregatedMetrics"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
     };
-    /** Get aggregated metrics */
-    get: operations["getAggregatedMetrics"];
-    put?: never;
-    post?: never;
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/organizations": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
+    "/organizations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List organizations */
+        get: operations["listOrganizations"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
     };
-    /** List organizations */
-    get: operations["listOrganizations"];
-    put?: never;
-    post?: never;
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/organizations/{orgId}": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
+    "/organizations/{orgId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get organization details */
+        get: operations["getOrganization"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
     };
-    /** Get organization details */
-    get: operations["getOrganization"];
-    put?: never;
-    post?: never;
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/organizations/{orgId}/members": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
+    "/organizations/{orgId}/members": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List organization members */
+        get: operations["listOrganizationMembers"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
     };
-    /** List organization members */
-    get: operations["listOrganizationMembers"];
-    put?: never;
-    post?: never;
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/organizations/{orgId}/invite": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
+    "/organizations/{orgId}/invite": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Invite organization member */
+        post: operations["inviteOrganizationMember"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
     };
-    get?: never;
-    put?: never;
-    /** Invite organization member */
-    post: operations["inviteOrganizationMember"];
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/organizations/{orgId}/members/{address}": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
+    "/organizations/{orgId}/members/{address}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Remove organization member */
+        delete: operations["removeOrganizationMember"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
     };
-    get?: never;
-    put?: never;
-    post?: never;
-    /** Remove organization member */
-    delete: operations["removeOrganizationMember"];
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/tickets": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
+    "/tickets": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List support tickets */
+        get: operations["listTickets"];
+        put?: never;
+        /** Create support ticket */
+        post: operations["createTicket"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
     };
-    /** List support tickets */
-    get: operations["listTickets"];
-    put?: never;
-    /** Create support ticket */
-    post: operations["createTicket"];
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/tickets/{ticketId}": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
+    "/tickets/{ticketId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get ticket details */
+        get: operations["getTicket"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Update ticket */
+        patch: operations["updateTicket"];
+        trace?: never;
     };
-    /** Get ticket details */
-    get: operations["getTicket"];
-    put?: never;
-    post?: never;
-    delete?: never;
-    options?: never;
-    head?: never;
-    /** Update ticket */
-    patch: operations["updateTicket"];
-    trace?: never;
-  };
-  "/tickets/{ticketId}/comments": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
+    "/tickets/{ticketId}/comments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Add ticket comment */
+        post: operations["addTicketComment"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
     };
-    get?: never;
-    put?: never;
-    /** Add ticket comment */
-    post: operations["addTicketComment"];
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/invoices": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
+    "/invoices": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List invoices */
+        get: operations["listInvoices"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
     };
-    /** List invoices */
-    get: operations["listInvoices"];
-    put?: never;
-    post?: never;
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/invoices/{invoiceId}": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
+    "/invoices/{invoiceId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get invoice */
+        get: operations["getInvoice"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
     };
-    /** Get invoice */
-    get: operations["getInvoice"];
-    put?: never;
-    post?: never;
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/usage": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
+    "/usage": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get current usage */
+        get: operations["getUsage"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
     };
-    /** Get current usage */
-    get: operations["getUsage"];
-    put?: never;
-    post?: never;
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/usage/history": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
+    "/usage/history": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get usage history */
+        get: operations["getUsageHistory"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
     };
-    /** Get usage history */
-    get: operations["getUsageHistory"];
-    put?: never;
-    post?: never;
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/provider/info": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
+    "/provider/info": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get provider info */
+        get: operations["getProviderInfo"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
     };
-    /** Get provider info */
-    get: operations["getProviderInfo"];
-    put?: never;
-    post?: never;
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/provider/pricing": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
+    "/provider/pricing": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get provider pricing */
+        get: operations["getProviderPricing"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
     };
-    /** Get provider pricing */
-    get: operations["getProviderPricing"];
-    put?: never;
-    post?: never;
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/provider/capacity": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
+    "/provider/capacity": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get provider capacity */
+        get: operations["getProviderCapacity"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
     };
-    /** Get provider capacity */
-    get: operations["getProviderCapacity"];
-    put?: never;
-    post?: never;
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/provider/attributes": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
+    "/provider/attributes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get provider attributes */
+        get: operations["getProviderAttributes"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
     };
-    /** Get provider attributes */
-    get: operations["getProviderAttributes"];
-    put?: never;
-    post?: never;
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
+    "/vault/blobs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Upload a vault blob */
+        post: operations["uploadVaultBlob"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/vault/blobs/{blobId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Retrieve and decrypt a vault blob */
+        get: operations["getVaultBlob"];
+        put?: never;
+        post?: never;
+        /** Delete a vault blob */
+        delete: operations["deleteVaultBlob"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/vault/blobs/{blobId}/metadata": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get vault blob metadata */
+        get: operations["getVaultBlobMetadata"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/vault/audit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Search vault audit events */
+        get: operations["listVaultAuditEvents"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
-  schemas: {
-    ErrorResponse: {
-      error: string;
-      message: string;
-      code?: string;
-      details?: {
-        [key: string]: unknown;
-      };
+    schemas: {
+        VaultUploadRequest: {
+            /** @enum {string} */
+            scope: "veid" | "support" | "market" | "audit";
+            org_id?: string;
+            retention_policy?: string;
+            /** Format: date-time */
+            expires_at?: string;
+            tags?: {
+                [key: string]: string;
+            };
+            /**
+             * Format: byte
+             * @description Base64-encoded plaintext payload (legacy alias of content_base64)
+             */
+            payload_base64?: string;
+            /**
+             * Format: byte
+             * @description Base64-encoded plaintext payload
+             */
+            content_base64?: string;
+        };
+        VaultUploadResponse: {
+            metadata?: components["schemas"]["VaultBlobMetadata"];
+        };
+        VaultRetrieveResponse: {
+            /** Format: byte */
+            data_base64?: string;
+            metadata?: components["schemas"]["VaultBlobMetadata"];
+        };
+        VaultAuditResponse: {
+            events?: components["schemas"]["VaultAuditEvent"][];
+        };
+        VaultBlobMetadata: {
+            id?: string;
+            scope?: string;
+            key_id?: string;
+            /** Format: int64 */
+            key_version?: number;
+            content_hash?: string;
+            /** Format: int64 */
+            size?: number;
+            /** Format: int64 */
+            encrypted_size?: number;
+            owner?: string;
+            org_id?: string;
+            /** Format: date-time */
+            created_at?: string;
+            /** Format: date-time */
+            expires_at?: string;
+            retention_policy?: string;
+            tags?: {
+                [key: string]: string;
+            };
+            backend?: string;
+            backend_ref?: string;
+        };
+        VaultAuditEvent: {
+            id?: string;
+            event_type?: string;
+            blob_id?: string;
+            scope?: string;
+            requester?: string;
+            org_id?: string;
+            success?: boolean;
+            error?: string;
+            /** Format: date-time */
+            timestamp?: string;
+            previous_hash?: string;
+            hash?: string;
+            metadata?: {
+                [key: string]: string;
+            };
+        };
+        ErrorResponse: {
+            error: string;
+            message: string;
+            code?: string;
+            details?: {
+                [key: string]: unknown;
+            };
+        };
+        HealthResponse: {
+            /** @enum {string} */
+            status?: "ok" | "degraded" | "down";
+            version?: string;
+            uptime_seconds?: number;
+            /** Format: date-time */
+            timestamp?: string;
+        };
+        DeploymentSummary: {
+            id?: string;
+            owner?: string;
+            provider?: string;
+            /** @enum {string} */
+            state?: "pending" | "active" | "closed";
+            /** Format: date-time */
+            created_at?: string;
+            /** Format: date-time */
+            updated_at?: string;
+        };
+        DeploymentDetail: components["schemas"]["DeploymentSummary"] & {
+            resources?: components["schemas"]["ResourceMetrics"];
+            services?: components["schemas"]["ServiceStatus"][];
+            metadata?: {
+                [key: string]: unknown;
+            };
+        };
+        DeploymentListResponse: {
+            deployments?: components["schemas"]["DeploymentSummary"][];
+            next_cursor?: string;
+        };
+        DeploymentStatus: {
+            lease_id?: string;
+            state?: string;
+            replicas?: {
+                ready?: number;
+                total?: number;
+            };
+            services?: components["schemas"]["ServiceStatus"][];
+            /** Format: date-time */
+            last_updated?: string;
+        };
+        ServiceStatus: {
+            name?: string;
+            state?: string;
+            replicas?: number;
+            ports?: components["schemas"]["PortMapping"][];
+        };
+        PortMapping: {
+            port?: number;
+            protocol?: string;
+        };
+        DeploymentActionRequest: {
+            /** @enum {string} */
+            action: "start" | "stop" | "restart" | "resize";
+            parameters?: {
+                [key: string]: unknown;
+            };
+        };
+        DeploymentActionResponse: {
+            success?: boolean;
+            message?: string;
+            operation_id?: string;
+            state?: string;
+        };
+        DeploymentEvent: {
+            id?: string;
+            type?: string;
+            message?: string;
+            /** Format: date-time */
+            created_at?: string;
+        };
+        DeploymentEventListResponse: {
+            events?: components["schemas"]["DeploymentEvent"][];
+            next_cursor?: string;
+        };
+        ShellSessionRequest: {
+            container?: string;
+        };
+        ShellSessionResponse: {
+            token?: string;
+            /** Format: date-time */
+            expires_at?: string;
+            deployment?: string;
+            container?: string;
+            session_ttl?: number;
+        };
+        ResourceMetrics: {
+            cpu?: components["schemas"]["UsageMetric"];
+            memory?: components["schemas"]["UsageMetric"];
+            storage?: components["schemas"]["UsageMetric"];
+            network?: components["schemas"]["NetworkMetric"];
+            /** Format: date-time */
+            timestamp?: string;
+        };
+        UsageMetric: {
+            usage?: number;
+            limit?: number;
+            unit?: string;
+        };
+        NetworkMetric: {
+            rx_bytes?: number;
+            tx_bytes?: number;
+        };
+        MetricsPoint: {
+            /** Format: date-time */
+            timestamp?: string;
+            metrics?: components["schemas"]["ResourceMetrics"];
+        };
+        MetricsSeriesResponse: {
+            series?: components["schemas"]["MetricsPoint"][];
+        };
+        Organization: {
+            id?: string;
+            name?: string;
+            description?: string;
+            /** Format: date-time */
+            created_at?: string;
+        };
+        OrganizationDetail: components["schemas"]["Organization"] & {
+            members?: components["schemas"]["OrganizationMember"][];
+        };
+        OrganizationMember: {
+            address?: string;
+            /** @enum {string} */
+            role?: "admin" | "member" | "viewer";
+            /** Format: date-time */
+            joined_at?: string;
+        };
+        OrganizationInviteRequest: {
+            address: string;
+            /** @enum {string} */
+            role: "admin" | "member" | "viewer";
+        };
+        Ticket: {
+            id?: string;
+            deployment_id?: string;
+            subject?: string;
+            description?: string;
+            /** @enum {string} */
+            status?: "open" | "in_progress" | "waiting_customer" | "resolved" | "closed";
+            /** @enum {string} */
+            priority?: "low" | "medium" | "high" | "critical";
+            /** Format: date-time */
+            created_at?: string;
+            /** Format: date-time */
+            updated_at?: string;
+        };
+        TicketDetail: components["schemas"]["Ticket"] & {
+            comments?: components["schemas"]["TicketComment"][];
+        };
+        CreateTicketRequest: {
+            deployment_id: string;
+            subject: string;
+            description: string;
+            /** @enum {string} */
+            category?: "technical" | "billing" | "general" | "security";
+            /**
+             * @default medium
+             * @enum {string}
+             */
+            priority: "low" | "medium" | "high" | "critical";
+        };
+        UpdateTicketRequest: {
+            /** @enum {string} */
+            status?: "open" | "in_progress" | "waiting_customer" | "resolved" | "closed";
+            /** @enum {string} */
+            priority?: "low" | "medium" | "high" | "critical";
+        };
+        TicketCommentRequest: {
+            message: string;
+        };
+        TicketComment: {
+            id?: string;
+            author?: string;
+            message?: string;
+            /** Format: date-time */
+            created_at?: string;
+        };
+        Invoice: {
+            id?: string;
+            number?: string;
+            /** @enum {string} */
+            status?: "pending" | "paid" | "overdue";
+            total?: string;
+            currency?: string;
+            /** Format: date-time */
+            due_date?: string;
+            /** Format: date-time */
+            issued_at?: string;
+            line_items?: components["schemas"]["InvoiceLineItem"][];
+        };
+        InvoiceLineItem: {
+            description?: string;
+            quantity?: number;
+            unit_price?: string;
+            total?: string;
+        };
+        InvoiceListResponse: {
+            invoices?: components["schemas"]["Invoice"][];
+            next_cursor?: string;
+        };
+        UsageSummary: {
+            period?: components["schemas"]["UsagePeriod"];
+            total_cost?: string;
+            currency?: string;
+            resources?: components["schemas"]["ResourceMetrics"];
+        };
+        UsageHistoryResponse: {
+            series?: components["schemas"]["UsageHistoryPoint"][];
+        };
+        UsageHistoryPoint: {
+            period?: components["schemas"]["UsagePeriod"];
+            total_cost?: string;
+            currency?: string;
+            resources?: components["schemas"]["ResourceMetrics"];
+        };
+        UsagePeriod: {
+            /** Format: date-time */
+            start?: string;
+            /** Format: date-time */
+            end?: string;
+        };
+        ProviderInfo: {
+            address?: string;
+            name?: string;
+            version?: string;
+            chain_id?: string;
+            capabilities?: string[];
+            region?: string;
+            endpoints?: components["schemas"]["ProviderEndpoints"];
+        };
+        ProviderEndpoints: {
+            rest?: string;
+            websocket?: string;
+            grpc?: string;
+        };
+        ProviderPricing: {
+            currency?: string;
+            cpu?: components["schemas"]["ResourcePrice"];
+            memory?: components["schemas"]["ResourcePrice"];
+            storage?: components["schemas"]["ResourcePrice"];
+            gpu?: components["schemas"]["ResourcePrice"];
+        };
+        ResourcePrice: {
+            unit?: string;
+            price?: string;
+            /** @enum {string} */
+            interval?: "hourly" | "daily" | "monthly";
+        };
+        ProviderCapacity: {
+            cpu_cores?: number;
+            memory_gb?: number;
+            storage_gb?: number;
+            gpu_units?: number;
+        };
+        ProviderAttributes: {
+            attributes?: {
+                [key: string]: unknown;
+            };
+        };
     };
-    HealthResponse: {
-      /** @enum {string} */
-      status?: "ok" | "degraded" | "down";
-      version?: string;
-      uptime_seconds?: number;
-      /** Format: date-time */
-      timestamp?: string;
+    responses: {
+        /** @description Authentication required */
+        Unauthorized: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["ErrorResponse"];
+            };
+        };
+        /** @description Not authorized */
+        Forbidden: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["ErrorResponse"];
+            };
+        };
+        /** @description Resource not found */
+        NotFound: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["ErrorResponse"];
+            };
+        };
+        /** @description Invalid request */
+        BadRequest: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["ErrorResponse"];
+            };
+        };
     };
-    DeploymentSummary: {
-      id?: string;
-      owner?: string;
-      provider?: string;
-      /** @enum {string} */
-      state?: "pending" | "active" | "closed";
-      /** Format: date-time */
-      created_at?: string;
-      /** Format: date-time */
-      updated_at?: string;
+    parameters: {
+        /** @description Deployment (lease) identifier */
+        deploymentId: string;
+        orgId: string;
+        ticketId: string;
+        invoiceId: string;
+        VaultBlobId: string;
+        addressParam: string;
+        limitParam: number;
+        cursorParam: string;
+        /** @description Start timestamp (RFC3339) */
+        startTimeParam: string;
+        /** @description End timestamp (RFC3339) */
+        endTimeParam: string;
+        /** @description Aggregation interval (e.g. 1m, 5m, 1h) */
+        intervalParam: string;
     };
-    DeploymentDetail: components["schemas"]["DeploymentSummary"] & {
-      resources?: components["schemas"]["ResourceMetrics"];
-      services?: components["schemas"]["ServiceStatus"][];
-      metadata?: {
-        [key: string]: unknown;
-      };
-    };
-    DeploymentListResponse: {
-      deployments?: components["schemas"]["DeploymentSummary"][];
-      next_cursor?: string;
-    };
-    DeploymentStatus: {
-      lease_id?: string;
-      state?: string;
-      replicas?: {
-        ready?: number;
-        total?: number;
-      };
-      services?: components["schemas"]["ServiceStatus"][];
-      /** Format: date-time */
-      last_updated?: string;
-    };
-    ServiceStatus: {
-      name?: string;
-      state?: string;
-      replicas?: number;
-      ports?: components["schemas"]["PortMapping"][];
-    };
-    PortMapping: {
-      port?: number;
-      protocol?: string;
-    };
-    DeploymentActionRequest: {
-      /** @enum {string} */
-      action: "start" | "stop" | "restart";
-      parameters?: {
-        [key: string]: unknown;
-      };
-    };
-    DeploymentActionResponse: {
-      success?: boolean;
-      message?: string;
-    };
-    DeploymentEvent: {
-      id?: string;
-      type?: string;
-      message?: string;
-      /** Format: date-time */
-      created_at?: string;
-    };
-    DeploymentEventListResponse: {
-      events?: components["schemas"]["DeploymentEvent"][];
-      next_cursor?: string;
-    };
-    ShellSessionRequest: {
-      container?: string;
-    };
-    ShellSessionResponse: {
-      token?: string;
-      /** Format: date-time */
-      expires_at?: string;
-      deployment?: string;
-      container?: string;
-      session_ttl?: number;
-    };
-    ResourceMetrics: {
-      cpu?: components["schemas"]["UsageMetric"];
-      memory?: components["schemas"]["UsageMetric"];
-      storage?: components["schemas"]["UsageMetric"];
-      network?: components["schemas"]["NetworkMetric"];
-      /** Format: date-time */
-      timestamp?: string;
-    };
-    UsageMetric: {
-      usage?: number;
-      limit?: number;
-      unit?: string;
-    };
-    NetworkMetric: {
-      rx_bytes?: number;
-      tx_bytes?: number;
-    };
-    MetricsPoint: {
-      /** Format: date-time */
-      timestamp?: string;
-      metrics?: components["schemas"]["ResourceMetrics"];
-    };
-    MetricsSeriesResponse: {
-      series?: components["schemas"]["MetricsPoint"][];
-    };
-    Organization: {
-      id?: string;
-      name?: string;
-      description?: string;
-      /** Format: date-time */
-      created_at?: string;
-    };
-    OrganizationDetail: components["schemas"]["Organization"] & {
-      members?: components["schemas"]["OrganizationMember"][];
-    };
-    OrganizationMember: {
-      address?: string;
-      /** @enum {string} */
-      role?: "admin" | "member" | "viewer";
-      /** Format: date-time */
-      joined_at?: string;
-    };
-    OrganizationInviteRequest: {
-      address: string;
-      /** @enum {string} */
-      role: "admin" | "member" | "viewer";
-    };
-    Ticket: {
-      id?: string;
-      deployment_id?: string;
-      subject?: string;
-      description?: string;
-      /** @enum {string} */
-      status?:
-        | "open"
-        | "in_progress"
-        | "waiting_customer"
-        | "resolved"
-        | "closed";
-      /** @enum {string} */
-      priority?: "low" | "medium" | "high" | "critical";
-      /** Format: date-time */
-      created_at?: string;
-      /** Format: date-time */
-      updated_at?: string;
-    };
-    TicketDetail: components["schemas"]["Ticket"] & {
-      comments?: components["schemas"]["TicketComment"][];
-    };
-    CreateTicketRequest: {
-      deployment_id: string;
-      subject: string;
-      description: string;
-      /** @enum {string} */
-      category?: "technical" | "billing" | "general" | "security";
-      /**
-       * @default medium
-       * @enum {string}
-       */
-      priority: "low" | "medium" | "high" | "critical";
-    };
-    UpdateTicketRequest: {
-      /** @enum {string} */
-      status?:
-        | "open"
-        | "in_progress"
-        | "waiting_customer"
-        | "resolved"
-        | "closed";
-      /** @enum {string} */
-      priority?: "low" | "medium" | "high" | "critical";
-    };
-    TicketCommentRequest: {
-      message: string;
-    };
-    TicketComment: {
-      id?: string;
-      author?: string;
-      message?: string;
-      /** Format: date-time */
-      created_at?: string;
-    };
-    Invoice: {
-      id?: string;
-      number?: string;
-      /** @enum {string} */
-      status?: "pending" | "paid" | "overdue";
-      total?: string;
-      currency?: string;
-      /** Format: date-time */
-      due_date?: string;
-      /** Format: date-time */
-      issued_at?: string;
-      line_items?: components["schemas"]["InvoiceLineItem"][];
-    };
-    InvoiceLineItem: {
-      description?: string;
-      quantity?: number;
-      unit_price?: string;
-      total?: string;
-    };
-    InvoiceListResponse: {
-      invoices?: components["schemas"]["Invoice"][];
-      next_cursor?: string;
-    };
-    UsageSummary: {
-      period?: components["schemas"]["UsagePeriod"];
-      total_cost?: string;
-      currency?: string;
-      resources?: components["schemas"]["ResourceMetrics"];
-    };
-    UsageHistoryResponse: {
-      series?: components["schemas"]["UsageHistoryPoint"][];
-    };
-    UsageHistoryPoint: {
-      period?: components["schemas"]["UsagePeriod"];
-      total_cost?: string;
-      currency?: string;
-      resources?: components["schemas"]["ResourceMetrics"];
-    };
-    UsagePeriod: {
-      /** Format: date-time */
-      start?: string;
-      /** Format: date-time */
-      end?: string;
-    };
-    ProviderInfo: {
-      address?: string;
-      name?: string;
-      version?: string;
-      chain_id?: string;
-      capabilities?: string[];
-      region?: string;
-      endpoints?: components["schemas"]["ProviderEndpoints"];
-    };
-    ProviderEndpoints: {
-      rest?: string;
-      websocket?: string;
-      grpc?: string;
-    };
-    ProviderPricing: {
-      currency?: string;
-      cpu?: components["schemas"]["ResourcePrice"];
-      memory?: components["schemas"]["ResourcePrice"];
-      storage?: components["schemas"]["ResourcePrice"];
-      gpu?: components["schemas"]["ResourcePrice"];
-    };
-    ResourcePrice: {
-      unit?: string;
-      price?: string;
-      /** @enum {string} */
-      interval?: "hourly" | "daily" | "monthly";
-    };
-    ProviderCapacity: {
-      cpu_cores?: number;
-      memory_gb?: number;
-      storage_gb?: number;
-      gpu_units?: number;
-    };
-    ProviderAttributes: {
-      attributes?: {
-        [key: string]: unknown;
-      };
-    };
-  };
-  responses: {
-    /** @description Authentication required */
-    Unauthorized: {
-      headers: {
-        [name: string]: unknown;
-      };
-      content: {
-        "application/json": components["schemas"]["ErrorResponse"];
-      };
-    };
-    /** @description Not authorized */
-    Forbidden: {
-      headers: {
-        [name: string]: unknown;
-      };
-      content: {
-        "application/json": components["schemas"]["ErrorResponse"];
-      };
-    };
-    /** @description Resource not found */
-    NotFound: {
-      headers: {
-        [name: string]: unknown;
-      };
-      content: {
-        "application/json": components["schemas"]["ErrorResponse"];
-      };
-    };
-    /** @description Invalid request */
-    BadRequest: {
-      headers: {
-        [name: string]: unknown;
-      };
-      content: {
-        "application/json": components["schemas"]["ErrorResponse"];
-      };
-    };
-  };
-  parameters: {
-    /** @description Deployment (lease) identifier */
-    deploymentId: string;
-    orgId: string;
-    ticketId: string;
-    invoiceId: string;
-    addressParam: string;
-    limitParam: number;
-    cursorParam: string;
-    /** @description Start timestamp (RFC3339) */
-    startTimeParam: string;
-    /** @description End timestamp (RFC3339) */
-    endTimeParam: string;
-    /** @description Aggregation interval (e.g. 1m, 5m, 1h) */
-    intervalParam: string;
-  };
-  requestBodies: never;
-  headers: never;
-  pathItems: never;
+    requestBodies: never;
+    headers: never;
+    pathItems: never;
 }
 export type $defs = Record<string, never>;
 export interface operations {
-  getHealth: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description Provider is healthy */
-      200: {
-        headers: {
-          [name: string]: unknown;
+    getHealth: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
         };
-        content: {
-          "application/json": components["schemas"]["HealthResponse"];
+        requestBody?: never;
+        responses: {
+            /** @description Provider is healthy */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HealthResponse"];
+                };
+            };
+            /** @description Invalid request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Provider is unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
         };
-      };
-      /** @description Invalid request */
-      400: {
-        headers: {
-          [name: string]: unknown;
+    };
+    listDeployments: {
+        parameters: {
+            query?: {
+                limit?: components["parameters"]["limitParam"];
+                cursor?: components["parameters"]["cursorParam"];
+                /** @description Filter by deployment status */
+                status?: "pending" | "active" | "closed";
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
         };
-        content: {
-          "application/json": components["schemas"]["ErrorResponse"];
+        requestBody?: never;
+        responses: {
+            /** @description Deployments list */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DeploymentListResponse"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
         };
-      };
-      /** @description Provider is unavailable */
-      503: {
-        headers: {
-          [name: string]: unknown;
+    };
+    getDeployment: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Deployment (lease) identifier */
+                deploymentId: components["parameters"]["deploymentId"];
+            };
+            cookie?: never;
         };
-        content: {
-          "application/json": components["schemas"]["ErrorResponse"];
+        requestBody?: never;
+        responses: {
+            /** @description Deployment details */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DeploymentDetail"];
+                };
+            };
+            404: components["responses"]["NotFound"];
         };
-      };
     };
-  };
-  listDeployments: {
-    parameters: {
-      query?: {
-        limit?: components["parameters"]["limitParam"];
-        cursor?: components["parameters"]["cursorParam"];
-        /** @description Filter by deployment status */
-        status?: "pending" | "active" | "closed";
-      };
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description Deployments list */
-      200: {
-        headers: {
-          [name: string]: unknown;
+    getDeploymentStatus: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Deployment (lease) identifier */
+                deploymentId: components["parameters"]["deploymentId"];
+            };
+            cookie?: never;
         };
-        content: {
-          "application/json": components["schemas"]["DeploymentListResponse"];
+        requestBody?: never;
+        responses: {
+            /** @description Deployment status */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DeploymentStatus"];
+                };
+            };
+            404: components["responses"]["NotFound"];
         };
-      };
-      401: components["responses"]["Unauthorized"];
     };
-  };
-  getDeployment: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path: {
-        /** @description Deployment (lease) identifier */
-        deploymentId: components["parameters"]["deploymentId"];
-      };
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description Deployment details */
-      200: {
-        headers: {
-          [name: string]: unknown;
+    getDeploymentLogs: {
+        parameters: {
+            query?: {
+                /** @description Number of log lines to return */
+                tail?: number;
+                /** @description Filter by log level */
+                level?: "debug" | "info" | "warn" | "error";
+                /** @description Filter by case-insensitive substring */
+                search?: string;
+                /** @description Set to 1 to request downloadable output */
+                download?: "1";
+                /** @description When using WebSockets, set to 0 to disable follow mode */
+                follow?: "0" | "1";
+            };
+            header?: never;
+            path: {
+                /** @description Deployment (lease) identifier */
+                deploymentId: components["parameters"]["deploymentId"];
+            };
+            cookie?: never;
         };
-        content: {
-          "application/json": components["schemas"]["DeploymentDetail"];
+        requestBody?: never;
+        responses: {
+            /** @description Log lines */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/plain": string;
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
         };
-      };
-      404: components["responses"]["NotFound"];
     };
-  };
-  getDeploymentStatus: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path: {
-        /** @description Deployment (lease) identifier */
-        deploymentId: components["parameters"]["deploymentId"];
-      };
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description Deployment status */
-      200: {
-        headers: {
-          [name: string]: unknown;
+    createShellSession: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Deployment (lease) identifier */
+                deploymentId: components["parameters"]["deploymentId"];
+            };
+            cookie?: never;
         };
-        content: {
-          "application/json": components["schemas"]["DeploymentStatus"];
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["ShellSessionRequest"];
+            };
         };
-      };
-      404: components["responses"]["NotFound"];
-    };
-  };
-  getDeploymentLogs: {
-    parameters: {
-      query?: {
-        /** @description Number of log lines to return */
-        tail?: number;
-        /** @description Filter by log level */
-        level?: "debug" | "info" | "warn" | "error";
-        /** @description Filter by case-insensitive substring */
-        search?: string;
-        /** @description Set to 1 to request downloadable output */
-        download?: "1";
-        /** @description When using WebSockets, set to 0 to disable follow mode */
-        follow?: "0" | "1";
-      };
-      header?: never;
-      path: {
-        /** @description Deployment (lease) identifier */
-        deploymentId: components["parameters"]["deploymentId"];
-      };
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description Log lines */
-      200: {
-        headers: {
-          [name: string]: unknown;
+        responses: {
+            /** @description Session token */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ShellSessionResponse"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
         };
-        content: {
-          "text/plain": string;
+    };
+    connectShell: {
+        parameters: {
+            query?: {
+                /** @description Session token issued by `/shell/session` */
+                token?: string;
+                /** @description Target container name */
+                container?: string;
+            };
+            header?: never;
+            path: {
+                /** @description Deployment (lease) identifier */
+                deploymentId: components["parameters"]["deploymentId"];
+            };
+            cookie?: never;
         };
-      };
-      401: components["responses"]["Unauthorized"];
-      404: components["responses"]["NotFound"];
-    };
-  };
-  createShellSession: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path: {
-        /** @description Deployment (lease) identifier */
-        deploymentId: components["parameters"]["deploymentId"];
-      };
-      cookie?: never;
-    };
-    requestBody?: {
-      content: {
-        "application/json": components["schemas"]["ShellSessionRequest"];
-      };
-    };
-    responses: {
-      /** @description Session token */
-      200: {
-        headers: {
-          [name: string]: unknown;
+        requestBody?: never;
+        responses: {
+            /** @description WebSocket connection established */
+            101: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description WebSocket upgrade accepted */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
         };
-        content: {
-          "application/json": components["schemas"]["ShellSessionResponse"];
+    };
+    getDeploymentMetrics: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Deployment (lease) identifier */
+                deploymentId: components["parameters"]["deploymentId"];
+            };
+            cookie?: never;
         };
-      };
-      401: components["responses"]["Unauthorized"];
-      403: components["responses"]["Forbidden"];
-    };
-  };
-  connectShell: {
-    parameters: {
-      query?: {
-        /** @description Session token issued by `/shell/session` */
-        token?: string;
-        /** @description Target container name */
-        container?: string;
-      };
-      header?: never;
-      path: {
-        /** @description Deployment (lease) identifier */
-        deploymentId: components["parameters"]["deploymentId"];
-      };
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description WebSocket connection established */
-      101: {
-        headers: {
-          [name: string]: unknown;
+        requestBody?: never;
+        responses: {
+            /** @description Current metrics */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResourceMetrics"];
+                };
+            };
+            404: components["responses"]["NotFound"];
         };
-        content?: never;
-      };
-      /** @description WebSocket upgrade accepted */
-      200: {
-        headers: {
-          [name: string]: unknown;
+    };
+    getDeploymentMetricsHistory: {
+        parameters: {
+            query?: {
+                /** @description Start timestamp (RFC3339) */
+                start?: components["parameters"]["startTimeParam"];
+                /** @description End timestamp (RFC3339) */
+                end?: components["parameters"]["endTimeParam"];
+                /** @description Aggregation interval (e.g. 1m, 5m, 1h) */
+                interval?: components["parameters"]["intervalParam"];
+            };
+            header?: never;
+            path: {
+                /** @description Deployment (lease) identifier */
+                deploymentId: components["parameters"]["deploymentId"];
+            };
+            cookie?: never;
         };
-        content?: never;
-      };
-      401: components["responses"]["Unauthorized"];
-      403: components["responses"]["Forbidden"];
-    };
-  };
-  getDeploymentMetrics: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path: {
-        /** @description Deployment (lease) identifier */
-        deploymentId: components["parameters"]["deploymentId"];
-      };
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description Current metrics */
-      200: {
-        headers: {
-          [name: string]: unknown;
+        requestBody?: never;
+        responses: {
+            /** @description Metrics time series */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MetricsSeriesResponse"];
+                };
+            };
+            404: components["responses"]["NotFound"];
         };
-        content: {
-          "application/json": components["schemas"]["ResourceMetrics"];
+    };
+    getDeploymentEvents: {
+        parameters: {
+            query?: {
+                limit?: components["parameters"]["limitParam"];
+                cursor?: components["parameters"]["cursorParam"];
+            };
+            header?: never;
+            path: {
+                /** @description Deployment (lease) identifier */
+                deploymentId: components["parameters"]["deploymentId"];
+            };
+            cookie?: never;
         };
-      };
-      404: components["responses"]["NotFound"];
-    };
-  };
-  getDeploymentMetricsHistory: {
-    parameters: {
-      query?: {
-        /** @description Start timestamp (RFC3339) */
-        start?: components["parameters"]["startTimeParam"];
-        /** @description End timestamp (RFC3339) */
-        end?: components["parameters"]["endTimeParam"];
-        /** @description Aggregation interval (e.g. 1m, 5m, 1h) */
-        interval?: components["parameters"]["intervalParam"];
-      };
-      header?: never;
-      path: {
-        /** @description Deployment (lease) identifier */
-        deploymentId: components["parameters"]["deploymentId"];
-      };
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description Metrics time series */
-      200: {
-        headers: {
-          [name: string]: unknown;
+        requestBody?: never;
+        responses: {
+            /** @description Deployment events */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DeploymentEventListResponse"];
+                };
+            };
+            404: components["responses"]["NotFound"];
         };
-        content: {
-          "application/json": components["schemas"]["MetricsSeriesResponse"];
+    };
+    performDeploymentAction: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Deployment (lease) identifier */
+                deploymentId: components["parameters"]["deploymentId"];
+            };
+            cookie?: never;
         };
-      };
-      404: components["responses"]["NotFound"];
-    };
-  };
-  getDeploymentEvents: {
-    parameters: {
-      query?: {
-        limit?: components["parameters"]["limitParam"];
-        cursor?: components["parameters"]["cursorParam"];
-      };
-      header?: never;
-      path: {
-        /** @description Deployment (lease) identifier */
-        deploymentId: components["parameters"]["deploymentId"];
-      };
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description Deployment events */
-      200: {
-        headers: {
-          [name: string]: unknown;
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DeploymentActionRequest"];
+            };
         };
-        content: {
-          "application/json": components["schemas"]["DeploymentEventListResponse"];
+        responses: {
+            /** @description Action response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DeploymentActionResponse"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            404: components["responses"]["NotFound"];
         };
-      };
-      404: components["responses"]["NotFound"];
     };
-  };
-  performDeploymentAction: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path: {
-        /** @description Deployment (lease) identifier */
-        deploymentId: components["parameters"]["deploymentId"];
-      };
-      cookie?: never;
-    };
-    requestBody: {
-      content: {
-        "application/json": components["schemas"]["DeploymentActionRequest"];
-      };
-    };
-    responses: {
-      /** @description Action response */
-      200: {
-        headers: {
-          [name: string]: unknown;
+    getAggregatedMetrics: {
+        parameters: {
+            query?: {
+                /** @description Start timestamp (RFC3339) */
+                start?: components["parameters"]["startTimeParam"];
+                /** @description End timestamp (RFC3339) */
+                end?: components["parameters"]["endTimeParam"];
+                /** @description Aggregation interval (e.g. 1m, 5m, 1h) */
+                interval?: components["parameters"]["intervalParam"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
         };
-        content: {
-          "application/json": components["schemas"]["DeploymentActionResponse"];
+        requestBody?: never;
+        responses: {
+            /** @description Aggregated metrics */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MetricsSeriesResponse"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
         };
-      };
-      400: components["responses"]["BadRequest"];
-      404: components["responses"]["NotFound"];
     };
-  };
-  getAggregatedMetrics: {
-    parameters: {
-      query?: {
-        /** @description Start timestamp (RFC3339) */
-        start?: components["parameters"]["startTimeParam"];
-        /** @description End timestamp (RFC3339) */
-        end?: components["parameters"]["endTimeParam"];
-        /** @description Aggregation interval (e.g. 1m, 5m, 1h) */
-        interval?: components["parameters"]["intervalParam"];
-      };
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description Aggregated metrics */
-      200: {
-        headers: {
-          [name: string]: unknown;
+    listOrganizations: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
         };
-        content: {
-          "application/json": components["schemas"]["MetricsSeriesResponse"];
+        requestBody?: never;
+        responses: {
+            /** @description Organization list */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Organization"][];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
         };
-      };
-      400: components["responses"]["BadRequest"];
     };
-  };
-  listOrganizations: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description Organization list */
-      200: {
-        headers: {
-          [name: string]: unknown;
+    getOrganization: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                orgId: components["parameters"]["orgId"];
+            };
+            cookie?: never;
         };
-        content: {
-          "application/json": components["schemas"]["Organization"][];
+        requestBody?: never;
+        responses: {
+            /** @description Organization detail */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OrganizationDetail"];
+                };
+            };
+            404: components["responses"]["NotFound"];
         };
-      };
-      401: components["responses"]["Unauthorized"];
     };
-  };
-  getOrganization: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path: {
-        orgId: components["parameters"]["orgId"];
-      };
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description Organization detail */
-      200: {
-        headers: {
-          [name: string]: unknown;
+    listOrganizationMembers: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                orgId: components["parameters"]["orgId"];
+            };
+            cookie?: never;
         };
-        content: {
-          "application/json": components["schemas"]["OrganizationDetail"];
+        requestBody?: never;
+        responses: {
+            /** @description Organization members */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OrganizationMember"][];
+                };
+            };
+            404: components["responses"]["NotFound"];
         };
-      };
-      404: components["responses"]["NotFound"];
     };
-  };
-  listOrganizationMembers: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path: {
-        orgId: components["parameters"]["orgId"];
-      };
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description Organization members */
-      200: {
-        headers: {
-          [name: string]: unknown;
+    inviteOrganizationMember: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                orgId: components["parameters"]["orgId"];
+            };
+            cookie?: never;
         };
-        content: {
-          "application/json": components["schemas"]["OrganizationMember"][];
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OrganizationInviteRequest"];
+            };
         };
-      };
-      404: components["responses"]["NotFound"];
-    };
-  };
-  inviteOrganizationMember: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path: {
-        orgId: components["parameters"]["orgId"];
-      };
-      cookie?: never;
-    };
-    requestBody: {
-      content: {
-        "application/json": components["schemas"]["OrganizationInviteRequest"];
-      };
-    };
-    responses: {
-      /** @description Member invited */
-      200: {
-        headers: {
-          [name: string]: unknown;
+        responses: {
+            /** @description Member invited */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OrganizationMember"];
+                };
+            };
+            403: components["responses"]["Forbidden"];
         };
-        content: {
-          "application/json": components["schemas"]["OrganizationMember"];
+    };
+    removeOrganizationMember: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                orgId: components["parameters"]["orgId"];
+                address: components["parameters"]["addressParam"];
+            };
+            cookie?: never;
         };
-      };
-      403: components["responses"]["Forbidden"];
-    };
-  };
-  removeOrganizationMember: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path: {
-        orgId: components["parameters"]["orgId"];
-        address: components["parameters"]["addressParam"];
-      };
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description Member removed */
-      204: {
-        headers: {
-          [name: string]: unknown;
+        requestBody?: never;
+        responses: {
+            /** @description Member removed */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            403: components["responses"]["Forbidden"];
         };
-        content?: never;
-      };
-      403: components["responses"]["Forbidden"];
     };
-  };
-  listTickets: {
-    parameters: {
-      query?: {
-        status?:
-          | "open"
-          | "in_progress"
-          | "waiting_customer"
-          | "resolved"
-          | "closed";
-        deployment_id?: string;
-      };
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description Tickets list */
-      200: {
-        headers: {
-          [name: string]: unknown;
+    listTickets: {
+        parameters: {
+            query?: {
+                status?: "open" | "in_progress" | "waiting_customer" | "resolved" | "closed";
+                deployment_id?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
         };
-        content: {
-          "application/json": components["schemas"]["Ticket"][];
+        requestBody?: never;
+        responses: {
+            /** @description Tickets list */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Ticket"][];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
         };
-      };
-      401: components["responses"]["Unauthorized"];
     };
-  };
-  createTicket: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    requestBody: {
-      content: {
-        "application/json": components["schemas"]["CreateTicketRequest"];
-      };
-    };
-    responses: {
-      /** @description Ticket created */
-      201: {
-        headers: {
-          [name: string]: unknown;
+    createTicket: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
         };
-        content: {
-          "application/json": components["schemas"]["Ticket"];
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateTicketRequest"];
+            };
         };
-      };
-      400: components["responses"]["BadRequest"];
-    };
-  };
-  getTicket: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path: {
-        ticketId: components["parameters"]["ticketId"];
-      };
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description Ticket detail */
-      200: {
-        headers: {
-          [name: string]: unknown;
+        responses: {
+            /** @description Ticket created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Ticket"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
         };
-        content: {
-          "application/json": components["schemas"]["TicketDetail"];
+    };
+    getTicket: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                ticketId: components["parameters"]["ticketId"];
+            };
+            cookie?: never;
         };
-      };
-      404: components["responses"]["NotFound"];
-    };
-  };
-  updateTicket: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path: {
-        ticketId: components["parameters"]["ticketId"];
-      };
-      cookie?: never;
-    };
-    requestBody: {
-      content: {
-        "application/json": components["schemas"]["UpdateTicketRequest"];
-      };
-    };
-    responses: {
-      /** @description Ticket updated */
-      200: {
-        headers: {
-          [name: string]: unknown;
+        requestBody?: never;
+        responses: {
+            /** @description Ticket detail */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TicketDetail"];
+                };
+            };
+            404: components["responses"]["NotFound"];
         };
-        content: {
-          "application/json": components["schemas"]["Ticket"];
+    };
+    updateTicket: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                ticketId: components["parameters"]["ticketId"];
+            };
+            cookie?: never;
         };
-      };
-      400: components["responses"]["BadRequest"];
-      404: components["responses"]["NotFound"];
-    };
-  };
-  addTicketComment: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path: {
-        ticketId: components["parameters"]["ticketId"];
-      };
-      cookie?: never;
-    };
-    requestBody: {
-      content: {
-        "application/json": components["schemas"]["TicketCommentRequest"];
-      };
-    };
-    responses: {
-      /** @description Comment created */
-      201: {
-        headers: {
-          [name: string]: unknown;
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateTicketRequest"];
+            };
         };
-        content: {
-          "application/json": components["schemas"]["TicketComment"];
+        responses: {
+            /** @description Ticket updated */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Ticket"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            404: components["responses"]["NotFound"];
         };
-      };
-      400: components["responses"]["BadRequest"];
-      404: components["responses"]["NotFound"];
     };
-  };
-  listInvoices: {
-    parameters: {
-      query?: {
-        status?: "pending" | "paid" | "overdue";
-        limit?: components["parameters"]["limitParam"];
-        cursor?: components["parameters"]["cursorParam"];
-      };
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description Invoices list */
-      200: {
-        headers: {
-          [name: string]: unknown;
+    addTicketComment: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                ticketId: components["parameters"]["ticketId"];
+            };
+            cookie?: never;
         };
-        content: {
-          "application/json": components["schemas"]["InvoiceListResponse"];
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TicketCommentRequest"];
+            };
         };
-      };
-      401: components["responses"]["Unauthorized"];
-    };
-  };
-  getInvoice: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path: {
-        invoiceId: components["parameters"]["invoiceId"];
-      };
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description Invoice detail */
-      200: {
-        headers: {
-          [name: string]: unknown;
+        responses: {
+            /** @description Comment created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TicketComment"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            404: components["responses"]["NotFound"];
         };
-        content: {
-          "application/json": components["schemas"]["Invoice"];
-        };
-      };
-      404: components["responses"]["NotFound"];
     };
-  };
-  getUsage: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description Current usage summary */
-      200: {
-        headers: {
-          [name: string]: unknown;
+    listInvoices: {
+        parameters: {
+            query?: {
+                status?: "pending" | "paid" | "overdue";
+                limit?: components["parameters"]["limitParam"];
+                cursor?: components["parameters"]["cursorParam"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
         };
-        content: {
-          "application/json": components["schemas"]["UsageSummary"];
+        requestBody?: never;
+        responses: {
+            /** @description Invoices list */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InvoiceListResponse"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
         };
-      };
-      401: components["responses"]["Unauthorized"];
     };
-  };
-  getUsageHistory: {
-    parameters: {
-      query?: {
-        /** @description Start timestamp (RFC3339) */
-        start?: components["parameters"]["startTimeParam"];
-        /** @description End timestamp (RFC3339) */
-        end?: components["parameters"]["endTimeParam"];
-        /** @description Aggregation interval (e.g. 1m, 5m, 1h) */
-        interval?: components["parameters"]["intervalParam"];
-      };
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description Usage history */
-      200: {
-        headers: {
-          [name: string]: unknown;
+    getInvoice: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                invoiceId: components["parameters"]["invoiceId"];
+            };
+            cookie?: never;
         };
-        content: {
-          "application/json": components["schemas"]["UsageHistoryResponse"];
+        requestBody?: never;
+        responses: {
+            /** @description Invoice detail */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Invoice"];
+                };
+            };
+            404: components["responses"]["NotFound"];
         };
-      };
-      401: components["responses"]["Unauthorized"];
     };
-  };
-  getProviderInfo: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description Provider information */
-      200: {
-        headers: {
-          [name: string]: unknown;
+    getUsage: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
         };
-        content: {
-          "application/json": components["schemas"]["ProviderInfo"];
+        requestBody?: never;
+        responses: {
+            /** @description Current usage summary */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UsageSummary"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
         };
-      };
-      400: components["responses"]["BadRequest"];
     };
-  };
-  getProviderPricing: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description Pricing information */
-      200: {
-        headers: {
-          [name: string]: unknown;
+    getUsageHistory: {
+        parameters: {
+            query?: {
+                /** @description Start timestamp (RFC3339) */
+                start?: components["parameters"]["startTimeParam"];
+                /** @description End timestamp (RFC3339) */
+                end?: components["parameters"]["endTimeParam"];
+                /** @description Aggregation interval (e.g. 1m, 5m, 1h) */
+                interval?: components["parameters"]["intervalParam"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
         };
-        content: {
-          "application/json": components["schemas"]["ProviderPricing"];
+        requestBody?: never;
+        responses: {
+            /** @description Usage history */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UsageHistoryResponse"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
         };
-      };
-      400: components["responses"]["BadRequest"];
     };
-  };
-  getProviderCapacity: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description Capacity information */
-      200: {
-        headers: {
-          [name: string]: unknown;
+    getProviderInfo: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
         };
-        content: {
-          "application/json": components["schemas"]["ProviderCapacity"];
+        requestBody?: never;
+        responses: {
+            /** @description Provider information */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProviderInfo"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
         };
-      };
-      400: components["responses"]["BadRequest"];
     };
-  };
-  getProviderAttributes: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description Provider attributes */
-      200: {
-        headers: {
-          [name: string]: unknown;
+    getProviderPricing: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
         };
-        content: {
-          "application/json": components["schemas"]["ProviderAttributes"];
+        requestBody?: never;
+        responses: {
+            /** @description Pricing information */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProviderPricing"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
         };
-      };
-      400: components["responses"]["BadRequest"];
     };
-  };
+    getProviderCapacity: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Capacity information */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProviderCapacity"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+        };
+    };
+    getProviderAttributes: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Provider attributes */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProviderAttributes"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+        };
+    };
+    uploadVaultBlob: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["VaultUploadRequest"];
+            };
+        };
+        responses: {
+            /** @description Vault blob created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VaultUploadResponse"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    getVaultBlob: {
+        parameters: {
+            query?: {
+                org_id?: string;
+                purpose?: string;
+                reason?: string;
+            };
+            header?: never;
+            path: {
+                blobId: components["parameters"]["VaultBlobId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Vault blob data */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VaultRetrieveResponse"];
+                };
+            };
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    deleteVaultBlob: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                blobId: components["parameters"]["VaultBlobId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Deleted */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    getVaultBlobMetadata: {
+        parameters: {
+            query?: {
+                org_id?: string;
+            };
+            header?: never;
+            path: {
+                blobId: components["parameters"]["VaultBlobId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Vault blob metadata */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VaultBlobMetadata"];
+                };
+            };
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    listVaultAuditEvents: {
+        parameters: {
+            query?: {
+                blob_id?: string;
+                scope?: string;
+                requester?: string;
+                org_id?: string;
+                start?: number;
+                end?: number;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Vault audit events */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VaultAuditResponse"];
+                };
+            };
+            403: components["responses"]["Forbidden"];
+        };
+    };
 }

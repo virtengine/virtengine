@@ -29,6 +29,13 @@ func RegisterLegacyAminoCodec(cdc *codec.LegacyAmino) {
 	legacy.RegisterAminoMsg(cdc, &MsgResizeAllocation{}, "marketplace/MsgResizeAllocation")
 	legacy.RegisterAminoMsg(cdc, &MsgPauseAllocation{}, "marketplace/MsgPauseAllocation")
 	legacy.RegisterAminoMsg(cdc, &MsgWaldurCallback{}, "marketplace/MsgWaldurCallback")
+	legacy.RegisterAminoMsg(cdc, &MsgCreateOrder{}, "marketplace/MsgCreateOrder")
+	legacy.RegisterAminoMsg(cdc, &MsgPlaceBid{}, "marketplace/MsgPlaceBid")
+	legacy.RegisterAminoMsg(cdc, &MsgWithdrawBid{}, "marketplace/MsgWithdrawBid")
+	legacy.RegisterAminoMsg(cdc, &MsgRegisterWaldurSource{}, "marketplace/MsgRegisterWaldurSource")
+	legacy.RegisterAminoMsg(cdc, &MsgIngestWaldurOffering{}, "marketplace/MsgIngestWaldurOffering")
+	legacy.RegisterAminoMsg(cdc, &MsgSetOfferingVisibility{}, "marketplace/MsgSetOfferingVisibility")
+	legacy.RegisterAminoMsg(cdc, &MsgAckWaldurCommand{}, "marketplace/MsgAckWaldurCommand")
 }
 
 // RegisterInterfaces registers module interfaces.
@@ -43,6 +50,13 @@ func RegisterInterfaces(registry cdctypes.InterfaceRegistry) {
 		&MsgResizeAllocation{},
 		&MsgPauseAllocation{},
 		&MsgWaldurCallback{},
+		&MsgCreateOrder{},
+		&MsgPlaceBid{},
+		&MsgWithdrawBid{},
+		&MsgRegisterWaldurSource{},
+		&MsgIngestWaldurOffering{},
+		&MsgSetOfferingVisibility{},
+		&MsgAckWaldurCommand{},
 	)
 	msgservice.RegisterMsgServiceDesc(registry, &marketplacev1.Msg_serviceDesc)
 }

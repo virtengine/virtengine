@@ -11,4 +11,5 @@ const (
 	flagResolution      = "resolution"
 	flagNotes           = "notes"
 	flagRelatedOrderIDs = "related-order-ids"
+	flagStatementHash   = "statement-hash"
 )

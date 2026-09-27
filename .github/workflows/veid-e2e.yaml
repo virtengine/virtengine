@@ -18,7 +18,7 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  GO_VERSION: "1.25.14"
+  GO_VERSION: "1.26.8"
   CACHE_KEY_PREFIX: veid-e2e
 
 jobs:
@@ -28,19 +28,24 @@ jobs:
     timeout-minutes: 30
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           fetch-depth: 0
 
       - name: Set up Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v6
         with:
           go-version: ${{ env.GO_VERSION }}
           cache: true
           cache-dependency-path: go.sum
 
+      - name: Install build dependencies for cgo packages
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends libudev-dev
+
       - name: Cache build artifacts
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: |
             ~/.cache/go-build
@@ -89,7 +94,7 @@ jobs:
           VEID_E2E_VERBOSE: ${{ github.event.inputs.verbose || 'false' }}
 
       - name: Upload test logs
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         if: failure()
         with:
           name: veid-e2e-logs
@@ -104,14 +109,19 @@ jobs:
     timeout-minutes: 15
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Set up Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v6
         with:
           go-version: ${{ env.GO_VERSION }}
           cache: true
           cache-dependency-path: go.sum
+
+      - name: Install build dependencies for cgo packages
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends libudev-dev
 
       - name: Run VEID module tests
         run: |
@@ -130,12 +140,16 @@ jobs:
             ./pkg/inference/...
 
       - name: Upload coverage
-        uses: codecov/codecov-action@v4
+        uses: codecov/codecov-action@v6
         if: always()
         with:
           files: ./coverage-veid.txt,./coverage-inference.txt
           flags: veid
           name: veid-coverage
+          token: ${{ secrets.CODECOV_TOKEN }}
+          # Coverage upload must never fail the gate: tests already passed or
+          # failed on their own merit before this step runs.
+          fail_ci_if_error: false
 
   veid-determinism:
     name: VEID Determinism Tests
@@ -143,10 +157,10 @@ jobs:
     timeout-minutes: 20
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Set up Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v6
         with:
           go-version: ${{ env.GO_VERSION }}
           cache: true

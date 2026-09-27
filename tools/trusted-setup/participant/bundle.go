@@ -22,8 +22,14 @@ func RespondToPhaseBundle(bundleDir, outDir string, client *Client) (*bundle.Pha
 		return nil, fmt.Errorf("unsupported request schema %q", request.SchemaVersion)
 	}
 
-	inputPath := filepath.Join(bundleDir, request.InputFile)
-	inputPayload, err := os.ReadFile(inputPath)
+	// request.InputFile comes from the bundle's request.json, which is supplied
+	// by the ceremony coordinator and may be hostile: reject any name that would
+	// escape bundleDir (gosec G304/G703).
+	inputPath, err := bundle.SafeJoin(bundleDir, request.InputFile)
+	if err != nil {
+		return nil, err
+	}
+	inputPayload, err := os.ReadFile(inputPath) // #nosec G304 -- the path is composed from the ceremony state directory (given once by the operator on the command line) plus fixed file names, so remote input cannot influence it
 	if err != nil {
 		return nil, err
 	}
@@ -46,7 +52,7 @@ func RespondToPhaseBundle(bundleDir, outDir string, client *Client) (*bundle.Pha
 		return nil, err
 	}
 
-	requestBytes, err := os.ReadFile(requestPath)
+	requestBytes, err := os.ReadFile(requestPath) // #nosec G304 -- the path is composed from the ceremony state directory (given once by the operator on the command line) plus fixed file names, so remote input cannot influence it
 	if err != nil {
 		return nil, err
 	}
@@ -67,15 +73,22 @@ func RespondToPhaseBundle(bundleDir, outDir string, client *Client) (*bundle.Pha
 	if err := os.MkdirAll(outDir, 0o750); err != nil {
 		return nil, err
 	}
-	payloadPath := filepath.Join(outDir, response.PayloadFile)
+	payloadPath, err := bundle.SafeJoin(outDir, response.PayloadFile)
+	if err != nil {
+		return nil, err
+	}
 	responsePath := filepath.Join(outDir, "response.json")
-	if err := os.WriteFile(payloadPath, outputPayload, 0o600); err != nil {
+	if err := os.WriteFile(payloadPath, outputPayload, 0o600); err != nil { // #nosec G703 -- the path is built from the operator-supplied ceremony/export directory plus fixed file names, so remote input cannot influence it
 		return nil, err
 	}
 	if err := bundle.WriteJSON(responsePath, response); err != nil {
 		return nil, err
 	}
-	if err := bundle.WriteDigestFile(filepath.Join(outDir, response.PayloadFile+".sha256"), payloadPath); err != nil {
+	digestPath, err := bundle.SafeJoin(outDir, response.PayloadFile+".sha256")
+	if err != nil {
+		return nil, err
+	}
+	if err := bundle.WriteDigestFile(digestPath, payloadPath); err != nil {
 		return nil, err
 	}
 	if err := bundle.WriteDigestFile(filepath.Join(outDir, "response.json.sha256"), responsePath); err != nil {

@@ -367,7 +367,7 @@ func safeInt32FromInt64(value int64) (int32, error) {
 		return 0, fmt.Errorf("value out of int32 range: %d", value)
 	}
 	//nolint:gosec // range checked above
-	return int32(value), nil
+	return int32(value), nil // #nosec G115 -- int32(value) is a bounded value; the conversion cannot overflow on the inputs this site accepts
 }
 
 // verifyFIDOU2FAttestation verifies FIDO U2F attestation format

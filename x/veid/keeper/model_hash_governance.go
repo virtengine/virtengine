@@ -119,15 +119,15 @@ func ComputeLocalModelHash(modelPath string) (string, error) {
 		hasher.Write([]byte(rel))
 
 		// Hash file contents
-		f, err := os.Open(fpath)
+		f, err := os.Open(fpath) // #nosec G304 -- fpath is a local path parameter supplied by this function's own caller (a CLI argument, loader parameter or configured state file) and is not derived from a network peer or chain message; opening the caller-nominated file is the purpose of this call
 		if err != nil {
 			return "", fmt.Errorf("failed to open %s: %w", fpath, err)
 		}
 		if _, err := io.Copy(hasher, f); err != nil {
-			f.Close()
+			_ = f.Close()
 			return "", fmt.Errorf("failed to hash %s: %w", fpath, err)
 		}
-		f.Close()
+		_ = f.Close()
 	}
 
 	return hex.EncodeToString(hasher.Sum(nil)), nil

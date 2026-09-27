@@ -80,7 +80,7 @@ Check your Go installation:
 go version
 ```
 
-**Required:** Go 1.21.0 or higher (1.22+ recommended)
+**Required:** Go 1.26.8 or higher
 
 If not installed or version is too old:
 
@@ -245,8 +245,8 @@ sudo apt update
 sudo apt install -y git build-essential curl wget jq nodejs npm direnv
 
 # Install Go
-wget https://go.dev/dl/go1.22.0.linux-amd64.tar.gz
-sudo tar -C /usr/local -xzf go1.22.0.linux-amd64.tar.gz
+wget https://go.dev/dl/go1.26.8.linux-amd64.tar.gz
+sudo tar -C /usr/local -xzf go1.26.8.linux-amd64.tar.gz
 echo 'export PATH=$PATH:/usr/local/go/bin' >> ~/.bashrc
 source ~/.bashrc
 

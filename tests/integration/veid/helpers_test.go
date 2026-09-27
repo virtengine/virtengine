@@ -93,9 +93,16 @@ func setupVEIDTestEnv(t *testing.T) veidTestEnv {
 
 	initialTime := time.Unix(1_700_000_000, 0).UTC()
 	ctx := veApp.NewContext(false).
+		WithChainID("virtengine-integration-1").
 		WithBlockHeight(1).
 		WithBlockTime(initialTime).
 		WithEventManager(sdk.NewEventManager())
+
+	// The app under test has no ML backend configured, so install the
+	// deterministic development scorer the keeper exposes for test harnesses.
+	veApp.Keepers.VirtEngine.VEID.SetDevelopmentMLScorer(
+		keeper.NewStubMLScorer(keeper.DefaultDevelopmentMLScoringConfig()),
+	)
 
 	validator := firstBondedValidatorAccAddress(t, veApp, ctx)
 

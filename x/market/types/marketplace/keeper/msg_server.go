@@ -613,6 +613,333 @@ func nextOfferingSequence(ctx sdk.Context, k IKeeper, providerAddress string) ui
 	return maxSeq + 1
 }
 
+// assumedBlockTime converts matching windows expressed in blocks to deadlines.
+// It is intentionally conservative and documented for operators.
+const assumedBlockTime = 6 * time.Second
+
+func nextOrderSequence(ctx sdk.Context, k IKeeper, customerAddress string) uint64 {
+	maxSeq := uint64(0)
+	for _, order := range k.GetOrdersByCustomer(ctx, customerAddress) {
+		if order.ID.Sequence > maxSeq {
+			maxSeq = order.ID.Sequence
+		}
+	}
+	return maxSeq + 1
+}
+
+func nextBidSequence(ctx sdk.Context, k IKeeper, orderID marketplace.OrderID, providerAddress string) uint64 {
+	maxSeq := uint64(0)
+	k.WithBidsForOrder(ctx, orderID, func(bid marketplace.MarketplaceBid) bool {
+		if bid.ID.ProviderAddress == providerAddress && bid.ID.Sequence > maxSeq {
+			maxSeq = bid.ID.Sequence
+		}
+		return false
+	})
+	return maxSeq + 1
+}
+
+// CreateOrder opens a demand order for automatic or manual resolution.
+func (ms msgServer) CreateOrder(goCtx context.Context, msg *marketplace.MsgCreateOrder) (*marketplace.MsgCreateOrderResponse, error) {
+	ctx := sdk.UnwrapSDKContext(goCtx)
+
+	if msg == nil {
+		return nil, marketplace.ErrUnauthorized.Wrap("empty message")
+	}
+	if _, err := sdk.AccAddressFromBech32(msg.Customer); err != nil {
+		return nil, marketplace.ErrUnauthorized.Wrap("invalid customer address")
+	}
+
+	mode := marketplace.AcquisitionMode(msg.AcquisitionMode)
+	if mode == "" {
+		mode = marketplace.AcquisitionModeDirect
+	}
+	if !mode.IsValid() {
+		return nil, marketplace.ErrInvalidRequest.Wrapf("invalid acquisition mode: %s", msg.AcquisitionMode)
+	}
+
+	quantity := msg.RequestedQuantity
+	if quantity == 0 {
+		quantity = 1
+	}
+	maxBidPrice := msg.MaxBidPrice
+	if maxBidPrice == 0 && msg.MaxPrice != nil {
+		if !msg.MaxPrice.Amount.IsUint64() {
+			return nil, marketplace.ErrPricingInvalid.Wrap("max price overflow")
+		}
+		maxBidPrice = msg.MaxPrice.Amount.Uint64()
+	}
+
+	order := &marketplace.Order{
+		ID:                marketplace.OrderID{CustomerAddress: msg.Customer, Sequence: nextOrderSequence(ctx, ms.keeper, msg.Customer)},
+		State:             marketplace.OrderStateOpen,
+		AcquisitionMode:   mode,
+		Region:            msg.Region,
+		RequestedQuantity: quantity,
+		MaxBidPrice:       maxBidPrice,
+		CreatedAt:         ctx.BlockTime().UTC(),
+		UpdatedAt:         ctx.BlockTime().UTC(),
+	}
+	if len(msg.ResourceUnits) > 0 {
+		order.ResourceUnits = make(map[string]uint64, len(msg.ResourceUnits))
+		for resourceType, units := range msg.ResourceUnits {
+			order.ResourceUnits[resourceType] = units
+		}
+	}
+
+	if msg.OfferingId != "" {
+		offeringID, err := marketplace.ParseOfferingID(msg.OfferingId)
+		if err != nil {
+			return nil, marketplace.ErrOfferingNotFound.Wrap(err.Error())
+		}
+		order.OfferingID = offeringID
+	} else {
+		selector := &marketplace.OfferSelector{
+			Category:         marketplace.OfferingCategory(msg.Category),
+			Regions:          append([]string(nil), msg.Regions...),
+			Backends:         append([]string(nil), msg.Backends...),
+			IdentityRequired: msg.IdentityRequired,
+		}
+		if len(msg.MinSpecs) > 0 {
+			selector.MinSpecs = make(map[string]uint64, len(msg.MinSpecs))
+			for key, value := range msg.MinSpecs {
+				selector.MinSpecs[key] = value
+			}
+		}
+		if msg.MaxPrice != nil {
+			maxPrice := *msg.MaxPrice
+			selector.MaxPrice = &maxPrice
+		}
+		order.Selector = selector
+	}
+
+	if mode == marketplace.AcquisitionModeBid {
+		if msg.MatchingDeadline != nil {
+			deadline := *msg.MatchingDeadline
+			order.MatchingDeadline = &deadline
+		} else {
+			window := ms.keeper.GetParams(ctx).DefaultMatchingWindowBlocks
+			if window <= 0 {
+				window = 100
+			}
+			deadline := ctx.BlockTime().Add(time.Duration(window) * assumedBlockTime).UTC()
+			order.MatchingDeadline = &deadline
+		}
+	}
+
+	if err := ms.keeper.createOrder(ctx, order); err != nil {
+		return nil, err
+	}
+
+	return &marketplace.MsgCreateOrderResponse{OrderId: order.ID.String()}, nil
+}
+
+// PlaceBid places a provider bid on an open order.
+func (ms msgServer) PlaceBid(goCtx context.Context, msg *marketplace.MsgPlaceBid) (*marketplace.MsgPlaceBidResponse, error) {
+	ctx := sdk.UnwrapSDKContext(goCtx)
+
+	if msg == nil {
+		return nil, marketplace.ErrUnauthorized.Wrap("empty message")
+	}
+	providerAddr, err := sdk.AccAddressFromBech32(msg.Provider)
+	if err != nil {
+		return nil, marketplace.ErrUnauthorized.Wrap("invalid provider address")
+	}
+	_ = providerAddr
+
+	if msg.OrderId == "" {
+		return nil, marketplace.ErrOrderNotFound.Wrap("order_id is required")
+	}
+	orderID, err := marketplace.ParseOrderID(msg.OrderId)
+	if err != nil {
+		return nil, marketplace.ErrOrderNotFound.Wrap(err.Error())
+	}
+	order, found := ms.keeper.GetOrder(ctx, orderID)
+	if !found {
+		return nil, marketplace.ErrOrderNotFound
+	}
+	if err := order.CanAcceptBidAt(ctx.BlockTime()); err != nil {
+		return nil, marketplace.ErrInvalidOrderState.Wrap(err.Error())
+	}
+	if msg.Price == 0 {
+		return nil, marketplace.ErrBidPriceTooHigh.Wrap("bid price must be positive")
+	}
+
+	bid := &marketplace.MarketplaceBid{
+		ID:         marketplace.BidID{OrderID: orderID, ProviderAddress: msg.Provider, Sequence: nextBidSequence(ctx, ms.keeper, orderID, msg.Provider)},
+		OfferingID: order.OfferingID,
+		Price:      msg.Price,
+	}
+	if err := ms.keeper.createBid(ctx, bid); err != nil {
+		return nil, err
+	}
+
+	return &marketplace.MsgPlaceBidResponse{BidId: bid.ID.String()}, nil
+}
+
+// WithdrawBid withdraws an open provider bid.
+func (ms msgServer) WithdrawBid(goCtx context.Context, msg *marketplace.MsgWithdrawBid) (*marketplace.MsgWithdrawBidResponse, error) {
+	ctx := sdk.UnwrapSDKContext(goCtx)
+
+	if msg == nil {
+		return nil, marketplace.ErrUnauthorized.Wrap("empty message")
+	}
+	if _, err := sdk.AccAddressFromBech32(msg.Provider); err != nil {
+		return nil, marketplace.ErrUnauthorized.Wrap("invalid provider address")
+	}
+	if msg.BidId == "" {
+		return nil, marketplace.ErrBidNotFound.Wrap("bid_id is required")
+	}
+	bidID, err := marketplace.ParseBidID(msg.BidId)
+	if err != nil {
+		return nil, marketplace.ErrBidNotFound.Wrap(err.Error())
+	}
+	if bidID.ProviderAddress != msg.Provider {
+		return nil, marketplace.ErrUnauthorized.Wrap("provider does not match bid")
+	}
+
+	bid, found := ms.keeper.GetBid(ctx, bidID)
+	if !found {
+		return nil, marketplace.ErrBidNotFound
+	}
+	if bid.State != marketplace.BidStateOpen {
+		return nil, marketplace.ErrInvalidStateTransition.Wrap("only open bids can be withdrawn")
+	}
+	bid.State = marketplace.BidStateWithdrawn
+	if err := ms.keeper.putBid(ctx, bid); err != nil {
+		return nil, err
+	}
+
+	return &marketplace.MsgWithdrawBidResponse{}, nil
+}
+
+// RegisterWaldurSource registers a trusted Waldur instance. Only the module
+// authority (governance) may register sources.
+func (ms msgServer) RegisterWaldurSource(goCtx context.Context, msg *marketplace.MsgRegisterWaldurSource) (*marketplace.MsgRegisterWaldurSourceResponse, error) {
+	ctx := sdk.UnwrapSDKContext(goCtx)
+
+	if msg == nil {
+		return nil, marketplace.ErrUnauthorized.Wrap("empty message")
+	}
+	if msg.Authority == "" || msg.Authority != ms.keeper.GetAuthority() {
+		return nil, marketplace.ErrUnauthorized.Wrap("invalid authority")
+	}
+
+	source := &marketplace.WaldurSource{
+		InstanceID:    msg.InstanceId,
+		BaseURL:       msg.BaseUrl,
+		PublicKey:     msg.PublicKey,
+		RelayerQuorum: msg.RelayerQuorum,
+		RegisteredAt:  ctx.BlockTime().UTC(),
+		Active:        true,
+	}
+	if err := ms.keeper.SetWaldurSource(ctx, source); err != nil {
+		return nil, err
+	}
+
+	return &marketplace.MsgRegisterWaldurSourceResponse{}, nil
+}
+
+// IngestWaldurOffering ingests a signed Waldur offering snapshot. The HTTP
+// fetch happens off-chain; only the signed snapshot enters consensus.
+func (ms msgServer) IngestWaldurOffering(goCtx context.Context, msg *marketplace.MsgIngestWaldurOffering) (*marketplace.MsgIngestWaldurOfferingResponse, error) {
+	ctx := sdk.UnwrapSDKContext(goCtx)
+
+	if msg == nil {
+		return nil, marketplace.ErrUnauthorized.Wrap("empty message")
+	}
+	if _, err := sdk.AccAddressFromBech32(msg.Relayer); err != nil {
+		return nil, marketplace.ErrUnauthorized.Wrap("invalid relayer address")
+	}
+	if msg.Snapshot == nil {
+		return nil, marketplace.ErrWaldurCallbackInvalid.Wrap("snapshot is required")
+	}
+
+	imp := snapshotToImport(msg.Snapshot)
+	if imp == nil {
+		return nil, marketplace.ErrWaldurCallbackInvalid.Wrap("invalid snapshot")
+	}
+	attestation := &marketplace.WaldurOfferingAttestation{
+		InstanceID:     imp.InstanceID,
+		OfferingUUID:   imp.UUID,
+		SnapshotHash:   imp.IngestChecksum(),
+		SnapshotHeight: msg.Snapshot.SnapshotHeight,
+		Signature:      msg.Signature,
+	}
+
+	result, err := ms.keeper.IngestWaldurOffering(ctx, imp, attestation)
+	if err != nil {
+		return nil, err
+	}
+
+	return &marketplace.MsgIngestWaldurOfferingResponse{
+		OfferingId: result.ChainOfferingID,
+		Action:     string(result.Action),
+		Checksum:   result.Checksum,
+	}, nil
+}
+
+// SetOfferingVisibility updates an offering's catalogue visibility.
+func (ms msgServer) SetOfferingVisibility(goCtx context.Context, msg *marketplace.MsgSetOfferingVisibility) (*marketplace.MsgSetOfferingVisibilityResponse, error) {
+	ctx := sdk.UnwrapSDKContext(goCtx)
+
+	if msg == nil {
+		return nil, marketplace.ErrUnauthorized.Wrap("empty message")
+	}
+	providerAddr, err := sdk.AccAddressFromBech32(msg.Provider)
+	if err != nil {
+		return nil, marketplace.ErrUnauthorized.Wrap("invalid provider address")
+	}
+	if !ms.keeper.IsProvider(ctx, providerAddr) {
+		return nil, marketplace.ErrNotProvider
+	}
+
+	visibility := marketplace.OfferingVisibility(msg.Visibility)
+	if !visibility.IsValid() || visibility == marketplace.OfferingVisibilityEmpty {
+		return nil, marketplace.ErrInvalidRequest.Wrapf("invalid visibility: %s", msg.Visibility)
+	}
+
+	offeringID, err := marketplace.ParseOfferingID(msg.OfferingId)
+	if err != nil {
+		return nil, marketplace.ErrOfferingNotFound.Wrap(err.Error())
+	}
+	if offeringID.ProviderAddress != msg.Provider {
+		return nil, marketplace.ErrUnauthorized.Wrap("provider does not match offering id")
+	}
+
+	offering, found := ms.keeper.GetOffering(ctx, offeringID)
+	if !found {
+		return nil, marketplace.ErrOfferingNotFound
+	}
+	offering.Visibility = visibility
+	if err := ms.keeper.UpdateOffering(ctx, offering); err != nil {
+		return nil, err
+	}
+
+	return &marketplace.MsgSetOfferingVisibilityResponse{}, nil
+}
+
+// AckWaldurCommand acknowledges a durable Waldur command on behalf of an
+// off-chain adapter.
+func (ms msgServer) AckWaldurCommand(goCtx context.Context, msg *marketplace.MsgAckWaldurCommand) (*marketplace.MsgAckWaldurCommandResponse, error) {
+	ctx := sdk.UnwrapSDKContext(goCtx)
+
+	if msg == nil {
+		return nil, marketplace.ErrUnauthorized.Wrap("empty message")
+	}
+	if _, err := sdk.AccAddressFromBech32(msg.Sender); err != nil {
+		return nil, marketplace.ErrUnauthorized.Wrap("invalid sender address")
+	}
+	if msg.CommandId == "" {
+		return nil, marketplace.ErrWaldurCallbackInvalid.Wrap("command_id is required")
+	}
+
+	if err := ms.keeper.AckWaldurCommand(ctx, msg.CommandId); err != nil {
+		return nil, err
+	}
+
+	return &marketplace.MsgAckWaldurCommandResponse{}, nil
+}
+
 func pricingInfoEmpty(pricing marketplace.PricingInfo) bool {
 	return pricing.Model == "" &&
 		pricing.BasePrice == 0 &&

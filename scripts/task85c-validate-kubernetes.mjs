@@ -420,6 +420,26 @@ function assertDrConsumers() {
   ]) {
     if (!dr.includes(required)) fail(`DR backup jobs must reference canonical ${required}`);
   }
+  // A digest-pinned image is only meaningful if something in this repository
+  // actually builds it. The dr-tools pin was phantom for exactly this reason:
+  // the pin existed, the Dockerfile and the publishing workflow did not, so all
+  // three CronJobs sat in ImagePullBackOff. Tie the two together.
+  const drImageRefs = [...dr.matchAll(/^\s*image:\s*["']?(ghcr\.io\/[^"'\s@]+)/gm)].map((m) => m[1]);
+  if (drImageRefs.length === 0) {
+    fail("DR backup jobs must pin an image reference");
+  }
+  for (const ref of new Set(drImageRefs)) {
+    const name = ref.split("/").pop();
+    const dockerfile = `_build/Dockerfile.${name}`;
+    if (!existsSync(join(repoRoot, dockerfile))) {
+      fail(`DR backup jobs pin ${ref} but ${dockerfile} does not exist; the pin cannot be built`);
+    }
+    const publisher = ".github/workflows/dr-tools-image.yaml";
+    if (!existsSync(join(repoRoot, publisher))) {
+      fail(`DR backup jobs pin ${ref} but ${publisher} does not publish it`);
+    }
+  }
+
   for (const forbidden of [
     "validator-keys",
     "virtengine/dr-tools:latest",

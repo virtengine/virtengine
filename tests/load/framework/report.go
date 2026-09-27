@@ -13,7 +13,7 @@ import (
 
 // WriteJSON writes the report to a JSON file
 func (r *TestReport) WriteJSON(filename string) error {
-	file, err := os.Create(filename)
+	file, err := os.Create(filename) // #nosec G304 -- the path is supplied by the operator or test harness on the command line
 	if err != nil {
 		return fmt.Errorf("create file: %w", err)
 	}
@@ -30,7 +30,7 @@ func (r *TestReport) WriteJSON(filename string) error {
 
 // WriteCSV writes the report to a CSV file
 func (r *TestReport) WriteCSV(filename string) error {
-	file, err := os.Create(filename)
+	file, err := os.Create(filename) // #nosec G304 -- the path is supplied by the operator or test harness on the command line
 	if err != nil {
 		return fmt.Errorf("create file: %w", err)
 	}

@@ -257,6 +257,7 @@ message MsgClaimRewardsResponse {
   int64 claimed_at = 2;
 }
 
+// MsgOpenFinancialCase opens a financial case against a lineage subject.
 message MsgOpenFinancialCase {
   option (gogoproto.equal) = false;
   option (cosmos.msg.v1.signer) = "sender";
@@ -271,8 +272,10 @@ message MsgOpenFinancialCase {
   string source_module = 8;
   string source_reference = 9;
 }
+// MsgOpenFinancialCaseResponse returns the opened case and first claim.
 message MsgOpenFinancialCaseResponse { string case_id = 1; string claim_id = 2; bool exact_duplicate = 3; FinancialCaseStatus status = 4; }
 
+// MsgAddFinancialClaim attaches an additional claim to an open case.
 message MsgAddFinancialClaim {
   option (gogoproto.equal) = false;
   option (cosmos.msg.v1.signer) = "sender";
@@ -287,8 +290,10 @@ message MsgAddFinancialClaim {
   string source_reference = 8;
   string recommendation = 9;
 }
+// MsgAddFinancialClaimResponse returns the case and the added claim.
 message MsgAddFinancialClaimResponse { string case_id = 1; string claim_id = 2; bool exact_duplicate = 3; FinancialCaseStatus status = 4; }
 
+// MsgSubmitFinancialCaseForReview moves a case into resolver review.
 message MsgSubmitFinancialCaseForReview {
   option (gogoproto.equal) = false;
   option (cosmos.msg.v1.signer) = "sender";
@@ -296,8 +301,10 @@ message MsgSubmitFinancialCaseForReview {
   string sender = 1 [(cosmos_proto.scalar) = "cosmos.AddressString"];
   string case_id = 2;
 }
+// MsgSubmitFinancialCaseForReviewResponse returns the resulting case status.
 message MsgSubmitFinancialCaseForReviewResponse { FinancialCaseStatus status = 1; }
 
+// MsgEscalateFinancialCase escalates a case past ordinary review.
 message MsgEscalateFinancialCase {
   option (gogoproto.equal) = false;
   option (cosmos.msg.v1.signer) = "sender";
@@ -306,8 +313,10 @@ message MsgEscalateFinancialCase {
   string case_id = 2;
   bytes reason_hash = 3;
 }
+// MsgEscalateFinancialCaseResponse returns the resulting case status.
 message MsgEscalateFinancialCaseResponse { FinancialCaseStatus status = 1; }
 
+// MsgResolveFinancialCase records a resolver's terminal allocation.
 message MsgResolveFinancialCase {
   option (gogoproto.equal) = false;
   option (cosmos.msg.v1.signer) = "resolver";
@@ -316,8 +325,10 @@ message MsgResolveFinancialCase {
   string case_id = 2;
   TerminalAllocation allocation = 3 [(gogoproto.nullable) = false];
 }
+// MsgResolveFinancialCaseResponse returns the status and appeal deadlines.
 message MsgResolveFinancialCaseResponse { FinancialCaseStatus status = 1; int64 appeal_deadline_height = 2; int64 appeal_deadline_time = 3; }
 
+// MsgAppealFinancialCase appeals a resolved-pending-appeal case.
 message MsgAppealFinancialCase {
   option (gogoproto.equal) = false;
   option (cosmos.msg.v1.signer) = "appellant";
@@ -328,8 +339,10 @@ message MsgAppealFinancialCase {
   string encrypted_reference = 4;
   bytes idempotency_key = 5;
 }
+// MsgAppealFinancialCaseResponse returns the appeal id and case status.
 message MsgAppealFinancialCaseResponse { string appeal_id = 1; FinancialCaseStatus status = 2; }
 
+// MsgCancelFinancialCase withdraws a case that is still open or in evidence.
 message MsgCancelFinancialCase {
   option (gogoproto.equal) = false;
   option (cosmos.msg.v1.signer) = "sender";
@@ -338,8 +351,10 @@ message MsgCancelFinancialCase {
   string case_id = 2;
   bytes reason_hash = 3;
 }
+// MsgCancelFinancialCaseResponse returns the resulting case status.
 message MsgCancelFinancialCaseResponse { FinancialCaseStatus status = 1; }
 
+// MsgFinalizeFinancialCase closes the appeal window and applies effects.
 message MsgFinalizeFinancialCase {
   option (gogoproto.equal) = false;
   option (cosmos.msg.v1.signer) = "sender";
@@ -347,6 +362,7 @@ message MsgFinalizeFinancialCase {
   string sender = 1 [(cosmos_proto.scalar) = "cosmos.AddressString"];
   string case_id = 2;
 }
+// MsgFinalizeFinancialCaseResponse returns the applied terminal effects.
 message MsgFinalizeFinancialCaseResponse { FinancialCaseStatus status = 1; repeated FinancialCaseEffect effects = 2 [(gogoproto.nullable) = false]; }
 
 // MsgRecordFiatConversionObservation reports privacy-safe external execution
@@ -389,6 +405,7 @@ message MsgRecordFiatConversionObservation {
   bytes payout_finality_hash = 28;
 }
 
+// MsgRecordFiatConversionObservationResponse acknowledges one observation.
 message MsgRecordFiatConversionObservationResponse {
   string conversion_id = 1;
   uint64 observation_sequence = 2;
@@ -398,6 +415,7 @@ message MsgRecordFiatConversionObservationResponse {
   bytes observation_digest = 6;
 }
 
+// MsgUpdateParams replaces the settlement module parameters.
 message MsgUpdateParams {
   option (gogoproto.equal) = false;
   option (cosmos.msg.v1.signer) = "authority";
@@ -406,4 +424,5 @@ message MsgUpdateParams {
   Params params = 2 [(gogoproto.nullable) = false];
 }
 
+// MsgUpdateParamsResponse is the empty response to a params update.
 message MsgUpdateParamsResponse {}

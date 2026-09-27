@@ -498,7 +498,7 @@ func (sbe *ScalableBidEngine) GetScalingMetrics() map[string]interface{} {
 func (sbe *ScalableBidEngine) Stop() {
 	sbe.BidEngine.Stop()
 	if sbe.deduplicator != nil {
-		sbe.deduplicator.Close()
+		_ = sbe.deduplicator.Close()
 	}
 }
 

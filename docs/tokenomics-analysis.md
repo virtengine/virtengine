@@ -1,12 +1,18 @@
 # VirtEngine Tokenomics Model Validation
 
+## Current supply policy
+
+Initial supply is **0 tokens**. New tokens are issued only when unique human identities are verified, under the identity-allocation rules. There is **no fixed maximum supply and no hard cap**: issuance follows verified human participation and can continue as new identities are verified and the human population grows. Human population is the basis for issuance, not a fixed numerical token ceiling.
+
+The initial zero balance also applies to the Foundation-controlled genesis account; any Foundation allocation is issued through eligible identity-linked issuance, not a premine. Staking does not independently authorize new token issuance.
+
 ## ECON-001 Implementation Summary
 
 This document describes the tokenomics validation framework implemented in `pkg/economics/`.
 
 ## Overview
 
-The VirtEngine tokenomics model has been analyzed and validated through comprehensive economic simulation and analysis tools. This package provides:
+The framework analyzes economic scenarios. Its existing inflation-based simulations use legacy assumptions and do not validate the current zero-initial-supply, uncapped identity-linked policy. This package provides:
 
 1. **Economic Simulation Models** - Monte Carlo and deterministic simulations
 2. **Inflation/Deflation Dynamics** - Supply and monetary policy analysis
@@ -43,12 +49,19 @@ pkg/economics/
 
 ## Economic Parameters
 
-### Default Tokenomics Parameters
+### Supply policy
+
+| Parameter | Policy | Description |
+|-----------|--------|-------------|
+| Initial Supply | 0 tokens | Tokens are issued only when unique human identities are verified |
+| Maximum Supply | No cap | Supply follows verified human participation and can grow with new verified identities and the human population |
+
+### Legacy simulation parameters
+
+The following values describe existing simulation inputs, not current issuance policy. `economics.DefaultTokenomicsParams()` still uses legacy nonzero initial supply and a finite maximum; code and simulations require separate alignment and validation before they can substantiate the current policy. Inflation targets and block rewards below do not authorize minting independently of identity verification.
 
 | Parameter | Default Value | Description |
 |-----------|---------------|-------------|
-| Initial Supply | 1B tokens | Starting token supply |
-| Max Supply | 10B tokens | Maximum possible supply |
 | Target Inflation | 7% | Annual target inflation rate |
 | Min Inflation | 1% | Minimum inflation floor |
 | Max Inflation | 20% | Maximum inflation ceiling |
@@ -58,7 +71,7 @@ pkg/economics/
 | Default Take Rate | 4% | Protocol fee on payments |
 | VEID Reward Pool | 10,000 tokens | Identity verification rewards per epoch |
 
-### Inflation Adjustment Mechanism
+### Legacy Inflation Adjustment Mechanism
 
 The inflation rate adjusts dynamically based on staking ratio:
 
@@ -70,7 +83,7 @@ If StakingRatio > TargetStakingRatio:
     Inflation decreases → Lower APR → Reduces staking pressure
 ```
 
-This creates a self-balancing mechanism that maintains network security.
+This describes the legacy staking-driven simulation, not the current issuance rule. New token issuance must remain linked to verified human identities; staking demand alone does not trigger minting.
 
 ## Simulation Capabilities
 
@@ -220,7 +233,7 @@ import (
 )
 
 func main() {
-    // Initialize with default parameters
+    // Legacy simulation defaults; not the current identity-linked supply policy
     params := economics.DefaultTokenomicsParams()
     
     // Create auditor

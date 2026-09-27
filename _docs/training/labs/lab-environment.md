@@ -107,11 +107,11 @@ sudo apt install -y docker-ce docker-ce-cli containerd.io docker-compose-plugin
 sudo usermod -aG docker $USER
 newgrp docker
 
-# Install Go 1.22
-wget https://go.dev/dl/go1.22.0.linux-amd64.tar.gz
+# Install Go 1.26.8
+wget https://go.dev/dl/go1.26.8.linux-amd64.tar.gz
 sudo rm -rf /usr/local/go
-sudo tar -C /usr/local -xzf go1.22.0.linux-amd64.tar.gz
-rm go1.22.0.linux-amd64.tar.gz
+sudo tar -C /usr/local -xzf go1.26.8.linux-amd64.tar.gz
+rm go1.26.8.linux-amd64.tar.gz
 
 # Add Go to PATH (add to ~/.bashrc or ~/.zshrc)
 echo 'export PATH=$PATH:/usr/local/go/bin:$HOME/go/bin' >> ~/.bashrc
@@ -182,7 +182,7 @@ docker ps
 === Environment Verification ===
 Docker: Docker version 24.0.5, build ced0996
 Docker Compose: Docker Compose version v2.20.2
-Go: go version go1.22.0 linux/amd64
+Go: go version go1.26.8 linux/amd64
 Git: git version 2.34.1
 Make: GNU Make 4.3
 jq: jq-1.6
@@ -269,7 +269,7 @@ go: downloading github.com/cometbft/cometbft v0.38.0
 $ .cache/bin/virtengine version
 virtengine version 1.0.0
 git commit: abc123def
-go version: go1.22.0
+go version: go1.26.8
 ```
 
 ### Common Build Issues

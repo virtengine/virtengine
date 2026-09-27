@@ -13,8 +13,8 @@ jobs:
       pull-requests: write  # for actions/labeler to add labels to PRs
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/labeler@v5
+      - uses: actions/checkout@v5
+      - uses: actions/labeler@v6
         with:
           configuration-path: .github/labeler.yaml
           repo-token: "${{ secrets.GITHUB_TOKEN }}"

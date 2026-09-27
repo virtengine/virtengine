@@ -136,6 +136,96 @@ To run the local secret scan with the enforced config:
 gitleaks dir . --config .gitleaks.toml --redact
 ```
 
+## Local Make Targets
+
+The controls above run in CI. The same underlying scripts are exposed as root `make` targets.
+Every target in this section was confirmed present from the repository root with
+`make -n <target>`; the recipes below are transcribed from `make/supply-chain.mk` and
+`make/mod.mk`. The build system prints the same list with `make help-supply-chain`.
+
+These targets are local conveniences layered over the scripts. Where a target is not itself
+enforced, that is stated below — the enforced gate is always the workflow in the section above.
+
+### Verification
+
+| Target | Recipe |
+| --- | --- |
+| `make supply-chain-verify` | `scripts/supply-chain/verify-dependencies.sh --all` |
+| `make supply-chain-detect` | `scripts/supply-chain/detect-supply-chain-attacks.sh --all` |
+| `make supply-chain-risk` | `go run assess-dependencies.go` from `scripts/supply-chain/` |
+| `make supply-chain-risk-report` | as above with `--report --json`, then `--report`; JSON is written to `.cache/risk-assessment.json` |
+| `make supply-chain-audit` | `supply-chain-verify` + `supply-chain-detect` + `supply-chain-risk` + `sbom` |
+
+`vuln-check` is not part of `supply-chain-audit`; run it separately.
+
+### SBOM
+
+| Target | Recipe |
+| --- | --- |
+| `make sbom` | `scripts/supply-chain/generate-sbom.sh --format all` |
+| `make sbom-verify` | `sbom`, then `generate-sbom.sh --format cyclonedx --verify` |
+
+`--format all` emits CycloneDX, SPDX, Syft-native, and Go-module inventories. The script's
+default output directory is `.cache/sbom`.
+
+Two gaps between these targets and the enforced CI bar:
+
+- `make sbom` does not pass `--output`. The tag workflow runs
+  `generate-sbom.sh --format all --output .cache/supply-chain/sbom`
+  (`.github/workflows/supply-chain.yaml:301`), so local and CI SBOMs land in different
+  directories. Do not assume a local `make sbom` reproduces the release layout.
+- `make sbom-verify` is not a gate. Its verifier returns early with a warning when `grype` is
+  not installed, and its `grype` invocation is suffixed `|| true`; it prints a severity summary
+  rather than failing the target. The enforced vulnerability check is the tag workflow.
+
+### Dependencies
+
+| Target | Recipe |
+| --- | --- |
+| `make deps-verify` | `go mod verify` |
+| `make deps-tidy` | `go mod tidy` |
+| `make deps-vendor` | `deps-tidy`, then `go mod vendor` |
+| `make deps-update-check` | `go list -u -m all`, filtered to out-of-date modules |
+
+### Vulnerabilities
+
+| Target | Recipe |
+| --- | --- |
+| `make vuln-check` | installs `govulncheck@latest` if absent, then `govulncheck ./...` |
+| `make vuln-check-json` | same, with `-format json` into `.cache/govulncheck-report.json` |
+
+Both targets install `govulncheck@latest` when it is not on `PATH`, while the security and
+PR workflows pin `govulncheck` `v1.1.4`
+(`.github/workflows/security.yaml:23`, `.github/workflows/pr-security-check.yaml:24`). Local
+results can therefore differ from the enforced scanner. Compare against the pinned version
+before treating a local clean run as evidence.
+
+### Signing
+
+| Target | Recipe |
+| --- | --- |
+| `make sign-artifact ARTIFACT=<path>` | `cosign sign-blob`, writing `<path>.sig` and `<path>.pem` |
+| `make verify-signature ARTIFACT=<path>` | `cosign verify-blob` against `<path>.sig` and `<path>.pem` |
+
+Both targets declare `ARTIFACT` as required and stop with an error when it is unset. Both also
+require `cosign` on `PATH` and fail if it is missing.
+
+`make verify-signature` cannot validate artifacts produced by the tag workflow as written,
+because the local and CI conventions differ on both the certificate filename and the identity:
+
+- The target reads the certificate from `<path>.pem`; the workflow writes
+  `${artifact}.sig.cert` (`.github/workflows/supply-chain.yaml:405`).
+- The target verifies `--certificate-identity-regexp ".*@virtengine.com"`; the workflow
+  verifies the exact workflow URL identity
+  `https://github.com/<repo>/.github/workflows/supply-chain.yaml@<ref>`
+  (`.github/workflows/supply-chain.yaml:445-455`). A workflow-URL identity does not match that
+  regexp, and a local keyless identity will not match the workflow URL.
+
+Use `make verify-signature` for locally-signed artifacts only. Verifying a release means either
+running the workflow's own verification step or reproducing its
+`--certificate-identity` / `--certificate` arguments explicitly, as in
+[Release Artifact Verification](#release-artifact-verification) below.
+
 ## Release Artifact Verification
 
 For a local verification of release-critical artifacts produced by the tag workflow, use:

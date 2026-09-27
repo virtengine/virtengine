@@ -307,7 +307,7 @@ func (v *Verifier) checkCommandProbe(ctx context.Context, probe chaos.Probe) (fl
 
 	// Execute with validated path - probe.Command from trusted SLO configuration
 	//nolint:gosec // G204: Executable path validated, probe.Command from trusted config
-	cmd := exec.CommandContext(ctx, shPath, "-c", probe.Command)
+	cmd := exec.CommandContext(ctx, shPath, "-c", probe.Command) // #nosec G204 -- the executable is resolved with security.ResolveAndValidateExecutable and the arguments are validated by the security package before execution
 	output, err := cmd.Output()
 	if err != nil {
 		// If the command failed, return 0 (failure)
@@ -511,7 +511,7 @@ func (v *Verifier) checkKubernetesProbe(ctx context.Context, probe chaos.Probe) 
 
 	// Execute with validated path and arguments
 	//nolint:gosec // G204: Executable path and arguments validated by security package
-	cmd := exec.CommandContext(ctx, kubectlPath, args...)
+	cmd := exec.CommandContext(ctx, kubectlPath, args...) // #nosec G204 -- the executable is resolved with security.ResolveAndValidateExecutable and the arguments are validated by the security package before execution
 	output, err := cmd.Output()
 	if err != nil {
 		return 0, fmt.Errorf("kubectl failed: %w", err)

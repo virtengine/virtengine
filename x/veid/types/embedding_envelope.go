@@ -354,9 +354,9 @@ func ComputeEmbeddingHashFromFloat32(embedding []float32) []byte {
 	for i, v := range embedding {
 		bits := math.Float32bits(v)
 		bytes[i*4] = byte(bits >> 24)
-		bytes[i*4+1] = byte(bits >> 16)
-		bytes[i*4+2] = byte(bits >> 8)
-		bytes[i*4+3] = byte(bits)
+		bytes[i*4+1] = byte(bits >> 16) // #nosec G115 -- fixed-width big-endian encoding: byte(bits >> 16) writes a single byte of the shifted value by design and the written byte is never used arithmetically
+		bytes[i*4+2] = byte(bits >> 8)  // #nosec G115 -- fixed-width big-endian encoding: byte(bits >> 8) writes a single byte of the shifted value by design and the written byte is never used arithmetically
+		bytes[i*4+3] = byte(bits)       // #nosec G115 -- fixed-width big-endian encoding: byte(bits) writes the low byte into the buffer by design; the truncated value is not used arithmetically
 	}
 	return ComputeEmbeddingHash(bytes)
 }

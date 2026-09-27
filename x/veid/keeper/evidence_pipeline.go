@@ -40,6 +40,10 @@ func (k Keeper) ProcessEvidencePipeline(
 		return &EvidenceAssessment{}, nil
 	}
 
+	// Raw document/biometric bytes must not linger in validator memory beyond
+	// this flow: wipe every decrypted plaintext once processing completes.
+	defer wipeDecryptedScopes(decryptedScopes)
+
 	pipeline := NewFeatureExtractionPipeline(DefaultFeatureExtractionConfig())
 	features, err := pipeline.ExtractFeatures(decryptedScopes, address.String(), ctx.BlockHeight(), ctx.BlockTime())
 	if err != nil {

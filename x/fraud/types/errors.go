@@ -83,4 +83,64 @@ var (
 
 	// ErrInvalidAuthority is returned when the authority address is invalid
 	ErrInvalidAuthority = errors.Register(ModuleName, 3022, "invalid authority address")
+
+	// ErrMissingOrderReference is returned when a non-provider reporter submits a
+	// report without any order or resource reference. Every affected participant
+	// must anchor their report to the transaction they were party to, so a
+	// moderator can verify standing without trusting the reporter's narrative.
+	ErrMissingOrderReference = errors.Register(ModuleName, 3008, "report requires an order or resource reference")
+
+	// ErrDuplicateReport is returned when a reporter resubmits a byte-identical
+	// report. The original report stays in the moderator queue; the duplicate
+	// never creates a second queue entry (spam control).
+	ErrDuplicateReport = errors.Register(ModuleName, 3009, "duplicate fraud report")
+
+	// ErrReporterRateLimited is returned when a reporter exceeds the per-window
+	// submission limit (spam control).
+	ErrReporterRateLimited = errors.Register(ModuleName, 3010, "reporter submission rate limit exceeded")
+
+	// ErrResponseNotFound is returned when a fraud response record is not found
+	ErrResponseNotFound = errors.Register(ModuleName, 3013, "fraud response not found")
+
+	// ErrInvalidResponse is returned when a fraud response record is malformed
+	ErrInvalidResponse = errors.Register(ModuleName, 3014, "invalid fraud response")
+
+	// ErrUnauthorizedRespondent is returned when a party that is neither the
+	// reported party nor the original reporter tries to file a response
+	ErrUnauthorizedRespondent = errors.Register(ModuleName, 3015, "unauthorized: only the reported party or the reporter may respond")
+
+	// ErrReportNotPending is returned when a response is filed against a report
+	// that is already in a terminal state
+	ErrReportNotPending = errors.Register(ModuleName, 3016, "fraud report is not pending")
+
+	// ErrOrderVerificationUnavailable is returned when a non-provider report cites
+	// an order but the fraud keeper has no market keeper wired, so reporter
+	// standing cannot be verified.
+	//
+	// This is a node-configuration fault, not a reporter fault, and is kept
+	// distinct from ErrUnauthorizedReporter/ErrMissingOrderReference so operators
+	// can tell "the reporter has no standing" apart from "this binary forgot to
+	// wire SetMarketKeeper". The check fails closed: an unverifiable claim never
+	// grants standing.
+	ErrOrderVerificationUnavailable = errors.Register(ModuleName, 3023, "order-standing verification unavailable: market keeper is not wired")
+
+	// ErrSecondReviewerRequired is returned when a suspension or termination
+	// resolution is attempted without a distinct second reviewer
+	//
+	// Codes 3023-3026 are taken on develop (order-standing verification and the
+	// response flow), so the co-signature errors start at 3027. Error codes are
+	// part of the consensus-visible error identity and must not be reused.
+	ErrSecondReviewerRequired = errors.Register(ModuleName, 3027, "suspension and termination resolutions require a distinct second reviewer")
+
+	// ErrSecondReviewerMustDiffer is returned when the confirming reviewer is
+	// the same identity that proposed the resolution
+	ErrSecondReviewerMustDiffer = errors.Register(ModuleName, 3028, "second reviewer must be a distinct identity from the proposing moderator")
+
+	// ErrResolutionNotPending is returned when confirming a resolution that has
+	// no pending co-signature request
+	ErrResolutionNotPending = errors.Register(ModuleName, 3029, "no pending resolution awaiting review")
+
+	// ErrPendingResolutionExpired is returned when a pending resolution lapses
+	// before it is reviewed
+	ErrPendingResolutionExpired = errors.Register(ModuleName, 3030, "pending resolution expired before review")
 )

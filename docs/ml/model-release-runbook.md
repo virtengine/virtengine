@@ -14,7 +14,7 @@ This document covers:
 ## Prerequisites
 
 - Python 3.11+ with dependencies from `ml/requirements-deterministic.txt`
-- Go 1.21+ for inference testing
+- Go 1.26.8+ for inference testing
 - Access to the VEID dataset (set `VEID_DATASET_PATH` environment variable)
 - VirtEngine CLI (`virtengine`) for governance proposals
 

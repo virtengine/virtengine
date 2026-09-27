@@ -21,6 +21,10 @@ class WorkflowSpec:
     required_jobs: tuple[str, ...]
     required_snippets: tuple[str, ...]
     forbidden_snippets: tuple[str, ...] = ()
+    # Groups of interchangeable spellings of the same required invocation: at least one
+    # member of each group must appear. Only used where the GitHub-expression form
+    # (${{ env.X }}) and the shell-env form (${X}) resolve to the same pinned value.
+    required_snippet_aliases: tuple[tuple[str, ...], ...] = ()
 
 
 WORKFLOW_SPECS: dict[str, WorkflowSpec] = {
@@ -86,8 +90,16 @@ WORKFLOW_SPECS: dict[str, WorkflowSpec] = {
         required_snippets=(
             "github.com/google/go-licenses@${{ env.GO_LICENSES_VERSION }}",
             "license-checker-rseidelsohn@${{ env.LICENSE_CHECKER_VERSION }}",
-            "pip-licenses==${{ env.PIP_LICENSES_VERSION }}",
             "scripts/supply-chain/generate-sbom.sh --format spdx",
+        ),
+        # #888 installs the pinned scanner inside each requirement venv, where the shell-env
+        # form of the same workflow-level pin is the correct spelling. Accept either, but
+        # keep requiring an explicitly pinned pip-licenses install.
+        required_snippet_aliases=(
+            (
+                "pip-licenses==${{ env.PIP_LICENSES_VERSION }}",
+                "pip-licenses==${PIP_LICENSES_VERSION}",
+            ),
         ),
     ),
     "pr-security-check.yaml": WorkflowSpec(
@@ -225,6 +237,10 @@ def validate_workflow(path: Path) -> list[str]:
     for snippet in spec.required_snippets:
         if snippet not in raw:
             errors.append(f"missing required snippet: {snippet}")
+
+    for alias_group in spec.required_snippet_aliases:
+        if not any(alias in raw for alias in alias_group):
+            errors.append(f"missing required snippet: {alias_group[0]}")
 
     for snippet in spec.forbidden_snippets:
         if snippet in raw:

@@ -23,7 +23,11 @@ permissions:
   contents: read
 
 env:
-  GO_VERSION: "1.25.14"
+  GO_VERSION: "1.26.8"
+  # Must match ci.yaml's PYTHON_VERSION. The ml manifests are shared with
+  # ci.yaml / security.yaml / license-compliance.yaml / ml-model-verify.yaml,
+  # which all resolve them on 3.11; keras==3.15.0 requires Python >=3.11.
+  PYTHON_VERSION: "3.11"
   GO_TEST_TIMEOUT_UNIT: "30m"
   TF_DETERMINISTIC_OPS: "1"
   TF_CUDNN_DETERMINISTIC: "1"
@@ -45,15 +49,16 @@ jobs:
         os: [ubuntu-latest, windows-latest, macos-latest]
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Setup Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v6
         with:
           go-version: ${{ env.GO_VERSION }}
           cache: true
 
       - name: Run determinism unit tests
+        shell: bash
         run: |
           go test -v -count=1 -timeout "${GO_TEST_TIMEOUT_UNIT}" \
             ./pkg/inference/... -run "Determinism|Hash|Golden"
@@ -62,18 +67,29 @@ jobs:
       - name: Run conformance suite
         shell: bash
         run: |
-          mkdir -p ./conformance-evidence
-          VEID_CONFORMANCE_EVIDENCE_DIR=./conformance-evidence go test -v -count=1 \
+          # NOTE: go test runs each package's binary with cwd set to the
+          # package directory, so a relative evidence dir would land under
+          # pkg/inference/. Use an absolute path under the workspace instead.
+          EVIDENCE_DIR="${GITHUB_WORKSPACE}/conformance-evidence"
+          mkdir -p "${EVIDENCE_DIR}"
+          VEID_CONFORMANCE_EVIDENCE_DIR="${EVIDENCE_DIR}" go test -v -count=1 \
             -timeout "${GO_TEST_TIMEOUT_UNIT}" \
             ./pkg/inference/... -run "TestMultiMachineConformanceSuite"
         timeout-minutes: 20
 
       - name: Upload conformance evidence
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
-          name: conformance-evidence-${{ matrix.os }}
-          path: ./conformance-evidence/
+          # Distinct artifact namespace: the VEID conformance workflow uploads
+          # `conformance-evidence-*` into the SAME run's artifact pool, and both
+          # verifiers download with a wildcard pattern. Sharing the prefix made
+          # each verifier download the other's artifacts and then fail on the
+          # foreign directories ("Missing conformance-output.txt in
+          # all-evidence/conformance-evidence-macos-latest"). Keep this prefix
+          # disjoint from `conformance-evidence-`.
+          name: ml-inference-evidence-${{ matrix.os }}
+          path: ${{ github.workspace }}/conformance-evidence/
           retention-days: 30
           if-no-files-found: error
 
@@ -84,9 +100,12 @@ jobs:
     if: always()
     steps:
       - name: Download all evidence
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
-          pattern: conformance-evidence-*
+          # Must stay in step with the upload name above, and must NOT match
+          # the VEID workflow's `conformance-evidence-*` artifacts, which live
+          # in the same run's artifact pool.
+          pattern: ml-inference-evidence-*
           path: ./all-evidence
           merge-multiple: false
 
@@ -98,9 +117,9 @@ jobs:
           from pathlib import Path
 
           expected_platforms = {
-              "conformance-evidence-ubuntu-latest",
-              "conformance-evidence-windows-latest",
-              "conformance-evidence-macos-latest",
+              "ml-inference-evidence-ubuntu-latest",
+              "ml-inference-evidence-windows-latest",
+              "ml-inference-evidence-macos-latest",
           }
           evidence_dirs = {p.name for p in Path("all-evidence").iterdir() if p.is_dir()}
           missing = sorted(expected_platforms - evidence_dirs)
@@ -145,7 +164,7 @@ jobs:
           PY
 
       - name: Upload cross-platform report
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: cross-platform-report
           path: cross-platform-report.md
@@ -156,12 +175,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Setup Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
-          python-version: "3.10"
+          python-version: ${{ env.PYTHON_VERSION }}
           cache: "pip"
 
       - name: Install deterministic dependencies
@@ -200,6 +219,35 @@ jobs:
             python3 test_determinism.py
           elif [ -d tests ]; then
             python3 -m pytest tests/ -k "determinism or determin" -v
+          elif [ -f conformance/generate_test_vectors.py ]; then
+            # No dedicated test entrypoint exists; prove Python-side
+            # determinism by generating the Go-conformance vectors twice and
+            # requiring identical vector hashes (generated_at varies by design).
+            python3 conformance/generate_test_vectors.py
+          python3 - <<'PY'
+          import json
+          import subprocess
+          import sys
+          from pathlib import Path
+          out = Path("conformance/test_vectors.json")
+          if not out.exists():
+              raise SystemExit("generate_test_vectors.py produced no test_vectors.json")
+          first = json.loads(out.read_text(encoding="utf-8"))
+          assert first.get("vector_count", 0) > 0, "no test vectors generated"
+          subprocess.run(
+              [sys.executable, "conformance/generate_test_vectors.py"],
+              check=True,
+              capture_output=True,
+          )
+          second = json.loads(out.read_text(encoding="utf-8"))
+          if first["vectors_hash"] != second["vectors_hash"]:
+              raise SystemExit(
+                  "nondeterministic test vectors: "
+                  f"{first['vectors_hash']} != {second['vectors_hash']}"
+              )
+          print(f"OK: deterministic vectors hash {first['vectors_hash'][:16]}... "
+                f"({first['vector_count']} vectors)")
+          PY
           else
             echo "::error::No Python determinism test entrypoint found in ml/"
             exit 1
@@ -210,10 +258,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Setup Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v6
         with:
           go-version: ${{ env.GO_VERSION }}
           cache: true
@@ -232,10 +280,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Setup Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v6
         with:
           go-version: ${{ env.GO_VERSION }}
           cache: true
@@ -265,10 +313,10 @@ jobs:
     if: github.event_name == 'workflow_dispatch' && github.event.inputs.run_extended == 'true'
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Setup Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v6
         with:
           go-version: ${{ env.GO_VERSION }}
           cache: true

@@ -37,15 +37,15 @@ permissions:
   contents: read
 
 env:
-  GO_VERSION: '1.25.14'
+  GO_VERSION: '1.26.8'
 
 jobs:
   contracts:
     runs-on: ubuntu-24.04
     timeout-minutes: 45
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v6
         with:
           go-version: ${{ env.GO_VERSION }}
           cache: true

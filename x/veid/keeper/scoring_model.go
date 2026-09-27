@@ -740,9 +740,9 @@ func computeEvidenceSummaryHash(summary *types.EvidenceSummary) []byte {
 	// Hash score
 	scoreBytes := make([]byte, 4)
 	scoreBytes[0] = byte(summary.FinalScore >> 24)
-	scoreBytes[1] = byte(summary.FinalScore >> 16)
-	scoreBytes[2] = byte(summary.FinalScore >> 8)
-	scoreBytes[3] = byte(summary.FinalScore)
+	scoreBytes[1] = byte(summary.FinalScore >> 16) // #nosec G115 -- fixed-width big-endian encoding: byte(summary.FinalScore >> 16) writes a single byte of the shifted value by design and the written byte is never used arithmetically
+	scoreBytes[2] = byte(summary.FinalScore >> 8)  // #nosec G115 -- fixed-width big-endian encoding: byte(summary.FinalScore >> 8) writes a single byte of the shifted value by design and the written byte is never used arithmetically
+	scoreBytes[3] = byte(summary.FinalScore)       // #nosec G115 -- fixed-width big-endian encoding: byte(summary.FinalScore) writes the low byte into the buffer by design; the truncated value is not used arithmetically
 	h.Write(scoreBytes)
 
 	// Hash contributions
@@ -750,9 +750,9 @@ func computeEvidenceSummaryHash(summary *types.EvidenceSummary) []byte {
 		h.Write([]byte(contrib.FeatureName))
 		contribBytes := make([]byte, 4)
 		contribBytes[0] = byte(contrib.WeightedScore >> 24)
-		contribBytes[1] = byte(contrib.WeightedScore >> 16)
-		contribBytes[2] = byte(contrib.WeightedScore >> 8)
-		contribBytes[3] = byte(contrib.WeightedScore)
+		contribBytes[1] = byte(contrib.WeightedScore >> 16) // #nosec G115 -- fixed-width big-endian encoding: byte(contrib.WeightedScore >> 16) writes a single byte of the shifted value by design and the written byte is never used arithmetically
+		contribBytes[2] = byte(contrib.WeightedScore >> 8)  // #nosec G115 -- fixed-width big-endian encoding: byte(contrib.WeightedScore >> 8) writes a single byte of the shifted value by design and the written byte is never used arithmetically
+		contribBytes[3] = byte(contrib.WeightedScore)       // #nosec G115 -- fixed-width big-endian encoding: byte(contrib.WeightedScore) writes the low byte into the buffer by design; the truncated value is not used arithmetically
 		h.Write(contribBytes)
 	}
 

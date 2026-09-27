@@ -98,6 +98,16 @@ endif
 		"$(ARTIFACT)"
 	@echo "✓ Signed: $(ARTIFACT).sig"
 
+# Cosign keyless signatures produced by CI carry a *workflow URL* identity, never an
+# email address:
+#   https://github.com/<owner>/<repo>/.github/workflows/<workflow>@<ref>
+# (see sign-release-artifacts in .github/workflows/supply-chain.yaml). The old
+# pattern --certificate-identity-regexp ".*@virtengine.com" therefore could not verify a
+# single artifact this project signs in CI. Accept both forms so locally signed
+# artifacts (email identity) stay verifiable too, and allow an override.
+CERTIFICATE_IDENTITY_REGEXP ?= '^(.*@virtengine\.com|https://github\.com/[^/]+/[^/]+/\.github/workflows/[^@]+@.+)$'
+CERTIFICATE_OIDC_ISSUER     ?= https://token.actions.githubusercontent.com
+
 .PHONY: verify-signature
 verify-signature: ## Verify an artifact signature (requires ARTIFACT env var)
 ifndef ARTIFACT
@@ -108,8 +118,8 @@ endif
 	@cosign verify-blob \
 		--signature "$(ARTIFACT).sig" \
 		--certificate "$(ARTIFACT).pem" \
-		--certificate-identity-regexp ".*@virtengine.com" \
-		--certificate-oidc-issuer https://token.actions.githubusercontent.com \
+		--certificate-identity-regexp $(CERTIFICATE_IDENTITY_REGEXP) \
+		--certificate-oidc-issuer $(CERTIFICATE_OIDC_ISSUER) \
 		"$(ARTIFACT)"
 	@echo "✓ Signature verified"
 

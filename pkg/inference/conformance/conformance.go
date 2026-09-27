@@ -343,7 +343,7 @@ func (tr *TestRunner) RunTest(vector *TestVector) *TestResult {
 func (tr *TestRunner) loadTestInput(vectorID string) ([]byte, error) {
 	path := filepath.Join(tr.testDataDir, vectorID+".bin")
 	//nolint:gosec // G304: path is constructed from trusted test data directory
-	return os.ReadFile(path)
+	return os.ReadFile(path) // #nosec G304 -- the path is a fixture path supplied by the conformance harness
 }
 
 // computeHash computes SHA256 hash of data
@@ -403,7 +403,7 @@ func (sr *SuiteResult) ToJSON() ([]byte, error) {
 // LoadTestSuite loads a test suite from a JSON file
 func LoadTestSuite(path string) (*TestSuite, error) {
 	//nolint:gosec // G304: path is provided by trusted caller/configuration
-	data, err := os.ReadFile(path)
+	data, err := os.ReadFile(path) // #nosec G304 -- the path is a fixture path supplied by the conformance harness
 	if err != nil {
 		return nil, fmt.Errorf("failed to read test suite: %w", err)
 	}

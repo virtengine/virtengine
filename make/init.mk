@@ -41,6 +41,17 @@ ifndef ROOT_DIR
 ROOT_DIR := $(VE_ROOT)
 endif
 
+# SEMVER is exported by .envrc:72 for direnv shells, but nothing else defines it:
+# a shell that only carries the devcache env (CI's non-direnv fallback in
+# .github/actions/setup-ubuntu, or a hand-exported VE_DEVCACHE as
+# _docs/development-environment.md instructs) leaves it empty. make/setup-cache.mk
+# then derives an empty major for mockery/golangci-lint and hands `go install` a
+# malformed module path (github.com/vektra/mockery/v@v3.5.0) that surfaces as a Go
+# module error, not as a missing-env diagnostic. Same fallback shape as VE_ROOT above.
+ifndef SEMVER
+SEMVER := $(ROOT_DIR)/script/semver.sh
+endif
+
 ifeq (, $(GOTOOLCHAIN))
 ifeq ($(OS),Windows_NT)
 GOTOOLCHAIN := auto
@@ -96,7 +107,7 @@ endif
 
 # ==== Build tools versions ====
 # Format <TOOL>_VERSION
-GOLANGCI_LINT_VERSION        ?= v2.4.0
+GOLANGCI_LINT_VERSION        ?= v2.13.2
 STATIK_VERSION               ?= v0.1.7
 GIT_CHGLOG_VERSION           ?= v0.15.1
 MOCKERY_VERSION              ?= 3.5.0
@@ -125,10 +136,24 @@ COSMOVISOR_DEBUG                 := $(VE_RUN_BIN)/cosmovisor
 GITLEAKS                         := $(VE_DEVCACHE_BIN)/gitleaks
 
 
+# ==== Release tag ====
+# `git describe --tags --abbrev=0` is NOT usable as a release-tag default here: 31 of the
+# 32 remote tags are checkpoint/* automation tags and only v0.1.0 is a release tag, so
+# git describe resolves to `checkpoint/stable-virtengine-beta/consolidated-v2`. Every
+# consumer (GORELEASER_BUILD_VARS, IS_PREREL, IS_MAINNET, script/genchangelog.sh) then
+# received a non-semver tag, which made `make gen-changelog` fail with exit 1 and a
+# 0-byte notes file (release plan defect D4).
+#
+# Default to the newest semver (v*) tag; a caller-supplied RELEASE_TAG always wins.
+# `make release-tag-check` (make/releasing.mk) rejects a non-semver value loudly.
 ifeq ($(OS),Windows_NT)
-RELEASE_TAG           ?= $(shell git describe --tags --abbrev=0 2>NUL || echo v0.0.0)
+RELEASE_TAG           ?= $(shell git tag --list "v[0-9]*" --sort=-v:refname 2>NUL | head -n 1)
 else
-RELEASE_TAG           ?= $(shell git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0")
+RELEASE_TAG           ?= $(shell git tag --list "v[0-9]*" --sort=-v:refname 2>/dev/null | head -n 1)
+endif
+RELEASE_TAG           := $(strip $(RELEASE_TAG))
+ifeq ($(RELEASE_TAG),)
+RELEASE_TAG           := v0.0.0
 endif
 
 include $(VE_ROOT)/make/setup-cache.mk

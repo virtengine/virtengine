@@ -331,7 +331,7 @@ func (dm *DiskMonitor) CalculateGrowthProjection() GrowthProjection {
 			elapsed := latest.Timestamp.Sub(oldestRelevant.Timestamp)
 			if elapsed > 0 {
 				//nolint:gosec // G115: conversion is safe for disk usage values in practice
-				bytesChange := int64(latest.UsedBytes) - int64(oldestRelevant.UsedBytes)
+				bytesChange := int64(latest.UsedBytes) - int64(oldestRelevant.UsedBytes) // #nosec G115 -- disk usage byte counts are non-negative and fit in int64
 				daysElapsed := elapsed.Hours() / 24
 				if daysElapsed > 0 {
 					projection.DailyGrowthRate = int64(float64(bytesChange) / daysElapsed)
@@ -361,14 +361,14 @@ func (dm *DiskMonitor) CalculateGrowthProjection() GrowthProjection {
 
 		if latest.UsedBytes < warningThreshold {
 			//nolint:gosec // G115: conversion is safe, UsedBytes < warningThreshold ensures positive result
-			projection.DaysUntilWarning = int((int64(warningThreshold) - int64(latest.UsedBytes)) / projection.DailyGrowthRate)
+			projection.DaysUntilWarning = int((int64(warningThreshold) - int64(latest.UsedBytes)) / projection.DailyGrowthRate) // #nosec G115 -- the projection result is a small non-negative day count
 		}
 		if latest.UsedBytes < criticalThreshold {
 			//nolint:gosec // G115: conversion is safe, UsedBytes < criticalThreshold ensures positive result
-			projection.DaysUntilCritical = int((int64(criticalThreshold) - int64(latest.UsedBytes)) / projection.DailyGrowthRate)
+			projection.DaysUntilCritical = int((int64(criticalThreshold) - int64(latest.UsedBytes)) / projection.DailyGrowthRate) // #nosec G115 -- the projection result is a small non-negative day count
 		}
 		//nolint:gosec // G115: freeBytes is disk free space, safe for int64 conversion
-		projection.DaysUntilFull = int(int64(freeBytes) / projection.DailyGrowthRate)
+		projection.DaysUntilFull = int(int64(freeBytes) / projection.DailyGrowthRate) // #nosec G115 -- the projection result is a small non-negative day count
 	} else {
 		// Stable or shrinking - set to a large value
 		projection.DaysUntilWarning = 9999
@@ -454,7 +454,7 @@ func getDirSize(path string) uint64 {
 		}
 		if !info.IsDir() {
 			//nolint:gosec // G115: file sizes are non-negative, safe conversion
-			size += uint64(info.Size())
+			size += uint64(info.Size()) // #nosec G115 -- file sizes are non-negative and fit in uint64
 		}
 		return nil
 	})

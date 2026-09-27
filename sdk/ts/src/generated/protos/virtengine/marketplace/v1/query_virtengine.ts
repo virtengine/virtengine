@@ -1,4 +1,4 @@
-import { QueryAllocationsByCustomerRequest, QueryAllocationsByProviderRequest, QueryAllocationsResponse, QueryOfferingPriceRequest, QueryOfferingPriceResponse } from "./query.ts";
+import { QueryAllocationsByCustomerRequest, QueryAllocationsByProviderRequest, QueryAllocationsResponse, QueryCatalogRequest, QueryCatalogResponse, QueryOfferingPriceRequest, QueryOfferingPriceResponse, QueryWaldurCommandsRequest, QueryWaldurCommandsResponse } from "./query.ts";
 
 export const Query = {
   typeName: "virtengine.marketplace.v1.Query",
@@ -22,6 +22,20 @@ export const Query = {
       httpPath: "/virtengine/marketplace/v1/allocations/provider/{provider_address}",
       input: QueryAllocationsByProviderRequest,
       output: QueryAllocationsResponse,
+      get parent() { return Query; },
+    },
+    catalog: {
+      name: "Catalog",
+      httpPath: "/virtengine/marketplace/v1/catalog",
+      input: QueryCatalogRequest,
+      output: QueryCatalogResponse,
+      get parent() { return Query; },
+    },
+    waldurCommands: {
+      name: "WaldurCommands",
+      httpPath: "/virtengine/marketplace/v1/waldur-commands",
+      input: QueryWaldurCommandsRequest,
+      output: QueryWaldurCommandsResponse,
       get parent() { return Query; },
     },
   },

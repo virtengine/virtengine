@@ -25,7 +25,7 @@ runs:
             exit 1
         fi
         echo "GOVERSION=${toolchain}" >> $GITHUB_ENV
-    - uses: actions/setup-go@v5
+    - uses: actions/setup-go@v6
       with:
         go-version: "${{ env.GOVERSION }}"
         check-latest: true

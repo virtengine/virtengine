@@ -209,7 +209,7 @@ func (ml *ModelLoader) loadMetadata(modelPath string) (*ModelMetadata, error) {
 
 	// Read and parse metadata
 	//nolint:gosec // G304: metadataPath validated against model base directory
-	data, err := os.ReadFile(metadataPath)
+	data, err := os.ReadFile(metadataPath) // #nosec G304 -- metadataPath is a local path parameter supplied by this function's own caller (a CLI argument, loader parameter or configured state file) and is not derived from a network peer or chain message; opening the caller-nominated file is the purpose of this call
 	if err != nil {
 		return nil, fmt.Errorf("failed to read metadata file: %w", err)
 	}
@@ -366,7 +366,7 @@ func (ml *ModelLoader) computeModelHash(modelPath string) (string, error) {
 	for _, path := range files {
 		// Read and hash file contents
 		//nolint:gosec // G304: path is from trusted model directory
-		file, err := os.Open(path)
+		file, err := os.Open(path) // #nosec G304 -- path is a local path parameter supplied by this function's own caller (a CLI argument, loader parameter or configured state file) and is not derived from a network peer or chain message; opening the caller-nominated file is the purpose of this call
 		if err != nil {
 			return "", fmt.Errorf("failed to open %s: %w", path, err)
 		}

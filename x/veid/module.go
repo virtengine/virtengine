@@ -152,14 +152,17 @@ func (am AppModule) RegisterQueryService(server grpc.Server) {
 	veidv1.RegisterQueryServer(server, keeper.NewSDKQueryServer(am.keeper))
 }
 
-// BeginBlock performs no-op
-func (am AppModule) BeginBlock(_ context.Context) error {
-	return nil
+// BeginBlock performs veid begin-block processing via the keeper hook.
+func (am AppModule) BeginBlock(ctx context.Context) error {
+	sdkCtx := sdk.UnwrapSDKContext(ctx)
+	return am.keeper.BeginBlocker(sdkCtx)
 }
 
-// EndBlock returns the end blocker for the veid module.
-func (am AppModule) EndBlock(_ context.Context) error {
-	return nil
+// EndBlock performs veid end-block processing via the keeper hook, including
+// the throttled retention/erasure sweep that enforces data-lifecycle expiry.
+func (am AppModule) EndBlock(ctx context.Context) error {
+	sdkCtx := sdk.UnwrapSDKContext(ctx)
+	return am.keeper.EndBlocker(sdkCtx)
 }
 
 // InitGenesis performs genesis initialization for the veid module.

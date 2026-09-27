@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1.7
 # The deployed image is always referenced by digest in Kubernetes. Builders
 # should pass a digest-pinned Go base via GO_BUILDER_IMAGE in release CI.
-ARG GO_BUILDER_IMAGE=golang:1.25.8-alpine
+ARG GO_BUILDER_IMAGE=golang:1.26.8-alpine
 FROM ${GO_BUILDER_IMAGE} AS build
 
 RUN apk add --no-cache ca-certificates git
@@ -25,7 +25,7 @@ RUN go build -trimpath -buildvcs=false \
 FROM gcr.io/distroless/static-debian12:nonroot
 LABEL org.opencontainers.image.title="VirtEngine VEID Inference" \
       org.opencontainers.image.description="Deterministic VEID inference sidecar" \
-      org.opencontainers.image.source="https://github.com/virtengine-network/node"
+      org.opencontainers.image.source="https://github.com/virtengine/virtengine"
 COPY --from=build /out/veid-inference /usr/local/bin/veid-inference
 USER 65532:65532
 EXPOSE 50051 9090

@@ -1,0 +1,98 @@
+---
+name: pr-shepherd
+on:
+  schedule:
+    - cron: "0 6 * * *"
+  workflow_dispatch:
+
+permissions:
+  pull-requests: write
+  issues: write
+
+jobs:
+  shepherd:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - name: Shepherd PR review queue
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          FAIL_MUT=0
+          OK_MUT=0
+          # Wrap every mutating gh call: counts success vs failure so a
+          # run where all mutations 403 is distinguishable from a good run
+          # (Finding 3: fail-silent mutations). Usage: mut <gh args...>
+          mut() {
+            if "$@" >/dev/null 2>&1; then
+              OK_MUT=$((OK_MUT + 1))
+            else
+              FAIL_MUT=$((FAIL_MUT + 1))
+            fi
+          }
+          gh pr list --state open --limit 200 \
+            --json number,createdAt,author,isDraft,mergeable,reviewDecision \
+            > /tmp/prs.json
+          COUNT=$(jq 'length' /tmp/prs.json)
+          echo "open_prs=$COUNT" >> "$GITHUB_STEP_SUMMARY"
+          CONFLICTING=$(jq -r '.[] | select(.mergeable=="CONFLICTING") | .number' /tmp/prs.json)
+          NCONFLICT=$(echo "$CONFLICTING" | grep -c . || true)
+          echo "conflicting=$NCONFLICT" >> "$GITHUB_STEP_SUMMARY"
+          NOW=$(date +%s)
+          STALE_COUNT=0
+          REBASE_COUNT=0
+          REVIEW_COUNT=0
+          for N in $(jq -r '.[].number' /tmp/prs.json); do
+            CREATED=$(jq -r ".[] | select(.number==$N) | .createdAt" /tmp/prs.json)
+            AUTHOR=$(jq -r ".[] | select(.number==$N) | .author.login" /tmp/prs.json)
+            MERGEABLE=$(jq -r ".[] | select(.number==$N) | .mergeable" /tmp/prs.json)
+            AGE=$(( (NOW - $(date -d "$CREATED" +%s)) / 86400 ))
+            if [ "$AGE" -ge 10 ]; then
+              mut gh pr edit "$N" --add-label "stale"
+              mut gh pr comment "$N" --body "Shepherd: this PR is ${AGE}d old. Please review or rebase."
+              STALE_COUNT=$((STALE_COUNT + 1))
+            fi
+            if [ "$MERGEABLE" = "CONFLICTING" ]; then
+              mut gh pr comment "$N" --body "Shepherd: this PR is CONFLICTING with main. Please rebase."
+              REBASE_COUNT=$((REBASE_COUNT + 1))
+            fi
+            if [ "$AUTHOR" = "jaeko44" ]; then
+              mut gh pr edit "$N" --add-reviewer "livenson"
+            else
+              mut gh pr edit "$N" --add-reviewer "jaeko44"
+            fi
+            REVIEW_COUNT=$((REVIEW_COUNT + 1))
+          done
+          echo "stale_labeled=$STALE_COUNT rebase_commented=$REBASE_COUNT reviewers_assigned=$REVIEW_COUNT" >> "$GITHUB_STEP_SUMMARY"
+          echo "mutations_ok=$OK_MUT mutations_failed=$FAIL_MUT" >> "$GITHUB_STEP_SUMMARY"
+          # Finding 3: fail loudly when every mutation failed (e.g. all 403).
+          # A run where nothing took effect must not read as success.
+          # Checked before the depth branch so no path masks a dead shepherd.
+          if [ "$OK_MUT" -eq 0 ] && [ "$FAIL_MUT" -gt 0 ]; then
+            echo "ERROR: all $FAIL_MUT shepherd mutations failed — check workflow permissions." >> "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
+          # Finding 2: dedupe the depth alert — one open issue per queue-depth
+          # episode, not one per run. Marker title is stable while depth>=30.
+          if [ "$COUNT" -ge 30 ]; then
+            TITLE="Shepherd: PR review queue needs owner attention (depth >= 30)"
+            EXISTING=$(gh issue list --state open --search "$TITLE in:title" \
+              --json number --jq 'length' 2>/dev/null | tail -n 1 || echo 0)
+            EXISTING="${EXISTING:-0}"
+            echo "ALERT: PR queue depth $COUNT >= 30 — review lane needs owner attention." >> "$GITHUB_STEP_SUMMARY"
+            if [ "$EXISTING" -eq 0 ]; then
+              mut gh issue create --title "$TITLE" \
+                --body "Shepherd alert: $COUNT open PRs, $NCONFLICT conflicting. See run $GITHUB_RUN_ID." \
+                --label "priority:high"
+              echo "alert_issue=created" >> "$GITHUB_STEP_SUMMARY"
+            else
+              echo "alert_issue=already-open (no duplicate filed)" >> "$GITHUB_STEP_SUMMARY"
+            fi
+            # Do not fail the scheduled run when the alert is already tracked:
+            # a perpetually-red workflow trains people to ignore it.
+            if [ "$EXISTING" -gt 0 ]; then
+              exit 0
+            fi
+            exit 1
+          fi

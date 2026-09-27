@@ -53,8 +53,8 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  GO_VERSION: "1.25.14"
-  GOLANGCI_LINT_VERSION: "v2.4.0"
+  GO_VERSION: "1.26.8"
+  GOLANGCI_LINT_VERSION: "v2.13.2"
   NODE_VERSION: "20"
   PNPM_VERSION: "10.28.2"
   PYTHON_VERSION: "3.11"
@@ -75,7 +75,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Install system dependencies
         # github.com/zondax/hid (via go.mod replace) carries `#cgo pkg-config: libudev`;
@@ -94,7 +94,7 @@ jobs:
           fi
 
       - name: Set up Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v6
         with:
           go-version: ${{ env.GO_VERSION }}
           cache: true
@@ -105,7 +105,7 @@ jobs:
           go mod vendor
 
       - name: Run golangci-lint
-        uses: golangci/golangci-lint-action@v8
+        uses: golangci/golangci-lint-action@v9
         with:
           version: ${{ env.GOLANGCI_LINT_VERSION }}
           args: --timeout=10m ${{ github.event_name == 'pull_request' && format('--new-from-rev=origin/{0}', github.base_ref) || '' }}
@@ -137,7 +137,7 @@ jobs:
     timeout-minutes: 20
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Install system dependencies
         # Same libudev requirement as the lint job: `go vet ./...` compiles the
@@ -145,7 +145,7 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y libudev-dev
 
       - name: Set up Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v6
         with:
           go-version: ${{ env.GO_VERSION }}
           cache: true
@@ -167,12 +167,18 @@ jobs:
     timeout-minutes: 30
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
+        with:
+          # Same reason as the test-go job: pkg/platformsecurity/contracts asserts
+          # provenance against the real git object DB (PersistedSchemaPayloadHead
+          # must exist and PersistedSchemaEpochBase must be its ancestor), and a
+          # depth-1 checkout does not contain those objects.
+          fetch-depth: 0
 
       - name: Set up Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v6
         with:
-          go-version: "1.25.14"
+          go-version: "1.26.8"
           cache: true
 
       - name: Download dependencies
@@ -201,7 +207,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Run ShellCheck
         uses: ludeeus/action-shellcheck@master
@@ -210,15 +216,53 @@ jobs:
           severity: warning
         continue-on-error: true # Don't fail CI on shell lint warnings
 
+  node-runtime-audit:
+    name: Action Node Runtime Audit
+    runs-on: ubuntu-latest
+    # Deliberately NOT path-filtered. A path filter here would be expressed as
+    # `... || contains(changed_files, '.github/workflows')`, which is always
+    # true on the event that matters and silently disables the gate on the one
+    # event that could hide a regression. The job costs ~40 API reads and one
+    # runner minute; a gate that can be skipped by construction is worth less
+    # than the minute it saves.
+    #
+    # Skipped on schedule only: those events change no pins, so a red here would
+    # be noise rather than signal.
+    if: github.event_name != 'schedule'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+        with:
+          # The audit reads upstream manifests at the pinned refs, so it needs
+          # the workflow files, and nothing else. A depth-1 fetch is enough.
+          fetch-depth: 1
+          sparse-checkout: .github
+
+      - name: Audit action runtimes for deprecated Node
+        # Fails when any action reachable from .github/workflows -- including
+        # one embedded inside a COMPOSITE action -- still declares `using:
+        # node20`. Exits 2, not 0, if a pin cannot be read: a blind run must
+        # never read as a pass.
+        #
+        # GH_TOKEN is REQUIRED, not optional. Without it `gh` refuses every
+        # call ("please run: gh auth login"), the audit sees API errors rather
+        # than manifests, and correctly exits 2 -- which fails the build on a
+        # clean tree. Passing the built-in token is what makes it able to reach
+        # a verdict at all; the read is of PUBLIC manifests in other repos.
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GITHUB_TOKEN: ${{ github.token }}
+        run: python3 .github/scripts/audit_node_runtime.py
+
   agents-docs:
     name: AGENTS Docs
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Set up Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: ${{ env.NODE_VERSION }}
 
@@ -233,7 +277,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Run backup/restore smoke test
         run: |
@@ -251,7 +295,7 @@ jobs:
     # Run in parallel with lint for faster feedback
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           # pkg/platformsecurity/contracts asserts provenance against the real
           # git object DB (PersistedSchemaPayloadHead must exist and
@@ -283,7 +327,7 @@ jobs:
 
       - name: Set up Go
         if: steps.detect.outputs.run == 'true'
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v6
         with:
           go-version: ${{ env.GO_VERSION }}
           cache: true
@@ -344,7 +388,7 @@ jobs:
 
       - name: Upload coverage to Codecov
         if: steps.detect.outputs.run == 'true'
-        uses: codecov/codecov-action@v4
+        uses: codecov/codecov-action@v6
         with:
           files: ./coverage.out
           flags: unittests
@@ -353,7 +397,7 @@ jobs:
 
       - name: Upload coverage artifact
         if: steps.detect.outputs.run == 'true'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: go-coverage
           path: coverage.out
@@ -369,7 +413,7 @@ jobs:
     needs: test-go
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Detect economics-relevant changes
         id: detect
@@ -390,7 +434,7 @@ jobs:
 
       - name: Set up Go
         if: steps.detect.outputs.run == 'true'
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v6
         with:
           go-version: ${{ env.GO_VERSION }}
           cache: true
@@ -417,7 +461,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Detect Python tests
         id: detect
@@ -430,7 +474,7 @@ jobs:
 
       - name: Set up Python
         if: steps.detect.outputs.run == 'true'
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: ${{ env.PYTHON_VERSION }}
           cache: "pip"
@@ -467,7 +511,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Detect portal package
         id: detect
@@ -480,13 +524,13 @@ jobs:
 
       - name: Set up pnpm
         if: steps.detect.outputs.run == 'true'
-        uses: pnpm/action-setup@v2
+        uses: pnpm/action-setup@v5
         with:
           version: ${{ env.PNPM_VERSION }}
 
       - name: Set up Node.js
         if: steps.detect.outputs.run == 'true'
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: "pnpm"
@@ -537,12 +581,12 @@ jobs:
             goarch: amd64
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           fetch-depth: 0
 
       - name: Set up Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v6
         with:
           go-version: ${{ env.GO_VERSION }}
           cache: true
@@ -591,7 +635,7 @@ jobs:
           fi
 
       - name: Upload build artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: virtengine-${{ matrix.goos }}-${{ matrix.goarch }}
           path: dist/virtengine-*
@@ -606,7 +650,7 @@ jobs:
     needs: build
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Install system dependencies
         # Same libudev requirement as vet/test-go: the integration packages
@@ -614,13 +658,13 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y libudev-dev
 
       - name: Set up Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v6
         with:
           go-version: ${{ env.GO_VERSION }}
           cache: true
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@v4
 
       - name: Sync dependencies
         run: |
@@ -628,7 +672,7 @@ jobs:
           go mod vendor
 
       - name: Download build artifact
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           name: virtengine-linux-amd64
           path: dist
@@ -696,7 +740,7 @@ jobs:
 
       - name: Upload logs on failure
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: integration-test-logs
           path: docker-compose-logs.txt
@@ -716,10 +760,10 @@ jobs:
     needs: [build, integration]
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Set up Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v6
         with:
           go-version: ${{ env.GO_VERSION }}
           cache: true
@@ -730,7 +774,7 @@ jobs:
           go mod vendor
 
       - name: Download build artifact
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           name: virtengine-linux-amd64
           path: dist
@@ -797,7 +841,7 @@ jobs:
 
       - name: Upload HPC E2E test logs
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: hpc-e2e-test-logs
           path: hpc-e2e-output.txt
@@ -821,7 +865,7 @@ jobs:
       id-token: write
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Detect container-relevant changes
         id: detect
@@ -842,7 +886,7 @@ jobs:
 
       - name: Set up Docker Buildx
         if: steps.detect.outputs.run == 'true'
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@v4
 
       - name: Build virtengine image (local)
         if: steps.detect.outputs.run == 'true'
@@ -851,7 +895,7 @@ jobs:
 
       - name: Scan virtengine image
         if: steps.detect.outputs.run == 'true'
-        uses: aquasecurity/trivy-action@0.24.0
+        uses: aquasecurity/trivy-action@v0.24.0
         with:
           image-ref: virtengine:ci
           format: table
@@ -876,7 +920,7 @@ jobs:
 
       - name: Scan test-runner image
         if: steps.detect.outputs.run == 'true'
-        uses: aquasecurity/trivy-action@0.24.0
+        uses: aquasecurity/trivy-action@v0.24.0
         with:
           image-ref: virtengine-test:ci
           format: table
@@ -890,7 +934,7 @@ jobs:
 
       - name: Scan veid-pipeline image
         if: ${{ steps.detect.outputs.run == 'true' && hashFiles('ml/models/**') != '' }}
-        uses: aquasecurity/trivy-action@0.24.0
+        uses: aquasecurity/trivy-action@v0.24.0
         with:
           image-ref: veid-pipeline:ci
           format: table
@@ -899,7 +943,7 @@ jobs:
 
       - name: Log in to GHCR
         if: steps.detect.outputs.run == 'true' && github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop' || startsWith(github.ref, 'refs/tags/v'))
-        uses: docker/login-action@v3
+        uses: docker/login-action@v4
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
@@ -951,7 +995,7 @@ jobs:
     needs: lint
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Setup environment
         uses: ./.github/actions/setup-macos
@@ -987,7 +1031,7 @@ jobs:
     needs: test-go
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Setup environment
         uses: ./.github/actions/setup-ubuntu
@@ -1017,7 +1061,7 @@ jobs:
     needs: [build, test-go]
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Setup environment
         uses: ./.github/actions/setup-ubuntu
@@ -1120,12 +1164,12 @@ jobs:
       contents: write
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           fetch-depth: 0
 
       - name: Download all artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           path: artifacts
 
@@ -1140,7 +1184,7 @@ jobs:
           sha256sum -- "${archives[@]}" > checksums.txt
 
       - name: Create Release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           files: |
             artifacts/**/*.tar.gz
@@ -1148,7 +1192,11 @@ jobs:
             artifacts/checksums.txt
           draft: true
           prerelease: ${{ contains(github.ref, '-rc') || contains(github.ref, '-beta') || contains(github.ref, '-alpha') }}
-          generate_release_notes: true
+          # Release bodies have exactly one writer: release.yaml's publish job runs
+          # GoReleaser with --release-notes=.cache/changelog.md and release.mode=replace,
+          # and script/genchangelog.sh (make gen-changelog) is the single notes generator.
+          # GitHub's own note generation is a competing writer, so it stays off here.
+          generate_release_notes: false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 

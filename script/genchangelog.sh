@@ -19,9 +19,29 @@ export PATH=$PATH
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd)"
 
-if [[ $# -ne 2 ]]; then
-	echo "illegal number of parameters"
+usage() {
+	echo "usage: genchangelog.sh [--next-tag] <tag> <output-file>"
+	echo ""
+	echo "  <tag>          the release tag to generate notes for"
+	echo "  <output-file>  where the markdown notes are written"
+	echo "  --next-tag     preview mode: generate notes for a tag that does not exist yet"
+	echo "                 (passes --next-tag to git-chglog; nothing is tagged or published)"
 	exit 1
+}
+
+# s0
+# Preview mode (release plan defect D5). Without --next-tag, git-chglog refuses to run
+# for a tag that is not in the repository:
+#   ERROR commits corresponding to "v0.3.0" was not found
+# which made it impossible to review release notes before cutting the tag.
+next_tag=false
+if [[ "${1:-}" == "--next-tag" ]]; then
+	next_tag=true
+	shift
+fi
+
+if [[ $# -ne 2 ]]; then
+	usage
 fi
 
 to_tag=$1
@@ -43,5 +63,13 @@ else
 	tag_regexp=$version_prerel
 fi
 
-query_string="$to_tag"
-git-chglog --config .chglog/config.yaml --tag-filter-pattern="$tag_regexp" --output "$2" "$query_string"
+# s3
+# --config is mandatory: without it git-chglog looks for .chglog/config.yml, but this
+# repository ships .chglog/config.yaml, so the command dies with
+#   ERROR open .chglog/config.yml: The system cannot find the file specified
+# --tag-filter-pattern keeps checkpoint/* automation tags out of the compare range.
+if [[ "$next_tag" == true ]]; then
+	git-chglog --config .chglog/config.yaml --tag-filter-pattern="$tag_regexp" --next-tag "$to_tag" --output "$2"
+else
+	git-chglog --config .chglog/config.yaml --tag-filter-pattern="$tag_regexp" --output "$2" "$to_tag"
+fi

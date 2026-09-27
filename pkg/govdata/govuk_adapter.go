@@ -557,7 +557,7 @@ func loadGovUKConfigFromEnv(_ AdapterConfig) (GovUKConfig, bool, error) {
 
 	if govUKConfig.AuditEnabled {
 		log.Printf("[GOV.UK Verify] Loaded configuration for service %s in %s environment",
-			govUKConfig.ServiceEntityID, govUKConfig.Environment)
+			sanitizeLogValue(govUKConfig.ServiceEntityID), sanitizeLogValue(govUKConfig.Environment))
 	}
 
 	return govUKConfig, true, nil

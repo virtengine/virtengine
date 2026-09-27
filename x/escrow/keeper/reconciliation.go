@@ -854,11 +854,11 @@ func (rk *reconciliationKeeper) calculateSummary(
 ) billing.ReconciliationSummary {
 	summary := billing.ReconciliationSummary{
 		//nolint:gosec // slice lengths are non-negative
-		TotalUsageRecords: uint32(len(usageRecords)),
+		TotalUsageRecords: uint32(len(usageRecords)), // #nosec G115 -- len(usageRecords) is bounded by its allocating container, a protocol-capped collection far below 2^32, so the conversion cannot truncate
 		//nolint:gosec // slice lengths are non-negative
-		TotalInvoices: uint32(len(invoices)),
+		TotalInvoices: uint32(len(invoices)), // #nosec G115 -- len(invoices) is bounded by its allocating container, a protocol-capped collection far below 2^32, so the conversion cannot truncate
 		//nolint:gosec // slice lengths are non-negative
-		TotalSettlements:      uint32(len(payoutRecords)),
+		TotalSettlements:      uint32(len(payoutRecords)), // #nosec G115 -- len(payoutRecords) is bounded by its allocating container, a protocol-capped collection far below 2^32, so the conversion cannot truncate
 		TotalInvoiceAmount:    sdk.NewCoins(),
 		TotalSettlementAmount: sdk.NewCoins(),
 		TotalUsageAmount:      sdk.NewCoins(),
@@ -868,7 +868,7 @@ func (rk *reconciliationKeeper) calculateSummary(
 		OverdueAmount:         sdk.NewCoins(),
 		DiscrepancyAmount:     sdk.NewCoins(),
 		//nolint:gosec // slice length is non-negative
-		DiscrepancyCount: uint32(len(discrepancies)),
+		DiscrepancyCount: uint32(len(discrepancies)), // #nosec G115 -- len(discrepancies) is bounded by its allocating container, a protocol-capped collection far below 2^32, so the conversion cannot truncate
 	}
 
 	// Calculate usage totals

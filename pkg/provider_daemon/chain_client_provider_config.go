@@ -643,7 +643,7 @@ func deriveConfigVersion(
 		return version
 	}
 	if !lastUpdated.IsZero() && lastUpdated.Unix() > 0 {
-		return uint64(lastUpdated.Unix()) //nolint:gosec // G115: timestamp is guaranteed non-negative here
+		return uint64(lastUpdated.Unix()) /* #nosec G115 -- timestamp is guaranteed non-negative here */ //nolint:gosec
 	}
 	return 1
 }

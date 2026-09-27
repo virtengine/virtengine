@@ -19,7 +19,7 @@ import (
 
 const (
 	flagWaldurURL   = "waldur-url"
-	flagWaldurToken = "waldur-token" //nolint:gosec // #nosec G101: CLI flag name, not a credential
+	flagWaldurToken = "waldur-token" /* #nosec G101 -- #nosec G101: CLI flag name, not a credential */ //nolint:gosec
 	flagOutput      = "output"
 	flagTimeout     = "timeout"
 )

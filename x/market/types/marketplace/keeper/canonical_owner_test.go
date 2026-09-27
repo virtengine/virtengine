@@ -22,7 +22,7 @@ import (
 func TestGenesisRejectsMutableNonOwnerLifecycle(t *testing.T) {
 	provider := sdk.AccAddress(bytes.Repeat([]byte{7}, 20)).String()
 	customer := sdk.AccAddress(bytes.Repeat([]byte{8}, 20)).String()
-	offering := marketplace.NewOfferingAt(marketplace.OfferingID{ProviderAddress: provider, Sequence: 1}, "catalog", marketplace.OfferingCategoryCompute, marketplace.PricingInfo{Model: marketplace.PricingModelFixed, BasePrice: 1, Currency: "uve"}, time.Unix(1, 0).UTC())
+	offering := marketplace.NewOfferingAt(marketplace.OfferingID{ProviderAddress: provider, Sequence: 1}, "catalog", marketplace.OfferingCategoryCompute, marketplace.PricingInfo{Model: marketplace.PricingModelFixed, BasePrice: 1, Currency: testDenom}, time.Unix(1, 0).UTC())
 	offering.State = marketplace.OfferingStateActive
 	order := marketplace.NewOrderAt(marketplace.OrderID{CustomerAddress: customer, Sequence: 1}, offering.ID, 1, 1, time.Unix(1, 0).UTC())
 	order.State = marketplace.OrderStateOpen
@@ -47,7 +47,7 @@ func TestCanonicalActivationRejectsLifecycleWritesAndPreservesCatalog(t *testing
 
 	provider := sdk.AccAddress(bytes.Repeat([]byte{7}, 20)).String()
 	customer := sdk.AccAddress(bytes.Repeat([]byte{8}, 20)).String()
-	offering := marketplace.NewOfferingAt(marketplace.OfferingID{ProviderAddress: provider, Sequence: 1}, "catalog", marketplace.OfferingCategoryCompute, marketplace.PricingInfo{Model: marketplace.PricingModelFixed, BasePrice: 1, Currency: "uve"}, ctx.BlockTime())
+	offering := marketplace.NewOfferingAt(marketplace.OfferingID{ProviderAddress: provider, Sequence: 1}, "catalog", marketplace.OfferingCategoryCompute, marketplace.PricingInfo{Model: marketplace.PricingModelFixed, BasePrice: 1, Currency: testDenom}, ctx.BlockTime())
 	offering.State = marketplace.OfferingStateActive
 	require.NoError(t, k.CreateOffering(ctx, offering), "supply catalog writes remain compatible")
 
@@ -73,7 +73,7 @@ func TestPreActivationLifecycleWriteRemainsReplayable(t *testing.T) {
 	require.NoError(t, k.SetParams(ctx, params))
 	provider := sdk.AccAddress(bytes.Repeat([]byte{7}, 20)).String()
 	customer := sdk.AccAddress(bytes.Repeat([]byte{8}, 20)).String()
-	offering := marketplace.NewOfferingAt(marketplace.OfferingID{ProviderAddress: provider, Sequence: 1}, "catalog", marketplace.OfferingCategoryCompute, marketplace.PricingInfo{Model: marketplace.PricingModelFixed, BasePrice: 1, Currency: "uve"}, ctx.BlockTime())
+	offering := marketplace.NewOfferingAt(marketplace.OfferingID{ProviderAddress: provider, Sequence: 1}, "catalog", marketplace.OfferingCategoryCompute, marketplace.PricingInfo{Model: marketplace.PricingModelFixed, BasePrice: 1, Currency: testDenom}, ctx.BlockTime())
 	offering.State = marketplace.OfferingStateActive
 	require.NoError(t, k.CreateOffering(ctx, offering))
 

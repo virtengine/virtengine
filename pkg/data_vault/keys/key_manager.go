@@ -214,7 +214,7 @@ func (km *KeyManager) GenerateKey(scope Scope) error {
 	version := uint32(1)
 	if scopeKeys != nil {
 		if len(scopeKeys) > 0 {
-			version = uint32(len(scopeKeys)) + 1 //nolint:gosec // key versions are expected to be reasonable
+			version = uint32(len(scopeKeys)) + 1 /* #nosec G115 -- key versions are expected to be reasonable */ //nolint:gosec
 		}
 	}
 
@@ -317,7 +317,7 @@ func (km *KeyManager) RotateKey(scope Scope, overlapDuration time.Duration) erro
 
 	// Determine new version
 	scopeKeys := km.keys[scope]
-	newVersion := uint32(len(scopeKeys)) + 1 //nolint:gosec // key versions are expected to be reasonable
+	newVersion := uint32(len(scopeKeys)) + 1 /* #nosec G115 -- key versions are expected to be reasonable */ //nolint:gosec
 
 	// Create new key info
 	now := time.Now()
@@ -442,7 +442,7 @@ func (km *KeyManager) EmergencyRotateKey(scope Scope) (*KeyInfo, error) {
 	}
 	newKeyID := fmt.Sprintf("%s-%x", scope, keyIDBytes)
 	scopeKeys := km.keys[scope]
-	newVersion := uint32(len(scopeKeys)) + 1 //nolint:gosec // key versions are expected to be reasonable
+	newVersion := uint32(len(scopeKeys)) + 1 /* #nosec G115 -- key versions are expected to be reasonable */ //nolint:gosec
 
 	now := time.Now()
 	newKeyInfo := &KeyInfo{

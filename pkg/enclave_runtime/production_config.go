@@ -343,7 +343,7 @@ func LoadProductionConfigFromEnv() (*ProductionConfig, error) {
 
 // LoadProductionConfigFromFile loads configuration from a JSON file
 func LoadProductionConfigFromFile(path string) (*ProductionConfig, error) {
-	data, err := os.ReadFile(path)
+	data, err := os.ReadFile(path) // #nosec G304 -- the path is an operator-configured device or allow-list location (from configuration or a fixed device constant), never untrusted input
 	if err != nil {
 		return nil, fmt.Errorf("failed to read config file: %w", err)
 	}
