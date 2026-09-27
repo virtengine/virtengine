@@ -24,7 +24,10 @@ const AllocationDetailClient = dynamic(() => import('./AllocationDetailClient'),
 });
 
 export function generateStaticParams() {
-  return [{ id: '_' }];
+  // Catch-all segments must be returned as an array of segments, not a joined
+  // string, or Next throws "A required parameter (id) was not provided as an
+  // array received string".
+  return [{ id: ['_'] }];
 }
 
 export default function AllocationDetailPage() {
