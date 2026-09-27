@@ -1239,13 +1239,21 @@ type QueryClient interface {
 	AllocationHistory(ctx context.Context, in *QueryAllocationHistoryRequest, opts ...grpc.CallOption) (*QueryAllocationHistoryResponse, error)
 	// AllocationsByProvider returns allocations for a provider.
 	AllocationsByProvider(ctx context.Context, in *QueryAllocationsByProviderRequest, opts ...grpc.CallOption) (*QueryAllocationsByProviderResponse, error)
+	// Reservation returns a single reservation by its id.
 	Reservation(ctx context.Context, in *QueryReservationRequest, opts ...grpc.CallOption) (*QueryReservationResponse, error)
+	// ReservationByOrder returns the reservation for an order.
 	ReservationByOrder(ctx context.Context, in *QueryReservationByOrderRequest, opts ...grpc.CallOption) (*QueryReservationResponse, error)
+	// ReservationByBid returns the reservation for a bid.
 	ReservationByBid(ctx context.Context, in *QueryReservationByBidRequest, opts ...grpc.CallOption) (*QueryReservationResponse, error)
+	// ReservationByLease returns the reservation for a lease.
 	ReservationByLease(ctx context.Context, in *QueryReservationByLeaseRequest, opts ...grpc.CallOption) (*QueryReservationResponse, error)
+	// ReservationByJob returns the reservation for an HPC job.
 	ReservationByJob(ctx context.Context, in *QueryReservationByJobRequest, opts ...grpc.CallOption) (*QueryReservationResponse, error)
+	// ReservationByConsumer returns the reservation for a typed consumer.
 	ReservationByConsumer(ctx context.Context, in *QueryReservationByConsumerRequest, opts ...grpc.CallOption) (*QueryReservationResponse, error)
+	// ReservationsByProvider lists the reservations held by one provider.
 	ReservationsByProvider(ctx context.Context, in *QueryReservationsByProviderRequest, opts ...grpc.CallOption) (*QueryReservationsResponse, error)
+	// ReservationLineage returns a reservation and its ordered event history.
 	ReservationLineage(ctx context.Context, in *QueryReservationLineageRequest, opts ...grpc.CallOption) (*QueryReservationLineageResponse, error)
 	// Params returns module parameters.
 	Params(ctx context.Context, in *QueryParamsRequest, opts ...grpc.CallOption) (*QueryParamsResponse, error)
@@ -1386,13 +1394,21 @@ type QueryServer interface {
 	AllocationHistory(context.Context, *QueryAllocationHistoryRequest) (*QueryAllocationHistoryResponse, error)
 	// AllocationsByProvider returns allocations for a provider.
 	AllocationsByProvider(context.Context, *QueryAllocationsByProviderRequest) (*QueryAllocationsByProviderResponse, error)
+	// Reservation returns a single reservation by its id.
 	Reservation(context.Context, *QueryReservationRequest) (*QueryReservationResponse, error)
+	// ReservationByOrder returns the reservation for an order.
 	ReservationByOrder(context.Context, *QueryReservationByOrderRequest) (*QueryReservationResponse, error)
+	// ReservationByBid returns the reservation for a bid.
 	ReservationByBid(context.Context, *QueryReservationByBidRequest) (*QueryReservationResponse, error)
+	// ReservationByLease returns the reservation for a lease.
 	ReservationByLease(context.Context, *QueryReservationByLeaseRequest) (*QueryReservationResponse, error)
+	// ReservationByJob returns the reservation for an HPC job.
 	ReservationByJob(context.Context, *QueryReservationByJobRequest) (*QueryReservationResponse, error)
+	// ReservationByConsumer returns the reservation for a typed consumer.
 	ReservationByConsumer(context.Context, *QueryReservationByConsumerRequest) (*QueryReservationResponse, error)
+	// ReservationsByProvider lists the reservations held by one provider.
 	ReservationsByProvider(context.Context, *QueryReservationsByProviderRequest) (*QueryReservationsResponse, error)
+	// ReservationLineage returns a reservation and its ordered event history.
 	ReservationLineage(context.Context, *QueryReservationLineageRequest) (*QueryReservationLineageResponse, error)
 	// Params returns module parameters.
 	Params(context.Context, *QueryParamsRequest) (*QueryParamsResponse, error)

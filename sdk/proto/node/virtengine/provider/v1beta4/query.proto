@@ -21,10 +21,12 @@ service Query {
     option (google.api.http).get = "/virtengine/provider/v1beta4/providers/{owner}";
   }
 
+  // ProviderSigningKey returns one provider signing key by id or epoch.
   rpc ProviderSigningKey(QueryProviderSigningKeyRequest) returns (QueryProviderSigningKeyResponse) {
     option (google.api.http).get = "/virtengine/provider/v1beta4/providers/{owner}/signing-keys/{epoch}";
   }
 
+  // ProviderSigningKeyEpochs lists every signing key epoch for a provider.
   rpc ProviderSigningKeyEpochs(QueryProviderSigningKeyEpochsRequest) returns (QueryProviderSigningKeyEpochsResponse) {
     option (google.api.http).get = "/virtengine/provider/v1beta4/providers/{owner}/signing-keys";
   }
@@ -66,6 +68,7 @@ message QueryProviderResponse {
   ];
 }
 
+// ProviderSigningKeyRecord is a provider signing key and its lifecycle.
 message ProviderSigningKeyRecord {
   bytes public_key = 1;
   string key_type = 2;
@@ -83,20 +86,24 @@ message ProviderSigningKeyRecord {
   uint32 rotation_count = 14;
 }
 
+// QueryProviderSigningKeyRequest is the request for the ProviderSigningKey RPC.
 message QueryProviderSigningKeyRequest {
   string owner = 1;
   string key_id = 2;
   uint64 epoch = 3;
 }
 
+// QueryProviderSigningKeyResponse is the response for the ProviderSigningKey RPC.
 message QueryProviderSigningKeyResponse {
   ProviderSigningKeyRecord key = 1 [(gogoproto.nullable) = false];
 }
 
+// QueryProviderSigningKeyEpochsRequest is the request for the ProviderSigningKeyEpochs RPC.
 message QueryProviderSigningKeyEpochsRequest {
   string owner = 1;
 }
 
+// QueryProviderSigningKeyEpochsResponse is the response for the ProviderSigningKeyEpochs RPC.
 message QueryProviderSigningKeyEpochsResponse {
   repeated ProviderSigningKeyRecord keys = 1 [(gogoproto.nullable) = false];
 }

@@ -1362,6 +1362,7 @@ func (m *MsgClaimRewardsResponse) GetClaimedAt() int64 {
 	return 0
 }
 
+// MsgOpenFinancialCase opens a financial case against a lineage subject.
 type MsgOpenFinancialCase struct {
 	Sender             string             `protobuf:"bytes,1,opt,name=sender,proto3" json:"sender,omitempty"`
 	Subject            FinancialSubject   `protobuf:"bytes,2,opt,name=subject,proto3" json:"subject"`
@@ -1470,6 +1471,7 @@ func (m *MsgOpenFinancialCase) GetSourceReference() string {
 	return ""
 }
 
+// MsgOpenFinancialCaseResponse returns the opened case and first claim.
 type MsgOpenFinancialCaseResponse struct {
 	CaseId         string              `protobuf:"bytes,1,opt,name=case_id,json=caseId,proto3" json:"case_id,omitempty"`
 	ClaimId        string              `protobuf:"bytes,2,opt,name=claim_id,json=claimId,proto3" json:"claim_id,omitempty"`
@@ -1538,6 +1540,7 @@ func (m *MsgOpenFinancialCaseResponse) GetStatus() FinancialCaseStatus {
 	return FinancialCaseStatus_FINANCIAL_CASE_STATUS_UNSPECIFIED
 }
 
+// MsgAddFinancialClaim attaches an additional claim to an open case.
 type MsgAddFinancialClaim struct {
 	Sender             string             `protobuf:"bytes,1,opt,name=sender,proto3" json:"sender,omitempty"`
 	CaseId             string             `protobuf:"bytes,2,opt,name=case_id,json=caseId,proto3" json:"case_id,omitempty"`
@@ -1646,6 +1649,7 @@ func (m *MsgAddFinancialClaim) GetRecommendation() string {
 	return ""
 }
 
+// MsgAddFinancialClaimResponse returns the case and the added claim.
 type MsgAddFinancialClaimResponse struct {
 	CaseId         string              `protobuf:"bytes,1,opt,name=case_id,json=caseId,proto3" json:"case_id,omitempty"`
 	ClaimId        string              `protobuf:"bytes,2,opt,name=claim_id,json=claimId,proto3" json:"claim_id,omitempty"`
@@ -1714,6 +1718,7 @@ func (m *MsgAddFinancialClaimResponse) GetStatus() FinancialCaseStatus {
 	return FinancialCaseStatus_FINANCIAL_CASE_STATUS_UNSPECIFIED
 }
 
+// MsgSubmitFinancialCaseForReview moves a case into resolver review.
 type MsgSubmitFinancialCaseForReview struct {
 	Sender string `protobuf:"bytes,1,opt,name=sender,proto3" json:"sender,omitempty"`
 	CaseId string `protobuf:"bytes,2,opt,name=case_id,json=caseId,proto3" json:"case_id,omitempty"`
@@ -1766,6 +1771,7 @@ func (m *MsgSubmitFinancialCaseForReview) GetCaseId() string {
 	return ""
 }
 
+// MsgSubmitFinancialCaseForReviewResponse returns the resulting case status.
 type MsgSubmitFinancialCaseForReviewResponse struct {
 	Status FinancialCaseStatus `protobuf:"varint,1,opt,name=status,proto3,enum=virtengine.settlement.v1.FinancialCaseStatus" json:"status,omitempty"`
 }
@@ -1812,6 +1818,7 @@ func (m *MsgSubmitFinancialCaseForReviewResponse) GetStatus() FinancialCaseStatu
 	return FinancialCaseStatus_FINANCIAL_CASE_STATUS_UNSPECIFIED
 }
 
+// MsgEscalateFinancialCase escalates a case past ordinary review.
 type MsgEscalateFinancialCase struct {
 	Sender     string `protobuf:"bytes,1,opt,name=sender,proto3" json:"sender,omitempty"`
 	CaseId     string `protobuf:"bytes,2,opt,name=case_id,json=caseId,proto3" json:"case_id,omitempty"`
@@ -1872,6 +1879,7 @@ func (m *MsgEscalateFinancialCase) GetReasonHash() []byte {
 	return nil
 }
 
+// MsgEscalateFinancialCaseResponse returns the resulting case status.
 type MsgEscalateFinancialCaseResponse struct {
 	Status FinancialCaseStatus `protobuf:"varint,1,opt,name=status,proto3,enum=virtengine.settlement.v1.FinancialCaseStatus" json:"status,omitempty"`
 }
@@ -1916,6 +1924,7 @@ func (m *MsgEscalateFinancialCaseResponse) GetStatus() FinancialCaseStatus {
 	return FinancialCaseStatus_FINANCIAL_CASE_STATUS_UNSPECIFIED
 }
 
+// MsgResolveFinancialCase records a resolver's terminal allocation.
 type MsgResolveFinancialCase struct {
 	Resolver   string             `protobuf:"bytes,1,opt,name=resolver,proto3" json:"resolver,omitempty"`
 	CaseId     string             `protobuf:"bytes,2,opt,name=case_id,json=caseId,proto3" json:"case_id,omitempty"`
@@ -1976,6 +1985,7 @@ func (m *MsgResolveFinancialCase) GetAllocation() TerminalAllocation {
 	return TerminalAllocation{}
 }
 
+// MsgResolveFinancialCaseResponse returns the status and appeal deadlines.
 type MsgResolveFinancialCaseResponse struct {
 	Status               FinancialCaseStatus `protobuf:"varint,1,opt,name=status,proto3,enum=virtengine.settlement.v1.FinancialCaseStatus" json:"status,omitempty"`
 	AppealDeadlineHeight int64               `protobuf:"varint,2,opt,name=appeal_deadline_height,json=appealDeadlineHeight,proto3" json:"appeal_deadline_height,omitempty"`
@@ -2036,6 +2046,7 @@ func (m *MsgResolveFinancialCaseResponse) GetAppealDeadlineTime() int64 {
 	return 0
 }
 
+// MsgAppealFinancialCase appeals a resolved-pending-appeal case.
 type MsgAppealFinancialCase struct {
 	Appellant          string `protobuf:"bytes,1,opt,name=appellant,proto3" json:"appellant,omitempty"`
 	CaseId             string `protobuf:"bytes,2,opt,name=case_id,json=caseId,proto3" json:"case_id,omitempty"`
@@ -2112,6 +2123,7 @@ func (m *MsgAppealFinancialCase) GetIdempotencyKey() []byte {
 	return nil
 }
 
+// MsgAppealFinancialCaseResponse returns the appeal id and case status.
 type MsgAppealFinancialCaseResponse struct {
 	AppealId string              `protobuf:"bytes,1,opt,name=appeal_id,json=appealId,proto3" json:"appeal_id,omitempty"`
 	Status   FinancialCaseStatus `protobuf:"varint,2,opt,name=status,proto3,enum=virtengine.settlement.v1.FinancialCaseStatus" json:"status,omitempty"`
@@ -2164,6 +2176,7 @@ func (m *MsgAppealFinancialCaseResponse) GetStatus() FinancialCaseStatus {
 	return FinancialCaseStatus_FINANCIAL_CASE_STATUS_UNSPECIFIED
 }
 
+// MsgCancelFinancialCase withdraws a case that is still open or in evidence.
 type MsgCancelFinancialCase struct {
 	Sender     string `protobuf:"bytes,1,opt,name=sender,proto3" json:"sender,omitempty"`
 	CaseId     string `protobuf:"bytes,2,opt,name=case_id,json=caseId,proto3" json:"case_id,omitempty"`
@@ -2224,6 +2237,7 @@ func (m *MsgCancelFinancialCase) GetReasonHash() []byte {
 	return nil
 }
 
+// MsgCancelFinancialCaseResponse returns the resulting case status.
 type MsgCancelFinancialCaseResponse struct {
 	Status FinancialCaseStatus `protobuf:"varint,1,opt,name=status,proto3,enum=virtengine.settlement.v1.FinancialCaseStatus" json:"status,omitempty"`
 }
@@ -2268,6 +2282,7 @@ func (m *MsgCancelFinancialCaseResponse) GetStatus() FinancialCaseStatus {
 	return FinancialCaseStatus_FINANCIAL_CASE_STATUS_UNSPECIFIED
 }
 
+// MsgFinalizeFinancialCase closes the appeal window and applies effects.
 type MsgFinalizeFinancialCase struct {
 	Sender string `protobuf:"bytes,1,opt,name=sender,proto3" json:"sender,omitempty"`
 	CaseId string `protobuf:"bytes,2,opt,name=case_id,json=caseId,proto3" json:"case_id,omitempty"`
@@ -2320,6 +2335,7 @@ func (m *MsgFinalizeFinancialCase) GetCaseId() string {
 	return ""
 }
 
+// MsgFinalizeFinancialCaseResponse returns the applied terminal effects.
 type MsgFinalizeFinancialCaseResponse struct {
 	Status  FinancialCaseStatus   `protobuf:"varint,1,opt,name=status,proto3,enum=virtengine.settlement.v1.FinancialCaseStatus" json:"status,omitempty"`
 	Effects []FinancialCaseEffect `protobuf:"bytes,2,rep,name=effects,proto3" json:"effects"`
@@ -2637,6 +2653,7 @@ func (m *MsgRecordFiatConversionObservation) GetPayoutFinalityHash() []byte {
 	return nil
 }
 
+// MsgRecordFiatConversionObservationResponse acknowledges one observation.
 type MsgRecordFiatConversionObservationResponse struct {
 	ConversionId        string                         `protobuf:"bytes,1,opt,name=conversion_id,json=conversionId,proto3" json:"conversion_id,omitempty"`
 	ObservationSequence uint64                         `protobuf:"varint,2,opt,name=observation_sequence,json=observationSequence,proto3" json:"observation_sequence,omitempty"`
@@ -2725,6 +2742,7 @@ func (m *MsgRecordFiatConversionObservationResponse) GetObservationDigest() []by
 	return nil
 }
 
+// MsgUpdateParams replaces the settlement module parameters.
 type MsgUpdateParams struct {
 	Authority string `protobuf:"bytes,1,opt,name=authority,proto3" json:"authority,omitempty"`
 	Params    Params `protobuf:"bytes,2,opt,name=params,proto3" json:"params"`
@@ -2777,6 +2795,7 @@ func (m *MsgUpdateParams) GetParams() Params {
 	return Params{}
 }
 
+// MsgUpdateParamsResponse is the empty response to a params update.
 type MsgUpdateParamsResponse struct {
 }
 
