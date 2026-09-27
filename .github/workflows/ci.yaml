@@ -216,6 +216,35 @@ jobs:
           severity: warning
         continue-on-error: true # Don't fail CI on shell lint warnings
 
+  node-runtime-audit:
+    name: Action Node Runtime Audit
+    runs-on: ubuntu-latest
+    # Deliberately NOT path-filtered. A path filter here would be expressed as
+    # `... || contains(changed_files, '.github/workflows')`, which is always
+    # true on the event that matters and silently disables the gate on the one
+    # event that could hide a regression. The job costs ~40 API reads and one
+    # runner minute; a gate that can be skipped by construction is worth less
+    # than the minute it saves.
+    #
+    # Skipped on schedule only: those events change no pins, so a red here would
+    # be noise rather than signal.
+    if: github.event_name != 'schedule'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+        with:
+          # The audit reads upstream manifests at the pinned refs, so it needs
+          # the workflow files, and nothing else. A depth-1 fetch is enough.
+          fetch-depth: 1
+          sparse-checkout: .github
+
+      - name: Audit action runtimes for deprecated Node
+        # Fails when any action reachable from .github/workflows -- including
+        # one embedded inside a COMPOSITE action -- still declares `using:
+        # node20`. Exits 2, not 0, if a pin cannot be read: a blind run must
+        # never read as a pass.
+        run: python3 .github/scripts/audit_node_runtime.py
+
   agents-docs:
     name: AGENTS Docs
     runs-on: ubuntu-latest
