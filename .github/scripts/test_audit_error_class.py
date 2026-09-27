@@ -157,9 +157,33 @@ def main() -> int:
         failures.append(f"ratelimit-retries: expected a recovered read, got {content!r} after {state['n']} calls")
     print(f"  {'FAIL' if content != 'inputs::composite\n' else 'ok  '} ratelimit-is-retried (recovered on call {state['n']})")
 
+    # --- a permission failure is NOT "no such manifest" ---------------------
+    # This is the regression the third CI run exposed: the ranking compared a
+    # class's attempt budget against the sweep number, so `forbidden` (budget
+    # 1) seen on attempt 1 never displaced the "404" default and the audit
+    # confidently reported a repo as having no manifest when it simply was not
+    # readable. Stating a confident falsehood is worse than staying silent.
+    def handler5(cmd, **kw):
+        return fail(1, "HTTP 403: Resource not accessible by integration")
+
+    _, restore = patch_gh(handler5)
+    try:
+        mod._FETCH_CACHE.clear(); mod._READ_SEEN.clear(); mod._FETCH_ERRORS.clear()
+        content = mod.fetch_action_yml("o/r", "v1")
+    finally:
+        restore()
+    ok = content == mod.TRANSIENT_FAILURE and mod._FETCH_ERRORS.get(("o/r", "v1", "manifest")) == "forbidden"
+    if not ok:
+        failures.append(
+            f"forbidden-is-not-a-404: expected TRANSIENT/forbidden, got "
+            f"{content!r} class={mod._FETCH_ERRORS.get(('o/r', 'v1', 'manifest'))!r}"
+        )
+    print(f"  {'FAIL' if not ok else 'ok  '} forbidden-is-not-a-404")
+
     for f in failures:
         print("FAIL:", f)
-    print(f"{5 - len({f.split(':')[0] for f in failures})}/5 checks passed")
+    total = 6
+    print(f"{total - len({f.split(':')[0] for f in failures})}/{total} checks passed")
     return 1 if failures else 0
 
 

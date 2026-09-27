@@ -202,10 +202,17 @@ def _gh_contents(owner_repo: str, path: str, ref: str) -> tuple[str | None, str]
         return None, "unavailable"
 
 
+# Severity order, most transient first. `>` on this ordering, NOT on
+# _ATTEMPTS: `forbidden` and `404` share an attempt budget of 1, so comparing
+# budgets let "404" -- the default -- win ties and a permission failure was
+# reported as "this repo has no manifest". Two classes with equal retry value
+# must still be distinguishable, and only a genuine 404 may be called MISSING.
+_SEVERITY = {"404": 0, "forbidden": 1, "api-error": 2, "unavailable": 3, "ratelimit": 4}
+
 # How many attempts each failure class earns. 404 is terminal (this layout does
 # not exist); everything else is worth another go, because the whole tree is
 # read in a few seconds and GitHub's abuse detection is what actually bites.
-_ATTEMPTS = {"404": 1, "forbidden": 1, "api-error": 2, "unavailable": 2, "ratelimit": 4}
+_ATTEMPTS = {"404": 1, "forbidden": 2, "api-error": 2, "unavailable": 2, "ratelimit": 4}
 
 
 def fetch_action_yml(repo_path: str, ref: str) -> str | None:
@@ -228,6 +235,13 @@ def fetch_action_yml(repo_path: str, ref: str) -> str | None:
 
     best = "404"
     for attempt in range(1, max(_ATTEMPTS.values()) + 1):
+        # The MOST SEVERE class seen in a full sweep decides the outcome, and
+        # the ranking must be independent of `attempt`: an earlier version
+        # compared a class's attempt budget against the sweep number, so a
+        # `forbidden` (budget 1) seen on attempt 1 never displaced the "404"
+        # default -- a PERMISSION failure was reported as "no such manifest".
+        # That is the worst possible direction: a confident falsehood about a
+        # repository that plainly exists.
         worst = "404"
         for prefix in prefixes:
             for name in MANIFEST_NAMES:
@@ -239,11 +253,7 @@ def fetch_action_yml(repo_path: str, ref: str) -> str | None:
                 if err == "":
                     _FETCH_CACHE[key] = content
                     return content
-                # The WORST class seen in a full sweep decides the retry, and a
-                # class already exhausted must not be re-attempted: an earlier
-                # version compared only the sweep's worst against the sweep
-                # number, so a 404 pin was probed 4x (8 calls) instead of once.
-                if _ATTEMPTS[err] > attempt:
+                if _SEVERITY[err] > _SEVERITY[worst]:
                     worst = err
         best = worst
         if _ATTEMPTS[worst] <= attempt:
