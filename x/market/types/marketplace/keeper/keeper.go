@@ -29,6 +29,9 @@ type VEIDKeeper interface {
 	IsEmailVerified(ctx sdk.Context, address sdk.AccAddress) bool
 	// IsDomainVerified returns whether the account's domain is verified
 	IsDomainVerified(ctx sdk.Context, address sdk.AccAddress) bool
+	// IsIdentityLocked returns whether the account's identity is revoked/locked.
+	// A listing that opts into RequireUnlockedIdentity relies on this check.
+	IsIdentityLocked(ctx sdk.Context, address sdk.AccAddress) bool
 	// IsComplianceCleared returns whether compliance checks have been cleared.
 	IsComplianceCleared(ctx sdk.Context, address sdk.AccAddress) (bool, bool)
 }
@@ -421,17 +424,19 @@ func (k Keeper) createOrder(ctx sdk.Context, order *marketplace.Order) error {
 
 	params := k.GetParams(ctx)
 
-	// VE-301: Identity gating check. Offering-bound orders are gated by the
-	// offering; selector-based orders fall back to the platform default.
-	if params.EnableIdentityGating {
-		if offering != nil {
-			if err := k.CheckIdentityGating(ctx, offering, customerAddr); err != nil {
-				return err
-			}
-		} else if params.DefaultIdentityScoreRequired > 0 && k.veidKeeper != nil {
-			if score, ok := k.veidKeeper.GetIdentityScore(ctx, customerAddr); !ok || score < params.DefaultIdentityScoreRequired {
-				return marketplace.ErrInsufficientIdentityScore.Wrapf("requires score %d", params.DefaultIdentityScoreRequired)
-			}
+	// VEID gating is per-listing and opt-in. An offering-bound order is gated by
+	// the listing it names, and a listing that declares nothing gates nobody, so
+	// there is no market-wide identity gate for offering-bound orders.
+	//
+	// Selector-based orders are not bound to a single offering, so they keep the
+	// platform default score fallback when governance sets one.
+	if offering != nil {
+		if err := k.CheckIdentityGating(ctx, offering, customerAddr); err != nil {
+			return err
+		}
+	} else if params.EnableIdentityGating && params.DefaultIdentityScoreRequired > 0 && k.veidKeeper != nil {
+		if score, ok := k.veidKeeper.GetIdentityScore(ctx, customerAddr); !ok || score < params.DefaultIdentityScoreRequired {
+			return marketplace.ErrInsufficientIdentityScore.Wrapf("requires score %d", params.DefaultIdentityScoreRequired)
 		}
 	}
 
@@ -934,8 +939,21 @@ func (k Keeper) GetAllocationsByProvider(ctx sdk.Context, providerAddress string
 // Identity Gating (VE-301)
 // ============================================================================
 
-// CheckIdentityGating checks identity requirements for an order
+// CheckIdentityGating checks identity requirements for an order.
+//
+// The offering is the single source of truth: a listing that declares nothing
+// yields zero requirements and gates nobody. There is no market-wide default
+// gate, so this is a no-op unless the provider opted in for that listing.
 func (k Keeper) CheckIdentityGating(ctx sdk.Context, offering *marketplace.Offering, customerAddress sdk.AccAddress) error {
+	if offering == nil {
+		return marketplace.ErrOfferingNotFound
+	}
+
+	// Opt-in check: nothing declared means no identity obligation at all.
+	if offering.IdentityRequirement.IsZero() {
+		return nil
+	}
+
 	// Get customer identity info
 	score, _ := k.veidKeeper.GetIdentityScore(ctx, customerAddress)
 	status, _ := k.veidKeeper.GetIdentityStatus(ctx, customerAddress)
@@ -949,6 +967,7 @@ func (k Keeper) CheckIdentityGating(ctx sdk.Context, offering *marketplace.Offer
 		EmailVerified:  emailVerified,
 		DomainVerified: domainVerified,
 		MFAEnabled:     mfaEnabled,
+		Locked:         k.veidKeeper.IsIdentityLocked(ctx, customerAddress),
 	}
 
 	// Get provider settings
@@ -959,6 +978,21 @@ func (k Keeper) CheckIdentityGating(ctx sdk.Context, offering *marketplace.Offer
 
 	// Validate
 	return marketplace.ValidateOrderCreation(offering, customerInfo, providerSettings)
+}
+
+// GetEffectiveIdentityRequirement returns the identity requirement an offering
+// actually enforces at order time. A listing that declares nothing returns the
+// zero requirement, which clients render as "no identity requirement".
+//
+// This is the read side of the per-listing opt-in: it is the same record the
+// order path evaluates, so clients can show the exact proof requested before a
+// buyer commits.
+func (k Keeper) GetEffectiveIdentityRequirement(ctx sdk.Context, offeringID marketplace.OfferingID) (marketplace.IdentityRequirement, bool) {
+	offering, found := k.GetOffering(ctx, offeringID)
+	if !found {
+		return marketplace.IdentityRequirement{}, false
+	}
+	return offering.IdentityRequirement, true
 }
 
 // GetProviderIdentitySettings returns provider identity settings
