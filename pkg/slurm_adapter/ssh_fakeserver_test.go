@@ -1014,7 +1014,7 @@ func TestSSHSLURMClient_CleanupExitsOnPoolClose(t *testing.T) {
 	c.poolMu.Unlock()
 
 	// Returns without blocking, and leaves the pool intact.
-	c.cleanupIdleConnections()
+	c.cleanupIdleConnections(closed)
 
 	c.poolMu.Lock()
 	assert.Len(t, c.pool, poolLen, "the close path does not mutate the pool")
