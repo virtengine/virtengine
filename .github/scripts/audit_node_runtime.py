@@ -32,11 +32,14 @@ from __future__ import annotations
 
 import argparse
 import base64
+import json
 import os
 import re
 import subprocess
 import sys
 import time
+import urllib.error
+import urllib.request
 from dataclasses import dataclass, field
 
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -173,25 +176,20 @@ def split_ref(spec_repo: str) -> tuple[str, str]:
     return "/".join(parts[:2]), "/".join(parts[2:])
 
 
-def _run_gh(owner_repo: str, path: str, ref: str, env: dict[str, str] | None):
-    """One `gh api` contents read, optionally with a scrubbed environment.
-
-    `env` is passed to subprocess.run so the anonymous fallback can strip the
-    token without mutating os.environ for the rest of the process.
-    """
+def _run_gh(owner_repo: str, path: str, ref: str):
+    """One authenticated `gh api` contents read."""
     return subprocess.run(
         ["gh", "api", f"repos/{owner_repo}/contents/{path}?ref={ref}", "--jq", ".content"],
         capture_output=True,
         text=True,
         timeout=60,
         check=True,
-        env=env,
     )
 
 
 def _classify(exc: subprocess.CalledProcessError) -> str:
-    """Error class from `gh`'s stderr. Split out so both the authenticated and
-    the anonymous read classify a failure identically."""
+    """Error class from `gh`'s stderr. Split out so the authenticated read and
+    the anonymous read classify their failures identically."""
     blob = ((exc.stderr or "") + (exc.stdout or "")).lower()
     if "404" in blob or "not found" in blob:
         return "404"
@@ -200,6 +198,54 @@ def _classify(exc: subprocess.CalledProcessError) -> str:
     if "403" in blob or "forbidden" in blob or "not accessible" in blob:
         return "forbidden"
     return "api-error"
+
+
+def _classify_http(status: int) -> str:
+    """The same classes, from an HTTP status code instead of a stderr string."""
+    if status == 404:
+        return "404"
+    if status == 429:
+        return "ratelimit"
+    if status == 403:
+        return "forbidden"
+    return "api-error"
+
+
+def _anon_contents(owner_repo: str, path: str, ref: str) -> tuple[str | None, str]:
+    """(content, error_class) for an UNAUTHENTICATED read of a public file.
+
+    This deliberately does not shell out to `gh`. `gh` refuses to issue an API
+    call that carries no credential -- on a runner it exits non-zero with its own
+    usage text before any request is made -- so "run gh with the token removed"
+    is not an anonymous read at all, it is a guaranteed failure wearing the
+    costume of one. The first attempt at this fix did exactly that and moved the
+    5 pins from `forbidden` to `api-error` in CI while passing every local
+    test, because a workstation's `gh` has a logged-in account to fall back on
+    and a runner does not.
+
+    A plain HTTPS GET of a public path on api.github.com needs no credential,
+    which is the whole point: the read must not depend on who is asking.
+    """
+    url = f"https://api.github.com/repos/{owner_repo}/contents/{path}?ref={ref}"
+    req = urllib.request.Request(
+        url,
+        headers={
+            "Accept": "application/vnd.github+json",
+            "User-Agent": "virtengine-node-runtime-audit",
+            "X-GitHub-Api-Version": "2022-11-28",
+        },
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=60) as resp:
+            payload = json.loads(resp.read().decode("utf-8", "replace"))
+    except urllib.error.HTTPError as exc:
+        return None, _classify_http(exc.code)
+    except (urllib.error.URLError, OSError, ValueError):
+        return None, "unavailable"
+    try:
+        return base64.b64decode(payload["content"]).decode("utf-8", "replace"), ""
+    except (KeyError, TypeError, ValueError):
+        return None, "api-error"
 
 
 def _gh_contents(owner_repo: str, path: str, ref: str) -> tuple[str | None, str]:
@@ -221,7 +267,7 @@ def _gh_contents(owner_repo: str, path: str, ref: str) -> tuple[str | None, str]
     returned unchanged.
     """
     try:
-        proc = _run_gh(owner_repo, path, ref, None)
+        proc = _run_gh(owner_repo, path, ref)
         return base64.b64decode(proc.stdout.strip()).decode("utf-8", "replace"), ""
     except subprocess.CalledProcessError as exc:
         err = _classify(exc)
@@ -230,17 +276,8 @@ def _gh_contents(owner_repo: str, path: str, ref: str) -> tuple[str | None, str]
     except (subprocess.SubprocessError, ValueError, OSError):
         return None, "unavailable"
 
-    # Authenticated read was refused. Retry with no credentials in the
-    # environment: `gh` falls back to the unauthenticated API, which serves
-    # public contents without a token.
-    anon_env = {k: v for k, v in os.environ.items() if k not in ("GH_TOKEN", "GITHUB_TOKEN")}
-    try:
-        proc = _run_gh(owner_repo, path, ref, anon_env)
-        return base64.b64decode(proc.stdout.strip()).decode("utf-8", "replace"), ""
-    except subprocess.CalledProcessError as exc:
-        return None, _classify(exc)
-    except (subprocess.SubprocessError, ValueError, OSError):
-        return None, "unavailable"
+    # Authenticated read was refused. Retry with no credential at all.
+    return _anon_contents(owner_repo, path, ref)
 
 
 # Severity order, most transient first. `>` on this ordering, NOT on
