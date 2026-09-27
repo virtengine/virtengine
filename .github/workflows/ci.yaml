@@ -243,6 +243,15 @@ jobs:
         # one embedded inside a COMPOSITE action -- still declares `using:
         # node20`. Exits 2, not 0, if a pin cannot be read: a blind run must
         # never read as a pass.
+        #
+        # GH_TOKEN is REQUIRED, not optional. Without it `gh` refuses every
+        # call ("please run: gh auth login"), the audit sees API errors rather
+        # than manifests, and correctly exits 2 -- which fails the build on a
+        # clean tree. Passing the built-in token is what makes it able to reach
+        # a verdict at all; the read is of PUBLIC manifests in other repos.
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GITHUB_TOKEN: ${{ github.token }}
         run: python3 .github/scripts/audit_node_runtime.py
 
   agents-docs:

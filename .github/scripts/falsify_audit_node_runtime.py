@@ -52,6 +52,14 @@ MUTATIONS = [
         "if using == 'composite-but-never-matches':\n",
         "the composite branch becomes dead code; only direct pins are resolved",
     ),
+    (
+        "M4-auth-preflight-removed",
+        r'if auth\.returncode != 0:',
+        "if False:",
+        "without the preflight an unauthenticated run degrades into 43 identical "
+        "per-pin 'API error' lines instead of one actionable refusal -- the "
+        "exact symptom that shipped this job red on a clean tree",
+    ),
 ]
 
 # The live file must be byte-identical after the run.
