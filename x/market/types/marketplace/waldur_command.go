@@ -255,7 +255,7 @@ func (a *WaldurOfferingAttestation) Digest() []byte {
 	h.Write([]byte("|"))
 	h.Write([]byte(a.SnapshotHash))
 	h.Write([]byte("|"))
-	fmt.Fprintf(h, "%d", a.SnapshotHeight)
+	_, _ = fmt.Fprintf(h, "%d", a.SnapshotHeight)
 	return h.Sum(nil)
 }
 

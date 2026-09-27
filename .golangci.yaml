@@ -19,6 +19,12 @@ linters:
   # Note: gofmt is a formatter, not a linter. Auto-formatting is handled by
   # pre-commit hook. golangci-lint only runs actual linters (not formatters).
   settings:
+    goconst:
+      # Table-driven tests legitimately repeat the same literal across cases
+      # ("test", "true", a fixture account name); hoisting each into a named
+      # constant makes the cases harder to read, not easier. goconst still
+      # applies to non-test code.
+      ignore-tests: true
     gocritic:
       disabled-checks:
         - ifElseChain

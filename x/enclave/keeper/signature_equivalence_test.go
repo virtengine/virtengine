@@ -442,17 +442,6 @@ func highSWithClearMSBSignatures(t *testing.T, nonce, digest []byte) []struct {
 	return out
 }
 
-// serializeRS renders a decred signature as the 64-byte R||S form the verifier
-// consumes.
-func serializeRS(sig *decred_ecdsa.Signature) []byte {
-	out := make([]byte, 64)
-	r := sig.R()
-	s := sig.S()
-	r.PutBytesUnchecked(out[0:32])
-	s.PutBytesUnchecked(out[32:64])
-	return out
-}
-
 // isValidSecp256k1 reports whether a signature is arithmetically valid, ignoring the
 // low-S policy. It exists so the malleability test can distinguish "rejected
 // because it is a forgery" from "rejected because it is a second encoding of an

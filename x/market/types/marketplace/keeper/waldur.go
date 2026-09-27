@@ -45,7 +45,7 @@ func (k Keeper) GetWaldurSource(ctx sdk.Context, instanceID string) (*marketplac
 func (k Keeper) WithWaldurSources(ctx sdk.Context, fn func(marketplace.WaldurSource) bool) {
 	store := ctx.KVStore(k.skey)
 	iter := storetypes.KVStorePrefixIterator(store, marketplace.WaldurSourceKeyPrefix)
-	defer iter.Close()
+	defer func() { _ = iter.Close() }()
 	for ; iter.Valid(); iter.Next() {
 		var source marketplace.WaldurSource
 		if err := json.Unmarshal(iter.Value(), &source); err != nil {

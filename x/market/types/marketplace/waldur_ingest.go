@@ -108,7 +108,7 @@ func DefaultIngestConfig() IngestConfig {
 		RegionMap:                   map[string]string{},
 		CustomerProviderMap:         map[string]string{},
 		CurrencyDenominator:         1000000,
-		DefaultCurrency:             "uvirt",
+		DefaultCurrency:             DefaultDenom,
 		MinIdentityScore:            0,
 		RequireProviderRegistration: true,
 	}
@@ -294,7 +294,7 @@ func (w *WaldurOfferingImport) resolveMinBid(cfg IngestConfig, pricing PricingIn
 		denom = cfg.DefaultCurrency
 	}
 	if denom == "" {
-		denom = "uvirt"
+		denom = DefaultDenom
 	}
 
 	if value, ok := w.Attributes["ve_min_bid"]; ok {
@@ -676,6 +676,11 @@ const (
 	// IngestStateDeprecated indicates the Waldur offering was archived.
 	IngestStateDeprecated IngestState = "deprecated"
 )
+
+// DefaultDenom is the chain's native staking/settlement denomination. It is the
+// default currency for marketplace pricing and the fallback when an ingest
+// carries no explicit denom.
+const DefaultDenom = "uvirt"
 
 // IngestResult represents the result of an ingestion operation.
 type IngestResult struct {

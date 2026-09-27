@@ -102,18 +102,18 @@ func (s *fakeSSHServer) serve(t *testing.T, output cannedOutput) {
 			if err != nil {
 				return // listener closed
 			}
-			go s.handleConn(t, conn, cfg, output)
+			go s.handleConn(conn, cfg, output)
 		}
 	}()
 }
 
-func (s *fakeSSHServer) handleConn(t *testing.T, nConn net.Conn, cfg *ssh.ServerConfig, output cannedOutput) {
+func (s *fakeSSHServer) handleConn(nConn net.Conn, cfg *ssh.ServerConfig, output cannedOutput) {
 	sshConn, chans, reqs, err := ssh.NewServerConn(nConn, cfg)
 	if err != nil {
 		_ = nConn.Close()
 		return
 	}
-	defer sshConn.Close()
+	defer func() { _ = sshConn.Close() }()
 	go ssh.DiscardRequests(reqs)
 
 	for newChannel := range chans {
@@ -130,7 +130,7 @@ func (s *fakeSSHServer) handleConn(t *testing.T, nConn net.Conn, cfg *ssh.Server
 }
 
 func (s *fakeSSHServer) handleSession(ch ssh.Channel, requests <-chan *ssh.Request, output cannedOutput) {
-	defer ch.Close()
+	defer func() { _ = ch.Close() }()
 	for req := range requests {
 		if req.Type != "exec" {
 			_ = req.Reply(false, nil)
@@ -153,7 +153,15 @@ func (s *fakeSSHServer) handleSession(ch ssh.Channel, requests <-chan *ssh.Reque
 		if stdout != "" {
 			_, _ = ch.Write([]byte(stdout))
 		}
-		_, _ = ch.SendRequest("exit-status", false, ssh.Marshal(struct{ Status uint32 }{uint32(code)}))
+		// An exec exit status is a uint32 on the wire; the canned outputs in
+		// this file only ever use small positive codes, and the helper's
+		// contract is "the status to report", so a negative value is clamped
+		// rather than wrapped into a huge unsigned exit code.
+		status := uint32(0)
+		if code > 0 {
+			status = uint32(code) // #nosec G115 -- clamped non-negative canned exit code
+		}
+		_, _ = ch.SendRequest("exit-status", false, ssh.Marshal(struct{ Status uint32 }{status}))
 		return
 	}
 }

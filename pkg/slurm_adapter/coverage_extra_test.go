@@ -780,7 +780,7 @@ func TestSLURMAdapter_CancelClientError(t *testing.T) {
 	require.NoError(t, bad.Connect(ctx))
 	a2 := NewSLURMAdapter(DefaultSLURMConfig(), bad, testSigner{addr: testProviderAddr})
 	require.NoError(t, a2.Start(ctx))
-	defer a2.Stop()
+	defer func() { _ = a2.Stop() }()
 	_, err = a2.SubmitJob(ctx, "ve-2", &SLURMJobSpec{
 		JobName: "j", Nodes: 1, CPUsPerNode: 1, TimeLimit: 60, Command: "true",
 	})
@@ -806,7 +806,7 @@ func TestSLURMAdapter_GetJobStatusFallsBackToCache(t *testing.T) {
 
 	a := NewSLURMAdapter(DefaultSLURMConfig(), client, testSigner{addr: testProviderAddr})
 	require.NoError(t, a.Start(ctx))
-	defer a.Stop()
+	defer func() { _ = a.Stop() }()
 
 	// Unknown VE job.
 	_, err := a.GetJobStatus(ctx, "ve-unknown")
@@ -829,7 +829,7 @@ func TestSLURMAdapter_GetJobStatusFallsBackToCache(t *testing.T) {
 	require.NoError(t, broken.Connect(ctx))
 	a2 := NewSLURMAdapter(DefaultSLURMConfig(), broken, testSigner{addr: testProviderAddr})
 	require.NoError(t, a2.Start(ctx))
-	defer a2.Stop()
+	defer func() { _ = a2.Stop() }()
 	a2.mu.Lock()
 	a2.jobs["s9"] = &SLURMJob{SLURMJobID: "s9", VirtEngineJobID: "ve-9", State: SLURMJobStateRunning}
 	a2.jobMapping["ve-9"] = "s9"
@@ -848,7 +848,7 @@ func TestSLURMAdapter_UpdateJobStatuses(t *testing.T) {
 
 	a := NewSLURMAdapter(DefaultSLURMConfig(), client, testSigner{addr: testProviderAddr})
 	require.NoError(t, a.Start(ctx))
-	defer a.Stop()
+	defer func() { _ = a.Stop() }()
 
 	// A terminal job is not polled; a non-terminal one is.
 	a.mu.Lock()
@@ -892,7 +892,7 @@ func TestSLURMAdapter_UpdateJobStatuses_SkipsFailedQueries(t *testing.T) {
 
 	a := NewSLURMAdapter(DefaultSLURMConfig(), broken, testSigner{addr: testProviderAddr})
 	require.NoError(t, a.Start(ctx))
-	defer a.Stop()
+	defer func() { _ = a.Stop() }()
 
 	a.mu.Lock()
 	a.jobs["s1"] = &SLURMJob{SLURMJobID: "s1", State: SLURMJobStateRunning}
@@ -921,7 +921,7 @@ func TestSLURMAdapter_ListNodesAndGetJobsByCluster(t *testing.T) {
 	assert.ErrorIs(t, err, ErrSLURMNotConnected)
 
 	require.NoError(t, a.Start(ctx))
-	defer a.Stop()
+	defer func() { _ = a.Stop() }()
 
 	nodes, err := a.ListNodes(ctx)
 	require.NoError(t, err)

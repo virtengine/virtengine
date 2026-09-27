@@ -530,22 +530,27 @@ func (r *FraudReport) Reject(notes string, rejectedAt time.Time) error {
 // fingerprint, which is what de-duplication keys on so an identical repeat
 // report does not create a second moderator-queue entry.
 func (r *FraudReport) ComputeSubmissionFingerprint() string {
-	parts := []string{
-		r.Reporter,
-		r.ReportedParty,
-		strconv.FormatUint(uint64(r.Category), 10),
-		r.Description,
-	}
 	ordered := make([]string, 0, len(r.RelatedOrderIDs))
 	ordered = append(ordered, r.RelatedOrderIDs...)
 	sort.Strings(ordered)
-	parts = append(parts, ordered...)
 
-	hashes := make([]string, 0, len(r.Evidence))
+	hashes := make([]string, 0, 2*len(r.Evidence))
 	for _, ev := range r.Evidence {
 		hashes = append(hashes, ev.EvidenceHash, ev.ComputeCiphertextHash())
 	}
 	sort.Strings(hashes)
+
+	// The join order below is part of the fingerprint definition, so the
+	// literal fields, the sorted order IDs and the sorted evidence hashes must
+	// stay in exactly this sequence.
+	parts := make([]string, 0, 4+len(ordered)+len(hashes))
+	parts = append(parts,
+		r.Reporter,
+		r.ReportedParty,
+		strconv.FormatUint(uint64(r.Category), 10),
+		r.Description,
+	)
+	parts = append(parts, ordered...)
 	parts = append(parts, hashes...)
 
 	hash := sha256.Sum256([]byte(strings.Join(parts, "|")))
