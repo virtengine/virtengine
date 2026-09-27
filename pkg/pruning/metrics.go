@@ -3,6 +3,7 @@ package pruning
 
 import (
 	"math"
+	"strconv"
 	"sync"
 	"time"
 )
@@ -268,7 +269,7 @@ func (b *Benchmark) RunSimulation(totalBlocks, avgBlockSize int64) BenchmarkResu
 		result = b.simulateTieredPruning(totalBlocks, avgBlockSize)
 	} else {
 		//nolint:gosec // G115: keepRecent is a configuration value bounded by practical limits
-		retained := int64(keepRecent)
+		retained := int64(keepRecent) // #nosec G115 -- keepRecent is a configured non-negative block count, far below MaxInt64
 		if retained > totalBlocks {
 			retained = totalBlocks
 		}
@@ -304,7 +305,7 @@ func (b *Benchmark) simulateTieredPruning(totalBlocks, avgBlockSize int64) Bench
 
 	// Tier 1: Full retention
 	//nolint:gosec // G115: Tier1Blocks is a configuration value bounded by practical limits
-	tier1 := int64(b.config.Tiered.Tier1Blocks)
+	tier1 := int64(b.config.Tiered.Tier1Blocks) // #nosec G115 -- Tier1Blocks is a configured non-negative block count, far below MaxInt64
 	if tier1 > totalBlocks {
 		tier1 = totalBlocks
 	}
@@ -317,7 +318,7 @@ func (b *Benchmark) simulateTieredPruning(totalBlocks, avgBlockSize int64) Bench
 
 	// Tier 2: Sample every N blocks
 	//nolint:gosec // G115: Tier2Blocks is a configuration value bounded by practical limits
-	tier2 := int64(b.config.Tiered.Tier2Blocks) - tier1
+	tier2 := int64(b.config.Tiered.Tier2Blocks) - tier1 // #nosec G115 -- Tier2Blocks/Tier1Blocks are configured non-negative block counts and validation enforces Tier2 >= Tier1
 	if tier2 > remaining {
 		tier2 = remaining
 	}
@@ -397,13 +398,13 @@ func safeInt64FromUint64(value uint64) int64 {
 }
 
 func formatInt64(v int64) string {
-	return string(rune(v))
+	return strconv.FormatInt(v, 10)
 }
 
 func formatInt(v int) string {
-	return string(rune(v))
+	return strconv.Itoa(v)
 }
 
 func formatFloat64(v float64) string {
-	return string(rune(int(v)))
+	return strconv.FormatFloat(v, 'f', -1, 64)
 }

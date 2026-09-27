@@ -236,7 +236,7 @@ func crossChainIndexKey(address, sourceChainID string) []byte {
 
 func appendUint64(bz []byte, n uint64) []byte {
 	for i := 7; i >= 0; i-- {
-		bz = append(bz, byte(n>>(i*8)))
+		bz = append(bz, byte(n>>(i*8))) // #nosec G115 -- fixed-width big-endian encoding: only the low 8 bits are written by design and the truncated value is never used arithmetically
 	}
 	return bz
 }

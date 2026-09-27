@@ -19,6 +19,7 @@ message GenesisState {
   repeated ProviderSigningKeyGenesisRecord signing_keys = 2 [(gogoproto.nullable) = false];
 }
 
+// ProviderSigningKeyGenesisRecord seeds one provider signing key at genesis.
 message ProviderSigningKeyGenesisRecord {
   string owner = 1;
   ProviderSigningKeyRecord key = 2 [(gogoproto.nullable) = false];

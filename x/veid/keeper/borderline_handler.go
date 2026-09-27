@@ -752,7 +752,7 @@ func provisionalApprovalKey(caseID string) []byte {
 func manualReviewQueueKey(priority int, caseID string) []byte {
 	key := make([]byte, 0, len(PrefixManualReviewQueue)+1+len(caseID))
 	key = append(key, PrefixManualReviewQueue...)
-	key = append(key, byte(priority))
+	key = append(key, byte(priority)) // #nosec G115 -- fixed-width big-endian encoding: byte(priority) writes the low byte into the buffer by design; the truncated value is not used arithmetically
 	return append(key, []byte(caseID)...)
 }
 

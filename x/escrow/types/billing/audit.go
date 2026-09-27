@@ -372,7 +372,7 @@ func BuildAuditByEntityPrefix(entityType AuditEntityType, entityID string) []byt
 func BuildAuditByActorKey(actor string, timestamp int64, entryID string) []byte {
 	tsBytes := make([]byte, 8)
 	//nolint:gosec // G115: timestamp is a Unix timestamp which is always positive
-	binary.BigEndian.PutUint64(tsBytes, uint64(timestamp))
+	binary.BigEndian.PutUint64(tsBytes, uint64(timestamp)) // #nosec G115 -- the timestamp is non-negative Unix seconds
 
 	key := make([]byte, 0, len(AuditByActorPrefix)+len(actor)+1+8+1+len(entryID))
 	key = append(key, AuditByActorPrefix...)
@@ -396,7 +396,7 @@ func BuildAuditByActorPrefix(actor string) []byte {
 func BuildAuditByActionKey(action AuditActionType, timestamp int64, entryID string) []byte {
 	tsBytes := make([]byte, 8)
 	//nolint:gosec // G115: timestamp is a Unix timestamp which is always positive
-	binary.BigEndian.PutUint64(tsBytes, uint64(timestamp))
+	binary.BigEndian.PutUint64(tsBytes, uint64(timestamp)) // #nosec G115 -- the timestamp is non-negative Unix seconds
 
 	key := make([]byte, 0, len(AuditByActionPrefix)+1+1+8+1+len(entryID))
 	key = append(key, AuditByActionPrefix...)

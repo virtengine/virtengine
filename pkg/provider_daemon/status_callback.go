@@ -268,9 +268,15 @@ func (s *OrderStatusWebhookServer) Start(ctx context.Context) error {
 		IdleTimeout:  60 * time.Second,
 	}
 
+	// The drain runs *because* ctx was cancelled, so it cannot reuse ctx for the
+	// shutdown call. A bounded, value-carrying context keeps the drain from
+	// hanging forever without silently detaching it via context.Background().
+	shutdownCtx, cancelShutdown := context.WithTimeout(context.WithoutCancel(ctx), shutdownDrainTimeout)
+	defer cancelShutdown()
+
 	go func() {
 		<-ctx.Done()
-		_ = s.server.Shutdown(context.Background())
+		_ = s.server.Shutdown(shutdownCtx)
 	}()
 
 	log.Printf("[order-status] webhook listening on %s%s", s.cfg.ListenAddr, s.cfg.CallbackPath)

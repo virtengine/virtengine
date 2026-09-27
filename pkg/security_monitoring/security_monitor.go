@@ -205,7 +205,7 @@ func (sm *SecurityMonitor) Stop() {
 	sm.wg.Wait()
 
 	if sm.auditLog != nil {
-		sm.auditLog.Close()
+		_ = sm.auditLog.Close()
 	}
 }
 

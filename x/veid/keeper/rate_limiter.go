@@ -196,7 +196,7 @@ func (k Keeper) checkAccountCooldown(ctx sdk.Context, address sdk.AccAddress) er
 
 	rawHeight := binary.BigEndian.Uint64(bz)
 	//nolint:gosec // block heights are always positive and bounded by int64 max
-	lastHeight := int64(rawHeight)
+	lastHeight := int64(rawHeight) // #nosec G115 -- int64(rawHeight) is a non-negative chain height/count that fits int64
 	currentHeight := ctx.BlockHeight()
 	blocksSinceLastOp := currentHeight - lastHeight
 

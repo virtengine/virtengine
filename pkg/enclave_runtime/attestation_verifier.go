@@ -268,7 +268,7 @@ type allowlistJSON struct {
 
 // LoadFromJSON loads the allowlist from a JSON file.
 func (m *MeasurementAllowlist) LoadFromJSON(path string) error {
-	data, err := os.ReadFile(path)
+	data, err := os.ReadFile(path) // #nosec G304,G703 -- the path is an operator-configured device or allow-list location (from configuration or a fixed device constant), never untrusted input
 	if err != nil {
 		return fmt.Errorf("failed to read allowlist file: %w", err)
 	}

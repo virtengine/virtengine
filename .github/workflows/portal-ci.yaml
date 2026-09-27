@@ -206,7 +206,13 @@ jobs:
           ls -la portal/.next
 
       - name: Install Playwright browsers
-        run: npx playwright install --with-deps chromium
+        # Must resolve the workspace-pinned Playwright, not whatever npx fetches
+        # from the registry. `npx playwright install` at the repo root has no
+        # local playwright package to resolve, so npm downloads the newest
+        # release; that installed chromium build 1243 while the locked
+        # @playwright/test 1.58.1 launches build 1208, and every spec failed with
+        # "browserType.launch: Executable doesn't exist".
+        run: pnpm --filter virtengine-portal exec playwright install --with-deps chromium
 
       - name: Run E2E tests
         uses: nick-fields/retry@v4

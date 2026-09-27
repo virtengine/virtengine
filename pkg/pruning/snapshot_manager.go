@@ -88,7 +88,7 @@ func NewSnapshotManager(config SnapshotConfig, baseDir string, logger log.Logger
 	}
 
 	// Ensure directory exists
-	if err := os.MkdirAll(snapshotDir, 0755); err != nil {
+	if err := os.MkdirAll(snapshotDir, 0o750); err != nil {
 		return nil, fmt.Errorf("failed to create snapshot directory: %w", err)
 	}
 

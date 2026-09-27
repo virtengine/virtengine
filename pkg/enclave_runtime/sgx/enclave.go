@@ -649,7 +649,7 @@ func (e *Enclave) ecallSimulated(functionID int, input []byte) ([]byte, error) {
 	// In real implementation, this would call actual enclave functions
 
 	h := sha256.New()
-	h.Write([]byte{byte(functionID), byte(functionID >> 8)})
+	h.Write([]byte{byte(functionID), byte(functionID >> 8)}) // #nosec G115 -- functionID is a small ECALL identifier (< 256)
 	h.Write(input)
 	hash := h.Sum(nil)
 

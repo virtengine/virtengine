@@ -303,7 +303,7 @@ func readJobScriptFromSpec(specPath, script, scriptFile string) (string, error) 
 		if !filepath.IsAbs(path) {
 			path = filepath.Join(filepath.Dir(specPath), path)
 		}
-		data, err := os.ReadFile(path)
+		data, err := os.ReadFile(path) // #nosec G304 -- path is a local path parameter supplied by this function's own caller (a CLI argument, loader parameter or configured state file) and is not derived from a network peer or chain message; opening the caller-nominated file is the purpose of this call
 		if err != nil {
 			return "", fmt.Errorf("read job script file: %w", err)
 		}

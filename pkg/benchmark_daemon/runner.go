@@ -71,8 +71,8 @@ func (r *DefaultBenchmarkRunner) RunBenchmarks(ctx context.Context, config Bench
 func (r *DefaultBenchmarkRunner) runCPUBenchmarks(ctx context.Context, metrics *BenchmarkMetrics) error {
 	// Get basic CPU info
 	//nolint:gosec // G115: NumCPU returns small positive int, safe for int32
-	metrics.CPUCoreCount = int32(runtime.NumCPU())
-	metrics.CPUThreadCount = metrics.CPUCoreCount // Simplified
+	metrics.CPUCoreCount = int32(runtime.NumCPU()) // #nosec G115 -- value is a non-negative length/count/duration that always fits the target width
+	metrics.CPUThreadCount = metrics.CPUCoreCount  // Simplified
 
 	// Try to get frequency info (platform-dependent)
 	metrics.CPUBaseFreqMHz = 3000 // Default fallback
@@ -280,7 +280,7 @@ func (r *DefaultBenchmarkRunner) runPingTest(ctx context.Context, endpoint strin
 
 	// Execute with validated path and arguments
 	//nolint:gosec // G204: Executable path and arguments validated by security package
-	cmd := exec.CommandContext(ctx, pingPath, args...)
+	cmd := exec.CommandContext(ctx, pingPath, args...) // #nosec G204 -- the executable is resolved with security.ResolveAndValidateExecutable and the arguments are produced by security.PingArgs
 
 	output, err := cmd.Output()
 	if err != nil {

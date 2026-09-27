@@ -208,3 +208,188 @@ func (msg *MsgWaldurCallback) GetSigners() []sdk.AccAddress {
 	addr, _ := sdk.AccAddressFromBech32(msg.Sender)
 	return []sdk.AccAddress{addr}
 }
+
+// sdk.Msg interface methods for MsgCreateOrder
+
+func (msg *MsgCreateOrder) ValidateBasic() error {
+	if msg.Customer == "" {
+		return ErrInvalidAddress.Wrap("customer address is required")
+	}
+
+	if _, err := sdk.AccAddressFromBech32(msg.Customer); err != nil {
+		return ErrInvalidAddress.Wrapf("invalid customer address: %v", err)
+	}
+
+	if msg.AcquisitionMode != "direct" && msg.AcquisitionMode != "bid" {
+		return ErrInvalidOrder.Wrapf("invalid acquisition mode: %s", msg.AcquisitionMode)
+	}
+
+	if msg.RequestedQuantity == 0 {
+		return ErrInvalidOrder.Wrap("requested quantity must be positive")
+	}
+
+	return nil
+}
+
+func (msg *MsgCreateOrder) GetSigners() []sdk.AccAddress {
+	addr, _ := sdk.AccAddressFromBech32(msg.Customer)
+	return []sdk.AccAddress{addr}
+}
+
+// sdk.Msg interface methods for MsgPlaceBid
+
+func (msg *MsgPlaceBid) ValidateBasic() error {
+	if msg.Provider == "" {
+		return ErrInvalidAddress.Wrap("provider address is required")
+	}
+
+	if _, err := sdk.AccAddressFromBech32(msg.Provider); err != nil {
+		return ErrInvalidAddress.Wrapf("invalid provider address: %v", err)
+	}
+
+	if msg.OrderId == "" {
+		return ErrInvalidBid.Wrap("order_id is required")
+	}
+
+	if msg.Price == 0 {
+		return ErrInvalidBid.Wrap("bid price must be positive")
+	}
+
+	return nil
+}
+
+func (msg *MsgPlaceBid) GetSigners() []sdk.AccAddress {
+	addr, _ := sdk.AccAddressFromBech32(msg.Provider)
+	return []sdk.AccAddress{addr}
+}
+
+// sdk.Msg interface methods for MsgWithdrawBid
+
+func (msg *MsgWithdrawBid) ValidateBasic() error {
+	if msg.Provider == "" {
+		return ErrInvalidAddress.Wrap("provider address is required")
+	}
+
+	if _, err := sdk.AccAddressFromBech32(msg.Provider); err != nil {
+		return ErrInvalidAddress.Wrapf("invalid provider address: %v", err)
+	}
+
+	if msg.BidId == "" {
+		return ErrInvalidBid.Wrap("bid_id is required")
+	}
+
+	return nil
+}
+
+func (msg *MsgWithdrawBid) GetSigners() []sdk.AccAddress {
+	addr, _ := sdk.AccAddressFromBech32(msg.Provider)
+	return []sdk.AccAddress{addr}
+}
+
+// sdk.Msg interface methods for MsgRegisterWaldurSource
+
+func (msg *MsgRegisterWaldurSource) ValidateBasic() error {
+	if msg.Authority == "" {
+		return ErrInvalidAddress.Wrap("authority address is required")
+	}
+
+	if _, err := sdk.AccAddressFromBech32(msg.Authority); err != nil {
+		return ErrInvalidAddress.Wrapf("invalid authority address: %v", err)
+	}
+
+	if msg.InstanceId == "" {
+		return ErrInvalidRequest.Wrap("instance_id is required")
+	}
+
+	if msg.PublicKey == "" {
+		return ErrInvalidRequest.Wrap("public_key is required")
+	}
+
+	return nil
+}
+
+func (msg *MsgRegisterWaldurSource) GetSigners() []sdk.AccAddress {
+	addr, _ := sdk.AccAddressFromBech32(msg.Authority)
+	return []sdk.AccAddress{addr}
+}
+
+// sdk.Msg interface methods for MsgIngestWaldurOffering
+
+func (msg *MsgIngestWaldurOffering) ValidateBasic() error {
+	if msg.Relayer == "" {
+		return ErrInvalidAddress.Wrap("relayer address is required")
+	}
+
+	if _, err := sdk.AccAddressFromBech32(msg.Relayer); err != nil {
+		return ErrInvalidAddress.Wrapf("invalid relayer address: %v", err)
+	}
+
+	if msg.Snapshot == nil {
+		return ErrInvalidOffering.Wrap("snapshot is required")
+	}
+
+	if msg.Snapshot.Uuid == "" {
+		return ErrInvalidOffering.Wrap("snapshot uuid is required")
+	}
+
+	if msg.Signature == "" {
+		return ErrInvalidOffering.Wrap("signature is required")
+	}
+
+	return nil
+}
+
+func (msg *MsgIngestWaldurOffering) GetSigners() []sdk.AccAddress {
+	addr, _ := sdk.AccAddressFromBech32(msg.Relayer)
+	return []sdk.AccAddress{addr}
+}
+
+// sdk.Msg interface methods for MsgSetOfferingVisibility
+
+func (msg *MsgSetOfferingVisibility) ValidateBasic() error {
+	if msg.Provider == "" {
+		return ErrInvalidAddress.Wrap("provider address is required")
+	}
+
+	if _, err := sdk.AccAddressFromBech32(msg.Provider); err != nil {
+		return ErrInvalidAddress.Wrapf("invalid provider address: %v", err)
+	}
+
+	if msg.OfferingId == "" {
+		return ErrInvalidOffering.Wrap("offering_id is required")
+	}
+
+	if msg.Visibility != "public" && msg.Visibility != "unlisted" && msg.Visibility != "private" {
+		return ErrInvalidOffering.Wrapf("invalid visibility: %s", msg.Visibility)
+	}
+
+	return nil
+}
+
+func (msg *MsgSetOfferingVisibility) GetSigners() []sdk.AccAddress {
+	addr, _ := sdk.AccAddressFromBech32(msg.Provider)
+	return []sdk.AccAddress{addr}
+}
+
+// sdk.Msg interface methods for MsgAckWaldurCommand
+
+func (msg *MsgAckWaldurCommand) ValidateBasic() error {
+	if msg.Sender == "" {
+		return ErrInvalidAddress.Wrap("sender address is required")
+	}
+
+	if _, err := sdk.AccAddressFromBech32(msg.Sender); err != nil {
+		return ErrInvalidAddress.Wrapf("invalid sender address: %v", err)
+	}
+
+	if msg.CommandId == "" {
+		return ErrInvalidRequest.Wrap("command_id is required")
+	}
+
+	return nil
+}
+
+func (msg *MsgAckWaldurCommand) GetSigners() []sdk.AccAddress {
+	addr, _ := sdk.AccAddressFromBech32(msg.Sender)
+	return []sdk.AccAddress{addr}
+}

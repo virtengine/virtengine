@@ -270,7 +270,8 @@ func (v *Verifier) VerifyDocument(doc *AttestationDocument) (*VerificationResult
 
 	// Extract basic info
 	result.ModuleID = doc.Payload.ModuleID
-	result.Timestamp = time.UnixMilli(int64(doc.Payload.Timestamp)) //nolint:gosec // timestamp won't overflow int64 in practice
+	// #nosec G115 -- value originates from a non-negative quantity (height, timestamp, duration or counter) that always fits the target width
+	result.Timestamp = time.UnixMilli(int64(doc.Payload.Timestamp)) // #nosec G115 -- timestamp won't overflow int64 in practice
 	result.UserData = doc.Payload.UserData
 	result.PublicKey = doc.Payload.PublicKey
 	result.PCRDigest = GetPCRDigest(doc.Payload.PCRs)
@@ -517,7 +518,8 @@ func (v *Verifier) verifyFreshness(doc *AttestationDocument, config *VerifierCon
 		return ErrInvalidDocument
 	}
 
-	docTime := time.UnixMilli(int64(doc.Payload.Timestamp)) //nolint:gosec // timestamp won't overflow int64 in practice
+	// #nosec G115 -- value originates from a non-negative quantity (height, timestamp, duration or counter) that always fits the target width
+	docTime := time.UnixMilli(int64(doc.Payload.Timestamp)) // #nosec G115 -- timestamp won't overflow int64 in practice
 	now := time.Now()
 
 	// Check if document is too old
@@ -600,7 +602,7 @@ func decodeBase64(data []byte) ([]byte, error) {
 		decodeTable[i] = 0xff
 	}
 	for i, c := range alphabet {
-		decodeTable[c] = byte(i)
+		decodeTable[c] = byte(i) // #nosec G115 -- i indexes the 64-character base64 alphabet, so it always fits in one byte
 	}
 	decodeTable['='] = 0
 
@@ -627,7 +629,7 @@ func decodeBase64(data []byte) ([]byte, error) {
 		if bufferBits >= 8 {
 			bufferBits -= 8
 			if outputIdx < len(output) {
-				output[outputIdx] = byte(buffer >> bufferBits)
+				output[outputIdx] = byte(buffer >> bufferBits) // #nosec G115 -- buffer holds at most 8 buffered bits, so buffer >> bufferBits is < 256
 				outputIdx++
 			}
 		}

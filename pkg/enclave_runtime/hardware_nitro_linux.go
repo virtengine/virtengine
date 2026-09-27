@@ -30,5 +30,6 @@ func dialNitroVsock(ctx context.Context, cid, port uint32) (io.ReadWriteCloser, 
 		return nil, fmt.Errorf("connect vsock: %w", err)
 	}
 
-	return os.NewFile(uintptr(fd), fmt.Sprintf("nitro-vsock-%d-%d", cid, port)), nil
+	// fd comes from unix.Socket and is a small non-negative file descriptor.
+	return os.NewFile(uintptr(fd), fmt.Sprintf("nitro-vsock-%d-%d", cid, port)), nil // #nosec G115 -- fd is a small non-negative vsock file descriptor number
 }

@@ -24,8 +24,8 @@ func SlashRecordKey(oracleAddr sdk.AccAddress, height int64) []byte {
 	key := make([]byte, 0, len(SlashRecordPrefix)+len(oracleAddr.Bytes())+8)
 	key = append(key, SlashRecordPrefix...)
 	key = append(key, oracleAddr.Bytes()...)
-	key = append(key, byte(height>>56), byte(height>>48), byte(height>>40), byte(height>>32))
-	key = append(key, byte(height>>24), byte(height>>16), byte(height>>8), byte(height))
+	key = append(key, byte(height>>56), byte(height>>48), byte(height>>40), byte(height>>32)) // #nosec G115 -- fixed-width big-endian encoding: byte(height>>56) writes a single byte of the shifted value by design and the written byte is never used arithmetically
+	key = append(key, byte(height>>24), byte(height>>16), byte(height>>8), byte(height))      // #nosec G115 -- fixed-width big-endian encoding: byte(height>>24) writes a single byte of the shifted value by design and the written byte is never used arithmetically
 	return key
 }
 
@@ -159,7 +159,7 @@ func (k *Keeper) SlashForBadPrice(ctx sdk.Context, oracleAddr sdk.AccAddress, de
 	// Calculate slash amount based on deviation
 	// Slash 1% for every 100 bps of excess deviation
 	excessDeviation := deviation - params.MaxPriceDeviationBps
-	slashBps := int64(min(excessDeviation/100, 500)) //nolint:gosec // Value is bounded by min(n, 500)
+	slashBps := int64(min(excessDeviation/100, 500)) /* #nosec G115 -- Value is bounded by min(n, 500) */ //nolint:gosec
 	if slashBps == 0 {
 		return nil
 	}

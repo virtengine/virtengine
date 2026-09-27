@@ -288,14 +288,14 @@ func (k Keeper) GetScoreHistoryPaginated(ctx sdk.Context, accountAddr string, li
 
 	// Apply pagination
 	//nolint:gosec // G115: len(entries) is bounded by storage limits, safe uint32 conversion
-	if offset >= uint32(len(entries)) {
+	if offset >= uint32(len(entries)) { // #nosec G115 -- len(entries) is bounded by its allocating container, a protocol-capped collection far below 2^32, so the conversion cannot truncate
 		return []types.ScoreHistoryEntry{}
 	}
 
 	end := offset + limit
 	//nolint:gosec // G115: len(entries) is bounded by storage limits, safe uint32 conversion
-	if end > uint32(len(entries)) || limit == 0 {
-		end = uint32(len(entries))
+	if end > uint32(len(entries)) || limit == 0 { // #nosec G115 -- len(entries) is bounded by its allocating container, a protocol-capped collection far below 2^32, so the conversion cannot truncate
+		end = uint32(len(entries)) // #nosec G115 -- len(entries) is bounded by its allocating container, a protocol-capped collection far below 2^32, so the conversion cannot truncate
 	}
 
 	return entries[offset:end]

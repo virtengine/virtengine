@@ -222,6 +222,45 @@ const buildNotification = (
   createdAt: createdAt.toISOString(),
 });
 
+/**
+ * Map raw escrow payment records into store shape.
+ *
+ * Extracted so the payments fetch can be mapped and committed independently of
+ * the allocation-bearing reads that gate the dashboard's first paint.
+ */
+const mapEscrowPayments = (
+  items: Record<string, unknown>[],
+  ownerAddress: string
+): CustomerDashboardState['escrowPayments'] =>
+  items.map((record) => {
+    const accountId =
+      record.account_id && typeof record.account_id === 'object'
+        ? (record.account_id as Record<string, unknown>)
+        : undefined;
+    const rate =
+      record.rate && typeof record.rate === 'object'
+        ? (record.rate as Record<string, unknown>)
+        : undefined;
+    const balance =
+      record.balance && typeof record.balance === 'object'
+        ? (record.balance as Record<string, unknown>)
+        : undefined;
+    const withdrawn =
+      record.withdrawn && typeof record.withdrawn === 'object'
+        ? (record.withdrawn as Record<string, unknown>)
+        : undefined;
+    return {
+      paymentId: coerceString(record.payment_id ?? record.paymentId ?? record.id, ''),
+      scope: coerceString(accountId?.scope ?? record.scope, ''),
+      xid: coerceString(accountId?.xid ?? record.xid, ''),
+      owner: coerceString(record.owner, ownerAddress),
+      state: coerceString(record.state, 'open'),
+      rateAmount: coerceNumber(rate?.amount ?? record.rate_amount, 0),
+      balanceAmount: coerceNumber(balance?.amount ?? record.balance_amount, 0),
+      withdrawnAmount: coerceNumber(withdrawn?.amount ?? record.withdrawn_amount, 0),
+    };
+  });
+
 export const useCustomerDashboardStore = create<CustomerDashboardStore>()((set, get) => ({
   ...initialState,
 
@@ -244,7 +283,23 @@ export const useCustomerDashboardStore = create<CustomerDashboardStore>()((set, 
         throw new Error('Wallet address is required to load dashboard data.');
       }
 
-      const [leaseResult, orderResult, escrowResult, paymentResult] = await Promise.all([
+      // Escrow payments are an OPTIONAL enrichment, deliberately not awaited
+      // alongside the allocation-bearing reads. Previously they were part of the
+      // same `Promise.all`, so a slow or unreachable payments endpoint held the
+      // entire dashboard in its loading skeleton for as long as the request took
+      // to fail — even though every lease/order/escrow response had already
+      // landed. The dashboard now renders as soon as the authoritative reads
+      // resolve, and the payments slice is committed separately when it arrives.
+      void fetchPaginated<Record<string, unknown>>(ESCROW_PAYMENT_ENDPOINTS, 'payments', {
+        params: { owner: ownerAddress },
+      })
+        .catch(() => ({ items: [] as Record<string, unknown>[], nextKey: null, total: 0 }))
+        .then((result) => {
+          if (requestId !== dashboardRequest) return;
+          set({ escrowPayments: mapEscrowPayments(result.items, ownerAddress) });
+        });
+
+      const [leaseResult, orderResult, escrowResult] = await Promise.all([
         fetchPaginated<Record<string, unknown>>(LEASE_ENDPOINTS, 'leases', {
           params: { owner: ownerAddress },
         }),
@@ -254,9 +309,6 @@ export const useCustomerDashboardStore = create<CustomerDashboardStore>()((set, 
         fetchPaginated<Record<string, unknown>>(ESCROW_ACCOUNT_ENDPOINTS, 'accounts', {
           params: { owner: ownerAddress },
         }),
-        fetchPaginated<Record<string, unknown>>(ESCROW_PAYMENT_ENDPOINTS, 'payments', {
-          params: { owner: ownerAddress },
-        }).catch(() => ({ items: [], nextKey: null, total: 0 })),
       ]);
 
       const providerMap = new Map<string, string>();
@@ -346,34 +398,6 @@ export const useCustomerDashboardStore = create<CustomerDashboardStore>()((set, 
             record.settled_at || record.settledAt
               ? toDate(record.settled_at ?? record.settledAt).toISOString()
               : undefined,
-        };
-      });
-      const escrowPayments = paymentResult.items.map((record) => {
-        const accountId =
-          record.account_id && typeof record.account_id === 'object'
-            ? (record.account_id as Record<string, unknown>)
-            : undefined;
-        const rate =
-          record.rate && typeof record.rate === 'object'
-            ? (record.rate as Record<string, unknown>)
-            : undefined;
-        const balance =
-          record.balance && typeof record.balance === 'object'
-            ? (record.balance as Record<string, unknown>)
-            : undefined;
-        const withdrawn =
-          record.withdrawn && typeof record.withdrawn === 'object'
-            ? (record.withdrawn as Record<string, unknown>)
-            : undefined;
-        return {
-          paymentId: coerceString(record.payment_id ?? record.paymentId ?? record.id, ''),
-          scope: coerceString(accountId?.scope ?? record.scope, ''),
-          xid: coerceString(accountId?.xid ?? record.xid, ''),
-          owner: coerceString(record.owner, ownerAddress),
-          state: coerceString(record.state, 'open'),
-          rateAmount: coerceNumber(rate?.amount ?? record.rate_amount, 0),
-          balanceAmount: coerceNumber(balance?.amount ?? record.balance_amount, 0),
-          withdrawnAmount: coerceNumber(withdrawn?.amount ?? record.withdrawn_amount, 0),
         };
       });
       const escrowTotals = escrowAccounts.reduce((sum, record) => sum + record.balance, 0);
@@ -599,7 +623,6 @@ export const useCustomerDashboardStore = create<CustomerDashboardStore>()((set, 
         stats: finalStats,
         allocations: finalAllocations,
         escrowAccounts,
-        escrowPayments,
         usage,
         billing,
         notifications,

@@ -116,7 +116,10 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Install Playwright browsers
-        run: npx playwright install --with-deps chromium
+        # Workspace-pinned Playwright only; `npx playwright install` would fetch
+        # the newest release from the registry and install a browser build the
+        # locked @playwright/test does not launch.
+        run: pnpm --filter virtengine-portal exec playwright install --with-deps chromium
 
       - name: Run smoke tests
         env:

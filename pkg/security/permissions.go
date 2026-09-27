@@ -214,7 +214,7 @@ func (v *StateFileValidator) SafeWriteStateFile(path string, data []byte) error 
 	}
 
 	if err := os.Rename(tmp, cleanPath); err != nil {
-		os.Remove(tmp) // Clean up temp file on rename failure
+		_ = os.Remove(tmp) // Best-effort cleanup of the temp file after a failed rename
 		return fmt.Errorf("failed to rename temp file: %w", err)
 	}
 

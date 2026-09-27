@@ -11,4 +11,5 @@ import (
 	_ "github.com/virtengine/virtengine/upgrades/software/v1.6.0"
 	_ "github.com/virtengine/virtengine/upgrades/software/v1.7.0"
 	_ "github.com/virtengine/virtengine/upgrades/software/v1.8.0"
+	_ "github.com/virtengine/virtengine/upgrades/software/v1.9.0"
 )

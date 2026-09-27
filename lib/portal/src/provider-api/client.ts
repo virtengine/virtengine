@@ -295,7 +295,9 @@ export class ProviderAPIClient {
     this.retryDelayMs = options.retryDelayMs ?? 1000;
     this.wallet = options.wallet;
     this.hmac = options.hmac;
-    this.fetcher = options.fetcher ?? fetch;
+    // See the note in MultiProviderClient: an unbound global `fetch` throws
+    // "Illegal invocation" when invoked as a method in the browser.
+    this.fetcher = options.fetcher ?? ((input, init) => fetch(input, init));
     this.providerId = options.providerId;
     this.deploymentActionCapability = options.deploymentActionCapability;
     this.deploymentActionReceiptValidator =

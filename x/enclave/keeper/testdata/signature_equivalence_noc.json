@@ -1,0 +1,257 @@
+{
+  "buildPath": "nocgo(decred)",
+  "cases": [
+    {
+      "name": "valid",
+      "note": "canonical valid signature",
+      "pubKey": "0454dee68fb11f8211e7833a05fc9140d8ae665e65f4dd105d4785fdbd6baa66c1497858d23c332c61dd0093e816cadee05d4a225d2385798777ed42043a8fd2e6",
+      "payload": "da025d475c52b74de05d7299069b544541d6b7edb0430a19143b6d5b813a2743",
+      "sig": "f5b5dd05c960aa3390e568784be23e9e1545612e0c7eabce495dccbf8a52d6790661775e9b8b78a5578e1f4e85825fc24406de149dad78d3faae941fade37931",
+      "oldAccept": true,
+      "oldErrCategory": "accept",
+      "buildPath": "nocgo(decred)"
+    },
+    {
+      "name": "valid-second-key",
+      "note": "valid signature from the second key",
+      "pubKey": "04eea36b6e4bd45e3db0f16c6d8e9b84fc1095807c71600a410914aadc133ed8ce04e7919b97e6e9718172650c3eedea155fa9e9a489126ee3775d2ad70f8e94b4",
+      "payload": "d9298a10d1b0735837dc4bd85dac641b0f3cef27a47e5d53a54f2f3f5b2fcffa",
+      "sig": "8d590b757f8a21582c98402c4617d63f8af96c6e6d1993593c9a197e9c48ff0e55ff6134210f6a5e2879b7df954dd21635716354d0c722550b4f604f179f8a62",
+      "oldAccept": true,
+      "oldErrCategory": "accept",
+      "buildPath": "nocgo(decred)"
+    },
+    {
+      "name": "tampered-r",
+      "note": "R bit flipped",
+      "pubKey": "0454dee68fb11f8211e7833a05fc9140d8ae665e65f4dd105d4785fdbd6baa66c1497858d23c332c61dd0093e816cadee05d4a225d2385798777ed42043a8fd2e6",
+      "payload": "da025d475c52b74de05d7299069b544541d6b7edb0430a19143b6d5b813a2743",
+      "sig": "f4b5dd05c960aa3390e568784be23e9e1545612e0c7eabce495dccbf8a52d6790661775e9b8b78a5578e1f4e85825fc24406de149dad78d3faae941fade37931",
+      "oldAccept": false,
+      "oldErrCategory": "verify-failed",
+      "buildPath": "nocgo(decred)"
+    },
+    {
+      "name": "tampered-s",
+      "note": "S bit flipped",
+      "pubKey": "0454dee68fb11f8211e7833a05fc9140d8ae665e65f4dd105d4785fdbd6baa66c1497858d23c332c61dd0093e816cadee05d4a225d2385798777ed42043a8fd2e6",
+      "payload": "da025d475c52b74de05d7299069b544541d6b7edb0430a19143b6d5b813a2743",
+      "sig": "f5b5dd05c960aa3390e568784be23e9e1545612e0c7eabce495dccbf8a52d6790661775e9b8b78a5568e1f4e85825fc24406de149dad78d3faae941fade37931",
+      "oldAccept": false,
+      "oldErrCategory": "verify-failed",
+      "buildPath": "nocgo(decred)"
+    },
+    {
+      "name": "tampered-payload",
+      "note": "signature over a different payload",
+      "pubKey": "0454dee68fb11f8211e7833a05fc9140d8ae665e65f4dd105d4785fdbd6baa66c1497858d23c332c61dd0093e816cadee05d4a225d2385798777ed42043a8fd2e6",
+      "payload": "b7176a7796310bfb986582f98acff461ac9dc0f64e67ee8cf22dc5dc5b6103bd",
+      "sig": "f5b5dd05c960aa3390e568784be23e9e1545612e0c7eabce495dccbf8a52d6790661775e9b8b78a5578e1f4e85825fc24406de149dad78d3faae941fade37931",
+      "oldAccept": false,
+      "oldErrCategory": "verify-failed",
+      "buildPath": "nocgo(decred)"
+    },
+    {
+      "name": "wrong-key",
+      "note": "valid signature checked against the wrong public key",
+      "pubKey": "04eea36b6e4bd45e3db0f16c6d8e9b84fc1095807c71600a410914aadc133ed8ce04e7919b97e6e9718172650c3eedea155fa9e9a489126ee3775d2ad70f8e94b4",
+      "payload": "da025d475c52b74de05d7299069b544541d6b7edb0430a19143b6d5b813a2743",
+      "sig": "f5b5dd05c960aa3390e568784be23e9e1545612e0c7eabce495dccbf8a52d6790661775e9b8b78a5578e1f4e85825fc24406de149dad78d3faae941fade37931",
+      "oldAccept": false,
+      "oldErrCategory": "verify-failed",
+      "buildPath": "nocgo(decred)"
+    },
+    {
+      "name": "high-s-malleable",
+      "note": "S negated to N-s; MSB set so the pre-check catches it",
+      "pubKey": "0454dee68fb11f8211e7833a05fc9140d8ae665e65f4dd105d4785fdbd6baa66c1497858d23c332c61dd0093e816cadee05d4a225d2385798777ed42043a8fd2e6",
+      "payload": "da025d475c52b74de05d7299069b544541d6b7edb0430a19143b6d5b813a2743",
+      "sig": "f5b5dd05c960aa3390e568784be23e9e1545612e0c7eabce495dccbf8a52d679f99e88a16474875aa871e0b17a7da03c76a7fed2119b2767c523ca6d2252c810",
+      "oldAccept": false,
+      "oldErrCategory": "low-s-msb",
+      "buildPath": "nocgo(decred)"
+    },
+    {
+      "name": "over-half-s-msb-clear",
+      "note": "S in (N/2, 2^255) with MSB clear: the window the old MSB-only check misses",
+      "pubKey": "0454dee68fb11f8211e7833a05fc9140d8ae665e65f4dd105d4785fdbd6baa66c1497858d23c332c61dd0093e816cadee05d4a225d2385798777ed42043a8fd2e6",
+      "payload": "da025d475c52b74de05d7299069b544541d6b7edb0430a19143b6d5b813a2743",
+      "sig": "f5b5dd05c960aa3390e568784be23e9e1545612e0c7eabce495dccbf8a52d6797fffffffffffffffffffffffffffffff5d576e7357a4501ddfe92f46681b20a1",
+      "oldAccept": false,
+      "oldErrCategory": "verify-failed",
+      "buildPath": "nocgo(decred)"
+    },
+    {
+      "name": "r-zero",
+      "note": "R = 0",
+      "pubKey": "0454dee68fb11f8211e7833a05fc9140d8ae665e65f4dd105d4785fdbd6baa66c1497858d23c332c61dd0093e816cadee05d4a225d2385798777ed42043a8fd2e6",
+      "payload": "da025d475c52b74de05d7299069b544541d6b7edb0430a19143b6d5b813a2743",
+      "sig": "00000000000000000000000000000000000000000000000000000000000000000661775e9b8b78a5578e1f4e85825fc24406de149dad78d3faae941fade37931",
+      "oldAccept": false,
+      "oldErrCategory": "verify-failed",
+      "buildPath": "nocgo(decred)"
+    },
+    {
+      "name": "s-zero",
+      "note": "S = 0",
+      "pubKey": "0454dee68fb11f8211e7833a05fc9140d8ae665e65f4dd105d4785fdbd6baa66c1497858d23c332c61dd0093e816cadee05d4a225d2385798777ed42043a8fd2e6",
+      "payload": "da025d475c52b74de05d7299069b544541d6b7edb0430a19143b6d5b813a2743",
+      "sig": "f5b5dd05c960aa3390e568784be23e9e1545612e0c7eabce495dccbf8a52d6790000000000000000000000000000000000000000000000000000000000000000",
+      "oldAccept": false,
+      "oldErrCategory": "verify-failed",
+      "buildPath": "nocgo(decred)"
+    },
+    {
+      "name": "r-equals-n",
+      "note": "R = N, not a canonical scalar",
+      "pubKey": "0454dee68fb11f8211e7833a05fc9140d8ae665e65f4dd105d4785fdbd6baa66c1497858d23c332c61dd0093e816cadee05d4a225d2385798777ed42043a8fd2e6",
+      "payload": "da025d475c52b74de05d7299069b544541d6b7edb0430a19143b6d5b813a2743",
+      "sig": "fffffffffffffffffffffffffffffffebaaedce6af48a03bbfd25e8cd03641410661775e9b8b78a5578e1f4e85825fc24406de149dad78d3faae941fade37931",
+      "oldAccept": false,
+      "oldErrCategory": "verify-failed",
+      "buildPath": "nocgo(decred)"
+    },
+    {
+      "name": "s-equals-n",
+      "note": "S = N, not a canonical scalar",
+      "pubKey": "0454dee68fb11f8211e7833a05fc9140d8ae665e65f4dd105d4785fdbd6baa66c1497858d23c332c61dd0093e816cadee05d4a225d2385798777ed42043a8fd2e6",
+      "payload": "da025d475c52b74de05d7299069b544541d6b7edb0430a19143b6d5b813a2743",
+      "sig": "f5b5dd05c960aa3390e568784be23e9e1545612e0c7eabce495dccbf8a52d679fffffffffffffffffffffffffffffffebaaedce6af48a03bbfd25e8cd0364141",
+      "oldAccept": false,
+      "oldErrCategory": "low-s-msb",
+      "buildPath": "nocgo(decred)"
+    },
+    {
+      "name": "r-all-ff",
+      "note": "R = 0xFF..FF",
+      "pubKey": "0454dee68fb11f8211e7833a05fc9140d8ae665e65f4dd105d4785fdbd6baa66c1497858d23c332c61dd0093e816cadee05d4a225d2385798777ed42043a8fd2e6",
+      "payload": "da025d475c52b74de05d7299069b544541d6b7edb0430a19143b6d5b813a2743",
+      "sig": "00000000000000000000000000000000000000000000000000000000000000000661775e9b8b78a5578e1f4e85825fc24406de149dad78d3faae941fade37931",
+      "oldAccept": false,
+      "oldErrCategory": "verify-failed",
+      "buildPath": "nocgo(decred)"
+    },
+    {
+      "name": "pubkey-off-curve",
+      "note": "X valid, Y not on the curve",
+      "pubKey": "0454dee68fb11f8211e7833a05fc9140d8ae665e65f4dd105d4785fdbd6baa66c1497858d23c332c61dd0093e816cadee05d4a225d2385798777ed42043a8fd2e7",
+      "payload": "da025d475c52b74de05d7299069b544541d6b7edb0430a19143b6d5b813a2743",
+      "sig": "f5b5dd05c960aa3390e568784be23e9e1545612e0c7eabce495dccbf8a52d6790661775e9b8b78a5578e1f4e85825fc24406de149dad78d3faae941fade37931",
+      "oldAccept": false,
+      "oldErrCategory": "invalid-pubkey",
+      "buildPath": "nocgo(decred)"
+    },
+    {
+      "name": "pubkey-x-too-big",
+      "note": "X = field prime P",
+      "pubKey": "04fffffffffffffffffffffffffffffffffffffffffffffffffffffffefffffc2f497858d23c332c61dd0093e816cadee05d4a225d2385798777ed42043a8fd2e6",
+      "payload": "da025d475c52b74de05d7299069b544541d6b7edb0430a19143b6d5b813a2743",
+      "sig": "f5b5dd05c960aa3390e568784be23e9e1545612e0c7eabce495dccbf8a52d6790661775e9b8b78a5578e1f4e85825fc24406de149dad78d3faae941fade37931",
+      "oldAccept": false,
+      "oldErrCategory": "invalid-pubkey",
+      "buildPath": "nocgo(decred)"
+    },
+    {
+      "name": "pubkey-hybrid-06",
+      "note": "hybrid encoding 0x06",
+      "pubKey": "0654dee68fb11f8211e7833a05fc9140d8ae665e65f4dd105d4785fdbd6baa66c1497858d23c332c61dd0093e816cadee05d4a225d2385798777ed42043a8fd2e6",
+      "payload": "da025d475c52b74de05d7299069b544541d6b7edb0430a19143b6d5b813a2743",
+      "sig": "f5b5dd05c960aa3390e568784be23e9e1545612e0c7eabce495dccbf8a52d6790661775e9b8b78a5578e1f4e85825fc24406de149dad78d3faae941fade37931",
+      "oldAccept": false,
+      "oldErrCategory": "invalid-pubkey",
+      "buildPath": "nocgo(decred)"
+    },
+    {
+      "name": "pubkey-hybrid-07",
+      "note": "hybrid encoding 0x07",
+      "pubKey": "0754dee68fb11f8211e7833a05fc9140d8ae665e65f4dd105d4785fdbd6baa66c1497858d23c332c61dd0093e816cadee05d4a225d2385798777ed42043a8fd2e6",
+      "payload": "da025d475c52b74de05d7299069b544541d6b7edb0430a19143b6d5b813a2743",
+      "sig": "f5b5dd05c960aa3390e568784be23e9e1545612e0c7eabce495dccbf8a52d6790661775e9b8b78a5578e1f4e85825fc24406de149dad78d3faae941fade37931",
+      "oldAccept": false,
+      "oldErrCategory": "invalid-pubkey",
+      "buildPath": "nocgo(decred)"
+    },
+    {
+      "name": "pubkey-compressed-prefix",
+      "note": "compressed prefix on a 65-byte key",
+      "pubKey": "0254dee68fb11f8211e7833a05fc9140d8ae665e65f4dd105d4785fdbd6baa66c1497858d23c332c61dd0093e816cadee05d4a225d2385798777ed42043a8fd2e6",
+      "payload": "da025d475c52b74de05d7299069b544541d6b7edb0430a19143b6d5b813a2743",
+      "sig": "f5b5dd05c960aa3390e568784be23e9e1545612e0c7eabce495dccbf8a52d6790661775e9b8b78a5578e1f4e85825fc24406de149dad78d3faae941fade37931",
+      "oldAccept": false,
+      "oldErrCategory": "invalid-pubkey",
+      "buildPath": "nocgo(decred)"
+    },
+    {
+      "name": "pubkey-zero-prefix",
+      "note": "0x00 prefix",
+      "pubKey": "0054dee68fb11f8211e7833a05fc9140d8ae665e65f4dd105d4785fdbd6baa66c1497858d23c332c61dd0093e816cadee05d4a225d2385798777ed42043a8fd2e6",
+      "payload": "da025d475c52b74de05d7299069b544541d6b7edb0430a19143b6d5b813a2743",
+      "sig": "f5b5dd05c960aa3390e568784be23e9e1545612e0c7eabce495dccbf8a52d6790661775e9b8b78a5578e1f4e85825fc24406de149dad78d3faae941fade37931",
+      "oldAccept": false,
+      "oldErrCategory": "invalid-pubkey",
+      "buildPath": "nocgo(decred)"
+    },
+    {
+      "name": "pubkey-all-zero",
+      "note": "all-zero 65-byte key",
+      "pubKey": "0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+      "payload": "da025d475c52b74de05d7299069b544541d6b7edb0430a19143b6d5b813a2743",
+      "sig": "f5b5dd05c960aa3390e568784be23e9e1545612e0c7eabce495dccbf8a52d6790661775e9b8b78a5578e1f4e85825fc24406de149dad78d3faae941fade37931",
+      "oldAccept": false,
+      "oldErrCategory": "invalid-pubkey",
+      "buildPath": "nocgo(decred)"
+    },
+    {
+      "name": "payload-31-bytes",
+      "note": "payload truncated to 31 bytes",
+      "pubKey": "0454dee68fb11f8211e7833a05fc9140d8ae665e65f4dd105d4785fdbd6baa66c1497858d23c332c61dd0093e816cadee05d4a225d2385798777ed42043a8fd2e6",
+      "payload": "da025d475c52b74de05d7299069b544541d6b7edb0430a19143b6d5b813a27",
+      "sig": "f5b5dd05c960aa3390e568784be23e9e1545612e0c7eabce495dccbf8a52d6790661775e9b8b78a5578e1f4e85825fc24406de149dad78d3faae941fade37931",
+      "oldAccept": false,
+      "oldErrCategory": "verify-failed",
+      "buildPath": "nocgo(decred)"
+    },
+    {
+      "name": "payload-33-bytes",
+      "note": "payload extended to 33 bytes",
+      "pubKey": "0454dee68fb11f8211e7833a05fc9140d8ae665e65f4dd105d4785fdbd6baa66c1497858d23c332c61dd0093e816cadee05d4a225d2385798777ed42043a8fd2e6",
+      "payload": "da025d475c52b74de05d7299069b544541d6b7edb0430a19143b6d5b813a274300",
+      "sig": "f5b5dd05c960aa3390e568784be23e9e1545612e0c7eabce495dccbf8a52d6790661775e9b8b78a5578e1f4e85825fc24406de149dad78d3faae941fade37931",
+      "oldAccept": true,
+      "oldErrCategory": "accept",
+      "buildPath": "nocgo(decred)"
+    },
+    {
+      "name": "payload-64-bytes",
+      "note": "payload extended to 64 bytes",
+      "pubKey": "0454dee68fb11f8211e7833a05fc9140d8ae665e65f4dd105d4785fdbd6baa66c1497858d23c332c61dd0093e816cadee05d4a225d2385798777ed42043a8fd2e6",
+      "payload": "da025d475c52b74de05d7299069b544541d6b7edb0430a19143b6d5b813a27430000000000000000000000000000000000000000000000000000000000000000",
+      "sig": "f5b5dd05c960aa3390e568784be23e9e1545612e0c7eabce495dccbf8a52d6790661775e9b8b78a5578e1f4e85825fc24406de149dad78d3faae941fade37931",
+      "oldAccept": true,
+      "oldErrCategory": "accept",
+      "buildPath": "nocgo(decred)"
+    },
+    {
+      "name": "sig-length-65",
+      "note": "65-byte signature including recovery id",
+      "pubKey": "0454dee68fb11f8211e7833a05fc9140d8ae665e65f4dd105d4785fdbd6baa66c1497858d23c332c61dd0093e816cadee05d4a225d2385798777ed42043a8fd2e6",
+      "payload": "da025d475c52b74de05d7299069b544541d6b7edb0430a19143b6d5b813a2743",
+      "sig": "f5b5dd05c960aa3390e568784be23e9e1545612e0c7eabce495dccbf8a52d6790661775e9b8b78a5578e1f4e85825fc24406de149dad78d3faae941fade3793100",
+      "oldAccept": false,
+      "oldErrCategory": "sig-length",
+      "buildPath": "nocgo(decred)"
+    },
+    {
+      "name": "sig-length-63",
+      "note": "63-byte signature",
+      "pubKey": "0454dee68fb11f8211e7833a05fc9140d8ae665e65f4dd105d4785fdbd6baa66c1497858d23c332c61dd0093e816cadee05d4a225d2385798777ed42043a8fd2e6",
+      "payload": "da025d475c52b74de05d7299069b544541d6b7edb0430a19143b6d5b813a2743",
+      "sig": "f5b5dd05c960aa3390e568784be23e9e1545612e0c7eabce495dccbf8a52d6790661775e9b8b78a5578e1f4e85825fc24406de149dad78d3faae941fade379",
+      "oldAccept": false,
+      "oldErrCategory": "sig-length",
+      "buildPath": "nocgo(decred)"
+    }
+  ],
+  "schemaVersion": 1,
+  "source": "github.com/ethereum/go-ethereum v1.17.0 crypto (pre-change implementation)"
+}

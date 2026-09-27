@@ -290,7 +290,7 @@ func NewFileLogger(config Config, logger zerolog.Logger) (*FileLogger, error) {
 
 	// Open file in append mode
 	filepath := config.File.Directory + "/" + config.File.Filename
-	file, err := os.OpenFile(filepath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0600)
+	file, err := os.OpenFile(filepath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0600) // #nosec G304 -- the path is the operator-configured audit log location
 	if err != nil {
 		return nil, ErrStorageError.Wrapf("failed to open file: %v", err)
 	}

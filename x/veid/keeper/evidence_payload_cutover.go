@@ -555,7 +555,7 @@ func collectEvidencePayloadCutoverRows(ctx sdk.Context, k Keeper) ([]legacyEvide
 				rows = append(rows, row)
 			}
 		}
-		iterator.Close()
+		_ = iterator.Close()
 	}
 	sort.Slice(rows, func(i, j int) bool {
 		if rows[i].sourceKind != rows[j].sourceKind {

@@ -191,6 +191,10 @@ func NewPortalAPIServer(cfg PortalAPIServerConfig) (*PortalAPIServer, error) {
 	return srv, nil
 }
 
+// shutdownDrainTimeout bounds how long an HTTP server waits for in-flight
+// requests to drain after its context is cancelled.
+const shutdownDrainTimeout = 10 * time.Second
+
 func (s *PortalAPIServer) Start(ctx context.Context) error {
 	if err := validatePortalChainQuery(s.chainQuery); err != nil {
 		return fmt.Errorf("portal chain query startup validation: %w", err)
@@ -204,9 +208,15 @@ func (s *PortalAPIServer) Start(ctx context.Context) error {
 		ReadHeaderTimeout: 10 * time.Second,
 	}
 
+	// The drain runs *because* ctx was cancelled, so it cannot reuse ctx for the
+	// shutdown call. A bounded, value-carrying context keeps the drain from
+	// hanging forever without silently detaching it via context.Background().
+	shutdownCtx, cancelShutdown := context.WithTimeout(context.WithoutCancel(ctx), shutdownDrainTimeout)
+	defer cancelShutdown()
+
 	go func() {
 		<-ctx.Done()
-		_ = s.Shutdown(context.Background())
+		_ = s.Shutdown(shutdownCtx)
 	}()
 
 	return s.server.ListenAndServe()

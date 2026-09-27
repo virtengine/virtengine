@@ -35,7 +35,7 @@ func handleAddVerifierVersionProposal(ctx sdk.Context, k Keeper, proposal *types
 	ms := NewMsgServerImpl(k)
 	proposalID := proposal.Verifier.GovernanceProposalID
 	if proposalID == 0 {
-		proposalID = uint64(ctx.BlockHeight()) //nolint:gosec // G115: block height is non-negative
+		proposalID = uint64(ctx.BlockHeight()) /* #nosec G115 -- block height is non-negative */ //nolint:gosec
 	}
 	_, err := ms.UpsertVerifierVersion(ctx, &types.MsgUpsertVerifierVersion{
 		Authority: k.GetAuthority(),

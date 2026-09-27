@@ -22,6 +22,9 @@ type WaldurOfferingImport struct {
 	// UUID is the Waldur offering UUID.
 	UUID string `json:"uuid"`
 
+	// InstanceID identifies the source Waldur instance (optional).
+	InstanceID string `json:"instance_id,omitempty"`
+
 	// Name is the offering name.
 	Name string `json:"name"`
 
@@ -226,6 +229,96 @@ func (w *WaldurOfferingImport) ResolveState() OfferingState {
 	default:
 		return OfferingStatePaused
 	}
+}
+
+// ResolveBackendType resolves the provider execution backend from Waldur
+// attributes or the offering type string.
+func (w *WaldurOfferingImport) ResolveBackendType() string {
+	for _, key := range []string{"ve_backend_type", "backend_type", "backend"} {
+		if value, ok := w.Attributes[key]; ok {
+			if s, ok := value.(string); ok && strings.TrimSpace(s) != "" {
+				return strings.ToLower(strings.TrimSpace(s))
+			}
+		}
+	}
+
+	typeLower := strings.ToLower(w.Type)
+	switch {
+	case strings.Contains(typeLower, "slurm"):
+		return BackendSLURM
+	case strings.Contains(typeLower, "moab"):
+		return BackendMOAB
+	case strings.Contains(typeLower, "ondemand") || strings.Contains(typeLower, "ood"):
+		return BackendOOD
+	case strings.Contains(typeLower, "hpc"):
+		return BackendSLURM
+	case strings.Contains(typeLower, "kubernetes") || strings.Contains(typeLower, "rancher") || strings.Contains(typeLower, "container"):
+		return BackendKubernetes
+	case strings.Contains(typeLower, "openstack"):
+		return BackendOpenStack
+	case strings.Contains(typeLower, "vmware"):
+		return BackendVMware
+	case strings.Contains(typeLower, "aws"):
+		return BackendAWS
+	case strings.Contains(typeLower, "azure"):
+		return BackendAzure
+	default:
+		return ""
+	}
+}
+
+// ResolveMeteringProfile resolves the metering component profile from Waldur
+// attributes, defaulting to the offering type-derived profile.
+func (w *WaldurOfferingImport) ResolveMeteringProfile() string {
+	for _, key := range []string{"ve_metering_profile", "metering_profile"} {
+		if value, ok := w.Attributes[key]; ok {
+			if s, ok := value.(string); ok && strings.TrimSpace(s) != "" {
+				return strings.TrimSpace(s)
+			}
+		}
+	}
+	switch w.ResolveBackendType() {
+	case BackendSLURM, BackendMOAB, BackendOOD:
+		return "hpc"
+	default:
+		return "compute"
+	}
+}
+
+// resolveMinBid resolves the minimum bid for a Waldur offering that allows
+// bidding. It falls back to a single unit in the offering currency so the
+// on-chain validation invariant (min bid positive) always holds.
+func (w *WaldurOfferingImport) resolveMinBid(cfg IngestConfig, pricing PricingInfo) sdk.Coin {
+	denom := pricing.Currency
+	if denom == "" {
+		denom = cfg.DefaultCurrency
+	}
+	if denom == "" {
+		denom = "uvirt"
+	}
+
+	if value, ok := w.Attributes["ve_min_bid"]; ok {
+		switch v := value.(type) {
+		case float64:
+			return sdk.NewCoin(denom, sdkmath.NewInt(safeInt64FromFloat64(v)))
+		case string:
+			if parsed, err := strconv.ParseUint(strings.TrimSpace(v), 10, 64); err == nil {
+				return sdk.NewCoin(denom, sdkmath.NewIntFromUint64(parsed))
+			}
+		}
+	}
+
+	return sdk.NewInt64Coin(denom, 1)
+}
+
+func safeInt64FromFloat64(value float64) int64 {
+	if value <= 0 {
+		return 1
+	}
+	if value > math.MaxInt64 {
+		return math.MaxInt64
+	}
+	return int64(value)
 }
 
 // ResolvePricing extracts pricing information from Waldur components.
@@ -436,9 +529,36 @@ func (w *WaldurOfferingImport) ToOfferingAt(providerAddr string, sequence uint64
 		Specifications:      w.ExtractSpecifications(),
 		Tags:                w.ExtractTags(),
 		Regions:             w.ExtractRegions(cfg),
-		CreatedAt:           createdAt,
-		UpdatedAt:           createdAt,
+		Source:              OfferingSourceWaldur,
+		Visibility:          OfferingVisibilityPublic,
+		AcquisitionModes:    []AcquisitionMode{AcquisitionModeDirect},
+		BackendType:         w.ResolveBackendType(),
+		MeteringProfile:     w.ResolveMeteringProfile(),
+		Waldur: &WaldurOfferingRef{
+			InstanceID:   w.InstanceID,
+			OfferingUUID: w.UUID,
+			CustomerUUID: w.CustomerUUID,
+			BackendType:  w.ResolveBackendType(),
+			SnapshotHash: w.IngestChecksum(),
+		},
+		CreatedAt: createdAt,
+		UpdatedAt: createdAt,
 	}
+
+	// Waldur offerings that expose a bid plan support the bidding pathway.
+	if allowBidding, ok := w.Attributes["ve_allow_bidding"]; ok {
+		switch v := allowBidding.(type) {
+		case bool:
+			offering.AllowBidding = v
+		case string:
+			offering.AllowBidding = strings.EqualFold(strings.TrimSpace(v), "true")
+		}
+		if offering.AllowBidding {
+			offering.AcquisitionModes = append(offering.AcquisitionModes, AcquisitionModeBid)
+			offering.MinBid = w.resolveMinBid(cfg, offering.Pricing)
+		}
+	}
+	offering.AcquisitionModes = NormalizeAcquisitionModes(offering.AcquisitionModes)
 
 	// Extract max concurrent orders
 	if maxOrders, ok := w.Attributes["ve_max_concurrent_orders"]; ok {
@@ -744,6 +864,9 @@ func isReservedAttribute(key string) bool {
 		"ve_min_identity_score":    true,
 		"ve_require_mfa":           true,
 		"ve_max_concurrent_orders": true,
+		"ve_allow_bidding":         true,
+		"ve_backend_type":          true,
+		"ve_metering_profile":      true,
 	}
 	return reserved[key]
 }

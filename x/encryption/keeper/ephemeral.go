@@ -127,6 +127,6 @@ func buildEphemeralSessionID(address string, pubKey []byte, height int64) string
 	h := sha256.New()
 	h.Write([]byte(address))
 	h.Write(pubKey)
-	h.Write([]byte{byte(height >> 56), byte(height >> 48), byte(height >> 40), byte(height >> 32), byte(height >> 24), byte(height >> 16), byte(height >> 8), byte(height)})
+	h.Write([]byte{byte(height >> 56), byte(height >> 48), byte(height >> 40), byte(height >> 32), byte(height >> 24), byte(height >> 16), byte(height >> 8), byte(height)}) // #nosec G115 -- fixed-width big-endian encoding: byte(height >> 56) writes a single byte of the shifted value by design and the written byte is never used arithmetically
 	return hex.EncodeToString(h.Sum(nil))
 }

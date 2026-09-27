@@ -328,7 +328,7 @@ func AssessSeriousAbuse(violations []ViolationRecord, criteria SeriousAbuseCrite
 		}
 	}
 
-	assessment.DistinctTypes = uint32(len(distinct)) //nolint:gosec // G115: len(distinct) is bounded by the violation-type cardinality
+	assessment.DistinctTypes = uint32(len(distinct)) // #nosec G115 -- len(distinct) is bounded by the violation-type cardinality
 
 	if assessment.QualifyingViolations < criteria.MinQualifyingViolations {
 		assessment.Reasons = append(assessment.Reasons, fmt.Sprintf(

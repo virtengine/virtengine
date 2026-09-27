@@ -93,7 +93,7 @@ func readEvidenceFromFlags(evidenceJSON string, evidenceFile string) ([]fraudv1.
 	}
 
 	if evidenceFile != "" {
-		data, err := os.ReadFile(evidenceFile)
+		data, err := os.ReadFile(evidenceFile) // #nosec G304 -- evidenceFile is a local path parameter supplied by this function's own caller (a CLI argument, loader parameter or configured state file) and is not derived from a network peer or chain message; opening the caller-nominated file is the purpose of this call
 		if err != nil {
 			return nil, fmt.Errorf("failed to read evidence file: %w", err)
 		}

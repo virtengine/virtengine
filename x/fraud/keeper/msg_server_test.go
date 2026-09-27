@@ -187,7 +187,8 @@ func (s *MsgServerTestSuite) TestSubmitFraudReport_InvalidAddress() {
 	s.Require().ErrorIs(err, types.ErrInvalidReporter)
 }
 
-// Test: SubmitFraudReport - unauthorized reporter (not a provider)
+// Test: SubmitFraudReport - a reporter with no order link and no no-order basis
+// is rejected: non-provider reporters must document their standing.
 func (s *MsgServerTestSuite) TestSubmitFraudReport_UnauthorizedReporter() {
 	reporterAddr := sdk.AccAddress([]byte("non-provider-addr"))
 
@@ -203,7 +204,7 @@ func (s *MsgServerTestSuite) TestSubmitFraudReport_UnauthorizedReporter() {
 
 	_, err := s.msgServer.SubmitFraudReport(s.ctx, msg)
 	s.Require().Error(err)
-	s.Require().ErrorIs(err, types.ErrUnauthorizedReporter)
+	s.Require().ErrorIs(err, types.ErrMissingOrderReference)
 }
 
 // Test: AssignModerator - success

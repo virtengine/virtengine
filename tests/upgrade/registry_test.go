@@ -19,6 +19,7 @@ import (
 	v160 "github.com/virtengine/virtengine/upgrades/software/v1.6.0"
 	v170 "github.com/virtengine/virtengine/upgrades/software/v1.7.0"
 	v180 "github.com/virtengine/virtengine/upgrades/software/v1.8.0"
+	v190 "github.com/virtengine/virtengine/upgrades/software/v1.9.0"
 	utypes "github.com/virtengine/virtengine/upgrades/types"
 )
 
@@ -70,5 +71,6 @@ func expectedUpgradeNames() []string {
 		v160.UpgradeName,
 		v170.UpgradeName,
 		v180.UpgradeName,
+		v190.UpgradeName,
 	}
 }

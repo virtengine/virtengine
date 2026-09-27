@@ -4,6 +4,7 @@
 package keeper
 
 import (
+	"fmt"
 	"testing"
 	"time"
 
@@ -111,6 +112,14 @@ func setupKeeper(t testing.TB) (Keeper, sdk.Context, *MockRolesKeeper, *MockProv
 	mockProvider := NewMockProviderKeeper()
 
 	k := NewKeeper(cdc, storeKey, mockRoles, mockProvider, "authority")
+
+	// Wire a market keeper by default, mirroring app wiring. The fraud keeper
+	// now FAILS CLOSED when no market keeper is set (order standing cannot be
+	// verified), so leaving it nil here would make every order-linked report in
+	// the suite fail for the wrong reason. Tests that care about order standing
+	// replace this with their own mock via SetMarketKeeper; tests that must
+	// exercise the unwired path call SetMarketKeeper(nil) explicitly.
+	k.SetMarketKeeper(newMockMarketKeeper())
 
 	ctx := sdk.NewContext(stateStore, cmtproto.Header{
 		Height: 100,
@@ -233,17 +242,18 @@ func TestKeeper_GetFraudReportsByReporter(t *testing.T) {
 	evidence := createValidEvidence()
 	description := testFraudDescription
 
-	// Submit two reports from the same reporter
+	// Submit two reports from the same reporter. Descriptions differ so the
+	// submissions are distinct: identical repeats are de-duplicated.
 	for i := 0; i < 2; i++ {
 		report := types.NewFraudReport(
 			"",
 			reporter.String(),
 			reported.String(),
 			types.FraudCategoryFakeIdentity,
-			description,
+			fmt.Sprintf("%s (instance %d)", description, i),
 			evidence,
 			ctx.BlockHeight(),
-			ctx.BlockTime(),
+			ctx.BlockTime().Add(time.Duration(i)*time.Second),
 		)
 		if err := k.SubmitFraudReport(ctx, report); err != nil {
 			t.Fatalf("Failed to submit report: %v", err)
@@ -706,6 +716,8 @@ func TestKeeper_Params(t *testing.T) {
 		EscalationThresholdDays: 14,
 		ReportRetentionDays:     180,
 		AuditLogRetentionDays:   365,
+		MaxReportsPerWindow:     10,
+		ReportWindowBlocks:      2000,
 	}
 
 	if err := k.SetParams(ctx, newParams); err != nil {
@@ -745,17 +757,19 @@ func TestKeeper_WithFraudReports(t *testing.T) {
 	evidence := createValidEvidence()
 	description := testFraudDescription
 
-	// Submit 3 reports
+	// Submit 3 reports. Descriptions differ so the submissions are distinct:
+	// identical repeats are now de-duplicated (spam control), which is asserted
+	// separately in TestKeeper_SubmitFraudReport_DuplicateRejected.
 	for i := 0; i < 3; i++ {
 		report := types.NewFraudReport(
 			"",
 			reporter.String(),
 			reported.String(),
 			types.FraudCategoryFakeIdentity,
-			description,
+			fmt.Sprintf("%s (instance %d)", description, i),
 			evidence,
 			ctx.BlockHeight(),
-			ctx.BlockTime(),
+			ctx.BlockTime().Add(time.Duration(i)*time.Second),
 		)
 		if err := k.SubmitFraudReport(ctx, report); err != nil {
 			t.Fatalf("Failed to submit report: %v", err)

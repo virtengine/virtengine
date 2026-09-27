@@ -41,6 +41,22 @@ func InitGenesis(ctx sdk.Context, k keeper.Keeper, gs *types.GenesisState) {
 			panic(err)
 		}
 	}
+
+	// Import responses/rebuttals
+	for _, response := range gs.FraudResponses {
+		if err := k.SetFraudResponse(ctx, response); err != nil {
+			panic(err)
+		}
+		store := ctx.KVStore(k.StoreKey())
+		store.Set(types.GetReportResponseKey(response.ReportID, response.ID), []byte(response.ID))
+	}
+
+	// Set next response sequence (default to 1 when unset for older genesis files)
+	nextResponseSequence := gs.NextFraudResponseSequence
+	if nextResponseSequence == 0 {
+		nextResponseSequence = 1
+	}
+	k.SetNextFraudResponseSequence(ctx, nextResponseSequence)
 }
 
 // ExportGenesis exports the fraud module's state to a genesis state
@@ -63,12 +79,22 @@ func ExportGenesis(ctx sdk.Context, k keeper.Keeper) *types.GenesisState {
 		return false
 	})
 
+	var responses []types.FraudResponse
+	for _, report := range reports {
+		k.WithFraudResponses(ctx, report.ID, func(r types.FraudResponse) bool {
+			responses = append(responses, r)
+			return false
+		})
+	}
+
 	return &types.GenesisState{
-		Params:                  k.GetParams(ctx),
-		FraudReports:            reports,
-		AuditLogs:               logs,
-		ModeratorQueue:          queue,
-		NextFraudReportSequence: k.GetNextFraudReportSequence(ctx),
-		NextAuditLogSequence:    k.GetNextAuditLogSequence(ctx),
+		Params:                    k.GetParams(ctx),
+		FraudReports:              reports,
+		AuditLogs:                 logs,
+		ModeratorQueue:            queue,
+		FraudResponses:            responses,
+		NextFraudReportSequence:   k.GetNextFraudReportSequence(ctx),
+		NextAuditLogSequence:      k.GetNextAuditLogSequence(ctx),
+		NextFraudResponseSequence: k.GetNextFraudResponseSequence(ctx),
 	}
 }

@@ -50,6 +50,8 @@ func requestSEVHardwareReport(fd *os.File, userData [64]byte, vmpl uint32) ([]by
 		VMPL:     vmpl,
 	}
 	resp := linuxSNPReportResponse{}
+	// #nosec G103 -- audited unsafe use for the SEV-SNP guest-request ioctl: both pointers refer to fixed-size
+	// request/response structs defined by the kernel UAPI and the ioctl targets an already-opened /dev/sev-guest handle.
 	if err := sevGuestIoctl(fd, SNP_GET_REPORT, unsafe.Pointer(&req), unsafe.Pointer(&resp)); err != nil {
 		return nil, err
 	}
@@ -59,11 +61,13 @@ func requestSEVHardwareReport(fd *os.File, userData [64]byte, vmpl uint32) ([]by
 
 func requestSEVDerivedKey(fd *os.File, rootKey int, guestFieldSelect uint64, vmpl uint32) ([]byte, error) {
 	req := linuxSNPDerivedKeyRequest{
-		RootKeySelect:    uint32(rootKey), //nolint:gosec // rootKey is a validated enum (KeyRootVCEK=0 or KeyRootVMRK=1)
+		RootKeySelect:    uint32(rootKey), // #nosec G115 -- RootKeySelect is a small enum (0-3)
 		GuestFieldSelect: guestFieldSelect,
 		VMPL:             vmpl,
 	}
 	resp := linuxSNPDerivedKeyResponse{}
+	// #nosec G103 -- audited unsafe use for the SEV-SNP guest-request ioctl: both pointers refer to fixed-size
+	// request/response structs defined by the kernel UAPI and the ioctl targets an already-opened /dev/sev-guest handle.
 	if err := sevGuestIoctl(fd, SNP_GET_DERIVED_KEY, unsafe.Pointer(&req), unsafe.Pointer(&resp)); err != nil {
 		return nil, err
 	}
@@ -85,13 +89,16 @@ func sevGuestIoctl(fd *os.File, request uintptr, reqPtr, respPtr unsafe.Pointer)
 		RespData:   uint64(uintptr(respPtr)),
 	}
 
+	// #nosec G103 -- audited unsafe use for the SEV-SNP guest-request ioctl: ioctlReq is a fixed-size struct
+	// defined by the kernel UAPI and holds only the addresses of the request/response structures above.
 	_, _, errno := syscall.Syscall(syscall.SYS_IOCTL, fd.Fd(), request, uintptr(unsafe.Pointer(&ioctlReq)))
 	if errno != 0 {
 		return os.NewSyscallError("ioctl", errno)
 	}
 	if ioctlReq.ExitInfo2 != 0 {
-		fwErr := uint32(ioctlReq.ExitInfo2)        //nolint:gosec // G115: low half of the packed 64-bit ExitInfo2
-		vmmErr := uint32(ioctlReq.ExitInfo2 >> 32) //nolint:gosec // G115: high half of the packed 64-bit ExitInfo2
+		// fw_error is the low 32 bits and vmm_error the high 32 bits of the 64-bit ExitInfo2 field.
+		fwErr := uint32(ioctlReq.ExitInfo2) // #nosec G115 -- fw_error is defined as the low 32 bits of the 64-bit ExitInfo2 field
+		vmmErr := uint32(ioctlReq.ExitInfo2 >> 32)
 		return fmt.Errorf("snp guest request failed: fw_error=%d vmm_error=%d", fwErr, vmmErr)
 	}
 

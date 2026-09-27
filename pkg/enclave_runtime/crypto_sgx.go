@@ -1016,7 +1016,7 @@ OOOOOOOOOO==
 	//nolint:gosec // G115: CryptoCertDataTypePCKCertChain is small constant
 	binary.LittleEndian.PutUint16(sigData[qeAuthOffset+2:], uint16(CryptoCertDataTypePCKCertChain))
 	//nolint:gosec // G115: len(fakePEM) is bounded cert chain size
-	binary.LittleEndian.PutUint32(sigData[qeAuthOffset+4:], uint32(len(fakePEM)))
+	binary.LittleEndian.PutUint32(sigData[qeAuthOffset+4:], uint32(len(fakePEM))) // #nosec G115 -- the fake PEM length is bounded by the DCAP quote buffer size (< 2^32)
 	copy(sigData[qeAuthOffset+8:], fakePEM)
 
 	// Combine all parts
@@ -1024,7 +1024,7 @@ OOOOOOOOOO==
 	copy(quote[0:], header)
 	copy(quote[dcapQuoteHeaderSize:], reportBody)
 	//nolint:gosec // G115: sigDataLen is bounded buffer size
-	binary.LittleEndian.PutUint32(quote[dcapQuoteHeaderSize+dcapReportBodySize:], uint32(sigDataLen))
+	binary.LittleEndian.PutUint32(quote[dcapQuoteHeaderSize+dcapReportBodySize:], uint32(sigDataLen)) // #nosec G115 -- the signature length is bounded by the DCAP quote buffer size (< 2^32)
 	copy(quote[dcapQuoteHeaderSize+dcapReportBodySize+4:], sigData)
 
 	return quote

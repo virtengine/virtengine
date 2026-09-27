@@ -26,6 +26,7 @@ var (
 	_ module.HasGenesisBasics = AppModuleBasic{}
 
 	_ appmodule.AppModule        = AppModule{}
+	_ appmodule.HasEndBlocker    = AppModule{}
 	_ module.HasConsensusVersion = AppModule{}
 	_ module.HasGenesis          = AppModule{}
 	_ module.HasServices         = AppModule{}
@@ -139,6 +140,19 @@ func (am AppModule) RegisterServices(cfg module.Configurator) {
 	queryServer := keeper.GRPCQuerier{Keeper: am.keeper}
 	types.RegisterMsgServer(cfg.MsgServer(), keeper.NewMsgServerImpl(am.keeper))
 	types.RegisterQueryServer(cfg.QueryServer(), queryServer)
+
+	// v1 -> v2: introduces the sanction store (prefixes 0x06-0x08).
+	//
+	// The migration is deliberately a no-op: sanctions did not exist before
+	// v2, so there is no pre-existing state to transform and every account's
+	// effective state already equals the projection of an empty sanction set
+	// (active). Registering it is still required, because a missing migration
+	// for a bumped ConsensusVersion makes the upgrade handler fail closed.
+	if err := cfg.RegisterMigration(types.ModuleName, 1, func(_ sdk.Context) error {
+		return nil
+	}); err != nil {
+		panic(err)
+	}
 }
 
 // RegisterQueryService registers a GRPC query service to respond to the
@@ -153,9 +167,13 @@ func (am AppModule) BeginBlock(_ context.Context) error {
 	return nil
 }
 
-// EndBlock returns the end blocker for the roles module.
-func (am AppModule) EndBlock(_ context.Context) error {
-	return nil
+// EndBlock lapses due sanctions and re-projects the affected account states.
+//
+// This is the mechanism behind "an expired suspension restores the preceding
+// state without manual intervention": a time-limited sanction clears itself on
+// the first block after its expiry, with no transaction and no operator action.
+func (am AppModule) EndBlock(ctx context.Context) error {
+	return am.keeper.ProcessSanctionExpiry(sdk.UnwrapSDKContext(ctx))
 }
 
 // InitGenesis performs genesis initialization for the roles module.
@@ -180,8 +198,12 @@ func (am AppModule) ExportGenesis(ctx sdk.Context, cdc codec.JSONCodec) json.Raw
 }
 
 // ConsensusVersion implements module.AppModule#ConsensusVersion
+//
+// Version 2 adds scoped, time-limited, appealable sanction records
+// (store prefixes 0x06-0x08). The bump is required so the v1 -> v2 migration
+// runs on upgrade; see RegisterServices.
 func (am AppModule) ConsensusVersion() uint64 {
-	return 1
+	return 2
 }
 
 // RegisterStoreDecoder registers a decoder for roles module's types.

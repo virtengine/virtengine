@@ -1,6 +1,8 @@
 package keeper
 
 import (
+	"time"
+
 	encryptionv1 "github.com/virtengine/virtengine/sdk/go/node/encryption/v1"
 	marketplacev1 "github.com/virtengine/virtengine/sdk/go/node/marketplace/v1"
 	encryptiontypes "github.com/virtengine/virtengine/x/encryption/types"
@@ -39,6 +41,15 @@ func offeringFromProto(pb *marketplacev1.Offering) marketplace.Offering {
 		offering.Pricing = pricingInfoFromProto(pb.Pricing)
 	}
 
+	if len(pb.Prices) > 0 {
+		offering.Prices = make([]marketplace.PriceComponent, 0, len(pb.Prices))
+		for _, component := range pb.Prices {
+			offering.Prices = append(offering.Prices, priceComponentFromProto(component))
+		}
+	}
+	offering.AllowBidding = pb.AllowBidding
+	offering.MinBid = pb.MinBid
+
 	if pb.IdentityRequirement != nil {
 		offering.IdentityRequirement = identityRequirementFromProto(pb.IdentityRequirement)
 	}
@@ -61,6 +72,21 @@ func offeringFromProto(pb *marketplacev1.Offering) marketplace.Offering {
 		terminated := *pb.TerminatedAt
 		offering.TerminatedAt = &terminated
 	}
+
+	offering.Source = marketplace.OfferingSource(pb.Source)
+	offering.Visibility = marketplace.OfferingVisibility(pb.Visibility)
+	if pb.Waldur != nil {
+		offering.Waldur = waldurRefFromProto(pb.Waldur)
+	}
+	if len(pb.AcquisitionModes) > 0 {
+		modes := make([]marketplace.AcquisitionMode, 0, len(pb.AcquisitionModes))
+		for _, mode := range pb.AcquisitionModes {
+			modes = append(modes, marketplace.AcquisitionMode(mode))
+		}
+		offering.AcquisitionModes = modes
+	}
+	offering.BackendType = pb.BackendType
+	offering.MeteringProfile = pb.MeteringProfile
 
 	return offering
 }
@@ -270,4 +296,218 @@ func allocationToProto(allocation marketplace.Allocation) marketplacev1.Allocati
 		TerminatedAt:    allocation.TerminatedAt,
 		StateReason:     allocation.StateReason,
 	}
+}
+
+func waldurRefFromProto(pb *marketplacev1.WaldurOfferingRef) *marketplace.WaldurOfferingRef {
+	if pb == nil {
+		return nil
+	}
+	return &marketplace.WaldurOfferingRef{
+		InstanceID:     pb.InstanceId,
+		OfferingUUID:   pb.OfferingUuid,
+		CustomerUUID:   pb.CustomerUuid,
+		BackendType:    pb.BackendType,
+		SnapshotHash:   pb.SnapshotHash,
+		SnapshotHeight: pb.SnapshotHeight,
+	}
+}
+
+func waldurRefToProto(ref *marketplace.WaldurOfferingRef) *marketplacev1.WaldurOfferingRef {
+	if ref == nil {
+		return nil
+	}
+	return &marketplacev1.WaldurOfferingRef{
+		InstanceId:     ref.InstanceID,
+		OfferingUuid:   ref.OfferingUUID,
+		CustomerUuid:   ref.CustomerUUID,
+		BackendType:    ref.BackendType,
+		SnapshotHash:   ref.SnapshotHash,
+		SnapshotHeight: ref.SnapshotHeight,
+	}
+}
+
+func priceComponentFromProto(pb marketplacev1.PriceComponent) marketplace.PriceComponent {
+	return marketplace.PriceComponent{
+		ResourceType: marketplace.PriceComponentResourceType(pb.ResourceType),
+		Unit:         pb.Unit,
+		Price:        pb.Price,
+		USDReference: pb.UsdReference,
+	}
+}
+
+func priceComponentToProto(component marketplace.PriceComponent) marketplacev1.PriceComponent {
+	return marketplacev1.PriceComponent{
+		ResourceType: string(component.ResourceType),
+		Unit:         component.Unit,
+		Price:        component.Price,
+		UsdReference: component.USDReference,
+	}
+}
+
+func offeringStateToProto(state marketplace.OfferingState) marketplacev1.OfferingState {
+	switch state {
+	case marketplace.OfferingStateActive:
+		return marketplacev1.OfferingState_OFFERING_STATE_ACTIVE
+	case marketplace.OfferingStatePaused:
+		return marketplacev1.OfferingState_OFFERING_STATE_PAUSED
+	case marketplace.OfferingStateSuspended:
+		return marketplacev1.OfferingState_OFFERING_STATE_SUSPENDED
+	case marketplace.OfferingStateDeprecated:
+		return marketplacev1.OfferingState_OFFERING_STATE_DEPRECATED
+	case marketplace.OfferingStateTerminated:
+		return marketplacev1.OfferingState_OFFERING_STATE_TERMINATED
+	default:
+		return marketplacev1.OfferingState_OFFERING_STATE_UNSPECIFIED
+	}
+}
+
+func offeringCategoryToProto(category marketplace.OfferingCategory) marketplacev1.OfferingCategory {
+	switch category {
+	case marketplace.OfferingCategoryCompute:
+		return marketplacev1.OfferingCategory_OFFERING_CATEGORY_COMPUTE
+	case marketplace.OfferingCategoryStorage:
+		return marketplacev1.OfferingCategory_OFFERING_CATEGORY_STORAGE
+	case marketplace.OfferingCategoryNetwork:
+		return marketplacev1.OfferingCategory_OFFERING_CATEGORY_NETWORK
+	case marketplace.OfferingCategoryHPC:
+		return marketplacev1.OfferingCategory_OFFERING_CATEGORY_HPC
+	case marketplace.OfferingCategoryGPU:
+		return marketplacev1.OfferingCategory_OFFERING_CATEGORY_GPU
+	case marketplace.OfferingCategoryML:
+		return marketplacev1.OfferingCategory_OFFERING_CATEGORY_ML
+	case marketplace.OfferingCategoryOther:
+		return marketplacev1.OfferingCategory_OFFERING_CATEGORY_OTHER
+	default:
+		return marketplacev1.OfferingCategory_OFFERING_CATEGORY_UNSPECIFIED
+	}
+}
+
+func pricingModelToProto(model marketplace.PricingModel) marketplacev1.PricingModel {
+	switch model {
+	case marketplace.PricingModelHourly:
+		return marketplacev1.PricingModel_PRICING_MODEL_HOURLY
+	case marketplace.PricingModelDaily:
+		return marketplacev1.PricingModel_PRICING_MODEL_DAILY
+	case marketplace.PricingModelMonthly:
+		return marketplacev1.PricingModel_PRICING_MODEL_MONTHLY
+	case marketplace.PricingModelUsageBased:
+		return marketplacev1.PricingModel_PRICING_MODEL_USAGE_BASED
+	case marketplace.PricingModelFixed:
+		return marketplacev1.PricingModel_PRICING_MODEL_FIXED
+	default:
+		return marketplacev1.PricingModel_PRICING_MODEL_UNSPECIFIED
+	}
+}
+
+func pricingInfoToProto(pricing marketplace.PricingInfo) *marketplacev1.PricingInfo {
+	return &marketplacev1.PricingInfo{
+		Model:             pricingModelToProto(pricing.Model),
+		BasePrice:         pricing.BasePrice,
+		Currency:          pricing.Currency,
+		UsageRates:        cloneUint64Map(pricing.UsageRates),
+		MinimumCommitment: pricing.MinimumCommitment,
+	}
+}
+
+func identityRequirementToProto(req marketplace.IdentityRequirement) *marketplacev1.IdentityRequirement {
+	return &marketplacev1.IdentityRequirement{
+		MinScore:              req.MinScore,
+		RequiredStatus:        req.RequiredStatus,
+		RequireVerifiedEmail:  req.RequireVerifiedEmail,
+		RequireVerifiedDomain: req.RequireVerifiedDomain,
+		RequireMfa:            req.RequireMFA,
+	}
+}
+
+// offeringToProto converts an on-chain offering to its wire form. Encrypted
+// provider secrets are intentionally omitted: queries must never expose them.
+func offeringToProto(offering marketplace.Offering) *marketplacev1.Offering {
+	pb := &marketplacev1.Offering{
+		Id: &marketplacev1.OfferingID{
+			ProviderAddress: offering.ID.ProviderAddress,
+			Sequence:        offering.ID.Sequence,
+		},
+		State:               offeringStateToProto(offering.State),
+		Category:            offeringCategoryToProto(offering.Category),
+		Name:                offering.Name,
+		Description:         offering.Description,
+		Version:             offering.Version,
+		Pricing:             pricingInfoToProto(offering.Pricing),
+		IdentityRequirement: identityRequirementToProto(offering.IdentityRequirement),
+		RequireMfaForOrders: offering.RequireMFAForOrders,
+		PublicMetadata:      cloneStringMap(offering.PublicMetadata),
+		Specifications:      cloneStringMap(offering.Specifications),
+		Tags:                append([]string(nil), offering.Tags...),
+		Regions:             append([]string(nil), offering.Regions...),
+		CreatedAt:           offering.CreatedAt,
+		UpdatedAt:           offering.UpdatedAt,
+		ActivatedAt:         offering.ActivatedAt,
+		TerminatedAt:        offering.TerminatedAt,
+		MaxConcurrentOrders: offering.MaxConcurrentOrders,
+		TotalOrderCount:     offering.TotalOrderCount,
+		ActiveOrderCount:    offering.ActiveOrderCount,
+		AllowBidding:        offering.AllowBidding,
+		MinBid:              offering.MinBid,
+		Source:              string(offering.Source),
+		Visibility:          string(offering.Visibility),
+		Waldur:              waldurRefToProto(offering.Waldur),
+		BackendType:         offering.BackendType,
+		MeteringProfile:     offering.MeteringProfile,
+	}
+	if len(offering.Prices) > 0 {
+		pb.Prices = make([]marketplacev1.PriceComponent, 0, len(offering.Prices))
+		for _, component := range offering.Prices {
+			pb.Prices = append(pb.Prices, priceComponentToProto(component))
+		}
+	}
+	if len(offering.AcquisitionModes) > 0 {
+		pb.AcquisitionModes = make([]string, 0, len(offering.AcquisitionModes))
+		for _, mode := range offering.AcquisitionModes {
+			pb.AcquisitionModes = append(pb.AcquisitionModes, string(mode))
+		}
+	}
+	return pb
+}
+
+// snapshotToImport converts a wire snapshot into the canonical ingest input.
+// Created/Modified are carried in the snapshot so adapters and the chain
+// compute identical checksums; adapters MUST set them from Waldur's actual
+// timestamps rather than local time.
+func snapshotToImport(snapshot *marketplacev1.WaldurOfferingSnapshot) *marketplace.WaldurOfferingImport {
+	if snapshot == nil {
+		return nil
+	}
+	imp := &marketplace.WaldurOfferingImport{
+		UUID:         snapshot.Uuid,
+		InstanceID:   snapshot.InstanceId,
+		Name:         snapshot.Name,
+		Description:  snapshot.Description,
+		Type:         snapshot.Type,
+		State:        snapshot.State,
+		CategoryUUID: snapshot.CategoryUuid,
+		CustomerUUID: snapshot.CustomerUuid,
+		Shared:       snapshot.Shared,
+		Billable:     snapshot.Billable,
+		Created:      time.Unix(snapshot.Created, 0).UTC(),
+		Modified:     time.Unix(snapshot.Modified, 0).UTC(),
+	}
+	if len(snapshot.Attributes) > 0 {
+		imp.Attributes = make(map[string]interface{}, len(snapshot.Attributes))
+		for key, value := range snapshot.Attributes {
+			imp.Attributes[key] = value
+		}
+	}
+	if len(snapshot.Components) > 0 {
+		imp.Components = make([]marketplace.WaldurPricingComponent, 0, len(snapshot.Components))
+		for _, component := range snapshot.Components {
+			imp.Components = append(imp.Components, marketplace.WaldurPricingComponent{
+				Type:         component.Type,
+				Name:         component.Name,
+				MeasuredUnit: component.MeasuredUnit,
+				BillingType:  component.BillingType,
+				Price:        component.Price,
+			})
+		}
+	}
+	return imp
 }

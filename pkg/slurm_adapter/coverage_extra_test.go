@@ -148,13 +148,18 @@ func TestNewSSHSLURMClient_HostKeyCallbackModes(t *testing.T) {
 		assert.Contains(t, err.Error(), "known_hosts")
 	})
 
-	t.Run("default falls back to insecure when no known_hosts", func(t *testing.T) {
-		// HostKeyCallback == "" with a nonexistent path must not error.
-		c := newTestSSHClient(t, func(cfg *SSHConfig) {
-			cfg.HostKeyCallback = ""
-			cfg.KnownHostsPath = filepath.Join(keyDir, "absent")
-		})
-		assert.NotNil(t, c.sshConfig.HostKeyCallback)
+	t.Run("default fails closed when no known_hosts", func(t *testing.T) {
+		// HostKeyCallback == "" with a nonexistent known_hosts must ERROR,
+		// not silently fall back to InsecureIgnoreHostKey. Skipping host key
+		// verification now requires an explicit HostKeyCallback="ignore".
+		_, err := NewSSHSLURMClient(SSHConfig{
+			Host: "h", Port: 22, User: "u", Password: "p",
+			HostKeyCallback: "",
+			KnownHostsPath:  filepath.Join(keyDir, "absent"),
+		}, "c", "d")
+		require.Error(t, err)
+		assert.ErrorIs(t, err, ErrHostKeyVerification)
+		assert.Contains(t, err.Error(), "ignore")
 	})
 
 	t.Run("default uses known_hosts when present", func(t *testing.T) {

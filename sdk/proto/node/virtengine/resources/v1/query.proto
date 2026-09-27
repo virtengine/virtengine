@@ -31,34 +31,42 @@ service Query {
     option (google.api.http).get = "/virtengine/resources/v1/allocations/provider/{provider_address}";
   }
 
+  // Reservation returns a single reservation by its id.
   rpc Reservation(QueryReservationRequest) returns (QueryReservationResponse) {
     option (google.api.http).get = "/virtengine/resources/v1/reservation/{reservation_id}";
   }
 
+  // ReservationByOrder returns the reservation for an order.
   rpc ReservationByOrder(QueryReservationByOrderRequest) returns (QueryReservationResponse) {
     option (google.api.http).get = "/virtengine/resources/v1/reservation/order/{order_id}";
   }
 
+  // ReservationByBid returns the reservation for a bid.
   rpc ReservationByBid(QueryReservationByBidRequest) returns (QueryReservationResponse) {
     option (google.api.http).get = "/virtengine/resources/v1/reservation/bid/{bid_id}";
   }
 
+  // ReservationByLease returns the reservation for a lease.
   rpc ReservationByLease(QueryReservationByLeaseRequest) returns (QueryReservationResponse) {
     option (google.api.http).get = "/virtengine/resources/v1/reservation/lease/{lease_id}";
   }
 
+  // ReservationByJob returns the reservation for an HPC job.
   rpc ReservationByJob(QueryReservationByJobRequest) returns (QueryReservationResponse) {
     option (google.api.http).get = "/virtengine/resources/v1/reservation/job/{job_id}";
   }
 
+  // ReservationByConsumer returns the reservation for a typed consumer.
   rpc ReservationByConsumer(QueryReservationByConsumerRequest) returns (QueryReservationResponse) {
     option (google.api.http).get = "/virtengine/resources/v1/reservation/consumer/{consumer_type}/{consumer_id}";
   }
 
+  // ReservationsByProvider lists the reservations held by one provider.
   rpc ReservationsByProvider(QueryReservationsByProviderRequest) returns (QueryReservationsResponse) {
     option (google.api.http).get = "/virtengine/resources/v1/reservations/provider/{provider_address}";
   }
 
+  // ReservationLineage returns a reservation and its ordered event history.
   rpc ReservationLineage(QueryReservationLineageRequest) returns (QueryReservationLineageResponse) {
     option (google.api.http).get = "/virtengine/resources/v1/reservation/{reservation_id}/lineage";
   }

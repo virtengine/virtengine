@@ -84,7 +84,7 @@ func (cv *CommandValidator) SafeCommand(ctx context.Context, name string, args .
 	}
 
 	//nolint:gosec // G204: Command and args validated above
-	cmd := exec.CommandContext(ctx, name, args...)
+	cmd := exec.CommandContext(ctx, name, args...) // #nosec G204 -- this function is the validated command constructor; callers can only reach it through CommandValidator, which enforces the executable allow-list and argument sanitisation
 	return cmd, nil
 }
 

@@ -723,7 +723,7 @@ func loadPCTFConfigFromEnv(_ AdapterConfig) (PCTFConfig, bool, error) {
 
 	if pctfConfig.AuditEnabled {
 		log.Printf("[PCTF] Loaded configuration for organization %s in %s environment",
-			pctfConfig.OrganizationID, pctfConfig.Environment)
+			sanitizeLogValue(pctfConfig.OrganizationID), sanitizeLogValue(pctfConfig.Environment))
 	}
 
 	return pctfConfig, true, nil

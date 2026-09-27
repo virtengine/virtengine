@@ -1,6 +1,9 @@
 package keeper
 
 import (
+	"fmt"
+
+	"cosmossdk.io/log"
 	storetypes "cosmossdk.io/store/types"
 	"github.com/cosmos/cosmos-sdk/codec"
 	sdk "github.com/cosmos/cosmos-sdk/types"
@@ -33,6 +36,26 @@ type IKeeper interface {
 	CanRevokeRole(ctx sdk.Context, sender sdk.AccAddress, targetRole types.Role) bool
 	CanModifyAccountState(ctx sdk.Context, sender sdk.AccAddress) bool
 
+	// Sanctions
+	//
+	// ConfirmSanction takes reviewedUntil because confirming an emergency hold
+	// converts it into a reviewed sanction whose duration the reviewer sets.
+	ImposeSanction(ctx sdk.Context, proposal types.Sanction, imposedBy sdk.AccAddress) (types.Sanction, error)
+	ConfirmSanction(ctx sdk.Context, sanctionID string, reviewer sdk.AccAddress, reviewedUntil int64) (types.Sanction, error)
+	RevokeSanction(ctx sdk.Context, sanctionID string, actor sdk.AccAddress, reason string) (types.Sanction, error)
+	OpenAppeal(ctx sdk.Context, sanctionID string, appellant sdk.AccAddress, justification string) (types.Sanction, error)
+	ResolveAppeal(ctx sdk.Context, appealID string, reviewer sdk.AccAddress, grant bool, notes string) (types.Sanction, error)
+	GetSanction(ctx sdk.Context, sanctionID string) (types.Sanction, bool)
+	GetSanctionsForSubject(ctx sdk.Context, subject string) []types.Sanction
+	GetAllSanctions(ctx sdk.Context) []types.Sanction
+	WithSanctions(ctx sdk.Context, fn func(types.Sanction) bool)
+	EffectiveAccountState(ctx sdk.Context, address sdk.AccAddress) types.AccountState
+	ProjectAccountState(ctx sdk.Context, subject sdk.AccAddress) (types.AccountState, error)
+	ExpireSanctions(ctx sdk.Context) ([]types.Sanction, error)
+	ProcessSanctionExpiry(ctx sdk.Context) error
+	GetNextSanctionSequence(ctx sdk.Context) uint64
+	SetNextSanctionSequence(ctx sdk.Context, seq uint64)
+
 	// Role checks for cross-module integration
 	IsAdmin(ctx sdk.Context, addr sdk.AccAddress) bool
 	IsModerator(ctx sdk.Context, addr sdk.AccAddress) bool
@@ -45,6 +68,13 @@ type IKeeper interface {
 	Codec() codec.BinaryCodec
 	StoreKey() storetypes.StoreKey
 }
+
+// Compile-time proof that the concrete Keeper still satisfies the interface the
+// module advertises. Without this assertion, an interface/implementation
+// signature drift (such as ConfirmSanction gaining a parameter) stays latent:
+// the build stays green because nothing consumes IKeeper, and the first
+// consumer that wires to it breaks at compile time.
+var _ IKeeper = Keeper{}
 
 // Keeper of the roles store
 type Keeper struct {
@@ -78,6 +108,11 @@ func (k Keeper) StoreKey() storetypes.StoreKey {
 // GetAuthority returns the module's authority
 func (k Keeper) GetAuthority() string {
 	return k.authority
+}
+
+// Logger returns a module-specific logger
+func (k Keeper) Logger(ctx sdk.Context) log.Logger {
+	return ctx.Logger().With("module", fmt.Sprintf("x/%s", types.ModuleName))
 }
 
 // SetParams sets the module parameters

@@ -369,15 +369,21 @@ func (a *Allocation) Validate() error {
 	}
 
 	if err := a.OfferingID.Validate(); err != nil {
-		return fmt.Errorf("invalid offering ID: %w", err)
+		// Engine-resolved listings for selector-based orders may not be bound to
+		// a single offering at allocation-validation time.
+		if a.OfferingID != (OfferingID{}) {
+			return fmt.Errorf("invalid offering ID: %w", err)
+		}
 	}
 
 	if a.ProviderAddress == "" {
 		return fmt.Errorf("provider address is required")
 	}
 
-	if err := a.BidID.Validate(); err != nil {
-		return fmt.Errorf("invalid bid ID: %w", err)
+	if a.BidID != (BidID{}) {
+		if err := a.BidID.Validate(); err != nil {
+			return fmt.Errorf("invalid bid ID: %w", err)
+		}
 	}
 
 	if !a.State.IsValid() {

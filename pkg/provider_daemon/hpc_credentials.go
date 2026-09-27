@@ -540,7 +540,7 @@ func (cm *HPCCredentialManager) loadCredentials() error {
 	}
 
 	filePath := filepath.Join(cm.config.StorageDir, "credentials.json")
-	fileData, err := os.ReadFile(filePath)
+	fileData, err := os.ReadFile(filePath) // #nosec G304 -- filePath is a local path parameter supplied by this function's own caller (a CLI argument, loader parameter or configured state file) and is not derived from a network peer or chain message; opening the caller-nominated file is the purpose of this call
 	if os.IsNotExist(err) {
 		return nil // No credentials file yet
 	}
