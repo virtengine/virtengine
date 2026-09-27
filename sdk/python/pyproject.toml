@@ -7,7 +7,9 @@ license = "Apache-2.0"
 readme = "README.md"
 homepage = "https://github.com/virtengine/virtengine"
 repository = "https://github.com/virtengine/virtengine/tree/main/sdk/python"
-documentation = "https://docs.virtengine.com/sdk/python"
+# https://docs.virtengine.com/sdk/python is a 404 (that path is not published on
+# the live docs site); point at the in-repo docs, which do resolve.
+documentation = "https://github.com/virtengine/virtengine/tree/main/sdk/python"
 keywords = ["blockchain", "cosmos", "sdk", "identity"]
 classifiers = [
     "Development Status :: 4 - Beta",

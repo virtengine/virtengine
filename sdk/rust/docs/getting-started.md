@@ -2,8 +2,16 @@
 
 ## Install
 
-```bash
-cargo add virtengine-sdk
+> **UNVERIFIED — not published to crates.io.** `cargo add virtengine-sdk` fails:
+> `https://crates.io/api/v1/crates/virtengine-sdk` reports
+> `crate \`virtengine-sdk\` does not exist`; the publish workflow
+> (`.github/workflows/sdk-publish.yaml`) fires only on `release: published` and
+> the repository has never published a release. See
+> [the SDK README](../README.md) for the verified path-dependency form.
+
+```toml
+[dependencies]
+virtengine-sdk = { path = "path/to/virtengine/sdk/rust" }
 ```
 
 ## Connect

@@ -1,11 +1,20 @@
 # VirtEngine Chain SDK
 
-[![Lint Status](https://github.com/virtengine/chain-sdk/actions/workflows/lint.yaml/badge.svg)](https://github.com/virtengine/chain-sdk/actions/workflows/lint.yaml)
-[![Test Status](https://github.com/virtengine/chain-sdk/actions/workflows/tests.yaml/badge.svg)](https://github.com/virtengine/chain-sdk/actions/workflows/tests.yaml)
+> **UNVERIFIED — no active CI for this directory.** `sdk/.github/workflows/`
+> (`lint.yaml`, `tests.yaml`, `release.yaml`, `release-ts.yaml`, `breakage.yaml`,
+> `labeler.yaml`, `lint-shell.yaml`) sits in a subdirectory, and GitHub Actions
+> only executes workflows under the repository-root `.github/workflows/`. None of
+> those files are referenced by the root `ci.yaml` either, so **no workflow lints
+> or tests `sdk/` today**. Previously this file carried Lint/Test badges pointing
+> at `github.com/virtengine/chain-sdk`, a repository that does not exist
+> (`gh api repos/virtengine/chain-sdk` → 404). The badges were removed rather than
+> repointed, because there is no SDK CI run to point them at. See task
+> `t_5c1a7e42`.
 
 ## Overview
 
-This repository is a development gateway to the VirtEngine Blockchain.
+The `sdk/` directory of the [virtengine/virtengine](https://github.com/virtengine/virtengine)
+monorepo is a development gateway to the VirtEngine Blockchain.
 It aims following:
 
 - Define data types and API via [protobuf](./proto)
@@ -18,8 +27,11 @@ It aims following:
 
 ### Golang
 
-[This implementation](./go) provider all necessary code-generation as well as client defining VirtEngine Blockchain
-There are a few packages this implementation exports. All packages available via Vanity URLs which are hosted as [Github Pages](https://github.com/virtengine/vanity).
+[This implementation](./go) provider all necessary code-generation as well as client defining VirtEngine Blockchain.
+There are a few packages this implementation exports. Import them by their full module path
+(`github.com/virtengine/virtengine/sdk/go/...`); the previous reference to Vanity URLs hosted as
+[GitHub Pages](https://github.com/virtengine/vanity) has been removed because
+`gh api repos/virtengine/vanity` returns 404 — that repository does not exist.
 
 #### Go package
 
@@ -109,8 +121,11 @@ If there is a need to run regenerate protobuf (in case of API or documentation c
    ```
 
    - to run codegen for a specific module use `make proto-gen-<module>`,
-     where `<module>` is one of `go`, `ts`, `doc`, `rust`, or `pulsar`
-     (see `sdk/make/codegen.mk`). For example
+     where `<module>` is one of `go`, `ts`, or `doc` — the exact list is
+     `PROTO_GEN_MODS` in `sdk/make/codegen.mk:1-3`. Targets `proto-gen-rust`
+     (`codegen.mk:17`) and `proto-gen-pulsar` (`codegen.mk:38`) also exist but are
+     **not** part of `PROTO_GEN_MODS`, so bare `make proto-gen` does not run them.
+     For example
 
    ```shell
    make proto-gen-go
@@ -122,4 +137,10 @@ Releases indicate changes to the repository itself. API versions are defined wit
 
 ## Contributing
 
-Please submit issues via the [support repository](https://github.com/virtengine/support/issues) and tag them with `repo/chain-sdk`. All pull requests must be associated with an open issue in the support repository.
+Please submit issues on this repository: <https://github.com/virtengine/virtengine/issues>.
+The previous pointer to a separate `virtengine/support` repository
+(`gh api repos/virtengine/support` → 404) has been removed, along with the
+"all pull requests must be associated with an open issue in the support
+repository" requirement, which no such repository backs. See
+[CONTRIBUTING.md](../CONTRIBUTING.md) at the repository root for the actual
+contribution process.
