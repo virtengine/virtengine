@@ -302,8 +302,10 @@ func (c *SSHSLURMClient) Connect(ctx context.Context) error {
 
 	c.connected = true
 
-	// Start idle connection cleanup goroutine
-	go c.cleanupIdleConnections()
+	// Start idle connection cleanup goroutine. Pass the close channel
+	// explicitly: Disconnect replaces c.poolClose under c.mu, and a goroutine
+	// that re-read the field each loop iteration raced with that write.
+	go c.cleanupIdleConnections(c.poolClose)
 
 	return nil
 }
@@ -403,8 +405,11 @@ func (c *SSHSLURMClient) releaseConnection(client *ssh.Client) {
 	}
 }
 
-// cleanupIdleConnections removes idle connections from the pool
-func (c *SSHSLURMClient) cleanupIdleConnections() {
+// cleanupIdleConnections removes idle connections from the pool until
+// closeCh is closed. The channel is passed in by the caller so this
+// goroutine never reads the mutable c.poolClose field, which Disconnect
+// replaces under c.mu.
+func (c *SSHSLURMClient) cleanupIdleConnections(closeCh <-chan struct{}) {
 	ticker := time.NewTicker(time.Minute)
 	defer ticker.Stop()
 
@@ -415,7 +420,7 @@ func (c *SSHSLURMClient) cleanupIdleConnections() {
 
 	for {
 		select {
-		case <-c.poolClose:
+		case <-closeCh:
 			return
 		case <-ticker.C:
 			c.poolMu.Lock()
