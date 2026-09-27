@@ -283,7 +283,7 @@ func DefaultParams() Params {
 		DefaultMatchingWindowBlocks:   100,
 		AllowPartialFill:              false,
 		PreferNativeSupply:            true,
-		DefaultMatchingDenom:          "uvirt",
+		DefaultMatchingDenom:          DefaultDenom,
 		WaldurIngestCustomerProviders: map[string]string{},
 	}
 }

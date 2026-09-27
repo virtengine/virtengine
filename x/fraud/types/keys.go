@@ -135,9 +135,17 @@ func GetReporterActivityKey(reporter string, height int64, reportID string) []by
 	heightBytes := make([]byte, 8)
 	// Safe conversion: height is always non-negative in SDK context.
 	binary.BigEndian.PutUint64(heightBytes, uint64(height)) /* #nosec G115 -- uint64(height) is a non-negative block height bounded well below 2^63 */ //nolint:gosec
-	key := append(ReporterActivityPrefix, []byte(reporter+"/")...)
+	// Build a fresh buffer rather than appending to ReporterActivityPrefix:
+	// that prefix is a package-level slice and appending to it can write into
+	// its spare capacity, aliasing one caller's key into the next.
+	key := make([]byte, 0, len(ReporterActivityPrefix)+len(reporter)+1+len(heightBytes)+1+len(reportID))
+	key = append(key, ReporterActivityPrefix...)
+	key = append(key, reporter...)
+	key = append(key, '/')
 	key = append(key, heightBytes...)
-	return append(key, []byte("/"+reportID)...)
+	key = append(key, '/')
+	key = append(key, reportID...)
+	return key
 }
 
 // GetReporterActivityPrefix returns the prefix for all of a reporter's submissions

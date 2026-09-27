@@ -94,7 +94,7 @@ func (k Keeper) GetSanctionsForSubject(ctx sdk.Context, subject string) []types.
 
 	var out []types.Sanction
 	iter := storetypes.KVStorePrefixIterator(store, types.SubjectSanctionPrefixKey(subject))
-	defer iter.Close()
+	defer func() { _ = iter.Close() }()
 
 	for ; iter.Valid(); iter.Next() {
 		if sanction, found := k.GetSanction(ctx, string(iter.Value())); found {
@@ -108,7 +108,7 @@ func (k Keeper) GetSanctionsForSubject(ctx sdk.Context, subject string) []types.
 func (k Keeper) WithSanctions(ctx sdk.Context, fn func(types.Sanction) bool) {
 	store := ctx.KVStore(k.skey)
 	iter := storetypes.KVStorePrefixIterator(store, types.PrefixSanction)
-	defer iter.Close()
+	defer func() { _ = iter.Close() }()
 
 	for ; iter.Valid(); iter.Next() {
 		var sanction types.Sanction
