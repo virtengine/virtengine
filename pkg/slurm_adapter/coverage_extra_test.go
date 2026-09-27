@@ -19,12 +19,19 @@ import (
 // "not connected" guard can be exercised without a network.
 func newTestSSHClient(t *testing.T, tweak func(*SSHConfig)) *SSHSLURMClient {
 	t.Helper()
+	// HostKeyCallback defaults to "ignore" so this helper never depends on the
+	// ambient ~/.ssh/known_hosts. The constructor fails closed on a missing
+	// known_hosts, which made every test using this helper fail on CI runners
+	// (no ~/.ssh) while passing on developer machines that have one.
+	// Host-key behaviour itself is asserted explicitly in
+	// TestNewSSHSLURMClient_HostKeyCallbackModes, which sets its own mode.
 	cfg := SSHConfig{
-		Host:     "127.0.0.1",
-		Port:     22,
-		User:     "testuser",
-		Password: "testpass",
-		Timeout:  time.Second,
+		Host:            "127.0.0.1",
+		Port:            22,
+		User:            "testuser",
+		Password:        "testpass",
+		Timeout:         time.Second,
+		HostKeyCallback: "ignore",
 	}
 	if tweak != nil {
 		tweak(&cfg)

@@ -340,8 +340,12 @@ func TestIncidentResponderExecutePlaybook_StepOutcomes(t *testing.T) {
 		Steps: []PlaybookStep{{Name: "boom", Action: "not_a_real_action", Timeout: 1}},
 	}
 	ir.executePlaybook(context.Background(), failing, incident)
-	if incident.PlaybookID != "pb-fail" {
-		t.Errorf("incident.PlaybookID = %q, want pb-fail", incident.PlaybookID)
+	// NOTE: executePlaybook deliberately does NOT write incident.PlaybookID.
+	// The incident is caller-owned and this runs on a background goroutine;
+	// writing there raced with the caller's own reads. HandleIncident sets
+	// PlaybookID synchronously instead. See TestIncidentResponderHandleIncident.
+	if incident.PlaybookID != "" {
+		t.Errorf("executePlaybook must not mutate caller-owned incident; PlaybookID = %q", incident.PlaybookID)
 	}
 
 	// A playbook whose first step fails but sets ContinueOnFailure keeps going.
@@ -387,13 +391,9 @@ func TestIncidentResponderHandleIncident(t *testing.T) {
 	}
 	ir.HandleIncident(context.Background(), incident)
 
-	deadline := time.Now().Add(2 * time.Second)
-	for time.Now().Before(deadline) {
-		if incident.PlaybookID != "" {
-			break
-		}
-		time.Sleep(5 * time.Millisecond)
-	}
+	// PlaybookID is set synchronously by HandleIncident (before the
+	// background playbook goroutines are spawned), so it is readable as soon
+	// as HandleIncident returns -- no polling and no race.
 	if incident.PlaybookID != "ddos-response" {
 		t.Errorf("incident.PlaybookID = %q, want ddos-response", incident.PlaybookID)
 	}
