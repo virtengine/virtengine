@@ -328,6 +328,33 @@ def main() -> int:
         print(f"FAIL: no workflow directory at {WORKFLOWS}", file=sys.stderr)
         return 2
 
+    # Preflight the ONE thing that makes every read fail at once. `gh` without
+    # usable credentials refuses all calls, which the per-pin path would
+    # otherwise report as 43 separate "API error" lines -- technically honest,
+    # but it hides a single root cause behind a wall of identical symptoms.
+    # This exact case shipped red: the first CI run of this job failed on a
+    # CLEAN tree purely because GH_TOKEN was not in the step env.
+    #
+    # The probe is `gh auth status`, NOT an env-var check. `gh` can authenticate
+    # from a config file, so requiring the env vars would refuse a perfectly
+    # capable local run while still being the wrong question for CI.
+    try:
+        auth = subprocess.run(
+            ["gh", "auth", "status"], capture_output=True, text=True, timeout=60
+        )
+    except (OSError, subprocess.SubprocessError) as exc:
+        print(f"FAIL: cannot execute `gh` ({exc}). The audit needs it to read manifests.", file=sys.stderr)
+        return 2
+    if auth.returncode != 0:
+        print(
+            "FAIL: `gh auth status` failed, so no manifest can be read and this run "
+            "could not reach a verdict.\n"
+            "  Export a token, e.g. GH_TOKEN=${{ github.token }} in CI.\n"
+            f"  gh said: {(auth.stderr or auth.stdout).strip().splitlines()[:3]}",
+            file=sys.stderr,
+        )
+        return 2
+
     files = sorted(f for f in os.listdir(WORKFLOWS) if f.endswith((".yaml", ".yml")))
     if args.workflow:
         unknown = [w for w in args.workflow if w not in files]

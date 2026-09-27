@@ -40,7 +40,7 @@ def make_tree() -> str:
 PROBE = "zz-audit-probe.yaml"
 
 
-def run_audit(root: str, full: bool = False) -> tuple[int, str]:
+def run_audit(root: str, full: bool = False, env_extra: dict | None = None) -> tuple[int, str]:
     """Run the SHIPPED script as a subprocess; return (rc, combined output).
 
     ``full=False`` audits only the planted probe file. The probe is a copy of the
@@ -51,8 +51,23 @@ def run_audit(root: str, full: bool = False) -> tuple[int, str]:
     cmd = [sys.executable, os.path.join(root, ".github", "scripts", "audit_node_runtime.py"), "--report"]
     if not full:
         cmd += ["--workflow", PROBE]
-    proc = subprocess.run(cmd, capture_output=True, text=True, timeout=600)
+    env = dict(os.environ)
+    if env_extra is not None:
+        env.update(env_extra)
+    proc = subprocess.run(cmd, capture_output=True, text=True, timeout=600, env=env)
     return proc.returncode, proc.stdout + proc.stderr
+
+
+def unauthenticated() -> dict:
+    """Env that makes `gh` genuinely unusable: no token AND no config file.
+
+    Clearing only the env vars is NOT enough here -- this host's `gh`
+    authenticates from its config file, so a tokenless-but-configured run is
+    still capable, and the audit is right to proceed. The condition under test
+    is "gh cannot authenticate at all", so the config has to go too.
+    """
+    empty = tempfile.mkdtemp(prefix="gh-empty-")
+    return {"GH_TOKEN": "", "GITHUB_TOKEN": "", "GH_CONFIG_DIR": empty}
 
 
 def plant(root: str, body: str) -> None:
@@ -158,12 +173,24 @@ def main() -> int:
         if "RESULT: no node20" not in out:
             failures.append(f"baseline: shipped tree is not clean\n{out}")
         print(f"  {'FAIL' if any(f.startswith('baseline') for f in failures) else 'ok  '} baseline-tree-is-clean")
+
+        # An unauthenticated `gh` is the condition that shipped this job red on
+        # a clean tree. It must be refused UP FRONT with one actionable line,
+        # not surface later as 43 identical per-pin "API error" lines.
+        code, out = run_audit(root, full=True, env_extra=unauthenticated())
+        ok = code == 2 and "gh auth status" in out and "TRANSIENT" not in out
+        if not ok:
+            failures.append(
+                f"unauthenticated-gh-is-refused-upfront: expected exit 2 naming "
+                f"`gh auth status` with no per-pin noise, got rc={code}:\n{out}"
+            )
+        print(f"  {'FAIL' if not ok else 'ok  '} unauthenticated-gh-is-refused-upfront")
     finally:
         shutil.rmtree(root, ignore_errors=True)
 
     for f in failures:
         print("FAIL:", f)
-    total = len(CASES) + 2
+    total = len(CASES) + 3
     print(f"{total - len({f.split(':')[0] for f in failures})}/{total} checks passed")
     return 1 if failures else 0
 
