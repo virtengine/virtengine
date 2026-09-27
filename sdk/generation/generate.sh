@@ -60,6 +60,7 @@ generate_openapi() {
 
 generate_typescript() {
   # Ensure vendor directory has proto files for cosmos-sdk and ibc-go
+  (cd "$sdk/go" && [ -f vendor/modules.txt ] || go mod vendor)
   (cd "$sdk/go" && modvendor -copy="**/*.proto" -v)
   install_typescript
   rm -rf ts/src/generated
