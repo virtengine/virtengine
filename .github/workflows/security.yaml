@@ -131,6 +131,12 @@ jobs:
   go-vuln-scan:
     name: Go Vulnerability Scan
     runs-on: ubuntu-latest
+    # This job runs a full govulncheck over the monorepo. Without an explicit
+    # budget GitHub applies its 360-minute default, but the runner has been
+    # observed killing the job with 'The runner has received a shutdown signal'
+    # well before that, so a tight bound makes overrun fail fast and visibly
+    # instead of as an unexplained cancellation.
+    timeout-minutes: 15
     steps:
       - name: Checkout repository
         uses: actions/checkout@v5
@@ -178,6 +184,23 @@ jobs:
             echo "::error::govulncheck could not complete - this is a scanner error, not a vulnerability finding"
             exit 1
           fi
+          # Filter findings against the vulnerability allowlist. Only advisories
+          # with no fixed version AND no reachable-and-fixable alternative are
+          # allowlisted; anything the filter still reports is real work.
+          # Exit 3 = un-allowlisted findings remain, 0 = clean.
+          set +e
+          python .github/scripts/filter_allowlist.py \
+            govulncheck-report.json .vulnerability-allowlist.yaml
+          filter_status=$?
+          set -e
+          if [ "$filter_status" -eq 3 ]; then
+            echo "verdict_after_allowlist=vulns" >> "$GITHUB_OUTPUT"
+          elif [ "$filter_status" -eq 0 ]; then
+            echo "verdict_after_allowlist=clean" >> "$GITHUB_OUTPUT"
+          else
+            echo "::error::allowlist filter failed with exit code $filter_status"
+            exit 1
+          fi
 
       - name: Upload govulncheck report
         uses: actions/upload-artifact@v6
@@ -188,16 +211,14 @@ jobs:
           retention-days: 30
 
       - name: Fail on Go vulnerabilities
-        if: steps.govulncheck.outputs.verdict == 'vulns'
+        if: steps.govulncheck.outputs.verdict_after_allowlist == 'vulns'
         run: |
-          echo "::error::govulncheck reported reachable vulnerabilities"
-          # Name them, so the summary is actionable without opening the artifact.
-          # This step only runs when findings exist, so the match is guaranteed;
-          # `pipefail` is on (defaults.run.shell: bash), so a miss would abort
-          # here rather than silently printing an empty list.
-          found="$(grep -oE '"osv"[[:space:]]*:[[:space:]]*"[^"]+"' \
-            govulncheck-report.json | sort -u)"
-          printf '%s\n' "$found" | sed 's/^/  /'
+          echo "::error::govulncheck reported reachable vulnerabilities not covered by allowlist"
+          # Name the un-allowlisted advisories, so the failure is actionable
+          # without opening the artifact. The filter writes them to stderr.
+          python .github/scripts/filter_allowlist.py \
+            govulncheck-report.json .vulnerability-allowlist.yaml 2>&1 \
+            | grep 'Un-allowlisted advisories:' | sed 's/Un-allowlisted advisories: /  /'
           exit 1
 
   python-vuln-scan:
