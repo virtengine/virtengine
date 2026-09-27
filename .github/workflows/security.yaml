@@ -154,18 +154,23 @@ jobs:
         env:
           CGO_ENABLED: "1"
         run: |
+          # ONE scan, not two. `govulncheck ./...` over this monorepo runs for
+          # many minutes; running it a second time in text mode doubled that and
+          # the job was killed by a runner shutdown before it could report
+          # anything, so this gate had never once produced a verdict. The JSON
+          # report already carries one `finding` object per REACHABLE
+          # vulnerability, which is the same signal text mode signals with exit
+          # 3, so the verdict is derived from it directly.
           set +e
           govulncheck -format json ./... > govulncheck-report.json
           json_status=$?
-          govulncheck ./...
-          text_status=$?
           set -e
           # Classify the run before reporting anything. A config-only report
           # (package loading failed) must never be reported as a vulnerability
           # finding, and a scanner failure must never be reported as a clean
           # scan. Regression cases: .github/tests/test_govulncheck_verdict.sh
           out="$(bash .github/scripts/govulncheck_verdict.sh \
-            govulncheck-report.json "$json_status" "$text_status" 2>&1)"
+            govulncheck-report.json "$json_status" - 2>&1)"
           echo "$out"
           verdict="$(printf '%s\n' "$out" | sed -n 's/^verdict=//p')"
           echo "verdict=$verdict" >> "$GITHUB_OUTPUT"
@@ -186,6 +191,13 @@ jobs:
         if: steps.govulncheck.outputs.verdict == 'vulns'
         run: |
           echo "::error::govulncheck reported reachable vulnerabilities"
+          # Name them, so the summary is actionable without opening the artifact.
+          # This step only runs when findings exist, so the match is guaranteed;
+          # `pipefail` is on (defaults.run.shell: bash), so a miss would abort
+          # here rather than silently printing an empty list.
+          found="$(grep -oE '"osv"[[:space:]]*:[[:space:]]*"[^"]+"' \
+            govulncheck-report.json | sort -u)"
+          printf '%s\n' "$found" | sed 's/^/  /'
           exit 1
 
   python-vuln-scan:
