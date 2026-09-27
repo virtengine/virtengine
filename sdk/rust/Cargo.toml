@@ -6,7 +6,9 @@ authors = ["VirtEngine <sdk@virtengine.com>"]
 license = "Apache-2.0"
 description = "Rust SDK for VirtEngine blockchain"
 repository = "https://github.com/virtengine/virtengine/tree/main/sdk/rust"
-documentation = "https://docs.virtengine.com/sdk/rust"
+# https://docs.virtengine.com/sdk/rust is a 404 (that path is not published on
+# the live docs site); point at the in-repo README, which does resolve.
+documentation = "https://github.com/virtengine/virtengine/blob/main/sdk/rust/README.md"
 keywords = ["blockchain", "cosmos", "sdk", "identity"]
 categories = ["api-bindings", "cryptography"]
 

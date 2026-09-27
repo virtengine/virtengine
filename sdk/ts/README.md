@@ -1,6 +1,6 @@
 # VirtEngine API TypeScript Bindings
 
-[![npm version](https://badge.fury.io/js/%40VirtEnginenetwork%2Fchain-sdk.svg)](https://badge.fury.io/js/%40VirtEnginenetwork%2Fchain-sdk)
+[![npm version](https://badge.fury.io/js/%40virtengine%2Fchain-sdk.svg)](https://badge.fury.io/js/%40virtengine%2Fchain-sdk)
 [![License: Apache-2.0](https://img.shields.io/badge/License-apache2.0-yellow.svg)](https://opensource.org/license/apache-2-0)
 [![semantic-release: conventionalcommits](https://img.shields.io/badge/semantic--release-conventionalcommits?logo=semantic-release)](https://github.com/semantic-release/semantic-release)
 
@@ -14,11 +14,14 @@ The new Chain SDK for TypeScript is currently in alpha. As such, small breaking 
 To ensure stability of your own scripts, pin a specific version of the SDK in your package.json (avoid using `^` or `~` in front of version).
 
 We are actively gathering developer feedback and improving the DX (Developer Experience).
-Please report any issues or suggestions via:
+Please report any issues or suggestions on the SDK issue tracker:
+<https://github.com/virtengine/virtengine/issues>
 
-- GitHub Issues (preferred)
-- [Discord](https://virtengine.com/docs/getting-started/technical-support/)
+The previous pointer to a Discord invite at
+`https://virtengine.com/docs/getting-started/technical-support/` has been removed
+because that URL returns 404 (verified with `curl -o /dev/null -w '%{http_code}'`).
 
+Requires Node.js `>=22.14.0` (`sdk/ts/package.json:104`).
 To install the package, run:
 
 ```bash

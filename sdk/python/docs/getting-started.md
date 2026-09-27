@@ -2,8 +2,15 @@
 
 ## Install
 
+> **UNVERIFIED — not published to PyPI.** `pip install virtengine` returns 404 from
+> `https://pypi.org/pypi/virtengine/json`; the publish workflow
+> (`.github/workflows/sdk-publish.yaml`) fires only on `release: published` and
+> the repository has never published a release. See
+> [the SDK README](../README.md) for the verified install path.
+
 ```bash
-pip install virtengine
+# from the repository root
+pip install ./sdk/python
 ```
 
 ## Connect
