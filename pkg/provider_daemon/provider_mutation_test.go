@@ -630,9 +630,18 @@ func TestProviderMutationReorgReturnsExplicitRetry(t *testing.T) {
 	envelope.TxHash = "hash"
 	_, _, err = submitter.store.PutIfAbsent(context.Background(), envelope)
 	require.NoError(t, err)
+	// awaitFinality is an internal step that process() always runs under
+	// processMu. The background worker calls process() on a 1ms ticker, and a
+	// reorg leaves the envelope in MutationStateAmbiguous, which is NOT
+	// terminal (providerMutationTerminalState), so the worker will pick the same
+	// envelope up and re-enter reconcile() -- whose first action overwrites
+	// ReconciliationState. Without the lock the assertion below races that
+	// write. Hold the production invariant explicitly.
+	submitter.processMu.Lock()
 	err = submitter.awaitFinality(context.Background(), envelope.ID)
-	require.ErrorIs(t, err, ErrProviderMutationReorg)
 	stored, getErr := submitter.store.Get(context.Background(), envelope.ID)
+	submitter.processMu.Unlock()
+	require.ErrorIs(t, err, ErrProviderMutationReorg)
 	require.NoError(t, getErr)
 	require.Equal(t, MutationStateAmbiguous, stored.State)
 	require.Equal(t, "reorg_detected", stored.ReconciliationState)
