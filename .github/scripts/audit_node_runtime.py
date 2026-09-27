@@ -173,31 +173,72 @@ def split_ref(spec_repo: str) -> tuple[str, str]:
     return "/".join(parts[:2]), "/".join(parts[2:])
 
 
+def _run_gh(owner_repo: str, path: str, ref: str, env: dict[str, str] | None):
+    """One `gh api` contents read, optionally with a scrubbed environment.
+
+    `env` is passed to subprocess.run so the anonymous fallback can strip the
+    token without mutating os.environ for the rest of the process.
+    """
+    return subprocess.run(
+        ["gh", "api", f"repos/{owner_repo}/contents/{path}?ref={ref}", "--jq", ".content"],
+        capture_output=True,
+        text=True,
+        timeout=60,
+        check=True,
+        env=env,
+    )
+
+
+def _classify(exc: subprocess.CalledProcessError) -> str:
+    """Error class from `gh`'s stderr. Split out so both the authenticated and
+    the anonymous read classify a failure identically."""
+    blob = ((exc.stderr or "") + (exc.stdout or "")).lower()
+    if "404" in blob or "not found" in blob:
+        return "404"
+    if "rate limit" in blob or "429" in blob or "abuse" in blob:
+        return "ratelimit"
+    if "403" in blob or "forbidden" in blob or "not accessible" in blob:
+        return "forbidden"
+    return "api-error"
+
+
 def _gh_contents(owner_repo: str, path: str, ref: str) -> tuple[str | None, str]:
     """(content, error_class). error_class is "" on success.
 
     Coarse on purpose: we need to tell "this layout does not exist" (keep
     probing) from "the call did not happen" (transient, retry) -- not to
     diagnose GitHub.
+
+    A `forbidden` verdict is retried ANONYMOUSLY before it is believed. Every
+    manifest this audit reads is public, so a permission failure says something
+    about the CALLER's token, never about whether the file exists. The CI job
+    passes the job's own ``github.token``, whose scope does not cover other
+    repositories, and GitHub answers 403 "Resource not accessible by
+    integration" for pins that are plainly readable -- which made the audit
+    declare itself INCOMPLETE on a tree it had already proven clean on every
+    other pin. An unauthenticated read of a public file needs no scope at all,
+    so a permission failure that survives it is a real failure and the class is
+    returned unchanged.
     """
     try:
-        proc = subprocess.run(
-            ["gh", "api", f"repos/{owner_repo}/contents/{path}?ref={ref}", "--jq", ".content"],
-            capture_output=True,
-            text=True,
-            timeout=60,
-            check=True,
-        )
+        proc = _run_gh(owner_repo, path, ref, None)
         return base64.b64decode(proc.stdout.strip()).decode("utf-8", "replace"), ""
     except subprocess.CalledProcessError as exc:
-        blob = ((exc.stderr or "") + (exc.stdout or "")).lower()
-        if "404" in blob or "not found" in blob:
-            return None, "404"
-        if "rate limit" in blob or "429" in blob or "abuse" in blob:
-            return None, "ratelimit"
-        if "403" in blob or "forbidden" in blob or "not accessible" in blob:
-            return None, "forbidden"
-        return None, "api-error"
+        err = _classify(exc)
+        if err != "forbidden":
+            return None, err
+    except (subprocess.SubprocessError, ValueError, OSError):
+        return None, "unavailable"
+
+    # Authenticated read was refused. Retry with no credentials in the
+    # environment: `gh` falls back to the unauthenticated API, which serves
+    # public contents without a token.
+    anon_env = {k: v for k, v in os.environ.items() if k not in ("GH_TOKEN", "GITHUB_TOKEN")}
+    try:
+        proc = _run_gh(owner_repo, path, ref, anon_env)
+        return base64.b64decode(proc.stdout.strip()).decode("utf-8", "replace"), ""
+    except subprocess.CalledProcessError as exc:
+        return None, _classify(exc)
     except (subprocess.SubprocessError, ValueError, OSError):
         return None, "unavailable"
 
