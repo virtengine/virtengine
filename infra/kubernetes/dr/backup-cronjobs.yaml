@@ -81,7 +81,7 @@ spec:
               type: RuntimeDefault
           containers:
             - name: backup
-              image: ghcr.io/virtengine/dr-tools@sha256:85c0d1f6e31b4f77a9c2db9af5082e8c43c29f7a8be77a2a1e764ec67e05985c
+              image: ghcr.io/virtengine/dr-tools@sha256:321f7ab7d022daae3ff1e388e88308d72757da6943d0bceef17388f5cd858109
               imagePullPolicy: IfNotPresent
               command: ["/scripts/dr/backup-chain-state.sh"]
               env:
@@ -167,7 +167,7 @@ spec:
               type: RuntimeDefault
           containers:
             - name: backup
-              image: ghcr.io/virtengine/dr-tools@sha256:85c0d1f6e31b4f77a9c2db9af5082e8c43c29f7a8be77a2a1e764ec67e05985c
+              image: ghcr.io/virtengine/dr-tools@sha256:321f7ab7d022daae3ff1e388e88308d72757da6943d0bceef17388f5cd858109
               imagePullPolicy: IfNotPresent
               command: ["/scripts/dr/backup-provider-state.sh"]
               env:
@@ -281,7 +281,7 @@ spec:
               type: RuntimeDefault
           containers:
             - name: test
-              image: ghcr.io/virtengine/dr-tools@sha256:85c0d1f6e31b4f77a9c2db9af5082e8c43c29f7a8be77a2a1e764ec67e05985c
+              image: ghcr.io/virtengine/dr-tools@sha256:321f7ab7d022daae3ff1e388e88308d72757da6943d0bceef17388f5cd858109
               imagePullPolicy: IfNotPresent
               command: ["/scripts/dr/dr-test.sh", "--report", "--notify"]
               env:
