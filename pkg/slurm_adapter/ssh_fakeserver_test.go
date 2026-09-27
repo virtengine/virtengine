@@ -56,7 +56,7 @@ func newFakeSSHServer(t *testing.T, output cannedOutput) *fakeSSHServer {
 		password: "testpass",
 		hostKey:  key,
 	}
-	s.serve(t, output)
+	s.serve(output)
 	t.Cleanup(func() { _ = ln.Close() })
 	return s
 }
@@ -85,7 +85,7 @@ func (s *fakeSSHServer) hostPort() (string, int) {
 	return host, p
 }
 
-func (s *fakeSSHServer) serve(t *testing.T, output cannedOutput) {
+func (s *fakeSSHServer) serve(output cannedOutput) {
 	cfg := &ssh.ServerConfig{
 		PasswordCallback: func(c ssh.ConnMetadata, pass []byte) (*ssh.Permissions, error) {
 			if c.User() == "testuser" && string(pass) == s.password {
