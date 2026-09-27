@@ -91,7 +91,7 @@ func (k Keeper) GetWaldurCommand(ctx sdk.Context, id string) (*marketplace.Waldu
 func (k Keeper) WithWaldurCommands(ctx sdk.Context, fn func(marketplace.WaldurCommand) bool) {
 	store := ctx.KVStore(k.skey)
 	iter := storetypes.KVStorePrefixIterator(store, marketplace.WaldurCommandKeyPrefix)
-	defer iter.Close()
+	defer func() { _ = iter.Close() }()
 	for ; iter.Valid(); iter.Next() {
 		var command marketplace.WaldurCommand
 		if err := json.Unmarshal(iter.Value(), &command); err != nil {
