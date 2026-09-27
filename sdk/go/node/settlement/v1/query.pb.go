@@ -38,12 +38,18 @@ const _ = proto.GoGoProtoPackageIsVersion3 // please upgrade the proto package
 type FinancialSubjectType int32
 
 const (
+	// FINANCIAL_SUBJECT_TYPE_UNSPECIFIED marks an absent lineage root.
 	FinancialSubjectType_FINANCIAL_SUBJECT_TYPE_UNSPECIFIED FinancialSubjectType = 0
-	FinancialSubjectType_FINANCIAL_SUBJECT_TYPE_ORDER       FinancialSubjectType = 1
-	FinancialSubjectType_FINANCIAL_SUBJECT_TYPE_INVOICE     FinancialSubjectType = 2
-	FinancialSubjectType_FINANCIAL_SUBJECT_TYPE_USAGE       FinancialSubjectType = 3
-	FinancialSubjectType_FINANCIAL_SUBJECT_TYPE_HPC_JOB     FinancialSubjectType = 4
-	FinancialSubjectType_FINANCIAL_SUBJECT_TYPE_SETTLEMENT  FinancialSubjectType = 5
+	// FINANCIAL_SUBJECT_TYPE_ORDER roots the case at a marketplace order.
+	FinancialSubjectType_FINANCIAL_SUBJECT_TYPE_ORDER FinancialSubjectType = 1
+	// FINANCIAL_SUBJECT_TYPE_INVOICE roots the case at an issued invoice.
+	FinancialSubjectType_FINANCIAL_SUBJECT_TYPE_INVOICE FinancialSubjectType = 2
+	// FINANCIAL_SUBJECT_TYPE_USAGE roots the case at a metered usage record.
+	FinancialSubjectType_FINANCIAL_SUBJECT_TYPE_USAGE FinancialSubjectType = 3
+	// FINANCIAL_SUBJECT_TYPE_HPC_JOB roots the case at an HPC job.
+	FinancialSubjectType_FINANCIAL_SUBJECT_TYPE_HPC_JOB FinancialSubjectType = 4
+	// FINANCIAL_SUBJECT_TYPE_SETTLEMENT roots the case at a settlement event.
+	FinancialSubjectType_FINANCIAL_SUBJECT_TYPE_SETTLEMENT FinancialSubjectType = 5
 )
 
 var FinancialSubjectType_name = map[int32]string{
@@ -76,15 +82,24 @@ func (FinancialSubjectType) EnumDescriptor() ([]byte, []int) {
 type FinancialClaimType int32
 
 const (
+	// FINANCIAL_CLAIM_TYPE_UNSPECIFIED marks an absent claim type.
 	FinancialClaimType_FINANCIAL_CLAIM_TYPE_UNSPECIFIED FinancialClaimType = 0
-	FinancialClaimType_FINANCIAL_CLAIM_TYPE_BILLING     FinancialClaimType = 1
-	FinancialClaimType_FINANCIAL_CLAIM_TYPE_USAGE       FinancialClaimType = 2
-	FinancialClaimType_FINANCIAL_CLAIM_TYPE_SERVICE     FinancialClaimType = 3
-	FinancialClaimType_FINANCIAL_CLAIM_TYPE_FRAUD       FinancialClaimType = 4
-	FinancialClaimType_FINANCIAL_CLAIM_TYPE_HPC         FinancialClaimType = 5
-	FinancialClaimType_FINANCIAL_CLAIM_TYPE_REVIEW      FinancialClaimType = 6
-	FinancialClaimType_FINANCIAL_CLAIM_TYPE_MODERATION  FinancialClaimType = 7
-	FinancialClaimType_FINANCIAL_CLAIM_TYPE_MIGRATION   FinancialClaimType = 8
+	// FINANCIAL_CLAIM_TYPE_BILLING disputes the billed amount.
+	FinancialClaimType_FINANCIAL_CLAIM_TYPE_BILLING FinancialClaimType = 1
+	// FINANCIAL_CLAIM_TYPE_USAGE disputes metered usage.
+	FinancialClaimType_FINANCIAL_CLAIM_TYPE_USAGE FinancialClaimType = 2
+	// FINANCIAL_CLAIM_TYPE_SERVICE disputes the delivered service.
+	FinancialClaimType_FINANCIAL_CLAIM_TYPE_SERVICE FinancialClaimType = 3
+	// FINANCIAL_CLAIM_TYPE_FRAUD alleges fraudulent conduct.
+	FinancialClaimType_FINANCIAL_CLAIM_TYPE_FRAUD FinancialClaimType = 4
+	// FINANCIAL_CLAIM_TYPE_HPC disputes an HPC execution outcome.
+	FinancialClaimType_FINANCIAL_CLAIM_TYPE_HPC FinancialClaimType = 5
+	// FINANCIAL_CLAIM_TYPE_REVIEW is a reviewer assessment.
+	FinancialClaimType_FINANCIAL_CLAIM_TYPE_REVIEW FinancialClaimType = 6
+	// FINANCIAL_CLAIM_TYPE_MODERATION is a moderation finding.
+	FinancialClaimType_FINANCIAL_CLAIM_TYPE_MODERATION FinancialClaimType = 7
+	// FINANCIAL_CLAIM_TYPE_MIGRATION was raised by a state migration.
+	FinancialClaimType_FINANCIAL_CLAIM_TYPE_MIGRATION FinancialClaimType = 8
 )
 
 var FinancialClaimType_name = map[int32]string{
@@ -123,17 +138,28 @@ func (FinancialClaimType) EnumDescriptor() ([]byte, []int) {
 type FinancialCaseStatus int32
 
 const (
-	FinancialCaseStatus_FINANCIAL_CASE_STATUS_UNSPECIFIED             FinancialCaseStatus = 0
-	FinancialCaseStatus_FINANCIAL_CASE_STATUS_OPEN                    FinancialCaseStatus = 1
-	FinancialCaseStatus_FINANCIAL_CASE_STATUS_EVIDENCE                FinancialCaseStatus = 2
-	FinancialCaseStatus_FINANCIAL_CASE_STATUS_REVIEW                  FinancialCaseStatus = 3
-	FinancialCaseStatus_FINANCIAL_CASE_STATUS_ESCALATED               FinancialCaseStatus = 4
+	// FINANCIAL_CASE_STATUS_UNSPECIFIED is the pre-open transition origin.
+	FinancialCaseStatus_FINANCIAL_CASE_STATUS_UNSPECIFIED FinancialCaseStatus = 0
+	// FINANCIAL_CASE_STATUS_OPEN is a newly opened case awaiting evidence.
+	FinancialCaseStatus_FINANCIAL_CASE_STATUS_OPEN FinancialCaseStatus = 1
+	// FINANCIAL_CASE_STATUS_EVIDENCE is collecting party evidence.
+	FinancialCaseStatus_FINANCIAL_CASE_STATUS_EVIDENCE FinancialCaseStatus = 2
+	// FINANCIAL_CASE_STATUS_REVIEW is under resolver review.
+	FinancialCaseStatus_FINANCIAL_CASE_STATUS_REVIEW FinancialCaseStatus = 3
+	// FINANCIAL_CASE_STATUS_ESCALATED has been escalated past review.
+	FinancialCaseStatus_FINANCIAL_CASE_STATUS_ESCALATED FinancialCaseStatus = 4
+	// FINANCIAL_CASE_STATUS_RESOLVED_PENDING_APPEAL is resolved but still appealable.
 	FinancialCaseStatus_FINANCIAL_CASE_STATUS_RESOLVED_PENDING_APPEAL FinancialCaseStatus = 5
-	FinancialCaseStatus_FINANCIAL_CASE_STATUS_FINAL                   FinancialCaseStatus = 6
-	FinancialCaseStatus_FINANCIAL_CASE_STATUS_REJECTED                FinancialCaseStatus = 7
-	FinancialCaseStatus_FINANCIAL_CASE_STATUS_CANCELLED               FinancialCaseStatus = 8
-	FinancialCaseStatus_FINANCIAL_CASE_STATUS_EXPIRED                 FinancialCaseStatus = 9
-	FinancialCaseStatus_FINANCIAL_CASE_STATUS_QUARANTINED             FinancialCaseStatus = 10
+	// FINANCIAL_CASE_STATUS_FINAL is a terminal resolution with no appeal left.
+	FinancialCaseStatus_FINANCIAL_CASE_STATUS_FINAL FinancialCaseStatus = 6
+	// FINANCIAL_CASE_STATUS_REJECTED is a terminal rejection of the claim.
+	FinancialCaseStatus_FINANCIAL_CASE_STATUS_REJECTED FinancialCaseStatus = 7
+	// FINANCIAL_CASE_STATUS_CANCELLED is a terminal withdrawal by the claimant.
+	FinancialCaseStatus_FINANCIAL_CASE_STATUS_CANCELLED FinancialCaseStatus = 8
+	// FINANCIAL_CASE_STATUS_EXPIRED is a terminal deadline lapse.
+	FinancialCaseStatus_FINANCIAL_CASE_STATUS_EXPIRED FinancialCaseStatus = 9
+	// FINANCIAL_CASE_STATUS_QUARANTINED is held by authority pending integrity review.
+	FinancialCaseStatus_FINANCIAL_CASE_STATUS_QUARANTINED FinancialCaseStatus = 10
 )
 
 var FinancialCaseStatus_name = map[int32]string{
@@ -176,12 +202,19 @@ func (FinancialCaseStatus) EnumDescriptor() ([]byte, []int) {
 type FinancialResolutionType int32
 
 const (
-	FinancialResolutionType_FINANCIAL_RESOLUTION_TYPE_UNSPECIFIED          FinancialResolutionType = 0
-	FinancialResolutionType_FINANCIAL_RESOLUTION_TYPE_PROVIDER_WIN         FinancialResolutionType = 1
-	FinancialResolutionType_FINANCIAL_RESOLUTION_TYPE_CUSTOMER_WIN         FinancialResolutionType = 2
-	FinancialResolutionType_FINANCIAL_RESOLUTION_TYPE_PARTIAL_SPLIT        FinancialResolutionType = 3
-	FinancialResolutionType_FINANCIAL_RESOLUTION_TYPE_MUTUAL               FinancialResolutionType = 4
-	FinancialResolutionType_FINANCIAL_RESOLUTION_TYPE_FRAUD_CONFIRMED      FinancialResolutionType = 5
+	// FINANCIAL_RESOLUTION_TYPE_UNSPECIFIED marks an absent resolution policy.
+	FinancialResolutionType_FINANCIAL_RESOLUTION_TYPE_UNSPECIFIED FinancialResolutionType = 0
+	// FINANCIAL_RESOLUTION_TYPE_PROVIDER_WIN awards the dispute to the provider.
+	FinancialResolutionType_FINANCIAL_RESOLUTION_TYPE_PROVIDER_WIN FinancialResolutionType = 1
+	// FINANCIAL_RESOLUTION_TYPE_CUSTOMER_WIN awards the dispute to the customer.
+	FinancialResolutionType_FINANCIAL_RESOLUTION_TYPE_CUSTOMER_WIN FinancialResolutionType = 2
+	// FINANCIAL_RESOLUTION_TYPE_PARTIAL_SPLIT splits the allocation between both parties.
+	FinancialResolutionType_FINANCIAL_RESOLUTION_TYPE_PARTIAL_SPLIT FinancialResolutionType = 3
+	// FINANCIAL_RESOLUTION_TYPE_MUTUAL records a mutually agreed resolution.
+	FinancialResolutionType_FINANCIAL_RESOLUTION_TYPE_MUTUAL FinancialResolutionType = 4
+	// FINANCIAL_RESOLUTION_TYPE_FRAUD_CONFIRMED records confirmed fraud.
+	FinancialResolutionType_FINANCIAL_RESOLUTION_TYPE_FRAUD_CONFIRMED FinancialResolutionType = 5
+	// FINANCIAL_RESOLUTION_TYPE_INCONCLUSIVE_TIMEOUT ends the case without a finding.
 	FinancialResolutionType_FINANCIAL_RESOLUTION_TYPE_INCONCLUSIVE_TIMEOUT FinancialResolutionType = 6
 )
 
@@ -217,13 +250,20 @@ func (FinancialResolutionType) EnumDescriptor() ([]byte, []int) {
 type FinancialEffectType int32
 
 const (
+	// FINANCIAL_EFFECT_TYPE_UNSPECIFIED marks an absent effect kind.
 	FinancialEffectType_FINANCIAL_EFFECT_TYPE_UNSPECIFIED FinancialEffectType = 0
-	FinancialEffectType_FINANCIAL_EFFECT_TYPE_PAYOUT      FinancialEffectType = 1
-	FinancialEffectType_FINANCIAL_EFFECT_TYPE_ESCROW      FinancialEffectType = 2
-	FinancialEffectType_FINANCIAL_EFFECT_TYPE_REWARD      FinancialEffectType = 3
+	// FINANCIAL_EFFECT_TYPE_PAYOUT moves value to the winning party.
+	FinancialEffectType_FINANCIAL_EFFECT_TYPE_PAYOUT FinancialEffectType = 1
+	// FINANCIAL_EFFECT_TYPE_ESCROW returns or releases escrowed funds.
+	FinancialEffectType_FINANCIAL_EFFECT_TYPE_ESCROW FinancialEffectType = 2
+	// FINANCIAL_EFFECT_TYPE_REWARD adjusts provider rewards.
+	FinancialEffectType_FINANCIAL_EFFECT_TYPE_REWARD FinancialEffectType = 3
+	// FINANCIAL_EFFECT_TYPE_RESERVATION adjusts a resource reservation.
 	FinancialEffectType_FINANCIAL_EFFECT_TYPE_RESERVATION FinancialEffectType = 4
-	FinancialEffectType_FINANCIAL_EFFECT_TYPE_REPUTATION  FinancialEffectType = 5
-	FinancialEffectType_FINANCIAL_EFFECT_TYPE_PROJECTION  FinancialEffectType = 6
+	// FINANCIAL_EFFECT_TYPE_REPUTATION adjusts reputation scores.
+	FinancialEffectType_FINANCIAL_EFFECT_TYPE_REPUTATION FinancialEffectType = 5
+	// FINANCIAL_EFFECT_TYPE_PROJECTION updates derived read models only.
+	FinancialEffectType_FINANCIAL_EFFECT_TYPE_PROJECTION FinancialEffectType = 6
 )
 
 var FinancialEffectType_name = map[int32]string{
@@ -258,10 +298,14 @@ func (FinancialEffectType) EnumDescriptor() ([]byte, []int) {
 type FinancialEffectStatus int32
 
 const (
+	// FINANCIAL_EFFECT_STATUS_UNSPECIFIED marks an absent effect status.
 	FinancialEffectStatus_FINANCIAL_EFFECT_STATUS_UNSPECIFIED FinancialEffectStatus = 0
-	FinancialEffectStatus_FINANCIAL_EFFECT_STATUS_PENDING     FinancialEffectStatus = 1
-	FinancialEffectStatus_FINANCIAL_EFFECT_STATUS_APPLIED     FinancialEffectStatus = 2
-	FinancialEffectStatus_FINANCIAL_EFFECT_STATUS_FAILED      FinancialEffectStatus = 3
+	// FINANCIAL_EFFECT_STATUS_PENDING is a recorded but unapplied effect.
+	FinancialEffectStatus_FINANCIAL_EFFECT_STATUS_PENDING FinancialEffectStatus = 1
+	// FINANCIAL_EFFECT_STATUS_APPLIED is a durably applied effect.
+	FinancialEffectStatus_FINANCIAL_EFFECT_STATUS_APPLIED FinancialEffectStatus = 2
+	// FINANCIAL_EFFECT_STATUS_FAILED is an effect that exhausted its retries.
+	FinancialEffectStatus_FINANCIAL_EFFECT_STATUS_FAILED FinancialEffectStatus = 3
 )
 
 var FinancialEffectStatus_name = map[int32]string{
@@ -291,12 +335,18 @@ func (FinancialEffectStatus) EnumDescriptor() ([]byte, []int) {
 type FiatConversionProfileState int32
 
 const (
-	FiatConversionProfileState_FIAT_CONVERSION_PROFILE_STATE_UNSPECIFIED                           FiatConversionProfileState = 0
-	FiatConversionProfileState_FIAT_CONVERSION_PROFILE_STATE_UNSUPPORTED                           FiatConversionProfileState = 1
-	FiatConversionProfileState_FIAT_CONVERSION_PROFILE_STATE_ENGINEERING_INCOMPLETE                FiatConversionProfileState = 2
+	// FIAT_CONVERSION_PROFILE_STATE_UNSPECIFIED marks an absent profile state.
+	FiatConversionProfileState_FIAT_CONVERSION_PROFILE_STATE_UNSPECIFIED FiatConversionProfileState = 0
+	// FIAT_CONVERSION_PROFILE_STATE_UNSUPPORTED is not backed by an engine profile.
+	FiatConversionProfileState_FIAT_CONVERSION_PROFILE_STATE_UNSUPPORTED FiatConversionProfileState = 1
+	// FIAT_CONVERSION_PROFILE_STATE_ENGINEERING_INCOMPLETE is still under construction.
+	FiatConversionProfileState_FIAT_CONVERSION_PROFILE_STATE_ENGINEERING_INCOMPLETE FiatConversionProfileState = 2
+	// FIAT_CONVERSION_PROFILE_STATE_ENGINEERING_COMPLETE_EXTERNAL_BLOCKED is built but externally blocked.
 	FiatConversionProfileState_FIAT_CONVERSION_PROFILE_STATE_ENGINEERING_COMPLETE_EXTERNAL_BLOCKED FiatConversionProfileState = 3
-	FiatConversionProfileState_FIAT_CONVERSION_PROFILE_STATE_CERTIFIED_ENABLED                     FiatConversionProfileState = 4
-	FiatConversionProfileState_FIAT_CONVERSION_PROFILE_STATE_PAUSED                                FiatConversionProfileState = 5
+	// FIAT_CONVERSION_PROFILE_STATE_CERTIFIED_ENABLED is the only executable state.
+	FiatConversionProfileState_FIAT_CONVERSION_PROFILE_STATE_CERTIFIED_ENABLED FiatConversionProfileState = 4
+	// FIAT_CONVERSION_PROFILE_STATE_PAUSED is administratively paused.
+	FiatConversionProfileState_FIAT_CONVERSION_PROFILE_STATE_PAUSED FiatConversionProfileState = 5
 )
 
 var FiatConversionProfileState_name = map[int32]string{
@@ -329,15 +379,24 @@ func (FiatConversionProfileState) EnumDescriptor() ([]byte, []int) {
 type FiatConversionObservationStage int32
 
 const (
-	FiatConversionObservationStage_FIAT_CONVERSION_OBSERVATION_STAGE_UNSPECIFIED      FiatConversionObservationStage = 0
-	FiatConversionObservationStage_FIAT_CONVERSION_OBSERVATION_STAGE_QUOTE_ACCEPTED   FiatConversionObservationStage = 1
-	FiatConversionObservationStage_FIAT_CONVERSION_OBSERVATION_STAGE_SWAP_SUBMITTED   FiatConversionObservationStage = 2
-	FiatConversionObservationStage_FIAT_CONVERSION_OBSERVATION_STAGE_SWAP_FINALIZED   FiatConversionObservationStage = 3
-	FiatConversionObservationStage_FIAT_CONVERSION_OBSERVATION_STAGE_PAYOUT_QUOTED    FiatConversionObservationStage = 4
+	// FIAT_CONVERSION_OBSERVATION_STAGE_UNSPECIFIED marks an absent stage.
+	FiatConversionObservationStage_FIAT_CONVERSION_OBSERVATION_STAGE_UNSPECIFIED FiatConversionObservationStage = 0
+	// FIAT_CONVERSION_OBSERVATION_STAGE_QUOTE_ACCEPTED is a quoted route accepted.
+	FiatConversionObservationStage_FIAT_CONVERSION_OBSERVATION_STAGE_QUOTE_ACCEPTED FiatConversionObservationStage = 1
+	// FIAT_CONVERSION_OBSERVATION_STAGE_SWAP_SUBMITTED is a submitted on-chain swap.
+	FiatConversionObservationStage_FIAT_CONVERSION_OBSERVATION_STAGE_SWAP_SUBMITTED FiatConversionObservationStage = 2
+	// FIAT_CONVERSION_OBSERVATION_STAGE_SWAP_FINALIZED is a swap past finality.
+	FiatConversionObservationStage_FIAT_CONVERSION_OBSERVATION_STAGE_SWAP_FINALIZED FiatConversionObservationStage = 3
+	// FIAT_CONVERSION_OBSERVATION_STAGE_PAYOUT_QUOTED is a quoted off-ramp payout.
+	FiatConversionObservationStage_FIAT_CONVERSION_OBSERVATION_STAGE_PAYOUT_QUOTED FiatConversionObservationStage = 4
+	// FIAT_CONVERSION_OBSERVATION_STAGE_PAYOUT_SUBMITTED is a submitted off-ramp payout.
 	FiatConversionObservationStage_FIAT_CONVERSION_OBSERVATION_STAGE_PAYOUT_SUBMITTED FiatConversionObservationStage = 5
+	// FIAT_CONVERSION_OBSERVATION_STAGE_PAYOUT_COMPLETED is a settled off-ramp payout.
 	FiatConversionObservationStage_FIAT_CONVERSION_OBSERVATION_STAGE_PAYOUT_COMPLETED FiatConversionObservationStage = 6
-	FiatConversionObservationStage_FIAT_CONVERSION_OBSERVATION_STAGE_FAILED           FiatConversionObservationStage = 7
-	FiatConversionObservationStage_FIAT_CONVERSION_OBSERVATION_STAGE_CANCELLED        FiatConversionObservationStage = 8
+	// FIAT_CONVERSION_OBSERVATION_STAGE_FAILED is a failed conversion leg.
+	FiatConversionObservationStage_FIAT_CONVERSION_OBSERVATION_STAGE_FAILED FiatConversionObservationStage = 7
+	// FIAT_CONVERSION_OBSERVATION_STAGE_CANCELLED is a cancelled conversion leg.
+	FiatConversionObservationStage_FIAT_CONVERSION_OBSERVATION_STAGE_CANCELLED FiatConversionObservationStage = 8
 )
 
 var FiatConversionObservationStage_name = map[int32]string{
@@ -3391,6 +3450,7 @@ func (m *EventFinancialCaseOpened) GetHoldCount() uint32 {
 	return 0
 }
 
+// EventFinancialClaimAdded is emitted when a claim joins an open case.
 type EventFinancialClaimAdded struct {
 	CaseId       string             `protobuf:"bytes,1,opt,name=case_id,json=caseId,proto3" json:"case_id,omitempty"`
 	ClaimId      string             `protobuf:"bytes,2,opt,name=claim_id,json=claimId,proto3" json:"claim_id,omitempty"`
@@ -3459,6 +3519,7 @@ func (m *EventFinancialClaimAdded) GetSourceModule() string {
 	return ""
 }
 
+// EventFinancialCaseHeld is emitted when settlement funds are held.
 type EventFinancialCaseHeld struct {
 	CaseId        string `protobuf:"bytes,1,opt,name=case_id,json=caseId,proto3" json:"case_id,omitempty"`
 	ReferenceType string `protobuf:"bytes,2,opt,name=reference_type,json=referenceType,proto3" json:"reference_type,omitempty"`
@@ -3519,6 +3580,7 @@ func (m *EventFinancialCaseHeld) GetReferenceId() string {
 	return ""
 }
 
+// EventFinancialCaseReviewed is emitted when a case enters review.
 type EventFinancialCaseReviewed struct {
 	CaseId string              `protobuf:"bytes,1,opt,name=case_id,json=caseId,proto3" json:"case_id,omitempty"`
 	Status FinancialCaseStatus `protobuf:"varint,2,opt,name=status,proto3,enum=virtengine.settlement.v1.FinancialCaseStatus" json:"status,omitempty"`
@@ -3571,6 +3633,7 @@ func (m *EventFinancialCaseReviewed) GetStatus() FinancialCaseStatus {
 	return FinancialCaseStatus_FINANCIAL_CASE_STATUS_UNSPECIFIED
 }
 
+// EventFinancialCaseEscalated is emitted when a case is escalated.
 type EventFinancialCaseEscalated struct {
 	CaseId string              `protobuf:"bytes,1,opt,name=case_id,json=caseId,proto3" json:"case_id,omitempty"`
 	Status FinancialCaseStatus `protobuf:"varint,2,opt,name=status,proto3,enum=virtengine.settlement.v1.FinancialCaseStatus" json:"status,omitempty"`
@@ -3623,6 +3686,7 @@ func (m *EventFinancialCaseEscalated) GetStatus() FinancialCaseStatus {
 	return FinancialCaseStatus_FINANCIAL_CASE_STATUS_UNSPECIFIED
 }
 
+// EventFinancialCaseResolved is emitted when a resolver allocates the case.
 type EventFinancialCaseResolved struct {
 	CaseId         string                  `protobuf:"bytes,1,opt,name=case_id,json=caseId,proto3" json:"case_id,omitempty"`
 	ResolutionType FinancialResolutionType `protobuf:"varint,2,opt,name=resolution_type,json=resolutionType,proto3,enum=virtengine.settlement.v1.FinancialResolutionType" json:"resolution_type,omitempty"`
@@ -3683,6 +3747,7 @@ func (m *EventFinancialCaseResolved) GetAllocationHash() []byte {
 	return nil
 }
 
+// EventFinancialCaseAppealed is emitted when a party appeals a resolution.
 type EventFinancialCaseAppealed struct {
 	CaseId      string `protobuf:"bytes,1,opt,name=case_id,json=caseId,proto3" json:"case_id,omitempty"`
 	AppealId    string `protobuf:"bytes,2,opt,name=appeal_id,json=appealId,proto3" json:"appeal_id,omitempty"`
@@ -3743,6 +3808,7 @@ func (m *EventFinancialCaseAppealed) GetAppealCount() uint32 {
 	return 0
 }
 
+// EventFinancialCaseFinalized is emitted when a case becomes final.
 type EventFinancialCaseFinalized struct {
 	CaseId         string                  `protobuf:"bytes,1,opt,name=case_id,json=caseId,proto3" json:"case_id,omitempty"`
 	ResolutionType FinancialResolutionType `protobuf:"varint,2,opt,name=resolution_type,json=resolutionType,proto3,enum=virtengine.settlement.v1.FinancialResolutionType" json:"resolution_type,omitempty"`
@@ -3795,6 +3861,7 @@ func (m *EventFinancialCaseFinalized) GetResolutionType() FinancialResolutionTyp
 	return FinancialResolutionType_FINANCIAL_RESOLUTION_TYPE_UNSPECIFIED
 }
 
+// EventFinancialCaseEffectApplied is emitted for each applied terminal effect.
 type EventFinancialCaseEffectApplied struct {
 	CaseId     string              `protobuf:"bytes,1,opt,name=case_id,json=caseId,proto3" json:"case_id,omitempty"`
 	EffectId   string              `protobuf:"bytes,2,opt,name=effect_id,json=effectId,proto3" json:"effect_id,omitempty"`
@@ -3855,6 +3922,7 @@ func (m *EventFinancialCaseEffectApplied) GetEffectType() FinancialEffectType {
 	return FinancialEffectType_FINANCIAL_EFFECT_TYPE_UNSPECIFIED
 }
 
+// EventFinancialCaseQuarantined is emitted when authority quarantines a case.
 type EventFinancialCaseQuarantined struct {
 	CaseId     string `protobuf:"bytes,1,opt,name=case_id,json=caseId,proto3" json:"case_id,omitempty"`
 	ReasonHash []byte `protobuf:"bytes,2,opt,name=reason_hash,json=reasonHash,proto3" json:"reason_hash,omitempty"`
@@ -3907,6 +3975,7 @@ func (m *EventFinancialCaseQuarantined) GetReasonHash() []byte {
 	return nil
 }
 
+// EventFinancialCaseExpired is emitted when a case passes its deadline.
 type EventFinancialCaseExpired struct {
 	CaseId string              `protobuf:"bytes,1,opt,name=case_id,json=caseId,proto3" json:"case_id,omitempty"`
 	Status FinancialCaseStatus `protobuf:"varint,2,opt,name=status,proto3,enum=virtengine.settlement.v1.FinancialCaseStatus" json:"status,omitempty"`
@@ -5078,6 +5147,7 @@ func (m *EventFiatConversionObservationRecorded) GetRecordedHeight() int64 {
 	return 0
 }
 
+// EventFiatConversionTerminal is emitted when a conversion reaches a terminal stage.
 type EventFiatConversionTerminal struct {
 	ConversionId   string                         `protobuf:"bytes,1,opt,name=conversion_id,json=conversionId,proto3" json:"conversion_id,omitempty"`
 	PayoutId       string                         `protobuf:"bytes,2,opt,name=payout_id,json=payoutId,proto3" json:"payout_id,omitempty"`
@@ -7587,6 +7657,7 @@ func (m *QueryFiatPayoutPreferenceResponse) GetPreference() *FiatPayoutPreferenc
 	return nil
 }
 
+// QueryFinancialCaseRequest is the request for the FinancialCase RPC.
 type QueryFinancialCaseRequest struct {
 	CaseId string `protobuf:"bytes,1,opt,name=case_id,json=caseId,proto3" json:"case_id,omitempty"`
 }
@@ -7631,6 +7702,7 @@ func (m *QueryFinancialCaseRequest) GetCaseId() string {
 	return ""
 }
 
+// QueryFinancialCaseResponse is the response for the FinancialCase RPC.
 type QueryFinancialCaseResponse struct {
 	FinancialCase *FinancialCase `protobuf:"bytes,1,opt,name=financial_case,json=financialCase,proto3" json:"financial_case,omitempty"`
 }
@@ -7675,6 +7747,7 @@ func (m *QueryFinancialCaseResponse) GetFinancialCase() *FinancialCase {
 	return nil
 }
 
+// QueryFinancialCaseBySubjectRequest is the request for the FinancialCaseBySubject RPC.
 type QueryFinancialCaseBySubjectRequest struct {
 	Subject FinancialSubject `protobuf:"bytes,1,opt,name=subject,proto3" json:"subject"`
 }
@@ -7719,6 +7792,7 @@ func (m *QueryFinancialCaseBySubjectRequest) GetSubject() FinancialSubject {
 	return FinancialSubject{}
 }
 
+// QueryFinancialCaseBySubjectResponse is the response for the FinancialCaseBySubject RPC.
 type QueryFinancialCaseBySubjectResponse struct {
 	FinancialCase *FinancialCase `protobuf:"bytes,1,opt,name=financial_case,json=financialCase,proto3" json:"financial_case,omitempty"`
 }
@@ -7763,6 +7837,7 @@ func (m *QueryFinancialCaseBySubjectResponse) GetFinancialCase() *FinancialCase 
 	return nil
 }
 
+// QueryFinancialCasesRequest is the request for the FinancialCasesBy* RPCs.
 type QueryFinancialCasesRequest struct {
 	Key        string             `protobuf:"bytes,1,opt,name=key,proto3" json:"key,omitempty"`
 	Pagination *query.PageRequest `protobuf:"bytes,2,opt,name=pagination,proto3" json:"pagination,omitempty"`
@@ -7815,6 +7890,7 @@ func (m *QueryFinancialCasesRequest) GetPagination() *query.PageRequest {
 	return nil
 }
 
+// QueryFinancialCasesResponse is the response for the FinancialCasesBy* RPCs.
 type QueryFinancialCasesResponse struct {
 	FinancialCases []FinancialCase     `protobuf:"bytes,1,rep,name=financial_cases,json=financialCases,proto3" json:"financial_cases"`
 	Pagination     *query.PageResponse `protobuf:"bytes,2,opt,name=pagination,proto3" json:"pagination,omitempty"`
@@ -7867,6 +7943,7 @@ func (m *QueryFinancialCasesResponse) GetPagination() *query.PageResponse {
 	return nil
 }
 
+// QueryFinancialCaseLineageRequest is the request for the FinancialCaseLineage RPC.
 type QueryFinancialCaseLineageRequest struct {
 	CaseId     string             `protobuf:"bytes,1,opt,name=case_id,json=caseId,proto3" json:"case_id,omitempty"`
 	Pagination *query.PageRequest `protobuf:"bytes,2,opt,name=pagination,proto3" json:"pagination,omitempty"`
@@ -7919,6 +7996,7 @@ func (m *QueryFinancialCaseLineageRequest) GetPagination() *query.PageRequest {
 	return nil
 }
 
+// QueryFinancialCaseLineageResponse is the response for the FinancialCaseLineage RPC.
 type QueryFinancialCaseLineageResponse struct {
 	Transitions []FinancialCaseTransition `protobuf:"bytes,1,rep,name=transitions,proto3" json:"transitions"`
 	Claims      []FinancialClaim          `protobuf:"bytes,2,rep,name=claims,proto3" json:"claims"`

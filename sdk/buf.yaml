@@ -131,9 +131,13 @@ modules:
           - proto/node/virtengine/staking/v1/types.proto
         RPC_REQUEST_RESPONSE_UNIQUE:
           - proto/node/virtengine/marketplace/v1/query.proto
+          - proto/node/virtengine/resources/v1/query.proto
+          - proto/node/virtengine/settlement/v1/query.proto
         RPC_RESPONSE_STANDARD_NAME:
           - proto/node/virtengine/audit/v1/msg_audit_log.proto
           - proto/node/virtengine/marketplace/v1/query.proto
+          - proto/node/virtengine/resources/v1/query.proto
+          - proto/node/virtengine/settlement/v1/query.proto
 # Vendor path disabled - enable when proto/vendor directory has .proto files
 #  - path: proto/vendor
 #    lint:

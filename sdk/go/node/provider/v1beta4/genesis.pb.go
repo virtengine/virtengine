@@ -77,6 +77,7 @@ func (m *GenesisState) GetSigningKeys() []ProviderSigningKeyGenesisRecord {
 	return nil
 }
 
+// ProviderSigningKeyGenesisRecord seeds one provider signing key at genesis.
 type ProviderSigningKeyGenesisRecord struct {
 	Owner   string                   `protobuf:"bytes,1,opt,name=owner,proto3" json:"owner,omitempty"`
 	Key     ProviderSigningKeyRecord `protobuf:"bytes,2,opt,name=key,proto3" json:"key"`
