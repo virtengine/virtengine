@@ -32,11 +32,11 @@ from __future__ import annotations
 
 import argparse
 import base64
-import json
 import os
 import re
 import subprocess
 import sys
+import time
 from dataclasses import dataclass, field
 
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -153,6 +153,19 @@ MANIFEST_NAMES = ("action.yml", "action.yaml")
 # None ("no such manifest"), so a transient API fault is never graded as clean.
 TRANSIENT_FAILURE = "\x00TRANSIENT\x00"
 
+# Why a pin could not be read, for the report. Without this the operator sees
+# "API error" 43 times and learns nothing; the class is the diagnosis.
+_FETCH_ERRORS: dict[tuple[str, str, str], str] = {}
+
+# Paced delay between upstream reads. The whole tree is ~40 manifests and is
+# read in seconds, which is what tripped GitHub's abuse detection on the first
+# CI run; a 43-read burst against one API is exactly the shape it flags.
+_READ_DELAY_SECONDS = 0.4
+
+# Whether a read for this pin has already happened, so the delay is applied
+# BETWEEN upstream calls rather than before the first.
+_READ_SEEN: dict[tuple[str, str, str], bool] = {}
+
 
 def split_ref(spec_repo: str) -> tuple[str, str]:
     """('github/codeql-action/init') -> ('github/codeql-action', 'init')."""
@@ -160,45 +173,89 @@ def split_ref(spec_repo: str) -> tuple[str, str]:
     return "/".join(parts[:2]), "/".join(parts[2:])
 
 
+def _gh_contents(owner_repo: str, path: str, ref: str) -> tuple[str | None, str]:
+    """(content, error_class). error_class is "" on success.
+
+    Coarse on purpose: we need to tell "this layout does not exist" (keep
+    probing) from "the call did not happen" (transient, retry) -- not to
+    diagnose GitHub.
+    """
+    try:
+        proc = subprocess.run(
+            ["gh", "api", f"repos/{owner_repo}/contents/{path}?ref={ref}", "--jq", ".content"],
+            capture_output=True,
+            text=True,
+            timeout=60,
+            check=True,
+        )
+        return base64.b64decode(proc.stdout.strip()).decode("utf-8", "replace"), ""
+    except subprocess.CalledProcessError as exc:
+        blob = ((exc.stderr or "") + (exc.stdout or "")).lower()
+        if "404" in blob or "not found" in blob:
+            return None, "404"
+        if "rate limit" in blob or "429" in blob or "abuse" in blob:
+            return None, "ratelimit"
+        if "403" in blob or "forbidden" in blob or "not accessible" in blob:
+            return None, "forbidden"
+        return None, "api-error"
+    except (subprocess.SubprocessError, ValueError, OSError):
+        return None, "unavailable"
+
+
+# How many attempts each failure class earns. 404 is terminal (this layout does
+# not exist); everything else is worth another go, because the whole tree is
+# read in a few seconds and GitHub's abuse detection is what actually bites.
+_ATTEMPTS = {"404": 1, "forbidden": 1, "api-error": 2, "unavailable": 2, "ratelimit": 4}
+
+
 def fetch_action_yml(repo_path: str, ref: str) -> str | None:
     """The raw action manifest at ``repo_path@ref``, or None if unreadable.
 
-    Tries each known manifest name in a subdirectory when the pin names one.
+    Tries each known manifest name in a subdirectory when the pin names one,
+    and retries a genuinely transient failure with backoff. A manifest read is
+    cheap; a rate-limited upstream must not decide whether the gate is red.
     """
     key = (repo_path, ref, "manifest")
     if key in _FETCH_CACHE:
         return _FETCH_CACHE[key]
 
     owner_repo, subdir = split_ref(repo_path)
-    prefixes = [subdir] if subdir else ["", "."]
-    saw_other_error = False
-    for prefix in prefixes:
-        for name in MANIFEST_NAMES:
-            path = f"{prefix}/{name}" if prefix else name
-            try:
-                proc = subprocess.run(
-                    ["gh", "api", f"repos/{owner_repo}/contents/{path}?ref={ref}", "--jq", ".content"],
-                    capture_output=True,
-                    text=True,
-                    timeout=60,
-                    check=True,
-                )
-                content = base64.b64decode(proc.stdout.strip()).decode("utf-8", "replace")
-            except subprocess.CalledProcessError as exc:
-                # 404 means "this layout does not exist" -- keep probing. Any
-                # other failure (5xx, auth, rate limit) is a TRANSIENT fault and
-                # must not be silently demoted to "no such file", or a network
-                # blip reads as a clean audit and the gate goes green blind.
-                if "404" not in (exc.stderr or ""):
-                    saw_other_error = True
-                continue
-            except (subprocess.SubprocessError, ValueError, OSError):
-                saw_other_error = True
-                continue
-            _FETCH_CACHE[key] = content
-            return content
+    # One prefix per pin. A previous version also probed "." for root-level
+    # pins, which doubled every 404-bearing root pin's API calls for no chance
+    # of a different answer -- `gh` resolves "action.yml" and "./action.yml" to
+    # the same object.
+    prefixes = [subdir] if subdir else [""]
 
-    _FETCH_CACHE[key] = None if not saw_other_error else TRANSIENT_FAILURE
+    best = "404"
+    for attempt in range(1, max(_ATTEMPTS.values()) + 1):
+        worst = "404"
+        for prefix in prefixes:
+            for name in MANIFEST_NAMES:
+                path = f"{prefix}/{name}" if prefix else name
+                if _READ_SEEN.get(key):
+                    time.sleep(_READ_DELAY_SECONDS)
+                _READ_SEEN[key] = True
+                content, err = _gh_contents(owner_repo, path, ref)
+                if err == "":
+                    _FETCH_CACHE[key] = content
+                    return content
+                # The WORST class seen in a full sweep decides the retry, and a
+                # class already exhausted must not be re-attempted: an earlier
+                # version compared only the sweep's worst against the sweep
+                # number, so a 404 pin was probed 4x (8 calls) instead of once.
+                if _ATTEMPTS[err] > attempt:
+                    worst = err
+        best = worst
+        if _ATTEMPTS[worst] <= attempt:
+            break
+        time.sleep(3 * attempt if worst == "ratelimit" else attempt)
+
+    if best == "404":
+        _FETCH_CACHE[key] = None
+    else:
+        _FETCH_CACHE[key] = TRANSIENT_FAILURE
+        _FETCH_ERRORS[key] = best
+    return _FETCH_CACHE[key]
 
 
 def parse_action_yml(text: str) -> tuple[str, list[str]]:
@@ -287,7 +344,10 @@ def node20_findings(refs: list[ActionRef]) -> tuple[list[str], list[str], list[s
                 problems.append(f"{ref.spec} ({ref.file}:{ref.line}): no action manifest found upstream")
                 break
             if text == TRANSIENT_FAILURE:
-                transient.append(f"{ref.spec} ({ref.file}:{ref.line}): GitHub API error, not a verdict")
+                cls = _FETCH_ERRORS.get((repo, version, "manifest"), "unknown")
+                transient.append(
+                    f"{ref.spec} ({ref.file}:{ref.line}): upstream read failed [{cls}]"
+                )
                 break
             using, _ = parse_action_yml(text)
             if using.startswith("node"):
@@ -378,9 +438,16 @@ def main() -> int:
         print(f"  NODE20  {f}")
 
     if transient:
-        print(f"pins unreadable this run (API fault, NOT a verdict): {len(transient)}")
-        for t in sorted(set(transient)):
-            print(f"  TRANSIENT  {t}")
+        # De-duplicate by (pin, class): one unreadable pin used 3 times is ONE
+        # fault, and printing it 3 times buries the diagnosis.
+        seen_faults: dict[str, int] = {}
+        for t in transient:
+            seen_faults[t] = seen_faults.get(t, 0) + 1
+        print(f"pins unreadable this run (NOT a verdict): {len(transient)} occurrence(s), "
+              f"{len(seen_faults)} distinct")
+        for t, n in sorted(seen_faults.items()):
+            suffix = f"  (x{n} uses)" if n > 1 else ""
+            print(f"  TRANSIENT  {t}{suffix}")
         print("audit INCOMPLETE -- a blind run is not a pass")
         return 2
 
