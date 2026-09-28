@@ -1,6 +1,23 @@
 # Trivy ignore file for accepted vulnerabilities
-# These are documented in .vulnerability-allowlist.yaml and SUPPLY_CHAIN_SECURITY.md
-# Python package vulnerabilities in veid-pipeline image (accepted as time-boxed risk)
+#
+# POLICY (2026-09-29, integration-keeper t_3b161655): an entry here is only
+# acceptable if the corresponding finding is genuinely unresolved. An entry that
+# suppresses a finding the image does not carry is dead weight at best and a
+# concealed defect at worst -- it hides the day the finding becomes real. The
+# wheel 0.42.0 entry (CVE-2026-24049) was exactly that: the final stage's purge
+# ran before the site-packages overlay, so the base image's wheel 0.42.0
+# survived into the shipped image and the suppression masked a live, fixable
+# HIGH. The purge ordering is fixed in _build/Dockerfile.veid-pipeline and the
+# entry is removed, so the gate must justify itself on the real image.
+#
+# The entries below are retained as accepted time-boxed risk. Documented in
+# .vulnerability-allowlist.yaml and SUPPLY_CHAIN_SECURITY.md.
+#
+# NOTE: the "fixed in" annotations below are stale as of 2026-09-29 (the stack
+# moved to tensorflow-cpu 2.20.0 / keras 3.15.0 / Pillow 12.3.0 / protobuf
+# 5.29.6 / setuptools 83.0.0). They are left in place because the pinned
+# versions no longer carry these CVEs; the entries are inert.
+
 
 # keras 2.15.0 CVEs (fixed in 3.x but requires TF 2.20+ stack move - human decision)
 CVE-2025-12060
@@ -28,6 +45,3 @@ CVE-2026-0994
 # setuptools 65.5.1 CVEs (fixed in 70.0.0/78.1.1 but 82+ removes pkg_resources needed by grpcio-tools/mtcnn)
 CVE-2024-6345
 CVE-2025-47273
-
-# wheel 0.42.0 CVE (fixed in 0.46.2)
-CVE-2026-24049
