@@ -59,7 +59,17 @@ generate_openapi() {
 }
 
 generate_typescript() {
-  # Ensure vendor directory has proto files for cosmos-sdk and ibc-go
+  # Ensure vendor directory has proto files for cosmos-sdk and ibc-go.
+  # modvendor reads vendor/modules.txt, which only exists once the module has
+  # actually been vendored. CI's `contracts` job runs this script in the image
+  # with no vendor/ present, so modvendor aborted the whole generation:
+  #
+  #   Whoops, cannot find vendor/modules.txt, first run `go mod vendor` and try again
+  #
+  # The --proto sources copied below and the TS templates both read from
+  # go/vendor/..., so the vendor tree is a precondition of this step, not an
+  # optional optimisation. Stage it when it is missing.
+  (cd "$sdk/go" && [ -f vendor/modules.txt ] || go mod vendor)
   (cd "$sdk/go" && modvendor -copy="**/*.proto" -v)
   install_typescript
   rm -rf ts/src/generated
