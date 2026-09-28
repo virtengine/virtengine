@@ -11,7 +11,15 @@ on:
   workflow_dispatch:
 
 concurrency:
-  group: security-${{ github.workflow }}-${{ github.ref }}
+  # The concurrency key MUST include the commit sha. Keyed on workflow+ref alone, every
+  # push to the same branch lands in the same group and cancels the in-flight run — and
+  # because Security is the slowest workflow in the repo (the Go vuln scan alone runs for
+  # many minutes) it was cancelled by the *next* push essentially every time on `develop`.
+  # That is why the Security workflow could never reach a verdict, why `Security Summary`
+  # cascaded to `One or more required security gates failed`, and why re-running the job
+  # never helped. Keying on the sha makes each commit's run independent, so a run can
+  # finish; superseded runs of the same commit (a re-run race) still cancel.
+  group: security-${{ github.workflow }}-${{ github.ref }}-${{ github.sha }}
   cancel-in-progress: true
 
 defaults:
