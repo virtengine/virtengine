@@ -261,17 +261,42 @@ jobs:
           print(f"re-pinned {n} reference(s) to {digest}")
           PY
 
+      # The download MUST land outside the workspace. `create-pull-request`
+      # commits EVERY change in the workspace, so a binary dropped in the repo
+      # root is published to a PR by default — which is how a 49.7 MB,
+      # single-platform `kubectl` reached PR #1023 and made it unmergeable.
+      # $RUNNER_TEMP is wiped with the runner and is never part of a commit.
       - name: Install pinned kubectl
         shell: bash
+        env:
+          KUBECTL_DIR: ${{ runner.temp }}/kubectl-bin
         run: |
           set -euo pipefail
-          curl -fsSLo kubectl "https://dl.k8s.io/release/v${KUBECTL_VERSION}/bin/linux/amd64/kubectl"
-          echo "${KUBECTL_SHA256}  kubectl" | sha256sum --check --strict
-          chmod +x kubectl
-          sudo install -m 0755 kubectl /usr/local/bin/kubectl
+          mkdir -p "$KUBECTL_DIR"
+          curl -fsSLo "$KUBECTL_DIR/kubectl" "https://dl.k8s.io/release/v${KUBECTL_VERSION}/bin/linux/amd64/kubectl"
+          echo "${KUBECTL_SHA256}  $KUBECTL_DIR/kubectl" | sha256sum --check --strict
+          chmod +x "$KUBECTL_DIR/kubectl"
+          sudo install -m 0755 "$KUBECTL_DIR/kubectl" /usr/local/bin/kubectl
+          kubectl version --client=true
 
       - name: Validate the manifest still satisfies policy
         run: node scripts/task85c-validate-kubernetes.mjs
+
+      # Catch-all: the re-pin PR must carry the manifest change and NOTHING
+      # else. Without this, any future step that writes an artefact into the
+      # workspace is silently published again.
+      - name: Assert only the manifest changed (no stray artefacts)
+        shell: bash
+        run: |
+          set -euo pipefail
+          git status --porcelain
+          stray="$(git status --porcelain | awk '{print $2}' | grep -vxF "$CRONJOB_MANIFEST" || true)"
+          if [ -n "$stray" ]; then
+            echo "::error::unexpected path(s) in the re-pin workspace — these would be committed and pushed to a PR:"
+            printf '%s\n' "$stray"
+            exit 1
+          fi
+          echo "workspace contains only ${CRONJOB_MANIFEST}"
 
       - name: Open re-pin PR
         uses: peter-evans/create-pull-request@v8
