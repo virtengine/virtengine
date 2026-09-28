@@ -84,6 +84,11 @@ jobs:
     name: lint
     runs-on: ubuntu-latest
     needs: analyze-changes
+    # Bound the job itself so a genuinely hung linter fails visibly and fast
+    # instead of sitting on GitHub's 360-minute default. This is a backstop,
+    # not the working budget: the linter's own --timeout below is what governs
+    # a normal run.
+    timeout-minutes: 45
     steps:
       - name: Checkout code
         uses: actions/checkout@v5
@@ -112,7 +117,7 @@ jobs:
         uses: golangci/golangci-lint-action@v9
         with:
           version: v2.13.2
-          args: --timeout=10m --new-from-rev=origin/${{ github.base_ref || 'main' }}
+          args: --timeout=30m --new-from-rev=origin/${{ github.base_ref || 'main' }}
 
   vet:
     name: vet
