@@ -17,6 +17,7 @@ the code that runs, not a copy of it.
 from __future__ import annotations
 
 import importlib.util
+import json
 import os
 import subprocess
 import sys
@@ -59,12 +60,16 @@ def patch_gh(handler):
     `subprocess.run(check=True)` does. Returning it instead would make every
     failed call look like a success carrying empty stdout, and the whole harness
     would pass while testing nothing.
+
+    `**kwargs` is forwarded to the handler, not swallowed: the audit passes
+    `env=` on its anonymous read, and a handler that cannot see it cannot tell
+    an authenticated call from an anonymous one.
     """
     calls = []
 
     def fake_run(cmd, **kwargs):
         calls.append(" ".join(cmd) if isinstance(cmd, (list, tuple)) else str(cmd))
-        result = handler(cmd)
+        result = handler(cmd, **kwargs)
         if isinstance(result, BaseException):
             raise result
         return result
@@ -77,6 +82,22 @@ def patch_gh(handler):
 def main() -> int:
     failures: list[str] = []
     mod.time.sleep = lambda *_: None  # keep the suite fast
+
+    # --- hermetic network guard -------------------------------------------
+    # A 403 from the authenticated read now triggers a REAL anonymous HTTPS
+    # read, so without this every forbidden-classification case would reach
+    # out to api.github.com. Worse, a fabricated repo like "o/r" answers 404
+    # there, so the suite would assert against whatever the live API said
+    # rather than against the classifier. The default below refuses the
+    # anonymous read with 403 -- "still forbidden" -- which is the answer that
+    # preserves the intent of the pre-existing cases. Individual cases
+    # override it; the one that must reach a URL asserts on the URL instead.
+    real_urlopen = mod.urllib.request.urlopen
+
+    def default_refuse(req, timeout=None):
+        raise mod.urllib.error.HTTPError(req.full_url, 403, "Forbidden", {}, None)
+
+    mod.urllib.request.urlopen = default_refuse
 
     # --- classification of real GitHub error text -------------------------
     cases = [
@@ -180,9 +201,103 @@ def main() -> int:
         )
     print(f"  {'FAIL' if not ok else 'ok  '} forbidden-is-not-a-404")
 
+    # --- a 403 on a PUBLIC manifest is retried ANONYMOUSLY ----------------
+    # This is the defect the fourth CI run exposed. The CI job passes the
+    # job's own `github.token`, which is not scoped to other repositories, so
+    # GitHub answers 403 "Resource not accessible by integration" for pins
+    # that are plainly public. The audit believed that verdict, called itself
+    # INCOMPLETE, and failed the build on a tree it had already proven clean
+    # on all 38 other pins.
+    #
+    # The retry must NOT go through `gh`. An earlier version re-ran `gh` with
+    # the token stripped from the environment, and CI moved the 5 pins from
+    # `forbidden` to `api-error` instead of clearing them: on a runner `gh`
+    # refuses an unauthenticated API call outright, so the "fallback" was a
+    # guaranteed failure. It passed every local test because a workstation's
+    # `gh` has a logged-in account to fall back on. So the assertion is on the
+    # NETWORK path, not on a second subprocess call.
+    anon_urls: list[str] = []
+    gh_calls: list[str] = []
+
+    class FakeResp:
+        def __init__(self, body: bytes):
+            self._body = body
+
+        def read(self):
+            return self._body
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+    payload = json.dumps({"content": "aW5wdXRzOjpjb21wb3NpdGUK"}).encode()
+    mod.urllib.request.urlopen = lambda req, timeout=None: (
+        anon_urls.append(req.full_url) or FakeResp(payload)
+    )
+
+    def handler6(cmd, **kw):
+        gh_calls.append(" ".join(cmd) if isinstance(cmd, (list, tuple)) else str(cmd))
+        return fail(1, "HTTP 403: Resource not accessible by integration")
+
+    _, restore = patch_gh(handler6)
+    try:
+        mod._FETCH_CACHE.clear(); mod._READ_SEEN.clear(); mod._FETCH_ERRORS.clear()
+        content = mod._gh_contents("o/r", "action.yml", "v1")
+    finally:
+        restore()
+        mod.urllib.request.urlopen = default_refuse
+
+    if content != ("inputs::composite\n", ""):
+        failures.append(f"anon-fallback: expected an anonymous read to succeed, got {content!r}")
+    if len(gh_calls) != 1:
+        failures.append(f"anon-fallback: expected exactly 1 authenticated gh call, made {len(gh_calls)}")
+    if len(anon_urls) != 1:
+        failures.append(f"anon-fallback: expected 1 anonymous HTTPS read, made {len(anon_urls)}")
+    elif "repos/o/r/contents/action.yml?ref=v1" not in anon_urls[0]:
+        failures.append(f"anon-fallback: anonymous URL is wrong: {anon_urls[0]!r}")
+    anon_ok = content == ("inputs::composite\n", "") and len(anon_urls) == 1
+    print(f"  {'ok  ' if anon_ok else 'FAIL'} "
+          f"anon-fallback (auth 403 -> anonymous HTTPS read)")
+
+    # --- an HTTP status maps to the same classes as gh's stderr -----------
+    http_cases = [(404, "404"), (429, "ratelimit"), (403, "forbidden"), (500, "api-error")]
+    for status, expected in http_cases:
+        got = mod._classify_http(status)
+        if got != expected:
+            failures.append(f"classify_http({status}) -> {got!r}, expected {expected!r}")
+    http_ok = all(mod._classify_http(s) == e for s, e in http_cases)
+    print(f"  {'ok  ' if http_ok else 'FAIL'} classify_http {[s for s, _ in http_cases]}")
+
+    # --- a 403 that survives the anonymous read is still a real failure ---
+    def handler7(cmd, **kw):
+        return fail(1, "HTTP 403: Resource not accessible by integration")
+
+    def refuse(req, timeout=None):
+        raise mod.urllib.error.HTTPError(req.full_url, 403, "Forbidden", {}, None)
+
+    mod.urllib.request.urlopen = refuse
+    _, restore = patch_gh(handler7)
+    try:
+        mod._FETCH_CACHE.clear(); mod._READ_SEEN.clear(); mod._FETCH_ERRORS.clear()
+        content = mod.fetch_action_yml("o/r", "v1")
+    finally:
+        restore()
+        mod.urllib.request.urlopen = default_refuse
+    ok = content == mod.TRANSIENT_FAILURE and mod._FETCH_ERRORS.get(("o/r", "v1", "manifest")) == "forbidden"
+    if not ok:
+        failures.append(
+            f"anon-fallback-hard-fail: expected TRANSIENT/forbidden when the "
+            f"anonymous read is refused too, got {content!r} "
+            f"class={mod._FETCH_ERRORS.get(('o/r', 'v1', 'manifest'))!r}"
+        )
+    print(f"  {'FAIL' if not ok else 'ok  '} anon-fallback-hard-fail")
+
+    mod.urllib.request.urlopen = real_urlopen
     for f in failures:
         print("FAIL:", f)
-    total = 6
+    total = 9
     print(f"{total - len({f.split(':')[0] for f in failures})}/{total} checks passed")
     return 1 if failures else 0
 

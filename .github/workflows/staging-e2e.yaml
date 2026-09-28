@@ -62,6 +62,14 @@ jobs:
           go-version: ${{ env.GO_VERSION }}
           cache: true
 
+      - name: Install build dependencies for cgo packages
+        # github.com/zondax/hid (via go.mod replace) carries `#cgo pkg-config: libudev`;
+        # without libudev-dev the packages below die at pkg-config build time and
+        # `go build`/`go test` never run. Not present on the ubuntu-latest image.
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends libudev-dev
+
       - name: Download dependencies
         run: go mod download
 

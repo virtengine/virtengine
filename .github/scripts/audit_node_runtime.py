@@ -32,11 +32,14 @@ from __future__ import annotations
 
 import argparse
 import base64
+import json
 import os
 import re
 import subprocess
 import sys
 import time
+import urllib.error
+import urllib.request
 from dataclasses import dataclass, field
 
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -173,33 +176,108 @@ def split_ref(spec_repo: str) -> tuple[str, str]:
     return "/".join(parts[:2]), "/".join(parts[2:])
 
 
+def _run_gh(owner_repo: str, path: str, ref: str):
+    """One authenticated `gh api` contents read."""
+    return subprocess.run(
+        ["gh", "api", f"repos/{owner_repo}/contents/{path}?ref={ref}", "--jq", ".content"],
+        capture_output=True,
+        text=True,
+        timeout=60,
+        check=True,
+    )
+
+
+def _classify(exc: subprocess.CalledProcessError) -> str:
+    """Error class from `gh`'s stderr. Split out so the authenticated read and
+    the anonymous read classify their failures identically."""
+    blob = ((exc.stderr or "") + (exc.stdout or "")).lower()
+    if "404" in blob or "not found" in blob:
+        return "404"
+    if "rate limit" in blob or "429" in blob or "abuse" in blob:
+        return "ratelimit"
+    if "403" in blob or "forbidden" in blob or "not accessible" in blob:
+        return "forbidden"
+    return "api-error"
+
+
+def _classify_http(status: int) -> str:
+    """The same classes, from an HTTP status code instead of a stderr string."""
+    if status == 404:
+        return "404"
+    if status == 429:
+        return "ratelimit"
+    if status == 403:
+        return "forbidden"
+    return "api-error"
+
+
+def _anon_contents(owner_repo: str, path: str, ref: str) -> tuple[str | None, str]:
+    """(content, error_class) for an UNAUTHENTICATED read of a public file.
+
+    This deliberately does not shell out to `gh`. `gh` refuses to issue an API
+    call that carries no credential -- on a runner it exits non-zero with its own
+    usage text before any request is made -- so "run gh with the token removed"
+    is not an anonymous read at all, it is a guaranteed failure wearing the
+    costume of one. The first attempt at this fix did exactly that and moved the
+    5 pins from `forbidden` to `api-error` in CI while passing every local
+    test, because a workstation's `gh` has a logged-in account to fall back on
+    and a runner does not.
+
+    A plain HTTPS GET of a public path on api.github.com needs no credential,
+    which is the whole point: the read must not depend on who is asking.
+    """
+    url = f"https://api.github.com/repos/{owner_repo}/contents/{path}?ref={ref}"
+    req = urllib.request.Request(
+        url,
+        headers={
+            "Accept": "application/vnd.github+json",
+            "User-Agent": "virtengine-node-runtime-audit",
+            "X-GitHub-Api-Version": "2022-11-28",
+        },
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=60) as resp:
+            payload = json.loads(resp.read().decode("utf-8", "replace"))
+    except urllib.error.HTTPError as exc:
+        return None, _classify_http(exc.code)
+    except (urllib.error.URLError, OSError, ValueError):
+        return None, "unavailable"
+    try:
+        return base64.b64decode(payload["content"]).decode("utf-8", "replace"), ""
+    except (KeyError, TypeError, ValueError):
+        return None, "api-error"
+
+
 def _gh_contents(owner_repo: str, path: str, ref: str) -> tuple[str | None, str]:
     """(content, error_class). error_class is "" on success.
 
     Coarse on purpose: we need to tell "this layout does not exist" (keep
     probing) from "the call did not happen" (transient, retry) -- not to
     diagnose GitHub.
+
+    A `forbidden` verdict is retried ANONYMOUSLY before it is believed. Every
+    manifest this audit reads is public, so a permission failure says something
+    about the CALLER's token, never about whether the file exists. The CI job
+    passes the job's own ``github.token``, whose scope does not cover other
+    repositories, and GitHub answers 403 "Resource not accessible by
+    integration" for pins that are plainly readable -- which made the audit
+    declare itself INCOMPLETE on a tree it had already proven clean on every
+    other pin. An unauthenticated read of a public file needs no scope at all,
+    so a permission failure that survives it is a real failure and the class is
+    returned unchanged.
     """
     try:
-        proc = subprocess.run(
-            ["gh", "api", f"repos/{owner_repo}/contents/{path}?ref={ref}", "--jq", ".content"],
-            capture_output=True,
-            text=True,
-            timeout=60,
-            check=True,
-        )
+        proc = _run_gh(owner_repo, path, ref)
         return base64.b64decode(proc.stdout.strip()).decode("utf-8", "replace"), ""
     except subprocess.CalledProcessError as exc:
-        blob = ((exc.stderr or "") + (exc.stdout or "")).lower()
-        if "404" in blob or "not found" in blob:
-            return None, "404"
-        if "rate limit" in blob or "429" in blob or "abuse" in blob:
-            return None, "ratelimit"
-        if "403" in blob or "forbidden" in blob or "not accessible" in blob:
-            return None, "forbidden"
-        return None, "api-error"
+        err = _classify(exc)
+        if err != "forbidden":
+            return None, err
     except (subprocess.SubprocessError, ValueError, OSError):
         return None, "unavailable"
+
+    # Authenticated read was refused. Retry with no credential at all.
+    return _anon_contents(owner_repo, path, ref)
 
 
 # Severity order, most transient first. `>` on this ordering, NOT on

@@ -2,7 +2,11 @@
   "schemaVersion": 1,
   "license": {
     "allowedFamilies": ["Apache-2.0", "BSD-2-Clause", "BSD-3-Clause", "ISC", "MIT", "MPL-2.0", "Unlicense", "CC0-1.0"],
-    "deniedTokens": ["AGPL", "BUSL", "GPL", "LGPL", "SSPL"]
+    "deniedTokens": ["AGPL", "BUSL", "GPL", "LGPL", "SSPL"],
+    "exceptions": [
+      "github.com/ethereum/go-ethereum",
+      "github.com/zondax/hid/libusb/libusb"
+    ]
   },
   "replaces": {
     "go.mod": [

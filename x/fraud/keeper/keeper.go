@@ -102,13 +102,13 @@ type ProviderKeeper interface {
 
 // Keeper implements the Fraud module keeper
 type Keeper struct {
-	skey            storetypes.StoreKey
-	cdc             codec.BinaryCodec
-	rolesKeeper     RolesKeeper
-	providerKeeper  ProviderKeeper
-	authority       string
-	financialCases  FinancialCaseKeeper
-	marketKeeper    MarketKeeper
+	skey           storetypes.StoreKey
+	cdc            codec.BinaryCodec
+	rolesKeeper    RolesKeeper
+	providerKeeper ProviderKeeper
+	authority      string
+	financialCases FinancialCaseKeeper
+	marketKeeper   MarketKeeper
 }
 
 type FinancialCaseKeeper interface {
