@@ -108,7 +108,13 @@ jobs:
         uses: golangci/golangci-lint-action@v9
         with:
           version: ${{ env.GOLANGCI_LINT_VERSION }}
-          args: --timeout=10m ${{ github.event_name == 'pull_request' && format('--new-from-rev=origin/{0}', github.base_ref) || '' }}
+          # The develop->main integration PR scopes this to the whole develop delta
+          # (--new-from-rev=origin/main), which does not finish inside 10m: the linter
+          # reports "0 issues." and is then killed by its own budget
+          # (`level=error msg="Timeout exceeded"`, exit 4) after ~12-13m of job wall time.
+          # That is a false red - the gate found nothing and failed to finish. 30m matches
+          # GO_TEST_TIMEOUT_UNIT below and leaves headroom for the whole-tree push variant.
+          args: --timeout=30m ${{ github.event_name == 'pull_request' && format('--new-from-rev=origin/{0}', github.base_ref) || '' }}
 
       - name: Check formatting
         run: |
