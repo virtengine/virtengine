@@ -590,9 +590,9 @@ func (c *SSHSLURMClient) SCPUploadBytes(ctx context.Context, content []byte, rem
 		// The write errors are not actionable and stay discarded, as before:
 		// the remote scp can legitimately close the channel before the trailing
 		// NUL is flushed, and Run() below reports the failure that matters.
-		fmt.Fprintf(stdin, "C%04o %d %s\n", mode, len(content), filename)
+		_, _ = fmt.Fprintf(stdin, "C%04o %d %s\n", mode, len(content), filename)
 		_, _ = stdin.Write(content)
-		fmt.Fprint(stdin, "\x00")
+		_, _ = fmt.Fprint(stdin, "\x00")
 	})
 
 	// Run scp command
