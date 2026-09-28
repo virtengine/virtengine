@@ -18,7 +18,27 @@ export LANG=C
 export TZ=UTC
 export SOURCE_DATE_EPOCH=0
 export BUF_CACHE_DIR="${BUF_CACHE_DIR:-/cache/buf}"
-export GOMODCACHE="${GOMODCACHE:-/cache/go-mod}"
+# --- module cache: one root, two views ---------------------------------------
+# modvendor resolves every module as $GOPATH/pkg/mod/<path>@<version> and reads
+# GOPATH ONLY -- it never consults GOMODCACHE (grep GOMODCACHE in
+# goware/modvendor => 0 hits). The golang base image sets GOPATH=/go while this
+# script put the module cache at /cache/go-mod, so modvendor searched a
+# directory nothing ever populates and aborted the run:
+#
+#   Error! "/go/pkg/mod/cloud.google.com/go@v0.123.0" module path does not exist, check $GOPATH/pkg/mod
+#
+# Derive both views from ONE root so they cannot disagree. The root defaults to
+# /cache -- the directory proto-generate.sh actually mounts, so the cache still
+# persists across runs -- and NOT to an inherited GOPATH, because the base image
+# presets GOPATH=/go, which is container-local and would silently throw the
+# module cache away on every run. A caller that already supplies GOMODCACHE at a
+# proper <root>/pkg/mod keeps its own root.
+if [[ "${GOMODCACHE:-}" == */pkg/mod ]]; then
+  export GOPATH="${GOPATH:-${GOMODCACHE%/pkg/mod}}"
+else
+  export GOPATH="${VE_PROTO_GOPATH:-/cache}"
+  export GOMODCACHE="$GOPATH/pkg/mod"
+fi
 export GOCACHE="${GOCACHE:-/cache/go-build}"
 export npm_config_cache="${npm_config_cache:-/cache/npm}"
 
