@@ -758,6 +758,16 @@ jobs:
       - gosec-scan
     if: always()
     steps:
+      # The "Fail if any security gate failed" step runs a helper FROM THIS REPO
+      # (.github/scripts/check_security_gate_results.sh). Without a checkout the job's
+      # workspace is empty and bash exits 127 ("No such file or directory"), so the gate
+      # fails for a reason that has nothing to do with the security results it summarises.
+      - name: Checkout gate-result helper
+        uses: actions/checkout@v5
+        with:
+          sparse-checkout: .github/scripts
+          sparse-checkout-cone-mode: true
+
       - name: Summarize security gates
         run: |
           {
