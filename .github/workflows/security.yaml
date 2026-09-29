@@ -225,10 +225,14 @@ jobs:
           CGO_ENABLED: "1"
         run: |
           # default -scan=symbol, same as the unsharded gate; only the package SET
-          # is partitioned. -show=verbose so the log names progress instead of
-          # being silent, which is what made the previous failure opaque.
+          # is partitioned. NOTE: -show=verbose is NOT valid with -format json
+          # (govulncheck answers "the -show flag is not supported for json output"
+          # and writes no report at all, which the verdict classifier correctly
+          # reports as verdict=error rather than as a clean scan). Progress
+          # reporting is therefore unavailable on the JSON pass; the per-shard
+          # job name and the step's own echo lines are the progress signal.
           set +e
-          govulncheck -show=verbose -format json ${{ matrix.patterns }} \
+          govulncheck -format json ${{ matrix.patterns }} \
             > govulncheck-report.json
           json_status=$?
           set -e
