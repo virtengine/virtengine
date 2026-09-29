@@ -90,6 +90,7 @@ jobs:
             .github/workflows/supply-chain.yaml \
             .github/workflows/license-compliance.yaml \
             .github/workflows/pr-security-check.yaml \
+            .github/workflows \
             .gitleaks.toml \
             .vulnerability-allowlist.yaml \
             SUPPLY_CHAIN_SECURITY.md

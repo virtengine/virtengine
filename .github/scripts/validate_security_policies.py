@@ -166,6 +166,111 @@ REQUIRED_ALLOWLIST_FIELDS = {
 # .github/tests/test_security_policy_validator.py
 TRACKING_REFERENCE_PATTERN = re.compile(r"^https://github\.com/virtengine/virtengine/(?:issues|pull)/[1-9][0-9]*$")
 
+# References are evidence, and a reference into this repository has to resolve. The same shipped
+# allowlist that pointed at a placeholder issue also cited
+# docs/security/GO-2022-06*-S3CRYPTO-ASSESSMENT.md and docs/security/GO-2026-4513-MSGPACK-ASSESSMENT.md
+# - files that did not exist. The tracking-reference rule cannot see that, because a link to an
+# advisory page and a link to a missing blob are both "a reference": this rule is what makes the
+# evidence real.
+REPO_BLOB_REFERENCE_PATTERN = re.compile(
+    r"^https://github\.com/virtengine/virtengine/blob/[^/]+/(?P<path>.+)$"
+)
+
+
+def unresolved_repo_reference_errors(entry_id: str, references: list) -> list[str]:
+    """Report references that point at a repository path which does not exist."""
+    errors: list[str] = []
+    for reference in references:
+        if not isinstance(reference, str):
+            continue
+        match = REPO_BLOB_REFERENCE_PATTERN.match(reference)
+        if match is None:
+            continue
+        path = match.group("path")
+        if not (ROOT / path).exists():
+            errors.append(
+                f"exceptions entry {entry_id} cites {path} but no such file exists in the "
+                "repository; a blob link to a missing file is a 404, not evidence"
+            )
+    return errors
+
+
+# A `run:` step that executes a repository-local path can only work when the job has checked the
+# repository out first. The security-summary job shipped
+# `bash .github/scripts/check_security_gate_results.sh` with no actions/checkout step: the runner
+# workspace is empty, so the only step that can report a failed gate died with exit 127,
+# "No such file or directory", while the ten gate results it was handed had already resolved to
+# success. `.github/tests/test_security_gate_summary.sh` exercises the script's logic in a local
+# workspace and stayed green the whole time - a guard that cannot observe the job it guards. This
+# rule checks the job: a job that runs a repo-local path must check the repository out before it.
+REPO_LOCAL_PATH_PATTERN = re.compile(
+    r"(?:^|(?<=[\s\"'=(]))(?:\./)?(?:\.github/(?:scripts|tests|actions)/|scripts/)[A-Za-z0-9_./-]+"
+)
+CHECKOUT_STEP_PATTERN = re.compile(r"^actions/checkout@")
+
+
+def repo_local_path_errors(workflow_name: str, job_name: str, job: dict) -> list[str]:
+    """Report steps that run a repository-local path before any actions/checkout step."""
+    steps = job.get("steps")
+    if not isinstance(steps, list):
+        return []
+
+    checked_out = False
+    offenders: list[str] = []
+    for step in steps:
+        if not isinstance(step, dict):
+            continue
+        uses = str(step.get("uses") or "")
+        if CHECKOUT_STEP_PATTERN.match(uses):
+            checked_out = True
+            continue
+        if uses.startswith("./") and not checked_out:
+            # A repo-local action is a repository path too, and needs the same checkout.
+            offenders.append(uses)
+            continue
+        run = step.get("run")
+        if not isinstance(run, str):
+            continue
+        for match in REPO_LOCAL_PATH_PATTERN.finditer(run):
+            if not checked_out:
+                offenders.append(match.group(0).strip())
+
+    if not offenders:
+        return []
+    listed = ", ".join(sorted(set(offenders)))
+    return [
+        f"{workflow_name}: job '{job_name}' runs the repo-local path(s) {listed} but no "
+        "actions/checkout step precedes it; the runner workspace is empty and the step fails "
+        "with 'No such file or directory' instead of reporting a result. Add "
+        "`- uses: actions/checkout@v5` before the first such step."
+    ]
+
+
+def validate_workflows_checkout_coverage(workflows_dir: Path) -> list[str]:
+    """Every job in `.github/workflows` that runs a repo-local path must check the repo out."""
+    if not workflows_dir.is_dir():
+        return [f"workflows directory does not exist: {repo_path(workflows_dir)}"]
+
+    workflow_paths = sorted(workflows_dir.glob("*.yaml"))
+    if not workflow_paths:
+        return [f"no workflow files found in {repo_path(workflows_dir)}"]
+
+    errors: list[str] = []
+    for path in workflow_paths:
+        try:
+            workflow = load_yaml(path)
+        except Exception as exc:  # pragma: no cover - defensive, load_yaml is exercised elsewhere
+            errors.append(f"{path.name}: could not be parsed ({exc.__class__.__name__}: {exc})")
+            continue
+        jobs = workflow.get("jobs", {})
+        if not isinstance(jobs, dict):
+            continue
+        for job_name, job in jobs.items():
+            if isinstance(job, dict):
+                errors.extend(repo_local_path_errors(path.name, str(job_name), job))
+
+    return errors
+
 
 def repo_path(path: Path) -> str:
     try:
@@ -363,6 +468,9 @@ def validate_allowlist(path: Path) -> list[str]:
                     "(policy.require_compensating_controls)"
                 )
 
+            if isinstance(references, list):
+                errors.extend(unresolved_repo_reference_errors(str(entry["id"]), references))
+
     return errors
 
 
@@ -401,6 +509,9 @@ VALIDATORS: dict[str, Callable[[Path], list[str]]] = {
     "supply-chain.yaml": validate_workflow,
     "license-compliance.yaml": validate_workflow,
     "pr-security-check.yaml": validate_workflow,
+    # Keyed on the directory's own name: the `.github/workflows` surface target is a directory,
+    # because the rule it carries is repo-wide (any workflow, not only the four specs above).
+    "workflows": validate_workflows_checkout_coverage,
     ".gitleaks.toml": validate_gitleaks,
     ".vulnerability-allowlist.yaml": validate_allowlist,
     "SUPPLY_CHAIN_SECURITY.md": validate_supply_chain_doc,
@@ -423,6 +534,7 @@ def resolve_targets(args: argparse.Namespace) -> list[Path]:
         ".github/workflows/supply-chain.yaml",
         ".github/workflows/license-compliance.yaml",
         ".github/workflows/pr-security-check.yaml",
+        ".github/workflows",
         ".gitleaks.toml",
         ".vulnerability-allowlist.yaml",
         "SUPPLY_CHAIN_SECURITY.md",
