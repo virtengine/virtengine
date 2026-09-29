@@ -759,15 +759,15 @@ jobs:
       - gosec-scan
     if: always()
     steps:
-      # This job executes a repository script, so it must check the repository out first.
-      # It shipped without this step: the runner workspace was empty, `bash
-      # .github/scripts/check_security_gate_results.sh` died with exit 127 ("No such file or
-      # directory"), and the one job whose purpose is to report a failed gate was itself the
-      # only failing job - every gate it was handed had already resolved to success.
-      # Enforced repo-wide by validate_security_policies.py: a job that runs a repo-local path
-      # must have an actions/checkout step before it.
-      - name: Checkout repository
+      # The "Fail if any security gate failed" step runs a helper FROM THIS REPO
+      # (.github/scripts/check_security_gate_results.sh). Without a checkout the job's
+      # workspace is empty and bash exits 127 ("No such file or directory"), so the gate
+      # fails for a reason that has nothing to do with the security results it summarises.
+      - name: Checkout gate-result helper
         uses: actions/checkout@v5
+        with:
+          sparse-checkout: .github/scripts
+          sparse-checkout-cone-mode: true
 
       - name: Summarize security gates
         run: |
