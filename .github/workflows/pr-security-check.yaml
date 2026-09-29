@@ -12,7 +12,14 @@ on:
       - reopened
 
 concurrency:
-  group: pr-security-${{ github.workflow }}-${{ github.event.pull_request.number }}
+  # The key MUST include the commit sha. On the `push:` trigger
+  # `github.event.pull_request.number` is EMPTY, so every push run landed in the
+  # same group (`pr-security-Security-`) and cancelled the in-flight one - which
+  # is why a `Go Security Scan` leg is cancelled at 0s on essentially every
+  # develop push, and why this job has never reached a verdict either. Keying on
+  # the sha makes each commit's run independent; superseded runs of the same
+  # commit still cancel, which is the protection cancel-in-progress is for.
+  group: pr-security-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}-${{ github.sha }}
   cancel-in-progress: true
 
 defaults:
