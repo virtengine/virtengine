@@ -22,6 +22,15 @@ from `./cmd/...` links the `aws-sdk-go` v1 module at all. Tracked in
 `.vulnerability-allowlist.yaml`. Sibling advisory on the same package and symbols:
 [GO-2022-0646](GO-2022-0646-S3CRYPTO-ASSESSMENT.md).
 
+**RESOLVED 2026-09-29 — this exception has been deleted, not renewed.** The permanent fix this
+assessment named as its exit condition landed: `github.com/aws/aws-sdk-go` v1 is no longer a
+`require` of the root module, and `pkg/verification/email/providers.go` /
+`pkg/verification/sms/providers.go` sign their SES and SNS query requests with
+`github.com/aws/aws-sdk-go-v2/aws/signer/v4` (`aws-sdk-go-v2/config` and
+`aws-sdk-go-v2/credentials` supply the credential chain). Re-verified with `govulncheck v1.1.4` on
+go1.26.8 after the change: the two module-granularity findings are gone from the report. Details
+and the A/B measurement are in §7.
+
 ---
 
 ## 1. What the advisory says
@@ -223,10 +232,51 @@ govulncheck -show verbose ./pkg/verification/...
 If step 3 or step 4 ever produces output, this assessment is void and the exception must be
 withdrawn in favour of the `aws-sdk-go-v2` port.
 
-## 7. Correction log
+## 7. Resolution (2026-09-29)
+
+The exit condition above was met by a **signer swap**, not an SDK client port: both packages
+hand-roll their AWS query-API calls over `net/http` and only ever needed SigV4 signing.
+
+| | before | after |
+| --- | --- | --- |
+| signer | `aws-sdk-go/aws/signer/v4` — `Signer.Sign(req, body, service, region, t)` | `aws-sdk-go-v2/aws/signer/v4` — `Signer.SignHTTP(ctx, creds, req, payloadHashHex, service, region, t)` |
+| credentials | `session.NewSession` + `credentials.NewStaticCredentials` | `aws-sdk-go-v2/config.LoadDefaultConfig` default chain, or `credentials.NewStaticCredentialsProvider` |
+| `go.mod` | `github.com/aws/aws-sdk-go v1.49.0` (direct require) | no v1 require at all |
+
+Measured on the change branch (base `develop` @ `d4f6c4f9`), go1.26.8, `GOWORK=off`:
+
+- `grep -n 'aws-sdk-go v1' go.mod` → no match, and
+  `go list -deps ./... | grep -c '^github.com/aws/aws-sdk-go/'` → 0.
+- `govulncheck -format json ./pkg/verification/email ./pkg/verification/sms`:
+  **3 findings before** (this advisory, GO-2022-0646, and the unrelated GO-2026-5932) and
+  **1 after** (GO-2026-5932 only — still allowlisted, still a separate residual risk). The
+  pre-change number was measured by running the identical command against `develop` @ `d4f6c4f9`
+  in a separate worktree, so the A/B is exact rather than inferred.
+- `python .github/scripts/filter_allowlist.py <report> .vulnerability-allowlist.yaml` exits 0 with
+  the post-change report and 3 with the pre-change report against the same (edited) allowlist —
+  i.e. deleting the exception is safe *because* of this change, not independently of it.
+- The two signers are wire-compatible. Signing the same request with both at a fixed signing time
+  and recomputing SigV4 from first principles (canonical request → string to sign → HMAC chain)
+  reproduces both signatures byte for byte. The only difference is the signed-header set: v2 also
+  signs `content-length`, whose value `net/http` sets from `Request.ContentLength`; the
+  `pkg/verification/{email,sms}` tests now assert the length the signer covered equals the length
+  the server received.
+- The allowlist entries for GO-2022-0635 and GO-2022-0646 were **deleted** (not renewed),
+  `policy.active_exception_count` went 5 → 3, and
+  `python .github/scripts/validate_security_policies.py` exits 0.
+
+`aws-sdk-go` v1 is still in the module graph as a requirement of `wasmd`, `ibc-go/v10` and
+`go-kit`, so it continues to appear in `go list -m all` — but `govulncheck` no longer loads its
+advisories, because no first-party package imports it. That is exactly the condition the
+module-granularity finding was always waiting on. The separate `infra/terraform/tests` and
+`infra/tests` modules still require v1 for `service/ec2` and `service/eks`; they are distinct
+modules, outside the root scan, and import no `s3crypto`.
+
+## 8. Correction log
 
 | date | change |
 | --- | --- |
 | 2026-09-28 | entry created; claimed the module entered only through `infra/terraform/tests` and that production S3 used `aws-sdk-go-v2` — both wrong |
 | 2026-09-29 | root cause re-derived and corrected (direct require, pulled in by `pkg/verification/email`); placeholder `issues/NEW` reference replaced with issue #1079; this assessment written |
 | 2026-09-29 | second correction: the module is pulled in by **two** first-party packages (`email` **and** `sms`), and the fix route is a SigV4-signer swap, not an SDK "SES client" port — issue #1079 updated accordingly |
+| 2026-09-29 | **resolved**: the v1 require is dropped from `go.mod` and both signers moved to `aws-sdk-go-v2`; `govulncheck` no longer reports this advisory (3 findings → 1 on the same scan). The allowlist entry was deleted, not renewed. See §7 |

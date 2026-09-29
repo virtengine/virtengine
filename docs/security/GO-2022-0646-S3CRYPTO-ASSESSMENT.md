@@ -20,6 +20,12 @@ nothing, and no binary built from `./cmd/...` links the module. Tracked in
 [issue #1079](https://github.com/virtengine/virtengine/issues/1079) and
 `.vulnerability-allowlist.yaml`.
 
+**RESOLVED 2026-09-29 — this exception has been deleted, not renewed.** The v1 module is no longer
+a `require` of the root module and the two first-party signers now use the `aws-sdk-go-v2` SigV4
+signer, so `govulncheck` no longer loads this advisory's OSV entry at all. Re-measured after the
+change: three findings before (this one, GO-2022-0635, and the unrelated still-allowlisted
+GO-2026-5932), one after (GO-2026-5932 only). Details and the A/B measurement are in §7.
+
 ---
 
 ## 1. What the advisory says
@@ -182,3 +188,28 @@ govulncheck -show verbose ./pkg/verification/...
 Any output from the `service/s3` or `s3crypto` greps, or a non-zero count from the `./cmd/...`
 grep, voids this assessment and the exception must be withdrawn in favour of the `aws-sdk-go-v2`
 port.
+
+## 7. Resolution (2026-09-29)
+
+The permanent fix recorded against issue #1079 landed as a **signer swap** in
+`pkg/verification/email/providers.go` and `pkg/verification/sms/providers.go`: both now use
+`aws-sdk-go-v2/aws/signer/v4` (`Signer.SignHTTP`) with credentials from
+`aws-sdk-go-v2/config.LoadDefaultConfig` or `credentials.NewStaticCredentialsProvider`, and
+`github.com/aws/aws-sdk-go v1` is no longer a require of the root module.
+
+Re-measured on the change branch (base `develop` @ `d4f6c4f9`), go1.26.8, `GOWORK=off`:
+
+- `govulncheck -format json ./pkg/verification/email ./pkg/verification/sms` reports **this
+  advisory and GO-2022-0635 before** the change and **neither after it** — the remaining finding
+  is the unrelated, still-allowlisted GO-2026-5932. The before-number came from running the same
+  command against `develop` @ `d4f6c4f9` in a separate worktree.
+- Both allowlist entries were **deleted**, `policy.active_exception_count` went 5 → 3, and
+  `python .github/scripts/validate_security_policies.py` exits 0.
+- Wire compatibility was checked, not assumed: signing a fixed request with the v1 and v2 signers
+  and recomputing SigV4 independently reproduces both signatures exactly. The one difference is
+  that v2 also signs `content-length` (set by `net/http` from `Request.ContentLength`).
+
+`aws-sdk-go` v1 remains a transitive requirement of `wasmd` / `ibc-go/v10` / `go-kit`, so it is
+still listed by `go list -m all`; `govulncheck` stops loading its advisories once no first-party
+package imports it, which is now the case. The `infra/*/tests` modules keep their own v1 require
+for `service/ec2` and `service/eks` and are outside the root scan.
