@@ -74,6 +74,13 @@ jobs:
       - name: Run govulncheck verdict regression tests
         run: bash .github/tests/test_govulncheck_verdict.sh
 
+      - name: Run govulncheck invocation guard
+        # govulncheck refuses -show with -format json and writes NO report, so the
+        # verdict classifier reads it as a scanner error. #1058 fixed the
+        # invocation and recorded the reason in a comment; this asserts it, so a
+        # later "restore progress reporting" cannot silently re-add the flag.
+        run: bash .github/tests/test_govulncheck_json_invocation.sh
+
       - name: Set up Go
         uses: actions/setup-go@v6
         with:
