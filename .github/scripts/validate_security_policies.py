@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import re
 import sys
 import tomllib
 from dataclasses import dataclass
@@ -157,6 +158,14 @@ REQUIRED_ALLOWLIST_FIELDS = {
     "compensating_controls",
 }
 
+# The control behind policy.require_issue_reference: an exception must point at a REAL issue or
+# pull request in this repository, by positive integer id. Advisory pages and vendor links are
+# evidence, not ownership - and a placeholder (".../issues/NEW") is neither. Two shipped
+# exceptions carried `issues/NEW` (HTTP 404) while the policy advertised that every entry was
+# tracked, and nothing failed: the key was declared and never read. Regression case:
+# .github/tests/test_security_policy_validator.py
+TRACKING_REFERENCE_PATTERN = re.compile(r"^https://github\.com/virtengine/virtengine/(?:issues|pull)/[1-9][0-9]*$")
+
 
 def repo_path(path: Path) -> str:
     try:
@@ -306,6 +315,13 @@ def validate_allowlist(path: Path) -> list[str]:
     if not isinstance(max_age, int) or max_age > 30:
         errors.append("policy.max_allowlist_age_days must be an integer no greater than 30")
 
+    # Both switches were declared in the policy and never read, so "every exception is tracked
+    # and compensated" was an assertion no run could falsify. Fail closed if either is turned off.
+    if policy.get("require_issue_reference") is not True:
+        errors.append("policy.require_issue_reference must be enabled")
+    if policy.get("require_compensating_controls") is not True:
+        errors.append("policy.require_compensating_controls must be enabled")
+
     today = date.today()
     for ecosystem, entries in exceptions.items():
         if not isinstance(entries, list):
@@ -325,6 +341,27 @@ def validate_allowlist(path: Path) -> list[str]:
                 errors.append(f"exceptions.{ecosystem} entry {entry['id']} is expired")
             if (expires - reviewed_date).days > max_age:
                 errors.append(f"exceptions.{ecosystem} entry {entry['id']} exceeds the maximum allowlist age")
+
+            references = entry["references"]
+            if not isinstance(references, list) or not references:
+                errors.append(f"exceptions.{ecosystem} entry {entry['id']} must list at least one reference")
+            elif not any(
+                isinstance(reference, str) and TRACKING_REFERENCE_PATTERN.match(reference) for reference in references
+            ):
+                errors.append(
+                    f"exceptions.{ecosystem} entry {entry['id']} needs a tracking reference to a "
+                    "virtengine/virtengine issue or pull request (policy.require_issue_reference); "
+                    "advisory URLs are evidence and a placeholder such as .../issues/NEW is not a reference"
+                )
+
+            controls = entry["compensating_controls"]
+            if not isinstance(controls, list) or not controls or not all(
+                isinstance(control, str) and control.strip() for control in controls
+            ):
+                errors.append(
+                    f"exceptions.{ecosystem} entry {entry['id']} must list at least one compensating control "
+                    "(policy.require_compensating_controls)"
+                )
 
     return errors
 

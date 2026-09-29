@@ -99,6 +99,9 @@ jobs:
         # going unscanned.
         run: bash .github/tests/test_govulncheck_shard_partition.sh
 
+      - name: Test the security summary fails closed
+        run: bash .github/tests/test_security_gate_summary.sh
+
       - name: Lint targeted workflows
         run: |
           go run github.com/rhysd/actionlint/cmd/actionlint@v1.7.12 \
@@ -755,6 +758,16 @@ jobs:
       - gosec-scan
     if: always()
     steps:
+      # The "Fail if any security gate failed" step runs a helper FROM THIS REPO
+      # (.github/scripts/check_security_gate_results.sh). Without a checkout the job's
+      # workspace is empty and bash exits 127 ("No such file or directory"), so the gate
+      # fails for a reason that has nothing to do with the security results it summarises.
+      - name: Checkout gate-result helper
+        uses: actions/checkout@v5
+        with:
+          sparse-checkout: .github/scripts
+          sparse-checkout-cone-mode: true
+
       - name: Summarize security gates
         run: |
           {
@@ -775,8 +788,7 @@ jobs:
 
       - name: Fail if any security gate failed
         run: |
-          FAILED=0
-          for result in \
+          bash .github/scripts/check_security_gate_results.sh \
             "${{ needs.policy-validation.result }}" \
             "${{ needs.codeql-analysis.result }}" \
             "${{ needs.go-vuln-scan.result }}" \
@@ -785,13 +797,4 @@ jobs:
             "${{ needs.container-scan.result }}" \
             "${{ needs.sbom-generation.result }}" \
             "${{ needs.secret-scan.result }}" \
-            "${{ needs.gosec-scan.result }}"; do
-            if [ "$result" = "failure" ] || [ "$result" = "cancelled" ]; then
-              FAILED=1
-            fi
-          done
-
-          if [ "$FAILED" -ne 0 ]; then
-            echo "::error::One or more required security gates failed"
-            exit 1
-          fi
+            "${{ needs.gosec-scan.result }}"

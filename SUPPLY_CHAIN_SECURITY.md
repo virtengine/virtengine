@@ -8,7 +8,7 @@ This document describes the controls that are actually enforced by `.github/work
 - The targeted workflows reject `@latest`, `continue-on-error: true`, and silent `|| true` bypasses. Scanner failures are treated as gate failures rather than advisory warnings.
 - The targeted workflows use GitHub-native identity only: `GITHUB_TOKEN` for GitHub APIs and OIDC keyless signing for Sigstore and provenance jobs. They do not consume long-lived signing or publish secrets.
 - Secret scanning uses `.gitleaks.toml` with narrow fixture-only allowlists. Markdown, docs, and public source surfaces remain scanned instead of being globally exempted.
-- Vulnerability exceptions are governed by `.vulnerability-allowlist.yaml`. The current active exception count is `0`, and the file does not auto-suppress scanner findings.
+- Vulnerability exceptions are governed by `.vulnerability-allowlist.yaml`. It currently holds 5 time-boxed exceptions, all of them advisories with no fixed version in any line, and the file does not auto-suppress scanner findings: the count is machine-checked against the file contents and every entry expires.
 
 ## Scanner And Tool Versions
 
@@ -103,17 +103,17 @@ The blocked families are:
 
 Allowed-license evidence is uploaded as workflow artifacts together with an SPDX SBOM.
 
-`.vulnerability-allowlist.yaml` is governance input, not a suppression switch. Any future exception entry must include:
+`.vulnerability-allowlist.yaml` is governance input, not a suppression switch. Every exception entry must include:
 
 - identifier
 - affected package or image
 - reviewer
 - review date
 - expiry date
-- issue or advisory reference
+- a **tracking reference**: `https://github.com/virtengine/virtengine/issues/<n>` (or `/pull/<n>`) for a real, numeric id. Advisory pages (`pkg.go.dev/vuln/...`, GHSA) and vendor links are evidence, not ownership; a placeholder such as `issues/NEW` is rejected.
 - compensating controls
 
-Expired entries are invalid, and the declared `active_exception_count` must match the file contents.
+Expired entries are invalid, and the declared `active_exception_count` must match the file contents. `policy.require_issue_reference` and `policy.require_compensating_controls` are enforced, not decorative: the validator fails if either switch is off, if an entry lists no tracking reference in this repository, or if its compensating controls are empty.
 
 ## Local Validation
 
