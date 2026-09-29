@@ -28,3 +28,5 @@ jobs:
       - name: Publish to crates.io
         working-directory: sdk/rust
         run: cargo publish --token ${{ secrets.CRATES_TOKEN }}
+
+# probe
