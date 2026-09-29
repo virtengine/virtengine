@@ -84,6 +84,12 @@ jobs:
     name: lint
     runs-on: ubuntu-latest
     needs: analyze-changes
+    # 40m: this job runs golangci-lint with its own --timeout=30m below, and the
+    # job budget must sit ABOVE the linter's own budget so a linter overrun is
+    # reported as a job timeout rather than as the linter's exit 4. Left unset,
+    # GitHub applied its 360-minute default and the only signal was
+    # `level=error msg="Timeout exceeded"` + exit code 4.
+    timeout-minutes: 40
     steps:
       - name: Checkout code
         uses: actions/checkout@v5
@@ -112,7 +118,14 @@ jobs:
         uses: golangci/golangci-lint-action@v9
         with:
           version: v2.13.2
-          args: --timeout=10m --new-from-rev=origin/${{ github.base_ref || 'main' }}
+          # 30m matches ci.yaml's lint job. On the standing develop->main PR the
+          # diff is the WHOLE develop delta (--new-from-rev=origin/main), which
+          # does not finish inside 10m: the linter printed its findings and was
+          # then killed by its own budget (`level=error msg="Timeout exceeded"`,
+          # exit code 4, "Ran golangci-lint in 751383ms" / "675401ms"). That is a
+          # false red — the gate cannot distinguish "found nothing" from "did not
+          # finish" at 10m.
+          args: --timeout=30m --new-from-rev=origin/${{ github.base_ref || 'main' }}
 
   vet:
     name: vet

@@ -69,7 +69,7 @@ func TestSyncTestingContextStillEstablishesTUnderSuiteRun(t *testing.T) {
 	if !outer.syncReached {
 		t.Fatal("syncTestingContext did not run to completion")
 	}
-	if outer.NetworkTestSuite.T() == nil {
+	if outer.T() == nil {
 		t.Fatal("suite has no *testing.T after SetupSuite -- T was never established")
 	}
 }
