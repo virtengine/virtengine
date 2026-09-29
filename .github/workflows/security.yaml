@@ -74,6 +74,12 @@ jobs:
       - name: Run govulncheck verdict regression tests
         run: bash .github/tests/test_govulncheck_verdict.sh
 
+      - name: Run govulncheck invocation guard
+        # govulncheck accepts -show OR -format json, not both: with json it writes
+        # NOTHING and every shard classifies as verdict=error. This pins the
+        # invocation so that combination cannot come back.
+        run: bash .github/tests/test_govulncheck_json_invocation.sh
+
       - name: Set up Go
         uses: actions/setup-go@v6
         with:
@@ -225,10 +231,16 @@ jobs:
           CGO_ENABLED: "1"
         run: |
           # default -scan=symbol, same as the unsharded gate; only the package SET
-          # is partitioned. -show=verbose so the log names progress instead of
-          # being silent, which is what made the previous failure opaque.
+          # is partitioned.
+          #
+          # Do NOT add -show. govulncheck rejects it with -format json -- it
+          # prints "the -show flag is not supported for json output" to stdout
+          # and writes NOTHING, so the report is empty and every shard reports
+          # verdict=error. That is how this gate failed on all four shards after
+          # it was sharded. JSON output has no verbosity switch: the scanner
+          # writes its own progress to stderr, which the log already captures.
           set +e
-          govulncheck -show=verbose -format json ${{ matrix.patterns }} \
+          govulncheck -format json ${{ matrix.patterns }} \
             > govulncheck-report.json
           json_status=$?
           set -e
