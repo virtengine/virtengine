@@ -85,6 +85,14 @@ jobs:
         # records that reason; a comment is not a guard, this is.
         run: bash .github/tests/test_govulncheck_json_invocation.sh
 
+      - name: Run allowlist filter regression tests
+        # Pins the two defects in .github/scripts/filter_allowlist.py: it must
+        # name every advisory it suppressed on a fully-allowlisted run (so a
+        # green gate shows WHAT the allowlist hid), and it must exit 4 - never
+        # 0 - when the govulncheck report does not parse to the end, so a scan
+        # killed mid-write can never be reported clean.
+        run: python -m unittest discover -s .github/tests -p "test_filter_allowlist*.py"
+
       - name: Set up Go
         uses: actions/setup-go@v6
         with:
@@ -266,7 +274,9 @@ jobs:
           # Filter findings against the vulnerability allowlist. Only advisories
           # with no fixed version AND no reachable-and-fixable alternative are
           # allowlisted; anything the filter still reports is real work.
-          # Exit 3 = un-allowlisted findings remain, 0 = clean.
+          # Exit codes: 3 = un-allowlisted findings remain, 0 = clean and the
+          # report parsed to the end, 4 = the report was INCOMPLETE (the scan
+          # was cut short, so no verdict may be claimed), other = a real error.
           set +e
           python .github/scripts/filter_allowlist.py \
             govulncheck-report.json .vulnerability-allowlist.yaml
@@ -275,6 +285,10 @@ jobs:
           if [ "$filter_status" -eq 3 ]; then
             echo "verdict_after_allowlist=vulns" >> "$GITHUB_OUTPUT"
             echo "::error::govulncheck reported reachable vulnerabilities not covered by allowlist on shard ${{ matrix.shard }}"
+            exit 1
+          elif [ "$filter_status" -eq 4 ]; then
+            echo "verdict_after_allowlist=incomplete" >> "$GITHUB_OUTPUT"
+            echo "::error::govulncheck report on shard ${{ matrix.shard }} is incomplete - the scan did not finish, so this shard has NO verdict. Treating it as clean would be a false negative."
             exit 1
           elif [ "$filter_status" -eq 0 ]; then
             echo "verdict_after_allowlist=clean" >> "$GITHUB_OUTPUT"
