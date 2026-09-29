@@ -326,6 +326,36 @@ audit_log:
 
         self.assertTrue(any("policy.require_issue_reference must be enabled" in error for error in errors), errors)
 
+    def test_allowlist_rejects_a_reference_to_a_missing_repository_file(self) -> None:
+        """Three shipped exceptions cited docs/security/... assessment files that did not exist, in
+        the same reference list the tracking rule had just made honest. A blob link to a missing
+        path is a 404, not evidence, and nothing read the reference list for resolvability."""
+        path = self.allowlist_entry_fixture(
+            references=(
+                "        - https://github.com/virtengine/virtengine/issues/1079\n"
+                "        - https://github.com/virtengine/virtengine/blob/develop/docs/security/DOES-NOT-EXIST-ASSESSMENT.md"
+            )
+        )
+
+        errors = self.validator.validate_allowlist(path)
+
+        self.assertTrue(
+            any("docs/security/DOES-NOT-EXIST-ASSESSMENT.md" in error for error in errors), errors
+        )
+
+    def test_allowlist_accepts_a_reference_to_an_existing_repository_file(self) -> None:
+        """The positive control: a blob link to a file that is really in the tree stays valid."""
+        path = self.allowlist_entry_fixture(
+            references=(
+                "        - https://github.com/virtengine/virtengine/issues/1079\n"
+                "        - https://github.com/virtengine/virtengine/blob/develop/SUPPLY_CHAIN_SECURITY.md"
+            )
+        )
+
+        errors = self.validator.validate_allowlist(path)
+
+        self.assertEqual([error for error in errors if "no such file exists" in error], [], errors)
+
     def test_doc_rejects_stale_claims(self) -> None:
         document = self.write_file(
             "SUPPLY_CHAIN_SECURITY.md",
@@ -406,6 +436,120 @@ jobs:
         errors = self.validator.validate_workflow(workflow)
 
         self.assertTrue(any("pip-licenses" in error for error in errors), errors)
+
+    def write_workflows(self, files: dict[str, str]) -> Path:
+        """A directory of workflow files, so the repo-wide sweep can be exercised in one tree."""
+        temp_dir = tempfile.TemporaryDirectory()
+        self.addCleanup(temp_dir.cleanup)
+        base = Path(temp_dir.name)
+        for name, content in files.items():
+            (base / name).write_text(content, encoding="utf-8")
+        return base
+
+    def one_job_workflow(self, steps: str) -> str:
+        """A one-job workflow whose only variable is the step list under test."""
+        return f"name: Fixture\njobs:\n  security-summary:\n    runs-on: ubuntu-latest\n    steps:\n{steps}"
+
+    def test_repo_local_path_without_checkout_is_rejected(self) -> None:
+        """The shipped shape. `security-summary` ran `bash .github/scripts/check_security_gate_results.sh`
+        with no actions/checkout step, so the runner workspace was empty and the only job whose
+        purpose is to report a failed gate died with exit 127 - while
+        `.github/tests/test_security_gate_summary.sh`, which exercises the script in a local
+        workspace, stayed green. The guard has to observe the job, not the script."""
+        directory = self.write_workflows(
+            {
+                "security.yaml": self.one_job_workflow(
+                    "      - name: Fail if any security gate failed\n"
+                    "        run: bash .github/scripts/check_security_gate_results.sh success\n"
+                )
+            }
+        )
+
+        errors = self.validator.validate_workflows_checkout_coverage(directory)
+
+        self.assertTrue(any("'security-summary'" in error for error in errors), errors)
+        self.assertTrue(
+            any(".github/scripts/check_security_gate_results.sh" in error for error in errors), errors
+        )
+        self.assertTrue(any("actions/checkout@v5" in error for error in errors), errors)
+
+    def test_repo_local_path_with_checkout_is_accepted(self) -> None:
+        """The positive control: the rule must not reject a job that checks the repository out."""
+        directory = self.write_workflows(
+            {
+                "security.yaml": self.one_job_workflow(
+                    "      - uses: actions/checkout@v5\n"
+                    "      - name: Fail if any security gate failed\n"
+                    "        run: bash .github/scripts/check_security_gate_results.sh success\n"
+                )
+            }
+        )
+
+        self.assertEqual(self.validator.validate_workflows_checkout_coverage(directory), [])
+
+    def test_checkout_after_the_repo_local_step_is_still_rejected(self) -> None:
+        """Too late is the same as absent: the first step still starts on an empty workspace."""
+        directory = self.write_workflows(
+            {
+                "security.yaml": self.one_job_workflow(
+                    "      - run: python .github/scripts/validate_security_policies.py\n"
+                    "      - uses: actions/checkout@v5\n"
+                )
+            }
+        )
+
+        errors = self.validator.validate_workflows_checkout_coverage(directory)
+
+        self.assertTrue(any("'security-summary'" in error for error in errors), errors)
+
+    def test_repo_local_composite_action_without_checkout_is_rejected(self) -> None:
+        """`uses: ./…` is a repository path too, and needs the same checkout."""
+        directory = self.write_workflows(
+            {"security.yaml": self.one_job_workflow("      - uses: ./.github/actions/lint\n")}
+        )
+
+        errors = self.validator.validate_workflows_checkout_coverage(directory)
+
+        self.assertTrue(any(".github/actions/lint" in error for error in errors), errors)
+
+    def test_paths_outside_the_repository_are_not_repo_local(self) -> None:
+        """A `scripts/` directory that is not the repository's must not demand a checkout."""
+        directory = self.write_workflows(
+            {
+                "security.yaml": self.one_job_workflow(
+                    "      - run: /usr/local/bin/scripts/helper.sh\n"
+                    "      - run: docker run --rm image /opt/app/scripts/entrypoint.sh\n"
+                )
+            }
+        )
+
+        self.assertEqual(self.validator.validate_workflows_checkout_coverage(directory), [])
+
+    def test_sweep_covers_every_workflow_in_the_directory(self) -> None:
+        """The rule is repo-wide: a defect in a workflow outside the four policy specs still fails,
+        so the next script-ification cannot repeat the security-summary mistake elsewhere."""
+        directory = self.write_workflows(
+            {
+                "unrelated.yaml": self.one_job_workflow(
+                    "      - run: bash scripts/supply-chain/verify-pinned-images.sh\n"
+                ),
+                "security.yaml": self.one_job_workflow("      - uses: actions/checkout@v5\n"),
+            }
+        )
+
+        errors = self.validator.validate_workflows_checkout_coverage(directory)
+
+        self.assertEqual(len(errors), 1, errors)
+        self.assertTrue(any("unrelated.yaml" in error for error in errors), errors)
+
+    def test_sweep_fails_closed_on_an_empty_workflow_directory(self) -> None:
+        """No workflow files is not 'nothing to check' - it is a surface that stopped being read."""
+        temp_dir = tempfile.TemporaryDirectory()
+        self.addCleanup(temp_dir.cleanup)
+
+        errors = self.validator.validate_workflows_checkout_coverage(Path(temp_dir.name))
+
+        self.assertTrue(any("no workflow files found" in error for error in errors), errors)
 
 
 if __name__ == "__main__":
