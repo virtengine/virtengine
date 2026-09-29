@@ -64,6 +64,7 @@ jobs:
             .github/workflows/supply-chain.yaml \
             .github/workflows/license-compliance.yaml \
             .github/workflows/pr-security-check.yaml \
+            .github/workflows \
             .gitleaks.toml \
             .vulnerability-allowlist.yaml \
             SUPPLY_CHAIN_SECURITY.md
@@ -758,6 +759,16 @@ jobs:
       - gosec-scan
     if: always()
     steps:
+      # This job executes a repository script, so it must check the repository out first.
+      # It shipped without this step: the runner workspace was empty, `bash
+      # .github/scripts/check_security_gate_results.sh` died with exit 127 ("No such file or
+      # directory"), and the one job whose purpose is to report a failed gate was itself the
+      # only failing job - every gate it was handed had already resolved to success.
+      # Enforced repo-wide by validate_security_policies.py: a job that runs a repo-local path
+      # must have an actions/checkout step before it.
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
       - name: Summarize security gates
         run: |
           {

@@ -50,6 +50,18 @@ class SecurityPolicyIntegrationTests(unittest.TestCase):
     def test_supply_chain_doc_is_clean(self) -> None:
         self.assert_clean(REPO_ROOT / "SUPPLY_CHAIN_SECURITY.md", "validate_supply_chain_doc")
 
+    def test_repo_local_checkout_coverage_is_clean(self) -> None:
+        """No job in the repository runs a repo-local path without checking it out.
+
+        This is the CI-level half of the security-summary defect: the job's own guard
+        (test_security_gate_summary.sh) tests the checker script in a local workspace, so it
+        cannot see that the job never got a workspace. This assertion fails if the checkout step
+        is removed again, or added-to-a-new-job/forgotten-elsewhere.
+        """
+        self.assert_clean(
+            REPO_ROOT / ".github" / "workflows", "validate_workflows_checkout_coverage"
+        )
+
 
 if __name__ == "__main__":
     unittest.main()
