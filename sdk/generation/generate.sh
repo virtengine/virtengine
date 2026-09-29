@@ -113,7 +113,20 @@ generate_typescript() {
       END             { if (path != "" && !has_pkg) print path "@" ver }
     ' vendor/modules.txt | xargs -r go mod download
   )
-  (cd "$sdk/go" && modvendor -copy="**/*.proto" -v)
+  # modvendor keeps a matched file only when it sits under a directory that is
+  # ALSO a package of that module (main.go: importPathIntersect, then
+  # strings.Index(vendorFile, path) == 0), so a module whose ROOT package is not
+  # vendored contributes nothing from its proto/ tree. cosmos-sdk and ibc-go are
+  # exactly that, and the buf steps below then die with
+  #
+  #   Failure: Module "path: "go/vendor/github.com/cosmos/cosmos-sdk/proto"" had no .proto files
+  #
+  # (measured: run 36525756868, step "Regenerate all contracts" after the
+  # package-less-stanza fix landed). `-include` appends these directories to the
+  # module's package list - the case its own help text documents - which makes the
+  # filter keep the proto trees the TS templates below read.
+  (cd "$sdk/go" && modvendor -copy="**/*.proto" \
+    -include="github.com/cosmos/cosmos-sdk/proto,github.com/cosmos/ibc-go/v10/proto" -v)
   install_typescript
   rm -rf ts/src/generated
   PROTO_SOURCE=node buf generate --template "$ts_template" proto/node
