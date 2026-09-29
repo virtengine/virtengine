@@ -74,6 +74,16 @@ jobs:
       - name: Run govulncheck verdict regression tests
         run: bash .github/tests/test_govulncheck_verdict.sh
 
+      - name: Run govulncheck JSON invocation guard
+        # The guard script shipped on develop but NOTHING invoked it, so it could
+        # never fail. It pins the sharded gate's invocation: govulncheck refuses
+        # -show with -format json, prints "the -show flag is not supported for
+        # json output" and writes NOTHING, so govulncheck-report.json is empty
+        # and every shard classifies as verdict=error -- which is exactly how all
+        # four shards went red after the gate was sharded. A workflow comment
+        # records that reason; a comment is not a guard, this is.
+        run: bash .github/tests/test_govulncheck_json_invocation.sh
+
       - name: Set up Go
         uses: actions/setup-go@v6
         with:
