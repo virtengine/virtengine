@@ -175,6 +175,7 @@ exceptions:
       reviewed_date: "{reviewed.isoformat()}"
       expires: "{expires.isoformat()}"
       references:
+        - https://github.com/virtengine/virtengine/issues/872
         - https://pkg.go.dev/vuln/GO-2026-4740
       compensating_controls:
         - no VirtEngine code imports the affected package
@@ -223,6 +224,107 @@ audit_log:
 
         self.assertFalse(any("is expired" in error for error in errors), errors)
         self.assertFalse(any("exceeds the maximum allowlist age" in error for error in errors), errors)
+
+    def allowlist_entry_fixture(
+        self,
+        references: str,
+        compensating_controls: str = "        - no VirtEngine code imports the affected package",
+        require_issue_reference: str = "true",
+        require_compensating_controls: str = "true",
+    ) -> Path:
+        """A current, in-window allowlist whose only variables are the fields under test.
+
+        Dates are relative to today and the placeholder-triggering literals are avoided, so the
+        reference and compensating-control rules are the only ones that can fire.
+        """
+        today = date.today()
+        return self.write_file(
+            ".vulnerability-allowlist.yaml",
+            f"""
+version: 2
+policy:
+  block_on: [CRITICAL, HIGH]
+  max_allowlist_age_days: 30
+  require_issue_reference: {require_issue_reference}
+  require_compensating_controls: {require_compensating_controls}
+  active_exception_count: 1
+exceptions:
+  go:
+    - id: GO-2026-4740
+      package: github.com/shamaton/msgpack/v2
+      reason: DoS with no patched release; decode path unreachable from shipped binaries
+      reviewed_by: secops
+      reviewed_date: "{today.isoformat()}"
+      expires: "{(today + timedelta(days=5)).isoformat()}"
+      references:
+{references}
+      compensating_controls:
+{compensating_controls}
+  python: []
+  npm: []
+  containers: []
+audit_log:
+  - date: "{today.isoformat()}"
+    actor: secops
+    action: review-exception
+    note: reference-validation fixture
+""".strip(),
+        )
+
+    def test_allowlist_rejects_placeholder_issue_reference(self) -> None:
+        """`.../issues/NEW` shipped in two live exceptions while the policy advertised that every
+        entry was tracked. It is an unresolvable 404, and no rule read the reference list at all,
+        so the control was decorative. Regression case for the aws-sdk-go / s3crypto entries."""
+        path = self.allowlist_entry_fixture(
+            references=(
+                "        - https://github.com/virtengine/virtengine/issues/NEW\n"
+                "        - https://pkg.go.dev/vuln/GO-2026-4740"
+            )
+        )
+
+        errors = self.validator.validate_allowlist(path)
+
+        self.assertTrue(any("needs a tracking reference" in error for error in errors), errors)
+
+    def test_allowlist_rejects_advisory_only_references(self) -> None:
+        """An advisory page is evidence, not ownership: it is not a tracked issue in this repo."""
+        path = self.allowlist_entry_fixture(references="        - https://pkg.go.dev/vuln/GO-2026-4740")
+
+        errors = self.validator.validate_allowlist(path)
+
+        self.assertTrue(any("needs a tracking reference" in error for error in errors), errors)
+
+    def test_allowlist_accepts_a_real_repository_issue_reference(self) -> None:
+        """The positive control: the rule must not reject a correctly tracked exception."""
+        path = self.allowlist_entry_fixture(
+            references="        - https://github.com/virtengine/virtengine/issues/1079"
+        )
+
+        errors = self.validator.validate_allowlist(path)
+
+        self.assertFalse([error for error in errors if "reference" in error], errors)
+
+    def test_allowlist_rejects_empty_compensating_controls(self) -> None:
+        """policy.require_compensating_controls was likewise declared and never enforced."""
+        path = self.allowlist_entry_fixture(
+            references="        - https://github.com/virtengine/virtengine/issues/1079",
+            compensating_controls="        []",
+        )
+
+        errors = self.validator.validate_allowlist(path)
+
+        self.assertTrue(any("compensating control" in error for error in errors), errors)
+
+    def test_allowlist_rejects_a_disabled_issue_reference_policy(self) -> None:
+        """Flipping the switch off must fail closed rather than silently dropping the control."""
+        path = self.allowlist_entry_fixture(
+            references="        - https://github.com/virtengine/virtengine/issues/1079",
+            require_issue_reference="false",
+        )
+
+        errors = self.validator.validate_allowlist(path)
+
+        self.assertTrue(any("policy.require_issue_reference must be enabled" in error for error in errors), errors)
 
     def test_doc_rejects_stale_claims(self) -> None:
         document = self.write_file(
