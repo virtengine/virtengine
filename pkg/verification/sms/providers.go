@@ -4,6 +4,8 @@ package sms
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"encoding/xml"
 	"fmt"
@@ -15,10 +17,10 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/aws/credentials"
-	"github.com/aws/aws-sdk-go/aws/session"
-	v4 "github.com/aws/aws-sdk-go/aws/signer/v4"
+	"github.com/aws/aws-sdk-go-v2/aws"
+	v4 "github.com/aws/aws-sdk-go-v2/aws/signer/v4"
+	awsconfig "github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/rs/zerolog"
 
 	"github.com/virtengine/virtengine/pkg/errors"
@@ -691,7 +693,7 @@ type SNSProvider struct {
 	logger      zerolog.Logger
 	httpClient  *http.Client
 	endpoint    string
-	credentials *credentials.Credentials
+	credentials aws.CredentialsProvider
 	signer      *v4.Signer
 }
 
@@ -879,25 +881,31 @@ func resolveSNSCredentials(config ProviderConfig) (string, string) {
 	return accessKeyID, secretAccessKey
 }
 
-func newAWSSMSSigner(region, accessKeyID, secretAccessKey string, httpClient *http.Client) (*credentials.Credentials, *v4.Signer, error) {
-	cfg := aws.NewConfig().WithRegion(region).WithHTTPClient(httpClient)
+func newAWSSMSSigner(region, accessKeyID, secretAccessKey string, httpClient *http.Client) (aws.CredentialsProvider, *v4.Signer, error) {
+	var provider aws.CredentialsProvider
 	switch {
 	case accessKeyID != "" && secretAccessKey != "":
-		cfg = cfg.WithCredentials(credentials.NewStaticCredentials(accessKeyID, secretAccessKey, ""))
+		provider = aws.NewCredentialsCache(credentials.NewStaticCredentialsProvider(accessKeyID, secretAccessKey, ""))
 	case accessKeyID != "" || secretAccessKey != "":
 		return nil, nil, errors.Wrap(ErrInvalidConfig, "both access credentials are required for SNS")
+	default:
+		// No explicit credentials configured: fall back to the aws-sdk-go-v2 default chain
+		// (environment, shared config, web identity / IRSA, ECS or EC2 instance role).
+		cfg, err := awsconfig.LoadDefaultConfig(context.Background(),
+			awsconfig.WithRegion(region),
+			awsconfig.WithHTTPClient(httpClient),
+		)
+		if err != nil {
+			return nil, nil, errors.Wrapf(ErrInvalidConfig, "failed to load AWS configuration: %v", err)
+		}
+		provider = cfg.Credentials
 	}
 
-	sess, err := session.NewSession(cfg)
-	if err != nil {
-		return nil, nil, errors.Wrapf(ErrInvalidConfig, "failed to initialize AWS session: %v", err)
-	}
-
-	if sess.Config.Credentials == nil {
+	if provider == nil {
 		return nil, nil, errors.Wrap(ErrInvalidConfig, "AWS credentials are not configured")
 	}
 
-	return sess.Config.Credentials, v4.NewSigner(sess.Config.Credentials), nil
+	return provider, v4.NewSigner(), nil
 }
 
 func (p *SNSProvider) doSignedRequest(ctx context.Context, form url.Values) ([]byte, error) {
@@ -908,7 +916,14 @@ func (p *SNSProvider) doSignedRequest(ctx context.Context, form url.Values) ([]b
 	}
 
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded; charset=utf-8")
-	if _, err := p.signer.Sign(req, bytes.NewReader(payload), "sns", p.config.Region, time.Now().UTC()); err != nil {
+
+	creds, err := p.credentials.Retrieve(ctx)
+	if err != nil {
+		return nil, errors.Wrapf(ErrProviderError, "failed to retrieve AWS credentials: %v", err)
+	}
+
+	payloadHash := sha256.Sum256(payload)
+	if err := p.signer.SignHTTP(ctx, creds, req, hex.EncodeToString(payloadHash[:]), "sns", p.config.Region, time.Now().UTC()); err != nil {
 		return nil, errors.Wrapf(ErrProviderError, "failed to sign SNS request: %v", err)
 	}
 

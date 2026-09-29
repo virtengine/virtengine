@@ -23,6 +23,15 @@ func TestSESProviderSendUsesAWSQueryAPI(t *testing.T) {
 		require.Contains(t, string(body), "Destination.ToAddresses.member.1=user%40example.com")
 		require.Contains(t, string(body), "Source=noreply%40virtengine.com")
 
+		authHeader := r.Header.Get("Authorization")
+		require.Contains(t, authHeader, "AWS4-HMAC-SHA256 Credential=",
+			"SES request must carry a SigV4 Authorization header, got %q", authHeader)
+		require.Contains(t, authHeader, "/ap-southeast-2/ses/aws4_request")
+		require.NotEmpty(t, r.Header.Get("X-Amz-Date"))
+		// The v2 signer signs Content-Length alongside the other headers, so the
+		// length it signed has to be the length the server received.
+		require.EqualValues(t, len(body), r.ContentLength)
+
 		w.Header().Set("Content-Type", "text/xml")
 		_, _ = w.Write([]byte(`<SendEmailResponse><SendEmailResult><MessageId>ses-message-1</MessageId></SendEmailResult></SendEmailResponse>`))
 	}))

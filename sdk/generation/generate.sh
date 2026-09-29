@@ -18,7 +18,27 @@ export LANG=C
 export TZ=UTC
 export SOURCE_DATE_EPOCH=0
 export BUF_CACHE_DIR="${BUF_CACHE_DIR:-/cache/buf}"
-export GOMODCACHE="${GOMODCACHE:-/cache/go-mod}"
+# --- module cache: one root, two views ---------------------------------------
+# modvendor resolves every module as $GOPATH/pkg/mod/<path>@<version> and reads
+# GOPATH ONLY -- it never consults GOMODCACHE (grep GOMODCACHE in
+# goware/modvendor => 0 hits). The golang base image sets GOPATH=/go while this
+# script put the module cache at /cache/go-mod, so modvendor searched a
+# directory nothing ever populates and aborted the run:
+#
+#   Error! "/go/pkg/mod/cloud.google.com/go@v0.123.0" module path does not exist, check $GOPATH/pkg/mod
+#
+# Derive both views from ONE root so they cannot disagree. The root defaults to
+# /cache -- the directory proto-generate.sh actually mounts, so the cache still
+# persists across runs -- and NOT to an inherited GOPATH, because the base image
+# presets GOPATH=/go, which is container-local and would silently throw the
+# module cache away on every run. A caller that already supplies GOMODCACHE at a
+# proper <root>/pkg/mod keeps its own root.
+if [[ "${GOMODCACHE:-}" == */pkg/mod ]]; then
+  export GOPATH="${GOPATH:-${GOMODCACHE%/pkg/mod}}"
+else
+  export GOPATH="${VE_PROTO_GOPATH:-/cache}"
+  export GOMODCACHE="$GOPATH/pkg/mod"
+fi
 export GOCACHE="${GOCACHE:-/cache/go-build}"
 export npm_config_cache="${npm_config_cache:-/cache/npm}"
 
@@ -59,8 +79,54 @@ generate_openapi() {
 }
 
 generate_typescript() {
-  # Ensure vendor directory has proto files for cosmos-sdk and ibc-go
-  (cd "$sdk/go" && modvendor -copy="**/*.proto" -v)
+  # Ensure vendor directory has proto files for cosmos-sdk and ibc-go.
+  # modvendor reads vendor/modules.txt, which only exists once the module has
+  # actually been vendored. CI's `contracts` job runs this script in the image
+  # with no vendor/ present, so modvendor aborted the whole generation:
+  #
+  #   Whoops, cannot find vendor/modules.txt, first run `go mod vendor` and try again
+  #
+  # The --proto sources copied below and the TS templates both read from
+  # go/vendor/..., so the vendor tree is a precondition of this step, not an
+  # optional optimisation. Stage it when it is missing.
+  (cd "$sdk/go" && [ -f vendor/modules.txt ] || go mod vendor)
+  # modvendor stats $GOPATH/pkg/mod/<path>@<version> for EVERY `# <path> <version>`
+  # stanza in vendor/modules.txt - including modules that contribute NO vendored
+  # package at all. `go mod vendor` writes such a stanza for every module named in
+  # go.mod (github.com/golang/mock is a `// indirect` require that no imported
+  # package uses) but never downloads the source of one that provides no package,
+  # so modvendor aborted the whole generation before copying anything:
+  #
+  #   Error! "/cache/pkg/mod/github.com/golang/mock@v1.7.0-rc.1" module path does not exist, check $GOPATH/pkg/mod
+  #
+  # Reproduced offline against the gate's own inputs: `go mod vendor` in sdk/go
+  # writes the golang/mock stanza with no package lines, and modvendor exits 1 on
+  # the existence check for it. Stage the source of every package-less stanza
+  # first - modvendor only stats that directory and copies nothing from it - so an
+  # unused go.mod entry cannot red the contracts job.
+  (
+    cd "$sdk/go"
+    awk '
+      /^# / && NF == 3 { if (path != "" && !has_pkg) print path "@" ver; path = $2; ver = $3; has_pkg = 0; next }
+      /^#/            { next }
+      NF              { has_pkg = 1 }
+      END             { if (path != "" && !has_pkg) print path "@" ver }
+    ' vendor/modules.txt | xargs -r go mod download
+  )
+  # modvendor keeps a matched file only when it sits under a directory that is
+  # ALSO a package of that module (main.go: importPathIntersect, then
+  # strings.Index(vendorFile, path) == 0), so a module whose ROOT package is not
+  # vendored contributes nothing from its proto/ tree. cosmos-sdk and ibc-go are
+  # exactly that, and the buf steps below then die with
+  #
+  #   Failure: Module "path: "go/vendor/github.com/cosmos/cosmos-sdk/proto"" had no .proto files
+  #
+  # (measured: run 36525756868, step "Regenerate all contracts" after the
+  # package-less-stanza fix landed). `-include` appends these directories to the
+  # module's package list - the case its own help text documents - which makes the
+  # filter keep the proto trees the TS templates below read.
+  (cd "$sdk/go" && modvendor -copy="**/*.proto" \
+    -include="github.com/cosmos/cosmos-sdk/proto,github.com/cosmos/ibc-go/v10/proto" -v)
   install_typescript
   rm -rf ts/src/generated
   PROTO_SOURCE=node buf generate --template "$ts_template" proto/node

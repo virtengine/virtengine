@@ -11,7 +11,15 @@ on:
   workflow_dispatch:
 
 concurrency:
-  group: security-${{ github.workflow }}-${{ github.ref }}
+  # The concurrency key MUST include the commit sha. Keyed on workflow+ref alone, every
+  # push to the same branch lands in the same group and cancels the in-flight run — and
+  # because Security is the slowest workflow in the repo (the Go vuln scan alone runs for
+  # many minutes) it was cancelled by the *next* push essentially every time on `develop`.
+  # That is why the Security workflow could never reach a verdict, why `Security Summary`
+  # cascaded to `One or more required security gates failed`, and why re-running the job
+  # never helped. Keying on the sha makes each commit's run independent, so a run can
+  # finish; superseded runs of the same commit (a re-run race) still cancel.
+  group: security-${{ github.workflow }}-${{ github.ref }}-${{ github.sha }}
   cancel-in-progress: true
 
 defaults:
@@ -56,6 +64,7 @@ jobs:
             .github/workflows/supply-chain.yaml \
             .github/workflows/license-compliance.yaml \
             .github/workflows/pr-security-check.yaml \
+            .github/workflows \
             .gitleaks.toml \
             .vulnerability-allowlist.yaml \
             SUPPLY_CHAIN_SECURITY.md
@@ -66,11 +75,41 @@ jobs:
       - name: Run govulncheck verdict regression tests
         run: bash .github/tests/test_govulncheck_verdict.sh
 
+      - name: Run govulncheck JSON invocation guard
+        # The guard script shipped on develop but NOTHING invoked it, so it could
+        # never fail. It pins the sharded gate's invocation: govulncheck refuses
+        # -show with -format json, prints "the -show flag is not supported for
+        # json output" and writes NOTHING, so govulncheck-report.json is empty
+        # and every shard classifies as verdict=error -- which is exactly how all
+        # four shards went red after the gate was sharded. A workflow comment
+        # records that reason; a comment is not a guard, this is.
+        run: bash .github/tests/test_govulncheck_json_invocation.sh
+
+      - name: Run allowlist filter regression tests
+        # Pins the two defects in .github/scripts/filter_allowlist.py: it must
+        # name every advisory it suppressed on a fully-allowlisted run (so a
+        # green gate shows WHAT the allowlist hid), and it must exit 4 - never
+        # 0 - when the govulncheck report does not parse to the end, so a scan
+        # killed mid-write can never be reported clean.
+        run: python -m unittest discover -s .github/tests -p "test_filter_allowlist*.py"
+
       - name: Set up Go
         uses: actions/setup-go@v6
         with:
           go-version: ${{ env.GO_VERSION }}
           cache: true
+
+      - name: Verify the govulncheck shard partition is exact
+        # The sharded gate is findings-equivalent to one unsharded scan ONLY when
+        # the shards are disjoint AND their union is exactly ./... . A package in
+        # no shard is a silent false negative; this asserts the partition against
+        # the real `go list ./...` output on every run, so adding a top-level
+        # directory without adding it to a shard fails here instead of quietly
+        # going unscanned.
+        run: bash .github/tests/test_govulncheck_shard_partition.sh
+
+      - name: Test the security summary fails closed
+        run: bash .github/tests/test_security_gate_summary.sh
 
       - name: Lint targeted workflows
         run: |
@@ -129,8 +168,61 @@ jobs:
           category: "/language:go"
 
   go-vuln-scan:
-    name: Go Vulnerability Scan
+    name: Go Vulnerability Scan (${{ matrix.shard }})
     runs-on: ubuntu-latest
+    # This job runs govulncheck at the DEFAULT -scan=symbol level, which builds a
+    # whole-program call graph. That is the signal this gate exists to provide, so
+    # it is not negotiable — but over 3442 Go files it OOMs a free 7 GB hosted
+    # runner and the runner evicts the job at ~7 minutes with ZERO output on
+    # 27/27 runs. (CodeQL in the same run survived 18m33s on the same image, so
+    # this is memory pressure, not a runner lifetime cap; timeout-minutes is 15
+    # and was never reached.)
+    #
+    # The fix is to SHARD, not to weaken the scan. Each shard scans a disjoint set
+    # of top-level package roots at the SAME default -scan=symbol level, so the
+    # union of the shards' findings is findings-equivalent to one unsharded scan,
+    # while peak RAM per runner stays bounded (no whole-program call graph).
+    #
+    # Coverage-preserving constraints, both enforced below — do NOT relax them:
+    #   1. Shards are disjoint and their patterns UNION TO ./... . Adding a
+    #      top-level directory means adding it to exactly one shard.
+    #   2. A shard that fails to load/type-check is a FAILURE, never a pass. A
+    #      broken shard reports no findings, which would otherwise be a silent
+    #      false negative; .github/scripts/govulncheck_verdict.sh classifies a
+    #      config-only report as `verdict=error`, and the shard fails on that.
+    # The summary job then fails if ANY shard is red or produced findings.
+    #
+    # Alternatives REJECTED with reasons (do not "simplify" back to these):
+    #   * CGO_ENABLED=0 — silently drops files gated behind cgo build constraints
+    #     from compilation, so they stop being scanned. A cleaner-looking run that
+    #     is actually a narrower one, with no warning. Not acceptable on a gate.
+    #   * -scan=package — sound, but reports unreachable code and discards the
+    #     reachability signal entirely.
+    #   * scanning only ./ (root package) — misses every subpackage: false negatives.
+    #   * a larger hosted runner — that is a paid-plan spend decision, which is a
+    #     human call, not something a bot may switch on.
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        # Partition of the MEASURED package list (`go list ./...` -> 318 packages),
+        # not of the directory tree: several top-level dirs (infra/, ml/, mobile/,
+        # deploy/, artifacts/, output/, _build/, api/, config/, lib/, models/,
+        # fuzz/, script/, gentx/, make/) are separate Go modules or hold no Go
+        # packages from the root module's view, so a `./<dir>/...` pattern for them
+        # matches nothing. `.` carries the root package `github.com/virtengine/virtengine`,
+        # which is a real package and was previously unscanned.
+        # .github/tests/test_govulncheck_shard_partition.sh asserts that these
+        # shards stay disjoint and keep unioning to exactly `go list ./...`.
+        include:
+          - shard: core
+            patterns: ". ./x/... ./app/... ./client/... ./pubsub/..."
+          - shard: platform
+            patterns: "./pkg/..."
+          - shard: tooling
+            patterns: "./cmd/... ./scripts/... ./tools/... ./docgen/..."
+          - shard: tests-and-sim
+            patterns: "./tests/... ./testutil/... ./sim/... ./upgrades/... ./sdk/... ./util/..."
     steps:
       - name: Checkout repository
         uses: actions/checkout@v5
@@ -149,20 +241,21 @@ jobs:
       - name: Install govulncheck
         run: go install golang.org/x/vuln/cmd/govulncheck@${{ env.GOVULNCHECK_VERSION }}
 
-      - name: Run govulncheck
+      - name: Run govulncheck (${{ matrix.shard }})
         id: govulncheck
         env:
           CGO_ENABLED: "1"
         run: |
-          # ONE scan, not two. `govulncheck ./...` over this monorepo runs for
-          # many minutes; running it a second time in text mode doubled that and
-          # the job was killed by a runner shutdown before it could report
-          # anything, so this gate had never once produced a verdict. The JSON
-          # report already carries one `finding` object per REACHABLE
-          # vulnerability, which is the same signal text mode signals with exit
-          # 3, so the verdict is derived from it directly.
+          # default -scan=symbol, same as the unsharded gate; only the package SET
+          # is partitioned. NOTE: -show=verbose is NOT valid with -format json
+          # (govulncheck answers "the -show flag is not supported for json output"
+          # and writes no report at all, which the verdict classifier correctly
+          # reports as verdict=error rather than as a clean scan). Progress
+          # reporting is therefore unavailable on the JSON pass; the per-shard
+          # job name and the step's own echo lines are the progress signal.
           set +e
-          govulncheck -format json ./... > govulncheck-report.json
+          govulncheck -format json ${{ matrix.patterns }} \
+            > govulncheck-report.json
           json_status=$?
           set -e
           # Classify the run before reporting anything. A config-only report
@@ -175,30 +268,42 @@ jobs:
           verdict="$(printf '%s\n' "$out" | sed -n 's/^verdict=//p')"
           echo "verdict=$verdict" >> "$GITHUB_OUTPUT"
           if [ "$verdict" = "error" ]; then
-            echo "::error::govulncheck could not complete - this is a scanner error, not a vulnerability finding"
+            echo "::error::govulncheck could not complete on shard ${{ matrix.shard }} - this is a scanner error, not a vulnerability finding"
+            exit 1
+          fi
+          # Filter findings against the vulnerability allowlist. Only advisories
+          # with no fixed version AND no reachable-and-fixable alternative are
+          # allowlisted; anything the filter still reports is real work.
+          # Exit codes: 3 = un-allowlisted findings remain, 0 = clean and the
+          # report parsed to the end, 4 = the report was INCOMPLETE (the scan
+          # was cut short, so no verdict may be claimed), other = a real error.
+          set +e
+          python .github/scripts/filter_allowlist.py \
+            govulncheck-report.json .vulnerability-allowlist.yaml
+          filter_status=$?
+          set -e
+          if [ "$filter_status" -eq 3 ]; then
+            echo "verdict_after_allowlist=vulns" >> "$GITHUB_OUTPUT"
+            echo "::error::govulncheck reported reachable vulnerabilities not covered by allowlist on shard ${{ matrix.shard }}"
+            exit 1
+          elif [ "$filter_status" -eq 4 ]; then
+            echo "verdict_after_allowlist=incomplete" >> "$GITHUB_OUTPUT"
+            echo "::error::govulncheck report on shard ${{ matrix.shard }} is incomplete - the scan did not finish, so this shard has NO verdict. Treating it as clean would be a false negative."
+            exit 1
+          elif [ "$filter_status" -eq 0 ]; then
+            echo "verdict_after_allowlist=clean" >> "$GITHUB_OUTPUT"
+          else
+            echo "::error::allowlist filter failed with exit code $filter_status"
             exit 1
           fi
 
-      - name: Upload govulncheck report
+      - name: Upload govulncheck report (${{ matrix.shard }})
         uses: actions/upload-artifact@v6
         if: always()
         with:
-          name: govulncheck-report
+          name: govulncheck-report-${{ matrix.shard }}
           path: govulncheck-report.json
           retention-days: 30
-
-      - name: Fail on Go vulnerabilities
-        if: steps.govulncheck.outputs.verdict == 'vulns'
-        run: |
-          echo "::error::govulncheck reported reachable vulnerabilities"
-          # Name them, so the summary is actionable without opening the artifact.
-          # This step only runs when findings exist, so the match is guaranteed;
-          # `pipefail` is on (defaults.run.shell: bash), so a miss would abort
-          # here rather than silently printing an empty list.
-          found="$(grep -oE '"osv"[[:space:]]*:[[:space:]]*"[^"]+"' \
-            govulncheck-report.json | sort -u)"
-          printf '%s\n' "$found" | sed 's/^/  /'
-          exit 1
 
   python-vuln-scan:
     name: Python Vulnerability Scan
@@ -668,6 +773,16 @@ jobs:
       - gosec-scan
     if: always()
     steps:
+      # The "Fail if any security gate failed" step runs a helper FROM THIS REPO
+      # (.github/scripts/check_security_gate_results.sh). Without a checkout the job's
+      # workspace is empty and bash exits 127 ("No such file or directory"), so the gate
+      # fails for a reason that has nothing to do with the security results it summarises.
+      - name: Checkout gate-result helper
+        uses: actions/checkout@v5
+        with:
+          sparse-checkout: .github/scripts
+          sparse-checkout-cone-mode: true
+
       - name: Summarize security gates
         run: |
           {
@@ -677,7 +792,7 @@ jobs:
             echo "|------|--------|"
             echo "| Policy Validation | ${{ needs.policy-validation.result }} |"
             echo "| CodeQL | ${{ needs.codeql-analysis.result }} |"
-            echo "| govulncheck | ${{ needs.go-vuln-scan.result }} |"
+            echo "| govulncheck (all shards) | ${{ needs.go-vuln-scan.result }} |"
             echo "| pip-audit | ${{ needs.python-vuln-scan.result }} |"
             echo "| JavaScript audits | ${{ needs.node-vuln-scan.result }} |"
             echo "| Container scan | ${{ needs.container-scan.result }} |"
@@ -688,8 +803,7 @@ jobs:
 
       - name: Fail if any security gate failed
         run: |
-          FAILED=0
-          for result in \
+          bash .github/scripts/check_security_gate_results.sh \
             "${{ needs.policy-validation.result }}" \
             "${{ needs.codeql-analysis.result }}" \
             "${{ needs.go-vuln-scan.result }}" \
@@ -698,13 +812,4 @@ jobs:
             "${{ needs.container-scan.result }}" \
             "${{ needs.sbom-generation.result }}" \
             "${{ needs.secret-scan.result }}" \
-            "${{ needs.gosec-scan.result }}"; do
-            if [ "$result" = "failure" ] || [ "$result" = "cancelled" ]; then
-              FAILED=1
-            fi
-          done
-
-          if [ "$FAILED" -ne 0 ]; then
-            echo "::error::One or more required security gates failed"
-            exit 1
-          fi
+            "${{ needs.gosec-scan.result }}"

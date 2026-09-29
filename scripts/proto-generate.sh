@@ -8,7 +8,7 @@ image="virtengine-proto-gen:1.0.0"
 mode="${1:-all}"
 cache="${VE_PROTO_CACHE:-$repo/.cache/proto-generation}"
 
-mkdir -p "$cache/buf" "$cache/go-mod" "$cache/go-build" "$cache/npm" "$cache/home" "$cache/npm-prefix"
+mkdir -p "$cache/buf" "$cache/pkg/mod" "$cache/go-build" "$cache/npm" "$cache/home" "$cache/npm-prefix"
 
 docker build \
   --file "$repo/sdk/generation/Dockerfile" \

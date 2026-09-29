@@ -71,6 +71,15 @@ func TestSNSProviderSendUsesPublishAPI(t *testing.T) {
 		require.Contains(t, string(body), "PhoneNumber=%2B14155551234")
 		require.Contains(t, string(body), "Message=Code+123456")
 
+		authHeader := r.Header.Get("Authorization")
+		require.Contains(t, authHeader, "AWS4-HMAC-SHA256 Credential=",
+			"SNS request must carry a SigV4 Authorization header, got %q", authHeader)
+		require.Contains(t, authHeader, "/ap-southeast-2/sns/aws4_request")
+		require.NotEmpty(t, r.Header.Get("X-Amz-Date"))
+		// The v2 signer signs Content-Length alongside the other headers, so the
+		// length it signed has to be the length the server received.
+		require.EqualValues(t, len(body), r.ContentLength)
+
 		w.Header().Set("Content-Type", "text/xml")
 		_, _ = w.Write([]byte(`<PublishResponse><PublishResult><MessageId>sns-message-1</MessageId></PublishResult></PublishResponse>`))
 	}))

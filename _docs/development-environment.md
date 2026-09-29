@@ -19,11 +19,13 @@ export PATH="$(brew --prefix)/opt/make/libexec/gnubin:$PATH"
 
 #### Debian based
 
-**TODO** validate
+Package list cross-checked against the repo's own CI installer
+(`.github/actions/setup-ubuntu/action.yaml:20`) and `.envrc` (which hard-fails
+when `unzip` is absent):
 
 ```shell
 sudo apt update
-sudo apt install -y jq curl wget build-essentials ca-certificates npm direnv gcc
+sudo apt install -y jq curl wget unzip build-essential libudev-dev ca-certificates npm direnv gcc
 ```
 
 ### Node.js + pnpm (frontend tooling)

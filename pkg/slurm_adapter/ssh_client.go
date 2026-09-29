@@ -568,20 +568,43 @@ func (c *SSHSLURMClient) SCPUploadBytes(ctx context.Context, content []byte, rem
 	filename := filepath.Base(remotePath)
 	dir := filepath.Dir(remotePath)
 
-	// Prepare content with SCP protocol
-	verrors.SafeGo("", func() {
-		defer func() {}() // WG Done if needed
-		w, _ := session.StdinPipe()
-		defer w.Close()
-		fmt.Fprintf(w, "C%04o %d %s\n", mode, len(content), filename)
-		_, _ = w.Write(content)
-		fmt.Fprint(w, "\x00")
+	// Establish the SCP stdin pipe on THIS goroutine, before session.Run().
+	// x/crypto/ssh records `stdinpipe` in StdinPipe() and reads it back in
+	// start(), which Run() calls, so creating the pipe from a separate
+	// goroutine is a data race on Session state (seen on CI as
+	// "WARNING: DATA RACE ... session.go:373 ... ssh_client.go:574").
+	stdin, err := session.StdinPipe()
+	if err != nil {
+		return fmt.Errorf("failed to open SCP stdin pipe: %w", err)
+	}
+
+	// The payload can exceed the SSH channel window, so the frame write has to
+	// run concurrently with Run() or it deadlocks waiting for the window to
+	// drain. The deferred close always runs, even if the write panics.
+	writeDone := make(chan struct{})
+	verrors.SafeGo("scp-upload", func() {
+		defer func() {
+			_ = stdin.Close()
+			close(writeDone)
+		}()
+		// The write errors are not actionable and stay discarded, as before:
+		// the remote scp can legitimately close the channel before the trailing
+		// NUL is flushed, and Run() below reports the failure that matters.
+		_, _ = fmt.Fprintf(stdin, "C%04o %d %s\n", mode, len(content), filename)
+		_, _ = stdin.Write(content)
+		_, _ = fmt.Fprint(stdin, "\x00")
 	})
 
 	// Run scp command
 	cmd := fmt.Sprintf("scp -t %s", dir)
-	if err := session.Run(cmd); err != nil {
-		return fmt.Errorf("%w: %v", ErrSCPFailed, err)
+	runErr := session.Run(cmd)
+
+	// Run() cannot return before the writer closed the pipe (the remote scp
+	// exits on EOF), so this is not a wait. Joining also keeps the writer from
+	// touching the session after the deferred session.Close() runs.
+	<-writeDone
+	if runErr != nil {
+		return fmt.Errorf("%w: %v", ErrSCPFailed, runErr)
 	}
 
 	return nil

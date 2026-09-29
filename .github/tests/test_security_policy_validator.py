@@ -175,6 +175,7 @@ exceptions:
       reviewed_date: "{reviewed.isoformat()}"
       expires: "{expires.isoformat()}"
       references:
+        - https://github.com/virtengine/virtengine/issues/872
         - https://pkg.go.dev/vuln/GO-2026-4740
       compensating_controls:
         - no VirtEngine code imports the affected package
@@ -223,6 +224,137 @@ audit_log:
 
         self.assertFalse(any("is expired" in error for error in errors), errors)
         self.assertFalse(any("exceeds the maximum allowlist age" in error for error in errors), errors)
+
+    def allowlist_entry_fixture(
+        self,
+        references: str,
+        compensating_controls: str = "        - no VirtEngine code imports the affected package",
+        require_issue_reference: str = "true",
+        require_compensating_controls: str = "true",
+    ) -> Path:
+        """A current, in-window allowlist whose only variables are the fields under test.
+
+        Dates are relative to today and the placeholder-triggering literals are avoided, so the
+        reference and compensating-control rules are the only ones that can fire.
+        """
+        today = date.today()
+        return self.write_file(
+            ".vulnerability-allowlist.yaml",
+            f"""
+version: 2
+policy:
+  block_on: [CRITICAL, HIGH]
+  max_allowlist_age_days: 30
+  require_issue_reference: {require_issue_reference}
+  require_compensating_controls: {require_compensating_controls}
+  active_exception_count: 1
+exceptions:
+  go:
+    - id: GO-2026-4740
+      package: github.com/shamaton/msgpack/v2
+      reason: DoS with no patched release; decode path unreachable from shipped binaries
+      reviewed_by: secops
+      reviewed_date: "{today.isoformat()}"
+      expires: "{(today + timedelta(days=5)).isoformat()}"
+      references:
+{references}
+      compensating_controls:
+{compensating_controls}
+  python: []
+  npm: []
+  containers: []
+audit_log:
+  - date: "{today.isoformat()}"
+    actor: secops
+    action: review-exception
+    note: reference-validation fixture
+""".strip(),
+        )
+
+    def test_allowlist_rejects_placeholder_issue_reference(self) -> None:
+        """`.../issues/NEW` shipped in two live exceptions while the policy advertised that every
+        entry was tracked. It is an unresolvable 404, and no rule read the reference list at all,
+        so the control was decorative. Regression case for the aws-sdk-go / s3crypto entries."""
+        path = self.allowlist_entry_fixture(
+            references=(
+                "        - https://github.com/virtengine/virtengine/issues/NEW\n"
+                "        - https://pkg.go.dev/vuln/GO-2026-4740"
+            )
+        )
+
+        errors = self.validator.validate_allowlist(path)
+
+        self.assertTrue(any("needs a tracking reference" in error for error in errors), errors)
+
+    def test_allowlist_rejects_advisory_only_references(self) -> None:
+        """An advisory page is evidence, not ownership: it is not a tracked issue in this repo."""
+        path = self.allowlist_entry_fixture(references="        - https://pkg.go.dev/vuln/GO-2026-4740")
+
+        errors = self.validator.validate_allowlist(path)
+
+        self.assertTrue(any("needs a tracking reference" in error for error in errors), errors)
+
+    def test_allowlist_accepts_a_real_repository_issue_reference(self) -> None:
+        """The positive control: the rule must not reject a correctly tracked exception."""
+        path = self.allowlist_entry_fixture(
+            references="        - https://github.com/virtengine/virtengine/issues/1079"
+        )
+
+        errors = self.validator.validate_allowlist(path)
+
+        self.assertFalse([error for error in errors if "reference" in error], errors)
+
+    def test_allowlist_rejects_empty_compensating_controls(self) -> None:
+        """policy.require_compensating_controls was likewise declared and never enforced."""
+        path = self.allowlist_entry_fixture(
+            references="        - https://github.com/virtengine/virtengine/issues/1079",
+            compensating_controls="        []",
+        )
+
+        errors = self.validator.validate_allowlist(path)
+
+        self.assertTrue(any("compensating control" in error for error in errors), errors)
+
+    def test_allowlist_rejects_a_disabled_issue_reference_policy(self) -> None:
+        """Flipping the switch off must fail closed rather than silently dropping the control."""
+        path = self.allowlist_entry_fixture(
+            references="        - https://github.com/virtengine/virtengine/issues/1079",
+            require_issue_reference="false",
+        )
+
+        errors = self.validator.validate_allowlist(path)
+
+        self.assertTrue(any("policy.require_issue_reference must be enabled" in error for error in errors), errors)
+
+    def test_allowlist_rejects_a_reference_to_a_missing_repository_file(self) -> None:
+        """Three shipped exceptions cited docs/security/... assessment files that did not exist, in
+        the same reference list the tracking rule had just made honest. A blob link to a missing
+        path is a 404, not evidence, and nothing read the reference list for resolvability."""
+        path = self.allowlist_entry_fixture(
+            references=(
+                "        - https://github.com/virtengine/virtengine/issues/1079\n"
+                "        - https://github.com/virtengine/virtengine/blob/develop/docs/security/DOES-NOT-EXIST-ASSESSMENT.md"
+            )
+        )
+
+        errors = self.validator.validate_allowlist(path)
+
+        self.assertTrue(
+            any("docs/security/DOES-NOT-EXIST-ASSESSMENT.md" in error for error in errors), errors
+        )
+
+    def test_allowlist_accepts_a_reference_to_an_existing_repository_file(self) -> None:
+        """The positive control: a blob link to a file that is really in the tree stays valid."""
+        path = self.allowlist_entry_fixture(
+            references=(
+                "        - https://github.com/virtengine/virtengine/issues/1079\n"
+                "        - https://github.com/virtengine/virtengine/blob/develop/SUPPLY_CHAIN_SECURITY.md"
+            )
+        )
+
+        errors = self.validator.validate_allowlist(path)
+
+        self.assertEqual([error for error in errors if "no such file exists" in error], [], errors)
 
     def test_doc_rejects_stale_claims(self) -> None:
         document = self.write_file(
@@ -304,6 +436,120 @@ jobs:
         errors = self.validator.validate_workflow(workflow)
 
         self.assertTrue(any("pip-licenses" in error for error in errors), errors)
+
+    def write_workflows(self, files: dict[str, str]) -> Path:
+        """A directory of workflow files, so the repo-wide sweep can be exercised in one tree."""
+        temp_dir = tempfile.TemporaryDirectory()
+        self.addCleanup(temp_dir.cleanup)
+        base = Path(temp_dir.name)
+        for name, content in files.items():
+            (base / name).write_text(content, encoding="utf-8")
+        return base
+
+    def one_job_workflow(self, steps: str) -> str:
+        """A one-job workflow whose only variable is the step list under test."""
+        return f"name: Fixture\njobs:\n  security-summary:\n    runs-on: ubuntu-latest\n    steps:\n{steps}"
+
+    def test_repo_local_path_without_checkout_is_rejected(self) -> None:
+        """The shipped shape. `security-summary` ran `bash .github/scripts/check_security_gate_results.sh`
+        with no actions/checkout step, so the runner workspace was empty and the only job whose
+        purpose is to report a failed gate died with exit 127 - while
+        `.github/tests/test_security_gate_summary.sh`, which exercises the script in a local
+        workspace, stayed green. The guard has to observe the job, not the script."""
+        directory = self.write_workflows(
+            {
+                "security.yaml": self.one_job_workflow(
+                    "      - name: Fail if any security gate failed\n"
+                    "        run: bash .github/scripts/check_security_gate_results.sh success\n"
+                )
+            }
+        )
+
+        errors = self.validator.validate_workflows_checkout_coverage(directory)
+
+        self.assertTrue(any("'security-summary'" in error for error in errors), errors)
+        self.assertTrue(
+            any(".github/scripts/check_security_gate_results.sh" in error for error in errors), errors
+        )
+        self.assertTrue(any("actions/checkout@v5" in error for error in errors), errors)
+
+    def test_repo_local_path_with_checkout_is_accepted(self) -> None:
+        """The positive control: the rule must not reject a job that checks the repository out."""
+        directory = self.write_workflows(
+            {
+                "security.yaml": self.one_job_workflow(
+                    "      - uses: actions/checkout@v5\n"
+                    "      - name: Fail if any security gate failed\n"
+                    "        run: bash .github/scripts/check_security_gate_results.sh success\n"
+                )
+            }
+        )
+
+        self.assertEqual(self.validator.validate_workflows_checkout_coverage(directory), [])
+
+    def test_checkout_after_the_repo_local_step_is_still_rejected(self) -> None:
+        """Too late is the same as absent: the first step still starts on an empty workspace."""
+        directory = self.write_workflows(
+            {
+                "security.yaml": self.one_job_workflow(
+                    "      - run: python .github/scripts/validate_security_policies.py\n"
+                    "      - uses: actions/checkout@v5\n"
+                )
+            }
+        )
+
+        errors = self.validator.validate_workflows_checkout_coverage(directory)
+
+        self.assertTrue(any("'security-summary'" in error for error in errors), errors)
+
+    def test_repo_local_composite_action_without_checkout_is_rejected(self) -> None:
+        """`uses: ./…` is a repository path too, and needs the same checkout."""
+        directory = self.write_workflows(
+            {"security.yaml": self.one_job_workflow("      - uses: ./.github/actions/lint\n")}
+        )
+
+        errors = self.validator.validate_workflows_checkout_coverage(directory)
+
+        self.assertTrue(any(".github/actions/lint" in error for error in errors), errors)
+
+    def test_paths_outside_the_repository_are_not_repo_local(self) -> None:
+        """A `scripts/` directory that is not the repository's must not demand a checkout."""
+        directory = self.write_workflows(
+            {
+                "security.yaml": self.one_job_workflow(
+                    "      - run: /usr/local/bin/scripts/helper.sh\n"
+                    "      - run: docker run --rm image /opt/app/scripts/entrypoint.sh\n"
+                )
+            }
+        )
+
+        self.assertEqual(self.validator.validate_workflows_checkout_coverage(directory), [])
+
+    def test_sweep_covers_every_workflow_in_the_directory(self) -> None:
+        """The rule is repo-wide: a defect in a workflow outside the four policy specs still fails,
+        so the next script-ification cannot repeat the security-summary mistake elsewhere."""
+        directory = self.write_workflows(
+            {
+                "unrelated.yaml": self.one_job_workflow(
+                    "      - run: bash scripts/supply-chain/verify-pinned-images.sh\n"
+                ),
+                "security.yaml": self.one_job_workflow("      - uses: actions/checkout@v5\n"),
+            }
+        )
+
+        errors = self.validator.validate_workflows_checkout_coverage(directory)
+
+        self.assertEqual(len(errors), 1, errors)
+        self.assertTrue(any("unrelated.yaml" in error for error in errors), errors)
+
+    def test_sweep_fails_closed_on_an_empty_workflow_directory(self) -> None:
+        """No workflow files is not 'nothing to check' - it is a surface that stopped being read."""
+        temp_dir = tempfile.TemporaryDirectory()
+        self.addCleanup(temp_dir.cleanup)
+
+        errors = self.validator.validate_workflows_checkout_coverage(Path(temp_dir.name))
+
+        self.assertTrue(any("no workflow files found" in error for error in errors), errors)
 
 
 if __name__ == "__main__":
