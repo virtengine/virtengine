@@ -131,12 +131,34 @@ jobs:
               - '**/auth/**'
 
   go-security:
-    name: Go Security Scan
+    name: Go Security Scan (${{ matrix.shard }})
     runs-on: ubuntu-latest
     # Explicit budget. Without one the job inherited GitHub's 360-minute default
-    # and still died to a runner shutdown at ~8-12 minutes with no legible
-    # failure; a tight bound turns an overrun into a visible timeout instead.
+    # and still died to a runner shutdown at ~8 minutes with no legible failure;
+    # a tight bound turns an overrun into a visible timeout instead.
     timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        # Same MEASURED partition of `go list ./...` (318 packages) used by the
+        # scheduled gate in security.yaml: several top-level dirs are separate Go
+        # modules or hold no packages from the root module's view, so a
+        # `./<dir>/...` pattern for them matches nothing, and `.` carries the root
+        # package github.com/virtengine/virtengine. Sharding keeps the DEFAULT
+        # -scan=symbol in every leg, so the union of the shards' findings is
+        # findings-equivalent to one unsharded scan while peak RAM per runner
+        # stays bounded - the unsharded scan OOMs a free 7 GB runner at ~8 min.
+        # .github/tests/test_govulncheck_shard_partition.sh asserts this partition
+        # stays disjoint and keeps unioning to exactly `go list ./...`.
+        include:
+          - shard: core
+            patterns: ". ./x/... ./app/... ./client/... ./pubsub/..."
+          - shard: platform
+            patterns: "./pkg/..."
+          - shard: tooling
+            patterns: "./cmd/... ./scripts/... ./tools/... ./docgen/..."
+          - shard: tests-and-sim
+            patterns: "./tests/... ./testutil/... ./sim/... ./upgrades/... ./sdk/... ./util/..."
     needs:
       - policy-validation
       - analyze-changes
@@ -176,18 +198,17 @@ jobs:
       - name: Run govulncheck
         id: govulncheck
         run: |
-          # ONE scan, not two. `govulncheck ./...` over this monorepo builds a
-          # whole-program call graph and is the memory-heavy step; running it a
-          # second time in text mode doubled that and the job was killed by a
-          # runner shutdown before it could report anything (measured: 8m14s,
-          # 8m12s, 8m39s, 8m25s, 11m52s across five runs, then
-          # ':: The operation was canceled.'). The JSON report already carries one
-          # `finding` object per REACHABLE vulnerability, which is the same signal
-          # text mode signals with exit 3, so passing "-" for the text status
-          # derives the verdict from the JSON report alone. The scheduled gate in
-          # security.yaml has used this shape since #1006; this file was missed.
+          # ONE scan, not two, and only THIS shard's package set. `govulncheck
+          # ./...` over this monorepo builds a whole-program call graph and is the
+          # memory-heavy step: run twice, or over all 3442 files at once, it OOMs a
+          # free 7 GB runner and the job dies to a runner shutdown at ~8 minutes
+          # with nothing reported (measured: 8m14s, 8m12s, 8m39s, 8m25s, 11m52s
+          # across five runs). The JSON report already carries one `finding`
+          # object per REACHABLE vulnerability - the same signal text mode signals
+          # with exit 3 - so passing "-" for the text status derives the verdict
+          # from the JSON report alone. Same shape as the scheduled gate.
           set +e
-          govulncheck -format json ./... > govulncheck-report.json
+          govulncheck -format json ${{ matrix.patterns }} > govulncheck-report.json
           json_status=$?
           set -e
           # Same classification as the scheduled gate: a config-only report means
@@ -212,6 +233,11 @@ jobs:
 
       - name: Run gosec on changed Go source files
         id: gosec
+        # gosec is scoped to the CHANGED files, not to the shard, so running it in
+        # every matrix leg would repeat the identical scan four times. One leg runs
+        # it; the others report the no-op result so the downstream "Fail on Go
+        # security findings" step and the summary read the same outputs everywhere.
+        if: matrix.shard == 'core'
         run: |
           mapfile -t changed_files < <(
             git diff --name-only "origin/${{ github.base_ref }}...HEAD" -- '*.go' \
@@ -267,22 +293,27 @@ jobs:
         if: always()
         with:
           sarif_file: gosec.sarif
-          category: gosec-pr
+          # Per-shard category: a fixed category makes the four matrix legs
+          # overwrite each other's SARIF upload rather than merging.
+          category: gosec-pr-${{ matrix.shard }}
 
-      - name: Upload Go security reports
+      - name: Upload Go security reports (${{ matrix.shard }})
         uses: actions/upload-artifact@v6
         if: always()
         with:
-          name: pr-go-security-report
+          name: pr-go-security-report-${{ matrix.shard }}
           path: |
             govulncheck-report.json
             gosec-results.json
           retention-days: 7
 
       - name: Fail on Go security findings
-        if: steps.govulncheck.outputs.exit_code != '0' || steps.gosec.outputs.exit_code != '0'
+        # `steps.gosec.outputs.exit_code` is EMPTY on the shards where gosec is
+        # skipped, so a bare `!= '0'` would fail those legs on a false premise.
+        # Only assert when the step actually ran.
+        if: always() && (steps.govulncheck.outputs.exit_code != '0' || (steps.gosec.outcome == 'success' && steps.gosec.outputs.exit_code != '0'))
         run: |
-          echo "::error::PR Go security checks failed"
+          echo "::error::PR Go security checks failed (shard ${{ matrix.shard }})"
           exit 1
 
   gitleaks-scan:
