@@ -118,7 +118,11 @@ func (f *mutationChainFake) ReconcileMutation(context.Context, *ProviderMutation
 	return f.reconciled, nil
 }
 
-func newMutationSubmitterForTest(t *testing.T, chain *mutationChainFake, queuePath string) (*ProviderMutationSubmitter, *KeyManager) {
+// newMutationSubmitterForTest builds a started submitter over the fake chain.
+// An optional store replaces the default file store so a test can interpose on
+// the durable write; the generated file-store path is still used for every
+// other call site.
+func newMutationSubmitterForTest(t *testing.T, chain *mutationChainFake, queuePath string, store ...ProviderMutationStore) (*ProviderMutationSubmitter, *KeyManager) {
 	t.Helper()
 	address := sdk.AccAddress(make([]byte, 20)).String()
 	keyConfig := DefaultKeyManagerConfig()
@@ -139,6 +143,9 @@ func newMutationSubmitterForTest(t *testing.T, chain *mutationChainFake, queuePa
 	cfg.RetryBackoff = time.Millisecond
 	cfg.MaxRetryBackoff = 2 * time.Millisecond
 	cfg.Production = false
+	if len(store) > 0 && store[0] != nil {
+		cfg.Store = store[0]
+	}
 	submitter, err := NewProviderMutationSubmitter(cfg, keyManager)
 	require.NoError(t, err)
 	require.NoError(t, submitter.Start(context.Background()))
@@ -566,6 +573,59 @@ func TestProviderMutationSubmitterDeadLettersTerminalFailure(t *testing.T) {
 	status, statusErr := submitter.Status(context.Background(), result.ID)
 	require.NoError(t, statusErr)
 	require.Equal(t, MutationStateDeadLetter, status.State)
+	require.Equal(t, 1, submitter.Metrics(context.Background()).DeadLetters)
+}
+
+// workerWinsStore makes the "the background worker observed the terminal
+// failure first" interleaving deterministic instead of load-dependent: every
+// fresh PutIfAbsent hands the caller's own envelope to the submitter's worker
+// path (ProcessDue) before Submit() gets the stored copy back, exactly as a
+// poll tick landing between the durable write and Submit's inline process()
+// would.
+type workerWinsStore struct {
+	ProviderMutationStore
+	submitter *ProviderMutationSubmitter
+}
+
+func (w *workerWinsStore) PutIfAbsent(ctx context.Context, envelope *ProviderMutationEnvelope) (*ProviderMutationEnvelope, bool, error) {
+	stored, existed, err := w.ProviderMutationStore.PutIfAbsent(ctx, envelope)
+	if err != nil || existed || w.submitter == nil {
+		return stored, existed, err
+	}
+	if procErr := w.submitter.ProcessDue(ctx, 32); procErr != nil && !isProviderMutationRetryable(procErr) {
+		return stored, existed, procErr
+	}
+	return stored, existed, nil
+}
+
+// TestProviderMutationSubmitterReportsDeadLetterRacedByWorker pins the CI red
+// "An error is expected but got nil" on the require.Error in
+// TestProviderMutationSubmitterDeadLettersTerminalFailure.
+//
+// Submit() durably writes the envelope and then processes it inline, but the
+// submitter also runs a worker that polls the same store on PollInterval.
+// Either goroutine can be the one that observes the terminal broadcast
+// failure: when the worker gets there first, process() finds an already
+// dead-lettered envelope, reports a no-op, and Submit() used to hand back a nil
+// error for a mutation that is durably dead-lettered -- dropping the only
+// in-band signal the caller gets that the work will never be submitted.
+//
+// The assertion is unchanged in spirit: a dead-lettered mutation must never be
+// reported as success. Only the interleaving is forced.
+func TestProviderMutationSubmitterReportsDeadLetterRacedByWorker(t *testing.T) {
+	chain := newMutationChainFake()
+	chain.broadcastErrAlways = errors.New("unauthorized signature")
+	queuePath := filepath.Join(t.TempDir(), "queue.json")
+	inner, err := NewFileProviderMutationStore(queuePath)
+	require.NoError(t, err)
+	store := &workerWinsStore{ProviderMutationStore: inner}
+	submitter, _ := newMutationSubmitterForTest(t, chain, queuePath, store)
+	store.submitter = submitter
+
+	result, err := submitter.Submit(context.Background(), MutationProviderDelete, &providerv1beta4.MsgDeleteProvider{Owner: submitter.cfg.ProviderAddress})
+	require.ErrorIs(t, err, ErrProviderMutationDeadLetter)
+	require.Equal(t, MutationStateDeadLetter, result.State)
+	require.False(t, result.Final)
 	require.Equal(t, 1, submitter.Metrics(context.Background()).DeadLetters)
 }
 

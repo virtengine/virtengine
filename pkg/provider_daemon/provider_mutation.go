@@ -988,6 +988,16 @@ func (s *ProviderMutationSubmitter) Submit(ctx context.Context, kind ProviderMut
 	latest, getErr := s.store.Get(ctx, stored.ID)
 	if getErr == nil {
 		result = resultFromEnvelope(latest, existed)
+		// The background worker polls this same store on PollInterval and can be
+		// the goroutine that observes the terminal failure first. process()
+		// treats an already terminal envelope as a no-op and returns nil for it,
+		// so the durable state -- not process()'s return value -- decides whether
+		// the caller may treat this mutation as submitted. Reporting success for
+		// a dead-lettered mutation would drop the only in-band signal the caller
+		// gets about a terminal failure.
+		if err == nil && latest.State == MutationStateDeadLetter {
+			err = &ProviderMutationError{Op: "submit", MutationID: latest.ID, Classification: latest.Classification, Err: ErrProviderMutationDeadLetter}
+		}
 	}
 	return result, err
 }
