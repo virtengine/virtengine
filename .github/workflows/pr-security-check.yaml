@@ -318,7 +318,12 @@ jobs:
 
       - name: Upload gosec SARIF
         uses: github/codeql-action/upload-sarif@v4
-        if: always()
+        # Only the leg that RAN gosec has a SARIF file to upload: `Run gosec` is
+        # gated on `matrix.shard == 'core'`. A bare `always()` therefore made the
+        # other three legs fail on a file that was never written (measured: run
+        # 36524197867, platform -> 'Upload gosec SARIF' FAILURE, while that leg's
+        # govulncheck had already passed). Mirror the gosec step's own condition.
+        if: always() && matrix.shard == 'core'
         with:
           sarif_file: gosec.sarif
           # Per-shard category: a fixed category makes the four matrix legs
