@@ -220,15 +220,42 @@ jobs:
             govulncheck-report.json "$json_status" - 2>&1)"
           echo "$out"
           verdict="$(printf '%s\n' "$out" | sed -n 's/^verdict=//p')"
-          # Keep the existing exit_code interface intact for the downstream
-          # "Fail on Go security findings" step; only a clean scan is 0.
-          if [ "$verdict" = "clean" ]; then
-            echo "exit_code=0" >> "$GITHUB_OUTPUT"
-          else
-            echo "exit_code=1" >> "$GITHUB_OUTPUT"
-          fi
+          # A scanner failure must never be reported as a clean scan.
           if [ "$verdict" = "error" ]; then
             echo "::error::govulncheck could not complete - this is a scanner error, not a vulnerability finding"
+            echo "exit_code=1" >> "$GITHUB_OUTPUT"
+            exit 1
+          fi
+          # Filter findings against the SAME reviewed allowlist the scheduled gate
+          # uses, so this leg adjudicates instead of failing closed on reviewed
+          # risk. Without this the leg reds on advisories that have no fixed
+          # release and no reachable alternative - already reviewed, dated and
+          # compensating-controlled in .vulnerability-allowlist.yaml - reddening
+          # every Go-touching PR and the standing develop->main integration PR on
+          # a finding that is not new work (measured: run 36522313022, all four
+          # shards red on the single advisory the scheduled gate allowlists).
+          # This does NOT weaken the gate: the allowlist's age, tracking issue
+          # and controls are enforced by the policy-validation job, and anything
+          # the filter still reports is real work.
+          # Exit 3 = un-allowlisted findings remain, 0 = clean.
+          set +e
+          python .github/scripts/filter_allowlist.py \
+            govulncheck-report.json .vulnerability-allowlist.yaml
+          filter_status=$?
+          set -e
+          # Keep the exit_code interface intact for the downstream
+          # "Fail on Go security findings" step.
+          if [ "$filter_status" -eq 3 ]; then
+            echo "verdict_after_allowlist=vulns" >> "$GITHUB_OUTPUT"
+            echo "exit_code=1" >> "$GITHUB_OUTPUT"
+            echo "::error::govulncheck reported reachable vulnerabilities not covered by allowlist on shard ${{ matrix.shard }}"
+            exit 1
+          elif [ "$filter_status" -eq 0 ]; then
+            echo "verdict_after_allowlist=clean" >> "$GITHUB_OUTPUT"
+            echo "exit_code=0" >> "$GITHUB_OUTPUT"
+          else
+            echo "::error::allowlist filter failed with exit code $filter_status"
+            echo "exit_code=1" >> "$GITHUB_OUTPUT"
             exit 1
           fi
 
