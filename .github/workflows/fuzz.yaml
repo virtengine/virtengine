@@ -22,7 +22,7 @@ on:
   workflow_dispatch:
     inputs:
       fuzz_time:
-        description: "Fuzz test duration per target (e.g., 30s, 5m)"
+        description: "Fuzz budget per step, divided across that step's fuzz targets (e.g., 30s, 5m)"
         required: false
         default: "30s"
 
@@ -75,30 +75,77 @@ jobs:
             echo "duration=30s" >> $GITHUB_OUTPUT
           fi
 
+      # Regression test for the runner below. Hermetic - it stubs `go` on PATH -
+      # so it costs nothing and pins the argument contract that this workflow
+      # broke (`-fuzz=.` matches 10-14 targets per package and aborts before
+      # fuzzing anything). Not continue-on-error: a broken runner is a defect.
+      - name: Test the fuzz-target runner
+        run: bash .github/tests/test_run_fuzz_targets.sh
+
+      # Each step fuzzes every target in its packages one at a time. `-fuzz=.`
+      # cannot be used: it requires the pattern to match exactly ONE fuzz target,
+      # and these packages declare 7-14 each, so the old invocation aborted with
+      # "will not fuzz, -fuzz matches more than one fuzz test" and fuzzed nothing
+      # - on every run, for every one of these steps.
       - name: Run encryption crypto fuzz tests
+        id: fuzz-encryption-crypto
         run: |
-          go test -fuzz=. -fuzztime=${{ steps.fuzz-time.outputs.duration }} ./x/encryption/crypto/...
+          bash .github/scripts/run_fuzz_targets.sh "${{ steps.fuzz-time.outputs.duration }}" ./x/encryption/crypto/...
         continue-on-error: true
 
       - name: Run encryption types fuzz tests
+        id: fuzz-encryption-types
         run: |
-          go test -fuzz=. -fuzztime=${{ steps.fuzz-time.outputs.duration }} ./x/encryption/types/...
+          bash .github/scripts/run_fuzz_targets.sh "${{ steps.fuzz-time.outputs.duration }}" ./x/encryption/types/...
         continue-on-error: true
 
       - name: Run VEID types fuzz tests
+        id: fuzz-veid-types
         run: |
-          go test -fuzz=. -fuzztime=${{ steps.fuzz-time.outputs.duration }} ./x/veid/types/...
+          bash .github/scripts/run_fuzz_targets.sh "${{ steps.fuzz-time.outputs.duration }}" ./x/veid/types/...
         continue-on-error: true
 
       - name: Run marketplace types fuzz tests
+        id: fuzz-market-types
         run: |
-          go test -fuzz=. -fuzztime=${{ steps.fuzz-time.outputs.duration }} ./x/market/types/marketplace/...
+          bash .github/scripts/run_fuzz_targets.sh "${{ steps.fuzz-time.outputs.duration }}" ./x/market/types/marketplace/...
         continue-on-error: true
 
       - name: Run MFA types fuzz tests
+        id: fuzz-mfa-types
         run: |
-          go test -fuzz=. -fuzztime=${{ steps.fuzz-time.outputs.duration }} ./x/mfa/types/...
+          bash .github/scripts/run_fuzz_targets.sh "${{ steps.fuzz-time.outputs.duration }}" ./x/mfa/types/...
         continue-on-error: true
+
+      # The fuzz steps above stay non-gating (a crash in a pre-existing fuzz
+      # target must not red the whole workflow overnight), but the masking was
+      # invisible: the job reported success while every step exited 1. This makes
+      # a failing fuzz step show up in the run summary and as a job annotation
+      # instead of only in the raw log.
+      - name: Summarize fuzz step outcomes
+        if: always()
+        env:
+          OUTCOMES: |
+            encryption-crypto=${{ steps.fuzz-encryption-crypto.outcome }}
+            encryption-types=${{ steps.fuzz-encryption-types.outcome }}
+            veid-types=${{ steps.fuzz-veid-types.outcome }}
+            market-types=${{ steps.fuzz-market-types.outcome }}
+            mfa-types=${{ steps.fuzz-mfa-types.outcome }}
+        run: |
+          {
+            echo "# Fuzz step outcomes"
+            echo ""
+            echo '```'
+            printf '%s\n' "$OUTCOMES"
+            echo '```'
+            echo ""
+            echo "These steps are non-gating (continue-on-error); anything other than"
+            echo "'success' above means that fuzz target did not run cleanly - read the"
+            echo "step log for the target that failed."
+          } >> "$GITHUB_STEP_SUMMARY"
+          if printf '%s\n' "$OUTCOMES" | grep -qvE '=(success|skipped)$'; then
+            echo "::warning::at least one fuzz step did not succeed - see the Fuzz step outcomes summary"
+          fi
 
       # Provider daemon and enclave fuzz tests are currently disabled due to pre-existing
       # compilation issues in those packages. They will be re-enabled once those issues
