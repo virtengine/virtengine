@@ -97,9 +97,9 @@ mu               sync.RWMutex
 }
 
 func TestHPCBillingE2E(t *testing.T) {
-suite.Run(t, &HPCBillingE2ETestSuite{
-NetworkTestSuite: testutil.NewNetworkTestSuite(nil, &HPCBillingE2ETestSuite{}),
-})
+s := &HPCBillingE2ETestSuite{}
+	s.NetworkTestSuite = testutil.NewNetworkTestSuite(nil, s)
+	suite.Run(t, s)
 }
 
 func (s *HPCBillingE2ETestSuite) SetupSuite() {

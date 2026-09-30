@@ -60,9 +60,9 @@ func TestHPCSLURMIntegration(t *testing.T) {
 	cfg.NumValidators = 1
 	cfg.CleanupDir = false
 
-	suite.Run(t, &HPCSLURMIntegrationE2ETestSuite{
-		NetworkTestSuite: testutil.NewNetworkTestSuite(&cfg, &HPCSLURMIntegrationE2ETestSuite{}),
-	})
+	s := &HPCSLURMIntegrationE2ETestSuite{}
+	s.NetworkTestSuite = testutil.NewNetworkTestSuite(&cfg, s)
+	suite.Run(t, s)
 }
 
 func (s *HPCSLURMIntegrationE2ETestSuite) SetupSuite() {
