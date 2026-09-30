@@ -2430,31 +2430,31 @@ export function createSDK(queryTransport: Transport, txTransport: Transport, opt
             const service = await serviceLoader.loadAt(48);
             return getClient(service).financialCaseBySubject(input, options);
           }, { path: [48, 20] }),
-          getFinancialCasesByOrder: withMetadata(async function getFinancialCasesByOrder(input: DeepPartial<virtengine_settlement_v1_query.QueryFinancialCasesRequest>, options?: CallOptions) {
+          getFinancialCasesByOrder: withMetadata(async function getFinancialCasesByOrder(input: DeepPartial<virtengine_settlement_v1_query.QueryFinancialCasesByOrderRequest>, options?: CallOptions) {
             const service = await serviceLoader.loadAt(48);
             return getClient(service).financialCasesByOrder(input, options);
           }, { path: [48, 21] }),
-          getFinancialCasesByInvoice: withMetadata(async function getFinancialCasesByInvoice(input: DeepPartial<virtengine_settlement_v1_query.QueryFinancialCasesRequest>, options?: CallOptions) {
+          getFinancialCasesByInvoice: withMetadata(async function getFinancialCasesByInvoice(input: DeepPartial<virtengine_settlement_v1_query.QueryFinancialCasesByInvoiceRequest>, options?: CallOptions) {
             const service = await serviceLoader.loadAt(48);
             return getClient(service).financialCasesByInvoice(input, options);
           }, { path: [48, 22] }),
-          getFinancialCasesByUsage: withMetadata(async function getFinancialCasesByUsage(input: DeepPartial<virtengine_settlement_v1_query.QueryFinancialCasesRequest>, options?: CallOptions) {
+          getFinancialCasesByUsage: withMetadata(async function getFinancialCasesByUsage(input: DeepPartial<virtengine_settlement_v1_query.QueryFinancialCasesByUsageRequest>, options?: CallOptions) {
             const service = await serviceLoader.loadAt(48);
             return getClient(service).financialCasesByUsage(input, options);
           }, { path: [48, 23] }),
-          getFinancialCasesByJob: withMetadata(async function getFinancialCasesByJob(input: DeepPartial<virtengine_settlement_v1_query.QueryFinancialCasesRequest>, options?: CallOptions) {
+          getFinancialCasesByJob: withMetadata(async function getFinancialCasesByJob(input: DeepPartial<virtengine_settlement_v1_query.QueryFinancialCasesByJobRequest>, options?: CallOptions) {
             const service = await serviceLoader.loadAt(48);
             return getClient(service).financialCasesByJob(input, options);
           }, { path: [48, 24] }),
-          getFinancialCasesByEscrow: withMetadata(async function getFinancialCasesByEscrow(input: DeepPartial<virtengine_settlement_v1_query.QueryFinancialCasesRequest>, options?: CallOptions) {
+          getFinancialCasesByEscrow: withMetadata(async function getFinancialCasesByEscrow(input: DeepPartial<virtengine_settlement_v1_query.QueryFinancialCasesByEscrowRequest>, options?: CallOptions) {
             const service = await serviceLoader.loadAt(48);
             return getClient(service).financialCasesByEscrow(input, options);
           }, { path: [48, 25] }),
-          getFinancialCasesByStatus: withMetadata(async function getFinancialCasesByStatus(input: DeepPartial<virtengine_settlement_v1_query.QueryFinancialCasesRequest>, options?: CallOptions) {
+          getFinancialCasesByStatus: withMetadata(async function getFinancialCasesByStatus(input: DeepPartial<virtengine_settlement_v1_query.QueryFinancialCasesByStatusRequest>, options?: CallOptions) {
             const service = await serviceLoader.loadAt(48);
             return getClient(service).financialCasesByStatus(input, options);
           }, { path: [48, 26] }),
-          getFinancialCasesByParty: withMetadata(async function getFinancialCasesByParty(input: DeepPartial<virtengine_settlement_v1_query.QueryFinancialCasesRequest>, options?: CallOptions) {
+          getFinancialCasesByParty: withMetadata(async function getFinancialCasesByParty(input: DeepPartial<virtengine_settlement_v1_query.QueryFinancialCasesByPartyRequest>, options?: CallOptions) {
             const service = await serviceLoader.loadAt(48);
             return getClient(service).financialCasesByParty(input, options);
           }, { path: [48, 27] }),
