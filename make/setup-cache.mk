@@ -19,7 +19,7 @@
 #   * file targets (the version markers) run $(DEVACHE_GUARD) as their first
 #     recipe line -- a phony prerequisite there would mark the target
 #     permanently out of date and re-install every tool on every run.
-DEVACHE_ERROR = VE_DEVCACHE is empty - run "direnv allow" or export VE_DEVCACHE
+DEVACHE_ERROR = VE_DEVCACHE is empty - run "direnv allow", or export the devcache family (VE_DEVCACHE, VE_DEVCACHE_BIN, VE_DEVCACHE_INCLUDE, VE_DEVCACHE_VERSIONS, VE_DEVCACHE_NODE_MODULES, VE_RUN, VE_RUN_BIN) - exporting VE_DEVCACHE alone is not enough, the recipes use the others
 DEVACHE_GUARD = $(if $(VE_DEVCACHE),@:,$(error $(DEVACHE_ERROR)))
 
 .PHONY: require-devache
