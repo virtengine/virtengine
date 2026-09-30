@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/binary"
 	"math"
-	"reflect"
 	"time"
 
 	sdk "github.com/cosmos/cosmos-sdk/types"
@@ -460,26 +459,22 @@ func (q GRPCQuerier) FinancialCasesByParty(ctx context.Context, req *settlementv
 }
 
 // financialCases resolves the paginated case list for one lineage index key and
-// wraps it in the caller's response type. It is a free function rather than a
-// method because Go forbids type parameters on methods.
-func financialCases[T any](ctx context.Context, q GRPCQuerier, kind, key string, pagination *query.PageRequest) (*T, error) {
+// returns the shared payload every FinancialCasesBy* response is built from.
+//
+// Each FinancialCasesBy* RPC wraps this in its own response type. All seven
+// declare `repeated FinancialCase financial_cases = 1` plus
+// `PageResponse pagination = 2`, field-identical to the retired shared
+// QueryFinancialCasesResponse, so the encoded bytes are unchanged by the split.
+func financialCases(ctx context.Context, q GRPCQuerier, kind, key string, pagination *query.PageRequest) ([]settlementv1.FinancialCase, *query.PageResponse, error) {
 	if key == "" {
-		return nil, status.Error(codes.InvalidArgument, "key required")
+		return nil, nil, status.Error(codes.InvalidArgument, "key required")
 	}
 	all, err := q.FinancialCasesByIndex(sdk.UnwrapSDKContext(ctx), kind, key)
 	if err != nil {
-		return nil, status.Error(codes.Internal, err.Error())
+		return nil, nil, status.Error(codes.Internal, err.Error())
 	}
 	start, end, page := financialPageBounds(len(all), pagination)
-
-	// Every FinancialCasesBy* response declares `repeated FinancialCase
-	// financial_cases = 1` plus `PageResponse pagination = 2`, field-identical to
-	// the retired shared QueryFinancialCasesResponse, so the encoded bytes are
-	// unchanged. The fields are set by name to avoid a per-RPC conversion.
-	out := new(T)
-	reflect.ValueOf(out).Elem().FieldByName("FinancialCases").Set(reflect.ValueOf(all[start:end]))
-	reflect.ValueOf(out).Elem().FieldByName("Pagination").Set(reflect.ValueOf(page))
-	return out, nil
+	return all[start:end], page, nil
 }
 
 func (q GRPCQuerier) FinancialCaseLineage(ctx context.Context, req *settlementv1.QueryFinancialCaseLineageRequest) (*settlementv1.QueryFinancialCaseLineageResponse, error) {
