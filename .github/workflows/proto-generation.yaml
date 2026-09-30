@@ -51,6 +51,16 @@ jobs:
           cache: true
       - name: Verify modules and checksums
         run: VE_VERIFY_EMPTY_CACHE=1 ./scripts/verify-modules.sh
+      # `tests/compatibility` reaches x/encryption/crypto -> ledger hid, whose
+      # cgo directive needs libudev. Steps 7-9 never got far enough to compile
+      # it (the TS step failed first), so this job never needed the package
+      # until #1108. Same step shape as the other cgo jobs in ci.yaml /
+      # quality-gate.yaml / pr-security-check.yaml / security.yaml /
+      # veid-e2e.yaml.
+      - name: Install build dependencies for cgo packages
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends libudev-dev
       - name: Build pinned generation image
         run: docker build --file sdk/generation/Dockerfile --tag virtengine-proto-gen:1.0.0 .
       - name: Lint protobuf sources
