@@ -244,16 +244,16 @@ generate_typescript() {
   # the module root buf is pointed at, and let buf resolve it from the registry.
   # The buf.build.lock that `buf dep update` writes is build output, not a
   # source artifact, so it is not committed - the gate re-resolves each run.
-  # The config goes in a sibling directory rather than in the vendored root:
-  # the module cache is mode 444 (read-only) and modvendor's tree inherits that,
-  # so writing buf.yaml in place fails with `Permission denied` (measured). A
-  # config placed in the PARENT of the vendored root is also the only shape buf
-  # accepts for a non-default location - a module path may not escape its own
-  # context directory (`invalid module path: ../v10/proto: is outside the
-  # context directory`, measured), and `$sdk/go/vendor/github.com/cosmos` is that
-  # parent while the module path stays relative to it.
-  local ics23_dep_dir="$sdk/go/vendor/github.com/cosmos"
-  printf 'version: v2\nmodules:\n  - path: ibc-go/v10/proto\ndeps:\n  - buf.build/cosmos/ics23\n' \
+  # The config is written into a fresh writable directory that IS the ibc-go
+  # module root, not into the vendored tree: the module cache is mode 444
+  # (read-only) and modvendor's tree inherits that, so writing buf.yaml in place
+  # fails with `Permission denied` (measured). The staging block above already
+  # creates that directory's contents, and the tree is inside $sdk (writable), so
+  # `path: .` names a module at its own context directory - the only shape buf
+  # accepts, since a module path may not escape it (`invalid module path:
+  # ../v10/proto: is outside the context directory`, measured).
+  local ics23_dep_dir="$vendored_ibc"
+  printf 'version: v2\nmodules:\n  - path: .\ndeps:\n  - buf.build/cosmos/ics23\n' \
     > "$ics23_dep_dir/buf.yaml"
   ( cd "$ics23_dep_dir" && buf dep update ) \
     || echo "warning: could not resolve buf.build/cosmos/ics23 from the registry" >&2
@@ -261,23 +261,24 @@ generate_typescript() {
   rm -rf ts/src/generated
   PROTO_SOURCE=node buf generate --template "$ts_template" proto/node
   PROTO_SOURCE=cosmos buf generate --template "$ts_template" go/vendor/github.com/cosmos/cosmos-sdk/proto
-  # buf reads the config next to the module it is pointed at, so pass the
-  # config explicitly for the ibc-go step. Two measured constraints on the
-  # invocation, both from the config living outside $sdk:
-  #   * a module path may not escape its context directory, so the config sits
-  #     in the PARENT of the vendored root with `path: ibc-go/v10/proto`;
-  #   * with --config, the positional argument is resolved against $sdk, and
-  #     pointing it at a directory that contains a buf.yaml makes buf treat it
-  #     as a REMOTE ("is "ibc-go" a valid remote address?"), while resolving it
-  #     from $sdk yields `Module "path: "ibc-go/v10/proto"" had no .proto
-  #     files`. Running the command from the config's own directory - where
-  #     buf finds that config with no --config flag at all - is the shape that
-  #     builds the module (measured EXIT=0). --template is a FILE, so it is
-  #     resolved from $sdk regardless of the working directory: pass it
-  #     absolute or the cd makes it unresolvable.
+  # The ibc-go step needs `buf.build/cosmos/ics23`, which no pinned Go module
+  # ships, so it gets its own config. Two measured constraints decide the shape:
+  #   * a module path may not escape its context directory, so the config must
+  #     name a module at or below its own directory;
+  #   * buf resolves a template's RELATIVE `local:` plugin paths against the
+  #     WORKING DIRECTORY, so this step must keep cwd=$sdk. `cd`-ing to the
+  #     config's directory (the shape that worked for `buf build`) made the
+  #     template's ["node","ts/script/protoc-gen-sdk-object.ts"] resolve to
+  #     /src/sdk/go/vendor/github.com/cosmos/ts/script/... and the step died with
+  #     `Cannot find module` (measured: contracts run 36735951768).
+  # So: put the config INSIDE the ibc-go root (module `path: .`), pass it with
+  # --config, and pass NO positional input - buf then builds the config's own
+  # module while the relative plugin paths still resolve from $sdk.
+  # `buf dep update` must run first, or the dep is declared but unresolved and
+  # `cosmos/ics23/v1/proofs.proto` still does not resolve (measured).
   # Drop the config afterwards so it cannot perturb the generated-drift check.
-  ( cd "$ics23_dep_dir" && PROTO_SOURCE=ibc-go buf generate \
-      --template "$sdk/$ts_template" ) \
+  PROTO_SOURCE=ibc-go buf generate --template "$ts_template" \
+    --config "$ics23_dep_dir/buf.yaml" \
     || { echo "ibc-go contract generation failed" >&2; return 1; }
   PROTO_SOURCE=provider buf generate --template "$ts_template" proto/provider
   node --experimental-strip-types --no-warnings ts/script/fix-ts-proto-generated-types.ts
