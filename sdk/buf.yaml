@@ -12,11 +12,13 @@ modules:
       # rather than by bumping the whole comparison baseline. Scoped to the two
       # migrated files and to these two rules only, so any OTHER breaking
       # change in them still fails the gate.
-      ignore:
-        - RPC_SAME_REQUEST_TYPE:proto/node/virtengine/resources/v1/query.proto
-        - RPC_SAME_REQUEST_TYPE:proto/node/virtengine/settlement/v1/query.proto
-        - RPC_SAME_RESPONSE_TYPE:proto/node/virtengine/resources/v1/query.proto
-        - RPC_SAME_RESPONSE_TYPE:proto/node/virtengine/settlement/v1/query.proto
+      ignore_only:
+        RPC_SAME_REQUEST_TYPE:
+          - proto/node/virtengine/resources/v1/query.proto
+          - proto/node/virtengine/settlement/v1/query.proto
+        RPC_SAME_RESPONSE_TYPE:
+          - proto/node/virtengine/resources/v1/query.proto
+          - proto/node/virtengine/settlement/v1/query.proto
     lint:
       use:
         - STANDARD
