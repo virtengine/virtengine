@@ -223,8 +223,18 @@ def main() -> int:
         print(f"::error::changed Go file(s) in '{d}' are not in a loadable package: {err}",
               file=sys.stderr)
     if skipped:
+        # MUST go to stderr. The workflow consumes stdout as the gosec argument list
+        # (`mapfile -t gosec_targets < gosec-targets.txt`), so a human-readable line
+        # here is read as a package path: gosec is handed "note: ...", skips it as a
+        # non-existent path, imports 0 files, exits 0, and the job's fail-closed
+        # `Stats.files=0` guard then reports a red that is not a security finding.
+        # Measured on run 36786584597, job 'Go Security Scan (core)', 2026-09-30:
+        # stderr said "gosec targets: 0 package(s)" while the scan line read
+        # "scanning 1 package(s): note: ..." - the count that stderr published was
+        # correct and the array the caller built from stdout was not.
         print(f"note: {len(skipped)} changed file(s) excluded by the scan filter "
-              f"(tests, generated .pb.go, vendor/testdata), e.g. {skipped[0]}")
+              f"(tests, generated .pb.go, vendor/testdata), e.g. {skipped[0]}",
+              file=sys.stderr)
 
     if bad:
         print("::error::refusing to hand gosec a path it cannot load as a package - that "

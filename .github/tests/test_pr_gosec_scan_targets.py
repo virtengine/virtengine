@@ -194,10 +194,86 @@ def test_empty_report_flag() -> None:
               json.loads(Path(td, "gosec.sarif").read_text())["version"] == "2.1.0")
 
 
+def test_stdout_is_only_package_paths() -> None:
+    """The real end-to-end contract: stdout is the gosec argument list, nothing else.
+
+    Why this exists
+    ---------------
+    ``main()`` printed its human-readable ``note: ...`` summary to STDOUT while
+    every other diagnostic in the same function used ``file=sys.stderr``. The
+    workflow consumes stdout verbatim as the package list::
+
+        python3 .github/scripts/gosec_pr_targets.py --changed-files ... > gosec-targets.txt
+        mapfile -t gosec_targets < gosec-targets.txt
+
+    so that line became a gosec target. gosec skipped it as a non-existent path,
+    imported 0 files, and the job's fail-closed ``Stats.files=0`` guard reported a
+    red that was not a security finding at all. Measured on run 36786584597, job
+    ``Go Security Scan (core)``, 2026-09-30: stderr published
+    ``gosec targets: 0 package(s)`` while the scan line read
+    ``scanning 1 package(s): note: ...``.
+
+    The earlier sections of this file test the helper's FUNCTIONS, so they all
+    pass while this defect is live - only the process's real stdout shows it.
+    That is why the assertion is made by RUNNING the script, exactly as the
+    workflow runs it, rather than by reading its source.
+    """
+    print("== 5. stdout carries package paths ONLY (the real process contract) ==")
+    with tempfile.TemporaryDirectory() as td:
+        # A changed file that the scan filter drops, so `skipped` is non-empty and
+        # the note branch actually executes. Zero packages survive -> the count the
+        # script publishes and the list the caller builds must both be empty.
+        listing = Path(td) / "changed.txt"
+        listing.write_text("x/veid/keeper/keeper_test.go\n", encoding="utf-8")
+        proc = subprocess.run(
+            [sys.executable, str(SCRIPT), "--changed-files", str(listing),
+             "--module-dir", str(REPO)],
+            cwd=td, capture_output=True, text=True,
+        )
+        check("helper exits 0 on a fully-filtered change list", proc.returncode == 0,
+              f"rc={proc.returncode} stderr={proc.stderr[-300:]}")
+
+        stdout_lines = [ln for ln in proc.stdout.splitlines() if ln.strip()]
+        check("stdout is empty when 0 packages resolved", stdout_lines == [],
+              "stdout carried " + repr(stdout_lines))
+
+        # The note must still be VISIBLE - moving it to stderr must not silence it.
+        check("the note is still reported, on stderr", "note:" in proc.stderr,
+              proc.stderr[-300:])
+        # And the published count must be consistent with the list the caller builds.
+        m = re.search(r"gosec targets: (\d+) package", proc.stderr)
+        check("published count is present on stderr", m is not None)
+        if m:
+            check("published count matches what stdout delivered",
+                  int(m.group(1)) == len(stdout_lines),
+                  f"stderr said {m.group(1)}, stdout delivered {len(stdout_lines)}")
+
+    # And the positive case: a real package reaches stdout as a bare path, with no
+    # diagnostics mixed in. This is what the mapfile actually consumes.
+    if not shutil.which("go"):
+        print("  SKIP  go not on PATH: cannot resolve a real package")
+        return
+    with tempfile.TemporaryDirectory() as td:
+        listing = Path(td) / "changed.txt"
+        listing.write_text("pkg/verification/sms/providers.go\n", encoding="utf-8")
+        proc = subprocess.run(
+            [sys.executable, str(SCRIPT), "--changed-files", str(listing),
+             "--module-dir", str(REPO)],
+            cwd=td, capture_output=True, text=True,
+        )
+        lines = [ln for ln in proc.stdout.splitlines() if ln.strip()]
+        check("a resolvable package is emitted on stdout as a bare path",
+              lines == ["./pkg/verification/sms"], repr(lines))
+        # Every stdout line must be a path the script would hand to gosec, i.e.
+        # start with "./" or a drive letter - never a sentence.
+        check("no stdout line looks like a human-readable message",
+              all(re.match(r"^\./|^[A-Za-z]:[\\/]", ln) for ln in lines), repr(lines))
+
+
 def main() -> int:
     print("test_pr_gosec_scan_targets: PR-side gosec must SCAN the changed files\n")
     for fn in (test_workflow_shape, test_target_resolution, test_scan_outcomes,
-               test_empty_report_flag):
+               test_empty_report_flag, test_stdout_is_only_package_paths):
         fn()
         print()
     if failures:
