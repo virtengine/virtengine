@@ -20,6 +20,7 @@ import {
   FraudReportStatus,
   fraudReportStatusFromJSON,
   fraudReportStatusToJSON,
+  FraudResponse,
   ModeratorQueueEntry,
 } from "./types.ts";
 
@@ -109,6 +110,22 @@ export interface QueryAuditLogRequest {
 export interface QueryAuditLogResponse {
   /** AuditLogs are the audit log entries */
   auditLogs: FraudAuditLog[];
+  /** Pagination defines the pagination response */
+  pagination: PageResponse | undefined;
+}
+
+/** QueryFraudResponsesRequest is the request for FraudResponses query */
+export interface QueryFraudResponsesRequest {
+  /** ReportID is the fraud report ID whose responses are being queried */
+  reportId: string;
+  /** Pagination defines pagination options */
+  pagination: PageRequest | undefined;
+}
+
+/** QueryFraudResponsesResponse is the response for FraudResponses query */
+export interface QueryFraudResponsesResponse {
+  /** Responses are the responses/rebuttals filed against the report */
+  responses: FraudResponse[];
   /** Pagination defines the pagination response */
   pagination: PageResponse | undefined;
 }
@@ -989,6 +1006,166 @@ export const QueryAuditLogResponse: MessageFns<QueryAuditLogResponse, "virtengin
   fromPartial(object: DeepPartial<QueryAuditLogResponse>): QueryAuditLogResponse {
     const message = createBaseQueryAuditLogResponse();
     message.auditLogs = object.auditLogs?.map((e) => FraudAuditLog.fromPartial(e)) || [];
+    message.pagination = (object.pagination !== undefined && object.pagination !== null)
+      ? PageResponse.fromPartial(object.pagination)
+      : undefined;
+    return message;
+  },
+};
+
+function createBaseQueryFraudResponsesRequest(): QueryFraudResponsesRequest {
+  return { reportId: "", pagination: undefined };
+}
+
+export const QueryFraudResponsesRequest: MessageFns<
+  QueryFraudResponsesRequest,
+  "virtengine.fraud.v1.QueryFraudResponsesRequest"
+> = {
+  $type: "virtengine.fraud.v1.QueryFraudResponsesRequest" as const,
+
+  encode(message: QueryFraudResponsesRequest, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.reportId !== "") {
+      writer.uint32(10).string(message.reportId);
+    }
+    if (message.pagination !== undefined) {
+      PageRequest.encode(message.pagination, writer.uint32(18).fork()).join();
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): QueryFraudResponsesRequest {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseQueryFraudResponsesRequest();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.reportId = reader.string();
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.pagination = PageRequest.decode(reader, reader.uint32());
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): QueryFraudResponsesRequest {
+    return {
+      reportId: isSet(object.report_id) ? globalThis.String(object.report_id) : "",
+      pagination: isSet(object.pagination) ? PageRequest.fromJSON(object.pagination) : undefined,
+    };
+  },
+
+  toJSON(message: QueryFraudResponsesRequest): unknown {
+    const obj: any = {};
+    if (message.reportId !== "") {
+      obj.report_id = message.reportId;
+    }
+    if (message.pagination !== undefined) {
+      obj.pagination = PageRequest.toJSON(message.pagination);
+    }
+    return obj;
+  },
+  fromPartial(object: DeepPartial<QueryFraudResponsesRequest>): QueryFraudResponsesRequest {
+    const message = createBaseQueryFraudResponsesRequest();
+    message.reportId = object.reportId ?? "";
+    message.pagination = (object.pagination !== undefined && object.pagination !== null)
+      ? PageRequest.fromPartial(object.pagination)
+      : undefined;
+    return message;
+  },
+};
+
+function createBaseQueryFraudResponsesResponse(): QueryFraudResponsesResponse {
+  return { responses: [], pagination: undefined };
+}
+
+export const QueryFraudResponsesResponse: MessageFns<
+  QueryFraudResponsesResponse,
+  "virtengine.fraud.v1.QueryFraudResponsesResponse"
+> = {
+  $type: "virtengine.fraud.v1.QueryFraudResponsesResponse" as const,
+
+  encode(message: QueryFraudResponsesResponse, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    for (const v of message.responses) {
+      FraudResponse.encode(v!, writer.uint32(10).fork()).join();
+    }
+    if (message.pagination !== undefined) {
+      PageResponse.encode(message.pagination, writer.uint32(18).fork()).join();
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): QueryFraudResponsesResponse {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseQueryFraudResponsesResponse();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.responses.push(FraudResponse.decode(reader, reader.uint32()));
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.pagination = PageResponse.decode(reader, reader.uint32());
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): QueryFraudResponsesResponse {
+    return {
+      responses: globalThis.Array.isArray(object?.responses)
+        ? object.responses.map((e: any) => FraudResponse.fromJSON(e))
+        : [],
+      pagination: isSet(object.pagination) ? PageResponse.fromJSON(object.pagination) : undefined,
+    };
+  },
+
+  toJSON(message: QueryFraudResponsesResponse): unknown {
+    const obj: any = {};
+    if (message.responses?.length) {
+      obj.responses = message.responses.map((e) => FraudResponse.toJSON(e));
+    }
+    if (message.pagination !== undefined) {
+      obj.pagination = PageResponse.toJSON(message.pagination);
+    }
+    return obj;
+  },
+  fromPartial(object: DeepPartial<QueryFraudResponsesResponse>): QueryFraudResponsesResponse {
+    const message = createBaseQueryFraudResponsesResponse();
+    message.responses = object.responses?.map((e) => FraudResponse.fromPartial(e)) || [];
     message.pagination = (object.pagination !== undefined && object.pagination !== null)
       ? PageResponse.fromPartial(object.pagination)
       : undefined;
