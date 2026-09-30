@@ -162,17 +162,19 @@ generate_typescript() {
     local dir target
     dir="$(cd "$sdk/go" && GOWORK=off go list -m -f '{{.Dir}}' "$module")"
     if [[ -z "$dir" || ! -d "$dir/$module_subdir" ]]; then
-      # `go list -m -f {{.Dir}}` succeeds even when the module is not yet
-      # downloaded - it prints the path the module WOULD occupy - so on a cold
-      # cache the directory is absent and the first cut of this failed with
-      # `proto dependency github.com/cosmos/cosmos-proto has no
-      # proto/cosmos_proto to stage` (measured: contracts run 36718051031, the
-      # run that proved the buf import fix and then hit this). The same
-      # download-on-demand step the modvendor block above uses applies here;
-      # this image's module cache only holds what sdk/go's vendor pass pulled.
+      # Two distinct cold-cache symptoms, both measured in the image
+      # (contracts runs 36718051031 and 36720120900):
+      #   * the module is absent, so `-d` fails; and
+      #   * on a cache with NO module graph loaded, `go list -m` prints an
+      #     EMPTY .Dir rather than the path the module would occupy.
+      # #1103 downloaded the module and then re-tested the SAME `$dir` value,
+      # which was still empty, so it failed identically (the log shows the
+      # `go: downloading` lines succeeding and the error repeating). Re-resolve
+      # after the download; never cache a pre-download answer.
       (cd "$sdk/go" && GOWORK=off go mod download "$module")
-      if [[ ! -d "$dir/$module_subdir" ]]; then
-        echo "proto dependency $module has no $module_subdir to stage" >&2
+      dir="$(cd "$sdk/go" && GOWORK=off go list -m -f '{{.Dir}}' "$module")"
+      if [[ -z "$dir" || ! -d "$dir/$module_subdir" ]]; then
+        echo "proto dependency $module has no $module_subdir to stage (dir=[$dir])" >&2
         return 1
       fi
     fi
