@@ -42,9 +42,9 @@ type HPCProviderE2ETestSuite struct {
 }
 
 func TestHPCProviderE2E(t *testing.T) {
-	suite.Run(t, &HPCProviderE2ETestSuite{
-		NetworkTestSuite: testutil.NewNetworkTestSuite(nil, &HPCProviderE2ETestSuite{}),
-	})
+	s := &HPCProviderE2ETestSuite{}
+	s.NetworkTestSuite = testutil.NewNetworkTestSuite(nil, s)
+	suite.Run(t, s)
 }
 
 // LifecycleEventE2E tracks job lifecycle events for verification.

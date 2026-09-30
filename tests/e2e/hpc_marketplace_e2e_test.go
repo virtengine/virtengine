@@ -48,9 +48,9 @@ type HPCMarketplaceE2ETestSuite struct {
 }
 
 func TestHPCMarketplaceE2E(t *testing.T) {
-	suite.Run(t, &HPCMarketplaceE2ETestSuite{
-		NetworkTestSuite: testutil.NewNetworkTestSuite(nil, &HPCMarketplaceE2ETestSuite{}),
-	})
+	s := &HPCMarketplaceE2ETestSuite{}
+	s.NetworkTestSuite = testutil.NewNetworkTestSuite(nil, s)
+	suite.Run(t, s)
 }
 
 func (s *HPCMarketplaceE2ETestSuite) SetupSuite() {

@@ -34,9 +34,9 @@ type providerDaemonE2ETestSuite struct {
 }
 
 func TestProviderDaemonE2E(t *testing.T) {
-	suite.Run(t, &providerDaemonE2ETestSuite{
-		NetworkTestSuite: testutil.NewNetworkTestSuite(nil, &providerDaemonE2ETestSuite{}),
-	})
+	s := &providerDaemonE2ETestSuite{}
+	s.NetworkTestSuite = testutil.NewNetworkTestSuite(nil, s)
+	suite.Run(t, s)
 }
 
 func (s *providerDaemonE2ETestSuite) SetupSuite() {
