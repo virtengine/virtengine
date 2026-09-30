@@ -80,6 +80,10 @@ test("repository inventory has exact Go module replaces and TypeScript proto par
   const inventory = JSON.parse(canonical);
 
   assert.equal(inventory.modules.some((module) => module.replaces.some((replacement) => replacement.old === "(")), false);
-  assert.equal(inventory.summaries.replaces, 23);
+  // The counter sums `go mod edit -json` Replace entries over EVERY discovered
+  // go.mod, the sdk/generation tool module included (its `gogoproto` fork
+  // replace). The pinned composition is 15 (root) + 8 (sdk/go) + 1 (tool
+  // module) = 24; a new module or replace must move this number deliberately.
+  assert.equal(inventory.summaries.replaces, 24);
   assert.equal(inventory.generated.gatewayStubs.length, 0);
 });
