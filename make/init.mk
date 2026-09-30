@@ -41,6 +41,44 @@ ifndef ROOT_DIR
 ROOT_DIR := $(VE_ROOT)
 endif
 
+# VE_DEVCACHE and its four siblings are exported by .envrc:114-118, but a shell that
+# only exports VE_DEVCACHE (exactly what this repo's own guard error tells you to do,
+# and what _docs/development-environment.md documents) leaves the other four EMPTY.
+# The recipes in make/setup-cache.mk use all of them, so the guard passes, the install
+# step "succeeds", and the damage lands somewhere root-relative: `GOBIN= go install`
+# writes to the OS default and `rm -f /git-chglog` / `touch /git-chglog/v0.15.1`
+# target C:\git-chglog on Windows. That is release-plan defect 12.
+#
+# Derive the whole family from VE_DEVCACHE when it is set, exactly as .env:6-14 defines
+# it, so the paths cannot disagree. Uses `:=` with $(origin) guards so an explicit
+# export always wins and a real direnv shell is never rewritten. Same fallback shape as
+# the VE_ROOT / SEMVER defaults above.
+ifeq ($(OS),Windows_NT)
+ifndef VE_DEVCACHE
+VE_DEVCACHE := $(CURDIR)/.cache
+endif
+endif
+ifneq ($(VE_DEVCACHE),)
+ifndef VE_DEVCACHE_BIN
+VE_DEVCACHE_BIN := $(VE_DEVCACHE)/bin
+endif
+ifndef VE_DEVCACHE_INCLUDE
+VE_DEVCACHE_INCLUDE := $(VE_DEVCACHE)/include
+endif
+ifndef VE_DEVCACHE_VERSIONS
+VE_DEVCACHE_VERSIONS := $(VE_DEVCACHE)/versions
+endif
+ifndef VE_DEVCACHE_NODE_MODULES
+VE_DEVCACHE_NODE_MODULES := $(VE_DEVCACHE)
+endif
+ifndef VE_RUN
+VE_RUN := $(VE_DEVCACHE)/run
+endif
+ifndef VE_RUN_BIN
+VE_RUN_BIN := $(VE_RUN)/bin
+endif
+endif
+
 # SEMVER is exported by .envrc:72 for direnv shells, but nothing else defines it:
 # a shell that only carries the devcache env (CI's non-direnv fallback in
 # .github/actions/setup-ubuntu, or a hand-exported VE_DEVCACHE as
