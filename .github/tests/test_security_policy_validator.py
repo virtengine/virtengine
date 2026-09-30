@@ -231,6 +231,7 @@ audit_log:
         compensating_controls: str = "        - no VirtEngine code imports the affected package",
         require_issue_reference: str = "true",
         require_compensating_controls: str = "true",
+        reason: str = "DoS with no patched release; decode path unreachable from shipped binaries",
     ) -> Path:
         """A current, in-window allowlist whose only variables are the fields under test.
 
@@ -252,7 +253,7 @@ exceptions:
   go:
     - id: GO-2026-4740
       package: github.com/shamaton/msgpack/v2
-      reason: DoS with no patched release; decode path unreachable from shipped binaries
+      reason: '{reason}'
       reviewed_by: secops
       reviewed_date: "{today.isoformat()}"
       expires: "{(today + timedelta(days=5)).isoformat()}"
@@ -350,6 +351,73 @@ audit_log:
                 "        - https://github.com/virtengine/virtengine/issues/1079\n"
                 "        - https://github.com/virtengine/virtengine/blob/develop/SUPPLY_CHAIN_SECURITY.md"
             )
+        )
+
+        errors = self.validator.validate_allowlist(path)
+
+        self.assertEqual([error for error in errors if "no such file exists" in error], [], errors)
+
+    def test_allowlist_rejects_a_missing_doc_cited_in_the_reason(self) -> None:
+        """The prose channel. Every shipped assessment citation lives in `reason:`, NOT in
+        `references:`, and the blob rule walks only the reference list - so repointing the prose
+        alone left the entry passing (measured on develop @ 6c5fb13e: exit 0, no error). The
+        unresolved class re-opened through the other field, and the reason is the field a new
+        entry naturally writes its assessment citation in. The reference list here is entirely
+        valid, which is the point: the prose must carry its own obligation."""
+        path = self.allowlist_entry_fixture(
+            references="        - https://github.com/virtengine/virtengine/issues/1079",
+            reason=(
+                "DoS with no patched release. Full assessment: "
+                "docs/security/DOES-NOT-EXIST-ASSESSMENT.md"
+            ),
+        )
+
+        errors = self.validator.validate_allowlist(path)
+
+        self.assertTrue(
+            any("docs/security/DOES-NOT-EXIST-ASSESSMENT.md" in error for error in errors), errors
+        )
+
+    def test_allowlist_accepts_a_reason_citing_a_document_that_exists(self) -> None:
+        """The positive control, and the shape every real exception in the ledger uses: a reason
+        that cites a repo document which is really in the tree must still validate."""
+        path = self.allowlist_entry_fixture(
+            references="        - https://github.com/virtengine/virtengine/issues/1079",
+            reason=(
+                "DoS with no patched release. Full assessment: "
+                "docs/security/GO-2026-4740-MSGPACK-ASSESSMENT.md"
+            ),
+        )
+
+        errors = self.validator.validate_allowlist(path)
+
+        self.assertEqual([error for error in errors if "no such file exists" in error], [], errors)
+
+    def test_reason_citation_rule_ignores_non_citation_repo_syntax(self) -> None:
+        """The rule must not fire on a shell command, a Go import path or a package module path
+        that merely starts with a repo-looking prefix. A gate that cries wolf on `go list -deps
+        ./...` gets muted, which is the same end state as no gate at all."""
+        path = self.allowlist_entry_fixture(
+            references="        - https://github.com/virtengine/virtengine/issues/1079",
+            reason=(
+                "Verified with `go list -deps ./...`; the module github.com/shamaton/msgpack/v2 "
+                "and ./.../scripts/supply-chain/go-module-policy.json aside, nothing links it"
+            ),
+        )
+
+        errors = self.validator.validate_allowlist(path)
+
+        self.assertEqual([error for error in errors if "no such file exists" in error], [], errors)
+
+    def test_reason_citation_rule_ignores_paths_that_escape_the_repository(self) -> None:
+        """A `..` traversal that climbs OUT of the repository, or an absolute path, is not a plain
+        repository citation: the resolver must refuse to follow it out of the tree, and must not
+        manufacture a failure for text that was never a citation. Note the boundary is the
+        resolved location, not the spelling - `docs/../x.md` normalises to a path still inside the
+        repository, so it stays a citation and is judged on whether the file exists."""
+        path = self.allowlist_entry_fixture(
+            references="        - https://github.com/virtengine/virtengine/issues/1079",
+            reason="Out-of-tree artifact at /etc/docs/outside.md and docs/../../outside-repo.md",
         )
 
         errors = self.validator.validate_allowlist(path)
