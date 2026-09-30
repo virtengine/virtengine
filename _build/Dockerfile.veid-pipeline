@@ -216,8 +216,21 @@ COPY --from=app --chown=nonroot:nonroot /app /app
 # Nothing at runtime needs pip/setuptools/wheel (ENTRYPOINT is `python3 -m`,
 # HEALTHCHECK is `python3 -c`), so wiping them also shrinks the production
 # attack surface. pkg_resources is deliberately left as-is.
+#
+# distutils-precedence.pth must go WITH setuptools: it is installed by
+# setuptools and its only content is `__import__('_distutils_hack')`, the
+# package this purge deletes. site.py executes every .pth at interpreter
+# startup and does NOT ignore failures, so leaving it behind made every
+# python3 invocation in the shipped image print
+#   "Error processing line 1 of .../distutils-precedence.pth ...
+#    ModuleNotFoundError: No module named '_distutils_hack'"
+# on stderr before running the real command. That is a traceback on the
+# image's ENTRYPOINT and HEALTHCHECK paths (and in validator logs) for a
+# module that can never exist again. pkg_resources is a plain package
+# rather than a .pth hook, so it stays.
 RUN rm -rf /usr/local/lib/python3.11/site-packages/setuptools* \
            /usr/local/lib/python3.11/site-packages/_distutils_hack \
+           /usr/local/lib/python3.11/site-packages/distutils-precedence.pth \
            /usr/local/lib/python3.11/site-packages/pip \
            /usr/local/lib/python3.11/site-packages/pip-* \
            /usr/local/lib/python3.11/site-packages/wheel \
@@ -240,6 +253,11 @@ RUN set -e; \
     if [ -n "$stale" ]; then \
       echo 'ERROR: installer toolchain present in final image; refusing image'; \
       echo "$stale"; \
+      exit 1; \
+    fi; \
+    if grep -rlE '_distutils_hack' /usr/local/lib/python3.11/site-packages/*.pth 2>/dev/null | grep -q .; then \
+      echo 'ERROR: .pth hook imports a purged module; refusing image'; \
+      grep -rlE '_distutils_hack' /usr/local/lib/python3.11/site-packages/*.pth; \
       exit 1; \
     fi
 
