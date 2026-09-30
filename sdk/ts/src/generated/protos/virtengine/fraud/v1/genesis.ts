@@ -10,7 +10,7 @@ import type { DeepPartial, MessageFns } from "../../../../../encoding/typeEncodi
 import { BinaryReader, BinaryWriter } from "@bufbuild/protobuf/wire";
 import Long from "long";
 import { Params } from "./params.ts";
-import { FraudAuditLog, FraudReport, ModeratorQueueEntry } from "./types.ts";
+import { FraudAuditLog, FraudReport, FraudResponse, ModeratorQueueEntry } from "./types.ts";
 
 /** GenesisState defines the fraud module's genesis state */
 export interface GenesisState {
@@ -28,6 +28,10 @@ export interface GenesisState {
   nextFraudReportSequence: Long;
   /** NextAuditLogSequence is the next audit log sequence number */
   nextAuditLogSequence: Long;
+  /** Responses contains all report responses/rebuttals */
+  responses: FraudResponse[];
+  /** NextFraudResponseSequence is the next response sequence number */
+  nextFraudResponseSequence: Long;
 }
 
 function createBaseGenesisState(): GenesisState {
@@ -38,6 +42,8 @@ function createBaseGenesisState(): GenesisState {
     moderatorQueue: [],
     nextFraudReportSequence: Long.UZERO,
     nextAuditLogSequence: Long.UZERO,
+    responses: [],
+    nextFraudResponseSequence: Long.UZERO,
   };
 }
 
@@ -62,6 +68,12 @@ export const GenesisState: MessageFns<GenesisState, "virtengine.fraud.v1.Genesis
     }
     if (!message.nextAuditLogSequence.equals(Long.UZERO)) {
       writer.uint32(48).uint64(message.nextAuditLogSequence.toString());
+    }
+    for (const v of message.responses) {
+      FraudResponse.encode(v!, writer.uint32(58).fork()).join();
+    }
+    if (!message.nextFraudResponseSequence.equals(Long.UZERO)) {
+      writer.uint32(64).uint64(message.nextFraudResponseSequence.toString());
     }
     return writer;
   },
@@ -121,6 +133,22 @@ export const GenesisState: MessageFns<GenesisState, "virtengine.fraud.v1.Genesis
           message.nextAuditLogSequence = Long.fromString(reader.uint64().toString(), true);
           continue;
         }
+        case 7: {
+          if (tag !== 58) {
+            break;
+          }
+
+          message.responses.push(FraudResponse.decode(reader, reader.uint32()));
+          continue;
+        }
+        case 8: {
+          if (tag !== 64) {
+            break;
+          }
+
+          message.nextFraudResponseSequence = Long.fromString(reader.uint64().toString(), true);
+          continue;
+        }
       }
       if ((tag & 7) === 4 || tag === 0) {
         break;
@@ -146,6 +174,12 @@ export const GenesisState: MessageFns<GenesisState, "virtengine.fraud.v1.Genesis
       nextAuditLogSequence: isSet(object.next_audit_log_sequence)
         ? Long.fromValue(object.next_audit_log_sequence)
         : Long.UZERO,
+      responses: globalThis.Array.isArray(object?.responses)
+        ? object.responses.map((e: any) => FraudResponse.fromJSON(e))
+        : [],
+      nextFraudResponseSequence: isSet(object.next_fraud_response_sequence)
+        ? Long.fromValue(object.next_fraud_response_sequence)
+        : Long.UZERO,
     };
   },
 
@@ -169,6 +203,12 @@ export const GenesisState: MessageFns<GenesisState, "virtengine.fraud.v1.Genesis
     if (!message.nextAuditLogSequence.equals(Long.UZERO)) {
       obj.next_audit_log_sequence = (message.nextAuditLogSequence || Long.UZERO).toString();
     }
+    if (message.responses?.length) {
+      obj.responses = message.responses.map((e) => FraudResponse.toJSON(e));
+    }
+    if (!message.nextFraudResponseSequence.equals(Long.UZERO)) {
+      obj.next_fraud_response_sequence = (message.nextFraudResponseSequence || Long.UZERO).toString();
+    }
     return obj;
   },
   fromPartial(object: DeepPartial<GenesisState>): GenesisState {
@@ -186,6 +226,11 @@ export const GenesisState: MessageFns<GenesisState, "virtengine.fraud.v1.Genesis
     message.nextAuditLogSequence = (object.nextAuditLogSequence !== undefined && object.nextAuditLogSequence !== null)
       ? Long.fromValue(object.nextAuditLogSequence)
       : Long.UZERO;
+    message.responses = object.responses?.map((e) => FraudResponse.fromPartial(e)) || [];
+    message.nextFraudResponseSequence =
+      (object.nextFraudResponseSequence !== undefined && object.nextFraudResponseSequence !== null)
+        ? Long.fromValue(object.nextFraudResponseSequence)
+        : Long.UZERO;
     return message;
   },
 };

@@ -1,4 +1,4 @@
-import { QueryAuditLogRequest, QueryAuditLogResponse, QueryFraudReportRequest, QueryFraudReportResponse, QueryFraudReportsByReportedPartyRequest, QueryFraudReportsByReportedPartyResponse, QueryFraudReportsByReporterRequest, QueryFraudReportsByReporterResponse, QueryFraudReportsRequest, QueryFraudReportsResponse, QueryModeratorQueueRequest, QueryModeratorQueueResponse, QueryParamsRequest, QueryParamsResponse } from "./query.ts";
+import { QueryAuditLogRequest, QueryAuditLogResponse, QueryFraudReportRequest, QueryFraudReportResponse, QueryFraudReportsByReportedPartyRequest, QueryFraudReportsByReportedPartyResponse, QueryFraudReportsByReporterRequest, QueryFraudReportsByReporterResponse, QueryFraudReportsRequest, QueryFraudReportsResponse, QueryFraudResponsesRequest, QueryFraudResponsesResponse, QueryModeratorQueueRequest, QueryModeratorQueueResponse, QueryParamsRequest, QueryParamsResponse } from "./query.ts";
 
 export const Query = {
   typeName: "virtengine.fraud.v1.Query",
@@ -50,6 +50,13 @@ export const Query = {
       httpPath: "/virtengine/fraud/v1/moderator/queue",
       input: QueryModeratorQueueRequest,
       output: QueryModeratorQueueResponse,
+      get parent() { return Query; },
+    },
+    fraudResponses: {
+      name: "FraudResponses",
+      httpPath: "/virtengine/fraud/v1/reports/{report_id}/responses",
+      input: QueryFraudResponsesRequest,
+      output: QueryFraudResponsesResponse,
       get parent() { return Query; },
     },
   },

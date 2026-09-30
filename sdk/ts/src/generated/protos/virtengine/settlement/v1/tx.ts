@@ -182,6 +182,7 @@ export interface MsgClaimRewardsResponse {
   claimedAt: Long;
 }
 
+/** MsgOpenFinancialCase opens a financial case against a lineage subject. */
 export interface MsgOpenFinancialCase {
   sender: string;
   subject: FinancialSubject | undefined;
@@ -194,6 +195,7 @@ export interface MsgOpenFinancialCase {
   sourceReference: string;
 }
 
+/** MsgOpenFinancialCaseResponse returns the opened case and first claim. */
 export interface MsgOpenFinancialCaseResponse {
   caseId: string;
   claimId: string;
@@ -201,6 +203,7 @@ export interface MsgOpenFinancialCaseResponse {
   status: FinancialCaseStatus;
 }
 
+/** MsgAddFinancialClaim attaches an additional claim to an open case. */
 export interface MsgAddFinancialClaim {
   sender: string;
   caseId: string;
@@ -213,6 +216,7 @@ export interface MsgAddFinancialClaim {
   recommendation: string;
 }
 
+/** MsgAddFinancialClaimResponse returns the case and the added claim. */
 export interface MsgAddFinancialClaimResponse {
   caseId: string;
   claimId: string;
@@ -220,37 +224,44 @@ export interface MsgAddFinancialClaimResponse {
   status: FinancialCaseStatus;
 }
 
+/** MsgSubmitFinancialCaseForReview moves a case into resolver review. */
 export interface MsgSubmitFinancialCaseForReview {
   sender: string;
   caseId: string;
 }
 
+/** MsgSubmitFinancialCaseForReviewResponse returns the resulting case status. */
 export interface MsgSubmitFinancialCaseForReviewResponse {
   status: FinancialCaseStatus;
 }
 
+/** MsgEscalateFinancialCase escalates a case past ordinary review. */
 export interface MsgEscalateFinancialCase {
   sender: string;
   caseId: string;
   reasonHash: Uint8Array;
 }
 
+/** MsgEscalateFinancialCaseResponse returns the resulting case status. */
 export interface MsgEscalateFinancialCaseResponse {
   status: FinancialCaseStatus;
 }
 
+/** MsgResolveFinancialCase records a resolver's terminal allocation. */
 export interface MsgResolveFinancialCase {
   resolver: string;
   caseId: string;
   allocation: TerminalAllocation | undefined;
 }
 
+/** MsgResolveFinancialCaseResponse returns the status and appeal deadlines. */
 export interface MsgResolveFinancialCaseResponse {
   status: FinancialCaseStatus;
   appealDeadlineHeight: Long;
   appealDeadlineTime: Long;
 }
 
+/** MsgAppealFinancialCase appeals a resolved-pending-appeal case. */
 export interface MsgAppealFinancialCase {
   appellant: string;
   caseId: string;
@@ -259,26 +270,31 @@ export interface MsgAppealFinancialCase {
   idempotencyKey: Uint8Array;
 }
 
+/** MsgAppealFinancialCaseResponse returns the appeal id and case status. */
 export interface MsgAppealFinancialCaseResponse {
   appealId: string;
   status: FinancialCaseStatus;
 }
 
+/** MsgCancelFinancialCase withdraws a case that is still open or in evidence. */
 export interface MsgCancelFinancialCase {
   sender: string;
   caseId: string;
   reasonHash: Uint8Array;
 }
 
+/** MsgCancelFinancialCaseResponse returns the resulting case status. */
 export interface MsgCancelFinancialCaseResponse {
   status: FinancialCaseStatus;
 }
 
+/** MsgFinalizeFinancialCase closes the appeal window and applies effects. */
 export interface MsgFinalizeFinancialCase {
   sender: string;
   caseId: string;
 }
 
+/** MsgFinalizeFinancialCaseResponse returns the applied terminal effects. */
 export interface MsgFinalizeFinancialCaseResponse {
   status: FinancialCaseStatus;
   effects: FinancialCaseEffect[];
@@ -324,6 +340,7 @@ export interface MsgRecordFiatConversionObservation {
   payoutFinalityHash: Uint8Array;
 }
 
+/** MsgRecordFiatConversionObservationResponse acknowledges one observation. */
 export interface MsgRecordFiatConversionObservationResponse {
   conversionId: string;
   observationSequence: Long;
@@ -333,11 +350,13 @@ export interface MsgRecordFiatConversionObservationResponse {
   observationDigest: Uint8Array;
 }
 
+/** MsgUpdateParams replaces the settlement module parameters. */
 export interface MsgUpdateParams {
   authority: string;
   params: Params | undefined;
 }
 
+/** MsgUpdateParamsResponse is the empty response to a params update. */
 export interface MsgUpdateParamsResponse {
 }
 
