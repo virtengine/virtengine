@@ -1,4 +1,4 @@
-import { patched } from "./cosmosPatchMessage.ts";
+import { patched } from "./ibc-goPatchMessage.ts";
 
 export { BaseAccount, ModuleAccount, ModuleCredential, Params } from "./cosmos/auth/v1beta1/auth.ts";
 export { GenesisState } from "./cosmos/auth/v1beta1/genesis.ts";

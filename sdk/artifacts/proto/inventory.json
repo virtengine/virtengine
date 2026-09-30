@@ -7550,6 +7550,8 @@
       "sdk/ts/src/generated/createProviderSDK.ts",
       "sdk/ts/src/generated/patches/cosmosCustomTypePatches.spec.ts",
       "sdk/ts/src/generated/patches/cosmosCustomTypePatches.ts",
+      "sdk/ts/src/generated/patches/ibc-goCustomTypePatches.spec.ts",
+      "sdk/ts/src/generated/patches/ibc-goCustomTypePatches.ts",
       "sdk/ts/src/generated/patches/nodeCustomTypePatches.spec.ts",
       "sdk/ts/src/generated/patches/nodeCustomTypePatches.ts",
       "sdk/ts/src/generated/protos/amino/amino.ts",
@@ -7758,6 +7760,7 @@
       "sdk/ts/src/generated/protos/gogoproto/gogo.ts",
       "sdk/ts/src/generated/protos/google/api/annotations.ts",
       "sdk/ts/src/generated/protos/google/api/http.ts",
+      "sdk/ts/src/generated/protos/google/api/httpbody.ts",
       "sdk/ts/src/generated/protos/google/protobuf/any.ts",
       "sdk/ts/src/generated/protos/google/protobuf/descriptor.ts",
       "sdk/ts/src/generated/protos/google/protobuf/duration.ts",
@@ -7831,6 +7834,8 @@
       "sdk/ts/src/generated/protos/ibc/lightclients/wasm/v1/tx_virtengine.ts",
       "sdk/ts/src/generated/protos/ibc/lightclients/wasm/v1/tx.ts",
       "sdk/ts/src/generated/protos/ibc/lightclients/wasm/v1/wasm.ts",
+      "sdk/ts/src/generated/protos/ibc-goPatchMessage.ts",
+      "sdk/ts/src/generated/protos/index.cosmos_proto.cosmos_proto.ts",
       "sdk/ts/src/generated/protos/index.cosmos.abci.ts",
       "sdk/ts/src/generated/protos/index.cosmos.ed25519.ts",
       "sdk/ts/src/generated/protos/index.cosmos.multisig.ts",
@@ -7840,6 +7845,7 @@
       "sdk/ts/src/generated/protos/index.cosmos.v1alpha1.ts",
       "sdk/ts/src/generated/protos/index.cosmos.v1beta1.ts",
       "sdk/ts/src/generated/protos/index.cosmos.v2alpha1.ts",
+      "sdk/ts/src/generated/protos/index.google.api.ts",
       "sdk/ts/src/generated/protos/index.ibc.v1.ts",
       "sdk/ts/src/generated/protos/index.ibc.v2.ts",
       "sdk/ts/src/generated/protos/index.ibc.v3.ts",
@@ -8198,6 +8204,6 @@
     "goMessages": 228,
     "gateways": 28,
     "gatewayStubs": 0,
-    "typescript": 637
+    "typescript": 643
   }
 }
