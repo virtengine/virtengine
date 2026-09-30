@@ -272,13 +272,26 @@ generate_typescript() {
   #     /src/sdk/go/vendor/github.com/cosmos/ts/script/... and the step died with
   #     `Cannot find module` (measured: contracts run 36735951768).
   # So: put the config INSIDE the ibc-go root (module `path: .`), pass it with
-  # --config, and pass NO positional input - buf then builds the config's own
-  # module while the relative plugin paths still resolve from $sdk.
+  # --config, AND name the input directory on the command line.
+  #
+  # The positional input is not optional. With `--config` and NO input, buf
+  # takes the module's own `path` - `.` - and compiles the whole CONTEXT
+  # directory, which for a config inside the shared vendor tree also contains
+  # the sibling cosmos-sdk root, so every symbol they share is defined twice:
+  #
+  #   cosmos/group/v1/types.proto:296:3: symbol
+  #   "cosmos.group.v1.PROPOSAL_EXECUTOR_RESULT_FAILURE" already defined at
+  #   go/vendor/github.com/cosmos/cosmos-sdk/proto/cosmos/group/v1/types.proto:296:3
+  #
+  # (measured: contracts run 36743453258, and reproduced locally - `EXIT=100`
+  # with and without the sibling tree, `EXIT=0` once the input is named
+  # explicitly). Naming the directory restricts the build to that tree while the
+  # config still supplies the ics23 dependency.
   # `buf dep update` must run first, or the dep is declared but unresolved and
   # `cosmos/ics23/v1/proofs.proto` still does not resolve (measured).
   # Drop the config afterwards so it cannot perturb the generated-drift check.
   PROTO_SOURCE=ibc-go buf generate --template "$ts_template" \
-    --config "$ics23_dep_dir/buf.yaml" \
+    --config "$ics23_dep_dir/buf.yaml" "$vendored_ibc" \
     || { echo "ibc-go contract generation failed" >&2; return 1; }
   PROTO_SOURCE=provider buf generate --template "$ts_template" proto/provider
   node --experimental-strip-types --no-warnings ts/script/fix-ts-proto-generated-types.ts
