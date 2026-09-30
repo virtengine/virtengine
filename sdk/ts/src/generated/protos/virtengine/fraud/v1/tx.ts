@@ -37,12 +37,40 @@ export interface MsgSubmitFraudReport {
   evidence: EncryptedEvidence[];
   /** RelatedOrderIDs are optional order IDs related to this fraud */
   relatedOrderIds: string[];
+  /**
+   * NoOrderAvailable asserts there is genuinely no order/resource to reference.
+   * Tenants and other non-provider reporters must supply an order reference or
+   * set this flag; the justification itself belongs in encrypted evidence.
+   */
+  noOrderAvailable: boolean;
 }
 
 /** MsgSubmitFraudReportResponse is the response for MsgSubmitFraudReport */
 export interface MsgSubmitFraudReportResponse {
   /** ReportID is the unique identifier for the submitted report */
   reportId: string;
+}
+
+/**
+ * MsgSubmitFraudResponse files a response/rebuttal against a fraud report.
+ * Either the reported party or the original reporter may respond; the actual
+ * statement travels in encrypted evidence, never in a public free-text field.
+ */
+export interface MsgSubmitFraudResponse {
+  /** Respondent is the address filing the response */
+  respondent: string;
+  /** ReportID is the fraud report being responded to */
+  reportId: string;
+  /** Evidence holds the encrypted response content for the moderator recipients */
+  evidence: EncryptedEvidence[];
+  /** StatementHash is SHA256 of the plaintext statement, for integrity only */
+  statementHash: string;
+}
+
+/** MsgSubmitFraudResponseResponse is the response for MsgSubmitFraudResponse */
+export interface MsgSubmitFraudResponseResponse {
+  /** ResponseID is the unique identifier for the stored response */
+  responseId: string;
 }
 
 /** MsgAssignModerator defines the message for assigning a moderator to a report */
@@ -87,8 +115,44 @@ export interface MsgResolveFraudReport {
   notes: string;
 }
 
-/** MsgResolveFraudReportResponse is the response for MsgResolveFraudReport */
+/**
+ * MsgResolveFraudReportResponse is the response for MsgResolveFraudReport
+ *
+ * A suspension or termination is not applied by the proposing message: it is
+ * recorded pending review. `requires_second_reviewer` and `pending` tell the
+ * caller that the report is unresolved and that a distinct second reviewer must
+ * confirm via MsgConfirmFraudResolution before anything takes effect.
+ */
 export interface MsgResolveFraudReportResponse {
+  /**
+   * RequiresSecondReviewer reports that this resolution can never be applied
+   * by a single moderator
+   */
+  requiresSecondReviewer: boolean;
+  /** Pending reports that a proposal was recorded awaiting a second reviewer */
+  pending: boolean;
+  /** PendingExpiresAt is the Unix time the proposal lapses if unreviewed */
+  pendingExpiresAt: Long;
+}
+
+/**
+ * MsgConfirmFraudResolution applies a proposed suspension or termination.
+ *
+ * This is the only path by which a suspension or termination driven from a
+ * fraud report takes effect. The signer must be a moderator-or-above identity
+ * distinct from the proposer, and the proposal must be within its review window.
+ */
+export interface MsgConfirmFraudResolution {
+  /** Reviewer is the second, distinct moderator confirming the resolution */
+  reviewer: string;
+  /** ReportID is the report whose proposal is being confirmed */
+  reportId: string;
+}
+
+/** MsgConfirmFraudResolutionResponse is the response for MsgConfirmFraudResolution */
+export interface MsgConfirmFraudResolutionResponse {
+  /** Resolution is the resolution that was applied */
+  resolution: ResolutionType;
 }
 
 /** MsgRejectFraudReport defines the message for rejecting a fraud report */
@@ -132,7 +196,15 @@ export interface MsgUpdateParamsResponse {
 }
 
 function createBaseMsgSubmitFraudReport(): MsgSubmitFraudReport {
-  return { reporter: "", reportedParty: "", category: 0, description: "", evidence: [], relatedOrderIds: [] };
+  return {
+    reporter: "",
+    reportedParty: "",
+    category: 0,
+    description: "",
+    evidence: [],
+    relatedOrderIds: [],
+    noOrderAvailable: false,
+  };
 }
 
 export const MsgSubmitFraudReport: MessageFns<MsgSubmitFraudReport, "virtengine.fraud.v1.MsgSubmitFraudReport"> = {
@@ -156,6 +228,9 @@ export const MsgSubmitFraudReport: MessageFns<MsgSubmitFraudReport, "virtengine.
     }
     for (const v of message.relatedOrderIds) {
       writer.uint32(50).string(v!);
+    }
+    if (message.noOrderAvailable !== false) {
+      writer.uint32(56).bool(message.noOrderAvailable);
     }
     return writer;
   },
@@ -215,6 +290,14 @@ export const MsgSubmitFraudReport: MessageFns<MsgSubmitFraudReport, "virtengine.
           message.relatedOrderIds.push(reader.string());
           continue;
         }
+        case 7: {
+          if (tag !== 56) {
+            break;
+          }
+
+          message.noOrderAvailable = reader.bool();
+          continue;
+        }
       }
       if ((tag & 7) === 4 || tag === 0) {
         break;
@@ -236,6 +319,7 @@ export const MsgSubmitFraudReport: MessageFns<MsgSubmitFraudReport, "virtengine.
       relatedOrderIds: globalThis.Array.isArray(object?.related_order_ids)
         ? object.related_order_ids.map((e: any) => globalThis.String(e))
         : [],
+      noOrderAvailable: isSet(object.no_order_available) ? globalThis.Boolean(object.no_order_available) : false,
     };
   },
 
@@ -259,6 +343,9 @@ export const MsgSubmitFraudReport: MessageFns<MsgSubmitFraudReport, "virtengine.
     if (message.relatedOrderIds?.length) {
       obj.related_order_ids = message.relatedOrderIds;
     }
+    if (message.noOrderAvailable !== false) {
+      obj.no_order_available = message.noOrderAvailable;
+    }
     return obj;
   },
   fromPartial(object: DeepPartial<MsgSubmitFraudReport>): MsgSubmitFraudReport {
@@ -269,6 +356,7 @@ export const MsgSubmitFraudReport: MessageFns<MsgSubmitFraudReport, "virtengine.
     message.description = object.description ?? "";
     message.evidence = object.evidence?.map((e) => EncryptedEvidence.fromPartial(e)) || [];
     message.relatedOrderIds = object.relatedOrderIds?.map((e) => e) || [];
+    message.noOrderAvailable = object.noOrderAvailable ?? false;
     return message;
   },
 };
@@ -328,6 +416,174 @@ export const MsgSubmitFraudReportResponse: MessageFns<
   fromPartial(object: DeepPartial<MsgSubmitFraudReportResponse>): MsgSubmitFraudReportResponse {
     const message = createBaseMsgSubmitFraudReportResponse();
     message.reportId = object.reportId ?? "";
+    return message;
+  },
+};
+
+function createBaseMsgSubmitFraudResponse(): MsgSubmitFraudResponse {
+  return { respondent: "", reportId: "", evidence: [], statementHash: "" };
+}
+
+export const MsgSubmitFraudResponse: MessageFns<MsgSubmitFraudResponse, "virtengine.fraud.v1.MsgSubmitFraudResponse"> =
+  {
+    $type: "virtengine.fraud.v1.MsgSubmitFraudResponse" as const,
+
+    encode(message: MsgSubmitFraudResponse, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+      if (message.respondent !== "") {
+        writer.uint32(10).string(message.respondent);
+      }
+      if (message.reportId !== "") {
+        writer.uint32(18).string(message.reportId);
+      }
+      for (const v of message.evidence) {
+        EncryptedEvidence.encode(v!, writer.uint32(26).fork()).join();
+      }
+      if (message.statementHash !== "") {
+        writer.uint32(34).string(message.statementHash);
+      }
+      return writer;
+    },
+
+    decode(input: BinaryReader | Uint8Array, length?: number): MsgSubmitFraudResponse {
+      const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+      const end = length === undefined ? reader.len : reader.pos + length;
+      const message = createBaseMsgSubmitFraudResponse();
+      while (reader.pos < end) {
+        const tag = reader.uint32();
+        switch (tag >>> 3) {
+          case 1: {
+            if (tag !== 10) {
+              break;
+            }
+
+            message.respondent = reader.string();
+            continue;
+          }
+          case 2: {
+            if (tag !== 18) {
+              break;
+            }
+
+            message.reportId = reader.string();
+            continue;
+          }
+          case 3: {
+            if (tag !== 26) {
+              break;
+            }
+
+            message.evidence.push(EncryptedEvidence.decode(reader, reader.uint32()));
+            continue;
+          }
+          case 4: {
+            if (tag !== 34) {
+              break;
+            }
+
+            message.statementHash = reader.string();
+            continue;
+          }
+        }
+        if ((tag & 7) === 4 || tag === 0) {
+          break;
+        }
+        reader.skip(tag & 7);
+      }
+      return message;
+    },
+
+    fromJSON(object: any): MsgSubmitFraudResponse {
+      return {
+        respondent: isSet(object.respondent) ? globalThis.String(object.respondent) : "",
+        reportId: isSet(object.report_id) ? globalThis.String(object.report_id) : "",
+        evidence: globalThis.Array.isArray(object?.evidence)
+          ? object.evidence.map((e: any) => EncryptedEvidence.fromJSON(e))
+          : [],
+        statementHash: isSet(object.statement_hash) ? globalThis.String(object.statement_hash) : "",
+      };
+    },
+
+    toJSON(message: MsgSubmitFraudResponse): unknown {
+      const obj: any = {};
+      if (message.respondent !== "") {
+        obj.respondent = message.respondent;
+      }
+      if (message.reportId !== "") {
+        obj.report_id = message.reportId;
+      }
+      if (message.evidence?.length) {
+        obj.evidence = message.evidence.map((e) => EncryptedEvidence.toJSON(e));
+      }
+      if (message.statementHash !== "") {
+        obj.statement_hash = message.statementHash;
+      }
+      return obj;
+    },
+    fromPartial(object: DeepPartial<MsgSubmitFraudResponse>): MsgSubmitFraudResponse {
+      const message = createBaseMsgSubmitFraudResponse();
+      message.respondent = object.respondent ?? "";
+      message.reportId = object.reportId ?? "";
+      message.evidence = object.evidence?.map((e) => EncryptedEvidence.fromPartial(e)) || [];
+      message.statementHash = object.statementHash ?? "";
+      return message;
+    },
+  };
+
+function createBaseMsgSubmitFraudResponseResponse(): MsgSubmitFraudResponseResponse {
+  return { responseId: "" };
+}
+
+export const MsgSubmitFraudResponseResponse: MessageFns<
+  MsgSubmitFraudResponseResponse,
+  "virtengine.fraud.v1.MsgSubmitFraudResponseResponse"
+> = {
+  $type: "virtengine.fraud.v1.MsgSubmitFraudResponseResponse" as const,
+
+  encode(message: MsgSubmitFraudResponseResponse, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.responseId !== "") {
+      writer.uint32(10).string(message.responseId);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): MsgSubmitFraudResponseResponse {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseMsgSubmitFraudResponseResponse();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.responseId = reader.string();
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): MsgSubmitFraudResponseResponse {
+    return { responseId: isSet(object.response_id) ? globalThis.String(object.response_id) : "" };
+  },
+
+  toJSON(message: MsgSubmitFraudResponseResponse): unknown {
+    const obj: any = {};
+    if (message.responseId !== "") {
+      obj.response_id = message.responseId;
+    }
+    return obj;
+  },
+  fromPartial(object: DeepPartial<MsgSubmitFraudResponseResponse>): MsgSubmitFraudResponseResponse {
+    const message = createBaseMsgSubmitFraudResponseResponse();
+    message.responseId = object.responseId ?? "";
     return message;
   },
 };
@@ -723,7 +979,7 @@ export const MsgResolveFraudReport: MessageFns<MsgResolveFraudReport, "virtengin
 };
 
 function createBaseMsgResolveFraudReportResponse(): MsgResolveFraudReportResponse {
-  return {};
+  return { requiresSecondReviewer: false, pending: false, pendingExpiresAt: Long.ZERO };
 }
 
 export const MsgResolveFraudReportResponse: MessageFns<
@@ -732,7 +988,16 @@ export const MsgResolveFraudReportResponse: MessageFns<
 > = {
   $type: "virtengine.fraud.v1.MsgResolveFraudReportResponse" as const,
 
-  encode(_: MsgResolveFraudReportResponse, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+  encode(message: MsgResolveFraudReportResponse, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.requiresSecondReviewer !== false) {
+      writer.uint32(8).bool(message.requiresSecondReviewer);
+    }
+    if (message.pending !== false) {
+      writer.uint32(16).bool(message.pending);
+    }
+    if (!message.pendingExpiresAt.equals(Long.ZERO)) {
+      writer.uint32(24).int64(message.pendingExpiresAt.toString());
+    }
     return writer;
   },
 
@@ -743,6 +1008,30 @@ export const MsgResolveFraudReportResponse: MessageFns<
     while (reader.pos < end) {
       const tag = reader.uint32();
       switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 8) {
+            break;
+          }
+
+          message.requiresSecondReviewer = reader.bool();
+          continue;
+        }
+        case 2: {
+          if (tag !== 16) {
+            break;
+          }
+
+          message.pending = reader.bool();
+          continue;
+        }
+        case 3: {
+          if (tag !== 24) {
+            break;
+          }
+
+          message.pendingExpiresAt = Long.fromString(reader.int64().toString());
+          continue;
+        }
       }
       if ((tag & 7) === 4 || tag === 0) {
         break;
@@ -752,16 +1041,172 @@ export const MsgResolveFraudReportResponse: MessageFns<
     return message;
   },
 
-  fromJSON(_: any): MsgResolveFraudReportResponse {
-    return {};
+  fromJSON(object: any): MsgResolveFraudReportResponse {
+    return {
+      requiresSecondReviewer: isSet(object.requires_second_reviewer)
+        ? globalThis.Boolean(object.requires_second_reviewer)
+        : false,
+      pending: isSet(object.pending) ? globalThis.Boolean(object.pending) : false,
+      pendingExpiresAt: isSet(object.pending_expires_at) ? Long.fromValue(object.pending_expires_at) : Long.ZERO,
+    };
   },
 
-  toJSON(_: MsgResolveFraudReportResponse): unknown {
+  toJSON(message: MsgResolveFraudReportResponse): unknown {
     const obj: any = {};
+    if (message.requiresSecondReviewer !== false) {
+      obj.requires_second_reviewer = message.requiresSecondReviewer;
+    }
+    if (message.pending !== false) {
+      obj.pending = message.pending;
+    }
+    if (!message.pendingExpiresAt.equals(Long.ZERO)) {
+      obj.pending_expires_at = (message.pendingExpiresAt || Long.ZERO).toString();
+    }
     return obj;
   },
-  fromPartial(_: DeepPartial<MsgResolveFraudReportResponse>): MsgResolveFraudReportResponse {
+  fromPartial(object: DeepPartial<MsgResolveFraudReportResponse>): MsgResolveFraudReportResponse {
     const message = createBaseMsgResolveFraudReportResponse();
+    message.requiresSecondReviewer = object.requiresSecondReviewer ?? false;
+    message.pending = object.pending ?? false;
+    message.pendingExpiresAt = (object.pendingExpiresAt !== undefined && object.pendingExpiresAt !== null)
+      ? Long.fromValue(object.pendingExpiresAt)
+      : Long.ZERO;
+    return message;
+  },
+};
+
+function createBaseMsgConfirmFraudResolution(): MsgConfirmFraudResolution {
+  return { reviewer: "", reportId: "" };
+}
+
+export const MsgConfirmFraudResolution: MessageFns<
+  MsgConfirmFraudResolution,
+  "virtengine.fraud.v1.MsgConfirmFraudResolution"
+> = {
+  $type: "virtengine.fraud.v1.MsgConfirmFraudResolution" as const,
+
+  encode(message: MsgConfirmFraudResolution, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.reviewer !== "") {
+      writer.uint32(10).string(message.reviewer);
+    }
+    if (message.reportId !== "") {
+      writer.uint32(18).string(message.reportId);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): MsgConfirmFraudResolution {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseMsgConfirmFraudResolution();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.reviewer = reader.string();
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.reportId = reader.string();
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): MsgConfirmFraudResolution {
+    return {
+      reviewer: isSet(object.reviewer) ? globalThis.String(object.reviewer) : "",
+      reportId: isSet(object.report_id) ? globalThis.String(object.report_id) : "",
+    };
+  },
+
+  toJSON(message: MsgConfirmFraudResolution): unknown {
+    const obj: any = {};
+    if (message.reviewer !== "") {
+      obj.reviewer = message.reviewer;
+    }
+    if (message.reportId !== "") {
+      obj.report_id = message.reportId;
+    }
+    return obj;
+  },
+  fromPartial(object: DeepPartial<MsgConfirmFraudResolution>): MsgConfirmFraudResolution {
+    const message = createBaseMsgConfirmFraudResolution();
+    message.reviewer = object.reviewer ?? "";
+    message.reportId = object.reportId ?? "";
+    return message;
+  },
+};
+
+function createBaseMsgConfirmFraudResolutionResponse(): MsgConfirmFraudResolutionResponse {
+  return { resolution: 0 };
+}
+
+export const MsgConfirmFraudResolutionResponse: MessageFns<
+  MsgConfirmFraudResolutionResponse,
+  "virtengine.fraud.v1.MsgConfirmFraudResolutionResponse"
+> = {
+  $type: "virtengine.fraud.v1.MsgConfirmFraudResolutionResponse" as const,
+
+  encode(message: MsgConfirmFraudResolutionResponse, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.resolution !== 0) {
+      writer.uint32(8).int32(message.resolution);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): MsgConfirmFraudResolutionResponse {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseMsgConfirmFraudResolutionResponse();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 8) {
+            break;
+          }
+
+          message.resolution = reader.int32() as any;
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): MsgConfirmFraudResolutionResponse {
+    return { resolution: isSet(object.resolution) ? resolutionTypeFromJSON(object.resolution) : 0 };
+  },
+
+  toJSON(message: MsgConfirmFraudResolutionResponse): unknown {
+    const obj: any = {};
+    if (message.resolution !== 0) {
+      obj.resolution = resolutionTypeToJSON(message.resolution);
+    }
+    return obj;
+  },
+  fromPartial(object: DeepPartial<MsgConfirmFraudResolutionResponse>): MsgConfirmFraudResolutionResponse {
+    const message = createBaseMsgConfirmFraudResolutionResponse();
+    message.resolution = object.resolution ?? 0;
     return message;
   },
 };

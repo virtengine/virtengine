@@ -28,6 +28,16 @@ export interface Params {
   reportRetentionDays: number;
   /** AuditLogRetentionDays is how long to retain audit logs */
   auditLogRetentionDays: number;
+  /**
+   * MaxReportsPerWindow caps how many fraud reports a single reporter may submit
+   * within ReportWindowBlocks (spam control).
+   */
+  maxReportsPerWindow: number;
+  /**
+   * ReportWindowBlocks is the block-height window used for the per-reporter
+   * submission limit. Block height (not wall clock) keeps the check deterministic.
+   */
+  reportWindowBlocks: number;
 }
 
 function createBaseParams(): Params {
@@ -40,6 +50,8 @@ function createBaseParams(): Params {
     escalationThresholdDays: 0,
     reportRetentionDays: 0,
     auditLogRetentionDays: 0,
+    maxReportsPerWindow: 0,
+    reportWindowBlocks: 0,
   };
 }
 
@@ -70,6 +82,12 @@ export const Params: MessageFns<Params, "virtengine.fraud.v1.Params"> = {
     }
     if (message.auditLogRetentionDays !== 0) {
       writer.uint32(64).int32(message.auditLogRetentionDays);
+    }
+    if (message.maxReportsPerWindow !== 0) {
+      writer.uint32(72).int32(message.maxReportsPerWindow);
+    }
+    if (message.reportWindowBlocks !== 0) {
+      writer.uint32(80).int32(message.reportWindowBlocks);
     }
     return writer;
   },
@@ -145,6 +163,22 @@ export const Params: MessageFns<Params, "virtengine.fraud.v1.Params"> = {
           message.auditLogRetentionDays = reader.int32();
           continue;
         }
+        case 9: {
+          if (tag !== 72) {
+            break;
+          }
+
+          message.maxReportsPerWindow = reader.int32();
+          continue;
+        }
+        case 10: {
+          if (tag !== 80) {
+            break;
+          }
+
+          message.reportWindowBlocks = reader.int32();
+          continue;
+        }
       }
       if ((tag & 7) === 4 || tag === 0) {
         break;
@@ -170,6 +204,8 @@ export const Params: MessageFns<Params, "virtengine.fraud.v1.Params"> = {
       auditLogRetentionDays: isSet(object.audit_log_retention_days)
         ? globalThis.Number(object.audit_log_retention_days)
         : 0,
+      maxReportsPerWindow: isSet(object.max_reports_per_window) ? globalThis.Number(object.max_reports_per_window) : 0,
+      reportWindowBlocks: isSet(object.report_window_blocks) ? globalThis.Number(object.report_window_blocks) : 0,
     };
   },
 
@@ -199,6 +235,12 @@ export const Params: MessageFns<Params, "virtengine.fraud.v1.Params"> = {
     if (message.auditLogRetentionDays !== 0) {
       obj.audit_log_retention_days = Math.round(message.auditLogRetentionDays);
     }
+    if (message.maxReportsPerWindow !== 0) {
+      obj.max_reports_per_window = Math.round(message.maxReportsPerWindow);
+    }
+    if (message.reportWindowBlocks !== 0) {
+      obj.report_window_blocks = Math.round(message.reportWindowBlocks);
+    }
     return obj;
   },
   fromPartial(object: DeepPartial<Params>): Params {
@@ -213,6 +255,8 @@ export const Params: MessageFns<Params, "virtengine.fraud.v1.Params"> = {
     message.escalationThresholdDays = object.escalationThresholdDays ?? 0;
     message.reportRetentionDays = object.reportRetentionDays ?? 0;
     message.auditLogRetentionDays = object.auditLogRetentionDays ?? 0;
+    message.maxReportsPerWindow = object.maxReportsPerWindow ?? 0;
+    message.reportWindowBlocks = object.reportWindowBlocks ?? 0;
     return message;
   },
 };
