@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/binary"
 	"math"
+	"reflect"
 	"time"
 
 	sdk "github.com/cosmos/cosmos-sdk/types"
@@ -430,38 +431,55 @@ func (q GRPCQuerier) FinancialCaseBySubject(ctx context.Context, req *settlement
 	return &settlementv1.QueryFinancialCaseBySubjectResponse{FinancialCase: &financialCase}, nil
 }
 
-func (q GRPCQuerier) FinancialCasesByOrder(ctx context.Context, req *settlementv1.QueryFinancialCasesRequest) (*settlementv1.QueryFinancialCasesResponse, error) {
-	return q.financialCases(ctx, "order", req)
-}
-func (q GRPCQuerier) FinancialCasesByInvoice(ctx context.Context, req *settlementv1.QueryFinancialCasesRequest) (*settlementv1.QueryFinancialCasesResponse, error) {
-	return q.financialCases(ctx, "invoice", req)
-}
-func (q GRPCQuerier) FinancialCasesByUsage(ctx context.Context, req *settlementv1.QueryFinancialCasesRequest) (*settlementv1.QueryFinancialCasesResponse, error) {
-	return q.financialCases(ctx, "usage", req)
-}
-func (q GRPCQuerier) FinancialCasesByJob(ctx context.Context, req *settlementv1.QueryFinancialCasesRequest) (*settlementv1.QueryFinancialCasesResponse, error) {
-	return q.financialCases(ctx, "job", req)
-}
-func (q GRPCQuerier) FinancialCasesByEscrow(ctx context.Context, req *settlementv1.QueryFinancialCasesRequest) (*settlementv1.QueryFinancialCasesResponse, error) {
-	return q.financialCases(ctx, "escrow", req)
-}
-func (q GRPCQuerier) FinancialCasesByStatus(ctx context.Context, req *settlementv1.QueryFinancialCasesRequest) (*settlementv1.QueryFinancialCasesResponse, error) {
-	return q.financialCases(ctx, "status", req)
-}
-func (q GRPCQuerier) FinancialCasesByParty(ctx context.Context, req *settlementv1.QueryFinancialCasesRequest) (*settlementv1.QueryFinancialCasesResponse, error) {
-	return q.financialCases(ctx, "party", req)
+func (q GRPCQuerier) FinancialCasesByOrder(ctx context.Context, req *settlementv1.QueryFinancialCasesByOrderRequest) (*settlementv1.QueryFinancialCasesByOrderResponse, error) {
+	return financialCases(ctx, q, "order", req.GetOrderId(), req.GetPagination())
 }
 
-func (q GRPCQuerier) financialCases(ctx context.Context, kind string, req *settlementv1.QueryFinancialCasesRequest) (*settlementv1.QueryFinancialCasesResponse, error) {
-	if req == nil || req.Key == "" {
+func (q GRPCQuerier) FinancialCasesByInvoice(ctx context.Context, req *settlementv1.QueryFinancialCasesByInvoiceRequest) (*settlementv1.QueryFinancialCasesByInvoiceResponse, error) {
+	return financialCases(ctx, q, "invoice", req.GetInvoiceId(), req.GetPagination())
+}
+
+func (q GRPCQuerier) FinancialCasesByUsage(ctx context.Context, req *settlementv1.QueryFinancialCasesByUsageRequest) (*settlementv1.QueryFinancialCasesByUsageResponse, error) {
+	return financialCases(ctx, q, "usage", req.GetUsageId(), req.GetPagination())
+}
+
+func (q GRPCQuerier) FinancialCasesByJob(ctx context.Context, req *settlementv1.QueryFinancialCasesByJobRequest) (*settlementv1.QueryFinancialCasesByJobResponse, error) {
+	return financialCases(ctx, q, "job", req.GetJobId(), req.GetPagination())
+}
+
+func (q GRPCQuerier) FinancialCasesByEscrow(ctx context.Context, req *settlementv1.QueryFinancialCasesByEscrowRequest) (*settlementv1.QueryFinancialCasesByEscrowResponse, error) {
+	return financialCases(ctx, q, "escrow", req.GetEscrowId(), req.GetPagination())
+}
+
+func (q GRPCQuerier) FinancialCasesByStatus(ctx context.Context, req *settlementv1.QueryFinancialCasesByStatusRequest) (*settlementv1.QueryFinancialCasesByStatusResponse, error) {
+	return financialCases(ctx, q, "status", req.GetStatus(), req.GetPagination())
+}
+
+func (q GRPCQuerier) FinancialCasesByParty(ctx context.Context, req *settlementv1.QueryFinancialCasesByPartyRequest) (*settlementv1.QueryFinancialCasesByPartyResponse, error) {
+	return financialCases(ctx, q, "party", req.GetParty(), req.GetPagination())
+}
+
+// financialCases resolves the paginated case list for one lineage index key and
+// wraps it in the caller's response type. It is a free function rather than a
+// method because Go forbids type parameters on methods.
+func financialCases[T any](ctx context.Context, q GRPCQuerier, kind, key string, pagination *query.PageRequest) (*T, error) {
+	if key == "" {
 		return nil, status.Error(codes.InvalidArgument, "key required")
 	}
-	all, err := q.FinancialCasesByIndex(sdk.UnwrapSDKContext(ctx), kind, req.Key)
+	all, err := q.FinancialCasesByIndex(sdk.UnwrapSDKContext(ctx), kind, key)
 	if err != nil {
 		return nil, status.Error(codes.Internal, err.Error())
 	}
-	start, end, page := financialPageBounds(len(all), req.Pagination)
-	return &settlementv1.QueryFinancialCasesResponse{FinancialCases: all[start:end], Pagination: page}, nil
+	start, end, page := financialPageBounds(len(all), pagination)
+
+	// Every FinancialCasesBy* response declares `repeated FinancialCase
+	// financial_cases = 1` plus `PageResponse pagination = 2`, field-identical to
+	// the retired shared QueryFinancialCasesResponse, so the encoded bytes are
+	// unchanged. The fields are set by name to avoid a per-RPC conversion.
+	out := new(T)
+	reflect.ValueOf(out).Elem().FieldByName("FinancialCases").Set(reflect.ValueOf(all[start:end]))
+	reflect.ValueOf(out).Elem().FieldByName("Pagination").Set(reflect.ValueOf(page))
+	return out, nil
 }
 
 func (q GRPCQuerier) FinancialCaseLineage(ctx context.Context, req *settlementv1.QueryFinancialCaseLineageRequest) (*settlementv1.QueryFinancialCaseLineageResponse, error) {

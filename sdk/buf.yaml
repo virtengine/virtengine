@@ -5,6 +5,18 @@ modules:
     breaking:
       use:
         - FILE
+      # Per-RPC request/response types are the approved end state for the
+      # deployed shared query messages (see #1097). Repointing an existing RPC
+      # at its own type is exactly what RPC_SAME_REQUEST_TYPE and
+      # RPC_SAME_RESPONSE_TYPE flag, so the approved migration is recorded here
+      # rather than by bumping the whole comparison baseline. Scoped to the two
+      # migrated files and to these two rules only, so any OTHER breaking
+      # change in them still fails the gate.
+      ignore:
+        - RPC_SAME_REQUEST_TYPE:proto/node/virtengine/resources/v1/query.proto
+        - RPC_SAME_REQUEST_TYPE:proto/node/virtengine/settlement/v1/query.proto
+        - RPC_SAME_RESPONSE_TYPE:proto/node/virtengine/resources/v1/query.proto
+        - RPC_SAME_RESPONSE_TYPE:proto/node/virtengine/settlement/v1/query.proto
     lint:
       use:
         - STANDARD
@@ -131,13 +143,9 @@ modules:
           - proto/node/virtengine/staking/v1/types.proto
         RPC_REQUEST_RESPONSE_UNIQUE:
           - proto/node/virtengine/marketplace/v1/query.proto
-          - proto/node/virtengine/resources/v1/query.proto
-          - proto/node/virtengine/settlement/v1/query.proto
         RPC_RESPONSE_STANDARD_NAME:
           - proto/node/virtengine/audit/v1/msg_audit_log.proto
           - proto/node/virtengine/marketplace/v1/query.proto
-          - proto/node/virtengine/resources/v1/query.proto
-          - proto/node/virtengine/settlement/v1/query.proto
 # Vendor path disabled - enable when proto/vendor directory has .proto files
 #  - path: proto/vendor
 #    lint:
