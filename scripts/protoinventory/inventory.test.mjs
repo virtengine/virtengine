@@ -80,6 +80,36 @@ test("repository inventory has exact Go module replaces and TypeScript proto par
   const inventory = JSON.parse(canonical);
 
   assert.equal(inventory.modules.some((module) => module.replaces.some((replacement) => replacement.old === "(")), false);
-  assert.equal(inventory.summaries.replaces, 23);
+
+  // Exact pin, deliberately a literal: this is the canary that forces a human
+  // to look at a replace-set change before it ships. Update it in the same PR
+  // that changes go.mod, and say in that PR which directive was added or
+  // repointed.
+  //
+  // 24 as of 2026-10-01: 15 in go.mod + 1 in sdk/generation/go.mod + 8 in
+  // sdk/go/go.mod. It was 23 until b488f79a (#960) regenerated the inventory
+  // after #848 repointed the ledger directives to akash-network/ledger-go;
+  // that regeneration also carried a `bytedance/sonic` replace, and this
+  // constant was not updated with it. The contracts gate only reached the step
+  // that runs this test once #1102-#1107 made proto generation succeed, so the
+  // drift sat unreadable until then.
+  assert.equal(inventory.summaries.replaces, 24);
+
+  // A replace must never point at the deleted virtengine/ledger-go repository
+  // (#848); assert the target rather than trusting the count to catch it.
+  assert.equal(
+    inventory.modules.some((module) => module.replaces.some((replacement) => String(replacement.new).includes("virtengine/ledger-go"))),
+    false,
+  );
+
+  // Every replace must name a concrete source, not an unresolved placeholder:
+  // a replace whose `old` is not a real module path silently stops applying and
+  // the inventory keeps reporting a count that no longer describes the build.
+  for (const module of inventory.modules) {
+    for (const replacement of module.replaces) {
+      assert.match(replacement.old, /^[^(\s]+\/[^(\s]+$/);
+    }
+  }
+
   assert.equal(inventory.generated.gatewayStubs.length, 0);
 });
