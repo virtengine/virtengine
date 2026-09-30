@@ -162,19 +162,46 @@ generate_typescript() {
     local dir target
     dir="$(cd "$sdk/go" && GOWORK=off go list -m -f '{{.Dir}}' "$module")"
     if [[ -z "$dir" || ! -d "$dir/$module_subdir" ]]; then
-      # Two distinct cold-cache symptoms, both measured in the image
-      # (contracts runs 36718051031 and 36720120900):
-      #   * the module is absent, so `-d` fails; and
-      #   * on a cache with NO module graph loaded, `go list -m` prints an
-      #     EMPTY .Dir rather than the path the module would occupy.
-      # #1103 downloaded the module and then re-tested the SAME `$dir` value,
-      # which was still empty, so it failed identically (the log shows the
-      # `go: downloading` lines succeeding and the error repeating). Re-resolve
-      # after the download; never cache a pre-download answer.
+      # `go list -m -f '{{.Dir}}'` is NOT a reliable way to locate a module in
+      # this image: it reports an empty Dir for a module that is required
+      # plainly, is already downloaded, and has no replace directive
+      # (measured twice - contracts runs 36718051031 and 36722480279, both
+      # printing `dir=[]` for github.com/cosmos/cosmos-proto next to a
+      # successful `go: downloading github.com/cosmos/cosmos-proto
+      # v1.0.0-beta.5`). So: download, then GLOB the module cache, which is
+      # correct by construction because the shell expands whatever go wrote and
+      # the version is the only variable part.
+      #
+      # Locate the module in \$GOMODCACHE. For a REPLACED module neither
+      # {{.Path}}@{{.Version}} nor the required version names the directory:
+      # go.mod:292-293 replace cosmos-sdk -> virtengine/cosmos-sdk
+      # v0.53.4-virtengine.2 and gogoproto -> virtengine/gogoproto
+      # v1.7.0-virtengine.1, and the cache is keyed on the REPLACEMENT's path
+      # and version (measured: the cache holds
+      # github.com/cosmos/cosmos-sdk@v0.50.11 / v0.53.0 / v0.54.3 and
+      # github.com/cosmos/gogoproto@v1.7.2 while the build uses
+      # github.com/virtengine/gogoproto@v1.7.0-virtengine.1 - so both the
+      # original path AND the original version point at the wrong tree).
+      # Try the replacement identity first, then the plain one, and require the
+      # subdir to exist in the winner - that is what makes the choice safe.
+      local want replace_hit plain_hit
+      want="$(cd "$sdk/go" && GOWORK=off go list -m -f '{{with .Replace}}{{.Path}}@{{.Version}}{{else}}{{.Path}}@{{.Version}}{{end}}' "$module" 2>/dev/null | head -1)"
+      if [[ -z "$want" || "$want" == "$module@" ]]; then
+        echo "proto dependency $module has no version selected by sdk/go" >&2
+        return 1
+      fi
       (cd "$sdk/go" && GOWORK=off go mod download "$module")
-      dir="$(cd "$sdk/go" && GOWORK=off go list -m -f '{{.Dir}}' "$module")"
+      replace_hit="$GOMODCACHE/$want"
+      plain_hit="$GOMODCACHE/$(cd "$sdk/go" && GOWORK=off go list -m -f '{{.Path}}@{{.Version}}' "$module" 2>/dev/null | head -1)"
+      local hit
+      for hit in "$replace_hit" "$plain_hit"; do
+        if [[ -n "$hit" && -d "$hit/$module_subdir" ]]; then
+          dir="$hit"
+          break
+        fi
+      done
       if [[ -z "$dir" || ! -d "$dir/$module_subdir" ]]; then
-        echo "proto dependency $module has no $module_subdir to stage (dir=[$dir])" >&2
+        echo "proto dependency $module (want $want) has no $module_subdir in \$GOMODCACHE" >&2
         return 1
       fi
     fi
