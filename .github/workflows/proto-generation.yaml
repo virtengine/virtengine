@@ -73,9 +73,29 @@ jobs:
       - name: REST/gRPC gateway boundary
         run: go test -p 1 -tags=e2e.integration ./tests/gateway -run '^TestTask86A' -count=1
       - name: TypeScript SDK
+        # `set -e` is load-bearing, not decoration. The four npm commands below run
+        # inside a `bash -lc` string inside the container, which is a SEPARATE shell
+        # from the one GitHub Actions wraps this step in. Actions' own
+        # `bash --noprofile --norc -e -o pipefail` applies only to the outer
+        # `docker run`; the inner bash does not inherit errexit. Without `set -e`
+        # the step's exit status is whatever the LAST command returned, and
+        # `npm run build` is last -- so a failing `lint` or `test` was silently
+        # discarded and the step reported success.
+        #
+        # Observed on run 36786584581 (sha ef0b319): vitest printed
+        #   Test Suites: 7 failed, 33 passed, 40 total
+        #   Tests:       69 failed, 1306 passed, 1375 total
+        # then `npm run build` succeeded, and the step, the whole job, and the
+        # workflow all reported `success`. That is a green gate over 69 red tests,
+        # which is worse than a red gate: it makes the contract gate untrustworthy.
+        #
+        # `pipefail` is added to match the Actions default so a failure inside a
+        # pipeline (e.g. `npm run lint 2>&1 | tee`) is caught rather than reduced
+        # to tee's exit status.
         run: |
           docker run --rm --volume "$PWD:/src" --workdir /src --entrypoint bash \
             virtengine-proto-gen:1.0.0 -lc '
+              set -euo pipefail
               export NODE_OPTIONS=--max-old-space-size=6144
               npm --prefix sdk/ts ci --ignore-scripts --no-audit --no-fund
               npm --prefix sdk/ts run lint
