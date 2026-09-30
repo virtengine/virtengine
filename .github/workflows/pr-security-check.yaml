@@ -74,6 +74,13 @@ jobs:
       - name: Run policy validator tests
         run: python -m unittest discover -s .github/tests -p "test_*policy*.py"
 
+      # This test does not match the `test_*policy*.py` glob above, so without an
+      # explicit step it would never run in CI - a guard that is not wired is not a
+      # guard. It pins the gosec target resolution used by the 'Go Security Scan'
+      # leg below, so a revert to passing file paths to gosec fails here first.
+      - name: Run PR gosec scan-target tests
+        run: python .github/tests/test_pr_gosec_scan_targets.py
+
       - name: Set up Go
         uses: actions/setup-go@v6
         with:
@@ -267,41 +274,45 @@ jobs:
         # security findings" step and the summary read the same outputs everywhere.
         if: matrix.shard == 'core'
         run: |
-          mapfile -t changed_files < <(
-            git diff --name-only "origin/${{ github.base_ref }}...HEAD" -- '*.go' \
-              | awk '!/_test\.go$/ && !/^vendor\// && !/\.pb\.go$/'
-          )
-
-          if [ "${#changed_files[@]}" -eq 0 ]; then
-            cat > gosec-results.json <<'EOF'
-          {"Issues":[]}
-          EOF
-            cat > gosec.sarif <<'EOF'
-          {
-            "$schema": "https://json.schemastore.org/sarif-2.1.0.json",
-            "version": "2.1.0",
-            "runs": [
-              {
-                "tool": {
-                  "driver": {
-                    "name": "gosec",
-                    "informationUri": "https://github.com/securego/gosec",
-                    "rules": []
-                  }
-                },
-                "results": []
-              }
-            ]
-          }
-          EOF
+          # gosec is given PACKAGE DIRECTORIES, never file paths. Handed a .go
+          # file, gosec v2.25.0 resolves it as a package pattern and reports
+          #   "Golang errors": {"pkg/foo/bar.go": [... "cannot find package \".\""]}
+          #   "Issues": [], "Stats": {"files": 0, ...}
+          # i.e. it imports ZERO files and still exits 1 - a false negative (the
+          # only PR-side Go SAST control scanned nothing) AND a false red (the
+          # non-zero exit was reported to the reviewer as a security finding).
+          # Measured: run 36524756911, job 'Go Security Scan (core)', artifact
+          # pr-go-security-report-core -> Stats.files=0 with 2 Golang errors.
+          # gosec_pr_targets.py maps the changed files to the packages that own
+          # them (dropping tests/.pb.go/vendor the way the old awk did) and fails
+          # closed if any changed file is not in a loadable package.
+          git diff --name-only "origin/${{ github.base_ref }}...HEAD" -- '*.go' > changed-go-files.txt
+          if [ ! -s changed-go-files.txt ]; then
+            echo "no Go files changed in this PR - nothing for gosec to scan"
+            python3 .github/scripts/gosec_pr_targets.py --changed-files changed-go-files.txt --write-empty-report
             echo "exit_code=0" >> "$GITHUB_OUTPUT"
             exit 0
           fi
 
+          if ! python3 .github/scripts/gosec_pr_targets.py --changed-files changed-go-files.txt > gosec-targets.txt; then
+            echo "::error::could not resolve the changed Go files to loadable packages - refusing to run gosec, because a target it cannot load reports 0 files analysed AND exits 1"
+            echo "exit_code=1" >> "$GITHUB_OUTPUT"
+            exit 1
+          fi
+
+          mapfile -t gosec_targets < gosec-targets.txt
+          if [ "${#gosec_targets[@]}" -eq 0 ]; then
+            echo "no scannable Go packages among the changed files (tests/generated only)"
+            python3 .github/scripts/gosec_pr_targets.py --changed-files changed-go-files.txt --write-empty-report
+            echo "exit_code=0" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "scanning ${#gosec_targets[@]} package(s): ${gosec_targets[*]}"
+
           set +e
-          gosec -fmt json -out gosec-results.json -exclude-generated "${changed_files[@]}"
+          gosec -fmt json -out gosec-results.json -exclude-generated "${gosec_targets[@]}"
           json_status=$?
-          gosec -fmt sarif -out gosec.sarif -exclude-generated "${changed_files[@]}"
+          gosec -fmt sarif -out gosec.sarif -exclude-generated "${gosec_targets[@]}"
           sarif_status=$?
           set -e
 
@@ -310,7 +321,21 @@ jobs:
             exit 1
           fi
 
-          if [ "$json_status" -ne 0 ] || [ "$sarif_status" -ne 0 ]; then
+          # A scan that could not load a package is not a clean scan. gosec reports
+          # this as a non-zero exit WITH an empty Issues list, so a caller that only
+          # looks at findings would record it as a pass. Fail closed on either
+          # signal: a non-zero exit, or a report that analysed nothing at all.
+          analysis_files=$(python3 -c "import json;print(json.load(open('gosec-results.json')).get('Stats',{}).get('files',0))")
+          if [ "$json_status" -ne 0 ] || [ "$sarif_status" -ne 0 ] || [ "$analysis_files" -eq 0 ]; then
+            echo "::error::gosec exited $json_status (json) / $sarif_status (sarif) after analysing $analysis_files file(s); Stats.files=0 with a non-zero exit means the scan could not load its targets, not that the code is clean"
+            # Name the unloadable targets. This is a diagnostic, not the verdict,
+            # so it is allowed to fail without changing the step's outcome - which
+            # is why it is wrapped in set +e. A masked-failure idiom is not used
+            # here: this repo's policy validator forbids it, and it would hide the
+            # very error being diagnosed.
+            set +e
+            python3 -c "import json;d=json.load(open('gosec-results.json'));e=list((d.get('Golang errors') or {}).keys());print('::error::gosec could not load: '+', '.join(e) if e else '::error::no Golang errors reported')"
+            set -e
             echo "exit_code=1" >> "$GITHUB_OUTPUT"
           else
             echo "exit_code=0" >> "$GITHUB_OUTPUT"
