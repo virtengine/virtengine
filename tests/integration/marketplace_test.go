@@ -292,7 +292,7 @@ func (s *MarketplaceIntegrationTestSuite) submitProviderTx(msg sdk.Msg) {
 
 	var committed *sdk.TxResponse
 	s.Require().Eventually(func() bool {
-		committed, err = nutils.QueryTx(cctx, hash)
+		committed, err = nutils.QueryTx(context.Background(), cctx, hash)
 		if err != nil || committed == nil {
 			return false
 		}
