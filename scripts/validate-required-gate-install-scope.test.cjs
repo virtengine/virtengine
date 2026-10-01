@@ -83,6 +83,27 @@
 // actually failed. A guard that cries wolf on a legal spelling gets switched
 // off, which is how a real defect walks back in.
 //
+// WHAT ELSE THE GUARD MUST NOT MISREAD
+// -------------------------------------
+// Three shapes make a perfectly good command come back with the WRONG verdict,
+// and each one cost a review round, so each has controls below:
+//
+//   FOO=1 pnpm --dir sdk/ts --ignore-workspace install
+//     -> `FOO=1` was taken as the SUBCOMMAND, so `isInstall` went false and rule
+//        (b) — the lockfile-existence check — was SKIPPED. A directory with no
+//        lockfile at all came back clean: a fail-OPEN hole, the exact defect
+//        class rule (b) exists to catch. It was also a false failure at the
+//        same time (`runs \`FOO=1\` … declares no such script`).
+//   pnpm --dir='mobile/veid-capture-app' --ignore-workspace install
+//     -> the shell strips those quotes before the installer sees the path; the
+//        guard did not, so it reported a lockfile that exists under a name
+//        nothing can open.
+//   pnpm --dir mobile/veid-capture-app --ignore-workspace approve-builds
+//     -> `approve-builds` and `patch` are real pnpm 10.28.2 builtins. A name
+//        missing from BUILTIN_SUBCOMMANDS is false-failed, which is how a guard
+//        gets switched off — so that list is transcribed from `pnpm help -a` and
+//        `npm help -a` rather than from memory, and re-derived on a toolchain bump.
+//
 // Static shape check: it reads the matrix, pnpm-workspace.yaml, and per-directory
 // package.json / lockfile presence. No network, no install, milliseconds to run.
 //
@@ -138,8 +159,11 @@ function isWorkspaceMember(dir, members) {
 // `--cwd` would make it certify the exact defect it exists to catch, so an
 // unrecognised scope flag must FAIL instead (see parseCommand).
 const INSTALLERS = new Map([
-  ["pnpm", { dirFlags: ["--dir", "-C"], subcommands: new Set(["install", "i", "add"]) }],
-  ["npm", { dirFlags: ["--prefix", "-C"], subcommands: new Set(["ci", "install", "i"]) }],
+  // `install-test` / `it` / `install-ci-test` run an install FIRST and a test
+  // after, so they are install subcommands: rule (b) has to fire on them, or a
+  // gate naming one would skip the lockfile check that makes the install real.
+  ["pnpm", { dirFlags: ["--dir", "-C"], subcommands: new Set(["install", "i", "add", "install-test", "it"]) }],
+  ["npm", { dirFlags: ["--prefix", "-C"], subcommands: new Set(["ci", "install", "i", "install-test", "install-ci-test"]) }],
 ]);
 
 // `--ignore-workspace` may appear before or after the subcommand.
@@ -164,12 +188,49 @@ const ISOLATED = /(?:^|\s)--ignore-workspace(?:\s|$)/;
 // such script"), and a gate that cries wolf on its own live commands gets
 // switched off. Every subcommand in an installer's own `subcommands` set is by
 // definition handled by that installer.
-const BUILTIN_SUBCOMMANDS = new Set([
-  "audit", "config", "create", "dedupe", "dlx", "doctor", "env", "exec",
-  "fetch", "import", "info", "init", "link", "list", "ls", "outdated",
-  "pack", "prune", "publish", "rebuild", "remove", "rm", "run", "store",
-  "uninstall", "unlink", "update", "up", "view", "why",
+//
+// THE LIST BELOW IS TRANSCRIBED FROM THE PINNED INSTALLERS, not from memory:
+// `pnpm help -a` (10.28.2) and `npm help -a` (11.6.2). Two rounds of review
+// were lost to names that were MISSING rather than wrongly present — `patch`
+// and `approve-builds` both exit 0 under pnpm 10.28.2 yet were false-failed as
+// undeclared scripts, which is exactly how a guard gets switched off. So this
+// is pnpm's full command surface plus npm's names pnpm does not share, and the
+// comment above it says where to re-derive it on a toolchain bump.
+const PNPM_BUILTINS = new Set([
+  // pnpm help -a, "Manage your dependencies"
+  "add", "dedupe", "fetch", "import", "install", "install-test", "it", "link",
+  "ln", "prune", "rebuild", "rb", "remove", "rm", "unlink", "update", "up",
+  // pnpm help -a, "Patch your dependencies"
+  "patch", "patch-commit", "patch-remove",
+  // pnpm help -a, "Review your dependencies"
+  "audit", "licenses", "list", "ls", "outdated", "why",
+  // pnpm help -a, "Run your scripts"
+  "approve-builds", "create", "dlx", "exec", "ignored-builds", "run", "start",
+  // pnpm help -a, "Other"
+  "bin", "config", "c", "deploy", "doctor", "init", "pack", "publish", "root",
+  "self-update",
+  // pnpm help -a, "Manage your environments" / "Inspect your store" / "Manage
+  // your store" / "Manage your cache"
+  "env", "cat-file", "cat-index", "find-hash", "store", "cache",
 ]);
+
+const NPM_ONLY_BUILTINS = new Set([
+  // npm help -a, "All commands" — names npm owns that pnpm does not.
+  "access", "adduser", "bugs", "cache", "completion", "deprecate", "diff",
+  "dist-tag", "docs", "edit", "explain", "explore", "find-dupes", "fund",
+  "get", "help", "help-search", "install-ci-test", "ll", "login", "logout",
+  "org", "owner", "ping", "pkg", "prefix", "profile", "query", "repo",
+  "restart", "sbom", "search", "set", "shrinkwrap", "star", "stars", "stop",
+  "team", "token", "undeprecate", "unpublish", "unstar", "version", "whoami",
+]);
+
+// `test` and its pnpm shorthand are removed from the builtins: both run the
+// package's `test` SCRIPT, so rule (c) must check the manifest for it.
+PNPM_BUILTINS.delete("t");
+PNPM_BUILTINS.delete("test");
+NPM_ONLY_BUILTINS.delete("test");
+
+const BUILTIN_SUBCOMMANDS = new Set([...PNPM_BUILTINS, ...NPM_ONLY_BUILTINS]);
 for (const spec of INSTALLERS.values()) {
   for (const subcommand of spec.subcommands) BUILTIN_SUBCOMMANDS.add(subcommand);
 }
@@ -192,17 +253,54 @@ function flagValue(tokens, flag) {
   return null;
 }
 
+// Leading `VAR=value` assignments, which every shell applies to the command it
+// runs: `FOO=1 pnpm …`, `CI=true NODE_ENV=test npm …`. Both tokens that inspect a
+// command have to agree on this, which is why it is one shared helper.
+//
+// This is not cosmetic. `FOO=1` used to become `bare[0]` — the SUBCOMMAND — so
+// `isInstall` went false and `scopeProblems` SKIPPED rule (b) entirely: a
+// directory with no lockfile at all came back clean, which is the exact defect
+// class rule (b) exists to catch. It was also a false failure at the same time,
+// reporting the legal command as `runs \`FOO=1\` … declares no such script`.
+const ENV_ASSIGNMENT = /^[A-Za-z_][A-Za-z0-9_]*=/;
+
+/**
+ * Drop leading `VAR=value` tokens, i.e. everything before the command itself.
+ * Only LEADING assignments are stripped: an assignment after the subcommand is a
+ * script ARGUMENT (`pnpm run test -- --env=FOO=1`) and must not be consumed as
+ * the subcommand.
+ */
+function stripEnvPrefixes(command) {
+  const tokens = command.trim().split(/\s+/);
+  let index = 0;
+  while (index < tokens.length && ENV_ASSIGNMENT.test(tokens[index])) index += 1;
+  return tokens.slice(index);
+}
+
+/**
+ * Remove one matching layer of surrounding quotes from a shell word. A shell
+ * strips these before the installer ever sees the path, so the guard must too:
+ * `--dir='mobile/veid-capture-app'` is a legal, honoured spelling, but the
+ * quotes surviving into `existsSync` made the guard report a lockfile that is
+ * present under a name nothing can open.
+ */
+function unquote(value) {
+  if (value === undefined || value === null) return value;
+  return value.replace(/^(["'])([\s\S]*)\1$/, "$2");
+}
+
 /**
  * True when the command invokes a package manager AT ALL, at any token
  * position. Deliberately not just `tokens[0]`: `cd sdk/ts && pnpm ci` and
  * `FOO=1 pnpm --dir sdk/ts ci` are both package-manager gates, and a
  * first-token-only rule would skip them exactly as silently as before.
+ *
+ * Matches the package manager as a WHOLE token, so an argument that merely
+ * contains the word (`pnpm run lint -- --pm=npm`) is not mistaken for a second
+ * installer.
  */
-function packageManagerTokens(command) {
-  return command
-    .trim()
-    .split(/\s+/)
-    .filter((token) => INSTALLERS.has(token));
+function packageManagerTokens(tokens) {
+  return tokens.filter((token) => INSTALLERS.has(token));
 }
 
 /**
@@ -218,8 +316,8 @@ function packageManagerTokens(command) {
  * a guard that cannot understand a command must not certify it.
  */
 function parseCommand(command) {
-  const tokens = command.trim().split(/\s+/);
-  const found = packageManagerTokens(command);
+  const tokens = stripEnvPrefixes(command);
+  const found = packageManagerTokens(tokens);
   if (!found.length) return null;
   const installer = found[0];
   const spec = INSTALLERS.get(installer);
@@ -248,7 +346,7 @@ function parseCommand(command) {
   // it or the lockfile check would silently verify the wrong file.
   const lockfileHit = flagValue(tokens, "--lockfile-dir");
   const lockDir = lockfileHit && lockfileHit.value && !lockfileHit.value.startsWith("-")
-    ? lockfileHit.value.replace(/^--lockfile-dir=/, "")
+    ? unquote(lockfileHit.value)
     : null;
 
   if (!dir) {
@@ -267,7 +365,7 @@ function parseCommand(command) {
   if (dir.startsWith("-")) {
     return { unparsed: `\`${dir}\` follows its scope flag but is another flag, not a directory` };
   }
-  dir = dir.replaceAll("\\", "/").replace(/\/$/, "");
+  dir = unquote(dir).replaceAll("\\", "/").replace(/\/$/, "");
 
   // Drop the installer token, the scope-flag token, and the flag's VALUE — but
   // only skip a second token when the value really is a separate one. Retaining
@@ -640,6 +738,100 @@ const CONTROLS = [
     name: "equals-form scope, sdk/ts has no pnpm lockfile (negative)",
     command: "pnpm --dir=sdk/ts --ignore-workspace install --frozen-lockfile",
     expect: /ERR_PNPM_NO_LOCKFILE/,
+  },
+  {
+    // THE FAIL-OPEN HOLE, and the only control that can catch it: an env prefix
+    // used to become the SUBCOMMAND, which flipped `isInstall` to false so rule
+    // (b) never ran — and rule (b) is the ONLY rule that notices a missing
+    // lockfile. sdk/ts owns no pnpm lockfile, so under the old code this
+    // reported CLEAN. If anyone reintroduces the hole, this goes green.
+    name: "env prefix must not disable the lockfile check (fail-closed)",
+    command: "FOO=1 pnpm --dir sdk/ts --ignore-workspace install --frozen-lockfile",
+    expect: /ERR_PNPM_NO_LOCKFILE/,
+  },
+  {
+    // The same command with NO env prefix must produce the SAME complaint, not a
+    // different one. This is what proves the prefix is stripped rather than
+    // special-cased: the verdict has to be independent of it.
+    name: "the same install without its env prefix (equivalent verdict)",
+    command: "pnpm --dir sdk/ts --ignore-workspace install --frozen-lockfile",
+    expect: /ERR_PNPM_NO_LOCKFILE/,
+  },
+  {
+    // And the ORIGINAL defect, env-prefixed, must still be caught — proof the
+    // fix did not weaken rule (a) while strengthening rule (b).
+    name: "env prefix must not disable the workspace-member check",
+    command: "FOO=1 pnpm --dir mobile/veid-capture-app install --frozen-lockfile",
+    expect: /is not a pnpm workspace member/,
+  },
+  {
+    // The POSITIVE half of the env-prefix fix. Under the old code this reported
+    // "runs `FOO=1` … declares no such script" on a command that exits 0, so a
+    // false failure on a legal, honoured spelling.
+    name: "env-prefixed legal install on mobile (positive)",
+    command: "FOO=1 pnpm --dir mobile/veid-capture-app --ignore-workspace install --frozen-lockfile",
+    expect: null,
+  },
+  {
+    // npm's side of the same fix: `CI=true npm --prefix sdk/ts run build` runs,
+    // and sdk/ts declares `build`. Rule (c) must see the script name, not `CI=true`.
+    name: "env-prefixed npm run build on sdk (positive)",
+    command: "CI=true npm --prefix sdk/ts run build",
+    expect: null,
+  },
+  {
+    // Quotes around the dir value are a legal shell spelling that both installers
+    // honour. The old code let them reach existsSync and reported a lockfile
+    // that is present under a name nothing can open.
+    name: "quoted scope flag value, install on mobile (positive)",
+    command: "pnpm --dir='mobile/veid-capture-app' --ignore-workspace install --frozen-lockfile",
+    expect: null,
+  },
+  {
+    // ...and the quotes must not BLIND the guard either: an unquoted path that
+    // does not exist has to fail the same way a quoted one does.
+    name: "quoted scope flag value, directory that does not exist (negative)",
+    command: "pnpm --dir='nope/does-not-exist' --ignore-workspace install --frozen-lockfile",
+    expect: /ERR_PNPM_NO_LOCKFILE/,
+  },
+  {
+    // `approve-builds` is a real pnpm 10.28.2 builtin (`pnpm approve-builds
+    // --help` exits 0; it is listed under "Run your scripts" in `pnpm help -a`).
+    // Missing it false-failed a legal command, which is how a guard gets
+    // switched off.
+    name: "pnpm approve-builds is a builtin, not an undeclared script (positive)",
+    command: "pnpm --dir mobile/veid-capture-app --ignore-workspace approve-builds",
+    expect: null,
+  },
+  {
+    // `patch` likewise. It does abort ERR_PNPM_MISSING_PACKAGE_NAME when given
+    // no argument — but that is a BUILTIN complaining about its own arguments,
+    // not ERR_PNPM_NO_SCRIPT, so the guard must not claim the script is missing.
+    name: "pnpm patch is a builtin, not an undeclared script (positive)",
+    command: "pnpm --dir mobile/veid-capture-app --ignore-workspace patch",
+    expect: null,
+  },
+  {
+    // Keeps the two controls above honest: adding builtin names must not grant
+    // a free pass to anything that merely LOOKS like one. `approve-builds-nope`
+    // is not a builtin and mobile declares no such script.
+    name: "a name that merely resembles a builtin is still checked (negative)",
+    command: "pnpm --dir mobile/veid-capture-app --ignore-workspace approve-builds-nope",
+    expect: /declares no such script/,
+  },
+  {
+    // `install-test` runs an install and then a test, so it is an INSTALL
+    // subcommand: rule (b) must fire on it. sdk/ts owns no pnpm lockfile, so a
+    // gate naming this without the check would report clean.
+    name: "pnpm install-test must still run the lockfile check (fail-closed)",
+    command: "pnpm --dir sdk/ts --ignore-workspace install-test",
+    expect: /ERR_PNPM_NO_LOCKFILE/,
+  },
+  {
+    // The npm spelling of the same idea.
+    name: "npm install-test must still run the lockfile check (fail-closed)",
+    command: "npm --prefix sdk/ts install-test",
+    expect: null, // sdk/ts/package-lock.json exists, so rule (b) passes
   },
 ];
 
