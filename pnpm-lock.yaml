@@ -16,6 +16,7 @@ overrides:
   browserslist: ^4.29.0
   '@babel/core': ^7.29.6
   postcss-selector-parser@^6: ^6.1.4
+  js-yaml@^4: ^4.3.2
 
 importers:
 
