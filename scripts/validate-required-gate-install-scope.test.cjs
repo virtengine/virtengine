@@ -63,6 +63,26 @@
 // "8 gate command(s) checked, 0 failed". A guard that cannot understand a
 // command must not certify it.
 //
+// TOKENIZATION, both spellings of every scope flag
+// ------------------------------------------------
+// `--dir <d>` and `--dir=<d>` are both legal and both honoured (pnpm 10.28.2,
+// npm 11.6.2), so both must PARSE — and, more importantly, both must be judged
+// on their merits rather than skipped. The skip past the flag has to consume the
+// flag's value whether that value is the next token or part of the same one.
+// An unconditional two-token skip ate the SUBCOMMAND on the equals form, because
+// there the token after the flag IS `install`/`ci`/`test`:
+//
+//   pnpm --dir=lib/admin install --frozen-lockfile
+//     -> "declares no subcommand, so it installs nothing and runs nothing"
+//
+// That is a FALSE failure on a command that runs correctly, carrying a FALSE
+// cause. It hid for a whole review round because every equals-form control on
+// this board had a second flag between the scope flag and the subcommand, so the
+// skip happened to land on a flag and the control passed. The controls below
+// place the subcommand IMMEDIATELY after the flag, which is the shape that
+// actually failed. A guard that cries wolf on a legal spelling gets switched
+// off, which is how a real defect walks back in.
+//
 // Static shape check: it reads the matrix, pnpm-workspace.yaml, and per-directory
 // package.json / lockfile presence. No network, no install, milliseconds to run.
 //
@@ -249,11 +269,26 @@ function parseCommand(command) {
   }
   dir = dir.replaceAll("\\", "/").replace(/\/$/, "");
 
-  // Drop BOTH the leading installer token and the <dir> value; keep the rest of
-  // the tokens after the dir flag. Retaining the installer here would make
-  // `subcommand` resolve to "pnpm"/"npm", which silently skips every check
-  // below and turns the whole guard vacuously green.
-  const rest = [...tokens.slice(installerIndex + 1, consumed), ...tokens.slice(consumed + 2)];
+  // Drop the installer token, the scope-flag token, and the flag's VALUE — but
+  // only skip a second token when the value really is a separate one. Retaining
+  // the installer would make `subcommand` resolve to "pnpm"/"npm", which
+  // silently skips every check below and turns the whole guard vacuously green.
+  //
+  // The inline check is load-bearing, not a nicety: `--dir=<d>` is a legal and
+  // honoured spelling (verified: `pnpm --dir=mobile/veid-capture-app run` and
+  // `pnpm -C=mobile/veid-capture-app run typecheck` both act on mobile, and
+  // `npm --prefix=sdk/ts run` / `npm -C=sdk/ts run` both list the SDK's scripts),
+  // but an unconditional two-token skip EATS THE SUBCOMMAND, because for the
+  // equals form the token after the flag IS `install` / `ci` / `test`. Every
+  // such command was then reported as "declares no subcommand, so it installs
+  // nothing and runs nothing" — a FALSE failure carrying a FALSE cause, on a
+  // command that runs correctly. A guard that cries wolf on a legal spelling
+  // gets switched off, which is how a real defect walks back in.
+  const scopeFlagToken = tokens[consumed];
+  const valueIsInline = typeof scopeFlagToken === "string" && scopeFlagToken.includes("=");
+  const skip = new Set([installerIndex, consumed]);
+  if (!valueIsInline) skip.add(consumed + 1);
+  const rest = tokens.filter((_token, index) => !skip.has(index));
   const bare = rest.filter((token) => !token.startsWith("-"));
   const subcommand = bare[0];
   if (!subcommand) {
@@ -536,6 +571,75 @@ const CONTROLS = [
     name: "equals-form scope flag with a relocated lockfile",
     command: "pnpm --dir=lib/admin --ignore-workspace install --lockfile-dir mobile/veid-capture-app",
     expect: null, // lockfile now resolves to mobile/veid-capture-app/pnpm-lock.yaml, which exists
+  },
+  {
+    // THE CONTROL THAT WAS MISSING, and why the bug below survived 15 controls.
+    // Every other equals-form control places the subcommand BEHIND a second flag
+    // (`install --lockfile-dir <d>`, or `--ignore-workspace install`), so the token
+    // right after `--dir=` is another FLAG. The unconditional two-token skip then
+    // landed on that flag and the control passed — while the bare equals form,
+    // whose next token IS the subcommand, was never exercised at all.
+    //
+    // lib/admin is the right dir: it IS a workspace member, so rule (a) passes and
+    // the control isolates the PARSER instead of re-testing scope; it declares no
+    // lockfile of its own, so rule (b) resolves to the root lockfile, which
+    // exists. Nothing but the parser can make this command fail.
+    name: "equals-form scope flag, subcommand IMMEDIATELY after (positive)",
+    command: "pnpm --dir=lib/admin install --frozen-lockfile",
+    expect: null,
+  },
+  {
+    // The control that keeps the one above honest: the identical token shape with
+    // a script lib/admin does NOT declare. If the equals-form subcommand is
+    // dropped, this command still fails — but as "declares no subcommand", the
+    // wrong cause. The `expect` regex pins that it must be reported for the RIGHT
+    // reason, so a half-fix cannot pass as correct.
+    name: "equals-form scope flag, undeclared script IMMEDIATELY after (negative)",
+    command: "pnpm --dir=lib/admin build",
+    expect: /declares no such script/,
+  },
+  {
+    // `--ignore-workspace` between the flag and the subcommand is the shape that
+    // HID the defect, so it stays as a control too — it must remain clean, proving
+    // the fix did not only work by accident for the bare form.
+    name: "equals-form scope flag with a second flag before the subcommand (positive)",
+    command: "pnpm --dir=mobile/veid-capture-app --ignore-workspace install --frozen-lockfile",
+    expect: null,
+  },
+  {
+    // `npm --prefix=<dir>` in the equals form, subcommand immediately after. The
+    // space-separated spelling of this exact command is the live sdk gate, so the
+    // equals form must be judged identically — rule (b) reads
+    // sdk/ts/package-lock.json, which exists. THIS is the control the old parser
+    // fails: nothing separates `--prefix=sdk/ts` from `ci`, so the skip ate the
+    // only subcommand the command has.
+    name: "equals-form npm prefix, subcommand IMMEDIATELY after (positive)",
+    command: "npm --prefix=sdk/ts ci --ignore-scripts",
+    expect: null,
+  },
+  {
+    // Same npm shape, an undeclared script: must be caught on its merits rather
+    // than by the accidental "declares no subcommand" the old parser produced.
+    name: "equals-form npm prefix, undeclared script IMMEDIATELY after (negative)",
+    command: "npm --prefix=sdk/ts run nonexistent-script",
+    expect: /declares no such script/,
+  },
+  {
+    // `-C=<dir>` is honoured exactly like `--dir=<dir>` (verified: `pnpm
+    // -C=lib/admin run` and `pnpm -C=mobile/veid-capture-app run typecheck` both
+    // act on the named dir), so its bare form must be judged on its merits and
+    // NOT swallowed by the subcommand skip. This is a THIRD independent witness:
+    // it fails under the old parser for the same reason the npm control does.
+    name: "equals-form -C alias, subcommand IMMEDIATELY after (positive)",
+    command: "pnpm -C=lib/admin install --frozen-lockfile",
+    expect: null,
+  },
+  {
+    // And the guard must still catch the real defect through the equals form:
+    // isolated from the workspace but owning no pnpm lockfile at all.
+    name: "equals-form scope, sdk/ts has no pnpm lockfile (negative)",
+    command: "pnpm --dir=sdk/ts --ignore-workspace install --frozen-lockfile",
+    expect: /ERR_PNPM_NO_LOCKFILE/,
   },
 ];
 
