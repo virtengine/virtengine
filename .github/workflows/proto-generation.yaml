@@ -96,6 +96,21 @@ jobs:
           docker run --rm --volume "$PWD:/src" --workdir /src --entrypoint bash \
             virtengine-proto-gen:1.0.0 -lc '
               set -euo pipefail
+              # A login shell REBUILDS PATH from /etc/profile, which drops the PATH
+              # set by the image ENV. `buf` is installed by
+              # `go install github.com/bufbuild/buf/cmd/buf`, so it lives in
+              # /go/bin and becomes invisible to this shell and to every child
+              # process it spawns. The "Lint protobuf sources" step above
+              # ("--entrypoint buf ... lint") succeeds because that invocation
+              # never goes through a login shell, which is why the missing
+              # binary was not obvious: the image demonstrably HAS buf.
+              #
+              # Observable as `spawn buf ENOENT` from
+              # sdk/ts/test/helpers/runBufGenerate.ts (the only buf spawn site
+              # in sdk/ts), which took 7 suites / 69 tests red while `npm run
+              # build` - the last command, and the one whose status used to be
+              # the exit status of this step - passed.
+              export PATH="/go/bin:/usr/local/bin:$PATH"
               export NODE_OPTIONS=--max-old-space-size=6144
               npm --prefix sdk/ts ci --ignore-scripts --no-audit --no-fund
               npm --prefix sdk/ts run lint
