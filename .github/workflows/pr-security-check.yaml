@@ -81,6 +81,19 @@ jobs:
       - name: Run PR gosec scan-target tests
         run: python .github/tests/test_pr_gosec_scan_targets.py
 
+      # Same reasoning for the gate-matrix install-scope guard. Its only other
+      # home is .github/workflows/security.yaml, which triggers on push to
+      # main/mainnet/develop and on a nightly schedule - never on a pull request.
+      # Tier-1 merges are autonomous, so a push-only check fires AFTER the defect
+      # is on develop, where it is then indistinguishable from pre-existing
+      # breakage. This step makes it fail on the PR that introduces it.
+      #
+      # Static shape check: reads the matrix, pnpm-workspace.yaml and per-dir
+      # manifests/lockfiles. No network, no install, no toolchain setup needed -
+      # it runs on the runner's default node exactly as it does in security.yaml.
+      - name: Verify every gated dependency install reaches its own tree
+        run: node scripts/validate-required-gate-install-scope.test.cjs
+
       # Proves the test above can actually go RED. It mutates a COPY of
       # gosec_pr_targets.py (the note back on stdout - the #1115 regression) and
       # REQUIRES the test to fail. A guard that has only ever been seen green is

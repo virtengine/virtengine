@@ -389,7 +389,14 @@ resource "kubernetes_manifest" "cross_region_alerts" {
             {
               alert = "RegionDown"
               expr  = "up{job=~\"federation-.*\"} == 0"
-              for   = "5m"
+              # Quoted, not bare: checkov 3.3.22's HCL parser (python-hcl2/lark)
+              # reads a bare `for` as the for-expression keyword and refuses the
+              # WHOLE file, which silently drops every check in this module.
+              # `terraform validate` and `terraform console` accept both
+              # spellings and evaluate them to the same object, so quoting is
+              # parse-shape only. Measured: Parsing errors 1 -> 0,
+              # Passed checks 0 -> 1, control reverts the error.
+              "for" = "5m"
               labels = {
                 severity = "critical"
               }
@@ -401,7 +408,7 @@ resource "kubernetes_manifest" "cross_region_alerts" {
             {
               alert = "HighReplicationLag"
               expr  = "cockroachdb_replication_lag_seconds > 5"
-              for   = "2m"
+              "for" = "2m"
               labels = {
                 severity = "warning"
               }
@@ -413,7 +420,7 @@ resource "kubernetes_manifest" "cross_region_alerts" {
             {
               alert = "CrossRegionLatencyHigh"
               expr  = "histogram_quantile(0.99, rate(virtengine_cross_region_latency_seconds_bucket[5m])) > 0.5"
-              for   = "10m"
+              "for" = "10m"
               labels = {
                 severity = "warning"
               }
