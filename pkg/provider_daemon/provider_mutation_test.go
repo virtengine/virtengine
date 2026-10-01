@@ -150,7 +150,23 @@ func newMutationSubmitterForTest(t *testing.T, chain *mutationChainFake, queuePa
 	require.NoError(t, err)
 	require.NoError(t, submitter.Start(context.Background()))
 	t.Cleanup(func() {
-		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+		// Generous, because this is a teardown budget and not a behaviour under test.
+		// At 1s the Windows runner failed this helper on a healthy submitter:
+		// CI 36934009110 / 36934015266 both died with
+		//   --- FAIL: TestProviderMutationConfirmationTimeoutRemainsAmbiguous (1.15s)
+		//   provider_mutation_test.go:155: Received unexpected error:
+		//   context deadline exceeded
+		// and the failure MOVED between tests in this same family. Stop() is not at
+		// fault: driven directly with a 30s deadline on an idle machine it returns
+		// err=nil with a 0s drain, and with an expired deadline it returns exactly
+		// context.DeadlineExceeded via the ctx branch of its select. A test that
+		// lowers ConfirmationTimeout to 5ms against a 1ms PollInterval keeps a
+		// non-terminal envelope in flight (MutationStateAmbiguous is not in
+		// providerMutationTerminalState), so the worker keeps re-entering reconcile()
+		// and the drain is pure wall-clock. 1s left ~150ms of headroom on a loaded
+		// Windows runner and none on a busy one. Teardown should not be flaky, so the
+		// budget goes up; the submitter's own timeouts stay at their test values.
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
 		require.NoError(t, submitter.Stop(ctx))
 	})
@@ -412,7 +428,7 @@ func TestProviderMutationSubmitterRestartRecoversBuiltItem(t *testing.T) {
 	envelope.NextAttemptAt = time.Now().UTC().Add(time.Hour)
 	_, _, err = submitter.store.PutIfAbsent(context.Background(), envelope)
 	require.NoError(t, err)
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	require.NoError(t, submitter.Stop(ctx))
 	cancel()
 
