@@ -125,35 +125,51 @@ func (q *Querier) Reservation(ctx context.Context, req *resourcesv1.QueryReserva
 	return &resourcesv1.QueryReservationResponse{Reservation: reservation}, nil
 }
 
-func (q *Querier) ReservationByOrder(ctx context.Context, req *resourcesv1.QueryReservationByOrderRequest) (*resourcesv1.QueryReservationResponse, error) {
+func (q *Querier) ReservationByOrder(ctx context.Context, req *resourcesv1.QueryReservationByOrderRequest) (*resourcesv1.QueryReservationByOrderResponse, error) {
 	if req == nil {
 		return nil, status.Error(codes.InvalidArgument, "order ID required")
 	}
-	return q.reservationByLineage(ctx, "order", req.GetOrderId())
+	reservation, err := q.reservationByLineage(ctx, "order", req.GetOrderId())
+	if err != nil {
+		return nil, err
+	}
+	return &resourcesv1.QueryReservationByOrderResponse{Reservation: reservation}, nil
 }
 
-func (q *Querier) ReservationByBid(ctx context.Context, req *resourcesv1.QueryReservationByBidRequest) (*resourcesv1.QueryReservationResponse, error) {
+func (q *Querier) ReservationByBid(ctx context.Context, req *resourcesv1.QueryReservationByBidRequest) (*resourcesv1.QueryReservationByBidResponse, error) {
 	if req == nil {
 		return nil, status.Error(codes.InvalidArgument, "bid ID required")
 	}
-	return q.reservationByLineage(ctx, "bid", req.GetBidId())
+	reservation, err := q.reservationByLineage(ctx, "bid", req.GetBidId())
+	if err != nil {
+		return nil, err
+	}
+	return &resourcesv1.QueryReservationByBidResponse{Reservation: reservation}, nil
 }
 
-func (q *Querier) ReservationByLease(ctx context.Context, req *resourcesv1.QueryReservationByLeaseRequest) (*resourcesv1.QueryReservationResponse, error) {
+func (q *Querier) ReservationByLease(ctx context.Context, req *resourcesv1.QueryReservationByLeaseRequest) (*resourcesv1.QueryReservationByLeaseResponse, error) {
 	if req == nil {
 		return nil, status.Error(codes.InvalidArgument, "lease ID required")
 	}
-	return q.reservationByLineage(ctx, "lease", req.GetLeaseId())
+	reservation, err := q.reservationByLineage(ctx, "lease", req.GetLeaseId())
+	if err != nil {
+		return nil, err
+	}
+	return &resourcesv1.QueryReservationByLeaseResponse{Reservation: reservation}, nil
 }
 
-func (q *Querier) ReservationByJob(ctx context.Context, req *resourcesv1.QueryReservationByJobRequest) (*resourcesv1.QueryReservationResponse, error) {
+func (q *Querier) ReservationByJob(ctx context.Context, req *resourcesv1.QueryReservationByJobRequest) (*resourcesv1.QueryReservationByJobResponse, error) {
 	if req == nil {
 		return nil, status.Error(codes.InvalidArgument, "job ID required")
 	}
-	return q.reservationByLineage(ctx, "job", req.GetJobId())
+	reservation, err := q.reservationByLineage(ctx, "job", req.GetJobId())
+	if err != nil {
+		return nil, err
+	}
+	return &resourcesv1.QueryReservationByJobResponse{Reservation: reservation}, nil
 }
 
-func (q *Querier) ReservationByConsumer(ctx context.Context, req *resourcesv1.QueryReservationByConsumerRequest) (*resourcesv1.QueryReservationResponse, error) {
+func (q *Querier) ReservationByConsumer(ctx context.Context, req *resourcesv1.QueryReservationByConsumerRequest) (*resourcesv1.QueryReservationByConsumerResponse, error) {
 	if req == nil || req.ConsumerType == "" || req.ConsumerId == "" {
 		return nil, status.Error(codes.InvalidArgument, "consumer type and ID required")
 	}
@@ -161,10 +177,10 @@ func (q *Querier) ReservationByConsumer(ctx context.Context, req *resourcesv1.Qu
 	if !found {
 		return nil, status.Error(codes.NotFound, "reservation not found")
 	}
-	return &resourcesv1.QueryReservationResponse{Reservation: reservation}, nil
+	return &resourcesv1.QueryReservationByConsumerResponse{Reservation: reservation}, nil
 }
 
-func (q *Querier) ReservationsByProvider(ctx context.Context, req *resourcesv1.QueryReservationsByProviderRequest) (*resourcesv1.QueryReservationsResponse, error) {
+func (q *Querier) ReservationsByProvider(ctx context.Context, req *resourcesv1.QueryReservationsByProviderRequest) (*resourcesv1.QueryReservationsByProviderResponse, error) {
 	if req == nil || req.ProviderAddress == "" {
 		return nil, status.Error(codes.InvalidArgument, "provider_address required")
 	}
@@ -181,7 +197,7 @@ func (q *Querier) ReservationsByProvider(ctx context.Context, req *resourcesv1.Q
 	if err != nil {
 		return nil, status.Error(codes.Internal, err.Error())
 	}
-	return &resourcesv1.QueryReservationsResponse{Reservations: reservations, Pagination: pageRes}, nil
+	return &resourcesv1.QueryReservationsByProviderResponse{Reservations: reservations, Pagination: pageRes}, nil
 }
 
 func (q *Querier) ReservationLineage(ctx context.Context, req *resourcesv1.QueryReservationLineageRequest) (*resourcesv1.QueryReservationLineageResponse, error) {
@@ -209,15 +225,19 @@ func (q *Querier) ReservationLineage(ctx context.Context, req *resourcesv1.Query
 	return &resourcesv1.QueryReservationLineageResponse{Reservation: reservation, Events: events, Pagination: pageRes}, nil
 }
 
-func (q *Querier) reservationByLineage(ctx context.Context, kind, id string) (*resourcesv1.QueryReservationResponse, error) {
+// reservationByLineage resolves the reservation recorded against a lineage key.
+// It returns the bare reservation so each ReservationBy* RPC can wrap it in its
+// own response type; the per-RPC responses are field-identical, so every caller
+// encodes the same bytes the shared QueryReservationResponse used to.
+func (q *Querier) reservationByLineage(ctx context.Context, kind, id string) (resourcesv1.Reservation, error) {
 	if id == "" {
-		return nil, status.Error(codes.InvalidArgument, kind+" ID required")
+		return resourcesv1.Reservation{}, status.Error(codes.InvalidArgument, kind+" ID required")
 	}
 	reservation, found := q.GetReservationByLineage(sdk.UnwrapSDKContext(ctx), kind, id)
 	if !found {
-		return nil, status.Error(codes.NotFound, "reservation not found")
+		return resourcesv1.Reservation{}, status.Error(codes.NotFound, "reservation not found")
 	}
-	return &resourcesv1.QueryReservationResponse{Reservation: reservation}, nil
+	return reservation, nil
 }
 
 // Params returns module params.
