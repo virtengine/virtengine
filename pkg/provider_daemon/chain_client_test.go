@@ -70,12 +70,12 @@ func (f *fakeProviderResourcesQueryClient) ReservationsByProvider(
 	_ context.Context,
 	req *resourcesv1.QueryReservationsByProviderRequest,
 	_ ...grpc.CallOption,
-) (*resourcesv1.QueryReservationsResponse, error) {
+) (*resourcesv1.QueryReservationsByProviderResponse, error) {
 	if f.err != nil {
 		return nil, f.err
 	}
 	reservations := append([]resourcesv1.Reservation(nil), f.reservationsByProvider[req.GetProviderAddress()]...)
-	return &resourcesv1.QueryReservationsResponse{Reservations: reservations}, nil
+	return &resourcesv1.QueryReservationsByProviderResponse{Reservations: reservations}, nil
 }
 
 func (f *fakeProviderResourcesQueryClient) AllocationsByProvider(

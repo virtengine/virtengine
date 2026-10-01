@@ -33,7 +33,7 @@ type providerHPCQueryClient interface {
 
 type providerResourcesQueryClient interface {
 	AllocationsByProvider(context.Context, *resourcesv1.QueryAllocationsByProviderRequest, ...grpc.CallOption) (*resourcesv1.QueryAllocationsByProviderResponse, error)
-	ReservationsByProvider(context.Context, *resourcesv1.QueryReservationsByProviderRequest, ...grpc.CallOption) (*resourcesv1.QueryReservationsResponse, error)
+	ReservationsByProvider(context.Context, *resourcesv1.QueryReservationsByProviderRequest, ...grpc.CallOption) (*resourcesv1.QueryReservationsByProviderResponse, error)
 }
 
 type providerStoreQueryClient interface {

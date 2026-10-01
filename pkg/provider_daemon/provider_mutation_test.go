@@ -592,9 +592,17 @@ func (w *workerWinsStore) PutIfAbsent(ctx context.Context, envelope *ProviderMut
 	if err != nil || existed || w.submitter == nil {
 		return stored, existed, err
 	}
-	if procErr := w.submitter.ProcessDue(ctx, 32); procErr != nil && !isProviderMutationRetryable(procErr) {
-		return stored, existed, procErr
-	}
+	// The durable write is what this seam is here to interleave with, so the
+	// hook must not manufacture a store-level failure out of the worker's own
+	// verdict. A real ProviderMutationStore never reports a submitter
+	// outcome, so propagating ProcessDue's non-retryable error out of a
+	// PutIfAbsent that itself succeeded fabricates an error value no
+	// production call site can produce -- and it carries the envelope's own
+	// broadcast failure rather than the dead-letter sentinel, so the caller
+	// cannot errors.Is(..., ErrProviderMutationDeadLetter) it. Swallowing the
+	// worker error keeps this a pure interleaving seam; the dead-letter
+	// signal the assertion checks is read from durable state in Submit().
+	_ = w.submitter.ProcessDue(ctx, 32)
 	return stored, existed, nil
 }
 

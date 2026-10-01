@@ -5,7 +5,9 @@
 package integration
 
 import (
+	"bytes"
 	"context"
+	"encoding/hex"
 	"encoding/json"
 	"path/filepath"
 	"testing"
@@ -29,6 +31,7 @@ import (
 	"github.com/virtengine/virtengine/sdk/go/node/market/v1beta5"
 	deposit "github.com/virtengine/virtengine/sdk/go/node/types/deposit/v1"
 	resourcesv1 "github.com/virtengine/virtengine/sdk/go/node/resources/v1"
+	nutils "github.com/virtengine/virtengine/sdk/go/node/utils"
 	"github.com/virtengine/virtengine/sdk/go/sdkutil"
 	sdktestutil "github.com/virtengine/virtengine/sdk/go/testutil"
 	"github.com/virtengine/virtengine/testutil"
@@ -225,6 +228,16 @@ func (s *MarketplaceIntegrationTestSuite) SetupSuite() {
 // mirrors the CLI tx flags the suite uses elsewhere (gas auto, 0.0025uve gas
 // prices, sync broadcast) via a tx factory, for messages the market CLI
 // cannot express (resource offers on bids, resource heartbeats).
+//
+// Unlike the CLI helpers, this path cannot use --broadcast-mode block:
+// client.Context.BroadcastTx supports only sync/async, so a sync broadcast
+// returns as soon as CometBFT accepts the tx into the mempool. The caller must
+// therefore CONFIRM the tx, and TestOrderBidLeaseFlow submits three
+// transactions from this one key before it queries the bid it just created.
+// Without a commit wait, the next submission reused a sequence the node had
+// not yet advanced ("account sequence mismatch, expected 2, got 1") and the
+// bid query ran before the bid tx was indexed ("Should NOT be empty, but
+// was []"). Polling the tx hash to a committed response closes both.
 func (s *MarketplaceIntegrationTestSuite) submitProviderTx(msg sdk.Msg) {
 	cmd := &cobra.Command{Use: "market-bid-tx"}
 	flags.AddTxFlagsToCmd(cmd)
@@ -244,14 +257,48 @@ func (s *MarketplaceIntegrationTestSuite) submitProviderTx(msg sdk.Msg) {
 		WithFromName("integration-provider").
 		WithFromAddress(s.addrProvider).
 		WithSkipConfirmation(true).
-		// client.Context.BroadcastTx only supports sync/async; the caller
-		// waits a block and queries, which is the commit confirmation.
+		WithOutputFormat("json").
 		WithBroadcastMode("sync")
+
+	// Resolve the signer sequence from the node rather than letting the
+	// factory cache whatever it read at construction: the gas simulation
+	// pass and the real broadcast both need the value the node has now, and
+	// a stale sequence is only visible on the broadcast.
+	accNum, seq, err := cctx.AccountRetriever.GetAccountNumberSequence(
+		cctx.WithClient(cctx.Client), s.addrProvider)
+	s.Require().NoError(err)
 
 	txf, err := clienttx.NewFactoryCLI(cctx, fs)
 	s.Require().NoError(err)
+	txf = txf.WithAccountNumber(accNum).WithSequence(seq)
 
-	s.Require().NoError(clienttx.GenerateOrBroadcastTxWithFactory(cctx, txf, msg))
+	// Broadcast synchronously and capture the response: BroadcastTx prints
+	// the TxResponse to the context output and returns only an error, which
+	// is not enough to learn the hash we have to poll for.
+	out := &bytes.Buffer{}
+	cctx = cctx.WithOutput(out)
+
+	s.Require().NoError(clienttx.BroadcastTx(cctx, txf, msg))
+
+	var resp sdk.TxResponse
+	s.Require().NoError(cctx.Codec.UnmarshalJSON(out.Bytes(), &resp))
+
+	// Wait for the tx to be committed, exactly as clitestutil.getTxResponse
+	// does for the CLI helpers, so the next tx from this key sees the
+	// advanced sequence and the bid is queryable.
+	hash, err := hex.DecodeString(resp.TxHash)
+	s.Require().NoError(err)
+	s.Require().NotEmpty(resp.TxHash)
+
+	var committed *sdk.TxResponse
+	s.Require().Eventually(func() bool {
+		committed, err = nutils.QueryTx(context.Background(), cctx, hash)
+		if err != nil || committed == nil {
+			return false
+		}
+		return committed.Code == 0 && committed.Height > 0
+	}, 30*time.Second, 250*time.Millisecond,
+		"provider tx %s did not commit: %v", resp.TxHash, err)
 }
 
 // TestCreateMarketplaceOffering tests creating a marketplace offering.

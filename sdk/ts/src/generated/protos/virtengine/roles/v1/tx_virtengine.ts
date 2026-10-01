@@ -1,4 +1,4 @@
-import { MsgAssignRole, MsgAssignRoleResponse, MsgNominateAdmin, MsgNominateAdminResponse, MsgRevokeRole, MsgRevokeRoleResponse, MsgSetAccountState, MsgSetAccountStateResponse, MsgUpdateParams, MsgUpdateParamsResponse } from "./tx.ts";
+import { MsgAssignRole, MsgAssignRoleResponse, MsgConfirmSanction, MsgConfirmSanctionResponse, MsgImposeSanction, MsgImposeSanctionResponse, MsgNominateAdmin, MsgNominateAdminResponse, MsgOpenSanctionAppeal, MsgOpenSanctionAppealResponse, MsgResolveSanctionAppeal, MsgResolveSanctionAppealResponse, MsgRevokeRole, MsgRevokeRoleResponse, MsgRevokeSanction, MsgRevokeSanctionResponse, MsgSetAccountState, MsgSetAccountStateResponse, MsgUpdateParams, MsgUpdateParamsResponse } from "./tx.ts";
 
 export const Msg = {
   typeName: "virtengine.roles.v1.Msg",
@@ -31,6 +31,36 @@ export const Msg = {
       name: "UpdateParams",
       input: MsgUpdateParams,
       output: MsgUpdateParamsResponse,
+      get parent() { return Msg; },
+    },
+    imposeSanction: {
+      name: "ImposeSanction",
+      input: MsgImposeSanction,
+      output: MsgImposeSanctionResponse,
+      get parent() { return Msg; },
+    },
+    confirmSanction: {
+      name: "ConfirmSanction",
+      input: MsgConfirmSanction,
+      output: MsgConfirmSanctionResponse,
+      get parent() { return Msg; },
+    },
+    revokeSanction: {
+      name: "RevokeSanction",
+      input: MsgRevokeSanction,
+      output: MsgRevokeSanctionResponse,
+      get parent() { return Msg; },
+    },
+    openSanctionAppeal: {
+      name: "OpenSanctionAppeal",
+      input: MsgOpenSanctionAppeal,
+      output: MsgOpenSanctionAppealResponse,
+      get parent() { return Msg; },
+    },
+    resolveSanctionAppeal: {
+      name: "ResolveSanctionAppeal",
+      input: MsgResolveSanctionAppeal,
+      output: MsgResolveSanctionAppealResponse,
       get parent() { return Msg; },
     },
   },

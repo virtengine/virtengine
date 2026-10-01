@@ -85,6 +85,14 @@ jobs:
         # records that reason; a comment is not a guard, this is.
         run: bash .github/tests/test_govulncheck_json_invocation.sh
 
+      - name: Run allowlist filter regression tests
+        # Pins the two defects in .github/scripts/filter_allowlist.py: it must
+        # name every advisory it suppressed on a fully-allowlisted run (so a
+        # green gate shows WHAT the allowlist hid), and it must exit 4 - never
+        # 0 - when the govulncheck report does not parse to the end, so a scan
+        # killed mid-write can never be reported clean.
+        run: python -m unittest discover -s .github/tests -p "test_filter_allowlist*.py"
+
       - name: Set up Go
         uses: actions/setup-go@v6
         with:
@@ -116,6 +124,45 @@ jobs:
           chmod +x scripts/supply-chain/verify-pinned-images.sh
           scripts/supply-chain/verify-pinned-images.sh --self-test
           scripts/supply-chain/verify-pinned-images.sh
+
+      - name: Verify no orphaned npm lockfile can report phantom advisories
+        # Dependabot resolves advisories against every tracked manifest, including
+        # lockfiles nothing installs. portal/ is a pnpm workspace member that
+        # installs only via `pnpm install --frozen-lockfile`, so its committed
+        # package-lock.json was a pre-pnpm fossil: it pinned next@15.5.10 while
+        # package.json and pnpm-lock.yaml both said 15.5.24, which held two
+        # CRITICAL unauthenticated-RCE advisories permanently "open" against a
+        # runtime that was never vulnerable. A phantom advisory is worse than no
+        # advisory — it cannot be closed and it teaches reviewers to ignore the
+        # tool. This ADDS a check; it does not relax any existing one.
+        run: |
+          node scripts/supply-chain/check-orphan-lockfiles.mjs --selftest
+          node scripts/supply-chain/check-orphan-lockfiles.mjs
+
+      - name: Verify every gated dependency install reaches its own tree
+        # A declared gate is only evidence if the command it pins actually
+        # installs and runs the tree it names. Two defects made the Task 88B
+        # gate matrix lie, both exiting 0 while measuring nothing:
+        #
+        # 1. WRONG SCOPE. `pnpm --dir <dir> install` does NOT scope to <dir>:
+        #    pnpm walks up, finds the repo-root pnpm-workspace.yaml, and installs
+        #    THAT workspace. For mobile/veid-capture-app (not a member) it
+        #    reported "Scope: all 4 workspace projects", created no
+        #    mobile/veid-capture-app/node_modules, read neither of mobile's two
+        #    lockfiles, and the typecheck/test that followed failed on
+        #    "'tsc' is not recognized" — a green category that was a false
+        #    signal rather than a measurement.
+        # 2. WRONG PACKAGE MANAGER. sdk/ts has NO pnpm-lock.yaml; its
+        #    committed authority is sdk/ts/package-lock.json, which every
+        #    workflow that builds sdk/ts consumes with `npm --prefix`. So the
+        #    pinned `pnpm --dir sdk/ts install --frozen-lockfile` could not run
+        #    at all (ERR_PNPM_NO_LOCKFILE) even when correctly scoped.
+        #
+        # The matrix now pins the installer each directory actually owns, and
+        # this asserts, per gated command: install scope is reachable, the
+        # lockfile that installer will read exists, and any script it runs is
+        # declared. ADDITIONAL check; relaxes nothing.
+        run: node scripts/validate-required-gate-install-scope.test.cjs
 
   codeql-analysis:
     name: CodeQL SAST
@@ -266,7 +313,9 @@ jobs:
           # Filter findings against the vulnerability allowlist. Only advisories
           # with no fixed version AND no reachable-and-fixable alternative are
           # allowlisted; anything the filter still reports is real work.
-          # Exit 3 = un-allowlisted findings remain, 0 = clean.
+          # Exit codes: 3 = un-allowlisted findings remain, 0 = clean and the
+          # report parsed to the end, 4 = the report was INCOMPLETE (the scan
+          # was cut short, so no verdict may be claimed), other = a real error.
           set +e
           python .github/scripts/filter_allowlist.py \
             govulncheck-report.json .vulnerability-allowlist.yaml
@@ -275,6 +324,10 @@ jobs:
           if [ "$filter_status" -eq 3 ]; then
             echo "verdict_after_allowlist=vulns" >> "$GITHUB_OUTPUT"
             echo "::error::govulncheck reported reachable vulnerabilities not covered by allowlist on shard ${{ matrix.shard }}"
+            exit 1
+          elif [ "$filter_status" -eq 4 ]; then
+            echo "verdict_after_allowlist=incomplete" >> "$GITHUB_OUTPUT"
+            echo "::error::govulncheck report on shard ${{ matrix.shard }} is incomplete - the scan did not finish, so this shard has NO verdict. Treating it as clean would be a false negative."
             exit 1
           elif [ "$filter_status" -eq 0 ]; then
             echo "verdict_after_allowlist=clean" >> "$GITHUB_OUTPUT"

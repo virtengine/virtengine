@@ -234,6 +234,17 @@ jobs:
           sarif_file: checkov-results.sarif
 
       - name: Run Trivy on Kubernetes manifests
+        # `if: always()` is load-bearing, not decoration. Checkov runs first with
+        # soft_fail: false, so any Checkov finding fails the job at that step and
+        # GitHub skips every subsequent step that has no condition. This step had
+        # no condition, so the k8s manifest scan was silently skipped on exactly
+        # the runs where the repo was already red -- while the upload below ran
+        # (it does carry `always()`) and failed with the misleading
+        #   ##[error]Path does not exist: trivy-k8s-results.sarif
+        # which reads like a checkout or permissions fault rather than "the scan
+        # never ran". deploy/kubernetes went unscanned as a result. Both scanners
+        # must be independent of each other's exit status.
+        if: always()
         # NOTE: trivy-action pins aquasecurity/setup-trivy by hash; keep this
         # version current because old setup-trivy tags are deleted upstream
         # (v0.28.0 referenced v0.2.1, which no longer resolves).
@@ -245,6 +256,15 @@ jobs:
           output: trivy-k8s-results.sarif
 
       - name: Upload Trivy results
+        # `always()` matches the scan step above, so this upload only ever fails
+        # for a real reason. Note: upload-sarif has NO `if-no-files-found` input
+        # (verified against the action's own action.yml at tag v4 -- its inputs
+        # are sarif_file, checkout_path, ref, sha, token, matrix, category,
+        # wait-for-processing), so an absent SARIF still surfaces as
+        # "Path does not exist". That is acceptable now precisely because the
+        # scan above can no longer be skipped: with `always()` on both, a missing
+        # file means Trivy itself failed, and is distinguishable from the old
+        # "Checkov went red so the scan never ran" case.
         if: always()
         uses: github/codeql-action/upload-sarif@v4
         with:

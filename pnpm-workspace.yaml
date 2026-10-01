@@ -37,6 +37,16 @@ overrides:
   '@babel/core': '^7.29.6'
   # GHSA-w9m9-85wc-3x92 — 6.x line (tailwindcss); the 7.1.1 instance is patched
   'postcss-selector-parser@^6': '^6.1.4'
+  # GHSA-2883-xcg3-v3hh / GHSA-52cp-r559-cp3m / GHSA-5p4m-2wfm-xmqj /
+  # GHSA-h67p-54hq-rp68 — merge-key (<<) CPU-exhaustion DoS across the 4.x line.
+  # Keyed on ^4 so the 3.x instance (sdk/ts only, outside this workspace) is left
+  # alone. @eslint/eslintrc, cosmiconfig and eslint all declare ^4.1.0, which
+  # already accepts 4.3.2; the stale 4.1.1 resolution is what #1126 corrected. The
+  # override is recorded here as well as in the lockfile because the Lockfile
+  # Integrity gate requires a workspace manifest change alongside a root
+  # lockfile change, and it pins this so a later `pnpm update` cannot silently
+  # walk back to a vulnerable resolution.
+  'js-yaml@^4': '^4.3.2'
 
 allowBuilds:
   esbuild: true

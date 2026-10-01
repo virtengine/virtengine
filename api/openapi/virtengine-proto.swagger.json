@@ -10417,6 +10417,51 @@
       },
       "type": "object"
     },
+    "virtengine.resources.v1.QueryReservationByBidResponse": {
+      "description": "QueryReservationByBidResponse is the response for the ReservationByBid RPC.",
+      "properties": {
+        "reservation": {
+          "$ref": "#/definitions/virtengine.resources.v1.Reservation"
+        }
+      },
+      "type": "object"
+    },
+    "virtengine.resources.v1.QueryReservationByConsumerResponse": {
+      "description": "QueryReservationByConsumerResponse is the response for the ReservationByConsumer RPC.",
+      "properties": {
+        "reservation": {
+          "$ref": "#/definitions/virtengine.resources.v1.Reservation"
+        }
+      },
+      "type": "object"
+    },
+    "virtengine.resources.v1.QueryReservationByJobResponse": {
+      "description": "QueryReservationByJobResponse is the response for the ReservationByJob RPC.",
+      "properties": {
+        "reservation": {
+          "$ref": "#/definitions/virtengine.resources.v1.Reservation"
+        }
+      },
+      "type": "object"
+    },
+    "virtengine.resources.v1.QueryReservationByLeaseResponse": {
+      "description": "QueryReservationByLeaseResponse is the response for the ReservationByLease RPC.",
+      "properties": {
+        "reservation": {
+          "$ref": "#/definitions/virtengine.resources.v1.Reservation"
+        }
+      },
+      "type": "object"
+    },
+    "virtengine.resources.v1.QueryReservationByOrderResponse": {
+      "description": "QueryReservationByOrderResponse is the response for the ReservationByOrder RPC.\nField layout is identical to QueryReservationResponse so the wire encoding of\nan existing client is unchanged.",
+      "properties": {
+        "reservation": {
+          "$ref": "#/definitions/virtengine.resources.v1.Reservation"
+        }
+      },
+      "type": "object"
+    },
     "virtengine.resources.v1.QueryReservationLineageResponse": {
       "properties": {
         "events": {
@@ -10435,6 +10480,7 @@
       "type": "object"
     },
     "virtengine.resources.v1.QueryReservationResponse": {
+      "description": "QueryReservationResponse is the response for the Reservation RPC.",
       "properties": {
         "reservation": {
           "$ref": "#/definitions/virtengine.resources.v1.Reservation"
@@ -10442,7 +10488,8 @@
       },
       "type": "object"
     },
-    "virtengine.resources.v1.QueryReservationsResponse": {
+    "virtengine.resources.v1.QueryReservationsByProviderResponse": {
+      "description": "QueryReservationsByProviderResponse is the response for the ReservationsByProvider RPC.",
       "properties": {
         "pagination": {
           "$ref": "#/definitions/cosmos.base.query.v1beta1.PageResponse"
@@ -12949,8 +12996,98 @@
       },
       "type": "object"
     },
-    "virtengine.settlement.v1.QueryFinancialCasesResponse": {
-      "description": "QueryFinancialCasesResponse is the response for the FinancialCasesBy* RPCs.",
+    "virtengine.settlement.v1.QueryFinancialCasesByEscrowResponse": {
+      "description": "QueryFinancialCasesByEscrowResponse is the response for the FinancialCasesByEscrow RPC.",
+      "properties": {
+        "financial_cases": {
+          "items": {
+            "$ref": "#/definitions/virtengine.settlement.v1.FinancialCase"
+          },
+          "type": "array"
+        },
+        "pagination": {
+          "$ref": "#/definitions/cosmos.base.query.v1beta1.PageResponse"
+        }
+      },
+      "type": "object"
+    },
+    "virtengine.settlement.v1.QueryFinancialCasesByInvoiceResponse": {
+      "description": "QueryFinancialCasesByInvoiceResponse is the response for the FinancialCasesByInvoice RPC.",
+      "properties": {
+        "financial_cases": {
+          "items": {
+            "$ref": "#/definitions/virtengine.settlement.v1.FinancialCase"
+          },
+          "type": "array"
+        },
+        "pagination": {
+          "$ref": "#/definitions/cosmos.base.query.v1beta1.PageResponse"
+        }
+      },
+      "type": "object"
+    },
+    "virtengine.settlement.v1.QueryFinancialCasesByJobResponse": {
+      "description": "QueryFinancialCasesByJobResponse is the response for the FinancialCasesByJob RPC.",
+      "properties": {
+        "financial_cases": {
+          "items": {
+            "$ref": "#/definitions/virtengine.settlement.v1.FinancialCase"
+          },
+          "type": "array"
+        },
+        "pagination": {
+          "$ref": "#/definitions/cosmos.base.query.v1beta1.PageResponse"
+        }
+      },
+      "type": "object"
+    },
+    "virtengine.settlement.v1.QueryFinancialCasesByOrderResponse": {
+      "description": "QueryFinancialCasesByOrderResponse is the response for the FinancialCasesByOrder RPC.",
+      "properties": {
+        "financial_cases": {
+          "items": {
+            "$ref": "#/definitions/virtengine.settlement.v1.FinancialCase"
+          },
+          "type": "array"
+        },
+        "pagination": {
+          "$ref": "#/definitions/cosmos.base.query.v1beta1.PageResponse"
+        }
+      },
+      "type": "object"
+    },
+    "virtengine.settlement.v1.QueryFinancialCasesByPartyResponse": {
+      "description": "QueryFinancialCasesByPartyResponse is the response for the FinancialCasesByParty RPC.",
+      "properties": {
+        "financial_cases": {
+          "items": {
+            "$ref": "#/definitions/virtengine.settlement.v1.FinancialCase"
+          },
+          "type": "array"
+        },
+        "pagination": {
+          "$ref": "#/definitions/cosmos.base.query.v1beta1.PageResponse"
+        }
+      },
+      "type": "object"
+    },
+    "virtengine.settlement.v1.QueryFinancialCasesByStatusResponse": {
+      "description": "QueryFinancialCasesByStatusResponse is the response for the FinancialCasesByStatus RPC.",
+      "properties": {
+        "financial_cases": {
+          "items": {
+            "$ref": "#/definitions/virtengine.settlement.v1.FinancialCase"
+          },
+          "type": "array"
+        },
+        "pagination": {
+          "$ref": "#/definitions/cosmos.base.query.v1beta1.PageResponse"
+        }
+      },
+      "type": "object"
+    },
+    "virtengine.settlement.v1.QueryFinancialCasesByUsageResponse": {
+      "description": "QueryFinancialCasesByUsageResponse is the response for the FinancialCasesByUsage RPC.",
       "properties": {
         "financial_cases": {
           "items": {
@@ -25445,7 +25582,7 @@
           "200": {
             "description": "A successful response.",
             "schema": {
-              "$ref": "#/definitions/virtengine.resources.v1.QueryReservationResponse"
+              "$ref": "#/definitions/virtengine.resources.v1.QueryReservationByBidResponse"
             }
           },
           "default": {
@@ -25484,7 +25621,7 @@
           "200": {
             "description": "A successful response.",
             "schema": {
-              "$ref": "#/definitions/virtengine.resources.v1.QueryReservationResponse"
+              "$ref": "#/definitions/virtengine.resources.v1.QueryReservationByConsumerResponse"
             }
           },
           "default": {
@@ -25517,7 +25654,7 @@
           "200": {
             "description": "A successful response.",
             "schema": {
-              "$ref": "#/definitions/virtengine.resources.v1.QueryReservationResponse"
+              "$ref": "#/definitions/virtengine.resources.v1.QueryReservationByJobResponse"
             }
           },
           "default": {
@@ -25550,7 +25687,7 @@
           "200": {
             "description": "A successful response.",
             "schema": {
-              "$ref": "#/definitions/virtengine.resources.v1.QueryReservationResponse"
+              "$ref": "#/definitions/virtengine.resources.v1.QueryReservationByLeaseResponse"
             }
           },
           "default": {
@@ -25583,7 +25720,7 @@
           "200": {
             "description": "A successful response.",
             "schema": {
-              "$ref": "#/definitions/virtengine.resources.v1.QueryReservationResponse"
+              "$ref": "#/definitions/virtengine.resources.v1.QueryReservationByOrderResponse"
             }
           },
           "default": {
@@ -25654,7 +25791,7 @@
           "200": {
             "description": "A successful response.",
             "schema": {
-              "$ref": "#/definitions/virtengine.resources.v1.QueryReservationsResponse"
+              "$ref": "#/definitions/virtengine.resources.v1.QueryReservationsByProviderResponse"
             }
           },
           "default": {
@@ -26328,13 +26465,13 @@
         "x-virtengine-proto-source": "virtengine/settlement/v1/query.proto"
       }
     },
-    "/virtengine/settlement/v1/financial-cases/by-escrow/{key}": {
+    "/virtengine/settlement/v1/financial-cases/by-escrow/{escrow_id}": {
       "get": {
         "operationId": "virtengine.settlement.v1.Query_FinancialCasesByEscrow",
         "parameters": [
           {
             "in": "path",
-            "name": "key",
+            "name": "escrow_id",
             "required": true,
             "type": "string"
           },
@@ -26381,7 +26518,7 @@
           "200": {
             "description": "A successful response.",
             "schema": {
-              "$ref": "#/definitions/virtengine.settlement.v1.QueryFinancialCasesResponse"
+              "$ref": "#/definitions/virtengine.settlement.v1.QueryFinancialCasesByEscrowResponse"
             }
           },
           "default": {
@@ -26398,13 +26535,13 @@
         "x-virtengine-proto-source": "virtengine/settlement/v1/query.proto"
       }
     },
-    "/virtengine/settlement/v1/financial-cases/by-invoice/{key}": {
+    "/virtengine/settlement/v1/financial-cases/by-invoice/{invoice_id}": {
       "get": {
         "operationId": "virtengine.settlement.v1.Query_FinancialCasesByInvoice",
         "parameters": [
           {
             "in": "path",
-            "name": "key",
+            "name": "invoice_id",
             "required": true,
             "type": "string"
           },
@@ -26451,7 +26588,7 @@
           "200": {
             "description": "A successful response.",
             "schema": {
-              "$ref": "#/definitions/virtengine.settlement.v1.QueryFinancialCasesResponse"
+              "$ref": "#/definitions/virtengine.settlement.v1.QueryFinancialCasesByInvoiceResponse"
             }
           },
           "default": {
@@ -26468,13 +26605,13 @@
         "x-virtengine-proto-source": "virtengine/settlement/v1/query.proto"
       }
     },
-    "/virtengine/settlement/v1/financial-cases/by-job/{key}": {
+    "/virtengine/settlement/v1/financial-cases/by-job/{job_id}": {
       "get": {
         "operationId": "virtengine.settlement.v1.Query_FinancialCasesByJob",
         "parameters": [
           {
             "in": "path",
-            "name": "key",
+            "name": "job_id",
             "required": true,
             "type": "string"
           },
@@ -26521,7 +26658,7 @@
           "200": {
             "description": "A successful response.",
             "schema": {
-              "$ref": "#/definitions/virtengine.settlement.v1.QueryFinancialCasesResponse"
+              "$ref": "#/definitions/virtengine.settlement.v1.QueryFinancialCasesByJobResponse"
             }
           },
           "default": {
@@ -26538,13 +26675,13 @@
         "x-virtengine-proto-source": "virtengine/settlement/v1/query.proto"
       }
     },
-    "/virtengine/settlement/v1/financial-cases/by-order/{key}": {
+    "/virtengine/settlement/v1/financial-cases/by-order/{order_id}": {
       "get": {
         "operationId": "virtengine.settlement.v1.Query_FinancialCasesByOrder",
         "parameters": [
           {
             "in": "path",
-            "name": "key",
+            "name": "order_id",
             "required": true,
             "type": "string"
           },
@@ -26591,7 +26728,7 @@
           "200": {
             "description": "A successful response.",
             "schema": {
-              "$ref": "#/definitions/virtengine.settlement.v1.QueryFinancialCasesResponse"
+              "$ref": "#/definitions/virtengine.settlement.v1.QueryFinancialCasesByOrderResponse"
             }
           },
           "default": {
@@ -26608,13 +26745,13 @@
         "x-virtengine-proto-source": "virtengine/settlement/v1/query.proto"
       }
     },
-    "/virtengine/settlement/v1/financial-cases/by-party/{key}": {
+    "/virtengine/settlement/v1/financial-cases/by-party/{party}": {
       "get": {
         "operationId": "virtengine.settlement.v1.Query_FinancialCasesByParty",
         "parameters": [
           {
             "in": "path",
-            "name": "key",
+            "name": "party",
             "required": true,
             "type": "string"
           },
@@ -26661,7 +26798,7 @@
           "200": {
             "description": "A successful response.",
             "schema": {
-              "$ref": "#/definitions/virtengine.settlement.v1.QueryFinancialCasesResponse"
+              "$ref": "#/definitions/virtengine.settlement.v1.QueryFinancialCasesByPartyResponse"
             }
           },
           "default": {
@@ -26678,13 +26815,13 @@
         "x-virtengine-proto-source": "virtengine/settlement/v1/query.proto"
       }
     },
-    "/virtengine/settlement/v1/financial-cases/by-status/{key}": {
+    "/virtengine/settlement/v1/financial-cases/by-status/{status}": {
       "get": {
         "operationId": "virtengine.settlement.v1.Query_FinancialCasesByStatus",
         "parameters": [
           {
             "in": "path",
-            "name": "key",
+            "name": "status",
             "required": true,
             "type": "string"
           },
@@ -26731,7 +26868,7 @@
           "200": {
             "description": "A successful response.",
             "schema": {
-              "$ref": "#/definitions/virtengine.settlement.v1.QueryFinancialCasesResponse"
+              "$ref": "#/definitions/virtengine.settlement.v1.QueryFinancialCasesByStatusResponse"
             }
           },
           "default": {
@@ -26844,13 +26981,13 @@
         "x-virtengine-proto-source": "virtengine/settlement/v1/query.proto"
       }
     },
-    "/virtengine/settlement/v1/financial-cases/by-usage/{key}": {
+    "/virtengine/settlement/v1/financial-cases/by-usage/{usage_id}": {
       "get": {
         "operationId": "virtengine.settlement.v1.Query_FinancialCasesByUsage",
         "parameters": [
           {
             "in": "path",
-            "name": "key",
+            "name": "usage_id",
             "required": true,
             "type": "string"
           },
@@ -26897,7 +27034,7 @@
           "200": {
             "description": "A successful response.",
             "schema": {
-              "$ref": "#/definitions/virtengine.settlement.v1.QueryFinancialCasesResponse"
+              "$ref": "#/definitions/virtengine.settlement.v1.QueryFinancialCasesByUsageResponse"
             }
           },
           "default": {

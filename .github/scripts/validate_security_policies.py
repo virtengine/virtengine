@@ -176,6 +176,44 @@ REPO_BLOB_REFERENCE_PATTERN = re.compile(
     r"^https://github\.com/virtengine/virtengine/blob/[^/]+/(?P<path>.+)$"
 )
 
+# ...and so is a doc path written as BARE PROSE. Every shipped assessment citation lives in the
+# `reason:` field, not in `references:`:
+#     reason: '... Full assessment: docs/security/GO-2026-4740-MSGPACK-ASSESSMENT.md'
+# The blob rule walks `references` only, so that prose citation is invisible to it. Measured on
+# develop @ 6c5fb13e: repointing only the prose to a file that does not exist left
+# validate_security_policies.py at exit 0, with the entry still passing - the exact failure mode
+# the blob rule was written to close, reopened through the other field. The natural way to DRAFT
+# an entry is to write its assessment citation in the reason, so the unchecked field is the one
+# new entries reach for. This pattern extracts repo-relative doc paths out of free text.
+#
+# Narrow on purpose: it matches a path that starts at a known top-level entry and carries a
+# documentation extension, so a prose mention of `go list -deps ./...`, a package path or a
+# command flag cannot be mistaken for a cited document. Regression case:
+# .github/tests/test_security_policy_validator.py
+PROSE_REPO_PATH_PATTERN = re.compile(
+    r"(?<![\w/.-])(?P<path>(?:docs|scripts|_docs|\.github)/[\w./-]*"
+    r"\.(?:md|rst|txt|json|ya?ml|sh|py))"
+)
+
+# A cited path is only evidence if it resolves to a FILE inside the repository. `ROOT / path`
+# escapes upward for an absolute or `..`-bearing candidate, so normalise and confine.
+
+
+def _resolve_prose_repo_path(path: str) -> str | None:
+    """Return a validation error message, or None when the cited path resolves to a file."""
+    try:
+        candidate = (ROOT / path).resolve()
+        candidate.relative_to(ROOT.resolve())
+    except (OSError, ValueError):
+        # Escapes ROOT (absolute path, or `..` traversal) - not a plain repo citation.
+        return None
+    if not candidate.is_file():
+        return (
+            f"cites {path} in its reason but no such file exists in the repository; a "
+            "prose citation of a missing document is a 404, not evidence"
+        )
+    return None
+
 
 def unresolved_repo_reference_errors(entry_id: str, references: list) -> list[str]:
     """Report references that point at a repository path which does not exist."""
@@ -192,6 +230,24 @@ def unresolved_repo_reference_errors(entry_id: str, references: list) -> list[st
                 f"exceptions entry {entry_id} cites {path} but no such file exists in the "
                 "repository; a blob link to a missing file is a 404, not evidence"
             )
+    return errors
+
+
+def unresolved_reason_citation_errors(entry_id: str, reason: object) -> list[str]:
+    """Report repo-relative document paths cited in an entry's prose that do not exist.
+
+    The `reason` field is the natural place to cite an assessment document, and the
+    reference-channel rule cannot see it. Same obligation, second field: if a citation is
+    required to be real, it is required to be real wherever it is written.
+    """
+    if not isinstance(reason, str):
+        return []
+    errors: list[str] = []
+    for match in PROSE_REPO_PATH_PATTERN.finditer(reason):
+        path = match.group("path")
+        problem = _resolve_prose_repo_path(path)
+        if problem is not None:
+            errors.append(f"exceptions entry {entry_id} {problem}")
     return errors
 
 
@@ -470,6 +526,10 @@ def validate_allowlist(path: Path) -> list[str]:
 
             if isinstance(references, list):
                 errors.extend(unresolved_repo_reference_errors(str(entry["id"]), references))
+
+            # The prose channel carries the same obligation as the reference list: a doc path
+            # cited in `reason` is a citation, and a missing one is a 404, not evidence.
+            errors.extend(unresolved_reason_citation_errors(str(entry["id"]), entry.get("reason")))
 
     return errors
 
