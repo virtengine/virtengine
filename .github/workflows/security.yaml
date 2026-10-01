@@ -139,6 +139,31 @@ jobs:
           node scripts/supply-chain/check-orphan-lockfiles.mjs --selftest
           node scripts/supply-chain/check-orphan-lockfiles.mjs
 
+      - name: Verify every gated dependency install reaches its own tree
+        # A declared gate is only evidence if the command it pins actually
+        # installs and runs the tree it names. Two defects made the Task 88B
+        # gate matrix lie, both exiting 0 while measuring nothing:
+        #
+        # 1. WRONG SCOPE. `pnpm --dir <dir> install` does NOT scope to <dir>:
+        #    pnpm walks up, finds the repo-root pnpm-workspace.yaml, and installs
+        #    THAT workspace. For mobile/veid-capture-app (not a member) it
+        #    reported "Scope: all 4 workspace projects", created no
+        #    mobile/veid-capture-app/node_modules, read neither of mobile's two
+        #    lockfiles, and the typecheck/test that followed failed on
+        #    "'tsc' is not recognized" — a green category that was a false
+        #    signal rather than a measurement.
+        # 2. WRONG PACKAGE MANAGER. sdk/ts has NO pnpm-lock.yaml; its
+        #    committed authority is sdk/ts/package-lock.json, which every
+        #    workflow that builds sdk/ts consumes with `npm --prefix`. So the
+        #    pinned `pnpm --dir sdk/ts install --frozen-lockfile` could not run
+        #    at all (ERR_PNPM_NO_LOCKFILE) even when correctly scoped.
+        #
+        # The matrix now pins the installer each directory actually owns, and
+        # this asserts, per gated command: install scope is reachable, the
+        # lockfile that installer will read exists, and any script it runs is
+        # declared. ADDITIONAL check; relaxes nothing.
+        run: node scripts/validate-required-gate-install-scope.test.cjs
+
   codeql-analysis:
     name: CodeQL SAST
     runs-on: ubuntu-latest
