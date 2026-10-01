@@ -125,6 +125,20 @@ jobs:
           scripts/supply-chain/verify-pinned-images.sh --self-test
           scripts/supply-chain/verify-pinned-images.sh
 
+      - name: Verify no orphaned npm lockfile can report phantom advisories
+        # Dependabot resolves advisories against every tracked manifest, including
+        # lockfiles nothing installs. portal/ is a pnpm workspace member that
+        # installs only via `pnpm install --frozen-lockfile`, so its committed
+        # package-lock.json was a pre-pnpm fossil: it pinned next@15.5.10 while
+        # package.json and pnpm-lock.yaml both said 15.5.24, which held two
+        # CRITICAL unauthenticated-RCE advisories permanently "open" against a
+        # runtime that was never vulnerable. A phantom advisory is worse than no
+        # advisory — it cannot be closed and it teaches reviewers to ignore the
+        # tool. This ADDS a check; it does not relax any existing one.
+        run: |
+          node scripts/supply-chain/check-orphan-lockfiles.mjs --selftest
+          node scripts/supply-chain/check-orphan-lockfiles.mjs
+
   codeql-analysis:
     name: CodeQL SAST
     runs-on: ubuntu-latest
