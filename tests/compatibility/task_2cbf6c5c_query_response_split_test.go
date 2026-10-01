@@ -1,3 +1,4 @@
+//nolint:staticcheck // SA1019: naming the retired shared query types is the entire subject of this test; see the note below.
 package compatibility
 
 import (
@@ -34,6 +35,11 @@ import (
 //   - a shared message marshals to the same bytes as its per-RPC replacement
 //     (the old client's encoder output is what a new node must still accept);
 //   - the legacy type still decodes (nothing broke existing compiled clients).
+//
+// SA1019 is waived file-wide on purpose: naming the deprecated shared types is
+// the entire subject of this file. The waiver is scoped to this one test rather
+// than a repo-wide staticcheck exclusion, because everywhere else in the tree a
+// deprecated-type reference is a real finding and should stay one.
 
 // sharedToPerRPC lists each retired shared message against the per-RPC types
 // that replaced it, by fully qualified proto name so the pairs are read off the
@@ -142,7 +148,7 @@ func wireFields(t *testing.T, message proto.Message) map[int]string {
 	messageType := reflect.TypeOf(message)
 	// Generated messages are handled as pointers, and NumField panics on a
 	// pointer type, so dereference to the struct before walking the fields.
-	for messageType.Kind() == reflect.Ptr {
+	for messageType.Kind() == reflect.Pointer {
 		messageType = messageType.Elem()
 	}
 	if messageType.Kind() != reflect.Struct {
@@ -252,7 +258,7 @@ func setScalarOrNested(field reflect.Value, depth int) int {
 		}
 		field.Set(reflect.Append(field, element))
 		return 1
-	case reflect.Ptr:
+	case reflect.Pointer:
 		if field.Type().Elem().Kind() != reflect.Struct || depth >= maxPopulateDepth {
 			return 0
 		}
