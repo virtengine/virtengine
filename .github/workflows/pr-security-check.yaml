@@ -81,6 +81,14 @@ jobs:
       - name: Run PR gosec scan-target tests
         run: python .github/tests/test_pr_gosec_scan_targets.py
 
+      # Proves the test above can actually go RED. It mutates a COPY of
+      # gosec_pr_targets.py (the note back on stdout - the #1115 regression) and
+      # REQUIRES the test to fail. A guard that has only ever been seen green is
+      # decoration, and this step has already produced two false-red + false-
+      # negative defects that a green suite did not catch. Mutates no live file.
+      - name: Falsify the PR gosec stdout contract
+        run: bash .github/tests/falsify_pr_gosec_stdout_contract.sh
+
       - name: Set up Go
         uses: actions/setup-go@v6
         with:
