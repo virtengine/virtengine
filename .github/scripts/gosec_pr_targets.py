@@ -53,6 +53,22 @@ from pathlib import Path
 # under one of them is reported as unresolvable rather than passed to gosec.
 NEVER_A_PACKAGE_DIRS = {"testdata", "vendor", "node_modules", ".git"}
 
+# Subtrees that are SEPARATE Go modules (they carry their own go.mod). `go list`
+# run from a module root cannot resolve a package that lives inside a nested
+# module - relative or absolute - and reports instead:
+#     main module (github.com/virtengine/virtengine) does not contain package
+#     github.com/virtengine/virtengine/sdk/go/node/settlement/v1
+# This is not a `go list` bug and no flag fixes it: the nested module has its own
+# build list, so the parent's resolver legitimately refuses to look inside it.
+# Measured against the real tree, 2026-10-02, on a minimal fixture with a root
+# module plus a nested `sdk/go/go.mod`: the relative pattern AND the absolute path
+# both return that message from the parent root, while the same pattern run with
+# cwd=sdk/go returns `v1|<abs>/sdk/go/node/settlement/v1`.
+#
+# So resolution has to be per-module: a changed file is resolved against the
+# nearest ancestor go.mod, not against one module root.
+NESTED_MODULE_DIRS = ("sdk/go", "sdk/generation")
+
 
 def norm(p: str) -> str:
     """Normalise separators so the same path compares equal on Windows and Linux."""
@@ -73,6 +89,23 @@ def read_changed_files(path: str) -> list[str]:
     return [norm(line.strip().strip("\r\n")) for line in text.splitlines() if line.strip()]
 
 
+def module_root_for(dirpath: str, base: str = ".") -> str:
+    """Return the module root that OWNS ``dirpath``.
+
+    Resolution walks the path from the repository root and returns the deepest
+    prefix that has its own ``go.mod`` (falling back to the repo root when there
+    is none). Deeper wins deliberately: a package under ``sdk/go`` belongs to the
+    nested module, not to the root module that also happens to contain it.
+    """
+    parts = [p for p in norm(dirpath).split("/") if p and p != "."]
+    for depth in range(len(parts), -1, -1):
+        candidate = "/".join(parts[:depth])
+        root = os.path.join(base, *parts[:depth]) if candidate else base
+        if os.path.isfile(os.path.join(root, "go.mod")):
+            return root
+    return base
+
+
 def package_dirs(files: list[str]) -> list[str]:
     """Distinct parent directories of the changed Go files, in first-seen order."""
     seen: list[str] = []
@@ -86,18 +119,51 @@ def package_dirs(files: list[str]) -> list[str]:
 def loadable(dirs: list[str], module_dir: str) -> tuple[list[str], list[tuple[str, str]]]:
     """Split dirs into loadable packages and dirs the go tool cannot load.
 
-    One ``go list -e`` call for all of them: a directory that is a real package
-    comes back with a ``.Name``; one that is not (a stray file, a fixture
-    directory, a nested module) comes back with an empty name and an error.
+    One ``go list -e`` call per OWNING MODULE ROOT, not one per repository: the
+    changed packages of a PR routinely span several modules (the root module and
+    ``sdk/go``), and a single call from the repository root cannot see into the
+    nested ones. A directory that is a real package comes back with a ``.Name``;
+    one that is not (a stray file, a fixture directory, a nested module passed
+    at the wrong root) comes back with an empty name and an error.
     """
     if not dirs:
         return [], []
 
+    # Group by the module that owns each dir, preserving first-seen order both
+    # across the groups and inside them, so the emitted list stays stable.
+    grouped: dict[str, list[str]] = {}
+    for d in dirs:
+        root = norm(module_root_for(d, module_dir))
+        grouped.setdefault(root, []).append(d)
+
+    good: list[str] = []
+    bad: list[tuple[str, str]] = []
+    for root, root_dirs in grouped.items():
+        _loadable_in(root, root_dirs, module_dir, good, bad)
+    return good, bad
+
+
+def _loadable_in(root: str, dirs: list[str], module_dir: str,
+                 good: list[str], bad: list[tuple[str, str]]) -> None:
+    """Append the resolved packages of ``dirs`` (all inside ``root``) to good/bad."""
     # A directory must be handed to the go tool as a pattern with a leading ./ :
     # `go list pkg/foo` is not a pattern, it is a module-relative import path and
     # resolves to nothing (or to another module's package). gosec is given
-    # ./pkg/foo, so the enumeration must use the same shape.
-    patterns = [d if d.startswith(".") else f"./{d}" for d in dirs]
+    # ./pkg/foo, so the enumeration must use the same shape. The pattern is made
+    # relative to the module root that owns it, which is what makes a nested
+    # module's packages resolvable at all.
+    rel_root = norm(os.path.relpath(root, module_dir)).replace("\\", "/")
+    if rel_root == ".":
+        rel_root = ""
+
+    patterns = []
+    for d in dirs:
+        key = norm(d)
+        if rel_root and (key == rel_root or key.startswith(rel_root + "/")):
+            inner = key[len(rel_root):].lstrip("/")
+            patterns.append("./" + inner if inner else ".")
+        else:
+            patterns.append(key if key.startswith(".") else f"./{key}")
 
     env = dict(os.environ)
     env["GOFLAGS"] = "-mod=readonly"
@@ -106,7 +172,7 @@ def loadable(dirs: list[str], module_dir: str) -> tuple[list[str], list[tuple[st
         # not abort the whole template with "nil pointer evaluating
         # *load.PackageError.Err" and blank out every other field.
         ["go", "list", "-e", "-f", "{{.Name}}|{{.Dir}}|{{with .Error}}{{.Err}}{{end}}", *patterns],
-        cwd=module_dir,
+        cwd=root,
         capture_output=True,
         text=True,
         env=env,
@@ -115,11 +181,11 @@ def loadable(dirs: list[str], module_dir: str) -> tuple[list[str], list[tuple[st
         # `go list` itself failed (missing go, broken go.mod): report and let the
         # caller fail closed rather than assuming the targets are fine.
         err = (proc.stderr or proc.stdout).strip()
-        print(f"::error::'go list' could not enumerate the changed packages: {err}", file=sys.stderr)
-        return [], [(d, err or "go list failed") for d in dirs]
+        print(f"::error::'go list' could not enumerate the changed packages in {root}: {err}",
+              file=sys.stderr)
+        bad.extend((d, err or "go list failed") for d in dirs)
+        return
 
-    good: list[str] = []
-    bad: list[tuple[str, str]] = []
     by_dir: dict[str, tuple[str, str]] = {}
     for line in proc.stdout.splitlines():
         name, _, rest = line.partition("|")
@@ -141,12 +207,11 @@ def loadable(dirs: list[str], module_dir: str) -> tuple[list[str], list[tuple[st
         key = norm(d)
         entry = by_dir.get(key) or by_dir.get(key.rsplit("/", 1)[-1])
         if entry is None:
-            bad.append((d, "go list returned no result for this path"))
+            bad.append((d, f"go list returned no result for this path (resolved in module {rel_root or '.'})"))
         elif not entry[0]:
             bad.append((d, entry[1] or "not a loadable Go package"))
         else:
             good.append(self_dir(key))
-    return good, bad
 
 
 def self_dir(d: str) -> str:
