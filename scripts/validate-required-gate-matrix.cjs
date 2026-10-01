@@ -14,9 +14,28 @@ const resultSchemaPath = resolve(root, "_docs/ralph/prototype-integration/requir
 const categoryCommands = new Map([
   ["go", ["go vet ./...", "go test -count=1 ./..."]],
   ["proto_api", ["docker build --file sdk/generation/Dockerfile --tag virtengine-proto-gen:1.0.0 .", "docker run --rm --volume $PWD:/src --workdir /src/sdk --entrypoint buf virtengine-proto-gen:1.0.0 lint", "bash scripts/verify-proto-generation.sh", "go test -count=1 ./api/... ./client/...", "node scripts/validate-generated-contract-inventory.cjs --require-ready"]],
-  ["sdk", ["pnpm --dir sdk/ts install --frozen-lockfile", "pnpm --dir sdk/ts build", "pnpm --dir sdk/ts test"]],
+  // sdk/ts has NO pnpm-lock.yaml — its committed dependency authority is
+  // sdk/ts/package-lock.json, and every workflow that actually builds it uses
+  // npm (proto-generation.yaml, security.yaml, supply-chain.yaml,
+  // license-compliance.yaml). The previous `pnpm --dir sdk/ts install
+  // --frozen-lockfile` therefore did two wrong things: pnpm walked up to the
+  // repo-root workspace (installing the ROOT tree, never sdk/ts), and even
+  // pinned to sdk/ts it could not run — pnpm aborts ERR_PNPM_NO_LOCKFILE
+  // because no pnpm lockfile exists there. These literals now name the package
+  // manager that owns sdk/ts's lockfile, so they install and test sdk/ts.
+  ["sdk", ["npm --prefix sdk/ts ci --ignore-scripts", "npm --prefix sdk/ts run build", "npm --prefix sdk/ts test"]],
   ["portal", ["pnpm --dir portal install --frozen-lockfile", "pnpm --dir portal lint", "pnpm --dir portal test"]],
-  ["mobile", ["pnpm --dir mobile/veid-capture-app install --frozen-lockfile", "pnpm --dir mobile/veid-capture-app typecheck", "pnpm --dir mobile/veid-capture-app test"]],
+  // mobile/veid-capture-app is NOT a pnpm workspace member, so a bare
+  // `pnpm --dir <dir> install` walks UP to the repo root and installs the ROOT
+  // workspace: it reports "Scope: all 4 workspace projects", never creates
+  // mobile/veid-capture-app/node_modules, and never reads mobile's own
+  // pnpm-lock.yaml. The typecheck/test commands then run with no installed tree
+  // at all ('tsc'/'cross-env' are not recognized). `--ignore-workspace` pins the
+  // install to that directory's own manifest + pnpm-lock.yaml, so the three
+  // commands below actually exercise mobile's dependency graph. See
+  // _docs/ralph/prototype-integration/required-gate-matrix.json for the same
+  // commands in machine-readable form.
+  ["mobile", ["pnpm --dir mobile/veid-capture-app --ignore-workspace install --frozen-lockfile", "pnpm --dir mobile/veid-capture-app --ignore-workspace typecheck", "pnpm --dir mobile/veid-capture-app --ignore-workspace test"]],
   ["ml", ["python -m pip install --require-hashes -r ml/requirements-deterministic.txt", "python -m pytest --collect-only -q ml/training/tests", "python -m pytest -q ml/training/tests", "node scripts/validate-ai-production-policy.cjs --enforce", "node scripts/validate-ai-biometric-security-gates.cjs --enforce"]],
   ["deployment", ["docker compose -f docker-compose.yaml config --quiet", "helm lint deploy/slurm/slurm-cluster --values deploy/slurm/slurm-cluster/tests/stable-secrets-values.yaml --strict", "helm template slurm-capacity deploy/slurm/slurm-cluster --namespace slurm-capacity --values deploy/slurm/slurm-cluster/tests/stable-secrets-values.yaml | python scripts/validate_slurm_chart_semantics.py --chart deploy/slurm/slurm-cluster --rendered -", "bash scripts/ci/post-deploy-smoke-test.sh"]],
   ["observability", ["docker compose -f docker-compose.observability.yaml config --quiet", "go test -count=1 ./pkg/observability/..."]],
