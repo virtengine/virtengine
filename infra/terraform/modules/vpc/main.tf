@@ -218,8 +218,57 @@ resource "aws_cloudwatch_log_group" "flow_logs" {
 
   name              = "/aws/vpc/${var.name}/flow-logs"
   retention_in_days = var.flow_logs_retention_days
+  kms_key_id        = aws_kms_key.flow_logs.arn
 
   tags = local.tags
+}
+
+# -----------------------------------------------------------------------------
+# KMS key for VPC flow log encryption
+# -----------------------------------------------------------------------------
+data "aws_caller_identity" "current" {}
+
+resource "aws_kms_key" "flow_logs" {
+  description             = "KMS key for VPC flow log encryption"
+  deletion_window_in_days = 30
+  enable_key_rotation     = true
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid    = "AllowKeyAdministration"
+        Effect = "Allow"
+        Principal = {
+          AWS = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:root"
+        }
+        Action   = "kms:*"
+        Resource = "*"
+      },
+      {
+        Sid    = "AllowServicesUse"
+        Effect = "Allow"
+        Principal = {
+          Service = [
+            "cloudwatch.amazonaws.com",
+            "vpc-flow-logs.amazonaws.com",
+            "logs.${data.aws_region.current.name}.amazonaws.com",
+          ]
+        }
+        Action   = ["kms:Decrypt", "kms:GenerateDataKey*", "kms:Describe*"]
+        Resource = "*"
+      },
+    ]
+  })
+
+  tags = merge(local.tags, {
+    Name = "${var.name}-vpc-flow-logs-key"
+  })
+}
+
+resource "aws_kms_alias" "flow_logs" {
+  name          = "alias/${var.name}-vpc-flow-logs"
+  target_key_id = aws_kms_key.flow_logs.key_id
 }
 
 resource "aws_iam_role" "flow_logs" {
@@ -249,17 +298,31 @@ resource "aws_iam_role_policy" "flow_logs" {
 
   policy = jsonencode({
     Version = "2012-10-17"
-    Statement = [{
-      Action = [
-        "logs:CreateLogGroup",
-        "logs:CreateLogStream",
-        "logs:PutLogEvents",
-        "logs:DescribeLogGroups",
-        "logs:DescribeLogStreams"
-      ]
-      Effect   = "Allow"
-      Resource = "*"
-    }]
+    Statement = [
+      {
+        Action = [
+          "logs:CreateLogGroup",
+          "logs:CreateLogStream",
+          "logs:PutLogEvents",
+          "logs:DescribeLogGroups",
+          "logs:DescribeLogStreams"
+        ]
+        Effect   = "Allow"
+        Resource = "*"
+      },
+      {
+        # REQUIRED: the log group is KMS-encrypted, so the flow-logs delivery role
+        # must be allowed to generate the data key for every envelope write.
+        # Without this the delivery silently fails once encryption is enabled.
+        Action = [
+          "kms:Decrypt",
+          "kms:GenerateDataKey",
+          "kms:DescribeKey"
+        ]
+        Effect   = "Allow"
+        Resource = aws_kms_key.flow_logs.arn
+      },
+    ]
   })
 }
 

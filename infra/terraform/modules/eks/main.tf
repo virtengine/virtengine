@@ -22,6 +22,8 @@ locals {
   })
 }
 
+data "aws_caller_identity" "current" {}
+
 # -----------------------------------------------------------------------------
 # EKS Cluster
 # -----------------------------------------------------------------------------
@@ -128,11 +130,61 @@ resource "aws_kms_alias" "eks" {
 }
 
 # -----------------------------------------------------------------------------
+# CloudWatch Logs encryption key
+# -----------------------------------------------------------------------------
+# DELIBERATELY a SEPARATE key from aws_kms_key.eks above. That key is the EKS
+# control plane's `secrets_encryption` key (modules/eks/main.tf:43); a KMS key
+# policy cannot scope a grant to CloudWatch Logs, so reusing it would widen the
+# key's blast radius to every principal already trusted by the secrets key.
+resource "aws_kms_key" "cloudwatch_logs" {
+  description             = "KMS key for CloudWatch log encryption ${var.cluster_name}"
+  deletion_window_in_days = 30
+  enable_key_rotation     = true
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid    = "AllowKeyAdministration"
+        Effect = "Allow"
+        Principal = {
+          AWS = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:root"
+        }
+        Action   = "kms:*"
+        Resource = "*"
+      },
+      {
+        Sid    = "AllowServicesUse"
+        Effect = "Allow"
+        Principal = {
+          Service = [
+            "cloudwatch.amazonaws.com",
+            "logs.${data.aws_region.current.name}.amazonaws.com",
+          ]
+        }
+        Action   = ["kms:Decrypt", "kms:GenerateDataKey*", "kms:Describe*"]
+        Resource = "*"
+      },
+    ]
+  })
+
+  tags = merge(local.tags, {
+    Name = "${var.cluster_name}-cloudwatch-logs-key"
+  })
+}
+
+resource "aws_kms_alias" "cloudwatch_logs" {
+  name          = "alias/${var.cluster_name}-cloudwatch-logs"
+  target_key_id = aws_kms_key.cloudwatch_logs.key_id
+}
+
+# -----------------------------------------------------------------------------
 # CloudWatch Log Group for EKS
 # -----------------------------------------------------------------------------
 resource "aws_cloudwatch_log_group" "eks" {
   name              = "/aws/eks/${var.cluster_name}/cluster"
   retention_in_days = var.log_retention_days
+  kms_key_id        = aws_kms_key.cloudwatch_logs.arn
 
   tags = local.tags
 }
