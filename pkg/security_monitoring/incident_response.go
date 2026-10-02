@@ -263,7 +263,7 @@ func (ir *IncidentResponder) findMatchingPlaybooks(incident *SecurityIncident) [
 			continue
 		}
 
-		if incident.Severity < playbook.MinSeverity {
+		if !incident.Severity.AtLeast(playbook.MinSeverity) {
 			continue
 		}
 
@@ -474,7 +474,7 @@ func (ir *IncidentResponder) actionSuspendProvider(incident *SecurityIncident, _
 }
 
 func (ir *IncidentResponder) actionIncreaseSeverity(incident *SecurityIncident) error {
-	if incident.Severity < SeverityCritical {
+	if incident.Severity.Rank() < SeverityCritical.Rank() {
 		switch incident.Severity {
 		case SeverityLow:
 			incident.Severity = SeverityMedium

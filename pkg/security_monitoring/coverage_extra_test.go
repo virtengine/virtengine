@@ -198,16 +198,15 @@ func TestIncidentResponderFindMatchingPlaybooks(t *testing.T) {
 		t.Errorf("unrelated type matched %d playbooks, want 0", len(got))
 	}
 
-	// A playbook whose MinSeverity sorts above the incident severity is skipped.
-	// NOTE: the sort is lexicographic because SecurityEventSeverity is a string
-	// type -- see TestSeverityOrderingIsLexicographic_KnownDefect.
+	// A playbook whose MinSeverity is more severe than the incident is skipped.
+	// Severity orders by Rank, so "critical" outranks "high" here.
 	ir.AddPlaybook(&Playbook{
-		ID: "zzz-never", Enabled: true, MinSeverity: "zzzzz",
+		ID: "critical-only", Enabled: true, MinSeverity: SeverityCritical,
 		TriggerTypes: []string{"rate_limit_breach"},
 	})
 	hit := &SecurityIncident{ID: "i3", Type: "rate_limit_breach", Severity: SeverityHigh}
 	for _, pb := range ir.findMatchingPlaybooks(hit) {
-		if pb.ID == "zzz-never" {
+		if pb.ID == "critical-only" {
 			t.Error("playbook with a higher MinSeverity should be skipped")
 		}
 	}
@@ -216,6 +215,22 @@ func TestIncidentResponderFindMatchingPlaybooks(t *testing.T) {
 	matches := ir.findMatchingPlaybooks(hit)
 	if len(matches) != 1 || matches[0].ID != "ddos-response" {
 		t.Fatalf("expected exactly ddos-response, got %+v", matches)
+	}
+
+	// The same CRITICAL incident must also match, since critical >= high.
+	crit := &SecurityIncident{ID: "i4", Type: "rate_limit_breach", Severity: SeverityCritical}
+	var sawDDOS, sawCriticalOnly bool
+	for _, pb := range ir.findMatchingPlaybooks(crit) {
+		switch pb.ID {
+		case "ddos-response":
+			sawDDOS = true
+		case "critical-only":
+			sawCriticalOnly = true
+		}
+	}
+	if !sawDDOS || !sawCriticalOnly {
+		t.Errorf("critical incident matched ddos=%v critical-only=%v, want both",
+			sawDDOS, sawCriticalOnly)
 	}
 
 	// disabled playbooks are skipped
@@ -235,33 +250,147 @@ func TestIncidentResponderFindMatchingPlaybooks(t *testing.T) {
 	ir.DisablePlaybook("does-not-exist")
 }
 
-// TestSeverityOrderingIsLexicographic_KnownDefect pins the CURRENT behaviour of
-// severity comparisons, which is a real defect rather than intent:
-// SecurityEventSeverity is a `string`, so `<` and `>` sort alphabetically
-// ("critical" < "high" is true, "low" > "medium" is false). The effect is that
-// findMatchingPlaybooks drops CRITICAL incidents from playbooks requiring HIGH,
-// and updateIncidents never escalates an incident from medium to critical.
-// This test exists to make the defect executable; fix the ordering (ordered
-// severity enum) and this test will fail, which is the intended signal.
-func TestSeverityOrderingIsLexicographic_KnownDefect(t *testing.T) {
+// TestSeverityOrderingIsRankOrdered pins the severity ORDER. It used to be
+// TestSeverityOrderingIsLexicographic_KnownDefect and asserted the opposite:
+// SecurityEventSeverity is a `string`, so `<`/`>` sort alphabetically
+// ("critical" < "high", "high" < "medium"), which meant findMatchingPlaybooks
+// dropped CRITICAL incidents from every HIGH playbook and updateIncidents
+// never escalated an incident. Severity now orders through Rank/AtLeast/Above;
+// this test fails if any comparison site reverts to a raw string operator.
+func TestSeverityOrderingIsRankOrdered(t *testing.T) {
 	ir, _ := NewIncidentResponder("", quietLogger())
 
+	// 1. A CRITICAL incident must match the playbooks that require HIGH --
+	//    lexicographically "critical" < "high" skipped all of them.
 	critical := &SecurityIncident{ID: "c", Type: "rate_limit_breach", Severity: SeverityCritical}
-	if got := ir.findMatchingPlaybooks(critical); len(got) != 0 {
-		t.Errorf("DEFECT REGRESSION GUARD: a critical incident now matches %d playbooks; "+
-			"severity ordering appears to have been fixed — update this test", len(got))
+	got := ir.findMatchingPlaybooks(critical)
+	if len(got) == 0 {
+		t.Error("a critical rate_limit_breach incident matches no playbooks; " +
+			"severity ordering has regressed to lexicographic")
+	}
+	sawDDOS := false
+	for _, pb := range got {
+		if pb.ID == "ddos-response" {
+			sawDDOS = true
+		}
+	}
+	if !sawDDOS {
+		t.Errorf("critical incident did not match ddos-response (MinSeverity HIGH); got %+v", got)
 	}
 
-	inc := &SecurityIncident{ID: "i", Severity: SeverityMedium}
+	// 2. An incident must escalate when a more severe event arrives. The map
+	//    key is type+":"+source, which is how updateIncidents finds it.
+	inc := &SecurityIncident{ID: "i", Type: "t", Severity: SeverityMedium}
 	sm := &SecurityMonitor{
 		config:          DefaultSecurityMonitorConfig(),
 		metrics:         GetSecurityMetrics(),
-		activeIncidents: map[string]*SecurityIncident{"k": inc},
+		activeIncidents: map[string]*SecurityIncident{"t:s": inc},
 	}
 	sm.updateIncidents(&SecurityEvent{ID: "e", Type: "t", Severity: SeverityCritical, Source: "s"})
-	if inc.Severity == SeverityCritical {
-		t.Errorf("DEFECT REGRESSION GUARD: incident escalated medium->critical; " +
-			"severity ordering appears to have been fixed — update this test")
+	if inc.Severity != SeverityCritical {
+		t.Errorf("incident severity after a CRITICAL event = %q, want %q", inc.Severity, SeverityCritical)
+	}
+
+	// Escalation must not walk an incident back down either.
+	sm.updateIncidents(&SecurityEvent{ID: "e2", Type: "t", Severity: SeverityLow, Source: "s"})
+	if inc.Severity != SeverityCritical {
+		t.Errorf("incident severity after a LOW event = %q, want it held at %q",
+			inc.Severity, SeverityCritical)
+	}
+
+	// 3. A HIGH event must open an incident and raise an alert. Lexicographic
+	//    ordering made "high" < "medium", so HIGH and CRITICAL events were
+	//    silently dropped by both guards -- the most severe events in the
+	//    system raised nothing at all.
+	for _, sev := range []SecurityEventSeverity{SeverityMedium, SeverityHigh, SeverityCritical} {
+		t.Run("opens-incident/"+string(sev), func(t *testing.T) {
+			sm := newTestMonitor(t, nil)
+			sm.handleEvent(&SecurityEvent{
+				ID: "x", Type: "t", Severity: sev, Source: "s", Timestamp: time.Unix(1700000000, 0),
+			})
+			if got := len(sm.GetActiveIncidents()); got != 1 {
+				t.Errorf("severity %q opened %d incidents, want 1", sev, got)
+			}
+		})
+		// A separate monitor for the alert probe: handleEvent above already
+		// consumed the cooldown/rate-limit budget for this type+source.
+		sm := newTestMonitor(t, nil)
+		if !sm.shouldAlert(&SecurityEvent{ID: "y", Type: "t", Severity: sev, Source: "s"}) {
+			t.Errorf("severity %q raised no alert, want an alert", sev)
+		}
+	}
+
+	// Info and low must stay below the alert/incident floor.
+	for _, sev := range []SecurityEventSeverity{SeverityInfo, SeverityLow} {
+		t.Run("below-floor/"+string(sev), func(t *testing.T) {
+			sm := newTestMonitor(t, nil)
+			sm.handleEvent(&SecurityEvent{
+				ID: "x", Type: "t", Severity: sev, Source: "s", Timestamp: time.Unix(1700000000, 0),
+			})
+			if got := len(sm.GetActiveIncidents()); got != 0 {
+				t.Errorf("severity %q opened %d incidents, want 0", sev, got)
+			}
+			if sm.shouldAlert(&SecurityEvent{ID: "y", Type: "t", Severity: sev, Source: "s"}) {
+				t.Errorf("severity %q raised an alert, want none", sev)
+			}
+		})
+	}
+}
+
+// TestSeverityRankHelpers pins the ordering helpers themselves, including the
+// unknown-value case: an unrecognised severity must not outrank a known one.
+func TestSeverityRankHelpers(t *testing.T) {
+	order := []SecurityEventSeverity{
+		SeverityInfo, SeverityLow, SeverityMedium, SeverityHigh, SeverityCritical,
+	}
+	for i, lo := range order {
+		if got := lo.Rank(); got != i {
+			t.Errorf("Rank(%q) = %d, want %d", lo, got, i)
+		}
+		for j, hi := range order {
+			if got := hi.AtLeast(lo); got != (j >= i) {
+				t.Errorf("%q.AtLeast(%q) = %v, want %v", hi, lo, got, j >= i)
+			}
+			if got := hi.Above(lo); got != (j > i) {
+				t.Errorf("%q.Above(%q) = %v, want %v", hi, lo, got, j > i)
+			}
+		}
+	}
+
+	// An unknown severity ranks below every known one, so it can never open an
+	// incident, trigger a playbook or escalate one -- a corrupt value fails
+	// safe. The converse holds too: a known severity outranks an unknown one.
+	unknown := SecurityEventSeverity("not-a-severity")
+	if got := unknown.Rank(); got != -1 {
+		t.Errorf("Rank(unknown) = %d, want -1", got)
+	}
+	if unknown.AtLeast(unknown) != true || unknown.Above(unknown) != false {
+		t.Error("unknown compared against itself must be equal, not strictly above")
+	}
+	for _, known := range order {
+		if unknown.AtLeast(known) {
+			t.Errorf("unknown severity AtLeast(%q) = true, want false -- "+
+				"a corrupt severity must not escalate or trigger a playbook", known)
+		}
+		if unknown.Above(known) {
+			t.Errorf("unknown severity Above(%q) = true, want false", known)
+		}
+		if !known.Above(unknown) {
+			t.Errorf("%q.Above(unknown) = false, want true -- known must outrank unknown", known)
+		}
+	}
+
+	// The wire format is unchanged: these are still the lowercase strings.
+	for _, tc := range []struct {
+		sev  SecurityEventSeverity
+		want string
+	}{
+		{SeverityInfo, "info"}, {SeverityLow, "low"}, {SeverityMedium, "medium"},
+		{SeverityHigh, "high"}, {SeverityCritical, "critical"},
+	} {
+		if string(tc.sev) != tc.want {
+			t.Errorf("string(%v) = %q, want %q", tc.sev, string(tc.sev), tc.want)
+		}
 	}
 }
 
@@ -303,19 +432,19 @@ func TestIncidentResponderExecutePlaybook_AllActions(t *testing.T) {
 func TestIncidentResponderActionIncreaseSeverity(t *testing.T) {
 	ir, _ := NewIncidentResponder("", quietLogger())
 
-	// actionIncreaseSeverity gates on `incident.Severity < SeverityCritical`,
-	// which is a lexicographic string comparison. Only "critical" is not
-	// less-than itself, so in practice no severity is ever raised; the inner
-	// switch is unreachable through the public action. Exercised here via the
-	// action itself so the behaviour is pinned rather than assumed.
+	// actionIncreaseSeverity escalates one step below critical. It used to gate
+	// on the lexicographic `incident.Severity < SeverityCritical`, which is true
+	// for every value except "critical" itself, so the outer block never ran and
+	// the inner switch was unreachable -- the action was a total no-op.
 	cases := []struct {
 		start SecurityEventSeverity
 		want  SecurityEventSeverity
 	}{
-		{SeverityLow, SeverityLow},
-		{SeverityMedium, SeverityMedium},
-		{SeverityHigh, SeverityHigh},
-		{SeverityCritical, SeverityCritical},
+		{SeverityInfo, SeverityInfo}, // below the switch floor: unchanged
+		{SeverityLow, SeverityMedium},
+		{SeverityMedium, SeverityHigh},
+		{SeverityHigh, SeverityCritical},
+		{SeverityCritical, SeverityCritical}, // already maxed
 	}
 	for _, tc := range cases {
 		inc := &SecurityIncident{ID: "x", Severity: tc.start}
@@ -522,9 +651,8 @@ func TestSecurityMonitorHandleEvent_IncidentLifecycle(t *testing.T) {
 	}
 
 	// Second event of the same type+source updates the existing incident
-	// rather than opening a second one. NOTE: severity escalation is a
-	// lexicographic string comparison, so medium -> critical does NOT
-	// escalate; see TestSeverityOrderingIsLexicographic_KnownDefect.
+	// rather than opening a second one, and escalates it because high is more
+	// severe than medium (see TestSeverityOrderingIsRankOrdered).
 	med2 := &SecurityEvent{ID: "e3", Type: "attack", Severity: SeverityHigh, Timestamp: base.Add(time.Second), Source: "s1"}
 	sm.handleEvent(med2)
 	incidents = sm.GetActiveIncidents()
