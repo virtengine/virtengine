@@ -8,7 +8,9 @@
 #   Core (run on every PR):
 #     1. lint          - Go linting with golangci-lint
 #     2. lint-shell    - Shell script linting
-#     3. test-go       - Go unit tests with coverage (80% enforced)
+#     3. test-go       - Go unit tests; INFRA-003 coverage gate routes by event
+#                        (PR: changed lines at 80%; push: non-regression ratchet
+#                        against COVERAGE_BASELINE) -- see scripts/ci/coverage_gate.py
 #     4. build         - Build binaries for multiple platforms
 #     5. integration   - Integration tests against localnet
 #     6. container-security - Container image scanning with Trivy
