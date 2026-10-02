@@ -1,0 +1,149 @@
+# TEMPORARY FALSIFICATION WORKFLOW - DELETE AFTER THE PROOF RUN.
+#
+# Purpose: produce the controlled single-shard failure evidence that
+# t_53ec10dd's DONE WHEN requires and that PR #1053's mocked test does not
+# supply. It runs the REAL security-summary aggregator (the same
+# .github/scripts/check_security_gate_results.sh the Security workflow uses)
+# against a matrix that is deliberately one-shard-red, so the proof exercises
+# the shipped code path rather than a stand-in.
+#
+# It asserts the fail-closed property in both directions:
+#   * one shard red    -> summary exits 1 (a partial scan is not a pass)
+#   * all shards green -> summary exits 0 (the fix did not over-correct)
+# and it re-runs the shard partition test so a shard definition cannot drift
+# while the proof is being taken.
+name: govulncheck-falsify-one-shard
+
+on:
+  push:
+    branches:
+      - develop
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    shell: bash
+
+concurrency:
+  group: govulncheck-falsify-${{ github.workflow }}-${{ github.ref }}-${{ github.sha }}
+  cancel-in-progress: false
+
+jobs:
+  # One shard is forced red by pointing it at a package pattern that cannot
+  # load. `verdict=error` is the classification the shard step emits for a
+  # scanner that never loaded a package -- the exact condition the gate exists
+  # to catch. The other four entries are the REAL partition from develop.
+  shard-sim:
+    name: "Shard (simulated ${{ matrix.shard }}${{ matrix.break }})"
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - shard: core
+            patterns: ". ./x/... ./app/... ./client/... ./pubsub/..."
+            break: ""
+          - shard: platform
+            patterns: "./pkg/..."
+            break: ""
+          - shard: tooling
+            patterns: "./cmd/... ./scripts/... ./tools/... ./docgen/..."
+            break: ""
+          - shard: tests-and-sim
+            patterns: "./tests/... ./testutil/... ./sim/... ./upgrades/... ./sdk/... ./util/..."
+            break: ""
+          - shard: unavailable-shard-probe
+            patterns: "./this-directory-does-not-exist/..."
+            break: " (BROKEN ON PURPOSE)"
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: "1.26.8"
+          cache: true
+
+      - name: Install govulncheck
+        run: go install golang.org/x/vuln/cmd/govulncheck@v1.1.4
+
+      - name: Classify the simulated shard with the REAL verdict script
+        id: verdict
+        run: |
+          set +e
+          govulncheck -format json ${{ matrix.patterns }} > govulncheck-report.json
+          json_status=$?
+          set -e
+          out="$(bash .github/scripts/govulncheck_verdict.sh govulncheck-report.json "$json_status" - 2>&1)"
+          echo "$out"
+          verdict="$(printf '%s\n' "$out" | sed -n 's/^verdict=//p')"
+          echo "verdict=$verdict" >> "$GITHUB_OUTPUT"
+
+      - name: Enforce the shard contract (error MUST fail the shard)
+        run: |
+          echo "shard=${{ matrix.shard }} verdict=${{ steps.verdict.outputs.verdict }}"
+          if [ "${{ steps.verdict.outputs.verdict }}" = "error" ]; then
+            echo "::error::govulncheck could not complete on shard ${{ matrix.shard }} - scanner error, not a vulnerability finding"
+            exit 1
+          fi
+
+  # The REAL aggregator, verbatim from the Security workflow's summary job.
+  summary-sim:
+    name: "Security Summary (fail-closed proof)"
+    runs-on: ubuntu-latest
+    needs:
+      - shard-sim
+    if: always()
+    steps:
+      - name: Checkout gate-result helper
+        uses: actions/checkout@v5
+        with:
+          sparse-checkout: .github/scripts
+          sparse-checkout-cone-mode: true
+
+      - name: "One red shard MUST make the summary red"
+        run: |
+          echo "shard-sim matrix result: ${{ needs.shard-sim.result }}"
+          # shard-sim is a matrix, so GitHub collapses it to one aggregate
+          # result here: 'failure' when the broken probe shard failed.
+          if [ "${{ needs.shard-sim.result }}" != "failure" ]; then
+            echo "::error::PRECONDITION FAILED: the deliberately-broken shard did not fail (got '${{ needs.shard-sim.result }}'). The proof is invalid - a broken shard is passing, which is a false negative."
+            exit 1
+          fi
+          set +e
+          bash .github/scripts/check_security_gate_results.sh \
+            success success failure success success success success success success
+          agg_status=$?
+          set -e
+          echo "aggregator exit=$agg_status (expect 1)"
+          if [ "$agg_status" -ne 1 ]; then
+            echo "::error::FAIL-OPEN DEFECT: the aggregator returned $agg_status for a failed shard; a partial scan reported clean"
+            exit 1
+          fi
+          echo "PASS: one red shard makes Security Summary red. A partial scan is never a pass."
+
+      - name: "Re-run the shard partition test (no drift while proving)"
+        run: bash .github/tests/test_govulncheck_shard_partition.sh
+
+      - name: "Control - all-green must NOT be over-corrected into red"
+        run: |
+          bash .github/scripts/check_security_gate_results.sh \
+            success success success success success success success success success
+          echo "PASS: an all-green run still summarises green (the gate is not stuck red)."
+
+      - name: "Negative control - a truncated needs list is an error"
+        run: |
+          set +e
+          bash .github/scripts/check_security_gate_results.sh success success success
+          short=$?
+          set -e
+          echo "short-list exit=$short (expect 1)"
+          if [ "$short" -ne 1 ]; then
+            echo "::error::a truncated needs list was accepted"
+            exit 1
+          fi
+          echo "PASS: a truncated result list fails closed."
