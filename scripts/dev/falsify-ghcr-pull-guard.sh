@@ -6,42 +6,88 @@
 # Direction 2 (positive): the unmodified tree MUST pass.
 # Direction 3: the placeholder annotation must fail when the placeholder digest
 # is swapped for a real one, and must fail when removed while the digest stays.
+#
+# Restore is by FILE SNAPSHOT, not `git checkout`: this script has to be
+# runnable against a pinned `git archive` export (which is how the guard gets
+# verified against an exact SHA rather than a moving shared tree). `git
+# checkout` fails silently in such an export -- the old 2>/dev/null hid it --
+# so every mutation would compound onto the previous one and the closing
+# "tree restored" run would prove nothing. Here every restore is byte-compared
+# against the snapshot and a mismatch aborts non-zero.
 set -uo pipefail
 
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 TESTS="$REPO/.github/tests"
 cd "$TESTS" || exit 1
 
+# `python` here is NATIVE Windows Python, which cannot open the MSYS-style path
+# bash's `pwd` prints (/c/Users/...). Shell tools are happy with /c/..., so the
+# two get different forms of the same directory: REPO for grep/cp/cmp,
+# REPO_PY for every path handed to python. On Linux cygpath is absent and the
+# two are identical, so nothing here is Windows-specific behaviour.
+if command -v cygpath >/dev/null 2>&1; then
+  REPO_PY="$(cygpath -m "$REPO")"
+else
+  REPO_PY="$REPO"
+fi
+
 fail=0
+
+# Every file this script is allowed to mutate.
+FILES=(
+  "deploy/kubernetes/base/virtengine-node-deployment.yaml"
+  "deploy/kubernetes/base/provider-daemon-deployment.yaml"
+  "deploy/kubernetes/base/tee-enclave-deployment.yaml"
+  "deploy/kubernetes/base/veid-inference-deployment.yaml"
+  "infra/kubernetes/dr/backup-cronjobs.yaml"
+)
+
+SNAP="$(mktemp -d)" || exit 1
+trap 'rm -rf "$SNAP"' EXIT
+
+snapshot() {
+  local f
+  for f in "${FILES[@]}"; do
+    if [ ! -f "$REPO/$f" ]; then
+      echo "missing expected manifest: $f"
+      exit 1
+    fi
+    mkdir -p "$SNAP/$(dirname "$f")"
+    cp "$REPO/$f" "$SNAP/$f"
+  done
+}
+
+restore() {
+  local f
+  for f in "${FILES[@]}"; do
+    cp "$SNAP/$f" "$REPO/$f" || { echo "restore failed: $f"; exit 1; }
+    cmp -s "$SNAP/$f" "$REPO/$f" || { echo "restore MISMATCH: $f"; exit 1; }
+  done
+}
 
 run_guard() {
   python -m unittest test_ghcr_image_pull_credential_policy 2>&1
 }
 
-restore() {
-  cd "$REPO" || exit 1
-  git checkout -- deploy/kubernetes infra/kubernetes 2>/dev/null
-  cd "$TESTS" || exit 1
-}
-
 report() { # name expected(FAIL|PASS) output
-  local name="$1" want="$2" out="$3"
-  if echo "$out" | grep -qE '^(OK|FAILED)'; then
-    local got="$(echo "$out" | grep -oE '^(OK|FAILED)' | head -1)"
-    # unittest prints OK / FAILED (failures=N) on the summary line.
-    [ "${got:0:1}" = "F" ] && got=FAIL
-    if [ "$got" = "$want" ]; then
-      echo "PASS  $name -> $got (expected $want)"
-    else
-      echo "FAIL  $name -> $got (expected $want)"
-      fail=1
-    fi
+  local name="$1" want="$2" out="$3" got
+  got="$(printf '%s\n' "$out" | grep -oE '^(OK|FAILED)' | head -1)"
+  case "$got" in
+    OK) got=PASS ;;
+    FAILED*) got=FAIL ;;
+  esac
+  if [ "$got" = "$want" ]; then
+    echo "PASS  $name -> $got (expected $want)"
   else
-    echo "FAIL  $name -> no verdict line in output"
-    echo "$out" | tail -20
+    echo "FAIL  $name -> ${got:-<no verdict line>} (expected $want)"
+    printf '%s\n' "$out" | tail -25
     fail=1
   fi
 }
+
+snapshot
+echo "pinned manifest digests under test:"
+( cd "$SNAP" && sha256sum "${FILES[@]}" ) | sed 's/^/  /'
 
 echo "=============================================================="
 echo "Direction 2 (positive): unmodified tree must PASS"
@@ -50,20 +96,15 @@ restore
 out="$(run_guard)"
 report "unmodified tree" PASS "$out"
 
-for sa_file in \
-  "deploy/kubernetes/base/virtengine-node-deployment.yaml" \
-  "deploy/kubernetes/base/provider-daemon-deployment.yaml" \
-  "deploy/kubernetes/base/tee-enclave-deployment.yaml" \
-  "deploy/kubernetes/base/veid-inference-deployment.yaml" \
-  "infra/kubernetes/dr/backup-cronjobs.yaml" ; do
+for sa_file in "${FILES[@]}"; do
   echo
   echo "=============================================================="
   echo "Direction 1 (negative): strip imagePullSecrets from $sa_file"
   echo "=============================================================="
   restore
   before="$(grep -c 'imagePullSecrets:' "$REPO/$sa_file")"
-  # Delete the whole key plus its single list item, wherever it sits.
-  python - "$REPO/$sa_file" <<'PY'
+  # Delete the whole key plus its list items, wherever it sits.
+  python - "$REPO_PY/$sa_file" <<'PY'
 import re, sys
 p = sys.argv[1]
 text = open(p, encoding="utf-8").read()
@@ -84,7 +125,7 @@ echo "Direction 3a: placeholder digest replaced by a real one,"
 echo "            placeholder annotation left behind -> must FAIL"
 echo "=============================================================="
 restore
-python - "$REPO/deploy/kubernetes/base/veid-inference-deployment.yaml" <<'PY'
+python - "$REPO_PY/deploy/kubernetes/base/veid-inference-deployment.yaml" <<'PY'
 import sys
 p = sys.argv[1]
 ZERO = "0" * 64
@@ -103,7 +144,7 @@ echo "Direction 3b: annotation removed while the placeholder digest"
 echo "            stays -> must FAIL (the unpullable pin is now undeclared)"
 echo "=============================================================="
 restore
-python - "$REPO/deploy/kubernetes/base/veid-inference-deployment.yaml" <<'PY'
+python - "$REPO_PY/deploy/kubernetes/base/veid-inference-deployment.yaml" <<'PY'
 import sys
 p = sys.argv[1]
 t = open(p, encoding="utf-8").read()
