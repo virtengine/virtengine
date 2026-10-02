@@ -696,8 +696,40 @@ func TestProviderMutationConfirmationTimeoutRemainsAmbiguous(t *testing.T) {
 	chain.confirmMissing = true
 	submitter, _ := newMutationSubmitterForTest(t, chain, filepath.Join(t.TempDir(), "queue.json"))
 	submitter.cfg.ConfirmationTimeout = 5 * time.Millisecond
+
+	// The background worker in newMutationSubmitterForTest is live and its
+	// PollInterval ticker calls worker -> ProcessDue -> process, and process()
+	// takes processMu itself. With the fake's ConfirmTx never finding the tx,
+	// Submit's confirm() hits its context deadline and parks the envelope in
+	// `ambiguous` (provider_mutation.go:1378 -> scheduleAmbiguous). That state is
+	// deliberately NOT terminal, so the worker is entitled to re-drive it: each
+	// pass re-enters process, and the envelope either advances AttemptCount
+	// toward MaxAttempts (ending in `dead_letter`) or, if a pass classifies the
+	// reconcile failure as retryable-but-not-ambiguous, gets rewritten to
+	// `retry`. Which one lands depends purely on how many worker ticks fit
+	// inside this test's 5ms confirmation window, i.e. on runner load.
+	//
+	// On CI under `go test -race` the worker won and the assertion saw
+	//     expected: "ambiguous"
+	//     actual  : "retry"
+	// while passing locally every time. Measured here by re-driving the envelope:
+	//     pass 1: state="ambiguous" attempts=4
+	//     pass 2: state="ambiguous" attempts=6
+	//     pass 3: state="dead_letter" attempts=6
+	//
+	// This is the same defect class as TestProviderMutationReorgReturnsExplicitRetry
+	// directly below, which #1144 fixed by taking processMu before seeding and
+	// holding it across awaitFinality plus the read-back.
+	//
+	// The lock MUST go AFTER Submit, not before: Submit itself calls
+	// s.process (provider_mutation.go:987) which takes processMu, so holding it
+	// across Submit self-deadlocks.
 	result, err := submitter.Submit(context.Background(), MutationProviderDelete, &providerv1beta4.MsgDeleteProvider{Owner: submitter.cfg.ProviderAddress})
 	require.Error(t, err)
+
+	submitter.processMu.Lock()
+	defer submitter.processMu.Unlock()
+
 	status, statusErr := submitter.Status(context.Background(), result.ID)
 	require.NoError(t, statusErr)
 	require.Equal(t, MutationStateAmbiguous, status.State)
