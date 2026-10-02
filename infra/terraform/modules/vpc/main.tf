@@ -27,6 +27,16 @@ data "aws_availability_zones" "available" {
 # -----------------------------------------------------------------------------
 # VPC
 # -----------------------------------------------------------------------------
+# Lock down the auto-created default security group. No ingress/egress blocks
+# means nothing is allowed; the VPC has no workload that relies on it.
+resource "aws_default_security_group" "main" {
+  vpc_id = aws_vpc.main.id
+
+  tags = merge(local.tags, {
+    Name = "default-deny-all"
+  })
+}
+
 resource "aws_vpc" "main" {
   cidr_block           = var.vpc_cidr
   enable_dns_hostnames = true
