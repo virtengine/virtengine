@@ -943,6 +943,7 @@ func (w *WaldurIngestWorker) Reconcile(ctx context.Context) error {
 	offeringsQueued := 0
 	driftDetected := 0
 
+ingestLoop:
 	for _, waldurUUID := range needsIngest {
 		record := w.state.GetRecord(waldurUUID)
 		if record == nil {
@@ -968,7 +969,7 @@ func (w *WaldurIngestWorker) Reconcile(ctx context.Context) error {
 				driftDetected++
 			}
 		case <-ctx.Done():
-			break
+			break ingestLoop
 		default:
 			log.Printf("[waldur-ingest] reconcile queue full, skipping %s", waldurUUID)
 		}

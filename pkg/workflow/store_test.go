@@ -73,7 +73,7 @@ func TestMemoryWorkflowStore(t *testing.T) {
 
 	t.Run("delete state", func(t *testing.T) {
 		store := NewMemoryWorkflowStore(DefaultWorkflowStoreConfig())
-		defer store.Close()
+		defer func() { _ = store.Close() }()
 
 		state := &WorkflowState{
 			ID:        "test-workflow-2",
@@ -98,7 +98,7 @@ func TestMemoryWorkflowStore(t *testing.T) {
 
 	t.Run("list states with filter", func(t *testing.T) {
 		store := NewMemoryWorkflowStore(DefaultWorkflowStoreConfig())
-		defer store.Close()
+		defer func() { _ = store.Close() }()
 
 		// Create multiple states
 		now := time.Now()
@@ -151,7 +151,7 @@ func TestMemoryWorkflowStore(t *testing.T) {
 
 	t.Run("checkpoint operations", func(t *testing.T) {
 		store := NewMemoryWorkflowStore(DefaultWorkflowStoreConfig())
-		defer store.Close()
+		defer func() { _ = store.Close() }()
 
 		workflowID := "wf-checkpoints"
 
@@ -228,7 +228,7 @@ func TestMemoryWorkflowStore(t *testing.T) {
 
 	t.Run("history operations", func(t *testing.T) {
 		store := NewMemoryWorkflowStore(DefaultWorkflowStoreConfig())
-		defer store.Close()
+		defer func() { _ = store.Close() }()
 
 		workflowID := "wf-history"
 
@@ -271,7 +271,7 @@ func TestMemoryWorkflowStore(t *testing.T) {
 		config := DefaultWorkflowStoreConfig()
 		config.MaxHistoryPerWorkflow = 5
 		store := NewMemoryWorkflowStore(config)
-		defer store.Close()
+		defer func() { _ = store.Close() }()
 
 		workflowID := "wf-max-history"
 
@@ -294,7 +294,7 @@ func TestMemoryWorkflowStore(t *testing.T) {
 
 	t.Run("concurrent access", func(t *testing.T) {
 		store := NewMemoryWorkflowStore(DefaultWorkflowStoreConfig())
-		defer store.Close()
+		defer func() { _ = store.Close() }()
 
 		var wg sync.WaitGroup
 		numWorkers := 10
@@ -325,7 +325,7 @@ func TestMemoryWorkflowStore(t *testing.T) {
 
 	t.Run("closed store returns error", func(t *testing.T) {
 		store := NewMemoryWorkflowStore(DefaultWorkflowStoreConfig())
-		store.Close()
+		_ = store.Close()
 
 		_, err := store.LoadState(ctx, "test")
 		if err == nil {
@@ -343,7 +343,7 @@ func TestWorkflowStoreFactory(t *testing.T) {
 		if err != nil {
 			t.Fatalf("failed to create memory store: %v", err)
 		}
-		defer store.Close()
+		defer func() { _ = store.Close() }()
 
 		// Verify it works
 		err = store.SaveState(ctx, "test", &WorkflowState{
@@ -482,7 +482,7 @@ func TestWorkflowRecovery(t *testing.T) {
 	t.Run("resumes from checkpoint", func(t *testing.T) {
 		// Create store with pre-existing workflow state
 		store := NewMemoryWorkflowStore(DefaultWorkflowStoreConfig())
-		defer store.Close()
+		defer func() { _ = store.Close() }()
 
 		// Save a workflow that was interrupted mid-execution
 		state := &WorkflowState{
@@ -605,7 +605,7 @@ func TestWorkflowRecovery(t *testing.T) {
 func TestWorkflowStateTransitions(t *testing.T) {
 	ctx := context.Background()
 	store := NewMemoryWorkflowStore(DefaultWorkflowStoreConfig())
-	defer store.Close()
+	defer func() { _ = store.Close() }()
 
 	t.Run("valid state transitions", func(t *testing.T) {
 		transitions := []struct {
@@ -674,7 +674,7 @@ func TestHistoryEventTypes(t *testing.T) {
 func TestDeepCopyIsolation(t *testing.T) {
 	ctx := context.Background()
 	store := NewMemoryWorkflowStore(DefaultWorkflowStoreConfig())
-	defer store.Close()
+	defer func() { _ = store.Close() }()
 
 	t.Run("modifying loaded state doesn't affect stored state", func(t *testing.T) {
 		original := &WorkflowState{
@@ -765,7 +765,7 @@ func TestStepRetryWithPersistence(t *testing.T) {
 func TestWorkflowDataPersistence(t *testing.T) {
 	ctx := context.Background()
 	store := NewMemoryWorkflowStore(DefaultWorkflowStoreConfig())
-	defer store.Close()
+	defer func() { _ = store.Close() }()
 
 	t.Run("complex data types persist correctly", func(t *testing.T) {
 		state := &WorkflowState{

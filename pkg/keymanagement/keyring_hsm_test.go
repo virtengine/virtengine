@@ -73,7 +73,7 @@ func TestHSMKeyringHasKey(t *testing.T) {
 
 func TestHSMKeyringListKeys(t *testing.T) {
 	kr, p := newTestKeyring(t)
-	defer p.Close()
+	defer func() { _ = p.Close() }()
 
 	ctx := context.Background()
 	_, err := p.GenerateKey(ctx, hsm.KeyTypeEd25519, "k1")

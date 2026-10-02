@@ -108,7 +108,7 @@ func TestAuditLogLogIncidentAction(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewAuditLog failed: %v", err)
 	}
-	defer auditLog.Close()
+	defer func() { _ = auditLog.Close() }()
 
 	// Should not panic
 	auditLog.LogIncidentAction("INC-001", "block_ip", "system", "success")
@@ -121,7 +121,7 @@ func TestAuditLogLogPlaybookExecution(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewAuditLog failed: %v", err)
 	}
-	defer auditLog.Close()
+	defer func() { _ = auditLog.Close() }()
 
 	steps := []string{"step1", "step2", "step3"}
 	duration := 5 * time.Second

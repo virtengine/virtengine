@@ -42,9 +42,9 @@ func TestLoadSecrets(t *testing.T) {
 	// Set test values
 	_ = os.Setenv("DATABASE_URL", "postgres://localhost:5432/testdb")
 	_ = os.Setenv("JWT_SECRET", "test-jwt-secret-12345")
-	os.Setenv("ENCRYPTION_KEY", "0123456789abcdef0123456789abcdef")
-	os.Setenv("OPENAI_API_KEY", "sk-test-openai-key")
-	os.Setenv("STRIPE_SECRET_KEY", "sk_test_stripe_key")
+	_ = os.Setenv("ENCRYPTION_KEY", "0123456789abcdef0123456789abcdef")
+	_ = os.Setenv("OPENAI_API_KEY", "sk-test-openai-key")
+	_ = os.Setenv("STRIPE_SECRET_KEY", "sk_test_stripe_key")
 
 	cfg, err := LoadSecrets()
 	if err != nil {
@@ -317,7 +317,7 @@ func TestLoadSecrets_EmptyEnv(t *testing.T) {
 			if v == "" {
 				_ = os.Unsetenv(k)
 			} else {
-				os.Setenv(k, v)
+				_ = os.Setenv(k, v)
 			}
 		}
 	}()

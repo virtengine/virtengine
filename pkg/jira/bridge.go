@@ -341,15 +341,15 @@ func (b *TicketBridge) buildDescription(req *VirtEngineSupportRequest) string {
 	sb.WriteString("h2. Support Request Details\n\n")
 
 	// Add metadata
-	sb.WriteString(fmt.Sprintf("*VirtEngine Ticket ID:* %s\n", req.TicketID))
-	sb.WriteString(fmt.Sprintf("*Ticket Number:* %s\n", req.TicketNumber))
-	sb.WriteString(fmt.Sprintf("*Category:* %s\n", req.Category))
-	sb.WriteString(fmt.Sprintf("*Priority:* %s\n", req.Priority))
-	sb.WriteString(fmt.Sprintf("*Submitted:* %s\n", req.CreatedAt.Format(time.RFC3339)))
+	fmt.Fprintf(&sb, "*VirtEngine Ticket ID:* %s\n", req.TicketID)
+	fmt.Fprintf(&sb, "*Ticket Number:* %s\n", req.TicketNumber)
+	fmt.Fprintf(&sb, "*Category:* %s\n", req.Category)
+	fmt.Fprintf(&sb, "*Priority:* %s\n", req.Priority)
+	fmt.Fprintf(&sb, "*Submitted:* %s\n", req.CreatedAt.Format(time.RFC3339))
 
 	// Add related entity if present
 	if req.RelatedEntity != nil {
-		sb.WriteString(fmt.Sprintf("*Related Entity:* %s (%s)\n", req.RelatedEntity.ID, req.RelatedEntity.Type))
+		fmt.Fprintf(&sb, "*Related Entity:* %s (%s)\n", req.RelatedEntity.ID, req.RelatedEntity.Type)
 	}
 
 	sb.WriteString("\n----\n\n")

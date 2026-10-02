@@ -290,7 +290,7 @@ func TestSEVGuestDeriveKey(t *testing.T) {
 	if err := guest.Initialize(); err != nil {
 		t.Fatalf("Initialize() error = %v", err)
 	}
-	defer guest.Close()
+	defer func() { _ = guest.Close() }()
 
 	req := &KeyRequest{
 		RootKeySelect:    KeyRootVCEK,
@@ -384,7 +384,7 @@ func TestSEVGuestVerifyPolicySecure(t *testing.T) {
 	if err := guest.Initialize(); err != nil {
 		t.Fatalf("Initialize() error = %v", err)
 	}
-	defer guest.Close()
+	defer func() { _ = guest.Close() }()
 
 	// Default policy should be secure
 	err := guest.VerifyPolicySecure()

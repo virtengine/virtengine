@@ -470,7 +470,7 @@ func TestNSMLockPCRSimulated(t *testing.T) {
 	if err := device.Open(); err != nil {
 		t.Fatalf("Open failed: %v", err)
 	}
-	defer device.Close()
+	defer func() { _ = device.Close() }()
 
 	// Lock PCR
 	if err := device.LockPCR(5); err != nil {
@@ -494,7 +494,7 @@ func TestNSMGetRandomSimulated(t *testing.T) {
 	if err := device.Open(); err != nil {
 		t.Fatalf("Open failed: %v", err)
 	}
-	defer device.Close()
+	defer func() { _ = device.Close() }()
 
 	// Get random bytes
 	random, err := device.GetRandomBytes(32)
@@ -529,7 +529,7 @@ func TestNSMDescribeNSMSimulated(t *testing.T) {
 	if err := device.Open(); err != nil {
 		t.Fatalf("Open failed: %v", err)
 	}
-	defer device.Close()
+	defer func() { _ = device.Close() }()
 
 	info, err := device.DescribeNSM()
 	if err != nil {
@@ -635,7 +635,7 @@ func TestVerifySimulatedAttestation(t *testing.T) {
 	if err := device.Open(); err != nil {
 		t.Fatalf("Open failed: %v", err)
 	}
-	defer device.Close()
+	defer func() { _ = device.Close() }()
 
 	attestation, err := device.GetAttestation([]byte("test"), nil, nil)
 	if err != nil {
