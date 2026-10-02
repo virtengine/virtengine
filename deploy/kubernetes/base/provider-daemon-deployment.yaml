@@ -334,6 +334,25 @@ metadata:
   namespace: virtengine
   labels:
     app.kubernetes.io/name: provider-daemon
+# ghcr.io/virtengine/provider-daemon returned NO anonymous pull token on
+# 2026-10-03, so the node's kubelet cannot fetch this image unassisted and every
+# provider pod would sit in ImagePullBackOff. The init container runs the same
+# package, so it is covered by the same credential.
+#
+# Provision the secret VALUE out of band in namespace `virtengine` (by name
+# only, never committed), following the same convention as
+# infra/kubernetes/dr/backup-cronjobs.yaml -- one read-only pull secret per
+# ghcr.io/virtengine package, named `<package>-ghcr-pull`:
+#
+#   kubectl -n virtengine create secret docker-registry provider-daemon-ghcr-pull \
+#     --docker-server=ghcr.io \
+#     --docker-username='<principal with read:packages on provider-daemon>' \
+#     --docker-password='<token>'
+#
+# If your cluster already names this secret differently, change this reference
+# to that name rather than creating a second secret.
+imagePullSecrets:
+  - name: provider-daemon-ghcr-pull
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole

@@ -341,6 +341,25 @@ metadata:
   annotations:
     # Add the environment-specific IRSA annotation in the cluster overlay when
     # the TEE workload needs direct AWS API access.
+# ghcr.io/virtengine/tee-enclave returned NO anonymous pull token on 2026-10-03,
+# so the node's kubelet cannot fetch this image unassisted and every enclave pod
+# would sit in ImagePullBackOff. The hardware-detect init container runs the same
+# package, so it is covered by the same credential.
+#
+# Provision the secret VALUE out of band in namespace `virtengine` (by name
+# only, never committed), following the same convention as
+# infra/kubernetes/dr/backup-cronjobs.yaml -- one read-only pull secret per
+# ghcr.io/virtengine package, named `<package>-ghcr-pull`:
+#
+#   kubectl -n virtengine create secret docker-registry tee-enclave-ghcr-pull \
+#     --docker-server=ghcr.io \
+#     --docker-username='<principal with read:packages on tee-enclave>' \
+#     --docker-password='<token>'
+#
+# If your cluster already names this secret differently, change this reference
+# to that name rather than creating a second secret.
+imagePullSecrets:
+  - name: tee-enclave-ghcr-pull
 
 ---
 # PodDisruptionBudget for high availability
