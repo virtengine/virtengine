@@ -110,6 +110,13 @@ jobs:
 
   # Roll the per-shard verdicts up so the summary job can assert that EXACTLY
   # one shard was red, instead of inferring it from the collapsed matrix result.
+  #
+  # NOTE on the first attempt: this collected via toJSON(needs.<matrix>.outputs),
+  # which evaluated to `{}` on proof run 37002118880 because a FAILED matrix leg
+  # contributes no step outputs. A failed shard is exactly the thing this job
+  # must count, so that shape cannot work. This job reads the per-leg verdicts
+  # through the jobs API instead, which reports a conclusion for every leg
+  # including the failed one.
   verdicts:
     name: "Collect shard verdicts"
     runs-on: ubuntu-latest
@@ -118,19 +125,56 @@ jobs:
     if: always()
     outputs:
       verdicts: ${{ steps.collect.outputs.verdicts }}
+      green: ${{ steps.collect.outputs.green }}
+      red: ${{ steps.collect.outputs.red }}
     steps:
       - name: Collect every shard's verdict
         id: collect
         env:
-          SHARD_VERDICTS: ${{ toJSON(needs.shard-sim.outputs) }}
+          GH_TOKEN: ${{ github.token }}
+          RUN_ID: ${{ github.run_id }}
         run: |
-          echo "raw matrix outputs: $SHARD_VERDICTS"
-          verdicts="$(printf '%s' "$SHARD_VERDICTS" \
-            | tr ',' '\n' \
-            | sed -n 's/.*"verdict"[[:space:]]*:[[:space:]]*"\([a-z]*\)".*/\1/p' \
-            | tr '\n' ' ')"
-          echo "verdicts: $verdicts"
+          # Read the matrix legs directly: the aggregate `needs.shard-sim.result`
+          # cannot distinguish "one shard red" from "all shards red", and
+          # matrix outputs are empty for failed legs.
+          api="repos/$GITHUB_REPOSITORY/actions/runs/$RUN_ID/jobs?per_page=100"
+          jobs_json="$(gh api "$api")"
+          verdicts=""
+          green=0
+          red=0
+          while IFS=$'\t' read -r name conclusion; do
+            [ -z "$name" ] && continue
+            case "$name" in
+              "Shard (simulated "*unavailable-shard-probe*)
+                echo "  RED (on purpose): $name -> $conclusion"
+                red=$((red + 1))
+                verdicts="$verdicts broken "
+                ;;
+              "Shard (simulated "*)
+                echo "  real shard: $name -> $conclusion"
+                verdicts="$verdicts $conclusion "
+                if [ "$conclusion" = "success" ]; then
+                  green=$((green + 1))
+                else
+                  red=$((red + 1))
+                fi
+                ;;
+            esac
+          done < <(
+            # `tr -d '\r'` is required, not cosmetic: a CRLF-terminated
+            # conclusion would compare unequal to the literal "success" and
+            # silently count every real shard as red. Verified locally against
+            # a real jobs payload - with \r present the count came out
+            # "green=0 red=5" on a run where 4 shards had in fact succeeded.
+            printf '%s' "$jobs_json" \
+              | jq -r '.jobs[] | [.name, .conclusion] | @tsv' \
+              | tr -d '\r'
+          )
+          echo "verdicts:$verdicts"
+          echo "real shards green: $green (expect 4), red: $red (expect 1)"
           echo "verdicts=$verdicts" >> "$GITHUB_OUTPUT"
+          echo "green=$green" >> "$GITHUB_OUTPUT"
+          echo "red=$red" >> "$GITHUB_OUTPUT"
 
   # The REAL aggregator, verbatim from the Security workflow's summary job.
   summary-sim:
@@ -192,24 +236,18 @@ jobs:
           # First proof run (37000010379) failed this step legitimately: without
           # libudev every shard returned verdict=error, so "one red" was not
           # distinguishable from "all red". This asserts the distinction on
-          # recorded per-shard verdicts rather than on the collapsed matrix
-          # result, so the proof cannot pass for the wrong reason.
-          green=0
-          red=0
-          for v in ${{ needs.verdicts.outputs.verdicts }}; do
-            echo "  shard verdict: $v"
-            case "$v" in
-              clean|vulns) green=$((green + 1)) ;;
-              error|broken) red=$((red + 1)) ;;
-            esac
-          done
-          echo "shards with a real verdict: $green (expect 4), shards red: $red (expect 1)"
-          if [ "$red" -ne 1 ]; then
-            echo "::error::expected EXACTLY one red shard, got $red. The proof is invalid: the single failure is not attributable to the deliberately-broken pattern."
+          # per-leg job conclusions rather than on the collapsed matrix result,
+          # so the proof cannot pass for the wrong reason.
+          echo "collected verdicts: ${{ needs.verdicts.outputs.verdicts }}"
+          green="${{ needs.verdicts.outputs.green }}"
+          red="${{ needs.verdicts.outputs.red }}"
+          echo "real shards green: $green (expect 4), red: $red (expect 1)"
+          if [ "$red" != "1" ]; then
+            echo "::error::expected EXACTLY one red shard, got '$red'. The proof is invalid: the single failure is not attributable to the deliberately-broken pattern."
             exit 1
           fi
-          if [ "$green" -ne 4 ]; then
-            echo "::error::expected the 4 real shards to reach a verdict, got $green. Package loading is broken for them too, so this run proves nothing about a one-shard failure."
+          if [ "$green" != "4" ]; then
+            echo "::error::expected the 4 real shards to reach a verdict, got '$green'. Package loading is broken for them too, so this run proves nothing about a one-shard failure."
             exit 1
           fi
           echo "PASS: 4 real shards reached a verdict and exactly 1 shard was red."
