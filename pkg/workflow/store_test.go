@@ -17,7 +17,7 @@ func TestMemoryWorkflowStore(t *testing.T) {
 
 	t.Run("save and load state", func(t *testing.T) {
 		store := NewMemoryWorkflowStore(DefaultWorkflowStoreConfig())
-		defer store.Close()
+		defer func() { _ = store.Close() }()
 
 		state := &WorkflowState{
 			ID:             "test-workflow-1",
@@ -60,7 +60,7 @@ func TestMemoryWorkflowStore(t *testing.T) {
 
 	t.Run("load non-existent state returns nil", func(t *testing.T) {
 		store := NewMemoryWorkflowStore(DefaultWorkflowStoreConfig())
-		defer store.Close()
+		defer func() { _ = store.Close() }()
 
 		loaded, err := store.LoadState(ctx, "non-existent")
 		if err != nil {

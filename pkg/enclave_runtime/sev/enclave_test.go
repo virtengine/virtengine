@@ -212,7 +212,7 @@ func TestSEVGuestInitialize(t *testing.T) {
 	if err := guest.Initialize(); err != nil {
 		t.Fatalf("Initialize() error = %v", err)
 	}
-	defer guest.Close()
+	defer func() { _ = guest.Close() }()
 
 	if !guest.IsInitialized() {
 		t.Error("IsInitialized() = false after Initialize()")
@@ -228,7 +228,7 @@ func TestSEVGuestGetPlatformInfo(t *testing.T) {
 	if err := guest.Initialize(); err != nil {
 		t.Fatalf("Initialize() error = %v", err)
 	}
-	defer guest.Close()
+	defer func() { _ = guest.Close() }()
 
 	info, err := guest.GetPlatformInfo()
 	if err != nil {
@@ -255,7 +255,7 @@ func TestSEVGuestGenerateAttestation(t *testing.T) {
 	if err := guest.Initialize(); err != nil {
 		t.Fatalf("Initialize() error = %v", err)
 	}
-	defer guest.Close()
+	defer func() { _ = guest.Close() }()
 
 	var userData [ReportDataSize]byte
 	copy(userData[:], []byte("test-nonce-12345"))

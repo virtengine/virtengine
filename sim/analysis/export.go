@@ -82,7 +82,7 @@ func WriteMonteCarloJSON(path string, results map[string]MonteCarloResult) error
 	sort.Strings(keys)
 
 	writer := bufio.NewWriter(file)
-	defer writer.Flush()
+	defer func() { _ = writer.Flush() }()
 
 	if _, err := writer.WriteString("{\n"); err != nil {
 		return err

@@ -78,8 +78,8 @@ func (tx *MockTransaction) computeHash() {
 	h.Write([]byte(tx.ID))
 	h.Write([]byte(tx.Sender))
 	h.Write([]byte(tx.Receiver))
-	fmt.Fprintf(h, "%d", tx.Amount)
-	fmt.Fprintf(h, "%d", tx.Nonce)
+_ = fmt.Fprintf(h, "%d", tx.Amount)
+_ = fmt.Fprintf(h, "%d", tx.Nonce)
 	tx.Hash = h.Sum(nil)
 }
 

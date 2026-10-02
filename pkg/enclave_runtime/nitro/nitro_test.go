@@ -393,7 +393,7 @@ func TestNSMGetAttestationSimulated(t *testing.T) {
 	if err := device.Open(); err != nil {
 		t.Fatalf("Open failed: %v", err)
 	}
-	defer device.Close()
+	defer func() { _ = device.Close() }()
 
 	userData := []byte("test user data")
 	nonce := make([]byte, 32)
@@ -417,7 +417,7 @@ func TestNSMDescribePCRSimulated(t *testing.T) {
 	if err := device.Open(); err != nil {
 		t.Fatalf("Open failed: %v", err)
 	}
-	defer device.Close()
+	defer func() { _ = device.Close() }()
 
 	// Describe PCR0
 	desc, err := device.DescribePCR(0)
@@ -445,7 +445,7 @@ func TestNSMExtendPCRSimulated(t *testing.T) {
 	if err := device.Open(); err != nil {
 		t.Fatalf("Open failed: %v", err)
 	}
-	defer device.Close()
+	defer func() { _ = device.Close() }()
 
 	// Get initial PCR value
 	before, _ := device.DescribePCR(3)
@@ -556,7 +556,7 @@ func TestNSMSession(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewNSMSession failed: %v", err)
 	}
-	defer session.Close()
+	defer func() { _ = session.Close() }()
 
 	if !session.IsSimulated() {
 		t.Log("Running on actual Nitro hardware")
@@ -913,7 +913,7 @@ func TestFullSimulatedWorkflow(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewNSMSession failed: %v", err)
 	}
-	defer nsm.Close()
+	defer func() { _ = nsm.Close() }()
 
 	// 5. Get attestation
 	attestation, err := nsm.GetAttestation([]byte("challenge"), nil, nil)

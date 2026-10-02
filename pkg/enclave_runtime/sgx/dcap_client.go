@@ -775,7 +775,7 @@ func (c *DCAPClient) doRequest(ctx context.Context, endpoint string) ([]byte, ht
 	if err != nil {
 		return nil, nil, fmt.Errorf("request failed: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		return nil, nil, fmt.Errorf("unexpected status code: %d", resp.StatusCode)

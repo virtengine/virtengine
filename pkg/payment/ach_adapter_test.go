@@ -120,6 +120,6 @@ func buildStripeSignature(secret string, payload []byte, timestamp int64) string
 }
 
 func ioReadAll(r *http.Request) ([]byte, error) {
-	defer r.Body.Close()
+	defer func() { _ = r.Body.Close() }()
 	return io.ReadAll(r.Body)
 }

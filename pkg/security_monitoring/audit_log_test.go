@@ -22,7 +22,7 @@ func TestNewAuditLog(t *testing.T) {
 	if auditLog == nil {
 		t.Fatal("NewAuditLog returned nil")
 	}
-	auditLog.Close()
+	_ = auditLog.Close()
 }
 
 func TestNewAuditLogWithFile(t *testing.T) {
@@ -34,9 +34,9 @@ func TestNewAuditLogWithFile(t *testing.T) {
 		t.Fatalf("Failed to create temp file: %v", err)
 	}
 	tmpPath := tmpFile.Name()
-	tmpFile.Close()
-	os.Remove(tmpPath)
-	defer os.Remove(tmpPath)
+	_ = tmpFile.Close()
+	_ = os.Remove(tmpPath)
+	defer func() { _ = os.Remove(tmpPath) }()
 
 	auditLog, err := NewAuditLog(tmpPath, logger)
 	if err != nil {
@@ -59,7 +59,7 @@ func TestAuditLogLogEvent(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewAuditLog failed: %v", err)
 	}
-	defer auditLog.Close()
+	defer func() { _ = auditLog.Close() }()
 
 	event := &SecurityEvent{
 		ID:             generateEventID(),
@@ -84,7 +84,7 @@ func TestAuditLogLogAlert(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewAuditLog failed: %v", err)
 	}
-	defer auditLog.Close()
+	defer func() { _ = auditLog.Close() }()
 
 	alert := &SecurityAlert{
 		ID:          generateAlertID(),

@@ -31,7 +31,7 @@ func TestNewHSMKeyringNilProvider(t *testing.T) {
 
 func TestHSMKeyringSign(t *testing.T) {
 	kr, p := newTestKeyring(t)
-	defer p.Close()
+	defer func() { _ = p.Close() }()
 
 	ctx := context.Background()
 	_, err := p.GenerateKey(ctx, hsm.KeyTypeEd25519, "sign-key")
@@ -49,7 +49,7 @@ func TestHSMKeyringSign(t *testing.T) {
 
 func TestHSMKeyringPublicKey(t *testing.T) {
 	kr, p := newTestKeyring(t)
-	defer p.Close()
+	defer func() { _ = p.Close() }()
 
 	_, err := p.GenerateKey(context.Background(), hsm.KeyTypeEd25519, "pub-key")
 	require.NoError(t, err)
@@ -61,7 +61,7 @@ func TestHSMKeyringPublicKey(t *testing.T) {
 
 func TestHSMKeyringHasKey(t *testing.T) {
 	kr, p := newTestKeyring(t)
-	defer p.Close()
+	defer func() { _ = p.Close() }()
 
 	assert.False(t, kr.HasKey("nope"))
 

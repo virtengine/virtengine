@@ -201,7 +201,7 @@ func generateMockValidator(index int) *MockValidator {
 
 	// Generate deterministic address
 	h := sha256.New()
-	fmt.Fprintf(h, "validator_%d", index)
+_ = fmt.Fprintf(h, "validator_%d", index)
 	sum := h.Sum(nil)
 	copy(v.Address[:], sum[:20])
 

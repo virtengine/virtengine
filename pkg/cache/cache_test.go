@@ -12,7 +12,7 @@ func TestMemoryCache_BasicOperations(t *testing.T) {
 		WithMaxSize[string, string](100),
 		WithDefaultTTL[string, string](5*time.Minute),
 	)
-	defer cache.Close()
+	defer func() { _ = cache.Close() }()
 
 	ctx := context.Background()
 
@@ -58,7 +58,7 @@ func TestMemoryCache_TTLExpiration(t *testing.T) {
 		WithDefaultTTL[string, string](50*time.Millisecond),
 		WithCleanupInterval[string, string](10*time.Millisecond),
 	)
-	defer cache.Close()
+	defer func() { _ = cache.Close() }()
 
 	ctx := context.Background()
 
@@ -87,7 +87,7 @@ func TestMemoryCache_LRUEviction(t *testing.T) {
 		WithMaxSize[string, string](3),
 		WithDefaultTTL[string, string](5*time.Minute),
 	)
-	defer cache.Close()
+	defer func() { _ = cache.Close() }()
 
 	ctx := context.Background()
 
@@ -429,7 +429,7 @@ func TestManager_GetOrCreateMemoryCache(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewManager failed: %v", err)
 	}
-	defer manager.Close()
+	defer func() { _ = manager.Close() }()
 
 	// Create cache
 	cache1 := GetOrCreateMemoryCache[string, string](manager, "test-cache")
