@@ -17,10 +17,23 @@ so the defect was the red signal, not a merge block.
 The tests also assert the floor is a ratchet and not a disabled check: a
 coverage drop below the recorded baseline still fails.
 
-`WorkflowWiringTest` additionally pins *this suite's own* wiring: the routing
-step in `ci.yaml` must not be gated on a Go-path filter, because the round-1
-review showed that a PR editing only the gate's own files (0 `.go` files, exactly
-like #1166) computed `run=false` and skipped the step that guards the gate.
+`WorkflowWiringTest` additionally pins *this suite's own* wiring, and pins it
+against the *parsed workflow step* rather than the file text. Two review rounds
+found the difference matters:
+
+* Round 1: the routing step was gated on a Go-path filter, so a PR editing only
+  the gate's own files (0 `.go` files, exactly like #1166) computed `run=false`
+  and skipped the step that guards the gate.
+* Round 2: the "the workflow calls the script" assertion matched the literal
+  `scripts/ci/coverage_gate.py` against the *whole file*, and that literal also
+  lives in two comments -- so deleting the gate outright left the suite green.
+  A guard asserted on file text does not fire when the thing it guards is gone.
+
+So the wiring tests here locate the real step object in
+`doc["jobs"]["test-go"]["steps"]` and assert on its parsed `run`, `env` and
+`if`. Each of those assertions is falsified by a mutation in this file's
+docstring; `test_coverage_step_*` is what makes the INFRA-003 gate
+undeletable from CI without this suite going red.
 """
 
 from __future__ import annotations
@@ -255,26 +268,153 @@ class CoverageGateRoutingTest(unittest.TestCase):
 
 
 class WorkflowWiringTest(unittest.TestCase):
-    """The workflow must actually call the script, not re-inline the routing."""
+    """The workflow must actually call the script, not re-inline the routing.
+
+    Round-2 review defect, reproduced on this tree at 2191979db: the old
+    `test_coverage_step_invokes_the_gate_script` asserted
+    `assertIn("scripts/ci/coverage_gate.py", self.text)` where `self.text` is
+    the ENTIRE `ci.yaml`. The literal also appears in two comments (ci.yaml:13
+    and the INFRA-003 comment above the step), so replacing the step body with
+    `echo ...; exit 0` left all 16 tests green -- the gate was deletable from CI
+    with the suite reporting OK, and `actionlint` does not catch it either.
+
+    Everything below asserts on the PARSED step object, so the comment can no
+    longer stand in for the code. Each assertion names the mutation it catches.
+    """
 
     CI_YAML = REPO_ROOT / ".github" / "workflows" / "ci.yaml"
+
+    # The coverage gate step, identified by name. A step that is renamed, or
+    # whose `run` no longer invokes the script, fails the lookup below rather
+    # than silently matching a different step.
+    COVERAGE_STEP_NAME = "Check coverage threshold"
 
     @classmethod
     def setUpClass(cls):
         cls.text = cls.CI_YAML.read_text(encoding="utf-8")
         cls.doc = yaml.safe_load(cls.text)
+        cls.steps = cls.doc["jobs"]["test-go"]["steps"]
+
+    def find_coverage_step(self):
+        """The single parsed step that runs the gate. Fails if it is gone.
+
+        Located by name so the assertions below cannot be satisfied by some
+        other step's text, and required to be exactly one so the gate cannot be
+        duplicated into a second, unenforced copy.
+        """
+        matches = [
+            s for s in self.steps
+            if isinstance(s, dict) and s.get("name") == self.COVERAGE_STEP_NAME
+        ]
+        self.assertEqual(
+            len(matches), 1,
+            f"expected exactly one step named {self.COVERAGE_STEP_NAME!r} in "
+            f"jobs.test-go, found {len(matches)}: the INFRA-003 gate step must "
+            "exist and must not be duplicated",
+        )
+        return matches[0]
 
     def test_coverage_step_invokes_the_gate_script(self):
-        self.assertIn("scripts/ci/coverage_gate.py", self.text)
+        """DEFECT 3: the gate must be invoked by the step, not just mentioned.
+
+        Asserted on `step["run"]`, not on the file text. Catches:
+          * step body replaced by `echo ...; exit 0`
+          * invocation deleted, comment retained
+          * the routing re-inlined as shell (any floor re-implemented inline)
+        """
+        step = self.find_coverage_step()
+        run = step.get("run", "")
+        self.assertIn(
+            "scripts/ci/coverage_gate.py", run,
+            "the coverage step's run must invoke scripts/ci/coverage_gate.py: a "
+            "comment mentioning the script does not enforce anything (round-2 "
+            "review defect 3 -- this assertion used to match the whole file)",
+        )
+
+    def test_coverage_step_passes_the_measured_coverprofile(self):
+        """The gate must be handed the profile the test run just produced.
+
+        A `run` that invokes the script with some other argument, or with none,
+        would score a stale or absent file. Fails closed in the script but that
+        is a runtime failure, not a wiring guarantee.
+        """
+        step = self.find_coverage_step()
+        run = step.get("run", "")
+        self.assertRegex(
+            run, r"scripts/ci/coverage_gate\.py\s+\S*coverage\.out",
+            "the coverage step must pass the measured coverprofile "
+            "(coverage.out) to the gate script",
+        )
+
+    def test_coverage_step_env_carries_the_real_event_and_base(self):
+        """The routing inputs must come from the event, on the step itself.
+
+        Parsed `env` rather than file text: an `env:` block on some other step,
+        or one that stopped being wired, must not satisfy the gate.
+        """
+        step = self.find_coverage_step()
+        env = step.get("env") or {}
+        self.assertEqual(
+            env.get("GITHUB_EVENT_NAME"), "${{ github.event_name }}",
+            "the coverage step must set GITHUB_EVENT_NAME from github.event_name",
+        )
+        self.assertEqual(
+            env.get("BASE_REF"), "${{ github.base_ref }}",
+            "the coverage step must set BASE_REF from github.base_ref",
+        )
 
     def test_workflow_passes_the_real_event_name(self):
+        """Same guarantee, pinned on the text so a rename of the step cannot
+        silently drop the env wiring while the parsed test still passes."""
         self.assertIn("GITHUB_EVENT_NAME: ${{ github.event_name }}", self.text)
         self.assertIn("BASE_REF: ${{ github.base_ref }}", self.text)
 
     def test_dead_repo_wide_floor_is_gone(self):
-        """The literal that caused the unconditional red must not come back."""
+        """The literal that caused the unconditional red must not come back.
+
+        Deliberately a *text* assertion over the whole file: a repo-wide floor
+        re-inlined anywhere in the workflow (not only in the coverage step) is
+        the regression, and catching it anywhere is the point. The parsed-step
+        test above covers the opposite failure -- a gate that is not called --
+        which text matching cannot see.
+        """
         self.assertNotIn("MIN_COVERAGE=80", self.text)
         self.assertNotIn("below minimum ${MIN_COVERAGE}%", self.text)
+
+    def test_coverage_step_cannot_bypass_the_gate(self):
+        """DEFECT 3 falsifier, in the suite itself.
+
+        A `run` body that ends the step successfully without ever consulting the
+        gate is the exact mutation round-2 review used. Reject `exit 0` / `|| true`
+        / `set +e` / `continue-on-error` in the coverage step, so the gate cannot
+        be invoked *and then* overridden. The first version of this assertion
+        used `re.search(r"^\\s*exit\\s+[01]\\s*$", run)` without re.MULTILINE,
+        which only anchors at the start of the whole body -- so a trailing
+        `exit 0` after a genuine invocation passed. Caught by the round-3
+        falsification sweep and rewritten to check each line.
+        """
+        step = self.find_coverage_step()
+        run = step.get("run", "")
+        for line in run.splitlines():
+            self.assertNotRegex(
+                line.strip(), r"^exit\s+[01]$",
+                "the coverage step must not contain a bare `exit`: a trailing "
+                "`exit 0` overrides the gate's own non-zero verdict "
+                "(round-2 review defect 3)",
+            )
+        self.assertNotIn(
+            "|| true", run,
+            "the coverage step must not tolerate a failing gate via `|| true`",
+        )
+        self.assertNotIn(
+            "set +e", run,
+            "the coverage step must not disable errexit",
+        )
+        self.assertFalse(
+            step.get("continue-on-error"),
+            "the coverage step must not set continue-on-error: the gate must be "
+            "able to fail the job",
+        )
 
     def test_gate_routing_test_is_not_behind_a_go_path_filter(self):
         """Defect 1: the gate's own test must not skip on gate-only PRs.
