@@ -161,8 +161,14 @@ class CliTests(unittest.TestCase):
 
     def test_expired_budget_fails_through_cli(self):
         counts = {name: measured for name, (measured, _i, _e) in gate.BASELINES.items()}
-        code, out = run_gate(make_report(counts), "--today", "2030-01-01")
-        self.assertEqual(code, 1)
+        # Pin the event explicitly. `run_gate` inherits os.environ, so on a
+        # pull_request run GITHUB_EVENT_NAME would force report_only and the
+        # gate would exit 0 -- this assertion would then fail on CI only.
+        code, out = run_gate(
+            make_report(counts), "--today", "2030-01-01",
+            env={"GITHUB_EVENT_NAME": "push"},
+        )
+        self.assertEqual(code, 1, out)
         self.assertIn("EXPIRED", out)
 
 
