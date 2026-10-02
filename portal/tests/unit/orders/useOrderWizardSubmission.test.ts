@@ -81,12 +81,33 @@ describe('useOrderWizard authoritative submission', () => {
   it('shows loading and prevents duplicate concurrent submission', async () => {
     let resolveSubmission!: (value: unknown) => void;
     const submitOrder = vi.fn(() => new Promise<unknown>((resolve) => (resolveSubmission = resolve)));
-    const { result } = renderSubmission({ submitOrder });
+    // `isSubmitting` is set before `digestOrderCreateRequest` resolves, so it is
+    // NOT evidence that the adapter has been reached — `crypto.subtle.digest`
+    // runs on the libuv threadpool (a macrotask), which `waitFor` does not
+    // outlast on a loaded runner. Synchronise on the adapter actually being
+    // invoked instead, exactly as the timeout test below does. Guessing a tick
+    // count is what made this intermittently fail on CI with "expected
+    // vi.fn() to be called once, but got 0 times".
+    let markAdapterCalled!: () => void;
+    const adapterCalled = new Promise<void>((resolve) => {
+      markAdapterCalled = resolve;
+    });
+    const instrumentedSubmitOrder = vi.fn(() => {
+      markAdapterCalled();
+      return submitOrder();
+    });
+    const { result } = renderSubmission({ submitOrder: instrumentedSubmitOrder });
     await advanceToEscrow(result);
 
     act(() => void result.current.submitOrder());
+    await act(async () => {
+      await adapterCalled;
+    });
     await waitFor(() => expect(result.current.state.isSubmitting).toBe(true));
+
     await act(() => result.current.submitOrder());
+
+    expect(instrumentedSubmitOrder).toHaveBeenCalledOnce();
     expect(submitOrder).toHaveBeenCalledOnce();
 
     const request = buildOrderCreateRequest(result.current.state)!;
