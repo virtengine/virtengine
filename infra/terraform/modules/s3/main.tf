@@ -56,6 +56,10 @@ resource "aws_s3_bucket_lifecycle_configuration" "chain_backups" {
     id     = "transition-to-ia"
     status = "Enabled"
 
+    abort_incomplete_multipart_upload {
+      days_after_initiation = 7
+    }
+
     transition {
       days          = 30
       storage_class = "STANDARD_IA"
