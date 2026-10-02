@@ -83,3 +83,22 @@ func TestWorkflowContractsUseReviewedPlansAndInfraOwnedAutomation(t *testing.T) 
 		t.Fatal("DR workflow no longer publishes structured drill evidence")
 	}
 }
+
+// The re-pin PR branch must be a STABLE name. With `branch: dr-tools/repin-$SHA`
+// every publish mints its own PR, so N builds leave N open re-pins holding
+// progressively older digests and merging them out of order rolls the pin
+// backwards (seen 2026-10-02: #1092 wanted a digest older than the one #1140
+// had already merged, and #1131's manifest blob was byte-identical to develop).
+// A stable branch makes create-pull-request update the one open PR instead.
+func TestDRToolsRePinBranchIsStable(t *testing.T) {
+	t.Parallel()
+
+	wf := readRepoFile(t, ".github", "workflows", "dr-tools-image.yaml")
+
+	if strings.Contains(wf, "branch: dr-tools/repin-${{") {
+		t.Fatal("dr-tools-image.yaml re-pins onto a per-commit branch, so each build opens a NEW PR; use a stable branch name")
+	}
+	if !strings.Contains(wf, "branch: dr-tools/repin\n") {
+		t.Fatal("dr-tools-image.yaml no longer opens the re-pin on the stable dr-tools/repin branch")
+	}
+}
