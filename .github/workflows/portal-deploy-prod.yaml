@@ -65,7 +65,19 @@ jobs:
         uses: actions/upload-artifact@v6
         with:
           name: portal-production-build
-          path: portal/.next
+          # `.next` is a HIDDEN directory. upload-artifact >= v4.4 defaults
+          # `include-hidden-files: false`, so this path matched ZERO files and
+          # `if-no-files-found` defaulted to `warn` -- the step exited 0 while
+          # uploading nothing, and `deploy-staging` then failed with
+          # "Artifact not found for name: portal-production-build" (run
+          # 37036353791). The build had succeeded; only the handoff was empty.
+          # portal-ci.yaml already sets both keys for the same reason.
+          path: |
+            portal/.next
+            !portal/.next/cache
+          include-hidden-files: true
+          # Never let an empty artifact look like a successful upload.
+          if-no-files-found: error
           retention-days: 7
 
   deploy-staging:
