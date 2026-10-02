@@ -371,39 +371,29 @@ jobs:
           go test -v -race -timeout ${{ env.GO_TEST_TIMEOUT_UNIT }} \
             -coverprofile=coverage.out -covermode=atomic ./...
 
-      # INFRA-003: Coverage enforcement gate (80% minimum)
+      # INFRA-003: Coverage enforcement gate.
+      #
+      # The event routing and both thresholds live in scripts/ci/coverage_gate.py,
+      # asserted by .github/tests/test_coverage_gate.py. Do not re-inline the
+      # routing here: the previous inline form applied a repo-wide 80% floor on
+      # the branch path, which this repository has never met (46.5%), making
+      # `Go Tests` unconditionally red on push and — through the required
+      # `CI Quality Gates` context that inherits it — blocking every PR.
+      #
+      # The test runs in this job, not only where a path filter happens to match
+      # it, so the gate that blocks PRs can never ship untested.
+      - name: Test coverage gate routing
+        if: steps.detect.outputs.run == 'true'
+        run: python -m unittest discover -s .github/tests -p "test_coverage_gate.py" -v
+
       - name: Check coverage threshold
         id: coverage
         if: steps.detect.outputs.run == 'true'
         env:
           BASE_REF: ${{ github.base_ref }}
+          GITHUB_EVENT_NAME: ${{ github.event_name }}
         run: |
-          if [ ! -f coverage.out ]; then
-            echo "No coverage file generated"
-            exit 1
-          fi
-
-          # Calculate total coverage
-          COVERAGE=$(go tool cover -func=coverage.out | grep total: | awk '{print $3}' | sed 's/%//')
-          echo "coverage=$COVERAGE" >> "${GITHUB_OUTPUT}"
-
-          if [ "${{ github.event_name }}" = "pull_request" ]; then
-            python3 scripts/ci/check_pr_diff_coverage.py coverage.out
-            exit 0
-          fi
-
-          # Minimum required coverage (INFRA-003)
-          MIN_COVERAGE=80
-
-          echo "Total coverage: ${COVERAGE}%"
-          echo "Minimum required: ${MIN_COVERAGE}%"
-
-          if (( $(echo "$COVERAGE < $MIN_COVERAGE" | bc -l) )); then
-            echo "::error::Coverage is ${COVERAGE}%, below minimum ${MIN_COVERAGE}%"
-            exit 1
-          else
-            echo "✅ Coverage meets minimum requirement: ${COVERAGE}% >= ${MIN_COVERAGE}%"
-          fi
+          python3 scripts/ci/coverage_gate.py coverage.out
 
       - name: Upload coverage to Codecov
         if: steps.detect.outputs.run == 'true'
