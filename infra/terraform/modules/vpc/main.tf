@@ -300,13 +300,29 @@ resource "aws_iam_role_policy" "flow_logs" {
     Version = "2012-10-17"
     Statement = [
       {
+        # Write actions scoped to THIS log group. The delivery role has no reason
+        # to be able to write to any other log group in the account.
         Action = [
-          "logs:CreateLogGroup",
           "logs:CreateLogStream",
           "logs:PutLogEvents",
-          "logs:DescribeLogGroups",
           "logs:DescribeLogStreams"
         ]
+        Effect   = "Allow"
+        Resource = "${aws_cloudwatch_log_group.flow_logs[0].arn}:*"
+      },
+      {
+        # logs:CreateLogGroup is scoped to the log group itself (no stream suffix);
+        # AWS requires this call to be made against the parent log group ARN.
+        Action   = ["logs:CreateLogGroup"]
+        Effect   = "Allow"
+        Resource = aws_cloudwatch_log_group.flow_logs[0].arn
+      },
+      {
+        # logs:DescribeLogGroups does NOT support resource-level permissions --
+        # AWS rejects any ARN other than "*". It is a read-only, account-scoped
+        # call and cannot be narrowed; it is isolated in its own statement so the
+        # write actions above can be scoped.
+        Action   = ["logs:DescribeLogGroups"]
         Effect   = "Allow"
         Resource = "*"
       },
