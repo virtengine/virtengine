@@ -210,6 +210,29 @@ jobs:
             ./x/enclave/... \
             ./x/encryption/...
 
+  infra-contracts:
+    name: infra-contracts
+    runs-on: ubuntu-latest
+    needs: analyze-changes
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+          cache-dependency-path: infra/tests/go.sum
+
+      - name: Run offline infra + workflow contract tests
+        # infra/tests is a separate Go module, so the root module's test-go job
+        # (an explicit ./pkg/... + ./x/... allowlist) cannot reach it. Without
+        # this job the workflow/terraform contract tests pass in CI no matter
+        # what they assert. The script fails closed: every contract test it
+        # names must report PASS.
+        run: ./scripts/test-infra-contracts.sh
+
   agents-docs:
     name: agents-docs
     runs-on: ubuntu-latest
@@ -281,7 +304,20 @@ jobs:
       - name: Run gosec
         run: |
           base_ref="${{ github.base_ref || 'main' }}"
-          git fetch origin "${base_ref}" --depth=1
+          # See supply-chain.yaml "Check dependency diff discipline": a depth-1
+          # fetch of the base ref removes the ancestry `git merge-base` needs and
+          # the three-dot diff dies with `fatal: ... no merge base` (exit 128).
+          # Here that is worse than a false red - the `|| true` on the pipeline
+          # below turns it into an EMPTY changed-file list, so gosec scans nothing
+          # and the step passes green having analysed zero packages.
+          git fetch --unshallow origin 2>/dev/null \
+            || git fetch origin "+refs/heads/*:refs/remotes/origin/*"
+          # Fail closed: never let an uncomputed diff look like "no Go changed".
+          if ! git merge-base "origin/${base_ref}" HEAD >/dev/null 2>&1; then
+            echo "::error::no merge base between origin/${base_ref} and HEAD even after a full fetch."
+            echo "::error::refusing to run gosec on an empty target set - that reports 0 findings, not clean code."
+            exit 1
+          fi
           mapfile -t changed_files < <(
             git diff --name-only "origin/${base_ref}...HEAD" -- '*.go' \
               | grep -v '_test.go' \

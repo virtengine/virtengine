@@ -28,8 +28,43 @@ data "aws_region" "current" {}
 # -----------------------------------------------------------------------------
 # SNS Topic for Alerts
 # -----------------------------------------------------------------------------
+resource "aws_kms_key" "sns" {
+  description             = "KMS key for SNS topic encryption"
+  deletion_window_in_days = 30
+  enable_key_rotation     = true
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid    = "AllowKeyAdministration"
+        Effect = "Allow"
+        Principal = {
+          AWS = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:root"
+        }
+        Action   = "kms:*"
+        Resource = "*"
+      },
+      {
+        Sid    = "AllowServicesUse"
+        Effect = "Allow"
+        Principal = {
+          Service = [
+            "cloudwatch.amazonaws.com",
+            "sns.amazonaws.com",
+          ]
+        }
+        Action   = ["kms:Decrypt", "kms:GenerateDataKey*"]
+        Resource = "*"
+      },
+    ]
+  })
+}
+
+
 resource "aws_sns_topic" "alerts" {
-  name = "${var.project}-${var.environment}-alerts"
+  name              = "${var.project}-${var.environment}-alerts"
+  kms_master_key_id = aws_kms_key.sns.arn
 
   tags = merge(var.tags, {
     Name = "${var.project}-${var.environment}-alerts"
@@ -196,9 +231,14 @@ resource "aws_cloudwatch_dashboard" "main" {
 # -----------------------------------------------------------------------------
 # CloudWatch Log Groups
 # -----------------------------------------------------------------------------
+# aws_kms_key.sns is reused here deliberately: it already exists in this module,
+# its policy ALREADY grants cloudwatch.amazonaws.com (see above), and there is
+# no other consumer of it in this module (only aws_sns_topic.alerts uses it), so
+# no existing grant is widened by attaching the log groups to it.
 resource "aws_cloudwatch_log_group" "application" {
   name              = "/aws/eks/${var.cluster_name}/application"
   retention_in_days = var.log_retention_days
+  kms_key_id        = aws_kms_key.sns.arn
 
   tags = var.tags
 }
@@ -206,6 +246,7 @@ resource "aws_cloudwatch_log_group" "application" {
 resource "aws_cloudwatch_log_group" "chain" {
   name              = "/aws/eks/${var.cluster_name}/chain"
   retention_in_days = var.log_retention_days
+  kms_key_id        = aws_kms_key.sns.arn
 
   tags = var.tags
 }

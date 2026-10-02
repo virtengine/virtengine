@@ -184,6 +184,16 @@ resource "aws_s3_bucket" "backup_primary" {
   })
 }
 
+resource "aws_s3_bucket_public_access_block" "backup_primary" {
+  provider = aws.primary
+  bucket   = aws_s3_bucket.backup_primary.id
+
+  block_public_acls       = true
+  block_public_policy     = true
+  ignore_public_acls      = true
+  restrict_public_buckets = true
+}
+
 resource "aws_s3_bucket_versioning" "backup_primary" {
   provider = aws.primary
   bucket   = aws_s3_bucket.backup_primary.id
@@ -214,6 +224,10 @@ resource "aws_s3_bucket_lifecycle_configuration" "backup_primary" {
     id     = "archive-old-backups"
     status = "Enabled"
 
+    abort_incomplete_multipart_upload {
+      days_after_initiation = 7
+    }
+
     transition {
       days          = 30
       storage_class = "STANDARD_IA"
@@ -241,12 +255,50 @@ resource "aws_s3_bucket" "backup_secondary" {
   })
 }
 
+resource "aws_s3_bucket_public_access_block" "backup_secondary" {
+  provider = aws.secondary
+  bucket   = aws_s3_bucket.backup_secondary.id
+
+  block_public_acls       = true
+  block_public_policy     = true
+  ignore_public_acls      = true
+  restrict_public_buckets = true
+}
+
 resource "aws_s3_bucket_versioning" "backup_secondary" {
   provider = aws.secondary
   bucket   = aws_s3_bucket.backup_secondary.id
 
   versioning_configuration {
     status = "Enabled"
+  }
+}
+
+resource "aws_s3_bucket_lifecycle_configuration" "backup_secondary" {
+  provider = aws.secondary
+  bucket   = aws_s3_bucket.backup_secondary.id
+
+  rule {
+    id     = "archive-old-backups"
+    status = "Enabled"
+
+    abort_incomplete_multipart_upload {
+      days_after_initiation = 7
+    }
+
+    transition {
+      days          = 30
+      storage_class = "STANDARD_IA"
+    }
+
+    transition {
+      days          = var.backup_retention_days
+      storage_class = "GLACIER"
+    }
+
+    expiration {
+      days = var.backup_retention_days + 365
+    }
   }
 }
 
@@ -484,15 +536,17 @@ resource "aws_cloudwatch_metric_alarm" "primary_health" {
 # -----------------------------------------------------------------------------
 
 resource "aws_sns_topic" "dr_alerts_primary" {
-  provider = aws.primary
-  name     = "${var.project_name}-dr-alerts-${var.primary_region}"
+  provider          = aws.primary
+  name              = "${var.project_name}-dr-alerts-${var.primary_region}"
+  kms_master_key_id = aws_kms_key.backup_primary.arn
 
   tags = local.common_tags
 }
 
 resource "aws_sns_topic" "dr_alerts_secondary" {
-  provider = aws.secondary
-  name     = "${var.project_name}-dr-alerts-${var.secondary_region}"
+  provider          = aws.secondary
+  name              = "${var.project_name}-dr-alerts-${var.secondary_region}"
+  kms_master_key_id = aws_kms_key.backup_secondary.arn
 
   tags = local.common_tags
 }

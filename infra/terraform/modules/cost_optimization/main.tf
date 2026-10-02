@@ -277,8 +277,46 @@ resource "aws_ce_anomaly_subscription" "main" {
 # SNS Topic for Cost Alerts
 # -----------------------------------------------------------------------------
 
+resource "aws_kms_key" "sns" {
+  description             = "KMS key for cost alert SNS topic encryption"
+  deletion_window_in_days = 30
+  enable_key_rotation     = true
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid    = "AllowKeyAdministration"
+        Effect = "Allow"
+        Principal = {
+          AWS = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:root"
+        }
+        Action   = "kms:*"
+        Resource = "*"
+      },
+      {
+        Sid    = "AllowServicesUse"
+        Effect = "Allow"
+        Principal = {
+          Service = [
+            "cloudwatch.amazonaws.com",
+            "sns.amazonaws.com",
+          ]
+        }
+        Action   = ["kms:Decrypt", "kms:GenerateDataKey*"]
+        Resource = "*"
+      },
+    ]
+  })
+
+  tags = merge(local.common_tags, {
+    Name = "virtengine-${var.environment}-sns"
+  })
+}
+
 resource "aws_sns_topic" "cost_alerts" {
-  name = "virtengine-${var.environment}-cost-alerts"
+  name              = "virtengine-${var.environment}-cost-alerts"
+  kms_master_key_id = aws_kms_key.sns.arn
 
   tags = merge(local.common_tags, {
     Name = "virtengine-${var.environment}-cost-alerts"

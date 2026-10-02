@@ -56,6 +56,10 @@ resource "aws_s3_bucket_lifecycle_configuration" "chain_backups" {
     id     = "transition-to-ia"
     status = "Enabled"
 
+    abort_incomplete_multipart_upload {
+      days_after_initiation = 7
+    }
+
     transition {
       days          = 30
       storage_class = "STANDARD_IA"
@@ -75,6 +79,13 @@ resource "aws_s3_bucket_lifecycle_configuration" "chain_backups" {
       noncurrent_days = 365
     }
   }
+}
+
+resource "aws_s3_bucket_logging" "chain_backups" {
+  bucket = aws_s3_bucket.chain_backups.id
+
+  target_bucket = aws_s3_bucket.chain_backups.arn
+  target_prefix = "access-logs/chain_backups/"
 }
 
 resource "aws_s3_bucket_public_access_block" "chain_backups" {
@@ -115,6 +126,13 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "manifests" {
     }
     bucket_key_enabled = true
   }
+}
+
+resource "aws_s3_bucket_logging" "manifests" {
+  bucket = aws_s3_bucket.manifests.id
+
+  target_bucket = aws_s3_bucket.manifests.arn
+  target_prefix = "access-logs/manifests/"
 }
 
 resource "aws_s3_bucket_public_access_block" "manifests" {
@@ -181,6 +199,14 @@ resource "aws_s3_bucket" "terraform_state" {
     Name    = "${var.name_prefix}-terraform-state"
     Purpose = "terraform-state"
   })
+}
+
+resource "aws_s3_bucket_logging" "terraform_state" {
+  count  = var.create_state_bucket ? 1 : 0
+  bucket = aws_s3_bucket.terraform_state[0].id
+
+  target_bucket = aws_s3_bucket.terraform_state[0].arn
+  target_prefix = "access-logs/terraform_state/"
 }
 
 resource "aws_s3_bucket_versioning" "terraform_state" {

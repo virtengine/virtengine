@@ -150,7 +150,23 @@ func newMutationSubmitterForTest(t *testing.T, chain *mutationChainFake, queuePa
 	require.NoError(t, err)
 	require.NoError(t, submitter.Start(context.Background()))
 	t.Cleanup(func() {
-		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+		// Generous, because this is a teardown budget and not a behaviour under test.
+		// At 1s the Windows runner failed this helper on a healthy submitter:
+		// CI 36934009110 / 36934015266 both died with
+		//   --- FAIL: TestProviderMutationConfirmationTimeoutRemainsAmbiguous (1.15s)
+		//   provider_mutation_test.go:155: Received unexpected error:
+		//   context deadline exceeded
+		// and the failure MOVED between tests in this same family. Stop() is not at
+		// fault: driven directly with a 30s deadline on an idle machine it returns
+		// err=nil with a 0s drain, and with an expired deadline it returns exactly
+		// context.DeadlineExceeded via the ctx branch of its select. A test that
+		// lowers ConfirmationTimeout to 5ms against a 1ms PollInterval keeps a
+		// non-terminal envelope in flight (MutationStateAmbiguous is not in
+		// providerMutationTerminalState), so the worker keeps re-entering reconcile()
+		// and the drain is pure wall-clock. 1s left ~150ms of headroom on a loaded
+		// Windows runner and none on a busy one. Teardown should not be flaky, so the
+		// budget goes up; the submitter's own timeouts stay at their test values.
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
 		require.NoError(t, submitter.Stop(ctx))
 	})
@@ -412,7 +428,7 @@ func TestProviderMutationSubmitterRestartRecoversBuiltItem(t *testing.T) {
 	envelope.NextAttemptAt = time.Now().UTC().Add(time.Hour)
 	_, _, err = submitter.store.PutIfAbsent(context.Background(), envelope)
 	require.NoError(t, err)
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	require.NoError(t, submitter.Stop(ctx))
 	cancel()
 
@@ -680,8 +696,40 @@ func TestProviderMutationConfirmationTimeoutRemainsAmbiguous(t *testing.T) {
 	chain.confirmMissing = true
 	submitter, _ := newMutationSubmitterForTest(t, chain, filepath.Join(t.TempDir(), "queue.json"))
 	submitter.cfg.ConfirmationTimeout = 5 * time.Millisecond
+
+	// The background worker in newMutationSubmitterForTest is live and its
+	// PollInterval ticker calls worker -> ProcessDue -> process, and process()
+	// takes processMu itself. With the fake's ConfirmTx never finding the tx,
+	// Submit's confirm() hits its context deadline and parks the envelope in
+	// `ambiguous` (provider_mutation.go:1378 -> scheduleAmbiguous). That state is
+	// deliberately NOT terminal, so the worker is entitled to re-drive it: each
+	// pass re-enters process, and the envelope either advances AttemptCount
+	// toward MaxAttempts (ending in `dead_letter`) or, if a pass classifies the
+	// reconcile failure as retryable-but-not-ambiguous, gets rewritten to
+	// `retry`. Which one lands depends purely on how many worker ticks fit
+	// inside this test's 5ms confirmation window, i.e. on runner load.
+	//
+	// On CI under `go test -race` the worker won and the assertion saw
+	//     expected: "ambiguous"
+	//     actual  : "retry"
+	// while passing locally every time. Measured here by re-driving the envelope:
+	//     pass 1: state="ambiguous" attempts=4
+	//     pass 2: state="ambiguous" attempts=6
+	//     pass 3: state="dead_letter" attempts=6
+	//
+	// This is the same defect class as TestProviderMutationReorgReturnsExplicitRetry
+	// directly below, which #1144 fixed by taking processMu before seeding and
+	// holding it across awaitFinality plus the read-back.
+	//
+	// The lock MUST go AFTER Submit, not before: Submit itself calls
+	// s.process (provider_mutation.go:987) which takes processMu, so holding it
+	// across Submit self-deadlocks.
 	result, err := submitter.Submit(context.Background(), MutationProviderDelete, &providerv1beta4.MsgDeleteProvider{Owner: submitter.cfg.ProviderAddress})
 	require.Error(t, err)
+
+	submitter.processMu.Lock()
+	defer submitter.processMu.Unlock()
+
 	status, statusErr := submitter.Status(context.Background(), result.ID)
 	require.NoError(t, statusErr)
 	require.Equal(t, MutationStateAmbiguous, status.State)
@@ -690,6 +738,26 @@ func TestProviderMutationConfirmationTimeoutRemainsAmbiguous(t *testing.T) {
 func TestProviderMutationReorgReturnsExplicitRetry(t *testing.T) {
 	chain := newMutationChainFake()
 	submitter, _ := newMutationSubmitterForTest(t, chain, filepath.Join(t.TempDir(), "queue.json"))
+	// Take processMu BEFORE seeding the envelope, and hold it across the
+	// awaitFinality call and the read-back.
+	//
+	// This test asserts on the exact error awaitFinality returns, and that error
+	// is decided by a race it used to lose. The seeded envelope is already past
+	// finality -- ConfirmationHeight=100 with the fake's LatestHeight()=102 and
+	// FinalityBlocks=2 makes target=102, so `height >= target` holds on entry --
+	// and a reorg leaves it in MutationStateAmbiguous, which is NOT terminal, so
+	// the background worker (1ms ticker) re-picks the same envelope. The FIRST
+	// of {worker's process(), this test's awaitFinality()} performs the reorg
+	// write; the second hits the `item.State != MutationStateIncluded` guard at
+	// provider_mutation.go:1417 and gets ErrProviderMutationStaleState instead.
+	//
+	// Locking after PutIfAbsent is not enough: the worker can already be inside
+	// process() by then, so this test loses on a loaded runner and reports
+	//     expected: "provider mutation confirmation reorged"
+	//     in chain: "provider mutation stale state"
+	// while passing locally. Measured with the worker deliberately given one tick
+	// to go first: err="provider mutation stale state" every time.
+	submitter.processMu.Lock()
 	envelope, err := submitter.registry.Encode(submitter.cfg.ChainID, MutationProviderDelete, &providerv1beta4.MsgDeleteProvider{Owner: submitter.cfg.ProviderAddress})
 	require.NoError(t, err)
 	envelope.State = MutationStateIncluded
@@ -698,14 +766,6 @@ func TestProviderMutationReorgReturnsExplicitRetry(t *testing.T) {
 	envelope.TxHash = "hash"
 	_, _, err = submitter.store.PutIfAbsent(context.Background(), envelope)
 	require.NoError(t, err)
-	// awaitFinality is an internal step that process() always runs under
-	// processMu. The background worker calls process() on a 1ms ticker, and a
-	// reorg leaves the envelope in MutationStateAmbiguous, which is NOT
-	// terminal (providerMutationTerminalState), so the worker will pick the same
-	// envelope up and re-enter reconcile() -- whose first action overwrites
-	// ReconciliationState. Without the lock the assertion below races that
-	// write. Hold the production invariant explicitly.
-	submitter.processMu.Lock()
 	err = submitter.awaitFinality(context.Background(), envelope.ID)
 	stored, getErr := submitter.store.Get(context.Background(), envelope.ID)
 	submitter.processMu.Unlock()

@@ -192,7 +192,21 @@ jobs:
         if: github.event_name == 'pull_request'
         run: |
           base_ref="${{ github.base_ref }}"
-          git fetch origin "$base_ref" --depth=1
+          # A depth-1 fetch of the base ref makes it a shallow boundary, so
+          # `git merge-base origin/<base> HEAD` has no ancestry to walk and the
+          # three-dot diff below dies with `fatal: ... no merge base` (exit 128).
+          # Verified against this repo: main diverges from develop further than
+          # the fetched tip, so base=main trips this and base=develop does not -
+          # which is why this step passed on develop PRs and failed on main PRs.
+          # Unshallow instead, so the base ref and HEAD share one history.
+          git fetch --unshallow origin 2>/dev/null \
+            || git fetch origin "+refs/heads/*:refs/remotes/origin/*"
+          # Fail closed: a gate that cannot see the diff must not report clean.
+          if ! git merge-base "origin/${base_ref}" HEAD >/dev/null 2>&1; then
+            echo "::error::no merge base between origin/${base_ref} and HEAD even after a full fetch;"
+            echo "::error::the changed-file diff would be empty and this gate would pass vacuously."
+            exit 1
+          fi
           changed_files=$(git diff --name-only "origin/${base_ref}...HEAD")
 
           require_pair() {
