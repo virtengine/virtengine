@@ -68,6 +68,19 @@ jobs:
           go-version: "1.26.8"
           cache: true
 
+      # REQUIRED for the real shards to reach a verdict. Without libudev the
+      # zondax/troian hid cgo chain cannot compile, package loading fails, and
+      # the report is config-only -- which govulncheck_verdict.sh correctly
+      # classifies as verdict=error. Measured on the first proof run: with this
+      # step omitted EVERY shard (including the real ones) returned verdict=error,
+      # so the one-red-shard control was not actually distinguishable. That is
+      # the gate failing closed correctly, and it is the same missing-package
+      # class of defect t_2792115d fixed in ci.yaml.
+      - name: Install build dependencies for cgo packages
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends libudev-dev
+
       - name: Install govulncheck
         run: go install golang.org/x/vuln/cmd/govulncheck@v1.1.4
 
@@ -83,7 +96,7 @@ jobs:
           verdict="$(printf '%s\n' "$out" | sed -n 's/^verdict=//p')"
           echo "verdict=$verdict" >> "$GITHUB_OUTPUT"
 
-      - name: Enforce the shard contract (error MUST fail the shard)
+      - name: "Enforce the shard contract (error MUST fail the shard)"
         run: |
           echo "shard=${{ matrix.shard }} verdict=${{ steps.verdict.outputs.verdict }}"
           if [ "${{ steps.verdict.outputs.verdict }}" = "error" ]; then
@@ -91,12 +104,41 @@ jobs:
             exit 1
           fi
 
+      - name: "Report the verdict (always, so the proof can count shards)"
+        if: always()
+        run: echo "verdict=${{ steps.verdict.outputs.verdict }}" >> "$GITHUB_OUTPUT"
+
+  # Roll the per-shard verdicts up so the summary job can assert that EXACTLY
+  # one shard was red, instead of inferring it from the collapsed matrix result.
+  verdicts:
+    name: "Collect shard verdicts"
+    runs-on: ubuntu-latest
+    needs:
+      - shard-sim
+    if: always()
+    outputs:
+      verdicts: ${{ steps.collect.outputs.verdicts }}
+    steps:
+      - name: Collect every shard's verdict
+        id: collect
+        env:
+          SHARD_VERDICTS: ${{ toJSON(needs.shard-sim.outputs) }}
+        run: |
+          echo "raw matrix outputs: $SHARD_VERDICTS"
+          verdicts="$(printf '%s' "$SHARD_VERDICTS" \
+            | tr ',' '\n' \
+            | sed -n 's/.*"verdict"[[:space:]]*:[[:space:]]*"\([a-z]*\)".*/\1/p' \
+            | tr '\n' ' ')"
+          echo "verdicts: $verdicts"
+          echo "verdicts=$verdicts" >> "$GITHUB_OUTPUT"
+
   # The REAL aggregator, verbatim from the Security workflow's summary job.
   summary-sim:
     name: "Security Summary (fail-closed proof)"
     runs-on: ubuntu-latest
     needs:
       - shard-sim
+      - verdicts
     if: always()
     steps:
       - name: Checkout gate-result helper
@@ -147,3 +189,30 @@ jobs:
             exit 1
           fi
           echo "PASS: a truncated result list fails closed."
+
+      - name: "Proof validity - exactly the four real shards are green"
+        run: |
+          # First proof run (37000010379) failed this step legitimately: without
+          # libudev every shard returned verdict=error, so "one red" was not
+          # distinguishable from "all red". This asserts the distinction on
+          # recorded per-shard verdicts rather than on the collapsed matrix
+          # result, so the proof cannot pass for the wrong reason.
+          green=0
+          red=0
+          for v in ${{ needs.verdicts.outputs.verdicts }}; do
+            echo "  shard verdict: $v"
+            case "$v" in
+              clean|vulns) green=$((green + 1)) ;;
+              error|broken) red=$((red + 1)) ;;
+            esac
+          done
+          echo "shards with a real verdict: $green (expect 4), shards red: $red (expect 1)"
+          if [ "$red" -ne 1 ]; then
+            echo "::error::expected EXACTLY one red shard, got $red. The proof is invalid: the single failure is not attributable to the deliberately-broken pattern."
+            exit 1
+          fi
+          if [ "$green" -ne 4 ]; then
+            echo "::error::expected the 4 real shards to reach a verdict, got $green. Package loading is broken for them too, so this run proves nothing about a one-shard failure."
+            exit 1
+          fi
+          echo "PASS: 4 real shards reached a verdict and exactly 1 shard was red."
