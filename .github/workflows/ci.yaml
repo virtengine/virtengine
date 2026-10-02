@@ -322,8 +322,21 @@ jobs:
             exit 0
           fi
 
-          git fetch --no-tags --depth=1 origin "${{ github.base_ref }}"
-          changed_go_files="$(git diff --name-only FETCH_HEAD...HEAD -- '*.go' 'go.mod' 'go.sum' 'go.work' 'go.work.sum' | grep -v '^vendor/' || true)"
+          # A depth-1 fetch of the base ref removes the ancestry `git merge-base`
+          # needs, so the three-dot diff below dies with `fatal: ... no merge base`
+          # (exit 128) and the `|| true` converts that into an empty file list -
+          # which this step then reports as "run=false", silently skipping the job.
+          # Proven against this repo: only base=main trips it, because main
+          # diverges from develop further than the fetched tip. Unshallow so the
+          # base ref and HEAD share one history.
+          git fetch --unshallow origin 2>/dev/null \
+            || git fetch origin "+refs/heads/*:refs/remotes/origin/*"
+          if ! git merge-base "origin/${{ github.base_ref }}" HEAD >/dev/null 2>&1; then
+            echo "::error::no merge base between origin/${{ github.base_ref }} and HEAD after a full fetch."
+            echo "::error::refusing to report run=false from a diff that could not be computed."
+            exit 1
+          fi
+          changed_go_files="$(git diff --name-only "origin/${{ github.base_ref }}...HEAD" -- '*.go' 'go.mod' 'go.sum' 'go.work' 'go.work.sum' | grep -v '^vendor/' || true)"
 
           if [[ -n "$changed_go_files" ]]; then
             echo "run=true" >> "$GITHUB_OUTPUT"
@@ -429,8 +442,18 @@ jobs:
             exit 0
           fi
 
-          git fetch --no-tags --depth=1 origin "${{ github.base_ref }}"
-          changed_files="$(git diff --name-only FETCH_HEAD...HEAD || true)"
+          # Depth-1 fetch + three-dot diff + `|| true` = a silently empty
+          # changed-file list, which makes this job report "nothing relevant
+          # changed" and pass while having checked nothing. See the identical
+          # site above for the full reasoning and the local reproduction.
+          git fetch --unshallow origin 2>/dev/null \
+            || git fetch origin "+refs/heads/*:refs/remotes/origin/*"
+          if ! git merge-base "origin/${{ github.base_ref }}" HEAD >/dev/null 2>&1; then
+            echo "::error::no merge base between origin/${{ github.base_ref }} and HEAD after a full fetch."
+            echo "::error::refusing to report 'no relevant changes' from a diff that could not be computed."
+            exit 1
+          fi
+          changed_files="$(git diff --name-only "origin/${{ github.base_ref }}...HEAD" || true)"
 
           if printf '%s\n' "$changed_files" | grep -Eq '^(.*\.go|go\.mod|go\.sum|go\.work|go\.work\.sum|app/|cmd/|x/|scripts/economics/|tests/integration/|tests/simulation/|simulation/)'; then
             echo "run=true" >> "$GITHUB_OUTPUT"
@@ -889,8 +912,18 @@ jobs:
             exit 0
           fi
 
-          git fetch --no-tags --depth=1 origin "${{ github.base_ref }}"
-          changed_files="$(git diff --name-only FETCH_HEAD...HEAD || true)"
+          # Depth-1 fetch + three-dot diff + `|| true` = a silently empty
+          # changed-file list, which makes this job report "nothing relevant
+          # changed" and pass while having checked nothing. See the identical
+          # site above for the full reasoning and the local reproduction.
+          git fetch --unshallow origin 2>/dev/null \
+            || git fetch origin "+refs/heads/*:refs/remotes/origin/*"
+          if ! git merge-base "origin/${{ github.base_ref }}" HEAD >/dev/null 2>&1; then
+            echo "::error::no merge base between origin/${{ github.base_ref }} and HEAD after a full fetch."
+            echo "::error::refusing to report 'no relevant changes' from a diff that could not be computed."
+            exit 1
+          fi
+          changed_files="$(git diff --name-only "origin/${{ github.base_ref }}...HEAD" || true)"
 
           if printf '%s\n' "$changed_files" | grep -Eq '^(.*\.go|go\.mod|go\.sum|go\.work|go\.work\.sum|_build/|Dockerfile|Dockerfile\.|cmd/|app/|x/|scripts/docker/|scripts/ci/|scripts/release/|deploy/|infra/)'; then
             echo "run=true" >> "$GITHUB_OUTPUT"
