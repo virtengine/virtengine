@@ -6,8 +6,16 @@ Why this exists
 `ci.yaml` enforced a repo-wide `MIN_COVERAGE=80` floor on the branch (push)
 path while the pull_request path used diff-scoped coverage. The repo sits at
 46.5% overall, so the branch path was unconditionally red and the required
-`CI Quality Gates` context (which inherits `test-go`) blocked every PR. There
-were zero test failures: the only error was the coverage floor itself.
+`CI Quality Gates` context (which inherits `test-go`) reported a permanent
+failure that consumed the tier-2 develop->main gate's fix-attempt budget on
+every run. There were zero test failures: the only error was the coverage floor
+itself.
+
+Scope note, so this is not overclaimed: no PR was ever blocked *by GitHub*.
+`develop` has no branch protection (`404 Branch not protected`), `main`'s
+protection carries no `required_status_checks`, both rulesets are
+`enforcement: disabled`, and tier-1 merges evaluate no checks at all. The defect
+was a permanently red signal, not a merge block.
 
 Design
 ------

@@ -379,13 +379,25 @@ jobs:
       # asserted by .github/tests/test_coverage_gate.py. Do not re-inline the
       # routing here: the previous inline form applied a repo-wide 80% floor on
       # the branch path, which this repository has never met (46.5%), making
-      # `Go Tests` unconditionally red on push and — through the required
-      # `CI Quality Gates` context that inherits it — blocking every PR.
+      # `Go Tests` unconditionally red on every push. Because the required
+      # `CI Quality Gates` context inherits `test-go`, that red signal fed the
+      # tier-2 develop->main gate's fix-attempt budget on every run. (No PR was
+      # ever blocked *by GitHub*: `develop` has no branch protection and
+      # `main`'s has no required_status_checks, and tier-1 merges evaluate no
+      # checks at all. The accurate claim is "a permanently red signal", not
+      # "blocked every PR".)
       #
-      # The test runs in this job, not only where a path filter happens to match
-      # it, so the gate that blocks PRs can never ship untested.
+      # This step is deliberately NOT gated on `steps.detect.outputs.run`.
+      # That filter only matches *.go / go.mod / go.sum / go.work / go.work.sum,
+      # so a PR that edits only the gate's own files (exactly like #1166, which
+      # touched 0 .go files) computed run=false and SKIPPED this step: the gate
+      # that decides PR coverage could ship with its own test never executed.
+      # The suite is pure-Python and hermetic (it builds its own throwaway git
+      # repos, so it needs no `origin/develop`), and costs single-digit
+      # seconds against a job that already ran `go test -race ./...` with
+      # libudev installed. Affordable on every run, and being unconditional is
+      # what makes it a real guard.
       - name: Test coverage gate routing
-        if: steps.detect.outputs.run == 'true'
         run: python -m unittest discover -s .github/tests -p "test_coverage_gate.py" -v
 
       - name: Check coverage threshold
