@@ -706,6 +706,26 @@ func TestProviderMutationConfirmationTimeoutRemainsAmbiguous(t *testing.T) {
 func TestProviderMutationReorgReturnsExplicitRetry(t *testing.T) {
 	chain := newMutationChainFake()
 	submitter, _ := newMutationSubmitterForTest(t, chain, filepath.Join(t.TempDir(), "queue.json"))
+	// Take processMu BEFORE seeding the envelope, and hold it across the
+	// awaitFinality call and the read-back.
+	//
+	// This test asserts on the exact error awaitFinality returns, and that error
+	// is decided by a race it used to lose. The seeded envelope is already past
+	// finality -- ConfirmationHeight=100 with the fake's LatestHeight()=102 and
+	// FinalityBlocks=2 makes target=102, so `height >= target` holds on entry --
+	// and a reorg leaves it in MutationStateAmbiguous, which is NOT terminal, so
+	// the background worker (1ms ticker) re-picks the same envelope. The FIRST
+	// of {worker's process(), this test's awaitFinality()} performs the reorg
+	// write; the second hits the `item.State != MutationStateIncluded` guard at
+	// provider_mutation.go:1417 and gets ErrProviderMutationStaleState instead.
+	//
+	// Locking after PutIfAbsent is not enough: the worker can already be inside
+	// process() by then, so this test loses on a loaded runner and reports
+	//     expected: "provider mutation confirmation reorged"
+	//     in chain: "provider mutation stale state"
+	// while passing locally. Measured with the worker deliberately given one tick
+	// to go first: err="provider mutation stale state" every time.
+	submitter.processMu.Lock()
 	envelope, err := submitter.registry.Encode(submitter.cfg.ChainID, MutationProviderDelete, &providerv1beta4.MsgDeleteProvider{Owner: submitter.cfg.ProviderAddress})
 	require.NoError(t, err)
 	envelope.State = MutationStateIncluded
@@ -714,14 +734,6 @@ func TestProviderMutationReorgReturnsExplicitRetry(t *testing.T) {
 	envelope.TxHash = "hash"
 	_, _, err = submitter.store.PutIfAbsent(context.Background(), envelope)
 	require.NoError(t, err)
-	// awaitFinality is an internal step that process() always runs under
-	// processMu. The background worker calls process() on a 1ms ticker, and a
-	// reorg leaves the envelope in MutationStateAmbiguous, which is NOT
-	// terminal (providerMutationTerminalState), so the worker will pick the same
-	// envelope up and re-enter reconcile() -- whose first action overwrites
-	// ReconciliationState. Without the lock the assertion below races that
-	// write. Hold the production invariant explicitly.
-	submitter.processMu.Lock()
 	err = submitter.awaitFinality(context.Background(), envelope.ID)
 	stored, getErr := submitter.store.Get(context.Background(), envelope.ID)
 	submitter.processMu.Unlock()
