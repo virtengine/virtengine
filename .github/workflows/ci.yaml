@@ -116,7 +116,32 @@ jobs:
           # (`level=error msg="Timeout exceeded"`, exit 4) after ~12-13m of job wall time.
           # That is a false red - the gate found nothing and failed to finish. 30m matches
           # GO_TEST_TIMEOUT_UNIT below and leaves headroom for the whole-tree push variant.
-          args: --timeout=30m ${{ github.event_name == 'pull_request' && format('--new-from-rev=origin/{0}', github.base_ref) || '' }}
+          #
+          # `--output.json.path` emits a machine-readable report for the per-linter
+          # budget gate below. `.golangci.yaml` now sets max-issues-per-linter=0 and
+          # max-same-issues=0: without that, golangci-lint v2 applies its defaults of
+          # 50 and 3, and the reported debt is an artifact of the display cap rather
+          # than a property of the tree (capped: errcheck=50; uncapped: errcheck=662).
+          args: --timeout=30m --output.json.path=lint-report.json ${{ github.event_name == 'pull_request' && format('--new-from-rev=origin/{0}', github.base_ref) || '' }}
+
+      # Self-test for the budget gate, mirroring #1166's coverage gate: the gate
+      # that scores this repository's lint debt must not ship untested.
+      - name: Test the lint budget gate
+        run: python -m unittest discover -s .github/tests -p "test_lint_budget_gate.py" -v
+
+      # Per-linter non-regression ratchet over the whole-tree lint report.
+      # `continue-on-error` is deliberate: this job is ALREADY red on develop for
+      # this same debt, and the budget gate must not be the thing that changes
+      # that verdict -- it exists to stop the debt growing, and to make growth
+      # visible with a named baseline and an expiry. The event routing (enforced
+      # on push, report-only on the diff-scoped pull_request path) lives in the
+      # gate, asserted by the test above.
+      - name: Lint debt budget (non-regression ratchet)
+        if: always()
+        continue-on-error: true
+        env:
+          GITHUB_EVENT_NAME: ${{ github.event_name }}
+        run: python3 scripts/ci/lint_budget_gate.py lint-report.json
 
       - name: Check formatting
         run: |
