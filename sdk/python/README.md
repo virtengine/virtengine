@@ -4,12 +4,12 @@ Python SDK for interacting with the VirtEngine chain via gRPC.
 
 ## Install
 
-> **UNVERIFIED — not published to PyPI.** `pip install virtengine` does not work:
-> `https://pypi.org/pypi/virtengine/json` returns **404**. The package is built by
-> `.github/workflows/sdk-publish.yaml` on the `release: published` event, and
-> `gh release list -R virtengine/virtengine` shows only `0.1.0` — a **draft** from
-> 2021 — so that workflow has never run. Install from a checkout instead
-> (see task `t_9d3b0f86`):
+> **This SDK is source-only and will not be published to PyPI** (operator decision,
+> 2026-09-29, task `t_9d3b0f86`). `pip install virtengine` therefore does not and will
+> never work: `https://pypi.org/pypi/virtengine/json` returns **404**, and
+> `.github/workflows/sdk-publish.yaml` is disabled (it no longer triggers on a release
+> event, so publishing can never be an unattended side effect of tagging). Install from
+> a checkout:
 
 ```bash
 # from the repository root
