@@ -210,6 +210,29 @@ jobs:
             ./x/enclave/... \
             ./x/encryption/...
 
+  infra-contracts:
+    name: infra-contracts
+    runs-on: ubuntu-latest
+    needs: analyze-changes
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+          cache-dependency-path: infra/tests/go.sum
+
+      - name: Run offline infra + workflow contract tests
+        # infra/tests is a separate Go module, so the root module's test-go job
+        # (an explicit ./pkg/... + ./x/... allowlist) cannot reach it. Without
+        # this job the workflow/terraform contract tests pass in CI no matter
+        # what they assert. The script fails closed: every contract test it
+        # names must report PASS.
+        run: ./scripts/test-infra-contracts.sh
+
   agents-docs:
     name: agents-docs
     runs-on: ubuntu-latest
