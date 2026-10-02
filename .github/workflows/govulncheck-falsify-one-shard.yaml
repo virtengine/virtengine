@@ -141,7 +141,7 @@ jobs:
       - verdicts
     if: always()
     steps:
-      - name: Checkout gate-result helper
+      - name: "Checkout gate-result helper"
         uses: actions/checkout@v5
         with:
           sparse-checkout: .github/scripts
@@ -167,9 +167,6 @@ jobs:
             exit 1
           fi
           echo "PASS: one red shard makes Security Summary red. A partial scan is never a pass."
-
-      - name: "Re-run the shard partition test (no drift while proving)"
-        run: bash .github/tests/test_govulncheck_shard_partition.sh
 
       - name: "Control - all-green must NOT be over-corrected into red"
         run: |
@@ -216,3 +213,33 @@ jobs:
             exit 1
           fi
           echo "PASS: 4 real shards reached a verdict and exactly 1 shard was red."
+
+  # The shard partition test needs the full tree and a Go toolchain (it runs
+  # `go list ./...`), so it cannot live in the sparse-checkout summary job.
+  # Measured on proof run 37002118880: as a step in that job it died with exit
+  # 127 "No such file or directory" because .github/tests was not checked out.
+  # Keeping it here also means it re-proves the partition on the SAME sha as
+  # the proof, so a shard definition cannot have drifted between the two.
+  partition-guard:
+    name: "Shard partition still exact on this sha"
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: "1.26.8"
+          cache: true
+
+      - name: Install build dependencies for cgo packages
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends libudev-dev
+
+      - name: Prove the shards still partition ./... exactly
+        run: bash .github/tests/test_govulncheck_shard_partition.sh
+
+      - name: Re-run the verdict regression suite
+        run: bash .github/tests/test_govulncheck_verdict.sh
