@@ -25,3 +25,7 @@ coverage.txt
 dev.env
 
 .editorconfig
+
+# Rust build output and lockfile (sdk/rust is a cargo workspace member)
+target/
+Cargo.lock

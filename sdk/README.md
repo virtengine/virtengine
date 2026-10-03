@@ -1,15 +1,31 @@
 # VirtEngine Chain SDK
 
-> **UNVERIFIED — no active CI for this directory.** `sdk/.github/workflows/`
-> (`lint.yaml`, `tests.yaml`, `release.yaml`, `release-ts.yaml`, `breakage.yaml`,
-> `labeler.yaml`, `lint-shell.yaml`) sits in a subdirectory, and GitHub Actions
-> only executes workflows under the repository-root `.github/workflows/`. None of
-> those files are referenced by the root `ci.yaml` either, so **no workflow lints
-> or tests `sdk/` today**. Previously this file carried Lint/Test badges pointing
-> at `github.com/virtengine/chain-sdk`, a repository that does not exist
-> (`gh api repos/virtengine/chain-sdk` → 404). The badges were removed rather than
-> repointed, because there is no SDK CI run to point them at. See task
-> `t_5c1a7e42`.
+[![SDK CI](https://github.com/virtengine/virtengine/actions/workflows/sdk-ci.yaml/badge.svg?branch=develop)](https://github.com/virtengine/virtengine/actions/workflows/sdk-ci.yaml?query=branch%3Adevelop)
+[![Portal CI](https://github.com/virtengine/virtengine/actions/workflows/portal-ci.yaml/badge.svg?branch=develop)](https://github.com/virtengine/virtengine/actions/workflows/portal-ci.yaml?query=branch%3Adevelop)
+
+| Package | Gated by | What runs |
+| --- | --- | --- |
+| [`sdk/go`](./go) | [SDK CI](https://github.com/virtengine/virtengine/actions/workflows/sdk-ci.yaml) | `go test ./...` + `golangci-lint` |
+| [`sdk/ts`](./ts) | [SDK CI](https://github.com/virtengine/virtengine/actions/workflows/sdk-ci.yaml) | `npm run lint`, `npm test`, `npm run build` |
+| [`sdk/portal`](./portal) | [Portal CI](https://github.com/virtengine/virtengine/actions/workflows/portal-ci.yaml) (job `SDK Portal`) | `pnpm type-check`, `pnpm test`, `pnpm build` |
+| [`sdk/python`](./python) | **none — see below** | — |
+| [`sdk/rust`](./rust) | **none — see below** | — |
+
+> **Known gap: `sdk/python` and `sdk/rust` have no CI.** Both fail for reasons
+> that predate this workflow and that a CI gate cannot fix on its own:
+>
+> - `sdk/python` — pytest cannot collect. The generated `google/` package
+>   vendored next to the code shadows the installed `google.protobuf`, so
+>   `from google.protobuf import any_pb2` raises
+>   `ImportError: cannot import name 'descriptor'`. All 3 test modules error
+>   during collection.
+> - `sdk/rust` — does not compile. `rust/src/proto/mod.rs:123` contains
+>   `pub mod mod {`, which is a syntax error on every platform; the crate then
+>   reports cascading `E0428` (duplicate module) errors and a `stringify!`
+>   recursion-limit failure.
+>
+> These are tracked as separate work items; this workflow gates only what is
+> known green so that a red check always means a real regression.
 
 ## Overview
 
