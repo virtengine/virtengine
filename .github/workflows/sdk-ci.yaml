@@ -121,15 +121,26 @@ jobs:
       # `go mod vendor` creates the first path but NOT the second: vendor/ only
       # carries Go packages, and cosmos-sdk's proto/ tree is .proto files. The
       # sdk/go replace directive redirects github.com/cosmos/cosmos-sdk to
-      # github.com/virtengine/cosmos-sdk, so the source has to be copied from the
-      # resolved module directory rather than hard-coded to a version.
+      # github.com/virtengine/cosmos-sdk, so the source is copied from the
+      # directory go resolves - no version is hard-coded here.
+      #
+      # -mod=mod is REQUIRED and load-bearing: `go mod vendor` on the line above
+      # leaves a vendor/ directory, which makes every later go command default to
+      # -mod=vendor, where `.Dir` for a module resolved by a replace directive is
+      # EMPTY. The job then died at `cp: cannot stat '/proto'` (run 37157615713,
+      # job 111304202944). -mod=mod restores module mode so .Dir resolves.
       - name: Stage sdk/go vendor tree for the Jest buf harness
         working-directory: sdk/go
         env:
           GOWORK: "off"
         run: |
+          set -euo pipefail
           go mod vendor
-          SDK_DIR="$(go list -m -f '{{.Dir}}' github.com/cosmos/cosmos-sdk)"
+          SDK_DIR="$(go list -mod=mod -m -f '{{.Dir}}' github.com/cosmos/cosmos-sdk)"
+          if [ -z "${SDK_DIR}" ] || [ ! -d "${SDK_DIR}/proto" ]; then
+            echo "::error::could not resolve cosmos-sdk proto sources (Dir='${SDK_DIR}')"
+            exit 1
+          fi
           mkdir -p vendor/github.com/cosmos/cosmos-sdk
           cp -r "${SDK_DIR}/proto" vendor/github.com/cosmos/cosmos-sdk/proto
 
