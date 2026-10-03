@@ -28,6 +28,9 @@ does not create collateral or a peg. Burn/mint mechanics are generic; the term
 - BME message handlers and tests, SDK Go message and gRPC descriptors, CLI,
   TypeScript generated messages/services/index/SDK factory, and wallet currencies.
   Wallet fees and stake now display native `VE/uve`, matching the native Go paths.
+- Funding-authorization registry entries and canonical inventory fixtures now use
+  the VCC message URLs. Their registry and inventory digests change with this
+  interface update; the declared registry does not establish live BME enforcement.
 - Descriptor set, inventory, protobuf OpenAPI, generated reference documentation,
   and experimental Python/Rust outputs. These latter SDKs remain unsupported
   release contracts under `sdk/generation/toolchain.json`.
@@ -69,7 +72,8 @@ Old ACT/vACT message URLs, RPC names and CLI commands are not maintained as
 active aliases. Renamed message type URLs and methods break old clients and
 signed transactions, even though protobuf field numbers are preserved. The
 oracle field rename also changes JSON/config field names. Rebuild clients and
-signed requests for a coordinated version upgrade.
+signed requests for a coordinated version upgrade. Authorizations or proofs bound
+to the previous funding-registry digest require coordinated regeneration too.
 
 `uact` and `uvact` balances are not automatically `uvcc` balances. No live state
 has been rewritten. Fresh development genesis can use the new naming. Before
