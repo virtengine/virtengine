@@ -60,6 +60,14 @@ jobs:
       # Without it the package set under test is the workspace's, not this
       # module's.
       GOWORK: "off"
+      # Same reason as ci.yaml's windows-native job (ci.yaml:224). With cgo on,
+      # cosmos-sdk/crypto/ledger pulls in zondax/hid, whose callbacks_cgo.cgo2.c
+      # defines each callback twice, and GCC 10+ on ubuntu runners rejects the
+      # duplicate symbols at link time ("multiple definition of cNextKey_cgo").
+      # The ledger HID path is unreachable from these tests, so disabling cgo is
+      # the same isolation the rest of the repo already uses.
+      CGO_ENABLED: "0"
+      GOFLAGS: "-mod=readonly"
     steps:
       - name: Checkout
         uses: actions/checkout@v5
@@ -104,6 +112,29 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v5
+
+      # sdk/ts's functional tests copy proto modules out of a Go vendor tree
+      # (sdk/ts/test/functional/protoc-gen-*.spec.ts reference
+      # "go/vendor/github.com/cosmos/gogoproto" and
+      # "go/vendor/github.com/cosmos/cosmos-sdk/proto"). sdk/go/vendor is
+      # gitignored, so a fresh checkout has no such tree and those suites fail
+      # with ENOENT on lstat. proto-generation.yaml only passes because it runs
+      # inside a pinned generator image that happens to carry a vendor tree.
+      - name: Setup Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: sdk/go/go.mod
+          cache: false
+
+      - name: Vendor sdk/go for the proto-based tests
+        working-directory: sdk/go
+        env:
+          # The root go.work also lists sdk/specs and infra/*; vendoring must
+          # describe sdk/go alone, or `go mod vendor` refuses to run in
+          # workspace mode.
+          GOWORK: "off"
+          CGO_ENABLED: "0"
+        run: go mod vendor
 
       - name: Setup Node.js
         uses: actions/setup-node@v6
