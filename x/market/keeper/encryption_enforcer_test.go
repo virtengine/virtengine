@@ -56,7 +56,7 @@ func setupKeeperForEncryption(t testing.TB) (sdk.Context, *encryptionkeeper.Keep
 func createTestEncryptedBidPayload(t *testing.T, bidderPubKey, customerPubKey []byte) (*marketplace.EncryptedBidPayload, error) {
 	t.Helper()
 
-	plaintext := []byte(`{"price":"100uakt","resources":{}}`)
+	plaintext := []byte(`{"price":"100uve","resources":{}}`)
 
 	senderKeyPair, err := crypto.GenerateKeyPair()
 	require.NoError(t, err)

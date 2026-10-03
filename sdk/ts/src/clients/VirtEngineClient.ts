@@ -132,13 +132,13 @@ export const VIRTENGINE_MAINNET: ChainInfo = {
     bech32PrefixConsPub: "virtvalconspub",
   },
   currencies: [
-    { coinDenom: "VIRT", coinMinimalDenom: "uvirt", coinDecimals: 6 },
-    { coinDenom: "ACT", coinMinimalDenom: "uact", coinDecimals: 6 },
+    { coinDenom: "VE", coinMinimalDenom: "uve", coinDecimals: 6 },
+    { coinDenom: "VCC", coinMinimalDenom: "uvcc", coinDecimals: 6 },
   ],
   feeCurrencies: [
-    { coinDenom: "VIRT", coinMinimalDenom: "uvirt", coinDecimals: 6 },
+    { coinDenom: "VE", coinMinimalDenom: "uve", coinDecimals: 6 },
   ],
-  stakeCurrency: { coinDenom: "VIRT", coinMinimalDenom: "uvirt", coinDecimals: 6 },
+  stakeCurrency: { coinDenom: "VE", coinMinimalDenom: "uve", coinDecimals: 6 },
 };
 
 /**
@@ -159,13 +159,13 @@ export const VIRTENGINE_TESTNET: ChainInfo = {
     bech32PrefixConsPub: "virtvalconspub",
   },
   currencies: [
-    { coinDenom: "VIRT", coinMinimalDenom: "uvirt", coinDecimals: 6 },
-    { coinDenom: "ACT", coinMinimalDenom: "uact", coinDecimals: 6 },
+    { coinDenom: "VE", coinMinimalDenom: "uve", coinDecimals: 6 },
+    { coinDenom: "VCC", coinMinimalDenom: "uvcc", coinDecimals: 6 },
   ],
   feeCurrencies: [
-    { coinDenom: "VIRT", coinMinimalDenom: "uvirt", coinDecimals: 6 },
+    { coinDenom: "VE", coinMinimalDenom: "uve", coinDecimals: 6 },
   ],
-  stakeCurrency: { coinDenom: "VIRT", coinMinimalDenom: "uvirt", coinDecimals: 6 },
+  stakeCurrency: { coinDenom: "VE", coinMinimalDenom: "uve", coinDecimals: 6 },
 };
 
 /**

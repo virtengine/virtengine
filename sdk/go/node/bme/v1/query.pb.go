@@ -242,9 +242,9 @@ type QueryStatusResponse struct {
 	WarnThreshold cosmossdk_io_math.LegacyDec `protobuf:"bytes,3,opt,name=warn_threshold,json=warnThreshold,proto3,customtype=cosmossdk.io/math.LegacyDec" json:"warn_threshold"`
 	// halt_threshold is the halt threshold
 	HaltThreshold cosmossdk_io_math.LegacyDec `protobuf:"bytes,4,opt,name=halt_threshold,json=haltThreshold,proto3,customtype=cosmossdk.io/math.LegacyDec" json:"halt_threshold"`
-	// mints_allowed indicates if new ACT mints are allowed
+	// mints_allowed indicates if new VCC mints are allowed
 	MintsAllowed bool `protobuf:"varint,5,opt,name=mints_allowed,json=mintsAllowed,proto3" json:"mints_allowed,omitempty"`
-	// refunds_allowed indicates if ACT refunds are allowed
+	// refunds_allowed indicates if VCC refunds are allowed
 	RefundsAllowed bool `protobuf:"varint,6,opt,name=refunds_allowed,json=refundsAllowed,proto3" json:"refunds_allowed,omitempty"`
 }
 

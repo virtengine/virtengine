@@ -22,9 +22,9 @@ export interface EventMintStatusChange {
   collateralRatio: string;
 }
 
-/** EventVaultSeeded is emitted when the vault is seeded with AKT */
+/** EventVaultSeeded is emitted when the vault is seeded with VE */
 export interface EventVaultSeeded {
-  /** amount is the AKT amount added to vault */
+  /** amount is the VE amount added to vault */
   amount:
     | Coin
     | undefined;

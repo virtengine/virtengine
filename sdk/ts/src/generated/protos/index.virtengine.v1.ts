@@ -39,7 +39,7 @@ export const GenesisLedgerState = patched(_GenesisLedgerState);
 export type GenesisLedgerState = _GenesisLedgerState
 export const Bme_GenesisState = patched(_Bme_GenesisState);
 export type Bme_GenesisState = _Bme_GenesisState
-export { MsgUpdateParams as Bme_MsgUpdateParams, MsgUpdateParamsResponse as Bme_MsgUpdateParamsResponse, MsgSeedVault, MsgSeedVaultResponse, MsgBurnMint, MsgMintACT, MsgBurnACT, MsgBurnMintResponse, MsgMintACTResponse, MsgBurnACTResponse } from "./virtengine/bme/v1/msgs.ts";
+export { MsgUpdateParams as Bme_MsgUpdateParams, MsgUpdateParamsResponse as Bme_MsgUpdateParamsResponse, MsgSeedVault, MsgSeedVaultResponse, MsgBurnMint, MsgMintVCC, MsgBurnVCC, MsgBurnMintResponse, MsgMintVCCResponse, MsgBurnVCCResponse } from "./virtengine/bme/v1/msgs.ts";
 export { QueryParamsRequest as Bme_QueryParamsRequest, QueryParamsResponse as Bme_QueryParamsResponse, QueryVaultStateRequest, QueryVaultStateResponse, QueryStatusRequest } from "./virtengine/bme/v1/query.ts";
 
 import { QueryStatusResponse as _QueryStatusResponse } from "./virtengine/bme/v1/query.ts";

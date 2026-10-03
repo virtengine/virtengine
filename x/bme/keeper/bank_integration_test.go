@@ -229,7 +229,7 @@ func TestMintTokens(t *testing.T) {
 	k, ctx, bankKeeper := setupKeeperWithBankMock(t)
 
 	recipient := sdk.AccAddress([]byte("recipient123456789"))
-	amount := sdk.NewCoins(sdk.NewCoin("uvact", math.NewInt(500)))
+	amount := sdk.NewCoins(sdk.NewCoin("uvcc", math.NewInt(500)))
 
 	// Mint tokens
 	err := k.MintTokens(ctx, recipient, amount)

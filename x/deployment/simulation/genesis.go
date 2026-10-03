@@ -10,7 +10,7 @@ import (
 func RandomizedGenState(simState *module.SimulationState) {
 	// numDeployments := simulation.RandIntBetween(simState.Rand, 0, len(simState.Accounts))
 
-	// Use DefaultParams which includes both uve and uact as required by validation
+	// Use DefaultParams which includes both uve and uvcc as required by validation
 	deploymentGenesis := &types.GenesisState{
 		Params: types.DefaultParams(),
 		// Deployments: make([]types.GenesisDeployment, 0, numDeployments),

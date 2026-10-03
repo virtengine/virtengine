@@ -74,9 +74,9 @@ message QueryStatusResponse {
     (gogoproto.nullable) = false
   ];
 
-  // mints_allowed indicates if new ACT mints are allowed
+  // mints_allowed indicates if new VCC mints are allowed
   bool mints_allowed = 5;
 
-  // refunds_allowed indicates if ACT refunds are allowed
+  // refunds_allowed indicates if VCC refunds are allowed
   bool refunds_allowed = 6;
 }

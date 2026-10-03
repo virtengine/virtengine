@@ -30,7 +30,7 @@ type Params struct {
 	// circuit_breaker_halt_threshold is the CR below which mints are halted
 	// Stored as basis points * 100 (e.g., 9000 = 0.90)
 	CircuitBreakerHaltThreshold uint32 `protobuf:"varint,2,opt,name=circuit_breaker_halt_threshold,json=circuitBreakerHaltThreshold,proto3" json:"circuit_breaker_halt_threshold,omitempty"`
-	// min_epoch_blocks is the minimum amount of blocks required for ACT mints
+	// min_epoch_blocks is the minimum amount of blocks required for VCC mints
 	MinEpochBlocks int64 `protobuf:"varint,3,opt,name=min_epoch_blocks,json=minEpochBlocks,proto3" json:"min_epoch_blocks,omitempty"`
 	// epoch_blocks_backoff increase of runway_blocks in % during warn threshold
 	// for drop in 1 basis point of circuit_breaker_warn_threshold
@@ -43,7 +43,7 @@ type Params struct {
 	//      circuit_breaker_warn_threshold drops from 0.94 to 0.92
 	//      then runway_blocks = (110*(0.1*2) + 110) = 132
 	EpochBlocksBackoff uint32 `protobuf:"varint,4,opt,name=epoch_blocks_backoff,json=epochBlocksBackoff,proto3" json:"epoch_blocks_backoff,omitempty"`
-	// mint_spread_bps is the spread in basis points applied during ACT mint
+	// mint_spread_bps is the spread in basis points applied during VCC mint
 	// (default: 25 bps = 0.25%)
 	MintSpreadBps uint32 `protobuf:"varint,6,opt,name=mint_spread_bps,json=mintSpreadBps,proto3" json:"mint_spread_bps,omitempty"`
 	// settle_spread_bps is the spread in basis points applied during settlement
