@@ -255,25 +255,39 @@ jobs:
           # Capture the status instead of letting `bash -e` abort on it: the step
           # below is what decides pass/fail, and it must run AFTER the log is
           # echoed, or a red run shows an empty step with no assertion detail.
+          #
+          # Run the file DIRECTLY, not under `node --test`. Its harness is
+          # hand-rolled (console.log + process.exit), not node:test, and node's
+          # TAP reporter rewrites console output into `#`-prefixed TAP comments,
+          # so `ok   <name>` arrives as `# ok   <name>` and any grep anchored on
+          # the harness's own output finds nothing. That was a real red here:
+          # run 37133231750 job `Census self-test` reported "did not run any
+          # assertion" while the log it printed showed all 5 passing. This file's
+          # own docstring says to run it directly; do not wrap it.
           set +e
-          node --test scripts/ci/check-portal-export-routes.test.mjs > export-routes-tests.log 2>&1
+          node scripts/ci/check-portal-export-routes.test.mjs > export-routes-tests.log 2>&1
           test_status=$?
           set -e
           cat export-routes-tests.log
-          # `node --test` reports "tests 1" for this file because it uses a
-          # hand-rolled harness rather than node:test's own assertions, so the
-          # TAP file count cannot distinguish "5 assertions ran" from "the
-          # harness threw on line 1". Assert on the harness's own count instead.
+
+          # Verdict is the harness's OWN exit code and its OWN trailer line, not a
+          # reporter's file count: `node --test` counts a hand-rolled harness as
+          # "tests 1" whether 5 assertions ran or the harness threw on line 1.
+          if [ "$test_status" -ne 0 ]; then
+            echo "::error::check-portal-export-routes census self-test reported a failing assertion (exit $test_status)"
+            exit 1
+          fi
+
+          # Fail closed if the harness stops running assertions while still
+          # exiting 0 — e.g. someone replaces it with a bare process.exit(0).
+          # That is the direction that matters: a census that silently stopped
+          # finding routes reads as "0 block a static export", i.e. good news.
           count=$(grep -cE '^ok   ' export-routes-tests.log || true)
           if [ -z "${count:-}" ] || [ "$count" -eq 0 ]; then
             echo "::error::check-portal-export-routes census self-test did not run any assertion"
             exit 1
           fi
           echo "export-routes census self-test ran: $count assertion(s)"
-          if grep -qE '^FAIL ' export-routes-tests.log || [ "$test_status" -ne 0 ]; then
-            echo "::error::check-portal-export-routes census self-test reported a failing assertion"
-            exit 1
-          fi
 
   test-e2e:
     name: E2E Tests
