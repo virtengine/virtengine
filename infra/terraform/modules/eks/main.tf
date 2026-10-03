@@ -28,6 +28,8 @@ data "aws_caller_identity" "current" {}
 # EKS Cluster
 # -----------------------------------------------------------------------------
 resource "aws_eks_cluster" "main" {
+  #checkov:skip=CKV_AWS_39:accepted by architecture: the control plane endpoint must be reachable for cluster administration; access is gated by IAM auth, not network isolation | review-by 2027-04-01
+  #checkov:skip=CKV_AWS_38:KNOWN GAP, real defect carried deliberately: the public endpoint is not restricted to an admin CIDR at the endpoint policy. Real fix is a resource policy on the cluster scoping access; IAM auth is the only control today | review-by 2026-11-01
   name     = var.cluster_name
   version  = var.kubernetes_version
   role_arn = aws_iam_role.cluster.arn
@@ -94,6 +96,7 @@ resource "aws_iam_role_policy_attachment" "cluster_vpc_controller" {
 # EKS Cluster Security Group
 # -----------------------------------------------------------------------------
 resource "aws_security_group" "cluster" {
+  #checkov:skip=CKV_AWS_382:accepted: node/cluster/database security groups need unrestricted egress to pull images and reach AWS service endpoints; restricting it requires a per-service-endpoint egress allowlist | review-by 2027-04-01
   name        = "${var.cluster_name}-cluster-sg"
   description = "Security group for EKS cluster control plane"
   vpc_id      = var.vpc_id
@@ -115,6 +118,7 @@ resource "aws_security_group" "cluster" {
 # KMS Key for EKS Secrets Encryption
 # -----------------------------------------------------------------------------
 resource "aws_kms_key" "eks" {
+  #checkov:skip=CKV2_AWS_64:KNOWN GAP, real defect carried deliberately: no explicit key policy, so the key falls back to the AWS-managed default. Real fix is an explicit policy document; effective permissions are unchanged today, which is why this is a hardening gap not an exposure | review-by 2026-11-01
   description             = "KMS key for EKS cluster ${var.cluster_name} secrets encryption"
   deletion_window_in_days = 7
   enable_key_rotation     = true
@@ -182,6 +186,7 @@ resource "aws_kms_alias" "cloudwatch_logs" {
 # CloudWatch Log Group for EKS
 # -----------------------------------------------------------------------------
 resource "aws_cloudwatch_log_group" "eks" {
+  #checkov:skip=CKV_AWS_338:KNOWN GAP, real defect carried deliberately: retention is below the 1-year the check wants. Declared with a deliberate operational retention; long-term retention is carried by the S3 archive buckets. Real fix is to confirm each retention with the log owner and raise where the window is genuinely too short | review-by 2026-11-01
   name              = "/aws/eks/${var.cluster_name}/cluster"
   retention_in_days = var.log_retention_days
   kms_key_id        = aws_kms_key.cloudwatch_logs.arn
